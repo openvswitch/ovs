@@ -1,0 +1,55 @@
+AC_PREREQ(2.59)
+AC_INIT(openflow, v0.1.8, info@openflowswitch.org)
+AM_INIT_AUTOMAKE
+
+AC_PROG_CC
+AC_PROG_CPP
+
+AC_USE_SYSTEM_EXTENSIONS
+
+AC_PROG_LIBTOOL
+
+AC_ARG_ENABLE(
+  [ndebug],
+  [AC_HELP_STRING([--enable-ndebug], 
+                  [Disable debugging features for max performance])],
+  [case "${enableval}" in # (
+     yes) ndebug=true ;; # (
+     no)  ndebug=false ;; # (
+     *) AC_MSG_ERROR([bad value ${enableval} for --enable-ndebug]) ;;
+   esac],
+  [ndebug=false])
+AM_CONDITIONAL([NDEBUG], [test x$ndebug = xtrue])
+
+CHECK_LINUX(l26, 2.6, 2.6, KSRC26, L26_ENABLED)
+CHECK_LINUX(uml, 2.6, 2.6-uml, KSRCUML, UML_ENABLED)
+CHECK_LINUX(l24, 2.4, 2.4, KSRC24, L24_ENABLED)
+
+AC_CHECK_HEADER([linux/netlink.h],
+                [HAVE_NETLINK=yes],
+                [HAVE_NETLINK=no],
+                [#include <sys/socket.h>])
+AM_CONDITIONAL([HAVE_NETLINK], [test "$HAVE_NETLINK" = yes])
+
+AC_CHECK_LIB([socket], [connect])
+AC_CHECK_LIB([resolv], [gethostbyname])
+AC_CHECK_LIB([dl], [dladdr])
+
+CFLAGS="$CFLAGS -Wall -Wno-sign-compare"
+
+AC_CONFIG_FILES([Makefile 
+man/Makefile
+man/man8/Makefile
+datapath/Makefile 
+lib/Makefile
+include/Makefile
+controller/Makefile
+utilities/Makefile
+secchan/Makefile
+datapath/tests/Makefile
+third-party/Makefile
+datapath/linux-2.6/Makefile
+datapath/linux-2.6-uml/Makefile
+datapath/linux-2.4/Makefile])
+
+AC_OUTPUT

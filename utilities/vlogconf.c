@@ -1,0 +1,185 @@
+#include "vlog.h"
+
+#include <dirent.h>
+#include <errno.h>
+#include <getopt.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+#include "command-line.h"
+#include "compiler.h"
+#include "util.h"
+#include "vlog-socket.h"
+
+void
+usage(char *prog_name, int exit_code)
+{
+    printf("Usage: %s [TARGET] [ACTION...]\n"
+           "Targets:\n"
+           "  -a, --all            Apply to all targets (default)\n"
+           "  -t, --target=TARGET  Specify target program, as a pid or an\n"
+           "                       absolute path to a Unix domain socket\n"
+           "Actions:\n"
+           "  -l, --list         List current settings\n"
+           "  -s, --set=MODULE:FACILITY:LEVEL\n"
+           "        Set MODULE and FACILITY log level to LEVEL\n"
+           "        MODULE may be any valid module name or 'ANY'\n"
+           "        FACILITY may be 'syslog' or 'console' or 'ANY'\n"
+           "        LEVEL may be 'emer', 'err', 'warn', or 'dbg'\n"
+           "  -h, --help         Print this helpful information\n",
+           prog_name);
+    exit(exit_code);
+}
+
+static char *
+transact(struct vlog_client *client, const char *request, bool *ok)
+{
+    char *reply;
+    int error = vlog_client_transact(client, request, &reply);
+    if (error) {
+        fprintf(stderr, "%s: transaction error: %s\n",
+                vlog_client_target(client), strerror(error));
+        *ok = false;
+    }
+    return reply ? reply : xstrdup("");
+}
+
+static void
+transact_ack(struct vlog_client *client, const char* request, bool *ok)
+{
+    char *reply;
+    int error = vlog_client_transact(client, request, &reply);
+    if (error) {
+        fprintf(stderr, "%s: transaction error: %s\n",
+                vlog_client_target(client), strerror(error));
+        *ok = false;
+    } else if (strcmp(reply, "ack")) {
+        fprintf(stderr, "Received unexpected reply from %s: %s\n",
+                vlog_client_target(client), reply);
+        *ok = false;
+    }
+    free(reply);
+}
+
+static void
+add_target(struct vlog_client ***clients, size_t *n_clients,
+           const char *path, bool *ok)
+{
+    struct vlog_client *client;
+    int error = vlog_client_connect(path, &client);
+    if (error) {
+        fprintf(stderr, "Error connecting to \"%s\": %s\n",
+                path, strerror(error));
+        *ok = false;
+    } else {
+        *clients = xrealloc(*clients, sizeof *clients * (*n_clients + 1));
+        (*clients)[*n_clients] = client;
+        ++*n_clients;
+    }
+}
+
+static void
+add_all_targets(struct vlog_client ***clients, size_t *n_clients, bool *ok)
+{
+    DIR *directory;
+    struct dirent* de;
+
+    directory = opendir("/tmp");
+    if (!directory) {
+        fprintf(stderr, "/tmp: opendir: %s\n", strerror(errno));
+    }
+
+    while ((de = readdir(directory)) != NULL) {
+        if (!strncmp(de->d_name, "vlogs.", 5)) {
+            char *path = xasprintf("/tmp/%s", de->d_name);
+            add_target(clients, n_clients, path, ok);
+            free(path);
+        }
+    }
+
+    closedir(directory);
+}
+
+int main(int argc, char *argv[])
+{
+    static const struct option long_options[] = {
+        /* Target options must come first. */
+        {"all", no_argument, NULL, 'a'},
+        {"target", required_argument, NULL, 't'},
+        {"help", no_argument, NULL, 'h'},
+
+        /* Action options come afterward. */
+        {"list", no_argument, NULL, 'l'},
+        {"set", required_argument, NULL, 's'},
+        {0, 0, 0, 0},
+    };
+    char *short_options;
+
+    /* Determine targets. */
+    bool ok = true;
+    int n_actions = 0;
+    struct vlog_client **clients = NULL;
+    size_t n_clients = 0;
+
+    set_program_name(argv[0]);
+
+    short_options = long_options_to_short_options(long_options);
+    for (;;) {
+        int option;
+        size_t i;
+
+        option = getopt_long(argc, argv, short_options, long_options, NULL);
+        if (option == -1) {
+            break;
+        }
+        if (!strchr("ath", option) && n_clients == 0) {
+            fatal(0, "no targets specified (use --help for help)");
+        } else {
+            ++n_actions;
+        }
+        switch (option) {
+        case 'a':
+            add_all_targets(&clients, &n_clients, &ok);
+            break;
+
+        case 't':
+            add_target(&clients, &n_clients, optarg, &ok);
+            break;
+
+        case 'l':
+            for (i = 0; i < n_clients; i++) {
+                struct vlog_client *client = clients[i];
+                char *reply;
+
+                printf("%s:\n", vlog_client_target(client));
+                reply = transact(client, "list", &ok);
+                fputs(reply, stdout);
+                free(reply);
+            }
+            break;
+
+        case 's':
+            for (i = 0; i < n_clients; i++) {
+                struct vlog_client *client = clients[i];
+                char *request = xasprintf("set %s", optarg);
+                transact_ack(client, request, &ok);
+                free(request);
+            }
+            break;
+
+        case 'h':
+            usage(argv[0], EXIT_SUCCESS);
+            break;
+
+        default:
+            NOT_REACHED();
+        }
+    }
+    if (!n_actions) {
+        fprintf(stderr,
+                "warning: no actions specified (use --help for help)\n");
+    }
+    exit(ok ? 0 : 1);
+}

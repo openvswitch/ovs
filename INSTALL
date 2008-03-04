@@ -1,0 +1,156 @@
+   Installation Instructions for OpenFlow Reference Release v0.1.5
+
+This document describes how to build, install, and execute the v0.1.5
+reference implementation of OpenFlow.  Please send any comments to:
+
+                      <info@openflowswitch.org>
+
+Setting up the Kernel Build Environment
+---------------------------------------
+
+The datapath kernel module must be compiled against a kernel build
+directory for the Linux version the module is to run on.  The datapath
+module has been mainly tested on Linux 2.6.23.  Support for Linux 2.4 
+is also in place, although it has only been lightly tested under 2.4.35.
+
+For example, if compiling on Debian or Ubuntu, the Linux headers
+and image packages must be installed (apt-get install
+linux-headers-<version> linux-image-<version>). 
+
+Note: the OpenFlow datapath requires that bridging support has been
+configured in the kernel, but not enabled or in use.  If the bridge
+module is running (check with "lsmod | grep bridge"), you must remove
+it ("rmmod bridge") before starting the datapath.
+
+Building the Code
+-----------------
+
+1. In the top source directory, configure the package, passing the
+   location of the kernel build directory as an argument.  Use
+   --with-l26 for Linux 2.6, --with-l24 for Linux 2.4:
+
+    For example, if compiling for a running instance of Linux 2.6:
+      % ./configure --with-l26=/lib/modules/`uname -r`/build
+
+    Or if compiling for a running instance of Linux 2.4:
+      % ./configure --with-l24=/lib/modules/`uname -r`/build
+
+   To use a specific C compiler for compiling OpenFlow user programs,
+   also specify it on the configure command line, like so:
+      % ./configure CC=gcc-4.2
+
+2. Run make in the top source directory: 
+
+    % make
+
+    The following binaries will be built:
+
+    Datapath kernel module:
+        ./datapath/linux-2.6/openflow_mod.ko (If compiling for Linux 2.6)
+        ./datapath/linux-2.4/openflow_mod.o  (If compiling for Linux 2.4)
+
+    Secure channel executable:
+        ./secchan/secchan
+
+    Controller executable:
+        ./controller/controller
+
+    Datapath administration utility:
+        ./utilities/dpctl
+
+3. (Optional) Run "make install" to install the executables and
+   manpages into the running system, by default under /usr/local.
+
+Installing the datapath
+-----------------------
+
+To run the module, simply insmod it:
+
+     (Linux 2.6)
+     % insmod datapath/linux-2.6/openflow_mod.ko
+
+     (Linux 2.4)
+     % insmod datapath/linux-2.4/compat24_mod.o
+     % insmod datapath/linux-2.4/openflow_mod.o
+
+
+Testing the datapath
+--------------------
+
+Once the OpenFlow datapath has been installed (you can verify that it is
+running if it appears in lsmod's listing), you can configure it using
+the dpctl command line utility.
+
+1. Create a datapath instance.  The command below creates a datapath with
+   ID 0 (see dpctl(8) for more detailed usage information).
+
+   % dpctl adddp 0
+   
+  (note, while in principle openflow_mod supports multiple datapaths
+  within the same host, this is rarely useful in practice)
+
+2. Use dpctl to attach the datapath to physical interfaces on the
+   machine.  Say, for example, you want to create a trivial 2-port
+   switch using interfaces eth1 and eth2, you would issue the following
+   commands:
+
+   % dpctl addif 0 eth1
+   % dpctl addif 0 eth2
+
+   You can verify that the interfaces were successfully added by asking
+   dpctl to print the current status of datapath 0:
+
+   % dpctl show 0
+
+3. (Optional) You can manually add flows to the datapath to test using
+   dpctl add-flows and view them using dpctl dump-flows.  See dpctl(8)
+   for more details.
+
+4. The simplest way to test the datapath is to run the provided sample
+   controller on the host machine to manage the datapath directly using
+   netlink.
+
+   % controller -v nl:0
+
+   Once the controller is running, the datapath should operate like a
+   learning Ethernet switch.  You may monitor the flows in the datapath
+   flow table using "dpctl dump-flows" command.
+
+Running the datapath with a remote controller
+---------------------------------------------
+
+1. Start the datapath and attach it to two or more physical ports as
+   described in the previous section.
+
+   Note: The current version of the secure channel and controller
+   require at least one interface not be connected to the datapath
+   to be functional.  This interface will be used for communication
+   between the secure channel and the controller.  Future releases will
+   support in-band control communication.
+
+2. Run the controller in passive tcp mode on the host which will act as
+   the controller. In the example below, the controller will bind to
+   port 975 (the default) awaiting connections from secure channels. 
+   
+   % controller -v ptcp:
+
+   (See controller(8) for more details)
+   
+   Make sure the machine hosting the controller is reachable by the switch.  
+
+3. Run secchan on the datapath host to start the secure channel
+   connecting the datapath to a remote controller.  (See secchan(8)
+   for usage details).  The channel should be configured to connect to
+   the controller's IP address on the port configured in step 2.
+
+   If the controller is running on host 192.168.1.2 port 975 (the
+   default port) and the datapath ID is 0, the secchan invocation
+   would look like:
+
+   % secchan -v nl:0 tcp:192.168.1.2
+
+Bug Reporting
+-------------
+
+Please report problems to: 
+info@openflowswitch.org

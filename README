@@ -1,0 +1,199 @@
+     OpenFlow Reference Release v0.1.5 <http://openflowswitch.org>
+
+What is OpenFlow?
+-----------------
+
+OpenFlow is a flow-based switch specification designed to enable
+researchers to run experiments in live networks.  OpenFlow is based on a
+simple Ethernet flow switch that exposes a standardized interface for
+adding and removing flow entries.
+
+An OpenFlow Switch consists of three parts: (1) A Flow Table in which
+each flow entry is associated with an action telling the switch how to
+process the flow, (2) A Secure Channel connecting the switch to a remote
+process (a controller), allowing commands and packets to be sent between
+the controller and the switch, and (3) An OpenFlow Protocol
+implementation, providing an open and standard way for a controller to
+talk to the switch.  
+
+An OpenFlow Switch can thus serve as a simple datapath element that
+forwards packets between ports according to flow actions defined by
+the controller using OpenFlow commands.  Example actions are:
+
+    - Forward this flow's packets to the given port(s)
+    - Drop this flow's packets
+    - Encapsulate and forward this flow's packets to the controller.
+
+The OpenFlow Switch is defined in detail in the OpenFlow Switch
+Specification [2].
+
+What's here?
+------------
+
+This software is a reference implementation of an OpenFlow Switch kernel
+module for the Linux operating system, a secure channel implementation,
+and an example controller that performs switching with MAC learning.
+
+The rest of this file contains the following sections:
+
+    - Description of the directory hierarchy
+    - Platform support
+    - Quickstart build and install instructions
+    - Shortcomings
+    - References
+
+Directory Hierarchy
+-------------------
+
+  Source:
+
+    datapath/     Linux kernel module implementing an OpenFlow Flow Table
+                  that incoming packets are checked against.  The
+                  kernel module uses netlink (a socket protocol for
+                  user-kernel communication, described in RFC 3549) to
+                  pass OpenFlow messages with the secure channel to be
+                  relayed to the controller.
+
+    secchan/      A Secure Channel that connects to a kernel datapath
+                  via netlink and a remote controller via TCP,
+                  relaying OpenFlow packets received on one end to the
+                  other.  (The current implementation does not
+                  support SSL, but this will be added in future releases.)
+
+    controller/   A simple controller that connects to a datapath via
+                  a Secure Channel, commanding the datapath to act as
+                  a regular MAC learning switch.
+
+    utilities/    Contains the sorce for "dpctl", a command-line utility
+                  for controlling the OpenFlow datapath kernel module.
+                  With it, you can add physical ports to the datapath,
+                  add flows, monitor received packets, and query the
+                  datapath state.
+
+    include/      Header files common to the datapath, secure channel,
+                  and controller components.
+
+    lib/          Implementation files common to the datapath, secure
+                  channel, and controller components.
+
+    third-party/  Contains third-party software that may be useful for
+                  debugging.  Currently, it only contains a patch to 
+                  allow tcpdump to parse OpenFlow messages.
+                  
+  Documentation:
+
+    README        Text file describing this OpenFlow implementation,
+                  aka this document.
+
+    INSTALLATION  Detailed configure, build, and installation
+                  instructions 
+
+    man/          Man pages describing how to administer datapath,
+                  secure channel, and controller.
+
+Platform support
+----------------
+
+    The datapath kernel module supports Linux 2.6.15 and above, however,
+    testing has focused on Linux 2.6.23.  Support for Linux 2.4.20 and
+    above is also in place, although testing has focused on Linux 2.6.
+
+    Components have been built and tested on Debian and Ubuntu.
+
+    If you are able to build/run the code on platforms not mentioned
+    here, or have problems with supported system, please report your
+    experiences to:
+
+                  <info@openflowswitch.org>
+
+    GCC is required for compilation.
+
+
+Building and Installing (Quick Start)
+-------------------------------------
+
+    Building the datapath module requires that the source for the
+    currently running Linux kernel be installed on the machine and 
+    been configured.  
+
+    The following instructions assume the Linux 2.6 source is located in
+    /usr/src/linux-2.6.23 and Linux 2.4 in /usr/src/linux-2.4.35
+
+    1. ./configure the package, passing the location of one or more
+       kernel source trees on the command line:
+
+       For example, if compiling for Linux 2.6:
+          % ./configure --with-l26=/usr/src/linux-2.6.23
+
+       Or compiling for Linux 2.4:
+          % ./configure --with-l24=/usr/src/linux-2.4.35
+
+    2. Run make: 
+
+          % make
+
+       The following binaries should be built.
+
+       Datapath kernel module:
+           ./datapath/linux-2.6/openflow_mod.ko (If compiling for Linux 2.6)
+           ./datapath/linux-2.4/openflow_mod.o  (If compiling for Linux 2.4)
+
+       Secure channel executable:
+           ./secchan/secchan
+
+       Controller executable:
+           ./controller/controller
+
+        dpctl utility:
+           ./utility/dpctl
+
+    3. Optionally you can "make install" to install binaries and the
+    man pages (/usr/local/ is the default prefix).  If you just want
+    access to the man pages without installing, set your MANPATH to
+    include the openflow/ source root.
+          
+    4. Insert the datapath kernel module into the running Linux instance.
+
+          (Linux 2.6)
+          % insmod datapath/linux-2.6/openflow_mod.ko
+
+          (Linux 2.4)
+          % insmod datapath/linux-2.4/openflow_mod.o
+
+    5.  Create datapaths by running dpctl on the Linux host (see man
+        dpctl(8)).  Start the controller on a remote host with
+        controller (see man controller(8)).  Start the Secure Channel
+        on the datapath host to connect the datapath to the controller
+        with secchan(see man secchan(8)).
+
+    For more detailed installation instructions, refer to [3].
+
+
+Bugs/Shortcomings
+-----------------
+
+- The current flowtable does not support all statistics messages
+  mentioned in the Type 0 OpenFlow spec
+- The secure channel and sample controller don't support SSL
+- The flowtable does not support the "normal processing" action
+- Configure/build system does not support separate build directory for
+  the datapath.  ./configure must be run from the source root.
+- dpctl dump-flows may freeze when large numbers of flows are in the
+  flow table.  This has no affect on the datapath
+
+References
+----------
+
+    [1] OpenFlow: Enabling Innovation in College Networks.  Whitepaper.
+        <http://openflowswitch.org/alpha/openflow-wp-v0.1.pdf>
+
+    [2] OpenFlow Switch Specification.
+        <http://openflowswitch.org/alpha/openflow-spec-v0.2.pdf>        
+
+    [3] Installation Instructions: INSTALL
+
+Contact 
+-------
+
+e-mail: info@openflowswitch.org
+www: http://openflowswitch.org/alpha/

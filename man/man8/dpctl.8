@@ -1,0 +1,141 @@
+.TH dpctl 8 "December 2007" "OpenFlow" "OpenFlow Manual"
+
+.SH NAME
+dpctl \- command line tool to administer OpenFlow datapaths
+
+.SH SYNOPSIS
+.B dpctl
+[OPTIONS] COMMAND [ARGS...]
+
+.SH DESCRIPTION
+The
+.B dpctl
+program is a command line tool through which OpenFlow datapaths on the
+local host can be created, deleted, modified, and monitored.  A single
+machine may host up to 32 datapaths (numbered 0 to 31).  In most
+situations, a machine hosts only one datapath.
+
+A newly created datapath is not associated with any of the
+host's network interfaces and thus does not process any incoming
+traffic.  To intercept and process traffic on a given interface, the
+interface must be explicitly added to a datapath through the
+\fBaddif\fR command.
+
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\^\-help
+Prints a brief help message to the console.
+
+.TP
+.BR \-v ", " \-\^\-verbose
+Prints debug messages to the console.
+
+.TP
+.BR \-V ", " \-\^\-version
+Prints version information to the console.
+
+.SH COMMANDS
+.TP
+.BI adddp " DP_IDX"
+Creates datapath numbered \fIDP_IDX\fR on the local host.  Will fail
+if \fIDP_IDX\fR is not in the range 0 to 31, or if the datapath with
+that number already exists on the host.
+
+.TP
+.BI deldp " DP_IDX"
+Deletes datapath \fIDP_IDX\fR on the local host.  \fIDP_IDX\fR must be
+an existing datapath.  All of a datapath's interfaces must be
+explicitly removed before the datapath can be deleted (see \fBdelif\fR
+command).
+
+.TP
+.BI show " DP_IDX"
+Prints to the console information on datapath \fIDP_IDX\fR including
+information on its flow tables and ports.
+
+.TP
+.BI addif " DP_IDX INTERFACE"
+Adds \fIINTERFACE\fR to the list of network interfaces datapath
+\fIDP_IDX\fR monitors, where \fIDP_IDX\fR is the ID of an existing
+datapath, and \fIINTERFACE\fR is the name of one of the host's
+interfaces, e.g. \fBeth0\fR.  Once an interface has been added
+to a datapath, the datapath has complete ownership of the interface's
+traffic and the interface appears silent to the rest of the system.
+
+.TP
+.BI delif " DP_IDX INTERFACE"
+Removes \fIINTERFACE\fR from the list of network interfaces datapath
+\fIDP_IDX\fR monitors.
+
+.TP
+.BI monitor " DP_IDX"
+Prints to the console all OpenFlow packets sent by datapath
+\fIDP_IDX\fR to its controller, where \fIDP_IDX\fR is the ID of an
+existing datapath.
+
+.TP
+.BI dump-tables " DP_IDX"
+Prints to the console statistics for each of the flow tables used by
+datapath \fIDP_IDX\fR, where \fIDP_IDX\fR is the ID of an existing
+datapath.
+
+.TP
+.BI dump-flows " DP_IDX TABLE_ID"
+Prints to the console all flow entries in datapath \fIDP_IDX\fR's table
+\fITABLE_ID\fR, where \fIDP_IDX\fR is the ID of an existing datapath,
+and \fITABLE_ID\fR is the integer ID of one of the datapath's tables
+as displayed in the output produced by \fBdump-tables\fR.
+
+.SH EXAMPLES
+
+A typical dpctl command sequence:
+.nf
+.TP
+Create datapath numbered 0:
+
+.B % dpctl adddp 0
+
+.TP
+Add two interfaces to the new datapath:
+
+.B % dpctl addif 0 eth0
+.B % dpctl addif 0 eth1
+
+.TP
+Monitor traffic received by the datapath (exit with control-C):
+
+.B % dpctl monitor 0
+
+
+.TP
+View the datapath's table stats after some traffic has passed through:
+
+.B % dpctl dump-tables 0
+
+.TP
+View the flow entries in one of the datapath's tables (shown is the command for the table 1).  (This assumes that there is running controller adding flows to the flowtables)
+
+.B % dpctl dump-flows 0 1
+
+.TP
+Remote interfaces from the datapath when finished:
+
+.B % dpctl delif 0 eth0
+.B % dpctl delif 0 eth1
+
+.TP
+Delete the datapath:
+
+.B % dpctl deldp 0
+.fi
+.SH "SEE ALSO"
+
+.BR secchan (8),
+.BR controller (8)
+.BR vlogconf (8)
+
+.SH BUGS
+
+dump-flows currently only prints the first action of each flow.  This is
+a shortcoming in the modules netlink flow query functionality and will
+be addressed in future releases

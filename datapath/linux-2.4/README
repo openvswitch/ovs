@@ -1,0 +1,6 @@
+Linux kernel 2.4 specific build:
+
+	- Backports: compat-2.4/genetlink.c is a back-port of the
+          Linux 2.6 Generic Netlink functionality.  It must be loaded
+          as module genetlink_mod.o before openflow_mod.o may be
+          loaded.

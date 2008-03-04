@@ -1,0 +1,100 @@
+export builddir = @abs_builddir@
+export srcdir = @abs_srcdir@
+export top_srcdir = @abs_top_srcdir@
+export KSRC = @KSRC24@
+export KVERSION = 2.4
+export VMDIR = @VMDIR@
+
+SHAREDFILES = ../chain.c ../crc32.c ../table-hash.c ../table-linear.c	\
+              ../table-mac.c ../forward.c ../flow.c ../unit-exports.c  \
+			  ../dp_dev.c ../datapath_t.c
+
+SIMLINKFILES = $(patsubst ../%,%, $(SHAREDFILES))
+
+CFILES = datapath.c $(SIMLINKFILES)
+
+# create local symlinks of shared files
+%.c : ../%.c
+	ln -s $< $@
+
+COMPAT24_CFILES =				\
+	compat-2.4/random32.c			\
+	compat-2.4/genetlink.c			\
+	compat-2.4/netlink.c			\
+	compat-2.4/attr.c			\
+	compat-2.4/rcupdate.c			\
+	compat-2.4/string.c			\
+	compat-2.4/kernel.c			\
+	compat-2.4/compat24.c
+
+UNIT_CFILES =					\
+	../table_t.c				\
+	../unit.c
+
+SHARED_T_FILES =                                \
+    ../forward_t.c				\
+    ../table_t.c                                \
+    ../crc_t.c                                  \
+    ../unit.c
+UNIT_CFILES = $(patsubst ../%,%, $(SHARED_T_FILES))
+
+kFILES = ../datapath.h 				\
+	../chain.h 				\
+	../crc32.h 				\
+	../flow.h 				\
+	../forward.h				\
+	../table.h				\
+	../datapath_t.h				\
+	compat-2.4/include/linux/rcupdate.h	\
+	compat-2.4/include/linux/jiffies.h	\
+	compat-2.4/include/linux/ipv6.h		\
+	compat-2.4/include/linux/timer.h	\
+	compat-2.4/include/linux/if_vlan.h	\
+	compat-2.4/include/linux/types.h	\
+	compat-2.4/include/linux/skbuff.h	\
+	compat-2.4/include/linux/etherdevice.h	\
+	compat-2.4/include/linux/tcp.h		\
+	compat-2.4/include/linux/genetlink.h	\
+	compat-2.4/include/linux/sockios.h	\
+	compat-2.4/include/linux/list.h		\
+	compat-2.4/include/linux/udp.h		\
+	compat-2.4/include/linux/slab.h		\
+	compat-2.4/include/linux/random.h	\
+	compat-2.4/include/linux/mutex.h	\
+	compat-2.4/include/linux/ip.h		\
+	compat-2.4/include/linux/string.h	\
+	compat-2.4/include/linux/netlink.h	\
+	compat-2.4/include/linux/compiler.h	\
+	compat-2.4/include/linux/kernel.h	\
+	compat-2.4/include/linux/if_ether.h	\
+	compat-2.4/include/net/checksum.h	\
+	compat-2.4/include/net/genetlink.h	\
+	compat-2.4/include/net/netlink.h	\
+	compat-2.4/include/asm/system.h		\
+	compat-2.4/compat24.h
+
+VERSION = @VERSION@
+
+CFLAGS_EXTRA += -DVERSION=\"$(VERSION)\"
+CFLAGS_EXTRA += -O2 -g
+CFLAGS_EXTRA += -I $(srcdir)/.. -I $(top_srcdir)/include
+
+# Conditional include so that make dist doesn't puke when
+# this build isn't turned on by automake
+ifneq (,$(KSRC))
+include $(srcdir)/kbuild.inc
+else
+clean:
+endif
+
+distclean : clean
+distdir : clean
+install :
+
+
+PWD       := $(shell pwd)
+
+all: default
+
+
+check: all

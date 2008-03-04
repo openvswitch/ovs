@@ -1,0 +1,119 @@
+diff -rNu tcpdump/interface.h tcpdump/interface.h
+--- tcpdump/interface.h	2007-06-13 18:03:20.000000000 -0700
++++ tcpdump/interface.h	2008-02-06 15:06:30.000000000 -0800
+@@ -148,7 +148,8 @@
+ 
+ extern const char *dnaddr_string(u_short);
+ 
+-extern void error(const char *, ...)
++#define error(fmt, args...)   tcpdump_error(fmt, ## args)
++extern void tcpdump_error(const char *, ...)
+     __attribute__((noreturn, format (printf, 1, 2)));
+ extern void warning(const char *, ...) __attribute__ ((format (printf, 1, 2)));
+ 
+@@ -176,6 +177,7 @@
+ extern void hex_print_with_offset(const char *, const u_char *, u_int, u_int);
+ extern void hex_print(const char *, const u_char *, u_int);
+ extern void telnet_print(const u_char *, u_int);
++extern void openflow_print(const u_char *, u_int);
+ extern int ether_encap_print(u_short, const u_char *, u_int, u_int, u_short *);
+ extern int llc_print(const u_char *, u_int, u_int, const u_char *,
+ 	const u_char *, u_short *);
+diff -rNu tcpdump/Makefile.in tcpdump/Makefile.in
+--- tcpdump/Makefile.in	2007-09-25 18:59:52.000000000 -0700
++++ tcpdump/Makefile.in	2008-02-07 11:46:03.000000000 -0800
+@@ -49,10 +49,10 @@
+ CFLAGS = $(CCOPT) $(DEFS) $(INCLS)
+ 
+ # Standard LDFLAGS
+-LDFLAGS = @LDFLAGS@
++LDFLAGS = @LDFLAGS@ -L../../lib/.libs
+ 
+ # Standard LIBS
+-LIBS = @LIBS@
++LIBS = @LIBS@ -lopenflow
+ 
+ INSTALL = @INSTALL@
+ INSTALL_PROGRAM = @INSTALL_PROGRAM@
+@@ -87,7 +87,8 @@
+ 	print-slow.c print-snmp.c print-stp.c print-sunatm.c print-sunrpc.c \
+ 	print-symantec.c print-syslog.c print-tcp.c print-telnet.c print-tftp.c \
+ 	print-timed.c print-token.c print-udp.c print-vjc.c print-vrrp.c \
+-	print-wb.c print-zephyr.c setsignal.c tcpdump.c util.c
++	print-wb.c print-zephyr.c setsignal.c tcpdump.c util.c \
++	print-openflow.c
+ 
+ LOCALSRC = @LOCALSRC@
+ GENSRC = version.c
+diff -rNu tcpdump/print-openflow.c tcpdump/print-openflow.c
+--- tcpdump/print-openflow.c	1969-12-31 16:00:00.000000000 -0800
++++ tcpdump/print-openflow.c	2008-02-07 11:29:01.000000000 -0800
+@@ -0,0 +1,46 @@
++/* Copyright (C) 2007 Board of Trustees, Leland Stanford Jr. University.
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a copy
++ * of this software and associated documentation files (the "Software"), to
++ * deal in the Software without restriction, including without limitation the
++ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
++ * sell copies of the Software, and to permit persons to whom the Software is
++ * furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in
++ * all copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
++ * IN THE SOFTWARE.
++ */
++
++
++#ifdef HAVE_CONFIG_H
++#include "config.h"
++#endif
++
++#include <stdlib.h>
++
++#include "interface.h"
++#include "../../include/openflow.h"
++#include "../../include/ofp-print.h"
++
++void
++openflow_print(const u_char *sp, u_int length)
++{
++    const struct ofp_header *ofp = (struct ofp_header *)sp;
++
++    if (!TTEST2(*sp, ntohs(ofp->length)))
++            goto trunc;
++
++    ofp_print(stdout, sp, length, vflag);
++    return;
++
++trunc:
++    printf("[|openflow]");
++}
+diff -rNu tcpdump/print-tcp.c tcpdump/print-tcp.c
+--- tcpdump/print-tcp.c	2006-09-19 12:07:57.000000000 -0700
++++ tcpdump/print-tcp.c	2008-02-07 13:07:58.000000000 -0800
+@@ -52,6 +52,8 @@
+ 
+ #include "nameser.h"
+ 
++#include "../../include/openflow.h"
++
+ #ifdef HAVE_LIBCRYPTO
+ #include <openssl/md5.h>
+ 
+@@ -680,7 +682,8 @@
+ 		}
+                 else if (length > 0 && (sport == LDP_PORT || dport == LDP_PORT)) {
+                         ldp_print(bp, length);
+-		}
++		} else if (sport == OFP_TCP_PORT || dport == OFP_TCP_PORT)
++			openflow_print(bp, length);
+ 	}
+ 	return;
+ bad:

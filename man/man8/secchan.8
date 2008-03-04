@@ -1,0 +1,47 @@
+.TH secchan 8 "December 2007" "OpenFlow" "OpenFlow Manual"
+
+.SH NAME
+secchan \- secure channel connecting an OpenFlow datapath to a controller
+
+.SH SYNOPSIS
+.B secchan
+[OPTIONS] nl:\fIDP_IDX\fR tcp:\fICONTROLLER_IP\fR[:\fICONTROLLER_TCP_PORT\fR]
+
+.SH DESCRIPTION
+The \fBsecchan\fR program sets up a secure channel between a local
+OpenFlow datapath and a remote controller.  \fBsecchan\fR connects to
+the datapath over netlink and to the controller over TCP, and then
+proceeds to forward packets from one endpoint to the other.
+
+\fIDP_IDX\fR \- the ID of the local datapath to connect to
+
+\fICONTROLLER_IP\fR \- the controller's IP address
+
+\fICONTROLLER_TCP_PORT\fR \- the controller's TCP port to connect to \- defaults to 975
+
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\^\-help
+Prints a brief help message to the console.
+
+.TP
+.BR \-u ", " \-\^\-unreliable
+Do not attempt to reconnect the channel if a connection drops.  By
+default, \fBsecchan\fR attempts to reconnect.
+
+.TP
+.BR \-v ", " \-\^\-verbose
+Prints debug messages to the console.
+
+.TP
+.BR \-V ", " \-\^\-version
+Prints version information to the console.
+
+.SH "SEE ALSO"
+
+.BR dpctl (8),
+.BR controller (8)
+.BR vlogconf (8)
+
+.SH BUGS
+Currently \fBsecchan\fR does not support SSL

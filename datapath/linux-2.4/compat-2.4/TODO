@@ -1,0 +1,2 @@
+* Properly port RCU to Linux 2.4.  In particular we will need support
+  for call_rcu to properly do flow-table updating.

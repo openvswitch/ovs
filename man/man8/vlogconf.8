@@ -1,0 +1,45 @@
+.TH vlogconf 8 "December 2007" "OpenFlow" "OpenFlow Manual"
+
+.SH NAME
+vlogconf \- configuration utility for OpenFlow logging in userspace
+
+.SH SYNOPSIS
+\fBvlogconf\fR [OPTIONS]
+.br
+\fBvlogconf\fR \fIMODULE\fR \fIFACILITY\fR \fILEVEL\fR
+
+.SH DESCRIPTION
+The \fBvlogconf\fR program configures the logging system used by the 
+OpenFlow userspace programs.  The logging configuration may be modified 
+while OpenFlow programs are running.
+
+\fIMODULE\fR \- The module for which the logging level is being
+modified.  To see a list of supported modules, rerun \fBvlogconf\fR with
+the \fI\-print\fR option.
+
+\fIFACILITY\fR \- The method of logging.  Valid values are \fBSYSLOG\fR and
+\fBCONSOLE\fR.
+
+\fILEVEL\fR \- The level with which the module should be logged.  Valid 
+values are \fBDBG\fR (debug), \fBWARN\fR (warning), \fBERR\fR (error), 
+and \fBEMER\fR (emergency).
+
+.SH OPTIONS
+.TP
+\fB\-p\fR, \fB\-\^\-print\fR
+Prints the current logging configuration.
+
+.TP
+\fB\-a\fR, \fB\-\^\-all\fR \fIlevel\fR
+Sets all modules and facilities to the specified level.
+
+.TP
+\fB\-h\fR, \fB\-\^\-help\fR
+Prints a brief help message to the console.
+
+
+.SH "SEE ALSO"
+
+.BR dpctl (8),
+.BR secchan (8),
+.BR controller (8)

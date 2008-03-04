@@ -1,0 +1,55 @@
+v0.1.8 - 03 Mar 2008
+--------------------
+    - Added support for cross-compilation.
+    - Various bug fixes and tweaks
+
+v0.1.7 - 07 Feb 2008
+--------------------
+    - Allow permanent flow entries to be set
+    - Added patch for tcpdump that allows parsing of OpenFlow messages
+    - Various bug fixes and tweaks
+
+v0.1.6 - 05 Feb 2008
+--------------------
+    - Added support for Linux 2.6.24
+    - Set nwsrc/nwdst fields in flow structs on ARP packets
+    - Various bug fixes and tweaks
+
+v0.1.5 - 17 Jan 2008
+--------------------
+    - Added support for Linux 2.4.20
+    - Added support for GCC 2.95
+
+v0.1.4 - 15 Jan 2008
+--------------------
+    - Decode and print port_status messages
+    - Fixed build problems on big-endian systems
+    - Fixed compatibility for older 2.6 kernels
+    - Various bug fixes and tweaks
+
+v0.1.3 - 08 Jan 2008
+--------------------
+    - Added support for flow expiration messages
+    - Decode and print all datapath-generated messages in dpctl's "monitor" 
+    - Added "--noflow" option to controller
+    - Various bug fixes and tweaks
+
+v0.1.2 - 07 Jan 2008
+--------------------
+    - Fixed distribution to include ofp_pcap.h
+    - Removed autoconf C++ checks
+
+v0.1.1 - 18 Dec 2007
+--------------------
+    - Fixed support for Linux 2.4.35 and 2.6.22
+    - Added support for Linux 2.6.15
+    - Added "vlogconf" utility to modify logging configuration
+    - Added better support for SNAP headers
+    - Improved printing of flow information in dpctl
+    - Made kernel code consistently use tabs instead of spaces
+    - Removed libpcap requirement for building
+    - Various bug fixes and tweaks
+
+v0.1.0 - 30 Nov 2007
+--------------------
+    - Initial release
