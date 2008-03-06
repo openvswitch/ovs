@@ -36,7 +36,13 @@ endif
 # Environment tests
 
 ifeq (,$(CC))
-  CC := gcc cc
+  CC_CANDIDATES := gcc cc
+  test_cc = $(shell $(cc) --version > /dev/null 2>&1 && echo $(cc))
+  CC := $(foreach cc,$(CC_CANDIDATES), $(test_cc))
+  CC := $(firstword $(CC))
+  ifeq (,$(CC))
+    $(error Compiler not found)
+  endif
 endif
 
 ifeq (,$(KSRC))
@@ -94,13 +100,6 @@ ifeq (,$(wildcard $(CONFIG_FILE)))
   $(error Linux kernel source not configured - missing autoconf.h)
 endif
 
-
-test_cc = $(shell $(cc) --version > /dev/null 2>&1 && echo $(cc))
-CC := $(foreach cc, $(CC), $(test_cc))
-CC := $(firstword $(CC))
-ifeq (,$(CC))
-  $(error Compiler not found)
-endif
 
 # we need to know what platform the driver is being built on
 # some additional features are only built on Intel platforms
