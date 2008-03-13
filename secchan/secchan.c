@@ -88,7 +88,10 @@ main(int argc, char *argv[])
         reconnect(&halves[i]);
     }
     for (;;) {
+        size_t n_ready;
+        
         /* Wait until there's something to do. */
+        n_ready = 0;
         for (i = 0; i < 2; i++) {
             struct half *this = &halves[i];
             struct half *peer = &halves[!i];
@@ -101,16 +104,17 @@ main(int argc, char *argv[])
             }
             this->pollfd->fd = -1;
             this->pollfd->events = 0;
-            vconn_prepoll(this->vconn, want, this->pollfd);
+            n_ready += vconn_prepoll(this->vconn, want, this->pollfd);
         }
         if (vlog_server) {
             pollfds[2].fd = vlog_server_get_fd(vlog_server);
             pollfds[2].events = POLLIN;
         }
         do {
-            retval = poll(pollfds, 2 + (vlog_server != NULL), -1);
+            retval = poll(pollfds, 2 + (vlog_server != NULL),
+                          n_ready ? 0 : -1);
         } while (retval < 0 && errno == EINTR);
-        if (retval <= 0) {
+        if (retval < 0 || (retval == 0 && !n_ready)) {
             fatal(retval < 0 ? errno : 0, "poll");
         }
 
@@ -217,6 +221,11 @@ parse_options(int argc, char *argv[])
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
+#ifdef HAVE_OPENSSL
+        {"private-key", required_argument, 0, 'p'},
+        {"certificate", required_argument, 0, 'c'},
+        {"ca-cert",     required_argument, 0, 'C'},
+#endif
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -246,6 +255,20 @@ parse_options(int argc, char *argv[])
             vlog_set_verbosity(optarg);
             break;
 
+#ifdef HAVE_OPENSSL
+        case 'p':
+            vconn_ssl_set_private_key_file(optarg);
+            break;
+
+        case 'c':
+            vconn_ssl_set_certificate_file(optarg);
+            break;
+
+        case 'C':
+            vconn_ssl_set_ca_cert_file(optarg);
+            break;
+#endif
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -260,15 +283,28 @@ static void
 usage(void)
 {
     printf("%s: Secure Channel\n"
-           "usage: %s [OPTIONS] nl:DP_ID tcp:HOST:[PORT]\n"
-           "\nConnects to local datapath DP_ID via Netlink and \n"
-           "controller on HOST via TCP to PORT (default: %d).\n"
-           "\nNetworking options:\n"
+           "usage: %s [OPTIONS] LOCAL REMOTE\n"
+           "\nRelays OpenFlow message between LOCAL and REMOTE datapaths.\n"
+           "LOCAL and REMOTE must each be one of the following:\n"
+           "  tcp:HOST[:PORT]         PORT (default: %d) on remote TCP HOST\n",
+           program_name, program_name);
+#ifdef HAVE_NETLINK
+    printf("  nl:DP_IDX               local datapath DP_IDX\n");
+#endif
+#ifdef HAVE_OPENSSL
+    printf("  ssl:HOST[:PORT]         SSL PORT (default: %d) on remote HOST\n"
+           "\nPKI configuration (required to use SSL):\n"
+           "  -p, --private-key=FILE  file with private key\n"
+           "  -c, --certificate=FILE  file with certificate for private key\n"
+           "  -C, --ca-cert=FILE      file with peer CA certificate\n",
+           OFP_SSL_PORT);
+#endif
+    printf("\nNetworking options:\n"
            "  -u, --unreliable        do not reconnect after connections drop\n"
            "\nOther options:\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n",
-           program_name, program_name, OFP_TCP_PORT);
+           OFP_TCP_PORT);
     exit(EXIT_SUCCESS);
 }

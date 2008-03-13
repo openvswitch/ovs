@@ -46,7 +46,7 @@ enum {
 int vconn_open(const char *name, struct vconn **);
 void vconn_close(struct vconn *);
 bool vconn_is_passive(const struct vconn *);
-void vconn_prepoll(struct vconn *, int want, struct pollfd *);
+bool vconn_prepoll(struct vconn *, int want, struct pollfd *);
 void vconn_postpoll(struct vconn *, short int *revents);
 int vconn_accept(struct vconn *, struct vconn **);
 int vconn_recv(struct vconn *, struct buffer **);
@@ -83,8 +83,13 @@ struct vconn_class {
      * initialize 'pfd->fd' and 'pfd->events' appropriately so that poll() will
      * wake up when the connection becomes available for the operations
      * specified in 'want'.  The prepoll function may also set bits in 'pfd' to
-     * allow for internal processing. */
-    void (*prepoll)(struct vconn *, int want, struct pollfd *pfd);
+     * allow for internal processing.
+     *
+     * Should return false normally.  May return true to indicate that no
+     * blocking should happen in poll() because the connection is available for
+     * some operation specified in 'want' but that status cannot be detected
+     * via poll() and thus poll() could block forever otherwise. */
+    bool (*prepoll)(struct vconn *, int want, struct pollfd *pfd);
 
     /* Called by the main loop after calling poll(), this function may perform
      * any internal processing needed by the connection.  It is provided with
@@ -147,6 +152,10 @@ struct vconn_class {
 
 extern struct vconn_class tcp_vconn_class;
 extern struct vconn_class ptcp_vconn_class;
+#ifdef HAVE_OPENSSL
+extern struct vconn_class ssl_vconn_class;
+extern struct vconn_class pssl_vconn_class;
+#endif
 #ifdef HAVE_NETLINK
 extern struct vconn_class netlink_vconn_class;
 #endif

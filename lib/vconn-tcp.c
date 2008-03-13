@@ -139,7 +139,7 @@ tcp_close(struct vconn *vconn)
     free(tcp);
 }
 
-static void
+static bool
 tcp_prepoll(struct vconn *vconn, int want, struct pollfd *pfd) 
 {
     struct tcp_vconn *tcp = tcp_vconn_cast(vconn);
@@ -150,6 +150,7 @@ tcp_prepoll(struct vconn *vconn, int want, struct pollfd *pfd)
     if (want & WANT_SEND || tcp->txbuf) {
         pfd->events |= POLLOUT;
     }
+    return false;
 }
 
 static void
@@ -336,7 +337,7 @@ ptcp_close(struct vconn *vconn)
     free(ptcp);
 }
 
-static void
+static bool
 ptcp_prepoll(struct vconn *vconn, int want, struct pollfd *pfd) 
 {
     struct ptcp_vconn *ptcp = ptcp_vconn_cast(vconn);
@@ -344,6 +345,7 @@ ptcp_prepoll(struct vconn *vconn, int want, struct pollfd *pfd)
     if (want & WANT_ACCEPT) {
         pfd->events |= POLLIN;
     }
+    return false;
 }
 
 static int

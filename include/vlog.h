@@ -60,6 +60,7 @@ enum vlog_facility vlog_get_facility_val(const char *name);
         VLOG_MODULE(socket_util)                \
         VLOG_MODULE(vconn_netlink)              \
         VLOG_MODULE(vconn_tcp)                  \
+        VLOG_MODULE(vconn_ssl)                  \
         VLOG_MODULE(vconn)                      \
 
 /* VLM_ constant for each vlog module. */

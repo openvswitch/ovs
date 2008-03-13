@@ -1,0 +1,308 @@
+#! /bin/sh -e
+
+DIR=pki
+command=
+arg1=
+arg2=
+prev=
+force=no
+batch=no
+log=ofp-pki.log
+for option; do
+    # This option-parsing mechanism borrowed from a Autoconf-generated
+    # configure script under the following license:
+
+    # Copyright (C) 1992, 1993, 1994, 1995, 1996, 1998, 1999, 2000, 2001,
+    # 2002, 2003, 2004, 2005, 2006 Free Software Foundation, Inc.
+    # This configure script is free software; the Free Software Foundation
+    # gives unlimited permission to copy, distribute and modify it.
+
+    # If the previous option needs an argument, assign it.
+    if test -n "$prev"; then
+	eval $prev=\$option
+	prev=
+	continue
+    fi
+    case $option in
+	*=*) optarg=`expr "X$option" : '[^=]*=\(.*\)'` ;;
+	*) optarg=yes ;;
+    esac
+
+    case $dashdash$option in
+	--)
+	    dashdash=yes ;;
+	-h|--help)
+	    cat <<EOF
+ofp-pki, for managing a simple OpenFlow public key infrastructure 
+usage: $0 [OPTION...] COMMAND [ARG...]
+where the valid commands and their arguments are:
+  new-pki              Create a new PKI
+  req NAME             Create new private key and certificate request
+                       named NAME-privkey.pem and NAME-req.pem, resp.
+                       TYPE is a certificate type: 'switch' or 'controller'
+  sign NAME TYPE       Sign switch certificate request NAME-req.pem,
+                       producing certificate NAME-cert.pem
+                       TYPE is a certificate type: 'switch' or 'controller'
+  req+sign NAME TYPE   Combine the above two steps, producing all three files.
+  verify NAME TYPE     Checks that NAME-cert.pem is a valid TYPE certificate
+                       TYPE is a certificate type: 'switch' or 'controller'
+The valid OPTIONS are:
+  -d, --dir=DIR        Directory where the PKI is located (default: pki)
+  -f, --force          Continue even if file or directory already exists
+  -b, --batch          Skip fingerprint verification
+  -l, --log=FILE       Log openssl output to FILE (default: ofp-log.log)
+  -h, --help           Print this usage message.
+EOF
+	    exit 0
+	    ;;
+	--d*=*)
+            DIR=$optarg
+            ;;
+	--d*|-d)
+	    prev=DIR
+	    ;;
+        --force|-f)
+            force=yes
+            ;;
+        --batch|-b)
+            batch=yes
+            ;;
+	-*)
+	    echo "unrecognized option $option"
+	    exit 1
+	    ;;
+	*)
+	    if test -z "$command"; then
+		command=$option
+	    elif test -z "$arg1"; then
+                arg1=$option
+	    elif test -z "$arg2"; then
+                arg2=$option
+            else
+		echo "only two arguments may be specified"
+		exit 1
+	    fi
+	    ;;
+    esac
+    shift
+done
+if test -n "$prev"; then
+    option=--`echo $prev | sed 's/_/-/g'`
+    { echo "$as_me: error: missing argument to $option" >&2
+	{ (exit 1); exit 1; }; }
+fi
+if test -z "$command"; then
+    echo "$0: missing command name; use --help for help"
+    exit 1
+fi
+exec 3>>$log
+
+if test "$command" = "new-pki"; then
+    if test -e "$DIR" && test "$force" != "yes"; then
+        echo "$0: $DIR already exists"
+        exit 1
+    fi
+
+    if test ! -d "$DIR"; then
+        mkdir "$DIR"
+    fi
+    cd "$DIR"
+
+    if test ! -e dsaparam.pem; then
+        echo "Generating DSA parameters, please wait..."
+        openssl dsaparam -out dsaparam.pem 2048 1>&3 2>&3
+    fi
+
+    # Create the request configuration.
+    if test ! -e req.cnf; then
+        cat > req.cnf <<EOF
+[ req ]
+prompt = no
+distinguished_name = req_distinguished_name
+
+[ req_distinguished_name ]
+C = US
+ST = CA
+L = Palo Alto
+O = OpenFlow
+OU = OpenFlow certifier
+CN = OpenFlow certificate
+EOF
+    fi
+
+    # Create the CAs.
+    for ca in controllerca switchca; do
+        echo "Creating $ca..."
+        oldpwd=$PWD
+        mkdir -p $ca
+        cd $ca
+
+        mkdir -p certs crl newcerts private
+        touch index.txt
+        test -e crlnumber || echo 01 > crlnumber
+        test -e serial || echo 01 > serial
+
+        # Put DSA parameters in directory.
+        if test ! -e dsaparam.pem; then
+            cp ../dsaparam.pem .
+        fi
+
+    # Write CA configuration file.
+        if test ! -e ca.cnf; then
+            cat > ca.cnf <<'EOF'
+[ req ]
+prompt = no
+distinguished_name = req_distinguished_name
+
+[ req_distinguished_name ]
+C = US
+ST = CA
+L = Palo Alto
+O = OpenFlow
+OU = OpenFlow
+CN = OpenFlow
+
+[ ca ]
+default_ca = the_ca
+
+[ the_ca ]
+dir            = .                     # top dir
+database       = $dir/index.txt        # index file.
+new_certs_dir  = $dir/newcerts         # new certs dir
+certificate    = $dir/cacert.pem       # The CA cert
+serial         = $dir/serial           # serial no file
+private_key    = $dir/private/cakey.pem# CA private key
+RANDFILE       = $dir/private/.rand    # random number file
+default_days   = 365                   # how long to certify for
+default_crl_days= 30                   # how long before next CRL
+default_md     = md5                   # md to use
+policy         = policy                # default policy
+email_in_dn    = no                    # Don't add the email into cert DN
+name_opt       = ca_default            # Subject name display option
+cert_opt       = ca_default            # Certificate display option
+copy_extensions = none                 # Don't copy extensions from request
+
+# For the CA policy
+[ policy ]
+countryName             = optional
+stateOrProvinceName     = optional
+organizationName        = match
+organizationalUnitName  = optional
+commonName              = supplied
+emailAddress            = optional
+EOF
+        fi
+
+        # Create certificate authority.
+        openssl req -config ca.cnf -nodes \
+            -newkey dsa:dsaparam.pem -keyout private/cakey.pem -out careq.pem \
+            1>&3 2>&3
+        openssl ca -config ca.cnf -create_serial -out cacert.pem \
+            -days 1095 -batch -keyfile private/cakey.pem -selfsign \
+            -infiles careq.pem 1>&3 2>&3
+
+        cd "$oldpwd"
+    done
+    exit 0
+fi
+
+one_arg() {
+    if test -z "$arg1" || test -n "$arg2"; then
+        echo "$0: $command must have exactly one argument; use --help for help"
+        exit 1
+    fi
+}
+
+two_args() {
+    if test -z "$arg1" || test -z "$arg2"; then
+        echo "$0: $command must have exactly two arguments; use --help for help"
+        exit 1
+    fi
+}
+
+must_not_exist() {
+    if test -e "$1" && test "$force" != "yes"; then
+        echo "$0: $1 already exists and --force not supplied"
+        exit 1
+    fi
+}
+
+fingerprint() {
+    printf "$1-req.pem fingerprint is "
+    sha1sum "$1-req.pem" | awk '{print $1}'
+}
+
+check_type() {
+    if test "$1" != switch && test "$1" != controller; then
+        echo "$0: type argument must be 'switch' or 'controller'"
+        exit 1
+    fi
+}
+
+must_exist() {
+    if test ! -e "$1"; then
+        echo "$0: $1 does not exist"
+        exit 1
+    fi
+}
+
+DIR_must_exist() {
+    if test ! -e "$DIR"; then
+        echo "$0: $DIR does not exist (need to use --dir or new-pki?)"
+        exit 1
+    elif test ! -d "$DIR"; then
+        echo "$0: $DIR is not a directory"
+        exit 1
+    fi
+}
+
+make_request() {
+    must_not_exist "$arg1-privkey.pem"
+    must_not_exist "$arg1-req.pem"
+    DIR_must_exist
+    openssl req -config "$DIR/req.cnf" -text -nodes \
+        -newkey "dsa:$DIR/dsaparam.pem" -keyout "$1-privkey.pem" \
+        -out "$1-req.pem" 1>&3 2>&3
+}
+
+sign_request() {
+    must_exist "$1-req.pem"
+    must_not_exist "$1-cert.pem"
+    check_type "$2"
+    DIR_must_exist
+    (cd "$DIR/$2ca" && openssl ca -config ca.cnf -batch -in /dev/stdin) \
+        < "$1-req.pem" > "$1-cert.pem.tmp" 2>&3
+    mv "$1-cert.pem.tmp" "$1-cert.pem"
+}
+
+if test "$command" = req; then
+    one_arg
+    make_request "$arg1"
+    fingerprint "$arg1"
+elif test "$command" = sign; then
+    two_args
+    fingerprint "$arg1"
+    if test $batch != yes; then
+        echo "Does fingerprint match? (yes/no)"
+        read answer
+        if test "$answer" != yes; then 
+            echo "Match failure, aborting"
+            exit 1
+        fi
+    fi
+    sign_request "$arg1" "$arg2"
+elif test "$command" = req+sign; then
+    two_args
+    make_request "$arg1"
+    sign_request "$arg1" "$arg2"
+    fingerprint "$arg1"
+elif test "$command" = verify; then
+    two_args
+    must_exist "$arg1-cert.pem"
+    check_type "$arg2"
+    DIR_must_exist
+    openssl verify -CAfile "$DIR/${arg2}ca/cacert.pem" "$arg1-cert.pem"
+else
+    echo "$0: $command command unknown; use --help for help"
+    exit 1
+fi

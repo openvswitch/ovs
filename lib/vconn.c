@@ -37,6 +37,10 @@ static struct vconn_class *vconn_classes[] = {
 #ifdef HAVE_NETLINK
     &netlink_vconn_class,
 #endif
+#ifdef HAVE_OPENSSL
+    &ssl_vconn_class,
+    &pssl_vconn_class,
+#endif
 };
 
 /* Check the validity of the vconn class structures. */
@@ -116,11 +120,16 @@ vconn_is_passive(const struct vconn *vconn)
 
 /* Initializes 'pfd->fd' and 'pfd->events' appropriately so that poll() will
  * wake up when the connection becomes available for the operations specified
- * in 'want', or for performing the vconn's needed internal processing.  */
-void
+ * in 'want', or for performing the vconn's needed internal processing.
+ *
+ * Normally returns false.  Returns true to indicate that no blocking should
+ * happen in poll() because the connection is available for some operation
+ * specified in 'want' but that status cannot be detected via poll() and thus
+ * poll() could block forever otherwise. */
+bool
 vconn_prepoll(struct vconn *vconn, int want, struct pollfd *pollfd)
 {
-    (vconn->class->prepoll)(vconn, want, pollfd);
+    return (vconn->class->prepoll)(vconn, want, pollfd);
 }
 
 /* Perform any internal processing needed by the connections.  The vconn file
