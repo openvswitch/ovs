@@ -24,6 +24,7 @@
 #include <poll.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "buffer.h"
@@ -48,6 +49,8 @@ struct half {
     struct vconn *vconn;
     struct pollfd *pollfd;
     struct buffer *rxbuf;
+    time_t backoff_deadline;
+    int backoff;
 };
 
 static void reconnect(struct half *);
@@ -80,6 +83,8 @@ main(int argc, char *argv[])
         halves[i].vconn = NULL;
         halves[i].pollfd = &pollfds[i];
         halves[i].rxbuf = NULL;
+        halves[i].backoff_deadline = 0;
+        halves[i].backoff = 1;
         reconnect(&halves[i]);
     }
     for (;;) {
@@ -156,8 +161,6 @@ main(int argc, char *argv[])
 static void
 reconnect(struct half *this) 
 {
-    int backoff;
-    
     if (this->vconn != NULL) {
         if (!reliable) {
             fatal(0, "%s: connection dropped", this->name);
@@ -171,23 +174,38 @@ reconnect(struct half *this)
     }
     this->pollfd->revents = POLLIN | POLLOUT;
 
-    for (backoff = 1; ; backoff = MIN(backoff * 2, 60)) {
-        int retval = vconn_open(this->name, &this->vconn);
+    for (;;) {
+        time_t now = time(0);
+        int retval;
+
+        if (now >= this->backoff_deadline) {
+            this->backoff = 1;
+        } else {
+            this->backoff *= 2;
+            if (this->backoff > 60) {
+                this->backoff = 60;
+            }
+            VLOG_WARN("%s: waiting %d seconds before reconnect\n",
+                      this->name, (int) (this->backoff_deadline - now));
+            sleep(this->backoff_deadline - now);
+        }
+
+        retval = vconn_open(this->name, &this->vconn);
         if (!retval) {
             VLOG_WARN("%s: connected", this->name);
             if (vconn_is_passive(this->vconn)) {
                 fatal(0, "%s: passive vconn not supported in control path",
                       this->name);
             }
+            this->backoff_deadline = now + this->backoff;
             return;
         }
 
         if (!reliable) {
             fatal(0, "%s: connection failed", this->name);
         }
-        VLOG_WARN("%s: connection failed (%s), reconnecting",
-                  this->name, strerror(errno));
-        sleep(backoff);
+        VLOG_WARN("%s: connection failed (%s)", this->name, strerror(errno));
+        this->backoff_deadline = time(0) + this->backoff;
     }
 }
 
