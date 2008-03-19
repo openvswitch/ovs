@@ -120,12 +120,12 @@ new_ssl_vconn(const char *name, int fd, enum session_type type,
     /* Create and configure OpenSSL stream. */
     ssl = SSL_new(ctx);
     if (ssl == NULL) {
-        VLOG_DBG("SSL_new: %s", ERR_error_string(ERR_get_error(), NULL));
+        VLOG_ERR("SSL_new: %s", ERR_error_string(ERR_get_error(), NULL));
         close(fd);
         return ENOPROTOOPT;
     }
     if (SSL_set_fd(ssl, fd) == 0) {
-        VLOG_DBG("SSL_set_fd: %s", ERR_error_string(ERR_get_error(), NULL));
+        VLOG_ERR("SSL_set_fd: %s", ERR_error_string(ERR_get_error(), NULL));
         goto error;
     }
 
