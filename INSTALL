@@ -71,7 +71,7 @@ Building the Code
    also specify it on the configure command line, like so:
       % ./configure CC=gcc-4.2
 
-   The configure script accepts a number of other options and honors a
+   The configure script accepts a number of other options and honors
    additional environment variables.  For a full list, invoke
    configure with the --help option.
 

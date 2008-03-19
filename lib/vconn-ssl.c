@@ -583,7 +583,7 @@ struct vconn_class pssl_vconn_class = {
 /*
  * Returns true if OpenSSL error is WANT_READ or WANT_WRITE, indicating that
  * OpenSSL is requesting that we call it back when the socket is ready for read
- * or writing (respectively.
+ * or writing, respectively.
  */
 static bool
 ssl_wants_io(int ssl_error)

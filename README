@@ -43,7 +43,7 @@ of an OpenFlow switch, comprising:
 
 This distribution includes some additional software as well:
 
-	- controller, a simple program connects to any number of
+	- controller, a simple program that connects to any number of
           OpenFlow switches, commanding them to act as regular MAC
           learning switches.
 
