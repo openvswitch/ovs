@@ -19,20 +19,20 @@ for option; do
 
     # If the previous option needs an argument, assign it.
     if test -n "$prev"; then
-	eval $prev=\$option
-	prev=
-	continue
+        eval $prev=\$option
+        prev=
+        continue
     fi
     case $option in
-	*=*) optarg=`expr "X$option" : '[^=]*=\(.*\)'` ;;
-	*) optarg=yes ;;
+        *=*) optarg=`expr "X$option" : '[^=]*=\(.*\)'` ;;
+        *) optarg=yes ;;
     esac
 
     case $dashdash$option in
-	--)
-	    dashdash=yes ;;
-	-h|--help)
-	    cat <<EOF
+        --)
+            dashdash=yes ;;
+        -h|--help)
+            cat <<EOF
 ofp-pki, for managing a simple OpenFlow public key infrastructure 
 usage: $0 [OPTION...] COMMAND [ARG...]
 where the valid commands and their arguments are:
@@ -53,43 +53,43 @@ The valid OPTIONS are:
   -l, --log=FILE       Log openssl output to FILE (default: ofp-log.log)
   -h, --help           Print this usage message.
 EOF
-	    exit 0
-	    ;;
-	--d*=*)
+            exit 0
+            ;;
+        --d*=*)
             DIR=$optarg
             ;;
-	--d*|-d)
-	    prev=DIR
-	    ;;
+        --d*|-d)
+            prev=DIR
+            ;;
         --force|-f)
             force=yes
             ;;
         --batch|-b)
             batch=yes
             ;;
-	-*)
-	    echo "unrecognized option $option"
-	    exit 1
-	    ;;
-	*)
-	    if test -z "$command"; then
-		command=$option
-	    elif test -z "$arg1"; then
+        -*)
+            echo "unrecognized option $option"
+            exit 1
+            ;;
+        *)
+            if test -z "$command"; then
+                command=$option
+            elif test -z "$arg1"; then
                 arg1=$option
-	    elif test -z "$arg2"; then
+            elif test -z "$arg2"; then
                 arg2=$option
             else
-		echo "only two arguments may be specified"
-		exit 1
-	    fi
-	    ;;
+                echo "only two arguments may be specified"
+                exit 1
+            fi
+            ;;
     esac
     shift
 done
 if test -n "$prev"; then
     option=--`echo $prev | sed 's/_/-/g'`
     { echo "$as_me: error: missing argument to $option" >&2
-	{ (exit 1); exit 1; }; }
+        { (exit 1); exit 1; }; }
 fi
 if test -z "$command"; then
     echo "$0: missing command name; use --help for help"
