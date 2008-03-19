@@ -673,8 +673,6 @@ tmp_dh_callback(SSL *ssl, int is_export UNUSED, int keylength)
     };
 
     static struct dh dh_table[] = {
-        {512, NULL, get_dh512},
-        {1024, NULL, get_dh1024},
         {2048, NULL, get_dh2048},
         {4096, NULL, get_dh4096},
     };
