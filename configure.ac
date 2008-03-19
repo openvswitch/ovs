@@ -29,6 +29,23 @@ AC_CHECK_HEADER([linux/netlink.h],
                 [HAVE_NETLINK=no],
                 [#include <sys/socket.h>])
 AM_CONDITIONAL([HAVE_NETLINK], [test "$HAVE_NETLINK" = yes])
+if test "$HAVE_NETLINK" = yes; then
+   AC_DEFINE([HAVE_NETLINK], [1],
+             [Define to 1 if Netlink protocol is available.])
+fi
+
+PKG_CHECK_MODULES([SSL], [libssl], 
+  [HAVE_OPENSSL=yes],
+  [HAVE_OPENSSL=no
+   AC_MSG_WARN([Cannot find libssl:
+
+$SSL_PKG_ERRORS
+
+OpenFlow will not support SSL connections.])])
+AM_CONDITIONAL([HAVE_OPENSSL], [test "$HAVE_OPENSSL" = yes])
+if test "$HAVE_OPENSSL" = yes; then
+   AC_DEFINE([HAVE_OPENSSL], [1], [Define to 1 if OpenSSL is installed.])
+fi
 
 AC_CHECK_LIB([socket], [connect])
 AC_CHECK_LIB([resolv], [gethostbyname])

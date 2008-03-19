@@ -25,3 +25,15 @@ libopenflow_la_SOURCES += \
 	netlink.c \
 	vconn-netlink.c
 endif
+
+if HAVE_OPENSSL
+libopenflow_la_SOURCES += \
+	vconn-ssl.c \
+	dhparams.c
+dhparams.c: dh2048.pem dh4096.pem
+	(echo '#include "dhparams.h"' &&			\
+	 openssl dhparam -C -in $(srcdir)/dh2048.pem -noout &&	\
+	 openssl dhparam -C -in $(srcdir)/dh4096.pem -noout)	\
+	| sed 's/\(get_dh[0-9]*\)()/\1(void)/' > dhparams.c.tmp
+	mv dhparams.c.tmp dhparams.c
+endif

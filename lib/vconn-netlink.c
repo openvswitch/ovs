@@ -85,7 +85,7 @@ netlink_close(struct vconn *vconn)
     free(netlink);
 }
 
-static void
+static bool
 netlink_prepoll(struct vconn *vconn, int want, struct pollfd *pfd) 
 {
     struct netlink_vconn *netlink = netlink_vconn_cast(vconn);
@@ -96,6 +96,7 @@ netlink_prepoll(struct vconn *vconn, int want, struct pollfd *pfd)
     if (want & WANT_SEND) {
         pfd->events |= POLLOUT;
     }
+    return false;
 }
 
 static int

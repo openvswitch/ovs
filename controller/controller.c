@@ -41,6 +41,7 @@
 #include "openflow.h"
 #include "time.h"
 #include "util.h"
+#include "vconn-ssl.h"
 #include "vconn.h"
 #include "vlog-socket.h"
 #include "xtoxll.h"
@@ -133,9 +134,11 @@ main(int argc, char *argv[])
     }
     
     while (n_switches > 0) {
+        size_t n_ready;
         int retval;
 
         /* Wait until there's something to do. */
+        n_ready = 0;
         for (i = 0; i < n_switches; i++) {
             struct switch_ *this = switches[i];
             int want;
@@ -152,16 +155,17 @@ main(int argc, char *argv[])
             this->pollfd = &pollfds[i];
             this->pollfd->fd = -1;
             this->pollfd->events = 0;
-            vconn_prepoll(this->vconn, want, this->pollfd);
+            n_ready += vconn_prepoll(this->vconn, want, this->pollfd);
         }
         if (vlog_server) {
             pollfds[n_switches].fd = vlog_server_get_fd(vlog_server);
             pollfds[n_switches].events = POLLIN;
         }
         do {
-            retval = poll(pollfds, n_switches + (vlog_server != NULL), -1);
+            retval = poll(pollfds, n_switches + (vlog_server != NULL),
+                          n_ready ? 0 : -1);
         } while (retval < 0 && errno == EINTR);
-        if (retval <= 0) {
+        if (retval < 0 || (retval == 0 && !n_ready)) {
             fatal(retval < 0 ? errno : 0, "poll");
         }
 
@@ -623,6 +627,11 @@ parse_options(int argc, char *argv[])
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
+#ifdef HAVE_OPENSSL
+        {"private-key", required_argument, 0, 'p'},
+        {"certificate", required_argument, 0, 'c'},
+        {"ca-cert",     required_argument, 0, 'C'},
+#endif
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -656,6 +665,20 @@ parse_options(int argc, char *argv[])
             vlog_set_verbosity(optarg);
             break;
 
+#ifdef HAVE_OPENSSL
+        case 'p':
+            vconn_ssl_set_private_key_file(optarg);
+            break;
+
+        case 'c':
+            vconn_ssl_set_certificate_file(optarg);
+            break;
+
+        case 'C':
+            vconn_ssl_set_ca_cert_file(optarg);
+            break;
+#endif
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -672,16 +695,24 @@ usage(void)
     printf("%s: OpenFlow controller\n"
            "usage: %s [OPTIONS] VCONN\n"
            "where VCONN is one of the following:\n"
+           "  ptcp:[PORT]             listen to TCP PORT (default: %d)\n",
+           program_name, program_name, OFP_TCP_PORT);
 #ifdef HAVE_NETLINK
-           "  nl:DP_IDX               via netlink to local datapath DP_IDX\n"
+    printf("  nl:DP_IDX               via netlink to local datapath DP_IDX\n");
 #endif
-           "  ptcp:[PORT]             listen to TCP PORT (default: %d)\n"
-           "\nOther options:\n"
+#ifdef HAVE_OPENSSL
+    printf("  pssl:[PORT]             listen for SSL on PORT (default: %d)\n"
+           "\nPKI configuration (required to use SSL):\n"
+           "  -p, --private-key=FILE  file with private key\n"
+           "  -c, --certificate=FILE  file with certificate for private key\n"
+           "  -C, --ca-cert=FILE      file with peer CA certificate\n",
+           OFP_SSL_PORT);
+#endif
+    printf("\nOther options:\n"
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
-           "  -V, --version           display version information\n",
-           program_name, program_name, OFP_TCP_PORT);
+           "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);
 }
