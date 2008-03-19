@@ -32,6 +32,7 @@
 #include "compiler.h"
 #include "fault.h"
 #include "util.h"
+#include "vconn-ssl.h"
 #include "vconn.h"
 #include "vlog-socket.h"
 #include "openflow.h"

@@ -41,6 +41,7 @@
 #include "openflow.h"
 #include "time.h"
 #include "util.h"
+#include "vconn-ssl.h"
 #include "vconn.h"
 #include "vlog-socket.h"
 #include "xtoxll.h"
