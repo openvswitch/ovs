@@ -1,5 +1,5 @@
 AC_PREREQ(2.59)
-AC_INIT(openflow, v0.1.8, info@openflowswitch.org)
+AC_INIT(openflow, v0.1.9, info@openflowswitch.org)
 AM_INIT_AUTOMAKE
 
 AC_PROG_CC
@@ -22,7 +22,6 @@ AC_ARG_ENABLE(
 AM_CONDITIONAL([NDEBUG], [test x$ndebug = xtrue])
 
 CHECK_LINUX(l26, 2.6, 2.6, KSRC26, L26_ENABLED)
-CHECK_LINUX(uml, 2.6, 2.6-uml, KSRCUML, UML_ENABLED)
 CHECK_LINUX(l24, 2.4, 2.4, KSRC24, L24_ENABLED)
 
 AC_CHECK_HEADER([linux/netlink.h],
@@ -49,7 +48,6 @@ secchan/Makefile
 datapath/tests/Makefile
 third-party/Makefile
 datapath/linux-2.6/Makefile
-datapath/linux-2.6-uml/Makefile
 datapath/linux-2.4/Makefile])
 
 AC_OUTPUT

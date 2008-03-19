@@ -1,6 +1,11 @@
+v0.1.9 - 17 Mar 2008
+--------------------
+    - Added SSL/TLS support
+    - Various bug fixes and tweaks
+
 v0.1.8 - 03 Mar 2008
 --------------------
-    - Added support for cross-compilation.
+    - Added support for cross-compilation
     - Various bug fixes and tweaks
 
 v0.1.7 - 07 Feb 2008

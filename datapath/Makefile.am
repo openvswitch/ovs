@@ -2,14 +2,11 @@ SUBDIRS = tests
 if L26_ENABLED
 SUBDIRS += linux-2.6
 endif
-if UML_ENABLED
-SUBDIRS += linux-2.6-uml
-endif
 if L24_ENABLED
 SUBDIRS += linux-2.4
 endif
 
-EXTRA_DIST = linux-2.6 linux-2.4 linux-2.6-uml\
+EXTRA_DIST = linux-2.6 linux-2.4\
 			datapath.c snap.h chain.c  crc32.c  crc_t.c\
 			flow.h forward.h table-hash.c table-mac.c\
             unit.c unit.h datapath.h  chain.h  crc32.h\
