@@ -696,7 +696,7 @@ usage(void)
            "usage: %s [OPTIONS] VCONN\n"
            "where VCONN is one of the following:\n"
            "  ptcp:[PORT]             listen to TCP PORT (default: %d)\n",
-           program_name, program_name);
+           program_name, program_name, OFP_TCP_PORT);
 #ifdef HAVE_NETLINK
     printf("  nl:DP_IDX               via netlink to local datapath DP_IDX\n");
 #endif
@@ -713,7 +713,6 @@ usage(void)
            "  -n, --noflow            pass traffic, but don't add flows\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
-           "  -V, --version           display version information\n",
-           OFP_TCP_PORT);
+           "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);
 }

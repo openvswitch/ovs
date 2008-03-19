@@ -288,7 +288,7 @@ usage(void)
            "\nRelays OpenFlow message between LOCAL and REMOTE datapaths.\n"
            "LOCAL and REMOTE must each be one of the following:\n"
            "  tcp:HOST[:PORT]         PORT (default: %d) on remote TCP HOST\n",
-           program_name, program_name);
+           program_name, program_name, OFP_TCP_PORT);
 #ifdef HAVE_NETLINK
     printf("  nl:DP_IDX               local datapath DP_IDX\n");
 #endif
@@ -305,7 +305,6 @@ usage(void)
            "\nOther options:\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
-           "  -V, --version           display version information\n",
-           OFP_TCP_PORT);
+           "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);
 }
