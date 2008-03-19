@@ -185,8 +185,8 @@ Secure operation over SSL
 -------------------------
 
 The instructions above set up OpenFlow for operation over a plaintext
-TCP connection.  Production use of OpenFlow should use SSL to ensure
-confidentiality and authenticity of traffic among switches and
+TCP connection.  Production use of OpenFlow should use SSL[*] to
+ensure confidentiality and authenticity of traffic among switches and
 controllers.
 
 To use SSL with OpenFlow, you must set up a public-key infrastructure
@@ -218,6 +218,11 @@ controller CA.  If, for example, your PKI was created with the
 instructions below, then the invocation would look like:
       % secchan -v nl:0 ssl:192.168.1.2 --private-key=sc-privkey.pem \
             --certificate=sc-cert.pem --ca-cert=pki/controllerca/cacert.pem
+
+[*] To be specific, OpenFlow uses TLS version 1.0 or later (TLSv1), as
+    specified by RFC 2246, which is very similar to SSL version 3.0.
+    TLSv1 was released in January 1999, so all current software and
+    hardware should implement it.
 
 Establishing a Public Key Infrastructure
 ----------------------------------------
