@@ -37,3 +37,5 @@ dhparams.c: dh2048.pem dh4096.pem
 	| sed 's/\(get_dh[0-9]*\)()/\1(void)/' > dhparams.c.tmp
 	mv dhparams.c.tmp dhparams.c
 endif
+
+EXTRA_DIST = dh2048.pem dh4096.pem dhparams.h

@@ -20,6 +20,7 @@ noinst_HEADERS = \
 	socket-util.h \
 	util.h \
 	vconn.h \
+	vconn-ssl.h \
 	vlog-socket.h \
 	vlog.h \
 	xtoxll.h
