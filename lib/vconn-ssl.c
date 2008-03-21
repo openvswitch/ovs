@@ -23,6 +23,7 @@
 #include "dhparams.h"
 #include <assert.h>
 #include <errno.h>
+#include <string.h>
 #include <netinet/tcp.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
