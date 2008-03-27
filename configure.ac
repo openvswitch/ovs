@@ -34,6 +34,15 @@ if test "$HAVE_NETLINK" = yes; then
              [Define to 1 if Netlink protocol is available.])
 fi
 
+AC_CHECK_HEADER([net/if_packet.h],
+                [HAVE_IF_PACKET=yes],
+                [HAVE_IF_PACKET=no])
+AM_CONDITIONAL([HAVE_IF_PACKET], [test "$HAVE_IF_PACKET" = yes])
+if test "$HAVE_IF_PACKET" = yes; then
+   AC_DEFINE([HAVE_IF_PACKET], [1],
+             [Define to 1 if net/if_packet.h is available.])
+fi
+
 PKG_CHECK_MODULES([SSL], [libssl], 
   [HAVE_OPENSSL=yes],
   [HAVE_OPENSSL=no
@@ -62,6 +71,7 @@ include/Makefile
 controller/Makefile
 utilities/Makefile
 secchan/Makefile
+switch/Makefile
 datapath/tests/Makefile
 third-party/Makefile
 datapath/linux-2.6/Makefile

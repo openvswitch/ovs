@@ -30,16 +30,21 @@ Specification [2].
 What's here?
 ------------
 
-This distribution includes a Linux-specific reference implementation
-of an OpenFlow switch, comprising:
+This distribution includes two different reference implementations of
+an OpenFlow switch.  The first implementation, which is closely tied
+to Linux because it is partially implemented in the Linux kernel, has
+the following components:
 
 	- A Linux kernel module that implements the flow table and
-          OpenFlow protocol.
+          OpenFlow protocol, in the datapath directory.
 
 	- secchan, a program that implements the secure channel
           component of the reference switch.
 
 	- dpctl, a tool for configuring the kernel module.
+
+The second implementation is a single user-space program, named
+"switch", that integrates all three parts of an OpenFlow switch.
 
 This distribution includes some additional software as well:
 
@@ -63,17 +68,22 @@ directory.
 Platform support
 ----------------
 
-Other than the Linux kernel module, the software in the OpenFlow
-distribution should compile under Unix-like environments such as
-Linux, FreeBSD, Mac OS X, and Solaris.  Our primary test environment
-is Debian GNU/Linux.  Please contact us with portability-related bug
-reports or patches.
+Other than the Linux kernel module and userspace switch
+implementation, the software in the OpenFlow distribution should
+compile under Unix-like environments such as Linux, FreeBSD, Mac OS X,
+and Solaris.  Our primary test environment is Debian GNU/Linux.
+Please contact us with portability-related bug reports or patches.
 
 The Linux kernel module is, of course, Linux-specific, and the secchan
 and dpctl utilities will not be as useful without the kernel module.
 The testing of the kernel module has focused on Linux 2.6.23.  Linux
 2.6 releases from 2.6.15 onward and Linux 2.4 releases from 2.4.20
 onward should also work.
+
+The userspace switch implementation should be easy to port to
+Unix-like systems.  The interface to network devices, in netdev.c, is
+the only code that should need to change.  So far, only Linux is
+supported.  We welcome ports to other platforms.
 
 GCC is the expected compiler.
 
