@@ -536,6 +536,7 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb,
 	opi->total_len      = htons(skb->len);
 	opi->in_port        = htons(skb->dev->br_port->port_no);
 	opi->reason         = reason;
+	opi->pad            = 0;
 	SKB_LINEAR_ASSERT(skb);
 	memcpy(opi->data, skb_mac_header(skb), fwd_len);
 
