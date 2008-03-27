@@ -54,6 +54,17 @@ list_push_back(struct list *list, struct list *elem)
   list_insert(list, elem);
 }
 
+/* Puts 'elem' in the position currently occupied by 'position'.
+ * Afterward, 'position' is not part of a list. */
+void
+list_replace(struct list *element, const struct list *position)
+{
+    element->next = position->next;
+    element->next->prev = element;
+    element->prev = position->prev;
+    element->prev->next = element;
+}
+
 /* Removes 'elem' from its list and returns the element that followed it.
    Undefined behavior if 'elem' is not in a list. */
 struct list *

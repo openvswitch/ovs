@@ -23,6 +23,7 @@ void list_insert(struct list *, struct list *);
 void list_splice(struct list *before, struct list *first, struct list *last);
 void list_push_front(struct list *, struct list *);
 void list_push_back(struct list *, struct list *);
+void list_replace(struct list *, const struct list *);
 
 /* List removal. */
 struct list *list_remove(struct list *);
