@@ -4,8 +4,20 @@
 #include <stdint.h>
 #include "util.h"
 
-/* Ethernet frames. */
 #define ETH_ADDR_LEN           6
+
+static inline bool eth_addr_is_broadcast(const uint8_t ea[6])
+{
+    return (ea[0] & ea[1] & ea[2] & ea[3] & ea[4] & ea[5]) == 0xff;
+}
+static inline bool eth_addr_is_multicast(const uint8_t ea[6])
+{
+    return ea[0] & 1;
+}
+static inline bool eth_addr_is_local(const uint8_t ea[6]) 
+{
+    return ea[0] & 2;
+}
 
 #define ETH_TYPE_IP            0x0800
 #define ETH_TYPE_ARP           0x0806
@@ -14,6 +26,7 @@
 #define ETH_HEADER_LEN 14
 #define ETH_PAYLOAD_MIN 46
 #define ETH_TOTAL_MIN (ETH_HEADER_LEN + ETH_PAYLOAD_MIN)
+#define ETH_TOTAL_MAX (ETH_HEADER_LEN + VLAN_HEADER_LEN + 1500)
 struct eth_header {
     uint8_t eth_dst[ETH_ADDR_LEN];
     uint8_t eth_src[ETH_ADDR_LEN];
@@ -57,6 +70,16 @@ struct vlan_header {
     uint16_t vlan_next_type;
 };
 BUILD_ASSERT_DECL(VLAN_HEADER_LEN == sizeof(struct vlan_header));
+
+#define VLAN_ETH_HEADER_LEN (ETH_HEADER_LEN + VLAN_HEADER_LEN)
+struct vlan_eth_header {
+    uint8_t veth_dst[ETH_ADDR_LEN];
+    uint8_t veth_src[ETH_ADDR_LEN];
+    uint16_t veth_type;
+    uint16_t veth_tci;          /* Lowest 12 bits are VLAN ID. */
+    uint16_t veth_next_type;
+};
+BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
 
 #define IP_VER(ip_ihl_ver) ((ip_ihl_ver) >> 4)
 #define IP_IHL(ip_ihl_ver) ((ip_ihl_ver) & 15)
