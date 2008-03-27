@@ -349,7 +349,7 @@ struct ofp_flow_stats {
     uint64_t byte_count;
 };
 
-enum {
+enum ofp_stat_type {
     OFPFS_INDIV,              /* Send an entry for each matching flow */
     OFPFS_AGGREGATE           /* Aggregate matching flows */
 };
