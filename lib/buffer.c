@@ -38,6 +38,7 @@ buffer_use(struct buffer *b, void *base, size_t allocated)
     b->base = b->data = base;
     b->allocated = allocated;
     b->size = 0;
+    b->l2 = b->l3 = b->l4 = NULL;
     b->next = NULL;
 }
 
@@ -75,6 +76,15 @@ buffer_new(size_t size)
     return b;
 }
 
+struct buffer *
+buffer_clone(const struct buffer *buffer) 
+{
+    /* FIXME: reference counting. */
+    struct buffer *b = buffer_new(buffer->size);
+    buffer_put(b, buffer->data, buffer->size);
+    return b;
+}
+
 /* Frees memory that 'b' points to, as well as 'b' itself. */
 void
 buffer_delete(struct buffer *b) 
@@ -109,15 +119,30 @@ void
 buffer_reserve_tailroom(struct buffer *b, size_t size) 
 {
     if (size > buffer_tailroom(b)) {
-        size_t headroom = buffer_headroom(b);
         size_t new_allocated = b->allocated + MAX(size, 64);
         void *new_base = xmalloc(new_allocated);
+        uintptr_t base_delta = new_base - b->base;
         memcpy(new_base, b->base, b->allocated);
         free(b->base);
         b->base = new_base;
         b->allocated = new_allocated;
-        b->data = new_base + headroom;
+        b->data += base_delta;
+        if (b->l2) {
+            b->l2 += base_delta;
+        }
+        if (b->l3) {
+            b->l3 += base_delta;
+        }
+        if (b->l4) {
+            b->l4 += base_delta;
+        }
     }
+}
+
+void
+buffer_reserve_headroom(struct buffer *b, size_t size) 
+{
+    assert(size <= buffer_headroom(b));
 }
 
 /* Appends 'size' bytes of data to the tail end of 'b', reallocating and
@@ -139,6 +164,15 @@ void
 buffer_put(struct buffer *b, const void *p, size_t size) 
 {
     memcpy(buffer_put_uninit(b, size), p, size);
+}
+
+void *
+buffer_push_uninit(struct buffer *b, size_t size) 
+{
+    buffer_reserve_headroom(b, size);
+    b->data -= size;
+    b->size += size;
+    return b->data;
 }
 
 /* If 'b' contains at least 'offset + size' bytes of data, returns a pointer to
@@ -190,3 +224,4 @@ buffer_pull(struct buffer *b, size_t size)
     b->data += size;
     b->size -= size;
 }
+

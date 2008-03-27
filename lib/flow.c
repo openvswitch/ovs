@@ -14,7 +14,7 @@
 #define THIS_MODULE VLM_flow
 
 void
-flow_extract(const struct buffer *packet, uint16_t in_port, struct flow *flow)
+flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
 {
     struct buffer b = *packet;
     struct eth_header *eth;
@@ -26,6 +26,10 @@ flow_extract(const struct buffer *packet, uint16_t in_port, struct flow *flow)
 
     memset(flow, 0, sizeof *flow);
     flow->in_port = htons(in_port);
+
+    packet->l2 = b.data;
+    packet->l3 = NULL;
+    packet->l4 = NULL;
 
     eth = buffer_at(&b, 0, sizeof *eth);
     if (eth) {
@@ -64,12 +68,14 @@ flow_extract(const struct buffer *packet, uint16_t in_port, struct flow *flow)
         memcpy(flow->dl_src, eth->eth_src, ETH_ADDR_LEN);
         memcpy(flow->dl_dst, eth->eth_dst, ETH_ADDR_LEN);
 
+        packet->l3 = b.data;
         if (flow->dl_type == htons(ETH_TYPE_IP)) {
             const struct ip_header *nh = buffer_at(&b, 0, sizeof *nh);
             if (nh) {
                 flow->nw_src = nh->ip_src;
                 flow->nw_dst = nh->ip_dst;
                 flow->nw_proto = nh->ip_proto;
+                packet->l4 = b.data + IP_HEADER_LEN;
                 if (flow->nw_proto == IP_TYPE_TCP
                     || flow->nw_proto == IP_TYPE_UDP) {
                     int udp_ofs = IP_IHL(nh->ip_ihl_ver) * 4;

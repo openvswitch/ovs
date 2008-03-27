@@ -33,6 +33,10 @@ struct buffer {
     void *data;                 /* First byte actually in use. */
     size_t size;                /* Number of bytes in use. */
 
+    void *l2;                   /* Link-level header. */
+    void *l3;                   /* Network-level header. */
+    void *l4;                   /* Transport-level header. */
+
     struct buffer *next;        /* Next in a list of buffers. */
 };
 
@@ -43,6 +47,7 @@ void buffer_uninit(struct buffer *);
 void buffer_reinit(struct buffer *, size_t);
 
 struct buffer *buffer_new(size_t);
+struct buffer *buffer_clone(const struct buffer *);
 void buffer_delete(struct buffer *);
 
 void *buffer_at(const struct buffer *, size_t offset, size_t size);
@@ -52,6 +57,7 @@ void *buffer_end(const struct buffer *);
 
 void *buffer_put_uninit(struct buffer *, size_t);
 void buffer_put(struct buffer *, const void *, size_t);
+void *buffer_push_uninit(struct buffer *b, size_t);
 
 size_t buffer_headroom(struct buffer *);
 size_t buffer_tailroom(struct buffer *);
