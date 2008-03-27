@@ -674,13 +674,14 @@ tmp_dh_callback(SSL *ssl, int is_export UNUSED, int keylength)
     };
 
     static struct dh dh_table[] = {
+        {1024, NULL, get_dh1024},
         {2048, NULL, get_dh2048},
         {4096, NULL, get_dh4096},
     };
 
     struct dh *dh;
 
-    for (dh = dh_table; dh < &dh[ARRAY_SIZE(dh_table)]; dh++) {
+    for (dh = dh_table; dh < &dh_table[ARRAY_SIZE(dh_table)]; dh++) {
         if (dh->keylength == keylength) {
             if (!dh->dh) {
                 dh->dh = dh->constructor();

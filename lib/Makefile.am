@@ -30,12 +30,13 @@ if HAVE_OPENSSL
 libopenflow_la_SOURCES += \
 	vconn-ssl.c \
 	dhparams.c
-dhparams.c: dh2048.pem dh4096.pem
+dhparams.c: dh1024.pem dh2048.pem dh4096.pem
 	(echo '#include "dhparams.h"' &&			\
+	 openssl dhparam -C -in $(srcdir)/dh1024.pem -noout &&	\
 	 openssl dhparam -C -in $(srcdir)/dh2048.pem -noout &&	\
 	 openssl dhparam -C -in $(srcdir)/dh4096.pem -noout)	\
 	| sed 's/\(get_dh[0-9]*\)()/\1(void)/' > dhparams.c.tmp
 	mv dhparams.c.tmp dhparams.c
 endif
 
-EXTRA_DIST = dh2048.pem dh4096.pem dhparams.h
+EXTRA_DIST = dh1024.pem dh2048.pem dh4096.pem dhparams.h
