@@ -40,6 +40,7 @@
 #include "ofp-print.h"
 #include "openflow.h"
 #include "poll-loop.h"
+#include "queue.h"
 #include "time.h"
 #include "util.h"
 #include "vconn-ssl.h"
@@ -60,8 +61,7 @@ struct switch_ {
     uint64_t datapath_id;
     time_t last_control_hello;
 
-    int n_txq;
-    struct buffer *txq, *tx_tail;
+    struct queue txq;
 };
 
 /* -H, --hub: Use dumb hub instead of learning switch? */
@@ -185,7 +185,7 @@ main(int argc, char *argv[])
                 }
             } else {
                 vconn_recv_wait(this->vconn);
-                if (this->n_txq) {
+                if (this->txq.n) {
                     vconn_send_wait(this->vconn);
                 }
             }
@@ -214,19 +214,13 @@ static int
 do_switch_send(struct switch_ *this) 
 {
     int retval = 0;
-    if (this->n_txq) {
-        struct buffer *next = this->txq->next;
-
-        retval = vconn_send(this->vconn, this->txq);
+    if (this->txq.n) {
+        struct buffer *next = this->txq.head->next;
+        retval = vconn_send(this->vconn, this->txq.head);
         if (retval) {
             return retval;
         }
-
-        this->txq = next;
-        if (this->txq == NULL) {
-            this->tx_tail = NULL;
-        }
-        this->n_txq--;
+        queue_advance_head(&this->txq, next);
         return 0;
     }
     return EAGAIN;
@@ -254,9 +248,7 @@ new_switch(const char *name, struct vconn *vconn)
     memset(this, 0, sizeof *this);
     this->name = xstrdup(name);
     this->vconn = vconn;
-    this->n_txq = 0;
-    this->txq = NULL;
-    this->tx_tail = NULL;
+    queue_init(&this->txq);
     this->last_control_hello = 0;
     if (!vconn_is_passive(vconn)) {
         send_control_hello(this);
@@ -268,14 +260,9 @@ static void
 close_switch(struct switch_ *this) 
 {
     if (this) {
-        struct buffer *cur, *next;
-
         free(this->name);
         vconn_close(this->vconn);
-        for (cur = this->txq; cur != NULL; cur = next) {
-            next = cur->next;
-            buffer_delete(cur);
-        }
+        queue_destroy(&this->txq);
         free(this);
     }
 }
@@ -304,39 +291,9 @@ send_control_hello(struct switch_ *this)
 }
 
 static void
-check_txq(struct switch_ *this UNUSED)
-{
-#if 0
-    struct buffer *iter;
-    size_t n;
-
-    assert(this->n_txq == 0
-           ? this->txq == NULL && this->tx_tail == NULL
-           : this->txq != NULL && this->tx_tail != NULL);
-
-    n = 0;
-    for (iter = this->txq; iter != NULL; iter = iter->next) {
-        n++;
-        assert((iter->next != NULL) == (iter != this->tx_tail));
-    }
-    assert(n == this->n_txq);
-#endif
-}
-
-static void
 queue_tx(struct switch_ *this, struct buffer *b) 
 {
-    check_txq(this);
-
-    b->next = NULL;
-    if (this->n_txq++) {
-        this->tx_tail->next = b;
-    } else {
-        this->txq = b;
-    }
-    this->tx_tail = b;
-
-    check_txq(this);
+    queue_push_tail(&this->txq, b);
 }
 
 static void
@@ -374,7 +331,8 @@ process_packet(struct switch_ *sw, struct buffer *msg)
     }
 
     if (oh->type == OFPT_PACKET_IN) {
-        if (sw->n_txq >= MAX_TXQ) {
+        if (sw->txq.n >= MAX_TXQ) {
+            /* FIXME: ratelimit. */
             VLOG_WARN("%s: tx queue overflow", sw->name);
         } else if (noflow) {
             process_noflow(sw, msg->data);
