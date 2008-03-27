@@ -92,6 +92,7 @@ void vlog(enum vlog_module, enum vlog_level, const char *format, ...)
  * expands to the module used by the current source file, e.g.
  *      #include "vlog.h"
  *      #define THIS_MODULE VLM_NETLINK
+ * Guaranteed to preserve errno.
  */
 #define VLOG_EMER(...) vlog(THIS_MODULE, VLL_EMER, __VA_ARGS__)
 #define VLOG_ERR(...) vlog(THIS_MODULE, VLL_ERR, __VA_ARGS__)

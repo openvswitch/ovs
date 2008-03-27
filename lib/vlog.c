@@ -266,13 +266,16 @@ vlog_get_levels(void)
 }
 
 /* Writes 'message' to the log at the given 'level' and as coming from the
- * given 'module'. */
+ * given 'module'.
+ *
+ * Guaranteed to preserve errno. */
 void
 vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
 {
     bool log_console = levels[module][VLF_CONSOLE] >= level;
     bool log_syslog = levels[module][VLF_SYSLOG] >= level;
     if (log_console || log_syslog) {
+        int save_errno = errno;
         static int msg_num;
         const char *module_name = vlog_get_module_name(module);
         const char *level_name = vlog_get_level_name(level);
@@ -305,5 +308,6 @@ vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
 
             syslog(syslog_levels[level], "%s", s);
         }
+        errno = save_errno;
     }
 }
