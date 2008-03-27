@@ -43,11 +43,12 @@ bool list_is_empty(const struct list *);
     for (ITER = LIST_ELEM__((LIST)->next, STRUCT, MEMBER, LIST);    \
          ITER != NULL;                                              \
          ITER = LIST_ELEM__((ITER)->MEMBER.next, STRUCT, MEMBER, LIST))
-#define LIST_FOR_EACH_SAFE(ITER, NEXT, STRUCT, MEMBER, LIST)            \
-    for (ITER = LIST_ELEM__((LIST)->next, STRUCT, MEMBER, LIST);        \
-         (ITER != NULL                                                  \
-          ? (NEXT = LIST_ELEM__((ITER)->MEMBER.next, STRUCT, MEMBER, LIST), 1) \
-          : 0),                                                         \
+#define LIST_FOR_EACH_SAFE(ITER, NEXT, STRUCT, MEMBER, LIST)        \
+    for (ITER = LIST_ELEM__((LIST)->next, STRUCT, MEMBER, LIST);    \
+         (ITER != NULL                                              \
+          ? (NEXT = LIST_ELEM__((ITER)->MEMBER.next,                \
+                                STRUCT, MEMBER, LIST), 1)           \
+          : 0);                                                     \
          ITER = NEXT)
 
 #endif /* list.h */
