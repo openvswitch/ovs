@@ -36,6 +36,7 @@
 #include "vconn.h"
 #include "vlog-socket.h"
 #include "openflow.h"
+#include "poll-loop.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_secchan
@@ -48,7 +49,6 @@ static bool reliable = true;
 struct half {
     const char *name;
     struct vconn *vconn;
-    struct pollfd *pollfd;
     struct buffer *rxbuf;
     time_t backoff_deadline;
     int backoff;
@@ -60,8 +60,6 @@ int
 main(int argc, char *argv[])
 {
     struct half halves[2];
-    struct pollfd pollfds[2 + 1];
-    struct vlog_server *vlog_server;
     int retval;
     int i;
 
@@ -74,7 +72,7 @@ main(int argc, char *argv[])
         fatal(0, "exactly two peer arguments required; use --help for usage");
     }
 
-    retval = vlog_server_listen(NULL, &vlog_server);
+    retval = vlog_server_listen(NULL, NULL);
     if (retval) {
         fatal(retval, "Could not listen for vlog connections");
     }
@@ -82,82 +80,65 @@ main(int argc, char *argv[])
     for (i = 0; i < 2; i++) {
         halves[i].name = argv[optind + i];
         halves[i].vconn = NULL;
-        halves[i].pollfd = &pollfds[i];
         halves[i].rxbuf = NULL;
         halves[i].backoff_deadline = 0;
         halves[i].backoff = 1;
         reconnect(&halves[i]);
     }
     for (;;) {
-        size_t n_ready;
-        
-        /* Wait until there's something to do. */
-        n_ready = 0;
+        /* Do some work.  Limit the number of iterations so that callbacks
+         * registered with the poll loop don't starve. */
+        int iteration;
+        for (iteration = 0; iteration < 50; iteration++) {
+            bool progress = false;
+            for (i = 0; i < 2; i++) {
+                struct half *this = &halves[i];
+                struct half *peer = &halves[!i];
+
+                if (!this->rxbuf) {
+                    retval = vconn_recv(this->vconn, &this->rxbuf);
+                    if (retval && retval != EAGAIN) {
+                        if (retval == EOF) {
+                            VLOG_DBG("%s: connection closed by remote host",
+                                     this->name); 
+                        } else {
+                            VLOG_DBG("%s: recv: closing connection: %s",
+                                     this->name, strerror(retval));
+                        }
+                        reconnect(this);
+                        break;
+                    }
+                }
+
+                if (this->rxbuf) {
+                    retval = vconn_send(peer->vconn, this->rxbuf);
+                    if (!retval) {
+                        this->rxbuf = NULL;
+                        progress = true;
+                    } else if (retval != EAGAIN) {
+                        VLOG_DBG("%s: send: closing connection: %s",
+                                 peer->name, strerror(retval));
+                        reconnect(peer);
+                        break;
+                    }
+                }
+            }
+            if (!progress) {
+                break;
+            }
+        }
+
+        /* Wait for something to happen. */
         for (i = 0; i < 2; i++) {
             struct half *this = &halves[i];
             struct half *peer = &halves[!i];
-            int want = 0;
-            if (peer->rxbuf) {
-                want |= WANT_SEND;
-            }
             if (!this->rxbuf) {
-                want |= WANT_RECV;
-            }
-            this->pollfd->fd = -1;
-            this->pollfd->events = 0;
-            n_ready += vconn_prepoll(this->vconn, want, this->pollfd);
-        }
-        if (vlog_server) {
-            pollfds[2].fd = vlog_server_get_fd(vlog_server);
-            pollfds[2].events = POLLIN;
-        }
-        do {
-            retval = poll(pollfds, 2 + (vlog_server != NULL),
-                          n_ready ? 0 : -1);
-        } while (retval < 0 && errno == EINTR);
-        if (retval < 0 || (retval == 0 && !n_ready)) {
-            fatal(retval < 0 ? errno : 0, "poll");
-        }
-
-        /* Let each connection deal with any pending operations. */
-        for (i = 0; i < 2; i++) {
-            struct half *this = &halves[i];
-            vconn_postpoll(this->vconn, &this->pollfd->revents);
-            if (this->pollfd->revents & POLLERR) {
-                this->pollfd->revents |= POLLIN | POLLOUT;
+                vconn_recv_wait(this->vconn);
+            } else {
+                vconn_send_wait(peer->vconn);
             }
         }
-        if (vlog_server && pollfds[2].revents) {
-            vlog_server_poll(vlog_server);
-        }
-
-        /* Do as much work as we can without waiting. */
-        for (i = 0; i < 2; i++) {
-            struct half *this = &halves[i];
-            struct half *peer = &halves[!i];
-
-            if (this->pollfd->revents & POLLIN && !this->rxbuf) {
-                retval = vconn_recv(this->vconn, &this->rxbuf);
-                if (retval && retval != EAGAIN) {
-                    VLOG_DBG("%s: recv: closing connection: %s",
-                             this->name, strerror(retval));
-                    reconnect(this);
-                    break;
-                }
-            }
-
-            if (peer->pollfd->revents & POLLOUT && this->rxbuf) {
-                retval = vconn_send(peer->vconn, this->rxbuf);
-                if (!retval) {
-                    this->rxbuf = NULL;
-                } else if (retval != EAGAIN) {
-                    VLOG_DBG("%s: send: closing connection: %s",
-                             peer->name, strerror(retval));
-                    reconnect(peer); 
-                    break;
-                }
-            } 
-        }
+        poll_block();
     }
 
     return 0;
@@ -177,7 +158,6 @@ reconnect(struct half *this)
         buffer_delete(this->rxbuf);
         this->rxbuf = NULL;
     }
-    this->pollfd->revents = POLLIN | POLLOUT;
 
     for (;;) {
         time_t now = time(0);
@@ -192,10 +172,11 @@ reconnect(struct half *this)
             }
             VLOG_WARN("%s: waiting %d seconds before reconnect\n",
                       this->name, (int) (this->backoff_deadline - now));
-            sleep(this->backoff_deadline - now);
+            poll_timer_wait((this->backoff_deadline - now) * 1000);
+            poll_block();
         }
 
-        retval = vconn_open(this->name, &this->vconn);
+        retval = vconn_open_block(this->name, &this->vconn);
         if (!retval) {
             VLOG_WARN("%s: connected", this->name);
             if (vconn_is_passive(this->vconn)) {
@@ -209,7 +190,7 @@ reconnect(struct half *this)
         if (!reliable) {
             fatal(0, "%s: connection failed", this->name);
         }
-        VLOG_WARN("%s: connection failed (%s)", this->name, strerror(errno));
+        VLOG_WARN("%s: connection failed (%s)", this->name, strerror(retval));
         this->backoff_deadline = time(0) + this->backoff;
     }
 }

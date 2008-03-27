@@ -29,7 +29,11 @@
 #include "buffer.h"
 #include "flow.h"
 #include "openflow.h"
+#include "poll-loop.h"
 #include "util.h"
+
+#define THIS_MODULE VLM_vconn
+#include "vlog.h"
 
 static struct vconn_class *vconn_classes[] = {
     &tcp_vconn_class,
@@ -45,7 +49,7 @@ static struct vconn_class *vconn_classes[] = {
 
 /* Check the validity of the vconn class structures. */
 static void
-check_vconn_classes(void) 
+check_vconn_classes(void)
 {
 #ifndef NDEBUG
     size_t i;
@@ -55,10 +59,10 @@ check_vconn_classes(void)
         assert(class->name != NULL);
         assert(class->open != NULL);
         assert(class->close != NULL);
-        assert(class->prepoll != NULL);
         assert(class->accept
                ? !class->recv && !class->send
-               : class->recv && class->send);
+               :  class->recv && class->send);
+        assert(class->wait != NULL);
     }
 #endif
 }
@@ -71,7 +75,7 @@ check_vconn_classes(void)
  * stores a pointer to the new connection in '*vconnp', otherwise a null
  * pointer.  */
 int
-vconn_open(const char *name, struct vconn **vconnp) 
+vconn_open(const char *name, struct vconn **vconnp)
 {
     size_t prefix_len;
     size_t i;
@@ -91,6 +95,9 @@ vconn_open(const char *name, struct vconn **vconnp)
             free(suffix_copy);
             if (retval) {
                 *vconnp = NULL;
+            } else {
+                assert((*vconnp)->connect_status != EAGAIN
+                       || (*vconnp)->class->connect);
             }
             return retval;
         }
@@ -99,9 +106,31 @@ vconn_open(const char *name, struct vconn **vconnp)
     abort();
 }
 
+int
+vconn_open_block(const char *name, struct vconn **vconnp)
+{
+    struct vconn *vconn;
+    int error;
+
+    error = vconn_open(name, &vconn);
+    while (error == EAGAIN) {
+        vconn_connect_wait(vconn);
+        poll_block();
+        error = vconn_connect(vconn);
+        assert(error != EINPROGRESS);
+    }
+    if (error) {
+        vconn_close(vconn);
+        *vconnp = NULL;
+    } else {
+        *vconnp = vconn;
+    }
+    return error;
+}
+
 /* Closes 'vconn'. */
 void
-vconn_close(struct vconn *vconn) 
+vconn_close(struct vconn *vconn)
 {
     if (vconn != NULL) {
         (vconn->class->close)(vconn);
@@ -113,40 +142,23 @@ vconn_close(struct vconn *vconn)
  * 'vconn' is an active vconn, that is, its purpose is to transfer data, not
  * to wait for new connections to arrive. */
 bool
-vconn_is_passive(const struct vconn *vconn) 
+vconn_is_passive(const struct vconn *vconn)
 {
     return vconn->class->accept != NULL;
 }
 
-/* Initializes 'pfd->fd' and 'pfd->events' appropriately so that poll() will
- * wake up when the connection becomes available for the operations specified
- * in 'want', or for performing the vconn's needed internal processing.
- *
- * Normally returns false.  Returns true to indicate that no blocking should
- * happen in poll() because the connection is available for some operation
- * specified in 'want' but that status cannot be detected via poll() and thus
- * poll() could block forever otherwise. */
-bool
-vconn_prepoll(struct vconn *vconn, int want, struct pollfd *pollfd)
+/* Tries to complete the connection on 'vconn', which must be an active
+ * vconn.  If 'vconn''s connection is complete, returns 0 if the connection
+ * was successful or a positive errno value if it failed.  If the
+ * connection is still in progress, returns EAGAIN. */
+int
+vconn_connect(struct vconn *vconn)
 {
-    return (vconn->class->prepoll)(vconn, want, pollfd);
-}
-
-/* Perform any internal processing needed by the connections.  The vconn file
- * descriptor's status, as reported by poll(), must be provided in '*revents'.
- *
- * The postpoll function adjusts '*revents' to reflect the status of the
- * connection from the caller's point of view.  That is, upon return '*revents
- * & POLLIN' indicates that a packet is (potentially) ready to be read (for an
- * active vconn) or a new connection is ready to be accepted (for a passive
- * vconn) and '*revents & POLLOUT' indicates that a packet is (potentially)
- * ready to be written. */
-void
-vconn_postpoll(struct vconn *vconn, short int *revents) 
-{
-    if (vconn->class->postpoll) {
-        (vconn->class->postpoll)(vconn, revents);
-    } 
+    if (vconn->connect_status == EAGAIN) {
+        vconn->connect_status = (vconn->class->connect)(vconn);
+        assert(vconn->connect_status != EINPROGRESS);
+    }
+    return vconn->connect_status;
 }
 
 /* Tries to accept a new connection on 'vconn', which must be a passive vconn.
@@ -156,11 +168,17 @@ vconn_postpoll(struct vconn *vconn, short int *revents)
  * vconn_accept will not block waiting for a connection.  If no connection is
  * ready to be accepted, it returns EAGAIN immediately. */
 int
-vconn_accept(struct vconn *vconn, struct vconn **new_vconn) 
+vconn_accept(struct vconn *vconn, struct vconn **new_vconn)
 {
-    int retval = (vconn->class->accept)(vconn, new_vconn);
+    int retval;
+
+    retval = (vconn->class->accept)(vconn, new_vconn);
+
     if (retval) {
         *new_vconn = NULL;
+    } else {
+        assert((*new_vconn)->connect_status != EAGAIN
+               || (*new_vconn)->class->connect);
     }
     return retval;
 }
@@ -174,9 +192,12 @@ vconn_accept(struct vconn *vconn, struct vconn **new_vconn)
  * vconn_recv will not block waiting for a packet to arrive.  If no packets
  * have been received, it returns EAGAIN immediately. */
 int
-vconn_recv(struct vconn *vconn, struct buffer **msgp) 
+vconn_recv(struct vconn *vconn, struct buffer **msgp)
 {
-    int retval = (vconn->class->recv)(vconn, msgp);
+    int retval = vconn_connect(vconn);
+    if (!retval) {
+        retval = (vconn->class->recv)(vconn, msgp);
+    }
     if (retval) {
         *msgp = NULL;
     }
@@ -195,37 +216,76 @@ vconn_recv(struct vconn *vconn, struct buffer **msgp)
  * vconn_send will not block.  If 'msg' cannot be immediately accepted for
  * transmission, it returns EAGAIN immediately. */
 int
-vconn_send(struct vconn *vconn, struct buffer *msg) 
+vconn_send(struct vconn *vconn, struct buffer *msg)
 {
-    return (vconn->class->send)(vconn, msg);
-}
-
-/* Same as vconn_send, except that it waits until 'msg' can be transmitted. */
-int
-vconn_send_wait(struct vconn *vconn, struct buffer *msg) 
-{
-    int retval;
-    while ((retval = vconn_send(vconn, msg)) == EAGAIN) {
-        struct pollfd pfd;
-
-        pfd.fd = -1;
-        pfd.events = 0;
-        vconn_prepoll(vconn, WANT_SEND, &pfd);
-        do {
-            retval = poll(&pfd, 1, -1);
-        } while (retval < 0 && errno == EINTR);
-        if (retval < 0) {
-            return errno;
-        }
-        assert(retval == 1);
-        vconn_postpoll(vconn, &pfd.revents);
+    int retval = vconn_connect(vconn);
+    if (!retval) {
+        retval = (vconn->class->send)(vconn, msg);
     }
     return retval;
 }
 
+/* Same as vconn_send, except that it waits until 'msg' can be transmitted. */
+int
+vconn_send_block(struct vconn *vconn, struct buffer *msg)
+{
+    int retval;
+    while ((retval = vconn_send(vconn, msg)) == EAGAIN) {
+        vconn_send_wait(vconn);
+        poll_block();
+    }
+    return retval;
+}
+
+void
+vconn_wait(struct vconn *vconn, enum vconn_wait_type wait)
+{
+    int connect_status;
+
+    assert(vconn_is_passive(vconn)
+           ? wait == WAIT_ACCEPT || wait == WAIT_CONNECT
+           : wait == WAIT_CONNECT || wait == WAIT_RECV || wait == WAIT_SEND);
+
+    connect_status = vconn_connect(vconn);
+    if (connect_status) {
+        if (connect_status == EAGAIN) {
+            wait = WAIT_CONNECT;
+        } else {
+            poll_immediate_wake();
+            return;
+        }
+    }
+
+    (vconn->class->wait)(vconn, wait);
+}
+
+void
+vconn_connect_wait(struct vconn *vconn)
+{
+    vconn_wait(vconn, WAIT_CONNECT);
+}
+
+void
+vconn_accept_wait(struct vconn *vconn)
+{
+    vconn_wait(vconn, WAIT_ACCEPT);
+}
+
+void
+vconn_recv_wait(struct vconn *vconn)
+{
+    vconn_wait(vconn, WAIT_RECV);
+}
+
+void
+vconn_send_wait(struct vconn *vconn)
+{
+    vconn_wait(vconn, WAIT_SEND);
+}
+
 struct buffer *
 make_add_simple_flow(const struct flow *flow,
-                     uint32_t buffer_id, uint16_t out_port) 
+                     uint32_t buffer_id, uint16_t out_port)
 {
     struct ofp_flow_mod *ofm;
     size_t size = sizeof *ofm + sizeof ofm->actions[0];

@@ -24,7 +24,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
+#include <poll.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "vlog.h"
 #define THIS_MODULE VLM_socket_util
@@ -36,8 +38,14 @@ set_nonblocking(int fd)
 {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags != -1) {
-        return fcntl(fd, F_SETFL, flags | O_NONBLOCK) != -1 ? 0 : errno;
+        if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) != -1) {
+            return 0;
+        } else {
+            VLOG_ERR("fcntl(F_SETFL) failed: %s", strerror(errno));
+            return errno;
+        }
     } else {
+        VLOG_ERR("fcntl(F_GETFL) failed: %s", strerror(errno));
         return errno;
     }
 }
@@ -62,4 +70,39 @@ lookup_ip(const char *host_name, struct in_addr *addr)
         addr->s_addr = *(uint32_t *) he->h_addr;
     }
     return 0;
+}
+
+/* Returns the error condition associated with socket 'fd' and resets the
+ * socket's error status. */
+int
+get_socket_error(int fd) 
+{
+    int error;
+    socklen_t len = sizeof(error);
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) {
+        error = errno;
+        VLOG_ERR("getsockopt(SO_ERROR): %s", strerror(error));
+    }
+    return error;
+}
+
+int
+check_connection_completion(int fd) 
+{
+    struct pollfd pfd;
+    int retval;
+
+    pfd.fd = fd;
+    pfd.events = POLLOUT;
+    do {
+        retval = poll(&pfd, 1, 0);
+    } while (retval < 0 && errno == EINTR);
+    if (retval == 1) {
+        return get_socket_error(fd);
+    } else if (retval < 0) {
+        VLOG_ERR("poll: %s", strerror(errno));
+        return errno;
+    } else {
+        return EAGAIN;
+    }
 }

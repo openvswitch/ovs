@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "fatal-signal.h"
+#include "poll-loop.h"
 #include "util.h"
 #include "vlog.h"
 
@@ -43,9 +44,12 @@ static int make_unix_socket(bool nonblock, bool passcred,
 
 /* Server for Vlog control connection. */
 struct vlog_server {
+    struct poll_waiter *waiter;
     char *path;
     int fd;
 };
+
+static void poll_server(int fd, short int events, void *server_);
 
 /* Start listening for connections from clients and processing their
  * requests.  'path' may be:
@@ -80,10 +84,17 @@ vlog_server_listen(const char *path, struct vlog_server **serverp)
         free(server);
         fprintf(stderr, "Could not initialize vlog configuration socket: %s\n",
                 strerror(-server->fd));
-        *serverp = NULL;
+        if (serverp) {
+            *serverp = NULL; 
+        }
         return fd;
     }
-    *serverp = server;
+
+    server->waiter = poll_fd_callback(server->fd, POLLIN, poll_server, server);
+
+    if (serverp) {
+        *serverp = server; 
+    }
     return 0;
 }
 
@@ -92,20 +103,13 @@ void
 vlog_server_close(struct vlog_server *server)
 {
     if (server) {
+        poll_cancel(server->waiter);
         close(server->fd);
         unlink(server->path);
         fatal_signal_remove_file_to_unlink(server->path);
         free(server->path);
         free(server);
     }
-}
-
-/* Returns the fd used by 'server'.  The caller can poll this fd (POLLIN) to
- * determine when to call vlog_server_poll(). */
-int
-vlog_server_get_fd(const struct vlog_server *server)
-{
-    return server->fd;
 }
 
 static int
@@ -212,9 +216,10 @@ recv_with_creds(const struct vlog_server *server,
 }
 
 /* Processes incoming requests for 'server'. */
-void
-vlog_server_poll(struct vlog_server *server)
+static void
+poll_server(int fd UNUSED, short int events, void *server_)
 {
+    struct vlog_server *server = server_;
     for (;;) {
         char cmd_buf[512];
         struct sockaddr_un un;
@@ -228,7 +233,7 @@ vlog_server_poll(struct vlog_server *server)
                 fprintf(stderr, "vlog: reading configuration socket: %s",
                         strerror(errno));
             }
-            return;
+            break;
         } else if (error < 0) {
             continue;
         }
@@ -246,6 +251,7 @@ vlog_server_poll(struct vlog_server *server)
                (struct sockaddr*) &un, un_len);
         free(reply);
     }
+    server->waiter = poll_fd_callback(server->fd, POLLIN, poll_server, server);
 }
 
 /* Client for Vlog control connection. */

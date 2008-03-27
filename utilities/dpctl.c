@@ -480,7 +480,7 @@ static void do_add_flows(int argc, char *argv[])
         ofm->group_id = htonl(0);
         str_to_flow(line, &ofm->match, &ofm->actions[0]);
 
-        retval = vconn_send_wait(vconn, buffer);
+        retval = vconn_send_block(vconn, buffer);
         if (retval) {
             fatal(retval, "sending to datapath");
         }

@@ -39,6 +39,7 @@
 #include "mac.h"
 #include "ofp-print.h"
 #include "openflow.h"
+#include "poll-loop.h"
 #include "time.h"
 #include "util.h"
 #include "vconn-ssl.h"
@@ -55,7 +56,6 @@
 struct switch_ {
     char *name;
     struct vconn *vconn;
-    struct pollfd *pollfd;
 
     uint64_t datapath_id;
     time_t last_control_hello;
@@ -95,8 +95,6 @@ int
 main(int argc, char *argv[])
 {
     struct switch_ *switches[MAX_SWITCHES];
-    struct pollfd pollfds[MAX_SWITCHES + 1];
-    struct vlog_server *vlog_server;
     int n_switches;
     int retval;
     int i;
@@ -114,7 +112,7 @@ main(int argc, char *argv[])
         fatal(0, "at least one vconn argument required; use --help for usage");
     }
 
-    retval = vlog_server_listen(NULL, &vlog_server);
+    retval = vlog_server_listen(NULL, NULL);
     if (retval) {
         fatal(retval, "Could not listen for vlog connections");
     }
@@ -132,99 +130,67 @@ main(int argc, char *argv[])
     if (n_switches == 0) {
         fatal(0, "could not connect to any switches");
     }
-    
+
     while (n_switches > 0) {
-        size_t n_ready;
-        int retval;
+        /* Do some work.  Limit the number of iterations so that callbacks
+         * registered with the poll loop don't starve. */
+        int iteration;
+        int i;
+        for (iteration = 0; iteration < 50; iteration++) {
+            bool progress = false;
+            for (i = 0; i < n_switches; ) {
+                struct switch_ *this = switches[i];
+                int retval;
 
-        /* Wait until there's something to do. */
-        n_ready = 0;
-        for (i = 0; i < n_switches; i++) {
-            struct switch_ *this = switches[i];
-            int want;
-
-            if (vconn_is_passive(this->vconn)) {
-                want = n_switches < MAX_SWITCHES ? WANT_ACCEPT : 0;
-            } else {
-                want = WANT_RECV;
-                if (this->n_txq) {
-                    want |= WANT_SEND;
-                }
-            }
-
-            this->pollfd = &pollfds[i];
-            this->pollfd->fd = -1;
-            this->pollfd->events = 0;
-            n_ready += vconn_prepoll(this->vconn, want, this->pollfd);
-        }
-        if (vlog_server) {
-            pollfds[n_switches].fd = vlog_server_get_fd(vlog_server);
-            pollfds[n_switches].events = POLLIN;
-        }
-        do {
-            retval = poll(pollfds, n_switches + (vlog_server != NULL),
-                          n_ready ? 0 : -1);
-        } while (retval < 0 && errno == EINTR);
-        if (retval < 0 || (retval == 0 && !n_ready)) {
-            fatal(retval < 0 ? errno : 0, "poll");
-        }
-
-        /* Let each connection deal with any pending operations. */
-        for (i = 0; i < n_switches; i++) {
-            struct switch_ *this = switches[i];
-            vconn_postpoll(this->vconn, &this->pollfd->revents);
-            if (this->pollfd->revents & POLLERR) {
-                this->pollfd->revents |= POLLIN | POLLOUT;
-            }
-        }
-        if (vlog_server && pollfds[n_switches].revents) {
-            vlog_server_poll(vlog_server);
-        }
-
-        for (i = 0; i < n_switches; ) {
-            struct switch_ *this = switches[i];
-
-            if (this->pollfd) {
-                retval = 0;
                 if (vconn_is_passive(this->vconn)) {
-                    if (this->pollfd->revents & POLLIN) {
+                    retval = 0;
+                    while (n_switches < MAX_SWITCHES) {
                         struct vconn *new_vconn;
-                        while (n_switches < MAX_SWITCHES 
-                               && (retval = vconn_accept(this->vconn,
-                                                         &new_vconn)) == 0) {
-                            switches[n_switches++] = new_switch("tcp",
-                                                                new_vconn);
+                        retval = vconn_accept(this->vconn, &new_vconn);
+                        if (retval) {
+                            break;
                         }
+                        switches[n_switches++] = new_switch("tcp", new_vconn);
                     }
                 } else {
-                    bool may_read = this->pollfd->revents & POLLIN;
-                    bool may_write = this->pollfd->revents & POLLOUT;
-                    if (may_read) {
-                        retval = do_switch_recv(this);
-                        if (!retval || retval == EAGAIN) {
-                            retval = 0;
-
-                            /* Enable writing to avoid round trip through poll
-                             * in common case. */
-                            may_write = true;
-                        }
-                    }
-                    while ((!retval || retval == EAGAIN) && may_write) {
-                        retval = do_switch_send(this);
-                        may_write = !retval;
+                    retval = do_switch_recv(this);
+                    if (!retval || retval == EAGAIN) {
+                        do {
+                            retval = do_switch_send(this);
+                            if (!retval) {
+                                progress = true;
+                            }
+                        } while (!retval);
                     }
                 }
 
                 if (retval && retval != EAGAIN) {
                     close_switch(this);
                     switches[i] = switches[--n_switches];
-                    continue;
+                } else {
+                    i++;
+                }
+            }
+            if (!progress) {
+                break;
+            }
+        }
+
+        /* Wait for something to happen. */
+        for (i = 0; i < n_switches; i++) {
+            struct switch_ *this = switches[i];
+            if (vconn_is_passive(this->vconn)) {
+                if (n_switches < MAX_SWITCHES) {
+                    vconn_accept_wait(this->vconn);
                 }
             } else {
-                /* New switch that hasn't been polled yet. */
+                vconn_recv_wait(this->vconn);
+                if (this->n_txq) {
+                    vconn_send_wait(this->vconn);
+                }
             }
-            i++;
         }
+        poll_block();
     }
 
     return 0;
@@ -288,7 +254,6 @@ new_switch(const char *name, struct vconn *vconn)
     memset(this, 0, sizeof *this);
     this->name = xstrdup(name);
     this->vconn = vconn;
-    this->pollfd = NULL;
     this->n_txq = 0;
     this->txq = NULL;
     this->tx_tail = NULL;

@@ -12,6 +12,7 @@ libopenflow_la_SOURCES = \
 	hash.c \
 	list.c \
 	ofp-print.c \
+	poll-loop.c \
 	socket-util.c \
 	util.c \
 	vconn-tcp.c \

@@ -11,12 +11,12 @@ noinst_HEADERS = \
 	ip.h \
 	list.h \
 	mac.h \
-	Makefile.am \
 	netlink.h \
 	ofp-print.h \
 	openflow.h \
 	openflow-netlink.h \
 	packets.h \
+	poll-loop.h \
 	socket-util.h \
 	util.h \
 	vconn.h \

@@ -19,22 +19,20 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef VLOG_SOCKET_H
-#define VLOG_SOCKET_H 1
+#ifndef POLL_LOOP_H
+#define POLL_LOOP_H 1
 
-/* Server for Vlog control connection. */
-struct vlog_server;
-int vlog_server_listen(const char *path, struct vlog_server **);
-void vlog_server_close(struct vlog_server *);
+#include <poll.h>
 
-/* Client for Vlog control connection. */
-struct vlog_client;
-int vlog_client_connect(const char *path, struct vlog_client **);
-void vlog_client_close(struct vlog_client *);
-int vlog_client_send(struct vlog_client *, const char *request);
-int vlog_client_recv(struct vlog_client *, char **reply);
-int vlog_client_transact(struct vlog_client *,
-                         const char *request, char **reply);
-const char *vlog_client_target(const struct vlog_client *);
+typedef void poll_fd_func(int fd, short int revents, void *aux);
 
-#endif /* vlog-socket.h */
+struct poll_waiter *poll_fd_callback(int fd, short int events,
+                                     poll_fd_func *, void *aux);
+struct poll_waiter *poll_fd_wait(int fd, short int events, short int *revents);
+void poll_cancel(struct poll_waiter *);
+
+void poll_immediate_wake(void);
+void poll_timer_wait(int msec);
+void poll_block(void);
+
+#endif /* poll-loop.h */

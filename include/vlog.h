@@ -49,14 +49,20 @@ enum vlog_facility vlog_get_facility_val(const char *name);
 
 /* Modules that can emit log messages. */
 #define VLOG_MODULES                            \
+        VLOG_MODULE(chain)                      \
         VLOG_MODULE(controller)                 \
+        VLOG_MODULE(controller_connection)      \
         VLOG_MODULE(ctlpath)                    \
+        VLOG_MODULE(datapath)                   \
         VLOG_MODULE(dpif)                       \
         VLOG_MODULE(dpctl)                      \
         VLOG_MODULE(fault)                      \
         VLOG_MODULE(flow)                       \
+        VLOG_MODULE(netdev)                     \
         VLOG_MODULE(netlink)                    \
+        VLOG_MODULE(poll_loop)                  \
         VLOG_MODULE(secchan)                    \
+        VLOG_MODULE(switch)                     \
         VLOG_MODULE(socket_util)                \
         VLOG_MODULE(vconn_netlink)              \
         VLOG_MODULE(vconn_tcp)                  \

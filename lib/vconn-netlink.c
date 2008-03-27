@@ -34,6 +34,7 @@
 #include "buffer.h"
 #include "dpif.h"
 #include "netlink.h"
+#include "poll-loop.h"
 #include "socket-util.h"
 #include "util.h"
 #include "openflow.h"
@@ -67,6 +68,7 @@ netlink_open(const char *name, char *suffix, struct vconn **vconnp)
 
     netlink = xmalloc(sizeof *netlink);
     netlink->vconn.class = &netlink_vconn_class;
+    netlink->vconn.connect_status = 0;
     retval = dpif_open(dp_idx, true, &netlink->dp);
     if (retval) {
         free(netlink);
@@ -83,20 +85,6 @@ netlink_close(struct vconn *vconn)
     struct netlink_vconn *netlink = netlink_vconn_cast(vconn);
     dpif_close(&netlink->dp);
     free(netlink);
-}
-
-static bool
-netlink_prepoll(struct vconn *vconn, int want, struct pollfd *pfd) 
-{
-    struct netlink_vconn *netlink = netlink_vconn_cast(vconn);
-    pfd->fd = nl_sock_fd(netlink->dp.sock);
-    if (want & WANT_RECV) {
-        pfd->events |= POLLIN;
-    }
-    if (want & WANT_SEND) {
-        pfd->events |= POLLOUT;
-    }
-    return false;
 }
 
 static int
@@ -117,11 +105,31 @@ netlink_send(struct vconn *vconn, struct buffer *buffer)
     return retval;
 }
 
+static void
+netlink_wait(struct vconn *vconn, enum vconn_wait_type wait) 
+{
+    struct netlink_vconn *netlink = netlink_vconn_cast(vconn);
+    short int events = 0;
+    switch (wait) {
+    case WAIT_RECV:
+        events = POLLIN;
+        break;
+
+    case WAIT_SEND:
+        events = 0;
+        break;
+
+    default:
+        NOT_REACHED();
+    }
+    poll_fd_wait(nl_sock_fd(netlink->dp.sock), events, NULL);
+}
+
 struct vconn_class netlink_vconn_class = {
     .name = "nl",
     .open = netlink_open,
     .close = netlink_close,
-    .prepoll = netlink_prepoll,
     .recv = netlink_recv,
     .send = netlink_send,
+    .wait = netlink_wait,
 };
