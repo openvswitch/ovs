@@ -158,7 +158,9 @@ dp_run(struct datapath *dp)
              * to the controller or adding a vlan tag, plus an extra 2 bytes to
              * allow IP headers to be aligned on a 4-byte boundary.  */
             const int headroom = 128 + 2;
-            buffer = buffer_new(ETH_TOTAL_MAX + headroom);
+            const int hard_header = VLAN_ETH_HEADER_LEN;
+            const int mtu = netdev_get_mtu(p->netdev);
+            buffer = buffer_new(headroom + hard_header + mtu);
             buffer->data += headroom;
         }
         error = netdev_recv(p->netdev, buffer, false);

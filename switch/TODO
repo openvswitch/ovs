@@ -1,7 +1,5 @@
 * Give it a more specific name (ofswitch? ofp-switch?)
 
-* Jumbo frames (drop ETH_TOTAL_MAX?).
-
 * Test memory leaks.
 
 * Test packet header modifications.

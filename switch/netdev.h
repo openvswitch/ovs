@@ -47,6 +47,7 @@ int netdev_send(struct netdev *, struct buffer *, bool block);
 const uint8_t *netdev_get_etheraddr(const struct netdev *);
 int netdev_get_fd(const struct netdev *);
 const char *netdev_get_name(const struct netdev *);
+int netdev_get_mtu(const struct netdev *);
 int netdev_get_speed(const struct netdev *);
 uint32_t netdev_get_features(const struct netdev *);
 

@@ -68,6 +68,7 @@ struct netdev {
     int fd;
     uint8_t etheraddr[ETH_ADDR_LEN];
     int speed;
+    int mtu;
     uint32_t features;
     int save_flags;
 };
@@ -212,6 +213,7 @@ netdev_open(const char *name, struct netdev **netdev_)
     socklen_t rcvbuf_len;
     size_t rcvbuf;
     uint8_t etheraddr[ETH_ADDR_LEN];
+    int mtu;
     int error;
     struct netdev *netdev;
 
@@ -259,7 +261,7 @@ netdev_open(const char *name, struct netdev **netdev_)
         rcvbuf -= n_bytes;
     }
 
-    /* Get ethernet device index and hardware address. */
+    /* Get ethernet device index. */
     strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
     if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0) {
         VLOG_ERR("ioctl(SIOCGIFINDEX) on %s device failed: %s",
@@ -267,6 +269,8 @@ netdev_open(const char *name, struct netdev **netdev_)
         goto error;
     }
     ifindex = ifr.ifr_ifindex;
+
+    /* Get MAC address. */
     if (ioctl(fd, SIOCGIFHWADDR, &ifr) < 0) {
         VLOG_ERR("ioctl(SIOCGIFHWADDR) on %s device failed: %s",
                  name, strerror(errno));
@@ -279,11 +283,20 @@ netdev_open(const char *name, struct netdev **netdev_)
     }
     memcpy(etheraddr, ifr.ifr_hwaddr.sa_data, sizeof etheraddr);
 
+    /* Get MTU. */
+    if (ioctl(fd, SIOCGIFMTU, &ifr) < 0) {
+        VLOG_ERR("ioctl(SIOCGIFMTU) on %s device failed: %s",
+                 name, strerror(errno));
+        goto error;
+    }
+    mtu = ifr.ifr_mtu;
+
     /* Allocate network device. */
     netdev = xmalloc(sizeof *netdev);
     netdev->name = xstrdup(name);
     netdev->fd = fd;
     memcpy(netdev->etheraddr, etheraddr, sizeof etheraddr);
+    netdev->mtu = mtu;
 
     /* Get speed, features. */
     do_ethtool(netdev);
@@ -440,6 +453,12 @@ const char *
 netdev_get_name(const struct netdev *netdev)
 {
     return netdev->name;
+}
+
+int
+netdev_get_mtu(const struct netdev *netdev) 
+{
+    return netdev->mtu;
 }
 
 int
