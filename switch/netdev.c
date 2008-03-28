@@ -428,7 +428,7 @@ netdev_recv(struct netdev *netdev, struct buffer *buffer)
 void
 netdev_recv_wait(struct netdev *netdev)
 {
-    poll_fd_wait(netdev->fd, POLLIN, NULL);
+    poll_fd_wait(netdev->fd, POLLIN);
 }
 
 /* Sends 'buffer' on 'netdev'.  Returns 0 if successful, otherwise a positive
@@ -494,7 +494,7 @@ netdev_send(struct netdev *netdev, struct buffer *buffer)
 void
 netdev_send_wait(struct netdev *netdev)
 {
-    poll_fd_wait(netdev->fd, POLLOUT, NULL);
+    poll_fd_wait(netdev->fd, POLLOUT);
 }
 
 /* Returns a pointer to 'netdev''s MAC address.  The caller must not modify or

@@ -134,7 +134,7 @@ netlink_wait(struct vconn *vconn, enum vconn_wait_type wait)
     default:
         NOT_REACHED();
     }
-    poll_fd_wait(nl_sock_fd(netlink->dp.sock), events, NULL);
+    poll_fd_wait(nl_sock_fd(netlink->dp.sock), events);
 }
 
 struct vconn_class netlink_vconn_class = {

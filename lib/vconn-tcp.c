@@ -276,19 +276,19 @@ tcp_wait(struct vconn *vconn, enum vconn_wait_type wait)
     struct tcp_vconn *tcp = tcp_vconn_cast(vconn);
     switch (wait) {
     case WAIT_CONNECT:
-        poll_fd_wait(tcp->fd, POLLOUT, NULL);
+        poll_fd_wait(tcp->fd, POLLOUT);
         break;
 
     case WAIT_SEND:
         if (!tcp->txbuf) {
-            poll_fd_wait(tcp->fd, POLLOUT, NULL);
+            poll_fd_wait(tcp->fd, POLLOUT);
         } else {
             /* Nothing to do: need to drain txbuf first. */
         }
         break;
 
     case WAIT_RECV:
-        poll_fd_wait(tcp->fd, POLLIN, NULL);
+        poll_fd_wait(tcp->fd, POLLIN);
         break;
 
     default:
@@ -414,7 +414,7 @@ ptcp_wait(struct vconn *vconn, enum vconn_wait_type wait)
 {
     struct ptcp_vconn *ptcp = ptcp_vconn_cast(vconn);
     assert(wait == WAIT_ACCEPT);
-    poll_fd_wait(ptcp->fd, POLLIN, NULL);
+    poll_fd_wait(ptcp->fd, POLLIN);
 }
 
 struct vconn_class ptcp_vconn_class = {

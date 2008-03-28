@@ -42,75 +42,58 @@
 #define THIS_MODULE VLM_poll_loop
 #include "vlog.h"
 
+/* An event that will wake the following call to poll_block(). */
 struct poll_waiter {
-    struct list node;
-    int fd;
-    short int events;
-    struct pollfd *pollfd;
+    /* Set when the waiter is created. */
+    struct list node;           /* Element in global waiters list. */
+    int fd;                     /* File descriptor. */
+    short int events;           /* Events to wait for (POLLIN, POLLOUT). */
+    poll_fd_func *function;     /* Callback function, if any, or null. */
+    void *aux;                  /* Argument to callback function. */
 
-    short int *revents;
-
-    poll_fd_func *function;
-    void *aux;
+    /* Set only when poll_block() is called. */
+    struct pollfd *pollfd;      /* Pointer to element of the pollfds array
+                                   (null if added from a callback). */
 };
 
+/* All active poll waiters. */
 static struct list waiters = LIST_INITIALIZER(&waiters);
+
+/* Number of elements in the waiters list. */
 static size_t n_waiters;
+
+/* Max time to wait in next call to poll_block(), in milliseconds, or -1 to
+ * wait forever. */
 static int timeout = -1;
 
+/* Callback currently running, to allow verifying that poll_cancel() is not
+ * being called on a running callback. */
 #ifndef NDEBUG
 static struct poll_waiter *running_cb;
 #endif
 
-static struct poll_waiter *
-new_waiter(int fd, short int events)
-{
-    struct poll_waiter *waiter = xcalloc(1, sizeof *waiter);
-    assert(fd >= 0);
-    waiter->fd = fd;
-    waiter->events = events;
-    list_push_back(&waiters, &waiter->node);
-    n_waiters++;
-    return waiter;
-}
+static struct poll_waiter *new_waiter(int fd, short int events);
 
+/* Registers 'fd' as waiting for the specified 'events' (which should be POLLIN
+ * or POLLOUT or POLLIN | POLLOUT).  The following call to poll_block() will
+ * wake up when 'fd' becomes ready for one or more of the requested events.
+ *
+ * The event registration is one-shot: only the following call to poll_block()
+ * is affected.  The event will need to be re-registered after poll_block() is
+ * called if it is to persist. */
 struct poll_waiter *
-poll_fd_callback(int fd, short int events, poll_fd_func *function, void *aux)
+poll_fd_wait(int fd, short int events)
 {
-    struct poll_waiter *pw = new_waiter(fd, events);
-    pw->function = function;
-    pw->aux = aux;
-    return pw;
+    return new_waiter(fd, events);
 }
 
-struct poll_waiter *
-poll_fd_wait(int fd, short int events, short int *revents)
-{
-    struct poll_waiter *pw = new_waiter(fd, events);
-    pw->revents = revents;
-    if (revents) {
-        *revents = 0;
-    }
-    return pw;
-}
-
-void
-poll_cancel(struct poll_waiter *pw)
-{
-    if (pw) {
-        assert(pw != running_cb);
-        list_remove(&pw->node);
-        free(pw);
-        n_waiters--;
-    }
-}
-
-void
-poll_immediate_wake(void)
-{
-    timeout = 0;
-}
-
+/* Causes the following call to poll_block() to block for no more than 'msec'
+ * milliseconds.  If 'msec' is nonpositive, the following call to poll_block()
+ * will not block at all.
+ *
+ * The timer registration is one-shot: only the following call to poll_block()
+ * is affected.  The timer will need to be re-registered after poll_block() is
+ * called if it is to persist. */
 void
 poll_timer_wait(int msec)
 {
@@ -119,6 +102,20 @@ poll_timer_wait(int msec)
     }
 }
 
+/* Causes the following call to poll_block() to wake up immediately, without
+ * blocking. */
+void
+poll_immediate_wake(void)
+{
+    timeout = 0;
+}
+
+/* Blocks until one or more of the events registered with poll_fd_wait()
+ * occurs, or until the minimum duration registered with poll_timer_wait()
+ * elapses, or not at all if poll_immediate_wake() has been called.
+ *
+ * Also executes any autonomous subroutines registered with poll_fd_callback(),
+ * if their file descriptor have become ready. */
 void
 poll_block(void)
 {
@@ -159,23 +156,71 @@ poll_block(void)
                 node = node->next;
                 continue;
             }
-        } else {
-            if (pw->function) {
+        } else if (pw->function) {
 #ifndef NDEBUG
-                running_cb = pw;
+            running_cb = pw;
 #endif
-                pw->function(pw->fd, pw->pollfd->revents, pw->aux);
+            pw->function(pw->fd, pw->pollfd->revents, pw->aux);
 #ifndef NDEBUG
-                running_cb = NULL;
+            running_cb = NULL;
 #endif
-            } else if (pw->revents) {
-                *pw->revents = pw->pollfd->revents;
-            }
         }
-        node = list_remove(node);
-        free(pw);
-        n_waiters--;
+        node = node->next;
+        poll_cancel(pw);
     }
 
     timeout = -1;
+}
+
+/* Registers 'function' to be called with argument 'aux' by poll_block() when
+ * 'fd' becomes ready for one of the events in 'events', which should be POLLIN
+ * or POLLOUT or POLLIN | POLLOUT.
+ *
+ * The callback registration persists until the event actually occurs.  At that
+ * point, it is automatically de-registered.  The callback function must
+ * re-register the event by calling poll_fd_callback() again within the
+ * callback, if it wants to be called back again later. */
+struct poll_waiter *
+poll_fd_callback(int fd, short int events, poll_fd_func *function, void *aux)
+{
+    struct poll_waiter *pw = new_waiter(fd, events);
+    pw->function = function;
+    pw->aux = aux;
+    return pw;
+}
+
+/* Cancels the file descriptor event registered with poll_fd_wait() or
+ * poll_fd_callback().  'pw' must be the struct poll_waiter returned by one of
+ * those functions.
+ *
+ * An event registered with poll_fd_wait() may be canceled from its time of
+ * registration until the next call to poll_block().  At that point, the event
+ * is automatically canceled by the system and its poll_waiter is freed.
+ *
+ * An event registered with poll_fd_callback() may be canceled from its time of
+ * registration until its callback is actually called.  At that point, the
+ * event is automatically canceled by the system and its poll_waiter is
+ * freed. */
+void
+poll_cancel(struct poll_waiter *pw)
+{
+    if (pw) {
+        assert(pw != running_cb);
+        list_remove(&pw->node);
+        free(pw);
+        n_waiters--;
+    }
+}
+
+/* Creates and returns a new poll_waiter for 'fd' and 'events'. */
+static struct poll_waiter *
+new_waiter(int fd, short int events)
+{
+    struct poll_waiter *waiter = xcalloc(1, sizeof *waiter);
+    assert(fd >= 0);
+    waiter->fd = fd;
+    waiter->events = events;
+    list_push_back(&waiters, &waiter->node);
+    n_waiters++;
+    return waiter;
 }

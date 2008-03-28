@@ -473,10 +473,10 @@ static bool
 ssl_needs_wait(struct ssl_vconn *sslv) 
 {
     if (SSL_want_read(sslv->ssl)) {
-        poll_fd_wait(sslv->fd, POLLIN, NULL);
+        poll_fd_wait(sslv->fd, POLLIN);
         return true;
     } else if (SSL_want_write(sslv->ssl)) {
-        poll_fd_wait(sslv->fd, POLLOUT, NULL);
+        poll_fd_wait(sslv->fd, POLLOUT);
         return true;
     } else {
         return false;
@@ -493,7 +493,7 @@ ssl_wait(struct vconn *vconn, enum vconn_wait_type wait)
         if (vconn_connect(vconn) != EAGAIN) {
             poll_immediate_wake();
         } else if (sslv->state == STATE_TCP_CONNECTING) {
-            poll_fd_wait(sslv->fd, POLLOUT, NULL);
+            poll_fd_wait(sslv->fd, POLLOUT);
         } else if (!ssl_needs_wait(sslv)) {
             NOT_REACHED();
         }
@@ -504,14 +504,14 @@ ssl_wait(struct vconn *vconn, enum vconn_wait_type wait)
             if (SSL_pending(sslv->ssl)) {
                 poll_immediate_wake();
             } else {
-                poll_fd_wait(sslv->fd, POLLIN, NULL);
+                poll_fd_wait(sslv->fd, POLLIN);
             }
         }
         break;
 
     case WAIT_SEND:
         if (!sslv->txbuf && !ssl_needs_wait(sslv)) {
-            poll_fd_wait(sslv->fd, POLLOUT, NULL);
+            poll_fd_wait(sslv->fd, POLLOUT);
         }
         break;
 
@@ -646,7 +646,7 @@ pssl_wait(struct vconn *vconn, enum vconn_wait_type wait)
 {
     struct pssl_vconn *pssl = pssl_vconn_cast(vconn);
     assert(wait == WAIT_ACCEPT);
-    poll_fd_wait(pssl->fd, POLLIN, NULL);
+    poll_fd_wait(pssl->fd, POLLIN);
 }
 
 struct vconn_class pssl_vconn_class = {
