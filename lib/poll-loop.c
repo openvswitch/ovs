@@ -35,6 +35,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <poll.h>
+#include <stdlib.h>
 #include <string.h>
 #include "list.h"
 
@@ -99,6 +100,7 @@ poll_cancel(struct poll_waiter *pw)
     if (pw) {
         assert(pw != running_cb);
         list_remove(&pw->node);
+        free(pw);
         n_waiters--;
     }
 }
@@ -171,6 +173,7 @@ poll_block(void)
             }
         }
         node = list_remove(node);
+        free(pw);
         n_waiters--;
     }
 
