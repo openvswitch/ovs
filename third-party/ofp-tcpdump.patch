@@ -49,7 +49,7 @@ diff -rNu tcpdump/print-openflow.c tcpdump/print-openflow.c
 --- tcpdump/print-openflow.c	1969-12-31 16:00:00.000000000 -0800
 +++ tcpdump/print-openflow.c	2008-02-07 11:29:01.000000000 -0800
 @@ -0,0 +1,46 @@
-+/* Copyright (C) 2007 Board of Trustees, Leland Stanford Jr. University.
++/* Copyright (C) 2007, 2008 Board of Trustees, Leland Stanford Jr. University.
 + *
 + * Permission is hereby granted, free of charge, to any person obtaining a copy
 + * of this software and associated documentation files (the "Software"), to

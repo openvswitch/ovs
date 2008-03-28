@@ -1,6 +1,6 @@
 dnl =================================================================================
 dnl Distributed under the terms of the GNU GPL version 2.
-dnl Copyright (c) 2007 The Board of Trustees of The Leland Stanford Junior University
+dnl Copyright (c) 2007, 2008 The Board of Trustees of The Leland Stanford Junior University
 dnl =================================================================================
 
 

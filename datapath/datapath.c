@@ -1,7 +1,7 @@
 /*
  * Distributed under the terms of the GNU GPL version 2.
- * Copyright (c) 2007 The Board of Trustees of The Leland Stanford Junior Univer
-sity
+ * Copyright (c) 2007, 2008 The Board of Trustees of The Leland 
+ * Stanford Junior University
  */
 
 /* Functions for managing the dp interface/device. */
@@ -1575,7 +1575,7 @@ static void dp_uninit_netlink(void)
 #define DRV_NAME		"openflow"
 #define DRV_VERSION	 VERSION
 #define DRV_DESCRIPTION "OpenFlow switching datapath implementation"
-#define DRV_COPYRIGHT   "Copyright (c) 2007 The Board of Trustees of The Leland Stanford Junior University"
+#define DRV_COPYRIGHT   "Copyright (c) 2007, 2008 The Board of Trustees of The Leland Stanford Junior University"
 
 
 static int __init dp_init(void)
