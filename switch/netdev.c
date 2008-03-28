@@ -58,6 +58,7 @@
 #include "buffer.h"
 #include "openflow.h"
 #include "packets.h"
+#include "poll-loop.h"
 
 #define THIS_MODULE VLM_netdev
 #include "vlog.h"
@@ -102,6 +103,8 @@ check_ipv4_address(const char *name)
     close(sock);
 }
 
+/* Check whether device NAME has an IPv6 address assigned to it and, if so, log
+ * an error. */
 static void
 check_ipv6_address(const char *name)
 {
@@ -203,6 +206,9 @@ do_ethtool(struct netdev *netdev)
     }
 }
 
+/* Opens the network device named 'name' (e.g. "eth0") and returns zero if
+ * successful, otherwise a positive errno value.  On success, sets '*netdev'
+ * to the new network device, otherwise to null. */
 int
 netdev_open(const char *name, struct netdev **netdev_)
 {
@@ -322,7 +328,10 @@ netdev_open(const char *name, struct netdev **netdev_)
         return error;
     }
 
-    /* Report IP addresses to administrator. */
+    /* Complain to administrator if any IP addresses are assigned to the
+     * interface.  We warn about this because packets received for that IP
+     * address will be processed both by the kernel TCP/IP stack and by us as a
+     * switch, which produces poor results. */
     check_ipv4_address(name);
     check_ipv6_address(name);
 
@@ -336,6 +345,7 @@ error:
     return error;
 }
 
+/* Closes and destroys 'netdev'. */
 void
 netdev_close(struct netdev *netdev)
 {
@@ -359,6 +369,8 @@ netdev_close(struct netdev *netdev)
     }
 }
 
+/* Pads 'buffer' out with zero-bytes to the minimum valid length of an
+ * Ethernet packet, if necessary.  */
 static void
 pad_to_minimum_length(struct buffer *buffer)
 {
@@ -368,8 +380,20 @@ pad_to_minimum_length(struct buffer *buffer)
     }
 }
 
+/* Attempts to receive a packet from 'netdev' into 'buffer', which the caller
+ * must have initialized with sufficient room for the packet.  The space
+ * required to receive any packet is ETH_HEADER_LEN bytes, plus VLAN_HEADER_LEN
+ * bytes, plus the device's MTU (which may be retrieved via netdev_get_mtu()).
+ * (Some devices do not allow for a VLAN header, in which case VLAN_HEADER_LEN
+ * need not be included.)
+ *
+ * If a packet is successfully retrieved, returns 0.  In this case 'buffer' is
+ * guaranteed to contain at least ETH_TOTAL_MIN bytes.  Otherwise, returns a
+ * positive errno value.  Returns EAGAIN immediately if no packet is ready to
+ * be returned.
+ */
 int
-netdev_recv(struct netdev *netdev, struct buffer *buffer, bool block)
+netdev_recv(struct netdev *netdev, struct buffer *buffer)
 {
     ssize_t n_bytes;
 
@@ -378,7 +402,7 @@ netdev_recv(struct netdev *netdev, struct buffer *buffer, bool block)
     do {
         n_bytes = recv(netdev->fd,
                        buffer_tail(buffer), buffer_tailroom(buffer),
-                       block ? 0 : MSG_DONTWAIT);
+                       MSG_DONTWAIT);
     } while (n_bytes < 0 && errno == EINTR);
     if (n_bytes < 0) {
         if (errno != EAGAIN) {
@@ -399,8 +423,23 @@ netdev_recv(struct netdev *netdev, struct buffer *buffer, bool block)
     }
 }
 
+/* Registers with the poll loop to wake up from the next call to poll_block()
+ * when a packet is ready to be received with netdev_recv() on 'netdev'. */
+void
+netdev_recv_wait(struct netdev *netdev)
+{
+    poll_fd_wait(netdev->fd, POLLIN, NULL);
+}
+
+/* Sends 'buffer' on 'netdev'.  Returns 0 if successful, otherwise a positive
+ * errno value.  Returns EAGAIN without blocking if the packet cannot be queued
+ * immediately.  Returns EMSGSIZE if a partial packet was transmitted or if
+ * the packet is too big to transmit on the device.
+ *
+ * The kernel maintains a packet transmission queue, so the caller is not
+ * expected to do additional queuing of packets. */
 int
-netdev_send(struct netdev *netdev, struct buffer *buffer, bool block)
+netdev_send(struct netdev *netdev, struct buffer *buffer)
 {
     ssize_t n_bytes;
     const struct eth_header *eh;
@@ -408,7 +447,10 @@ netdev_send(struct netdev *netdev, struct buffer *buffer, bool block)
 
     /* Ensure packet is long enough.  (Although all incoming packets are at
      * least ETH_TOTAL_MIN bytes long, we could have trimmed some data off a
-     * minimum-size packet, e.g. by dropping a vlan header.) */
+     * minimum-size packet, e.g. by dropping a vlan header.)
+     *
+     * The kernel does not require this, but it ensures that we always access
+     * valid memory in grabbing the sockaddr below. */
     pad_to_minimum_length(buffer);
 
     /* Construct packet sockaddr, which SOCK_PACKET requires. */
@@ -418,14 +460,19 @@ netdev_send(struct netdev *netdev, struct buffer *buffer, bool block)
     spkt.spkt_protocol = eh->eth_type;
 
     do {
-        n_bytes = sendto(netdev->fd, buffer->data, buffer->size,
-                         block ? 0 : MSG_DONTWAIT,
+        n_bytes = sendto(netdev->fd, buffer->data, buffer->size, 0,
                          (const struct sockaddr *) &spkt, sizeof spkt);
     } while (n_bytes < 0 && errno == EINTR);
+
     if (n_bytes < 0) {
-        if (errno != EAGAIN) {
+        /* The Linux AF_PACKET implementation never blocks waiting for room
+         * for packets, instead returning ENOBUFS.  Translate this into EAGAIN
+         * for the caller. */
+        if (errno == ENOBUFS) {
+            return EAGAIN;
+        } else if (errno != EAGAIN) {
             VLOG_WARN("error sending Ethernet packet on %s: %s",
-                      netdev->name, strerror(errno)); 
+                      netdev->name, strerror(errno));
         }
         return errno;
     } else if (n_bytes != buffer->size) {
@@ -437,36 +484,54 @@ netdev_send(struct netdev *netdev, struct buffer *buffer, bool block)
     }
 }
 
+/* Registers with the poll loop to wake up from the next call to poll_block()
+ * when the packet transmission queue has sufficient room to transmit a packet
+ * with netdev_send().
+ *
+ * The kernel maintains a packet transmission queue, so the client is not
+ * expected to do additional queuing of packets.  Thus, this function is
+ * unlikely to ever be used.  It is included for completeness. */
+void
+netdev_send_wait(struct netdev *netdev)
+{
+    poll_fd_wait(netdev->fd, POLLOUT, NULL);
+}
+
+/* Returns a pointer to 'netdev''s MAC address.  The caller must not modify or
+ * free the returned buffer. */
 const uint8_t *
 netdev_get_etheraddr(const struct netdev *netdev)
 {
     return netdev->etheraddr;
 }
 
-int
-netdev_get_fd(const struct netdev *netdev)
-{
-    return netdev->fd;
-}
-
+/* Returns the name of the network device that 'netdev' represents,
+ * e.g. "eth0".  The caller must not modify or free the returned string. */
 const char *
 netdev_get_name(const struct netdev *netdev)
 {
     return netdev->name;
 }
 
+/* Returns the maximum size of transmitted (and received) packets on 'netdev',
+ * in bytes, not including the hardware header; thus, this is typically 1500
+ * bytes for Ethernet devices. */
 int
 netdev_get_mtu(const struct netdev *netdev) 
 {
     return netdev->mtu;
 }
 
+/* Returns the current speed of the network device that 'netdev' represents, in
+ * megabits per second, or 0 if the speed is unknown. */
 int
 netdev_get_speed(const struct netdev *netdev) 
 {
     return netdev->speed;
 }
 
+/* Returns the features supported by 'netdev', as a bitmap of bits from enum
+ * ofp_phy_port, in host byte order. */
 uint32_t
 netdev_get_features(const struct netdev *netdev) 
 {
@@ -475,6 +540,8 @@ netdev_get_features(const struct netdev *netdev)
 
 static void restore_all_flags(void *aux);
 
+/* Set up a signal hook to restore network device flags on program
+ * termination.  */
 static void
 init_netdev(void)
 {
@@ -485,6 +552,11 @@ init_netdev(void)
     }
 }
 
+/* Restore the network device flags on 'netdev' to those that were active
+ * before we changed them.  Returns 0 if successful, otherwise a positive
+ * errno value.
+ *
+ * To avoid reentry, the caller must ensure that fatal signals are blocked. */
 static int
 restore_flags(struct netdev *netdev)
 {
@@ -508,6 +580,8 @@ restore_flags(struct netdev *netdev)
     return 0;
 }
 
+/* Retores all the flags on all network devices that we modified.  Called from
+ * a signal handler, so it does not attempt to report error conditions. */
 static void
 restore_all_flags(void *aux UNUSED)
 {

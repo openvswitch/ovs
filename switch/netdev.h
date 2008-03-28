@@ -31,6 +31,12 @@
  * derivatives without specific, written prior permission.
  */
 
+/* Generic interface to network devices.
+ *
+ * Currently, there is a single implementation of this interface that supports
+ * Linux.  The interface should be generic enough to be implementable on other
+ * operating systems as well. */
+
 #ifndef NETDEV_H
 #define NETDEV_H 1
 
@@ -42,10 +48,10 @@ struct buffer;
 struct netdev;
 int netdev_open(const char *name, struct netdev **);
 void netdev_close(struct netdev *);
-int netdev_recv(struct netdev *, struct buffer *, bool block);
-int netdev_send(struct netdev *, struct buffer *, bool block);
+int netdev_recv(struct netdev *, struct buffer *);
+void netdev_recv_wait(struct netdev *);
+int netdev_send(struct netdev *, struct buffer *);
 const uint8_t *netdev_get_etheraddr(const struct netdev *);
-int netdev_get_fd(const struct netdev *);
 const char *netdev_get_name(const struct netdev *);
 int netdev_get_mtu(const struct netdev *);
 int netdev_get_speed(const struct netdev *);

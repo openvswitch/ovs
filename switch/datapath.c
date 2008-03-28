@@ -163,7 +163,7 @@ dp_run(struct datapath *dp)
             buffer = buffer_new(headroom + hard_header + mtu);
             buffer->data += headroom;
         }
-        error = netdev_recv(p->netdev, buffer, false);
+        error = netdev_recv(p->netdev, buffer);
         if (!error) {
             fwd_port_input(dp, buffer, port_no(dp, p));
             buffer = NULL;
@@ -182,7 +182,7 @@ dp_wait(struct datapath *dp)
     struct sw_port *p;
 
     LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
-        poll_fd_wait(netdev_get_fd(p->netdev), POLLIN, NULL);
+        netdev_recv_wait(p->netdev);
     }
 }
 
@@ -247,8 +247,7 @@ output_packet(struct datapath *dp, struct buffer *buffer, int out_port)
     if (out_port >= 0 && out_port < OFPP_MAX) { 
         struct sw_port *p = &dp->ports[out_port];
         if (p->netdev != NULL) {
-            /* FIXME: queue packets. */
-            netdev_send(p->netdev, buffer, false);
+            netdev_send(p->netdev, buffer);
             return;
         }
     }
