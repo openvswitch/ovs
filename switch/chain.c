@@ -41,6 +41,13 @@
 #define THIS_MODULE VLM_chain
 #include "vlog.h"
 
+/* Set of tables chained together in sequence from cheap to expensive. */
+#define CHAIN_MAX_TABLES 4
+struct sw_chain {
+    int n_tables;
+    struct sw_table *tables[CHAIN_MAX_TABLES];
+};
+
 /* Attempts to append 'table' to the set of tables in 'chain'.  Returns 0 or
  * negative error.  If 'table' is null it is assumed that table creation failed
  * due to out-of-memory. */
