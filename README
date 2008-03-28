@@ -43,7 +43,7 @@ the following components:
 
 	- dpctl, a tool for configuring the kernel module.
 
-The second implementation is a single user-space program, named
+The second implementation is a single userspace program, named
 "switch", that integrates all three parts of an OpenFlow switch.
 
 This distribution includes some additional software as well:

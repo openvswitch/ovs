@@ -40,8 +40,12 @@ Switch".
 Building Userspace Programs
 ---------------------------
 
-These instructions describe how to build the userspace components of
-the OpenFlow distribution.  Refer to "Building and Testing the Linux
+The OpenFlow distribution includes two implementations of the switch:
+one entirely in userspace, for portability and ease of installation,
+and another with a Linux kernel module component that is more
+difficult to install but should also yield better performance.  These
+instructions describe how to build the userspace components of the
+OpenFlow distribution.  Refer to "Building and Testing the Linux
 Kernel-Based Switch", below, for additional instructions on how to
 build the optional Linux kernel module.
 
@@ -85,10 +89,13 @@ build the optional Linux kernel module.
 Testing Userspace Programs
 --------------------------
 
+0. The commands below must run as root, so log in as root, or use a
+   program such as "su" to become root temporarily.
+
 1. Start the OpenFlow controller running in the background, by running
    the "controller" program with a command like the following:
 
-      % controller ptcp: &
+      # controller ptcp: &
 
    This command causes the controller to bind to port 975 (the
    default) awaiting connections from OpenFlow switches.  See
@@ -98,10 +105,10 @@ Testing Userspace Programs
    switch, specifying network devices to use as switch ports on the -i
    option as a comma-separated list, like so:
 
-      % switch tcp:127.0.0.1 -i eth1,eth2
+      # switch tcp:127.0.0.1 -i eth1,eth2
    
    The network devices that you specify should not have configured IP
-   addresses.  The switch program must run as root.
+   addresses.
 
 3. The controller causes each switch that connects to it to act like a
    learning Ethernet switch.  Thus, devices plugged into the specified
@@ -137,10 +144,10 @@ controllers and one for switches.  If you have an established PKI,
 OpenFlow can use it directly.  Otherwise, refer to "Establishing a
 Public Key Infrastructure" below.
 
-To configure the controller to listen for SSL connections on the
-default port, invoke it as follows:
+To configure the controller to listen for SSL connections on port 976
+(the default), invoke it as follows:
 
-      % controller -v pssl: --private-key=PRIVKEY --certificate=CERT \
+      # controller -v pssl: --private-key=PRIVKEY --certificate=CERT \
             --ca-cert=CACERT
 
 where PRIVKEY is a file containing the controller's private key, CERT
@@ -149,23 +156,23 @@ controller's public key, and CACERT is a file containing the root
 certificate for the switch CA.  If, for example, your PKI was created
 with the instructions below, then the invocation would look like:
 
-      % controller -v pssl: --private-key=ctl-privkey.pem \
+      # controller -v pssl: --private-key=ctl-privkey.pem \
             --certificate=ctl-cert.pem --ca-cert=pki/switchca/cacert.pem
 
-To configure a switch to connect to a controller running on the
-default port on host 192.168.1.2 over SSL, invoke it as follows:
+To configure a switch to connect to a controller running on port 976
+(the default) on host 192.168.1.2 over SSL, invoke it as follows:
 
-      % switch -v ssl:192.168.1.2 -i INTERFACES --private-key=PRIVKEY \
+      # switch -v ssl:192.168.1.2 -i INTERFACES --private-key=PRIVKEY \
             --certificate=CERT --ca-cert=CACERT
 
-where INTERFACES is the command-separated list of network devices
+where INTERFACES is the command-separated list of network device
 interfaces, PRIVKEY is a file containing the switch's private key,
 CERT is a file containing the switch CA's certificate for the switch's
 public key, and CACERT is a file containing the root certificate for
 the controller CA.  If, for example, your PKI was created with the
 instructions below, then the invocation would look like:
 
-      % secchan -v -i INTERFACES ssl:192.168.1.2 --private-key=sc-privkey.pem \
+      # secchan -v -i INTERFACES ssl:192.168.1.2 --private-key=sc-privkey.pem \
             --certificate=sc-cert.pem --ca-cert=pki/controllerca/cacert.pem
 
 [*] To be specific, OpenFlow uses TLS version 1.0 or later (TLSv1), as
@@ -300,10 +307,13 @@ Testing the Kernel-Based Implementation
 The OpenFlow kernel module must be loaded, as described in the
 previous section, before it may be tested.
 
+0. The commands below must run as root, so log in as root, or use a
+   program such as "su" to become root temporarily.
+
 1. Create a datapath instance.  The command below creates a datapath with
    ID 0 (see dpctl(8) for more detailed usage information).
 
-      % dpctl adddp 0
+      # dpctl adddp 0
    
    (In principle, openflow_mod supports multiple datapaths within the
    same host, but this is rarely useful in practice.)
@@ -313,13 +323,13 @@ previous section, before it may be tested.
    switch using interfaces eth1 and eth2, you would issue the following
    commands:
 
-      % dpctl addif 0 eth1
-      % dpctl addif 0 eth2
+      # dpctl addif 0 eth1
+      # dpctl addif 0 eth2
 
    You can verify that the interfaces were successfully added by asking
    dpctl to print the current status of datapath 0:
 
-      % dpctl show 0
+      # dpctl show 0
 
 3. (Optional) You can manually add flows to the datapath to test using
    dpctl add-flows and view them using dpctl dump-flows.  See dpctl(8)
@@ -329,7 +339,7 @@ previous section, before it may be tested.
    controller on the host machine to manage the datapath directly using
    netlink:
 
-      % controller -v nl:0
+      # controller -v nl:0
 
    Once the controller is running, the datapath should operate like a
    learning Ethernet switch.  You may monitor the flows in the datapath
@@ -353,7 +363,7 @@ following instructions to set up remote switches:
    the controller. In the example below, the controller will bind to
    port 975 (the default) awaiting connections from secure channels. 
 
-      % controller -v ptcp:
+      # controller -v ptcp:
 
    (See controller(8) for more details)
    
@@ -368,7 +378,7 @@ following instructions to set up remote switches:
    default port) and the datapath ID is 0, the secchan invocation
    would look like:
 
-      % secchan -v nl:0 tcp:192.168.1.2
+      # secchan -v nl:0 tcp:192.168.1.2
 
 Bug Reporting
 -------------
