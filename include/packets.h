@@ -75,7 +75,7 @@ BUILD_ASSERT_DECL(VLAN_HEADER_LEN == sizeof(struct vlan_header));
 struct vlan_eth_header {
     uint8_t veth_dst[ETH_ADDR_LEN];
     uint8_t veth_src[ETH_ADDR_LEN];
-    uint16_t veth_type;
+    uint16_t veth_type;         /* Always htons(ETH_TYPE_VLAN). */
     uint16_t veth_tci;          /* Lowest 12 bits are VLAN ID. */
     uint16_t veth_next_type;
 };
