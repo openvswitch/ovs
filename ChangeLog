@@ -1,3 +1,7 @@
+v0.2.0 - 28 Mar 2008
+--------------------
+    - Added userspace switch reference implementation
+
 v0.1.9 - 19 Mar 2008
 --------------------
     - Added SSL/TLS support
