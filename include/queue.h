@@ -36,9 +36,9 @@
 
 /* Packet queue. */
 struct queue {
-    int n;
-    struct buffer *head;
-    struct buffer *tail;
+    int n;                      /* Number of queued packets. */
+    struct buffer *head;        /* First queued packet, null if n == 0. */
+    struct buffer *tail;        /* Last queued packet, null if n == 0. */
 };
 
 void queue_init(struct queue *);

@@ -37,6 +37,7 @@
 
 static void check_queue(struct queue *q);
 
+/* Initializes 'q' as an empty packet queue. */
 void
 queue_init(struct queue *q)
 {
@@ -45,6 +46,7 @@ queue_init(struct queue *q)
     q->tail = NULL;
 }
 
+/* Destroys 'q' and all of the packets that it contains. */
 void
 queue_destroy(struct queue *q)
 {
@@ -55,6 +57,7 @@ queue_destroy(struct queue *q)
     }
 }
 
+/* Removes and destroys all of the packets in 'q', rendering it empty. */
 void
 queue_clear(struct queue *q)
 {
@@ -62,6 +65,12 @@ queue_clear(struct queue *q)
     queue_init(q);
 }
 
+/* Advances the first packet in 'q' from 'q->head' to 'next', which should be
+ * the second packet in the queue.
+ *
+ * The odd, unsafe interface here allows the first packet in the queue to be
+ * passed to a function for possible consumption (and destruction) and only
+ * dropped from the queue if that function actually accepts it. */
 void
 queue_advance_head(struct queue *q, struct buffer *next)
 {
@@ -74,6 +83,7 @@ queue_advance_head(struct queue *q, struct buffer *next)
     q->n--;
 }
 
+/* Appends 'b' to the tail of 'q'. */
 void
 queue_push_tail(struct queue *q, struct buffer *b)
 {
@@ -90,6 +100,7 @@ queue_push_tail(struct queue *q, struct buffer *b)
     check_queue(q);
 }
 
+/* Checks the internal integrity of 'q'.  For use in debugging. */
 static void
 check_queue(struct queue *q)
 {
