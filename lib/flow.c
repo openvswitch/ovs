@@ -72,18 +72,25 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
         if (flow->dl_type == htons(ETH_TYPE_IP)) {
             const struct ip_header *nh = buffer_at(&b, 0, sizeof *nh);
             if (nh) {
+                int ip_len = IP_IHL(nh->ip_ihl_ver) * 4;
+                if (ip_len < IP_HEADER_LEN) {
+                    return;
+                }
+
                 flow->nw_src = nh->ip_src;
                 flow->nw_dst = nh->ip_dst;
                 flow->nw_proto = nh->ip_proto;
-                packet->l4 = b.data + IP_HEADER_LEN;
                 if (flow->nw_proto == IP_TYPE_TCP
                     || flow->nw_proto == IP_TYPE_UDP) {
-                    int udp_ofs = IP_IHL(nh->ip_ihl_ver) * 4;
-                    const struct udp_header *th
-                        = buffer_at(&b, udp_ofs, sizeof *th);
+                    const struct udp_header *th;
+                    th = packet->l4 = buffer_at(&b, ip_len, sizeof *th);
                     if (th) {
                         flow->tp_src = th->udp_src;
                         flow->tp_dst = th->udp_dst;
+                    } else {
+                        /* Avoid tricking other code into thinking that this
+                         * packet has an L4 header. */
+                        flow->nw_proto = 0;
                     }
                 }
             }
