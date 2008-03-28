@@ -42,7 +42,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#include "ip.h"
 #include "compiler.h"
 #include "util.h"
 #include "openflow.h"

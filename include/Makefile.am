@@ -8,7 +8,6 @@ noinst_HEADERS = \
 	fault.h \
 	flow.h \
 	hash.h \
-	ip.h \
 	list.h \
 	netlink.h \
 	ofp-print.h \

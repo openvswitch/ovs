@@ -37,7 +37,6 @@
 #include <string.h>
 #include "buffer.h"
 #include "hash.h"
-#include "ip.h"
 #include "openflow.h"
 #include "packets.h"
 
