@@ -43,10 +43,10 @@
 #include <ctype.h>
 
 #include "ip.h"
-#include "mac.h"
 #include "compiler.h"
 #include "util.h"
 #include "openflow.h"
+#include "packets.h"
 
 /* Dumps the contents of the Ethernet frame in the 'len' bytes starting at
  * 'data' to 'stream' using tcpdump.  'total_len' specifies the full length of
@@ -257,10 +257,10 @@ void ofp_print_phy_port(FILE *stream, const struct ofp_phy_port *port)
     }
     name[j] = '\0';
 
-    fprintf(stream, " %2d(%s): addr:"MAC_FMT", speed:%d, flags:%#x, "
+    fprintf(stream, " %2d(%s): addr:"ETH_ADDR_FMT", speed:%d, flags:%#x, "
             "feat:%#x\n", ntohs(port->port_no), name, 
-            MAC_ARGS(port->hw_addr), ntohl(port->speed), ntohl(port->flags), 
-            ntohl(port->features));
+            ETH_ADDR_ARGS(port->hw_addr), ntohl(port->speed),
+            ntohl(port->flags), ntohl(port->features));
 }
 
 /* Pretty-print the OFPT_DATA_HELLO packet of 'len' bytes at 'oh' to 'stream'
@@ -321,8 +321,10 @@ static void ofp_print_match(FILE *f, const struct ofp_match *om)
 
     print_wild(f, "inport", w & OFPFW_IN_PORT, "%04x", ntohs(om->in_port));
     print_wild(f, ":vlan", w & OFPFW_DL_VLAN, "%04x", ntohs(om->dl_vlan));
-    print_wild(f, " mac[", w & OFPFW_DL_SRC, MAC_FMT, MAC_ARGS(om->dl_src));
-    print_wild(f, "->", w & OFPFW_DL_DST, MAC_FMT, MAC_ARGS(om->dl_dst));
+    print_wild(f, " mac[", w & OFPFW_DL_SRC,
+               ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_src));
+    print_wild(f, "->", w & OFPFW_DL_DST,
+               ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_dst));
     print_wild(f, "] type", w & OFPFW_DL_TYPE, "%04x", ntohs(om->dl_type));
     print_wild(f, " ip[", w & OFPFW_NW_SRC, IP_FMT, IP_ARGS(&om->nw_src));
     print_wild(f, "->", w & OFPFW_NW_DST, IP_FMT, IP_ARGS(&om->nw_dst));

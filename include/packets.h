@@ -34,6 +34,7 @@
 #define PACKETS_H 1
 
 #include <stdint.h>
+#include <string.h>
 #include "util.h"
 
 #define ETH_ADDR_LEN           6
@@ -50,6 +51,15 @@ static inline bool eth_addr_is_local(const uint8_t ea[6])
 {
     return ea[0] & 2;
 }
+static inline bool eth_addr_equals(const uint8_t a[ETH_ADDR_LEN],
+                                   const uint8_t b[ETH_ADDR_LEN]) 
+{
+    return !memcmp(a, b, ETH_ADDR_LEN);
+}
+#define ETH_ADDR_FMT                                                    \
+    "%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8
+#define ETH_ADDR_ARGS(ea)                                   \
+    (ea)[0], (ea)[1], (ea)[2], (ea)[3], (ea)[4], (ea)[5]
 
 #define ETH_TYPE_IP            0x0800
 #define ETH_TYPE_ARP           0x0806

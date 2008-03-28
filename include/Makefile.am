@@ -10,7 +10,6 @@ noinst_HEADERS = \
 	hash.h \
 	ip.h \
 	list.h \
-	mac.h \
 	netlink.h \
 	ofp-print.h \
 	openflow.h \

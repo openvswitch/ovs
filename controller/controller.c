@@ -48,9 +48,9 @@
 #include "flow.h"
 #include "hash.h"
 #include "list.h"
-#include "mac.h"
 #include "ofp-print.h"
 #include "openflow.h"
+#include "packets.h"
 #include "poll-loop.h"
 #include "queue.h"
 #include "time.h"
@@ -462,7 +462,7 @@ process_switch(struct switch_ *sw, struct ofp_packet_in *opi)
     flow_extract(&pkt, ntohs(opi->in_port), &flow);
 
     /* Learn the source. */
-    if (!mac_is_multicast(flow.dl_src)) {
+    if (!eth_addr_is_multicast(flow.dl_src)) {
         struct mac_source *src;
         struct list *bucket;
         bool found;
@@ -471,7 +471,7 @@ process_switch(struct switch_ *sw, struct ofp_packet_in *opi)
         found = false;
         LIST_FOR_EACH (src, struct mac_source, hash_list, bucket) {
             if (src->datapath_id == sw->datapath_id
-                && mac_equals(src->mac, flow.dl_src)) {
+                && eth_addr_equals(src->mac, flow.dl_src)) {
                 found = true;
                 break;
             }
@@ -506,24 +506,26 @@ process_switch(struct switch_ *sw, struct ofp_packet_in *opi)
 
         if (ntohs(flow.in_port) != src->port) {
             src->port = ntohs(flow.in_port);
-            VLOG_DBG("learned that "MAC_FMT" is on datapath %"PRIx64" port %d",
-                     MAC_ARGS(src->mac), ntohll(src->datapath_id),
+            VLOG_DBG("learned that "ETH_ADDR_FMT" is on datapath %"
+                     PRIx64" port %d",
+                     ETH_ADDR_ARGS(src->mac), ntohll(src->datapath_id),
                      src->port);
         }
     } else {
-        VLOG_DBG("multicast packet source "MAC_FMT, MAC_ARGS(flow.dl_src));
+        VLOG_DBG("multicast packet source "ETH_ADDR_FMT,
+                 ETH_ADDR_ARGS(flow.dl_src));
     }
 
     /* Figure out the destination. */
     out_port = OFPP_FLOOD;
-    if (!mac_is_multicast(flow.dl_dst)) {
+    if (!eth_addr_is_multicast(flow.dl_dst)) {
         struct mac_source *dst;
         struct list *bucket;
 
         bucket = mac_table_bucket(sw->datapath_id, flow.dl_dst);
         LIST_FOR_EACH (dst, struct mac_source, hash_list, bucket) {
             if (dst->datapath_id == sw->datapath_id
-                && mac_equals(dst->mac, flow.dl_dst)) {
+                && eth_addr_equals(dst->mac, flow.dl_dst)) {
                 out_port = dst->port;
                 break;
             }

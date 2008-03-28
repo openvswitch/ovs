@@ -38,7 +38,6 @@
 #include "buffer.h"
 #include "hash.h"
 #include "ip.h"
-#include "mac.h"
 #include "openflow.h"
 #include "packets.h"
 
@@ -145,10 +144,10 @@ void
 flow_print(FILE *stream, const struct flow *flow) 
 {
     fprintf(stream,
-            "port%04x:vlan%04x mac"MAC_FMT"->"MAC_FMT" "
+            "port%04x:vlan%04x mac"ETH_ADDR_FMT"->"ETH_ADDR_FMT" "
             "proto%04x ip"IP_FMT"->"IP_FMT" port%d->%d",
             ntohs(flow->in_port), ntohs(flow->dl_vlan),
-            MAC_ARGS(flow->dl_src), MAC_ARGS(flow->dl_dst),
+            ETH_ADDR_ARGS(flow->dl_src), ETH_ADDR_ARGS(flow->dl_dst),
             ntohs(flow->dl_type),
             IP_ARGS(&flow->nw_src), IP_ARGS(&flow->nw_dst),
             ntohs(flow->tp_src), ntohs(flow->tp_dst));

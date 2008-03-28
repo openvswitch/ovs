@@ -41,11 +41,11 @@
 #include <string.h>
 
 #include "buffer.h"
-#include "mac.h"
 #include "netlink.h"
 #include "ofp-print.h"
 #include "openflow-netlink.h"
 #include "openflow.h"
+#include "packets.h"
 #include "util.h"
 #include "xtoxll.h"
 
