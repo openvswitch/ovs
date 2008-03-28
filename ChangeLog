@@ -1,3 +1,7 @@
+v0.2.1 - 28 Mar 2008
+--------------------
+    - Fixed build problem when SSL enabled
+
 v0.2.0 - 28 Mar 2008
 --------------------
     - Added userspace switch reference implementation
