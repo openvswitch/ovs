@@ -31,6 +31,7 @@ endif
 if HAVE_OPENSSL
 libopenflow_la_SOURCES += \
 	vconn-ssl.c 
+nodist_libopenflow_la_SOURCES = dhparams.c
 dhparams.c: dh1024.pem dh2048.pem dh4096.pem
 	(echo '#include "dhparams.h"' &&			\
 	 openssl dhparam -C -in $(srcdir)/dh1024.pem -noout &&	\
