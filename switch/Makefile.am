@@ -23,4 +23,4 @@ switch_SOURCES = \
 	table-linear.c \
 	table-mac.c 
 
-switch_LDADD = ../lib/libopenflow.la
+switch_LDADD = ../lib/libopenflow.la -ldl

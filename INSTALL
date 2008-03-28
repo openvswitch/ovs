@@ -20,7 +20,7 @@ distribution, you will need the following software:
     - libssl, from OpenSSL (http://www.openssl.org/), is optional but
       recommended.  libssl is required to establish confidentiality
       and authenticity in the connections among OpenFlow switches and
-      controllers.
+      controllers.  To enable, compile with --enable-ssl=yes
 
 If you are working from a Git tree or snapshot (instead of from a
 distribution tarball), or if you modify the OpenFlow build system, you
@@ -136,7 +136,8 @@ Secure operation over SSL
 The instructions above set up OpenFlow for operation over a plaintext
 TCP connection.  Production use of OpenFlow should use SSL[*] to
 ensure confidentiality and authenticity of traffic among switches and
-controllers.
+controllers.  The source must be configured with --enable-ssl=yes to
+build with ssl support.
 
 To use SSL with OpenFlow, you must set up a public-key infrastructure
 (PKI) including a pair of certificate authorities (CAs), one for

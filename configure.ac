@@ -43,6 +43,18 @@ if test "$HAVE_IF_PACKET" = yes; then
              [Define to 1 if net/if_packet.h is available.])
 fi
 
+AC_ARG_ENABLE(
+  [ssl],
+  [AC_HELP_STRING([--enable-ssl], 
+                  [Enable ssl support (requires libssl)])],
+  [case "${enableval}" in # (
+     yes) ssl=true ;;  # (
+     no)  ssl=false ;; # (
+     *) AC_MSG_ERROR([bad value ${enableval} for --enable-ssl]) ;;
+   esac],
+  [ssl=false])
+
+if test "$ssl" = true; then
 PKG_CHECK_MODULES([SSL], [libssl], 
   [HAVE_OPENSSL=yes],
   [HAVE_OPENSSL=no
@@ -51,6 +63,8 @@ PKG_CHECK_MODULES([SSL], [libssl],
 $SSL_PKG_ERRORS
 
 OpenFlow will not support SSL connections.])])
+
+fi
 AM_CONDITIONAL([HAVE_OPENSSL], [test "$HAVE_OPENSSL" = yes])
 if test "$HAVE_OPENSSL" = yes; then
    AC_DEFINE([HAVE_OPENSSL], [1], [Define to 1 if OpenSSL is installed.])
