@@ -35,7 +35,6 @@
 #include <errno.h>
 #include <string.h>
 #include "buffer.h"
-#include "forward.h"
 #include "poll-loop.h"
 #include "ofp-print.h"
 #include "util.h"
@@ -70,7 +69,7 @@ try_send(struct controller_connection *cc)
 }
 
 void
-controller_run(struct controller_connection *cc, struct datapath *dp)
+controller_run(struct controller_connection *cc)
 {
     if (!cc->vconn) {
         if (time(0) >= cc->backoff_deadline) {
@@ -101,22 +100,6 @@ controller_run(struct controller_connection *cc, struct datapath *dp)
             controller_disconnect(cc, 0);
         }
     } else {
-        int iterations;
-
-        for (iterations = 0; iterations < 50; iterations++) {
-            struct buffer *buffer;
-            int error = vconn_recv(cc->vconn, &buffer);
-            if (!error) {
-                fwd_control_input(dp, buffer->data, buffer->size);
-                buffer_delete(buffer);
-            } else if (error == EAGAIN) {
-                break;
-            } else {
-                controller_disconnect(cc, error);
-                return;
-            }
-        }
-
         while (cc->txq.n > 0) {
             int error = try_send(cc);
             if (error == EAGAIN) {
@@ -125,7 +108,19 @@ controller_run(struct controller_connection *cc, struct datapath *dp)
                 controller_disconnect(cc, error);
                 return;
             }
-        } 
+        }
+    }
+}
+
+void
+controller_run_wait(struct controller_connection *cc) 
+{
+    if (cc->vconn) {
+        if (cc->txq.n) {
+            vconn_wait(cc->vconn, WAIT_SEND);
+        }
+    } else {
+        poll_timer_wait((cc->backoff_deadline - time(0)) * 1000);
     }
 }
 
@@ -162,16 +157,26 @@ controller_disconnect(struct controller_connection *cc, int error)
     cc->backoff_deadline = now + cc->backoff;
 }
 
+struct buffer *
+controller_recv(struct controller_connection *cc)
+{
+    if (cc->vconn && cc->connected) {
+        struct buffer *buffer;
+        int error = vconn_recv(cc->vconn, &buffer);
+        if (!error) {
+            return buffer;
+        } else if (error != EAGAIN) {
+            controller_disconnect(cc, error); 
+        }
+    }
+    return NULL;
+}
+
 void
-controller_wait(struct controller_connection *cc) 
+controller_recv_wait(struct controller_connection *cc) 
 {
     if (cc->vconn) {
         vconn_wait(cc->vconn, WAIT_RECV);
-        if (cc->txq.n) {
-            vconn_wait(cc->vconn, WAIT_SEND);
-        }
-    } else {
-        poll_timer_wait((cc->backoff_deadline - time(0)) * 1000);
     }
 }
 

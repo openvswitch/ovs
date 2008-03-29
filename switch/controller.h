@@ -52,10 +52,12 @@ struct controller_connection {
 
 void controller_init(struct controller_connection *,
                      const char *name, bool reliable);
-void controller_run(struct controller_connection *, struct datapath *);
+void controller_run(struct controller_connection *);
+void controller_run_wait(struct controller_connection *);
 void controller_connect(struct controller_connection *);
 void controller_disconnect(struct controller_connection *, int error);
-void controller_wait(struct controller_connection *);
+struct buffer *controller_recv(struct controller_connection *);
+void controller_recv_wait(struct controller_connection *);
 void controller_send(struct controller_connection *, struct buffer *);
 
 #endif /* controller.h */

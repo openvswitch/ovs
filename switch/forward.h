@@ -53,6 +53,8 @@ struct sw_flow_key;
 
 #define PKT_COOKIE_BITS (32 - PKT_BUFFER_BITS)
 
+void fwd_run(struct datapath *);
+void fwd_run_wait(struct datapath *);
 
 void fwd_port_input(struct datapath *, struct buffer *, int in_port);
 int fwd_control_input(struct datapath *, const void *, size_t);

@@ -37,6 +37,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include "controller.h"
 #include "datapath.h"
 #include "chain.h"
 #include "flow.h"
@@ -48,6 +49,27 @@ static void execute_actions(struct datapath *, struct buffer *,
 
 static struct buffer *retrieve_buffer(uint32_t id);
 static void discard_buffer(uint32_t id);
+
+void
+fwd_run(struct datapath *dp)
+{
+    int i;
+
+    for (i = 0; i < 50; i++) {
+        struct buffer *buffer = controller_recv(dp->cc);
+        if (!buffer) {
+            break;
+        }
+        fwd_control_input(dp, buffer->data, buffer->size);
+        buffer_delete(buffer);
+    }
+}
+
+void
+fwd_run_wait(struct datapath *dp) 
+{
+    controller_recv_wait(dp->cc);
+}
 
 /* 'buffer' was received on 'in_port', a physical switch port between 0 and
  * OFPP_MAX.  Process it according to 'chain'. */
