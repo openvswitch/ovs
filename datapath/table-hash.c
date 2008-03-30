@@ -440,7 +440,7 @@ kmem_alloc(size_t size)
 		ptr = vmalloc(size);
 		if (ptr)
 			printk("openflow: used vmalloc for %lu bytes\n", 
-                    (unsigned long)size);
+					(unsigned long)size);
 	}
 	return ptr;
 }
