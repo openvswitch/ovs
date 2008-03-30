@@ -84,7 +84,7 @@ static void execute_actions(struct datapath *dp, struct sk_buff *skb,
 			prev_port = -1;
 		}
 
-		if (likely(a->type == ntohs(OFPAT_OUTPUT))) {
+		if (likely(a->type == htons(OFPAT_OUTPUT))) {
 			prev_port = ntohs(a->arg.output.port);
 			max_len = ntohs(a->arg.output.max_len);
 		} else {
@@ -129,7 +129,7 @@ static void modify_nh(struct sk_buff *skb, uint16_t eth_proto,
 
 		new = a->arg.nw_addr;
 
-		if (a->type == OFPAT_SET_NW_SRC)
+		if (a->type == htons(OFPAT_SET_NW_SRC))
 			field = &nh->saddr;
 		else
 			field = &nh->daddr;
@@ -157,7 +157,7 @@ static void modify_th(struct sk_buff *skb, uint16_t eth_proto,
 		if (nw_proto == IPPROTO_TCP) {
 			struct tcphdr *th = tcp_hdr(skb);
 
-			if (a->type == OFPAT_SET_TP_SRC)
+			if (a->type == htons(OFPAT_SET_TP_SRC))
 				field = &th->source;
 			else
 				field = &th->dest;
@@ -167,7 +167,7 @@ static void modify_th(struct sk_buff *skb, uint16_t eth_proto,
 		} else if (nw_proto == IPPROTO_UDP) {
 			struct udphdr *th = udp_hdr(skb);
 
-			if (a->type == OFPAT_SET_TP_SRC)
+			if (a->type == htons(OFPAT_SET_TP_SRC))
 				field = &th->source;
 			else
 				field = &th->dest;
@@ -185,7 +185,7 @@ static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 
 
 	/* Verify we were given a vlan packet */
-	if (vh->h_vlan_proto != __constant_htons(ETH_P_8021Q))
+	if (vh->h_vlan_proto != htons(ETH_P_8021Q))
 		return skb;
 
 	memmove(skb->data + VLAN_HLEN, skb->data, 2 * VLAN_ETH_ALEN);
@@ -204,11 +204,11 @@ static struct sk_buff *modify_vlan(struct sk_buff *skb,
 	uint16_t new_id = a->arg.vlan_id;
 
 	if (new_id != OFP_VLAN_NONE) {
-		if (key->dl_vlan != __constant_htons(OFP_VLAN_NONE)) {
+		if (key->dl_vlan != htons(OFP_VLAN_NONE)) {
 			/* Modify vlan id, but maintain other TCI values */
 			struct vlan_ethhdr *vh = vlan_eth_hdr(skb);
 			vh->h_vlan_TCI = (vh->h_vlan_TCI 
-					& ~(__constant_htons(VLAN_VID_MASK))) | htons(new_id);
+					& ~(htons(VLAN_VID_MASK))) | htons(new_id);
 		} else  {
 			/* Add vlan header */
 			skb = vlan_put_tag(skb, new_id);
@@ -224,7 +224,7 @@ static struct sk_buff *modify_vlan(struct sk_buff *skb,
 struct sk_buff *execute_setter(struct sk_buff *skb, uint16_t eth_proto,
 			const struct sw_flow_key *key, const struct ofp_action *a)
 {
-	switch (a->type) {
+	switch (ntohs(a->type)) {
 	case OFPAT_SET_DL_VLAN:
 		skb = modify_vlan(skb, key, a);
 		break;
@@ -251,7 +251,8 @@ struct sk_buff *execute_setter(struct sk_buff *skb, uint16_t eth_proto,
 		break;
 	
 	default:
-		BUG();
+		if (net_ratelimit())
+			printk("execute_setter: unknown action: %d\n", ntohs(a->type));
 	}
 
 	return skb;

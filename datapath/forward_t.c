@@ -46,7 +46,7 @@ static void
 set_action_data(struct sk_buff *skb, struct sw_flow_key *key, struct ofp_action *a)
 {
 	if (key != NULL) {
-		switch(a->type) {
+		switch(ntohs(a->type)) {
 		case(OFPAT_SET_DL_SRC):
 			memcpy(a->arg.dl_addr, key->dl_src, sizeof key->dl_src);
 			break;
@@ -297,7 +297,7 @@ check_packet(struct sk_buff *skb, struct ofp_action *a, struct pkt *p)
 	}
 
 	if (a != NULL) {
-		switch(a->type) {
+		switch(ntohs(a->type)) {
 		case(OFPAT_SET_DL_SRC):
 			if (memcmp(a->arg.dl_addr, eh->h_source, sizeof eh->h_source) != 0) {
 				unit_fail("Source eth addr has not been set");
@@ -399,6 +399,7 @@ void
 test_l3_l4(void)
 {
 	struct ofp_action action;
+	uint16_t a_type;
 	struct sk_buff *skb;
 	struct sw_flow_key key;
 	unsigned int i, j;
@@ -423,10 +424,11 @@ test_l3_l4(void)
 		if (unit_failed())
 			return;
 
-		for (action.type = OFPAT_SET_DL_SRC;
-			 action.type <= OFPAT_SET_TP_DST;
-			 action.type++)
+		for (a_type = OFPAT_SET_DL_SRC;
+			 a_type <= OFPAT_SET_TP_DST;
+			 a_type++)
 		{
+			action.type = htons(a_type);
 			set_action_data(skb, NULL, &action);
 			for(j = 0; j < 2; j++) {
 				skb = execute_setter(skb, eth_proto, &key, &action);
@@ -447,6 +449,9 @@ test_l3_l4(void)
 		if (ret != 0)
 			break;
 	}
+
+	if (ret == 0)
+		printk("\nL3/L4 actions test passed.\n");
 }
 
 int
@@ -493,7 +498,7 @@ test_vlan(void)
 		eh = eth_hdr(skb);
 		orig_id = eh->h_proto;
 
-		action.type = OFPAT_SET_DL_VLAN;
+		action.type = htons(OFPAT_SET_DL_VLAN);
 
 		// Add a random vlan tag
 		new_id = (uint16_t) random32() & VLAN_VID_MASK;
@@ -564,8 +569,6 @@ test_vlan(void)
 		printk("\nVLAN actions test passed.\n");
 
 	return ret;
-
-
 }
 
 /*
