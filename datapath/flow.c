@@ -225,12 +225,12 @@ void flow_extract(struct sk_buff *skb, uint16_t in_port,
 	}
 
 	/* Check for a VLAN tag */
-	if (likely(key->dl_type != __constant_htons(ETH_P_8021Q))) {
-		key->dl_vlan = __constant_htons(OFP_VLAN_NONE);
+	if (likely(key->dl_type != htons(ETH_P_8021Q))) {
+		key->dl_vlan = htons(OFP_VLAN_NONE);
 	} else {
 		struct vlan_hdr *vh = (struct vlan_hdr *)(skb_mac_header(skb) + nh_ofs);
 		key->dl_type = vh->h_vlan_encapsulated_proto;
-		key->dl_vlan = vh->h_vlan_TCI & __constant_htons(VLAN_VID_MASK);
+		key->dl_vlan = vh->h_vlan_TCI & htons(VLAN_VID_MASK);
 		nh_ofs += sizeof(*vh);
 	}
 	memcpy(key->dl_src, mac->h_source, ETH_ALEN);
@@ -279,7 +279,7 @@ void flow_extract(struct sk_buff *skb, uint16_t in_port,
 			goto no_th;
 		}
 	} else {
-                /* Fall through. */
+		/* Fall through. */
 	}
 
 	key->nw_src = 0;
