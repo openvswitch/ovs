@@ -39,7 +39,7 @@
 
 struct sw_flow;
 struct sw_flow_key;
-struct datapath;
+struct list;
 
 /* Iterator through the flows stored in a table. */
 struct swt_iterator {
@@ -78,8 +78,9 @@ struct sw_table {
                   int strict);
 
     /* Performs timeout processing on all the flow entries in 'table'.
-     * Returns the number of flow entries deleted through expiration. */
-    int (*timeout)(struct datapath *dp, struct sw_table *table);
+     * Appends all the flow entries removed from 'table' to 'deleted' for the
+     * caller to free. */
+    void (*timeout)(struct sw_table *table, struct list *deleted);
 
     /* Destroys 'table', which must not have any users. */
     void (*destroy)(struct sw_table *table);

@@ -127,23 +127,20 @@ static int table_hash_delete(struct sw_table *swt,
     return count;
 }
 
-static int table_hash_timeout(struct datapath *dp, struct sw_table *swt)
+static void table_hash_timeout(struct sw_table *swt, struct list *deleted)
 {
     struct sw_table_hash *th = (struct sw_table_hash *) swt;
     unsigned int i;
-    int count = 0;
 
     for (i = 0; i <= th->bucket_mask; i++) {
         struct sw_flow **bucket = &th->buckets[i];
         struct sw_flow *flow = *bucket;
         if (flow && flow_timeout(flow)) {
-            dp_send_flow_expired(dp, flow);
-            do_delete(bucket);
-            count++;
+            list_push_back(deleted, &flow->node);
+            *bucket = NULL;
+            th->n_flows--;
         }
     }
-    th->n_flows -= count;
-    return count;
 }
 
 static void table_hash_destroy(struct sw_table *swt)
@@ -293,11 +290,11 @@ static int table_hash2_delete(struct sw_table *swt,
             + table_hash_delete(t2->subtable[1], key, strict));
 }
 
-static int table_hash2_timeout(struct datapath *dp, struct sw_table *swt)
+static void table_hash2_timeout(struct sw_table *swt, struct list *deleted)
 {
     struct sw_table_hash2 *t2 = (struct sw_table_hash2 *) swt;
-    return (table_hash_timeout(dp, t2->subtable[0])
-            + table_hash_timeout(dp, t2->subtable[1]));
+    table_hash_timeout(t2->subtable[0], deleted);
+    table_hash_timeout(t2->subtable[1], deleted);
 }
 
 static void table_hash2_destroy(struct sw_table *swt)

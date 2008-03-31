@@ -99,6 +99,7 @@ void dp_send_hello(struct datapath *);
 void dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp);
 void dp_output_control(struct datapath *, struct buffer *, int in_port,
                        size_t max_len, int reason);
+static void send_flow_expired(struct datapath *, struct sw_flow *);
 static void send_port_status(struct sw_port *p, uint8_t status);
 static void del_switch_port(struct sw_port *p);
 static void execute_actions(struct datapath *, struct buffer *,
@@ -220,7 +221,15 @@ dp_run(struct datapath *dp)
     int i;
 
     if (now != dp->last_timeout) {
-        chain_timeout(dp->chain, dp);
+        struct list deleted = LIST_INITIALIZER(&deleted);
+        struct sw_flow *f, *n;
+
+        chain_timeout(dp->chain, &deleted);
+        LIST_FOR_EACH_SAFE (f, n, struct sw_flow, node, &deleted) {
+            send_flow_expired(dp, f);
+            list_remove(&f->node);
+            flow_free(f);
+        }
         dp->last_timeout = now;
     }
     poll_timer_wait(1000);
@@ -466,7 +475,7 @@ send_port_status(struct sw_port *p, uint8_t status)
 }
 
 void
-dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow)
+send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 {
     struct buffer *buffer;
     struct ofp_flow_expired *ofe;

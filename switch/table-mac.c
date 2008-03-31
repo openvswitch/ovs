@@ -139,25 +139,22 @@ static int table_mac_delete(struct sw_table *swt,
     }
 }
 
-static int table_mac_timeout(struct datapath *dp, struct sw_table *swt)
+static void table_mac_timeout(struct sw_table *swt, struct list *deleted)
 {
     struct sw_table_mac *tm = (struct sw_table_mac *) swt;
     unsigned int i;
-    int count = 0;
 
     for (i = 0; i <= tm->bucket_mask; i++) {
         struct list *bucket = &tm->buckets[i];
         struct sw_flow *flow, *next;
         LIST_FOR_EACH_SAFE (flow, next, struct sw_flow, node, bucket) {
             if (flow_timeout(flow)) {
-                dp_send_flow_expired(dp, flow);
-                do_delete(flow);
-                count++;
+                list_remove(&flow->node);
+                list_push_back(deleted, &flow->node);
+                tm->n_flows--;
             }
         }
     }
-    tm->n_flows -= count;
-    return count;
 }
 
 static void table_mac_destroy(struct sw_table *swt)

@@ -50,6 +50,4 @@ int dp_add_port(struct datapath *, const char *netdev);
 void dp_run(struct datapath *);
 void dp_wait(struct datapath *);
 
-void dp_send_flow_expired(struct datapath *, struct sw_flow *);
-
 #endif /* datapath.h */

@@ -108,21 +108,18 @@ static int table_linear_delete(struct sw_table *swt,
     return count;
 }
 
-static int table_linear_timeout(struct datapath *dp, struct sw_table *swt)
+static void table_linear_timeout(struct sw_table *swt, struct list *deleted)
 {
     struct sw_table_linear *tl = (struct sw_table_linear *) swt;
     struct sw_flow *flow, *n;
-    int count = 0;
 
     LIST_FOR_EACH_SAFE (flow, n, struct sw_flow, node, &tl->flows) {
         if (flow_timeout(flow)) {
-            dp_send_flow_expired(dp, flow);
-            do_delete(flow);
-            count++;
+            list_remove(&flow->node);
+            list_push_back(deleted, &flow->node);
+            tl->n_flows--;
         }
     }
-    tl->n_flows -= count;
-    return count;
 }
 
 static void table_linear_destroy(struct sw_table *swt)

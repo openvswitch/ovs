@@ -125,9 +125,7 @@ chain_insert(struct sw_chain *chain, struct sw_flow *flow)
  *
  * Expensive in the general case as currently implemented, since it requires
  * iterating through the entire contents of each table for keys that contain
- * wildcards.  Relatively cheap for fully specified keys.
- *
- * The caller need not hold any locks. */
+ * wildcards.  Relatively cheap for fully specified keys. */
 int
 chain_delete(struct sw_chain *chain, const struct sw_flow_key *key, int strict)
 {
@@ -143,24 +141,20 @@ chain_delete(struct sw_chain *chain, const struct sw_flow_key *key, int strict)
 
 }
 
-/* Performs timeout processing on all the tables in 'chain'.  Returns the
- * number of flow entries deleted through expiration.
+/* Deletes timed-out flow entries from all the tables in 'chain' and appends
+ * the deleted flows to 'deleted'.
  *
  * Expensive as currently implemented, since it iterates through the entire
- * contents of each table.
- *
- * The caller need not hold any locks. */
-int
-chain_timeout(struct sw_chain *chain, struct datapath *dp)
+ * contents of each table. */
+void
+chain_timeout(struct sw_chain *chain, struct list *deleted)
 {
-    int count = 0;
     int i;
 
     for (i = 0; i < chain->n_tables; i++) {
         struct sw_table *t = chain->tables[i];
-        count += t->timeout(dp, t);
+        t->timeout(t, deleted);
     }
-    return count;
 }
 
 /* Destroys 'chain', which must not have any users. */
