@@ -93,10 +93,7 @@ main(int argc, char *argv[])
 
     for (;;) {
         dp_run(dp);
-        controller_run(cc);
-        
         dp_wait(dp);
-        controller_run_wait(cc);
         poll_block();
     }
 

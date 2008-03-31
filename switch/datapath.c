@@ -249,6 +249,17 @@ dp_run(struct datapath *dp)
         }
     }
     buffer_delete(buffer);
+
+    for (i = 0; i < 50; i++) {
+        struct buffer *buffer = controller_recv(dp->cc);
+        if (!buffer) {
+            break;
+        }
+        fwd_control_input(dp, buffer->data, buffer->size);
+        buffer_delete(buffer);
+    }
+
+    controller_run(dp->cc);
 }
 
 void
@@ -259,6 +270,7 @@ dp_wait(struct datapath *dp)
     LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
         netdev_recv_wait(p->netdev);
     }
+    controller_recv_wait(dp->cc);
 }
 
 /* Delete 'p' from switch. */
