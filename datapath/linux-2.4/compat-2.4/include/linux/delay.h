@@ -54,6 +54,6 @@ static inline unsigned long msecs_to_jiffies(const unsigned int m)
 #endif
 }
 
-#endif /* linux kernel < 2.6.29 */
+#endif /* linux kernel < 2.4.29 */
 
 #endif
