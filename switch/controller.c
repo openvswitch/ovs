@@ -43,16 +43,27 @@
 #define THIS_MODULE VLM_controller_connection
 #include "vlog.h"
 
-void
-controller_init(struct controller_connection *cc,
-                const char *name, bool reliable)
+struct controller_connection {
+    bool reliable;
+    const char *name;
+    struct vconn *vconn;
+    bool connected;
+    struct queue txq;
+    time_t backoff_deadline;
+    int backoff;
+};
+
+struct controller_connection *
+controller_new(const char *name, bool reliable)
 {
+    struct controller_connection *cc = xmalloc(sizeof *cc);
     cc->reliable = reliable;
     cc->name = name;
     cc->vconn = NULL;
     queue_init(&cc->txq);
     cc->backoff_deadline = 0;
     cc->backoff = 0;
+    return cc;
 }
 
 static int

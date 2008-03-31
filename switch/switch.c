@@ -66,7 +66,7 @@ static void add_ports(struct datapath *dp, char *port_list);
 int
 main(int argc, char *argv[])
 {
-    struct controller_connection cc;
+    struct controller_connection *cc;
     int error;
 
     set_program_name(argv[0]);
@@ -78,8 +78,8 @@ main(int argc, char *argv[])
         fatal(0, "missing controller argument; use --help for usage");
     }
 
-    controller_init(&cc, argv[optind], reliable);
-    error = dp_new(&dp, dpid, &cc);
+    cc = controller_new(argv[optind], reliable);
+    error = dp_new(&dp, dpid, cc);
     if (error) {
         fatal(error, "could not create datapath");
     }
@@ -95,11 +95,11 @@ main(int argc, char *argv[])
     for (;;) {
         dp_run(dp);
         fwd_run(dp);
-        controller_run(&cc);
+        controller_run(cc);
         
         dp_wait(dp);
         fwd_run_wait(dp);
-        controller_run_wait(&cc);
+        controller_run_wait(cc);
         poll_block();
     }
 

@@ -38,20 +38,7 @@
 #include <stdbool.h>
 #include <time.h>
 
-struct datapath;
-
-struct controller_connection {
-    bool reliable;
-    const char *name;
-    struct vconn *vconn;
-    bool connected;
-    struct queue txq;
-    time_t backoff_deadline;
-    int backoff;
-};
-
-void controller_init(struct controller_connection *,
-                     const char *name, bool reliable);
+struct controller_connection *controller_new(const char *name, bool reliable);
 void controller_run(struct controller_connection *);
 void controller_run_wait(struct controller_connection *);
 void controller_connect(struct controller_connection *);
