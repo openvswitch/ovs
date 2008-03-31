@@ -41,7 +41,6 @@
 #include "controller.h"
 #include "datapath.h"
 #include "fault.h"
-#include "forward.h"
 #include "openflow.h"
 #include "poll-loop.h"
 #include "queue.h"
@@ -94,11 +93,9 @@ main(int argc, char *argv[])
 
     for (;;) {
         dp_run(dp);
-        fwd_run(dp);
         controller_run(cc);
         
         dp_wait(dp);
-        fwd_run_wait(dp);
         controller_run_wait(cc);
         poll_block();
     }

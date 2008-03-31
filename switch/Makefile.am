@@ -11,8 +11,6 @@ switch_SOURCES = \
 	crc32.h \
 	datapath.c \
 	datapath.h \
-	forward.c \
-	forward.h \
 	netdev.c \
 	netdev.h \
 	switch.c \

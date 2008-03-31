@@ -42,60 +42,14 @@
 #include "buffer.h"
 #include "list.h"
 
-#define NL_FLOWS_PER_MESSAGE 100
-
-/* Capabilities supported by this implementation. */
-#define OFP_SUPPORTED_CAPABILITIES (OFPC_MULTI_PHY_TX)
-
-/* Actions supported by this implementation. */
-#define OFP_SUPPORTED_ACTIONS ( (1 << OFPAT_OUTPUT)         \
-                                | (1 << OFPAT_SET_DL_VLAN)  \
-                                | (1 << OFPAT_SET_DL_SRC)   \
-                                | (1 << OFPAT_SET_DL_DST)   \
-                                | (1 << OFPAT_SET_NW_SRC)   \
-                                | (1 << OFPAT_SET_NW_DST)   \
-                                | (1 << OFPAT_SET_TP_SRC)   \
-                                | (1 << OFPAT_SET_TP_DST) )
-
-struct sw_port {
-    uint32_t flags;
-    struct datapath *dp;
-    struct netdev *netdev;
-    struct list node; /* Element in datapath.ports. */
-};
-
-struct datapath {
-    struct controller_connection *cc;
-
-    time_t last_timeout;
-
-    /* Unique identifier for this datapath */
-    uint64_t  id;
-
-    struct sw_chain *chain;  /* Forwarding rules. */
-
-    /* Flags from the control hello message */
-    uint16_t hello_flags;
-
-    /* Maximum number of bytes that should be sent for flow misses */
-    uint16_t miss_send_len;
-
-    /* Switch ports. */
-    struct sw_port ports[OFPP_MAX];
-    struct list port_list; /* List of ports, for flooding. */
-};
+struct datapath;
+struct controller_connection;
 
 int dp_new(struct datapath **, uint64_t dpid, struct controller_connection *);
 int dp_add_port(struct datapath *, const char *netdev);
 void dp_run(struct datapath *);
 void dp_wait(struct datapath *);
 
-void dp_output_port(struct datapath *, struct buffer *,
-                    int in_port, int out_port);
-void dp_output_control(struct datapath *, struct buffer *, int in_port,
-                       uint32_t buffer_id, size_t max_len, int reason);
-void dp_send_hello(struct datapath *);
 void dp_send_flow_expired(struct datapath *, struct sw_flow *);
-void dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp);
 
 #endif /* datapath.h */
