@@ -259,6 +259,8 @@ dp_run(struct datapath *dp)
     }
     buffer_delete(buffer);
 
+    /* Process a number of commands from the controller, but cap it at a
+     * reasonable number so that other processing doesn't starve. */
     for (i = 0; i < 50; i++) {
         struct buffer *buffer = controller_recv(dp->cc);
         if (!buffer) {
