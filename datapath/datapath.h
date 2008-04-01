@@ -42,6 +42,7 @@ struct datapath {
 
 	struct timer_list timer;	/* Expiration timer. */
 	struct sw_chain *chain;	 /* Forwarding rules. */
+	struct task_struct *dp_task; /* Kernel thread for maintenance. */
 
 	/* Data related to the "of" device of this datapath */
 	struct net_device dev;

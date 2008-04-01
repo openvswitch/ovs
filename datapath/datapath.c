@@ -13,11 +13,12 @@
 #include <linux/in.h>
 #include <net/genetlink.h>
 #include <linux/ip.h>
+#include <linux/delay.h>
 #include <linux/etherdevice.h>
 #include <linux/kernel.h>
+#include <linux/kthread.h>
 #include <linux/mutex.h>
 #include <linux/rtnetlink.h>
-#include <linux/timer.h>
 #include <linux/rcupdate.h>
 #include <linux/version.h>
 #include <linux/ethtool.h>
@@ -38,8 +39,8 @@
 #include "compat.h"
 
 
-/* Number of seconds between runs of the flow expiration code. */
-#define EXPIRE_SECS 1
+/* Number of milliseconds between runs of the maintenance thread. */
+#define MAINT_SLEEP_MSECS 1000
 
 #define BRIDGE_PORT_NO_FLOOD	0x00000001 
 
@@ -71,7 +72,7 @@ int dp_dev_setup(struct net_device *dev);
 static struct datapath *dps[DP_MAX];
 static DEFINE_MUTEX(dp_mutex);
 
-static void dp_timer_handler(unsigned long arg);
+static int dp_maint_func(void *data);
 static int send_port_status(struct net_bridge_port *p, uint8_t status);
 
 
@@ -174,8 +175,9 @@ static int new_dp(int dp_idx)
 
 	dp->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
 
-	setup_timer(&dp->timer, dp_timer_handler, (unsigned long) dp);
-	mod_timer(&dp->timer, round_jiffies(jiffies + (EXPIRE_SECS * HZ)));
+	dp->dp_task = kthread_run(dp_maint_func, dp, "dp%d", dp_idx);
+	if (IS_ERR(dp->dp_task))
+		goto err_free_dp;
 
 	rcu_assign_pointer(dps[dp_idx], dp);
 	mutex_unlock(&dp_mutex);
@@ -288,10 +290,11 @@ static void del_dp(struct datapath *dp)
 	rtnl_unlock();
 #endif
 
+	kthread_stop(dp->dp_task);
+
 	/* Drop references to DP. */
 	list_for_each_entry_safe (p, n, &dp->port_list, node)
 		del_switch_port(p);
-	del_timer_sync(&dp->timer);
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
 	/* Wait until no longer in use, then destroy it. */
@@ -301,18 +304,23 @@ static void del_dp(struct datapath *dp)
 	module_put(THIS_MODULE);
 }
 
-static void dp_timer_handler(unsigned long arg)
+static int dp_maint_func(void *data)
 {
-	struct datapath *dp = (struct datapath *) arg;
+	struct datapath *dp = (struct datapath *) data;
+
+	while (!kthread_should_stop()) {
 #if 1
-	chain_timeout(dp->chain);
+		chain_timeout(dp->chain);
 #else
-	int count = chain_timeout(dp->chain);
-	chain_print_stats(dp->chain);
-	if (count)
-		printk("%d flows timed out\n", count);
+		int count = chain_timeout(dp->chain);
+		chain_print_stats(dp->chain);
+		if (count)
+			printk("%d flows timed out\n", count);
 #endif
-	mod_timer(&dp->timer, round_jiffies(jiffies + (EXPIRE_SECS * HZ)));
+		msleep_interruptible(MAINT_SLEEP_MSECS);
+	}
+		
+	return 0;
 }
 
 /*

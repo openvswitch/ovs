@@ -15,6 +15,8 @@ int __init compat24_init(void)
 	if (err)
 		return err;
 
+	init_kthread();
+
 	return genl_init();
 
 }

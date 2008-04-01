@@ -56,4 +56,19 @@ static inline unsigned long msecs_to_jiffies(const unsigned int m)
 
 #endif /* linux kernel < 2.4.29 */
 
+/**
+ * msleep_interruptible - sleep waiting for waitqueue interruptions
+ * @msecs: Time in milliseconds to sleep for
+ */
+static inline unsigned long msleep_interruptible(unsigned int msecs)
+{
+       unsigned long timeout = msecs_to_jiffies(msecs);
+
+       while (timeout && !signal_pending(current)) {
+               set_current_state(TASK_INTERRUPTIBLE);
+               timeout = schedule_timeout(timeout);
+       }
+       return jiffies_to_msecs(timeout);
+}
+
 #endif
