@@ -45,6 +45,7 @@
 #define BRIDGE_PORT_NO_FLOOD	0x00000001 
 
 #define UINT32_MAX			  4294967295U
+#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
 
 struct net_bridge_port {
 	u16	port_no;
@@ -519,7 +520,7 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb,
 	len = nla_total_size(offsetof(struct ofp_packet_in, data) + fwd_len) 
 				+ nla_total_size(sizeof(uint32_t));
 
-	f_skb = genlmsg_new(len, GFP_ATOMIC); 
+	f_skb = genlmsg_new(MAX(len, NLMSG_GOODSIZE), GFP_ATOMIC); 
 	if (!f_skb)
 		goto error_free_skb;
 
@@ -656,7 +657,7 @@ dp_send_hello(struct datapath *dp)
 	len = nla_total_size(sizeof(*odh) + port_max_len) 
 				+ nla_total_size(sizeof(uint32_t));
 
-	skb = genlmsg_new(len, GFP_ATOMIC);
+	skb = genlmsg_new(MAX(len, NLMSG_GOODSIZE), GFP_ATOMIC);
 	if (!skb) {
 		if (net_ratelimit())
 			printk("dp_send_hello: genlmsg_new failed\n");
@@ -1047,7 +1048,7 @@ static int dp_genl_show(struct sk_buff *skb, struct genl_info *info)
 	len = nla_total_size(sizeof(*odh) + port_max_len)
 			+ nla_total_size(sizeof(uint32_t));
 
-	ans_skb = nlmsg_new(len, GFP_KERNEL);
+	ans_skb = nlmsg_new(MAX(len, NLMSG_GOODSIZE), GFP_KERNEL);
 	if (!ans_skb)
 		goto error;
 
@@ -1163,7 +1164,7 @@ dp_dump_table(struct datapath *dp, uint16_t table_idx, struct genl_info *info, s
 			return -ENOMEM;
 		}
 
-		skb = nlmsg_new(8192 - 64, GFP_ATOMIC);
+		skb = nlmsg_new(NLMSG_GOODSIZE, GFP_ATOMIC);
 		if (skb == NULL) {
 			return -ENOMEM;
 		}
@@ -1259,13 +1260,16 @@ dp_dump_table_stats(struct datapath *dp, int dp_idx, struct genl_info *info)
 	struct ofp_table *ot = 0;
 	struct nlattr   *attr;
 	struct sw_table_stats stats; 
+	size_t len;
 	void *data; 
 	int err = -ENOMEM;
 	int i = 0;
 	int nt = dp->chain->n_tables;
 
+	len = 4 + 4 + (sizeof(struct ofp_table) * nt);
+
 	/* u32 IDX, u32 NUMTABLES, list-of-tables */
-	skb = nlmsg_new(4 + 4 + (sizeof(struct ofp_table) * nt), GFP_ATOMIC);
+	skb = nlmsg_new(MAX(len, NLMSG_GOODSIZE), GFP_ATOMIC);
 	if (skb == NULL) {
 		return -ENOMEM;
 	}
@@ -1303,7 +1307,6 @@ dp_dump_table_stats(struct datapath *dp, int dp_idx, struct genl_info *info)
 		ot->max_flows = htonl(stats.max_flows);
 		ot++;
 	}
-
 
 	genlmsg_end(skb, data); 
 	err = genlmsg_reply(skb, info); skb = 0;
