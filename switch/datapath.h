@@ -43,9 +43,9 @@
 #include "list.h"
 
 struct datapath;
-struct controller_connection;
+struct rconn;
 
-int dp_new(struct datapath **, uint64_t dpid, struct controller_connection *);
+int dp_new(struct datapath **, uint64_t dpid, struct rconn *);
 int dp_add_port(struct datapath *, const char *netdev);
 void dp_run(struct datapath *);
 void dp_wait(struct datapath *);

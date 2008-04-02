@@ -31,20 +31,40 @@
  * derivatives without specific, written prior permission.
  */
 
-#ifndef CONTROLLER_H
-#define CONTROLLER_H 1
+#ifndef RCONN_H
+#define RCONN_H 1
 
 #include "queue.h"
 #include <stdbool.h>
 #include <time.h>
 
-struct controller_connection *controller_new(const char *name, bool reliable);
-void controller_run(struct controller_connection *);
-void controller_run_wait(struct controller_connection *);
-void controller_connect(struct controller_connection *);
-void controller_disconnect(struct controller_connection *, int error);
-struct buffer *controller_recv(struct controller_connection *);
-void controller_recv_wait(struct controller_connection *);
-void controller_send(struct controller_connection *, struct buffer *);
+/* A wrapper around vconn that provides queuing and optionally reliability.
+ *
+ * An rconn maintains a message transmission queue of bounded length specified
+ * by the caller.  The rconn does not guarantee reliable delivery of
+ * queued messages: all queued messages are dropped when reconnection becomes
+ * necessary.
+ *
+ * An rconn optionally provides reliable communication, in this sense: the
+ * rconn will re-connect, with exponential backoff, when the underlying vconn
+ * disconnects.
+ */
 
-#endif /* controller.h */
+struct vconn;
+
+struct rconn *rconn_new(const char *name, int txq_limit);
+struct rconn *rconn_new_from_vconn(const char *name, int txq_limit,
+                                   struct vconn *);
+void rconn_destroy(struct rconn *);
+
+void rconn_run(struct rconn *);
+void rconn_run_wait(struct rconn *);
+struct buffer *rconn_recv(struct rconn *);
+void rconn_recv_wait(struct rconn *);
+int rconn_send(struct rconn *, struct buffer *);
+void rconn_send_wait(struct rconn *);
+
+const char *rconn_get_name(const struct rconn *);
+bool rconn_is_alive(const struct rconn *);
+
+#endif /* rconn.h */

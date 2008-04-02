@@ -44,8 +44,8 @@
 #include "compiler.h"
 #include "fault.h"
 #include "util.h"
+#include "rconn.h"
 #include "vconn-ssl.h"
-#include "vconn.h"
 #include "vlog-socket.h"
 #include "openflow.h"
 #include "poll-loop.h"
@@ -58,19 +58,14 @@ static void usage(void) NO_RETURN;
 
 static bool reliable = true;
 
-struct half {
-    const char *name;
-    struct vconn *vconn;
-    struct buffer *rxbuf;
-    time_t backoff_deadline;
-    int backoff;
-};
-
-static void reconnect(struct half *);
-
 int
 main(int argc, char *argv[])
 {
+    struct half {
+        struct rconn *rconn;
+        struct buffer *rxbuf;
+    };
+
     struct half halves[2];
     int retval;
     int i;
@@ -90,17 +85,18 @@ main(int argc, char *argv[])
     }
 
     for (i = 0; i < 2; i++) {
-        halves[i].name = argv[optind + i];
-        halves[i].vconn = NULL;
+        halves[i].rconn = rconn_new(argv[optind + i], 1);
         halves[i].rxbuf = NULL;
-        halves[i].backoff_deadline = 0;
-        halves[i].backoff = 1;
-        reconnect(&halves[i]);
     }
     for (;;) {
         /* Do some work.  Limit the number of iterations so that callbacks
          * registered with the poll loop don't starve. */
         int iteration;
+
+        for (i = 0; i < 2; i++) {
+            rconn_run(halves[i].rconn);
+        }
+
         for (iteration = 0; iteration < 50; iteration++) {
             bool progress = false;
             for (i = 0; i < 2; i++) {
@@ -108,30 +104,16 @@ main(int argc, char *argv[])
                 struct half *peer = &halves[!i];
 
                 if (!this->rxbuf) {
-                    retval = vconn_recv(this->vconn, &this->rxbuf);
-                    if (retval && retval != EAGAIN) {
-                        if (retval == EOF) {
-                            VLOG_DBG("%s: connection closed by remote host",
-                                     this->name); 
-                        } else {
-                            VLOG_DBG("%s: recv: closing connection: %s",
-                                     this->name, strerror(retval));
-                        }
-                        reconnect(this);
-                        break;
-                    }
+                    this->rxbuf = rconn_recv(this->rconn);
                 }
 
                 if (this->rxbuf) {
-                    retval = vconn_send(peer->vconn, this->rxbuf);
-                    if (!retval) {
+                    retval = rconn_send(peer->rconn, this->rxbuf);
+                    if (retval != EAGAIN) {
                         this->rxbuf = NULL;
-                        progress = true;
-                    } else if (retval != EAGAIN) {
-                        VLOG_DBG("%s: send: closing connection: %s",
-                                 peer->name, strerror(retval));
-                        reconnect(peer);
-                        break;
+                        if (!retval) {
+                            progress = true;
+                        }
                     }
                 }
             }
@@ -143,11 +125,10 @@ main(int argc, char *argv[])
         /* Wait for something to happen. */
         for (i = 0; i < 2; i++) {
             struct half *this = &halves[i];
-            struct half *peer = &halves[!i];
+
+            rconn_run_wait(this->rconn);
             if (!this->rxbuf) {
-                vconn_recv_wait(this->vconn);
-            } else {
-                vconn_send_wait(peer->vconn);
+                rconn_recv_wait(this->rconn);
             }
         }
         poll_block();
@@ -157,61 +138,9 @@ main(int argc, char *argv[])
 }
 
 static void
-reconnect(struct half *this) 
-{
-    if (this->vconn != NULL) {
-        if (!reliable) {
-            fatal(0, "%s: connection dropped", this->name);
-        }
-
-        VLOG_WARN("%s: connection dropped, reconnecting", this->name);
-        vconn_close(this->vconn);
-        this->vconn = NULL;
-        buffer_delete(this->rxbuf);
-        this->rxbuf = NULL;
-    }
-
-    for (;;) {
-        time_t now = time(0);
-        int retval;
-
-        if (now >= this->backoff_deadline) {
-            this->backoff = 1;
-        } else {
-            this->backoff *= 2;
-            if (this->backoff > 60) {
-                this->backoff = 60;
-            }
-            VLOG_WARN("%s: waiting %d seconds before reconnect\n",
-                      this->name, (int) (this->backoff_deadline - now));
-            poll_timer_wait((this->backoff_deadline - now) * 1000);
-            poll_block();
-        }
-
-        retval = vconn_open_block(this->name, &this->vconn);
-        if (!retval) {
-            VLOG_WARN("%s: connected", this->name);
-            if (vconn_is_passive(this->vconn)) {
-                fatal(0, "%s: passive vconn not supported in control path",
-                      this->name);
-            }
-            this->backoff_deadline = now + this->backoff;
-            return;
-        }
-
-        if (!reliable) {
-            fatal(0, "%s: connection failed", this->name);
-        }
-        VLOG_WARN("%s: connection failed (%s)", this->name, strerror(retval));
-        this->backoff_deadline = time(0) + this->backoff;
-    }
-}
-
-static void
 parse_options(int argc, char *argv[]) 
 {
     static struct option long_options[] = {
-        {"unreliable",  no_argument, 0, 'u'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -234,10 +163,6 @@ parse_options(int argc, char *argv[])
         }
 
         switch (c) {
-        case 'u':
-            reliable = false;
-            break;
-
         case 'h':
             usage();
 
@@ -293,9 +218,7 @@ usage(void)
            "  -C, --ca-cert=FILE      file with peer CA certificate\n",
            OFP_SSL_PORT);
 #endif
-    printf("\nNetworking options:\n"
-           "  -u, --unreliable        do not reconnect after connections drop\n"
-           "\nOther options:\n"
+    printf("\nOther options:\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");

@@ -63,7 +63,6 @@ enum vlog_facility vlog_get_facility_val(const char *name);
 #define VLOG_MODULES                            \
         VLOG_MODULE(chain)                      \
         VLOG_MODULE(controller)                 \
-        VLOG_MODULE(controller_connection)      \
         VLOG_MODULE(ctlpath)                    \
         VLOG_MODULE(datapath)                   \
         VLOG_MODULE(dpif)                       \
@@ -74,6 +73,7 @@ enum vlog_facility vlog_get_facility_val(const char *name);
         VLOG_MODULE(netlink)                    \
         VLOG_MODULE(poll_loop)                  \
         VLOG_MODULE(secchan)                    \
+        VLOG_MODULE(rconn)                      \
         VLOG_MODULE(switch)                     \
         VLOG_MODULE(socket_util)                \
         VLOG_MODULE(vconn_netlink)              \

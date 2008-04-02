@@ -39,11 +39,11 @@
 #include <string.h>
 #include "buffer.h"
 #include "chain.h"
-#include "controller.h"
 #include "flow.h"
 #include "netdev.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "rconn.h"
 #include "table.h"
 #include "xtoxll.h"
 
@@ -73,7 +73,7 @@ struct sw_port {
 };
 
 struct datapath {
-    struct controller_connection *cc;
+    struct rconn *rconn;
 
     time_t last_timeout;
 
@@ -157,7 +157,7 @@ gen_datapath_id(void)
 }
 
 int
-dp_new(struct datapath **dp_, uint64_t dpid, struct controller_connection *cc)
+dp_new(struct datapath **dp_, uint64_t dpid, struct rconn *rconn)
 {
     struct datapath *dp;
 
@@ -167,7 +167,7 @@ dp_new(struct datapath **dp_, uint64_t dpid, struct controller_connection *cc)
     }
 
     dp->last_timeout = time(0);
-    dp->cc = cc;
+    dp->rconn = rconn;
     dp->id = dpid <= UINT64_C(0xffffffffffff) ? dpid : gen_datapath_id();
     dp->chain = chain_create();
     if (!dp->chain) {
@@ -262,7 +262,7 @@ dp_run(struct datapath *dp)
     /* Process a number of commands from the controller, but cap it at a
      * reasonable number so that other processing doesn't starve. */
     for (i = 0; i < 50; i++) {
-        struct buffer *buffer = controller_recv(dp->cc);
+        struct buffer *buffer = rconn_recv(dp->rconn);
         if (!buffer) {
             break;
         }
@@ -270,7 +270,7 @@ dp_run(struct datapath *dp)
         buffer_delete(buffer);
     }
 
-    controller_run(dp->cc);
+    rconn_run(dp->rconn);
 }
 
 void
@@ -281,7 +281,7 @@ dp_wait(struct datapath *dp)
     LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
         netdev_recv_wait(p->netdev);
     }
-    controller_recv_wait(dp->cc);
+    rconn_recv_wait(dp->rconn);
 }
 
 /* Delete 'p' from switch. */
@@ -397,7 +397,7 @@ dp_output_control(struct datapath *dp, struct buffer *buffer, int in_port,
     opi->in_port        = htons(in_port);
     opi->reason         = reason;
     opi->pad            = 0;
-    controller_send(dp->cc, buffer);
+    rconn_send(dp->rconn, buffer);
 }
 
 static void fill_port_desc(struct datapath *dp, struct sw_port *p,
@@ -443,7 +443,7 @@ dp_send_hello(struct datapath *dp)
     }
     odh = buffer_at_assert(buffer, 0, sizeof *odh);
     odh->header.length = htons(buffer->size);
-    controller_send(dp->cc, buffer);
+    rconn_send(dp->rconn, buffer);
 }
 
 void
@@ -474,7 +474,7 @@ send_port_status(struct sw_port *p, uint8_t status)
     ops->header.xid     = htonl(0);
     ops->reason         = status;
     fill_port_desc(p->dp, p, &ops->desc);
-    controller_send(p->dp->cc, buffer);
+    rconn_send(p->dp->rconn, buffer);
 }
 
 void
@@ -492,7 +492,7 @@ send_flow_expired(struct datapath *dp, struct sw_flow *flow)
     ofe->duration   = htonl(flow->timeout - flow->max_idle - flow->created);
     ofe->packet_count   = htonll(flow->packet_count);
     ofe->byte_count     = htonll(flow->byte_count);
-    controller_send(dp->cc, buffer);
+    rconn_send(dp->rconn, buffer);
 }
 
 /* 'buffer' was received on 'in_port', a physical switch port between 0 and

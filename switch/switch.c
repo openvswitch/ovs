@@ -38,13 +38,13 @@
 #include <string.h>
 
 #include "command-line.h"
-#include "controller.h"
 #include "datapath.h"
 #include "fault.h"
 #include "openflow.h"
 #include "poll-loop.h"
 #include "queue.h"
 #include "util.h"
+#include "rconn.h"
 #include "vconn.h"
 #include "vconn-ssl.h"
 #include "vlog-socket.h"
@@ -55,7 +55,6 @@
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
-static bool reliable = true;
 static struct datapath *dp;
 static uint64_t dpid = UINT64_MAX;
 static char *port_list;
@@ -65,7 +64,6 @@ static void add_ports(struct datapath *dp, char *port_list);
 int
 main(int argc, char *argv[])
 {
-    struct controller_connection *cc;
     int error;
 
     set_program_name(argv[0]);
@@ -77,8 +75,7 @@ main(int argc, char *argv[])
         fatal(0, "missing controller argument; use --help for usage");
     }
 
-    cc = controller_new(argv[optind], reliable);
-    error = dp_new(&dp, dpid, cc);
+    error = dp_new(&dp, dpid, rconn_new(argv[optind], 128));
     if (error) {
         fatal(error, "could not create datapath");
     }
@@ -123,7 +120,6 @@ parse_options(int argc, char *argv[])
 {
     static struct option long_options[] = {
         {"interfaces",  required_argument, 0, 'i'},
-        {"unreliable",  no_argument, 0, 'u'},
         {"datapath-id", required_argument, 0, 'd'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
@@ -147,10 +143,6 @@ parse_options(int argc, char *argv[])
         }
 
         switch (c) {
-        case 'u':
-            reliable = false;
-            break;
-
         case 'd':
             if (strlen(optarg) != 12
                 || strspn(optarg, "0123456789abcdefABCDEF") != 12) {
@@ -227,7 +219,6 @@ usage(void)
            "                          add specified initial switch ports\n"
            "  -d, --datapath-id=ID    Use ID as the OpenFlow switch ID\n"
            "                          (ID must consist of 12 hex digits)\n"
-           "  -u, --unreliable        do not reconnect to controller\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");

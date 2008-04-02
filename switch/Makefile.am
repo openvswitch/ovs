@@ -5,8 +5,6 @@ bin_PROGRAMS = switch
 switch_SOURCES = \
 	chain.c \
 	chain.h \
-	controller.c \
-	controller.h \
 	crc32.c \
 	crc32.h \
 	datapath.c \
