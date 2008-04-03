@@ -179,27 +179,16 @@ usage(void)
            "  delif nl:DP_ID IFACE        delete IFACE as a port on DP_ID\n"
            "  benchmark-nl nl:DP_ID N SIZE   send N packets of SIZE bytes\n"
 #endif
-           "\nCommands that also apply to remote switches:\n"
-           "  show VCONN                  show information about VCONN\n"
-           "  monitor VCONN               print packets received on VCONN\n"
-           "  dump-tables VCONN           print table stats for VCONN\n"
-           "  dump-flows VCONN T_ID       print all flow entries in table T_ID of VCONN\n"
-           "  dump-flows VCONN T_ID FLOW  print matching FLOWs in table T_ID of VCONN\n"
-           "  add-flows VCONN FILE        add flows from FILE to VCONN\n"
-           "where each VCONN is one of the following:\n"
-           "  tcp:HOST[:PORT]             PORT (default: %d) on remote TCP HOST\n",
-           program_name, program_name, OFP_TCP_PORT);
-#ifdef HAVE_NETLINK
-    printf("  nl:DP_IDX                   via netlink to local datapath DP_IDX\n");
-#endif
-#ifdef HAVE_OPENSSL
-    printf("  ssl:HOST[:PORT]             SSL PORT (default: %d) on remote HOST\n"
-           "\nPKI configuration (required to use SSL):\n"
-           "  -p, --private-key=FILE      file with private key\n"
-           "  -c, --certificate=FILE      file with certificate for private key\n"
-           "  -C, --ca-cert=FILE          file with peer CA certificate\n",
-           OFP_SSL_PORT);
-#endif
+           "\nCommands that apply to local datapaths and remote switches:\n"
+           "  show METHOD                 show information about METHOD\n"
+           "  monitor METHOD              print packets received on METHOD\n"
+           "  dump-tables METHOD          print table stats for METHOD\n"
+           "  dump-flows METHOD T_ID      print all flow entries in table T_ID of METHOD\n"
+           "  dump-flows METHOD T_ID FLOW print matching FLOWs in table T_ID of METHOD\n"
+           "  add-flows METHOD FILE       add flows from FILE to METHOD\n"
+           "where each METHOD is an active OpenFlow connection method.\n",
+           program_name, program_name);
+    vconn_usage(true, false);
     printf("\nOptions:\n"
            "  -v, --verbose               set maximum verbosity level\n"
            "  -h, --help                  display this help message\n"

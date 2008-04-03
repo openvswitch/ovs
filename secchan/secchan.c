@@ -337,32 +337,15 @@ parse_options(int argc, char *argv[])
 static void
 usage(void)
 {
-    printf("%s: Secure Channel\n"
+    printf("%s: Secure Channel, a relay for OpenFlow messages.\n"
            "usage: %s [OPTIONS] LOCAL REMOTE\n"
-           "\nRelays OpenFlow message between LOCAL and REMOTE datapaths.\n"
-           "LOCAL and REMOTE must each be one of the following:\n"
-           "  tcp:HOST[:PORT]         PORT (default: %d) on remote TCP HOST\n",
-           program_name, program_name, OFP_TCP_PORT);
-#ifdef HAVE_NETLINK
-    printf("  nl:DP_IDX               local datapath DP_IDX\n");
-#endif
-#ifdef HAVE_OPENSSL
-    printf("  ssl:HOST[:PORT]         SSL PORT (default: %d) on remote HOST\n"
-           "\nPKI configuration (required to use SSL):\n"
-           "  -p, --private-key=FILE  file with private key\n"
-           "  -c, --certificate=FILE  file with certificate for private key\n"
-           "  -C, --ca-cert=FILE      file with peer CA certificate\n",
-           OFP_SSL_PORT);
-#endif
+           "where LOCAL and REMOTE are active OpenFlow connection methods.\n",
+           program_name, program_name);
+    vconn_usage(true, true);
     printf("\nNetworking options:\n"
-           "  -l, --listen=VCONN      allow management connections on VCONN:\n"
-           "                          ptcp:[PORT]   TCP PORT (default: %d)\n",
-           OFP_TCP_PORT);
-#ifdef HAVE_OPENSSL
-    printf("                          pssl:[PORT]   SSL PORT (default: %d)\n",
-           OFP_SSL_PORT);
-#endif
-    printf("\nOther options:\n"
+           "  -l, --listen=METHOD     allow management connections on METHOD\n"
+           "                          (a passive OpenFlow connection method)\n"
+           "\nOther options:\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");

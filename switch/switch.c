@@ -203,18 +203,10 @@ usage(void)
 {
     printf("%s: userspace OpenFlow switch\n"
            "usage: %s [OPTIONS] CONTROLLER\n"
-           "CONTROLLER must be one of the following:\n"
-           "  tcp:HOST[:PORT]         PORT (default: %d) on remote TCP HOST\n",
-           program_name, program_name, OFP_TCP_PORT);
-#ifdef HAVE_OPENSSL
-    printf("  ssl:HOST[:PORT]         SSL PORT (default: %d) on remote HOST\n"
-           "\nPKI configuration (required to use SSL):\n"
-           "  -p, --private-key=FILE  file with private key\n"
-           "  -c, --certificate=FILE  file with certificate for private key\n"
-           "  -C, --ca-cert=FILE      file with peer CA certificate\n",
-           OFP_SSL_PORT);
-#endif
-    printf("Options:\n"
+           "where CONTROLLER is an active OpenFlow connection method.\n",
+           program_name, program_name);
+    vconn_usage(true, false);
+    printf("\nOptions:\n"
            "  -i, --interfaces=NETDEV[,NETDEV]...\n"
            "                          add specified initial switch ports\n"
            "  -d, --datapath-id=ID    Use ID as the OpenFlow switch ID\n"

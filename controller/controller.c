@@ -630,21 +630,10 @@ static void
 usage(void)
 {
     printf("%s: OpenFlow controller\n"
-           "usage: %s [OPTIONS] VCONN\n"
-           "where VCONN is one of the following:\n"
-           "  ptcp:[PORT]             listen to TCP PORT (default: %d)\n",
-           program_name, program_name, OFP_TCP_PORT);
-#ifdef HAVE_NETLINK
-    printf("  nl:DP_IDX               via netlink to local datapath DP_IDX\n");
-#endif
-#ifdef HAVE_OPENSSL
-    printf("  pssl:[PORT]             listen for SSL on PORT (default: %d)\n"
-           "\nPKI configuration (required to use SSL):\n"
-           "  -p, --private-key=FILE  file with private key\n"
-           "  -c, --certificate=FILE  file with certificate for private key\n"
-           "  -C, --ca-cert=FILE      file with peer CA certificate\n",
-           OFP_SSL_PORT);
-#endif
+           "usage: %s [OPTIONS] METHOD\n"
+           "where METHOD is any OpenFlow connection method.\n",
+           program_name, program_name);
+    vconn_usage(true, true);
     printf("\nOther options:\n"
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"

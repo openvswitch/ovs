@@ -49,6 +49,7 @@ struct vconn {
     int connect_status;
 };
 
+void vconn_usage(bool active, bool passive);
 int vconn_open(const char *name, struct vconn **);
 void vconn_close(struct vconn *);
 bool vconn_is_passive(const struct vconn *);

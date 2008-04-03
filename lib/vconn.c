@@ -80,6 +80,50 @@ check_vconn_classes(void)
 #endif
 }
 
+/* Prints information on active (if 'active') and passive (if 'passive')
+ * connection methods supported by the vconn. */
+void
+vconn_usage(bool active, bool passive)
+{
+    /* Really this should be implemented via callbacks into the vconn
+     * providers, but that seems too heavy-weight to bother with at the
+     * moment. */
+    
+    printf("\n");
+    if (active) {
+        printf("Active OpenFlow connection methods:\n");
+#ifdef HAVE_NETLINK
+        printf("  nl:DP_IDX               "
+               "local datapath DP_IDX\n");
+#endif
+        printf("  tcp:HOST[:PORT]         "
+               "PORT (default: %d) on remote TCP HOST\n", OFP_TCP_PORT);
+#ifdef HAVE_OPENSSL
+        printf("  ssl:HOST[:PORT]         "
+               "SSL PORT (default: %d) on remote HOST\n", OFP_SSL_PORT);
+#endif
+    }
+
+    if (passive) {
+        printf("Passive OpenFlow connection methods:\n");
+        printf("  ptcp:[PORT]             "
+               "listen to TCP PORT (default: %d)\n",
+               OFP_TCP_PORT);
+#ifdef HAVE_OPENSSL
+        printf("  pssl:[PORT]             "
+               "listen for SSL on PORT (default: %d)\n",
+               OFP_SSL_PORT);
+#endif
+    }
+
+#ifdef HAVE_OPENSSL
+    printf("PKI configuration (required to use SSL):\n"
+           "  -p, --private-key=FILE  file with private key\n"
+           "  -c, --certificate=FILE  file with certificate for private key\n"
+           "  -C, --ca-cert=FILE      file with peer CA certificate\n");
+#endif
+}
+
 /* Attempts to connect to an OpenFlow device.  'name' is a connection name in
  * the form "TYPE:ARGS", where TYPE is the vconn class's name and ARGS are
  * vconn class-specific.
