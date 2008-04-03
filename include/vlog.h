@@ -98,6 +98,7 @@ enum vlog_level vlog_get_level(enum vlog_module, enum vlog_facility);
 void vlog_set_levels(enum vlog_module, enum vlog_facility, enum vlog_level);
 char *vlog_set_levels_from_string(const char *);
 char *vlog_get_levels(void);
+bool vlog_is_enabled(enum vlog_module, enum vlog_level);
 void vlog_set_verbosity(const char *arg);
 
 /* Function for actual logging. */
@@ -116,5 +117,13 @@ void vlog(enum vlog_module, enum vlog_level, const char *format, ...)
 #define VLOG_ERR(...) vlog(THIS_MODULE, VLL_ERR, __VA_ARGS__)
 #define VLOG_WARN(...) vlog(THIS_MODULE, VLL_WARN, __VA_ARGS__)
 #define VLOG_DBG(...) vlog(THIS_MODULE, VLL_DBG, __VA_ARGS__)
+
+/* More convenience macros, for testing whether a given level is enabled in
+ * THIS_MODULE.  When constructing a log message is expensive, this enables it
+ * to be skipped. */
+#define VLOG_IS_EMER_ENABLED() true
+#define VLOG_IS_ERR_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_EMER)
+#define VLOG_IS_WARN_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_WARN)
+#define VLOG_IS_DBG_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_DBG)
 
 #endif /* vlog.h */

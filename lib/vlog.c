@@ -277,6 +277,16 @@ vlog_get_levels(void)
     return ds_cstr(&s);
 }
 
+/* Returns true if a log message emitted for the given 'module' and 'level'
+ * would cause some log output, false if that module and level are completely
+ * disabled. */
+bool
+vlog_is_enabled(enum vlog_module module, enum vlog_level level)
+{
+    return (levels[module][VLF_CONSOLE] >= level
+            || levels[module][VLF_SYSLOG] >= level);
+}
+
 /* Writes 'message' to the log at the given 'level' and as coming from the
  * given 'module'.
  *
