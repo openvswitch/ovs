@@ -47,11 +47,11 @@ extern "C" {
 
 void ofp_print(FILE *, const void *, size_t, int verbosity);
 void ofp_print_table(FILE *stream, const struct ofp_table* ot);
-void ofp_print_flow_mod(FILE *stream, const void *data, size_t len, int verbosity);
-void ofp_print_flow_expired(FILE *stream, const void *data, size_t len, int verbosity);
-void ofp_print_data_hello(FILE *stream, const void *data, size_t len, int verbosity);
 void ofp_print_packet(FILE *stream, const void *data, size_t len, size_t total_len);
-void ofp_print_port_status(FILE *stream, const void *oh, size_t len, int verbosity);
+
+char *ofp_to_string(const void *, size_t, int verbosity);
+char *ofp_table_to_string(const struct ofp_table* ot);
+char *ofp_packet_to_string(const void *data, size_t len, size_t total_len);
 
 #ifdef  __cplusplus
 }

@@ -300,7 +300,7 @@ dpif_show(struct dpif *dp)
     }
 
     len = nl_attr_get_size(attrs[DP_GENL_A_DP_INFO]);
-    ofp_print_data_hello(stdout, odh, len, 1);
+    ofp_print(stdout, odh, len, 1);
 
     return retval;
 }
@@ -431,8 +431,7 @@ dpif_dump_flows(struct dpif *dp, int table, struct ofp_match *match)
                 return EPROTO;
             }
 
-            ofp_print_flow_mod(stdout, &ofm->ofm, 
-                    sizeof(struct ofp_flow_mod), 1);
+            ofp_print(stdout, &ofm->ofm, sizeof(struct ofp_flow_mod), 1);
             putc('\n', stdout);
         }
 

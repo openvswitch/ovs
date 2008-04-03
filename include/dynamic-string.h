@@ -35,7 +35,9 @@
 #define DYNAMIC_STRING_H 1
 
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include "compiler.h"
 
 struct ds {
@@ -48,9 +50,13 @@ struct ds {
 
 void ds_init(struct ds *);
 void ds_reserve(struct ds *, size_t min_length);
+void ds_put_char(struct ds *, char);
+void ds_put_cstr(struct ds *, const char *);
 void ds_put_format(struct ds *, const char *, ...) PRINTF_FORMAT(2, 3);
 void ds_put_format_valist(struct ds *, const char *, va_list)
     PRINTF_FORMAT(2, 0);
+void ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
+                     uintptr_t ofs, bool ascii);
 char *ds_cstr(struct ds *);
 void ds_destroy(struct ds *);
 

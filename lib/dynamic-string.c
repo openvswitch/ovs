@@ -34,6 +34,7 @@
 #include "dynamic-string.h"
 #include <assert.h>
 #include <stdlib.h>
+#include <string.h>
 #include "util.h"
 
 void
@@ -52,6 +53,23 @@ ds_reserve(struct ds *ds, size_t min_length)
         ds->allocated = MAX(8, ds->allocated);
         ds->string = xrealloc(ds->string, ds->allocated + 1);
     }
+}
+
+void
+ds_put_char(struct ds *ds, char c)
+{
+    ds_reserve(ds, ds->length + 1);
+    ds->string[ds->length++] = c;
+    ds->string[ds->length] = '\0';
+}
+
+void
+ds_put_cstr(struct ds *ds, const char *s)
+{
+    size_t s_len = strlen(s);
+    ds_reserve(ds, ds->length + s_len);
+    memcpy(&ds->string[ds->length], s, s_len + 1);
+    ds->length += s_len;
 }
 
 void
@@ -107,4 +125,57 @@ void
 ds_destroy(struct ds *ds)
 {
     free(ds->string);
+}
+
+/* Writes the 'size' bytes in 'buf' to 'string' as hex bytes arranged 16 per
+ * line.  Numeric offsets are also included, starting at 'ofs' for the first
+ * byte in 'buf'.  If 'ascii' is true then the corresponding ASCII characters
+ * are also rendered alongside. */
+void
+ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
+                uintptr_t ofs, bool ascii)
+{
+  const uint8_t *buf = buf_;
+  const size_t per_line = 16; /* Maximum bytes per line. */
+
+  while (size > 0)
+    {
+      size_t start, end, n;
+      size_t i;
+
+      /* Number of bytes on this line. */
+      start = ofs % per_line;
+      end = per_line;
+      if (end - start > size)
+        end = start + size;
+      n = end - start;
+
+      /* Print line. */
+      ds_put_format(ds, "%08jx  ", (uintmax_t) ROUND_DOWN(ofs, per_line));
+      for (i = 0; i < start; i++)
+        ds_put_format(ds, "   ");
+      for (; i < end; i++)
+        ds_put_format(ds, "%02hhx%c",
+                buf[i - start], i == per_line / 2 - 1? '-' : ' ');
+      if (ascii)
+        {
+          for (; i < per_line; i++)
+            ds_put_format(ds, "   ");
+          ds_put_format(ds, "|");
+          for (i = 0; i < start; i++)
+            ds_put_format(ds, " ");
+          for (; i < end; i++) {
+              int c = buf[i - start];
+              ds_put_char(ds, c >= 32 && c < 127 ? c : '.');
+          }
+          for (; i < per_line; i++)
+            ds_put_format(ds, " ");
+          ds_put_format(ds, "|");
+        }
+      ds_put_format(ds, "\n");
+
+      ofs += n;
+      buf += n;
+      size -= n;
+    }
 }
