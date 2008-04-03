@@ -1,9 +1,6 @@
 include ../Make.vars
 
-bin_PROGRAMS = vlogconf
-if HAVE_NETLINK
-bin_PROGRAMS += dpctl
-endif
+bin_PROGRAMS = vlogconf dpctl
 
 dpctl_SOURCES = dpctl.c
 dpctl_LDADD = ../lib/libopenflow.la

@@ -290,37 +290,57 @@ ofp_print_phy_port(struct ds *string, const struct ofp_phy_port *port)
             ntohl(port->flags), ntohl(port->features));
 }
 
-/* Pretty-print the OFPT_DATA_HELLO packet of 'len' bytes at 'oh' to 'stream'
- * at the given 'verbosity' level. */
-void ofp_print_data_hello(struct ds *string, const void *oh, size_t len, 
-        int verbosity)
+/* Pretty-print the struct ofp_switch_features of 'len' bytes at 'oh' to
+ * 'string' at the given 'verbosity' level. */
+static void
+ofp_print_switch_features(struct ds *string, const void *oh, size_t len,
+                          int verbosity)
 {
-    const struct ofp_data_hello *odh = oh;
+    const struct ofp_switch_features *osf = oh;
     struct ofp_phy_port port_list[OFPP_MAX];
     int n_ports;
     int i;
 
-
-    ds_put_format(string, "dp id:%"PRIx64"\n", ntohll(odh->datapath_id));
+    ds_put_format(string, "dp id:%"PRIx64"\n", ntohll(osf->datapath_id));
     ds_put_format(string, "tables: exact:%d, mac:%d, compressed:%d, general:%d\n",
-           ntohl(odh->n_exact), ntohl(odh->n_mac_only),
-           ntohl(odh->n_compression), ntohl(odh->n_general));
-    ds_put_format(string, "buffers: size:%d, number:%d, miss_len:%d\n",
-           ntohl(odh->buffer_mb), ntohl(odh->n_buffers),
-           ntohs(odh->miss_send_len));
+           ntohl(osf->n_exact), ntohl(osf->n_mac_only),
+           ntohl(osf->n_compression), ntohl(osf->n_general));
+    ds_put_format(string, "buffers: size:%d, number:%d\n",
+           ntohl(osf->buffer_mb), ntohl(osf->n_buffers));
     ds_put_format(string, "features: capabilities:%#x, actions:%#x\n",
-           ntohl(odh->capabilities), ntohl(odh->actions));
+           ntohl(osf->capabilities), ntohl(osf->actions));
 
-    if (ntohs(odh->header.length) >= sizeof *odh) {
-        len = MIN(len, ntohs(odh->header.length));
+    if (ntohs(osf->header.length) >= sizeof *osf) {
+        len = MIN(len, ntohs(osf->header.length));
     }
-    n_ports = (len - sizeof *odh) / sizeof *odh->ports;
+    n_ports = (len - sizeof *osf) / sizeof *osf->ports;
 
-    memcpy(port_list, odh->ports, (len - sizeof *odh));
+    memcpy(port_list, osf->ports, (len - sizeof *osf));
     qsort(port_list, n_ports, sizeof port_list[0], compare_ports);
     for (i = 0; i < n_ports; i++) {
         ofp_print_phy_port(string, &port_list[i]);
     }
+}
+
+/* Pretty-print the struct ofp_switch_config of 'len' bytes at 'oh' to 'string'
+ * at the given 'verbosity' level. */
+static void
+ofp_print_switch_config(struct ds *string, const void *oh, size_t len,
+                        int verbosity)
+{
+    const struct ofp_switch_config *osc = oh;
+    uint16_t flags;
+
+    flags = ntohs(osc->flags);
+    if (flags & OFPC_SEND_FLOW_EXP) {
+        flags &= ~OFPC_SEND_FLOW_EXP;
+        ds_put_format(string, " (sending flow expirations)");
+    }
+    if (flags) {
+        ds_put_format(string, " ***unknown flags %04"PRIx16"***", flags);
+    }
+
+    ds_put_format(string, " miss_send_len=%"PRIu16"\n", ntohs(osc->miss_send_len));
 }
 
 static void print_wild(struct ds *string, const char *leader, int is_wild,
@@ -414,43 +434,58 @@ struct openflow_packet {
 };
 
 static const struct openflow_packet packets[] = {
-    [OFPT_CONTROL_HELLO] = {
-        "ofp_control_hello",
-        sizeof (struct ofp_control_hello),
+    [OFPT_FEATURES_REQUEST] = {
+        "features_request",
+        sizeof (struct ofp_header),
         NULL,
     },
-    [OFPT_DATA_HELLO] = {
-        "ofp_data_hello",
-        sizeof (struct ofp_data_hello),
-        ofp_print_data_hello,
+    [OFPT_FEATURES_REPLY] = {
+        "features_reply",
+        sizeof (struct ofp_switch_features),
+        ofp_print_switch_features,
+    },
+    [OFPT_GET_CONFIG_REQUEST] = {
+        "get_config_request",
+        sizeof (struct ofp_header),
+        NULL,
+    },
+    [OFPT_GET_CONFIG_REPLY] = {
+        "get_config_reply",
+        sizeof (struct ofp_switch_config),
+        ofp_print_switch_config,
+    },
+    [OFPT_SET_CONFIG] = {
+        "set_config",
+        sizeof (struct ofp_switch_config),
+        ofp_print_switch_config,
     },
     [OFPT_PACKET_IN] = {
-        "ofp_packet_in",
+        "packet_in",
         offsetof(struct ofp_packet_in, data),
         ofp_packet_in,
     },
     [OFPT_PACKET_OUT] = {
-        "ofp_packet_out",
+        "packet_out",
         sizeof (struct ofp_packet_out),
         ofp_packet_out,
     },
     [OFPT_FLOW_MOD] = {
-        "ofp_flow_mod",
+        "flow_mod",
         sizeof (struct ofp_flow_mod),
         ofp_print_flow_mod,
     },
     [OFPT_FLOW_EXPIRED] = {
-        "ofp_flow_expired",
+        "flow_expired",
         sizeof (struct ofp_flow_expired),
         ofp_print_flow_expired,
     },
     [OFPT_PORT_MOD] = {
-        "ofp_port_mod",
+        "port_mod",
         sizeof (struct ofp_port_mod),
         NULL,
     },
     [OFPT_PORT_STATUS] = {
-        "ofp_port_status",
+        "port_status",
         sizeof (struct ofp_port_status),
         ofp_print_port_status
     },

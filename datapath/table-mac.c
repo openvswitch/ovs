@@ -132,7 +132,7 @@ static int table_mac_timeout(struct datapath *dp, struct sw_table *swt)
 		hlist_for_each_entry_rcu (flow, pos, bucket, u.hnode) {
 			if (flow_timeout(flow)) {
 				count += do_delete(swt, flow);
-				if (dp->hello_flags & OFP_CHELLO_SEND_FLOW_EXP)
+				if (dp->config.flags & OFPC_SEND_FLOW_EXP)
 					dp_send_flow_expired(dp, flow);
 			}
 		}

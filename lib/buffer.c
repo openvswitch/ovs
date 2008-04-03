@@ -171,11 +171,14 @@ buffer_put_uninit(struct buffer *b, size_t size)
 }
 
 /* Appends the 'size' bytes of data in 'p' to the tail end of 'b'.  Data in 'b'
- * is reallocated and copied if necessary. */
-void
+ * is reallocated and copied if necessary.  Returns a pointer to the first
+ * byte of the data's location in the buffer. */
+void *
 buffer_put(struct buffer *b, const void *p, size_t size) 
 {
-    memcpy(buffer_put_uninit(b, size), p, size);
+    void *dst = buffer_put_uninit(b, size);
+    memcpy(dst, p, size);
+    return dst;
 }
 
 void *

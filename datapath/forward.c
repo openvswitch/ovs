@@ -44,7 +44,8 @@ void fwd_port_input(struct sw_chain *chain, struct sk_buff *skb, int in_port)
 				flow->actions, flow->n_actions);
 	} else {
 		dp_output_control(chain->dp, skb, fwd_save_skb(skb), 
-				chain->dp->miss_send_len, OFPR_NO_MATCH);
+				  chain->dp->config.miss_send_len,
+				  OFPR_NO_MATCH);
 	}
 }
 
@@ -259,20 +260,24 @@ struct sk_buff *execute_setter(struct sk_buff *skb, uint16_t eth_proto,
 }
 
 static int
-recv_control_hello(struct sw_chain *chain, const void *msg)
+recv_features_request(struct sw_chain *chain, const void *msg) 
 {
-	const struct ofp_control_hello *och = msg;
+	const struct ofp_header *ofr = msg;
+	return dp_send_features_reply(chain->dp, ofr->xid);
+}
 
-	printk("control_hello(version=%d)\n", ntohl(och->version));
+static int
+recv_get_config_request(struct sw_chain *chain, const void *msg)
+{
+	const struct ofp_header *ofr = msg;
+	return dp_send_config_reply(chain->dp, ofr->xid);
+}
 
-	if (ntohs(och->miss_send_len) != OFP_MISS_SEND_LEN_UNCHANGED) {
-		chain->dp->miss_send_len = ntohs(och->miss_send_len);
-	}
-
-	chain->dp->hello_flags = ntohs(och->flags);
-
-	dp_send_hello(chain->dp);
-
+static int
+recv_set_config(struct sw_chain *chain, const void *msg)
+{
+	const struct ofp_switch_config *osc = msg;
+	chain->dp->config = *osc;
 	return 0;
 }
 
@@ -427,9 +432,17 @@ fwd_control_input(struct sw_chain *chain, const void *msg, size_t length)
 	};
 
 	static const struct openflow_packet packets[] = {
-		[OFPT_CONTROL_HELLO] = {
-			sizeof (struct ofp_control_hello),
-			recv_control_hello,
+		[OFPT_FEATURES_REQUEST] = {
+			sizeof (struct ofp_header),
+			recv_features_request,
+		},
+		[OFPT_GET_CONFIG_REQUEST] = {
+			sizeof (struct ofp_header),
+			recv_get_config_request,
+		},
+		[OFPT_SET_CONFIG] = {
+			sizeof (struct ofp_switch_config),
+			recv_set_config,
 		},
 		[OFPT_PACKET_OUT] = {
 			sizeof (struct ofp_packet_out),

@@ -68,7 +68,7 @@ void *buffer_tail(const struct buffer *);
 void *buffer_end(const struct buffer *);
 
 void *buffer_put_uninit(struct buffer *, size_t);
-void buffer_put(struct buffer *, const void *, size_t);
+void *buffer_put(struct buffer *, const void *, size_t);
 void *buffer_push_uninit(struct buffer *b, size_t);
 
 size_t buffer_headroom(struct buffer *);

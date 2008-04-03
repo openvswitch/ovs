@@ -95,6 +95,56 @@ void nla_unreserve(struct sk_buff *skb, struct nlattr *nla, int len)
 	nla->nla_len -= len;
 }
 
+static void *
+alloc_openflow_skb(struct datapath *dp, size_t openflow_len,
+		   uint8_t type, uint32_t xid, struct sk_buff **pskb) 
+{
+	size_t genl_len;
+	struct sk_buff *skb;
+	struct nlattr *attr;
+	struct ofp_header *oh;
+
+	genl_len = nla_total_size(sizeof(uint32_t)); /* DP_GENL_A_DP_IDX */
+	genl_len += nla_total_size(openflow_len);    /* DP_GENL_A_OPENFLOW */
+	skb = *pskb = genlmsg_new(genl_len, GFP_ATOMIC);
+	if (!skb) {
+		if (net_ratelimit())
+			printk("alloc_openflow_skb: genlmsg_new failed\n");
+		return NULL;
+	}
+
+	/* Assemble the Generic Netlink wrapper. */
+	if (!genlmsg_put(skb, 0, 0, &dp_genl_family, 0, DP_GENL_C_OPENFLOW))
+		BUG();
+	if (nla_put_u32(skb, DP_GENL_A_DP_IDX, dp->dp_idx) < 0)
+		BUG();
+	attr = nla_reserve(skb, DP_GENL_A_OPENFLOW, openflow_len);
+	BUG_ON(!attr);
+	nlmsg_end(skb, (struct nlmsghdr *) skb->data);
+
+	/* Fill in the header. */
+	oh = nla_data(attr);
+	oh->version = OFP_VERSION;
+	oh->type = type;
+	oh->length = htons(openflow_len);
+	oh->xid = xid;
+
+	return oh;
+}
+
+static void
+resize_openflow_skb(struct sk_buff *skb,
+		    struct ofp_header *oh, size_t new_length)
+{
+	struct nlattr *attr;
+
+	BUG_ON(new_length > ntohs(oh->length));
+	attr = ((void *) oh) - NLA_HDRLEN;
+	nla_unreserve(skb, attr, ntohs(oh->length) - new_length);
+	oh->length = htons(new_length);
+	nlmsg_end(skb, (struct nlmsghdr *) skb->data);
+}
+
 /* Generates a unique datapath id.  It incorporates the datapath index
  * and a hardware address, if available.  If not, it generates a random
  * one.
@@ -174,7 +224,8 @@ static int new_dp(int dp_idx)
 		printk("datapath: problem setting up 'of' device\n");
 #endif
 
-	dp->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
+	dp->config.flags = 0;
+	dp->config.miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
 
 	dp->dp_task = kthread_run(dp_maint_func, dp, "dp%d", dp_idx);
 	if (IS_ERR(dp->dp_task))
@@ -501,57 +552,25 @@ int
 dp_output_control(struct datapath *dp, struct sk_buff *skb,
 			   uint32_t buffer_id, size_t max_len, int reason)
 {
-	/* FIXME? packet_rcv_spkt in net/packet/af_packet.c does some stuff
-	   that we should possibly be doing here too. */
 	/* FIXME?  Can we avoid creating a new skbuff in the case where we
 	 * forward the whole packet? */
 	struct sk_buff *f_skb;
-	struct nlattr *attr;
 	struct ofp_packet_in *opi;
-	size_t opi_len;
-	size_t len, fwd_len;
-	void *data;
-	int err = -ENOMEM;
+	size_t fwd_len, opi_len;
+	int err;
 
 	fwd_len = skb->len;
 	if ((buffer_id != (uint32_t) -1) && max_len)
 		fwd_len = min(fwd_len, max_len);
 
-	len = nla_total_size(offsetof(struct ofp_packet_in, data) + fwd_len) 
-				+ nla_total_size(sizeof(uint32_t));
-
-	f_skb = genlmsg_new(MAX(len, NLMSG_GOODSIZE), GFP_ATOMIC); 
-	if (!f_skb)
-		goto error_free_skb;
-
-	data = genlmsg_put(f_skb, 0, 0, &dp_genl_family, 0,
-				DP_GENL_C_OPENFLOW);
-	if (data == NULL)
-		goto error_free_f_skb;
-
-	NLA_PUT_U32(f_skb, DP_GENL_A_DP_IDX, dp->dp_idx);
-
 	opi_len = offsetof(struct ofp_packet_in, data) + fwd_len;
-	attr = nla_reserve(f_skb, DP_GENL_A_OPENFLOW, opi_len);
-	if (!attr)
-		goto error_free_f_skb;
-	opi = nla_data(attr);
-	opi->header.version = OFP_VERSION;
-	opi->header.type    = OFPT_PACKET_IN;
-	opi->header.length  = htons(opi_len);
-	opi->header.xid     = htonl(0);
-
+	opi = alloc_openflow_skb(dp, opi_len, OFPT_PACKET_IN, 0, &f_skb);
 	opi->buffer_id      = htonl(buffer_id);
 	opi->total_len      = htons(skb->len);
 	opi->in_port        = htons(skb->dev->br_port->port_no);
 	opi->reason         = reason;
 	opi->pad            = 0;
-	SKB_LINEAR_ASSERT(skb);
 	memcpy(opi->data, skb_mac_header(skb), fwd_len);
-
-	err = genlmsg_end(f_skb, data);
-	if (err < 0)
-		goto error_free_f_skb;
 
 	err = genlmsg_multicast(f_skb, 0, mc_group.id, GFP_ATOMIC);
 	if (err && net_ratelimit())
@@ -559,15 +578,6 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb,
 
 	kfree_skb(skb);  
 
-	return err;
-
-nla_put_failure:
-error_free_f_skb:
-	nlmsg_free(f_skb);
-error_free_skb:
-	kfree_skb(skb);
-	if (net_ratelimit())
-		printk(KERN_ERR "dp_output_control: failed to send: %d\n", err);
 	return err;
 }
 
@@ -610,28 +620,24 @@ static void fill_port_desc(struct net_bridge_port *p, struct ofp_phy_port *desc)
 }
 
 static int 
-fill_data_hello(struct datapath *dp, struct ofp_data_hello *odh)
+fill_features_reply(struct datapath *dp, struct ofp_switch_features *ofr)
 {
 	struct net_bridge_port *p;
 	int port_count = 0;
 
-	odh->header.version = OFP_VERSION;
-	odh->header.type    = OFPT_DATA_HELLO;
-	odh->header.xid     = htonl(0);
-	odh->datapath_id    = cpu_to_be64(dp->id); 
+	ofr->datapath_id    = cpu_to_be64(dp->id); 
 
-	odh->n_exact        = htonl(2 * TABLE_HASH_MAX_FLOWS);
-	odh->n_mac_only     = htonl(TABLE_MAC_MAX_FLOWS);
-	odh->n_compression  = 0;					   /* Not supported */
-	odh->n_general      = htonl(TABLE_LINEAR_MAX_FLOWS);
-	odh->buffer_mb      = htonl(UINT32_MAX);
-	odh->n_buffers      = htonl(N_PKT_BUFFERS);
-	odh->capabilities   = htonl(OFP_SUPPORTED_CAPABILITIES);
-	odh->actions        = htonl(OFP_SUPPORTED_ACTIONS);
-	odh->miss_send_len  = htons(dp->miss_send_len); 
+	ofr->n_exact        = htonl(2 * TABLE_HASH_MAX_FLOWS);
+	ofr->n_mac_only     = htonl(TABLE_MAC_MAX_FLOWS);
+	ofr->n_compression  = 0;					   /* Not supported */
+	ofr->n_general      = htonl(TABLE_LINEAR_MAX_FLOWS);
+	ofr->buffer_mb      = htonl(UINT32_MAX);
+	ofr->n_buffers      = htonl(N_PKT_BUFFERS);
+	ofr->capabilities   = htonl(OFP_SUPPORTED_CAPABILITIES);
+	ofr->actions        = htonl(OFP_SUPPORTED_ACTIONS);
 
 	list_for_each_entry_rcu (p, &dp->port_list, node) {
-		fill_port_desc(p, &odh->ports[port_count]);
+		fill_port_desc(p, &ofr->ports[port_count]);
 		port_count++;
 	}
 
@@ -639,77 +645,54 @@ fill_data_hello(struct datapath *dp, struct ofp_data_hello *odh)
 }
 
 int
-dp_send_hello(struct datapath *dp)
+dp_send_features_reply(struct datapath *dp, uint32_t xid)
 {
 	struct sk_buff *skb;
-	struct nlattr *attr;
-	struct ofp_data_hello *odh;
-	size_t odh_max_len, odh_len, port_max_len, len;
-	void *data;
-	int err = -ENOMEM;
+	struct ofp_switch_features *ofr;
+	size_t ofr_len, port_max_len;
+	int err;
 	int port_count;
 
-
-	/* Overallocate, since we can't reliably determine the number of
-	 * ports a priori. */
+	/* Overallocate. */
 	port_max_len = sizeof(struct ofp_phy_port) * OFPP_MAX;
+	ofr = alloc_openflow_skb(dp, sizeof(*ofr) + port_max_len,
+				 OFPT_FEATURES_REPLY, xid, &skb);
+	if (!ofr)
+		return -ENOMEM;
 
-	len = nla_total_size(sizeof(*odh) + port_max_len) 
-				+ nla_total_size(sizeof(uint32_t));
+	/* Fill. */
+	port_count = fill_features_reply(dp, ofr);
 
-	skb = genlmsg_new(MAX(len, NLMSG_GOODSIZE), GFP_ATOMIC);
-	if (!skb) {
-		if (net_ratelimit())
-			printk("dp_send_hello: genlmsg_new failed\n");
-		goto error;
-	}
+	/* Shrink to fit. */
+	ofr_len = sizeof(*ofr) + (sizeof(struct ofp_phy_port) * port_count);
+	resize_openflow_skb(skb, &ofr->header, ofr_len);
 
-	data = genlmsg_put(skb, 0, 0, &dp_genl_family, 0,
-			   DP_GENL_C_OPENFLOW);
-	if (data == NULL) {
-		if (net_ratelimit())
-			printk("dp_send_hello: genlmsg_put failed\n");
-		goto error;
-	}
-
-	NLA_PUT_U32(skb, DP_GENL_A_DP_IDX, dp->dp_idx);
-
-	odh_max_len = sizeof(*odh) + port_max_len;
-	attr = nla_reserve(skb, DP_GENL_A_OPENFLOW, odh_max_len);
-	if (!attr) {
-		if (net_ratelimit())
-			printk("dp_send_hello: nla_reserve failed\n");
-		goto error;
-	}
-	odh = nla_data(attr);
-	port_count = fill_data_hello(dp, odh);
-
-	/* Only now that we know how many ports we've added can we say
-	 * say something about the length. */
-	odh_len = sizeof(*odh) + (sizeof(struct ofp_phy_port) * port_count);
-	odh->header.length = htons(odh_len);
-
-	/* Take back the unused part that was reserved */
-	nla_unreserve(skb, attr, (odh_max_len - odh_len));
-
-	err = genlmsg_end(skb, data);
-	if (err < 0) {
-		if (net_ratelimit())
-			printk("dp_send_hello: genlmsg_end failed\n");
-		goto error;
-	}
-
+	/* FIXME: send as reply. */
 	err = genlmsg_multicast(skb, 0, mc_group.id, GFP_ATOMIC);
 	if (err && net_ratelimit())
 		printk(KERN_WARNING "dp_send_hello: genlmsg_multicast failed: %d\n", err);
 
 	return err;
+}
 
-nla_put_failure:
-error:
-	kfree_skb(skb);
-	if (net_ratelimit())
-		printk(KERN_ERR "dp_send_hello: failed to send: %d\n", err);
+int
+dp_send_config_reply(struct datapath *dp, uint32_t xid)
+{
+	struct sk_buff *skb;
+	struct ofp_switch_config *osc;
+	int err;
+
+	osc = alloc_openflow_skb(dp, sizeof *osc, OFPT_PORT_STATUS, 0, &skb);
+	if (!osc)
+		return -ENOMEM;
+	memcpy(((char *)osc) + sizeof osc->header,
+	       ((char *)&dp->config) + sizeof dp->config.header,
+	       sizeof dp->config - sizeof dp->config.header);
+
+	err = genlmsg_multicast(skb, 0, mc_group.id, GFP_ATOMIC);
+	if (err && net_ratelimit())
+		printk(KERN_WARNING "send_port_status: genlmsg_multicast failed: %d\n", err);
+
 	return err;
 }
 
@@ -734,63 +717,20 @@ static int
 send_port_status(struct net_bridge_port *p, uint8_t status)
 {
 	struct sk_buff *skb;
-	struct nlattr *attr;
 	struct ofp_port_status *ops;
-	void *data;
-	int err = -ENOMEM;
+	int err;
 
-
-	skb = genlmsg_new(NLMSG_GOODSIZE, GFP_ATOMIC);
-	if (!skb) {
-		if (net_ratelimit())
-			printk("send_port_status: genlmsg_new failed\n");
-		goto error;
-	}
-
-	data = genlmsg_put(skb, 0, 0, &dp_genl_family, 0,
-			   DP_GENL_C_OPENFLOW);
-	if (data == NULL) {
-		if (net_ratelimit())
-			printk("send_port_status: genlmsg_put failed\n");
-		goto error;
-	}
-
-	NLA_PUT_U32(skb, DP_GENL_A_DP_IDX, p->dp->dp_idx);
-
-	attr = nla_reserve(skb, DP_GENL_A_OPENFLOW, sizeof(*ops));
-	if (!attr) {
-		if (net_ratelimit())
-			printk("send_port_status: nla_reserve failed\n");
-		goto error;
-	}
-
-	ops = nla_data(attr);
-	ops->header.version = OFP_VERSION;
-	ops->header.type    = OFPT_PORT_STATUS;
-	ops->header.length  = htons(sizeof(*ops));
-	ops->header.xid     = htonl(0);
-
-	ops->reason         = status;
+	ops = alloc_openflow_skb(p->dp, sizeof *ops, OFPT_PORT_STATUS, 0,
+				 &skb);
+	if (!ops)
+		return -ENOMEM;
+	ops->reason = status;
 	fill_port_desc(p, &ops->desc);
-
-	err = genlmsg_end(skb, data);
-	if (err < 0) {
-		if (net_ratelimit())
-			printk("send_port_status: genlmsg_end failed\n");
-		goto error;
-	}
 
 	err = genlmsg_multicast(skb, 0, mc_group.id, GFP_ATOMIC);
 	if (err && net_ratelimit())
 		printk(KERN_WARNING "send_port_status: genlmsg_multicast failed: %d\n", err);
 
-	return err;
-
-nla_put_failure:
-error:
-	kfree_skb(skb);
-	if (net_ratelimit())
-		printk(KERN_ERR "send_port_status: failed to send: %d\n", err);
 	return err;
 }
 
@@ -798,42 +738,13 @@ int
 dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 {
 	struct sk_buff *skb;
-	struct nlattr *attr;
 	struct ofp_flow_expired *ofe;
-	void *data;
 	unsigned long duration_j;
-	int err = -ENOMEM;
+	int err;
 
-
-	skb = genlmsg_new(NLMSG_GOODSIZE, GFP_ATOMIC);
-	if (!skb) {
-		if (net_ratelimit())
-			printk("dp_send_flow_expired: genlmsg_new failed\n");
-		goto error;
-	}
-
-	data = genlmsg_put(skb, 0, 0, &dp_genl_family, 0,
-			   DP_GENL_C_OPENFLOW);
-	if (data == NULL) {
-		if (net_ratelimit())
-			printk("dp_send_flow_expired: genlmsg_put failed\n");
-		goto error;
-	}
-
-	NLA_PUT_U32(skb, DP_GENL_A_DP_IDX, dp->dp_idx);
-
-	attr = nla_reserve(skb, DP_GENL_A_OPENFLOW, sizeof(*ofe));
-	if (!attr) {
-		if (net_ratelimit())
-			printk("dp_send_flow_expired: nla_reserve failed\n");
-		goto error;
-	}
-
-	ofe = nla_data(attr);
-	ofe->header.version = OFP_VERSION;
-	ofe->header.type    = OFPT_FLOW_EXPIRED;
-	ofe->header.length  = htons(sizeof(*ofe));
-	ofe->header.xid     = htonl(0);
+	ofe = alloc_openflow_skb(dp, sizeof *ofe, OFPT_FLOW_EXPIRED, 0, &skb);
+	if (!ofe)
+		return -ENOMEM;
 
 	flow_fill_match(&ofe->match, &flow->key);
 	duration_j = (flow->timeout - HZ * flow->max_idle) - flow->init_time;
@@ -841,24 +752,10 @@ dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 	ofe->packet_count   = cpu_to_be64(flow->packet_count);
 	ofe->byte_count     = cpu_to_be64(flow->byte_count);
 
-	err = genlmsg_end(skb, data);
-	if (err < 0) {
-		if (net_ratelimit())
-			printk("dp_send_flow_expired: genlmsg_end failed\n");
-		goto error;
-	}
-
 	err = genlmsg_multicast(skb, 0, mc_group.id, GFP_ATOMIC);
 	if (err && net_ratelimit())
 		printk(KERN_WARNING "send_flow_expired: genlmsg_multicast failed: %d\n", err);
 
-	return err;
-
-nla_put_failure:
-error:
-	kfree_skb(skb);
-	if (net_ratelimit())
-		printk(KERN_ERR "send_flow_expired: failed to send: %d\n", err);
 	return err;
 }
 
@@ -1021,79 +918,6 @@ dp_fill_flow(struct ofp_flow_mod* ofm, struct swt_iterator* iter)
 
 	return 0;
 }
-
-static int dp_genl_show(struct sk_buff *skb, struct genl_info *info)
-{
-	struct datapath *dp;
-	int err = -ENOMEM;
-	struct sk_buff *ans_skb = NULL;
-	void *data;
-	struct nlattr *attr;
-	struct ofp_data_hello *odh;
-	size_t odh_max_len, odh_len, port_max_len, len;
-	int port_count;
-
-	if (!info->attrs[DP_GENL_A_DP_IDX])
-		return -EINVAL;
-
-	mutex_lock(&dp_mutex);
-	dp = dp_get(nla_get_u32((info->attrs[DP_GENL_A_DP_IDX])));
-	if (!dp)
-		goto error;
-
-	/* Overallocate, since we can't reliably determine the number of
-	 * ports a priori. */
-	port_max_len = sizeof(struct ofp_phy_port) * OFPP_MAX;
-
-	len = nla_total_size(sizeof(*odh) + port_max_len)
-			+ nla_total_size(sizeof(uint32_t));
-
-	ans_skb = nlmsg_new(MAX(len, NLMSG_GOODSIZE), GFP_KERNEL);
-	if (!ans_skb)
-		goto error;
-
-	data = genlmsg_put_reply(ans_skb, info, &dp_genl_family,
-				 0, DP_GENL_C_SHOW_DP);
-	if (data == NULL) 
-		goto error;
-
-	NLA_PUT_U32(ans_skb, DP_GENL_A_DP_IDX, dp->dp_idx);
-
-	odh_max_len = sizeof(*odh) + port_max_len;
-	attr = nla_reserve(ans_skb, DP_GENL_A_DP_INFO, odh_max_len);
-	if (!attr)
-		goto error;
-	odh = nla_data(attr);
-	port_count = fill_data_hello(dp, odh);
-
-	/* Only now that we know how many ports we've added can we say
-	 * say something about the length. */
-	odh_len = sizeof(*odh) + (sizeof(struct ofp_phy_port) * port_count);
-	odh->header.length = htons(odh_len);
-
-	/* Take back the unused part that was reserved */
-	nla_unreserve(ans_skb, attr, (odh_max_len - odh_len));
-
-	genlmsg_end(ans_skb, data);
-	err = genlmsg_reply(ans_skb, info);
-	if (!err)
-		ans_skb = NULL;
-
-error:
-nla_put_failure:
-	if (ans_skb)
-		kfree_skb(ans_skb);
-	mutex_unlock(&dp_mutex);
-	return err;
-}
-
-static struct genl_ops dp_genl_ops_show_dp = {
-	.cmd = DP_GENL_C_SHOW_DP,
-	.flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
-	.policy = dp_genl_policy,
-	.doit = dp_genl_show,
-	.dumpit = NULL,
-};
 
 /* Convenience function */
 static
@@ -1542,7 +1366,6 @@ static struct genl_ops *dp_genl_all_ops[] = {
 
 	&dp_genl_ops_query_flow,
 	&dp_genl_ops_query_table,
-	&dp_genl_ops_show_dp,
 	&dp_genl_ops_add_dp,
 	&dp_genl_ops_del_dp,
 	&dp_genl_ops_query_dp,

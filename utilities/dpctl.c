@@ -53,6 +53,7 @@
 #include "openflow.h"
 #include "ofp-print.h"
 #include "vconn.h"
+#include "vconn-ssl.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_DPCTL
@@ -111,6 +112,11 @@ parse_options(int argc, char *argv[])
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
+#ifdef HAVE_OPENSSL
+        {"private-key", required_argument, 0, 'p'},
+        {"certificate", required_argument, 0, 'c'},
+        {"ca-cert",     required_argument, 0, 'C'},
+#endif
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -136,6 +142,20 @@ parse_options(int argc, char *argv[])
             vlog_set_verbosity(optarg);
             break;
 
+#ifdef HAVE_OPENSSL
+        case 'p':
+            vconn_ssl_set_private_key_file(optarg);
+            break;
+
+        case 'c':
+            vconn_ssl_set_certificate_file(optarg);
+            break;
+
+        case 'C':
+            vconn_ssl_set_ca_cert_file(optarg);
+            break;
+#endif
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -149,25 +169,41 @@ parse_options(int argc, char *argv[])
 static void
 usage(void)
 {
-    printf("%s: Datapath Utility\n"
+    printf("%s: OpenFlow switch management utility\n"
            "usage: %s [OPTIONS] COMMAND [ARG...]\n"
-           "\nAvailable commands:\n"
-           "  adddp DP_ID                 add a new datapath with ID DP_ID\n"
-           "  deldp DP_ID                 delete datapath DP_ID\n"
-           "  show DP                     show information about DP\n"
-           "  addif DP_ID IFACE           add IFACE as a port on DP_ID\n"
-           "  delif DP_ID IFACE           delete IFACE as a port on DP_ID\n"
-           "  monitor DP_ID               print packets received on DP_ID\n"
-           "  dump-tables DP_ID           print stats for all tables in DP_ID\n"
-           "  dump-flows DP_ID T_ID       print all flow entries in table T_ID of DP_ID\n"
-           "  dump-flows DP_ID T_ID FLOW  print matching FLOWs in table T_ID of DP_ID\n"
-           "  add-flows DP FILE           add flows from FILE to DP\n"
-           "  benchmark-nl DP_ID N SIZE   send N packets of SIZE bytes up netlink\n"
-           "\nOptions:\n"
+#ifdef HAVE_NETLINK
+           "\nCommands that apply to local datapaths only:\n"
+           "  adddp nl:DP_ID              add a new local datapath DP_ID\n"
+           "  deldp nl:DP_ID              delete local datapath DP_ID\n"
+           "  addif nl:DP_ID IFACE        add IFACE as a port on DP_ID\n"
+           "  delif nl:DP_ID IFACE        delete IFACE as a port on DP_ID\n"
+           "  benchmark-nl nl:DP_ID N SIZE   send N packets of SIZE bytes\n"
+#endif
+           "\nCommands that also apply to remote switches:\n"
+           "  show VCONN                  show information about VCONN\n"
+           "  monitor VCONN               print packets received on VCONN\n"
+           "  dump-tables VCONN           print table stats for VCONN\n"
+           "  dump-flows VCONN T_ID       print all flow entries in table T_ID of VCONN\n"
+           "  dump-flows VCONN T_ID FLOW  print matching FLOWs in table T_ID of VCONN\n"
+           "  add-flows VCONN FILE        add flows from FILE to VCONN\n"
+           "where each VCONN is one of the following:\n"
+           "  tcp:HOST[:PORT]             PORT (default: %d) on remote TCP HOST\n",
+           program_name, program_name, OFP_TCP_PORT);
+#ifdef HAVE_NETLINK
+    printf("  nl:DP_IDX                   via netlink to local datapath DP_IDX\n");
+#endif
+#ifdef HAVE_OPENSSL
+    printf("  ssl:HOST[:PORT]             SSL PORT (default: %d) on remote HOST\n"
+           "\nPKI configuration (required to use SSL):\n"
+           "  -p, --private-key=FILE      file with private key\n"
+           "  -c, --certificate=FILE      file with certificate for private key\n"
+           "  -C, --ca-cert=FILE          file with peer CA certificate\n",
+           OFP_SSL_PORT);
+#endif
+    printf("\nOptions:\n"
            "  -v, --verbose               set maximum verbosity level\n"
            "  -h, --help                  display this help message\n"
-           "  -V, --version               display version information\n",
-           program_name, program_name);
+           "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
 }
 
@@ -177,6 +213,9 @@ static void run(int retval, const char *name)
         fatal(retval, "%s", name);
     }
 }
+
+#ifdef HAVE_NETLINK
+/* Netlink-only commands. */
 
 static int  if_up(const char* intf)
 {
@@ -186,10 +225,20 @@ static int  if_up(const char* intf)
     return system(command);
 }
 
+static void open_nl_vconn(const char *name, bool subscribe, struct dpif *dpif)
+{
+    if (strncmp(name, "nl:", 3)
+        || strlen(name) < 4
+        || name[strspn(name + 3, "0123456789") + 3]) {
+        fatal(0, "%s: argument is not of the form \"nl:DP_ID\"", name);
+    }
+    run(dpif_open(atoi(name + 3), subscribe, dpif), "opening datapath");
+}
+
 static void do_add_dp(int argc UNUSED, char *argv[])
 {
     struct dpif dp;
-    run(dpif_open(atoi(argv[1]), false, &dp), "dpif_open");
+    open_nl_vconn(argv[1], false, &dp);
     run(dpif_add_dp(&dp), "add_dp");
     dpif_close(&dp);
 }
@@ -197,16 +246,8 @@ static void do_add_dp(int argc UNUSED, char *argv[])
 static void do_del_dp(int argc UNUSED, char *argv[])
 {
     struct dpif dp;
-    run(dpif_open(atoi(argv[1]), false, &dp), "dpif_open");
+    open_nl_vconn(argv[1], false, &dp);
     run(dpif_del_dp(&dp), "del_dp");
-    dpif_close(&dp);
-}
-
-static void do_show(int argc UNUSED, char *argv[])
-{
-    struct dpif dp;
-    run(dpif_open(atoi(argv[1]), false, &dp), "dpif_open");
-    run(dpif_show(&dp), "show");
     dpif_close(&dp);
 }
 
@@ -214,7 +255,7 @@ static void do_add_port(int argc UNUSED, char *argv[])
 {
     struct dpif dp;
     if_up(argv[2]);
-    run(dpif_open(atoi(argv[1]), false, &dp), "dpif_open");
+    open_nl_vconn(argv[1], false, &dp);
     run(dpif_add_port(&dp, argv[2]), "add_port");
     dpif_close(&dp);
 }
@@ -222,7 +263,7 @@ static void do_add_port(int argc UNUSED, char *argv[])
 static void do_del_port(int argc UNUSED, char *argv[])
 {
     struct dpif dp;
-    run(dpif_open(atoi(argv[1]), false, &dp), "dpif_open");
+    open_nl_vconn(argv[1], false, &dp);
     run(dpif_del_port(&dp, argv[2]), "del_port");
     dpif_close(&dp);
 }
@@ -235,7 +276,7 @@ static void do_benchmark_nl(int argc UNUSED, char *argv[])
     uint32_t num_packets, i, milestone;
     struct timeval start, end;
 
-    run(dpif_open(atoi(argv[1]), true, &dp), "dpif_open");
+    open_nl_vconn(argv[1], false, &dp);
     num_packets = atoi(argv[2]);
     milestone = BENCHMARK_INCR;
     run(dpif_benchmark_nl(&dp, num_packets, atoi(argv[3])), "benchmark_nl");
@@ -263,6 +304,19 @@ static void do_benchmark_nl(int argc UNUSED, char *argv[])
            + (.001*(end.tv_usec - start.tv_usec)));
 
     dpif_close(&dp);
+}
+#endif /* HAVE_NETLINK */
+
+/* Generic commands. */
+
+static void do_show(int argc UNUSED, char *argv[])
+{
+#if 0
+    struct dpif dp;
+    run(dpif_open(atoi(argv[1]), false, &dp), "dpif_open");
+    run(dpif_show(&dp), "show");
+    dpif_close(&dp);
+#endif
 }
 
 static void do_monitor(int argc UNUSED, char *argv[])
@@ -507,25 +561,19 @@ static void do_help(int argc UNUSED, char *argv[] UNUSED)
 }
 
 static struct command all_commands[] = {
-    { "add-dp", 1, 1, do_add_dp },
+#ifdef HAVE_NETLINK
     { "adddp", 1, 1, do_add_dp },
-
-    { "del-dp", 1, 1, do_del_dp },
     { "deldp", 1, 1, do_del_dp },
+    { "addif", 2, 2, do_add_port },
+    { "delif", 2, 2, do_del_port },
+    { "benchmark-nl", 3, 3, do_benchmark_nl },
+#endif
 
     { "show", 1, 1, do_show },
-
-    { "add-port", 2, 2, do_add_port },
-    { "addif", 2, 2, do_add_port },
-
-    { "del-port", 2, 2, do_del_port },
-    { "delif", 2, 2, do_del_port },
 
     { "help", 0, INT_MAX, do_help },
     { "monitor", 1, 1, do_monitor },
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 2, 3, do_dump_flows },
     { "add-flows", 2, 2, do_add_flows },
-
-    { "benchmark-nl", 3, 3, do_benchmark_nl },
 };

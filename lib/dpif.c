@@ -258,53 +258,6 @@ dpif_del_port(struct dpif *dp, const char *netdev)
     return send_mgmt_command(dp, DP_GENL_C_DEL_PORT, netdev);
 }
 
-/* Prints a description of 'dp' to stdout.  Returns 0 if successful, otherwise
- * a positive errno value. */
-int
-dpif_show(struct dpif *dp) 
-{
-    static const struct nl_policy show_policy[] = {
-        [DP_GENL_A_DP_INFO] = { .type = NL_A_UNSPEC,
-                                .min_len = sizeof(struct ofp_data_hello),
-                                .max_len = SIZE_MAX },
-    };
-
-    struct buffer request, *reply;
-    struct nlattr *attrs[ARRAY_SIZE(show_policy)];
-    struct ofp_data_hello *odh;
-    int retval;
-    size_t len;
-
-    buffer_init(&request, 0);
-    nl_msg_put_genlmsghdr(&request, dp->sock, 0, openflow_family,
-                          NLM_F_REQUEST, DP_GENL_C_SHOW_DP, 1);
-    nl_msg_put_u32(&request, DP_GENL_A_DP_IDX, dp->dp_idx);
-    retval = nl_sock_transact(dp->sock, &request, &reply);
-    buffer_uninit(&request);
-    if (retval) {
-        return retval;
-    }
-    if (!nl_policy_parse(reply, show_policy, attrs,
-                         ARRAY_SIZE(show_policy))) {
-        buffer_delete(reply);
-        return EPROTO;
-    }
-
-    odh = (void *) nl_attr_get(attrs[DP_GENL_A_DP_INFO]);
-    if (odh->header.version != OFP_VERSION
-        || odh->header.type != OFPT_DATA_HELLO) {
-        VLOG_ERR("bad show query response (%"PRIu8",%"PRIu8")",
-                 odh->header.version, odh->header.type);
-        buffer_delete(reply);
-        return EPROTO;
-    }
-
-    len = nl_attr_get_size(attrs[DP_GENL_A_DP_INFO]);
-    ofp_print(stdout, odh, len, 1);
-
-    return retval;
-}
-
 static const struct nl_policy table_policy[] = {
     [DP_GENL_A_NUMTABLES] = { .type = NL_A_U32 },
     [DP_GENL_A_TABLE] = { .type = NL_A_UNSPEC },
@@ -364,12 +317,6 @@ static const struct nl_policy flow_policy[] = {
     [DP_GENL_A_FLOW] = { .type = NL_A_UNSPEC },
 };
 
-struct _dump_ofp_flow_mod
-{
-    struct ofp_flow_mod ofm;
-    struct ofp_action   oa;
-};
-
 /* Writes a description of flows in the given 'table' in 'dp' to stdout.  If
  * 'match' is null, all flows in the table are written; otherwise, only
  * matching flows are written.  Returns 0 if successful, otherwise a positive
@@ -404,7 +351,7 @@ dpif_dump_flows(struct dpif *dp, int table, struct ofp_match *match)
 
     for (;;) {
         struct nlattr *attrs[ARRAY_SIZE(flow_policy)];
-        const struct _dump_ofp_flow_mod *flows, *ofm;
+        const struct ofp_flow_mod *flows, *ofm;
         int n_flows;
 
         if (!nl_policy_parse(reply, flow_policy, attrs,
@@ -421,17 +368,17 @@ dpif_dump_flows(struct dpif *dp, int table, struct ofp_match *match)
 
         flows = nl_attr_get(attrs[DP_GENL_A_FLOW]);
         for (ofm = flows; ofm < &flows[n_flows]; ofm++) {
-            if (ofm->ofm.header.version != 1){
+            if (ofm->header.version != 1){
                 VLOG_DBG("recv_dp_flow incorrect version");
                 buffer_delete(reply);
                 return EPROTO;
-            } else if (ofm->ofm.header.type != OFPT_FLOW_MOD) {
+            } else if (ofm->header.type != OFPT_FLOW_MOD) {
                 VLOG_DBG("recv_fp_flow bad return message type");
                 buffer_delete(reply);
                 return EPROTO;
             }
 
-            ofp_print(stdout, &ofm->ofm, sizeof(struct ofp_flow_mod), 1);
+            ofp_print(stdout, ofm, sizeof *ofm, 1);
             putc('\n', stdout);
         }
 

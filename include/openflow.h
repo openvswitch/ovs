@@ -43,7 +43,7 @@
 #endif
 
 /* Maximum length of a OpenFlow packet. */
-#define OFP_MAXLEN (sizeof(struct ofp_data_hello) \
+#define OFP_MAXLEN (sizeof(struct ofp_switch_features) \
         + (sizeof(struct ofp_phy_port) * OFPP_MAX) + 200)
 
 #define OFP_VERSION   1
@@ -71,21 +71,24 @@ enum ofp_port {
 };
 
 enum ofp_type {
-    OFPT_CONTROL_HELLO,      /* 0  Controller/switch message */
-    OFPT_DATA_HELLO,         /* 1  Controller/switch message */
-    OFPT_PACKET_IN,          /* 2  Async message */
-    OFPT_PACKET_OUT,         /* 3  Controller/switch message */
-    OFPT_FLOW_MOD,           /* 4  Controller/switch message */
-    OFPT_FLOW_EXPIRED,       /* 5  Async message */
-    OFPT_TABLE,              /* 6  Controller/switch message */
-    OFPT_PORT_MOD,           /* 7  Controller/switch message */
-    OFPT_PORT_STATUS,        /* 8  Async message */
-    OFPT_FLOW_STAT_REQUEST,  /* 9  Controller/switch message */
-    OFPT_FLOW_STAT_REPLY,    /* 10 Controller/switch message */
-    OFPT_TABLE_STAT_REQUEST, /* 11 Controller/switch message */
-    OFPT_TABLE_STAT_REPLY,   /* 12 Controller/switch message */
-    OFPT_PORT_STAT_REQUEST,  /* 13 Controller/switch message */
-    OFPT_PORT_STAT_REPLY     /* 14 Controller/switch message */
+    OFPT_FEATURES_REQUEST,   /*  0 Controller/switch message */
+    OFPT_FEATURES_REPLY,     /*  1 Controller/switch message */
+    OFPT_GET_CONFIG_REQUEST, /*  2 Controller/switch message */
+    OFPT_GET_CONFIG_REPLY,   /*  3 Controller/switch message */
+    OFPT_SET_CONFIG,         /*  4 Controller/switch message */
+    OFPT_PACKET_IN,          /*  5 Async message */
+    OFPT_PACKET_OUT,         /*  6 Controller/switch message */
+    OFPT_FLOW_MOD,           /*  7 Controller/switch message */
+    OFPT_FLOW_EXPIRED,       /*  8 Async message */
+    OFPT_TABLE,              /*  9 Controller/switch message */
+    OFPT_PORT_MOD,           /* 10 Controller/switch message */
+    OFPT_PORT_STATUS,        /* 11 Async message */
+    OFPT_FLOW_STAT_REQUEST,  /* 12 Controller/switch message */
+    OFPT_FLOW_STAT_REPLY,    /* 13 Controller/switch message */
+    OFPT_TABLE_STAT_REQUEST, /* 14 Controller/switch message */
+    OFPT_TABLE_STAT_REPLY,   /* 15 Controller/switch message */
+    OFPT_PORT_STAT_REQUEST,  /* 16 Controller/switch message */
+    OFPT_PORT_STAT_REPLY     /* 17 Controller/switch message */
 };
 
 /* Header on all OpenFlow packets. */
@@ -99,22 +102,18 @@ struct ofp_header {
 };
 
 #define OFP_DEFAULT_MISS_SEND_LEN   128
-#define OFP_MISS_SEND_LEN_UNCHANGED 0xffff
 
-/* Flag to indicate that datapath should notify the controller of
- * expired flow entries.
- */
-#define OFP_CHELLO_SEND_FLOW_EXP 0x0001
+enum ofp_config_flags {
+    /* Tells datapath to notify the controller of expired flow entries. */
+    OFPC_SEND_FLOW_EXP = 1 << 0
+};
 
-/* Controller hello (controller -> datapath). */
-struct ofp_control_hello {
+/* Switch configuration. */
+struct ofp_switch_config {
     struct ofp_header header;
-    uint32_t version;         /* Max supported protocol version (?) */
-    uint16_t flags;           
-    uint16_t miss_send_len;   /* Max bytes of new flow that datapath should 
-                                 send to the controller.  A value of 
-                                 OFP_MISS_SEND_LEN_UNCHANGED leaves the 
-                                 currently configured value unchanged. */
+    uint16_t flags;             /* OFPC_* flags. */
+    uint16_t miss_send_len;     /* Max bytes of new flow that datapath should
+                                   send to the controller. */
 };
 
 /* Capabilities supported by the datapath. */
@@ -154,8 +153,8 @@ struct ofp_phy_port {
     uint32_t features;      /* Bitmap of supported "ofp_port_features"s. */
 };
 
-/* Datapath hello (datapath -> controller). */
-struct ofp_data_hello {
+/* Switch features. */
+struct ofp_switch_features {
     struct ofp_header header;
     uint64_t datapath_id;   /* Datapath unique ID */
 
@@ -173,15 +172,9 @@ struct ofp_data_hello {
     uint32_t capabilities;  /* Bitmap of support "ofp_capabilities". */
     uint32_t actions;       /* Bitmap of supported "ofp_action_type"s. */
 
-    /* Miscellany */
-    uint16_t miss_send_len; /* Currently configured value for max bytes 
-                               of new flow that datapath will send to the 
-                               controller. */
-    uint8_t pad[2];         /* Align to 32-bits */
-
     /* Port info.*/
     struct ofp_phy_port ports[0];   /* Port definitions.  The number of ports
-                                      is inferred from the length field in 
+                                      is inferred from the length field in
                                       the header. */
 };
 

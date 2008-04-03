@@ -48,11 +48,7 @@ struct datapath {
 	struct net_device dev;
 	struct net_device_stats stats;
 
-	/* Flags from the control hello message */
-	uint16_t hello_flags;
-
-	/* Maximum number of bytes that should be sent for flow misses */
-	uint16_t miss_send_len;
+	struct ofp_switch_config config;
 
 	/* Switch ports. */
 	struct net_bridge_port *ports[OFPP_MAX];
@@ -63,8 +59,10 @@ int dp_output_port(struct datapath *, struct sk_buff *, int out_port);
 int dp_output_control(struct datapath *, struct sk_buff *,
 			   uint32_t buffer_id, size_t max_len, int reason);
 int dp_set_origin(struct datapath *, uint16_t, struct sk_buff *);
-int dp_send_hello(struct datapath *);
+int dp_send_features_reply(struct datapath *, uint32_t xid);
+int dp_send_config_reply(struct datapath *, uint32_t xid);
 int dp_send_flow_expired(struct datapath *, struct sw_flow *);
+int dp_send_port_stats(struct datapath *dp, uint32_t xid);
 int dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp);
 
 /* Should hold at least RCU read lock when calling */

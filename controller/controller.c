@@ -71,7 +71,7 @@ struct switch_ {
     struct vconn *vconn;
 
     uint64_t datapath_id;
-    time_t last_control_hello;
+    time_t last_features_request;
 
     struct queue txq;
 };
@@ -91,7 +91,7 @@ static void close_switch(struct switch_ *);
 
 static void queue_tx(struct switch_ *, struct buffer *);
 
-static void send_control_hello(struct switch_ *);
+static void send_features_request(struct switch_ *);
 
 static int do_switch_recv(struct switch_ *this);
 static int do_switch_send(struct switch_ *this);
@@ -162,6 +162,7 @@ main(int argc, char *argv[])
                         if (retval) {
                             break;
                         }
+                        printf("accept!\n");
                         switches[n_switches++] = new_switch("tcp", new_vconn);
                     }
                 } else {
@@ -261,9 +262,9 @@ new_switch(const char *name, struct vconn *vconn)
     this->name = xstrdup(name);
     this->vconn = vconn;
     queue_init(&this->txq);
-    this->last_control_hello = 0;
+    this->last_features_request = 0;
     if (!vconn_is_passive(vconn)) {
-        send_control_hello(this);
+        send_features_request(this);
     }
     return this;
 }
@@ -272,6 +273,7 @@ static void
 close_switch(struct switch_ *this) 
 {
     if (this) {
+        printf("dropped!\n");
         free(this->name);
         vconn_close(this->vconn);
         queue_destroy(&this->txq);
@@ -280,25 +282,35 @@ close_switch(struct switch_ *this)
 }
 
 static void
-send_control_hello(struct switch_ *this)
+send_features_request(struct switch_ *this)
 {
     time_t now = time(0);
-    if (now >= this->last_control_hello + 1) {
+    if (now >= this->last_features_request + 1) {
         struct buffer *b;
-        struct ofp_control_hello *och;
+        struct ofp_header *ofr;
+        struct ofp_switch_config *osc;
 
+        /* Send OFPT_SET_CONFIG. */
         b = buffer_new(0);
-        och = buffer_put_uninit(b, sizeof *och);
-        memset(och, 0, sizeof *och);
-        och->header.version = OFP_VERSION;
-        och->header.length = htons(sizeof *och);
-
-        och->version = htonl(OFP_VERSION);
-        och->flags = htons(OFP_CHELLO_SEND_FLOW_EXP);
-        och->miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
+        osc = buffer_put_uninit(b, sizeof *osc);
+        memset(osc, 0, sizeof *osc);
+        osc->header.type = OFPT_SET_CONFIG;
+        osc->header.version = OFP_VERSION;
+        osc->header.length = htons(sizeof *osc);
+        osc->flags = htons(OFPC_SEND_FLOW_EXP);
+        osc->miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
         queue_tx(this, b);
 
-        this->last_control_hello = now;
+        /* Send OFPT_FEATURES_REQUEST. */
+        b = buffer_new(0);
+        ofr = buffer_put_uninit(b, sizeof *ofr);
+        memset(ofr, 0, sizeof *ofr);
+        ofr->type = OFPT_FEATURES_REQUEST;
+        ofr->version = OFP_VERSION;
+        ofr->length = htons(sizeof *ofr);
+        queue_tx(this, b);
+
+        this->last_features_request = now;
     }
 }
 
@@ -312,18 +324,9 @@ static void
 process_packet(struct switch_ *sw, struct buffer *msg) 
 {
     static const size_t min_size[UINT8_MAX + 1] = {
-        [0 ... UINT8_MAX] = SIZE_MAX,
-        [OFPT_CONTROL_HELLO] = sizeof (struct ofp_control_hello),
-        [OFPT_DATA_HELLO] = sizeof (struct ofp_data_hello),
+        [0 ... UINT8_MAX] = sizeof (struct ofp_header),
+        [OFPT_FEATURES_REPLY] = sizeof (struct ofp_switch_features),
         [OFPT_PACKET_IN] = offsetof (struct ofp_packet_in, data),
-        [OFPT_PACKET_OUT] = sizeof (struct ofp_packet_out),
-        [OFPT_FLOW_MOD] = sizeof (struct ofp_flow_mod),
-        [OFPT_FLOW_EXPIRED] = sizeof (struct ofp_flow_expired),
-        [OFPT_TABLE] = sizeof (struct ofp_table),
-        [OFPT_PORT_MOD] = sizeof (struct ofp_port_mod),
-        [OFPT_PORT_STATUS] = sizeof (struct ofp_port_status),
-        [OFPT_FLOW_STAT_REQUEST] = sizeof (struct ofp_flow_stat_request),
-        [OFPT_FLOW_STAT_REPLY] = sizeof (struct ofp_flow_stat_reply),
     };
     struct ofp_header *oh;
 
@@ -334,29 +337,26 @@ process_packet(struct switch_ *sw, struct buffer *msg)
         return;
     }
 
-    if (oh->type == OFPT_DATA_HELLO) {
-        struct ofp_data_hello *odh = msg->data;
-        sw->datapath_id = odh->datapath_id;
+    if (oh->type == OFPT_FEATURES_REPLY) {
+        struct ofp_switch_features *osf = msg->data;
+        sw->datapath_id = osf->datapath_id;
     } else if (sw->datapath_id == 0) {
-        send_control_hello(sw);
-        return;
-    }
-
-    if (oh->type == OFPT_PACKET_IN) {
+        send_features_request(sw);
+    } else if (oh->type == OFPT_PACKET_IN) {
+        struct ofp_packet_in *opi = msg->data;
         if (sw->txq.n >= MAX_TXQ) {
             /* FIXME: ratelimit. */
             VLOG_WARN("%s: tx queue overflow", sw->name);
         } else if (noflow) {
-            process_noflow(sw, msg->data);
+            process_noflow(sw, opi);
         } else if (hub) {
-            process_hub(sw, msg->data);
+            process_hub(sw, opi);
         } else {
-            process_switch(sw, msg->data);
+            process_switch(sw, opi);
         }
-        return;
+    } else {
+        ofp_print(stdout, msg->data, msg->size, 2); 
     }
-
-    ofp_print(stdout, msg->data, msg->size, 2);
 }
 
 static void

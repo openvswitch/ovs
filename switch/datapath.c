@@ -82,11 +82,7 @@ struct datapath {
 
     struct sw_chain *chain;  /* Forwarding rules. */
 
-    /* Flags from the control hello message */
-    uint16_t hello_flags;
-
-    /* Maximum number of bytes that should be sent for flow misses */
-    uint16_t miss_send_len;
+    struct ofp_switch_config config;
 
     /* Switch ports. */
     struct sw_port ports[OFPP_MAX];
@@ -95,7 +91,6 @@ struct datapath {
 
 void dp_output_port(struct datapath *, struct buffer *,
                     int in_port, int out_port);
-void dp_send_hello(struct datapath *);
 void dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp);
 void dp_output_control(struct datapath *, struct buffer *, int in_port,
                        size_t max_len, int reason);
@@ -177,7 +172,8 @@ dp_new(struct datapath **dp_, uint64_t dpid, struct rconn *rconn)
     }
 
     list_init(&dp->port_list);
-    dp->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
+    dp->config.flags = 0;
+    dp->config.miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
     *dp_ = dp;
     return 0;
 }
@@ -413,36 +409,35 @@ static void fill_port_desc(struct datapath *dp, struct sw_port *p,
     desc->speed = htonl(netdev_get_speed(p->netdev));
 }
 
-void
-dp_send_hello(struct datapath *dp)
+static void
+dp_send_features_reply(struct datapath *dp, uint32_t xid)
 {
     struct buffer *buffer;
-    struct ofp_data_hello *odh;
+    struct ofp_switch_features *ofr;
     struct sw_port *p;
 
-    buffer = buffer_new(sizeof *odh);
-    odh = buffer_put_uninit(buffer, sizeof *odh);
-    memset(odh, 0, sizeof *odh);
-    odh->header.version = OFP_VERSION;
-    odh->header.type    = OFPT_DATA_HELLO;
-    odh->header.xid     = htonl(0);
-    odh->datapath_id    = htonll(dp->id); 
-    odh->n_exact        = htonl(2 * TABLE_HASH_MAX_FLOWS);
-    odh->n_mac_only     = htonl(TABLE_MAC_MAX_FLOWS);
-    odh->n_compression  = 0;                                           /* Not supported */
-    odh->n_general      = htonl(TABLE_LINEAR_MAX_FLOWS);
-    odh->buffer_mb      = htonl(UINT32_MAX);
-    odh->n_buffers      = htonl(N_PKT_BUFFERS);
-    odh->capabilities   = htonl(OFP_SUPPORTED_CAPABILITIES);
-    odh->actions        = htonl(OFP_SUPPORTED_ACTIONS);
-    odh->miss_send_len  = htons(dp->miss_send_len); 
+    buffer = buffer_new(sizeof *ofr);
+    ofr = buffer_put_uninit(buffer, sizeof *ofr);
+    memset(ofr, 0, sizeof *ofr);
+    ofr->header.version = OFP_VERSION;
+    ofr->header.type    = OFPT_FEATURES_REPLY;
+    ofr->header.xid     = xid;
+    ofr->datapath_id    = htonll(dp->id); 
+    ofr->n_exact        = htonl(2 * TABLE_HASH_MAX_FLOWS);
+    ofr->n_mac_only     = htonl(TABLE_MAC_MAX_FLOWS);
+    ofr->n_compression  = 0;                                           /* Not supported */
+    ofr->n_general      = htonl(TABLE_LINEAR_MAX_FLOWS);
+    ofr->buffer_mb      = htonl(UINT32_MAX);
+    ofr->n_buffers      = htonl(N_PKT_BUFFERS);
+    ofr->capabilities   = htonl(OFP_SUPPORTED_CAPABILITIES);
+    ofr->actions        = htonl(OFP_SUPPORTED_ACTIONS);
     LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
         struct ofp_phy_port *opp = buffer_put_uninit(buffer, sizeof *opp);
         memset(opp, 0, sizeof *opp);
         fill_port_desc(dp, p, opp);
     }
-    odh = buffer_at_assert(buffer, 0, sizeof *odh);
-    odh->header.length = htons(buffer->size);
+    ofr = buffer_at_assert(buffer, 0, sizeof *ofr);
+    ofr->header.length = htons(buffer->size);
     rconn_send(dp->rconn, buffer);
 }
 
@@ -510,7 +505,7 @@ void fwd_port_input(struct datapath *dp, struct buffer *buffer, int in_port)
         execute_actions(dp, buffer, in_port, &key,
                         flow->actions, flow->n_actions);
     } else {
-        dp_output_control(dp, buffer, in_port, dp->miss_send_len,
+        dp_output_control(dp, buffer, in_port, dp->config.miss_send_len,
                           OFPR_NO_MATCH);
     }
 }
@@ -712,20 +707,35 @@ modify_vlan(struct buffer *buffer,
 }
 
 static int
-recv_control_hello(struct datapath *dp, const void *msg)
+recv_features_request(struct datapath *dp, const void *msg) 
 {
-    const struct ofp_control_hello *och = msg;
+    struct ofp_header *ofr = msg;
+    dp_send_features_reply(dp, ofr->xid);
+    return 0;
+}
 
-    printf("control_hello(version=%d)\n", ntohl(och->version));
+static int
+recv_get_config_request(struct datapath *dp, const void *msg) 
+{
+    struct ofp_header *gcr = msg;
+    struct buffer *buffer;
+    struct ofp_switch_config *osc;
 
-    if (ntohs(och->miss_send_len) != OFP_MISS_SEND_LEN_UNCHANGED) {
-        dp->miss_send_len = ntohs(och->miss_send_len);
-    }
+    buffer = buffer_new(sizeof dp->config);
+    osc = buffer_put(buffer, &dp->config, sizeof dp->config);
+    osc->header.version = OFP_VERSION;
+    osc->header.type = OFPT_GET_CONFIG_REPLY;
+    osc->header.length = htons(sizeof *osc);
+    osc->header.xid = gcr->xid;
+    rconn_send(dp->rconn, buffer);
+    return 0;
+}
 
-    dp->hello_flags = ntohs(och->flags);
-
-    dp_send_hello(dp);
-
+static int
+recv_set_config(struct datapath *dp, const void *msg)
+{
+    const struct ofp_switch_config *osc = msg;
+    dp->config = *osc;
     return 0;
 }
 
@@ -862,9 +872,17 @@ fwd_control_input(struct datapath *dp, const void *msg, size_t length)
     };
 
     static const struct openflow_packet packets[] = {
-        [OFPT_CONTROL_HELLO] = {
-            sizeof (struct ofp_control_hello),
-            recv_control_hello,
+        [OFPT_FEATURES_REQUEST] = {
+            sizeof (struct ofp_header),
+            recv_features_request,
+        },
+        [OFPT_GET_CONFIG_REQUEST] = {
+            sizeof (struct ofp_header),
+            recv_get_config_request,
+        },
+        [OFPT_SET_CONFIG] = {
+            sizeof (struct ofp_switch_config),
+            recv_set_config,
         },
         [OFPT_PACKET_OUT] = {
             sizeof (struct ofp_packet_out),
