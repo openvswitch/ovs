@@ -367,11 +367,12 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
     }
 }
 
-/* Takes ownership of 'buffer' and transmits it to 'dp''s controller.  If
- * 'buffer_id' != -1, then only the first 64 bytes of 'buffer' are sent;
- * otherwise, all of 'buffer' is sent.  'reason' indicates why 'buffer' is
- * being sent. 'max_len' sets the maximum number of bytes that the caller wants
- * to be sent; a value of 0 indicates the entire packet should be sent. */
+/* Takes ownership of 'buffer' and transmits it to 'dp''s controller.  If the
+ * packet can be saved in a buffer, then only the first max_len bytes of
+ * 'buffer' are sent; otherwise, all of 'buffer' is sent.  'reason' indicates
+ * why 'buffer' is being sent. 'max_len' sets the maximum number of bytes that
+ * the caller wants to be sent; a value of 0 indicates the entire packet should
+ * be sent. */
 void
 dp_output_control(struct datapath *dp, struct buffer *buffer, int in_port,
                   size_t max_len, int reason)
@@ -382,7 +383,7 @@ dp_output_control(struct datapath *dp, struct buffer *buffer, int in_port,
 
     buffer_id = save_buffer(buffer);
     total_len = buffer->size;
-    if (buffer_id != UINT32_MAX && max_len > buffer->size) {
+    if (buffer_id != UINT32_MAX && buffer->size > max_len) {
         buffer->size = max_len;
     }
 
