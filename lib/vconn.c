@@ -40,6 +40,7 @@
 #include <string.h>
 #include "buffer.h"
 #include "flow.h"
+#include "ofp-print.h"
 #include "openflow.h"
 #include "poll-loop.h"
 #include "util.h"
@@ -209,6 +210,11 @@ vconn_recv(struct vconn *vconn, struct buffer **msgp)
     int retval = vconn_connect(vconn);
     if (!retval) {
         retval = (vconn->class->recv)(vconn, msgp);
+        if (VLOG_IS_DBG_ENABLED() && !retval) {
+            char *s = ofp_to_string((*msgp)->data, (*msgp)->size, 1);
+            VLOG_DBG("received: %s", s);
+            free(s);
+        }
     }
     if (retval) {
         *msgp = NULL;
@@ -232,7 +238,16 @@ vconn_send(struct vconn *vconn, struct buffer *msg)
 {
     int retval = vconn_connect(vconn);
     if (!retval) {
-        retval = (vconn->class->send)(vconn, msg);
+        if (!VLOG_IS_DBG_ENABLED()) { 
+            retval = (vconn->class->send)(vconn, msg);
+        } else {
+            char *s = ofp_to_string(msg->data, msg->size, 1);
+            retval = (vconn->class->send)(vconn, msg);
+            if (retval != EAGAIN) {
+                VLOG_DBG("sent (%s): %s", strerror(retval), s);
+            }
+            free(s);
+        }
     }
     return retval;
 }
