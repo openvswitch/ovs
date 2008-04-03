@@ -213,7 +213,12 @@ again:
         }
         return EAGAIN;
     } else if (retval == 0) {
-        return rx->size ? EPROTO : EOF;
+        if (rx->size) {
+            VLOG_ERR("connection dropped mid-packet");
+            return EPROTO;
+        } else {
+            return EOF; 
+        }
     } else {
         return retval ? errno : EAGAIN;
     }
