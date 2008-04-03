@@ -58,7 +58,7 @@
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
-static struct vconn *listen_vconn = NULL;
+static const char *listen_vconn_name;
 
 struct half {
     struct rconn *rconn;
@@ -81,6 +81,7 @@ static void relay_destroy(struct relay *);
 int
 main(int argc, char *argv[])
 {
+    struct vconn *listen_vconn;
     const char *nl_name;
     int retval;
 
@@ -100,6 +101,18 @@ main(int argc, char *argv[])
         fatal(0, "%s: argument is not of the form \"nl:DP_ID\"", nl_name);
     }
 
+    if (listen_vconn_name) {
+        retval = vconn_open(listen_vconn_name, &listen_vconn);
+        if (retval && retval != EAGAIN) {
+            fatal(retval, "opening %s", listen_vconn_name);
+        }
+        if (!vconn_is_passive(listen_vconn)) {
+            fatal(0, "%s is not a passive vconn", listen_vconn_name);
+        }
+    } else {
+        listen_vconn = NULL;
+    }
+
     retval = vlog_server_listen(NULL, NULL);
     if (retval) {
         fatal(retval, "Could not listen for vlog connections");
@@ -114,8 +127,8 @@ main(int argc, char *argv[])
             relay_run(r);
         }
         if (listen_vconn) {
-            struct vconn *new_remote;
             for (;;) {
+                struct vconn *new_remote;
                 retval = vconn_accept(listen_vconn, &new_remote);
                 if (retval) {
                     if (retval != EAGAIN) {
@@ -123,7 +136,6 @@ main(int argc, char *argv[])
                     }
                     break;
                 }
-
                 new_management_connection(nl_name, new_remote);
             }
         }
@@ -273,7 +285,6 @@ parse_options(int argc, char *argv[])
     char *short_options = long_options_to_short_options(long_options);
     
     for (;;) {
-        int retval;
         int c;
 
         c = getopt_long(argc, argv, short_options, long_options, NULL);
@@ -283,16 +294,10 @@ parse_options(int argc, char *argv[])
 
         switch (c) {
         case 'l':
-            if (listen_vconn) {
+            if (listen_vconn_name) {
                 fatal(0, "-l or --listen may be only specified once");
             }
-            retval = vconn_open(optarg, &listen_vconn);
-            if (retval && retval != EAGAIN) {
-                fatal(retval, "opening %s", optarg);
-            }
-            if (!vconn_is_passive(listen_vconn)) {
-                fatal(0, "%s is not a passive vconn", optarg);
-            }
+            listen_vconn_name = optarg;
             break;
 
         case 'h':

@@ -7,6 +7,7 @@
 struct sk_buff;
 struct sw_chain;
 struct ofp_action;
+struct sender;
 
 /* Buffers are identified to userspace by a 31-bit opaque ID.  We divide the ID
  * into a buffer number (low bits) and a cookie (high bits).  The buffer number
@@ -21,7 +22,8 @@ struct ofp_action;
 
 
 void fwd_port_input(struct sw_chain *, struct sk_buff *, int in_port);
-int fwd_control_input(struct sw_chain *, const void *, size_t);
+int fwd_control_input(struct sw_chain *, const struct sender *,
+		      const void *, size_t);
 
 uint32_t fwd_save_skb(struct sk_buff *skb);
 

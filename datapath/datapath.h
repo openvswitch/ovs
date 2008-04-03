@@ -55,14 +55,21 @@ struct datapath {
 	struct list_head port_list; /* List of ports, for flooding. */
 };
 
+/* Information necessary to reply to the sender of an OpenFlow message. */
+struct sender {
+	uint32_t xid;		/* OpenFlow transaction ID of request. */
+	uint32_t pid;		/* Netlink process ID of sending socket. */
+	uint32_t seq;		/* Netlink sequence ID of request. */
+};
+
 int dp_output_port(struct datapath *, struct sk_buff *, int out_port);
 int dp_output_control(struct datapath *, struct sk_buff *,
 			   uint32_t buffer_id, size_t max_len, int reason);
 int dp_set_origin(struct datapath *, uint16_t, struct sk_buff *);
-int dp_send_features_reply(struct datapath *, uint32_t xid);
-int dp_send_config_reply(struct datapath *, uint32_t xid);
+int dp_send_features_reply(struct datapath *, const struct sender *);
+int dp_send_config_reply(struct datapath *, const struct sender *);
 int dp_send_flow_expired(struct datapath *, struct sw_flow *);
-int dp_send_port_stats(struct datapath *dp, uint32_t xid);
+int dp_send_port_stats(struct datapath *, const struct sender *);
 int dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp);
 
 /* Should hold at least RCU read lock when calling */

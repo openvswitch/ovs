@@ -44,6 +44,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"
+#include "vconn.h"
 #include "table.h"
 #include "xtoxll.h"
 
@@ -72,8 +73,23 @@ struct sw_port {
     struct list node; /* Element in datapath.ports. */
 };
 
-struct datapath {
+/* A connection to a controller or a management device. */
+struct remote {
+    struct list node;
     struct rconn *rconn;
+};
+
+/* The origin of a received OpenFlow message, to enable sending a reply. */
+struct sender {
+    struct remote *remote;      /* The device that sent the message. */
+    uint32_t xid;               /* The OpenFlow transaction ID. */
+};
+
+struct datapath {
+    /* Remote connections. */
+    struct remote *controller;  /* Connection to controller. */
+    struct list remotes;        /* All connections (including controller). */
+    struct vconn *listen_vconn;
 
     time_t last_timeout;
 
@@ -88,6 +104,11 @@ struct datapath {
     struct sw_port ports[OFPP_MAX];
     struct list port_list; /* List of ports, for flooding. */
 };
+
+static struct remote *remote_create(struct datapath *, struct rconn *);
+static void remote_run(struct datapath *, struct remote *);
+static void remote_wait(struct remote *);
+static void remote_destroy(struct remote *);
 
 void dp_output_port(struct datapath *, struct buffer *,
                     int in_port, int out_port);
@@ -119,7 +140,8 @@ static void modify_th(struct buffer *buffer, uint16_t eth_proto,
 #define PKT_COOKIE_BITS (32 - PKT_BUFFER_BITS)
 
 void fwd_port_input(struct datapath *, struct buffer *, int in_port);
-int fwd_control_input(struct datapath *, const void *, size_t);
+int fwd_control_input(struct datapath *, const struct sender *,
+                      const void *, size_t);
 
 uint32_t save_buffer(struct buffer *);
 static struct buffer *retrieve_buffer(uint32_t id);
@@ -162,7 +184,9 @@ dp_new(struct datapath **dp_, uint64_t dpid, struct rconn *rconn)
     }
 
     dp->last_timeout = time(0);
-    dp->rconn = rconn;
+    list_init(&dp->remotes);
+    dp->controller = remote_create(dp, rconn);
+    dp->listen_vconn = NULL;
     dp->id = dpid <= UINT64_C(0xffffffffffff) ? dpid : gen_datapath_id();
     dp->chain = chain_create();
     if (!dp->chain) {
@@ -209,12 +233,19 @@ dp_add_port(struct datapath *dp, const char *name)
 }
 
 void
+dp_add_listen_vconn(struct datapath *dp, struct vconn *listen_vconn)
+{
+    assert(!dp->listen_vconn);
+    dp->listen_vconn = listen_vconn;
+}
+
+void
 dp_run(struct datapath *dp) 
 {
     time_t now = time(0);
-    struct sw_port *p, *n;
+    struct sw_port *p, *pn;
+    struct remote *r, *rn;
     struct buffer *buffer = NULL;
-    int i;
 
     if (now != dp->last_timeout) {
         struct list deleted = LIST_INITIALIZER(&deleted);
@@ -230,7 +261,7 @@ dp_run(struct datapath *dp)
     }
     poll_timer_wait(1000);
     
-    LIST_FOR_EACH_SAFE (p, n, struct sw_port, node, &dp->port_list) {
+    LIST_FOR_EACH_SAFE (p, pn, struct sw_port, node, &dp->port_list) {
         int error;
 
         if (!buffer) {
@@ -255,29 +286,104 @@ dp_run(struct datapath *dp)
     }
     buffer_delete(buffer);
 
-    /* Process a number of commands from the controller, but cap it at a
+    /* Talk to remotes. */
+    LIST_FOR_EACH_SAFE (r, rn, struct remote, node, &dp->remotes) {
+        remote_run(dp, r);
+    }
+    if (dp->listen_vconn) {
+        for (;;) {
+            struct vconn *new_vconn;
+            int retval;
+
+            retval = vconn_accept(dp->listen_vconn, &new_vconn);
+            if (retval) {
+                if (retval != EAGAIN) {
+                    VLOG_WARN("accept failed (%s)", strerror(retval));
+                }
+                break;
+            }
+            remote_create(dp, rconn_new_from_vconn("passive", 128, new_vconn));
+        }
+    }
+}
+
+static void
+remote_run(struct datapath *dp, struct remote *r)
+{
+    int i;
+
+    rconn_run(r->rconn);
+
+    /* Process a number of commands from the remote, but cap them at a
      * reasonable number so that other processing doesn't starve. */
     for (i = 0; i < 50; i++) {
-        struct buffer *buffer = rconn_recv(dp->rconn);
+        struct buffer *buffer;
+        struct ofp_header *oh;
+
+        buffer = rconn_recv(r->rconn);
         if (!buffer) {
             break;
         }
-        fwd_control_input(dp, buffer->data, buffer->size);
+
+        if (buffer->size >= sizeof *oh) {
+            struct sender sender;
+
+            oh = buffer->data;
+            sender.remote = r;
+            sender.xid = oh->xid;
+            fwd_control_input(dp, &sender, buffer->data, buffer->size);
+        } else {
+            VLOG_WARN("received too-short OpenFlow message"); 
+        }
         buffer_delete(buffer);
     }
 
-    rconn_run(dp->rconn);
+    if (!rconn_is_alive(r->rconn)) {
+        remote_destroy(r);
+    }
+}
+
+static void
+remote_wait(struct remote *r) 
+{
+    rconn_run_wait(r->rconn);
+    rconn_recv_wait(r->rconn);
+}
+
+static void
+remote_destroy(struct remote *r)
+{
+    if (r) {
+        list_remove(&r->node);
+        rconn_destroy(r->rconn);
+        free(r);
+    }
+}
+
+static struct remote *
+remote_create(struct datapath *dp, struct rconn *rconn) 
+{
+    struct remote *remote = xmalloc(sizeof *remote);
+    list_push_back(&dp->remotes, &remote->node);
+    remote->rconn = rconn;
+    return remote;
 }
 
 void
 dp_wait(struct datapath *dp) 
 {
     struct sw_port *p;
+    struct remote *r;
 
     LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
         netdev_recv_wait(p->netdev);
     }
-    rconn_recv_wait(dp->rconn);
+    LIST_FOR_EACH (r, struct remote, node, &dp->remotes) {
+        remote_wait(r);
+    }
+    if (dp->listen_vconn) {
+        vconn_accept_wait(dp->listen_vconn);
+    }
 }
 
 /* Delete 'p' from switch. */
@@ -363,6 +469,43 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
     }
 }
 
+static void *
+alloc_openflow_buffer(struct datapath *dp, size_t openflow_len, uint8_t type,
+                      const struct sender *sender, struct buffer **bufferp)
+{
+	struct buffer *buffer;
+	struct ofp_header *oh;
+
+	buffer = *bufferp = buffer_new(openflow_len);
+	oh = buffer_put_uninit(buffer, openflow_len);
+	oh->version = OFP_VERSION;
+	oh->type = type;
+	oh->length = 0;             /* Filled in by send_openflow_buffer(). */
+	oh->xid = sender ? sender->xid : 0;
+	return oh;
+}
+
+static int
+send_openflow_buffer(struct datapath *dp, struct buffer *buffer,
+                     const struct sender *sender)
+{
+    struct remote *remote = sender ? sender->remote : dp->controller;
+    struct rconn *rconn = remote->rconn;
+    struct ofp_header *oh;
+    int retval;
+
+    oh = buffer_at_assert(buffer, 0, sizeof *oh);
+    oh->length = htons(buffer->size);
+
+    retval = rconn_send(rconn, buffer);
+    if (retval) {
+        VLOG_WARN("send to %s failed: %s",
+                  rconn_get_name(rconn), strerror(retval));
+        buffer_delete(buffer);
+    }
+    return retval;
+}
+
 /* Takes ownership of 'buffer' and transmits it to 'dp''s controller.  If the
  * packet can be saved in a buffer, then only the first max_len bytes of
  * 'buffer' are sent; otherwise, all of 'buffer' is sent.  'reason' indicates
@@ -393,7 +536,7 @@ dp_output_control(struct datapath *dp, struct buffer *buffer, int in_port,
     opi->in_port        = htons(in_port);
     opi->reason         = reason;
     opi->pad            = 0;
-    rconn_send(dp->rconn, buffer);
+    send_openflow_buffer(dp, buffer, NULL);
 }
 
 static void fill_port_desc(struct datapath *dp, struct sw_port *p,
@@ -410,18 +553,14 @@ static void fill_port_desc(struct datapath *dp, struct sw_port *p,
 }
 
 static void
-dp_send_features_reply(struct datapath *dp, uint32_t xid)
+dp_send_features_reply(struct datapath *dp, const struct sender *sender)
 {
     struct buffer *buffer;
     struct ofp_switch_features *ofr;
     struct sw_port *p;
 
-    buffer = buffer_new(sizeof *ofr);
-    ofr = buffer_put_uninit(buffer, sizeof *ofr);
-    memset(ofr, 0, sizeof *ofr);
-    ofr->header.version = OFP_VERSION;
-    ofr->header.type    = OFPT_FEATURES_REPLY;
-    ofr->header.xid     = xid;
+    ofr = alloc_openflow_buffer(dp, sizeof *ofr, OFPT_FEATURES_REPLY,
+                                sender, &buffer);
     ofr->datapath_id    = htonll(dp->id); 
     ofr->n_exact        = htonl(2 * TABLE_HASH_MAX_FLOWS);
     ofr->n_mac_only     = htonl(TABLE_MAC_MAX_FLOWS);
@@ -436,9 +575,7 @@ dp_send_features_reply(struct datapath *dp, uint32_t xid)
         memset(opp, 0, sizeof *opp);
         fill_port_desc(dp, p, opp);
     }
-    ofr = buffer_at_assert(buffer, 0, sizeof *ofr);
-    ofr->header.length = htons(buffer->size);
-    rconn_send(dp->rconn, buffer);
+    send_openflow_buffer(dp, buffer, sender);
 }
 
 void
@@ -461,15 +598,11 @@ send_port_status(struct sw_port *p, uint8_t status)
 {
     struct buffer *buffer;
     struct ofp_port_status *ops;
-    buffer = buffer_new(sizeof *ops);
-    ops = buffer_put_uninit(buffer, sizeof *ops);
-    ops->header.version = OFP_VERSION;
-    ops->header.type    = OFPT_PORT_STATUS;
-    ops->header.length  = htons(sizeof(*ops));
-    ops->header.xid     = htonl(0);
+    ops = alloc_openflow_buffer(p->dp, sizeof *ops, OFPT_PORT_STATUS, NULL,
+                                &buffer);
     ops->reason         = status;
     fill_port_desc(p->dp, p, &ops->desc);
-    rconn_send(p->dp->rconn, buffer);
+    send_openflow_buffer(p->dp, buffer, NULL);
 }
 
 void
@@ -477,17 +610,13 @@ send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 {
     struct buffer *buffer;
     struct ofp_flow_expired *ofe;
-    buffer = buffer_new(sizeof *ofe);
-    ofe = buffer_put_uninit(buffer, sizeof *ofe);
-    ofe->header.version = OFP_VERSION;
-    ofe->header.type    = OFPT_FLOW_EXPIRED;
-    ofe->header.length  = htons(sizeof(*ofe));
-    ofe->header.xid     = htonl(0);
+    ofe = alloc_openflow_buffer(dp, sizeof *ofe, OFPT_FLOW_EXPIRED, NULL,
+                                &buffer);
     flow_fill_match(&ofe->match, &flow->key);
     ofe->duration   = htonl(flow->timeout - flow->max_idle - flow->created);
     ofe->packet_count   = htonll(flow->packet_count);
     ofe->byte_count     = htonll(flow->byte_count);
-    rconn_send(dp->rconn, buffer);
+    send_openflow_buffer(dp, buffer, NULL);
 }
 
 /* 'buffer' was received on 'in_port', a physical switch port between 0 and
@@ -707,32 +836,34 @@ modify_vlan(struct buffer *buffer,
 }
 
 static int
-recv_features_request(struct datapath *dp, const void *msg) 
+recv_features_request(struct datapath *dp, const struct sender *sender,
+                      const void *msg) 
 {
-    struct ofp_header *ofr = msg;
-    dp_send_features_reply(dp, ofr->xid);
+    dp_send_features_reply(dp, sender);
     return 0;
 }
 
 static int
-recv_get_config_request(struct datapath *dp, const void *msg) 
+recv_get_config_request(struct datapath *dp, const struct sender *sender,
+                        const void *msg) 
 {
-    struct ofp_header *gcr = msg;
     struct buffer *buffer;
     struct ofp_switch_config *osc;
 
-    buffer = buffer_new(sizeof dp->config);
-    osc = buffer_put(buffer, &dp->config, sizeof dp->config);
-    osc->header.version = OFP_VERSION;
-    osc->header.type = OFPT_GET_CONFIG_REPLY;
-    osc->header.length = htons(sizeof *osc);
-    osc->header.xid = gcr->xid;
-    rconn_send(dp->rconn, buffer);
-    return 0;
+    osc = alloc_openflow_buffer(dp, sizeof *osc, OFPT_GET_CONFIG_REPLY,
+                                sender, &buffer);
+
+    assert(sizeof *osc == sizeof dp->config);
+	memcpy(((char *)osc) + sizeof osc->header,
+	       ((char *)&dp->config) + sizeof dp->config.header,
+	       sizeof dp->config - sizeof dp->config.header);
+
+    return send_openflow_buffer(dp, buffer, sender);
 }
 
 static int
-recv_set_config(struct datapath *dp, const void *msg)
+recv_set_config(struct datapath *dp, const struct sender *sender UNUSED,
+                const void *msg)
 {
     const struct ofp_switch_config *osc = msg;
     dp->config = *osc;
@@ -740,7 +871,8 @@ recv_set_config(struct datapath *dp, const void *msg)
 }
 
 static int
-recv_packet_out(struct datapath *dp, const void *msg)
+recv_packet_out(struct datapath *dp, const struct sender *sender UNUSED,
+                const void *msg)
 {
     const struct ofp_packet_out *opo = msg;
 
@@ -771,7 +903,8 @@ recv_packet_out(struct datapath *dp, const void *msg)
 }
 
 static int
-recv_port_mod(struct datapath *dp, const void *msg)
+recv_port_mod(struct datapath *dp, const struct sender *sender UNUSED,
+              const void *msg)
 {
     const struct ofp_port_mod *opm = msg;
 
@@ -840,7 +973,8 @@ error:
 }
 
 static int
-recv_flow(struct datapath *dp, const void *msg)
+recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
+          const void *msg)
 {
     const struct ofp_flow_mod *ofm = msg;
     uint16_t command = ntohs(ofm->command);
@@ -863,12 +997,12 @@ recv_flow(struct datapath *dp, const void *msg)
 /* 'msg', which is 'length' bytes long, was received from the control path.
  * Apply it to 'chain'. */
 int
-fwd_control_input(struct datapath *dp, const void *msg, size_t length)
+fwd_control_input(struct datapath *dp, const struct sender *sender,
+                  const void *msg, size_t length)
 {
-
     struct openflow_packet {
         size_t min_size;
-        int (*handler)(struct datapath *, const void *);
+        int (*handler)(struct datapath *, const struct sender *, const void *);
     };
 
     static const struct openflow_packet packets[] = {
@@ -901,9 +1035,6 @@ fwd_control_input(struct datapath *dp, const void *msg, size_t length)
     const struct openflow_packet *pkt;
     struct ofp_header *oh;
 
-    if (length < sizeof(struct ofp_header))
-        return -EINVAL;
-
     oh = (struct ofp_header *) msg;
     if (oh->version != 1 || oh->type >= ARRAY_SIZE(packets)
         || ntohs(oh->length) > length)
@@ -915,7 +1046,7 @@ fwd_control_input(struct datapath *dp, const void *msg, size_t length)
     if (length < pkt->min_size)
         return -EFAULT;
 
-    return pkt->handler(dp, msg);
+    return pkt->handler(dp, sender, msg);
 }
 
 /* Packet buffering. */

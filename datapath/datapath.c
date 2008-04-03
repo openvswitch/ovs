@@ -96,8 +96,8 @@ void nla_unreserve(struct sk_buff *skb, struct nlattr *nla, int len)
 }
 
 static void *
-alloc_openflow_skb(struct datapath *dp, size_t openflow_len,
-		   uint8_t type, uint32_t xid, struct sk_buff **pskb) 
+alloc_openflow_skb(struct datapath *dp, size_t openflow_len, uint8_t type,
+		   const struct sender *sender, struct sk_buff **pskb) 
 {
 	size_t genl_len;
 	struct sk_buff *skb;
@@ -114,7 +114,10 @@ alloc_openflow_skb(struct datapath *dp, size_t openflow_len,
 	}
 
 	/* Assemble the Generic Netlink wrapper. */
-	if (!genlmsg_put(skb, 0, 0, &dp_genl_family, 0, DP_GENL_C_OPENFLOW))
+	if (!genlmsg_put(skb,
+			 sender ? sender->pid : 0,
+			 sender ? sender->seq : 0,
+			 &dp_genl_family, 0, DP_GENL_C_OPENFLOW))
 		BUG();
 	if (nla_put_u32(skb, DP_GENL_A_DP_IDX, dp->dp_idx) < 0)
 		BUG();
@@ -127,7 +130,7 @@ alloc_openflow_skb(struct datapath *dp, size_t openflow_len,
 	oh->version = OFP_VERSION;
 	oh->type = type;
 	oh->length = htons(openflow_len);
-	oh->xid = xid;
+	oh->xid = sender ? sender->xid : 0;
 
 	return oh;
 }
@@ -143,6 +146,18 @@ resize_openflow_skb(struct sk_buff *skb,
 	nla_unreserve(skb, attr, ntohs(oh->length) - new_length);
 	oh->length = htons(new_length);
 	nlmsg_end(skb, (struct nlmsghdr *) skb->data);
+}
+
+static int
+send_openflow_skb(struct sk_buff *skb, const struct sender *sender) 
+{
+	int err = (sender
+		   ? genlmsg_unicast(skb, sender->pid)
+		   : genlmsg_multicast(skb, 0, mc_group.id, GFP_ATOMIC));
+	if (err && net_ratelimit())
+		printk(KERN_WARNING "send_openflow_skb: send failed: %d\n",
+		       err);
+	return err;
 }
 
 /* Generates a unique datapath id.  It incorporates the datapath index
@@ -564,19 +579,16 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb,
 		fwd_len = min(fwd_len, max_len);
 
 	opi_len = offsetof(struct ofp_packet_in, data) + fwd_len;
-	opi = alloc_openflow_skb(dp, opi_len, OFPT_PACKET_IN, 0, &f_skb);
+	opi = alloc_openflow_skb(dp, opi_len, OFPT_PACKET_IN, NULL, &f_skb);
 	opi->buffer_id      = htonl(buffer_id);
 	opi->total_len      = htons(skb->len);
 	opi->in_port        = htons(skb->dev->br_port->port_no);
 	opi->reason         = reason;
 	opi->pad            = 0;
 	memcpy(opi->data, skb_mac_header(skb), fwd_len);
+	err = send_openflow_skb(f_skb, NULL);
 
-	err = genlmsg_multicast(f_skb, 0, mc_group.id, GFP_ATOMIC);
-	if (err && net_ratelimit())
-		printk(KERN_WARNING "dp_output_control: genlmsg_multicast failed: %d\n", err);
-
-	kfree_skb(skb);  
+	kfree_skb(skb);
 
 	return err;
 }
@@ -645,18 +657,17 @@ fill_features_reply(struct datapath *dp, struct ofp_switch_features *ofr)
 }
 
 int
-dp_send_features_reply(struct datapath *dp, uint32_t xid)
+dp_send_features_reply(struct datapath *dp, const struct sender *sender)
 {
 	struct sk_buff *skb;
 	struct ofp_switch_features *ofr;
 	size_t ofr_len, port_max_len;
-	int err;
 	int port_count;
 
 	/* Overallocate. */
 	port_max_len = sizeof(struct ofp_phy_port) * OFPP_MAX;
 	ofr = alloc_openflow_skb(dp, sizeof(*ofr) + port_max_len,
-				 OFPT_FEATURES_REPLY, xid, &skb);
+				 OFPT_FEATURES_REPLY, sender, &skb);
 	if (!ofr)
 		return -ENOMEM;
 
@@ -666,34 +677,23 @@ dp_send_features_reply(struct datapath *dp, uint32_t xid)
 	/* Shrink to fit. */
 	ofr_len = sizeof(*ofr) + (sizeof(struct ofp_phy_port) * port_count);
 	resize_openflow_skb(skb, &ofr->header, ofr_len);
-
-	/* FIXME: send as reply. */
-	err = genlmsg_multicast(skb, 0, mc_group.id, GFP_ATOMIC);
-	if (err && net_ratelimit())
-		printk(KERN_WARNING "dp_send_hello: genlmsg_multicast failed: %d\n", err);
-
-	return err;
+	return send_openflow_skb(skb, sender);
 }
 
 int
-dp_send_config_reply(struct datapath *dp, uint32_t xid)
+dp_send_config_reply(struct datapath *dp, const struct sender *sender)
 {
 	struct sk_buff *skb;
 	struct ofp_switch_config *osc;
-	int err;
 
-	osc = alloc_openflow_skb(dp, sizeof *osc, OFPT_PORT_STATUS, 0, &skb);
+	osc = alloc_openflow_skb(dp, sizeof *osc, OFPT_PORT_STATUS, sender,
+				 &skb);
 	if (!osc)
 		return -ENOMEM;
 	memcpy(((char *)osc) + sizeof osc->header,
 	       ((char *)&dp->config) + sizeof dp->config.header,
 	       sizeof dp->config - sizeof dp->config.header);
-
-	err = genlmsg_multicast(skb, 0, mc_group.id, GFP_ATOMIC);
-	if (err && net_ratelimit())
-		printk(KERN_WARNING "send_port_status: genlmsg_multicast failed: %d\n", err);
-
-	return err;
+	return send_openflow_skb(skb, sender);
 }
 
 int
@@ -718,20 +718,15 @@ send_port_status(struct net_bridge_port *p, uint8_t status)
 {
 	struct sk_buff *skb;
 	struct ofp_port_status *ops;
-	int err;
 
-	ops = alloc_openflow_skb(p->dp, sizeof *ops, OFPT_PORT_STATUS, 0,
+	ops = alloc_openflow_skb(p->dp, sizeof *ops, OFPT_PORT_STATUS, NULL,
 				 &skb);
 	if (!ops)
 		return -ENOMEM;
 	ops->reason = status;
 	fill_port_desc(p, &ops->desc);
 
-	err = genlmsg_multicast(skb, 0, mc_group.id, GFP_ATOMIC);
-	if (err && net_ratelimit())
-		printk(KERN_WARNING "send_port_status: genlmsg_multicast failed: %d\n", err);
-
-	return err;
+	return send_openflow_skb(skb, NULL);
 }
 
 int 
@@ -740,7 +735,6 @@ dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 	struct sk_buff *skb;
 	struct ofp_flow_expired *ofe;
 	unsigned long duration_j;
-	int err;
 
 	ofe = alloc_openflow_skb(dp, sizeof *ofe, OFPT_FLOW_EXPIRED, 0, &skb);
 	if (!ofe)
@@ -751,12 +745,7 @@ dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 	ofe->duration   = htonl(duration_j / HZ);
 	ofe->packet_count   = cpu_to_be64(flow->packet_count);
 	ofe->byte_count     = cpu_to_be64(flow->byte_count);
-
-	err = genlmsg_multicast(skb, 0, mc_group.id, GFP_ATOMIC);
-	if (err && net_ratelimit())
-		printk(KERN_WARNING "send_flow_expired: genlmsg_multicast failed: %d\n", err);
-
-	return err;
+	return send_openflow_skb(skb, NULL);
 }
 
 /* Generic Netlink interface.
@@ -1311,6 +1300,8 @@ static int dp_genl_openflow(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlattr *va = info->attrs[DP_GENL_A_OPENFLOW];
 	struct datapath *dp;
+	struct ofp_header *oh;
+	struct sender sender;
 	int err;
 
 	if (!info->attrs[DP_GENL_A_DP_IDX] || !va)
@@ -1324,8 +1315,16 @@ static int dp_genl_openflow(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	va = info->attrs[DP_GENL_A_OPENFLOW];
+	if (nla_len(va) < sizeof(struct ofp_header)) {
+		err = -EINVAL;
+		goto out;
+	}
+	oh = nla_data(va);
 
-	err = fwd_control_input(dp->chain, nla_data(va), nla_len(va));
+	sender.xid = oh->xid;
+	sender.pid = info->snd_pid;
+	sender.seq = info->snd_seq;
+	err = fwd_control_input(dp->chain, &sender, nla_data(va), nla_len(va));
 
 out:
 	rcu_read_unlock();

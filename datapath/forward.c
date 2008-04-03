@@ -260,21 +260,22 @@ struct sk_buff *execute_setter(struct sk_buff *skb, uint16_t eth_proto,
 }
 
 static int
-recv_features_request(struct sw_chain *chain, const void *msg) 
+recv_features_request(struct sw_chain *chain, const struct sender *sender,
+		      const void *msg) 
 {
-	const struct ofp_header *ofr = msg;
-	return dp_send_features_reply(chain->dp, ofr->xid);
+	return dp_send_features_reply(chain->dp, sender);
 }
 
 static int
-recv_get_config_request(struct sw_chain *chain, const void *msg)
+recv_get_config_request(struct sw_chain *chain, const struct sender *sender,
+			const void *msg)
 {
-	const struct ofp_header *ofr = msg;
-	return dp_send_config_reply(chain->dp, ofr->xid);
+	return dp_send_config_reply(chain->dp, sender);
 }
 
 static int
-recv_set_config(struct sw_chain *chain, const void *msg)
+recv_set_config(struct sw_chain *chain, const struct sender *sender,
+		const void *msg)
 {
 	const struct ofp_switch_config *osc = msg;
 	chain->dp->config = *osc;
@@ -282,7 +283,8 @@ recv_set_config(struct sw_chain *chain, const void *msg)
 }
 
 static int
-recv_packet_out(struct sw_chain *chain, const void *msg)
+recv_packet_out(struct sw_chain *chain, const struct sender *sender,
+		const void *msg)
 {
 	const struct ofp_packet_out *opo = msg;
 	struct sk_buff *skb;
@@ -330,7 +332,8 @@ recv_packet_out(struct sw_chain *chain, const void *msg)
 }
 
 static int
-recv_port_mod(struct sw_chain *chain, const void *msg)
+recv_port_mod(struct sw_chain *chain, const struct sender *sender,
+	      const void *msg)
 {
 	const struct ofp_port_mod *opm = msg;
 
@@ -400,7 +403,7 @@ error:
 }
 
 static int
-recv_flow(struct sw_chain *chain, const void *msg)
+recv_flow(struct sw_chain *chain, const struct sender *sender, const void *msg)
 {
 	const struct ofp_flow_mod *ofm = msg;
 	uint16_t command = ntohs(ofm->command);
@@ -420,15 +423,17 @@ recv_flow(struct sw_chain *chain, const void *msg)
 	}
 }
 
-/* 'msg', which is 'length' bytes long, was received from the control path.
- * Apply it to 'chain'. */
+/* 'msg', which is 'length' bytes long, was received across Netlink from
+ * 'sender'.  Apply it to 'chain'. */
 int
-fwd_control_input(struct sw_chain *chain, const void *msg, size_t length)
+fwd_control_input(struct sw_chain *chain, const struct sender *sender,
+		  const void *msg, size_t length)
 {
 
 	struct openflow_packet {
 		size_t min_size;
-		int (*handler)(struct sw_chain *, const void *);
+		int (*handler)(struct sw_chain *, const struct sender *,
+			       const void *);
 	};
 
 	static const struct openflow_packet packets[] = {
@@ -461,9 +466,6 @@ fwd_control_input(struct sw_chain *chain, const void *msg, size_t length)
 	const struct openflow_packet *pkt;
 	struct ofp_header *oh;
 
-	if (length < sizeof(struct ofp_header))
-		return -EINVAL;
-
 	oh = (struct ofp_header *) msg;
 	if (oh->version != 1 || oh->type >= ARRAY_SIZE(packets)
 		|| ntohs(oh->length) > length)
@@ -475,7 +477,7 @@ fwd_control_input(struct sw_chain *chain, const void *msg, size_t length)
 	if (length < pkt->min_size)
 		return -EFAULT;
 
-	return pkt->handler(chain, msg);
+	return pkt->handler(chain, sender, msg);
 }
 
 /* Packet buffering. */

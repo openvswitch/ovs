@@ -44,9 +44,11 @@
 
 struct datapath;
 struct rconn;
+struct vconn;
 
 int dp_new(struct datapath **, uint64_t dpid, struct rconn *);
 int dp_add_port(struct datapath *, const char *netdev);
+void dp_add_listen_vconn(struct datapath *, struct vconn *);
 void dp_run(struct datapath *);
 void dp_wait(struct datapath *);
 

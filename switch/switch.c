@@ -55,6 +55,7 @@
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
+static const char *listen_vconn_name;
 static struct datapath *dp;
 static uint64_t dpid = UINT64_MAX;
 static char *port_list;
@@ -76,6 +77,19 @@ main(int argc, char *argv[])
     }
 
     error = dp_new(&dp, dpid, rconn_new(argv[optind], 128));
+    if (listen_vconn_name) {
+        struct vconn *listen_vconn;
+        int retval;
+        
+        retval = vconn_open(listen_vconn_name, &listen_vconn);
+        if (retval && retval != EAGAIN) {
+            fatal(retval, "opening %s", listen_vconn_name);
+        }
+        if (!vconn_is_passive(listen_vconn)) {
+            fatal(0, "%s is not a passive vconn", listen_vconn_name);
+        }
+        dp_add_listen_vconn(dp, listen_vconn);
+    }
     if (error) {
         fatal(error, "could not create datapath");
     }
@@ -170,6 +184,13 @@ parse_options(int argc, char *argv[])
             }
             break;
 
+        case 'l':
+            if (listen_vconn_name) {
+                fatal(0, "-l or --listen may be only specified once");
+            }
+            listen_vconn_name = optarg;
+            break;
+
         VCONN_SSL_OPTION_HANDLERS
 
         case '?':
@@ -189,12 +210,15 @@ usage(void)
            "usage: %s [OPTIONS] CONTROLLER\n"
            "where CONTROLLER is an active OpenFlow connection method.\n",
            program_name, program_name);
-    vconn_usage(true, false);
-    printf("\nOptions:\n"
+    vconn_usage(true, true);
+    printf("\nConfiguration options:\n"
            "  -i, --interfaces=NETDEV[,NETDEV]...\n"
            "                          add specified initial switch ports\n"
            "  -d, --datapath-id=ID    Use ID as the OpenFlow switch ID\n"
            "                          (ID must consist of 12 hex digits)\n"
+           "  -l, --listen=METHOD     allow management connections on METHOD\n"
+           "                          (a passive OpenFlow connection method)\n"
+           "\nOther options:\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
