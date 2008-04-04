@@ -191,6 +191,11 @@ again:
             return EPROTO;
         }
         want_bytes = length - rx->size;
+        if (!want_bytes) {
+            *bufferp = rx;
+            tcp->rxbuf = NULL;
+            return 0;
+        }
     }
     buffer_reserve_tailroom(rx, want_bytes);
 
