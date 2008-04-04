@@ -39,18 +39,15 @@
 #include <stdio.h>
 
 struct ofp_flow_mod;
-struct ofp_table;
 
 #ifdef  __cplusplus
 extern "C" {
 #endif
 
 void ofp_print(FILE *, const void *, size_t, int verbosity);
-void ofp_print_table(FILE *stream, const struct ofp_table* ot);
 void ofp_print_packet(FILE *stream, const void *data, size_t len, size_t total_len);
 
 char *ofp_to_string(const void *, size_t, int verbosity);
-char *ofp_table_to_string(const struct ofp_table* ot);
 char *ofp_packet_to_string(const void *data, size_t len, size_t total_len);
 
 #ifdef  __cplusplus

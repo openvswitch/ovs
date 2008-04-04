@@ -423,6 +423,33 @@ recv_flow(struct sw_chain *chain, const struct sender *sender, const void *msg)
 	}
 }
 
+static int
+recv_flow_status_request(struct sw_chain *chain, const struct sender *sender,
+			 const void *msg)
+{
+	const struct ofp_flow_stat_request *fsr = msg;
+	if (fsr->type == OFPFS_INDIV) {
+		return dp_send_flow_stats(chain->dp, sender, &fsr->match); 
+	} else {
+		/* FIXME */
+		return -ENOTSUPP;
+	}
+}
+
+static int
+recv_port_status_request(struct sw_chain *chain, const struct sender *sender,
+			 const void *msg)
+{
+	return dp_send_port_stats(chain->dp, sender);
+}
+
+static int
+recv_table_status_request(struct sw_chain *chain, const struct sender *sender,
+			  const void *msg)
+{
+	return dp_send_table_stats(chain->dp, sender);
+}
+
 /* 'msg', which is 'length' bytes long, was received across Netlink from
  * 'sender'.  Apply it to 'chain'. */
 int
@@ -460,6 +487,18 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 		[OFPT_PORT_MOD] = {
 			sizeof (struct ofp_port_mod),
 			recv_port_mod,
+		},
+		[OFPT_FLOW_STAT_REQUEST] = {
+			sizeof (struct ofp_flow_stat_request),
+			recv_flow_status_request,
+		},
+		[OFPT_PORT_STAT_REQUEST] = {
+			sizeof (struct ofp_port_stat_request),
+			recv_port_status_request,
+		},
+		[OFPT_TABLE_STAT_REQUEST] = {
+			sizeof (struct ofp_table_stat_request),
+			recv_table_status_request,
 		},
 	};
 

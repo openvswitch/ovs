@@ -71,6 +71,7 @@ struct sw_port {
     struct datapath *dp;
     struct netdev *netdev;
     struct list node; /* Element in datapath.ports. */
+    unsigned long long int rx_count, tx_count, drop_count;
 };
 
 /* A connection to a controller or a management device. */
@@ -224,6 +225,9 @@ dp_add_port(struct datapath *dp, const char *name)
 
     p->dp = dp;
     p->netdev = netdev;
+    p->tx_count = 0;
+    p->rx_count = 0;
+    p->drop_count = 0;
     list_push_back(&dp->port_list, &p->node);
 
     /* Notify the ctlpath that this port has been added */
@@ -276,6 +280,7 @@ dp_run(struct datapath *dp)
         }
         error = netdev_recv(p->netdev, buffer);
         if (!error) {
+            p->rx_count++;
             fwd_port_input(dp, buffer, port_no(dp, p));
             buffer = NULL;
         } else if (error != EAGAIN) {
@@ -442,7 +447,11 @@ output_packet(struct datapath *dp, struct buffer *buffer, int out_port)
     if (out_port >= 0 && out_port < OFPP_MAX) { 
         struct sw_port *p = &dp->ports[out_port];
         if (p->netdev != NULL) {
-            netdev_send(p->netdev, buffer);
+            if (!netdev_send(p->netdev, buffer)) {
+                p->tx_count++;
+            } else {
+                p->drop_count++;
+            }
             return;
         }
     }
@@ -617,6 +626,125 @@ send_flow_expired(struct datapath *dp, struct sw_flow *flow)
     ofe->packet_count   = htonll(flow->packet_count);
     ofe->byte_count     = htonll(flow->byte_count);
     send_openflow_buffer(dp, buffer, NULL);
+}
+
+static void
+fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
+                int table_idx, time_t now)
+{
+	int duration;
+
+	ofs->match.wildcards = htons(flow->key.wildcards);
+	ofs->match.in_port   = flow->key.flow.in_port;
+	memcpy(ofs->match.dl_src, flow->key.flow.dl_src, ETH_ADDR_LEN);
+	memcpy(ofs->match.dl_dst, flow->key.flow.dl_dst, ETH_ADDR_LEN);
+	ofs->match.dl_vlan   = flow->key.flow.dl_vlan;
+	ofs->match.dl_type   = flow->key.flow.dl_type;
+	ofs->match.nw_src    = flow->key.flow.nw_src;
+	ofs->match.nw_dst    = flow->key.flow.nw_dst;
+	ofs->match.nw_proto  = flow->key.flow.nw_proto;
+	memset(ofs->match.pad, 0, sizeof ofs->match.pad);
+	ofs->match.tp_src    = flow->key.flow.tp_src;
+	ofs->match.tp_dst    = flow->key.flow.tp_dst;
+	duration = now - flow->created;
+	ofs->duration        = htons(MIN(65535, duration));
+	ofs->table_id        = htons(table_idx);
+	ofs->packet_count    = htonll(flow->packet_count);
+	ofs->byte_count      = htonll(flow->byte_count);
+}
+
+int
+dp_send_flow_stats(struct datapath *dp, const struct sender *sender,
+                   const struct ofp_match *match)
+{
+	struct buffer *buffer;
+	struct ofp_flow_stat_reply *fsr;
+	size_t header_size, fudge, flow_size;
+	struct sw_flow_key match_key;
+	int table_idx, n_flows, max_flows;
+    time_t now;
+
+	header_size = offsetof(struct ofp_flow_stat_reply, flows);
+	fudge = 128;
+	flow_size = sizeof fsr->flows[0];
+	max_flows = (65536 - header_size - fudge) / flow_size;
+	fsr = alloc_openflow_buffer(dp, header_size,
+                                OFPT_FLOW_STAT_REPLY, sender, &buffer);
+
+	n_flows = 0;
+	flow_extract_match(&match_key, match);
+    now = time(0);
+	for (table_idx = 0; table_idx < dp->chain->n_tables; table_idx++) {
+		struct sw_table *table = dp->chain->tables[table_idx];
+		struct swt_iterator iter;
+
+		if (n_flows >= max_flows) {
+			break;
+		}
+
+		if (!table->iterator(table, &iter)) {
+            printf("iterator failed for table %d\n", table_idx);
+			continue;
+		}
+
+		for (; iter.flow; table->iterator_next(&iter)) {
+			if (flow_matches(&match_key, &iter.flow->key)) {
+                struct ofp_flow_stats *ofs = buffer_put_uninit(buffer,
+                                                               sizeof *ofs);
+				fill_flow_stats(ofs, iter.flow, table_idx, now);
+				if (++n_flows >= max_flows) {
+					break;
+				}
+			}
+		}
+		table->iterator_destroy(&iter);
+	}
+	return send_openflow_buffer(dp, buffer, sender);
+}
+
+int
+dp_send_port_stats(struct datapath *dp, const struct sender *sender)
+{
+	struct buffer *buffer;
+	struct ofp_port_stat_reply *psr;
+    struct sw_port *p;
+
+	psr = alloc_openflow_buffer(dp, offsetof(struct ofp_port_stat_reply,
+                                             ports),
+                                OFPT_PORT_STAT_REPLY, sender, &buffer);
+    LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
+		struct ofp_port_stats *ps = buffer_put_uninit(buffer, sizeof *ps);
+		ps->port_no = htons(port_no(dp, p));
+		memset(ps->pad, 0, sizeof ps->pad);
+		ps->rx_count = htonll(p->rx_count);
+		ps->tx_count = htonll(p->tx_count);
+		ps->drop_count = htonll(p->drop_count);
+	}
+	return send_openflow_buffer(dp, buffer, sender);
+}
+
+int
+dp_send_table_stats(struct datapath *dp, const struct sender *sender)
+{
+	struct buffer *buffer;
+	struct ofp_table_stat_reply *tsr;
+	int i;
+
+	tsr = alloc_openflow_buffer(dp, offsetof(struct ofp_table_stat_reply,
+                                             tables),
+                                OFPT_TABLE_STAT_REPLY, sender, &buffer);
+	for (i = 0; i < dp->chain->n_tables; i++) {
+		struct ofp_table_stats *ots = buffer_put_uninit(buffer, sizeof *ots);
+		struct sw_table_stats stats;
+		dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
+		strncpy(ots->name, stats.name, sizeof ots->name);
+		ots->table_id = htons(i);
+		ots->pad[0] = ots->pad[1] = 0;
+		ots->max_entries = htonl(stats.max_flows);
+		ots->active_count = htonl(stats.n_flows);
+		ots->matched_count = htonll(0); /* FIXME */
+	}
+	return send_openflow_buffer(dp, buffer, sender);
 }
 
 /* 'buffer' was received on 'in_port', a physical switch port between 0 and
@@ -994,6 +1122,33 @@ recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
     }
 }
 
+static int
+recv_flow_status_request(struct datapath *dp, const struct sender *sender,
+                         const void *msg)
+{
+	const struct ofp_flow_stat_request *fsr = msg;
+	if (fsr->type == OFPFS_INDIV) {
+		return dp_send_flow_stats(dp, sender, &fsr->match); 
+	} else {
+		/* FIXME */
+		return -ENOSYS;
+	}
+}
+
+static int
+recv_port_status_request(struct datapath *dp, const struct sender *sender,
+                         const void *msg)
+{
+	return dp_send_port_stats(dp, sender);
+}
+
+static int
+recv_table_status_request(struct datapath *dp, const struct sender *sender,
+                          const void *msg)
+{
+	return dp_send_table_stats(dp, sender);
+}
+
 /* 'msg', which is 'length' bytes long, was received from the control path.
  * Apply it to 'chain'. */
 int
@@ -1030,6 +1185,18 @@ fwd_control_input(struct datapath *dp, const struct sender *sender,
             sizeof (struct ofp_port_mod),
             recv_port_mod,
         },
+		[OFPT_FLOW_STAT_REQUEST] = {
+			sizeof (struct ofp_flow_stat_request),
+			recv_flow_status_request,
+		},
+		[OFPT_PORT_STAT_REQUEST] = {
+			sizeof (struct ofp_port_stat_request),
+			recv_port_status_request,
+		},
+		[OFPT_TABLE_STAT_REQUEST] = {
+			sizeof (struct ofp_table_stat_request),
+			recv_table_status_request,
+		},
     };
 
     const struct openflow_packet *pkt;

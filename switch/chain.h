@@ -43,6 +43,13 @@ struct list;
 #define TABLE_MAC_MAX_FLOWS      1024
 #define TABLE_MAC_NUM_BUCKETS   1024
 
+/* Set of tables chained together in sequence from cheap to expensive. */
+#define CHAIN_MAX_TABLES 4
+struct sw_chain {
+    int n_tables;
+    struct sw_table *tables[CHAIN_MAX_TABLES];
+};
+
 struct sw_chain *chain_create(void);
 struct sw_flow *chain_lookup(struct sw_chain *, const struct sw_flow_key *);
 int chain_insert(struct sw_chain *, struct sw_flow *);

@@ -60,6 +60,7 @@ int vconn_send(struct vconn *, struct buffer *);
 
 int vconn_open_block(const char *name, struct vconn **);
 int vconn_send_block(struct vconn *, struct buffer *);
+int vconn_recv_block(struct vconn *, struct buffer **);
 
 enum vconn_wait_type {
     WAIT_CONNECT,

@@ -303,6 +303,20 @@ vconn_send_block(struct vconn *vconn, struct buffer *msg)
     int retval;
     while ((retval = vconn_send(vconn, msg)) == EAGAIN) {
         vconn_send_wait(vconn);
+        VLOG_DBG("blocking on vconn send");
+        poll_block();
+    }
+    return retval;
+}
+
+/* Same as vconn_recv, except that it waits until a message is received. */
+int
+vconn_recv_block(struct vconn *vconn, struct buffer **msgp)
+{
+    int retval;
+    while ((retval = vconn_recv(vconn, msgp)) == EAGAIN) {
+        vconn_recv_wait(vconn);
+        VLOG_DBG("blocking on vconn receive");
         poll_block();
     }
     return retval;

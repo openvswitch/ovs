@@ -60,9 +60,6 @@ int dpif_add_dp(struct dpif *);
 int dpif_del_dp(struct dpif *);
 int dpif_add_port(struct dpif *, const char *netdev);
 int dpif_del_port(struct dpif *, const char *netdev);
-int dpif_show(struct dpif *);
-int dpif_dump_tables(struct dpif *);
-int dpif_dump_flows(struct dpif *, int table, struct ofp_match *);
 int dpif_benchmark_nl(struct dpif *, uint32_t, uint32_t);
 
 #endif /* dpif.h */

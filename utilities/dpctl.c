@@ -35,6 +35,7 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <netinet/in.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -56,7 +57,7 @@
 #include "vconn-ssl.h"
 
 #include "vlog.h"
-#define THIS_MODULE VLM_DPCTL
+#define THIS_MODULE VLM_dpctl
 
 static const char* ifconfigbin = "/sbin/ifconfig";
 
@@ -161,16 +162,17 @@ usage(void)
            "  deldp nl:DP_ID              delete local datapath DP_ID\n"
            "  addif nl:DP_ID IFACE        add IFACE as a port on DP_ID\n"
            "  delif nl:DP_ID IFACE        delete IFACE as a port on DP_ID\n"
+           "  monitor nl:DP_ID            print packets received\n"
            "  benchmark-nl nl:DP_ID N SIZE   send N packets of SIZE bytes\n"
 #endif
            "\nCommands that apply to local datapaths and remote switches:\n"
-           "  show METHOD                 show information about METHOD\n"
-           "  monitor METHOD              print packets received on METHOD\n"
-           "  dump-tables METHOD          print table stats for METHOD\n"
-           "  dump-flows METHOD T_ID      print all flow entries in table T_ID of METHOD\n"
-           "  dump-flows METHOD T_ID FLOW print matching FLOWs in table T_ID of METHOD\n"
-           "  add-flows METHOD FILE       add flows from FILE to METHOD\n"
-           "where each METHOD is an active OpenFlow connection method.\n",
+           "  show SWITCH                 show information\n"
+           "  dump-tables SWITCH          print table stats\n"
+           "  dump-ports SWITCH           print port statistics\n"
+           "  dump-flows SWITCH           print all flow entries\n"
+           "  dump-flows SWITCH FLOW      print matching FLOWs\n"
+           "  add-flows SWITCH FILE       add flows from FILE\n"
+           "where each SWITCH is an active OpenFlow connection method.\n",
            program_name, program_name);
     vconn_usage(true, false);
     printf("\nOptions:\n"
@@ -180,10 +182,25 @@ usage(void)
     exit(EXIT_SUCCESS);
 }
 
-static void run(int retval, const char *name) 
+static void run(int retval, const char *message, ...)
+    PRINTF_FORMAT(2, 3);
+
+static void run(int retval, const char *message, ...)
 {
     if (retval) {
-        fatal(retval, "%s", name);
+        va_list args;
+
+        fprintf(stderr, "%s: ", program_name);
+        va_start(args, message);
+        vfprintf(stderr, message, args);
+        va_end(args);
+        if (retval == EOF) {
+            fputs(": unexpected end of file\n", stderr);
+        } else {
+            vfprintf(stderr, ": %s\n", strerror(retval));
+        }
+
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -241,6 +258,18 @@ static void do_del_port(int argc UNUSED, char *argv[])
     dpif_close(&dp);
 }
 
+static void do_monitor(int argc UNUSED, char *argv[])
+{
+    struct dpif dp;
+    open_nl_vconn(argv[1], false, &dp);
+    for (;;) {
+        struct buffer *b;
+        run(dpif_recv_openflow(&dp, &b, true), "dpif_recv_openflow");
+        ofp_print(stderr, b->data, b->size, 2);
+        buffer_delete(b);
+    }
+}
+
 #define BENCHMARK_INCR   100
 
 static void do_benchmark_nl(int argc UNUSED, char *argv[])
@@ -282,34 +311,95 @@ static void do_benchmark_nl(int argc UNUSED, char *argv[])
 
 /* Generic commands. */
 
-static void do_show(int argc UNUSED, char *argv[])
+static uint32_t
+random_xid(void)
 {
-#if 0
-    struct dpif dp;
-    run(dpif_open(atoi(argv[1]), false, &dp), "dpif_open");
-    run(dpif_show(&dp), "show");
-    dpif_close(&dp);
-#endif
+    static bool inited = false;
+    if (!inited) {
+        struct timeval tv;
+        inited = true;
+        if (gettimeofday(&tv, NULL) < 0) {
+            fatal(errno, "gettimeofday");
+        }
+        srand(tv.tv_sec ^ tv.tv_usec);
+    }
+    return rand();
 }
 
-static void do_monitor(int argc UNUSED, char *argv[])
+static void *
+alloc_openflow_buffer(size_t openflow_len, uint8_t type,
+                      struct buffer **bufferp)
 {
-    struct dpif dp;
-    run(dpif_open(atoi(argv[1]), true, &dp), "dpif_open");
+	struct buffer *buffer;
+	struct ofp_header *oh;
+
+	buffer = *bufferp = buffer_new(openflow_len);
+	oh = buffer_put_uninit(buffer, openflow_len);
+    memset(oh, 0, openflow_len);
+	oh->version = OFP_VERSION;
+	oh->type = type;
+	oh->length = 0;
+	oh->xid = random_xid();
+	return oh;
+}
+
+static void
+send_openflow_buffer(struct vconn *vconn, struct buffer *buffer)
+{
+    struct ofp_header *oh;
+
+    oh = buffer_at_assert(buffer, 0, sizeof *oh);
+    oh->length = htons(buffer->size);
+
+    run(vconn_send_block(vconn, buffer), "failed to send packet to switch");
+}
+
+static struct buffer *
+transact_openflow(struct vconn *vconn, struct buffer *request)
+{
+    uint32_t send_xid = ((struct ofp_header *) request->data)->xid;
+
+    send_openflow_buffer(vconn, request);
     for (;;) {
-        struct buffer *b;
-        run(dpif_recv_openflow(&dp, &b, true), "dpif_recv_openflow");
-        ofp_print(stderr, b->data, b->size, 2);
-        buffer_delete(b);
+        uint32_t recv_xid;
+        struct buffer *reply;
+
+        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
+        recv_xid = ((struct ofp_header *) reply->data)->xid;
+        if (send_xid == recv_xid) {
+            return reply;
+        }
+
+        VLOG_DBG("received reply with xid %08"PRIx32" != expected %08"PRIx32,
+                 recv_xid, send_xid);
+        buffer_delete(reply);
     }
 }
 
-static void do_dump_tables(int argc, char *argv[])
+static void
+dump_transaction(const char *vconn_name, uint8_t request_type)
 {
-    struct dpif dp;
-    run(dpif_open(atoi(argv[1]), false, &dp), "dpif_open");
-    run(dpif_dump_tables(&dp), "dump_tables");
-    dpif_close(&dp);
+    struct vconn *vconn;
+    struct buffer *request, *reply;
+
+    run(vconn_open_block(vconn_name, &vconn), "connecting to %s", vconn_name);
+    alloc_openflow_buffer(sizeof(struct ofp_header), request_type, &request);
+    reply = transact_openflow(vconn, request);
+    ofp_print(stdout, reply->data, reply->size, 1);
+    vconn_close(vconn);
+}
+
+static void
+do_show(int argc UNUSED, char *argv[])
+{
+    dump_transaction(argv[1], OFPT_FEATURES_REQUEST);
+}
+
+
+static void
+do_dump_tables(int argc, char *argv[])
+{
+    dump_transaction(argv[1], OFPT_TABLE_STAT_REQUEST);
 }
 
 
@@ -364,7 +454,8 @@ str_to_action(const char *str, struct ofp_action *action)
 }
 
 static void
-str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action)
+str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action,
+            uint16_t *table_idx)
 {
     struct field {
         const char *name;
@@ -391,6 +482,9 @@ str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action)
     uint32_t wildcards;
     bool got_action = false;
 
+    if (table_idx) {
+        *table_idx = htons(0xffff);
+    }
     memset(match, 0, sizeof *match);
     wildcards = OFPFW_ALL;
     for (name = strtok(string, "="), value = strtok(NULL, " \t\n");
@@ -403,6 +497,11 @@ str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action)
         if (action && !strcmp(name, "action")) {
             got_action = true;
             str_to_action(value, action);
+            continue;
+        }
+
+        if (table_idx && !strcmp(name, "table")) {
+            *table_idx = htons(atoi(value));
             continue;
         }
 
@@ -452,17 +551,18 @@ str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action)
 
 static void do_dump_flows(int argc, char *argv[])
 {
-    struct dpif dp;
-    struct ofp_match match, *matchp;
-    run(dpif_open(atoi(argv[1]), false, &dp), "dpif_open");
-    if (argc == 4) {
-        str_to_flow(argv[3], &match, NULL);
-        matchp = &match;
-    } else {
-        matchp = NULL;
-    }
-    run(dpif_dump_flows(&dp, atoi(argv[2]), matchp), "dump_flows");
-    dpif_close(&dp);
+    struct vconn *vconn;
+    struct buffer *request, *reply;
+    struct ofp_flow_stat_request *fsr;
+
+    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    fsr = alloc_openflow_buffer(sizeof *fsr, OFPT_FLOW_STAT_REQUEST, &request);
+    str_to_flow(argc > 2 ? argv[2] : "", &fsr->match, NULL, &fsr->table_id);
+    fsr->type = OFPFS_INDIV;
+    fsr->pad = 0;
+    reply = transact_openflow(vconn, request);
+    ofp_print(stdout, reply->data, reply->size, 1);
+    vconn_close(vconn);
 }
 
 static void do_add_flows(int argc, char *argv[])
@@ -473,19 +573,12 @@ static void do_add_flows(int argc, char *argv[])
     FILE *file;
     char line[1024];
 
-    int retval;
-
     file = fopen(argv[2], "r");
     if (file == NULL) {
         fatal(errno, "%s: open", argv[2]);
     }
 
-    sprintf(vconn_name, "nl:%d", atoi(argv[1]));
-    retval = vconn_open(vconn_name, &vconn);
-    if (retval) {
-        fatal(retval, "opening datapath");
-    }
-
+    run(vconn_open_block(vconn_name, &vconn), "connecting to %s", argv[1]);
     while (fgets(line, sizeof line, file)) {
         struct buffer *buffer;
         struct ofp_flow_mod *ofm;
@@ -504,28 +597,24 @@ static void do_add_flows(int argc, char *argv[])
             continue;
         }
 
+        /* Parse and send. */
         size = sizeof *ofm + sizeof ofm->actions[0];
-        buffer = buffer_new(size);
-        ofm = buffer_put_uninit(buffer, size);
-
-        /* Parse. */
-        memset(ofm, 0, size);
-        ofm->header.type = OFPT_FLOW_MOD;
-        ofm->header.version = OFP_VERSION;
-        ofm->header.length = htons(size);
+        ofm = alloc_openflow_buffer(size, OFPT_FLOW_MOD, &buffer);
         ofm->command = htons(OFPFC_ADD);
         ofm->max_idle = htons(50);
         ofm->buffer_id = htonl(UINT32_MAX);
         ofm->group_id = htonl(0);
-        str_to_flow(line, &ofm->match, &ofm->actions[0]);
-
-        retval = vconn_send_block(vconn, buffer);
-        if (retval) {
-            fatal(retval, "sending to datapath");
-        }
+        str_to_flow(line, &ofm->match, &ofm->actions[0], NULL);
+        run(vconn_send_block(vconn, buffer), "send OpenFlow packet");
     }
     vconn_close(vconn);
     fclose(file);
+}
+
+static void
+do_dump_ports(int argc, char *argv[])
+{
+    dump_transaction(argv[1], OFPT_PORT_STAT_REQUEST);
 }
 
 static void do_help(int argc UNUSED, char *argv[] UNUSED)
@@ -547,6 +636,7 @@ static struct command all_commands[] = {
     { "help", 0, INT_MAX, do_help },
     { "monitor", 1, 1, do_monitor },
     { "dump-tables", 1, 1, do_dump_tables },
-    { "dump-flows", 2, 3, do_dump_flows },
+    { "dump-flows", 1, 2, do_dump_flows },
     { "add-flows", 2, 2, do_add_flows },
+    { "dump-ports", 1, 1, do_dump_ports },
 };

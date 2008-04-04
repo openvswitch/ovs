@@ -748,6 +748,155 @@ dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 	return send_openflow_skb(skb, NULL);
 }
 
+static void
+fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
+		int table_idx)
+{
+	int duration;
+	
+	ofs->match.wildcards = htons(flow->key.wildcards);
+	ofs->match.in_port   = flow->key.in_port;
+	memcpy(ofs->match.dl_src, flow->key.dl_src, ETH_ALEN);
+	memcpy(ofs->match.dl_dst, flow->key.dl_dst, ETH_ALEN);
+	ofs->match.dl_vlan   = flow->key.dl_vlan;
+	ofs->match.dl_type   = flow->key.dl_type;
+	ofs->match.nw_src    = flow->key.nw_src;
+	ofs->match.nw_dst    = flow->key.nw_dst;
+	ofs->match.nw_proto  = flow->key.nw_proto;
+	memset(ofs->match.pad, 0, sizeof ofs->match.pad);
+	ofs->match.tp_src    = flow->key.tp_src;
+	ofs->match.tp_dst    = flow->key.tp_dst;
+	duration = (jiffies - flow->init_time) / HZ;
+	ofs->duration        = htons(min(65535, duration));
+	ofs->table_id        = htons(table_idx);
+	ofs->packet_count    = cpu_to_be64(flow->packet_count);
+	ofs->byte_count      = cpu_to_be64(flow->byte_count);
+}
+
+int
+dp_send_flow_stats(struct datapath *dp, const struct sender *sender,
+		   const struct ofp_match *match)
+{
+	struct sk_buff *skb;
+	struct ofp_flow_stat_reply *fsr;
+	size_t header_size, fudge, flow_size;
+	struct sw_flow_key match_key;
+	int table_idx, n_flows, max_flows;
+
+	header_size = offsetof(struct ofp_flow_stat_reply, flows);
+	fudge = 128;
+	flow_size = sizeof fsr->flows[0];
+	max_flows = (NLMSG_GOODSIZE - header_size - fudge) / flow_size;
+	fsr = alloc_openflow_skb(dp, header_size + max_flows * flow_size,
+				 OFPT_FLOW_STAT_REPLY, sender, &skb);
+	if (!fsr)
+		return -ENOMEM;
+
+	n_flows = 0;
+	flow_extract_match(&match_key, match);
+	for (table_idx = 0; table_idx < dp->chain->n_tables; table_idx++) {
+		struct sw_table *table = dp->chain->tables[table_idx];
+		struct swt_iterator iter;
+
+		if (n_flows >= max_flows) {
+			break;
+		}
+
+		if (!table->iterator(table, &iter)) {
+			if (net_ratelimit())
+				printk("iterator failed for table %d\n",
+				       table_idx);
+			continue;
+		}
+
+		for (; iter.flow; table->iterator_next(&iter)) {
+			if (flow_matches(&match_key, &iter.flow->key)) {
+				fill_flow_stats(&fsr->flows[n_flows],
+						iter.flow, table_idx);
+				if (++n_flows >= max_flows) {
+					break;
+				}
+			}
+		}
+		table->iterator_destroy(&iter);
+	}
+	resize_openflow_skb(skb, &fsr->header,
+			    header_size + flow_size * n_flows);
+	return send_openflow_skb(skb, sender);
+}
+
+static int 
+fill_port_stat_reply(struct datapath *dp, struct ofp_port_stat_reply *psr)
+{
+	struct net_bridge_port *p;
+	int port_count = 0;
+
+	list_for_each_entry_rcu (p, &dp->port_list, node) {
+		struct ofp_port_stats *ps = &psr->ports[port_count++];
+		struct net_device_stats *stats = p->dev->get_stats(p->dev);
+		ps->port_no = htons(p->port_no);
+		memset(ps->pad, 0, sizeof ps->pad);
+		ps->rx_count = cpu_to_be64(stats->rx_packets);
+		ps->tx_count = cpu_to_be64(stats->tx_packets);
+		ps->drop_count = cpu_to_be64(stats->rx_dropped
+					     + stats->tx_dropped);
+	}
+
+	return port_count;
+}
+
+int
+dp_send_port_stats(struct datapath *dp, const struct sender *sender)
+{
+	struct sk_buff *skb;
+	struct ofp_port_stat_reply *psr;
+	size_t psr_len, port_max_len;
+	int port_count;
+
+	/* Overallocate. */
+	port_max_len = sizeof(struct ofp_port_stats) * OFPP_MAX;
+	psr = alloc_openflow_skb(dp, sizeof *psr + port_max_len,
+				 OFPT_PORT_STAT_REPLY, sender, &skb);
+	if (!psr)
+		return -ENOMEM;
+
+	/* Fill. */
+	port_count = fill_port_stat_reply(dp, psr);
+
+	/* Shrink to fit. */
+	psr_len = sizeof *psr + sizeof(struct ofp_port_stats) * port_count;
+	resize_openflow_skb(skb, &psr->header, psr_len);
+	return send_openflow_skb(skb, sender);
+}
+
+int
+dp_send_table_stats(struct datapath *dp, const struct sender *sender)
+{
+	struct sk_buff *skb;
+	struct ofp_table_stat_reply *tsr;
+	int i, n_tables;
+
+	n_tables = dp->chain->n_tables;
+	tsr = alloc_openflow_skb(dp, (offsetof(struct ofp_table_stat_reply,
+					       tables)
+				      + sizeof tsr->tables[0] * n_tables),
+				 OFPT_TABLE_STAT_REPLY, sender, &skb);
+	if (!tsr)
+		return -ENOMEM;
+	for (i = 0; i < n_tables; i++) {
+		struct ofp_table_stats *ots = &tsr->tables[i];
+		struct sw_table_stats stats;
+		dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
+		strncpy(ots->name, stats.name, sizeof ots->name);
+		ots->table_id = htons(i);
+		ots->pad[0] = ots->pad[1] = 0;
+		ots->max_entries = htonl(stats.max_flows);
+		ots->active_count = htonl(stats.n_flows);
+		ots->matched_count = cpu_to_be64(0); /* FIXME */
+	}
+	return send_openflow_skb(skb, sender);
+}
+
 /* Generic Netlink interface.
  *
  * See netlink(7) for an introduction to netlink.  See
@@ -874,360 +1023,6 @@ nla_put_failure:
 	rcu_read_unlock();
 	return err;
 }
-
-/*
- * Fill flow entry for nl flow query.  Called with rcu_lock  
- *
- */
-static
-int
-dp_fill_flow(struct ofp_flow_mod* ofm, struct swt_iterator* iter)
-{
-	ofm->header.version  = OFP_VERSION;
-	ofm->header.type     = OFPT_FLOW_MOD;
-	ofm->header.length   = htons(sizeof(struct ofp_flow_mod) 
-				+ sizeof(ofm->actions[0]));
-	ofm->header.xid      = htonl(0);
-
-	ofm->match.wildcards = htons(iter->flow->key.wildcards);
-	ofm->match.in_port   = iter->flow->key.in_port;
-	ofm->match.dl_vlan   = iter->flow->key.dl_vlan;
-	memcpy(ofm->match.dl_src, iter->flow->key.dl_src, ETH_ALEN);
-	memcpy(ofm->match.dl_dst, iter->flow->key.dl_dst, ETH_ALEN);
-	ofm->match.dl_type   = iter->flow->key.dl_type;
-	ofm->match.nw_src    = iter->flow->key.nw_src;
-	ofm->match.nw_dst    = iter->flow->key.nw_dst;
-	ofm->match.nw_proto  = iter->flow->key.nw_proto;
-	ofm->match.tp_src    = iter->flow->key.tp_src;
-	ofm->match.tp_dst    = iter->flow->key.tp_dst;
-	ofm->group_id        = iter->flow->group_id;
-	ofm->max_idle        = iter->flow->max_idle;
-	/* TODO support multiple actions  */
-	ofm->actions[0]      = iter->flow->actions[0];
-
-	return 0;
-}
-
-/* Convenience function */
-static
-void* 
-dp_init_nl_flow_msg(uint32_t dp_idx, uint16_t table_idx, 
-		struct genl_info *info, struct sk_buff* skb)
-{
-	void* data;
-
-	data = genlmsg_put_reply(skb, info, &dp_genl_family, 0, 
-				DP_GENL_C_QUERY_FLOW);
-	if (data == NULL)
-		return NULL;
-	NLA_PUT_U32(skb, DP_GENL_A_DP_IDX,   dp_idx);
-	NLA_PUT_U16(skb, DP_GENL_A_TABLEIDX, table_idx);
-
-	return data;
-
-nla_put_failure:
-	return NULL;
-}
-
-/*  Iterate through the specified table and send all flow entries over
- *  netlink to userspace.  Each flow message has the following format:
- *
- *  32bit dpix
- *  16bit tabletype
- *  32bit number of flows
- *  openflow-flow-entries
- *
- *  The full table may require multiple messages.  A message with 0 flows
- *  signifies end-of message.
- */
-
-static 
-int 
-dp_dump_table(struct datapath *dp, uint16_t table_idx, struct genl_info *info, struct ofp_flow_mod* matchme) 
-{ 
-	struct sk_buff  *skb = 0; 
-	struct sw_table *table = 0;
-	struct swt_iterator iter;
-	struct sw_flow_key in_flow; 
-	struct nlattr   *attr;
-	int count = 0, sum_count = 0;
-	void *data; 
-	uint8_t* ofm_ptr = 0;
-	struct nlattr   *num_attr; 
-	int err = -ENOMEM;
-
-	table = dp->chain->tables[table_idx]; 
-	if ( table == NULL ) {
-		dprintk("dp::dp_dump_table error, non-existant table at position %d\n", table_idx);
-		return -EINVAL;
-	}
-
-	if (!table->iterator(table, &iter)) {
-		dprintk("dp::dp_dump_table couldn't initialize empty table iterator\n");
-		return -ENOMEM;
-	}
-
-	while (iter.flow) {
-
-		/* verify that we can fit all NL_FLOWS_PER_MESSAGE in a single
-		 * sk_buf */
-		if( (sizeof(dp_genl_family) + sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint32_t) + 
-					(NL_FLOWS_PER_MESSAGE * sizeof(struct ofp_flow_mod))) > (8192 - 64)){
-			dprintk("dp::dp_dump_table NL_FLOWS_PER_MESSAGE may cause overrun in skbuf\n");
-			return -ENOMEM;
-		}
-
-		skb = nlmsg_new(NLMSG_GOODSIZE, GFP_ATOMIC);
-		if (skb == NULL) {
-			return -ENOMEM;
-		}
-
-		data = dp_init_nl_flow_msg(dp->dp_idx, table_idx, info, skb);
-		if (data == NULL){
-			err= -ENOMEM;	
-			goto error_free_skb;
-		} 
-
-		/* reserve space to put the number of flows for this message, to
-		 * be filled after the loop*/
-		num_attr = nla_reserve(skb, DP_GENL_A_NUMFLOWS, sizeof(uint32_t));
-		if(!num_attr){
-			err = -ENOMEM;
-			goto error_free_skb;
-		}
-
-		/* Only load NL_FLOWS_PER_MESSAGE flows at a time */
-		attr = nla_reserve(skb, DP_GENL_A_FLOW, 
-				(sizeof(struct ofp_flow_mod) + sizeof(struct ofp_action)) * NL_FLOWS_PER_MESSAGE);
-		if (!attr){
-			err = -ENOMEM;
-			goto error_free_skb;
-		}
-
-		/* internal loop to fill NL_FLOWS_PER_MESSAGE flows */
-		ofm_ptr = nla_data(attr);
-		flow_extract_match(&in_flow, &matchme->match);
-		while (iter.flow && count < NL_FLOWS_PER_MESSAGE) {
-			if(flow_matches(&in_flow, &iter.flow->key)){
-				if((err = dp_fill_flow((struct ofp_flow_mod*)ofm_ptr, &iter))) 
-					goto error_free_skb;
-				count++; 
-				/* TODO support multiple actions  */
-				ofm_ptr += sizeof(struct ofp_flow_mod) + sizeof(struct ofp_action);
-			}
-			table->iterator_next(&iter);
-		}
-
-		*((uint32_t*)nla_data(num_attr)) = count;
-		genlmsg_end(skb, data); 
-
-		sum_count += count; 
-		count = 0;
-
-		err = genlmsg_unicast(skb, info->snd_pid); 
-		skb = 0;
-	}
-
-	/* send a sentinal message saying we're done */
-	skb = nlmsg_new(NLMSG_GOODSIZE, GFP_ATOMIC);
-	if (skb == NULL) {
-		return -ENOMEM;
-	}
-	data = dp_init_nl_flow_msg(dp->dp_idx, table_idx, info, skb);
-	if (data == NULL){
-		err= -ENOMEM;	
-		goto error_free_skb;
-	} 
-
-	NLA_PUT_U32(skb, DP_GENL_A_NUMFLOWS,   0);
-	/* dummy flow so nl doesn't complain */
-	attr = nla_reserve(skb, DP_GENL_A_FLOW, sizeof(struct ofp_flow_mod));
-	if (!attr){
-		err = -ENOMEM;
-		goto error_free_skb;
-	}
-	genlmsg_end(skb, data); 
-	err = genlmsg_reply(skb, info); skb = 0;
-
-nla_put_failure:
-error_free_skb:
-	if(skb)
-		kfree_skb(skb);
-	return err;
-}
-
-/* Helper function to query_table which creates and sends a message packed with
- * table stats.  Message form is:
- *
- * u32 DP_IDX
- * u32 NUM_TABLES
- * OFP_TABLE (list of OFP_TABLES)
- *
- */
-
-static 
-int 
-dp_dump_table_stats(struct datapath *dp, int dp_idx, struct genl_info *info) 
-{ 
-	struct sk_buff   *skb = 0; 
-	struct ofp_table *ot = 0;
-	struct nlattr   *attr;
-	struct sw_table_stats stats; 
-	size_t len;
-	void *data; 
-	int err = -ENOMEM;
-	int i = 0;
-	int nt = dp->chain->n_tables;
-
-	len = 4 + 4 + (sizeof(struct ofp_table) * nt);
-
-	/* u32 IDX, u32 NUMTABLES, list-of-tables */
-	skb = nlmsg_new(MAX(len, NLMSG_GOODSIZE), GFP_ATOMIC);
-	if (skb == NULL) {
-		return -ENOMEM;
-	}
-	
-	data = genlmsg_put_reply(skb, info, &dp_genl_family, 0, 
-				DP_GENL_C_QUERY_TABLE);
-	if (data == NULL){
-		return -ENOMEM;
-	} 
-
-	NLA_PUT_U32(skb, DP_GENL_A_DP_IDX,	dp_idx);
-	NLA_PUT_U32(skb, DP_GENL_A_NUMTABLES, nt);
-
-	/* ... we assume that all tables can fit in a single message.
-	 * Probably a reasonable assumption seeing that we only have
-	 * 3 atm */
-	attr = nla_reserve(skb, DP_GENL_A_TABLE, (sizeof(struct ofp_table) * nt));
-	if (!attr){
-		err = -ENOMEM;
-		goto error_free_skb;
-	}
-
-	ot = nla_data(attr);
-
-	for (i = 0; i < nt; ++i) {
-		dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
-		ot->header.version = OFP_VERSION;
-		ot->header.type    = OFPT_TABLE;
-		ot->header.length  = htons(sizeof(struct ofp_table));
-		ot->header.xid     = htonl(0);
-
-		strncpy(ot->name, stats.name, OFP_MAX_TABLE_NAME_LEN); 
-		ot->table_id  = htons(i);
-		ot->n_flows   = htonl(stats.n_flows);
-		ot->max_flows = htonl(stats.max_flows);
-		ot++;
-	}
-
-	genlmsg_end(skb, data); 
-	err = genlmsg_reply(skb, info); skb = 0;
-
-nla_put_failure:
-error_free_skb:
-	if(skb)
-		kfree_skb(skb);
-	return err;
-}
-
-/* 
- * Queries a datapath for flow-table statistics 
- */
-
-
-static int dp_genl_table_query(struct sk_buff *skb, struct genl_info *info)
-{
-	struct   datapath* dp;
-	int	  err = 0;
-
-	if (!info->attrs[DP_GENL_A_DP_IDX]) {
-		dprintk("dp::dp_genl_table_query received message with missing attributes\n");
-		return -EINVAL;
-	}
-
-	rcu_read_lock();
-	dp = dp_get(nla_get_u32(info->attrs[DP_GENL_A_DP_IDX]));
-	if (!dp) {
-		err = -ENOENT;
-		goto err_out;
-	}
-
-	err = dp_dump_table_stats(dp, nla_get_u32(info->attrs[DP_GENL_A_DP_IDX]), info); 
-
-err_out:
-	rcu_read_unlock();
-	return err;
-}
-
-/* 
- * Queries a datapath for flow-table entries.
- */
-
-static int dp_genl_flow_query(struct sk_buff *skb, struct genl_info *info)
-{
-	struct datapath* dp;
-	struct ofp_flow_mod*  ofm;
-	u16	table_idx;
-	int	err = 0;
-
-	if (!info->attrs[DP_GENL_A_DP_IDX]
-				|| !info->attrs[DP_GENL_A_TABLEIDX]
-				|| !info->attrs[DP_GENL_A_FLOW]) {
-		dprintk("dp::dp_genl_flow_query received message with missing attributes\n");
-		return -EINVAL;
-	}
-
-	rcu_read_lock();
-	dp = dp_get(nla_get_u32(info->attrs[DP_GENL_A_DP_IDX]));
-	if (!dp) {
-		err = -ENOENT;
-		goto err_out;
-	}
-
-	table_idx = nla_get_u16(info->attrs[DP_GENL_A_TABLEIDX]);
-
-	if (dp->chain->n_tables <= table_idx){
-		printk("table index %d invalid (dp has %d tables)\n",
-				table_idx, dp->chain->n_tables);
-	err = -EINVAL;
-		goto err_out;
-	}
-
-	ofm = nla_data(info->attrs[DP_GENL_A_FLOW]);
-	err = dp_dump_table(dp, table_idx, info, ofm); 
-
-err_out:
-	rcu_read_unlock();
-	return err;
-}
-
-static struct nla_policy dp_genl_flow_policy[DP_GENL_A_MAX + 1] = {
-	[DP_GENL_A_DP_IDX]	= { .type = NLA_U32 },
-	[DP_GENL_A_TABLEIDX] = { .type = NLA_U16 },
-	[DP_GENL_A_NUMFLOWS]  = { .type = NLA_U32 },
-};
-
-static struct genl_ops dp_genl_ops_query_flow = {
-	.cmd	= DP_GENL_C_QUERY_FLOW,
-	.flags  = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
-	.policy = dp_genl_flow_policy,
-	.doit   = dp_genl_flow_query,
-	.dumpit = NULL,
-};
-
-static struct nla_policy dp_genl_table_policy[DP_GENL_A_MAX + 1] = {
-	[DP_GENL_A_DP_IDX]	= { .type = NLA_U32 },
-};
-
-static struct genl_ops dp_genl_ops_query_table = {
-	.cmd	= DP_GENL_C_QUERY_TABLE,
-	.flags  = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
-	.policy = dp_genl_table_policy,
-	.doit   = dp_genl_table_query,
-	.dumpit = NULL,
-};
-
 
 static struct genl_ops dp_genl_ops_query_dp = {
 	.cmd = DP_GENL_C_QUERY_DP,
@@ -1363,8 +1158,6 @@ static struct genl_ops *dp_genl_all_ops[] = {
 	 * front. */
 	&dp_genl_ops_openflow,
 
-	&dp_genl_ops_query_flow,
-	&dp_genl_ops_query_table,
 	&dp_genl_ops_add_dp,
 	&dp_genl_ops_del_dp,
 	&dp_genl_ops_query_dp,

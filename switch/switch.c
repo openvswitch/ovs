@@ -135,6 +135,7 @@ parse_options(int argc, char *argv[])
     static struct option long_options[] = {
         {"interfaces",  required_argument, 0, 'i'},
         {"datapath-id", required_argument, 0, 'd'},
+        {"listen",      required_argument, 0, 'l'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},

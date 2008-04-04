@@ -348,9 +348,10 @@ struct ofp_flow_expired {
 /* Statistics about flows that match the "match" field */
 struct ofp_flow_stats {
     struct ofp_match match;   /* Description of fields */
-    uint32_t duration;        /* Time flow has been alive in seconds.  Only 
+    uint16_t duration;        /* Time flow has been alive in seconds.  Only 
                                  used for non-aggregated results. */
-    uint64_t packet_count;    
+    uint16_t table_id;        /* ID of table flow came from. */
+    uint64_t packet_count;
     uint64_t byte_count;
 };
 
@@ -363,8 +364,10 @@ enum ofp_stat_type {
 struct ofp_flow_stat_request {
     struct ofp_header header;
     struct ofp_match match;   /* Fields to match */
+    uint16_t table_id;        /* ID of table to read (from ofp_table_stats)
+                                 or 0xffff for all tables. */
     uint8_t type;             /* One of OFPFS_ */
-    uint8_t pad[3];           /* Align to 32-bits */
+    uint8_t pad;              /* Align to 32-bits */
 };
 
 /* Current flow statistics reply */
@@ -381,13 +384,47 @@ struct ofp_flow_stat_reply {
     struct ofp_flow_stats flows[0];  
 };
 
-/* Table attributes collected at runtime */
-struct ofp_table {
+/* Current table statistics request */
+struct ofp_table_stat_request {
     struct ofp_header header;
-    char              name[OFP_MAX_TABLE_NAME_LEN];
-    uint16_t          table_id;
-    unsigned long int n_flows;
-    unsigned long int max_flows;
+};
+
+/* Statistics about a particular table */
+struct ofp_table_stats {
+    uint16_t table_id;
+    uint8_t pad[2];          /* Align to 32-bits */
+    char name[OFP_MAX_TABLE_NAME_LEN];
+    uint32_t max_entries;    /* Max number of entries supported */
+    uint32_t active_count;   /* Number of active entries */
+    uint64_t matched_count;  /* Number of packets that hit table */
+};
+
+/* Current table statistics reply */
+struct ofp_table_stat_reply {
+    struct ofp_header header;
+    struct ofp_table_stats tables[]; /* The number of entries is inferred from
+                                        the length field in the header. */
+};
+
+/* Statistics about a particular port */
+struct ofp_port_stats {
+    uint16_t port_no;
+    uint8_t pad[2];          /* Align to 32-bits */
+    uint64_t rx_count;     /* Number of received packets */
+    uint64_t tx_count;     /* Number of transmitted packets */
+    uint64_t drop_count; /* Number of packets dropped by interface */
+};
+
+/* Current port statistics request */
+struct ofp_port_stat_request {
+    struct ofp_header header;
+};
+
+/* Current port statistics reply */
+struct ofp_port_stat_reply {
+    struct ofp_header header;
+    struct ofp_port_stats ports[]; /* The number of entries is inferred from
+                                      the length field in the header. */
 };
 
 #endif /* openflow.h */

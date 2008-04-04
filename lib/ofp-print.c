@@ -427,6 +427,102 @@ void ofp_print_port_status(struct ds *string, const void *oh, size_t len,
     ofp_print_phy_port(string, &ops->desc);
 }
 
+static void
+ofp_flow_stat_request(struct ds *string, const void *oh, size_t len,
+                      int verbosity) 
+{
+    const struct ofp_flow_stat_request *fsr = oh;
+
+    if (fsr->table_id == htons(0xffff)) {
+        ds_put_format(string, " table_id=any, ");
+    } else {
+        ds_put_format(string, " table_id=%"PRIu16", ", ntohs(fsr->table_id));
+    }
+
+    if (fsr->type == OFPFS_INDIV) {
+        ds_put_cstr(string, " type=indiv, ");
+    } else if (fsr->type == OFPFS_AGGREGATE) {
+        ds_put_cstr(string, " type=aggregate, ");
+    } else {
+        ds_put_format(string, " ***type=%"PRIu8"***, ", fsr->type);
+    }
+    ofp_print_match(string, &fsr->match);
+}
+
+static void
+ofp_flow_stat_reply(struct ds *string, const void *oh, size_t len,
+                     int verbosity)
+{
+    const struct ofp_flow_stat_reply *fsr = oh;
+    const struct ofp_flow_stats *fs;
+    size_t n;
+
+    n = (len - offsetof(struct ofp_flow_stat_reply, flows)) / sizeof *fs;
+    ds_put_format(string, " %zu flows\n", n);
+    if (verbosity < 1) {
+        return;
+    }
+
+    for (fs = &fsr->flows[0]; fs < &fsr->flows[n]; fs++) {
+        ds_put_format(string, "  duration=%"PRIu16" s, ", ntohs(fs->duration));
+        ds_put_format(string, "table_id=%"PRIu16", ", ntohs(fs->table_id));
+        ds_put_format(string, "n_packets=%"PRIu64", ",
+                      ntohll(fs->packet_count));
+        ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
+        ofp_print_match(string, &fs->match);
+     }
+}
+
+static void
+ofp_port_stat_reply(struct ds *string, const void *oh, size_t len,
+                    int verbosity)
+{
+    const struct ofp_port_stat_reply *psr = oh;
+    const struct ofp_port_stats *ps;
+    size_t n;
+
+    n = (len - offsetof(struct ofp_port_stat_reply, ports)) / sizeof *ps;
+    ds_put_format(string, " %zu ports\n", n);
+    if (verbosity < 1) {
+        return;
+    }
+
+    for (ps = &psr->ports[0]; ps < &psr->ports[n]; ps++) {
+        ds_put_format(string, "  port %"PRIu16": ", ntohs(ps->port_no));
+        ds_put_format(string, "rx %"PRIu64", ", ntohll(ps->rx_count));
+        ds_put_format(string, "tx %"PRIu64", ", ntohll(ps->tx_count));
+        ds_put_format(string, "dropped %"PRIu64"\n", ntohll(ps->drop_count));
+    }
+}
+
+static void
+ofp_table_stat_reply(struct ds *string, const void *oh, size_t len,
+                     int verbosity)
+{
+    const struct ofp_table_stat_reply *tsr = oh;
+    const struct ofp_table_stats *ts;
+    size_t n;
+
+    n = (len - offsetof(struct ofp_table_stat_reply, tables)) / sizeof *ts;
+    ds_put_format(string, " %zu tables\n", n);
+    if (verbosity < 1) {
+        return;
+    }
+
+    for (ts = &tsr->tables[0]; ts < &tsr->tables[n]; ts++) {
+        char name[OFP_MAX_TABLE_NAME_LEN + 1];
+        strncpy(name, ts->name, sizeof name);
+        name[OFP_MAX_TABLE_NAME_LEN] = '\0';
+
+        ds_put_format(string, "  table %"PRIu16": ", ntohs(ts->table_id));
+        ds_put_format(string, "name %-8s, ", name);
+        ds_put_format(string, "max %6"PRIu32", ", ntohl(ts->max_entries));
+        ds_put_format(string, "active %6"PRIu32", ", ntohl(ts->active_count));
+        ds_put_format(string, "matched %6"PRIu64"\n",
+                      ntohll(ts->matched_count));
+     }
+}
+
 struct openflow_packet {
     const char *name;
     size_t min_size;
@@ -489,6 +585,36 @@ static const struct openflow_packet packets[] = {
         sizeof (struct ofp_port_status),
         ofp_print_port_status
     },
+    [OFPT_FLOW_STAT_REQUEST] = {
+        "flow_stat_request",
+        sizeof (struct ofp_flow_stat_request),
+        ofp_flow_stat_request,
+    },
+    [OFPT_FLOW_STAT_REPLY] = {
+        "flow_stat_reply",
+        sizeof (struct ofp_flow_stat_reply),
+        ofp_flow_stat_reply,
+    },
+    [OFPT_PORT_STAT_REQUEST] = {
+        "port_stat_request",
+        sizeof (struct ofp_port_stat_request),
+        NULL,
+    },
+    [OFPT_PORT_STAT_REPLY] = {
+        "port_stat_reply",
+        sizeof (struct ofp_port_stat_reply),
+        ofp_port_stat_reply,
+    },
+    [OFPT_TABLE_STAT_REQUEST] = {
+        "table_stat_request",
+        sizeof (struct ofp_table_stat_request),
+        NULL,
+    },
+    [OFPT_TABLE_STAT_REPLY] = {
+        "table_stat_reply",
+        sizeof (struct ofp_table_stat_reply),
+        ofp_table_stat_reply,
+    },
 };
 
 /* Composes and returns a string representing the OpenFlow packet of 'len'
@@ -533,8 +659,10 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
         ds_put_format(&string, " (***length=%zu < min_size=%zu***)\n",
                 len, pkt->min_size);
     } else if (!pkt->printer) {
-        ds_put_format(&string, " length=%zu (decoder not implemented)\n",
-                ntohs(oh->length));
+        if (len > sizeof *oh) {
+            ds_put_format(&string, " length=%zu (decoder not implemented)\n",
+                          ntohs(oh->length)); 
+        }
     } else {
         pkt->printer(&string, oh, len, verbosity);
     }
@@ -542,14 +670,6 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
         ds_put_hex_dump(&string, oh, len, 0, true);
     }
     return ds_cstr(&string);
-}
-
-char *
-ofp_table_to_string(const struct ofp_table* ot)
-{
-    return xasprintf("id: %d name: %-8s n_flows: %6d max_flows: %6d",
-                     ntohs(ot->table_id), ot->name, ntohl(ot->n_flows),
-                     ntohl(ot->max_flows));
 }
 
 static void
@@ -566,13 +686,6 @@ void
 ofp_print(FILE *stream, const void *oh, size_t len, int verbosity)
 {
     print_and_free(stream, ofp_to_string(oh, len, verbosity));
-}
-
-/* Pretty print a openflow table */
-void
-ofp_print_table(FILE *stream, const struct ofp_table *ot)
-{
-    print_and_free(stream, ofp_table_to_string(ot));
 }
 
 /* Dumps the contents of the Ethernet frame in the 'len' bytes starting at
