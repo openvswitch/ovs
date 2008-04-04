@@ -43,12 +43,14 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "fault.h"
+#include "list.h"
 #include "util.h"
 #include "rconn.h"
 #include "vconn-ssl.h"
 #include "vlog-socket.h"
 #include "openflow.h"
 #include "poll-loop.h"
+#include "vconn.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_secchan
@@ -56,19 +58,31 @@
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
-static bool reliable = true;
+static struct vconn *listen_vconn = NULL;
+
+struct half {
+    struct rconn *rconn;
+    struct buffer *rxbuf;
+};
+
+struct relay {
+    struct list node;
+    struct half halves[2];
+};
+
+static struct list relays = LIST_INITIALIZER(&relays);
+
+static void new_management_connection(const char *nl_name, struct vconn *new_remote);
+static void relay_create(struct rconn *, struct rconn *);
+static void relay_run(struct relay *);
+static void relay_wait(struct relay *);
+static void relay_destroy(struct relay *);
 
 int
 main(int argc, char *argv[])
 {
-    struct half {
-        struct rconn *rconn;
-        struct buffer *rxbuf;
-    };
-
-    struct half halves[2];
+    const char *nl_name;
     int retval;
-    int i;
 
     set_program_name(argv[0]);
     register_fault_handlers();
@@ -76,7 +90,14 @@ main(int argc, char *argv[])
     parse_options(argc, argv);
 
     if (argc - optind != 2) {
-        fatal(0, "exactly two peer arguments required; use --help for usage");
+        fatal(0,
+              "need exactly two non-option arguments; use --help for usage");
+    }
+    nl_name = argv[optind];
+    if (strncmp(nl_name, "nl:", 3)
+        || strlen(nl_name) < 4
+        || nl_name[strspn(nl_name + 3, "0123456789") + 3]) {
+        fatal(0, "%s: argument is not of the form \"nl:DP_ID\"", nl_name);
     }
 
     retval = vlog_server_listen(NULL, NULL);
@@ -84,52 +105,35 @@ main(int argc, char *argv[])
         fatal(retval, "Could not listen for vlog connections");
     }
 
-    for (i = 0; i < 2; i++) {
-        halves[i].rconn = rconn_new(argv[optind + i], 1);
-        halves[i].rxbuf = NULL;
-    }
+    relay_create(rconn_new(argv[optind], 1), rconn_new(argv[optind + 1], 1));
     for (;;) {
-        /* Do some work.  Limit the number of iterations so that callbacks
-         * registered with the poll loop don't starve. */
-        int iteration;
+        struct relay *r, *n;
 
-        for (i = 0; i < 2; i++) {
-            rconn_run(halves[i].rconn);
+        /* Do work. */
+        LIST_FOR_EACH_SAFE (r, n, struct relay, node, &relays) {
+            relay_run(r);
         }
-
-        for (iteration = 0; iteration < 50; iteration++) {
-            bool progress = false;
-            for (i = 0; i < 2; i++) {
-                struct half *this = &halves[i];
-                struct half *peer = &halves[!i];
-
-                if (!this->rxbuf) {
-                    this->rxbuf = rconn_recv(this->rconn);
-                }
-
-                if (this->rxbuf) {
-                    retval = rconn_send(peer->rconn, this->rxbuf);
+        if (listen_vconn) {
+            struct vconn *new_remote;
+            for (;;) {
+                retval = vconn_accept(listen_vconn, &new_remote);
+                if (retval) {
                     if (retval != EAGAIN) {
-                        this->rxbuf = NULL;
-                        if (!retval) {
-                            progress = true;
-                        }
+                        VLOG_WARN("accept failed (%s)", strerror(retval));
                     }
+                    break;
                 }
-            }
-            if (!progress) {
-                break;
+
+                new_management_connection(nl_name, new_remote);
             }
         }
 
         /* Wait for something to happen. */
-        for (i = 0; i < 2; i++) {
-            struct half *this = &halves[i];
-
-            rconn_run_wait(this->rconn);
-            if (!this->rxbuf) {
-                rconn_recv_wait(this->rconn);
-            }
+        LIST_FOR_EACH (r, struct relay, node, &relays) {
+            relay_wait(r);
+        }
+        if (listen_vconn) {
+            vconn_accept_wait(listen_vconn);
         }
         poll_block();
     }
@@ -138,9 +142,128 @@ main(int argc, char *argv[])
 }
 
 static void
+new_management_connection(const char *nl_name, struct vconn *new_remote)
+{
+    char *nl_name_without_subscription;
+    struct vconn *new_local;
+    struct rconn *r1, *r2;
+    int retval;
+
+    /* nl:123 or nl:123:1 opens a netlink connection to local datapath 123.  We
+     * only accept the former syntax in main().
+     *
+     * nl:123:0 opens a netlink connection to local datapath 123 without
+     * obtaining a subscription for ofp_packet_in or ofp_flow_expired
+     * messages.*/
+    nl_name_without_subscription = xasprintf("%s:0", nl_name);
+    retval = vconn_open(nl_name_without_subscription, &new_local);
+    if (retval) {
+        VLOG_ERR("could not connect to %s (%s)",
+                 nl_name_without_subscription, strerror(retval));
+        vconn_close(new_remote);
+        return;
+    }
+    free(nl_name_without_subscription);
+
+    /* Add it to the relay list. */
+    r1 = rconn_new_from_vconn(nl_name_without_subscription, 1, new_local);
+    r2 = rconn_new_from_vconn("passive", 1, new_remote);
+    relay_create(r1, r2);
+}
+
+static void
+relay_create(struct rconn *a, struct rconn *b)
+{
+    struct relay *r;
+    int i;
+
+    r = xmalloc(sizeof *r);
+    for (i = 0; i < 2; i++) {
+        r->halves[i].rconn = i ? b : a;
+        r->halves[i].rxbuf = NULL;
+    }
+    list_push_back(&relays, &r->node);
+}
+
+static void
+relay_run(struct relay *r)
+{
+    int iteration;
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        rconn_run(r->halves[i].rconn);
+    }
+
+    /* Limit the number of iterations to prevent other tasks from starving. */
+    for (iteration = 0; iteration < 50; iteration++) {
+        bool progress = false;
+        for (i = 0; i < 2; i++) {
+            struct half *this = &r->halves[i];
+            struct half *peer = &r->halves[!i];
+
+            if (!this->rxbuf) {
+                this->rxbuf = rconn_recv(this->rconn);
+            }
+
+            if (this->rxbuf) {
+                int retval = rconn_send(peer->rconn, this->rxbuf);
+                if (retval != EAGAIN) {
+                    this->rxbuf = NULL;
+                    if (!retval) {
+                        progress = true;
+                    }
+                }
+            }
+        }
+        if (!progress) {
+            break;
+        }
+    }
+
+    for (i = 0; i < 2; i++) {
+        struct half *this = &r->halves[i];
+        if (!rconn_is_alive(this->rconn)) {
+            relay_destroy(r);
+            return;
+        }
+    }
+}
+
+static void
+relay_wait(struct relay *r)
+{
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        struct half *this = &r->halves[i];
+
+        rconn_run_wait(this->rconn);
+        if (!this->rxbuf) {
+            rconn_recv_wait(this->rconn);
+        }
+    }
+}
+
+static void
+relay_destroy(struct relay *r)
+{
+    int i;
+
+    list_remove(&r->node);
+    for (i = 0; i < 2; i++) {
+        struct half *this = &r->halves[i];
+        rconn_destroy(this->rconn);
+        buffer_delete(this->rxbuf);
+    }
+    free(r);
+}
+
+static void
 parse_options(int argc, char *argv[]) 
 {
     static struct option long_options[] = {
+        {"listen",      required_argument, 0, 'l'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -154,15 +277,28 @@ parse_options(int argc, char *argv[])
     char *short_options = long_options_to_short_options(long_options);
     
     for (;;) {
-        int indexptr;
+        int retval;
         int c;
 
-        c = getopt_long(argc, argv, short_options, long_options, &indexptr);
+        c = getopt_long(argc, argv, short_options, long_options, NULL);
         if (c == -1) {
             break;
         }
 
         switch (c) {
+        case 'l':
+            if (listen_vconn) {
+                fatal(0, "-l or --listen may be only specified once");
+            }
+            retval = vconn_open(optarg, &listen_vconn);
+            if (retval && retval != EAGAIN) {
+                fatal(retval, "opening %s", optarg);
+            }
+            if (!vconn_is_passive(listen_vconn)) {
+                fatal(0, "%s is not a passive vconn", optarg);
+            }
+            break;
+
         case 'h':
             usage();
 
@@ -216,6 +352,14 @@ usage(void)
            "  -p, --private-key=FILE  file with private key\n"
            "  -c, --certificate=FILE  file with certificate for private key\n"
            "  -C, --ca-cert=FILE      file with peer CA certificate\n",
+           OFP_SSL_PORT);
+#endif
+    printf("\nNetworking options:\n"
+           "  -l, --listen=VCONN      allow management connections on VCONN:\n"
+           "                          ptcp:[PORT]   TCP PORT (default: %d)\n",
+           OFP_TCP_PORT);
+#ifdef HAVE_OPENSSL
+    printf("                          pssl:[PORT]   SSL PORT (default: %d)\n",
            OFP_SSL_PORT);
 #endif
     printf("\nOther options:\n"

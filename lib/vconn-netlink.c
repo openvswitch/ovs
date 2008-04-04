@@ -72,16 +72,18 @@ netlink_open(const char *name, char *suffix, struct vconn **vconnp)
 {
     struct netlink_vconn *netlink;
     int dp_idx;
+    int subscribe;
     int retval;
 
-    if (sscanf(suffix, "%d", &dp_idx) != 1) {
-        fatal(0, "%s: bad peer name format", name);
+    subscribe = 1;
+    if (sscanf(suffix, "%d:%d", &dp_idx, &subscribe) < 1) {
+        fatal(0, "%s: syntax error", name);
     }
 
     netlink = xmalloc(sizeof *netlink);
     netlink->vconn.class = &netlink_vconn_class;
     netlink->vconn.connect_status = 0;
-    retval = dpif_open(dp_idx, true, &netlink->dp);
+    retval = dpif_open(dp_idx, subscribe, &netlink->dp);
     if (retval) {
         free(netlink);
         *vconnp = NULL;
