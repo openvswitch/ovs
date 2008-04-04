@@ -37,6 +37,27 @@
 void vconn_ssl_set_private_key_file(const char *file_name);
 void vconn_ssl_set_certificate_file(const char *file_name);
 void vconn_ssl_set_ca_cert_file(const char *file_name);
-#endif
+
+#define VCONN_SSL_LONG_OPTIONS                      \
+        {"private-key", required_argument, 0, 'p'}, \
+        {"certificate", required_argument, 0, 'c'}, \
+        {"ca-cert",     required_argument, 0, 'C'},
+
+#define VCONN_SSL_OPTION_HANDLERS                   \
+        case 'p':                                   \
+            vconn_ssl_set_private_key_file(optarg); \
+            break;                                  \
+                                                    \
+        case 'c':                                   \
+            vconn_ssl_set_certificate_file(optarg); \
+            break;                                  \
+                                                    \
+        case 'C':                                   \
+            vconn_ssl_set_ca_cert_file(optarg);     \
+            break;
+#else /* !HAVE_OPENSSL */
+#define VCONN_SSL_LONG_OPTIONS
+#define VCONN_SSL_OPTION_HANDLERS
+#endif /* !HAVE_OPENSSL */
 
 #endif /* vconn-ssl.h */

@@ -124,11 +124,7 @@ parse_options(int argc, char *argv[])
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
-#ifdef HAVE_OPENSSL
-        {"private-key", required_argument, 0, 'p'},
-        {"certificate", required_argument, 0, 'c'},
-        {"ca-cert",     required_argument, 0, 'C'},
-#endif
+        VCONN_SSL_LONG_OPTIONS
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -174,19 +170,7 @@ parse_options(int argc, char *argv[])
             }
             break;
 
-#ifdef HAVE_OPENSSL
-        case 'p':
-            vconn_ssl_set_private_key_file(optarg);
-            break;
-
-        case 'c':
-            vconn_ssl_set_certificate_file(optarg);
-            break;
-
-        case 'C':
-            vconn_ssl_set_ca_cert_file(optarg);
-            break;
-#endif
+        VCONN_SSL_OPTION_HANDLERS
 
         case '?':
             exit(EXIT_FAILURE);
