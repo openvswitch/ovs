@@ -1109,7 +1109,6 @@ static int dp_genl_openflow(struct sk_buff *skb, struct genl_info *info)
 		goto out;
 	}
 
-	va = info->attrs[DP_GENL_A_OPENFLOW];
 	if (nla_len(va) < sizeof(struct ofp_header)) {
 		err = -EINVAL;
 		goto out;
