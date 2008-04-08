@@ -52,7 +52,7 @@ This distribution includes some additional software as well:
           OpenFlow switches, commanding them to act as regular MAC
           learning switches.
 
-        - vlogconf, a utility that can adjust the logging levels of a
+	- vlogconf, a utility that can adjust the logging levels of a
           running secchan or controller.
 
 	- ofp-pki, a utility for creating and managing the public-key
