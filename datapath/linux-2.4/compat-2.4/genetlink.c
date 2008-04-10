@@ -6,6 +6,7 @@
  *				Johannes Berg <johannes@sipsolutions.net>
  */
 
+#include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/errno.h>

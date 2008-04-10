@@ -33,8 +33,9 @@
 
 */
 
-#include <linux/types.h>
+#include <linux/init.h>
 #include <linux/module.h>
+#include <linux/types.h>
 #include <linux/jiffies.h>
 #include <linux/random.h>
 #include <linux/threads.h>

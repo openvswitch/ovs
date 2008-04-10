@@ -150,6 +150,7 @@ nl_sock_create(int protocol, int multicast_group,
         goto error_free_pid;
     }
 
+#ifdef NETLINK_ADD_MEMBERSHIP
     /* This method of joining multicast groups is only supported by newish
      * kernels, but it allows for an arbitrary number of multicast groups. */
     if (multicast_group > 32
@@ -159,6 +160,7 @@ nl_sock_create(int protocol, int multicast_group,
                  multicast_group, strerror(errno));
         goto error_free_pid;
     }
+#endif
 
     *sockp = sock;
     return 0;

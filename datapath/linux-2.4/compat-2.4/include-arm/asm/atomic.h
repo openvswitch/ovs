@@ -3,8 +3,6 @@
 
 #include_next <asm/atomic.h>
 
-#error "Cribbed from linux-2.6/include/asm-arm/atomic.h but untested"
-
 #ifdef __KERNEL__
 
 #if __LINUX_ARM_ARCH__ >= 6
@@ -40,11 +38,11 @@ static inline int atomic_cmpxchg(atomic_t *v, int old, int new)
 	int ret;
 	unsigned long flags;
 
-	raw_local_irq_save(flags);
+	local_irq_save(flags);
 	ret = v->counter;
 	if (likely(ret == old))
 		v->counter = new;
-	raw_local_irq_restore(flags);
+	local_irq_restore(flags);
 
 	return ret;
 }
