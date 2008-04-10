@@ -4,6 +4,7 @@ AM_INIT_AUTOMAKE
 
 AC_PROG_CC
 AC_PROG_CPP
+AC_PROG_LD
 
 AC_USE_SYSTEM_EXTENSIONS
 
@@ -27,7 +28,8 @@ CHECK_LINUX(l24, 2.4, 2.4, KSRC24, L24_ENABLED)
 AC_CHECK_HEADER([linux/netlink.h],
                 [HAVE_NETLINK=yes],
                 [HAVE_NETLINK=no],
-                [#include <sys/socket.h>])
+                [#include <sys/socket.h>
+#include <linux/types.h>])
 AM_CONDITIONAL([HAVE_NETLINK], [test "$HAVE_NETLINK" = yes])
 if test "$HAVE_NETLINK" = yes; then
    AC_DEFINE([HAVE_NETLINK], [1],
