@@ -6,7 +6,7 @@ export KVERSION = 2.4
 export VMDIR = @VMDIR@
 
 SHAREDFILES = ../chain.c ../crc32.c ../table-hash.c ../table-linear.c	\
-              ../table-mac.c ../forward.c ../flow.c ../unit-exports.c  \
+              ../forward.c ../flow.c ../unit-exports.c  \
 			  ../dp_dev.c ../datapath_t.c
 
 SIMLINKFILES = $(patsubst ../%,%, $(SHAREDFILES))

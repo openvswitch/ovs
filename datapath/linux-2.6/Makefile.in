@@ -12,7 +12,7 @@ CFLAGS_EXTRA += -I $(srcdir)/.. -I $(srcdir)/datapath/  -I $(top_srcdir)/include
 # Files shared between 2.4 and 2.6 builds
 
 SHAREDFILES = ../chain.c ../crc32.c ../table-hash.c ../table-linear.c	\
-			../table-mac.c ../forward.c ../flow.c ../unit-exports.c \
+			../forward.c ../flow.c ../unit-exports.c \
 			../datapath_t.c ../dp_dev.c \
 			compat-2.6/genetlink.c \
 			compat-2.6/random32.c 

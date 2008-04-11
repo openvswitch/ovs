@@ -755,29 +755,17 @@ complex_test_destr:
 
 void run_table_t(void)
 {
-	int mac_buckets, mac_max, linear_max, hash_buckets, hash2_buckets1;
+	int linear_max, hash_buckets, hash2_buckets1;
 	int hash2_buckets2, num_flows, num_iterations;
 	int i;
 
 	struct sw_table *swt;
 
 	/* Most basic operations. */
-	simple_insert_delete(table_mac_create(2048, 65536),
-			 OFPFW_ALL & ~OFPFW_DL_SRC);
 	simple_insert_delete(table_linear_create(2048), 0);
 	simple_insert_delete(table_hash_create(0x04C11DB7, 2048), 0);
 	simple_insert_delete(table_hash2_create(0x04C11DB7, 2048,
 						0x1EDC6F41, 2048), 0);
-
-	/* MAC table operations. */
-	multiple_insert_destroy(table_mac_create(2048, 65536), 1024,
-				OFPFW_ALL & ~OFPFW_DL_SRC, 0, 0);
-	multiple_insert_destroy(table_mac_create(2048, 65536), 2048,
-				OFPFW_ALL & ~OFPFW_DL_SRC, 0, 0);
-	multiple_insert_destroy(table_mac_create(2048, 65536), 65535,
-				OFPFW_ALL & ~OFPFW_DL_SRC, 0, 0);
-	multiple_insert_destroy(table_mac_create(2048, 65536),
-				131072, OFPFW_ALL & ~OFPFW_DL_SRC, 65536, 65536);
 
 	/* Linear table operations. */
 	multiple_insert_destroy(table_linear_create(2048), 1024, 0, 0, 0);
@@ -817,8 +805,6 @@ void run_table_t(void)
 	multiple_insert_destroy(table_hash2_create(0x04C11DB7, 1<<20,
 						0x04C11DB7, 1<<20), 1<<16, 0, 0, 100);
 
-	mac_buckets = 1024;
-	mac_max = 2048;
 	linear_max = 2048;
 	hash_buckets = 2048;
 	hash2_buckets1 = 1024;
@@ -835,7 +821,7 @@ void run_table_t(void)
 	printk("  complex_add_delete_test with %d flows and %d iterations\n\n",
 				num_flows, num_iterations);
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < 3; i++) {
 		unsigned int mask = i == 0 ?  : 0;
 
 		if (unit_failed())
@@ -844,16 +830,12 @@ void run_table_t(void)
 		mask = 0;
 		switch (i) {
 		case 0:
-			swt = table_mac_create(mac_buckets, mac_max);
-			mask = OFPFW_ALL & ~OFPFW_DL_SRC;
-			break;
-		case 1:
 			swt = table_linear_create(linear_max);
 			break;
-		case 2:
+		case 1:
 			swt = table_hash_create (0x04C11DB7, hash_buckets);
 			break;
-		case 3:
+		case 2:
 			swt = table_hash2_create(0x04C11DB7, hash2_buckets1,
 						 0x1EDC6F41, hash2_buckets2);
 			break;
@@ -867,7 +849,7 @@ void run_table_t(void)
 			return;
 		}
 		printk("Testing %s table with %d buckets and %d max flows...\n",
-					table_name(swt), mac_buckets, mac_max);
+					table_name(swt), hash_buckets, num_flows);
 		iterator_test(swt, 0, mask);
 		iterator_test(swt, num_flows, mask);
 		add_test(swt, mask);

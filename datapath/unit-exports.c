@@ -14,7 +14,6 @@ EXPORT_SYMBOL(flow_alloc);
 EXPORT_SYMBOL(flow_free);
 EXPORT_SYMBOL(flow_cache);
 
-EXPORT_SYMBOL(table_mac_create);
 EXPORT_SYMBOL(table_hash_create);
 EXPORT_SYMBOL(table_hash2_create);
 EXPORT_SYMBOL(table_linear_create);

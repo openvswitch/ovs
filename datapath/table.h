@@ -63,8 +63,6 @@ struct sw_table {
 	void (*stats)(struct sw_table *table, struct sw_table_stats *stats);
 };
 
-struct sw_table *table_mac_create(unsigned int n_buckets,
-		unsigned int max_flows);
 struct sw_table *table_hash_create(unsigned int polynomial,
 		unsigned int n_buckets);
 struct sw_table *table_hash2_create(unsigned int poly0, unsigned int buckets0,
