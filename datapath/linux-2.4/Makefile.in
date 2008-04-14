@@ -38,7 +38,7 @@ SHARED_T_FILES =                                \
     ../unit.c
 UNIT_CFILES = $(patsubst ../%,%, $(SHARED_T_FILES))
 
-kFILES = ../datapath.h 				\
+HFILES = ../datapath.h 				\
 	../chain.h 				\
 	../crc32.h 				\
 	../flow.h 				\

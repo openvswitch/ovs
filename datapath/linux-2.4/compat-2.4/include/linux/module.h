@@ -1,6 +1,7 @@
 #ifndef __LINUX_MODULE_WRAPPER_H
 #define __LINUX_MODULE_WRAPPER_H 1
 
+#include <linux/kernel.h>
 #include_next <linux/module.h>
 
 static inline int try_module_get(struct module *module)

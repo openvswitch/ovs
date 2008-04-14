@@ -3,8 +3,6 @@
 
 #include <asm/system.h>
 
-#error "Cribbed from linux-2.6/include/asm-mips/barrier.h but untested."
-
 /* Not sure whether these really need to be defined, but the conservative
  * choice seems to be to define them. */
 #define CONFIG_WEAK_ORDERING 1
