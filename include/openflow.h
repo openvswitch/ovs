@@ -348,11 +348,12 @@ struct ofp_flow_expired {
 /* Statistics about flows that match the "match" field */
 struct ofp_flow_stats {
     struct ofp_match match;   /* Description of fields */
-    uint16_t duration;        /* Time flow has been alive in seconds.  Only 
+    uint32_t duration;        /* Time flow has been alive in seconds.  Only 
                                  used for non-aggregated results. */
+    uint64_t packet_count;    /* Number of packets in flow. */
+    uint64_t byte_count;      /* Number of bytes in flow. */
     uint16_t table_id;        /* ID of table flow came from. */
-    uint64_t packet_count;
-    uint64_t byte_count;
+    uint8_t pad[6];           /* Align to 64-bits. */
 };
 
 enum ofp_stat_type {

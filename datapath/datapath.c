@@ -752,8 +752,6 @@ static void
 fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
 		int table_idx)
 {
-	int duration;
-	
 	ofs->match.wildcards = htons(flow->key.wildcards);
 	ofs->match.in_port   = flow->key.in_port;
 	memcpy(ofs->match.dl_src, flow->key.dl_src, ETH_ALEN);
@@ -766,8 +764,7 @@ fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
 	memset(ofs->match.pad, 0, sizeof ofs->match.pad);
 	ofs->match.tp_src    = flow->key.tp_src;
 	ofs->match.tp_dst    = flow->key.tp_dst;
-	duration = (jiffies - flow->init_time) / HZ;
-	ofs->duration        = htons(min(65535, duration));
+	ofs->duration        = htonl((jiffies - flow->init_time) / HZ);
 	ofs->table_id        = htons(table_idx);
 	ofs->packet_count    = cpu_to_be64(flow->packet_count);
 	ofs->byte_count      = cpu_to_be64(flow->byte_count);
