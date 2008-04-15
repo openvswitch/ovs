@@ -352,8 +352,8 @@ struct ofp_flow_stats {
                                  used for non-aggregated results. */
     uint64_t packet_count;    /* Number of packets in flow. */
     uint64_t byte_count;      /* Number of bytes in flow. */
-    uint16_t table_id;        /* ID of table flow came from. */
-    uint8_t pad[6];           /* Align to 64-bits. */
+    uint8_t table_id;         /* ID of table flow came from. */
+    uint8_t pad[7];           /* Align to 64-bits. */
 };
 
 enum ofp_stat_type {
@@ -365,10 +365,10 @@ enum ofp_stat_type {
 struct ofp_flow_stat_request {
     struct ofp_header header;
     struct ofp_match match;   /* Fields to match */
-    uint16_t table_id;        /* ID of table to read (from ofp_table_stats)
+    uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
                                  or 0xffff for all tables. */
     uint8_t type;             /* One of OFPFS_ */
-    uint8_t pad;              /* Align to 32-bits */
+    uint16_t pad;               /* Align to 32-bits */
 };
 
 /* Current flow statistics reply */
@@ -392,8 +392,8 @@ struct ofp_table_stat_request {
 
 /* Statistics about a particular table */
 struct ofp_table_stats {
-    uint16_t table_id;
-    uint8_t pad[2];          /* Align to 32-bits */
+    uint8_t table_id;
+    uint8_t pad[3];          /* Align to 32-bits */
     char name[OFP_MAX_TABLE_NAME_LEN];
     uint32_t max_entries;    /* Max number of entries supported */
     uint32_t active_count;   /* Number of active entries */

@@ -645,7 +645,7 @@ fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
 	ofs->match.tp_src    = flow->key.flow.tp_src;
 	ofs->match.tp_dst    = flow->key.flow.tp_dst;
 	ofs->duration        = htonl(now - flow->created);
-	ofs->table_id        = htons(table_idx);
+	ofs->table_id        = table_idx;
 	ofs->packet_count    = htonll(flow->packet_count);
 	ofs->byte_count      = htonll(flow->byte_count);
 }
@@ -735,7 +735,7 @@ dp_send_table_stats(struct datapath *dp, const struct sender *sender)
 		struct sw_table_stats stats;
 		dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
 		strncpy(ots->name, stats.name, sizeof ots->name);
-		ots->table_id = htons(i);
+		ots->table_id = i;
 		ots->pad[0] = ots->pad[1] = 0;
 		ots->max_entries = htonl(stats.max_flows);
 		ots->active_count = htonl(stats.n_flows);

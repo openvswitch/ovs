@@ -455,7 +455,7 @@ str_to_action(const char *str, struct ofp_action *action)
 
 static void
 str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action,
-            uint16_t *table_idx)
+            uint8_t *table_idx)
 {
     struct field {
         const char *name;
@@ -483,7 +483,7 @@ str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action,
     bool got_action = false;
 
     if (table_idx) {
-        *table_idx = htons(0xffff);
+        *table_idx = 0xff;
     }
     memset(match, 0, sizeof *match);
     wildcards = OFPFW_ALL;
@@ -501,7 +501,7 @@ str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action,
         }
 
         if (table_idx && !strcmp(name, "table")) {
-            *table_idx = htons(atoi(value));
+            *table_idx = atoi(value);
             continue;
         }
 

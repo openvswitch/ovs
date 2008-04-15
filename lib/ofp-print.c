@@ -433,10 +433,10 @@ ofp_flow_stat_request(struct ds *string, const void *oh, size_t len,
 {
     const struct ofp_flow_stat_request *fsr = oh;
 
-    if (fsr->table_id == htons(0xffff)) {
+    if (fsr->table_id == 0xff) {
         ds_put_format(string, " table_id=any, ");
     } else {
-        ds_put_format(string, " table_id=%"PRIu16", ", ntohs(fsr->table_id));
+        ds_put_format(string, " table_id=%"PRIu8", ", fsr->table_id);
     }
 
     if (fsr->type == OFPFS_INDIV) {
@@ -464,11 +464,11 @@ ofp_flow_stat_reply(struct ds *string, const void *oh, size_t len,
     }
 
     for (fs = &fsr->flows[0]; fs < &fsr->flows[n]; fs++) {
-        ds_put_format(string, "  table_id=%"PRIu16", ", ntohs(fs->table_id));
+        ds_put_format(string, "  duration=%"PRIu32" s, ", ntohs(fs->duration));
+        ds_put_format(string, "table_id=%"PRIu8", ", fs->table_id);
         ds_put_format(string, "n_packets=%"PRIu64", ",
                       ntohll(fs->packet_count));
         ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
-        ds_put_format(string, "duration=%"PRIu32" s, ", ntohl(fs->duration));
         ofp_print_match(string, &fs->match);
      }
 }
@@ -514,7 +514,7 @@ ofp_table_stat_reply(struct ds *string, const void *oh, size_t len,
         strncpy(name, ts->name, sizeof name);
         name[OFP_MAX_TABLE_NAME_LEN] = '\0';
 
-        ds_put_format(string, "  table %"PRIu16": ", ntohs(ts->table_id));
+        ds_put_format(string, "  table %"PRIu8": ", ts->table_id);
         ds_put_format(string, "name %-8s, ", name);
         ds_put_format(string, "max %6"PRIu32", ", ntohl(ts->max_entries));
         ds_put_format(string, "active %6"PRIu32", ", ntohl(ts->active_count));
