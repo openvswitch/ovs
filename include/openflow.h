@@ -61,7 +61,11 @@ enum ofp_port {
     OFPP_MAX = 0x100,
 
     /* Fake output "ports". */
-    OFPP_NORMAL     = 0xfffa,  /* Process with normal L2/L3 switching */
+    OFPP_TABLE      = 0xfff9,  /* Perform actions in flow table.  
+                                * NB: This can only be the destination
+                                * port for packet-out messages. 
+                                */
+    OFPP_NORMAL     = 0xfffa,  /* Process with normal L2/L3 switching. */
     OFPP_FLOOD      = 0xfffb,  /* All physical ports except input port and 
                                   those disabled by STP. */
     OFPP_ALL        = 0xfffc,  /* All physical ports except input port. */

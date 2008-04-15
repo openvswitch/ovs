@@ -2,6 +2,7 @@
 #define FORWARD_H 1
 
 #include <linux/types.h>
+#include "datapath.h"
 #include "flow.h"
 
 struct sk_buff;
@@ -29,6 +30,9 @@ uint32_t fwd_save_skb(struct sk_buff *skb);
 
 void fwd_exit(void);
 
+void execute_actions(struct datapath *, struct sk_buff *,
+			const struct sw_flow_key *, 
+			const struct ofp_action *, int n_actions);
 struct sk_buff *execute_setter(struct sk_buff *, uint16_t,
 			const struct sw_flow_key *, const struct ofp_action *);
 

@@ -6,6 +6,7 @@
 #include <linux/version.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,29)
 #include <linux/time.h>
+#include <linux/sched.h>
 #include <asm/param.h>
 /*
  * We define MAX_MSEC_OFFSET as the maximal value that can be accepted by

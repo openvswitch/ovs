@@ -21,9 +21,6 @@
 
 /* FIXME: do we need to use GFP_ATOMIC everywhere here? */
 
-static void execute_actions(struct datapath *, struct sk_buff *,
-				const struct sw_flow_key *,
-				const struct ofp_action *, int n_actions);
 static int make_writable(struct sk_buff **);
 
 static struct sk_buff *retrieve_skb(uint32_t id);
@@ -60,7 +57,7 @@ static int do_output(struct datapath *dp, struct sk_buff *skb, size_t max_len,
 					 max_len, OFPR_ACTION));
 }
 
-static void execute_actions(struct datapath *dp, struct sk_buff *skb,
+void execute_actions(struct datapath *dp, struct sk_buff *skb,
 				const struct sw_flow_key *key,
 				const struct ofp_action *actions, int n_actions)
 {
@@ -346,6 +343,7 @@ static int
 add_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 {
 	int error = -ENOMEM;
+	int i;
 	int n_acts;
 	struct sw_flow *flow;
 
@@ -355,6 +353,19 @@ add_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 	if (n_acts > MAX_ACTIONS) {
 		error = -E2BIG;
 		goto error;
+	}
+
+	/* To prevent loops, make sure there's no action to send to the
+	 * OFP_TABLE virtual port.
+	 */
+	for (i=0; i<n_acts; i++) {
+		const struct ofp_action *a = &ofm->actions[i];
+
+		if (a->type == htons(OFPAT_OUTPUT) 
+					&& a->arg.output.port == htons(OFPP_TABLE)) {
+			/* xxx Send fancy new error message? */
+			goto error;
+		}
 	}
 
 	/* Allocate memory. */

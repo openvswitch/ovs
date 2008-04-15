@@ -46,6 +46,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/socket.h>
+#include <linux/types.h>
 #include <linux/netlink.h>
 #include <linux/genetlink.h>
 #include <linux/version.h>

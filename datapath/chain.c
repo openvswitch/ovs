@@ -35,9 +35,7 @@ struct sw_chain *chain_create(struct datapath *dp)
 		return NULL;
 	chain->dp = dp;
 
-	if (add_table(chain, table_mac_create(TABLE_MAC_NUM_BUCKETS, 
-						TABLE_MAC_MAX_FLOWS))
-		|| add_table(chain, table_hash2_create(0x1EDC6F41, TABLE_HASH_MAX_FLOWS,
+	if (add_table(chain, table_hash2_create(0x1EDC6F41, TABLE_HASH_MAX_FLOWS,
 						0x741B8CD7, TABLE_HASH_MAX_FLOWS))
 		|| add_table(chain, table_linear_create(TABLE_LINEAR_MAX_FLOWS))) {
 		chain_destroy(chain);

@@ -3,8 +3,6 @@
 
 #include_next <asm/system.h>
 
-#error "Cribbed from linux-2.6/include/asm-mips/system.h but untested."
-
 #define __HAVE_ARCH_CMPXCHG 1
 
 static inline unsigned long __cmpxchg_u32(volatile int * m, unsigned long old,
@@ -52,11 +50,11 @@ static inline unsigned long __cmpxchg_u32(volatile int * m, unsigned long old,
 	} else {
 		unsigned long flags;
 
-		raw_local_irq_save(flags);
+		local_irq_save(flags);
 		retval = *m;
 		if (retval == old)
 			*m = new;
-		raw_local_irq_restore(flags);	/* implies memory barrier  */
+		local_irq_restore(flags);	/* implies memory barrier  */
 	}
 
 	smp_llsc_mb();
@@ -158,11 +156,11 @@ static inline unsigned long __cmpxchg_u64(volatile int * m, unsigned long old,
 	} else {
 		unsigned long flags;
 
-		raw_local_irq_save(flags);
+		local_irq_save(flags);
 		retval = *m;
 		if (retval == old)
 			*m = new;
-		raw_local_irq_restore(flags);	/* implies memory barrier  */
+		local_irq_restore(flags);	/* implies memory barrier  */
 	}
 
 	smp_llsc_mb();

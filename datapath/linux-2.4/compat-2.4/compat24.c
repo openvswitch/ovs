@@ -2,6 +2,7 @@
  * Distributed under the terms of the GNU GPL version 2.
  */
 
+#include <linux/init.h>
 #include <linux/module.h>
 #include "compat24.h"
 

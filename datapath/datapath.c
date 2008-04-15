@@ -6,6 +6,7 @@
 
 /* Functions for managing the dp interface/device. */
 
+#include <linux/init.h>
 #include <linux/module.h>
 #include <linux/if_arp.h>
 #include <linux/if_bridge.h>
@@ -531,7 +532,19 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 	else if (out_port == OFPP_CONTROLLER)
 		return dp_output_control(dp, skb, fwd_save_skb(skb), 0,
 						  OFPR_ACTION);
-	else if (out_port >= OFPP_MAX)
+	else if (out_port == OFPP_TABLE) {
+		struct sw_flow_key key;
+		struct sw_flow *flow;
+
+		flow_extract(skb, skb->dev->br_port->port_no, &key);
+		flow = chain_lookup(dp->chain, &key);
+		if (likely(flow != NULL)) {
+			flow_used(flow, skb);
+			execute_actions(dp, skb, &key, flow->actions, flow->n_actions);
+			return 0;
+		}
+		return -ESRCH;
+	} else if (out_port >= OFPP_MAX)
 		goto bad_port;
 
 	p = dp->ports[out_port];

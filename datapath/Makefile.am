@@ -8,7 +8,7 @@ endif
 
 EXTRA_DIST = linux-2.6 linux-2.4\
 			datapath.c snap.h chain.c  crc32.c  crc_t.c\
-			flow.h forward.h table-hash.c table-mac.c\
+			flow.h forward.h table-hash.c\
             unit.c unit.h datapath.h  chain.h  crc32.h\
             flow.c  forward.c  forward_t.c table.h\
             table-linear.c  table_t.c    unit-exports.c\
