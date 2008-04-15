@@ -654,49 +654,49 @@ int
 dp_send_flow_stats(struct datapath *dp, const struct sender *sender,
                    const struct ofp_match *match)
 {
-	struct buffer *buffer;
-	struct ofp_flow_stat_reply *fsr;
-	size_t header_size, fudge, flow_size;
-	struct sw_flow_key match_key;
-	int table_idx, n_flows, max_flows;
+    struct buffer *buffer;
+    struct ofp_flow_stat_reply *fsr;
+    size_t header_size, fudge, flow_size;
+    struct sw_flow_key match_key;
+    int table_idx, n_flows, max_flows;
     time_t now;
 
-	header_size = offsetof(struct ofp_flow_stat_reply, flows);
-	fudge = 128;
-	flow_size = sizeof fsr->flows[0];
-	max_flows = (65536 - header_size - fudge) / flow_size;
-	fsr = alloc_openflow_buffer(dp, header_size,
+    header_size = offsetof(struct ofp_flow_stat_reply, flows);
+    fudge = 128;
+    flow_size = sizeof fsr->flows[0];
+    max_flows = (65536 - header_size - fudge) / flow_size;
+    fsr = alloc_openflow_buffer(dp, header_size,
                                 OFPT_FLOW_STAT_REPLY, sender, &buffer);
 
-	n_flows = 0;
-	flow_extract_match(&match_key, match);
+    n_flows = 0;
+    flow_extract_match(&match_key, match);
     now = time(0);
-	for (table_idx = 0; table_idx < dp->chain->n_tables; table_idx++) {
-		struct sw_table *table = dp->chain->tables[table_idx];
-		struct swt_iterator iter;
+    for (table_idx = 0; table_idx < dp->chain->n_tables; table_idx++) {
+        struct sw_table *table = dp->chain->tables[table_idx];
+        struct swt_iterator iter;
 
-		if (n_flows >= max_flows) {
-			break;
-		}
+        if (n_flows >= max_flows) {
+            break;
+        }
 
-		if (!table->iterator(table, &iter)) {
+        if (!table->iterator(table, &iter)) {
             printf("iterator failed for table %d\n", table_idx);
-			continue;
-		}
+            continue;
+        }
 
-		for (; iter.flow; table->iterator_next(&iter)) {
-			if (flow_matches(&match_key, &iter.flow->key)) {
+        for (; iter.flow; table->iterator_next(&iter)) {
+            if (flow_matches(&match_key, &iter.flow->key)) {
                 struct ofp_flow_stats *ofs = buffer_put_uninit(buffer,
                                                                sizeof *ofs);
-				fill_flow_stats(ofs, iter.flow, table_idx, now);
-				if (++n_flows >= max_flows) {
-					break;
-				}
-			}
-		}
-		table->iterator_destroy(&iter);
-	}
-	return send_openflow_buffer(dp, buffer, sender);
+                fill_flow_stats(ofs, iter.flow, table_idx, now);
+                if (++n_flows >= max_flows) {
+                    break;
+                }
+            }
+        }
+        table->iterator_destroy(&iter);
+    }
+    return send_openflow_buffer(dp, buffer, sender);
 }
 
 int
