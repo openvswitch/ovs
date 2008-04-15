@@ -164,7 +164,6 @@ struct ofp_switch_features {
 
     /* Table info. */
     uint32_t n_exact;       /* Max exact-match table entries. */
-    uint32_t n_mac_only;    /* Max mac-only table entries. */
     uint32_t n_compression; /* Max entries compressed on service port.  */
     uint32_t n_general;     /* Max entries of arbitrary form. */
 

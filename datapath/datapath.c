@@ -653,7 +653,6 @@ fill_features_reply(struct datapath *dp, struct ofp_switch_features *ofr)
 	ofr->datapath_id    = cpu_to_be64(dp->id); 
 
 	ofr->n_exact        = htonl(2 * TABLE_HASH_MAX_FLOWS);
-	ofr->n_mac_only     = htonl(TABLE_MAC_MAX_FLOWS);
 	ofr->n_compression  = 0;					   /* Not supported */
 	ofr->n_general      = htonl(TABLE_LINEAR_MAX_FLOWS);
 	ofr->buffer_mb      = htonl(UINT32_MAX);

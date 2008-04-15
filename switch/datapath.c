@@ -572,8 +572,7 @@ dp_send_features_reply(struct datapath *dp, const struct sender *sender)
                                 sender, &buffer);
     ofr->datapath_id    = htonll(dp->id); 
     ofr->n_exact        = htonl(2 * TABLE_HASH_MAX_FLOWS);
-    ofr->n_mac_only     = htonl(TABLE_MAC_MAX_FLOWS);
-    ofr->n_compression  = 0;                                           /* Not supported */
+    ofr->n_compression  = 0;         /* Not supported */
     ofr->n_general      = htonl(TABLE_LINEAR_MAX_FLOWS);
     ofr->buffer_mb      = htonl(UINT32_MAX);
     ofr->n_buffers      = htonl(N_PKT_BUFFERS);

@@ -8,8 +8,6 @@ struct datapath;
 
 #define TABLE_LINEAR_MAX_FLOWS  100
 #define TABLE_HASH_MAX_FLOWS	65536
-#define TABLE_MAC_MAX_FLOWS	 1024
-#define TABLE_MAC_NUM_BUCKETS   1024
 
 /* Set of tables chained together in sequence from cheap to expensive. */
 #define CHAIN_MAX_TABLES 4

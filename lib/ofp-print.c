@@ -302,8 +302,8 @@ ofp_print_switch_features(struct ds *string, const void *oh, size_t len,
     int i;
 
     ds_put_format(string, "dp id:%"PRIx64"\n", ntohll(osf->datapath_id));
-    ds_put_format(string, "tables: exact:%d, mac:%d, compressed:%d, general:%d\n",
-           ntohl(osf->n_exact), ntohl(osf->n_mac_only),
+    ds_put_format(string, "tables: exact:%d, compressed:%d, general:%d\n",
+           ntohl(osf->n_exact), 
            ntohl(osf->n_compression), ntohl(osf->n_general));
     ds_put_format(string, "buffers: size:%d, number:%d\n",
            ntohl(osf->buffer_mb), ntohl(osf->n_buffers));
