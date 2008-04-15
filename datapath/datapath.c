@@ -240,7 +240,7 @@ static int new_dp(int dp_idx)
 #endif
 
 	dp->config.flags = 0;
-	dp->config.miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
+	dp->config.miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
 
 	dp->dp_task = kthread_run(dp_maint_func, dp, "dp%d", dp_idx);
 	if (IS_ERR(dp->dp_task))

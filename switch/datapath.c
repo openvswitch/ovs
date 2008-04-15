@@ -198,7 +198,7 @@ dp_new(struct datapath **dp_, uint64_t dpid, struct rconn *rconn)
 
     list_init(&dp->port_list);
     dp->config.flags = 0;
-    dp->config.miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
+    dp->config.miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
     *dp_ = dp;
     return 0;
 }
@@ -762,7 +762,7 @@ void fwd_port_input(struct datapath *dp, struct buffer *buffer, int in_port)
         execute_actions(dp, buffer, in_port, &key,
                         flow->actions, flow->n_actions);
     } else {
-        dp_output_control(dp, buffer, in_port, dp->config.miss_send_len,
+        dp_output_control(dp, buffer, in_port, ntohs(dp->config.miss_send_len),
                           OFPR_NO_MATCH);
     }
 }

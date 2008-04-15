@@ -44,7 +44,7 @@ void fwd_port_input(struct sw_chain *chain, struct sk_buff *skb, int in_port)
 				flow->actions, flow->n_actions);
 	} else {
 		dp_output_control(chain->dp, skb, fwd_save_skb(skb), 
-				  chain->dp->config.miss_send_len,
+				  ntohs(chain->dp->config.miss_send_len),
 				  OFPR_NO_MATCH);
 	}
 }
