@@ -399,7 +399,7 @@ do_show(int argc UNUSED, char *argv[])
 static void
 do_dump_tables(int argc, char *argv[])
 {
-    dump_transaction(argv[1], OFPT_TABLE_STAT_REQUEST);
+    dump_transaction(argv[1], OFPT_TABLE_STATS_REQUEST);
 }
 
 
@@ -553,10 +553,10 @@ static void do_dump_flows(int argc, char *argv[])
 {
     struct vconn *vconn;
     struct buffer *request, *reply;
-    struct ofp_flow_stat_request *fsr;
+    struct ofp_flow_stats_request *fsr;
 
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
-    fsr = alloc_openflow_buffer(sizeof *fsr, OFPT_FLOW_STAT_REQUEST, &request);
+    fsr = alloc_openflow_buffer(sizeof *fsr, OFPT_FLOW_STATS_REQUEST, &request);
     str_to_flow(argc > 2 ? argv[2] : "", &fsr->match, NULL, &fsr->table_id);
     fsr->type = OFPFS_INDIV;
     fsr->pad = 0;
@@ -614,7 +614,7 @@ static void do_add_flows(int argc, char *argv[])
 static void
 do_dump_ports(int argc, char *argv[])
 {
-    dump_transaction(argv[1], OFPT_PORT_STAT_REQUEST);
+    dump_transaction(argv[1], OFPT_PORT_STATS_REQUEST);
 }
 
 static void do_help(int argc UNUSED, char *argv[] UNUSED)

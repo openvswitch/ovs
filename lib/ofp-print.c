@@ -428,10 +428,10 @@ void ofp_print_port_status(struct ds *string, const void *oh, size_t len,
 }
 
 static void
-ofp_flow_stat_request(struct ds *string, const void *oh, size_t len,
+ofp_flow_stats_request(struct ds *string, const void *oh, size_t len,
                       int verbosity) 
 {
-    const struct ofp_flow_stat_request *fsr = oh;
+    const struct ofp_flow_stats_request *fsr = oh;
 
     if (fsr->table_id == 0xff) {
         ds_put_format(string, " table_id=any, ");
@@ -450,14 +450,14 @@ ofp_flow_stat_request(struct ds *string, const void *oh, size_t len,
 }
 
 static void
-ofp_flow_stat_reply(struct ds *string, const void *oh, size_t len,
+ofp_flow_stats_reply(struct ds *string, const void *oh, size_t len,
                      int verbosity)
 {
-    const struct ofp_flow_stat_reply *fsr = oh;
+    const struct ofp_flow_stats_reply *fsr = oh;
     const struct ofp_flow_stats *fs;
     size_t n;
 
-    n = (len - offsetof(struct ofp_flow_stat_reply, flows)) / sizeof *fs;
+    n = (len - offsetof(struct ofp_flow_stats_reply, flows)) / sizeof *fs;
     ds_put_format(string, " %zu flows\n", n);
     if (verbosity < 1) {
         return;
@@ -474,14 +474,14 @@ ofp_flow_stat_reply(struct ds *string, const void *oh, size_t len,
 }
 
 static void
-ofp_port_stat_reply(struct ds *string, const void *oh, size_t len,
+ofp_port_stats_reply(struct ds *string, const void *oh, size_t len,
                     int verbosity)
 {
-    const struct ofp_port_stat_reply *psr = oh;
+    const struct ofp_port_stats_reply *psr = oh;
     const struct ofp_port_stats *ps;
     size_t n;
 
-    n = (len - offsetof(struct ofp_port_stat_reply, ports)) / sizeof *ps;
+    n = (len - offsetof(struct ofp_port_stats_reply, ports)) / sizeof *ps;
     ds_put_format(string, " %zu ports\n", n);
     if (verbosity < 1) {
         return;
@@ -496,14 +496,14 @@ ofp_port_stat_reply(struct ds *string, const void *oh, size_t len,
 }
 
 static void
-ofp_table_stat_reply(struct ds *string, const void *oh, size_t len,
+ofp_table_stats_reply(struct ds *string, const void *oh, size_t len,
                      int verbosity)
 {
-    const struct ofp_table_stat_reply *tsr = oh;
+    const struct ofp_table_stats_reply *tsr = oh;
     const struct ofp_table_stats *ts;
     size_t n;
 
-    n = (len - offsetof(struct ofp_table_stat_reply, tables)) / sizeof *ts;
+    n = (len - offsetof(struct ofp_table_stats_reply, tables)) / sizeof *ts;
     ds_put_format(string, " %zu tables\n", n);
     if (verbosity < 1) {
         return;
@@ -585,35 +585,35 @@ static const struct openflow_packet packets[] = {
         sizeof (struct ofp_port_status),
         ofp_print_port_status
     },
-    [OFPT_FLOW_STAT_REQUEST] = {
-        "flow_stat_request",
-        sizeof (struct ofp_flow_stat_request),
-        ofp_flow_stat_request,
+    [OFPT_FLOW_STATS_REQUEST] = {
+        "flow_stats_request",
+        sizeof (struct ofp_flow_stats_request),
+        ofp_flow_stats_request,
     },
-    [OFPT_FLOW_STAT_REPLY] = {
-        "flow_stat_reply",
-        sizeof (struct ofp_flow_stat_reply),
-        ofp_flow_stat_reply,
+    [OFPT_FLOW_STATS_REPLY] = {
+        "flow_stats_reply",
+        sizeof (struct ofp_flow_stats_reply),
+        ofp_flow_stats_reply,
     },
-    [OFPT_PORT_STAT_REQUEST] = {
-        "port_stat_request",
-        sizeof (struct ofp_port_stat_request),
+    [OFPT_PORT_STATS_REQUEST] = {
+        "port_stats_request",
+        sizeof (struct ofp_port_stats_request),
         NULL,
     },
-    [OFPT_PORT_STAT_REPLY] = {
-        "port_stat_reply",
-        sizeof (struct ofp_port_stat_reply),
-        ofp_port_stat_reply,
+    [OFPT_PORT_STATS_REPLY] = {
+        "port_stats_reply",
+        sizeof (struct ofp_port_stats_reply),
+        ofp_port_stats_reply,
     },
-    [OFPT_TABLE_STAT_REQUEST] = {
-        "table_stat_request",
-        sizeof (struct ofp_table_stat_request),
+    [OFPT_TABLE_STATS_REQUEST] = {
+        "table_stats_request",
+        sizeof (struct ofp_table_stats_request),
         NULL,
     },
-    [OFPT_TABLE_STAT_REPLY] = {
-        "table_stat_reply",
-        sizeof (struct ofp_table_stat_reply),
-        ofp_table_stat_reply,
+    [OFPT_TABLE_STATS_REPLY] = {
+        "table_stats_reply",
+        sizeof (struct ofp_table_stats_reply),
+        ofp_table_stats_reply,
     },
 };
 

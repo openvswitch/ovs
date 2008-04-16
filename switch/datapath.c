@@ -654,18 +654,18 @@ dp_send_flow_stats(struct datapath *dp, const struct sender *sender,
                    const struct ofp_match *match)
 {
     struct buffer *buffer;
-    struct ofp_flow_stat_reply *fsr;
+    struct ofp_flow_stats_reply *fsr;
     size_t header_size, fudge, flow_size;
     struct sw_flow_key match_key;
     int table_idx, n_flows, max_flows;
     time_t now;
 
-    header_size = offsetof(struct ofp_flow_stat_reply, flows);
+    header_size = offsetof(struct ofp_flow_stats_reply, flows);
     fudge = 128;
     flow_size = sizeof fsr->flows[0];
     max_flows = (65536 - header_size - fudge) / flow_size;
     fsr = alloc_openflow_buffer(dp, header_size,
-                                OFPT_FLOW_STAT_REPLY, sender, &buffer);
+                                OFPT_FLOW_STATS_REPLY, sender, &buffer);
 
     n_flows = 0;
     flow_extract_match(&match_key, match);
@@ -702,12 +702,12 @@ int
 dp_send_port_stats(struct datapath *dp, const struct sender *sender)
 {
 	struct buffer *buffer;
-	struct ofp_port_stat_reply *psr;
+	struct ofp_port_stats_reply *psr;
     struct sw_port *p;
 
-	psr = alloc_openflow_buffer(dp, offsetof(struct ofp_port_stat_reply,
+	psr = alloc_openflow_buffer(dp, offsetof(struct ofp_port_stats_reply,
                                              ports),
-                                OFPT_PORT_STAT_REPLY, sender, &buffer);
+                                OFPT_PORT_STATS_REPLY, sender, &buffer);
     LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
 		struct ofp_port_stats *ps = buffer_put_uninit(buffer, sizeof *ps);
 		ps->port_no = htons(port_no(dp, p));
@@ -723,12 +723,12 @@ int
 dp_send_table_stats(struct datapath *dp, const struct sender *sender)
 {
 	struct buffer *buffer;
-	struct ofp_table_stat_reply *tsr;
+	struct ofp_table_stats_reply *tsr;
 	int i;
 
-	tsr = alloc_openflow_buffer(dp, offsetof(struct ofp_table_stat_reply,
+	tsr = alloc_openflow_buffer(dp, offsetof(struct ofp_table_stats_reply,
                                              tables),
-                                OFPT_TABLE_STAT_REPLY, sender, &buffer);
+                                OFPT_TABLE_STATS_REPLY, sender, &buffer);
 	for (i = 0; i < dp->chain->n_tables; i++) {
 		struct ofp_table_stats *ots = buffer_put_uninit(buffer, sizeof *ots);
 		struct sw_table_stats stats;
@@ -1119,10 +1119,10 @@ recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
 }
 
 static int
-recv_flow_status_request(struct datapath *dp, const struct sender *sender,
+recv_flow_stats_request(struct datapath *dp, const struct sender *sender,
                          const void *msg)
 {
-	const struct ofp_flow_stat_request *fsr = msg;
+	const struct ofp_flow_stats_request *fsr = msg;
 	if (fsr->type == OFPFS_INDIV) {
 		return dp_send_flow_stats(dp, sender, &fsr->match); 
 	} else {
@@ -1132,14 +1132,14 @@ recv_flow_status_request(struct datapath *dp, const struct sender *sender,
 }
 
 static int
-recv_port_status_request(struct datapath *dp, const struct sender *sender,
+recv_port_stats_request(struct datapath *dp, const struct sender *sender,
                          const void *msg)
 {
 	return dp_send_port_stats(dp, sender);
 }
 
 static int
-recv_table_status_request(struct datapath *dp, const struct sender *sender,
+recv_table_stats_request(struct datapath *dp, const struct sender *sender,
                           const void *msg)
 {
 	return dp_send_table_stats(dp, sender);
@@ -1181,17 +1181,17 @@ fwd_control_input(struct datapath *dp, const struct sender *sender,
             sizeof (struct ofp_port_mod),
             recv_port_mod,
         },
-		[OFPT_FLOW_STAT_REQUEST] = {
-			sizeof (struct ofp_flow_stat_request),
-			recv_flow_status_request,
+		[OFPT_FLOW_STATS_REQUEST] = {
+			sizeof (struct ofp_flow_stats_request),
+			recv_flow_stats_request,
 		},
-		[OFPT_PORT_STAT_REQUEST] = {
-			sizeof (struct ofp_port_stat_request),
-			recv_port_status_request,
+		[OFPT_PORT_STATS_REQUEST] = {
+			sizeof (struct ofp_port_stats_request),
+			recv_port_stats_request,
 		},
-		[OFPT_TABLE_STAT_REQUEST] = {
-			sizeof (struct ofp_table_stat_request),
-			recv_table_status_request,
+		[OFPT_TABLE_STATS_REQUEST] = {
+			sizeof (struct ofp_table_stats_request),
+			recv_table_stats_request,
 		},
     };
 

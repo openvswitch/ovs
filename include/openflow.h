@@ -80,24 +80,24 @@ enum ofp_port {
 };
 
 enum ofp_type {
-    OFPT_FEATURES_REQUEST,   /*  0 Controller/switch message */
-    OFPT_FEATURES_REPLY,     /*  1 Controller/switch message */
-    OFPT_GET_CONFIG_REQUEST, /*  2 Controller/switch message */
-    OFPT_GET_CONFIG_REPLY,   /*  3 Controller/switch message */
-    OFPT_SET_CONFIG,         /*  4 Controller/switch message */
-    OFPT_PACKET_IN,          /*  5 Async message */
-    OFPT_PACKET_OUT,         /*  6 Controller/switch message */
-    OFPT_FLOW_MOD,           /*  7 Controller/switch message */
-    OFPT_FLOW_EXPIRED,       /*  8 Async message */
-    OFPT_TABLE,              /*  9 Controller/switch message */
-    OFPT_PORT_MOD,           /* 10 Controller/switch message */
-    OFPT_PORT_STATUS,        /* 11 Async message */
-    OFPT_FLOW_STAT_REQUEST,  /* 12 Controller/switch message */
-    OFPT_FLOW_STAT_REPLY,    /* 13 Controller/switch message */
-    OFPT_TABLE_STAT_REQUEST, /* 14 Controller/switch message */
-    OFPT_TABLE_STAT_REPLY,   /* 15 Controller/switch message */
-    OFPT_PORT_STAT_REQUEST,  /* 16 Controller/switch message */
-    OFPT_PORT_STAT_REPLY     /* 17 Controller/switch message */
+    OFPT_FEATURES_REQUEST,    /*  0 Controller/switch message */
+    OFPT_FEATURES_REPLY,      /*  1 Controller/switch message */
+    OFPT_GET_CONFIG_REQUEST,  /*  2 Controller/switch message */
+    OFPT_GET_CONFIG_REPLY,    /*  3 Controller/switch message */
+    OFPT_SET_CONFIG,          /*  4 Controller/switch message */
+    OFPT_PACKET_IN,           /*  5 Async message */
+    OFPT_PACKET_OUT,          /*  6 Controller/switch message */
+    OFPT_FLOW_MOD,            /*  7 Controller/switch message */
+    OFPT_FLOW_EXPIRED,        /*  8 Async message */
+    OFPT_TABLE,               /*  9 Controller/switch message */
+    OFPT_PORT_MOD,            /* 10 Controller/switch message */
+    OFPT_PORT_STATUS,         /* 11 Async message */
+    OFPT_FLOW_STATS_REQUEST,  /* 12 Controller/switch message */
+    OFPT_FLOW_STATS_REPLY,    /* 13 Controller/switch message */
+    OFPT_TABLE_STATS_REQUEST, /* 14 Controller/switch message */
+    OFPT_TABLE_STATS_REPLY,   /* 15 Controller/switch message */
+    OFPT_PORT_STATS_REQUEST,  /* 16 Controller/switch message */
+    OFPT_PORT_STATS_REPLY     /* 17 Controller/switch message */
 };
 
 /* Header on all OpenFlow packets. */
@@ -364,13 +364,13 @@ struct ofp_flow_stats {
     uint8_t pad[7];           /* Align to 64-bits. */
 };
 
-enum ofp_stat_type {
+enum ofp_stats_type {
     OFPFS_INDIV,              /* Send an entry for each matching flow */
     OFPFS_AGGREGATE           /* Aggregate matching flows */
 };
 
 /* Current flow statistics request */
-struct ofp_flow_stat_request {
+struct ofp_flow_stats_request {
     struct ofp_header header;
     struct ofp_match match;   /* Fields to match */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
@@ -380,7 +380,7 @@ struct ofp_flow_stat_request {
 };
 
 /* Current flow statistics reply */
-struct ofp_flow_stat_reply {
+struct ofp_flow_stats_reply {
     struct ofp_header header;
 
     /* If request was of type OFPFS_INDIV, this will contain an array of
@@ -394,7 +394,7 @@ struct ofp_flow_stat_reply {
 };
 
 /* Current table statistics request */
-struct ofp_table_stat_request {
+struct ofp_table_stats_request {
     struct ofp_header header;
 };
 
@@ -409,7 +409,7 @@ struct ofp_table_stats {
 };
 
 /* Current table statistics reply */
-struct ofp_table_stat_reply {
+struct ofp_table_stats_reply {
     struct ofp_header header;
     struct ofp_table_stats tables[]; /* The number of entries is inferred from
                                         the length field in the header. */
@@ -425,12 +425,12 @@ struct ofp_port_stats {
 };
 
 /* Current port statistics request */
-struct ofp_port_stat_request {
+struct ofp_port_stats_request {
     struct ofp_header header;
 };
 
 /* Current port statistics reply */
-struct ofp_port_stat_reply {
+struct ofp_port_stats_reply {
     struct ofp_header header;
     struct ofp_port_stats ports[]; /* The number of entries is inferred from
                                       the length field in the header. */

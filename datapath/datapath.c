@@ -788,17 +788,17 @@ dp_send_flow_stats(struct datapath *dp, const struct sender *sender,
 		   const struct ofp_match *match)
 {
 	struct sk_buff *skb;
-	struct ofp_flow_stat_reply *fsr;
+	struct ofp_flow_stats_reply *fsr;
 	size_t header_size, fudge, flow_size;
 	struct sw_flow_key match_key;
 	int table_idx, n_flows, max_flows;
 
-	header_size = offsetof(struct ofp_flow_stat_reply, flows);
+	header_size = offsetof(struct ofp_flow_stats_reply, flows);
 	fudge = 128;
 	flow_size = sizeof fsr->flows[0];
 	max_flows = (NLMSG_GOODSIZE - header_size - fudge) / flow_size;
 	fsr = alloc_openflow_skb(dp, header_size + max_flows * flow_size,
-				 OFPT_FLOW_STAT_REPLY, sender, &skb);
+				 OFPT_FLOW_STATS_REPLY, sender, &skb);
 	if (!fsr)
 		return -ENOMEM;
 
@@ -836,7 +836,7 @@ dp_send_flow_stats(struct datapath *dp, const struct sender *sender,
 }
 
 static int 
-fill_port_stat_reply(struct datapath *dp, struct ofp_port_stat_reply *psr)
+fill_port_stats_reply(struct datapath *dp, struct ofp_port_stats_reply *psr)
 {
 	struct net_bridge_port *p;
 	int port_count = 0;
@@ -859,19 +859,19 @@ int
 dp_send_port_stats(struct datapath *dp, const struct sender *sender)
 {
 	struct sk_buff *skb;
-	struct ofp_port_stat_reply *psr;
+	struct ofp_port_stats_reply *psr;
 	size_t psr_len, port_max_len;
 	int port_count;
 
 	/* Overallocate. */
 	port_max_len = sizeof(struct ofp_port_stats) * OFPP_MAX;
 	psr = alloc_openflow_skb(dp, sizeof *psr + port_max_len,
-				 OFPT_PORT_STAT_REPLY, sender, &skb);
+				 OFPT_PORT_STATS_REPLY, sender, &skb);
 	if (!psr)
 		return -ENOMEM;
 
 	/* Fill. */
-	port_count = fill_port_stat_reply(dp, psr);
+	port_count = fill_port_stats_reply(dp, psr);
 
 	/* Shrink to fit. */
 	psr_len = sizeof *psr + sizeof(struct ofp_port_stats) * port_count;
@@ -883,14 +883,14 @@ int
 dp_send_table_stats(struct datapath *dp, const struct sender *sender)
 {
 	struct sk_buff *skb;
-	struct ofp_table_stat_reply *tsr;
+	struct ofp_table_stats_reply *tsr;
 	int i, n_tables;
 
 	n_tables = dp->chain->n_tables;
-	tsr = alloc_openflow_skb(dp, (offsetof(struct ofp_table_stat_reply,
+	tsr = alloc_openflow_skb(dp, (offsetof(struct ofp_table_stats_reply,
 					       tables)
 				      + sizeof tsr->tables[0] * n_tables),
-				 OFPT_TABLE_STAT_REPLY, sender, &skb);
+				 OFPT_TABLE_STATS_REPLY, sender, &skb);
 	if (!tsr)
 		return -ENOMEM;
 	for (i = 0; i < n_tables; i++) {

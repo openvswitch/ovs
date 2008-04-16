@@ -438,10 +438,10 @@ recv_flow(struct sw_chain *chain, const struct sender *sender, const void *msg)
 }
 
 static int
-recv_flow_status_request(struct sw_chain *chain, const struct sender *sender,
+recv_flow_stats_request(struct sw_chain *chain, const struct sender *sender,
 			 const void *msg)
 {
-	const struct ofp_flow_stat_request *fsr = msg;
+	const struct ofp_flow_stats_request *fsr = msg;
 	if (fsr->type == OFPFS_INDIV) {
 		return dp_send_flow_stats(chain->dp, sender, &fsr->match); 
 	} else {
@@ -451,14 +451,14 @@ recv_flow_status_request(struct sw_chain *chain, const struct sender *sender,
 }
 
 static int
-recv_port_status_request(struct sw_chain *chain, const struct sender *sender,
+recv_port_stats_request(struct sw_chain *chain, const struct sender *sender,
 			 const void *msg)
 {
 	return dp_send_port_stats(chain->dp, sender);
 }
 
 static int
-recv_table_status_request(struct sw_chain *chain, const struct sender *sender,
+recv_table_stats_request(struct sw_chain *chain, const struct sender *sender,
 			  const void *msg)
 {
 	return dp_send_table_stats(chain->dp, sender);
@@ -502,17 +502,17 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 			sizeof (struct ofp_port_mod),
 			recv_port_mod,
 		},
-		[OFPT_FLOW_STAT_REQUEST] = {
-			sizeof (struct ofp_flow_stat_request),
-			recv_flow_status_request,
+		[OFPT_FLOW_STATS_REQUEST] = {
+			sizeof (struct ofp_flow_stats_request),
+			recv_flow_stats_request,
 		},
-		[OFPT_PORT_STAT_REQUEST] = {
-			sizeof (struct ofp_port_stat_request),
-			recv_port_status_request,
+		[OFPT_PORT_STATS_REQUEST] = {
+			sizeof (struct ofp_port_stats_request),
+			recv_port_stats_request,
 		},
-		[OFPT_TABLE_STAT_REQUEST] = {
-			sizeof (struct ofp_table_stat_request),
-			recv_table_status_request,
+		[OFPT_TABLE_STATS_REQUEST] = {
+			sizeof (struct ofp_table_stats_request),
+			recv_table_stats_request,
 		},
 	};
 
