@@ -102,7 +102,7 @@ enum ofp_type {
 
 /* Header on all OpenFlow packets. */
 struct ofp_header {
-    uint8_t version;    /* Always 1. */
+    uint8_t version;    /* OFP_VERSION. */
     uint8_t type;       /* One of the OFPT_ constants. */
     uint16_t length;    /* Length including this ofp_header. */
     uint32_t xid;       /* Transactin id associated with this packet.

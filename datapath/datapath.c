@@ -240,8 +240,8 @@ static int new_dp(int dp_idx)
 		printk("datapath: problem setting up 'of' device\n");
 #endif
 
-	dp->config.flags = 0;
-	dp->config.miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
+	dp->flags = 0;
+	dp->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
 
 	dp->dp_task = kthread_run(dp_maint_func, dp, "dp%d", dp_idx);
 	if (IS_ERR(dp->dp_task))
@@ -698,13 +698,14 @@ dp_send_config_reply(struct datapath *dp, const struct sender *sender)
 	struct sk_buff *skb;
 	struct ofp_switch_config *osc;
 
-	osc = alloc_openflow_skb(dp, sizeof *osc, OFPT_PORT_STATUS, sender,
+	osc = alloc_openflow_skb(dp, sizeof *osc, OFPT_GET_CONFIG_REPLY, sender,
 				 &skb);
 	if (!osc)
 		return -ENOMEM;
-	memcpy(((char *)osc) + sizeof osc->header,
-	       ((char *)&dp->config) + sizeof dp->config.header,
-	       sizeof dp->config - sizeof dp->config.header);
+
+	osc->flags = htons(dp->flags);
+	osc->miss_send_len = htons(dp->miss_send_len);
+
 	return send_openflow_skb(skb, sender);
 }
 

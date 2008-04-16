@@ -123,7 +123,7 @@ static int table_hash_timeout(struct datapath *dp, struct sw_table *swt)
 		struct sw_flow *flow = *bucket;
 		if (flow && flow_timeout(flow)) {
 			count += do_delete(bucket, flow); 
-			if (dp->config.flags & OFPC_SEND_FLOW_EXP)
+			if (dp->flags & OFPC_SEND_FLOW_EXP)
 				dp_send_flow_expired(dp, flow);
 		}
 	}

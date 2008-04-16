@@ -102,7 +102,7 @@ static int table_linear_timeout(struct datapath *dp, struct sw_table *swt)
 		struct sw_flow *flow = list_entry(pos, struct sw_flow, u.node);
 		if (flow_timeout(flow)) {
 			count += do_delete(swt, flow);
-			if (dp->config.flags & OFPC_SEND_FLOW_EXP)
+			if (dp->flags & OFPC_SEND_FLOW_EXP)
 				dp_send_flow_expired(dp, flow);
 		}
 	}

@@ -48,7 +48,9 @@ struct datapath {
 	struct net_device dev;
 	struct net_device_stats stats;
 
-	struct ofp_switch_config config;
+    /* Configuration set from controller */
+    uint16_t flags;
+    uint16_t miss_send_len;
 
 	/* Switch ports. */
 	struct net_bridge_port *ports[OFPP_MAX];

@@ -41,7 +41,7 @@ void fwd_port_input(struct sw_chain *chain, struct sk_buff *skb, int in_port)
 				flow->actions, flow->n_actions);
 	} else {
 		dp_output_control(chain->dp, skb, fwd_save_skb(skb), 
-				  ntohs(chain->dp->config.miss_send_len),
+				  chain->dp->miss_send_len,
 				  OFPR_NO_MATCH);
 	}
 }
@@ -275,7 +275,10 @@ recv_set_config(struct sw_chain *chain, const struct sender *sender,
 		const void *msg)
 {
 	const struct ofp_switch_config *osc = msg;
-	chain->dp->config = *osc;
+
+	chain->dp->flags = ntohs(osc->flags);
+	chain->dp->miss_send_len = ntohs(osc->miss_send_len);
+
 	return 0;
 }
 
