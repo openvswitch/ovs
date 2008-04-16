@@ -197,7 +197,7 @@ static void run(int retval, const char *message, ...)
         if (retval == EOF) {
             fputs(": unexpected end of file\n", stderr);
         } else {
-            vfprintf(stderr, ": %s\n", strerror(retval));
+            fprintf(stderr, ": %s\n", strerror(retval));
         }
 
         exit(EXIT_FAILURE);
