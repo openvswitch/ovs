@@ -46,7 +46,12 @@
 #define OFP_MAXLEN (sizeof(struct ofp_switch_features) \
         + (sizeof(struct ofp_phy_port) * OFPP_MAX) + 200)
 
-#define OFP_VERSION   1
+
+/* The most significant bit being set in the version field indicates an
+ * experimental OpenFlow version.  
+ */
+#define OFP_VERSION   0x80
+
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
 
