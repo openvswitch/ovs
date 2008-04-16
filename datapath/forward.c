@@ -517,7 +517,7 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 	struct ofp_header *oh;
 
 	oh = (struct ofp_header *) msg;
-	if (oh->version != 1 || oh->type >= ARRAY_SIZE(packets)
+	if (oh->version != OFP_VERSION || oh->type >= ARRAY_SIZE(packets)
 		|| ntohs(oh->length) > length)
 		return -EINVAL;
 

@@ -632,7 +632,7 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
         ds_put_cstr(&string, "OpenFlow packet too short:\n");
         ds_put_hex_dump(&string, oh, len, 0, true);
         return ds_cstr(&string);
-    } else if (oh->version != 1) {
+    } else if (oh->version != OFP_VERSION) {
         ds_put_format(&string, "Bad OpenFlow version %"PRIu8":\n", oh->version);
         ds_put_hex_dump(&string, oh, len, 0, true);
         return ds_cstr(&string);
