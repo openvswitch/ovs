@@ -105,7 +105,8 @@ alloc_openflow_skb(struct datapath *dp, size_t openflow_len, uint8_t type,
 	struct nlattr *attr;
 	struct ofp_header *oh;
 
-	genl_len = nla_total_size(sizeof(uint32_t)); /* DP_GENL_A_DP_IDX */
+	genl_len = nlmsg_total_size(GENL_HDRLEN + dp_genl_family.hdrsize);
+	genl_len += nla_total_size(sizeof(uint32_t)); /* DP_GENL_A_DP_IDX */
 	genl_len += nla_total_size(openflow_len);    /* DP_GENL_A_OPENFLOW */
 	skb = *pskb = genlmsg_new(genl_len, GFP_ATOMIC);
 	if (!skb) {
