@@ -382,7 +382,7 @@ struct ofp_flow_stats_request {
     struct ofp_header header;
     struct ofp_match match;   /* Fields to match */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
-                                 or 0xffff for all tables. */
+                                 or 0xff for all tables. */
     uint8_t type;             /* One of OFPFS_ */
     uint16_t pad;               /* Align to 32-bits */
 };
