@@ -235,7 +235,7 @@ nl_sock_sendv(struct nl_sock *sock, const struct iovec iov[], size_t n_iov,
     msg.msg_iov = (struct iovec *) iov;
     msg.msg_iovlen = n_iov;
     do {
-        retval = sendmsg(sock->fd, &msg, MSG_DONTWAIT);
+        retval = sendmsg(sock->fd, &msg, wait ? 0 : MSG_DONTWAIT);
     } while (retval < 0 && errno == EINTR);
     return retval < 0 ? errno : 0;
 }
