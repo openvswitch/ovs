@@ -73,7 +73,7 @@ struct eth_header {
     uint8_t eth_dst[ETH_ADDR_LEN];
     uint8_t eth_src[ETH_ADDR_LEN];
     uint16_t eth_type;
-};
+} __attribute__((packed));
 BUILD_ASSERT_DECL(ETH_HEADER_LEN == sizeof(struct eth_header));
 
 #define LLC_DSAP_SNAP 0xaa
@@ -85,7 +85,7 @@ struct llc_header {
     uint8_t llc_dsap;
     uint8_t llc_ssap;
     uint8_t llc_cntl;
-};
+} __attribute__((packed));
 BUILD_ASSERT_DECL(LLC_HEADER_LEN == sizeof(struct llc_header));
 
 #define SNAP_ORG_ETHERNET "\0\0" /* The compiler adds a null byte, so
@@ -101,7 +101,7 @@ BUILD_ASSERT_DECL(SNAP_HEADER_LEN == sizeof(struct snap_header));
 struct llc_snap_header {
     struct llc_header llc;
     struct snap_header snap;
-};
+} __attribute__((packed));
 BUILD_ASSERT_DECL(LLC_SNAP_HEADER_LEN == sizeof(struct llc_snap_header));
 
 #define VLAN_VID 0x0fff
