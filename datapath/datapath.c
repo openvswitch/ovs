@@ -1008,7 +1008,7 @@ static int dp_genl_query(struct sk_buff *skb, struct genl_info *info)
 		err = -ENOENT;
 	else {
 		void *data;
-		ans_skb = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
+		ans_skb = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_ATOMIC);
 		if (!ans_skb) {
 			err = -ENOMEM;
 			goto err;

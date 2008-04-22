@@ -165,7 +165,7 @@ static int table_hash_iterator(struct sw_table *swt,
 {
 	struct swt_iterator_hash *ih;
 
-	swt_iter->private = ih = kmalloc(sizeof *ih, GFP_KERNEL);
+	swt_iter->private = ih = kmalloc(sizeof *ih, GFP_ATOMIC);
 
 	if (ih == NULL)
 		return 0;
@@ -306,7 +306,7 @@ static int table_hash2_iterator(struct sw_table *swt,
 {
 	struct swt_iterator_hash2 *ih2;
 
-	swt_iter->private = ih2 = kmalloc(sizeof *ih2, GFP_KERNEL);
+	swt_iter->private = ih2 = kmalloc(sizeof *ih2, GFP_ATOMIC);
 	if (ih2 == NULL)
 		return 0;
 
