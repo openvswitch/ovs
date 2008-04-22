@@ -321,7 +321,7 @@ struct ofp_match {
     uint32_t nw_src;           /* IP source address. */
     uint32_t nw_dst;           /* IP destination address. */
     uint8_t nw_proto;          /* IP protocol. */
-    uint8_t pad[3];            /* Align to 32-bits */
+    uint8_t pad[3];            /* Align to 32-bits. */
     uint16_t tp_src;           /* TCP/UDP source port. */
     uint16_t tp_dst;           /* TCP/UDP destination port. */
 };
@@ -335,10 +335,12 @@ struct ofp_flow_mod {
     struct ofp_match match;      /* Fields to match */
 
     /* Flow actions. */
-    uint16_t command;            /* One of OFPFC_*. */
-    uint16_t max_idle;           /* Idle time before discarding (seconds). */
-    uint32_t buffer_id;          /* Buffered packet to apply to (or -1). */
-    uint32_t group_id;           /* Flow group ID (for QoS). */
+    uint16_t command;             /* One of OFPFC_*. */
+    uint16_t max_idle;            /* Idle time before discarding (seconds). */
+    uint32_t buffer_id;           /* Buffered packet to apply to (or -1). */
+    uint32_t group_id;            /* Flow group ID (for QoS). */
+    uint16_t priority;            /* Priority level of flow entry. */
+    uint8_t pad[2];               /* Align to 32-bits. */
     struct ofp_action actions[0]; /* The number of actions is inferred from
                                     the length field in the header. */
 };
@@ -419,9 +421,9 @@ struct ofp_table_stats_reply {
 struct ofp_port_stats {
     uint16_t port_no;
     uint8_t pad[2];          /* Align to 32-bits */
-    uint64_t rx_count;     /* Number of received packets */
-    uint64_t tx_count;     /* Number of transmitted packets */
-    uint64_t drop_count; /* Number of packets dropped by interface */
+    uint64_t rx_count;       /* Number of received packets */
+    uint64_t tx_count;       /* Number of transmitted packets */
+    uint64_t drop_count;     /* Number of packets dropped by interface */
 };
 
 /* Current port statistics request */
