@@ -568,7 +568,6 @@ static void do_dump_flows(int argc, char *argv[])
 static void do_add_flows(int argc, char *argv[])
 {
     struct vconn *vconn;
-    char vconn_name[16];
 
     FILE *file;
     char line[1024];
@@ -578,7 +577,7 @@ static void do_add_flows(int argc, char *argv[])
         fatal(errno, "%s: open", argv[2]);
     }
 
-    run(vconn_open_block(vconn_name, &vconn), "connecting to %s", argv[1]);
+    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
     while (fgets(line, sizeof line, file)) {
         struct buffer *buffer;
         struct ofp_flow_mod *ofm;
