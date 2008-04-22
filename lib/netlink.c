@@ -42,6 +42,7 @@
 #include <unistd.h>
 #include "buffer.h"
 #include "netlink-protocol.h"
+#include "dynamic-string.h"
 #include "util.h"
 
 #include "vlog.h"
@@ -51,6 +52,9 @@
 #ifndef SOL_NETLINK
 #define SOL_NETLINK 270
 #endif
+
+static void log_nlmsg(const char *function, int error,
+                      const void *message, size_t size);
 
 /* Netlink sockets. */
 
@@ -208,13 +212,16 @@ nl_sock_destroy(struct nl_sock *sock)
 int
 nl_sock_send(struct nl_sock *sock, const struct buffer *msg, bool wait) 
 {
-    int retval;
+    int error;
 
     nl_msg_nlmsghdr(msg)->nlmsg_len = msg->size;
     do {
+        int retval;
         retval = send(sock->fd, msg->data, msg->size, wait ? 0 : MSG_DONTWAIT);
-    } while (retval < 0 && errno == EINTR);
-    return retval < 0 ? errno : 0;
+        error = retval < 0 ? errno : 0;
+    } while (error == EINTR);
+    log_nlmsg(__func__, error, msg->data, msg->size);
+    return error;
 }
 
 /* Tries to send the 'n_iov' chunks of data in 'iov' to the kernel on 'sock' as
@@ -229,15 +236,20 @@ nl_sock_sendv(struct nl_sock *sock, const struct iovec iov[], size_t n_iov,
               bool wait) 
 {
     struct msghdr msg;
-    int retval;
+    int error;
 
     memset(&msg, 0, sizeof msg);
     msg.msg_iov = (struct iovec *) iov;
     msg.msg_iovlen = n_iov;
     do {
+        int retval;
         retval = sendmsg(sock->fd, &msg, wait ? 0 : MSG_DONTWAIT);
-    } while (retval < 0 && errno == EINTR);
-    return retval < 0 ? errno : 0;
+        error = retval < 0 ? errno : 0;
+    } while (error == EINTR);
+    if (error != EAGAIN) {
+        log_nlmsg(__func__, error, iov[0].iov_base, iov[0].iov_len);
+    }
+    return error;
 }
 
 /* Tries to receive a netlink message from the kernel on 'sock'.  If
@@ -320,6 +332,7 @@ try_again:
         return EPROTO;
     }
     *bufp = buf;
+    log_nlmsg(__func__, 0, buf->data, buf->size);
     return 0;
 }
 
@@ -937,3 +950,114 @@ free_pid(uint32_t pid)
     assert(avail_sockets[sock / 32] & (1u << (sock % 32)));
     avail_sockets[sock / 32] &= ~(1u << (sock % 32));
 }
+
+static void
+nlmsghdr_to_string(const struct nlmsghdr *h, struct ds *ds)
+{
+    struct nlmsg_flag {
+        unsigned int bits;
+        const char *name;
+    };
+    static const struct nlmsg_flag flags[] = { 
+        { NLM_F_REQUEST, "REQUEST" },
+        { NLM_F_MULTI, "MULTI" },
+        { NLM_F_ACK, "ACK" },
+        { NLM_F_ECHO, "ECHO" },
+        { NLM_F_DUMP, "DUMP" },
+        { NLM_F_ROOT, "ROOT" },
+        { NLM_F_MATCH, "MATCH" },
+        { NLM_F_ATOMIC, "ATOMIC" },
+    };
+    const struct nlmsg_flag *flag;
+    uint16_t flags_left;
+
+    ds_put_format(ds, "nl(len:%"PRIu32", type=%"PRIu16,
+                  h->nlmsg_len, h->nlmsg_type);
+    if (h->nlmsg_type == NLMSG_NOOP) {
+        ds_put_cstr(ds, "(no-op)");
+    } else if (h->nlmsg_type == NLMSG_ERROR) {
+        ds_put_cstr(ds, "(error)");
+    } else if (h->nlmsg_type == NLMSG_DONE) {
+        ds_put_cstr(ds, "(done)");
+    } else if (h->nlmsg_type == NLMSG_OVERRUN) {
+        ds_put_cstr(ds, "(overrun)");
+    } else if (h->nlmsg_type < NLMSG_MIN_TYPE) {
+        ds_put_cstr(ds, "(reserved)");
+    } else {
+        ds_put_cstr(ds, "(family-defined)");
+    }
+    ds_put_format(ds, ", flags=%"PRIx16, h->nlmsg_flags);
+    flags_left = h->nlmsg_flags;
+    for (flag = flags; flag < &flags[ARRAY_SIZE(flags)]; flag++) {
+        if ((flags_left & flag->bits) == flag->bits) {
+            ds_put_format(ds, "[%s]", flag->name);
+            flags_left &= ~flag->bits;
+        }
+    }
+    if (flags_left) {
+        ds_put_format(ds, "[OTHER:%"PRIx16"]", flags_left);
+    }
+    ds_put_format(ds, ", seq=%"PRIx32", pid=%"PRIu32"(%d:%d))",
+                  h->nlmsg_seq, h->nlmsg_pid,
+                  (int) (h->nlmsg_pid & PROCESS_MASK),
+                  (int) (h->nlmsg_pid >> PROCESS_BITS));
+}
+
+static char *
+nlmsg_to_string(const struct buffer *buffer)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct nlmsghdr *h = buffer_at(buffer, 0, NLMSG_HDRLEN);
+    if (h) {
+        nlmsghdr_to_string(h, &ds);
+        if (h->nlmsg_type == NLMSG_ERROR) {
+            const struct nlmsgerr *e;
+            e = buffer_at(buffer, NLMSG_HDRLEN,
+                          NLMSG_ALIGN(sizeof(struct nlmsgerr)));
+            if (e) {
+                ds_put_format(&ds, " error(%d", e->error);
+                if (e->error < 0) {
+                    ds_put_format(&ds, "(%s)", strerror(-e->error));
+                }
+                ds_put_cstr(&ds, ", in-reply-to(");
+                nlmsghdr_to_string(&e->msg, &ds);
+                ds_put_cstr(&ds, "))");
+            } else {
+                ds_put_cstr(&ds, " error(truncated)");
+            }
+        } else if (h->nlmsg_type == NLMSG_DONE) {
+            int *error = buffer_at(buffer, NLMSG_HDRLEN, sizeof *error);
+            if (error) {
+                ds_put_format(&ds, " done(%d", *error);
+                if (*error < 0) {
+                    ds_put_format(&ds, "(%s)", strerror(-*error));
+                }
+                ds_put_cstr(&ds, ")");
+            } else {
+                ds_put_cstr(&ds, " done(truncated)");
+            }
+        }
+    } else {
+        ds_put_cstr(&ds, "nl(truncated)");
+    }
+    return ds.string;
+}
+
+static void
+log_nlmsg(const char *function, int error,
+          const void *message, size_t size)
+{
+    struct buffer buffer;
+    char *nlmsg;
+
+    if (!VLOG_IS_DBG_ENABLED()) {
+        return;
+    }
+
+    buffer.data = (void *) message;
+    buffer.size = size;
+    nlmsg = nlmsg_to_string(&buffer);
+    VLOG_DBG("%s (%s): %s", function, strerror(error), nlmsg);
+    free(nlmsg);
+}
+
