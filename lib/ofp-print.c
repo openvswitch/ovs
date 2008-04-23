@@ -396,8 +396,9 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
 
 /* Pretty-print the OFPT_FLOW_EXPIRED packet of 'len' bytes at 'oh' to 'string'
  * at the given 'verbosity' level. */
-void ofp_print_flow_expired(struct ds *string, const void *oh, size_t len, 
-        int verbosity)
+static void
+ofp_print_flow_expired(struct ds *string, const void *oh, size_t len, 
+                       int verbosity)
 {
     const struct ofp_flow_expired *ofe = oh;
 
@@ -409,8 +410,9 @@ void ofp_print_flow_expired(struct ds *string, const void *oh, size_t len,
 
 /* Pretty-print the OFPT_PORT_STATUS packet of 'len' bytes at 'oh' to 'string'
  * at the given 'verbosity' level. */
-void ofp_print_port_status(struct ds *string, const void *oh, size_t len, 
-        int verbosity)
+static void
+ofp_print_port_status(struct ds *string, const void *oh, size_t len, 
+                      int verbosity)
 {
     const struct ofp_port_status *ops = oh;
 
