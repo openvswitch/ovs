@@ -150,7 +150,13 @@ nl_sock_create(int protocol, int multicast_group,
         goto error_free_pid;
     }
 
-#ifdef NETLINK_ADD_MEMBERSHIP
+    /* Older kernel headers failed to define this macro.  We want our programs
+     * to support the newer kernel features even if compiled with older
+     * headers, so define it ourselves in such a case. */
+#ifndef NETLINK_ADD_MEMBERSHIP
+#define NETLINK_ADD_MEMBERSHIP 1
+#endif
+
     /* This method of joining multicast groups is only supported by newish
      * kernels, but it allows for an arbitrary number of multicast groups. */
     if (multicast_group > 32
@@ -160,7 +166,6 @@ nl_sock_create(int protocol, int multicast_group,
                  multicast_group, strerror(errno));
         goto error_free_pid;
     }
-#endif
 
     *sockp = sock;
     return 0;
