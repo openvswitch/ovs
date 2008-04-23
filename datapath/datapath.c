@@ -594,6 +594,10 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb,
 
 	opi_len = offsetof(struct ofp_packet_in, data) + fwd_len;
 	opi = alloc_openflow_skb(dp, opi_len, OFPT_PACKET_IN, NULL, &f_skb);
+	if (!opi) {
+		err = -ENOMEM;
+		goto out;
+	}
 	opi->buffer_id      = htonl(buffer_id);
 	opi->total_len      = htons(skb->len);
 	opi->in_port        = htons(skb->dev->br_port->port_no);
@@ -602,8 +606,8 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb,
 	memcpy(opi->data, skb_mac_header(skb), fwd_len);
 	err = send_openflow_skb(f_skb, NULL);
 
+out:
 	kfree_skb(skb);
-
 	return err;
 }
 
