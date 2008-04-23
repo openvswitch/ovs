@@ -296,11 +296,20 @@ try_again:
     iov.iov_len = 1;
     do {
         nbytes2 = recvmsg(sock->fd, &msg, MSG_DONTWAIT);
-        if (nbytes2 < 0) {
-            VLOG_ERR("failed to remove nlmsg from socket: %d\n", errno);
-        }
     } while (nbytes2 < 0 && errno == EINTR);
-
+    if (nbytes2 < 0) {
+        if (errno == ENOBUFS) {
+            /* The kernel is notifying us that a message it tried to send to us
+             * was dropped.  We have to pass this along to the caller in case
+             * it wants to retry a request.  So kill the buffer, which we can
+             * re-read next time. */
+            buffer_delete(buf);
+            return ENOBUFS;
+        } else {
+            VLOG_ERR("failed to remove nlmsg from socket: %s\n",
+                     strerror(errno));
+        }
+    }
     if (!NLMSG_OK(nlmsghdr, nbytes)) {
         VLOG_ERR("received invalid nlmsg (%zd bytes < %d)",
                  bufsize, NLMSG_HDRLEN);
