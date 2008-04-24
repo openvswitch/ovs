@@ -42,6 +42,7 @@
 
 #include "buffer.h"
 #include "netlink.h"
+#include "netlink-protocol.h"
 #include "ofp-print.h"
 #include "openflow-netlink.h"
 #include "openflow.h"

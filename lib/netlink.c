@@ -41,6 +41,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "buffer.h"
+#include "netlink-protocol.h"
 #include "util.h"
 
 #include "vlog.h"
@@ -310,7 +311,9 @@ try_again:
                      strerror(errno));
         }
     }
-    if (!NLMSG_OK(nlmsghdr, nbytes)) {
+    if (nbytes < sizeof *nlmsghdr
+        || nlmsghdr->nlmsg_len < sizeof *nlmsghdr
+        || nlmsghdr->nlmsg_len > nbytes) {
         VLOG_ERR("received invalid nlmsg (%zd bytes < %d)",
                  bufsize, NLMSG_HDRLEN);
         buffer_delete(buf);

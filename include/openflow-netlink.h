@@ -34,9 +34,6 @@
 #ifndef OPENFLOW_NETLINK_H
 #define OPENFLOW_NETLINK_H 1
 
-#include <linux/types.h>
-#include <linux/netlink.h>
-
 #define DP_GENL_FAMILY_NAME "OpenFlow"
 
 /* Attributes that can be attached to the datapath's netlink messages. */

@@ -44,28 +44,12 @@
  * machines because host byte order is used throughout. */
 
 #include <stdbool.h>
+#include <sys/uio.h>
 #include <stdint.h>
-#include <sys/socket.h>
-#include <linux/types.h>
-#include <linux/netlink.h>
-#include <linux/genetlink.h>
-#include <linux/version.h>
-
-#ifndef NLA_ALIGNTO
-struct nlattr
-{
-    __u16           nla_len;
-    __u16           nla_type;
-};
-
-#define NLA_ALIGNTO     4
-#define NLA_ALIGN(len)      (((len) + NLA_ALIGNTO - 1) & ~(NLA_ALIGNTO - 1))
-#define NLA_HDRLEN      ((int) NLA_ALIGN(sizeof(struct nlattr)))
-
-#endif 
 
 struct buffer;
 struct nl_sock;
+struct nlattr;
 
 /* Netlink sockets. */
 
