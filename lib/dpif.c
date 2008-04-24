@@ -203,8 +203,8 @@ dpif_send_openflow(struct dpif *dp, struct buffer *buffer, bool wait)
     nl_msg_put_genlmsghdr(&hdr, dp->sock, 32, openflow_family,
                           NLM_F_REQUEST, DP_GENL_C_OPENFLOW, 1);
     nl_msg_put_u32(&hdr, DP_GENL_A_DP_IDX, dp->dp_idx);
-    nla = buffer_put_uninit(&hdr, sizeof nla);
-    nla->nla_len = sizeof nla + buffer->size;
+    nla = buffer_put_uninit(&hdr, sizeof *nla);
+    nla->nla_len = sizeof *nla + buffer->size;
     nla->nla_type = DP_GENL_A_OPENFLOW;
     pad_bytes = NLA_ALIGN(nla->nla_len) - nla->nla_len;
     nl_msg_nlmsghdr(&hdr)->nlmsg_len = hdr.size + buffer->size + pad_bytes;
