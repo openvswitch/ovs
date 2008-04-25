@@ -172,6 +172,7 @@ usage(void)
            "  dump-flows SWITCH           print all flow entries\n"
            "  dump-flows SWITCH FLOW      print matching FLOWs\n"
            "  add-flows SWITCH FILE       add flows from FILE\n"
+           "  del-flows SWITCH FLOW       delete matching FLOWs\n"
            "where each SWITCH is an active OpenFlow connection method.\n",
            program_name, program_name);
     vconn_usage(true, false);
@@ -562,7 +563,8 @@ static void do_dump_flows(int argc, char *argv[])
 
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
     fsr = alloc_openflow_buffer(sizeof *fsr, OFPT_FLOW_STATS_REQUEST, &request);
-    str_to_flow(argc > 2 ? argv[2] : "", &fsr->match, NULL, &fsr->table_id, NULL);
+    str_to_flow(argc > 2 ? argv[2] : "", &fsr->match, NULL, &fsr->table_id, 
+            NULL);
     fsr->type = OFPFS_INDIV;
     fsr->pad = 0;
     reply = transact_openflow(vconn, request);
@@ -618,6 +620,31 @@ static void do_add_flows(int argc, char *argv[])
     fclose(file);
 }
 
+static void do_del_flows(int argc, char *argv[])
+{
+    struct vconn *vconn;
+
+    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    struct buffer *buffer;
+    struct ofp_flow_mod *ofm;
+    size_t size;
+
+
+    /* Parse and send. */
+    size = sizeof *ofm;
+    ofm = alloc_openflow_buffer(size, OFPT_FLOW_MOD, &buffer);
+    ofm->command = htons(OFPFC_DELETE);
+    ofm->max_idle = 0;
+    ofm->buffer_id = htonl(UINT32_MAX);
+    ofm->group_id = 0;
+    ofm->priority = 0;
+    str_to_flow(argc > 2 ? argv[2] : "", &ofm->match, NULL, NULL, NULL);
+
+    send_openflow_buffer(vconn, buffer);
+
+    vconn_close(vconn);
+}
+
 static void
 do_dump_ports(int argc, char *argv[])
 {
@@ -645,5 +672,6 @@ static struct command all_commands[] = {
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 1, 2, do_dump_flows },
     { "add-flows", 2, 2, do_add_flows },
+    { "del-flows", 1, 2, do_del_flows },
     { "dump-ports", 1, 1, do_dump_ports },
 };
