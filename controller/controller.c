@@ -162,7 +162,6 @@ main(int argc, char *argv[])
                         if (retval) {
                             break;
                         }
-                        printf("accept!\n");
                         switches[n_switches++] = new_switch("tcp", new_vconn);
                     }
                 } else {
@@ -273,7 +272,6 @@ static void
 close_switch(struct switch_ *this) 
 {
     if (this) {
-        printf("dropped!\n");
         free(this->name);
         vconn_close(this->vconn);
         queue_destroy(&this->txq);
