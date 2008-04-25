@@ -394,6 +394,7 @@ static void
 do_show(int argc UNUSED, char *argv[])
 {
     dump_transaction(argv[1], OFPT_FEATURES_REQUEST);
+    dump_transaction(argv[1], OFPT_GET_CONFIG_REQUEST);
 }
 
 
