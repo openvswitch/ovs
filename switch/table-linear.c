@@ -63,24 +63,34 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
     struct sw_table_linear *tl = (struct sw_table_linear *) swt;
     struct sw_flow *f;
 
-    /* Replace flows that match exactly. */
+    /* Loop through the existing list of entries.  New entries will
+     * always be placed behind those with equal priority.  Just replace 
+     * any flows that match exactly.
+     */
     LIST_FOR_EACH (f, struct sw_flow, node, &tl->flows) {
-        if (f->key.wildcards == flow->key.wildcards
-            && flow_matches(&f->key, &flow->key)) {
+        if (f->priority == flow->priority
+                && f->key.wildcards == flow->key.wildcards
+                && flow_matches(&f->key, &flow->key)) {
             list_replace(&flow->node, &f->node);
             flow_free(f);
             return 1;
         }
+
+        if (f->priority < flow->priority)
+            break;
     }
 
-    /* Table overflow? */
+    /* Make sure there's room in the table. */
     if (tl->n_flows >= tl->max_flows) {
         return 0;
     }
     tl->n_flows++;
 
-    /* FIXME: need to order rules from most to least specific. */
-    list_push_back(&tl->flows, &flow->node);
+    /* Insert the entry immediately in front of where we're pointing. */
+    if (f)
+        list_push_back(&f->node, &flow->node);
+    else
+        list_push_back(&tl->flows, &flow->node);
     return 1;
 }
 

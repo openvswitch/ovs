@@ -644,6 +644,7 @@ fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
 	ofs->match.tp_src    = flow->key.flow.tp_src;
 	ofs->match.tp_dst    = flow->key.flow.tp_dst;
 	ofs->duration        = htonl(now - flow->created);
+	ofs->priority        = htons(flow->priority);
 	ofs->table_id        = table_idx;
 	ofs->packet_count    = htonll(flow->packet_count);
 	ofs->byte_count      = htonll(flow->byte_count);
@@ -1061,6 +1062,7 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
     flow_extract_match(&flow->key, &ofm->match);
     flow->group_id = ntohl(ofm->group_id);
     flow->max_idle = ntohs(ofm->max_idle);
+    flow->priority = ntohs(ofm->priority);
     flow->timeout = time(0) + flow->max_idle; /* FIXME */
     flow->n_actions = n_acts;
     flow->created = time(0);    /* FIXME */

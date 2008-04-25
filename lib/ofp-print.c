@@ -366,7 +366,7 @@ static void ofp_print_match(struct ds *f, const struct ofp_match *om)
 {
     uint16_t w = ntohs(om->wildcards);
 
-    print_wild(f, "inport", w & OFPFW_IN_PORT, "%04x", ntohs(om->in_port));
+    print_wild(f, "inport", w & OFPFW_IN_PORT, "%d", ntohs(om->in_port));
     print_wild(f, ":vlan", w & OFPFW_DL_VLAN, "%04x", ntohs(om->dl_vlan));
     print_wild(f, " mac[", w & OFPFW_DL_SRC,
                ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_src));
@@ -468,6 +468,7 @@ ofp_flow_stats_reply(struct ds *string, const void *oh, size_t len,
     for (fs = &fsr->flows[0]; fs < &fsr->flows[n]; fs++) {
         ds_put_format(string, "  duration=%"PRIu32" s, ", ntohs(fs->duration));
         ds_put_format(string, "table_id=%"PRIu8", ", fs->table_id);
+        ds_put_format(string, "priority=%"PRIu16", ", fs->match.wildcards ? ntohs(fs->priority) : (uint16_t)-1);
         ds_put_format(string, "n_packets=%"PRIu64", ",
                       ntohll(fs->packet_count));
         ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));

@@ -380,6 +380,7 @@ add_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 	flow_extract_match(&flow->key, &ofm->match);
 	flow->group_id = ntohl(ofm->group_id);
 	flow->max_idle = ntohs(ofm->max_idle);
+	flow->priority = ntohs(ofm->priority);
 	flow->timeout = jiffies + flow->max_idle * HZ;
 	flow->n_actions = n_acts;
 	flow->init_time = jiffies;

@@ -455,7 +455,7 @@ str_to_action(const char *str, struct ofp_action *action)
 
 static void
 str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action,
-            uint8_t *table_idx)
+            uint8_t *table_idx, uint16_t *priority)
 {
     struct field {
         const char *name;
@@ -502,6 +502,11 @@ str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action,
 
         if (table_idx && !strcmp(name, "table")) {
             *table_idx = atoi(value);
+            continue;
+        }
+
+        if (priority && !strcmp(name, "priority")) {
+            *priority = atoi(value);
             continue;
         }
 
@@ -557,7 +562,7 @@ static void do_dump_flows(int argc, char *argv[])
 
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
     fsr = alloc_openflow_buffer(sizeof *fsr, OFPT_FLOW_STATS_REQUEST, &request);
-    str_to_flow(argc > 2 ? argv[2] : "", &fsr->match, NULL, &fsr->table_id);
+    str_to_flow(argc > 2 ? argv[2] : "", &fsr->match, NULL, &fsr->table_id, NULL);
     fsr->type = OFPFS_INDIV;
     fsr->pad = 0;
     reply = transact_openflow(vconn, request);
@@ -581,6 +586,7 @@ static void do_add_flows(int argc, char *argv[])
     while (fgets(line, sizeof line, file)) {
         struct buffer *buffer;
         struct ofp_flow_mod *ofm;
+        uint16_t priority=0;
         size_t size;
 
         char *comment;
@@ -603,8 +609,10 @@ static void do_add_flows(int argc, char *argv[])
         ofm->max_idle = htons(50);
         ofm->buffer_id = htonl(UINT32_MAX);
         ofm->group_id = htonl(0);
-        str_to_flow(line, &ofm->match, &ofm->actions[0], NULL);
-        run(vconn_send_block(vconn, buffer), "send OpenFlow packet");
+        str_to_flow(line, &ofm->match, &ofm->actions[0], NULL, &priority);
+        ofm->priority = htons(priority);
+
+        send_openflow_buffer(vconn, buffer);
     }
     vconn_close(vconn);
     fclose(file);

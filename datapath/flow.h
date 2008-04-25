@@ -67,6 +67,7 @@ struct sw_flow {
 
 	uint32_t group_id;      /* Flow group ID (for QoS). */
 	uint16_t max_idle;      /* Idle time before discarding (seconds). */
+	uint16_t priority;      /* Only used on entries with wildcards. */
 	unsigned long timeout;  /* Expiration time (in jiffies). */
 
 	/* FIXME?  Probably most flows have only a single action. */

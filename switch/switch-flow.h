@@ -54,6 +54,7 @@ struct sw_flow {
 
     uint32_t group_id;          /* Flow group ID (for QoS). */
     uint16_t max_idle;          /* Idle time before discarding (seconds). */
+    uint16_t priority;          /* Only used on entries with wildcards. */
     time_t created;             /* When the flow was created. */
     time_t timeout;             /* When the flow expires (if idle). */
     uint64_t packet_count;      /* Number of packets seen. */

@@ -1,5 +1,8 @@
-v0.2.2 - 13 Apr 2008
+v0.8.0 - 13 Apr 2008
 --------------------
+    - Added support for flow entry priorities
+    - Added support for all stats messages
+    - Added support for OFPP_TABLE virtual port
     - Removed MAC tables
     - Various bug fixes and tweaks
 

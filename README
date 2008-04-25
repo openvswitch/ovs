@@ -90,16 +90,10 @@ GCC is the expected compiler.
 Bugs/Shortcomings
 -----------------
 
-- The current flowtable does not support all statistics messages
-  mentioned in the Type 0 OpenFlow spec.
-
 - The flowtable does not support the "normal processing" action.
 
 - Configure/build system does not support separate build directory for
   the datapath.  ./configure must be run from the source root.
-
-- dpctl dump-flows may freeze when large numbers of flows are in the
-  flow table.  This has no effect on the datapath.
 
 References
 ----------

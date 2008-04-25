@@ -50,7 +50,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x80
+#define OFP_VERSION   0x81
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -341,6 +341,7 @@ struct ofp_flow_mod {
     uint32_t group_id;            /* Flow group ID (for QoS). */
     uint16_t priority;            /* Priority level of flow entry. */
     uint8_t pad[2];               /* Align to 32-bits. */
+    uint32_t reserved;            /* Reserved for future use. */
     struct ofp_action actions[0]; /* The number of actions is inferred from
                                     the length field in the header. */
 };
@@ -362,8 +363,10 @@ struct ofp_flow_stats {
                                  used for non-aggregated results. */
     uint64_t packet_count;    /* Number of packets in flow. */
     uint64_t byte_count;      /* Number of bytes in flow. */
+    uint16_t priority;        /* Priority of the entry.  Only meaningful 
+                                 when this is not an exact-match entry. */
     uint8_t table_id;         /* ID of table flow came from. */
-    uint8_t pad[7];           /* Align to 64-bits. */
+    uint8_t pad[5];           /* Align to 64-bits. */
 };
 
 enum ofp_stats_type {

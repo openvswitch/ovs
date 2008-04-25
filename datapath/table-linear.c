@@ -39,10 +39,15 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 	unsigned long int flags;
 	struct sw_flow *f;
 
-	/* Replace flows that match exactly. */
+
+	/* Loop through the existing list of entries.  New entries will
+	 * always be placed behind those with equal priority.  Just replace 
+	 * any flows that match exactly.
+	 */
 	spin_lock_irqsave(&tl->lock, flags);
 	list_for_each_entry_rcu (f, &tl->flows, u.node) {
-		if (f->key.wildcards == flow->key.wildcards
+		if (f->priority == flow->priority
+				&& f->key.wildcards == flow->key.wildcards
 				&& flow_matches(&f->key, &flow->key)
 				&& flow_del(f)) {
 			list_replace_rcu(&f->u.node, &flow->u.node);
@@ -50,17 +55,20 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 			flow_deferred_free(f);
 			return 1;
 		}
+
+		if (f->priority < flow->priority)
+			break;
 	}
 
-	/* Table overflow? */
+	/* Make sure there's room in the table. */
 	if (atomic_read(&tl->n_flows) >= tl->max_flows) {
 		spin_unlock_irqrestore(&tl->lock, flags);
 		return 0;
 	}
 	atomic_inc(&tl->n_flows);
 
-	/* FIXME: need to order rules from most to least specific. */
-	list_add_rcu(&flow->u.node, &tl->flows);
+	/* Insert the entry immediately in front of where we're pointing. */
+	list_add_tail_rcu(&flow->u.node, &f->u.node);
 	spin_unlock_irqrestore(&tl->lock, flags);
 	return 1;
 }
