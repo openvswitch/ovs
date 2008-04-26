@@ -70,18 +70,18 @@ struct list *list_back(struct list *);
 size_t list_size(const struct list *);
 bool list_is_empty(const struct list *);
 
-#define LIST_ELEM__(ELEM, STRUCT, MEMBER, LIST)                 \
-        (ELEM != LIST ? CONTAINER_OF(ELEM, STRUCT, MEMBER) : NULL)
 #define LIST_FOR_EACH(ITER, STRUCT, MEMBER, LIST)                   \
-    for (ITER = LIST_ELEM__((LIST)->next, STRUCT, MEMBER, LIST);    \
-         ITER != NULL;                                              \
-         ITER = LIST_ELEM__((ITER)->MEMBER.next, STRUCT, MEMBER, LIST))
+    for (ITER = CONTAINER_OF((LIST)->next, STRUCT, MEMBER);         \
+         &(ITER)->MEMBER != (LIST);                                 \
+         ITER = CONTAINER_OF((ITER)->MEMBER.next, STRUCT, MEMBER))
+#define LIST_FOR_EACH_REVERSE(ITER, STRUCT, MEMBER, LIST)           \
+    for (ITER = CONTAINER_OF((LIST)->prev, STRUCT, MEMBER);         \
+         &(ITER)->MEMBER != (LIST);                                 \
+         ITER = CONTAINER_OF((ITER)->MEMBER.prev, STRUCT, MEMBER))
 #define LIST_FOR_EACH_SAFE(ITER, NEXT, STRUCT, MEMBER, LIST)        \
-    for (ITER = LIST_ELEM__((LIST)->next, STRUCT, MEMBER, LIST);    \
-         (ITER != NULL                                              \
-          ? (NEXT = LIST_ELEM__((ITER)->MEMBER.next,                \
-                                STRUCT, MEMBER, LIST), 1)           \
-          : 0);                                                     \
+    for (ITER = CONTAINER_OF((LIST)->next, STRUCT, MEMBER);         \
+         (NEXT = CONTAINER_OF((ITER)->MEMBER.next, STRUCT, MEMBER), \
+          &(ITER)->MEMBER != (LIST));                               \
          ITER = NEXT)
 
 #endif /* list.h */

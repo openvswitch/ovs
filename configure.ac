@@ -88,6 +88,7 @@ controller/Makefile
 utilities/Makefile
 secchan/Makefile
 switch/Makefile
+tests/Makefile
 datapath/tests/Makefile
 third-party/Makefile
 datapath/linux-2.6/Makefile
