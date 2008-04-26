@@ -675,4 +675,5 @@ static struct command all_commands[] = {
     { "add-flows", 2, 2, do_add_flows },
     { "del-flows", 1, 2, do_del_flows },
     { "dump-ports", 1, 1, do_dump_ports },
+    { NULL, 0, 0, NULL },
 };
