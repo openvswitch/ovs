@@ -329,6 +329,9 @@ struct ofp_match {
 /* Value used in "max_idle" to indicate that the entry is permanent */
 #define OFP_FLOW_PERMANENT 0
 
+/* By default, choose a priority in the middle */
+#define OFP_DEFAULT_PRIORITY 0x8000
+
 /* Flow setup and teardown (controller -> datapath). */
 struct ofp_flow_mod {
     struct ofp_header header;

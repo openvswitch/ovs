@@ -487,6 +487,9 @@ str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action,
     if (table_idx) {
         *table_idx = 0xff;
     }
+    if (priority) {
+        *priority = OFP_DEFAULT_PRIORITY;
+    }
     memset(match, 0, sizeof *match);
     wildcards = OFPFW_ALL;
     for (name = strtok(string, "="), value = strtok(NULL, " \t\n");
@@ -589,7 +592,7 @@ static void do_add_flows(int argc, char *argv[])
     while (fgets(line, sizeof line, file)) {
         struct buffer *buffer;
         struct ofp_flow_mod *ofm;
-        uint16_t priority=0;
+        uint16_t priority;
         size_t size;
 
         char *comment;
@@ -608,12 +611,13 @@ static void do_add_flows(int argc, char *argv[])
         /* Parse and send. */
         size = sizeof *ofm + sizeof ofm->actions[0];
         ofm = alloc_openflow_buffer(size, OFPT_FLOW_MOD, &buffer);
+        str_to_flow(line, &ofm->match, &ofm->actions[0], NULL, &priority);
         ofm->command = htons(OFPFC_ADD);
         ofm->max_idle = htons(50);
         ofm->buffer_id = htonl(UINT32_MAX);
         ofm->group_id = htonl(0);
-        str_to_flow(line, &ofm->match, &ofm->actions[0], NULL, &priority);
         ofm->priority = htons(priority);
+        ofm->reserved = htonl(0);
 
         send_openflow_buffer(vconn, buffer);
     }
@@ -635,10 +639,11 @@ static void do_del_flows(int argc, char *argv[])
     size = sizeof *ofm;
     ofm = alloc_openflow_buffer(size, OFPT_FLOW_MOD, &buffer);
     ofm->command = htons(OFPFC_DELETE);
-    ofm->max_idle = 0;
+    ofm->max_idle = htons(0);
     ofm->buffer_id = htonl(UINT32_MAX);
-    ofm->group_id = 0;
-    ofm->priority = 0;
+    ofm->group_id = htonl(0);
+    ofm->priority = htons(0);
+    ofm->reserved = htonl(0);
     str_to_flow(argc > 2 ? argv[2] : "", &ofm->match, NULL, NULL, NULL);
 
     send_openflow_buffer(vconn, buffer);

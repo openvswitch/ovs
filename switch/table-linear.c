@@ -87,10 +87,8 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
     tl->n_flows++;
 
     /* Insert the entry immediately in front of where we're pointing. */
-    if (f)
-        list_push_back(&f->node, &flow->node);
-    else
-        list_push_back(&tl->flows, &flow->node);
+    list_push_back(&f->node, &flow->node);
+
     return 1;
 }
 
