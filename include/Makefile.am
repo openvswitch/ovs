@@ -9,6 +9,7 @@ noinst_HEADERS = \
 	flow.h \
 	hash.h \
 	list.h \
+	netlink-protocol.h \
 	netlink.h \
 	ofp-print.h \
 	openflow.h \
