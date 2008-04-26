@@ -419,7 +419,7 @@ struct ofp_table_stats {
 /* Current table statistics reply */
 struct ofp_table_stats_reply {
     struct ofp_header header;
-    struct ofp_table_stats tables[]; /* The number of entries is inferred from
+    struct ofp_table_stats tables[0]; /* The number of entries is inferred from
                                         the length field in the header. */
 };
 
@@ -440,7 +440,7 @@ struct ofp_port_stats_request {
 /* Current port statistics reply */
 struct ofp_port_stats_reply {
     struct ofp_header header;
-    struct ofp_port_stats ports[]; /* The number of entries is inferred from
+    struct ofp_port_stats ports[0]; /* The number of entries is inferred from
                                       the length field in the header. */
 };
 
