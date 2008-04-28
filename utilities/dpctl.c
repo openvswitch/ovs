@@ -262,7 +262,7 @@ static void do_del_port(int argc UNUSED, char *argv[])
 static void do_monitor(int argc UNUSED, char *argv[])
 {
     struct dpif dp;
-    open_nl_vconn(argv[1], false, &dp);
+    open_nl_vconn(argv[1], true, &dp);
     for (;;) {
         struct buffer *b;
         run(dpif_recv_openflow(&dp, &b, true), "dpif_recv_openflow");
