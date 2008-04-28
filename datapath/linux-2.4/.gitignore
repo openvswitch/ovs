@@ -8,12 +8,10 @@
 /forward.c
 /forward_t.c
 /datapath_t.c
-/kernel-src.inc
 /table-hash.c
 /table-linear.c
 /table-mac.c
 /table_t.c
 /unit-exports.c
 /unit.c
-/kernel-src.inc
 /tmp

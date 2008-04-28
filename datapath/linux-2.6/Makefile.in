@@ -1,65 +1,9 @@
-export builddir = @abs_builddir@
-export srcdir = @abs_srcdir@
-export top_srcdir = @abs_top_srcdir@
-export KSRC = @KSRC26@
-export KVERSION = 2.6
-export VMDIR = @VMDIR@
-export VERSION = @VERSION@
-
-CFLAGS_EXTRA += -DVERSION=\"$(VERSION)\"
-CFLAGS_EXTRA += -I $(srcdir)/.. -I $(srcdir)/datapath/  -I $(top_srcdir)/include
-
-# Files shared between 2.4 and 2.6 builds
-
-SHAREDFILES = ../chain.c ../crc32.c ../table-hash.c ../table-linear.c	\
-			../forward.c ../flow.c ../unit-exports.c \
-			../datapath_t.c ../dp_dev.c \
-			compat-2.6/genetlink.c \
-			compat-2.6/random32.c 
-
-HFILES = ../datapath.h ../chain.h ../crc32.h ../flow.h ../forward.h	\
-			../table.h ../datapath_t.h \
-			compat-2.6/include/compat26.h \
-			compat-2.6/include/linux/ip.h \
-			compat-2.6/include/linux/ipv6.h \
-			compat-2.6/include/linux/lockdep.h \
-			compat-2.6/include/linux/mutex.h \
-			compat-2.6/include/linux/netlink.h \
-			compat-2.6/include/linux/random.h \
-			compat-2.6/include/linux/skbuff.h \
-			compat-2.6/include/linux/tcp.h \
-			compat-2.6/include/linux/timer.h \
-			compat-2.6/include/linux/types.h \
-			compat-2.6/include/linux/udp.h \
-			compat-2.6/include/net/checksum.h \
-			compat-2.6/include/net/genetlink.h 
-
-SIMLINKFILES = $(patsubst ../%,%, $(SHAREDFILES))
-
-CFILES = datapath.c $(SIMLINKFILES)
-
-# Testing files used for both 2.6 and 2.4 kernels.  Are symlinked
-# locally
-SHARED_T_FILES = ../table_t.c ../crc_t.c ../forward_t.c ../unit.c
-
-UNIT_CFILES = $(patsubst ../%,%, $(SHARED_T_FILES))
-
-# General rule to create symlinks of shared files 
-%.c : ../%.c 
-	ln -s $< $@
-
-# Conditional include so that make dist doesn't puke when
-# this build isn't turned on by automake
-ifneq (,$(KSRC))
-include $(srcdir)/kbuild.inc
+ifeq ($(KERNELRELEASE),)
+# We're being called directly by running make in this directory.
+include Makefile.main
 else
-clean:
+# We're being included by the Linux kernel build system
+include Kbuild
 endif
 
-distclean : clean
-distdir : clean
-install :
 
-all: default
-
-check: all

@@ -1,100 +1,130 @@
-export builddir = @abs_builddir@
-export srcdir = @abs_srcdir@
-export top_srcdir = @abs_top_srcdir@
-export KSRC = @KSRC24@
-export KVERSION = 2.4
-export VMDIR = @VMDIR@
-
-SHAREDFILES = ../chain.c ../crc32.c ../table-hash.c ../table-linear.c	\
-              ../forward.c ../flow.c ../unit-exports.c  \
-			  ../dp_dev.c ../datapath_t.c
-
-SIMLINKFILES = $(patsubst ../%,%, $(SHAREDFILES))
-
-CFILES = datapath.c $(SIMLINKFILES)
-
-# create local symlinks of shared files
-%.c : ../%.c
-	ln -s $< $@
-
-COMPAT24_CFILES =				\
-	compat-2.4/random32.c			\
-	compat-2.4/genetlink.c			\
-	compat-2.4/netlink.c			\
-	compat-2.4/attr.c			\
-	compat-2.4/rcupdate.c			\
-	compat-2.4/string.c			\
-	compat-2.4/kernel.c			\
-	compat-2.4/compat24.c
-
-UNIT_CFILES =					\
-	../table_t.c				\
-	../unit.c
-
-SHARED_T_FILES =                                \
-    ../forward_t.c				\
-    ../table_t.c                                \
-    ../crc_t.c                                  \
-    ../unit.c
-UNIT_CFILES = $(patsubst ../%,%, $(SHARED_T_FILES))
-
-HFILES = ../datapath.h 				\
-	../chain.h 				\
-	../crc32.h 				\
-	../flow.h 				\
-	../forward.h				\
-	../table.h				\
-	../datapath_t.h				\
-	compat-2.4/include/linux/rcupdate.h	\
-	compat-2.4/include/linux/jiffies.h	\
-	compat-2.4/include/linux/ipv6.h		\
-	compat-2.4/include/linux/timer.h	\
-	compat-2.4/include/linux/if_vlan.h	\
-	compat-2.4/include/linux/types.h	\
-	compat-2.4/include/linux/skbuff.h	\
-	compat-2.4/include/linux/etherdevice.h	\
-	compat-2.4/include/linux/tcp.h		\
-	compat-2.4/include/linux/genetlink.h	\
-	compat-2.4/include/linux/sockios.h	\
-	compat-2.4/include/linux/list.h		\
-	compat-2.4/include/linux/udp.h		\
-	compat-2.4/include/linux/slab.h		\
-	compat-2.4/include/linux/random.h	\
-	compat-2.4/include/linux/mutex.h	\
-	compat-2.4/include/linux/ip.h		\
-	compat-2.4/include/linux/string.h	\
-	compat-2.4/include/linux/netlink.h	\
-	compat-2.4/include/linux/compiler.h	\
-	compat-2.4/include/linux/kernel.h	\
-	compat-2.4/include/linux/if_ether.h	\
-	compat-2.4/include/net/checksum.h	\
-	compat-2.4/include/net/genetlink.h	\
-	compat-2.4/include/net/netlink.h	\
-	compat-2.4/include/asm/system.h		\
-	compat-2.4/compat24.h
-
+builddir = @abs_builddir@
+srcdir = @abs_srcdir@
+top_srcdir = @abs_top_srcdir@
+KSRC = @KSRC24@
+VMDIR = @VMDIR@
 VERSION = @VERSION@
 
-CFLAGS_EXTRA += -DVERSION=\"$(VERSION)\"
-CFLAGS_EXTRA += -O2 -g
-CFLAGS_EXTRA += -I $(srcdir)/.. -I $(top_srcdir)/include
+# The names vpath and VPATH are very special for GNU Make and Automake.
+# The following odd construction works around these oddities, whereas
+# the straightforward "VPATH = $(srcdir)/.." will not work.
+v = $(srcdir)/..
+VPATH = $(v)
 
-# Conditional include so that make dist doesn't puke when
-# this build isn't turned on by automake
-ifneq (,$(KSRC))
-include $(srcdir)/kbuild.inc
-else
-clean:
-endif
+include $(srcdir)/../Modules.mk
+include $(srcdir)/Modules.mk
 
-distclean : clean
-distdir : clean
-install :
-
-
-PWD       := $(shell pwd)
-
+default:
+distclean: clean
+distdir: clean
+install:
 all: default
-
+clean:
+	rm -f $(all_objects) *_mod.o
+	for d in $(all_objdirs); do		\
+		while				\
+			rmdir $$d 2> /dev/null;	\
+		do				\
+			d=`dirname $$d`;	\
+		done;				\
+	done
 
 check: all
+
+ifneq (,$(KSRC))
+ifeq (/lib/modules/$(shell uname -r)/source, $(KSRC))
+  KOBJ :=  /lib/modules/$(shell uname -r)/build
+else
+  KOBJ :=  $(KSRC)
+endif
+
+ifneq ($(shell grep -c 'PATCHLEVEL = 4' $(KSRC)/Makefile),1)
+  $(error Linux kernel source in $(KSRC) not 2.4)
+endif
+
+VERSION_FILE := $(KOBJ)/include/linux/version.h
+ifeq (,$(wildcard $(VERSION_FILE)))
+  $(error Linux kernel source not configured - missing version.h)
+endif
+
+CONFIG_FILE  := $(KSRC)/include/linux/autoconf.h
+ifeq (,$(wildcard $(CONFIG_FILE)))
+  $(error Linux kernel source not configured - missing autoconf.h)
+endif
+
+K_SUBLEVEL := $(shell sed -n 's/SUBLEVEL = // p' $(KSRC)/Makefile)
+ifeq ($(shell test $(K_SUBLEVEL) -le 20; echo $?), 0)
+  # 2.4.20 and before require GCC 2.95.
+  CC := gcc-2.95
+else
+  # Later 2.4 versions are more flexible.
+  CC := gcc-3.4 gcc-3.3 gcc-2.95
+endif
+test_cc = $(shell $(cc) --version > /dev/null 2>&1 && echo $(cc))
+CC := $(foreach cc, $(CC), $(test_cc))
+CC := $(firstword $(CC))
+ifeq (,$(CC))
+  $(error Compiler not found)
+endif
+
+CFLAGS = -DVERSION=\"$(VERSION)\" -O2 -g
+CFLAGS += -I $(srcdir)/.. -I $(top_srcdir)/include
+ifeq ($(ARCH),)
+  ARCH := $(shell uname -m | sed 's/i.86/i386/')
+endif
+CFLAGS += -DLINUX -D__KERNEL__ -DMODULE -O2 -pipe -Wall
+CFLAGS += -I$(srcdir)/compat-2.4/include-$(ARCH)
+CFLAGS += -I$(srcdir)/compat-2.4/include
+CFLAGS += -I$(srcdir)/compat-2.4
+CFLAGS += -I$(KSRC)/include -I.
+CFLAGS += -Wno-sign-compare -fno-strict-aliasing
+CFLAGS += $(shell [ -f $(KSRC)/include/linux/modversions.h ] && \
+            echo "-DMODVERSIONS -DEXPORT_SYMTAB \
+                  -include $(KSRC)/include/linux/modversions.h")
+
+$(all_objects): $(all_objdirs)
+$(all_objdirs):
+	mkdir -p $@
+
+default: $(patsubst %,%_mod.o,$(all_modules))
+
+define module_template
+$(1)_objects = $$(patsubst %.c,%.o,$($(1)_sources))
+$($(1)_sources): $(headers)
+$(1)_mod.o: $$($(1)_objects)
+	$(LD) $(LDFLAGS) -r $$^ -o $$@
+endef
+
+$(foreach module,$(all_modules),$(eval $(call module_template,$(module))))
+endif
+
+# Much of the kernel build system in this file is derived from Intel's
+# e1000 distribution, with the following license:
+
+################################################################################
+#
+# Intel PRO/1000 Linux driver
+# Copyright(c) 1999 - 2007 Intel Corporation.
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms and conditions of the GNU General Public License,
+# version 2, as published by the Free Software Foundation.
+#
+# This program is distributed in the hope it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
+#
+# The full GNU General Public License is included in this distribution in
+# the file called "COPYING".
+#
+# Contact Information:
+# Linux NICS <linux.nics@intel.com>
+# e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
+# Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
+#
+################################################################################
