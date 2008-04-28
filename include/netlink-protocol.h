@@ -59,6 +59,11 @@ BUILD_ASSERT_DECL(sizeof(struct sockaddr_nl) == 12);
 #define NLM_F_ACK               0x004
 #define NLM_F_ECHO              0x008
 
+#define NLM_F_ROOT              0x100
+#define NLM_F_MATCH             0x200
+#define NLM_F_ATOMIC            0x400
+#define NLM_F_DUMP              (NLM_F_ROOT | NLM_F_MATCH)
+
 /* nlmsg_type values. */
 #define NLMSG_NOOP              1
 #define NLMSG_ERROR             2
