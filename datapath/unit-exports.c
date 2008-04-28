@@ -11,7 +11,6 @@
 #include <linux/module.h>
 
 EXPORT_SYMBOL(flow_alloc);
-EXPORT_SYMBOL(flow_free);
 EXPORT_SYMBOL(flow_cache);
 
 EXPORT_SYMBOL(table_hash_create);

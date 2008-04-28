@@ -826,6 +826,7 @@ dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 
 	return send_openflow_skb(skb, NULL);
 }
+EXPORT_SYMBOL(dp_send_flow_expired);
 
 int
 dp_send_error_msg(struct datapath *dp, const struct sender *sender, 

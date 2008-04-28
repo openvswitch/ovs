@@ -6,6 +6,7 @@ export VERSION = @VERSION@
 
 include $(srcdir)/../Modules.mk
 include $(srcdir)/Modules.mk
+include @HW_TABLES@
 
 EXTRA_CFLAGS := -DVERSION=\"$(VERSION)\"
 EXTRA_CFLAGS += -I$(srcdir)/.. 

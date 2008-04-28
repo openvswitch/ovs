@@ -74,6 +74,7 @@ struct sw_flow {
 	struct list_head node;
 	struct list_head iter_node;
 	unsigned long serial;
+	void *private;
 
 	spinlock_t lock;         /* Lock this entry...mostly for stat updates */
 	unsigned long init_time; /* When the flow was created (in jiffies). */

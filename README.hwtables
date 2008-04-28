@@ -1,0 +1,38 @@
+Hardware Table Support					-*- text -*-
+----------------------
+
+The OpenFlow reference implementation in this distribution provides a
+mechanism to support hardware that can accelerate OpenFlow switching.
+The mechanism consists of the ability to add a "hardware acceleration"
+switching table ahead of the software switching tables implemented by
+the reference implementation.  The hardware switching table is
+expected to handle any incoming packets that it can on its own.  Any
+packets that it cannot handle itself it may pass up to the software
+table implementations.
+
+Hardware table implementation are built as separate kernel modules
+that may be loaded after the openflow module.  At most one hardware
+table module may be loaded at a time.  Only datapaths created after a
+hardware table module is loaded (and before it is unloaded) will take
+advantage of hardware switching features.
+
+Creating a hardware table module is straightforward.  Create a
+directory in the openflow source tree named datapath/hwtable-NAME,
+where NAME identifies the hardware that the module supports.  Populate
+that directory with the C source files that comprise the module, plus
+a file named Modules.mk that specifies how to build the module.  This
+distribution includes a "dummy" hardware module that demonstrates how
+this works.
+
+Even though only one may be loaded at a given time, any number of
+hardware table modules may be built along with the OpenFlow kernel
+modules.  Specify each NAME that identifies a module to be built on
+the OpenFlow configure script command as the argument to
+--enable-hw-tables, e.g.:
+	./configure --enable-hw-tables=NAME
+
+Each hardware table module's code is encapsulated in a directory, so
+it is easy to separate a hardware table implementation from OpenFlow.
+Simply package up the contents of the hwtable-NAME directory and
+distribute it for builders to extract into their distribution
+directory.

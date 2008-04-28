@@ -8,6 +8,7 @@ export VERSION = @VERSION@
 
 include $(srcdir)/../Modules.mk
 include $(srcdir)/Modules.mk
+include @HW_TABLES@
 
 default: $(all_sources)
 $(all_sources):

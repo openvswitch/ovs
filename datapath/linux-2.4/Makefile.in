@@ -13,6 +13,7 @@ VPATH = $(v)
 
 include $(srcdir)/../Modules.mk
 include $(srcdir)/Modules.mk
+include @HW_TABLES@
 
 default:
 distclean: clean

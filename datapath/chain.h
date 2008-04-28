@@ -18,6 +18,7 @@ struct sw_chain {
 	struct sw_table *tables[CHAIN_MAX_TABLES];
 
 	struct datapath *dp;
+	struct module *owner;
 };
 
 struct sw_chain *chain_create(struct datapath *);
@@ -27,5 +28,9 @@ int chain_delete(struct sw_chain *, const struct sw_flow_key *, uint16_t, int);
 int chain_timeout(struct sw_chain *);
 void chain_destroy(struct sw_chain *);
 void chain_print_stats(struct sw_chain *);
+
+int chain_set_hw_hook(struct sw_table *(*create_hw_table)(void),
+		      struct module *owner);
+void chain_clear_hw_hook(void);
 
 #endif /* chain.h */

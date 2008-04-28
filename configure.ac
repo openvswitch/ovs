@@ -22,6 +22,31 @@ AC_ARG_ENABLE(
   [ndebug=false])
 AM_CONDITIONAL([NDEBUG], [test x$ndebug = xtrue])
 
+AC_ARG_ENABLE(
+  [hw-tables],
+  [AC_HELP_STRING([--enable-hw-tables=MODULE...],
+                  [Configure and build the specified externally supplied 
+		   hardware table support modules])])
+case "${enable_hw_tables}" in # (
+  yes) 
+    AC_MSG_ERROR([--enable-hw-tables has a required argument])
+    ;; # (
+  ''|no) 
+    hw_tables=
+    ;; # (
+  *) 
+    hw_tables=`echo "$enable_hw_tables" | sed 's/,/ /g'`
+    ;;
+esac
+for d in $hw_tables; do
+    mk=datapath/hwtable-$d/Modules.mk
+    if test ! -e $srcdir/$mk; then
+       AC_MSG_ERROR([--enable-hw-tables=$d specified but $mk is missing])
+    fi
+    HW_TABLES="$HW_TABLES \$(top_srcdir)/$mk"
+done
+AC_SUBST(HW_TABLES)
+
 CHECK_LINUX(l26, 2.6, 2.6, KSRC26, L26_ENABLED)
 CHECK_LINUX(l24, 2.4, 2.4, KSRC24, L24_ENABLED)
 

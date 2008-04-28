@@ -12,6 +12,7 @@
 #include <net/llc_pdu.h>
 #include <linux/ip.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/in.h>
@@ -42,18 +43,17 @@ int flow_fields_match(const struct sw_flow_key *a, const struct sw_flow_key *b,
 
 /* Returns nonzero if 'a' and 'b' match, that is, if their fields are equal
  * modulo wildcards, zero otherwise. */
-inline
 int flow_matches(const struct sw_flow_key *a, const struct sw_flow_key *b)
 {
 	return flow_fields_match(a, b, (a->wildcards | b->wildcards));
 }
+EXPORT_SYMBOL(flow_matches);
 
 /* Returns nonzero if 't' (the table entry's key) and 'd' (the key 
  * describing the deletion) match, that is, if their fields are 
  * equal modulo wildcards, zero otherwise.  If 'strict' is nonzero, the
  * wildcards must match in both 't_key' and 'd_key'.  Note that the
  * table's wildcards are ignored unless 'strict' is set. */
-inline
 int flow_del_matches(const struct sw_flow_key *t, const struct sw_flow_key *d, int strict)
 {
 	if (strict && (t->wildcards != d->wildcards))
@@ -61,6 +61,7 @@ int flow_del_matches(const struct sw_flow_key *t, const struct sw_flow_key *d, i
 
 	return flow_fields_match(t, d, d->wildcards);
 }
+EXPORT_SYMBOL(flow_del_matches);
 
 void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
 {
@@ -118,6 +119,7 @@ int flow_del(struct sw_flow *flow)
 {
 	return !atomic_cmpxchg(&flow->deleted, 0, 1);
 }
+EXPORT_SYMBOL(flow_del);
 
 /* Allocates and returns a new flow with 'n_actions' action, using allocation
  * flags 'flags'.  Returns the new flow or a null pointer on failure. */
@@ -145,6 +147,7 @@ void flow_free(struct sw_flow *flow)
 	kfree(flow->actions);
 	kmem_cache_free(flow_cache, flow);
 }
+EXPORT_SYMBOL(flow_free);
 
 /* RCU callback used by flow_deferred_free. */
 static void rcu_callback(struct rcu_head *rcu)
@@ -159,6 +162,7 @@ void flow_deferred_free(struct sw_flow *flow)
 {
 	call_rcu(&flow->rcu, rcu_callback);
 }
+EXPORT_SYMBOL(flow_deferred_free);
 
 /* Prints a representation of 'key' to the kernel log. */
 void print_flow(const struct sw_flow_key *key)
@@ -182,6 +186,7 @@ void print_flow(const struct sw_flow_key *key)
 			((unsigned char *)&key->nw_dst)[3],
 			ntohs(key->tp_src), ntohs(key->tp_dst));
 }
+EXPORT_SYMBOL(print_flow);
 
 /* Parses the Ethernet frame in 'skb', which was received on 'in_port',
  * and initializes 'key' to match. */

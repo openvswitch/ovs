@@ -281,11 +281,29 @@ To build for a running instance of Linux 2.4:
 
       % ./configure --with-l24=/lib/modules/`uname -r`/build
 
+If you have hardware that supports accelerated OpenFlow switching, and
+you have obtained a hardware table module for your hardware and
+extracted it into the OpenFlow reference distribution source tree,
+then you may also enable building support for the hardware switching
+table with --enable-hw-tables.  For example, if your hardware
+switching table is in a directory named datapath/hwtable-foomatic, you
+could compile support for it with the running Linux 2.6 kernel like
+so:
+
+      % ./configure --with-l26=/lib/modules/`uname -r`/build \
+                    --enable-hw-tables=foomatic
+
+For more information about hardware table modules, please read
+README.hwtables at the root of the OpenFlow distribution tree.
+
 In addition to the binaries listed under step 2 in "Building Userspace
 Programs" above, "make" will build the following kernel modules:
 
       datapath/linux-2.6/openflow_mod.ko (if --with-l26 was specified)
       datapath/linux-2.4/openflow_mod.o  (if --with-l24 was specified)
+
+"make" will also build a kernel module for each hardware switch table
+enabled with --enable-hw-tables.
 
 Once you have built the kernel modules, activating them requires only
 running "insmod", e.g.:
@@ -296,6 +314,10 @@ running "insmod", e.g.:
       (Linux 2.4)
       % insmod datapath/linux-2.4/compat24_mod.o
       % insmod datapath/linux-2.4/openflow_mod.o
+
+After you load the openflow module, you may load one hardware switch
+table module (if any were built) to enable support for that hardware
+switching table.
 
 The insmod program must be run as root.  You may need to specify a
 full path to insmod, which is usually in the /sbin directory.  To
@@ -316,8 +338,12 @@ previous section, before it may be tested.
 
       # dpctl adddp 0
    
-   (In principle, openflow_mod supports multiple datapaths within the
-   same host, but this is rarely useful in practice.)
+   In principle, openflow_mod supports multiple datapaths within the
+   same host, but this is rarely useful in practice.
+
+   If you built a support module for hardware accelerated OpenFlow
+   switching and you want to use it, you must load it before creating
+   the datapath with "dpctl adddp".
 
 2. Use dpctl to attach the datapath to physical interfaces on the
    machine.  Say, for example, you want to create a trivial 2-port
