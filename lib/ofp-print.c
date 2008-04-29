@@ -468,11 +468,12 @@ ofp_flow_stats_reply(struct ds *string, const void *oh, size_t len,
     }
 
     for (fs = &fsr->flows[0]; fs < &fsr->flows[n]; fs++) {
-        ds_put_format(string, "  duration=%"PRIu32" s, ", ntohs(fs->duration));
+        ds_put_format(string, "  duration=%"PRIu32" s, ", ntohl(fs->duration));
         ds_put_format(string, "table_id=%"PRIu8", ", fs->table_id);
-        ds_put_format(string, "priority=%"PRIu16", ", fs->match.wildcards ? ntohs(fs->priority) : (uint16_t)-1);
+        ds_put_format(string, "priority=%"PRIu16", ", 
+                    fs->match.wildcards ? ntohs(fs->priority) : (uint16_t)-1);
         ds_put_format(string, "n_packets=%"PRIu64", ",
-                      ntohll(fs->packet_count));
+                    ntohll(fs->packet_count));
         ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
         ofp_print_match(string, &fs->match);
      }
