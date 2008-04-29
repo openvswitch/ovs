@@ -4,6 +4,8 @@
 #ifndef TABLE_H
 #define TABLE_H 1
 
+#include <linux/types.h>
+
 struct sw_flow;
 struct sw_flow_key;
 struct datapath;
@@ -45,10 +47,10 @@ struct sw_table {
 	int (*insert)(struct sw_table *table, struct sw_flow *flow);
 
 	/* Deletes from 'table' any and all flows that match 'key' from
-	 * 'table'.  If 'strict' set, wildcards must match.  Returns the 
-	 * number of flows that were deleted. */
+	 * 'table'.  If 'strict' set, wildcards and priority must match.  
+	 * Returns the number of flows that were deleted. */
 	int (*delete)(struct sw_table *table, const struct sw_flow_key *key, 
-			int strict);
+			uint16_t priority, int strict);
 
 	/* Performs timeout processing on all the flow entries in 'table'.
 	 * Returns the number of flow entries deleted through expiration. */

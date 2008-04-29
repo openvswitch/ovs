@@ -642,7 +642,6 @@ static void do_add_flows(int argc, char *argv[])
         ofm->command = htons(OFPFC_ADD);
         ofm->max_idle = htons(50);
         ofm->buffer_id = htonl(UINT32_MAX);
-        ofm->group_id = htonl(0);
         ofm->priority = htons(priority);
         ofm->reserved = htonl(0);
 
@@ -668,7 +667,6 @@ static void do_del_flows(int argc, char *argv[])
     ofm->command = htons(OFPFC_DELETE);
     ofm->max_idle = htons(0);
     ofm->buffer_id = htonl(UINT32_MAX);
-    ofm->group_id = htonl(0);
     ofm->priority = htons(0);
     ofm->reserved = htonl(0);
     str_to_flow(argc > 2 ? argv[2] : "", &ofm->match, NULL, NULL, NULL);

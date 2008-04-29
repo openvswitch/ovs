@@ -94,7 +94,8 @@ int chain_insert(struct sw_chain *chain, struct sw_flow *flow)
  * wildcards.  Relatively cheap for fully specified keys.
  *
  * The caller need not hold any locks. */
-int chain_delete(struct sw_chain *chain, const struct sw_flow_key *key, int strict)
+int chain_delete(struct sw_chain *chain, const struct sw_flow_key *key, 
+		uint16_t priority, int strict)
 {
 	int count = 0;
 	int i;
@@ -102,12 +103,11 @@ int chain_delete(struct sw_chain *chain, const struct sw_flow_key *key, int stri
 	for (i = 0; i < chain->n_tables; i++) {
 		struct sw_table *t = chain->tables[i];
 		rcu_read_lock();
-		count += t->delete(t, key, strict);
+		count += t->delete(t, key, priority, strict);
 		rcu_read_unlock();
 	}
 
 	return count;
-
 }
 
 /* Performs timeout processing on all the tables in 'chain'.  Returns the

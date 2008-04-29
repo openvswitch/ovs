@@ -394,7 +394,6 @@ make_add_simple_flow(const struct flow *flow,
     ofm->command = htons(OFPFC_ADD);
     ofm->max_idle = htons(60);
     ofm->buffer_id = htonl(buffer_id);
-    ofm->group_id = htonl(0);
     ofm->actions[0].type = htons(OFPAT_OUTPUT);
     ofm->actions[0].arg.output.max_len = htons(0);
     ofm->actions[0].arg.output.port = htons(out_port);

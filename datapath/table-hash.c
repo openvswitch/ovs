@@ -85,9 +85,12 @@ static int do_delete(struct sw_flow **bucket, struct sw_flow *flow)
 	return 0;
 }
 
-/* Returns number of deleted flows. */
+/* Returns number of deleted flows.  We can ignore the priority
+ * argument, since all exact-match entries are the same (highest)
+ * priority. */
 static int table_hash_delete(struct sw_table *swt,
-							 const struct sw_flow_key *key, int strict)
+							 const struct sw_flow_key *key, 
+							 uint16_t priority, int strict)
 {
 	struct sw_table_hash *th = (struct sw_table_hash *) swt;
 	unsigned int count = 0;
@@ -250,11 +253,12 @@ static int table_hash2_insert(struct sw_table *swt, struct sw_flow *flow)
 }
 
 static int table_hash2_delete(struct sw_table *swt,
-							  const struct sw_flow_key *key, int strict)
+							  const struct sw_flow_key *key, 
+							  uint16_t priority, int strict)
 {
 	struct sw_table_hash2 *t2 = (struct sw_table_hash2 *) swt;
-	return (table_hash_delete(t2->subtable[0], key, strict)
-			+ table_hash_delete(t2->subtable[1], key, strict));
+	return (table_hash_delete(t2->subtable[0], key, priority, strict)
+			+ table_hash_delete(t2->subtable[1], key, priority, strict));
 }
 
 static int table_hash2_timeout(struct datapath *dp, struct sw_table *swt)

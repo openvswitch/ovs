@@ -72,7 +72,7 @@ simple_insert_delete(struct sw_table *swt, uint16_t wildcards)
 	if (swt->lookup(swt, &b_flow->key))
 		unit_fail("lookup should not succeed (1)");
 
-	swt->delete(swt, &a_flow->key, 0);
+	swt->delete(swt, &a_flow->key, 0, 0);
 	if (swt->lookup(swt, &a_flow->key))
 		unit_fail("lookup should not succeed (3)");
 
@@ -358,7 +358,7 @@ delete_flows(struct sw_table *swt, struct list_head *keys,
 
 	list_for_each_entry_safe (pos, next, keys, node) {
 		if (del_all == 1 || i % 3 == 0) {
-			n_del = swt->delete(swt, &pos->key, 0);
+			n_del = swt->delete(swt, &pos->key, 0, 0);
 			if (n_del > 1) {
 				unit_fail("%d flows deleted for one entry", n_del);
 				unit_fail("\tfuture 'errors' could just be product duplicate flow_key_entries");
@@ -494,7 +494,7 @@ iterator_test(struct sw_table *swt, int n_flows, uint16_t wildcards)
 
 iterator_test_destr:
 	allocated->key.wildcards = OFPFW_ALL;
-	swt->delete(swt, &allocated->key, 0);
+	swt->delete(swt, &allocated->key, 0, 0);
 	vfree(allocated);
 	return success;
 }
@@ -587,7 +587,7 @@ add_test(struct sw_table *swt, uint16_t wildcards)
 
 add_test_destr:
 	allocated->key.wildcards = OFPFW_ALL;
-	swt->delete(swt, &allocated->key, 0);
+	swt->delete(swt, &allocated->key, 0, 0);
 	vfree(allocated);
 	return success;
 }
@@ -689,7 +689,7 @@ delete_test(struct sw_table *swt, uint16_t wildcards)
 
 delete_test_destr:
 	allocated->key.wildcards = OFPFW_ALL;
-	swt->delete(swt, &allocated->key, 0);
+	swt->delete(swt, &allocated->key, 0, 0);
 	vfree(allocated);
 	return success;
 }
@@ -760,7 +760,7 @@ complex_add_delete_test(struct sw_table *swt, int n_flows, int i, uint16_t wildc
 
 complex_test_destr:
 	allocated->key.wildcards = OFPFW_ALL;
-	swt->delete(swt, &allocated->key, 0);
+	swt->delete(swt, &allocated->key, 0, 0);
 	vfree(allocated);
 	return success;
 

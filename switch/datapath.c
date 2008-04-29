@@ -1060,7 +1060,6 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
 
     /* Fill out flow. */
     flow_extract_match(&flow->key, &ofm->match);
-    flow->group_id = ntohl(ofm->group_id);
     flow->max_idle = ntohs(ofm->max_idle);
     flow->priority = ntohs(ofm->priority);
     flow->timeout = time(0) + flow->max_idle; /* FIXME */
@@ -1110,11 +1109,12 @@ recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
     }  else if (command == OFPFC_DELETE) {
         struct sw_flow_key key;
         flow_extract_match(&key, &ofm->match);
-        return chain_delete(dp->chain, &key, 0) ? 0 : -ESRCH;
+        return chain_delete(dp->chain, &key, 0, 0) ? 0 : -ESRCH;
     } else if (command == OFPFC_DELETE_STRICT) {
         struct sw_flow_key key;
         flow_extract_match(&key, &ofm->match);
-        return chain_delete(dp->chain, &key, 1) ? 0 : -ESRCH;
+        return chain_delete(dp->chain, &key, 
+                    ntohs(ofm->priority), 1) ? 0 : -ESRCH;
     } else {
         return -ENODEV;
     }

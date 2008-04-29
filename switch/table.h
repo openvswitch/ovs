@@ -37,6 +37,8 @@
 #ifndef TABLE_H
 #define TABLE_H 1
 
+#include <stdint.h>
+
 struct sw_flow;
 struct sw_flow_key;
 struct list;
@@ -75,7 +77,7 @@ struct sw_table {
      * 'table'.  If 'strict' set, wildcards must match.  Returns the 
      * number of flows that were deleted. */
     int (*delete)(struct sw_table *table, const struct sw_flow_key *key, 
-                  int strict);
+                  uint16_t priority, int strict);
 
     /* Performs timeout processing on all the flow entries in 'table'.
      * Appends all the flow entries removed from 'table' to 'deleted' for the

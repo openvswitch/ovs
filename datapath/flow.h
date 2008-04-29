@@ -65,7 +65,6 @@ static inline void check_key_align(void)
 struct sw_flow {
 	struct sw_flow_key key;
 
-	uint32_t group_id;      /* Flow group ID (for QoS). */
 	uint16_t max_idle;      /* Idle time before discarding (seconds). */
 	uint16_t priority;      /* Only used on entries with wildcards. */
 	unsigned long timeout;  /* Expiration time (in jiffies). */

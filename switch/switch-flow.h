@@ -52,7 +52,6 @@ struct sw_flow_key {
 struct sw_flow {
     struct sw_flow_key key;
 
-    uint32_t group_id;          /* Flow group ID (for QoS). */
     uint16_t max_idle;          /* Idle time before discarding (seconds). */
     uint16_t priority;          /* Only used on entries with wildcards. */
     time_t created;             /* When the flow was created. */

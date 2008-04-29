@@ -90,7 +90,7 @@ static int do_delete(struct sw_table *swt, struct sw_flow *flow)
 }
 
 static int table_linear_delete(struct sw_table *swt,
-				const struct sw_flow_key *key, int strict)
+				const struct sw_flow_key *key, uint16_t priority, int strict)
 {
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
 	struct list_head *pos, *n;
@@ -98,7 +98,8 @@ static int table_linear_delete(struct sw_table *swt,
 
 	list_for_each_safe_rcu (pos, n, &tl->flows) {
 		struct sw_flow *flow = list_entry(pos, struct sw_flow, node);
-		if (flow_del_matches(&flow->key, key, strict))
+		if (flow_del_matches(&flow->key, key, strict)
+				&& (strict && (flow->priority == priority)))
 			count += do_delete(swt, flow);
 	}
 	if (count)

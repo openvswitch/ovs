@@ -50,7 +50,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x81
+#define OFP_VERSION   0x82
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -281,7 +281,7 @@ struct ofp_packet_out {
 enum ofp_flow_mod_command {
     OFPFC_ADD,              /* New flow. */
     OFPFC_DELETE,           /* Delete all matching flows. */
-    OFPFC_DELETE_STRICT     /* Strictly match wildcards. */
+    OFPFC_DELETE_STRICT     /* Strictly match wildcards and priority. */
 };
 
 /* Flow wildcards. */
@@ -341,7 +341,6 @@ struct ofp_flow_mod {
     uint16_t command;             /* One of OFPFC_*. */
     uint16_t max_idle;            /* Idle time before discarding (seconds). */
     uint32_t buffer_id;           /* Buffered packet to apply to (or -1). */
-    uint32_t group_id;            /* Flow group ID (for QoS). */
     uint16_t priority;            /* Priority level of flow entry. */
     uint8_t pad[2];               /* Align to 32-bits. */
     uint32_t reserved;            /* Reserved for future use. */

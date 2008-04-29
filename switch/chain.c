@@ -120,14 +120,15 @@ chain_insert(struct sw_chain *chain, struct sw_flow *flow)
  * iterating through the entire contents of each table for keys that contain
  * wildcards.  Relatively cheap for fully specified keys. */
 int
-chain_delete(struct sw_chain *chain, const struct sw_flow_key *key, int strict)
+chain_delete(struct sw_chain *chain, const struct sw_flow_key *key, 
+             uint16_t priority, int strict)
 {
     int count = 0;
     int i;
 
     for (i = 0; i < chain->n_tables; i++) {
         struct sw_table *t = chain->tables[i];
-        count += t->delete(t, key, strict);
+        count += t->delete(t, key, priority, strict);
     }
 
     return count;
