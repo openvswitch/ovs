@@ -279,6 +279,31 @@ check_no_lookup(struct sw_table *swt, struct list_head *keys)
 }
 
 
+struct check_iteration_state
+{
+	int n_found;
+	struct list_head *to_find;
+	struct list_head *found;
+};
+
+static int
+check_iteration_callback(struct sw_flow *flow, void *private) 
+{
+	struct check_iteration_state *s = private;
+	struct flow_key_entry *entry;
+
+	entry = find_flow(s->to_find, flow);
+	if (entry == NULL) {
+		unit_fail("UNKNOWN ITERATOR FLOW %p", flow);
+		rcu_read_unlock();
+		return 1;
+	}
+	s->n_found++;
+	list_del(&entry->node);
+	list_add(&entry->node, s->found);
+	return 0;
+}
+
 /*
  * Compares an iterator's view of the 'swt' table to the list of
  * flow_key_entrys in 'to_find'.  flow_key_entrys that are matched are removed
@@ -293,36 +318,24 @@ check_no_lookup(struct sw_table *swt, struct list_head *keys)
 static int
 check_iteration(struct sw_table *swt, struct list_head *to_find, struct list_head *found)
 {
-	struct swt_iterator iter;
-	struct flow_key_entry *entry;
-	int n_found = 0;
+	struct sw_flow_key key;
+	struct sw_table_position position;
+	struct check_iteration_state state;
+
+	memset(&key, 0, sizeof key);
+	key.wildcards = -1;
+
+	memset(&position, 0, sizeof position);
+
+	state.n_found = 0;
+	state.to_find = to_find;
+	state.found = found;
 
 	rcu_read_lock();
-	if (!swt->iterator(swt, &iter)) {
-		rcu_read_unlock();
-		unit_fail("Could not initialize iterator");
-		return -1;
-	}
-
-	while (iter.flow != NULL) {
-		entry = find_flow(to_find, iter.flow);
-		if (entry == NULL) {
-			unit_fail("UNKNOWN ITERATOR FLOW %p",
-				  iter.flow);
-			swt->iterator_destroy(&iter);
-			rcu_read_unlock();
-			return -1;
-		}
-		n_found++;
-		list_del(&entry->node);
-		list_add(&entry->node, found);
-		swt->iterator_next(&iter);
-	}
-
-	swt->iterator_destroy(&iter);
+	swt->iterate(swt, &key, &position, check_iteration_callback, &state);
 	rcu_read_unlock();
 
-	return n_found;
+	return state.n_found;
 }
 
 /*

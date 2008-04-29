@@ -78,32 +78,96 @@ static int dp_maint_func(void *data);
 static int send_port_status(struct net_bridge_port *p, uint8_t status);
 
 
-/* nla_unreserve - reduce amount of space reserved by nla_reserve  
+/* nla_shrink - reduce amount of space reserved by nla_reserve
  * @skb: socket buffer from which to recover room
  * @nla: netlink attribute to adjust
- * @len: amount by which to reduce attribute payload
+ * @len: new length of attribute payload
  *
  * Reduces amount of space reserved by a call to nla_reserve.
  *
  * No other attributes may be added between calling nla_reserve and this
  * function, since it will create a hole in the message.
  */
-void nla_unreserve(struct sk_buff *skb, struct nlattr *nla, int len)
+void nla_shrink(struct sk_buff *skb, struct nlattr *nla, int len)
 {
-	skb->tail -= len;
-	skb->len  -= len;
-
-	nla->nla_len -= len;
+	int delta = nla_total_size(len) - nla_total_size(nla_len(nla));
+	BUG_ON(delta > 0);
+	skb->tail += delta;
+	skb->len  += delta;
+	nla->nla_len = nla_attr_size(len);
 }
 
+/* Puts a set of openflow headers for a message of the given 'type' into 'skb'.
+ * If 'sender' is nonnull, then it is used as the message's destination.  'dp'
+ * must specify the datapath to use.
+ *
+ * '*max_openflow_len' receives the maximum number of bytes that are available
+ * for the embedded OpenFlow message.  The caller must call
+ * resize_openflow_skb() to set the actual size of the message to this number
+ * of bytes or less.
+ *
+ * Returns the openflow header if successful, otherwise (if 'skb' is too small)
+ * an error code. */
+static void *
+put_openflow_headers(struct datapath *dp, struct sk_buff *skb, uint8_t type,
+		     const struct sender *sender, int *max_openflow_len)
+{
+	struct ofp_header *oh;
+	struct nlattr *attr;
+	int openflow_len;
+
+	/* Assemble the Generic Netlink wrapper. */
+	if (!genlmsg_put(skb,
+			 sender ? sender->pid : 0,
+			 sender ? sender->seq : 0,
+			 &dp_genl_family, 0, DP_GENL_C_OPENFLOW))
+		return ERR_PTR(-ENOBUFS);
+	if (nla_put_u32(skb, DP_GENL_A_DP_IDX, dp->dp_idx) < 0)
+		return ERR_PTR(-ENOBUFS);
+	openflow_len = (skb_tailroom(skb) - NLA_HDRLEN) & ~(NLA_ALIGNTO - 1);
+	if (openflow_len < sizeof *oh)
+		return ERR_PTR(-ENOBUFS);
+	*max_openflow_len = openflow_len;
+	attr = nla_reserve(skb, DP_GENL_A_OPENFLOW, openflow_len);
+	BUG_ON(!attr);
+
+	/* Fill in the header.  The caller is responsible for the length. */
+	oh = nla_data(attr);
+	oh->version = OFP_VERSION;
+	oh->type = type;
+	oh->xid = sender ? sender->xid : 0;
+
+	return oh;
+}
+
+/* Resizes OpenFlow header 'oh', which must be at the tail end of 'skb', to new
+ * length 'new_length' (in bytes), adjusting pointers and size values as
+ * necessary. */
+static void
+resize_openflow_skb(struct sk_buff *skb,
+		    struct ofp_header *oh, size_t new_length)
+{
+	struct nlattr *attr = ((void *) oh) - NLA_HDRLEN;
+	nla_shrink(skb, attr, new_length);
+	oh->length = htons(new_length);
+	nlmsg_end(skb, (struct nlmsghdr *) skb->data);
+}
+
+/* Allocates a new skb to contain an OpenFlow message 'openflow_len' bytes in
+ * length.  Returns a null pointer if memory is unavailable, otherwise returns
+ * the OpenFlow header and stores a pointer to the skb in '*pskb'. 
+ *
+ * 'type' is the OpenFlow message type.  If 'sender' is nonnull, then it is
+ * used as the message's destination.  'dp' must specify the datapath to
+ * use.  */
 static void *
 alloc_openflow_skb(struct datapath *dp, size_t openflow_len, uint8_t type,
 		   const struct sender *sender, struct sk_buff **pskb) 
 {
+	struct ofp_header *oh;
 	size_t genl_len;
 	struct sk_buff *skb;
-	struct nlattr *attr;
-	struct ofp_header *oh;
+	int max_openflow_len;
 
 	genl_len = nlmsg_total_size(GENL_HDRLEN + dp_genl_family.hdrsize);
 	genl_len += nla_total_size(sizeof(uint32_t)); /* DP_GENL_A_DP_IDX */
@@ -115,41 +179,15 @@ alloc_openflow_skb(struct datapath *dp, size_t openflow_len, uint8_t type,
 		return NULL;
 	}
 
-	/* Assemble the Generic Netlink wrapper. */
-	if (!genlmsg_put(skb,
-			 sender ? sender->pid : 0,
-			 sender ? sender->seq : 0,
-			 &dp_genl_family, 0, DP_GENL_C_OPENFLOW))
-		BUG();
-	if (nla_put_u32(skb, DP_GENL_A_DP_IDX, dp->dp_idx) < 0)
-		BUG();
-	attr = nla_reserve(skb, DP_GENL_A_OPENFLOW, openflow_len);
-	BUG_ON(!attr);
-	nlmsg_end(skb, (struct nlmsghdr *) skb->data);
-
-	/* Fill in the header. */
-	oh = nla_data(attr);
-	oh->version = OFP_VERSION;
-	oh->type = type;
-	oh->length = htons(openflow_len);
-	oh->xid = sender ? sender->xid : 0;
+	oh = put_openflow_headers(dp, skb, type, sender, &max_openflow_len);
+	BUG_ON(!oh || IS_ERR(oh));
+	resize_openflow_skb(skb, oh, openflow_len);
 
 	return oh;
 }
 
-static void
-resize_openflow_skb(struct sk_buff *skb,
-		    struct ofp_header *oh, size_t new_length)
-{
-	struct nlattr *attr;
-
-	BUG_ON(new_length > ntohs(oh->length));
-	attr = ((void *) oh) - NLA_HDRLEN;
-	nla_unreserve(skb, attr, ntohs(oh->length) - new_length);
-	oh->length = htons(new_length);
-	nlmsg_end(skb, (struct nlmsghdr *) skb->data);
-}
-
+/* Sends 'skb' to 'sender' if it is nonnull, otherwise multicasts 'skb' to all
+ * listeners. */
 static int
 send_openflow_skb(struct sk_buff *skb, const struct sender *sender) 
 {
@@ -789,58 +827,6 @@ fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
 	ofs->byte_count      = cpu_to_be64(flow->byte_count);
 }
 
-int
-dp_send_flow_stats(struct datapath *dp, const struct sender *sender,
-		   const struct ofp_match *match)
-{
-	struct sk_buff *skb;
-	struct ofp_flow_stats_reply *fsr;
-	size_t header_size, fudge, flow_size;
-	struct sw_flow_key match_key;
-	int table_idx, n_flows, max_flows;
-
-	header_size = offsetof(struct ofp_flow_stats_reply, flows);
-	fudge = 128;
-	flow_size = sizeof fsr->flows[0];
-	max_flows = (NLMSG_GOODSIZE - header_size - fudge) / flow_size;
-	fsr = alloc_openflow_skb(dp, header_size + max_flows * flow_size,
-				 OFPT_FLOW_STATS_REPLY, sender, &skb);
-	if (!fsr)
-		return -ENOMEM;
-
-	n_flows = 0;
-	flow_extract_match(&match_key, match);
-	for (table_idx = 0; table_idx < dp->chain->n_tables; table_idx++) {
-		struct sw_table *table = dp->chain->tables[table_idx];
-		struct swt_iterator iter;
-
-		if (n_flows >= max_flows) {
-			break;
-		}
-
-		if (!table->iterator(table, &iter)) {
-			if (net_ratelimit())
-				printk("iterator failed for table %d\n",
-				       table_idx);
-			continue;
-		}
-
-		for (; iter.flow; table->iterator_next(&iter)) {
-			if (flow_matches(&match_key, &iter.flow->key)) {
-				fill_flow_stats(&fsr->flows[n_flows],
-						iter.flow, table_idx);
-				if (++n_flows >= max_flows) {
-					break;
-				}
-			}
-		}
-		table->iterator_destroy(&iter);
-	}
-	resize_openflow_skb(skb, &fsr->header,
-			    header_size + flow_size * n_flows);
-	return send_openflow_skb(skb, sender);
-}
-
 static int 
 fill_port_stats_reply(struct datapath *dp, struct ofp_port_stats_reply *psr)
 {
@@ -1145,12 +1131,156 @@ static struct nla_policy dp_genl_openflow_policy[DP_GENL_A_MAX + 1] = {
 	[DP_GENL_A_DP_IDX] = { .type = NLA_U32 },
 };
 
+struct flow_stats_cb_state {
+	int dp_idx;
+	int table_idx;
+	struct sw_table_position position;
+	struct ofp_flow_stats_request *rq;
+	int sent_terminator;
+
+	struct ofp_flow_stats *flows;
+	int n_flows, max_flows;
+};
+
+static int muster_callback(struct sw_flow *flow, void *private)
+{
+	struct flow_stats_cb_state *s = private;
+
+	fill_flow_stats(&s->flows[s->n_flows], flow, s->table_idx);
+	return ++s->n_flows >= s->max_flows;
+}
+
+int
+muster_flow_stats(struct datapath *dp, struct flow_stats_cb_state *s,
+		  const struct sender *sender, struct sk_buff *skb)
+{
+	struct ofp_flow_stats_reply *fsr;
+	size_t header_size, flow_size;
+	struct sw_flow_key match_key;
+	int max_openflow_len;
+	size_t size;
+
+	fsr = put_openflow_headers(dp, skb, OFPT_FLOW_STATS_REPLY, sender,
+				   &max_openflow_len);
+	if (IS_ERR(fsr))
+		return PTR_ERR(fsr);
+	resize_openflow_skb(skb, &fsr->header, max_openflow_len);
+
+	header_size = offsetof(struct ofp_flow_stats_reply, flows);
+	flow_size = sizeof fsr->flows[0];
+	s->max_flows = (max_openflow_len - header_size) / flow_size;
+	if (s->max_flows <= 0)
+		return -ENOMEM;
+	s->flows = fsr->flows;
+
+	flow_extract_match(&match_key, &s->rq->match);
+	s->n_flows = 0;
+	while (s->table_idx < dp->chain->n_tables
+	       && (s->rq->table_id == 0xff || s->rq->table_id == s->table_idx))
+	{
+		struct sw_table *table = dp->chain->tables[s->table_idx];
+
+		if (table->iterate(table, &match_key, &s->position,
+				   muster_callback, s))
+			break;
+
+		s->table_idx++;
+		memset(&s->position, 0, sizeof s->position);
+	}
+	if (!s->n_flows) {
+		/* Signal dump completion. */
+		if (s->sent_terminator) {
+			return 0;
+		}
+		s->sent_terminator = 1;
+	}
+	size = header_size + flow_size * s->n_flows;
+	resize_openflow_skb(skb, &fsr->header, size);
+	return skb->len;
+}
+
+static int
+dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
+{
+	struct datapath *dp;
+	struct sender sender;
+	struct flow_stats_cb_state *state;
+	int err;
+
+	if (!cb->args[0]) {
+		struct nlattr *attrs[DP_GENL_A_MAX + 1];
+		struct ofp_flow_stats_request *rq;
+		struct nlattr *va;
+
+		err = nlmsg_parse(cb->nlh, GENL_HDRLEN, attrs, DP_GENL_A_MAX,
+				  dp_genl_openflow_policy);
+		if (err < 0)
+			return err;
+
+		if (!attrs[DP_GENL_A_DP_IDX])
+			return -EINVAL;
+
+		va = attrs[DP_GENL_A_OPENFLOW];
+		if (!va || nla_len(va) != sizeof *state->rq)
+			return -EINVAL;
+
+		rq = nla_data(va);
+		if (rq->header.version != OFP_VERSION
+		    || rq->header.type != OFPT_FLOW_STATS_REQUEST
+		    || ntohs(rq->header.length) != sizeof *rq)
+			return -EINVAL;
+
+		state = kmalloc(sizeof *state, GFP_KERNEL);
+		if (!state)
+			return -ENOMEM;
+		state->dp_idx = nla_get_u32(attrs[DP_GENL_A_DP_IDX]);
+		state->table_idx = rq->table_id == 0xff ? 0 : rq->table_id;
+		memset(&state->position, 0, sizeof state->position);
+		state->rq = rq;
+		state->sent_terminator = 0;
+
+		cb->args[0] = (long) state;
+	} else {
+		state = (struct flow_stats_cb_state *) cb->args[0];
+	}
+
+	if (state->rq->type != OFPFS_INDIV) {
+		return -ENOTSUPP;
+	}
+
+	rcu_read_lock();
+	dp = dp_get(state->dp_idx);
+	if (!dp) {
+		err = -ENOENT;
+		goto out;
+	}
+
+	sender.xid = state->rq->header.xid;
+	sender.pid = NETLINK_CB(cb->skb).pid;
+	sender.seq = cb->nlh->nlmsg_seq;
+	err = muster_flow_stats(dp, state, &sender, skb);
+
+out:
+	rcu_read_unlock();
+	return err;
+}
+
+static int
+dp_genl_openflow_done(struct netlink_callback *cb)
+{
+	struct flow_stats_cb_state *state;
+	state = (struct flow_stats_cb_state *) cb->args[0];
+	kfree(state);
+	return 0;
+}
+
 static struct genl_ops dp_genl_ops_openflow = {
 	.cmd = DP_GENL_C_OPENFLOW,
 	.flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
 	.policy = dp_genl_openflow_policy,
 	.doit = dp_genl_openflow,
-	.dumpit = NULL,
+	.dumpit = dp_genl_openflow_dumpit,
+	.done = dp_genl_openflow_done,
 };
 
 static struct nla_policy dp_genl_benchmark_policy[DP_GENL_A_MAX + 1] = {

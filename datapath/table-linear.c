@@ -19,6 +19,8 @@ struct sw_table_linear {
 	unsigned int max_flows;
 	atomic_t n_flows;
 	struct list_head flows;
+	struct list_head iter_flows;
+	unsigned long int next_serial;
 };
 
 static struct sw_flow *table_linear_lookup(struct sw_table *swt,
@@ -50,7 +52,9 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 				&& f->key.wildcards == flow->key.wildcards
 				&& flow_matches(&f->key, &flow->key)
 				&& flow_del(f)) {
+			flow->serial = f->serial;
 			list_replace_rcu(&f->u.node, &flow->u.node);
+			list_replace_rcu(&f->iter_node, &flow->iter_node);
 			spin_unlock_irqrestore(&tl->lock, flags);
 			flow_deferred_free(f);
 			return 1;
@@ -69,6 +73,7 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 
 	/* Insert the entry immediately in front of where we're pointing. */
 	list_add_tail_rcu(&flow->u.node, &f->u.node);
+	list_add_rcu(&flow->iter_node, &tl->iter_flows);
 	spin_unlock_irqrestore(&tl->lock, flags);
 	return 1;
 }
@@ -77,6 +82,7 @@ static int do_delete(struct sw_table *swt, struct sw_flow *flow)
 {
 	if (flow_del(flow)) {
 		list_del_rcu(&flow->u.node);
+		list_del_rcu(&flow->iter_node);
 		flow_deferred_free(flow);
 		return 1;
 	}
@@ -132,43 +138,28 @@ static void table_linear_destroy(struct sw_table *swt)
 	kfree(tl);
 }
 
-/* Linear table's private data is just a pointer to the table */
-
-static int table_linear_iterator(struct sw_table *swt,
-				 struct swt_iterator *swt_iter) 
+static int table_linear_iterate(struct sw_table *swt,
+				const struct sw_flow_key *key,
+				struct sw_table_position *position,
+				int (*callback)(struct sw_flow *, void *),
+				void *private)
 {
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
+	struct sw_flow *flow;
+	unsigned long start;
 
-	swt_iter->private = tl;
-
-	if (atomic_read(&tl->n_flows) == 0)
-		swt_iter->flow = NULL;
-	else
-		swt_iter->flow = list_entry(tl->flows.next,
-				struct sw_flow, u.node);
-
-	return 1;
+	start = ~position->private[0];
+	list_for_each_entry_rcu (flow, &tl->iter_flows, iter_node) {
+		if (flow->serial <= start && flow_matches(key, &flow->key)) {
+			int error = callback(flow, private);
+			if (error) {
+				position->private[0] = ~(flow->serial - 1);
+				return error;
+			}
+		}
+	}
+	return 0;
 }
-
-static void table_linear_next(struct swt_iterator *swt_iter)
-{
-	struct sw_table_linear *tl;
-	struct list_head *next;
-
-	if (swt_iter->flow == NULL)
-		return;
-
-	tl = (struct sw_table_linear *) swt_iter->private;
-
-	next = swt_iter->flow->u.node.next;
-	if (next == &tl->flows)
-		swt_iter->flow = NULL;
-	else
-		swt_iter->flow = list_entry(next, struct sw_flow, u.node);
-}
-
-static void table_linear_iterator_destroy(struct swt_iterator *swt_iter)
-{}
 
 static void table_linear_stats(struct sw_table *swt,
 				struct sw_table_stats *stats)
@@ -195,16 +186,15 @@ struct sw_table *table_linear_create(unsigned int max_flows)
 	swt->delete = table_linear_delete;
 	swt->timeout = table_linear_timeout;
 	swt->destroy = table_linear_destroy;
+	swt->iterate = table_linear_iterate;
 	swt->stats = table_linear_stats;
-
-		swt->iterator = table_linear_iterator;
-	swt->iterator_next = table_linear_next;
-	swt->iterator_destroy = table_linear_iterator_destroy;
 
 	tl->max_flows = max_flows;
 	atomic_set(&tl->n_flows, 0);
 	INIT_LIST_HEAD(&tl->flows);
+	INIT_LIST_HEAD(&tl->iter_flows);
 	spin_lock_init(&tl->lock);
+	tl->next_serial = 0;
 
 	return swt;
 }

@@ -562,8 +562,10 @@ str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action,
 static void do_dump_flows(int argc, char *argv[])
 {
     struct vconn *vconn;
-    struct buffer *request, *reply;
+    struct buffer *request;
     struct ofp_flow_stats_request *fsr;
+    uint32_t send_xid;
+    bool done = false;
 
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
     fsr = alloc_openflow_buffer(sizeof *fsr, OFPT_FLOW_STATS_REQUEST, &request);
@@ -571,8 +573,32 @@ static void do_dump_flows(int argc, char *argv[])
             NULL);
     fsr->type = OFPFS_INDIV;
     fsr->pad = 0;
-    reply = transact_openflow(vconn, request);
-    ofp_print(stdout, reply->data, reply->size, 1);
+
+    send_xid = ((struct ofp_header *) request->data)->xid;
+    send_openflow_buffer(vconn, request);
+    while (!done) {
+        uint32_t recv_xid;
+        struct buffer *reply;
+
+        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
+        recv_xid = ((struct ofp_header *) reply->data)->xid;
+        if (send_xid == recv_xid) {
+            struct ofp_flow_stats_reply *fsr;
+
+            ofp_print(stdout, reply->data, reply->size, 1);
+
+            fsr = buffer_at(reply, 0, sizeof *fsr);
+            done = (!fsr
+                    || fsr->header.version != OFP_VERSION
+                    || fsr->header.type != OFPT_FLOW_STATS_REPLY
+                    || (ntohs(fsr->header.length)
+                        < sizeof fsr->header + sizeof *fsr->flows));
+        } else {
+            VLOG_DBG("received reply with xid %08"PRIx32" "
+                     "!= expected %08"PRIx32, recv_xid, send_xid);
+        }
+        buffer_delete(reply);
+    }
     vconn_close(vconn);
 }
 

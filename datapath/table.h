@@ -8,17 +8,19 @@ struct sw_flow;
 struct sw_flow_key;
 struct datapath;
 
-/* Iterator through the flows stored in a table. */
-struct swt_iterator {
-	struct sw_flow *flow;	/* Current flow, for use by client. */
-	void *private;
-};
-
 /* Table statistics. */
 struct sw_table_stats {
 	const char *name;	/* Human-readable name. */
 	unsigned long int n_flows; /* Number of active flows. */
 	unsigned long int max_flows; /* Flow capacity. */
+};
+
+/* Position within an iteration of a sw_table.
+ *
+ * The contents are private to the table implementation, except that a position
+ * initialized to all-zero-bits represents the start of a table. */
+struct sw_table_position {
+	unsigned long private[4];
 };
 
 /* A single table of flows.
@@ -55,9 +57,23 @@ struct sw_table {
 	/* Destroys 'table', which must not have any users. */
 	void (*destroy)(struct sw_table *table);
 
-	int (*iterator)(struct sw_table *, struct swt_iterator *);
-	void (*iterator_next)(struct swt_iterator *);
-	void (*iterator_destroy)(struct swt_iterator *);
+	/* Iterates through the flow entries in 'table', passing each one
+	 * matches 'key' to 'callback'.  The callback function should return 0
+	 * to continue iteration or a nonzero error code to stop.  The iterator
+	 * function returns either 0 if the table iteration completed or the
+	 * value returned by the callback function otherwise.
+	 *
+	 * The iteration starts at 'position', which may be initialized to
+	 * all-zero-bits to iterate from the beginning of the table.  If the
+	 * iteration terminates due to an error from the callback function,
+	 * 'position' is updated to a value that can be passed back to the
+	 * iterator function to resume iteration later with the following
+	 * flow. */
+	int (*iterate)(struct sw_table *table,
+		       const struct sw_flow_key *key,
+		       struct sw_table_position *position,
+		       int (*callback)(struct sw_flow *flow, void *private),
+		       void *private);
 
 	/* Dumps statistics for 'table' into 'stats'. */
 	void (*stats)(struct sw_table *table, struct sw_table_stats *stats);

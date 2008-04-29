@@ -439,19 +439,6 @@ recv_flow(struct sw_chain *chain, const struct sender *sender, const void *msg)
 }
 
 static int
-recv_flow_stats_request(struct sw_chain *chain, const struct sender *sender,
-			 const void *msg)
-{
-	const struct ofp_flow_stats_request *fsr = msg;
-	if (fsr->type == OFPFS_INDIV) {
-		return dp_send_flow_stats(chain->dp, sender, &fsr->match); 
-	} else {
-		/* FIXME */
-		return -ENOTSUPP;
-	}
-}
-
-static int
 recv_port_stats_request(struct sw_chain *chain, const struct sender *sender,
 			 const void *msg)
 {
@@ -502,10 +489,6 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 		[OFPT_PORT_MOD] = {
 			sizeof (struct ofp_port_mod),
 			recv_port_mod,
-		},
-		[OFPT_FLOW_STATS_REQUEST] = {
-			sizeof (struct ofp_flow_stats_request),
-			recv_flow_stats_request,
 		},
 		[OFPT_PORT_STATS_REQUEST] = {
 			sizeof (struct ofp_port_stats_request),

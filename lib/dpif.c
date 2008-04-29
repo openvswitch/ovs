@@ -192,6 +192,8 @@ error:
 int
 dpif_send_openflow(struct dpif *dp, struct buffer *buffer, bool wait) 
 {
+    struct ofp_header *oh;
+    unsigned int dump_flag;
     struct buffer hdr;
     struct nlattr *nla;
     uint32_t fixed_buffer[64 / 4];
@@ -200,9 +202,14 @@ dpif_send_openflow(struct dpif *dp, struct buffer *buffer, bool wait)
     int n_iov;
     int retval;
 
+    /* The reply to OFPT_FLOW_STATS_REQUEST may be multiple segments long, so
+     * we need to specify NLM_F_DUMP in the request. */
+    oh = buffer_at_assert(buffer, 0, sizeof *oh);
+    dump_flag = oh->type == OFPT_FLOW_STATS_REQUEST ? NLM_F_DUMP : 0;
+
     buffer_use(&hdr, fixed_buffer, sizeof fixed_buffer);
     nl_msg_put_genlmsghdr(&hdr, dp->sock, 32, openflow_family,
-                          NLM_F_REQUEST, DP_GENL_C_OPENFLOW, 1);
+                          NLM_F_REQUEST | dump_flag, DP_GENL_C_OPENFLOW, 1);
     nl_msg_put_u32(&hdr, DP_GENL_A_DP_IDX, dp->dp_idx);
     nla = buffer_put_uninit(&hdr, sizeof *nla);
     nla->nla_len = sizeof *nla + buffer->size;

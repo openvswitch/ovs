@@ -144,58 +144,37 @@ static void table_hash_destroy(struct sw_table *swt)
 	kfree(th);
 }
 
-struct swt_iterator_hash {
-	struct sw_table_hash *th;
-	unsigned int bucket_i;
-};
-
-static struct sw_flow *next_flow(struct swt_iterator_hash *ih)
+static int table_hash_iterate(struct sw_table *swt,
+			      const struct sw_flow_key *key,
+			      struct sw_table_position *position,
+			      int (*callback)(struct sw_flow *, void *private),
+			      void *private) 
 {
-	for (;ih->bucket_i <= ih->th->bucket_mask; ih->bucket_i++) {
-		struct sw_flow *f = ih->th->buckets[ih->bucket_i];
-		if (f != NULL)
-			return f;
-	}
+	struct sw_table_hash *th = (struct sw_table_hash *) swt;
 
-	return NULL;
-}
-
-static int table_hash_iterator(struct sw_table *swt,
-				struct swt_iterator *swt_iter)
-{
-	struct swt_iterator_hash *ih;
-
-	swt_iter->private = ih = kmalloc(sizeof *ih, GFP_ATOMIC);
-
-	if (ih == NULL)
+	if (position->private[0] > th->bucket_mask)
 		return 0;
 
-	ih->th = (struct sw_table_hash *) swt;
+	if (key->wildcards == 0) {
+		struct sw_flow *flow = table_hash_lookup(swt, key);
+		position->private[0] = -1;
+		return flow ? callback(flow, private) : 0;
+	} else {
+		int i;
 
-	ih->bucket_i = 0;
-	swt_iter->flow = next_flow(ih);
-
-	return 1;
+		for (i = position->private[0]; i <= th->bucket_mask; i++) {
+			struct sw_flow *flow = th->buckets[i];
+			if (flow && flow_matches(key, &flow->key)) {
+				int error = callback(flow, private);
+				if (error) {
+					position->private[0] = i + 1;
+					return error;
+				}
+			}
+		}
+		return 0;
+	}
 }
-
-static void table_hash_next(struct swt_iterator *swt_iter)
-{
-	struct swt_iterator_hash *ih;
-
-	if (swt_iter->flow == NULL)
-		return;
-
-	ih = (struct swt_iterator_hash *) swt_iter->private;
-
-	ih->bucket_i++;
-	swt_iter->flow = next_flow(ih);
-}
-
-static void table_hash_iterator_destroy(struct swt_iterator *swt_iter)
-{
-	kfree(swt_iter->private);
-}
-
 static void table_hash_stats(struct sw_table *swt,
 				 struct sw_table_stats *stats) 
 {
@@ -230,9 +209,7 @@ struct sw_table *table_hash_create(unsigned int polynomial,
 	swt->delete = table_hash_delete;
 	swt->timeout = table_hash_timeout;
 	swt->destroy = table_hash_destroy;
-	swt->iterator = table_hash_iterator;
-	swt->iterator_next = table_hash_next;
-	swt->iterator_destroy = table_hash_iterator_destroy;
+	swt->iterate = table_hash_iterate;
 	swt->stats = table_hash_stats;
 
 	spin_lock_init(&th->lock);
@@ -295,79 +272,25 @@ static void table_hash2_destroy(struct sw_table *swt)
 	kfree(t2);
 }
 
-struct swt_iterator_hash2 {
-	struct sw_table_hash2 *th2;
-	struct swt_iterator ih;
-	uint8_t table_i;
-};
-
-static int table_hash2_iterator(struct sw_table *swt,
-				struct swt_iterator *swt_iter)
+static int table_hash2_iterate(struct sw_table *swt,
+			       const struct sw_flow_key *key,
+			       struct sw_table_position *position,
+			       int (*callback)(struct sw_flow *, void *),
+			       void *private)
 {
-	struct swt_iterator_hash2 *ih2;
+	struct sw_table_hash2 *t2 = (struct sw_table_hash2 *) swt;
+	int i;
 
-	swt_iter->private = ih2 = kmalloc(sizeof *ih2, GFP_ATOMIC);
-	if (ih2 == NULL)
-		return 0;
-
-	ih2->th2 = (struct sw_table_hash2 *) swt;
-	if (!table_hash_iterator(ih2->th2->subtable[0], &ih2->ih)) {
-		kfree(ih2);
-		return 0;
-	}
-
-	if (ih2->ih.flow != NULL) {
-		swt_iter->flow = ih2->ih.flow;
-		ih2->table_i = 0;
-	} else {
-		table_hash_iterator_destroy(&ih2->ih);
-		ih2->table_i = 1;
-		if (!table_hash_iterator(ih2->th2->subtable[1], &ih2->ih)) {
-			kfree(ih2);
-			return 0;
+	for (i = position->private[1]; i < 2; i++) {
+		int error = table_hash_iterate(t2->subtable[i], key, position,
+					       callback, private);
+		if (error) {
+			return error;
 		}
-		swt_iter->flow = ih2->ih.flow;
+		position->private[0] = 0;
+		position->private[1]++;
 	}
-
-	return 1;
-}
-
-static void table_hash2_next(struct swt_iterator *swt_iter) 
-{
-	struct swt_iterator_hash2 *ih2;
-
-	if (swt_iter->flow == NULL)
-		return;
-
-	ih2 = (struct swt_iterator_hash2 *) swt_iter->private;
-	table_hash_next(&ih2->ih);
-
-	if (ih2->ih.flow != NULL) {
-		swt_iter->flow = ih2->ih.flow;
-	} else {
-		if (ih2->table_i == 0) {
-			table_hash_iterator_destroy(&ih2->ih);
-			ih2->table_i = 1;
-			if (!table_hash_iterator(ih2->th2->subtable[1], &ih2->ih)) {
-				ih2->ih.private = NULL;
-				swt_iter->flow = NULL;
-			} else {
-				swt_iter->flow = ih2->ih.flow;
-			}
-		} else {
-			swt_iter->flow = NULL;
-		}
-	}
-}
-
-static void table_hash2_iterator_destroy(struct swt_iterator *swt_iter)
-{
-	struct swt_iterator_hash2 *ih2;
-
-	ih2 = (struct swt_iterator_hash2 *) swt_iter->private;
-	if (ih2->ih.private != NULL)
-		table_hash_iterator_destroy(&ih2->ih);
-	kfree(ih2);
+	return 0;
 }
 
 static void table_hash2_stats(struct sw_table *swt,
@@ -409,11 +332,8 @@ struct sw_table *table_hash2_create(unsigned int poly0, unsigned int buckets0,
 	swt->delete = table_hash2_delete;
 	swt->timeout = table_hash2_timeout;
 	swt->destroy = table_hash2_destroy;
+	swt->iterate = table_hash2_iterate;
 	swt->stats = table_hash2_stats;
-
-	swt->iterator = table_hash2_iterator;
-	swt->iterator_next = table_hash2_next;
-	swt->iterator_destroy = table_hash2_iterator_destroy;
 
 	return swt;
 
