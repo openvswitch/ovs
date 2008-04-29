@@ -75,10 +75,7 @@ struct sw_flow {
 	struct ofp_action *actions;
 
 	/* For use by table implementation. */
-	union {
-		struct list_head node;
-		struct hlist_node hnode;
-	} u;
+	struct list_head node;
 	struct list_head iter_node;
 	unsigned long serial;
 

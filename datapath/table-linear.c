@@ -28,7 +28,7 @@ static struct sw_flow *table_linear_lookup(struct sw_table *swt,
 {
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
 	struct sw_flow *flow;
-	list_for_each_entry_rcu (flow, &tl->flows, u.node) {
+	list_for_each_entry_rcu (flow, &tl->flows, node) {
 		if (flow_matches(&flow->key, key))
 			return flow;
 	}
@@ -47,13 +47,13 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 	 * any flows that match exactly.
 	 */
 	spin_lock_irqsave(&tl->lock, flags);
-	list_for_each_entry_rcu (f, &tl->flows, u.node) {
+	list_for_each_entry_rcu (f, &tl->flows, node) {
 		if (f->priority == flow->priority
 				&& f->key.wildcards == flow->key.wildcards
 				&& flow_matches(&f->key, &flow->key)
 				&& flow_del(f)) {
 			flow->serial = f->serial;
-			list_replace_rcu(&f->u.node, &flow->u.node);
+			list_replace_rcu(&f->node, &flow->node);
 			list_replace_rcu(&f->iter_node, &flow->iter_node);
 			spin_unlock_irqrestore(&tl->lock, flags);
 			flow_deferred_free(f);
@@ -72,7 +72,7 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 	atomic_inc(&tl->n_flows);
 
 	/* Insert the entry immediately in front of where we're pointing. */
-	list_add_tail_rcu(&flow->u.node, &f->u.node);
+	list_add_tail_rcu(&flow->node, &f->node);
 	list_add_rcu(&flow->iter_node, &tl->iter_flows);
 	spin_unlock_irqrestore(&tl->lock, flags);
 	return 1;
@@ -81,7 +81,7 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 static int do_delete(struct sw_table *swt, struct sw_flow *flow) 
 {
 	if (flow_del(flow)) {
-		list_del_rcu(&flow->u.node);
+		list_del_rcu(&flow->node);
 		list_del_rcu(&flow->iter_node);
 		flow_deferred_free(flow);
 		return 1;
@@ -97,7 +97,7 @@ static int table_linear_delete(struct sw_table *swt,
 	unsigned int count = 0;
 
 	list_for_each_safe_rcu (pos, n, &tl->flows) {
-		struct sw_flow *flow = list_entry(pos, struct sw_flow, u.node);
+		struct sw_flow *flow = list_entry(pos, struct sw_flow, node);
 		if (flow_del_matches(&flow->key, key, strict))
 			count += do_delete(swt, flow);
 	}
@@ -113,7 +113,7 @@ static int table_linear_timeout(struct datapath *dp, struct sw_table *swt)
 	int count = 0;
 
 	list_for_each_safe_rcu (pos, n, &tl->flows) {
-		struct sw_flow *flow = list_entry(pos, struct sw_flow, u.node);
+		struct sw_flow *flow = list_entry(pos, struct sw_flow, node);
 		if (flow_timeout(flow)) {
 			count += do_delete(swt, flow);
 			if (dp->flags & OFPC_SEND_FLOW_EXP)
@@ -131,8 +131,8 @@ static void table_linear_destroy(struct sw_table *swt)
 
 	while (!list_empty(&tl->flows)) {
 		struct sw_flow *flow = list_entry(tl->flows.next,
-						  struct sw_flow, u.node);
-		list_del(&flow->u.node);
+						  struct sw_flow, node);
+		list_del(&flow->node);
 		flow_free(flow);
 	}
 	kfree(tl);
