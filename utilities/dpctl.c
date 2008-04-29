@@ -563,16 +563,17 @@ static void do_dump_flows(int argc, char *argv[])
 {
     struct vconn *vconn;
     struct buffer *request;
-    struct ofp_flow_stats_request *fsr;
+    struct ofp_flow_stats_request *req;
     uint32_t send_xid;
     bool done = false;
 
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
-    fsr = alloc_openflow_buffer(sizeof *fsr, OFPT_FLOW_STATS_REQUEST, &request);
-    str_to_flow(argc > 2 ? argv[2] : "", &fsr->match, NULL, &fsr->table_id, 
+    req = alloc_openflow_buffer(sizeof *req, OFPT_FLOW_STATS_REQUEST,
+                                &request);
+    str_to_flow(argc > 2 ? argv[2] : "", &req->match, NULL, &req->table_id, 
             NULL);
-    fsr->type = OFPFS_INDIV;
-    fsr->pad = 0;
+    req->type = OFPFS_INDIV;
+    req->pad = 0;
 
     send_xid = ((struct ofp_header *) request->data)->xid;
     send_openflow_buffer(vconn, request);
@@ -583,16 +584,16 @@ static void do_dump_flows(int argc, char *argv[])
         run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
         recv_xid = ((struct ofp_header *) reply->data)->xid;
         if (send_xid == recv_xid) {
-            struct ofp_flow_stats_reply *fsr;
+            struct ofp_flow_stats_reply *rpy;
 
             ofp_print(stdout, reply->data, reply->size, 1);
 
-            fsr = buffer_at(reply, 0, sizeof *fsr);
-            done = (!fsr
-                    || fsr->header.version != OFP_VERSION
-                    || fsr->header.type != OFPT_FLOW_STATS_REPLY
-                    || (ntohs(fsr->header.length)
-                        < sizeof fsr->header + sizeof *fsr->flows));
+            rpy = buffer_at(reply, 0, sizeof *rpy);
+            done = (!rpy
+                    || rpy->header.version != OFP_VERSION
+                    || rpy->header.type != OFPT_FLOW_STATS_REPLY
+                    || (ntohs(rpy->header.length)
+                        < sizeof rpy->header + sizeof *rpy->flows));
         } else {
             VLOG_DBG("received reply with xid %08"PRIx32" "
                      "!= expected %08"PRIx32, recv_xid, send_xid);
