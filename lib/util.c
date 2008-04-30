@@ -75,13 +75,18 @@ xrealloc(void *p, size_t size)
     return p;
 }
 
-char *
-xstrdup(const char *s_) 
+void *
+xmemdup(const void *p_, size_t size)
 {
-    size_t size = strlen(s_) + 1;
-    char *s = xmalloc(size);
-    memcpy(s, s_, size);
-    return s;
+    void *p = xmalloc(size);
+    memcpy(p, p_, size);
+    return p;
+}
+
+char *
+xstrdup(const char *s) 
+{
+    return xmemdup(s, strlen(s) + 1);
 }
 
 char *
