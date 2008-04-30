@@ -62,7 +62,6 @@ void rconn_run_wait(struct rconn *);
 struct buffer *rconn_recv(struct rconn *);
 void rconn_recv_wait(struct rconn *);
 int rconn_send(struct rconn *, struct buffer *);
-void rconn_send_wait(struct rconn *);
 
 const char *rconn_get_name(const struct rconn *);
 bool rconn_is_alive(const struct rconn *);
