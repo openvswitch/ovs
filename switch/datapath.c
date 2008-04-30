@@ -670,10 +670,11 @@ fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
 	ofs->match.tp_src    = flow->key.flow.tp_src;
 	ofs->match.tp_dst    = flow->key.flow.tp_dst;
 	ofs->duration        = htonl(now - flow->created);
-	ofs->priority        = htons(flow->priority);
-	ofs->table_id        = table_idx;
 	ofs->packet_count    = htonll(flow->packet_count);
 	ofs->byte_count      = htonll(flow->byte_count);
+	ofs->priority        = htons(flow->priority);
+	ofs->table_id        = table_idx;
+    memset(ofs->pad, 0, sizeof ofs->pad);
 }
 
 int

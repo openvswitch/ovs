@@ -849,10 +849,11 @@ fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
 	ofs->match.tp_src    = flow->key.tp_src;
 	ofs->match.tp_dst    = flow->key.tp_dst;
 	ofs->duration        = htonl((jiffies - flow->init_time) / HZ);
-	ofs->priority        = htons(flow->priority);
-	ofs->table_id        = table_idx;
 	ofs->packet_count    = cpu_to_be64(flow->packet_count);
 	ofs->byte_count      = cpu_to_be64(flow->byte_count);
+	ofs->priority        = htons(flow->priority);
+	ofs->table_id        = table_idx;
+	memset(ofs->pad, 0, sizeof ofs->pad);
 }
 
 static int 
