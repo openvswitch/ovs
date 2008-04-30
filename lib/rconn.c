@@ -228,6 +228,7 @@ create_rconn(const char *name, int txq_limit, struct vconn *vconn)
     struct rconn *rc = xmalloc(sizeof *rc);
     assert(txq_limit > 0);
     rc->reliable = vconn == NULL;
+    rc->connected = vconn != NULL;
     rc->name = xstrdup(name);
     rc->vconn = vconn;
     queue_init(&rc->txq);
