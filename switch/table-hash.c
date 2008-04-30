@@ -237,6 +237,7 @@ struct sw_table *table_hash_create(unsigned int polynomial,
         free(th);
         return NULL;
     }
+    th->n_flows = 0;
     th->bucket_mask = n_buckets - 1;
 
     swt = &th->swt;
