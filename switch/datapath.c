@@ -473,6 +473,18 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
         flood(dp, buffer, in_port); 
     } else if (out_port == OFPP_CONTROLLER) {
         dp_output_control(dp, buffer, in_port, 0, OFPR_ACTION); 
+    } else if (out_port == OFPP_TABLE) {
+        struct sw_flow_key key;
+        struct sw_flow *flow;
+
+        key.wildcards = 0;
+        flow_extract(buffer, in_port, &key.flow);
+        flow = chain_lookup(dp->chain, &key);
+        if (flow != NULL) {
+            flow_used(flow, buffer);
+            execute_actions(dp, buffer, in_port, &key, 
+                            flow->actions, flow->n_actions);
+        }
     } else {
         output_packet(dp, buffer, out_port);
     }
@@ -1057,6 +1069,7 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
 {
     int error = -ENOMEM;
     int n_acts;
+    int i;
     struct sw_flow *flow;
 
 
@@ -1065,6 +1078,19 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
     if (n_acts > MAX_ACTIONS) {
         error = -E2BIG;
         goto error;
+    }
+
+    /* To prevent loops, make sure there's no action to send to the
+     * OFP_TABLE virtual port.
+     */
+    for (i=0; i<n_acts; i++) {
+        const struct ofp_action *a = &ofm->actions[i];
+
+        if (a->type == htons(OFPAT_OUTPUT)
+                    && a->arg.output.port == htons(OFPP_TABLE)) {
+            /* xxx Send fancy new error message? */
+            goto error;
+        }
     }
 
     /* Allocate memory. */
