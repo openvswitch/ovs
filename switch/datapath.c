@@ -627,6 +627,20 @@ send_flow_expired(struct datapath *dp, struct sw_flow *flow)
     send_openflow_buffer(dp, buffer, NULL);
 }
 
+void
+dp_send_error_msg(struct datapath *dp, const struct sender *sender,
+        uint16_t type, uint16_t code, const uint8_t *data, size_t len)
+{
+    struct buffer *buffer;
+    struct ofp_error_msg *oem;
+    oem = alloc_openflow_buffer(dp, sizeof(*oem)+len, OFPT_ERROR_MSG, 
+                                sender, &buffer);
+    oem->type = htons(type);
+    oem->code = htons(code);
+    memcpy(oem->data, data, len);
+    send_openflow_buffer(dp, buffer, sender);
+}
+
 static void
 fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
                 int table_idx, time_t now)

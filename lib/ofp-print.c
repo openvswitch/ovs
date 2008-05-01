@@ -410,6 +410,18 @@ ofp_print_flow_expired(struct ds *string, const void *oh, size_t len,
          ntohll(ofe->packet_count), ntohll(ofe->byte_count));
 }
 
+/* Pretty-print the OFPT_ERROR_MSG packet of 'len' bytes at 'oh' to 'string'
+ * at the given 'verbosity' level. */
+static void
+ofp_print_error_msg(struct ds *string, const void *oh, size_t len, 
+                       int verbosity)
+{
+    const struct ofp_error_msg *oem = oh;
+
+    ds_put_format(string, 
+         " type%d code%d\n", ntohs(oem->type), ntohs(oem->code));
+}
+
 /* Pretty-print the OFPT_PORT_STATUS packet of 'len' bytes at 'oh' to 'string'
  * at the given 'verbosity' level. */
 static void
@@ -590,6 +602,11 @@ static const struct openflow_packet packets[] = {
         "port_status",
         sizeof (struct ofp_port_status),
         ofp_print_port_status
+    },
+    [OFPT_ERROR_MSG] = {
+        "error_msg",
+        sizeof (struct ofp_error_msg),
+        ofp_print_error_msg,
     },
     [OFPT_FLOW_STATS_REQUEST] = {
         "flow_stats_request",

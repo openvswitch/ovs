@@ -46,6 +46,7 @@
 #define BRIDGE_PORT_NO_FLOOD	0x00000001 
 
 #define UINT32_MAX			  4294967295U
+#define UINT16_MAX			  65535
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
 
 struct net_bridge_port {
@@ -168,6 +169,13 @@ alloc_openflow_skb(struct datapath *dp, size_t openflow_len, uint8_t type,
 	size_t genl_len;
 	struct sk_buff *skb;
 	int max_openflow_len;
+
+	if ((openflow_len + sizeof(struct ofp_header)) > UINT16_MAX) {
+		if (net_ratelimit())
+			printk("alloc_openflow_skb: openflow message too large: %d\n", 
+					openflow_len);
+		return NULL;
+	}
 
 	genl_len = nlmsg_total_size(GENL_HDRLEN + dp_genl_family.hdrsize);
 	genl_len += nla_total_size(sizeof(uint32_t)); /* DP_GENL_A_DP_IDX */
@@ -802,6 +810,26 @@ dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 	ofe->packet_count   = cpu_to_be64(flow->packet_count);
 	ofe->byte_count     = cpu_to_be64(flow->byte_count);
 	return send_openflow_skb(skb, NULL);
+}
+
+int
+dp_send_error_msg(struct datapath *dp, const struct sender *sender, 
+		uint16_t type, uint16_t code, const uint8_t *data, size_t len)
+{
+	struct sk_buff *skb;
+	struct ofp_error_msg *oem;
+
+
+	oem = alloc_openflow_skb(dp, sizeof(*oem)+len, OFPT_ERROR_MSG, 
+			sender, &skb);
+	if (!oem)
+		return -ENOMEM;
+
+	oem->type = htons(type);
+	oem->code = htons(code);
+	memcpy(oem->data, data, len);
+
+	return send_openflow_skb(skb, sender);
 }
 
 static void

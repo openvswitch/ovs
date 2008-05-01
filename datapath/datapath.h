@@ -65,16 +65,18 @@ struct sender {
 };
 
 int dp_output_port(struct datapath *, struct sk_buff *, int out_port);
-int dp_output_control(struct datapath *, struct sk_buff *,
-			   uint32_t buffer_id, size_t max_len, int reason);
+int dp_output_control(struct datapath *, struct sk_buff *, uint32_t, 
+			size_t, int);
 int dp_set_origin(struct datapath *, uint16_t, struct sk_buff *);
 int dp_send_features_reply(struct datapath *, const struct sender *);
 int dp_send_config_reply(struct datapath *, const struct sender *);
 int dp_send_flow_expired(struct datapath *, struct sw_flow *);
 int dp_send_flow_stats(struct datapath *, const struct sender *,
-		       const struct ofp_match *);
+			const struct ofp_match *);
 int dp_send_table_stats(struct datapath *, const struct sender *);
 int dp_send_port_stats(struct datapath *, const struct sender *);
+int dp_send_error_msg(struct datapath *, const struct sender *, 
+			uint16_t, uint16_t, const uint8_t *, size_t);
 int dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp);
 
 /* Should hold at least RCU read lock when calling */

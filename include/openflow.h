@@ -92,12 +92,13 @@ enum ofp_type {
     OFPT_TABLE,               /*  9 Controller/switch message */
     OFPT_PORT_MOD,            /* 10 Controller/switch message */
     OFPT_PORT_STATUS,         /* 11 Async message */
-    OFPT_FLOW_STATS_REQUEST,  /* 12 Controller/switch message */
-    OFPT_FLOW_STATS_REPLY,    /* 13 Controller/switch message */
-    OFPT_TABLE_STATS_REQUEST, /* 14 Controller/switch message */
-    OFPT_TABLE_STATS_REPLY,   /* 15 Controller/switch message */
-    OFPT_PORT_STATS_REQUEST,  /* 16 Controller/switch message */
-    OFPT_PORT_STATS_REPLY     /* 17 Controller/switch message */
+    OFPT_ERROR_MSG,           /* 12 Async message */
+    OFPT_FLOW_STATS_REQUEST,  /* 13 Controller/switch message */
+    OFPT_FLOW_STATS_REPLY,    /* 14 Controller/switch message */
+    OFPT_TABLE_STATS_REQUEST, /* 15 Controller/switch message */
+    OFPT_TABLE_STATS_REPLY,   /* 16 Controller/switch message */
+    OFPT_PORT_STATS_REQUEST,  /* 17 Controller/switch message */
+    OFPT_PORT_STATS_REPLY     /* 18 Controller/switch message */
 };
 
 /* Header on all OpenFlow packets. */
@@ -356,6 +357,16 @@ struct ofp_flow_expired {
     uint32_t duration;        /* Time flow was alive in seconds. */
     uint64_t packet_count;    
     uint64_t byte_count;
+};
+
+/* Error message (datapath -> controller). */
+struct ofp_error_msg {
+    struct ofp_header header;
+
+    uint16_t type;
+    uint16_t code;
+    uint8_t data[0];          /* Variable-length data.  Interpreted based 
+                                 on the type and code. */
 };
 
 /* Statistics about flows that match the "match" field */
