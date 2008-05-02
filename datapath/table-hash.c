@@ -159,9 +159,17 @@ static int table_hash_iterate(struct sw_table *swt,
 		return 0;
 
 	if (key->wildcards == 0) {
-		struct sw_flow *flow = table_hash_lookup(swt, key);
-		position->private[0] = -1;
-		return flow ? callback(flow, private) : 0;
+		struct sw_flow *flow;
+		int error;
+
+		flow = table_hash_lookup(swt, key);
+		if (!flow)
+			return 0;
+
+		error = callback(flow, private);
+		if (!error)
+			position->private[0] = -1;
+		return error;
 	} else {
 		int i;
 
@@ -170,7 +178,7 @@ static int table_hash_iterate(struct sw_table *swt,
 			if (flow && flow_matches(key, &flow->key)) {
 				int error = callback(flow, private);
 				if (error) {
-					position->private[0] = i + 1;
+					position->private[0] = i;
 					return error;
 				}
 			}

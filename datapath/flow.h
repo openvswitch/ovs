@@ -46,9 +46,6 @@ static inline void check_key_align(void)
 	BUILD_BUG_ON(sizeof(struct sw_flow_key) != 36); 
 }
 
-/* Maximum number of actions in a single flow entry. */
-#define MAX_ACTIONS 16
-
 /* Locking:
  *
  * - Readers must take rcu_read_lock and hold it the entire time that the flow

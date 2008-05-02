@@ -154,7 +154,7 @@ static int table_linear_iterate(struct sw_table *swt,
 		if (flow->serial <= start && flow_matches(key, &flow->key)) {
 			int error = callback(flow, private);
 			if (error) {
-				position->private[0] = ~(flow->serial - 1);
+				position->private[0] = ~flow->serial;
 				return error;
 			}
 		}

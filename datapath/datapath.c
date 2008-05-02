@@ -838,36 +838,6 @@ dp_send_error_msg(struct datapath *dp, const struct sender *sender,
 	return send_openflow_skb(skb, sender);
 }
 
-static int
-fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
-		int table_idx)
-{
-	int length = sizeof *ofs + sizeof *ofs->actions * flow->n_actions;
-	ofs->length          = htons(length);
-	ofs->table_id        = table_idx;
-	ofs->pad             = 0;
-	ofs->match.wildcards = htons(flow->key.wildcards);
-	ofs->match.in_port   = flow->key.in_port;
-	memcpy(ofs->match.dl_src, flow->key.dl_src, ETH_ALEN);
-	memcpy(ofs->match.dl_dst, flow->key.dl_dst, ETH_ALEN);
-	ofs->match.dl_vlan   = flow->key.dl_vlan;
-	ofs->match.dl_type   = flow->key.dl_type;
-	ofs->match.nw_src    = flow->key.nw_src;
-	ofs->match.nw_dst    = flow->key.nw_dst;
-	ofs->match.nw_proto  = flow->key.nw_proto;
-	memset(ofs->match.pad, 0, sizeof ofs->match.pad);
-	ofs->match.tp_src    = flow->key.tp_src;
-	ofs->match.tp_dst    = flow->key.tp_dst;
-	ofs->duration        = htonl((jiffies - flow->init_time) / HZ);
-	ofs->packet_count    = cpu_to_be64(flow->packet_count);
-	ofs->byte_count      = cpu_to_be64(flow->byte_count);
-	ofs->priority        = htons(flow->priority);
-	ofs->max_idle        = htons(flow->max_idle);
-	memcpy(ofs->actions, flow->actions,
-	       sizeof *ofs->actions * flow->n_actions);
-	return length;
-}
-
 /* Generic Netlink interface.
  *
  * See netlink(7) for an introduction to netlink.  See
@@ -1109,9 +1079,6 @@ struct flow_stats_state {
 	int bytes_used, bytes_allocated;
 };
 
-#define MAX_FLOW_STATS_SIZE (sizeof(struct ofp_flow_stats) \
-			     + MAX_ACTIONS * sizeof(struct ofp_action))
-
 static int flow_stats_init(struct datapath *dp, const void *body, int body_len,
 			   void **state)
 {
@@ -1129,9 +1096,40 @@ static int flow_stats_init(struct datapath *dp, const void *body, int body_len,
 static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 {
 	struct flow_stats_state *s = private;
-	s->bytes_used += fill_flow_stats(s->body + s->bytes_used, flow,
-					 s->table_idx);
-	return s->bytes_used + MAX_FLOW_STATS_SIZE > s->bytes_allocated;
+	struct ofp_flow_stats *ofs;
+	int actions_length;
+	int length;
+
+	actions_length = sizeof *ofs->actions * flow->n_actions;
+	length = sizeof *ofs + sizeof *ofs->actions * flow->n_actions;
+	if (length + s->bytes_used > s->bytes_allocated)
+		return 1;
+
+	ofs = s->body + s->bytes_used;
+	ofs->length          = htons(length);
+	ofs->table_id        = s->table_idx;
+	ofs->pad             = 0;
+	ofs->match.wildcards = htons(flow->key.wildcards);
+	ofs->match.in_port   = flow->key.in_port;
+	memcpy(ofs->match.dl_src, flow->key.dl_src, ETH_ALEN);
+	memcpy(ofs->match.dl_dst, flow->key.dl_dst, ETH_ALEN);
+	ofs->match.dl_vlan   = flow->key.dl_vlan;
+	ofs->match.dl_type   = flow->key.dl_type;
+	ofs->match.nw_src    = flow->key.nw_src;
+	ofs->match.nw_dst    = flow->key.nw_dst;
+	ofs->match.nw_proto  = flow->key.nw_proto;
+	memset(ofs->match.pad, 0, sizeof ofs->match.pad);
+	ofs->match.tp_src    = flow->key.tp_src;
+	ofs->match.tp_dst    = flow->key.tp_dst;
+	ofs->duration        = htonl((jiffies - flow->init_time) / HZ);
+	ofs->packet_count    = cpu_to_be64(flow->packet_count);
+	ofs->byte_count      = cpu_to_be64(flow->byte_count);
+	ofs->priority        = htons(flow->priority);
+	ofs->max_idle        = htons(flow->max_idle);
+	memcpy(ofs->actions, flow->actions, actions_length);
+
+	s->bytes_used += length;
+	return 0;
 }
 
 static int flow_stats_dump(struct datapath *dp, void *state,
@@ -1139,11 +1137,10 @@ static int flow_stats_dump(struct datapath *dp, void *state,
 {
 	struct flow_stats_state *s = state;
 	struct sw_flow_key match_key;
+	int error = 0;
 
 	s->bytes_used = 0;
 	s->bytes_allocated = *body_len;
-	if (s->bytes_allocated < MAX_FLOW_STATS_SIZE)
-		return -ENOMEM;
 	s->body = body;
 
 	flow_extract_match(&match_key, &s->rq->match);
@@ -1152,15 +1149,22 @@ static int flow_stats_dump(struct datapath *dp, void *state,
 	{
 		struct sw_table *table = dp->chain->tables[s->table_idx];
 
-		if (table->iterate(table, &match_key, &s->position,
-				   flow_stats_dump_callback, s))
+		error = table->iterate(table, &match_key, &s->position,
+				       flow_stats_dump_callback, s);
+		if (error)
 			break;
 
 		s->table_idx++;
 		memset(&s->position, 0, sizeof s->position);
 	}
 	*body_len = s->bytes_used;
-	return s->bytes_used + MAX_FLOW_STATS_SIZE > s->bytes_allocated;
+
+	/* If error is 0, we're done.
+	 * Otherwise, if some bytes were used, there are more flows to come.
+	 * Otherwise, we were not able to fit even a single flow in the body,
+	 * which indicates that we have a single flow with too many actions to
+	 * fit.  We won't ever make any progress at that rate, so give up. */
+	return !error ? 0 : s->bytes_used ? 1 : -ENOMEM;
 }
 
 static void flow_stats_done(void *state)

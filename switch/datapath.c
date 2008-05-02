@@ -1048,16 +1048,10 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
     struct sw_flow *flow;
 
 
-    /* Check number of actions. */
-    n_acts = (ntohs(ofm->header.length) - sizeof *ofm) / sizeof *ofm->actions;
-    if (n_acts > MAX_ACTIONS) {
-        error = -E2BIG;
-        goto error;
-    }
-
     /* To prevent loops, make sure there's no action to send to the
      * OFP_TABLE virtual port.
      */
+    n_acts = (ntohs(ofm->header.length) - sizeof *ofm) / sizeof *ofm->actions;
     for (i=0; i<n_acts; i++) {
         const struct ofp_action *a = &ofm->actions[i];
 

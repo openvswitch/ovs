@@ -46,9 +46,6 @@ struct sw_flow_key {
     uint32_t wildcards;         /* Wildcard fields (in host byte order). */
 };
 
-/* Maximum number of actions in a single flow entry. */
-#define MAX_ACTIONS 16
-
 struct sw_flow {
     struct sw_flow_key key;
 

@@ -69,8 +69,9 @@ struct sw_table {
 	 * all-zero-bits to iterate from the beginning of the table.  If the
 	 * iteration terminates due to an error from the callback function,
 	 * 'position' is updated to a value that can be passed back to the
-	 * iterator function to resume iteration later with the following
-	 * flow. */
+	 * iterator function to continue iteration later from the same position
+	 * that caused the error (assuming that that flow entry has not been
+	 * deleted in the meantime). */
 	int (*iterate)(struct sw_table *table,
 		       const struct sw_flow_key *key,
 		       struct sw_table_position *position,
