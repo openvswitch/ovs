@@ -86,6 +86,13 @@ Prints to the console all flow entries in datapath \fIDP_IDX\fR's table
 and \fITABLE_ID\fR is the integer ID of one of the datapath's tables
 as displayed in the output produced by \fBdump-tables\fR.
 
+.TP
+.BI dump-aggregate " DP_IDX [FLOWS]"
+Prints to the console aggregate statistics for flows in datapath
+\fIDP_IDX\fR's that match \fIFLOWS\fR.  If \fIFLOWS\fR is omitted, the
+statistics are aggregated across all flows in the datapath's flow
+tables.
+
 .SH EXAMPLES
 
 A typical dpctl command sequence:

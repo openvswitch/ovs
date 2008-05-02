@@ -457,13 +457,6 @@ ofp_flow_stats_request(struct ds *string, const void *oh, size_t len,
         ds_put_format(string, " table_id=%"PRIu8", ", fsr->table_id);
     }
 
-    if (fsr->type == OFPFS_INDIV) {
-        ds_put_cstr(string, " type=indiv, ");
-    } else if (fsr->type == OFPFS_AGGREGATE) {
-        ds_put_cstr(string, " type=aggregate, ");
-    } else {
-        ds_put_format(string, " ***type=%"PRIu8"***, ", fsr->type);
-    }
     ofp_print_match(string, &fsr->match);
 }
 
@@ -520,6 +513,32 @@ ofp_flow_stats_reply(struct ds *string, const void *body_, size_t len,
 
         pos += length;
      }
+}
+
+static void
+ofp_aggregate_stats_request(struct ds *string, const void *oh, size_t len,
+                            int verbosity) 
+{
+    const struct ofp_aggregate_stats_request *asr = oh;
+
+    if (asr->table_id == 0xff) {
+        ds_put_format(string, " table_id=any, ");
+    } else {
+        ds_put_format(string, " table_id=%"PRIu8", ", asr->table_id);
+    }
+
+    ofp_print_match(string, &asr->match);
+}
+
+static void
+ofp_aggregate_stats_reply(struct ds *string, const void *body_, size_t len,
+                          int verbosity)
+{
+    const struct ofp_aggregate_stats_reply *asr = body_;
+
+    ds_put_format(string, " packet_count=%"PRIu64, ntohll(asr->packet_count));
+    ds_put_format(string, " byte_count=%"PRIu64, ntohll(asr->byte_count));
+    ds_put_format(string, " flow_count=%"PRIu32, ntohl(asr->flow_count));
 }
 
 static void
@@ -593,6 +612,15 @@ print_stats(struct ds *string, int type, const void *body, size_t body_len,
               sizeof(struct ofp_flow_stats_request),
               ofp_flow_stats_request },
             { 0, SIZE_MAX, ofp_flow_stats_reply },
+        },
+        [OFPST_AGGREGATE] = {
+            "aggregate",
+            { sizeof(struct ofp_aggregate_stats_request),
+              sizeof(struct ofp_aggregate_stats_request),
+              ofp_aggregate_stats_request },
+            { sizeof(struct ofp_aggregate_stats_reply),
+              sizeof(struct ofp_aggregate_stats_reply),
+              ofp_aggregate_stats_reply },
         },
         [OFPST_TABLE] = {
             "table",

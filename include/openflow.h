@@ -369,10 +369,15 @@ struct ofp_error_msg {
 };
 
 enum ofp_stats_types {
-    /* Flow statistics.
+    /* Individual flow statistics.
      * The request body is struct ofp_flow_stats_request.
      * The reply body is an array of struct ofp_flow_stats. */
     OFPST_FLOW,
+
+    /* Aggregate flow statistics.
+     * The request body is struct ofp_aggregate_stats_request.
+     * The reply body is struct ofp_aggregate_stats_reply. */
+    OFPST_AGGREGATE,
 
     /* Flow table statistics.
      * The request body is empty.
@@ -403,35 +408,42 @@ struct ofp_stats_reply {
     uint8_t body[0];            /* Body of the reply. */
 };
 
-enum ofp_stats_type {
-    OFPFS_INDIV,              /* Send an entry for each matching flow */
-    OFPFS_AGGREGATE           /* Aggregate matching flows */
-};
-
 /* Body for ofp_stats_request of type OFPST_FLOW. */
 struct ofp_flow_stats_request {
     struct ofp_match match;   /* Fields to match */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
                                  or 0xff for all tables. */
-    uint8_t type;             /* One of OFPFS_ */
-    uint16_t pad;               /* Align to 32-bits */
+    uint8_t pad[3];           /* Align to 32 bits. */
 };
 
 /* Body of reply to OFPST_FLOW request. */
 struct ofp_flow_stats {
     uint16_t length;          /* Length of this entry */
-    uint8_t table_id;         /* ID of table flow came from. 0nly used for
-                                 non-aggregated results */
+    uint8_t table_id;         /* ID of table flow came from. */
     uint8_t pad;
     struct ofp_match match;   /* Description of fields */
-    uint32_t duration;        /* Time flow has been alive in seconds. Only
-                                 used for non-aggregated results. */
+    uint32_t duration;        /* Time flow has been alive in seconds. */
     uint64_t packet_count;    /* Number of packets in flow. */
     uint64_t byte_count;      /* Number of bytes in flow. */
     uint16_t priority;        /* Priority of the entry. Only meaningful
                                  when this is not an exact-match entry. */
-    uint16_t max_idle;        /* Only used for non-aggregated results. */
-    struct ofp_action actions[0]; /* Only used for non-aggregated results. */
+    uint16_t max_idle;        /* Number of seconds idle before expiration. */
+    struct ofp_action actions[0]; /* Actions. */
+};
+
+/* Body for ofp_stats_request of type OFPST_AGGREGATE. */
+struct ofp_aggregate_stats_request {
+    struct ofp_match match;   /* Fields to match */
+    uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
+                                 or 0xff for all tables. */
+    uint8_t pad[3];           /* Align to 32 bits. */
+};
+
+/* Body of reply to OFPST_AGGREGATE request. */
+struct ofp_aggregate_stats_reply {
+    uint64_t packet_count;    /* Number of packets in flows. */
+    uint64_t byte_count;      /* Number of bytes in flows. */
+    uint32_t flow_count;      /* Number of flows. */
 };
 
 /* Body of reply to OFPST_TABLE request. */

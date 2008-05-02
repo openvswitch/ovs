@@ -1172,6 +1172,63 @@ static void flow_stats_done(void *state)
 	kfree(state);
 }
 
+static int aggregate_stats_init(struct datapath *dp,
+				const void *body, int body_len,
+				void **state)
+{
+	*state = (void *)body;
+	return 0;
+}
+
+static int aggregate_stats_dump_callback(struct sw_flow *flow, void *private)
+{
+	struct ofp_aggregate_stats_reply *rpy = private;
+	rpy->packet_count += flow->packet_count;
+	rpy->byte_count += flow->byte_count;
+	rpy->flow_count++;
+	return 0;
+}
+
+static int aggregate_stats_dump(struct datapath *dp, void *state,
+				void *body, int *body_len)
+{
+	struct ofp_aggregate_stats_request *rq = state;
+	struct ofp_aggregate_stats_reply *rpy;
+	struct sw_table_position position;
+	struct sw_flow_key match_key;
+	int table_idx;
+
+	if (*body_len < sizeof *rpy)
+		return -ENOBUFS;
+	rpy = body;
+	*body_len = sizeof *rpy;
+
+	memset(rpy, 0, sizeof *rpy);
+
+	flow_extract_match(&match_key, &rq->match);
+	table_idx = rq->table_id == 0xff ? 0 : rq->table_id;
+	memset(&position, 0, sizeof position);
+	while (table_idx < dp->chain->n_tables
+	       && (rq->table_id == 0xff || rq->table_id == table_idx))
+	{
+		struct sw_table *table = dp->chain->tables[table_idx];
+		int error;
+
+		error = table->iterate(table, &match_key, &position,
+				       aggregate_stats_dump_callback, rpy);
+		if (error)
+			return error;
+
+		table_idx++;
+		memset(&position, 0, sizeof position);
+	}
+
+	rpy->packet_count = cpu_to_be64(rpy->packet_count);
+	rpy->byte_count = cpu_to_be64(rpy->byte_count);
+	rpy->flow_count = htonl(rpy->flow_count);
+	return 0;
+}
+
 static int table_stats_dump(struct datapath *dp, void *state,
 			    void *body, int *body_len)
 {
@@ -1280,6 +1337,13 @@ static const struct stats_type stats[] = {
 		flow_stats_init,
 		flow_stats_dump,
 		flow_stats_done
+	},
+	[OFPST_AGGREGATE] = {
+		sizeof(struct ofp_aggregate_stats_request),
+		sizeof(struct ofp_aggregate_stats_request),
+		aggregate_stats_init,
+		aggregate_stats_dump,
+		NULL
 	},
 	[OFPST_TABLE] = {
 		0,

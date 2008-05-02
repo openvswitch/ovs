@@ -171,6 +171,8 @@ usage(void)
            "  dump-ports SWITCH           print port statistics\n"
            "  dump-flows SWITCH           print all flow entries\n"
            "  dump-flows SWITCH FLOW      print matching FLOWs\n"
+           "  dump-aggregate SWITCH       print aggregate flow statistics\n"
+           "  dump-aggregate SWITCH FLOW  print aggregate stats for FLOWs\n"
            "  add-flows SWITCH FILE       add flows from FILE\n"
            "  del-flows SWITCH FLOW       delete matching FLOWs\n"
            "where each SWITCH is an active OpenFlow connection method.\n",
@@ -624,8 +626,20 @@ static void do_dump_flows(int argc, char *argv[])
     req = alloc_stats_request(sizeof *req, OFPST_FLOW, &request);
     str_to_flow(argc > 2 ? argv[2] : "", &req->match, NULL, &req->table_id, 
             NULL);
-    req->type = OFPFS_INDIV;
-    req->pad = 0;
+    memset(req->pad, 0, sizeof req->pad);
+
+    dump_stats_transaction(argv[1], request);
+}
+
+static void do_dump_aggregate(int argc, char *argv[])
+{
+    struct ofp_aggregate_stats_request *req;
+    struct buffer *request;
+
+    req = alloc_stats_request(sizeof *req, OFPST_AGGREGATE, &request);
+    str_to_flow(argc > 2 ? argv[2] : "", &req->match, NULL, &req->table_id,
+                NULL);
+    memset(req->pad, 0, sizeof req->pad);
 
     dump_stats_transaction(argv[1], request);
 }
@@ -729,6 +743,7 @@ static struct command all_commands[] = {
     { "monitor", 1, 1, do_monitor },
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 1, 2, do_dump_flows },
+    { "dump-aggregate", 1, 2, do_dump_aggregate },
     { "add-flows", 2, 2, do_add_flows },
     { "del-flows", 1, 2, do_del_flows },
     { "dump-ports", 1, 1, do_dump_ports },
