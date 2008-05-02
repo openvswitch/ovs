@@ -20,7 +20,7 @@ distdir: clean
 install:
 all: default
 clean:
-	rm -f $(all_objects) *_mod.o
+	rm -f $(all_objects) *_mod.o $(all_dummies)
 	for d in $(all_objdirs); do		\
 		while				\
 			rmdir $$d 2> /dev/null;	\
@@ -82,9 +82,10 @@ CFLAGS += $(shell [ -f $(KSRC)/include/linux/modversions.h ] && \
             echo "-DMODVERSIONS -DEXPORT_SYMTAB \
                   -include $(KSRC)/include/linux/modversions.h")
 
-$(all_objects): $(all_objdirs)
-$(all_objdirs):
-	mkdir -p $@
+$(all_objects): $(all_dummies)
+$(all_dummies):
+	mkdir -p $(@D)
+	touch $@
 
 default: $(patsubst %,%_mod.o,$(all_modules))
 
