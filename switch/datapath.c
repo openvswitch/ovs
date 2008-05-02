@@ -548,16 +548,16 @@ static void *
 alloc_openflow_buffer(struct datapath *dp, size_t openflow_len, uint8_t type,
                       const struct sender *sender, struct buffer **bufferp)
 {
-	struct buffer *buffer;
-	struct ofp_header *oh;
+    struct buffer *buffer;
+    struct ofp_header *oh;
 
-	buffer = *bufferp = buffer_new(openflow_len);
-	oh = buffer_put_uninit(buffer, openflow_len);
-	oh->version = OFP_VERSION;
-	oh->type = type;
-	oh->length = 0;             /* Filled in by send_openflow_buffer(). */
-	oh->xid = sender ? sender->xid : 0;
-	return oh;
+    buffer = *bufferp = buffer_new(openflow_len);
+    oh = buffer_put_uninit(buffer, openflow_len);
+    oh->version = OFP_VERSION;
+    oh->type = type;
+    oh->length = 0;             /* Filled in by send_openflow_buffer(). */
+    oh->xid = sender ? sender->xid : 0;
+    return oh;
 }
 
 static int
@@ -711,23 +711,23 @@ static void
 fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
                 int table_idx, time_t now)
 {
-	ofs->match.wildcards = htons(flow->key.wildcards);
-	ofs->match.in_port   = flow->key.flow.in_port;
-	memcpy(ofs->match.dl_src, flow->key.flow.dl_src, ETH_ADDR_LEN);
-	memcpy(ofs->match.dl_dst, flow->key.flow.dl_dst, ETH_ADDR_LEN);
-	ofs->match.dl_vlan   = flow->key.flow.dl_vlan;
-	ofs->match.dl_type   = flow->key.flow.dl_type;
-	ofs->match.nw_src    = flow->key.flow.nw_src;
-	ofs->match.nw_dst    = flow->key.flow.nw_dst;
-	ofs->match.nw_proto  = flow->key.flow.nw_proto;
-	memset(ofs->match.pad, 0, sizeof ofs->match.pad);
-	ofs->match.tp_src    = flow->key.flow.tp_src;
-	ofs->match.tp_dst    = flow->key.flow.tp_dst;
-	ofs->duration        = htonl(now - flow->created);
-	ofs->packet_count    = htonll(flow->packet_count);
-	ofs->byte_count      = htonll(flow->byte_count);
-	ofs->priority        = htons(flow->priority);
-	ofs->table_id        = table_idx;
+    ofs->match.wildcards = htons(flow->key.wildcards);
+    ofs->match.in_port   = flow->key.flow.in_port;
+    memcpy(ofs->match.dl_src, flow->key.flow.dl_src, ETH_ADDR_LEN);
+    memcpy(ofs->match.dl_dst, flow->key.flow.dl_dst, ETH_ADDR_LEN);
+    ofs->match.dl_vlan   = flow->key.flow.dl_vlan;
+    ofs->match.dl_type   = flow->key.flow.dl_type;
+    ofs->match.nw_src    = flow->key.flow.nw_src;
+    ofs->match.nw_dst    = flow->key.flow.nw_dst;
+    ofs->match.nw_proto  = flow->key.flow.nw_proto;
+    memset(ofs->match.pad, 0, sizeof ofs->match.pad);
+    ofs->match.tp_src    = flow->key.flow.tp_src;
+    ofs->match.tp_dst    = flow->key.flow.tp_dst;
+    ofs->duration        = htonl(now - flow->created);
+    ofs->packet_count    = htonll(flow->packet_count);
+    ofs->byte_count      = htonll(flow->byte_count);
+    ofs->priority        = htons(flow->priority);
+    ofs->table_id        = table_idx;
     memset(ofs->pad, 0, sizeof ofs->pad);
 }
 
@@ -967,9 +967,9 @@ recv_get_config_request(struct datapath *dp, const struct sender *sender,
                                 sender, &buffer);
 
     assert(sizeof *osc == sizeof dp->config);
-	memcpy(((char *)osc) + sizeof osc->header,
-	       ((char *)&dp->config) + sizeof dp->config.header,
-	       sizeof dp->config - sizeof dp->config.header);
+    memcpy(((char *)osc) + sizeof osc->header,
+           ((char *)&dp->config) + sizeof dp->config.header,
+           sizeof dp->config - sizeof dp->config.header);
 
     return send_openflow_buffer(dp, buffer, sender);
 }
@@ -1123,176 +1123,176 @@ recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
 }
 
 struct flow_stats_state {
-	int table_idx;
-	struct sw_table_position position;
-	struct ofp_flow_stats_request rq;
+    int table_idx;
+    struct sw_table_position position;
+    struct ofp_flow_stats_request rq;
     time_t now;
 
     struct buffer *buffer;
-	int n_flows, max_flows;
+    int n_flows, max_flows;
 };
 
 static int flow_stats_init(struct datapath *dp, const void *body, int body_len,
                            void **state)
 {
-	const struct ofp_flow_stats_request *fsr = body;
-	struct flow_stats_state *s = xmalloc(sizeof *s);
-	s->table_idx = fsr->table_id == 0xff ? 0 : fsr->table_id;
-	memset(&s->position, 0, sizeof s->position);
-	s->rq = *fsr;
-	*state = s;
-	return 0;
+    const struct ofp_flow_stats_request *fsr = body;
+    struct flow_stats_state *s = xmalloc(sizeof *s);
+    s->table_idx = fsr->table_id == 0xff ? 0 : fsr->table_id;
+    memset(&s->position, 0, sizeof s->position);
+    s->rq = *fsr;
+    *state = s;
+    return 0;
 }
 
 static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 {
-	struct flow_stats_state *s = private;
+    struct flow_stats_state *s = private;
     struct ofp_flow_stats *ofs = buffer_put_uninit(s->buffer, sizeof *ofs);
-	fill_flow_stats(ofs, flow, s->table_idx, s->now);
-	return ++s->n_flows >= s->max_flows;
+    fill_flow_stats(ofs, flow, s->table_idx, s->now);
+    return ++s->n_flows >= s->max_flows;
 }
 
 static int flow_stats_dump(struct datapath *dp, void *state,
                            struct buffer *buffer)
 {
-	struct flow_stats_state *s = state;
-	struct ofp_flow_stats *ofs;
-	struct sw_flow_key match_key;
+    struct flow_stats_state *s = state;
+    struct ofp_flow_stats *ofs;
+    struct sw_flow_key match_key;
 
-	s->max_flows = 4096 / sizeof *ofs;
-	if (!s->max_flows)
-		return -ENOMEM;
+    s->max_flows = 4096 / sizeof *ofs;
+    if (!s->max_flows)
+        return -ENOMEM;
 
-	flow_extract_match(&match_key, &s->rq.match);
+    flow_extract_match(&match_key, &s->rq.match);
     s->buffer = buffer;
-	s->n_flows = 0;
+    s->n_flows = 0;
     s->now = time(0);
-	while (s->table_idx < dp->chain->n_tables
-	       && (s->rq.table_id == 0xff || s->rq.table_id == s->table_idx))
-	{
-		struct sw_table *table = dp->chain->tables[s->table_idx];
+    while (s->table_idx < dp->chain->n_tables
+           && (s->rq.table_id == 0xff || s->rq.table_id == s->table_idx))
+    {
+        struct sw_table *table = dp->chain->tables[s->table_idx];
 
-		if (table->iterate(table, &match_key, &s->position,
+        if (table->iterate(table, &match_key, &s->position,
                            flow_stats_dump_callback, s))
-			break;
+            break;
 
-		s->table_idx++;
-		memset(&s->position, 0, sizeof s->position);
-	}
-	return s->n_flows >= s->max_flows;
+        s->table_idx++;
+        memset(&s->position, 0, sizeof s->position);
+    }
+    return s->n_flows >= s->max_flows;
 }
 
 static void flow_stats_done(void *state)
 {
-	free(state);
+    free(state);
 }
 
 static int table_stats_dump(struct datapath *dp, void *state,
                             struct buffer *buffer)
 {
-	int i;
-	for (i = 0; i < dp->chain->n_tables; i++) {
+    int i;
+    for (i = 0; i < dp->chain->n_tables; i++) {
         struct ofp_table_stats *ots = buffer_put_uninit(buffer, sizeof *ots);
-		struct sw_table_stats stats;
-		dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
-		strncpy(ots->name, stats.name, sizeof ots->name);
-		ots->table_id = i;
-		memset(ots->pad, 0, sizeof ots->pad);
-		ots->max_entries = htonl(stats.max_flows);
-		ots->active_count = htonl(stats.n_flows);
-		ots->matched_count = htonll(0); /* FIXME */
-	}
-	return 0;
+        struct sw_table_stats stats;
+        dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
+        strncpy(ots->name, stats.name, sizeof ots->name);
+        ots->table_id = i;
+        memset(ots->pad, 0, sizeof ots->pad);
+        ots->max_entries = htonl(stats.max_flows);
+        ots->active_count = htonl(stats.n_flows);
+        ots->matched_count = htonll(0); /* FIXME */
+    }
+    return 0;
 }
 
 struct port_stats_state {
-	int port;
+    int port;
 };
 
 static int port_stats_init(struct datapath *dp, const void *body, int body_len,
-			   void **state)
+               void **state)
 {
-	struct port_stats_state *s = xmalloc(sizeof *s);
-	s->port = 0;
-	*state = s;
-	return 0;
+    struct port_stats_state *s = xmalloc(sizeof *s);
+    s->port = 0;
+    *state = s;
+    return 0;
 }
 
 static int port_stats_dump(struct datapath *dp, void *state,
                            struct buffer *buffer)
 {
-	struct port_stats_state *s = state;
-	int i;
+    struct port_stats_state *s = state;
+    int i;
 
-	for (i = s->port; i < OFPP_MAX; i++) {
-		struct sw_port *p = &dp->ports[i];
+    for (i = s->port; i < OFPP_MAX; i++) {
+        struct sw_port *p = &dp->ports[i];
         struct ofp_port_stats *ops;
-		if (!p->netdev) {
-			continue;
+        if (!p->netdev) {
+            continue;
         }
         ops = buffer_put_uninit(buffer, sizeof *ops);
-		ops->port_no = htons(port_no(dp, p));
-		memset(ops->pad, 0, sizeof ops->pad);
-		ops->rx_count = htonll(p->rx_count);
-		ops->tx_count = htonll(p->tx_count);
-		ops->drop_count = htonll(p->drop_count);
-		ops++;
-	}
-	s->port = i;
-	return 0;
+        ops->port_no = htons(port_no(dp, p));
+        memset(ops->pad, 0, sizeof ops->pad);
+        ops->rx_count = htonll(p->rx_count);
+        ops->tx_count = htonll(p->tx_count);
+        ops->drop_count = htonll(p->drop_count);
+        ops++;
+    }
+    s->port = i;
+    return 0;
 }
 
 static void port_stats_done(void *state)
 {
-	free(state);
+    free(state);
 }
 
 struct stats_type {
-	/* Minimum and maximum acceptable number of bytes in body member of
-	 * struct ofp_stats_request. */
-	size_t min_body, max_body;
+    /* Minimum and maximum acceptable number of bytes in body member of
+     * struct ofp_stats_request. */
+    size_t min_body, max_body;
 
-	/* Prepares to dump some kind of statistics on 'dp'.  'body' and
-	 * 'body_len' are the 'body' member of the struct ofp_stats_request.
-	 * Returns zero if successful, otherwise a negative error code.
-	 * May initialize '*state' to state information.  May be null if no
-	 * initialization is required.*/
-	int (*init)(struct datapath *dp, const void *body, int body_len,
-		    void **state);
+    /* Prepares to dump some kind of statistics on 'dp'.  'body' and
+     * 'body_len' are the 'body' member of the struct ofp_stats_request.
+     * Returns zero if successful, otherwise a negative error code.
+     * May initialize '*state' to state information.  May be null if no
+     * initialization is required.*/
+    int (*init)(struct datapath *dp, const void *body, int body_len,
+            void **state);
 
-	/* Appends statistics for 'dp' to 'buffer', which initially contains a
+    /* Appends statistics for 'dp' to 'buffer', which initially contains a
      * struct ofp_stats_reply.  On success, it should return 1 if it should be
      * called again later with another buffer, 0 if it is done, or a negative
      * errno value on failure. */
-	int (*dump)(struct datapath *dp, void *state, struct buffer *buffer);
+    int (*dump)(struct datapath *dp, void *state, struct buffer *buffer);
 
-	/* Cleans any state created by the init or dump functions.  May be null
-	 * if no cleanup is required. */
-	void (*done)(void *state);
+    /* Cleans any state created by the init or dump functions.  May be null
+     * if no cleanup is required. */
+    void (*done)(void *state);
 };
 
 static const struct stats_type stats[] = {
-	[OFPST_FLOW] = {
-		sizeof(struct ofp_flow_stats_request),
-		sizeof(struct ofp_flow_stats_request),
-		flow_stats_init,
-		flow_stats_dump,
-		flow_stats_done
-	},
-	[OFPST_TABLE] = {
-		0,
-		0,
-		NULL,
-		table_stats_dump,
-		NULL
-	},
-	[OFPST_PORT] = {
-		0,
-		0,
-		port_stats_init,
-		port_stats_dump,
-		port_stats_done
-	},
+    [OFPST_FLOW] = {
+        sizeof(struct ofp_flow_stats_request),
+        sizeof(struct ofp_flow_stats_request),
+        flow_stats_init,
+        flow_stats_dump,
+        flow_stats_done
+    },
+    [OFPST_TABLE] = {
+        0,
+        0,
+        NULL,
+        table_stats_dump,
+        NULL
+    },
+    [OFPST_PORT] = {
+        0,
+        0,
+        port_stats_init,
+        port_stats_dump,
+        port_stats_done
+    },
 };
 
 struct stats_dump_cb {
@@ -1307,36 +1307,36 @@ static int
 stats_dump(struct datapath *dp, void *cb_)
 {
     struct stats_dump_cb *cb = cb_;
-	struct ofp_stats_reply *osr;
+    struct ofp_stats_reply *osr;
     struct buffer *buffer;
-	int err;
+    int err;
 
     if (cb->done) {
         return 0;
-	}
+    }
 
-	osr = alloc_openflow_buffer(dp, sizeof *osr, OFPT_STATS_REPLY, &cb->sender,
+    osr = alloc_openflow_buffer(dp, sizeof *osr, OFPT_STATS_REPLY, &cb->sender,
                                 &buffer);
-	osr->type = htons(cb->s - stats);
-	osr->flags = 0;
+    osr->type = htons(cb->s - stats);
+    osr->flags = 0;
 
-	err = cb->s->dump(dp, cb->state, buffer);
-	if (err >= 0) {
+    err = cb->s->dump(dp, cb->state, buffer);
+    if (err >= 0) {
         int err2;
-		if (!err) {
-			cb->done = true;
+        if (!err) {
+            cb->done = true;
         } else {
             /* Buffer might have been reallocated, so find our data again. */
             osr = buffer_at_assert(buffer, 0, sizeof *osr);
-			osr->flags = ntohs(OFPSF_REPLY_MORE);
+            osr->flags = ntohs(OFPSF_REPLY_MORE);
         }
         err2 = send_openflow_buffer(dp, buffer, &cb->sender);
         if (err2) {
             err = err2;
         }
-	}
+    }
 
-	return err;
+    return err;
 }
 
 static void
@@ -1344,11 +1344,11 @@ stats_done(void *cb_)
 {
     struct stats_dump_cb *cb = cb_;
     if (cb) {
-		if (cb->s->done) {
-			cb->s->done(cb->state);
+        if (cb->s->done) {
+            cb->s->done(cb->state);
         }
         free(cb);
-	}
+    }
 }
 
 static int
@@ -1436,10 +1436,10 @@ fwd_control_input(struct datapath *dp, const struct sender *sender,
             sizeof (struct ofp_port_mod),
             recv_port_mod,
         },
-		[OFPT_STATS_REQUEST] = {
-			sizeof (struct ofp_stats_request),
-			recv_stats_request,
-		},
+        [OFPT_STATS_REQUEST] = {
+            sizeof (struct ofp_stats_request),
+            recv_stats_request,
+        },
     };
 
     const struct openflow_packet *pkt;
