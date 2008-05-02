@@ -714,9 +714,15 @@ dp_send_error_msg(struct datapath *dp, const struct sender *sender,
 }
 
 static void
-fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
+fill_flow_stats(struct buffer *buffer, struct sw_flow *flow,
                 int table_idx, time_t now)
 {
+    struct ofp_flow_stats *ofs;
+    int length = sizeof *ofs + sizeof *ofs->actions * flow->n_actions;
+    ofs = buffer_put_uninit(buffer, length);
+    ofs->length          = htons(length);
+    ofs->table_id        = table_idx;
+    ofs->pad             = 0;
     ofs->match.wildcards = htons(flow->key.wildcards);
     ofs->match.in_port   = flow->key.flow.in_port;
     memcpy(ofs->match.dl_src, flow->key.flow.dl_src, ETH_ADDR_LEN);
@@ -734,8 +740,8 @@ fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
     ofs->byte_count      = htonll(flow->byte_count);
     ofs->priority        = htons(flow->priority);
     ofs->max_idle        = htons(flow->max_idle);
-    ofs->table_id        = table_idx;
-    memset(ofs->pad, 0, sizeof ofs->pad);
+    memcpy(ofs->actions, flow->actions,
+           sizeof *ofs->actions * flow->n_actions);
 }
 
 
@@ -1136,8 +1142,9 @@ struct flow_stats_state {
     time_t now;
 
     struct buffer *buffer;
-    int n_flows, max_flows;
 };
+
+#define MAX_FLOW_STATS_BYTES 4096
 
 static int flow_stats_init(struct datapath *dp, const void *body, int body_len,
                            void **state)
@@ -1154,25 +1161,18 @@ static int flow_stats_init(struct datapath *dp, const void *body, int body_len,
 static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 {
     struct flow_stats_state *s = private;
-    struct ofp_flow_stats *ofs = buffer_put_uninit(s->buffer, sizeof *ofs);
-    fill_flow_stats(ofs, flow, s->table_idx, s->now);
-    return ++s->n_flows >= s->max_flows;
+    fill_flow_stats(s->buffer, flow, s->table_idx, s->now);
+    return s->buffer->size >= MAX_FLOW_STATS_BYTES;
 }
 
 static int flow_stats_dump(struct datapath *dp, void *state,
                            struct buffer *buffer)
 {
     struct flow_stats_state *s = state;
-    struct ofp_flow_stats *ofs;
     struct sw_flow_key match_key;
-
-    s->max_flows = 4096 / sizeof *ofs;
-    if (!s->max_flows)
-        return -ENOMEM;
 
     flow_extract_match(&match_key, &s->rq.match);
     s->buffer = buffer;
-    s->n_flows = 0;
     s->now = time(0);
     while (s->table_idx < dp->chain->n_tables
            && (s->rq.table_id == 0xff || s->rq.table_id == s->table_idx))
@@ -1186,7 +1186,7 @@ static int flow_stats_dump(struct datapath *dp, void *state,
         s->table_idx++;
         memset(&s->position, 0, sizeof s->position);
     }
-    return s->n_flows >= s->max_flows;
+    return s->buffer->size >= MAX_FLOW_STATS_BYTES;
 }
 
 static void flow_stats_done(void *state)

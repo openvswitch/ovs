@@ -838,10 +838,14 @@ dp_send_error_msg(struct datapath *dp, const struct sender *sender,
 	return send_openflow_skb(skb, sender);
 }
 
-static void
+static int
 fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
 		int table_idx)
 {
+	int length = sizeof *ofs + sizeof *ofs->actions * flow->n_actions;
+	ofs->length          = htons(length);
+	ofs->table_id        = table_idx;
+	ofs->pad             = 0;
 	ofs->match.wildcards = htons(flow->key.wildcards);
 	ofs->match.in_port   = flow->key.in_port;
 	memcpy(ofs->match.dl_src, flow->key.dl_src, ETH_ALEN);
@@ -859,8 +863,9 @@ fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
 	ofs->byte_count      = cpu_to_be64(flow->byte_count);
 	ofs->priority        = htons(flow->priority);
 	ofs->max_idle        = htons(flow->max_idle);
-	ofs->table_id        = table_idx;
-	memset(ofs->pad, 0, sizeof ofs->pad);
+	memcpy(ofs->actions, flow->actions,
+	       sizeof *ofs->actions * flow->n_actions);
+	return length;
 }
 
 /* Generic Netlink interface.
@@ -1100,9 +1105,12 @@ struct flow_stats_state {
 	struct sw_table_position position;
 	const struct ofp_flow_stats_request *rq;
 
-	struct ofp_flow_stats *flows;
-	int n_flows, max_flows;
+	void *body;
+	int bytes_used, bytes_allocated;
 };
+
+#define MAX_FLOW_STATS_SIZE (sizeof(struct ofp_flow_stats) \
+			     + MAX_ACTIONS * sizeof(struct ofp_action))
 
 static int flow_stats_init(struct datapath *dp, const void *body, int body_len,
 			   void **state)
@@ -1121,25 +1129,24 @@ static int flow_stats_init(struct datapath *dp, const void *body, int body_len,
 static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 {
 	struct flow_stats_state *s = private;
-
-	fill_flow_stats(&s->flows[s->n_flows], flow, s->table_idx);
-	return ++s->n_flows >= s->max_flows;
+	s->bytes_used += fill_flow_stats(s->body + s->bytes_used, flow,
+					 s->table_idx);
+	return s->bytes_used + MAX_FLOW_STATS_SIZE > s->bytes_allocated;
 }
 
 static int flow_stats_dump(struct datapath *dp, void *state,
 			   void *body, int *body_len)
 {
 	struct flow_stats_state *s = state;
-	struct ofp_flow_stats *ofs;
 	struct sw_flow_key match_key;
 
-	s->max_flows = *body_len / sizeof *ofs;
-	if (!s->max_flows)
+	s->bytes_used = 0;
+	s->bytes_allocated = *body_len;
+	if (s->bytes_allocated < MAX_FLOW_STATS_SIZE)
 		return -ENOMEM;
-	s->flows = body;
+	s->body = body;
 
 	flow_extract_match(&match_key, &s->rq->match);
-	s->n_flows = 0;
 	while (s->table_idx < dp->chain->n_tables
 	       && (s->rq->table_id == 0xff || s->rq->table_id == s->table_idx))
 	{
@@ -1152,8 +1159,8 @@ static int flow_stats_dump(struct datapath *dp, void *state,
 		s->table_idx++;
 		memset(&s->position, 0, sizeof s->position);
 	}
-	*body_len = sizeof *ofs * s->n_flows;
-	return s->n_flows >= s->max_flows;
+	*body_len = s->bytes_used;
+	return s->bytes_used + MAX_FLOW_STATS_SIZE > s->bytes_allocated;
 }
 
 static void flow_stats_done(void *state)

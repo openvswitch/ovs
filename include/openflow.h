@@ -419,16 +419,19 @@ struct ofp_flow_stats_request {
 
 /* Body of reply to OFPST_FLOW request. */
 struct ofp_flow_stats {
+    uint16_t length;          /* Length of this entry */
+    uint8_t table_id;         /* ID of table flow came from. 0nly used for
+                                 non-aggregated results */
+    uint8_t pad;
     struct ofp_match match;   /* Description of fields */
-    uint32_t duration;        /* Time flow has been alive in seconds.  Only 
+    uint32_t duration;        /* Time flow has been alive in seconds. Only
                                  used for non-aggregated results. */
     uint64_t packet_count;    /* Number of packets in flow. */
     uint64_t byte_count;      /* Number of bytes in flow. */
-    uint16_t priority;        /* Priority of the entry.  Only meaningful 
+    uint16_t priority;        /* Priority of the entry. Only meaningful
                                  when this is not an exact-match entry. */
     uint16_t max_idle;        /* Only used for non-aggregated results. */
-    uint8_t table_id;         /* ID of table flow came from. */
-    uint8_t pad[5];           /* Align to 64-bits. */
+    struct ofp_action actions[0]; /* Only used for non-aggregated results. */
 };
 
 /* Body of reply to OFPST_TABLE request. */

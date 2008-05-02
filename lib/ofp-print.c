@@ -366,7 +366,7 @@ static void ofp_print_match(struct ds *f, const struct ofp_match *om)
 {
     uint16_t w = ntohs(om->wildcards);
 
-    print_wild(f, "inport", w & OFPFW_IN_PORT, "%d", ntohs(om->in_port));
+    print_wild(f, " inport", w & OFPFW_IN_PORT, "%d", ntohs(om->in_port));
     print_wild(f, ":vlan", w & OFPFW_DL_VLAN, "%04x", ntohs(om->dl_vlan));
     print_wild(f, " mac[", w & OFPFW_DL_SRC,
                ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_src));
@@ -378,7 +378,7 @@ static void ofp_print_match(struct ds *f, const struct ofp_match *om)
     print_wild(f, "] proto", w & OFPFW_NW_PROTO, "%u", om->nw_proto);
     print_wild(f, " tport[", w & OFPFW_TP_SRC, "%d", ntohs(om->tp_src));
     print_wild(f, "->", w & OFPFW_TP_DST, "%d", ntohs(om->tp_dst));
-    ds_put_cstr(f, "]\n");
+    ds_put_cstr(f, "]");
 }
 
 /* Pretty-print the OFPT_FLOW_MOD packet of 'len' bytes at 'oh' to 'string'
@@ -468,17 +468,44 @@ ofp_flow_stats_request(struct ds *string, const void *oh, size_t len,
 }
 
 static void
-ofp_flow_stats_reply(struct ds *string, const void *body, size_t len,
+ofp_flow_stats_reply(struct ds *string, const void *body_, size_t len,
                      int verbosity)
 {
-    const struct ofp_flow_stats *fs = body;
-    size_t n = len / sizeof *fs;
-    ds_put_format(string, " %zu flows\n", n);
-    if (verbosity < 1) {
-        return;
-    }
+    const char *body = body_;
+    const char *pos = body;
+    for (;;) {
+        const struct ofp_flow_stats *fs;
+        ptrdiff_t bytes_left = body + len - pos;
+        size_t length;
 
-    for (; n--; fs++) {
+        if (bytes_left < sizeof *fs) {
+            if (bytes_left != 0) {
+                ds_put_format(string, " ***%td leftover bytes at end***",
+                              bytes_left);
+            }
+            break;
+        }
+
+        fs = (const void *) pos;
+        length = ntohs(fs->length);
+        if (length < sizeof *fs) {
+            ds_put_format(string, " ***length=%zu shorter than minimum %zu***",
+                          length, sizeof *fs);
+            break;
+        } else if (length > bytes_left) {
+            ds_put_format(string,
+                          " ***length=%zu but only %td bytes left***",
+                          length, bytes_left);
+            break;
+        } else if ((length - sizeof *fs) % sizeof fs->actions[0]) {
+            ds_put_format(string,
+                          " ***length=%zu has %zu bytes leftover in "
+                          "final action***",
+                          length,
+                          (length - sizeof *fs) % sizeof fs->actions[0]);
+            break;
+        }
+
         ds_put_format(string, "  duration=%"PRIu32" s, ", ntohl(fs->duration));
         ds_put_format(string, "table_id=%"PRIu8", ", fs->table_id);
         ds_put_format(string, "priority=%"PRIu16", ", 
@@ -488,6 +515,10 @@ ofp_flow_stats_reply(struct ds *string, const void *body, size_t len,
         ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
         ds_put_format(string, "max_idle=%"PRIu16", ", ntohs(fs->max_idle));
         ofp_print_match(string, &fs->match);
+        ofp_print_actions(string, fs->actions, length - sizeof *fs);
+        ds_put_char(string, '\n');
+
+        pos += length;
      }
 }
 
