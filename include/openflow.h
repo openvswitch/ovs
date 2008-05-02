@@ -426,6 +426,7 @@ struct ofp_flow_stats {
     uint64_t byte_count;      /* Number of bytes in flow. */
     uint16_t priority;        /* Priority of the entry.  Only meaningful 
                                  when this is not an exact-match entry. */
+    uint16_t max_idle;        /* Only used for non-aggregated results. */
     uint8_t table_id;         /* ID of table flow came from. */
     uint8_t pad[5];           /* Align to 64-bits. */
 };

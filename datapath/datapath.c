@@ -858,6 +858,7 @@ fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
 	ofs->packet_count    = cpu_to_be64(flow->packet_count);
 	ofs->byte_count      = cpu_to_be64(flow->byte_count);
 	ofs->priority        = htons(flow->priority);
+	ofs->max_idle        = htons(flow->max_idle);
 	ofs->table_id        = table_idx;
 	memset(ofs->pad, 0, sizeof ofs->pad);
 }

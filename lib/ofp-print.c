@@ -486,6 +486,7 @@ ofp_flow_stats_reply(struct ds *string, const void *body, size_t len,
         ds_put_format(string, "n_packets=%"PRIu64", ",
                     ntohll(fs->packet_count));
         ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
+        ds_put_format(string, "max_idle=%"PRIu16", ", ntohs(fs->max_idle));
         ofp_print_match(string, &fs->match);
      }
 }
