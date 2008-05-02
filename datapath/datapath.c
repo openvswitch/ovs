@@ -856,78 +856,6 @@ fill_flow_stats(struct ofp_flow_stats *ofs, struct sw_flow *flow,
 	memset(ofs->pad, 0, sizeof ofs->pad);
 }
 
-static int 
-fill_port_stats_reply(struct datapath *dp, struct ofp_port_stats_reply *psr)
-{
-	struct net_bridge_port *p;
-	int port_count = 0;
-
-	list_for_each_entry_rcu (p, &dp->port_list, node) {
-		struct ofp_port_stats *ps = &psr->ports[port_count++];
-		struct net_device_stats *stats = p->dev->get_stats(p->dev);
-		ps->port_no = htons(p->port_no);
-		memset(ps->pad, 0, sizeof ps->pad);
-		ps->rx_count = cpu_to_be64(stats->rx_packets);
-		ps->tx_count = cpu_to_be64(stats->tx_packets);
-		ps->drop_count = cpu_to_be64(stats->rx_dropped
-					     + stats->tx_dropped);
-	}
-
-	return port_count;
-}
-
-int
-dp_send_port_stats(struct datapath *dp, const struct sender *sender)
-{
-	struct sk_buff *skb;
-	struct ofp_port_stats_reply *psr;
-	size_t psr_len, port_max_len;
-	int port_count;
-
-	/* Overallocate. */
-	port_max_len = sizeof(struct ofp_port_stats) * OFPP_MAX;
-	psr = alloc_openflow_skb(dp, sizeof *psr + port_max_len,
-				 OFPT_PORT_STATS_REPLY, sender, &skb);
-	if (!psr)
-		return -ENOMEM;
-
-	/* Fill. */
-	port_count = fill_port_stats_reply(dp, psr);
-
-	/* Shrink to fit. */
-	psr_len = sizeof *psr + sizeof(struct ofp_port_stats) * port_count;
-	resize_openflow_skb(skb, &psr->header, psr_len);
-	return send_openflow_skb(skb, sender);
-}
-
-int
-dp_send_table_stats(struct datapath *dp, const struct sender *sender)
-{
-	struct sk_buff *skb;
-	struct ofp_table_stats_reply *tsr;
-	int i, n_tables;
-
-	n_tables = dp->chain->n_tables;
-	tsr = alloc_openflow_skb(dp, (offsetof(struct ofp_table_stats_reply,
-					       tables)
-				      + sizeof tsr->tables[0] * n_tables),
-				 OFPT_TABLE_STATS_REPLY, sender, &skb);
-	if (!tsr)
-		return -ENOMEM;
-	for (i = 0; i < n_tables; i++) {
-		struct ofp_table_stats *ots = &tsr->tables[i];
-		struct sw_table_stats stats;
-		dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
-		strncpy(ots->name, stats.name, sizeof ots->name);
-		ots->table_id = i;
-		ots->pad[0] = ots->pad[1] = 0;
-		ots->max_entries = htonl(stats.max_flows);
-		ots->active_count = htonl(stats.n_flows);
-		ots->matched_count = cpu_to_be64(0); /* FIXME */
-	}
-	return send_openflow_skb(skb, sender);
-}
-
 /* Generic Netlink interface.
  *
  * See netlink(7) for an introduction to netlink.  See
@@ -1160,47 +1088,48 @@ static struct nla_policy dp_genl_openflow_policy[DP_GENL_A_MAX + 1] = {
 	[DP_GENL_A_DP_IDX] = { .type = NLA_U32 },
 };
 
-struct flow_stats_cb_state {
-	int dp_idx;
+struct flow_stats_state {
 	int table_idx;
 	struct sw_table_position position;
-	struct ofp_flow_stats_request *rq;
-	int sent_terminator;
+	const struct ofp_flow_stats_request *rq;
 
 	struct ofp_flow_stats *flows;
 	int n_flows, max_flows;
 };
 
-static int muster_callback(struct sw_flow *flow, void *private)
+static int flow_stats_init(struct datapath *dp, const void *body, int body_len,
+			   void **state)
 {
-	struct flow_stats_cb_state *s = private;
+	const struct ofp_flow_stats_request *fsr = body;
+	struct flow_stats_state *s = kmalloc(sizeof *s, GFP_ATOMIC);
+	if (!s)
+		return -ENOMEM;
+	s->table_idx = fsr->table_id == 0xff ? 0 : fsr->table_id;
+	memset(&s->position, 0, sizeof s->position);
+	s->rq = fsr;
+	*state = s;
+	return 0;
+}
+
+static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
+{
+	struct flow_stats_state *s = private;
 
 	fill_flow_stats(&s->flows[s->n_flows], flow, s->table_idx);
 	return ++s->n_flows >= s->max_flows;
 }
 
-int
-muster_flow_stats(struct datapath *dp, struct flow_stats_cb_state *s,
-		  const struct sender *sender, struct sk_buff *skb)
+static int flow_stats_dump(struct datapath *dp, void *state,
+			   void *body, int *body_len)
 {
-	struct ofp_flow_stats_reply *fsr;
-	size_t header_size, flow_size;
+	struct flow_stats_state *s = state;
+	struct ofp_flow_stats *ofs;
 	struct sw_flow_key match_key;
-	int max_openflow_len;
-	size_t size;
 
-	fsr = put_openflow_headers(dp, skb, OFPT_FLOW_STATS_REPLY, sender,
-				   &max_openflow_len);
-	if (IS_ERR(fsr))
-		return PTR_ERR(fsr);
-	resize_openflow_skb(skb, &fsr->header, max_openflow_len);
-
-	header_size = offsetof(struct ofp_flow_stats_reply, flows);
-	flow_size = sizeof fsr->flows[0];
-	s->max_flows = (max_openflow_len - header_size) / flow_size;
-	if (s->max_flows <= 0)
+	s->max_flows = *body_len / sizeof *ofs;
+	if (!s->max_flows)
 		return -ENOMEM;
-	s->flows = fsr->flows;
+	s->flows = body;
 
 	flow_extract_match(&match_key, &s->rq->match);
 	s->n_flows = 0;
@@ -1210,84 +1139,253 @@ muster_flow_stats(struct datapath *dp, struct flow_stats_cb_state *s,
 		struct sw_table *table = dp->chain->tables[s->table_idx];
 
 		if (table->iterate(table, &match_key, &s->position,
-				   muster_callback, s))
+				   flow_stats_dump_callback, s))
 			break;
 
 		s->table_idx++;
 		memset(&s->position, 0, sizeof s->position);
 	}
-	if (!s->n_flows) {
-		/* Signal dump completion. */
-		if (s->sent_terminator) {
-			return 0;
-		}
-		s->sent_terminator = 1;
-	}
-	size = header_size + flow_size * s->n_flows;
-	resize_openflow_skb(skb, &fsr->header, size);
-	return skb->len;
+	*body_len = sizeof *ofs * s->n_flows;
+	return s->n_flows >= s->max_flows;
 }
+
+static void flow_stats_done(void *state)
+{
+	kfree(state);
+}
+
+static int table_stats_dump(struct datapath *dp, void *state,
+			    void *body, int *body_len)
+{
+	struct ofp_table_stats *ots;
+	int nbytes = dp->chain->n_tables * sizeof *ots;
+	int i;
+	if (nbytes > *body_len)
+		return -ENOBUFS;
+	*body_len = nbytes;
+	for (i = 0, ots = body; i < dp->chain->n_tables; i++, ots++) {
+		struct sw_table_stats stats;
+		dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
+		strncpy(ots->name, stats.name, sizeof ots->name);
+		ots->table_id = i;
+		memset(ots->pad, 0, sizeof ots->pad);
+		ots->max_entries = htonl(stats.max_flows);
+		ots->active_count = htonl(stats.n_flows);
+		ots->matched_count = cpu_to_be64(0); /* FIXME */
+	}
+	return 0;
+}
+
+struct port_stats_state {
+	int port;
+};
+
+static int port_stats_init(struct datapath *dp, const void *body, int body_len,
+			   void **state)
+{
+	struct port_stats_state *s = kmalloc(sizeof *s, GFP_ATOMIC);
+	if (!s)
+		return -ENOMEM;
+	s->port = 0;
+	*state = s;
+	return 0;
+}
+
+static int port_stats_dump(struct datapath *dp, void *state,
+			   void *body, int *body_len)
+{
+	struct port_stats_state *s = state;
+	struct ofp_port_stats *ops;
+	int n_ports, max_ports;
+	int i;
+
+	max_ports = *body_len / sizeof *ops;
+	if (!max_ports)
+		return -ENOMEM;
+	ops = body;
+
+	n_ports = 0;
+	for (i = s->port; i < OFPP_MAX && n_ports < max_ports; i++) {
+		struct net_bridge_port *p = dp->ports[i];
+		struct net_device_stats *stats;
+		if (!p)
+			continue;
+		stats = p->dev->get_stats(p->dev);
+		ops->port_no = htons(p->port_no);
+		memset(ops->pad, 0, sizeof ops->pad);
+		ops->rx_count = cpu_to_be64(stats->rx_packets);
+		ops->tx_count = cpu_to_be64(stats->tx_packets);
+		ops->drop_count = cpu_to_be64(stats->rx_dropped
+					      + stats->tx_dropped);
+		n_ports++;
+		ops++;
+	}
+	s->port = i;
+	*body_len = n_ports * sizeof *ops;
+	return n_ports >= max_ports;
+}
+
+static void port_stats_done(void *state)
+{
+	kfree(state);
+}
+
+struct stats_type {
+	/* Minimum and maximum acceptable number of bytes in body member of
+	 * struct ofp_stats_request. */
+	size_t min_body, max_body;
+
+	/* Prepares to dump some kind of statistics on 'dp'.  'body' and
+	 * 'body_len' are the 'body' member of the struct ofp_stats_request.
+	 * Returns zero if successful, otherwise a negative error code.
+	 * May initialize '*state' to state information.  May be null if no
+	 * initialization is required.*/
+	int (*init)(struct datapath *dp, const void *body, int body_len,
+		    void **state);
+
+	/* Dumps statistics for 'dp' into the '*body_len' bytes at 'body', and
+	 * modifies '*body_len' to reflect the number of bytes actually used.
+	 * ('body' will be transmitted as the 'body' member of struct
+	 * ofp_stats_reply.) */
+	int (*dump)(struct datapath *dp, void *state,
+		    void *body, int *body_len);
+
+	/* Cleans any state created by the init or dump functions.  May be null
+	 * if no cleanup is required. */
+	void (*done)(void *state);
+};
+
+static const struct stats_type stats[] = {
+	[OFPST_FLOW] = {
+		sizeof(struct ofp_flow_stats_request),
+		sizeof(struct ofp_flow_stats_request),
+		flow_stats_init,
+		flow_stats_dump,
+		flow_stats_done
+	},
+	[OFPST_TABLE] = {
+		0,
+		0,
+		NULL,
+		table_stats_dump,
+		NULL
+	},
+	[OFPST_PORT] = {
+		0,
+		0,
+		port_stats_init,
+		port_stats_dump,
+		port_stats_done
+	},
+};
 
 static int
 dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 {
 	struct datapath *dp;
 	struct sender sender;
-	struct flow_stats_cb_state *state;
+	const struct stats_type *s;
+	struct ofp_stats_reply *osr;
+	int dp_idx;
+	int max_openflow_len, body_len;
+	void *body;
 	int err;
 
+	rcu_read_lock();
 	if (!cb->args[0]) {
 		struct nlattr *attrs[DP_GENL_A_MAX + 1];
-		struct ofp_flow_stats_request *rq;
+		struct ofp_stats_request *rq;
 		struct nlattr *va;
+		size_t len, body_len;
+		int type;
 
 		err = nlmsg_parse(cb->nlh, GENL_HDRLEN, attrs, DP_GENL_A_MAX,
 				  dp_genl_openflow_policy);
 		if (err < 0)
 			return err;
 
+		err = -EINVAL;
+
 		if (!attrs[DP_GENL_A_DP_IDX])
-			return -EINVAL;
+			goto out;
+		dp_idx = nla_get_u16(attrs[DP_GENL_A_DP_IDX]);
+		dp = dp_get(dp_idx);
+		if (!dp) {
+			err = -ENOENT;
+			goto out;
+		}
 
 		va = attrs[DP_GENL_A_OPENFLOW];
-		if (!va || nla_len(va) != sizeof *state->rq)
-			return -EINVAL;
+		len = nla_len(va);
+		if (!va || len < sizeof *rq)
+			goto out;
 
 		rq = nla_data(va);
+		type = ntohs(rq->type);
 		if (rq->header.version != OFP_VERSION
-		    || rq->header.type != OFPT_FLOW_STATS_REQUEST
-		    || ntohs(rq->header.length) != sizeof *rq)
-			return -EINVAL;
+		    || rq->header.type != OFPT_STATS_REQUEST
+		    || ntohs(rq->header.length) != len
+		    || type >= ARRAY_SIZE(stats)
+		    || !stats[type].dump)
+			goto out;
 
-		state = kmalloc(sizeof *state, GFP_KERNEL);
-		if (!state)
-			return -ENOMEM;
-		state->dp_idx = nla_get_u32(attrs[DP_GENL_A_DP_IDX]);
-		state->table_idx = rq->table_id == 0xff ? 0 : rq->table_id;
-		memset(&state->position, 0, sizeof state->position);
-		state->rq = rq;
-		state->sent_terminator = 0;
+		s = &stats[type];
+		body_len = len - offsetof(struct ofp_stats_request, body);
+		if (body_len < s->min_body || body_len > s->max_body)
+			goto out;
 
-		cb->args[0] = (long) state;
+		cb->args[0] = 1;
+		cb->args[1] = dp_idx;
+		cb->args[2] = type;
+		cb->args[3] = rq->header.xid;
+		if (s->init) {
+			void *state;
+			err = s->init(dp, rq->body, body_len, &state);
+			if (err)
+				goto out;
+			cb->args[4] = (long) state;
+		}
+	} else if (cb->args[0] == 1) {
+		dp_idx = cb->args[1];
+		s = &stats[cb->args[2]];
+
+		dp = dp_get(dp_idx);
+		if (!dp) {
+			err = -ENOENT;
+			goto out;
+		}
 	} else {
-		state = (struct flow_stats_cb_state *) cb->args[0];
-	}
-
-	if (state->rq->type != OFPFS_INDIV) {
-		return -ENOTSUPP;
-	}
-
-	rcu_read_lock();
-	dp = dp_get(state->dp_idx);
-	if (!dp) {
-		err = -ENOENT;
+		err = 0;
 		goto out;
 	}
 
-	sender.xid = state->rq->header.xid;
+	sender.xid = cb->args[3];
 	sender.pid = NETLINK_CB(cb->skb).pid;
 	sender.seq = cb->nlh->nlmsg_seq;
-	err = muster_flow_stats(dp, state, &sender, skb);
+
+	osr = put_openflow_headers(dp, skb, OFPT_STATS_REPLY, &sender,
+				   &max_openflow_len);
+	if (IS_ERR(osr)) {
+		err = PTR_ERR(osr);
+		goto out;
+	}
+	osr->type = htons(s - stats);
+	osr->flags = 0;
+	resize_openflow_skb(skb, &osr->header, max_openflow_len);
+	body = osr->body;
+	body_len = max_openflow_len - offsetof(struct ofp_stats_reply, body);
+
+	err = s->dump(dp, (void *) cb->args[4], body, &body_len);
+	if (err >= 0) {
+		if (!err)
+			cb->args[0] = 2;
+		else
+			osr->flags = ntohs(OFPSF_REPLY_MORE);
+		resize_openflow_skb(skb, &osr->header,
+				    (offsetof(struct ofp_stats_reply, body)
+				     + body_len));
+		err = skb->len;
+	}
 
 out:
 	rcu_read_unlock();
@@ -1297,9 +1395,11 @@ out:
 static int
 dp_genl_openflow_done(struct netlink_callback *cb)
 {
-	struct flow_stats_cb_state *state;
-	state = (struct flow_stats_cb_state *) cb->args[0];
-	kfree(state);
+	if (cb->args[0]) {
+		const struct stats_type *s = &stats[cb->args[2]];
+		if (s->done)
+			s->done((void *) cb->args[4]);
+	}
 	return 0;
 }
 

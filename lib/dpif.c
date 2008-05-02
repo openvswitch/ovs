@@ -202,10 +202,10 @@ dpif_send_openflow(struct dpif *dp, struct buffer *buffer, bool wait)
     int n_iov;
     int retval;
 
-    /* The reply to OFPT_FLOW_STATS_REQUEST may be multiple segments long, so
-     * we need to specify NLM_F_DUMP in the request. */
+    /* The reply to OFPT_STATS_REQUEST may be multiple segments long, so we
+     * need to specify NLM_F_DUMP in the request. */
     oh = buffer_at_assert(buffer, 0, sizeof *oh);
-    dump_flag = oh->type == OFPT_FLOW_STATS_REQUEST ? NLM_F_DUMP : 0;
+    dump_flag = oh->type == OFPT_STATS_REQUEST ? NLM_F_DUMP : 0;
 
     buffer_use(&hdr, fixed_buffer, sizeof fixed_buffer);
     nl_msg_put_genlmsghdr(&hdr, dp->sock, 32, openflow_family,

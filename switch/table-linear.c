@@ -44,6 +44,8 @@ struct sw_table_linear {
     unsigned int max_flows;
     unsigned int n_flows;
     struct list flows;
+    struct list iter_flows;
+    unsigned long int next_serial;
 };
 
 static struct sw_flow *table_linear_lookup(struct sw_table *swt,
@@ -71,7 +73,9 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
         if (f->priority == flow->priority
                 && f->key.wildcards == flow->key.wildcards
                 && flow_matches(&f->key, &flow->key)) {
+            flow->serial = f->serial;
             list_replace(&flow->node, &f->node);
+            list_replace(&flow->iter_node, &f->iter_node);
             flow_free(f);
             return 1;
         }
@@ -87,7 +91,8 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
     tl->n_flows++;
 
     /* Insert the entry immediately in front of where we're pointing. */
-    list_push_back(&f->node, &flow->node);
+    list_insert(&f->node, &flow->node);
+    list_push_front(&tl->iter_flows, &flow->iter_node);
 
     return 1;
 }
@@ -96,6 +101,7 @@ static void
 do_delete(struct sw_flow *flow) 
 {
     list_remove(&flow->node);
+    list_remove(&flow->iter_node);
     flow_free(flow);
 }
 
@@ -126,6 +132,7 @@ static void table_linear_timeout(struct sw_table *swt, struct list *deleted)
     LIST_FOR_EACH_SAFE (flow, n, struct sw_flow, node, &tl->flows) {
         if (flow_timeout(flow)) {
             list_remove(&flow->node);
+            list_remove(&flow->iter_node);
             list_push_back(deleted, &flow->node);
             tl->n_flows--;
         }
@@ -145,42 +152,28 @@ static void table_linear_destroy(struct sw_table *swt)
     free(tl);
 }
 
-/* Linear table's private data is just a pointer to the table */
-
-static int table_linear_iterator(struct sw_table *swt,
-                                 struct swt_iterator *swt_iter) 
+static int table_linear_iterate(struct sw_table *swt,
+                                const struct sw_flow_key *key,
+                                struct sw_table_position *position,
+                                int (*callback)(struct sw_flow *, void *),
+                                void *private)
 {
     struct sw_table_linear *tl = (struct sw_table_linear *) swt;
+    struct sw_flow *flow;
+    unsigned long start;
 
-    swt_iter->private = tl;
-
-    if (!tl->n_flows)
-        swt_iter->flow = NULL;
-    else
-        swt_iter->flow = CONTAINER_OF(list_front(&tl->flows), struct sw_flow, node);
-
-    return 1;
+    start = ~position->private[0];
+    LIST_FOR_EACH (flow, struct sw_flow, iter_node, &tl->iter_flows) {
+        if (flow->serial <= start && flow_matches(key, &flow->key)) {
+            int error = callback(flow, private);
+            if (error) {
+                position->private[0] = ~(flow->serial - 1);
+                return error;
+            }
+        }
+    }
+    return 0;
 }
-
-static void table_linear_next(struct swt_iterator *swt_iter)
-{
-    struct sw_table_linear *tl;
-    struct list *next;
-
-    if (swt_iter->flow == NULL)
-        return;
-
-    tl = (struct sw_table_linear *) swt_iter->private;
-
-    next = swt_iter->flow->node.next;
-    if (next == &tl->flows)
-        swt_iter->flow = NULL;
-    else
-        swt_iter->flow = CONTAINER_OF(next, struct sw_flow, node);
-}
-
-static void table_linear_iterator_destroy(struct swt_iterator *swt_iter)
-{}
 
 static void table_linear_stats(struct sw_table *swt,
                                struct sw_table_stats *stats)
@@ -207,15 +200,14 @@ struct sw_table *table_linear_create(unsigned int max_flows)
     swt->delete = table_linear_delete;
     swt->timeout = table_linear_timeout;
     swt->destroy = table_linear_destroy;
+    swt->iterate = table_linear_iterate;
     swt->stats = table_linear_stats;
-
-    swt->iterator = table_linear_iterator;
-    swt->iterator_next = table_linear_next;
-    swt->iterator_destroy = table_linear_iterator_destroy;
 
     tl->max_flows = max_flows;
     tl->n_flows = 0;
     list_init(&tl->flows);
+    list_init(&tl->iter_flows);
+    tl->next_serial = 0;
 
     return swt;
 }

@@ -344,6 +344,17 @@ alloc_openflow_buffer(size_t openflow_len, uint8_t type,
 	return oh;
 }
 
+static void *
+alloc_stats_request(size_t body_len, uint16_t type, struct buffer **bufferp)
+{
+    struct ofp_stats_request *rq;
+    rq = alloc_openflow_buffer((offsetof(struct ofp_stats_request, body)
+                                + body_len), OFPT_STATS_REQUEST, bufferp);
+    rq->type = htons(type);
+    rq->flags = htons(0);
+    return rq->body;
+}
+
 static void
 send_openflow_buffer(struct vconn *vconn, struct buffer *buffer)
 {
@@ -378,30 +389,76 @@ transact_openflow(struct vconn *vconn, struct buffer *request)
 }
 
 static void
-dump_transaction(const char *vconn_name, uint8_t request_type)
+dump_transaction(const char *vconn_name, struct buffer *request)
 {
     struct vconn *vconn;
-    struct buffer *request, *reply;
+    struct buffer *reply;
 
     run(vconn_open_block(vconn_name, &vconn), "connecting to %s", vconn_name);
-    alloc_openflow_buffer(sizeof(struct ofp_header), request_type, &request);
     reply = transact_openflow(vconn, request);
     ofp_print(stdout, reply->data, reply->size, 1);
     vconn_close(vconn);
 }
 
 static void
+dump_trivial_transaction(const char *vconn_name, uint8_t request_type)
+{
+    struct buffer *request;
+    alloc_openflow_buffer(sizeof(struct ofp_header), request_type, &request);
+    dump_transaction(vconn_name, request);
+}
+
+static void
+dump_stats_transaction(const char *vconn_name, struct buffer *request)
+{
+    uint32_t send_xid = ((struct ofp_header *) request->data)->xid;
+    struct vconn *vconn;
+    bool done = false;
+
+    run(vconn_open_block(vconn_name, &vconn), "connecting to %s", vconn_name);
+    send_openflow_buffer(vconn, request);
+    while (!done) {
+        uint32_t recv_xid;
+        struct buffer *reply;
+
+        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
+        recv_xid = ((struct ofp_header *) reply->data)->xid;
+        if (send_xid == recv_xid) {
+            struct ofp_stats_reply *osr;
+
+            ofp_print(stdout, reply->data, reply->size, 1);
+
+            osr = buffer_at(reply, 0, sizeof *osr);
+            done = !osr || !(ntohs(osr->flags) & OFPSF_REPLY_MORE);
+        } else {
+            VLOG_DBG("received reply with xid %08"PRIx32" "
+                     "!= expected %08"PRIx32, recv_xid, send_xid);
+        }
+        buffer_delete(reply);
+    }
+    vconn_close(vconn);
+}
+
+static void
+dump_trivial_stats_transaction(const char *vconn_name, uint8_t stats_type)
+{
+    struct buffer *request;
+    alloc_stats_request(0, stats_type, &request);
+    dump_stats_transaction(vconn_name, request);
+}
+
+static void
 do_show(int argc UNUSED, char *argv[])
 {
-    dump_transaction(argv[1], OFPT_FEATURES_REQUEST);
-    dump_transaction(argv[1], OFPT_GET_CONFIG_REQUEST);
+    dump_trivial_transaction(argv[1], OFPT_FEATURES_REQUEST);
+    dump_trivial_transaction(argv[1], OFPT_GET_CONFIG_REQUEST);
 }
 
 
 static void
 do_dump_tables(int argc, char *argv[])
 {
-    dump_transaction(argv[1], OFPT_TABLE_STATS_REQUEST);
+    dump_trivial_stats_transaction(argv[1], OFPST_TABLE);
 }
 
 
@@ -561,46 +618,16 @@ str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action,
 
 static void do_dump_flows(int argc, char *argv[])
 {
-    struct vconn *vconn;
-    struct buffer *request;
     struct ofp_flow_stats_request *req;
-    uint32_t send_xid;
-    bool done = false;
+    struct buffer *request;
 
-    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
-    req = alloc_openflow_buffer(sizeof *req, OFPT_FLOW_STATS_REQUEST,
-                                &request);
+    req = alloc_stats_request(sizeof *req, OFPST_FLOW, &request);
     str_to_flow(argc > 2 ? argv[2] : "", &req->match, NULL, &req->table_id, 
             NULL);
     req->type = OFPFS_INDIV;
     req->pad = 0;
 
-    send_xid = ((struct ofp_header *) request->data)->xid;
-    send_openflow_buffer(vconn, request);
-    while (!done) {
-        uint32_t recv_xid;
-        struct buffer *reply;
-
-        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
-        recv_xid = ((struct ofp_header *) reply->data)->xid;
-        if (send_xid == recv_xid) {
-            struct ofp_flow_stats_reply *rpy;
-
-            ofp_print(stdout, reply->data, reply->size, 1);
-
-            rpy = buffer_at(reply, 0, sizeof *rpy);
-            done = (!rpy
-                    || rpy->header.version != OFP_VERSION
-                    || rpy->header.type != OFPT_FLOW_STATS_REPLY
-                    || (ntohs(rpy->header.length)
-                        < sizeof rpy->header + sizeof *rpy->flows));
-        } else {
-            VLOG_DBG("received reply with xid %08"PRIx32" "
-                     "!= expected %08"PRIx32, recv_xid, send_xid);
-        }
-        buffer_delete(reply);
-    }
-    vconn_close(vconn);
+    dump_stats_transaction(argv[1], request);
 }
 
 static void do_add_flows(int argc, char *argv[])
@@ -679,7 +706,7 @@ static void do_del_flows(int argc, char *argv[])
 static void
 do_dump_ports(int argc, char *argv[])
 {
-    dump_transaction(argv[1], OFPT_PORT_STATS_REQUEST);
+    dump_trivial_stats_transaction(argv[1], OFPST_PORT);
 }
 
 static void do_help(int argc UNUSED, char *argv[] UNUSED)

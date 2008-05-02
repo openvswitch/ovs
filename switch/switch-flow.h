@@ -58,7 +58,11 @@ struct sw_flow {
     time_t timeout;             /* When the flow expires (if idle). */
     uint64_t packet_count;      /* Number of packets seen. */
     uint64_t byte_count;        /* Number of bytes seen. */
+
+    /* Private to table implementations. */
     struct list node;
+    struct list iter_node;
+    unsigned long int serial;
 
     /* Actions (XXX probably most flows have only a single action). */
     unsigned int n_actions;

@@ -93,12 +93,8 @@ enum ofp_type {
     OFPT_PORT_MOD,            /* 10 Controller/switch message */
     OFPT_PORT_STATUS,         /* 11 Async message */
     OFPT_ERROR_MSG,           /* 12 Async message */
-    OFPT_FLOW_STATS_REQUEST,  /* 13 Controller/switch message */
-    OFPT_FLOW_STATS_REPLY,    /* 14 Controller/switch message */
-    OFPT_TABLE_STATS_REQUEST, /* 15 Controller/switch message */
-    OFPT_TABLE_STATS_REPLY,   /* 16 Controller/switch message */
-    OFPT_PORT_STATS_REQUEST,  /* 17 Controller/switch message */
-    OFPT_PORT_STATS_REPLY     /* 18 Controller/switch message */
+    OFPT_STATS_REQUEST,       /* 13 Controller/switch message */
+    OFPT_STATS_REPLY          /* 14 Controller/switch message */
 };
 
 /* Header on all OpenFlow packets. */
@@ -369,7 +365,56 @@ struct ofp_error_msg {
                                  on the type and code. */
 };
 
-/* Statistics about flows that match the "match" field */
+enum ofp_stats_types {
+    /* Flow statistics.
+     * The request body is struct ofp_flow_stats_request.
+     * The reply body is an array of struct ofp_flow_stats. */
+    OFPST_FLOW,
+
+    /* Flow table statistics.
+     * The request body is empty.
+     * The reply body is an array of struct ofp_table_stats. */
+    OFPST_TABLE,
+
+    /* Physical port statistics.
+     * The request body is empty.
+     * The reply body is an array of struct ofp_port_stats. */
+    OFPST_PORT
+};
+
+struct ofp_stats_request {
+    struct ofp_header header;
+    uint16_t type;              /* One of the OFPST_* constants. */
+    uint16_t flags;             /* OFPSF_REQ_* flags (none yet defined). */
+    uint8_t body[0];            /* Body of the request. */
+};
+
+enum ofp_stats_reply_flags {
+    OFPSF_REPLY_MORE  = 1 << 0, /* More replies to follow */
+};
+
+struct ofp_stats_reply {
+    struct ofp_header header;
+    uint16_t type;              /* One of the OFPST_* constants. */
+    uint16_t flags;             /* OFPSF_REPLY_* flags. */
+    uint8_t body[0];            /* Body of the reply. */
+};
+
+enum ofp_stats_type {
+    OFPFS_INDIV,              /* Send an entry for each matching flow */
+    OFPFS_AGGREGATE           /* Aggregate matching flows */
+};
+
+/* Body for ofp_stats_request of type OFPST_FLOW. */
+struct ofp_flow_stats_request {
+    struct ofp_match match;   /* Fields to match */
+    uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
+                                 or 0xff for all tables. */
+    uint8_t type;             /* One of OFPFS_ */
+    uint16_t pad;               /* Align to 32-bits */
+};
+
+/* Body of reply to OFPST_FLOW request. */
 struct ofp_flow_stats {
     struct ofp_match match;   /* Description of fields */
     uint32_t duration;        /* Time flow has been alive in seconds.  Only 
@@ -382,41 +427,7 @@ struct ofp_flow_stats {
     uint8_t pad[5];           /* Align to 64-bits. */
 };
 
-enum ofp_stats_type {
-    OFPFS_INDIV,              /* Send an entry for each matching flow */
-    OFPFS_AGGREGATE           /* Aggregate matching flows */
-};
-
-/* Current flow statistics request */
-struct ofp_flow_stats_request {
-    struct ofp_header header;
-    struct ofp_match match;   /* Fields to match */
-    uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
-                                 or 0xff for all tables. */
-    uint8_t type;             /* One of OFPFS_ */
-    uint16_t pad;               /* Align to 32-bits */
-};
-
-/* Current flow statistics reply */
-struct ofp_flow_stats_reply {
-    struct ofp_header header;
-
-    /* If request was of type OFPFS_INDIV, this will contain an array of
-     * flow statistic entries.  The number of matching flows is likely
-     * much larger than can fit in a single OpenFlow message, so a
-     * a response with no flows included is sent to indicate the end.
-     * If it was a OFPFS_AGGREGATE request, only a single flow stats 
-     * entry will be contained in the response.
-     */
-    struct ofp_flow_stats flows[0];  
-};
-
-/* Current table statistics request */
-struct ofp_table_stats_request {
-    struct ofp_header header;
-};
-
-/* Statistics about a particular table */
+/* Body of reply to OFPST_TABLE request. */
 struct ofp_table_stats {
     uint8_t table_id;
     uint8_t pad[3];          /* Align to 32-bits */
@@ -426,13 +437,6 @@ struct ofp_table_stats {
     uint64_t matched_count;  /* Number of packets that hit table */
 };
 
-/* Current table statistics reply */
-struct ofp_table_stats_reply {
-    struct ofp_header header;
-    struct ofp_table_stats tables[0]; /* The number of entries is inferred from
-                                        the length field in the header. */
-};
-
 /* Statistics about a particular port */
 struct ofp_port_stats {
     uint16_t port_no;
@@ -440,18 +444,6 @@ struct ofp_port_stats {
     uint64_t rx_count;       /* Number of received packets */
     uint64_t tx_count;       /* Number of transmitted packets */
     uint64_t drop_count;     /* Number of packets dropped by interface */
-};
-
-/* Current port statistics request */
-struct ofp_port_stats_request {
-    struct ofp_header header;
-};
-
-/* Current port statistics reply */
-struct ofp_port_stats_reply {
-    struct ofp_header header;
-    struct ofp_port_stats ports[0]; /* The number of entries is inferred from
-                                      the length field in the header. */
 };
 
 #endif /* openflow.h */

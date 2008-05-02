@@ -16,7 +16,6 @@ switch_SOURCES = \
 	switch-flow.h \
 	table.h \
 	table-hash.c \
-	table-linear.c \
-	table-mac.c 
+	table-linear.c
 
 switch_LDADD = ../lib/libopenflow.la -ldl

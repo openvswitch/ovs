@@ -207,6 +207,14 @@ rconn_send(struct rconn *rc, struct buffer *b)
     }
 }
 
+/* Returns true if 'rc''s send buffer is full,
+ * false if it has room for at least one more packet. */
+bool
+rconn_is_full(const struct rconn *rc) 
+{
+    return rc->txq.n >= rc->txq_limit;
+}
+
 /* Returns 'rc''s name (the 'name' argument passed to rconn_new()). */
 const char *
 rconn_get_name(const struct rconn *rc) 

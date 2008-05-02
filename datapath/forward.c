@@ -437,20 +437,6 @@ recv_flow(struct sw_chain *chain, const struct sender *sender, const void *msg)
 	}
 }
 
-static int
-recv_port_stats_request(struct sw_chain *chain, const struct sender *sender,
-			 const void *msg)
-{
-	return dp_send_port_stats(chain->dp, sender);
-}
-
-static int
-recv_table_stats_request(struct sw_chain *chain, const struct sender *sender,
-			  const void *msg)
-{
-	return dp_send_table_stats(chain->dp, sender);
-}
-
 /* 'msg', which is 'length' bytes long, was received across Netlink from
  * 'sender'.  Apply it to 'chain'. */
 int
@@ -488,14 +474,6 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 		[OFPT_PORT_MOD] = {
 			sizeof (struct ofp_port_mod),
 			recv_port_mod,
-		},
-		[OFPT_PORT_STATS_REQUEST] = {
-			sizeof (struct ofp_port_stats_request),
-			recv_port_stats_request,
-		},
-		[OFPT_TABLE_STATS_REQUEST] = {
-			sizeof (struct ofp_table_stats_request),
-			recv_table_stats_request,
 		},
 	};
 
