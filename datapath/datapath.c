@@ -788,6 +788,7 @@ send_port_status(struct net_bridge_port *p, uint8_t status)
 	if (!ops)
 		return -ENOMEM;
 	ops->reason = status;
+	memset(ops->pad, 0, sizeof ops->pad);
 	fill_port_desc(p, &ops->desc);
 
 	return send_openflow_skb(skb, NULL);
@@ -805,10 +806,15 @@ dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 		return -ENOMEM;
 
 	flow_fill_match(&ofe->match, &flow->key);
+
+	memset(ofe->pad, 0, sizeof ofe->pad);
+	ofe->priority = htons(flow->priority);
+
 	duration_j = (flow->timeout - HZ * flow->max_idle) - flow->init_time;
-	ofe->duration   = htonl(duration_j / HZ);
-	ofe->packet_count   = cpu_to_be64(flow->packet_count);
-	ofe->byte_count     = cpu_to_be64(flow->byte_count);
+	ofe->duration     = htonl(duration_j / HZ);
+	ofe->packet_count = cpu_to_be64(flow->packet_count);
+	ofe->byte_count   = cpu_to_be64(flow->byte_count);
+
 	return send_openflow_skb(skb, NULL);
 }
 

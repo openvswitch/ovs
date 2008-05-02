@@ -50,7 +50,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x82
+#define OFP_VERSION   0x83
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -349,6 +349,9 @@ struct ofp_flow_mod {
 struct ofp_flow_expired {
     struct ofp_header header;
     struct ofp_match match;   /* Description of fields */
+
+    uint16_t priority;        /* Priority level of flow entry. */
+    uint8_t pad[2];           /* Align to 32-bits. */
 
     uint32_t duration;        /* Time flow was alive in seconds. */
     uint64_t packet_count;    

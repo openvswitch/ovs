@@ -406,8 +406,10 @@ ofp_print_flow_expired(struct ds *string, const void *oh, size_t len,
 
     ofp_print_match(string, &ofe->match);
     ds_put_format(string, 
-         " secs%d pkts%lld bytes%lld\n", ntohl(ofe->duration),
-         ntohll(ofe->packet_count), ntohll(ofe->byte_count));
+         " pri%d secs%d pkts%lld bytes%lld\n", 
+         ofe->match.wildcards ? ntohs(ofe->priority) : (uint16_t)-1,
+         ntohl(ofe->duration), ntohll(ofe->packet_count), 
+         ntohll(ofe->byte_count));
 }
 
 /* Pretty-print the OFPT_ERROR_MSG packet of 'len' bytes at 'oh' to 'string'

@@ -674,8 +674,10 @@ send_port_status(struct sw_port *p, uint8_t status)
     struct ofp_port_status *ops;
     ops = alloc_openflow_buffer(p->dp, sizeof *ops, OFPT_PORT_STATUS, NULL,
                                 &buffer);
-    ops->reason         = status;
+    ops->reason = status;
+    memset(ops->pad, 0, sizeof ops->pad);
     fill_port_desc(p->dp, p, &ops->desc);
+
     send_openflow_buffer(p->dp, buffer, NULL);
 }
 
@@ -687,9 +689,13 @@ send_flow_expired(struct datapath *dp, struct sw_flow *flow)
     ofe = alloc_openflow_buffer(dp, sizeof *ofe, OFPT_FLOW_EXPIRED, NULL,
                                 &buffer);
     flow_fill_match(&ofe->match, &flow->key);
-    ofe->duration   = htonl(flow->timeout - flow->max_idle - flow->created);
-    ofe->packet_count   = htonll(flow->packet_count);
-    ofe->byte_count     = htonll(flow->byte_count);
+
+    memset(ofe->pad, 0, sizeof ofe->pad);
+    ofe->priority = htons(flow->priority);
+
+    ofe->duration     = htonl(flow->timeout - flow->max_idle - flow->created);
+    ofe->packet_count = htonll(flow->packet_count);
+    ofe->byte_count   = htonll(flow->byte_count);
     send_openflow_buffer(dp, buffer, NULL);
 }
 
