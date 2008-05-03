@@ -249,7 +249,7 @@ netdev_open(const char *name, struct netdev **netdev_)
      * packets on all system interfaces.  We do not want to receive that
      * data, but there is no way to avoid it.  So we must now drain out the
      * receive queue.  There is no way to know how long the receive queue is,
-     * but we know that the total number of byted queued does not exceed the
+     * but we know that the total number of bytes queued does not exceed the
      * receive buffer size, so we pull packets until none are left or we've
      * read that many bytes. */
     rcvbuf_len = sizeof rcvbuf;
