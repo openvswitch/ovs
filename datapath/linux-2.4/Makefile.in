@@ -68,7 +68,7 @@ ifeq (,$(CC))
 endif
 
 CFLAGS = -DVERSION=\"$(VERSION)\" -O2 -g
-CFLAGS += -I $(srcdir)/.. -I $(top_srcdir)/include
+CFLAGS += -I $(srcdir)/.. -I $(builddir)/.. -I $(top_srcdir)/include
 ifeq ($(ARCH),)
   ARCH := $(shell uname -m | sed 's/i.86/i386/')
 endif

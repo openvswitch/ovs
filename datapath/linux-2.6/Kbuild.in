@@ -9,7 +9,7 @@ include $(srcdir)/Modules.mk
 
 EXTRA_CFLAGS := -DVERSION=\"$(VERSION)\"
 EXTRA_CFLAGS += -I$(srcdir)/.. 
-EXTRA_CFLAGS += -I$(srcdir)/datapath
+EXTRA_CFLAGS += -I$(builddir)/..
 EXTRA_CFLAGS += -I$(top_srcdir)/include
 
 # These include directories have to go before -I$(KSRC)/include.
