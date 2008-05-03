@@ -1,25 +1,22 @@
-.TH dpctl 8 "December 2007" "OpenFlow" "OpenFlow Manual"
+.TH dpctl 8 "May 2008" "OpenFlow" "OpenFlow Manual"
 
 .SH NAME
 dpctl \- command line tool to administer OpenFlow datapaths
 
 .SH SYNOPSIS
 .B dpctl
-[OPTIONS] COMMAND [ARGS...]
+[OPTIONS] COMMAND [SWITCH] [ARGS...]
 
 .SH DESCRIPTION
 The
 .B dpctl
-program is a command line tool through which OpenFlow datapaths on the
-local host can be created, deleted, modified, and monitored.  A single
-machine may host up to 32 datapaths (numbered 0 to 31).  In most
-situations, a machine hosts only one datapath.
+program is a command line tool for monitoring and administering OpenFlow 
+datapaths.  It is able to show the current state of a datapath,
+including features, configuration, and tables entries.  When using the
+OpenFlow kernel module,
+.B dpctl
+is used to add, delete, modify, and monitor datapaths.  
 
-A newly created datapath is not associated with any of the
-host's network interfaces and thus does not process any incoming
-traffic.  To intercept and process traffic on a given interface, the
-interface must be explicitly added to a datapath through the
-\fBaddif\fR command.
 
 .SH OPTIONS
 .TP
@@ -35,26 +32,43 @@ Prints debug messages to the console.
 Prints version information to the console.
 
 .SH COMMANDS
-.TP
-.BI adddp " DP_IDX"
-Creates datapath numbered \fIDP_IDX\fR on the local host.  Will fail
-if \fIDP_IDX\fR is not in the range 0 to 31, or if the datapath with
-that number already exists on the host.
+
+Depending on the type of datapath, \fBdpctl\fR communicates using 
+different connection methods.  As such, one must provide the method to 
+use as the \fISWITCH\fR argument.  To communicate with userspace,
+\fItcp:host[:port]\fR is used.  The netlink interface is used to 
+communicate with the kernel module directly.  This uses the form 
+\fInl:DP_IDX\fR, where \fIDP_IDX\fR is explained below.
+
+.B COMMANDS FOR THE KERNEL MODULE
+
+With the \fBdpctl\fR program, datapaths running in the kernel can be 
+created, deleted, modified, and monitored.  A single machine may 
+host up to 32 datapaths (numbered 0 to 31).  In most situations, 
+a machine hosts only one datapath.
+
+A newly created datapath is not associated with any of the
+host's network interfaces and thus does not process any incoming
+traffic.  To intercept and process traffic on a given interface, the
+interface must be explicitly added to a datapath through the
+\fBaddif\fR command.
+
 
 .TP
-.BI deldp " DP_IDX"
+.BI adddp " nl:DP_IDX"
+Creates datapath numbered \fIDP_IDX\fR on the local host.  This will 
+fail if \fIDP_IDX\fR is not in the range 0 to 31, or if the datapath 
+with that number already exists on the host.
+
+.TP
+.BI deldp " nl:DP_IDX"
 Deletes datapath \fIDP_IDX\fR on the local host.  \fIDP_IDX\fR must be
 an existing datapath.  All of a datapath's interfaces must be
 explicitly removed before the datapath can be deleted (see \fBdelif\fR
 command).
 
 .TP
-.BI show " DP_IDX"
-Prints to the console information on datapath \fIDP_IDX\fR including
-information on its flow tables and ports.
-
-.TP
-.BI addif " DP_IDX INTERFACE"
+.BI addif " nl:DP_IDX INTERFACE"
 Adds \fIINTERFACE\fR to the list of network interfaces datapath
 \fIDP_IDX\fR monitors, where \fIDP_IDX\fR is the ID of an existing
 datapath, and \fIINTERFACE\fR is the name of one of the host's
@@ -63,86 +77,114 @@ to a datapath, the datapath has complete ownership of the interface's
 traffic and the interface appears silent to the rest of the system.
 
 .TP
-.BI delif " DP_IDX INTERFACE"
+.BI delif " nl:DP_IDX INTERFACE"
 Removes \fIINTERFACE\fR from the list of network interfaces datapath
 \fIDP_IDX\fR monitors.
 
 .TP
-.BI monitor " DP_IDX"
+.BI monitor " nl:DP_IDX"
 Prints to the console all OpenFlow packets sent by datapath
 \fIDP_IDX\fR to its controller, where \fIDP_IDX\fR is the ID of an
 existing datapath.
 
 .TP
-.BI dump-tables " DP_IDX"
+.BI benchmark-nl " nl:DP_IDX N SIZE"
+Checks the netlink performance between the kernel and userspace.
+This is done by sending \fIN\fR packets of \fISIZE\fR bytes from
+the kernel module to dpctl.
+
+
+.TP
+.B GENERAL COMMANDS
+
+.TP
+The following commands can be used regardless of the connection method.
+
+.TP
+.BI show " SWITCH"
+Prints to the console information on datapath \fISWITCH\fR including
+information on its flow tables and ports.
+
+.TP
+.BI dump-tables " SWITCH"
 Prints to the console statistics for each of the flow tables used by
-datapath \fIDP_IDX\fR, where \fIDP_IDX\fR is the ID of an existing
-datapath.
+datapath \fISWITCH\fR.
 
 .TP
-.BI dump-flows " DP_IDX TABLE_ID"
-Prints to the console all flow entries in datapath \fIDP_IDX\fR's table
-\fITABLE_ID\fR, where \fIDP_IDX\fR is the ID of an existing datapath,
-and \fITABLE_ID\fR is the integer ID of one of the datapath's tables
-as displayed in the output produced by \fBdump-tables\fR.
+.BI dump-ports " SWITCH"
+Prints to the console statistics for each of the physical interfaces 
+associated with datapath \fISWITCH\fR.
 
 .TP
-.BI dump-aggregate " DP_IDX [FLOWS]"
+.BI dump-flows " SWITCH [FLOW]"
+Prints to the console all flow entries in datapath \fISWITCH\fR's tables
+that match \fIFLOW\fR.  If \fIFLOW\fR is omitted, all flows in the 
+datapath are retrieved.
+
+.TP
+.BI dump-aggregate " SWITCH [FLOWS]"
 Prints to the console aggregate statistics for flows in datapath
-\fIDP_IDX\fR's that match \fIFLOWS\fR.  If \fIFLOWS\fR is omitted, the
-statistics are aggregated across all flows in the datapath's flow
+\fSWITCH\fR's tables that match \fIFLOWS\fR.  If \fIFLOWS\fR is omitted, 
+the statistics are aggregated across all flows in the datapath's flow
 tables.
+
+.TP
+.BI add-flows " SWITCH FILE"
+Add flow entries as described in \fIFILE\fR to the datapath \fISWITCH\fR's 
+tables.  Each line in \fIFILE\fR describes an entry in the format used
+to describe a \fIFLOW\fR in other commands..
+
+.TP
+.BI del-flows " SWITCH [FLOW]"
+Deletes entries from the datapath \fISWITCH\fR's tables that match 
+\fIFLOW\fR.  If \fIFLOW\fR is omitted, all flows in the datapath's
+tables are removed.
 
 .SH EXAMPLES
 
-A typical dpctl command sequence:
+A typical dpctl command sequence for controlling an OpenFlow kernel module:
 .nf
 .TP
 Create datapath numbered 0:
 
-.B % dpctl adddp 0
+.B % dpctl adddp nl:0
 
 .TP
 Add two interfaces to the new datapath:
 
-.B % dpctl addif 0 eth0
-.B % dpctl addif 0 eth1
+.B % dpctl addif nl:0 eth0
+.B % dpctl addif nl:0 eth1
 
 .TP
 Monitor traffic received by the datapath (exit with control-C):
 
-.B % dpctl monitor 0
+.B % dpctl monitor nl:0
 
 
 .TP
 View the datapath's table stats after some traffic has passed through:
 
-.B % dpctl dump-tables 0
+.B % dpctl dump-tables nl:0
 
 .TP
-View the flow entries in one of the datapath's tables (shown is the command for the table 1).  (This assumes that there is running controller adding flows to the flowtables)
+View the flow entries in the datapath:
 
-.B % dpctl dump-flows 0 1
+.B % dpctl dump-flows nl:0 
 
 .TP
-Remote interfaces from the datapath when finished:
+Remove interfaces from the datapath when finished:
 
-.B % dpctl delif 0 eth0
-.B % dpctl delif 0 eth1
+.B % dpctl delif nl:0 eth0
+.B % dpctl delif nl:0 eth1
 
 .TP
 Delete the datapath:
 
-.B % dpctl deldp 0
+.B % dpctl deldp nl:0
 .fi
 .SH "SEE ALSO"
 
 .BR secchan (8),
+.BR switch (8)
 .BR controller (8)
 .BR vlogconf (8)
-
-.SH BUGS
-
-dump-flows currently only prints the first action of each flow.  This is
-a shortcoming in the modules netlink flow query functionality and will
-be addressed in future releases

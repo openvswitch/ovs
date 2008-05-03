@@ -1,4 +1,4 @@
-.TH secchan 8 "March 2008" "OpenFlow" "OpenFlow Manual"
+.TH secchan 8 "May 2008" "OpenFlow" "OpenFlow Manual"
 
 .SH NAME
 switch \- userspace implementation of OpenFlow switch
@@ -53,7 +53,7 @@ network devices.
 .TP
 \fB-d\fR, \fB--datapath-id=\fIdpid\fR
 Specifies the OpenFlow switch ID (a 48-bit number that uniquely
-identifies a controller) as \fIdpid\fR, which consist of exactly 12
+identifies a controller) as \fIdpid\fR, which consists of exactly 12
 hex digits.  Without this option, \fBswitch\fR picks an ID randomly.
 
 .TP
@@ -87,8 +87,6 @@ Prints version information to the console.
 .SH "SEE ALSO"
 
 .BR dpctl (8),
+.BR ofp-pki (8),
 .BR controller (8)
 .BR vlogconf (8)
-
-.SH BUGS
-Currently \fBsecchan\fR does not support SSL
