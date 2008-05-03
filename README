@@ -92,9 +92,6 @@ Bugs/Shortcomings
 
 - The flowtable does not support the "normal processing" action.
 
-- Configure/build system does not support separate build directory for
-  the datapath.  ./configure must be run from the source root.
-
 References
 ----------
 
