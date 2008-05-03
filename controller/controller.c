@@ -288,6 +288,15 @@ send_features_request(struct switch_ *this)
         struct ofp_header *ofr;
         struct ofp_switch_config *osc;
 
+        /* Send OFPT_FEATURES_REQUEST. */
+        b = buffer_new(0);
+        ofr = buffer_put_uninit(b, sizeof *ofr);
+        memset(ofr, 0, sizeof *ofr);
+        ofr->type = OFPT_FEATURES_REQUEST;
+        ofr->version = OFP_VERSION;
+        ofr->length = htons(sizeof *ofr);
+        queue_tx(this, b);
+
         /* Send OFPT_SET_CONFIG. */
         b = buffer_new(0);
         osc = buffer_put_uninit(b, sizeof *osc);
@@ -297,15 +306,6 @@ send_features_request(struct switch_ *this)
         osc->header.length = htons(sizeof *osc);
         osc->flags = htons(OFPC_SEND_FLOW_EXP);
         osc->miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
-        queue_tx(this, b);
-
-        /* Send OFPT_FEATURES_REQUEST. */
-        b = buffer_new(0);
-        ofr = buffer_put_uninit(b, sizeof *ofr);
-        memset(ofr, 0, sizeof *ofr);
-        ofr->type = OFPT_FEATURES_REQUEST;
-        ofr->version = OFP_VERSION;
-        ofr->length = htons(sizeof *ofr);
         queue_tx(this, b);
 
         this->last_features_request = now;
