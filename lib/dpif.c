@@ -131,8 +131,9 @@ dpif_recv_openflow(struct dpif *dp, struct buffer **bufferp,
     size_t ofp_len;
     int retval;
 
-    *bufferp = NULL;
+    buffer = *bufferp = NULL;
     do {
+        buffer_delete(buffer);
         retval = nl_sock_recv(dp->sock, &buffer, wait);
     } while (retval == ENOBUFS || (!retval && nl_msg_nlmsgerr(buffer, NULL)));
     if (retval) {
