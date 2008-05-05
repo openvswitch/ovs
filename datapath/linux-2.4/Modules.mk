@@ -9,6 +9,7 @@ compat24_sources = \
 	linux-2.4/compat-2.4/netlink.c \
 	linux-2.4/compat-2.4/random32.c \
 	linux-2.4/compat-2.4/rcupdate.c \
+	linux-2.4/compat-2.4/sched.c \
 	linux-2.4/compat-2.4/string.c
 
 compat24_headers = \
@@ -41,6 +42,7 @@ compat24_headers = \
 	linux-2.4/compat-2.4/include/linux/netlink.h \
 	linux-2.4/compat-2.4/include/linux/random.h \
 	linux-2.4/compat-2.4/include/linux/rcupdate.h \
+	linux-2.4/compat-2.4/include/linux/sched.h \
 	linux-2.4/compat-2.4/include/linux/skbuff.h \
 	linux-2.4/compat-2.4/include/linux/slab.h \
 	linux-2.4/compat-2.4/include/linux/sockios.h \
