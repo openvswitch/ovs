@@ -93,11 +93,10 @@ static int table_linear_delete(struct sw_table *swt,
 				const struct sw_flow_key *key, uint16_t priority, int strict)
 {
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
-	struct list_head *pos, *n;
+	struct sw_flow *flow;
 	unsigned int count = 0;
 
-	list_for_each_safe_rcu (pos, n, &tl->flows) {
-		struct sw_flow *flow = list_entry(pos, struct sw_flow, node);
+	list_for_each_entry_rcu (flow, &tl->flows, node) {
 		if (flow_del_matches(&flow->key, key, strict)
 				&& (strict && (flow->priority == priority)))
 			count += do_delete(swt, flow);
@@ -110,11 +109,10 @@ static int table_linear_delete(struct sw_table *swt,
 static int table_linear_timeout(struct datapath *dp, struct sw_table *swt)
 {
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
-	struct list_head *pos, *n;
+	struct sw_flow *flow;
 	int count = 0;
 
-	list_for_each_safe_rcu (pos, n, &tl->flows) {
-		struct sw_flow *flow = list_entry(pos, struct sw_flow, node);
+	list_for_each_entry_rcu (flow, &tl->flows, node) {
 		if (flow_timeout(flow)) {
 			count += do_delete(swt, flow);
 			if (dp->flags & OFPC_SEND_FLOW_EXP)
