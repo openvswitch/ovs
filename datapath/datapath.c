@@ -77,7 +77,7 @@ static DEFINE_MUTEX(dp_mutex);
 
 static int dp_maint_func(void *data);
 static int send_port_status(struct net_bridge_port *p, uint8_t status);
-
+static int dp_genl_openflow_done(struct netlink_callback *);
 
 /* nla_shrink - reduce amount of space reserved by nla_reserve
  * @skb: socket buffer from which to recover room
@@ -1373,6 +1373,11 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 	void *body;
 	int err;
 
+	/* Set up the cleanup function for this dump.  Linux 2.6.20 and later
+	 * support setting up cleanup functions via the .doneit member of
+	 * struct genl_ops.  This kluge supports earlier versions also. */
+	cb->done = dp_genl_openflow_done;
+
 	rcu_read_lock();
 	if (!cb->args[0]) {
 		struct nlattr *attrs[DP_GENL_A_MAX + 1];
@@ -1491,7 +1496,6 @@ static struct genl_ops dp_genl_ops_openflow = {
 	.policy = dp_genl_openflow_policy,
 	.doit = dp_genl_openflow,
 	.dumpit = dp_genl_openflow_dumpit,
-	.done = dp_genl_openflow_done,
 };
 
 static struct nla_policy dp_genl_benchmark_policy[DP_GENL_A_MAX + 1] = {
