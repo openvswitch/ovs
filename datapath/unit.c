@@ -72,7 +72,11 @@ static int run_test(const char *name, size_t len)
 int unit_init(void)
 {
 	int n_pass = 0, n_fail = 0;
-	char *p = run ?: "";
+	char *p = run;
+
+	if (p == NULL) {
+		p = "";
+	}
 	for (;;) {
 		static const char white_space[] = " \t\r\n\v,";
 		int len;
