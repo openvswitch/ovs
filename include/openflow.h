@@ -162,11 +162,12 @@ struct ofp_phy_port {
 /* Switch features. */
 struct ofp_switch_features {
     struct ofp_header header;
-    uint64_t datapath_id;   /* Datapath unique ID */
+    uint64_t datapath_id;   /* Datapath unique ID.  Only the lower 48-bits
+                               are meaningful. */
 
     /* Table info. */
     uint32_t n_exact;       /* Max exact-match table entries. */
-    uint32_t n_compression; /* Max entries compressed on service port.  */
+    uint32_t n_compression; /* Max entries compressed on service port. */
     uint32_t n_general;     /* Max entries of arbitrary form. */
 
     /* Buffer limits.  A datapath that cannot buffer reports 0.*/
@@ -418,10 +419,10 @@ struct ofp_flow_stats_request {
 
 /* Body of reply to OFPST_FLOW request. */
 struct ofp_flow_stats {
-    uint16_t length;          /* Length of this entry */
+    uint16_t length;          /* Length of this entry. */
     uint8_t table_id;         /* ID of table flow came from. */
     uint8_t pad;
-    struct ofp_match match;   /* Description of fields */
+    struct ofp_match match;   /* Description of fields. */
     uint32_t duration;        /* Time flow has been alive in seconds. */
     uint64_t packet_count;    /* Number of packets in flow. */
     uint64_t byte_count;      /* Number of bytes in flow. */
