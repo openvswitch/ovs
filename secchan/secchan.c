@@ -221,10 +221,12 @@ relay_run(struct relay *r)
             if (this->rxbuf) {
                 int retval = rconn_send(peer->rconn, this->rxbuf);
                 if (retval != EAGAIN) {
-                    this->rxbuf = NULL;
                     if (!retval) {
                         progress = true;
+                    } else {
+                        buffer_delete(this->rxbuf);
                     }
+                    this->rxbuf = NULL;
                 }
             }
         }
