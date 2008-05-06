@@ -406,7 +406,7 @@ ofp_print_flow_expired(struct ds *string, const void *oh, size_t len,
 
     ofp_print_match(string, &ofe->match);
     ds_put_format(string, 
-         " pri%d secs%d pkts%lld bytes%lld\n", 
+         " pri%"PRIu16" secs%"PRIu32" pkts%"PRIu64" bytes%"PRIu64"n", 
          ofe->match.wildcards ? ntohs(ofe->priority) : (uint16_t)-1,
          ntohl(ofe->duration), ntohll(ofe->packet_count), 
          ntohll(ofe->byte_count));
@@ -816,7 +816,7 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
                 len, pkt->min_size);
     } else if (!pkt->printer) {
         if (len > sizeof *oh) {
-            ds_put_format(&string, " length=%zu (decoder not implemented)\n",
+            ds_put_format(&string, " length=%"PRIu16" (decoder not implemented)\n",
                           ntohs(oh->length)); 
         }
     } else {

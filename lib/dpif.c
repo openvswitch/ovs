@@ -128,7 +128,7 @@ dpif_recv_openflow(struct dpif *dp, struct buffer **bufferp,
     struct nlattr *attrs[ARRAY_SIZE(openflow_policy)];
     struct buffer *buffer;
     struct ofp_header *oh;
-    size_t ofp_len;
+    uint16_t ofp_len;
     int retval;
 
     buffer = *bufferp = NULL;

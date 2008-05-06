@@ -172,7 +172,7 @@ alloc_openflow_skb(struct datapath *dp, size_t openflow_len, uint8_t type,
 
 	if ((openflow_len + sizeof(struct ofp_header)) > UINT16_MAX) {
 		if (net_ratelimit())
-			printk("alloc_openflow_skb: openflow message too large: %d\n", 
+			printk("alloc_openflow_skb: openflow message too large: %zu\n", 
 					openflow_len);
 		return NULL;
 	}

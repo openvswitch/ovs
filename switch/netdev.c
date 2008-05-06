@@ -476,7 +476,7 @@ netdev_send(struct netdev *netdev, struct buffer *buffer)
         }
         return errno;
     } else if (n_bytes != buffer->size) {
-        VLOG_WARN("send partial Ethernet packet (%d bytes of %d) on %s",
+        VLOG_WARN("send partial Ethernet packet (%d bytes of %zu) on %s",
                   (int) n_bytes, buffer->size, netdev->name);
         return EMSGSIZE;
     } else {
