@@ -120,7 +120,7 @@ struct vlan_eth_header {
     uint16_t veth_type;         /* Always htons(ETH_TYPE_VLAN). */
     uint16_t veth_tci;          /* Lowest 12 bits are VLAN ID. */
     uint16_t veth_next_type;
-};
+} __attribute__((packed));
 BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
 
 #define IP_FMT "%"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8
