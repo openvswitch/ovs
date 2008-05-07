@@ -642,7 +642,7 @@ print_stats(struct ds *string, int type, const void *body, size_t body_len,
         return;
     }
     s = &stats_types[type];
-    ds_put_format(string, " type=%d(%s)", type, s->name);
+    ds_put_format(string, " type=%d(%s)\n", type, s->name);
 
     m = direction == REQUEST ? &s->request : &s->reply;
     if (body_len < m->min_body || body_len > m->max_body) {
