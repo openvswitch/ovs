@@ -1071,7 +1071,7 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
     /* Fill out flow. */
     flow_extract_match(&flow->key, &ofm->match);
     flow->max_idle = ntohs(ofm->max_idle);
-    flow->priority = ntohs(ofm->priority);
+    flow->priority = flow->key.wildcards ? ntohs(ofm->priority) : -1;
     flow->timeout = time(0) + flow->max_idle; /* FIXME */
     flow->n_actions = n_acts;
     flow->created = time(0);    /* FIXME */
@@ -1122,9 +1122,10 @@ recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
         return chain_delete(dp->chain, &key, 0, 0) ? 0 : -ESRCH;
     } else if (command == OFPFC_DELETE_STRICT) {
         struct sw_flow_key key;
+        uint16_t priority;
         flow_extract_match(&key, &ofm->match);
-        return chain_delete(dp->chain, &key, 
-                    ntohs(ofm->priority), 1) ? 0 : -ESRCH;
+        priority = key.wildcards ? ntohs(ofm->priority) : -1;
+        return chain_delete(dp->chain, &key, priority, 1) ? 0 : -ESRCH;
     } else {
         return -ENODEV;
     }
