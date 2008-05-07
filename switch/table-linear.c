@@ -115,7 +115,7 @@ static int table_linear_delete(struct sw_table *swt,
 
     LIST_FOR_EACH_SAFE (flow, n, struct sw_flow, node, &tl->flows) {
         if (flow_del_matches(&flow->key, key, strict)
-                && (strict && (flow->priority == priority))) {
+                && (!strict || (flow->priority == priority))) {
             do_delete(flow);
             count++;
         }
