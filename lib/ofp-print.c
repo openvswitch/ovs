@@ -406,7 +406,7 @@ ofp_print_flow_expired(struct ds *string, const void *oh, size_t len,
 
     ofp_print_match(string, &ofe->match);
     ds_put_format(string, 
-         " pri%"PRIu16" secs%"PRIu32" pkts%"PRIu64" bytes%"PRIu64"n", 
+         " pri%"PRIu16" secs%"PRIu32" pkts%"PRIu64" bytes%"PRIu64"\n", 
          ofe->match.wildcards ? ntohs(ofe->priority) : (uint16_t)-1,
          ntohl(ofe->duration), ntohll(ofe->packet_count), 
          ntohll(ofe->byte_count));
