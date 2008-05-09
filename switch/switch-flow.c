@@ -81,17 +81,39 @@ int flow_del_matches(const struct sw_flow_key *t, const struct sw_flow_key *d, i
 void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
 {
     to->wildcards = ntohs(from->wildcards) & OFPFW_ALL;
-    to->flow.in_port   = from->in_port;
-    to->flow.dl_vlan   = from->dl_vlan;
+    to->flow.reserved = 0;
+    to->flow.in_port = from->in_port;
+    to->flow.dl_vlan = from->dl_vlan;
     memcpy(to->flow.dl_src, from->dl_src, ETH_ADDR_LEN);
     memcpy(to->flow.dl_dst, from->dl_dst, ETH_ADDR_LEN);
-    to->flow.dl_type   = from->dl_type;
-    to->flow.nw_src   = from->nw_src;
-    to->flow.nw_dst   = from->nw_dst;
-    to->flow.nw_proto  = from->nw_proto;
-    to->flow.tp_src   = from->tp_src;
-    to->flow.tp_dst   = from->tp_dst;
-    to->flow.reserved = 0;
+    to->flow.dl_type = from->dl_type;
+
+
+    if (from->dl_type == htons(ETH_TYPE_IP)) {
+        to->flow.nw_src   = from->nw_src;
+        to->flow.nw_dst   = from->nw_dst;
+        to->flow.nw_proto = from->nw_proto;
+
+        if ((from->nw_proto != IPPROTO_TCP && from->nw_proto != IPPROTO_UDP)) {
+            goto no_th;
+        }
+        to->flow.tp_src = from->tp_src;
+        to->flow.tp_dst = from->tp_dst;
+        return;
+    } else if (from->dl_type == htons(ETH_TYPE_ARP)) {
+        to->flow.nw_src = from->nw_src;
+        to->flow.nw_dst = from->nw_dst;
+        to->flow.nw_proto = 0;
+        goto no_th;
+    }
+
+    to->flow.nw_src = 0;
+    to->flow.nw_dst = 0;
+    to->flow.nw_proto = 0;
+
+no_th:
+    to->flow.tp_src = 0;
+    to->flow.tp_dst = 0;
 }
 
 void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
