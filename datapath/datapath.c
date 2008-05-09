@@ -507,13 +507,17 @@ static void dp_frame_hook(struct sk_buff *skb)
 /* Forwarding output path.
  * Based on net/bridge/br_forward.c. */
 
-/* Don't forward packets to originating port or with flooding disabled */
+/* Don't forward packets to originating port.  If we're flooding,
+ * then don't send out ports with flooding disabled.
+ */
 static inline int should_deliver(const struct net_bridge_port *p,
-			const struct sk_buff *skb)
+			const struct sk_buff *skb, int flood)
 {
-	if ((skb->dev == p->dev) || (p->flags & BRIDGE_PORT_NO_FLOOD)) {
+	if (skb->dev == p->dev)
 		return 0;
-	} 
+
+	if (flood && (p->flags & BRIDGE_PORT_NO_FLOOD))
+		return 0;
 
 	return 1;
 }
@@ -526,15 +530,18 @@ static inline unsigned packet_length(const struct sk_buff *skb)
 	return length;
 }
 
+/* Send packets out all the ports except the originating one.  If the
+ * "flood" argument is set, only send along the minimum spanning tree.
+ */
 static int
-flood(struct datapath *dp, struct sk_buff *skb)
+output_all(struct datapath *dp, struct sk_buff *skb, int flood)
 {
 	struct net_bridge_port *p;
 	int prev_port;
 
 	prev_port = -1;
 	list_for_each_entry_rcu (p, &dp->port_list, node) {
-		if (!should_deliver(p, skb))
+		if (!should_deliver(p, skb, flood))
 			continue;
 		if (prev_port != -1) {
 			struct sk_buff *clone = skb_clone(skb, GFP_ATOMIC);
@@ -575,7 +582,9 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 
 	BUG_ON(!skb);
 	if (out_port == OFPP_FLOOD)
-		return flood(dp, skb);
+		return output_all(dp, skb, 1);
+	else if (out_port == OFPP_ALL)
+		return output_all(dp, skb, 0);
 	else if (out_port == OFPP_CONTROLLER)
 		return dp_output_control(dp, skb, fwd_save_skb(skb), 0,
 						  OFPR_ACTION);

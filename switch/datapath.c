@@ -472,15 +472,21 @@ dp_destroy(struct datapath *dp)
     free(dp);
 }
 
+/* Send packets out all the ports except the originating one.  If the
+ * "flood" argument is set, don't send out ports with flooding disabled.
+ */
 static int
-flood(struct datapath *dp, struct buffer *buffer, int in_port)
+output_all(struct datapath *dp, struct buffer *buffer, int in_port, int flood)
 {
     struct sw_port *p;
     int prev_port;
 
     prev_port = -1;
     LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
-        if (port_no(dp, p) == in_port || p->flags & BRIDGE_PORT_NO_FLOOD) {
+        if (port_no(dp, p) == in_port) {
+            continue;
+        }
+        if (flood && p->flags & BRIDGE_PORT_NO_FLOOD) {
             continue;
         }
         if (prev_port != -1) {
@@ -525,7 +531,9 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
 
     assert(buffer);
     if (out_port == OFPP_FLOOD) {
-        flood(dp, buffer, in_port); 
+        output_all(dp, buffer, in_port, 1); 
+    } else if (out_port == OFPP_ALL) {
+        output_all(dp, buffer, in_port, 0); 
     } else if (out_port == OFPP_CONTROLLER) {
         dp_output_control(dp, buffer, in_port, 0, OFPR_ACTION); 
     } else if (out_port == OFPP_TABLE) {
