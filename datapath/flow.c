@@ -12,7 +12,6 @@
 #include <linux/if_arp.h>
 #include <net/llc_pdu.h>
 #include <linux/ip.h>
-#include <linux/ipv6.h>
 #include <linux/kernel.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
@@ -277,14 +276,6 @@ void flow_extract(struct sk_buff *skb, uint16_t in_port,
 		key->tp_dst = th->dest;
 
 		return;
-	} else if (key->dl_type == htons(ETH_P_IPV6)) {
-		struct ipv6hdr *nh = ipv6_hdr(skb);
-		key->nw_src = hash_in6(&nh->saddr);
-		key->nw_dst = hash_in6(&nh->daddr);
-		/* FIXME: Need to traverse next-headers until we find the
-		 * upper-layer header. */
-		key->nw_proto = 0;
-		goto no_th;
 	} else if (key->dl_type == htons(ETH_P_ARP)) {
 		/* just barely within 46-byte minimum packet */
 		struct arp_eth_hdr *ah = (struct arp_eth_hdr *)skb_network_header(skb);
