@@ -9,7 +9,6 @@
 #include <linux/etherdevice.h>
 #include <linux/if_ether.h>
 #include <linux/if_vlan.h>
-#include <linux/if_arp.h>
 #include <net/llc_pdu.h>
 #include <linux/ip.h>
 #include <linux/kernel.h>
@@ -84,11 +83,6 @@ void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
 		to->tp_src = from->tp_src;
 		to->tp_dst = from->tp_dst;
 		return;
-	} else if (from->dl_type == htons(ETH_P_ARP)) {
-		to->nw_src = from->nw_src;
-		to->nw_dst = from->nw_dst;
-		to->nw_proto = 0;
-		goto no_th;
 	}
 
 	to->nw_src = 0;
@@ -195,20 +189,6 @@ uint32_t hash_in6(const struct in6_addr *in)
 			^ in->s6_addr32[2] ^ in->s6_addr32[3]);
 }
 
-// with inspiration from linux/if_arp.h
-struct arp_eth_hdr {
-	uint16_t  ar_hrd;  /* format of hardware address    */
-	uint16_t  ar_pro;  /* format of protocol address    */
-	uint8_t   ar_hln;  /* length of hardware address    */
-	uint8_t   ar_pln;  /* length of protocol address    */
-	uint16_t  ar_op;   /* ARP opcode (command)          */
-
-	uint8_t   ar_sha[ETH_ALEN]; /* source hardware addr */
-	uint32_t  ar_sip;           /* source protocol addr */
-	uint8_t   ar_tha[ETH_ALEN]; /* dest hardware addr   */
-	uint32_t  ar_tip;           /* dest protocol addr   */
-} __attribute__((packed));
-
 /* Parses the Ethernet frame in 'skb', which was received on 'in_port',
  * and initializes 'key' to match. */
 void flow_extract(struct sk_buff *skb, uint16_t in_port,
@@ -276,22 +256,6 @@ void flow_extract(struct sk_buff *skb, uint16_t in_port,
 		key->tp_dst = th->dest;
 
 		return;
-	} else if (key->dl_type == htons(ETH_P_ARP)) {
-		/* just barely within 46-byte minimum packet */
-		struct arp_eth_hdr *ah = (struct arp_eth_hdr *)skb_network_header(skb);
-		if (ah->ar_hrd == htons(ARPHRD_ETHER)
-		    && ah->ar_pro == htons(ETH_P_IP)
-		    && ah->ar_hln == ETH_ALEN
-		    && ah->ar_pln == sizeof(key->nw_src))
-		{
-			/* check if sha/tha match dl_src/dl_dst? */
-			key->nw_src = ah->ar_sip;
-			key->nw_dst = ah->ar_tip;
-			key->nw_proto = 0;
-			goto no_th;
-		}
-	} else {
-		/* Fall through. */
 	}
 
 	key->nw_src = 0;

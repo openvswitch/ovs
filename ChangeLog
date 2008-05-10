@@ -1,3 +1,8 @@
+v0.8.1 - 14 May 2008
+--------------------
+    - No longer set nwsrc/nwdst fields in flow structs on ARP packets
+    - Various bug fixes and tweaks
+
 v0.8.0 - 04 May 2008
 --------------------
     - Added support for flow entry priorities

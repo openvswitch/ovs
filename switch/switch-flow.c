@@ -100,11 +100,6 @@ void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
         to->flow.tp_src = from->tp_src;
         to->flow.tp_dst = from->tp_dst;
         return;
-    } else if (from->dl_type == htons(ETH_TYPE_ARP)) {
-        to->flow.nw_src = from->nw_src;
-        to->flow.nw_dst = from->nw_dst;
-        to->flow.nw_proto = 0;
-        goto no_th;
     }
 
     to->flow.nw_src = 0;

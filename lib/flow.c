@@ -124,17 +124,6 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
                     }
                 }
             }
-        } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
-            const struct arp_eth_header *ah = buffer_at(&b, 0, sizeof *ah);
-            if (ah && ah->ar_hrd == htons(ARP_HRD_ETHERNET)
-                && ah->ar_pro == htons(ARP_PRO_IP)
-                && ah->ar_hln == ETH_ADDR_LEN
-                && ah->ar_pln == sizeof flow->nw_src)
-            {
-                /* check if sha/tha match dl_src/dl_dst? */
-                flow->nw_src = ah->ar_spa;
-                flow->nw_dst = ah->ar_tpa;
-            }
         }
     }
 }
