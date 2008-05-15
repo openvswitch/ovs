@@ -183,12 +183,6 @@ void print_flow(const struct sw_flow_key *key)
 			ntohs(key->tp_src), ntohs(key->tp_dst));
 }
 
-uint32_t hash_in6(const struct in6_addr *in)
-{
-	return (in->s6_addr32[0] ^ in->s6_addr32[1]
-			^ in->s6_addr32[2] ^ in->s6_addr32[3]);
-}
-
 /* Parses the Ethernet frame in 'skb', which was received on 'in_port',
  * and initializes 'key' to match. */
 void flow_extract(struct sk_buff *skb, uint16_t in_port,
