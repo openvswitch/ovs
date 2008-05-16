@@ -424,14 +424,7 @@ static int dp_maint_func(void *data)
 	struct datapath *dp = (struct datapath *) data;
 
 	while (!kthread_should_stop()) {
-#if 1
 		chain_timeout(dp->chain);
-#else
-		int count = chain_timeout(dp->chain);
-		chain_print_stats(dp->chain);
-		if (count)
-			printk("%d flows timed out\n", count);
-#endif
 		msleep_interruptible(MAINT_SLEEP_MSECS);
 	}
 		
