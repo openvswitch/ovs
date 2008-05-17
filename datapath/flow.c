@@ -73,26 +73,40 @@ void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
 	memcpy(to->dl_dst, from->dl_dst, ETH_ALEN);
 	to->dl_type = from->dl_type;
 
-	if (likely(from->dl_type == htons(ETH_P_IP))) {
+	to->nw_src = to->nw_dst = to->nw_proto = 0;
+	to->tp_src = to->tp_dst = 0;
+
+#define OFPFW_TP (OFPFW_TP_SRC | OFPFW_TP_DST)
+#define OFPFW_NW (OFPFW_NW_SRC | OFPFW_NW_DST | OFPFW_NW_PROTO)
+	if (to->wildcards & OFPFW_DL_TYPE) {
+		/* Can't sensibly match on network or transport headers if the
+		 * data link type is unknown. */
+		to->wildcards |= OFPFW_NW | OFPFW_TP;
+	} else if (from->dl_type == htons(ETH_P_IP)) {
 		to->nw_src   = from->nw_src;
 		to->nw_dst   = from->nw_dst;
 		to->nw_proto = from->nw_proto;
 
-		if ((from->nw_proto != IPPROTO_TCP && from->nw_proto != IPPROTO_UDP)) {
-			goto no_th;
+		if (to->wildcards & OFPFW_NW_PROTO) {
+			/* Can't sensibly match on transport headers if the
+			 * network protocol is unknown. */
+			to->wildcards |= OFPFW_TP;
+		} else if (from->nw_proto == IPPROTO_TCP
+			   || from->nw_proto == IPPROTO_UDP) {
+			to->tp_src = from->tp_src;
+			to->tp_dst = from->tp_dst;
+		} else {
+			/* Transport layer fields are undefined.  Mark them as
+			 * exact-match to allow such flows to reside in
+			 * table-hash, instead of falling into table-linear. */
+			to->wildcards &= ~OFPFW_TP;
 		}
-		to->tp_src = from->tp_src;
-		to->tp_dst = from->tp_dst;
-		return;
+	} else {
+		/* Network and transport layer fields are undefined.  Mark them
+		 * as exact-match to allow such flows to reside in table-hash,
+		 * instead of falling into table-linear. */
+		to->wildcards &= ~(OFPFW_NW | OFPFW_TP);
 	}
-
-	to->nw_src = 0;
-	to->nw_dst = 0;
-	to->nw_proto = 0;
-
-no_th:
-	to->tp_src = 0;
-	to->tp_dst = 0;
 }
 
 void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)

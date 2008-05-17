@@ -102,11 +102,19 @@ void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
         return;
     }
 
+    /* dl_type is not IPv4, so the network layer fields are undefined.  We set
+     * them to zero and mark them as exact-match to allow such flows to reside
+     * in table-hash, instead of falling into table-linear. */
+    to->wildcards &= ~(OFPFW_NW_SRC | OFPFW_NW_DST | OFPFW_NW_PROTO);
     to->flow.nw_src = 0;
     to->flow.nw_dst = 0;
     to->flow.nw_proto = 0;
 
 no_th:
+    /* nw_proto is not TCP or UDP, so the transport layer fields are undefined.
+     * We set them to zero and mark them as exact-match to allow such flows to
+     * reside in table-hash, instead of falling into table-linear. */
+    to->wildcards &= ~(OFPFW_TP_SRC | OFPFW_TP_DST);
     to->flow.tp_src = 0;
     to->flow.tp_dst = 0;
 }
