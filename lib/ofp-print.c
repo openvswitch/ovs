@@ -180,15 +180,34 @@ ofp_packet_in(struct ds *string, const void *oh, size_t len, int verbosity)
 
 static void ofp_print_port_name(struct ds *string, uint16_t port) 
 {
-    if (port == UINT16_MAX) {
-        ds_put_cstr(string, "none");
-    } else if (port == OFPP_FLOOD) {
-        ds_put_cstr(string, "flood");
-    } else if (port == OFPP_CONTROLLER) {
-        ds_put_cstr(string, "controller");
-    } else {
+    const char *name;
+    switch (port) {
+    case OFPP_TABLE:
+        name = "TABLE";
+        break;
+    case OFPP_NORMAL:
+        name = "NORMAL";
+        break;
+    case OFPP_FLOOD:
+        name = "FLOOD";
+        break;
+    case OFPP_ALL:
+        name = "ALL";
+        break;
+    case OFPP_CONTROLLER:
+        name = "CONTROLLER";
+        break;
+    case OFPP_LOCAL:
+        name = "LOCAL";
+        break;
+    case OFPP_NONE:
+        name = "NONE";
+        break;
+    default:
         ds_put_format(string, "%"PRIu16, port);
+        return;
     }
+    ds_put_cstr(string, name);
 }
 
 static void
