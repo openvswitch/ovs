@@ -72,6 +72,7 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 	atomic_inc(&tl->n_flows);
 
 	/* Insert the entry immediately in front of where we're pointing. */
+	flow->serial = tl->next_serial++;
 	list_add_tail_rcu(&flow->node, &f->node);
 	list_add_rcu(&flow->iter_node, &tl->iter_flows);
 	spin_unlock_irqrestore(&tl->lock, flags);
@@ -147,12 +148,12 @@ static int table_linear_iterate(struct sw_table *swt,
 	struct sw_flow *flow;
 	unsigned long start;
 
-	start = ~position->private[0];
+	start = position->private[0];
 	list_for_each_entry_rcu (flow, &tl->iter_flows, iter_node) {
-		if (flow->serial <= start && flow_matches(key, &flow->key)) {
+		if (flow->serial >= start && flow_matches(key, &flow->key)) {
 			int error = callback(flow, private);
 			if (error) {
-				position->private[0] = ~flow->serial;
+				position->private[0] = flow->serial;
 				return error;
 			}
 		}
