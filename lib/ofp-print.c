@@ -415,10 +415,13 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
     const struct ofp_flow_mod *ofm = oh;
 
     ofp_print_match(string, &ofm->match);
-    ds_put_format(string, " cmd:%d idle:%d pri:%d buf:%#x\n", 
+    ds_put_format(string, " cmd:%d idle:%d pri:%d buf:%#x", 
             ntohs(ofm->command), ntohs(ofm->max_idle), 
             ofm->match.wildcards ? ntohs(ofm->priority) : (uint16_t)-1,
             ntohl(ofm->buffer_id));
+    ofp_print_actions(string, ofm->actions,
+                      len - offsetof(struct ofp_flow_mod, actions));
+    ds_put_char(string, '\n');
 }
 
 /* Pretty-print the OFPT_FLOW_EXPIRED packet of 'len' bytes at 'oh' to 'string'
