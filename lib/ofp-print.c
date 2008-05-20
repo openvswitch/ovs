@@ -499,14 +499,14 @@ ofp_flow_stats_reply(struct ds *string, const void *body_, size_t len,
             break;
         }
 
-        ds_put_format(string, "  duration=%"PRIu32" s, ", ntohl(fs->duration));
+        ds_put_format(string, "  duration=%"PRIu32"s, ", ntohl(fs->duration));
         ds_put_format(string, "table_id=%"PRIu8", ", fs->table_id);
         ds_put_format(string, "priority=%"PRIu16", ", 
                     fs->match.wildcards ? ntohs(fs->priority) : (uint16_t)-1);
         ds_put_format(string, "n_packets=%"PRIu64", ",
                     ntohll(fs->packet_count));
         ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
-        ds_put_format(string, "max_idle=%"PRIu16", ", ntohs(fs->max_idle));
+        ds_put_format(string, "max_idle=%"PRIu16",", ntohs(fs->max_idle));
         ofp_print_match(string, &fs->match);
         ofp_print_actions(string, fs->actions, length - sizeof *fs);
         ds_put_char(string, '\n');
