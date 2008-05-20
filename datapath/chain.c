@@ -153,7 +153,8 @@ void chain_destroy(struct sw_chain *chain)
 	synchronize_rcu();
 	for (i = 0; i < chain->n_tables; i++) {
 		struct sw_table *t = chain->tables[i];
-		t->destroy(t);
+		if (t->destroy)
+			t->destroy(t);
 	}
 	module_put(chain->owner);
 	kfree(chain);
