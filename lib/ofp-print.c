@@ -267,6 +267,7 @@ static void ofp_packet_out(struct ds *string, const void *oh, size_t len,
         if (verbosity > 0 && len > sizeof *opo) {
             char *packet = ofp_packet_to_string(opo->u.data, len - sizeof *opo,
                                                 len - sizeof *opo);
+            ds_put_char(string, '\n');
             ds_put_cstr(string, packet);
             free(packet);
         }
