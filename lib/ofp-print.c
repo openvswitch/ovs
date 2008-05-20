@@ -48,6 +48,8 @@
 #include "openflow.h"
 #include "packets.h"
 
+static void ofp_print_port_name(struct ds *string, uint16_t port);
+
 /* Returns a string that represents the contents of the Ethernet frame in the
  * 'len' bytes starting at 'data' to 'stream' as output by tcpdump.
  * 'total_len' specifies the full length of the Ethernet frame (of which 'len'
@@ -149,8 +151,9 @@ ofp_packet_in(struct ds *string, const void *oh, size_t len, int verbosity)
     const struct ofp_packet_in *op = oh;
     size_t data_len;
 
-    ds_put_format(string, " total_len=%"PRIu16" in_port=%"PRIu8,
-            ntohs(op->total_len), ntohs(op->in_port));
+    ds_put_format(string, " total_len=%"PRIu16" in_port=",
+                  ntohs(op->total_len));
+    ofp_print_port_name(string, ntohs(op->in_port));
 
     if (op->reason == OFPR_ACTION)
         ds_put_cstr(string, " (via action)");
