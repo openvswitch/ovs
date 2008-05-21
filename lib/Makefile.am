@@ -11,6 +11,7 @@ libopenflow_la_SOURCES = \
 	flow.c \
 	hash.c \
 	list.c \
+	netdev.c \
 	ofp-print.c \
 	poll-loop.c \
 	queue.c \

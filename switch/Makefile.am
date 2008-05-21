@@ -9,8 +9,6 @@ switch_SOURCES = \
 	crc32.h \
 	datapath.c \
 	datapath.h \
-	netdev.c \
-	netdev.h \
 	switch.c \
 	switch-flow.c \
 	switch-flow.h \
