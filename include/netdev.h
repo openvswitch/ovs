@@ -47,6 +47,11 @@ struct buffer;
 struct in_addr;
 struct in6_addr;
 
+enum netdev_flags {
+    NETDEV_UP = 0x0001,         /* Device enabled? */
+    NETDEV_PROMISC = 0x0002     /* Promiscuous mode? */
+};
+
 struct netdev;
 int netdev_open(const char *name, struct netdev **);
 void netdev_close(struct netdev *);
@@ -60,5 +65,7 @@ int netdev_get_speed(const struct netdev *);
 uint32_t netdev_get_features(const struct netdev *);
 bool netdev_get_in4(const struct netdev *, struct in_addr *);
 bool netdev_get_in6(const struct netdev *, struct in6_addr *);
+int netdev_get_flags(const struct netdev *, enum netdev_flags *);
+int netdev_set_flags(struct netdev *, enum netdev_flags);
 
 #endif /* netdev.h */

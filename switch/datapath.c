@@ -226,6 +226,12 @@ dp_add_port(struct datapath *dp, const char *name)
     if (error) {
         return error;
     }
+    error = netdev_set_flags(netdev, NETDEV_UP | NETDEV_PROMISC);
+    if (error) {
+        VLOG_ERR("Couldn't set promiscuous mode on %s device", name);
+        netdev_close(netdev);
+        return error;
+    }
     if (netdev_get_in4(netdev, &in4)) {
         VLOG_ERR("%s device has assigned IP address %s", name, inet_ntoa(in4));
     }

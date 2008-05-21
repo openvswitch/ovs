@@ -80,6 +80,8 @@ static struct list netdev_list = LIST_INITIALIZER(&netdev_list);
 
 static void init_netdev(void);
 static int restore_flags(struct netdev *netdev);
+static int get_flags(const struct netdev *, int *flagsp);
+static int set_flags(struct netdev *, int flags);
 
 /* Obtains the IPv4 address for 'name' into 'in4'.  Returns true if
  * successful. */
@@ -321,25 +323,13 @@ netdev_open(const char *name, struct netdev **netdev_)
     do_ethtool(netdev);
 
     /* Save flags to restore at close or exit. */
-    if (ioctl(fd, SIOCGIFFLAGS, &ifr) < 0) {
-        VLOG_ERR("ioctl(SIOCGIFFLAGS) on %s device failed: %s",
-                 name, strerror(errno));
-        goto error;
+    error = get_flags(netdev, &netdev->save_flags);
+    if (error) {
+        goto preset_error;
     }
-    netdev->save_flags = ifr.ifr_flags;
     fatal_signal_block();
     list_push_back(&netdev_list, &netdev->node);
     fatal_signal_unblock();
-
-    /* Bring up interface and set promiscuous mode. */
-    ifr.ifr_flags |= IFF_PROMISC | IFF_UP;
-    if (ioctl(fd, SIOCSIFFLAGS, &ifr) < 0) {
-        error = errno;
-        VLOG_ERR("failed to set promiscuous mode on %s device: %s",
-                 name, strerror(errno));
-        netdev_close(netdev);
-        return error;
-    }
 
     /* Success! */
     *netdev_ = netdev;
@@ -347,6 +337,7 @@ netdev_open(const char *name, struct netdev **netdev_)
 
 error:
     error = errno;
+preset_error:
     close(fd);
     return error;
 }
@@ -561,6 +552,54 @@ netdev_get_in6(const struct netdev *netdev, struct in6_addr *in6)
     *in6 = netdev->in6;
     return memcmp(in6, &in6addr_any, sizeof *in6) != 0;
 }
+
+/* Obtains the current flags for 'netdev' and stores them into '*flagsp'.
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+netdev_get_flags(const struct netdev *netdev, enum netdev_flags *flagsp)
+{
+    int error, flags;
+
+    error = get_flags(netdev, &flags);
+    if (error) {
+        return error;
+    }
+
+    *flagsp = 0;
+    if (flags & IFF_UP) {
+        *flagsp |= NETDEV_UP;
+    }
+    if (flags & IFF_PROMISC) {
+        *flagsp |= NETDEV_PROMISC;
+    }
+    return 0;
+}
+
+/* Sets the flags for 'netdev' to 'nd_flags'.
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+netdev_set_flags(struct netdev *netdev, enum netdev_flags nd_flags)
+{
+    int old_flags, new_flags;
+    int error;
+
+    error = get_flags(netdev, &old_flags);
+    if (error) {
+        return error;
+    }
+
+    new_flags = old_flags & ~(IFF_UP | IFF_PROMISC);
+    if (nd_flags & NETDEV_UP) {
+        new_flags |= IFF_UP;
+    }
+    if (nd_flags & NETDEV_PROMISC) {
+        new_flags |= IFF_PROMISC;
+    }
+    if (new_flags != old_flags) {
+        error = set_flags(netdev, new_flags);
+    }
+    return error;
+}
 
 static void restore_all_flags(void *aux);
 
@@ -613,4 +652,32 @@ restore_all_flags(void *aux UNUSED)
     LIST_FOR_EACH (netdev, struct netdev, node, &netdev_list) {
         restore_flags(netdev);
     }
+}
+
+static int
+get_flags(const struct netdev *netdev, int *flags)
+{
+    struct ifreq ifr;
+    strncpy(ifr.ifr_name, netdev->name, sizeof ifr.ifr_name);
+    if (ioctl(netdev->fd, SIOCGIFFLAGS, &ifr) < 0) {
+        VLOG_ERR("ioctl(SIOCGIFFLAGS) on %s device failed: %s",
+                 netdev->name, strerror(errno));
+        return errno;
+    }
+    *flags = ifr.ifr_flags;
+    return 0;
+}
+
+static int
+set_flags(struct netdev *netdev, int flags)
+{
+    struct ifreq ifr;
+    strncpy(ifr.ifr_name, netdev->name, sizeof ifr.ifr_name);
+    ifr.ifr_flags = flags;
+    if (ioctl(netdev->fd, SIOCSIFFLAGS, &ifr) < 0) {
+        VLOG_ERR("ioctl(SIOCSIFFLAGS) on %s device failed: %s",
+                 netdev->name, strerror(errno));
+        return errno;
+    }
+    return 0;
 }
