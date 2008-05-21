@@ -33,6 +33,8 @@
 
 #include <errno.h>
 #include <getopt.h>
+#include <inttypes.h>
+#include <netinet/in.h>
 #include <poll.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,20 +45,23 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "fault.h"
+#include "flow.h"
 #include "list.h"
-#include "util.h"
-#include "rconn.h"
-#include "vconn-ssl.h"
-#include "vlog-socket.h"
+#include "mac-learning.h"
+#include "netdev.h"
 #include "openflow.h"
+#include "packets.h"
 #include "poll-loop.h"
+#include "rconn.h"
+#include "util.h"
+#include "vconn-ssl.h"
 #include "vconn.h"
+#include "vlog-socket.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_secchan
 
-static void parse_options(int argc, char *argv[]);
-static void usage(void) NO_RETURN;
+#include "ofp-print.h"
 
 static const char *listen_vconn_name;
 
@@ -67,22 +72,41 @@ struct half {
 
 struct relay {
     struct list node;
+
+#define HALF_LOCAL 0
+#define HALF_REMOTE 1
     struct half halves[2];
 };
 
 static struct list relays = LIST_INITIALIZER(&relays);
 
+/* Enable the local port? */
+static int local_port;
+
+/* MAC address of local port. */
+static uint8_t local_mac[ETH_ADDR_LEN];
+
+/* MAC learning table for local port. */
+static struct mac_learning *local_ml;
+
+static void parse_options(int argc, char *argv[]);
+static void usage(void) NO_RETURN;
+
 static void new_management_connection(const char *nl_name, struct vconn *new_remote);
-static void relay_create(struct rconn *, struct rconn *);
+static void relay_create(struct rconn *local, struct rconn *remote);
 static void relay_run(struct relay *);
 static void relay_wait(struct relay *);
 static void relay_destroy(struct relay *);
+
+static bool local_hook(struct relay *r);
 
 int
 main(int argc, char *argv[])
 {
     struct vconn *listen_vconn;
+    struct netdev *of_device;
     const char *nl_name;
+    char of_name[16];
     int retval;
 
     set_program_name(argv[0]);
@@ -111,6 +135,33 @@ main(int argc, char *argv[])
         }
     } else {
         listen_vconn = NULL;
+    }
+
+
+    snprintf(of_name, sizeof of_name, "of%s", nl_name + 3);
+    retval = netdev_open(of_name, &of_device);
+    if (!retval) {
+        enum netdev_flags flags;
+        retval = netdev_get_flags(of_device, &flags);
+        if (!retval) {
+            if (flags & NETDEV_UP) {
+                struct in6_addr in6;
+
+                local_port = true;
+                memcpy(local_mac, netdev_get_etheraddr(of_device),
+                       ETH_ADDR_LEN);
+                if (netdev_get_in6(of_device, &in6)) {
+                    VLOG_WARN("Ignoring IPv6 address on %s device: "
+                              "IPv6 not supported", of_name);
+                }
+                local_ml = mac_learning_create();
+            }
+        } else {
+            error(retval, "Could not get flags for %s device", of_name);
+        }
+        netdev_close(of_device);
+    } else {
+        error(retval, "Could not open %s device", of_name);
     }
 
     retval = vlog_server_listen(NULL, NULL);
@@ -184,14 +235,15 @@ new_management_connection(const char *nl_name, struct vconn *new_remote)
 }
 
 static void
-relay_create(struct rconn *a, struct rconn *b)
+relay_create(struct rconn *local, struct rconn *remote)
 {
     struct relay *r;
     int i;
 
     r = xmalloc(sizeof *r);
+    r->halves[HALF_LOCAL].rconn = local;
+    r->halves[HALF_REMOTE].rconn = remote;
     for (i = 0; i < 2; i++) {
-        r->halves[i].rconn = i ? b : a;
         r->halves[i].rxbuf = NULL;
     }
     list_push_back(&relays, &r->node);
@@ -216,6 +268,10 @@ relay_run(struct relay *r)
 
             if (!this->rxbuf) {
                 this->rxbuf = rconn_recv(this->rconn);
+                if (this->rxbuf && i == HALF_LOCAL && local_hook(r)) {
+                    buffer_delete(this->rxbuf);
+                    this->rxbuf = NULL;
+                }
             }
 
             if (this->rxbuf) {
@@ -271,6 +327,74 @@ relay_destroy(struct relay *r)
         buffer_delete(this->rxbuf);
     }
     free(r);
+}
+
+static bool
+local_hook(struct relay *r)
+{
+    struct rconn *rc = r->halves[HALF_LOCAL].rconn;
+    struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
+    struct ofp_packet_in *opi;
+    struct ofp_header *oh;
+    size_t pkt_ofs, pkt_len;
+    struct buffer pkt, *b;
+    struct flow flow;
+    uint16_t in_port, out_port;
+
+    if (!local_port) {
+        return false;
+    }
+
+    oh = msg->data;
+    if (oh->type != OFPT_PACKET_IN) {
+        return false;
+    }
+    if (msg->size < offsetof (struct ofp_packet_in, data)) {
+        VLOG_WARN("packet too short (%zu bytes) for packet_in", msg->size);
+        return false;
+    }
+
+    /* Extract flow data from 'opi' into 'flow'. */
+    opi = msg->data;
+    in_port = ntohs(opi->in_port);
+    pkt_ofs = offsetof(struct ofp_packet_in, data);
+    pkt_len = ntohs(opi->header.length) - pkt_ofs;
+    pkt.data = opi->data;
+    pkt.size = pkt_len;
+    flow_extract(&pkt, in_port, &flow);
+
+    /* Deal with local stuff. */
+    if (!rconn_is_connected(r->halves[HALF_REMOTE].rconn)
+        && eth_addr_is_broadcast(flow.dl_dst)) {
+        out_port = OFPP_FLOOD;
+    } else if (in_port == OFPP_LOCAL) {
+        out_port = mac_learning_lookup(local_ml, flow.dl_dst);
+    } else if (eth_addr_equals(flow.dl_dst, local_mac)) {
+        out_port = OFPP_LOCAL;
+        if (mac_learning_learn(local_ml, flow.dl_src, in_port)) {
+            VLOG_DBG("learned that "ETH_ADDR_FMT" is on port %"PRIu16,
+                     ETH_ADDR_ARGS(flow.dl_src), in_port);
+        }
+    } else {
+        return false;
+    }
+
+    /* Add new flow. */
+    if (out_port != OFPP_FLOOD) {
+        b = make_add_simple_flow(&flow, ntohl(opi->buffer_id), out_port);
+        if (rconn_force_send(rc, b)) {
+            buffer_delete(b);
+        }
+    }
+
+    /* If the switch didn't buffer the packet, we need to send a copy. */
+    if (out_port == OFPP_FLOOD || ntohl(opi->buffer_id) == UINT32_MAX) {
+        b = make_unbuffered_packet_out(&pkt, in_port, out_port);
+        if (rconn_force_send(rc, b)) {
+            buffer_delete(b);
+        }
+    }
+    return true;
 }
 
 static void

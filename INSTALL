@@ -124,11 +124,11 @@ switch are running on the same machine.  This is an easy configuration
 for testing, but a more conventional setup would run a controller on
 one machine and one or more switches on different machines.  To do so,
 simply specify the IP address of the controller as the first argument
-to the switch program (in place of 127.0.0.1).  (Note: The current
-version of the switch and controller requires that they be connected
-through a "control network" that is physically separate from the one
-that they are controlling.  Future releases will support in-band
-control communication.)
+to the switch program (in place of 127.0.0.1). (Note: The userspace
+switch must be connected to the controller over a "control network"
+that is physically separate from the one that the switch and
+controller are controlling.  The kernel-based switch does not have
+this limitation.)
 
 Secure operation over SSL
 -------------------------
@@ -381,11 +381,6 @@ following instructions to set up remote switches:
 1. Start the datapath and attach it to two or more physical ports as
    described in the previous section.
 
-   Note: The current version of the switch and controller requires
-   that they be connected through a "control network" that is
-   physically separate from the one that they are controlling.  Future
-   releases will support in-band control communication.
-
 2. Run the controller in passive tcp mode on the host which will act as
    the controller. In the example below, the controller will bind to
    port 975 (the default) awaiting connections from secure channels. 
@@ -396,7 +391,38 @@ following instructions to set up remote switches:
    
    Make sure the machine hosting the controller is reachable by the switch.  
 
-3. Run secchan on the datapath host to start the secure channel
+3. Arrange so that the switch can reach the controller over the
+   network.  There are two ways to do this:
+
+      - Use a "control network" that is completely separate from the
+        "data network" to be controlled.  To do so, configure a
+        network device (one that has not been added to the datapath
+        with "dpctl addif") to access the control network in the usual
+        way.
+
+      - Use the same network for control and for data.  For this
+        purpose, each datapath nl:K has a corresponding virtual
+        network device named ofK.  Start by bringing up of0 before you
+        start the secure channel:
+
+           # ifconfig of0 up
+
+        Before the secure channel starts up, the of0 device cannot
+        send or receive any packets, so the next step depends on
+        whether connectivity is required to configure the device's IP
+        address:
+
+           . If the switch has a static IP address, you may configure
+             its IP address now, e.g.:
+
+                # ifconfig of0 192.168.1.1
+
+           . If the switch does not have a static IP address, e.g. its
+             IP address is obtained dynamically via DHCP, then proceed
+             to step 4.  The DHCP client will not be able to contact
+             the DHCP server until the secure channel has started up.
+
+4. Run secchan on the datapath host to start the secure channel
    connecting the datapath to a remote controller.  (See secchan(8)
    for usage details).  The channel should be configured to connect to
    the controller's IP address on the port configured in step 2.
@@ -406,6 +432,17 @@ following instructions to set up remote switches:
    would look like:
 
       # secchan -v nl:0 tcp:192.168.1.2
+
+   If you are using separate control and data networks, or if the
+   networks are combined and the switch has a static IP address, the
+   secure channel should quickly connect to the controller.  Setup is
+   now complete.  Otherwise, proceed to step 5.
+
+5. If you are using the same network for control and data, and the
+   switch obtains its IP address dynamically, then you may now obtain
+   the switch's IP address, e.g. by invoking a DHCP client.  The
+   secure channel will only be able to connect to the controller after
+   an IP address has been obtained.
 
 Bug Reporting
 -------------

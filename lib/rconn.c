@@ -186,14 +186,13 @@ rconn_recv_wait(struct rconn *rc)
     }
 }
 
-/* There is no rconn_send_wait() function: an rconn has a send queue that it
- * takes care of sending if you call rconn_wait(), which will have the side
- * effect of waking up poll_block(). */
+/* Sends 'b' on 'rc'.  Returns 0 if successful, EAGAIN if at least 'txq_limit'
+ * packets are already queued, otherwise a positive errno value. */
 int
-rconn_send(struct rconn *rc, struct buffer *b) 
+do_send(struct rconn *rc, struct buffer *b, int txq_limit)
 {
     if (rc->vconn) {
-        if (rc->txq.n < rc->txq_limit) {
+        if (rc->txq.n < txq_limit) {
             queue_push_tail(&rc->txq, b);
             if (rc->txq.n == 1) {
                 try_send(rc);
@@ -205,6 +204,29 @@ rconn_send(struct rconn *rc, struct buffer *b)
     } else {
         return ENOTCONN;
     }
+}
+
+/* Sends 'b' on 'rc'.  Returns 0 if successful, EAGAIN if the send queue is
+ * full, otherwise a positive errno value.
+ *
+ * There is no rconn_send_wait() function: an rconn has a send queue that it
+ * takes care of sending if you call rconn_wait(), which will have the side
+ * effect of waking up poll_block(). */
+int
+rconn_send(struct rconn *rc, struct buffer *b)
+{
+    return do_send(rc, b, rc->txq_limit);
+}
+
+/* Sends 'b' on 'rc'.  Returns 0 if successful, EAGAIN if the send queue is
+ * full, otherwise a positive errno value.
+ *
+ * Compared to rconn_send(), this function relaxes the queue limit, allowing
+ * more packets than usual to be queued. */
+int
+rconn_force_send(struct rconn *rc, struct buffer *b)
+{
+    return do_send(rc, b, 2 * rc->txq_limit);
 }
 
 /* Returns true if 'rc''s send buffer is full,
@@ -228,6 +250,13 @@ bool
 rconn_is_alive(const struct rconn *rconn) 
 {
     return rconn->reliable || rconn->vconn;
+}
+
+/* Returns true if 'rconn' is connected, false otherwise. */
+bool
+rconn_is_connected(const struct rconn *rconn)
+{
+    return rconn->vconn && !vconn_connect(rconn->vconn);
 }
 
 static struct rconn *
