@@ -45,8 +45,7 @@ struct datapath {
 	struct task_struct *dp_task; /* Kernel thread for maintenance. */
 
 	/* Data related to the "of" device of this datapath */
-	struct net_device dev;
-	struct net_device_stats stats;
+	struct net_device *netdev;
 
 	/* Configuration set from controller */
 	uint16_t flags;
@@ -54,7 +53,8 @@ struct datapath {
 
 	/* Switch ports. */
 	struct net_bridge_port *ports[OFPP_MAX];
-	struct list_head port_list; /* List of ports, for flooding. */
+	struct net_bridge_port *local_port; /* OFPP_LOCAL port. */
+	struct list_head port_list; /* All ports, including local_port. */
 };
 
 /* Information necessary to reply to the sender of an OpenFlow message. */

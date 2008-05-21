@@ -33,6 +33,7 @@
 #include "datapath.h"
 #include "table.h"
 #include "chain.h"
+#include "dp_dev.h"
 #include "forward.h"
 #include "flow.h"
 #include "datapath_t.h"
@@ -60,8 +61,6 @@ struct net_bridge_port {
 static struct genl_family dp_genl_family;
 static struct genl_multicast_group mc_group;
 
-int dp_dev_setup(struct net_device *dev);  
-
 /* It's hard to imagine wanting more than one datapath, but... */
 #define DP_MAX 32
 
@@ -78,6 +77,9 @@ static DEFINE_MUTEX(dp_mutex);
 static int dp_maint_func(void *data);
 static int send_port_status(struct net_bridge_port *p, uint8_t status);
 static int dp_genl_openflow_done(struct netlink_callback *);
+static struct net_bridge_port *new_nbp(struct datapath *,
+				       struct net_device *, int port_no);
+static int del_switch_port(struct net_bridge_port *);
 
 /* nla_shrink - reduce amount of space reserved by nla_reserve
  * @skb: socket buffer from which to recover room
@@ -270,35 +272,42 @@ static int new_dp(int dp_idx)
 	if (dp == NULL)
 		goto err_unlock;
 
+	/* Setup our "of" device */
+	err = dp_dev_setup(dp);
+	if (err)
+		goto err_free_dp;
+
 	dp->dp_idx = dp_idx;
 	dp->id = gen_datapath_id(dp_idx);
 	dp->chain = chain_create(dp);
 	if (dp->chain == NULL)
-		goto err_free_dp;
+		goto err_destroy_dp_dev;
 	INIT_LIST_HEAD(&dp->port_list);
 
-#if 0
-	/* Setup our "of" device */
-	dp->dev.priv = dp;
-	rtnl_lock();
-	err = dp_dev_setup(&dp->dev);
-	rtnl_unlock();
-	if (err != 0) 
-		printk("datapath: problem setting up 'of' device\n");
-#endif
+	dp->local_port = new_nbp(dp, dp->netdev, OFPP_LOCAL);
+	if (IS_ERR(dp->local_port)) {
+		err = PTR_ERR(dp->local_port);
+		goto err_destroy_local_port;
+	}
 
 	dp->flags = 0;
 	dp->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
 
 	dp->dp_task = kthread_run(dp_maint_func, dp, "dp%d", dp_idx);
 	if (IS_ERR(dp->dp_task))
-		goto err_free_dp;
+		goto err_destroy_chain;
 
 	rcu_assign_pointer(dps[dp_idx], dp);
 	mutex_unlock(&dp_mutex);
 
 	return 0;
 
+err_destroy_local_port:
+	del_switch_port(dp->local_port);
+err_destroy_chain:
+	chain_destroy(dp->chain);
+err_destroy_dp_dev:
+	dp_dev_destroy(dp);
 err_free_dp:
 	kfree(dp);
 err_unlock:
@@ -318,23 +327,29 @@ static int find_portno(struct datapath *dp)
 }
 
 static struct net_bridge_port *new_nbp(struct datapath *dp,
-									   struct net_device *dev)
+				       struct net_device *dev, int port_no)
 {
 	struct net_bridge_port *p;
-	int port_no;
 
-	port_no = find_portno(dp);
-	if (port_no < 0)
-		return ERR_PTR(port_no);
+	if (dev->br_port != NULL)
+		return ERR_PTR(-EBUSY);
 
 	p = kzalloc(sizeof(*p), GFP_KERNEL);
 	if (p == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	p->dp = dp;
+	rtnl_lock();
+	dev_set_promiscuity(dev, 1);
+	rtnl_unlock();
 	dev_hold(dev);
+	p->dp = dp;
 	p->dev = dev;
 	p->port_no = port_no;
+	if (port_no != OFPP_LOCAL)
+		rcu_assign_pointer(dev->br_port, p);
+	if (port_no < OFPP_MAX)
+		rcu_assign_pointer(dp->ports[port_no], p); 
+	list_add_rcu(&p->node, &dp->port_list);
 
 	return p;
 }
@@ -343,25 +358,19 @@ static struct net_bridge_port *new_nbp(struct datapath *dp,
 int add_switch_port(struct datapath *dp, struct net_device *dev)
 {
 	struct net_bridge_port *p;
+	int port_no;
 
-	if (dev->flags & IFF_LOOPBACK || dev->type != ARPHRD_ETHER)
+	if (dev->flags & IFF_LOOPBACK || dev->type != ARPHRD_ETHER
+	    || is_dp_dev(dev))
 		return -EINVAL;
 
-	if (dev->br_port != NULL)
-		return -EBUSY;
+	port_no = find_portno(dp);
+	if (port_no < 0)
+		return port_no;
 
-	p = new_nbp(dp, dev);
+	p = new_nbp(dp, dev, port_no);
 	if (IS_ERR(p))
 		return PTR_ERR(p);
-
-	dev_hold(dev);
-	rcu_assign_pointer(dev->br_port, p);
-	rtnl_lock();
-	dev_set_promiscuity(dev, 1);
-	rtnl_unlock();
-
-	rcu_assign_pointer(dp->ports[p->port_no], p);
-	list_add_rcu(&p->node, &dp->port_list);
 
 	/* Notify the ctlpath that this port has been added */
 	send_port_status(p, OFPPR_ADD);
@@ -396,19 +405,13 @@ static int del_switch_port(struct net_bridge_port *p)
 /* Called with dp_mutex. */
 static void del_dp(struct datapath *dp)
 {
-	struct net_bridge_port *p, *n;
+	struct net_bridge_port *p;
 
-#if 0
-	/* Unregister the "of" device of this dp */
-	rtnl_lock();
-	unregister_netdevice(&dp->dev);
-	rtnl_unlock();
-#endif
-
+	dp_dev_destroy(dp);
 	kthread_stop(dp->dp_task);
 
 	/* Drop references to DP. */
-	list_for_each_entry_safe (p, n, &dp->port_list, node)
+	list_for_each_entry_rcu (p, &dp->port_list, node)
 		del_switch_port(p);
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
@@ -479,21 +482,6 @@ static void dp_frame_hook(struct sk_buff *skb)
 /* Forwarding output path.
  * Based on net/bridge/br_forward.c. */
 
-/* Don't forward packets to originating port.  If we're flooding,
- * then don't send out ports with flooding disabled.
- */
-static inline int should_deliver(const struct net_bridge_port *p,
-			const struct sk_buff *skb, int flood)
-{
-	if (skb->dev == p->dev)
-		return 0;
-
-	if (flood && (p->flags & BRIDGE_PORT_NO_FLOOD))
-		return 0;
-
-	return 1;
-}
-
 static inline unsigned packet_length(const struct sk_buff *skb)
 {
 	int length = skb->len - ETH_HLEN;
@@ -508,12 +496,12 @@ static inline unsigned packet_length(const struct sk_buff *skb)
 static int
 output_all(struct datapath *dp, struct sk_buff *skb, int flood)
 {
+	u32 disable = flood ? BRIDGE_PORT_NO_FLOOD : 0;
 	struct net_bridge_port *p;
-	int prev_port;
+	int prev_port = -1;
 
-	prev_port = -1;
 	list_for_each_entry_rcu (p, &dp->port_list, node) {
-		if (!should_deliver(p, skb, flood))
+		if (skb->dev == p->dev || p->flags & disable)
 			continue;
 		if (prev_port != -1) {
 			struct sk_buff *clone = skb_clone(skb, GFP_ATOMIC);
@@ -538,8 +526,11 @@ output_all(struct datapath *dp, struct sk_buff *skb, int flood)
 int dp_set_origin(struct datapath *dp, uint16_t in_port,
 			   struct sk_buff *skb)
 {
-	if (in_port < OFPP_MAX && dp->ports[in_port]) {
-		skb->dev = dp->ports[in_port]->dev;
+	struct net_bridge_port *p = (in_port < OFPP_MAX ? dp->ports[in_port]
+				     : in_port == OFPP_LOCAL ? dp->local_port
+				     : NULL);
+	if (p) {
+		skb->dev = p->dev;
 		return 0;
 	}
 	return -ENOENT;
@@ -549,9 +540,6 @@ int dp_set_origin(struct datapath *dp, uint16_t in_port,
  */
 int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 {
-	struct net_bridge_port *p;
-	int len = skb->len;
-
 	BUG_ON(!skb);
 	if (out_port == OFPP_FLOOD)
 		return output_all(dp, skb, 1);
@@ -561,10 +549,11 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 		return dp_output_control(dp, skb, fwd_save_skb(skb), 0,
 						  OFPR_ACTION);
 	else if (out_port == OFPP_TABLE) {
+		struct net_bridge_port *p = skb->dev->br_port;
 		struct sw_flow_key key;
 		struct sw_flow *flow;
 
-		flow_extract(skb, skb->dev->br_port->port_no, &key);
+		flow_extract(skb, p ? p->port_no : OFPP_LOCAL, &key);
 		flow = chain_lookup(dp->chain, &key);
 		if (likely(flow != NULL)) {
 			flow_used(flow, skb);
@@ -572,24 +561,26 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 			return 0;
 		}
 		return -ESRCH;
-	} else if (out_port >= OFPP_MAX)
-		goto bad_port;
+	} else if (out_port == OFPP_LOCAL) {
+		struct net_device *dev = dp->netdev;
+		return dev ? dp_dev_recv(dev, skb) : -ESRCH;
+	} else if (out_port >= 0 && out_port < OFPP_MAX) {
+		struct net_bridge_port *p = dp->ports[out_port];
+		int len = skb->len;
+		if (p == NULL)
+			goto bad_port;
+		skb->dev = p->dev; 
+		if (packet_length(skb) > skb->dev->mtu) {
+			printk("dropped over-mtu packet: %d > %d\n",
+			       packet_length(skb), skb->dev->mtu);
+			kfree_skb(skb);
+			return -E2BIG;
+		}
 
-	p = dp->ports[out_port];
-	if (p == NULL)
-		goto bad_port;
+		dev_queue_xmit(skb);
 
-	skb->dev = p->dev;
-	if (packet_length(skb) > skb->dev->mtu) {
-		printk("dropped over-mtu packet: %d > %d\n",
-					packet_length(skb), skb->dev->mtu);
-		kfree_skb(skb);
-		return -E2BIG;
+		return len;
 	}
-
-	dev_queue_xmit(skb);
-
-	return len;
 
 bad_port:
 	kfree_skb(skb);
@@ -612,6 +603,7 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb,
 	 * forward the whole packet? */
 	struct sk_buff *f_skb;
 	struct ofp_packet_in *opi;
+	struct net_bridge_port *p;
 	size_t fwd_len, opi_len;
 	int err;
 
@@ -627,7 +619,8 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb,
 	}
 	opi->buffer_id      = htonl(buffer_id);
 	opi->total_len      = htons(skb->len);
-	opi->in_port        = htons(skb->dev->br_port->port_no);
+	p = skb->dev->br_port;
+	opi->in_port        = htons(p ? p->port_no : OFPP_LOCAL);
 	opi->reason         = reason;
 	opi->pad            = 0;
 	memcpy(opi->data, skb_mac_header(skb), fwd_len);
@@ -744,16 +737,14 @@ dp_send_config_reply(struct datapath *dp, const struct sender *sender)
 int
 dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp)
 {
-	struct net_bridge_port *p;
-
-	p = dp->ports[htons(opp->port_no)];
-
+	int port_no = ntohs(opp->port_no);
+	struct net_bridge_port *p = (port_no < OFPP_MAX ? dp->ports[port_no]
+				     : port_no == OFPP_LOCAL ? dp->local_port
+				     : NULL);
 	/* Make sure the port id hasn't changed since this was sent */
-	if (!p || memcmp(opp->hw_addr, p->dev->dev_addr, ETH_ALEN) != 0) 
+	if (!p || memcmp(opp->hw_addr, p->dev->dev_addr, ETH_ALEN))
 		return -1;
-	
 	p->flags = htonl(opp->flags);
-
 	return 0;
 }
 

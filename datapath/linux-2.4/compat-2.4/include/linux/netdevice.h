@@ -2,6 +2,8 @@
 #define __LINUX_NETDEVICE_WRAPPER_H 1
 
 #include_next <linux/netdevice.h>
+#include <linux/kernel.h>
+#include <linux/rcupdate.h>
 
 /*----------------------------------------------------------------------------
  * In 2.6.24, a namespace argument became required for dev_get_by_name. 
@@ -27,5 +29,11 @@ static inline void *netdev_priv(struct net_device *dev)
 	return dev->priv;
 }
 #endif
+
+/* Synchronize with packet receive processing. */
+static inline void synchronize_net(void) 
+{
+	synchronize_rcu();
+}
 
 #endif
