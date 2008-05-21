@@ -50,8 +50,12 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
     struct eth_header *eth;
 
     if (b.size < ETH_TOTAL_MIN) {
-        VLOG_WARN("packet length %zu less than minimum size %d",
-                  b.size, ETH_TOTAL_MIN);
+        /* This message is not too useful since there are various ways that we
+         * can end up with runt frames, e.g. frames that only ever passed
+         * through virtual network devices and never touched a physical
+         * Ethernet. */
+        VLOG_DBG("packet length %zu less than minimum size %d",
+                 b.size, ETH_TOTAL_MIN);
     }
 
     memset(flow, 0, sizeof *flow);
