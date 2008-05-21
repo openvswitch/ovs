@@ -49,6 +49,7 @@
 #include "hash.h"
 #include "list.h"
 #include "ofp-print.h"
+#include "mac-learning.h"
 #include "openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -74,13 +75,14 @@ struct switch_ {
     time_t last_features_request;
 
     struct queue txq;
+    struct mac_learning *ml;
 };
 
-/* -H, --hub: Use dumb hub instead of learning switch? */
-static bool hub = false;
+/* Learn the ports on which MAC addresses appear? */
+static bool learn_macs = true;
 
-/* -n, --noflow: Pass traffic, but don't setup flows in switch */
-static bool noflow = false;
+/* Set up flows?  (If not, every packet is processed at the controller.) */
+static bool setup_flows = true;
 
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
@@ -97,11 +99,7 @@ static int do_switch_recv(struct switch_ *this);
 static int do_switch_send(struct switch_ *this);
 
 static void process_packet(struct switch_ *, struct buffer *);
-static void process_hub(struct switch_ *, struct ofp_packet_in *);
-static void process_noflow(struct switch_ *, struct ofp_packet_in *);
-
-static void switch_init(void);
-static void process_switch(struct switch_ *, struct ofp_packet_in *);
+static void process_packet_in(struct switch_ *, struct ofp_packet_in *);
 
 int
 main(int argc, char *argv[])
@@ -115,10 +113,6 @@ main(int argc, char *argv[])
     register_fault_handlers();
     vlog_init();
     parse_options(argc, argv);
-
-    if (!hub && !noflow) {
-        switch_init();
-    }
 
     if (argc - optind < 1) {
         fatal(0, "at least one vconn argument required; use --help for usage");
@@ -265,6 +259,9 @@ new_switch(const char *name, struct vconn *vconn)
     if (!vconn_is_passive(vconn)) {
         send_features_request(this);
     }
+    if (learn_macs) {
+        this->ml = mac_learning_create(); 
+    }
     return this;
 }
 
@@ -275,6 +272,7 @@ close_switch(struct switch_ *this)
         free(this->name);
         vconn_close(this->vconn);
         queue_destroy(&this->txq);
+        mac_learning_destroy(this->ml);
         free(this);
     }
 }
@@ -345,12 +343,8 @@ process_packet(struct switch_ *sw, struct buffer *msg)
         if (sw->txq.n >= MAX_TXQ) {
             /* FIXME: ratelimit. */
             VLOG_WARN("%s: tx queue overflow", sw->name);
-        } else if (noflow) {
-            process_noflow(sw, opi);
-        } else if (hub) {
-            process_hub(sw, opi);
         } else {
-            process_switch(sw, opi);
+            process_packet_in(sw, opi);
         }
     } else {
         ofp_print(stdout, msg->data, msg->size, 2); 
@@ -358,8 +352,11 @@ process_packet(struct switch_ *sw, struct buffer *msg)
 }
 
 static void
-process_hub(struct switch_ *sw, struct ofp_packet_in *opi)
+process_packet_in(struct switch_ *sw, struct ofp_packet_in *opi) 
 {
+    uint16_t in_port = ntohs(opi->in_port);
+    uint16_t out_port = OFPP_FLOOD;
+
     size_t pkt_ofs, pkt_len;
     struct buffer pkt;
     struct flow flow;
@@ -369,185 +366,36 @@ process_hub(struct switch_ *sw, struct ofp_packet_in *opi)
     pkt_len = ntohs(opi->header.length) - pkt_ofs;
     pkt.data = opi->data;
     pkt.size = pkt_len;
-    flow_extract(&pkt, ntohs(opi->in_port), &flow);
+    flow_extract(&pkt, in_port, &flow);
 
-    /* Add new flow. */
-    queue_tx(sw, make_add_simple_flow(&flow, ntohl(opi->buffer_id),
-                                      OFPP_FLOOD));
-
-    /* If the switch didn't buffer the packet, we need to send a copy. */
-    if (ntohl(opi->buffer_id) == UINT32_MAX) {
-        queue_tx(sw, make_unbuffered_packet_out(&pkt, ntohs(flow.in_port),
-                                                OFPP_FLOOD));
-    }
-}
-
-static void
-process_noflow(struct switch_ *sw, struct ofp_packet_in *opi)
-{
-    /* If the switch didn't buffer the packet, we need to send a copy. */
-    if (ntohl(opi->buffer_id) == UINT32_MAX) {
-        size_t pkt_ofs, pkt_len;
-        struct buffer pkt;
-
-        /* Extract flow data from 'opi' into 'flow'. */
-        pkt_ofs = offsetof(struct ofp_packet_in, data);
-        pkt_len = ntohs(opi->header.length) - pkt_ofs;
-        pkt.data = opi->data;
-        pkt.size = pkt_len;
-
-        queue_tx(sw, make_unbuffered_packet_out(&pkt, ntohs(opi->in_port),
-                    OFPP_FLOOD));
-    } else {
-        queue_tx(sw, make_buffered_packet_out(ntohl(opi->buffer_id), 
-                    ntohs(opi->in_port), OFPP_FLOOD));
-    }
-}
-
-
-#define MAC_HASH_BITS 10
-#define MAC_HASH_MASK (MAC_HASH_SIZE - 1)
-#define MAC_HASH_SIZE (1u << MAC_HASH_BITS)
-
-#define MAC_MAX 1024
-
-struct mac_source {
-    struct list hash_list;
-    struct list lru_list;
-    uint64_t datapath_id;
-    uint8_t mac[ETH_ADDR_LEN];
-    uint16_t port;
-};
-
-static struct list mac_table[MAC_HASH_SIZE];
-static struct list lrus;
-static size_t mac_count;
-
-static void
-switch_init(void)
-{
-    int i;
-
-    list_init(&lrus);
-    for (i = 0; i < MAC_HASH_SIZE; i++) {
-        list_init(&mac_table[i]);
-    }
-}
-
-static struct list *
-mac_table_bucket(uint64_t datapath_id, const uint8_t mac[ETH_ADDR_LEN]) 
-{
-    uint32_t hash;
-    hash = hash_fnv(&datapath_id, sizeof datapath_id, HASH_FNV_BASIS);
-    hash = hash_fnv(mac, ETH_ADDR_LEN, hash);
-    return &mac_table[hash & MAC_HASH_BITS];
-}
-
-static void
-process_switch(struct switch_ *sw, struct ofp_packet_in *opi)
-{
-    size_t pkt_ofs, pkt_len;
-    struct buffer pkt;
-    struct flow flow;
-
-    uint16_t out_port;
-
-    /* Extract flow data from 'opi' into 'flow'. */
-    pkt_ofs = offsetof(struct ofp_packet_in, data);
-    pkt_len = ntohs(opi->header.length) - pkt_ofs;
-    pkt.data = opi->data;
-    pkt.size = pkt_len;
-    flow_extract(&pkt, ntohs(opi->in_port), &flow);
-
-    /* Learn the source. */
-    if (!eth_addr_is_multicast(flow.dl_src)) {
-        struct mac_source *src;
-        struct list *bucket;
-        bool found;
-
-        bucket = mac_table_bucket(sw->datapath_id, flow.dl_src);
-        found = false;
-        LIST_FOR_EACH (src, struct mac_source, hash_list, bucket) {
-            if (src->datapath_id == sw->datapath_id
-                && eth_addr_equals(src->mac, flow.dl_src)) {
-                found = true;
-                break;
-            }
-        }
-
-        if (!found) {
-            /* Learn a new address. */
-
-            if (mac_count >= MAC_MAX) {
-                /* Drop the least recently used mac source. */
-                struct mac_source *lru;
-                lru = CONTAINER_OF(lrus.next, struct mac_source, lru_list);
-                list_remove(&lru->hash_list);
-                list_remove(&lru->lru_list);
-                free(lru);
-            } else {
-                mac_count++;
-            }
-
-            /* Create new mac source */
-            src = xmalloc(sizeof *src);
-            src->datapath_id = sw->datapath_id;
-            memcpy(src->mac, flow.dl_src, ETH_ADDR_LEN);
-            src->port = -1;
-            list_push_front(bucket, &src->hash_list);
-            list_push_back(&lrus, &src->lru_list);
-        } else {
-            /* Make 'src' most-recently-used.  */
-            list_remove(&src->lru_list);
-            list_push_back(&lrus, &src->lru_list);
-        }
-
-        if (ntohs(flow.in_port) != src->port) {
-            src->port = ntohs(flow.in_port);
+    if (learn_macs) {
+        if (mac_learning_learn(sw->ml, flow.dl_src, in_port)) {
             VLOG_DBG("learned that "ETH_ADDR_FMT" is on datapath %"
-                     PRIx64" port %d",
-                     ETH_ADDR_ARGS(src->mac), ntohll(src->datapath_id),
-                     src->port);
+                     PRIx64" port %"PRIu16, ETH_ADDR_ARGS(flow.dl_src),
+                     ntohll(sw->datapath_id), in_port);
         }
-    } else {
-        VLOG_DBG("multicast packet source "ETH_ADDR_FMT,
-                 ETH_ADDR_ARGS(flow.dl_src));
+        out_port = mac_learning_lookup(sw->ml, flow.dl_dst);
     }
 
-    /* Figure out the destination. */
-    out_port = OFPP_FLOOD;
-    if (!eth_addr_is_multicast(flow.dl_dst)) {
-        struct mac_source *dst;
-        struct list *bucket;
-
-        bucket = mac_table_bucket(sw->datapath_id, flow.dl_dst);
-        LIST_FOR_EACH (dst, struct mac_source, hash_list, bucket) {
-            if (dst->datapath_id == sw->datapath_id
-                && eth_addr_equals(dst->mac, flow.dl_dst)) {
-                out_port = dst->port;
-                break;
-            }
-        }
-    }
-
-    if (out_port != OFPP_FLOOD) {
-        /* The output port is known, so add a new flow. */
-        queue_tx(sw, make_add_simple_flow(&flow, ntohl(opi->buffer_id), 
-                    out_port));
+    if (setup_flows && (!learn_macs || out_port != OFPP_FLOOD)) {
+        /* The output port is known, or we always flood everything, so add a
+         * new flow. */
+        queue_tx(sw, make_add_simple_flow(&flow, ntohl(opi->buffer_id),
+                                          out_port));
 
         /* If the switch didn't buffer the packet, we need to send a copy. */
         if (ntohl(opi->buffer_id) == UINT32_MAX) {
-            queue_tx(sw, make_unbuffered_packet_out(&pkt, ntohs(flow.in_port),
-                                                    out_port));
+            queue_tx(sw, make_unbuffered_packet_out(&pkt, in_port, out_port));
         }
     } else {
-        /* We don't know that MAC.  Flood the packet. */
+        /* We don't know that MAC, or we don't set up flows.  Send along the
+         * packet without setting up a flow. */
         struct buffer *b;
         if (ntohl(opi->buffer_id) == UINT32_MAX) {
-            b = make_unbuffered_packet_out(&pkt, ntohs(flow.in_port), out_port);
+            b = make_unbuffered_packet_out(&pkt, in_port, out_port);
         } else {
-            b = make_buffered_packet_out(ntohl(opi->buffer_id), 
-                        ntohs(flow.in_port), out_port);
+            b = make_buffered_packet_out(ntohl(opi->buffer_id),
+                                         in_port, out_port);
         }
         queue_tx(sw, b);
     }
@@ -578,11 +426,11 @@ parse_options(int argc, char *argv[])
 
         switch (c) {
         case 'H':
-            hub = true;
+            learn_macs = false;
             break;
 
         case 'n':
-            noflow = true;
+            setup_flows = false;
             break;
 
         case 'h':

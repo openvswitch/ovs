@@ -9,6 +9,7 @@ noinst_HEADERS = \
 	flow.h \
 	hash.h \
 	list.h \
+	mac-learning.h \
 	netdev.h \
 	netlink-protocol.h \
 	netlink.h \
