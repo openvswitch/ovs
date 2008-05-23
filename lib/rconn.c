@@ -259,7 +259,7 @@ do_send(struct rconn *rc, struct buffer *b, int txq_limit)
  * full, or ENOTCONN if 'rc' is not currently connected.
  *
  * There is no rconn_send_wait() function: an rconn has a send queue that it
- * takes care of sending if you call rconn_wait(), which will have the side
+ * takes care of sending if you call rconn_run(), which will have the side
  * effect of waking up poll_block(). */
 int
 rconn_send(struct rconn *rc, struct buffer *b)
