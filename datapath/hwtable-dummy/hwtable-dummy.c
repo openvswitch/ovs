@@ -133,6 +133,7 @@ static int do_delete(struct sw_table *swt, struct sw_flow *flow)
 {
 	if (flow_del(flow)) {
 		list_del_rcu(&flow->node);
+		list_del_rcu(&flow->iter_node);
 		table_dummy_flow_deferred_free(flow);
 		return 1;
 	}
@@ -164,7 +165,7 @@ static int table_dummy_timeout(struct datapath *dp, struct sw_table *swt)
 	struct sw_flow_dummy *sfw, *n;
 	int del_count = 0;
 	uint64_t packet_count = 0;
-	int i=0;
+	int i = 0;
 
 	list_for_each_entry_rcu (flow, &td->flows, node) {
 		/* xxx Retrieve the packet count associated with this entry
@@ -280,7 +281,9 @@ static struct sw_table *table_dummy_create(void)
 	td->max_flows = DUMMY_MAX_FLOW;
 	atomic_set(&td->n_flows, 0);
 	INIT_LIST_HEAD(&td->flows);
+	INIT_LIST_HEAD(&td->iter_flows);
 	spin_lock_init(&td->lock);
+	tl->next_serial = 0
 
 	INIT_LIST_HEAD(&pending_free_list);
 	spin_lock_init(&pending_free_lock);
