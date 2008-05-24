@@ -8,7 +8,7 @@ researchers to run experiments in live networks.  OpenFlow is based on a
 simple Ethernet flow switch that exposes a standardized interface for
 adding and removing flow entries.
 
-An OpenFlow Switch consists of three parts: (1) A "flow table" in
+An OpenFlow switch consists of three parts: (1) A "flow table" in
 which each flow entry is associated with an action telling the switch
 how to process the flow, (2) a "secure channel" connecting the switch
 to a remote process (a controller), allowing commands and packets to
@@ -16,7 +16,7 @@ be sent between the controller and the switch, and (3) an OpenFlow
 protocol implementation, providing an open and standard way for a
 controller to talk to the switch.
 
-An OpenFlow Switch can thus serve as a simple datapath element that
+An OpenFlow switch can thus serve as a simple datapath element that
 forwards packets between ports according to flow actions defined by
 the controller using OpenFlow commands.  Example actions are:
 
@@ -24,7 +24,7 @@ the controller using OpenFlow commands.  Example actions are:
     - Drop this flow's packets
     - Encapsulate and forward this flow's packets to the controller.
 
-The OpenFlow Switch is defined in detail in the OpenFlow Switch
+The OpenFlow switch is defined in detail in the OpenFlow switch
 Specification [2].
 
 What's here?

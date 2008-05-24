@@ -137,7 +137,7 @@ The instructions above set up OpenFlow for operation over a plaintext
 TCP connection.  Production use of OpenFlow should use SSL[*] to
 ensure confidentiality and authenticity of traffic among switches and
 controllers.  The source must be configured with --enable-ssl=yes to
-build with ssl support.
+build with SSL support.
 
 To use SSL with OpenFlow, you must set up a public-key infrastructure
 (PKI) including a pair of certificate authorities (CAs), one for
@@ -381,7 +381,7 @@ following instructions to set up remote switches:
 1. Start the datapath and attach it to two or more physical ports as
    described in the previous section.
 
-2. Run the controller in passive tcp mode on the host which will act as
+2. Run the controller in passive TCP mode on the host which will act as
    the controller. In the example below, the controller will bind to
    port 975 (the default) awaiting connections from secure channels. 
 
