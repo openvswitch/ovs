@@ -44,6 +44,8 @@
 #include <stdint.h>
 
 struct buffer;
+struct in_addr;
+struct in6_addr;
 
 struct netdev;
 int netdev_open(const char *name, struct netdev **);
@@ -56,5 +58,7 @@ const char *netdev_get_name(const struct netdev *);
 int netdev_get_mtu(const struct netdev *);
 int netdev_get_speed(const struct netdev *);
 uint32_t netdev_get_features(const struct netdev *);
+bool netdev_get_in4(const struct netdev *, struct in_addr *);
+bool netdev_get_in6(const struct netdev *, struct in6_addr *);
 
 #endif /* netdev.h */

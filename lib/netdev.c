@@ -71,6 +71,8 @@ struct netdev {
     int speed;
     int mtu;
     uint32_t features;
+    struct in_addr in4;
+    struct in6_addr in6;
     int save_flags;
 };
 
@@ -79,10 +81,10 @@ static struct list netdev_list = LIST_INITIALIZER(&netdev_list);
 static void init_netdev(void);
 static int restore_flags(struct netdev *netdev);
 
-/* Check whether device NAME has an IPv4 address assigned to it and, if so, log
- * an error. */
-static void
-check_ipv4_address(const char *name)
+/* Obtains the IPv4 address for 'name' into 'in4'.  Returns true if
+ * successful. */
+static bool
+get_ipv4_address(const char *name, struct in_addr *in4)
 {
     int sock;
     struct ifreq ifr;
@@ -90,35 +92,39 @@ check_ipv4_address(const char *name)
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
         VLOG_WARN("socket(AF_INET): %s", strerror(errno));
-        return;
+        return false;
     }
 
     strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
     ifr.ifr_addr.sa_family = AF_INET;
     if (ioctl(sock, SIOCGIFADDR, &ifr) == 0) {
-        VLOG_ERR("%s device has assigned IP address %s", name,
-                 inet_ntoa(((struct sockaddr_in*) &ifr.ifr_addr)->sin_addr));
+        struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
+        *in4 = sin->sin_addr;
+    } else {
+        in4->s_addr = INADDR_ANY;
     }
 
     close(sock);
+    return true;
 }
 
-/* Check whether device NAME has an IPv6 address assigned to it and, if so, log
- * an error. */
+/* Obtains the IPv6 address for 'name' into 'in6'. */
 static void
-check_ipv6_address(const char *name)
+get_ipv6_address(const char *name, struct in6_addr *in6)
 {
     FILE *file;
     char line[128];
 
     file = fopen("/proc/net/if_inet6", "r");
     if (file == NULL) {
+        /* This most likely indicates that the host doesn't have IPv6 support,
+         * so it's not really a failure condition.*/
+        *in6 = in6addr_any;
         return;
     }
 
     while (fgets(line, sizeof line, file)) {
-        struct in6_addr in6;
-        uint8_t *s6 = in6.s6_addr;
+        uint8_t *s6 = in6->s6_addr;
         char ifname[16 + 1];
 
 #define X8 "%2"SCNx8
@@ -131,12 +137,10 @@ check_ipv6_address(const char *name)
                    ifname) == 17
             && !strcmp(name, ifname))
         {
-            char in6_name[INET6_ADDRSTRLEN + 1];
-            inet_ntop(AF_INET6, &in6, in6_name, sizeof in6_name);
-            VLOG_ERR("%s device has assigned IPv6 address %s",
-                     name, in6_name);
+            return;
         }
     }
+    *in6 = in6addr_any;
 
     fclose(file);
 }
@@ -219,6 +223,8 @@ netdev_open(const char *name, struct netdev **netdev_)
     socklen_t rcvbuf_len;
     size_t rcvbuf;
     uint8_t etheraddr[ETH_ADDR_LEN];
+    struct in_addr in4;
+    struct in6_addr in6;
     int mtu;
     int error;
     struct netdev *netdev;
@@ -297,12 +303,19 @@ netdev_open(const char *name, struct netdev **netdev_)
     }
     mtu = ifr.ifr_mtu;
 
+    if (!get_ipv4_address(name, &in4)) {
+        goto error;
+    }
+    get_ipv6_address(name, &in6);
+
     /* Allocate network device. */
     netdev = xmalloc(sizeof *netdev);
     netdev->name = xstrdup(name);
     netdev->fd = fd;
     memcpy(netdev->etheraddr, etheraddr, sizeof etheraddr);
     netdev->mtu = mtu;
+    netdev->in4 = in4;
+    netdev->in6 = in6;
 
     /* Get speed, features. */
     do_ethtool(netdev);
@@ -327,13 +340,6 @@ netdev_open(const char *name, struct netdev **netdev_)
         netdev_close(netdev);
         return error;
     }
-
-    /* Complain to administrator if any IP addresses are assigned to the
-     * interface.  We warn about this because packets received for that IP
-     * address will be processed both by the kernel TCP/IP stack and by us as a
-     * switch, which produces poor results. */
-    check_ipv4_address(name);
-    check_ipv6_address(name);
 
     /* Success! */
     *netdev_ = netdev;
@@ -536,6 +542,24 @@ uint32_t
 netdev_get_features(const struct netdev *netdev) 
 {
     return netdev->features;
+}
+
+/* If 'netdev' has an assigned IPv4 address, sets '*in4' to that address and
+ * returns true.  Otherwise, returns false. */
+bool
+netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
+{
+    *in4 = netdev->in4;
+    return in4->s_addr != INADDR_ANY;
+}
+
+/* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address and
+ * returns true.  Otherwise, returns false. */
+bool
+netdev_get_in6(const struct netdev *netdev, struct in6_addr *in6)
+{
+    *in6 = netdev->in6;
+    return memcmp(in6, &in6addr_any, sizeof *in6) != 0;
 }
 
 static void restore_all_flags(void *aux);

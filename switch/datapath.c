@@ -217,12 +217,22 @@ int
 dp_add_port(struct datapath *dp, const char *name)
 {
     struct netdev *netdev;
+    struct in6_addr in6;
+    struct in_addr in4;
     struct sw_port *p;
     int error;
 
     error = netdev_open(name, &netdev);
     if (error) {
         return error;
+    }
+    if (netdev_get_in4(netdev, &in4)) {
+        VLOG_ERR("%s device has assigned IP address %s", name, inet_ntoa(in4));
+    }
+    if (netdev_get_in6(netdev, &in6)) {
+        char in6_name[INET6_ADDRSTRLEN + 1];
+        inet_ntop(AF_INET6, &in6, in6_name, sizeof in6_name);
+        VLOG_ERR("%s device has assigned IPv6 address %s", name, in6_name);
     }
 
     for (p = dp->ports; ; p++) {
@@ -664,16 +674,17 @@ dp_send_features_reply(struct datapath *dp, const struct sender *sender)
 void
 dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp)
 {
-    struct sw_port *p;
+    int port_no = ntohs(opp->port_no);
+    if (port_no < OFPP_MAX) {
+        struct sw_port *p = &dp->ports[port_no];
 
-    p = &dp->ports[htons(opp->port_no)];
-
-    /* Make sure the port id hasn't changed since this was sent */
-    if (!p || memcmp(opp->hw_addr, netdev_get_etheraddr(p->netdev),
-                     ETH_ADDR_LEN) != 0) 
-        return;
-        
-    p->flags = htonl(opp->flags);
+        /* Make sure the port id hasn't changed since this was sent */
+        if (!p || memcmp(opp->hw_addr, netdev_get_etheraddr(p->netdev),
+                         ETH_ADDR_LEN) != 0) {
+            return;
+        }
+        p->flags = htonl(opp->flags); 
+    }
 }
 
 static void
