@@ -224,14 +224,16 @@ new_management_connection(const char *nl_name, struct vconn *new_remote)
         VLOG_ERR("could not connect to %s (%s)",
                  nl_name_without_subscription, strerror(retval));
         vconn_close(new_remote);
+        free(nl_name_without_subscription);
         return;
     }
-    free(nl_name_without_subscription);
 
     /* Add it to the relay list. */
     r1 = rconn_new_from_vconn(nl_name_without_subscription, 1, new_local);
     r2 = rconn_new_from_vconn("passive", 1, new_remote);
     relay_create(r1, r2);
+
+    free(nl_name_without_subscription);
 }
 
 static void
