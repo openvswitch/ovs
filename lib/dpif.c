@@ -135,7 +135,10 @@ dpif_recv_openflow(struct dpif *dp, struct buffer **bufferp,
     do {
         buffer_delete(buffer);
         retval = nl_sock_recv(dp->sock, &buffer, wait);
-    } while (retval == ENOBUFS || (!retval && nl_msg_nlmsgerr(buffer, NULL)));
+    } while (retval == ENOBUFS
+             || (!retval
+                 && (nl_msg_nlmsgerr(buffer, NULL)
+                     || nl_msg_nlmsghdr(buffer)->nlmsg_type == NLMSG_DONE)));
     if (retval) {
         if (retval != EAGAIN) {
             VLOG_WARN("dpif_recv_openflow: %s", strerror(retval)); 
