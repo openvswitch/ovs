@@ -795,7 +795,7 @@ vconn_ssl_set_ca_cert_file(const char *file_name)
 
     /* Set up CAs for OpenSSL to trust in verifying the peer's certificate. */
     if (SSL_CTX_load_verify_locations(ctx, file_name, NULL) != 1) {
-        VLOG_ERR("SSL_load_verify_locations: %s",
+        VLOG_ERR("SSL_CTX_load_verify_locations: %s",
                  ERR_error_string(ERR_get_error(), NULL));
         return;
     }
