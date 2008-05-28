@@ -438,66 +438,45 @@ static int dp_maint_func(void *data)
 	return 0;
 }
 
-/*
- * Used as br_handle_frame_hook.  (Cannot run bridge at the same time, even on
- * different set of devices!)  Returns 0 if *pskb should be processed further,
- * 1 if *pskb is handled. */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
-/* Called with rcu_read_lock. */
-static struct sk_buff *dp_frame_hook(struct net_bridge_port *p,
-					 struct sk_buff *skb)
+static void
+do_port_input(struct net_bridge_port *p, struct sk_buff *skb) 
 {
-	struct ethhdr *eh = eth_hdr(skb);
-	struct sk_buff *skb_local = NULL;
-
-
-	if (compare_ether_addr(eh->h_dest, skb->dev->dev_addr) == 0) 
-		return skb;
-
-	if (is_broadcast_ether_addr(eh->h_dest)
-				|| is_multicast_ether_addr(eh->h_dest)
-				|| is_local_ether_addr(eh->h_dest)) 
-		skb_local = skb_clone(skb, GFP_ATOMIC);
-
 	/* Push the Ethernet header back on. */
 	if (skb->protocol == htons(ETH_P_8021Q))
 		skb_push(skb, VLAN_ETH_HLEN);
 	else
 		skb_push(skb, ETH_HLEN);
-
 	fwd_port_input(p->dp->chain, skb, p->port_no);
+}
 
-	return skb_local;
+/*
+ * Used as br_handle_frame_hook.  (Cannot run bridge at the same time, even on
+ * different set of devices!)
+ */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+/* Called with rcu_read_lock. */
+static struct sk_buff *dp_frame_hook(struct net_bridge_port *p,
+					 struct sk_buff *skb)
+{
+	do_port_input(p, skb);
+	return NULL;
 }
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
 static int dp_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 {
-	/* Push the Ethernet header back on. */
-	if ((*pskb)->protocol == htons(ETH_P_8021Q))
-		skb_push(*pskb, VLAN_ETH_HLEN);
-	else
-		skb_push(*pskb, ETH_HLEN);
-
-	fwd_port_input(p->dp->chain, *pskb, p->port_no);
+	do_port_input(p, *pskb);
 	return 1;
 }
-#else 
+#else
 /* NB: This has only been tested on 2.4.35 */
 
 /* Called without any locks (?) */
 static void dp_frame_hook(struct sk_buff *skb)
 {
 	struct net_bridge_port *p = skb->dev->br_port;
-
-	/* Push the Ethernet header back on. */
-	if (skb->protocol == htons(ETH_P_8021Q))
-		skb_push(skb, VLAN_ETH_HLEN);
-	else
-		skb_push(skb, ETH_HLEN);
-
 	if (p) {
 		rcu_read_lock();
-		fwd_port_input(p->dp->chain, skb, p->port_no);
+		do_port_input(p, skb);
 		rcu_read_unlock();
 	} else
 		kfree_skb(skb);
