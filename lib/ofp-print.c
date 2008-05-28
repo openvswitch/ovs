@@ -307,8 +307,10 @@ ofp_print_phy_port(struct ds *string, const struct ofp_phy_port *port)
     }
     name[j] = '\0';
 
-    ds_put_format(string, " %2d(%s): addr:"ETH_ADDR_FMT", speed:%d, flags:%#x, "
-            "feat:%#x\n", ntohs(port->port_no), name, 
+    ds_put_char(string, ' ');
+    ofp_print_port_name(string, ntohs(port->port_no));
+    ds_put_format(string, "(%s): addr:"ETH_ADDR_FMT", speed:%d, flags:%#x, "
+            "feat:%#x\n", name, 
             ETH_ADDR_ARGS(port->hw_addr), ntohl(port->speed),
             ntohl(port->flags), ntohl(port->features));
 }
