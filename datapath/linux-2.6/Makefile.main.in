@@ -24,7 +24,7 @@ check: all
 clean:
 	rm -f $(all_objects) *.ko *_mod.* Module.symvers
 	rm -f `find . -name \*.cmd`
-	for d in $(sources); do			\
+	for d in $(all_sources); do		\
 		if test -h $$d; then		\
 			rm $$d;			\
 		fi;				\
