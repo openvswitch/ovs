@@ -406,12 +406,12 @@ static int del_switch_port(struct net_bridge_port *p)
 /* Called with dp_mutex. */
 static void del_dp(struct datapath *dp)
 {
-	struct net_bridge_port *p;
+	struct net_bridge_port *p, *n;
 
 	kthread_stop(dp->dp_task);
 
 	/* Drop references to DP. */
-	list_for_each_entry_rcu (p, &dp->port_list, node)
+	list_for_each_entry_safe (p, n, &dp->port_list, node)
 		del_switch_port(p);
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
