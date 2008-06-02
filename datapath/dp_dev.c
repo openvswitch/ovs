@@ -126,6 +126,7 @@ void dp_dev_destroy(struct datapath *dp)
 	dp_dev->dp = NULL;
 	synchronize_net();
 	unregister_netdev(dp->netdev);
+	free_netdev(dp->netdev);
 }
 
 int is_dp_dev(struct net_device *netdev) 
