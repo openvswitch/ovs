@@ -408,13 +408,16 @@ static void del_dp(struct datapath *dp)
 {
 	struct net_bridge_port *p;
 
-	dp_dev_destroy(dp);
 	kthread_stop(dp->dp_task);
 
 	/* Drop references to DP. */
 	list_for_each_entry_rcu (p, &dp->port_list, node)
 		del_switch_port(p);
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
+
+	/* Destroy dp->netdev.  (Must follow deleting switch ports since
+	 * dp->local_port has a reference to it.) */
+	dp_dev_destroy(dp);
 
 	/* Wait until no longer in use, then destroy it. */
 	synchronize_rcu();
