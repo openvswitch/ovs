@@ -387,7 +387,8 @@ static int del_switch_port(struct net_bridge_port *p)
 	dev_set_promiscuity(p->dev, -1);
 	rtnl_unlock();
 	list_del_rcu(&p->node);
-	rcu_assign_pointer(p->dp->ports[p->port_no], NULL);
+	if (p->port_no != OFPP_LOCAL)
+		rcu_assign_pointer(p->dp->ports[p->port_no], NULL);
 	rcu_assign_pointer(p->dev->br_port, NULL);
 
 	/* Then wait until no one is still using it, and destroy it. */
