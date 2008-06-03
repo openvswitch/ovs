@@ -19,6 +19,7 @@ openflow_headers = \
 	crc32.h \
 	datapath.h \
 	datapath_t.h \
+	dp_dev.h \
 	flow.h \
 	forward.h \
 	snap.h \

@@ -7,6 +7,7 @@ SUBDIRS += linux-2.4
 endif
 
 EXTRA_DIST = $(dist_headers) $(dist_sources)
+EXTRA_DIST += hwtable-dummy/Modules.mk hwtable-dummy/hwtable-dummy.c
 
 # Suppress warnings about GNU extensions in Modules.mk files.
 AUTOMAKE_OPTIONS = -Wno-portability
