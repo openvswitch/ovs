@@ -56,6 +56,11 @@ static inline unsigned char *skb_mac_header(const struct sk_buff *skb)
 	return skb->mac.raw;
 }
 
+static inline void skb_reset_mac_header(struct sk_buff *skb)
+{
+	skb->mac_header = skb->data;
+}
+
 static inline void skb_set_mac_header(struct sk_buff *skb, const int offset)
 {
 	skb->mac.raw = skb->data + offset;

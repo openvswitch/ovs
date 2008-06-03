@@ -2,6 +2,7 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/rcupdate.h>
+#include <linux/skbuff.h>
 
 #include "datapath.h"
 #include "forward.h"
