@@ -281,6 +281,13 @@ To build for a running instance of Linux 2.4:
 
       % ./configure --with-l24=/lib/modules/`uname -r`/build
 
+If you wish to build OpenFlow for an architecture other than the architecture
+used for compilation, you may specify the kernel architecture string using the
+KARCH variable when invoking the configure script. For example, to build
+OpenFlow for MIPS with Linux 2.4:
+
+      % ./configure --with-l24=/path/to/linux-2.4 KARCH=mips
+
 If you have hardware that supports accelerated OpenFlow switching, and
 you have obtained a hardware table module for your hardware and
 extracted it into the OpenFlow reference distribution source tree,

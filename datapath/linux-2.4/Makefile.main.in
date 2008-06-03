@@ -1,0 +1,70 @@
+# -*- makefile -*-
+builddir = @abs_builddir@
+srcdir = @abs_srcdir@
+top_srcdir = @abs_top_srcdir@
+KSRC = @KSRC24@
+VERSION = @VERSION@
+AC_CC = @CC@
+KARCH = @KARCH@
+
+# File Lists
+include $(srcdir)/../Modules.mk
+include $(srcdir)/Modules.mk
+include @HW_TABLES@
+
+all: default
+default: $(all_links)
+$(foreach m,$(all_modules), \
+  $(foreach s,$($(m)_sources), \
+    $(eval $(notdir $(s)): ; ln -s $(srcdir)/../$(s) .)))
+
+# Verify Kernel Sources
+ifneq ($(shell grep -c 'PATCHLEVEL = 4' $(KSRC)/Makefile),1)
+  $(error Linux kernel source in $(KSRC) not 2.4)
+endif
+
+ifneq (,$(KSRC))
+ifeq (/lib/modules/$(shell uname -r)/source, $(KSRC))
+  KOBJ :=  /lib/modules/$(shell uname -r)/build
+else
+  KOBJ :=  $(KSRC)
+endif
+
+VERSION_FILE := $(KOBJ)/include/linux/version.h
+ifeq (,$(wildcard $(VERSION_FILE)))
+  $(error Linux kernel source not configured - missing version.h)
+endif
+
+CONFIG_FILE  := $(KSRC)/include/linux/autoconf.h
+ifeq (,$(wildcard $(CONFIG_FILE)))
+  $(error Linux kernel source not configured - missing autoconf.h)
+endif
+
+# Determine the Cross-compile string for the kernel, which should just be the
+# c compiler with 'gcc' removed from the end. We're obviously assuming gcc
+# here.
+CROSS_COMPILE = $(shell echo $(AC_CC) | perl -p -e 's/(.*)gcc.*/$$1/')
+
+# Determine if we want to override the ARCH for the kernel
+ifneq (,$(KARCH))
+	ARCH_OVERRIDE := ARCH=$(KARCH)
+else
+	ARCH_OVERRIDE :=
+endif
+
+.PHONY: all distclean distdir clean check
+
+# Invoke the kernel build system
+all:
+	$(MAKE) -C $(KSRC) $(ARCH_OVERRIDE) CROSS_COMPILE=$(CROSS_COMPILE) SUBDIRS=$(PWD) modules
+
+distclean: clean
+distdir: clean
+clean:
+	rm -f *.o *_mod.o .*.o.flags
+	for d in $(all_links); do if test -h $$d; then rm $$d; fi; done
+
+check: all
+install:
+
+endif # (,$(KSRC))

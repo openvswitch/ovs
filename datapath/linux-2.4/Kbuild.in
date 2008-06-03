@@ -1,0 +1,79 @@
+# -*- makefile -*-
+builddir = @abs_builddir@
+srcdir = @abs_srcdir@
+top_srcdir = @abs_top_srcdir@
+KSRC = @KSRC24@
+VERSION = @VERSION@
+
+# File Lists
+include $(srcdir)/../Modules.mk
+include $(srcdir)/Modules.mk
+include @HW_TABLES@
+
+# This is somewhat hacky. We want to include our compatibility headers before
+# any header files in the kernel by the same name. Unfortunately, the only
+# mechanism the kernel provides to add cflags is the EXTRA_CFLAGS variable,
+# which gets inserted into the build command after the internal kernel CFLAGS.
+# Since our stuff needs to come first, we override the variable.
+OF_CFLAGS = -I$(srcdir)/compat-2.4/include -I$(srcdir)/compat-2.4/include-$(ARCH) \
+            -I$(srcdir)/compat-2.4 -I$(srcdir)/.. -I$(srcdir)/../../include \
+						 -I$(builddir)/.. $(CFLAGS) -DVERSION=\"$(VERSION)\"
+override CFLAGS := $(OF_CFLAGS)
+
+# Multipart objects
+list-multi := $(patsubst %,%_mod.o,$(all_modules))
+
+# Module objects that we can build
+obj-m += $(list-multi)
+
+# Object Parts
+define parts_template
+$(1)_mod-objs = $$(patsubst %.c,%.o,$(notdir $($(1)_sources)))
+endef
+$(foreach module,$(all_modules),$(eval $(call parts_template,$(module))))
+
+# Objects that export symbols
+export-objs = $(all_objects)
+
+# Include the kernel's global Rules.make
+include $(TOPDIR)/Rules.make
+
+# Link rules for multi-part objects
+define link_template
+$(1)_mod.o: $($(1)_mod-objs)
+	$(LD) -r -o $$@ $($(1)_mod-objs)
+endef
+$(foreach module,$(all_modules),$(eval $(call link_template,$(module))))
+
+# Build system rewrite May 2008: Bobby Holley <bh10@stanford.edu>
+#
+# A few bits and pieces of this file might be derived from Intel's e1000
+# distribution, with the following license:
+
+################################################################################
+#
+# Intel PRO/1000 Linux driver
+# Copyright(c) 1999 - 2007 Intel Corporation.
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms and conditions of the GNU General Public License,
+# version 2, as published by the Free Software Foundation.
+#
+# This program is distributed in the hope it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
+#
+# The full GNU General Public License is included in this distribution in
+# the file called "COPYING".
+#
+# Contact Information:
+# Linux NICS <linux.nics@intel.com>
+# e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
+# Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
+#
+################################################################################

@@ -21,7 +21,7 @@ NOSTDINC_FLAGS += -I$(srcdir)/compat-2.6 -I$(srcdir)/compat-2.6/include
 obj-m := $(patsubst %,%_mod.o,$(all_modules))
 
 define module_template
-$(1)_mod-y = $$(patsubst %.c,%.o,$($(1)_sources))
+$(1)_mod-y = $$(notdir $$(patsubst %.c,%.o,$($(1)_sources)))
 endef
 
 $(foreach module,$(all_modules),$(eval $(call module_template,$(module))))

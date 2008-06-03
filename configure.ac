@@ -47,6 +47,9 @@ for d in $hw_tables; do
 done
 AC_SUBST(HW_TABLES)
 
+AC_ARG_VAR(KARCH, [Kernel Architecture String])
+AC_SUBST(KARCH)
+
 CHECK_LINUX(l26, 2.6, 2.6, KSRC26, L26_ENABLED)
 CHECK_LINUX(l24, 2.4, 2.4, KSRC24, L24_ENABLED)
 
@@ -119,6 +122,8 @@ third-party/Makefile
 datapath/linux-2.6/Kbuild
 datapath/linux-2.6/Makefile
 datapath/linux-2.6/Makefile.main
-datapath/linux-2.4/Makefile])
+datapath/linux-2.4/Kbuild
+datapath/linux-2.4/Makefile
+datapath/linux-2.4/Makefile.main])
 
 AC_OUTPUT

@@ -9,10 +9,11 @@ include $(srcdir)/../Modules.mk
 include $(srcdir)/Modules.mk
 include @HW_TABLES@
 
-default: $(all_sources)
-$(all_sources):
-	mkdir -p `dirname $@`
-	ln -s $(srcdir)/../$@ $@
+default: $(all_links)
+
+$(foreach m,$(all_modules), \
+  $(foreach s,$($(m)_sources), \
+    $(eval $(notdir $(s)): ; ln -s $(srcdir)/../$(s) $@)))
 
 default:
 distclean: clean
@@ -21,13 +22,8 @@ install:
 all: default
 check: all
 clean:
-	rm -f $(all_objects) *.ko *_mod.* Module.symvers
-	rm -f `find . -name \*.cmd`
-	for d in $(all_sources); do		\
-		if test -h $$d; then		\
-			rm $$d;			\
-		fi;				\
-	done
+	rm -f *.o *.ko *_mod.* Module.symvers *.cmd
+	for d in $(all_links); do if test -h $$d; then rm $$d; fi; done
 
 ifneq ($(KSRC),)
 
