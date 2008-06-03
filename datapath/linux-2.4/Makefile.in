@@ -2,7 +2,6 @@ builddir = @abs_builddir@
 srcdir = @abs_srcdir@
 top_srcdir = @abs_top_srcdir@
 KSRC = @KSRC24@
-VMDIR = @VMDIR@
 VERSION = @VERSION@
 
 # The names vpath and VPATH are very special for GNU Make and Automake.
