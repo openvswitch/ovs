@@ -69,6 +69,7 @@ enum vlog_facility vlog_get_facility_val(const char *name);
         VLOG_MODULE(dpctl)                      \
         VLOG_MODULE(fault)                      \
         VLOG_MODULE(flow)                       \
+        VLOG_MODULE(learning_switch)            \
         VLOG_MODULE(mac_learning)               \
         VLOG_MODULE(netdev)                     \
         VLOG_MODULE(netlink)                    \

@@ -10,6 +10,7 @@ libopenflow_la_SOURCES = \
 	fault.c \
 	flow.c \
 	hash.c \
+	learning-switch.c \
 	list.c \
 	mac-learning.c \
 	netdev.c \

@@ -57,6 +57,8 @@ struct rconn {
     int txq_limit;
     time_t backoff_deadline;
     int backoff;
+    time_t last_connected;
+    unsigned int packets_sent;
 };
 
 static struct rconn *create_rconn(const char *name, int txq_limit,
@@ -168,6 +170,7 @@ rconn_recv(struct rconn *rc)
         struct buffer *buffer;
         int error = vconn_recv(rc->vconn, &buffer);
         if (!error) {
+            rc->last_connected = time(0);
             return buffer;
         } else if (error != EAGAIN) {
             disconnect(rc, error); 
@@ -207,7 +210,7 @@ do_send(struct rconn *rc, struct buffer *b, int txq_limit)
 }
 
 /* Sends 'b' on 'rc'.  Returns 0 if successful, EAGAIN if the send queue is
- * full, otherwise a positive errno value.
+ * full, or ENOTCONN if 'rc' is not currently connected.
  *
  * There is no rconn_send_wait() function: an rconn has a send queue that it
  * takes care of sending if you call rconn_wait(), which will have the side
@@ -237,6 +240,15 @@ rconn_is_full(const struct rconn *rc)
     return rc->txq.n >= rc->txq_limit;
 }
 
+/* Returns the total number of packets successfully sent on the underlying
+ * vconn.  A packet is not counted as sent while it is still queued in the
+ * rconn, only when it has been successfuly passed to the vconn.  */
+unsigned int
+rconn_packets_sent(const struct rconn *rc) 
+{
+    return rc->packets_sent;
+}
+
 /* Returns 'rc''s name (the 'name' argument passed to rconn_new()). */
 const char *
 rconn_get_name(const struct rconn *rc) 
@@ -258,6 +270,14 @@ rconn_is_connected(const struct rconn *rconn)
 {
     return rconn->vconn && !vconn_connect(rconn->vconn);
 }
+
+/* Returns 0 if 'rconn' is connected, otherwise the number of seconds that it
+ * has been disconnected. */
+int
+rconn_disconnected_duration(const struct rconn *rconn) 
+{
+    return rconn_is_connected(rconn) ? 0 : time(0) - rconn->last_connected;
+}
 
 static struct rconn *
 create_rconn(const char *name, int txq_limit, struct vconn *vconn)
@@ -272,6 +292,8 @@ create_rconn(const char *name, int txq_limit, struct vconn *vconn)
     rc->txq_limit = txq_limit;
     rc->backoff_deadline = 0;
     rc->backoff = 0;
+    rc->last_connected = time(0);
+    rc->packets_sent = 0;
     return rc;
 }
 
@@ -286,6 +308,7 @@ try_send(struct rconn *rc)
     if (retval) {
         return retval;
     }
+    rc->packets_sent++;
     queue_advance_head(&rc->txq, next);
     return 0;
 }

@@ -8,6 +8,7 @@ noinst_HEADERS = \
 	fault.h \
 	flow.h \
 	hash.h \
+	learning-switch.h \
 	list.h \
 	mac-learning.h \
 	netdev.h \
