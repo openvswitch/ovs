@@ -12,18 +12,26 @@ include $(srcdir)/../Modules.mk
 include $(srcdir)/Modules.mk
 include @HW_TABLES@
 
-all: default
 default: $(all_links)
 $(foreach m,$(all_modules), \
   $(foreach s,$($(m)_sources), \
     $(eval $(notdir $(s)): ; ln -s $(srcdir)/../$(s) .)))
 
-# Verify Kernel Sources
+distclean: clean
+distdir: clean
+install:
+all: default
+check: all
+clean:
+	rm -f *.o *_mod.o .*.o.flags
+	for d in $(all_links); do if test -h $$d; then rm $$d; fi; done
+
+ifneq (,$(KSRC))
+
 ifneq ($(shell grep -c 'PATCHLEVEL = 4' $(KSRC)/Makefile),1)
   $(error Linux kernel source in $(KSRC) not 2.4)
 endif
 
-ifneq (,$(KSRC))
 ifeq (/lib/modules/$(shell uname -r)/source, $(KSRC))
   KOBJ :=  /lib/modules/$(shell uname -r)/build
 else
@@ -57,14 +65,5 @@ endif
 # Invoke the kernel build system
 all:
 	$(MAKE) -C $(KSRC) $(ARCH_OVERRIDE) CROSS_COMPILE=$(CROSS_COMPILE) SUBDIRS=$(PWD) modules
-
-distclean: clean
-distdir: clean
-clean:
-	rm -f *.o *_mod.o .*.o.flags
-	for d in $(all_links); do if test -h $$d; then rm $$d; fi; done
-
-check: all
-install:
 
 endif # (,$(KSRC))
