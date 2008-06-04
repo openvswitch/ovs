@@ -85,6 +85,8 @@ AC_ARG_ENABLE(
   [ssl=false])
 
 if test "$ssl" = true; then
+dnl Make sure that pkg-config is installed.
+m4_pattern_forbid([PKG_CHECK_MODULES])
 PKG_CHECK_MODULES([SSL], [libssl], 
   [HAVE_OPENSSL=yes],
   [HAVE_OPENSSL=no
