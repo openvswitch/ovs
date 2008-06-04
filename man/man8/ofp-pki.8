@@ -53,7 +53,7 @@ The files \fBpki/controllerca/private/cakey.pem\fR and
 contents that should not be exposed.
 
 .TP
-\fBofp\-pki\fR \fBreq\fR \fINAME\fR
+\fBreq\fR \fINAME\fR
 Generates a new private key named \fINAME\fR\fB-privkey.pem\fR and
 corresponding certificate request named \fINAME\fR\fB-req.pem\fR.
 The private key can be intended for use by a switch or a controller.
@@ -71,7 +71,7 @@ continuing with the \fBsign\fR step.
 exposed.  \fINAME\fR\fB-req.pem\fR may be safely made public.
 
 .TP
-\fBofp\-pki\fR \fBsign\fR \fINAME\fR \fITYPE\fR
+\fBsign\fR \fINAME\fR \fITYPE\fR
 Signs the certificate request named \fINAME\fR\fB-req.pem\fR that was
 produced in the previous step, producing a certificate named
 \fINAME\fR\fB-cert.pem\fR.  \fITYPE\fR, which must be \fBswitch\fR or
@@ -90,7 +90,7 @@ switch or controller for which it is intended.  Its contents may
 safely be made public.
 
 .TP
-\fBofp\-pki\fR \fBreq+sign\fR \fINAME\fR \fITYPE\fR
+\fBreq+sign\fR \fINAME\fR \fITYPE\fR
 Combines the \fBreq\fR and \fBsign\fR commands into a single step,
 outputting all the files produced by each.  The
 \fINAME\fR\fB-privkey.pem\fR and \fINAME\fR\fB-cert.pem\fR files must
@@ -105,7 +105,7 @@ because there is additional potential for exposure of the private
 key.  However, it is also more convenient.
 
 .TP
-\fBofp\-pki\fR \fBverify\fR \fINAME\fR \fITYPE\fR
+\fBverify\fR \fINAME\fR \fITYPE\fR
 Verifies that \fINAME\fR\fB-cert.pem\fR is a valid certificate for the
 given \fITYPE\fR of use (either \fBswitch\fR or \fBcontroller\fR).  If
 the certificate is valid for this use, it prints the message
