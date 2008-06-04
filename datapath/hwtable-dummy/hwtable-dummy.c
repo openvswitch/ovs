@@ -283,7 +283,7 @@ static struct sw_table *table_dummy_create(void)
 	INIT_LIST_HEAD(&td->flows);
 	INIT_LIST_HEAD(&td->iter_flows);
 	spin_lock_init(&td->lock);
-	tl->next_serial = 0
+	td->next_serial = 0;
 
 	INIT_LIST_HEAD(&pending_free_list);
 	spin_lock_init(&pending_free_lock);
