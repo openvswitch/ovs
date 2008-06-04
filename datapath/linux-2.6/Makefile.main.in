@@ -15,7 +15,6 @@ $(foreach m,$(all_modules), \
   $(foreach s,$($(m)_sources), \
     $(eval $(notdir $(s)): ; ln -s $(srcdir)/../$(s) $@)))
 
-default:
 distclean: clean
 distdir: clean
 install:
