@@ -347,7 +347,11 @@ process_packet(struct switch_ *sw, struct buffer *msg)
             process_packet_in(sw, opi);
         }
     } else {
-        ofp_print(stdout, msg->data, msg->size, 2); 
+        if (VLOG_IS_DBG_ENABLED()) {
+            char *p = ofp_to_string(msg->data, msg->size, 2);
+            VLOG_DBG("OpenFlow packet ignored: %s", p);
+            free(p);
+        }
     }
 }
 
