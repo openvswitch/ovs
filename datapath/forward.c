@@ -556,6 +556,19 @@ static struct sk_buff *retrieve_skb(uint32_t id)
 	return skb;
 }
 
+void fwd_discard_all(void) 
+{
+	unsigned long int flags;
+	int i;
+
+	spin_lock_irqsave(&buffer_lock, flags);
+	for (i = 0; i < N_PKT_BUFFERS; i++) {
+		kfree_skb(buffers[i].skb);
+		buffers[i].skb = NULL;
+	}
+	spin_unlock_irqrestore(&buffer_lock, flags);
+}
+
 static void discard_skb(uint32_t id)
 {
 	unsigned long int flags;
@@ -572,10 +585,7 @@ static void discard_skb(uint32_t id)
 
 void fwd_exit(void)
 {
-	int i;
-
-	for (i = 0; i < N_PKT_BUFFERS; i++)
-		kfree_skb(buffers[i].skb);
+	fwd_discard_all();
 }
 
 /* Utility functions. */

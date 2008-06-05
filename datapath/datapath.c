@@ -415,6 +415,11 @@ static void del_dp(struct datapath *dp)
 		del_switch_port(p);
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
+	/* Kill off local_port dev references from buffered packets that have
+	 * associated dst entries. */
+	synchronize_rcu();
+	fwd_discard_all();
+
 	/* Destroy dp->netdev.  (Must follow deleting switch ports since
 	 * dp->local_port has a reference to it.) */
 	dp_dev_destroy(dp);
