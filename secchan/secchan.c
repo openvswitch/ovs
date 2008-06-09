@@ -1,4 +1,4 @@
-/* Copyright (c) 2008 The Board of Trustees of The Leland Stanford
+ /* Copyright (c) 2008 The Board of Trustees of The Leland Stanford
  * Junior University
  * 
  * We are making the OpenFlow specification and associated documentation
@@ -46,6 +46,7 @@
 #include "compiler.h"
 #include "fault.h"
 #include "flow.h"
+#include "learning-switch.h"
 #include "list.h"
 #include "mac-learning.h"
 #include "netdev.h"
@@ -70,12 +71,21 @@ struct half {
     struct buffer *rxbuf;
 };
 
+/* Behavior when the connection to the controller fails. */
+enum fail_mode {
+    FAIL_OPEN,                  /* Act as learning switch. */
+    FAIL_CLOSED                 /* Drop all packets. */
+};
+
 struct relay {
     struct list node;
 
 #define HALF_LOCAL 0
 #define HALF_REMOTE 1
     struct half halves[2];
+
+    bool is_mgmt_conn;
+    struct lswitch *lswitch;
 };
 
 static struct list relays = LIST_INITIALIZER(&relays);
@@ -89,16 +99,25 @@ static uint8_t local_mac[ETH_ADDR_LEN];
 /* MAC learning table for local port. */
 static struct mac_learning *local_ml;
 
+/* -f, --fail: Behavior when the connection to the controller fails. */
+static enum fail_mode fail_mode;
+
+/* -d, --fail-open-delay: Number of seconds after which to fail open, when
+ * fail_mode is FAIL_OPEN. */
+static int fail_open_delay = 30;
+
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
 static void new_management_connection(const char *nl_name, struct vconn *new_remote);
-static void relay_create(struct rconn *local, struct rconn *remote);
+static struct relay *relay_create(struct rconn *local, struct rconn *remote,
+                                  bool is_mgmt_conn);
 static void relay_run(struct relay *);
 static void relay_wait(struct relay *);
 static void relay_destroy(struct relay *);
 
 static bool local_hook(struct relay *r);
+static bool fail_open_hook(struct relay *r);
 
 int
 main(int argc, char *argv[])
@@ -137,7 +156,6 @@ main(int argc, char *argv[])
         listen_vconn = NULL;
     }
 
-
     snprintf(of_name, sizeof of_name, "of%s", nl_name + 3);
     retval = netdev_open(of_name, &of_device);
     if (!retval) {
@@ -169,7 +187,8 @@ main(int argc, char *argv[])
         fatal(retval, "Could not listen for vlog connections");
     }
 
-    relay_create(rconn_new(argv[optind], 1), rconn_new(argv[optind + 1], 1));
+    relay_create(rconn_new(argv[optind], 1), rconn_new(argv[optind + 1], 1),
+                 false);
     for (;;) {
         struct relay *r, *n;
 
@@ -231,13 +250,13 @@ new_management_connection(const char *nl_name, struct vconn *new_remote)
     /* Add it to the relay list. */
     r1 = rconn_new_from_vconn(nl_name_without_subscription, 1, new_local);
     r2 = rconn_new_from_vconn("passive", 1, new_remote);
-    relay_create(r1, r2);
+    relay_create(r1, r2, true);
 
     free(nl_name_without_subscription);
 }
 
-static void
-relay_create(struct rconn *local, struct rconn *remote)
+static struct relay *
+relay_create(struct rconn *local, struct rconn *remote, bool is_mgmt_conn)
 {
     struct relay *r;
     int i;
@@ -248,7 +267,10 @@ relay_create(struct rconn *local, struct rconn *remote)
     for (i = 0; i < 2; i++) {
         r->halves[i].rxbuf = NULL;
     }
+    r->is_mgmt_conn = is_mgmt_conn;
+    r->lswitch = NULL;
     list_push_back(&relays, &r->node);
+    return r;
 }
 
 static void
@@ -270,7 +292,8 @@ relay_run(struct relay *r)
 
             if (!this->rxbuf) {
                 this->rxbuf = rconn_recv(this->rconn);
-                if (this->rxbuf && i == HALF_LOCAL && local_hook(r)) {
+                if (this->rxbuf && !r->is_mgmt_conn && i == HALF_LOCAL
+                    && (local_hook(r) || fail_open_hook(r))) {
                     buffer_delete(this->rxbuf);
                     this->rxbuf = NULL;
                 }
@@ -399,10 +422,49 @@ local_hook(struct relay *r)
     return true;
 }
 
+static bool
+fail_open_hook(struct relay *r)
+{
+    struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
+    struct rconn *local = r->halves[HALF_LOCAL].rconn;
+    struct rconn *remote = r->halves[HALF_REMOTE].rconn;
+    int disconnected_duration;
+
+    if (fail_mode == FAIL_CLOSED) {
+        /* We fail closed, so there's never anything to do. */
+        return false;
+    }
+
+    disconnected_duration = rconn_disconnected_duration(remote);
+    if (disconnected_duration < fail_open_delay) {
+        /* It's not time to fail open yet. */
+        if (r->lswitch && rconn_is_connected(remote)) {
+            /* We're connected, so drop the learning switch. */
+            VLOG_WARN("No longer in fail-open mode");
+            lswitch_destroy(r->lswitch);
+            r->lswitch = NULL;
+        }
+        return false;
+    }
+
+    if (!r->lswitch) {
+        VLOG_WARN("Could not connect to controller for %d seconds, "
+                  "failing open", disconnected_duration);
+        r->lswitch = lswitch_create(local, true, true);
+    }
+
+    /* Do switching. */
+    lswitch_process_packet(r->lswitch, local, msg);
+    rconn_run(local);
+    return true;
+}
+
 static void
 parse_options(int argc, char *argv[]) 
 {
     static struct option long_options[] = {
+        {"fail",        required_argument, 0, 'f'},
+        {"fail-open-delay", required_argument, 0, 'd'},
         {"listen",      required_argument, 0, 'l'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
@@ -421,6 +483,25 @@ parse_options(int argc, char *argv[])
         }
 
         switch (c) {
+        case 'f':
+            if (!strcmp(optarg, "open")) {
+                fail_mode = FAIL_OPEN;
+            } else if (!strcmp(optarg, "closed")) {
+                fail_mode = FAIL_CLOSED;
+            } else {
+                fatal(0,
+                      "-f or --fail argument must be \"open\" or \"closed\"");
+            }
+            break;
+
+        case 'd':
+            fail_open_delay = atoi(optarg);
+            if (fail_open_delay < 1) {
+                fatal(0,
+                      "-d or --fail-open-delay argument must be at least 1");
+            }
+            break;
+
         case 'l':
             if (listen_vconn_name) {
                 fatal(0, "-l or --listen may be only specified once");
@@ -460,6 +541,11 @@ usage(void)
            program_name, program_name);
     vconn_usage(true, true);
     printf("\nNetworking options:\n"
+           "  -f, --fail=open|closed  when controller connection fails:\n"
+           "                            closed (default): drop all packets\n"
+           "                            open: act as learning switch\n"
+           "  -d, --fail-open-delay=SECS  number of seconds after which to\n"
+           "                          fail open if --fail=open (default: 30)\n"
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
            "                          (a passive OpenFlow connection method)\n"
            "\nOther options:\n"
