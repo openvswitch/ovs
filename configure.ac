@@ -109,8 +109,6 @@ AC_CHECK_LIB([dl], [dladdr])
 CFLAGS="$CFLAGS -Wall -Wno-sign-compare"
 
 AC_CONFIG_FILES([Makefile 
-man/Makefile
-man/man8/Makefile
 datapath/Makefile 
 lib/Makefile
 include/Makefile

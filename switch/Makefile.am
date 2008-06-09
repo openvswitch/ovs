@@ -1,6 +1,7 @@
 include ../Make.vars
 
 bin_PROGRAMS = switch
+dist_man_MANS = switch.8
 
 switch_SOURCES = \
 	chain.c \

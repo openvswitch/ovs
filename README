@@ -61,9 +61,8 @@ This distribution includes some additional software as well:
 	- A patch to tcpdump that enables it to parse OpenFlow
           messages.
 
-For installation instructions, read INSTALL.  This distribution also
-includes manpages for each of its userspace programs, in the man/
-directory.
+For installation instructions, read INSTALL.  Each userspace program
+is also accompanied by a manpage.
 
 Platform support
 ----------------
