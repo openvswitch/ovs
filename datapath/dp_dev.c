@@ -29,7 +29,10 @@ int dp_dev_recv(struct net_device *netdev, struct sk_buff *skb)
 	struct dp_dev *dp_dev = dp_dev_priv(netdev);
 	skb->pkt_type = PACKET_HOST;
 	skb->protocol = eth_type_trans(skb, netdev);
-	netif_rx(skb);
+	if (in_interrupt())
+		netif_rx(skb);
+	else
+		netif_rx_ni(skb);
 	netdev->last_rx = jiffies;
 	dp_dev->stats.rx_packets++;
 	dp_dev->stats.rx_bytes += len;
