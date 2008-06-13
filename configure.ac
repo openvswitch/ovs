@@ -6,6 +6,12 @@ AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_LD
 
+AC_ARG_VAR([PERL], [path to Perl interpreter])
+AC_PATH_PROG([PERL], perl, no)
+if test "$PERL" = no; then
+   AC_MSG_ERROR([Perl interpreter not found in $PATH or $PERL.])
+fi
+
 AC_USE_SYSTEM_EXTENSIONS
 
 AC_PROG_LIBTOOL

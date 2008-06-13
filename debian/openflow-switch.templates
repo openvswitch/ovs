@@ -1,0 +1,189 @@
+Template: openflow-switch/netdevs
+Type: multiselect
+_Choices: ${choices}
+_Description: OpenFlow switch network devices:
+ Choose the network devices that should become part of the OpenFlow
+ switch.  At least two devices must be selected for this machine to be
+ a useful switch.  Unselecting all network devices will disable the
+ OpenFlow switch entirely.
+ .
+ The network devices that you select should not be configured with IP
+ or IPv6 addresses, even if the switch contacts the controller over
+ one of the selected network devices.  This is because a running
+ OpenFlow switch takes over network devices at a low level: they
+ become part of the switch and cannot be used for other purposes.
+
+Template: openflow-switch/no-netdevs
+Type: error
+_Description: No network devices were selected.
+ No network devices were selected for inclusion in the OpenFlow switch.
+ The switch will be disabled.
+
+Template: openflow-switch/configured-netdevs
+Type: note
+_Description: Some Network Devices Have IP or IPv6 Addresses
+ The following network devices selected to be part of the OpenFlow switch
+ have IP or IPv6 addresses configured:
+ .
+ ${configured-netdevs}
+ .
+ This is usually a mistake, even if the switch contacts the controller over
+ one of the selected network devices.  This is because a running
+ OpenFlow switch takes over network devices at a low level: they
+ become part of the switch and cannot be used for other purposes.
+ .
+ If this is an unintentional mistake, move back and fix the selection,
+ or de-configure the IP or IPv6 from these network devices.
+
+Template: openflow-switch/band
+Type: select
+_Choices: in-band, out-of-band
+Default: in-band
+_Description: Switch-to-controller access method:
+ The OpenFlow switch must be able to contact the OpenFlow controller over
+ the network.  It can do so in one of two ways:
+ .
+ in-band: A single network is used for OpenFlow traffic and other data
+ traffic; that is, the switch contacts the controller over one of the
+ network devices selected as OpenFlow switch netdevs in the previous
+ question.  This is the most common case.
+ .
+ out-of-band: OpenFlow traffic uses a network separate from the data traffic
+ that it controls.  If this is the case, the control network must already
+ be configured on a network device other than one of those selected as
+ an OpenFlow switch netdev in the previous question.
+
+Template: openflow-switch/switch-ip
+Type: string
+Default: dhcp
+_Description: Switch IP address:
+ For in-band communication with the controller, the OpenFlow switch must
+ be able to determine its own IP address.  Its IP address may be configured
+ statically or dynamically.
+ .
+ For static configuration, specify the switch's IP address as a string.
+ .
+ For dynamic configuration with DHCP (the most common case), specify "dhcp".
+ Configuration with DHCP will only work reliably if the network topology
+ allows the switch to contact the DHCP server before it connects to the
+ OpenFlow controller.
+
+Template: openflow-switch/switch-ip-error
+Type: error
+_Description: The switch IP address is invalid.
+ The switch IP address must specified as "dhcp" or a valid IP address in
+ dotted-octet form (e.g. "1.2.3.4").
+
+Template: openflow-switch/controller-vconn
+Type: string
+_Description: Controller location:
+ Specify how the OpenFlow switch should connect to the OpenFlow controller.
+ The value should be in form "ssl:HOST[:PORT]" to connect to the controller
+ over SSL (recommended for security) or "tcp:HOST[:PORT]" to connect over
+ cleartext TCP.
+
+Template: openflow-switch/controller-vconn-error
+Type: error
+_Description: The controller location is invalid.
+ The controller location must be specifed as "ssl:HOST[:PORT]" to
+ connect to the controller over SSL (recommended for security) or
+ "tcp:HOST[:PORT]" to connect over cleartext TCP.
+
+Template: openflow-switch/pki-host
+Type: string
+_Description: OpenFlow PKI server host name:
+ Specify the host name or IP address of the server that hosts the OpenFlow
+ public key infrastructure (PKI).  This is usually the same host as the
+ OpenFlow controller.
+ .
+ The setup process will connect to the OpenFlow PKI server over
+ HTTP, using the system's configured default HTTP proxy (if any).
+
+Template: openflow-switch/fetch-cacert-failed
+Type: error
+_Description: The switch CA certificate could not be retrieved.
+ Retrieval of ${url} failed, with the following status: "${error}".
+ .
+ Ensure that the OpenFlow PKI server is correctly configured and
+ available on ${pki-host}.  If the system is configured to use an HTTP
+ proxy, also make sure that the HTTP proxy is available and that the
+ PKI server can be reached through it.
+
+Template: openflow-switch/verify-controller-ca
+Type: select
+_Choices: yes, no
+Default: yes
+_Description: Is ${fingerprint} the controller CA's fingerprint?
+ If a man-in-the-middle attack is possible in your network
+ environment, check that the controller CA's fingerprint is really
+ ${fingerprint}.  Answer "yes" if it matches, "no" if
+ there is a discrepancy.
+ .
+ If a man-in-the-middle attack is not a concern, there is no need to
+ verify the fingerprint.  Simply answer "yes".
+
+Template: openflow-switch/send-cert-req
+Type: select
+_Choices: yes, no
+Default: yes
+_Description: Send certificate request to switch CA?
+ Before it can connect to the controller over SSL, the OpenFlow
+ switch's key must be signed by the switch certificate authority (CA)
+ located on the OpenFlow PKI server, which is usually collocated with
+ the OpenFlow controller.  A signing request can be sent to the PKI
+ server now.
+ .
+ Answer "yes" to send a signing request to the switch CA now.  This is
+ ordinarily the correct choice.  There is no harm in sending a given
+ signing request more than once.
+ .
+ Answer "no" to skip sending a signing request to the switch CA.
+ Unless the request has already been sent to the switch CA, manual
+ sending of the request and signing will be necessary.
+
+Template: openflow-switch/send-cert-req-failed
+Type: error
+_Description: The certificate request could not be sent.
+ Posting to ${url} failed, with the following status: "${error}".
+ .
+ Ensure that the OpenFlow PKI server is correctly configured and
+ available on ${pki-host}.
+
+Template: openflow-switch/fetch-switch-cert
+Type: select
+_Choices: yes, no
+_Description: Fetch signed switch certificate from PKI server?
+ Before it can connect to the controller over SSL, the OpenFlow
+ switch's key must be signed by the switch certificate authority (CA)
+ located on the OpenFlow PKI server, which is usually collocated with
+ the OpenFlow controller.
+ .
+ At this point, a signing request has been sent to the switch CA (or
+ sending a request has been manually skipped), but the signed
+ certificate has not yet been retrieved.  Manual action may need to be
+ taken at the PKI server to approve the signing request.
+ .
+ Answer "yes" to attempt to retrieve the signed switch certificate
+ from the switch CA.  If the switch certificate request has been
+ signed at the PKI server, this is the correct choice.
+ .
+ Answer "no" to postpone switch configuration.  The configuration
+ process must be restarted later, when the switch certificate request
+ has been signed.
+
+Template: openflow-switch/fetch-switch-cert-failed
+Type: error
+_Description: Signed switch certificate could not be retrieved.
+ The signed switch certificate could not be retrieved from the switch
+ CA: retrieval of ${url} failed, with the following status: "${error}".
+ .
+ This probably indicates that the switch's certificate request has not
+ yet been signed.  If this is the problem, it may be fixed by signing
+ the certificate request at ${pki-host}, then trying to fetch the
+ signed switch certificate again.
+
+Template: openflow-switch/complete
+Type: note
+_Description: OpenFlow Switch Setup Finished
+ Setup of this OpenFlow switch is finished.  Complete the setup procedure
+ to enable the switch.

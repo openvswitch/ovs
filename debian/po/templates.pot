@@ -1,0 +1,432 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: openflow-dev@lists.stanford.edu\n"
+"POT-Creation-Date: 2008-06-12 14:45-0700\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: multiselect
+#. Choices
+#: ../openflow-switch.templates:1001
+msgid "${choices}"
+msgstr ""
+
+#. Type: multiselect
+#. Description
+#: ../openflow-switch.templates:1002
+msgid "OpenFlow switch network devices:"
+msgstr ""
+
+#. Type: multiselect
+#. Description
+#: ../openflow-switch.templates:1002
+msgid ""
+"Choose the network devices that should become part of the OpenFlow switch.  "
+"At least two devices must be selected for this machine to be a useful "
+"switch.  Unselecting all network devices will disable the OpenFlow switch "
+"entirely."
+msgstr ""
+
+#. Type: multiselect
+#. Description
+#: ../openflow-switch.templates:1002
+msgid ""
+"The network devices that you select should not be configured with IP or IPv6 "
+"addresses, even if the switch contacts the controller over one of the "
+"selected network devices.  This is because a running OpenFlow switch takes "
+"over network devices at a low level: they become part of the switch and "
+"cannot be used for other purposes."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:2001
+msgid "No network devices were selected."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:2001
+msgid ""
+"No network devices were selected for inclusion in the OpenFlow switch. The "
+"switch will be disabled."
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../openflow-switch.templates:3001
+msgid "Some Network Devices Have IP or IPv6 Addresses"
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../openflow-switch.templates:3001
+msgid ""
+"The following network devices selected to be part of the OpenFlow switch "
+"have IP or IPv6 addresses configured:"
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../openflow-switch.templates:3001
+msgid "${configured-netdevs}"
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../openflow-switch.templates:3001
+msgid ""
+"This is usually a mistake, even if the switch contacts the controller over "
+"one of the selected network devices.  This is because a running OpenFlow "
+"switch takes over network devices at a low level: they become part of the "
+"switch and cannot be used for other purposes."
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../openflow-switch.templates:3001
+msgid ""
+"If this is an unintentional mistake, move back and fix the selection, or de-"
+"configure the IP or IPv6 from these network devices."
+msgstr ""
+
+#. Type: select
+#. Choices
+#: ../openflow-switch.templates:4001
+msgid "in-band, out-of-band"
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:4002
+msgid "Switch-to-controller access method:"
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:4002
+msgid ""
+"The OpenFlow switch must be able to contact the OpenFlow controller over the "
+"network.  It can do so in one of two ways:"
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:4002
+msgid ""
+"in-band: A single network is used for OpenFlow traffic and other data "
+"traffic; that is, the switch contacts the controller over one of the network "
+"devices selected as OpenFlow switch netdevs in the previous question.  This "
+"is the most common case."
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:4002
+msgid ""
+"out-of-band: OpenFlow traffic uses a network separate from the data traffic "
+"that it controls.  If this is the case, the control network must already be "
+"configured on a network device other than one of those selected as an "
+"OpenFlow switch netdev in the previous question."
+msgstr ""
+
+#. Type: string
+#. Description
+#: ../openflow-switch.templates:5001
+msgid "Switch IP address:"
+msgstr ""
+
+#. Type: string
+#. Description
+#: ../openflow-switch.templates:5001
+msgid ""
+"For in-band communication with the controller, the OpenFlow switch must be "
+"able to determine its own IP address.  Its IP address may be configured "
+"statically or dynamically."
+msgstr ""
+
+#. Type: string
+#. Description
+#: ../openflow-switch.templates:5001
+msgid "For static configuration, specify the switch's IP address as a string."
+msgstr ""
+
+#. Type: string
+#. Description
+#: ../openflow-switch.templates:5001
+msgid ""
+"For dynamic configuration with DHCP (the most common case), specify \"dhcp"
+"\". Configuration with DHCP will only work reliably if the network topology "
+"allows the switch to contact the DHCP server before it connects to the "
+"OpenFlow controller."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:6001
+msgid "The switch IP address is invalid."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:6001
+msgid ""
+"The switch IP address must specified as \"dhcp\" or a valid IP address in "
+"dotted-octet form (e.g. \"1.2.3.4\")."
+msgstr ""
+
+#. Type: string
+#. Description
+#: ../openflow-switch.templates:7001
+msgid "Controller location:"
+msgstr ""
+
+#. Type: string
+#. Description
+#: ../openflow-switch.templates:7001
+msgid ""
+"Specify how the OpenFlow switch should connect to the OpenFlow controller. "
+"The value should be in form \"ssl:HOST[:PORT]\" to connect to the controller "
+"over SSL (recommended for security) or \"tcp:HOST[:PORT]\" to connect over "
+"cleartext TCP."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:8001
+msgid "The controller location is invalid."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:8001
+msgid ""
+"The controller location must be specifed as \"ssl:HOST[:PORT]\" to connect "
+"to the controller over SSL (recommended for security) or \"tcp:HOST[:PORT]\" "
+"to connect over cleartext TCP."
+msgstr ""
+
+#. Type: string
+#. Description
+#: ../openflow-switch.templates:9001
+msgid "OpenFlow PKI server host name:"
+msgstr ""
+
+#. Type: string
+#. Description
+#: ../openflow-switch.templates:9001
+msgid ""
+"Specify the host name or IP address of the server that hosts the OpenFlow "
+"public key infrastructure (PKI).  This is usually the same host as the "
+"OpenFlow controller."
+msgstr ""
+
+#. Type: string
+#. Description
+#: ../openflow-switch.templates:9001
+msgid ""
+"The setup process will connect to the OpenFlow PKI server over HTTP, using "
+"the system's configured default HTTP proxy (if any)."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:10001
+msgid "The switch CA certificate could not be retrieved."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:10001
+msgid "Retrieval of ${url} failed, with the following status: \"${error}\"."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:10001
+msgid ""
+"Ensure that the OpenFlow PKI server is correctly configured and available on "
+"${pki-host}.  If the system is configured to use an HTTP proxy, also make "
+"sure that the HTTP proxy is available and that the PKI server can be reached "
+"through it."
+msgstr ""
+
+#. Type: select
+#. Choices
+#. Type: select
+#. Choices
+#. Type: select
+#. Choices
+#: ../openflow-switch.templates:11001 ../openflow-switch.templates:12001
+#: ../openflow-switch.templates:14001
+msgid "yes, no"
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:11002
+msgid "Is ${fingerprint} the controller CA's fingerprint?"
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:11002
+msgid ""
+"If a man-in-the-middle attack is possible in your network environment, check "
+"that the controller CA's fingerprint is really ${fingerprint}.  Answer \"yes"
+"\" if it matches, \"no\" if there is a discrepancy."
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:11002
+msgid ""
+"If a man-in-the-middle attack is not a concern, there is no need to verify "
+"the fingerprint.  Simply answer \"yes\"."
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:12002
+msgid "Send certificate request to switch CA?"
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:12002
+msgid ""
+"Before it can connect to the controller over SSL, the OpenFlow switch's key "
+"must be signed by the switch certificate authority (CA) located on the "
+"OpenFlow PKI server, which is usually collocated with the OpenFlow "
+"controller.  A signing request can be sent to the PKI server now."
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:12002
+msgid ""
+"Answer \"yes\" to send a signing request to the switch CA now.  This is "
+"ordinarily the correct choice.  There is no harm in sending a given signing "
+"request more than once."
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:12002
+msgid ""
+"Answer \"no\" to skip sending a signing request to the switch CA. Unless the "
+"request has already been sent to the switch CA, manual sending of the "
+"request and signing will be necessary."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:13001
+msgid "The certificate request could not be sent."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:13001
+msgid "Posting to ${url} failed, with the following status: \"${error}\"."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:13001
+msgid ""
+"Ensure that the OpenFlow PKI server is correctly configured and available on "
+"${pki-host}."
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:14002
+msgid "Fetch signed switch certificate from PKI server?"
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:14002
+msgid ""
+"Before it can connect to the controller over SSL, the OpenFlow switch's key "
+"must be signed by the switch certificate authority (CA) located on the "
+"OpenFlow PKI server, which is usually collocated with the OpenFlow "
+"controller."
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:14002
+msgid ""
+"At this point, a signing request has been sent to the switch CA (or sending "
+"a request has been manually skipped), but the signed certificate has not yet "
+"been retrieved.  Manual action may need to be taken at the PKI server to "
+"approve the signing request."
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:14002
+msgid ""
+"Answer \"yes\" to attempt to retrieve the signed switch certificate from the "
+"switch CA.  If the switch certificate request has been signed at the PKI "
+"server, this is the correct choice."
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:14002
+msgid ""
+"Answer \"no\" to postpone switch configuration.  The configuration process "
+"must be restarted later, when the switch certificate request has been signed."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:15001
+msgid "Signed switch certificate could not be retrieved."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:15001
+msgid ""
+"The signed switch certificate could not be retrieved from the switch CA: "
+"retrieval of ${url} failed, with the following status: \"${error}\"."
+msgstr ""
+
+#. Type: error
+#. Description
+#: ../openflow-switch.templates:15001
+msgid ""
+"This probably indicates that the switch's certificate request has not yet "
+"been signed.  If this is the problem, it may be fixed by signing the "
+"certificate request at ${pki-host}, then trying to fetch the signed switch "
+"certificate again."
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../openflow-switch.templates:16001
+msgid "OpenFlow Switch Setup Finished"
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../openflow-switch.templates:16001
+msgid ""
+"Setup of this OpenFlow switch is finished.  Complete the setup procedure to "
+"enable the switch."
+msgstr ""

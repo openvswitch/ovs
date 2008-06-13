@@ -1,0 +1,15 @@
+README.Debian for openflow-switch
+---------------------------------
+
+* The switch must be configured before it can be used.  To configure
+  it interactively, run the ofp-switch-setup program.  Alternatively,
+  edit /etc/default/openflow-switch by hand, then start the switch
+  manually with "/etc/init.d/openflow-switch start".
+
+* To use the Linux kernel-based switch implementation, you will need
+  to build and install the OpenFlow kernel module.  To do so, install
+  the openflow-datapath-source package, then follow the instructions
+  given in /usr/share/doc/openflow-datapath-source/README.Debian
+
+* This package does not yet support the userspace switch
+  implementation.

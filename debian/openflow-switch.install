@@ -1,0 +1,4 @@
+switch/switch usr/sbin
+secchan/secchan usr/sbin
+utilities/dpctl usr/sbin
+debian/ofp-switch-setup usr/sbin

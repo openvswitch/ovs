@@ -1,0 +1,19 @@
+Source: openflow
+Section: net
+Priority: extra
+Maintainer: OpenFlow Team <openflow-dev@lists.stanford.edu>
+Build-Depends: debhelper (>= 5.0.37)
+Standards-Version: 3.7.3
+
+Package: openflow-datapath-module-_KVERS_
+Architecture: any
+Recommends: kernel-image-_KVERS_, openflow-switch
+Provides: openflow-datapath-module
+Description: OpenFlow Linux datapath kernel module
+ This package contains the OpenFlow loadable datapath kernel modules for
+ the kernel-image-_KVERS_ package.
+ .
+ If you compiled a custom kernel, you will most likely need to compile
+ a custom version of this module as well.  The openflow-datapath-source
+ package has been provided for this purpose.  Refer to README.Debian
+ provided in that package for further instructions.

@@ -1,0 +1,5 @@
+README.Debian for openflow-controller
+-------------------------------------
+
+* To reconfigure the controller, edit /etc/default/openflow-controller
+  and run "/etc/init.d/openflow-controller restart".

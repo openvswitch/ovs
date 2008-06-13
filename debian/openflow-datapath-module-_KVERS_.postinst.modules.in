@@ -1,0 +1,14 @@
+#!/bin/sh
+# postinst script for #PACKAGE#
+#
+# see: dh_installdeb(1)
+
+set -e
+
+depmod -a
+
+#DEBHELPER#
+
+exit 0
+
+

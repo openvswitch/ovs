@@ -1,0 +1,4 @@
+debian/ofp-switch-setup.8
+secchan/secchan.8
+switch/switch.8
+utilities/dpctl.8

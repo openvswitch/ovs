@@ -1,0 +1,77 @@
+# This is a POSIX shell fragment                -*- sh -*-
+
+# To configure the secure channel, fill in the following properly and
+# uncomment them.  Afterward, the secure channel will come up
+# automatically at boot time.  It can be started immediately with
+#       /etc/init.d/openflow-switch start
+# Alternatively, use the ofp-switch-setup program to do everything
+# automatically.
+
+# NETDEVS: Which network devices should the OpenFlow switch include?
+#
+# List the network devices that should become part of the OpenFlow
+# switch, separated by spaces.  At least two devices must be selected
+# for this machine to be a useful switch.  Unselecting all network
+# devices will disable the OpenFlow switch entirely.
+# 
+# The network devices that you select should not be configured with IP
+# or IPv6 addresses, even if the switch contacts the controller over
+# one of the selected network devices.  This is because a running
+# OpenFlow switch takes over network devices at a low level: they
+# become part of the switch and cannot be used for other purposes.
+#NETDEVS=""
+
+# IN_BAND: The OpenFlow switch must be able to contact the OpenFlow
+# controller over the network.  It can do so in one of two ways:
+# 
+# * in-band: A single network is used for OpenFlow traffic and other
+#   data traffic; that is, the switch contacts the controller over one
+#   of the network devices selected as OpenFlow switch ports in the
+#   previous question.  This is the most common case.
+# 
+# * out-of-band: OpenFlow traffic uses a network separate from the
+#   data traffic that it controls.  If this is the case, the control
+#   network must already be configured on a network device other than
+#   one of those selected as an OpenFlow switch port in the previous
+#   question.
+#
+# Set IN_BAND to yes for in-band control, or to no for out-of-band
+# control.
+IN_BAND=yes
+
+# SWITCH_IP: For in-band communication with the controller, the
+# OpenFlow switch must be able to determine its own IP address.  Its
+# IP address may be configured statically or dynamically:
+# 
+# * For static configuration, specify the switch's IP address as a
+#   string.
+# 
+# * For dynamic configuration with DHCP (the most common case),
+#   specify "dhcp".  Configuration with DHCP will only work reliably
+#   if the network topology allows the switch to contact the DHCP
+#   server before it connects to the OpenFlow controller.
+#
+# If IN_BAND is set to "no" above, this setting has no effect.
+SWITCH_IP=dhcp
+
+# CONTROLLER: Location of controller.
+# One of the following formats:
+#  tcp:HOST[:PORT]         via TCP to PORT (default: 975) on HOST
+#  ssl:HOST[:PORT]         via SSL to PORT (default: 976) on HOST
+# The default below assumes that the controller is running locally.
+#CONTROLLER="tcp:127.0.0.1"
+
+# PRIVKEY: Name of file containing switch's private key.
+# Required if SSL enabled.
+#PRIVKEY=/etc/openflow-switch/of0-privkey.pem
+
+# CERT: Name of file containing certificate for private key.
+# Required if SSL enabled.
+#CERT=/etc/openflow-switch/of0-cert.pem
+
+# CACERT: Name of file containing controller CA certificate.
+# Required if SSL enabled.
+#CACERT=/etc/openflow-switch/cacert.pem
+
+# Additional options to pass to secchan, e.g. "--fail=open"
+DAEMON_OPTS=""

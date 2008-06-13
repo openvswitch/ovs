@@ -1,0 +1,9 @@
+*.debhelper
+/files
+/openflow
+/openflow-common
+/openflow-controller
+/openflow-pki
+/openflow-switch
+/openflow-datapath-source
+*.substvars

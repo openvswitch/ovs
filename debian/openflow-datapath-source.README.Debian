@@ -1,0 +1,31 @@
+OpenFlow for Debian
+-------------------
+
+* How do I build this module the Debian way?
+
+    - Building with module-assistant:
+
+        $ module-assistant auto-install openflow
+      or
+        $ m-a a-i openflow
+
+      If kernel source or headers are in a non-standard directory, add
+      the option -k /path/to/kernel/source with the correct path.
+
+    - Building with make-kpkg
+
+        $ cd /usr/src/
+        $ tar jxvf openflow.tar.bz2
+        $ cd /usr/src/kernel-source-2.6.9
+        $ make-kpkg --added-modules=openflow modules
+
+    - Building without make-kpkg
+
+        $ cd /usr/src/
+        $ tar jxvf openflow.tar.bz2
+        $ cd modules/openflow
+        $ fakeroot debian/rules kdist_image
+
+      If you run this as root, fakeroot is not needed.
+
+ -- OpenFlow Team <openflow-dev@lists.stanford.edu>, Thu, 12 Jun 2008 16:42:38 -0700

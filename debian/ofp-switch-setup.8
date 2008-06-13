@@ -1,0 +1,41 @@
+.TH ofp-switch-setup 8 "June 2008" "OpenFlow" "OpenFlow Manual"
+
+.SH NAME
+ofp\-switch\-setup \- interactive setup for OpenFlow switch
+
+.SH SYNOPSIS
+.B ofp\-switch\-setup
+
+.SH DESCRIPTION
+The \fBofp\-switch\-setup\fR program is an interactive program that
+assists the system administrator in configuring an OpenFlow switch,
+including the underlying public key infrastructure (PKI).
+
+.SH OPTIONS
+ofp\-switch\-setup does not accept any command-line options.
+
+.SH FILES
+.IP /etc/default/openflow-switch
+Main configuration file for OpenFlow switch.
+
+.IP /etc/openflow-switch/cacert.pem
+Default location of CA certificate for OpenFlow controllers.
+
+.IP /etc/openflow-switch/of0-cert.pem
+Default location of certificate for the OpenFlow switch's private key.
+
+.IP /etc/openflow-switch/of0-privkey.pem
+Default location of the OpenFlow switch's private key.  This file
+should be readable only by \fBroot\fR.
+
+.IP /etc/openflow-switch/of0-req.pem
+Default location of certificate request for the OpenFlow switch's
+certificate.  This file is not used after the signed certificate
+(typically \fB/etc/openflow-switch/of0-cert.pem\fR, above) has been
+obtained from the OpenFlow PKI server.
+
+.SH "SEE ALSO"
+
+.BR ofp-pki (8),
+.BR dpctl (8),
+.BR secchan (8)

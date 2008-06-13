@@ -1,0 +1,145 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+#
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+#
+# Modified to make a template file for a multi-binary package with separated
+# build-arch and build-indep targets  by Bill Allombert 2001
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+# This has to be exported to make some magic below work.
+export DH_OPTIONS
+
+# prefix of the target package name
+PACKAGE=openflow-datapath-module
+# modifieable for experiments or debugging m-a
+MA_DIR ?= /usr/share/modass
+# load generic variable handling
+-include $(MA_DIR)/include/generic.make
+# load default rules
+-include $(MA_DIR)/include/common-rules.make
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	test -e configure || ./boot.sh
+	test -e Makefile || \
+		./configure --prefix=/usr --localstatedir=/var --enable-ssl
+	touch configure-stamp
+
+#Architecture 
+build: build-arch build-indep
+
+build-arch: build-arch-stamp
+build-arch-stamp: configure-stamp 
+	$(MAKE)
+	touch $@
+
+build-indep: build-indep-stamp
+build-indep-stamp: configure-stamp 
+	$(MAKE) dist distdir=openflow
+	touch $@
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-arch-stamp build-indep-stamp configure-stamp
+	[ ! -f Makefile ] || $(MAKE) distclean
+	dh_clean 
+	debconf-updatepo
+
+MAJOR=$(shell echo $(KVERS) | sed -e 's/\(...\).*/\1/')
+ifeq ($(MAJOR),2.6)
+KO=k
+l2x=l26
+dpdir=datapath/linux-2.6
+else
+KO=
+l2x=l24
+dpdir=datapath/linux-2.4
+endif
+
+kdist_clean:
+	dh_clean
+	make KERNELDIR=$(KSRC) KVERREL=$(KVERS) clean
+
+kdist_config: prep-deb-files
+
+binary-modules: DSTDIR = $(CURDIR)/debian/$(PKGNAME)/lib/modules/$(KVERS)
+binary-modules: prep-deb-files
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	tar xzf openflow.tar.gz
+	cd openflow && ./configure --with-$(l2x)=$(KSRC)
+	cd openflow && $(MAKE) -C $(dpdir)
+	install -d -m755 $(DSTDIR)
+	install -m644 openflow/$(dpdir)/*_mod.$(KO)o $(DSTDIR)/
+	dh_installdocs
+	dh_installchangelogs
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol -- -v$(VERSION)
+	dh_md5sums
+	dh_builddeb --destdir=$(DEB_DESTDIR)
+
+install: install-indep install-arch
+install-indep: MODDIR = $(CURDIR)/debian/openflow-datapath-source/usr/src/modules/openflow-datapath
+install-indep: build-indep
+	dh_testdir
+	dh_testroot
+	dh_clean -k -i 
+	dh_installdirs -i
+	cp openflow.tar.gz $(MODDIR)
+	cd debian; cp changelog control compat *.modules.in rules $(MODDIR)/debian
+	cd debian/openflow-datapath-source/usr/src && tar -c modules | bzip2 -9 > openflow-datapath.tar.bz2 && rm -rf modules
+	install -m644 debian/openflow-pki.apache2 debian/openflow-pki/etc/apache2/sites-available/openflow-pki
+	dh_install -i
+
+install-arch: build-arch
+	dh_testdir
+	dh_testroot
+	dh_clean -k -s 
+	dh_installdirs -s
+	$(MAKE) DESTDIR=$(CURDIR)/debian/openflow install
+	cp debian/openflow-switch.overrides debian/openflow-switch/usr/share/lintian/overrides/openflow-switch
+	dh_install -s
+
+# Must not depend on anything. This is to be called by
+# binary-arch/binary-indep
+# in another 'make' thread.
+binary-common:
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs 
+	dh_installdocs
+	dh_installexamples
+	dh_installdebconf
+#	dh_installlogrotate
+	dh_installinit
+	dh_installman
+	dh_link
+	dh_strip
+	dh_compress 
+	dh_fixperms
+	dh_perl
+	dh_makeshlibs
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+binary-indep: install-indep
+	$(MAKE) -f debian/rules DH_OPTIONS=-i binary-common
+binary-arch: install-arch
+	$(MAKE) -f debian/rules DH_OPTIONS=-s binary-common
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary-arch binary install install-indep install-arch configure

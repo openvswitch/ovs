@@ -1,4 +1,7 @@
 /Makefile
 /Makefile.in
 /dpctl
+/ofp-pki
+/ofp-pki-cgi
+/ofp-pki.8
 /vlogconf
