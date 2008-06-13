@@ -501,10 +501,16 @@ str_to_action(const char *str, struct ofp_action *action)
 {
     uint16_t port;
 
-    if (!strcasecmp(str, "flood")) {
+    if (!strcasecmp(str, "normal")) {
+        port = OFPP_NORMAL;
+    } else if (!strcasecmp(str, "flood")) {
         port = OFPP_FLOOD;
+    } else if (!strcasecmp(str, "all")) {
+        port = OFPP_ALL;
     } else if (!strcasecmp(str, "controller")) {
         port = OFPP_CONTROLLER;
+    } else if (!strcasecmp(str, "local")) {
+        port = OFPP_LOCAL;
     } else {
         port = str_to_int(str);
     }
@@ -551,9 +557,9 @@ str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action,
     }
     memset(match, 0, sizeof *match);
     wildcards = OFPFW_ALL;
-    for (name = strtok(string, "="), value = strtok(NULL, " \t\n");
+    for (name = strtok(string, "="), value = strtok(NULL, ", \t\r\n");
          name && value;
-         name = strtok(NULL, "="), value = strtok(NULL, " \t\n"))
+         name = strtok(NULL, "="), value = strtok(NULL, ", \t\r\n"))
     {
         const struct field *f;
         void *data;
@@ -592,7 +598,7 @@ str_to_flow(char *string, struct ofp_match *match, struct ofp_action *action,
 
     found:
         data = (char *) match + f->offset;
-        if (!strcmp(value, "*")) {
+        if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
             wildcards |= f->wildcard;
         } else {
             wildcards &= ~f->wildcard;
