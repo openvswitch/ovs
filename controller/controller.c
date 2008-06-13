@@ -290,6 +290,7 @@ usage(void)
            "  -P, --pidfile[=FILE]    create pidfile (default: %s/controller.pid)\n"
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"
+           "  -v, --verbose=MODULE:FACILITY:LEVEL  configure logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n",

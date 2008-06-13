@@ -548,9 +548,10 @@ parse_options(int argc, char *argv[])
 static void
 usage(void)
 {
-    printf("%s: Secure Channel, a relay for OpenFlow messages.\n"
-           "usage: %s [OPTIONS] LOCAL REMOTE\n"
-           "where LOCAL and REMOTE are active OpenFlow connection methods.\n",
+    printf("%s: secure channel, a relay for OpenFlow messages.\n"
+           "usage: %s [OPTIONS] nl:DP_IDX CONTROLLER\n"
+           "where nl:DP_IDX is a datapath that has been added with dpctl\n"
+           "and CONTROLLER is an active OpenFlow connection method.\n",
            program_name, program_name);
     vconn_usage(true, true);
     printf("\nNetworking options:\n"
@@ -564,6 +565,7 @@ usage(void)
            "\nOther options:\n"
            "  -D, --detach            run in background as daemon\n"
            "  -P, --pidfile[=FILE]    create pidfile (default: %s/secchan.pid)\n"
+           "  -v, --verbose=MODULE:FACILITY:LEVEL  configure logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n",

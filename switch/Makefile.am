@@ -1,7 +1,7 @@
 include ../Make.vars
 
 bin_PROGRAMS = switch
-dist_man_MANS = switch.8
+man_MANS = switch.8
 
 switch_SOURCES = \
 	chain.c \
@@ -18,3 +18,8 @@ switch_SOURCES = \
 	table-linear.c
 
 switch_LDADD = ../lib/libopenflow.la -ldl
+
+EXTRA_DIST = switch.8.in
+DISTCLEANFILES = switch.8
+switch.8: switch.8.in Makefile
+	($(do_subst) && $(ro_man)) < $(srcdir)/switch.8.in > switch.8

@@ -1,11 +1,11 @@
 .TH dpctl 8 "May 2008" "OpenFlow" "OpenFlow Manual"
 
 .SH NAME
-dpctl \- command line tool to administer OpenFlow datapaths
+dpctl \- administer OpenFlow datapaths
 
 .SH SYNOPSIS
 .B dpctl
-[OPTIONS] COMMAND [SWITCH] [ARGS...]
+[\fIoptions\fR] \fIcommand \fR[\fIswitch\fR] [\fIargs\fR&...]
 
 .SH DESCRIPTION
 The
@@ -17,30 +17,27 @@ OpenFlow kernel module,
 .B dpctl
 is used to add, delete, modify, and monitor datapaths.  
 
-
-.SH OPTIONS
-.TP
-.BR \-h ", " \-\^\-help
-Prints a brief help message to the console.
+Most \fBdpctl\fR commands take an argument that specifies the
+method for connecting to an OpenFlow switch.  The following connection
+methods are supported:
 
 .TP
-.BR \-v ", " \-\^\-verbose
-Prints debug messages to the console.
+\fBnl:\fIdp_idx\fR
+The local Netlink datapath numbered \fIdp_idx\fR.  This form requires
+that the local host has the OpenFlow kernel module for Linux loaded.
 
 .TP
-.BR \-V ", " \-\^\-version
-Prints version information to the console.
+\fBssl:\fIhost\fR[\fB:\fIport\fR]
+The specified SSL \fIport\fR (default: 976) on the given remote
+\fIhost\fR.  The \fB--private-key\fR, \fB--certificate\fR, and
+\fB--ca-cert\fR options are mandatory when this form is used.
+
+.TP
+\fBtcp:\fIhost\fR[\fB:\fIport\fR]
+The specified TCP \fIport\fR (default: 975) on the given remote
+\fIhost\fR.
 
 .SH COMMANDS
-
-Depending on the type of datapath, \fBdpctl\fR communicates using 
-different connection methods.  As such, one must provide the method to 
-use as the \fISWITCH\fR argument.  To communicate with userspace,
-\fItcp:host[:port]\fR is used.  The netlink interface is used to 
-communicate with the kernel module directly.  This uses the form 
-\fInl:DP_IDX\fR, where \fIDP_IDX\fR is explained below.
-
-.B COMMANDS FOR THE KERNEL MODULE
 
 With the \fBdpctl\fR program, datapaths running in the kernel can be 
 created, deleted, modified, and monitored.  A single machine may 
@@ -48,97 +45,256 @@ host up to 32 datapaths (numbered 0 to 31).  In most situations,
 a machine hosts only one datapath.
 
 A newly created datapath is not associated with any of the
-host's network interfaces and thus does not process any incoming
-traffic.  To intercept and process traffic on a given interface, the
-interface must be explicitly added to a datapath through the
+host's network devices thus does not process any incoming
+traffic.  To intercept and process traffic on a given network device, the
+network device must be explicitly added to a datapath through the
 \fBaddif\fR command.
 
+The following commands manage local datapaths.
 
 .TP
-.BI adddp " nl:DP_IDX"
-Creates datapath numbered \fIDP_IDX\fR on the local host.  This will 
-fail if \fIDP_IDX\fR is not in the range 0 to 31, or if the datapath 
+\fBadddp nl:\fIdp_idx\fR
+Creates datapath numbered \fIdp_idx\fR on the local host.  This will 
+fail if \fIdp_idx\fR is not in the range 0 to 31, or if the datapath 
 with that number already exists on the host.
 
 .TP
-.BI deldp " nl:DP_IDX"
-Deletes datapath \fIDP_IDX\fR on the local host.  \fIDP_IDX\fR must be
-an existing datapath.  All of a datapath's interfaces must be
+\fBdeldp nl:\fIdp_idx\fR
+Deletes datapath \fIdp_idx\fR on the local host.  \fIdp_idx\fR must be
+an existing datapath.  All of a datapath's network devices must be
 explicitly removed before the datapath can be deleted (see \fBdelif\fR
 command).
 
 .TP
-.BI addif " nl:DP_IDX INTERFACE"
-Adds \fIINTERFACE\fR to the list of network interfaces datapath
-\fIDP_IDX\fR monitors, where \fIDP_IDX\fR is the ID of an existing
-datapath, and \fIINTERFACE\fR is the name of one of the host's
-interfaces, e.g. \fBeth0\fR.  Once an interface has been added
-to a datapath, the datapath has complete ownership of the interface's
-traffic and the interface appears silent to the rest of the system.
+\fBaddif nl:\fIdp_idx netdev\fR
+Adds \fInetdev\fR to the list of network devices datapath
+\fIdp_idx\fR monitors, where \fIdp_idx\fR is the ID of an existing
+datapath, and \fInetdev\fR is the name of one of the host's
+network devices, e.g. \fBeth0\fR.  Once a network device has been added
+to a datapath, the datapath has complete ownership of the network device's
+traffic and the network device appears silent to the rest of the system.
 
 .TP
-.BI delif " nl:DP_IDX INTERFACE"
-Removes \fIINTERFACE\fR from the list of network interfaces datapath
-\fIDP_IDX\fR monitors.
+\fBdelif nl:\fIdp_idx netdev\fR
+Removes \fInetdev\fR from the list of network devices datapath
+\fIdp_idx\fR monitors.
 
 .TP
-.BI monitor " nl:DP_IDX"
+\fBmonitor nl:\fIdp_idx\fR
 Prints to the console all OpenFlow packets sent by datapath
-\fIDP_IDX\fR to its controller, where \fIDP_IDX\fR is the ID of an
+\fIdp_idx\fR to its controller, where \fIdp_idx\fR is the ID of an
 existing datapath.
 
 .TP
-.BI benchmark-nl " nl:DP_IDX N SIZE"
+\fBbenchmark-nl nl:\fIdp_idx n size\fR
 Checks the netlink performance between the kernel and userspace.
-This is done by sending \fIN\fR packets of \fISIZE\fR bytes from
+This is done by sending \fIN\fR packets of \fIsize\fR bytes from
 the kernel module to dpctl.
 
-
-.TP
-.B GENERAL COMMANDS
-
-.TP
+.PP
 The following commands can be used regardless of the connection method.
 
 .TP
-.BI show " SWITCH"
-Prints to the console information on datapath \fISWITCH\fR including
+\fBshow \fIswitch\fR
+Prints to the console information on datapath \fIswitch\fR including
 information on its flow tables and ports.
 
 .TP
-.BI dump-tables " SWITCH"
+\fBdump-tables \fIswitch\fR
 Prints to the console statistics for each of the flow tables used by
-datapath \fISWITCH\fR.
+datapath \fIswitch\fR.
 
 .TP
-.BI dump-ports " SWITCH"
-Prints to the console statistics for each of the physical interfaces 
-associated with datapath \fISWITCH\fR.
+\fBdump-ports \fIswitch\fR
+Prints to the console statistics for each of the network devices
+associated with datapath \fIswitch\fR.
 
 .TP
-.BI dump-flows " SWITCH [FLOW]"
-Prints to the console all flow entries in datapath \fISWITCH\fR's tables
-that match \fIFLOW\fR.  If \fIFLOW\fR is omitted, all flows in the 
-datapath are retrieved.
+\fBdump-flows \fIswitch \fR[\fIflows\fR]
+Prints to the console all flow entries in datapath \fIswitch\fR's
+tables that match \fIflows\fR.  If \fIflows\fR is omitted, all flows
+in the datapath are retrieved.  See \fBFLOW SYNTAX\fR, below, for the
+syntax of \fIflows\fR.
 
 .TP
-.BI dump-aggregate " SWITCH [FLOWS]"
+\fBdump-aggregate \fIswitch \fR[\fIflows\fR]
 Prints to the console aggregate statistics for flows in datapath
-\fSWITCH\fR's tables that match \fIFLOWS\fR.  If \fIFLOWS\fR is omitted, 
+\fSWITCH\fR's tables that match \fIflows\fR.  If \fIflows\fR is omitted, 
 the statistics are aggregated across all flows in the datapath's flow
-tables.
+tables.  See \fBFLOW SYNTAX\fR, below, for the syntax of \fIflows\fR.
 
 .TP
-.BI add-flows " SWITCH FILE"
-Add flow entries as described in \fIFILE\fR to the datapath \fISWITCH\fR's 
-tables.  Each line in \fIFILE\fR describes an entry in the format used
-to describe a \fIFLOW\fR in other commands..
+\fBadd-flows \fIswitch file\fR
+Add flow entries as described in \fIfile\fR to the datapath \fIswitch\fR's 
+tables.  Each line in \fIfile\fR is a flow entry in the format
+described in \fBFLOW SYNTAX\fB, below.
 
 .TP
-.BI del-flows " SWITCH [FLOW]"
-Deletes entries from the datapath \fISWITCH\fR's tables that match 
-\fIFLOW\fR.  If \fIFLOW\fR is omitted, all flows in the datapath's
-tables are removed.
+\fBdel-flows \fIswitch \fR[\fIflow\fR]
+Deletes entries from the datapath \fIswitch\fR's tables that match
+\fIflow\fR.  If \fIflow\fR is omitted, all flows in the datapath's
+tables are removed.  See \fBFLOW SYNTAX\fR, below, for the syntax of
+\fIflows\fR.
+
+.SH "FLOW SYNTAX"
+
+Some \fBdpctl\fR commands accept an argument that describes a flow or
+flows.  Such flow descriptions comprise a series
+\fIfield\fB=\fIvalue\fR assignments, separated by commas or white
+space.
+
+The following field assignments describe how a flow matches a packet.
+If any of these assignments is omitted from the flow syntax, the field
+is treated as a wildcard; thus, if all of them are omitted, the
+resulting flow matches all packets.  The string \fB*\fR or \fBANY\fR
+may be specified a value to explicitly mark any of these fields as a
+wildcard.
+
+.IP \fBin_port=\fIport_no\fR
+Matches physical port \fIport_no\fR.  Switch ports are numbered as
+displayed by \fBdpctl show\fR.
+
+.IP \fBdl_vlan=\fIvlan\fR
+Matches IEEE 802.1q virtual LAN tag \fIvlan\fR.  Specify \fB0xffff\fR
+as \fIvlan\fR to match packets that are not tagged with a virtual LAN;
+otherwise, specify a number between 0 and 4095, inclusive, as the
+12-bit VLAN ID to match.
+
+.IP \fBdl_src=\fImac\fR
+Matches Ethernet source address \fImac\fR, which should be specified
+as 6 pairs of hexadecimal digits delimited by colons,
+e.g. \fB00:0A:E4:25:6B:B0\fR.
+
+.IP \fBdl_dst=\fImac\fR
+Matches Ethernet destination address \fImac\fR.
+
+.IP \fBdl_type=\fIethertype\fR
+Matches Ethernet protocol type \fIethertype\fR, which should be
+specified as a integer between 0 and 65535, inclusive, either in
+decimal or as a hexadecimal number prefixed by \fB0x\fR,
+e.g. \fB0x0806\fR to match ARP packets.
+
+.IP \fBnw_src=\fIip\fR
+Matches IPv4 source address \fIip\fR, which should be specified as an
+IP address or host name, e.g. \fB192.168.1.1\fR or
+\fBwww.example.com\fR.
+
+.IP \fBnw_dst=\fInw_dst\fR
+Matches IPv4 destination address \fIip\fR.
+
+.IP \fBnw_proto=\fIproto\fR
+Matches IP protocol type \fIproto\fR, which should be specified as a
+decimal number between 0 and 255, inclusive, e.g. 6 to match TCP
+packets.
+
+.IP \fBtp_src=\fIport\fR
+Matches UDP or TCP source port \fIport\fR, which should be specified
+as a decimal number between 0 and 65535, inclusive, e.g. 80 to match
+packets originating from a HTTP server.
+
+.IP \fBtp_dst=\fIport\fR
+Matches UDP or TCP destination port \fIport\fR.
+
+.PP
+The \fBadd-flow\fR command requires an additional field:
+
+.IP \fBaction=\fItarget\fR
+Specifies the action to take on a packet when the flow entry matches.
+The \fItarget\fR may be a decimal port number designating the physical
+port on which to output the packet, or one of the following keywords:
+
+.RS
+.IP \fBnormal\fR
+Subjects the packet to the device's normal L2/L3 processing.  This
+action is not implemented by all OpenFlow switches.
+
+.IP \fBflood\fR
+Outputs the packet on all switch physical ports other than the port on
+which it was received and any ports on which flooding is disabled
+(typically, these would be ports disabled by the IEEE 802.1D spanning
+tree protocol).
+
+.IP \fBall\fR
+Outputs the packet on all switch physical ports other than the port on
+which it was received.
+
+.IP \fBcontroller\fR
+Sends the packet to the OpenFlow controller as a ``packet in''
+message.
+
+.IP \fBlocal\fR
+Outputs the packet on the ``local port,'' which corresponds to the
+\fBof\fIn\fR network device (see \fBCONTACTING THE CONTROLLER\fR in
+\fBsecchan\fR(8) for information on the \fBof\fIn\fR network device).
+.RE
+
+.IP
+(The OpenFlow protocol supports other actions that \fBdpctl\fR does
+not yet expose to the user.)
+
+.PP
+The \fBadd-flows\fR and \fBdel-flows\fR commands support an additional
+optional field:
+
+.IP \fBpriority=\fIvalue\fR
+Sets the priority of the flow to be added or deleted to \fIvalue\fR,
+which should be a number between 0 and 65535, inclusive.  If this
+field is not specified, it defaults to 32768.
+
+.PP
+The \fBdump-flows\fR and \fBdump-aggregate\fR commands support an
+additional optional field:
+
+.IP \fBtable=\fInumber\fR
+If specified, limits the flows about which statistics are gathered to
+those in the table with the given \fInumber\fR.  Tables are numbered
+as shown by the \fBdump-tables\fR command.
+
+If this field is not specified, or if \fInumber\fR is given as
+\fB255\fR, statistics are gathered about flows from all tables.
+
+.SH OPTIONS
+.TP
+\fB-p\fR, \fB--private-key=\fIprivkey.pem\fR
+Specifies a PEM file containing the private key used as the
+identity for SSL connections to a switch.
+
+.TP
+\fB-c\fR, \fB--certificate=\fIcert.pem\fR
+Specifies a PEM file containing a certificate, signed by the
+controller's certificate authority (CA), that certifies the
+private key to identify a trustworthy controller.
+
+.TP
+\fB-C\fR, \fB--ca-cert=\fIcacert.pem\fR
+Specifies a PEM file containing the CA certificate used to verify that
+a switch is trustworthy.
+
+.TP
+.BR \-h ", " \-\^\-help
+Prints a brief help message to the console.
+
+.TP
+\fB-v\fR \fImodule\fB:\fIfacility\fB:\fIlevel\fR, \fB--verbose=\fImodule\fB:\fIfacility\fB:\fIlevel\fR
+Sets the logging level for \fImodule\fR in \fIfacility\fR to
+\fIlevel\fR.  The \fImodule\fR may be any valid module name (as
+displayed by the \fB--list\fR action on \fBvlogconf\fR(8)), or the
+special name \fBANY\fR to set the logging levels for all modules.  The
+\fIfacility\fR may be \fBsyslog\fR or \fBconsole\fR to set the levels
+for logging to the system log or to the console, respectively, or
+\fBANY\fR to set the logging levels for both facilities.  The
+\fIlevel\fR must be one of \fBemer\fR, \fBerr\fR, \fBwarn\fR, or
+\fBdbg\fR, designating the minimum severity of a message for it to be
+logged.
+
+.TP
+\fB-v\fR, \fB--verbose\fR
+Sets the maximum logging verbosity level, equivalent to
+\fB--verbose=ANY:ANY:dbg\fR.
+
+.TP
+.BR \-V ", " \-\^\-version
+Prints version information to the console.
 
 .SH EXAMPLES
 
@@ -150,7 +306,7 @@ Create datapath numbered 0:
 .B % dpctl adddp nl:0
 
 .TP
-Add two interfaces to the new datapath:
+Add two network devices to the new datapath:
 
 .B % dpctl addif nl:0 eth0
 .B % dpctl addif nl:0 eth1
@@ -172,7 +328,7 @@ View the flow entries in the datapath:
 .B % dpctl dump-flows nl:0 
 
 .TP
-Remove interfaces from the datapath when finished:
+Remove network devices from the datapath when finished:
 
 .B % dpctl delif nl:0 eth0
 .B % dpctl delif nl:0 eth1
@@ -185,6 +341,6 @@ Delete the datapath:
 .SH "SEE ALSO"
 
 .BR secchan (8),
-.BR switch (8)
-.BR controller (8)
+.BR switch (8),
+.BR controller (8),
 .BR vlogconf (8)

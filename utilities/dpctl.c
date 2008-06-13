@@ -179,6 +179,7 @@ usage(void)
            program_name, program_name);
     vconn_usage(true, false);
     printf("\nOptions:\n"
+           "  -v, --verbose=MODULE:FACILITY:LEVEL  configure logging levels\n"
            "  -v, --verbose               set maximum verbosity level\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");

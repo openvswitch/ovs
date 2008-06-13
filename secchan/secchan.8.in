@@ -1,0 +1,196 @@
+.TH secchan 8 "May 2008" "OpenFlow" "OpenFlow Manual"
+
+.SH NAME
+secchan \- secure channel connecting an OpenFlow datapath to a controller
+
+.SH SYNOPSIS
+.B secchan
+[\fIoptions\fR] \fBnl:\fIdp_idx\fR \fIremote\fR
+
+.SH DESCRIPTION
+The \fBsecchan\fR program sets up a secure channel between a local
+OpenFlow datapath and a remote controller.  \fBsecchan\fR connects to
+the local datapath over Netlink and to the controller over TCP or SSL,
+and then forwards OpenFlow messages from one endpoint to the other.
+
+The mandatory \fBnl:\fIdp_idx\fR argument specifies the local datapath
+to relay.  Within this argument, \fIdp_idx\fR is the number of a
+datapath that has been created with
+.BR dpctl (8).
+
+The mandatory \fIcontroller\fR argument specifies how to connect to
+the OpenFlow controller.  It takes one of the following forms:
+
+.TP
+\fBssl:\fIhost\fR[\fB:\fIport\fR]
+The specified SSL \fIport\fR (default: 976) on the given remote
+\fIhost\fR.  The \fB--private-key\fR, \fB--certificate\fR, and
+\fB--ca-cert\fR options are mandatory when this form is used.
+
+.TP
+\fBtcp:\fIhost\fR[\fB:\fIport\fR]
+The specified TCP \fIport\fR (default: 975) on the given remote
+\fIhost\fR.
+
+.SH "CONTACTING THE CONTROLLER"
+The OpenFlow switch must be able to contact the OpenFlow controller
+over the network.  It can do so in one of two ways:
+
+.IP out-of-band
+In this configuration, OpenFlow traffic uses a network separate from
+the data traffic that it controls, that is, the switch does not use
+any of the network devices added to the datapath with \fBdpctl
+addif\fR in its communication with the controller.
+
+To use \fBsecchan\fR in a network with out-of-band control, the
+control network must be configured for use by \fBsecchan\fR at the
+time it is started.  No additional setup is required.  In particular,
+the \fBof\fIn\fR device should not be up or configured with an IP
+address (see below).
+
+.IP in-band
+In this configuration, a single network is used for OpenFlow traffic
+and other data traffic, that is, the switch contacts the controller
+over one of the network devices added to the datapath with \fBdpctl
+addif\fR.  This configuration is often more convenient than
+out-of-band control, because it is not necessary to maintain two
+independent networks.
+
+Using \fBsecchan\fR in a network with in-band control requires
+additional setup before starting \fBsecchan\fR.  At a minimum, the
+special OpenFlow network device \fBof\fIn\fR, where \fIn\fR is same as
+the \fIdp_idx\fR specified on the \fBsecchan\fR command line, must be
+brought up using
+.BR ifconfig (8),
+e.g.:
+.RS
+.IP
+ifconfig of0 up
+.RE
+.IP
+Before \fBsecchan\fR starts, the \fBof\fIn\fR device cannot send or
+receive any packets, so the next step depends on whether connectivity
+is required to configure the device's IP address.  If the switch has a
+static IP address, you may configure its IP address now with a command
+such as:
+.RS
+.IP
+ifconfig of0 192.168.1.1
+.RE
+.IP
+and then invoke \fBsecchan\fR.
+
+On the other hand, if the switch does not have a static IP address,
+e.g. it obtains its IP address dynamically via DHCP, the DHCP client
+will not be able to contact the DHCP server until the secure channel
+has started up.  Thus, start \fBsecchan\fR without configuring
+\fBof\fIn\fR further, and start the DHCP client afterward.
+
+.SH OPTIONS
+.TP
+\fB-f\fR, \fB--fail=\fR[\fBopen\fR|\fBclosed\fR]
+The controller is, ordinarily, responsible for setting up all flows on
+the OpenFlow switch.  Thus, if the connection to the controller fails,
+no new network connections can be set up.  If the connection to the
+controller stays down long enough, no packets can pass through the
+switch at all.
+
+If this option is set to \fBopen\fR (the default), \fBsecchan\fR will
+take over responsibility for setting up flows in the local datapath
+when the controller connection stays down for long enough.  In this
+``fail open'' mode, \fBsecchan\fR causes the datapath to act like an
+ordinary MAC-learning switch.  \fBsecchan\fR will continue to retry
+connection to the controller in the background and, when the
+connection succeeds, it discontinues its fail-open behavior.
+
+If this option is set to \fBclosed\fR, then \fBsecchan\fR will not
+set up flows on its own when the controller connection fails.
+
+.TP
+\fB-d\fR, \fB--fail-open-delay=\fIsecs\fR
+Sets the number of seconds of failed controller connection attempts
+after which the switch enters fail-open mode.  The default is 30
+seconds.
+
+This option has no effect when \fB--fail=closed\fR is specified.
+
+.TP
+\fB-l\Fr, \Fb--listen=\fImethod\fR
+Configures the switch to additionally listen for incoming OpenFlow
+connections for switch management with \fBdpctl\fR.  The \fImethod\fR
+must be given as one of the following passive OpenFlow connection
+methods:
+
+.RS
+.TP
+\fBpssl:\fR[\fIport\fR]
+Listens for SSL connections on \fIport\fR (default: 976).  The
+\fB--private-key\fR, \fB--certificate\fR, and \fB--ca-cert\fR options
+are mandatory when this form is used.
+
+.TP
+\fBptcp:\fR[\fIport\fR]
+Listens for TCP connections on \fIport\fR (default: 975).
+.RE
+
+.TP
+\fB-p\fR, \fB--private-key=\fIprivkey.pem\fR
+Specifies a PEM file containing the private key used as the switch's
+identity for SSL connections to the controller.
+
+.TP
+\fB-c\fR, \fB--certificate=\fIcert.pem\fR
+Specifies a PEM file containing a certificate, signed by the
+controller's certificate authority (CA), that certifies the switch's
+private key to identify a trustworthy switch.
+
+.TP
+\fB-C\fR, \fB--ca-cert=\fIcacert.pem\fR
+Specifies a PEM file containing the CA certificate used to verify that
+the switch is connected to a trustworthy controller.
+
+.TP
+\fB-P\fR[\fIpidfile\fR], \fB--pidfile\fR[\fB=\fIpidfile\fR]
+Causes a file (by default, \fBsecchan.pid\fR) to be created indicating
+the PID of the running process.  If \fIpidfile\fR is not specified, or
+if it does not begin with \fB/\fR, then it is created in
+\fB@rundir@\fR.
+
+.TP
+\fB-D\fR, \fB--detach\fR
+Causes \fBsecchan\fR to detach itself from the foreground session and
+run as a background process.
+
+.TP
+.BR \-h ", " \-\^\-help
+Prints a brief help message to the console.
+
+.TP
+\fB-v\fR \fImodule\fB:\fIfacility\fB:\fIlevel\fR, \fB--verbose=\fImodule\fB:\fIfacility\fB:\fIlevel\fR
+Sets the logging level for \fImodule\fR in \fIfacility\fR to
+\fIlevel\fR.  The \fImodule\fR may be any valid module name (as
+displayed by the \fB--list\fR action on \fBvlogconf\fR(8)), or the
+special name \fBANY\fR to set the logging levels for all modules.  The
+\fIfacility\fR may be \fBsyslog\fR or \fBconsole\fR to set the levels
+for logging to the system log or to the console, respectively, or
+\fBANY\fR to set the logging levels for both facilities.  The
+\fIlevel\fR must be one of \fBemer\fR, \fBerr\fR, \fBwarn\fR, or
+\fBdbg\fR, designating the minimum severity of a message for it to be
+logged.
+
+.TP
+\fB-v\fR, \fB--verbose\fR
+Sets the maximum logging verbosity level, equivalent to
+\fB--verbose=ANY:ANY:dbg\fR.
+
+.TP
+.BR \-V ", " \-\^\-version
+Prints version information to the console.
+
+.SH "SEE ALSO"
+
+.BR dpctl (8),
+.BR controller (8),
+.BR ofp-pki (8),
+.BR vlogconf (8),
+.BR switch (8)
