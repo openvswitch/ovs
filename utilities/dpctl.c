@@ -701,6 +701,7 @@ static void do_add_flows(int argc, char *argv[])
 static void do_del_flows(int argc, char *argv[])
 {
     struct vconn *vconn;
+    uint16_t priority;
 
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
     struct buffer *buffer;
@@ -711,12 +712,12 @@ static void do_del_flows(int argc, char *argv[])
     /* Parse and send. */
     size = sizeof *ofm;
     ofm = alloc_openflow_buffer(size, OFPT_FLOW_MOD, &buffer);
+    str_to_flow(argc > 2 ? argv[2] : "", &ofm->match, NULL, NULL, &priority);
     ofm->command = htons(OFPFC_DELETE);
     ofm->max_idle = htons(0);
     ofm->buffer_id = htonl(UINT32_MAX);
-    ofm->priority = htons(0);
+    ofm->priority = htons(priority);
     ofm->reserved = htonl(0);
-    str_to_flow(argc > 2 ? argv[2] : "", &ofm->match, NULL, NULL, NULL);
 
     send_openflow_buffer(vconn, buffer);
 
