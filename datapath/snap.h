@@ -19,9 +19,9 @@ static inline int snap_get_ethertype(struct sk_buff *skb, uint16_t *ethertype)
 {
 	struct snap_hdr *sh = (struct snap_hdr *)(skb->data 
 				+ sizeof(struct ethhdr));
-	if (((sh->dsap & 0xFE) != LLC_SAP_SNAP) 
-				|| ((sh->ssap & 0xFE) != LLC_SAP_SNAP)
-				|| (!memcmp(sh->oui, "\0\0\0", SNAP_OUI_LEN)))
+	if ((sh->dsap  != LLC_SAP_SNAP) 
+				|| (sh->ssap != LLC_SAP_SNAP)
+				|| (memcmp(sh->oui, "\0\0\0", SNAP_OUI_LEN)))
 		return -EINVAL;
 
 	*ethertype = sh->ethertype;
