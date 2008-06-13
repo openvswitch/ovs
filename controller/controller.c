@@ -39,6 +39,7 @@
 #include "buffer.h"
 #include "command-line.h"
 #include "compiler.h"
+#include "daemon.h"
 #include "fault.h"
 #include "learning-switch.h"
 #include "poll-loop.h"
@@ -120,6 +121,8 @@ main(int argc, char *argv[])
     if (n_switches == 0 && n_listeners == 0) {
         fatal(0, "no active or passive switch connections");
     }
+
+    daemonize();
 
     while (n_switches > 0 || n_listeners > 0) {
         int iteration;
@@ -213,6 +216,8 @@ static void
 parse_options(int argc, char *argv[])
 {
     static struct option long_options[] = {
+        {"detach",      no_argument, 0, 'D'},
+        {"pidfile",     optional_argument, 0, 'P'},
         {"hub",         no_argument, 0, 'H'},
         {"noflow",      no_argument, 0, 'n'},
         {"verbose",     optional_argument, 0, 'v'},
@@ -233,6 +238,14 @@ parse_options(int argc, char *argv[])
         }
 
         switch (c) {
+        case 'D':
+            set_detach();
+            break;
+
+        case 'P':
+            set_pidfile(optarg ? optarg : "controller.pid");
+            break;
+
         case 'H':
             learn_macs = false;
             break;
@@ -273,10 +286,13 @@ usage(void)
            program_name, program_name);
     vconn_usage(true, true);
     printf("\nOther options:\n"
+           "  -D, --detach            run in background as daemon\n"
+           "  -P, --pidfile[=FILE]    create pidfile (default: %s/controller.pid)\n"
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
-           "  -V, --version           display version information\n");
+           "  -V, --version           display version information\n",
+           RUNDIR);
     exit(EXIT_SUCCESS);
 }

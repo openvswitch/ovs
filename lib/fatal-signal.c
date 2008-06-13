@@ -123,6 +123,7 @@ fatal_signal_unblock()
 
 static char **files;
 static size_t n_files, max_files;
+static bool disabled;
 
 static void unlink_files(void *aux);
 static void do_unlink_files(void);
@@ -169,16 +170,37 @@ fatal_signal_remove_file_to_unlink(const char *file)
 static void
 unlink_files(void *aux UNUSED)
 {
-    do_unlink_files();
+    do_unlink_files(); 
 }
 
 static void
 do_unlink_files(void)
 {
+    if (!disabled) {
+        size_t i;
+
+        for (i = 0; i < n_files; i++) {
+            unlink(files[i]);
+        }
+    }
+}
+
+/* Disables the fatal signal hook mechanism.  Following a fork, one of the
+ * resulting processes can call this function to allow it to terminate without
+ * triggering fatal signal processing or removing files.  Fatal signal
+ * processing is still enabled in the other process. */
+void
+fatal_signal_fork(void)
+{
     size_t i;
 
-    for (i = 0; i < n_files; i++) {
-        unlink(files[i]);
+    disabled = true;
+
+    for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {
+        int sig_nr = fatal_signals[i];
+        if (signal(sig_nr, SIG_DFL) == SIG_IGN) {
+            signal(sig_nr, SIG_IGN);
+        }
     }
 }
 

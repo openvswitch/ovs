@@ -5,6 +5,7 @@ noinst_LTLIBRARIES = libopenflow.la
 libopenflow_la_SOURCES = \
 	buffer.c \
 	command-line.c \
+	daemon.c \
 	dynamic-string.c \
 	fatal-signal.c \
 	fault.c \

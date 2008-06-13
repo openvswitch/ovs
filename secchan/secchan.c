@@ -44,6 +44,7 @@
 #include "buffer.h"
 #include "command-line.h"
 #include "compiler.h"
+#include "daemon.h"
 #include "fault.h"
 #include "flow.h"
 #include "learning-switch.h"
@@ -186,6 +187,8 @@ main(int argc, char *argv[])
     if (retval) {
         fatal(retval, "Could not listen for vlog connections");
     }
+
+    daemonize();
 
     relay_create(rconn_new(argv[optind], 1), rconn_new(argv[optind + 1], 1),
                  false);
@@ -466,6 +469,8 @@ parse_options(int argc, char *argv[])
         {"fail",        required_argument, 0, 'f'},
         {"fail-open-delay", required_argument, 0, 'd'},
         {"listen",      required_argument, 0, 'l'},
+        {"detach",      no_argument, 0, 'D'},
+        {"pidfile",     optional_argument, 0, 'P'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -500,6 +505,14 @@ parse_options(int argc, char *argv[])
                 fatal(0,
                       "-d or --fail-open-delay argument must be at least 1");
             }
+            break;
+
+        case 'D':
+            set_detach();
+            break;
+
+        case 'P':
+            set_pidfile(optarg ? optarg : "secchan.pid");
             break;
 
         case 'l':
@@ -549,8 +562,11 @@ usage(void)
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
            "                          (a passive OpenFlow connection method)\n"
            "\nOther options:\n"
+           "  -D, --detach            run in background as daemon\n"
+           "  -P, --pidfile[=FILE]    create pidfile (default: %s/secchan.pid)\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
-           "  -V, --version           display version information\n");
+           "  -V, --version           display version information\n",
+           RUNDIR);
     exit(EXIT_SUCCESS);
 }

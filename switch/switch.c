@@ -38,6 +38,7 @@
 #include <string.h>
 
 #include "command-line.h"
+#include "daemon.h"
 #include "datapath.h"
 #include "fault.h"
 #include "openflow.h"
@@ -102,6 +103,8 @@ main(int argc, char *argv[])
         fatal(error, "could not listen for vlog connections");
     }
 
+    daemonize();
+
     for (;;) {
         dp_run(dp);
         dp_wait(dp);
@@ -136,6 +139,8 @@ parse_options(int argc, char *argv[])
         {"interfaces",  required_argument, 0, 'i'},
         {"datapath-id", required_argument, 0, 'd'},
         {"listen",      required_argument, 0, 'l'},
+        {"detach",      no_argument, 0, 'D'},
+        {"pidfile",     optional_argument, 0, 'P'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -172,6 +177,14 @@ parse_options(int argc, char *argv[])
         case 'V':
             printf("%s "VERSION" compiled "__DATE__" "__TIME__"\n", argv[0]);
             exit(EXIT_SUCCESS);
+
+        case 'D':
+            set_detach();
+            break;
+
+        case 'P':
+            set_pidfile(optarg ? optarg : "switch.pid");
+            break;
 
         case 'v':
             vlog_set_verbosity(optarg);
@@ -220,8 +233,11 @@ usage(void)
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
            "                          (a passive OpenFlow connection method)\n"
            "\nOther options:\n"
+           "  -D, --detach            run in background as daemon\n"
+           "  -P, --pidfile[=FILE]    create pidfile (default: %s/switch.pid)\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
-           "  -V, --version           display version information\n");
+           "  -V, --version           display version information\n",
+        RUNDIR);
     exit(EXIT_SUCCESS);
 }
