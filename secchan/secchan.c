@@ -100,7 +100,7 @@ static uint8_t local_mac[ETH_ADDR_LEN];
 static struct mac_learning *local_ml;
 
 /* -f, --fail: Behavior when the connection to the controller fails. */
-static enum fail_mode fail_mode;
+static enum fail_mode fail_mode = FAIL_OPEN;
 
 /* -d, --fail-open-delay: Number of seconds after which to fail open, when
  * fail_mode is FAIL_OPEN. */
@@ -542,8 +542,8 @@ usage(void)
     vconn_usage(true, true);
     printf("\nNetworking options:\n"
            "  -f, --fail=open|closed  when controller connection fails:\n"
-           "                            closed (default): drop all packets\n"
-           "                            open: act as learning switch\n"
+           "                            closed: drop all packets\n"
+           "                            open (default): act as learning switch\n"
            "  -d, --fail-open-delay=SECS  number of seconds after which to\n"
            "                          fail open if --fail=open (default: 30)\n"
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
