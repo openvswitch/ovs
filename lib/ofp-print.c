@@ -221,13 +221,49 @@ ofp_print_action(struct ds *string, const struct ofp_action *a)
         ds_put_cstr(string, "output(");
         ofp_print_port_name(string, ntohs(a->arg.output.port));
         if (a->arg.output.port == htons(OFPP_CONTROLLER)) {
-            ds_put_format(string, ", max %"PRIu16" bytes", ntohs(a->arg.output.max_len));
+            ds_put_format(string, ", max %"PRIu16" bytes", 
+                    ntohs(a->arg.output.max_len));
         }
         ds_put_cstr(string, ")");
         break;
 
+    case OFPAT_SET_DL_VLAN:
+        if (ntohs(a->arg.vlan_id) == OFP_VLAN_NONE) {
+            ds_put_cstr(string, "strip vlan");
+        } else {
+            ds_put_format(string, "mod vlan(%"PRIu16")", ntohs(a->arg.vlan_id));
+        }
+        break;
+
+    case OFPAT_SET_DL_SRC:
+        ds_put_format(string, "mod dl src("ETH_ADDR_FMT")", 
+                ETH_ADDR_ARGS(a->arg.dl_addr));
+        break;
+
+    case OFPAT_SET_DL_DST:
+        ds_put_format(string, "mod dl dst("ETH_ADDR_FMT")", 
+                ETH_ADDR_ARGS(a->arg.dl_addr));
+        break;
+
+    case OFPAT_SET_NW_SRC:
+        ds_put_format(string, "mod nw src("IP_FMT")", IP_ARGS(a->arg.nw_addr));
+        break;
+
+    case OFPAT_SET_NW_DST:
+        ds_put_format(string, "mod nw dst("IP_FMT")", IP_ARGS(a->arg.nw_addr));
+        break;
+
+    case OFPAT_SET_TP_SRC:
+        ds_put_format(string, "mod tp src(%d)", ntohs(a->arg.tp));
+        break;
+
+    case OFPAT_SET_TP_DST:
+        ds_put_format(string, "mod tp dst(%d)", ntohs(a->arg.tp));
+        break;
+
     default:
-        ds_put_format(string, "(decoder %"PRIu16" not implemented)", ntohs(a->type));
+        ds_put_format(string, "(decoder %"PRIu16" not implemented)", 
+                ntohs(a->type));
         break;
     }
 }
