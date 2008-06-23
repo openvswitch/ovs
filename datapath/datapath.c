@@ -201,13 +201,9 @@ alloc_openflow_skb(struct datapath *dp, size_t openflow_len, uint8_t type,
 static int
 send_openflow_skb(struct sk_buff *skb, const struct sender *sender) 
 {
-	int err = (sender
-		   ? genlmsg_unicast(skb, sender->pid)
-		   : genlmsg_multicast(skb, 0, mc_group.id, GFP_ATOMIC));
-	if (err && net_ratelimit())
-		printk(KERN_WARNING "send_openflow_skb: send failed: %d\n",
-		       err);
-	return err;
+	return (sender
+		? genlmsg_unicast(skb, sender->pid)
+		: genlmsg_multicast(skb, 0, mc_group.id, GFP_ATOMIC));
 }
 
 /* Generates a unique datapath id.  It incorporates the datapath index
