@@ -4,7 +4,9 @@
 #include_next <linux/timer.h>
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+#if ((LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)) && \
+     (!defined(RHEL_RELEASE_CODE) || \
+      (RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(5,1))))
 
 extern unsigned long volatile jiffies;
 
