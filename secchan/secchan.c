@@ -396,10 +396,7 @@ local_hook(struct relay *r)
     flow_extract(&pkt, in_port, &flow);
 
     /* Deal with local stuff. */
-    if (!rconn_is_connected(r->halves[HALF_REMOTE].rconn)
-        && eth_addr_is_broadcast(flow.dl_dst)) {
-        out_port = OFPP_FLOOD;
-    } else if (in_port == OFPP_LOCAL) {
+    if (in_port == OFPP_LOCAL) {
         out_port = mac_learning_lookup(local_ml, flow.dl_dst);
     } else if (eth_addr_equals(flow.dl_dst, local_mac)) {
         out_port = OFPP_LOCAL;
