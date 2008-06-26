@@ -952,12 +952,12 @@ modify_vlan(struct buffer *buffer,
     uint16_t new_id = a->arg.vlan_id;
     struct vlan_eth_header *veh;
 
-    if (new_id != OFP_VLAN_NONE) {
+    if (new_id != htons(OFP_VLAN_NONE)) {
         if (key->flow.dl_vlan != htons(OFP_VLAN_NONE)) {
             /* Modify vlan id, but maintain other TCI values */
             veh = buffer->l2;
             veh->veth_tci &= ~htons(VLAN_VID);
-            veh->veth_tci |= htons(new_id);
+            veh->veth_tci |= new_id;
         } else {
             /* Insert new vlan id. */
             struct eth_header *eh = buffer->l2;
