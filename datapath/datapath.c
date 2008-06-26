@@ -443,10 +443,7 @@ static void
 do_port_input(struct net_bridge_port *p, struct sk_buff *skb) 
 {
 	/* Push the Ethernet header back on. */
-	if (skb->protocol == htons(ETH_P_8021Q))
-		skb_push(skb, VLAN_ETH_HLEN);
-	else
-		skb_push(skb, ETH_HLEN);
+	skb_push(skb, ETH_HLEN);
 	fwd_port_input(p->dp->chain, skb, p->port_no);
 }
 
