@@ -53,7 +53,11 @@
 #include "vlog.h"
 
 struct lswitch {
-    bool setup_flows; /* Set up flows? (or controller processes all packets) */
+    /* If nonnegative, the switch sets up flows that expire after the given
+     * number of seconds (or never expire, if the value is OFP_FLOW_PERMANENT).
+     * Otherwise, the switch processes every packet. */
+    int max_idle;
+
     uint64_t datapath_id;
     time_t last_features_request;
     struct mac_learning *ml;    /* NULL to act as hub instead of switch. */
@@ -69,16 +73,17 @@ static void process_packet_in(struct lswitch *, struct rconn *,
  * If 'learn_macs' is true, the new switch will learn the ports on which MAC
  * addresses appear.  Otherwise, the new switch will flood all packets.
  *
- * If 'setup_flows' is true, the new switch will set up flows.  Otherwise, the
- * new switch will process every packet.
+ * If 'max_idle' is nonnegative, the new switch will set up flows that expire
+ * after the given number of seconds (or never expire, if 'max_idle' is
+ * OFP_FLOW_PERMANENT).  Otherwise, the new switch will process every packet.
  *
  * 'rconn' is used to send out an OpenFlow features request. */
 struct lswitch *
-lswitch_create(struct rconn *rconn, bool learn_macs, bool setup_flows)
+lswitch_create(struct rconn *rconn, bool learn_macs, int max_idle)
 {
     struct lswitch *sw = xmalloc(sizeof *sw);
     memset(sw, 0, sizeof *sw);
-    sw->setup_flows = setup_flows;
+    sw->max_idle = max_idle;
     sw->datapath_id = 0;
     sw->last_features_request = 0;
     sw->ml = learn_macs ? mac_learning_create() : NULL;
@@ -213,11 +218,11 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
         out_port = mac_learning_lookup(sw->ml, flow.dl_dst);
     }
 
-    if (sw->setup_flows && (!sw->ml || out_port != OFPP_FLOOD)) {
+    if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
         /* The output port is known, or we always flood everything, so add a
          * new flow. */
         queue_tx(sw, rconn, make_add_simple_flow(&flow, ntohl(opi->buffer_id),
-                                                 out_port));
+                                                 out_port, sw->max_idle));
 
         /* If the switch didn't buffer the packet, we need to send a copy. */
         if (ntohl(opi->buffer_id) == UINT32_MAX) {

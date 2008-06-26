@@ -107,6 +107,10 @@ static enum fail_mode fail_mode = FAIL_OPEN;
  * fail_mode is FAIL_OPEN. */
 static int fail_open_delay = 30;
 
+/* --max-idle: Idle time to assign to flows created by learning switch when in
+ * fail-open mode. */
+static int max_idle = 15;
+
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
@@ -409,7 +413,8 @@ local_hook(struct relay *r)
 
     /* Add new flow. */
     if (out_port != OFPP_FLOOD) {
-        b = make_add_simple_flow(&flow, ntohl(opi->buffer_id), out_port);
+        b = make_add_simple_flow(&flow, ntohl(opi->buffer_id), out_port,
+                                 max_idle);
         if (rconn_force_send(rc, b)) {
             buffer_delete(b);
         }
@@ -453,7 +458,7 @@ fail_open_hook(struct relay *r)
     if (!r->lswitch) {
         VLOG_WARN("Could not connect to controller for %d seconds, "
                   "failing open", disconnected_duration);
-        r->lswitch = lswitch_create(local, true, true);
+        r->lswitch = lswitch_create(local, true, max_idle);
     }
 
     /* Do switching. */
@@ -465,9 +470,11 @@ fail_open_hook(struct relay *r)
 static void
 parse_options(int argc, char *argv[]) 
 {
+    enum { OPT_MAX_IDLE = UCHAR_MAX + 1 };
     static struct option long_options[] = {
         {"fail",        required_argument, 0, 'f'},
         {"fail-open-delay", required_argument, 0, 'd'},
+        {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
         {"listen",      required_argument, 0, 'l'},
         {"detach",      no_argument, 0, 'D'},
         {"pidfile",     optional_argument, 0, 'P'},
@@ -504,6 +511,18 @@ parse_options(int argc, char *argv[])
             if (fail_open_delay < 1) {
                 fatal(0,
                       "-d or --fail-open-delay argument must be at least 1");
+            }
+            break;
+
+        case OPT_MAX_IDLE:
+            if (!strcmp(optarg, "permanent")) {
+                max_idle = OFP_FLOW_PERMANENT;
+            } else {
+                max_idle = atoi(optarg);
+                if (max_idle < 1 || max_idle > 65535) {
+                    fatal(0, "--max-idle argument must be between 1 and "
+                          "65535 or the word 'permanent'");
+                }
             }
             break;
 
@@ -560,6 +579,7 @@ usage(void)
            "                            open (default): act as learning switch\n"
            "  -d, --fail-open-delay=SECS  number of seconds after which to\n"
            "                          fail open if --fail=open (default: 30)\n"
+           "  --max-idle=SECS         max idle for flows set up by secchan\n"
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
            "                          (a passive OpenFlow connection method)\n"
            "\nOther options:\n"

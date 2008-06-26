@@ -39,8 +39,7 @@
 struct buffer;
 struct rconn;
 
-struct lswitch *lswitch_create(struct rconn *,
-                               bool learn_macs, bool setup_flows);
+struct lswitch *lswitch_create(struct rconn *, bool learn_macs, int max_idle);
 void lswitch_destroy(struct lswitch *);
 void lswitch_process_packet(struct lswitch *, struct rconn *,
                             const struct buffer *);

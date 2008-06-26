@@ -115,7 +115,35 @@ seconds.
 This option has no effect when \fB--fail=closed\fR is specified.
 
 .TP
-\fB-l\Fr, \Fb--listen=\fImethod\fR
+\fB--max-idle=\fIsecs\fR|\fBpermanent\fR
+Sets \fIsecs\fR as the number of seconds that a flow set up by the
+secure channel will remain in the switch's flow table without any
+matching packets being seen.  If \fBpermanent\fR is specified, which
+is not recommended, flows set up by the secure channel will never
+expire.  The default is 15 seconds.
+
+Most flows are set up by the OpenFlow controller, not by the secure
+channel.  This option affects only the following flows, which the
+secure channel sets up itself:
+
+.RS
+.IP \(bu
+When \fB--fail=open\fR is specified, flows set up when the secure
+channel has not been able to contact the controller for the configured
+fail-open delay.
+
+.IP \(bu
+When in-band control is in use, flows set up to bootstrap contacting
+the controller (see \fBCONTACTING THE CONTROLLER\fR, above, for
+more information about in-band control).
+.RE
+
+.IP
+As a result, when both \fB--fail=open\fR and in-band control are not
+in use, this option has no effect.
+
+.TP
+\fB-l\fR, \fB--listen=\fImethod\fR
 Configures the switch to additionally listen for incoming OpenFlow
 connections for switch management with \fBdpctl\fR.  The \fImethod\fR
 must be given as one of the following passive OpenFlow connection

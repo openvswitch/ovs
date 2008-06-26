@@ -370,7 +370,7 @@ vconn_send_wait(struct vconn *vconn)
 
 struct buffer *
 make_add_simple_flow(const struct flow *flow,
-                     uint32_t buffer_id, uint16_t out_port)
+                     uint32_t buffer_id, uint16_t out_port, uint16_t max_idle)
 {
     struct ofp_flow_mod *ofm;
     size_t size = sizeof *ofm + sizeof ofm->actions[0];
@@ -392,7 +392,7 @@ make_add_simple_flow(const struct flow *flow,
     ofm->match.tp_src = flow->tp_src;
     ofm->match.tp_dst = flow->tp_dst;
     ofm->command = htons(OFPFC_ADD);
-    ofm->max_idle = htons(60);
+    ofm->max_idle = htons(max_idle);
     ofm->buffer_id = htonl(buffer_id);
     ofm->actions[0].type = htons(OFPAT_OUTPUT);
     ofm->actions[0].arg.output.max_len = htons(0);

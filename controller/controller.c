@@ -33,6 +33,7 @@
 
 #include <errno.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -42,6 +43,7 @@
 #include "daemon.h"
 #include "fault.h"
 #include "learning-switch.h"
+#include "openflow.h"
 #include "poll-loop.h"
 #include "rconn.h"
 #include "util.h"
@@ -65,6 +67,9 @@ static bool learn_macs = true;
 
 /* Set up flows?  (If not, every packet is processed at the controller.) */
 static bool setup_flows = true;
+
+/* --max-idle: Maximum idle time, in seconds, before flows expire. */
+static int max_idle = 60;
 
 static int do_switching(struct switch_ *);
 static void new_switch(struct switch_ *, struct vconn *, const char *name);
@@ -189,7 +194,8 @@ static void
 new_switch(struct switch_ *sw, struct vconn *vconn, const char *name)
 {
     sw->rconn = rconn_new_from_vconn(name, 128, vconn);
-    sw->lswitch = lswitch_create(sw->rconn, learn_macs, setup_flows);
+    sw->lswitch = lswitch_create(sw->rconn, learn_macs,
+                                 setup_flows ? max_idle : -1);
 }
 
 static int
@@ -215,11 +221,13 @@ do_switching(struct switch_ *sw)
 static void
 parse_options(int argc, char *argv[])
 {
+    enum { OPT_MAX_IDLE = UCHAR_MAX + 1 };
     static struct option long_options[] = {
         {"detach",      no_argument, 0, 'D'},
         {"pidfile",     optional_argument, 0, 'P'},
         {"hub",         no_argument, 0, 'H'},
         {"noflow",      no_argument, 0, 'n'},
+        {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -252,6 +260,18 @@ parse_options(int argc, char *argv[])
 
         case 'n':
             setup_flows = false;
+            break;
+
+        case OPT_MAX_IDLE:
+            if (!strcmp(optarg, "permanent")) {
+                max_idle = OFP_FLOW_PERMANENT;
+            } else {
+                max_idle = atoi(optarg);
+                if (max_idle < 1 || max_idle > 65535) {
+                    fatal(0, "--max-idle argument must be between 1 and "
+                          "65535 or the word 'permanent'");
+                }
+            }
             break;
 
         case 'h':
@@ -290,6 +310,7 @@ usage(void)
            "  -P, --pidfile[=FILE]    create pidfile (default: %s/controller.pid)\n"
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"
+           "  --max-idle=SECS         max idle time for new flows\n"
            "  -v, --verbose=MODULE:FACILITY:LEVEL  configure logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"

@@ -74,6 +74,21 @@ This option is most useful for debugging.  It reduces switching
 performance, so it should not be used in production.
 
 .TP
+\fB--max-idle=\fIsecs\fR|\fBpermanent\fR
+Sets \fIsecs\fR as the number of seconds that a flow set up by the
+controller will remain in the switch's flow table without any matching
+packets being seen.  If \fBpermanent\fR is specified, which is not
+recommended, flows will never expire.  The default is 60 seconds.
+
+This option affects only flows set up by the OpenFlow controller.  In
+some configurations, the OpenFlow secure channel can set up some flows
+on its own.  To set the idle time for those flows, pass
+\fB--max-idle\fR to \fBsecchan\fR(8).
+
+This option has no effect when \fB-n\fR (or \fB--noflow\fR) is in use
+(because the controller does not set up flows in that case).
+
+.TP
 .BR \-H ", " \-\^\-hub
 By default, the controller acts as an L2 MAC-learning switch.  This
 option changes its behavior to that of a hub that floods packets on
