@@ -45,7 +45,7 @@ case "${enable_hw_tables}" in # (
     ;;
 esac
 for d in $hw_tables; do
-    mk=datapath/hwtable-$d/Modules.mk
+    mk=datapath/hwtable_$d/Modules.mk
     if test ! -e $srcdir/$mk; then
        AC_MSG_ERROR([--enable-hw-tables=$d specified but $mk is missing])
     fi

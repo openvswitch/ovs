@@ -17,7 +17,7 @@ hardware table module is loaded (and before it is unloaded) will take
 advantage of hardware switching features.
 
 Creating a hardware table module is straightforward.  Create a
-directory in the openflow source tree named datapath/hwtable-NAME,
+directory in the openflow source tree named datapath/hwtable_NAME,
 where NAME identifies the hardware that the module supports.  Populate
 that directory with the C source files that comprise the module, plus
 a file named Modules.mk that specifies how to build the module.  This
@@ -33,6 +33,6 @@ the OpenFlow configure script command as the argument to
 
 Each hardware table module's code is encapsulated in a directory, so
 it is easy to separate a hardware table implementation from OpenFlow.
-Simply package up the contents of the hwtable-NAME directory and
+Simply package up the contents of the hwtable_NAME directory and
 distribute it for builders to extract into their distribution
 directory.
