@@ -50,7 +50,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x83
+#define OFP_VERSION   0x84
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -94,7 +94,9 @@ enum ofp_type {
     OFPT_PORT_STATUS,         /* 11 Async message */
     OFPT_ERROR_MSG,           /* 12 Async message */
     OFPT_STATS_REQUEST,       /* 13 Controller/switch message */
-    OFPT_STATS_REPLY          /* 14 Controller/switch message */
+    OFPT_STATS_REPLY,         /* 14 Controller/switch message */
+    OFPT_ECHO_REQUEST,        /* 15 Symmetric message */
+    OFPT_ECHO_REPLY           /* 16 Symmetric message */
 };
 
 /* Header on all OpenFlow packets. */

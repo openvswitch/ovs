@@ -77,6 +77,8 @@ int dp_send_flow_expired(struct datapath *, struct sw_flow *);
 int dp_send_error_msg(struct datapath *, const struct sender *, 
 			uint16_t, uint16_t, const uint8_t *, size_t);
 int dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp);
+int dp_send_echo_reply(struct datapath *, const struct sender *,
+		       const struct ofp_header *);
 
 /* Should hold at least RCU read lock when calling */
 struct datapath *dp_get(int dp_idx);

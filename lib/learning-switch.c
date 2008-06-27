@@ -67,6 +67,8 @@ static void queue_tx(struct lswitch *, struct rconn *, struct buffer *);
 static void send_features_request(struct lswitch *, struct rconn *);
 static void process_packet_in(struct lswitch *, struct rconn *,
                               struct ofp_packet_in *);
+static void process_echo_request(struct lswitch *, struct rconn *,
+                                 struct ofp_header *);
 
 /* Creates and returns a new learning switch.
  *
@@ -124,7 +126,9 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
         return;
     }
 
-    if (oh->type == OFPT_FEATURES_REPLY) {
+    if (oh->type == OFPT_ECHO_REQUEST) {
+        process_echo_request(sw, rconn, msg->data);
+    } else if (oh->type == OFPT_FEATURES_REPLY) {
         struct ofp_switch_features *osf = msg->data;
         sw->datapath_id = osf->datapath_id;
     } else if (sw->datapath_id == 0) {
@@ -241,4 +245,11 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
         }
         queue_tx(sw, rconn, b);
     }
+}
+
+static void
+process_echo_request(struct lswitch *sw, struct rconn *rconn,
+                     struct ofp_header *rq)
+{
+    queue_tx(sw, rconn, make_echo_reply(rq));
 }

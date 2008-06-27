@@ -780,6 +780,17 @@ ofp_stats_reply(struct ds *string, const void *oh, size_t len, int verbosity)
                 verbosity, REPLY);
 }
 
+static void
+ofp_echo(struct ds *string, const void *oh, size_t len, int verbosity)
+{
+    const struct ofp_header *hdr = oh;
+
+    ds_put_format(string, " %zu bytes of payload\n", len - sizeof *hdr);
+    if (verbosity > 1) {
+        ds_put_hex_dump(string, hdr, len - sizeof *hdr, 0, true); 
+    }
+}
+
 struct openflow_packet {
     const char *name;
     size_t min_size;
@@ -856,6 +867,16 @@ static const struct openflow_packet packets[] = {
         "stats_reply",
         sizeof (struct ofp_stats_reply),
         ofp_stats_reply,
+    },
+    [OFPT_ECHO_REQUEST] = {
+        "echo_request",
+        sizeof (struct ofp_header),
+        ofp_echo,
+    },
+    [OFPT_ECHO_REPLY] = {
+        "echo_reply",
+        sizeof (struct ofp_header),
+        ofp_echo,
     },
 };
 

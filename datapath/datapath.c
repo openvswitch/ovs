@@ -813,6 +813,22 @@ dp_send_error_msg(struct datapath *dp, const struct sender *sender,
 	return send_openflow_skb(skb, sender);
 }
 
+int
+dp_send_echo_reply(struct datapath *dp, const struct sender *sender,
+		   const struct ofp_header *rq)
+{
+	struct sk_buff *skb;
+	struct ofp_header *reply;
+
+	reply = alloc_openflow_skb(dp, ntohs(rq->length), OFPT_ECHO_REPLY,
+				   sender, &skb);
+	if (!reply)
+		return -ENOMEM;
+
+	memcpy(reply + 1, rq + 1, ntohs(rq->length) - sizeof *rq);
+	return send_openflow_skb(skb, sender);
+}
+
 /* Generic Netlink interface.
  *
  * See netlink(7) for an introduction to netlink.  See

@@ -1494,6 +1494,13 @@ error:
     return err;
 }
 
+static int
+recv_echo_request(struct datapath *dp, const struct sender *sender,
+                  const void *oh)
+{
+    return send_openflow_buffer(dp, make_echo_reply(oh), sender);
+}
+
 /* 'msg', which is 'length' bytes long, was received from the control path.
  * Apply it to 'chain'. */
 int
@@ -1533,6 +1540,10 @@ fwd_control_input(struct datapath *dp, const struct sender *sender,
         [OFPT_STATS_REQUEST] = {
             sizeof (struct ofp_stats_request),
             recv_stats_request,
+        },
+        [OFPT_ECHO_REQUEST] = {
+            sizeof (struct ofp_header),
+            recv_echo_request,
         },
     };
 

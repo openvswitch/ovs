@@ -440,3 +440,14 @@ make_buffered_packet_out(uint32_t buffer_id,
     return out;
 }
 
+/* Creates and returns an OFPT_ECHO_REPLY message matching the
+ * OFPT_ECHO_REQUEST message in 'rq'. */
+struct buffer *
+make_echo_reply(const struct ofp_header *rq)
+{
+    size_t size = ntohs(rq->length);
+    struct buffer *out = buffer_new(size);
+    struct ofp_header *reply = buffer_put(out, rq, size);
+    reply->type = OFPT_ECHO_REPLY;
+    return out;
+}
