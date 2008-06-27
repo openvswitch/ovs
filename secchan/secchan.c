@@ -146,7 +146,7 @@ main(int argc, char *argv[])
     if (strncmp(nl_name, "nl:", 3)
         || strlen(nl_name) < 4
         || nl_name[strspn(nl_name + 3, "0123456789") + 3]) {
-        fatal(0, "%s: argument is not of the form \"nl:DP_ID\"", nl_name);
+        fatal(0, "%s: argument is not of the form \"nl:DP_IDX\"", nl_name);
     }
 
     if (listen_vconn_name) {
