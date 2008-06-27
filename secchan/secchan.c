@@ -122,6 +122,7 @@ static void relay_wait(struct relay *);
 static void relay_destroy(struct relay *);
 
 static bool local_hook(struct relay *r);
+static bool failing_open(struct relay *r);
 static bool fail_open_hook(struct relay *r);
 
 int
@@ -129,6 +130,7 @@ main(int argc, char *argv[])
 {
     struct vconn *listen_vconn;
     struct netdev *of_device;
+    struct relay *controller_relay;
     const char *nl_name;
     char of_name[16];
     int retval;
@@ -194,9 +196,10 @@ main(int argc, char *argv[])
 
     daemonize();
 
-    relay_create(rconn_new(argv[optind], 1, 0),
-                 rconn_new(argv[optind + 1], 1, probe_interval),
-                 false);
+    controller_relay = relay_create(rconn_new(argv[optind], 1, 0),
+                                    rconn_new(argv[optind + 1], 1,
+                                              probe_interval),
+                                    false);
     for (;;) {
         struct relay *r, *n;
 
@@ -217,6 +220,7 @@ main(int argc, char *argv[])
                 new_management_connection(nl_name, new_remote);
             }
         }
+        failing_open(controller_relay);
 
         /* Wait for something to happen. */
         LIST_FOR_EACH (r, struct relay, node, &relays) {
@@ -428,10 +432,11 @@ local_hook(struct relay *r)
     return true;
 }
 
+/* Causess 'r' to enter or leave fail-open mode, if appropriate.  Returns true
+ * if 'r' is in fail-open fail, false otherwise. */
 static bool
-fail_open_hook(struct relay *r)
+failing_open(struct relay *r)
 {
-    struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
     struct rconn *local = r->halves[HALF_LOCAL].rconn;
     struct rconn *remote = r->halves[HALF_REMOTE].rconn;
     int disconnected_duration;
@@ -458,11 +463,21 @@ fail_open_hook(struct relay *r)
                   "failing open", disconnected_duration);
         r->lswitch = lswitch_create(local, true, max_idle);
     }
-
-    /* Do switching. */
-    lswitch_process_packet(r->lswitch, local, msg);
-    rconn_run(local);
     return true;
+}
+
+static bool
+fail_open_hook(struct relay *r)
+{
+    if (!failing_open(r)) {
+        return false;
+    } else {
+        struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
+        struct rconn *local = r->halves[HALF_LOCAL].rconn;
+        lswitch_process_packet(r->lswitch, local, msg);
+        rconn_run(local);
+        return true;
+    }
 }
 
 static void
