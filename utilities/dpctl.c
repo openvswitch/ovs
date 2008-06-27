@@ -180,6 +180,7 @@ usage(void)
            "  add-flow SWITCH FLOW        add flow described by FLOW\n"
            "  add-flows SWITCH FILE       add flows from FILE\n"
            "  del-flows SWITCH FLOW       delete matching FLOWs\n"
+           "  ping SWITCH [N]             time N-byte (default: 64) echos\n"
            "where each SWITCH is an active OpenFlow connection method.\n",
            program_name, program_name);
     vconn_usage(true, false);
@@ -815,6 +816,53 @@ do_dump_ports(int argc, char *argv[])
     dump_trivial_stats_transaction(argv[1], OFPST_PORT);
 }
 
+static void
+do_ping(int argc, char *argv[])
+{
+    size_t max_payload = 65535 - sizeof(struct ofp_header);
+    unsigned int payload;
+    struct vconn *vconn;
+    int i;
+
+    payload = argc > 2 ? atoi(argv[1]) : 64;
+    if (payload > max_payload) {
+        fatal(0, "payload must be between 0 and %zu bytes", max_payload);
+    }
+
+    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    for (i = 0; i < 10; i++) {
+        struct timeval start, end;
+        struct buffer *request, *reply;
+        struct ofp_header *rq_hdr, *rpy_hdr;
+
+        rq_hdr = alloc_openflow_buffer(sizeof(struct ofp_header) + payload,
+                                    OFPT_ECHO_REQUEST, &request);
+        random_bytes(rq_hdr + 1, payload);
+
+        gettimeofday(&start, NULL);
+        reply = transact_openflow(vconn, buffer_clone(request));
+        gettimeofday(&end, NULL);
+
+        rpy_hdr = reply->data;
+        if (reply->size != request->size
+            || memcmp(rpy_hdr + 1, rq_hdr + 1, payload)
+            || rpy_hdr->xid != rq_hdr->xid
+            || rpy_hdr->type != OFPT_ECHO_REPLY) {
+            printf("Reply does not match request.  Request:\n");
+            ofp_print(stdout, request, request->size, 2);
+            printf("Reply:\n");
+            ofp_print(stdout, reply, reply->size, 2);
+        }
+        printf("%d bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
+               reply->size - sizeof *rpy_hdr, argv[1], rpy_hdr->xid,
+                   (1000*(double)(end.tv_sec - start.tv_sec))
+                   + (.001*(end.tv_usec - start.tv_usec)));
+        buffer_delete(request);
+        buffer_delete(reply);
+    }
+    vconn_close(vconn);
+}
+
 static void do_help(int argc UNUSED, char *argv[] UNUSED)
 {
     usage();
@@ -840,5 +888,6 @@ static struct command all_commands[] = {
     { "add-flows", 2, 2, do_add_flows },
     { "del-flows", 1, 2, do_del_flows },
     { "dump-ports", 1, 1, do_dump_ports },
+    { "ping", 1, 2, do_ping },
     { NULL, 0, 0, NULL },
 };

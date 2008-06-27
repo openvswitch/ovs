@@ -142,6 +142,12 @@ Deletes entries from the datapath \fIswitch\fR's tables that match
 tables are removed.  See \fBFLOW SYNTAX\fR, below, for the syntax of
 \fIflows\fR.
 
+.TP
+\fBping \fIswitch \fR[\fIn\fR]
+Sends a series of 10 echo request packets to \fIswitch\fR and times
+each reply.  The echo request packets consist of an OpenFlow header
+plus \fIn\fR bytes (default: 64) of randomly generated payload.
+
 .SH "FLOW SYNTAX"
 
 Some \fBdpctl\fR commands accept an argument that describes a flow or
