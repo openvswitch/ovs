@@ -21,6 +21,7 @@ noinst_HEADERS = \
 	packets.h \
 	poll-loop.h \
 	queue.h \
+	random.h \
 	rconn.h \
 	socket-util.h \
 	util.h \

@@ -35,6 +35,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include "random.h"
 #include "util.h"
 
 #define ETH_ADDR_LEN           6
@@ -56,6 +57,29 @@ static inline bool eth_addr_equals(const uint8_t a[ETH_ADDR_LEN],
 {
     return !memcmp(a, b, ETH_ADDR_LEN);
 }
+static inline uint64_t eth_addr_to_uint64(const uint8_t ea[ETH_ADDR_LEN])
+{
+    return (((uint64_t) ea[0] << 40)
+            | ((uint64_t) ea[1] << 32)
+            | ((uint64_t) ea[2] << 24)
+            | ((uint64_t) ea[3] << 16)
+            | ((uint64_t) ea[4] << 8)
+            | ea[5]);
+}
+static inline void eth_addr_from_uint64(uint64_t x, uint8_t ea[ETH_ADDR_LEN])
+{
+    ea[0] = x >> 40;
+    ea[1] = x >> 32;
+    ea[2] = x >> 24;
+    ea[3] = x >> 16;
+    ea[4] = x >> 8;
+    ea[5] = x;
+}
+static inline void eth_addr_random(uint8_t ea[ETH_ADDR_LEN])
+{
+    random_bytes(ea, ETH_ADDR_LEN);
+}
+
 #define ETH_ADDR_FMT                                                    \
     "%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8
 #define ETH_ADDR_ARGS(ea)                                   \

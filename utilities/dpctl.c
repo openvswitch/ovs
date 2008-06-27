@@ -53,6 +53,7 @@
 #include "socket-util.h"
 #include "openflow.h"
 #include "ofp-print.h"
+#include "random.h"
 #include "vconn.h"
 #include "vconn-ssl.h"
 
@@ -319,21 +320,6 @@ static void do_benchmark_nl(int argc UNUSED, char *argv[])
 
 /* Generic commands. */
 
-static uint32_t
-random_xid(void)
-{
-    static bool inited = false;
-    if (!inited) {
-        struct timeval tv;
-        inited = true;
-        if (gettimeofday(&tv, NULL) < 0) {
-            fatal(errno, "gettimeofday");
-        }
-        srand(tv.tv_sec ^ tv.tv_usec);
-    }
-    return rand();
-}
-
 static void *
 alloc_openflow_buffer(size_t openflow_len, uint8_t type,
                       struct buffer **bufferp)
@@ -347,7 +333,7 @@ alloc_openflow_buffer(size_t openflow_len, uint8_t type,
 	oh->version = OFP_VERSION;
 	oh->type = type;
 	oh->length = 0;
-	oh->xid = random_xid();
+	oh->xid = random_uint32();
 	return oh;
 }
 

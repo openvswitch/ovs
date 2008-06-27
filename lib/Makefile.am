@@ -18,6 +18,7 @@ libopenflow_la_SOURCES = \
 	ofp-print.c \
 	poll-loop.c \
 	queue.c \
+	random.c \
 	rconn.c \
 	socket-util.c \
 	util.c \

@@ -167,24 +167,13 @@ static int port_no(struct datapath *dp, struct sw_port *p)
     return p - dp->ports;
 }
 
-/* Generates a unique datapath id.  It incorporates the datapath index
- * and a hardware address, if available.  If not, it generates a random
- * one.
- */
+/* Generates and returns a random datapath id. */
 static uint64_t
 gen_datapath_id(void)
 {
-    /* Choose a random datapath id. */
-    uint64_t id = 0;
-    int i;
-
-    srand(time(0));
-
-    for (i = 0; i < ETH_ADDR_LEN; i++) {
-        id |= (uint64_t)(rand() & 0xff) << (8*(ETH_ADDR_LEN-1 - i));
-    }
-
-    return id;
+    uint8_t ea[ETH_ADDR_LEN];
+    eth_addr_random(ea);
+    return eth_addr_to_uint64(ea);
 }
 
 int
