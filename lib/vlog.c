@@ -232,12 +232,16 @@ vlog_set_levels_from_string(const char *s_)
 }
 
 /* If 'arg' is null, configure maximum verbosity.  Otherwise, sets
- * configuration according to 'arg' (see vlog_set_levels_from_string()).  If
- * parsing fails, default to maximum verbosity. */
+ * configuration according to 'arg' (see vlog_set_levels_from_string()). */
 void
 vlog_set_verbosity(const char *arg)
 {
-    if (arg == NULL || !vlog_set_levels_from_string(arg)) {
+    if (arg) {
+        char *msg = vlog_set_levels_from_string(arg);
+        if (msg) {
+            fatal(0, "processing \"%s\": %s", arg, msg);
+        }
+    } else {
         vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_DBG);
     }
 }
