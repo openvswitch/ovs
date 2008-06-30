@@ -1085,7 +1085,8 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
         const struct ofp_action *a = &ofm->actions[i];
 
         if (a->type == htons(OFPAT_OUTPUT)
-                    && a->arg.output.port == htons(OFPP_TABLE)) {
+                    && (a->arg.output.port == htons(OFPP_TABLE)
+                        || a->arg.output.port == htons(OFPP_NONE))) {
             /* xxx Send fancy new error message? */
             goto error;
         }
