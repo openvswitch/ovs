@@ -218,47 +218,57 @@ ofp_print_action(struct ds *string, const struct ofp_action *a)
 {
     switch (ntohs(a->type)) {
     case OFPAT_OUTPUT:
-        ds_put_cstr(string, "output(");
-        ofp_print_port_name(string, ntohs(a->arg.output.port));
-        if (a->arg.output.port == htons(OFPP_CONTROLLER)) {
-            ds_put_format(string, ", max %"PRIu16" bytes", 
-                    ntohs(a->arg.output.max_len));
+        {
+            uint16_t port = ntohs(a->arg.output.port); 
+            if (port < OFPP_MAX) {
+                ds_put_format(string, "output:%"PRIu16, port);
+            } else {
+                ofp_print_port_name(string, port);
+                if (port == OFPP_CONTROLLER) {
+                    if (a->arg.output.max_len) {
+                        ds_put_format(string, ":%"PRIu16, 
+                                ntohs(a->arg.output.max_len));
+                    } else {
+                        ds_put_cstr(string, ":all");
+                    }
+                }
+            }
         }
-        ds_put_cstr(string, ")");
         break;
 
     case OFPAT_SET_DL_VLAN:
+        ds_put_cstr(string, "mod_vlan:");
         if (ntohs(a->arg.vlan_id) == OFP_VLAN_NONE) {
-            ds_put_cstr(string, "strip vlan");
+            ds_put_cstr(string, "strip");
         } else {
-            ds_put_format(string, "mod vlan(%"PRIu16")", ntohs(a->arg.vlan_id));
+            ds_put_format(string, "%"PRIu16, ntohs(a->arg.vlan_id));
         }
         break;
 
     case OFPAT_SET_DL_SRC:
-        ds_put_format(string, "mod dl src("ETH_ADDR_FMT")", 
+        ds_put_format(string, "mod_dl_src:"ETH_ADDR_FMT, 
                 ETH_ADDR_ARGS(a->arg.dl_addr));
         break;
 
     case OFPAT_SET_DL_DST:
-        ds_put_format(string, "mod dl dst("ETH_ADDR_FMT")", 
+        ds_put_format(string, "mod_dl_dst:"ETH_ADDR_FMT, 
                 ETH_ADDR_ARGS(a->arg.dl_addr));
         break;
 
     case OFPAT_SET_NW_SRC:
-        ds_put_format(string, "mod nw src("IP_FMT")", IP_ARGS(a->arg.nw_addr));
+        ds_put_format(string, "mod_nw_src:"IP_FMT, IP_ARGS(a->arg.nw_addr));
         break;
 
     case OFPAT_SET_NW_DST:
-        ds_put_format(string, "mod nw dst("IP_FMT")", IP_ARGS(a->arg.nw_addr));
+        ds_put_format(string, "mod_nw_dst:"IP_FMT, IP_ARGS(a->arg.nw_addr));
         break;
 
     case OFPAT_SET_TP_SRC:
-        ds_put_format(string, "mod tp src(%d)", ntohs(a->arg.tp));
+        ds_put_format(string, "mod_tp_src:%d", ntohs(a->arg.tp));
         break;
 
     case OFPAT_SET_TP_DST:
-        ds_put_format(string, "mod tp dst(%d)", ntohs(a->arg.tp));
+        ds_put_format(string, "mod_tp_dst:%d", ntohs(a->arg.tp));
         break;
 
     default:
@@ -273,21 +283,21 @@ static void ofp_print_actions(struct ds *string,
                               size_t n_bytes) 
 {
     size_t i;
+    int n_actions = n_bytes / sizeof *actions;
 
-    ds_put_cstr(string, " actions[");
-    for (i = 0; i < n_bytes / sizeof *actions; i++) {
+    ds_put_format(string, "action%s=", n_actions == 1 ? "" : "s");
+    for (i = 0; i < n_actions; i++) {
         if (i) {
-            ds_put_cstr(string, "; ");
+            ds_put_cstr(string, ",");
         }
         ofp_print_action(string, &actions[i]);
     }
     if (n_bytes % sizeof *actions) {
         if (i) {
-            ds_put_cstr(string, "; ");
+            ds_put_cstr(string, ",");
         }
-        ds_put_cstr(string, "; ***trailing garbage***");
+        ds_put_cstr(string, ", ***trailing garbage***");
     }
-    ds_put_cstr(string, "]");
 }
 
 /* Pretty-print the OFPT_PACKET_OUT packet of 'len' bytes at 'oh' to 'string'
@@ -405,11 +415,15 @@ ofp_print_switch_config(struct ds *string, const void *oh, size_t len,
 }
 
 static void print_wild(struct ds *string, const char *leader, int is_wild,
-            const char *format, ...) __attribute__((format(printf, 4, 5)));
+            int verbosity, const char *format, ...) 
+            __attribute__((format(printf, 5, 6)));
 
 static void print_wild(struct ds *string, const char *leader, int is_wild,
-                       const char *format, ...) 
+                       int verbosity, const char *format, ...) 
 {
+    if (is_wild && verbosity < 2) {
+        return;
+    }
     ds_put_cstr(string, leader);
     if (!is_wild) {
         va_list args;
@@ -418,28 +432,36 @@ static void print_wild(struct ds *string, const char *leader, int is_wild,
         ds_put_format_valist(string, format, args);
         va_end(args);
     } else {
-        ds_put_char(string, '?');
+        ds_put_char(string, '*');
     }
 }
 
 /* Pretty-print the ofp_match structure */
-static void ofp_print_match(struct ds *f, const struct ofp_match *om)
+static void ofp_print_match(struct ds *f, const struct ofp_match *om, 
+        int verbosity)
 {
     uint16_t w = ntohs(om->wildcards);
 
-    print_wild(f, " inport", w & OFPFW_IN_PORT, "%d", ntohs(om->in_port));
-    print_wild(f, ":vlan", w & OFPFW_DL_VLAN, "%04x", ntohs(om->dl_vlan));
-    print_wild(f, " mac[", w & OFPFW_DL_SRC,
-               ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_src));
-    print_wild(f, "->", w & OFPFW_DL_DST,
-               ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_dst));
-    print_wild(f, "] type", w & OFPFW_DL_TYPE, "%04x", ntohs(om->dl_type));
-    print_wild(f, " ip[", w & OFPFW_NW_SRC, IP_FMT, IP_ARGS(&om->nw_src));
-    print_wild(f, "->", w & OFPFW_NW_DST, IP_FMT, IP_ARGS(&om->nw_dst));
-    print_wild(f, "] proto", w & OFPFW_NW_PROTO, "%u", om->nw_proto);
-    print_wild(f, " tport[", w & OFPFW_TP_SRC, "%d", ntohs(om->tp_src));
-    print_wild(f, "->", w & OFPFW_TP_DST, "%d", ntohs(om->tp_dst));
-    ds_put_cstr(f, "]");
+    print_wild(f, "in_port=", w & OFPFW_IN_PORT, verbosity,
+               "%d,", ntohs(om->in_port));
+    print_wild(f, "dl_vlan=", w & OFPFW_DL_VLAN, verbosity,
+               "%04x,", ntohs(om->dl_vlan));
+    print_wild(f, "dl_src=", w & OFPFW_DL_SRC, verbosity,
+               ETH_ADDR_FMT",", ETH_ADDR_ARGS(om->dl_src));
+    print_wild(f, "dl_dst=", w & OFPFW_DL_DST, verbosity,
+               ETH_ADDR_FMT",", ETH_ADDR_ARGS(om->dl_dst));
+    print_wild(f, "dl_type=", w & OFPFW_DL_TYPE, verbosity,
+               "%04x,", ntohs(om->dl_type));
+    print_wild(f, "nw_src=", w & OFPFW_NW_SRC, verbosity,
+               IP_FMT",", IP_ARGS(&om->nw_src));
+    print_wild(f, "nw_dst=", w & OFPFW_NW_DST, verbosity,
+               IP_FMT",", IP_ARGS(&om->nw_dst));
+    print_wild(f, "nw_proto=", w & OFPFW_NW_PROTO, verbosity,
+               "%u,", om->nw_proto);
+    print_wild(f, "tp_src=", w & OFPFW_TP_SRC, verbosity,
+               "%d,", ntohs(om->tp_src));
+    print_wild(f, "tp_dst=", w & OFPFW_TP_DST, verbosity,
+               "%d,", ntohs(om->tp_dst));
 }
 
 /* Pretty-print the OFPT_FLOW_MOD packet of 'len' bytes at 'oh' to 'string'
@@ -450,7 +472,7 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
 {
     const struct ofp_flow_mod *ofm = oh;
 
-    ofp_print_match(string, &ofm->match);
+    ofp_print_match(string, &ofm->match, verbosity);
     ds_put_format(string, " cmd:%d idle:%d pri:%d buf:%#x", 
             ntohs(ofm->command), ntohs(ofm->max_idle), 
             ofm->match.wildcards ? ntohs(ofm->priority) : (uint16_t)-1,
@@ -468,7 +490,7 @@ ofp_print_flow_expired(struct ds *string, const void *oh, size_t len,
 {
     const struct ofp_flow_expired *ofe = oh;
 
-    ofp_print_match(string, &ofe->match);
+    ofp_print_match(string, &ofe->match, verbosity);
     ds_put_format(string, 
          " pri%"PRIu16" secs%"PRIu32" pkts%"PRIu64" bytes%"PRIu64"\n", 
          ofe->match.wildcards ? ntohs(ofe->priority) : (uint16_t)-1,
@@ -521,7 +543,7 @@ ofp_flow_stats_request(struct ds *string, const void *oh, size_t len,
         ds_put_format(string, " table_id=%"PRIu8", ", fsr->table_id);
     }
 
-    ofp_print_match(string, &fsr->match);
+    ofp_print_match(string, &fsr->match, verbosity);
 }
 
 static void
@@ -571,7 +593,7 @@ ofp_flow_stats_reply(struct ds *string, const void *body_, size_t len,
                     ntohll(fs->packet_count));
         ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
         ds_put_format(string, "max_idle=%"PRIu16",", ntohs(fs->max_idle));
-        ofp_print_match(string, &fs->match);
+        ofp_print_match(string, &fs->match, verbosity);
         ofp_print_actions(string, fs->actions, length - sizeof *fs);
         ds_put_char(string, '\n');
 
@@ -591,7 +613,7 @@ ofp_aggregate_stats_request(struct ds *string, const void *oh, size_t len,
         ds_put_format(string, " table_id=%"PRIu8", ", asr->table_id);
     }
 
-    ofp_print_match(string, &asr->match);
+    ofp_print_match(string, &asr->match, verbosity);
 }
 
 static void

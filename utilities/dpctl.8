@@ -124,10 +124,16 @@ the statistics are aggregated across all flows in the datapath's flow
 tables.  See \fBFLOW SYNTAX\fR, below, for the syntax of \fIflows\fR.
 
 .TP
+\fBadd-flow \fIswitch flow\fR
+Add the flow entry as described by \fIflow\fR to the datapath \fIswitch\fR's 
+tables.  The flow entry is in the format described in \fBFLOW SYNTAX\fR, 
+below.
+
+.TP
 \fBadd-flows \fIswitch file\fR
 Add flow entries as described in \fIfile\fR to the datapath \fIswitch\fR's 
 tables.  Each line in \fIfile\fR is a flow entry in the format
-described in \fBFLOW SYNTAX\fB, below.
+described in \fBFLOW SYNTAX\fR, below.
 
 .TP
 \fBdel-flows \fIswitch \fR[\fIflow\fR]
@@ -196,17 +202,21 @@ packets originating from a HTTP server.
 Matches UDP or TCP destination port \fIport\fR.
 
 .PP
-The \fBadd-flow\fR command requires an additional field:
+The \fBadd-flow\fR and \fBadd-flows\fR commands require an additional field:
 
-.IP \fBaction=\fItarget\fR
-Specifies the action to take on a packet when the flow entry matches.
-The \fItarget\fR may be a decimal port number designating the physical
-port on which to output the packet, or one of the following keywords:
+.IP \fIactions\fB=\fItarget\fR[\fB,\fItarget\fR...]\fR
+Specifies a comma-separated list of actions to take on a packet when the 
+flow entry matches.  The \fItarget\fR may be a decimal port number 
+designating the physical port on which to output the packet, or one of 
+the following keywords:
 
 .RS
+.IP \fBoutput\fR:\fIport\fR
+Outputs the packet on the port specified by \fIport\fR.
+
 .IP \fBnormal\fR
-Subjects the packet to the device's normal L2/L3 processing.  This
-action is not implemented by all OpenFlow switches.
+Subjects the packet to the device's normal L2/L3 processing.  (This
+action is not implemented by all OpenFlow switches.)
 
 .IP \fBflood\fR
 Outputs the packet on all switch physical ports other than the port on
@@ -218,14 +228,23 @@ tree protocol).
 Outputs the packet on all switch physical ports other than the port on
 which it was received.
 
-.IP \fBcontroller\fR
+.IP \fBcontroller\fR:\fImax_len\fR
 Sends the packet to the OpenFlow controller as a ``packet in''
-message.
+message.  If \fImax_len\fR is a number, then it specifies the maximum
+number of bytes that should be sent.  If \fImax_len\fR is \fBALL\fR or
+omitted, then the entire packet is sent.
 
 .IP \fBlocal\fR
 Outputs the packet on the ``local port,'' which corresponds to the
 \fBof\fIn\fR network device (see \fBCONTACTING THE CONTROLLER\fR in
 \fBsecchan\fR(8) for information on the \fBof\fIn\fR network device).
+
+.IP \fBmod_vlan\fR:\fIvlan_id\fR
+Modifies the VLAN tag on a packet.  If \fIvlan_id\fR is a number, then 
+the VLAN tag is added or modified as necessary to match the value 
+specified.  If \fIvlan_id\fR is \fBSTRIP\fR, then the VLAN tag is 
+stripped from the packet if one is present.  (This action is not 
+implemented by all OpenFlow switches.)
 .RE
 
 .IP
