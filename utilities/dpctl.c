@@ -180,7 +180,8 @@ usage(void)
            "  add-flow SWITCH FLOW        add flow described by FLOW\n"
            "  add-flows SWITCH FILE       add flows from FILE\n"
            "  del-flows SWITCH FLOW       delete matching FLOWs\n"
-           "  ping SWITCH [N]             time N-byte (default: 64) echos\n"
+           "  ping SWITCH [N]             latency of N-byte echos\n"
+           "  benchmark SWITCH N COUNT    bandwidth of COUNT N-byte echos\n"
            "where each SWITCH is an active OpenFlow connection method.\n",
            program_name, program_name);
     vconn_usage(true, false);
@@ -824,7 +825,7 @@ do_ping(int argc, char *argv[])
     struct vconn *vconn;
     int i;
 
-    payload = argc > 2 ? atoi(argv[1]) : 64;
+    payload = argc > 2 ? atoi(argv[2]) : 64;
     if (payload > max_payload) {
         fatal(0, "payload must be between 0 and %zu bytes", max_payload);
     }
@@ -863,6 +864,49 @@ do_ping(int argc, char *argv[])
     vconn_close(vconn);
 }
 
+static void
+do_benchmark(int argc, char *argv[])
+{
+    size_t max_payload = 65535 - sizeof(struct ofp_header);
+    struct timeval start, end;
+    unsigned int payload_size, message_size;
+    struct vconn *vconn;
+    double duration;
+    int count;
+    int i;
+
+    payload_size = atoi(argv[2]);
+    if (payload_size > max_payload) {
+        fatal(0, "payload must be between 0 and %zu bytes", max_payload);
+    }
+    message_size = sizeof(struct ofp_header) + payload_size;
+
+    count = atoi(argv[3]);
+
+    printf("Sending %d packets * %u bytes (with header) = %u bytes total\n",
+           count, message_size, count * message_size);
+
+    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    gettimeofday(&start, NULL);
+    for (i = 0; i < count; i++) {
+        struct buffer *request;
+        struct ofp_header *rq_hdr;
+
+        rq_hdr = alloc_openflow_buffer(message_size, OFPT_ECHO_REQUEST,
+                                       &request);
+        memset(rq_hdr + 1, 0, payload_size);
+        buffer_delete(transact_openflow(vconn, request));
+    }
+    gettimeofday(&end, NULL);
+    vconn_close(vconn);
+
+    duration = ((1000*(double)(end.tv_sec - start.tv_sec))
+                + (.001*(end.tv_usec - start.tv_usec)));
+    printf("Finished in %.1f ms (%.0f packets/s) (%.0f bytes/s)\n",
+           duration, count / (duration / 1000.0),
+           count * message_size / (duration / 1000.0));
+}
+
 static void do_help(int argc UNUSED, char *argv[] UNUSED)
 {
     usage();
@@ -889,5 +933,6 @@ static struct command all_commands[] = {
     { "del-flows", 1, 2, do_del_flows },
     { "dump-ports", 1, 1, do_dump_ports },
     { "ping", 1, 2, do_ping },
+    { "benchmark", 3, 3, do_benchmark },
     { NULL, 0, 0, NULL },
 };

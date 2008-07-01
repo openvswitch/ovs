@@ -146,7 +146,16 @@ tables are removed.  See \fBFLOW SYNTAX\fR, below, for the syntax of
 \fBping \fIswitch \fR[\fIn\fR]
 Sends a series of 10 echo request packets to \fIswitch\fR and times
 each reply.  The echo request packets consist of an OpenFlow header
-plus \fIn\fR bytes (default: 64) of randomly generated payload.
+plus \fIn\fR bytes (default: 64) of randomly generated payload.  This
+measures the latency of individual requests.
+
+.TP
+\fBbenchmark \fIswitch n count\fR
+Sends \fIcount\fR echo request packets that each consist of an
+OpenFlow header plus \fIn\fR bytes of payload and waits for each
+response.  Reports the total time required.  This is a measure of the
+maximum bandwidth to \fIswitch\fR for round-trips of \fIn\fR-byte
+messages.
 
 .SH "FLOW SYNTAX"
 
