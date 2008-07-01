@@ -330,8 +330,9 @@ ssl_connect(struct vconn *vconn)
             if (retval < 0 && ssl_wants_io(error)) {
                 return EAGAIN;
             } else {
+                int unused;
                 interpret_ssl_error((sslv->type == CLIENT ? "SSL_connect"
-                                     : "SSL_accept"), retval, error, NULL);
+                                     : "SSL_accept"), retval, error, &unused);
                 shutdown(sslv->fd, SHUT_RDWR);
                 return EPROTO;
             }
