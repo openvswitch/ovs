@@ -61,8 +61,6 @@ enum dp_genl_command {
 	DP_GENL_C_DEL_PORT,	 /* Remove port from datapath. */
 	DP_GENL_C_OPENFLOW,  /* Encapsulated OpenFlow protocol. */
 
-    DP_GENL_C_BENCHMARK_NL, /* Benchmark netlink connection */
-
 	__DP_GENL_C_MAX,
 	DP_GENL_C_MAX = __DP_GENL_C_MAX - 1
 };

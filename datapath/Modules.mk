@@ -5,7 +5,6 @@ openflow_sources = \
 	chain.c \
 	crc32.c \
 	datapath.c \
-	datapath_t.c \
 	dp_dev.c \
 	flow.c \
 	forward.c \
@@ -18,7 +17,6 @@ openflow_headers = \
 	compat.h \
 	crc32.h \
 	datapath.h \
-	datapath_t.h \
 	dp_dev.h \
 	flow.h \
 	forward.h \

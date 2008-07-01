@@ -36,7 +36,6 @@
 #include "dp_dev.h"
 #include "forward.h"
 #include "flow.h"
-#include "datapath_t.h"
 
 #include "compat.h"
 
@@ -1489,20 +1488,6 @@ static struct genl_ops dp_genl_ops_openflow = {
 	.dumpit = dp_genl_openflow_dumpit,
 };
 
-static struct nla_policy dp_genl_benchmark_policy[DP_GENL_A_MAX + 1] = {
-	[DP_GENL_A_DP_IDX] = { .type = NLA_U32 },
-	[DP_GENL_A_NPACKETS] = { .type = NLA_U32 },
-	[DP_GENL_A_PSIZE] = { .type = NLA_U32 },
-};
-
-static struct genl_ops dp_genl_ops_benchmark_nl = {
-	.cmd = DP_GENL_C_BENCHMARK_NL,
-	.flags = GENL_ADMIN_PERM, /* Requires CAP_NET_ADMIN privilege. */
-	.policy = dp_genl_benchmark_policy,
-	.doit = dp_genl_benchmark_nl,
-	.dumpit = NULL,
-};
-
 static struct genl_ops *dp_genl_all_ops[] = {
 	/* Keep this operation first.  Generic Netlink dispatching
 	 * looks up operations with linear search, so we want it at the
@@ -1514,7 +1499,6 @@ static struct genl_ops *dp_genl_all_ops[] = {
 	&dp_genl_ops_query_dp,
 	&dp_genl_ops_add_port,
 	&dp_genl_ops_del_port,
-	&dp_genl_ops_benchmark_nl,
 };
 
 static int dp_init_netlink(void)

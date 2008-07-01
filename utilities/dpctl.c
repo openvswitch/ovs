@@ -167,7 +167,6 @@ usage(void)
            "  addif nl:DP_ID IFACE        add IFACE as a port on DP_ID\n"
            "  delif nl:DP_ID IFACE        delete IFACE as a port on DP_ID\n"
            "  monitor nl:DP_ID            print packets received\n"
-           "  benchmark-nl nl:DP_ID N SIZE   send N packets of SIZE bytes\n"
 #endif
            "\nCommands that apply to local datapaths and remote switches:\n"
            "  show SWITCH                 show information\n"
@@ -279,44 +278,6 @@ static void do_monitor(int argc UNUSED, char *argv[])
         ofp_print(stderr, b->data, b->size, 2);
         buffer_delete(b);
     }
-}
-
-#define BENCHMARK_INCR   100
-
-static void do_benchmark_nl(int argc UNUSED, char *argv[])
-{
-    struct dpif dp;
-    uint32_t num_packets, i, milestone;
-    struct timeval start, end;
-
-    open_nl_vconn(argv[1], false, &dp);
-    num_packets = atoi(argv[2]);
-    milestone = BENCHMARK_INCR;
-    run(dpif_benchmark_nl(&dp, num_packets, atoi(argv[3])), "benchmark_nl");
-    if (gettimeofday(&start, NULL) == -1) {
-        run(errno, "gettimeofday");
-    }
-    for (i = 0; i < num_packets;i++) {
-        struct buffer *b;
-        run(dpif_recv_openflow(&dp, &b, true), "dpif_recv_openflow");
-        if (i == milestone) {
-            gettimeofday(&end, NULL);
-            printf("%u packets received in %f ms\n",
-                   BENCHMARK_INCR,
-                   (1000*(double)(end.tv_sec - start.tv_sec))
-                   + (.001*(end.tv_usec - start.tv_usec)));
-            milestone += BENCHMARK_INCR;
-            start = end;
-        }
-        buffer_delete(b);
-    }
-    gettimeofday(&end, NULL);
-    printf("%u packets received in %f ms\n",
-           i - (milestone - BENCHMARK_INCR),
-           (1000*(double)(end.tv_sec - start.tv_sec))
-           + (.001*(end.tv_usec - start.tv_usec)));
-
-    dpif_close(&dp);
 }
 #endif /* HAVE_NETLINK */
 
@@ -918,7 +879,6 @@ static struct command all_commands[] = {
     { "deldp", 1, 1, do_del_dp },
     { "addif", 2, 2, do_add_port },
     { "delif", 2, 2, do_del_port },
-    { "benchmark-nl", 3, 3, do_benchmark_nl },
 #endif
 
     { "show", 1, 1, do_show },

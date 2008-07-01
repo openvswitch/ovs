@@ -269,25 +269,6 @@ dpif_del_port(struct dpif *dp, const char *netdev)
 {
     return send_mgmt_command(dp, DP_GENL_C_DEL_PORT, netdev);
 }
-
-/* Tells dp to send num_packets up through netlink for benchmarking*/
-int
-dpif_benchmark_nl(struct dpif *dp, uint32_t num_packets, uint32_t packet_size)
-{
-    struct buffer request;
-    int retval;
-
-    buffer_init(&request, 0);
-    nl_msg_put_genlmsghdr(&request, dp->sock, 0, openflow_family,
-                          NLM_F_REQUEST, DP_GENL_C_BENCHMARK_NL, 1);
-    nl_msg_put_u32(&request, DP_GENL_A_DP_IDX, dp->dp_idx);
-    nl_msg_put_u32(&request, DP_GENL_A_NPACKETS, num_packets);
-    nl_msg_put_u32(&request, DP_GENL_A_PSIZE, packet_size);
-    retval = nl_sock_send(dp->sock, &request, true);
-    buffer_uninit(&request);
-
-    return retval;
-}
 
 static const struct nl_policy openflow_multicast_policy[] = {
     [DP_GENL_A_DP_IDX] = { .type = NL_A_U32 },

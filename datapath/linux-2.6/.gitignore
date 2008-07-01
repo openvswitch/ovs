@@ -5,7 +5,6 @@
 /crc32.c
 /crc_t.c
 /datapath.c
-/datapath_t.c
 /dp_dev.c
 /flow.c
 /forward.c
