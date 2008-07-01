@@ -4,6 +4,10 @@
 #include_next <linux/timer.h>
 
 #include <linux/version.h>
+
+#ifndef RHEL_RELEASE_VERSION
+#define RHEL_RELEASE_VERSION(X,Y) ( 0 )
+#endif
 #if ((LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)) && \
      (!defined(RHEL_RELEASE_CODE) || \
       (RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(5,1))))
