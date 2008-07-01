@@ -103,9 +103,9 @@ static struct mac_learning *local_ml;
 /* -f, --fail: Behavior when the connection to the controller fails. */
 static enum fail_mode fail_mode = FAIL_OPEN;
 
-/* -d, --fail-open-delay: Number of seconds after which to fail open, when
- * fail_mode is FAIL_OPEN. */
-static int fail_open_delay = 30;
+/* --inactivity-probe: Number of seconds without receiving a message from the
+   controller before sending an inactivity probe. */
+static int probe_interval = 15;
 
 /* --max-idle: Idle time to assign to flows created by learning switch when in
  * fail-open mode. */
@@ -194,7 +194,8 @@ main(int argc, char *argv[])
 
     daemonize();
 
-    relay_create(rconn_new(argv[optind], 1), rconn_new(argv[optind + 1], 1),
+    relay_create(rconn_new(argv[optind], 1, 0),
+                 rconn_new(argv[optind + 1], 1, probe_interval),
                  false);
     for (;;) {
         struct relay *r, *n;
@@ -441,7 +442,7 @@ fail_open_hook(struct relay *r)
     }
 
     disconnected_duration = rconn_disconnected_duration(remote);
-    if (disconnected_duration < fail_open_delay) {
+    if (disconnected_duration < probe_interval * 3) {
         /* It's not time to fail open yet. */
         if (r->lswitch && rconn_is_connected(remote)) {
             /* We're connected, so drop the learning switch. */
@@ -467,10 +468,10 @@ fail_open_hook(struct relay *r)
 static void
 parse_options(int argc, char *argv[]) 
 {
-    enum { OPT_MAX_IDLE = UCHAR_MAX + 1 };
+    enum { OPT_INACTIVITY_PROBE = UCHAR_MAX + 1, OPT_MAX_IDLE };
     static struct option long_options[] = {
         {"fail",        required_argument, 0, 'f'},
-        {"fail-open-delay", required_argument, 0, 'd'},
+        {"inactivity-probe", required_argument, 0, OPT_INACTIVITY_PROBE},
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
         {"listen",      required_argument, 0, 'l'},
         {"detach",      no_argument, 0, 'D'},
@@ -503,11 +504,10 @@ parse_options(int argc, char *argv[])
             }
             break;
 
-        case 'd':
-            fail_open_delay = atoi(optarg);
-            if (fail_open_delay < 1) {
-                fatal(0,
-                      "-d or --fail-open-delay argument must be at least 1");
+        case OPT_INACTIVITY_PROBE:
+            probe_interval = atoi(optarg);
+            if (probe_interval < 5) {
+                fatal(0, "--inactivity-probe argument must be at least 5");
             }
             break;
 
@@ -574,8 +574,7 @@ usage(void)
            "  -f, --fail=open|closed  when controller connection fails:\n"
            "                            closed: drop all packets\n"
            "                            open (default): act as learning switch\n"
-           "  -d, --fail-open-delay=SECS  number of seconds after which to\n"
-           "                          fail open if --fail=open (default: 30)\n"
+           "  --inactivity-probe=SECS time between inactivity probes\n"
            "  --max-idle=SECS         max idle for flows set up by secchan\n"
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
            "                          (a passive OpenFlow connection method)\n"

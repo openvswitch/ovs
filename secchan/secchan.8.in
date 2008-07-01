@@ -97,22 +97,30 @@ switch at all.
 
 If this option is set to \fBopen\fR (the default), \fBsecchan\fR will
 take over responsibility for setting up flows in the local datapath
-when the controller connection stays down for long enough.  In this
-``fail open'' mode, \fBsecchan\fR causes the datapath to act like an
-ordinary MAC-learning switch.  \fBsecchan\fR will continue to retry
-connection to the controller in the background and, when the
-connection succeeds, it discontinues its fail-open behavior.
+when no message has been received from the controller for three times
+the inactivity probe interval (see below), or 45 seconds by default.
+In this ``fail open'' mode, \fBsecchan\fR causes the datapath to act
+like an ordinary MAC-learning switch.  \fBsecchan\fR will continue to
+retry connection to the controller in the background and, when the
+connection succeeds, it discontinues its fail-open behavior.  The
+secure channel enters the fail-open mode when
 
 If this option is set to \fBclosed\fR, then \fBsecchan\fR will not
 set up flows on its own when the controller connection fails.
 
 .TP
-\fB-d\fR, \fB--fail-open-delay=\fIsecs\fR
-Sets the number of seconds of failed controller connection attempts
-after which the switch enters fail-open mode.  The default is 30
-seconds.
+\fB--inactivity-probe=\fIsecs\fR
+When the secure channel is connected to the controller, the secure
+channel waits for a message to be received from the controller for
+\fIsecs\fR seconds before it sends a inactivity probe to the
+controller.  After sending the inactivity probe, if no response is
+received for an additional \fIsecs\fR seconds, the secure channel
+assumes that the connection has been broken and attempts to reconnect.
+The default is 15 seconds, and the minimum value is 5 seconds.
 
-This option has no effect when \fB--fail=closed\fR is specified.
+When fail-open mode is configured, changing the inactivity probe
+interval also changes the interval before entering fail-open mode (see
+above).
 
 .TP
 \fB--max-idle=\fIsecs\fR|\fBpermanent\fR

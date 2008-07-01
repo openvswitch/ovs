@@ -440,6 +440,20 @@ make_buffered_packet_out(uint32_t buffer_id,
     return out;
 }
 
+/* Creates and returns an OFPT_ECHO_REQUEST message with an empty payload. */
+struct buffer *
+make_echo_request(void)
+{
+    struct ofp_header *rq;
+    struct buffer *out = buffer_new(sizeof *rq);
+    rq = buffer_put_uninit(out, sizeof *rq);
+    rq->version = OFP_VERSION;
+    rq->type = OFPT_ECHO_REQUEST;
+    rq->length = htons(sizeof *rq);
+    rq->xid = 0;
+    return out;
+}
+
 /* Creates and returns an OFPT_ECHO_REPLY message matching the
  * OFPT_ECHO_REQUEST message in 'rq'. */
 struct buffer *

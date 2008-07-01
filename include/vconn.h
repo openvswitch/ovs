@@ -82,6 +82,7 @@ struct buffer *make_buffered_packet_out(uint32_t buffer_id,
                                         uint16_t in_port, uint16_t out_port);
 struct buffer *make_unbuffered_packet_out(const struct buffer *packet,
                                           uint16_t in_port, uint16_t out_port);
+struct buffer *make_echo_request(void);
 struct buffer *make_echo_reply(const struct ofp_header *rq);
 
 /* Provider interface. */

@@ -59,21 +59,36 @@ struct rconn {
     int backoff;
     time_t last_connected;
     unsigned int packets_sent;
+
+    /* Throughout this file, "probe" is shorthand for "inactivity probe".
+     * When nothing has been received from the peer for a while, we send out
+     * an echo request as an inactivity probe packet.  We should receive back
+     * a response. */
+    int probe_interval;         /* Secs of inactivity before sending probe. */
+    time_t probe_sent;          /* Time at which last probe sent, or 0 if none
+                                 * has been sent since 'last_connected'. */
 };
 
 static struct rconn *create_rconn(const char *name, int txq_limit,
-                                  struct vconn *);
+                                  int probe_interval, struct vconn *);
 static int try_send(struct rconn *);
 static void disconnect(struct rconn *, int error);
+static time_t probe_deadline(const struct rconn *);
 
 /* Creates and returns a new rconn that connects (and re-connects as necessary)
  * to the vconn named 'name'.
  *
- * 'txq_limit' is the maximum length of the send queue, in packets. */
+ * 'txq_limit' is the maximum length of the send queue, in packets.
+ *
+ * 'probe_interval' is a number of seconds.  If the interval passes once
+ * without an OpenFlow message being received from the peer, the rconn sends
+ * out an "echo request" message.  If the interval passes again without a
+ * message being received, the rconn disconnects and re-connects to the peer.
+ * Setting 'probe_interval' to 0 disables this behavior.  */
 struct rconn *
-rconn_new(const char *name, int txq_limit) 
+rconn_new(const char *name, int txq_limit, int probe_interval)
 {
-    return create_rconn(name, txq_limit, NULL);
+    return create_rconn(name, txq_limit, probe_interval, NULL);
 }
 
 /* Creates and returns a new rconn that is initially connected to 'vconn' and
@@ -85,7 +100,7 @@ struct rconn *
 rconn_new_from_vconn(const char *name, int txq_limit, struct vconn *vconn)
 {
     assert(vconn != NULL);
-    return create_rconn(name, txq_limit, vconn);
+    return create_rconn(name, txq_limit, 0, vconn);
 }
 
 /* Disconnects 'rc' and frees the underlying storage. */
@@ -134,6 +149,22 @@ rconn_run(struct rconn *rc)
             disconnect(rc, 0);
         }
     } else {
+        if (rc->probe_interval) {
+            time_t now = time(0);
+            if (now >= probe_deadline(rc)) {
+                if (!rc->probe_sent) {
+                    queue_push_tail(&rc->txq, make_echo_request());
+                    rc->probe_sent = now;
+                    VLOG_DBG("%s: idle %d seconds, sending inactivity probe",
+                             rc->name, (int) (now - rc->last_connected)); 
+                } else {
+                    VLOG_ERR("%s: no response to inactivity probe after %d "
+                             "seconds, disconnecting",
+                             rc->name, (int) (now - rc->probe_sent));
+                    disconnect(rc, 0);
+                }
+            }
+        }
         while (rc->txq.n > 0) {
             int error = try_send(rc);
             if (error == EAGAIN) {
@@ -149,15 +180,29 @@ rconn_run(struct rconn *rc)
 /* Causes the next call to poll_block() to wake up when rconn_run() should be
  * called on 'rc'. */
 void
-rconn_run_wait(struct rconn *rc) 
+rconn_run_wait(struct rconn *rc)
 {
     if (rc->vconn) {
         if (rc->txq.n) {
             vconn_wait(rc->vconn, WAIT_SEND);
         }
+        if (rc->probe_interval) {
+            poll_timer_wait((probe_deadline(rc) - time(0)) * 1000);
+        }
     } else {
         poll_timer_wait((rc->backoff_deadline - time(0)) * 1000);
     }
+}
+
+/* Returns the time at which, should nothing be received, we should send out an
+ * inactivity probe (if none has yet been sent) or conclude that the connection
+ * is dead (if a probe has already been sent). */
+static time_t
+probe_deadline(const struct rconn *rc) 
+{
+    assert(rc->probe_interval);
+    return (rc->probe_interval
+            + (rc->probe_sent ? rc->probe_sent : rc->last_connected));
 }
 
 /* Attempts to receive a packet from 'rc'.  If successful, returns the packet;
@@ -171,6 +216,7 @@ rconn_recv(struct rconn *rc)
         int error = vconn_recv(rc->vconn, &buffer);
         if (!error) {
             rc->last_connected = time(0);
+            rc->probe_sent = 0;
             return buffer;
         } else if (error != EAGAIN) {
             disconnect(rc, error); 
@@ -280,7 +326,8 @@ rconn_disconnected_duration(const struct rconn *rconn)
 }
 
 static struct rconn *
-create_rconn(const char *name, int txq_limit, struct vconn *vconn)
+create_rconn(const char *name, int txq_limit, int probe_interval,
+             struct vconn *vconn)
 {
     struct rconn *rc = xmalloc(sizeof *rc);
     assert(txq_limit > 0);
@@ -293,6 +340,9 @@ create_rconn(const char *name, int txq_limit, struct vconn *vconn)
     rc->backoff_deadline = 0;
     rc->backoff = 0;
     rc->last_connected = time(0);
+    rc->probe_interval = (probe_interval
+                              ? MAX(5, probe_interval) : 0);
+    rc->probe_sent = 0;
     rc->packets_sent = 0;
     return rc;
 }
@@ -345,4 +395,5 @@ disconnect(struct rconn *rc, int error)
                   rc->name, rc->backoff);
     }
     rc->backoff_deadline = now + rc->backoff;
+    rc->probe_sent = 0;
 }
