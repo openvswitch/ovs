@@ -54,6 +54,7 @@
 #include "openflow.h"
 #include "ofp-print.h"
 #include "random.h"
+#include "signal.h"
 #include "vconn.h"
 #include "vconn-ssl.h"
 
@@ -114,6 +115,7 @@ static void
 parse_options(int argc, char *argv[])
 {
     static struct option long_options[] = {
+        {"timeout", required_argument, 0, 't'},
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
@@ -123,6 +125,7 @@ parse_options(int argc, char *argv[])
     char *short_options = long_options_to_short_options(long_options);
 
     for (;;) {
+        unsigned long int timeout;
         int indexptr;
         int c;
 
@@ -132,6 +135,21 @@ parse_options(int argc, char *argv[])
         }
 
         switch (c) {
+        case 't':
+            timeout = strtoul(optarg, NULL, 10);
+            if (timeout <= 0) {
+                fatal(0, "value %s on -t or --timeout is not at least 1",
+                      optarg);
+            } else if (timeout < UINT_MAX) {
+                /* Add 1 because historical implementations allow an alarm to
+                 * occur up to a second early. */
+                alarm(timeout + 1);
+            } else {
+                alarm(UINT_MAX);
+            }
+            signal(SIGALRM, SIG_DFL);
+            break;
+
         case 'h':
             usage();
 
@@ -161,14 +179,14 @@ usage(void)
     printf("%s: OpenFlow switch management utility\n"
            "usage: %s [OPTIONS] COMMAND [ARG...]\n"
 #ifdef HAVE_NETLINK
-           "\nCommands that apply to local datapaths only:\n"
+           "\nFor local datapaths only:\n"
            "  adddp nl:DP_ID              add a new local datapath DP_ID\n"
            "  deldp nl:DP_ID              delete local datapath DP_ID\n"
            "  addif nl:DP_ID IFACE        add IFACE as a port on DP_ID\n"
            "  delif nl:DP_ID IFACE        delete IFACE as a port on DP_ID\n"
            "  monitor nl:DP_ID            print packets received\n"
 #endif
-           "\nCommands that apply to local datapaths and remote switches:\n"
+           "\nFor local datapaths and remote switches:\n"
            "  show SWITCH                 show information\n"
            "  dump-tables SWITCH          print table stats\n"
            "  dump-ports SWITCH           print port statistics\n"
@@ -179,12 +197,15 @@ usage(void)
            "  add-flow SWITCH FLOW        add flow described by FLOW\n"
            "  add-flows SWITCH FILE       add flows from FILE\n"
            "  del-flows SWITCH FLOW       delete matching FLOWs\n"
-           "  ping SWITCH [N]             latency of N-byte echos\n"
-           "  benchmark SWITCH N COUNT    bandwidth of COUNT N-byte echos\n"
+           "\nFor local datapaths, remote switches, and controllers:\n"
+           "  probe VCONN                 probe whether VCONN is up\n"
+           "  ping VCONN [N]              latency of N-byte echos\n"
+           "  benchmark VCONN N COUNT     bandwidth of COUNT N-byte echos\n"
            "where each SWITCH is an active OpenFlow connection method.\n",
            program_name, program_name);
     vconn_usage(true, false);
     printf("\nOptions:\n"
+           "  -t, --timeout=SECS          give up after SECS seconds\n"
            "  -v, --verbose=MODULE:FACILITY:LEVEL  configure logging levels\n"
            "  -v, --verbose               set maximum verbosity level\n"
            "  -h, --help                  display this help message\n"
@@ -779,6 +800,24 @@ do_dump_ports(int argc, char *argv[])
 }
 
 static void
+do_probe(int argc, char *argv[])
+{
+    struct buffer *request;
+    struct vconn *vconn;
+    struct buffer *reply;
+
+    alloc_openflow_buffer(sizeof(struct ofp_header), OFPT_ECHO_REQUEST,
+                          &request);
+    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    reply = transact_openflow(vconn, request);
+    if (reply->size != request->size) {
+        fatal(0, "reply does not match request");
+    }
+    buffer_delete(reply);
+    vconn_close(vconn);
+}
+
+static void
 do_ping(int argc, char *argv[])
 {
     size_t max_payload = 65535 - sizeof(struct ofp_header);
@@ -892,6 +931,7 @@ static struct command all_commands[] = {
     { "add-flows", 2, 2, do_add_flows },
     { "del-flows", 1, 2, do_del_flows },
     { "dump-ports", 1, 1, do_dump_ports },
+    { "probe", 1, 1, do_probe },
     { "ping", 1, 2, do_ping },
     { "benchmark", 3, 3, do_benchmark },
     { NULL, 0, 0, NULL },

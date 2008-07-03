@@ -86,7 +86,8 @@ Prints to the console all OpenFlow packets sent by datapath
 existing datapath.
 
 .PP
-The following commands can be used regardless of the connection method.
+The following commands can be apply to OpenFlow switches regardless of
+the connection method.
 
 .TP
 \fBshow \fIswitch\fR
@@ -136,19 +137,30 @@ Deletes entries from the datapath \fIswitch\fR's tables that match
 tables are removed.  See \fBFLOW SYNTAX\fR, below, for the syntax of
 \fIflows\fR.
 
+.PP
+The following commands can be used regardless of the connection
+method.  They apply to OpenFlow switches and controllers.
+
 .TP
-\fBping \fIswitch \fR[\fIn\fR]
-Sends a series of 10 echo request packets to \fIswitch\fR and times
+\fBprobe \fIvconn\fR
+Connects to \fIvconn\fR and sends a single OpenFlow echo-request
+packet and waits for the response.  With the \fB-t\fR or
+\fB--timeout\fR option, this command can test whether an OpenFlow
+switch or controller is up and running.
+
+.TP
+\fBping \fIvconn \fR[\fIn\fR]
+Sends a series of 10 echo request packets to \fIvconn\fR and times
 each reply.  The echo request packets consist of an OpenFlow header
 plus \fIn\fR bytes (default: 64) of randomly generated payload.  This
 measures the latency of individual requests.
 
 .TP
-\fBbenchmark \fIswitch n count\fR
+\fBbenchmark \fIvconn n count\fR
 Sends \fIcount\fR echo request packets that each consist of an
 OpenFlow header plus \fIn\fR bytes of payload and waits for each
 response.  Reports the total time required.  This is a measure of the
-maximum bandwidth to \fIswitch\fR for round-trips of \fIn\fR-byte
+maximum bandwidth to \fIvconn\fR for round-trips of \fIn\fR-byte
 messages.
 
 .SH "FLOW SYNTAX"
@@ -282,6 +294,12 @@ If this field is not specified, or if \fInumber\fR is given as
 \fB255\fR, statistics are gathered about flows from all tables.
 
 .SH OPTIONS
+.TP
+\fB-t\fR, \fB--timeout=\fIsecs\fR
+Limits \fBdpctl\fR runtime to approximately \fIsecs\fR seconds.  If
+the timeout expires, \fBdpctl\fR will exit with a \fBSIGALRM\fR
+signal.
+
 .TP
 \fB-p\fR, \fB--private-key=\fIprivkey.pem\fR
 Specifies a PEM file containing the private key used as the
