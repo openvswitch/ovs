@@ -27,6 +27,7 @@ int dp_dev_recv(struct net_device *netdev, struct sk_buff *skb)
 {
 	int len = skb->len;
 	struct dp_dev *dp_dev = dp_dev_priv(netdev);
+	skb->dev = netdev;
 	skb->pkt_type = PACKET_HOST;
 	skb->protocol = eth_type_trans(skb, netdev);
 	if (in_interrupt())
