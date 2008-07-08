@@ -4,6 +4,8 @@ noinst_HEADERS = \
 	compiler.h \
 	csum.h \
 	daemon.h \
+	dhcp-client.h \
+	dhcp.h \
 	dynamic-string.h \
 	dpif.h \
 	fatal-signal.h \

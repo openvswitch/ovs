@@ -7,6 +7,8 @@ libopenflow_la_SOURCES = \
 	command-line.c \
 	csum.c \
 	daemon.c \
+	dhcp-client.c \
+	dhcp.c \
 	dynamic-string.c \
 	fatal-signal.c \
 	fault.c \

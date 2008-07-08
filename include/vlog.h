@@ -66,6 +66,8 @@ enum vlog_facility vlog_get_facility_val(const char *name);
         VLOG_MODULE(ctlpath)                    \
         VLOG_MODULE(daemon)                     \
         VLOG_MODULE(datapath)                   \
+        VLOG_MODULE(dhcp)                       \
+        VLOG_MODULE(dhcp_client)                \
         VLOG_MODULE(dpif)                       \
         VLOG_MODULE(dpctl)                      \
         VLOG_MODULE(fault)                      \
