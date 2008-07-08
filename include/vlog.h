@@ -113,7 +113,7 @@ void vlog(enum vlog_module, enum vlog_level, const char *format, ...)
 /* Convenience macros.  To use these, define THIS_MODULE as a macro that
  * expands to the module used by the current source file, e.g.
  *      #include "vlog.h"
- *      #define THIS_MODULE VLM_NETLINK
+ *      #define THIS_MODULE VLM_netlink
  * Guaranteed to preserve errno.
  */
 #define VLOG_EMER(...) vlog(THIS_MODULE, VLL_EMER, __VA_ARGS__)
