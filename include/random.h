@@ -39,5 +39,6 @@
 
 void random_bytes(void *, size_t);
 uint32_t random_uint32(void);
+int random_range(int max);
 
 #endif /* random.h */

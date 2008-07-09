@@ -70,3 +70,9 @@ random_uint32(void)
     random_bytes(&x, sizeof x);
     return x;
 }
+
+int
+random_range(int max) 
+{
+    return random_uint32() % max;
+}
