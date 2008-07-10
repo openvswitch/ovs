@@ -81,6 +81,7 @@ void *xmalloc(size_t);
 void *xcalloc(size_t, size_t);
 void *xrealloc(void *, size_t);
 void *xmemdup(const void *, size_t);
+char *xmemdup0(const char *, size_t);
 char *xstrdup(const char *);
 char *xasprintf(const char *format, ...) PRINTF_FORMAT(1, 2);
 
