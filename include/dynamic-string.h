@@ -49,6 +49,7 @@ struct ds {
 #define DS_EMPTY_INITIALIZER { NULL, 0, 0 }
 
 void ds_init(struct ds *);
+void ds_clear(struct ds *);
 void ds_reserve(struct ds *, size_t min_length);
 void ds_put_char(struct ds *, char);
 void ds_put_cstr(struct ds *, const char *);

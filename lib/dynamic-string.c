@@ -46,6 +46,12 @@ ds_init(struct ds *ds)
 }
 
 void
+ds_clear(struct ds *ds) 
+{
+    ds->length = 0;
+}
+
+void
 ds_reserve(struct ds *ds, size_t min_length)
 {
     if (min_length > ds->allocated || !ds->string) {
