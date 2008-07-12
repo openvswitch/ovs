@@ -24,6 +24,7 @@ noinst_HEADERS = \
 	random.h \
 	rconn.h \
 	socket-util.h \
+	type-props.h \
 	util.h \
 	vconn.h \
 	vconn-ssl.h \
