@@ -25,6 +25,7 @@ noinst_HEADERS = \
 	rconn.h \
 	socket-util.h \
 	type-props.h \
+	timeval.h \
 	util.h \
 	vconn.h \
 	vconn-ssl.h \
