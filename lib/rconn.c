@@ -132,6 +132,7 @@ rconn_run(struct rconn *rc)
         if (rc->reliable && time(0) >= rc->backoff_deadline) {
             int retval;
 
+            VLOG_WARN("%s: connecting...", rc->name);
             retval = vconn_open(rc->name, &rc->vconn);
             if (!retval) {
                 rc->backoff_deadline = time(0) + rc->backoff;
