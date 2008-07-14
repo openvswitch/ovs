@@ -175,7 +175,7 @@ usage(void)
            "  --vendor-class=STRING   use STRING as vendor class (default:\n"
            "                          none); use OpenFlow to imitate secchan\n"
            "\nOther options:\n"
-           "  -v, --verbose=MODULE:FACILITY:LEVEL  configure logging levels\n"
+           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n",

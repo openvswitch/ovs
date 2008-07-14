@@ -55,11 +55,11 @@ usage(char *prog_name, int exit_code)
            "                       absolute path to a Unix domain socket\n"
            "Actions:\n"
            "  -l, --list         List current settings\n"
-           "  -s, --set=MODULE:FACILITY:LEVEL\n"
+           "  -s, --set=MODULE[:FACILITY[:LEVEL]]\n"
            "        Set MODULE and FACILITY log level to LEVEL\n"
            "        MODULE may be any valid module name or 'ANY'\n"
-           "        FACILITY may be 'syslog' or 'console' or 'ANY'\n"
-           "        LEVEL may be 'emer', 'err', 'warn', or 'dbg'\n"
+           "        FACILITY may be 'syslog' or 'console' or 'ANY' (default)\n"
+           "        LEVEL may be 'emer', 'err', 'warn', or 'dbg (default)'\n"
            "  -h, --help         Print this helpful information\n",
            prog_name);
     exit(exit_code);

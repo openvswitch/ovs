@@ -174,7 +174,7 @@ vlog_set_levels(enum vlog_module module, enum vlog_facility facility,
 
 /* Set debugging levels:
  *
- *  mod:facility:level mod2:facility:level ...
+ *  mod[:facility[:level]] mod2[:facility[:level]] ...
  *
  * Return null if successful, otherwise an error message that the caller must
  * free().
@@ -194,10 +194,6 @@ vlog_set_levels_from_string(const char *s_)
 
         facility = strtok_r(NULL, ":", &save_ptr);
         level = strtok_r(NULL, ":", &save_ptr);
-        if (level == NULL || facility == NULL) {
-            free(s);
-            return xstrdup("syntax error in level string");
-        }
 
         if (!strcmp(module, "ANY")) {
             e_module = VLM_ANY_MODULE;
@@ -210,7 +206,7 @@ vlog_set_levels_from_string(const char *s_)
             }
         }
 
-        if (!strcmp(facility, "ANY")) {
+        if (!facility || !strcmp(facility, "ANY")) {
             e_facility = VLF_ANY_FACILITY;
         } else {
             e_facility = vlog_get_facility_val(facility);
@@ -221,7 +217,7 @@ vlog_set_levels_from_string(const char *s_)
             }
         }
 
-        e_level = vlog_get_level_val(level);
+        e_level = level ? vlog_get_level_val(level) : VLL_DBG;
         if (e_level >= VLL_N_LEVELS) {
             char *msg = xasprintf("unknown level \"%s\"", level);
             free(s);

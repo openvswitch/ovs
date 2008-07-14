@@ -262,7 +262,7 @@ usage(void)
            "\nOther options:\n"
            "  -D, --detach            run in background as daemon\n"
            "  -P, --pidfile[=FILE]    create pidfile (default: %s/switch.pid)\n"
-           "  -v, --verbose=MODULE:FACILITY:LEVEL  configure logging levels\n"
+           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n",

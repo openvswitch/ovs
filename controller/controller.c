@@ -311,7 +311,7 @@ usage(void)
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"
            "  --max-idle=SECS         max idle time for new flows\n"
-           "  -v, --verbose=MODULE:FACILITY:LEVEL  configure logging levels\n"
+           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n",

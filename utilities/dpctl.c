@@ -206,7 +206,7 @@ usage(void)
     vconn_usage(true, false);
     printf("\nOptions:\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
-           "  -v, --verbose=MODULE:FACILITY:LEVEL  configure logging levels\n"
+           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose               set maximum verbosity level\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
