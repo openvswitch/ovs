@@ -57,6 +57,7 @@ struct rconn {
     int txq_limit;
     time_t backoff_deadline;
     int backoff;
+    int max_backoff;
     time_t last_connected;
     unsigned int packets_sent;
 
@@ -70,7 +71,8 @@ struct rconn {
 };
 
 static struct rconn *create_rconn(const char *name, int txq_limit,
-                                  int probe_interval, struct vconn *);
+                                  int probe_interval, int max_backoff,
+                                  struct vconn *);
 static int try_send(struct rconn *);
 static void disconnect(struct rconn *, int error);
 static time_t probe_deadline(const struct rconn *);
@@ -84,11 +86,16 @@ static time_t probe_deadline(const struct rconn *);
  * without an OpenFlow message being received from the peer, the rconn sends
  * out an "echo request" message.  If the interval passes again without a
  * message being received, the rconn disconnects and re-connects to the peer.
- * Setting 'probe_interval' to 0 disables this behavior.  */
+ * Setting 'probe_interval' to 0 disables this behavior.
+ *
+ * 'max_backoff' is the maximum number of seconds between attempts to connect
+ * to the peer.  The actual interval starts at 1 second and doubles on each
+ * failure until it reaches 'max_backoff'.  If 0 is specified, the default of
+ * 60 seconds is used. */
 struct rconn *
-rconn_new(const char *name, int txq_limit, int probe_interval)
+rconn_new(const char *name, int txq_limit, int probe_interval, int max_backoff)
 {
-    return create_rconn(name, txq_limit, probe_interval, NULL);
+    return create_rconn(name, txq_limit, probe_interval, max_backoff, NULL);
 }
 
 /* Creates and returns a new rconn that is initially connected to 'vconn' and
@@ -100,7 +107,7 @@ struct rconn *
 rconn_new_from_vconn(const char *name, int txq_limit, struct vconn *vconn)
 {
     assert(vconn != NULL);
-    return create_rconn(name, txq_limit, 0, vconn);
+    return create_rconn(name, txq_limit, 0, 0, vconn);
 }
 
 /* Disconnects 'rc' and frees the underlying storage. */
@@ -335,7 +342,7 @@ rconn_get_ip(const struct rconn *rconn)
 
 static struct rconn *
 create_rconn(const char *name, int txq_limit, int probe_interval,
-             struct vconn *vconn)
+             int max_backoff, struct vconn *vconn)
 {
     struct rconn *rc = xmalloc(sizeof *rc);
     assert(txq_limit > 0);
@@ -347,6 +354,7 @@ create_rconn(const char *name, int txq_limit, int probe_interval,
     rc->txq_limit = txq_limit;
     rc->backoff_deadline = time(0);
     rc->backoff = 0;
+    rc->max_backoff = max_backoff ? max_backoff : 60;
     rc->last_connected = time(0);
     rc->probe_interval = (probe_interval
                               ? MAX(5, probe_interval) : 0);
@@ -398,7 +406,7 @@ disconnect(struct rconn *rc, int error)
     if (now >= rc->backoff_deadline) {
         rc->backoff = 1;
     } else {
-        rc->backoff = MIN(60, MAX(1, 2 * rc->backoff));
+        rc->backoff = MIN(rc->max_backoff, MAX(1, 2 * rc->backoff));
         VLOG_WARN("%s: waiting %d seconds before reconnect\n",
                   rc->name, rc->backoff);
     }

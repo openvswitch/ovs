@@ -54,7 +54,7 @@
 struct vconn;
 
 struct rconn *rconn_new(const char *name, int txq_limit,
-                        int inactivity_probe_interval);
+                        int inactivity_probe_interval, int max_backoff);
 struct rconn *rconn_new_from_vconn(const char *name, int txq_limit,
                                    struct vconn *);
 void rconn_destroy(struct rconn *);

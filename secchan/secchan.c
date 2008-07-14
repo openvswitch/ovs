@@ -197,9 +197,9 @@ main(int argc, char *argv[])
 
     daemonize();
 
-    controller_relay = relay_create(rconn_new(argv[optind], 1, 0),
+    controller_relay = relay_create(rconn_new(argv[optind], 1, 0, 0),
                                     rconn_new(argv[optind + 1], 1,
-                                              probe_interval),
+                                              probe_interval, 0),
                                     false);
     for (;;) {
         struct relay *r, *n;

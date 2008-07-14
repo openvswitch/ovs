@@ -77,7 +77,7 @@ main(int argc, char *argv[])
         fatal(0, "missing controller argument; use --help for usage");
     }
 
-    error = dp_new(&dp, dpid, rconn_new(argv[optind], 128, 60));
+    error = dp_new(&dp, dpid, rconn_new(argv[optind], 128, 60, 0));
     if (listen_vconn_name) {
         struct vconn *listen_vconn;
         int retval;
