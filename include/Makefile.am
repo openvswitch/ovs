@@ -2,6 +2,7 @@ noinst_HEADERS = \
 	buffer.h \
 	command-line.h \
 	compiler.h \
+	csum.h \
 	daemon.h \
 	dynamic-string.h \
 	dpif.h \

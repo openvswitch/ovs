@@ -40,6 +40,7 @@
 #include <string.h>
 #include "buffer.h"
 #include "chain.h"
+#include "csum.h"
 #include "flow.h"
 #include "netdev.h"
 #include "packets.h"
@@ -856,34 +857,6 @@ execute_actions(struct datapath *dp, struct buffer *buffer,
         do_output(dp, buffer, in_port, max_len, prev_port);
     else
         buffer_delete(buffer);
-}
-
-/* Returns the new checksum for a packet in which the checksum field previously
- * contained 'old_csum' and in which a field that contained 'old_u16' was
- * changed to contain 'new_u16'. */
-static uint16_t
-recalc_csum16(uint16_t old_csum, uint16_t old_u16, uint16_t new_u16)
-{
-    /* Ones-complement arithmetic is endian-independent, so this code does not
-     * use htons() or ntohs().
-     *
-     * See RFC 1624 for formula and explanation. */
-    uint16_t hc_complement = ~old_csum;
-    uint16_t m_complement = ~old_u16;
-    uint16_t m_prime = new_u16;
-    uint32_t sum = hc_complement + m_complement + m_prime;
-    uint16_t hc_prime_complement = sum + (sum >> 16);
-    return ~hc_prime_complement;
-}
-
-/* Returns the new checksum for a packet in which the checksum field previously
- * contained 'old_csum' and in which a field that contained 'old_u32' was
- * changed to contain 'new_u32'. */
-static uint16_t
-recalc_csum32(uint16_t old_csum, uint32_t old_u32, uint32_t new_u32)
-{
-    return recalc_csum16(recalc_csum16(old_csum, old_u32, new_u32),
-                         old_u32 >> 16, new_u32 >> 16);
 }
 
 static void modify_nh(struct buffer *buffer, uint16_t eth_proto,
