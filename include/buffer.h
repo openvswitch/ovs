@@ -76,6 +76,6 @@ size_t buffer_tailroom(struct buffer *);
 void buffer_reserve_tailroom(struct buffer *, size_t);
 
 void buffer_clear(struct buffer *);
-void buffer_pull(struct buffer *, size_t);
+void *buffer_pull(struct buffer *, size_t);
 
 #endif /* buffer.h */

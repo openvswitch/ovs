@@ -231,12 +231,14 @@ buffer_clear(struct buffer *b)
 }
 
 /* Removes 'size' bytes from the head end of 'b', which must contain at least
- * 'size' bytes of data. */
-void
+ * 'size' bytes of data.  Returns the first byte of data removed. */
+void *
 buffer_pull(struct buffer *b, size_t size) 
 {
+    void *data = b->data;
     assert(b->size >= size);
     b->data += size;
     b->size -= size;
+    return data;
 }
 
