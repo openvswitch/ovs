@@ -181,6 +181,16 @@ buffer_put(struct buffer *b, const void *p, size_t size)
     return dst;
 }
 
+/* Reserves 'size' bytes of headroom so that they can be later allocated with
+ * buffer_push_uninit() without reallocating the buffer. */
+void
+buffer_reserve(struct buffer *b, size_t size) 
+{
+    assert(!b->size);
+    buffer_prealloc_tailroom(b, size);
+    b->data += size;
+}
+
 void *
 buffer_push_uninit(struct buffer *b, size_t size) 
 {
@@ -188,6 +198,14 @@ buffer_push_uninit(struct buffer *b, size_t size)
     b->data -= size;
     b->size += size;
     return b->data;
+}
+
+void *
+buffer_push(struct buffer *b, const void *p, size_t size) 
+{
+    void *dst = buffer_push_uninit(b, size);
+    memcpy(dst, p, size);
+    return dst;
 }
 
 /* If 'b' contains at least 'offset + size' bytes of data, returns a pointer to
@@ -242,3 +260,11 @@ buffer_pull(struct buffer *b, size_t size)
     return data;
 }
 
+/* If 'b' has at least 'size' bytes of data, removes that many bytes from the
+ * head end of 'b' and returns the first byte removed.  Otherwise, returns a
+ * null pointer without modifying 'b'. */
+void *
+buffer_try_pull(struct buffer *b, size_t size) 
+{
+    return b->size >= size ? buffer_pull(b, size) : NULL;
+}

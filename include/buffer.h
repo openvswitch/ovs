@@ -69,7 +69,9 @@ void *buffer_end(const struct buffer *);
 
 void *buffer_put_uninit(struct buffer *, size_t);
 void *buffer_put(struct buffer *, const void *, size_t);
+void buffer_reserve(struct buffer *, size_t);
 void *buffer_push_uninit(struct buffer *b, size_t);
+void *buffer_push(struct buffer *b, const void *, size_t);
 
 size_t buffer_headroom(struct buffer *);
 size_t buffer_tailroom(struct buffer *);
@@ -78,5 +80,6 @@ void buffer_prealloc_tailroom(struct buffer *, size_t);
 
 void buffer_clear(struct buffer *);
 void *buffer_pull(struct buffer *, size_t);
+void *buffer_try_pull(struct buffer *, size_t);
 
 #endif /* buffer.h */
