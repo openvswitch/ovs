@@ -52,8 +52,14 @@ enum netdev_flags {
     NETDEV_PROMISC = 0x0002     /* Promiscuous mode? */
 };
 
+enum netdev_pseudo_ethertype {
+    NETDEV_ETH_TYPE_NONE = -128, /* Receive no frames. */
+    NETDEV_ETH_TYPE_ANY,         /* Receive all frames. */
+    NETDEV_ETH_TYPE_802_2        /* Receive all IEEE 802.2 frames. */
+};
+
 struct netdev;
-int netdev_open(const char *name, struct netdev **);
+int netdev_open(const char *name, int ethertype, struct netdev **);
 void netdev_close(struct netdev *);
 int netdev_recv(struct netdev *, struct buffer *);
 void netdev_recv_wait(struct netdev *);

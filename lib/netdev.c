@@ -209,9 +209,14 @@ do_ethtool(struct netdev *netdev)
 
 /* Opens the network device named 'name' (e.g. "eth0") and returns zero if
  * successful, otherwise a positive errno value.  On success, sets '*netdev'
- * to the new network device, otherwise to null. */
+ * to the new network device, otherwise to null.
+ *
+ * 'ethertype' may be a 16-bit Ethernet protocol value in host byte order to
+ * capture frames of that type received on the device.  It may also be one of
+ * the 'enum netdev_pseudo_ethertype' values to receive frames in one of those
+ * categories. */
 int
-netdev_open(const char *name, struct netdev **netdev_)
+netdev_open(const char *name, int ethertype, struct netdev **netdev_)
 {
     int fd;
     struct sockaddr sa;
@@ -234,7 +239,11 @@ netdev_open(const char *name, struct netdev **netdev_)
      * We have to use SOCK_PACKET, despite its deprecation, because only
      * SOCK_PACKET lets us set the hardware source address of outgoing
      * packets. */
-    fd = socket(PF_PACKET, SOCK_PACKET, htons(ETH_P_ALL));
+    fd = socket(PF_PACKET, SOCK_PACKET,
+                htons(ethertype == NETDEV_ETH_TYPE_NONE ? 0
+                      : ethertype == NETDEV_ETH_TYPE_ANY ? ETH_P_ALL
+                      : ethertype == NETDEV_ETH_TYPE_802_2 ? ETH_P_802_2
+                      : ethertype));
     if (fd < 0) {
         return errno;
     }

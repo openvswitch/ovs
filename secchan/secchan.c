@@ -166,7 +166,7 @@ main(int argc, char *argv[])
     }
 
     snprintf(of_name, sizeof of_name, "of%s", nl_name + 3);
-    retval = netdev_open(of_name, &of_device);
+    retval = netdev_open(of_name, NETDEV_ETH_TYPE_NONE, &of_device);
     if (!retval) {
         enum netdev_flags flags;
         retval = netdev_get_flags(of_device, &flags);

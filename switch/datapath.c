@@ -215,7 +215,7 @@ dp_add_port(struct datapath *dp, const char *name)
     struct sw_port *p;
     int error;
 
-    error = netdev_open(name, &netdev);
+    error = netdev_open(name, NETDEV_ETH_TYPE_ANY, &netdev);
     if (error) {
         return error;
     }
