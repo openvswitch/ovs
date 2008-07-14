@@ -93,6 +93,16 @@ struct rconn {
 
     unsigned int packets_sent;
 
+    /* If we can't connect to the peer, it could be for any number of reasons.
+     * Usually, one would assume it is because the peer is not running or
+     * because the network is partitioned.  But it could also be because the
+     * network topology has changed, in which case the upper layer will need to
+     * reassess it (in particular, obtain a new IP address via DHCP and find
+     * the new location of the controller).  We set this flag when we suspect
+     * that this could be the case. */
+    bool questionable_connectivity;
+    time_t last_questioned;
+
     /* Throughout this file, "probe" is shorthand for "inactivity probe".
      * When nothing has been received from the peer for a while, we send out
      * an echo request as an inactivity probe packet.  We should receive back
@@ -108,6 +118,7 @@ static void state_transition(struct rconn *, enum state);
 static int try_send(struct rconn *);
 static void reconnect(struct rconn *);
 static void disconnect(struct rconn *, int error);
+static void question_connectivity(struct rconn *);
 
 /* Creates a new rconn, connects it (reliably) to 'name', and returns it. */
 struct rconn *
@@ -167,6 +178,9 @@ rconn_create(int txq_limit, int probe_interval, int max_backoff)
     rc->last_connected = time(0);
 
     rc->packets_sent = 0;
+
+    rc->questionable_connectivity = false;
+    rc->last_questioned = time(0);
 
     rc->probe_interval = probe_interval ? MAX(5, probe_interval) : 0;
 
@@ -311,6 +325,7 @@ static void
 run_IDLE(struct rconn *rc)
 {
     if (timeout(rc, rc->probe_interval)) {
+        question_connectivity(rc);
         VLOG_ERR("%s: no response to inactivity probe after %u "
                  "seconds, disconnecting",
                  rc->name, elapsed_in_this_state(rc));
@@ -463,7 +478,7 @@ rconn_get_name(const struct rconn *rc)
 bool
 rconn_is_alive(const struct rconn *rconn)
 {
-    return rconn->reliable || rconn->vconn;
+    return rconn->state != S_VOID;
 }
 
 /* Returns true if 'rconn' is connected, false otherwise. */
@@ -487,6 +502,22 @@ uint32_t
 rconn_get_ip(const struct rconn *rconn) 
 {
     return rconn->vconn ? vconn_get_ip(rconn->vconn) : 0;
+}
+
+/* If 'rconn' can't connect to the peer, it could be for any number of reasons.
+ * Usually, one would assume it is because the peer is not running or because
+ * the network is partitioned.  But it could also be because the network
+ * topology has changed, in which case the upper layer will need to reassess it
+ * (in particular, obtain a new IP address via DHCP and find the new location
+ * of the controller).  When this appears that this might be the case, this
+ * function returns true.  It also clears the questionability flag and prevents
+ * it from being set again for some time. */
+bool
+rconn_is_connectivity_questionable(struct rconn *rconn)
+{
+    bool questionable = rconn->questionable_connectivity;
+    rconn->questionable_connectivity = false;
+    return questionable;
 }
 
 /* Tries to send a packet from 'rc''s send buffer.  Returns 0 if successful,
@@ -542,6 +573,9 @@ disconnect(struct rconn *rc, int error)
         }
         rc->backoff_deadline = now + rc->backoff;
         state_transition(rc, S_BACKOFF);
+        if (now - rc->last_connected > 60) {
+            question_connectivity(rc);
+        }
     } else {
         rconn_disconnect(rc);
     }
@@ -579,4 +613,14 @@ sat_mul(unsigned int x, unsigned int y)
 {
     assert(y);
     return x <= UINT_MAX / y ? x * y : UINT_MAX;
+}
+
+static void
+question_connectivity(struct rconn *rc) 
+{
+    time_t now = time(0);
+    if (now - rc->last_questioned > 60) {
+        rc->questionable_connectivity = true;
+        rc->last_questioned = now;
+    }
 }
