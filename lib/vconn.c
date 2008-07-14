@@ -292,6 +292,8 @@ vconn_send(struct vconn *vconn, struct buffer *msg)
 {
     int retval = vconn_connect(vconn);
     if (!retval) {
+        assert(msg->size >= sizeof(struct ofp_header));
+        assert(((struct ofp_header *) msg->data)->length == htons(msg->size));
         if (!VLOG_IS_DBG_ENABLED()) { 
             retval = (vconn->class->send)(vconn, msg);
         } else {
