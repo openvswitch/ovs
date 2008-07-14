@@ -173,6 +173,12 @@ BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
 
 #define IP_VERSION 4
 
+#define IP_DONT_FRAGMENT  0x4000 /* Don't fragment. */
+#define IP_MORE_FRAGMENTS 0x2000 /* More fragments. */
+#define IP_FRAG_OFF_MASK  0x1fff /* Fragment offset. */
+#define IP_IS_FRAGMENT(ip_frag_off) \
+        (ntohs(ip_frag_off) & (IP_MORE_FRAGMENTS | IP_FRAG_OFF_MASK))
+
 #define IP_HEADER_LEN 20
 struct ip_header {
     uint8_t ip_ihl_ver;
