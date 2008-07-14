@@ -35,10 +35,14 @@
 
 #include <stdint.h>
 #include <string.h>
+#include "compiler.h"
 #include "random.h"
 #include "util.h"
 
 #define ETH_ADDR_LEN           6
+
+static const uint8_t eth_addr_broadcast[ETH_ADDR_LEN] UNUSED
+    = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
 static inline bool eth_addr_is_broadcast(const uint8_t ea[6])
 {
