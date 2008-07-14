@@ -57,6 +57,12 @@ struct rconn *rconn_new(const char *name, int txq_limit,
                         int inactivity_probe_interval, int max_backoff);
 struct rconn *rconn_new_from_vconn(const char *name, int txq_limit,
                                    struct vconn *);
+struct rconn *rconn_create(int txq_limit, int inactivity_probe_interval,
+                           int max_backoff);
+void rconn_connect(struct rconn *, const char *name);
+void rconn_connect_unreliably(struct rconn *,
+                              const char *name, struct vconn *vconn);
+void rconn_disconnect(struct rconn *);
 void rconn_destroy(struct rconn *);
 
 void rconn_run(struct rconn *);
