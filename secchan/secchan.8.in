@@ -151,6 +151,14 @@ As a result, when both \fB--fail=open\fR and in-band control are not
 in use, this option has no effect.
 
 .TP
+\fB--max-backoff=\fIsecs\fR
+Sets the maximum time between attempts to connect to the controller to
+\fIsecs\fR, which must be at least 1.  The actual interval between
+connection attempts starts at 1 second and doubles on each failing
+attempt until it reaches the maximum.  The default maximum backoff
+time is 15 seconds.
+
+.TP
 \fB-l\fR, \fB--listen=\fImethod\fR
 Configures the switch to additionally listen for incoming OpenFlow
 connections for switch management with \fBdpctl\fR.  The \fImethod\fR

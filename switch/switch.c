@@ -33,6 +33,7 @@
 
 #include <errno.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,6 +62,10 @@ static struct datapath *dp;
 static uint64_t dpid = UINT64_MAX;
 static char *port_list;
 
+/* --max-backoff: Maximum interval between controller connection attempts, in
+ * seconds. */
+static int max_backoff = 15;
+
 static void add_ports(struct datapath *dp, char *port_list);
 
 int
@@ -77,7 +82,7 @@ main(int argc, char *argv[])
         fatal(0, "missing controller argument; use --help for usage");
     }
 
-    error = dp_new(&dp, dpid, rconn_new(argv[optind], 128, 60, 0));
+    error = dp_new(&dp, dpid, rconn_new(argv[optind], 128, 60, max_backoff));
     if (listen_vconn_name) {
         struct vconn *listen_vconn;
         int retval;
@@ -135,9 +140,14 @@ add_ports(struct datapath *dp, char *port_list)
 static void
 parse_options(int argc, char *argv[])
 {
+    enum {
+        OPT_MAX_BACKOFF = UCHAR_MAX + 1
+    };
+
     static struct option long_options[] = {
         {"interfaces",  required_argument, 0, 'i'},
         {"datapath-id", required_argument, 0, 'd'},
+        {"max-backoff", required_argument, 0, OPT_MAX_BACKOFF},
         {"listen",      required_argument, 0, 'l'},
         {"detach",      no_argument, 0, 'D'},
         {"pidfile",     optional_argument, 0, 'P'},
@@ -198,6 +208,15 @@ parse_options(int argc, char *argv[])
             }
             break;
 
+        case OPT_MAX_BACKOFF:
+            max_backoff = atoi(optarg);
+            if (max_backoff < 1) {
+                fatal(0, "--max-backoff argument must be at least 1");
+            } else if (max_backoff > 3600) {
+                max_backoff = 3600;
+            }
+            break;
+
         case 'l':
             if (listen_vconn_name) {
                 fatal(0, "-l or --listen may be only specified once");
@@ -230,6 +249,8 @@ usage(void)
            "                          add specified initial switch ports\n"
            "  -d, --datapath-id=ID    Use ID as the OpenFlow switch ID\n"
            "                          (ID must consist of 12 hex digits)\n"
+           "  --max-backoff=SECS      max time between controller connection\n"
+           "                          attempts (default: 15 seconds)\n"
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
            "                          (a passive OpenFlow connection method)\n"
            "\nOther options:\n"

@@ -114,6 +114,10 @@ static int probe_interval = 15;
  * fail-open mode. */
 static int max_idle = 15;
 
+/* --max-backoff: Maximum interval between controller connection attempts, in
+ * seconds. */
+static int max_backoff = 15;
+
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
@@ -197,9 +201,9 @@ main(int argc, char *argv[])
 
     daemonize();
 
-    controller_relay = relay_create(rconn_new(argv[optind], 1, 0, 0),
+    controller_relay = relay_create(rconn_new(argv[optind], 1, 0, max_backoff),
                                     rconn_new(argv[optind + 1], 1,
-                                              probe_interval, 0),
+                                              probe_interval, max_backoff),
                                     false);
     for (;;) {
         struct relay *r, *n;
@@ -539,11 +543,16 @@ fail_open_hook(struct relay *r)
 static void
 parse_options(int argc, char *argv[]) 
 {
-    enum { OPT_INACTIVITY_PROBE = UCHAR_MAX + 1, OPT_MAX_IDLE };
+    enum {
+        OPT_INACTIVITY_PROBE = UCHAR_MAX + 1,
+        OPT_MAX_IDLE,
+        OPT_MAX_BACKOFF
+    };
     static struct option long_options[] = {
         {"fail",        required_argument, 0, 'f'},
         {"inactivity-probe", required_argument, 0, OPT_INACTIVITY_PROBE},
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
+        {"max-backoff", required_argument, 0, OPT_MAX_BACKOFF},
         {"listen",      required_argument, 0, 'l'},
         {"detach",      no_argument, 0, 'D'},
         {"pidfile",     optional_argument, 0, 'P'},
@@ -591,6 +600,15 @@ parse_options(int argc, char *argv[])
                     fatal(0, "--max-idle argument must be between 1 and "
                           "65535 or the word 'permanent'");
                 }
+            }
+            break;
+
+        case OPT_MAX_BACKOFF:
+            max_backoff = atoi(optarg);
+            if (max_backoff < 1) {
+                fatal(0, "--max-backoff argument must be at least 1");
+            } else if (max_backoff > 3600) {
+                max_backoff = 3600;
             }
             break;
 
@@ -647,6 +665,8 @@ usage(void)
            "                            open (default): act as learning switch\n"
            "  --inactivity-probe=SECS time between inactivity probes\n"
            "  --max-idle=SECS         max idle for flows set up by secchan\n"
+           "  --max-backoff=SECS      max time between controller connection\n"
+           "                          attempts (default: 15 seconds)\n"
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
            "                          (a passive OpenFlow connection method)\n"
            "\nOther options:\n"
