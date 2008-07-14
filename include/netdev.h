@@ -74,6 +74,8 @@ bool netdev_get_in4(const struct netdev *, struct in_addr *);
 bool netdev_get_in6(const struct netdev *, struct in6_addr *);
 int netdev_get_flags(const struct netdev *, enum netdev_flags *);
 int netdev_set_flags(struct netdev *, enum netdev_flags);
+int netdev_turn_flags_on(struct netdev *, enum netdev_flags);
+int netdev_turn_flags_off(struct netdev *, enum netdev_flags);
 int netdev_arp_lookup(const struct netdev *, uint32_t ip, uint8_t mac[6]);
 
 #endif /* netdev.h */

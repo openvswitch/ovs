@@ -575,10 +575,24 @@ netdev_get_flags(const struct netdev *netdev, enum netdev_flags *flagsp)
     return 0;
 }
 
-/* Sets the flags for 'netdev' to 'nd_flags'.
- * Returns 0 if successful, otherwise a positive errno value. */
-int
-netdev_set_flags(struct netdev *netdev, enum netdev_flags nd_flags)
+static int
+nd_to_iff_flags(enum netdev_flags nd)
+{
+    int iff = 0;
+    if (nd & NETDEV_UP) {
+        iff |= IFF_UP;
+    }
+    if (nd & NETDEV_PROMISC) {
+        iff |= IFF_PROMISC;
+    }
+    return iff;
+}
+
+/* On 'netdev', turns off the flags in 'off' and then turns on the flags in
+ * 'on'.  Returns 0 if successful, otherwise a positive errno value. */
+static int
+do_update_flags(struct netdev *netdev, enum netdev_flags off,
+                enum netdev_flags on)
 {
     int old_flags, new_flags;
     int error;
@@ -588,17 +602,35 @@ netdev_set_flags(struct netdev *netdev, enum netdev_flags nd_flags)
         return error;
     }
 
-    new_flags = old_flags & ~(IFF_UP | IFF_PROMISC);
-    if (nd_flags & NETDEV_UP) {
-        new_flags |= IFF_UP;
-    }
-    if (nd_flags & NETDEV_PROMISC) {
-        new_flags |= IFF_PROMISC;
-    }
+    new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
     if (new_flags != old_flags) {
         error = set_flags(netdev, new_flags);
     }
     return error;
+}
+
+/* Sets the flags for 'netdev' to 'flags'.
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+netdev_set_flags(struct netdev *netdev, enum netdev_flags flags)
+{
+    return do_update_flags(netdev, -1, flags);
+}
+
+/* Turns on the specified 'flags' on 'netdev'.
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+netdev_turn_flags_on(struct netdev *netdev, enum netdev_flags flags)
+{
+    return do_update_flags(netdev, 0, flags);
+}
+
+/* Turns off the specified 'flags' on 'netdev'.
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+netdev_turn_flags_off(struct netdev *netdev, enum netdev_flags flags)
+{
+    return do_update_flags(netdev, flags, 0);
 }
 
 /* Looks up the ARP table entry for 'ip' on 'netdev'.  If one exists and can be
