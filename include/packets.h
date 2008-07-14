@@ -99,8 +99,10 @@ static inline void eth_addr_random(uint8_t ea[ETH_ADDR_LEN])
 
 #define ETH_HEADER_LEN 14
 #define ETH_PAYLOAD_MIN 46
+#define ETH_PAYLOAD_MAX 1500
 #define ETH_TOTAL_MIN (ETH_HEADER_LEN + ETH_PAYLOAD_MIN)
-#define ETH_TOTAL_MAX (ETH_HEADER_LEN + VLAN_HEADER_LEN + 1500)
+#define ETH_TOTAL_MAX (ETH_HEADER_LEN + ETH_PAYLOAD_MAX)
+#define ETH_VLAN_TOTAL_MAX (ETH_HEADER_LEN + VLAN_HEADER_LEN + ETH_PAYLOAD_MAX)
 struct eth_header {
     uint8_t eth_dst[ETH_ADDR_LEN];
     uint8_t eth_src[ETH_ADDR_LEN];
