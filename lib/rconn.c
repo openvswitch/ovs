@@ -39,6 +39,7 @@
 #include "buffer.h"
 #include "poll-loop.h"
 #include "ofp-print.h"
+#include "timeval.h"
 #include "util.h"
 #include "vconn.h"
 
@@ -154,6 +155,10 @@ rconn_run(struct rconn *rc)
             rc->connected = true;
         } else if (error != EAGAIN) {
             VLOG_WARN("%s: connection failed (%s)", rc->name, strerror(error));
+            disconnect(rc, 0);
+        } else if (time(0) >= rc->backoff_deadline) {
+            VLOG_WARN("%s: connection timed out", rc->name);
+            rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
             disconnect(rc, 0);
         }
     } else {
