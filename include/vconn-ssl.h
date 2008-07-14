@@ -33,7 +33,10 @@
 #ifndef VCONN_SSL_H
 #define VCONN_SSL_H 1
 
+#include <stdbool.h>
+
 #ifdef HAVE_OPENSSL
+bool vconn_ssl_is_configured(void);
 void vconn_ssl_set_private_key_file(const char *file_name);
 void vconn_ssl_set_certificate_file(const char *file_name);
 void vconn_ssl_set_ca_cert_file(const char *file_name);
@@ -56,6 +59,10 @@ void vconn_ssl_set_ca_cert_file(const char *file_name);
             vconn_ssl_set_ca_cert_file(optarg);     \
             break;
 #else /* !HAVE_OPENSSL */
+static inline bool vconn_ssl_is_configured(void) 
+{
+    return false;
+}
 #define VCONN_SSL_LONG_OPTIONS
 #define VCONN_SSL_OPTION_HANDLERS
 #endif /* !HAVE_OPENSSL */

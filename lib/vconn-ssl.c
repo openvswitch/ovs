@@ -867,6 +867,13 @@ tmp_dh_callback(SSL *ssl, int is_export UNUSED, int keylength)
     return NULL;
 }
 
+/* Returns true if SSL is at least partially configured. */
+bool
+vconn_ssl_is_configured(void) 
+{
+    return has_private_key || has_certificate || has_ca_cert;
+}
+
 void
 vconn_ssl_set_private_key_file(const char *file_name)
 {
