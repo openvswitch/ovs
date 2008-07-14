@@ -48,6 +48,7 @@ struct buffer {
     void *l2;                   /* Link-level header. */
     void *l3;                   /* Network-level header. */
     void *l4;                   /* Transport-level header. */
+    void *l7;                   /* Application data. */
 
     struct buffer *next;        /* Next in a list of buffers. */
 };

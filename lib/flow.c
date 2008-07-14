@@ -43,6 +43,44 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_flow
 
+struct ip_header *
+pull_ip(struct buffer *packet)
+{
+    if (packet->size >= IP_HEADER_LEN) {
+        struct ip_header *ip = packet->data;
+        int ip_len = IP_IHL(ip->ip_ihl_ver) * 4;
+        if (ip_len >= IP_HEADER_LEN && packet->size >= ip_len) {
+            return buffer_pull(packet, ip_len);
+        }
+    }
+    return NULL;
+}
+
+struct tcp_header *
+pull_tcp(struct buffer *packet) 
+{
+    if (packet->size >= TCP_HEADER_LEN) {
+        struct tcp_header *tcp = packet->data;
+        int tcp_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
+        if (tcp_len >= TCP_HEADER_LEN && packet->size >= tcp_len) {
+            return buffer_pull(packet, tcp_len);
+        }
+    }
+    return NULL;
+}
+
+struct udp_header *
+pull_udp(struct buffer *packet) 
+{
+    return buffer_try_pull(packet, UDP_HEADER_LEN);
+}
+
+struct eth_header *
+pull_eth(struct buffer *packet) 
+{
+    return buffer_try_pull(packet, ETH_HEADER_LEN);
+}
+
 void
 flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
 {
@@ -64,10 +102,10 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
     packet->l2 = b.data;
     packet->l3 = NULL;
     packet->l4 = NULL;
+    packet->l7 = NULL;
 
-    eth = buffer_at(&b, 0, sizeof *eth);
+    eth = pull_eth(&b);
     if (eth) {
-        buffer_pull(&b, ETH_HEADER_LEN);
         if (ntohs(eth->eth_type) >= OFP_DL_TYPE_ETH2_CUTOFF) {
             /* This is an Ethernet II frame */
             flow->dl_type = eth->eth_type;
@@ -104,23 +142,29 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
 
         packet->l3 = b.data;
         if (flow->dl_type == htons(ETH_TYPE_IP)) {
-            const struct ip_header *nh = buffer_at(&b, 0, sizeof *nh);
+            const struct ip_header *nh = pull_ip(&b);
             if (nh) {
-                int ip_len = IP_IHL(nh->ip_ihl_ver) * 4;
-                if (ip_len < IP_HEADER_LEN) {
-                    return;
-                }
-
                 flow->nw_src = nh->ip_src;
                 flow->nw_dst = nh->ip_dst;
                 flow->nw_proto = nh->ip_proto;
-                if (flow->nw_proto == IP_TYPE_TCP
-                    || flow->nw_proto == IP_TYPE_UDP) {
-                    const struct udp_header *th;
-                    th = packet->l4 = buffer_at(&b, ip_len, sizeof *th);
-                    if (th) {
-                        flow->tp_src = th->udp_src;
-                        flow->tp_dst = th->udp_dst;
+                packet->l4 = b.data;
+                if (flow->nw_proto == IP_TYPE_TCP) {
+                    const struct tcp_header *tcp = pull_tcp(&b);
+                    if (tcp) {
+                        flow->tp_src = tcp->tcp_src;
+                        flow->tp_dst = tcp->tcp_dst;
+                        packet->l7 = b.data;
+                    } else {
+                        /* Avoid tricking other code into thinking that this
+                         * packet has an L4 header. */
+                        flow->nw_proto = 0;
+                    }
+                } else if (flow->nw_proto == IP_TYPE_UDP) {
+                    const struct udp_header *udp = pull_udp(&b);
+                    if (udp) {
+                        flow->tp_src = udp->udp_src;
+                        flow->tp_dst = udp->udp_dst;
+                        packet->l7 = b.data;
                     } else {
                         /* Avoid tricking other code into thinking that this
                          * packet has an L4 header. */

@@ -50,7 +50,7 @@ buffer_use(struct buffer *b, void *base, size_t allocated)
     b->base = b->data = base;
     b->allocated = allocated;
     b->size = 0;
-    b->l2 = b->l3 = b->l4 = NULL;
+    b->l2 = b->l3 = b->l4 = b->l7 = NULL;
     b->next = NULL;
 }
 
@@ -147,6 +147,9 @@ buffer_prealloc_tailroom(struct buffer *b, size_t size)
         }
         if (b->l4) {
             b->l4 += base_delta;
+        }
+        if (b->l7) {
+            b->l7 += base_delta;
         }
     }
 }
