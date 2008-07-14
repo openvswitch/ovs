@@ -67,6 +67,7 @@
 struct netdev {
     struct list node;
     char *name;
+    int ifindex;
     int fd;
     uint8_t etheraddr[ETH_ADDR_LEN];
     int speed;
@@ -220,7 +221,7 @@ int
 netdev_open(const char *name, int ethertype, struct netdev **netdev_)
 {
     int fd;
-    struct sockaddr sa;
+    struct sockaddr_ll sll;
     struct ifreq ifr;
     unsigned int ifindex;
     uint8_t etheraddr[ETH_ADDR_LEN];
@@ -233,12 +234,8 @@ netdev_open(const char *name, int ethertype, struct netdev **netdev_)
     *netdev_ = NULL;
     init_netdev();
 
-    /* Create raw socket.
-     *
-     * We have to use SOCK_PACKET, despite its deprecation, because only
-     * SOCK_PACKET lets us set the hardware source address of outgoing
-     * packets. */
-    fd = socket(PF_PACKET, SOCK_PACKET,
+    /* Create raw socket. */
+    fd = socket(PF_PACKET, SOCK_RAW,
                 htons(ethertype == NETDEV_ETH_TYPE_NONE ? 0
                       : ethertype == NETDEV_ETH_TYPE_ANY ? ETH_P_ALL
                       : ethertype == NETDEV_ETH_TYPE_802_2 ? ETH_P_802_2
@@ -247,11 +244,20 @@ netdev_open(const char *name, int ethertype, struct netdev **netdev_)
         return errno;
     }
 
+    /* Get ethernet device index. */
+    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+    if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0) {
+        VLOG_ERR("ioctl(SIOCGIFINDEX) on %s device failed: %s",
+                 name, strerror(errno));
+        goto error;
+    }
+    ifindex = ifr.ifr_ifindex;
+
     /* Bind to specific ethernet device. */
-    memset(&sa, 0, sizeof sa);
-    sa.sa_family = AF_UNSPEC;
-    strncpy((char *) sa.sa_data, name, sizeof sa.sa_data);
-    if (bind(fd, &sa, sizeof sa) < 0) {
+    memset(&sll, 0, sizeof sll);
+    sll.sll_family = AF_PACKET;
+    sll.sll_ifindex = ifindex;
+    if (bind(fd, (struct sockaddr *) &sll, sizeof sll) < 0) {
         VLOG_ERR("bind to %s failed: %s", name, strerror(errno));
         goto error;
     }
@@ -266,15 +272,6 @@ netdev_open(const char *name, int ethertype, struct netdev **netdev_)
             goto error;
         }
     }
-
-    /* Get ethernet device index. */
-    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
-    if (ioctl(fd, SIOCGIFINDEX, &ifr) < 0) {
-        VLOG_ERR("ioctl(SIOCGIFINDEX) on %s device failed: %s",
-                 name, strerror(errno));
-        goto error;
-    }
-    ifindex = ifr.ifr_ifindex;
 
     /* Get MAC address. */
     if (ioctl(fd, SIOCGIFHWADDR, &ifr) < 0) {
@@ -305,6 +302,7 @@ netdev_open(const char *name, int ethertype, struct netdev **netdev_)
     /* Allocate network device. */
     netdev = xmalloc(sizeof *netdev);
     netdev->name = xstrdup(name);
+    netdev->ifindex = ifindex;
     netdev->fd = fd;
     memcpy(netdev->etheraddr, etheraddr, sizeof etheraddr);
     netdev->mtu = mtu;
@@ -441,7 +439,6 @@ netdev_send(struct netdev *netdev, const struct buffer *buffer)
 {
     ssize_t n_bytes;
     const struct eth_header *eh;
-    struct sockaddr_pkt spkt;
 
     /* Pull out the Ethernet header. */
     if (buffer->size < ETH_HEADER_LEN) {
@@ -451,14 +448,8 @@ netdev_send(struct netdev *netdev, const struct buffer *buffer)
     }
     eh = buffer_at_assert(buffer, 0, sizeof *eh);
 
-    /* Construct packet sockaddr, which SOCK_PACKET requires. */
-    spkt.spkt_family = AF_PACKET;
-    strncpy((char *) spkt.spkt_device, netdev->name, sizeof spkt.spkt_device);
-    spkt.spkt_protocol = eh->eth_type;
-
     do {
-        n_bytes = sendto(netdev->fd, buffer->data, buffer->size, 0,
-                         (const struct sockaddr *) &spkt, sizeof spkt);
+        n_bytes = sendto(netdev->fd, buffer->data, buffer->size, 0, NULL, 0);
     } while (n_bytes < 0 && errno == EINTR);
 
     if (n_bytes < 0) {
