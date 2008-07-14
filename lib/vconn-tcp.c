@@ -200,7 +200,7 @@ again:
             return 0;
         }
     }
-    buffer_reserve_tailroom(rx, want_bytes);
+    buffer_prealloc_tailroom(rx, want_bytes);
 
     retval = read(tcp->fd, buffer_tail(rx), want_bytes);
     if (retval > 0) {

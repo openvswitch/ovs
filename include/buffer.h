@@ -73,7 +73,8 @@ void *buffer_push_uninit(struct buffer *b, size_t);
 
 size_t buffer_headroom(struct buffer *);
 size_t buffer_tailroom(struct buffer *);
-void buffer_reserve_tailroom(struct buffer *, size_t);
+void buffer_prealloc_headroom(struct buffer *, size_t);
+void buffer_prealloc_tailroom(struct buffer *, size_t);
 
 void buffer_clear(struct buffer *);
 void *buffer_pull(struct buffer *, size_t);

@@ -458,7 +458,7 @@ again:
             return 0;
         }
     }
-    buffer_reserve_tailroom(rx, want_bytes);
+    buffer_prealloc_tailroom(rx, want_bytes);
 
     /* Behavior of zero-byte SSL_read is poorly defined. */
     assert(want_bytes > 0);

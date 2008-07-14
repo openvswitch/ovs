@@ -470,12 +470,12 @@ nl_msg_nlmsgerr(const struct buffer *msg, int *errorp)
     }
 }
 
-/* Ensures that 'b' has room for at least 'size' bytes plus netlink pading at
+/* Ensures that 'b' has room for at least 'size' bytes plus netlink padding at
  * its tail end, reallocating and copying its data if necessary. */
 void
 nl_msg_reserve(struct buffer *msg, size_t size) 
 {
-    buffer_reserve_tailroom(msg, NLMSG_ALIGN(size));
+    buffer_prealloc_tailroom(msg, NLMSG_ALIGN(size));
 }
 
 /* Puts a nlmsghdr at the beginning of 'msg', which must be initially empty.

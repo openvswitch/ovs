@@ -128,7 +128,7 @@ buffer_tailroom(struct buffer *b)
 /* Ensures that 'b' has room for at least 'size' bytes at its tail end,
  * reallocating and copying its data if necessary. */
 void
-buffer_reserve_tailroom(struct buffer *b, size_t size) 
+buffer_prealloc_tailroom(struct buffer *b, size_t size) 
 {
     if (size > buffer_tailroom(b)) {
         size_t new_allocated = b->allocated + MAX(size, 64);
@@ -152,7 +152,7 @@ buffer_reserve_tailroom(struct buffer *b, size_t size)
 }
 
 void
-buffer_reserve_headroom(struct buffer *b, size_t size) 
+buffer_prealloc_headroom(struct buffer *b, size_t size) 
 {
     assert(size <= buffer_headroom(b));
 }
@@ -164,7 +164,7 @@ void *
 buffer_put_uninit(struct buffer *b, size_t size) 
 {
     void *p;
-    buffer_reserve_tailroom(b, size);
+    buffer_prealloc_tailroom(b, size);
     p = buffer_tail(b);
     b->size += size;
     return p;
@@ -184,7 +184,7 @@ buffer_put(struct buffer *b, const void *p, size_t size)
 void *
 buffer_push_uninit(struct buffer *b, size_t size) 
 {
-    buffer_reserve_headroom(b, size);
+    buffer_prealloc_headroom(b, size);
     b->data -= size;
     b->size += size;
     return b->data;
