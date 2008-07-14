@@ -380,6 +380,14 @@ relay_destroy(struct relay *r)
     free(r);
 }
 
+static void
+queue_tx(struct rconn *rc, struct buffer *b)
+{
+    if (rconn_force_send(rc, b)) {
+        buffer_delete(b);
+    }
+}
+
 static bool
 is_controller_mac(const uint8_t dl_addr[ETH_ADDR_LEN],
                   struct rconn *controller) 
@@ -438,7 +446,7 @@ local_hook(struct relay *r)
     struct ofp_packet_in *opi;
     struct ofp_header *oh;
     size_t pkt_ofs, pkt_len;
-    struct buffer pkt, *b;
+    struct buffer pkt;
     struct flow flow;
     uint16_t in_port, out_port;
 
@@ -482,21 +490,26 @@ local_hook(struct relay *r)
         return false;
     }
 
-    /* Add new flow. */
     if (out_port != OFPP_FLOOD) {
-        b = make_add_simple_flow(&flow, ntohl(opi->buffer_id), out_port,
-                                 max_idle);
-        if (rconn_force_send(rc, b)) {
-            buffer_delete(b);
-        }
-    }
+        /* The output port is known, so add a new flow. */
+        queue_tx(rc, make_add_simple_flow(&flow, ntohl(opi->buffer_id),
+                                          out_port, max_idle));
 
-    /* If the switch didn't buffer the packet, we need to send a copy. */
-    if (out_port == OFPP_FLOOD || ntohl(opi->buffer_id) == UINT32_MAX) {
-        b = make_unbuffered_packet_out(&pkt, in_port, out_port);
-        if (rconn_force_send(rc, b)) {
-            buffer_delete(b);
+        /* If the switch didn't buffer the packet, we need to send a copy. */
+        if (ntohl(opi->buffer_id) == UINT32_MAX) {
+            queue_tx(rc, make_unbuffered_packet_out(&pkt, in_port, out_port));
         }
+    } else {
+        /* We don't know that MAC.  Send along the packet without setting up a
+         * flow. */
+        struct buffer *b;
+        if (ntohl(opi->buffer_id) == UINT32_MAX) {
+            b = make_unbuffered_packet_out(&pkt, in_port, out_port);
+        } else {
+            b = make_buffered_packet_out(ntohl(opi->buffer_id),
+                                         in_port, out_port);
+        }
+        queue_tx(rc, b);
     }
     return true;
 }
