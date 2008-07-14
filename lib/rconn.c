@@ -180,11 +180,8 @@ rconn_run(struct rconn *rc)
         }
         while (rc->txq.n > 0) {
             int error = try_send(rc);
-            if (error == EAGAIN) {
+            if (error) {
                 break;
-            } else if (error) {
-                disconnect(rc, error);
-                return;
             }
         }
     }
@@ -378,6 +375,9 @@ try_send(struct rconn *rc)
     struct buffer *next = rc->txq.head->next;
     retval = vconn_send(rc->vconn, rc->txq.head);
     if (retval) {
+        if (retval != EAGAIN) {
+            disconnect(rc, retval);
+        }
         return retval;
     }
     rc->packets_sent++;
