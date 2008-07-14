@@ -77,7 +77,8 @@ netlink_open(const char *name, char *suffix, struct vconn **vconnp)
 
     subscribe = 1;
     if (sscanf(suffix, "%d:%d", &dp_idx, &subscribe) < 1) {
-        fatal(0, "%s: syntax error", name);
+        error(0, "%s: syntax error", name);
+        return EAFNOSUPPORT;
     }
 
     netlink = xmalloc(sizeof *netlink);

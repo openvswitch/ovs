@@ -135,6 +135,7 @@ static bool fail_open_hook(struct relay *r);
 int
 main(int argc, char *argv[])
 {
+    struct rconn *local_rconn, *remote_rconn;
     struct vconn *listen_vconn;
     struct relay *controller_relay;
     const char *nl_name;
@@ -201,10 +202,18 @@ main(int argc, char *argv[])
 
     daemonize();
 
-    controller_relay = relay_create(rconn_new(argv[optind], 1, 0, max_backoff),
-                                    rconn_new(argv[optind + 1], 1,
-                                              probe_interval, max_backoff),
-                                    false);
+    local_rconn = rconn_create(1, 0, max_backoff);
+    retval = rconn_connect(local_rconn, nl_name);
+    if (retval == EAFNOSUPPORT) {
+        fatal(0, "No support for %s vconn", nl_name);
+    }
+
+    remote_rconn = rconn_create(1, probe_interval, max_backoff);
+    retval = rconn_connect(remote_rconn, argv[optind + 1]);
+    if (retval == EAFNOSUPPORT) {
+        fatal(0, "No support for %s vconn", argv[optind + 1]);
+    }
+    controller_relay = relay_create(local_rconn, remote_rconn, false);
     for (;;) {
         struct relay *r, *n;
 

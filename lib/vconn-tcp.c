@@ -117,7 +117,8 @@ tcp_open(const char *name, char *suffix, struct vconn **vconnp)
     host_name = strtok_r(suffix, "::", &save_ptr);
     port_string = strtok_r(NULL, "::", &save_ptr);
     if (!host_name) {
-        fatal(0, "%s: bad peer name format", name);
+        error(0, "%s: bad peer name format", name);
+        return EAFNOSUPPORT;
     }
 
     memset(&sin, 0, sizeof sin);

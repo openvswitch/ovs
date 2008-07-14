@@ -143,7 +143,8 @@ vconn_open(const char *name, struct vconn **vconnp)
 
     prefix_len = strcspn(name, ":");
     if (prefix_len == strlen(name)) {
-        fatal(0, "`%s' not correct format for peer name", name);
+        error(0, "`%s' not correct format for peer name", name);
+        return EAFNOSUPPORT;
     }
     for (i = 0; i < ARRAY_SIZE(vconn_classes); i++) {
         struct vconn_class *class = vconn_classes[i];
@@ -161,8 +162,8 @@ vconn_open(const char *name, struct vconn **vconnp)
             return retval;
         }
     }
-    fatal(0, "unknown peer type `%.*s'", (int) prefix_len, name);
-    abort();
+    error(0, "unknown peer type `%.*s'", (int) prefix_len, name);
+    return EAFNOSUPPORT;
 }
 
 int

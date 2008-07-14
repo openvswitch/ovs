@@ -116,7 +116,7 @@ static unsigned int elapsed_in_this_state(const struct rconn *);
 static bool timeout(struct rconn *, unsigned int secs);
 static void state_transition(struct rconn *, enum state);
 static int try_send(struct rconn *);
-static void reconnect(struct rconn *);
+static int reconnect(struct rconn *);
 static void disconnect(struct rconn *, int error);
 static void question_connectivity(struct rconn *);
 
@@ -187,14 +187,14 @@ rconn_create(int txq_limit, int probe_interval, int max_backoff)
     return rc;
 }
 
-void
+int
 rconn_connect(struct rconn *rc, const char *name)
 {
     rconn_disconnect(rc);
     free(rc->name);
     rc->name = xstrdup(name);
     rc->reliable = true;
-    reconnect(rc);
+    return reconnect(rc);
 }
 
 void
@@ -246,7 +246,7 @@ run_VOID(struct rconn *rc)
     /* Nothing to do. */
 }
 
-static void
+static int
 reconnect(struct rconn *rc)
 {
     int retval;
@@ -260,6 +260,7 @@ reconnect(struct rconn *rc)
         VLOG_WARN("%s: connection failed (%s)", rc->name, strerror(retval));
         disconnect(rc, 0);
     }
+    return retval;
 }
 
 static void
@@ -273,18 +274,19 @@ run_BACKOFF(struct rconn *rc)
 static void
 run_CONNECTING(struct rconn *rc)
 {
-    int error = vconn_connect(rc->vconn);
-    if (!error) {
+    int retval = vconn_connect(rc->vconn);
+    if (!retval) {
         VLOG_WARN("%s: connected", rc->name);
         if (vconn_is_passive(rc->vconn)) {
-            fatal(0, "%s: passive vconn not supported in switch",
-                  rc->name);
+            error(0, "%s: passive vconn not supported", rc->name);
+            state_transition(rc, S_VOID);
+        } else {
+            state_transition(rc, S_ACTIVE);
+            rc->last_connected = rc->state_entered;
         }
-        state_transition(rc, S_ACTIVE);
-        rc->last_connected = rc->state_entered;
-    } else if (error != EAGAIN) {
-        VLOG_WARN("%s: connection failed (%s)", rc->name, strerror(error));
-        disconnect(rc, error);
+    } else if (retval != EAGAIN) {
+        VLOG_WARN("%s: connection failed (%s)", rc->name, strerror(retval));
+        disconnect(rc, retval);
     } else if (timeout(rc, MAX(1, rc->backoff))) {
         VLOG_WARN("%s: connection timed out", rc->name);
         rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
