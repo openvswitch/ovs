@@ -57,7 +57,7 @@ int netdev_open(const char *name, struct netdev **);
 void netdev_close(struct netdev *);
 int netdev_recv(struct netdev *, struct buffer *);
 void netdev_recv_wait(struct netdev *);
-int netdev_send(struct netdev *, struct buffer *);
+int netdev_send(struct netdev *, const struct buffer *);
 const uint8_t *netdev_get_etheraddr(const struct netdev *);
 const char *netdev_get_name(const struct netdev *);
 int netdev_get_mtu(const struct netdev *);

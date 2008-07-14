@@ -426,29 +426,30 @@ netdev_recv_wait(struct netdev *netdev)
 /* Sends 'buffer' on 'netdev'.  Returns 0 if successful, otherwise a positive
  * errno value.  Returns EAGAIN without blocking if the packet cannot be queued
  * immediately.  Returns EMSGSIZE if a partial packet was transmitted or if
- * the packet is too big to transmit on the device.
+ * the packet is too big or too small to transmit on the device.
+ *
+ * The caller retains ownership of 'buffer' in all cases.
  *
  * The kernel maintains a packet transmission queue, so the caller is not
  * expected to do additional queuing of packets. */
 int
-netdev_send(struct netdev *netdev, struct buffer *buffer)
+netdev_send(struct netdev *netdev, const struct buffer *buffer)
 {
     ssize_t n_bytes;
     const struct eth_header *eh;
     struct sockaddr_pkt spkt;
 
-    /* Ensure packet is long enough.  (Although all incoming packets are at
-     * least ETH_TOTAL_MIN bytes long, we could have trimmed some data off a
-     * minimum-size packet, e.g. by dropping a vlan header.)
-     *
-     * The kernel does not require this, but it ensures that we always access
-     * valid memory in grabbing the sockaddr below. */
-    pad_to_minimum_length(buffer);
+    /* Pull out the Ethernet header. */
+    if (buffer->size < ETH_HEADER_LEN) {
+        VLOG_WARN("cannot send %zu-byte frame on %s",
+                  buffer->size, netdev->name);
+        return EMSGSIZE;
+    }
+    eh = buffer_at_assert(buffer, 0, sizeof *eh);
 
     /* Construct packet sockaddr, which SOCK_PACKET requires. */
     spkt.spkt_family = AF_PACKET;
     strncpy((char *) spkt.spkt_device, netdev->name, sizeof spkt.spkt_device);
-    eh = buffer_at_assert(buffer, 0, sizeof *eh);
     spkt.spkt_protocol = eh->eth_type;
 
     do {
