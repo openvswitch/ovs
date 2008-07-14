@@ -538,6 +538,75 @@ netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
     return in4->s_addr != INADDR_ANY;
 }
 
+static void
+make_in4_sockaddr(struct sockaddr *sa, struct in_addr addr)
+{
+    struct sockaddr_in sin;
+    memset(&sin, 0, sizeof sin);
+    sin.sin_family = AF_INET;
+    sin.sin_addr = addr;
+    sin.sin_port = 0;
+
+    memset(sa, 0, sizeof *sa);
+    memcpy(sa, &sin, sizeof sin);
+}
+
+static int
+do_set_addr(struct netdev *netdev, int sock,
+            int ioctl_nr, const char *ioctl_name, struct in_addr addr)
+{
+    struct ifreq ifr;
+    int error;
+
+    strncpy(ifr.ifr_name, netdev->name, sizeof ifr.ifr_name);
+    make_in4_sockaddr(&ifr.ifr_addr, addr);
+    error = ioctl(sock, ioctl_nr, &ifr) < 0 ? errno : 0;
+    if (error) {
+        VLOG_WARN("ioctl(%s): %s", ioctl_name, strerror(error));
+    }
+    return error;
+}
+
+/* Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If
+ * 'addr' is INADDR_ANY, 'netdev''s IPv4 address is cleared.  Returns a
+ * positive errno value. */
+int
+netdev_set_in4(struct netdev *netdev, struct in_addr addr, struct in_addr mask)
+{
+    int error;
+
+    error = do_set_addr(netdev, af_inet_sock,
+                        SIOCSIFADDR, "SIOCSIFADDR", addr);
+    if (!error) {
+        netdev->in4 = addr;
+        if (addr.s_addr != INADDR_ANY) {
+            error = do_set_addr(netdev, af_inet_sock,
+                                SIOCSIFNETMASK, "SIOCSIFNETMASK", mask);
+        }
+    }
+    return error;
+}
+
+/* Adds 'router' as a default gateway for 'netdev''s IP address. */
+int
+netdev_add_router(struct netdev *netdev, struct in_addr router)
+{
+    struct in_addr any = { INADDR_ANY };
+    struct rtentry rt;
+    int error;
+
+    memset(&rt, 0, sizeof rt);
+    make_in4_sockaddr(&rt.rt_dst, any);
+    make_in4_sockaddr(&rt.rt_gateway, router);
+    make_in4_sockaddr(&rt.rt_genmask, any);
+    rt.rt_flags = RTF_UP | RTF_GATEWAY;
+    error = ioctl(af_inet_sock, SIOCADDRT, &rt) < 0 ? errno : 0;
+    if (error) {
+        VLOG_WARN("ioctl(SIOCADDRT): %s", strerror(error));
+    }
+    return error;
+}
+
 /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address and
  * returns true.  Otherwise, returns false. */
 bool
