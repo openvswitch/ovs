@@ -41,5 +41,6 @@ int set_nonblocking(int fd);
 int lookup_ip(const char *host_name, struct in_addr *address);
 int get_socket_error(int sock);
 int check_connection_completion(int fd);
+int drain_rcvbuf(int fd);
 
 #endif /* socket-util.h */

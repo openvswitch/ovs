@@ -59,6 +59,7 @@
 #include "openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "socket-util.h"
 
 #define THIS_MODULE VLM_netdev
 #include "vlog.h"
@@ -222,8 +223,6 @@ netdev_open(const char *name, int ethertype, struct netdev **netdev_)
     struct sockaddr sa;
     struct ifreq ifr;
     unsigned int ifindex;
-    socklen_t rcvbuf_len;
-    size_t rcvbuf;
     uint8_t etheraddr[ETH_ADDR_LEN];
     struct in_addr in4;
     struct in6_addr in6;
@@ -257,26 +256,15 @@ netdev_open(const char *name, int ethertype, struct netdev **netdev_)
         goto error;
     }
 
-    /* Between the socket() and bind() calls above, the socket receives all
-     * packets on all system interfaces.  We do not want to receive that
-     * data, but there is no way to avoid it.  So we must now drain out the
-     * receive queue.  There is no way to know how long the receive queue is,
-     * but we know that the total number of bytes queued does not exceed the
-     * receive buffer size, so we pull packets until none are left or we've
-     * read that many bytes. */
-    rcvbuf_len = sizeof rcvbuf;
-    if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, &rcvbuf_len) < 0) {
-        VLOG_ERR("getsockopt(SO_RCVBUF) on %s device failed: %s",
-                 name, strerror(errno));
-        goto error;
-    }
-    while (rcvbuf > 0) {
-        char buffer;
-        ssize_t n_bytes = recv(fd, &buffer, 1, MSG_TRUNC | MSG_DONTWAIT);
-        if (n_bytes <= 0) {
-            break;
+    if (ethertype != NETDEV_ETH_TYPE_NONE) {
+        /* Between the socket() and bind() calls above, the socket receives all
+         * packets of the requested type on all system interfaces.  We do not
+         * want to receive that data, but there is no way to avoid it.  So we
+         * must now drain out the receive queue. */
+        error = drain_rcvbuf(fd);
+        if (error) {
+            goto error;
         }
-        rcvbuf -= n_bytes;
     }
 
     /* Get ethernet device index. */
@@ -430,6 +418,13 @@ void
 netdev_recv_wait(struct netdev *netdev)
 {
     poll_fd_wait(netdev->fd, POLLIN);
+}
+
+/* Discards all packets waiting to be received from 'netdev'. */
+void
+netdev_drain(struct netdev *netdev)
+{
+    drain_rcvbuf(netdev->fd);
 }
 
 /* Sends 'buffer' on 'netdev'.  Returns 0 if successful, otherwise a positive

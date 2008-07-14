@@ -118,3 +118,44 @@ check_connection_completion(int fd)
         return EAGAIN;
     }
 }
+
+/* Drain all the data currently in the receive queue of a datagram socket (and
+ * possibly additional data).  There is no way to know how many packets are in
+ * the receive queue, but we do know that the total number of bytes queued does
+ * not exceed the receive buffer size, so we pull packets until none are left
+ * or we've read that many bytes. */
+int
+drain_rcvbuf(int fd)
+{
+    socklen_t rcvbuf_len;
+    size_t rcvbuf;
+
+    rcvbuf_len = sizeof rcvbuf;
+    if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, &rcvbuf_len) < 0) {
+        VLOG_ERR("getsockopt(SO_RCVBUF) failed: %s", strerror(errno));
+        return errno;
+    }
+    while (rcvbuf > 0) {
+        /* In Linux, specifying MSG_TRUNC in the flags argument causes the
+         * datagram length to be returned, even if that is longer than the
+         * buffer provided.  Thus, we can use a 1-byte buffer to discard the
+         * incoming datagram and still be able to account how many bytes were
+         * removed from the receive buffer.
+         *
+         * On other Unix-like OSes, MSG_TRUNC has no effect in the flags
+         * argument. */
+#ifdef __linux__
+#define BUFFER_SIZE 1
+#else
+#define BUFFER_SIZE 2048
+#endif
+        char buffer[BUFFER_SIZE];
+        ssize_t n_bytes = recv(fd, buffer, sizeof buffer,
+                               MSG_TRUNC | MSG_DONTWAIT);
+        if (n_bytes <= 0 || n_bytes >= rcvbuf) {
+            break;
+        }
+        rcvbuf -= n_bytes;
+    }
+    return 0;
+}
