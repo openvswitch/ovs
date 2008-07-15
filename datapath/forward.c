@@ -362,6 +362,13 @@ recv_echo_request(struct sw_chain *chain, const struct sender *sender,
 }
 
 static int
+recv_echo_reply(struct sw_chain *chain, const struct sender *sender,
+		  const void *msg) 
+{
+	return 0;
+}
+
+static int
 add_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 {
 	int error = -ENOMEM;
@@ -494,6 +501,10 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 		[OFPT_ECHO_REQUEST] = {
 			sizeof (struct ofp_header),
 			recv_echo_request,
+		},
+		[OFPT_ECHO_REPLY] = {
+			sizeof (struct ofp_header),
+			recv_echo_reply,
 		},
 	};
 

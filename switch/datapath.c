@@ -1501,6 +1501,13 @@ recv_echo_request(struct datapath *dp, const struct sender *sender,
     return send_openflow_buffer(dp, make_echo_reply(oh), sender);
 }
 
+static int
+recv_echo_reply(struct datapath *dp UNUSED, const struct sender *sender UNUSED,
+                  const void *oh UNUSED)
+{
+    return 0;
+}
+
 /* 'msg', which is 'length' bytes long, was received from the control path.
  * Apply it to 'chain'. */
 int
@@ -1544,6 +1551,10 @@ fwd_control_input(struct datapath *dp, const struct sender *sender,
         [OFPT_ECHO_REQUEST] = {
             sizeof (struct ofp_header),
             recv_echo_request,
+        },
+        [OFPT_ECHO_REPLY] = {
+            sizeof (struct ofp_header),
+            recv_echo_reply,
         },
     };
 
