@@ -402,48 +402,72 @@ following instructions to set up remote switches:
    network.  There are two ways to do this:
 
       - Use a "control network" that is completely separate from the
-        "data network" to be controlled.  To do so, configure a
-        network device (one that has not been added to the datapath
-        with "dpctl addif") to access the control network in the usual
-        way.
+        "data network" to be controlled ("out-of-band control").  To
+        do so, configure a network device (one that has not been added
+        to the datapath with "dpctl addif") to access the control
+        network in the usual way.
 
-      - Use the same network for control and for data.  For this
-        purpose, each datapath nl:K has a corresponding virtual
-        network device named ofK.  Start by bringing up of0 before you
-        start the secure channel:
+      - Use the same network for control and for data ("in-band
+        control").  For this purpose, each datapath nl:K has a
+        corresponding virtual network device named ofK.
 
-           # ifconfig of0 up
+        When in-band control is used, the location of the controller
+        may be configured manually or discovered automatically:
 
-        Before the secure channel starts up, the of0 device cannot
-        send or receive any packets, so the next step depends on
-        whether connectivity is required to configure the device's IP
-        address:
+            * Manual configuration: Start by bringing up of0 before
+              you start the secure channel:
 
-           . If the switch has a static IP address, you may configure
-             its IP address now, e.g.:
+                 # ifconfig of0 up
 
-                # ifconfig of0 192.168.1.1
+              Before the secure channel starts up, the of0 device
+              cannot send or receive any packets, so the next step
+              depends on whether connectivity is required to configure
+              the device's IP address:
 
-           . If the switch does not have a static IP address, e.g. its
-             IP address is obtained dynamically via DHCP, then proceed
-             to step 4.  The DHCP client will not be able to contact
-             the DHCP server until the secure channel has started up.
+                 . If the switch has a static IP address, you may
+                   configure its IP address now, e.g.:
+
+                      # ifconfig of0 192.168.1.1
+
+                 . If the switch does not have a static IP address,
+                   e.g. its IP address is obtained dynamically via
+                   DHCP, then proceed to step 4.  The DHCP client will
+                   not be able to contact the DHCP server until the
+                   secure channel has started up.
+
+            * Controller discovery: No special setup is required at
+              the switch, but you must specially configure a DHCP
+              server to give out the switch's IP address and to tell
+              it the location of the controller.  See secchan(8) for
+              details.
 
 4. Run secchan on the datapath host to start the secure channel
    connecting the datapath to a remote controller.  (See secchan(8)
-   for usage details).  The channel should be configured to connect to
-   the controller's IP address on the port configured in step 2.
+   for usage details).  The details depend on how you configured the
+   network in step 3:
 
-   If the controller is running on host 192.168.1.2 port 975 (the
-   default port) and the datapath ID is 0, the secchan invocation
-   would look like:
+      - If you are using in-band control and controller discovery,
+        invoke secchan something like this:
 
-      # secchan -v nl:0 tcp:192.168.1.2
+           # secchan -v nl:0
 
-   If you are using separate control and data networks, or if the
-   networks are combined and the switch has a static IP address, the
-   secure channel should quickly connect to the controller.  Setup is
-   now complete.  Otherwise, proceed to step 5.
+        The secure channel should connect to the controller after it
+        obtains its own IP address and the controller's location via
+        DHCP.  This can take a few seconds.  Switch setup is now
+        complete.
+
+      - Otherwise, the secure channel should be configured to connect
+        to the controller's IP address on the port configured in step
+        2.  If the controller is running on host 192.168.1.2 port 975
+        (the default port) and the datapath ID is 0, the secchan
+        invocation would look like:
+
+           # secchan -v nl:0 tcp:192.168.1.2
+
+        If you are using out-of-band control, or if you are using
+        in-band control and the switch has a static IP address, the
+        secure channel should quickly connect to the controller.
+        Setup is now complete.  Otherwise, proceed to step 5.
 
 5. If you are using the same network for control and data, and the
    switch obtains its IP address dynamically, then you may now obtain

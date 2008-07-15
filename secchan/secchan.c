@@ -1,4 +1,4 @@
- /* Copyright (c) 2008 The Board of Trustees of The Leland Stanford
+/* Copyright (c) 2008 The Board of Trustees of The Leland Stanford
  * Junior University
  * 
  * We are making the OpenFlow specification and associated documentation
@@ -36,6 +36,7 @@
 #include <inttypes.h>
 #include <netinet/in.h>
 #include <poll.h>
+#include <regex.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -45,6 +46,8 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
+#include "dhcp.h"
+#include "dhcp-client.h"
 #include "fault.h"
 #include "flow.h"
 #include "learning-switch.h"
@@ -91,14 +94,19 @@ struct relay {
 
 static struct list relays = LIST_INITIALIZER(&relays);
 
-/* Enable the local port? */
-static int local_port;
+/* Mode of operation.  Note that autodiscovery implies in-band
+ * communication. */
+static bool autodiscovery;      /* Discover the controller automatically? */
+static bool in_band;            /* Connect to controller in-band? */
 
 /* MAC address of local port. */
 static uint8_t local_mac[ETH_ADDR_LEN];
 
 /* MAC learning table for local port. */
 static struct mac_learning *local_ml;
+
+/* Controller vconn name, or null to perform controller autodiscovery. */
+static char *controller_name = NULL;
 
 /* -f, --fail: Behavior when the connection to the controller fails. */
 static enum fail_mode fail_mode = FAIL_OPEN;
@@ -118,6 +126,14 @@ static int max_idle = 15;
  * seconds. */
 static int max_backoff = 15;
 
+/* DHCP client, for controller autodiscovery. */
+static struct dhclient *dhcp;
+
+/* --accept-vconn: Regular expression specifying the class of controller vconns
+ * that we will accept during autodiscovery. */
+static const char *accept_controller_re;
+static regex_t accept_controller_regex;
+
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
@@ -131,6 +147,9 @@ static void relay_destroy(struct relay *);
 static bool local_hook(struct relay *r);
 static bool failing_open(struct relay *r);
 static bool fail_open_hook(struct relay *r);
+
+static void modify_dhcp_request(struct dhcp_msg *, void *aux);
+static bool validate_dhcp_offer(const struct dhcp_msg *, void *aux);
 
 int
 main(int argc, char *argv[])
@@ -147,15 +166,30 @@ main(int argc, char *argv[])
     vlog_init();
     parse_options(argc, argv);
 
-    if (argc - optind != 2) {
-        fatal(0,
-              "need exactly two non-option arguments; use --help for usage");
+    argc -= optind;
+    argv += optind;
+    if (argc < 1 || argc > 2) {
+        fatal(0, "need one or two non-option arguments; use --help for usage");
     }
-    nl_name = argv[optind];
+    nl_name = argv[0];
     if (strncmp(nl_name, "nl:", 3)
         || strlen(nl_name) < 4
         || nl_name[strspn(nl_name + 3, "0123456789") + 3]) {
         fatal(0, "%s: argument is not of the form \"nl:DP_IDX\"", nl_name);
+    }
+    controller_name = argc > 1 ? xstrdup(argv[1]) : NULL;
+    autodiscovery = controller_name == NULL;
+
+    if (!accept_controller_re) {
+        accept_controller_re = vconn_ssl_is_configured() ? "^ssl:.*" : ".*";
+    }
+    retval = regcomp(&accept_controller_regex, accept_controller_re,
+                     REG_NOSUB | REG_EXTENDED);
+    if (retval) {
+        size_t length = regerror(retval, &accept_controller_regex, NULL, 0);
+        char *buffer = xmalloc(length);
+        regerror(retval, &accept_controller_regex, buffer, length);
+        fatal(0, "%s: %s", accept_controller_re, buffer);
     }
 
     if (listen_vconn_name) {
@@ -174,12 +208,20 @@ main(int argc, char *argv[])
     retval = netdev_open(of_name, NETDEV_ETH_TYPE_NONE, &of_device);
     if (!retval) {
         enum netdev_flags flags;
+
+        if (autodiscovery) {
+            retval = netdev_turn_flags_on(of_device, NETDEV_UP, true);
+            if (retval) {
+                fatal(retval, "Could not bring %s device up", of_name);
+            }
+        }
+
         retval = netdev_get_flags(of_device, &flags);
         if (!retval) {
             if (flags & NETDEV_UP) {
                 struct in6_addr in6;
 
-                local_port = true;
+                in_band = true;
                 memcpy(local_mac, netdev_get_etheraddr(of_device),
                        ETH_ADDR_LEN);
                 if (netdev_get_in6(of_device, &in6)) {
@@ -187,12 +229,25 @@ main(int argc, char *argv[])
                               "IPv6 not supported", of_name);
                 }
                 local_ml = mac_learning_create();
-            }
+            } 
         } else {
             error(retval, "Could not get flags for %s device", of_name);
         }
     } else {
         error(retval, "Could not open %s device", of_name);
+    }
+    if (autodiscovery && !in_band) {
+        fatal(retval, "In autodiscovery mode but failed to configure "
+              "in-band control");
+    }
+
+    if (autodiscovery) {
+        retval = dhclient_create(of_name, modify_dhcp_request,
+                                 validate_dhcp_offer, NULL, &dhcp);
+        if (retval) {
+            fatal(retval, "Failed to initialize DHCP client");
+        }
+        dhclient_init(dhcp, 0);
     }
 
     retval = vlog_server_listen(NULL, NULL);
@@ -203,15 +258,14 @@ main(int argc, char *argv[])
     daemonize();
 
     local_rconn = rconn_create(1, 0, max_backoff);
-    retval = rconn_connect(local_rconn, nl_name);
-    if (retval == EAFNOSUPPORT) {
-        fatal(0, "No support for %s vconn", nl_name);
-    }
+    rconn_connect(local_rconn, nl_name);
 
     remote_rconn = rconn_create(1, probe_interval, max_backoff);
-    retval = rconn_connect(remote_rconn, argv[optind + 1]);
-    if (retval == EAFNOSUPPORT) {
-        fatal(0, "No support for %s vconn", argv[optind + 1]);
+    if (controller_name) {
+        retval = rconn_connect(remote_rconn, controller_name);
+        if (retval == EAFNOSUPPORT) {
+            fatal(0, "No support for %s vconn", controller_name);
+        }
     }
     controller_relay = relay_create(local_rconn, remote_rconn, false);
     for (;;) {
@@ -234,7 +288,32 @@ main(int argc, char *argv[])
                 new_management_connection(nl_name, new_remote);
             }
         }
-        failing_open(controller_relay);
+        if (controller_relay) {
+            /* FIXME: should also fail open when controller_relay is NULL. */
+            failing_open(controller_relay); 
+        }
+        if (dhcp) {
+            if (rconn_is_connectivity_questionable(remote_rconn)) {
+                dhclient_force_renew(dhcp, 15);
+            }
+            dhclient_run(dhcp);
+            if (dhclient_changed(dhcp)) {
+                free(controller_name);
+                if (dhclient_is_bound(dhcp)) {
+                    controller_name = dhcp_msg_get_string(
+                        dhclient_get_config(dhcp),
+                        DHCP_CODE_OFP_CONTROLLER_VCONN);
+                    VLOG_WARN("%s: discovered controller",
+                              controller_name);
+                    rconn_connect(remote_rconn, controller_name);
+                } else if (controller_name) {
+                    VLOG_WARN("%s: discover controller no longer available",
+                              controller_name);
+                    controller_name = NULL;
+                    rconn_disconnect(remote_rconn);
+                }
+            }
+        }
 
         /* Wait for something to happen. */
         LIST_FOR_EACH (r, struct relay, node, &relays) {
@@ -242,6 +321,9 @@ main(int argc, char *argv[])
         }
         if (listen_vconn) {
             vconn_accept_wait(listen_vconn);
+        }
+        if (dhcp) {
+            dhclient_wait(dhcp);
         }
         poll_block();
     }
@@ -274,8 +356,10 @@ new_management_connection(const char *nl_name, struct vconn *new_remote)
     }
 
     /* Add it to the relay list. */
-    r1 = rconn_new_from_vconn(nl_name_without_subscription, 1, new_local);
-    r2 = rconn_new_from_vconn("passive", 1, new_remote);
+    r1 = rconn_create(1, 0, 0);
+    rconn_connect_unreliably(r1, nl_name_without_subscription, new_local);
+    r2 = rconn_create(1, 0, 0);
+    rconn_connect_unreliably(r2, "passive", new_remote);
     relay_create(r1, r2, true);
 
     free(nl_name_without_subscription);
@@ -342,11 +426,13 @@ relay_run(struct relay *r)
         }
     }
 
-    for (i = 0; i < 2; i++) {
-        struct half *this = &r->halves[i];
-        if (!rconn_is_alive(this->rconn)) {
-            relay_destroy(r);
-            return;
+    if (r->is_mgmt_conn) {
+        for (i = 0; i < 2; i++) {
+            struct half *this = &r->halves[i];
+            if (!rconn_is_alive(this->rconn)) {
+                relay_destroy(r);
+                return;
+            }
         }
     }
 }
@@ -450,7 +536,7 @@ local_hook(struct relay *r)
     struct flow flow;
     uint16_t in_port, out_port;
 
-    if (!local_port) {
+    if (!in_band) {
         return false;
     }
 
@@ -563,14 +649,38 @@ fail_open_hook(struct relay *r)
 }
 
 static void
+modify_dhcp_request(struct dhcp_msg *msg, void *aux)
+{
+    dhcp_msg_put_string(msg, DHCP_CODE_VENDOR_CLASS, "OpenFlow");
+}
+
+static bool
+validate_dhcp_offer(const struct dhcp_msg *msg, void *aux)
+{
+    char *vconn_name;
+    bool accept;
+
+    vconn_name = dhcp_msg_get_string(msg, DHCP_CODE_OFP_CONTROLLER_VCONN);
+    if (!vconn_name) {
+        VLOG_WARN("rejecting DHCP offer missing controller vconn");
+        return false;
+    }
+    accept = !regexec(&accept_controller_regex, vconn_name, 0, NULL, 0);
+    free(vconn_name);
+    return accept;
+}
+
+static void
 parse_options(int argc, char *argv[]) 
 {
     enum {
-        OPT_INACTIVITY_PROBE = UCHAR_MAX + 1,
+        OPT_ACCEPT_VCONN = UCHAR_MAX + 1,
+        OPT_INACTIVITY_PROBE,
         OPT_MAX_IDLE,
         OPT_MAX_BACKOFF
     };
     static struct option long_options[] = {
+        {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
         {"fail",        required_argument, 0, 'f'},
         {"inactivity-probe", required_argument, 0, OPT_INACTIVITY_PROBE},
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
@@ -595,6 +705,12 @@ parse_options(int argc, char *argv[])
         }
 
         switch (c) {
+        case OPT_ACCEPT_VCONN:
+            accept_controller_re = (optarg[0] == '^'
+                                    ? optarg
+                                    : xasprintf("^%s", optarg));
+            break;
+
         case 'f':
             if (!strcmp(optarg, "open")) {
                 fail_mode = FAIL_OPEN;
@@ -676,12 +792,14 @@ static void
 usage(void)
 {
     printf("%s: secure channel, a relay for OpenFlow messages.\n"
-           "usage: %s [OPTIONS] nl:DP_IDX CONTROLLER\n"
-           "where nl:DP_IDX is a datapath that has been added with dpctl\n"
-           "and CONTROLLER is an active OpenFlow connection method.\n",
+           "usage: %s [OPTIONS] nl:DP_IDX [CONTROLLER]\n"
+           "where nl:DP_IDX is a datapath that has been added with dpctl.\n"
+           "CONTROLLER is an active OpenFlow connection method; if it is\n"
+           "omitted, then secchan performs controller autodiscovery.\n",
            program_name, program_name);
     vconn_usage(true, true);
     printf("\nNetworking options:\n"
+           "  --accept-vconn=REGEX    accept matching discovered controllers\n"
            "  -f, --fail=open|closed  when controller connection fails:\n"
            "                            closed: drop all packets\n"
            "                            open (default): act as learning switch\n"

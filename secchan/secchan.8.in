@@ -5,7 +5,7 @@ secchan \- secure channel connecting an OpenFlow datapath to a controller
 
 .SH SYNOPSIS
 .B secchan
-[\fIoptions\fR] \fBnl:\fIdp_idx\fR \fIremote\fR
+[\fIoptions\fR] \fBnl:\fIdp_idx\fR [\fIremote\fR]
 
 .SH DESCRIPTION
 The \fBsecchan\fR program sets up a secure channel between a local
@@ -18,7 +18,7 @@ to relay.  Within this argument, \fIdp_idx\fR is the number of a
 datapath that has been created with
 .BR dpctl (8).
 
-The mandatory \fIcontroller\fR argument specifies how to connect to
+The optional \fIcontroller\fR argument specifies how to connect to
 the OpenFlow controller.  It takes one of the following forms:
 
 .TP
@@ -31,6 +31,9 @@ The specified SSL \fIport\fR (default: 976) on the given remote
 \fBtcp:\fIhost\fR[\fB:\fIport\fR]
 The specified TCP \fIport\fR (default: 975) on the given remote
 \fIhost\fR.
+
+If \fIcontroller\fR is omitted, \fBsecchan\fR attempts to discover the
+location of the controller automatically (see below).
 
 .SH "CONTACTING THE CONTROLLER"
 The OpenFlow switch must be able to contact the OpenFlow controller
@@ -56,7 +59,71 @@ addif\fR.  This configuration is often more convenient than
 out-of-band control, because it is not necessary to maintain two
 independent networks.
 
-Using \fBsecchan\fR in a network with in-band control requires
+With in-band control, the location of the controller can be configured
+manually or discovered automatically:
+
+.RS
+.IP "controller discovery"
+To make \fBsecchan\fR discover the location of the controller
+automatically, do not specify the location of the controller on the
+\fBsecchan\fR command line.
+
+In this mode, \fBsecchan\fR will broadcast a DHCP request with vendor
+class identifier \fBOpenFlow\fR across the network devices added to
+the datapath with \fBdpctl addif\fR.  It will accept any valid DHCP
+reply that has the same vendor class identifier and includes a
+vendor-specific option with code 1 whose contents are a string
+specifying the location of the controller in the same format used on
+the \fBsecchan\fR command line (e.g. \fBssl:192.168.0.1\fR).
+
+The following ISC DHCP server configuration file assigns the IP
+address range 192.168.0.20 through 192.168.0.30 to OpenFlow switches
+that follow the switch protocol and addresses 192.168.0.1 through
+192.168.0.10 to all other DHCP clients:
+
+default-lease-time 600;
+.br
+max-lease-time 7200;
+.br
+option space openflow;
+.br
+option openflow.controller-vconn code 1 = text;
+.br
+class "OpenFlow" {
+.br
+  match if option vendor-class-identifier = "OpenFlow";
+.br
+  vendor-option-space openflow;
+.br
+  option openflow.controller-vconn "tcp:192.168.0.10";
+.br
+  option vendor-class-identifier "OpenFlow";
+.br
+}
+.br
+subnet 192.168.0.0 netmask 255.255.255.0 {
+.br
+    pool {
+.br
+        allow members of "OpenFlow";
+.br
+        range 192.168.0.20 192.168.0.30;
+.br
+    }
+.br
+    pool {
+.br
+        deny members of "OpenFlow";
+.br
+        range 192.168.0.1 192.168.0.10;
+.br
+    }
+.br
+}
+.br
+
+.IP "manual configuration"
+Configuring in-band control manually requires
 additional setup before starting \fBsecchan\fR.  At a minimum, the
 special OpenFlow network device \fBof\fIn\fR, where \fIn\fR is same as
 the \fIdp_idx\fR specified on the \fBsecchan\fR command line, must be
@@ -85,8 +152,28 @@ e.g. it obtains its IP address dynamically via DHCP, the DHCP client
 will not be able to contact the DHCP server until the secure channel
 has started up.  Thus, start \fBsecchan\fR without configuring
 \fBof\fIn\fR further, and start the DHCP client afterward.
+.RE
 
 .SH OPTIONS
+.TP
+\fB--accept-vconn=\fIregex\fR
+When \fBsecchan\fR performs controller discovery (see \fBCONTACTING
+THE CONTROLLER\fR, above, for more information about controller
+discovery), it validates the controller location obtained via DHCP
+with a regular expression.  Only controllers whose names match the
+regular expression will be accepted.
+
+The default regular expression is \fBssl:.*\fR (meaning that only SSL
+controller connections will be accepted) when any of the SSL
+configuration options \fB--private-key\fR, \fB--certificate\fR, or
+\fB--ca-cert\fR is specified.  The default is \fB.*\fR otherwise
+(meaning that any controller will be accepted).
+
+The \fIregex\fR is implicitly anchored at the beginning of the
+controller location string, as if it begins with \fB^\fR.
+
+When controller discovery is not performed, this option has no effect.
+
 .TP
 \fB-f\fR, \fB--fail=\fR[\fBopen\fR|\fBclosed\fR]
 The controller is, ordinarily, responsible for setting up all flows on
