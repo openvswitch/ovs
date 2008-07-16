@@ -324,6 +324,14 @@ rconn_disconnected_duration(const struct rconn *rconn)
 {
     return rconn_is_connected(rconn) ? 0 : time(0) - rconn->last_connected;
 }
+
+/* Returns the IP address of the peer, or 0 if the peer is not connected over
+ * an IP-based protocol or if its IP address is not known. */
+uint32_t
+rconn_get_ip(const struct rconn *rconn) 
+{
+    return rconn->vconn ? vconn_get_ip(rconn->vconn) : 0;
+}
 
 static struct rconn *
 create_rconn(const char *name, int txq_limit, int probe_interval,

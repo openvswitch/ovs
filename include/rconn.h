@@ -36,6 +36,7 @@
 
 #include "queue.h"
 #include <stdbool.h>
+#include <stdint.h>
 #include <time.h>
 
 /* A wrapper around vconn that provides queuing and optionally reliability.
@@ -71,5 +72,7 @@ const char *rconn_get_name(const struct rconn *);
 bool rconn_is_alive(const struct rconn *);
 bool rconn_is_connected(const struct rconn *);
 int rconn_disconnected_duration(const struct rconn *);
+
+uint32_t rconn_get_ip(const struct rconn *);
 
 #endif /* rconn.h */
