@@ -87,7 +87,7 @@ lswitch_create(struct rconn *rconn, bool learn_macs, int max_idle)
     memset(sw, 0, sizeof *sw);
     sw->max_idle = max_idle;
     sw->datapath_id = 0;
-    sw->last_features_request = 0;
+    sw->last_features_request = time(0) - 1;
     sw->ml = learn_macs ? mac_learning_create() : NULL;
     send_features_request(sw, rconn);
     return sw;

@@ -345,7 +345,7 @@ create_rconn(const char *name, int txq_limit, int probe_interval,
     rc->vconn = vconn;
     queue_init(&rc->txq);
     rc->txq_limit = txq_limit;
-    rc->backoff_deadline = 0;
+    rc->backoff_deadline = time(0);
     rc->backoff = 0;
     rc->last_connected = time(0);
     rc->probe_interval = (probe_interval
