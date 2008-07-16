@@ -52,6 +52,10 @@ static inline bool eth_addr_is_local(const uint8_t ea[6])
 {
     return ea[0] & 2;
 }
+static inline bool eth_addr_is_zero(const uint8_t ea[6]) 
+{
+    return !(ea[0] | ea[1] | ea[2] | ea[3] | ea[4] | ea[5]);
+}
 static inline bool eth_addr_equals(const uint8_t a[ETH_ADDR_LEN],
                                    const uint8_t b[ETH_ADDR_LEN]) 
 {
