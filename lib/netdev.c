@@ -78,6 +78,9 @@ struct netdev {
 
 static struct list netdev_list = LIST_INITIALIZER(&netdev_list);
 
+/* An AF_INET socket (used for ioctl operations). */
+static int af_inet_sock = -1;
+
 static void init_netdev(void);
 static int restore_flags(struct netdev *netdev);
 static int get_flags(const struct netdev *, int *flagsp);
@@ -88,25 +91,17 @@ static int set_flags(struct netdev *, int flags);
 static bool
 get_ipv4_address(const char *name, struct in_addr *in4)
 {
-    int sock;
     struct ifreq ifr;
-
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) {
-        VLOG_WARN("socket(AF_INET): %s", strerror(errno));
-        return false;
-    }
 
     strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
     ifr.ifr_addr.sa_family = AF_INET;
-    if (ioctl(sock, SIOCGIFADDR, &ifr) == 0) {
+    if (ioctl(af_inet_sock, SIOCGIFADDR, &ifr) == 0) {
         struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
         *in4 = sin->sin_addr;
     } else {
         in4->s_addr = INADDR_ANY;
     }
 
-    close(sock);
     return true;
 }
 
@@ -600,6 +595,36 @@ netdev_set_flags(struct netdev *netdev, enum netdev_flags nd_flags)
     }
     return error;
 }
+
+/* Looks up the ARP table entry for 'ip' on 'netdev'.  If one exists and can be
+ * successfully retrieved, it stores the corresponding MAC address in 'mac' and
+ * returns 0.  Otherwise, it returns a positive errno value; in particular,
+ * ENXIO indicates that there is not ARP table entry for 'ip' on 'netdev'. */
+int
+netdev_arp_lookup(const struct netdev *netdev,
+                  uint32_t ip, uint8_t mac[ETH_ADDR_LEN]) 
+{
+    struct arpreq r;
+    struct sockaddr_in *pa;
+    int retval;
+
+    memset(&r, 0, sizeof r);
+    pa = (struct sockaddr_in *) &r.arp_pa;
+    pa->sin_family = AF_INET;
+    pa->sin_addr.s_addr = ip;
+    pa->sin_port = 0;
+    r.arp_ha.sa_family = ARPHRD_ETHER;
+    r.arp_flags = 0;
+    strncpy(r.arp_dev, netdev->name, sizeof r.arp_dev);
+    retval = ioctl(af_inet_sock, SIOCGARP, &r) < 0 ? errno : 0;
+    if (!retval) {
+        memcpy(mac, r.arp_ha.sa_data, ETH_ADDR_LEN);
+    } else if (retval != ENXIO) {
+        VLOG_WARN("%s: could not look up ARP entry for "IP_FMT": %s",
+                  netdev->name, IP_ARGS(&ip), strerror(retval));
+    }
+    return retval;
+}
 
 static void restore_all_flags(void *aux);
 
@@ -612,6 +637,10 @@ init_netdev(void)
     if (!inited) {
         inited = true;
         fatal_signal_add_hook(restore_all_flags, NULL);
+        af_inet_sock = socket(AF_INET, SOCK_DGRAM, 0);
+        if (af_inet_sock < 0) {
+            fatal(errno, "socket(AF_INET)");
+        }
     }
 }
 
