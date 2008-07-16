@@ -40,6 +40,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <syslog.h>
+#include <time.h>
 #include "dynamic-string.h"
 #include "util.h"
 
@@ -305,11 +306,18 @@ vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
         static int msg_num;
         const char *module_name = vlog_get_module_name(module);
         const char *level_name = vlog_get_level_name(level);
+        time_t now;
+        struct tm tm;
         va_list args;
         char s[1024];
-        size_t len;
+        size_t len, time_len;
 
-        len = sprintf(s, "%05d|%s|%s:", ++msg_num, module_name, level_name);
+        now = time(0);
+        localtime_r(&now, &tm);
+
+        len = time_len = strftime(s, sizeof s, "%b %d %H:%M:%S|", &tm);
+        len += sprintf(s + len, "%05d|%s|%s:",
+                       ++msg_num, module_name, level_name);
         va_start(args, message);
         len += vsnprintf(s + len, sizeof s - len, message, args);
         va_end(args);
@@ -332,7 +340,7 @@ vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
                 [VLL_DBG] = LOG_DEBUG,
             };
 
-            syslog(syslog_levels[level], "%s", s);
+            syslog(syslog_levels[level], "%s", s + time_len);
         }
         errno = save_errno;
     }
