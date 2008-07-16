@@ -83,6 +83,7 @@ netlink_open(const char *name, char *suffix, struct vconn **vconnp)
     netlink = xmalloc(sizeof *netlink);
     netlink->vconn.class = &netlink_vconn_class;
     netlink->vconn.connect_status = 0;
+    netlink->vconn.ip = 0;
     retval = dpif_open(dp_idx, subscribe, &netlink->dp);
     if (retval) {
         free(netlink);

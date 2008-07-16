@@ -34,6 +34,7 @@
 #include "vconn.h"
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <netdb.h>
 #include <poll.h>
 #include <sys/types.h>
@@ -47,6 +48,7 @@
 #include "util.h"
 #include "openflow.h"
 #include "ofp-print.h"
+#include "packets.h"
 #include "poll-loop.h"
 
 #include "vlog.h"
@@ -65,7 +67,7 @@ struct tcp_vconn
 
 static int
 new_tcp_vconn(const char *name, int fd, int connect_status,
-              struct vconn **vconnp)
+              const struct sockaddr_in *sin, struct vconn **vconnp)
 {
     struct tcp_vconn *tcp;
     int on = 1;
@@ -81,6 +83,7 @@ new_tcp_vconn(const char *name, int fd, int connect_status,
     tcp = xmalloc(sizeof *tcp);
     tcp->vconn.class = &tcp_vconn_class;
     tcp->vconn.connect_status = connect_status;
+    tcp->vconn.ip = sin->sin_addr.s_addr;
     tcp->fd = fd;
     tcp->txbuf = NULL;
     tcp->tx_waiter = NULL;
@@ -139,7 +142,7 @@ tcp_open(const char *name, char *suffix, struct vconn **vconnp)
     retval = connect(fd, (struct sockaddr *) &sin, sizeof sin);
     if (retval < 0) {
         if (errno == EINPROGRESS) {
-            return new_tcp_vconn(name, fd, EAGAIN, vconnp);
+            return new_tcp_vconn(name, fd, EAGAIN, &sin, vconnp);
         } else {
             int error = errno;
             VLOG_ERR("%s: connect: %s", name, strerror(error));
@@ -147,7 +150,7 @@ tcp_open(const char *name, char *suffix, struct vconn **vconnp)
             return error;
         }
     } else {
-        return new_tcp_vconn(name, fd, 0, vconnp);
+        return new_tcp_vconn(name, fd, 0, &sin, vconnp);
     }
 }
 
@@ -398,10 +401,13 @@ static int
 ptcp_accept(struct vconn *vconn, struct vconn **new_vconnp)
 {
     struct ptcp_vconn *ptcp = ptcp_vconn_cast(vconn);
+    struct sockaddr_in sin;
+    socklen_t sin_len = sizeof sin;
+    char name[128];
     int new_fd;
     int error;
 
-    new_fd = accept(ptcp->fd, NULL, NULL);
+    new_fd = accept(ptcp->fd, &sin, &sin_len);
     if (new_fd < 0) {
         int error = errno;
         if (error != EAGAIN) {
@@ -416,7 +422,11 @@ ptcp_accept(struct vconn *vconn, struct vconn **new_vconnp)
         return error;
     }
 
-    return new_tcp_vconn("tcp" /* FIXME */, new_fd, 0, new_vconnp);
+    sprintf(name, "tcp:"IP_FMT, IP_ARGS(&sin.sin_addr));
+    if (sin.sin_port != htons(OFP_TCP_PORT)) {
+        sprintf(strchr(name, '\0'), ":%"PRIu16, ntohs(sin.sin_port));
+    }
+    return new_tcp_vconn(name, new_fd, 0, &sin, new_vconnp);
 }
 
 static void

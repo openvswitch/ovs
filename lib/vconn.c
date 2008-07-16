@@ -204,6 +204,14 @@ vconn_is_passive(const struct vconn *vconn)
     return vconn->class->accept != NULL;
 }
 
+/* Returns the IP address of the peer, or 0 if the peer is not connected over
+ * an IP-based protocol or if its IP address is not yet known. */
+uint32_t
+vconn_get_ip(const struct vconn *vconn) 
+{
+    return vconn->ip;
+}
+
 /* Tries to complete the connection on 'vconn', which must be an active
  * vconn.  If 'vconn''s connection is complete, returns 0 if the connection
  * was successful or a positive errno value if it failed.  If the

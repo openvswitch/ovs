@@ -48,12 +48,14 @@ struct ofp_header;
 struct vconn {
     struct vconn_class *class;
     int connect_status;
+    uint32_t ip;
 };
 
 void vconn_usage(bool active, bool passive);
 int vconn_open(const char *name, struct vconn **);
 void vconn_close(struct vconn *);
 bool vconn_is_passive(const struct vconn *);
+uint32_t vconn_get_ip(const struct vconn *);
 int vconn_connect(struct vconn *);
 int vconn_accept(struct vconn *, struct vconn **);
 int vconn_recv(struct vconn *, struct buffer **);
