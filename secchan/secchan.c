@@ -103,6 +103,9 @@ static struct mac_learning *local_ml;
 /* -f, --fail: Behavior when the connection to the controller fails. */
 static enum fail_mode fail_mode = FAIL_OPEN;
 
+/* The OpenFlow virtual network device ofX. */
+static struct netdev *of_device;
+
 /* --inactivity-probe: Number of seconds without receiving a message from the
    controller before sending an inactivity probe. */
 static int probe_interval = 15;
@@ -129,7 +132,6 @@ int
 main(int argc, char *argv[])
 {
     struct vconn *listen_vconn;
-    struct netdev *of_device;
     struct relay *controller_relay;
     const char *nl_name;
     char of_name[16];
@@ -184,7 +186,6 @@ main(int argc, char *argv[])
         } else {
             error(retval, "Could not get flags for %s device", of_name);
         }
-        netdev_close(of_device);
     } else {
         error(retval, "Could not open %s device", of_name);
     }
@@ -367,6 +368,56 @@ relay_destroy(struct relay *r)
 }
 
 static bool
+is_controller_mac(const uint8_t dl_addr[ETH_ADDR_LEN],
+                  struct rconn *controller) 
+{
+    static uint32_t ip, last_nonzero_ip;
+    static uint8_t mac[ETH_ADDR_LEN], last_nonzero_mac[ETH_ADDR_LEN];
+    static time_t next_refresh = 0;
+
+    uint32_t last_ip = ip;
+
+    time_t now = time(0);
+
+    ip = rconn_get_ip(controller);
+    if (last_ip != ip || !next_refresh || now >= next_refresh) {
+        bool have_mac;
+
+        /* Look up MAC address. */
+        memset(mac, 0, sizeof mac);
+        if (ip) {
+            int retval = netdev_arp_lookup(of_device, ip, mac);
+            if (retval) {
+                VLOG_DBG("cannot look up controller hw address ("IP_FMT"): %s",
+                         IP_ARGS(&ip), strerror(retval));
+            }
+        }
+        have_mac = !eth_addr_is_zero(mac);
+
+        /* Log changes in IP, MAC addresses. */
+        if (ip && ip != last_nonzero_ip) {
+            VLOG_DBG("controller IP address changed from "IP_FMT
+                     " to "IP_FMT, IP_ARGS(&last_nonzero_ip), IP_ARGS(&ip));
+            last_nonzero_ip = ip;
+        }
+        if (have_mac && memcmp(last_nonzero_mac, mac, ETH_ADDR_LEN)) {
+            VLOG_DBG("controller MAC address changed from "ETH_ADDR_FMT" to "
+                     ETH_ADDR_FMT,
+                     ETH_ADDR_ARGS(last_nonzero_mac), ETH_ADDR_ARGS(mac));
+            memcpy(last_nonzero_mac, mac, ETH_ADDR_LEN);
+        }
+
+        /* Schedule next refresh.
+         *
+         * If we have an IP address but not a MAC address, then refresh
+         * quickly, since we probably will get a MAC address soon (via ARP).
+         * Otherwise, we can afford to wait a little while. */
+        next_refresh = now + (!ip || have_mac ? 10 : 1);
+    }
+    return !eth_addr_is_zero(mac) && eth_addr_equals(mac, dl_addr);
+}
+
+static bool
 local_hook(struct relay *r)
 {
     struct rconn *rc = r->halves[HALF_LOCAL].rconn;
@@ -409,6 +460,11 @@ local_hook(struct relay *r)
             VLOG_DBG("learned that "ETH_ADDR_FMT" is on port %"PRIu16,
                      ETH_ADDR_ARGS(flow.dl_src), in_port);
         }
+    } else if (flow.dl_type == htons(ETH_TYPE_ARP)
+               && eth_addr_is_broadcast(flow.dl_dst)
+               && is_controller_mac(flow.dl_src,
+                                    r->halves[HALF_REMOTE].rconn)) {
+        out_port = OFPP_FLOOD;
     } else {
         return false;
     }
