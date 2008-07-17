@@ -50,7 +50,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x84
+#define OFP_VERSION   0x85
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -179,6 +179,7 @@ struct ofp_switch_features {
     /* Features. */
     uint32_t capabilities;  /* Bitmap of support "ofp_capabilities". */
     uint32_t actions;       /* Bitmap of supported "ofp_action_type"s. */
+    uint8_t pad[4];         /* Align to 64-bits. */
 
     /* Port info.*/
     struct ofp_phy_port ports[0];   /* Port definitions.  The number of ports
@@ -261,7 +262,7 @@ struct ofp_action {
         struct ofp_action_output output; /* OFPAT_OUTPUT: output struct. */
         uint16_t vlan_id;                /* OFPAT_SET_DL_VLAN: VLAN id. */
         uint8_t  dl_addr[OFP_ETH_ALEN];  /* OFPAT_SET_DL_SRC/DST */
-        uint32_t nw_addr;                /* OFPAT_SET_NW_SRC/DST */
+        uint32_t nw_addr __attribute__((packed)); /* OFPAT_SET_NW_SRC/DST */
         uint16_t tp;                     /* OFPAT_SET_TP_SRC/DST */
     } arg;
 };
@@ -357,6 +358,7 @@ struct ofp_flow_expired {
     uint8_t pad[2];           /* Align to 32-bits. */
 
     uint32_t duration;        /* Time flow was alive in seconds. */
+    uint8_t pad2[4];          /* Align to 64-bits. */
     uint64_t packet_count;    
     uint64_t byte_count;
 };
@@ -426,11 +428,11 @@ struct ofp_flow_stats {
     uint8_t pad;
     struct ofp_match match;   /* Description of fields. */
     uint32_t duration;        /* Time flow has been alive in seconds. */
-    uint64_t packet_count;    /* Number of packets in flow. */
-    uint64_t byte_count;      /* Number of bytes in flow. */
     uint16_t priority;        /* Priority of the entry. Only meaningful
                                  when this is not an exact-match entry. */
     uint16_t max_idle;        /* Number of seconds idle before expiration. */
+    uint64_t packet_count;    /* Number of packets in flow. */
+    uint64_t byte_count;      /* Number of bytes in flow. */
     struct ofp_action actions[0]; /* Actions. */
 };
 
@@ -456,13 +458,14 @@ struct ofp_table_stats {
     char name[OFP_MAX_TABLE_NAME_LEN];
     uint32_t max_entries;    /* Max number of entries supported */
     uint32_t active_count;   /* Number of active entries */
+    uint8_t pad2[4];         /* Align to 64 bits. */
     uint64_t matched_count;  /* Number of packets that hit table */
 };
 
 /* Statistics about a particular port */
 struct ofp_port_stats {
     uint16_t port_no;
-    uint8_t pad[2];          /* Align to 32-bits */
+    uint8_t pad[6];          /* Align to 64-bits */
     uint64_t rx_count;       /* Number of received packets */
     uint64_t tx_count;       /* Number of transmitted packets */
     uint64_t drop_count;     /* Number of packets dropped by interface */
