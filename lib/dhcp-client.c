@@ -98,8 +98,6 @@ struct dhclient {
 
     unsigned int retransmit, delay; /* Used by send_reliably(). */
 
-    uint16_t next_ip_id;
-
     unsigned int init_delay;    /* Used by S_INIT. */
 
     time_t lease_expiration;
@@ -198,7 +196,6 @@ dhclient_create(const char *netdev_name,
     cli->xid = random_uint32();
     cli->ipaddr = 0;
     cli->server_ip = 0;
-    cli->next_ip_id = random_uint32();
     cli->retransmit = cli->delay = 0;
     cli->min_timeout = 1;
     ds_init(&cli->s);
@@ -766,9 +763,11 @@ do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
     nh.ip_ihl_ver = IP_IHL_VER(5, IP_VERSION);
     nh.ip_tos = 0;
     nh.ip_tot_len = htons(IP_HEADER_LEN + UDP_HEADER_LEN + b.size);
-    nh.ip_id = htons(cli->next_ip_id++);
-    /* Our choice of ip_id could collide with the host's, screwing up fragment
-     * reassembly, so prevent fragmentation.  */
+    /* We can't guarantee uniqueness of ip_id versus the host's, screwing up
+     * fragment reassembly, so prevent fragmentation and use an all-zeros
+     * ip_id.  RFC 791 doesn't say we can do this, but Linux does the same
+     * thing for DF packets, so it must not screw anything up.  */
+    nh.ip_id = 0;
     nh.ip_frag_off = htons(IP_DONT_FRAGMENT);
     nh.ip_ttl = 64;
     nh.ip_proto = IP_TYPE_UDP;
