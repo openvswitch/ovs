@@ -44,6 +44,8 @@
 #include "dynamic-string.h"
 #include "util.h"
 
+#define THIS_MODULE VLM_vlog
+
 /* Name for each logging level. */
 static const char *level_names[VLL_N_LEVELS] = {
     [VLL_EMER] = "EMER",
@@ -251,8 +253,18 @@ vlog_set_verbosity(const char *arg)
 void
 vlog_init(void) 
 {
+    time_t now;
     openlog(program_name, LOG_NDELAY, LOG_DAEMON);
     vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_WARN);
+    now = time(0);
+    if (now < 0) {
+        struct tm tm;
+        char s[128];
+
+        localtime_r(&now, &tm);
+        strftime(s, sizeof s, "%a, %d %b %Y %H:%M:%S %z", &tm);
+        VLOG_ERR("current time is negative: %s (%ld)", s, (long int) now);
+    }
 }
 
 /* Closes the logging subsystem. */
