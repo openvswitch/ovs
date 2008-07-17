@@ -245,7 +245,7 @@ vlog_set_verbosity(const char *arg)
             fatal(0, "processing \"%s\": %s", arg, msg);
         }
     } else {
-        vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_DBG);
+        vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_DBG);
     }
 }
 
@@ -254,8 +254,10 @@ void
 vlog_init(void) 
 {
     time_t now;
+
     openlog(program_name, LOG_NDELAY, LOG_DAEMON);
-    vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_WARN);
+    vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_WARN);
+
     now = time(0);
     if (now < 0) {
         struct tm tm;
