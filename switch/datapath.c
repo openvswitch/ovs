@@ -563,19 +563,11 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
 }
 
 static void *
-alloc_openflow_buffer(struct datapath *dp, size_t openflow_len, uint8_t type,
-                      const struct sender *sender, struct buffer **bufferp)
+make_openflow_reply(size_t openflow_len, uint8_t type,
+                    const struct sender *sender, struct buffer **bufferp)
 {
-    struct buffer *buffer;
-    struct ofp_header *oh;
-
-    buffer = *bufferp = buffer_new(openflow_len);
-    oh = buffer_put_uninit(buffer, openflow_len);
-    oh->version = OFP_VERSION;
-    oh->type = type;
-    oh->length = 0;             /* Filled in by send_openflow_buffer(). */
-    oh->xid = sender ? sender->xid : 0;
-    return oh;
+    return make_openflow_xid(openflow_len, type, sender ? sender->xid : 0,
+                             bufferp);
 }
 
 static int
@@ -584,12 +576,9 @@ send_openflow_buffer(struct datapath *dp, struct buffer *buffer,
 {
     struct remote *remote = sender ? sender->remote : dp->controller;
     struct rconn *rconn = remote->rconn;
-    struct ofp_header *oh;
     int retval;
 
-    oh = buffer_at_assert(buffer, 0, sizeof *oh);
-    oh->length = htons(buffer->size);
-
+    update_openflow_length(buffer);
     retval = rconn_send(rconn, buffer);
     if (retval) {
         VLOG_WARN("send to %s failed: %s",
@@ -652,8 +641,8 @@ dp_send_features_reply(struct datapath *dp, const struct sender *sender)
     struct ofp_switch_features *ofr;
     struct sw_port *p;
 
-    ofr = alloc_openflow_buffer(dp, sizeof *ofr, OFPT_FEATURES_REPLY,
-                                sender, &buffer);
+    ofr = make_openflow_reply(sizeof *ofr, OFPT_FEATURES_REPLY,
+                               sender, &buffer);
     ofr->datapath_id    = htonll(dp->id); 
     ofr->n_exact        = htonl(2 * TABLE_HASH_MAX_FLOWS);
     ofr->n_compression  = 0;         /* Not supported */
@@ -691,8 +680,7 @@ send_port_status(struct sw_port *p, uint8_t status)
 {
     struct buffer *buffer;
     struct ofp_port_status *ops;
-    ops = alloc_openflow_buffer(p->dp, sizeof *ops, OFPT_PORT_STATUS, NULL,
-                                &buffer);
+    ops = make_openflow_xid(sizeof *ops, OFPT_PORT_STATUS, 0, &buffer);
     ops->reason = status;
     memset(ops->pad, 0, sizeof ops->pad);
     fill_port_desc(p->dp, p, &ops->desc);
@@ -705,8 +693,7 @@ send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 {
     struct buffer *buffer;
     struct ofp_flow_expired *ofe;
-    ofe = alloc_openflow_buffer(dp, sizeof *ofe, OFPT_FLOW_EXPIRED, NULL,
-                                &buffer);
+    ofe = make_openflow_xid(sizeof *ofe, OFPT_FLOW_EXPIRED, 0, &buffer);
     flow_fill_match(&ofe->match, &flow->key);
 
     memset(ofe->pad, 0, sizeof ofe->pad);
@@ -724,8 +711,8 @@ dp_send_error_msg(struct datapath *dp, const struct sender *sender,
 {
     struct buffer *buffer;
     struct ofp_error_msg *oem;
-    oem = alloc_openflow_buffer(dp, sizeof(*oem)+len, OFPT_ERROR_MSG, 
-                                sender, &buffer);
+    oem = make_openflow_reply(sizeof(*oem)+len, OFPT_ERROR_MSG, 
+                              sender, &buffer);
     oem->type = htons(type);
     oem->code = htons(code);
     memcpy(oem->data, data, len);
@@ -967,8 +954,8 @@ recv_get_config_request(struct datapath *dp, const struct sender *sender,
     struct buffer *buffer;
     struct ofp_switch_config *osc;
 
-    osc = alloc_openflow_buffer(dp, sizeof *osc, OFPT_GET_CONFIG_REPLY,
-                                sender, &buffer);
+    osc = make_openflow_reply(sizeof *osc, OFPT_GET_CONFIG_REPLY,
+                              sender, &buffer);
 
     assert(sizeof *osc == sizeof dp->config);
     memcpy(((char *)osc) + sizeof osc->header,
@@ -1382,8 +1369,8 @@ stats_dump(struct datapath *dp, void *cb_)
         return 0;
     }
 
-    osr = alloc_openflow_buffer(dp, sizeof *osr, OFPT_STATS_REPLY, &cb->sender,
-                                &buffer);
+    osr = make_openflow_reply(sizeof *osr, OFPT_STATS_REPLY, &cb->sender,
+                              &buffer);
     osr->type = htons(cb->s - stats);
     osr->flags = 0;
 

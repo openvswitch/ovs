@@ -305,28 +305,11 @@ static void do_monitor(int argc UNUSED, char *argv[])
 /* Generic commands. */
 
 static void *
-alloc_openflow_buffer(size_t openflow_len, uint8_t type,
-                      struct buffer **bufferp)
-{
-	struct buffer *buffer;
-	struct ofp_header *oh;
-
-	buffer = *bufferp = buffer_new(openflow_len);
-	oh = buffer_put_uninit(buffer, openflow_len);
-    memset(oh, 0, openflow_len);
-	oh->version = OFP_VERSION;
-	oh->type = type;
-	oh->length = 0;
-	oh->xid = random_uint32();
-	return oh;
-}
-
-static void *
 alloc_stats_request(size_t body_len, uint16_t type, struct buffer **bufferp)
 {
     struct ofp_stats_request *rq;
-    rq = alloc_openflow_buffer((offsetof(struct ofp_stats_request, body)
-                                + body_len), OFPT_STATS_REQUEST, bufferp);
+    rq = make_openflow((offsetof(struct ofp_stats_request, body)
+                        + body_len), OFPT_STATS_REQUEST, bufferp);
     rq->type = htons(type);
     rq->flags = htons(0);
     return rq->body;
@@ -335,11 +318,7 @@ alloc_stats_request(size_t body_len, uint16_t type, struct buffer **bufferp)
 static void
 send_openflow_buffer(struct vconn *vconn, struct buffer *buffer)
 {
-    struct ofp_header *oh;
-
-    oh = buffer_at_assert(buffer, 0, sizeof *oh);
-    oh->length = htons(buffer->size);
-
+    update_openflow_length(buffer);
     run(vconn_send_block(vconn, buffer), "failed to send packet to switch");
 }
 
@@ -371,6 +350,7 @@ dump_transaction(const char *vconn_name, struct buffer *request)
     struct vconn *vconn;
     struct buffer *reply;
 
+    update_openflow_length(request);
     run(vconn_open_block(vconn_name, &vconn), "connecting to %s", vconn_name);
     reply = transact_openflow(vconn, request);
     ofp_print(stdout, reply->data, reply->size, 1);
@@ -381,7 +361,7 @@ static void
 dump_trivial_transaction(const char *vconn_name, uint8_t request_type)
 {
     struct buffer *request;
-    alloc_openflow_buffer(sizeof(struct ofp_header), request_type, &request);
+    make_openflow(sizeof(struct ofp_header), request_type, &request);
     dump_transaction(vconn_name, request);
 }
 
@@ -697,7 +677,7 @@ static void do_add_flow(int argc, char *argv[])
 
     /* Parse and send. */
     size = sizeof *ofm + (sizeof ofm->actions[0] * MAX_ADD_ACTS);
-    ofm = alloc_openflow_buffer(size, OFPT_FLOW_MOD, &buffer);
+    ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argv[2], &ofm->match, &ofm->actions[0], &n_actions, 
             NULL, &priority, &max_idle);
     ofm->command = htons(OFPFC_ADD);
@@ -748,9 +728,9 @@ static void do_add_flows(int argc, char *argv[])
 
         /* Parse and send. */
         size = sizeof *ofm + (sizeof ofm->actions[0] * MAX_ADD_ACTS);
-        ofm = alloc_openflow_buffer(size, OFPT_FLOW_MOD, &buffer);
+        ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
         str_to_flow(line, &ofm->match, &ofm->actions[0], &n_actions, 
-                NULL, &priority, &max_idle);
+                    NULL, &priority, &max_idle);
         ofm->command = htons(OFPFC_ADD);
         ofm->max_idle = htons(max_idle);
         ofm->buffer_id = htonl(UINT32_MAX);
@@ -779,9 +759,9 @@ static void do_del_flows(int argc, char *argv[])
 
     /* Parse and send. */
     size = sizeof *ofm;
-    ofm = alloc_openflow_buffer(size, OFPT_FLOW_MOD, &buffer);
+    ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argc > 2 ? argv[2] : "", &ofm->match, NULL, 0, NULL, 
-            &priority, NULL);
+                &priority, NULL);
     ofm->command = htons(OFPFC_DELETE);
     ofm->max_idle = htons(0);
     ofm->buffer_id = htonl(UINT32_MAX);
@@ -806,8 +786,7 @@ do_probe(int argc, char *argv[])
     struct vconn *vconn;
     struct buffer *reply;
 
-    alloc_openflow_buffer(sizeof(struct ofp_header), OFPT_ECHO_REQUEST,
-                          &request);
+    make_openflow(sizeof(struct ofp_header), OFPT_ECHO_REQUEST, &request);
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
     reply = transact_openflow(vconn, request);
     if (reply->size != request->size) {
@@ -836,8 +815,8 @@ do_ping(int argc, char *argv[])
         struct buffer *request, *reply;
         struct ofp_header *rq_hdr, *rpy_hdr;
 
-        rq_hdr = alloc_openflow_buffer(sizeof(struct ofp_header) + payload,
-                                    OFPT_ECHO_REQUEST, &request);
+        rq_hdr = make_openflow(sizeof(struct ofp_header) + payload,
+                               OFPT_ECHO_REQUEST, &request);
         random_bytes(rq_hdr + 1, payload);
 
         gettimeofday(&start, NULL);
@@ -892,8 +871,7 @@ do_benchmark(int argc, char *argv[])
         struct buffer *request;
         struct ofp_header *rq_hdr;
 
-        rq_hdr = alloc_openflow_buffer(message_size, OFPT_ECHO_REQUEST,
-                                       &request);
+        rq_hdr = make_openflow(message_size, OFPT_ECHO_REQUEST, &request);
         memset(rq_hdr + 1, 0, payload_size);
         buffer_delete(transact_openflow(vconn, request));
     }

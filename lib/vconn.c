@@ -43,6 +43,7 @@
 #include "ofp-print.h"
 #include "openflow.h"
 #include "poll-loop.h"
+#include "random.h"
 #include "util.h"
 
 #define THIS_MODULE VLM_vconn
@@ -374,6 +375,48 @@ void
 vconn_send_wait(struct vconn *vconn)
 {
     vconn_wait(vconn, WAIT_SEND);
+}
+
+/* Allocates and returns the first byte of a buffer 'openflow_len' bytes long,
+ * containing an OpenFlow header with the given 'type' and a random transaction
+ * id.  Stores the new buffer in '*bufferp'.  The caller must free the buffer
+ * when it is no longer needed. */
+void *
+make_openflow(size_t openflow_len, uint8_t type, struct buffer **bufferp) 
+{
+    return make_openflow_xid(openflow_len, type, random_uint32(), bufferp);
+}
+
+/* Allocates and returns the first byte of a buffer 'openflow_len' bytes long,
+ * containing an OpenFlow header with the given 'type' and transaction id
+ * 'xid'.  Stores the new buffer in '*bufferp'.  The caller must free the
+ * buffer when it is no longer needed. */
+void *
+make_openflow_xid(size_t openflow_len, uint8_t type, uint32_t xid,
+                  struct buffer **bufferp)
+{
+    struct buffer *buffer;
+    struct ofp_header *oh;
+
+    assert(openflow_len >= sizeof *oh);
+    assert(openflow_len <= UINT16_MAX);
+    buffer = *bufferp = buffer_new(openflow_len);
+    oh = buffer_put_uninit(buffer, openflow_len);
+    memset(oh, 0, openflow_len);
+    oh->version = OFP_VERSION;
+    oh->type = type;
+    oh->length = htons(openflow_len);
+    oh->xid = xid;
+    return oh;
+}
+
+/* Updates the 'length' field of the OpenFlow message in 'buffer' to
+ * 'buffer->size'. */
+void
+update_openflow_length(struct buffer *buffer) 
+{
+    struct ofp_header *oh = buffer_at_assert(buffer, 0, sizeof *oh);
+    oh->length = htons(buffer->size); 
 }
 
 struct buffer *
