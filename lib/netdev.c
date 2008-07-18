@@ -48,6 +48,7 @@
 #include <net/if.h>
 #include <net/if_arp.h>
 #include <net/if_packet.h>
+#include <net/route.h>
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,7 +76,8 @@ struct netdev {
     uint32_t features;
     struct in_addr in4;
     struct in6_addr in6;
-    int save_flags;
+    int save_flags;             /* Initial device flags. */
+    int changed_flags;          /* Flags that we changed. */
 };
 
 static struct list netdev_list = LIST_INITIALIZER(&netdev_list);
@@ -317,6 +319,7 @@ netdev_open(const char *name, int ethertype, struct netdev **netdev_)
     if (error) {
         goto preset_error;
     }
+    netdev->changed_flags = 0;
     fatal_signal_block();
     list_push_back(&netdev_list, &netdev->node);
     fatal_signal_unblock();
@@ -580,10 +583,12 @@ nd_to_iff_flags(enum netdev_flags nd)
 }
 
 /* On 'netdev', turns off the flags in 'off' and then turns on the flags in
- * 'on'.  Returns 0 if successful, otherwise a positive errno value. */
+ * 'on'.  If 'permanent' is true, the changes will persist; otherwise, they
+ * will be reverted when 'netdev' is closed or the program exits.  Returns 0 if
+ * successful, otherwise a positive errno value. */
 static int
 do_update_flags(struct netdev *netdev, enum netdev_flags off,
-                enum netdev_flags on)
+                enum netdev_flags on, bool permanent)
 {
     int old_flags, new_flags;
     int error;
@@ -594,6 +599,9 @@ do_update_flags(struct netdev *netdev, enum netdev_flags off,
     }
 
     new_flags = (old_flags & ~nd_to_iff_flags(off)) | nd_to_iff_flags(on);
+    if (!permanent) {
+        netdev->changed_flags |= new_flags ^ old_flags; 
+    }
     if (new_flags != old_flags) {
         error = set_flags(netdev, new_flags);
     }
@@ -601,27 +609,36 @@ do_update_flags(struct netdev *netdev, enum netdev_flags off,
 }
 
 /* Sets the flags for 'netdev' to 'flags'.
+ * If 'permanent' is true, the changes will persist; otherwise, they
+ * will be reverted when 'netdev' is closed or the program exits.
  * Returns 0 if successful, otherwise a positive errno value. */
 int
-netdev_set_flags(struct netdev *netdev, enum netdev_flags flags)
+netdev_set_flags(struct netdev *netdev, enum netdev_flags flags,
+                 bool permanent)
 {
-    return do_update_flags(netdev, -1, flags);
+    return do_update_flags(netdev, -1, flags, permanent);
 }
 
 /* Turns on the specified 'flags' on 'netdev'.
+ * If 'permanent' is true, the changes will persist; otherwise, they
+ * will be reverted when 'netdev' is closed or the program exits.
  * Returns 0 if successful, otherwise a positive errno value. */
 int
-netdev_turn_flags_on(struct netdev *netdev, enum netdev_flags flags)
+netdev_turn_flags_on(struct netdev *netdev, enum netdev_flags flags,
+                     bool permanent)
 {
-    return do_update_flags(netdev, 0, flags);
+    return do_update_flags(netdev, 0, flags, permanent);
 }
 
 /* Turns off the specified 'flags' on 'netdev'.
+ * If 'permanent' is true, the changes will persist; otherwise, they
+ * will be reverted when 'netdev' is closed or the program exits.
  * Returns 0 if successful, otherwise a positive errno value. */
 int
-netdev_turn_flags_off(struct netdev *netdev, enum netdev_flags flags)
+netdev_turn_flags_off(struct netdev *netdev, enum netdev_flags flags,
+                      bool permanent)
 {
-    return do_update_flags(netdev, flags, 0);
+    return do_update_flags(netdev, flags, 0, permanent);
 }
 
 /* Looks up the ARP table entry for 'ip' on 'netdev'.  If one exists and can be
@@ -681,6 +698,7 @@ static int
 restore_flags(struct netdev *netdev)
 {
     struct ifreq ifr;
+    int restore_flags;
 
     /* Get current flags. */
     strncpy(ifr.ifr_name, netdev->name, sizeof ifr.ifr_name);
@@ -689,9 +707,10 @@ restore_flags(struct netdev *netdev)
     }
 
     /* Restore flags that we might have changed, if necessary. */
-    if ((ifr.ifr_flags ^ netdev->save_flags) & (IFF_PROMISC | IFF_UP)) {
-        ifr.ifr_flags &= ~(IFF_PROMISC | IFF_UP);
-        ifr.ifr_flags |= netdev->save_flags & (IFF_PROMISC | IFF_UP);
+    restore_flags = netdev->changed_flags & (IFF_PROMISC | IFF_UP);
+    if ((ifr.ifr_flags ^ netdev->save_flags) & restore_flags) {
+        ifr.ifr_flags &= ~restore_flags;
+        ifr.ifr_flags |= netdev->save_flags & restore_flags;
         if (ioctl(netdev->fd, SIOCSIFFLAGS, &ifr) < 0) {
             return errno;
         }
