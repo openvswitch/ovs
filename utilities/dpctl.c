@@ -322,28 +322,6 @@ send_openflow_buffer(struct vconn *vconn, struct buffer *buffer)
     run(vconn_send_block(vconn, buffer), "failed to send packet to switch");
 }
 
-static struct buffer *
-transact_openflow(struct vconn *vconn, struct buffer *request)
-{
-    uint32_t send_xid = ((struct ofp_header *) request->data)->xid;
-
-    send_openflow_buffer(vconn, request);
-    for (;;) {
-        uint32_t recv_xid;
-        struct buffer *reply;
-
-        run(vconn_recv_block(vconn, &reply), "OpenFlow packet receive failed");
-        recv_xid = ((struct ofp_header *) reply->data)->xid;
-        if (send_xid == recv_xid) {
-            return reply;
-        }
-
-        VLOG_DBG("received reply with xid %08"PRIx32" != expected %08"PRIx32,
-                 recv_xid, send_xid);
-        buffer_delete(reply);
-    }
-}
-
 static void
 dump_transaction(const char *vconn_name, struct buffer *request)
 {
@@ -352,7 +330,7 @@ dump_transaction(const char *vconn_name, struct buffer *request)
 
     update_openflow_length(request);
     run(vconn_open_block(vconn_name, &vconn), "connecting to %s", vconn_name);
-    reply = transact_openflow(vconn, request);
+    run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
     ofp_print(stdout, reply->data, reply->size, 1);
     vconn_close(vconn);
 }
@@ -788,7 +766,7 @@ do_probe(int argc, char *argv[])
 
     make_openflow(sizeof(struct ofp_header), OFPT_ECHO_REQUEST, &request);
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
-    reply = transact_openflow(vconn, request);
+    run(vconn_transact(vconn, request, &reply), "talking to %s", argv[1]);
     if (reply->size != request->size) {
         fatal(0, "reply does not match request");
     }
@@ -820,7 +798,7 @@ do_ping(int argc, char *argv[])
         random_bytes(rq_hdr + 1, payload);
 
         gettimeofday(&start, NULL);
-        reply = transact_openflow(vconn, buffer_clone(request));
+        run(vconn_transact(vconn, buffer_clone(request), &reply), "transact");
         gettimeofday(&end, NULL);
 
         rpy_hdr = reply->data;
@@ -868,12 +846,13 @@ do_benchmark(int argc, char *argv[])
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
     gettimeofday(&start, NULL);
     for (i = 0; i < count; i++) {
-        struct buffer *request;
+        struct buffer *request, *reply;
         struct ofp_header *rq_hdr;
 
         rq_hdr = make_openflow(message_size, OFPT_ECHO_REQUEST, &request);
         memset(rq_hdr + 1, 0, payload_size);
-        buffer_delete(transact_openflow(vconn, request));
+        run(vconn_transact(vconn, request, &reply), "transact");
+        buffer_delete(reply);
     }
     gettimeofday(&end, NULL);
     vconn_close(vconn);

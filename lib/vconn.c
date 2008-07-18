@@ -34,6 +34,7 @@
 #include "vconn.h"
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdlib.h>
@@ -329,6 +330,45 @@ vconn_recv_block(struct vconn *vconn, struct buffer **msgp)
         poll_block();
     }
     return retval;
+}
+
+/* Sends 'request' to 'vconn' and blocks until it receives a reply with a
+ * matching transaction ID.  Returns 0 if successful, in which case the reply
+ * is stored in '*replyp' for the caller to examine and free.  Otherwise
+ * returns a positive errno value, or EOF, and sets '*replyp' to null.
+ *
+ * 'request' is always destroyed, regardless of the return value. */
+int
+vconn_transact(struct vconn *vconn, struct buffer *request,
+               struct buffer **replyp)
+{
+    uint32_t send_xid = ((struct ofp_header *) request->data)->xid;
+    int error;
+
+    *replyp = NULL;
+    error = vconn_send_block(vconn, request);
+    if (error) {
+        buffer_delete(request);
+        return error;
+    }
+    for (;;) {
+        uint32_t recv_xid;
+        struct buffer *reply;
+
+        error = vconn_recv_block(vconn, &reply);
+        if (error) {
+            return error;
+        }
+        recv_xid = ((struct ofp_header *) reply->data)->xid;
+        if (send_xid == recv_xid) {
+            *replyp = reply;
+            return 0;
+        }
+
+        VLOG_DBG("received reply with xid %08"PRIx32" != expected %08"PRIx32,
+                 recv_xid, send_xid);
+        buffer_delete(reply);
+    }
 }
 
 void

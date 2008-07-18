@@ -61,6 +61,7 @@ int vconn_connect(struct vconn *);
 int vconn_accept(struct vconn *, struct vconn **);
 int vconn_recv(struct vconn *, struct buffer **);
 int vconn_send(struct vconn *, struct buffer *);
+int vconn_transact(struct vconn *, struct buffer *, struct buffer **);
 
 int vconn_open_block(const char *name, struct vconn **);
 int vconn_send_block(struct vconn *, struct buffer *);
