@@ -10,7 +10,7 @@
 
 #include <linux/rcupdate.h>
 #include <linux/slab.h>
-#include <linux/list.h>
+#include <linux/rculist.h>
 
 struct sw_table_linear {
 	struct sw_table swt;

@@ -35,6 +35,7 @@
 #include <linux/rcupdate.h>
 #include <linux/slab.h>
 #include <linux/list.h>
+#include <linux/rculist.h>
 #include <linux/delay.h>
 #include <linux/if_arp.h>
 

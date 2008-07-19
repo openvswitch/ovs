@@ -28,6 +28,7 @@
 #include <linux/netfilter_bridge.h>
 #include <linux/inetdevice.h>
 #include <linux/list.h>
+#include <linux/rculist.h>
 
 #include "openflow-netlink.h"
 #include "datapath.h"
