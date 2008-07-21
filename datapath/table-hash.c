@@ -22,7 +22,7 @@ static void kmem_free(void *, size_t);
 struct sw_table_hash {
 	struct sw_table swt;
 	struct crc32 crc32;
-	atomic_t n_flows;
+	unsigned int n_flows;
 	unsigned int bucket_mask; /* Number of buckets minus 1. */
 	struct sw_flow **buckets;
 };
@@ -53,7 +53,7 @@ static int table_hash_insert(struct sw_table *swt, struct sw_flow *flow)
 
 	bucket = find_bucket(swt, &flow->key);
 	if (*bucket == NULL) {
-		atomic_inc(&th->n_flows);
+		th->n_flows++;
 		rcu_assign_pointer(*bucket, flow);
 		retval = 1;
 	} else {
@@ -106,8 +106,7 @@ static int table_hash_delete(struct sw_table *swt,
 				count += do_delete(bucket, flow);
 		}
 	}
-	if (count)
-		atomic_sub(count, &th->n_flows);
+	th->n_flows -= count;
 	return count;
 }
 
@@ -127,10 +126,9 @@ static int table_hash_timeout(struct datapath *dp, struct sw_table *swt)
 				dp_send_flow_expired(dp, flow);
 		}
 	}
+	th->n_flows -= count;
 	mutex_unlock(&dp_mutex);
 
-	if (count)
-		atomic_sub(count, &th->n_flows);
 	return count;
 }
 
@@ -189,7 +187,7 @@ static void table_hash_stats(struct sw_table *swt,
 {
 	struct sw_table_hash *th = (struct sw_table_hash *) swt;
 	stats->name = "hash";
-	stats->n_flows = atomic_read(&th->n_flows);
+	stats->n_flows = th->n_flows;
 	stats->max_flows = th->bucket_mask + 1;
 }
 
@@ -222,7 +220,7 @@ struct sw_table *table_hash_create(unsigned int polynomial,
 	swt->stats = table_hash_stats;
 
 	crc32_init(&th->crc32, polynomial);
-	atomic_set(&th->n_flows, 0);
+	th->n_flows = 0;
 
 	return swt;
 }

@@ -16,7 +16,7 @@ struct sw_table_linear {
 	struct sw_table swt;
 
 	unsigned int max_flows;
-	atomic_t n_flows;
+	unsigned int n_flows;
 	struct list_head flows;
 	struct list_head iter_flows;
 	unsigned long int next_serial;
@@ -61,10 +61,10 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 	}
 
 	/* Make sure there's room in the table. */
-	if (atomic_read(&tl->n_flows) >= tl->max_flows) {
+	if (tl->n_flows >= tl->max_flows) {
 		return 0;
 	}
-	atomic_inc(&tl->n_flows);
+	tl->n_flows++;
 
 	/* Insert the entry immediately in front of where we're pointing. */
 	flow->serial = tl->next_serial++;
@@ -96,8 +96,7 @@ static int table_linear_delete(struct sw_table *swt,
 				&& (!strict || (flow->priority == priority)))
 			count += do_delete(swt, flow);
 	}
-	if (count)
-		atomic_sub(count, &tl->n_flows);
+	tl->n_flows -= count;
 	return count;
 }
 
@@ -115,10 +114,8 @@ static int table_linear_timeout(struct datapath *dp, struct sw_table *swt)
 				dp_send_flow_expired(dp, flow);
 		}
 	}
+	tl->n_flows -= count;
 	mutex_unlock(&dp_mutex);
-
-	if (count)
-		atomic_sub(count, &tl->n_flows);
 	return count;
 }
 
@@ -163,7 +160,7 @@ static void table_linear_stats(struct sw_table *swt,
 {
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
 	stats->name = "linear";
-	stats->n_flows = atomic_read(&tl->n_flows);
+	stats->n_flows = tl->n_flows;
 	stats->max_flows = tl->max_flows;
 }
 
@@ -187,7 +184,7 @@ struct sw_table *table_linear_create(unsigned int max_flows)
 	swt->stats = table_linear_stats;
 
 	tl->max_flows = max_flows;
-	atomic_set(&tl->n_flows, 0);
+	tl->n_flows = 0;
 	INIT_LIST_HEAD(&tl->flows);
 	INIT_LIST_HEAD(&tl->iter_flows);
 	tl->next_serial = 0;

@@ -63,7 +63,7 @@ struct sw_table_dummy {
 	struct sw_table swt;
 
 	unsigned int max_flows;
-	atomic_t n_flows;
+	unsigned int n_flows;
 	struct list_head flows;
 	struct list_head iter_flows;
 	unsigned long int next_serial;
@@ -151,8 +151,7 @@ static int table_dummy_delete(struct sw_table *swt,
 		    && (!strict || (flow->priority == priority)))
 			count += do_delete(swt, flow);
 	}
-	if (count)
-		atomic_sub(count, &td->n_flows);
+	td->n_flows -= count;
 	return count;
 }
 
@@ -201,8 +200,7 @@ static int table_dummy_timeout(struct datapath *dp, struct sw_table *swt)
 	spin_unlock_bh(&pending_free_lock);
 	mutex_unlock(&dp_mutex);
 
-	if (del_count)
-		atomic_sub(del_count, &td->n_flows);
+	td->n_flows -= del_count;
 	return del_count;
 }
 
@@ -256,7 +254,7 @@ static void table_dummy_stats(struct sw_table *swt,
 {
 	struct sw_table_dummy *td = (struct sw_table_dummy *) swt;
 	stats->name = "dummy";
-	stats->n_flows = atomic_read(&td->n_flows);
+	stats->n_flows = td->n_flows;
 	stats->max_flows = td->max_flows;
 }
 
@@ -280,7 +278,7 @@ static struct sw_table *table_dummy_create(void)
 	swt->stats = table_dummy_stats;
 
 	td->max_flows = DUMMY_MAX_FLOW;
-	atomic_set(&td->n_flows, 0);
+	td->n_flows = 0;
 	INIT_LIST_HEAD(&td->flows);
 	INIT_LIST_HEAD(&td->iter_flows);
 	td->next_serial = 0;
