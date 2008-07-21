@@ -10,6 +10,7 @@ openflow_headers += \
 	linux-2.6/compat-2.6/include/linux/mutex.h \
 	linux-2.6/compat-2.6/include/linux/netlink.h \
 	linux-2.6/compat-2.6/include/linux/random.h \
+	linux-2.6/compat-2.6/include/linux/rculist.h \
 	linux-2.6/compat-2.6/include/linux/skbuff.h \
 	linux-2.6/compat-2.6/include/linux/tcp.h \
 	linux-2.6/compat-2.6/include/linux/timer.h \

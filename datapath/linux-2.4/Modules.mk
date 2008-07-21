@@ -41,6 +41,7 @@ compat24_headers = \
 	linux-2.4/compat-2.4/include/linux/netdevice.h \
 	linux-2.4/compat-2.4/include/linux/netlink.h \
 	linux-2.4/compat-2.4/include/linux/random.h \
+	linux-2.4/compat-2.4/include/linux/rculist.h \
 	linux-2.4/compat-2.4/include/linux/rcupdate.h \
 	linux-2.4/compat-2.4/include/linux/sched.h \
 	linux-2.4/compat-2.4/include/linux/skbuff.h \
