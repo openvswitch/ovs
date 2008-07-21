@@ -21,7 +21,6 @@ static void kmem_free(void *, size_t);
 
 struct sw_table_hash {
 	struct sw_table swt;
-	spinlock_t lock;
 	struct crc32 crc32;
 	atomic_t n_flows;
 	unsigned int bucket_mask; /* Number of buckets minus 1. */
@@ -47,13 +46,11 @@ static int table_hash_insert(struct sw_table *swt, struct sw_flow *flow)
 {
 	struct sw_table_hash *th = (struct sw_table_hash *) swt;
 	struct sw_flow **bucket;
-	unsigned long int flags;
 	int retval;
 
 	if (flow->key.wildcards != 0)
 		return 0;
 
-	spin_lock_irqsave(&th->lock, flags);
 	bucket = find_bucket(swt, &flow->key);
 	if (*bucket == NULL) {
 		atomic_inc(&th->n_flows);
@@ -70,7 +67,6 @@ static int table_hash_insert(struct sw_table *swt, struct sw_flow *flow)
 			retval = 0;
 		}
 	}
-	spin_unlock_irqrestore(&th->lock, flags);
 	return retval;
 }
 
@@ -225,7 +221,6 @@ struct sw_table *table_hash_create(unsigned int polynomial,
 	swt->iterate = table_hash_iterate;
 	swt->stats = table_hash_stats;
 
-	spin_lock_init(&th->lock);
 	crc32_init(&th->crc32, polynomial);
 	atomic_set(&th->n_flows, 0);
 

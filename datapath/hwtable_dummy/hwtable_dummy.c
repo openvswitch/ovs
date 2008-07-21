@@ -62,7 +62,6 @@ struct sw_flow_dummy {
 struct sw_table_dummy {
 	struct sw_table swt;
 
-	spinlock_t lock;
 	unsigned int max_flows;
 	atomic_t n_flows;
 	struct list_head flows;
@@ -147,7 +146,7 @@ static int table_dummy_delete(struct sw_table *swt,
 	struct sw_flow *flow;
 	unsigned int count = 0;
 
-	list_for_each_entry_rcu (flow, &td->flows, node) {
+	list_for_each_entry (flow, &td->flows, node) {
 		if (flow_del_matches(&flow->key, key, strict)
 		    && (!strict || (flow->priority == priority)))
 			count += do_delete(swt, flow);
@@ -168,7 +167,7 @@ static int table_dummy_timeout(struct datapath *dp, struct sw_table *swt)
 	int i = 0;
 
 	mutex_lock(&dp_mutex);
-	list_for_each_entry_rcu (flow, &td->flows, node) {
+	list_for_each_entry (flow, &td->flows, node) {
 		/* xxx Retrieve the packet count associated with this entry
 		 * xxx and store it in "packet_count".
 		 */
@@ -240,7 +239,7 @@ static int table_dummy_iterate(struct sw_table *swt,
 	unsigned long start;
 
 	start = ~position->private[0];
-	list_for_each_entry_rcu (flow, &tl->iter_flows, iter_node) {
+	list_for_each_entry (flow, &tl->iter_flows, iter_node) {
 		if (flow->serial <= start && flow_matches(key, &flow->key)) {
 			int error = callback(flow, private);
 			if (error) {
@@ -284,7 +283,6 @@ static struct sw_table *table_dummy_create(void)
 	atomic_set(&td->n_flows, 0);
 	INIT_LIST_HEAD(&td->flows);
 	INIT_LIST_HEAD(&td->iter_flows);
-	spin_lock_init(&td->lock);
 	td->next_serial = 0;
 
 	INIT_LIST_HEAD(&pending_free_list);
