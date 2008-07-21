@@ -11,10 +11,10 @@ dist_man_MANS = vlogconf.8 dpctl.8
 man_MANS = ofp-pki.8
 
 dpctl_SOURCES = dpctl.c
-dpctl_LDADD = ../lib/libopenflow.la $(SSL_LIBS)
+dpctl_LDADD = ../lib/libopenflow.a $(SSL_LIBS)
 
 vlogconf_SOURCES = vlogconf.c
-vlogconf_LDADD = ../lib/libopenflow.la
+vlogconf_LDADD = ../lib/libopenflow.a
 
 pkidir = $(pkgdatadir)/pki
 

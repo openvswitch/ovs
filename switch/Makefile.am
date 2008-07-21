@@ -17,7 +17,7 @@ switch_SOURCES = \
 	table-hash.c \
 	table-linear.c
 
-switch_LDADD = ../lib/libopenflow.la $(SSL_LIBS)
+switch_LDADD = ../lib/libopenflow.a $(SSL_LIBS)
 
 EXTRA_DIST = switch.8.in
 DISTCLEANFILES = switch.8
