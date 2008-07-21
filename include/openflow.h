@@ -42,7 +42,9 @@
 #include <stdint.h>
 #endif
 
-#ifndef __cplusplus
+#ifdef SWIG
+#define OFP_ASSERT(EXPR)        /* SWIG can't handle OFP_ASSERT. */
+#elif !defined(__cplusplus)
 /* Build-time assertion for use in a declaration context. */
 #define OFP_ASSERT(EXPR)                                                \
         extern int (*build_assert(void))[ sizeof(struct {               \
@@ -51,6 +53,12 @@
 #include <boost/static_assert.hpp>
 #define OFP_ASSERT BOOST_STATIC_ASSERT
 #endif /* __cplusplus */
+
+#ifndef SWIG
+#define OFP_PACKED __attribute__((packed))
+#else
+#define OFP_PACKED              /* SWIG doesn't understand __attribute. */
+#endif
 
 /* Maximum length of a OpenFlow packet. */
 #define OFP_MAXLEN (sizeof(struct ofp_switch_features) \
@@ -280,7 +288,7 @@ struct ofp_action {
         struct ofp_action_output output; /* OFPAT_OUTPUT: output struct. */
         uint16_t vlan_id;                /* OFPAT_SET_DL_VLAN: VLAN id. */
         uint8_t  dl_addr[OFP_ETH_ALEN];  /* OFPAT_SET_DL_SRC/DST */
-        uint32_t nw_addr __attribute__((packed)); /* OFPAT_SET_NW_SRC/DST */
+        uint32_t nw_addr OFP_PACKED;     /* OFPAT_SET_NW_SRC/DST */
         uint16_t tp;                     /* OFPAT_SET_TP_SRC/DST */
     } arg;
 };
