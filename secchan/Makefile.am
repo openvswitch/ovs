@@ -9,7 +9,7 @@ man_MANS =
 endif
 
 secchan_SOURCES = secchan.c
-secchan_LDADD = ../lib/libopenflow.la -ldl $(SSL_LIBS)
+secchan_LDADD = ../lib/libopenflow.la $(SSL_LIBS)
 
 EXTRA_DIST = secchan.8.in
 DISTCLEANFILES = secchan.8
