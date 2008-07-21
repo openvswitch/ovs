@@ -13,5 +13,5 @@ test_type_props_SOURCES = test-type-props.c
 
 check_PROGRAMS += test-dhcp-client
 test_dhcp_client_SOURCES = test-dhcp-client.c
-test_dhcp_client_LDADD = ../lib/libopenflow.a
+test_dhcp_client_LDADD = ../lib/libopenflow.a $(FAULT_LIBS)
 

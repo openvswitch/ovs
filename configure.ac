@@ -109,8 +109,9 @@ if test "$HAVE_OPENSSL" = yes; then
 fi
 
 AC_CHECK_LIB([socket], [connect])
-AC_CHECK_LIB([resolv], [gethostbyname])
-AC_CHECK_LIB([dl], [dladdr])
+AC_SEARCH_LIBS([gethostbyname], [resolv], [RESOLVER_LIBS=-lresolv])
+AC_CHECK_LIB([dl], [dladdr], [FAULT_LIBS=-ldl])
+AC_SUBST([FAULT_LIBS])
 
 CFLAGS="$CFLAGS -Wall -Wno-sign-compare"
 
