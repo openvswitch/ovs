@@ -5,7 +5,7 @@ man_MANS = controller.8
 DISTCLEANFILES = controller.8
 
 controller_SOURCES = controller.c
-controller_LDADD = ../lib/libopenflow.la -ldl
+controller_LDADD = ../lib/libopenflow.la -ldl $(SSL_LIBS)
 
 EXTRA_DIST = controller.8.in
 controller.8: controller.8.in Makefile
