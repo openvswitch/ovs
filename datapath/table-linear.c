@@ -47,8 +47,7 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 	list_for_each_entry (f, &tl->flows, node) {
 		if (f->priority == flow->priority
 				&& f->key.wildcards == flow->key.wildcards
-				&& flow_matches(&f->key, &flow->key)
-				&& flow_del(f)) {
+				&& flow_matches(&f->key, &flow->key)) {
 			flow->serial = f->serial;
 			list_replace_rcu(&f->node, &flow->node);
 			list_replace_rcu(&f->iter_node, &flow->iter_node);
@@ -75,13 +74,10 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 
 static int do_delete(struct sw_table *swt, struct sw_flow *flow) 
 {
-	if (flow_del(flow)) {
-		list_del_rcu(&flow->node);
-		list_del_rcu(&flow->iter_node);
-		flow_deferred_free(flow);
-		return 1;
-	}
-	return 0;
+	list_del_rcu(&flow->node);
+	list_del_rcu(&flow->iter_node);
+	flow_deferred_free(flow);
+	return 1;
 }
 
 static int table_linear_delete(struct sw_table *swt,

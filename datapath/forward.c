@@ -406,7 +406,6 @@ add_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 	flow->init_time = jiffies;
 	flow->byte_count = 0;
 	flow->packet_count = 0;
-	atomic_set(&flow->deleted, 0);
 	spin_lock_init(&flow->lock);
 	memcpy(flow->actions, ofm->actions, n_acts * sizeof *flow->actions);
 

@@ -2,7 +2,6 @@
 #define FLOW_H 1
 
 #include <linux/kernel.h>
-#include <asm/atomic.h>
 #include <linux/spinlock.h>
 #include <linux/list.h>
 #include <linux/types.h>
@@ -49,15 +48,9 @@ static inline void check_key_align(void)
 /* Locking:
  *
  * - Readers must take rcu_read_lock and hold it the entire time that the flow
- *   must continue to exist.  Readers need not take delete_lock.  They *may*
- *   examine 'deleted' *if* it is important not to read stale data.
+ *   must continue to exist.
  *
- * - Deleters must take rcu_read_lock and call flow_del to verify that another
- *   thread has not already deleted the flow.  If not, do a deferred free of
- *   the flow with call_rcu, then rcu_assign_pointer or [h]list_del_rcu the
- *   flow.
- *
- * - In-place update not yet contemplated.
+ * - Writers must hold dp_mutex.
  */
 struct sw_flow {
 	struct sw_flow_key key;
@@ -81,7 +74,6 @@ struct sw_flow {
 	uint64_t packet_count;   /* Number of packets associated with this entry */
 	uint64_t byte_count;     /* Number of bytes associated with this entry */
 
-	atomic_t deleted;        /* 0 if not deleted, 1 if deleted. */
 	struct rcu_head rcu;
 };
 
@@ -92,7 +84,6 @@ struct sw_flow *flow_alloc(int n_actions, gfp_t flags);
 void flow_free(struct sw_flow *);
 void flow_deferred_free(struct sw_flow *);
 void flow_extract(struct sk_buff *, uint16_t in_port, struct sw_flow_key *);
-int flow_del(struct sw_flow *);
 void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from);
 void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from);
 

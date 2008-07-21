@@ -130,13 +130,10 @@ static int table_dummy_insert(struct sw_table *swt, struct sw_flow *flow)
 
 static int do_delete(struct sw_table *swt, struct sw_flow *flow)
 {
-	if (flow_del(flow)) {
-		list_del_rcu(&flow->node);
-		list_del_rcu(&flow->iter_node);
-		table_dummy_flow_deferred_free(flow);
-		return 1;
-	}
-	return 0;
+	list_del_rcu(&flow->node);
+	list_del_rcu(&flow->iter_node);
+	table_dummy_flow_deferred_free(flow);
+	return 1;
 }
 
 static int table_dummy_delete(struct sw_table *swt,
