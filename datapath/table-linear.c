@@ -113,6 +113,7 @@ static int table_linear_timeout(struct datapath *dp, struct sw_table *swt)
 	struct sw_flow *flow;
 	int count = 0;
 
+	mutex_lock(&dp_mutex);
 	list_for_each_entry_rcu (flow, &tl->flows, node) {
 		if (flow_timeout(flow)) {
 			count += do_delete(swt, flow);
@@ -120,6 +121,8 @@ static int table_linear_timeout(struct datapath *dp, struct sw_table *swt)
 				dp_send_flow_expired(dp, flow);
 		}
 	}
+	mutex_unlock(&dp_mutex);
+
 	if (count)
 		atomic_sub(count, &tl->n_flows);
 	return count;

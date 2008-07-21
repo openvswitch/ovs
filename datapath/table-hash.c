@@ -121,6 +121,7 @@ static int table_hash_timeout(struct datapath *dp, struct sw_table *swt)
 	unsigned int i;
 	int count = 0;
 
+	mutex_lock(&dp_mutex);
 	for (i = 0; i <= th->bucket_mask; i++) {
 		struct sw_flow **bucket = &th->buckets[i];
 		struct sw_flow *flow = *bucket;
@@ -130,6 +131,7 @@ static int table_hash_timeout(struct datapath *dp, struct sw_table *swt)
 				dp_send_flow_expired(dp, flow);
 		}
 	}
+	mutex_unlock(&dp_mutex);
 
 	if (count)
 		atomic_sub(count, &th->n_flows);

@@ -167,6 +167,7 @@ static int table_dummy_timeout(struct datapath *dp, struct sw_table *swt)
 	uint64_t packet_count = 0;
 	int i = 0;
 
+	mutex_lock(&dp_mutex);
 	list_for_each_entry_rcu (flow, &td->flows, node) {
 		/* xxx Retrieve the packet count associated with this entry
 		 * xxx and store it in "packet_count".
@@ -199,6 +200,7 @@ static int table_dummy_timeout(struct datapath *dp, struct sw_table *swt)
 		table_dummy_sfw_destroy(sfw);
 	}
 	spin_unlock_bh(&pending_free_lock);
+	mutex_unlock(&dp_mutex);
 
 	if (del_count)
 		atomic_sub(del_count, &td->n_flows);
