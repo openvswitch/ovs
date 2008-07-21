@@ -48,10 +48,6 @@
 #define DUMMY_MAX_FLOW   8192
 
 
-/* xxx Explain need for this separate list because of RCU */
-static spinlock_t pending_free_lock;
-static struct list_head pending_free_list;
-
 /* sw_flow private data for dummy table entries.  */
 struct sw_flow_dummy {
 	struct list_head node;
@@ -69,34 +65,6 @@ struct sw_table_dummy {
 	unsigned long int next_serial;
 };
 
-
-static void table_dummy_sfw_destroy(struct sw_flow_dummy *sfw)
-{
-	/* xxx Remove the entry from hardware.  If you need to do any other
-	 * xxx clean-up associated with the entry, do it here.
-	 */
-
-	kfree(sfw);
-}
-
-static void table_dummy_rcu_callback(struct rcu_head *rcu)
-{
-	struct sw_flow *flow = container_of(rcu, struct sw_flow, rcu);
-
-	spin_lock(&pending_free_lock);
-	if (flow->private) {
-		struct sw_flow_dummy *sfw = flow->private;
-		list_add(&sfw->node, &pending_free_list);
-		flow->private = NULL;
-	}
-	spin_unlock(&pending_free_lock);
-	flow_free(flow);
-}
-
-static void table_dummy_flow_deferred_free(struct sw_flow *flow)
-{
-	call_rcu(&flow->rcu, table_dummy_rcu_callback);
-}
 
 static struct sw_flow *table_dummy_lookup(struct sw_table *swt,
 					  const struct sw_flow_key *key)
@@ -121,7 +89,8 @@ static int table_dummy_insert(struct sw_table *swt, struct sw_flow *flow)
 	/* xxx Do whatever needs to be done to insert an entry in hardware. 
 	 * xxx If the entry can't be inserted, return 0.  This stub code
 	 * xxx doesn't do anything yet, so we're going to return 0...you
-	 * xxx shouldn't.
+	 * xxx shouldn't (and you should update n_flows in struct
+	 * xxx sw_table_dummy, too).
 	 */
 	kfree(flow->private);
 	return 0;
@@ -130,9 +99,11 @@ static int table_dummy_insert(struct sw_table *swt, struct sw_flow *flow)
 
 static int do_delete(struct sw_table *swt, struct sw_flow *flow)
 {
+	/* xxx Remove the entry from hardware.  If you need to do any other
+	 * xxx clean-up associated with the entry, do it here.
+	 */
 	list_del_rcu(&flow->node);
 	list_del_rcu(&flow->iter_node);
-	table_dummy_flow_deferred_free(flow);
 	return 1;
 }
 
@@ -157,7 +128,6 @@ static int table_dummy_timeout(struct datapath *dp, struct sw_table *swt)
 {
 	struct sw_table_dummy *td = (struct sw_table_dummy *) swt;
 	struct sw_flow *flow;
-	struct sw_flow_dummy *sfw, *n;
 	int del_count = 0;
 	uint64_t packet_count = 0;
 	int i = 0;
@@ -182,19 +152,8 @@ static int table_dummy_timeout(struct datapath *dp, struct sw_table *swt)
 			}
 			del_count += do_delete(swt, flow);
 		}
-		if ((i % 50) == 0) {
-			msleep_interruptible(1);
-		}
 		i++;
 	}
-
-	/* Remove any entries queued for removal */
-	spin_lock_bh(&pending_free_lock);
-	list_for_each_entry_safe (sfw, n, &pending_free_list, node) {
-		list_del(&sfw->node);
-		table_dummy_sfw_destroy(sfw);
-	}
-	spin_unlock_bh(&pending_free_lock);
 	mutex_unlock(&dp_mutex);
 
 	td->n_flows -= del_count;
@@ -279,9 +238,6 @@ static struct sw_table *table_dummy_create(void)
 	INIT_LIST_HEAD(&td->flows);
 	INIT_LIST_HEAD(&td->iter_flows);
 	td->next_serial = 0;
-
-	INIT_LIST_HEAD(&pending_free_list);
-	spin_lock_init(&pending_free_lock);
 
 	return swt;
 }
