@@ -1028,32 +1028,23 @@ static int dp_genl_openflow(struct sk_buff *skb, struct genl_info *info)
 	struct datapath *dp;
 	struct ofp_header *oh;
 	struct sender sender;
-	int err;
 
 	if (!info->attrs[DP_GENL_A_DP_IDX] || !va)
 		return -EINVAL;
 
-	rcu_read_lock();
 	dp = dp_get(nla_get_u32(info->attrs[DP_GENL_A_DP_IDX]));
-	if (!dp) {
-		err = -ENOENT;
-		goto out;
-	}
+	if (!dp)
+		return -ENOENT;
 
-	if (nla_len(va) < sizeof(struct ofp_header)) {
-		err = -EINVAL;
-		goto out;
-	}
+	if (nla_len(va) < sizeof(struct ofp_header))
+		return -EINVAL;
 	oh = nla_data(va);
 
 	sender.xid = oh->xid;
 	sender.pid = info->snd_pid;
 	sender.seq = info->snd_seq;
-	err = fwd_control_input(dp->chain, &sender, nla_data(va), nla_len(va));
-
-out:
-	rcu_read_unlock();
-	return err;
+	return fwd_control_input(dp->chain, &sender,
+				 nla_data(va), nla_len(va));
 }
 
 static struct nla_policy dp_genl_openflow_policy[DP_GENL_A_MAX + 1] = {
@@ -1368,7 +1359,6 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 	 * struct genl_ops.  This kluge supports earlier versions also. */
 	cb->done = dp_genl_openflow_done;
 
-	rcu_read_lock();
 	if (!cb->args[0]) {
 		struct nlattr *attrs[DP_GENL_A_MAX + 1];
 		struct ofp_stats_request *rq;
@@ -1381,21 +1371,17 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 		if (err < 0)
 			return err;
 
-		err = -EINVAL;
-
 		if (!attrs[DP_GENL_A_DP_IDX])
-			goto out;
+			return -EINVAL;
 		dp_idx = nla_get_u16(attrs[DP_GENL_A_DP_IDX]);
 		dp = dp_get(dp_idx);
-		if (!dp) {
-			err = -ENOENT;
-			goto out;
-		}
+		if (!dp)
+			return -ENOENT;
 
 		va = attrs[DP_GENL_A_OPENFLOW];
 		len = nla_len(va);
 		if (!va || len < sizeof *rq)
-			goto out;
+			return -EINVAL;
 
 		rq = nla_data(va);
 		type = ntohs(rq->type);
@@ -1404,12 +1390,12 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 		    || ntohs(rq->header.length) != len
 		    || type >= ARRAY_SIZE(stats)
 		    || !stats[type].dump)
-			goto out;
+			return -EINVAL;
 
 		s = &stats[type];
 		body_len = len - offsetof(struct ofp_stats_request, body);
 		if (body_len < s->min_body || body_len > s->max_body)
-			goto out;
+			return -EINVAL;
 
 		cb->args[0] = 1;
 		cb->args[1] = dp_idx;
@@ -1419,7 +1405,7 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 			void *state;
 			err = s->init(dp, rq->body, body_len, &state);
 			if (err)
-				goto out;
+				return err;
 			cb->args[4] = (long) state;
 		}
 	} else if (cb->args[0] == 1) {
@@ -1427,13 +1413,10 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 		s = &stats[cb->args[2]];
 
 		dp = dp_get(dp_idx);
-		if (!dp) {
-			err = -ENOENT;
-			goto out;
-		}
+		if (!dp)
+			return -ENOENT;
 	} else {
-		err = 0;
-		goto out;
+		return 0;
 	}
 
 	sender.xid = cb->args[3];
@@ -1442,10 +1425,8 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 
 	osr = put_openflow_headers(dp, skb, OFPT_STATS_REPLY, &sender,
 				   &max_openflow_len);
-	if (IS_ERR(osr)) {
-		err = PTR_ERR(osr);
-		goto out;
-	}
+	if (IS_ERR(osr))
+		return PTR_ERR(osr);
 	osr->type = htons(s - stats);
 	osr->flags = 0;
 	resize_openflow_skb(skb, &osr->header, max_openflow_len);
@@ -1464,8 +1445,6 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 		err = skb->len;
 	}
 
-out:
-	rcu_read_unlock();
 	return err;
 }
 

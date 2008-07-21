@@ -138,9 +138,7 @@ int chain_timeout(struct sw_chain *chain)
 
 	for (i = 0; i < chain->n_tables; i++) {
 		struct sw_table *t = chain->tables[i];
-		rcu_read_lock();
 		count += t->timeout(chain->dp, t);
-		rcu_read_unlock();
 	}
 	return count;
 }
