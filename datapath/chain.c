@@ -89,6 +89,7 @@ int chain_insert(struct sw_chain *chain, struct sw_flow *flow)
 {
 	int i;
 
+	might_sleep();
 	for (i = 0; i < chain->n_tables; i++) {
 		struct sw_table *t = chain->tables[i];
 		if (t->insert(t, flow))
@@ -112,6 +113,7 @@ int chain_delete(struct sw_chain *chain, const struct sw_flow_key *key,
 	int count = 0;
 	int i;
 
+	might_sleep();
 	for (i = 0; i < chain->n_tables; i++) {
 		struct sw_table *t = chain->tables[i];
 		count += t->delete(t, key, priority, strict);
@@ -133,6 +135,7 @@ int chain_timeout(struct sw_chain *chain)
 	int count = 0;
 	int i;
 
+	might_sleep();
 	for (i = 0; i < chain->n_tables; i++) {
 		struct sw_table *t = chain->tables[i];
 		count += t->timeout(chain->dp, t);
