@@ -29,8 +29,10 @@ configure: configure-stamp
 configure-stamp:
 	dh_testdir
 	test -e configure || ./boot.sh
-	test -e Makefile || \
-		./configure --prefix=/usr --localstatedir=/var --enable-ssl
+	test -d _debian || mkdir _debian
+	cd _debian && ( \
+		test -e Makefile || \
+		../configure --prefix=/usr --localstatedir=/var --enable-ssl)
 	touch configure-stamp
 
 #Architecture 
@@ -38,18 +40,19 @@ build: build-arch build-indep
 
 build-arch: build-arch-stamp
 build-arch-stamp: configure-stamp 
-	$(MAKE)
+	$(MAKE) -C _debian
 	touch $@
 
 build-indep: build-indep-stamp
 build-indep-stamp: configure-stamp 
-	$(MAKE) dist distdir=openflow
+	$(MAKE) -C _debian dist distdir=openflow
 	touch $@
 
 clean:
 	dh_testdir
 	dh_testroot
 	rm -f build-arch-stamp build-indep-stamp configure-stamp
+	rm -rf _debian
 	[ ! -f Makefile ] || $(MAKE) distclean
 	dh_clean 
 	debconf-updatepo
@@ -97,7 +100,7 @@ install-indep: build-indep
 	dh_testroot
 	dh_clean -k -i 
 	dh_installdirs -i
-	cp openflow.tar.gz $(MODDIR)
+	cp _debian/openflow.tar.gz $(MODDIR)
 	cd debian; cp changelog control compat *.modules.in rules $(MODDIR)/debian
 	cd debian/openflow-datapath-source/usr/src && tar -c modules | bzip2 -9 > openflow-datapath.tar.bz2 && rm -rf modules
 	install -m644 debian/openflow-pki.apache2 debian/openflow-pki/etc/apache2/sites-available/openflow-pki
@@ -108,7 +111,7 @@ install-arch: build-arch
 	dh_testroot
 	dh_clean -k -s 
 	dh_installdirs -s
-	$(MAKE) DESTDIR=$(CURDIR)/debian/openflow install
+	$(MAKE) -C _debian DESTDIR=$(CURDIR)/debian/openflow install
 	cp debian/openflow-switch.overrides debian/openflow-switch/usr/share/lintian/overrides/openflow-switch
 	dh_install -s
 

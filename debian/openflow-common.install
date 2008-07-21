@@ -1,2 +1,2 @@
-utilities/ofp-pki usr/sbin
-utilities/vlogconf usr/sbin
+_debian/utilities/ofp-pki usr/sbin
+_debian/utilities/vlogconf usr/sbin
