@@ -30,6 +30,7 @@
  * advertising or publicity pertaining to the Software or any
  * derivatives without specific, written prior permission.
  */
+#include <config.h>
 #include "fatal-signal.h"
 #include <assert.h>
 #include <errno.h>

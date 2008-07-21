@@ -31,6 +31,7 @@
  * derivatives without specific, written prior permission.
  */
 
+#include <config.h>
 #include "ofp-print.h"
 #include "xtoxll.h"
 

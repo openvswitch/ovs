@@ -31,6 +31,7 @@
  * derivatives without specific, written prior permission.
  */
 
+#include <config.h>
 #include "csum.h"
 
 /* Returns the IP checksum of the 'n' bytes in 'data'. */

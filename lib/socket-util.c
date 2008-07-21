@@ -31,6 +31,7 @@
  * derivatives without specific, written prior permission.
  */
 
+#include <config.h>
 #include "socket-util.h"
 #include <arpa/inet.h>
 #include <errno.h>

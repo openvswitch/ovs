@@ -31,6 +31,7 @@
  * derivatives without specific, written prior permission.
  */
 
+#include <config.h>
 #include "vconn.h"
 #include <assert.h>
 #include <errno.h>

@@ -31,6 +31,7 @@
  * derivatives without specific, written prior permission.
  */
 
+#include <config.h>
 #include "vconn-ssl.h"
 #include "dhparams.h"
 #include <assert.h>

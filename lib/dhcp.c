@@ -31,6 +31,7 @@
  * derivatives without specific, written prior permission.
  */
 
+#include <config.h>
 #include "dhcp.h"
 #include <arpa/inet.h>
 #include <assert.h>

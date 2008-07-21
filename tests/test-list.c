@@ -1,6 +1,7 @@
 /* A non-exhaustive test for some of the functions and macros declared in
  * list.h. */
 
+#include <config.h>
 #include "list.h"
 #include <string.h>
 

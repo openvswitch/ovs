@@ -31,6 +31,7 @@
  * derivatives without specific, written prior permission.
  */
 
+#include <config.h>
 #include "fault.h"
 #include <dlfcn.h>
 #include <inttypes.h>

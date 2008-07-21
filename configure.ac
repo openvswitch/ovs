@@ -1,5 +1,6 @@
 AC_PREREQ(2.59)
 AC_INIT(openflow, v0.8.1, info@openflowswitch.org)
+AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
 
 AC_PROG_CC

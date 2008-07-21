@@ -31,6 +31,7 @@
  * derivatives without specific, written prior permission.
  */
 
+#include <config.h>
 #include "command-line.h"
 #include <getopt.h>
 #include <limits.h>

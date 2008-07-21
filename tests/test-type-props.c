@@ -1,3 +1,4 @@
+#include <config.h>
 #include "type-props.h"
 #include <stdio.h>
 #include <stdlib.h>

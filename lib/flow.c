@@ -30,6 +30,7 @@
  * advertising or publicity pertaining to the Software or any
  * derivatives without specific, written prior permission.
  */
+#include <config.h>
 #include <sys/types.h>
 #include "flow.h"
 #include <inttypes.h>

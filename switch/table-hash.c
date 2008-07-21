@@ -31,6 +31,7 @@
  * derivatives without specific, written prior permission.
  */
 
+#include <config.h>
 #include "table.h"
 #include <assert.h>
 #include <stdlib.h>
