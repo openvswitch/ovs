@@ -67,8 +67,6 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_secchan
 
-#include "ofp-print.h"
-
 static const char *listen_vconn_name;
 
 struct half {
