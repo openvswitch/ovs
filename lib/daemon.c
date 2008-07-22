@@ -52,12 +52,16 @@ static char *pidfile;
 /* Sets up a following call to daemonize() to create a pidfile named 'name'.
  * If 'name' begins with '/', then it is treated as an absolute path.
  * Otherwise, it is taken relative to RUNDIR, which is $(prefix)/var/run by
- * default. */
+ * default.
+ *
+ * If 'name' is null, then program_name followed by ".pid" is used. */
 void
 set_pidfile(const char *name)
 {
     free(pidfile);
-    pidfile = *name == '/' ? xstrdup(name) : xasprintf("%s/%s", RUNDIR, name);
+    pidfile = (!name ? xasprintf("%s/%s.pid", RUNDIR, program_name)
+               : *name == '/' ? xstrdup(name)
+               : xasprintf("%s/%s", RUNDIR, name));
 }
 
 /* Sets up a following call to daemonize() to detach from the foreground

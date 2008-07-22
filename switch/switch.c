@@ -200,7 +200,7 @@ parse_options(int argc, char *argv[])
             break;
 
         case 'P':
-            set_pidfile(optarg ? optarg : "switch.pid");
+            set_pidfile(optarg);
             break;
 
         case 'v':

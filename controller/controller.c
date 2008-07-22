@@ -253,7 +253,7 @@ parse_options(int argc, char *argv[])
             break;
 
         case 'P':
-            set_pidfile(optarg ? optarg : "controller.pid");
+            set_pidfile(optarg);
             break;
 
         case 'H':
