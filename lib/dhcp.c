@@ -383,7 +383,6 @@ dhcp_option_to_string(const struct dhcp_option *opt, int code, struct ds *ds)
     const struct arg_type *type = &types[class->type];
     size_t offset;
 
-    ds_put_char(ds, ' ');
     if (class->name) {
         const char *cp;
         for (cp = class->name; *cp; cp++) {
@@ -480,20 +479,25 @@ dhcp_option_to_string(const struct dhcp_option *opt, int code, struct ds *ds)
     return ds_cstr(ds);
 }
 
-/* Replaces 'ds' by a string representation of 'msg'. */
+/* Replaces 'ds' by a string representation of 'msg'.  If 'multiline' is
+ * false, 'ds' receives a single-line representation of 'msg', otherwise a
+ * multiline representation. */
 const char *
-dhcp_msg_to_string(const struct dhcp_msg *msg, struct ds *ds)
+dhcp_msg_to_string(const struct dhcp_msg *msg, bool multiline, struct ds *ds)
 {
+    char separator = multiline ? '\n' : ' ';
     int code;
 
     ds_clear(ds);
-    ds_put_format(ds, "%s %s xid=%08"PRIx32" secs=%"PRIu16,
+    ds_put_format(ds, "%s%c%s%cxid=%08"PRIx32"%csecs=%"PRIu16,
                   (msg->op == DHCP_BOOTREQUEST ? "BOOTREQUEST"
                    : msg->op == DHCP_BOOTREPLY ? "BOOTREPLY"
                    : "<<bad DHCP op>>"),
-                  dhcp_type_name(msg->type), msg->xid, msg->secs);
+                  separator, dhcp_type_name(msg->type),
+                  separator, msg->xid,
+                  separator, msg->secs);
     if (msg->flags) {
-        ds_put_cstr(ds, " flags=");
+        ds_put_format(ds, "%cflags=", separator);
         if (msg->flags & DHCP_FLAGS_BROADCAST) {
             ds_put_cstr(ds, "[BROADCAST]");
         }
@@ -502,24 +506,29 @@ dhcp_msg_to_string(const struct dhcp_msg *msg, struct ds *ds)
         }
     }
     if (msg->ciaddr) {
-        ds_put_format(ds, " ciaddr="IP_FMT, IP_ARGS(&msg->ciaddr));
+        ds_put_format(ds, "%cciaddr="IP_FMT, separator, IP_ARGS(&msg->ciaddr));
     }
     if (msg->yiaddr) {
-        ds_put_format(ds, " yiaddr="IP_FMT, IP_ARGS(&msg->yiaddr));
+        ds_put_format(ds, "%cyiaddr="IP_FMT, separator, IP_ARGS(&msg->yiaddr));
     }
     if (msg->siaddr) {
-        ds_put_format(ds, " siaddr="IP_FMT, IP_ARGS(&msg->siaddr));
+        ds_put_format(ds, "%csiaddr="IP_FMT, separator, IP_ARGS(&msg->siaddr));
     }
     if (msg->giaddr) {
-        ds_put_format(ds, " giaddr="IP_FMT, IP_ARGS(&msg->giaddr));
+        ds_put_format(ds, "%cgiaddr="IP_FMT, separator, IP_ARGS(&msg->giaddr));
     }
-    ds_put_format(ds, " chaddr="ETH_ADDR_FMT, ETH_ADDR_ARGS(msg->chaddr));
+    ds_put_format(ds, "%cchaddr="ETH_ADDR_FMT,
+                  separator, ETH_ADDR_ARGS(msg->chaddr));
 
     for (code = 0; code < DHCP_N_OPTIONS; code++) {
         const struct dhcp_option *opt = &msg->options[code];
         if (opt->data) {
+            ds_put_char(ds, separator);
             dhcp_option_to_string(opt, code, ds);
         }
+    }
+    if (multiline) {
+        ds_put_char(ds, separator);
     }
     return ds_cstr(ds);
 }
@@ -693,7 +702,7 @@ error:
         VLOG_DBG("invalid DHCP message dump:\n%s", ds_cstr(&ds));
 
         ds_clear(&ds);
-        dhcp_msg_to_string(msg, &ds);
+        dhcp_msg_to_string(msg, false, &ds);
         VLOG_DBG("partially dissected DHCP message: %s", ds_cstr(&ds));
 
         ds_destroy(&ds);

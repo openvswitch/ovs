@@ -267,7 +267,8 @@ bool dhcp_msg_get_uint16(const struct dhcp_msg *, int code,
                          size_t offset, uint16_t *);
 const char *dhcp_option_to_string(const struct dhcp_option *, int code,
                                   struct ds *);
-const char *dhcp_msg_to_string(const struct dhcp_msg *, struct ds *);
+const char *dhcp_msg_to_string(const struct dhcp_msg *, bool multiline,
+                               struct ds *);
 int dhcp_parse(struct dhcp_msg *, const struct buffer *);
 void dhcp_assemble(const struct dhcp_msg *, struct buffer *);
 
