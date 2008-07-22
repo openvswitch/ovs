@@ -214,7 +214,6 @@ dhclient_init(struct dhclient *cli, uint32_t requested_ip)
 {
     state_transition(cli, requested_ip ? S_INIT_REBOOT : S_INIT);
     cli->ipaddr = requested_ip;
-    cli->changed = true;
     cli->min_timeout = 0;
     cli->init_delay = 0;
 }
@@ -230,6 +229,7 @@ dhclient_release(struct dhclient *cli)
         msg.ciaddr = cli->ipaddr;
         do_send_msg(cli, &msg);
         dhcp_msg_uninit(&msg);
+        cli->changed = true;
     }
     state_transition(cli, S_RELEASED);
     cli->min_timeout = UINT_MAX;
