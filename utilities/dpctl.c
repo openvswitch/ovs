@@ -127,10 +127,9 @@ parse_options(int argc, char *argv[])
 
     for (;;) {
         unsigned long int timeout;
-        int indexptr;
         int c;
 
-        c = getopt_long(argc, argv, short_options, long_options, &indexptr);
+        c = getopt_long(argc, argv, short_options, long_options, NULL);
         if (c == -1) {
             break;
         }
