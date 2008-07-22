@@ -89,8 +89,8 @@ main(int argc, char *argv[])
         if (dhclient_changed(cli)) {
             dhclient_configure_netdev(cli);
         }
-        fatal_signal_unblock();
         dhclient_wait(cli);
+        fatal_signal_unblock();
         poll_block();
     }
 }
