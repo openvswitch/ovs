@@ -43,7 +43,7 @@
 #include "util.h"
 
 /* Signals to catch. */
-static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP };
+static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM };
 
 /* Signals to catch as a sigset_t. */
 static sigset_t fatal_signal_set;
