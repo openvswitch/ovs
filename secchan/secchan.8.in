@@ -160,8 +160,8 @@ has started up.  Thus, start \fBsecchan\fR without configuring
 When \fBsecchan\fR performs controller discovery (see \fBCONTACTING
 THE CONTROLLER\fR, above, for more information about controller
 discovery), it validates the controller location obtained via DHCP
-with a regular expression.  Only controllers whose names match the
-regular expression will be accepted.
+with a POSIX extended regular expression.  Only controllers whose
+names match the regular expression will be accepted.
 
 The default regular expression is \fBssl:.*\fR (meaning that only SSL
 controller connections will be accepted) when any of the SSL
@@ -322,6 +322,7 @@ Prints version information to the console.
 .SH "SEE ALSO"
 
 .BR dpctl (8),
+.BR ofp-discover (8),
 .BR controller (8),
 .BR ofp-pki (8),
 .BR vlogconf (8),

@@ -76,6 +76,7 @@ enum vlog_facility vlog_get_facility_val(const char *name);
         VLOG_MODULE(mac_learning)               \
         VLOG_MODULE(netdev)                     \
         VLOG_MODULE(netlink)                    \
+        VLOG_MODULE(ofp_discover)               \
         VLOG_MODULE(poll_loop)                  \
         VLOG_MODULE(secchan)                    \
         VLOG_MODULE(rconn)                      \

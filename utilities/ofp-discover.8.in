@@ -1,0 +1,131 @@
+.TH ofp\-discover 8 "May 2008" "OpenFlow" "OpenFlow Manual"
+
+.SH NAME
+ofp\-discover \- controller discovery utility
+
+.SH SYNOPSIS
+.B ofp\-discover
+[\fIoptions\fR] \fInetdev\fR [\fInetdev\fR...]
+
+.SH DESCRIPTION
+The \fBofp\-discover\fR program attempts to discover the location of
+an OpenFlow controller on one of the network devices listed on the
+command line.  It repeatedly broadcasts a DHCP request with vendor
+class identifier \fBOpenFlow\fR on each network device until it
+receives an acceptable DHCP response.  It will accept any valid DHCP
+reply that has the same vendor class identifier and includes a
+vendor-specific option with code 1 whose contents are a string
+specifying the location of the controller in the same format used on
+the \fBsecchan\fR command line (e.g. \fBssl:192.168.0.1\fR).
+
+When \fBofp\-discover\fR receives an acceptable response, it prints
+the details of the response on \fBstdout\fR.  Then, by default, it
+configures the network device on which the response was received with
+the received IP address, netmask, and default gateway, and detaches
+itself to the background.
+
+.SH OPTIONS
+.TP
+\fB--accept-vconn=\fIregex\fR
+By default, \fBofp\-discover\fR accepts any controller location
+advertised over DHCP.  With this option, only controllers whose names
+match POSIX extended regular expression \fIregex\fR will be accepted.
+Specifying \fBssl:.*\fR for \fIregex\fR, for example, would cause only
+SSL controller connections to be accepted.
+
+The \fIregex\fR is implicitly anchored at the beginning of the
+controller location string, as if it begins with \fB^\fR.
+
+.TP
+\fB--exit-without-bind\fR
+By default, \fBofp\-discover\fR binds the network device that receives
+the first acceptable response to the IP address received over DHCP.
+With this option, the configuration of the network device is not
+changed at all, except to bring it up if it is initially down, and
+\fBofp\-discover\fR will exit immediately after it receives an
+acceptable DHCP response.
+
+This option is mutually exclusive with \fB--exit-after-bind\fR and
+\fB--no-detach\fR.
+
+.TP
+\fB--exit-after-bind\fR
+By default, after it receives an acceptable DHCP response,
+\fBofp\-discover\fR detaches itself from the foreground session and
+runs in the background maintaining the DHCP lease as necessary.  With
+this option, \fBofp\-discover\fR will exit immediately after it
+receives an acceptable DHCP response and configures the network device
+with the received IP address.  The address obtained via DHCP could
+therefore be used past the expiration of its lease.
+
+This option is mutually exclusive with \fB--exit-without-bind\fR and
+\fB--no-detach\fR.
+
+.TP
+\fB--no-detach\fR
+By default, \fBofp\-discover\fR runs in the foreground until it obtains
+an acceptable DHCP response, then it detaches itself from the
+foreground session and run as a background process.  This option
+prevents \fBofp\-discover\fR from detaching, causing it to run in the
+foreground even after it obtains a DHCP response.
+
+This option is mutually exclusive with \fB--exit-without-bind\fR and
+\fB--exit-after-bind\fR.
+
+.TP
+\fB-P\fR[\fIpidfile\fR], \fB--pidfile\fR[\fB=\fIpidfile\fR]
+Causes a file (by default, \fBofp\-discover.pid\fR) to be created indicating
+the PID of the running process.  If \fIpidfile\fR is not specified, or
+if it does not begin with \fB/\fR, then it is created in
+\fB@rundir@\fR.
+
+The \fIpidfile\fR is created when \fBofp\-discover\fR detaches, so
+this this option has no effect when one of \fB--exit-without-bind\fR,
+\fB--exit-after-bind\fR, or \fB--no-detach\fR is also given.
+
+.TP
+.BR \-h ", " \-\^\-help
+Prints a brief help message to the console.
+
+.TP
+\fB-v\fR \fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]], \fB--verbose=\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]
+Sets the logging level for \fImodule\fR in \fIfacility\fR to
+\fIlevel\fR.  The \fImodule\fR may be any valid module name (as
+displayed by the \fB--list\fR action on \fBvlogconf\fR(8)), or the
+special name \fBANY\fR to set the logging levels for all modules.  The
+\fIfacility\fR may be \fBsyslog\fR or \fBconsole\fR to set the levels
+for logging to the system log or to the console, respectively, or
+\fBANY\fR to set the logging levels for both facilities.  If it is
+omitted, \fIfacility\fR defaults to \fBANY\fR.  The \fIlevel\fR must
+be one of \fBemer\fR, \fBerr\fR, \fBwarn\fR, or \fBdbg\fR, designating
+the minimum severity of a message for it to be logged.  If it is
+omitted, \fIlevel\fR defaults to \fBdbg\fR.
+
+.TP
+\fB-v\fR, \fB--verbose\fR
+Sets the maximum logging verbosity level, equivalent to
+\fB--verbose=ANY:ANY:dbg\fR.
+
+.TP
+.BR \-V ", " \-\^\-version
+Prints version information to the console.
+
+.SH BUGS
+
+If the network devices specified on the command line have been added
+to an OpenFlow switch with \fBdpctl addif\fR, then controller
+discovery will fail because \fBofp\-discover\fR will not be able to
+see DHCP responses, even though tools such as \fBtcpdump\fR(8) and
+\fBwireshark\fR(1) can see them on the wire.  This is because of the
+structure of the Linux kernel networking stack, which hands packets
+first to programs that listen for all arriving packets, then to
+OpenFlow, then to programs that listen for a specific kind of packet.
+OpenFlow consumes all the packets handed to it, so tools like
+\fBtcpdump\fR that look at all packets will see packets arriving on
+OpenFlow interfaces, but \fRofp\-discover\fR, which listens only for
+arriving IP packets, will not.
+
+.SH "SEE ALSO"
+
+.BR secchan (8),
+.BR ofp-pki (8)
