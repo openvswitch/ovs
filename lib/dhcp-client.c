@@ -731,7 +731,7 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
         buffer_clear(&b);
         error = netdev_recv(cli->netdev, &b);
         if (error) {
-            break;
+            goto drained;
         }
 
         flow_extract(&b, 0, &flow);
@@ -766,6 +766,7 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
         }
     }
     netdev_drain(cli->netdev);
+drained:
     buffer_uninit(&b);
     return false;
 }
