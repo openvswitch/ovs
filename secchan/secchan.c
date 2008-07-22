@@ -297,6 +297,7 @@ main(int argc, char *argv[])
             }
             dhclient_run(dhcp);
             if (dhclient_changed(dhcp)) {
+                dhclient_configure_netdev(dhcp);
                 free(controller_name);
                 if (dhclient_is_bound(dhcp)) {
                     controller_name = dhcp_msg_get_string(

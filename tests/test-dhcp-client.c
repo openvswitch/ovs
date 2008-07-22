@@ -86,6 +86,9 @@ main(int argc, char *argv[])
     for (;;) {
         fatal_signal_block();
         dhclient_run(cli);
+        if (dhclient_changed(cli)) {
+            dhclient_configure_netdev(cli);
+        }
         fatal_signal_unblock();
         dhclient_wait(cli);
         poll_block();
@@ -97,6 +100,9 @@ release(void *cli_)
 {
     struct dhclient *cli = cli_;
     dhclient_release(cli);
+    if (dhclient_changed(cli)) {
+        dhclient_configure_netdev(cli);
+    }
 }
 
 static void

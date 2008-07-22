@@ -39,6 +39,7 @@
 
 struct dhclient;
 struct dhcp_msg;
+struct netdev;
 int dhclient_create(const char *netdev,
                     void (*modify_request)(struct dhcp_msg *, void *aux),
                     bool (*validate_offer)(const struct dhcp_msg *, void *aux),
@@ -53,7 +54,10 @@ bool dhclient_changed(struct dhclient *);
 
 uint32_t dhclient_get_ip(const struct dhclient *);
 uint32_t dhclient_get_netmask(const struct dhclient *);
+uint32_t dhclient_get_router(const struct dhclient *);
 const struct dhcp_msg *dhclient_get_config(const struct dhclient *);
+
+int dhclient_configure_netdev(struct dhclient *);
 
 void dhclient_run(struct dhclient *);
 void dhclient_wait(struct dhclient *);

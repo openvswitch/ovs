@@ -164,7 +164,6 @@ dhclient_create(const char *netdev_name,
                 bool (*validate_offer)(const struct dhcp_msg *, void *aux),
                 void *aux, struct dhclient **cli_)
 {
-    struct in_addr any = { INADDR_ANY };
     struct dhclient *cli;
     struct netdev *netdev;
     int error;
@@ -179,9 +178,9 @@ dhclient_create(const char *netdev_name,
         return error;
     }
 
-    error = netdev_set_in4(netdev, any, any);
+    error = netdev_turn_flags_on(netdev, NETDEV_UP, false);
     if (error) {
-        VLOG_ERR("could not remove IPv4 address from %s network device: %s",
+        VLOG_ERR("could not bring %s device up: %s",
                  netdev_name, strerror(error));
         netdev_close(netdev);
         return error;
@@ -229,7 +228,6 @@ dhclient_release(struct dhclient *cli)
         msg.ciaddr = cli->ipaddr;
         do_send_msg(cli, &msg);
         dhcp_msg_uninit(&msg);
-        cli->changed = true;
     }
     state_transition(cli, S_RELEASED);
     cli->min_timeout = UINT_MAX;
@@ -320,6 +318,14 @@ dhclient_get_netmask(const struct dhclient *cli)
     return dhclient_is_bound(cli) ? cli->netmask : 0;
 }
 
+/* If 'cli' is bound to an IP address and 'cli' has a default gateway, returns
+ * that default gateway; otherwise, returns 0. */
+uint32_t
+dhclient_get_router(const struct dhclient *cli)
+{
+    return dhclient_is_bound(cli) ? cli->router : 0;
+}
+
 /* If 'cli' is bound to an IP address, returns the DHCP message that was
  * received to obtain that IP address (so that the caller can obtain additional
  * options from it).  Otherwise, returns a null pointer. */
@@ -327,6 +333,48 @@ const struct dhcp_msg *
 dhclient_get_config(const struct dhclient *cli)
 {
     return dhclient_is_bound(cli) ? cli->binding : NULL;
+}
+
+/* Configures the network device backing 'cli' to the network address and other
+ * parameters obtained via DHCP.  If no address is bound on 'cli', removes any
+ * configured address from 'cli'.
+ *
+ * To use a dhclient as a regular DHCP client that binds and unbinds from IP
+ * addresses in the usual fashion, call this function after dhclient_run() if
+ * anything has changed, like so:
+ *
+ * dhclient_run(cli);
+ * if (dhclient_changed(cli)) {
+ *     dhclient_configure_netdev(cli);
+ * }
+ *
+ */
+int
+dhclient_configure_netdev(struct dhclient *cli)
+{
+    struct in_addr addr = { dhclient_get_ip(cli) };
+    struct in_addr mask = { dhclient_get_netmask(cli) };
+    struct in_addr router = { dhclient_get_router(cli) };
+    int error;
+
+    error = netdev_set_in4(cli->netdev, addr, mask);
+    if (error) {
+        VLOG_ERR("could not set %s address "IP_FMT"/"IP_FMT": %s",
+                 netdev_get_name(cli->netdev),
+                 IP_ARGS(&addr.s_addr), IP_ARGS(&mask.s_addr),
+                 strerror(error));
+    }
+
+    if (!error && router.s_addr) {
+        error = netdev_add_router(cli->netdev, router);
+        if (error) {
+            VLOG_ERR("failed to add default route to "IP_FMT" on %s: %s",
+                     IP_ARGS(&router), netdev_get_name(cli->netdev),
+                     strerror(error));
+        }
+    }
+
+    return error;
 }
 
 /* DHCP protocol. */
@@ -598,45 +646,23 @@ state_transition(struct dhclient *cli, enum dhclient_state state)
     cli->retransmit = cli->delay = 0;
     am_bound = dhclient_is_bound(cli);
     if (was_bound != am_bound) {
-        struct in_addr addr, mask;
-        int error;
-
         cli->changed = true;
         if (am_bound) {
-            VLOG_WARN("%s: binding to "IP_FMT"/"IP_FMT,
+            assert(cli->binding != NULL);
+            VLOG_WARN("%s: obtained address "IP_FMT", netmask "IP_FMT,
                       netdev_get_name(cli->netdev),
                       IP_ARGS(&cli->ipaddr), IP_ARGS(&cli->netmask));
-            addr.s_addr = cli->ipaddr;
-            mask.s_addr = cli->netmask;
-        } else {
-            VLOG_WARN("%s: unbinding IPv4 network address",
-                      netdev_get_name(cli->netdev));
-            addr.s_addr = mask.s_addr = INADDR_ANY;
-        }
-        error = netdev_set_in4(cli->netdev, addr, mask);
-        if (error) {
-            VLOG_ERR("could not set %s address "IP_FMT"/"IP_FMT": %s",
-                     netdev_get_name(cli->netdev),
-                     IP_ARGS(&addr.s_addr), IP_ARGS(&mask.s_addr),
-                     strerror(error));
-        }
-        if (am_bound && !error && cli->router) {
-            struct in_addr router = { cli->router };
-            error = netdev_add_router(cli->netdev, router);
-            VLOG_WARN("%s: configuring router "IP_FMT,
-                      netdev_get_name(cli->netdev), IP_ARGS(cli->router));
-            if (error) {
-                VLOG_ERR("failed to add default route to "IP_FMT" on %s: %s",
-                         IP_ARGS(&router), netdev_get_name(cli->netdev),
-                         strerror(error));
+            if (cli->router) {
+                VLOG_WARN("%s: obtained default gateway "IP_FMT,
+                          netdev_get_name(cli->netdev), IP_ARGS(&cli->router));
             }
-        }
-        if (am_bound) {
-            assert(cli->binding != NULL);
         } else {
             dhcp_msg_uninit(cli->binding);
             free(cli->binding);
             cli->binding = NULL;
+
+            VLOG_WARN("%s: network address unbound",
+                      netdev_get_name(cli->netdev));
         }
     }
     if (cli->state & (S_SELECTING | S_REQUESTING | S_REBOOTING)) {
