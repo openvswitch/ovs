@@ -642,8 +642,10 @@ state_transition(struct dhclient *cli, enum dhclient_state state)
 {
     bool was_bound = dhclient_is_bound(cli);
     bool am_bound;
-    VLOG_DBG("entering %s", state_name(state));
-    cli->state = state;
+    if (cli->state != state) {
+        VLOG_DBG("entering %s", state_name(state)); 
+        cli->state = state;
+    }
     cli->state_entered = time(0);
     cli->retransmit = cli->delay = 0;
     am_bound = dhclient_is_bound(cli);
@@ -700,7 +702,6 @@ dhclient_msg_init(struct dhclient *cli, enum dhcp_msg_type type,
     msg->secs = cli->secs;
     msg->type = type;
     memcpy(msg->chaddr, netdev_get_etheraddr(cli->netdev), ETH_ADDR_LEN);
-    
 }
 
 static unsigned int
