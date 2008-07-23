@@ -70,7 +70,7 @@ endif
 
 kdist_clean:
 	dh_clean
-	make KERNELDIR=$(KSRC) KVERREL=$(KVERS) clean
+	rm -rf openflow
 
 kdist_config: prep-deb-files
 
