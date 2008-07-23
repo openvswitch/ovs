@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: openflow-dev@lists.stanford.edu\n"
-"POT-Creation-Date: 2008-07-23 10:15-0700\n"
+"POT-Creation-Date: 2008-07-23 14:55-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -101,63 +101,75 @@ msgid ""
 "configure the IP or IPv6 from these network devices."
 msgstr ""
 
-#. Type: boolean
-#. Description
+#. Type: select
+#. Choices
 #: ../openflow-switch.templates:4001
-msgid "Discover Controller Automatically?"
+msgid "discovery, in-band, out-of-band"
 msgstr ""
 
-#. Type: boolean
+#. Type: select
 #. Description
-#: ../openflow-switch.templates:4001
+#: ../openflow-switch.templates:4002
+msgid "Switch-to-controller access method:"
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:4002
 msgid ""
-"If the OpenFlow network includes a DHCP server that is configured "
-"appropriately, then the controller and PKI server can be discovered "
-"automatically."
+"The OpenFlow switch must be able to contact the OpenFlow controller over the "
+"network.  It can do so in one of three ways:"
 msgstr ""
 
-#. Type: boolean
+#. Type: select
 #. Description
-#: ../openflow-switch.templates:4001
-msgid "Controller discovery may take up to 30 seconds.  Please be patient."
+#: ../openflow-switch.templates:4002
+msgid ""
+"discovery: A single network is used for OpenFlow traffic and other data "
+"traffic; that is, the switch contacts the controller over one of the network "
+"devices selected as OpenFlow switch network devices in the previous "
+"question.  The switch automatically determines the location of the "
+"controller using a DHCP request with an OpenFlow-specific vendor option.  "
+"This is the most common case."
 msgstr ""
 
-#. Type: boolean
+#. Type: select
 #. Description
-#: ../openflow-switch.templates:4001
+#: ../openflow-switch.templates:4002
+msgid ""
+"in-band: As above, but the location of the controller is manually configured."
+msgstr ""
+
+#. Type: select
+#. Description
+#: ../openflow-switch.templates:4002
+msgid ""
+"out-of-band: OpenFlow traffic uses a network separate from the data traffic "
+"that it controls.  If this is the case, the control network must already be "
+"configured on a network device other than one of those selected as an "
+"OpenFlow switch netdev in the previous question."
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../openflow-switch.templates:5001
+msgid "Preparing to discover controller."
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../openflow-switch.templates:5001
+msgid ""
+"The setup program will now attempt to discover the OpenFlow controller. "
+"Controller discovery may take up to 30 seconds.  Please be patient."
+msgstr ""
+
+#. Type: note
+#. Description
+#: ../openflow-switch.templates:5001
 msgid ""
 "See secchan(8) for instructions on how to configure a DHCP server for "
 "controller discovery."
-msgstr ""
-
-#. Type: boolean
-#. Description
-#: ../openflow-switch.templates:5001
-msgid "Use discovered settings?"
-msgstr ""
-
-#. Type: boolean
-#. Description
-#: ../openflow-switch.templates:5001
-msgid "Controller discovery obtained the following settings:"
-msgstr ""
-
-#. Type: boolean
-#. Description
-#: ../openflow-switch.templates:5001
-msgid "Controller location: ${controller-vconn}"
-msgstr ""
-
-#. Type: boolean
-#. Description
-#: ../openflow-switch.templates:5001
-msgid "PKI URL: ${pki-uri}"
-msgstr ""
-
-#. Type: boolean
-#. Description
-#: ../openflow-switch.templates:5001
-msgid "Please verify that these settings are correct."
 msgstr ""
 
 #. Type: error
@@ -180,44 +192,34 @@ msgid ""
 "for instructions on how to configure a DHCP server for controller discovery."
 msgstr ""
 
-#. Type: select
-#. Choices
+#. Type: boolean
+#. Description
 #: ../openflow-switch.templates:7001
-msgid "in-band, out-of-band"
+msgid "Use discovered settings?"
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openflow-switch.templates:7002
-msgid "Switch-to-controller access method:"
+#: ../openflow-switch.templates:7001
+msgid "Controller discovery obtained the following settings:"
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openflow-switch.templates:7002
-msgid ""
-"The OpenFlow switch must be able to contact the OpenFlow controller over the "
-"network.  It can do so in one of two ways:"
+#: ../openflow-switch.templates:7001
+msgid "Controller location: ${controller-vconn}"
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openflow-switch.templates:7002
-msgid ""
-"in-band: A single network is used for OpenFlow traffic and other data "
-"traffic; that is, the switch contacts the controller over one of the network "
-"devices selected as OpenFlow switch netdevs in the previous question.  This "
-"is the most common case."
+#: ../openflow-switch.templates:7001
+msgid "PKI URL: ${pki-uri}"
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openflow-switch.templates:7002
-msgid ""
-"out-of-band: OpenFlow traffic uses a network separate from the data traffic "
-"that it controls.  If this is the case, the control network must already be "
-"configured on a network device other than one of those selected as an "
-"OpenFlow switch netdev in the previous question."
+#: ../openflow-switch.templates:7001
+msgid "Please verify that these settings are correct."
 msgstr ""
 
 #. Type: string
