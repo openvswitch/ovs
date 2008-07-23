@@ -34,6 +34,7 @@
 #ifndef DAEMON_H
 #define DAEMON_H 1
 
+char *make_pidfile_name(const char *name);
 void set_pidfile(const char *name);
 void set_detach(void);
 void daemonize(void);

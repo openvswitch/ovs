@@ -50,6 +50,16 @@ static bool detach;
 /* Name of pidfile (null if none). */
 static char *pidfile;
 
+/* Returns the file name that would be used for a pidfile if 'name' were
+ * provided to set_pidfile().  The caller must free the returned string. */
+char *
+make_pidfile_name(const char *name) 
+{
+    return (!name ? xasprintf("%s/%s.pid", RUNDIR, program_name)
+            : *name == '/' ? xstrdup(name)
+            : xasprintf("%s/%s", RUNDIR, name));
+}
+
 /* Sets up a following call to daemonize() to create a pidfile named 'name'.
  * If 'name' begins with '/', then it is treated as an absolute path.
  * Otherwise, it is taken relative to RUNDIR, which is $(prefix)/var/run by
@@ -60,9 +70,7 @@ void
 set_pidfile(const char *name)
 {
     free(pidfile);
-    pidfile = (!name ? xasprintf("%s/%s.pid", RUNDIR, program_name)
-               : *name == '/' ? xstrdup(name)
-               : xasprintf("%s/%s", RUNDIR, name));
+    pidfile = make_pidfile_name(name);
 }
 
 /* Sets up a following call to daemonize() to detach from the foreground
