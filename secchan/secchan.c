@@ -666,6 +666,10 @@ validate_dhcp_offer(const struct dhcp_msg *msg, void *aux)
         return false;
     }
     accept = !regexec(&accept_controller_regex, vconn_name, 0, NULL, 0);
+    if (!accept) {
+        VLOG_WARN("rejecting controller vconn that fails to match %s",
+                  accept_controller_re);
+    }
     free(vconn_name);
     return accept;
 }
