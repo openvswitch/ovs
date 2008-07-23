@@ -50,8 +50,14 @@ running_pid()
     [ ! -d /proc/$pid ] &&  return 1
     cmd=`cat /proc/$pid/cmdline | tr "\000" "\n"|head -n 1 |cut -d : -f 1`
     # Is this the expected child?
-    [ "$cmd" != "$name" ] &&  return 1
-    return 0
+    case $cmd in
+        $name|*/$name)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 running()
