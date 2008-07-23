@@ -61,21 +61,7 @@ if (-e $default) {
 }
 
 my $cacert_preverified = -e $cacert_file;
-
-if (! -e $privkey_file) {
-    my $old_umask = umask(077);
-    run_cmd("ofp-pki req $etc/of0 >&2 2>/dev/null");
-    chmod(0644, $req_file) or die "$req_file: chmod: $!\n";
-    umask($old_umask);
-}
-
 my ($req, $req_fingerprint);
-if (! -e $cert_file) {
-    open(REQ, '<', $req_file) or die "$req_file: open: $!\n";
-    $req = join('', <REQ>);
-    close(REQ);
-    $req_fingerprint = sha1_hex($req);
-}
 
 my %options;
 
@@ -201,6 +187,24 @@ my (@states) =
            db_input('controller-vconn-error');
            db_go();
        }
+   },
+   sub {
+       return 'skip' if !ssl_enabled();
+
+       if (! -e $privkey_file) {
+           my $old_umask = umask(077);
+           run_cmd("ofp-pki req $etc/of0 >&2 2>/dev/null");
+           chmod(0644, $req_file) or die "$req_file: chmod: $!\n";
+           umask($old_umask);
+       }
+
+       if (! -e $cert_file) {
+           open(REQ, '<', $req_file) or die "$req_file: open: $!\n";
+           $req = join('', <REQ>);
+           close(REQ);
+           $req_fingerprint = sha1_hex($req);
+       }
+       return 'skip';
    },
    sub {
        return 'skip' if !ssl_enabled();

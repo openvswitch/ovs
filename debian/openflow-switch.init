@@ -120,6 +120,9 @@ configure_ssl() {
             echo "$CACERT: CA certificate missing" >&2
         fi
         echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
+        if test "$MODE" = discovery; then
+            echo "You may also delete or rename $PRIVKEY to disable SSL requirement" >&2
+        fi
         exit 1
     fi
     SSL_OPTS="--private-key=$PRIVKEY --certificate=$CERT --ca-cert=$CACERT"
