@@ -108,6 +108,23 @@ check_op() {
     fi
 }
 
+configure_ssl() {
+    if test ! -e "$PRIVKEY" || test ! -e "$CERT" || test ! -e "$CACERT"; then
+        if test ! -e "$PRIVKEY"; then
+            echo "$PRIVKEY: private key missing" >&2
+        fi
+        if test ! -e "$CERT"; then
+            echo "$CERT: certificate for private key missing" >&2
+        fi
+        if test ! -e "$CACERT"; then
+            echo "$CACERT: CA certificate missing" >&2
+        fi
+        echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
+        exit 1
+    fi
+    SSL_OPTS="--private-key=$PRIVKEY --certificate=$CERT --ca-cert=$CACERT"
+}
+
 case "$1" in
     start)
         if test -z "$NETDEVS"; then
@@ -115,40 +132,36 @@ case "$1" in
             echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
             exit 0
         fi
-        if test -z "$CONTROLLER"; then
-            echo "$default: No controller configured, switch disabled" >&2
-            echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
-            exit 0
-        fi
-        if test "$IN_BAND" != yes && test "$IN_BAND" != no; then
-            echo "$default: IN_BAND must set to 'yes' or 'no'" >&2
+        if test "$MODE" = discovery; then
+            unset CONTROLLER
+        elif test "$MODE" = in-band || test "$MODE" = out-of-band; then
+            if test -z "$CONTROLLER"; then
+                echo "$default: No controller configured and not configured for discovery, switch disabled" >&2
+                echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
+                exit 0
+            fi
+        else
+            echo "$default: MODE must set to 'discovery', 'in-band', or 'out-of-band'" >&2
             echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
             exit 1
         fi
+        : ${PRIVKEY:=/etc/openflow-switch/of0-privkey.pem}
+        : ${CERT:=/etc/openflow-switch/of0-cert.pem}
+        : ${CACERT:=/etc/openflow-switch/cacert.pem}
         case $CONTROLLER in
+            '')
+                # Discovery mode.
+                if test -e "$PRIVKEY"; then
+                    configure_ssl
+                fi
+                ;;
             tcp:*)
                 ;;
             ssl:*)
-                : ${PRIVKEY:=/etc/openflow-switch/of0-privkey.pem}
-                : ${CERT:=/etc/openflow-switch/of0-cert.pem}
-                : ${CACERT:=/etc/openflow-switch/cacert.pem}
-                if test ! -e "$PRIVKEY" || test ! -e "$CERT" ||
-                    test ! -e "$CACERT"; then
-                    if test ! -e "$PRIVKEY"; then
-                        echo "$PRIVKEY: private key missing" >&2
-                    fi
-                    if test ! -e "$CERT"; then
-                        echo "$CERT: certificate for private key missing" >&2
-                    fi
-                    if test ! -e "$CACERT"; then
-                        echo "$CACERT: CA certificate missing" >&2
-                    fi
-                    echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
-                    exit 1
-                fi
+                configure_ssl
                 ;;
             *)
-                echo "$default: CONTROLLER must be in the form 'ssl:HOST[:PORT]' or 'tcp:HOST[:PORT]'" >&2
+                echo "$default: CONTROLLER must be in the form 'ssl:HOST[:PORT]' or 'tcp:HOST[:PORT]' when not in discovery mode" >&2
                 echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
                 exit 1
         esac
@@ -174,7 +187,7 @@ case "$1" in
             must_succeed "Adding $netdev to datapath" dpctl addif nl:0 $netdev
         done
 
-        if test "$IN_BAND" = yes; then
+        if test "$MODE" = in-band; then
             if test "$SWITCH_IP" = dhcp; then
                 must_succeed "Temporarily disabling of0" ifconfig of0 down
             else
@@ -194,7 +207,7 @@ case "$1" in
             echo " ERROR."
         fi
 
-        if test "$IN_BAND" = yes && test "$SWITCH_IP" = dhcp; then
+        if test "$MODE" = in-band && test "$SWITCH_IP" = dhcp; then
             echo -n "Starting dhclient on of0: "
 	    start-stop-daemon --start --quiet --pidfile $DHCLIENT_PIDFILE \
 		--exec /sbin/dhclient -- -q -pf $DHCLIENT_PIDFILE of0

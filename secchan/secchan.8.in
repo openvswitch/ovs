@@ -76,6 +76,12 @@ vendor-specific option with code 1 whose contents are a string
 specifying the location of the controller in the same format used on
 the \fBsecchan\fR command line (e.g. \fBssl:192.168.0.1\fR).
 
+The DHCP reply may also, optionally, include a vendor-specific option
+with code 2 whose contents are a string specifying the URI to the base
+of the OpenFlow PKI (e.g. \fBhttp://192.168.0.1/openflow/pki\fR).
+This URI is used only for bootstrapping the OpenFlow PKI at initial
+switch setup; \fBsecchan\fR does not use it at all.
+
 The following ISC DHCP server configuration file assigns the IP
 address range 192.168.0.20 through 192.168.0.30 to OpenFlow switches
 that follow the switch protocol and addresses 192.168.0.1 through
@@ -89,6 +95,8 @@ option space openflow;
 .br
 option openflow.controller-vconn code 1 = text;
 .br
+option openflow.pki-uri code 2 = text;
+.br
 class "OpenFlow" {
 .br
   match if option vendor-class-identifier = "OpenFlow";
@@ -96,6 +104,8 @@ class "OpenFlow" {
   vendor-option-space openflow;
 .br
   option openflow.controller-vconn "tcp:192.168.0.10";
+.br
+  option openflow.pki-uri "http://192.168.0.10/openflow/pki";
 .br
   option vendor-class-identifier "OpenFlow";
 .br

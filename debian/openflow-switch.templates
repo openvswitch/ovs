@@ -35,23 +35,58 @@ _Description: Some Network Devices Have IP or IPv6 Addresses
  If this is an unintentional mistake, move back and fix the selection,
  or de-configure the IP or IPv6 from these network devices.
 
-Template: openflow-switch/band
+Template: openflow-switch/mode
 Type: select
-_Choices: in-band, out-of-band
-Default: in-band
+_Choices: discovery, in-band, out-of-band
+Default: discovery
 _Description: Switch-to-controller access method:
  The OpenFlow switch must be able to contact the OpenFlow controller over
- the network.  It can do so in one of two ways:
+ the network.  It can do so in one of three ways:
  .
- in-band: A single network is used for OpenFlow traffic and other data
- traffic; that is, the switch contacts the controller over one of the
- network devices selected as OpenFlow switch netdevs in the previous
- question.  This is the most common case.
+ discovery: A single network is used for OpenFlow traffic and other
+ data traffic; that is, the switch contacts the controller over one of
+ the network devices selected as OpenFlow switch network devices in
+ the previous question.  The switch automatically determines the
+ location of the controller using a DHCP request with an
+ OpenFlow-specific vendor option.  This is the most common case.
+ .
+ in-band: As above, but the location of the controller is manually
+ configured.
  .
  out-of-band: OpenFlow traffic uses a network separate from the data traffic
  that it controls.  If this is the case, the control network must already
  be configured on a network device other than one of those selected as
  an OpenFlow switch netdev in the previous question.
+
+Template: openflow-switch/discover
+Type: note
+_Description: Preparing to discover controller.
+ The setup program will now attempt to discover the OpenFlow controller.
+ Controller discovery may take up to 30 seconds.  Please be patient.
+ .
+ See secchan(8) for instructions on how to configure a DHCP server for
+ controller discovery.
+
+Template: openflow-switch/discovery-failure
+Type: error
+_Description: Controller discovery failed.
+ The controller's location could not be determined automatically.
+ .
+ Ensure that the OpenFlow DHCP server is properly configured.  See
+ secchan(8) for instructions on how to configure a DHCP server for
+ controller discovery.
+
+Template: openflow-switch/discovery-success
+Type: boolean
+Default: true
+_Description: Use discovered settings?
+ Controller discovery obtained the following settings:
+ .
+ Controller location: ${controller-vconn}
+ .
+ PKI URL: ${pki-uri}
+ .
+ Please verify that these settings are correct.
 
 Template: openflow-switch/switch-ip
 Type: string
@@ -89,12 +124,16 @@ _Description: The controller location is invalid.
  connect to the controller over SSL (recommended for security) or
  "tcp:HOST[:PORT]" to connect over cleartext TCP.
 
-Template: openflow-switch/pki-host
+Template: openflow-switch/pki-uri
 Type: string
-_Description: OpenFlow PKI server host name:
- Specify the host name or IP address of the server that hosts the OpenFlow
- public key infrastructure (PKI).  This is usually the same host as the
- OpenFlow controller.
+_Description: OpenFlow PKI server host name or URL:
+ Specify a URL to the OpenFlow public key infrastructure (PKI).  If a
+ host name or IP address is specified in place of a URL, then
+ http://<host>/openflow/pki/ will be used,
+ where <host> is the specified host name or IP address.
+ .
+ The OpenFlow PKI is usually on the same machine as the OpenFlow
+ controller.
  .
  The setup process will connect to the OpenFlow PKI server over
  HTTP, using the system's configured default HTTP proxy (if any).
@@ -105,7 +144,7 @@ _Description: The switch CA certificate could not be retrieved.
  Retrieval of ${url} failed, with the following status: "${error}".
  .
  Ensure that the OpenFlow PKI server is correctly configured and
- available on ${pki-host}.  If the system is configured to use an HTTP
+ available at ${pki-uri}.  If the system is configured to use an HTTP
  proxy, also make sure that the HTTP proxy is available and that the
  PKI server can be reached through it.
 
@@ -147,7 +186,7 @@ _Description: The certificate request could not be sent.
  Posting to ${url} failed, with the following status: "${error}".
  .
  Ensure that the OpenFlow PKI server is correctly configured and
- available on ${pki-host}.
+ available at ${pki-uri}.
 
 Template: openflow-switch/fetch-switch-cert
 Type: select
@@ -179,7 +218,7 @@ _Description: Signed switch certificate could not be retrieved.
  .
  This probably indicates that the switch's certificate request has not
  yet been signed.  If this is the problem, it may be fixed by signing
- the certificate request at ${pki-host}, then trying to fetch the
+ the certificate request at ${pki-uri}, then trying to fetch the
  signed switch certificate again.
 
 Template: openflow-switch/complete

@@ -12,14 +12,19 @@ my $debconf_owner = 'openflow-switch';
 
 my $default = '/etc/default/openflow-switch';
 my $etc = '/etc/openflow-switch';
+my $rundir = '/var/run';
 my $privkey_file = "$etc/of0-privkey.pem";
 my $req_file = "$etc/of0-req.pem";
 my $cert_file = "$etc/of0-cert.pem";
 my $cacert_file = "$etc/cacert.pem";
+my $ofp_discover_pidfile = "$rundir/ofp-discover.pid";
 
 my $ua = LWP::UserAgent->new;
 $ua->timeout(10);
 $ua->env_proxy;
+
+system("/etc/init.d/openflow-switch stop 1>&2");
+kill_ofp_discover();
 
 version('2.0');
 capb('backup');
@@ -38,8 +43,9 @@ if (-e $default) {
            db_set('netdevs', join(', ', map($netdevs{$_},
                                             grep(exists $netdevs{$_}, split))))
        },
-       IN_BAND => sub {
-           db_set('band', $_ eq 'no' ? 'in-band' : 'out-of-band')
+       MODE => sub {
+           db_set('mode',
+                  $_ eq 'in-band' || $_ eq 'out-of-band' ? $_ : 'discovery')
        },
        SWITCH_IP => sub { db_set('switch-ip', $_) },
        CONTROLLER => sub { db_set('controller-vconn', $_) },
@@ -71,6 +77,8 @@ if (! -e $cert_file) {
     $req_fingerprint = sha1_hex($req);
 }
 
+my %options;
+
 my (@states) =
   (sub {
        # User backed up from first dialog box.
@@ -101,12 +109,69 @@ my (@states) =
        }
    },
    sub {
-       # In-band or out-of-band controller?
-       db_input('band');
+       # Discovery or in-band or out-of-band controller?
+       db_input('mode');
        return;
    },
    sub {
-       return 'skip' if db_get('band') eq 'out-of-band';
+       return 'skip' if db_get('mode') ne 'discovery';
+       for (;;) {
+           # Notify user that we are going to do discovery.
+           db_input('discover');
+           return 'prev' if db_go();
+           print STDERR "Please wait up to 30 seconds for discovery...\n";
+
+           # Make sure that there's no running discovery process.
+           kill_ofp_discover();
+
+           # Do discovery.
+           %options = ();
+           open(DISCOVER, '-|', 'ofp-discover --timeout=30 --pidfile '
+                . join(' ', netdev_names()));
+           while (<DISCOVER>) {
+               chomp;
+               if (my ($name, $value) = /^([^=]+)=(.*)$/) {
+                   if ($value =~ /^"(.*)"$/) {
+                       $value = $1;
+                       $value =~ s/\\([0-7][0-7][0-7])/chr($1)/ge;
+                   } else {
+                       $value =~ s/^(0x[[:xdigit:]]+)$/hex($1)/e;
+                   }
+                   $options{$name} = $value;
+               }
+               last if /^$/;
+           }
+
+           # Check results.
+           my $vconn = $options{'ofp-controller-vconn'};
+           my $pki_uri = $options{'ofp-pki-uri'};
+           return 'next'
+             if (defined($vconn)
+                 && is_valid_vconn($vconn)
+                 && (!is_ssl_vconn($vconn) || defined($pki_uri)));
+
+           # Try again?
+           kill_ofp_discover();
+           db_input('discovery-failure');
+           db_go();
+       }
+   },
+   sub {
+       return 'skip' if db_get('mode') ne 'discovery';
+
+       my $vconn = $options{'ofp-controller-vconn'};
+       my $pki_uri = $options{'ofp-pki-uri'};
+       db_subst('discovery-success', 'controller-vconn', $vconn);
+       db_subst('discovery-success',
+                'pki-uri', is_ssl_vconn($vconn) ? $pki_uri : "no PKI in use");
+       db_input('discovery-success');
+       return 'prev' if db_go();
+       db_set('controller-vconn', $vconn);
+       db_set('pki-uri', $pki_uri);
+       return 'next';
+   },
+   sub {
+       return 'skip' if db_get('mode') ne 'in-band';
        for (;;) {
            db_input('switch-ip');
            return 'prev' if db_go();
@@ -119,16 +184,16 @@ my (@states) =
        }
    },
    sub {
+       return 'skip' if db_get('mode') eq 'discovery';
        for (;;) {
            my $old_vconn = db_get('controller-vconn');
            db_input('controller-vconn');
            return 'prev' if db_go();
 
            my $vconn = db_get('controller-vconn');
-           if ($vconn =~ /^(tcp|ssl):([^:]+)(:.*)?/) {
-               if ($old_vconn ne $vconn
-                   || db_get('pki-host') eq '') {
-                   db_set('pki-host', $2);
+           if (is_valid_vconn($vconn)) {
+               if ($old_vconn ne $vconn || db_get('pki-uri') eq '') {
+                   db_set('pki-uri', pki_host_to_uri($2));
                }
                return 'next';
            }
@@ -141,7 +206,7 @@ my (@states) =
        return 'skip' if !ssl_enabled();
        return 'skip' if -e $cacert_file && -e $cert_file;
 
-       db_input('pki-host');
+       db_input('pki-uri');
        return 'prev' if db_go();
        return;
    },
@@ -149,8 +214,16 @@ my (@states) =
        return 'skip' if !ssl_enabled();
        return 'skip' if -e $cacert_file;
 
-       my $pki_host = db_get('pki-host');
-       my $url = "http://$pki_host/openflow/pki/controllerca/cacert.pem";
+       my $pki_uri = db_get('pki-uri');
+       if ($pki_uri !~ /:/) {
+           $pki_uri = pki_host_to_uri($pki_uri);
+       } else {
+           # Trim trailing slashes.
+           $pki_uri =~ s%/+$%%;
+       }
+       db_set('pki-uri', $pki_uri);
+
+       my $url = "$pki_uri/controllerca/cacert.pem";
        my $response = $ua->get($url, ':content_file' => $cacert_file);
        if ($response->is_success) {
            return 'next';
@@ -158,7 +231,7 @@ my (@states) =
 
        db_subst('fetch-cacert-failed', 'url', $url);
        db_subst('fetch-cacert-failed', 'error', $response->status_line);
-       db_subst('fetch-cacert-failed', 'pki-host', $pki_host);
+       db_subst('fetch-cacert-failed', 'pki-uri', $pki_uri);
        db_input('fetch-cacert-failed');
        db_go();
        return 'prev';
@@ -173,8 +246,9 @@ my (@states) =
            return 'prev' if db_go();
            return 'next' if db_get('send-cert-req') eq 'no';
 
-           my $pki_host = db_get('pki-host');
-           my $url = "http://$pki_host/cgi-bin/ofp-pki-cgi";
+           my $pki_uri = db_get('pki-uri');
+           my ($pki_base_uri) = $pki_uri =~ m%^([^/]+://[^/]+)/%;
+           my $url = "$pki_base_uri/cgi-bin/ofp-pki-cgi";
            my $response = $ua->post($url, {'type' => 'switch',
                                            'req' => $req});
            return 'next' if $response->is_success;
@@ -182,8 +256,7 @@ my (@states) =
            db_subst('send-cert-req-failed', 'url', $url);
            db_subst('send-cert-req-failed', 'error',
                     $response->status_line);
-           db_subst('send-cert-req-failed', 'pki-host',
-                    $pki_host);
+           db_subst('send-cert-req-failed', 'pki-uri', $pki_uri);
            db_input('send-cert-req-failed');
            db_go();
        }
@@ -210,8 +283,8 @@ my (@states) =
            return 'prev' if db_go();
            exit(1) if db_get('fetch-switch-cert') eq 'no';
 
-           my $pki_host = db_get('pki-host');
-           my $url = "http://$pki_host/openflow/pki/switchca/certs/$req_fingerprint-cert.pem";
+           my $pki_uri = db_get('pki-uri');
+           my $url = "$pki_uri/switchca/certs/$req_fingerprint-cert.pem";
            my $response = $ua->get($url, ':content_file' => $cert_file);
            if ($response->is_success) {
                return 'next';
@@ -220,8 +293,7 @@ my (@states) =
            db_subst('fetch-switch-cert-failed', 'url', $url);
            db_subst('fetch-switch-cert-failed', 'error',
                     $response->status_line);
-           db_subst('fetch-switch-cert-failed', 'pki-host',
-                    $pki_host);
+           db_subst('fetch-switch-cert-failed', 'pki-uri', $pki_uri);
            db_input('fetch-switch-cert-failed');
            db_go();
        }
@@ -256,24 +328,25 @@ for (;;) {
 }
 
 my %config;
-$config{NETDEVS} = join(' ', map(/^(\S+)/, split(', ', db_get('netdevs'))));
-if (db_get('band') eq 'in-band') {
-    $config{IN_BAND} = 'yes';
+$config{NETDEVS} = join(' ', netdev_names());
+$config{MODE} = db_get('mode');
+if (db_get('mode') eq 'in-band') {
     $config{SWITCH_IP} = db_get('switch-ip');
-} else {
-    $config{IN_BAND} = 'no';
 }
-$config{CONTROLLER} = db_get('controller-vconn');
+if (db_get('mode') ne 'discovery') {
+    $config{CONTROLLER} = db_get('controller-vconn');
+}
 $config{PRIVKEY} = $privkey_file;
 $config{CERT} = $cert_file;
 $config{CACERT} = $cacert_file;
 save_config($default, %config);
 
 dup2(2, 1);                     # Get stdout back.
-system("/etc/init.d/openflow-switch restart");
+kill_ofp_discover();
+system("/etc/init.d/openflow-switch start");
 
 sub ssl_enabled {
-    return db_get('controller-vconn') =~ /^ssl:/;
+    return is_ssl_vconn(db_get('controller-vconn'));
 }
 
 sub db_subst {
@@ -288,7 +361,7 @@ sub db_subst {
 
 sub db_set {
     my ($question, $value) = @_;
-    $question = "$debconf_owner/$question";
+   $question = "$debconf_owner/$question";
     my ($ret, $seen) = set($question, $value);
     if ($ret && $ret != 30) {
         die "Error setting debconf question $question to $value: $seen";
@@ -415,7 +488,9 @@ sub load_config {
 
 sub shell_escape {
     local $_ = $_[0];
-    if (m&^[-a-zA-Z0-9:./%^_+,]*$&) {
+    if ($_ eq '') {
+        return '""';
+    } elsif (m&^[-a-zA-Z0-9:./%^_+,]*$&) {
         return $_;
     } else {
         s/'/'\\''/;
@@ -484,4 +559,29 @@ sub save_config {
     print NEWFILE join('', map("$_\n", @lines));
     close(NEWFILE);
     rename("$file.tmp", $file) or die "$file.tmp: rename to $file: $!\n";
+}
+
+sub pki_host_to_uri {
+    my ($pki_host) = @_;
+    return "http://$pki_host/openflow/pki";
+}
+
+sub kill_ofp_discover {
+    # Delegate this to a subprocess because there is no portable way
+    # to invoke fcntl(F_GETLK) from Perl.
+    system("ofp-kill --force $ofp_discover_pidfile");
+}
+
+sub netdev_names {
+    return map(/^(\S+)/, split(', ', db_get('netdevs')));
+}
+
+sub is_valid_vconn {
+    my ($vconn) = @_;
+    return scalar($vconn =~ /^(tcp|ssl):([^:]+)(:.*)?/);
+}
+
+sub is_ssl_vconn {
+    my ($vconn) = @_;
+    return scalar($vconn =~ /^ssl:/);
 }

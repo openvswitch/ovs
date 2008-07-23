@@ -21,13 +21,18 @@
 # become part of the switch and cannot be used for other purposes.
 #NETDEVS=""
 
-# IN_BAND: The OpenFlow switch must be able to contact the OpenFlow
-# controller over the network.  It can do so in one of two ways:
+# MODE: The OpenFlow switch has three modes that determine how it
+# reaches the controller:
+#
+# * in-band with discovery: A single network is used for OpenFlow
+#   traffic and other data traffic; that is, the switch contacts the
+#   controller over one of the network devices selected as OpenFlow
+#   switch ports.  The switch automatically determines the location of
+#   the controller using a DHCP request with an OpenFlow-specific
+#   vendor option.  This is the most common case.
 # 
-# * in-band: A single network is used for OpenFlow traffic and other
-#   data traffic; that is, the switch contacts the controller over one
-#   of the network devices selected as OpenFlow switch ports in the
-#   previous question.  This is the most common case.
+# * in-band: As above, but the location of the controller is manually
+#   configured.
 # 
 # * out-of-band: OpenFlow traffic uses a network separate from the
 #   data traffic that it controls.  If this is the case, the control
@@ -35,13 +40,12 @@
 #   one of those selected as an OpenFlow switch port in the previous
 #   question.
 #
-# Set IN_BAND to yes for in-band control, or to no for out-of-band
-# control.
-IN_BAND=yes
+# Set MODE to 'discovery', 'in-band', or 'out-of-band' for these
+# respective cases.
+MODE=discovery
 
-# SWITCH_IP: For in-band communication with the controller, the
-# OpenFlow switch must be able to determine its own IP address.  Its
-# IP address may be configured statically or dynamically:
+# SWITCH_IP: In 'in-band' mode, the switch's IP address may be
+# configured statically or dynamically:
 # 
 # * For static configuration, specify the switch's IP address as a
 #   string.
@@ -51,7 +55,7 @@ IN_BAND=yes
 #   if the network topology allows the switch to contact the DHCP
 #   server before it connects to the OpenFlow controller.
 #
-# If IN_BAND is set to "no" above, this setting has no effect.
+# This setting has no effect unless MODE is set to 'in-band'.
 SWITCH_IP=dhcp
 
 # CONTROLLER: Location of controller.
@@ -59,6 +63,7 @@ SWITCH_IP=dhcp
 #  tcp:HOST[:PORT]         via TCP to PORT (default: 975) on HOST
 #  ssl:HOST[:PORT]         via SSL to PORT (default: 976) on HOST
 # The default below assumes that the controller is running locally.
+# This setting has no effect when MODE is set to 'discovery'.
 #CONTROLLER="tcp:127.0.0.1"
 
 # PRIVKEY: Name of file containing switch's private key.

@@ -193,7 +193,8 @@ const char *dhcp_type_name(enum dhcp_msg_type);
     DHCP_OPT(T2,                       59, SECS,    1, 1)               \
     DHCP_OPT(VENDOR_CLASS,             60, STRING,  1, SIZE_MAX)        \
     DHCP_OPT(CLIENT_ID,                61, UINT8,   2, SIZE_MAX)        \
-    DHCP_VNDOPT(OFP_CONTROLLER_VCONN,   1, STRING,  1, SIZE_MAX)
+    DHCP_VNDOPT(OFP_CONTROLLER_VCONN,   1, STRING,  1, SIZE_MAX)        \
+    DHCP_VNDOPT(OFP_PKI_URI,            2, STRING,  1, SIZE_MAX)
 
 /* Shorthand for defining vendor options (used above). */
 #define DHCP_VNDOPT(NAME, CODE, ARG, MIN, MAX) \

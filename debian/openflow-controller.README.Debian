@@ -1,5 +1,10 @@
 README.Debian for openflow-controller
 -------------------------------------
 
-* To reconfigure the controller, edit /etc/default/openflow-controller
+* To (re)configure the controller, edit /etc/default/openflow-controller
   and run "/etc/init.d/openflow-controller restart".
+
+* To enable OpenFlow switches to automatically discover the location
+  of the controller, you must install and configure a DHCP server.
+  The secchan(8) manpage (found in the openflow-switch package) gives
+  a working example configuration file for the ISC DHCP server.
