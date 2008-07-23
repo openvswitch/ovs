@@ -374,6 +374,31 @@ dhcp_msg_get_uint16(const struct dhcp_msg *msg, int code,
     }
 }
 
+/* Appends a string representing 'duration' seconds to 'ds'. */
+static void
+put_duration(struct ds *ds, unsigned int duration)
+{
+    if (duration) {
+        if (duration >= 86400) {
+            ds_put_format(ds, "%ud", duration / 86400);
+            duration %= 86400;
+        }
+        if (duration >= 3600) {
+            ds_put_format(ds, "%uh", duration / 3600);
+            duration %= 3600;
+        }
+        if (duration >= 60) {
+            ds_put_format(ds, "%umin", duration / 60);
+            duration %= 60;
+        }
+        if (duration > 0) {
+            ds_put_format(ds, "%us", duration);
+        }
+    } else {
+        ds_put_cstr(ds, "0s");
+    }
+}
+
 /* Appends a string representation of 'opt', which has the given 'code', to
  * 'ds'. */
 const char *
@@ -404,7 +429,6 @@ dhcp_option_to_string(const struct dhcp_option *opt, int code, struct ds *ds)
         const uint16_t *uint16 = p;
         const char *cp = p;
         unsigned char c;
-        unsigned int secs;
 
         if (offset && class->type != DHCP_ARG_STRING) {
             ds_put_cstr(ds, class->type == DHCP_ARG_UINT8 ? ":" : ", ");
@@ -425,22 +449,7 @@ dhcp_option_to_string(const struct dhcp_option *opt, int code, struct ds *ds)
             ds_put_format(ds, "%"PRIu32, ntohl(*uint32));
             break;
         case DHCP_ARG_SECS:
-            secs = ntohl(*uint32);
-            if (secs >= 86400) {
-                ds_put_format(ds, "%ud", secs / 86400);
-                secs %= 86400;
-            }
-            if (secs >= 3600) {
-                ds_put_format(ds, "%uh", secs / 3600);
-                secs %= 3600;
-            }
-            if (secs >= 60) {
-                ds_put_format(ds, "%umin", secs / 60);
-                secs %= 60;
-            }
-            if (secs > 0 || *uint32 == 0) {
-                ds_put_format(ds, "%us", secs);
-            }
+            put_duration(ds, ntohl(*uint32));
             break;
         case DHCP_ARG_STRING:
             c = *cp;
@@ -489,13 +498,14 @@ dhcp_msg_to_string(const struct dhcp_msg *msg, bool multiline, struct ds *ds)
     int code;
 
     ds_clear(ds);
-    ds_put_format(ds, "%s%c%s%cxid=%08"PRIx32"%csecs=%"PRIu16,
-                  (msg->op == DHCP_BOOTREQUEST ? "BOOTREQUEST"
-                   : msg->op == DHCP_BOOTREPLY ? "BOOTREPLY"
-                   : "<<bad DHCP op>>"),
-                  separator, dhcp_type_name(msg->type),
-                  separator, msg->xid,
-                  separator, msg->secs);
+    ds_put_format(ds, "op=%s",
+                  (msg->op == DHCP_BOOTREQUEST ? "request"
+                   : msg->op == DHCP_BOOTREPLY ? "reply"
+                   : "error"));
+    ds_put_format(ds, "%ctype=%s", separator, dhcp_type_name(msg->type));
+    ds_put_format(ds, "%cxid=0x%08"PRIx32, separator, msg->xid);
+    ds_put_format(ds, "%csecs=", separator);
+    put_duration(ds, msg->secs);
     if (msg->flags) {
         ds_put_format(ds, "%cflags=", separator);
         if (msg->flags & DHCP_FLAGS_BROADCAST) {
