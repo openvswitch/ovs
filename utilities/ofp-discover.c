@@ -144,6 +144,7 @@ main(int argc, char *argv[])
                 /* Configure network device. */
                 if (!exit_without_bind) {
                     dhclient_configure_netdev(iface->dhcp);
+                    dhclient_update_resolv_conf(iface->dhcp);
                 }
 
                 if (is_bound) {

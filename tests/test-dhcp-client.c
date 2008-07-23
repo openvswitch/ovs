@@ -53,6 +53,9 @@ static struct in_addr request_ip;
  * vendor class string is included. */
 static const char *vendor_class;
 
+/* --no-resolv-conf: Update /etc/resolv.conf to match DHCP reply? */
+static bool update_resolv_conf = true;
+
 static void parse_options(int argc, char *argv[]);
 static void usage(void);
 static void release(void *cli_);
@@ -88,6 +91,9 @@ main(int argc, char *argv[])
         dhclient_run(cli);
         if (dhclient_changed(cli)) {
             dhclient_configure_netdev(cli);
+            if (update_resolv_conf) {
+                dhclient_update_resolv_conf(cli);
+            }
         }
         dhclient_wait(cli);
         fatal_signal_unblock();
@@ -118,11 +124,13 @@ parse_options(int argc, char *argv[])
 {
     enum {
         OPT_REQUEST_IP = UCHAR_MAX + 1,
-        OPT_VENDOR_CLASS
+        OPT_VENDOR_CLASS,
+        OPT_NO_RESOLV_CONF
     };
     static struct option long_options[] = {
         {"request-ip",  required_argument, 0, OPT_REQUEST_IP },
         {"vendor-class", required_argument, 0, OPT_VENDOR_CLASS },
+        {"no-resolv-conf", no_argument, 0, OPT_NO_RESOLV_CONF},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -147,6 +155,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_VENDOR_CLASS:
             vendor_class = optarg;
+            break;
+
+        case OPT_NO_RESOLV_CONF:
+            update_resolv_conf = false;
             break;
 
         case 'h':
@@ -181,6 +193,7 @@ usage(void)
            "                          do not request a specific IP)\n"
            "  --vendor-class=STRING   use STRING as vendor class (default:\n"
            "                          none); use OpenFlow to imitate secchan\n"
+           "  --no-resolv-conf        do not update /etc/resolv.conf\n"
            "\nOther options:\n"
            "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"

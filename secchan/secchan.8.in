@@ -185,6 +185,24 @@ controller location string, as if it begins with \fB^\fR.
 When controller discovery is not performed, this option has no effect.
 
 .TP
+\fB--no-resolv-conf\fR
+When \fBsecchan\fR performs controller discovery (see \fBCONTACTING
+THE CONTROLLER\fR, above, for more information about controller
+discovery), by default it overwrites the system's
+\fB/etc/resolv.conf\fR with domain information and DNS servers
+obtained via DHCP.  If the location of the controller is specified
+using a hostname, rather than an IP address, and the network's DNS
+servers ever change, this behavior is essential.  But because it also
+interferes with any administrator or process that manages
+\fB/etc/resolv.conf\fR, when this option is specified, \fBsecchan\fR
+will not modify \fB/etc/resolv.conf\fR.
+
+\fBsecchan\fR will only modify \fBresolv.conf\fR if the DHCP response
+that it receives specifies one or more DNS servers.
+
+When controller discovery is not performed, this option has no effect.
+
+.TP
 \fB-f\fR, \fB--fail=\fR[\fBopen\fR|\fBclosed\fR]
 The controller is, ordinarily, responsible for setting up all flows on
 the OpenFlow switch.  Thus, if the connection to the controller fails,

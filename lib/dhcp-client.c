@@ -40,7 +40,9 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 #include <time.h>
+#include <unistd.h>
 #include "buffer.h"
 #include "csum.h"
 #include "dhcp.h"
@@ -375,6 +377,86 @@ dhclient_configure_netdev(struct dhclient *cli)
     }
 
     return error;
+}
+
+/* If 'cli' is bound and the binding includes DNS domain parameters, updates
+ * /etc/resolv.conf will be updated to match the received parameters.  Returns
+ * 0 if successful, otherwise a positive errno value. */
+int
+dhclient_update_resolv_conf(struct dhclient *cli)
+{
+    uint32_t dns_server;
+    char *domain_name;
+    bool has_domain_name;
+    char new_name[128];
+    FILE *old, *new;
+    int i;
+
+    if (!dhclient_is_bound(cli)) {
+        return 0;
+    }
+    if (!dhcp_msg_get_ip(cli->binding, DHCP_CODE_DNS_SERVER, 0, &dns_server)) {
+        VLOG_DBG("binding does not include any DNS servers");
+        return 0;
+    }
+
+    sprintf(new_name, "/etc/resolv.conf.tmp%ld", (long int) getpid());
+    new = fopen(new_name, "w");
+    if (!new) {
+        VLOG_WARN("%s: create: %s", new_name, strerror(errno));
+        return errno;
+    }
+
+    domain_name = dhcp_msg_get_string(cli->binding, DHCP_CODE_DOMAIN_NAME);
+    has_domain_name = domain_name != NULL;
+    if (domain_name) {
+        if (strspn(domain_name, "-_.0123456789abcdefghijklmnopqrstuvwxyz"
+                   "ABCDEFGHIJKLMNOPQRSTUVWXYZ") == strlen(domain_name)) {
+            fprintf(new, "domain %s\n", domain_name);
+        } else {
+            VLOG_WARN("ignoring invalid domain name %s", domain_name);
+            has_domain_name = false;
+        }
+    } else {
+        VLOG_DBG("binding does not include domain name");
+    }
+    free(domain_name);
+
+    for (i = 0; dhcp_msg_get_ip(cli->binding, DHCP_CODE_DNS_SERVER,
+                                i, &dns_server); i++) {
+        fprintf(new, "nameserver "IP_FMT"\n", IP_ARGS(&dns_server));
+    }
+
+    old = fopen("/etc/resolv.conf", "r");
+    if (old) {
+        char line[128];
+
+        while (fgets(line, sizeof line, old)) {
+            char *kw = xmemdup0(line, strcspn(line, " \t\r\n"));
+            if (strcmp(kw, "nameserver")
+                && (!has_domain_name
+                    || (strcmp(kw, "domain") && strcmp(kw, "search")))) {
+                fputs(line, new);
+            }
+            free(kw);
+        }
+        fclose(old);
+    } else {
+        VLOG_DBG("/etc/resolv.conf: open: %s", strerror(errno));
+    }
+
+    if (fclose(new) < 0) {
+        VLOG_WARN("%s: close: %s", new_name, strerror(errno));
+        return errno;
+    }
+
+    if (rename(new_name, "/etc/resolv.conf") < 0) {
+        VLOG_WARN("failed to rename %s to /etc/resolv.conf: %s",
+                  new_name, strerror(errno));
+        return errno;
+    }
+
+    return 0;
 }
 
 /* DHCP protocol. */

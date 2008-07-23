@@ -58,6 +58,7 @@ uint32_t dhclient_get_router(const struct dhclient *);
 const struct dhcp_msg *dhclient_get_config(const struct dhclient *);
 
 int dhclient_configure_netdev(struct dhclient *);
+int dhclient_update_resolv_conf(struct dhclient *);
 
 void dhclient_run(struct dhclient *);
 void dhclient_wait(struct dhclient *);

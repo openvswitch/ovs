@@ -133,6 +133,10 @@ static struct dhclient *dhcp;
 static const char *accept_controller_re;
 static regex_t accept_controller_regex;
 
+/* --no-resolv-conf: Update resolv.conf upon successful controller
+ * discovery? */
+static bool update_resolv_conf = true;
+
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
@@ -298,8 +302,12 @@ main(int argc, char *argv[])
             dhclient_run(dhcp);
             if (dhclient_changed(dhcp)) {
                 dhclient_configure_netdev(dhcp);
-                free(controller_name);
+                if (update_resolv_conf) {
+                    dhclient_update_resolv_conf(dhcp);
+                }
+
                 if (dhclient_is_bound(dhcp)) {
+                    free(controller_name);
                     controller_name = dhcp_msg_get_string(
                         dhclient_get_config(dhcp),
                         DHCP_CODE_OFP_CONTROLLER_VCONN);
@@ -309,6 +317,7 @@ main(int argc, char *argv[])
                 } else if (controller_name) {
                     VLOG_WARN("%s: discover controller no longer available",
                               controller_name);
+                    free(controller_name);
                     controller_name = NULL;
                     rconn_disconnect(remote_rconn);
                 }
@@ -679,12 +688,14 @@ parse_options(int argc, char *argv[])
 {
     enum {
         OPT_ACCEPT_VCONN = UCHAR_MAX + 1,
+        OPT_NO_RESOLV_CONF,
         OPT_INACTIVITY_PROBE,
         OPT_MAX_IDLE,
         OPT_MAX_BACKOFF
     };
     static struct option long_options[] = {
         {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
+        {"no-resolv-conf", no_argument, 0, OPT_NO_RESOLV_CONF},
         {"fail",        required_argument, 0, 'f'},
         {"inactivity-probe", required_argument, 0, OPT_INACTIVITY_PROBE},
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
@@ -713,6 +724,10 @@ parse_options(int argc, char *argv[])
             accept_controller_re = (optarg[0] == '^'
                                     ? optarg
                                     : xasprintf("^%s", optarg));
+            break;
+
+        case OPT_NO_RESOLV_CONF:
+            update_resolv_conf = false;
             break;
 
         case 'f':
@@ -802,8 +817,10 @@ usage(void)
            "omitted, then secchan performs controller autodiscovery.\n",
            program_name, program_name);
     vconn_usage(true, true);
-    printf("\nNetworking options:\n"
+    printf("\nController discovery options:\n"
            "  --accept-vconn=REGEX    accept matching discovered controllers\n"
+           "  --no-resolv-conf        do not update /etc/resolv.conf\n"
+           "\nNetworking options:\n"
            "  -f, --fail=open|closed  when controller connection fails:\n"
            "                            closed: drop all packets\n"
            "                            open (default): act as learning switch\n"
