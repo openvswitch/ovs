@@ -1522,8 +1522,8 @@ fwd_control_input(struct datapath *dp, const struct sender *sender,
     struct ofp_header *oh;
 
     oh = (struct ofp_header *) msg;
-    if (oh->version != OFP_VERSION || oh->type >= ARRAY_SIZE(packets)
-        || ntohs(oh->length) > length)
+    assert(oh->version == OFP_VERSION);
+    if (oh->type >= ARRAY_SIZE(packets) || ntohs(oh->length) > length)
         return -EINVAL;
 
     pkt = &packets[oh->type];

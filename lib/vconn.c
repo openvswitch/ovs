@@ -266,10 +266,24 @@ vconn_recv(struct vconn *vconn, struct buffer **msgp)
     int retval = vconn_connect(vconn);
     if (!retval) {
         retval = (vconn->class->recv)(vconn, msgp);
-        if (VLOG_IS_DBG_ENABLED() && !retval) {
-            char *s = ofp_to_string((*msgp)->data, (*msgp)->size, 1);
-            VLOG_DBG("received: %s", s);
-            free(s);
+        if (!retval) {
+            struct ofp_header *oh;
+
+            if (VLOG_IS_DBG_ENABLED()) {
+                char *s = ofp_to_string((*msgp)->data, (*msgp)->size, 1);
+                VLOG_DBG("received: %s", s);
+                free(s);
+            }
+
+            oh = buffer_at_assert(*msgp, 0, sizeof *oh);
+            if (oh->version != OFP_VERSION) {
+                VLOG_ERR("received OpenFlow version %02"PRIx8" "
+                         "!= expected %02x",
+                         oh->version, OFP_VERSION);
+                buffer_delete(*msgp);
+                *msgp = NULL;
+                return EPROTO;
+            }
         }
     }
     if (retval) {
