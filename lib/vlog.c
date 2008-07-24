@@ -345,7 +345,7 @@ vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
 
         if (log_syslog) {
             static const int syslog_levels[VLL_N_LEVELS] = {
-                [VLL_EMER] = LOG_EMERG,
+                [VLL_EMER] = LOG_ALERT,
                 [VLL_ERR] = LOG_ERR,
                 [VLL_WARN] = LOG_WARNING,
                 [VLL_DBG] = LOG_DEBUG,
