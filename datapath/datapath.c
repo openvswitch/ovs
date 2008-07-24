@@ -1714,19 +1714,12 @@ static void dp_uninit_netlink(void)
 	genl_unregister_family(&dp_genl_family);
 }
 
-#define DRV_NAME		"openflow"
-#define DRV_VERSION	 VERSION
-#define DRV_DESCRIPTION "OpenFlow switching datapath implementation"
-#define DRV_COPYRIGHT   "Copyright (c) 2007, 2008 The Board of Trustees of The Leland Stanford Junior University"
-
-
 static int __init dp_init(void)
 {
 	int err;
 
-	printk(KERN_INFO DRV_NAME ": " DRV_DESCRIPTION "\n");
-	printk(KERN_INFO DRV_NAME ": " VERSION" built on "__DATE__" "__TIME__"\n");
-	printk(KERN_INFO DRV_NAME ": " DRV_COPYRIGHT "\n");
+	printk("OpenFlow "VERSION", built "__DATE__" "__TIME__", "
+	       "protocol 0x%02x\n", OFP_VERSION);
 
 	err = flow_init();
 	if (err)
@@ -1762,6 +1755,6 @@ static void dp_cleanup(void)
 module_init(dp_init);
 module_exit(dp_cleanup);
 
-MODULE_DESCRIPTION(DRV_DESCRIPTION);
-MODULE_AUTHOR(DRV_COPYRIGHT);
+MODULE_DESCRIPTION("OpenFlow switching datapath");
+MODULE_AUTHOR("Copyright (c) 2007, 2008 The Board of Trustees of The Leland Stanford Junior University");
 MODULE_LICENSE("GPL");
