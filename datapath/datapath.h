@@ -3,6 +3,7 @@
 #ifndef DATAPATH_H
 #define DATAPATH_H 1
 
+#include <linux/mutex.h>
 #include <linux/netlink.h>
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
@@ -66,6 +67,8 @@ struct sender {
 	uint32_t pid;		/* Netlink process ID of sending socket. */
 	uint32_t seq;		/* Netlink sequence ID of request. */
 };
+
+extern struct mutex dp_mutex;
 
 int dp_output_port(struct datapath *, struct sk_buff *, int out_port);
 int dp_output_control(struct datapath *, struct sk_buff *, uint32_t, 

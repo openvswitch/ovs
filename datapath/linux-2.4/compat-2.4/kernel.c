@@ -2,9 +2,11 @@
  * Distributed under the terms of the GNU GPL version 2.
  */
 
+#include <linux/config.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <asm/hardirq.h>
 
 int vprintk(const char *msg, ...)
 {
@@ -25,3 +27,20 @@ int vprintk(const char *msg, ...)
 }
 
 EXPORT_SYMBOL(vprintk);
+
+#ifdef CONFIG_DEBUG_SPINLOCK
+void __might_sleep(char *file, int line)
+{
+	static unsigned long prev_jiffy;	/* ratelimiting */
+
+	if ((in_interrupt()) && !oops_in_progress) {
+		if (time_before(jiffies, prev_jiffy + HZ) && prev_jiffy)
+			return;
+		prev_jiffy = jiffies;
+		printk(KERN_ERR "BUG: sleeping function called from invalid"
+				" context at %s:%d\n", file, line);
+		dump_stack();
+	}
+}
+EXPORT_SYMBOL(__might_sleep);
+#endif

@@ -125,16 +125,6 @@ void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
 	memset(to->pad, '\0', sizeof(to->pad));
 }
 
-/* Returns true if 'flow' can be deleted and set up for a deferred free, false
- * if deletion has already been scheduled (by another thread).
- *
- * Caller must hold rcu_read_lock. */
-int flow_del(struct sw_flow *flow)
-{
-	return !atomic_cmpxchg(&flow->deleted, 0, 1);
-}
-EXPORT_SYMBOL(flow_del);
-
 /* Allocates and returns a new flow with 'n_actions' action, using allocation
  * flags 'flags'.  Returns the new flow or a null pointer on failure. */
 struct sw_flow *flow_alloc(int n_actions, gfp_t flags)

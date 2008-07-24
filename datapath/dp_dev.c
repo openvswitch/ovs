@@ -55,19 +55,16 @@ static int dp_dev_mac_addr(struct net_device *dev, void *p)
 static int dp_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
 	struct dp_dev *dp_dev = dp_dev_priv(netdev);
-	struct datapath *dp;
+	struct datapath *dp = dp_dev->dp;
+
+	dp_dev->stats.tx_packets++;
+	dp_dev->stats.tx_bytes += skb->len;
+
+	skb_reset_mac_header(skb);
 	rcu_read_lock();
-	dp = dp_dev->dp;
-	if (likely(dp != NULL)) {
-		dp_dev->stats.tx_packets++;
-		dp_dev->stats.tx_bytes += skb->len;
-		skb_reset_mac_header(skb);
-		fwd_port_input(dp->chain, skb, OFPP_LOCAL);
-	} else {
-		dp_dev->stats.tx_dropped++;
-		kfree_skb(skb);
-	}
+	fwd_port_input(dp->chain, skb, OFPP_LOCAL);
 	rcu_read_unlock();
+
 	return 0;
 }
 
@@ -127,8 +124,7 @@ int dp_dev_setup(struct datapath *dp)
 
 void dp_dev_destroy(struct datapath *dp)
 {
-	struct dp_dev *dp_dev = dp_dev_priv(dp->netdev);
-	dp_dev->dp = NULL;
+	netif_tx_disable(dp->netdev);
 	synchronize_net();
 	unregister_netdev(dp->netdev);
 	free_netdev(dp->netdev);

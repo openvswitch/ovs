@@ -21,9 +21,8 @@ static void kmem_free(void *, size_t);
 
 struct sw_table_hash {
 	struct sw_table swt;
-	spinlock_t lock;
 	struct crc32 crc32;
-	atomic_t n_flows;
+	unsigned int n_flows;
 	unsigned int bucket_mask; /* Number of buckets minus 1. */
 	struct sw_flow **buckets;
 };
@@ -47,22 +46,19 @@ static int table_hash_insert(struct sw_table *swt, struct sw_flow *flow)
 {
 	struct sw_table_hash *th = (struct sw_table_hash *) swt;
 	struct sw_flow **bucket;
-	unsigned long int flags;
 	int retval;
 
 	if (flow->key.wildcards != 0)
 		return 0;
 
-	spin_lock_irqsave(&th->lock, flags);
 	bucket = find_bucket(swt, &flow->key);
 	if (*bucket == NULL) {
-		atomic_inc(&th->n_flows);
+		th->n_flows++;
 		rcu_assign_pointer(*bucket, flow);
 		retval = 1;
 	} else {
 		struct sw_flow *old_flow = *bucket;
-		if (!memcmp(&old_flow->key, &flow->key, sizeof flow->key)
-					&& flow_del(old_flow)) {
+		if (!memcmp(&old_flow->key, &flow->key, sizeof flow->key)) {
 			rcu_assign_pointer(*bucket, flow);
 			flow_deferred_free(old_flow);
 			retval = 1;
@@ -70,19 +66,15 @@ static int table_hash_insert(struct sw_table *swt, struct sw_flow *flow)
 			retval = 0;
 		}
 	}
-	spin_unlock_irqrestore(&th->lock, flags);
 	return retval;
 }
 
 /* Caller must update n_flows. */
 static int do_delete(struct sw_flow **bucket, struct sw_flow *flow)
 {
-	if (flow_del(flow)) {
-		rcu_assign_pointer(*bucket, NULL);
-		flow_deferred_free(flow);
-		return 1;
-	}
-	return 0;
+	rcu_assign_pointer(*bucket, NULL);
+	flow_deferred_free(flow);
+	return 1;
 }
 
 /* Returns number of deleted flows.  We can ignore the priority
@@ -110,8 +102,7 @@ static int table_hash_delete(struct sw_table *swt,
 				count += do_delete(bucket, flow);
 		}
 	}
-	if (count)
-		atomic_sub(count, &th->n_flows);
+	th->n_flows -= count;
 	return count;
 }
 
@@ -121,6 +112,7 @@ static int table_hash_timeout(struct datapath *dp, struct sw_table *swt)
 	unsigned int i;
 	int count = 0;
 
+	mutex_lock(&dp_mutex);
 	for (i = 0; i <= th->bucket_mask; i++) {
 		struct sw_flow **bucket = &th->buckets[i];
 		struct sw_flow *flow = *bucket;
@@ -130,9 +122,9 @@ static int table_hash_timeout(struct datapath *dp, struct sw_table *swt)
 				dp_send_flow_expired(dp, flow);
 		}
 	}
+	th->n_flows -= count;
+	mutex_unlock(&dp_mutex);
 
-	if (count)
-		atomic_sub(count, &th->n_flows);
 	return count;
 }
 
@@ -191,7 +183,7 @@ static void table_hash_stats(struct sw_table *swt,
 {
 	struct sw_table_hash *th = (struct sw_table_hash *) swt;
 	stats->name = "hash";
-	stats->n_flows = atomic_read(&th->n_flows);
+	stats->n_flows = th->n_flows;
 	stats->max_flows = th->bucket_mask + 1;
 }
 
@@ -223,9 +215,8 @@ struct sw_table *table_hash_create(unsigned int polynomial,
 	swt->iterate = table_hash_iterate;
 	swt->stats = table_hash_stats;
 
-	spin_lock_init(&th->lock);
 	crc32_init(&th->crc32, polynomial);
-	atomic_set(&th->n_flows, 0);
+	th->n_flows = 0;
 
 	return swt;
 }

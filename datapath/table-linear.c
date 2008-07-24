@@ -15,9 +15,8 @@
 struct sw_table_linear {
 	struct sw_table swt;
 
-	spinlock_t lock;
 	unsigned int max_flows;
-	atomic_t n_flows;
+	unsigned int n_flows;
 	struct list_head flows;
 	struct list_head iter_flows;
 	unsigned long int next_serial;
@@ -38,7 +37,6 @@ static struct sw_flow *table_linear_lookup(struct sw_table *swt,
 static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 {
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
-	unsigned long int flags;
 	struct sw_flow *f;
 
 
@@ -46,16 +44,13 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 	 * always be placed behind those with equal priority.  Just replace 
 	 * any flows that match exactly.
 	 */
-	spin_lock_irqsave(&tl->lock, flags);
-	list_for_each_entry_rcu (f, &tl->flows, node) {
+	list_for_each_entry (f, &tl->flows, node) {
 		if (f->priority == flow->priority
 				&& f->key.wildcards == flow->key.wildcards
-				&& flow_matches(&f->key, &flow->key)
-				&& flow_del(f)) {
+				&& flow_matches(&f->key, &flow->key)) {
 			flow->serial = f->serial;
 			list_replace_rcu(&f->node, &flow->node);
 			list_replace_rcu(&f->iter_node, &flow->iter_node);
-			spin_unlock_irqrestore(&tl->lock, flags);
 			flow_deferred_free(f);
 			return 1;
 		}
@@ -65,29 +60,24 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 	}
 
 	/* Make sure there's room in the table. */
-	if (atomic_read(&tl->n_flows) >= tl->max_flows) {
-		spin_unlock_irqrestore(&tl->lock, flags);
+	if (tl->n_flows >= tl->max_flows) {
 		return 0;
 	}
-	atomic_inc(&tl->n_flows);
+	tl->n_flows++;
 
 	/* Insert the entry immediately in front of where we're pointing. */
 	flow->serial = tl->next_serial++;
 	list_add_tail_rcu(&flow->node, &f->node);
 	list_add_rcu(&flow->iter_node, &tl->iter_flows);
-	spin_unlock_irqrestore(&tl->lock, flags);
 	return 1;
 }
 
 static int do_delete(struct sw_table *swt, struct sw_flow *flow) 
 {
-	if (flow_del(flow)) {
-		list_del_rcu(&flow->node);
-		list_del_rcu(&flow->iter_node);
-		flow_deferred_free(flow);
-		return 1;
-	}
-	return 0;
+	list_del_rcu(&flow->node);
+	list_del_rcu(&flow->iter_node);
+	flow_deferred_free(flow);
+	return 1;
 }
 
 static int table_linear_delete(struct sw_table *swt,
@@ -97,13 +87,12 @@ static int table_linear_delete(struct sw_table *swt,
 	struct sw_flow *flow;
 	unsigned int count = 0;
 
-	list_for_each_entry_rcu (flow, &tl->flows, node) {
+	list_for_each_entry (flow, &tl->flows, node) {
 		if (flow_del_matches(&flow->key, key, strict)
 				&& (!strict || (flow->priority == priority)))
 			count += do_delete(swt, flow);
 	}
-	if (count)
-		atomic_sub(count, &tl->n_flows);
+	tl->n_flows -= count;
 	return count;
 }
 
@@ -113,15 +102,16 @@ static int table_linear_timeout(struct datapath *dp, struct sw_table *swt)
 	struct sw_flow *flow;
 	int count = 0;
 
-	list_for_each_entry_rcu (flow, &tl->flows, node) {
+	mutex_lock(&dp_mutex);
+	list_for_each_entry (flow, &tl->flows, node) {
 		if (flow_timeout(flow)) {
 			count += do_delete(swt, flow);
 			if (dp->flags & OFPC_SEND_FLOW_EXP)
 				dp_send_flow_expired(dp, flow);
 		}
 	}
-	if (count)
-		atomic_sub(count, &tl->n_flows);
+	tl->n_flows -= count;
+	mutex_unlock(&dp_mutex);
 	return count;
 }
 
@@ -149,7 +139,7 @@ static int table_linear_iterate(struct sw_table *swt,
 	unsigned long start;
 
 	start = position->private[0];
-	list_for_each_entry_rcu (flow, &tl->iter_flows, iter_node) {
+	list_for_each_entry (flow, &tl->iter_flows, iter_node) {
 		if (flow->serial >= start && flow_matches(key, &flow->key)) {
 			int error = callback(flow, private);
 			if (error) {
@@ -166,7 +156,7 @@ static void table_linear_stats(struct sw_table *swt,
 {
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
 	stats->name = "linear";
-	stats->n_flows = atomic_read(&tl->n_flows);
+	stats->n_flows = tl->n_flows;
 	stats->max_flows = tl->max_flows;
 }
 
@@ -190,10 +180,9 @@ struct sw_table *table_linear_create(unsigned int max_flows)
 	swt->stats = table_linear_stats;
 
 	tl->max_flows = max_flows;
-	atomic_set(&tl->n_flows, 0);
+	tl->n_flows = 0;
 	INIT_LIST_HEAD(&tl->flows);
 	INIT_LIST_HEAD(&tl->iter_flows);
-	spin_lock_init(&tl->lock);
 	tl->next_serial = 0;
 
 	return swt;

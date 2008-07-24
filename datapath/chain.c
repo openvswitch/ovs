@@ -62,8 +62,7 @@ error:
 /* Searches 'chain' for a flow matching 'key', which must not have any wildcard
  * fields.  Returns the flow if successful, otherwise a null pointer.
  *
- * Caller must hold rcu_read_lock, and not release it until it is done with the
- * returned flow. */
+ * Caller must hold rcu_read_lock or dp_mutex. */
 struct sw_flow *chain_lookup(struct sw_chain *chain,
 			 const struct sw_flow_key *key)
 {
@@ -85,12 +84,12 @@ struct sw_flow *chain_lookup(struct sw_chain *chain,
  * If successful, 'flow' becomes owned by the chain, otherwise it is retained
  * by the caller.
  *
- * Caller must hold rcu_read_lock.  If insertion is successful, it must not
- * release rcu_read_lock until it is done with the inserted flow. */
+ * Caller must hold dp_mutex. */
 int chain_insert(struct sw_chain *chain, struct sw_flow *flow)
 {
 	int i;
 
+	might_sleep();
 	for (i = 0; i < chain->n_tables; i++) {
 		struct sw_table *t = chain->tables[i];
 		if (t->insert(t, flow))
@@ -107,18 +106,17 @@ int chain_insert(struct sw_chain *chain, struct sw_flow *flow)
  * iterating through the entire contents of each table for keys that contain
  * wildcards.  Relatively cheap for fully specified keys.
  *
- * The caller need not hold any locks. */
+ * Caller must hold dp_mutex. */
 int chain_delete(struct sw_chain *chain, const struct sw_flow_key *key, 
 		uint16_t priority, int strict)
 {
 	int count = 0;
 	int i;
 
+	might_sleep();
 	for (i = 0; i < chain->n_tables; i++) {
 		struct sw_table *t = chain->tables[i];
-		rcu_read_lock();
 		count += t->delete(t, key, priority, strict);
-		rcu_read_unlock();
 	}
 
 	return count;
@@ -130,17 +128,17 @@ int chain_delete(struct sw_chain *chain, const struct sw_flow_key *key,
  * Expensive as currently implemented, since it iterates through the entire
  * contents of each table.
  *
- * The caller need not hold any locks. */
+ * Caller must not hold dp_mutex, because individual tables take and release it
+ * as necessary. */
 int chain_timeout(struct sw_chain *chain)
 {
 	int count = 0;
 	int i;
 
+	might_sleep();
 	for (i = 0; i < chain->n_tables; i++) {
 		struct sw_table *t = chain->tables[i];
-		rcu_read_lock();
 		count += t->timeout(chain->dp, t);
-		rcu_read_unlock();
 	}
 	return count;
 }

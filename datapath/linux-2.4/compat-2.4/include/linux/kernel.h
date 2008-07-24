@@ -2,6 +2,7 @@
 #define __LINUX_KERNEL_WRAPPER_H 1
 
 #include_next <linux/kernel.h>
+#include <linux/config.h>
 
 /**
  * container_of - cast a member of a structure out to the containing structure
@@ -39,5 +40,27 @@ int vprintk(const char *msg, ...)
 
 /* Force a compilation error if condition is true */
 #define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
+
+/**
+ * might_sleep - annotation for functions that can sleep
+ *
+ * this macro will print a stack trace if it is executed in an atomic
+ * context (spinlock, irq-handler, ...).
+ *
+ * This is a useful debugging help to be able to catch problems early and not
+ * be bitten later when the calling function happens to sleep when it is not
+ * supposed to.
+ */
+#define might_resched() do { } while (0)
+
+#ifdef CONFIG_DEBUG_SPINLOCK
+  void __might_sleep(char *file, int line);
+# define might_sleep() \
+	do { __might_sleep(__FILE__, __LINE__); might_resched(); } while (0)
+#else
+# define might_sleep() do { might_resched(); } while (0)
+#endif
+
+#define might_sleep_if(cond) do { if (cond) might_sleep(); } while (0)
 
 #endif

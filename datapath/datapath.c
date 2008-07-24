@@ -64,15 +64,16 @@ static struct genl_multicast_group mc_group;
 /* It's hard to imagine wanting more than one datapath, but... */
 #define DP_MAX 32
 
-/* datapaths.  Protected on the read side by rcu_read_lock, on the write side
- * by dp_mutex.
+/* Datapaths.  Protected on the read side by rcu_read_lock, on the write side
+ * by dp_mutex.  dp_mutex is almost completely redundant with genl_mutex
+ * maintained by the Generic Netlink code, but the timeout path needs mutual
+ * exclusion too.
  *
  * It is safe to access the datapath and net_bridge_port structures with just
- * the dp_mutex, but to access the chain you need to take the rcu_read_lock
- * also (because dp_mutex doesn't prevent flows from being destroyed).
+ * dp_mutex.
  */
 static struct datapath *dps[DP_MAX];
-static DEFINE_MUTEX(dp_mutex);
+DEFINE_MUTEX(dp_mutex);
 
 static int dp_maint_func(void *data);
 static int send_port_status(struct net_bridge_port *p, uint8_t status);
@@ -242,9 +243,7 @@ uint64_t gen_datapath_id(uint16_t dp_idx)
 }
 
 /* Creates a new datapath numbered 'dp_idx'.  Returns 0 for success or a
- * negative error code.
- *
- * Not called with any locks. */
+ * negative error code. */
 static int new_dp(int dp_idx)
 {
 	struct datapath *dp;
@@ -256,9 +255,8 @@ static int new_dp(int dp_idx)
 	if (!try_module_get(THIS_MODULE))
 		return -ENODEV;
 
-	mutex_lock(&dp_mutex);
-	dp = rcu_dereference(dps[dp_idx]);
-	if (dp != NULL) {
+	/* Exit early if a datapath with that number already exists. */
+	if (dps[dp_idx]) {
 		err = -EEXIST;
 		goto err_unlock;
 	}
@@ -293,8 +291,7 @@ static int new_dp(int dp_idx)
 	if (IS_ERR(dp->dp_task))
 		goto err_destroy_chain;
 
-	rcu_assign_pointer(dps[dp_idx], dp);
-	mutex_unlock(&dp_mutex);
+	dps[dp_idx] = dp;
 
 	return 0;
 
@@ -307,12 +304,11 @@ err_destroy_dp_dev:
 err_free_dp:
 	kfree(dp);
 err_unlock:
-	mutex_unlock(&dp_mutex);
 	module_put(THIS_MODULE);
 		return err;
 }
 
-/* Find and return a free port number under 'dp'.  Called under dp_mutex. */
+/* Find and return a free port number under 'dp'. */
 static int find_portno(struct datapath *dp)
 {
 	int i;
@@ -350,7 +346,6 @@ static struct net_bridge_port *new_nbp(struct datapath *dp,
 	return p;
 }
 
-/* Called with dp_mutex. */
 int add_switch_port(struct datapath *dp, struct net_device *dev)
 {
 	struct net_bridge_port *p;
@@ -374,8 +369,7 @@ int add_switch_port(struct datapath *dp, struct net_device *dev)
 	return 0;
 }
 
-/* Delete 'p' from switch.
- * Called with dp_mutex. */
+/* Delete 'p' from switch. */
 static int del_switch_port(struct net_bridge_port *p)
 {
 	/* First drop references to device. */
@@ -399,7 +393,6 @@ static int del_switch_port(struct net_bridge_port *p)
 	return 0;
 }
 
-/* Called with dp_mutex. */
 static void del_dp(struct datapath *dp)
 {
 	struct net_bridge_port *p, *n;
@@ -467,8 +460,6 @@ static int dp_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 }
 #else
 /* NB: This has only been tested on 2.4.35 */
-
-/* Called without any locks (?) */
 static void dp_frame_hook(struct sk_buff *skb)
 {
 	struct net_bridge_port *p = skb->dev->br_port;
@@ -882,7 +873,6 @@ static int dp_genl_del(struct sk_buff *skb, struct genl_info *info)
 	if (!info->attrs[DP_GENL_A_DP_IDX])
 		return -EINVAL;
 
-	mutex_lock(&dp_mutex);
 	dp = dp_get(nla_get_u32((info->attrs[DP_GENL_A_DP_IDX])));
 	if (!dp)
 		err = -ENOENT;
@@ -890,7 +880,6 @@ static int dp_genl_del(struct sk_buff *skb, struct genl_info *info)
 		del_dp(dp);
 		err = 0;
 	}
-	mutex_unlock(&dp_mutex);
 	return err;
 }
 
@@ -974,7 +963,6 @@ static int dp_genl_add_del_port(struct sk_buff *skb, struct genl_info *info)
 		return -EINVAL;
 
 	/* Get datapath. */
-	mutex_lock(&dp_mutex);
 	dp = dp_get(nla_get_u32(info->attrs[DP_GENL_A_DP_IDX]));
 	if (!dp) {
 		err = -ENOENT;
@@ -1003,7 +991,6 @@ static int dp_genl_add_del_port(struct sk_buff *skb, struct genl_info *info)
 out_put:
 	dev_put(port);
 out:
-	mutex_unlock(&dp_mutex);
 	return err;
 }
 
@@ -1034,26 +1021,22 @@ static int dp_genl_openflow(struct sk_buff *skb, struct genl_info *info)
 	if (!info->attrs[DP_GENL_A_DP_IDX] || !va)
 		return -EINVAL;
 
-	rcu_read_lock();
 	dp = dp_get(nla_get_u32(info->attrs[DP_GENL_A_DP_IDX]));
-	if (!dp) {
-		err = -ENOENT;
-		goto out;
-	}
+	if (!dp)
+		return -ENOENT;
 
-	if (nla_len(va) < sizeof(struct ofp_header)) {
-		err = -EINVAL;
-		goto out;
-	}
+	if (nla_len(va) < sizeof(struct ofp_header))
+		return -EINVAL;
 	oh = nla_data(va);
 
 	sender.xid = oh->xid;
 	sender.pid = info->snd_pid;
 	sender.seq = info->snd_seq;
-	err = fwd_control_input(dp->chain, &sender, nla_data(va), nla_len(va));
 
-out:
-	rcu_read_unlock();
+	mutex_lock(&dp_mutex);
+	err = fwd_control_input(dp->chain, &sender,
+				nla_data(va), nla_len(va));
+	mutex_unlock(&dp_mutex);
 	return err;
 }
 
@@ -1369,7 +1352,6 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 	 * struct genl_ops.  This kluge supports earlier versions also. */
 	cb->done = dp_genl_openflow_done;
 
-	rcu_read_lock();
 	if (!cb->args[0]) {
 		struct nlattr *attrs[DP_GENL_A_MAX + 1];
 		struct ofp_stats_request *rq;
@@ -1382,21 +1364,17 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 		if (err < 0)
 			return err;
 
-		err = -EINVAL;
-
 		if (!attrs[DP_GENL_A_DP_IDX])
-			goto out;
+			return -EINVAL;
 		dp_idx = nla_get_u16(attrs[DP_GENL_A_DP_IDX]);
 		dp = dp_get(dp_idx);
-		if (!dp) {
-			err = -ENOENT;
-			goto out;
-		}
+		if (!dp)
+			return -ENOENT;
 
 		va = attrs[DP_GENL_A_OPENFLOW];
 		len = nla_len(va);
 		if (!va || len < sizeof *rq)
-			goto out;
+			return -EINVAL;
 
 		rq = nla_data(va);
 		type = ntohs(rq->type);
@@ -1405,12 +1383,12 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 		    || ntohs(rq->header.length) != len
 		    || type >= ARRAY_SIZE(stats)
 		    || !stats[type].dump)
-			goto out;
+			return -EINVAL;
 
 		s = &stats[type];
 		body_len = len - offsetof(struct ofp_stats_request, body);
 		if (body_len < s->min_body || body_len > s->max_body)
-			goto out;
+			return -EINVAL;
 
 		cb->args[0] = 1;
 		cb->args[1] = dp_idx;
@@ -1420,7 +1398,7 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 			void *state;
 			err = s->init(dp, rq->body, body_len, &state);
 			if (err)
-				goto out;
+				return err;
 			cb->args[4] = (long) state;
 		}
 	} else if (cb->args[0] == 1) {
@@ -1428,13 +1406,10 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 		s = &stats[cb->args[2]];
 
 		dp = dp_get(dp_idx);
-		if (!dp) {
-			err = -ENOENT;
-			goto out;
-		}
+		if (!dp)
+			return -ENOENT;
 	} else {
-		err = 0;
-		goto out;
+		return 0;
 	}
 
 	sender.xid = cb->args[3];
@@ -1443,10 +1418,8 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 
 	osr = put_openflow_headers(dp, skb, OFPT_STATS_REPLY, &sender,
 				   &max_openflow_len);
-	if (IS_ERR(osr)) {
-		err = PTR_ERR(osr);
-		goto out;
-	}
+	if (IS_ERR(osr))
+		return PTR_ERR(osr);
 	osr->type = htons(s - stats);
 	osr->flags = 0;
 	resize_openflow_skb(skb, &osr->header, max_openflow_len);
@@ -1465,8 +1438,6 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 		err = skb->len;
 	}
 
-out:
-	rcu_read_unlock();
 	return err;
 }
 
