@@ -350,7 +350,8 @@ vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
                 [VLL_WARN] = LOG_WARNING,
                 [VLL_DBG] = LOG_DEBUG,
             };
-            char *line, *save_ptr;
+            char *save_ptr = NULL;
+            char *line;
 
             for (line = strtok_r(s + time_len, "\n", &save_ptr); line != NULL;
                  line = strtok_r(NULL, "\n", &save_ptr)) {
