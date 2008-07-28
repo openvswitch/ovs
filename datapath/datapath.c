@@ -74,6 +74,7 @@ static struct genl_multicast_group mc_group;
  */
 static struct datapath *dps[DP_MAX];
 DEFINE_MUTEX(dp_mutex);
+EXPORT_SYMBOL(dp_mutex);
 
 static int dp_maint_func(void *data);
 static int send_port_status(struct net_bridge_port *p, uint8_t status);
