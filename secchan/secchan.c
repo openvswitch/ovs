@@ -291,10 +291,7 @@ main(int argc, char *argv[])
                 new_management_connection(nl_name, new_remote);
             }
         }
-        if (controller_relay) {
-            /* FIXME: should also fail open when controller_relay is NULL. */
-            failing_open(controller_relay); 
-        }
+        failing_open(controller_relay); 
         if (dhcp) {
             if (rconn_is_connectivity_questionable(remote_rconn)) {
                 dhclient_force_renew(dhcp, 15);
