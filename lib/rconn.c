@@ -496,7 +496,7 @@ rconn_is_connected(const struct rconn *rconn)
 int
 rconn_disconnected_duration(const struct rconn *rconn)
 {
-    return rconn_is_connected(rconn) ? 0 : time(0) - rconn->last_connected;
+    return rconn_is_connected(rconn) ? 0 : time(0) - rconn->last_received;
 }
 
 /* Returns the IP address of the peer, or 0 if the peer is not connected over
