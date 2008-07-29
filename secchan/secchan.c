@@ -606,7 +606,7 @@ local_hook(struct relay *r)
     return true;
 }
 
-/* Causess 'r' to enter or leave fail-open mode, if appropriate.  Returns true
+/* Causes 'r' to enter or leave fail-open mode, if appropriate.  Returns true
  * if 'r' is in fail-open fail, false otherwise. */
 static bool
 failing_open(struct relay *r)
