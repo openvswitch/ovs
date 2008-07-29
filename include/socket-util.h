@@ -35,6 +35,7 @@
 #define SOCKET_UTIL_H 1
 
 #include <netinet/in.h>
+#include <stdbool.h>
 #include <sys/socket.h>
 
 int set_nonblocking(int fd);
@@ -42,5 +43,7 @@ int lookup_ip(const char *host_name, struct in_addr *address);
 int get_socket_error(int sock);
 int check_connection_completion(int fd);
 int drain_rcvbuf(int fd);
+int make_unix_socket(int style, bool nonblock, bool passcred,
+                     const char *bind_path, const char *connect_path);
 
 #endif /* socket-util.h */

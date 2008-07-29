@@ -38,8 +38,13 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include "fatal-signal.h"
+#include "util.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_socket_util
@@ -159,4 +164,89 @@ drain_rcvbuf(int fd)
         rcvbuf -= n_bytes;
     }
     return 0;
+}
+
+/* Stores in '*un' a sockaddr_un that refers to file 'name'.  Stores in
+ * '*un_len' the size of the sockaddr_un. */
+static void
+make_sockaddr_un(const char *name, struct sockaddr_un* un, socklen_t *un_len)
+{
+    un->sun_family = AF_UNIX;
+    strncpy(un->sun_path, name, sizeof un->sun_path);
+    un->sun_path[sizeof un->sun_path - 1] = '\0';
+    *un_len = (offsetof(struct sockaddr_un, sun_path)
+                + strlen (un->sun_path) + 1);
+}
+
+/* Creates a Unix domain socket in the given 'style' (either SOCK_DGRAM or
+ * SOCK_STREAM) that is bound to '*bind_path' (if 'bind_path' is non-null) and
+ * connected to '*connect_path' (if 'connect_path' is non-null).  If 'nonblock'
+ * is true, the socket is made non-blocking.  If 'passcred' is true, the socket
+ * is configured to receive SCM_CREDENTIALS control messages.
+ *
+ * Returns the socket's fd if successful, otherwise a negative errno value. */
+int
+make_unix_socket(int style, bool nonblock, bool passcred UNUSED,
+                 const char *bind_path, const char *connect_path)
+{
+    int error;
+    int fd;
+
+    fd = socket(PF_UNIX, style, 0);
+    if (fd < 0) {
+        return -errno;
+    }
+
+    if (nonblock) {
+        int flags = fcntl(fd, F_GETFL, 0);
+        if (flags == -1) {
+            goto error;
+        }
+        if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+            goto error;
+        }
+    }
+
+    if (bind_path) {
+        struct sockaddr_un un;
+        socklen_t un_len;
+        make_sockaddr_un(bind_path, &un, &un_len);
+        if (unlink(un.sun_path) && errno != ENOENT) {
+            VLOG_WARN("unlinking \"%s\": %s\n", un.sun_path, strerror(errno));
+        }
+        fatal_signal_add_file_to_unlink(bind_path);
+        if (bind(fd, (struct sockaddr*) &un, un_len)
+            || fchmod(fd, S_IRWXU)) {
+            goto error;
+        }
+    }
+
+    if (connect_path) {
+        struct sockaddr_un un;
+        socklen_t un_len;
+        make_sockaddr_un(connect_path, &un, &un_len);
+        if (connect(fd, (struct sockaddr*) &un, un_len)
+            && errno != EINPROGRESS) {
+            goto error;
+        }
+    }
+
+#ifdef SCM_CREDENTIALS
+    if (passcred) {
+        int enable = 1;
+        if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &enable, sizeof(enable))) {
+            goto error;
+        }
+    }
+#endif
+
+    return fd;
+
+error:
+    if (bind_path) {
+        fatal_signal_remove_file_to_unlink(bind_path);
+    }
+    error = errno;
+    close(fd);
+    return -error;
 }

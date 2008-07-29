@@ -45,15 +45,13 @@
 #include <unistd.h>
 #include "fatal-signal.h"
 #include "poll-loop.h"
+#include "socket-util.h"
 #include "util.h"
 #include "vlog.h"
 
 #ifndef SCM_CREDENTIALS
 #include <time.h>
 #endif
-
-static int make_unix_socket(bool nonblock, bool passcred,
-                            const char *bind_path, const char *connect_path);
 
 /* Server for Vlog control connection. */
 struct vlog_server {
@@ -90,7 +88,7 @@ vlog_server_listen(const char *path, struct vlog_server **serverp)
                                  (long int) getpid(), path ? path : "");
     }
 
-    server->fd = make_unix_socket(true, true, server->path, NULL);
+    server->fd = make_unix_socket(SOCK_DGRAM, true, true, server->path, NULL);
     if (server->fd < 0) {
         int fd = server->fd;
         free(server->path);
@@ -295,7 +293,7 @@ vlog_client_connect(const char *path, struct vlog_client **clientp)
                             : xasprintf("/tmp/vlogs.%s", path));
 
     client->bind_path = xasprintf("/tmp/vlog.%ld", (long int) getpid());
-    fd = make_unix_socket(false, false,
+    fd = make_unix_socket(SOCK_DGRAM, false, false,
                           client->bind_path, client->connect_path);
 
     if (fd >= 0) {
@@ -435,89 +433,3 @@ vlog_client_target(const struct vlog_client *client)
     return client->connect_path;
 }
 
-/* Helper functions. */
-
-/* Stores in '*un' a sockaddr_un that refers to file 'name'.  Stores in
- * '*un_len' the size of the sockaddr_un. */
-static void
-make_sockaddr_un(const char *name, struct sockaddr_un* un, socklen_t *un_len)
-{
-    un->sun_family = AF_UNIX;
-    strncpy(un->sun_path, name, sizeof un->sun_path);
-    un->sun_path[sizeof un->sun_path - 1] = '\0';
-    *un_len = (offsetof(struct sockaddr_un, sun_path)
-                + strlen (un->sun_path) + 1);
-}
-
-/* Creates a Unix domain datagram socket that is bound to '*bind_path' (if
- * 'bind_path' is non-null) and connected to '*connect_path' (if 'connect_path'
- * is non-null).  If 'nonblock' is true, the socket is made non-blocking.  If
- * 'passcred' is true, the socket is configured to receive SCM_CREDENTIALS
- * control messages.
- *
- * Returns the socket's fd if successful, otherwise a negative errno value. */
-static int
-make_unix_socket(bool nonblock, bool passcred UNUSED,
-                 const char *bind_path, const char *connect_path)
-{
-    int error;
-    int fd;
-
-    fd = socket(PF_UNIX, SOCK_DGRAM, 0);
-    if (fd < 0) {
-        return -errno;
-    }
-
-    if (nonblock) {
-        int flags = fcntl(fd, F_GETFL, 0);
-        if (flags == -1) {
-            goto error;
-        }
-        if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-            goto error;
-        }
-    }
-
-    if (bind_path) {
-        struct sockaddr_un un;
-        socklen_t un_len;
-        make_sockaddr_un(bind_path, &un, &un_len);
-        if (unlink(un.sun_path) && errno != ENOENT) {
-            fprintf(stderr, "unlinking \"%s\": %s\n",
-                    un.sun_path, strerror(errno));
-        }
-        fatal_signal_add_file_to_unlink(bind_path);
-        if (bind(fd, (struct sockaddr*) &un, un_len)
-            || fchmod(fd, S_IRWXU)) {
-            goto error;
-        }
-    }
-
-    if (connect_path) {
-        struct sockaddr_un un;
-        socklen_t un_len;
-        make_sockaddr_un(connect_path, &un, &un_len);
-        if (connect(fd, (struct sockaddr*) &un, un_len)) {
-            goto error;
-        }
-    }
-
-#ifdef SCM_CREDENTIALS
-    if (passcred) {
-        int enable = 1;
-        if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &enable, sizeof(enable))) {
-            goto error;
-        }
-    }
-#endif
-
-    return fd;
-
-error:
-    if (bind_path) {
-        fatal_signal_remove_file_to_unlink(bind_path);
-    }
-    error = errno;
-    close(fd);
-    return -error;
-}
