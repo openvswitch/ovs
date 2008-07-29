@@ -77,7 +77,6 @@ state_name(enum state state)
 struct rconn {
     enum state state;
     time_t state_entered;
-    unsigned int min_timeout;
 
     struct vconn *vconn;
     char *name;
@@ -114,7 +113,8 @@ struct rconn {
 static unsigned int sat_add(unsigned int x, unsigned int y);
 static unsigned int sat_mul(unsigned int x, unsigned int y);
 static unsigned int elapsed_in_this_state(const struct rconn *);
-static bool timeout(struct rconn *, unsigned int secs);
+static unsigned int timeout(const struct rconn *);
+static bool timed_out(const struct rconn *);
 static void state_transition(struct rconn *, enum state);
 static int try_send(struct rconn *);
 static int reconnect(struct rconn *);
@@ -162,7 +162,6 @@ rconn_create(int txq_limit, int probe_interval, int max_backoff)
 
     rc->state = S_VOID;
     rc->state_entered = time(0);
-    rc->min_timeout = 0;
 
     rc->vconn = NULL;
     rc->name = xstrdup("void");
@@ -241,6 +240,12 @@ rconn_destroy(struct rconn *rc)
     }
 }
 
+static unsigned int
+timeout_VOID(const struct rconn *rc)
+{
+    return UINT_MAX;
+}
+
 static void
 run_VOID(struct rconn *rc)
 {
@@ -264,12 +269,24 @@ reconnect(struct rconn *rc)
     return retval;
 }
 
+static unsigned int
+timeout_BACKOFF(const struct rconn *rc)
+{
+    return rc->backoff;
+}
+
 static void
 run_BACKOFF(struct rconn *rc)
 {
-    if (timeout(rc, rc->backoff)) {
+    if (timed_out(rc)) {
         reconnect(rc);
     }
+}
+
+static unsigned int
+timeout_CONNECTING(const struct rconn *rc)
+{
+    return MAX(1, rc->backoff);
 }
 
 static void
@@ -288,7 +305,7 @@ run_CONNECTING(struct rconn *rc)
     } else if (retval != EAGAIN) {
         VLOG_WARN("%s: connection failed (%s)", rc->name, strerror(retval));
         disconnect(rc, retval);
-    } else if (timeout(rc, MAX(1, rc->backoff))) {
+    } else if (timed_out(rc)) {
         VLOG_WARN("%s: connection timed out", rc->name);
         rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
         disconnect(rc, 0);
@@ -306,28 +323,42 @@ do_tx_work(struct rconn *rc)
     }
 }
 
-static void
-run_ACTIVE(struct rconn *rc)
+static unsigned int
+timeout_ACTIVE(const struct rconn *rc)
 {
     if (rc->probe_interval) {
         unsigned int base = MAX(rc->last_received, rc->state_entered);
         unsigned int arg = base + rc->probe_interval - rc->state_entered;
-        if (timeout(rc, arg)) {
-            queue_push_tail(&rc->txq, make_echo_request());
-            VLOG_DBG("%s: idle %u seconds, sending inactivity probe",
-                     rc->name, (unsigned int) (time(0) - base));
-            state_transition(rc, S_IDLE);
-            return;
-        }
+        return arg;
+    }
+    return UINT_MAX;
+}
+
+static void
+run_ACTIVE(struct rconn *rc)
+{
+    if (timed_out(rc)) {
+        unsigned int base = MAX(rc->last_received, rc->state_entered);
+        queue_push_tail(&rc->txq, make_echo_request());
+        VLOG_DBG("%s: idle %u seconds, sending inactivity probe",
+                 rc->name, (unsigned int) (time(0) - base));
+        state_transition(rc, S_IDLE);
+        return;
     }
 
     do_tx_work(rc);
 }
 
+static unsigned int
+timeout_IDLE(const struct rconn *rc)
+{
+    return rc->probe_interval;
+}
+
 static void
 run_IDLE(struct rconn *rc)
 {
-    if (timeout(rc, rc->probe_interval)) {
+    if (timed_out(rc)) {
         question_connectivity(rc);
         VLOG_ERR("%s: no response to inactivity probe after %u "
                  "seconds, disconnecting",
@@ -347,7 +378,6 @@ rconn_run(struct rconn *rc)
     int old_state;
     do {
         old_state = rc->state;
-        rc->min_timeout = UINT_MAX;
         switch (rc->state) {
 #define STATE(NAME, VALUE) case S_##NAME: run_##NAME(rc); break;
             STATES
@@ -363,14 +393,10 @@ rconn_run(struct rconn *rc)
 void
 rconn_run_wait(struct rconn *rc)
 {
-    if (rc->min_timeout != UINT_MAX) {
-        poll_timer_wait(sat_mul(rc->min_timeout, 1000));
+    unsigned int timeo = timeout(rc);
+    if (timeo != UINT_MAX) {
+        poll_timer_wait(sat_mul(timeo, 1000));
     }
-    /* Reset timeout to 1 second.  This will have no effect ordinarily, because
-     * rconn_run() will typically set it back to a higher value.  If, however,
-     * the caller fails to call rconn_run() before its next call to
-     * rconn_wait() we won't potentially block forever. */
-    rc->min_timeout = 1;
 
     if ((rc->state & (S_ACTIVE | S_IDLE)) && rc->txq.n) {
         vconn_wait(rc->vconn, WAIT_SEND);
@@ -590,11 +616,22 @@ elapsed_in_this_state(const struct rconn *rc)
     return time(0) - rc->state_entered;
 }
 
-static bool
-timeout(struct rconn *rc, unsigned int secs)
+static unsigned int
+timeout(const struct rconn *rc)
 {
-    rc->min_timeout = MIN(rc->min_timeout, secs);
-    return time(0) >= sat_add(rc->state_entered, secs);
+    switch (rc->state) {
+#define STATE(NAME, VALUE) case S_##NAME: return timeout_##NAME(rc);
+        STATES
+#undef STATE
+    default:
+        NOT_REACHED();
+    }
+}
+
+static bool
+timed_out(const struct rconn *rc)
+{
+    return time(0) >= sat_add(rc->state_entered, timeout(rc));
 }
 
 static void
