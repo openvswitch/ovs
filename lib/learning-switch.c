@@ -223,7 +223,11 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
         out_port = mac_learning_lookup(sw->ml, flow.dl_dst);
     }
 
-    if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
+    if (in_port == out_port) {
+        /* The input port and output port match, so just drop the packet 
+         * by returning. */
+        return;
+    } else if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
         /* The output port is known, or we always flood everything, so add a
          * new flow. */
         queue_tx(sw, rconn, make_add_simple_flow(&flow, ntohl(opi->buffer_id),
