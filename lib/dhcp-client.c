@@ -588,6 +588,52 @@ dhclient_run_SELECTING(struct dhclient *cli)
 }
 
 static bool
+same_binding(const struct dhcp_msg *old, const struct dhcp_msg *new)
+{
+    static const int codes[] = {
+        DHCP_CODE_SUBNET_MASK,
+        DHCP_CODE_ROUTER,
+        DHCP_CODE_DNS_SERVER,
+        DHCP_CODE_HOST_NAME,
+        DHCP_CODE_DOMAIN_NAME,
+        DHCP_CODE_IP_TTL,
+        DHCP_CODE_MTU,
+        DHCP_CODE_BROADCAST_ADDRESS,
+        DHCP_CODE_STATIC_ROUTE,
+        DHCP_CODE_ARP_CACHE_TIMEOUT,
+        DHCP_CODE_ETHERNET_ENCAPSULATION,
+        DHCP_CODE_TCP_TTL,
+        DHCP_CODE_SERVER_IDENTIFIER,
+        DHCP_CODE_OFP_CONTROLLER_VCONN,
+        DHCP_CODE_OFP_PKI_URI,
+    };
+    int i;
+    bool same = true;
+
+    if (old->yiaddr != new->yiaddr) {
+        VLOG_WARN("DHCP binding changed IP address from "IP_FMT" to "IP_FMT,
+                  IP_ARGS(&old->yiaddr), IP_ARGS(&new->yiaddr));
+        same = false;
+    }
+    for (i = 0; i < ARRAY_SIZE(codes); i++) {
+        int code = codes[i];
+        const struct dhcp_option *old_opt = &old->options[code];
+        const struct dhcp_option *new_opt = &new->options[code];
+        if (!dhcp_option_equals(old_opt, new_opt)) {
+            struct ds old_string = DS_EMPTY_INITIALIZER;
+            struct ds new_string = DS_EMPTY_INITIALIZER;
+            VLOG_WARN("DHCP binding changed option from %s to %s",
+                      dhcp_option_to_string(old_opt, code, &old_string),
+                      dhcp_option_to_string(new_opt, code, &new_string));
+            ds_destroy(&old_string);
+            ds_destroy(&new_string);
+            same = false;
+        }
+    }
+    return same;
+}
+
+static bool
 receive_ack(struct dhclient *cli)
 {
     struct dhcp_msg msg;
@@ -605,6 +651,9 @@ receive_ack(struct dhclient *cli)
         uint32_t lease = 0, t1 = 0, t2 = 0;
 
         if (cli->binding) {
+            if (!same_binding(cli->binding, &msg)) {
+                cli->changed = true;
+            }
             dhcp_msg_uninit(cli->binding);
         } else {
             cli->binding = xmalloc(sizeof *cli->binding);
