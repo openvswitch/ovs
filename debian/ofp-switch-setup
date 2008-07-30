@@ -122,6 +122,8 @@ my (@states) =
                        $value =~ s/\\([0-7][0-7][0-7])/chr($1)/ge;
                    } else {
                        $value =~ s/^(0x[[:xdigit:]]+)$/hex($1)/e;
+                       $value = '' if $value eq 'empty';
+                       next if $value eq 'null'; # Shouldn't happen.
                    }
                    $options{$name} = $value;
                }

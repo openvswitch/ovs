@@ -419,6 +419,11 @@ dhcp_option_to_string(const struct dhcp_option *opt, int code, struct ds *ds)
     }
     ds_put_char(ds, '=');
 
+    if (!opt->data || !opt->n) {
+        ds_put_cstr(ds, opt->data ? "empty" : "null");
+        return ds_cstr(ds);
+    }
+
     if (class->type == DHCP_ARG_STRING) {
         ds_put_char(ds, '"');
     }
