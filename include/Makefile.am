@@ -32,6 +32,7 @@ noinst_HEADERS = \
 	util.h \
 	vconn.h \
 	vconn-ssl.h \
+	vconn-stream.h \
 	vlog-socket.h \
 	vlog.h \
 	xtoxll.h
