@@ -27,6 +27,7 @@ test -x $DAEMON || exit 0
 
 LOGDIR=/var/log/openflow
 PIDFILE=/var/run/$NAME.pid
+MGMTSOCK=/var/run/$NAME.socket
 DHCLIENT_PIDFILE=/var/run/dhclient.of0.pid
 DODTIME=1                   # Time to wait for the server to die, in seconds
                             # If this value is set too low you might not
@@ -209,7 +210,8 @@ case "$1" in
 	echo -n "Starting $DESC: "
 	start-stop-daemon --start --quiet --pidfile $PIDFILE \
 	    --exec $DAEMON -- nl:0 $CONTROLLER --detach --pidfile=$PIDFILE \
-            --verbose=ANY:console:emer $DAEMON_OPTS $SSL_OPTS
+            --verbose=ANY:console:emer --listen=punix:$MGMTSOCK \
+            $DAEMON_OPTS $SSL_OPTS
         if running; then
             echo "$NAME."
         else
