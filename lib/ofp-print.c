@@ -257,11 +257,11 @@ ofp_print_action(struct ds *string, const struct ofp_action *a)
         break;
 
     case OFPAT_SET_NW_SRC:
-        ds_put_format(string, "mod_nw_src:"IP_FMT, IP_ARGS(a->arg.nw_addr));
+        ds_put_format(string, "mod_nw_src:"IP_FMT, IP_ARGS(&a->arg.nw_addr));
         break;
 
     case OFPAT_SET_NW_DST:
-        ds_put_format(string, "mod_nw_dst:"IP_FMT, IP_ARGS(a->arg.nw_addr));
+        ds_put_format(string, "mod_nw_dst:"IP_FMT, IP_ARGS(&a->arg.nw_addr));
         break;
 
     case OFPAT_SET_TP_SRC:
