@@ -530,13 +530,15 @@ netdev_get_features(const struct netdev *netdev)
     return netdev->features;
 }
 
-/* If 'netdev' has an assigned IPv4 address, sets '*in4' to that address and
- * returns true.  Otherwise, returns false. */
+/* If 'netdev' has an assigned IPv4 address, sets '*in4' to that address (if
+ * 'in4' is non-null) and returns true.  Otherwise, returns false. */
 bool
 netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
 {
-    *in4 = netdev->in4;
-    return in4->s_addr != INADDR_ANY;
+    if (in4) {
+        *in4 = netdev->in4; 
+    }
+    return netdev->in4.s_addr != INADDR_ANY;
 }
 
 static void
@@ -608,13 +610,15 @@ netdev_add_router(struct netdev *netdev, struct in_addr router)
     return error;
 }
 
-/* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address and
- * returns true.  Otherwise, returns false. */
+/* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address (if
+ * 'in6' is non-null) and returns true.  Otherwise, returns false. */
 bool
 netdev_get_in6(const struct netdev *netdev, struct in6_addr *in6)
 {
-    *in6 = netdev->in6;
-    return memcmp(in6, &in6addr_any, sizeof *in6) != 0;
+    if (in6) {
+        *in6 = netdev->in6;
+    }
+    return memcmp(&netdev->in6, &in6addr_any, sizeof netdev->in6) != 0;
 }
 
 /* Obtains the current flags for 'netdev' and stores them into '*flagsp'.
