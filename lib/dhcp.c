@@ -488,6 +488,15 @@ dhcp_option_to_string(const struct dhcp_option *opt, int code, struct ds *ds)
     return ds_cstr(ds);
 }
 
+/* Returns true if 'a' and 'b' have the same content, false otherwise. */
+bool
+dhcp_option_equals(const struct dhcp_option *a, const struct dhcp_option *b)
+{
+    return ((a->data != NULL) == (b->data != NULL)
+            && a->n == b->n
+            && !memcmp(a->data, b->data, a->n));
+}
+
 /* Replaces 'ds' by a string representation of 'msg'.  If 'multiline' is
  * false, 'ds' receives a single-line representation of 'msg', otherwise a
  * multiline representation. */
