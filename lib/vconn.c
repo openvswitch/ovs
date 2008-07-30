@@ -74,11 +74,16 @@ check_vconn_classes(void)
         struct vconn_class *class = vconn_classes[i];
         assert(class->name != NULL);
         assert(class->open != NULL);
-        assert(class->close != NULL);
-        assert(class->accept
-               ? !class->recv && !class->send
-               :  class->recv && class->send);
-        assert(class->wait != NULL);
+        if (class->close || class->accept || class->recv || class->send
+            || class->wait) {
+            assert(class->close != NULL);
+            assert(class->accept
+                   ? !class->recv && !class->send
+                   :  class->recv && class->send);
+            assert(class->wait != NULL);
+        } else {
+            /* This class delegates to another one. */
+        }
     }
 #endif
 }
