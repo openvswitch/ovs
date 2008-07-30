@@ -86,6 +86,7 @@ enum vlog_facility vlog_get_facility_val(const char *name);
         VLOG_MODULE(vconn_tcp)                  \
         VLOG_MODULE(vconn_ssl)                  \
         VLOG_MODULE(vconn_stream)               \
+        VLOG_MODULE(vconn_unix)                 \
         VLOG_MODULE(vconn)                      \
         VLOG_MODULE(vlog)                       \
 

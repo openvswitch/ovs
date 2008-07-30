@@ -61,6 +61,8 @@ static struct vconn_class *vconn_classes[] = {
     &ssl_vconn_class,
     &pssl_vconn_class,
 #endif
+    &unix_vconn_class,
+    &punix_vconn_class,
 };
 
 /* Check the validity of the vconn class structures. */
@@ -110,6 +112,7 @@ vconn_usage(bool active, bool passive)
         printf("  ssl:HOST[:PORT]         "
                "SSL PORT (default: %d) on remote HOST\n", OFP_SSL_PORT);
 #endif
+        printf("  unix:FILE               Unix domain socket named FILE\n");
     }
 
     if (passive) {
@@ -122,6 +125,8 @@ vconn_usage(bool active, bool passive)
                "listen for SSL on PORT (default: %d)\n",
                OFP_SSL_PORT);
 #endif
+        printf("  punix:FILE              "
+               "listen on Unix domain socket FILE\n");
     }
 
 #ifdef HAVE_OPENSSL

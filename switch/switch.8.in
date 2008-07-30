@@ -42,6 +42,10 @@ The specified SSL \fIport\fR (default: 976) on the given remote
 The specified TCP \fIport\fR (default: 975) on the given remote
 \fIhost\fR.
 
+.TP
+\fBunix:\fIfile\fR
+The Unix domain server socket named \fIfile\fR.
+
 .SH OPTIONS
 .TP
 \fB-i\fR, \fB--interfaces=\fR\fInetdev\fR[\fB,\fInetdev\fR]...

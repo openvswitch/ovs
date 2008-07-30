@@ -29,6 +29,11 @@ Listens for TCP connections from remote OpenFlow switches on
 \fIport\fR (default: 975).
 
 .TP
+\fBpunix:\fIfile\fR
+Listens for connections from OpenFlow switches on the Unix domain
+server socket named \fIfile\fR.
+
+.TP
 \fBnl:\fIdp_idx\fR
 The local Netlink datapath numbered \fIdp_idx\fR, as configured with
 .BR dpctl (8).
@@ -45,6 +50,10 @@ The specified SSL \fIport\fR (default: 976) on the given remote
 \fBtcp:\fIhost\fR[\fB:\fIport\fR]
 The specified TCP \fIport\fR (default: 975) on the given remote
 \fIhost\fR.
+
+.TP
+\fBunix:\fIfile\fR
+The Unix domain server socket named \fIfile\fR.
 
 .SH OPTIONS
 .TP

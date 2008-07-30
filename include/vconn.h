@@ -173,6 +173,8 @@ struct vconn_class {
 
 extern struct vconn_class tcp_vconn_class;
 extern struct vconn_class ptcp_vconn_class;
+extern struct vconn_class unix_vconn_class;
+extern struct vconn_class punix_vconn_class;
 #ifdef HAVE_OPENSSL
 extern struct vconn_class ssl_vconn_class;
 extern struct vconn_class pssl_vconn_class;

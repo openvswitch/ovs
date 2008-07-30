@@ -32,6 +32,10 @@ The specified SSL \fIport\fR (default: 976) on the given remote
 The specified TCP \fIport\fR (default: 975) on the given remote
 \fIhost\fR.
 
+.TP
+\fBunix:\fIfile\fR
+The Unix domain server socket named \fIfile\fR.
+
 If \fIcontroller\fR is omitted, \fBsecchan\fR attempts to discover the
 location of the controller automatically (see below).
 
@@ -291,6 +295,10 @@ are mandatory when this form is used.
 \fBptcp:\fR[\fIport\fR]
 Listens for TCP connections on \fIport\fR (default: 975).
 .RE
+
+.TP
+\fBpunix:\fIfile\fR
+Listens for connections on Unix domain server socket named \fIfile\fR.
 
 .TP
 \fB-p\fR, \fB--private-key=\fIprivkey.pem\fR

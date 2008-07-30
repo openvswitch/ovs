@@ -26,6 +26,7 @@ libopenflow_a_SOURCES = \
 	socket-util.c \
 	util.c \
 	vconn-tcp.c \
+	vconn-unix.c \
 	vconn-stream.c \
 	vconn.c \
 	vlog-socket.c \
