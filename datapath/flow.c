@@ -193,13 +193,29 @@ void print_flow(const struct sw_flow_key *key)
 }
 EXPORT_SYMBOL(print_flow);
 
+static int tcphdr_ok(struct sk_buff *skb)
+{
+	int th_ofs = skb_transport_offset(skb);
+	if (skb->len >= th_ofs + sizeof(struct tcphdr)) {
+		int tcp_len = tcp_hdrlen(skb);
+		return (tcp_len >= sizeof(struct tcphdr)
+			&& skb->len >= th_ofs + tcp_len);
+	}
+	return 0;
+}
+
+static int udphdr_ok(struct sk_buff *skb)
+{
+	int th_ofs = skb_transport_offset(skb);
+	return skb->len >= th_ofs + sizeof(struct udphdr);
+}
+
 /* Parses the Ethernet frame in 'skb', which was received on 'in_port',
  * and initializes 'key' to match. */
 void flow_extract(struct sk_buff *skb, uint16_t in_port,
 		  struct sw_flow_key *key)
 {
 	struct ethhdr *mac;
-	struct udphdr *th;
 	int nh_ofs, th_ofs;
 
 	key->in_port = htons(in_port);
@@ -251,20 +267,41 @@ void flow_extract(struct sk_buff *skb, uint16_t in_port,
 		skb_set_transport_header(skb, th_ofs);
 
 		/* Transport layer. */
-		if ((key->nw_proto != IPPROTO_TCP && key->nw_proto != IPPROTO_UDP)
-		    || skb->len < th_ofs + sizeof(struct udphdr)
-		    || nh->frag_off & htons(IP_MF | IP_OFFSET)) {
+		if (!(nh->frag_off & htons(IP_MF | IP_OFFSET))) {
+			if (key->nw_proto == IPPROTO_TCP) {
+				if (tcphdr_ok(skb)) {
+					struct tcphdr *tcp = tcp_hdr(skb);
+					key->tp_src = tcp->source;
+					key->tp_dst = tcp->dest;
+				} else {
+					/* Avoid tricking other code into
+					 * thinking that this packet has an L4
+					 * header. */
+					goto no_proto;
+				}
+			} else if (key->nw_proto == IPPROTO_UDP) {
+				if (udphdr_ok(skb)) {
+					struct udphdr *udp = udp_hdr(skb);
+					key->tp_src = udp->source;
+					key->tp_dst = udp->dest;
+				} else {
+					/* Avoid tricking other code into
+					 * thinking that this packet has an L4
+					 * header. */
+					goto no_proto;
+				}
+			}
+		} else {
 			goto no_th;
 		}
-		th = udp_hdr(skb);
-		key->tp_src = th->source;
-		key->tp_dst = th->dest;
 
 		return;
 	}
 
 	key->nw_src = 0;
 	key->nw_dst = 0;
+
+no_proto:
 	key->nw_proto = 0;
 
 no_th:
