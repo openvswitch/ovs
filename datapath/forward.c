@@ -36,7 +36,13 @@ int run_flow_through_tables(struct sw_chain *chain, struct sk_buff *skb,
 	struct sw_flow_key key;
 	struct sw_flow *flow;
 
-	flow_extract(skb, in_port, &key);
+	if (flow_extract(skb, in_port, &key)
+	    && (chain->dp->flags & OFPC_FRAG_MASK) == OFPC_FRAG_DROP) {
+		/* Drop fragment. */
+		kfree_skb(skb);
+		return 0;
+	}
+
 	flow = chain_lookup(chain, &key);
 	if (likely(flow != NULL)) {
 		flow_used(flow, skb);

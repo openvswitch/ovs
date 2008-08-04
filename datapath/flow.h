@@ -83,7 +83,7 @@ int flow_del_matches(const struct sw_flow_key *, const struct sw_flow_key *,
 struct sw_flow *flow_alloc(int n_actions, gfp_t flags);
 void flow_free(struct sw_flow *);
 void flow_deferred_free(struct sw_flow *);
-void flow_extract(struct sk_buff *, uint16_t in_port, struct sw_flow_key *);
+int flow_extract(struct sk_buff *, uint16_t in_port, struct sw_flow_key *);
 void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from);
 void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from);
 

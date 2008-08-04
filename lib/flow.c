@@ -88,11 +88,13 @@ pull_vlan(struct buffer *packet)
     return buffer_try_pull(packet, VLAN_HEADER_LEN);
 }
 
-void
+/* Returns 1 if 'packet' is an IP fragment, 0 otherwise. */
+int
 flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
 {
     struct buffer b = *packet;
     struct eth_header *eth;
+    int retval = 0;
 
     if (b.size < ETH_TOTAL_MIN) {
         /* This message is not too useful since there are various ways that we
@@ -121,7 +123,7 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
             /* This is an 802.2 frame */
             struct llc_snap_header *h = buffer_at(&b, 0, sizeof *h);
             if (h == NULL) {
-                return;
+                return 0;
             }
             if (h->llc.llc_dsap == LLC_DSAP_SNAP
                 && h->llc.llc_ssap == LLC_SSAP_SNAP
@@ -179,10 +181,13 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
                             flow->nw_proto = 0;
                         }
                     }
+                } else {
+                    retval = 1;
                 }
             }
         }
     }
+    return retval;
 }
 
 void

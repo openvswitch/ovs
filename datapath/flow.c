@@ -211,12 +211,14 @@ static int udphdr_ok(struct sk_buff *skb)
 }
 
 /* Parses the Ethernet frame in 'skb', which was received on 'in_port',
- * and initializes 'key' to match. */
-void flow_extract(struct sk_buff *skb, uint16_t in_port,
-		  struct sw_flow_key *key)
+ * and initializes 'key' to match.  Returns 1 if 'skb' contains an IP
+ * fragment, 0 otherwise. */
+int flow_extract(struct sk_buff *skb, uint16_t in_port,
+		 struct sw_flow_key *key)
 {
 	struct ethhdr *mac;
 	int nh_ofs, th_ofs;
+	int retval = 0;
 
 	key->in_port = htons(in_port);
 	key->wildcards = 0;
@@ -292,10 +294,11 @@ void flow_extract(struct sk_buff *skb, uint16_t in_port,
 				}
 			}
 		} else {
+			retval = 1;
 			goto no_th;
 		}
 
-		return;
+		return 0;
 	}
 
 	key->nw_src = 0;
@@ -307,6 +310,7 @@ no_proto:
 no_th:
 	key->tp_src = 0;
 	key->tp_dst = 0;
+	return retval;
 }
 
 /* Initializes the flow module.

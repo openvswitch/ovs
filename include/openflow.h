@@ -132,7 +132,13 @@ OFP_ASSERT(sizeof(struct ofp_header) == 8);
 
 enum ofp_config_flags {
     /* Tells datapath to notify the controller of expired flow entries. */
-    OFPC_SEND_FLOW_EXP = 1 << 0
+    OFPC_SEND_FLOW_EXP = 1 << 0,
+
+    /* Handling of IP fragments. */
+    OFPC_FRAG_NORMAL = 0 << 1,  /* No special handling for fragments. */
+    OFPC_FRAG_DROP = 1 << 1,    /* Drop fragments. */
+    OFPC_FRAG_REASM = 2 << 1,   /* Reassemble (only if OFPC_IP_REASM set). */
+    OFPC_FRAG_MASK = 3 << 1
 };
 
 /* Switch configuration. */
@@ -150,8 +156,9 @@ enum ofp_capabilities {
     OFPC_TABLE_STATS  = 1 << 1, /* Table statistics. */
     OFPC_PORT_STATS   = 1 << 2, /* Port statistics. */
     OFPC_STP          = 1 << 3, /* 802.11d spanning tree. */
-    OFPC_MULTI_PHY_TX = 1 << 4  /* Supports transmitting through multiple
+    OFPC_MULTI_PHY_TX = 1 << 4, /* Supports transmitting through multiple
                                    physical interfaces */
+    OFPC_IP_REASM     = 1 << 5  /* Can reassemble IP fragments. */
 };
 
 /* Flags to indicate behavior of the physical port */

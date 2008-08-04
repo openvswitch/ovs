@@ -57,7 +57,7 @@ struct flow {
 };
 BUILD_ASSERT_DECL(sizeof (struct flow) == 32);
 
-void flow_extract(struct buffer *, uint16_t in_port, struct flow *);
+int flow_extract(struct buffer *, uint16_t in_port, struct flow *);
 void flow_print(FILE *, const struct flow *);
 int flow_compare(const struct flow *, const struct flow *);
 unsigned long int flow_hash(const struct flow *, uint32_t basis);

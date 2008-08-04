@@ -757,7 +757,13 @@ int run_flow_through_tables(struct datapath *dp, struct buffer *buffer,
     struct sw_flow *flow;
 
     key.wildcards = 0;
-    flow_extract(buffer, in_port, &key.flow);
+    if (flow_extract(buffer, in_port, &key.flow)
+        && (dp->flags & OFPC_FRAG_MASK) == OFPC_FRAG_DROP) {
+        /* Drop fragment. */
+        buffer_delete(buffer);
+        return 0;
+    }
+
     flow = chain_lookup(dp->chain, &key);
     if (flow != NULL) {
         flow_used(flow, buffer);
