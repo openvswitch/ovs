@@ -82,6 +82,12 @@ pull_eth(struct buffer *packet)
     return buffer_try_pull(packet, ETH_HEADER_LEN);
 }
 
+static struct vlan_header *
+pull_vlan(struct buffer *packet)
+{
+    return buffer_try_pull(packet, VLAN_HEADER_LEN);
+}
+
 void
 flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
 {
@@ -98,6 +104,7 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
     }
 
     memset(flow, 0, sizeof *flow);
+    flow->dl_vlan = htons(OFP_VLAN_NONE);
     flow->in_port = htons(in_port);
 
     packet->l2 = b.data;
@@ -130,13 +137,12 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
         }
 
         /* Check for a VLAN tag */
-        if (flow->dl_type != htons(ETH_TYPE_VLAN)) {
-            flow->dl_vlan = htons(OFP_VLAN_NONE);
-        } else {
-            struct vlan_header *vh = buffer_at(&b, 0, sizeof *vh);
-            flow->dl_type = vh->vlan_next_type;
-            flow->dl_vlan = vh->vlan_tci & htons(VLAN_VID);
-            buffer_pull(&b, sizeof *vh);
+        if (flow->dl_type == htons(ETH_TYPE_VLAN)) {
+            struct vlan_header *vh = pull_vlan(&b);
+            if (vh) {
+                flow->dl_type = vh->vlan_next_type;
+                flow->dl_vlan = vh->vlan_tci & htons(VLAN_VID);
+            }
         }
         memcpy(flow->dl_src, eth->eth_src, ETH_ADDR_LEN);
         memcpy(flow->dl_dst, eth->eth_dst, ETH_ADDR_LEN);
