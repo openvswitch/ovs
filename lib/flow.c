@@ -44,7 +44,7 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_flow
 
-struct ip_header *
+static struct ip_header *
 pull_ip(struct buffer *packet)
 {
     if (packet->size >= IP_HEADER_LEN) {
@@ -57,7 +57,7 @@ pull_ip(struct buffer *packet)
     return NULL;
 }
 
-struct tcp_header *
+static struct tcp_header *
 pull_tcp(struct buffer *packet) 
 {
     if (packet->size >= TCP_HEADER_LEN) {
@@ -70,13 +70,13 @@ pull_tcp(struct buffer *packet)
     return NULL;
 }
 
-struct udp_header *
+static struct udp_header *
 pull_udp(struct buffer *packet) 
 {
     return buffer_try_pull(packet, UDP_HEADER_LEN);
 }
 
-struct eth_header *
+static struct eth_header *
 pull_eth(struct buffer *packet) 
 {
     return buffer_try_pull(packet, ETH_HEADER_LEN);
