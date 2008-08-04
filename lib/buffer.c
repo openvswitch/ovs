@@ -213,7 +213,7 @@ buffer_push(struct buffer *b, const void *p, size_t size)
 }
 
 /* If 'b' contains at least 'offset + size' bytes of data, returns a pointer to
- * byte 'offset'.  Otherwise, returns a null pointers. */
+ * byte 'offset'.  Otherwise, returns a null pointer. */
 void *
 buffer_at(const struct buffer *b, size_t offset, size_t size) 
 {
