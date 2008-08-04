@@ -209,7 +209,7 @@ struct ofp_switch_features {
 };
 OFP_ASSERT(sizeof(struct ofp_switch_features) == 48);
 
-/* What changed about the phsyical port */
+/* What changed about the physical port */
 enum ofp_port_reason {
     OFPPR_ADD,              /* The port was added */
     OFPPR_DELETE,           /* The port was removed */
