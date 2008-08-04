@@ -17,6 +17,7 @@
 #include <linux/udp.h>
 #include <linux/in.h>
 #include <linux/rcupdate.h>
+#include <net/ip.h>
 
 #include "openflow.h"
 #include "compat.h"
@@ -251,7 +252,8 @@ void flow_extract(struct sk_buff *skb, uint16_t in_port,
 
 		/* Transport layer. */
 		if ((key->nw_proto != IPPROTO_TCP && key->nw_proto != IPPROTO_UDP)
-				|| skb->len < th_ofs + sizeof(struct udphdr)) {
+		    || skb->len < th_ofs + sizeof(struct udphdr)
+		    || nh->frag_off & htons(IP_MF | IP_OFFSET)) {
 			goto no_th;
 		}
 		th = udp_hdr(skb);

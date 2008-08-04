@@ -149,27 +149,29 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
                 flow->nw_dst = nh->ip_dst;
                 flow->nw_proto = nh->ip_proto;
                 packet->l4 = b.data;
-                if (flow->nw_proto == IP_TYPE_TCP) {
-                    const struct tcp_header *tcp = pull_tcp(&b);
-                    if (tcp) {
-                        flow->tp_src = tcp->tcp_src;
-                        flow->tp_dst = tcp->tcp_dst;
-                        packet->l7 = b.data;
-                    } else {
-                        /* Avoid tricking other code into thinking that this
-                         * packet has an L4 header. */
-                        flow->nw_proto = 0;
-                    }
-                } else if (flow->nw_proto == IP_TYPE_UDP) {
-                    const struct udp_header *udp = pull_udp(&b);
-                    if (udp) {
-                        flow->tp_src = udp->udp_src;
-                        flow->tp_dst = udp->udp_dst;
-                        packet->l7 = b.data;
-                    } else {
-                        /* Avoid tricking other code into thinking that this
-                         * packet has an L4 header. */
-                        flow->nw_proto = 0;
+                if (!IP_IS_FRAGMENT(nh->ip_frag_off)) {
+                    if (flow->nw_proto == IP_TYPE_TCP) {
+                        const struct tcp_header *tcp = pull_tcp(&b);
+                        if (tcp) {
+                            flow->tp_src = tcp->tcp_src;
+                            flow->tp_dst = tcp->tcp_dst;
+                            packet->l7 = b.data;
+                        } else {
+                            /* Avoid tricking other code into thinking that
+                             * this packet has an L4 header. */
+                            flow->nw_proto = 0;
+                        }
+                    } else if (flow->nw_proto == IP_TYPE_UDP) {
+                        const struct udp_header *udp = pull_udp(&b);
+                        if (udp) {
+                            flow->tp_src = udp->udp_src;
+                            flow->tp_dst = udp->udp_dst;
+                            packet->l7 = b.data;
+                        } else {
+                            /* Avoid tricking other code into thinking that
+                             * this packet has an L4 header. */
+                            flow->nw_proto = 0;
+                        }
                     }
                 }
             }
