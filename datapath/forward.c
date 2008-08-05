@@ -306,8 +306,15 @@ recv_set_config(struct sw_chain *chain, const struct sender *sender,
 		const void *msg)
 {
 	const struct ofp_switch_config *osc = msg;
+	int flags;
 
-	chain->dp->flags = ntohs(osc->flags);
+	flags = ntohs(osc->flags) & ~(OFPC_SEND_FLOW_EXP | OFPC_FRAG_MASK);
+	if ((flags & OFPC_FRAG_MASK) != OFPC_FRAG_NORMAL
+	    && (flags & OFPC_FRAG_MASK) != OFPC_FRAG_DROP) {
+		flags = (flags & ~OFPC_FRAG_MASK) | OFPC_FRAG_DROP;
+	}
+	chain->dp->flags = flags;
+
 	chain->dp->miss_send_len = ntohs(osc->miss_send_len);
 
 	return 0;
