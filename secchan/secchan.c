@@ -451,9 +451,8 @@ queue_tx(struct rconn *rc, struct buffer *b)
     }
 }
 
-static bool
-is_controller_mac(const uint8_t dl_addr[ETH_ADDR_LEN], struct netdev *netdev,
-                  struct rconn *controller)
+static const uint8_t *
+get_controller_mac(struct netdev *netdev, struct rconn *controller)
 {
     static uint32_t ip, last_nonzero_ip;
     static uint8_t mac[ETH_ADDR_LEN], last_nonzero_mac[ETH_ADDR_LEN];
@@ -498,7 +497,14 @@ is_controller_mac(const uint8_t dl_addr[ETH_ADDR_LEN], struct netdev *netdev,
          * Otherwise, we can afford to wait a little while. */
         next_refresh = now + (!ip || have_mac ? 10 : 1);
     }
-    return !eth_addr_is_zero(mac) && eth_addr_equals(mac, dl_addr);
+    return !eth_addr_is_zero(mac) ? mac : NULL;
+}
+
+static bool
+is_controller_mac(const uint8_t mac[ETH_ADDR_LEN],
+                  const uint8_t *controller_mac)
+{
+    return controller_mac && eth_addr_equals(mac, controller_mac);
 }
 
 static bool
@@ -513,6 +519,7 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
     struct buffer pkt;
     struct flow flow;
     uint16_t in_port, out_port;
+    const uint8_t *controller_mac;
 
     if (half != HALF_LOCAL || r->is_mgmt_conn) {
         return false;
@@ -537,9 +544,13 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
     flow_extract(&pkt, in_port, &flow);
 
     /* Deal with local stuff. */
+    controller_mac = get_controller_mac(in_band->of_device,
+                                        r->halves[HALF_REMOTE].rconn);
     if (in_port == OFPP_LOCAL) {
+        /* Sent by secure channel. */
         out_port = mac_learning_lookup(in_band->ml, flow.dl_dst);
     } else if (eth_addr_equals(flow.dl_dst, in_band->mac)) {
+        /* Sent to secure channel. */
         out_port = OFPP_LOCAL;
         if (mac_learning_learn(in_band->ml, flow.dl_src, in_port)) {
             VLOG_DBG("learned that "ETH_ADDR_FMT" is on port %"PRIu16,
@@ -547,9 +558,16 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
         }
     } else if (flow.dl_type == htons(ETH_TYPE_ARP)
                && eth_addr_is_broadcast(flow.dl_dst)
-               && is_controller_mac(flow.dl_src, in_band->of_device,
-                                    r->halves[HALF_REMOTE].rconn)) {
+               && is_controller_mac(flow.dl_src, controller_mac)) {
+        /* ARP sent by controller. */
         out_port = OFPP_FLOOD;
+    } else if (is_controller_mac(flow.dl_dst, controller_mac)
+               && in_port == mac_learning_lookup(in_band->ml,
+                                                 controller_mac)) {
+        /* Drop controller traffic that arrives on the controller port. */
+        queue_tx(rc, make_add_flow(&flow, ntohl(opi->buffer_id),
+                                   in_band->s->max_idle, 0));
+        return true;
     } else {
         return false;
     }

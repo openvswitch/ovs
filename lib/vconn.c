@@ -488,11 +488,11 @@ update_openflow_length(struct buffer *buffer)
 }
 
 struct buffer *
-make_add_simple_flow(const struct flow *flow,
-                     uint32_t buffer_id, uint16_t out_port, uint16_t max_idle)
+make_add_flow(const struct flow *flow, uint32_t buffer_id, uint16_t max_idle,
+              size_t n_actions)
 {
     struct ofp_flow_mod *ofm;
-    size_t size = sizeof *ofm + sizeof ofm->actions[0];
+    size_t size = sizeof *ofm + n_actions * sizeof ofm->actions[0];
     struct buffer *out = buffer_new(size);
     ofm = buffer_put_uninit(out, size);
     memset(ofm, 0, size);
@@ -513,10 +513,19 @@ make_add_simple_flow(const struct flow *flow,
     ofm->command = htons(OFPFC_ADD);
     ofm->max_idle = htons(max_idle);
     ofm->buffer_id = htonl(buffer_id);
+    return out;
+}
+
+struct buffer *
+make_add_simple_flow(const struct flow *flow,
+                     uint32_t buffer_id, uint16_t out_port, uint16_t max_idle)
+{
+    struct buffer *buffer = make_add_flow(flow, buffer_id, max_idle, 1);
+    struct ofp_flow_mod *ofm = buffer->data;
     ofm->actions[0].type = htons(OFPAT_OUTPUT);
     ofm->actions[0].arg.output.max_len = htons(0);
     ofm->actions[0].arg.output.port = htons(out_port);
-    return out;
+    return buffer;
 }
 
 struct buffer *
