@@ -113,7 +113,9 @@ struct datapath {
 
     struct sw_chain *chain;  /* Forwarding rules. */
 
-    struct ofp_switch_config config;
+    /* Configuration set from controller. */
+    uint16_t flags;
+    uint16_t miss_send_len;
 
     /* Switch ports. */
     struct sw_port ports[OFPP_MAX];
@@ -200,8 +202,8 @@ dp_new(struct datapath **dp_, uint64_t dpid, struct rconn *rconn)
     }
 
     list_init(&dp->port_list);
-    dp->config.flags = 0;
-    dp->config.miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
+    dp->flags = 0;
+    dp->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
     *dp_ = dp;
     return 0;
 }
@@ -768,7 +770,7 @@ void fwd_port_input(struct datapath *dp, struct buffer *buffer, int in_port)
         execute_actions(dp, buffer, in_port, &key,
                         flow->actions, flow->n_actions);
     } else {
-        dp_output_control(dp, buffer, in_port, ntohs(dp->config.miss_send_len),
+        dp_output_control(dp, buffer, in_port, dp->miss_send_len,
                           OFPR_NO_MATCH);
     }
 }
@@ -959,10 +961,8 @@ recv_get_config_request(struct datapath *dp, const struct sender *sender,
     osc = make_openflow_reply(sizeof *osc, OFPT_GET_CONFIG_REPLY,
                               sender, &buffer);
 
-    assert(sizeof *osc == sizeof dp->config);
-    memcpy(((char *)osc) + sizeof osc->header,
-           ((char *)&dp->config) + sizeof dp->config.header,
-           sizeof dp->config - sizeof dp->config.header);
+    osc->flags = htons(dp->flags);
+    osc->miss_send_len = htons(dp->miss_send_len);
 
     return send_openflow_buffer(dp, buffer, sender);
 }
@@ -972,7 +972,8 @@ recv_set_config(struct datapath *dp, const struct sender *sender UNUSED,
                 const void *msg)
 {
     const struct ofp_switch_config *osc = msg;
-    dp->config = *osc;
+    dp->flags = ntohs(osc->flags);
+    dp->miss_send_len = ntohs(osc->miss_send_len);
     return 0;
 }
 
