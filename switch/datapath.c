@@ -556,6 +556,8 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
             flow_used(flow, buffer);
             execute_actions(dp, buffer, in_port, &key, 
                             flow->actions, flow->n_actions);
+        } else {
+            buffer_delete(buffer);
         }
     } else {
         output_packet(dp, buffer, out_port);

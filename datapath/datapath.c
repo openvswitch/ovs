@@ -554,6 +554,7 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 			execute_actions(dp, skb, &key, flow->actions, flow->n_actions);
 			return 0;
 		}
+		kfree_skb(skb);
 		return -ESRCH;
 	} else if (out_port == OFPP_LOCAL) {
 		struct net_device *dev = dp->netdev;
