@@ -156,6 +156,7 @@ static void modify_th(struct buffer *buffer, uint16_t eth_proto,
 
 #define PKT_COOKIE_BITS (32 - PKT_BUFFER_BITS)
 
+int run_flow_through_tables(struct datapath *, struct buffer *, int in_port);
 void fwd_port_input(struct datapath *, struct buffer *, int in_port);
 int fwd_control_input(struct datapath *, const struct sender *,
                       const void *, size_t);
@@ -548,18 +549,8 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
     } else if (out_port == OFPP_CONTROLLER) {
         dp_output_control(dp, buffer, in_port, 0, OFPR_ACTION); 
     } else if (out_port == OFPP_TABLE) {
-        struct sw_flow_key key;
-        struct sw_flow *flow;
-
-        key.wildcards = 0;
-        flow_extract(buffer, in_port, &key.flow);
-        flow = chain_lookup(dp->chain, &key);
-        if (flow != NULL) {
-            flow_used(flow, buffer);
-            execute_actions(dp, buffer, in_port, &key, 
-                            flow->actions, flow->n_actions);
-        } else {
-            buffer_delete(buffer);
+		if (run_flow_through_tables(dp, buffer, in_port)) {
+			buffer_delete(buffer);
         }
     } else {
         output_packet(dp, buffer, out_port);
@@ -756,8 +747,11 @@ fill_flow_stats(struct buffer *buffer, struct sw_flow *flow,
 
 
 /* 'buffer' was received on 'in_port', a physical switch port between 0 and
- * OFPP_MAX.  Process it according to 'chain'. */
-void fwd_port_input(struct datapath *dp, struct buffer *buffer, int in_port)
+ * OFPP_MAX.  Process it according to 'dp''s flow table.  Returns 0 if
+ * successful, in which case 'buffer' is destroyed, or -ESRCH if there is no
+ * matching flow, in which case 'buffer' still belongs to the caller. */
+int run_flow_through_tables(struct datapath *dp, struct buffer *buffer,
+                            int in_port)
 {
     struct sw_flow_key key;
     struct sw_flow *flow;
@@ -769,7 +763,18 @@ void fwd_port_input(struct datapath *dp, struct buffer *buffer, int in_port)
         flow_used(flow, buffer);
         execute_actions(dp, buffer, in_port, &key,
                         flow->actions, flow->n_actions);
+        return 0;
     } else {
+        return -ESRCH;
+    }
+}
+
+/* 'buffer' was received on 'in_port', a physical switch port between 0 and
+ * OFPP_MAX.  Process it according to 'dp''s flow table, sending it up to the
+ * controller if no flow matches.  Takes ownership of 'buffer'. */
+void fwd_port_input(struct datapath *dp, struct buffer *buffer, int in_port) 
+{
+    if (run_flow_through_tables(dp, buffer, in_port)) {
         dp_output_control(dp, buffer, in_port, dp->miss_send_len,
                           OFPR_NO_MATCH);
     }

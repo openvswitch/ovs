@@ -27,8 +27,11 @@ static struct sk_buff *retrieve_skb(uint32_t id);
 static void discard_skb(uint32_t id);
 
 /* 'skb' was received on 'in_port', a physical switch port between 0 and
- * OFPP_MAX.  Process it according to 'chain'. */
-void fwd_port_input(struct sw_chain *chain, struct sk_buff *skb, int in_port)
+ * OFPP_MAX.  Process it according to 'chain'.  Returns 0 if successful, in
+ * which case 'skb' is destroyed, or -ESRCH if there is no matching flow, in
+ * which case 'skb' still belongs to the caller. */
+int run_flow_through_tables(struct sw_chain *chain, struct sk_buff *skb,
+			    int in_port)
 {
 	struct sw_flow_key key;
 	struct sw_flow *flow;
@@ -39,11 +42,21 @@ void fwd_port_input(struct sw_chain *chain, struct sk_buff *skb, int in_port)
 		flow_used(flow, skb);
 		execute_actions(chain->dp, skb, &key,
 				flow->actions, flow->n_actions);
+		return 0;
 	} else {
+		return -ESRCH;
+	}
+}
+
+/* 'skb' was received on 'in_port', a physical switch port between 0 and
+ * OFPP_MAX.  Process it according to 'chain', sending it up to the controller
+ * if no flow matches.  Takes ownership of 'skb'. */
+void fwd_port_input(struct sw_chain *chain, struct sk_buff *skb, int in_port)
+{
+	if (run_flow_through_tables(chain, skb, in_port))
 		dp_output_control(chain->dp, skb, fwd_save_skb(skb), 
 				  chain->dp->miss_send_len,
 				  OFPR_NO_MATCH);
-	}
 }
 
 static int do_output(struct datapath *dp, struct sk_buff *skb, size_t max_len,

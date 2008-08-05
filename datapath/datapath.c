@@ -544,18 +544,12 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 						  OFPR_ACTION);
 	else if (out_port == OFPP_TABLE) {
 		struct net_bridge_port *p = skb->dev->br_port;
-		struct sw_flow_key key;
-		struct sw_flow *flow;
-
-		flow_extract(skb, p ? p->port_no : OFPP_LOCAL, &key);
-		flow = chain_lookup(dp->chain, &key);
-		if (likely(flow != NULL)) {
-			flow_used(flow, skb);
-			execute_actions(dp, skb, &key, flow->actions, flow->n_actions);
-			return 0;
-		}
-		kfree_skb(skb);
-		return -ESRCH;
+		int retval;
+		retval = run_flow_through_tables(dp->chain, skb,
+						 p ? p->port_no : OFPP_LOCAL);
+		if (retval)
+			kfree_skb(skb);
+		return retval;
 	} else if (out_port == OFPP_LOCAL) {
 		struct net_device *dev = dp->netdev;
 		return dev ? dp_dev_recv(dev, skb) : -ESRCH;

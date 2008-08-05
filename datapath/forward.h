@@ -23,6 +23,7 @@ struct sender;
 
 
 void fwd_port_input(struct sw_chain *, struct sk_buff *, int in_port);
+int run_flow_through_tables(struct sw_chain *, struct sk_buff *, int in_port);
 int fwd_control_input(struct sw_chain *, const struct sender *,
 		      const void *, size_t);
 
