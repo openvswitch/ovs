@@ -435,6 +435,7 @@ static void print_wild(struct ds *string, const char *leader, int is_wild,
     } else {
         ds_put_char(string, '*');
     }
+    ds_put_char(string, ',');
 }
 
 /* Pretty-print the ofp_match structure */
@@ -444,25 +445,25 @@ static void ofp_print_match(struct ds *f, const struct ofp_match *om,
     uint16_t w = ntohs(om->wildcards);
 
     print_wild(f, "in_port=", w & OFPFW_IN_PORT, verbosity,
-               "%d,", ntohs(om->in_port));
+               "%d", ntohs(om->in_port));
     print_wild(f, "dl_vlan=", w & OFPFW_DL_VLAN, verbosity,
-               "%04x,", ntohs(om->dl_vlan));
+               "%04x", ntohs(om->dl_vlan));
     print_wild(f, "dl_src=", w & OFPFW_DL_SRC, verbosity,
-               ETH_ADDR_FMT",", ETH_ADDR_ARGS(om->dl_src));
+               ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_src));
     print_wild(f, "dl_dst=", w & OFPFW_DL_DST, verbosity,
-               ETH_ADDR_FMT",", ETH_ADDR_ARGS(om->dl_dst));
+               ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_dst));
     print_wild(f, "dl_type=", w & OFPFW_DL_TYPE, verbosity,
-               "%04x,", ntohs(om->dl_type));
+               "%04x", ntohs(om->dl_type));
     print_wild(f, "nw_src=", w & OFPFW_NW_SRC, verbosity,
-               IP_FMT",", IP_ARGS(&om->nw_src));
+               IP_FMT, IP_ARGS(&om->nw_src));
     print_wild(f, "nw_dst=", w & OFPFW_NW_DST, verbosity,
-               IP_FMT",", IP_ARGS(&om->nw_dst));
+               IP_FMT, IP_ARGS(&om->nw_dst));
     print_wild(f, "nw_proto=", w & OFPFW_NW_PROTO, verbosity,
-               "%u,", om->nw_proto);
+               "%u", om->nw_proto);
     print_wild(f, "tp_src=", w & OFPFW_TP_SRC, verbosity,
-               "%d,", ntohs(om->tp_src));
+               "%d", ntohs(om->tp_src));
     print_wild(f, "tp_dst=", w & OFPFW_TP_DST, verbosity,
-               "%d,", ntohs(om->tp_dst));
+               "%d", ntohs(om->tp_dst));
 }
 
 /* Pretty-print the OFPT_FLOW_MOD packet of 'len' bytes at 'oh' to 'string'
