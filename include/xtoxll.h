@@ -48,4 +48,4 @@ ntohll(uint64_t n)
     return htonl(1) == 1 ? n : ((uint64_t) ntohl(n) << 32) | ntohl(n >> 32);
 }
 
-#endif /* xtonll.h */
+#endif /* xtoxll.h */
