@@ -158,6 +158,7 @@ static void table_linear_stats(struct sw_table *swt,
 	stats->name = "linear";
 	stats->n_flows = tl->n_flows;
 	stats->max_flows = tl->max_flows;
+	stats->n_matched = swt->n_matched;
 }
 
 

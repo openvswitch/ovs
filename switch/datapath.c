@@ -1247,7 +1247,7 @@ static int table_stats_dump(struct datapath *dp, void *state,
         memset(ots->pad, 0, sizeof ots->pad);
         ots->max_entries = htonl(stats.max_flows);
         ots->active_count = htonl(stats.n_flows);
-        ots->matched_count = htonll(0); /* FIXME */
+        ots->matched_count = htonll(stats.n_matched);
     }
     return 0;
 }

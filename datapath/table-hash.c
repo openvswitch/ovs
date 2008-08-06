@@ -185,6 +185,7 @@ static void table_hash_stats(struct sw_table *swt,
 	stats->name = "hash";
 	stats->n_flows = th->n_flows;
 	stats->max_flows = th->bucket_mask + 1;
+	stats->n_matched = swt->n_matched;
 }
 
 struct sw_table *table_hash_create(unsigned int polynomial,
@@ -193,7 +194,7 @@ struct sw_table *table_hash_create(unsigned int polynomial,
 	struct sw_table_hash *th;
 	struct sw_table *swt;
 
-	th = kmalloc(sizeof *th, GFP_KERNEL);
+	th = kzalloc(sizeof *th, GFP_KERNEL);
 	if (th == NULL)
 		return NULL;
 
@@ -308,6 +309,7 @@ static void table_hash2_stats(struct sw_table *swt,
 	stats->name = "hash2";
 	stats->n_flows = substats[0].n_flows + substats[1].n_flows;
 	stats->max_flows = substats[0].max_flows + substats[1].max_flows;
+	stats->n_matched = swt->n_matched;
 }
 
 struct sw_table *table_hash2_create(unsigned int poly0, unsigned int buckets0,
@@ -317,7 +319,7 @@ struct sw_table *table_hash2_create(unsigned int poly0, unsigned int buckets0,
 	struct sw_table_hash2 *t2;
 	struct sw_table *swt;
 
-	t2 = kmalloc(sizeof *t2, GFP_KERNEL);
+	t2 = kzalloc(sizeof *t2, GFP_KERNEL);
 	if (t2 == NULL)
 		return NULL;
 

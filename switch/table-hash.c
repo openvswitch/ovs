@@ -199,6 +199,7 @@ static void table_hash_stats(struct sw_table *swt,
     stats->name = "hash";
     stats->n_flows = th->n_flows;
     stats->max_flows = th->bucket_mask + 1;
+    stats->n_matched = swt->n_matched;
 }
 
 struct sw_table *table_hash_create(unsigned int polynomial,
@@ -322,6 +323,7 @@ static void table_hash2_stats(struct sw_table *swt,
     stats->name = "hash2";
     stats->n_flows = substats[0].n_flows + substats[1].n_flows;
     stats->max_flows = substats[0].max_flows + substats[1].max_flows;
+    stats->n_matched = swt->n_matched;
 }
 
 struct sw_table *table_hash2_create(unsigned int poly0, unsigned int buckets0,

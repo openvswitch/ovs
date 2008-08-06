@@ -27,7 +27,6 @@ int chain_insert(struct sw_chain *, struct sw_flow *);
 int chain_delete(struct sw_chain *, const struct sw_flow_key *, uint16_t, int);
 int chain_timeout(struct sw_chain *);
 void chain_destroy(struct sw_chain *);
-void chain_print_stats(struct sw_chain *);
 
 int chain_set_hw_hook(struct sw_table *(*create_hw_table)(void),
 		      struct module *owner);

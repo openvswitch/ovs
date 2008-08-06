@@ -58,6 +58,5 @@ int chain_insert(struct sw_chain *, struct sw_flow *);
 int chain_delete(struct sw_chain *, const struct sw_flow_key *, uint16_t, int);
 void chain_timeout(struct sw_chain *, struct list *deleted);
 void chain_destroy(struct sw_chain *);
-void chain_print_stats(struct sw_chain *);
 
 #endif /* chain.h */

@@ -12,9 +12,10 @@ struct datapath;
 
 /* Table statistics. */
 struct sw_table_stats {
-	const char *name;	/* Human-readable name. */
-	unsigned long int n_flows; /* Number of active flows. */
-	unsigned long int max_flows; /* Flow capacity. */
+	const char *name;	         /* Human-readable name. */
+	unsigned int n_flows;        /* Number of active flows. */
+	unsigned int max_flows;      /* Flow capacity. */
+	unsigned long int n_matched; /* Number of packets that have hit. */
 };
 
 /* Position within an iteration of a sw_table.
@@ -31,6 +32,11 @@ struct sw_table_position {
  * rcu_read_lock.  destroy must be fully serialized.
  */
 struct sw_table {
+	/* Keep track of the number of packets that matched this table.  To
+	 * make this 100% accurate, it should be atomic.  However, we're
+	 * primarily concerned about speed. */
+	unsigned long int n_matched;
+
 	/* Searches 'table' for a flow matching 'key', which must not have any
 	 * wildcard fields.  Returns the flow if successful, a null pointer
 	 * otherwise. */

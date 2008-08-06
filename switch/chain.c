@@ -87,8 +87,10 @@ chain_lookup(struct sw_chain *chain, const struct sw_flow_key *key)
     for (i = 0; i < chain->n_tables; i++) {
         struct sw_table *t = chain->tables[i];
         struct sw_flow *flow = t->lookup(t, key);
-        if (flow)
+        if (flow) {
+            t->n_matched++;
             return flow;
+        }
     }
     return NULL;
 }
@@ -161,20 +163,4 @@ chain_destroy(struct sw_chain *chain)
         t->destroy(t);
     }
     free(chain);
-}
-
-/* Prints statistics for each of the tables in 'chain'. */
-void
-chain_print_stats(struct sw_chain *chain)
-{
-    int i;
-
-    printf("\n");
-    for (i = 0; i < chain->n_tables; i++) {
-        struct sw_table *t = chain->tables[i];
-        struct sw_table_stats stats;
-        t->stats(t, &stats);
-        printf("%s: %lu/%lu flows\n",
-               stats.name, stats.n_flows, stats.max_flows);
-    }
 }
