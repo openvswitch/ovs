@@ -92,6 +92,7 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
     tl->n_flows++;
 
     /* Insert the entry immediately in front of where we're pointing. */
+    flow->serial = tl->next_serial++;
     list_insert(&f->node, &flow->node);
     list_push_front(&tl->iter_flows, &flow->iter_node);
 
