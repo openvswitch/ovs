@@ -152,6 +152,7 @@ vconn_open(const char *name, struct vconn **vconnp)
 
     check_vconn_classes();
 
+    *vconnp = NULL;
     prefix_len = strcspn(name, ":");
     if (prefix_len == strlen(name)) {
         error(0, "`%s' not correct format for peer name", name);
@@ -161,14 +162,14 @@ vconn_open(const char *name, struct vconn **vconnp)
         struct vconn_class *class = vconn_classes[i];
         if (strlen(class->name) == prefix_len
             && !memcmp(class->name, name, prefix_len)) {
+            struct vconn *vconn;
             char *suffix_copy = xstrdup(name + prefix_len + 1);
-            int retval = class->open(name, suffix_copy, vconnp);
+            int retval = class->open(name, suffix_copy, &vconn);
             free(suffix_copy);
-            if (retval) {
-                *vconnp = NULL;
-            } else {
-                assert((*vconnp)->connect_status != EAGAIN
-                       || (*vconnp)->class->connect);
+            if (!retval) {
+                assert(vconn->connect_status != EAGAIN
+                       || vconn->class->connect);
+                *vconnp = vconn;
             }
             return retval;
         }
