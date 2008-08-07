@@ -567,6 +567,7 @@ static DEFINE_SPINLOCK(buffer_lock);
 
 uint32_t fwd_save_skb(struct sk_buff *skb)
 {
+	struct sk_buff *old_skb = NULL;
 	struct packet_buffer *p;
 	unsigned long int flags;
 	uint32_t id;
@@ -580,8 +581,10 @@ uint32_t fwd_save_skb(struct sk_buff *skb)
 		if (time_before(jiffies, p->exp_jiffies)) {
 			spin_unlock_irqrestore(&buffer_lock, flags);
 			return -1;
-		} else 
-			kfree_skb(p->skb);
+		} else {
+			/* Defer kfree_skb() until interrupts re-enabled. */
+			old_skb = p->skb;
+		}
 	}
 	/* Don't use maximum cookie value since the all-bits-1 id is
 	 * special. */
@@ -592,6 +595,9 @@ uint32_t fwd_save_skb(struct sk_buff *skb)
 	p->exp_jiffies = jiffies + OVERWRITE_JIFFIES;
 	id = buffer_idx | (p->cookie << PKT_BUFFER_BITS);
 	spin_unlock_irqrestore(&buffer_lock, flags);
+
+	if (old_skb)
+		kfree_skb(old_skb);
 
 	return id;
 }
@@ -618,29 +624,39 @@ static struct sk_buff *retrieve_skb(uint32_t id)
 
 void fwd_discard_all(void) 
 {
-	unsigned long int flags;
 	int i;
 
-	spin_lock_irqsave(&buffer_lock, flags);
 	for (i = 0; i < N_PKT_BUFFERS; i++) {
-		kfree_skb(buffers[i].skb);
+		struct sk_buff *skb;
+		unsigned long int flags;
+
+		/* Defer kfree_skb() until interrupts re-enabled. */
+		spin_lock_irqsave(&buffer_lock, flags);
+		skb = buffers[i].skb;
 		buffers[i].skb = NULL;
+		spin_unlock_irqrestore(&buffer_lock, flags);
+
+		kfree_skb(skb);
 	}
-	spin_unlock_irqrestore(&buffer_lock, flags);
 }
 
 static void discard_skb(uint32_t id)
 {
+	struct sk_buff *old_skb = NULL;
 	unsigned long int flags;
 	struct packet_buffer *p;
 
 	spin_lock_irqsave(&buffer_lock, flags);
 	p = &buffers[id & PKT_BUFFER_MASK];
 	if (p->cookie == id >> PKT_BUFFER_BITS) {
-		kfree_skb(p->skb);
+		/* Defer kfree_skb() until interrupts re-enabled. */
+		old_skb = p->skb;
 		p->skb = NULL;
 	}
 	spin_unlock_irqrestore(&buffer_lock, flags);
+
+	if (old_skb)
+		kfree_skb(old_skb);
 }
 
 void fwd_exit(void)
