@@ -132,7 +132,8 @@ void dp_output_port(struct datapath *, struct buffer *,
 void dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp);
 void dp_output_control(struct datapath *, struct buffer *, int in_port,
                        size_t max_len, int reason);
-static void send_flow_expired(struct datapath *, struct sw_flow *);
+static void send_flow_expired(struct datapath *, struct sw_flow *,
+                              enum ofp_flow_expired_reason);
 static void send_port_status(struct sw_port *p, uint8_t status);
 static void del_switch_port(struct sw_port *p);
 static void execute_actions(struct datapath *, struct buffer *,
@@ -279,7 +280,7 @@ dp_run(struct datapath *dp)
 
         chain_timeout(dp->chain, &deleted);
         LIST_FOR_EACH_SAFE (f, n, struct sw_flow, node, &deleted) {
-            send_flow_expired(dp, f);
+            send_flow_expired(dp, f, f->reason);
             list_remove(&f->node);
             flow_free(f);
         }
@@ -684,17 +685,20 @@ send_port_status(struct sw_port *p, uint8_t status)
 }
 
 void
-send_flow_expired(struct datapath *dp, struct sw_flow *flow)
+send_flow_expired(struct datapath *dp, struct sw_flow *flow,
+                  enum ofp_flow_expired_reason reason)
 {
     struct buffer *buffer;
     struct ofp_flow_expired *ofe;
     ofe = make_openflow_xid(sizeof *ofe, OFPT_FLOW_EXPIRED, 0, &buffer);
     flow_fill_match(&ofe->match, &flow->key);
 
-    memset(ofe->pad, 0, sizeof ofe->pad);
     ofe->priority = htons(flow->priority);
+    ofe->reason = reason;
+    memset(ofe->pad, 0, sizeof ofe->pad);
 
-    ofe->duration     = htonl(flow->timeout - flow->max_idle - flow->created);
+    ofe->duration     = htonl(time(0) - flow->created);
+    memset(ofe->pad2, 0, sizeof ofe->pad2);
     ofe->packet_count = htonll(flow->packet_count);
     ofe->byte_count   = htonll(flow->byte_count);
     send_openflow_buffer(dp, buffer, NULL);
@@ -737,10 +741,12 @@ fill_flow_stats(struct buffer *buffer, struct sw_flow *flow,
     ofs->match.tp_src    = flow->key.flow.tp_src;
     ofs->match.tp_dst    = flow->key.flow.tp_dst;
     ofs->duration        = htonl(now - flow->created);
+    ofs->priority        = htons(flow->priority);
+    ofs->idle_timeout    = htons(flow->idle_timeout);
+    ofs->hard_timeout    = htons(flow->hard_timeout);
+    memset(ofs->pad2, 0, sizeof ofs->pad2);
     ofs->packet_count    = htonll(flow->packet_count);
     ofs->byte_count      = htonll(flow->byte_count);
-    ofs->priority        = htons(flow->priority);
-    ofs->max_idle        = htons(flow->max_idle);
     memcpy(ofs->actions, flow->actions,
            sizeof *ofs->actions * flow->n_actions);
 }
@@ -1069,11 +1075,11 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
 
     /* Fill out flow. */
     flow_extract_match(&flow->key, &ofm->match);
-    flow->max_idle = ntohs(ofm->max_idle);
     flow->priority = flow->key.wildcards ? ntohs(ofm->priority) : -1;
-    flow->timeout = time(0) + flow->max_idle; /* FIXME */
+    flow->idle_timeout = ntohs(ofm->idle_timeout);
+    flow->hard_timeout = ntohs(ofm->hard_timeout);
+    flow->used = flow->created = time(0);
     flow->n_actions = n_acts;
-    flow->created = time(0);    /* FIXME */
     flow->byte_count = 0;
     flow->packet_count = 0;
     memcpy(flow->actions, ofm->actions, n_acts * sizeof *flow->actions);

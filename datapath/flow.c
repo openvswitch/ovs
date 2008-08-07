@@ -11,6 +11,7 @@
 #include <linux/if_vlan.h>
 #include <net/llc_pdu.h>
 #include <linux/ip.h>
+#include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/tcp.h>
@@ -125,6 +126,20 @@ void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
 	to->tp_dst	  = from->tp_dst;
 	memset(to->pad, '\0', sizeof(to->pad));
 }
+
+int flow_timeout(struct sw_flow *flow)
+{
+	if (flow->idle_timeout != OFP_FLOW_PERMANENT
+	    && time_after(jiffies, flow->used + flow->idle_timeout * HZ))
+		return OFPER_IDLE_TIMEOUT;
+	else if (flow->hard_timeout != OFP_FLOW_PERMANENT
+		 && time_after(jiffies,
+			       flow->init_time + flow->hard_timeout * HZ))
+		return OFPER_HARD_TIMEOUT;
+	else
+		return -1;
+}
+EXPORT_SYMBOL(flow_timeout);
 
 /* Allocates and returns a new flow with 'n_actions' action, using allocation
  * flags 'flags'.  Returns the new flow or a null pointer on failure. */

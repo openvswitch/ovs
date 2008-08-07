@@ -116,10 +116,12 @@ static int table_hash_timeout(struct datapath *dp, struct sw_table *swt)
 	for (i = 0; i <= th->bucket_mask; i++) {
 		struct sw_flow **bucket = &th->buckets[i];
 		struct sw_flow *flow = *bucket;
-		if (flow && flow_timeout(flow)) {
-			count += do_delete(bucket, flow); 
-			if (dp->flags & OFPC_SEND_FLOW_EXP)
-				dp_send_flow_expired(dp, flow);
+		if (flow) {
+			int reason = flow_timeout(flow);
+			if (reason >= 0) {
+				count += do_delete(bucket, flow); 
+				dp_send_flow_expired(dp, flow, reason);
+			}
 		}
 	}
 	th->n_flows -= count;

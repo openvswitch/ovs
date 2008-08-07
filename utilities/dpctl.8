@@ -277,13 +277,28 @@ implemented by all OpenFlow switches.)
 not yet expose to the user.)
 
 .PP
-The \fBadd-flows\fR and \fBdel-flows\fR commands support an additional
-optional field:
+The \fBadd-flow\fR, \fBadd-flows\fR, and \fBdel-flows\fR commands
+support an additional optional field:
 
 .IP \fBpriority=\fIvalue\fR
 Sets the priority of the flow to be added or deleted to \fIvalue\fR,
 which should be a number between 0 and 65535, inclusive.  If this
 field is not specified, it defaults to 32768.
+
+.PP
+The \fBadd-flow\fR and \fBadd-flows\fR commands support additional
+optional fields:
+
+.TP
+\fBidle_timeout=\fIseconds\fR
+Causes the flow to expire after the given number of seconds of
+inactivity.  A value of 0 prevents a flow from expiring due to
+inactivity.  The default is 60 seconds.
+
+.IP \fBhard_timeout=\fIseconds\fR
+Causes the flow to expire after the given number of seconds,
+regardless of activity.  A value of 0 (the default) gives the flow no
+hard expiration deadline.
 
 .PP
 The \fBdump-flows\fR and \fBdump-aggregate\fR commands support an

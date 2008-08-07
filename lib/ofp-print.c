@@ -475,8 +475,9 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
     const struct ofp_flow_mod *ofm = oh;
 
     ofp_print_match(string, &ofm->match, verbosity);
-    ds_put_format(string, " cmd:%d idle:%d pri:%d buf:%#x", 
-            ntohs(ofm->command), ntohs(ofm->max_idle), 
+    ds_put_format(string, " cmd:%d idle:%d hard:%d pri:%d buf:%#x", 
+            ntohs(ofm->command), ntohs(ofm->idle_timeout),
+            ntohs(ofm->hard_timeout),
             ofm->match.wildcards ? ntohs(ofm->priority) : (uint16_t)-1,
             ntohl(ofm->buffer_id));
     ofp_print_actions(string, ofm->actions,
@@ -493,6 +494,18 @@ ofp_print_flow_expired(struct ds *string, const void *oh, size_t len,
     const struct ofp_flow_expired *ofe = oh;
 
     ofp_print_match(string, &ofe->match, verbosity);
+    ds_put_cstr(string, " reason=");
+    switch (ofe->reason) {
+    case OFPER_IDLE_TIMEOUT:
+        ds_put_cstr(string, "idle");
+        break;
+    case OFPER_HARD_TIMEOUT:
+        ds_put_cstr(string, "hard");
+        break;
+    default:
+        ds_put_format(string, "**%"PRIu8"**", ofe->reason);
+        break;
+    }
     ds_put_format(string, 
          " pri%"PRIu16" secs%"PRIu32" pkts%"PRIu64" bytes%"PRIu64"\n", 
          ofe->match.wildcards ? ntohs(ofe->priority) : (uint16_t)-1,
@@ -594,7 +607,10 @@ ofp_flow_stats_reply(struct ds *string, const void *body_, size_t len,
         ds_put_format(string, "n_packets=%"PRIu64", ",
                     ntohll(fs->packet_count));
         ds_put_format(string, "n_bytes=%"PRIu64", ", ntohll(fs->byte_count));
-        ds_put_format(string, "max_idle=%"PRIu16",", ntohs(fs->max_idle));
+        ds_put_format(string, "idle_timeout=%"PRIu16",",
+                      ntohs(fs->idle_timeout));
+        ds_put_format(string, "hard_timeout=%"PRIu16",",
+                      ntohs(fs->hard_timeout));
         ofp_print_match(string, &fs->match, verbosity);
         ofp_print_actions(string, fs->actions, length - sizeof *fs);
         ds_put_char(string, '\n');

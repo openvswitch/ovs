@@ -756,11 +756,14 @@ send_port_status(struct net_bridge_port *p, uint8_t status)
 }
 
 int 
-dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow)
+dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow,
+		     enum ofp_flow_expired_reason reason)
 {
 	struct sk_buff *skb;
 	struct ofp_flow_expired *ofe;
-	unsigned long duration_j;
+
+	if (!(dp->flags & OFPC_SEND_FLOW_EXP))
+		return 0;
 
 	ofe = alloc_openflow_skb(dp, sizeof *ofe, OFPT_FLOW_EXPIRED, 0, &skb);
 	if (!ofe)
@@ -768,11 +771,12 @@ dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow)
 
 	flow_fill_match(&ofe->match, &flow->key);
 
-	memset(ofe->pad, 0, sizeof ofe->pad);
 	ofe->priority = htons(flow->priority);
+	ofe->reason = reason;
+	memset(ofe->pad, 0, sizeof ofe->pad);
 
-	duration_j = (flow->timeout - HZ * flow->max_idle) - flow->init_time;
-	ofe->duration     = htonl(duration_j / HZ);
+	ofe->duration     = htonl((jiffies - flow->init_time) / HZ);
+	memset(ofe->pad2, 0, sizeof ofe->pad2);
 	ofe->packet_count = cpu_to_be64(flow->packet_count);
 	ofe->byte_count   = cpu_to_be64(flow->byte_count);
 
@@ -1092,10 +1096,12 @@ static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 	ofs->match.tp_src    = flow->key.tp_src;
 	ofs->match.tp_dst    = flow->key.tp_dst;
 	ofs->duration        = htonl((jiffies - flow->init_time) / HZ);
+	ofs->priority        = htons(flow->priority);
+	ofs->idle_timeout    = htons(flow->idle_timeout);
+	ofs->hard_timeout    = htons(flow->hard_timeout);
+	memset(ofs->pad2, 0, sizeof ofs->pad2);
 	ofs->packet_count    = cpu_to_be64(flow->packet_count);
 	ofs->byte_count      = cpu_to_be64(flow->byte_count);
-	ofs->priority        = htons(flow->priority);
-	ofs->max_idle        = htons(flow->max_idle);
 	memcpy(ofs->actions, flow->actions, actions_length);
 
 	s->bytes_used += length;

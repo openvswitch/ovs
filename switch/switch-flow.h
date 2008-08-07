@@ -49,12 +49,14 @@ struct sw_flow_key {
 struct sw_flow {
     struct sw_flow_key key;
 
-    uint16_t max_idle;          /* Idle time before discarding (seconds). */
     uint16_t priority;          /* Only used on entries with wildcards. */
+    uint16_t idle_timeout;      /* Idle time before discarding (seconds). */
+    uint16_t hard_timeout;      /* Hard expiration time (seconds) */
+    time_t used;                /* Last used time. */
     time_t created;             /* When the flow was created. */
-    time_t timeout;             /* When the flow expires (if idle). */
     uint64_t packet_count;      /* Number of packets seen. */
     uint64_t byte_count;        /* Number of bytes seen. */
+    uint8_t reason;             /* Reason flow expired (one of OFPER_*). */
 
     /* Private to table implementations. */
     struct list node;
@@ -76,7 +78,7 @@ void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from);
 void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from);
 
 void print_flow(const struct sw_flow_key *);
-int flow_timeout(struct sw_flow *flow);
+bool flow_timeout(struct sw_flow *flow);
 void flow_used(struct sw_flow *flow, struct buffer *buffer);
 
 #endif /* switch-flow.h */

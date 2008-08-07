@@ -68,7 +68,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x85
+#define OFP_VERSION   0x86
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -240,7 +240,7 @@ struct ofp_port_mod {
 OFP_ASSERT(sizeof(struct ofp_port_mod) == 44);
 
 /* Why is this packet being sent to the controller? */
-enum ofp_reason {
+enum ofp_packet_in_reason {
     OFPR_NO_MATCH,          /* No matching flow. */
     OFPR_ACTION             /* Action explicitly output to controller. */
 };
@@ -363,7 +363,8 @@ struct ofp_match {
 };
 OFP_ASSERT(sizeof(struct ofp_match) == 36);
 
-/* Value used in "max_idle" to indicate that the entry is permanent */
+/* Value used in "idle_timeout" and "hard_timeout" to indicate that the entry
+ * is permanent. */
 #define OFP_FLOW_PERMANENT 0
 
 /* By default, choose a priority in the middle */
@@ -376,15 +377,21 @@ struct ofp_flow_mod {
 
     /* Flow actions. */
     uint16_t command;             /* One of OFPFC_*. */
-    uint16_t max_idle;            /* Idle time before discarding (seconds). */
-    uint32_t buffer_id;           /* Buffered packet to apply to (or -1). */
+    uint16_t idle_timeout;        /* Idle time before discarding (seconds). */
+    uint16_t hard_timeout;        /* Max time before discarding (seconds). */
     uint16_t priority;            /* Priority level of flow entry. */
-    uint8_t pad[2];               /* Align to 32-bits. */
+    uint32_t buffer_id;           /* Buffered packet to apply to (or -1). */
     uint32_t reserved;            /* Reserved for future use. */
     struct ofp_action actions[0]; /* The number of actions is inferred from
                                     the length field in the header. */
 };
 OFP_ASSERT(sizeof(struct ofp_flow_mod) == 60);
+
+/* Why did this flow expire? */
+enum ofp_flow_expired_reason {
+    OFPER_IDLE_TIMEOUT,         /* Flow idle time exceeded idle_timeout. */
+    OFPER_HARD_TIMEOUT          /* Time exceeded hard_timeout. */
+};
 
 /* Flow expiration (datapath -> controller). */
 struct ofp_flow_expired {
@@ -392,7 +399,8 @@ struct ofp_flow_expired {
     struct ofp_match match;   /* Description of fields */
 
     uint16_t priority;        /* Priority level of flow entry. */
-    uint8_t pad[2];           /* Align to 32-bits. */
+    uint8_t reason;           /* One of OFPER_*. */
+    uint8_t pad[1];           /* Align to 32-bits. */
 
     uint32_t duration;        /* Time flow was alive in seconds. */
     uint8_t pad2[4];          /* Align to 64-bits. */
@@ -472,12 +480,14 @@ struct ofp_flow_stats {
     uint32_t duration;        /* Time flow has been alive in seconds. */
     uint16_t priority;        /* Priority of the entry. Only meaningful
                                  when this is not an exact-match entry. */
-    uint16_t max_idle;        /* Number of seconds idle before expiration. */
+    uint16_t idle_timeout;    /* Number of seconds idle before expiration. */
+    uint16_t hard_timeout;    /* Number of seconds before expiration. */
+    uint16_t pad2[3];         /* Pad to 64 bits. */
     uint64_t packet_count;    /* Number of packets in flow. */
     uint64_t byte_count;      /* Number of bytes in flow. */
     struct ofp_action actions[0]; /* Actions. */
 };
-OFP_ASSERT(sizeof(struct ofp_flow_stats) == 64);
+OFP_ASSERT(sizeof(struct ofp_flow_stats) == 72);
 
 /* Body for ofp_stats_request of type OFPST_AGGREGATE. */
 struct ofp_aggregate_stats_request {

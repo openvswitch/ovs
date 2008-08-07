@@ -62,7 +62,7 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_dpctl
 
-#define DEFAULT_MAX_IDLE 60
+#define DEFAULT_IDLE_TIMEOUT 60
 #define MAX_ADD_ACTS 5
 
 static const char* ifconfigbin = "/sbin/ifconfig";
@@ -499,7 +499,7 @@ str_to_action(char *str, struct ofp_action *action, int *n_actions)
 static void
 str_to_flow(char *string, struct ofp_match *match, 
         struct ofp_action *action, int *n_actions, uint8_t *table_idx, 
-        uint16_t *priority, uint16_t *max_idle)
+            uint16_t *priority, uint16_t *idle_timeout, uint16_t *hard_timeout)
 {
     struct field {
         const char *name;
@@ -532,8 +532,11 @@ str_to_flow(char *string, struct ofp_match *match,
     if (priority) {
         *priority = OFP_DEFAULT_PRIORITY;
     }
-    if (max_idle) {
-        *max_idle = DEFAULT_MAX_IDLE;
+    if (idle_timeout) {
+        *idle_timeout = DEFAULT_IDLE_TIMEOUT;
+    }
+    if (hard_timeout) {
+        *hard_timeout = OFP_FLOW_PERMANENT;
     }
     if (action) {
         act_str = strstr(string, "action");
@@ -570,8 +573,13 @@ str_to_flow(char *string, struct ofp_match *match,
             continue;
         }
 
-        if (max_idle && !strcmp(name, "max_idle")) {
-            *max_idle = atoi(value);
+        if (idle_timeout && !strcmp(name, "idle_timeout")) {
+            *idle_timeout = atoi(value);
+            continue;
+        }
+
+        if (hard_timeout && !strcmp(name, "hard_timeout")) {
+            *hard_timeout = atoi(value);
             continue;
         }
 
@@ -623,7 +631,7 @@ static void do_dump_flows(int argc, char *argv[])
 
     req = alloc_stats_request(sizeof *req, OFPST_FLOW, &request);
     str_to_flow(argc > 2 ? argv[2] : "", &req->match, NULL, 0, 
-            &req->table_id, NULL, NULL);
+                &req->table_id, NULL, NULL, NULL);
     memset(req->pad, 0, sizeof req->pad);
 
     dump_stats_transaction(argv[1], request);
@@ -636,7 +644,7 @@ static void do_dump_aggregate(int argc, char *argv[])
 
     req = alloc_stats_request(sizeof *req, OFPST_AGGREGATE, &request);
     str_to_flow(argc > 2 ? argv[2] : "", &req->match, NULL, 0,
-            &req->table_id, NULL, NULL);
+                &req->table_id, NULL, NULL, NULL);
     memset(req->pad, 0, sizeof req->pad);
 
     dump_stats_transaction(argv[1], request);
@@ -647,7 +655,7 @@ static void do_add_flow(int argc, char *argv[])
     struct vconn *vconn;
     struct buffer *buffer;
     struct ofp_flow_mod *ofm;
-    uint16_t priority, max_idle;
+    uint16_t priority, idle_timeout, hard_timeout;
     size_t size;
     int n_actions = MAX_ADD_ACTS;
 
@@ -657,9 +665,10 @@ static void do_add_flow(int argc, char *argv[])
     size = sizeof *ofm + (sizeof ofm->actions[0] * MAX_ADD_ACTS);
     ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argv[2], &ofm->match, &ofm->actions[0], &n_actions, 
-            NULL, &priority, &max_idle);
+                NULL, &priority, &idle_timeout, &hard_timeout);
     ofm->command = htons(OFPFC_ADD);
-    ofm->max_idle = htons(max_idle);
+    ofm->idle_timeout = htons(idle_timeout);
+    ofm->hard_timeout = htons(hard_timeout);
     ofm->buffer_id = htonl(UINT32_MAX);
     ofm->priority = htons(priority);
     ofm->reserved = htonl(0);
@@ -687,7 +696,7 @@ static void do_add_flows(int argc, char *argv[])
     while (fgets(line, sizeof line, file)) {
         struct buffer *buffer;
         struct ofp_flow_mod *ofm;
-        uint16_t priority, max_idle;
+        uint16_t priority, idle_timeout, hard_timeout;
         size_t size;
         int n_actions = MAX_ADD_ACTS;
 
@@ -708,9 +717,10 @@ static void do_add_flows(int argc, char *argv[])
         size = sizeof *ofm + (sizeof ofm->actions[0] * MAX_ADD_ACTS);
         ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
         str_to_flow(line, &ofm->match, &ofm->actions[0], &n_actions, 
-                    NULL, &priority, &max_idle);
+                    NULL, &priority, &idle_timeout, &hard_timeout);
         ofm->command = htons(OFPFC_ADD);
-        ofm->max_idle = htons(max_idle);
+        ofm->idle_timeout = htons(idle_timeout);
+        ofm->hard_timeout = htons(hard_timeout);
         ofm->buffer_id = htonl(UINT32_MAX);
         ofm->priority = htons(priority);
         ofm->reserved = htonl(0);
@@ -739,9 +749,10 @@ static void do_del_flows(int argc, char *argv[])
     size = sizeof *ofm;
     ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argc > 2 ? argv[2] : "", &ofm->match, NULL, 0, NULL, 
-                &priority, NULL);
+                &priority, NULL, NULL);
     ofm->command = htons(OFPFC_DELETE);
-    ofm->max_idle = htons(0);
+    ofm->idle_timeout = htons(0);
+    ofm->hard_timeout = htons(0);
     ofm->buffer_id = htonl(UINT32_MAX);
     ofm->priority = htons(priority);
     ofm->reserved = htonl(0);

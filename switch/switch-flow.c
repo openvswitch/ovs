@@ -192,20 +192,25 @@ void print_flow(const struct sw_flow_key *key)
            ntohs(f->tp_src), ntohs(f->tp_dst));
 }
 
-int flow_timeout(struct sw_flow *flow)
+bool flow_timeout(struct sw_flow *flow)
 {
-    if (flow->max_idle == OFP_FLOW_PERMANENT)
-        return 0;
-
-    /* FIXME */
-    return time(0) > flow->timeout;
+    time_t now = time(0);
+    if (flow->idle_timeout != OFP_FLOW_PERMANENT
+        && now > flow->used + flow->idle_timeout) {
+        flow->reason = OFPER_IDLE_TIMEOUT;
+        return true;
+    } else if (flow->hard_timeout != OFP_FLOW_PERMANENT
+               && now > flow->created + flow->hard_timeout) {
+        flow->reason = OFPER_HARD_TIMEOUT;
+        return true;
+    } else {
+        return false;
+    }
 }
 
 void flow_used(struct sw_flow *flow, struct buffer *buffer)
 {
-    if (flow->max_idle != OFP_FLOW_PERMANENT)
-        flow->timeout = time(0) + flow->max_idle;
-
+    flow->used = time(0);
     flow->packet_count++;
     flow->byte_count += buffer->size;
 }

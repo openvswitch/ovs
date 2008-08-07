@@ -488,8 +488,8 @@ update_openflow_length(struct buffer *buffer)
 }
 
 struct buffer *
-make_add_flow(const struct flow *flow, uint32_t buffer_id, uint16_t max_idle,
-              size_t n_actions)
+make_add_flow(const struct flow *flow, uint32_t buffer_id,
+              uint16_t idle_timeout, size_t n_actions)
 {
     struct ofp_flow_mod *ofm;
     size_t size = sizeof *ofm + n_actions * sizeof ofm->actions[0];
@@ -511,16 +511,18 @@ make_add_flow(const struct flow *flow, uint32_t buffer_id, uint16_t max_idle,
     ofm->match.tp_src = flow->tp_src;
     ofm->match.tp_dst = flow->tp_dst;
     ofm->command = htons(OFPFC_ADD);
-    ofm->max_idle = htons(max_idle);
+    ofm->idle_timeout = htons(idle_timeout);
+    ofm->hard_timeout = htons(OFP_FLOW_PERMANENT);
     ofm->buffer_id = htonl(buffer_id);
     return out;
 }
 
 struct buffer *
 make_add_simple_flow(const struct flow *flow,
-                     uint32_t buffer_id, uint16_t out_port, uint16_t max_idle)
+                     uint32_t buffer_id, uint16_t out_port,
+                     uint16_t idle_timeout)
 {
-    struct buffer *buffer = make_add_flow(flow, buffer_id, max_idle, 1);
+    struct buffer *buffer = make_add_flow(flow, buffer_id, idle_timeout, 1);
     struct ofp_flow_mod *ofm = buffer->data;
     ofm->actions[0].type = htons(OFPAT_OUTPUT);
     ofm->actions[0].arg.output.max_len = htons(0);

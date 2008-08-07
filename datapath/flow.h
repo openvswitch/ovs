@@ -55,9 +55,10 @@ static inline void check_key_align(void)
 struct sw_flow {
 	struct sw_flow_key key;
 
-	uint16_t max_idle;      /* Idle time before discarding (seconds). */
 	uint16_t priority;      /* Only used on entries with wildcards. */
-	unsigned long timeout;  /* Expiration time (in jiffies). */
+	uint16_t idle_timeout;	/* Idle time before discarding (seconds). */
+	uint16_t hard_timeout;  /* Hard expiration time (seconds) */
+	unsigned long used;	/* Last used time (in jiffies). */
 
 	/* FIXME?  Probably most flows have only a single action. */
 	unsigned int n_actions;
@@ -86,24 +87,15 @@ void flow_deferred_free(struct sw_flow *);
 int flow_extract(struct sk_buff *, uint16_t in_port, struct sw_flow_key *);
 void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from);
 void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from);
+int flow_timeout(struct sw_flow *);
 
 void print_flow(const struct sw_flow_key *);
-
-#include <linux/jiffies.h>
-static inline int flow_timeout(struct sw_flow *flow)
-{
-	if (flow->max_idle == OFP_FLOW_PERMANENT)
-		return 0;
-
-	return time_after(jiffies, flow->timeout);
-}
 
 static inline void flow_used(struct sw_flow *flow, struct sk_buff *skb) 
 {
 	unsigned long flags;
 
-	if (flow->max_idle != OFP_FLOW_PERMANENT)
-		flow->timeout = jiffies + HZ * flow->max_idle;
+	flow->used = jiffies;
 
 	spin_lock_irqsave(&flow->lock, flags);
 	flow->packet_count++;

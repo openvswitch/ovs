@@ -145,11 +145,12 @@ static int table_dummy_timeout(struct datapath *dp, struct sw_table *swt)
 			flow->timeout = jiffies + HZ * flow->max_idle;
 		}
 
-		if (flow_timeout(flow)) {
+		reason = flow_timeout(flow);
+		if (reason >= 0) {
 			if (dp->flags & OFPC_SEND_FLOW_EXP) {
 				/* xxx Get byte count */
 				flow->byte_count = 0;
-				dp_send_flow_expired(dp, flow);
+				dp_send_flow_expired(dp, flow, reason);
 			}
 			del_count += do_delete(swt, flow);
 		}

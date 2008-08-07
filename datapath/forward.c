@@ -425,9 +425,10 @@ add_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 
 	/* Fill out flow. */
 	flow_extract_match(&flow->key, &ofm->match);
-	flow->max_idle = ntohs(ofm->max_idle);
 	flow->priority = flow->key.wildcards ? ntohs(ofm->priority) : -1;
-	flow->timeout = jiffies + flow->max_idle * HZ;
+	flow->idle_timeout = ntohs(ofm->idle_timeout);
+	flow->hard_timeout = ntohs(ofm->hard_timeout);
+	flow->used = jiffies;
 	flow->n_actions = n_acts;
 	flow->init_time = jiffies;
 	flow->byte_count = 0;

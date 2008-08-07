@@ -104,10 +104,10 @@ static int table_linear_timeout(struct datapath *dp, struct sw_table *swt)
 
 	mutex_lock(&dp_mutex);
 	list_for_each_entry (flow, &tl->flows, node) {
-		if (flow_timeout(flow)) {
+		int reason = flow_timeout(flow);
+		if (reason >= 0) {
 			count += do_delete(swt, flow);
-			if (dp->flags & OFPC_SEND_FLOW_EXP)
-				dp_send_flow_expired(dp, flow);
+			dp_send_flow_expired(dp, flow, reason);
 		}
 	}
 	tl->n_flows -= count;
