@@ -985,7 +985,7 @@ recv_set_config(struct datapath *dp, const struct sender *sender UNUSED,
     const struct ofp_switch_config *osc = msg;
     int flags;
 
-    flags = ntohs(osc->flags) & ~(OFPC_SEND_FLOW_EXP | OFPC_FRAG_MASK);
+    flags = ntohs(osc->flags) & (OFPC_SEND_FLOW_EXP | OFPC_FRAG_MASK);
     if ((flags & OFPC_FRAG_MASK) != OFPC_FRAG_NORMAL
         && (flags & OFPC_FRAG_MASK) != OFPC_FRAG_DROP) {
         flags = (flags & ~OFPC_FRAG_MASK) | OFPC_FRAG_DROP;
