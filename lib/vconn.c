@@ -500,7 +500,7 @@ make_add_flow(const struct flow *flow, uint32_t buffer_id,
     ofm->header.version = OFP_VERSION;
     ofm->header.type = OFPT_FLOW_MOD;
     ofm->header.length = htons(size);
-    ofm->match.wildcards = htons(0);
+    ofm->match.wildcards = htonl(0);
     ofm->match.in_port = flow->in_port;
     memcpy(ofm->match.dl_src, flow->dl_src, sizeof ofm->match.dl_src);
     memcpy(ofm->match.dl_dst, flow->dl_dst, sizeof ofm->match.dl_dst);

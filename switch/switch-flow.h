@@ -44,6 +44,8 @@ struct ofp_match;
 struct sw_flow_key {
     struct flow flow;           /* Flow data (in network byte order). */
     uint32_t wildcards;         /* Wildcard fields (in host byte order). */
+    uint32_t nw_src_mask;       /* 1-bit in each significant nw_src bit. */
+    uint32_t nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
 };
 
 struct sw_flow {
@@ -68,7 +70,8 @@ struct sw_flow {
     struct ofp_action *actions;
 };
 
-int flow_matches(const struct sw_flow_key *, const struct sw_flow_key *);
+int flow_matches_1wild(const struct sw_flow_key *, const struct sw_flow_key *);
+int flow_matches_2wild(const struct sw_flow_key *, const struct sw_flow_key *);
 int flow_del_matches(const struct sw_flow_key *, const struct sw_flow_key *, 
                      int);
 struct sw_flow *flow_alloc(int n_actions);

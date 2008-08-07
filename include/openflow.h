@@ -68,7 +68,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x88
+#define OFP_VERSION   0x89
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -330,12 +330,27 @@ enum ofp_flow_wildcards {
     OFPFW_DL_SRC   = 1 << 2,  /* Ethernet source address. */
     OFPFW_DL_DST   = 1 << 3,  /* Ethernet destination address. */
     OFPFW_DL_TYPE  = 1 << 4,  /* Ethernet frame type. */
-    OFPFW_NW_SRC   = 1 << 5,  /* IP source address. */
-    OFPFW_NW_DST   = 1 << 6,  /* IP destination address. */
-    OFPFW_NW_PROTO = 1 << 7,  /* IP protocol. */
-    OFPFW_TP_SRC   = 1 << 8,  /* TCP/UDP source port. */
-    OFPFW_TP_DST   = 1 << 9,  /* TCP/UDP destination port. */
-    OFPFW_ALL      = (1 << 10) - 1
+    OFPFW_NW_PROTO = 1 << 5,  /* IP protocol. */
+    OFPFW_TP_SRC   = 1 << 6,  /* TCP/UDP source port. */
+    OFPFW_TP_DST   = 1 << 7,  /* TCP/UDP destination port. */
+
+    /* IP source address wildcard bit count.  0 is exact match, 1 ignores the
+     * LSB, 2 ignores the 2 least-significant bits, ..., 32 and higher wildcard
+     * the entire field.  This is the *opposite* of the usual convention where
+     * e.g. /24 indicates that 8 bits (not 24 bits) are wildcarded. */
+    OFPFW_NW_SRC_SHIFT = 8,
+    OFPFW_NW_SRC_BITS = 6,
+    OFPFW_NW_SRC_MASK = ((1 << OFPFW_NW_SRC_BITS) - 1) << OFPFW_NW_SRC_SHIFT,
+    OFPFW_NW_SRC_ALL = 32 << OFPFW_NW_SRC_SHIFT,
+
+    /* IP destination address wildcard bit count.  Same format as source. */
+    OFPFW_NW_DST_SHIFT = 14,
+    OFPFW_NW_DST_BITS = 6,
+    OFPFW_NW_DST_MASK = ((1 << OFPFW_NW_DST_BITS) - 1) << OFPFW_NW_DST_SHIFT,
+    OFPFW_NW_DST_ALL = 32 << OFPFW_NW_DST_SHIFT,
+
+    /* Wildcard all fields. */
+    OFPFW_ALL = ((1 << 20) - 1)
 };
 
 /* Values below this cutoff are 802.3 packets and the two bytes
@@ -351,16 +366,16 @@ enum ofp_flow_wildcards {
 
 /* Fields to match against flows */
 struct ofp_match {
-    uint16_t wildcards;        /* Wildcard fields. */
+    uint32_t wildcards;        /* Wildcard fields. */
     uint16_t in_port;          /* Input switch port. */
     uint8_t dl_src[OFP_ETH_ALEN]; /* Ethernet source address. */
     uint8_t dl_dst[OFP_ETH_ALEN]; /* Ethernet destination address. */
     uint16_t dl_vlan;          /* Input VLAN. */
     uint16_t dl_type;          /* Ethernet frame type. */
+    uint8_t nw_proto;          /* IP protocol. */
+    uint8_t pad;               /* Align to 32-bits. */
     uint32_t nw_src;           /* IP source address. */
     uint32_t nw_dst;           /* IP destination address. */
-    uint8_t nw_proto;          /* IP protocol. */
-    uint8_t pad[3];            /* Align to 32-bits. */
     uint16_t tp_src;           /* TCP/UDP source port. */
     uint16_t tp_dst;           /* TCP/UDP destination port. */
 };

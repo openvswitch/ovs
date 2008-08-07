@@ -43,7 +43,7 @@ static struct sw_flow *flow_zalloc(int n_actions, gfp_t flags)
 }
 
 static void
-simple_insert_delete(struct sw_table *swt, uint16_t wildcards)
+simple_insert_delete(struct sw_table *swt, uint32_t wildcards)
 {
 	struct sw_flow *a_flow = flow_zalloc(0, GFP_KERNEL);
 	struct sw_flow *b_flow = flow_zalloc(0, GFP_KERNEL);
@@ -81,7 +81,7 @@ simple_insert_delete(struct sw_table *swt, uint16_t wildcards)
 }
 
 static void
-multiple_insert_destroy(struct sw_table *swt, int inserts, uint16_t wildcards,
+multiple_insert_destroy(struct sw_table *swt, int inserts, uint32_t wildcards,
 			int min_collisions, int max_collisions)
 {
 	int i;
@@ -124,7 +124,7 @@ multiple_insert_destroy(struct sw_table *swt, int inserts, uint16_t wildcards,
 }
 
 static void
-set_random_key(struct sw_flow_key *key, uint16_t wildcards)
+set_random_key(struct sw_flow_key *key, uint32_t wildcards)
 {
 	key->nw_src = random32();
 	key->nw_dst = random32();
@@ -156,7 +156,7 @@ struct flow_key_entry {
  */
 
 static struct flow_key_entry *
-allocate_random_keys(int n_keys, uint16_t wildcards)
+allocate_random_keys(int n_keys, uint32_t wildcards)
 {
 	struct flow_key_entry *entries, *pos;
 	struct list_head *keys;
@@ -423,7 +423,7 @@ check_lookup_and_iter(struct sw_table *swt, struct list_head *deleted,
  */
 
 static int
-iterator_test(struct sw_table *swt, int n_flows, uint16_t wildcards)
+iterator_test(struct sw_table *swt, int n_flows, uint32_t wildcards)
 {
 	struct flow_key_entry *allocated, h1, h2;
 	struct list_head *added, *deleted, *tmp;
@@ -506,7 +506,7 @@ iterator_test_destr:
  */
 
 static int
-add_test(struct sw_table *swt, uint16_t wildcards)
+add_test(struct sw_table *swt, uint32_t wildcards)
 {
 	struct flow_key_entry *allocated, h1, h2;
 	struct list_head *added, *deleted, *tmp, *tmp2;
@@ -599,7 +599,7 @@ add_test_destr:
  */
 
 static int
-delete_test(struct sw_table *swt, uint16_t wildcards)
+delete_test(struct sw_table *swt, uint32_t wildcards)
 {
 	struct flow_key_entry *allocated, h1, h2;
 	struct list_head *added, *deleted, *tmp, *tmp2;
@@ -700,7 +700,7 @@ delete_test_destr:
  */
 
 static int
-complex_add_delete_test(struct sw_table *swt, int n_flows, int i, uint16_t wildcards)
+complex_add_delete_test(struct sw_table *swt, int n_flows, int i, uint32_t wildcards)
 {
 	struct flow_key_entry *allocated, h1, h2;
 	struct list_head *added, *deleted, *tmp;

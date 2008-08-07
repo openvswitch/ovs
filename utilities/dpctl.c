@@ -32,6 +32,7 @@
  */
 
 #include <config.h>
+#include <arpa/inet.h>
 #include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
@@ -405,8 +406,12 @@ do_dump_tables(int argc, char *argv[])
 static uint32_t
 str_to_int(const char *str) 
 {
+    char *tail;
     uint32_t value;
-    if (sscanf(str, "%"SCNu32, &value) != 1) {
+
+    errno = 0;
+    value = strtoul(str, &tail, 0);
+    if (errno == EINVAL || errno == ERANGE || *tail) {
         fatal(0, "invalid numeric format %s", str);
     }
     return value;
@@ -421,17 +426,57 @@ str_to_mac(const char *str, uint8_t mac[6])
     }
 }
 
-static void
-str_to_ip(const char *str, uint32_t *ip) 
+static uint32_t
+str_to_ip(const char *str_, uint32_t *ip)
 {
+    char *str = xstrdup(str_);
+    char *save_ptr = NULL;
+    const char *name, *netmask;
     struct in_addr in_addr;
-    int retval;
+    int n_wild, retval;
 
-    retval = lookup_ip(str, &in_addr);
+    name = strtok_r(str, "//", &save_ptr);
+    retval = name ? lookup_ip(name, &in_addr) : EINVAL;
     if (retval) {
         fatal(0, "%s: could not convert to IP address", str);
     }
     *ip = in_addr.s_addr;
+
+    netmask = strtok_r(NULL, "//", &save_ptr);
+    if (netmask) {
+        uint8_t o[4];
+        if (sscanf(netmask, "%"SCNu8".%"SCNu8".%"SCNu8".%"SCNu8,
+                   &o[0], &o[1], &o[2], &o[3]) == 4) {
+            uint32_t nm = (o[0] << 24) | (o[1] << 16) | (o[2] << 8) | o[3];
+            int i;
+
+            /* Find first 1-bit. */
+            for (i = 0; i < 32; i++) {
+                if (nm & (1u << i)) {
+                    break;
+                }
+            }
+            n_wild = i;
+
+            /* Verify that the rest of the bits are 1-bits. */
+            for (; i < 32; i++) {
+                if (!(nm & (1u << i))) {
+                    fatal(0, "%s: %s is not a valid netmask", str, netmask);
+                }
+            }
+        } else {
+            int prefix = atoi(netmask);
+            if (prefix <= 0 || prefix > 32) {
+                fatal(0, "%s: network prefix bits not between 1 and 32", str);
+            }
+            n_wild = 32 - prefix;
+        }
+    } else {
+        n_wild = 0;
+    }
+
+    free(str);
+    return n_wild;
 }
 
 static void
@@ -510,7 +555,7 @@ str_to_flow(char *string, struct ofp_match *match,
         const char *name;
         uint32_t wildcard;
         enum { F_U8, F_U16, F_MAC, F_IP } type;
-        size_t offset;
+        size_t offset, shift;
     };
 
 #define F_OFS(MEMBER) offsetof(struct ofp_match, MEMBER)
@@ -520,8 +565,10 @@ str_to_flow(char *string, struct ofp_match *match,
         { "dl_src", OFPFW_DL_SRC, F_MAC, F_OFS(dl_src) },
         { "dl_dst", OFPFW_DL_DST, F_MAC, F_OFS(dl_dst) },
         { "dl_type", OFPFW_DL_TYPE, F_U16, F_OFS(dl_type) },
-        { "nw_src", OFPFW_NW_SRC, F_IP, F_OFS(nw_src) },
-        { "nw_dst", OFPFW_NW_DST, F_IP, F_OFS(nw_dst) },
+        { "nw_src", OFPFW_NW_SRC_MASK, F_IP,
+          F_OFS(nw_src), OFPFW_NW_SRC_SHIFT },
+        { "nw_dst", OFPFW_NW_DST_MASK, F_IP,
+          F_OFS(nw_dst), OFPFW_NW_DST_SHIFT },
         { "nw_proto", OFPFW_NW_PROTO, F_U8, F_OFS(nw_proto) },
         { "tp_src", OFPFW_TP_SRC, F_U16, F_OFS(tp_src) },
         { "tp_dst", OFPFW_TP_DST, F_U16, F_OFS(tp_dst) },
@@ -617,7 +664,7 @@ str_to_flow(char *string, struct ofp_match *match,
             } else if (f->type == F_MAC) {
                 str_to_mac(value, data);
             } else if (f->type == F_IP) {
-                str_to_ip(value, data);
+                wildcards |= str_to_ip(value, data) << f->shift;
             } else {
                 NOT_REACHED();
             }
@@ -626,7 +673,7 @@ str_to_flow(char *string, struct ofp_match *match,
     if (name && !value) {
         fatal(0, "field %s missing value", name);
     }
-    match->wildcards = htons(wildcards);
+    match->wildcards = htonl(wildcards);
 }
 
 static void do_dump_flows(int argc, char *argv[])

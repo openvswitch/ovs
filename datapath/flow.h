@@ -23,18 +23,20 @@ struct ofp_flow_mod;
    inter-flow variability, so that failing bytewise comparisons with memcmp
    terminate as quickly as possible on average. */
 struct sw_flow_key {
+	uint32_t wildcards;	    /* Wildcard fields (host byte order). */
 	uint32_t nw_src;		/* IP source address. */
+	uint32_t nw_src_mask;	/* 1-bit in each significant nw_src bit. */
 	uint32_t nw_dst;		/* IP destination address. */
+	uint32_t nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
 	uint16_t in_port;	    /* Input switch port */
 	uint16_t dl_vlan;	    /* Input VLAN. */
 	uint16_t dl_type;	    /* Ethernet frame type. */
 	uint16_t tp_src;        /* TCP/UDP source port. */
 	uint16_t tp_dst;        /* TCP/UDP destination port. */
-	uint16_t wildcards;	    /* Wildcard fields (host byte order). */
 	uint8_t dl_src[ETH_ALEN];	    /* Ethernet source address. */
 	uint8_t dl_dst[ETH_ALEN];	    /* Ethernet destination address. */
 	uint8_t nw_proto;		/* IP protocol. */
-	uint8_t pad[3];		    /* NB: Pad to make 32-bit aligned */
+	uint8_t pad;		    /* NB: Pad to make 32-bit aligned */
 };
 
 /* We need to manually make sure that the structure is 32-bit aligned,
@@ -43,7 +45,7 @@ struct sw_flow_key {
  */
 static inline void check_key_align(void)
 {
-	BUILD_BUG_ON(sizeof(struct sw_flow_key) != 36); 
+	BUILD_BUG_ON(sizeof(struct sw_flow_key) != 44); 
 }
 
 /* Locking:
@@ -79,7 +81,8 @@ struct sw_flow {
 	struct rcu_head rcu;
 };
 
-int flow_matches(const struct sw_flow_key *, const struct sw_flow_key *);
+int flow_matches_1wild(const struct sw_flow_key *, const struct sw_flow_key *);
+int flow_matches_2wild(const struct sw_flow_key *, const struct sw_flow_key *);
 int flow_del_matches(const struct sw_flow_key *, const struct sw_flow_key *, 
 		int);
 struct sw_flow *flow_alloc(int n_actions, gfp_t flags);

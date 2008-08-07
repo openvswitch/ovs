@@ -28,7 +28,7 @@ static struct sw_flow *table_linear_lookup(struct sw_table *swt,
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
 	struct sw_flow *flow;
 	list_for_each_entry_rcu (flow, &tl->flows, node) {
-		if (flow_matches(&flow->key, key))
+		if (flow_matches_1wild(key, &flow->key))
 			return flow;
 	}
 	return NULL;
@@ -47,7 +47,7 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 	list_for_each_entry (f, &tl->flows, node) {
 		if (f->priority == flow->priority
 				&& f->key.wildcards == flow->key.wildcards
-				&& flow_matches(&f->key, &flow->key)) {
+				&& flow_matches_2wild(&f->key, &flow->key)) {
 			flow->serial = f->serial;
 			list_replace_rcu(&f->node, &flow->node);
 			list_replace_rcu(&f->iter_node, &flow->iter_node);
@@ -140,7 +140,8 @@ static int table_linear_iterate(struct sw_table *swt,
 
 	start = position->private[0];
 	list_for_each_entry (flow, &tl->iter_flows, iter_node) {
-		if (flow->serial >= start && flow_matches(key, &flow->key)) {
+		if (flow->serial >= start
+		    && flow_matches_2wild(key, &flow->key)) {
 			int error = callback(flow, private);
 			if (error) {
 				position->private[0] = flow->serial;

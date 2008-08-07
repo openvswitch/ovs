@@ -747,7 +747,7 @@ fill_flow_stats(struct buffer *buffer, struct sw_flow *flow,
     ofs->length          = htons(length);
     ofs->table_id        = table_idx;
     ofs->pad             = 0;
-    ofs->match.wildcards = htons(flow->key.wildcards);
+    ofs->match.wildcards = htonl(flow->key.wildcards);
     ofs->match.in_port   = flow->key.flow.in_port;
     memcpy(ofs->match.dl_src, flow->key.flow.dl_src, ETH_ADDR_LEN);
     memcpy(ofs->match.dl_dst, flow->key.flow.dl_dst, ETH_ADDR_LEN);
@@ -756,7 +756,7 @@ fill_flow_stats(struct buffer *buffer, struct sw_flow *flow,
     ofs->match.nw_src    = flow->key.flow.nw_src;
     ofs->match.nw_dst    = flow->key.flow.nw_dst;
     ofs->match.nw_proto  = flow->key.flow.nw_proto;
-    memset(ofs->match.pad, 0, sizeof ofs->match.pad);
+    ofs->match.pad       = 0;
     ofs->match.tp_src    = flow->key.flow.tp_src;
     ofs->match.tp_dst    = flow->key.flow.tp_dst;
     ofs->duration        = htonl(now - flow->created);

@@ -180,7 +180,7 @@ static int table_hash_iterate(struct sw_table *swt,
 
         for (i = position->private[0]; i <= th->bucket_mask; i++) {
             struct sw_flow *flow = th->buckets[i];
-            if (flow && flow_matches(key, &flow->key)) {
+            if (flow && flow_matches_1wild(&flow->key, key)) {
                 int error = callback(flow, private);
                 if (error) {
                     position->private[0] = i + 1;

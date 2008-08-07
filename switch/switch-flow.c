@@ -43,27 +43,45 @@
 #include "timeval.h"
 
 /* Internal function used to compare fields in flow. */
-static inline
-int flow_fields_match(const struct flow *a, const struct flow *b, uint16_t w)
+static inline int
+flow_fields_match(const struct flow *a, const struct flow *b, uint16_t w,
+                  uint32_t src_mask, uint32_t dst_mask)
 {
     return ((w & OFPFW_IN_PORT || a->in_port == b->in_port)
             && (w & OFPFW_DL_VLAN || a->dl_vlan == b->dl_vlan)
-            && (w & OFPFW_DL_SRC || !memcmp(a->dl_src, b->dl_src, ETH_ADDR_LEN))
-            && (w & OFPFW_DL_DST || !memcmp(a->dl_dst, b->dl_dst, ETH_ADDR_LEN))
+            && (w & OFPFW_DL_SRC || eth_addr_equals(a->dl_src, b->dl_src))
+            && (w & OFPFW_DL_DST || eth_addr_equals(a->dl_dst, b->dl_dst))
             && (w & OFPFW_DL_TYPE || a->dl_type == b->dl_type)
-            && (w & OFPFW_NW_SRC || a->nw_src == b->nw_src)
-            && (w & OFPFW_NW_DST || a->nw_dst == b->nw_dst)
+            && !((a->nw_src ^ b->nw_src) & src_mask)
+            && !((a->nw_dst ^ b->nw_dst) & dst_mask)
             && (w & OFPFW_NW_PROTO || a->nw_proto == b->nw_proto)
             && (w & OFPFW_TP_SRC || a->tp_src == b->tp_src)
             && (w & OFPFW_TP_DST || a->tp_dst == b->tp_dst));
 }
 
-/* Returns nonzero if 'a' and 'b' match, that is, if their fields are equal
- * modulo wildcards, zero otherwise. */
-inline
-int flow_matches(const struct sw_flow_key *a, const struct sw_flow_key *b)
+static uint32_t make_nw_mask(int n_wild_bits)
 {
-    return flow_fields_match(&a->flow, &b->flow, a->wildcards | b->wildcards);
+    n_wild_bits &= (1u << OFPFW_NW_SRC_BITS) - 1;
+    return n_wild_bits < 32 ? htonl(~((1u << n_wild_bits) - 1)) : 0;
+}
+
+/* Returns nonzero if 'a' and 'b' match, that is, if their fields are equal
+ * modulo wildcards in 'b', zero otherwise. */
+inline int
+flow_matches_1wild(const struct sw_flow_key *a, const struct sw_flow_key *b)
+{
+    return flow_fields_match(&a->flow, &b->flow, b->wildcards,
+                             b->nw_src_mask, b->nw_dst_mask);
+}
+
+/* Returns nonzero if 'a' and 'b' match, that is, if their fields are equal
+ * modulo wildcards in 'a' or 'b', zero otherwise. */
+inline int
+flow_matches_2wild(const struct sw_flow_key *a, const struct sw_flow_key *b)
+{
+    return flow_fields_match(&a->flow, &b->flow, a->wildcards | b->wildcards,
+                             a->nw_src_mask & b->nw_src_mask,
+                             a->nw_dst_mask & b->nw_dst_mask);
 }
 
 /* Returns nonzero if 't' (the table entry's key) and 'd' (the key 
@@ -71,18 +89,19 @@ int flow_matches(const struct sw_flow_key *a, const struct sw_flow_key *b)
  * equal modulo wildcards, zero otherwise.  If 'strict' is nonzero, the
  * wildcards must match in both 't_key' and 'd_key'.  Note that the
  * table's wildcards are ignored unless 'strict' is set. */
-inline
-int flow_del_matches(const struct sw_flow_key *t, const struct sw_flow_key *d, int strict)
+int
+flow_del_matches(const struct sw_flow_key *t, const struct sw_flow_key *d, int strict)
 {
-    if (strict && t->wildcards != d->wildcards)
+    if (strict && d->wildcards != t->wildcards) {
         return 0;
-
-    return flow_fields_match(&t->flow, &d->flow, d->wildcards);
+    }
+    return flow_matches_1wild(t, d);
 }
 
-void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
+void
+flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
 {
-    to->wildcards = ntohs(from->wildcards) & OFPFW_ALL;
+    to->wildcards = ntohl(from->wildcards) & OFPFW_ALL;
     to->flow.reserved = 0;
     to->flow.in_port = from->in_port;
     to->flow.dl_vlan = from->dl_vlan;
@@ -94,7 +113,7 @@ void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
     to->flow.tp_src = to->flow.tp_dst = 0;
 
 #define OFPFW_TP (OFPFW_TP_SRC | OFPFW_TP_DST)
-#define OFPFW_NW (OFPFW_NW_SRC | OFPFW_NW_DST | OFPFW_NW_PROTO)
+#define OFPFW_NW (OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK | OFPFW_NW_PROTO)
     if (to->wildcards & OFPFW_DL_TYPE) {
         /* Can't sensibly match on network or transport headers if the
          * data link type is unknown. */
@@ -124,11 +143,16 @@ void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
          * instead of falling into table-linear. */
         to->wildcards &= ~(OFPFW_NW | OFPFW_TP);
     }
+
+	/* We set these late because code above adjusts to->wildcards. */
+	to->nw_src_mask = make_nw_mask(to->wildcards >> OFPFW_NW_SRC_SHIFT);
+	to->nw_dst_mask = make_nw_mask(to->wildcards >> OFPFW_NW_DST_SHIFT);
 }
 
-void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
+void
+flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
 {
-    to->wildcards = htons(from->wildcards);
+    to->wildcards = htonl(from->wildcards);
     to->in_port   = from->flow.in_port;
     to->dl_vlan   = from->flow.dl_vlan;
     memcpy(to->dl_src, from->flow.dl_src, ETH_ADDR_LEN);
@@ -139,12 +163,13 @@ void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
     to->nw_proto  = from->flow.nw_proto;
     to->tp_src        = from->flow.tp_src;
     to->tp_dst        = from->flow.tp_dst;
-    memset(to->pad, '\0', sizeof(to->pad));
+    to->pad           = 0;
 }
 
 /* Allocates and returns a new flow with 'n_actions' action, using allocation
  * flags 'flags'.  Returns the new flow or a null pointer on failure. */
-struct sw_flow *flow_alloc(int n_actions)
+struct sw_flow *
+flow_alloc(int n_actions)
 {
     struct sw_flow *flow = malloc(sizeof *flow);
     if (!flow)
@@ -160,7 +185,8 @@ struct sw_flow *flow_alloc(int n_actions)
 }
 
 /* Frees 'flow' immediately. */
-void flow_free(struct sw_flow *flow)
+void
+flow_free(struct sw_flow *flow)
 {
     if (!flow) {
         return; 
@@ -170,10 +196,11 @@ void flow_free(struct sw_flow *flow)
 }
 
 /* Prints a representation of 'key' to the kernel log. */
-void print_flow(const struct sw_flow_key *key)
+void
+print_flow(const struct sw_flow_key *key)
 {
     const struct flow *f = &key->flow;
-    printf("wild%04x port%04x:vlan%04x mac%02x:%02x:%02x:%02x:%02x:%02x"
+    printf("wild%08x port%04x:vlan%04x mac%02x:%02x:%02x:%02x:%02x:%02x"
            "->%02x:%02x:%02x:%02x:%02x:%02x "
            "proto%04x ip%u.%u.%u.%u->%u.%u.%u.%u port%d->%d\n",
            key->wildcards, ntohs(f->in_port), ntohs(f->dl_vlan),

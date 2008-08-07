@@ -205,12 +205,15 @@ specified as a integer between 0 and 65535, inclusive, either in
 decimal or as a hexadecimal number prefixed by \fB0x\fR,
 e.g. \fB0x0806\fR to match ARP packets.
 
-.IP \fBnw_src=\fIip\fR
+.IP \fBnw_src=\fIip\fR[\fB/\fInetmask\fR]
 Matches IPv4 source address \fIip\fR, which should be specified as an
 IP address or host name, e.g. \fB192.168.1.1\fR or
-\fBwww.example.com\fR.
+\fBwww.example.com\fR.  The optional \fInetmask\fR allows matching
+only on an IPv4 address prefix.  It may be specified as a dotted quad
+(e.g. \fB192.168.1.0/255.255.255.0\fR) or as a count of bits
+(e.g. \fB192.168.1.0/24\fR).
 
-.IP \fBnw_dst=\fInw_dst\fR
+.IP \fBnw_dst=\fIip\fR[\fB/\fInetmask\fR]
 Matches IPv4 destination address \fIip\fR.
 
 .IP \fBnw_proto=\fIproto\fR

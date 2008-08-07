@@ -1153,7 +1153,7 @@ static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 	ofs->length          = htons(length);
 	ofs->table_id        = s->table_idx;
 	ofs->pad             = 0;
-	ofs->match.wildcards = htons(flow->key.wildcards);
+	ofs->match.wildcards = htonl(flow->key.wildcards);
 	ofs->match.in_port   = flow->key.in_port;
 	memcpy(ofs->match.dl_src, flow->key.dl_src, ETH_ALEN);
 	memcpy(ofs->match.dl_dst, flow->key.dl_dst, ETH_ALEN);
@@ -1162,7 +1162,7 @@ static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 	ofs->match.nw_src    = flow->key.nw_src;
 	ofs->match.nw_dst    = flow->key.nw_dst;
 	ofs->match.nw_proto  = flow->key.nw_proto;
-	memset(ofs->match.pad, 0, sizeof ofs->match.pad);
+	ofs->match.pad       = 0;
 	ofs->match.tp_src    = flow->key.tp_src;
 	ofs->match.tp_dst    = flow->key.tp_dst;
 	ofs->duration        = htonl((jiffies - flow->init_time) / HZ);

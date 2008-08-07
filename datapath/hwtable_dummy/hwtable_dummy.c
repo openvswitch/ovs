@@ -73,7 +73,7 @@ static struct sw_flow *table_dummy_lookup(struct sw_table *swt,
 	struct sw_table_dummy *td = (struct sw_table_dummy *) swt;
 	struct sw_flow *flow;
 	list_for_each_entry (flow, &td->flows, node) {
-		if (flow_matches(&flow->key, key)) {
+		if (flow_matches_1wild(key, &flow->key)) {
 			return flow; 
 		}
 	}
@@ -196,7 +196,8 @@ static int table_dummy_iterate(struct sw_table *swt,
 
 	start = ~position->private[0];
 	list_for_each_entry (flow, &tl->iter_flows, iter_node) {
-		if (flow->serial <= start && flow_matches(key, &flow->key)) {
+		if (flow->serial <= start && flow_matches_2wild(key,
+								&flow->key)) {
 			int error = callback(flow, private);
 			if (error) {
 				position->private[0] = ~flow->serial;

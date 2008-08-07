@@ -29,46 +29,65 @@ struct kmem_cache *flow_cache;
 /* Internal function used to compare fields in flow. */
 static inline
 int flow_fields_match(const struct sw_flow_key *a, const struct sw_flow_key *b,
-		uint16_t w)
+		      uint32_t w, uint32_t src_mask, uint32_t dst_mask)
 {
 	return ((w & OFPFW_IN_PORT || a->in_port == b->in_port)
 		&& (w & OFPFW_DL_VLAN || a->dl_vlan == b->dl_vlan)
 		&& (w & OFPFW_DL_SRC || !memcmp(a->dl_src, b->dl_src, ETH_ALEN))
 		&& (w & OFPFW_DL_DST || !memcmp(a->dl_dst, b->dl_dst, ETH_ALEN))
 		&& (w & OFPFW_DL_TYPE || a->dl_type == b->dl_type)
-		&& (w & OFPFW_NW_SRC || a->nw_src == b->nw_src)
-		&& (w & OFPFW_NW_DST || a->nw_dst == b->nw_dst)
+		&& !((a->nw_src ^ b->nw_src) & src_mask)
+		&& !((a->nw_dst ^ b->nw_dst) & dst_mask)
 		&& (w & OFPFW_NW_PROTO || a->nw_proto == b->nw_proto)
 		&& (w & OFPFW_TP_SRC || a->tp_src == b->tp_src)
 		&& (w & OFPFW_TP_DST || a->tp_dst == b->tp_dst));
 }
 
 /* Returns nonzero if 'a' and 'b' match, that is, if their fields are equal
- * modulo wildcards, zero otherwise. */
-int flow_matches(const struct sw_flow_key *a, const struct sw_flow_key *b)
+ * modulo wildcards in 'b', zero otherwise. */
+int flow_matches_1wild(const struct sw_flow_key *a,
+		       const struct sw_flow_key *b)
 {
-	return flow_fields_match(a, b, (a->wildcards | b->wildcards));
+	return flow_fields_match(a, b, b->wildcards,
+				 b->nw_src_mask, b->nw_dst_mask);
 }
-EXPORT_SYMBOL(flow_matches);
+EXPORT_SYMBOL(flow_matches_1wild);
 
-/* Returns nonzero if 't' (the table entry's key) and 'd' (the key 
- * describing the deletion) match, that is, if their fields are 
+/* Returns nonzero if 'a' and 'b' match, that is, if their fields are equal
+ * modulo wildcards in 'a' or 'b', zero otherwise. */
+int flow_matches_2wild(const struct sw_flow_key *a,
+		       const struct sw_flow_key *b)
+{
+	return flow_fields_match(a, b,
+				 a->wildcards | b->wildcards,
+				 a->nw_src_mask & b->nw_src_mask,
+				 a->nw_dst_mask & b->nw_dst_mask);
+}
+EXPORT_SYMBOL(flow_matches_2wild);
+
+/* Returns nonzero if 't' (the table entry's key) and 'd' (the key
+ * describing the deletion) match, that is, if their fields are
  * equal modulo wildcards, zero otherwise.  If 'strict' is nonzero, the
  * wildcards must match in both 't_key' and 'd_key'.  Note that the
  * table's wildcards are ignored unless 'strict' is set. */
 int flow_del_matches(const struct sw_flow_key *t, const struct sw_flow_key *d, int strict)
 {
-	if (strict && (t->wildcards != d->wildcards))
+	if (strict && d->wildcards != t->wildcards)
 		return 0;
-
-	return flow_fields_match(t, d, d->wildcards);
+	return flow_matches_1wild(t, d);
 }
 EXPORT_SYMBOL(flow_del_matches);
 
+static uint32_t make_nw_mask(int n_wild_bits)
+{
+	n_wild_bits &= (1u << OFPFW_NW_SRC_BITS) - 1;
+	return n_wild_bits < 32 ? htonl(~((1u << n_wild_bits) - 1)) : 0;
+}
+
 void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
 {
-	to->wildcards = ntohs(from->wildcards) & OFPFW_ALL;
-	memset(to->pad, '\0', sizeof(to->pad));
+	to->wildcards = ntohl(from->wildcards) & OFPFW_ALL;
+	to->pad = 0;
 	to->in_port = from->in_port;
 	to->dl_vlan = from->dl_vlan;
 	memcpy(to->dl_src, from->dl_src, ETH_ALEN);
@@ -79,7 +98,7 @@ void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
 	to->tp_src = to->tp_dst = 0;
 
 #define OFPFW_TP (OFPFW_TP_SRC | OFPFW_TP_DST)
-#define OFPFW_NW (OFPFW_NW_SRC | OFPFW_NW_DST | OFPFW_NW_PROTO)
+#define OFPFW_NW (OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK | OFPFW_NW_PROTO)
 	if (to->wildcards & OFPFW_DL_TYPE) {
 		/* Can't sensibly match on network or transport headers if the
 		 * data link type is unknown. */
@@ -109,11 +128,15 @@ void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
 		 * instead of falling into table-linear. */
 		to->wildcards &= ~(OFPFW_NW | OFPFW_TP);
 	}
+
+	/* We set these late because code above adjusts to->wildcards. */
+	to->nw_src_mask = make_nw_mask(to->wildcards >> OFPFW_NW_SRC_SHIFT);
+	to->nw_dst_mask = make_nw_mask(to->wildcards >> OFPFW_NW_DST_SHIFT);
 }
 
 void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
 {
-	to->wildcards = htons(from->wildcards);
+	to->wildcards = htonl(from->wildcards);
 	to->in_port   = from->in_port;
 	to->dl_vlan   = from->dl_vlan;
 	memcpy(to->dl_src, from->dl_src, ETH_ALEN);
@@ -124,7 +147,7 @@ void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
 	to->nw_proto  = from->nw_proto;
 	to->tp_src	  = from->tp_src;
 	to->tp_dst	  = from->tp_dst;
-	memset(to->pad, '\0', sizeof(to->pad));
+	to->pad           = 0;
 }
 
 int flow_timeout(struct sw_flow *flow)
@@ -187,7 +210,7 @@ EXPORT_SYMBOL(flow_deferred_free);
 /* Prints a representation of 'key' to the kernel log. */
 void print_flow(const struct sw_flow_key *key)
 {
-	printk("wild%04x port%04x:vlan%04x mac%02x:%02x:%02x:%02x:%02x:%02x"
+	printk("wild%08x port%04x:vlan%04x mac%02x:%02x:%02x:%02x:%02x:%02x"
 			"->%02x:%02x:%02x:%02x:%02x:%02x "
 			"proto%04x ip%u.%u.%u.%u->%u.%u.%u.%u port%d->%d\n",
 			key->wildcards, ntohs(key->in_port), ntohs(key->dl_vlan),
@@ -236,8 +259,10 @@ int flow_extract(struct sk_buff *skb, uint16_t in_port,
 	int retval = 0;
 
 	key->in_port = htons(in_port);
+	key->pad = 0;
 	key->wildcards = 0;
-	memset(key->pad, '\0', sizeof(key->pad));
+	key->nw_src_mask = 0;
+	key->nw_dst_mask = 0;
 
 	/* This code doesn't check that skb->len is long enough to contain the
 	 * MAC or network header.  With a 46-byte minimum length frame this

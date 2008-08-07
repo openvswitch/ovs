@@ -449,12 +449,51 @@ static void print_wild(struct ds *string, const char *leader, int is_wild,
     ds_put_char(string, ',');
 }
 
+static void
+print_ip_netmask(struct ds *string, const char *leader, uint32_t ip,
+                 uint32_t wild_bits, int verbosity)
+{
+    if (wild_bits >= 32 && verbosity < 2) {
+        return;
+    }
+    ds_put_cstr(string, leader);
+    if (wild_bits < 32) {
+        ds_put_format(string, IP_FMT, IP_ARGS(&ip));
+        if (wild_bits) {
+            ds_put_format(string, "/%d", 32 - wild_bits);
+        }
+    } else {
+        ds_put_char(string, '*');
+    }
+    ds_put_char(string, ',');
+}
+
 /* Pretty-print the ofp_match structure */
 static void ofp_print_match(struct ds *f, const struct ofp_match *om, 
         int verbosity)
 {
-    uint16_t w = ntohs(om->wildcards);
+    uint32_t w = ntohl(om->wildcards);
+    bool skip_type = false;
+    bool skip_proto = false;
 
+    if (!(w & OFPFW_DL_TYPE) &&om->dl_type == htons(ETH_TYPE_IP)) {
+        skip_type = true;
+        if (!(w & OFPFW_NW_PROTO)) {
+            skip_proto = true;
+            if (om->nw_proto == IP_TYPE_ICMP) {
+                ds_put_cstr(f, "icmp,");
+            } else if (om->nw_proto == IP_TYPE_TCP) {
+                ds_put_cstr(f, "tcp,");
+            } else if (om->nw_proto == IP_TYPE_UDP) {
+                ds_put_cstr(f, "udp,");
+            } else {
+                ds_put_cstr(f, "ip,");
+                skip_proto = false;
+            }
+        } else {
+            ds_put_cstr(f, "ip,");
+        }
+    }
     print_wild(f, "in_port=", w & OFPFW_IN_PORT, verbosity,
                "%d", ntohs(om->in_port));
     print_wild(f, "dl_vlan=", w & OFPFW_DL_VLAN, verbosity,
@@ -463,14 +502,18 @@ static void ofp_print_match(struct ds *f, const struct ofp_match *om,
                ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_src));
     print_wild(f, "dl_dst=", w & OFPFW_DL_DST, verbosity,
                ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_dst));
-    print_wild(f, "dl_type=", w & OFPFW_DL_TYPE, verbosity,
-               "0x%04x", ntohs(om->dl_type));
-    print_wild(f, "nw_src=", w & OFPFW_NW_SRC, verbosity,
-               IP_FMT, IP_ARGS(&om->nw_src));
-    print_wild(f, "nw_dst=", w & OFPFW_NW_DST, verbosity,
-               IP_FMT, IP_ARGS(&om->nw_dst));
-    print_wild(f, "nw_proto=", w & OFPFW_NW_PROTO, verbosity,
-               "%u", om->nw_proto);
+    if (!skip_type) {
+        print_wild(f, "dl_type=", w & OFPFW_DL_TYPE, verbosity,
+                   "0x%04x", ntohs(om->dl_type));
+    }
+    print_ip_netmask(f, "nw_src=", om->nw_src,
+                     (w & OFPFW_NW_SRC_MASK) >> OFPFW_NW_SRC_SHIFT, verbosity);
+    print_ip_netmask(f, "nw_dst=", om->nw_dst,
+                     (w & OFPFW_NW_DST_MASK) >> OFPFW_NW_DST_SHIFT, verbosity);
+    if (!skip_proto) {
+        print_wild(f, "nw_proto=", w & OFPFW_NW_PROTO, verbosity,
+                   "%u", om->nw_proto);
+    }
     print_wild(f, "tp_src=", w & OFPFW_TP_SRC, verbosity,
                "%d", ntohs(om->tp_src));
     print_wild(f, "tp_dst=", w & OFPFW_TP_DST, verbosity,

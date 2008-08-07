@@ -168,6 +168,7 @@ BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
 #define IP_IHL(ip_ihl_ver) ((ip_ihl_ver) & 15)
 #define IP_IHL_VER(ihl, ver) (((ver) << 4) | (ihl))
 
+#define IP_TYPE_ICMP 1
 #define IP_TYPE_TCP 6
 #define IP_TYPE_UDP 17
 
