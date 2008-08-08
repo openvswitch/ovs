@@ -224,9 +224,9 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
     }
 
     if (in_port == out_port) {
-        /* The input port and output port match, so just drop the packet 
-         * by returning. */
-        return;
+        /* The input and output port match.  Set up a flow to drop packets. */
+        queue_tx(sw, rconn, make_add_flow(&flow, ntohl(opi->buffer_id),
+                                          sw->max_idle, 0));
     } else if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
         /* The output port is known, or we always flood everything, so add a
          * new flow. */
