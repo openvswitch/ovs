@@ -33,6 +33,7 @@
 #ifndef FLOW_H
 #define FLOW_H 1
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "util.h"
 
@@ -53,7 +54,7 @@ struct flow {
     uint8_t dl_src[6];          /* Ethernet source address. */
     uint8_t dl_dst[6];          /* Ethernet destination address. */
     uint8_t nw_proto;           /* IP protocol. */
-    uint8_t reserved;           /* One byte of padding. */
+    uint8_t reserved;           /* Pad to 32-bit alignment. */
 };
 BUILD_ASSERT_DECL(sizeof (struct flow) == 32);
 

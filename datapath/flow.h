@@ -16,28 +16,36 @@ struct sk_buff;
 struct ofp_flow_mod;
 
 /* Identification data for a flow.
-   Network byte order except for the "wildcards" field.
-   In decreasing order by size, so that sw_flow_key structures can
-   be hashed or compared bytewise.
-   It might be useful to reorder members from (expected) greatest to least
-   inter-flow variability, so that failing bytewise comparisons with memcmp
-   terminate as quickly as possible on average. */
+ * Network byte order except for the "wildcards" field.
+ * Ordered to make bytewise comparisons (e.g. with memcmp()) fail quickly and
+ * to keep the amount of padding to a minimum.
+ * If you change the ordering of fields here, change flow_keys_equal() to
+ * compare the proper fields.
+ */
 struct sw_flow_key {
-	uint32_t wildcards;	    /* Wildcard fields (host byte order). */
-	uint32_t nw_src;		/* IP source address. */
+	uint32_t nw_src;	/* IP source address. */
+	uint32_t nw_dst;	/* IP destination address. */
+	uint16_t in_port;	/* Input switch port */
+	uint16_t dl_vlan;	/* Input VLAN. */
+	uint16_t dl_type;	/* Ethernet frame type. */
+	uint16_t tp_src;	/* TCP/UDP source port. */
+	uint16_t tp_dst;	/* TCP/UDP destination port. */
+	uint8_t dl_src[ETH_ALEN]; /* Ethernet source address. */
+	uint8_t dl_dst[ETH_ALEN]; /* Ethernet destination address. */
+	uint8_t nw_proto;	/* IP protocol. */
+	uint8_t pad;		/* Pad to 32-bit alignment. */
+	uint32_t wildcards;	/* Wildcard fields (host byte order). */
 	uint32_t nw_src_mask;	/* 1-bit in each significant nw_src bit. */
-	uint32_t nw_dst;		/* IP destination address. */
-	uint32_t nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
-	uint16_t in_port;	    /* Input switch port */
-	uint16_t dl_vlan;	    /* Input VLAN. */
-	uint16_t dl_type;	    /* Ethernet frame type. */
-	uint16_t tp_src;        /* TCP/UDP source port. */
-	uint16_t tp_dst;        /* TCP/UDP destination port. */
-	uint8_t dl_src[ETH_ALEN];	    /* Ethernet source address. */
-	uint8_t dl_dst[ETH_ALEN];	    /* Ethernet destination address. */
-	uint8_t nw_proto;		/* IP protocol. */
-	uint8_t pad;		    /* NB: Pad to make 32-bit aligned */
+	uint32_t nw_dst_mask;	/* 1-bit in each significant nw_dst bit. */
 };
+
+/* Compare two sw_flow_keys and return true if they are the same flow, false
+ * otherwise.  Wildcards and netmasks are not considered. */
+static inline int flow_keys_equal(const struct sw_flow_key *a,
+				   const struct sw_flow_key *b) 
+{
+	return !memcmp(a, b, offsetof(struct sw_flow_key, wildcards));
+}
 
 /* We need to manually make sure that the structure is 32-bit aligned,
  * since we don't want garbage values in compiler-generated pads from

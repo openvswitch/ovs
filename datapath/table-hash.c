@@ -39,7 +39,7 @@ static struct sw_flow *table_hash_lookup(struct sw_table *swt,
 										 const struct sw_flow_key *key)
 {
 	struct sw_flow *flow = *find_bucket(swt, key);
-	return flow && !memcmp(&flow->key, key, sizeof *key) ? flow : NULL;
+	return flow && flow_keys_equal(&flow->key, key) ? flow : NULL;
 }
 
 static int table_hash_insert(struct sw_table *swt, struct sw_flow *flow)
@@ -58,7 +58,7 @@ static int table_hash_insert(struct sw_table *swt, struct sw_flow *flow)
 		retval = 1;
 	} else {
 		struct sw_flow *old_flow = *bucket;
-		if (!memcmp(&old_flow->key, &flow->key, sizeof flow->key)) {
+		if (!flow_keys_equal(&old_flow->key, &flow->key)) {
 			rcu_assign_pointer(*bucket, flow);
 			flow_deferred_free(old_flow);
 			retval = 1;
@@ -90,7 +90,7 @@ static int table_hash_delete(struct sw_table *swt,
 	if (key->wildcards == 0) {
 		struct sw_flow **bucket = find_bucket(swt, key);
 		struct sw_flow *flow = *bucket;
-		if (flow && !memcmp(&flow->key, key, sizeof *key))
+		if (flow && flow_keys_equal(&flow->key, key))
 			count = do_delete(bucket, flow);
 	} else {
 		unsigned int i;
@@ -239,7 +239,7 @@ static struct sw_flow *table_hash2_lookup(struct sw_table *swt,
 	
 	for (i = 0; i < 2; i++) {
 		struct sw_flow *flow = *find_bucket(t2->subtable[i], key);
-		if (flow && !memcmp(&flow->key, key, sizeof *key))
+		if (flow && flow_keys_equal(&flow->key, key))
 			return flow;
 	}
 	return NULL;
