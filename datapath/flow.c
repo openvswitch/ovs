@@ -307,6 +307,8 @@ int flow_extract(struct sk_buff *skb, uint16_t in_port,
 					 * header. */
 					goto no_proto;
 				}
+			} else {
+				goto no_th;
 			}
 		} else {
 			retval = 1;
