@@ -43,13 +43,17 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+#include "buffer.h"
 #include "compiler.h"
 #include "dynamic-string.h"
+#include "flow.h"
 #include "util.h"
 #include "openflow.h"
 #include "packets.h"
 
 static void ofp_print_port_name(struct ds *string, uint16_t port);
+static void ofp_print_match(struct ds *, const struct ofp_match *,
+                            int verbosity);
 
 /* Returns a string that represents the contents of the Ethernet frame in the
  * 'len' bytes starting at 'data' to 'stream' as output by tcpdump.
@@ -175,6 +179,28 @@ ofp_packet_in(struct ds *string, const void *oh, size_t len, int verbosity)
     ds_put_char(string, '\n');
 
     if (verbosity > 0) {
+        struct flow flow;
+        struct buffer packet;
+        struct ofp_match match;
+        packet.data = (void *) op->data;
+        packet.size = data_len;
+        flow_extract(&packet, ntohs(op->in_port), &flow);
+        match.wildcards = 0;
+        match.in_port = flow.in_port;
+        memcpy(match.dl_src, flow.dl_src, ETH_ADDR_LEN);
+        memcpy(match.dl_dst, flow.dl_dst, ETH_ADDR_LEN);
+        match.dl_vlan = flow.dl_vlan;
+        match.dl_type = flow.dl_type;
+        match.nw_proto = flow.nw_proto;
+        match.pad = 0;
+        match.nw_src = flow.nw_src;
+        match.nw_dst = flow.nw_dst;
+        match.tp_src = flow.tp_src;
+        match.tp_dst = flow.tp_dst;
+        ofp_print_match(string, &match, verbosity);
+        ds_put_char(string, '\n');
+    }
+    if (verbosity > 1) {
         char *packet = ofp_packet_to_string(op->data, data_len,
                                             ntohs(op->total_len)); 
         ds_put_cstr(string, packet);
