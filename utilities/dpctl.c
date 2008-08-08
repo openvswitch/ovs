@@ -56,6 +56,7 @@
 #include "socket-util.h"
 #include "openflow.h"
 #include "ofp-print.h"
+#include "packets.h"
 #include "random.h"
 #include "timeval.h"
 #include "vconn.h"
@@ -546,18 +547,44 @@ str_to_action(char *str, struct ofp_action *action, int *n_actions)
     *n_actions = i;
 }
 
-static void
-str_to_flow(char *string, struct ofp_match *match, 
-        struct ofp_action *action, int *n_actions, uint8_t *table_idx, 
-            uint16_t *priority, uint16_t *idle_timeout, uint16_t *hard_timeout)
-{
-    struct field {
-        const char *name;
-        uint32_t wildcard;
-        enum { F_U8, F_U16, F_MAC, F_IP } type;
-        size_t offset, shift;
-    };
+struct protocol {
+    const char *name;
+    uint16_t dl_type;
+    uint8_t nw_proto;
+};
 
+static bool
+parse_protocol(const char *name, const struct protocol **p_out)
+{
+    static const struct protocol protocols[] = {
+        { "ip", ETH_TYPE_IP },
+        { "arp", ETH_TYPE_ARP },
+        { "icmp", ETH_TYPE_IP, IP_TYPE_ICMP },
+        { "tcp", ETH_TYPE_IP, IP_TYPE_TCP },
+        { "udp", ETH_TYPE_IP, IP_TYPE_UDP },
+    };
+    const struct protocol *p;
+
+    for (p = protocols; p < &protocols[ARRAY_SIZE(protocols)]; p++) {
+        if (!strcmp(p->name, name)) {
+            *p_out = p;
+            return true;
+        }
+    }
+    *p_out = NULL;
+    return false;
+}
+
+struct field {
+    const char *name;
+    uint32_t wildcard;
+    enum { F_U8, F_U16, F_MAC, F_IP } type;
+    size_t offset, shift;
+};
+
+static bool
+parse_field(const char *name, const struct field **f_out) 
+{
 #define F_OFS(MEMBER) offsetof(struct ofp_match, MEMBER)
     static const struct field fields[] = { 
         { "in_port", OFPFW_IN_PORT, F_U16, F_OFS(in_port) },
@@ -573,10 +600,26 @@ str_to_flow(char *string, struct ofp_match *match,
         { "tp_src", OFPFW_TP_SRC, F_U16, F_OFS(tp_src) },
         { "tp_dst", OFPFW_TP_DST, F_U16, F_OFS(tp_dst) },
     };
+    const struct field *f;
 
-    char *name, *value;
+    for (f = fields; f < &fields[ARRAY_SIZE(fields)]; f++) {
+        if (!strcmp(f->name, name)) {
+            *f_out = f;
+            return true;
+        }
+    }
+    *f_out = NULL;
+    return false;
+}
+
+static void
+str_to_flow(char *string, struct ofp_match *match, 
+            struct ofp_action *action, int *n_actions, uint8_t *table_idx, 
+            uint16_t *priority, uint16_t *idle_timeout, uint16_t *hard_timeout)
+{
+
+    char *name;
     uint32_t wildcards;
-    char *act_str;
 
     if (table_idx) {
         *table_idx = 0xff;
@@ -591,7 +634,7 @@ str_to_flow(char *string, struct ofp_match *match,
         *hard_timeout = OFP_FLOW_PERMANENT;
     }
     if (action) {
-        act_str = strstr(string, "action");
+        char *act_str = strstr(string, "action");
         if (!act_str) {
             fatal(0, "must specify an action");
         }
@@ -608,70 +651,56 @@ str_to_flow(char *string, struct ofp_match *match,
     }
     memset(match, 0, sizeof *match);
     wildcards = OFPFW_ALL;
-    for (name = strtok(string, "="), value = strtok(NULL, ", \t\r\n");
-         name && value;
-         name = strtok(NULL, "="), value = strtok(NULL, ", \t\r\n"))
-    {
-        const struct field *f;
-        void *data;
+    for (name = strtok(string, "=, \t\r\n"); name;
+         name = strtok(NULL, "=, \t\r\n")) {
+        const struct protocol *p;
 
-        if (table_idx && !strcmp(name, "table")) {
-            *table_idx = atoi(value);
-            continue;
-        }
-
-        if (priority && !strcmp(name, "priority")) {
-            *priority = atoi(value);
-            continue;
-        }
-
-        if (idle_timeout && !strcmp(name, "idle_timeout")) {
-            *idle_timeout = atoi(value);
-            continue;
-        }
-
-        if (hard_timeout && !strcmp(name, "hard_timeout")) {
-            *hard_timeout = atoi(value);
-            continue;
-        }
-
-        for (f = fields; f < &fields[ARRAY_SIZE(fields)]; f++) {
-            if (!strcmp(f->name, name)) {
-                goto found;
+        if (parse_protocol(name, &p)) {
+            wildcards &= ~OFPFW_DL_TYPE;
+            match->dl_type = htons(p->dl_type);
+            if (p->nw_proto) {
+                wildcards &= ~OFPFW_NW_PROTO;
+                match->nw_proto = p->nw_proto;
             }
-        }
-        fprintf(stderr, "%s: unknown field %s (fields are",
-                program_name, name);
-        for (f = fields; f < &fields[ARRAY_SIZE(fields)]; f++) {
-            if (f != fields) {
-                putc(',', stderr);
-            }
-            fprintf(stderr, " %s", f->name);
-        }
-        fprintf(stderr, ")\n");
-        exit(1);
-
-    found:
-        data = (char *) match + f->offset;
-        if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
-            wildcards |= f->wildcard;
         } else {
-            wildcards &= ~f->wildcard;
-            if (f->type == F_U8) {
-                *(uint8_t *) data = str_to_int(value);
-            } else if (f->type == F_U16) {
-                *(uint16_t *) data = htons(str_to_int(value));
-            } else if (f->type == F_MAC) {
-                str_to_mac(value, data);
-            } else if (f->type == F_IP) {
-                wildcards |= str_to_ip(value, data) << f->shift;
+            const struct field *f;
+            char *value;
+
+            value = strtok(NULL, ", \t\r\n");
+            if (!value) {
+                fatal(0, "field %s missing value", name);
+            }
+        
+            if (table_idx && !strcmp(name, "table")) {
+                *table_idx = atoi(value);
+            } else if (priority && !strcmp(name, "priority")) {
+                *priority = atoi(value);
+            } else if (idle_timeout && !strcmp(name, "idle_timeout")) {
+                *idle_timeout = atoi(value);
+            } else if (hard_timeout && !strcmp(name, "hard_timeout")) {
+                *hard_timeout = atoi(value);
+            } else if (parse_field(name, &f)) {
+                void *data = (char *) match + f->offset;
+                if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
+                    wildcards |= f->wildcard;
+                } else {
+                    wildcards &= ~f->wildcard;
+                    if (f->type == F_U8) {
+                        *(uint8_t *) data = str_to_int(value);
+                    } else if (f->type == F_U16) {
+                        *(uint16_t *) data = htons(str_to_int(value));
+                    } else if (f->type == F_MAC) {
+                        str_to_mac(value, data);
+                    } else if (f->type == F_IP) {
+                        wildcards |= str_to_ip(value, data) << f->shift;
+                    } else {
+                        NOT_REACHED();
+                    }
+                }
             } else {
-                NOT_REACHED();
+                fatal(0, "unknown keyword %s", name);
             }
         }
-    }
-    if (name && !value) {
-        fatal(0, "field %s missing value", name);
     }
     match->wildcards = htonl(wildcards);
 }

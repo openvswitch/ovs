@@ -230,6 +230,24 @@ packets originating from a HTTP server.
 Matches UDP or TCP destination port \fIport\fR.
 
 .PP
+The following shorthand notations are also available:
+
+.IP \fBip\fR
+Same as \fBdl_type=0x0800\fR.
+
+.IP \fBicmp\fR
+Same as \fBdl_type=0x0800,nw_proto=1\fR.
+
+.IP \fBtcp\fR
+Same as \fBdl_type=0x0800,nw_proto=6\fR.
+
+.IP \fBudp\fR
+Same as \fBdl_type=0x0800,nw_proto=17\fR.
+
+.IP \fBarp\fR
+Same as \fBdl_type=0x0806\fR.
+
+.PP
 The \fBadd-flow\fR and \fBadd-flows\fR commands require an additional field:
 
 .IP \fIactions\fB=\fItarget\fR[\fB,\fItarget\fR...]\fR

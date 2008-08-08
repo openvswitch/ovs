@@ -502,22 +502,28 @@ static void ofp_print_match(struct ds *f, const struct ofp_match *om,
     bool skip_type = false;
     bool skip_proto = false;
 
-    if (!(w & OFPFW_DL_TYPE) &&om->dl_type == htons(ETH_TYPE_IP)) {
+    if (!(w & OFPFW_DL_TYPE)) {
         skip_type = true;
-        if (!(w & OFPFW_NW_PROTO)) {
-            skip_proto = true;
-            if (om->nw_proto == IP_TYPE_ICMP) {
-                ds_put_cstr(f, "icmp,");
-            } else if (om->nw_proto == IP_TYPE_TCP) {
-                ds_put_cstr(f, "tcp,");
-            } else if (om->nw_proto == IP_TYPE_UDP) {
-                ds_put_cstr(f, "udp,");
+        if (om->dl_type == htons(ETH_TYPE_IP)) {
+            if (!(w & OFPFW_NW_PROTO)) {
+                skip_proto = true;
+                if (om->nw_proto == IP_TYPE_ICMP) {
+                    ds_put_cstr(f, "icmp,");
+                } else if (om->nw_proto == IP_TYPE_TCP) {
+                    ds_put_cstr(f, "tcp,");
+                } else if (om->nw_proto == IP_TYPE_UDP) {
+                    ds_put_cstr(f, "udp,");
+                } else {
+                    ds_put_cstr(f, "ip,");
+                    skip_proto = false;
+                }
             } else {
                 ds_put_cstr(f, "ip,");
-                skip_proto = false;
             }
+        } else if (om->dl_type == htons(ETH_TYPE_ARP)) {
+            ds_put_cstr(f, "arp,");
         } else {
-            ds_put_cstr(f, "ip,");
+            skip_type = false;
         }
     }
     print_wild(f, "in_port=", w & OFPFW_IN_PORT, verbosity,
