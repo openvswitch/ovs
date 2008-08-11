@@ -53,6 +53,7 @@ buffer_use(struct buffer *b, void *base, size_t allocated)
     b->size = 0;
     b->l2 = b->l3 = b->l4 = b->l7 = NULL;
     b->next = NULL;
+    b->private = NULL;
 }
 
 /* Initializes 'b' as a buffer with an initial capacity of 'size' bytes. */

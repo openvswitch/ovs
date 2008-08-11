@@ -90,6 +90,8 @@ struct sender {
 struct remote {
     struct list node;
     struct rconn *rconn;
+#define TXQ_LIMIT 128           /* Max number of packets to queue for tx. */
+    int n_txq;                  /* Number of packets queued for tx on rconn. */
 
     /* Support for reliable, multi-message replies to requests.
      *
@@ -331,7 +333,7 @@ dp_run(struct datapath *dp)
                 }
                 break;
             }
-            remote_create(dp, rconn_new_from_vconn("passive", 128, new_vconn));
+            remote_create(dp, rconn_new_from_vconn("passive", new_vconn));
         }
     }
 }
@@ -367,7 +369,7 @@ remote_run(struct datapath *dp, struct remote *r)
             }
             buffer_delete(buffer); 
         } else {
-            if (!rconn_is_full(r->rconn)) {
+            if (r->n_txq < TXQ_LIMIT) {
                 int error = r->cb_dump(dp, r->cb_aux);
                 if (error <= 0) {
                     if (error) {
@@ -576,7 +578,9 @@ send_openflow_buffer(struct datapath *dp, struct buffer *buffer,
     int retval;
 
     update_openflow_length(buffer);
-    retval = rconn_send(rconn, buffer);
+    retval = (remote->n_txq < TXQ_LIMIT
+              ? rconn_send(rconn, buffer, &remote->n_txq)
+              : EAGAIN);
     if (retval) {
         VLOG_WARN("send to %s failed: %s",
                   rconn_get_name(rconn), strerror(retval));

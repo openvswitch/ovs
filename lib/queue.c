@@ -101,6 +101,17 @@ queue_push_tail(struct queue *q, struct buffer *b)
     check_queue(q);
 }
 
+/* Removes the first buffer from 'q', which must not be empty, and returns
+ * it.  The caller must free the buffer (with buffer_delete()) when it is no
+ * longer needed. */
+struct buffer *
+queue_pop_head(struct queue *q)
+{
+    struct buffer *head = q->head;
+    queue_advance_head(q, head->next);
+    return head;
+}
+
 /* Checks the internal integrity of 'q'.  For use in debugging. */
 static void
 check_queue(struct queue *q)

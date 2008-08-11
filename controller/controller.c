@@ -197,7 +197,7 @@ main(int argc, char *argv[])
 static void
 new_switch(struct switch_ *sw, struct vconn *vconn, const char *name)
 {
-    sw->rconn = rconn_new_from_vconn(name, 128, vconn);
+    sw->rconn = rconn_new_from_vconn(name, vconn);
     sw->lswitch = lswitch_create(sw->rconn, learn_macs,
                                  setup_flows ? max_idle : -1);
 }

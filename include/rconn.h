@@ -53,12 +53,10 @@
 
 struct vconn;
 
-struct rconn *rconn_new(const char *name, int txq_limit,
+struct rconn *rconn_new(const char *name, 
                         int inactivity_probe_interval, int max_backoff);
-struct rconn *rconn_new_from_vconn(const char *name, int txq_limit,
-                                   struct vconn *);
-struct rconn *rconn_create(int txq_limit, int inactivity_probe_interval,
-                           int max_backoff);
+struct rconn *rconn_new_from_vconn(const char *name, struct vconn *);
+struct rconn *rconn_create(int inactivity_probe_interval, int max_backoff);
 int rconn_connect(struct rconn *, const char *name);
 void rconn_connect_unreliably(struct rconn *,
                               const char *name, struct vconn *vconn);
@@ -69,9 +67,9 @@ void rconn_run(struct rconn *);
 void rconn_run_wait(struct rconn *);
 struct buffer *rconn_recv(struct rconn *);
 void rconn_recv_wait(struct rconn *);
-int rconn_send(struct rconn *, struct buffer *);
-int rconn_force_send(struct rconn *, struct buffer *);
-bool rconn_is_full(const struct rconn *);
+int rconn_send(struct rconn *, struct buffer *, int *n_queued);
+int rconn_send_with_limit(struct rconn *, struct buffer *,
+                          int *n_queued, int queue_limit);
 unsigned int rconn_packets_sent(const struct rconn *);
 
 const char *rconn_get_name(const struct rconn *);

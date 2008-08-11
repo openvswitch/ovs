@@ -51,6 +51,7 @@ struct buffer {
     void *l7;                   /* Application data. */
 
     struct buffer *next;        /* Next in a list of buffers. */
+    void *private;              /* Private pointer for use by owner. */
 };
 
 void buffer_use(struct buffer *, void *, size_t);

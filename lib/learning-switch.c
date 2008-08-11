@@ -63,6 +63,9 @@ struct lswitch {
     uint64_t datapath_id;
     time_t last_features_request;
     struct mac_learning *ml;    /* NULL to act as hub instead of switch. */
+
+    /* Number of outgoing queued packets on the rconn. */
+    int n_queued;
 };
 
 static void queue_tx(struct lswitch *, struct rconn *, struct buffer *);
@@ -85,8 +88,7 @@ static void process_echo_request(struct lswitch *, struct rconn *,
 struct lswitch *
 lswitch_create(struct rconn *rconn, bool learn_macs, int max_idle)
 {
-    struct lswitch *sw = xmalloc(sizeof *sw);
-    memset(sw, 0, sizeof *sw);
+    struct lswitch *sw = xcalloc(1, sizeof *sw);
     sw->max_idle = max_idle;
     sw->datapath_id = 0;
     sw->last_features_request = time_now() - 1;
@@ -182,7 +184,7 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
 static void
 queue_tx(struct lswitch *sw, struct rconn *rconn, struct buffer *b)
 {
-    int retval = rconn_send(rconn, b);
+    int retval = rconn_send_with_limit(rconn, b, &sw->n_queued, 10);
     if (retval) {
         if (retval == EAGAIN) {
             /* FIXME: ratelimit. */
@@ -193,7 +195,6 @@ queue_tx(struct lswitch *sw, struct rconn *rconn, struct buffer *b)
             /* FIXME: ratelimit. */
             VLOG_WARN("%s: send: %s", rconn_get_name(rconn), strerror(retval));
         }
-        buffer_delete(b);
     }
 }
 

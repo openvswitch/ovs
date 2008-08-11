@@ -86,7 +86,7 @@ main(int argc, char *argv[])
         fatal(0, "missing controller argument; use --help for usage");
     }
 
-    rconn = rconn_create(128, 60, max_backoff);
+    rconn = rconn_create(60, max_backoff);
     error = rconn_connect(rconn, argv[optind]);
     if (error == EAFNOSUPPORT) {
         fatal(0, "no support for %s vconn", argv[optind]);

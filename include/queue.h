@@ -46,5 +46,6 @@ void queue_destroy(struct queue *);
 void queue_clear(struct queue *);
 void queue_advance_head(struct queue *, struct buffer *next);
 void queue_push_tail(struct queue *, struct buffer *);
+struct buffer *queue_pop_head(struct queue *);
 
 #endif /* queue.h */
