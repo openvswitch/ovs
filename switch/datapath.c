@@ -48,6 +48,7 @@
 #include "rconn.h"
 #include "vconn.h"
 #include "table.h"
+#include "timeval.h"
 #include "xtoxll.h"
 
 #define THIS_MODULE VLM_datapath
@@ -191,7 +192,7 @@ dp_new(struct datapath **dp_, uint64_t dpid, struct rconn *rconn)
         return ENOMEM;
     }
 
-    dp->last_timeout = time(0);
+    dp->last_timeout = time_now();
     list_init(&dp->remotes);
     dp->controller = remote_create(dp, rconn);
     dp->listen_vconn = NULL;
@@ -269,7 +270,7 @@ dp_add_listen_vconn(struct datapath *dp, struct vconn *listen_vconn)
 void
 dp_run(struct datapath *dp)
 {
-    time_t now = time(0);
+    time_t now = time_now();
     struct sw_port *p, *pn;
     struct remote *r, *rn;
     struct buffer *buffer = NULL;
@@ -697,7 +698,7 @@ send_flow_expired(struct datapath *dp, struct sw_flow *flow,
     ofe->reason = reason;
     memset(ofe->pad, 0, sizeof ofe->pad);
 
-    ofe->duration     = htonl(time(0) - flow->created);
+    ofe->duration     = htonl(time_now() - flow->created);
     memset(ofe->pad2, 0, sizeof ofe->pad2);
     ofe->packet_count = htonll(flow->packet_count);
     ofe->byte_count   = htonll(flow->byte_count);
@@ -1078,7 +1079,7 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
     flow->priority = flow->key.wildcards ? ntohs(ofm->priority) : -1;
     flow->idle_timeout = ntohs(ofm->idle_timeout);
     flow->hard_timeout = ntohs(ofm->hard_timeout);
-    flow->used = flow->created = time(0);
+    flow->used = flow->created = time_now();
     flow->n_actions = n_acts;
     flow->byte_count = 0;
     flow->packet_count = 0;
@@ -1174,7 +1175,7 @@ static int flow_stats_dump(struct datapath *dp, void *state,
 
     flow_extract_match(&match_key, &s->rq.match);
     s->buffer = buffer;
-    s->now = time(0);
+    s->now = time_now();
     while (s->table_idx < dp->chain->n_tables
            && (s->rq.table_id == 0xff || s->rq.table_id == s->table_idx))
     {
@@ -1585,7 +1586,7 @@ uint32_t save_buffer(struct buffer *buffer)
     if (p->buffer) {
         /* Don't buffer packet if existing entry is less than
          * OVERWRITE_SECS old. */
-        if (time(0) < p->timeout) { /* FIXME */
+        if (time_now() < p->timeout) { /* FIXME */
             return -1;
         } else {
             buffer_delete(p->buffer); 
@@ -1596,7 +1597,7 @@ uint32_t save_buffer(struct buffer *buffer)
     if (++p->cookie >= (1u << PKT_COOKIE_BITS) - 1)
         p->cookie = 0;
     p->buffer = buffer_clone(buffer);      /* FIXME */
-    p->timeout = time(0) + OVERWRITE_SECS; /* FIXME */
+    p->timeout = time_now() + OVERWRITE_SECS; /* FIXME */
     id = buffer_idx | (p->cookie << PKT_BUFFER_BITS);
 
     return id;

@@ -212,7 +212,7 @@ recv_with_creds(const struct vlog_server *server,
         fprintf(stderr, "vlog: config message not from a socket\n");
         return -1;
     }
-    recent = time(0) - 30;
+    recent = time_now() - 30;
     if (s.st_atime < recent || s.st_ctime < recent || s.st_mtime < recent) {
         fprintf(stderr, "vlog: config socket too old\n");
         return -1;

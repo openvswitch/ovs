@@ -47,6 +47,7 @@
 #include "openflow.h"
 #include "queue.h"
 #include "rconn.h"
+#include "timeval.h"
 #include "vconn.h"
 #include "xtoxll.h"
 
@@ -88,7 +89,7 @@ lswitch_create(struct rconn *rconn, bool learn_macs, int max_idle)
     memset(sw, 0, sizeof *sw);
     sw->max_idle = max_idle;
     sw->datapath_id = 0;
-    sw->last_features_request = time(0) - 1;
+    sw->last_features_request = time_now() - 1;
     sw->ml = learn_macs ? mac_learning_create() : NULL;
     send_features_request(sw, rconn);
     return sw;
@@ -148,7 +149,7 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
 static void
 send_features_request(struct lswitch *sw, struct rconn *rconn)
 {
-    time_t now = time(0);
+    time_t now = time_now();
     if (now >= sw->last_features_request + 1) {
         struct buffer *b;
         struct ofp_header *ofr;

@@ -43,6 +43,7 @@
 #include <syslog.h>
 #include <time.h>
 #include "dynamic-string.h"
+#include "timeval.h"
 #include "util.h"
 
 #define THIS_MODULE VLM_vlog
@@ -255,7 +256,7 @@ vlog_init(void)
     openlog(program_name, LOG_NDELAY, LOG_DAEMON);
     vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_WARN);
 
-    now = time(0);
+    now = time_now();
     if (now < 0) {
         struct tm tm;
         char s[128];
@@ -323,7 +324,7 @@ vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
         char s[1024];
         size_t len, time_len;
 
-        now = time(0);
+        now = time_now();
         localtime_r(&now, &tm);
 
         len = time_len = strftime(s, sizeof s, "%b %d %H:%M:%S|", &tm);

@@ -40,6 +40,7 @@
 #include "buffer.h"
 #include "openflow.h"
 #include "packets.h"
+#include "timeval.h"
 
 /* Internal function used to compare fields in flow. */
 static inline
@@ -194,7 +195,7 @@ void print_flow(const struct sw_flow_key *key)
 
 bool flow_timeout(struct sw_flow *flow)
 {
-    time_t now = time(0);
+    time_t now = time_now();
     if (flow->idle_timeout != OFP_FLOW_PERMANENT
         && now > flow->used + flow->idle_timeout) {
         flow->reason = OFPER_IDLE_TIMEOUT;
@@ -210,7 +211,7 @@ bool flow_timeout(struct sw_flow *flow)
 
 void flow_used(struct sw_flow *flow, struct buffer *buffer)
 {
-    flow->used = time(0);
+    flow->used = time_now();
     flow->packet_count++;
     flow->byte_count += buffer->size;
 }

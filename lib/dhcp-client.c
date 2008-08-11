@@ -51,6 +51,7 @@
 #include "netdev.h"
 #include "ofp-print.h"
 #include "poll-loop.h"
+#include "timeval.h"
 
 #define THIS_MODULE VLM_dhcp_client
 #include "vlog.h"
@@ -194,7 +195,7 @@ dhclient_create(const char *netdev_name,
     cli->aux = aux;
     cli->netdev = netdev;
     cli->state = S_RELEASED;
-    cli->state_entered = time(0);
+    cli->state_entered = time_now();
     cli->xid = random_uint32();
     cli->ipaddr = 0;
     cli->server_ip = 0;
@@ -238,7 +239,7 @@ dhclient_release(struct dhclient *cli)
 static void
 do_force_renew(struct dhclient *cli, int deadline)
 {
-    time_t now = time(0);
+    time_t now = time_now();
     unsigned int lease_left = sat_sub(cli->lease_expiration, now);
     if (lease_left <= deadline) {
         if (cli->state & (S_RENEWING | S_REBINDING)) {
@@ -672,7 +673,7 @@ receive_ack(struct dhclient *cli)
             t1 = calc_t1(lease, t2);
         }
 
-        cli->lease_expiration = sat_add(time(0), lease);
+        cli->lease_expiration = sat_add(time_now(), lease);
         cli->bound_timeout = t1;
         cli->renewing_timeout = t2 - t1;
         cli->rebinding_timeout = lease - t2;
@@ -777,7 +778,7 @@ state_transition(struct dhclient *cli, enum dhclient_state state)
         VLOG_DBG("entering %s", state_name(state)); 
         cli->state = state;
     }
-    cli->state_entered = time(0);
+    cli->state_entered = time_now();
     cli->retransmit = cli->delay = 0;
     am_bound = dhclient_is_bound(cli);
     if (was_bound != am_bound) {
@@ -838,14 +839,14 @@ dhclient_msg_init(struct dhclient *cli, enum dhcp_msg_type type,
 static unsigned int
 elapsed_in_this_state(const struct dhclient *cli)
 {
-    return time(0) - cli->state_entered;
+    return time_now() - cli->state_entered;
 }
 
 static bool
 timeout(struct dhclient *cli, unsigned int secs)
 {
     cli->min_timeout = MIN(cli->min_timeout, secs);
-    return time(0) >= sat_add(cli->state_entered, secs);
+    return time_now() >= sat_add(cli->state_entered, secs);
 }
 
 static bool

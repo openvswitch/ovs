@@ -462,7 +462,7 @@ get_controller_mac(struct netdev *netdev, struct rconn *controller)
 
     uint32_t last_ip = ip;
 
-    time_t now = time(0);
+    time_t now = time_now();
 
     ip = rconn_get_ip(controller);
     if (last_ip != ip || !next_refresh || now >= next_refresh) {

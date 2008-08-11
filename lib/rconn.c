@@ -161,7 +161,7 @@ rconn_create(int txq_limit, int probe_interval, int max_backoff)
     struct rconn *rc = xcalloc(1, sizeof *rc);
 
     rc->state = S_VOID;
-    rc->state_entered = time(0);
+    rc->state_entered = time_now();
 
     rc->vconn = NULL;
     rc->name = xstrdup("void");
@@ -174,13 +174,13 @@ rconn_create(int txq_limit, int probe_interval, int max_backoff)
     rc->backoff = 0;
     rc->max_backoff = max_backoff ? max_backoff : 60;
     rc->backoff_deadline = TIME_MIN;
-    rc->last_received = time(0);
-    rc->last_connected = time(0);
+    rc->last_received = time_now();
+    rc->last_connected = time_now();
 
     rc->packets_sent = 0;
 
     rc->questionable_connectivity = false;
-    rc->last_questioned = time(0);
+    rc->last_questioned = time_now();
 
     rc->probe_interval = probe_interval ? MAX(5, probe_interval) : 0;
 
@@ -207,7 +207,7 @@ rconn_connect_unreliably(struct rconn *rc,
     rc->name = xstrdup(name);
     rc->reliable = false;
     rc->vconn = vconn;
-    rc->last_connected = time(0);
+    rc->last_connected = time_now();
     state_transition(rc, S_ACTIVE);
 }
 
@@ -260,7 +260,7 @@ reconnect(struct rconn *rc)
     VLOG_WARN("%s: connecting...", rc->name);
     retval = vconn_open(rc->name, &rc->vconn);
     if (!retval) {
-        rc->backoff_deadline = time(0) + rc->backoff;
+        rc->backoff_deadline = time_now() + rc->backoff;
         state_transition(rc, S_CONNECTING);
     } else {
         VLOG_WARN("%s: connection failed (%s)", rc->name, strerror(retval));
@@ -341,7 +341,7 @@ run_ACTIVE(struct rconn *rc)
         unsigned int base = MAX(rc->last_received, rc->state_entered);
         queue_push_tail(&rc->txq, make_echo_request());
         VLOG_DBG("%s: idle %u seconds, sending inactivity probe",
-                 rc->name, (unsigned int) (time(0) - base));
+                 rc->name, (unsigned int) (time_now() - base));
         state_transition(rc, S_IDLE);
         return;
     }
@@ -413,7 +413,7 @@ rconn_recv(struct rconn *rc)
         struct buffer *buffer;
         int error = vconn_recv(rc->vconn, &buffer);
         if (!error) {
-            rc->last_received = time(0);
+            rc->last_received = time_now();
             if (rc->state == S_IDLE) {
                 state_transition(rc, S_ACTIVE);
             }
@@ -522,7 +522,7 @@ rconn_is_connected(const struct rconn *rconn)
 int
 rconn_disconnected_duration(const struct rconn *rconn)
 {
-    return rconn_is_connected(rconn) ? 0 : time(0) - rconn->last_received;
+    return rconn_is_connected(rconn) ? 0 : time_now() - rconn->last_received;
 }
 
 /* Returns the IP address of the peer, or 0 if the peer is not connected over
@@ -575,7 +575,7 @@ static void
 disconnect(struct rconn *rc, int error)
 {
     if (rc->reliable) {
-        time_t now = time(0);
+        time_t now = time_now();
 
         if (rc->state & (S_CONNECTING | S_ACTIVE | S_IDLE)) {
             if (error > 0) {
@@ -613,7 +613,7 @@ disconnect(struct rconn *rc, int error)
 static unsigned int
 elapsed_in_this_state(const struct rconn *rc)
 {
-    return time(0) - rc->state_entered;
+    return time_now() - rc->state_entered;
 }
 
 static unsigned int
@@ -631,7 +631,7 @@ timeout(const struct rconn *rc)
 static bool
 timed_out(const struct rconn *rc)
 {
-    return time(0) >= sat_add(rc->state_entered, timeout(rc));
+    return time_now() >= sat_add(rc->state_entered, timeout(rc));
 }
 
 static void
@@ -639,7 +639,7 @@ state_transition(struct rconn *rc, enum state state)
 {
     VLOG_DBG("%s: entering %s", rc->name, state_name(state));
     rc->state = state;
-    rc->state_entered = time(0);
+    rc->state_entered = time_now();
 }
 
 static unsigned int
@@ -658,7 +658,7 @@ sat_mul(unsigned int x, unsigned int y)
 static void
 question_connectivity(struct rconn *rc) 
 {
-    time_t now = time(0);
+    time_t now = time_now();
     if (now - rc->last_questioned > 60) {
         rc->questionable_connectivity = true;
         rc->last_questioned = now;

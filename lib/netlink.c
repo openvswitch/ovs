@@ -44,6 +44,7 @@
 #include "buffer.h"
 #include "netlink-protocol.h"
 #include "dynamic-string.h"
+#include "timeval.h"
 #include "util.h"
 
 #include "vlog.h"
@@ -99,7 +100,7 @@ nl_sock_create(int protocol, int multicast_group,
 
     if (next_seq == 0) {
         /* Pick initial sequence number. */
-        next_seq = getpid() ^ time(0);
+        next_seq = getpid() ^ time_now();
     }
 
     *sockp = NULL;
