@@ -41,6 +41,7 @@
 #include <string.h>
 #include "command-line.h"
 #include "daemon.h"
+#include "timeval.h"
 #include "util.h"
 
 /* -s, --signal: signal to send. */
@@ -62,6 +63,7 @@ main(int argc, char *argv[])
     int i;
 
     set_program_name(argv[0]);
+    time_init();
     parse_options(argc, argv);
 
     argc -= optind;

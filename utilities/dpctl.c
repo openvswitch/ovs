@@ -36,6 +36,7 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,7 +56,7 @@
 #include "openflow.h"
 #include "ofp-print.h"
 #include "random.h"
-#include "signal.h"
+#include "timeval.h"
 #include "vconn.h"
 #include "vconn-ssl.h"
 
@@ -84,6 +85,7 @@ int main(int argc, char *argv[])
     struct command *p;
 
     set_program_name(argv[0]);
+    time_init();
     vlog_init();
     parse_options(argc, argv);
 
@@ -140,14 +142,9 @@ parse_options(int argc, char *argv[])
             if (timeout <= 0) {
                 fatal(0, "value %s on -t or --timeout is not at least 1",
                       optarg);
-            } else if (timeout < UINT_MAX) {
-                /* Add 1 because historical implementations allow an alarm to
-                 * occur up to a second early. */
-                alarm(timeout + 1);
             } else {
-                alarm(UINT_MAX);
+                time_alarm(timeout);
             }
-            signal(SIGALRM, SIG_DFL);
             break;
 
         case 'h':

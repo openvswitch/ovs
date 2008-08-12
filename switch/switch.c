@@ -48,6 +48,7 @@
 #include "queue.h"
 #include "util.h"
 #include "rconn.h"
+#include "timeval.h"
 #include "vconn.h"
 #include "vconn-ssl.h"
 #include "vlog-socket.h"
@@ -77,6 +78,7 @@ main(int argc, char *argv[])
 
     set_program_name(argv[0]);
     register_fault_handlers();
+    time_init();
     vlog_init();
     parse_options(argc, argv);
 

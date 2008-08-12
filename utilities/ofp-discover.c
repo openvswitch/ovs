@@ -46,6 +46,7 @@
 #include "fatal-signal.h"
 #include "netdev.h"
 #include "poll-loop.h"
+#include "timeval.h"
 #include "util.h"
 #include "vlog-socket.h"
 
@@ -90,6 +91,7 @@ main(int argc, char *argv[])
     int i;
 
     set_program_name(argv[0]);
+    time_init();
     vlog_init();
     parse_options(argc, argv);
 
@@ -152,7 +154,7 @@ main(int argc, char *argv[])
                     struct ds ds;
 
                     /* Disable timeout, since discovery was successful. */
-                    alarm(0);
+                    time_alarm(0);
 
                     /* Print discovered parameters. */
                     ds_init(&ds);
@@ -344,12 +346,8 @@ parse_options(int argc, char *argv[])
             if (timeout <= 0) {
                 fatal(0, "value %s on -t or --timeout is not at least 1",
                       optarg);
-            } else if (timeout < UINT_MAX) {
-                /* Add 1 because historical implementations allow an alarm to
-                 * occur up to a second early. */
-                alarm(timeout + 1);
             } else {
-                alarm(UINT_MAX);
+                time_alarm(timeout);
             }
             signal(SIGALRM, SIG_DFL);
             break;

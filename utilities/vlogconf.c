@@ -43,6 +43,7 @@
 
 #include "command-line.h"
 #include "compiler.h"
+#include "timeval.h"
 #include "util.h"
 #include "vlog-socket.h"
 
@@ -157,6 +158,7 @@ int main(int argc, char *argv[])
     size_t n_clients = 0;
 
     set_program_name(argv[0]);
+    time_init();
 
     short_options = long_options_to_short_options(long_options);
     for (;;) {
