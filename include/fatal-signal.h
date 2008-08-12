@@ -47,4 +47,8 @@ void fatal_signal_fork(void);
 void fatal_signal_add_file_to_unlink(const char *);
 void fatal_signal_remove_file_to_unlink(const char *);
 
+/* Interface for other code that catches one of our signals and needs to pass
+ * it through. */
+void fatal_signal_handler(int sig_nr);
+
 #endif /* fatal-signal.h */

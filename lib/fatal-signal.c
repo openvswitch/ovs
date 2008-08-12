@@ -64,7 +64,6 @@ static int block_level = 0;
 static sigset_t saved_signal_mask;
 
 static void call_sigprocmask(int how, sigset_t* new_set, sigset_t* old_set);
-static void signal_handler(int sig_nr);
 
 /* Registers 'hook' to be called when a process termination signal is
  * raised. */
@@ -97,9 +96,15 @@ fatal_signal_block()
         sigemptyset(&fatal_signal_set);
         for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {
             int sig_nr = fatal_signals[i];
+            struct sigaction old_sa;
+
             sigaddset(&fatal_signal_set, sig_nr);
-            if (signal(sig_nr, signal_handler) == SIG_IGN) {
-                signal(sig_nr, SIG_IGN);
+            if (sigaction(sig_nr, NULL, &old_sa)) {
+                fatal(errno, "sigaction");
+            }
+            if (old_sa.sa_handler == SIG_DFL
+                && signal(sig_nr, fatal_signal_handler) == SIG_ERR) {
+                fatal(errno, "signal");
             }
         }
     }
@@ -120,6 +125,36 @@ fatal_signal_unblock()
     if (--block_level == 0) {
         call_sigprocmask(SIG_SETMASK, &saved_signal_mask, NULL);
     }
+}
+
+/* Handles fatal signal number 'sig_nr'.
+ *
+ * Ordinarily this is the actual signal handler.  When other code needs to
+ * handle one of our signals, however, it can register for that signal and, if
+ * and when necessary, call this function to do fatal signal processing for it
+ * and terminate the process.  Currently only timeval.c does this, for SIGALRM.
+ * (It is not important whether the other code sets up its signal handler
+ * before or after this file, because this file will only set up a signal
+ * handler in the case where the signal has its default handling.)  */
+void
+fatal_signal_handler(int sig_nr)
+{
+    volatile sig_atomic_t recurse = 0;
+    if (!recurse) {
+        size_t i;
+
+        recurse = 1;
+
+        /* Call all the hooks. */
+        for (i = 0; i < n_hooks; i++) {
+            hooks[i].func(hooks[i].aux);
+        }
+    }
+
+    /* Re-raise the signal with the default handling so that the program
+     * termination status reflects that we were killed by this signal */
+    signal(sig_nr, SIG_DFL);
+    raise(sig_nr);
 }
 
 static char **files;
@@ -212,25 +247,4 @@ call_sigprocmask(int how, sigset_t* new_set, sigset_t* old_set)
     if (error) {
         fprintf(stderr, "sigprocmask: %s\n", strerror(errno));
     }
-}
-
-static void
-signal_handler(int sig_nr)
-{
-    volatile sig_atomic_t recurse = 0;
-    if (!recurse) {
-        size_t i;
-
-        recurse = 1;
-
-        /* Call all the hooks. */
-        for (i = 0; i < n_hooks; i++) {
-            hooks[i].func(hooks[i].aux);
-        }
-    }
-
-    /* Re-raise the signal with the default handling so that the program
-     * termination status reflects that we were killed by this signal */
-    signal(sig_nr, SIG_DFL);
-    raise(sig_nr);
 }
