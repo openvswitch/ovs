@@ -487,7 +487,7 @@ static void
 do_init(struct dhclient *cli, enum dhclient_state next_state)
 {
     if (!cli->init_delay) {
-        cli->init_delay = clamp(fuzz(2, 8), 1, 10);
+        cli->init_delay = fuzz(2, 1);
     }
     if (timeout(cli, cli->init_delay)) {
         state_transition(cli, next_state);
