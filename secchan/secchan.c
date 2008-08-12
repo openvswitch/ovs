@@ -1219,13 +1219,10 @@ parse_options(int argc, char *argv[], struct settings *s)
             VLOG_WARN("Rate limit set to unusually low value %d",
                       s->rate_limit);
         }
-
         if (!s->burst_limit) {
-            s->burst_limit = s->rate_limit * 2;
-        } else if (s->burst_limit < s->rate_limit) {
-            VLOG_WARN("Burst limit (%d) set lower than rate limit (%d)",
-                      s->burst_limit, s->rate_limit);
+            s->burst_limit = s->rate_limit / 4;
         }
+        s->burst_limit = MAX(s->burst_limit, 1);
         s->burst_limit = MIN(s->burst_limit, INT_MAX / 1000);
     }
 }
