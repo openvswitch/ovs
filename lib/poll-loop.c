@@ -39,6 +39,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "list.h"
+#include "timeval.h"
 
 #define THIS_MODULE VLM_poll_loop
 #include "vlog.h"
@@ -143,11 +144,9 @@ poll_block(void)
         n_pollfds++;
     }
 
-    do {
-        retval = poll(pollfds, n_pollfds, timeout);
-    } while (retval < 0 && errno == EINTR);
+    retval = time_poll(pollfds, n_pollfds, timeout);
     if (retval < 0) {
-        VLOG_ERR("poll: %s", strerror(errno));
+        VLOG_ERR("poll: %s", strerror(-retval));
     }
 
     for (node = waiters.next; node != &waiters; ) {

@@ -24,6 +24,7 @@ libopenflow_a_SOURCES = \
 	random.c \
 	rconn.c \
 	socket-util.c \
+	timeval.c \
 	util.c \
 	vconn-tcp.c \
 	vconn-unix.c \
