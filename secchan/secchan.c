@@ -40,6 +40,7 @@
 #include <poll.h>
 #include <regex.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -179,6 +180,7 @@ main(int argc, char *argv[])
     time_init();
     vlog_init();
     parse_options(argc, argv, &s);
+    signal(SIGPIPE, SIG_IGN);
 
     /* Start listening for management connections. */
     if (s.listen_vconn_name) {

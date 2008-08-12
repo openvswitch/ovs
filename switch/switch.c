@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,6 +82,7 @@ main(int argc, char *argv[])
     time_init();
     vlog_init();
     parse_options(argc, argv);
+    signal(SIGPIPE, SIG_IGN);
 
     if (argc - optind != 1) {
         fatal(0, "missing controller argument; use --help for usage");

@@ -88,6 +88,7 @@ int main(int argc, char *argv[])
     time_init();
     vlog_init();
     parse_options(argc, argv);
+    signal(SIGPIPE, SIG_IGN);
 
     argc -= optind;
     argv += optind;
