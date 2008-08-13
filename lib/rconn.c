@@ -310,11 +310,17 @@ run_CONNECTING(struct rconn *rc)
 static void
 do_tx_work(struct rconn *rc)
 {
+    if (!rc->txq.n) {
+        return;
+    }
     while (rc->txq.n > 0) {
         int error = try_send(rc);
         if (error) {
             break;
         }
+    }
+    if (!rc->txq.n) {
+        poll_immediate_wake();
     }
 }
 
@@ -618,6 +624,9 @@ disconnect(struct rconn *rc, int error)
 static void
 flush_queue(struct rconn *rc)
 {
+    if (!rc->txq.n) {
+        return;
+    }
     while (rc->txq.n > 0) {
         struct buffer *b = queue_pop_head(&rc->txq);
         int *n_queued = b->private;
@@ -626,6 +635,7 @@ flush_queue(struct rconn *rc)
         }
         buffer_delete(b);
     }
+    poll_immediate_wake();
 }
 
 static unsigned int
