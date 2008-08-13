@@ -446,7 +446,7 @@ rconn_recv_wait(struct rconn *rc)
 int
 rconn_send(struct rconn *rc, struct buffer *b, int *n_queued)
 {
-    if (rc->vconn) {
+    if (rconn_is_connected(rc)) {
         b->private = n_queued;
         if (n_queued) {
             ++*n_queued;
