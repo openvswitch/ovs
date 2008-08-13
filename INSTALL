@@ -5,11 +5,23 @@ reference implementation of OpenFlow.  Please send any comments to:
 
                       <info@openflowswitch.org>
 
-Prerequisites
--------------
+Build Methods
+=============
 
-To compile the userspace programs in the OpenFlow reference
-distribution, you will need the following software:
+There are two principal ways to build and install this distribution:
+
+	- Using "configure" and "make" in the ordinary way.  See
+          Building Conventionally below for detailed instructions.
+
+	- As a set of Debian packages.  Refer to Building Debian
+          Packages, below, for instructions.
+
+Base Prerequisites
+------------------
+
+Regardless of how it is built, OpenFlow has a common set of
+prerequisites.  To compile the userspace programs in the OpenFlow
+reference distribution, you will need the following software:
 
     - A make program, e.g. GNU make
       (http://www.gnu.org/software/make/).  BSD make should also work.
@@ -20,7 +32,7 @@ distribution, you will need the following software:
     - libssl, from OpenSSL (http://www.openssl.org/), is optional but
       recommended.  libssl is required to establish confidentiality
       and authenticity in the connections among OpenFlow switches and
-      controllers.  To enable, compile with --enable-ssl=yes
+      controllers.  To enable, configure with --enable-ssl=yes
 
 If you are working from a Git tree or snapshot (instead of from a
 distribution tarball), or if you modify the OpenFlow build system, you
@@ -33,21 +45,64 @@ will also need the following software:
     - pkg-config (http://pkg-config.freedesktop.org/wiki/).  We test
       with version 0.22.
 
-The optional Linux module has additional prerequisites, described
-later in the section "Building and Testing the Linux Kernel-Based
-Switch".
+Debian Prerequisites
+--------------------
 
-Building Userspace Programs
----------------------------
+To build Debian packages from the OpenFlow distribution, you will need
+to install a number of Debian packages in addition to the base
+prerequisites listed above.  These additional prerequisites may be
+found listed as "Build-Depends" in debian/control in the source tree.
+To check that they are installed, first install the dpkg-dev package,
+then run dpkg-checkbuilddeps from the top level of the OpenFlow source
+tree.
 
-The OpenFlow distribution includes two implementations of the switch:
-one entirely in userspace, for portability and ease of installation,
-and another with a Linux kernel module component that is more
-difficult to install but should also yield better performance.  These
-instructions describe how to build the userspace components of the
-OpenFlow distribution.  Refer to "Building and Testing the Linux
-Kernel-Based Switch", below, for additional instructions on how to
-build the optional Linux kernel module.
+To build Debian packages without being root, also install the
+"fakeroot" package.
+
+Kernel-Based Switch Prerequisites
+---------------------------------
+
+The OpenFlow distribution also includes a Linux kernel module that can
+be used to achieve higher switching performance.  To compile the
+kernel module, you must install the following in addition to the
+software listed in the "Base Prerequisites" section above:
+
+    - A supported Linux kernel version.  Please refer to README for a
+      list of supported versions.
+
+      The OpenFlow datapath requires bridging support (CONFIG_BRIDGE)
+      to be built as a kernel module.  (This is common in kernels
+      provided by Linux distributions.)  The bridge module must not be
+      loaded or in use.  If the bridge module is running (check with
+      "lsmod | grep bridge"), you must remove it ("rmmod bridge")
+      before starting the datapath.
+
+    - The correct version of GCC for the kernel that you are building
+      the module against:
+
+        * To build a kernel module for a Linux 2.6 kernel, you need
+          the same version of GCC that was used to build that kernel
+          (usually version 4.0 or later).
+
+        * To build a kernel module for a Linux 2.4 kernel, you need an
+          earlier version of GCC, typically GCC 2.95, 3.3, or 3.4.
+
+    - A kernel build directory corresponding to the Linux kernel image
+      the module is to run on.  Under Debian and Ubuntu, for example,
+      each linux-image package containing a kernel binary has a
+      corresponding linux-headers package with the required build
+      infrastructure.
+
+Building Conventionally
+=======================
+
+This section explains how to build and install the OpenFlow
+distribution in the ordinary way using "configure" and "make".
+
+0. Check that you have installed all the prerequisites listed above in
+   the Base Prerequisites section.  If you want to compile the Linux
+   kernel module, also check that the prequisites listed under
+   Kernel-Based Switch Prequisites are installed.
 
 1. In the top source directory, configure the package by running the
    configure script.  You can usually invoke configure without any
@@ -59,6 +114,11 @@ build the optional Linux kernel module.
    also specify it on the configure command line, like so:
 
       % ./configure CC=gcc-4.2
+
+   To build the Linux kernel module, so that you can run the
+   kernel-based switch, add --with-l26 or --with-l24 option, or both,
+   to the configure script's command line.  Refer to Building the
+   Linux Kernel-Based Switch, below, for more information.
 
    The configure script accepts a number of other options and honors
    additional environment variables.  For a full list, invoke
@@ -83,8 +143,172 @@ build the optional Linux kernel module.
 
       - Runtime logging configuration utility: utilities/vlogconf.
 
-3. (Optional) Run "make install" to install the executables and
-   manpages into the running system, by default under /usr/local.
+   If you passed --with-l26 to configure, "make" will also build the
+   following kernel modules:
+
+      - datapath/linux-2.6/openflow_mod.ko
+
+      - datapath/linux-2.6/hwtable_<table>_mod.ko for each <table>
+        specified on --enable-hw-tables (if any).
+
+   If you passed --with-l24 to configure, "make" will also build the
+   following kernel modules:
+
+      - datapath/linux-2.4/openflow_mod.o      
+
+      - datapath/linux-2.6/hwtable_<table>_mod.o for each <table>
+        specified on --enable-hw-tables (if any).
+
+3. Run "make install" to install the executables and manpages into the
+   running system, by default under /usr/local.
+
+4. If you built kernel modules, you may load them with "insmod", e.g.:
+
+      (Linux 2.6)
+      % insmod datapath/linux-2.6/openflow_mod.ko
+
+      (Linux 2.4)
+      % insmod datapath/linux-2.4/compat24_mod.o
+      % insmod datapath/linux-2.4/openflow_mod.o
+
+   After you load the openflow module, you may load one hardware switch
+   table module (if any were built) to enable support for that hardware
+   switching table.
+
+   The insmod program must be run as root.  You may need to specify a
+   full path to insmod, e.g. /sbin/insmod.  To verify that the modules
+   have been loaded, run "/sbin/lsmod" and check that openflow_mod is
+   listed.
+
+4. Test the userspace programs, as described under Testing Userspace
+   Programs below.
+
+5. If you built the kernel module, test the kernel-based switch, as
+   described under Testing the Kernel-Based Implementation below.
+
+Building the Linux Kernel-Based Switch
+--------------------------------------
+
+To build the kernel module, follow the build process described above,
+but pass the location of the kernel build directory as an additional
+argument to the configure script, as described under step 1 in that
+section.  Specify the location on --with-l26 for Linux 2.6, --with-l24
+for Linux 2.4.  For example, to build for a running instance of Linux
+2.6:
+
+      % ./configure --with-l26=/lib/modules/`uname -r`/build
+
+To build for a running instance of Linux 2.4:
+
+      % ./configure --with-l24=/lib/modules/`uname -r`/build
+
+If you wish to build OpenFlow for an architecture other than the
+architecture used for compilation, you may specify the kernel
+architecture string using the KARCH variable when invoking the
+configure script. For example, to build OpenFlow for MIPS with Linux
+2.4:
+
+      % ./configure --with-l24=/path/to/linux-2.4 KARCH=mips
+
+If you have hardware that supports accelerated OpenFlow switching, and
+you have obtained a hardware table module for your hardware and
+extracted it into the OpenFlow reference distribution source tree,
+then you may also enable building support for the hardware switching
+table with --enable-hw-tables.  For example, if your hardware
+switching table is in a directory named datapath/hwtable-foomatic, you
+could compile support for it with the running Linux 2.6 kernel like
+so:
+
+      % ./configure --with-l26=/lib/modules/`uname -r`/build \
+                    --enable-hw-tables=foomatic
+
+For more information about hardware table modules, please read
+README.hwtables at the root of the OpenFlow distribution tree.
+
+Building Debian Packages
+========================
+
+Follow these instructions to build Debian packages for OpenFlow.
+
+0. Check that you have installed all the prerequisites listed above in
+   the Base Prerequisites and Debian Prerequisites sections above.
+
+1. In the top source directory, run the following command, as root:
+
+      % dpkg-buildpackage
+
+   Alternatively, if you installed the "fakeroot" package, you may run
+   dpkg-buildpackage as an ordinary user with the following syntax:
+
+      % dpkg-buildpackage -rfakeroot
+
+   The following packages will be built in the directory above the
+   source tree:
+
+      - openflow-controller: The OpenFlow controller.  Depends on
+        openflow-pki (see below).
+
+      - openflow-switch: Install this package on a machine that acts
+        as an OpenFlow userspace or kernel switch.
+
+      - openflow-datapath-source: Source code for OpenFlow's Linux
+        kernel module.
+
+      - openflow-pki: Public-key infrastructure for OpenFlow.  Install
+        this package on a machine that acts as an OpenFlow PKI server
+        (see "Establishing a Public Key Infrastructure" below).
+
+      - openflow-common: Files and utilities required by more than one
+        of the above packages.
+
+2. To set up an OpenFlow controller, install the openflow-controller
+   package and its dependencies.  You may configure it by editing
+   /etc/default/openflow-controller, e.g. to enable non-SSL
+   connections, which are disabled by default.  If you change the
+   default settings, you will need to restart the controller by
+   running:
+
+      % /etc/init.d/openflow-controller restart
+
+3. To set up an OpenFlow switch, install the openflow-switch package
+   and its dependencies.  If it is to be a kernel-based switch, also
+   install openflow-datapath-source, then follow the instructions in
+   /usr/share/doc/openflow-datapath-source/README.Debian to build and
+   install the kernel module.
+
+   You may configure the switch one of the following ways:
+
+      - Completely by hand, as described under the Testing section
+        below.
+
+        For the userspace switch, this is the only supported form of
+        configuration.
+
+      - By editing /etc/default/openflow-switch.  You must at least
+        configure some network devices, by uncommenting NETDEVS and
+        adding the appropriate devices to the list, e.g. NETDEVS="eth0
+        eth1".
+
+        After you edit this file, you will need to start the switch by
+        running:
+
+           % /etc/init.d/openflow-switch restart
+
+        This form of configuration is not supported for the userspace
+        switch.
+
+      - By running the ofp-switch-setup program.  This interactive
+        program will walk you through all the steps of configuring an
+        OpenFlow switch, including configuration of SSL certificates.
+        Run it without arguments, as root:
+
+           % ofp-switch-setup
+
+        This form of configuration is not supported for the userspace
+        switch.
+
+Testing
+=======
 
 Testing Userspace Programs
 --------------------------
@@ -129,207 +353,6 @@ switch must be connected to the controller over a "control network"
 that is physically separate from the one that the switch and
 controller are controlling.  The kernel-based switch does not have
 this limitation.)
-
-Secure operation over SSL
--------------------------
-
-The instructions above set up OpenFlow for operation over a plaintext
-TCP connection.  Production use of OpenFlow should use SSL[*] to
-ensure confidentiality and authenticity of traffic among switches and
-controllers.  The source must be configured with --enable-ssl=yes to
-build with SSL support.
-
-To use SSL with OpenFlow, you must set up a public-key infrastructure
-(PKI) including a pair of certificate authorities (CAs), one for
-controllers and one for switches.  If you have an established PKI,
-OpenFlow can use it directly.  Otherwise, refer to "Establishing a
-Public Key Infrastructure" below.
-
-To configure the controller to listen for SSL connections on port 976
-(the default), invoke it as follows:
-
-      # controller -v pssl: --private-key=PRIVKEY --certificate=CERT \
-            --ca-cert=CACERT
-
-where PRIVKEY is a file containing the controller's private key, CERT
-is a file containing the controller CA's certificate for the
-controller's public key, and CACERT is a file containing the root
-certificate for the switch CA.  If, for example, your PKI was created
-with the instructions below, then the invocation would look like:
-
-      # controller -v pssl: --private-key=ctl-privkey.pem \
-            --certificate=ctl-cert.pem --ca-cert=pki/switchca/cacert.pem
-
-To configure a switch to connect to a controller running on port 976
-(the default) on host 192.168.1.2 over SSL, invoke it as follows:
-
-      # switch -v ssl:192.168.1.2 -i INTERFACES --private-key=PRIVKEY \
-            --certificate=CERT --ca-cert=CACERT
-
-where INTERFACES is the command-separated list of network device
-interfaces, PRIVKEY is a file containing the switch's private key,
-CERT is a file containing the switch CA's certificate for the switch's
-public key, and CACERT is a file containing the root certificate for
-the controller CA.  If, for example, your PKI was created with the
-instructions below, then the invocation would look like:
-
-      # secchan -v -i INTERFACES ssl:192.168.1.2 --private-key=sc-privkey.pem \
-            --certificate=sc-cert.pem --ca-cert=pki/controllerca/cacert.pem
-
-[*] To be specific, OpenFlow uses TLS version 1.0 or later (TLSv1), as
-    specified by RFC 2246, which is very similar to SSL version 3.0.
-    TLSv1 was released in January 1999, so all current software and
-    hardware should implement it.
-
-Establishing a Public Key Infrastructure
-----------------------------------------
-
-If you do not have a PKI, the ofp-pki script included with OpenFlow
-can help.  To create an initial PKI structure, invoke it as:
-      % ofp-pki new-pki
-which will create and populate a new directory named "pki" under the
-current directory.
-
-The pki directory contains two important subdirectories.  The
-controllerca subdirectory contains controller certificate authority
-related files, including the following:
-
-    - cacert.pem: Root certificate for the controller certificate
-      authority.  This file must be provided to the switch or secchan
-      program with the --ca-cert option to enable it to authenticate
-      valid controllers.
-
-    - private/cakey.pem: Private signing key for the controller
-      certificate authority.  This file must be kept secret.  There is
-      no need for switches or controllers to have a copy of it.
-
-The switchca subdirectory contains switch certificate authority
-related files, analogous to those in the controllerca subdirectory:
-
-    - cacert.pem: Root certificate for the switch certificate
-      authority.  This file must be provided to the controller program
-      with the --ca-cert option to enable it to authenticate valid
-      switches.
-
-    - private/cakey.pem: Private signing key for the switch
-      certificate authority.  This file must be kept secret.  There is
-      no need for switches or controllers to have a copy of it.
-
-After you create the initial structure, you can create keys and
-certificates for switches and controllers with ofp-pki.  To create a
-controller private key and certificate in files named ctl-privkey.pem
-and ctl-cert.pem, for example, you could run:
-      % ofp-pki req+sign ctl controller
-ctl-privkey.pem and ctl-cert.pem would need to be copied to the
-controller for its use at runtime (they could then be deleted from
-their original locations).  The --private-key and --certificate
-options of controller, respectively, would point to these files.
-
-Analogously, to create a switch private key and certificate in files
-named sc-privkey.pem and sc-cert.pem, for example, you could run: 
-      % ofp-pki req+sign sc switch
-sc-privkey.pem and sc-cert.pem would need to be copied to the switch
-for its use at runtime (they could then be deleted from their original
-locations).  The --private-key and --certificate options,
-respectively, of switch and secchan would point to these files.
-
-Building and Testing the Linux Kernel-Based Switch
---------------------------------------------------
-
-The OpenFlow distribution also includes a Linux kernel module that can
-be used to achieve higher switching performance at a cost in
-portability and ease of installation.  Compiling the kernel module has
-the following prerequisites in addition to those listed in the
-"Prerequisites" section above:
-
-    - A supported Linux kernel version.  Please refer to README for a
-      list of supported versions.
-
-      The OpenFlow datapath requires bridging support (CONFIG_BRIDGE)
-      to be built as a kernel module.  (This is common in kernels
-      provided by Linux distributions.)  The bridge module must not be
-      loaded or in use.  If the bridge module is running (check with
-      "lsmod | grep bridge"), you must remove it ("rmmod bridge")
-      before starting the datapath.
-
-    - The correct version of GCC for the kernel that you are building
-      the module against:
-
-        * To build a kernel module for a Linux 2.6 kernel, you need
-          the same version of GCC that was used to build that kernel
-          (usually version 4.0 or later).
-
-        * To build a kernel module for a Linux 2.4 kernel, you need an
-          earlier version of GCC, typically GCC 2.95, 3.3, or 3.4.
-
-    - A kernel build directory corresponding to the Linux kernel image
-      the module is to run on.  Under Debian and Ubuntu, for example,
-      each linux-image package containing a kernel binary has a
-      corresponding linux-headers package with the required build
-      infrastructure.
-
-To build the kernel module, follow the build process described under
-"Building Userspace Programs" above, but pass the location of the
-kernel build directory as an additional argument to the configure
-script, as described under step 1 in that section.  Specify the
-location on --with-l26 for Linux 2.6, --with-l24 for Linux 2.4.  For
-example, to build for a running instance of Linux 2.6:
-
-      % ./configure --with-l26=/lib/modules/`uname -r`/build
-
-To build for a running instance of Linux 2.4:
-
-      % ./configure --with-l24=/lib/modules/`uname -r`/build
-
-If you wish to build OpenFlow for an architecture other than the architecture
-used for compilation, you may specify the kernel architecture string using the
-KARCH variable when invoking the configure script. For example, to build
-OpenFlow for MIPS with Linux 2.4:
-
-      % ./configure --with-l24=/path/to/linux-2.4 KARCH=mips
-
-If you have hardware that supports accelerated OpenFlow switching, and
-you have obtained a hardware table module for your hardware and
-extracted it into the OpenFlow reference distribution source tree,
-then you may also enable building support for the hardware switching
-table with --enable-hw-tables.  For example, if your hardware
-switching table is in a directory named datapath/hwtable-foomatic, you
-could compile support for it with the running Linux 2.6 kernel like
-so:
-
-      % ./configure --with-l26=/lib/modules/`uname -r`/build \
-                    --enable-hw-tables=foomatic
-
-For more information about hardware table modules, please read
-README.hwtables at the root of the OpenFlow distribution tree.
-
-In addition to the binaries listed under step 2 in "Building Userspace
-Programs" above, "make" will build the following kernel modules:
-
-      datapath/linux-2.6/openflow_mod.ko (if --with-l26 was specified)
-      datapath/linux-2.4/openflow_mod.o  (if --with-l24 was specified)
-
-"make" will also build a kernel module for each hardware switch table
-enabled with --enable-hw-tables.
-
-Once you have built the kernel modules, activating them requires only
-running "insmod", e.g.:
-
-      (Linux 2.6)
-      % insmod datapath/linux-2.6/openflow_mod.ko
-
-      (Linux 2.4)
-      % insmod datapath/linux-2.4/compat24_mod.o
-      % insmod datapath/linux-2.4/openflow_mod.o
-
-After you load the openflow module, you may load one hardware switch
-table module (if any were built) to enable support for that hardware
-switching table.
-
-The insmod program must be run as root.  You may need to specify a
-full path to insmod, which is usually in the /sbin directory.  To
-verify that the modules have been loaded, run "lsmod" (also in /sbin)
-and check that openflow_mod appears in the result.
 
 Testing the Kernel-Based Implementation
 ---------------------------------------
@@ -474,6 +497,112 @@ following instructions to set up remote switches:
    the switch's IP address, e.g. by invoking a DHCP client.  The
    secure channel will only be able to connect to the controller after
    an IP address has been obtained.
+
+Configuration
+=============
+
+Secure operation over SSL
+-------------------------
+
+The instructions above set up OpenFlow for operation over a plaintext
+TCP connection.  Production use of OpenFlow should use SSL[*] to
+ensure confidentiality and authenticity of traffic among switches and
+controllers.  The source must be configured with --enable-ssl=yes to
+build with SSL support.
+
+To use SSL with OpenFlow, you must set up a public-key infrastructure
+(PKI) including a pair of certificate authorities (CAs), one for
+controllers and one for switches.  If you have an established PKI,
+OpenFlow can use it directly.  Otherwise, refer to "Establishing a
+Public Key Infrastructure" below.
+
+To configure the controller to listen for SSL connections on port 976
+(the default), invoke it as follows:
+
+      # controller -v pssl: --private-key=PRIVKEY --certificate=CERT \
+            --ca-cert=CACERT
+
+where PRIVKEY is a file containing the controller's private key, CERT
+is a file containing the controller CA's certificate for the
+controller's public key, and CACERT is a file containing the root
+certificate for the switch CA.  If, for example, your PKI was created
+with the instructions below, then the invocation would look like:
+
+      # controller -v pssl: --private-key=ctl-privkey.pem \
+            --certificate=ctl-cert.pem --ca-cert=pki/switchca/cacert.pem
+
+To configure a switch to connect to a controller running on port 976
+(the default) on host 192.168.1.2 over SSL, invoke it as follows:
+
+      # switch -v ssl:192.168.1.2 -i INTERFACES --private-key=PRIVKEY \
+            --certificate=CERT --ca-cert=CACERT
+
+where INTERFACES is the command-separated list of network device
+interfaces, PRIVKEY is a file containing the switch's private key,
+CERT is a file containing the switch CA's certificate for the switch's
+public key, and CACERT is a file containing the root certificate for
+the controller CA.  If, for example, your PKI was created with the
+instructions below, then the invocation would look like:
+
+      # secchan -v -i INTERFACES ssl:192.168.1.2 --private-key=sc-privkey.pem \
+            --certificate=sc-cert.pem --ca-cert=pki/controllerca/cacert.pem
+
+[*] To be specific, OpenFlow uses TLS version 1.0 or later (TLSv1), as
+    specified by RFC 2246, which is very similar to SSL version 3.0.
+    TLSv1 was released in January 1999, so all current software and
+    hardware should implement it.
+
+Establishing a Public Key Infrastructure
+----------------------------------------
+
+If you do not have a PKI, the ofp-pki script included with OpenFlow
+can help.  To create an initial PKI structure, invoke it as:
+      % ofp-pki new-pki
+which will create and populate a new directory named "pki" under the
+current directory.
+
+The pki directory contains two important subdirectories.  The
+controllerca subdirectory contains controller certificate authority
+related files, including the following:
+
+    - cacert.pem: Root certificate for the controller certificate
+      authority.  This file must be provided to the switch or secchan
+      program with the --ca-cert option to enable it to authenticate
+      valid controllers.
+
+    - private/cakey.pem: Private signing key for the controller
+      certificate authority.  This file must be kept secret.  There is
+      no need for switches or controllers to have a copy of it.
+
+The switchca subdirectory contains switch certificate authority
+related files, analogous to those in the controllerca subdirectory:
+
+    - cacert.pem: Root certificate for the switch certificate
+      authority.  This file must be provided to the controller program
+      with the --ca-cert option to enable it to authenticate valid
+      switches.
+
+    - private/cakey.pem: Private signing key for the switch
+      certificate authority.  This file must be kept secret.  There is
+      no need for switches or controllers to have a copy of it.
+
+After you create the initial structure, you can create keys and
+certificates for switches and controllers with ofp-pki.  To create a
+controller private key and certificate in files named ctl-privkey.pem
+and ctl-cert.pem, for example, you could run:
+      % ofp-pki req+sign ctl controller
+ctl-privkey.pem and ctl-cert.pem would need to be copied to the
+controller for its use at runtime (they could then be deleted from
+their original locations).  The --private-key and --certificate
+options of controller, respectively, would point to these files.
+
+Analogously, to create a switch private key and certificate in files
+named sc-privkey.pem and sc-cert.pem, for example, you could run: 
+      % ofp-pki req+sign sc switch
+sc-privkey.pem and sc-cert.pem would need to be copied to the switch
+for its use at runtime (they could then be deleted from their original
+locations).  The --private-key and --certificate options,
+respectively, of switch and secchan would point to these files.
 
 Bug Reporting
 -------------
