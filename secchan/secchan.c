@@ -206,6 +206,9 @@ main(int argc, char *argv[])
 
     daemonize();
 
+    VLOG_WARN("OpenFlow reference implementation version %s", VERSION);
+    VLOG_WARN("OpenFlow protocol version 0x%02x", OFP_VERSION);
+
     /* Connect to datapath. */
     local_rconn = rconn_create(0, s.max_backoff);
     rconn_connect(local_rconn, s.nl_name);
