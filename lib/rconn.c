@@ -486,7 +486,7 @@ rconn_send(struct rconn *rc, struct buffer *b, int *n_queued)
 /* Sends 'b' on 'rc'.  Increments '*n_queued' while the packet is in flight; it
  * will be decremented when it has been sent (or discarded due to
  * disconnection).  Returns 0 if successful, EAGAIN if '*n_queued' is already
- * at least as large of 'queue_limit', or ENOTCONN if 'rc' is not currently
+ * at least as large as 'queue_limit', or ENOTCONN if 'rc' is not currently
  * connected.  Regardless of return value, 'b' is destroyed.
  *
  * Because 'b' may be sent (or discarded) before this function returns, the
