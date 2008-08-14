@@ -131,18 +131,19 @@ static int table_dummy_timeout(struct datapath *dp, struct sw_table *swt)
 	struct sw_flow *flow;
 	int del_count = 0;
 	uint64_t packet_count = 0;
-	int i = 0;
+	uint64_t byte_count = 0;
+	int reason;
 
 	mutex_lock(&dp_mutex);
 	list_for_each_entry (flow, &td->flows, node) {
-		/* xxx Retrieve the packet count associated with this entry
-		 * xxx and store it in "packet_count".
+		/* xxx Retrieve the packet and byte counts associated with this
+		 * entry xxx and store them in "packet_count" and "byte_count".
 		 */
 
-		if ((packet_count > flow->packet_count)
-                    && (flow->max_idle != OFP_FLOW_PERMANENT)) {
+		if (packet_count != flow->packet_count) {
 			flow->packet_count = packet_count;
-			flow->timeout = jiffies + HZ * flow->max_idle;
+			flow->byte_count = byte_count;
+			flow->used = jiffies;
 		}
 
 		reason = flow_timeout(flow);
@@ -154,7 +155,6 @@ static int table_dummy_timeout(struct datapath *dp, struct sw_table *swt)
 			}
 			del_count += do_delete(swt, flow);
 		}
-		i++;
 	}
 	mutex_unlock(&dp_mutex);
 
