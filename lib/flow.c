@@ -133,7 +133,7 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
                 flow->dl_type = h->snap.snap_type;
                 buffer_pull(&b, sizeof *h);
             } else {
-                flow->dl_type = OFP_DL_TYPE_NOT_ETH_TYPE;
+                flow->dl_type = htons(OFP_DL_TYPE_NOT_ETH_TYPE);
                 buffer_pull(&b, sizeof(struct llc_header));
             }
         }

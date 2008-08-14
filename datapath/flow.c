@@ -256,7 +256,7 @@ int flow_extract(struct sk_buff *skb, uint16_t in_port,
 		if (snap_get_ethertype(skb, &key->dl_type) != -EINVAL) {
 			nh_ofs += sizeof(struct snap_hdr);
 		} else {
-			key->dl_type = OFP_DL_TYPE_NOT_ETH_TYPE;
+			key->dl_type = htons(OFP_DL_TYPE_NOT_ETH_TYPE);
 			nh_ofs += sizeof(struct llc_pdu_un);
 		}
 	}
