@@ -46,6 +46,7 @@
 #include "fatal-signal.h"
 #include "poll-loop.h"
 #include "socket-util.h"
+#include "timeval.h"
 #include "util.h"
 #include "vlog.h"
 
@@ -383,11 +384,11 @@ vlog_client_recv(struct vlog_client *client, char **reply)
 
     pfd.fd = client->fd;
     pfd.events = POLLIN;
-    nfds = poll(&pfd, 1, 1000);
+    nfds = time_poll(&pfd, 1, 1000);
     if (nfds == 0) {
         return ETIMEDOUT;
     } else if (nfds < 0) {
-        return errno;
+        return -nfds;
     }
 
     nbytes = read(client->fd, buffer, sizeof buffer - 1);
