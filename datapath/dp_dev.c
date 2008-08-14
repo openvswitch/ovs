@@ -95,6 +95,9 @@ do_setup(struct net_device *netdev)
 	netdev->flags = IFF_BROADCAST | IFF_MULTICAST;
 
 	random_ether_addr(netdev->dev_addr);
+	netdev->dev_addr[0] = 0x00;
+	netdev->dev_addr[1] = 0x23;
+	netdev->dev_addr[2] = 0x20;
 }
 
 
