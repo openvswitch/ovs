@@ -328,9 +328,18 @@ recv_packet_out(struct sw_chain *chain, const struct sender *sender,
 	struct sk_buff *skb;
 	struct vlan_ethhdr *mac;
 	int nh_ofs;
+	struct sw_flow_key key;
+	int n_actions = ntohs(opo->n_actions);
+	int act_len = n_actions * sizeof opo->actions[0];
+
+	if (act_len > (ntohs(opo->header.length) - sizeof *opo)) {
+		if (net_ratelimit()) 
+			printk("message too short for number of actions\n");
+		return -EINVAL;
+	}
 
 	if (ntohl(opo->buffer_id) == (uint32_t) -1) {
-		int data_len = ntohs(opo->header.length) - sizeof *opo;
+		int data_len = ntohs(opo->header.length) - sizeof *opo - act_len;
 
 		/* FIXME: there is likely a way to reuse the data in msg. */
 		skb = alloc_skb(data_len, GFP_ATOMIC);
@@ -340,8 +349,7 @@ recv_packet_out(struct sw_chain *chain, const struct sender *sender,
 		/* FIXME?  We don't reserve NET_IP_ALIGN or NET_SKB_PAD since
 		 * we're just transmitting this raw without examining anything
 		 * at those layers. */
-		memcpy(skb_put(skb, data_len), opo->u.data, data_len);
-		dp_set_origin(chain->dp, ntohs(opo->in_port), skb);
+		memcpy(skb_put(skb, data_len), &opo->actions[n_actions], data_len);
 
 		skb_set_mac_header(skb, 0);
 		mac = vlan_eth_hdr(skb);
@@ -350,22 +358,17 @@ recv_packet_out(struct sw_chain *chain, const struct sender *sender,
 		else
 			nh_ofs = sizeof(struct vlan_ethhdr);
 		skb_set_network_header(skb, nh_ofs);
-
-		dp_output_port(chain->dp, skb, ntohs(opo->out_port));
 	} else {
-		struct sw_flow_key key;
-		int n_acts;
-
 		skb = retrieve_skb(ntohl(opo->buffer_id));
 		if (!skb)
 			return -ESRCH;
-		dp_set_origin(chain->dp, ntohs(opo->in_port), skb);
-
-		n_acts = (ntohs(opo->header.length) - sizeof *opo) 
-				/ sizeof *opo->u.actions;
-		flow_extract(skb, ntohs(opo->in_port), &key);
-		execute_actions(chain->dp, skb, &key, opo->u.actions, n_acts);
 	}
+
+	dp_set_origin(chain->dp, ntohs(opo->in_port), skb);
+
+	flow_extract(skb, ntohs(opo->in_port), &key);
+	execute_actions(chain->dp, skb, &key, opo->actions, n_actions);
+
 	return 0;
 }
 
@@ -399,27 +402,29 @@ add_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 {
 	int error = -ENOMEM;
 	int i;
-	int n_acts;
+	int n_actions;
 	struct sw_flow *flow;
 
 
 	/* To prevent loops, make sure there's no action to send to the
 	 * OFP_TABLE virtual port.
 	 */
-	n_acts = (ntohs(ofm->header.length) - sizeof *ofm) / sizeof *ofm->actions;
-	for (i=0; i<n_acts; i++) {
+	n_actions = (ntohs(ofm->header.length) - sizeof *ofm) 
+			/ sizeof *ofm->actions;
+	for (i=0; i<n_actions; i++) {
 		const struct ofp_action *a = &ofm->actions[i];
 
 		if (a->type == htons(OFPAT_OUTPUT) 
 					&& (a->arg.output.port == htons(OFPP_TABLE) 
-						|| a->arg.output.port == htons(OFPP_NONE))) {
+						|| a->arg.output.port == htons(OFPP_NONE)
+						|| a->arg.output.port == ofm->match.in_port)) {
 			/* xxx Send fancy new error message? */
 			goto error;
 		}
 	}
 
 	/* Allocate memory. */
-	flow = flow_alloc(n_acts, GFP_ATOMIC);
+	flow = flow_alloc(n_actions, GFP_ATOMIC);
 	if (flow == NULL)
 		goto error;
 
@@ -429,12 +434,12 @@ add_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 	flow->idle_timeout = ntohs(ofm->idle_timeout);
 	flow->hard_timeout = ntohs(ofm->hard_timeout);
 	flow->used = jiffies;
-	flow->n_actions = n_acts;
+	flow->n_actions = n_actions;
 	flow->init_time = jiffies;
 	flow->byte_count = 0;
 	flow->packet_count = 0;
 	spin_lock_init(&flow->lock);
-	memcpy(flow->actions, ofm->actions, n_acts * sizeof *flow->actions);
+	memcpy(flow->actions, ofm->actions, n_actions * sizeof *flow->actions);
 
 	/* Act. */
 	error = chain_insert(chain, flow);
@@ -447,8 +452,7 @@ add_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 			struct sw_flow_key key;
 			flow_used(flow, skb);
 			flow_extract(skb, ntohs(ofm->match.in_port), &key);
-			execute_actions(chain->dp, skb, &key,
-					ofm->actions, n_acts);
+			execute_actions(chain->dp, skb, &key, ofm->actions, n_actions);
 		}
 		else
 			error = -ESRCH;

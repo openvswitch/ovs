@@ -68,7 +68,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x86
+#define OFP_VERSION   0x87
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -84,10 +84,13 @@ enum ofp_port {
     OFPP_MAX = 0x100,
 
     /* Fake output "ports". */
+    OFPP_IN_PORT    = 0xfff8,  /* Send the packet out the input port.  This 
+                                  virtual port must be explicitly used 
+                                  in order to send back out of the input 
+                                  port. */
     OFPP_TABLE      = 0xfff9,  /* Perform actions in flow table.  
-                                * NB: This can only be the destination
-                                * port for packet-out messages. 
-                                */
+                                  NB: This can only be the destination
+                                  port for packet-out messages. */
     OFPP_NORMAL     = 0xfffa,  /* Process with normal L2/L3 switching. */
     OFPP_FLOOD      = 0xfffb,  /* All physical ports except input port and 
                                   those disabled by STP. */
@@ -304,13 +307,13 @@ OFP_ASSERT(sizeof(struct ofp_action) == 8);
 /* Send packet (controller -> datapath). */
 struct ofp_packet_out {
     struct ofp_header header;
-    uint32_t buffer_id;     /* ID assigned by datapath (-1 if none). */
-    uint16_t in_port;       /* Packet's input port (OFPP_NONE if none). */
-    uint16_t out_port;      /* Output port (if buffer_id == -1). */
-    union {
-        struct ofp_action actions[0]; /* buffer_id != -1 */
-        uint8_t data[0];              /* buffer_id == -1 */
-    } u;
+    uint32_t buffer_id;           /* ID assigned by datapath (-1 if none). */
+    uint16_t in_port;             /* Packet's input port (OFPP_NONE if none). */
+    uint16_t n_actions;           /* Number of actions. */
+    struct ofp_action actions[0]; /* Actions. */
+    /* uint8_t data[0]; */        /* Packet data.  The length is inferred 
+                                     from the length field in the header.  
+                                     (Only meaningful if buffer_id == -1.) */
 };
 OFP_ASSERT(sizeof(struct ofp_packet_out) == 16);
 

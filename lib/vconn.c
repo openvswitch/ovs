@@ -536,17 +536,20 @@ make_unbuffered_packet_out(const struct buffer *packet,
                            uint16_t in_port, uint16_t out_port)
 {
     struct ofp_packet_out *opo;
-    size_t size = sizeof *opo + packet->size;
-    struct buffer *out = buffer_new(size);
+    size_t size = sizeof *opo + sizeof opo->actions[0];
+    struct buffer *out = buffer_new(size + packet->size);
     opo = buffer_put_uninit(out, size);
     memset(opo, 0, sizeof *opo);
     opo->header.version = OFP_VERSION;
     opo->header.type = OFPT_PACKET_OUT;
-    opo->header.length = htons(size);
     opo->buffer_id = htonl(UINT32_MAX);
     opo->in_port = htons(in_port);
-    opo->out_port = htons(out_port);
-    memcpy(opo->u.data, packet->data, packet->size);
+    opo->n_actions = htons(1);
+    opo->actions[0].type = htons(OFPAT_OUTPUT);
+    opo->actions[0].arg.output.max_len = htons(0);
+    opo->actions[0].arg.output.port = htons(out_port);
+    buffer_put(out, packet->data, packet->size);
+    update_openflow_length(out);
     return out;
 }
 
@@ -555,7 +558,7 @@ make_buffered_packet_out(uint32_t buffer_id,
                          uint16_t in_port, uint16_t out_port)
 {
     struct ofp_packet_out *opo;
-    size_t size = sizeof *opo + sizeof opo->u.actions[0];
+    size_t size = sizeof *opo + sizeof opo->actions[0];
     struct buffer *out = buffer_new(size);
     opo = buffer_put_uninit(out, size);
     memset(opo, 0, size);
@@ -564,10 +567,10 @@ make_buffered_packet_out(uint32_t buffer_id,
     opo->header.length = htons(size);
     opo->buffer_id = htonl(buffer_id);
     opo->in_port = htons(in_port);
-    opo->out_port = htons(out_port);
-    opo->u.actions[0].type = htons(OFPAT_OUTPUT);
-    opo->u.actions[0].arg.output.max_len = htons(0);
-    opo->u.actions[0].arg.output.port = htons(out_port);
+    opo->n_actions = htons(1);
+    opo->actions[0].type = htons(OFPAT_OUTPUT);
+    opo->actions[0].arg.output.max_len = htons(0);
+    opo->actions[0].arg.output.port = htons(out_port);
     return out;
 }
 

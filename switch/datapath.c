@@ -552,11 +552,18 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
         output_all(dp, buffer, in_port, 0); 
     } else if (out_port == OFPP_CONTROLLER) {
         dp_output_control(dp, buffer, in_port, 0, OFPR_ACTION); 
+    } else if (out_port == OFPP_IN_PORT) {
+        output_packet(dp, buffer, in_port);
     } else if (out_port == OFPP_TABLE) {
 		if (run_flow_through_tables(dp, buffer, in_port)) {
 			buffer_delete(buffer);
         }
     } else {
+        if (in_port == out_port) {
+            /* FIXME: ratelimit */
+            VLOG_DBG("can't directly forward to input port");
+            return;
+        }
         output_packet(dp, buffer, out_port);
     }
 }
@@ -1011,31 +1018,33 @@ recv_packet_out(struct datapath *dp, const struct sender *sender UNUSED,
                 const void *msg)
 {
     const struct ofp_packet_out *opo = msg;
+    struct sw_flow_key key;
+    struct buffer *buffer;
+    int n_actions = ntohs(opo->n_actions);
+    int act_len = n_actions * sizeof opo->actions[0];
+
+    if (act_len > (ntohs(opo->header.length) - sizeof *opo)) {
+        VLOG_DBG("message too short for number of actions");
+        return -EINVAL;
+    }
 
     if (ntohl(opo->buffer_id) == (uint32_t) -1) {
         /* FIXME: can we avoid copying data here? */
-        int data_len = ntohs(opo->header.length) - sizeof *opo;
-        struct buffer *buffer = buffer_new(data_len);
-        buffer_put(buffer, opo->u.data, data_len);
-        dp_output_port(dp, buffer,
-                       ntohs(opo->in_port), ntohs(opo->out_port));
+        int data_len = ntohs(opo->header.length) - sizeof *opo - act_len;
+        buffer = buffer_new(data_len);
+        buffer_put(buffer, &opo->actions[n_actions], data_len);
     } else {
-        struct sw_flow_key key;
-        struct buffer *buffer;
-        int n_acts;
-
         buffer = retrieve_buffer(ntohl(opo->buffer_id));
         if (!buffer) {
             return -ESRCH; 
         }
-
-        n_acts = (ntohs(opo->header.length) - sizeof *opo) 
-            / sizeof *opo->u.actions;
-        flow_extract(buffer, ntohs(opo->in_port), &key.flow);
-        execute_actions(dp, buffer, ntohs(opo->in_port),
-                        &key, opo->u.actions, n_acts);
     }
-    return 0;
+ 
+    flow_extract(buffer, ntohs(opo->in_port), &key.flow);
+    execute_actions(dp, buffer, ntohs(opo->in_port),
+                    &key, opo->actions, n_actions);
+
+   return 0;
 }
 
 static int
@@ -1053,7 +1062,7 @@ static int
 add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
 {
     int error = -ENOMEM;
-    int n_acts;
+    int n_actions;
     int i;
     struct sw_flow *flow;
 
@@ -1061,20 +1070,22 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
     /* To prevent loops, make sure there's no action to send to the
      * OFP_TABLE virtual port.
      */
-    n_acts = (ntohs(ofm->header.length) - sizeof *ofm) / sizeof *ofm->actions;
-    for (i=0; i<n_acts; i++) {
+    n_actions = (ntohs(ofm->header.length) - sizeof *ofm) 
+            / sizeof *ofm->actions;
+    for (i=0; i<n_actions; i++) {
         const struct ofp_action *a = &ofm->actions[i];
 
         if (a->type == htons(OFPAT_OUTPUT)
                     && (a->arg.output.port == htons(OFPP_TABLE)
-                        || a->arg.output.port == htons(OFPP_NONE))) {
+                        || a->arg.output.port == htons(OFPP_NONE)
+                        || a->arg.output.port == ofm->match.in_port)) {
             /* xxx Send fancy new error message? */
             goto error;
         }
     }
 
     /* Allocate memory. */
-    flow = flow_alloc(n_acts);
+    flow = flow_alloc(n_actions);
     if (flow == NULL)
         goto error;
 
@@ -1084,10 +1095,10 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
     flow->idle_timeout = ntohs(ofm->idle_timeout);
     flow->hard_timeout = ntohs(ofm->hard_timeout);
     flow->used = flow->created = time_now();
-    flow->n_actions = n_acts;
+    flow->n_actions = n_actions;
     flow->byte_count = 0;
     flow->packet_count = 0;
-    memcpy(flow->actions, ofm->actions, n_acts * sizeof *flow->actions);
+    memcpy(flow->actions, ofm->actions, n_actions * sizeof *flow->actions);
 
     /* Act. */
     error = chain_insert(dp->chain, flow);
@@ -1102,7 +1113,7 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
             uint16_t in_port = ntohs(ofm->match.in_port);
             flow_used(flow, buffer);
             flow_extract(buffer, in_port, &key.flow);
-            execute_actions(dp, buffer, in_port, &key, ofm->actions, n_acts);
+            execute_actions(dp, buffer, in_port, &key, ofm->actions, n_actions);
         } else {
             error = -ESRCH; 
         }

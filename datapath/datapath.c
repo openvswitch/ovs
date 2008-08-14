@@ -530,19 +530,39 @@ int dp_set_origin(struct datapath *dp, uint16_t in_port,
 	return -ENOENT;
 }
 
+static int xmit_skb(struct sk_buff *skb)
+{
+	int len = skb->len;
+	if (packet_length(skb) > skb->dev->mtu) {
+		printk("dropped over-mtu packet: %d > %d\n",
+			   packet_length(skb), skb->dev->mtu);
+		kfree_skb(skb);
+		return -E2BIG;
+	}
+
+	dev_queue_xmit(skb);
+
+	return len;
+}
+
 /* Takes ownership of 'skb' and transmits it to 'out_port' on 'dp'.
  */
 int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 {
 	BUG_ON(!skb);
-	if (out_port == OFPP_FLOOD)
-		return output_all(dp, skb, 1);
-	else if (out_port == OFPP_ALL)
-		return output_all(dp, skb, 0);
-	else if (out_port == OFPP_CONTROLLER)
-		return dp_output_control(dp, skb, fwd_save_skb(skb), 0,
-						  OFPR_ACTION);
-	else if (out_port == OFPP_TABLE) {
+	switch (out_port){
+	case OFPP_IN_PORT:
+		/* Send it out the port it came in on, which is already set in
+		 * the skb. */
+        if (!skb->dev) {
+			if (net_ratelimit())
+				printk("skb device not set forwarding to in_port\n");
+			kfree(skb);
+			return -ESRCH;
+		}
+		return xmit_skb(skb);
+		
+	case OFPP_TABLE: {
 		struct net_bridge_port *p = skb->dev->br_port;
 		int retval;
 		retval = run_flow_through_tables(dp->chain, skb,
@@ -550,25 +570,40 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 		if (retval)
 			kfree_skb(skb);
 		return retval;
-	} else if (out_port == OFPP_LOCAL) {
+	}
+
+	case OFPP_FLOOD:
+		return output_all(dp, skb, 1);
+
+	case OFPP_ALL:
+		return output_all(dp, skb, 0);
+
+	case OFPP_CONTROLLER:
+		return dp_output_control(dp, skb, fwd_save_skb(skb), 0,
+						  OFPR_ACTION);
+
+	case OFPP_LOCAL: {
 		struct net_device *dev = dp->netdev;
 		return dev ? dp_dev_recv(dev, skb) : -ESRCH;
-	} else if (out_port >= 0 && out_port < OFPP_MAX) {
+	}
+
+	case 0 ... OFPP_MAX-1: {
 		struct net_bridge_port *p = dp->ports[out_port];
-		int len = skb->len;
 		if (p == NULL)
 			goto bad_port;
-		skb->dev = p->dev; 
-		if (packet_length(skb) > skb->dev->mtu) {
-			printk("dropped over-mtu packet: %d > %d\n",
-			       packet_length(skb), skb->dev->mtu);
+		if (p->dev == skb->dev) {
+			/* To send to the input port, must use OFPP_IN_PORT */
 			kfree_skb(skb);
-			return -E2BIG;
+			if (net_ratelimit())
+				printk("can't directly forward to input port\n");
+			return -EINVAL;
 		}
+		skb->dev = p->dev; 
+		return xmit_skb(skb);
+	}
 
-		dev_queue_xmit(skb);
-
-		return len;
+	default:
+		goto bad_port;
 	}
 
 bad_port:

@@ -186,6 +186,9 @@ static void ofp_print_port_name(struct ds *string, uint16_t port)
 {
     const char *name;
     switch (port) {
+    case OFPP_IN_PORT:
+        name = "IN_PORT";
+        break;
     case OFPP_TABLE:
         name = "TABLE";
         break;
@@ -307,23 +310,31 @@ static void ofp_packet_out(struct ds *string, const void *oh, size_t len,
                            int verbosity) 
 {
     const struct ofp_packet_out *opo = oh;
+    int n_actions = ntohs(opo->n_actions);
+    int act_len = n_actions * sizeof opo->actions[0];
 
     ds_put_cstr(string, " in_port=");
     ofp_print_port_name(string, ntohs(opo->in_port));
 
+    ds_put_format(string, " n_actions=%d ", n_actions);
+    if (act_len > (ntohs(opo->header.length) - sizeof *opo)) {
+        ds_put_format(string, "***packet too short for number of actions***\n");
+        return;
+    }
+    ofp_print_actions(string, opo->actions, act_len);
+
     if (ntohl(opo->buffer_id) == UINT32_MAX) {
-        ds_put_cstr(string, " out_port=");
-        ofp_print_port_name(string, ntohs(opo->out_port));
+        int data_len = len - sizeof *opo - act_len;
+        ds_put_format(string, " data_len=%d", data_len);
         if (verbosity > 0 && len > sizeof *opo) {
-            char *packet = ofp_packet_to_string(opo->u.data, len - sizeof *opo,
-                                                len - sizeof *opo);
+            char *packet = ofp_packet_to_string(&opo->actions[n_actions], 
+                                                data_len, data_len);
             ds_put_char(string, '\n');
             ds_put_cstr(string, packet);
             free(packet);
         }
     } else {
         ds_put_format(string, " buffer=%08"PRIx32, ntohl(opo->buffer_id));
-        ofp_print_actions(string, opo->u.actions, len - sizeof *opo);
     }
     ds_put_char(string, '\n');
 }
