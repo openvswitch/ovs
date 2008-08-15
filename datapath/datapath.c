@@ -554,7 +554,7 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 	case OFPP_IN_PORT:
 		/* Send it out the port it came in on, which is already set in
 		 * the skb. */
-        if (!skb->dev) {
+		if (!skb->dev) {
 			if (net_ratelimit())
 				printk("skb device not set forwarding to in_port\n");
 			kfree(skb);
@@ -1299,10 +1299,18 @@ static int port_stats_dump(struct datapath *dp, void *state,
 		stats = p->dev->get_stats(p->dev);
 		ops->port_no = htons(p->port_no);
 		memset(ops->pad, 0, sizeof ops->pad);
-		ops->rx_count = cpu_to_be64(stats->rx_packets);
-		ops->tx_count = cpu_to_be64(stats->tx_packets);
-		ops->drop_count = cpu_to_be64(stats->rx_dropped
-					      + stats->tx_dropped);
+		ops->rx_packets   = cpu_to_be64(stats->rx_packets);
+		ops->tx_packets   = cpu_to_be64(stats->tx_packets);
+		ops->rx_bytes     = cpu_to_be64(stats->rx_bytes);
+		ops->tx_bytes     = cpu_to_be64(stats->tx_bytes);
+		ops->rx_dropped   = cpu_to_be64(stats->rx_dropped);
+		ops->tx_dropped   = cpu_to_be64(stats->tx_dropped);
+		ops->rx_errors    = cpu_to_be64(stats->rx_errors);
+		ops->tx_errors    = cpu_to_be64(stats->tx_errors);
+		ops->rx_frame_err = cpu_to_be64(stats->rx_frame_errors);
+		ops->rx_over_err  = cpu_to_be64(stats->rx_over_errors);
+		ops->rx_crc_err   = cpu_to_be64(stats->rx_crc_errors);
+		ops->collisions   = cpu_to_be64(stats->collisions);
 		n_ports++;
 		ops++;
 	}

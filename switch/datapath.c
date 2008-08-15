@@ -77,7 +77,9 @@ struct sw_port {
     struct datapath *dp;
     struct netdev *netdev;
     struct list node; /* Element in datapath.ports. */
-    unsigned long long int rx_count, tx_count, drop_count;
+    unsigned long long int rx_packets, tx_packets;
+    unsigned long long int rx_bytes, tx_bytes;
+    unsigned long long int tx_dropped;
 };
 
 /* The origin of a received OpenFlow message, to enable sending a reply. */
@@ -249,11 +251,10 @@ dp_add_port(struct datapath *dp, const char *name)
         }
     }
 
+    memset(p, '\0', sizeof *p);
+
     p->dp = dp;
     p->netdev = netdev;
-    p->tx_count = 0;
-    p->rx_count = 0;
-    p->drop_count = 0;
     list_push_back(&dp->port_list, &p->node);
 
     /* Notify the ctlpath that this port has been added */
@@ -306,7 +307,8 @@ dp_run(struct datapath *dp)
         }
         error = netdev_recv(p->netdev, buffer);
         if (!error) {
-            p->rx_count++;
+            p->rx_packets++;
+            p->rx_bytes += buffer->size;
             fwd_port_input(dp, buffer, port_no(dp, p));
             buffer = NULL;
         } else if (error != EAGAIN) {
@@ -525,9 +527,10 @@ output_packet(struct datapath *dp, struct buffer *buffer, int out_port)
         struct sw_port *p = &dp->ports[out_port];
         if (p->netdev != NULL) {
             if (!netdev_send(p->netdev, buffer)) {
-                p->tx_count++;
+                p->tx_packets++;
+                p->tx_bytes += buffer->size;
             } else {
-                p->drop_count++;
+                p->tx_dropped++;
             }
             return;
         }
@@ -1323,9 +1326,18 @@ static int port_stats_dump(struct datapath *dp, void *state,
         ops = buffer_put_uninit(buffer, sizeof *ops);
         ops->port_no = htons(port_no(dp, p));
         memset(ops->pad, 0, sizeof ops->pad);
-        ops->rx_count = htonll(p->rx_count);
-        ops->tx_count = htonll(p->tx_count);
-        ops->drop_count = htonll(p->drop_count);
+        ops->rx_packets   = htonll(p->rx_packets);
+        ops->tx_packets   = htonll(p->tx_packets);
+        ops->rx_bytes     = htonll(p->rx_bytes);
+        ops->tx_bytes     = htonll(p->tx_bytes);
+        ops->rx_dropped   = htonll(-1);
+        ops->tx_dropped   = htonll(p->tx_dropped);
+        ops->rx_errors    = htonll(-1);
+        ops->tx_errors    = htonll(-1);
+        ops->rx_frame_err = htonll(-1);
+        ops->rx_over_err  = htonll(-1);
+        ops->rx_crc_err   = htonll(-1);
+        ops->collisions   = htonll(-1);
         ops++;
     }
     s->port = i;

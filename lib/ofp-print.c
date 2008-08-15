@@ -656,6 +656,22 @@ ofp_aggregate_stats_reply(struct ds *string, const void *body_, size_t len,
     ds_put_format(string, " flow_count=%"PRIu32, ntohl(asr->flow_count));
 }
 
+static void print_port_stat(struct ds *string, const char *leader, 
+                            uint64_t stat, int more)
+{
+    ds_put_cstr(string, leader);
+    if (stat != -1) {
+        ds_put_format(string, "%"PRIu64, stat);
+    } else {
+        ds_put_char(string, '?');
+    }
+    if (more) {
+        ds_put_cstr(string, ", ");
+    } else {
+        ds_put_cstr(string, "\n");
+    }
+}
+
 static void
 ofp_port_stats_reply(struct ds *string, const void *body, size_t len,
                      int verbosity)
@@ -668,10 +684,23 @@ ofp_port_stats_reply(struct ds *string, const void *body, size_t len,
     }
 
     for (; n--; ps++) {
-        ds_put_format(string, "  port %"PRIu16": ", ntohs(ps->port_no));
-        ds_put_format(string, "rx %"PRIu64", ", ntohll(ps->rx_count));
-        ds_put_format(string, "tx %"PRIu64", ", ntohll(ps->tx_count));
-        ds_put_format(string, "dropped %"PRIu64"\n", ntohll(ps->drop_count));
+        ds_put_format(string, "  port %2"PRIu16": ", ntohs(ps->port_no));
+
+        ds_put_cstr(string, "rx ");
+        print_port_stat(string, "pkts=", ntohll(ps->rx_packets), 1);
+        print_port_stat(string, "bytes=", ntohll(ps->rx_bytes), 1);
+        print_port_stat(string, "drop=", ntohll(ps->rx_dropped), 1);
+        print_port_stat(string, "errs=", ntohll(ps->rx_errors), 1);
+        print_port_stat(string, "frame=", ntohll(ps->rx_frame_err), 1);
+        print_port_stat(string, "over=", ntohll(ps->rx_over_err), 1);
+        print_port_stat(string, "crc=", ntohll(ps->rx_crc_err), 0);
+
+        ds_put_cstr(string, "           tx ");
+        print_port_stat(string, "pkts=", ntohll(ps->tx_packets), 1);
+        print_port_stat(string, "bytes=", ntohll(ps->tx_bytes), 1);
+        print_port_stat(string, "drop=", ntohll(ps->tx_dropped), 1);
+        print_port_stat(string, "errs=", ntohll(ps->tx_errors), 1);
+        print_port_stat(string, "coll=", ntohll(ps->collisions), 0);
     }
 }
 
