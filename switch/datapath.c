@@ -56,6 +56,10 @@
 
 #define BRIDGE_PORT_NO_FLOOD    0x00000001
 
+extern char mfr_desc;
+extern char hw_desc;
+extern char sw_desc;
+
 /* Capabilities supported by this implementation. */
 #define OFP_SUPPORTED_CAPABILITIES ( OFPC_FLOW_STATS \
         | OFPC_TABLE_STATS \
@@ -1155,6 +1159,18 @@ recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
     }
 }
 
+static int version_stats_dump(struct datapath *dp, void *state,
+                              struct buffer *buffer)
+{
+    struct ofp_version_stats *ovs = buffer_put_uninit(buffer, sizeof *ovs);
+
+    strncpy(ovs->mfr_desc, &mfr_desc, sizeof ovs->mfr_desc);
+    strncpy(ovs->hw_desc, &hw_desc, sizeof ovs->hw_desc);
+    strncpy(ovs->sw_desc, &sw_desc, sizeof ovs->sw_desc);
+
+    return 0;
+}
+
 struct flow_stats_state {
     int table_idx;
     struct sw_table_position position;
@@ -1374,6 +1390,13 @@ struct stats_type {
 };
 
 static const struct stats_type stats[] = {
+    [OFPST_VERSION] = {
+        0,
+        0,
+        NULL,
+        version_stats_dump,
+        NULL
+    },
     [OFPST_FLOW] = {
         sizeof(struct ofp_flow_stats_request),
         sizeof(struct ofp_flow_stats_request),

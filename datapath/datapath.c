@@ -41,6 +41,23 @@
 #include "compat.h"
 
 
+/* Strings to describe the manufacturer, hardware, and software.  This data 
+ * is queriable through the version stats message. */
+static char mfr_desc[VERSION_STR_LEN] = "Nicira Networks";
+static char hw_desc[VERSION_STR_LEN] = "Reference Linux Kernel Module";
+static char sw_desc[VERSION_STR_LEN] = VERSION;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
+module_param_string(mfr_desc, mfr_desc, sizeof mfr_desc, 0444);
+module_param_string(hw_desc, hw_desc, sizeof hw_desc, 0444);
+module_param_string(sw_desc, sw_desc, sizeof sw_desc, 0444);
+#else
+MODULE_PARM(mfr_desc, "s");
+MODULE_PARM(hw_desc, "s");
+MODULE_PARM(sw_desc, "s");
+#endif
+
+
 /* Number of milliseconds between runs of the maintenance thread. */
 #define MAINT_SLEEP_MSECS 1000
 
@@ -1079,6 +1096,24 @@ static struct nla_policy dp_genl_openflow_policy[DP_GENL_A_MAX + 1] = {
 	[DP_GENL_A_DP_IDX] = { .type = NLA_U32 },
 };
 
+static int version_stats_dump(struct datapath *dp, void *state,
+			    void *body, int *body_len)
+{
+	struct ofp_version_stats *ovs = body;
+	int n_bytes = sizeof *ovs;
+
+	if (n_bytes > *body_len) {
+		return -ENOBUFS;
+	}
+	*body_len = n_bytes;
+
+	strncpy(ovs->mfr_desc, mfr_desc, sizeof ovs->mfr_desc);
+	strncpy(ovs->hw_desc, hw_desc, sizeof ovs->hw_desc);
+	strncpy(ovs->sw_desc, sw_desc, sizeof ovs->sw_desc);
+
+	return 0;
+}
+
 struct flow_stats_state {
 	int table_idx;
 	struct sw_table_position position;
@@ -1350,6 +1385,13 @@ struct stats_type {
 };
 
 static const struct stats_type stats[] = {
+	[OFPST_VERSION] = {
+		0,
+		0,
+		NULL,
+		version_stats_dump,
+		NULL
+	},
 	[OFPST_FLOW] = {
 		sizeof(struct ofp_flow_stats_request),
 		sizeof(struct ofp_flow_stats_request),

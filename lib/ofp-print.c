@@ -558,6 +558,17 @@ ofp_print_port_status(struct ds *string, const void *oh, size_t len,
 }
 
 static void
+ofp_version_stats_reply(struct ds *string, const void *body, size_t len,
+                     int verbosity)
+{
+    const struct ofp_version_stats *vs = body;
+
+    ds_put_format(string, "Manufacturer: %s\n", vs->mfr_desc);
+    ds_put_format(string, "Hardware: %s\n", vs->hw_desc);
+    ds_put_format(string, "Software: %s\n", vs->sw_desc);
+}
+
+static void
 ofp_flow_stats_request(struct ds *string, const void *oh, size_t len,
                       int verbosity) 
 {
@@ -750,6 +761,11 @@ print_stats(struct ds *string, int type, const void *body, size_t body_len,
     };
 
     static const struct stats_type stats_types[] = {
+        [OFPST_VERSION] = {
+            "version",
+            { 0, 0, NULL },
+            { 0, SIZE_MAX, ofp_version_stats_reply },
+        },
         [OFPST_FLOW] = {
             "flow",
             { sizeof(struct ofp_flow_stats_request),

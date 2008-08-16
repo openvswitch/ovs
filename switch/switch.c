@@ -57,6 +57,13 @@
 #define THIS_MODULE VLM_switch
 #include "vlog.h"
 
+
+/* Strings to describe the manufacturer, hardware, and software.  This data 
+ * is queriable through the version stats message. */
+char mfr_desc[VERSION_STR_LEN] = "Nicira Networks";
+char hw_desc[VERSION_STR_LEN] = "Reference User-Space Switch";
+char sw_desc[VERSION_STR_LEN] = VERSION;
+
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
@@ -152,7 +159,10 @@ static void
 parse_options(int argc, char *argv[])
 {
     enum {
-        OPT_MAX_BACKOFF = UCHAR_MAX + 1
+        OPT_MAX_BACKOFF = UCHAR_MAX + 1,
+        OPT_MFR_DESC,
+        OPT_HW_DESC,
+        OPT_SW_DESC
     };
 
     static struct option long_options[] = {
@@ -165,6 +175,9 @@ parse_options(int argc, char *argv[])
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
+        {"mfr-desc",    required_argument, 0, OPT_MFR_DESC},
+        {"hw-desc",     required_argument, 0, OPT_HW_DESC},
+        {"sw-desc",     required_argument, 0, OPT_SW_DESC},
         VCONN_SSL_LONG_OPTIONS
         {0, 0, 0, 0},
     };
@@ -226,6 +239,18 @@ parse_options(int argc, char *argv[])
             } else if (max_backoff > 3600) {
                 max_backoff = 3600;
             }
+            break;
+
+        case OPT_MFR_DESC:
+            strncpy(mfr_desc, optarg, sizeof mfr_desc);
+            break;
+
+        case OPT_HW_DESC:
+            strncpy(hw_desc, optarg, sizeof hw_desc);
+            break;
+
+        case OPT_SW_DESC:
+            strncpy(sw_desc, optarg, sizeof sw_desc);
             break;
 
         case 'l':

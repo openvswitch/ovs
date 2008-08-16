@@ -186,6 +186,7 @@ usage(void)
 #endif
            "\nFor local datapaths and remote switches:\n"
            "  show SWITCH                 show information\n"
+           "  dump-version SWITCH         print version information\n"
            "  dump-tables SWITCH          print table stats\n"
            "  dump-ports SWITCH           print port statistics\n"
            "  dump-flows SWITCH           print all flow entries\n"
@@ -387,6 +388,12 @@ do_show(int argc UNUSED, char *argv[])
     dump_trivial_transaction(argv[1], OFPT_GET_CONFIG_REQUEST);
 }
 
+
+static void
+do_dump_version(int argc, char *argv[])
+{
+    dump_trivial_stats_transaction(argv[1], OFPST_VERSION);
+}
 
 static void
 do_dump_tables(int argc, char *argv[])
@@ -890,6 +897,7 @@ static struct command all_commands[] = {
 
     { "help", 0, INT_MAX, do_help },
     { "monitor", 1, 1, do_monitor },
+    { "dump-version", 1, 1, do_dump_version },
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 1, 2, do_dump_flows },
     { "dump-aggregate", 1, 2, do_dump_aggregate },

@@ -424,6 +424,11 @@ struct ofp_error_msg {
 OFP_ASSERT(sizeof(struct ofp_error_msg) == 12);
 
 enum ofp_stats_types {
+    /* Description of this OpenFlow switch. 
+     * The request body is empty.
+     * The reply body is struct ofp_version_stats. */
+    OFPST_VERSION,
+
     /* Individual flow statistics.
      * The request body is struct ofp_flow_stats_request.
      * The reply body is an array of struct ofp_flow_stats. */
@@ -464,6 +469,16 @@ struct ofp_stats_reply {
     uint8_t body[0];            /* Body of the reply. */
 };
 OFP_ASSERT(sizeof(struct ofp_stats_reply) == 12);
+
+#define VERSION_STR_LEN 256
+/* Body of reply to OFPST_VERSION request.  Each entry is a NULL-terminated 
+ * ASCII string. */
+struct ofp_version_stats {
+    char mfr_desc[VERSION_STR_LEN];  /* Manufacturer description. */
+    char hw_desc[VERSION_STR_LEN];   /* Hardware description. */
+    char sw_desc[VERSION_STR_LEN];   /* Software description. */
+};
+OFP_ASSERT(sizeof(struct ofp_version_stats) == 768);
 
 /* Body for ofp_stats_request of type OFPST_FLOW. */
 struct ofp_flow_stats_request {
@@ -522,7 +537,7 @@ struct ofp_table_stats {
 };
 OFP_ASSERT(sizeof(struct ofp_table_stats) == 56);
 
-/* Statistics about a particular port.  If a counter is unsupported, set
+/* Body of reply to OFPST_PORT request. If a counter is unsupported, set
  * the field to all ones. */
 struct ofp_port_stats {
     uint16_t port_no;
