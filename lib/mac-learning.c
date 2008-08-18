@@ -41,6 +41,7 @@
 #include "hash.h"
 #include "list.h"
 #include "openflow.h"
+#include "timeval.h"
 #include "util.h"
 
 #define THIS_MODULE VLM_mac_learning
@@ -56,8 +57,9 @@
 struct mac_entry {
     struct list hash_node;      /* Element in a mac_learning 'table' list. */
     struct list lru_node;       /* Element in mac_learning 'lrus' list. */
+    time_t used;                /* Last used time. */
     uint8_t mac[ETH_ADDR_LEN];  /* Known MAC address. */
-    uint16_t port;              /* Port on which MAC was most recently seen. */
+    int port;                   /* Port on which MAC was most recently seen. */
 };
 
 /* MAC learning table. */
@@ -126,7 +128,6 @@ mac_learning_learn(struct mac_learning *ml,
     struct mac_entry *e;
     struct list *bucket;
 
-    assert(src_port != OFPP_FLOOD);
     if (eth_addr_is_multicast(src_mac)) {
         VLOG_DBG("multicast packet source "ETH_ADDR_FMT,
                  ETH_ADDR_ARGS(src_mac));
@@ -135,29 +136,27 @@ mac_learning_learn(struct mac_learning *ml,
 
     bucket = mac_table_bucket(ml, src_mac);
     e = search_bucket(bucket, src_mac);
-    if (e) {
-        /* Make 'e' most-recently-used.  */
-        list_remove(&e->lru_node);
-        list_push_back(&ml->lrus, &e->lru_node);
-        if (e->port == src_port) {
-            return false;
-        }
-    } else {
-        /* Learn a new address.
-         * First drop the least recently used mac source. */
+    if (!e) {
         e = CONTAINER_OF(ml->lrus.next, struct mac_entry, lru_node);
+        memcpy(e->mac, src_mac, ETH_ADDR_LEN);
         if (e->hash_node.next) {
             list_remove(&e->hash_node);
         }
-        list_remove(&e->lru_node);
-
-        /* Create new mac source. */
-        memcpy(e->mac, src_mac, ETH_ADDR_LEN);
         list_push_front(bucket, &e->hash_node);
-        list_push_back(&ml->lrus, &e->lru_node);
+        e->port = -1;
     }
-    e->port = src_port;
-    return true;
+
+    /* Make the entry most-recently-used. */
+    list_remove(&e->lru_node);
+    list_push_back(&ml->lrus, &e->lru_node);
+    e->used = time_now();
+
+    /* Did we learn something? */
+    if (e->port != src_port) {
+        e->port = src_port;
+        return true;
+    }
+    return false;
 }
 
 /* Looks up address 'dst' in 'ml'.  Returns the port on which a frame destined
@@ -168,7 +167,7 @@ mac_learning_lookup(const struct mac_learning *ml,
 {
     if (!eth_addr_is_multicast(dst)) {
         struct mac_entry *e = search_bucket(mac_table_bucket(ml, dst), dst);
-        if (e) {
+        if (e && time_now() - e->used < 60) {
             return e->port;
         }
     }
