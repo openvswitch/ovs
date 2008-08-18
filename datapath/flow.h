@@ -8,6 +8,7 @@
 #include <linux/rcupdate.h>
 #include <linux/gfp.h>
 #include <linux/skbuff.h>
+#include <linux/if_ether.h>
 
 #include "openflow.h"
 
@@ -30,8 +31,8 @@ struct sw_flow_key {
 	uint16_t tp_src;        /* TCP/UDP source port. */
 	uint16_t tp_dst;        /* TCP/UDP destination port. */
 	uint16_t wildcards;	    /* Wildcard fields (host byte order). */
-	uint8_t dl_src[6];	    /* Ethernet source address. */
-	uint8_t dl_dst[6];	    /* Ethernet destination address. */
+	uint8_t dl_src[ETH_ALEN];	    /* Ethernet source address. */
+	uint8_t dl_dst[ETH_ALEN];	    /* Ethernet destination address. */
 	uint8_t nw_proto;		/* IP protocol. */
 	uint8_t pad[3];		    /* NB: Pad to make 32-bit aligned */
 };
