@@ -1279,11 +1279,11 @@ static int table_stats_dump(struct datapath *dp, void *state,
 			    void *body, int *body_len)
 {
 	struct ofp_table_stats *ots;
-	int nbytes = dp->chain->n_tables * sizeof *ots;
+	int n_bytes = dp->chain->n_tables * sizeof *ots;
 	int i;
-	if (nbytes > *body_len)
+	if (n_bytes > *body_len)
 		return -ENOBUFS;
-	*body_len = nbytes;
+	*body_len = n_bytes;
 	for (i = 0, ots = body; i < dp->chain->n_tables; i++, ots++) {
 		struct sw_table_stats stats;
 		dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
