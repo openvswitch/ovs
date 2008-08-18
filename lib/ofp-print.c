@@ -168,7 +168,7 @@ ofp_packet_in(struct ds *string, const void *oh, size_t len, int verbosity)
         if (ntohs(op->total_len) != data_len)
             ds_put_format(string, " (***total_len != data_len***)");
     } else {
-        ds_put_format(string, " buffer=%08"PRIx32, ntohl(op->buffer_id));
+        ds_put_format(string, " buffer=0x%08"PRIx32, ntohl(op->buffer_id));
         if (ntohs(op->total_len) < data_len)
             ds_put_format(string, " (***total_len < data_len***)");
     }
@@ -334,7 +334,7 @@ static void ofp_packet_out(struct ds *string, const void *oh, size_t len,
             free(packet);
         }
     } else {
-        ds_put_format(string, " buffer=%08"PRIx32, ntohl(opo->buffer_id));
+        ds_put_format(string, " buffer=0x%08"PRIx32, ntohl(opo->buffer_id));
     }
     ds_put_char(string, '\n');
 }
@@ -420,7 +420,7 @@ ofp_print_switch_config(struct ds *string, const void *oh, size_t len,
         ds_put_format(string, " (sending flow expirations)");
     }
     if (flags) {
-        ds_put_format(string, " ***unknown flags %04"PRIx16"***", flags);
+        ds_put_format(string, " ***unknown flags 0x%04"PRIx16"***", flags);
     }
 
     ds_put_format(string, " miss_send_len=%"PRIu16"\n", ntohs(osc->miss_send_len));
@@ -458,13 +458,13 @@ static void ofp_print_match(struct ds *f, const struct ofp_match *om,
     print_wild(f, "in_port=", w & OFPFW_IN_PORT, verbosity,
                "%d", ntohs(om->in_port));
     print_wild(f, "dl_vlan=", w & OFPFW_DL_VLAN, verbosity,
-               "%04x", ntohs(om->dl_vlan));
+               "0x%04x", ntohs(om->dl_vlan));
     print_wild(f, "dl_src=", w & OFPFW_DL_SRC, verbosity,
                ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_src));
     print_wild(f, "dl_dst=", w & OFPFW_DL_DST, verbosity,
                ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_dst));
     print_wild(f, "dl_type=", w & OFPFW_DL_TYPE, verbosity,
-               "%04x", ntohs(om->dl_type));
+               "0x%04x", ntohs(om->dl_type));
     print_wild(f, "nw_src=", w & OFPFW_NW_SRC, verbosity,
                IP_FMT, IP_ARGS(&om->nw_src));
     print_wild(f, "nw_dst=", w & OFPFW_NW_DST, verbosity,
@@ -821,7 +821,7 @@ ofp_stats_request(struct ds *string, const void *oh, size_t len, int verbosity)
     const struct ofp_stats_request *srq = oh;
 
     if (srq->flags) {
-        ds_put_format(string, " ***unknown flags %04"PRIx16"***",
+        ds_put_format(string, " ***unknown flags 0x%04"PRIx16"***",
                       ntohs(srq->flags));
     }
 
@@ -845,7 +845,7 @@ ofp_stats_reply(struct ds *string, const void *oh, size_t len, int verbosity)
             flags &= ~OFPSF_REPLY_MORE;
         }
         if (flags) {
-            ds_put_format(string, "[***unknown%04"PRIx16"***]", flags);
+            ds_put_format(string, "[***unknown flags 0x%04"PRIx16"***]", flags);
         }
     }
 
@@ -981,7 +981,7 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
     }
 
     pkt = &packets[oh->type];
-    ds_put_format(&string, "%s (xid=%"PRIx32"):", pkt->name, oh->xid);
+    ds_put_format(&string, "%s (xid=0x%"PRIx32"):", pkt->name, oh->xid);
 
     if (ntohs(oh->length) > len)
         ds_put_format(&string, " (***truncated to %zu bytes from %"PRIu16"***)",
