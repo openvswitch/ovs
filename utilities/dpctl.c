@@ -44,31 +44,31 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-#include "command-line.h"
-#include "compiler.h"
-#include "buffer.h"
-#include "dpif.h"
 #ifdef HAVE_NETLINK
+#include "netdev.h"
 #include "netlink.h"
 #include "openflow-netlink.h"
 #endif
-#include "util.h"
-#include "socket-util.h"
-#include "openflow.h"
+
+#include "buffer.h"
+#include "command-line.h"
+#include "compiler.h"
+#include "dpif.h"
 #include "ofp-print.h"
+#include "openflow.h"
 #include "packets.h"
 #include "random.h"
+#include "socket-util.h"
 #include "timeval.h"
-#include "vconn.h"
+#include "util.h"
 #include "vconn-ssl.h"
+#include "vconn.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_dpctl
 
 #define DEFAULT_IDLE_TIMEOUT 60
 #define MAX_ADD_ACTS 5
-
-static const char* ifconfigbin = "/sbin/ifconfig";
 
 #define MOD_PORT_CMD_UP      "up"
 #define MOD_PORT_CMD_DOWN    "down"
@@ -246,12 +246,17 @@ static void run(int retval, const char *message, ...)
 #ifdef HAVE_NETLINK
 /* Netlink-only commands. */
 
-static int  if_up(const char* intf)
+static int if_up(const char *netdev_name)
 {
-    char command[256];
-    snprintf(command, sizeof command, "%s %s up &> /dev/null",
-            ifconfigbin, intf);
-    return system(command);
+    struct netdev *netdev;
+    int retval;
+
+    retval = netdev_open(netdev_name, NETDEV_ETH_TYPE_NONE, &netdev);
+    if (!retval) {
+        retval = netdev_turn_flags_on(netdev, NETDEV_UP, true);
+        netdev_close(netdev);
+    }
+    return retval;
 }
 
 static void open_nl_vconn(const char *name, bool subscribe, struct dpif *dpif)
@@ -305,8 +310,8 @@ static void add_del_ports(int argc UNUSED, char *argv[],
 
 static int ifup_and_add_port(struct dpif *dpif, const char *netdev)
 {
-    if_up(netdev);
-    return dpif_add_port(dpif, netdev);
+    int retval = if_up(netdev);
+    return retval ? retval : dpif_add_port(dpif, netdev);
 }
 
 static void do_add_port(int argc UNUSED, char *argv[])
