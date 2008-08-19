@@ -305,6 +305,29 @@ dhclient_changed(struct dhclient *cli)
     return changed;
 }
 
+/* Returns 'cli''s current state, as a string.  The caller must not modify or
+ * free the string. */
+const char *
+dhclient_get_state(const struct dhclient *cli)
+{
+    return state_name(cli->state);
+}
+
+/* Returns the number of seconds spent so far in 'cli''s current state. */
+unsigned int
+dhclient_get_state_elapsed(const struct dhclient *cli)
+{
+    return elapsed_in_this_state(cli);
+}
+
+/* If 'cli' is bound, returns the number of seconds remaining in its lease;
+ * otherwise, returns 0. */
+unsigned int
+dhclient_get_lease_remaining(const struct dhclient *cli)
+{
+    return dhclient_is_bound(cli) ? cli->lease_expiration - time_now() : 0;
+}
+
 /* If 'cli' is bound to an IP address, returns that IP address; otherwise,
  * returns 0. */
 uint32_t

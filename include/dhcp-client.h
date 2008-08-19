@@ -52,6 +52,10 @@ void dhclient_force_renew(struct dhclient *, int deadline);
 bool dhclient_is_bound(const struct dhclient *);
 bool dhclient_changed(struct dhclient *);
 
+const char *dhclient_get_state(const struct dhclient *);
+unsigned int dhclient_get_state_elapsed(const struct dhclient *);
+unsigned int dhclient_get_lease_remaining(const struct dhclient *);
+
 uint32_t dhclient_get_ip(const struct dhclient *);
 uint32_t dhclient_get_netmask(const struct dhclient *);
 uint32_t dhclient_get_router(const struct dhclient *);
