@@ -36,6 +36,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "util.h"
 
 void
@@ -141,6 +142,20 @@ ds_put_printable(struct ds *ds, const char *s, size_t n)
     }
 }
 
+void
+ds_put_strftime(struct ds *ds, const char *template, const struct tm *tm)
+{
+    for (;;) {
+        size_t avail = ds->string ? ds->allocated - ds->length + 1 : 0;
+        size_t used = strftime(&ds->string[ds->length], avail, template, tm);
+        if (used) {
+            ds->length += used;
+            return;
+        }
+        ds_reserve(ds, ds->length + (avail < 32 ? 64 : 2 * avail)); 
+    }
+}
+
 char *
 ds_cstr(struct ds *ds)
 {
@@ -214,4 +229,12 @@ int
 ds_last(const struct ds *ds)
 {
     return ds->length > 0 ? (unsigned char) ds->string[ds->length - 1] : EOF;
+}
+
+void
+ds_chomp(struct ds *ds, int c)
+{
+    if (ds->length > 0 && ds->string[ds->length - 1] == (char) c) {
+        ds->string[--ds->length] = '\0';
+    }
 }
