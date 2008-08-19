@@ -26,6 +26,7 @@ noinst_HEADERS = \
 	queue.h \
 	random.h \
 	rconn.h \
+	sat-math.h \
 	socket-util.h \
 	type-props.h \
 	timeval.h \

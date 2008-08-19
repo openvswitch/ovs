@@ -51,6 +51,7 @@
 #include "netdev.h"
 #include "ofp-print.h"
 #include "poll-loop.h"
+#include "sat-math.h"
 #include "timeval.h"
 
 #define THIS_MODULE VLM_dhcp_client
@@ -140,9 +141,6 @@ static unsigned int calc_t2(unsigned int lease);
 static unsigned int calc_t1(unsigned int lease, unsigned int t2);
 
 static unsigned int clamp(unsigned int x, unsigned int min, unsigned int max);
-static unsigned int sat_add(unsigned int x, unsigned int y);
-static unsigned int sat_sub(unsigned int x, unsigned int y);
-static unsigned int sat_mul(unsigned int x, unsigned int y);
 
 /* Creates a new DHCP client to configure the network device 'netdev_name'
  * (e.g. "eth0").
@@ -1011,25 +1009,6 @@ fuzz(unsigned int x, int max_fuzz)
     int fuzz = random_range(max_fuzz * 2 + 1) - max_fuzz;
     unsigned int y = x + fuzz;
     return fuzz >= 0 ? (y >= x ? y : UINT_MAX) : (y <= x ? y : 0);
-}
-
-static unsigned int
-sat_add(unsigned int x, unsigned int y)
-{
-    return x + y >= x ? x + y : UINT_MAX;
-}
-
-static unsigned int
-sat_sub(unsigned int x, unsigned int y)
-{
-    return x >= y ? x - y : 0;
-}
-
-static unsigned int
-sat_mul(unsigned int x, unsigned int y)
-{
-    assert(y);
-    return x <= UINT_MAX / y ? x * y : UINT_MAX;
 }
 
 static unsigned int

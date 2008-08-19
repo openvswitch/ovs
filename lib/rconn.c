@@ -41,6 +41,7 @@
 #include "buffer.h"
 #include "poll-loop.h"
 #include "ofp-print.h"
+#include "sat-math.h"
 #include "timeval.h"
 #include "util.h"
 #include "vconn.h"
@@ -115,9 +116,6 @@ struct rconn {
     int probe_interval;         /* Secs of inactivity before sending probe. */
 };
 
-static unsigned int sat_add(unsigned int x, unsigned int y);
-static unsigned int sat_sub(unsigned int x, unsigned int y);
-static unsigned int sat_mul(unsigned int x, unsigned int y);
 static unsigned int elapsed_in_this_state(const struct rconn *);
 static unsigned int timeout(const struct rconn *);
 static bool timed_out(const struct rconn *);
@@ -743,25 +741,6 @@ state_transition(struct rconn *rc, enum state state)
     VLOG_DBG("%s: entering %s", rc->name, state_name(state));
     rc->state = state;
     rc->state_entered = time_now();
-}
-
-static unsigned int
-sat_add(unsigned int x, unsigned int y)
-{
-    return x + y >= x ? x + y : UINT_MAX;
-}
-
-static unsigned int
-sat_sub(unsigned int x, unsigned int y)
-{
-    return x >= y ? x - y : 0;
-}
-
-static unsigned int
-sat_mul(unsigned int x, unsigned int y)
-{
-    assert(y);
-    return x <= UINT_MAX / y ? x * y : UINT_MAX;
 }
 
 static void
