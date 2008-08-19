@@ -187,8 +187,8 @@ usage(void)
            "\nFor local datapaths only:\n"
            "  adddp nl:DP_ID              add a new local datapath DP_ID\n"
            "  deldp nl:DP_ID              delete local datapath DP_ID\n"
-           "  addif nl:DP_ID IFACE        add IFACE as a port on DP_ID\n"
-           "  delif nl:DP_ID IFACE        delete IFACE as a port on DP_ID\n"
+           "  addif nl:DP_ID IFACE...     add each IFACE as a port on DP_ID\n"
+           "  delif nl:DP_ID IFACE...     delete each IFACE from DP_ID\n"
            "  monitor nl:DP_ID            print packets received\n"
 #endif
            "\nFor local datapaths and remote switches:\n"
@@ -280,21 +280,43 @@ static void do_del_dp(int argc UNUSED, char *argv[])
     dpif_close(&dp);
 }
 
-static void do_add_port(int argc UNUSED, char *argv[])
+static void add_del_ports(int argc UNUSED, char *argv[],
+                          int (*function)(struct dpif *, const char *netdev),
+                          const char *operation, const char *preposition)
 {
     struct dpif dp;
-    if_up(argv[2]);
+    bool failure = false;
+    int i;
+
     open_nl_vconn(argv[1], false, &dp);
-    run(dpif_add_port(&dp, argv[2]), "add_port");
+    for (i = 2; i < argc; i++) {
+        int retval = function(&dp, argv[i]);
+        if (retval) {
+            error(retval, "failed to %s %s %s %s",
+                  operation, argv[i], preposition, argv[1]);
+            failure = true;
+        }
+    }
     dpif_close(&dp);
+    if (failure) {
+        exit(EXIT_FAILURE);
+    }
+}
+
+static int ifup_and_add_port(struct dpif *dpif, const char *netdev)
+{
+    if_up(netdev);
+    return dpif_add_port(dpif, netdev);
+}
+
+static void do_add_port(int argc UNUSED, char *argv[])
+{
+    add_del_ports(argc, argv, ifup_and_add_port, "add", "to");
 }
 
 static void do_del_port(int argc UNUSED, char *argv[])
 {
-    struct dpif dp;
-    open_nl_vconn(argv[1], false, &dp);
-    run(dpif_del_port(&dp, argv[2]), "del_port");
-    dpif_close(&dp);
+    add_del_ports(argc, argv, dpif_del_port, "remove", "from");
 }
 
 static void do_monitor(int argc UNUSED, char *argv[])
@@ -1060,8 +1082,8 @@ static struct command all_commands[] = {
 #ifdef HAVE_NETLINK
     { "adddp", 1, 1, do_add_dp },
     { "deldp", 1, 1, do_del_dp },
-    { "addif", 2, 2, do_add_port },
-    { "delif", 2, 2, do_del_port },
+    { "addif", 2, INT_MAX, do_add_port },
+    { "delif", 2, INT_MAX, do_del_port },
 #endif
 
     { "show", 1, 1, do_show },

@@ -70,8 +70,8 @@ explicitly removed before the datapath can be deleted (see \fBdelif\fR
 command).
 
 .TP
-\fBaddif nl:\fIdp_idx netdev\fR
-Adds \fInetdev\fR to the list of network devices datapath
+\fBaddif nl:\fIdp_idx netdev\fR...
+Adds each \fInetdev\fR to the list of network devices datapath
 \fIdp_idx\fR monitors, where \fIdp_idx\fR is the ID of an existing
 datapath, and \fInetdev\fR is the name of one of the host's
 network devices, e.g. \fBeth0\fR.  Once a network device has been added
@@ -79,8 +79,8 @@ to a datapath, the datapath has complete ownership of the network device's
 traffic and the network device appears silent to the rest of the system.
 
 .TP
-\fBdelif nl:\fIdp_idx netdev\fR
-Removes \fInetdev\fR from the list of network devices datapath
+\fBdelif nl:\fIdp_idx netdev\fR...
+Removes each \fInetdev\fR from the list of network devices datapath
 \fIdp_idx\fR monitors.
 
 .TP
