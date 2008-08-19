@@ -43,6 +43,7 @@
 #include <syslog.h>
 #include <time.h>
 #include "dynamic-string.h"
+#include "sat-math.h"
 #include "timeval.h"
 #include "util.h"
 
@@ -309,7 +310,8 @@ vlog_is_enabled(enum vlog_module module, enum vlog_level level)
  *
  * Guaranteed to preserve errno. */
 void
-vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
+vlog_valist(enum vlog_module module, enum vlog_level level,
+            const char *message, va_list args)
 {
     bool log_console = levels[module][VLF_CONSOLE] >= level;
     bool log_syslog = levels[module][VLF_SYSLOG] >= level;
@@ -357,5 +359,59 @@ vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
 
         ds_destroy(&s);
         errno = save_errno;
+    }
+}
+
+void
+vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
+{
+    va_list args;
+
+    va_start(args, message);
+    vlog_valist(module, level, message, args);
+    va_end(args);
+}
+
+void
+vlog_rate_limit(enum vlog_module module, enum vlog_level level,
+                struct vlog_rate_limit *rl, const char *message, ...)
+{
+    va_list args;
+
+    if (!vlog_is_enabled(module, level)) {
+        return;
+    }
+
+    if (rl->tokens < VLOG_MSG_TOKENS) {
+        time_t now = time_now();
+        if (rl->last_fill > now) {
+            /* Last filled in the future?  Time must have gone backward, or
+             * 'rl' has not been used before. */
+            rl->tokens = rl->burst;
+        } else if (rl->last_fill < now) {
+            unsigned int add = sat_mul(rl->rate, now - rl->last_fill);
+            unsigned int tokens = sat_add(rl->tokens, add);
+            rl->tokens = MIN(tokens, rl->burst);
+            rl->last_fill = now;
+        }
+        if (rl->tokens < VLOG_MSG_TOKENS) {
+            if (!rl->n_dropped) {
+                rl->first_dropped = now;
+            }
+            rl->n_dropped++;
+            return;
+        }
+    }
+    rl->tokens -= VLOG_MSG_TOKENS;
+
+    va_start(args, message);
+    vlog_valist(module, level, message, args);
+    va_end(args);
+
+    if (rl->n_dropped) {
+        vlog(module, level,
+             "Dropped %u messages in last %u seconds due to excessive rate",
+             rl->n_dropped, (unsigned int) (time_now() - rl->first_dropped));
+        rl->n_dropped = 0;
     }
 }

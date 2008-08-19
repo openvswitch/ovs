@@ -34,7 +34,11 @@
 #ifndef VLOG_H
 #define VLOG_H 1
 
+#include <limits.h>
+#include <stdarg.h>
 #include <stdbool.h>
+#include <time.h>
+#include "util.h"
 
 /* Logging importance levels. */
 enum vlog_level {
@@ -102,6 +106,36 @@ enum vlog_module {
 const char *vlog_get_module_name(enum vlog_module);
 enum vlog_module vlog_get_module_val(const char *name);
 
+/* Rate-limiter for log messages. */
+struct vlog_rate_limit {
+    /* Configuration settings. */
+    unsigned int rate;          /* Tokens per second. */
+    unsigned int burst;         /* Max cumulative tokens credit. */
+
+    /* Current status. */
+    unsigned int tokens;        /* Current number of tokens. */
+    time_t last_fill;           /* Last time tokens added. */
+    time_t first_dropped;       /* Time first message was dropped. */
+    unsigned int n_dropped;     /* Number of messages dropped. */
+};
+
+/* Number of tokens to emit a message.  We add 'rate' token per second, which
+ * is 60 times the unit used for 'rate', thus 60 tokens are required to emit
+ * one message. */
+#define VLOG_MSG_TOKENS 60
+
+/* Initializer for a struct vlog_rate_limit, to set up a maximum rate of RATE
+ * messages per minute and a maximum burst size of BURST messages. */
+#define VLOG_RATE_LIMIT_INIT(RATE, BURST)                   \
+        {                                                   \
+            RATE,                           /* rate */      \
+            (MIN(BURST, UINT_MAX / VLOG_MSG_TOKENS)         \
+             * VLOG_MSG_TOKENS),            /* burst */     \
+            0,                              /* tokens */    \
+            0,                              /* last_fill */ \
+            0,                              /* n_dropped */ \
+        }
+
 /* Configuring how each module logs messages. */
 enum vlog_level vlog_get_level(enum vlog_module, enum vlog_facility);
 void vlog_set_levels(enum vlog_module, enum vlog_facility, enum vlog_level);
@@ -115,6 +149,11 @@ void vlog_init(void);
 void vlog_exit(void);
 void vlog(enum vlog_module, enum vlog_level, const char *format, ...)
     __attribute__((format(printf, 3, 4)));
+void vlog_valist(enum vlog_module, enum vlog_level, const char *, va_list)
+    __attribute__((format(printf, 3, 0)));
+void vlog_rate_limit(enum vlog_module, enum vlog_level,
+                     struct vlog_rate_limit *, const char *, ...)
+    __attribute__((format(printf, 4, 5)));
 
 /* Convenience macros.  To use these, define THIS_MODULE as a macro that
  * expands to the module used by the current source file, e.g.
@@ -134,5 +173,18 @@ void vlog(enum vlog_module, enum vlog_level, const char *format, ...)
 #define VLOG_IS_ERR_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_EMER)
 #define VLOG_IS_WARN_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_WARN)
 #define VLOG_IS_DBG_ENABLED() vlog_is_enabled(THIS_MODULE, VLL_DBG)
+
+/* Convenience macros.  To use these, define THIS_MODULE as a macro that
+ * expands to the module used by the current source file, e.g.
+ *      #include "vlog.h"
+ *      #define THIS_MODULE VLM_netlink
+ * Guaranteed to preserve errno.
+ */
+#define VLOG_ERR_RL(RL, ...) \
+        vlog_rate_limit(THIS_MODULE, VLL_ERR, RL, __VA_ARGS__)
+#define VLOG_WARN_RL(RL, ...) \
+        vlog_rate_limit(THIS_MODULE, VLL_WARN, RL, __VA_ARGS__)
+#define VLOG_DBG_RL(RL, ...) \
+        vlog_rate_limit(THIS_MODULE, VLL_DBG, RL, __VA_ARGS__)
 
 #endif /* vlog.h */
