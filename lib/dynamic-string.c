@@ -53,6 +53,15 @@ ds_clear(struct ds *ds)
 }
 
 void
+ds_truncate(struct ds *ds, size_t new_length)
+{
+    if (ds->length > new_length) {
+        ds->length = new_length;
+        ds->string[new_length] = '\0';
+    }
+}
+
+void
 ds_reserve(struct ds *ds, size_t min_length)
 {
     if (min_length > ds->allocated || !ds->string) {
@@ -199,4 +208,10 @@ ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
       buf += n;
       size -= n;
     }
+}
+
+int
+ds_last(const struct ds *ds)
+{
+    return ds->length > 0 ? (unsigned char) ds->string[ds->length - 1] : EOF;
 }

@@ -50,6 +50,7 @@ struct ds {
 
 void ds_init(struct ds *);
 void ds_clear(struct ds *);
+void ds_truncate(struct ds *, size_t new_length);
 void ds_reserve(struct ds *, size_t min_length);
 void ds_put_char(struct ds *, char);
 void ds_put_cstr(struct ds *, const char *);
@@ -61,5 +62,7 @@ void ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
                      uintptr_t ofs, bool ascii);
 char *ds_cstr(struct ds *);
 void ds_destroy(struct ds *);
+
+int ds_last(const struct ds *);
 
 #endif /* dynamic-string.h */
