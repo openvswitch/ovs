@@ -27,7 +27,7 @@ diff -rNu tcpdump/Makefile.in tcpdump/Makefile.in
  
  # Standard LDFLAGS
 -LDFLAGS = @LDFLAGS@
-+LDFLAGS = @LDFLAGS@ -L../../lib/.libs
++LDFLAGS = @LDFLAGS@ -L../../lib
  
  # Standard LIBS
 -LIBS = @LIBS@
