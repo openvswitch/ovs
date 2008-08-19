@@ -52,7 +52,8 @@ static struct sw_flow **find_bucket(struct sw_table *swt,
                                     const struct sw_flow_key *key)
 {
     struct sw_table_hash *th = (struct sw_table_hash *) swt;
-    unsigned int crc = crc32_calculate(&th->crc32, key, sizeof *key);
+    unsigned int crc = crc32_calculate(&th->crc32, key, 
+            offsetof(struct sw_flow_key, wildcards));
     return &th->buckets[crc & th->bucket_mask];
 }
 

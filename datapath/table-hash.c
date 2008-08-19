@@ -31,7 +31,8 @@ static struct sw_flow **find_bucket(struct sw_table *swt,
 									const struct sw_flow_key *key)
 {
 	struct sw_table_hash *th = (struct sw_table_hash *) swt;
-	unsigned int crc = crc32_calculate(&th->crc32, key, sizeof *key);
+	unsigned int crc = crc32_calculate(&th->crc32, key, 
+				offsetof(struct sw_flow_key, wildcards));
 	return &th->buckets[crc & th->bucket_mask];
 }
 
@@ -58,7 +59,7 @@ static int table_hash_insert(struct sw_table *swt, struct sw_flow *flow)
 		retval = 1;
 	} else {
 		struct sw_flow *old_flow = *bucket;
-		if (!flow_keys_equal(&old_flow->key, &flow->key)) {
+		if (flow_keys_equal(&old_flow->key, &flow->key)) {
 			rcu_assign_pointer(*bucket, flow);
 			flow_deferred_free(old_flow);
 			retval = 1;
