@@ -426,14 +426,15 @@ dhcp_option_to_string(const struct dhcp_option *opt, int code, struct ds *ds)
 
     if (class->type == DHCP_ARG_STRING) {
         ds_put_char(ds, '"');
+        ds_put_printable(ds, opt->data, opt->n);
+        ds_put_char(ds, '"');
+        return ds_cstr(ds);
     }
     for (offset = 0; offset + type->size <= opt->n; offset += type->size) {
         const void *p = (const char *) opt->data + offset;
         const uint8_t *uint8 = p;
         const uint32_t *uint32 = p;
         const uint16_t *uint16 = p;
-        const char *cp = p;
-        unsigned char c;
 
         if (offset && class->type != DHCP_ARG_STRING) {
             ds_put_cstr(ds, class->type == DHCP_ARG_UINT8 ? ":" : ", ");
@@ -457,13 +458,7 @@ dhcp_option_to_string(const struct dhcp_option *opt, int code, struct ds *ds)
             put_duration(ds, ntohl(*uint32));
             break;
         case DHCP_ARG_STRING:
-            c = *cp;
-            if (isprint(c) && (!isspace(c) || c == ' ') && c != '\\') {
-                ds_put_char(ds, *cp);
-            } else {
-                ds_put_format(ds, "\\%03o", (int) c);
-            }
-            break;
+            NOT_REACHED();
         case DHCP_ARG_BOOLEAN:
             if (*uint8 == 0) {
                 ds_put_cstr(ds, "false");
@@ -474,9 +469,6 @@ dhcp_option_to_string(const struct dhcp_option *opt, int code, struct ds *ds)
             }
             break;
         }
-    }
-    if (class->type == DHCP_ARG_STRING) {
-        ds_put_char(ds, '"');
     }
     if (offset != opt->n) {
         if (offset) {

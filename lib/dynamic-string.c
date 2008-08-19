@@ -118,6 +118,20 @@ ds_put_format_valist(struct ds *ds, const char *format, va_list args_)
     }
 }
 
+void
+ds_put_printable(struct ds *ds, const char *s, size_t n) 
+{
+    ds_reserve(ds, ds->length + n);
+    while (n-- > 0) {
+        unsigned char c = *s++;
+        if (c < 0x20 || c > 0x7e || c == '\\' || c == '"') {
+            ds_put_format(ds, "\\%03o", (int) c);
+        } else {
+            ds_put_char(ds, c);
+        }
+    }
+}
+
 char *
 ds_cstr(struct ds *ds)
 {
