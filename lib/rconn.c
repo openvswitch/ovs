@@ -89,8 +89,14 @@ struct rconn {
     time_t backoff_deadline;
     time_t last_received;
     time_t last_connected;
-
     unsigned int packets_sent;
+
+    /* These values are simply for statistics reporting, not used directly by
+     * anything internal to the rconn (or the secchan for that matter). */
+    unsigned int packets_received;
+    unsigned int n_attempted_connections, n_successful_connections;
+    time_t creation_time;
+    unsigned long int total_time_connected;
 
     /* If we can't connect to the peer, it could be for any number of reasons.
      * Usually, one would assume it is because the peer is not running or
@@ -174,6 +180,12 @@ rconn_create(int probe_interval, int max_backoff)
 
     rc->packets_sent = 0;
 
+    rc->packets_received = 0;
+    rc->n_attempted_connections = 0;
+    rc->n_successful_connections = 0;
+    rc->creation_time = time_now();
+    rc->total_time_connected = 0;
+
     rc->questionable_connectivity = false;
     rc->last_questioned = time_now();
 
@@ -254,6 +266,7 @@ reconnect(struct rconn *rc)
     int retval;
 
     VLOG_WARN("%s: connecting...", rc->name);
+    rc->n_attempted_connections++;
     retval = vconn_open(rc->name, &rc->vconn);
     if (!retval) {
         rc->backoff_deadline = time_now() + rc->backoff;
@@ -291,6 +304,7 @@ run_CONNECTING(struct rconn *rc)
     int retval = vconn_connect(rc->vconn);
     if (!retval) {
         VLOG_WARN("%s: connected", rc->name);
+        rc->n_successful_connections++;
         if (vconn_is_passive(rc->vconn)) {
             error(0, "%s: passive vconn not supported", rc->name);
             state_transition(rc, S_VOID);
@@ -418,6 +432,7 @@ rconn_recv(struct rconn *rc)
         int error = vconn_recv(rc->vconn, &buffer);
         if (!error) {
             rc->last_received = time_now();
+            rc->packets_received++;
             if (rc->state == S_IDLE) {
                 state_transition(rc, S_ACTIVE);
             }
@@ -556,6 +571,60 @@ rconn_is_connectivity_questionable(struct rconn *rconn)
     rconn->questionable_connectivity = false;
     return questionable;
 }
+
+/* Returns the total number of packets successfully received by the underlying
+ * vconn.  */
+unsigned int
+rconn_packets_received(const struct rconn *rc)
+{
+    return rc->packets_received;
+}
+
+/* Returns a string representing the internal state of 'rc'.  The caller must
+ * not modify or free the string. */
+const char *
+rconn_get_state(const struct rconn *rc)
+{
+    return state_name(rc->state);
+}
+
+/* Returns the number of connection attempts made by 'rc', including any
+ * ongoing attempt that has not yet succeeded or failed. */
+unsigned int
+rconn_get_attempted_connections(const struct rconn *rc)
+{
+    return rc->n_attempted_connections;
+}
+
+/* Returns the number of successful connection attempts made by 'rc'. */
+unsigned int
+rconn_get_successful_connections(const struct rconn *rc)
+{
+    return rc->n_successful_connections;
+}
+
+/* Returns the time at which the last successful connection was made by
+ * 'rc'. */
+time_t
+rconn_get_last_connection(const struct rconn *rc)
+{
+    return rc->last_connected;
+}
+
+/* Returns the time at which 'rc' was created. */
+time_t
+rconn_get_creation_time(const struct rconn *rc)
+{
+    return rc->creation_time;
+}
+
+/* Returns the approximate number of seconds that 'rc' has been connected. */
+unsigned long int
+rconn_get_total_time_connected(const struct rconn *rc)
+{
+    return (rc->total_time_connected
+            + (rconn_is_connected(rc) ? elapsed_in_this_state(rc) : 0));
+}
 
 /* Tries to send a packet from 'rc''s send buffer.  Returns 0 if successful,
  * otherwise a positive errno value. */
@@ -668,6 +737,9 @@ timed_out(const struct rconn *rc)
 static void
 state_transition(struct rconn *rc, enum state state)
 {
+    if (rconn_is_connected(rc)) {
+        rc->total_time_connected += elapsed_in_this_state(rc);
+    }
     VLOG_DBG("%s: entering %s", rc->name, state_name(state));
     rc->state = state;
     rc->state_entered = time_now();
