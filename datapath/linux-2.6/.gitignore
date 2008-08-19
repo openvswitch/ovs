@@ -9,6 +9,8 @@
 /flow.c
 /forward.c
 /forward_t.c
+/genetlink.c
+/random32.c
 /table-hash.c
 /table-linear.c
 /table-mac.c
