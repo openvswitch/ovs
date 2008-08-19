@@ -75,7 +75,6 @@ struct netdev {
     int speed;
     int mtu;
     uint32_t features;
-    struct in_addr in4;
     struct in6_addr in6;
     int save_flags;             /* Initial device flags. */
     int changed_flags;          /* Flags that we changed. */
@@ -90,25 +89,6 @@ static void init_netdev(void);
 static int restore_flags(struct netdev *netdev);
 static int get_flags(const struct netdev *, int *flagsp);
 static int set_flags(struct netdev *, int flags);
-
-/* Obtains the IPv4 address for 'name' into 'in4'.  Returns true if
- * successful. */
-static bool
-get_ipv4_address(const char *name, struct in_addr *in4)
-{
-    struct ifreq ifr;
-
-    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
-    ifr.ifr_addr.sa_family = AF_INET;
-    if (ioctl(af_inet_sock, SIOCGIFADDR, &ifr) == 0) {
-        struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
-        *in4 = sin->sin_addr;
-    } else {
-        in4->s_addr = INADDR_ANY;
-    }
-
-    return true;
-}
 
 /* Obtains the IPv6 address for 'name' into 'in6'. */
 static void
@@ -228,7 +208,6 @@ netdev_open(const char *name, int ethertype, struct netdev **netdev_)
     struct ifreq ifr;
     unsigned int ifindex;
     uint8_t etheraddr[ETH_ADDR_LEN];
-    struct in_addr in4;
     struct in6_addr in6;
     int mtu;
     int error;
@@ -297,9 +276,6 @@ netdev_open(const char *name, int ethertype, struct netdev **netdev_)
     }
     mtu = ifr.ifr_mtu;
 
-    if (!get_ipv4_address(name, &in4)) {
-        goto error;
-    }
     get_ipv6_address(name, &in6);
 
     /* Allocate network device. */
@@ -309,7 +285,6 @@ netdev_open(const char *name, int ethertype, struct netdev **netdev_)
     netdev->fd = fd;
     memcpy(netdev->etheraddr, etheraddr, sizeof etheraddr);
     netdev->mtu = mtu;
-    netdev->in4 = in4;
     netdev->in6 = in6;
 
     /* Get speed, features. */
@@ -560,10 +535,22 @@ netdev_get_features(const struct netdev *netdev)
 bool
 netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
 {
-    if (in4) {
-        *in4 = netdev->in4; 
+    struct ifreq ifr;
+    struct in_addr ip = { INADDR_ANY };
+
+    strncpy(ifr.ifr_name, netdev->name, sizeof ifr.ifr_name);
+    ifr.ifr_addr.sa_family = AF_INET;
+    if (ioctl(af_inet_sock, SIOCGIFADDR, &ifr) == 0) {
+        struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
+        ip = sin->sin_addr;
+    } else {
+        VLOG_DBG("%s: ioctl(SIOCGIFADDR) failed: %s",
+                 netdev->name, strerror(errno));
     }
-    return netdev->in4.s_addr != INADDR_ANY;
+    if (in4) {
+        *in4 = ip;
+    }
+    return ip.s_addr != INADDR_ANY;
 }
 
 static void
@@ -605,12 +592,9 @@ netdev_set_in4(struct netdev *netdev, struct in_addr addr, struct in_addr mask)
 
     error = do_set_addr(netdev, af_inet_sock,
                         SIOCSIFADDR, "SIOCSIFADDR", addr);
-    if (!error) {
-        netdev->in4 = addr;
-        if (addr.s_addr != INADDR_ANY) {
-            error = do_set_addr(netdev, af_inet_sock,
-                                SIOCSIFNETMASK, "SIOCSIFNETMASK", mask);
-        }
+    if (!error && addr.s_addr != INADDR_ANY) {
+        error = do_set_addr(netdev, af_inet_sock,
+                            SIOCSIFNETMASK, "SIOCSIFNETMASK", mask);
     }
     return error;
 }
