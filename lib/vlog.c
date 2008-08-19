@@ -320,28 +320,23 @@ vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
         const char *level_name = vlog_get_level_name(level);
         time_t now;
         struct tm tm;
-        va_list args;
-        char s[1024];
-        size_t len, time_len;
+        size_t time_len;
+        struct ds s;
 
         now = time_now();
         localtime_r(&now, &tm);
 
-        len = time_len = strftime(s, sizeof s, "%b %d %H:%M:%S|", &tm);
-        len += sprintf(s + len, "%05d|%s|%s:",
-                       ++msg_num, module_name, level_name);
-        va_start(args, message);
-        len += vsnprintf(s + len, sizeof s - len, message, args);
-        va_end(args);
-        if (len >= sizeof s) {
-            len = sizeof s;
-        }
-        if (s[len - 1] == '\n') {
-            s[len - 1] = '\0';
-        }
+        /* Compose log message. */
+        ds_init(&s);
+        ds_reserve(&s, 1024);
+        ds_put_strftime(&s, "%b %d %H:%M:%S|", &tm);
+        time_len = s.length;
+        ds_put_format(&s, "%05d|%s|%s:", ++msg_num, module_name, level_name);
+        ds_put_format_valist(&s, message, args);
+        ds_chomp(&s, '\n');
 
         if (log_console) {
-            fprintf(stderr, "%s\n", s);
+            fprintf(stderr, "%s\n", s.string);
         }
 
         if (log_syslog) {
@@ -354,11 +349,13 @@ vlog(enum vlog_module module, enum vlog_level level, const char *message, ...)
             char *save_ptr = NULL;
             char *line;
 
-            for (line = strtok_r(s + time_len, "\n", &save_ptr); line != NULL;
+            for (line = strtok_r(&s.string[time_len], "\n", &save_ptr); line;
                  line = strtok_r(NULL, "\n", &save_ptr)) {
                 syslog(syslog_levels[level], "%s", line);
             }
         }
+
+        ds_destroy(&s);
         errno = save_errno;
     }
 }
