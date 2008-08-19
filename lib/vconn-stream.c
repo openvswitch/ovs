@@ -63,6 +63,8 @@ struct stream_vconn
 
 static struct vconn_class stream_vconn_class;
 
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 25);
+
 int
 new_stream_vconn(const char *name, int fd, int connect_status,
                  uint32_t ip, struct vconn **vconnp)
@@ -124,7 +126,8 @@ again:
         struct ofp_header *oh = rx->data;
         size_t length = ntohs(oh->length);
         if (length < sizeof(struct ofp_header)) {
-            VLOG_ERR("received too-short ofp_header (%zu bytes)", length);
+            VLOG_ERR_RL(&rl, "received too-short ofp_header (%zu bytes)",
+                        length);
             return EPROTO;
         }
         want_bytes = length - rx->size;
@@ -151,7 +154,7 @@ again:
         return EAGAIN;
     } else if (retval == 0) {
         if (rx->size) {
-            VLOG_ERR("connection dropped mid-packet");
+            VLOG_ERR_RL(&rl, "connection dropped mid-packet");
             return EPROTO;
         } else {
             return EOF;
@@ -177,7 +180,7 @@ stream_do_tx(int fd UNUSED, short int revents UNUSED, void *vconn_)
     ssize_t n = write(s->fd, s->txbuf->data, s->txbuf->size);
     if (n < 0) {
         if (errno != EAGAIN) {
-            VLOG_ERR("send: %s", strerror(errno));
+            VLOG_ERR_RL(&rl, "send: %s", strerror(errno));
             stream_clear_txbuf(s);
             return;
         }
@@ -323,7 +326,7 @@ pstream_accept(struct vconn *vconn, struct vconn **new_vconnp)
     if (new_fd < 0) {
         int retval = errno;
         if (retval != EAGAIN) {
-            VLOG_DBG("accept: %s", strerror(retval));
+            VLOG_DBG_RL(&rl, "accept: %s", strerror(retval));
         }
         return retval;
     }

@@ -145,6 +145,10 @@ static SSL_CTX *ctx;
 /* Required configuration. */
 static bool has_private_key, has_certificate, has_ca_cert;
 
+/* Who knows what can trigger various SSL errors, so let's throttle them down
+ * quite a bit. */
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 25);
+
 static int ssl_init(void);
 static int do_ssl_init(void);
 static bool ssl_wants_io(int ssl_error);
@@ -368,11 +372,11 @@ interpret_ssl_error(const char *function, int ret, int error,
 
     switch (error) {
     case SSL_ERROR_NONE:
-        VLOG_ERR("%s: unexpected SSL_ERROR_NONE", function);
+        VLOG_ERR_RL(&rl, "%s: unexpected SSL_ERROR_NONE", function);
         break;
 
     case SSL_ERROR_ZERO_RETURN:
-        VLOG_ERR("%s: unexpected SSL_ERROR_ZERO_RETURN", function);
+        VLOG_ERR_RL(&rl, "%s: unexpected SSL_ERROR_ZERO_RETURN", function);
         break;
 
     case SSL_ERROR_WANT_READ:
@@ -384,15 +388,16 @@ interpret_ssl_error(const char *function, int ret, int error,
         return EAGAIN;
 
     case SSL_ERROR_WANT_CONNECT:
-        VLOG_ERR("%s: unexpected SSL_ERROR_WANT_CONNECT", function);
+        VLOG_ERR_RL(&rl, "%s: unexpected SSL_ERROR_WANT_CONNECT", function);
         break;
 
     case SSL_ERROR_WANT_ACCEPT:
-        VLOG_ERR("%s: unexpected SSL_ERROR_WANT_ACCEPT", function);
+        VLOG_ERR_RL(&rl, "%s: unexpected SSL_ERROR_WANT_ACCEPT", function);
         break;
 
     case SSL_ERROR_WANT_X509_LOOKUP:
-        VLOG_ERR("%s: unexpected SSL_ERROR_WANT_X509_LOOKUP", function);
+        VLOG_ERR_RL(&rl, "%s: unexpected SSL_ERROR_WANT_X509_LOOKUP",
+                    function);
         break;
 
     case SSL_ERROR_SYSCALL: {
@@ -400,14 +405,17 @@ interpret_ssl_error(const char *function, int ret, int error,
         if (queued_error == 0) {
             if (ret < 0) {
                 int status = errno;
-                VLOG_WARN("%s: system error (%s)", function, strerror(status));
+                VLOG_WARN_RL(&rl, "%s: system error (%s)",
+                             function, strerror(status));
                 return status;
             } else {
-                VLOG_WARN("%s: unexpected SSL connection close", function);
+                VLOG_WARN_RL(&rl, "%s: unexpected SSL connection close",
+                             function);
                 return EPROTO;
             }
         } else {
-            VLOG_DBG("%s: %s", function, ERR_error_string(queued_error, NULL));
+            VLOG_DBG_RL(&rl, "%s: %s",
+                        function, ERR_error_string(queued_error, NULL));
             break;
         }
     }
@@ -415,15 +423,17 @@ interpret_ssl_error(const char *function, int ret, int error,
     case SSL_ERROR_SSL: {
         int queued_error = ERR_get_error();
         if (queued_error != 0) {
-            VLOG_DBG("%s: %s", function, ERR_error_string(queued_error, NULL));
+            VLOG_DBG_RL(&rl, "%s: %s",
+                        function, ERR_error_string(queued_error, NULL));
         } else {
-            VLOG_ERR("%s: SSL_ERROR_SSL without queued error", function);
+            VLOG_ERR_RL(&rl, "%s: SSL_ERROR_SSL without queued error",
+                        function);
         }
         break;
     }
 
     default:
-        VLOG_ERR("%s: bad SSL error code %d", function, error);
+        VLOG_ERR_RL(&rl, "%s: bad SSL error code %d", function, error);
         break;
     }
     return EIO;
@@ -450,7 +460,8 @@ again:
         struct ofp_header *oh = rx->data;
         size_t length = ntohs(oh->length);
         if (length < sizeof(struct ofp_header)) {
-            VLOG_ERR("received too-short ofp_header (%zu bytes)", length);
+            VLOG_ERR_RL(&rl, "received too-short ofp_header (%zu bytes)",
+                        length);
             return EPROTO;
         }
         want_bytes = length - rx->size;
@@ -493,7 +504,7 @@ again:
         if (error == SSL_ERROR_ZERO_RETURN) {
             /* Connection closed (EOF). */
             if (rx->size) {
-                VLOG_WARN("SSL_read: unexpected connection close");
+                VLOG_WARN_RL(&rl, "SSL_read: unexpected connection close");
                 return EPROTO;
             } else {
                 return EOF;
@@ -541,7 +552,7 @@ ssl_do_tx(struct vconn *vconn)
         } else {
             int ssl_error = SSL_get_error(sslv->ssl, ret);
             if (ssl_error == SSL_ERROR_ZERO_RETURN) {
-                VLOG_WARN("SSL_write: connection closed");
+                VLOG_WARN_RL(&rl, "SSL_write: connection closed");
                 return EPIPE;
             } else {
                 return interpret_ssl_error("SSL_write", ret, ssl_error,
@@ -749,7 +760,7 @@ pssl_accept(struct vconn *vconn, struct vconn **new_vconnp)
     if (new_fd < 0) {
         int error = errno;
         if (error != EAGAIN) {
-            VLOG_DBG("accept: %s", strerror(error));
+            VLOG_DBG_RL(&rl, "accept: %s", strerror(error));
         }
         return error;
     }
@@ -865,7 +876,8 @@ tmp_dh_callback(SSL *ssl, int is_export UNUSED, int keylength)
             return dh->dh;
         }
     }
-    VLOG_ERR("no Diffie-Hellman parameters for key length %d", keylength);
+    VLOG_ERR_RL(&rl, "no Diffie-Hellman parameters for key length %d",
+                keylength);
     return NULL;
 }
 

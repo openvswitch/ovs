@@ -54,6 +54,9 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_dpif
 
+/* Not really much point in logging many dpif errors. */
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 60);
+
 /* The Generic Netlink family number used for OpenFlow. */
 static int openflow_family;
 
@@ -142,18 +145,18 @@ dpif_recv_openflow(struct dpif *dp, struct buffer **bufferp,
                      || nl_msg_nlmsghdr(buffer)->nlmsg_type == NLMSG_DONE)));
     if (retval) {
         if (retval != EAGAIN) {
-            VLOG_WARN("dpif_recv_openflow: %s", strerror(retval)); 
+            VLOG_WARN_RL(&rl, "dpif_recv_openflow: %s", strerror(retval)); 
         }
         return retval;
     }
 
     if (nl_msg_genlmsghdr(buffer) == NULL) {
-        VLOG_DBG("received packet too short for Generic Netlink");
+        VLOG_DBG_RL(&rl, "received packet too short for Generic Netlink");
         goto error;
     }
     if (nl_msg_nlmsghdr(buffer)->nlmsg_type != openflow_family) {
-        VLOG_DBG("received type (%"PRIu16") != openflow family (%d)",
-                 nl_msg_nlmsghdr(buffer)->nlmsg_type, openflow_family);
+        VLOG_DBG_RL(&rl, "received type (%"PRIu16") != openflow family (%d)",
+                    nl_msg_nlmsghdr(buffer)->nlmsg_type, openflow_family);
         goto error;
     }
 
@@ -162,8 +165,9 @@ dpif_recv_openflow(struct dpif *dp, struct buffer **bufferp,
         goto error;
     }
     if (nl_attr_get_u32(attrs[DP_GENL_A_DP_IDX]) != dp->dp_idx) {
-        VLOG_WARN("received dp_idx (%"PRIu32") differs from expected (%d)",
-                  nl_attr_get_u32(attrs[DP_GENL_A_DP_IDX]), dp->dp_idx);
+        VLOG_WARN_RL(&rl, "received dp_idx (%"PRIu32") differs from expected "
+                     "(%d)", nl_attr_get_u32(attrs[DP_GENL_A_DP_IDX]),
+                     dp->dp_idx);
         goto error;
     }
 
@@ -171,8 +175,9 @@ dpif_recv_openflow(struct dpif *dp, struct buffer **bufferp,
     buffer->size = nl_attr_get_size(attrs[DP_GENL_A_OPENFLOW]);
     ofp_len = ntohs(oh->length);
     if (ofp_len != buffer->size) {
-        VLOG_WARN("ofp_header.length %"PRIu16" != attribute length %zu\n",
-                  ofp_len, buffer->size);
+        VLOG_WARN_RL(&rl,
+                     "ofp_header.length %"PRIu16" != attribute length %zu\n",
+                     ofp_len, buffer->size);
         buffer->size = MIN(ofp_len, buffer->size);
     }
     *bufferp = buffer;
@@ -234,7 +239,7 @@ dpif_send_openflow(struct dpif *dp, struct buffer *buffer, bool wait)
     }
     retval = nl_sock_sendv(dp->sock, iov, n_iov, false);
     if (retval && retval != EAGAIN) {
-        VLOG_WARN("dpif_send_openflow: %s", strerror(retval));
+        VLOG_WARN_RL(&rl, "dpif_send_openflow: %s", strerror(retval));
     }
     return retval;
 }

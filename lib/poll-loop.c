@@ -146,7 +146,8 @@ poll_block(void)
 
     retval = time_poll(pollfds, n_pollfds, timeout);
     if (retval < 0) {
-        VLOG_ERR("poll: %s", strerror(-retval));
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_ERR_RL(&rl, "poll: %s", strerror(-retval));
     }
 
     for (node = waiters.next; node != &waiters; ) {

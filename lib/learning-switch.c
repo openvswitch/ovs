@@ -68,6 +68,10 @@ struct lswitch {
     int n_queued;
 };
 
+/* The log messages here could actually be useful in debugging, so keep the
+ * rate limit relatively high. */
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
+
 static void queue_tx(struct lswitch *, struct rconn *, struct buffer *);
 static void send_features_request(struct lswitch *, struct rconn *);
 static void process_packet_in(struct lswitch *, struct rconn *,
@@ -124,9 +128,10 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
 
     oh = msg->data;
     if (msg->size < min_size[oh->type]) {
-        VLOG_WARN("%s: too short (%zu bytes) for type %"PRIu8" (min %zu)",
-                  rconn_get_name(rconn),
-                  msg->size, oh->type, min_size[oh->type]);
+        VLOG_WARN_RL(&rl,
+                     "%s: too short (%zu bytes) for type %"PRIu8" (min %zu)",
+                     rconn_get_name(rconn),
+                     msg->size, oh->type, min_size[oh->type]);
         return;
     }
 
@@ -142,7 +147,7 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
     } else {
         if (VLOG_IS_DBG_ENABLED()) {
             char *p = ofp_to_string(msg->data, msg->size, 2);
-            VLOG_DBG("OpenFlow packet ignored: %s", p);
+            VLOG_DBG_RL(&rl, "OpenFlow packet ignored: %s", p);
             free(p);
         }
     }
@@ -185,15 +190,12 @@ static void
 queue_tx(struct lswitch *sw, struct rconn *rconn, struct buffer *b)
 {
     int retval = rconn_send_with_limit(rconn, b, &sw->n_queued, 10);
-    if (retval) {
+    if (retval && retval != ENOTCONN) {
         if (retval == EAGAIN) {
-            /* FIXME: ratelimit. */
-            VLOG_WARN("%s: tx queue overflow", rconn_get_name(rconn));
-        } else if (retval == ENOTCONN) {
-            /* Ignore. */
+            VLOG_WARN_RL(&rl, "%s: tx queue overflow", rconn_get_name(rconn));
         } else {
-            /* FIXME: ratelimit. */
-            VLOG_WARN("%s: send: %s", rconn_get_name(rconn), strerror(retval));
+            VLOG_WARN_RL(&rl, "%s: send: %s",
+                         rconn_get_name(rconn), strerror(retval));
         }
     }
 }
@@ -218,9 +220,9 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
 
     if (sw->ml) {
         if (mac_learning_learn(sw->ml, flow.dl_src, in_port)) {
-            VLOG_DBG("learned that "ETH_ADDR_FMT" is on datapath %"
-                     PRIx64" port %"PRIu16, ETH_ADDR_ARGS(flow.dl_src),
-                     ntohll(sw->datapath_id), in_port);
+            VLOG_DBG_RL(&rl, "learned that "ETH_ADDR_FMT" is on datapath %"
+                        PRIx64" port %"PRIu16, ETH_ADDR_ARGS(flow.dl_src),
+                        ntohll(sw->datapath_id), in_port);
         }
         out_port = mac_learning_lookup(sw->ml, flow.dl_dst);
     }

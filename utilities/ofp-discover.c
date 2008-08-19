@@ -272,12 +272,13 @@ modify_dhcp_request(struct dhcp_msg *msg, void *aux)
 static bool
 validate_dhcp_offer(const struct dhcp_msg *msg, void *aux)
 {
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
     char *vconn_name;
     bool accept;
 
     vconn_name = dhcp_msg_get_string(msg, DHCP_CODE_OFP_CONTROLLER_VCONN);
     if (!vconn_name) {
-        VLOG_WARN("rejecting DHCP offer missing controller vconn");
+        VLOG_WARN_RL(&rl, "rejecting DHCP offer missing controller vconn");
         return false;
     }
     accept = !regexec(&accept_controller_regex, vconn_name, 0, NULL, 0);

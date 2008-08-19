@@ -65,6 +65,11 @@ static struct vconn_class *vconn_classes[] = {
     &punix_vconn_class,
 };
 
+/* High rate limit because most of the rate-limiting here is individual
+ * OpenFlow messages going over the vconn.  If those are enabled then we
+ * really need to see them. */
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(600, 600);
+
 /* Check the validity of the vconn class structures. */
 static void
 check_vconn_classes(void)
@@ -282,15 +287,15 @@ vconn_recv(struct vconn *vconn, struct buffer **msgp)
 
             if (VLOG_IS_DBG_ENABLED()) {
                 char *s = ofp_to_string((*msgp)->data, (*msgp)->size, 1);
-                VLOG_DBG("received: %s", s);
+                VLOG_DBG_RL(&rl, "received: %s", s);
                 free(s);
             }
 
             oh = buffer_at_assert(*msgp, 0, sizeof *oh);
             if (oh->version != OFP_VERSION) {
-                VLOG_ERR("received OpenFlow version %02"PRIx8" "
-                         "!= expected %02x",
-                         oh->version, OFP_VERSION);
+                VLOG_ERR_RL(&rl, "received OpenFlow version %02"PRIx8" "
+                            "!= expected %02x",
+                            oh->version, OFP_VERSION);
                 buffer_delete(*msgp);
                 *msgp = NULL;
                 return EPROTO;
@@ -327,7 +332,7 @@ vconn_send(struct vconn *vconn, struct buffer *msg)
             char *s = ofp_to_string(msg->data, msg->size, 1);
             retval = (vconn->class->send)(vconn, msg);
             if (retval != EAGAIN) {
-                VLOG_DBG("sent (%s): %s", strerror(retval), s);
+                VLOG_DBG_RL(&rl, "sent (%s): %s", strerror(retval), s);
             }
             free(s);
         }
@@ -342,7 +347,6 @@ vconn_send_block(struct vconn *vconn, struct buffer *msg)
     int retval;
     while ((retval = vconn_send(vconn, msg)) == EAGAIN) {
         vconn_send_wait(vconn);
-        VLOG_DBG("blocking on vconn send");
         poll_block();
     }
     return retval;
@@ -355,7 +359,6 @@ vconn_recv_block(struct vconn *vconn, struct buffer **msgp)
     int retval;
     while ((retval = vconn_recv(vconn, msgp)) == EAGAIN) {
         vconn_recv_wait(vconn);
-        VLOG_DBG("blocking on vconn receive");
         poll_block();
     }
     return retval;
@@ -394,8 +397,8 @@ vconn_transact(struct vconn *vconn, struct buffer *request,
             return 0;
         }
 
-        VLOG_DBG("received reply with xid %08"PRIx32" != expected %08"PRIx32,
-                 recv_xid, send_xid);
+        VLOG_DBG_RL(&rl, "received reply with xid %08"PRIx32" != expected "
+                    "%08"PRIx32, recv_xid, send_xid);
         buffer_delete(reply);
     }
 }

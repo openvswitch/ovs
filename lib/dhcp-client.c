@@ -73,6 +73,8 @@ enum dhclient_state {
 #undef DHCLIENT_STATE
 };
 
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
+
 static const char *
 state_name(enum dhclient_state state)
 {
@@ -541,14 +543,15 @@ dhcp_receive(struct dhclient *cli, unsigned int msgs, struct dhcp_msg *msg)
 {
     while (do_receive_msg(cli, msg)) {
         if (msg->type < 0 || msg->type > 31 || !((1u << msg->type) & msgs)) {
-            VLOG_DBG("received unexpected %s in %s state: %s",
-                     dhcp_type_name(msg->type), state_name(cli->state),
-                     dhcp_msg_to_string(msg, false, &cli->s));
+            VLOG_DBG_RL(&rl, "received unexpected %s in %s state: %s",
+                        dhcp_type_name(msg->type), state_name(cli->state),
+                        dhcp_msg_to_string(msg, false, &cli->s));
         } else if (msg->xid != cli->xid) {
-            VLOG_DBG("ignoring %s with xid != %08"PRIx32" in %s state: %s",
-                     dhcp_type_name(msg->type), msg->xid,
-                     state_name(cli->state),
-                     dhcp_msg_to_string(msg, false, &cli->s));
+            VLOG_DBG_RL(&rl,
+                        "ignoring %s with xid != %08"PRIx32" in %s state: %s",
+                        dhcp_type_name(msg->type), msg->xid,
+                        state_name(cli->state),
+                        dhcp_msg_to_string(msg, false, &cli->s));
         } else {
             return true;
         }
@@ -562,18 +565,18 @@ validate_offered_options(struct dhclient *cli, const struct dhcp_msg *msg)
 {
     uint32_t lease, netmask;
     if (!dhcp_msg_get_secs(msg, DHCP_CODE_LEASE_TIME, 0, &lease)) {
-        VLOG_WARN("%s lacks lease time: %s", dhcp_type_name(msg->type),
-                  dhcp_msg_to_string(msg, false, &cli->s));
+        VLOG_WARN_RL(&rl, "%s lacks lease time: %s", dhcp_type_name(msg->type),
+                     dhcp_msg_to_string(msg, false, &cli->s));
     } else if (!dhcp_msg_get_ip(msg, DHCP_CODE_SUBNET_MASK, 0, &netmask)) {
-        VLOG_WARN("%s lacks netmask: %s", dhcp_type_name(msg->type),
-                  dhcp_msg_to_string(msg, false, &cli->s));
+        VLOG_WARN_RL(&rl, "%s lacks netmask: %s", dhcp_type_name(msg->type),
+                     dhcp_msg_to_string(msg, false, &cli->s));
     } else if (lease < MIN_ACCEPTABLE_LEASE) {
-        VLOG_WARN("Ignoring %s with %"PRIu32"-second lease time: %s",
-                  dhcp_type_name(msg->type), lease,
-                  dhcp_msg_to_string(msg, false, &cli->s));
+        VLOG_WARN_RL(&rl, "Ignoring %s with %"PRIu32"-second lease time: %s",
+                     dhcp_type_name(msg->type), lease,
+                     dhcp_msg_to_string(msg, false, &cli->s));
     } else if (cli->validate_offer && !cli->validate_offer(msg, cli->aux)) {
-        VLOG_DBG("client validation hook refused offer: %s",
-                 dhcp_msg_to_string(msg, false, &cli->s));
+        VLOG_DBG_RL(&rl, "client validation hook refused offer: %s",
+                    dhcp_msg_to_string(msg, false, &cli->s));
     } else {
         return true;
     }
@@ -596,13 +599,13 @@ dhclient_run_SELECTING(struct dhclient *cli)
         }
         if (!dhcp_msg_get_ip(&msg, DHCP_CODE_SERVER_IDENTIFIER,
                              0, &cli->server_ip)) {
-            VLOG_WARN("DHCPOFFER lacks server identifier: %s",
-                      dhcp_msg_to_string(&msg, false, &cli->s));
+            VLOG_WARN_RL(&rl, "DHCPOFFER lacks server identifier: %s",
+                         dhcp_msg_to_string(&msg, false, &cli->s));
             continue;
         }
 
-        VLOG_DBG("accepting DHCPOFFER: %s",
-                 dhcp_msg_to_string(&msg, false, &cli->s));
+        VLOG_DBG_RL(&rl, "accepting DHCPOFFER: %s",
+                    dhcp_msg_to_string(&msg, false, &cli->s));
         cli->ipaddr = msg.yiaddr;
         state_transition(cli, S_REQUESTING);
         break;
@@ -901,20 +904,21 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
         ip = b.l3;
         if (IP_IS_FRAGMENT(ip->ip_frag_off)) {
             /* We don't do reassembly. */
-            VLOG_WARN("ignoring fragmented DHCP datagram");
+            VLOG_WARN_RL(&rl, "ignoring fragmented DHCP datagram");
             continue;
         }
 
         dhcp = b.l7;
         if (!dhcp) {
-            VLOG_WARN("ignoring DHCP datagram with missing payload");
+            VLOG_WARN_RL(&rl, "ignoring DHCP datagram with missing payload");
             continue;
         }
 
         buffer_pull(&b, b.l7 - b.data);
         error = dhcp_parse(msg, &b);
         if (!error) {
-            VLOG_DBG("received %s", dhcp_msg_to_string(msg, false, &cli->s));
+            VLOG_DBG_RL(&rl, "received %s",
+                        dhcp_msg_to_string(msg, false, &cli->s));
             buffer_uninit(&b);
             return true;
         }

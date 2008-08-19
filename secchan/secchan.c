@@ -128,6 +128,8 @@ struct hook {
     void *aux;
 };
 
+static struct vlog_rate_limit vrl = VLOG_RATE_LIMIT_INIT(60, 60);
+
 static void parse_options(int argc, char *argv[], struct settings *);
 static void usage(void) NO_RETURN;
 
@@ -353,7 +355,7 @@ relay_accept(const struct settings *s, struct vconn *listen_vconn)
     retval = vconn_accept(listen_vconn, &new_remote);
     if (retval) {
         if (retval != EAGAIN) {
-            VLOG_WARN("accept failed (%s)", strerror(retval));
+            VLOG_WARN_RL(&vrl, "accept failed (%s)", strerror(retval));
         }
         return NULL;
     }
@@ -367,8 +369,8 @@ relay_accept(const struct settings *s, struct vconn *listen_vconn)
     nl_name_without_subscription = xasprintf("%s:0", s->nl_name);
     retval = vconn_open(nl_name_without_subscription, &new_local);
     if (retval) {
-        VLOG_ERR("could not connect to %s (%s)",
-                 nl_name_without_subscription, strerror(retval));
+        VLOG_ERR_RL(&vrl, "could not connect to %s (%s)",
+                    nl_name_without_subscription, strerror(retval));
         vconn_close(new_remote);
         free(nl_name_without_subscription);
         return NULL;
@@ -582,7 +584,8 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
         return false;
     }
     if (msg->size < offsetof(struct ofp_packet_in, data)) {
-        VLOG_WARN("packet too short (%zu bytes) for packet_in", msg->size);
+        VLOG_WARN_RL(&vrl, "packet too short (%zu bytes) for packet_in",
+                     msg->size);
         return false;
     }
 
@@ -604,8 +607,8 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
         /* Sent to secure channel. */
         out_port = OFPP_LOCAL;
         if (mac_learning_learn(in_band->ml, flow.dl_src, in_port)) {
-            VLOG_DBG("learned that "ETH_ADDR_FMT" is on port %"PRIu16,
-                     ETH_ADDR_ARGS(flow.dl_src), in_port);
+            VLOG_DBG_RL(&vrl, "learned that "ETH_ADDR_FMT" is on port %"PRIu16,
+                        ETH_ADDR_ARGS(flow.dl_src), in_port);
         }
     } else if (flow.dl_type == htons(ETH_TYPE_ARP)
                && eth_addr_is_broadcast(flow.dl_dst)
@@ -900,7 +903,8 @@ rate_limit_packet_cb(struct relay *r, int half, void *rl_)
         return false;
     }
     if (msg->size < offsetof(struct ofp_packet_in, data)) {
-        VLOG_WARN("packet too short (%zu bytes) for packet_in", msg->size);
+        VLOG_WARN_RL(&vrl, "packet too short (%zu bytes) for packet_in",
+                     msg->size);
         return false;
     }
 
@@ -1036,7 +1040,8 @@ switch_status_packet_cb(struct relay *r, int half, void *ss_)
         return false;
     }
     if (msg->size < sizeof(struct ofp_stats_request)) {
-        VLOG_WARN("packet too short (%zu bytes) for stats_request", msg->size);
+        VLOG_WARN_RL(&vrl, "packet too short (%zu bytes) for stats_request",
+                     msg->size);
         return false;
     }
 
@@ -1317,13 +1322,13 @@ validate_dhcp_offer(const struct dhcp_msg *msg, void *s_)
 
     vconn_name = dhcp_msg_get_string(msg, DHCP_CODE_OFP_CONTROLLER_VCONN);
     if (!vconn_name) {
-        VLOG_WARN("rejecting DHCP offer missing controller vconn");
+        VLOG_WARN_RL(&vrl, "rejecting DHCP offer missing controller vconn");
         return false;
     }
     accept = !regexec(&s->accept_controller_regex, vconn_name, 0, NULL, 0);
     if (!accept) {
-        VLOG_WARN("rejecting controller vconn that fails to match %s",
-                  s->accept_controller_re);
+        VLOG_WARN_RL(&vrl, "rejecting controller vconn that fails to match %s",
+                     s->accept_controller_re);
     }
     free(vconn_name);
     return accept;

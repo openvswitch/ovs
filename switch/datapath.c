@@ -139,6 +139,8 @@ struct datapath {
     struct list port_list; /* List of ports, for flooding. */
 };
 
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
+
 static struct remote *remote_create(struct datapath *, struct rconn *);
 static void remote_run(struct datapath *, struct remote *);
 static void remote_wait(struct remote *);
@@ -331,8 +333,8 @@ dp_run(struct datapath *dp)
             fwd_port_input(dp, buffer, port_no(dp, p));
             buffer = NULL;
         } else if (error != EAGAIN) {
-            VLOG_ERR("error receiving data from %s: %s",
-                     netdev_get_name(p->netdev), strerror(error));
+            VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
+                        netdev_get_name(p->netdev), strerror(error));
         }
     }
     buffer_delete(buffer);
@@ -349,7 +351,7 @@ dp_run(struct datapath *dp)
             retval = vconn_accept(dp->listen_vconn, &new_vconn);
             if (retval) {
                 if (retval != EAGAIN) {
-                    VLOG_WARN("accept failed (%s)", strerror(retval));
+                    VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
                 }
                 break;
             }
@@ -385,7 +387,7 @@ remote_run(struct datapath *dp, struct remote *r)
                 sender.xid = oh->xid;
                 fwd_control_input(dp, &sender, buffer->data, buffer->size);
             } else {
-                VLOG_WARN("received too-short OpenFlow message");
+                VLOG_WARN_RL(&rl, "received too-short OpenFlow message");
             }
             buffer_delete(buffer); 
         } else {
@@ -393,7 +395,8 @@ remote_run(struct datapath *dp, struct remote *r)
                 int error = r->cb_dump(dp, r->cb_aux);
                 if (error <= 0) {
                     if (error) {
-                        VLOG_WARN("dump callback error: %s", strerror(-error));
+                        VLOG_WARN_RL(&rl, "dump callback error: %s",
+                                     strerror(-error));
                     }
                     r->cb_done(r->cb_aux);
                     r->cb_dump = NULL;
@@ -555,8 +558,7 @@ output_packet(struct datapath *dp, struct buffer *buffer, int out_port)
     }
 
     buffer_delete(buffer);
-    /* FIXME: ratelimit */
-    VLOG_DBG("can't forward to bad port %d\n", out_port);
+    VLOG_DBG_RL(&rl, "can't forward to bad port %d\n", out_port);
 }
 
 /* Takes ownership of 'buffer' and transmits it to 'out_port' on 'dp'.
@@ -581,8 +583,7 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
         }
     } else {
         if (in_port == out_port) {
-            /* FIXME: ratelimit */
-            VLOG_DBG("can't directly forward to input port");
+            VLOG_DBG_RL(&rl, "can't directly forward to input port");
             return;
         }
         output_packet(dp, buffer, out_port);
@@ -610,8 +611,8 @@ send_openflow_buffer(struct datapath *dp, struct buffer *buffer,
               ? rconn_send(rconn, buffer, &remote->n_txq)
               : EAGAIN);
     if (retval) {
-        VLOG_WARN("send to %s failed: %s",
-                  rconn_get_name(rconn), strerror(retval));
+        VLOG_WARN_RL(&rl, "send to %s failed: %s",
+                     rconn_get_name(rconn), strerror(retval));
         buffer_delete(buffer);
     }
     return retval;
@@ -746,8 +747,8 @@ update_port_status(struct sw_port *p)
     uint32_t orig_status = p->status;
 
     if (netdev_get_flags(p->netdev, &flags) < 0) {
-        VLOG_WARN("could not get netdev flags for %s", 
-                  netdev_get_name(p->netdev));
+        VLOG_WARN_RL(&rl, "could not get netdev flags for %s", 
+                     netdev_get_name(p->netdev));
         return 0;
     } else {
         if (flags & NETDEV_UP) {
@@ -1110,7 +1111,7 @@ recv_packet_out(struct datapath *dp, const struct sender *sender UNUSED,
     int act_len = n_actions * sizeof opo->actions[0];
 
     if (act_len > (ntohs(opo->header.length) - sizeof *opo)) {
-        VLOG_DBG("message too short for number of actions");
+        VLOG_DBG_RL(&rl, "message too short for number of actions");
         return -EINVAL;
     }
 
@@ -1574,7 +1575,7 @@ recv_stats_request(struct datapath *dp, const struct sender *sender,
 
     type = ntohs(rq->type);
     if (type >= ARRAY_SIZE(stats) || !stats[type].dump) {
-        VLOG_WARN("received stats request of unknown type %d", type);
+        VLOG_WARN_RL(&rl, "received stats request of unknown type %d", type);
         return -EINVAL;
     }
 
@@ -1587,8 +1588,8 @@ recv_stats_request(struct datapath *dp, const struct sender *sender,
     
     body_len = rq_len - offsetof(struct ofp_stats_request, body);
     if (body_len < cb->s->min_body || body_len > cb->s->max_body) {
-        VLOG_WARN("stats request type %d with bad body length %d",
-                  type, body_len);
+        VLOG_WARN_RL(&rl, "stats request type %d with bad body length %d",
+                     type, body_len);
         err = -EINVAL;
         goto error;
     }
@@ -1596,8 +1597,9 @@ recv_stats_request(struct datapath *dp, const struct sender *sender,
     if (cb->s->init) {
         err = cb->s->init(dp, rq->body, body_len, &cb->state);
         if (err) {
-            VLOG_WARN("failed initialization of stats request type %d: %s",
-                      type, strerror(-err));
+            VLOG_WARN_RL(&rl,
+                         "failed initialization of stats request type %d: %s",
+                         type, strerror(-err));
             goto error;
         }
     }

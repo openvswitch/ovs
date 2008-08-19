@@ -80,10 +80,15 @@ struct netdev {
     int changed_flags;          /* Flags that we changed. */
 };
 
+/* All open network devices. */
 static struct list netdev_list = LIST_INITIALIZER(&netdev_list);
 
 /* An AF_INET socket (used for ioctl operations). */
 static int af_inet_sock = -1;
+
+/* This is set pretty low because we probably won't learn anything from the
+ * additional log messages. */
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 static void init_netdev(void);
 static int restore_flags(struct netdev *netdev);
@@ -372,8 +377,8 @@ netdev_recv(struct netdev *netdev, struct buffer *buffer)
     } while (n_bytes < 0 && errno == EINTR);
     if (n_bytes < 0) {
         if (errno != EAGAIN) {
-            VLOG_WARN("error receiving Ethernet packet on %s: %s",
-                      strerror(errno), netdev->name);
+            VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
+                         strerror(errno), netdev->name);
         }
         return errno;
     } else {
@@ -421,8 +426,8 @@ netdev_send(struct netdev *netdev, const struct buffer *buffer)
 
     /* Pull out the Ethernet header. */
     if (buffer->size < ETH_HEADER_LEN) {
-        VLOG_WARN("cannot send %zu-byte frame on %s",
-                  buffer->size, netdev->name);
+        VLOG_WARN_RL(&rl, "cannot send %zu-byte frame on %s",
+                     buffer->size, netdev->name);
         return EMSGSIZE;
     }
     eh = buffer_at_assert(buffer, 0, sizeof *eh);
@@ -438,13 +443,14 @@ netdev_send(struct netdev *netdev, const struct buffer *buffer)
         if (errno == ENOBUFS) {
             return EAGAIN;
         } else if (errno != EAGAIN) {
-            VLOG_WARN("error sending Ethernet packet on %s: %s",
-                      netdev->name, strerror(errno));
+            VLOG_WARN_RL(&rl, "error sending Ethernet packet on %s: %s",
+                         netdev->name, strerror(errno));
         }
         return errno;
     } else if (n_bytes != buffer->size) {
-        VLOG_WARN("send partial Ethernet packet (%d bytes of %zu) on %s",
-                  (int) n_bytes, buffer->size, netdev->name);
+        VLOG_WARN_RL(&rl,
+                     "send partial Ethernet packet (%d bytes of %zu) on %s",
+                     (int) n_bytes, buffer->size, netdev->name);
         return EMSGSIZE;
     } else {
         return 0;
@@ -544,8 +550,8 @@ netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
         struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
         ip = sin->sin_addr;
     } else {
-        VLOG_DBG("%s: ioctl(SIOCGIFADDR) failed: %s",
-                 netdev->name, strerror(errno));
+        VLOG_DBG_RL(&rl, "%s: ioctl(SIOCGIFADDR) failed: %s",
+                    netdev->name, strerror(errno));
     }
     if (in4) {
         *in4 = ip;
@@ -748,8 +754,8 @@ netdev_arp_lookup(const struct netdev *netdev,
     if (!retval) {
         memcpy(mac, r.arp_ha.sa_data, ETH_ADDR_LEN);
     } else if (retval != ENXIO) {
-        VLOG_WARN("%s: could not look up ARP entry for "IP_FMT": %s",
-                  netdev->name, IP_ARGS(&ip), strerror(retval));
+        VLOG_WARN_RL(&rl, "%s: could not look up ARP entry for "IP_FMT": %s",
+                     netdev->name, IP_ARGS(&ip), strerror(retval));
     }
     return retval;
 }

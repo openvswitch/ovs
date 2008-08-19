@@ -73,6 +73,11 @@ static struct option_class classes[DHCP_N_OPTIONS] = {
 #undef DHCP_OPT
 };
 
+/* A single (bad) DHCP message can in theory dump out many, many log messages,
+ * especially at high logging levels, so the burst size is set quite high
+ * here to avoid missing useful information. */
+struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 600);
+
 static void copy_data(struct dhcp_msg *);
 
 const char *
@@ -570,15 +575,15 @@ parse_options(struct dhcp_msg *msg, const char *name, void *data, size_t size,
 
         len = buffer_try_pull(&b, 1);
         if (!len) {
-            VLOG_DBG("reached end of %s expecting length byte", name);
+            VLOG_DBG_RL(&rl, "reached end of %s expecting length byte", name);
             break;
         }
 
         payload = buffer_try_pull(&b, *len);
         if (!payload) {
-            VLOG_DBG("expected %"PRIu8" bytes of option-%"PRIu8" payload "
-                     "with only %zu bytes of %s left",
-                     *len, *code, b.size, name);
+            VLOG_DBG_RL(&rl, "expected %"PRIu8" bytes of option-%"PRIu8" "
+                        "payload with only %zu bytes of %s left",
+                        *len, *code, b.size, name);
             break;
         }
         dhcp_msg_put(msg, *code + option_offset, payload, *len);
@@ -599,23 +604,23 @@ validate_options(struct dhcp_msg *msg)
             size_t remainder = opt->n % type->size;
             bool ok = true;
             if (remainder) {
-                VLOG_DBG("%s option has %zu %zu-byte %s arguments with "
-                         "%zu bytes left over",
-                         class->name, n_elems, type->size,
-                         type->name, remainder);
+                VLOG_DBG_RL(&rl, "%s option has %zu %zu-byte %s arguments "
+                            "with %zu bytes left over",
+                            class->name, n_elems, type->size,
+                            type->name, remainder);
                 ok = false;
             }
             if (n_elems < class->min_args || n_elems > class->max_args) {
-                VLOG_DBG("%s option has %zu %zu-byte %s arguments but "
-                         "between %zu and %zu are required",
-                         class->name, n_elems, type->size, type->name,
-                         class->min_args, class->max_args);
+                VLOG_DBG_RL(&rl, "%s option has %zu %zu-byte %s arguments but "
+                            "between %zu and %zu are required",
+                            class->name, n_elems, type->size, type->name,
+                            class->min_args, class->max_args);
                 ok = false;
             }
             if (!ok) {
                 struct ds ds = DS_EMPTY_INITIALIZER;
-                VLOG_DBG("%s option contains: %s",
-                         class->name, dhcp_option_to_string(opt, code, &ds));
+                VLOG_DBG_RL(&rl, "%s option contains: %s", class->name,
+                            dhcp_option_to_string(opt, code, &ds));
                 ds_destroy(&ds);
 
                 opt->n = 0;
@@ -639,20 +644,21 @@ dhcp_parse(struct dhcp_msg *msg, const struct buffer *b_)
 
     dhcp = buffer_try_pull(&b, sizeof *dhcp);
     if (!dhcp) {
-        VLOG_DBG("buffer too small for DHCP header (%zu bytes)", b.size);
+        VLOG_DBG_RL(&rl, "buffer too small for DHCP header (%zu bytes)",
+                    b.size);
         goto error;
     }
 
     if (dhcp->op != DHCP_BOOTREPLY && dhcp->op != DHCP_BOOTREQUEST) {
-        VLOG_DBG("invalid DHCP op (%"PRIu8")", dhcp->op);
+        VLOG_DBG_RL(&rl, "invalid DHCP op (%"PRIu8")", dhcp->op);
         goto error;
     }
     if (dhcp->htype != ARP_HRD_ETHERNET) {
-        VLOG_DBG("invalid DHCP htype (%"PRIu8")", dhcp->htype);
+        VLOG_DBG_RL(&rl, "invalid DHCP htype (%"PRIu8")", dhcp->htype);
         goto error;
     }
     if (dhcp->hlen != ETH_ADDR_LEN) {
-        VLOG_DBG("invalid DHCP hlen (%"PRIu8")", dhcp->hlen);
+        VLOG_DBG_RL(&rl, "invalid DHCP hlen (%"PRIu8")", dhcp->hlen);
         goto error;
     }
 
@@ -685,10 +691,11 @@ dhcp_parse(struct dhcp_msg *msg, const struct buffer *b_)
                 }
             }
         } else {
-            VLOG_DBG("bad DHCP options cookie: %08"PRIx32, ntohl(*cookie));
+            VLOG_DBG_RL(&rl, "bad DHCP options cookie: %08"PRIx32,
+                        ntohl(*cookie));
         }
     } else {
-        VLOG_DBG("DHCP packet has no options");
+        VLOG_DBG_RL(&rl, "DHCP packet has no options");
     }
 
     vendor_class = dhcp_msg_get_string(msg, DHCP_CODE_VENDOR_CLASS);
@@ -702,7 +709,7 @@ dhcp_parse(struct dhcp_msg *msg, const struct buffer *b_)
 
     validate_options(msg);
     if (!dhcp_msg_get_uint8(msg, DHCP_CODE_DHCP_MSG_TYPE, 0, &type)) {
-        VLOG_DBG("missing DHCP message type");
+        VLOG_DBG_RL(&rl, "missing DHCP message type");
         dhcp_msg_uninit(msg);
         goto error;
     }
@@ -715,11 +722,11 @@ error:
 
         ds_init(&ds);
         ds_put_hex_dump(&ds, b_->data, b_->size, 0, true);
-        VLOG_DBG("invalid DHCP message dump:\n%s", ds_cstr(&ds));
+        VLOG_DBG_RL(&rl, "invalid DHCP message dump:\n%s", ds_cstr(&ds));
 
         ds_clear(&ds);
         dhcp_msg_to_string(msg, false, &ds);
-        VLOG_DBG("partially dissected DHCP message: %s", ds_cstr(&ds));
+        VLOG_DBG_RL(&rl, "partially dissected DHCP message: %s", ds_cstr(&ds));
 
         ds_destroy(&ds);
     }

@@ -77,12 +77,13 @@ lookup_ip(const char *host_name, struct in_addr *addr)
     if (!inet_aton(host_name, addr)) {
         struct hostent *he = gethostbyname(host_name);
         if (he == NULL) {
-            VLOG_ERR("gethostbyname(%s): %s", host_name,
-                     (h_errno == HOST_NOT_FOUND ? "host not found"
-                      : h_errno == TRY_AGAIN ? "try again"
-                      : h_errno == NO_RECOVERY ? "non-recoverable error"
-                      : h_errno == NO_ADDRESS ? "no address"
-                      : "unknown error"));
+            struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_ERR_RL(&rl, "gethostbyname(%s): %s", host_name,
+                        (h_errno == HOST_NOT_FOUND ? "host not found"
+                         : h_errno == TRY_AGAIN ? "try again"
+                         : h_errno == NO_RECOVERY ? "non-recoverable error"
+                         : h_errno == NO_ADDRESS ? "no address"
+                         : "unknown error"));
             return ENOENT;
         }
         addr->s_addr = *(uint32_t *) he->h_addr;
@@ -98,8 +99,9 @@ get_socket_error(int fd)
     int error;
     socklen_t len = sizeof(error);
     if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) {
+        struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 10);
         error = errno;
-        VLOG_ERR("getsockopt(SO_ERROR): %s", strerror(error));
+        VLOG_ERR_RL(&rl, "getsockopt(SO_ERROR): %s", strerror(error));
     }
     return error;
 }
@@ -118,7 +120,8 @@ check_connection_completion(int fd)
     if (retval == 1) {
         return get_socket_error(fd);
     } else if (retval < 0) {
-        VLOG_ERR("poll: %s", strerror(errno));
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 10);
+        VLOG_ERR_RL(&rl, "poll: %s", strerror(errno));
         return errno;
     } else {
         return EAGAIN;
@@ -138,7 +141,8 @@ drain_rcvbuf(int fd)
 
     rcvbuf_len = sizeof rcvbuf;
     if (getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, &rcvbuf_len) < 0) {
-        VLOG_ERR("getsockopt(SO_RCVBUF) failed: %s", strerror(errno));
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 10);
+        VLOG_ERR_RL(&rl, "getsockopt(SO_RCVBUF) failed: %s", strerror(errno));
         return errno;
     }
     while (rcvbuf > 0) {

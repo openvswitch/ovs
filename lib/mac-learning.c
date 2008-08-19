@@ -129,8 +129,9 @@ mac_learning_learn(struct mac_learning *ml,
     struct list *bucket;
 
     if (eth_addr_is_multicast(src_mac)) {
-        VLOG_DBG("multicast packet source "ETH_ADDR_FMT,
-                 ETH_ADDR_ARGS(src_mac));
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 30);
+        VLOG_DBG_RL(&rl, "multicast packet source "ETH_ADDR_FMT,
+                    ETH_ADDR_ARGS(src_mac));
         return false;
     }
 

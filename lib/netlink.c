@@ -55,6 +55,11 @@
 #define SOL_NETLINK 270
 #endif
 
+/* A single (bad) Netlink message can in theory dump out many, many log
+ * messages, so the burst size is set quite high here to avoid missing useful
+ * information.  Also, at high logging levels we log *all* Netlink messages. */
+static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 600);
+
 static void log_nlmsg(const char *function, int error,
                       const void *message, size_t size);
 
@@ -321,15 +326,15 @@ try_again:
             buffer_delete(buf);
             return ENOBUFS;
         } else {
-            VLOG_ERR("failed to remove nlmsg from socket: %s\n",
-                     strerror(errno));
+            VLOG_ERR_RL(&rl, "failed to remove nlmsg from socket: %s\n",
+                        strerror(errno));
         }
     }
     if (nbytes < sizeof *nlmsghdr
         || nlmsghdr->nlmsg_len < sizeof *nlmsghdr
         || nlmsghdr->nlmsg_len > nbytes) {
-        VLOG_ERR("received invalid nlmsg (%zd bytes < %d)",
-                 bufsize, NLMSG_HDRLEN);
+        VLOG_ERR_RL(&rl, "received invalid nlmsg (%zd bytes < %d)",
+                    bufsize, NLMSG_HDRLEN);
         buffer_delete(buf);
         return EPROTO;
     }
@@ -394,7 +399,7 @@ recv:
     retval = nl_sock_recv(sock, &reply, true);
     if (retval) {
         if (retval == ENOBUFS) {
-            VLOG_DBG("receive buffer overflow, resending request");
+            VLOG_DBG_RL(&rl, "receive buffer overflow, resending request");
             goto send;
         } else {
             return retval;
@@ -402,14 +407,15 @@ recv:
     }
     nlmsghdr = nl_msg_nlmsghdr(reply);
     if (seq != nlmsghdr->nlmsg_seq) {
-        VLOG_DBG("ignoring seq %"PRIu32" != expected %"PRIu32,
-                 nl_msg_nlmsghdr(reply)->nlmsg_seq, seq);
+        VLOG_DBG_RL(&rl, "ignoring seq %"PRIu32" != expected %"PRIu32,
+                    nl_msg_nlmsghdr(reply)->nlmsg_seq, seq);
         buffer_delete(reply);
         goto recv;
     }
     if (nl_msg_nlmsgerr(reply, &retval)) {
         if (retval) {
-            VLOG_DBG("received NAK error=%d (%s)", retval, strerror(retval));
+            VLOG_DBG_RL(&rl, "received NAK error=%d (%s)",
+                        retval, strerror(retval));
         }
         return retval != EAGAIN ? retval : EPROTO;
     }
@@ -458,8 +464,8 @@ nl_msg_nlmsgerr(const struct buffer *msg, int *errorp)
         struct nlmsgerr *err = buffer_at(msg, NLMSG_HDRLEN, sizeof *err);
         int code = EPROTO;
         if (!err) {
-            VLOG_ERR("received invalid nlmsgerr (%zd bytes < %zd)",
-                     msg->size, NLMSG_HDRLEN + sizeof *err);
+            VLOG_ERR_RL(&rl, "received invalid nlmsgerr (%zd bytes < %zd)",
+                        msg->size, NLMSG_HDRLEN + sizeof *err);
         } else if (err->error <= 0 && err->error > INT_MIN) {
             code = -err->error;
         }
@@ -778,7 +784,7 @@ nl_policy_parse(const struct buffer *msg, const struct nl_policy policy[],
 
     p = buffer_at(msg, NLMSG_HDRLEN + GENL_HDRLEN, 0);
     if (p == NULL) {
-        VLOG_DBG("missing headers in nl_policy_parse");
+        VLOG_DBG_RL(&rl, "missing headers in nl_policy_parse");
         return false;
     }
     tail = buffer_tail(msg);
@@ -791,16 +797,16 @@ nl_policy_parse(const struct buffer *msg, const struct nl_policy policy[],
 
         /* Make sure its claimed length is plausible. */
         if (nla->nla_len < NLA_HDRLEN) {
-            VLOG_DBG("%zu: attr shorter than NLA_HDRLEN (%"PRIu16")",
-                     offset, nla->nla_len);
+            VLOG_DBG_RL(&rl, "%zu: attr shorter than NLA_HDRLEN (%"PRIu16")",
+                        offset, nla->nla_len);
             return false;
         }
         len = nla->nla_len - NLA_HDRLEN;
         aligned_len = NLA_ALIGN(len);
         if (aligned_len > tail - p) {
-            VLOG_DBG("%zu: attr %"PRIu16" aligned data len (%zu) "
-                     "> bytes left (%tu)",
-                     offset, nla->nla_type, aligned_len, tail - p);
+            VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" aligned data len (%zu) "
+                        "> bytes left (%tu)",
+                        offset, nla->nla_type, aligned_len, tail - p);
             return false;
         }
 
@@ -813,19 +819,20 @@ nl_policy_parse(const struct buffer *msg, const struct nl_policy policy[],
             min_len = p->min_len ? p->min_len : attr_len_range[p->type][0];
             max_len = p->max_len ? p->max_len : attr_len_range[p->type][1];
             if (len < min_len || len > max_len) {
-                VLOG_DBG("%zu: attr %"PRIu16" length %zu not in allowed range "
-                         "%zu...%zu", offset, type, len, min_len, max_len);
+                VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" length %zu not in "
+                            "allowed range %zu...%zu",
+                            offset, type, len, min_len, max_len);
                 return false;
             }
             if (p->type == NL_A_STRING) {
                 if (((char *) nla)[nla->nla_len - 1]) {
-                    VLOG_DBG("%zu: attr %"PRIu16" lacks null terminator",
-                             offset, type);
+                    VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" lacks null at end",
+                                offset, type);
                     return false;
                 }
                 if (memchr(nla + 1, '\0', len - 1) != NULL) {
-                    VLOG_DBG("%zu: attr %"PRIu16" lies about string length",
-                             offset, type);
+                    VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" has bad length",
+                                offset, type);
                     return false;
                 }
             }
@@ -840,7 +847,7 @@ nl_policy_parse(const struct buffer *msg, const struct nl_policy policy[],
         p += NLA_ALIGN(nla->nla_len);
     }
     if (n_required) {
-        VLOG_DBG("%zu required attrs missing", n_required);
+        VLOG_DBG_RL(&rl, "%zu required attrs missing", n_required);
         return false;
     }
     return true;
@@ -1059,7 +1066,7 @@ log_nlmsg(const char *function, int error,
     buffer.data = (void *) message;
     buffer.size = size;
     nlmsg = nlmsg_to_string(&buffer);
-    VLOG_DBG("%s (%s): %s", function, strerror(error), nlmsg);
+    VLOG_DBG_RL(&rl, "%s (%s): %s", function, strerror(error), nlmsg);
     free(nlmsg);
 }
 
