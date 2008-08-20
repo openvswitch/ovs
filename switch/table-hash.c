@@ -212,6 +212,7 @@ struct sw_table *table_hash_create(unsigned int polynomial,
     th = malloc(sizeof *th);
     if (th == NULL)
         return NULL;
+    memset(th, '\0', sizeof *th);
 
     assert(!(n_buckets & (n_buckets - 1)));
     th->buckets = calloc(n_buckets, sizeof *th->buckets);
@@ -337,6 +338,7 @@ struct sw_table *table_hash2_create(unsigned int poly0, unsigned int buckets0,
     t2 = malloc(sizeof *t2);
     if (t2 == NULL)
         return NULL;
+    memset(t2, '\0', sizeof *t2);
 
     t2->subtable[0] = table_hash_create(poly0, buckets0);
     if (t2->subtable[0] == NULL)
