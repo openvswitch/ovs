@@ -5,7 +5,6 @@ AM_INIT_AUTOMAKE
 
 AC_PROG_CC
 AC_PROG_CPP
-AC_PROG_LD
 AC_PROG_RANLIB
 
 AC_ARG_VAR([PERL], [path to Perl interpreter])
