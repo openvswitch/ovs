@@ -522,6 +522,31 @@ netdev_get_speed(const struct netdev *netdev)
     return netdev->speed;
 }
 
+/* Checks the link status.  Returns 1 or 0 to indicate the link is active 
+ * or not, respectively.  Any other return value indicates an error. */
+int
+netdev_get_link_status(const struct netdev *netdev) 
+{
+    struct ifreq ifr;
+    struct ethtool_value edata;
+
+    memset(&ifr, 0, sizeof ifr);
+    strncpy(ifr.ifr_name, netdev->name, sizeof ifr.ifr_name);
+    ifr.ifr_data = (caddr_t) &edata;
+
+    memset(&edata, 0, sizeof edata);
+    edata.cmd = ETHTOOL_GLINK;
+    if (ioctl(netdev->fd, SIOCETHTOOL, &ifr) == 0) {
+        if (edata.data) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
 /* Returns the features supported by 'netdev', as a bitmap of bits from enum
  * ofp_phy_port, in host byte order. */
 uint32_t

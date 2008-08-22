@@ -138,10 +138,10 @@ enum ofp_config_flags {
     OFPC_SEND_FLOW_EXP = 1 << 0,
 
     /* Handling of IP fragments. */
-    OFPC_FRAG_NORMAL = 0 << 1,  /* No special handling for fragments. */
-    OFPC_FRAG_DROP = 1 << 1,    /* Drop fragments. */
-    OFPC_FRAG_REASM = 2 << 1,   /* Reassemble (only if OFPC_IP_REASM set). */
-    OFPC_FRAG_MASK = 3 << 1
+    OFPC_FRAG_NORMAL   = 0 << 1,  /* No special handling for fragments. */
+    OFPC_FRAG_DROP     = 1 << 1,    /* Drop fragments. */
+    OFPC_FRAG_REASM    = 2 << 1,   /* Reassemble (only if OFPC_IP_REASM set). */
+    OFPC_FRAG_MASK     = 3 << 1
 };
 
 /* Switch configuration. */
@@ -166,7 +166,10 @@ enum ofp_capabilities {
 
 /* Flags to indicate behavior of the physical port */
 enum ofp_port_flags {
-    OFPPFL_NO_FLOOD  = 1 << 0, /* Do not include this port when flooding */
+    OFPPFL_NO_FLOOD  = 1 << 0, /* Do not include this port when flooding. */
+    OFPPFL_PORT_DOWN = 1 << 1, /* Port is configured down. */
+    OFPPFL_LINK_DOWN = 1 << 2, /* No physical link on interface.  
+                                  NOTE: Non-settable field */
 };
 
 /* Features of physical ports available in a datapath. */
@@ -213,7 +216,7 @@ struct ofp_switch_features {
     uint8_t pad[4];         /* Align to 64-bits. */
 
     /* Port info.*/
-    struct ofp_phy_port ports[0];   /* Port definitions.  The number of ports
+    struct ofp_phy_port ports[0];  /* Port definitions.  The number of ports
                                       is inferred from the length field in
                                       the header. */
 };
@@ -238,9 +241,11 @@ OFP_ASSERT(sizeof(struct ofp_port_status) == 48);
 /* Modify behavior of the physical port */
 struct ofp_port_mod {
     struct ofp_header header;
+    uint32_t mask;         /* Bitmap of "ofp_port_flags" that should be 
+                              changed. */
     struct ofp_phy_port desc;
 };
-OFP_ASSERT(sizeof(struct ofp_port_mod) == 44);
+OFP_ASSERT(sizeof(struct ofp_port_mod) == 48);
 
 /* Why is this packet being sent to the controller? */
 enum ofp_packet_in_reason {

@@ -378,7 +378,7 @@ recv_port_mod(struct sw_chain *chain, const struct sender *sender,
 {
 	const struct ofp_port_mod *opm = msg;
 
-	dp_update_port_flags(chain->dp, &opm->desc);
+	dp_update_port_flags(chain->dp, opm);
 
 	return 0;
 }

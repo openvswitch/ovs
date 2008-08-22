@@ -69,6 +69,7 @@ const uint8_t *netdev_get_etheraddr(const struct netdev *);
 const char *netdev_get_name(const struct netdev *);
 int netdev_get_mtu(const struct netdev *);
 int netdev_get_speed(const struct netdev *);
+int netdev_get_link_status(const struct netdev *);
 uint32_t netdev_get_features(const struct netdev *);
 bool netdev_get_in4(const struct netdev *, struct in_addr *);
 int netdev_set_in4(struct netdev *, struct in_addr addr, struct in_addr mask);

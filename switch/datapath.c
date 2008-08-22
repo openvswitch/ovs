@@ -54,7 +54,14 @@
 #define THIS_MODULE VLM_datapath
 #include "vlog.h"
 
-#define BRIDGE_PORT_NO_FLOOD    0x00000001
+enum br_port_flags {
+    BRPF_NO_FLOOD = 1 << 0,
+};
+
+enum br_port_status {
+    BRPS_PORT_DOWN = 1 << 0,
+    BRPS_LINK_DOWN = 1 << 1,
+};
 
 extern char mfr_desc;
 extern char hw_desc;
@@ -77,7 +84,8 @@ extern char sw_desc;
                                 | (1 << OFPAT_SET_TP_DST) )
 
 struct sw_port {
-    uint32_t flags;
+    uint32_t flags;                    /* BRPF_* flags */
+    uint32_t status;                   /* BRPS_* flags */
     struct datapath *dp;
     struct netdev *netdev;
     struct list node; /* Element in datapath.ports. */
@@ -138,11 +146,12 @@ static void remote_destroy(struct remote *);
 
 void dp_output_port(struct datapath *, struct buffer *,
                     int in_port, int out_port);
-void dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp);
+void dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm);
 void dp_output_control(struct datapath *, struct buffer *, int in_port,
                        size_t max_len, int reason);
 static void send_flow_expired(struct datapath *, struct sw_flow *,
                               enum ofp_flow_expired_reason);
+static int update_port_status(struct sw_port *p);
 static void send_port_status(struct sw_port *p, uint8_t status);
 static void del_switch_port(struct sw_port *p);
 static void execute_actions(struct datapath *, struct buffer *,
@@ -234,7 +243,7 @@ dp_add_port(struct datapath *dp, const char *name)
     }
     error = netdev_set_flags(netdev, NETDEV_UP | NETDEV_PROMISC, false);
     if (error) {
-        VLOG_ERR("Couldn't set promiscuous mode on %s device", name);
+        VLOG_ERR("couldn't set promiscuous mode on %s device", name);
         netdev_close(netdev);
         return error;
     }
@@ -286,6 +295,12 @@ dp_run(struct datapath *dp)
         struct list deleted = LIST_INITIALIZER(&deleted);
         struct sw_flow *f, *n;
 
+        LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
+            if (update_port_status(p)) {
+                send_port_status(p, OFPPR_MOD);
+            }
+        }
+
         chain_timeout(dp->chain, &deleted);
         LIST_FOR_EACH_SAFE (f, n, struct sw_flow, node, &deleted) {
             send_flow_expired(dp, f, f->reason);
@@ -316,9 +331,8 @@ dp_run(struct datapath *dp)
             fwd_port_input(dp, buffer, port_no(dp, p));
             buffer = NULL;
         } else if (error != EAGAIN) {
-            VLOG_ERR("Error receiving data from %s: %s",
+            VLOG_ERR("error receiving data from %s: %s",
                      netdev_get_name(p->netdev), strerror(error));
-            del_switch_port(p);
         }
     }
     buffer_delete(buffer);
@@ -508,7 +522,7 @@ output_all(struct datapath *dp, struct buffer *buffer, int in_port, int flood)
         if (port_no(dp, p) == in_port) {
             continue;
         }
-        if (flood && p->flags & BRIDGE_PORT_NO_FLOOD) {
+        if (flood && p->flags & BRPF_NO_FLOOD) {
             continue;
         }
         if (prev_port != -1) {
@@ -529,7 +543,7 @@ output_packet(struct datapath *dp, struct buffer *buffer, int out_port)
 {
     if (out_port >= 0 && out_port < OFPP_MAX) { 
         struct sw_port *p = &dp->ports[out_port];
-        if (p->netdev != NULL) {
+        if (p->netdev != NULL && !(p->status & BRPS_PORT_DOWN)) {
             if (!netdev_send(p->netdev, buffer)) {
                 p->tx_packets++;
                 p->tx_bytes += buffer->size;
@@ -644,9 +658,17 @@ static void fill_port_desc(struct datapath *dp, struct sw_port *p,
             sizeof desc->name);
     desc->name[sizeof desc->name - 1] = '\0';
     memcpy(desc->hw_addr, netdev_get_etheraddr(p->netdev), ETH_ADDR_LEN);
-    desc->flags = htonl(p->flags);
+    desc->flags = 0;
     desc->features = htonl(netdev_get_features(p->netdev));
     desc->speed = htonl(netdev_get_speed(p->netdev));
+
+    if (p->flags & BRPF_NO_FLOOD) {
+        desc->flags |= htonl(OFPPFL_NO_FLOOD);
+    } else if (p->status & BRPS_PORT_DOWN) {
+        desc->flags |= htonl(OFPPFL_PORT_DOWN);
+    } else if (p->status & BRPS_LINK_DOWN) { 
+        desc->flags |= htonl(OFPPFL_LINK_DOWN);
+    }
 }
 
 static void
@@ -675,8 +697,9 @@ dp_send_features_reply(struct datapath *dp, const struct sender *sender)
 }
 
 void
-dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp)
+dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm)
 {
+    const struct ofp_phy_port *opp = &opm->desc;
     int port_no = ntohs(opp->port_no);
     if (port_no < OFPP_MAX) {
         struct sw_port *p = &dp->ports[port_no];
@@ -686,8 +709,64 @@ dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp)
                          ETH_ADDR_LEN) != 0) {
             return;
         }
-        p->flags = htonl(opp->flags); 
+
+
+        if (opm->mask & htonl(OFPPFL_NO_FLOOD)) {
+            if (opp->flags & htonl(OFPPFL_NO_FLOOD))
+                p->flags |= BRPF_NO_FLOOD;
+            else 
+                p->flags &= ~BRPF_NO_FLOOD;
+        }
+
+        if (opm->mask & htonl(OFPPFL_PORT_DOWN)) {
+            if ((opp->flags & htonl(OFPPFL_PORT_DOWN))
+                            && (p->status & BRPS_PORT_DOWN) == 0) {
+                p->status |= BRPS_PORT_DOWN;
+                netdev_turn_flags_off(p->netdev, NETDEV_UP, true);
+            } else if ((opp->flags & htonl(OFPPFL_PORT_DOWN)) == 0
+                            && (p->status & BRPS_PORT_DOWN)) {
+                p->status &= ~BRPS_PORT_DOWN;
+                netdev_turn_flags_on(p->netdev, NETDEV_UP, true);
+            }
+        }
     }
+}
+
+/* Update the port status field of the bridge port.  A non-zero return
+ * value indicates some field has changed. 
+ *
+ * NB: Callers of this function may hold the RCU read lock, so any
+ * additional checks must not sleep.
+ */
+static int
+update_port_status(struct sw_port *p)
+{
+    int retval;
+    enum netdev_flags flags;
+    uint32_t orig_status = p->status;
+
+    if (netdev_get_flags(p->netdev, &flags) < 0) {
+        VLOG_WARN("could not get netdev flags for %s", 
+                  netdev_get_name(p->netdev));
+        return 0;
+    } else {
+        if (flags & NETDEV_UP) {
+            p->status &= ~BRPS_PORT_DOWN;
+        } else {
+            p->status |= BRPS_PORT_DOWN;
+        } 
+    }
+
+    /* Not all cards support this getting link status, so don't warn on
+     * error. */
+    retval = netdev_get_link_status(p->netdev);
+    if (retval == 1) {
+        p->status &= ~BRPS_LINK_DOWN;
+    } else if (retval == 0) {
+        p->status |= BRPS_LINK_DOWN;
+    } 
+
+    return (orig_status != p->status);
 }
 
 static void
@@ -1060,7 +1139,7 @@ recv_port_mod(struct datapath *dp, const struct sender *sender UNUSED,
 {
     const struct ofp_port_mod *opm = msg;
 
-    dp_update_port_flags(dp, &opm->desc);
+    dp_update_port_flags(dp, opm);
 
     return 0;
 }

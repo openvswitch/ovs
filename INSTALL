@@ -77,6 +77,11 @@ software listed in the "Base Prerequisites" section above:
       "lsmod | grep bridge"), you must remove it ("rmmod bridge")
       before starting the datapath.
 
+      In kernels prior to 2.6.9, VLAN support (CONFIG_VLAN_8021Q) must 
+      be compiled either directly or as a module.  Failure to do this
+      will cause an error on module insertion due to the 
+      "dev_change_flags" symbol being undefined.
+
     - The correct version of GCC for the kernel that you are building
       the module against:
 

@@ -29,6 +29,7 @@
 #include <linux/inetdevice.h>
 #include <linux/list.h>
 #include <linux/rculist.h>
+#include <linux/workqueue.h>
 
 #include "openflow-netlink.h"
 #include "datapath.h"
@@ -61,7 +62,14 @@ MODULE_PARM(sw_desc, "s");
 /* Number of milliseconds between runs of the maintenance thread. */
 #define MAINT_SLEEP_MSECS 1000
 
-#define BRIDGE_PORT_NO_FLOOD	0x00000001 
+enum br_port_flags {
+	BRPF_NO_FLOOD = 1 << 0,
+};
+
+enum br_port_status {
+	BRPS_PORT_DOWN = 1 << 0,
+	BRPS_LINK_DOWN = 1 << 1,
+};
 
 #define UINT32_MAX			  4294967295U
 #define UINT16_MAX			  65535
@@ -69,7 +77,10 @@ MODULE_PARM(sw_desc, "s");
 
 struct net_bridge_port {
 	u16	port_no;
-	u32 flags;
+	u32 flags;             /* BRPF_* flags */
+	u32 status;            /* BRPS_* flags */
+	spinlock_t lock;
+	struct work_struct port_task;
 	struct datapath	*dp;
 	struct net_device *dev;
 	struct list_head node; /* Element in datapath.ports. */
@@ -94,6 +105,7 @@ DEFINE_MUTEX(dp_mutex);
 EXPORT_SYMBOL(dp_mutex);
 
 static int dp_maint_func(void *data);
+static int update_port_status(struct net_bridge_port *p);
 static int send_port_status(struct net_bridge_port *p, uint8_t status);
 static int dp_genl_openflow_done(struct netlink_callback *);
 static struct net_bridge_port *new_nbp(struct datapath *,
@@ -355,6 +367,8 @@ static struct net_bridge_port *new_nbp(struct datapath *dp,
 	p->dp = dp;
 	p->dev = dev;
 	p->port_no = port_no;
+	spin_lock_init(&p->lock);
+	INIT_WORK(&p->port_task, NULL);
 	if (port_no != OFPP_LOCAL)
 		rcu_assign_pointer(dev->br_port, p);
 	if (port_no < OFPP_MAX)
@@ -381,6 +395,8 @@ int add_switch_port(struct datapath *dp, struct net_device *dev)
 	if (IS_ERR(p))
 		return PTR_ERR(p);
 
+	update_port_status(p);
+
 	/* Notify the ctlpath that this port has been added */
 	send_port_status(p, OFPPR_ADD);
 
@@ -391,6 +407,7 @@ int add_switch_port(struct datapath *dp, struct net_device *dev)
 static int del_switch_port(struct net_bridge_port *p)
 {
 	/* First drop references to device. */
+	cancel_work_sync(p->work);
 	rtnl_lock();
 	dev_set_promiscuity(p->dev, -1);
 	rtnl_unlock();
@@ -443,6 +460,16 @@ static int dp_maint_func(void *data)
 	struct datapath *dp = (struct datapath *) data;
 
 	while (!kthread_should_stop()) {
+		struct net_bridge_port *p;
+
+		/* Check if port status has changed */
+		rcu_read_lock();
+		list_for_each_entry_rcu (p, &dp->port_list, node) 
+			if (update_port_status(p)) 
+				send_port_status(p, OFPPR_MOD);
+		rcu_read_unlock();
+
+		/* Timeout old entries */
 		chain_timeout(dp->chain);
 		msleep_interruptible(MAINT_SLEEP_MSECS);
 	}
@@ -507,7 +534,7 @@ static inline unsigned packet_length(const struct sk_buff *skb)
 static int
 output_all(struct datapath *dp, struct sk_buff *skb, int flood)
 {
-	u32 disable = flood ? BRIDGE_PORT_NO_FLOOD : 0;
+	u32 disable = flood ? BRPF_NO_FLOOD : 0;
 	struct net_bridge_port *p;
 	int prev_port = -1;
 
@@ -674,13 +701,23 @@ out:
 
 static void fill_port_desc(struct net_bridge_port *p, struct ofp_phy_port *desc)
 {
+	unsigned long flags;
 	desc->port_no = htons(p->port_no);
 	strncpy(desc->name, p->dev->name, OFP_MAX_PORT_NAME_LEN);
 	desc->name[OFP_MAX_PORT_NAME_LEN-1] = '\0';
 	memcpy(desc->hw_addr, p->dev->dev_addr, ETH_ALEN);
-	desc->flags = htonl(p->flags);
+	desc->flags = 0;
 	desc->features = 0;
 	desc->speed = 0;
+
+	spin_lock_irqsave(&p->lock, flags);
+	if (p->flags & BRPF_NO_FLOOD) 
+		desc->flags |= htonl(OFPPFL_NO_FLOOD);
+	else if (p->status & BRPS_PORT_DOWN)
+		desc->flags |= htonl(OFPPFL_PORT_DOWN);
+	else if (p->status & BRPS_LINK_DOWN)
+		desc->flags |= htonl(OFPPFL_LINK_DOWN);
+	spin_unlock_irqrestore(&p->lock, flags);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,24)
 	if (p->dev->ethtool_ops && p->dev->ethtool_ops->get_settings) {
@@ -775,9 +812,41 @@ dp_send_config_reply(struct datapath *dp, const struct sender *sender)
 	return send_openflow_skb(skb, sender);
 }
 
-int
-dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp)
+/* Callback function for a workqueue to disable an interface */
+static void
+down_port_cb(struct work_struct *work)
 {
+	struct net_bridge_port *p = container_of(work, struct net_bridge_port, 
+			port_task);
+
+	rtnl_lock();
+	if (dev_change_flags(p->dev, p->dev->flags & ~IFF_UP) < 0)
+		if (net_ratelimit())
+			printk("problem bringing up port %s\n", p->dev->name);
+	rtnl_unlock();
+	p->status |= BRPS_PORT_DOWN;
+}
+
+/* Callback function for a workqueue to enable an interface */
+static void
+up_port_cb(struct work_struct *work)
+{
+	struct net_bridge_port *p = container_of(work, struct net_bridge_port, 
+			port_task);
+
+	rtnl_lock();
+	if (dev_change_flags(p->dev, p->dev->flags | IFF_UP) < 0)
+		if (net_ratelimit())
+			printk("problem bringing down port %s\n", p->dev->name);
+	rtnl_unlock();
+	p->status &= ~BRPS_PORT_DOWN;
+}
+
+int
+dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm)
+{
+	unsigned long int flags;
+	const struct ofp_phy_port *opp = &opm->desc;
 	int port_no = ntohs(opp->port_no);
 	struct net_bridge_port *p = (port_no < OFPP_MAX ? dp->ports[port_no]
 				     : port_no == OFPP_LOCAL ? dp->local_port
@@ -785,10 +854,63 @@ dp_update_port_flags(struct datapath *dp, const struct ofp_phy_port *opp)
 	/* Make sure the port id hasn't changed since this was sent */
 	if (!p || memcmp(opp->hw_addr, p->dev->dev_addr, ETH_ALEN))
 		return -1;
-	p->flags = htonl(opp->flags);
+
+	spin_lock_irqsave(&p->lock, flags);
+	if (opm->mask & htonl(OFPPFL_NO_FLOOD)) {
+		if (opp->flags & htonl(OFPPFL_NO_FLOOD))
+			p->flags |= BRPF_NO_FLOOD;
+		else 
+			p->flags &= ~BRPF_NO_FLOOD;
+	}
+
+	/* Modifying the status of an interface requires taking a lock
+	 * that cannot be done from here.  For this reason, we use a shared 
+	 * workqueue, which will cause it to be executed from a safer 
+	 * context. */
+	if (opm->mask & htonl(OFPPFL_PORT_DOWN)) {
+		if ((opp->flags & htonl(OFPPFL_PORT_DOWN))
+					&& (p->status & BRPS_PORT_DOWN) == 0) {
+			PREPARE_WORK(&p->port_task, down_port_cb);
+			schedule_work(&p->port_task);
+		} else if ((opp->flags & htonl(OFPPFL_PORT_DOWN)) == 0
+					&& (p->status & BRPS_PORT_DOWN)) {
+			PREPARE_WORK(&p->port_task, up_port_cb);
+			schedule_work(&p->port_task);
+		}
+	}
+	spin_unlock_irqrestore(&p->lock, flags);
+
 	return 0;
 }
 
+/* Update the port status field of the bridge port.  A non-zero return
+ * value indicates some field has changed. 
+ *
+ * NB: Callers of this function may hold the RCU read lock, so any
+ * additional checks must not sleep.
+ */
+static int
+update_port_status(struct net_bridge_port *p)
+{
+	unsigned long int flags;
+	uint32_t orig_status;
+
+	spin_lock_irqsave(&p->lock, flags);
+	orig_status = p->status;
+
+	if (p->dev->flags & IFF_UP) 
+		p->status &= ~BRPS_PORT_DOWN;
+	else
+		p->status |= BRPS_PORT_DOWN;
+
+	if (netif_carrier_ok(p->dev))
+		p->status &= ~BRPS_LINK_DOWN;
+	else
+		p->status |= BRPS_LINK_DOWN;
+
+	spin_unlock_irqrestore(&p->lock, flags);
+	return (orig_status != p->status);
+}
 
 static int
 send_port_status(struct net_bridge_port *p, uint8_t status)

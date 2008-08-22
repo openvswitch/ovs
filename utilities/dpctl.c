@@ -70,6 +70,11 @@
 
 static const char* ifconfigbin = "/sbin/ifconfig";
 
+#define MOD_PORT_CMD_UP      "up"
+#define MOD_PORT_CMD_DOWN    "down"
+#define MOD_PORT_CMD_FLOOD   "flood"
+#define MOD_PORT_CMD_NOFLOOD "noflood"
+
 struct command {
     const char *name;
     int min_args;
@@ -190,6 +195,7 @@ usage(void)
            "  show SWITCH                 show information\n"
            "  dump-version SWITCH         print version information\n"
            "  dump-tables SWITCH          print table stats\n"
+           "  mod-port SWITCH IFACE ACT   modify port behavior\n"
            "  dump-ports SWITCH           print port statistics\n"
            "  dump-flows SWITCH           print all flow entries\n"
            "  dump-flows SWITCH FLOW      print matching FLOWs\n"
@@ -867,6 +873,84 @@ do_probe(int argc, char *argv[])
 }
 
 static void
+do_mod_port(int argc, char *argv[])
+{
+    struct buffer *request, *reply;
+    struct ofp_switch_features *osf;
+    struct ofp_port_mod *opm;
+    struct vconn *vconn;
+    char *endptr;
+    int n_ports;
+    int port_idx;
+    int port_no;
+    
+
+    /* Check if the argument is a port index.  Otherwise, treat it as
+     * the port name. */
+    port_no = strtol(argv[2], &endptr, 10);
+    if (port_no == 0 && endptr == argv[2]) {
+        port_no = -1;
+    }
+
+    /* Send a "Features Request" to get the information we need in order 
+     * to modify the port. */
+    make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &request);
+    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    run(vconn_transact(vconn, request, &reply), "talking to %s", argv[1]);
+
+    osf = reply->data;
+    n_ports = (reply->size - sizeof *osf) / sizeof *osf->ports;
+
+    for (port_idx = 0; port_idx < n_ports; port_idx++) {
+        if (port_no != -1) {
+            /* Check argument as a port index */
+            if (osf->ports[port_idx].port_no == htons(port_no)) {
+                break;
+            }
+        } else {
+            /* Check argument as an interface name */
+            if (!strncmp((char *)osf->ports[port_idx].name, argv[2], 
+                        sizeof osf->ports[0].name)) {
+                break;
+            }
+
+        }
+    }
+    if (port_idx == n_ports) {
+        fatal(0, "couldn't find monitored port: %s", argv[2]);
+    }
+
+    opm = make_openflow(sizeof(struct ofp_port_mod), OFPT_PORT_MOD, &request);
+    memcpy(&opm->desc, &osf->ports[port_idx], sizeof osf->ports[0]);
+    opm->mask = 0;
+    opm->desc.flags = 0;
+
+    printf("modifying port: %s\n", osf->ports[port_idx].name);
+
+    if (!strncasecmp(argv[3], MOD_PORT_CMD_UP, sizeof MOD_PORT_CMD_UP)) {
+        opm->mask |= htonl(OFPPFL_PORT_DOWN);
+    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_DOWN, 
+                sizeof MOD_PORT_CMD_DOWN)) {
+        opm->mask |= htonl(OFPPFL_PORT_DOWN);
+        opm->desc.flags |= htonl(OFPPFL_PORT_DOWN);
+    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_FLOOD, 
+                sizeof MOD_PORT_CMD_FLOOD)) {
+        opm->mask |= htonl(OFPPFL_NO_FLOOD);
+    } else if (!strncasecmp(argv[3], MOD_PORT_CMD_NOFLOOD, 
+                sizeof MOD_PORT_CMD_NOFLOOD)) {
+        opm->mask |= htonl(OFPPFL_NO_FLOOD);
+        opm->desc.flags |= htonl(OFPPFL_NO_FLOOD);
+    } else {
+        fatal(0, "unknown mod-port command '%s'", argv[3]);
+    }
+
+    send_openflow_buffer(vconn, request);
+
+    buffer_delete(reply);
+    vconn_close(vconn);
+}
+
+static void
 do_ping(int argc, char *argv[])
 {
     size_t max_payload = 65535 - sizeof(struct ofp_header);
@@ -981,6 +1065,7 @@ static struct command all_commands[] = {
     { "add-flows", 2, 2, do_add_flows },
     { "del-flows", 1, 2, do_del_flows },
     { "dump-ports", 1, 1, do_dump_ports },
+    { "mod-port", 3, 3, do_mod_port },
     { "probe", 1, 1, do_probe },
     { "ping", 1, 2, do_ping },
     { "benchmark", 3, 3, do_benchmark },

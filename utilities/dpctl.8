@@ -109,6 +109,33 @@ Prints to the console statistics for each of the network devices
 associated with datapath \fIswitch\fR.
 
 .TP
+\fBmod-port \fIswitch\fR \fInetdev\fR \fIaction\fR
+Modify characteristics of an interface monitored by \fIswitch\fR.  
+\fInetdev\fR can be referred to by its OpenFlow assigned port number or 
+the device name, e.g. \fBeth0\fR.  The \fIaction\fR may be any one of the
+following:
+
+.RS
+.IP \fBup\fR
+Enables the interface.  This is equivalent to ``ifconfig up'' on a Unix
+system.
+
+.IP \fBdown\fR
+Disables the interface.  This is equivalent to ``ifconfig down'' on a Unix
+system.
+
+.IP \fBflood\fR
+When a \fIflood\fR action is specified, traffic will be sent out this
+interface.  This is the default posture for monitored ports.
+
+.IP \fBnoflood\fR
+When a \fIflood\fR action is specified, traffic will not be sent out 
+this interface.  This is primarily useful to prevent loops when a
+spanning tree protocol is not in use.
+
+.RE
+
+.TP
 \fBdump-flows \fIswitch \fR[\fIflows\fR]
 Prints to the console all flow entries in datapath \fIswitch\fR's
 tables that match \fIflows\fR.  If \fIflows\fR is omitted, all flows
