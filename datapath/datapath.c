@@ -407,7 +407,7 @@ int add_switch_port(struct datapath *dp, struct net_device *dev)
 static int del_switch_port(struct net_bridge_port *p)
 {
 	/* First drop references to device. */
-	cancel_work_sync(p->work);
+	cancel_work_sync(&p->port_task);
 	rtnl_lock();
 	dev_set_promiscuity(p->dev, -1);
 	rtnl_unlock();
