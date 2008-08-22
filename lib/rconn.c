@@ -110,6 +110,7 @@ struct rconn {
 };
 
 static unsigned int sat_add(unsigned int x, unsigned int y);
+static unsigned int sat_sub(unsigned int x, unsigned int y);
 static unsigned int sat_mul(unsigned int x, unsigned int y);
 static unsigned int elapsed_in_this_state(const struct rconn *);
 static unsigned int timeout(const struct rconn *);
@@ -396,7 +397,9 @@ rconn_run_wait(struct rconn *rc)
 {
     unsigned int timeo = timeout(rc);
     if (timeo != UINT_MAX) {
-        poll_timer_wait(sat_mul(timeo, 1000));
+        unsigned int expires = sat_add(rc->state_entered, timeo);
+        unsigned int remaining = sat_sub(expires, time_now());
+        poll_timer_wait(sat_mul(remaining, 1000));
     }
 
     if ((rc->state & (S_ACTIVE | S_IDLE)) && rc->txq.n) {
@@ -674,6 +677,12 @@ static unsigned int
 sat_add(unsigned int x, unsigned int y)
 {
     return x + y >= x ? x + y : UINT_MAX;
+}
+
+static unsigned int
+sat_sub(unsigned int x, unsigned int y)
+{
+    return x >= y ? x - y : 0;
 }
 
 static unsigned int
