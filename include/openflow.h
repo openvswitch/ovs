@@ -467,7 +467,15 @@ enum ofp_stats_types {
     /* Physical port statistics.
      * The request body is empty.
      * The reply body is an array of struct ofp_port_stats. */
-    OFPST_PORT
+    OFPST_PORT,
+
+    /* Switch status.
+     * The request body is an ASCII string that specifies a prefix of the key
+     * names to include in the output; if it is the null string, then all
+     * key-value pairs are included.
+     * The reply body is an ASCII string of key-value pairs in the form
+     * "key=value\n". */
+    OFPST_SWITCH
 };
 
 struct ofp_stats_request {

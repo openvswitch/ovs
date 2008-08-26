@@ -815,6 +815,22 @@ ofp_table_stats_reply(struct ds *string, const void *body, size_t len,
      }
 }
 
+static void
+switch_status_reply(struct ds *string, const void *body, size_t len,
+                    int verbosity UNUSED)
+{
+    char *save_ptr = NULL;
+    char *s, *line;
+
+    s = xmemdup0(body, len);
+    for (line = strtok_r(s, "\n\n", &save_ptr); line != NULL;
+         line = strtok_r(NULL, "\n\n", &save_ptr)) {
+        ds_put_printable(string, line, strlen(line));
+        ds_put_char(string, '\n');
+    }
+    free(s);
+}
+
 enum stats_direction {
     REQUEST,
     REPLY
@@ -866,6 +882,11 @@ print_stats(struct ds *string, int type, const void *body, size_t body_len,
             "port",
             { 0, 0, NULL, },
             { 0, SIZE_MAX, ofp_port_stats_reply },
+        },
+        [OFPST_SWITCH] = {
+            "switch status",
+            { 0, 0, NULL, },
+            { 0, SIZE_MAX, switch_status_reply },
         },
     };
 

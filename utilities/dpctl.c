@@ -192,7 +192,8 @@ usage(void)
            "  monitor nl:DP_ID            print packets received\n"
 #endif
            "\nFor local datapaths and remote switches:\n"
-           "  show SWITCH                 show information\n"
+           "  show SWITCH                 show basic information\n"
+           "  status SWITCH [KEY]         report statistics (about KEY)\n"
            "  dump-version SWITCH         print version information\n"
            "  dump-tables SWITCH          print table stats\n"
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
@@ -396,6 +397,16 @@ do_show(int argc UNUSED, char *argv[])
     dump_trivial_transaction(argv[1], OFPT_GET_CONFIG_REQUEST);
 }
 
+static void
+do_status(int argc, char *argv[])
+{
+    struct buffer *request;
+    alloc_stats_request(0, OFPST_SWITCH, &request);
+    if (argc > 2) {
+        buffer_put(request, argv[2], strlen(argv[2]));
+    }
+    dump_stats_transaction(argv[1], request);
+}
 
 static void
 do_dump_version(int argc, char *argv[])
@@ -1054,6 +1065,7 @@ static struct command all_commands[] = {
 #endif
 
     { "show", 1, 1, do_show },
+    { "status", 1, 2, do_status },
 
     { "help", 0, INT_MAX, do_help },
     { "monitor", 1, 1, do_monitor },

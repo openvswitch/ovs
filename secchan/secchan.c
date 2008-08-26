@@ -143,18 +143,38 @@ static struct hook make_hook(bool (*packet_cb)(struct relay *, int, void *),
                              void (*wait_cb)(void *),
                              void *aux);
 
-static struct discovery *discovery_init(const struct settings *);
+struct switch_status;
+struct status_reply;
+static struct hook switch_status_hook_create(const struct settings *,
+                                             struct switch_status **);
+static void switch_status_register_category(struct switch_status *,
+                                            const char *category,
+                                            void (*cb)(struct status_reply *,
+                                                       void *aux),
+                                            void *aux);
+static void status_reply_put(struct status_reply *, const char *, ...)
+    PRINTF_FORMAT(2, 3);
+
+static void rconn_status_cb(struct status_reply *, void *rconn_);
+
+static struct discovery *discovery_init(const struct settings *,
+                                        struct switch_status *);
 static void discovery_question_connectivity(struct discovery *);
 static bool discovery_run(struct discovery *, char **controller_name);
 static void discovery_wait(struct discovery *);
 
-static struct hook in_band_hook_create(const struct settings *);
+static struct hook in_band_hook_create(const struct settings *,
+                                       struct switch_status *,
+                                       struct rconn *remote);
 static struct hook fail_open_hook_create(const struct settings *,
+                                         struct switch_status *,
                                          struct rconn *local,
                                          struct rconn *remote);
 static struct hook rate_limit_hook_create(const struct settings *,
+                                          struct switch_status *,
                                           struct rconn *local,
                                           struct rconn *remote);
+
 
 static void modify_dhcp_request(struct dhcp_msg *, void *aux);
 static bool validate_dhcp_offer(const struct dhcp_msg *, void *aux);
@@ -166,13 +186,14 @@ main(int argc, char *argv[])
 
     struct list relays = LIST_INITIALIZER(&relays);
 
-    struct hook hooks[4];
-    size_t n_hooks;
+    struct hook hooks[8];
+    size_t n_hooks = 0;
 
     struct rconn *local_rconn, *remote_rconn;
     struct vconn *listen_vconn;
     struct relay *controller_relay;
     struct discovery *discovery;
+    struct switch_status *switch_status;
     int retval;
 
     set_program_name(argv[0]);
@@ -195,8 +216,11 @@ main(int argc, char *argv[])
         listen_vconn = NULL;
     }
 
+    /* Initialize switch status hook. */
+    hooks[n_hooks++] = switch_status_hook_create(&s, &switch_status);
+
     /* Start controller discovery. */
-    discovery = s.discovery ? discovery_init(&s) : NULL;
+    discovery = s.discovery ? discovery_init(&s, switch_status) : NULL;
 
     /* Start listening for vlogconf requests. */
     retval = vlog_server_listen(NULL, NULL);
@@ -212,6 +236,8 @@ main(int argc, char *argv[])
     /* Connect to datapath. */
     local_rconn = rconn_create(0, s.max_backoff);
     rconn_connect(local_rconn, s.nl_name);
+    switch_status_register_category(switch_status, "local",
+                                    rconn_status_cb, local_rconn);
 
     /* Connect to controller. */
     remote_rconn = rconn_create(s.probe_interval, s.max_backoff);
@@ -221,22 +247,24 @@ main(int argc, char *argv[])
             fatal(0, "No support for %s vconn", s.controller_name);
         }
     }
+    switch_status_register_category(switch_status, "remote",
+                                    rconn_status_cb, remote_rconn);
 
     /* Start relaying. */
     controller_relay = relay_create(local_rconn, remote_rconn, false);
     list_push_back(&relays, &controller_relay->node);
 
     /* Set up hooks. */
-    n_hooks = 0;
     if (s.in_band) {
-        hooks[n_hooks++] = in_band_hook_create(&s);
+        hooks[n_hooks++] = in_band_hook_create(&s, switch_status,
+                                               remote_rconn);
     }
     if (s.fail_mode == FAIL_OPEN) {
-        hooks[n_hooks++] = fail_open_hook_create(&s,
+        hooks[n_hooks++] = fail_open_hook_create(&s, switch_status,
                                                  local_rconn, remote_rconn);
     }
     if (s.rate_limit) {
-        hooks[n_hooks++] = rate_limit_hook_create(&s,
+        hooks[n_hooks++] = rate_limit_hook_create(&s, switch_status,
                                                   local_rconn, remote_rconn);
     }
     assert(n_hooks <= ARRAY_SIZE(hooks));
@@ -463,6 +491,7 @@ struct in_band_data {
     const struct settings *s;
     struct mac_learning *ml;
     struct netdev *of_device;
+    struct rconn *controller;
     uint8_t mac[ETH_ADDR_LEN];
     int n_queued;
 };
@@ -474,7 +503,7 @@ queue_tx(struct rconn *rc, struct in_band_data *in_band, struct buffer *b)
 }
 
 static const uint8_t *
-get_controller_mac(struct netdev *netdev, struct rconn *controller)
+get_controller_mac(struct in_band_data *in_band)
 {
     static uint32_t ip, last_nonzero_ip;
     static uint8_t mac[ETH_ADDR_LEN], last_nonzero_mac[ETH_ADDR_LEN];
@@ -484,14 +513,14 @@ get_controller_mac(struct netdev *netdev, struct rconn *controller)
 
     time_t now = time_now();
 
-    ip = rconn_get_ip(controller);
+    ip = rconn_get_ip(in_band->controller);
     if (last_ip != ip || !next_refresh || now >= next_refresh) {
         bool have_mac;
 
         /* Look up MAC address. */
         memset(mac, 0, sizeof mac);
         if (ip) {
-            int retval = netdev_arp_lookup(netdev, ip, mac);
+            int retval = netdev_arp_lookup(in_band->of_device, ip, mac);
             if (retval) {
                 VLOG_DBG("cannot look up controller hw address ("IP_FMT"): %s",
                          IP_ARGS(&ip), strerror(retval));
@@ -523,10 +552,11 @@ get_controller_mac(struct netdev *netdev, struct rconn *controller)
 }
 
 static bool
-is_controller_mac(const uint8_t mac[ETH_ADDR_LEN],
-                  const uint8_t *controller_mac)
+is_controller_mac(const uint8_t dl_addr[ETH_ADDR_LEN],
+                  struct in_band_data *in_band)
 {
-    return controller_mac && eth_addr_equals(mac, controller_mac);
+    const uint8_t *mac = get_controller_mac(in_band);
+    return mac && eth_addr_equals(mac, dl_addr);
 }
 
 static bool
@@ -551,7 +581,7 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
     if (oh->type != OFPT_PACKET_IN) {
         return false;
     }
-    if (msg->size < offsetof (struct ofp_packet_in, data)) {
+    if (msg->size < offsetof(struct ofp_packet_in, data)) {
         VLOG_WARN("packet too short (%zu bytes) for packet_in", msg->size);
         return false;
     }
@@ -566,8 +596,7 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
     flow_extract(&pkt, in_port, &flow);
 
     /* Deal with local stuff. */
-    controller_mac = get_controller_mac(in_band->of_device,
-                                        r->halves[HALF_REMOTE].rconn);
+    controller_mac = get_controller_mac(in_band);
     if (in_port == OFPP_LOCAL) {
         /* Sent by secure channel. */
         out_port = mac_learning_lookup(in_band->ml, flow.dl_dst);
@@ -580,10 +609,10 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
         }
     } else if (flow.dl_type == htons(ETH_TYPE_ARP)
                && eth_addr_is_broadcast(flow.dl_dst)
-               && is_controller_mac(flow.dl_src, controller_mac)) {
+               && is_controller_mac(flow.dl_src, in_band)) {
         /* ARP sent by controller. */
         out_port = OFPP_FLOOD;
-    } else if (is_controller_mac(flow.dl_dst, controller_mac)
+    } else if (is_controller_mac(flow.dl_dst, in_band)
                && in_port == mac_learning_lookup(in_band->ml,
                                                  controller_mac)) {
         /* Drop controller traffic that arrives on the controller port. */
@@ -620,8 +649,35 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
     return true;
 }
 
+static void
+in_band_status_cb(struct status_reply *sr, void *in_band_)
+{
+    struct in_band_data *in_band = in_band_;
+    struct in_addr local_ip;
+    uint32_t controller_ip;
+    const uint8_t *controller_mac;
+
+    if (netdev_get_in4(in_band->of_device, &local_ip)) {
+        status_reply_put(sr, "local-ip="IP_FMT, IP_ARGS(&local_ip.s_addr));
+    }
+    status_reply_put(sr, "local-mac="ETH_ADDR_FMT,
+                     ETH_ADDR_ARGS(in_band->mac));
+
+    controller_ip = rconn_get_ip(in_band->controller);
+    if (controller_ip) {
+        status_reply_put(sr, "controller-ip="IP_FMT,
+                      IP_ARGS(&controller_ip));
+    }
+    controller_mac = get_controller_mac(in_band);
+    if (controller_mac) {
+        status_reply_put(sr, "controller-mac="ETH_ADDR_FMT,
+                      ETH_ADDR_ARGS(controller_mac));
+    }
+}
+
 static struct hook
-in_band_hook_create(const struct settings *s)
+in_band_hook_create(const struct settings *s, struct switch_status *ss,
+                    struct rconn *remote)
 {
     struct in_band_data *in_band;
     int retval;
@@ -636,7 +692,8 @@ in_band_hook_create(const struct settings *s)
     }
     memcpy(in_band->mac, netdev_get_etheraddr(in_band->of_device),
            ETH_ADDR_LEN);
-
+    in_band->controller = remote;
+    switch_status_register_category(ss, "in-band", in_band_status_cb, in_band);
     return make_hook(in_band_packet_cb, NULL, NULL, in_band);
 }
 
@@ -693,15 +750,32 @@ fail_open_packet_cb(struct relay *r, int half, void *fail_open_)
     }
 }
 
+static void
+fail_open_status_cb(struct status_reply *sr, void *fail_open_)
+{
+    struct fail_open_data *fail_open = fail_open_;
+    const struct settings *s = fail_open->s;
+    int trigger_duration = s->probe_interval * 3;
+    int cur_duration = rconn_disconnected_duration(fail_open->remote_rconn);
+
+    status_reply_put(sr, "trigger-duration=%d", trigger_duration);
+    status_reply_put(sr, "current-duration=%d", cur_duration);
+    status_reply_put(sr, "triggered=%s",
+                     cur_duration >= trigger_duration ? "true" : "false");
+    status_reply_put(sr, "max-idle=%d", s->max_idle);
+}
+
 static struct hook
-fail_open_hook_create(const struct settings *s, struct rconn *local_rconn,
-                      struct rconn *remote_rconn)
+fail_open_hook_create(const struct settings *s, struct switch_status *ss,
+                      struct rconn *local_rconn, struct rconn *remote_rconn)
 {
     struct fail_open_data *fail_open = xmalloc(sizeof *fail_open);
     fail_open->s = s;
     fail_open->local_rconn = local_rconn;
     fail_open->remote_rconn = remote_rconn;
     fail_open->lswitch = NULL;
+    switch_status_register_category(ss, "fail-open",
+                                    fail_open_status_cb, fail_open);
     return make_hook(fail_open_packet_cb, fail_open_periodic_cb, NULL,
                      fail_open);
 }
@@ -726,6 +800,12 @@ struct rate_limiter {
 
     /* Transmission queue. */
     int n_txq;                  /* No. of packets waiting in rconn for tx. */
+
+    /* Statistics reporting. */
+    unsigned long long n_normal;        /* # txed w/o rate limit queuing. */
+    unsigned long long n_limited;       /* # queued for rate limiting. */
+    unsigned long long n_queue_dropped; /* # dropped due to queue overflow. */
+    unsigned long long n_tx_dropped;    /* # dropped due to tx overflow. */
 };
 
 /* Drop a packet from the longest queue in 'rl'. */
@@ -827,6 +907,7 @@ rate_limit_packet_cb(struct relay *r, int half, void *rl_)
     if (!rl->n_queued && get_token(rl)) {
         /* In the common case where we are not constrained by the rate limit,
          * let the packet take the normal path. */
+        rl->n_normal++;
         return false;
     } else {
         /* Otherwise queue it up for the periodic callback to drain out. */
@@ -837,8 +918,20 @@ rate_limit_packet_cb(struct relay *r, int half, void *rl_)
         }
         queue_push_tail(&rl->queues[port], buffer_clone(msg));
         rl->n_queued++;
+        rl->n_limited++;
         return true;
     }
+}
+
+static void
+rate_limit_status_cb(struct status_reply *sr, void *rl_)
+{
+    struct rate_limiter *rl = rl_;
+
+    status_reply_put(sr, "normal=%llu", rl->n_normal);
+    status_reply_put(sr, "limited=%llu", rl->n_limited);
+    status_reply_put(sr, "queue-dropped=%llu", rl->n_queue_dropped);
+    status_reply_put(sr, "tx-dropped=%llu", rl->n_tx_dropped);
 }
 
 static void
@@ -856,7 +949,9 @@ rate_limit_periodic_cb(void *rl_)
          * no point in trying to transmit faster than the TCP connection can
          * handle. */
         struct buffer *b = dequeue_packet(rl);
-        rconn_send_with_limit(rl->remote_rconn, b, &rl->n_txq, 10);
+        if (rconn_send_with_limit(rl->remote_rconn, b, &rl->n_txq, 10)) {
+            rl->n_tx_dropped++;
+        }
     }
 }
 
@@ -877,9 +972,8 @@ rate_limit_wait_cb(void *rl_)
 }
 
 static struct hook
-rate_limit_hook_create(const struct settings *s,
-                       struct rconn *local,
-                       struct rconn *remote)
+rate_limit_hook_create(const struct settings *s, struct switch_status *ss,
+                       struct rconn *local, struct rconn *remote)
 {
     struct rate_limiter *rl;
     size_t i;
@@ -892,9 +986,191 @@ rate_limit_hook_create(const struct settings *s,
     }
     rl->last_fill = time_msec();
     rl->tokens = s->rate_limit * 100;
+    switch_status_register_category(ss, "rate-limit",
+                                    rate_limit_status_cb, rl);
     return make_hook(rate_limit_packet_cb, rate_limit_periodic_cb,
                      rate_limit_wait_cb, rl);
 }
+
+/* OFPST_SWITCH statistics. */
+
+struct switch_status_category {
+    char *name;
+    void (*cb)(struct status_reply *, void *aux);
+    void *aux;
+};
+
+struct switch_status {
+    const struct settings *s;
+    time_t booted;
+    struct switch_status_category categories[8];
+    int n_categories;
+};
+
+struct status_reply {
+    struct switch_status_category *category;
+    struct ds request;
+    struct ds output;
+};
+
+static bool
+switch_status_packet_cb(struct relay *r, int half, void *ss_)
+{
+    struct switch_status *ss = ss_;
+    struct rconn *rc = r->halves[HALF_REMOTE].rconn;
+    struct buffer *msg = r->halves[HALF_REMOTE].rxbuf;
+    struct switch_status_category *c;
+    struct ofp_stats_request *osr;
+    struct ofp_stats_reply *reply;
+    struct status_reply sr;
+    struct ofp_header *oh;
+    struct buffer *b;
+    int retval;
+
+    if (half == HALF_LOCAL) {
+        return false;
+    }
+
+    oh = msg->data;
+    if (oh->type != OFPT_STATS_REQUEST) {
+        return false;
+    }
+    if (msg->size < sizeof(struct ofp_stats_request)) {
+        VLOG_WARN("packet too short (%zu bytes) for stats_request", msg->size);
+        return false;
+    }
+
+    osr = msg->data;
+    if (osr->type != htons(OFPST_SWITCH)) {
+        return false;
+    }
+
+    sr.request.string = (void *) (osr + 1);
+    sr.request.length = msg->size - sizeof *osr;
+    ds_init(&sr.output);
+    for (c = ss->categories; c < &ss->categories[ss->n_categories]; c++) {
+        if (!memcmp(c->name, sr.request.string,
+                    MIN(strlen(c->name), sr.request.length))) {
+            sr.category = c;
+            c->cb(&sr, c->aux);
+        }
+    }
+    reply = make_openflow_xid((offsetof(struct ofp_stats_reply, body)
+                               + sr.output.length),
+                              OFPT_STATS_REPLY, osr->header.xid, &b);
+    reply->type = htons(OFPST_SWITCH);
+    reply->flags = 0;
+    memcpy(reply->body, sr.output.string, sr.output.length);
+    retval = rconn_send(rc, b, NULL);
+    if (retval && retval != EAGAIN) {
+        VLOG_WARN("send failed (%s)", strerror(retval));
+    }
+    ds_destroy(&sr.output);
+    return true;
+}
+
+static void
+rconn_status_cb(struct status_reply *sr, void *rconn_)
+{
+    struct rconn *rconn = rconn_;
+    time_t now = time_now();
+
+    status_reply_put(sr, "name=%s", rconn_get_name(rconn));
+    status_reply_put(sr, "state=%s", rconn_get_state(rconn));
+    status_reply_put(sr, "is-connected=%s",
+                     rconn_is_connected(rconn) ? "true" : "false");
+    status_reply_put(sr, "sent-msgs=%u", rconn_packets_sent(rconn));
+    status_reply_put(sr, "received-msgs=%u", rconn_packets_received(rconn));
+    status_reply_put(sr, "attempted-connections=%u",
+                     rconn_get_attempted_connections(rconn));
+    status_reply_put(sr, "successful-connections=%u",
+                     rconn_get_successful_connections(rconn));
+    status_reply_put(sr, "last-connection=%ld",
+                     (long int) (now - rconn_get_last_connection(rconn)));
+    status_reply_put(sr, "time-connected=%lu",
+                     rconn_get_total_time_connected(rconn));
+}
+
+static void
+config_status_cb(struct status_reply *sr, void *s_)
+{
+     const struct settings *s = s_;
+
+    if (s->listen_vconn_name) {
+        status_reply_put(sr, "management=%s", s->listen_vconn_name);
+    }
+    if (s->probe_interval) {
+        status_reply_put(sr, "probe-interval=%d", s->probe_interval);
+    }
+    if (s->max_backoff) {
+        status_reply_put(sr, "max-backoff=%d", s->max_backoff);
+    }
+}
+
+static void
+switch_status_cb(struct status_reply *sr, void *ss_)
+{
+    struct switch_status *ss = ss_;
+    time_t now = time_now();
+
+    status_reply_put(sr, "now=%ld", (long int) now);
+    status_reply_put(sr, "uptime=%ld", (long int) (now - ss->booted));
+    status_reply_put(sr, "pid=%ld", (long int) getpid());
+}
+
+static struct hook
+switch_status_hook_create(const struct settings *s, struct switch_status **ssp)
+{
+    struct switch_status *ss = xcalloc(1, sizeof *ss);
+    ss->s = s;
+    ss->booted = time_now();
+    switch_status_register_category(ss, "config",
+                                    config_status_cb, (void *) s);
+    switch_status_register_category(ss, "switch", switch_status_cb, ss);
+    *ssp = ss;
+    return make_hook(switch_status_packet_cb, NULL, NULL, ss);
+}
+
+static void
+switch_status_register_category(struct switch_status *ss,
+                                const char *category,
+                                void (*cb)(struct status_reply *,
+                                           void *aux),
+                                void *aux)
+{
+    struct switch_status_category *c;
+    assert(ss->n_categories < ARRAY_SIZE(ss->categories));
+    c = &ss->categories[ss->n_categories++];
+    c->cb = cb;
+    c->aux = aux;
+    c->name = xstrdup(category);
+}
+
+static void
+status_reply_put(struct status_reply *sr, const char *content, ...)
+{
+    size_t old_length = sr->output.length;
+    size_t added;
+    va_list args;
+
+    /* Append the status reply to the output. */
+    ds_put_format(&sr->output, "%s.", sr->category->name);
+    va_start(args, content);
+    ds_put_format_valist(&sr->output, content, args);
+    va_end(args);
+    if (ds_last(&sr->output) != '\n') {
+        ds_put_char(&sr->output, '\n');
+    }
+
+    /* Drop what we just added if it doesn't match the request. */
+    added = sr->output.length - old_length;
+    if (added < sr->request.length
+        || memcmp(&sr->output.string[old_length],
+                  sr->request.string, sr->request.length)) {
+        ds_truncate(&sr->output, old_length);
+    }
+}
+
 
 /* Controller discovery. */
 
@@ -902,11 +1178,55 @@ struct discovery
 {
     const struct settings *s;
     struct dhclient *dhcp;
-    bool ever_successful;
+    int n_changes;
 };
 
+static void
+discovery_status_cb(struct status_reply *sr, void *d_)
+{
+    struct discovery *d = d_;
+
+    status_reply_put(sr, "discovery.accept-remote=%s",
+                     d->s->accept_controller_re);
+    status_reply_put(sr, "discovery.n-changes=%d", d->n_changes);
+    status_reply_put(sr, "discovery.state=%s", dhclient_get_state(d->dhcp));
+    status_reply_put(sr, "discovery.state-elapsed=%u",
+                     dhclient_get_state_elapsed(d->dhcp));
+    if (dhclient_is_bound(d->dhcp)) {
+        uint32_t ip = dhclient_get_ip(d->dhcp);
+        uint32_t netmask = dhclient_get_netmask(d->dhcp);
+        uint32_t router = dhclient_get_router(d->dhcp);
+
+        const struct dhcp_msg *cfg = dhclient_get_config(d->dhcp);
+        uint32_t dns_server;
+        char *domain_name;
+        int i;
+
+        status_reply_put(sr, "discovery.ip="IP_FMT, IP_ARGS(&ip));
+        status_reply_put(sr, "discovery.netmask="IP_FMT, IP_ARGS(&netmask));
+        if (router) {
+            status_reply_put(sr, "discovery.router="IP_FMT, IP_ARGS(&router));
+        }
+
+        for (i = 0; dhcp_msg_get_ip(cfg, DHCP_CODE_DNS_SERVER, i, &dns_server);
+             i++) {
+            status_reply_put(sr, "discovery.dns%d="IP_FMT,
+                             i, IP_ARGS(&dns_server));
+        }
+
+        domain_name = dhcp_msg_get_string(cfg, DHCP_CODE_DOMAIN_NAME);
+        if (domain_name) {
+            status_reply_put(sr, "discovery.domain=%s", domain_name);
+            free(domain_name);
+        }
+
+        status_reply_put(sr, "discovery.lease-remaining=%u",
+                         dhclient_get_lease_remaining(d->dhcp));
+    }
+}
+
 static struct discovery *
-discovery_init(const struct settings *s)
+discovery_init(const struct settings *s, struct switch_status *ss)
 {
     struct netdev *netdev;
     struct discovery *d;
@@ -935,7 +1255,10 @@ discovery_init(const struct settings *s)
     d = xmalloc(sizeof *d);
     d->s = s;
     d->dhcp = dhcp;
-    d->ever_successful = false;
+    d->n_changes = 0;
+
+    switch_status_register_category(ss, "discovery", discovery_status_cb, d);
+
     return d;
 }
 
@@ -962,11 +1285,12 @@ discovery_run(struct discovery *d, char **controller_name)
         *controller_name = dhcp_msg_get_string(dhclient_get_config(d->dhcp),
                                                DHCP_CODE_OFP_CONTROLLER_VCONN);
         VLOG_WARN("%s: discovered controller", *controller_name);
-        d->ever_successful = true;
-    } else if (controller_name) {
+        d->n_changes++;
+    } else {
         *controller_name = NULL;
-        if (d->ever_successful) {
+        if (d->n_changes) {
             VLOG_WARN("discovered controller no longer available");
+            d->n_changes++;
         }
     }
     return true;

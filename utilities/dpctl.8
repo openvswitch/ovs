@@ -99,6 +99,20 @@ Prints to the console information on datapath \fIswitch\fR including
 information on its flow tables and ports.
 
 .TP
+\fBstatus \fIswitch\fR [\fIkey\fR]
+Prints to the console a series of key-value pairs that report the
+status of \fIswitch\fR.  If \fIkey\fR is specified, only the key-value
+pairs whose key names begin with \fIkey\fR are printed.  If \fIkey\fR is
+omitted, all key-value pairs are printed.
+
+(In the OpenFlow reference implementation, the \fBstatus\fR command is
+implemented in \fBsecchan\fR(8), not in the kernel module, so the
+\fBnl:\fIdp_idx\fR connection method should not be used with this
+command.  Instead, specify \fB-l\fR or \fB--listen\fR on the
+\fBsecchan\fR command line and tell \fBdpctl\fR to use the connection
+method specified there.)
+
+.TP
 \fBdump-tables \fIswitch\fR
 Prints to the console statistics for each of the flow tables used by
 datapath \fIswitch\fR.
