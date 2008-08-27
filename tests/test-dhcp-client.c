@@ -84,7 +84,7 @@ main(int argc, char *argv[])
         fatal(error, "dhclient_create failed");
     }
     dhclient_init(cli, request_ip.s_addr);
-    fatal_signal_add_hook(release, cli);
+    fatal_signal_add_hook(release, cli, true);
 
     for (;;) {
         fatal_signal_block();

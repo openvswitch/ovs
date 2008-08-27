@@ -52,6 +52,7 @@ static sigset_t fatal_signal_set;
 struct hook {
     void (*func)(void *aux);
     void *aux;
+    bool run_at_exit;
 };
 #define MAX_HOOKS 32
 static struct hook hooks[MAX_HOOKS];
@@ -64,16 +65,20 @@ static int block_level = 0;
 static sigset_t saved_signal_mask;
 
 static void call_sigprocmask(int how, sigset_t* new_set, sigset_t* old_set);
+static void atexit_handler(void);
+static void call_hooks(int sig_nr);
 
-/* Registers 'hook' to be called when a process termination signal is
- * raised. */
+/* Registers 'hook' to be called when a process termination signal is raised.
+ * If 'run_at_exit' is true, 'hook' is also called during normal process
+ * termination, e.g. when exit() is called or when main() returns. */
 void
-fatal_signal_add_hook(void (*func)(void *aux), void *aux)
+fatal_signal_add_hook(void (*func)(void *aux), void *aux, bool run_at_exit)
 {
     fatal_signal_block();
     assert(n_hooks < MAX_HOOKS);
     hooks[n_hooks].func = func;
     hooks[n_hooks].aux = aux;
+    hooks[n_hooks].run_at_exit = run_at_exit;
     n_hooks++;
     fatal_signal_unblock();
 }
@@ -107,6 +112,7 @@ fatal_signal_block()
                 fatal(errno, "signal");
             }
         }
+        atexit(atexit_handler);
     }
 
     if (++block_level == 1) {
@@ -139,22 +145,36 @@ fatal_signal_unblock()
 void
 fatal_signal_handler(int sig_nr)
 {
+    call_hooks(sig_nr);
+
+    /* Re-raise the signal with the default handling so that the program
+     * termination status reflects that we were killed by this signal */
+    signal(sig_nr, SIG_DFL);
+    raise(sig_nr);
+}
+
+static void
+atexit_handler(void)
+{
+    call_hooks(0);
+}
+
+static void
+call_hooks(int sig_nr)
+{
     volatile sig_atomic_t recurse = 0;
     if (!recurse) {
         size_t i;
 
         recurse = 1;
 
-        /* Call all the hooks. */
         for (i = 0; i < n_hooks; i++) {
-            hooks[i].func(hooks[i].aux);
+            struct hook *h = &hooks[i];
+            if (sig_nr || h->run_at_exit) {
+                h->func(h->aux);
+            }
         }
     }
-
-    /* Re-raise the signal with the default handling so that the program
-     * termination status reflects that we were killed by this signal */
-    signal(sig_nr, SIG_DFL);
-    raise(sig_nr);
 }
 
 static char **files;
@@ -172,8 +192,7 @@ fatal_signal_add_file_to_unlink(const char *file)
     static bool added_hook = false;
     if (!added_hook) {
         added_hook = true;
-        fatal_signal_add_hook(unlink_files, NULL);
-        atexit(do_unlink_files);
+        fatal_signal_add_hook(unlink_files, NULL, true);
     }
 
     fatal_signal_block();

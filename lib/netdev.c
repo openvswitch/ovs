@@ -770,7 +770,7 @@ init_netdev(void)
     static bool inited;
     if (!inited) {
         inited = true;
-        fatal_signal_add_hook(restore_all_flags, NULL);
+        fatal_signal_add_hook(restore_all_flags, NULL, true);
         af_inet_sock = socket(AF_INET, SOCK_DGRAM, 0);
         if (af_inet_sock < 0) {
             fatal(errno, "socket(AF_INET)");
