@@ -1204,11 +1204,10 @@ discovery_status_cb(struct status_reply *sr, void *d_)
 {
     struct discovery *d = d_;
 
-    status_reply_put(sr, "discovery.accept-remote=%s",
-                     d->s->accept_controller_re);
-    status_reply_put(sr, "discovery.n-changes=%d", d->n_changes);
-    status_reply_put(sr, "discovery.state=%s", dhclient_get_state(d->dhcp));
-    status_reply_put(sr, "discovery.state-elapsed=%u",
+    status_reply_put(sr, "accept-remote=%s", d->s->accept_controller_re);
+    status_reply_put(sr, "n-changes=%d", d->n_changes);
+    status_reply_put(sr, "state=%s", dhclient_get_state(d->dhcp));
+    status_reply_put(sr, "state-elapsed=%u",
                      dhclient_get_state_elapsed(d->dhcp));
     if (dhclient_is_bound(d->dhcp)) {
         uint32_t ip = dhclient_get_ip(d->dhcp);
@@ -1220,25 +1219,24 @@ discovery_status_cb(struct status_reply *sr, void *d_)
         char *domain_name;
         int i;
 
-        status_reply_put(sr, "discovery.ip="IP_FMT, IP_ARGS(&ip));
-        status_reply_put(sr, "discovery.netmask="IP_FMT, IP_ARGS(&netmask));
+        status_reply_put(sr, "ip="IP_FMT, IP_ARGS(&ip));
+        status_reply_put(sr, "netmask="IP_FMT, IP_ARGS(&netmask));
         if (router) {
-            status_reply_put(sr, "discovery.router="IP_FMT, IP_ARGS(&router));
+            status_reply_put(sr, "router="IP_FMT, IP_ARGS(&router));
         }
 
         for (i = 0; dhcp_msg_get_ip(cfg, DHCP_CODE_DNS_SERVER, i, &dns_server);
              i++) {
-            status_reply_put(sr, "discovery.dns%d="IP_FMT,
-                             i, IP_ARGS(&dns_server));
+            status_reply_put(sr, "dns%d="IP_FMT, i, IP_ARGS(&dns_server));
         }
 
         domain_name = dhcp_msg_get_string(cfg, DHCP_CODE_DOMAIN_NAME);
         if (domain_name) {
-            status_reply_put(sr, "discovery.domain=%s", domain_name);
+            status_reply_put(sr, "domain=%s", domain_name);
             free(domain_name);
         }
 
-        status_reply_put(sr, "discovery.lease-remaining=%u",
+        status_reply_put(sr, "lease-remaining=%u",
                          dhclient_get_lease_remaining(d->dhcp));
     }
 }
