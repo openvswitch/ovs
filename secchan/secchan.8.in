@@ -281,8 +281,9 @@ time is 15 seconds.
 \fB-l\fR, \fB--listen=\fImethod\fR
 Configures the switch to additionally listen for incoming OpenFlow
 connections for switch management with \fBdpctl\fR.  The \fImethod\fR
-must be given as one of the following passive OpenFlow connection
-methods:
+must be given as one of the passive OpenFlow connection methods listed
+below.  This option may be specified multiple times to listen to
+multiple connection methods.
 
 .RS
 .TP

@@ -77,6 +77,9 @@ enum fail_mode {
     FAIL_CLOSED                 /* Drop all packets. */
 };
 
+/* Maximum number of management connection listeners. */
+#define MAX_MGMT 8
+
 /* Settings that may be configured by the user. */
 struct settings {
     /* Overall mode of operation. */
@@ -87,7 +90,8 @@ struct settings {
     const char *nl_name;        /* Local datapath (must be "nl:" vconn). */
     char *of_name;              /* ofX network device name. */
     const char *controller_name; /* Controller (if not discovery mode). */
-    const char *listen_vconn_name; /* Listens for mgmt connections. */
+    const char *listener_names[MAX_MGMT]; /* Listen for mgmt connections. */
+    size_t n_listeners;          /* Number of mgmt connection listeners. */
 
     /* Failure behavior. */
     enum fail_mode fail_mode; /* Act as learning switch if no controller? */
@@ -191,11 +195,14 @@ main(int argc, char *argv[])
     struct hook hooks[8];
     size_t n_hooks = 0;
 
+    struct vconn *listeners[MAX_MGMT];
+    size_t n_listeners;
+
     struct rconn *local_rconn, *remote_rconn;
-    struct vconn *listen_vconn;
     struct relay *controller_relay;
     struct discovery *discovery;
     struct switch_status *switch_status;
+    int i;
     int retval;
 
     set_program_name(argv[0]);
@@ -206,16 +213,18 @@ main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
 
     /* Start listening for management connections. */
-    if (s.listen_vconn_name) {
-        retval = vconn_open(s.listen_vconn_name, &listen_vconn);
+    n_listeners = 0;
+    for (i = 0; i < s.n_listeners; i++) {
+        const char *name = s.listener_names[i];
+        struct vconn *listener;
+        retval = vconn_open(name, &listener);
         if (retval && retval != EAGAIN) {
-            fatal(retval, "opening %s", s.listen_vconn_name);
+            fatal(retval, "opening %s", name);
         }
-        if (!vconn_is_passive(listen_vconn)) {
-            fatal(0, "%s is not a passive vconn", s.listen_vconn_name);
+        if (!vconn_is_passive(listener)) {
+            fatal(0, "%s is not a passive vconn", name);
         }
-    } else {
-        listen_vconn = NULL;
+        listeners[n_listeners++] = listener;
     }
 
     /* Initialize switch status hook. */
@@ -279,9 +288,9 @@ main(int argc, char *argv[])
         LIST_FOR_EACH_SAFE (r, n, struct relay, node, &relays) {
             relay_run(r, hooks, n_hooks);
         }
-        if (listen_vconn) {
+        for (i = 0; i < n_listeners; i++) {
             for (;;) {
-                struct relay *r = relay_accept(&s, listen_vconn);
+                struct relay *r = relay_accept(&s, listeners[i]);
                 if (!r) {
                     break;
                 }
@@ -311,8 +320,8 @@ main(int argc, char *argv[])
         LIST_FOR_EACH (r, struct relay, node, &relays) {
             relay_wait(r);
         }
-        if (listen_vconn) {
-            vconn_accept_wait(listen_vconn);
+        for (i = 0; i < n_listeners; i++) {
+            vconn_accept_wait(listeners[i]);
         }
         for (i = 0; i < n_hooks; i++) {
             if (hooks[i].wait_cb) {
@@ -1099,10 +1108,11 @@ rconn_status_cb(struct status_reply *sr, void *rconn_)
 static void
 config_status_cb(struct status_reply *sr, void *s_)
 {
-     const struct settings *s = s_;
+    const struct settings *s = s_;
+    size_t i;
 
-    if (s->listen_vconn_name) {
-        status_reply_put(sr, "management=%s", s->listen_vconn_name);
+    for (i = 0; i < s->n_listeners; i++) {
+        status_reply_put(sr, "management%zu=%s", i, s->listener_names[i]);
     }
     if (s->probe_interval) {
         status_reply_put(sr, "probe-interval=%d", s->probe_interval);
@@ -1371,7 +1381,7 @@ parse_options(int argc, char *argv[], struct settings *s)
     int retval;
 
     /* Set defaults that we can figure out before parsing options. */
-    s->listen_vconn_name = NULL;
+    s->n_listeners = 0;
     s->fail_mode = FAIL_OPEN;
     s->max_idle = 15;
     s->probe_interval = 15;
@@ -1462,10 +1472,11 @@ parse_options(int argc, char *argv[], struct settings *s)
             break;
 
         case 'l':
-            if (s->listen_vconn_name) {
-                fatal(0, "-l or --listen may be only specified once");
+            if (s->n_listeners >= MAX_MGMT) {
+                fatal(0, "-l or --listen may be specified at most %d times",
+                      MAX_MGMT);
             }
-            s->listen_vconn_name = optarg;
+            s->listener_names[s->n_listeners++] = optarg;
             break;
 
         case 'h':
