@@ -1092,6 +1092,7 @@ rconn_status_cb(struct status_reply *sr, void *rconn_)
 
     status_reply_put(sr, "name=%s", rconn_get_name(rconn));
     status_reply_put(sr, "state=%s", rconn_get_state(rconn));
+    status_reply_put(sr, "backoff=%d", rconn_get_backoff(rconn));
     status_reply_put(sr, "is-connected=%s",
                      rconn_is_connected(rconn) ? "true" : "false");
     status_reply_put(sr, "sent-msgs=%u", rconn_packets_sent(rconn));
@@ -1104,6 +1105,7 @@ rconn_status_cb(struct status_reply *sr, void *rconn_)
                      (long int) (now - rconn_get_last_connection(rconn)));
     status_reply_put(sr, "time-connected=%lu",
                      rconn_get_total_time_connected(rconn));
+    status_reply_put(sr, "state-elapsed=%u", rconn_get_state_elapsed(rconn));
 }
 
 static void

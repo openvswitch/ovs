@@ -623,6 +623,21 @@ rconn_get_total_time_connected(const struct rconn *rc)
     return (rc->total_time_connected
             + (rconn_is_connected(rc) ? elapsed_in_this_state(rc) : 0));
 }
+
+/* Returns the current amount of backoff, in seconds.  This is the amount of
+ * time after which the rconn will transition from BACKOFF to CONNECTING. */
+int
+rconn_get_backoff(const struct rconn *rc)
+{
+    return rc->backoff;
+}
+
+/* Returns the number of seconds spent in this state so far. */
+unsigned int
+rconn_get_state_elapsed(const struct rconn *rc)
+{
+    return elapsed_in_this_state(rc);
+}
 
 /* Tries to send a packet from 'rc''s send buffer.  Returns 0 if successful,
  * otherwise a positive errno value. */
