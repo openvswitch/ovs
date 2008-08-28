@@ -103,7 +103,7 @@ make_pidfile(void)
             lck.l_whence = SEEK_SET;
             lck.l_start = 0;
             lck.l_len = 0;
-            if (fcntl(fd, F_SETLK, &lck) >= 0) {
+            if (fcntl(fd, F_SETLK, &lck) != -1) {
                 char *text = xasprintf("%ld\n", pid);
                 if (write(fd, text, strlen(text)) == strlen(text)) {
                     fatal_signal_add_file_to_unlink(pidfile);
