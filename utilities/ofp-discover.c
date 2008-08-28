@@ -133,6 +133,8 @@ main(int argc, char *argv[])
         fatal(retval, "Could not listen for vlog connections");
     }
 
+    die_if_already_running();
+
     signal(SIGPIPE, SIG_IGN);
     for (;;) {
         fatal_signal_block();
@@ -302,6 +304,7 @@ parse_options(int argc, char *argv[])
         {"no-detach",   no_argument, 0, OPT_NO_DETACH},
         {"timeout",     required_argument, 0, 't'},
         {"pidfile",     optional_argument, 0, 'P'},
+        {"force",       no_argument, 0, 'f'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -340,6 +343,10 @@ parse_options(int argc, char *argv[])
 
         case 'P':
             set_pidfile(optarg);
+            break;
+
+        case 'f':
+            ignore_existing_pidfile();
             break;
 
         case 't':
@@ -401,6 +408,7 @@ usage(void)
            "\nOther options:\n"
            "  -t, --timeout=SECS      give up discovery after SECS seconds\n"
            "  -P, --pidfile[=FILE]    create pidfile (default: %s/%s.pid)\n"
+           "  -f, --force             with -P, start even if already running\n"
            "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"

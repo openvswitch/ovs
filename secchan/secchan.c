@@ -239,6 +239,7 @@ main(int argc, char *argv[])
         fatal(retval, "Could not listen for vlog connections");
     }
 
+    die_if_already_running();
     daemonize();
 
     VLOG_WARN("OpenFlow reference implementation version %s", VERSION);
@@ -1361,7 +1362,7 @@ parse_options(int argc, char *argv[], struct settings *s)
     static struct option long_options[] = {
         {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
         {"no-resolv-conf", no_argument, 0, OPT_NO_RESOLV_CONF},
-        {"fail",        required_argument, 0, 'f'},
+        {"fail",        required_argument, 0, 'F'},
         {"inactivity-probe", required_argument, 0, OPT_INACTIVITY_PROBE},
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
         {"max-backoff", required_argument, 0, OPT_MAX_BACKOFF},
@@ -1369,6 +1370,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         {"rate-limit",  optional_argument, 0, OPT_RATE_LIMIT},
         {"burst-limit", required_argument, 0, OPT_BURST_LIMIT},
         {"detach",      no_argument, 0, 'D'},
+        {"force",       no_argument, 0, 'f'},
         {"pidfile",     optional_argument, 0, 'P'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
@@ -1406,7 +1408,7 @@ parse_options(int argc, char *argv[], struct settings *s)
             s->update_resolv_conf = false;
             break;
 
-        case 'f':
+        case 'F':
             if (!strcmp(optarg, "open")) {
                 s->fail_mode = FAIL_OPEN;
             } else if (!strcmp(optarg, "closed")) {
@@ -1469,6 +1471,10 @@ parse_options(int argc, char *argv[], struct settings *s)
 
         case 'P':
             set_pidfile(optarg);
+            break;
+
+        case 'f':
+            ignore_existing_pidfile();
             break;
 
         case 'l':
@@ -1586,7 +1592,7 @@ usage(void)
            "  --accept-vconn=REGEX    accept matching discovered controllers\n"
            "  --no-resolv-conf        do not update /etc/resolv.conf\n"
            "\nNetworking options:\n"
-           "  -f, --fail=open|closed  when controller connection fails:\n"
+           "  -F, --fail=open|closed  when controller connection fails:\n"
            "                            closed: drop all packets\n"
            "                            open (default): act as learning switch\n"
            "  --inactivity-probe=SECS time between inactivity probes\n"
@@ -1601,6 +1607,7 @@ usage(void)
            "\nOther options:\n"
            "  -D, --detach            run in background as daemon\n"
            "  -P, --pidfile[=FILE]    create pidfile (default: %s/secchan.pid)\n"
+           "  -f, --force             with -P, start even if already running\n"
            "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"

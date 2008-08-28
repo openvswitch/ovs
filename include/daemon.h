@@ -34,9 +34,14 @@
 #ifndef DAEMON_H
 #define DAEMON_H 1
 
+#include <stdbool.h>
+
 char *make_pidfile_name(const char *name);
 void set_pidfile(const char *name);
+const char *get_pidfile(void);
 void set_detach(void);
 void daemonize(void);
+void die_if_already_running(void);
+void ignore_existing_pidfile(void);
 
 #endif /* daemon.h */

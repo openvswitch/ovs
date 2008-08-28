@@ -50,6 +50,9 @@ static bool detach;
 /* Name of pidfile (null if none). */
 static char *pidfile;
 
+/* Create pidfile even if one already exists and is locked? */
+static bool force;
+
 /* Returns the file name that would be used for a pidfile if 'name' were
  * provided to set_pidfile().  The caller must free the returned string. */
 char *
@@ -73,12 +76,71 @@ set_pidfile(const char *name)
     pidfile = make_pidfile_name(name);
 }
 
+/* Returns an absolute path to the configured pidfile, or a null pointer if no
+ * pidfile is configured.  The caller must not modify or free the returned
+ * string. */
+const char *
+get_pidfile(void)
+{
+    return pidfile;
+}
+
+/* Normally, die_if_already_running() will terminate the program with a message
+ * if a locked pidfile already exists.  If this function is called,
+ * die_if_already_running() will merely log a warning. */
+void
+ignore_existing_pidfile(void)
+{
+    force = true;
+}
+
 /* Sets up a following call to daemonize() to detach from the foreground
  * session, running this process in the background.  */
 void
 set_detach(void)
 {
     detach = true;
+}
+
+/* If a pidfile has been configured and that pidfile already exists and is
+ * locked by a running process, returns the pid of the running process.
+ * Otherwise, returns 0. */
+static pid_t
+already_running(void)
+{
+    pid_t pid = 0;
+    if (pidfile) {
+        int fd = open(pidfile, O_RDWR);
+        if (fd >= 0) {
+            struct flock lck;
+            lck.l_type = F_WRLCK;
+            lck.l_whence = SEEK_SET;
+            lck.l_start = 0;
+            lck.l_len = 0;
+            if (fcntl(fd, F_GETLK, &lck) != -1 && lck.l_type != F_UNLCK) {
+                pid = lck.l_pid;
+            }
+            close(fd);
+        }
+    }
+    return pid;
+}
+
+/* If a locked pidfile exists, issue a warning message and, unless
+ * ignore_existing_pidfile() has been called, terminate the program. */
+void
+die_if_already_running(void)
+{
+    pid_t pid = already_running();
+    if (pid) {
+        if (!force) {
+            fatal(0, "%s: already running as pid %ld",
+                  get_pidfile(), (long int) pid);
+        } else {
+            VLOG_WARN("%s: %s already running as pid %ld",
+                      get_pidfile(), program_name, (long int) pid);
+        }
+    }
 }
 
 /* If a pidfile has been configured, creates it and stores the running process'

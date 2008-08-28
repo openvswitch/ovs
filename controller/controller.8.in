@@ -118,6 +118,16 @@ if it does not begin with \fB/\fR, then it is created in
 \fB@rundir@\fR.
 
 .TP
+\fB-f\fR, \fB--force\fR
+By default, when \fB-P\fR or \fB--pidfile\fR is specified and the
+specified pidfile already exists and is locked by a running process,
+\fBcontroller\fR refuses to start.  Specify \fB-f\fR or \fB--force\fR
+to cause it to instead overwrite the pidfile.
+
+When \fB-P\fR or \fB--pidfile\fR is not specified, this option has no
+effect.
+
+.TP
 \fB-D\fR, \fB--detach\fR
 Causes \fBcontroller\fR to detach itself from the foreground session and
 run as a background process.

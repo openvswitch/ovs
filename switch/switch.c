@@ -126,6 +126,7 @@ main(int argc, char *argv[])
         fatal(error, "could not listen for vlog connections");
     }
 
+    die_if_already_running();
     daemonize();
 
     for (;;) {
@@ -172,6 +173,7 @@ parse_options(int argc, char *argv[])
         {"listen",      required_argument, 0, 'l'},
         {"detach",      no_argument, 0, 'D'},
         {"pidfile",     optional_argument, 0, 'P'},
+        {"force",       no_argument, 0, 'f'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -218,6 +220,10 @@ parse_options(int argc, char *argv[])
 
         case 'P':
             set_pidfile(optarg);
+            break;
+
+        case 'f':
+            ignore_existing_pidfile();
             break;
 
         case 'v':
@@ -292,6 +298,7 @@ usage(void)
            "\nOther options:\n"
            "  -D, --detach            run in background as daemon\n"
            "  -P, --pidfile[=FILE]    create pidfile (default: %s/switch.pid)\n"
+           "  -f, --force             with -P, start even if already running\n"
            "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"

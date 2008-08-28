@@ -133,6 +133,7 @@ main(int argc, char *argv[])
         fatal(0, "no active or passive switch connections");
     }
 
+    die_if_already_running();
     daemonize();
 
     while (n_switches > 0 || n_listeners > 0) {
@@ -231,6 +232,7 @@ parse_options(int argc, char *argv[])
     static struct option long_options[] = {
         {"detach",      no_argument, 0, 'D'},
         {"pidfile",     optional_argument, 0, 'P'},
+        {"force",       no_argument, 0, 'f'},
         {"hub",         no_argument, 0, 'H'},
         {"noflow",      no_argument, 0, 'n'},
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
@@ -258,6 +260,10 @@ parse_options(int argc, char *argv[])
 
         case 'P':
             set_pidfile(optarg);
+            break;
+
+        case 'f':
+            ignore_existing_pidfile();
             break;
 
         case 'H':
@@ -314,6 +320,7 @@ usage(void)
     printf("\nOther options:\n"
            "  -D, --detach            run in background as daemon\n"
            "  -P, --pidfile[=FILE]    create pidfile (default: %s/controller.pid)\n"
+           "  -f, --force             with -P, start even if already running\n"
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"
            "  --max-idle=SECS         max idle time for new flows\n"

@@ -207,7 +207,7 @@ that it receives specifies one or more DNS servers.
 When controller discovery is not performed, this option has no effect.
 
 .TP
-\fB-f\fR, \fB--fail=\fR[\fBopen\fR|\fBclosed\fR]
+\fB-F\fR, \fB--fail=\fR[\fBopen\fR|\fBclosed\fR]
 The controller is, ordinarily, responsible for setting up all flows on
 the OpenFlow switch.  Thus, if the connection to the controller fails,
 no new network connections can be set up.  If the connection to the
@@ -323,6 +323,16 @@ Causes a file (by default, \fBsecchan.pid\fR) to be created indicating
 the PID of the running process.  If \fIpidfile\fR is not specified, or
 if it does not begin with \fB/\fR, then it is created in
 \fB@rundir@\fR.
+
+.TP
+\fB-f\fR, \fB--force\fR
+By default, when \fB-P\fR or \fB--pidfile\fR is specified and the
+specified pidfile already exists and is locked by a running process,
+\fBsecchan\fR refuses to start.  Specify \fB-f\fR or \fB--force\fR
+to cause it to instead overwrite the pidfile.
+
+When \fB-P\fR or \fB--pidfile\fR is not specified, this option has no
+effect.
 
 .TP
 \fB-D\fR, \fB--detach\fR
