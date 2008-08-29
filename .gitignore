@@ -22,6 +22,7 @@
 /autom4te.cache
 /build-arch-stamp
 /build-indep-stamp
+/compile
 /config.guess
 /config.h
 /config.h.in

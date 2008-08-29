@@ -63,42 +63,10 @@ enum vlog_facility {
 const char *vlog_get_facility_name(enum vlog_facility);
 enum vlog_facility vlog_get_facility_val(const char *name);
 
-/* Modules that can emit log messages. */
-#define VLOG_MODULES                            \
-        VLOG_MODULE(chain)                      \
-        VLOG_MODULE(controller)                 \
-        VLOG_MODULE(ctlpath)                    \
-        VLOG_MODULE(daemon)                     \
-        VLOG_MODULE(datapath)                   \
-        VLOG_MODULE(dhcp)                       \
-        VLOG_MODULE(dhcp_client)                \
-        VLOG_MODULE(dpif)                       \
-        VLOG_MODULE(dpctl)                      \
-        VLOG_MODULE(fault)                      \
-        VLOG_MODULE(flow)                       \
-        VLOG_MODULE(learning_switch)            \
-        VLOG_MODULE(mac_learning)               \
-        VLOG_MODULE(netdev)                     \
-        VLOG_MODULE(netlink)                    \
-        VLOG_MODULE(ofp_discover)               \
-        VLOG_MODULE(poll_loop)                  \
-        VLOG_MODULE(secchan)                    \
-        VLOG_MODULE(rconn)                      \
-        VLOG_MODULE(switch)                     \
-        VLOG_MODULE(socket_util)                \
-        VLOG_MODULE(vconn_netlink)              \
-        VLOG_MODULE(vconn_tcp)                  \
-        VLOG_MODULE(vconn_ssl)                  \
-        VLOG_MODULE(vconn_stream)               \
-        VLOG_MODULE(vconn_unix)                 \
-        VLOG_MODULE(vconn)                      \
-        VLOG_MODULE(vlog)                       \
-
 /* VLM_ constant for each vlog module. */
 enum vlog_module {
 #define VLOG_MODULE(NAME) VLM_##NAME,
-    VLOG_MODULES
-#undef VLOG_MODULE
+#include "vlog-modules.def"
     VLM_N_MODULES,
     VLM_ANY_MODULE = -1
 };

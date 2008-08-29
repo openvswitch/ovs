@@ -66,8 +66,7 @@ static const char *facility_names[VLF_N_FACILITIES] = {
 /* Name for each logging module */
 static const char *module_names[VLM_N_MODULES] = { 
 #define VLOG_MODULE(NAME) #NAME,
-    VLOG_MODULES
-#undef VLOG_MODULES
+#include "vlog-modules.def"
 };
 
 static int levels[VLM_N_MODULES][VLF_N_FACILITIES];

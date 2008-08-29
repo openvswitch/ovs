@@ -30,12 +30,10 @@
 # advertising or publicity pertaining to the Software or any
 # derivatives without specific, written prior permission.
 
-dnl --
-dnl CHECK_LINUX(OPTION, VERSION, VARIABLE, CONDITIONAL)
+dnl OFP_CHECK_LINUX(OPTION, VERSION, VARIABLE, CONDITIONAL)
 dnl
 dnl Configure linux kernel source tree 
-dnl --
-AC_DEFUN([CHECK_LINUX], [
+AC_DEFUN([OFP_CHECK_LINUX], [
   AC_ARG_WITH([$1],
               [AC_HELP_STRING([--with-$1=/path/to/linux-$3],
                               [Specify the linux $3 kernel sources])],
@@ -66,3 +64,76 @@ AC_DEFUN([CHECK_LINUX], [
   fi
   AM_CONDITIONAL($5, test -n "$path")
 ])
+
+dnl Checks for --enable-hw-tables and substitutes HW_TABLES to any
+dnl requested hardware table modules.
+AC_DEFUN([OFP_CHECK_HWTABLES],
+  [AC_ARG_ENABLE(
+     [hw-tables],
+     [AC_HELP_STRING([--enable-hw-tables=MODULE...],
+                     [Configure and build the specified externally supplied 
+                      hardware table support modules])])
+   case "${enable_hw_tables}" in # (
+     yes) 
+       AC_MSG_ERROR([--enable-hw-tables has a required argument])
+       ;; # (
+     ''|no) 
+       hw_tables=
+       ;; # (
+     *) 
+       hw_tables=`echo "$enable_hw_tables" | sed 's/,/ /g'`
+       ;;
+   esac
+   for d in $hw_tables; do
+       mk=datapath/hwtable_$d/Modules.mk
+       if test ! -e $srcdir/$mk; then
+          AC_MSG_ERROR([--enable-hw-tables=$d specified but $mk is missing])
+       fi
+       HW_TABLES="$HW_TABLES \$(top_srcdir)/$mk"
+   done
+   AC_SUBST(HW_TABLES)])
+
+dnl Checks for net/if_packet.h.
+AC_DEFUN([OFP_CHECK_IF_PACKET],
+  [AC_CHECK_HEADER([net/if_packet.h],
+                   [HAVE_IF_PACKET=yes],
+                   [HAVE_IF_PACKET=no])
+   AM_CONDITIONAL([HAVE_IF_PACKET], [test "$HAVE_IF_PACKET" = yes])
+   if test "$HAVE_IF_PACKET" = yes; then
+      AC_DEFINE([HAVE_IF_PACKET], [1],
+                [Define to 1 if net/if_packet.h is available.])
+   fi])
+
+dnl Enable OpenFlow extension submodule.
+AC_DEFUN([OFP_ENABLE_EXT],
+  [AC_ARG_ENABLE([ext],
+     AS_HELP_STRING([--enable-ext], 
+                    [use OpenFlow extensions
+                     (default is yes if "ext" dir exists)]))
+   case "${enable_ext}" in
+     (yes)
+       HAVE_EXT=yes
+       ;;
+     (no)
+       HAVE_EXT=no
+       ;;
+     (*)
+       if test -d "$srcdir/ext"; then
+         HAVE_EXT=yes
+       else
+         HAVE_EXT=no
+       fi
+       ;;
+   esac
+   if test $HAVE_EXT = yes; then
+     if test -d "$srcdir/ext"; then
+       :
+     else
+       AC_MSG_ERROR([cannot configure extensions without "ext" directory])
+     fi
+     AC_CONFIG_SUBDIRS([ext])
+     AC_DEFINE([HAVE_EXT], [1], 
+               [Whether the OpenFlow extensions submodule is available])
+   fi
+   AC_SUBST([ofp_top_srcdir], ['$(top_srcdir)'])
+   AM_CONDITIONAL([HAVE_EXT], [test $HAVE_EXT = yes])])

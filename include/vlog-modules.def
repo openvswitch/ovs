@@ -1,0 +1,36 @@
+/* Modules that can emit log messages. */
+VLOG_MODULE(chain)
+VLOG_MODULE(controller)
+VLOG_MODULE(ctlpath)
+VLOG_MODULE(daemon)
+VLOG_MODULE(datapath)
+VLOG_MODULE(dhcp)
+VLOG_MODULE(dhcp_client)
+VLOG_MODULE(dpif)
+VLOG_MODULE(dpctl)
+VLOG_MODULE(fault)
+VLOG_MODULE(flow)
+VLOG_MODULE(learning_switch)
+VLOG_MODULE(mac_learning)
+VLOG_MODULE(netdev)
+VLOG_MODULE(netlink)
+VLOG_MODULE(ofp_discover)
+VLOG_MODULE(poll_loop)
+VLOG_MODULE(secchan)
+VLOG_MODULE(rconn)
+VLOG_MODULE(switch)
+VLOG_MODULE(terminal)
+VLOG_MODULE(socket_util)
+VLOG_MODULE(vconn_netlink)
+VLOG_MODULE(vconn_tcp)
+VLOG_MODULE(vconn_ssl)
+VLOG_MODULE(vconn_stream)
+VLOG_MODULE(vconn_unix)
+VLOG_MODULE(vconn)
+VLOG_MODULE(vlog)
+
+#ifdef HAVE_EXT
+#include "ext/vlogext-modules.def"
+#endif
+
+#undef VLOG_MODULE
