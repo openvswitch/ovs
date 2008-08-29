@@ -118,7 +118,7 @@ AC_DEFUN([OFP_ENABLE_EXT],
        HAVE_EXT=no
        ;;
      (*)
-       if test -d "$srcdir/ext"; then
+       if test -e "$srcdir/ext/configure"; then
          HAVE_EXT=yes
        else
          HAVE_EXT=no
@@ -126,7 +126,7 @@ AC_DEFUN([OFP_ENABLE_EXT],
        ;;
    esac
    if test $HAVE_EXT = yes; then
-     if test -d "$srcdir/ext"; then
+     if test -e "$srcdir/ext/configure"; then
        :
      else
        AC_MSG_ERROR([cannot configure extensions without "ext" directory])
