@@ -50,6 +50,7 @@ struct vconn {
     struct vconn_class *class;
     int connect_status;
     uint32_t ip;
+    char *name;
 };
 
 void vconn_usage(bool active, bool passive);
