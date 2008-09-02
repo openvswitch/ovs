@@ -625,18 +625,30 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
                && is_controller_mac(flow.dl_src, in_band)) {
         /* ARP sent by controller. */
         out_port = OFPP_FLOOD;
-    } else if (is_controller_mac(flow.dl_dst, in_band)
-               && in_port == mac_learning_lookup(in_band->ml,
-                                                 controller_mac)) {
-        /* Drop controller traffic that arrives on the controller port. */
-        queue_tx(rc, in_band, make_add_flow(&flow, ntohl(opi->buffer_id),
-                                            in_band->s->max_idle, 0));
-        return true;
+    } else if (is_controller_mac(flow.dl_dst, in_band)) {
+        if (mac_learning_learn(in_band->ml, flow.dl_src, in_port)) {
+            VLOG_DBG_RL(&vrl, "learned that "ETH_ADDR_FMT" is on port %"PRIu16,
+                        ETH_ADDR_ARGS(flow.dl_src), in_port);
+        }
+
+        out_port = mac_learning_lookup(in_band->ml, controller_mac);
+        if (in_port != out_port) {
+            return false;
+        }
+
+        /* This is controller traffic that arrived on the controller port.
+         * It will get dropped below. */
+    } else if (is_controller_mac(flow.dl_src, in_band)) {
+        out_port = mac_learning_lookup(in_band->ml, flow.dl_dst);
     } else {
         return false;
     }
 
-    if (out_port != OFPP_FLOOD) {
+    if (in_port == out_port) {
+        /* The input and output port match.  Set up a flow to drop packets. */
+        queue_tx(rc, in_band, make_add_flow(&flow, ntohl(opi->buffer_id),
+                                          in_band->s->max_idle, 0));
+    } else if (out_port != OFPP_FLOOD) {
         /* The output port is known, so add a new flow. */
         queue_tx(rc, in_band,
                  make_add_simple_flow(&flow, ntohl(opi->buffer_id),
