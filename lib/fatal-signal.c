@@ -64,6 +64,9 @@ static int block_level = 0;
 /* Signal mask saved by outermost signal blocker. */
 static sigset_t saved_signal_mask;
 
+/* Disabled by fatal_signal_fork()? */
+static bool disabled;
+
 static void call_sigprocmask(int how, sigset_t* new_set, sigset_t* old_set);
 static void atexit_handler(void);
 static void call_hooks(int sig_nr);
@@ -156,7 +159,9 @@ fatal_signal_handler(int sig_nr)
 static void
 atexit_handler(void)
 {
-    call_hooks(0);
+    if (!disabled) {
+        call_hooks(0);
+    }
 }
 
 static void
@@ -179,7 +184,6 @@ call_hooks(int sig_nr)
 
 static char **files;
 static size_t n_files, max_files;
-static bool disabled;
 
 static void unlink_files(void *aux);
 static void do_unlink_files(void);
@@ -231,12 +235,10 @@ unlink_files(void *aux UNUSED)
 static void
 do_unlink_files(void)
 {
-    if (!disabled) {
-        size_t i;
+    size_t i;
 
-        for (i = 0; i < n_files; i++) {
-            unlink(files[i]);
-        }
+    for (i = 0; i < n_files; i++) {
+        unlink(files[i]);
     }
 }
 
