@@ -38,7 +38,6 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#include "ofp-print.h"
 #include "ofpbuf.h"
 #include "poll-loop.h"
 #include "sat-math.h"

@@ -49,7 +49,6 @@
 #include "openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "ofp-print.h"
 #include "socket-util.h"
 #include "vconn.h"
 #include "vconn-provider.h"

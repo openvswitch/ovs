@@ -43,7 +43,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "ofp-print.h"
 #include "ofpbuf.h"
 #include "openflow.h"
 #include "packets.h"

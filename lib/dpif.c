@@ -44,7 +44,6 @@
 #include "netlink.h"
 #include "netlink-protocol.h"
 #include "ofpbuf.h"
-#include "ofp-print.h"
 #include "openflow-netlink.h"
 #include "openflow.h"
 #include "packets.h"

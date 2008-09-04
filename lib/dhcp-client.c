@@ -49,7 +49,6 @@
 #include "flow.h"
 #include "netdev.h"
 #include "ofpbuf.h"
-#include "ofp-print.h"
 #include "poll-loop.h"
 #include "sat-math.h"
 #include "timeval.h"
