@@ -636,7 +636,7 @@ dp_output_control(struct datapath *dp, struct ofpbuf *buffer, int in_port,
 
     buffer_id = save_buffer(buffer);
     total_len = buffer->size;
-    if (buffer_id != UINT32_MAX && buffer->size > max_len) {
+    if (buffer_id != UINT32_MAX && max_len && buffer->size > max_len) {
         buffer->size = max_len;
     }
 
