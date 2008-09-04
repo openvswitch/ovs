@@ -83,7 +83,7 @@ struct rconn {
     char *name;
     bool reliable;
 
-    struct queue txq;
+    struct ofp_queue txq;
 
     int backoff;
     int max_backoff;

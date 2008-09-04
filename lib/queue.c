@@ -36,11 +36,11 @@
 #include <assert.h>
 #include "ofpbuf.h"
 
-static void check_queue(struct queue *q);
+static void check_queue(struct ofp_queue *q);
 
 /* Initializes 'q' as an empty packet queue. */
 void
-queue_init(struct queue *q)
+queue_init(struct ofp_queue *q)
 {
     q->n = 0;
     q->head = NULL;
@@ -49,7 +49,7 @@ queue_init(struct queue *q)
 
 /* Destroys 'q' and all of the packets that it contains. */
 void
-queue_destroy(struct queue *q)
+queue_destroy(struct ofp_queue *q)
 {
     struct ofpbuf *cur, *next;
     for (cur = q->head; cur != NULL; cur = next) {
@@ -60,7 +60,7 @@ queue_destroy(struct queue *q)
 
 /* Removes and destroys all of the packets in 'q', rendering it empty. */
 void
-queue_clear(struct queue *q)
+queue_clear(struct ofp_queue *q)
 {
     queue_destroy(q);
     queue_init(q);
@@ -73,7 +73,7 @@ queue_clear(struct queue *q)
  * passed to a function for possible consumption (and destruction) and only
  * dropped from the queue if that function actually accepts it. */
 void
-queue_advance_head(struct queue *q, struct ofpbuf *next)
+queue_advance_head(struct ofp_queue *q, struct ofpbuf *next)
 {
     assert(q->n);
     assert(q->head);
@@ -86,7 +86,7 @@ queue_advance_head(struct queue *q, struct ofpbuf *next)
 
 /* Appends 'b' to the tail of 'q'. */
 void
-queue_push_tail(struct queue *q, struct ofpbuf *b)
+queue_push_tail(struct ofp_queue *q, struct ofpbuf *b)
 {
     check_queue(q);
 
@@ -105,7 +105,7 @@ queue_push_tail(struct queue *q, struct ofpbuf *b)
  * it.  The caller must free the buffer (with ofpbuf_delete()) when it is no
  * longer needed. */
 struct ofpbuf *
-queue_pop_head(struct queue *q)
+queue_pop_head(struct ofp_queue *q)
 {
     struct ofpbuf *head = q->head;
     queue_advance_head(q, head->next);
@@ -114,7 +114,7 @@ queue_pop_head(struct queue *q)
 
 /* Checks the internal integrity of 'q'.  For use in debugging. */
 static void
-check_queue(struct queue *q)
+check_queue(struct ofp_queue *q)
 {
 #if 0
     struct ofpbuf *iter;

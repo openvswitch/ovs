@@ -810,7 +810,7 @@ struct rate_limiter {
     struct rconn *remote_rconn;
 
     /* One queue per physical port. */
-    struct queue queues[OFPP_MAX];
+    struct ofp_queue queues[OFPP_MAX];
     int n_queued;               /* Sum over queues[*].n. */
     int next_tx_port;           /* Next port to check in round-robin. */
 
@@ -837,9 +837,9 @@ struct rate_limiter {
 static void
 drop_packet(struct rate_limiter *rl)
 {
-    struct queue *longest;      /* Queue currently selected as longest. */
+    struct ofp_queue *longest;  /* Queue currently selected as longest. */
     int n_longest;              /* # of queues of same length as 'longest'. */
-    struct queue *q;
+    struct ofp_queue *q;
 
     longest = &rl->queues[0];
     n_longest = 1;
@@ -871,7 +871,7 @@ dequeue_packet(struct rate_limiter *rl)
 
     for (i = 0; i < OFPP_MAX; i++) {
         unsigned int port = (rl->next_tx_port + i) % OFPP_MAX;
-        struct queue *q = &rl->queues[port];
+        struct ofp_queue *q = &rl->queues[port];
         if (q->n) {
             rl->next_tx_port = (port + 1) % OFPP_MAX;
             rl->n_queued--;
