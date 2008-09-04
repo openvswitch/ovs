@@ -39,7 +39,7 @@
 #include "util.h"
 
 struct ds;
-struct buffer;
+struct ofpbuf;
 
 /* Values for 'op' field. */
 #define DHCP_BOOTREQUEST        1        /* Message sent by DHCP client. */
@@ -273,7 +273,7 @@ bool dhcp_msg_get_uint16(const struct dhcp_msg *, int code,
                          size_t offset, uint16_t *);
 const char *dhcp_msg_to_string(const struct dhcp_msg *, bool multiline,
                                struct ds *);
-int dhcp_parse(struct dhcp_msg *, const struct buffer *);
-void dhcp_assemble(const struct dhcp_msg *, struct buffer *);
+int dhcp_parse(struct dhcp_msg *, const struct ofpbuf *);
+void dhcp_assemble(const struct dhcp_msg *, struct ofpbuf *);
 
 #endif /* dhcp.h */

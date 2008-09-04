@@ -38,7 +38,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-struct buffer;
+struct ofpbuf;
 struct flow;
 struct pollfd;
 struct ofp_header;
@@ -54,13 +54,13 @@ bool vconn_is_passive(const struct vconn *);
 uint32_t vconn_get_ip(const struct vconn *);
 int vconn_connect(struct vconn *);
 int vconn_accept(struct vconn *, struct vconn **);
-int vconn_recv(struct vconn *, struct buffer **);
-int vconn_send(struct vconn *, struct buffer *);
-int vconn_transact(struct vconn *, struct buffer *, struct buffer **);
+int vconn_recv(struct vconn *, struct ofpbuf **);
+int vconn_send(struct vconn *, struct ofpbuf *);
+int vconn_transact(struct vconn *, struct ofpbuf *, struct ofpbuf **);
 
 int vconn_open_block(const char *name, struct vconn **);
-int vconn_send_block(struct vconn *, struct buffer *);
-int vconn_recv_block(struct vconn *, struct buffer **);
+int vconn_send_block(struct vconn *, struct ofpbuf *);
+int vconn_recv_block(struct vconn *, struct ofpbuf **);
 
 enum vconn_wait_type {
     WAIT_CONNECT,
@@ -74,21 +74,21 @@ void vconn_accept_wait(struct vconn *);
 void vconn_recv_wait(struct vconn *);
 void vconn_send_wait(struct vconn *);
 
-void *make_openflow(size_t openflow_len, uint8_t type, struct buffer **);
+void *make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **);
 void *make_openflow_xid(size_t openflow_len, uint8_t type,
-                        uint32_t xid, struct buffer **);
-void update_openflow_length(struct buffer *);
-struct buffer *make_add_flow(const struct flow *, uint32_t buffer_id,
+                        uint32_t xid, struct ofpbuf **);
+void update_openflow_length(struct ofpbuf *);
+struct ofpbuf *make_add_flow(const struct flow *, uint32_t buffer_id,
                              uint16_t max_idle, size_t n_actions);
-struct buffer *make_add_simple_flow(const struct flow *,
+struct ofpbuf *make_add_simple_flow(const struct flow *,
                                     uint32_t buffer_id, uint16_t out_port,
                                     uint16_t max_idle);
-struct buffer *make_buffered_packet_out(uint32_t buffer_id,
+struct ofpbuf *make_buffered_packet_out(uint32_t buffer_id,
                                         uint16_t in_port, uint16_t out_port);
-struct buffer *make_unbuffered_packet_out(const struct buffer *packet,
+struct ofpbuf *make_unbuffered_packet_out(const struct ofpbuf *packet,
                                           uint16_t in_port, uint16_t out_port);
-struct buffer *make_echo_request(void);
-struct buffer *make_echo_reply(const struct ofp_header *rq);
+struct ofpbuf *make_echo_request(void);
+struct ofpbuf *make_echo_reply(const struct ofp_header *rq);
 
 extern struct vconn_class tcp_vconn_class;
 extern struct vconn_class ptcp_vconn_class;

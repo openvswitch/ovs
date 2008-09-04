@@ -32,13 +32,13 @@
  */
 
 #include <config.h>
-#include "buffer.h"
+#include "ofpbuf.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include "util.h"
 
-/* Initializes 'b' as an empty buffer that contains the 'allocated' bytes of
+/* Initializes 'b' as an empty ofpbuf that contains the 'allocated' bytes of
  * memory starting at 'base'.
  *
  * 'base' should ordinarily be the first byte of a region obtained from
@@ -46,7 +46,7 @@
  * never need to be expanded or freed, it can be a pointer into arbitrary
  * memory. */
 void
-buffer_use(struct buffer *b, void *base, size_t allocated)
+ofpbuf_use(struct ofpbuf *b, void *base, size_t allocated)
 {
     b->base = b->data = base;
     b->allocated = allocated;
@@ -56,83 +56,84 @@ buffer_use(struct buffer *b, void *base, size_t allocated)
     b->private = NULL;
 }
 
-/* Initializes 'b' as a buffer with an initial capacity of 'size' bytes. */
+/* Initializes 'b' as an empty ofpbuf with an initial capacity of 'size'
+ * bytes. */
 void
-buffer_init(struct buffer *b, size_t size)
+ofpbuf_init(struct ofpbuf *b, size_t size)
 {
-    buffer_use(b, size ? xmalloc(size) : NULL, size);
+    ofpbuf_use(b, size ? xmalloc(size) : NULL, size);
 }
 
 /* Frees memory that 'b' points to. */
 void
-buffer_uninit(struct buffer *b) 
+ofpbuf_uninit(struct ofpbuf *b) 
 {
     if (b) {
         free(b->base);
     }
 }
 
-/* Frees memory that 'b' points to and allocates a new buffer */
+/* Frees memory that 'b' points to and allocates a new ofpbuf */
 void
-buffer_reinit(struct buffer *b, size_t size)
+ofpbuf_reinit(struct ofpbuf *b, size_t size)
 {
-    buffer_uninit(b);
-    buffer_init(b, size);
+    ofpbuf_uninit(b);
+    ofpbuf_init(b, size);
 }
 
-/* Creates and returns a new buffer with an initial capacity of 'size'
+/* Creates and returns a new ofpbuf with an initial capacity of 'size'
  * bytes. */
-struct buffer *
-buffer_new(size_t size)
+struct ofpbuf *
+ofpbuf_new(size_t size)
 {
-    struct buffer *b = xmalloc(sizeof *b);
-    buffer_init(b, size);
+    struct ofpbuf *b = xmalloc(sizeof *b);
+    ofpbuf_init(b, size);
     return b;
 }
 
-struct buffer *
-buffer_clone(const struct buffer *buffer) 
+struct ofpbuf *
+ofpbuf_clone(const struct ofpbuf *buffer) 
 {
     /* FIXME: reference counting. */
-    struct buffer *b = buffer_new(buffer->size);
-    buffer_put(b, buffer->data, buffer->size);
+    struct ofpbuf *b = ofpbuf_new(buffer->size);
+    ofpbuf_put(b, buffer->data, buffer->size);
     return b;
 }
 
 /* Frees memory that 'b' points to, as well as 'b' itself. */
 void
-buffer_delete(struct buffer *b) 
+ofpbuf_delete(struct ofpbuf *b) 
 {
     if (b) {
-        buffer_uninit(b);
+        ofpbuf_uninit(b);
         free(b);
     }
 }
 
 /* Returns the number of bytes of headroom in 'b', that is, the number of bytes
- * of unused space in buffer 'b' before the data that is in use.  (Most
- * commonly, the data in a buffer is at its beginning, and thus the buffer's
+ * of unused space in ofpbuf 'b' before the data that is in use.  (Most
+ * commonly, the data in a ofpbuf is at its beginning, and thus the ofpbuf's
  * headroom is 0.) */
 size_t
-buffer_headroom(struct buffer *b) 
+ofpbuf_headroom(struct ofpbuf *b) 
 {
     return b->data - b->base;
 }
 
-/* Returns the number of bytes that may be appended to the tail end of buffer
- * 'b' before the buffer must be reallocated. */
+/* Returns the number of bytes that may be appended to the tail end of ofpbuf
+ * 'b' before the ofpbuf must be reallocated. */
 size_t
-buffer_tailroom(struct buffer *b) 
+ofpbuf_tailroom(struct ofpbuf *b) 
 {
-    return buffer_end(b) - buffer_tail(b);
+    return ofpbuf_end(b) - ofpbuf_tail(b);
 }
 
 /* Ensures that 'b' has room for at least 'size' bytes at its tail end,
  * reallocating and copying its data if necessary. */
 void
-buffer_prealloc_tailroom(struct buffer *b, size_t size) 
+ofpbuf_prealloc_tailroom(struct ofpbuf *b, size_t size) 
 {
-    if (size > buffer_tailroom(b)) {
+    if (size > ofpbuf_tailroom(b)) {
         size_t new_allocated = b->allocated + MAX(size, 64);
         void *new_base = xmalloc(new_allocated);
         uintptr_t base_delta = new_base - b->base;
@@ -157,58 +158,58 @@ buffer_prealloc_tailroom(struct buffer *b, size_t size)
 }
 
 void
-buffer_prealloc_headroom(struct buffer *b, size_t size) 
+ofpbuf_prealloc_headroom(struct ofpbuf *b, size_t size) 
 {
-    assert(size <= buffer_headroom(b));
+    assert(size <= ofpbuf_headroom(b));
 }
 
 /* Appends 'size' bytes of data to the tail end of 'b', reallocating and
  * copying its data if necessary.  Returns a pointer to the first byte of the
  * new data, which is left uninitialized. */
 void *
-buffer_put_uninit(struct buffer *b, size_t size) 
+ofpbuf_put_uninit(struct ofpbuf *b, size_t size) 
 {
     void *p;
-    buffer_prealloc_tailroom(b, size);
-    p = buffer_tail(b);
+    ofpbuf_prealloc_tailroom(b, size);
+    p = ofpbuf_tail(b);
     b->size += size;
     return p;
 }
 
 /* Appends the 'size' bytes of data in 'p' to the tail end of 'b'.  Data in 'b'
  * is reallocated and copied if necessary.  Returns a pointer to the first
- * byte of the data's location in the buffer. */
+ * byte of the data's location in the ofpbuf. */
 void *
-buffer_put(struct buffer *b, const void *p, size_t size) 
+ofpbuf_put(struct ofpbuf *b, const void *p, size_t size) 
 {
-    void *dst = buffer_put_uninit(b, size);
+    void *dst = ofpbuf_put_uninit(b, size);
     memcpy(dst, p, size);
     return dst;
 }
 
 /* Reserves 'size' bytes of headroom so that they can be later allocated with
- * buffer_push_uninit() without reallocating the buffer. */
+ * ofpbuf_push_uninit() without reallocating the ofpbuf. */
 void
-buffer_reserve(struct buffer *b, size_t size) 
+ofpbuf_reserve(struct ofpbuf *b, size_t size) 
 {
     assert(!b->size);
-    buffer_prealloc_tailroom(b, size);
+    ofpbuf_prealloc_tailroom(b, size);
     b->data += size;
 }
 
 void *
-buffer_push_uninit(struct buffer *b, size_t size) 
+ofpbuf_push_uninit(struct ofpbuf *b, size_t size) 
 {
-    buffer_prealloc_headroom(b, size);
+    ofpbuf_prealloc_headroom(b, size);
     b->data -= size;
     b->size += size;
     return b->data;
 }
 
 void *
-buffer_push(struct buffer *b, const void *p, size_t size) 
+ofpbuf_push(struct ofpbuf *b, const void *p, size_t size) 
 {
-    void *dst = buffer_push_uninit(b, size);
+    void *dst = ofpbuf_push_uninit(b, size);
     memcpy(dst, p, size);
     return dst;
 }
@@ -216,7 +217,7 @@ buffer_push(struct buffer *b, const void *p, size_t size)
 /* If 'b' contains at least 'offset + size' bytes of data, returns a pointer to
  * byte 'offset'.  Otherwise, returns a null pointer. */
 void *
-buffer_at(const struct buffer *b, size_t offset, size_t size) 
+ofpbuf_at(const struct ofpbuf *b, size_t offset, size_t size) 
 {
     return offset + size <= b->size ? (char *) b->data + offset : NULL;
 }
@@ -224,7 +225,7 @@ buffer_at(const struct buffer *b, size_t offset, size_t size)
 /* Returns a pointer to byte 'offset' in 'b', which must contain at least
  * 'offset + size' bytes of data. */
 void *
-buffer_at_assert(const struct buffer *b, size_t offset, size_t size) 
+ofpbuf_at_assert(const struct ofpbuf *b, size_t offset, size_t size) 
 {
     assert(offset + size <= b->size);
     return ((char *) b->data) + offset;
@@ -232,7 +233,7 @@ buffer_at_assert(const struct buffer *b, size_t offset, size_t size)
 
 /* Returns the byte following the last byte of data in use in 'b'. */
 void *
-buffer_tail(const struct buffer *b) 
+ofpbuf_tail(const struct ofpbuf *b) 
 {
     return (char *) b->data + b->size;
 }
@@ -240,14 +241,14 @@ buffer_tail(const struct buffer *b)
 /* Returns the byte following the last byte allocated for use (but not
  * necessarily in use) by 'b'. */
 void *
-buffer_end(const struct buffer *b) 
+ofpbuf_end(const struct ofpbuf *b) 
 {
     return (char *) b->base + b->allocated;
 }
 
 /* Clears any data from 'b'. */
 void
-buffer_clear(struct buffer *b) 
+ofpbuf_clear(struct ofpbuf *b) 
 {
     b->data = b->base;
     b->size = 0;
@@ -256,7 +257,7 @@ buffer_clear(struct buffer *b)
 /* Removes 'size' bytes from the head end of 'b', which must contain at least
  * 'size' bytes of data.  Returns the first byte of data removed. */
 void *
-buffer_pull(struct buffer *b, size_t size) 
+ofpbuf_pull(struct ofpbuf *b, size_t size) 
 {
     void *data = b->data;
     assert(b->size >= size);
@@ -269,7 +270,7 @@ buffer_pull(struct buffer *b, size_t size)
  * head end of 'b' and returns the first byte removed.  Otherwise, returns a
  * null pointer without modifying 'b'. */
 void *
-buffer_try_pull(struct buffer *b, size_t size) 
+ofpbuf_try_pull(struct ofpbuf *b, size_t size) 
 {
-    return b->size >= size ? buffer_pull(b, size) : NULL;
+    return b->size >= size ? ofpbuf_pull(b, size) : NULL;
 }

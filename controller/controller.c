@@ -40,12 +40,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "buffer.h"
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
 #include "fault.h"
 #include "learning-switch.h"
+#include "ofpbuf.h"
 #include "openflow.h"
 #include "poll-loop.h"
 #include "rconn.h"
@@ -209,14 +209,14 @@ static int
 do_switching(struct switch_ *sw)
 {
     unsigned int packets_sent;
-    struct buffer *msg;
+    struct ofpbuf *msg;
 
     packets_sent = rconn_packets_sent(sw->rconn);
 
     msg = rconn_recv(sw->rconn);
     if (msg) {
         lswitch_process_packet(sw->lswitch, sw->rconn, msg);
-        buffer_delete(msg);
+        ofpbuf_delete(msg);
     }
     rconn_run(sw->rconn);
 

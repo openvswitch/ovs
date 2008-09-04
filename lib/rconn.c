@@ -38,9 +38,9 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
-#include "buffer.h"
-#include "poll-loop.h"
 #include "ofp-print.h"
+#include "ofpbuf.h"
+#include "poll-loop.h"
 #include "sat-math.h"
 #include "timeval.h"
 #include "util.h"
@@ -421,12 +421,12 @@ rconn_run_wait(struct rconn *rc)
 
 /* Attempts to receive a packet from 'rc'.  If successful, returns the packet;
  * otherwise, returns a null pointer.  The caller is responsible for freeing
- * the packet (with buffer_delete()). */
-struct buffer *
+ * the packet (with ofpbuf_delete()). */
+struct ofpbuf *
 rconn_recv(struct rconn *rc)
 {
     if (rc->state & (S_ACTIVE | S_IDLE)) {
-        struct buffer *buffer;
+        struct ofpbuf *buffer;
         int error = vconn_recv(rc->vconn, &buffer);
         if (!error) {
             rc->last_received = time_now();
@@ -466,7 +466,7 @@ rconn_recv_wait(struct rconn *rc)
  * takes care of sending if you call rconn_run(), which will have the side
  * effect of waking up poll_block(). */
 int
-rconn_send(struct rconn *rc, struct buffer *b, int *n_queued)
+rconn_send(struct rconn *rc, struct ofpbuf *b, int *n_queued)
 {
     if (rconn_is_connected(rc)) {
         b->private = n_queued;
@@ -496,13 +496,13 @@ rconn_send(struct rconn *rc, struct buffer *b, int *n_queued)
  * takes care of sending if you call rconn_run(), which will have the side
  * effect of waking up poll_block(). */
 int
-rconn_send_with_limit(struct rconn *rc, struct buffer *b,
+rconn_send_with_limit(struct rconn *rc, struct ofpbuf *b,
                       int *n_queued, int queue_limit)
 {
     int retval;
     retval = *n_queued >= queue_limit ? EAGAIN : rconn_send(rc, b, n_queued);
     if (retval) {
-        buffer_delete(b);
+        ofpbuf_delete(b);
     }
     return retval;
 }
@@ -645,7 +645,7 @@ static int
 try_send(struct rconn *rc)
 {
     int retval = 0;
-    struct buffer *next = rc->txq.head->next;
+    struct ofpbuf *next = rc->txq.head->next;
     int *n_queued = rc->txq.head->private;
     retval = vconn_send(rc->vconn, rc->txq.head);
     if (retval) {
@@ -713,12 +713,12 @@ flush_queue(struct rconn *rc)
         return;
     }
     while (rc->txq.n > 0) {
-        struct buffer *b = queue_pop_head(&rc->txq);
+        struct ofpbuf *b = queue_pop_head(&rc->txq);
         int *n_queued = b->private;
         if (n_queued) {
             --*n_queued;
         }
-        buffer_delete(b);
+        ofpbuf_delete(b);
     }
     poll_immediate_wake();
 }

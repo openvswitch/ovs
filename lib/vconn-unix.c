@@ -43,13 +43,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "buffer.h"
-#include "socket-util.h"
-#include "util.h"
-#include "openflow.h"
 #include "ofp-print.h"
+#include "ofpbuf.h"
+#include "openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "socket-util.h"
+#include "util.h"
 #include "vconn-provider.h"
 #include "vconn-stream.h"
 

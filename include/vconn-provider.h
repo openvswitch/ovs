@@ -95,7 +95,7 @@ struct vconn_class {
     /* Tries to receive an OpenFlow message from 'vconn', which must be an
      * active vconn.  If successful, stores the received message into '*msgp'
      * and returns 0.  The caller is responsible for destroying the message
-     * with buffer_delete().  On failure, returns a positive errno value and
+     * with ofpbuf_delete().  On failure, returns a positive errno value and
      * stores a null pointer into '*msgp'.
      *
      * If the connection has been closed in the normal fashion, returns EOF.
@@ -105,7 +105,7 @@ struct vconn_class {
      *
      * Nonnull iff this is an active vconn (one that transfers data and does
      * not accept connections). */
-    int (*recv)(struct vconn *vconn, struct buffer **msgp);
+    int (*recv)(struct vconn *vconn, struct ofpbuf **msgp);
 
     /* Tries to queue 'msg' for transmission on 'vconn', which must be an
      * active vconn.  If successful, returns 0, in which case ownership of
@@ -121,7 +121,7 @@ struct vconn_class {
      *
      * Nonnull iff this is an active vconn (one that transfers data and does
      * not accept connections). */
-    int (*send)(struct vconn *vconn, struct buffer *msg);
+    int (*send)(struct vconn *vconn, struct ofpbuf *msg);
 
     void (*wait)(struct vconn *vconn, enum vconn_wait_type);
 };

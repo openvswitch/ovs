@@ -37,8 +37,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "crc32.h"
-#include "flow.h"
 #include "datapath.h"
+#include "flow.h"
+#include "switch-flow.h"
 
 struct sw_table_hash {
     struct sw_table swt;

@@ -45,12 +45,11 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "buffer.h"
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
-#include "dhcp.h"
 #include "dhcp-client.h"
+#include "dhcp.h"
 #include "dynamic-string.h"
 #include "fault.h"
 #include "flow.h"
@@ -58,6 +57,7 @@
 #include "list.h"
 #include "mac-learning.h"
 #include "netdev.h"
+#include "ofpbuf.h"
 #include "openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -111,7 +111,7 @@ struct settings {
 
 struct half {
     struct rconn *rconn;
-    struct buffer *rxbuf;
+    struct ofpbuf *rxbuf;
     int n_txq;                  /* No. of packets queued for tx on 'rconn'. */
 };
 
@@ -430,7 +430,7 @@ relay_run(struct relay *r, const struct hook hooks[], size_t n_hooks)
                     const struct hook *h;
                     for (h = hooks; h < &hooks[n_hooks]; h++) {
                         if (h->packet_cb(r, i, h->aux)) {
-                            buffer_delete(this->rxbuf);
+                            ofpbuf_delete(this->rxbuf);
                             this->rxbuf = NULL;
                             progress = true;
                             break;
@@ -446,7 +446,7 @@ relay_run(struct relay *r, const struct hook hooks[], size_t n_hooks)
                     if (!retval) {
                         progress = true;
                     } else {
-                        buffer_delete(this->rxbuf);
+                        ofpbuf_delete(this->rxbuf);
                     }
                     this->rxbuf = NULL;
                 }
@@ -492,7 +492,7 @@ relay_destroy(struct relay *r)
     for (i = 0; i < 2; i++) {
         struct half *this = &r->halves[i];
         rconn_destroy(this->rconn);
-        buffer_delete(this->rxbuf);
+        ofpbuf_delete(this->rxbuf);
     }
     free(r);
 }
@@ -509,7 +509,7 @@ struct in_band_data {
 };
 
 static void
-queue_tx(struct rconn *rc, struct in_band_data *in_band, struct buffer *b)
+queue_tx(struct rconn *rc, struct in_band_data *in_band, struct ofpbuf *b)
 {
     rconn_send_with_limit(rc, b, &in_band->n_queued, 10);
 }
@@ -576,11 +576,11 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
 {
     struct in_band_data *in_band = in_band_;
     struct rconn *rc = r->halves[HALF_LOCAL].rconn;
-    struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
+    struct ofpbuf *msg = r->halves[HALF_LOCAL].rxbuf;
     struct ofp_packet_in *opi;
     struct ofp_header *oh;
     size_t pkt_ofs, pkt_len;
-    struct buffer pkt;
+    struct ofpbuf pkt;
     struct flow flow;
     uint16_t in_port, out_port;
     const uint8_t *controller_mac;
@@ -662,7 +662,7 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
     } else {
         /* We don't know that MAC.  Send along the packet without setting up a
          * flow. */
-        struct buffer *b;
+        struct ofpbuf *b;
         if (ntohl(opi->buffer_id) == UINT32_MAX) {
             b = make_unbuffered_packet_out(&pkt, in_port, out_port);
         } else {
@@ -859,12 +859,12 @@ drop_packet(struct rate_limiter *rl)
     }
 
     /* FIXME: do we want to pop the tail instead? */
-    buffer_delete(queue_pop_head(longest));
+    ofpbuf_delete(queue_pop_head(longest));
     rl->n_queued--;
 }
 
 /* Remove and return the next packet to transmit (in round-robin order). */
-static struct buffer *
+static struct ofpbuf *
 dequeue_packet(struct rate_limiter *rl)
 {
     unsigned int i;
@@ -913,7 +913,7 @@ rate_limit_packet_cb(struct relay *r, int half, void *rl_)
 {
     struct rate_limiter *rl = rl_;
     const struct settings *s = rl->s;
-    struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
+    struct ofpbuf *msg = r->halves[HALF_LOCAL].rxbuf;
     struct ofp_header *oh;
 
     if (half == HALF_REMOTE) {
@@ -942,7 +942,7 @@ rate_limit_packet_cb(struct relay *r, int half, void *rl_)
         if (rl->n_queued >= s->burst_limit) {
             drop_packet(rl);
         }
-        queue_push_tail(&rl->queues[port], buffer_clone(msg));
+        queue_push_tail(&rl->queues[port], ofpbuf_clone(msg));
         rl->n_queued++;
         rl->n_limited++;
         return true;
@@ -974,7 +974,7 @@ rate_limit_periodic_cb(void *rl_)
          * because the TCP connection is responsible for buffering and there is
          * no point in trying to transmit faster than the TCP connection can
          * handle. */
-        struct buffer *b = dequeue_packet(rl);
+        struct ofpbuf *b = dequeue_packet(rl);
         if (rconn_send_with_limit(rl->remote_rconn, b, &rl->n_txq, 10)) {
             rl->n_tx_dropped++;
         }
@@ -1044,13 +1044,13 @@ switch_status_packet_cb(struct relay *r, int half, void *ss_)
 {
     struct switch_status *ss = ss_;
     struct rconn *rc = r->halves[HALF_REMOTE].rconn;
-    struct buffer *msg = r->halves[HALF_REMOTE].rxbuf;
+    struct ofpbuf *msg = r->halves[HALF_REMOTE].rxbuf;
     struct switch_status_category *c;
     struct ofp_stats_request *osr;
     struct ofp_stats_reply *reply;
     struct status_reply sr;
     struct ofp_header *oh;
-    struct buffer *b;
+    struct ofpbuf *b;
     int retval;
 
     if (half == HALF_LOCAL) {

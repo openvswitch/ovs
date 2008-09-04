@@ -43,7 +43,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-struct buffer;
+struct ofpbuf;
 struct in_addr;
 struct in6_addr;
 
@@ -61,10 +61,10 @@ enum netdev_pseudo_ethertype {
 struct netdev;
 int netdev_open(const char *name, int ethertype, struct netdev **);
 void netdev_close(struct netdev *);
-int netdev_recv(struct netdev *, struct buffer *);
+int netdev_recv(struct netdev *, struct ofpbuf *);
 void netdev_recv_wait(struct netdev *);
 void netdev_drain(struct netdev *);
-int netdev_send(struct netdev *, const struct buffer *);
+int netdev_send(struct netdev *, const struct ofpbuf *);
 const uint8_t *netdev_get_etheraddr(const struct netdev *);
 const char *netdev_get_name(const struct netdev *);
 int netdev_get_mtu(const struct netdev *);

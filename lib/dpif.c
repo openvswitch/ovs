@@ -41,9 +41,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "buffer.h"
 #include "netlink.h"
 #include "netlink-protocol.h"
+#include "ofpbuf.h"
 #include "ofp-print.h"
 #include "openflow-netlink.h"
 #include "openflow.h"
@@ -116,7 +116,7 @@ static const struct nl_policy openflow_policy[] = {
 
 /* Tries to receive an openflow message from the kernel on 'sock'.  If
  * successful, stores the received message into '*msgp' and returns 0.  The
- * caller is responsible for destroying the message with buffer_delete().  On
+ * caller is responsible for destroying the message with ofpbuf_delete().  On
  * failure, returns a positive errno value and stores a null pointer into
  * '*msgp'.
  *
@@ -126,18 +126,18 @@ static const struct nl_policy openflow_policy[] = {
  * If 'wait' is true, dpif_recv_openflow waits for a message to be ready;
  * otherwise, returns EAGAIN if the 'sock' receive buffer is empty. */
 int
-dpif_recv_openflow(struct dpif *dp, struct buffer **bufferp,
+dpif_recv_openflow(struct dpif *dp, struct ofpbuf **bufferp,
                         bool wait) 
 {
     struct nlattr *attrs[ARRAY_SIZE(openflow_policy)];
-    struct buffer *buffer;
+    struct ofpbuf *buffer;
     struct ofp_header *oh;
     uint16_t ofp_len;
     int retval;
 
     buffer = *bufferp = NULL;
     do {
-        buffer_delete(buffer);
+        ofpbuf_delete(buffer);
         retval = nl_sock_recv(dp->sock, &buffer, wait);
     } while (retval == ENOBUFS
              || (!retval
@@ -184,7 +184,7 @@ dpif_recv_openflow(struct dpif *dp, struct buffer **bufferp,
     return 0;
 
 error:
-    buffer_delete(buffer);
+    ofpbuf_delete(buffer);
     return EPROTO;
 }
 
@@ -200,11 +200,11 @@ error:
  * for details). 
  */
 int
-dpif_send_openflow(struct dpif *dp, struct buffer *buffer, bool wait) 
+dpif_send_openflow(struct dpif *dp, struct ofpbuf *buffer, bool wait) 
 {
     struct ofp_header *oh;
     unsigned int dump_flag;
-    struct buffer hdr;
+    struct ofpbuf hdr;
     struct nlattr *nla;
     uint32_t fixed_buffer[64 / 4];
     struct iovec iov[3];
@@ -214,14 +214,14 @@ dpif_send_openflow(struct dpif *dp, struct buffer *buffer, bool wait)
 
     /* The reply to OFPT_STATS_REQUEST may be multiple segments long, so we
      * need to specify NLM_F_DUMP in the request. */
-    oh = buffer_at_assert(buffer, 0, sizeof *oh);
+    oh = ofpbuf_at_assert(buffer, 0, sizeof *oh);
     dump_flag = oh->type == OFPT_STATS_REQUEST ? NLM_F_DUMP : 0;
 
-    buffer_use(&hdr, fixed_buffer, sizeof fixed_buffer);
+    ofpbuf_use(&hdr, fixed_buffer, sizeof fixed_buffer);
     nl_msg_put_genlmsghdr(&hdr, dp->sock, 32, openflow_family,
                           NLM_F_REQUEST | dump_flag, DP_GENL_C_OPENFLOW, 1);
     nl_msg_put_u32(&hdr, DP_GENL_A_DP_IDX, dp->dp_idx);
-    nla = buffer_put_uninit(&hdr, sizeof *nla);
+    nla = ofpbuf_put_uninit(&hdr, sizeof *nla);
     nla->nla_len = sizeof *nla + buffer->size;
     nla->nla_type = DP_GENL_A_OPENFLOW;
     pad_bytes = NLA_ALIGN(nla->nla_len) - nla->nla_len;
@@ -288,7 +288,7 @@ static int
 lookup_openflow_multicast_group(int dp_idx, int *multicast_group) 
 {
     struct nl_sock *sock;
-    struct buffer request, *reply;
+    struct ofpbuf request, *reply;
     struct nlattr *attrs[ARRAY_SIZE(openflow_multicast_policy)];
     int retval;
 
@@ -296,12 +296,12 @@ lookup_openflow_multicast_group(int dp_idx, int *multicast_group)
     if (retval) {
         return retval;
     }
-    buffer_init(&request, 0);
+    ofpbuf_init(&request, 0);
     nl_msg_put_genlmsghdr(&request, sock, 0, openflow_family, NLM_F_REQUEST,
                           DP_GENL_C_QUERY_DP, 1);
     nl_msg_put_u32(&request, DP_GENL_A_DP_IDX, dp_idx);
     retval = nl_sock_transact(sock, &request, &reply);
-    buffer_uninit(&request);
+    ofpbuf_uninit(&request);
     if (retval) {
         nl_sock_destroy(sock);
         return retval;
@@ -309,12 +309,12 @@ lookup_openflow_multicast_group(int dp_idx, int *multicast_group)
     if (!nl_policy_parse(reply, openflow_multicast_policy, attrs,
                          ARRAY_SIZE(openflow_multicast_policy))) {
         nl_sock_destroy(sock);
-        buffer_delete(reply);
+        ofpbuf_delete(reply);
         return EPROTO;
     }
     *multicast_group = nl_attr_get_u32(attrs[DP_GENL_A_MC_GROUP]);
     nl_sock_destroy(sock);
-    buffer_delete(reply);
+    ofpbuf_delete(reply);
 
     return 0;
 }
@@ -325,10 +325,10 @@ lookup_openflow_multicast_group(int dp_idx, int *multicast_group)
 static int
 send_mgmt_command(struct dpif *dp, int command, const char *netdev) 
 {
-    struct buffer request, *reply;
+    struct ofpbuf request, *reply;
     int retval;
 
-    buffer_init(&request, 0);
+    ofpbuf_init(&request, 0);
     nl_msg_put_genlmsghdr(&request, dp->sock, 32, openflow_family,
                           NLM_F_REQUEST | NLM_F_ACK, command, 1);
     nl_msg_put_u32(&request, DP_GENL_A_DP_IDX, dp->dp_idx);
@@ -336,8 +336,8 @@ send_mgmt_command(struct dpif *dp, int command, const char *netdev)
         nl_msg_put_string(&request, DP_GENL_A_PORTNAME, netdev);
     }
     retval = nl_sock_transact(dp->sock, &request, &reply);
-    buffer_uninit(&request);
-    buffer_delete(reply);
+    ofpbuf_uninit(&request);
+    ofpbuf_delete(reply);
 
     return retval;
 }

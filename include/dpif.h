@@ -42,7 +42,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-struct buffer;
+struct ofpbuf;
 struct ofp_match;
 
 /* A datapath interface.  Opaque. */
@@ -54,8 +54,8 @@ struct dpif
 
 int dpif_open(int dp_idx, bool subscribe, struct dpif *);
 void dpif_close(struct dpif *);
-int dpif_recv_openflow(struct dpif *, struct buffer **, bool wait);
-int dpif_send_openflow(struct dpif *, struct buffer *, bool wait);
+int dpif_recv_openflow(struct dpif *, struct ofpbuf **, bool wait);
+int dpif_send_openflow(struct dpif *, struct ofpbuf *, bool wait);
 int dpif_add_dp(struct dpif *);
 int dpif_del_dp(struct dpif *);
 int dpif_add_port(struct dpif *, const char *netdev);

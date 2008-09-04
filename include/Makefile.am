@@ -1,5 +1,4 @@
 noinst_HEADERS = \
-	buffer.h \
 	command-line.h \
 	compiler.h \
 	csum.h \
@@ -18,6 +17,7 @@ noinst_HEADERS = \
 	netdev.h \
 	netlink-protocol.h \
 	netlink.h \
+	ofpbuf.h \
 	ofp-print.h \
 	openflow.h \
 	openflow-netlink.h \

@@ -40,9 +40,9 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "buffer.h"
 #include "flow.h"
 #include "mac-learning.h"
+#include "ofpbuf.h"
 #include "ofp-print.h"
 #include "openflow.h"
 #include "queue.h"
@@ -72,7 +72,7 @@ struct lswitch {
  * rate limit relatively high. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 
-static void queue_tx(struct lswitch *, struct rconn *, struct buffer *);
+static void queue_tx(struct lswitch *, struct rconn *, struct ofpbuf *);
 static void send_features_request(struct lswitch *, struct rconn *);
 static void process_packet_in(struct lswitch *, struct rconn *,
                               struct ofp_packet_in *);
@@ -117,7 +117,7 @@ lswitch_destroy(struct lswitch *sw)
  * 'rconn'.  */
 void
 lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
-                       const struct buffer *msg)
+                       const struct ofpbuf *msg)
 {
     static const size_t min_size[UINT8_MAX + 1] = {
         [0 ... UINT8_MAX] = sizeof (struct ofp_header),
@@ -158,13 +158,13 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
 {
     time_t now = time_now();
     if (now >= sw->last_features_request + 1) {
-        struct buffer *b;
+        struct ofpbuf *b;
         struct ofp_header *ofr;
         struct ofp_switch_config *osc;
 
         /* Send OFPT_FEATURES_REQUEST. */
-        b = buffer_new(0);
-        ofr = buffer_put_uninit(b, sizeof *ofr);
+        b = ofpbuf_new(0);
+        ofr = ofpbuf_put_uninit(b, sizeof *ofr);
         memset(ofr, 0, sizeof *ofr);
         ofr->type = OFPT_FEATURES_REQUEST;
         ofr->version = OFP_VERSION;
@@ -172,8 +172,8 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
         queue_tx(sw, rconn, b);
 
         /* Send OFPT_SET_CONFIG. */
-        b = buffer_new(0);
-        osc = buffer_put_uninit(b, sizeof *osc);
+        b = ofpbuf_new(0);
+        osc = ofpbuf_put_uninit(b, sizeof *osc);
         memset(osc, 0, sizeof *osc);
         osc->header.type = OFPT_SET_CONFIG;
         osc->header.version = OFP_VERSION;
@@ -187,7 +187,7 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
 }
 
 static void
-queue_tx(struct lswitch *sw, struct rconn *rconn, struct buffer *b)
+queue_tx(struct lswitch *sw, struct rconn *rconn, struct ofpbuf *b)
 {
     int retval = rconn_send_with_limit(rconn, b, &sw->n_queued, 10);
     if (retval && retval != ENOTCONN) {
@@ -208,7 +208,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
     uint16_t out_port = OFPP_FLOOD;
 
     size_t pkt_ofs, pkt_len;
-    struct buffer pkt;
+    struct ofpbuf pkt;
     struct flow flow;
 
     /* Extract flow data from 'opi' into 'flow'. */
@@ -245,7 +245,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
     } else {
         /* We don't know that MAC, or we don't set up flows.  Send along the
          * packet without setting up a flow. */
-        struct buffer *b;
+        struct ofpbuf *b;
         if (ntohl(opi->buffer_id) == UINT32_MAX) {
             b = make_unbuffered_packet_out(&pkt, in_port, out_port);
         } else {

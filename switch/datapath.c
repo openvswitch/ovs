@@ -38,17 +38,20 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
-#include "buffer.h"
 #include "chain.h"
 #include "csum.h"
 #include "flow.h"
+#include "list.h"
 #include "netdev.h"
+#include "ofpbuf.h"
+#include "openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"
-#include "vconn.h"
+#include "switch-flow.h"
 #include "table.h"
 #include "timeval.h"
+#include "vconn.h"
 #include "xtoxll.h"
 
 #define THIS_MODULE VLM_datapath
@@ -147,24 +150,24 @@ static void remote_run(struct datapath *, struct remote *);
 static void remote_wait(struct remote *);
 static void remote_destroy(struct remote *);
 
-void dp_output_port(struct datapath *, struct buffer *,
+void dp_output_port(struct datapath *, struct ofpbuf *,
                     int in_port, int out_port);
 void dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm);
-void dp_output_control(struct datapath *, struct buffer *, int in_port,
+void dp_output_control(struct datapath *, struct ofpbuf *, int in_port,
                        size_t max_len, int reason);
 static void send_flow_expired(struct datapath *, struct sw_flow *,
                               enum ofp_flow_expired_reason);
 static int update_port_status(struct sw_port *p);
 static void send_port_status(struct sw_port *p, uint8_t status);
 static void del_switch_port(struct sw_port *p);
-static void execute_actions(struct datapath *, struct buffer *,
+static void execute_actions(struct datapath *, struct ofpbuf *,
                             int in_port, const struct sw_flow_key *,
                             const struct ofp_action *, int n_actions);
-static void modify_vlan(struct buffer *buffer, const struct sw_flow_key *key,
+static void modify_vlan(struct ofpbuf *buffer, const struct sw_flow_key *key,
                         const struct ofp_action *a);
-static void modify_nh(struct buffer *buffer, uint16_t eth_proto,
+static void modify_nh(struct ofpbuf *buffer, uint16_t eth_proto,
                       uint8_t nw_proto, const struct ofp_action *a);
-static void modify_th(struct buffer *buffer, uint16_t eth_proto,
+static void modify_th(struct ofpbuf *buffer, uint16_t eth_proto,
                           uint8_t nw_proto, const struct ofp_action *a);
 
 /* Buffers are identified to userspace by a 31-bit opaque ID.  We divide the ID
@@ -178,13 +181,13 @@ static void modify_th(struct buffer *buffer, uint16_t eth_proto,
 
 #define PKT_COOKIE_BITS (32 - PKT_BUFFER_BITS)
 
-int run_flow_through_tables(struct datapath *, struct buffer *, int in_port);
-void fwd_port_input(struct datapath *, struct buffer *, int in_port);
+int run_flow_through_tables(struct datapath *, struct ofpbuf *, int in_port);
+void fwd_port_input(struct datapath *, struct ofpbuf *, int in_port);
 int fwd_control_input(struct datapath *, const struct sender *,
                       const void *, size_t);
 
-uint32_t save_buffer(struct buffer *);
-static struct buffer *retrieve_buffer(uint32_t id);
+uint32_t save_buffer(struct ofpbuf *);
+static struct ofpbuf *retrieve_buffer(uint32_t id);
 static void discard_buffer(uint32_t id);
 
 static int port_no(struct datapath *dp, struct sw_port *p) 
@@ -292,7 +295,7 @@ dp_run(struct datapath *dp)
     time_t now = time_now();
     struct sw_port *p, *pn;
     struct remote *r, *rn;
-    struct buffer *buffer = NULL;
+    struct ofpbuf *buffer = NULL;
 
     if (now != dp->last_timeout) {
         struct list deleted = LIST_INITIALIZER(&deleted);
@@ -324,7 +327,7 @@ dp_run(struct datapath *dp)
             const int headroom = 128 + 2;
             const int hard_header = VLAN_ETH_HEADER_LEN;
             const int mtu = netdev_get_mtu(p->netdev);
-            buffer = buffer_new(headroom + hard_header + mtu);
+            buffer = ofpbuf_new(headroom + hard_header + mtu);
             buffer->data += headroom;
         }
         error = netdev_recv(p->netdev, buffer);
@@ -338,7 +341,7 @@ dp_run(struct datapath *dp)
                         netdev_get_name(p->netdev), strerror(error));
         }
     }
-    buffer_delete(buffer);
+    ofpbuf_delete(buffer);
 
     /* Talk to remotes. */
     LIST_FOR_EACH_SAFE (r, rn, struct remote, node, &dp->remotes) {
@@ -372,7 +375,7 @@ remote_run(struct datapath *dp, struct remote *r)
      * other processing doesn't starve. */
     for (i = 0; i < 50; i++) {
         if (!r->cb_dump) {
-            struct buffer *buffer;
+            struct ofpbuf *buffer;
             struct ofp_header *oh;
 
             buffer = rconn_recv(r->rconn);
@@ -390,7 +393,7 @@ remote_run(struct datapath *dp, struct remote *r)
             } else {
                 VLOG_WARN_RL(&rl, "received too-short OpenFlow message");
             }
-            buffer_delete(buffer); 
+            ofpbuf_delete(buffer); 
         } else {
             if (r->n_txq < TXQ_LIMIT) {
                 int error = r->cb_dump(dp, r->cb_aux);
@@ -517,7 +520,7 @@ dp_destroy(struct datapath *dp)
  * "flood" argument is set, don't send out ports with flooding disabled.
  */
 static int
-output_all(struct datapath *dp, struct buffer *buffer, int in_port, int flood)
+output_all(struct datapath *dp, struct ofpbuf *buffer, int in_port, int flood)
 {
     struct sw_port *p;
     int prev_port;
@@ -531,20 +534,20 @@ output_all(struct datapath *dp, struct buffer *buffer, int in_port, int flood)
             continue;
         }
         if (prev_port != -1) {
-            dp_output_port(dp, buffer_clone(buffer), in_port, prev_port);
+            dp_output_port(dp, ofpbuf_clone(buffer), in_port, prev_port);
         }
         prev_port = port_no(dp, p);
     }
     if (prev_port != -1)
         dp_output_port(dp, buffer, in_port, prev_port);
     else
-        buffer_delete(buffer);
+        ofpbuf_delete(buffer);
 
     return 0;
 }
 
 void
-output_packet(struct datapath *dp, struct buffer *buffer, int out_port) 
+output_packet(struct datapath *dp, struct ofpbuf *buffer, int out_port) 
 {
     if (out_port >= 0 && out_port < OFPP_MAX) { 
         struct sw_port *p = &dp->ports[out_port];
@@ -559,14 +562,14 @@ output_packet(struct datapath *dp, struct buffer *buffer, int out_port)
         }
     }
 
-    buffer_delete(buffer);
+    ofpbuf_delete(buffer);
     VLOG_DBG_RL(&rl, "can't forward to bad port %d\n", out_port);
 }
 
 /* Takes ownership of 'buffer' and transmits it to 'out_port' on 'dp'.
  */
 void
-dp_output_port(struct datapath *dp, struct buffer *buffer,
+dp_output_port(struct datapath *dp, struct ofpbuf *buffer,
                int in_port, int out_port)
 {
 
@@ -581,7 +584,7 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
         output_packet(dp, buffer, in_port);
     } else if (out_port == OFPP_TABLE) {
 		if (run_flow_through_tables(dp, buffer, in_port)) {
-			buffer_delete(buffer);
+			ofpbuf_delete(buffer);
         }
     } else {
         if (in_port == out_port) {
@@ -594,14 +597,14 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
 
 static void *
 make_openflow_reply(size_t openflow_len, uint8_t type,
-                    const struct sender *sender, struct buffer **bufferp)
+                    const struct sender *sender, struct ofpbuf **bufferp)
 {
     return make_openflow_xid(openflow_len, type, sender ? sender->xid : 0,
                              bufferp);
 }
 
 static int
-send_openflow_buffer(struct datapath *dp, struct buffer *buffer,
+send_openflow_buffer(struct datapath *dp, struct ofpbuf *buffer,
                      const struct sender *sender)
 {
     struct remote *remote = sender ? sender->remote : dp->controller;
@@ -624,7 +627,7 @@ send_openflow_buffer(struct datapath *dp, struct buffer *buffer,
  * the caller wants to be sent; a value of 0 indicates the entire packet should
  * be sent. */
 void
-dp_output_control(struct datapath *dp, struct buffer *buffer, int in_port,
+dp_output_control(struct datapath *dp, struct ofpbuf *buffer, int in_port,
                   size_t max_len, int reason)
 {
     struct ofp_packet_in *opi;
@@ -637,7 +640,7 @@ dp_output_control(struct datapath *dp, struct buffer *buffer, int in_port,
         buffer->size = max_len;
     }
 
-    opi = buffer_push_uninit(buffer, offsetof(struct ofp_packet_in, data));
+    opi = ofpbuf_push_uninit(buffer, offsetof(struct ofp_packet_in, data));
     opi->header.version = OFP_VERSION;
     opi->header.type    = OFPT_PACKET_IN;
     opi->header.length  = htons(buffer->size);
@@ -674,7 +677,7 @@ static void fill_port_desc(struct datapath *dp, struct sw_port *p,
 static void
 dp_send_features_reply(struct datapath *dp, const struct sender *sender)
 {
-    struct buffer *buffer;
+    struct ofpbuf *buffer;
     struct ofp_switch_features *ofr;
     struct sw_port *p;
 
@@ -689,7 +692,7 @@ dp_send_features_reply(struct datapath *dp, const struct sender *sender)
     ofr->capabilities   = htonl(OFP_SUPPORTED_CAPABILITIES);
     ofr->actions        = htonl(OFP_SUPPORTED_ACTIONS);
     LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
-        struct ofp_phy_port *opp = buffer_put_uninit(buffer, sizeof *opp);
+        struct ofp_phy_port *opp = ofpbuf_put_uninit(buffer, sizeof *opp);
         memset(opp, 0, sizeof *opp);
         fill_port_desc(dp, p, opp);
     }
@@ -772,7 +775,7 @@ update_port_status(struct sw_port *p)
 static void
 send_port_status(struct sw_port *p, uint8_t status) 
 {
-    struct buffer *buffer;
+    struct ofpbuf *buffer;
     struct ofp_port_status *ops;
     ops = make_openflow_xid(sizeof *ops, OFPT_PORT_STATUS, 0, &buffer);
     ops->reason = status;
@@ -786,7 +789,7 @@ void
 send_flow_expired(struct datapath *dp, struct sw_flow *flow,
                   enum ofp_flow_expired_reason reason)
 {
-    struct buffer *buffer;
+    struct ofpbuf *buffer;
     struct ofp_flow_expired *ofe;
     ofe = make_openflow_xid(sizeof *ofe, OFPT_FLOW_EXPIRED, 0, &buffer);
     flow_fill_match(&ofe->match, &flow->key);
@@ -806,7 +809,7 @@ void
 dp_send_error_msg(struct datapath *dp, const struct sender *sender,
         uint16_t type, uint16_t code, const uint8_t *data, size_t len)
 {
-    struct buffer *buffer;
+    struct ofpbuf *buffer;
     struct ofp_error_msg *oem;
     oem = make_openflow_reply(sizeof(*oem)+len, OFPT_ERROR_MSG, 
                               sender, &buffer);
@@ -817,12 +820,12 @@ dp_send_error_msg(struct datapath *dp, const struct sender *sender,
 }
 
 static void
-fill_flow_stats(struct buffer *buffer, struct sw_flow *flow,
+fill_flow_stats(struct ofpbuf *buffer, struct sw_flow *flow,
                 int table_idx, time_t now)
 {
     struct ofp_flow_stats *ofs;
     int length = sizeof *ofs + sizeof *ofs->actions * flow->n_actions;
-    ofs = buffer_put_uninit(buffer, length);
+    ofs = ofpbuf_put_uninit(buffer, length);
     ofs->length          = htons(length);
     ofs->table_id        = table_idx;
     ofs->pad             = 0;
@@ -854,7 +857,7 @@ fill_flow_stats(struct buffer *buffer, struct sw_flow *flow,
  * OFPP_MAX.  Process it according to 'dp''s flow table.  Returns 0 if
  * successful, in which case 'buffer' is destroyed, or -ESRCH if there is no
  * matching flow, in which case 'buffer' still belongs to the caller. */
-int run_flow_through_tables(struct datapath *dp, struct buffer *buffer,
+int run_flow_through_tables(struct datapath *dp, struct ofpbuf *buffer,
                             int in_port)
 {
     struct sw_flow_key key;
@@ -864,7 +867,7 @@ int run_flow_through_tables(struct datapath *dp, struct buffer *buffer,
     if (flow_extract(buffer, in_port, &key.flow)
         && (dp->flags & OFPC_FRAG_MASK) == OFPC_FRAG_DROP) {
         /* Drop fragment. */
-        buffer_delete(buffer);
+        ofpbuf_delete(buffer);
         return 0;
     }
 
@@ -882,7 +885,7 @@ int run_flow_through_tables(struct datapath *dp, struct buffer *buffer,
 /* 'buffer' was received on 'in_port', a physical switch port between 0 and
  * OFPP_MAX.  Process it according to 'dp''s flow table, sending it up to the
  * controller if no flow matches.  Takes ownership of 'buffer'. */
-void fwd_port_input(struct datapath *dp, struct buffer *buffer, int in_port) 
+void fwd_port_input(struct datapath *dp, struct ofpbuf *buffer, int in_port) 
 {
     if (run_flow_through_tables(dp, buffer, in_port)) {
         dp_output_control(dp, buffer, in_port, dp->miss_send_len,
@@ -891,7 +894,7 @@ void fwd_port_input(struct datapath *dp, struct buffer *buffer, int in_port)
 }
 
 static void
-do_output(struct datapath *dp, struct buffer *buffer, int in_port,
+do_output(struct datapath *dp, struct ofpbuf *buffer, int in_port,
           size_t max_len, int out_port)
 {
     if (out_port != OFPP_CONTROLLER) {
@@ -902,7 +905,7 @@ do_output(struct datapath *dp, struct buffer *buffer, int in_port,
 }
 
 static void
-execute_actions(struct datapath *dp, struct buffer *buffer,
+execute_actions(struct datapath *dp, struct ofpbuf *buffer,
                 int in_port, const struct sw_flow_key *key,
                 const struct ofp_action *actions, int n_actions)
 {
@@ -923,7 +926,7 @@ execute_actions(struct datapath *dp, struct buffer *buffer,
         struct eth_header *eh = buffer->l2;
 
         if (prev_port != -1) {
-            do_output(dp, buffer_clone(buffer), in_port, max_len, prev_port);
+            do_output(dp, ofpbuf_clone(buffer), in_port, max_len, prev_port);
             prev_port = -1;
         }
 
@@ -962,10 +965,10 @@ execute_actions(struct datapath *dp, struct buffer *buffer,
     if (prev_port != -1)
         do_output(dp, buffer, in_port, max_len, prev_port);
     else
-        buffer_delete(buffer);
+        ofpbuf_delete(buffer);
 }
 
-static void modify_nh(struct buffer *buffer, uint16_t eth_proto,
+static void modify_nh(struct ofpbuf *buffer, uint16_t eth_proto,
                       uint8_t nw_proto, const struct ofp_action *a)
 {
     if (eth_proto == ETH_TYPE_IP) {
@@ -991,7 +994,7 @@ static void modify_nh(struct buffer *buffer, uint16_t eth_proto,
     }
 }
 
-static void modify_th(struct buffer *buffer, uint16_t eth_proto,
+static void modify_th(struct ofpbuf *buffer, uint16_t eth_proto,
                       uint8_t nw_proto, const struct ofp_action *a)
 {
     if (eth_proto == ETH_TYPE_IP) {
@@ -1014,7 +1017,7 @@ static void modify_th(struct buffer *buffer, uint16_t eth_proto,
 }
 
 static void
-modify_vlan(struct buffer *buffer,
+modify_vlan(struct ofpbuf *buffer,
             const struct sw_flow_key *key, const struct ofp_action *a)
 {
     uint16_t new_id = a->arg.vlan_id;
@@ -1036,7 +1039,7 @@ modify_vlan(struct buffer *buffer,
             tmp.veth_tci = new_id;
             tmp.veth_next_type = eh->eth_type;
             
-            veh = buffer_push_uninit(buffer, VLAN_HEADER_LEN);
+            veh = ofpbuf_push_uninit(buffer, VLAN_HEADER_LEN);
             memcpy(veh, &tmp, sizeof tmp);
             buffer->l2 -= VLAN_HEADER_LEN;
         }
@@ -1070,7 +1073,7 @@ static int
 recv_get_config_request(struct datapath *dp, const struct sender *sender,
                         const void *msg) 
 {
-    struct buffer *buffer;
+    struct ofpbuf *buffer;
     struct ofp_switch_config *osc;
 
     osc = make_openflow_reply(sizeof *osc, OFPT_GET_CONFIG_REPLY,
@@ -1105,7 +1108,7 @@ recv_packet_out(struct datapath *dp, const struct sender *sender UNUSED,
 {
     const struct ofp_packet_out *opo = msg;
     struct sw_flow_key key;
-    struct buffer *buffer;
+    struct ofpbuf *buffer;
     int n_actions = ntohs(opo->n_actions);
     int act_len = n_actions * sizeof opo->actions[0];
 
@@ -1117,8 +1120,8 @@ recv_packet_out(struct datapath *dp, const struct sender *sender UNUSED,
     if (ntohl(opo->buffer_id) == (uint32_t) -1) {
         /* FIXME: can we avoid copying data here? */
         int data_len = ntohs(opo->header.length) - sizeof *opo - act_len;
-        buffer = buffer_new(data_len);
-        buffer_put(buffer, &opo->actions[n_actions], data_len);
+        buffer = ofpbuf_new(data_len);
+        ofpbuf_put(buffer, &opo->actions[n_actions], data_len);
     } else {
         buffer = retrieve_buffer(ntohl(opo->buffer_id));
         if (!buffer) {
@@ -1193,7 +1196,7 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
     }
     error = 0;
     if (ntohl(ofm->buffer_id) != UINT32_MAX) {
-        struct buffer *buffer = retrieve_buffer(ntohl(ofm->buffer_id));
+        struct ofpbuf *buffer = retrieve_buffer(ntohl(ofm->buffer_id));
         if (buffer) {
             struct sw_flow_key key;
             uint16_t in_port = ntohs(ofm->match.in_port);
@@ -1239,9 +1242,9 @@ recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
 }
 
 static int desc_stats_dump(struct datapath *dp, void *state,
-                              struct buffer *buffer)
+                              struct ofpbuf *buffer)
 {
-    struct ofp_desc_stats *ods = buffer_put_uninit(buffer, sizeof *ods);
+    struct ofp_desc_stats *ods = ofpbuf_put_uninit(buffer, sizeof *ods);
 
     strncpy(ods->mfr_desc, &mfr_desc, sizeof ods->mfr_desc);
     strncpy(ods->hw_desc, &hw_desc, sizeof ods->hw_desc);
@@ -1257,7 +1260,7 @@ struct flow_stats_state {
     struct ofp_flow_stats_request rq;
     time_t now;
 
-    struct buffer *buffer;
+    struct ofpbuf *buffer;
 };
 
 #define MAX_FLOW_STATS_BYTES 4096
@@ -1282,7 +1285,7 @@ static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 }
 
 static int flow_stats_dump(struct datapath *dp, void *state,
-                           struct buffer *buffer)
+                           struct ofpbuf *buffer)
 {
     struct flow_stats_state *s = state;
     struct sw_flow_key match_key;
@@ -1335,7 +1338,7 @@ static int aggregate_stats_dump_callback(struct sw_flow *flow, void *private)
 }
 
 static int aggregate_stats_dump(struct datapath *dp, void *state,
-                                struct buffer *buffer)
+                                struct ofpbuf *buffer)
 {
     struct aggregate_stats_state *s = state;
     struct ofp_aggregate_stats_request *rq = &s->rq;
@@ -1344,7 +1347,7 @@ static int aggregate_stats_dump(struct datapath *dp, void *state,
     struct sw_flow_key match_key;
     int table_idx;
 
-    rpy = buffer_put_uninit(buffer, sizeof *rpy);
+    rpy = ofpbuf_put_uninit(buffer, sizeof *rpy);
     memset(rpy, 0, sizeof *rpy);
 
     flow_extract_match(&match_key, &rq->match);
@@ -1377,11 +1380,11 @@ static void aggregate_stats_done(void *state)
 }
 
 static int table_stats_dump(struct datapath *dp, void *state,
-                            struct buffer *buffer)
+                            struct ofpbuf *buffer)
 {
     int i;
     for (i = 0; i < dp->chain->n_tables; i++) {
-        struct ofp_table_stats *ots = buffer_put_uninit(buffer, sizeof *ots);
+        struct ofp_table_stats *ots = ofpbuf_put_uninit(buffer, sizeof *ots);
         struct sw_table_stats stats;
         dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
         strncpy(ots->name, stats.name, sizeof ots->name);
@@ -1408,7 +1411,7 @@ static int port_stats_init(struct datapath *dp, const void *body, int body_len,
 }
 
 static int port_stats_dump(struct datapath *dp, void *state,
-                           struct buffer *buffer)
+                           struct ofpbuf *buffer)
 {
     struct port_stats_state *s = state;
     int i;
@@ -1419,7 +1422,7 @@ static int port_stats_dump(struct datapath *dp, void *state,
         if (!p->netdev) {
             continue;
         }
-        ops = buffer_put_uninit(buffer, sizeof *ops);
+        ops = ofpbuf_put_uninit(buffer, sizeof *ops);
         ops->port_no = htons(port_no(dp, p));
         memset(ops->pad, 0, sizeof ops->pad);
         ops->rx_packets   = htonll(p->rx_packets);
@@ -1462,7 +1465,7 @@ struct stats_type {
      * struct ofp_stats_reply.  On success, it should return 1 if it should be
      * called again later with another buffer, 0 if it is done, or a negative
      * errno value on failure. */
-    int (*dump)(struct datapath *dp, void *state, struct buffer *buffer);
+    int (*dump)(struct datapath *dp, void *state, struct ofpbuf *buffer);
 
     /* Cleans any state created by the init or dump functions.  May be null
      * if no cleanup is required. */
@@ -1520,7 +1523,7 @@ stats_dump(struct datapath *dp, void *cb_)
 {
     struct stats_dump_cb *cb = cb_;
     struct ofp_stats_reply *osr;
-    struct buffer *buffer;
+    struct ofpbuf *buffer;
     int err;
 
     if (cb->done) {
@@ -1539,7 +1542,7 @@ stats_dump(struct datapath *dp, void *cb_)
             cb->done = true;
         } else {
             /* Buffer might have been reallocated, so find our data again. */
-            osr = buffer_at_assert(buffer, 0, sizeof *osr);
+            osr = ofpbuf_at_assert(buffer, 0, sizeof *osr);
             osr->flags = ntohs(OFPSF_REPLY_MORE);
         }
         err2 = send_openflow_buffer(dp, buffer, &cb->sender);
@@ -1699,7 +1702,7 @@ fwd_control_input(struct datapath *dp, const struct sender *sender,
 #define OVERWRITE_SECS  1
 
 struct packet_buffer {
-    struct buffer *buffer;
+    struct ofpbuf *buffer;
     uint32_t cookie;
     time_t timeout;
 };
@@ -1707,7 +1710,7 @@ struct packet_buffer {
 static struct packet_buffer buffers[N_PKT_BUFFERS];
 static unsigned int buffer_idx;
 
-uint32_t save_buffer(struct buffer *buffer)
+uint32_t save_buffer(struct ofpbuf *buffer)
 {
     struct packet_buffer *p;
     uint32_t id;
@@ -1720,23 +1723,23 @@ uint32_t save_buffer(struct buffer *buffer)
         if (time_now() < p->timeout) { /* FIXME */
             return -1;
         } else {
-            buffer_delete(p->buffer); 
+            ofpbuf_delete(p->buffer); 
         }
     }
     /* Don't use maximum cookie value since the all-bits-1 id is
      * special. */
     if (++p->cookie >= (1u << PKT_COOKIE_BITS) - 1)
         p->cookie = 0;
-    p->buffer = buffer_clone(buffer);      /* FIXME */
+    p->buffer = ofpbuf_clone(buffer);      /* FIXME */
     p->timeout = time_now() + OVERWRITE_SECS; /* FIXME */
     id = buffer_idx | (p->cookie << PKT_BUFFER_BITS);
 
     return id;
 }
 
-static struct buffer *retrieve_buffer(uint32_t id)
+static struct ofpbuf *retrieve_buffer(uint32_t id)
 {
-    struct buffer *buffer = NULL;
+    struct ofpbuf *buffer = NULL;
     struct packet_buffer *p;
 
     p = &buffers[id & PKT_BUFFER_MASK];
@@ -1757,7 +1760,7 @@ static void discard_buffer(uint32_t id)
 
     p = &buffers[id & PKT_BUFFER_MASK];
     if (p->cookie == id >> PKT_BUFFER_BITS) {
-        buffer_delete(p->buffer);
+        ofpbuf_delete(p->buffer);
         p->buffer = NULL;
     }
 }

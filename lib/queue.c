@@ -34,7 +34,7 @@
 #include <config.h>
 #include "queue.h"
 #include <assert.h>
-#include "buffer.h"
+#include "ofpbuf.h"
 
 static void check_queue(struct queue *q);
 
@@ -51,10 +51,10 @@ queue_init(struct queue *q)
 void
 queue_destroy(struct queue *q)
 {
-    struct buffer *cur, *next;
+    struct ofpbuf *cur, *next;
     for (cur = q->head; cur != NULL; cur = next) {
         next = cur->next;
-        buffer_delete(cur);
+        ofpbuf_delete(cur);
     }
 }
 
@@ -73,7 +73,7 @@ queue_clear(struct queue *q)
  * passed to a function for possible consumption (and destruction) and only
  * dropped from the queue if that function actually accepts it. */
 void
-queue_advance_head(struct queue *q, struct buffer *next)
+queue_advance_head(struct queue *q, struct ofpbuf *next)
 {
     assert(q->n);
     assert(q->head);
@@ -86,7 +86,7 @@ queue_advance_head(struct queue *q, struct buffer *next)
 
 /* Appends 'b' to the tail of 'q'. */
 void
-queue_push_tail(struct queue *q, struct buffer *b)
+queue_push_tail(struct queue *q, struct ofpbuf *b)
 {
     check_queue(q);
 
@@ -102,12 +102,12 @@ queue_push_tail(struct queue *q, struct buffer *b)
 }
 
 /* Removes the first buffer from 'q', which must not be empty, and returns
- * it.  The caller must free the buffer (with buffer_delete()) when it is no
+ * it.  The caller must free the buffer (with ofpbuf_delete()) when it is no
  * longer needed. */
-struct buffer *
+struct ofpbuf *
 queue_pop_head(struct queue *q)
 {
-    struct buffer *head = q->head;
+    struct ofpbuf *head = q->head;
     queue_advance_head(q, head->next);
     return head;
 }
@@ -117,7 +117,7 @@ static void
 check_queue(struct queue *q)
 {
 #if 0
-    struct buffer *iter;
+    struct ofpbuf *iter;
     size_t n;
 
     assert(q->n == 0

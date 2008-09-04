@@ -43,7 +43,7 @@
 #include <openssl/ssl.h>
 #include <poll.h>
 #include <unistd.h>
-#include "buffer.h"
+#include "ofpbuf.h"
 #include "socket-util.h"
 #include "util.h"
 #include "openflow.h"
@@ -77,8 +77,8 @@ struct ssl_vconn
     enum session_type type;
     int fd;
     SSL *ssl;
-    struct buffer *rxbuf;
-    struct buffer *txbuf;
+    struct ofpbuf *rxbuf;
+    struct ofpbuf *txbuf;
     struct poll_waiter *tx_waiter;
 
     /* rx_want and tx_want record the result of the last call to SSL_read()
@@ -440,16 +440,16 @@ interpret_ssl_error(const char *function, int ret, int error,
 }
 
 static int
-ssl_recv(struct vconn *vconn, struct buffer **bufferp)
+ssl_recv(struct vconn *vconn, struct ofpbuf **bufferp)
 {
     struct ssl_vconn *sslv = ssl_vconn_cast(vconn);
-    struct buffer *rx;
+    struct ofpbuf *rx;
     size_t want_bytes;
     int old_state;
     ssize_t ret;
 
     if (sslv->rxbuf == NULL) {
-        sslv->rxbuf = buffer_new(1564);
+        sslv->rxbuf = ofpbuf_new(1564);
     }
     rx = sslv->rxbuf;
 
@@ -471,13 +471,13 @@ again:
             return 0;
         }
     }
-    buffer_prealloc_tailroom(rx, want_bytes);
+    ofpbuf_prealloc_tailroom(rx, want_bytes);
 
     /* Behavior of zero-byte SSL_read is poorly defined. */
     assert(want_bytes > 0);
 
     old_state = SSL_get_state(sslv->ssl);
-    ret = SSL_read(sslv->ssl, buffer_tail(rx), want_bytes);
+    ret = SSL_read(sslv->ssl, ofpbuf_tail(rx), want_bytes);
     if (old_state != SSL_get_state(sslv->ssl)) {
         sslv->tx_want = SSL_NOTHING;
         if (sslv->tx_waiter) {
@@ -518,7 +518,7 @@ again:
 static void
 ssl_clear_txbuf(struct ssl_vconn *sslv)
 {
-    buffer_delete(sslv->txbuf);
+    ofpbuf_delete(sslv->txbuf);
     sslv->txbuf = NULL;
     sslv->tx_waiter = NULL;
 }
@@ -545,7 +545,7 @@ ssl_do_tx(struct vconn *vconn)
         }
         sslv->tx_want = SSL_NOTHING;
         if (ret > 0) {
-            buffer_pull(sslv->txbuf, ret);
+            ofpbuf_pull(sslv->txbuf, ret);
             if (sslv->txbuf->size == 0) {
                 return 0;
             }
@@ -576,7 +576,7 @@ ssl_tx_poll_callback(int fd UNUSED, short int revents UNUSED, void *vconn_)
 }
 
 static int
-ssl_send(struct vconn *vconn, struct buffer *buffer)
+ssl_send(struct vconn *vconn, struct ofpbuf *buffer)
 {
     struct ssl_vconn *sslv = ssl_vconn_cast(vconn);
 

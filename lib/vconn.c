@@ -40,9 +40,9 @@
 #include <poll.h>
 #include <stdlib.h>
 #include <string.h>
-#include "buffer.h"
 #include "flow.h"
 #include "ofp-print.h"
+#include "ofpbuf.h"
 #include "openflow.h"
 #include "poll-loop.h"
 #include "random.h"
@@ -274,13 +274,13 @@ vconn_accept(struct vconn *vconn, struct vconn **new_vconn)
 /* Tries to receive an OpenFlow message from 'vconn', which must be an active
  * vconn.  If successful, stores the received message into '*msgp' and returns
  * 0.  The caller is responsible for destroying the message with
- * buffer_delete().  On failure, returns a positive errno value and stores a
+ * ofpbuf_delete().  On failure, returns a positive errno value and stores a
  * null pointer into '*msgp'.  On normal connection close, returns EOF.
  *
  * vconn_recv will not block waiting for a packet to arrive.  If no packets
  * have been received, it returns EAGAIN immediately. */
 int
-vconn_recv(struct vconn *vconn, struct buffer **msgp)
+vconn_recv(struct vconn *vconn, struct ofpbuf **msgp)
 {
     int retval = vconn_connect(vconn);
     if (!retval) {
@@ -294,12 +294,12 @@ vconn_recv(struct vconn *vconn, struct buffer **msgp)
                 free(s);
             }
 
-            oh = buffer_at_assert(*msgp, 0, sizeof *oh);
+            oh = ofpbuf_at_assert(*msgp, 0, sizeof *oh);
             if (oh->version != OFP_VERSION) {
                 VLOG_ERR_RL(&rl, "%s: received OpenFlow version %02"PRIx8" "
                             "!= expected %02x",
                             vconn->name, oh->version, OFP_VERSION);
-                buffer_delete(*msgp);
+                ofpbuf_delete(*msgp);
                 *msgp = NULL;
                 return EPROTO;
             }
@@ -323,7 +323,7 @@ vconn_recv(struct vconn *vconn, struct buffer **msgp)
  * vconn_send will not block.  If 'msg' cannot be immediately accepted for
  * transmission, it returns EAGAIN immediately. */
 int
-vconn_send(struct vconn *vconn, struct buffer *msg)
+vconn_send(struct vconn *vconn, struct ofpbuf *msg)
 {
     int retval = vconn_connect(vconn);
     if (!retval) {
@@ -345,7 +345,7 @@ vconn_send(struct vconn *vconn, struct buffer *msg)
 
 /* Same as vconn_send, except that it waits until 'msg' can be transmitted. */
 int
-vconn_send_block(struct vconn *vconn, struct buffer *msg)
+vconn_send_block(struct vconn *vconn, struct ofpbuf *msg)
 {
     int retval;
     while ((retval = vconn_send(vconn, msg)) == EAGAIN) {
@@ -357,7 +357,7 @@ vconn_send_block(struct vconn *vconn, struct buffer *msg)
 
 /* Same as vconn_recv, except that it waits until a message is received. */
 int
-vconn_recv_block(struct vconn *vconn, struct buffer **msgp)
+vconn_recv_block(struct vconn *vconn, struct ofpbuf **msgp)
 {
     int retval;
     while ((retval = vconn_recv(vconn, msgp)) == EAGAIN) {
@@ -374,8 +374,8 @@ vconn_recv_block(struct vconn *vconn, struct buffer **msgp)
  *
  * 'request' is always destroyed, regardless of the return value. */
 int
-vconn_transact(struct vconn *vconn, struct buffer *request,
-               struct buffer **replyp)
+vconn_transact(struct vconn *vconn, struct ofpbuf *request,
+               struct ofpbuf **replyp)
 {
     uint32_t send_xid = ((struct ofp_header *) request->data)->xid;
     int error;
@@ -383,12 +383,12 @@ vconn_transact(struct vconn *vconn, struct buffer *request,
     *replyp = NULL;
     error = vconn_send_block(vconn, request);
     if (error) {
-        buffer_delete(request);
+        ofpbuf_delete(request);
         return error;
     }
     for (;;) {
         uint32_t recv_xid;
-        struct buffer *reply;
+        struct ofpbuf *reply;
 
         error = vconn_recv_block(vconn, &reply);
         if (error) {
@@ -402,7 +402,7 @@ vconn_transact(struct vconn *vconn, struct buffer *request,
 
         VLOG_DBG_RL(&rl, "%s: received reply with xid %08"PRIx32" != expected "
                     "%08"PRIx32, vconn->name, recv_xid, send_xid);
-        buffer_delete(reply);
+        ofpbuf_delete(reply);
     }
 }
 
@@ -457,7 +457,7 @@ vconn_send_wait(struct vconn *vconn)
  * id.  Stores the new buffer in '*bufferp'.  The caller must free the buffer
  * when it is no longer needed. */
 void *
-make_openflow(size_t openflow_len, uint8_t type, struct buffer **bufferp) 
+make_openflow(size_t openflow_len, uint8_t type, struct ofpbuf **bufferp) 
 {
     return make_openflow_xid(openflow_len, type, random_uint32(), bufferp);
 }
@@ -468,15 +468,15 @@ make_openflow(size_t openflow_len, uint8_t type, struct buffer **bufferp)
  * buffer when it is no longer needed. */
 void *
 make_openflow_xid(size_t openflow_len, uint8_t type, uint32_t xid,
-                  struct buffer **bufferp)
+                  struct ofpbuf **bufferp)
 {
-    struct buffer *buffer;
+    struct ofpbuf *buffer;
     struct ofp_header *oh;
 
     assert(openflow_len >= sizeof *oh);
     assert(openflow_len <= UINT16_MAX);
-    buffer = *bufferp = buffer_new(openflow_len);
-    oh = buffer_put_uninit(buffer, openflow_len);
+    buffer = *bufferp = ofpbuf_new(openflow_len);
+    oh = ofpbuf_put_uninit(buffer, openflow_len);
     memset(oh, 0, openflow_len);
     oh->version = OFP_VERSION;
     oh->type = type;
@@ -488,20 +488,20 @@ make_openflow_xid(size_t openflow_len, uint8_t type, uint32_t xid,
 /* Updates the 'length' field of the OpenFlow message in 'buffer' to
  * 'buffer->size'. */
 void
-update_openflow_length(struct buffer *buffer) 
+update_openflow_length(struct ofpbuf *buffer) 
 {
-    struct ofp_header *oh = buffer_at_assert(buffer, 0, sizeof *oh);
+    struct ofp_header *oh = ofpbuf_at_assert(buffer, 0, sizeof *oh);
     oh->length = htons(buffer->size); 
 }
 
-struct buffer *
+struct ofpbuf *
 make_add_flow(const struct flow *flow, uint32_t buffer_id,
               uint16_t idle_timeout, size_t n_actions)
 {
     struct ofp_flow_mod *ofm;
     size_t size = sizeof *ofm + n_actions * sizeof ofm->actions[0];
-    struct buffer *out = buffer_new(size);
-    ofm = buffer_put_uninit(out, size);
+    struct ofpbuf *out = ofpbuf_new(size);
+    ofm = ofpbuf_put_uninit(out, size);
     memset(ofm, 0, size);
     ofm->header.version = OFP_VERSION;
     ofm->header.type = OFPT_FLOW_MOD;
@@ -524,12 +524,12 @@ make_add_flow(const struct flow *flow, uint32_t buffer_id,
     return out;
 }
 
-struct buffer *
+struct ofpbuf *
 make_add_simple_flow(const struct flow *flow,
                      uint32_t buffer_id, uint16_t out_port,
                      uint16_t idle_timeout)
 {
-    struct buffer *buffer = make_add_flow(flow, buffer_id, idle_timeout, 1);
+    struct ofpbuf *buffer = make_add_flow(flow, buffer_id, idle_timeout, 1);
     struct ofp_flow_mod *ofm = buffer->data;
     ofm->actions[0].type = htons(OFPAT_OUTPUT);
     ofm->actions[0].arg.output.max_len = htons(0);
@@ -537,14 +537,14 @@ make_add_simple_flow(const struct flow *flow,
     return buffer;
 }
 
-struct buffer *
-make_unbuffered_packet_out(const struct buffer *packet,
+struct ofpbuf *
+make_unbuffered_packet_out(const struct ofpbuf *packet,
                            uint16_t in_port, uint16_t out_port)
 {
     struct ofp_packet_out *opo;
     size_t size = sizeof *opo + sizeof opo->actions[0];
-    struct buffer *out = buffer_new(size + packet->size);
-    opo = buffer_put_uninit(out, size);
+    struct ofpbuf *out = ofpbuf_new(size + packet->size);
+    opo = ofpbuf_put_uninit(out, size);
     memset(opo, 0, sizeof *opo);
     opo->header.version = OFP_VERSION;
     opo->header.type = OFPT_PACKET_OUT;
@@ -554,19 +554,19 @@ make_unbuffered_packet_out(const struct buffer *packet,
     opo->actions[0].type = htons(OFPAT_OUTPUT);
     opo->actions[0].arg.output.max_len = htons(0);
     opo->actions[0].arg.output.port = htons(out_port);
-    buffer_put(out, packet->data, packet->size);
+    ofpbuf_put(out, packet->data, packet->size);
     update_openflow_length(out);
     return out;
 }
 
-struct buffer *
+struct ofpbuf *
 make_buffered_packet_out(uint32_t buffer_id,
                          uint16_t in_port, uint16_t out_port)
 {
     struct ofp_packet_out *opo;
     size_t size = sizeof *opo + sizeof opo->actions[0];
-    struct buffer *out = buffer_new(size);
-    opo = buffer_put_uninit(out, size);
+    struct ofpbuf *out = ofpbuf_new(size);
+    opo = ofpbuf_put_uninit(out, size);
     memset(opo, 0, size);
     opo->header.version = OFP_VERSION;
     opo->header.type = OFPT_PACKET_OUT;
@@ -581,12 +581,12 @@ make_buffered_packet_out(uint32_t buffer_id,
 }
 
 /* Creates and returns an OFPT_ECHO_REQUEST message with an empty payload. */
-struct buffer *
+struct ofpbuf *
 make_echo_request(void)
 {
     struct ofp_header *rq;
-    struct buffer *out = buffer_new(sizeof *rq);
-    rq = buffer_put_uninit(out, sizeof *rq);
+    struct ofpbuf *out = ofpbuf_new(sizeof *rq);
+    rq = ofpbuf_put_uninit(out, sizeof *rq);
     rq->version = OFP_VERSION;
     rq->type = OFPT_ECHO_REQUEST;
     rq->length = htons(sizeof *rq);
@@ -596,12 +596,12 @@ make_echo_request(void)
 
 /* Creates and returns an OFPT_ECHO_REPLY message matching the
  * OFPT_ECHO_REQUEST message in 'rq'. */
-struct buffer *
+struct ofpbuf *
 make_echo_reply(const struct ofp_header *rq)
 {
     size_t size = ntohs(rq->length);
-    struct buffer *out = buffer_new(size);
-    struct ofp_header *reply = buffer_put(out, rq, size);
+    struct ofpbuf *out = ofpbuf_new(size);
+    struct ofp_header *reply = ofpbuf_put(out, rq, size);
     reply->type = OFPT_ECHO_REPLY;
     return out;
 }

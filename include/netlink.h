@@ -47,7 +47,7 @@
 #include <sys/uio.h>
 #include <stdint.h>
 
-struct buffer;
+struct ofpbuf;
 struct nl_sock;
 struct nlattr;
 
@@ -58,43 +58,43 @@ int nl_sock_create(int protocol, int multicast_group,
                    struct nl_sock **);
 void nl_sock_destroy(struct nl_sock *);
 
-int nl_sock_send(struct nl_sock *, const struct buffer *, bool wait);
+int nl_sock_send(struct nl_sock *, const struct ofpbuf *, bool wait);
 int nl_sock_sendv(struct nl_sock *sock, const struct iovec iov[], size_t n_iov,
                   bool wait);
-int nl_sock_recv(struct nl_sock *, struct buffer **, bool wait);
-int nl_sock_transact(struct nl_sock *, const struct buffer *request,
-                     struct buffer **reply);
+int nl_sock_recv(struct nl_sock *, struct ofpbuf **, bool wait);
+int nl_sock_transact(struct nl_sock *, const struct ofpbuf *request,
+                     struct ofpbuf **reply);
 
 int nl_sock_fd(const struct nl_sock *);
 
 /* Netlink messages. */
 
 /* Accessing headers and data. */
-struct nlmsghdr *nl_msg_nlmsghdr(const struct buffer *);
-struct genlmsghdr *nl_msg_genlmsghdr(const struct buffer *);
-bool nl_msg_nlmsgerr(const struct buffer *, int *error);
-void nl_msg_reserve(struct buffer *, size_t);
+struct nlmsghdr *nl_msg_nlmsghdr(const struct ofpbuf *);
+struct genlmsghdr *nl_msg_genlmsghdr(const struct ofpbuf *);
+bool nl_msg_nlmsgerr(const struct ofpbuf *, int *error);
+void nl_msg_reserve(struct ofpbuf *, size_t);
 
 /* Appending headers and raw data. */
-void nl_msg_put_nlmsghdr(struct buffer *, struct nl_sock *,
+void nl_msg_put_nlmsghdr(struct ofpbuf *, struct nl_sock *,
                          size_t expected_payload,
                          uint32_t type, uint32_t flags);
-void nl_msg_put_genlmsghdr(struct buffer *, struct nl_sock *,
+void nl_msg_put_genlmsghdr(struct ofpbuf *, struct nl_sock *,
                            size_t expected_payload, int family, uint32_t flags,
                            uint8_t cmd, uint8_t version);
-void nl_msg_put(struct buffer *, const void *, size_t);
-void *nl_msg_put_uninit(struct buffer *, size_t);
+void nl_msg_put(struct ofpbuf *, const void *, size_t);
+void *nl_msg_put_uninit(struct ofpbuf *, size_t);
 
 /* Appending attributes. */
-void *nl_msg_put_unspec_uninit(struct buffer *, uint16_t type, size_t);
-void nl_msg_put_unspec(struct buffer *, uint16_t type, const void *, size_t);
-void nl_msg_put_flag(struct buffer *, uint16_t type);
-void nl_msg_put_u8(struct buffer *, uint16_t type, uint8_t value);
-void nl_msg_put_u16(struct buffer *, uint16_t type, uint16_t value);
-void nl_msg_put_u32(struct buffer *, uint16_t type, uint32_t value);
-void nl_msg_put_u64(struct buffer *, uint16_t type, uint64_t value);
-void nl_msg_put_string(struct buffer *, uint16_t type, const char *value);
-void nl_msg_put_nested(struct buffer *, uint16_t type, struct buffer *);
+void *nl_msg_put_unspec_uninit(struct ofpbuf *, uint16_t type, size_t);
+void nl_msg_put_unspec(struct ofpbuf *, uint16_t type, const void *, size_t);
+void nl_msg_put_flag(struct ofpbuf *, uint16_t type);
+void nl_msg_put_u8(struct ofpbuf *, uint16_t type, uint8_t value);
+void nl_msg_put_u16(struct ofpbuf *, uint16_t type, uint16_t value);
+void nl_msg_put_u32(struct ofpbuf *, uint16_t type, uint32_t value);
+void nl_msg_put_u64(struct ofpbuf *, uint16_t type, uint64_t value);
+void nl_msg_put_string(struct ofpbuf *, uint16_t type, const char *value);
+void nl_msg_put_nested(struct ofpbuf *, uint16_t type, struct ofpbuf *);
 
 /* Netlink attribute types. */
 enum nl_attr_type
@@ -135,7 +135,7 @@ struct nl_policy
     bool optional;
 };
 
-bool nl_policy_parse(const struct buffer *, const struct nl_policy[],
+bool nl_policy_parse(const struct ofpbuf *, const struct nl_policy[],
                      struct nlattr *[], size_t n_attrs);
 
 /* Miscellaneous. */

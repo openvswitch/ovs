@@ -43,13 +43,13 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#include "buffer.h"
 #include "compiler.h"
 #include "dynamic-string.h"
 #include "flow.h"
-#include "util.h"
+#include "ofpbuf.h"
 #include "openflow.h"
 #include "packets.h"
+#include "util.h"
 
 static void ofp_print_port_name(struct ds *string, uint16_t port);
 static void ofp_print_match(struct ds *, const struct ofp_match *,
@@ -180,7 +180,7 @@ ofp_packet_in(struct ds *string, const void *oh, size_t len, int verbosity)
 
     if (verbosity > 0) {
         struct flow flow;
-        struct buffer packet;
+        struct ofpbuf packet;
         struct ofp_match match;
         packet.data = (void *) op->data;
         packet.size = data_len;

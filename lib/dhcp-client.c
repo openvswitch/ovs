@@ -43,12 +43,12 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
-#include "buffer.h"
 #include "csum.h"
 #include "dhcp.h"
 #include "dynamic-string.h"
 #include "flow.h"
 #include "netdev.h"
+#include "ofpbuf.h"
 #include "ofp-print.h"
 #include "poll-loop.h"
 #include "sat-math.h"
@@ -876,16 +876,16 @@ timeout(struct dhclient *cli, unsigned int secs)
 static bool
 do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
 {
-    struct buffer b;
+    struct ofpbuf b;
 
-    buffer_init(&b, netdev_get_mtu(cli->netdev) + VLAN_ETH_HEADER_LEN);
+    ofpbuf_init(&b, netdev_get_mtu(cli->netdev) + VLAN_ETH_HEADER_LEN);
     for (; cli->received < 50; cli->received++) {
         const struct ip_header *ip;
         const struct dhcp_header *dhcp;
         struct flow flow;
         int error;
 
-        buffer_clear(&b);
+        ofpbuf_clear(&b);
         error = netdev_recv(cli->netdev, &b);
         if (error) {
             goto drained;
@@ -914,33 +914,33 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
             continue;
         }
 
-        buffer_pull(&b, b.l7 - b.data);
+        ofpbuf_pull(&b, b.l7 - b.data);
         error = dhcp_parse(msg, &b);
         if (!error) {
             VLOG_DBG_RL(&rl, "received %s",
                         dhcp_msg_to_string(msg, false, &cli->s));
-            buffer_uninit(&b);
+            ofpbuf_uninit(&b);
             return true;
         }
     }
     netdev_drain(cli->netdev);
 drained:
-    buffer_uninit(&b);
+    ofpbuf_uninit(&b);
     return false;
 }
 
 static void
 do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
 {
-    struct buffer b;
+    struct ofpbuf b;
     struct eth_header eh;
     struct ip_header nh;
     struct udp_header th;
     uint32_t udp_csum;
     int error;
 
-    buffer_init(&b, ETH_TOTAL_MAX);
-    buffer_reserve(&b, ETH_HEADER_LEN + IP_HEADER_LEN + UDP_HEADER_LEN);
+    ofpbuf_init(&b, ETH_TOTAL_MAX);
+    ofpbuf_reserve(&b, ETH_HEADER_LEN + IP_HEADER_LEN + UDP_HEADER_LEN);
 
     dhcp_assemble(msg, &b);
 
@@ -984,9 +984,9 @@ do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
     udp_csum = csum_continue(udp_csum, &th, sizeof th);
     th.udp_csum = csum_finish(csum_continue(udp_csum, b.data, b.size));
 
-    buffer_push(&b, &th, sizeof th);
-    buffer_push(&b, &nh, sizeof nh);
-    buffer_push(&b, &eh, sizeof eh);
+    ofpbuf_push(&b, &th, sizeof th);
+    ofpbuf_push(&b, &nh, sizeof nh);
+    ofpbuf_push(&b, &eh, sizeof eh);
 
     /* Don't try to send the frame if it's too long for an Ethernet frame.  We
      * disregard the network device's actual MTU because we don't want the
@@ -1003,7 +1003,7 @@ do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
         VLOG_ERR("cannot send %zu-byte Ethernet frame", b.size);
     }
 
-    buffer_uninit(&b);
+    ofpbuf_uninit(&b);
 }
 
 static unsigned int
