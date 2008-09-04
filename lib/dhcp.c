@@ -65,13 +65,35 @@ struct option_class {
     size_t max_args;            /* Maximum number of arguments. */
 };
 
-static struct option_class classes[DHCP_N_OPTIONS] = {
-    [0 ... 255] = {NULL, DHCP_ARG_UINT8, 0, SIZE_MAX},
-#define DHCP_OPT(NAME, CODE, TYPE, MIN, MAX) \
-    [CODE] = {#NAME, DHCP_ARG_##TYPE, MIN, MAX},
-    DHCP_OPTS
+static const struct option_class *
+get_option_class(int code)
+{
+    static struct option_class classes[DHCP_N_OPTIONS];
+    static bool init = false;
+    if (!init) {
+        int i;
+
+        init = true;
+#define DHCP_OPT(NAME, CODE, TYPE, MIN, MAX)    \
+        classes[CODE].name = #NAME;             \
+        classes[CODE].type = DHCP_ARG_##TYPE;   \
+        classes[CODE].min_args = MIN;           \
+        classes[CODE].max_args = MAX;
+        DHCP_OPTS
 #undef DHCP_OPT
-};
+
+        for (i = 0; i < DHCP_N_OPTIONS; i++) {
+            if (!classes[i].name) {
+                classes[i].name = xasprintf("option-%d", i);
+                classes[i].type = DHCP_ARG_UINT8;
+                classes[i].min_args = 0;
+                classes[i].max_args = SIZE_MAX;
+            }
+        }
+    }
+    assert(code >= 0 && code < DHCP_N_OPTIONS);
+    return &classes[code];
+}
 
 /* A single (bad) DHCP message can in theory dump out many, many log messages,
  * especially at high logging levels, so the burst size is set quite high
@@ -409,18 +431,14 @@ put_duration(struct ds *ds, unsigned int duration)
 const char *
 dhcp_option_to_string(const struct dhcp_option *opt, int code, struct ds *ds)
 {
-    struct option_class *class = &classes[code];
+    const struct option_class *class = get_option_class(code);
     const struct arg_type *type = &types[class->type];
     size_t offset;
+    const char *cp;
 
-    if (class->name) {
-        const char *cp;
-        for (cp = class->name; *cp; cp++) {
-            unsigned char c = *cp;
-            ds_put_char(ds, c == '_' ? '-' : tolower(c));
-        }
-    } else {
-        ds_put_format(ds, "option-%d", code);
+    for (cp = class->name; *cp; cp++) {
+        unsigned char c = *cp;
+        ds_put_char(ds, c == '_' ? '-' : tolower(c));
     }
     ds_put_char(ds, '=');
 
@@ -597,7 +615,7 @@ validate_options(struct dhcp_msg *msg)
 
     for (code = 0; code < DHCP_N_OPTIONS; code++) {
         struct dhcp_option *opt = &msg->options[code];
-        struct option_class *class = &classes[code];
+        const struct option_class *class = get_option_class(code);
         struct arg_type *type = &types[class->type];
         if (opt->data) {
             size_t n_elems = opt->n / type->size;

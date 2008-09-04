@@ -1449,6 +1449,9 @@ static void port_stats_done(void *state)
 }
 
 struct stats_type {
+    /* Value for 'type' member of struct ofp_stats_request. */
+    int type;
+
     /* Minimum and maximum acceptable number of bytes in body member of
      * struct ofp_stats_request. */
     size_t min_body, max_body;
@@ -1473,35 +1476,40 @@ struct stats_type {
 };
 
 static const struct stats_type stats[] = {
-    [OFPST_DESC] = {
+    {
+        OFPST_DESC,
         0,
         0,
         NULL,
         desc_stats_dump,
         NULL
     },
-    [OFPST_FLOW] = {
+    {
+        OFPST_FLOW,
         sizeof(struct ofp_flow_stats_request),
         sizeof(struct ofp_flow_stats_request),
         flow_stats_init,
         flow_stats_dump,
         flow_stats_done
     },
-    [OFPST_AGGREGATE] = {
+    {
+        OFPST_AGGREGATE,
         sizeof(struct ofp_aggregate_stats_request),
         sizeof(struct ofp_aggregate_stats_request),
         aggregate_stats_init,
         aggregate_stats_dump,
         aggregate_stats_done
     },
-    [OFPST_TABLE] = {
+    {
+        OFPST_TABLE,
         0,
         0,
         NULL,
         table_stats_dump,
         NULL
     },
-    [OFPST_PORT] = {
+    {
+        OFPST_PORT,
         0,
         0,
         port_stats_init,
@@ -1532,7 +1540,7 @@ stats_dump(struct datapath *dp, void *cb_)
 
     osr = make_openflow_reply(sizeof *osr, OFPT_STATS_REPLY, &cb->sender,
                               &buffer);
-    osr->type = htons(cb->s - stats);
+    osr->type = htons(cb->s->type);
     osr->flags = 0;
 
     err = cb->s->dump(dp, cb->state, buffer);
@@ -1572,21 +1580,27 @@ recv_stats_request(struct datapath *dp, const struct sender *sender,
 {
     const struct ofp_stats_request *rq = oh;
     size_t rq_len = ntohs(rq->header.length);
+    const struct stats_type *st;
     struct stats_dump_cb *cb;
     int type, body_len;
     int err;
 
     type = ntohs(rq->type);
-    if (type >= ARRAY_SIZE(stats) || !stats[type].dump) {
-        VLOG_WARN_RL(&rl, "received stats request of unknown type %d", type);
-        return -EINVAL;
+    for (st = stats; ; st++) {
+        if (st >= &stats[ARRAY_SIZE(stats)]) {
+            VLOG_WARN_RL(&rl, "received stats request of unknown type %d",
+                         type);
+            return -EINVAL;
+        } else if (type == st->type) {
+            break;
+        }
     }
 
     cb = xmalloc(sizeof *cb);
     cb->done = false;
     cb->rq = xmemdup(rq, rq_len);
     cb->sender = *sender;
-    cb->s = &stats[type];
+    cb->s = st;
     cb->state = NULL;
     
     body_len = rq_len - offsetof(struct ofp_stats_request, body);
@@ -1636,65 +1650,63 @@ int
 fwd_control_input(struct datapath *dp, const struct sender *sender,
                   const void *msg, size_t length)
 {
-    struct openflow_packet {
-        size_t min_size;
-        int (*handler)(struct datapath *, const struct sender *, const void *);
-    };
-
-    static const struct openflow_packet packets[] = {
-        [OFPT_FEATURES_REQUEST] = {
-            sizeof (struct ofp_header),
-            recv_features_request,
-        },
-        [OFPT_GET_CONFIG_REQUEST] = {
-            sizeof (struct ofp_header),
-            recv_get_config_request,
-        },
-        [OFPT_SET_CONFIG] = {
-            sizeof (struct ofp_switch_config),
-            recv_set_config,
-        },
-        [OFPT_PACKET_OUT] = {
-            sizeof (struct ofp_packet_out),
-            recv_packet_out,
-        },
-        [OFPT_FLOW_MOD] = {
-            sizeof (struct ofp_flow_mod),
-            recv_flow,
-        },
-        [OFPT_PORT_MOD] = {
-            sizeof (struct ofp_port_mod),
-            recv_port_mod,
-        },
-        [OFPT_STATS_REQUEST] = {
-            sizeof (struct ofp_stats_request),
-            recv_stats_request,
-        },
-        [OFPT_ECHO_REQUEST] = {
-            sizeof (struct ofp_header),
-            recv_echo_request,
-        },
-        [OFPT_ECHO_REPLY] = {
-            sizeof (struct ofp_header),
-            recv_echo_reply,
-        },
-    };
-
-    const struct openflow_packet *pkt;
+    int (*handler)(struct datapath *, const struct sender *, const void *);
     struct ofp_header *oh;
+    size_t min_size;
 
+    /* Check encapsulated length. */
     oh = (struct ofp_header *) msg;
-    assert(oh->version == OFP_VERSION);
-    if (oh->type >= ARRAY_SIZE(packets) || ntohs(oh->length) > length)
+    if (ntohs(oh->length) > length) {
         return -EINVAL;
+    }
+    assert(oh->version == OFP_VERSION);
 
-    pkt = &packets[oh->type];
-    if (!pkt->handler)
+    /* Figure out how to handle it. */
+    switch (oh->type) {
+    case OFPT_FEATURES_REQUEST:
+        min_size = sizeof(struct ofp_header);
+        handler = recv_features_request;
+        break;
+    case OFPT_GET_CONFIG_REQUEST:
+        min_size = sizeof(struct ofp_header);
+        handler = recv_get_config_request;
+        break;
+    case OFPT_SET_CONFIG:
+        min_size = sizeof(struct ofp_switch_config);
+        handler = recv_set_config;
+        break;
+    case OFPT_PACKET_OUT:
+        min_size = sizeof(struct ofp_packet_out);
+        handler = recv_packet_out;
+        break;
+    case OFPT_FLOW_MOD:
+        min_size = sizeof(struct ofp_flow_mod);
+        handler = recv_flow;
+        break;
+    case OFPT_PORT_MOD:
+        min_size = sizeof(struct ofp_port_mod);
+        handler = recv_port_mod;
+        break;
+    case OFPT_STATS_REQUEST:
+        min_size = sizeof(struct ofp_stats_request);
+        handler = recv_stats_request;
+        break;
+    case OFPT_ECHO_REQUEST:
+        min_size = sizeof(struct ofp_header);
+        handler = recv_echo_request;
+        break;
+    case OFPT_ECHO_REPLY:
+        min_size = sizeof(struct ofp_header);
+        handler = recv_echo_reply;
+        break;
+    default:
         return -ENOSYS;
-    if (length < pkt->min_size)
-        return -EFAULT;
+    }
 
-    return pkt->handler(dp, sender, msg);
+    /* Handle it. */
+    if (length < min_size)
+        return -EFAULT;
+    return handler(dp, sender, msg);
 }
 
 /* Packet buffering. */

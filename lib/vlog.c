@@ -51,16 +51,16 @@
 
 /* Name for each logging level. */
 static const char *level_names[VLL_N_LEVELS] = {
-    [VLL_EMER] = "EMER",
-    [VLL_ERR] = "ERR",
-    [VLL_WARN] = "WARN",
-    [VLL_DBG] = "DBG",
+#define VLOG_LEVEL(NAME) #NAME,
+    VLOG_LEVELS
+#undef VLOG_LEVEL
 };
 
 /* Name for each logging facility. */
 static const char *facility_names[VLF_N_FACILITIES] = { 
-    [VLF_CONSOLE] = "console",
-    [VLF_SYSLOG] = "syslog",
+#define VLOG_FACILITY(NAME) #NAME,
+    VLOG_FACILITIES
+#undef VLOG_FACILITY
 };
 
 /* Name for each logging module */
@@ -341,18 +341,20 @@ vlog_valist(enum vlog_module module, enum vlog_level level,
         }
 
         if (log_syslog) {
-            static const int syslog_levels[VLL_N_LEVELS] = {
-                [VLL_EMER] = LOG_ALERT,
-                [VLL_ERR] = LOG_ERR,
-                [VLL_WARN] = LOG_WARNING,
-                [VLL_DBG] = LOG_DEBUG,
-            };
+            int syslog_level = LOG_ALERT;
             char *save_ptr = NULL;
             char *line;
 
+            switch (level) {
+            case VLL_EMER: syslog_level = LOG_ALERT; break;
+            case VLL_ERR: syslog_level = LOG_ERR; break;
+            case VLL_WARN: syslog_level = LOG_WARNING; break;
+            case VLL_DBG: syslog_level = LOG_DEBUG; break;
+            case VLL_N_LEVELS: NOT_REACHED();
+            }
             for (line = strtok_r(&s.string[time_len], "\n", &save_ptr); line;
                  line = strtok_r(NULL, "\n", &save_ptr)) {
-                syslog(syslog_levels[level], "%s", line);
+                syslog(syslog_level, "%s", line);
             }
         }
 

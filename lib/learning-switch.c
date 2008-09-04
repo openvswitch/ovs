@@ -111,6 +111,14 @@ lswitch_destroy(struct lswitch *sw)
     }
 }
 
+static size_t
+min_size(uint8_t type)
+{
+    return (type == OFPT_FEATURES_REPLY ? sizeof(struct ofp_switch_features)
+            : type == OFPT_PACKET_IN ? offsetof (struct ofp_packet_in, data)
+            : sizeof(struct ofp_header));
+}
+
 /* Processes 'msg', which should be an OpenFlow received on 'rconn', according
  * to the learning switch state in 'sw'.  The most likely result of processing
  * is that flow-setup and packet-out OpenFlow messages will be sent out on
@@ -119,19 +127,14 @@ void
 lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
                        const struct ofpbuf *msg)
 {
-    static const size_t min_size[UINT8_MAX + 1] = {
-        [0 ... UINT8_MAX] = sizeof (struct ofp_header),
-        [OFPT_FEATURES_REPLY] = sizeof (struct ofp_switch_features),
-        [OFPT_PACKET_IN] = offsetof (struct ofp_packet_in, data),
-    };
     struct ofp_header *oh;
 
     oh = msg->data;
-    if (msg->size < min_size[oh->type]) {
+    if (msg->size < min_size(oh->type)) {
         VLOG_WARN_RL(&rl,
                      "%s: too short (%zu bytes) for type %"PRIu8" (min %zu)",
                      rconn_get_name(rconn),
-                     msg->size, oh->type, min_size[oh->type]);
+                     msg->size, oh->type, min_size(oh->type));
         return;
     }
 
