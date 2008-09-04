@@ -609,13 +609,10 @@ send_openflow_buffer(struct datapath *dp, struct buffer *buffer,
     int retval;
 
     update_openflow_length(buffer);
-    retval = (remote->n_txq < TXQ_LIMIT
-              ? rconn_send(rconn, buffer, &remote->n_txq)
-              : EAGAIN);
+    retval = rconn_send_with_limit(rconn, buffer, &remote->n_txq, TXQ_LIMIT);
     if (retval) {
         VLOG_WARN_RL(&rl, "send to %s failed: %s",
                      rconn_get_name(rconn), strerror(retval));
-        buffer_delete(buffer);
     }
     return retval;
 }
