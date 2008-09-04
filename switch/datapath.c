@@ -328,7 +328,7 @@ dp_run(struct datapath *dp)
             const int hard_header = VLAN_ETH_HEADER_LEN;
             const int mtu = netdev_get_mtu(p->netdev);
             buffer = ofpbuf_new(headroom + hard_header + mtu);
-            buffer->data += headroom;
+            buffer->data = (char*)buffer->data + headroom;
         }
         error = netdev_recv(p->netdev, buffer);
         if (!error) {
@@ -1041,7 +1041,7 @@ modify_vlan(struct ofpbuf *buffer,
             
             veh = ofpbuf_push_uninit(buffer, VLAN_HEADER_LEN);
             memcpy(veh, &tmp, sizeof tmp);
-            buffer->l2 -= VLAN_HEADER_LEN;
+            buffer->l2 = (char*)buffer->l2 - VLAN_HEADER_LEN;
         }
     } else  {
         /* Remove an existing vlan header if it exists */
@@ -1054,8 +1054,8 @@ modify_vlan(struct ofpbuf *buffer,
             tmp.eth_type = veh->veth_next_type;
             
             buffer->size -= VLAN_HEADER_LEN;
-            buffer->data += VLAN_HEADER_LEN;
-            buffer->l2 += VLAN_HEADER_LEN;
+            buffer->data = (char*)buffer->data + VLAN_HEADER_LEN;
+            buffer->l2 = (char*)buffer->l2 + VLAN_HEADER_LEN;
             memcpy(buffer->data, &tmp, sizeof tmp);
         }
     }

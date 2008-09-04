@@ -914,7 +914,7 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
             continue;
         }
 
-        ofpbuf_pull(&b, b.l7 - b.data);
+        ofpbuf_pull(&b, (char *)b.l7 - (char*)b.data);
         error = dhcp_parse(msg, &b);
         if (!error) {
             VLOG_DBG_RL(&rl, "received %s",

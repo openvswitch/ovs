@@ -117,7 +117,7 @@ ofpbuf_delete(struct ofpbuf *b)
 size_t
 ofpbuf_headroom(struct ofpbuf *b) 
 {
-    return b->data - b->base;
+    return (char*)b->data - (char*)b->base;
 }
 
 /* Returns the number of bytes that may be appended to the tail end of ofpbuf
@@ -125,7 +125,7 @@ ofpbuf_headroom(struct ofpbuf *b)
 size_t
 ofpbuf_tailroom(struct ofpbuf *b) 
 {
-    return ofpbuf_end(b) - ofpbuf_tail(b);
+    return (char*)ofpbuf_end(b) - (char*)ofpbuf_tail(b);
 }
 
 /* Ensures that 'b' has room for at least 'size' bytes at its tail end,
@@ -136,23 +136,23 @@ ofpbuf_prealloc_tailroom(struct ofpbuf *b, size_t size)
     if (size > ofpbuf_tailroom(b)) {
         size_t new_allocated = b->allocated + MAX(size, 64);
         void *new_base = xmalloc(new_allocated);
-        uintptr_t base_delta = new_base - b->base;
+        uintptr_t base_delta = (char*)new_base - (char*)b->base;
         memcpy(new_base, b->base, b->allocated);
         free(b->base);
         b->base = new_base;
         b->allocated = new_allocated;
-        b->data += base_delta;
+        b->data = (char*)b->data + base_delta;
         if (b->l2) {
-            b->l2 += base_delta;
+            b->l2 = (char*)b->l2 + base_delta;
         }
         if (b->l3) {
-            b->l3 += base_delta;
+            b->l3 = (char*)b->l3 + base_delta;
         }
         if (b->l4) {
-            b->l4 += base_delta;
+            b->l4 = (char*)b->l4 + base_delta;
         }
         if (b->l7) {
-            b->l7 += base_delta;
+            b->l7 = (char*)b->l7 + base_delta;
         }
     }
 }
@@ -194,14 +194,14 @@ ofpbuf_reserve(struct ofpbuf *b, size_t size)
 {
     assert(!b->size);
     ofpbuf_prealloc_tailroom(b, size);
-    b->data += size;
+    b->data = (char*)b->data + size;
 }
 
 void *
 ofpbuf_push_uninit(struct ofpbuf *b, size_t size) 
 {
     ofpbuf_prealloc_headroom(b, size);
-    b->data -= size;
+    b->data = (char*)b->data - size;
     b->size += size;
     return b->data;
 }
@@ -261,7 +261,7 @@ ofpbuf_pull(struct ofpbuf *b, size_t size)
 {
     void *data = b->data;
     assert(b->size >= size);
-    b->data += size;
+    b->data = (char*)b->data + size;
     b->size -= size;
     return data;
 }

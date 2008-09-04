@@ -790,7 +790,7 @@ nl_policy_parse(const struct ofpbuf *msg, const struct nl_policy policy[],
     tail = ofpbuf_tail(msg);
 
     while (p < tail) {
-        size_t offset = p - msg->data;
+        size_t offset = (char*)p - (char*)msg->data;
         struct nlattr *nla = p;
         size_t len, aligned_len;
         uint16_t type;
@@ -803,10 +803,11 @@ nl_policy_parse(const struct ofpbuf *msg, const struct nl_policy policy[],
         }
         len = nla->nla_len - NLA_HDRLEN;
         aligned_len = NLA_ALIGN(len);
-        if (aligned_len > tail - p) {
+        if (aligned_len > (char*)tail - (char*)p) {
             VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" aligned data len (%zu) "
                         "> bytes left (%tu)",
-                        offset, nla->nla_type, aligned_len, tail - p);
+                        offset, nla->nla_type, aligned_len,
+                        (char*)tail - (char*)p);
             return false;
         }
 
@@ -844,7 +845,7 @@ nl_policy_parse(const struct ofpbuf *msg, const struct nl_policy policy[],
         } else {
             /* Skip attribute type that we don't care about. */
         }
-        p += NLA_ALIGN(nla->nla_len);
+        p = (char*)p + NLA_ALIGN(nla->nla_len);
     }
     if (n_required) {
         VLOG_DBG_RL(&rl, "%zu required attrs missing", n_required);
