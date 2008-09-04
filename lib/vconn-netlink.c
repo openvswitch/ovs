@@ -142,10 +142,12 @@ netlink_wait(struct vconn *vconn, enum vconn_wait_type wait)
 }
 
 struct vconn_class netlink_vconn_class = {
-    .name = "nl",
-    .open = netlink_open,
-    .close = netlink_close,
-    .recv = netlink_recv,
-    .send = netlink_send,
-    .wait = netlink_wait,
+    "nl",                       /* name */
+    netlink_open,               /* open */
+    netlink_close,              /* close */
+    NULL,                       /* connect */
+    NULL,                       /* accept */
+    netlink_recv,               /* recv */
+    netlink_send,               /* send */
+    netlink_wait,               /* wait */
 };

@@ -652,13 +652,14 @@ ssl_wait(struct vconn *vconn, enum vconn_wait_type wait)
 }
 
 struct vconn_class ssl_vconn_class = {
-    .name = "ssl",
-    .open = ssl_open,
-    .close = ssl_close,
-    .connect = ssl_connect,
-    .recv = ssl_recv,
-    .send = ssl_send,
-    .wait = ssl_wait,
+    "ssl",                      /* name */
+    ssl_open,                   /* open */
+    ssl_close,                  /* close */
+    ssl_connect,                /* connect */
+    NULL,                       /* accept */
+    ssl_recv,                   /* recv */
+    ssl_send,                   /* send */
+    ssl_wait,                   /* wait */
 };
 
 /* Passive SSL. */
@@ -787,11 +788,14 @@ pssl_wait(struct vconn *vconn, enum vconn_wait_type wait)
 }
 
 struct vconn_class pssl_vconn_class = {
-    .name = "pssl",
-    .open = pssl_open,
-    .close = pssl_close,
-    .accept = pssl_accept,
-    .wait = pssl_wait,
+    "pssl",                     /* name */
+    pssl_open,                  /* open */
+    pssl_close,                 /* close */
+    NULL,                       /* connect */
+    pssl_accept,                /* accept */
+    NULL,                       /* recv */
+    NULL,                       /* send */
+    pssl_wait,                  /* wait */
 };
 
 /*

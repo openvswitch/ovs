@@ -82,8 +82,14 @@ unix_open(const char *name, char *suffix, struct vconn **vconnp)
 }
 
 struct vconn_class unix_vconn_class = {
-    .name = "unix",
-    .open = unix_open,
+    "unix",                     /* name */
+    unix_open,                  /* open */
+    NULL,                       /* close */
+    NULL,                       /* connect */
+    NULL,                       /* accept */
+    NULL,                       /* recv */
+    NULL,                       /* send */
+    NULL,                       /* wait */
 };
 
 /* Passive UNIX socket. */
@@ -123,7 +129,13 @@ punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
 }
 
 struct vconn_class punix_vconn_class = {
-    .name = "punix",
-    .open = punix_open,
+    "punix",                    /* name */
+    punix_open,                 /* open */
+    NULL,                       /* close */
+    NULL,                       /* connect */
+    NULL,                       /* accept */
+    NULL,                       /* recv */
+    NULL,                       /* send */
+    NULL,                       /* wait */
 };
 

@@ -127,8 +127,14 @@ tcp_open(const char *name, char *suffix, struct vconn **vconnp)
 }
 
 struct vconn_class tcp_vconn_class = {
-    .name = "tcp",
-    .open = tcp_open,
+    "tcp",                      /* name */
+    tcp_open,                   /* open */
+    NULL,                       /* close */
+    NULL,                       /* connect */
+    NULL,                       /* accept */
+    NULL,                       /* recv */
+    NULL,                       /* send */
+    NULL,                       /* wait */
 };
 
 /* Passive TCP. */
@@ -189,7 +195,13 @@ ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
 }
 
 struct vconn_class ptcp_vconn_class = {
-    .name = "ptcp",
-    .open = ptcp_open,
+    "ptcp",                     /* name */
+    ptcp_open,                  /* open */
+    NULL,                       /* close */
+    NULL,                       /* connect */
+    NULL,                       /* accept */
+    NULL,                       /* recv */
+    NULL,                       /* send */
+    NULL,                       /* wait */
 };
 

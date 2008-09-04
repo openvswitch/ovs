@@ -246,12 +246,14 @@ stream_wait(struct vconn *vconn, enum vconn_wait_type wait)
 }
 
 static struct vconn_class stream_vconn_class = {
-    .name = "stream",
-    .close = stream_close,
-    .connect = stream_connect,
-    .recv = stream_recv,
-    .send = stream_send,
-    .wait = stream_wait,
+    "stream",                   /* name */
+    NULL,                       /* open */
+    stream_close,               /* close */
+    stream_connect,             /* connect */
+    NULL,                       /* accept */
+    stream_recv,                /* recv */
+    stream_send,                /* send */
+    stream_wait,                /* wait */
 };
 
 /* Passive stream socket vconn. */
@@ -349,8 +351,12 @@ pstream_wait(struct vconn *vconn, enum vconn_wait_type wait)
 }
 
 static struct vconn_class pstream_vconn_class = {
-    .name = "pstream",
-    .close = pstream_close,
-    .accept = pstream_accept,
-    .wait = pstream_wait
+    "pstream",                  /* name */
+    NULL,                       /* open */
+    pstream_close,              /* close */
+    NULL,                       /* connect */
+    pstream_accept,             /* accept */
+    NULL,                       /* recv */
+    NULL,                       /* send */
+    pstream_wait                /* wait */
 };
