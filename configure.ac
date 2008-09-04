@@ -57,7 +57,7 @@ AC_SUBST(KARCH)
 OFP_CHECK_LINUX(l26, 2.6, 2.6, KSRC26, L26_ENABLED)
 OFP_CHECK_LINUX(l24, 2.4, 2.4, KSRC24, L24_ENABLED)
 
-CFLAGS="$CFLAGS -Wall -Wno-sign-compare"
+CFLAGS="$CFLAGS -Wall -Wno-sign-compare -Wpointer-arith"
 
 OFP_ENABLE_EXT
 
