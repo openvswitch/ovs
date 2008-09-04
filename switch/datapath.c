@@ -440,6 +440,7 @@ remote_create(struct datapath *dp, struct rconn *rconn)
     list_push_back(&dp->remotes, &remote->node);
     remote->rconn = rconn;
     remote->cb_dump = NULL;
+    remote->n_txq = 0;
     return remote;
 }
 
