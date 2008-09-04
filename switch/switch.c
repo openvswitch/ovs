@@ -59,10 +59,11 @@
 
 
 /* Strings to describe the manufacturer, hardware, and software.  This data 
- * is queriable through the version stats message. */
-char mfr_desc[VERSION_STR_LEN] = "Nicira Networks";
-char hw_desc[VERSION_STR_LEN] = "Reference User-Space Switch";
-char sw_desc[VERSION_STR_LEN] = VERSION;
+ * is queriable through the switch description stats message. */
+char mfr_desc[DESC_STR_LEN] = "Nicira Networks";
+char hw_desc[DESC_STR_LEN] = "Reference User-Space Switch";
+char sw_desc[DESC_STR_LEN] = VERSION;
+char serial_num[SERIAL_NUM_LEN] = "None";
 
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
@@ -163,7 +164,8 @@ parse_options(int argc, char *argv[])
         OPT_MAX_BACKOFF = UCHAR_MAX + 1,
         OPT_MFR_DESC,
         OPT_HW_DESC,
-        OPT_SW_DESC
+        OPT_SW_DESC,
+        OPT_SERIAL_NUM
     };
 
     static struct option long_options[] = {
@@ -180,6 +182,7 @@ parse_options(int argc, char *argv[])
         {"mfr-desc",    required_argument, 0, OPT_MFR_DESC},
         {"hw-desc",     required_argument, 0, OPT_HW_DESC},
         {"sw-desc",     required_argument, 0, OPT_SW_DESC},
+        {"serial_num",  required_argument, 0, OPT_SERIAL_NUM},
         VCONN_SSL_LONG_OPTIONS
         {0, 0, 0, 0},
     };
@@ -257,6 +260,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_SW_DESC:
             strncpy(sw_desc, optarg, sizeof sw_desc);
+            break;
+
+        case OPT_SERIAL_NUM:
+            strncpy(serial_num, optarg, sizeof serial_num);
             break;
 
         case 'l':

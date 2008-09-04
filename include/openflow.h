@@ -446,8 +446,8 @@ OFP_ASSERT(sizeof(struct ofp_error_msg) == 12);
 enum ofp_stats_types {
     /* Description of this OpenFlow switch. 
      * The request body is empty.
-     * The reply body is struct ofp_version_stats. */
-    OFPST_VERSION,
+     * The reply body is struct ofp_desc_stats. */
+    OFPST_DESC,
 
     /* Individual flow statistics.
      * The request body is struct ofp_flow_stats_request.
@@ -498,15 +498,17 @@ struct ofp_stats_reply {
 };
 OFP_ASSERT(sizeof(struct ofp_stats_reply) == 12);
 
-#define VERSION_STR_LEN 256
-/* Body of reply to OFPST_VERSION request.  Each entry is a NULL-terminated 
+#define DESC_STR_LEN   256
+#define SERIAL_NUM_LEN 32
+/* Body of reply to OFPST_DESC request.  Each entry is a NULL-terminated 
  * ASCII string. */
-struct ofp_version_stats {
-    char mfr_desc[VERSION_STR_LEN];  /* Manufacturer description. */
-    char hw_desc[VERSION_STR_LEN];   /* Hardware description. */
-    char sw_desc[VERSION_STR_LEN];   /* Software description. */
+struct ofp_desc_stats {
+    char mfr_desc[DESC_STR_LEN];       /* Manufacturer description. */
+    char hw_desc[DESC_STR_LEN];        /* Hardware description. */
+    char sw_desc[DESC_STR_LEN];        /* Software description. */
+    char serial_num[SERIAL_NUM_LEN];   /* Serial number. */
 };
-OFP_ASSERT(sizeof(struct ofp_version_stats) == 768);
+OFP_ASSERT(sizeof(struct ofp_desc_stats) == 800);
 
 /* Body for ofp_stats_request of type OFPST_FLOW. */
 struct ofp_flow_stats_request {

@@ -43,19 +43,22 @@
 
 
 /* Strings to describe the manufacturer, hardware, and software.  This data 
- * is queriable through the version stats message. */
-static char mfr_desc[VERSION_STR_LEN] = "Nicira Networks";
-static char hw_desc[VERSION_STR_LEN] = "Reference Linux Kernel Module";
-static char sw_desc[VERSION_STR_LEN] = VERSION;
+ * is queriable through the switch description stats message. */
+static char mfr_desc[DESC_STR_LEN] = "Nicira Networks";
+static char hw_desc[DESC_STR_LEN] = "Reference Linux Kernel Module";
+static char sw_desc[DESC_STR_LEN] = VERSION;
+static char serial_num[SERIAL_NUM_LEN] = "None";
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
 module_param_string(mfr_desc, mfr_desc, sizeof mfr_desc, 0444);
 module_param_string(hw_desc, hw_desc, sizeof hw_desc, 0444);
 module_param_string(sw_desc, sw_desc, sizeof sw_desc, 0444);
+module_param_string(serial_num, serial_num, sizeof serial_num, 0444);
 #else
 MODULE_PARM(mfr_desc, "s");
 MODULE_PARM(hw_desc, "s");
 MODULE_PARM(sw_desc, "s");
+MODULE_PARM(serial_num, "s");
 #endif
 
 
@@ -1218,20 +1221,21 @@ static struct nla_policy dp_genl_openflow_policy[DP_GENL_A_MAX + 1] = {
 	[DP_GENL_A_DP_IDX] = { .type = NLA_U32 },
 };
 
-static int version_stats_dump(struct datapath *dp, void *state,
+static int desc_stats_dump(struct datapath *dp, void *state,
 			    void *body, int *body_len)
 {
-	struct ofp_version_stats *ovs = body;
-	int n_bytes = sizeof *ovs;
+	struct ofp_desc_stats *ods = body;
+	int n_bytes = sizeof *ods;
 
 	if (n_bytes > *body_len) {
 		return -ENOBUFS;
 	}
 	*body_len = n_bytes;
 
-	strncpy(ovs->mfr_desc, mfr_desc, sizeof ovs->mfr_desc);
-	strncpy(ovs->hw_desc, hw_desc, sizeof ovs->hw_desc);
-	strncpy(ovs->sw_desc, sw_desc, sizeof ovs->sw_desc);
+	strncpy(ods->mfr_desc, mfr_desc, sizeof ods->mfr_desc);
+	strncpy(ods->hw_desc, hw_desc, sizeof ods->hw_desc);
+	strncpy(ods->sw_desc, sw_desc, sizeof ods->sw_desc);
+	strncpy(ods->serial_num, serial_num, sizeof ods->serial_num);
 
 	return 0;
 }
@@ -1507,11 +1511,11 @@ struct stats_type {
 };
 
 static const struct stats_type stats[] = {
-	[OFPST_VERSION] = {
+	[OFPST_DESC] = {
 		0,
 		0,
 		NULL,
-		version_stats_dump,
+		desc_stats_dump,
 		NULL
 	},
 	[OFPST_FLOW] = {

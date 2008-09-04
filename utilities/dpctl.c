@@ -194,7 +194,7 @@ usage(void)
            "\nFor local datapaths and remote switches:\n"
            "  show SWITCH                 show basic information\n"
            "  status SWITCH [KEY]         report statistics (about KEY)\n"
-           "  dump-version SWITCH         print version information\n"
+           "  dump-desc SWITCH            print switch description\n"
            "  dump-tables SWITCH          print table stats\n"
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
            "  dump-ports SWITCH           print port statistics\n"
@@ -436,9 +436,9 @@ do_status(int argc, char *argv[])
 }
 
 static void
-do_dump_version(int argc, char *argv[])
+do_dump_desc(int argc, char *argv[])
 {
-    dump_trivial_stats_transaction(argv[1], OFPST_VERSION);
+    dump_trivial_stats_transaction(argv[1], OFPST_DESC);
 }
 
 static void
@@ -1096,7 +1096,7 @@ static struct command all_commands[] = {
 
     { "help", 0, INT_MAX, do_help },
     { "monitor", 1, 1, do_monitor },
-    { "dump-version", 1, 1, do_dump_version },
+    { "dump-desc", 1, 1, do_dump_desc },
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 1, 2, do_dump_flows },
     { "dump-aggregate", 1, 2, do_dump_aggregate },

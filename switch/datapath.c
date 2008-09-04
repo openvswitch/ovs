@@ -66,6 +66,7 @@ enum br_port_status {
 extern char mfr_desc;
 extern char hw_desc;
 extern char sw_desc;
+extern char serial_num;
 
 /* Capabilities supported by this implementation. */
 #define OFP_SUPPORTED_CAPABILITIES ( OFPC_FLOW_STATS \
@@ -1239,14 +1240,15 @@ recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
     }
 }
 
-static int version_stats_dump(struct datapath *dp, void *state,
+static int desc_stats_dump(struct datapath *dp, void *state,
                               struct buffer *buffer)
 {
-    struct ofp_version_stats *ovs = buffer_put_uninit(buffer, sizeof *ovs);
+    struct ofp_desc_stats *ods = buffer_put_uninit(buffer, sizeof *ods);
 
-    strncpy(ovs->mfr_desc, &mfr_desc, sizeof ovs->mfr_desc);
-    strncpy(ovs->hw_desc, &hw_desc, sizeof ovs->hw_desc);
-    strncpy(ovs->sw_desc, &sw_desc, sizeof ovs->sw_desc);
+    strncpy(ods->mfr_desc, &mfr_desc, sizeof ods->mfr_desc);
+    strncpy(ods->hw_desc, &hw_desc, sizeof ods->hw_desc);
+    strncpy(ods->sw_desc, &sw_desc, sizeof ods->sw_desc);
+    strncpy(ods->serial_num, &serial_num, sizeof ods->serial_num);
 
     return 0;
 }
@@ -1470,11 +1472,11 @@ struct stats_type {
 };
 
 static const struct stats_type stats[] = {
-    [OFPST_VERSION] = {
+    [OFPST_DESC] = {
         0,
         0,
         NULL,
-        version_stats_dump,
+        desc_stats_dump,
         NULL
     },
     [OFPST_FLOW] = {
