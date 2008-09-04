@@ -34,9 +34,9 @@
 #ifndef SOCKET_UTIL_H
 #define SOCKET_UTIL_H 1
 
+#include <sys/types.h>
 #include <netinet/in.h>
 #include <stdbool.h>
-#include <sys/socket.h>
 
 int set_nonblocking(int fd);
 int lookup_ip(const char *host_name, struct in_addr *address);
