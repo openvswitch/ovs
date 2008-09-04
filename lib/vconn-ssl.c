@@ -275,7 +275,7 @@ ssl_open(const char *name, char *suffix, struct vconn **vconnp)
     host_name = strtok_r(suffix, "::", &save_ptr);
     port_string = strtok_r(NULL, "::", &save_ptr);
     if (!host_name) {
-        error(0, "%s: bad peer name format", name);
+        ofp_error(0, "%s: bad peer name format", name);
         return EAFNOSUPPORT;
     }
 
@@ -868,8 +868,8 @@ tmp_dh_callback(SSL *ssl, int is_export UNUSED, int keylength)
             if (!dh->dh) {
                 dh->dh = dh->constructor();
                 if (!dh->dh) {
-                    fatal(ENOMEM, "out of memory constructing "
-                          "Diffie-Hellman parameters");
+                    ofp_fatal(ENOMEM, "out of memory constructing "
+                              "Diffie-Hellman parameters");
                 }
             }
             return dh->dh;

@@ -108,11 +108,11 @@ fatal_signal_block()
 
             sigaddset(&fatal_signal_set, sig_nr);
             if (sigaction(sig_nr, NULL, &old_sa)) {
-                fatal(errno, "sigaction");
+                ofp_fatal(errno, "sigaction");
             }
             if (old_sa.sa_handler == SIG_DFL
                 && signal(sig_nr, fatal_signal_handler) == SIG_ERR) {
-                fatal(errno, "signal");
+                ofp_fatal(errno, "signal");
             }
         }
         atexit(atexit_handler);

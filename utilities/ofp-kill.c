@@ -70,8 +70,8 @@ main(int argc, char *argv[])
     argv += optind;
     if (argc < 1) {
         if (!force) {
-            fatal(0, "need at least one non-option argument; "
-                  "use --help for usage");
+            ofp_fatal(0, "need at least one non-option argument; "
+                      "use --help for usage");
         }
     }
 
@@ -202,7 +202,7 @@ parse_options(int argc, char *argv[])
                         goto got_name;
                     }
                 }
-                fatal(0, "unknown signal \"%s\"", optarg);
+                ofp_fatal(0, "unknown signal \"%s\"", optarg);
             got_name: ;
             }
             break;

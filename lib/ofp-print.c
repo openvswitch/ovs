@@ -96,7 +96,7 @@ ofp_packet_to_string(const void *data, size_t len, size_t total_len)
 
     pcap = tmpfile();
     if (!pcap) {
-        error(errno, "tmpfile");
+        ofp_error(errno, "tmpfile");
         return xstrdup("<error>");
     }
 
@@ -121,7 +121,7 @@ ofp_packet_to_string(const void *data, size_t len, size_t total_len)
 
     fflush(pcap);
     if (ferror(pcap)) {
-        error(errno, "error writing temporary file");
+        ofp_error(errno, "error writing temporary file");
     }
     rewind(pcap);
 
@@ -130,7 +130,7 @@ ofp_packet_to_string(const void *data, size_t len, size_t total_len)
     tcpdump = popen(command, "r");
     fclose(pcap);
     if (!tcpdump) {
-        error(errno, "exec(\"%s\")", command);
+        ofp_error(errno, "exec(\"%s\")", command);
         return xstrdup("<error>");
     }
 
@@ -141,9 +141,9 @@ ofp_packet_to_string(const void *data, size_t len, size_t total_len)
     status = pclose(tcpdump);
     if (WIFEXITED(status)) {
         if (WEXITSTATUS(status))
-            error(0, "tcpdump exited with status %d", WEXITSTATUS(status));
+            ofp_error(0, "tcpdump exited with status %d", WEXITSTATUS(status));
     } else if (WIFSIGNALED(status)) {
-        error(0, "tcpdump exited with signal %d", WTERMSIG(status)); 
+        ofp_error(0, "tcpdump exited with signal %d", WTERMSIG(status)); 
     }
     return ds_cstr(&ds);
 }

@@ -91,11 +91,10 @@ char *xmemdup0(const char *, size_t);
 char *xstrdup(const char *);
 char *xasprintf(const char *format, ...) PRINTF_FORMAT(1, 2);
 
-void fatal(int err_no, const char *format, ...) PRINTF_FORMAT(2, 3) NO_RETURN;
-void error(int err_no, const char *format, ...) PRINTF_FORMAT(2, 3);
-void debug(int err_no, const char *format, ...) PRINTF_FORMAT(2, 3);
-void debug_msg(int err_no, const char *format, ...) PRINTF_FORMAT(2, 3);
-void hex_dump(FILE *, const void *, size_t, uintptr_t offset, bool ascii);
+void ofp_fatal(int err_no, const char *format, ...)
+    PRINTF_FORMAT(2, 3) NO_RETURN;
+void ofp_error(int err_no, const char *format, ...) PRINTF_FORMAT(2, 3);
+void ofp_hex_dump(FILE *, const void *, size_t, uintptr_t offset, bool ascii);
 
 #ifdef  __cplusplus
 }

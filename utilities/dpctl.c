@@ -100,24 +100,24 @@ int main(int argc, char *argv[])
     argc -= optind;
     argv += optind;
     if (argc < 1)
-        fatal(0, "missing command name; use --help for help");
+        ofp_fatal(0, "missing command name; use --help for help");
 
     for (p = all_commands; p->name != NULL; p++) {
         if (!strcmp(p->name, argv[0])) {
             int n_arg = argc - 1;
             if (n_arg < p->min_args)
-                fatal(0, "'%s' command requires at least %d arguments",
-                      p->name, p->min_args);
+                ofp_fatal(0, "'%s' command requires at least %d arguments",
+                          p->name, p->min_args);
             else if (n_arg > p->max_args)
-                fatal(0, "'%s' command takes at most %d arguments",
-                      p->name, p->max_args);
+                ofp_fatal(0, "'%s' command takes at most %d arguments",
+                          p->name, p->max_args);
             else {
                 p->handler(argc, argv);
                 exit(0);
             }
         }
     }
-    fatal(0, "unknown command '%s'; use --help for help", argv[0]);
+    ofp_fatal(0, "unknown command '%s'; use --help for help", argv[0]);
 
     return 0;
 }
@@ -148,8 +148,8 @@ parse_options(int argc, char *argv[])
         case 't':
             timeout = strtoul(optarg, NULL, 10);
             if (timeout <= 0) {
-                fatal(0, "value %s on -t or --timeout is not at least 1",
-                      optarg);
+                ofp_fatal(0, "value %s on -t or --timeout is not at least 1",
+                          optarg);
             } else {
                 time_alarm(timeout);
             }
@@ -264,7 +264,7 @@ static void open_nl_vconn(const char *name, bool subscribe, struct dpif *dpif)
     if (strncmp(name, "nl:", 3)
         || strlen(name) < 4
         || name[strspn(name + 3, "0123456789") + 3]) {
-        fatal(0, "%s: argument is not of the form \"nl:DP_ID\"", name);
+        ofp_fatal(0, "%s: argument is not of the form \"nl:DP_ID\"", name);
     }
     run(dpif_open(atoi(name + 3), subscribe, dpif), "opening datapath");
 }
@@ -297,8 +297,8 @@ static void add_del_ports(int argc UNUSED, char *argv[],
     for (i = 2; i < argc; i++) {
         int retval = function(&dp, argv[i]);
         if (retval) {
-            error(retval, "failed to %s %s %s %s",
-                  operation, argv[i], preposition, argv[1]);
+            ofp_error(retval, "failed to %s %s %s %s",
+                      operation, argv[i], preposition, argv[1]);
             failure = true;
         }
     }
@@ -457,7 +457,7 @@ str_to_int(const char *str)
     errno = 0;
     value = strtoul(str, &tail, 0);
     if (errno == EINVAL || errno == ERANGE || *tail) {
-        fatal(0, "invalid numeric format %s", str);
+        ofp_fatal(0, "invalid numeric format %s", str);
     }
     return value;
 }
@@ -467,7 +467,7 @@ str_to_mac(const char *str, uint8_t mac[6])
 {
     if (sscanf(str, "%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8,
                &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]) != 6) {
-        fatal(0, "invalid mac address %s", str);
+        ofp_fatal(0, "invalid mac address %s", str);
     }
 }
 
@@ -483,7 +483,7 @@ str_to_ip(const char *str_, uint32_t *ip)
     name = strtok_r(str, "//", &save_ptr);
     retval = name ? lookup_ip(name, &in_addr) : EINVAL;
     if (retval) {
-        fatal(0, "%s: could not convert to IP address", str);
+        ofp_fatal(0, "%s: could not convert to IP address", str);
     }
     *ip = in_addr.s_addr;
 
@@ -506,13 +506,15 @@ str_to_ip(const char *str_, uint32_t *ip)
             /* Verify that the rest of the bits are 1-bits. */
             for (; i < 32; i++) {
                 if (!(nm & (1u << i))) {
-                    fatal(0, "%s: %s is not a valid netmask", str, netmask);
+                    ofp_fatal(0, "%s: %s is not a valid netmask",
+                              str, netmask);
                 }
             }
         } else {
             int prefix = atoi(netmask);
             if (prefix <= 0 || prefix > 32) {
-                fatal(0, "%s: network prefix bits not between 1 and 32", str);
+                ofp_fatal(0, "%s: network prefix bits not between 1 and 32",
+                          str);
             }
             n_wild = 32 - prefix;
         }
@@ -579,7 +581,7 @@ str_to_action(char *str, struct ofp_action *action, int *n_actions)
         } else if (strspn(act, "0123456789") == strlen(act)) {
             port = str_to_int(act);
         } else {
-            fatal(0, "Unknown action: %s", act);
+            ofp_fatal(0, "Unknown action: %s", act);
         }
 
         if (port != OFPP_MAX) {
@@ -680,13 +682,13 @@ str_to_flow(char *string, struct ofp_match *match,
     if (action) {
         char *act_str = strstr(string, "action");
         if (!act_str) {
-            fatal(0, "must specify an action");
+            ofp_fatal(0, "must specify an action");
         }
         *(act_str-1) = '\0';
 
         act_str = strchr(act_str, '=');
         if (!act_str) {
-            fatal(0, "must specify an action");
+            ofp_fatal(0, "must specify an action");
         }
 
         act_str++;
@@ -712,7 +714,7 @@ str_to_flow(char *string, struct ofp_match *match,
 
             value = strtok(NULL, ", \t\r\n");
             if (!value) {
-                fatal(0, "field %s missing value", name);
+                ofp_fatal(0, "field %s missing value", name);
             }
         
             if (table_idx && !strcmp(name, "table")) {
@@ -742,7 +744,7 @@ str_to_flow(char *string, struct ofp_match *match,
                     }
                 }
             } else {
-                fatal(0, "unknown keyword %s", name);
+                ofp_fatal(0, "unknown keyword %s", name);
             }
         }
     }
@@ -814,7 +816,7 @@ static void do_add_flows(int argc, char *argv[])
 
     file = fopen(argv[2], "r");
     if (file == NULL) {
-        fatal(errno, "%s: open", argv[2]);
+        ofp_fatal(errno, "%s: open", argv[2]);
     }
 
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
@@ -904,7 +906,7 @@ do_probe(int argc, char *argv[])
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
     run(vconn_transact(vconn, request, &reply), "talking to %s", argv[1]);
     if (reply->size != request->size) {
-        fatal(0, "reply does not match request");
+        ofp_fatal(0, "reply does not match request");
     }
     ofpbuf_delete(reply);
     vconn_close(vconn);
@@ -955,7 +957,7 @@ do_mod_port(int argc, char *argv[])
         }
     }
     if (port_idx == n_ports) {
-        fatal(0, "couldn't find monitored port: %s", argv[2]);
+        ofp_fatal(0, "couldn't find monitored port: %s", argv[2]);
     }
 
     opm = make_openflow(sizeof(struct ofp_port_mod), OFPT_PORT_MOD, &request);
@@ -979,7 +981,7 @@ do_mod_port(int argc, char *argv[])
         opm->mask |= htonl(OFPPFL_NO_FLOOD);
         opm->desc.flags |= htonl(OFPPFL_NO_FLOOD);
     } else {
-        fatal(0, "unknown mod-port command '%s'", argv[3]);
+        ofp_fatal(0, "unknown mod-port command '%s'", argv[3]);
     }
 
     send_openflow_buffer(vconn, request);
@@ -998,7 +1000,7 @@ do_ping(int argc, char *argv[])
 
     payload = argc > 2 ? atoi(argv[2]) : 64;
     if (payload > max_payload) {
-        fatal(0, "payload must be between 0 and %zu bytes", max_payload);
+        ofp_fatal(0, "payload must be between 0 and %zu bytes", max_payload);
     }
 
     run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
@@ -1048,7 +1050,7 @@ do_benchmark(int argc, char *argv[])
 
     payload_size = atoi(argv[2]);
     if (payload_size > max_payload) {
-        fatal(0, "payload must be between 0 and %zu bytes", max_payload);
+        ofp_fatal(0, "payload must be between 0 and %zu bytes", max_payload);
     }
     message_size = sizeof(struct ofp_header) + payload_size;
 

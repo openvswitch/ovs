@@ -134,8 +134,8 @@ die_if_already_running(void)
     pid_t pid = already_running();
     if (pid) {
         if (!force) {
-            fatal(0, "%s: already running as pid %ld",
-                  get_pidfile(), (long int) pid);
+            ofp_fatal(0, "%s: already running as pid %ld",
+                      get_pidfile(), (long int) pid);
         } else {
             VLOG_WARN("%s: %s already running as pid %ld",
                       get_pidfile(), program_name, (long int) pid);
@@ -204,7 +204,7 @@ daemonize(void)
         char c = 0;
         int fds[2];
         if (pipe(fds) < 0) {
-            fatal(errno, "pipe failed");
+            ofp_fatal(errno, "pipe failed");
         }
 
         switch (fork()) {
@@ -227,7 +227,7 @@ daemonize(void)
 
         case -1:
             /* Error. */
-            fatal(errno, "could not fork");
+            ofp_fatal(errno, "could not fork");
             break;
         }
     } else {

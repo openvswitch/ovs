@@ -81,7 +81,7 @@ time_init(void)
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
     if (sigaction(SIGALRM, &sa, NULL)) {
-        fatal(errno, "sigaction(SIGALRM) failed");
+        ofp_fatal(errno, "sigaction(SIGALRM) failed");
     }
 
     /* Set up periodic timer. */
@@ -89,7 +89,7 @@ time_init(void)
     itimer.it_interval.tv_usec = TIME_UPDATE_INTERVAL * 1000;
     itimer.it_value = itimer.it_interval;
     if (setitimer(ITIMER_REAL, &itimer, NULL)) {
-        fatal(errno, "setitimer failed");
+        ofp_fatal(errno, "setitimer failed");
     }
 }
 
@@ -216,7 +216,7 @@ block_sigalrm(sigset_t *oldsigs)
     sigemptyset(&sigalrm);
     sigaddset(&sigalrm, SIGALRM);
     if (sigprocmask(SIG_BLOCK, &sigalrm, oldsigs)) {
-        fatal(errno, "sigprocmask");
+        ofp_fatal(errno, "sigprocmask");
     }
 }
 
@@ -224,6 +224,6 @@ static void
 unblock_sigalrm(const sigset_t *oldsigs)
 {
     if (sigprocmask(SIG_SETMASK, oldsigs, NULL)) {
-        fatal(errno, "sigprocmask");
+        ofp_fatal(errno, "sigprocmask");
     }
 }

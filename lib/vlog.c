@@ -240,7 +240,7 @@ vlog_set_verbosity(const char *arg)
     if (arg) {
         char *msg = vlog_set_levels_from_string(arg);
         if (msg) {
-            fatal(0, "processing \"%s\": %s", arg, msg);
+            ofp_fatal(0, "processing \"%s\": %s", arg, msg);
         }
     } else {
         vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_DBG);

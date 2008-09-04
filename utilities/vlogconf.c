@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
             break;
         }
         if (!strchr("ath", option) && n_clients == 0) {
-            fatal(0, "no targets specified (use --help for help)");
+            ofp_fatal(0, "no targets specified (use --help for help)");
         } else {
             ++n_actions;
         }

@@ -43,7 +43,7 @@ const char *program_name;
 static void
 out_of_memory(void) 
 {
-    fatal(0, "virtual memory exhausted");
+    ofp_fatal(0, "virtual memory exhausted");
 }
 
 void *
@@ -119,7 +119,8 @@ xasprintf(const char *format, ...)
     return s;
 }
 
-void fatal(int err_no, const char *format, ...)
+void
+ofp_fatal(int err_no, const char *format, ...)
 {
     va_list args;
 
@@ -134,20 +135,8 @@ void fatal(int err_no, const char *format, ...)
     exit(EXIT_FAILURE);
 }
 
-void error(int err_no, const char *format, ...)
-{
-    va_list args;
-
-    fprintf(stderr, "%s: ", program_name);
-    va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    if (err_no != 0)
-        fprintf(stderr, " (%s)", strerror(err_no));
-    putc('\n', stderr);
-}
-
-void debug(int err_no, const char *format, ...)
+void
+ofp_error(int err_no, const char *format, ...)
 {
     va_list args;
 
@@ -173,8 +162,8 @@ void set_program_name(const char *argv0)
  * byte in 'buf'.  If 'ascii' is true then the corresponding ASCII characters
  * are also rendered alongside. */
 void
-hex_dump(FILE *stream, const void *buf_, size_t size,
-         uintptr_t ofs, bool ascii)
+ofp_hex_dump(FILE *stream, const void *buf_, size_t size,
+             uintptr_t ofs, bool ascii)
 {
   const uint8_t *buf = buf_;
   const size_t per_line = 16; /* Maximum bytes per line. */

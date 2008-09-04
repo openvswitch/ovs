@@ -93,13 +93,13 @@ main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
 
     if (argc - optind != 1) {
-        fatal(0, "missing controller argument; use --help for usage");
+        ofp_fatal(0, "missing controller argument; use --help for usage");
     }
 
     rconn = rconn_create(60, max_backoff);
     error = rconn_connect(rconn, argv[optind]);
     if (error == EAFNOSUPPORT) {
-        fatal(0, "no support for %s vconn", argv[optind]);
+        ofp_fatal(0, "no support for %s vconn", argv[optind]);
     }
     error = dp_new(&dp, dpid, rconn);
     if (listen_vconn_name) {
@@ -108,15 +108,15 @@ main(int argc, char *argv[])
         
         retval = vconn_open(listen_vconn_name, &listen_vconn);
         if (retval && retval != EAGAIN) {
-            fatal(retval, "opening %s", listen_vconn_name);
+            ofp_fatal(retval, "opening %s", listen_vconn_name);
         }
         if (!vconn_is_passive(listen_vconn)) {
-            fatal(0, "%s is not a passive vconn", listen_vconn_name);
+            ofp_fatal(0, "%s is not a passive vconn", listen_vconn_name);
         }
         dp_add_listen_vconn(dp, listen_vconn);
     }
     if (error) {
-        fatal(error, "could not create datapath");
+        ofp_fatal(error, "could not create datapath");
     }
     if (port_list) {
         add_ports(dp, port_list); 
@@ -124,7 +124,7 @@ main(int argc, char *argv[])
 
     error = vlog_server_listen(NULL, NULL);
     if (error) {
-        fatal(error, "could not listen for vlog connections");
+        ofp_fatal(error, "could not listen for vlog connections");
     }
 
     die_if_already_running();
@@ -152,7 +152,7 @@ add_ports(struct datapath *dp, char *port_list)
          port = strtok_r(NULL, ",,", &save_ptr)) {
         int error = dp_add_port(dp, port);
         if (error) {
-            fatal(error, "failed to add port %s", port);
+            ofp_fatal(error, "failed to add port %s", port);
         }
     }
 }
@@ -201,12 +201,13 @@ parse_options(int argc, char *argv[])
         case 'd':
             if (strlen(optarg) != 12
                 || strspn(optarg, "0123456789abcdefABCDEF") != 12) {
-                fatal(0, "argument to -d or --datapath-id must be "
-                      "exactly 12 hex digits");
+                ofp_fatal(0, "argument to -d or --datapath-id must be "
+                          "exactly 12 hex digits");
             }
             dpid = strtoll(optarg, NULL, 16);
             if (!dpid) {
-                fatal(0, "argument to -d or --datapath-id must be nonzero");
+                ofp_fatal(0, "argument to -d or --datapath-id must "
+                          "be nonzero");
             }
             break;
 
@@ -244,7 +245,7 @@ parse_options(int argc, char *argv[])
         case OPT_MAX_BACKOFF:
             max_backoff = atoi(optarg);
             if (max_backoff < 1) {
-                fatal(0, "--max-backoff argument must be at least 1");
+                ofp_fatal(0, "--max-backoff argument must be at least 1");
             } else if (max_backoff > 3600) {
                 max_backoff = 3600;
             }
@@ -268,7 +269,7 @@ parse_options(int argc, char *argv[])
 
         case 'l':
             if (listen_vconn_name) {
-                fatal(0, "-l or --listen may be only specified once");
+                ofp_fatal(0, "-l or --listen may be only specified once");
             }
             listen_vconn_name = optarg;
             break;

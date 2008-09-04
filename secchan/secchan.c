@@ -219,10 +219,10 @@ main(int argc, char *argv[])
         struct vconn *listener;
         retval = vconn_open(name, &listener);
         if (retval && retval != EAGAIN) {
-            fatal(retval, "opening %s", name);
+            ofp_fatal(retval, "opening %s", name);
         }
         if (!vconn_is_passive(listener)) {
-            fatal(0, "%s is not a passive vconn", name);
+            ofp_fatal(0, "%s is not a passive vconn", name);
         }
         listeners[n_listeners++] = listener;
     }
@@ -236,7 +236,7 @@ main(int argc, char *argv[])
     /* Start listening for vlogconf requests. */
     retval = vlog_server_listen(NULL, NULL);
     if (retval) {
-        fatal(retval, "Could not listen for vlog connections");
+        ofp_fatal(retval, "Could not listen for vlog connections");
     }
 
     die_if_already_running();
@@ -256,7 +256,7 @@ main(int argc, char *argv[])
     if (s.controller_name) {
         retval = rconn_connect(remote_rconn, s.controller_name);
         if (retval == EAFNOSUPPORT) {
-            fatal(0, "No support for %s vconn", s.controller_name);
+            ofp_fatal(0, "No support for %s vconn", s.controller_name);
         }
     }
     switch_status_register_category(switch_status, "remote",
@@ -713,7 +713,7 @@ in_band_hook_create(const struct settings *s, struct switch_status *ss,
     retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE,
                          &in_band->of_device);
     if (retval) {
-        fatal(retval, "Could not open %s device", s->of_name);
+        ofp_fatal(retval, "Could not open %s device", s->of_name);
     }
     memcpy(in_band->mac, netdev_get_etheraddr(in_band->of_device),
            ETH_ADDR_LEN);
@@ -1264,11 +1264,11 @@ discovery_init(const struct settings *s, struct switch_status *ss)
     /* Bring ofX network device up. */
     retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE, &netdev);
     if (retval) {
-        fatal(retval, "Could not open %s device", s->of_name);
+        ofp_fatal(retval, "Could not open %s device", s->of_name);
     }
     retval = netdev_turn_flags_on(netdev, NETDEV_UP, true);
     if (retval) {
-        fatal(retval, "Could not bring %s device up", s->of_name);
+        ofp_fatal(retval, "Could not bring %s device up", s->of_name);
     }
     netdev_close(netdev);
 
@@ -1276,7 +1276,7 @@ discovery_init(const struct settings *s, struct switch_status *ss)
     retval = dhclient_create(s->of_name, modify_dhcp_request,
                              validate_dhcp_offer, (void *) s, &dhcp);
     if (retval) {
-        fatal(retval, "Failed to initialize DHCP client");
+        ofp_fatal(retval, "Failed to initialize DHCP client");
     }
     dhclient_init(dhcp, 0);
 
@@ -1426,15 +1426,15 @@ parse_options(int argc, char *argv[], struct settings *s)
             } else if (!strcmp(optarg, "closed")) {
                 s->fail_mode = FAIL_CLOSED;
             } else {
-                fatal(0,
-                      "-f or --fail argument must be \"open\" or \"closed\"");
+                ofp_fatal(0, "-f or --fail argument must be \"open\" "
+                          "or \"closed\"");
             }
             break;
 
         case OPT_INACTIVITY_PROBE:
             s->probe_interval = atoi(optarg);
             if (s->probe_interval < 5) {
-                fatal(0, "--inactivity-probe argument must be at least 5");
+                ofp_fatal(0, "--inactivity-probe argument must be at least 5");
             }
             break;
 
@@ -1444,8 +1444,8 @@ parse_options(int argc, char *argv[], struct settings *s)
             } else {
                 s->max_idle = atoi(optarg);
                 if (s->max_idle < 1 || s->max_idle > 65535) {
-                    fatal(0, "--max-idle argument must be between 1 and "
-                          "65535 or the word 'permanent'");
+                    ofp_fatal(0, "--max-idle argument must be between 1 and "
+                              "65535 or the word 'permanent'");
                 }
             }
             break;
@@ -1453,7 +1453,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         case OPT_MAX_BACKOFF:
             s->max_backoff = atoi(optarg);
             if (s->max_backoff < 1) {
-                fatal(0, "--max-backoff argument must be at least 1");
+                ofp_fatal(0, "--max-backoff argument must be at least 1");
             } else if (s->max_backoff > 3600) {
                 s->max_backoff = 3600;
             }
@@ -1463,7 +1463,7 @@ parse_options(int argc, char *argv[], struct settings *s)
             if (optarg) {
                 s->rate_limit = atoi(optarg);
                 if (s->rate_limit < 1) {
-                    fatal(0, "--rate-limit argument must be at least 1");
+                    ofp_fatal(0, "--rate-limit argument must be at least 1");
                 }
             } else {
                 s->rate_limit = 1000;
@@ -1473,7 +1473,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         case OPT_BURST_LIMIT:
             s->burst_limit = atoi(optarg);
             if (s->burst_limit < 1) {
-                fatal(0, "--burst-limit argument must be at least 1");
+                ofp_fatal(0, "--burst-limit argument must be at least 1");
             }
             break;
 
@@ -1491,8 +1491,9 @@ parse_options(int argc, char *argv[], struct settings *s)
 
         case 'l':
             if (s->n_listeners >= MAX_MGMT) {
-                fatal(0, "-l or --listen may be specified at most %d times",
-                      MAX_MGMT);
+                ofp_fatal(0,
+                          "-l or --listen may be specified at most %d times",
+                          MAX_MGMT);
             }
             s->listener_names[s->n_listeners++] = optarg;
             break;
@@ -1522,7 +1523,8 @@ parse_options(int argc, char *argv[], struct settings *s)
     argc -= optind;
     argv += optind;
     if (argc < 1 || argc > 2) {
-        fatal(0, "need one or two non-option arguments; use --help for usage");
+        ofp_fatal(0, "need one or two non-option arguments; "
+                  "use --help for usage");
     }
 
     /* Local and remote vconns. */
@@ -1530,7 +1532,8 @@ parse_options(int argc, char *argv[], struct settings *s)
     if (strncmp(s->nl_name, "nl:", 3)
         || strlen(s->nl_name) < 4
         || s->nl_name[strspn(s->nl_name + 3, "0123456789") + 3]) {
-        fatal(0, "%s: argument is not of the form \"nl:DP_IDX\"", s->nl_name);
+        ofp_fatal(0, "%s: argument is not of the form \"nl:DP_IDX\"",
+                  s->nl_name);
     }
     s->of_name = xasprintf("of%s", s->nl_name + 3);
     s->controller_name = argc > 1 ? xstrdup(argv[1]) : NULL;
@@ -1545,7 +1548,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         size_t length = regerror(retval, &s->accept_controller_regex, NULL, 0);
         char *buffer = xmalloc(length);
         regerror(retval, &s->accept_controller_regex, buffer, length);
-        fatal(0, "%s: %s", accept_re, buffer);
+        ofp_fatal(0, "%s: %s", accept_re, buffer);
     }
     s->accept_controller_re = accept_re;
 
@@ -1559,12 +1562,12 @@ parse_options(int argc, char *argv[], struct settings *s)
 
         retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE, &netdev);
         if (retval) {
-            fatal(retval, "Could not open %s device", s->of_name);
+            ofp_fatal(retval, "Could not open %s device", s->of_name);
         }
 
         retval = netdev_get_flags(netdev, &flags);
         if (retval) {
-            fatal(retval, "Could not get flags for %s device", s->of_name);
+            ofp_fatal(retval, "Could not get flags for %s device", s->of_name);
         }
 
         s->in_band = (flags & NETDEV_UP) != 0;

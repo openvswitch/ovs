@@ -97,12 +97,13 @@ main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
 
     if (argc - optind < 1) {
-        fatal(0, "at least one vconn argument required; use --help for usage");
+        ofp_fatal(0, "at least one vconn argument required; "
+                  "use --help for usage");
     }
 
     retval = vlog_server_listen(NULL, NULL);
     if (retval) {
-        fatal(retval, "Could not listen for vlog connections");
+        ofp_fatal(retval, "Could not listen for vlog connections");
     }
 
     n_switches = n_listeners = 0;
@@ -119,18 +120,18 @@ main(int argc, char *argv[])
 
         if (vconn_is_passive(vconn)) {
             if (n_listeners >= MAX_LISTENERS) {
-                fatal(0, "max %d passive connections", n_listeners);
+                ofp_fatal(0, "max %d passive connections", n_listeners);
             }
             listeners[n_listeners++] = vconn;
         } else {
             if (n_switches >= MAX_SWITCHES) {
-                fatal(0, "max %d switch connections", n_switches);
+                ofp_fatal(0, "max %d switch connections", n_switches);
             }
             new_switch(&switches[n_switches++], vconn, name);
         }
     }
     if (n_switches == 0 && n_listeners == 0) {
-        fatal(0, "no active or passive switch connections");
+        ofp_fatal(0, "no active or passive switch connections");
     }
 
     die_if_already_running();
@@ -280,8 +281,8 @@ parse_options(int argc, char *argv[])
             } else {
                 max_idle = atoi(optarg);
                 if (max_idle < 1 || max_idle > 65535) {
-                    fatal(0, "--max-idle argument must be between 1 and "
-                          "65535 or the word 'permanent'");
+                    ofp_fatal(0, "--max-idle argument must be between 1 and "
+                              "65535 or the word 'permanent'");
                 }
             }
             break;
