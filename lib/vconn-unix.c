@@ -50,6 +50,7 @@
 #include "ofp-print.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "vconn-provider.h"
 #include "vconn-stream.h"
 
 #include "vlog.h"

@@ -52,6 +52,7 @@
 #include "ofp-print.h"
 #include "socket-util.h"
 #include "vconn.h"
+#include "vconn-provider.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_vconn_ssl
@@ -226,9 +227,8 @@ new_ssl_vconn(const char *name, int fd, enum session_type type,
 
     /* Create and return the ssl_vconn. */
     sslv = xmalloc(sizeof *sslv);
-    sslv->vconn.class = &ssl_vconn_class;
-    sslv->vconn.connect_status = EAGAIN;
-    sslv->vconn.ip = sin->sin_addr.s_addr;
+    vconn_init(&sslv->vconn, &ssl_vconn_class, EAGAIN, sin->sin_addr.s_addr,
+               name);
     sslv->state = state;
     sslv->type = type;
     sslv->fd = fd;
@@ -731,8 +731,7 @@ pssl_open(const char *name, char *suffix, struct vconn **vconnp)
     }
 
     pssl = xmalloc(sizeof *pssl);
-    pssl->vconn.class = &pssl_vconn_class;
-    pssl->vconn.connect_status = 0;
+    vconn_init(&pssl->vconn, &pssl_vconn_class, 0, 0, name);
     pssl->fd = fd;
     *vconnp = &pssl->vconn;
     return 0;

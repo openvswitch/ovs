@@ -51,6 +51,7 @@
 #include "socket-util.h"
 #include "util.h"
 #include "openflow.h"
+#include "vconn-provider.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_VCONN_NETLINK
@@ -83,9 +84,7 @@ netlink_open(const char *name, char *suffix, struct vconn **vconnp)
     }
 
     netlink = xmalloc(sizeof *netlink);
-    netlink->vconn.class = &netlink_vconn_class;
-    netlink->vconn.connect_status = 0;
-    netlink->vconn.ip = 0;
+    vconn_init(&netlink->vconn, &netlink_vconn_class, 0, 0, name);
     retval = dpif_open(dp_idx, subscribe, &netlink->dp);
     if (retval) {
         free(netlink);

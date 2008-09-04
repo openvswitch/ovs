@@ -45,6 +45,7 @@
 #include "socket-util.h"
 #include "util.h"
 #include "openflow.h"
+#include "vconn-provider.h"
 #include "vconn-stream.h"
 
 #include "vlog.h"

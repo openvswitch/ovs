@@ -46,6 +46,7 @@
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "vconn.h"
+#include "vconn-provider.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_vconn_stream
@@ -72,9 +73,7 @@ new_stream_vconn(const char *name, int fd, int connect_status,
     struct stream_vconn *s;
 
     s = xmalloc(sizeof *s);
-    s->vconn.class = &stream_vconn_class;
-    s->vconn.connect_status = connect_status;
-    s->vconn.ip = ip;
+    vconn_init(&s->vconn, &stream_vconn_class, connect_status, ip, name);
     s->fd = fd;
     s->txbuf = NULL;
     s->tx_waiter = NULL;

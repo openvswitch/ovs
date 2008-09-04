@@ -32,7 +32,7 @@
  */
 
 #include <config.h>
-#include "vconn.h"
+#include "vconn-provider.h"
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -174,6 +174,7 @@ vconn_open(const char *name, struct vconn **vconnp)
             if (!retval) {
                 assert(vconn->connect_status != EAGAIN
                        || vconn->class->connect);
+                vconn->name = xstrdup(name);
                 *vconnp = vconn;
             }
             return retval;
@@ -210,7 +211,9 @@ void
 vconn_close(struct vconn *vconn)
 {
     if (vconn != NULL) {
+        char *name = vconn->name;
         (vconn->class->close)(vconn);
+        free(name);
     }
 }
 
@@ -287,15 +290,15 @@ vconn_recv(struct vconn *vconn, struct buffer **msgp)
 
             if (VLOG_IS_DBG_ENABLED()) {
                 char *s = ofp_to_string((*msgp)->data, (*msgp)->size, 1);
-                VLOG_DBG_RL(&rl, "received: %s", s);
+                VLOG_DBG_RL(&rl, "%s: received: %s", vconn->name, s);
                 free(s);
             }
 
             oh = buffer_at_assert(*msgp, 0, sizeof *oh);
             if (oh->version != OFP_VERSION) {
-                VLOG_ERR_RL(&rl, "received OpenFlow version %02"PRIx8" "
+                VLOG_ERR_RL(&rl, "%s: received OpenFlow version %02"PRIx8" "
                             "!= expected %02x",
-                            oh->version, OFP_VERSION);
+                            vconn->name, oh->version, OFP_VERSION);
                 buffer_delete(*msgp);
                 *msgp = NULL;
                 return EPROTO;
@@ -332,7 +335,7 @@ vconn_send(struct vconn *vconn, struct buffer *msg)
             char *s = ofp_to_string(msg->data, msg->size, 1);
             retval = (vconn->class->send)(vconn, msg);
             if (retval != EAGAIN) {
-                VLOG_DBG_RL(&rl, "sent (%s): %s", strerror(retval), s);
+                VLOG_DBG_RL(&rl, "%s: sent (%s): %s", vconn->name, strerror(retval), s);
             }
             free(s);
         }
@@ -397,8 +400,8 @@ vconn_transact(struct vconn *vconn, struct buffer *request,
             return 0;
         }
 
-        VLOG_DBG_RL(&rl, "received reply with xid %08"PRIx32" != expected "
-                    "%08"PRIx32, recv_xid, send_xid);
+        VLOG_DBG_RL(&rl, "%s: received reply with xid %08"PRIx32" != expected "
+                    "%08"PRIx32, vconn->name, recv_xid, send_xid);
         buffer_delete(reply);
     }
 }
@@ -602,3 +605,14 @@ make_echo_reply(const struct ofp_header *rq)
     reply->type = OFPT_ECHO_REPLY;
     return out;
 }
+
+void
+vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
+           uint32_t ip, const char *name)
+{
+    vconn->class = class;
+    vconn->connect_status = connect_status;
+    vconn->ip = ip;
+    vconn->name = xstrdup(name);
+}
+
