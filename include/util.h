@@ -59,8 +59,14 @@ extern const char *program_name;
 #define ARRAY_SIZE(ARRAY) (sizeof ARRAY / sizeof *ARRAY)
 #define ROUND_UP(X, Y) (((X) + ((Y) - 1)) / (Y) * (Y))
 #define ROUND_DOWN(X, Y) ((X) / (Y) * (Y))
+
+#ifndef MIN
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+#endif
+
+#ifndef MAX
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
+#endif
 
 #define NOT_REACHED() abort()
 #define NOT_IMPLEMENTED() abort()
