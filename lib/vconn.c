@@ -217,6 +217,13 @@ vconn_close(struct vconn *vconn)
     }
 }
 
+/* Returns the name of 'vconn', that is, the string passed to vconn_open(). */
+const char *
+vconn_get_name(const struct vconn *vconn)
+{
+    return vconn->name;
+}
+
 /* Returns true if 'vconn' is a passive vconn, that is, its purpose is to
  * wait for connections to arrive, not to transfer data.  Returns false if
  * 'vconn' is an active vconn, that is, its purpose is to transfer data, not

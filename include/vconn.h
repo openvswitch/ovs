@@ -50,6 +50,7 @@ struct vconn;
 void vconn_usage(bool active, bool passive);
 int vconn_open(const char *name, struct vconn **);
 void vconn_close(struct vconn *);
+const char *vconn_get_name(const struct vconn *);
 bool vconn_is_passive(const struct vconn *);
 uint32_t vconn_get_ip(const struct vconn *);
 int vconn_connect(struct vconn *);
