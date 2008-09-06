@@ -66,6 +66,10 @@ static inline void skb_set_mac_header(struct sk_buff *skb, const int offset)
 	skb->mac.raw = skb->data + offset;
 }
 
+static inline int skb_transport_offset(const struct sk_buff *skb)
+{
+    return skb_transport_header(skb) - skb->data;
+}
 #endif /* linux kernel < 2.6.22 */
 
 #endif

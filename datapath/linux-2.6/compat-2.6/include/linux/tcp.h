@@ -11,6 +11,11 @@ static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
 {
 	return (struct tcphdr *)skb_transport_header(skb);
 }
+
+static inline unsigned int tcp_hdrlen(const struct sk_buff *skb)
+{
+        return tcp_hdr(skb)->doff * 4;
+}
 #endif /* __KERNEL__ */
 
 #endif /* linux kernel < 2.6.22 */
