@@ -571,6 +571,16 @@ is_controller_mac(const uint8_t dl_addr[ETH_ADDR_LEN],
     return mac && eth_addr_equals(mac, dl_addr);
 }
 
+static void
+in_band_learn_mac(struct in_band_data *in_band, const struct flow *flow)
+{
+    uint16_t in_port = ntohs(flow->in_port);
+    if (mac_learning_learn(in_band->ml, flow->dl_src, in_port)) {
+        VLOG_DBG_RL(&vrl, "learned that "ETH_ADDR_FMT" is on port %"PRIu16,
+                    ETH_ADDR_ARGS(flow->dl_src), in_port);
+    }
+}
+
 static bool
 in_band_packet_cb(struct relay *r, int half, void *in_band_)
 {
@@ -583,7 +593,6 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
     struct buffer pkt;
     struct flow flow;
     uint16_t in_port, out_port;
-    const uint8_t *controller_mac;
 
     if (half != HALF_LOCAL || r->is_mgmt_conn) {
         return false;
@@ -609,36 +618,22 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
     flow_extract(&pkt, in_port, &flow);
 
     /* Deal with local stuff. */
-    controller_mac = get_controller_mac(in_band);
     if (in_port == OFPP_LOCAL) {
         /* Sent by secure channel. */
         out_port = mac_learning_lookup(in_band->ml, flow.dl_dst);
     } else if (eth_addr_equals(flow.dl_dst, in_band->mac)) {
         /* Sent to secure channel. */
         out_port = OFPP_LOCAL;
-        if (mac_learning_learn(in_band->ml, flow.dl_src, in_port)) {
-            VLOG_DBG_RL(&vrl, "learned that "ETH_ADDR_FMT" is on port %"PRIu16,
-                        ETH_ADDR_ARGS(flow.dl_src), in_port);
-        }
+        in_band_learn_mac(in_band, &flow);
     } else if (flow.dl_type == htons(ETH_TYPE_ARP)
                && eth_addr_is_broadcast(flow.dl_dst)
                && is_controller_mac(flow.dl_src, in_band)) {
         /* ARP sent by controller. */
         out_port = OFPP_FLOOD;
-    } else if (is_controller_mac(flow.dl_dst, in_band)) {
-        if (mac_learning_learn(in_band->ml, flow.dl_src, in_port)) {
-            VLOG_DBG_RL(&vrl, "learned that "ETH_ADDR_FMT" is on port %"PRIu16,
-                        ETH_ADDR_ARGS(flow.dl_src), in_port);
-        }
-
-        out_port = mac_learning_lookup(in_band->ml, controller_mac);
-        if (in_port != out_port) {
-            return false;
-        }
-
-        /* This is controller traffic that arrived on the controller port.
-         * It will get dropped below. */
-    } else if (is_controller_mac(flow.dl_src, in_band)) {
+    } else if (is_controller_mac(flow.dl_dst, in_band)
+               || is_controller_mac(flow.dl_src, in_band)) {
+        /* Traffic to or from controller.  Switch it by hand. */
+        in_band_learn_mac(in_band, &flow);
         out_port = mac_learning_lookup(in_band->ml, flow.dl_dst);
     } else {
         return false;
