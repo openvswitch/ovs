@@ -114,6 +114,11 @@ struct rconn {
      * an echo request as an inactivity probe packet.  We should receive back
      * a response. */
     int probe_interval;         /* Secs of inactivity before sending probe. */
+
+    /* Messages sent or received are copied to the monitor connections. */
+#define MAX_MONITORS 8
+    struct vconn *monitors[8];
+    size_t n_monitors;
 };
 
 static unsigned int elapsed_in_this_state(const struct rconn *);
@@ -125,6 +130,7 @@ static int reconnect(struct rconn *);
 static void disconnect(struct rconn *, int error);
 static void flush_queue(struct rconn *);
 static void question_connectivity(struct rconn *);
+static void copy_to_monitor(struct rconn *, const struct buffer *);
 
 /* Creates a new rconn, connects it (reliably) to 'name', and returns it. */
 struct rconn *
@@ -188,6 +194,8 @@ rconn_create(int probe_interval, int max_backoff)
     rc->last_questioned = time_now();
 
     rc->probe_interval = probe_interval ? MAX(5, probe_interval) : 0;
+
+    rc->n_monitors = 0;
 
     return rc;
 }
@@ -429,6 +437,7 @@ rconn_recv(struct rconn *rc)
         struct buffer *buffer;
         int error = vconn_recv(rc->vconn, &buffer);
         if (!error) {
+            copy_to_monitor(rc, buffer);
             rc->last_received = time_now();
             rc->packets_received++;
             if (rc->state == S_IDLE) {
@@ -469,6 +478,7 @@ int
 rconn_send(struct rconn *rc, struct buffer *b, int *n_queued)
 {
     if (rconn_is_connected(rc)) {
+        copy_to_monitor(rc, b);
         b->private = n_queued;
         if (n_queued) {
             ++*n_queued;
@@ -514,6 +524,21 @@ unsigned int
 rconn_packets_sent(const struct rconn *rc)
 {
     return rc->packets_sent;
+}
+
+/* Adds 'vconn' to 'rc' as a monitoring connection, to which all messages sent
+ * and received on 'rconn' will be copied.  'rc' takes ownership of 'vconn'. */
+void
+rconn_add_monitor(struct rconn *rc, struct vconn *vconn)
+{
+    if (rc->n_monitors < ARRAY_SIZE(rc->monitors)) {
+        VLOG_WARN("new monitor connection from %s", vconn_get_name(vconn));
+        rc->monitors[rc->n_monitors++] = vconn;
+    } else {
+        VLOG_DBG("too many monitor connections, discarding %s",
+                 vconn_get_name(vconn));
+        vconn_close(vconn);
+    }
 }
 
 /* Returns 'rc''s name (the 'name' argument passed to rconn_new()). */
@@ -766,4 +791,32 @@ question_connectivity(struct rconn *rc)
         rc->questionable_connectivity = true;
         rc->last_questioned = now;
     }
+}
+
+static void
+copy_to_monitor(struct rconn *rc, const struct buffer *b)
+{
+    struct buffer *clone = NULL;
+    int retval;
+    size_t i;
+
+    for (i = 0; i < rc->n_monitors; ) {
+        struct vconn *vconn = rc->monitors[i];
+
+        if (!clone) {
+            clone = buffer_clone(b);
+        }
+        retval = vconn_send(vconn, clone);
+        if (!retval) {
+            clone = NULL;
+        } else if (retval != EAGAIN) {
+            VLOG_DBG("%s: closing monitor connection to %s: %s",
+                     rconn_get_name(rc), vconn_get_name(vconn),
+                     strerror(retval));
+            rc->monitors[i] = rc->monitors[--rc->n_monitors];
+            continue;
+        }
+        i++;
+    }
+    buffer_delete(clone);
 }

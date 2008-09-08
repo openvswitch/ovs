@@ -73,6 +73,8 @@ int rconn_send_with_limit(struct rconn *, struct buffer *,
 unsigned int rconn_packets_sent(const struct rconn *);
 unsigned int rconn_packets_received(const struct rconn *);
 
+void rconn_add_monitor(struct rconn *, struct vconn *);
+
 const char *rconn_get_name(const struct rconn *);
 bool rconn_is_alive(const struct rconn *);
 bool rconn_is_connected(const struct rconn *);

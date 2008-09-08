@@ -44,7 +44,7 @@ The Unix domain server socket named \fIfile\fR.
 .SH COMMANDS
 
 With the \fBdpctl\fR program, datapaths running in the kernel can be 
-created, deleted, modified, and monitored.  A single machine may 
+created, deleted, and modified.  A single machine may 
 host up to 32 datapaths (numbered 0 to 31).  In most situations, 
 a machine hosts only one datapath.
 
@@ -82,12 +82,6 @@ traffic and the network device appears silent to the rest of the system.
 \fBdelif nl:\fIdp_idx netdev\fR...
 Removes each \fInetdev\fR from the list of network devices datapath
 \fIdp_idx\fR monitors.
-
-.TP
-\fBmonitor nl:\fIdp_idx\fR
-Prints to the console all OpenFlow packets sent by datapath
-\fIdp_idx\fR to its controller, where \fIdp_idx\fR is the ID of an
-existing datapath.
 
 .PP
 The following commands can be apply to OpenFlow switches regardless of
@@ -181,6 +175,19 @@ Deletes entries from the datapath \fIswitch\fR's tables that match
 \fIflow\fR.  If \fIflow\fR is omitted, all flows in the datapath's
 tables are removed.  See \fBFLOW SYNTAX\fR, below, for the syntax of
 \fIflows\fR.
+
+.TP
+\fBmonitor \fIswitch\fR
+Connects to \fIswitch\fR and prints to the console all OpenFlow
+messages received.  Usually, \fIswitch\fR should specify a connection
+named on \fBsecchan\fR(8)'s \fB-m\fR or \fB--monitor\fR command line
+option, in which the messages printed will be all those sent or
+received by \fBsecchan\fR to or from the kernel datapath module.  A
+\fIswitch\fR of the form \fBnl:\fIdp_idx\fR will print all
+asynchronously generated OpenFlow messages (such as packet-in
+messages), but it will not print any messages sent to the kernel by
+\fBsecchan\fR and other processes, nor will it print replies sent by
+the kernel in response to those messages.
 
 .PP
 The following commands can be used regardless of the connection

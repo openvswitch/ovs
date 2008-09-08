@@ -295,11 +295,35 @@ are mandatory when this form is used.
 .TP
 \fBptcp:\fR[\fIport\fR]
 Listens for TCP connections on \fIport\fR (default: 975).
-.RE
 
 .TP
 \fBpunix:\fIfile\fR
 Listens for connections on Unix domain server socket named \fIfile\fR.
+.RE
+
+.TP
+\fB-m\fR, \fB--monitor=\fImethod\fR
+Configures the switch to additionally listen for incoming OpenFlow
+connections for switch monitoring with \fBdpctl\fR's \fBmonitor\fR
+command.  The \fImethod\fR must be given as one of the passive
+OpenFlow connection methods listed above as acceptable for
+\fB--listen\fR.
+
+When \fBdpctl monitor\fR makes a monitoring connection, \fBsecchan\fR
+sends it a copy of every OpenFlow message sent to or received from the
+kernel in the normal course of its operations.  It does not send a
+copy of any messages sent to or from the OpenFlow connection to the
+controller.  Most of these messages will be seen anyhow, however,
+because \fBsecchan\fR mainly acts as a relay between the controller
+and the kernel.  \fBsecchan\fR also does not send a copy of any
+messages sent to or from the OpenFlow connection to the controller.
+Such messages will typically \fBnot\fR be seen, because \fBsecchan\fR
+maintains a separate connection to the kernel for each management
+connection.
+
+Messages are copied to the monitoring connections on a best-effort
+basis.  In particular, if the socket buffer of the monitoring
+connection fills up, some messages will be lost.
 
 .TP
 \fB-p\fR, \fB--private-key=\fIprivkey.pem\fR

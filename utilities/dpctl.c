@@ -189,7 +189,6 @@ usage(void)
            "  deldp nl:DP_ID              delete local datapath DP_ID\n"
            "  addif nl:DP_ID IFACE...     add each IFACE as a port on DP_ID\n"
            "  delif nl:DP_ID IFACE...     delete each IFACE from DP_ID\n"
-           "  monitor nl:DP_ID            print packets received\n"
 #endif
            "\nFor local datapaths and remote switches:\n"
            "  show SWITCH                 show basic information\n"
@@ -205,6 +204,7 @@ usage(void)
            "  add-flow SWITCH FLOW        add flow described by FLOW\n"
            "  add-flows SWITCH FILE       add flows from FILE\n"
            "  del-flows SWITCH FLOW       delete matching FLOWs\n"
+           "  monitor SWITCH              print packets received from SWITCH\n"
            "\nFor local datapaths, remote switches, and controllers:\n"
            "  probe VCONN                 probe whether VCONN is up\n"
            "  ping VCONN [N]              latency of N-byte echos\n"
@@ -322,18 +322,6 @@ static void do_add_port(int argc UNUSED, char *argv[])
 static void do_del_port(int argc UNUSED, char *argv[])
 {
     add_del_ports(argc, argv, dpif_del_port, "remove", "from");
-}
-
-static void do_monitor(int argc UNUSED, char *argv[])
-{
-    struct dpif dp;
-    open_nl_vconn(argv[1], true, &dp);
-    for (;;) {
-        struct buffer *b;
-        run(dpif_recv_openflow(&dp, &b, true), "dpif_recv_openflow");
-        ofp_print(stderr, b->data, b->size, 2);
-        buffer_delete(b);
-    }
 }
 #endif /* HAVE_NETLINK */
 
@@ -885,6 +873,29 @@ static void do_del_flows(int argc, char *argv[])
     send_openflow_buffer(vconn, buffer);
 
     vconn_close(vconn);
+}
+
+static void
+do_monitor(int argc UNUSED, char *argv[])
+{
+    struct vconn *vconn;
+    const char *name;
+
+    /* If the user specified, e.g., "nl:0", append ":1" to it to ensure that
+     * the connection will subscribe to listen for asynchronous messages, such
+     * as packet-in messages. */
+    if (!strncmp(argv[1], "nl:", 3) && strrchr(argv[1], ':') == &argv[1][2]) {
+        name = xasprintf("%s:1", argv[1]);
+    } else {
+        name = argv[1];
+    }
+    run(vconn_open_block(argv[1], &vconn), "connecting to %s", name);
+    for (;;) {
+        struct buffer *b;
+        run(vconn_recv_block(vconn, &b), "vconn_recv");
+        ofp_print(stderr, b->data, b->size, 2);
+        buffer_delete(b);
+    }
 }
 
 static void

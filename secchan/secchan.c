@@ -92,6 +92,7 @@ struct settings {
     const char *controller_name; /* Controller (if not discovery mode). */
     const char *listener_names[MAX_MGMT]; /* Listen for mgmt connections. */
     size_t n_listeners;          /* Number of mgmt connection listeners. */
+    const char *monitor_name;   /* Listen for traffic monitor connections. */
 
     /* Failure behavior. */
     enum fail_mode fail_mode; /* Act as learning switch if no controller? */
@@ -136,6 +137,9 @@ static struct vlog_rate_limit vrl = VLOG_RATE_LIMIT_INIT(60, 60);
 
 static void parse_options(int argc, char *argv[], struct settings *);
 static void usage(void) NO_RETURN;
+
+static struct vconn *open_passive_vconn(const char *name);
+static struct vconn *accept_vconn(struct vconn *vconn);
 
 static struct relay *relay_create(struct rconn *local, struct rconn *remote,
                                   bool is_mgmt_conn);
@@ -195,6 +199,8 @@ main(int argc, char *argv[])
     struct hook hooks[8];
     size_t n_hooks = 0;
 
+    struct vconn *monitor;
+
     struct vconn *listeners[MAX_MGMT];
     size_t n_listeners;
 
@@ -212,20 +218,12 @@ main(int argc, char *argv[])
     parse_options(argc, argv, &s);
     signal(SIGPIPE, SIG_IGN);
 
-    /* Start listening for management connections. */
+    /* Start listening for management and monitoring connections. */
     n_listeners = 0;
     for (i = 0; i < s.n_listeners; i++) {
-        const char *name = s.listener_names[i];
-        struct vconn *listener;
-        retval = vconn_open(name, &listener);
-        if (retval && retval != EAGAIN) {
-            fatal(retval, "opening %s", name);
-        }
-        if (!vconn_is_passive(listener)) {
-            fatal(0, "%s is not a passive vconn", name);
-        }
-        listeners[n_listeners++] = listener;
+        listeners[n_listeners++] = open_passive_vconn(s.listener_names[i]);
     }
+    monitor = s.monitor_name ? open_passive_vconn(s.monitor_name) : NULL;
 
     /* Initialize switch status hook. */
     hooks[n_hooks++] = switch_status_hook_create(&s, &switch_status);
@@ -298,6 +296,12 @@ main(int argc, char *argv[])
                 list_push_back(&relays, &r->node);
             }
         }
+        if (monitor) {
+            struct vconn *new = accept_vconn(monitor);
+            if (new) {
+                rconn_add_monitor(local_rconn, new);
+            }
+        }
         for (i = 0; i < n_hooks; i++) {
             if (hooks[i].periodic_cb) {
                 hooks[i].periodic_cb(hooks[i].aux);
@@ -324,6 +328,9 @@ main(int argc, char *argv[])
         for (i = 0; i < n_listeners; i++) {
             vconn_accept_wait(listeners[i]);
         }
+        if (monitor) {
+            vconn_accept_wait(monitor);
+        }
         for (i = 0; i < n_hooks; i++) {
             if (hooks[i].wait_cb) {
                 hooks[i].wait_cb(hooks[i].aux);
@@ -336,6 +343,35 @@ main(int argc, char *argv[])
     }
 
     return 0;
+}
+
+static struct vconn *
+open_passive_vconn(const char *name) 
+{
+    struct vconn *vconn;
+    int retval;
+
+    retval = vconn_open(name, &vconn);
+    if (retval && retval != EAGAIN) {
+        fatal(retval, "opening %s", name);
+    }
+    if (!vconn_is_passive(vconn)) {
+        fatal(0, "%s is not a passive vconn", name);
+    }
+    return vconn;
+}
+
+static struct vconn *
+accept_vconn(struct vconn *vconn) 
+{
+    struct vconn *new;
+    int retval;
+
+    retval = vconn_accept(vconn, &new);
+    if (retval && retval != EAGAIN) {
+        VLOG_WARN_RL(&vrl, "accept failed (%s)", strerror(retval));
+    }
+    return new;
 }
 
 static struct hook
@@ -362,11 +398,8 @@ relay_accept(const struct settings *s, struct vconn *listen_vconn)
     struct rconn *r1, *r2;
     int retval;
 
-    retval = vconn_accept(listen_vconn, &new_remote);
-    if (retval) {
-        if (retval != EAGAIN) {
-            VLOG_WARN_RL(&vrl, "accept failed (%s)", strerror(retval));
-        }
+    new_remote = accept_vconn(listen_vconn);
+    if (!new_remote) {
         return NULL;
     }
 
@@ -1374,6 +1407,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
         {"max-backoff", required_argument, 0, OPT_MAX_BACKOFF},
         {"listen",      required_argument, 0, 'l'},
+        {"monitor",     required_argument, 0, 'm'},
         {"rate-limit",  optional_argument, 0, OPT_RATE_LIMIT},
         {"burst-limit", required_argument, 0, OPT_BURST_LIMIT},
         {"detach",      no_argument, 0, 'D'},
@@ -1391,6 +1425,7 @@ parse_options(int argc, char *argv[], struct settings *s)
 
     /* Set defaults that we can figure out before parsing options. */
     s->n_listeners = 0;
+    s->monitor_name = NULL;
     s->fail_mode = FAIL_OPEN;
     s->max_idle = 15;
     s->probe_interval = 15;
@@ -1490,6 +1525,13 @@ parse_options(int argc, char *argv[], struct settings *s)
                       MAX_MGMT);
             }
             s->listener_names[s->n_listeners++] = optarg;
+            break;
+
+        case 'm':
+            if (s->monitor_name) {
+                fatal(0, "-m or --monitor may only be specified once");
+            }
+            s->monitor_name = optarg;
             break;
 
         case 'h':
@@ -1607,6 +1649,8 @@ usage(void)
            "  --max-backoff=SECS      max time between controller connection\n"
            "                          attempts (default: 15 seconds)\n"
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
+           "                          (a passive OpenFlow connection method)\n"
+           "  -m, --monitor=METHOD    copy traffic to/from kernel to METHOD\n"
            "                          (a passive OpenFlow connection method)\n"
            "\nRate-limiting of \"packet-in\" messages to the controller:\n"
            "  --rate-limit[=PACKETS]  max rate, in packets/s (default: 1000)\n"
