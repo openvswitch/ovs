@@ -3,6 +3,7 @@
 #include <linux/etherdevice.h>
 #include <linux/rcupdate.h>
 #include <linux/skbuff.h>
+#include <linux/workqueue.h>
 
 #include "datapath.h"
 #include "forward.h"
@@ -10,7 +11,10 @@
 struct dp_dev {
 	struct net_device_stats stats;
 	struct datapath *dp;
+	struct sk_buff_head xmit_queue;
+	struct work_struct xmit_work;
 };
+
 
 static struct dp_dev *dp_dev_priv(struct net_device *netdev) 
 {
@@ -60,12 +64,35 @@ static int dp_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 	dp_dev->stats.tx_packets++;
 	dp_dev->stats.tx_bytes += skb->len;
 
-	skb_reset_mac_header(skb);
-	rcu_read_lock();
-	fwd_port_input(dp->chain, skb, OFPP_LOCAL);
-	rcu_read_unlock();
+	if (skb_queue_len(&dp_dev->xmit_queue) >= dp->netdev->tx_queue_len) {
+		/* Queue overflow.  Stop transmitter. */
+		netif_stop_queue(dp->netdev);
+
+		/* We won't see all dropped packets individually, so overrun
+		 * error is appropriate. */
+		dp_dev->stats.tx_fifo_errors++;
+	}
+	skb_queue_tail(&dp_dev->xmit_queue, skb);
+	dp->netdev->trans_start = jiffies;
+
+	schedule_work(&dp_dev->xmit_work);
 
 	return 0;
+}
+
+static void dp_dev_do_xmit(struct work_struct *work)
+{
+	struct dp_dev *dp_dev = container_of(work, struct dp_dev, xmit_work);
+	struct datapath *dp = dp_dev->dp;
+	struct sk_buff *skb;
+
+	while ((skb = skb_dequeue(&dp_dev->xmit_queue)) != NULL) {
+		skb_reset_mac_header(skb);
+		rcu_read_lock();
+		fwd_port_input(dp->chain, skb, OFPP_LOCAL);
+		rcu_read_unlock();
+	}
+	netif_wake_queue(dp->netdev);
 }
 
 static int dp_dev_open(struct net_device *netdev)
@@ -89,7 +116,7 @@ do_setup(struct net_device *netdev)
 	netdev->hard_start_xmit = dp_dev_xmit;
 	netdev->open = dp_dev_open;
 	netdev->stop = dp_dev_stop;
-	netdev->tx_queue_len = 0;
+	netdev->tx_queue_len = 100;
 	netdev->set_mac_address = dp_dev_mac_addr;
 
 	netdev->flags = IFF_BROADCAST | IFF_MULTICAST;
@@ -121,14 +148,19 @@ int dp_dev_setup(struct datapath *dp)
 
 	dp_dev = dp_dev_priv(netdev);
 	dp_dev->dp = dp;
+	skb_queue_head_init(&dp_dev->xmit_queue);
+	INIT_WORK(&dp_dev->xmit_work, dp_dev_do_xmit);
 	dp->netdev = netdev;
 	return 0;
 }
 
 void dp_dev_destroy(struct datapath *dp)
 {
+	struct dp_dev *dp_dev = dp_dev_priv(dp->netdev);
+
 	netif_tx_disable(dp->netdev);
 	synchronize_net();
+	skb_queue_purge(&dp_dev->xmit_queue);
 	unregister_netdev(dp->netdev);
 	free_netdev(dp->netdev);
 }
