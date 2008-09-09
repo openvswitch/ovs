@@ -552,7 +552,7 @@ make_unbuffered_packet_out(const struct buffer *packet,
     size_t size = sizeof *opo + sizeof opo->actions[0];
     struct buffer *out = buffer_new(size + packet->size);
     opo = buffer_put_uninit(out, size);
-    memset(opo, 0, sizeof *opo);
+    memset(opo, 0, size);
     opo->header.version = OFP_VERSION;
     opo->header.type = OFPT_PACKET_OUT;
     opo->buffer_id = htonl(UINT32_MAX);
