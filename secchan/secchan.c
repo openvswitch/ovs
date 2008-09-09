@@ -62,6 +62,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"
+#include "stp.h"
 #include "timeval.h"
 #include "util.h"
 #include "vconn-ssl.h"
@@ -108,6 +109,9 @@ struct settings {
     regex_t accept_controller_regex;  /* Controller vconns to accept. */
     const char *accept_controller_re; /* String version of regex. */
     bool update_resolv_conf;          /* Update /etc/resolv.conf? */
+
+    /* Spanning tree protocol. */
+    bool stp;                   /* Enable spanning tree protocol? */
 };
 
 struct half {
@@ -127,7 +131,7 @@ struct relay {
 };
 
 struct hook {
-    bool (*packet_cb)(struct relay *, int half, void *aux);
+    bool (*packet_cb[2])(struct relay *, void *aux);
     void (*periodic_cb)(void *aux);
     void (*wait_cb)(void *aux);
     void *aux;
@@ -148,10 +152,15 @@ static void relay_run(struct relay *, const struct hook[], size_t n_hooks);
 static void relay_wait(struct relay *);
 static void relay_destroy(struct relay *);
 
-static struct hook make_hook(bool (*packet_cb)(struct relay *, int, void *),
+static struct hook make_hook(bool (*local_packet_cb)(struct relay *, void *),
+                             bool (*remote_packet_cb)(struct relay *, void *),
                              void (*periodic_cb)(void *),
                              void (*wait_cb)(void *),
                              void *aux);
+static struct ofp_packet_in *get_ofp_packet_in(struct relay *);
+static bool get_ofp_packet_eth_header(struct relay *, struct ofp_packet_in **,
+                                      struct eth_header **);
+static void get_ofp_packet_payload(struct ofp_packet_in *, struct buffer *);
 
 struct switch_status;
 struct status_reply;
@@ -176,6 +185,20 @@ static void discovery_wait(struct discovery *);
 static struct hook in_band_hook_create(const struct settings *,
                                        struct switch_status *,
                                        struct rconn *remote);
+
+struct port_watcher;
+static struct hook port_watcher_create(struct rconn *local,
+                                       struct rconn *remote,
+                                       struct port_watcher **);
+static uint32_t port_watcher_get_flags(const struct port_watcher *,
+                                       int port_no);
+static void port_watcher_set_flags(struct port_watcher *,
+                                   int port_no, uint32_t flags, uint32_t mask);
+
+static struct hook stp_hook_create(const struct settings *,
+                                   struct port_watcher *,
+                                   struct rconn *local, struct rconn *remote);
+
 static struct hook fail_open_hook_create(const struct settings *,
                                          struct switch_status *,
                                          struct rconn *local,
@@ -265,6 +288,11 @@ main(int argc, char *argv[])
     list_push_back(&relays, &controller_relay->node);
 
     /* Set up hooks. */
+    if (s.stp) {
+        struct port_watcher *pw;
+        hooks[n_hooks++] = port_watcher_create(local_rconn, remote_rconn, &pw);
+        hooks[n_hooks++] = stp_hook_create(&s, pw, local_rconn, remote_rconn);
+    }
     if (s.in_band) {
         hooks[n_hooks++] = in_band_hook_create(&s, switch_status,
                                                remote_rconn);
@@ -375,18 +403,51 @@ accept_vconn(struct vconn *vconn)
 }
 
 static struct hook
-make_hook(bool (*packet_cb)(struct relay *, int half, void *aux),
+make_hook(bool (*local_packet_cb)(struct relay *, void *aux),
+          bool (*remote_packet_cb)(struct relay *, void *aux),
           void (*periodic_cb)(void *aux),
           void (*wait_cb)(void *aux),
           void *aux)
 {
     struct hook h;
-    h.packet_cb = packet_cb;
+    h.packet_cb[HALF_LOCAL] = local_packet_cb;
+    h.packet_cb[HALF_REMOTE] = remote_packet_cb;
     h.periodic_cb = periodic_cb;
     h.wait_cb = wait_cb;
     h.aux = aux;
     return h;
 }
+
+static struct ofp_packet_in *
+get_ofp_packet_in(struct relay *r)
+{
+    struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
+    struct ofp_header *oh = msg->data;
+    if (oh->type == OFPT_PACKET_IN) {
+        if (msg->size >= offsetof (struct ofp_packet_in, data)) {
+            return msg->data;
+        } else {
+            VLOG_WARN("packet too short (%zu bytes) for packet_in",
+                      msg->size);
+        }
+    }
+    return NULL;
+}
+
+static bool
+get_ofp_packet_eth_header(struct relay *r, struct ofp_packet_in **opip,
+                          struct eth_header **ethp)
+{
+    const int min_len = offsetof(struct ofp_packet_in, data) + ETH_HEADER_LEN;
+    struct ofp_packet_in *opi = get_ofp_packet_in(r);
+    if (opi && ntohs(opi->header.length) >= min_len) {
+        *opip = opi;
+        *ethp = (void *) opi->data;
+        return true;
+    }
+    return false;
+}
+
 
 /* OpenFlow message relaying. */
 
@@ -459,10 +520,10 @@ relay_run(struct relay *r, const struct hook hooks[], size_t n_hooks)
 
             if (!this->rxbuf) {
                 this->rxbuf = rconn_recv(this->rconn);
-                if (this->rxbuf) {
+                if (this->rxbuf && (i == HALF_REMOTE || !r->is_mgmt_conn)) {
                     const struct hook *h;
                     for (h = hooks; h < &hooks[n_hooks]; h++) {
-                        if (h->packet_cb(r, i, h->aux)) {
+                        if (h->packet_cb[i] && h->packet_cb[i](r, h->aux)) {
                             buffer_delete(this->rxbuf);
                             this->rxbuf = NULL;
                             progress = true;
@@ -528,6 +589,532 @@ relay_destroy(struct relay *r)
         buffer_delete(this->rxbuf);
     }
     free(r);
+}
+
+/* Port status watcher. */
+
+typedef void port_watcher_cb_func(uint16_t port_no,
+                                  const struct ofp_phy_port *old,
+                                  const struct ofp_phy_port *new,
+                                  void *aux);
+
+struct port_watcher_cb {
+    port_watcher_cb_func *function;
+    void *aux;
+};
+
+struct port_watcher {
+    struct rconn *local_rconn;
+    struct rconn *remote_rconn;
+    struct ofp_phy_port ports[OFPP_MAX + 1];
+    time_t last_feature_request;
+    bool got_feature_reply;
+    int n_txq;
+    struct port_watcher_cb cbs[2];
+    int n_cbs;
+};
+
+/* Returns the number of fields that differ from 'a' to 'b'. */
+static int
+opp_differs(const struct ofp_phy_port *a, const struct ofp_phy_port *b)
+{
+    BUILD_ASSERT_DECL(sizeof *a == 36); /* Trips when we add or remove fields. */
+    return ((a->port_no != b->port_no)
+            + (memcmp(a->hw_addr, b->hw_addr, sizeof a->hw_addr) != 0)
+            + (memcmp(a->name, b->name, sizeof a->name) != 0)
+            + (a->flags != b->flags)
+            + (a->speed != b->speed)
+            + (a->features != b->features));
+}
+
+static void
+sanitize_opp(struct ofp_phy_port *opp)
+{
+    size_t i;
+
+    for (i = 0; i < sizeof opp->name; i++) {
+        char c = opp->name[i];
+        if (c && (c < 0x20 || c > 0x7e)) {
+            opp->name[i] = '.';
+        }
+    }
+    opp->name[sizeof opp->name - 1] = '\0';
+}
+
+static int
+port_no_to_pw_idx(int port_no)
+{
+    return (port_no < OFPP_MAX ? port_no
+            : port_no == OFPP_LOCAL ? OFPP_MAX
+            : -1);
+}
+
+static void
+call_pw_callbacks(struct port_watcher *pw, int port_no,
+                  const struct ofp_phy_port *old,
+                  const struct ofp_phy_port *new)
+{
+    if (opp_differs(old, new)) {
+        int i;
+        for (i = 0; i < pw->n_cbs; i++) {
+            pw->cbs[i].function(port_no, old, new, pw->cbs[i].aux);
+        }
+    }
+}
+
+static void
+update_phy_port(struct port_watcher *pw, struct ofp_phy_port *opp,
+                uint8_t reason, bool seen[OFPP_MAX + 1])
+{
+    struct ofp_phy_port *pw_opp;
+    struct ofp_phy_port old;
+    uint16_t port_no;
+    int idx;
+
+    port_no = ntohs(opp->port_no);
+    idx = port_no_to_pw_idx(port_no);
+    if (idx < 0) {
+        return;
+    }
+
+    if (seen) {
+        seen[idx] = true;
+    }
+
+    pw_opp = &pw->ports[idx];
+    old = *pw_opp;
+    if (reason == OFPPR_DELETE) {
+        memset(pw_opp, 0, sizeof *pw_opp);
+        pw_opp->port_no = htons(OFPP_NONE);
+    } else if (reason == OFPPR_MOD || reason == OFPPR_ADD) {
+        *pw_opp = *opp;
+        sanitize_opp(pw_opp);
+    }
+    call_pw_callbacks(pw, port_no, &old, pw_opp);
+}
+
+static bool
+port_watcher_local_packet_cb(struct relay *r, void *pw_)
+{
+    struct port_watcher *pw = pw_;
+    struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
+    struct ofp_header *oh = msg->data;
+
+    if (oh->type == OFPT_FEATURES_REPLY
+        && msg->size >= offsetof(struct ofp_switch_features, ports)) {
+        struct ofp_switch_features *osf = msg->data;
+        bool seen[ARRAY_SIZE(pw->ports)];
+        size_t n_ports;
+        size_t i;
+
+        pw->got_feature_reply = true;
+
+        /* Update each port included in the message. */
+        memset(seen, 0, sizeof seen);
+        n_ports = ((msg->size - offsetof(struct ofp_switch_features, ports))
+                   / sizeof *osf->ports);
+        for (i = 0; i < n_ports; i++) {
+            update_phy_port(pw, &osf->ports[i], OFPPR_MOD, seen);
+        }
+
+        /* Delete all the ports not included in the message. */
+        for (i = 0; i < ARRAY_SIZE(pw->ports); i++) {
+            if (!seen[i]) {
+                update_phy_port(pw, &pw->ports[i], OFPPR_DELETE, NULL);
+            }
+        }
+    } else if (oh->type == OFPT_PORT_STATUS
+               && msg->size >= sizeof(struct ofp_port_status)) {
+        struct ofp_port_status *ops = msg->data;
+        update_phy_port(pw, &ops->desc, ops->reason, NULL);
+    }
+    return false;
+}
+
+static void
+port_watcher_periodic_cb(void *pw_)
+{
+    struct port_watcher *pw = pw_;
+
+    if (!pw->got_feature_reply && time_now() >= pw->last_feature_request + 5) {
+        struct buffer *b;
+        make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &b);
+        rconn_send_with_limit(pw->local_rconn, b, &pw->n_txq, 1);
+        pw->last_feature_request = time_now();
+    }
+}
+
+static void
+put_duplexes(struct ds *ds, const char *name, uint32_t features,
+             uint32_t hd_bit, uint32_t fd_bit)
+{
+    if (features & (hd_bit | fd_bit)) {
+        ds_put_format(ds, " %s", name);
+        if (features & hd_bit) {
+            ds_put_cstr(ds, "(HD)");
+        }
+        if (features & fd_bit) {
+            ds_put_cstr(ds, "(FD)");
+        }
+    }
+}
+
+static void
+log_port_status(uint16_t port_no,
+                const struct ofp_phy_port *old,
+                const struct ofp_phy_port *new,
+                void *aux)
+{
+    if (VLOG_IS_DBG_ENABLED()) {
+        bool was_enabled = old->port_no != htons(OFPP_NONE);
+        bool now_enabled = new->port_no != htons(OFPP_NONE);
+        uint32_t features = ntohl(new->features);
+        struct ds ds;
+
+        if (old->flags != new->flags && opp_differs(old, new) == 1) {
+            /* Don't care if only flags changed. */
+            return;
+        }
+
+        ds_init(&ds);
+        ds_put_format(&ds, "\"%s\", "ETH_ADDR_FMT, new->name,
+                      ETH_ADDR_ARGS(new->hw_addr));
+        if (ntohl(new->speed)) {
+            ds_put_format(&ds, ", speed %"PRIu32, ntohl(new->speed));
+        }
+        if (features & (OFPPF_10MB_HD | OFPPF_10MB_FD
+                        | OFPPF_100MB_HD | OFPPF_100MB_FD
+                        | OFPPF_1GB_HD | OFPPF_1GB_FD | OFPPF_10GB_FD)) {
+            ds_put_cstr(&ds, ", supports");
+            put_duplexes(&ds, "10M", features, OFPPF_10MB_HD, OFPPF_10MB_FD);
+            put_duplexes(&ds, "100M", features,
+                         OFPPF_100MB_HD, OFPPF_100MB_FD);
+            put_duplexes(&ds, "1G", features, OFPPF_100MB_HD, OFPPF_100MB_FD);
+            if (features & OFPPF_10GB_FD) {
+                ds_put_cstr(&ds, " 10G");
+            }
+        }
+        if (was_enabled != now_enabled) {
+            if (now_enabled) {
+                VLOG_DBG("Port %d added: %s", port_no, ds_cstr(&ds));
+            } else {
+                VLOG_DBG("Port %d deleted", port_no);
+            }
+        } else {
+            VLOG_DBG("Port %d changed: %s", port_no, ds_cstr(&ds));
+        }
+        ds_destroy(&ds);
+    }
+}
+
+static void
+port_watcher_register_callback(struct port_watcher *pw,
+                               port_watcher_cb_func *function,
+                               void *aux)
+{
+    assert(pw->n_cbs < ARRAY_SIZE(pw->cbs));
+    pw->cbs[pw->n_cbs].function = function;
+    pw->cbs[pw->n_cbs].aux = aux;
+    pw->n_cbs++;
+}
+
+static uint32_t
+port_watcher_get_flags(const struct port_watcher *pw, int port_no)
+{
+    int idx = port_no_to_pw_idx(port_no);
+    return idx >= 0 ? ntohl(pw->ports[idx].flags) : 0;
+}
+
+static void
+port_watcher_set_flags(struct port_watcher *pw,
+                       int port_no, uint32_t flags, uint32_t mask)
+{
+    struct ofp_phy_port old;
+    struct ofp_phy_port *p;
+    struct ofp_port_mod *opm;
+    struct ofp_port_status *ops;
+    struct buffer *b;
+    int idx;
+
+    idx = port_no_to_pw_idx(port_no);
+    if (idx < 0) {
+        return;
+    }
+
+    p = &pw->ports[idx];
+    if (!((ntohl(p->flags) ^ flags) & mask)) {
+        return;
+    }
+    old = *p;
+
+    /* Update our idea of the flags. */
+    p->flags = ntohl(flags);
+    call_pw_callbacks(pw, port_no, &old, p);
+
+    /* Change the flags in the datapath. */
+    opm = make_openflow(sizeof *opm, OFPT_PORT_MOD, &b);
+    opm->mask = htonl(mask);
+    opm->desc = *p;
+    rconn_send(pw->local_rconn, b, NULL);
+
+    /* Notify the controller that the flags changed. */
+    ops = make_openflow(sizeof *ops, OFPT_PORT_STATUS, &b);
+    ops->reason = OFPPR_MOD;
+    ops->desc = *p;
+    rconn_send(pw->remote_rconn, b, NULL);
+}
+
+static bool
+port_watcher_is_ready(const struct port_watcher *pw)
+{
+    return pw->got_feature_reply;
+}
+
+static struct hook
+port_watcher_create(struct rconn *local_rconn, struct rconn *remote_rconn,
+                    struct port_watcher **pwp)
+{
+    struct port_watcher *pw;
+    int i;
+
+    pw = *pwp = xcalloc(1, sizeof *pw);
+    pw->local_rconn = local_rconn;
+    pw->remote_rconn = remote_rconn;
+    pw->last_feature_request = TIME_MIN;
+    for (i = 0; i < OFPP_MAX; i++) {
+        pw->ports[i].port_no = htons(OFPP_NONE);
+    }
+    port_watcher_register_callback(pw, log_port_status, NULL);
+    return make_hook(port_watcher_local_packet_cb, NULL,
+                     port_watcher_periodic_cb, NULL, pw);
+}
+
+/* Spanning tree protocol. */
+
+/* Extra time, in seconds, at boot before going into fail-open, to give the
+ * spanning tree protocol time to figure out the network layout. */
+#define STP_EXTRA_BOOT_TIME 30
+
+struct stp_data {
+    struct stp *stp;
+    struct port_watcher *pw;
+    struct rconn *local_rconn;
+    struct rconn *remote_rconn;
+    uint8_t dpid[ETH_ADDR_LEN];
+    long long int last_tick_256ths;
+    int n_txq;
+};
+
+static bool
+stp_local_packet_cb(struct relay *r, void *stp_)
+{
+    struct stp_data *stp = stp_;
+    struct ofp_packet_in *opi;
+    struct eth_header *eth;
+    struct llc_header *llc;
+    struct buffer payload;
+    uint16_t port_no;
+    struct flow flow;
+
+    if (!get_ofp_packet_eth_header(r, &opi, &eth)
+        || !eth_addr_equals(eth->eth_dst, stp_eth_addr)) {
+        return false;
+    }
+
+    port_no = ntohs(opi->in_port);
+    if (port_no >= STP_MAX_PORTS) {
+        /* STP only supports 255 ports. */
+        return false;
+    }
+    if (port_watcher_get_flags(stp->pw, port_no) & OFPPFL_NO_STP) {
+        /* We're not doing STP on this port. */
+        return false;
+    }
+
+    if (opi->reason == OFPR_ACTION) {
+        /* The controller set up a flow for this, so we won't intercept it. */
+        return false;
+    }
+
+    get_ofp_packet_payload(opi, &payload);
+    flow_extract(&payload, port_no, &flow);
+    if (flow.dl_type != htons(OFP_DL_TYPE_NOT_ETH_TYPE)) {
+        VLOG_DBG("non-LLC frame received on STP multicast address");
+        return false;
+    }
+    llc = buffer_at_assert(&payload, sizeof *eth, sizeof *llc);
+    if (llc->llc_dsap != STP_LLC_DSAP) {
+        VLOG_DBG("bad DSAP 0x%02"PRIx8" received on STP multicast address",
+                 llc->llc_dsap);
+        return false;
+    }
+
+    /* Trim off padding on payload. */
+    if (payload.size > ntohs(eth->eth_type) + ETH_HEADER_LEN) {
+        payload.size = ntohs(eth->eth_type) + ETH_HEADER_LEN;
+    }
+    if (buffer_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
+        struct stp_port *p = stp_get_port(stp->stp, port_no);
+        stp_received_bpdu(p, payload.data, payload.size);
+    }
+
+    return true;
+}
+
+static long long int
+time_256ths(void)
+{
+    return time_msec() * 256 / 1000;
+}
+
+static void
+stp_periodic_cb(void *stp_)
+{
+    struct stp_data *stp = stp_;
+    long long int now_256ths = time_256ths();
+    long long int elapsed_256ths = now_256ths - stp->last_tick_256ths;
+    struct stp_port *p;
+
+    if (!port_watcher_is_ready(stp->pw)) {
+        /* Can't start STP until we know port flags, because port flags can
+         * disable STP. */
+        return;
+    }
+    if (elapsed_256ths <= 0) {
+        return;
+    }
+
+    stp_tick(stp->stp, MIN(INT_MAX, elapsed_256ths));
+    stp->last_tick_256ths = now_256ths;
+
+    while (stp_get_changed_port(stp->stp, &p)) {
+        int port_no = stp_port_no(p);
+        enum stp_state state = stp_port_get_state(p);
+
+        if (state != STP_DISABLED) {
+            VLOG_WARN("STP: Port %d entered %s state",
+                      port_no, stp_state_name(state));
+        }
+        if (!(port_watcher_get_flags(stp->pw, port_no) & OFPPFL_NO_STP)) {
+            uint32_t flags;
+            switch (state) {
+            case STP_LISTENING:
+                flags = OFPPFL_STP_LISTEN;
+                break;
+            case STP_LEARNING:
+                flags = OFPPFL_STP_LEARN;
+                break;
+            case STP_DISABLED:
+            case STP_FORWARDING:
+                flags = OFPPFL_STP_FORWARD;
+                break;
+            case STP_BLOCKING:
+                flags = OFPPFL_STP_BLOCK;
+                break;
+            default:
+                VLOG_DBG_RL(&vrl, "STP: Port %d has bad state %x",
+                            port_no, state);
+                flags = OFPPFL_STP_FORWARD;
+                break;
+            }
+            if (!stp_forward_in_state(state)) {
+                flags |= OFPPFL_NO_FLOOD;
+            }
+            port_watcher_set_flags(stp->pw, port_no, flags,
+                                   OFPPFL_STP_MASK | OFPPFL_NO_FLOOD);
+        } else {
+            /* We don't own those flags. */
+        }
+    }
+}
+
+static void
+stp_wait_cb(void *stp_ UNUSED)
+{
+    poll_timer_wait(1000);
+}
+
+static void
+send_bpdu(const void *bpdu, size_t bpdu_size, int port_no, void *stp_)
+{
+    struct stp_data *stp = stp_;
+    struct eth_header *eth;
+    struct llc_header *llc;
+    struct buffer pkt, *opo;
+
+    /* Packet skeleton. */
+    buffer_init(&pkt, ETH_HEADER_LEN + LLC_HEADER_LEN + bpdu_size);
+    eth = buffer_put_uninit(&pkt, sizeof *eth);
+    llc = buffer_put_uninit(&pkt, sizeof *llc);
+    buffer_put(&pkt, bpdu, bpdu_size);
+
+    /* 802.2 header. */
+    memcpy(eth->eth_dst, stp_eth_addr, ETH_ADDR_LEN);
+    memcpy(eth->eth_src, stp->pw->ports[port_no].hw_addr, ETH_ADDR_LEN);
+    eth->eth_type = htons(pkt.size - ETH_HEADER_LEN);
+
+    /* LLC header. */
+    llc->llc_dsap = STP_LLC_DSAP;
+    llc->llc_ssap = STP_LLC_SSAP;
+    llc->llc_cntl = STP_LLC_CNTL;
+
+    opo = make_unbuffered_packet_out(&pkt, OFPP_NONE, port_no);
+    buffer_uninit(&pkt);
+    rconn_send_with_limit(stp->local_rconn, opo, &stp->n_txq, OFPP_MAX);
+}
+
+static void
+stp_port_watcher_cb(uint16_t port_no,
+                    const struct ofp_phy_port *old,
+                    const struct ofp_phy_port *new,
+                    void *stp_)
+{
+    struct stp_data *stp = stp_;
+    struct stp_port *p;
+
+    /* STP only supports a maximum of 255 ports, one less than OpenFlow.  We
+     * don't support STP on OFPP_LOCAL, either.  */
+    if (port_no >= STP_MAX_PORTS) {
+        return;
+    }
+
+    p = stp_get_port(stp->stp, port_no);
+    if (new->port_no == htons(OFPP_NONE)
+        || new->flags & htonl(OFPPFL_NO_STP)) {
+        stp_port_disable(p);
+    } else {
+        stp_port_enable(p);
+        stp_port_set_speed(p, new->speed);
+    }
+}
+
+static struct hook
+stp_hook_create(const struct settings *s, struct port_watcher *pw,
+                struct rconn *local, struct rconn *remote)
+{
+    uint8_t dpid[ETH_ADDR_LEN];
+    struct netdev *netdev;
+    struct stp_data *stp;
+    int retval;
+
+    retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE, &netdev);
+    if (retval) {
+        fatal(retval, "Could not open %s device", s->of_name);
+    }
+    memcpy(dpid, netdev_get_etheraddr(netdev), ETH_ADDR_LEN);
+    netdev_close(netdev);
+
+    stp = xcalloc(1, sizeof *stp);
+    stp->stp = stp_create("stp", eth_addr_to_uint64(dpid), send_bpdu, stp);
+    stp->pw = pw;
+    memcpy(stp->dpid, dpid, ETH_ADDR_LEN);
+    stp->local_rconn = local;
+    stp->remote_rconn = remote;
+    stp->last_tick_256ths = time_256ths();
+
+    port_watcher_register_callback(pw, stp_port_watcher_cb, stp);
+    return make_hook(stp_local_packet_cb, NULL,
+                     stp_periodic_cb, stp_wait_cb, stp);
 }
 
 /* In-band control. */
@@ -605,73 +1192,70 @@ is_controller_mac(const uint8_t dl_addr[ETH_ADDR_LEN],
 }
 
 static void
-in_band_learn_mac(struct in_band_data *in_band, const struct flow *flow)
+in_band_learn_mac(struct in_band_data *in_band,
+                  uint16_t in_port, const uint8_t src_mac[ETH_ADDR_LEN])
 {
-    uint16_t in_port = ntohs(flow->in_port);
-    if (mac_learning_learn(in_band->ml, flow->dl_src, in_port)) {
+    if (mac_learning_learn(in_band->ml, src_mac, in_port)) {
         VLOG_DBG_RL(&vrl, "learned that "ETH_ADDR_FMT" is on port %"PRIu16,
-                    ETH_ADDR_ARGS(flow->dl_src), in_port);
+                    ETH_ADDR_ARGS(src_mac), in_port);
     }
 }
 
 static bool
-in_band_packet_cb(struct relay *r, int half, void *in_band_)
+in_band_local_packet_cb(struct relay *r, void *in_band_)
 {
     struct in_band_data *in_band = in_band_;
     struct rconn *rc = r->halves[HALF_LOCAL].rconn;
-    struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
     struct ofp_packet_in *opi;
-    struct ofp_header *oh;
-    size_t pkt_ofs, pkt_len;
-    struct buffer pkt;
+    struct eth_header *eth;
+    struct buffer payload;
     struct flow flow;
-    uint16_t in_port, out_port;
+    uint16_t in_port;
+    int out_port;
 
-    if (half != HALF_LOCAL || r->is_mgmt_conn) {
+    if (!get_ofp_packet_eth_header(r, &opi, &eth)) {
         return false;
     }
-
-    oh = msg->data;
-    if (oh->type != OFPT_PACKET_IN) {
-        return false;
-    }
-    if (msg->size < offsetof(struct ofp_packet_in, data)) {
-        VLOG_WARN_RL(&vrl, "packet too short (%zu bytes) for packet_in",
-                     msg->size);
-        return false;
-    }
-
-    /* Extract flow data from 'opi' into 'flow'. */
-    opi = msg->data;
     in_port = ntohs(opi->in_port);
-    pkt_ofs = offsetof(struct ofp_packet_in, data);
-    pkt_len = ntohs(opi->header.length) - pkt_ofs;
-    pkt.data = opi->data;
-    pkt.size = pkt_len;
-    flow_extract(&pkt, in_port, &flow);
 
     /* Deal with local stuff. */
     if (in_port == OFPP_LOCAL) {
         /* Sent by secure channel. */
-        out_port = mac_learning_lookup(in_band->ml, flow.dl_dst);
-    } else if (eth_addr_equals(flow.dl_dst, in_band->mac)) {
+        out_port = mac_learning_lookup(in_band->ml, eth->eth_dst);
+    } else if (eth_addr_equals(eth->eth_dst, in_band->mac)) {
         /* Sent to secure channel. */
         out_port = OFPP_LOCAL;
-        in_band_learn_mac(in_band, &flow);
-    } else if (flow.dl_type == htons(ETH_TYPE_ARP)
-               && eth_addr_is_broadcast(flow.dl_dst)
-               && is_controller_mac(flow.dl_src, in_band)) {
+        in_band_learn_mac(in_band, in_port, eth->eth_src);
+    } else if (eth->eth_type == htons(ETH_TYPE_ARP)
+               && eth_addr_is_broadcast(eth->eth_dst)
+               && is_controller_mac(eth->eth_src, in_band)) {
         /* ARP sent by controller. */
         out_port = OFPP_FLOOD;
-    } else if (is_controller_mac(flow.dl_dst, in_band)
-               || is_controller_mac(flow.dl_src, in_band)) {
+    } else if (is_controller_mac(eth->eth_dst, in_band)
+               || is_controller_mac(eth->eth_src, in_band)) {
         /* Traffic to or from controller.  Switch it by hand. */
-        in_band_learn_mac(in_band, &flow);
-        out_port = mac_learning_lookup(in_band->ml, flow.dl_dst);
+        in_band_learn_mac(in_band, in_port, eth->eth_src);
+        out_port = mac_learning_lookup(in_band->ml, eth->eth_dst);
     } else {
-        return false;
+        const uint8_t *controller_mac;
+        controller_mac = get_controller_mac(in_band);
+        if (eth->eth_type == htons(ETH_TYPE_ARP)
+            && eth_addr_is_broadcast(eth->eth_dst)
+            && is_controller_mac(eth->eth_src, in_band)) {
+            /* ARP sent by controller. */
+            out_port = OFPP_FLOOD;
+        } else if (is_controller_mac(eth->eth_dst, in_band)
+                   && in_port == mac_learning_lookup(in_band->ml,
+                                                     controller_mac)) {
+            /* Drop controller traffic that arrives on the controller port. */
+            out_port = -1;
+        } else {
+            return false;
+        }
     }
 
+    get_ofp_packet_payload(opi, &payload);
+    flow_extract(&payload, in_port, &flow);
     if (in_port == out_port) {
         /* The input and output port match.  Set up a flow to drop packets. */
         queue_tx(rc, in_band, make_add_flow(&flow, ntohl(opi->buffer_id),
@@ -685,14 +1269,14 @@ in_band_packet_cb(struct relay *r, int half, void *in_band_)
         /* If the switch didn't buffer the packet, we need to send a copy. */
         if (ntohl(opi->buffer_id) == UINT32_MAX) {
             queue_tx(rc, in_band,
-                     make_unbuffered_packet_out(&pkt, in_port, out_port));
+                     make_unbuffered_packet_out(&payload, in_port, out_port));
         }
     } else {
         /* We don't know that MAC.  Send along the packet without setting up a
          * flow. */
         struct buffer *b;
         if (ntohl(opi->buffer_id) == UINT32_MAX) {
-            b = make_unbuffered_packet_out(&pkt, in_port, out_port);
+            b = make_unbuffered_packet_out(&payload, in_port, out_port);
         } else {
             b = make_buffered_packet_out(ntohl(opi->buffer_id),
                                          in_port, out_port);
@@ -728,6 +1312,14 @@ in_band_status_cb(struct status_reply *sr, void *in_band_)
     }
 }
 
+static void
+get_ofp_packet_payload(struct ofp_packet_in *opi, struct buffer *payload)
+{
+    payload->data = opi->data;
+    payload->size = ntohs(opi->header.length) - offsetof(struct ofp_packet_in,
+                                                         data);
+}
+
 static struct hook
 in_band_hook_create(const struct settings *s, struct switch_status *ss,
                     struct rconn *remote)
@@ -747,7 +1339,7 @@ in_band_hook_create(const struct settings *s, struct switch_status *ss,
            ETH_ADDR_LEN);
     in_band->controller = remote;
     switch_status_register_category(ss, "in-band", in_band_status_cb, in_band);
-    return make_hook(in_band_packet_cb, NULL, NULL, in_band);
+    return make_hook(in_band_local_packet_cb, NULL, NULL, NULL, in_band);
 }
 
 /* Fail open support. */
@@ -758,6 +1350,7 @@ struct fail_open_data {
     struct rconn *remote_rconn;
     struct lswitch *lswitch;
     int last_disconn_secs;
+    time_t boot_deadline;
 };
 
 /* Causes 'r' to enter or leave fail-open mode, if appropriate. */
@@ -768,6 +1361,9 @@ fail_open_periodic_cb(void *fail_open_)
     int disconn_secs;
     bool open;
 
+    if (time_now() < fail_open->boot_deadline) {
+        return;
+    }
     disconn_secs = rconn_disconnected_duration(fail_open->remote_rconn);
     open = disconn_secs >= fail_open->s->probe_interval * 3;
     if (open != (fail_open->lswitch != NULL)) {
@@ -790,10 +1386,10 @@ fail_open_periodic_cb(void *fail_open_)
 }
 
 static bool
-fail_open_packet_cb(struct relay *r, int half, void *fail_open_)
+fail_open_local_packet_cb(struct relay *r, void *fail_open_)
 {
     struct fail_open_data *fail_open = fail_open_;
-    if (half != HALF_LOCAL || r->is_mgmt_conn || !fail_open->lswitch) {
+    if (!fail_open->lswitch) {
         return false;
     } else {
         lswitch_process_packet(fail_open->lswitch, fail_open->local_rconn,
@@ -827,10 +1423,14 @@ fail_open_hook_create(const struct settings *s, struct switch_status *ss,
     fail_open->local_rconn = local_rconn;
     fail_open->remote_rconn = remote_rconn;
     fail_open->lswitch = NULL;
+    fail_open->boot_deadline = time_now() + s->probe_interval * 3;
+    if (s->stp) {
+        fail_open->boot_deadline += STP_EXTRA_BOOT_TIME;
+    }
     switch_status_register_category(ss, "fail-open",
                                     fail_open_status_cb, fail_open);
-    return make_hook(fail_open_packet_cb, fail_open_periodic_cb, NULL,
-                     fail_open);
+    return make_hook(fail_open_local_packet_cb, NULL,
+                     fail_open_periodic_cb, NULL, fail_open);
 }
 
 struct rate_limiter {
@@ -937,24 +1537,14 @@ get_token(struct rate_limiter *rl)
 }
 
 static bool
-rate_limit_packet_cb(struct relay *r, int half, void *rl_)
+rate_limit_local_packet_cb(struct relay *r, void *rl_)
 {
     struct rate_limiter *rl = rl_;
     const struct settings *s = rl->s;
-    struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
-    struct ofp_header *oh;
+    struct ofp_packet_in *opi;
 
-    if (half == HALF_REMOTE) {
-        return false;
-    }
-
-    oh = msg->data;
-    if (oh->type != OFPT_PACKET_IN) {
-        return false;
-    }
-    if (msg->size < offsetof(struct ofp_packet_in, data)) {
-        VLOG_WARN_RL(&vrl, "packet too short (%zu bytes) for packet_in",
-                     msg->size);
+    opi = get_ofp_packet_in(r);
+    if (!opi) {
         return false;
     }
 
@@ -965,7 +1555,7 @@ rate_limit_packet_cb(struct relay *r, int half, void *rl_)
         return false;
     } else {
         /* Otherwise queue it up for the periodic callback to drain out. */
-        struct ofp_packet_in *opi = msg->data;
+        struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
         int port = ntohs(opi->in_port) % OFPP_MAX;
         if (rl->n_queued >= s->burst_limit) {
             drop_packet(rl);
@@ -1042,7 +1632,7 @@ rate_limit_hook_create(const struct settings *s, struct switch_status *ss,
     rl->tokens = s->rate_limit * 100;
     switch_status_register_category(ss, "rate-limit",
                                     rate_limit_status_cb, rl);
-    return make_hook(rate_limit_packet_cb, rate_limit_periodic_cb,
+    return make_hook(rate_limit_local_packet_cb, NULL, rate_limit_periodic_cb,
                      rate_limit_wait_cb, rl);
 }
 
@@ -1068,7 +1658,7 @@ struct status_reply {
 };
 
 static bool
-switch_status_packet_cb(struct relay *r, int half, void *ss_)
+switch_status_remote_packet_cb(struct relay *r, void *ss_)
 {
     struct switch_status *ss = ss_;
     struct rconn *rc = r->halves[HALF_REMOTE].rconn;
@@ -1080,10 +1670,6 @@ switch_status_packet_cb(struct relay *r, int half, void *ss_)
     struct ofp_header *oh;
     struct buffer *b;
     int retval;
-
-    if (half == HALF_LOCAL) {
-        return false;
-    }
 
     oh = msg->data;
     if (oh->type != OFPT_STATS_REQUEST) {
@@ -1186,7 +1772,7 @@ switch_status_hook_create(const struct settings *s, struct switch_status **ssp)
                                     config_status_cb, (void *) s);
     switch_status_register_category(ss, "switch", switch_status_cb, ss);
     *ssp = ss;
-    return make_hook(switch_status_packet_cb, NULL, NULL, ss);
+    return make_hook(NULL, switch_status_remote_packet_cb, NULL, NULL, ss);
 }
 
 static void

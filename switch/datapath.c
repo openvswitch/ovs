@@ -46,6 +46,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"
+#include "stp.h"
 #include "vconn.h"
 #include "table.h"
 #include "timeval.h"
@@ -53,15 +54,6 @@
 
 #define THIS_MODULE VLM_datapath
 #include "vlog.h"
-
-enum br_port_flags {
-    BRPF_NO_FLOOD = 1 << 0,
-};
-
-enum br_port_status {
-    BRPS_PORT_DOWN = 1 << 0,
-    BRPS_LINK_DOWN = 1 << 1,
-};
 
 extern char mfr_desc;
 extern char hw_desc;
@@ -84,9 +76,12 @@ extern char serial_num;
                                 | (1 << OFPAT_SET_TP_SRC)   \
                                 | (1 << OFPAT_SET_TP_DST) )
 
+#define PORT_STATUS_BITS (OFPPFL_PORT_DOWN | OFPPFL_LINK_DOWN)
+#define PORT_FLAG_BITS (~PORT_STATUS_BITS)
+
 struct sw_port {
-    uint32_t flags;                    /* BRPF_* flags */
-    uint32_t status;                   /* BRPS_* flags */
+    uint32_t flags;             /* Some subset of PORT_FLAG_BITS. */
+    uint32_t status;            /* Some subset of PORT_STATUS_BITS. */
     struct datapath *dp;
     struct netdev *netdev;
     struct list node; /* Element in datapath.ports. */
@@ -148,7 +143,7 @@ static void remote_wait(struct remote *);
 static void remote_destroy(struct remote *);
 
 void dp_output_port(struct datapath *, struct buffer *,
-                    int in_port, int out_port);
+                    int in_port, int out_port, bool ignore_no_fwd);
 void dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm);
 void dp_output_control(struct datapath *, struct buffer *, int in_port,
                        size_t max_len, int reason);
@@ -159,7 +154,8 @@ static void send_port_status(struct sw_port *p, uint8_t status);
 static void del_switch_port(struct sw_port *p);
 static void execute_actions(struct datapath *, struct buffer *,
                             int in_port, const struct sw_flow_key *,
-                            const struct ofp_action *, int n_actions);
+                            const struct ofp_action *, int n_actions,
+                            bool ignore_no_fwd);
 static void modify_vlan(struct buffer *buffer, const struct sw_flow_key *key,
                         const struct ofp_action *a);
 static void modify_nh(struct buffer *buffer, uint16_t eth_proto,
@@ -178,8 +174,9 @@ static void modify_th(struct buffer *buffer, uint16_t eth_proto,
 
 #define PKT_COOKIE_BITS (32 - PKT_BUFFER_BITS)
 
-int run_flow_through_tables(struct datapath *, struct buffer *, int in_port);
-void fwd_port_input(struct datapath *, struct buffer *, int in_port);
+int run_flow_through_tables(struct datapath *, struct buffer *,
+                            struct sw_port *);
+void fwd_port_input(struct datapath *, struct buffer *, struct sw_port *);
 int fwd_control_input(struct datapath *, const struct sender *,
                       const void *, size_t);
 
@@ -331,7 +328,7 @@ dp_run(struct datapath *dp)
         if (!error) {
             p->rx_packets++;
             p->rx_bytes += buffer->size;
-            fwd_port_input(dp, buffer, port_no(dp, p));
+            fwd_port_input(dp, buffer, p);
             buffer = NULL;
         } else if (error != EAGAIN) {
             VLOG_ERR_RL(&rl, "error receiving data from %s: %s",
@@ -527,16 +524,17 @@ output_all(struct datapath *dp, struct buffer *buffer, int in_port, int flood)
         if (port_no(dp, p) == in_port) {
             continue;
         }
-        if (flood && p->flags & BRPF_NO_FLOOD) {
+        if (flood && p->flags & OFPPFL_NO_FLOOD) {
             continue;
         }
         if (prev_port != -1) {
-            dp_output_port(dp, buffer_clone(buffer), in_port, prev_port);
+            dp_output_port(dp, buffer_clone(buffer), in_port, prev_port,
+                           false);
         }
         prev_port = port_no(dp, p);
     }
     if (prev_port != -1)
-        dp_output_port(dp, buffer, in_port, prev_port);
+        dp_output_port(dp, buffer, in_port, prev_port, false);
     else
         buffer_delete(buffer);
 
@@ -548,7 +546,7 @@ output_packet(struct datapath *dp, struct buffer *buffer, int out_port)
 {
     if (out_port >= 0 && out_port < OFPP_MAX) { 
         struct sw_port *p = &dp->ports[out_port];
-        if (p->netdev != NULL && !(p->status & BRPS_PORT_DOWN)) {
+        if (p->netdev != NULL && !(p->status & OFPPFL_PORT_DOWN)) {
             if (!netdev_send(p->netdev, buffer)) {
                 p->tx_packets++;
                 p->tx_bytes += buffer->size;
@@ -567,7 +565,7 @@ output_packet(struct datapath *dp, struct buffer *buffer, int out_port)
  */
 void
 dp_output_port(struct datapath *dp, struct buffer *buffer,
-               int in_port, int out_port)
+               int in_port, int out_port, bool ignore_no_fwd)
 {
 
     assert(buffer);
@@ -580,7 +578,8 @@ dp_output_port(struct datapath *dp, struct buffer *buffer,
     } else if (out_port == OFPP_IN_PORT) {
         output_packet(dp, buffer, in_port);
     } else if (out_port == OFPP_TABLE) {
-		if (run_flow_through_tables(dp, buffer, in_port)) {
+        struct sw_port *p = in_port < OFPP_MAX ? &dp->ports[in_port] : 0;
+		if (run_flow_through_tables(dp, buffer, p)) {
 			buffer_delete(buffer);
         }
     } else {
@@ -661,14 +660,7 @@ static void fill_port_desc(struct datapath *dp, struct sw_port *p,
     desc->flags = 0;
     desc->features = htonl(netdev_get_features(p->netdev));
     desc->speed = htonl(netdev_get_speed(p->netdev));
-
-    if (p->flags & BRPF_NO_FLOOD) {
-        desc->flags |= htonl(OFPPFL_NO_FLOOD);
-    } else if (p->status & BRPS_PORT_DOWN) {
-        desc->flags |= htonl(OFPPFL_PORT_DOWN);
-    } else if (p->status & BRPS_LINK_DOWN) { 
-        desc->flags |= htonl(OFPPFL_LINK_DOWN);
-    }
+    desc->flags = htonl(p->flags | p->status);
 }
 
 static void
@@ -703,6 +695,7 @@ dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm)
     int port_no = ntohs(opp->port_no);
     if (port_no < OFPP_MAX) {
         struct sw_port *p = &dp->ports[port_no];
+        uint32_t flag_mask;
 
         /* Make sure the port id hasn't changed since this was sent */
         if (!p || memcmp(opp->hw_addr, netdev_get_etheraddr(p->netdev),
@@ -711,21 +704,20 @@ dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm)
         }
 
 
-        if (opm->mask & htonl(OFPPFL_NO_FLOOD)) {
-            if (opp->flags & htonl(OFPPFL_NO_FLOOD))
-                p->flags |= BRPF_NO_FLOOD;
-            else 
-                p->flags &= ~BRPF_NO_FLOOD;
+        flag_mask = ntohl(opm->mask) & PORT_FLAG_BITS;
+        if (flag_mask) {
+            p->flags &= ~flag_mask;
+            p->flags |= ntohl(opp->flags) & flag_mask;
         }
 
         if (opm->mask & htonl(OFPPFL_PORT_DOWN)) {
             if ((opp->flags & htonl(OFPPFL_PORT_DOWN))
-                            && (p->status & BRPS_PORT_DOWN) == 0) {
-                p->status |= BRPS_PORT_DOWN;
+                && (p->status & OFPPFL_PORT_DOWN) == 0) {
+                p->status |= OFPPFL_PORT_DOWN;
                 netdev_turn_flags_off(p->netdev, NETDEV_UP, true);
             } else if ((opp->flags & htonl(OFPPFL_PORT_DOWN)) == 0
-                            && (p->status & BRPS_PORT_DOWN)) {
-                p->status &= ~BRPS_PORT_DOWN;
+                       && (p->status & OFPPFL_PORT_DOWN)) {
+                p->status &= ~OFPPFL_PORT_DOWN;
                 netdev_turn_flags_on(p->netdev, NETDEV_UP, true);
             }
         }
@@ -751,9 +743,9 @@ update_port_status(struct sw_port *p)
         return 0;
     } else {
         if (flags & NETDEV_UP) {
-            p->status &= ~BRPS_PORT_DOWN;
+            p->status &= ~OFPPFL_PORT_DOWN;
         } else {
-            p->status |= BRPS_PORT_DOWN;
+            p->status |= OFPPFL_PORT_DOWN;
         } 
     }
 
@@ -761,9 +753,9 @@ update_port_status(struct sw_port *p)
      * error. */
     retval = netdev_get_link_status(p->netdev);
     if (retval == 1) {
-        p->status &= ~BRPS_LINK_DOWN;
+        p->status &= ~OFPPFL_LINK_DOWN;
     } else if (retval == 0) {
-        p->status |= BRPS_LINK_DOWN;
+        p->status |= OFPPFL_LINK_DOWN;
     } 
 
     return (orig_status != p->status);
@@ -850,52 +842,59 @@ fill_flow_stats(struct buffer *buffer, struct sw_flow *flow,
 }
 
 
-/* 'buffer' was received on 'in_port', a physical switch port between 0 and
- * OFPP_MAX.  Process it according to 'dp''s flow table.  Returns 0 if
+/* 'buffer' was received on 'p', which may be a a physical switch port or a
+ * null pointer.  Process it according to 'dp''s flow table.  Returns 0 if
  * successful, in which case 'buffer' is destroyed, or -ESRCH if there is no
  * matching flow, in which case 'buffer' still belongs to the caller. */
 int run_flow_through_tables(struct datapath *dp, struct buffer *buffer,
-                            int in_port)
+                            struct sw_port *p)
 {
     struct sw_flow_key key;
     struct sw_flow *flow;
 
     key.wildcards = 0;
-    if (flow_extract(buffer, in_port, &key.flow)
+    if (flow_extract(buffer, p ? port_no(dp, p) : OFPP_NONE, &key.flow)
         && (dp->flags & OFPC_FRAG_MASK) == OFPC_FRAG_DROP) {
         /* Drop fragment. */
         buffer_delete(buffer);
         return 0;
     }
+	if (p && p->flags & (OFPPFL_NO_RECV | OFPPFL_NO_RECV_STP)
+        && p->flags & (!eth_addr_equals(key.flow.dl_dst, stp_eth_addr)
+                       ? OFPPFL_NO_RECV : OFPPFL_NO_RECV_STP)) {
+		buffer_delete(buffer);
+		return 0;
+	}
 
     flow = chain_lookup(dp->chain, &key);
     if (flow != NULL) {
         flow_used(flow, buffer);
-        execute_actions(dp, buffer, in_port, &key,
-                        flow->actions, flow->n_actions);
+        execute_actions(dp, buffer, port_no(dp, p),
+                        &key, flow->actions, flow->n_actions, false);
         return 0;
     } else {
         return -ESRCH;
     }
 }
 
-/* 'buffer' was received on 'in_port', a physical switch port between 0 and
- * OFPP_MAX.  Process it according to 'dp''s flow table, sending it up to the
- * controller if no flow matches.  Takes ownership of 'buffer'. */
-void fwd_port_input(struct datapath *dp, struct buffer *buffer, int in_port) 
+/* 'buffer' was received on 'p', which may be a a physical switch port or a
+ * null pointer.  Process it according to 'dp''s flow table, sending it up to
+ * the controller if no flow matches.  Takes ownership of 'buffer'. */
+void fwd_port_input(struct datapath *dp, struct buffer *buffer,
+                    struct sw_port *p)
 {
-    if (run_flow_through_tables(dp, buffer, in_port)) {
-        dp_output_control(dp, buffer, in_port, dp->miss_send_len,
-                          OFPR_NO_MATCH);
+    if (run_flow_through_tables(dp, buffer, p)) {
+        dp_output_control(dp, buffer, port_no(dp, p),
+                          dp->miss_send_len, OFPR_NO_MATCH);
     }
 }
 
 static void
 do_output(struct datapath *dp, struct buffer *buffer, int in_port,
-          size_t max_len, int out_port)
+          size_t max_len, int out_port, bool ignore_no_fwd)
 {
     if (out_port != OFPP_CONTROLLER) {
-        dp_output_port(dp, buffer, in_port, out_port);
+        dp_output_port(dp, buffer, in_port, out_port, ignore_no_fwd);
     } else {
         dp_output_control(dp, buffer, in_port, max_len, OFPR_ACTION);
     }
@@ -904,7 +903,8 @@ do_output(struct datapath *dp, struct buffer *buffer, int in_port,
 static void
 execute_actions(struct datapath *dp, struct buffer *buffer,
                 int in_port, const struct sw_flow_key *key,
-                const struct ofp_action *actions, int n_actions)
+                const struct ofp_action *actions, int n_actions,
+                bool ignore_no_fwd)
 {
     /* Every output action needs a separate clone of 'buffer', but the common
      * case is just a single output action, so that doing a clone and then
@@ -923,7 +923,8 @@ execute_actions(struct datapath *dp, struct buffer *buffer,
         struct eth_header *eh = buffer->l2;
 
         if (prev_port != -1) {
-            do_output(dp, buffer_clone(buffer), in_port, max_len, prev_port);
+            do_output(dp, buffer_clone(buffer), in_port, max_len, prev_port,
+                      ignore_no_fwd);
             prev_port = -1;
         }
 
@@ -960,7 +961,7 @@ execute_actions(struct datapath *dp, struct buffer *buffer,
         }
     }
     if (prev_port != -1)
-        do_output(dp, buffer, in_port, max_len, prev_port);
+        do_output(dp, buffer, in_port, max_len, prev_port, ignore_no_fwd);
     else
         buffer_delete(buffer);
 }
@@ -1128,7 +1129,7 @@ recv_packet_out(struct datapath *dp, const struct sender *sender UNUSED,
  
     flow_extract(buffer, ntohs(opo->in_port), &key.flow);
     execute_actions(dp, buffer, ntohs(opo->in_port),
-                    &key, opo->actions, n_actions);
+                    &key, opo->actions, n_actions, true);
 
    return 0;
 }
@@ -1199,7 +1200,8 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
             uint16_t in_port = ntohs(ofm->match.in_port);
             flow_used(flow, buffer);
             flow_extract(buffer, in_port, &key.flow);
-            execute_actions(dp, buffer, in_port, &key, ofm->actions, n_actions);
+            execute_actions(dp, buffer, in_port, &key,
+                            ofm->actions, n_actions, false);
         } else {
             error = -ESRCH; 
         }

@@ -65,29 +65,9 @@ MODULE_PARM(serial_num, "s");
 /* Number of milliseconds between runs of the maintenance thread. */
 #define MAINT_SLEEP_MSECS 1000
 
-enum br_port_flags {
-	BRPF_NO_FLOOD = 1 << 0,
-};
-
-enum br_port_status {
-	BRPS_PORT_DOWN = 1 << 0,
-	BRPS_LINK_DOWN = 1 << 1,
-};
-
 #define UINT32_MAX			  4294967295U
 #define UINT16_MAX			  65535
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
-
-struct net_bridge_port {
-	u16	port_no;
-	u32 flags;             /* BRPF_* flags */
-	u32 status;            /* BRPS_* flags */
-	spinlock_t lock;
-	struct work_struct port_task;
-	struct datapath	*dp;
-	struct net_device *dev;
-	struct list_head node; /* Element in datapath.ports. */
-};
 
 static struct genl_family dp_genl_family;
 static struct genl_multicast_group mc_group;
@@ -485,7 +465,7 @@ do_port_input(struct net_bridge_port *p, struct sk_buff *skb)
 {
 	/* Push the Ethernet header back on. */
 	skb_push(skb, ETH_HLEN);
-	fwd_port_input(p->dp->chain, skb, p->port_no);
+	fwd_port_input(p->dp->chain, skb, p);
 }
 
 /*
@@ -537,7 +517,7 @@ static inline unsigned packet_length(const struct sk_buff *skb)
 static int
 output_all(struct datapath *dp, struct sk_buff *skb, int flood)
 {
-	u32 disable = flood ? BRPF_NO_FLOOD : 0;
+	u32 disable = flood ? OFPPFL_NO_FLOOD : 0;
 	struct net_bridge_port *p;
 	int prev_port = -1;
 
@@ -550,12 +530,12 @@ output_all(struct datapath *dp, struct sk_buff *skb, int flood)
 				kfree_skb(skb);
 				return -ENOMEM;
 			}
-			dp_output_port(dp, clone, prev_port); 
+			dp_output_port(dp, clone, prev_port, 0); 
 		}
 		prev_port = p->port_no;
 	}
 	if (prev_port != -1)
-		dp_output_port(dp, skb, prev_port);
+		dp_output_port(dp, skb, prev_port, 0);
 	else
 		kfree_skb(skb);
 
@@ -594,7 +574,8 @@ static int xmit_skb(struct sk_buff *skb)
 
 /* Takes ownership of 'skb' and transmits it to 'out_port' on 'dp'.
  */
-int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
+int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port,
+		   int ignore_no_fwd)
 {
 	BUG_ON(!skb);
 	switch (out_port){
@@ -610,10 +591,8 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 		return xmit_skb(skb);
 		
 	case OFPP_TABLE: {
-		struct net_bridge_port *p = skb->dev->br_port;
-		int retval;
-		retval = run_flow_through_tables(dp->chain, skb,
-						 p ? p->port_no : OFPP_LOCAL);
+		int retval = run_flow_through_tables(dp->chain, skb,
+						     skb->dev->br_port);
 		if (retval)
 			kfree_skb(skb);
 		return retval;
@@ -644,6 +623,10 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port)
 			if (net_ratelimit())
 				printk("can't directly forward to input port\n");
 			return -EINVAL;
+		}
+		if (p->flags & OFPPFL_NO_FWD && !ignore_no_fwd) {
+			kfree_skb(skb);
+			return 0;
 		}
 		skb->dev = p->dev; 
 		return xmit_skb(skb);
@@ -713,13 +696,15 @@ static void fill_port_desc(struct net_bridge_port *p, struct ofp_phy_port *desc)
 	desc->features = 0;
 	desc->speed = 0;
 
+	if (p->port_no < 255) {
+		/* FIXME: this is a layering violation and should really be
+		 * done in the secchan, as with OFPC_STP in
+		 * OFP_SUPPORTED_CAPABILITIES. */
+		desc->features |= OFPPF_STP;
+	}
+
 	spin_lock_irqsave(&p->lock, flags);
-	if (p->flags & BRPF_NO_FLOOD) 
-		desc->flags |= htonl(OFPPFL_NO_FLOOD);
-	else if (p->status & BRPS_PORT_DOWN)
-		desc->flags |= htonl(OFPPFL_PORT_DOWN);
-	else if (p->status & BRPS_LINK_DOWN)
-		desc->flags |= htonl(OFPPFL_LINK_DOWN);
+	desc->flags = htonl(p->flags | p->status);
 	spin_unlock_irqrestore(&p->lock, flags);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,24)
@@ -743,11 +728,11 @@ static void fill_port_desc(struct net_bridge_port *p, struct ofp_phy_port *desc)
 			if (ecmd.supported & SUPPORTED_10000baseT_Full)
 				desc->features |= OFPPF_10GB_FD;
 
-			desc->features = htonl(desc->features);
 			desc->speed = htonl(ecmd.speed);
 		}
 	}
 #endif
+	desc->features = htonl(desc->features);
 }
 
 static int 
@@ -827,7 +812,7 @@ down_port_cb(struct work_struct *work)
 		if (net_ratelimit())
 			printk("problem bringing up port %s\n", p->dev->name);
 	rtnl_unlock();
-	p->status |= BRPS_PORT_DOWN;
+	p->status |= OFPPFL_PORT_DOWN;
 }
 
 /* Callback function for a workqueue to enable an interface */
@@ -842,7 +827,7 @@ up_port_cb(struct work_struct *work)
 		if (net_ratelimit())
 			printk("problem bringing down port %s\n", p->dev->name);
 	rtnl_unlock();
-	p->status &= ~BRPS_PORT_DOWN;
+	p->status &= ~OFPPFL_PORT_DOWN;
 }
 
 int
@@ -854,16 +839,17 @@ dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm)
 	struct net_bridge_port *p = (port_no < OFPP_MAX ? dp->ports[port_no]
 				     : port_no == OFPP_LOCAL ? dp->local_port
 				     : NULL);
+	uint32_t flag_mask;
+
 	/* Make sure the port id hasn't changed since this was sent */
 	if (!p || memcmp(opp->hw_addr, p->dev->dev_addr, ETH_ALEN))
 		return -1;
 
 	spin_lock_irqsave(&p->lock, flags);
-	if (opm->mask & htonl(OFPPFL_NO_FLOOD)) {
-		if (opp->flags & htonl(OFPPFL_NO_FLOOD))
-			p->flags |= BRPF_NO_FLOOD;
-		else 
-			p->flags &= ~BRPF_NO_FLOOD;
+	flag_mask = ntohl(opm->mask) & PORT_FLAG_BITS;
+	if (flag_mask) {
+		p->flags &= ~flag_mask;
+		p->flags |= ntohl(opp->flags) & flag_mask;
 	}
 
 	/* Modifying the status of an interface requires taking a lock
@@ -872,11 +858,11 @@ dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm)
 	 * context. */
 	if (opm->mask & htonl(OFPPFL_PORT_DOWN)) {
 		if ((opp->flags & htonl(OFPPFL_PORT_DOWN))
-					&& (p->status & BRPS_PORT_DOWN) == 0) {
+		    && (p->status & OFPPFL_PORT_DOWN) == 0) {
 			PREPARE_WORK(&p->port_task, down_port_cb);
 			schedule_work(&p->port_task);
 		} else if ((opp->flags & htonl(OFPPFL_PORT_DOWN)) == 0
-					&& (p->status & BRPS_PORT_DOWN)) {
+			   && (p->status & OFPPFL_PORT_DOWN)) {
 			PREPARE_WORK(&p->port_task, up_port_cb);
 			schedule_work(&p->port_task);
 		}
@@ -902,14 +888,14 @@ update_port_status(struct net_bridge_port *p)
 	orig_status = p->status;
 
 	if (p->dev->flags & IFF_UP) 
-		p->status &= ~BRPS_PORT_DOWN;
+		p->status &= ~OFPPFL_PORT_DOWN;
 	else
-		p->status |= BRPS_PORT_DOWN;
+		p->status |= OFPPFL_PORT_DOWN;
 
 	if (netif_carrier_ok(p->dev))
-		p->status &= ~BRPS_LINK_DOWN;
+		p->status &= ~OFPPFL_LINK_DOWN;
 	else
-		p->status |= BRPS_LINK_DOWN;
+		p->status |= OFPPFL_LINK_DOWN;
 
 	spin_unlock_irqrestore(&p->lock, flags);
 	return (orig_status != p->status);

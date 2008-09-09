@@ -6,6 +6,7 @@
 #include <linux/mutex.h>
 #include <linux/netlink.h>
 #include <linux/netdevice.h>
+#include <linux/workqueue.h>
 #include <linux/skbuff.h>
 #include "openflow.h"
 #include "flow.h"
@@ -23,6 +24,7 @@
 #define OFP_SUPPORTED_CAPABILITIES ( OFPC_FLOW_STATS \
 		| OFPC_TABLE_STATS \
 		| OFPC_PORT_STATS \
+		| OFPC_STP \
 		| OFPC_MULTI_PHY_TX )
 
 /* Actions supported by this implementation. */
@@ -68,9 +70,24 @@ struct sender {
 	uint32_t seq;		/* Netlink sequence ID of request. */
 };
 
+#define PORT_STATUS_BITS (OFPPFL_PORT_DOWN | OFPPFL_LINK_DOWN)
+#define PORT_FLAG_BITS (~PORT_STATUS_BITS)
+
+struct net_bridge_port {
+	u16	port_no;
+	u32 flags;		/* Some subset of PORT_FLAG_BITS. */
+	u32 status;		/* Some subset of PORT_STATUS_BITS. */
+	spinlock_t lock;
+	struct work_struct port_task;
+	struct datapath	*dp;
+	struct net_device *dev;
+	struct list_head node; /* Element in datapath.ports. */
+};
+
 extern struct mutex dp_mutex;
 
-int dp_output_port(struct datapath *, struct sk_buff *, int out_port);
+int dp_output_port(struct datapath *, struct sk_buff *, int out_port,
+		   int ignore_no_fwd);
 int dp_output_control(struct datapath *, struct sk_buff *, uint32_t, 
 			size_t, int);
 int dp_set_origin(struct datapath *, uint16_t, struct sk_buff *);

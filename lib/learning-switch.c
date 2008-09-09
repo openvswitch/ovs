@@ -61,6 +61,7 @@ struct lswitch {
     int max_idle;
 
     uint64_t datapath_id;
+    uint32_t capabilities;
     time_t last_features_request;
     struct mac_learning *ml;    /* NULL to act as hub instead of switch. */
 
@@ -74,10 +75,16 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 
 static void queue_tx(struct lswitch *, struct rconn *, struct buffer *);
 static void send_features_request(struct lswitch *, struct rconn *);
+static void process_switch_features(struct lswitch *, struct rconn *,
+                                    struct ofp_switch_features *);
 static void process_packet_in(struct lswitch *, struct rconn *,
                               struct ofp_packet_in *);
 static void process_echo_request(struct lswitch *, struct rconn *,
                                  struct ofp_header *);
+static void process_port_status(struct lswitch *, struct rconn *,
+                                struct ofp_port_status *);
+static void process_phy_port(struct lswitch *, struct rconn *,
+                             const struct ofp_phy_port *);
 
 /* Creates and returns a new learning switch.
  *
@@ -123,6 +130,7 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
         [0 ... UINT8_MAX] = sizeof (struct ofp_header),
         [OFPT_FEATURES_REPLY] = sizeof (struct ofp_switch_features),
         [OFPT_PACKET_IN] = offsetof (struct ofp_packet_in, data),
+        [OFPT_PORT_STATUS] = sizeof(struct ofp_port_status),
     };
     struct ofp_header *oh;
 
@@ -138,12 +146,13 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
     if (oh->type == OFPT_ECHO_REQUEST) {
         process_echo_request(sw, rconn, msg->data);
     } else if (oh->type == OFPT_FEATURES_REPLY) {
-        struct ofp_switch_features *osf = msg->data;
-        sw->datapath_id = osf->datapath_id;
+        process_switch_features(sw, rconn, msg->data);
     } else if (sw->datapath_id == 0) {
         send_features_request(sw, rconn);
     } else if (oh->type == OFPT_PACKET_IN) {
         process_packet_in(sw, rconn, msg->data);
+    } else if (oh->type == OFPT_PORT_STATUS) {
+        process_port_status(sw, rconn, msg->data);
     } else {
         if (VLOG_IS_DBG_ENABLED()) {
             char *p = ofp_to_string(msg->data, msg->size, 2);
@@ -186,6 +195,22 @@ queue_tx(struct lswitch *sw, struct rconn *rconn, struct buffer *b)
             VLOG_WARN_RL(&rl, "%s: send: %s",
                          rconn_get_name(rconn), strerror(retval));
         }
+    }
+}
+
+static void
+process_switch_features(struct lswitch *sw, struct rconn *rconn,
+                        struct ofp_switch_features *osf)
+{
+    size_t n_ports = ((ntohs(osf->header.length)
+                       - offsetof(struct ofp_switch_features, ports))
+                      / sizeof *osf->ports);
+    size_t i;
+
+    sw->datapath_id = osf->datapath_id;
+    sw->capabilities = ntohl(osf->capabilities);
+    for (i = 0; i < n_ports; i++) {
+        process_phy_port(sw, rconn, &osf->ports[i]);
     }
 }
 
@@ -250,4 +275,63 @@ process_echo_request(struct lswitch *sw, struct rconn *rconn,
                      struct ofp_header *rq)
 {
     queue_tx(sw, rconn, make_echo_reply(rq));
+}
+
+static void
+process_port_status(struct lswitch *sw, struct rconn *rconn,
+                    struct ofp_port_status *ops)
+{
+    process_phy_port(sw, rconn, &ops->desc);
+}
+
+static void
+process_phy_port(struct lswitch *sw, struct rconn *rconn,
+                 const struct ofp_phy_port *opp)
+{
+    if (sw->capabilities & OFPC_STP && opp->features & ntohl(OFPPF_STP)) {
+        uint32_t flags = ntohl(opp->flags);
+        uint32_t new_flags = flags & ~(OFPPFL_NO_RECV | OFPPFL_NO_RECV_STP
+                                       | OFPPFL_NO_FWD | OFPPFL_NO_PACKET_IN);
+        if (!(flags & (OFPPFL_NO_STP | OFPPFL_PORT_DOWN | OFPPFL_LINK_DOWN))) {
+            bool forward = false;
+            bool learn = false;
+            switch (flags & OFPPFL_STP_MASK) {
+            case OFPPFL_STP_LISTEN:
+            case OFPPFL_STP_BLOCK:
+                break;
+            case OFPPFL_STP_LEARN:
+                learn = true;
+                break;
+            case OFPPFL_STP_FORWARD:
+                forward = learn = true;
+                break;
+            }
+            if (!forward) {
+                new_flags |= OFPPFL_NO_RECV | OFPPFL_NO_FWD;
+            }
+            if (!learn) {
+                new_flags |= OFPPFL_NO_PACKET_IN;
+            }
+        }
+        if (flags != new_flags) {
+            struct ofp_port_mod *opm;
+            struct buffer *b;
+            int retval;
+
+            VLOG_WARN("port %d: flags=%x new_flags=%x",
+                      ntohs(opp->port_no), flags, new_flags);
+            opm = make_openflow(sizeof *opm, OFPT_PORT_MOD, &b);
+            opm->mask = htonl(flags ^ new_flags);
+            opm->desc = *opp;
+            opm->desc.flags = htonl(new_flags);
+            retval = rconn_send(rconn, b, NULL);
+            if (retval) {
+                if (retval != ENOTCONN) {
+                    VLOG_WARN_RL(&rl, "%s: send: %s",
+                                 rconn_get_name(rconn), strerror(retval));
+                }
+                buffer_delete(b);
+            }
+        }
+    }
 }

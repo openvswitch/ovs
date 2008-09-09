@@ -30,6 +30,7 @@ noinst_HEADERS = \
 	socket-util.h \
 	type-props.h \
 	timeval.h \
+	stp.h \
 	util.h \
 	vconn.h \
 	vconn-ssl.h \

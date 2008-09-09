@@ -22,8 +22,10 @@ struct sender;
 #define PKT_COOKIE_BITS (32 - PKT_BUFFER_BITS)
 
 
-void fwd_port_input(struct sw_chain *, struct sk_buff *, int in_port);
-int run_flow_through_tables(struct sw_chain *, struct sk_buff *, int in_port);
+void fwd_port_input(struct sw_chain *, struct sk_buff *,
+		    struct net_bridge_port *);
+int run_flow_through_tables(struct sw_chain *, struct sk_buff *,
+			    struct net_bridge_port *);
 int fwd_control_input(struct sw_chain *, const struct sender *,
 		      const void *, size_t);
 
@@ -33,8 +35,9 @@ void fwd_discard_all(void);
 void fwd_exit(void);
 
 void execute_actions(struct datapath *, struct sk_buff *,
-			const struct sw_flow_key *, 
-			const struct ofp_action *, int n_actions);
+		     const struct sw_flow_key *, 
+		     const struct ofp_action *, int n_actions,
+		     int ignore_no_fwd);
 struct sk_buff *execute_setter(struct sk_buff *, uint16_t,
 			const struct sw_flow_key *, const struct ofp_action *);
 

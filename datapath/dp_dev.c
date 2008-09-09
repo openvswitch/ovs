@@ -89,7 +89,7 @@ static void dp_dev_do_xmit(struct work_struct *work)
 	while ((skb = skb_dequeue(&dp_dev->xmit_queue)) != NULL) {
 		skb_reset_mac_header(skb);
 		rcu_read_lock();
-		fwd_port_input(dp->chain, skb, OFPP_LOCAL);
+		fwd_port_input(dp->chain, skb, dp->local_port);
 		rcu_read_unlock();
 	}
 	netif_wake_queue(dp->netdev);

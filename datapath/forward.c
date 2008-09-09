@@ -4,6 +4,8 @@
  * Stanford Junior University
  */
 
+#include <linux/netdevice.h>
+#include <linux/etherdevice.h>
 #include <linux/if_ether.h>
 #include <linux/if_vlan.h>
 #include <linux/in.h>
@@ -26,19 +28,28 @@ static int make_writable(struct sk_buff **);
 static struct sk_buff *retrieve_skb(uint32_t id);
 static void discard_skb(uint32_t id);
 
-/* 'skb' was received on 'in_port', a physical switch port between 0 and
- * OFPP_MAX.  Process it according to 'chain'.  Returns 0 if successful, in
- * which case 'skb' is destroyed, or -ESRCH if there is no matching flow, in
- * which case 'skb' still belongs to the caller. */
+/* 'skb' was received on port 'p', which may be a physical switch port, the
+ * local port, or a null pointer.  Process it according to 'chain'.  Returns 0
+ * if successful, in which case 'skb' is destroyed, or -ESRCH if there is no
+ * matching flow, in which case 'skb' still belongs to the caller. */
 int run_flow_through_tables(struct sw_chain *chain, struct sk_buff *skb,
-			    int in_port)
+			    struct net_bridge_port *p)
 {
+	/* Ethernet address used as the destination for STP frames. */
+	static const uint8_t stp_eth_addr[ETH_ALEN]
+		= { 0x01, 0x80, 0xC2, 0x00, 0x00, 0x01 };
 	struct sw_flow_key key;
 	struct sw_flow *flow;
 
-	if (flow_extract(skb, in_port, &key)
+	if (flow_extract(skb, p ? p->port_no : OFPP_NONE, &key)
 	    && (chain->dp->flags & OFPC_FRAG_MASK) == OFPC_FRAG_DROP) {
 		/* Drop fragment. */
+		kfree_skb(skb);
+		return 0;
+	}
+	if (p && p->flags & (OFPPFL_NO_RECV | OFPPFL_NO_RECV_STP) &&
+	    p->flags & (compare_ether_addr(key.dl_dst, stp_eth_addr)
+			? OFPPFL_NO_RECV : OFPPFL_NO_RECV_STP)) {
 		kfree_skb(skb);
 		return 0;
 	}
@@ -47,38 +58,40 @@ int run_flow_through_tables(struct sw_chain *chain, struct sk_buff *skb,
 	if (likely(flow != NULL)) {
 		flow_used(flow, skb);
 		execute_actions(chain->dp, skb, &key,
-				flow->actions, flow->n_actions);
+				flow->actions, flow->n_actions, 0);
 		return 0;
 	} else {
 		return -ESRCH;
 	}
 }
 
-/* 'skb' was received on 'in_port', a physical switch port between 0 and
- * OFPP_MAX.  Process it according to 'chain', sending it up to the controller
- * if no flow matches.  Takes ownership of 'skb'. */
-void fwd_port_input(struct sw_chain *chain, struct sk_buff *skb, int in_port)
+/* 'skb' was received on port 'p', which may be a physical switch port, the
+ * local port, or a null pointer.  Process it according to 'chain', sending it
+ * up to the controller if no flow matches.  Takes ownership of 'skb'. */
+void fwd_port_input(struct sw_chain *chain, struct sk_buff *skb,
+		    struct net_bridge_port *p)
 {
-	if (run_flow_through_tables(chain, skb, in_port))
+	if (run_flow_through_tables(chain, skb, p))
 		dp_output_control(chain->dp, skb, fwd_save_skb(skb), 
 				  chain->dp->miss_send_len,
 				  OFPR_NO_MATCH);
 }
 
 static int do_output(struct datapath *dp, struct sk_buff *skb, size_t max_len,
-			int out_port)
+		     int out_port, int ignore_no_fwd)
 {
 	if (!skb)
 		return -ENOMEM;
 	return (likely(out_port != OFPP_CONTROLLER)
-		? dp_output_port(dp, skb, out_port)
+		? dp_output_port(dp, skb, out_port, ignore_no_fwd)
 		: dp_output_control(dp, skb, fwd_save_skb(skb),
 					 max_len, OFPR_ACTION));
 }
 
 void execute_actions(struct datapath *dp, struct sk_buff *skb,
-				const struct sw_flow_key *key,
-				const struct ofp_action *actions, int n_actions)
+		     const struct sw_flow_key *key,
+		     const struct ofp_action *actions, int n_actions,
+		     int ignore_no_fwd)
 {
 	/* Every output action needs a separate clone of 'skb', but the common
 	 * case is just a single output action, so that doing a clone and
@@ -97,7 +110,7 @@ void execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 		if (prev_port != -1) {
 			do_output(dp, skb_clone(skb, GFP_ATOMIC),
-				  max_len, prev_port);
+				  max_len, prev_port, ignore_no_fwd);
 			prev_port = -1;
 		}
 
@@ -119,7 +132,7 @@ void execute_actions(struct datapath *dp, struct sk_buff *skb,
 		}
 	}
 	if (prev_port != -1)
-		do_output(dp, skb, max_len, prev_port);
+		do_output(dp, skb, max_len, prev_port, ignore_no_fwd);
 	else
 		kfree_skb(skb);
 }
@@ -367,7 +380,7 @@ recv_packet_out(struct sw_chain *chain, const struct sender *sender,
 	dp_set_origin(chain->dp, ntohs(opo->in_port), skb);
 
 	flow_extract(skb, ntohs(opo->in_port), &key);
-	execute_actions(chain->dp, skb, &key, opo->actions, n_actions);
+	execute_actions(chain->dp, skb, &key, opo->actions, n_actions, 1);
 
 	return 0;
 }
@@ -452,7 +465,7 @@ add_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 			struct sw_flow_key key;
 			flow_used(flow, skb);
 			flow_extract(skb, ntohs(ofm->match.in_port), &key);
-			execute_actions(chain->dp, skb, &key, ofm->actions, n_actions);
+			execute_actions(chain->dp, skb, &key, ofm->actions, n_actions, 0);
 		}
 		else
 			error = -ESRCH;

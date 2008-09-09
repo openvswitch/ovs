@@ -164,12 +164,32 @@ enum ofp_capabilities {
     OFPC_IP_REASM     = 1 << 5  /* Can reassemble IP fragments. */
 };
 
-/* Flags to indicate behavior of the physical port */
+/* Flags to indicate behavior of the physical port. */
 enum ofp_port_flags {
-    OFPPFL_NO_FLOOD  = 1 << 0, /* Do not include this port when flooding. */
-    OFPPFL_PORT_DOWN = 1 << 1, /* Port is configured down. */
-    OFPPFL_LINK_DOWN = 1 << 2, /* No physical link on interface.  
-                                  NOTE: Non-settable field */
+    /* Read/write bits. */
+    OFPPFL_PORT_DOWN    = 1 << 1, /* Port is configured down. */
+    OFPPFL_NO_STP       = 1 << 3, /* Disable 802.1D spanning tree on port. */
+    OFPPFL_NO_RECV      = 1 << 4, /* Drop most packets received on port. */
+    OFPPFL_NO_RECV_STP  = 1 << 5, /* Drop received 802.1D STP packets. */
+    OFPPFL_NO_FWD       = 1 << 6, /* Drop packets forwarded to port. */
+    OFPPFL_NO_PACKET_IN = 1 << 7, /* Do not send packet-in msgs for port. */
+
+    /* Read-only bits. */
+    OFPPFL_LINK_DOWN    = 1 << 2, /* No physical link present. */
+
+    /* Read-only when STP is enabled (when OFPPFL_NO_STP is not set).
+     * Read/write when STP is disabled (when OFPPFL_NO_STP is set).
+     *
+     * The OFPPFL_STP_* bits have no effect on switch operation.  The
+     * controller must adjust OFPPFL_NO_RECV, OFPPFL_NO_FWD, and
+     * OFPPFL_NO_PACKET_IN appropriately to fully implement an 802.1D spanning
+     * tree. */
+    OFPPFL_NO_FLOOD     = 1 << 0, /* Do not include this port when flooding. */
+    OFPPFL_STP_LISTEN   = 0 << 8, /* Not learning or relaying frames. */
+    OFPPFL_STP_LEARN    = 1 << 8, /* Learning but not relaying frames. */
+    OFPPFL_STP_FORWARD  = 2 << 8, /* Learning and relaying frames. */
+    OFPPFL_STP_BLOCK    = 3 << 8, /* Not part of spanning tree. */
+    OFPPFL_STP_MASK     = 3 << 8, /* Bit mask for OFPPFL_STP_* values. */
 };
 
 /* Features of physical ports available in a datapath. */
@@ -181,6 +201,7 @@ enum ofp_port_features {
     OFPPF_1GB_HD     = 1 << 4, /* 1 Gb half-duplex rate support. */
     OFPPF_1GB_FD     = 1 << 5, /* 1 Gb full-duplex rate support. */
     OFPPF_10GB_FD    = 1 << 6, /* 10 Gb full-duplex rate support. */
+    OFPPF_STP        = 1 << 7, /* 802.1D spanning tree supported on port. */
 };
 
 
