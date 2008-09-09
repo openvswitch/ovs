@@ -562,9 +562,11 @@ Establishing a Public Key Infrastructure
 
 If you do not have a PKI, the ofp-pki script included with OpenFlow
 can help.  To create an initial PKI structure, invoke it as:
-      % ofp-pki new-pki
-which will create and populate a new directory named "pki" under the
-current directory.
+      % ofp-pki init
+which will create and populate a new PKI directory.  The default
+location for the PKi directory depends on how the OpenFlow tree was
+configured (to see the configured default, look for the --dir option
+description in the output of "ofp-pki --help").
 
 The pki directory contains two important subdirectories.  The
 controllerca subdirectory contains controller certificate authority
