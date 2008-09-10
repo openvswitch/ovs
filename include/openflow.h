@@ -117,7 +117,8 @@ enum ofp_type {
     OFPT_STATS_REQUEST,       /* 13 Controller/switch message */
     OFPT_STATS_REPLY,         /* 14 Controller/switch message */
     OFPT_ECHO_REQUEST,        /* 15 Symmetric message */
-    OFPT_ECHO_REPLY           /* 16 Symmetric message */
+    OFPT_ECHO_REPLY,          /* 16 Symmetric message */
+    OFPT_VENDOR = 0xff        /* 255 Vendor extension */
 };
 
 /* Header on all OpenFlow packets. */
@@ -493,7 +494,13 @@ enum ofp_stats_types {
      * key-value pairs are included.
      * The reply body is an ASCII string of key-value pairs in the form
      * "key=value\n". */
-    OFPST_SWITCH
+    OFPST_SWITCH,
+
+    /* Vendor extension.
+     * The request and reply bodies begin with a 32-bit vendor ID, which takes
+     * the same form as in "struct ofp_vendor".  The request and reply bodies
+     * are otherwise vendor-defined. */
+    OFPST_VENDOR = 0xffff
 };
 
 struct ofp_stats_request {
@@ -609,5 +616,16 @@ struct ofp_port_stats {
     uint64_t collisions;     /* Number of collisions. */ 
 };
 OFP_ASSERT(sizeof(struct ofp_port_stats) == 104);
+
+/* Vendor extension. */
+struct ofp_vendor {
+    struct ofp_header header;   /* Type OFPT_VENDOR. */
+    uint32_t vendor;            /* Vendor ID:
+                                 * - MSB 0: low-order bytes are Ethernet OUI.
+                                 * - MSB != 0: defined by OpenFlow
+                                 *   consortium. */
+    /* Vendor-defined arbitrary additional data. */
+};
+OFP_ASSERT(sizeof(struct ofp_vendor) == 12);
 
 #endif /* openflow.h */
