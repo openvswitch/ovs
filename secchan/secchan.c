@@ -58,6 +58,7 @@
 #include "list.h"
 #include "mac-learning.h"
 #include "netdev.h"
+#include "nicira-ext.h"
 #include "openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -1657,30 +1658,24 @@ switch_status_remote_packet_cb(struct relay *r, void *ss_)
     struct rconn *rc = r->halves[HALF_REMOTE].rconn;
     struct buffer *msg = r->halves[HALF_REMOTE].rxbuf;
     struct switch_status_category *c;
-    struct ofp_stats_request *osr;
-    struct ofp_stats_reply *reply;
+    struct nicira_header *request;
+    struct nicira_header *reply;
     struct status_reply sr;
-    struct ofp_header *oh;
     struct buffer *b;
     int retval;
 
-    oh = msg->data;
-    if (oh->type != OFPT_STATS_REQUEST) {
+    if (msg->size < sizeof(struct nicira_header)) {
         return false;
     }
-    if (msg->size < sizeof(struct ofp_stats_request)) {
-        VLOG_WARN_RL(&vrl, "packet too short (%zu bytes) for stats_request",
-                     msg->size);
-        return false;
-    }
-
-    osr = msg->data;
-    if (osr->type != htons(OFPST_SWITCH)) {
+    request = msg->data;
+    if (request->header.type != OFPT_VENDOR
+        || request->vendor_id != htonl(NX_VENDOR_ID)
+        || request->subtype != htonl(NXT_STATUS_REQUEST)) {
         return false;
     }
 
-    sr.request.string = (void *) (osr + 1);
-    sr.request.length = msg->size - sizeof *osr;
+    sr.request.string = (void *) (request + 1);
+    sr.request.length = msg->size - sizeof *request;
     ds_init(&sr.output);
     for (c = ss->categories; c < &ss->categories[ss->n_categories]; c++) {
         if (!memcmp(c->name, sr.request.string,
@@ -1689,12 +1684,11 @@ switch_status_remote_packet_cb(struct relay *r, void *ss_)
             c->cb(&sr, c->aux);
         }
     }
-    reply = make_openflow_xid((offsetof(struct ofp_stats_reply, body)
-                               + sr.output.length),
-                              OFPT_STATS_REPLY, osr->header.xid, &b);
-    reply->type = htons(OFPST_SWITCH);
-    reply->flags = 0;
-    memcpy(reply->body, sr.output.string, sr.output.length);
+    reply = make_openflow_xid(sizeof *reply + sr.output.length,
+                              OFPT_VENDOR, request->header.xid, &b);
+    reply->vendor_id = htonl(NX_VENDOR_ID);
+    reply->subtype = htonl(NXT_STATUS_REPLY);
+    memcpy(reply + 1, sr.output.string, sr.output.length);
     retval = rconn_send(rc, b, NULL);
     if (retval && retval != EAGAIN) {
         VLOG_WARN("send failed (%s)", strerror(retval));

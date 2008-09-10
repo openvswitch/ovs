@@ -54,6 +54,7 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "dpif.h"
+#include "nicira-ext.h"
 #include "ofp-print.h"
 #include "openflow.h"
 #include "packets.h"
@@ -415,12 +416,32 @@ do_show(int argc UNUSED, char *argv[])
 static void
 do_status(int argc, char *argv[])
 {
-    struct buffer *request;
-    alloc_stats_request(0, OFPST_SWITCH, &request);
+    struct nicira_header *request, *reply;
+    struct vconn *vconn;
+    struct buffer *b;
+
+    request = make_openflow(sizeof *request, OFPT_VENDOR, &b);
+    request->vendor_id = htonl(NX_VENDOR_ID);
+    request->subtype = htonl(NXT_STATUS_REQUEST);
     if (argc > 2) {
-        buffer_put(request, argv[2], strlen(argv[2]));
+        buffer_put(b, argv[2], strlen(argv[2]));
     }
-    dump_stats_transaction(argv[1], request);
+    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    run(vconn_transact(vconn, b, &b), "talking to %s", argv[1]);
+    vconn_close(vconn);
+
+    if (b->size < sizeof *reply) {
+        fatal(0, "short reply (%zu bytes)", b->size);
+    }
+    reply = b->data;
+    if (reply->header.type != OFPT_VENDOR
+        || reply->vendor_id != ntohl(NX_VENDOR_ID)
+        || reply->subtype != ntohl(NXT_STATUS_REPLY)) {
+        ofp_print(stderr, b->data, b->size, 2);
+        fatal(0, "bad reply");
+    }
+
+    fwrite(reply + 1, b->size, 1, stdout);
 }
 
 static void

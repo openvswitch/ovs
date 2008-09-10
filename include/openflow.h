@@ -500,14 +500,6 @@ enum ofp_stats_types {
      * The reply body is an array of struct ofp_port_stats. */
     OFPST_PORT,
 
-    /* Switch status.
-     * The request body is an ASCII string that specifies a prefix of the key
-     * names to include in the output; if it is the null string, then all
-     * key-value pairs are included.
-     * The reply body is an ASCII string of key-value pairs in the form
-     * "key=value\n". */
-    OFPST_SWITCH,
-
     /* Vendor extension.
      * The request and reply bodies begin with a 32-bit vendor ID, which takes
      * the same form as in "struct ofp_vendor".  The request and reply bodies

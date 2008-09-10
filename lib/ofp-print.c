@@ -814,19 +814,12 @@ ofp_table_stats_reply(struct ds *string, const void *body, size_t len,
 }
 
 static void
-switch_status_reply(struct ds *string, const void *body, size_t len,
-                    int verbosity UNUSED)
+vendor_stat(struct ds *string, const void *body, size_t len,
+            int verbosity UNUSED)
 {
-    char *save_ptr = NULL;
-    char *s, *line;
-
-    s = xmemdup0(body, len);
-    for (line = strtok_r(s, "\n\n", &save_ptr); line != NULL;
-         line = strtok_r(NULL, "\n\n", &save_ptr)) {
-        ds_put_printable(string, line, strlen(line));
-        ds_put_char(string, '\n');
-    }
-    free(s);
+    ds_put_format(string, " vendor=%08"PRIx32, ntohl(*(uint32_t *) body));
+    ds_put_format(string, " %zu bytes additional data",
+                  len - sizeof(uint32_t));
 }
 
 enum stats_direction {
@@ -881,10 +874,10 @@ print_stats(struct ds *string, int type, const void *body, size_t body_len,
             { 0, 0, NULL, },
             { 0, SIZE_MAX, ofp_port_stats_reply },
         },
-        [OFPST_SWITCH] = {
-            "switch status",
-            { 0, 0, NULL, },
-            { 0, SIZE_MAX, switch_status_reply },
+        [OFPST_VENDOR] = {
+            "vendor-specific",
+            { sizeof(uint32_t), SIZE_MAX, vendor_stat },
+            { sizeof(uint32_t), SIZE_MAX, vendor_stat },
         },
     };
 
