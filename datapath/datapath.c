@@ -947,7 +947,7 @@ EXPORT_SYMBOL(dp_send_flow_expired);
 
 int
 dp_send_error_msg(struct datapath *dp, const struct sender *sender, 
-		uint16_t type, uint16_t code, const uint8_t *data, size_t len)
+		uint16_t type, uint16_t code, const void *data, size_t len)
 {
 	struct sk_buff *skb;
 	struct ofp_error_msg *oem;
@@ -1550,6 +1550,8 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 	 * struct genl_ops.  This kluge supports earlier versions also. */
 	cb->done = dp_genl_openflow_done;
 
+	sender.pid = NETLINK_CB(cb->skb).pid;
+	sender.seq = cb->nlh->nlmsg_seq;
 	if (!cb->args[0]) {
 		struct nlattr *attrs[DP_GENL_A_MAX + 1];
 		struct ofp_stats_request *rq;
@@ -1575,13 +1577,21 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 			return -EINVAL;
 
 		rq = nla_data(va);
-		type = ntohs(rq->type);
-		if (rq->header.version != OFP_VERSION
-		    || rq->header.type != OFPT_STATS_REQUEST
-		    || ntohs(rq->header.length) != len
-		    || type >= ARRAY_SIZE(stats)
-		    || !stats[type].dump)
+		sender.xid = type = ntohs(rq->type);
+		if (rq->header.version != OFP_VERSION) {
+			dp_send_error_msg(dp, &sender, OFPET_BAD_REQUEST,
+					  OFPBRC_BAD_VERSION, rq, len);
 			return -EINVAL;
+		}
+		if (rq->header.type != OFPT_STATS_REQUEST
+		    || ntohs(rq->header.length) != len)
+			return -EINVAL;
+
+		if (type >= ARRAY_SIZE(stats) || !stats[type].dump) {
+			dp_send_error_msg(dp, &sender, OFPET_BAD_REQUEST,
+					  OFPBRC_BAD_STAT, rq, len);
+			return -EINVAL;
+		}
 
 		s = &stats[type];
 		body_len = len - offsetof(struct ofp_stats_request, body);
@@ -1600,6 +1610,7 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 			cb->args[4] = (long) state;
 		}
 	} else if (cb->args[0] == 1) {
+		sender.xid = cb->args[3];
 		dp_idx = cb->args[1];
 		s = &stats[cb->args[2]];
 
@@ -1609,10 +1620,6 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 	} else {
 		return 0;
 	}
-
-	sender.xid = cb->args[3];
-	sender.pid = NETLINK_CB(cb->skb).pid;
-	sender.seq = cb->nlh->nlmsg_seq;
 
 	osr = put_openflow_headers(dp, skb, OFPT_STATS_REPLY, &sender,
 				   &max_openflow_len);

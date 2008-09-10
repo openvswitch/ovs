@@ -451,6 +451,18 @@ struct ofp_flow_expired {
 };
 OFP_ASSERT(sizeof(struct ofp_flow_expired) == 72);
 
+enum ofp_error_type {
+    OFPET_BAD_REQUEST           /* Request was not understood. */
+};
+
+enum ofp_bad_request_code {
+    OFPBRC_BAD_VERSION,         /* ofp_header.version not supported. */
+    OFPBRC_BAD_TYPE,            /* ofp_header.type not supported. */
+    OFPBRC_BAD_STAT,            /* ofp_stats_request.type not supported. */
+    OFPBRC_BAD_VENDOR           /* Vendor not supported (in ofp_vendor or
+                                 * ofp_stats_request or ofp_stats_reply). */
+};
+
 /* Error message (datapath -> controller). */
 struct ofp_error_msg {
     struct ofp_header header;

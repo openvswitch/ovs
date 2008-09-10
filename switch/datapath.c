@@ -793,7 +793,7 @@ send_flow_expired(struct datapath *dp, struct sw_flow *flow,
 
 void
 dp_send_error_msg(struct datapath *dp, const struct sender *sender,
-        uint16_t type, uint16_t code, const uint8_t *data, size_t len)
+                  uint16_t type, uint16_t code, const void *data, size_t len)
 {
     struct buffer *buffer;
     struct ofp_error_msg *oem;
@@ -1575,6 +1575,8 @@ recv_stats_request(struct datapath *dp, const struct sender *sender,
 
     type = ntohs(rq->type);
     if (type >= ARRAY_SIZE(stats) || !stats[type].dump) {
+        dp_send_error_msg(dp, sender, OFPET_BAD_REQUEST, OFPBRC_BAD_STAT,
+                          rq, rq_len);
         VLOG_WARN_RL(&rl, "received stats request of unknown type %d", type);
         return -EINVAL;
     }
@@ -1677,21 +1679,24 @@ fwd_control_input(struct datapath *dp, const struct sender *sender,
         },
     };
 
-    const struct openflow_packet *pkt;
     struct ofp_header *oh;
 
     oh = (struct ofp_header *) msg;
     assert(oh->version == OFP_VERSION);
-    if (oh->type >= ARRAY_SIZE(packets) || ntohs(oh->length) > length)
+    if (ntohs(oh->length) > length)
         return -EINVAL;
 
-    pkt = &packets[oh->type];
-    if (!pkt->handler)
-        return -ENOSYS;
-    if (length < pkt->min_size)
-        return -EFAULT;
-
-    return pkt->handler(dp, sender, msg);
+    if (oh->type < ARRAY_SIZE(packets)) {
+        const struct openflow_packet *pkt = &packets[oh->type];
+        if (pkt->handler) {
+            if (length < pkt->min_size)
+                return -EFAULT;
+            return pkt->handler(dp, sender, msg);
+        }
+    }
+    dp_send_error_msg(dp, sender, OFPET_BAD_REQUEST, OFPBRC_BAD_TYPE,
+                      msg, length);
+    return -EINVAL;
 }
 
 /* Packet buffering. */

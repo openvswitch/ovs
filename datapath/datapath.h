@@ -96,7 +96,7 @@ int dp_send_config_reply(struct datapath *, const struct sender *);
 int dp_send_flow_expired(struct datapath *, struct sw_flow *,
 			 enum ofp_flow_expired_reason);
 int dp_send_error_msg(struct datapath *, const struct sender *, 
-			uint16_t, uint16_t, const uint8_t *, size_t);
+			uint16_t, uint16_t, const void *, size_t);
 int dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm);
 int dp_send_echo_reply(struct datapath *, const struct sender *,
 		       const struct ofp_header *);

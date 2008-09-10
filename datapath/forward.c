@@ -551,21 +551,28 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 		},
 	};
 
-	const struct openflow_packet *pkt;
 	struct ofp_header *oh;
 
 	oh = (struct ofp_header *) msg;
-	if (oh->version != OFP_VERSION || oh->type >= ARRAY_SIZE(packets)
-		|| ntohs(oh->length) > length)
+	if (oh->version != OFP_VERSION) {
+		dp_send_error_msg(chain->dp, sender, OFPET_BAD_REQUEST,
+				  OFPBRC_BAD_VERSION, msg, length);
+		return -EINVAL;
+	}
+	if (ntohs(oh->length) > length)
 		return -EINVAL;
 
-	pkt = &packets[oh->type];
-	if (!pkt->handler)
-		return -ENOSYS;
-	if (length < pkt->min_size)
-		return -EFAULT;
-
-	return pkt->handler(chain, sender, msg);
+	if (oh->type < ARRAY_SIZE(packets)) {
+		const struct openflow_packet *pkt = &packets[oh->type];
+		if (pkt->handler) {
+			if (length < pkt->min_size)
+				return -EFAULT;
+			return pkt->handler(chain, sender, msg);
+		}
+	}
+	dp_send_error_msg(chain->dp, sender, OFPET_BAD_REQUEST,
+			  OFPBRC_BAD_TYPE, msg, length);
+	return -EINVAL;
 }
 
 /* Packet buffering. */
