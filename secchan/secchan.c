@@ -109,9 +109,6 @@ struct settings {
     regex_t accept_controller_regex;  /* Controller vconns to accept. */
     const char *accept_controller_re; /* String version of regex. */
     bool update_resolv_conf;          /* Update /etc/resolv.conf? */
-
-    /* Spanning tree protocol. */
-    bool stp;                   /* Enable spanning tree protocol? */
 };
 
 struct half {
@@ -231,6 +228,7 @@ main(int argc, char *argv[])
     struct relay *controller_relay;
     struct discovery *discovery;
     struct switch_status *switch_status;
+    struct port_watcher *pw;
     int i;
     int retval;
 
@@ -288,11 +286,8 @@ main(int argc, char *argv[])
     list_push_back(&relays, &controller_relay->node);
 
     /* Set up hooks. */
-    if (s.stp) {
-        struct port_watcher *pw;
-        hooks[n_hooks++] = port_watcher_create(local_rconn, remote_rconn, &pw);
-        hooks[n_hooks++] = stp_hook_create(&s, pw, local_rconn, remote_rconn);
-    }
+    hooks[n_hooks++] = port_watcher_create(local_rconn, remote_rconn, &pw);
+    hooks[n_hooks++] = stp_hook_create(&s, pw, local_rconn, remote_rconn);
     if (s.in_band) {
         hooks[n_hooks++] = in_band_hook_create(&s, switch_status,
                                                remote_rconn);
@@ -1424,9 +1419,7 @@ fail_open_hook_create(const struct settings *s, struct switch_status *ss,
     fail_open->remote_rconn = remote_rconn;
     fail_open->lswitch = NULL;
     fail_open->boot_deadline = time_now() + s->probe_interval * 3;
-    if (s->stp) {
-        fail_open->boot_deadline += STP_EXTRA_BOOT_TIME;
-    }
+    fail_open->boot_deadline += STP_EXTRA_BOOT_TIME;
     switch_status_register_category(ss, "fail-open",
                                     fail_open_status_cb, fail_open);
     return make_hook(fail_open_local_packet_cb, NULL,
