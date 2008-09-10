@@ -186,7 +186,8 @@ static void table_hash_stats(struct sw_table *swt,
 {
 	struct sw_table_hash *th = (struct sw_table_hash *) swt;
 	stats->name = "hash";
-	stats->n_flows = th->n_flows;
+	stats->wildcards = 0;          /* No wildcards are supported. */
+	stats->n_flows   = th->n_flows;
 	stats->max_flows = th->bucket_mask + 1;
 	stats->n_matched = swt->n_matched;
 }
@@ -310,7 +311,8 @@ static void table_hash2_stats(struct sw_table *swt,
 	for (i = 0; i < 2; i++)
 		table_hash_stats(t2->subtable[i], &substats[i]);
 	stats->name = "hash2";
-	stats->n_flows = substats[0].n_flows + substats[1].n_flows;
+	stats->wildcards = 0;          /* No wildcards are supported. */
+	stats->n_flows   = substats[0].n_flows + substats[1].n_flows;
 	stats->max_flows = substats[0].max_flows + substats[1].max_flows;
 	stats->n_matched = swt->n_matched;
 }

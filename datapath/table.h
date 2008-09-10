@@ -12,7 +12,9 @@ struct datapath;
 
 /* Table statistics. */
 struct sw_table_stats {
-	const char *name;	         /* Human-readable name. */
+	const char *name;            /* Human-readable name. */
+	uint32_t wildcards;          /* Bitmap of OFPFW_* wildcards that are
+	                                supported by the table. */
 	unsigned int n_flows;        /* Number of active flows. */
 	unsigned int max_flows;      /* Flow capacity. */
 	unsigned long int n_matched; /* Number of packets that have hit. */

@@ -411,11 +411,8 @@ ofp_print_switch_features(struct ds *string, const void *oh, size_t len,
     int i;
 
     ds_put_format(string, "dp id:%"PRIx64"\n", ntohll(osf->datapath_id));
-    ds_put_format(string, "tables: exact:%d, compressed:%d, general:%d\n",
-           ntohl(osf->n_exact), 
-           ntohl(osf->n_compression), ntohl(osf->n_general));
-    ds_put_format(string, "buffers: size:%d, number:%d\n",
-           ntohl(osf->buffer_mb), ntohl(osf->n_buffers));
+    ds_put_format(string, "n_tables:%d, n_buffers:%d\n", osf->n_tables,
+            ntohl(osf->n_buffers));
     ds_put_format(string, "features: capabilities:%#x, actions:%#x\n",
            ntohl(osf->capabilities), ntohl(osf->actions));
 
@@ -807,11 +804,11 @@ ofp_table_stats_reply(struct ds *string, const void *body, size_t len,
         strncpy(name, ts->name, sizeof name);
         name[OFP_MAX_TABLE_NAME_LEN] = '\0';
 
-        ds_put_format(string, "  table %"PRIu8": ", ts->table_id);
-        ds_put_format(string, "name %-8s, ", name);
-        ds_put_format(string, "max %6"PRIu32", ", ntohl(ts->max_entries));
-        ds_put_format(string, "active %6"PRIu32", ", ntohl(ts->active_count));
-        ds_put_format(string, "matched %6"PRIu64"\n",
+        ds_put_format(string, "  %d: %-8s: ", ts->table_id, name);
+        ds_put_format(string, "wild=0x%05"PRIx32", ", ntohl(ts->wildcards));
+        ds_put_format(string, "max=%6"PRIu32", ", ntohl(ts->max_entries));
+        ds_put_format(string, "active=%6"PRIu32", ", ntohl(ts->active_count));
+        ds_put_format(string, "matched=%6"PRIu64"\n",
                       ntohll(ts->matched_count));
      }
 }

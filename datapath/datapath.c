@@ -741,15 +741,13 @@ fill_features_reply(struct datapath *dp, struct ofp_switch_features *ofr)
 	struct net_bridge_port *p;
 	int port_count = 0;
 
-	ofr->datapath_id    = cpu_to_be64(dp->id); 
+	ofr->datapath_id  = cpu_to_be64(dp->id); 
 
-	ofr->n_exact        = htonl(2 * TABLE_HASH_MAX_FLOWS);
-	ofr->n_compression  = 0;					   /* Not supported */
-	ofr->n_general      = htonl(TABLE_LINEAR_MAX_FLOWS);
-	ofr->buffer_mb      = htonl(UINT32_MAX);
-	ofr->n_buffers      = htonl(N_PKT_BUFFERS);
-	ofr->capabilities   = htonl(OFP_SUPPORTED_CAPABILITIES);
-	ofr->actions        = htonl(OFP_SUPPORTED_ACTIONS);
+	ofr->n_buffers    = htonl(N_PKT_BUFFERS);
+	ofr->n_tables     = dp->chain->n_tables;
+	ofr->capabilities = htonl(OFP_SUPPORTED_CAPABILITIES);
+	ofr->actions      = htonl(OFP_SUPPORTED_ACTIONS);
+	memset(ofr->pad, 0, sizeof ofr->pad);
 
 	list_for_each_entry_rcu (p, &dp->port_list, node) {
 		fill_port_desc(p, &ofr->ports[port_count]);
@@ -1401,6 +1399,7 @@ static int table_stats_dump(struct datapath *dp, void *state,
 		dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
 		strncpy(ots->name, stats.name, sizeof ots->name);
 		ots->table_id = i;
+		ots->wildcards = htonl(stats.wildcards);
 		memset(ots->pad, 0, sizeof ots->pad);
 		ots->max_entries = htonl(stats.max_flows);
 		ots->active_count = htonl(stats.n_flows);

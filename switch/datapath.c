@@ -672,14 +672,11 @@ dp_send_features_reply(struct datapath *dp, const struct sender *sender)
 
     ofr = make_openflow_reply(sizeof *ofr, OFPT_FEATURES_REPLY,
                                sender, &buffer);
-    ofr->datapath_id    = htonll(dp->id); 
-    ofr->n_exact        = htonl(2 * TABLE_HASH_MAX_FLOWS);
-    ofr->n_compression  = 0;         /* Not supported */
-    ofr->n_general      = htonl(TABLE_LINEAR_MAX_FLOWS);
-    ofr->buffer_mb      = htonl(UINT32_MAX);
-    ofr->n_buffers      = htonl(N_PKT_BUFFERS);
-    ofr->capabilities   = htonl(OFP_SUPPORTED_CAPABILITIES);
-    ofr->actions        = htonl(OFP_SUPPORTED_ACTIONS);
+    ofr->datapath_id  = htonll(dp->id); 
+    ofr->n_tables     = dp->chain->n_tables;
+    ofr->n_buffers    = htonl(N_PKT_BUFFERS);
+    ofr->capabilities = htonl(OFP_SUPPORTED_CAPABILITIES);
+    ofr->actions      = htonl(OFP_SUPPORTED_ACTIONS);
     LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
         struct ofp_phy_port *opp = buffer_put_uninit(buffer, sizeof *opp);
         memset(opp, 0, sizeof *opp);
@@ -1388,6 +1385,7 @@ static int table_stats_dump(struct datapath *dp, void *state,
         dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
         strncpy(ots->name, stats.name, sizeof ots->name);
         ots->table_id = i;
+        ots->wildcards = htonl(stats.wildcards);
         memset(ots->pad, 0, sizeof ots->pad);
         ots->max_entries = htonl(stats.max_flows);
         ots->active_count = htonl(stats.n_flows);

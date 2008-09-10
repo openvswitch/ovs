@@ -68,7 +68,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x89
+#define OFP_VERSION   0x90
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -222,26 +222,21 @@ struct ofp_switch_features {
     uint64_t datapath_id;   /* Datapath unique ID.  Only the lower 48-bits
                                are meaningful. */
 
-    /* Table info. */
-    uint32_t n_exact;       /* Max exact-match table entries. */
-    uint32_t n_compression; /* Max entries compressed on service port. */
-    uint32_t n_general;     /* Max entries of arbitrary form. */
-
-    /* Buffer limits.  A datapath that cannot buffer reports 0.*/
-    uint32_t buffer_mb;     /* Space for buffering packets, in MB. */
     uint32_t n_buffers;     /* Max packets buffered at once. */
+
+    uint8_t n_tables;       /* Number of tables supported by datapath. */
+    uint8_t pad[3];         /* Align to 64-bits. */
 
     /* Features. */
     uint32_t capabilities;  /* Bitmap of support "ofp_capabilities". */
     uint32_t actions;       /* Bitmap of supported "ofp_action_type"s. */
-    uint8_t pad[4];         /* Align to 64-bits. */
 
     /* Port info.*/
     struct ofp_phy_port ports[0];  /* Port definitions.  The number of ports
                                       is inferred from the length field in
                                       the header. */
 };
-OFP_ASSERT(sizeof(struct ofp_switch_features) == 48);
+OFP_ASSERT(sizeof(struct ofp_switch_features) == 32);
 
 /* What changed about the physical port */
 enum ofp_port_reason {
@@ -345,6 +340,8 @@ OFP_ASSERT(sizeof(struct ofp_packet_out) == 16);
 
 enum ofp_flow_mod_command {
     OFPFC_ADD,              /* New flow. */
+    OFPFC_MODIFY,           /* Modify all matching flows. */
+    OFPFC_MODIFY_STRICT,    /* Strictly match wildcards and priority. */
     OFPFC_DELETE,           /* Delete all matching flows. */
     OFPFC_DELETE_STRICT     /* Strictly match wildcards and priority. */
 };
@@ -578,12 +575,14 @@ OFP_ASSERT(sizeof(struct ofp_aggregate_stats_reply) == 24);
 
 /* Body of reply to OFPST_TABLE request. */
 struct ofp_table_stats {
-    uint8_t table_id;
+    uint8_t table_id;        /* Identifier of table.  Lower numbered tables 
+                                are consulted first. */
     uint8_t pad[3];          /* Align to 32-bits */
     char name[OFP_MAX_TABLE_NAME_LEN];
+    uint32_t wildcards;      /* Bitmap of OFPFW_* wildcards that are 
+                                supported by the table. */
     uint32_t max_entries;    /* Max number of entries supported */
     uint32_t active_count;   /* Number of active entries */
-    uint8_t pad2[4];         /* Align to 64 bits. */
     uint64_t matched_count;  /* Number of packets that hit table */
 };
 OFP_ASSERT(sizeof(struct ofp_table_stats) == 56);

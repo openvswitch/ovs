@@ -213,8 +213,10 @@ static void table_dummy_stats(struct sw_table *swt,
 {
 	struct sw_table_dummy *td = (struct sw_table_dummy *) swt;
 	stats->name = "dummy";
-	stats->n_flows = td->n_flows;
+	stats->wildcards = OFPFW_ALL;      /* xxx Set this appropriately */
+	stats->n_flows   = td->n_flows;
 	stats->max_flows = td->max_flows;
+	stats->n_matched = swt->n_matched;
 }
 
 
