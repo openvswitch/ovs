@@ -13,6 +13,7 @@
 /forward.c
 /forward_t.c
 /genetlink.c
+/hwtable_dummy.c
 /kernel.c
 /kthread.c
 /netlink.c
