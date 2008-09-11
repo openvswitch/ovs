@@ -296,8 +296,7 @@ new_pstream_vconn(const char *name, int fd,
     }
 
     ps = xmalloc(sizeof *ps);
-    ps->vconn.class = &pstream_vconn_class;
-    ps->vconn.connect_status = 0;
+    vconn_init(&ps->vconn, &pstream_vconn_class, 0, 0, name);
     ps->fd = fd;
     ps->accept_cb = accept_cb;
     *vconnp = &ps->vconn;
