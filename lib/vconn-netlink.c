@@ -65,7 +65,7 @@ struct netlink_vconn
 static struct netlink_vconn *
 netlink_vconn_cast(struct vconn *vconn) 
 {
-    assert(vconn->class == &netlink_vconn_class);
+    vconn_assert_class(vconn, &netlink_vconn_class);
     return CONTAINER_OF(vconn, struct netlink_vconn, vconn); 
 }
 

@@ -85,7 +85,7 @@ new_stream_vconn(const char *name, int fd, int connect_status,
 static struct stream_vconn *
 stream_vconn_cast(struct vconn *vconn)
 {
-    assert(vconn->class == &stream_vconn_class);
+    vconn_assert_class(vconn, &stream_vconn_class);
     return CONTAINER_OF(vconn, struct stream_vconn, vconn);
 }
 
@@ -269,7 +269,7 @@ static struct vconn_class pstream_vconn_class;
 static struct pstream_vconn *
 pstream_vconn_cast(struct vconn *vconn)
 {
-    assert(vconn->class == &pstream_vconn_class);
+    vconn_assert_class(vconn, &pstream_vconn_class);
     return CONTAINER_OF(vconn, struct pstream_vconn, vconn);
 }
 

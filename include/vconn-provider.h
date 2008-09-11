@@ -37,9 +37,12 @@
 /* Provider interface, which provide a virtual connection to an OpenFlow
  * device. */
 
+#include <assert.h>
 #include "vconn.h"
 
-/* Virtual connection to an OpenFlow device. */
+/* Virtual connection to an OpenFlow device.
+ *
+ * This structure should be treated as opaque by vconn implementations. */
 struct vconn {
     struct vconn_class *class;
     int connect_status;
@@ -49,6 +52,11 @@ struct vconn {
 
 void vconn_init(struct vconn *, struct vconn_class *, int connect_status,
                 uint32_t ip, const char *name);
+static inline void vconn_assert_class(const struct vconn *vconn,
+                                      const struct vconn_class *class)
+{
+    assert(vconn->class == class);
+}
 
 struct vconn_class {
     /* Prefix for connection names, e.g. "nl", "tcp". */

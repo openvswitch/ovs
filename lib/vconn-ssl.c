@@ -251,7 +251,7 @@ error:
 static struct ssl_vconn *
 ssl_vconn_cast(struct vconn *vconn)
 {
-    assert(vconn->class == &ssl_vconn_class);
+    vconn_assert_class(vconn, &ssl_vconn_class);
     return CONTAINER_OF(vconn, struct ssl_vconn, vconn);
 }
 
@@ -672,7 +672,7 @@ struct pssl_vconn
 static struct pssl_vconn *
 pssl_vconn_cast(struct vconn *vconn)
 {
-    assert(vconn->class == &pssl_vconn_class);
+    vconn_assert_class(vconn, &pssl_vconn_class);
     return CONTAINER_OF(vconn, struct pssl_vconn, vconn);
 }
 
