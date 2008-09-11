@@ -117,7 +117,7 @@ struct datapath {
     /* Remote connections. */
     struct remote *controller;  /* Connection to controller. */
     struct list remotes;        /* All connections (including controller). */
-    struct vconn *listen_vconn;
+    struct pvconn *listen_pvconn;
 
     time_t last_timeout;
 
@@ -212,7 +212,7 @@ dp_new(struct datapath **dp_, uint64_t dpid, struct rconn *rconn)
     dp->last_timeout = time_now();
     list_init(&dp->remotes);
     dp->controller = remote_create(dp, rconn);
-    dp->listen_vconn = NULL;
+    dp->listen_pvconn = NULL;
     dp->id = dpid <= UINT64_C(0xffffffffffff) ? dpid : gen_datapath_id();
     dp->chain = chain_create();
     if (!dp->chain) {
@@ -277,10 +277,10 @@ dp_add_port(struct datapath *dp, const char *name)
 }
 
 void
-dp_add_listen_vconn(struct datapath *dp, struct vconn *listen_vconn)
+dp_add_listen_pvconn(struct datapath *dp, struct pvconn *listen_pvconn)
 {
-    assert(!dp->listen_vconn);
-    dp->listen_vconn = listen_vconn;
+    assert(!dp->listen_pvconn);
+    dp->listen_pvconn = listen_pvconn;
 }
 
 void
@@ -341,12 +341,12 @@ dp_run(struct datapath *dp)
     LIST_FOR_EACH_SAFE (r, rn, struct remote, node, &dp->remotes) {
         remote_run(dp, r);
     }
-    if (dp->listen_vconn) {
+    if (dp->listen_pvconn) {
         for (;;) {
             struct vconn *new_vconn;
             int retval;
 
-            retval = vconn_accept(dp->listen_vconn, &new_vconn);
+            retval = pvconn_accept(dp->listen_pvconn, &new_vconn);
             if (retval) {
                 if (retval != EAGAIN) {
                     VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
@@ -479,8 +479,8 @@ dp_wait(struct datapath *dp)
     LIST_FOR_EACH (r, struct remote, node, &dp->remotes) {
         remote_wait(r);
     }
-    if (dp->listen_vconn) {
-        vconn_accept_wait(dp->listen_vconn);
+    if (dp->listen_pvconn) {
+        pvconn_wait(dp->listen_pvconn);
     }
 }
 

@@ -38,13 +38,14 @@
 #include <stdint.h>
 
 struct vconn;
+struct pvconn;
 struct sockaddr;
 
 int new_stream_vconn(const char *name, int fd, int connect_status,
                      uint32_t ip, struct vconn **vconnp);
-int new_pstream_vconn(const char *name, int fd,
+int new_pstream_pvconn(const char *name, int fd,
                       int (*accept_cb)(int fd, const struct sockaddr *,
                                        size_t sa_len, struct vconn **),
-                      struct vconn **vconnp);
+                      struct pvconn **pvconnp);
 
 #endif /* vconn-stream.h */

@@ -40,21 +40,18 @@
 
 struct buffer;
 struct flow;
-struct pollfd;
 struct ofp_header;
+struct pvconn;
 struct vconn;
 
-/* Client interface to vconns, which provide a virtual connection to an
- * OpenFlow device. */
-
 void vconn_usage(bool active, bool passive);
+
+/* Active vconns: virtual connections to OpenFlow devices. */
 int vconn_open(const char *name, struct vconn **);
 void vconn_close(struct vconn *);
 const char *vconn_get_name(const struct vconn *);
-bool vconn_is_passive(const struct vconn *);
 uint32_t vconn_get_ip(const struct vconn *);
 int vconn_connect(struct vconn *);
-int vconn_accept(struct vconn *, struct vconn **);
 int vconn_recv(struct vconn *, struct buffer **);
 int vconn_send(struct vconn *, struct buffer *);
 int vconn_transact(struct vconn *, struct buffer *, struct buffer **);
@@ -65,16 +62,21 @@ int vconn_recv_block(struct vconn *, struct buffer **);
 
 enum vconn_wait_type {
     WAIT_CONNECT,
-    WAIT_ACCEPT,
     WAIT_RECV,
     WAIT_SEND
 };
 void vconn_wait(struct vconn *, enum vconn_wait_type);
 void vconn_connect_wait(struct vconn *);
-void vconn_accept_wait(struct vconn *);
 void vconn_recv_wait(struct vconn *);
 void vconn_send_wait(struct vconn *);
 
+/* Passive vconns: virtual listeners for incoming OpenFlow connections. */
+int pvconn_open(const char *name, struct pvconn **);
+void pvconn_close(struct pvconn *);
+int pvconn_accept(struct pvconn *, struct vconn **);
+void pvconn_wait(struct pvconn *);
+
+/* OpenFlow protocol utility functions. */
 void *make_openflow(size_t openflow_len, uint8_t type, struct buffer **);
 void *make_openflow_xid(size_t openflow_len, uint8_t type,
                         uint32_t xid, struct buffer **);
@@ -90,17 +92,5 @@ struct buffer *make_unbuffered_packet_out(const struct buffer *packet,
                                           uint16_t in_port, uint16_t out_port);
 struct buffer *make_echo_request(void);
 struct buffer *make_echo_reply(const struct ofp_header *rq);
-
-extern struct vconn_class tcp_vconn_class;
-extern struct vconn_class ptcp_vconn_class;
-extern struct vconn_class unix_vconn_class;
-extern struct vconn_class punix_vconn_class;
-#ifdef HAVE_OPENSSL
-extern struct vconn_class ssl_vconn_class;
-extern struct vconn_class pssl_vconn_class;
-#endif
-#ifdef HAVE_NETLINK
-extern struct vconn_class netlink_vconn_class;
-#endif
 
 #endif /* vconn.h */

@@ -53,16 +53,21 @@
 
 static struct vconn_class *vconn_classes[] = {
     &tcp_vconn_class,
-    &ptcp_vconn_class,
+    &unix_vconn_class,
 #ifdef HAVE_NETLINK
     &netlink_vconn_class,
 #endif
 #ifdef HAVE_OPENSSL
     &ssl_vconn_class,
-    &pssl_vconn_class,
 #endif
-    &unix_vconn_class,
-    &punix_vconn_class,
+};
+
+static struct pvconn_class *pvconn_classes[] = {
+    &ptcp_pvconn_class,
+    &punix_pvconn_class,
+#ifdef HAVE_OPENSSL
+    &pssl_pvconn_class,
+#endif
 };
 
 /* High rate limit because most of the rate-limiting here is individual
@@ -81,12 +86,23 @@ check_vconn_classes(void)
         struct vconn_class *class = vconn_classes[i];
         assert(class->name != NULL);
         assert(class->open != NULL);
-        if (class->close || class->accept || class->recv || class->send
-            || class->wait) {
+        if (class->close || class->recv || class->send || class->wait) {
             assert(class->close != NULL);
-            assert(class->accept
-                   ? !class->recv && !class->send
-                   :  class->recv && class->send);
+            assert(class->recv != NULL);
+            assert(class->send != NULL);
+            assert(class->wait != NULL);
+        } else {
+            /* This class delegates to another one. */
+        }
+    }
+
+    for (i = 0; i < ARRAY_SIZE(pvconn_classes); i++) {
+        struct pvconn_class *class = pvconn_classes[i];
+        assert(class->name != NULL);
+        assert(class->listen != NULL);
+        if (class->close || class->accept || class->wait) {
+            assert(class->close != NULL);
+            assert(class->accept != NULL);
             assert(class->wait != NULL);
         } else {
             /* This class delegates to another one. */
@@ -143,8 +159,8 @@ vconn_usage(bool active, bool passive)
 }
 
 /* Attempts to connect to an OpenFlow device.  'name' is a connection name in
- * the form "TYPE:ARGS", where TYPE is the vconn class's name and ARGS are
- * vconn class-specific.
+ * the form "TYPE:ARGS", where TYPE is an active vconn class's name and ARGS
+ * are vconn class-specific.
  *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
  * stores a pointer to the new connection in '*vconnp', otherwise a null
@@ -160,7 +176,6 @@ vconn_open(const char *name, struct vconn **vconnp)
     *vconnp = NULL;
     prefix_len = strcspn(name, ":");
     if (prefix_len == strlen(name)) {
-        error(0, "`%s' not correct format for peer name", name);
         return EAFNOSUPPORT;
     }
     for (i = 0; i < ARRAY_SIZE(vconn_classes); i++) {
@@ -174,13 +189,11 @@ vconn_open(const char *name, struct vconn **vconnp)
             if (!retval) {
                 assert(vconn->connect_status != EAGAIN
                        || vconn->class->connect);
-                vconn->name = xstrdup(name);
                 *vconnp = vconn;
             }
             return retval;
         }
     }
-    error(0, "unknown peer type `%.*s'", (int) prefix_len, name);
     return EAFNOSUPPORT;
 }
 
@@ -224,16 +237,6 @@ vconn_get_name(const struct vconn *vconn)
     return vconn->name;
 }
 
-/* Returns true if 'vconn' is a passive vconn, that is, its purpose is to
- * wait for connections to arrive, not to transfer data.  Returns false if
- * 'vconn' is an active vconn, that is, its purpose is to transfer data, not
- * to wait for new connections to arrive. */
-bool
-vconn_is_passive(const struct vconn *vconn)
-{
-    return vconn->class->accept != NULL;
-}
-
 /* Returns the IP address of the peer, or 0 if the peer is not connected over
  * an IP-based protocol or if its IP address is not yet known. */
 uint32_t
@@ -254,28 +257,6 @@ vconn_connect(struct vconn *vconn)
         assert(vconn->connect_status != EINPROGRESS);
     }
     return vconn->connect_status;
-}
-
-/* Tries to accept a new connection on 'vconn', which must be a passive vconn.
- * If successful, stores the new connection in '*new_vconn' and returns 0.
- * Otherwise, returns a positive errno value.
- *
- * vconn_accept will not block waiting for a connection.  If no connection is
- * ready to be accepted, it returns EAGAIN immediately. */
-int
-vconn_accept(struct vconn *vconn, struct vconn **new_vconn)
-{
-    int retval;
-
-    retval = (vconn->class->accept)(vconn, new_vconn);
-
-    if (retval) {
-        *new_vconn = NULL;
-    } else {
-        assert((*new_vconn)->connect_status != EAGAIN
-               || (*new_vconn)->class->connect);
-    }
-    return retval;
 }
 
 /* Tries to receive an OpenFlow message from 'vconn', which must be an active
@@ -418,9 +399,7 @@ vconn_wait(struct vconn *vconn, enum vconn_wait_type wait)
 {
     int connect_status;
 
-    assert(vconn_is_passive(vconn)
-           ? wait == WAIT_ACCEPT || wait == WAIT_CONNECT
-           : wait == WAIT_CONNECT || wait == WAIT_RECV || wait == WAIT_SEND);
+    assert(wait == WAIT_CONNECT || wait == WAIT_RECV || wait == WAIT_SEND);
 
     connect_status = vconn_connect(vconn);
     if (connect_status) {
@@ -442,12 +421,6 @@ vconn_connect_wait(struct vconn *vconn)
 }
 
 void
-vconn_accept_wait(struct vconn *vconn)
-{
-    vconn_wait(vconn, WAIT_ACCEPT);
-}
-
-void
 vconn_recv_wait(struct vconn *vconn)
 {
     vconn_wait(vconn, WAIT_RECV);
@@ -457,6 +430,78 @@ void
 vconn_send_wait(struct vconn *vconn)
 {
     vconn_wait(vconn, WAIT_SEND);
+}
+
+/* Attempts to start listening for OpenFlow connections.  'name' is a
+ * connection name in the form "TYPE:ARGS", where TYPE is an passive vconn
+ * class's name and ARGS are vconn class-specific.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  If successful,
+ * stores a pointer to the new connection in '*pvconnp', otherwise a null
+ * pointer.  */
+int
+pvconn_open(const char *name, struct pvconn **pvconnp)
+{
+    size_t prefix_len;
+    size_t i;
+
+    check_vconn_classes();
+
+    *pvconnp = NULL;
+    prefix_len = strcspn(name, ":");
+    if (prefix_len == strlen(name)) {
+        return EAFNOSUPPORT;
+    }
+    for (i = 0; i < ARRAY_SIZE(pvconn_classes); i++) {
+        struct pvconn_class *class = pvconn_classes[i];
+        if (strlen(class->name) == prefix_len
+            && !memcmp(class->name, name, prefix_len)) {
+            char *suffix_copy = xstrdup(name + prefix_len + 1);
+            int retval = class->listen(name, suffix_copy, pvconnp);
+            free(suffix_copy);
+            if (retval) {
+                *pvconnp = NULL;
+            }
+            return retval;
+        }
+    }
+    return EAFNOSUPPORT;
+}
+
+/* Closes 'pvconn'. */
+void
+pvconn_close(struct pvconn *pvconn)
+{
+    if (pvconn != NULL) {
+        char *name = pvconn->name;
+        (pvconn->class->close)(pvconn);
+        free(name);
+    }
+}
+
+/* Tries to accept a new connection on 'pvconn'.  If successful, stores the new
+ * connection in '*new_vconn' and returns 0.  Otherwise, returns a positive
+ * errno value.
+ *
+ * pvconn_accept() will not block waiting for a connection.  If no connection
+ * is ready to be accepted, it returns EAGAIN immediately. */
+int
+pvconn_accept(struct pvconn *pvconn, struct vconn **new_vconn)
+{
+    int retval = (pvconn->class->accept)(pvconn, new_vconn);
+    if (retval) {
+        *new_vconn = NULL;
+    } else {
+        assert((*new_vconn)->connect_status == 0
+               || (*new_vconn)->class->connect);
+    }
+    return retval;
+}
+
+void
+pvconn_wait(struct pvconn *pvconn)
+{
+    (pvconn->class->wait)(pvconn);
 }
 
 /* Allocates and returns the first byte of a buffer 'openflow_len' bytes long,
@@ -623,3 +668,10 @@ vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
     vconn->name = xstrdup(name);
 }
 
+void
+pvconn_init(struct pvconn *pvconn, struct pvconn_class *class,
+            const char *name)
+{
+    pvconn->class = class;
+    pvconn->name = xstrdup(name);
+}

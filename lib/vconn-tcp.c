@@ -137,7 +137,7 @@ static int ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
                        struct vconn **vconnp);
 
 static int
-ptcp_open(const char *name, char *suffix, struct vconn **vconnp)
+ptcp_open(const char *name, char *suffix, struct pvconn **pvconnp)
 {
     struct sockaddr_in sin;
     int retval;
@@ -167,7 +167,7 @@ ptcp_open(const char *name, char *suffix, struct vconn **vconnp)
         return error;
     }
 
-    return new_pstream_vconn("ptcp", fd, ptcp_accept, vconnp);
+    return new_pstream_pvconn("ptcp", fd, ptcp_accept, pvconnp);
 }
 
 static int
@@ -188,8 +188,8 @@ ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
     return new_tcp_vconn(name, fd, 0, sin, vconnp);
 }
 
-struct vconn_class ptcp_vconn_class = {
-    .name = "ptcp",
-    .open = ptcp_open,
+struct pvconn_class ptcp_pvconn_class = {
+    "ptcp",
+    ptcp_open,
 };
 

@@ -84,7 +84,7 @@ int
 main(int argc, char *argv[])
 {
     struct switch_ switches[MAX_SWITCHES];
-    struct vconn *listeners[MAX_LISTENERS];
+    struct pvconn *listeners[MAX_LISTENERS];
     int n_switches, n_listeners;
     int retval;
     int i;
@@ -112,22 +112,23 @@ main(int argc, char *argv[])
         int retval;
 
         retval = vconn_open(name, &vconn);
-        if (retval) {
-            VLOG_ERR("%s: connect: %s", name, strerror(retval));
-            continue;
-        }
-
-        if (vconn_is_passive(vconn)) {
-            if (n_listeners >= MAX_LISTENERS) {
-                fatal(0, "max %d passive connections", n_listeners);
-            }
-            listeners[n_listeners++] = vconn;
-        } else {
+        if (!retval) {
             if (n_switches >= MAX_SWITCHES) {
                 fatal(0, "max %d switch connections", n_switches);
             }
             new_switch(&switches[n_switches++], vconn, name);
+            continue;
+        } else if (retval == EAFNOSUPPORT) {
+            struct pvconn *pvconn;
+            retval = pvconn_open(name, &pvconn);
+            if (!retval) {
+                if (n_listeners >= MAX_LISTENERS) {
+                    fatal(0, "max %d passive connections", n_listeners);
+                }
+                listeners[n_listeners++] = pvconn;
+            }
         }
+        VLOG_ERR("%s: connect: %s", name, strerror(retval));
     }
     if (n_switches == 0 && n_listeners == 0) {
         fatal(0, "no active or passive switch connections");
@@ -145,14 +146,14 @@ main(int argc, char *argv[])
             struct vconn *new_vconn;
             int retval;
 
-            retval = vconn_accept(listeners[i], &new_vconn);
+            retval = pvconn_accept(listeners[i], &new_vconn);
             if (!retval || retval == EAGAIN) {
                 if (!retval) {
                     new_switch(&switches[n_switches++], new_vconn, "tcp");
                 }
                 i++;
             } else {
-                vconn_close(listeners[i]);
+                pvconn_close(listeners[i]);
                 listeners[i] = listeners[--n_listeners];
             }
         }
@@ -183,7 +184,7 @@ main(int argc, char *argv[])
         /* Wait for something to happen. */
         if (n_switches < MAX_SWITCHES) {
             for (i = 0; i < n_listeners; i++) {
-                vconn_accept_wait(listeners[i]);
+                pvconn_wait(listeners[i]);
             }
         }
         for (i = 0; i < n_switches; i++) {

@@ -68,7 +68,7 @@ char serial_num[SERIAL_NUM_LEN] = "None";
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
-static const char *listen_vconn_name;
+static const char *listen_pvconn_name;
 static struct datapath *dp;
 static uint64_t dpid = UINT64_MAX;
 static char *port_list;
@@ -102,18 +102,15 @@ main(int argc, char *argv[])
         fatal(0, "no support for %s vconn", argv[optind]);
     }
     error = dp_new(&dp, dpid, rconn);
-    if (listen_vconn_name) {
-        struct vconn *listen_vconn;
+    if (listen_pvconn_name) {
+        struct pvconn *listen_pvconn;
         int retval;
-        
-        retval = vconn_open(listen_vconn_name, &listen_vconn);
+
+        retval = pvconn_open(listen_pvconn_name, &listen_pvconn);
         if (retval && retval != EAGAIN) {
-            fatal(retval, "opening %s", listen_vconn_name);
+            fatal(retval, "opening %s", listen_pvconn_name);
         }
-        if (!vconn_is_passive(listen_vconn)) {
-            fatal(0, "%s is not a passive vconn", listen_vconn_name);
-        }
-        dp_add_listen_vconn(dp, listen_vconn);
+        dp_add_listen_pvconn(dp, listen_pvconn);
     }
     if (error) {
         fatal(error, "could not create datapath");
@@ -267,10 +264,10 @@ parse_options(int argc, char *argv[])
             break;
 
         case 'l':
-            if (listen_vconn_name) {
+            if (listen_pvconn_name) {
                 fatal(0, "-l or --listen may be only specified once");
             }
-            listen_vconn_name = optarg;
+            listen_pvconn_name = optarg;
             break;
 
         VCONN_SSL_OPTION_HANDLERS

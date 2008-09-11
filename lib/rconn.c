@@ -311,13 +311,8 @@ run_CONNECTING(struct rconn *rc)
     if (!retval) {
         VLOG_WARN("%s: connected", rc->name);
         rc->n_successful_connections++;
-        if (vconn_is_passive(rc->vconn)) {
-            error(0, "%s: passive vconn not supported", rc->name);
-            state_transition(rc, S_VOID);
-        } else {
-            state_transition(rc, S_ACTIVE);
-            rc->last_connected = rc->state_entered;
-        }
+        state_transition(rc, S_ACTIVE);
+        rc->last_connected = rc->state_entered;
     } else if (retval != EAGAIN) {
         VLOG_WARN("%s: connection failed (%s)", rc->name, strerror(retval));
         disconnect(rc, retval);

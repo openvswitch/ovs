@@ -663,24 +663,26 @@ struct vconn_class ssl_vconn_class = {
 
 /* Passive SSL. */
 
-struct pssl_vconn
+struct pssl_pvconn
 {
-    struct vconn vconn;
+    struct pvconn pvconn;
     int fd;
 };
 
-static struct pssl_vconn *
-pssl_vconn_cast(struct vconn *vconn)
+struct pvconn_class pssl_pvconn_class;
+
+static struct pssl_pvconn *
+pssl_pvconn_cast(struct pvconn *pvconn)
 {
-    vconn_assert_class(vconn, &pssl_vconn_class);
-    return CONTAINER_OF(vconn, struct pssl_vconn, vconn);
+    pvconn_assert_class(pvconn, &pssl_pvconn_class);
+    return CONTAINER_OF(pvconn, struct pssl_pvconn, pvconn);
 }
 
 static int
-pssl_open(const char *name, char *suffix, struct vconn **vconnp)
+pssl_open(const char *name, char *suffix, struct pvconn **pvconnp)
 {
     struct sockaddr_in sin;
-    struct pssl_vconn *pssl;
+    struct pssl_pvconn *pssl;
     int retval;
     int fd;
     unsigned int yes = 1;
@@ -731,24 +733,24 @@ pssl_open(const char *name, char *suffix, struct vconn **vconnp)
     }
 
     pssl = xmalloc(sizeof *pssl);
-    vconn_init(&pssl->vconn, &pssl_vconn_class, 0, 0, name);
+    pvconn_init(&pssl->pvconn, &pssl_pvconn_class, name);
     pssl->fd = fd;
-    *vconnp = &pssl->vconn;
+    *pvconnp = &pssl->pvconn;
     return 0;
 }
 
 static void
-pssl_close(struct vconn *vconn)
+pssl_close(struct pvconn *pvconn)
 {
-    struct pssl_vconn *pssl = pssl_vconn_cast(vconn);
+    struct pssl_pvconn *pssl = pssl_pvconn_cast(pvconn);
     close(pssl->fd);
     free(pssl);
 }
 
 static int
-pssl_accept(struct vconn *vconn, struct vconn **new_vconnp)
+pssl_accept(struct pvconn *pvconn, struct vconn **new_vconnp)
 {
-    struct pssl_vconn *pssl = pssl_vconn_cast(vconn);
+    struct pssl_pvconn *pssl = pssl_pvconn_cast(pvconn);
     struct sockaddr_in sin;
     socklen_t sin_len = sizeof sin;
     char name[128];
@@ -779,19 +781,18 @@ pssl_accept(struct vconn *vconn, struct vconn **new_vconnp)
 }
 
 static void
-pssl_wait(struct vconn *vconn, enum vconn_wait_type wait)
+pssl_wait(struct pvconn *pvconn)
 {
-    struct pssl_vconn *pssl = pssl_vconn_cast(vconn);
-    assert(wait == WAIT_ACCEPT);
+    struct pssl_pvconn *pssl = pssl_pvconn_cast(pvconn);
     poll_fd_wait(pssl->fd, POLLIN);
 }
 
-struct vconn_class pssl_vconn_class = {
-    .name = "pssl",
-    .open = pssl_open,
-    .close = pssl_close,
-    .accept = pssl_accept,
-    .wait = pssl_wait,
+struct pvconn_class pssl_pvconn_class = {
+    "pssl",
+    pssl_open,
+    pssl_close,
+    pssl_accept,
+    pssl_wait,
 };
 
 /*

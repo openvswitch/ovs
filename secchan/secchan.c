@@ -140,12 +140,12 @@ static struct vlog_rate_limit vrl = VLOG_RATE_LIMIT_INIT(60, 60);
 static void parse_options(int argc, char *argv[], struct settings *);
 static void usage(void) NO_RETURN;
 
-static struct vconn *open_passive_vconn(const char *name);
-static struct vconn *accept_vconn(struct vconn *vconn);
+static struct pvconn *open_passive_vconn(const char *name);
+static struct vconn *accept_vconn(struct pvconn *pvconn);
 
 static struct relay *relay_create(struct rconn *local, struct rconn *remote,
                                   bool is_mgmt_conn);
-static struct relay *relay_accept(const struct settings *, struct vconn *);
+static struct relay *relay_accept(const struct settings *, struct pvconn *);
 static void relay_run(struct relay *, const struct hook[], size_t n_hooks);
 static void relay_wait(struct relay *);
 static void relay_destroy(struct relay *);
@@ -220,9 +220,9 @@ main(int argc, char *argv[])
     struct hook hooks[8];
     size_t n_hooks = 0;
 
-    struct vconn *monitor;
+    struct pvconn *monitor;
 
-    struct vconn *listeners[MAX_MGMT];
+    struct pvconn *listeners[MAX_MGMT];
     size_t n_listeners;
 
     struct rconn *local_rconn, *remote_rconn;
@@ -350,10 +350,10 @@ main(int argc, char *argv[])
             relay_wait(r);
         }
         for (i = 0; i < n_listeners; i++) {
-            vconn_accept_wait(listeners[i]);
+            pvconn_wait(listeners[i]);
         }
         if (monitor) {
-            vconn_accept_wait(monitor);
+            pvconn_wait(monitor);
         }
         for (i = 0; i < n_hooks; i++) {
             if (hooks[i].wait_cb) {
@@ -369,29 +369,26 @@ main(int argc, char *argv[])
     return 0;
 }
 
-static struct vconn *
-open_passive_vconn(const char *name) 
+static struct pvconn *
+open_passive_vconn(const char *name)
 {
-    struct vconn *vconn;
+    struct pvconn *pvconn;
     int retval;
 
-    retval = vconn_open(name, &vconn);
+    retval = pvconn_open(name, &pvconn);
     if (retval && retval != EAGAIN) {
         fatal(retval, "opening %s", name);
     }
-    if (!vconn_is_passive(vconn)) {
-        fatal(0, "%s is not a passive vconn", name);
-    }
-    return vconn;
+    return pvconn;
 }
 
 static struct vconn *
-accept_vconn(struct vconn *vconn) 
+accept_vconn(struct pvconn *pvconn)
 {
     struct vconn *new;
     int retval;
 
-    retval = vconn_accept(vconn, &new);
+    retval = pvconn_accept(pvconn, &new);
     if (retval && retval != EAGAIN) {
         VLOG_WARN_RL(&vrl, "accept failed (%s)", strerror(retval));
     }
@@ -448,14 +445,14 @@ get_ofp_packet_eth_header(struct relay *r, struct ofp_packet_in **opip,
 /* OpenFlow message relaying. */
 
 static struct relay *
-relay_accept(const struct settings *s, struct vconn *listen_vconn)
+relay_accept(const struct settings *s, struct pvconn *pvconn)
 {
     struct vconn *new_remote, *new_local;
     char *nl_name_without_subscription;
     struct rconn *r1, *r2;
     int retval;
 
-    new_remote = accept_vconn(listen_vconn);
+    new_remote = accept_vconn(pvconn);
     if (!new_remote) {
         return NULL;
     }

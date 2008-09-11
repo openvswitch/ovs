@@ -92,7 +92,7 @@ static int punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
                         struct vconn **vconnp);
 
 static int
-punix_open(const char *name, char *suffix, struct vconn **vconnp)
+punix_open(const char *name, char *suffix, struct pvconn **pvconnp)
 {
     int fd;
 
@@ -102,7 +102,7 @@ punix_open(const char *name, char *suffix, struct vconn **vconnp)
         return errno;
     }
 
-    return new_pstream_vconn("punix", fd, punix_accept, vconnp);
+    return new_pstream_pvconn("punix", fd, punix_accept, pvconnp);
 }
 
 static int
@@ -122,8 +122,8 @@ punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
     return new_stream_vconn(name, fd, 0, 0, vconnp);
 }
 
-struct vconn_class punix_vconn_class = {
-    .name = "punix",
-    .open = punix_open,
+struct pvconn_class punix_pvconn_class = {
+    "punix",
+    punix_open,
 };
 

@@ -256,30 +256,30 @@ static struct vconn_class stream_vconn_class = {
 
 /* Passive stream socket vconn. */
 
-struct pstream_vconn
+struct pstream_pvconn
 {
-    struct vconn vconn;
+    struct pvconn pvconn;
     int fd;
     int (*accept_cb)(int fd, const struct sockaddr *, size_t sa_len,
                      struct vconn **);
 };
 
-static struct vconn_class pstream_vconn_class;
+static struct pvconn_class pstream_pvconn_class;
 
-static struct pstream_vconn *
-pstream_vconn_cast(struct vconn *vconn)
+static struct pstream_pvconn *
+pstream_pvconn_cast(struct pvconn *pvconn)
 {
-    vconn_assert_class(vconn, &pstream_vconn_class);
-    return CONTAINER_OF(vconn, struct pstream_vconn, vconn);
+    pvconn_assert_class(pvconn, &pstream_pvconn_class);
+    return CONTAINER_OF(pvconn, struct pstream_pvconn, pvconn);
 }
 
 int
-new_pstream_vconn(const char *name, int fd,
+new_pstream_pvconn(const char *name, int fd,
                   int (*accept_cb)(int fd, const struct sockaddr *,
                                    size_t sa_len, struct vconn **),
-                  struct vconn **vconnp)
+                  struct pvconn **pvconnp)
 {
-    struct pstream_vconn *ps;
+    struct pstream_pvconn *ps;
     int retval;
 
     retval = set_nonblocking(fd);
@@ -296,25 +296,25 @@ new_pstream_vconn(const char *name, int fd,
     }
 
     ps = xmalloc(sizeof *ps);
-    vconn_init(&ps->vconn, &pstream_vconn_class, 0, 0, name);
+    pvconn_init(&ps->pvconn, &pstream_pvconn_class, name);
     ps->fd = fd;
     ps->accept_cb = accept_cb;
-    *vconnp = &ps->vconn;
+    *pvconnp = &ps->pvconn;
     return 0;
 }
 
 static void
-pstream_close(struct vconn *vconn)
+pstream_close(struct pvconn *pvconn)
 {
-    struct pstream_vconn *ps = pstream_vconn_cast(vconn);
+    struct pstream_pvconn *ps = pstream_pvconn_cast(pvconn);
     close(ps->fd);
     free(ps);
 }
 
 static int
-pstream_accept(struct vconn *vconn, struct vconn **new_vconnp)
+pstream_accept(struct pvconn *pvconn, struct vconn **new_vconnp)
 {
-    struct pstream_vconn *ps = pstream_vconn_cast(vconn);
+    struct pstream_pvconn *ps = pstream_pvconn_cast(pvconn);
     struct sockaddr_storage ss;
     socklen_t ss_len = sizeof ss;
     int new_fd;
@@ -340,16 +340,16 @@ pstream_accept(struct vconn *vconn, struct vconn **new_vconnp)
 }
 
 static void
-pstream_wait(struct vconn *vconn, enum vconn_wait_type wait)
+pstream_wait(struct pvconn *pvconn)
 {
-    struct pstream_vconn *ps = pstream_vconn_cast(vconn);
-    assert(wait == WAIT_ACCEPT);
+    struct pstream_pvconn *ps = pstream_pvconn_cast(pvconn);
     poll_fd_wait(ps->fd, POLLIN);
 }
 
-static struct vconn_class pstream_vconn_class = {
-    .name = "pstream",
-    .close = pstream_close,
-    .accept = pstream_accept,
-    .wait = pstream_wait
+static struct pvconn_class pstream_pvconn_class = {
+    "pstream",
+    NULL,
+    pstream_close,
+    pstream_accept,
+    pstream_wait
 };
