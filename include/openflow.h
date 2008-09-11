@@ -60,11 +60,6 @@
 #define OFP_PACKED              /* SWIG doesn't understand __attribute. */
 #endif
 
-/* Maximum length of a OpenFlow packet. */
-#define OFP_MAXLEN (sizeof(struct ofp_switch_features) \
-        + (sizeof(struct ofp_phy_port) * OFPP_MAX) + 200)
-
-
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */

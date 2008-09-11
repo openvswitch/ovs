@@ -111,7 +111,7 @@ static const struct nl_policy openflow_policy[] = {
     [DP_GENL_A_DP_IDX] = { .type = NL_A_U32 },
     [DP_GENL_A_OPENFLOW] = { .type = NL_A_UNSPEC,
                               .min_len = sizeof(struct ofp_header),
-                              .max_len = OFP_MAXLEN },
+                              .max_len = 65535 },
 };
 
 /* Tries to receive an openflow message from the kernel on 'sock'.  If
