@@ -48,6 +48,11 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 		if (f->priority == flow->priority
 				&& f->key.wildcards == flow->key.wildcards
 				&& flow_matches_2wild(&f->key, &flow->key)) {
+			/* Keep stats from the original flow */
+			flow->init_time = f->init_time;
+			flow->packet_count = f->packet_count;
+			flow->byte_count = f->byte_count;
+
 			flow->serial = f->serial;
 			list_replace_rcu(&f->node, &flow->node);
 			list_replace_rcu(&f->iter_node, &flow->iter_node);

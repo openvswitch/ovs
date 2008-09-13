@@ -60,6 +60,11 @@ static int table_hash_insert(struct sw_table *swt, struct sw_flow *flow)
 	} else {
 		struct sw_flow *old_flow = *bucket;
 		if (flow_keys_equal(&old_flow->key, &flow->key)) {
+			/* Keep stats from the original flow */
+			flow->init_time = old_flow->init_time;
+			flow->packet_count = old_flow->packet_count;
+			flow->byte_count = old_flow->byte_count;
+
 			rcu_assign_pointer(*bucket, flow);
 			flow_deferred_free(old_flow);
 			retval = 1;

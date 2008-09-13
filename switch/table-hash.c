@@ -81,6 +81,12 @@ static int table_hash_insert(struct sw_table *swt, struct sw_flow *flow)
     } else {
         struct sw_flow *old_flow = *bucket;
         if (!flow_compare(&old_flow->key.flow, &flow->key.flow)) {
+            /* Keep stats from the original flow */
+            flow->used = old_flow->used;
+            flow->created = old_flow->created;
+            flow->packet_count = old_flow->packet_count;
+            flow->byte_count = old_flow->byte_count;
+
             *bucket = flow;
             flow_free(old_flow);
             retval = 1;
