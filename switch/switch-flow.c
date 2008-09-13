@@ -191,7 +191,9 @@ flow_free(struct sw_flow *flow)
     if (!flow) {
         return; 
     }
-    free(flow->actions);
+    if (flow->actions) {
+        free(flow->actions);
+    }
     free(flow);
 }
 

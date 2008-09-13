@@ -187,7 +187,8 @@ void flow_free(struct sw_flow *flow)
 {
 	if (unlikely(!flow))
 		return;
-	kfree(flow->actions);
+	if (flow->actions)
+		kfree(flow->actions);
 	kmem_cache_free(flow_cache, flow);
 }
 EXPORT_SYMBOL(flow_free);
