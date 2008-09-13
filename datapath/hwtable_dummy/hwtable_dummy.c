@@ -105,6 +105,7 @@ static int do_delete(struct sw_table *swt, struct sw_flow *flow)
 	 */
 	list_del_rcu(&flow->node);
 	list_del_rcu(&flow->iter_node);
+	flow_deferred_free(flow);
 	return 1;
 }
 
@@ -190,12 +191,12 @@ static int table_dummy_iterate(struct sw_table *swt,
 			       int (*callback)(struct sw_flow *, void *),
 			       void *private)
 {
-	struct sw_table_dummy *tl = (struct sw_table_dummy *) swt;
+	struct sw_table_dummy *td = (struct sw_table_dummy *) swt;
 	struct sw_flow *flow;
 	unsigned long start;
 
 	start = ~position->private[0];
-	list_for_each_entry (flow, &tl->iter_flows, iter_node) {
+	list_for_each_entry (flow, &td->iter_flows, iter_node) {
 		if (flow->serial <= start && flow_matches_2wild(key,
 								&flow->key)) {
 			int error = callback(flow, private);
