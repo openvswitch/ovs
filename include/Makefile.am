@@ -17,6 +17,7 @@ noinst_HEADERS = \
 	netdev.h \
 	netlink-protocol.h \
 	netlink.h \
+	nicira-ext.h \
 	ofpbuf.h \
 	ofp-print.h \
 	openflow.h \
@@ -33,6 +34,7 @@ noinst_HEADERS = \
 	stp.h \
 	util.h \
 	vconn.h \
+	vconn-provider.h \
 	vconn-ssl.h \
 	vconn-stream.h \
 	vlog-socket.h \
