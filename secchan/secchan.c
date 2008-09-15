@@ -727,6 +727,31 @@ port_watcher_local_packet_cb(struct relay *r, void *pw_)
     return false;
 }
 
+static bool
+port_watcher_remote_packet_cb(struct relay *r, void *pw_)
+{
+    struct port_watcher *pw = pw_;
+    struct buffer *msg = r->halves[HALF_REMOTE].rxbuf;
+    struct ofp_header *oh = msg->data;
+
+    if (oh->type == OFPT_PORT_MOD
+        && msg->size >= sizeof(struct ofp_port_mod)) {
+        struct ofp_port_mod *opm = msg->data;
+        uint16_t port_no = ntohs(opm->desc.port_no);
+        int idx = port_no_to_pw_idx(port_no);
+        if (idx >= 0) {
+            struct ofp_phy_port *pw_opp = &pw->ports[idx];
+            if (pw_opp->port_no != htons(OFPP_NONE)) {
+                struct ofp_phy_port old = *pw_opp;
+                pw_opp->flags = ((pw_opp->flags & ~opm->mask)
+                                 | (opm->desc.flags & opm->mask));
+                call_pw_callbacks(pw, port_no, &old, pw_opp);
+            }
+        }
+    }
+    return false;
+}
+
 static void
 port_watcher_periodic_cb(void *pw_)
 {
@@ -844,7 +869,7 @@ port_watcher_set_flags(struct port_watcher *pw,
     old = *p;
 
     /* Update our idea of the flags. */
-    p->flags = ntohl(flags);
+    p->flags = htonl((ntohl(p->flags) & ~mask) | (flags & mask));
     call_pw_callbacks(pw, port_no, &old, p);
 
     /* Change the flags in the datapath. */
@@ -881,7 +906,8 @@ port_watcher_create(struct rconn *local_rconn, struct rconn *remote_rconn,
         pw->ports[i].port_no = htons(OFPP_NONE);
     }
     port_watcher_register_callback(pw, log_port_status, NULL);
-    return make_hook(port_watcher_local_packet_cb, NULL,
+    return make_hook(port_watcher_local_packet_cb,
+                     port_watcher_remote_packet_cb,
                      port_watcher_periodic_cb, NULL, pw);
 }
 
