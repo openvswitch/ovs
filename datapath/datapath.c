@@ -1577,7 +1577,8 @@ dp_genl_openflow_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
 			return -EINVAL;
 
 		rq = nla_data(va);
-		sender.xid = type = ntohs(rq->type);
+		sender.xid = rq->header.xid;
+		type = ntohs(rq->type);
 		if (rq->header.version != OFP_VERSION) {
 			dp_send_error_msg(dp, &sender, OFPET_BAD_REQUEST,
 					  OFPBRC_BAD_VERSION, rq, len);
