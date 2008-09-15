@@ -100,6 +100,8 @@ int dp_send_error_msg(struct datapath *, const struct sender *,
 int dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm);
 int dp_send_echo_reply(struct datapath *, const struct sender *,
 		       const struct ofp_header *);
+int dp_send_hello(struct datapath *, const struct sender *,
+		  const struct ofp_header *);
 
 /* Should hold at least RCU read lock when calling */
 struct datapath *dp_get(int dp_idx);

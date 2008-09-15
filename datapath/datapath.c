@@ -798,6 +798,29 @@ dp_send_config_reply(struct datapath *dp, const struct sender *sender)
 	return send_openflow_skb(skb, sender);
 }
 
+int
+dp_send_hello(struct datapath *dp, const struct sender *sender,
+	      const struct ofp_header *request)
+{
+	if (request->version < OFP_VERSION) {
+		char err[64];
+		sprintf(err, "Only version 0x%02x supported", OFP_VERSION);
+		dp_send_error_msg(dp, sender, OFPET_HELLO_FAILED,
+				  OFPHFC_INCOMPATIBLE, err, strlen(err));
+		return -EINVAL;
+	} else {
+		struct sk_buff *skb;
+		struct ofp_header *reply;
+
+		reply = alloc_openflow_skb(dp, sizeof *reply,
+					   OFPT_HELLO, sender, &skb);
+		if (!reply)
+			return -ENOMEM;
+
+		return send_openflow_skb(skb, sender);
+	}
+}
+
 /* Callback function for a workqueue to disable an interface */
 static void
 down_port_cb(struct work_struct *work)
@@ -953,7 +976,7 @@ dp_send_error_msg(struct datapath *dp, const struct sender *sender,
 	struct ofp_error_msg *oem;
 
 
-	oem = alloc_openflow_skb(dp, sizeof(*oem)+len, OFPT_ERROR_MSG, 
+	oem = alloc_openflow_skb(dp, sizeof(*oem)+len, OFPT_ERROR, 
 			sender, &skb);
 	if (!oem)
 		return -ENOMEM;

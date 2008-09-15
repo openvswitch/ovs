@@ -301,6 +301,13 @@ struct sk_buff *execute_setter(struct sk_buff *skb, uint16_t eth_proto,
 }
 
 static int
+recv_hello(struct sw_chain *chain, const struct sender *sender,
+	   const void *msg)
+{
+	return dp_send_hello(chain->dp, sender, msg);
+}
+
+static int
 recv_features_request(struct sw_chain *chain, const struct sender *sender,
 		      const void *msg) 
 {
@@ -517,6 +524,10 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 	};
 
 	static const struct openflow_packet packets[] = {
+		[OFPT_HELLO] = {
+			sizeof (struct ofp_header),
+			recv_hello,
+		},
 		[OFPT_FEATURES_REQUEST] = {
 			sizeof (struct ofp_header),
 			recv_features_request,
@@ -554,7 +565,13 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 	struct ofp_header *oh;
 
 	oh = (struct ofp_header *) msg;
-	if (oh->version != OFP_VERSION) {
+	if (oh->version != OFP_VERSION
+	    && oh->type != OFPT_HELLO
+	    && oh->type != OFPT_ERROR
+	    && oh->type != OFPT_ECHO_REQUEST
+	    && oh->type != OFPT_ECHO_REPLY
+	    && oh->type != OFPT_VENDOR)
+	{
 		dp_send_error_msg(chain->dp, sender, OFPET_BAD_REQUEST,
 				  OFPBRC_BAD_VERSION, msg, length);
 		return -EINVAL;

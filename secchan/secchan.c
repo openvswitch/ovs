@@ -388,7 +388,7 @@ accept_vconn(struct pvconn *pvconn)
     struct vconn *new;
     int retval;
 
-    retval = pvconn_accept(pvconn, &new);
+    retval = pvconn_accept(pvconn, OFP_VERSION, &new);
     if (retval && retval != EAGAIN) {
         VLOG_WARN_RL(&vrl, "accept failed (%s)", strerror(retval));
     }
@@ -464,7 +464,7 @@ relay_accept(const struct settings *s, struct pvconn *pvconn)
      * obtaining a subscription for ofp_packet_in or ofp_flow_expired
      * messages.*/
     nl_name_without_subscription = xasprintf("%s:0", s->nl_name);
-    retval = vconn_open(nl_name_without_subscription, &new_local);
+    retval = vconn_open(nl_name_without_subscription, OFP_VERSION, &new_local);
     if (retval) {
         VLOG_ERR_RL(&vrl, "could not connect to %s (%s)",
                     nl_name_without_subscription, strerror(retval));

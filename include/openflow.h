@@ -63,7 +63,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x90
+#define OFP_VERSION   0x91
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -96,24 +96,34 @@ enum ofp_port {
 };
 
 enum ofp_type {
-    OFPT_FEATURES_REQUEST,    /*  0 Controller/switch message */
-    OFPT_FEATURES_REPLY,      /*  1 Controller/switch message */
-    OFPT_GET_CONFIG_REQUEST,  /*  2 Controller/switch message */
-    OFPT_GET_CONFIG_REPLY,    /*  3 Controller/switch message */
-    OFPT_SET_CONFIG,          /*  4 Controller/switch message */
-    OFPT_PACKET_IN,           /*  5 Async message */
-    OFPT_PACKET_OUT,          /*  6 Controller/switch message */
-    OFPT_FLOW_MOD,            /*  7 Controller/switch message */
-    OFPT_FLOW_EXPIRED,        /*  8 Async message */
-    OFPT_TABLE,               /*  9 Controller/switch message */
-    OFPT_PORT_MOD,            /* 10 Controller/switch message */
-    OFPT_PORT_STATUS,         /* 11 Async message */
-    OFPT_ERROR_MSG,           /* 12 Async message */
-    OFPT_STATS_REQUEST,       /* 13 Controller/switch message */
-    OFPT_STATS_REPLY,         /* 14 Controller/switch message */
-    OFPT_ECHO_REQUEST,        /* 15 Symmetric message */
-    OFPT_ECHO_REPLY,          /* 16 Symmetric message */
-    OFPT_VENDOR = 0xff        /* 255 Vendor extension */
+    /* Immutable messages. */
+    OFPT_HELLO,               /* Symmetric message */
+    OFPT_ERROR,               /* Symmetric message */
+    OFPT_ECHO_REQUEST,        /* Symmetric message */
+    OFPT_ECHO_REPLY,          /* Symmetric message */
+    OFPT_VENDOR,              /* Symmetric message */
+
+    /* Switch configuration messages. */
+    OFPT_FEATURES_REQUEST,    /* Controller/switch message */
+    OFPT_FEATURES_REPLY,      /* Controller/switch message */
+    OFPT_GET_CONFIG_REQUEST,  /* Controller/switch message */
+    OFPT_GET_CONFIG_REPLY,    /* Controller/switch message */
+    OFPT_SET_CONFIG,          /* Controller/switch message */
+
+    /* Asynchronous messages. */
+    OFPT_PACKET_IN,           /* Async message */
+    OFPT_FLOW_EXPIRED,        /* Async message */
+    OFPT_PORT_STATUS,         /* Async message */
+
+    /* Controller command messages. */
+    OFPT_PACKET_OUT,          /* Controller/switch message */
+    OFPT_FLOW_MOD,            /* Controller/switch message */
+    OFPT_PORT_MOD,            /* Controller/switch message */
+    OFPT_TABLE,               /* Controller/switch message */
+
+    /* Statistics messages. */
+    OFPT_STATS_REQUEST,       /* Controller/switch message */
+    OFPT_STATS_REPLY          /* Controller/switch message */
 };
 
 /* Header on all OpenFlow packets. */
@@ -126,6 +136,12 @@ struct ofp_header {
                            to facilitate pairing. */
 };
 OFP_ASSERT(sizeof(struct ofp_header) == 8);
+
+/* OFPT_HELLO.  This message has an empty body, but implementations must
+ * ignore any data included in the body, to allow for future extensions. */
+struct ofp_hello {
+    struct ofp_header header;
+};
 
 #define OFP_DEFAULT_MISS_SEND_LEN   128
 
@@ -446,10 +462,22 @@ struct ofp_flow_expired {
 };
 OFP_ASSERT(sizeof(struct ofp_flow_expired) == 72);
 
+/* Values for 'type' in ofp_error_message.  These values are immutable: they
+ * will not change in future versions of the protocol (although new values may
+ * be added). */
 enum ofp_error_type {
+    OFPET_HELLO_FAILED,         /* Hello protocol failed. */
     OFPET_BAD_REQUEST           /* Request was not understood. */
 };
 
+/* ofp_error_msg 'code' values for OFPET_HELLO_FAILED.  'data' contains an
+ * ASCII text string that may give failure details. */
+enum ofp_hello_failed_code {
+    OFPHFC_INCOMPATIBLE         /* No compatible version. */
+};
+
+/* ofp_error_msg 'code' values for OFPET_BAD_REQUEST.  'data' contains at least
+ * the first 64 bytes of the failed request. */
 enum ofp_bad_request_code {
     OFPBRC_BAD_VERSION,         /* ofp_header.version not supported. */
     OFPBRC_BAD_TYPE,            /* ofp_header.type not supported. */
@@ -458,7 +486,7 @@ enum ofp_bad_request_code {
                                  * ofp_stats_request or ofp_stats_reply). */
 };
 
-/* Error message (datapath -> controller). */
+/* OFPT_ERROR: Error message (datapath -> controller). */
 struct ofp_error_msg {
     struct ofp_header header;
 

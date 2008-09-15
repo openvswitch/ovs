@@ -39,6 +39,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "buffer.h"
+#include "openflow.h"
 #include "poll-loop.h"
 #include "ofp-print.h"
 #include "sat-math.h"
@@ -273,7 +274,7 @@ reconnect(struct rconn *rc)
 
     VLOG_WARN("%s: connecting...", rc->name);
     rc->n_attempted_connections++;
-    retval = vconn_open(rc->name, &rc->vconn);
+    retval = vconn_open(rc->name, OFP_VERSION, &rc->vconn);
     if (!retval) {
         rc->backoff_deadline = time_now() + rc->backoff;
         state_transition(rc, S_CONNECTING);

@@ -47,7 +47,7 @@ struct vconn;
 void vconn_usage(bool active, bool passive);
 
 /* Active vconns: virtual connections to OpenFlow devices. */
-int vconn_open(const char *name, struct vconn **);
+int vconn_open(const char *name, int min_version, struct vconn **);
 void vconn_close(struct vconn *);
 const char *vconn_get_name(const struct vconn *);
 uint32_t vconn_get_ip(const struct vconn *);
@@ -56,7 +56,7 @@ int vconn_recv(struct vconn *, struct buffer **);
 int vconn_send(struct vconn *, struct buffer *);
 int vconn_transact(struct vconn *, struct buffer *, struct buffer **);
 
-int vconn_open_block(const char *name, struct vconn **);
+int vconn_open_block(const char *name, int min_version, struct vconn **);
 int vconn_send_block(struct vconn *, struct buffer *);
 int vconn_recv_block(struct vconn *, struct buffer **);
 
@@ -73,7 +73,7 @@ void vconn_send_wait(struct vconn *);
 /* Passive vconns: virtual listeners for incoming OpenFlow connections. */
 int pvconn_open(const char *name, struct pvconn **);
 void pvconn_close(struct pvconn *);
-int pvconn_accept(struct pvconn *, struct vconn **);
+int pvconn_accept(struct pvconn *, int min_version, struct vconn **);
 void pvconn_wait(struct pvconn *);
 
 /* OpenFlow protocol utility functions. */

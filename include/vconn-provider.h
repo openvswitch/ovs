@@ -40,12 +40,17 @@
 #include <assert.h>
 #include "vconn.h"
 
+/* Active virtual connection to an OpenFlow device. */
+
 /* Active virtual connection to an OpenFlow device.
  *
  * This structure should be treated as opaque by vconn implementations. */
 struct vconn {
     struct vconn_class *class;
-    int connect_status;
+    int state;
+    int error;
+    int min_version;
+    int version;
     uint32_t ip;
     char *name;
 };

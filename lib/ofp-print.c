@@ -596,16 +596,82 @@ ofp_print_flow_expired(struct ds *string, const void *oh, size_t len,
          ntohll(ofe->byte_count));
 }
 
-/* Pretty-print the OFPT_ERROR_MSG packet of 'len' bytes at 'oh' to 'string'
+struct error_type {
+    int type;
+    int code;
+    const char *name;
+};
+
+static const struct error_type error_types[] = {
+#define ERROR_TYPE(TYPE) {TYPE, -1, #TYPE}
+#define ERROR_CODE(TYPE, CODE) {TYPE, CODE, #CODE}
+    ERROR_TYPE(OFPET_HELLO_FAILED),
+    ERROR_CODE(OFPET_HELLO_FAILED, OFPHFC_INCOMPATIBLE),
+
+    ERROR_TYPE(OFPET_BAD_REQUEST),
+    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_VERSION),
+    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_TYPE),
+    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT),
+    ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_VERSION),
+};
+#define N_ERROR_TYPES ARRAY_SIZE(error_types)
+
+static const char *
+lookup_error_type(int type)
+{
+    const struct error_type *t;
+
+    for (t = error_types; t < &error_types[N_ERROR_TYPES]; t++) {
+        if (t->type == type && t->code == -1) {
+            return t->name;
+        }
+    }
+    return "?";
+}
+
+static const char *
+lookup_error_code(int type, int code)
+{
+    const struct error_type *t;
+
+    for (t = error_types; t < &error_types[N_ERROR_TYPES]; t++) {
+        if (t->type == type && t->code == code) {
+            return t->name;
+        }
+    }
+    return "?";
+}
+
+/* Pretty-print the OFPT_ERROR packet of 'len' bytes at 'oh' to 'string'
  * at the given 'verbosity' level. */
 static void
 ofp_print_error_msg(struct ds *string, const void *oh, size_t len, 
                        int verbosity)
 {
     const struct ofp_error_msg *oem = oh;
+    int type = ntohs(oem->type);
+    int code = ntohs(oem->code);
+    char *s;
 
-    ds_put_format(string, 
-         " type%d code%d\n", ntohs(oem->type), ntohs(oem->code));
+    ds_put_format(string, " type%d(%s) code%d(%s) payload:\n",
+                  type, lookup_error_type(type),
+                  code, lookup_error_code(type, code));
+
+    switch (type) {
+    case OFPET_HELLO_FAILED:
+        ds_put_printable(string, (char *) oem->data, len - sizeof *oem);
+        break;
+
+    case OFPET_BAD_REQUEST:
+        s = ofp_to_string(oem->data, len - sizeof *oem, 1);
+        ds_put_cstr(string, s);
+        free(s);
+        break;
+
+    default:
+        ds_put_hex_dump(string, oem->data, len - sizeof *oem, 0, true);
+        break;
+    }
 }
 
 /* Pretty-print the OFPT_PORT_STATUS packet of 'len' bytes at 'oh' to 'string'
@@ -959,6 +1025,11 @@ struct openflow_packet {
 };
 
 static const struct openflow_packet packets[] = {
+    [OFPT_HELLO] = {
+        "hello",
+        sizeof (struct ofp_header),
+        NULL,
+    },
     [OFPT_FEATURES_REQUEST] = {
         "features_request",
         sizeof (struct ofp_header),
@@ -1014,7 +1085,7 @@ static const struct openflow_packet packets[] = {
         sizeof (struct ofp_port_status),
         ofp_print_port_status
     },
-    [OFPT_ERROR_MSG] = {
+    [OFPT_ERROR] = {
         "error_msg",
         sizeof (struct ofp_error_msg),
         ofp_print_error_msg,

@@ -346,7 +346,7 @@ dp_run(struct datapath *dp)
             struct vconn *new_vconn;
             int retval;
 
-            retval = pvconn_accept(dp->listen_pvconn, &new_vconn);
+            retval = pvconn_accept(dp->listen_pvconn, OFP_VERSION, &new_vconn);
             if (retval) {
                 if (retval != EAGAIN) {
                     VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
@@ -797,8 +797,7 @@ dp_send_error_msg(struct datapath *dp, const struct sender *sender,
 {
     struct buffer *buffer;
     struct ofp_error_msg *oem;
-    oem = make_openflow_reply(sizeof(*oem)+len, OFPT_ERROR_MSG, 
-                              sender, &buffer);
+    oem = make_openflow_reply(sizeof(*oem)+len, OFPT_ERROR, sender, &buffer);
     oem->type = htons(type);
     oem->code = htons(code);
     memcpy(oem->data, data, len);
@@ -1682,7 +1681,6 @@ fwd_control_input(struct datapath *dp, const struct sender *sender,
     struct ofp_header *oh;
 
     oh = (struct ofp_header *) msg;
-    assert(oh->version == OFP_VERSION);
     if (ntohs(oh->length) > length)
         return -EINVAL;
 

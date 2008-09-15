@@ -111,7 +111,7 @@ main(int argc, char *argv[])
         struct vconn *vconn;
         int retval;
 
-        retval = vconn_open(name, &vconn);
+        retval = vconn_open(name, OFP_VERSION, &vconn);
         if (!retval) {
             if (n_switches >= MAX_SWITCHES) {
                 fatal(0, "max %d switch connections", n_switches);
@@ -128,7 +128,9 @@ main(int argc, char *argv[])
                 listeners[n_listeners++] = pvconn;
             }
         }
-        VLOG_ERR("%s: connect: %s", name, strerror(retval));
+        if (retval) {
+            VLOG_ERR("%s: connect: %s", name, strerror(retval));
+        }
     }
     if (n_switches == 0 && n_listeners == 0) {
         fatal(0, "no active or passive switch connections");
@@ -146,7 +148,7 @@ main(int argc, char *argv[])
             struct vconn *new_vconn;
             int retval;
 
-            retval = pvconn_accept(listeners[i], &new_vconn);
+            retval = pvconn_accept(listeners[i], OFP_VERSION, &new_vconn);
             if (!retval || retval == EAGAIN) {
                 if (!retval) {
                     new_switch(&switches[n_switches++], new_vconn, "tcp");

@@ -328,6 +328,12 @@ static void do_del_port(int argc UNUSED, char *argv[])
 
 /* Generic commands. */
 
+static void
+open_vconn(const char *name, struct vconn **vconnp)
+{
+    run(vconn_open_block(name, OFP_VERSION, vconnp), "connecting to %s", name);
+}
+
 static void *
 alloc_stats_request(size_t body_len, uint16_t type, struct buffer **bufferp)
 {
@@ -353,7 +359,7 @@ dump_transaction(const char *vconn_name, struct buffer *request)
     struct buffer *reply;
 
     update_openflow_length(request);
-    run(vconn_open_block(vconn_name, &vconn), "connecting to %s", vconn_name);
+    open_vconn(vconn_name, &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
     ofp_print(stdout, reply->data, reply->size, 1);
     vconn_close(vconn);
@@ -374,7 +380,7 @@ dump_stats_transaction(const char *vconn_name, struct buffer *request)
     struct vconn *vconn;
     bool done = false;
 
-    run(vconn_open_block(vconn_name, &vconn), "connecting to %s", vconn_name);
+    open_vconn(vconn_name, &vconn);
     send_openflow_buffer(vconn, request);
     while (!done) {
         uint32_t recv_xid;
@@ -426,7 +432,7 @@ do_status(int argc, char *argv[])
     if (argc > 2) {
         buffer_put(b, argv[2], strlen(argv[2]));
     }
-    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    open_vconn(argv[1], &vconn);
     run(vconn_transact(vconn, b, &b), "talking to %s", argv[1]);
     vconn_close(vconn);
 
@@ -793,7 +799,7 @@ static void do_add_flow(int argc, char *argv[])
     size_t size;
     int n_actions = MAX_ADD_ACTS;
 
-    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    open_vconn(argv[1], &vconn);
 
     /* Parse and send. */
     size = sizeof *ofm + (sizeof ofm->actions[0] * MAX_ADD_ACTS);
@@ -826,7 +832,7 @@ static void do_add_flows(int argc, char *argv[])
         fatal(errno, "%s: open", argv[2]);
     }
 
-    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    open_vconn(argv[1], &vconn);
     while (fgets(line, sizeof line, file)) {
         struct buffer *buffer;
         struct ofp_flow_mod *ofm;
@@ -873,7 +879,7 @@ static void do_del_flows(int argc, char *argv[])
     struct vconn *vconn;
     uint16_t priority;
 
-    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    open_vconn(argv[1], &vconn);
     struct buffer *buffer;
     struct ofp_flow_mod *ofm;
     size_t size;
@@ -910,7 +916,7 @@ do_monitor(int argc UNUSED, char *argv[])
     } else {
         name = argv[1];
     }
-    run(vconn_open_block(argv[1], &vconn), "connecting to %s", name);
+    open_vconn(argv[1], &vconn);
     for (;;) {
         struct buffer *b;
         run(vconn_recv_block(vconn, &b), "vconn_recv");
@@ -933,7 +939,7 @@ do_probe(int argc, char *argv[])
     struct buffer *reply;
 
     make_openflow(sizeof(struct ofp_header), OFPT_ECHO_REQUEST, &request);
-    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    open_vconn(argv[1], &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", argv[1]);
     if (reply->size != request->size) {
         fatal(0, "reply does not match request");
@@ -965,7 +971,7 @@ do_mod_port(int argc, char *argv[])
     /* Send a "Features Request" to get the information we need in order 
      * to modify the port. */
     make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &request);
-    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    open_vconn(argv[1], &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", argv[1]);
 
     osf = reply->data;
@@ -1033,7 +1039,7 @@ do_ping(int argc, char *argv[])
         fatal(0, "payload must be between 0 and %zu bytes", max_payload);
     }
 
-    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    open_vconn(argv[1], &vconn);
     for (i = 0; i < 10; i++) {
         struct timeval start, end;
         struct buffer *request, *reply;
@@ -1089,7 +1095,7 @@ do_benchmark(int argc, char *argv[])
     printf("Sending %d packets * %u bytes (with header) = %u bytes total\n",
            count, message_size, count * message_size);
 
-    run(vconn_open_block(argv[1], &vconn), "connecting to %s", argv[1]);
+    open_vconn(argv[1], &vconn);
     gettimeofday(&start, NULL);
     for (i = 0; i < count; i++) {
         struct buffer *request, *reply;
