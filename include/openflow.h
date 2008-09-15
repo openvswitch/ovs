@@ -353,7 +353,6 @@ OFP_ASSERT(sizeof(struct ofp_packet_out) == 16);
 enum ofp_flow_mod_command {
     OFPFC_ADD,              /* New flow. */
     OFPFC_MODIFY,           /* Modify all matching flows. */
-    OFPFC_MODIFY_STRICT,    /* Strictly match wildcards and priority. */
     OFPFC_DELETE,           /* Delete all matching flows. */
     OFPFC_DELETE_STRICT     /* Strictly match wildcards and priority. */
 };
@@ -433,10 +432,11 @@ struct ofp_flow_mod {
     uint16_t idle_timeout;        /* Idle time before discarding (seconds). */
     uint16_t hard_timeout;        /* Max time before discarding (seconds). */
     uint16_t priority;            /* Priority level of flow entry. */
-    uint32_t buffer_id;           /* Buffered packet to apply to (or -1). */
+    uint32_t buffer_id;           /* Buffered packet to apply to (or -1). 
+                                     Not meaningful for OFPFC_DELETE*. */
     uint32_t reserved;            /* Reserved for future use. */
     struct ofp_action actions[0]; /* The number of actions is inferred from
-                                    the length field in the header. */
+                                     the length field in the header. */
 };
 OFP_ASSERT(sizeof(struct ofp_flow_mod) == 60);
 

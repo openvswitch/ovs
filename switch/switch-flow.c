@@ -171,16 +171,18 @@ flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
 struct sw_flow *
 flow_alloc(int n_actions)
 {
+    struct sw_flow_actions *sfa;
     struct sw_flow *flow = malloc(sizeof *flow);
     if (!flow)
         return NULL;
 
-    flow->n_actions = n_actions;
-    flow->actions = malloc(n_actions * sizeof *flow->actions);
-    if (!flow->actions && n_actions > 0) {
+    sfa = malloc(n_actions * sizeof sfa->actions[0]);
+    if (!sfa) {
         free(flow);
         return NULL;
     }
+    sfa->n_actions = n_actions;
+    flow->sf_acts = sfa;
     return flow;
 }
 
@@ -191,10 +193,29 @@ flow_free(struct sw_flow *flow)
     if (!flow) {
         return; 
     }
-    if (flow->actions) {
-        free(flow->actions);
-    }
+    free(flow->sf_acts);
     free(flow);
+}
+
+/* Copies 'actions' into a newly allocated structure for use by 'flow'
+ * and frees the structure that defined the previous actions. */
+void flow_replace_acts(struct sw_flow *flow, const struct ofp_action *actions,
+        int n_actions)
+{
+    struct sw_flow_actions *sfa;
+    int size = sizeof *sfa + (n_actions * sizeof sfa->actions[0]);
+
+    sfa = malloc(size);
+    if (unlikely(!sfa))
+        return;
+
+    sfa->n_actions = n_actions;
+    memcpy(sfa->actions, actions, n_actions * sizeof sfa->actions[0]);
+
+    free(flow->sf_acts);
+    flow->sf_acts = sfa;
+
+    return;
 }
 
 /* Prints a representation of 'key' to the kernel log. */

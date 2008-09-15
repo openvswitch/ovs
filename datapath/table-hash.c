@@ -75,6 +75,35 @@ static int table_hash_insert(struct sw_table *swt, struct sw_flow *flow)
 	return retval;
 }
 
+static int table_hash_modify(struct sw_table *swt, 
+		const struct sw_flow_key *key, 
+		const struct ofp_action *actions, int n_actions) 
+{
+	struct sw_table_hash *th = (struct sw_table_hash *) swt;
+	unsigned int count = 0;
+
+	if (key->wildcards == 0) {
+		struct sw_flow **bucket = find_bucket(swt, key);
+		struct sw_flow *flow = *bucket;
+		if (flow && flow_matches_1wild(&flow->key, key)) {
+			flow_replace_acts(flow, actions, n_actions);
+			count = 1;
+		}
+	} else {
+		unsigned int i;
+
+		for (i = 0; i <= th->bucket_mask; i++) {
+			struct sw_flow **bucket = &th->buckets[i];
+			struct sw_flow *flow = *bucket;
+			if (flow && flow_matches_1wild(&flow->key, key)) {
+				flow_replace_acts(flow, actions, n_actions);
+				count++;
+			}
+		}
+	}
+	return count;
+}
+
 /* Caller must update n_flows. */
 static int do_delete(struct sw_flow **bucket, struct sw_flow *flow)
 {
@@ -261,6 +290,15 @@ static int table_hash2_insert(struct sw_table *swt, struct sw_flow *flow)
 	return table_hash_insert(t2->subtable[1], flow);
 }
 
+static int table_hash2_modify(struct sw_table *swt, 
+		const struct sw_flow_key *key,
+		const struct ofp_action *actions, int n_actions)
+{
+	struct sw_table_hash2 *t2 = (struct sw_table_hash2 *) swt;
+	return (table_hash_modify(t2->subtable[0], key, actions, n_actions)
+			+ table_hash_modify(t2->subtable[1], key, actions, n_actions));
+}
+
 static int table_hash2_delete(struct sw_table *swt,
 							  const struct sw_flow_key *key, 
 							  uint16_t priority, int strict)
@@ -344,6 +382,7 @@ struct sw_table *table_hash2_create(unsigned int poly0, unsigned int buckets0,
 	swt = &t2->swt;
 	swt->lookup = table_hash2_lookup;
 	swt->insert = table_hash2_insert;
+	swt->modify = table_hash2_modify;
 	swt->delete = table_hash2_delete;
 	swt->timeout = table_hash2_timeout;
 	swt->destroy = table_hash2_destroy;

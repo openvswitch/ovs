@@ -35,6 +35,7 @@
 #define SWITCH_FLOW_H 1
 
 #include <time.h>
+#include "openflow.h"
 #include "flow.h"
 #include "list.h"
 
@@ -46,6 +47,11 @@ struct sw_flow_key {
     uint32_t wildcards;         /* Wildcard fields (in host byte order). */
     uint32_t nw_src_mask;       /* 1-bit in each significant nw_src bit. */
     uint32_t nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
+};
+
+struct sw_flow_actions {
+    unsigned int n_actions;
+    struct ofp_action actions[0];
 };
 
 struct sw_flow {
@@ -60,14 +66,12 @@ struct sw_flow {
     uint64_t byte_count;        /* Number of bytes seen. */
     uint8_t reason;             /* Reason flow expired (one of OFPER_*). */
 
+    struct sw_flow_actions *sf_acts;
+
     /* Private to table implementations. */
     struct list node;
     struct list iter_node;
     unsigned long int serial;
-
-    /* Actions (XXX probably most flows have only a single action). */
-    unsigned int n_actions;
-    struct ofp_action *actions;
 };
 
 int flow_matches_1wild(const struct sw_flow_key *, const struct sw_flow_key *);
@@ -77,6 +81,8 @@ int flow_del_matches(const struct sw_flow_key *, const struct sw_flow_key *,
 struct sw_flow *flow_alloc(int n_actions);
 void flow_free(struct sw_flow *);
 void flow_deferred_free(struct sw_flow *);
+void flow_deferred_free_acts(struct sw_flow_actions *);
+void flow_replace_acts(struct sw_flow *, const struct ofp_action *, int);
 void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from);
 void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from);
 

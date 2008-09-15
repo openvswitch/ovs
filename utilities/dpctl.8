@@ -170,6 +170,12 @@ tables.  Each line in \fIfile\fR is a flow entry in the format
 described in \fBFLOW SYNTAX\fR, below.
 
 .TP
+\fBmod-flows \fIswitch flow\fR
+Modify the actions in entries from the datapath \fIswitch\fR's tables 
+that match \fIflow\fR.  See \fBFLOW SYNTAX\fR, below, for the syntax 
+of \fIflows\fR.
+
+.TP
 \fBdel-flows \fIswitch \fR[\fIflow\fR]
 Deletes entries from the datapath \fIswitch\fR's tables that match
 \fIflow\fR.  If \fIflow\fR is omitted, all flows in the datapath's
