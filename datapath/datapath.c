@@ -1272,13 +1272,14 @@ static int flow_stats_init(struct datapath *dp, const void *body, int body_len,
 
 static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 {
+	struct sw_flow_actions *sf_acts = rcu_dereference(flow->sf_acts);
 	struct flow_stats_state *s = private;
 	struct ofp_flow_stats *ofs;
 	int actions_length;
 	int length;
 
-	actions_length = sizeof *ofs->actions * flow->n_actions;
-	length = sizeof *ofs + sizeof *ofs->actions * flow->n_actions;
+	actions_length = sizeof *ofs->actions * sf_acts->n_actions;
+	length = sizeof *ofs + actions_length;
 	if (length + s->bytes_used > s->bytes_allocated)
 		return 1;
 
@@ -1305,7 +1306,7 @@ static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 	memset(ofs->pad2, 0, sizeof ofs->pad2);
 	ofs->packet_count    = cpu_to_be64(flow->packet_count);
 	ofs->byte_count      = cpu_to_be64(flow->byte_count);
-	memcpy(ofs->actions, flow->actions, actions_length);
+	memcpy(ofs->actions, sf_acts->actions, actions_length);
 
 	s->bytes_used += length;
 	return 0;

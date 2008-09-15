@@ -142,12 +142,12 @@ void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
 	memcpy(to->dl_src, from->dl_src, ETH_ALEN);
 	memcpy(to->dl_dst, from->dl_dst, ETH_ALEN);
 	to->dl_type   = from->dl_type;
-	to->nw_src	  = from->nw_src;
-	to->nw_dst	  = from->nw_dst;
+	to->nw_src    = from->nw_src;
+	to->nw_dst    = from->nw_dst;
 	to->nw_proto  = from->nw_proto;
-	to->tp_src	  = from->tp_src;
-	to->tp_dst	  = from->tp_dst;
-	to->pad           = 0;
+	to->tp_src    = from->tp_src;
+	to->tp_dst    = from->tp_dst;
+	to->pad       = 0;
 }
 
 int flow_timeout(struct sw_flow *flow)
@@ -168,17 +168,20 @@ EXPORT_SYMBOL(flow_timeout);
  * flags 'flags'.  Returns the new flow or a null pointer on failure. */
 struct sw_flow *flow_alloc(int n_actions, gfp_t flags)
 {
+	struct sw_flow_actions *sfa;
+	int size = sizeof *sfa + (n_actions * sizeof sfa->actions[0]);
 	struct sw_flow *flow = kmem_cache_alloc(flow_cache, flags);
 	if (unlikely(!flow))
 		return NULL;
 
-	flow->n_actions = n_actions;
-	flow->actions = kmalloc(n_actions * sizeof *flow->actions,
-				flags);
-	if (unlikely(!flow->actions) && n_actions > 0) {
+	sfa = kmalloc(size, flags);
+	if (unlikely(!sfa)) {
 		kmem_cache_free(flow_cache, flow);
 		return NULL;
 	}
+	sfa->n_actions = n_actions;
+	flow->sf_acts = sfa;
+
 	return flow;
 }
 
@@ -187,14 +190,13 @@ void flow_free(struct sw_flow *flow)
 {
 	if (unlikely(!flow))
 		return;
-	if (flow->actions)
-		kfree(flow->actions);
+	kfree(flow->sf_acts);
 	kmem_cache_free(flow_cache, flow);
 }
 EXPORT_SYMBOL(flow_free);
 
 /* RCU callback used by flow_deferred_free. */
-static void rcu_callback(struct rcu_head *rcu)
+static void rcu_free_flow_callback(struct rcu_head *rcu)
 {
 	struct sw_flow *flow = container_of(rcu, struct sw_flow, rcu);
 	flow_free(flow);
@@ -204,9 +206,48 @@ static void rcu_callback(struct rcu_head *rcu)
  * The caller must hold rcu_read_lock for this to be sensible. */
 void flow_deferred_free(struct sw_flow *flow)
 {
-	call_rcu(&flow->rcu, rcu_callback);
+	call_rcu(&flow->rcu, rcu_free_flow_callback);
 }
 EXPORT_SYMBOL(flow_deferred_free);
+
+/* RCU callback used by flow_deferred_free_acts. */
+static void rcu_free_acts_callback(struct rcu_head *rcu)
+{
+	struct sw_flow_actions *sf_acts = container_of(rcu, 
+			struct sw_flow_actions, rcu);
+	kfree(sf_acts);
+}
+
+/* Schedules 'sf_acts' to be freed after the next RCU grace period.
+ * The caller must hold rcu_read_lock for this to be sensible. */
+void flow_deferred_free_acts(struct sw_flow_actions *sf_acts)
+{
+	call_rcu(&sf_acts->rcu, rcu_free_acts_callback);
+}
+EXPORT_SYMBOL(flow_deferred_free_acts);
+
+/* Copies 'actions' into a newly allocated structure for use by 'flow'
+ * and safely frees the structure that defined the previous actions. */
+void flow_replace_acts(struct sw_flow *flow, const struct ofp_action *actions,
+			int n_actions)
+{
+	struct sw_flow_actions *sfa;
+	struct sw_flow_actions *orig_sfa = flow->sf_acts;
+	int size = sizeof *sfa + (n_actions * sizeof sfa->actions[0]);
+
+	sfa = kmalloc(size, GFP_ATOMIC);
+	if (unlikely(!sfa))
+		return;
+
+	sfa->n_actions = n_actions;
+	memcpy(sfa->actions, actions, n_actions * sizeof sfa->actions[0]);
+
+	rcu_assign_pointer(flow->sf_acts, sfa);
+	flow_deferred_free_acts(orig_sfa);
+
+	return;
+}
+EXPORT_SYMBOL(flow_replace_acts);
 
 /* Prints a representation of 'key' to the kernel log. */
 void print_flow(const struct sw_flow_key *key)

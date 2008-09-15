@@ -204,7 +204,8 @@ usage(void)
            "  dump-aggregate SWITCH FLOW  print aggregate stats for FLOWs\n"
            "  add-flow SWITCH FLOW        add flow described by FLOW\n"
            "  add-flows SWITCH FILE       add flows from FILE\n"
-           "  del-flows SWITCH FLOW       delete matching FLOWs\n"
+           "  mod-flows SWITCH FLOW       modify actions of matching FLOWs\n"
+           "  del-flows SWITCH [FLOW]     delete matching FLOWs\n"
            "  monitor SWITCH              print packets received from SWITCH\n"
            "\nFor local datapaths, remote switches, and controllers:\n"
            "  probe VCONN                 probe whether VCONN is up\n"
@@ -801,8 +802,6 @@ static void do_add_flow(int argc, char *argv[])
     size_t size;
     int n_actions = MAX_ADD_ACTS;
 
-    open_vconn(argv[1], &vconn);
-
     /* Parse and send. */
     size = sizeof *ofm + (sizeof ofm->actions[0] * MAX_ADD_ACTS);
     ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
@@ -818,6 +817,7 @@ static void do_add_flow(int argc, char *argv[])
     /* xxx Should we use the ofpbuf library? */
     buffer->size -= (MAX_ADD_ACTS - n_actions) * sizeof ofm->actions[0];
 
+    open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, buffer);
     vconn_close(vconn);
 }
@@ -825,7 +825,6 @@ static void do_add_flow(int argc, char *argv[])
 static void do_add_flows(int argc, char *argv[])
 {
     struct vconn *vconn;
-
     FILE *file;
     char line[1024];
 
@@ -876,16 +875,42 @@ static void do_add_flows(int argc, char *argv[])
     fclose(file);
 }
 
+static void do_mod_flows(int argc, char *argv[])
+{
+    uint16_t idle_timeout, hard_timeout;
+    struct vconn *vconn;
+    struct ofpbuf *buffer;
+    struct ofp_flow_mod *ofm;
+    size_t size;
+    int n_actions = MAX_ADD_ACTS;
+
+    /* Parse and send. */
+    size = sizeof *ofm + (sizeof ofm->actions[0] * MAX_ADD_ACTS);
+    ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
+    str_to_flow(argv[2], &ofm->match, &ofm->actions[0], &n_actions, 
+                NULL, NULL, &idle_timeout, &hard_timeout);
+    ofm->command = htons(OFPFC_MODIFY);
+    ofm->idle_timeout = htons(idle_timeout);
+    ofm->hard_timeout = htons(hard_timeout);
+    ofm->buffer_id = htonl(UINT32_MAX);
+    ofm->priority = htons(0);
+    ofm->reserved = htonl(0);
+
+    /* xxx Should we use the buffer library? */
+    buffer->size -= (MAX_ADD_ACTS - n_actions) * sizeof ofm->actions[0];
+
+    open_vconn(argv[1], &vconn);
+    send_openflow_buffer(vconn, buffer);
+    vconn_close(vconn);
+}
+
 static void do_del_flows(int argc, char *argv[])
 {
     struct vconn *vconn;
     uint16_t priority;
-
-    open_vconn(argv[1], &vconn);
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
     size_t size;
-
 
     /* Parse and send. */
     size = sizeof *ofm;
@@ -899,8 +924,8 @@ static void do_del_flows(int argc, char *argv[])
     ofm->priority = htons(priority);
     ofm->reserved = htonl(0);
 
+    open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, buffer);
-
     vconn_close(vconn);
 }
 
@@ -1142,6 +1167,7 @@ static struct command all_commands[] = {
     { "dump-aggregate", 1, 2, do_dump_aggregate },
     { "add-flow", 2, 2, do_add_flow },
     { "add-flows", 2, 2, do_add_flows },
+    { "mod-flows", 2, 2, do_mod_flows },
     { "del-flows", 1, 2, do_del_flows },
     { "dump-ports", 1, 1, do_dump_ports },
     { "mod-port", 3, 3, do_mod_port },

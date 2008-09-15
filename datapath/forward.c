@@ -56,9 +56,10 @@ int run_flow_through_tables(struct sw_chain *chain, struct sk_buff *skb,
 
 	flow = chain_lookup(chain, &key);
 	if (likely(flow != NULL)) {
+		struct sw_flow_actions *sf_acts = rcu_dereference(flow->sf_acts);
 		flow_used(flow, skb);
 		execute_actions(chain->dp, skb, &key,
-				flow->actions, flow->n_actions, 0);
+				sf_acts->actions, sf_acts->n_actions, 0);
 		return 0;
 	} else {
 		return -ESRCH;
@@ -454,12 +455,12 @@ add_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 	flow->idle_timeout = ntohs(ofm->idle_timeout);
 	flow->hard_timeout = ntohs(ofm->hard_timeout);
 	flow->used = jiffies;
-	flow->n_actions = n_actions;
 	flow->init_time = jiffies;
 	flow->byte_count = 0;
 	flow->packet_count = 0;
 	spin_lock_init(&flow->lock);
-	memcpy(flow->actions, ofm->actions, n_actions * sizeof *flow->actions);
+	memcpy(flow->sf_acts->actions, ofm->actions, 
+			n_actions * sizeof *flow->sf_acts->actions);
 
 	/* Act. */
 	error = chain_insert(chain, flow);
@@ -488,6 +489,53 @@ error:
 }
 
 static int
+mod_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
+{
+	int error = -ENOMEM;
+	int i;
+	int n_actions;
+	struct sw_flow_key key;
+
+	/* To prevent loops, make sure there's no action to send to the
+	 * OFP_TABLE virtual port.
+	 */
+	n_actions = (ntohs(ofm->header.length) - sizeof *ofm) 
+			/ sizeof *ofm->actions;
+	for (i=0; i<n_actions; i++) {
+		const struct ofp_action *a = &ofm->actions[i];
+
+		if (a->type == htons(OFPAT_OUTPUT) 
+					&& (a->arg.output.port == htons(OFPP_TABLE) 
+						|| a->arg.output.port == htons(OFPP_NONE)
+						|| a->arg.output.port == ofm->match.in_port)) {
+			/* xxx Send fancy new error message? */
+			goto error;
+		}
+	}
+
+	flow_extract_match(&key, &ofm->match);
+	chain_modify(chain, &key, ofm->actions, n_actions);
+
+	if (ntohl(ofm->buffer_id) != (uint32_t) -1) {
+		struct sk_buff *skb = retrieve_skb(ntohl(ofm->buffer_id));
+		if (skb) {
+			struct sw_flow_key skb_key;
+			flow_extract(skb, ntohs(ofm->match.in_port), &skb_key);
+			execute_actions(chain->dp, skb, &skb_key, 
+					ofm->actions, n_actions, 0);
+		}
+		else
+			error = -ESRCH;
+	}
+	return error;
+
+error:
+	if (ntohl(ofm->buffer_id) != (uint32_t) -1)
+		discard_skb(ntohl(ofm->buffer_id));
+	return error;
+}
+
+static int
 recv_flow(struct sw_chain *chain, const struct sender *sender, const void *msg)
 {
 	const struct ofp_flow_mod *ofm = msg;
@@ -495,6 +543,8 @@ recv_flow(struct sw_chain *chain, const struct sender *sender, const void *msg)
 
 	if (command == OFPFC_ADD) {
 		return add_flow(chain, ofm);
+	} else if (command == OFPFC_MODIFY) {
+		return mod_flow(chain, ofm);
 	}  else if (command == OFPFC_DELETE) {
 		struct sw_flow_key key;
 		flow_extract_match(&key, &ofm->match);

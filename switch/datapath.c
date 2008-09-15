@@ -812,7 +812,7 @@ fill_flow_stats(struct ofpbuf *buffer, struct sw_flow *flow,
                 int table_idx, time_t now)
 {
     struct ofp_flow_stats *ofs;
-    int length = sizeof *ofs + sizeof *ofs->actions * flow->n_actions;
+    int length = sizeof *ofs + sizeof *ofs->actions * flow->sf_acts->n_actions;
     ofs = ofpbuf_put_uninit(buffer, length);
     ofs->length          = htons(length);
     ofs->table_id        = table_idx;
@@ -836,8 +836,8 @@ fill_flow_stats(struct ofpbuf *buffer, struct sw_flow *flow,
     memset(ofs->pad2, 0, sizeof ofs->pad2);
     ofs->packet_count    = htonll(flow->packet_count);
     ofs->byte_count      = htonll(flow->byte_count);
-    memcpy(ofs->actions, flow->actions,
-           sizeof *ofs->actions * flow->n_actions);
+    memcpy(ofs->actions, flow->sf_acts->actions,
+           sizeof *ofs->actions * flow->sf_acts->n_actions);
 }
 
 
@@ -869,7 +869,8 @@ int run_flow_through_tables(struct datapath *dp, struct ofpbuf *buffer,
     if (flow != NULL) {
         flow_used(flow, buffer);
         execute_actions(dp, buffer, port_no(dp, p),
-                        &key, flow->actions, flow->n_actions, false);
+                        &key, flow->sf_acts->actions, 
+                        flow->sf_acts->n_actions, false);
         return 0;
     } else {
         return -ESRCH;
@@ -1181,10 +1182,11 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
     flow->idle_timeout = ntohs(ofm->idle_timeout);
     flow->hard_timeout = ntohs(ofm->hard_timeout);
     flow->used = flow->created = time_now();
-    flow->n_actions = n_actions;
+    flow->sf_acts->n_actions = n_actions;
     flow->byte_count = 0;
     flow->packet_count = 0;
-    memcpy(flow->actions, ofm->actions, n_actions * sizeof *flow->actions);
+    memcpy(flow->sf_acts->actions, ofm->actions, 
+                n_actions * sizeof *flow->sf_acts->actions);
 
     /* Act. */
     error = chain_insert(dp->chain, flow);
@@ -1216,6 +1218,55 @@ error:
 }
 
 static int
+mod_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
+{
+    int error = -ENOMEM;
+    int n_actions;
+    int i;
+    struct sw_flow_key key;
+
+
+    /* To prevent loops, make sure there's no action to send to the
+     * OFP_TABLE virtual port.
+     */
+    n_actions = (ntohs(ofm->header.length) - sizeof *ofm) 
+            / sizeof *ofm->actions;
+    for (i=0; i<n_actions; i++) {
+        const struct ofp_action *a = &ofm->actions[i];
+
+        if (a->type == htons(OFPAT_OUTPUT)
+                    && (a->arg.output.port == htons(OFPP_TABLE)
+                        || a->arg.output.port == htons(OFPP_NONE)
+                        || a->arg.output.port == ofm->match.in_port)) {
+            /* xxx Send fancy new error message? */
+            goto error;
+        }
+    }
+
+    flow_extract_match(&key, &ofm->match);
+    chain_modify(dp->chain, &key, ofm->actions, n_actions);
+
+    if (ntohl(ofm->buffer_id) != UINT32_MAX) {
+        struct ofpbuf *buffer = retrieve_buffer(ntohl(ofm->buffer_id));
+        if (buffer) {
+            struct sw_flow_key skb_key;
+            uint16_t in_port = ntohs(ofm->match.in_port);
+            flow_extract(buffer, in_port, &skb_key.flow);
+            execute_actions(dp, buffer, in_port, &skb_key,
+                            ofm->actions, n_actions, false);
+        } else {
+            error = -ESRCH; 
+        }
+    }
+    return error;
+
+error:
+    if (ntohl(ofm->buffer_id) != (uint32_t) -1)
+        discard_buffer(ntohl(ofm->buffer_id));
+    return error;
+}
+
+static int
 recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
           const void *msg)
 {
@@ -1224,6 +1275,8 @@ recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
 
     if (command == OFPFC_ADD) {
         return add_flow(dp, ofm);
+    } else if (command == OFPFC_MODIFY) {
+        return mod_flow(dp, ofm);
     }  else if (command == OFPFC_DELETE) {
         struct sw_flow_key key;
         flow_extract_match(&key, &ofm->match);

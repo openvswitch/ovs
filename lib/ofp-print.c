@@ -558,9 +558,24 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
     const struct ofp_flow_mod *ofm = oh;
 
     ofp_print_match(string, &ofm->match, verbosity);
-    ds_put_format(string, " cmd:%d idle:%d hard:%d pri:%d buf:%#x", 
-            ntohs(ofm->command), ntohs(ofm->idle_timeout),
-            ntohs(ofm->hard_timeout),
+    switch (ntohs(ofm->command)) {
+    case OFPFC_ADD:
+        ds_put_cstr(string, " ADD: ");
+        break;
+    case OFPFC_MODIFY:
+        ds_put_cstr(string, " MOD: ");
+        break;
+    case OFPFC_DELETE:
+        ds_put_cstr(string, " DEL: ");
+        break;
+    case OFPFC_DELETE_STRICT:
+        ds_put_cstr(string, " DEL_STRICT: ");
+        break;
+    default:
+        ds_put_format(string, " cmd:%d ", ntohs(ofm->command));
+    }
+    ds_put_format(string, "idle:%d hard:%d pri:%d buf:%#x", 
+            ntohs(ofm->idle_timeout), ntohs(ofm->hard_timeout),
             ofm->match.wildcards ? ntohs(ofm->priority) : (uint16_t)-1,
             ntohl(ofm->buffer_id));
     ofp_print_actions(string, ofm->actions,

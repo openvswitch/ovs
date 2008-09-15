@@ -41,6 +41,7 @@
 
 struct sw_flow;
 struct sw_flow_key;
+struct ofp_action;
 struct list;
 
 /* Table statistics. */
@@ -82,6 +83,11 @@ struct sw_table {
      * If successful, 'flow' becomes owned by 'table', otherwise it is
      * retained by the caller. */
     int (*insert)(struct sw_table *table, struct sw_flow *flow);
+
+    /* Modifies entries in 'table' that match 'key'.  Returns the
+     * number of flows that were modified. */
+    int (*modify)(struct sw_table *table, const struct sw_flow_key *key,
+            const struct ofp_action *actions, int n_actions);
 
     /* Deletes from 'table' any and all flows that match 'key' from
      * 'table'.  If 'strict' set, wildcards must match.  Returns the 

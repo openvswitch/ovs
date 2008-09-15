@@ -77,6 +77,23 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 	return 1;
 }
 
+static int table_linear_modify(struct sw_table *swt,
+				const struct sw_flow_key *key,
+				const struct ofp_action *actions, int n_actions)
+{
+	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
+	struct sw_flow *flow;
+	unsigned int count = 0;
+
+	list_for_each_entry (flow, &tl->flows, node) {
+		if (flow_matches_1wild(&flow->key, key)) {
+			flow_replace_acts(flow, actions, n_actions);
+			count++;
+		}
+	}
+	return count;
+}
+
 static int do_delete(struct sw_table *swt, struct sw_flow *flow) 
 {
 	list_del_rcu(&flow->node);
@@ -181,6 +198,7 @@ struct sw_table *table_linear_create(unsigned int max_flows)
 	swt = &tl->swt;
 	swt->lookup = table_linear_lookup;
 	swt->insert = table_linear_insert;
+	swt->modify = table_linear_modify;
 	swt->delete = table_linear_delete;
 	swt->timeout = table_linear_timeout;
 	swt->destroy = table_linear_destroy;

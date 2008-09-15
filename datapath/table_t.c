@@ -35,9 +35,9 @@ static struct sw_flow *flow_zalloc(int n_actions, gfp_t flags)
 {
 	struct sw_flow *flow = flow_alloc(n_actions, flags);
 	if (flow) {
-		struct ofp_action *actions = flow->actions;
+		struct sw_flow_actions *sfa = flow->sf_acts;
 		memset(flow, 0, sizeof *flow);
-		flow->actions = actions;
+		flow->sf_acts = sfa;
 	}
 	return flow;
 }

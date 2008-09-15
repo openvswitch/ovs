@@ -56,6 +56,16 @@ static inline void check_key_align(void)
 	BUILD_BUG_ON(sizeof(struct sw_flow_key) != 44); 
 }
 
+/* We keep actions as a separate structure because we need to be able to 
+ * swap them out atomically when the modify command comes from a Flow
+ * Modify message. */
+struct sw_flow_actions {
+	unsigned int n_actions;
+	struct rcu_head rcu;
+
+	struct ofp_action actions[0];
+};
+
 /* Locking:
  *
  * - Readers must take rcu_read_lock and hold it the entire time that the flow
@@ -69,11 +79,9 @@ struct sw_flow {
 	uint16_t priority;      /* Only used on entries with wildcards. */
 	uint16_t idle_timeout;	/* Idle time before discarding (seconds). */
 	uint16_t hard_timeout;  /* Hard expiration time (seconds) */
-	unsigned long used;	/* Last used time (in jiffies). */
+	unsigned long used;     /* Last used time (in jiffies). */
 
-	/* FIXME?  Probably most flows have only a single action. */
-	unsigned int n_actions;
-	struct ofp_action *actions;
+	struct sw_flow_actions *sf_acts;
 
 	/* For use by table implementation. */
 	struct list_head node;
@@ -96,6 +104,8 @@ int flow_del_matches(const struct sw_flow_key *, const struct sw_flow_key *,
 struct sw_flow *flow_alloc(int n_actions, gfp_t flags);
 void flow_free(struct sw_flow *);
 void flow_deferred_free(struct sw_flow *);
+void flow_deferred_free_acts(struct sw_flow_actions *);
+void flow_replace_acts(struct sw_flow *, const struct ofp_action *, int);
 int flow_extract(struct sk_buff *, uint16_t in_port, struct sw_flow_key *);
 void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from);
 void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from);

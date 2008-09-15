@@ -10,6 +10,7 @@
 /forward.c
 /forward_t.c
 /genetlink.c
+/hwtable_dummy.c
 /random32.c
 /table-hash.c
 /table-linear.c
