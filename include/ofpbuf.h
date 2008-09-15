@@ -31,14 +31,14 @@
  * derivatives without specific, written prior permission.
  */
 
-#ifndef BUFFER_H
-#define BUFFER_H 1
+#ifndef OFPBUF_H
+#define OFPBUF_H 1
 
 #include <stddef.h>
 
-/* Buffer for holding arbitrary data.  A buffer is automatically reallocated as
- * necessary if it grows too large for the available memory. */
-struct buffer {
+/* Buffer for holding arbitrary data.  An ofpbuf is automatically reallocated
+ * as necessary if it grows too large for the available memory. */
+struct ofpbuf {
     void *base;                 /* First byte of area malloc()'d area. */
     size_t allocated;           /* Number of bytes allocated. */
 
@@ -50,38 +50,38 @@ struct buffer {
     void *l4;                   /* Transport-level header. */
     void *l7;                   /* Application data. */
 
-    struct buffer *next;        /* Next in a list of buffers. */
+    struct ofpbuf *next;        /* Next in a list of ofpbufs. */
     void *private;              /* Private pointer for use by owner. */
 };
 
-void buffer_use(struct buffer *, void *, size_t);
+void ofpbuf_use(struct ofpbuf *, void *, size_t);
 
-void buffer_init(struct buffer *, size_t);
-void buffer_uninit(struct buffer *);
-void buffer_reinit(struct buffer *, size_t);
+void ofpbuf_init(struct ofpbuf *, size_t);
+void ofpbuf_uninit(struct ofpbuf *);
+void ofpbuf_reinit(struct ofpbuf *, size_t);
 
-struct buffer *buffer_new(size_t);
-struct buffer *buffer_clone(const struct buffer *);
-void buffer_delete(struct buffer *);
+struct ofpbuf *ofpbuf_new(size_t);
+struct ofpbuf *ofpbuf_clone(const struct ofpbuf *);
+void ofpbuf_delete(struct ofpbuf *);
 
-void *buffer_at(const struct buffer *, size_t offset, size_t size);
-void *buffer_at_assert(const struct buffer *, size_t offset, size_t size);
-void *buffer_tail(const struct buffer *);
-void *buffer_end(const struct buffer *);
+void *ofpbuf_at(const struct ofpbuf *, size_t offset, size_t size);
+void *ofpbuf_at_assert(const struct ofpbuf *, size_t offset, size_t size);
+void *ofpbuf_tail(const struct ofpbuf *);
+void *ofpbuf_end(const struct ofpbuf *);
 
-void *buffer_put_uninit(struct buffer *, size_t);
-void *buffer_put(struct buffer *, const void *, size_t);
-void buffer_reserve(struct buffer *, size_t);
-void *buffer_push_uninit(struct buffer *b, size_t);
-void *buffer_push(struct buffer *b, const void *, size_t);
+void *ofpbuf_put_uninit(struct ofpbuf *, size_t);
+void *ofpbuf_put(struct ofpbuf *, const void *, size_t);
+void ofpbuf_reserve(struct ofpbuf *, size_t);
+void *ofpbuf_push_uninit(struct ofpbuf *b, size_t);
+void *ofpbuf_push(struct ofpbuf *b, const void *, size_t);
 
-size_t buffer_headroom(struct buffer *);
-size_t buffer_tailroom(struct buffer *);
-void buffer_prealloc_headroom(struct buffer *, size_t);
-void buffer_prealloc_tailroom(struct buffer *, size_t);
+size_t ofpbuf_headroom(struct ofpbuf *);
+size_t ofpbuf_tailroom(struct ofpbuf *);
+void ofpbuf_prealloc_headroom(struct ofpbuf *, size_t);
+void ofpbuf_prealloc_tailroom(struct ofpbuf *, size_t);
 
-void buffer_clear(struct buffer *);
-void *buffer_pull(struct buffer *, size_t);
-void *buffer_try_pull(struct buffer *, size_t);
+void ofpbuf_clear(struct ofpbuf *);
+void *ofpbuf_pull(struct ofpbuf *, size_t);
+void *ofpbuf_try_pull(struct ofpbuf *, size_t);
 
-#endif /* buffer.h */
+#endif /* ofpbuf.h */

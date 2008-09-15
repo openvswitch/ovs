@@ -41,9 +41,9 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include "buffer.h"
-#include "netlink-protocol.h"
 #include "dynamic-string.h"
+#include "netlink-protocol.h"
+#include "ofpbuf.h"
 #include "timeval.h"
 #include "util.h"
 
@@ -217,7 +217,7 @@ nl_sock_destroy(struct nl_sock *sock)
  * 'wait' is true, then the send will wait until buffer space is ready;
  * otherwise, returns EAGAIN if the 'sock' send buffer is full. */
 int
-nl_sock_send(struct nl_sock *sock, const struct buffer *msg, bool wait) 
+nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait) 
 {
     int error;
 
@@ -261,19 +261,19 @@ nl_sock_sendv(struct nl_sock *sock, const struct iovec iov[], size_t n_iov,
 
 /* Tries to receive a netlink message from the kernel on 'sock'.  If
  * successful, stores the received message into '*bufp' and returns 0.  The
- * caller is responsible for destroying the message with buffer_delete().  On
+ * caller is responsible for destroying the message with ofpbuf_delete().  On
  * failure, returns a positive errno value and stores a null pointer into
  * '*bufp'.
  *
  * If 'wait' is true, nl_sock_recv waits for a message to be ready; otherwise,
  * returns EAGAIN if the 'sock' receive buffer is empty. */
 int
-nl_sock_recv(struct nl_sock *sock, struct buffer **bufp, bool wait) 
+nl_sock_recv(struct nl_sock *sock, struct ofpbuf **bufp, bool wait) 
 {
     uint8_t tmp;
     ssize_t bufsize = 2048;
     ssize_t nbytes, nbytes2;
-    struct buffer *buf;
+    struct ofpbuf *buf;
     struct nlmsghdr *nlmsghdr;
     struct iovec iov;
     struct msghdr msg = {
@@ -286,7 +286,7 @@ nl_sock_recv(struct nl_sock *sock, struct buffer **bufp, bool wait)
         .msg_flags = 0
     };
 
-    buf = buffer_new(bufsize);
+    buf = ofpbuf_new(bufsize);
     *bufp = NULL;
 
 try_again:
@@ -294,19 +294,19 @@ try_again:
      * yet, so we take a guess at 2048.  If we're wrong, we keep trying
      * and doubling the buffer size each time. 
      */
-    nlmsghdr = buffer_put_uninit(buf, bufsize);
+    nlmsghdr = ofpbuf_put_uninit(buf, bufsize);
     iov.iov_base = nlmsghdr;
     iov.iov_len = bufsize;
     do {
         nbytes = recvmsg(sock->fd, &msg, (wait ? 0 : MSG_DONTWAIT) | MSG_PEEK); 
     } while (nbytes < 0 && errno == EINTR);
     if (nbytes < 0) {
-        buffer_delete(buf);
+        ofpbuf_delete(buf);
         return errno;
     }
     if (msg.msg_flags & MSG_TRUNC) {
         bufsize *= 2;
-        buffer_reinit(buf, bufsize);
+        ofpbuf_reinit(buf, bufsize);
         goto try_again;
     }
     buf->size = nbytes;
@@ -323,7 +323,7 @@ try_again:
              * was dropped.  We have to pass this along to the caller in case
              * it wants to retry a request.  So kill the buffer, which we can
              * re-read next time. */
-            buffer_delete(buf);
+            ofpbuf_delete(buf);
             return ENOBUFS;
         } else {
             VLOG_ERR_RL(&rl, "failed to remove nlmsg from socket: %s\n",
@@ -335,7 +335,7 @@ try_again:
         || nlmsghdr->nlmsg_len > nbytes) {
         VLOG_ERR_RL(&rl, "received invalid nlmsg (%zd bytes < %d)",
                     bufsize, NLMSG_HDRLEN);
-        buffer_delete(buf);
+        ofpbuf_delete(buf);
         return EPROTO;
     }
     *bufp = buf;
@@ -345,7 +345,7 @@ try_again:
 
 /* Sends 'request' to the kernel via 'sock' and waits for a response.  If
  * successful, stores the reply into '*replyp' and returns 0.  The caller is
- * responsible for destroying the reply with buffer_delete().  On failure,
+ * responsible for destroying the reply with ofpbuf_delete().  On failure,
  * returns a positive errno value and stores a null pointer into '*replyp'.
  *
  * Bare Netlink is an unreliable transport protocol.  This function layers
@@ -376,11 +376,11 @@ try_again:
  */
 int
 nl_sock_transact(struct nl_sock *sock,
-                 const struct buffer *request, struct buffer **replyp) 
+                 const struct ofpbuf *request, struct ofpbuf **replyp) 
 {
     uint32_t seq = nl_msg_nlmsghdr(request)->nlmsg_seq;
     struct nlmsghdr *nlmsghdr;
-    struct buffer *reply;
+    struct ofpbuf *reply;
     int retval;
 
     *replyp = NULL;
@@ -409,7 +409,7 @@ recv:
     if (seq != nlmsghdr->nlmsg_seq) {
         VLOG_DBG_RL(&rl, "ignoring seq %"PRIu32" != expected %"PRIu32,
                     nl_msg_nlmsghdr(reply)->nlmsg_seq, seq);
-        buffer_delete(reply);
+        ofpbuf_delete(reply);
         goto recv;
     }
     if (nl_msg_nlmsgerr(reply, &retval)) {
@@ -437,9 +437,9 @@ nl_sock_fd(const struct nl_sock *sock)
  *
  * 'msg' must be at least as large as a nlmsghdr. */
 struct nlmsghdr *
-nl_msg_nlmsghdr(const struct buffer *msg) 
+nl_msg_nlmsghdr(const struct ofpbuf *msg) 
 {
-    return buffer_at_assert(msg, 0, NLMSG_HDRLEN);
+    return ofpbuf_at_assert(msg, 0, NLMSG_HDRLEN);
 }
 
 /* Returns the genlmsghdr just past 'msg''s nlmsghdr.
@@ -447,9 +447,9 @@ nl_msg_nlmsghdr(const struct buffer *msg)
  * Returns a null pointer if 'msg' is not large enough to contain an nlmsghdr
  * and a genlmsghdr. */
 struct genlmsghdr *
-nl_msg_genlmsghdr(const struct buffer *msg) 
+nl_msg_genlmsghdr(const struct ofpbuf *msg) 
 {
-    return buffer_at(msg, NLMSG_HDRLEN, GENL_HDRLEN);
+    return ofpbuf_at(msg, NLMSG_HDRLEN, GENL_HDRLEN);
 }
 
 /* If 'buffer' is a NLMSG_ERROR message, stores 0 in '*errorp' if it is an ACK
@@ -458,10 +458,10 @@ nl_msg_genlmsghdr(const struct buffer *msg)
  *
  * 'msg' must be at least as large as a nlmsghdr. */
 bool
-nl_msg_nlmsgerr(const struct buffer *msg, int *errorp) 
+nl_msg_nlmsgerr(const struct ofpbuf *msg, int *errorp) 
 {
     if (nl_msg_nlmsghdr(msg)->nlmsg_type == NLMSG_ERROR) {
-        struct nlmsgerr *err = buffer_at(msg, NLMSG_HDRLEN, sizeof *err);
+        struct nlmsgerr *err = ofpbuf_at(msg, NLMSG_HDRLEN, sizeof *err);
         int code = EPROTO;
         if (!err) {
             VLOG_ERR_RL(&rl, "received invalid nlmsgerr (%zd bytes < %zd)",
@@ -481,9 +481,9 @@ nl_msg_nlmsgerr(const struct buffer *msg, int *errorp)
 /* Ensures that 'b' has room for at least 'size' bytes plus netlink padding at
  * its tail end, reallocating and copying its data if necessary. */
 void
-nl_msg_reserve(struct buffer *msg, size_t size) 
+nl_msg_reserve(struct ofpbuf *msg, size_t size) 
 {
-    buffer_prealloc_tailroom(msg, NLMSG_ALIGN(size));
+    ofpbuf_prealloc_tailroom(msg, NLMSG_ALIGN(size));
 }
 
 /* Puts a nlmsghdr at the beginning of 'msg', which must be initially empty.
@@ -503,7 +503,7 @@ nl_msg_reserve(struct buffer *msg, size_t size)
  * nl_msg_put_genlmsghdr is more convenient for composing a Generic Netlink
  * message. */
 void
-nl_msg_put_nlmsghdr(struct buffer *msg, struct nl_sock *sock,
+nl_msg_put_nlmsghdr(struct ofpbuf *msg, struct nl_sock *sock,
                     size_t expected_payload, uint32_t type, uint32_t flags) 
 {
     struct nlmsghdr *nlmsghdr;
@@ -539,7 +539,7 @@ nl_msg_put_nlmsghdr(struct buffer *msg, struct nl_sock *sock,
  * nl_msg_put_nlmsghdr should be used to compose Netlink messages that are not
  * Generic Netlink messages. */
 void
-nl_msg_put_genlmsghdr(struct buffer *msg, struct nl_sock *sock,
+nl_msg_put_genlmsghdr(struct ofpbuf *msg, struct nl_sock *sock,
                       size_t expected_payload, int family, uint32_t flags,
                       uint8_t cmd, uint8_t version)
 {
@@ -558,7 +558,7 @@ nl_msg_put_genlmsghdr(struct buffer *msg, struct nl_sock *sock,
  * the tail end of 'msg'.  Data in 'msg' is reallocated and copied if
  * necessary. */
 void
-nl_msg_put(struct buffer *msg, const void *data, size_t size) 
+nl_msg_put(struct ofpbuf *msg, const void *data, size_t size) 
 {
     memcpy(nl_msg_put_uninit(msg, size), data, size);
 }
@@ -567,10 +567,10 @@ nl_msg_put(struct buffer *msg, const void *data, size_t size)
  * end of 'msg', reallocating and copying its data if necessary.  Returns a
  * pointer to the first byte of the new data, which is left uninitialized. */
 void *
-nl_msg_put_uninit(struct buffer *msg, size_t size) 
+nl_msg_put_uninit(struct ofpbuf *msg, size_t size) 
 {
     size_t pad = NLMSG_ALIGN(size) - size;
-    char *p = buffer_put_uninit(msg, size + pad);
+    char *p = ofpbuf_put_uninit(msg, size + pad);
     if (pad) {
         memset(p + size, 0, pad); 
     }
@@ -582,7 +582,7 @@ nl_msg_put_uninit(struct buffer *msg, size_t size)
  * 'msg', reallocating and copying its data if necessary.  Returns a pointer to
  * the first byte of data in the attribute, which is left uninitialized. */
 void *
-nl_msg_put_unspec_uninit(struct buffer *msg, uint16_t type, size_t size) 
+nl_msg_put_unspec_uninit(struct ofpbuf *msg, uint16_t type, size_t size) 
 {
     size_t total_size = NLA_HDRLEN + size;
     struct nlattr* nla = nl_msg_put_uninit(msg, total_size);
@@ -597,7 +597,7 @@ nl_msg_put_unspec_uninit(struct buffer *msg, uint16_t type, size_t size)
  * its data if necessary.  Returns a pointer to the first byte of data in the
  * attribute, which is left uninitialized. */
 void
-nl_msg_put_unspec(struct buffer *msg, uint16_t type,
+nl_msg_put_unspec(struct ofpbuf *msg, uint16_t type,
                   const void *data, size_t size) 
 {
     memcpy(nl_msg_put_unspec_uninit(msg, type, size), data, size);
@@ -607,7 +607,7 @@ nl_msg_put_unspec(struct buffer *msg, uint16_t type,
  * (Some Netlink protocols use the presence or absence of an attribute as a
  * Boolean flag.) */
 void
-nl_msg_put_flag(struct buffer *msg, uint16_t type) 
+nl_msg_put_flag(struct ofpbuf *msg, uint16_t type) 
 {
     nl_msg_put_unspec(msg, type, NULL, 0);
 }
@@ -615,7 +615,7 @@ nl_msg_put_flag(struct buffer *msg, uint16_t type)
 /* Appends a Netlink attribute of the given 'type' and the given 8-bit 'value'
  * to 'msg'. */
 void
-nl_msg_put_u8(struct buffer *msg, uint16_t type, uint8_t value) 
+nl_msg_put_u8(struct ofpbuf *msg, uint16_t type, uint8_t value) 
 {
     nl_msg_put_unspec(msg, type, &value, sizeof value);
 }
@@ -623,7 +623,7 @@ nl_msg_put_u8(struct buffer *msg, uint16_t type, uint8_t value)
 /* Appends a Netlink attribute of the given 'type' and the given 16-bit 'value'
  * to 'msg'. */
 void
-nl_msg_put_u16(struct buffer *msg, uint16_t type, uint16_t value)
+nl_msg_put_u16(struct ofpbuf *msg, uint16_t type, uint16_t value)
 {
     nl_msg_put_unspec(msg, type, &value, sizeof value);
 }
@@ -631,7 +631,7 @@ nl_msg_put_u16(struct buffer *msg, uint16_t type, uint16_t value)
 /* Appends a Netlink attribute of the given 'type' and the given 32-bit 'value'
  * to 'msg'. */
 void
-nl_msg_put_u32(struct buffer *msg, uint16_t type, uint32_t value)
+nl_msg_put_u32(struct ofpbuf *msg, uint16_t type, uint32_t value)
 {
     nl_msg_put_unspec(msg, type, &value, sizeof value);
 }
@@ -639,7 +639,7 @@ nl_msg_put_u32(struct buffer *msg, uint16_t type, uint32_t value)
 /* Appends a Netlink attribute of the given 'type' and the given 64-bit 'value'
  * to 'msg'. */
 void
-nl_msg_put_u64(struct buffer *msg, uint16_t type, uint64_t value)
+nl_msg_put_u64(struct ofpbuf *msg, uint16_t type, uint64_t value)
 {
     nl_msg_put_unspec(msg, type, &value, sizeof value);
 }
@@ -647,7 +647,7 @@ nl_msg_put_u64(struct buffer *msg, uint16_t type, uint64_t value)
 /* Appends a Netlink attribute of the given 'type' and the given
  * null-terminated string 'value' to 'msg'. */
 void
-nl_msg_put_string(struct buffer *msg, uint16_t type, const char *value)
+nl_msg_put_string(struct ofpbuf *msg, uint16_t type, const char *value)
 {
     nl_msg_put_unspec(msg, type, value, strlen(value) + 1);
 }
@@ -656,8 +656,8 @@ nl_msg_put_string(struct buffer *msg, uint16_t type, const char *value)
  * netlink message in 'nested_msg' to 'msg'.  The nlmsg_len field in
  * 'nested_msg' is finalized to match 'nested_msg->size'. */
 void
-nl_msg_put_nested(struct buffer *msg,
-                  uint16_t type, struct buffer *nested_msg)
+nl_msg_put_nested(struct ofpbuf *msg,
+                  uint16_t type, struct ofpbuf *nested_msg)
 {
     nl_msg_nlmsghdr(nested_msg)->nlmsg_len = nested_msg->size;
     nl_msg_put_unspec(msg, type, nested_msg->data, nested_msg->size);
@@ -763,7 +763,7 @@ static const size_t attr_len_range[][2] = {
  * with nla_type == i is parsed; a pointer to attribute i is stored in
  * attrs[i].  Returns true if successful, false on failure. */
 bool
-nl_policy_parse(const struct buffer *msg, const struct nl_policy policy[],
+nl_policy_parse(const struct ofpbuf *msg, const struct nl_policy policy[],
                 struct nlattr *attrs[], size_t n_attrs)
 {
     void *p, *tail;
@@ -782,15 +782,15 @@ nl_policy_parse(const struct buffer *msg, const struct nl_policy policy[],
         }
     }
 
-    p = buffer_at(msg, NLMSG_HDRLEN + GENL_HDRLEN, 0);
+    p = ofpbuf_at(msg, NLMSG_HDRLEN + GENL_HDRLEN, 0);
     if (p == NULL) {
         VLOG_DBG_RL(&rl, "missing headers in nl_policy_parse");
         return false;
     }
-    tail = buffer_tail(msg);
+    tail = ofpbuf_tail(msg);
 
     while (p < tail) {
-        size_t offset = p - msg->data;
+        size_t offset = (char*)p - (char*)msg->data;
         struct nlattr *nla = p;
         size_t len, aligned_len;
         uint16_t type;
@@ -803,10 +803,11 @@ nl_policy_parse(const struct buffer *msg, const struct nl_policy policy[],
         }
         len = nla->nla_len - NLA_HDRLEN;
         aligned_len = NLA_ALIGN(len);
-        if (aligned_len > tail - p) {
+        if (aligned_len > (char*)tail - (char*)p) {
             VLOG_DBG_RL(&rl, "%zu: attr %"PRIu16" aligned data len (%zu) "
                         "> bytes left (%tu)",
-                        offset, nla->nla_type, aligned_len, tail - p);
+                        offset, nla->nla_type, aligned_len,
+                        (char*)tail - (char*)p);
             return false;
         }
 
@@ -844,7 +845,7 @@ nl_policy_parse(const struct buffer *msg, const struct nl_policy policy[],
         } else {
             /* Skip attribute type that we don't care about. */
         }
-        p += NLA_ALIGN(nla->nla_len);
+        p = (char*)p + NLA_ALIGN(nla->nla_len);
     }
     if (n_required) {
         VLOG_DBG_RL(&rl, "%zu required attrs missing", n_required);
@@ -862,7 +863,7 @@ static const struct nl_policy family_policy[CTRL_ATTR_MAX + 1] = {
 static int do_lookup_genl_family(const char *name) 
 {
     struct nl_sock *sock;
-    struct buffer request, *reply;
+    struct ofpbuf request, *reply;
     struct nlattr *attrs[ARRAY_SIZE(family_policy)];
     int retval;
 
@@ -871,12 +872,12 @@ static int do_lookup_genl_family(const char *name)
         return -retval;
     }
 
-    buffer_init(&request, 0);
+    ofpbuf_init(&request, 0);
     nl_msg_put_genlmsghdr(&request, sock, 0, GENL_ID_CTRL, NLM_F_REQUEST,
                           CTRL_CMD_GETFAMILY, 1);
     nl_msg_put_string(&request, CTRL_ATTR_FAMILY_NAME, name);
     retval = nl_sock_transact(sock, &request, &reply);
-    buffer_uninit(&request);
+    ofpbuf_uninit(&request);
     if (retval) {
         nl_sock_destroy(sock);
         return -retval;
@@ -885,7 +886,7 @@ static int do_lookup_genl_family(const char *name)
     if (!nl_policy_parse(reply, family_policy, attrs,
                          ARRAY_SIZE(family_policy))) {
         nl_sock_destroy(sock);
-        buffer_delete(reply);
+        ofpbuf_delete(reply);
         return -EPROTO;
     }
 
@@ -894,7 +895,7 @@ static int do_lookup_genl_family(const char *name)
         retval = -EPROTO;
     }
     nl_sock_destroy(sock);
-    buffer_delete(reply);
+    ofpbuf_delete(reply);
     return retval;
 }
 
@@ -1013,15 +1014,15 @@ nlmsghdr_to_string(const struct nlmsghdr *h, struct ds *ds)
 }
 
 static char *
-nlmsg_to_string(const struct buffer *buffer)
+nlmsg_to_string(const struct ofpbuf *buffer)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
-    const struct nlmsghdr *h = buffer_at(buffer, 0, NLMSG_HDRLEN);
+    const struct nlmsghdr *h = ofpbuf_at(buffer, 0, NLMSG_HDRLEN);
     if (h) {
         nlmsghdr_to_string(h, &ds);
         if (h->nlmsg_type == NLMSG_ERROR) {
             const struct nlmsgerr *e;
-            e = buffer_at(buffer, NLMSG_HDRLEN,
+            e = ofpbuf_at(buffer, NLMSG_HDRLEN,
                           NLMSG_ALIGN(sizeof(struct nlmsgerr)));
             if (e) {
                 ds_put_format(&ds, " error(%d", e->error);
@@ -1035,7 +1036,7 @@ nlmsg_to_string(const struct buffer *buffer)
                 ds_put_cstr(&ds, " error(truncated)");
             }
         } else if (h->nlmsg_type == NLMSG_DONE) {
-            int *error = buffer_at(buffer, NLMSG_HDRLEN, sizeof *error);
+            int *error = ofpbuf_at(buffer, NLMSG_HDRLEN, sizeof *error);
             if (error) {
                 ds_put_format(&ds, " done(%d", *error);
                 if (*error < 0) {
@@ -1056,7 +1057,7 @@ static void
 log_nlmsg(const char *function, int error,
           const void *message, size_t size)
 {
-    struct buffer buffer;
+    struct ofpbuf buffer;
     char *nlmsg;
 
     if (!VLOG_IS_DBG_ENABLED()) {

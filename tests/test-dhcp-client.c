@@ -75,13 +75,13 @@ main(int argc, char *argv[])
     argc -= optind;
     argv += optind;
     if (argc != 1) {
-        fatal(0, "exactly one non-option argument required; "
-              "use --help for help");
+        ofp_fatal(0, "exactly one non-option argument required; "
+                  "use --help for help");
     }
 
     error = dhclient_create(argv[0], modify_dhcp_request, NULL, NULL, &cli);
     if (error) {
-        fatal(error, "dhclient_create failed");
+        ofp_fatal(error, "dhclient_create failed");
     }
     dhclient_init(cli, request_ip.s_addr);
     fatal_signal_add_hook(release, cli, true);
@@ -149,7 +149,8 @@ parse_options(int argc, char *argv[])
         switch (c) {
         case OPT_REQUEST_IP:
             if (!inet_aton(optarg, &request_ip)) {
-                fatal(0, "--request-ip argument is not a valid IP address");
+                ofp_fatal(0,
+                          "--request-ip argument is not a valid IP address");
             }
             break;
 

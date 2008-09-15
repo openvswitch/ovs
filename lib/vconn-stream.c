@@ -40,13 +40,13 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include "buffer.h"
-#include "util.h"
+#include "ofpbuf.h"
 #include "openflow.h"
 #include "poll-loop.h"
 #include "socket-util.h"
-#include "vconn.h"
+#include "util.h"
 #include "vconn-provider.h"
+#include "vconn.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_vconn_stream
@@ -57,8 +57,8 @@ struct stream_vconn
 {
     struct vconn vconn;
     int fd;
-    struct buffer *rxbuf;
-    struct buffer *txbuf;
+    struct ofpbuf *rxbuf;
+    struct ofpbuf *txbuf;
     struct poll_waiter *tx_waiter;
 };
 
@@ -106,15 +106,15 @@ stream_connect(struct vconn *vconn)
 }
 
 static int
-stream_recv(struct vconn *vconn, struct buffer **bufferp)
+stream_recv(struct vconn *vconn, struct ofpbuf **bufferp)
 {
     struct stream_vconn *s = stream_vconn_cast(vconn);
-    struct buffer *rx;
+    struct ofpbuf *rx;
     size_t want_bytes;
     ssize_t retval;
 
     if (s->rxbuf == NULL) {
-        s->rxbuf = buffer_new(1564);
+        s->rxbuf = ofpbuf_new(1564);
     }
     rx = s->rxbuf;
 
@@ -136,9 +136,9 @@ again:
             return 0;
         }
     }
-    buffer_prealloc_tailroom(rx, want_bytes);
+    ofpbuf_prealloc_tailroom(rx, want_bytes);
 
-    retval = read(s->fd, buffer_tail(rx), want_bytes);
+    retval = read(s->fd, ofpbuf_tail(rx), want_bytes);
     if (retval > 0) {
         rx->size += retval;
         if (retval == want_bytes) {
@@ -166,7 +166,7 @@ again:
 static void
 stream_clear_txbuf(struct stream_vconn *s)
 {
-    buffer_delete(s->txbuf);
+    ofpbuf_delete(s->txbuf);
     s->txbuf = NULL;
     s->tx_waiter = NULL;
 }
@@ -184,7 +184,7 @@ stream_do_tx(int fd UNUSED, short int revents UNUSED, void *vconn_)
             return;
         }
     } else if (n > 0) {
-        buffer_pull(s->txbuf, n);
+        ofpbuf_pull(s->txbuf, n);
         if (!s->txbuf->size) {
             stream_clear_txbuf(s);
             return;
@@ -194,7 +194,7 @@ stream_do_tx(int fd UNUSED, short int revents UNUSED, void *vconn_)
 }
 
 static int
-stream_send(struct vconn *vconn, struct buffer *buffer)
+stream_send(struct vconn *vconn, struct ofpbuf *buffer)
 {
     struct stream_vconn *s = stream_vconn_cast(vconn);
     ssize_t retval;
@@ -205,12 +205,12 @@ stream_send(struct vconn *vconn, struct buffer *buffer)
 
     retval = write(s->fd, buffer->data, buffer->size);
     if (retval == buffer->size) {
-        buffer_delete(buffer);
+        ofpbuf_delete(buffer);
         return 0;
     } else if (retval >= 0 || errno == EAGAIN) {
         s->txbuf = buffer;
         if (retval > 0) {
-            buffer_pull(buffer, retval);
+            ofpbuf_pull(buffer, retval);
         }
         s->tx_waiter = poll_fd_callback(s->fd, POLLOUT, stream_do_tx, vconn);
         return 0;
@@ -246,12 +246,13 @@ stream_wait(struct vconn *vconn, enum vconn_wait_type wait)
 }
 
 static struct vconn_class stream_vconn_class = {
-    .name = "stream",
-    .close = stream_close,
-    .connect = stream_connect,
-    .recv = stream_recv,
-    .send = stream_send,
-    .wait = stream_wait,
+    "stream",                   /* name */
+    NULL,                       /* open */
+    stream_close,               /* close */
+    stream_connect,             /* connect */
+    stream_recv,                /* recv */
+    stream_send,                /* send */
+    stream_wait,                /* wait */
 };
 
 /* Passive stream socket vconn. */

@@ -450,13 +450,13 @@ main(int argc, char *argv[])
     int i;
 
     if (argc != 2) {
-        fatal(0, "usage: test-stp INPUT.STP\n");
+        ofp_fatal(0, "usage: test-stp INPUT.STP\n");
     }
     file_name = argv[1];
 
     input_file = fopen(file_name, "r");
     if (!input_file) {
-        fatal(errno, "error opening \"%s\"", file_name);
+        ofp_fatal(errno, "error opening \"%s\"", file_name);
     }
 
     tc = new_test_case();

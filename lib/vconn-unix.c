@@ -43,13 +43,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "buffer.h"
-#include "socket-util.h"
-#include "util.h"
+#include "ofpbuf.h"
 #include "openflow.h"
-#include "ofp-print.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "socket-util.h"
+#include "util.h"
 #include "vconn-provider.h"
 #include "vconn-stream.h"
 
@@ -82,8 +81,13 @@ unix_open(const char *name, char *suffix, struct vconn **vconnp)
 }
 
 struct vconn_class unix_vconn_class = {
-    .name = "unix",
-    .open = unix_open,
+    "unix",                     /* name */
+    unix_open,                  /* open */
+    NULL,                       /* close */
+    NULL,                       /* connect */
+    NULL,                       /* recv */
+    NULL,                       /* send */
+    NULL,                       /* wait */
 };
 
 /* Passive UNIX socket. */

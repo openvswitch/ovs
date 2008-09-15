@@ -36,12 +36,12 @@
 
 #include <stdbool.h>
 
-struct buffer;
+struct ofpbuf;
 struct rconn;
 
 struct lswitch *lswitch_create(struct rconn *, bool learn_macs, int max_idle);
 void lswitch_destroy(struct lswitch *);
 void lswitch_process_packet(struct lswitch *, struct rconn *,
-                            const struct buffer *);
+                            const struct ofpbuf *);
 
 #endif /* learning-switch.h */

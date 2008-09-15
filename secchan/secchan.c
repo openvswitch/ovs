@@ -45,12 +45,11 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "buffer.h"
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
-#include "dhcp.h"
 #include "dhcp-client.h"
+#include "dhcp.h"
 #include "dynamic-string.h"
 #include "fault.h"
 #include "flow.h"
@@ -59,6 +58,7 @@
 #include "mac-learning.h"
 #include "netdev.h"
 #include "nicira-ext.h"
+#include "ofpbuf.h"
 #include "openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -114,7 +114,7 @@ struct settings {
 
 struct half {
     struct rconn *rconn;
-    struct buffer *rxbuf;
+    struct ofpbuf *rxbuf;
     int n_txq;                  /* No. of packets queued for tx on 'rconn'. */
 };
 
@@ -158,7 +158,7 @@ static struct hook make_hook(bool (*local_packet_cb)(struct relay *, void *),
 static struct ofp_packet_in *get_ofp_packet_in(struct relay *);
 static bool get_ofp_packet_eth_header(struct relay *, struct ofp_packet_in **,
                                       struct eth_header **);
-static void get_ofp_packet_payload(struct ofp_packet_in *, struct buffer *);
+static void get_ofp_packet_payload(struct ofp_packet_in *, struct ofpbuf *);
 
 struct switch_status;
 struct status_reply;
@@ -256,7 +256,7 @@ main(int argc, char *argv[])
     /* Start listening for vlogconf requests. */
     retval = vlog_server_listen(NULL, NULL);
     if (retval) {
-        fatal(retval, "Could not listen for vlog connections");
+        ofp_fatal(retval, "Could not listen for vlog connections");
     }
 
     die_if_already_running();
@@ -276,7 +276,7 @@ main(int argc, char *argv[])
     if (s.controller_name) {
         retval = rconn_connect(remote_rconn, s.controller_name);
         if (retval == EAFNOSUPPORT) {
-            fatal(0, "No support for %s vconn", s.controller_name);
+            ofp_fatal(0, "No support for %s vconn", s.controller_name);
         }
     }
     switch_status_register_category(switch_status, "remote",
@@ -377,7 +377,7 @@ open_passive_vconn(const char *name)
 
     retval = pvconn_open(name, &pvconn);
     if (retval && retval != EAGAIN) {
-        fatal(retval, "opening %s", name);
+        ofp_fatal(retval, "opening %s", name);
     }
     return pvconn;
 }
@@ -414,7 +414,7 @@ make_hook(bool (*local_packet_cb)(struct relay *, void *aux),
 static struct ofp_packet_in *
 get_ofp_packet_in(struct relay *r)
 {
-    struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
+    struct ofpbuf *msg = r->halves[HALF_LOCAL].rxbuf;
     struct ofp_header *oh = msg->data;
     if (oh->type == OFPT_PACKET_IN) {
         if (msg->size >= offsetof (struct ofp_packet_in, data)) {
@@ -517,7 +517,7 @@ relay_run(struct relay *r, const struct hook hooks[], size_t n_hooks)
                     const struct hook *h;
                     for (h = hooks; h < &hooks[n_hooks]; h++) {
                         if (h->packet_cb[i] && h->packet_cb[i](r, h->aux)) {
-                            buffer_delete(this->rxbuf);
+                            ofpbuf_delete(this->rxbuf);
                             this->rxbuf = NULL;
                             progress = true;
                             break;
@@ -533,7 +533,7 @@ relay_run(struct relay *r, const struct hook hooks[], size_t n_hooks)
                     if (!retval) {
                         progress = true;
                     } else {
-                        buffer_delete(this->rxbuf);
+                        ofpbuf_delete(this->rxbuf);
                     }
                     this->rxbuf = NULL;
                 }
@@ -579,7 +579,7 @@ relay_destroy(struct relay *r)
     for (i = 0; i < 2; i++) {
         struct half *this = &r->halves[i];
         rconn_destroy(this->rconn);
-        buffer_delete(this->rxbuf);
+        ofpbuf_delete(this->rxbuf);
     }
     free(r);
 }
@@ -690,7 +690,7 @@ static bool
 port_watcher_local_packet_cb(struct relay *r, void *pw_)
 {
     struct port_watcher *pw = pw_;
-    struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
+    struct ofpbuf *msg = r->halves[HALF_LOCAL].rxbuf;
     struct ofp_header *oh = msg->data;
 
     if (oh->type == OFPT_FEATURES_REPLY
@@ -728,7 +728,7 @@ static bool
 port_watcher_remote_packet_cb(struct relay *r, void *pw_)
 {
     struct port_watcher *pw = pw_;
-    struct buffer *msg = r->halves[HALF_REMOTE].rxbuf;
+    struct ofpbuf *msg = r->halves[HALF_REMOTE].rxbuf;
     struct ofp_header *oh = msg->data;
 
     if (oh->type == OFPT_PORT_MOD
@@ -755,7 +755,7 @@ port_watcher_periodic_cb(void *pw_)
     struct port_watcher *pw = pw_;
 
     if (!pw->got_feature_reply && time_now() >= pw->last_feature_request + 5) {
-        struct buffer *b;
+        struct ofpbuf *b;
         make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &b);
         rconn_send_with_limit(pw->local_rconn, b, &pw->n_txq, 1);
         pw->last_feature_request = time_now();
@@ -851,7 +851,7 @@ port_watcher_set_flags(struct port_watcher *pw,
     struct ofp_phy_port *p;
     struct ofp_port_mod *opm;
     struct ofp_port_status *ops;
-    struct buffer *b;
+    struct ofpbuf *b;
     int idx;
 
     idx = port_no_to_pw_idx(port_no);
@@ -931,7 +931,7 @@ stp_local_packet_cb(struct relay *r, void *stp_)
     struct ofp_packet_in *opi;
     struct eth_header *eth;
     struct llc_header *llc;
-    struct buffer payload;
+    struct ofpbuf payload;
     uint16_t port_no;
     struct flow flow;
 
@@ -961,7 +961,7 @@ stp_local_packet_cb(struct relay *r, void *stp_)
         VLOG_DBG("non-LLC frame received on STP multicast address");
         return false;
     }
-    llc = buffer_at_assert(&payload, sizeof *eth, sizeof *llc);
+    llc = ofpbuf_at_assert(&payload, sizeof *eth, sizeof *llc);
     if (llc->llc_dsap != STP_LLC_DSAP) {
         VLOG_DBG("bad DSAP 0x%02"PRIx8" received on STP multicast address",
                  llc->llc_dsap);
@@ -972,7 +972,7 @@ stp_local_packet_cb(struct relay *r, void *stp_)
     if (payload.size > ntohs(eth->eth_type) + ETH_HEADER_LEN) {
         payload.size = ntohs(eth->eth_type) + ETH_HEADER_LEN;
     }
-    if (buffer_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
+    if (ofpbuf_try_pull(&payload, ETH_HEADER_LEN + LLC_HEADER_LEN)) {
         struct stp_port *p = stp_get_port(stp->stp, port_no);
         stp_received_bpdu(p, payload.data, payload.size);
     }
@@ -1059,13 +1059,13 @@ send_bpdu(const void *bpdu, size_t bpdu_size, int port_no, void *stp_)
     struct stp_data *stp = stp_;
     struct eth_header *eth;
     struct llc_header *llc;
-    struct buffer pkt, *opo;
+    struct ofpbuf pkt, *opo;
 
     /* Packet skeleton. */
-    buffer_init(&pkt, ETH_HEADER_LEN + LLC_HEADER_LEN + bpdu_size);
-    eth = buffer_put_uninit(&pkt, sizeof *eth);
-    llc = buffer_put_uninit(&pkt, sizeof *llc);
-    buffer_put(&pkt, bpdu, bpdu_size);
+    ofpbuf_init(&pkt, ETH_HEADER_LEN + LLC_HEADER_LEN + bpdu_size);
+    eth = ofpbuf_put_uninit(&pkt, sizeof *eth);
+    llc = ofpbuf_put_uninit(&pkt, sizeof *llc);
+    ofpbuf_put(&pkt, bpdu, bpdu_size);
 
     /* 802.2 header. */
     memcpy(eth->eth_dst, stp_eth_addr, ETH_ADDR_LEN);
@@ -1078,7 +1078,7 @@ send_bpdu(const void *bpdu, size_t bpdu_size, int port_no, void *stp_)
     llc->llc_cntl = STP_LLC_CNTL;
 
     opo = make_unbuffered_packet_out(&pkt, OFPP_NONE, port_no);
-    buffer_uninit(&pkt);
+    ofpbuf_uninit(&pkt);
     rconn_send_with_limit(stp->local_rconn, opo, &stp->n_txq, OFPP_MAX);
 }
 
@@ -1118,7 +1118,7 @@ stp_hook_create(const struct settings *s, struct port_watcher *pw,
 
     retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE, &netdev);
     if (retval) {
-        fatal(retval, "Could not open %s device", s->of_name);
+        ofp_fatal(retval, "Could not open %s device", s->of_name);
     }
     memcpy(dpid, netdev_get_etheraddr(netdev), ETH_ADDR_LEN);
     netdev_close(netdev);
@@ -1148,7 +1148,7 @@ struct in_band_data {
 };
 
 static void
-queue_tx(struct rconn *rc, struct in_band_data *in_band, struct buffer *b)
+queue_tx(struct rconn *rc, struct in_band_data *in_band, struct ofpbuf *b)
 {
     rconn_send_with_limit(rc, b, &in_band->n_queued, 10);
 }
@@ -1227,7 +1227,7 @@ in_band_local_packet_cb(struct relay *r, void *in_band_)
     struct rconn *rc = r->halves[HALF_LOCAL].rconn;
     struct ofp_packet_in *opi;
     struct eth_header *eth;
-    struct buffer payload;
+    struct ofpbuf payload;
     struct flow flow;
     uint16_t in_port;
     int out_port;
@@ -1293,7 +1293,7 @@ in_band_local_packet_cb(struct relay *r, void *in_band_)
     } else {
         /* We don't know that MAC.  Send along the packet without setting up a
          * flow. */
-        struct buffer *b;
+        struct ofpbuf *b;
         if (ntohl(opi->buffer_id) == UINT32_MAX) {
             b = make_unbuffered_packet_out(&payload, in_port, out_port);
         } else {
@@ -1332,7 +1332,7 @@ in_band_status_cb(struct status_reply *sr, void *in_band_)
 }
 
 static void
-get_ofp_packet_payload(struct ofp_packet_in *opi, struct buffer *payload)
+get_ofp_packet_payload(struct ofp_packet_in *opi, struct ofpbuf *payload)
 {
     payload->data = opi->data;
     payload->size = ntohs(opi->header.length) - offsetof(struct ofp_packet_in,
@@ -1352,7 +1352,7 @@ in_band_hook_create(const struct settings *s, struct switch_status *ss,
     retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE,
                          &in_band->of_device);
     if (retval) {
-        fatal(retval, "Could not open %s device", s->of_name);
+        ofp_fatal(retval, "Could not open %s device", s->of_name);
     }
     memcpy(in_band->mac, netdev_get_etheraddr(in_band->of_device),
            ETH_ADDR_LEN);
@@ -1455,7 +1455,7 @@ struct rate_limiter {
     struct rconn *remote_rconn;
 
     /* One queue per physical port. */
-    struct queue queues[OFPP_MAX];
+    struct ofp_queue queues[OFPP_MAX];
     int n_queued;               /* Sum over queues[*].n. */
     int next_tx_port;           /* Next port to check in round-robin. */
 
@@ -1482,9 +1482,9 @@ struct rate_limiter {
 static void
 drop_packet(struct rate_limiter *rl)
 {
-    struct queue *longest;      /* Queue currently selected as longest. */
+    struct ofp_queue *longest;  /* Queue currently selected as longest. */
     int n_longest;              /* # of queues of same length as 'longest'. */
-    struct queue *q;
+    struct ofp_queue *q;
 
     longest = &rl->queues[0];
     n_longest = 1;
@@ -1504,19 +1504,19 @@ drop_packet(struct rate_limiter *rl)
     }
 
     /* FIXME: do we want to pop the tail instead? */
-    buffer_delete(queue_pop_head(longest));
+    ofpbuf_delete(queue_pop_head(longest));
     rl->n_queued--;
 }
 
 /* Remove and return the next packet to transmit (in round-robin order). */
-static struct buffer *
+static struct ofpbuf *
 dequeue_packet(struct rate_limiter *rl)
 {
     unsigned int i;
 
     for (i = 0; i < OFPP_MAX; i++) {
         unsigned int port = (rl->next_tx_port + i) % OFPP_MAX;
-        struct queue *q = &rl->queues[port];
+        struct ofp_queue *q = &rl->queues[port];
         if (q->n) {
             rl->next_tx_port = (port + 1) % OFPP_MAX;
             rl->n_queued--;
@@ -1572,12 +1572,12 @@ rate_limit_local_packet_cb(struct relay *r, void *rl_)
         return false;
     } else {
         /* Otherwise queue it up for the periodic callback to drain out. */
-        struct buffer *msg = r->halves[HALF_LOCAL].rxbuf;
+        struct ofpbuf *msg = r->halves[HALF_LOCAL].rxbuf;
         int port = ntohs(opi->in_port) % OFPP_MAX;
         if (rl->n_queued >= s->burst_limit) {
             drop_packet(rl);
         }
-        queue_push_tail(&rl->queues[port], buffer_clone(msg));
+        queue_push_tail(&rl->queues[port], ofpbuf_clone(msg));
         rl->n_queued++;
         rl->n_limited++;
         return true;
@@ -1609,7 +1609,7 @@ rate_limit_periodic_cb(void *rl_)
          * because the TCP connection is responsible for buffering and there is
          * no point in trying to transmit faster than the TCP connection can
          * handle. */
-        struct buffer *b = dequeue_packet(rl);
+        struct ofpbuf *b = dequeue_packet(rl);
         if (rconn_send_with_limit(rl->remote_rconn, b, &rl->n_txq, 10)) {
             rl->n_tx_dropped++;
         }
@@ -1679,12 +1679,12 @@ switch_status_remote_packet_cb(struct relay *r, void *ss_)
 {
     struct switch_status *ss = ss_;
     struct rconn *rc = r->halves[HALF_REMOTE].rconn;
-    struct buffer *msg = r->halves[HALF_REMOTE].rxbuf;
+    struct ofpbuf *msg = r->halves[HALF_REMOTE].rxbuf;
     struct switch_status_category *c;
     struct nicira_header *request;
     struct nicira_header *reply;
     struct status_reply sr;
-    struct buffer *b;
+    struct ofpbuf *b;
     int retval;
 
     if (msg->size < sizeof(struct nicira_header)) {
@@ -1888,11 +1888,11 @@ discovery_init(const struct settings *s, struct switch_status *ss)
     /* Bring ofX network device up. */
     retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE, &netdev);
     if (retval) {
-        fatal(retval, "Could not open %s device", s->of_name);
+        ofp_fatal(retval, "Could not open %s device", s->of_name);
     }
     retval = netdev_turn_flags_on(netdev, NETDEV_UP, true);
     if (retval) {
-        fatal(retval, "Could not bring %s device up", s->of_name);
+        ofp_fatal(retval, "Could not bring %s device up", s->of_name);
     }
     netdev_close(netdev);
 
@@ -1900,7 +1900,7 @@ discovery_init(const struct settings *s, struct switch_status *ss)
     retval = dhclient_create(s->of_name, modify_dhcp_request,
                              validate_dhcp_offer, (void *) s, &dhcp);
     if (retval) {
-        fatal(retval, "Failed to initialize DHCP client");
+        ofp_fatal(retval, "Failed to initialize DHCP client");
     }
     dhclient_init(dhcp, 0);
 
@@ -2052,15 +2052,15 @@ parse_options(int argc, char *argv[], struct settings *s)
             } else if (!strcmp(optarg, "closed")) {
                 s->fail_mode = FAIL_CLOSED;
             } else {
-                fatal(0,
-                      "-f or --fail argument must be \"open\" or \"closed\"");
+                ofp_fatal(0, "-f or --fail argument must be \"open\" "
+                          "or \"closed\"");
             }
             break;
 
         case OPT_INACTIVITY_PROBE:
             s->probe_interval = atoi(optarg);
             if (s->probe_interval < 5) {
-                fatal(0, "--inactivity-probe argument must be at least 5");
+                ofp_fatal(0, "--inactivity-probe argument must be at least 5");
             }
             break;
 
@@ -2070,8 +2070,8 @@ parse_options(int argc, char *argv[], struct settings *s)
             } else {
                 s->max_idle = atoi(optarg);
                 if (s->max_idle < 1 || s->max_idle > 65535) {
-                    fatal(0, "--max-idle argument must be between 1 and "
-                          "65535 or the word 'permanent'");
+                    ofp_fatal(0, "--max-idle argument must be between 1 and "
+                              "65535 or the word 'permanent'");
                 }
             }
             break;
@@ -2079,7 +2079,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         case OPT_MAX_BACKOFF:
             s->max_backoff = atoi(optarg);
             if (s->max_backoff < 1) {
-                fatal(0, "--max-backoff argument must be at least 1");
+                ofp_fatal(0, "--max-backoff argument must be at least 1");
             } else if (s->max_backoff > 3600) {
                 s->max_backoff = 3600;
             }
@@ -2089,7 +2089,7 @@ parse_options(int argc, char *argv[], struct settings *s)
             if (optarg) {
                 s->rate_limit = atoi(optarg);
                 if (s->rate_limit < 1) {
-                    fatal(0, "--rate-limit argument must be at least 1");
+                    ofp_fatal(0, "--rate-limit argument must be at least 1");
                 }
             } else {
                 s->rate_limit = 1000;
@@ -2099,7 +2099,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         case OPT_BURST_LIMIT:
             s->burst_limit = atoi(optarg);
             if (s->burst_limit < 1) {
-                fatal(0, "--burst-limit argument must be at least 1");
+                ofp_fatal(0, "--burst-limit argument must be at least 1");
             }
             break;
 
@@ -2117,15 +2117,16 @@ parse_options(int argc, char *argv[], struct settings *s)
 
         case 'l':
             if (s->n_listeners >= MAX_MGMT) {
-                fatal(0, "-l or --listen may be specified at most %d times",
-                      MAX_MGMT);
+                ofp_fatal(0,
+                          "-l or --listen may be specified at most %d times",
+                          MAX_MGMT);
             }
             s->listener_names[s->n_listeners++] = optarg;
             break;
 
         case 'm':
             if (s->monitor_name) {
-                fatal(0, "-m or --monitor may only be specified once");
+                ofp_fatal(0, "-m or --monitor may only be specified once");
             }
             s->monitor_name = optarg;
             break;
@@ -2155,7 +2156,8 @@ parse_options(int argc, char *argv[], struct settings *s)
     argc -= optind;
     argv += optind;
     if (argc < 1 || argc > 2) {
-        fatal(0, "need one or two non-option arguments; use --help for usage");
+        ofp_fatal(0, "need one or two non-option arguments; "
+                  "use --help for usage");
     }
 
     /* Local and remote vconns. */
@@ -2163,7 +2165,8 @@ parse_options(int argc, char *argv[], struct settings *s)
     if (strncmp(s->nl_name, "nl:", 3)
         || strlen(s->nl_name) < 4
         || s->nl_name[strspn(s->nl_name + 3, "0123456789") + 3]) {
-        fatal(0, "%s: argument is not of the form \"nl:DP_IDX\"", s->nl_name);
+        ofp_fatal(0, "%s: argument is not of the form \"nl:DP_IDX\"",
+                  s->nl_name);
     }
     s->of_name = xasprintf("of%s", s->nl_name + 3);
     s->controller_name = argc > 1 ? xstrdup(argv[1]) : NULL;
@@ -2178,7 +2181,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         size_t length = regerror(retval, &s->accept_controller_regex, NULL, 0);
         char *buffer = xmalloc(length);
         regerror(retval, &s->accept_controller_regex, buffer, length);
-        fatal(0, "%s: %s", accept_re, buffer);
+        ofp_fatal(0, "%s: %s", accept_re, buffer);
     }
     s->accept_controller_re = accept_re;
 
@@ -2192,12 +2195,12 @@ parse_options(int argc, char *argv[], struct settings *s)
 
         retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE, &netdev);
         if (retval) {
-            fatal(retval, "Could not open %s device", s->of_name);
+            ofp_fatal(retval, "Could not open %s device", s->of_name);
         }
 
         retval = netdev_get_flags(netdev, &flags);
         if (retval) {
-            fatal(retval, "Could not get flags for %s device", s->of_name);
+            ofp_fatal(retval, "Could not get flags for %s device", s->of_name);
         }
 
         s->in_band = (flags & NETDEV_UP) != 0;

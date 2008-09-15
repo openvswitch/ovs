@@ -35,17 +35,17 @@
 #define QUEUE_H 1
 
 /* Packet queue. */
-struct queue {
+struct ofp_queue {
     int n;                      /* Number of queued packets. */
-    struct buffer *head;        /* First queued packet, null if n == 0. */
-    struct buffer *tail;        /* Last queued packet, null if n == 0. */
+    struct ofpbuf *head;        /* First queued packet, null if n == 0. */
+    struct ofpbuf *tail;        /* Last queued packet, null if n == 0. */
 };
 
-void queue_init(struct queue *);
-void queue_destroy(struct queue *);
-void queue_clear(struct queue *);
-void queue_advance_head(struct queue *, struct buffer *next);
-void queue_push_tail(struct queue *, struct buffer *);
-struct buffer *queue_pop_head(struct queue *);
+void queue_init(struct ofp_queue *);
+void queue_destroy(struct ofp_queue *);
+void queue_clear(struct ofp_queue *);
+void queue_advance_head(struct ofp_queue *, struct ofpbuf *next);
+void queue_push_tail(struct ofp_queue *, struct ofpbuf *);
+struct ofpbuf *queue_pop_head(struct ofp_queue *);
 
 #endif /* queue.h */

@@ -65,10 +65,10 @@ void rconn_destroy(struct rconn *);
 
 void rconn_run(struct rconn *);
 void rconn_run_wait(struct rconn *);
-struct buffer *rconn_recv(struct rconn *);
+struct ofpbuf *rconn_recv(struct rconn *);
 void rconn_recv_wait(struct rconn *);
-int rconn_send(struct rconn *, struct buffer *, int *n_queued);
-int rconn_send_with_limit(struct rconn *, struct buffer *,
+int rconn_send(struct rconn *, struct ofpbuf *, int *n_queued);
+int rconn_send_with_limit(struct rconn *, struct ofpbuf *,
                           int *n_queued, int queue_limit);
 unsigned int rconn_packets_sent(const struct rconn *);
 unsigned int rconn_packets_received(const struct rconn *);

@@ -37,7 +37,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-#include "buffer.h"
+#include "ofpbuf.h"
 #include "openflow.h"
 #include "packets.h"
 #include "timeval.h"
@@ -238,7 +238,7 @@ bool flow_timeout(struct sw_flow *flow)
     }
 }
 
-void flow_used(struct sw_flow *flow, struct buffer *buffer)
+void flow_used(struct sw_flow *flow, struct ofpbuf *buffer)
 {
     flow->used = time_now();
     flow->packet_count++;

@@ -48,7 +48,7 @@ random_init(void)
         struct timeval tv;
         inited = true;
         if (gettimeofday(&tv, NULL) < 0) {
-            fatal(errno, "gettimeofday");
+            ofp_fatal(errno, "gettimeofday");
         }
         srand(tv.tv_sec ^ tv.tv_usec);
     }

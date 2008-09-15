@@ -40,9 +40,9 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "buffer.h"
 #include "flow.h"
 #include "mac-learning.h"
+#include "ofpbuf.h"
 #include "ofp-print.h"
 #include "openflow.h"
 #include "queue.h"
@@ -73,7 +73,7 @@ struct lswitch {
  * rate limit relatively high. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 
-static void queue_tx(struct lswitch *, struct rconn *, struct buffer *);
+static void queue_tx(struct lswitch *, struct rconn *, struct ofpbuf *);
 static void send_features_request(struct lswitch *, struct rconn *);
 static void process_switch_features(struct lswitch *, struct rconn *,
                                     struct ofp_switch_features *);
@@ -118,28 +118,31 @@ lswitch_destroy(struct lswitch *sw)
     }
 }
 
+static size_t
+min_size(uint8_t type)
+{
+    return (type == OFPT_FEATURES_REPLY ? sizeof(struct ofp_switch_features)
+            : type == OFPT_PACKET_IN ? offsetof (struct ofp_packet_in, data)
+            : type == OFPT_PORT_STATUS ? sizeof(struct ofp_port_status)
+            : sizeof(struct ofp_header));
+}
+
 /* Processes 'msg', which should be an OpenFlow received on 'rconn', according
  * to the learning switch state in 'sw'.  The most likely result of processing
  * is that flow-setup and packet-out OpenFlow messages will be sent out on
  * 'rconn'.  */
 void
 lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
-                       const struct buffer *msg)
+                       const struct ofpbuf *msg)
 {
-    static const size_t min_size[UINT8_MAX + 1] = {
-        [0 ... UINT8_MAX] = sizeof (struct ofp_header),
-        [OFPT_FEATURES_REPLY] = sizeof (struct ofp_switch_features),
-        [OFPT_PACKET_IN] = offsetof (struct ofp_packet_in, data),
-        [OFPT_PORT_STATUS] = sizeof(struct ofp_port_status),
-    };
     struct ofp_header *oh;
 
     oh = msg->data;
-    if (msg->size < min_size[oh->type]) {
+    if (msg->size < min_size(oh->type)) {
         VLOG_WARN_RL(&rl,
                      "%s: too short (%zu bytes) for type %"PRIu8" (min %zu)",
                      rconn_get_name(rconn),
-                     msg->size, oh->type, min_size[oh->type]);
+                     msg->size, oh->type, min_size(oh->type));
         return;
     }
 
@@ -167,7 +170,7 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
 {
     time_t now = time_now();
     if (now >= sw->last_features_request + 1) {
-        struct buffer *b;
+        struct ofpbuf *b;
         struct ofp_switch_config *osc;
 
         /* Send OFPT_FEATURES_REQUEST. */
@@ -185,7 +188,7 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
 }
 
 static void
-queue_tx(struct lswitch *sw, struct rconn *rconn, struct buffer *b)
+queue_tx(struct lswitch *sw, struct rconn *rconn, struct ofpbuf *b)
 {
     int retval = rconn_send_with_limit(rconn, b, &sw->n_queued, 10);
     if (retval && retval != ENOTCONN) {
@@ -222,7 +225,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
     uint16_t out_port = OFPP_FLOOD;
 
     size_t pkt_ofs, pkt_len;
-    struct buffer pkt;
+    struct ofpbuf pkt;
     struct flow flow;
 
     /* Extract flow data from 'opi' into 'flow'. */
@@ -259,7 +262,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn,
     } else {
         /* We don't know that MAC, or we don't set up flows.  Send along the
          * packet without setting up a flow. */
-        struct buffer *b;
+        struct ofpbuf *b;
         if (ntohl(opi->buffer_id) == UINT32_MAX) {
             b = make_unbuffered_packet_out(&pkt, in_port, out_port);
         } else {
@@ -315,7 +318,7 @@ process_phy_port(struct lswitch *sw, struct rconn *rconn,
         }
         if (flags != new_flags) {
             struct ofp_port_mod *opm;
-            struct buffer *b;
+            struct ofpbuf *b;
             int retval;
 
             VLOG_WARN("port %d: flags=%x new_flags=%x",
@@ -330,7 +333,7 @@ process_phy_port(struct lswitch *sw, struct rconn *rconn,
                     VLOG_WARN_RL(&rl, "%s: send: %s",
                                  rconn_get_name(rconn), strerror(retval));
                 }
-                buffer_delete(b);
+                ofpbuf_delete(b);
             }
         }
     }

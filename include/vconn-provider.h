@@ -96,7 +96,7 @@ struct vconn_class {
 
     /* Tries to receive an OpenFlow message from 'vconn'.  If successful,
      * stores the received message into '*msgp' and returns 0.  The caller is
-     * responsible for destroying the message with buffer_delete().  On
+     * responsible for destroying the message with ofpbuf_delete().  On
      * failure, returns a positive errno value and stores a null pointer into
      * '*msgp'.
      *
@@ -104,7 +104,7 @@ struct vconn_class {
      *
      * The recv function must not block waiting for a packet to arrive.  If no
      * packets have been received, it should return EAGAIN. */
-    int (*recv)(struct vconn *vconn, struct buffer **msgp);
+    int (*recv)(struct vconn *vconn, struct ofpbuf **msgp);
 
     /* Tries to queue 'msg' for transmission on 'vconn'.  If successful,
      * returns 0, in which case ownership of 'msg' is transferred to the vconn.
@@ -116,7 +116,7 @@ struct vconn_class {
      *
      * The send function must not block.  If 'msg' cannot be immediately
      * accepted for transmission, it should return EAGAIN. */
-    int (*send)(struct vconn *vconn, struct buffer *msg);
+    int (*send)(struct vconn *vconn, struct ofpbuf *msg);
 
     /* Arranges for the poll loop to wake up when 'vconn' is ready to take an
      * action of the given 'type'. */

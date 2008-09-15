@@ -36,8 +36,8 @@
 #include <inttypes.h>
 #include <netinet/in.h>
 #include <string.h>
-#include "buffer.h"
 #include "hash.h"
+#include "ofpbuf.h"
 #include "openflow.h"
 #include "packets.h"
 
@@ -45,54 +45,54 @@
 #define THIS_MODULE VLM_flow
 
 static struct ip_header *
-pull_ip(struct buffer *packet)
+pull_ip(struct ofpbuf *packet)
 {
     if (packet->size >= IP_HEADER_LEN) {
         struct ip_header *ip = packet->data;
         int ip_len = IP_IHL(ip->ip_ihl_ver) * 4;
         if (ip_len >= IP_HEADER_LEN && packet->size >= ip_len) {
-            return buffer_pull(packet, ip_len);
+            return ofpbuf_pull(packet, ip_len);
         }
     }
     return NULL;
 }
 
 static struct tcp_header *
-pull_tcp(struct buffer *packet) 
+pull_tcp(struct ofpbuf *packet) 
 {
     if (packet->size >= TCP_HEADER_LEN) {
         struct tcp_header *tcp = packet->data;
         int tcp_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
         if (tcp_len >= TCP_HEADER_LEN && packet->size >= tcp_len) {
-            return buffer_pull(packet, tcp_len);
+            return ofpbuf_pull(packet, tcp_len);
         }
     }
     return NULL;
 }
 
 static struct udp_header *
-pull_udp(struct buffer *packet) 
+pull_udp(struct ofpbuf *packet) 
 {
-    return buffer_try_pull(packet, UDP_HEADER_LEN);
+    return ofpbuf_try_pull(packet, UDP_HEADER_LEN);
 }
 
 static struct eth_header *
-pull_eth(struct buffer *packet) 
+pull_eth(struct ofpbuf *packet) 
 {
-    return buffer_try_pull(packet, ETH_HEADER_LEN);
+    return ofpbuf_try_pull(packet, ETH_HEADER_LEN);
 }
 
 static struct vlan_header *
-pull_vlan(struct buffer *packet)
+pull_vlan(struct ofpbuf *packet)
 {
-    return buffer_try_pull(packet, VLAN_HEADER_LEN);
+    return ofpbuf_try_pull(packet, VLAN_HEADER_LEN);
 }
 
 /* Returns 1 if 'packet' is an IP fragment, 0 otherwise. */
 int
-flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
+flow_extract(struct ofpbuf *packet, uint16_t in_port, struct flow *flow)
 {
-    struct buffer b = *packet;
+    struct ofpbuf b = *packet;
     struct eth_header *eth;
     int retval = 0;
 
@@ -122,7 +122,7 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
             flow->dl_type = eth->eth_type;
         } else {
             /* This is an 802.2 frame */
-            struct llc_snap_header *h = buffer_at(&b, 0, sizeof *h);
+            struct llc_snap_header *h = ofpbuf_at(&b, 0, sizeof *h);
             if (h == NULL) {
                 return 0;
             }
@@ -132,10 +132,10 @@ flow_extract(struct buffer *packet, uint16_t in_port, struct flow *flow)
                 && !memcmp(h->snap.snap_org, SNAP_ORG_ETHERNET,
                            sizeof h->snap.snap_org)) {
                 flow->dl_type = h->snap.snap_type;
-                buffer_pull(&b, sizeof *h);
+                ofpbuf_pull(&b, sizeof *h);
             } else {
                 flow->dl_type = htons(OFP_DL_TYPE_NOT_ETH_TYPE);
-                buffer_pull(&b, sizeof(struct llc_header));
+                ofpbuf_pull(&b, sizeof(struct llc_header));
             }
         }
 

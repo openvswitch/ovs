@@ -39,8 +39,8 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdlib.h>
-#include "buffer.h"
 #include "dynamic-string.h"
+#include "ofpbuf.h"
 
 #define THIS_MODULE VLM_dhcp
 #include "vlog.h"
@@ -65,13 +65,35 @@ struct option_class {
     size_t max_args;            /* Maximum number of arguments. */
 };
 
-static struct option_class classes[DHCP_N_OPTIONS] = {
-    [0 ... 255] = {NULL, DHCP_ARG_UINT8, 0, SIZE_MAX},
-#define DHCP_OPT(NAME, CODE, TYPE, MIN, MAX) \
-    [CODE] = {#NAME, DHCP_ARG_##TYPE, MIN, MAX},
-    DHCP_OPTS
+static const struct option_class *
+get_option_class(int code)
+{
+    static struct option_class classes[DHCP_N_OPTIONS];
+    static bool init = false;
+    if (!init) {
+        int i;
+
+        init = true;
+#define DHCP_OPT(NAME, CODE, TYPE, MIN, MAX)    \
+        classes[CODE].name = #NAME;             \
+        classes[CODE].type = DHCP_ARG_##TYPE;   \
+        classes[CODE].min_args = MIN;           \
+        classes[CODE].max_args = MAX;
+        DHCP_OPTS
 #undef DHCP_OPT
-};
+
+        for (i = 0; i < DHCP_N_OPTIONS; i++) {
+            if (!classes[i].name) {
+                classes[i].name = xasprintf("option-%d", i);
+                classes[i].type = DHCP_ARG_UINT8;
+                classes[i].min_args = 0;
+                classes[i].max_args = SIZE_MAX;
+            }
+        }
+    }
+    assert(code >= 0 && code < DHCP_N_OPTIONS);
+    return &classes[code];
+}
 
 /* A single (bad) DHCP message can in theory dump out many, many log messages,
  * especially at high logging levels, so the burst size is set quite high
@@ -409,18 +431,14 @@ put_duration(struct ds *ds, unsigned int duration)
 const char *
 dhcp_option_to_string(const struct dhcp_option *opt, int code, struct ds *ds)
 {
-    struct option_class *class = &classes[code];
+    const struct option_class *class = get_option_class(code);
     const struct arg_type *type = &types[class->type];
     size_t offset;
+    const char *cp;
 
-    if (class->name) {
-        const char *cp;
-        for (cp = class->name; *cp; cp++) {
-            unsigned char c = *cp;
-            ds_put_char(ds, c == '_' ? '-' : tolower(c));
-        }
-    } else {
-        ds_put_format(ds, "option-%d", code);
+    for (cp = class->name; *cp; cp++) {
+        unsigned char c = *cp;
+        ds_put_char(ds, c == '_' ? '-' : tolower(c));
     }
     ds_put_char(ds, '=');
 
@@ -558,7 +576,7 @@ static void
 parse_options(struct dhcp_msg *msg, const char *name, void *data, size_t size,
               int option_offset)
 {
-    struct buffer b;
+    struct ofpbuf b;
 
     b.data = data;
     b.size = size;
@@ -566,20 +584,20 @@ parse_options(struct dhcp_msg *msg, const char *name, void *data, size_t size,
         uint8_t *code, *len;
         void *payload;
 
-        code = buffer_try_pull(&b, 1);
+        code = ofpbuf_try_pull(&b, 1);
         if (!code || *code == DHCP_CODE_END) {
             break;
         } else if (*code == DHCP_CODE_PAD) {
             continue;
         }
 
-        len = buffer_try_pull(&b, 1);
+        len = ofpbuf_try_pull(&b, 1);
         if (!len) {
             VLOG_DBG_RL(&rl, "reached end of %s expecting length byte", name);
             break;
         }
 
-        payload = buffer_try_pull(&b, *len);
+        payload = ofpbuf_try_pull(&b, *len);
         if (!payload) {
             VLOG_DBG_RL(&rl, "expected %"PRIu8" bytes of option-%"PRIu8" "
                         "payload with only %zu bytes of %s left",
@@ -597,7 +615,7 @@ validate_options(struct dhcp_msg *msg)
 
     for (code = 0; code < DHCP_N_OPTIONS; code++) {
         struct dhcp_option *opt = &msg->options[code];
-        struct option_class *class = &classes[code];
+        const struct option_class *class = get_option_class(code);
         struct arg_type *type = &types[class->type];
         if (opt->data) {
             size_t n_elems = opt->n / type->size;
@@ -634,15 +652,15 @@ validate_options(struct dhcp_msg *msg)
  * to the parsed message and returns 0.  Otherwise, returns a positive errno
  * value and '*msg' is indeterminate. */
 int
-dhcp_parse(struct dhcp_msg *msg, const struct buffer *b_)
+dhcp_parse(struct dhcp_msg *msg, const struct ofpbuf *b_)
 {
-    struct buffer b = *b_;
+    struct ofpbuf b = *b_;
     struct dhcp_header *dhcp;
     uint32_t *cookie;
     uint8_t type;
     char *vendor_class;
 
-    dhcp = buffer_try_pull(&b, sizeof *dhcp);
+    dhcp = ofpbuf_try_pull(&b, sizeof *dhcp);
     if (!dhcp) {
         VLOG_DBG_RL(&rl, "buffer too small for DHCP header (%zu bytes)",
                     b.size);
@@ -673,7 +691,7 @@ dhcp_parse(struct dhcp_msg *msg, const struct buffer *b_)
     msg->giaddr = dhcp->giaddr;
     memcpy(msg->chaddr, dhcp->chaddr, ETH_ADDR_LEN);
 
-    cookie = buffer_try_pull(&b, sizeof cookie);
+    cookie = ofpbuf_try_pull(&b, sizeof cookie);
     if (cookie) {
         if (ntohl(*cookie) == DHCP_OPTS_COOKIE) {
             uint8_t overload;
@@ -734,19 +752,19 @@ error:
 }
 
 static void
-put_option_chunk(struct buffer *b, uint8_t code, void *data, size_t n)
+put_option_chunk(struct ofpbuf *b, uint8_t code, void *data, size_t n)
 {
     uint8_t header[2];
 
     assert(n < 256);
     header[0] = code;
     header[1] = n;
-    buffer_put(b, header, sizeof header);
-    buffer_put(b, data, n);
+    ofpbuf_put(b, header, sizeof header);
+    ofpbuf_put(b, data, n);
 }
 
 static void
-put_option(struct buffer *b, uint8_t code, void *data, size_t n)
+put_option(struct ofpbuf *b, uint8_t code, void *data, size_t n)
 {
     if (data) {
         if (n) {
@@ -770,11 +788,11 @@ put_option(struct buffer *b, uint8_t code, void *data, size_t n)
 
 /* Appends to 'b' the DHCP message represented by 'msg'. */
 void
-dhcp_assemble(const struct dhcp_msg *msg, struct buffer *b)
+dhcp_assemble(const struct dhcp_msg *msg, struct ofpbuf *b)
 {
     const uint8_t end = DHCP_CODE_END;
     uint32_t cookie = htonl(DHCP_OPTS_COOKIE);
-    struct buffer vnd_data;
+    struct ofpbuf vnd_data;
     struct dhcp_header dhcp;
     int i;
 
@@ -791,8 +809,8 @@ dhcp_assemble(const struct dhcp_msg *msg, struct buffer *b)
     dhcp.siaddr = msg->siaddr;
     dhcp.giaddr = msg->giaddr;
     memcpy(dhcp.chaddr, msg->chaddr, ETH_ADDR_LEN);
-    buffer_put(b, &dhcp, sizeof dhcp);
-    buffer_put(b, &cookie, sizeof cookie);
+    ofpbuf_put(b, &dhcp, sizeof dhcp);
+    ofpbuf_put(b, &cookie, sizeof cookie);
 
     /* Put DHCP message type first.  (The ordering is not required but it
      * seems polite.) */
@@ -808,7 +826,7 @@ dhcp_assemble(const struct dhcp_msg *msg, struct buffer *b)
     }
 
     /* Assemble vendor specific option and put it. */
-    buffer_init(&vnd_data, 0);
+    ofpbuf_init(&vnd_data, 0);
     for (i = DHCP_VENDOR_OFS; i < DHCP_N_OPTIONS; i++) {
         const struct dhcp_option *option = &msg->options[i];
         put_option(&vnd_data, i - DHCP_VENDOR_OFS, option->data, option->n);
@@ -816,9 +834,9 @@ dhcp_assemble(const struct dhcp_msg *msg, struct buffer *b)
     if (vnd_data.size) {
         put_option(b, DHCP_CODE_VENDOR_SPECIFIC, vnd_data.data, vnd_data.size);
     }
-    buffer_uninit(&vnd_data);
+    ofpbuf_uninit(&vnd_data);
 
     /* Put end-of-options option. */
-    buffer_put(b, &end, sizeof end);
+    ofpbuf_put(b, &end, sizeof end);
 }
 

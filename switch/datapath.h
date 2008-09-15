@@ -36,11 +36,7 @@
 #ifndef DATAPATH_H
 #define DATAPATH_H 1
 
-#include <time.h>
-#include "openflow.h"
-#include "switch-flow.h"
-#include "buffer.h"
-#include "list.h"
+#include <stdint.h>
 
 struct datapath;
 struct rconn;

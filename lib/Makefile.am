@@ -3,7 +3,6 @@ include ../Make.vars
 noinst_LIBRARIES = libopenflow.a
 
 libopenflow_a_SOURCES = \
-	buffer.c \
 	command-line.c \
 	csum.c \
 	daemon.c \
@@ -18,6 +17,7 @@ libopenflow_a_SOURCES = \
 	list.c \
 	mac-learning.c \
 	netdev.c \
+	ofpbuf.c \
 	ofp-print.c \
 	poll-loop.c \
 	queue.c \

@@ -43,13 +43,13 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#include "buffer.h"
 #include "compiler.h"
 #include "dynamic-string.h"
 #include "flow.h"
-#include "util.h"
+#include "ofpbuf.h"
 #include "openflow.h"
 #include "packets.h"
+#include "util.h"
 
 static void ofp_print_port_name(struct ds *string, uint16_t port);
 static void ofp_print_match(struct ds *, const struct ofp_match *,
@@ -96,7 +96,7 @@ ofp_packet_to_string(const void *data, size_t len, size_t total_len)
 
     pcap = tmpfile();
     if (!pcap) {
-        error(errno, "tmpfile");
+        ofp_error(errno, "tmpfile");
         return xstrdup("<error>");
     }
 
@@ -121,7 +121,7 @@ ofp_packet_to_string(const void *data, size_t len, size_t total_len)
 
     fflush(pcap);
     if (ferror(pcap)) {
-        error(errno, "error writing temporary file");
+        ofp_error(errno, "error writing temporary file");
     }
     rewind(pcap);
 
@@ -130,7 +130,7 @@ ofp_packet_to_string(const void *data, size_t len, size_t total_len)
     tcpdump = popen(command, "r");
     fclose(pcap);
     if (!tcpdump) {
-        error(errno, "exec(\"%s\")", command);
+        ofp_error(errno, "exec(\"%s\")", command);
         return xstrdup("<error>");
     }
 
@@ -141,9 +141,9 @@ ofp_packet_to_string(const void *data, size_t len, size_t total_len)
     status = pclose(tcpdump);
     if (WIFEXITED(status)) {
         if (WEXITSTATUS(status))
-            error(0, "tcpdump exited with status %d", WEXITSTATUS(status));
+            ofp_error(0, "tcpdump exited with status %d", WEXITSTATUS(status));
     } else if (WIFSIGNALED(status)) {
-        error(0, "tcpdump exited with signal %d", WTERMSIG(status)); 
+        ofp_error(0, "tcpdump exited with signal %d", WTERMSIG(status)); 
     }
     return ds_cstr(&ds);
 }
@@ -180,7 +180,7 @@ ofp_packet_in(struct ds *string, const void *oh, size_t len, int verbosity)
 
     if (verbosity > 0) {
         struct flow flow;
-        struct buffer packet;
+        struct ofpbuf packet;
         struct ofp_match match;
         packet.data = (void *) op->data;
         packet.size = data_len;
@@ -903,25 +903,29 @@ print_stats(struct ds *string, int type, const void *body, size_t body_len,
     };
 
     struct stats_type {
+        int type;
         const char *name;
         struct stats_msg request;
         struct stats_msg reply;
     };
 
     static const struct stats_type stats_types[] = {
-        [OFPST_DESC] = {
+        {
+            OFPST_DESC,
             "description",
             { 0, 0, NULL },
             { 0, SIZE_MAX, ofp_desc_stats_reply },
         },
-        [OFPST_FLOW] = {
+        {
+            OFPST_FLOW,
             "flow",
             { sizeof(struct ofp_flow_stats_request),
               sizeof(struct ofp_flow_stats_request),
               ofp_flow_stats_request },
             { 0, SIZE_MAX, ofp_flow_stats_reply },
         },
-        [OFPST_AGGREGATE] = {
+        {
+            OFPST_AGGREGATE,
             "aggregate",
             { sizeof(struct ofp_aggregate_stats_request),
               sizeof(struct ofp_aggregate_stats_request),
@@ -930,20 +934,29 @@ print_stats(struct ds *string, int type, const void *body, size_t body_len,
               sizeof(struct ofp_aggregate_stats_reply),
               ofp_aggregate_stats_reply },
         },
-        [OFPST_TABLE] = {
+        {
+            OFPST_TABLE,
             "table",
             { 0, 0, NULL },
             { 0, SIZE_MAX, ofp_table_stats_reply },
         },
-        [OFPST_PORT] = {
+        {
+            OFPST_PORT,
             "port",
             { 0, 0, NULL, },
             { 0, SIZE_MAX, ofp_port_stats_reply },
         },
-        [OFPST_VENDOR] = {
+        {
+            OFPST_VENDOR,
             "vendor-specific",
             { sizeof(uint32_t), SIZE_MAX, vendor_stat },
             { sizeof(uint32_t), SIZE_MAX, vendor_stat },
+        },
+        {
+            -1,
+            "unknown",
+            { 0, 0, NULL, },
+            { 0, 0, NULL, },
         },
     };
 
@@ -954,7 +967,11 @@ print_stats(struct ds *string, int type, const void *body, size_t body_len,
         ds_put_format(string, " ***unknown type %d***", type);
         return;
     }
-    s = &stats_types[type];
+    for (s = stats_types; s->type >= 0; s++) {
+        if (s->type == type) {
+            break;
+        }
+    }
     ds_put_format(string, " type=%d(%s)\n", type, s->name);
 
     m = direction == REQUEST ? &s->request : &s->reply;
@@ -1019,93 +1036,111 @@ ofp_echo(struct ds *string, const void *oh, size_t len, int verbosity)
 }
 
 struct openflow_packet {
+    uint8_t type;
     const char *name;
     size_t min_size;
     void (*printer)(struct ds *, const void *, size_t len, int verbosity);
 };
 
 static const struct openflow_packet packets[] = {
-    [OFPT_HELLO] = {
+    {
+        OFPT_HELLO,
         "hello",
         sizeof (struct ofp_header),
         NULL,
     },
-    [OFPT_FEATURES_REQUEST] = {
+    {
+        OFPT_FEATURES_REQUEST,
         "features_request",
         sizeof (struct ofp_header),
         NULL,
     },
-    [OFPT_FEATURES_REPLY] = {
+    {
+        OFPT_FEATURES_REPLY,
         "features_reply",
         sizeof (struct ofp_switch_features),
         ofp_print_switch_features,
     },
-    [OFPT_GET_CONFIG_REQUEST] = {
+    {
+        OFPT_GET_CONFIG_REQUEST,
         "get_config_request",
         sizeof (struct ofp_header),
         NULL,
     },
-    [OFPT_GET_CONFIG_REPLY] = {
+    {
+        OFPT_GET_CONFIG_REPLY,
         "get_config_reply",
         sizeof (struct ofp_switch_config),
         ofp_print_switch_config,
     },
-    [OFPT_SET_CONFIG] = {
+    {
+        OFPT_SET_CONFIG,
         "set_config",
         sizeof (struct ofp_switch_config),
         ofp_print_switch_config,
     },
-    [OFPT_PACKET_IN] = {
+    {
+        OFPT_PACKET_IN,
         "packet_in",
         offsetof(struct ofp_packet_in, data),
         ofp_packet_in,
     },
-    [OFPT_PACKET_OUT] = {
+    {
+        OFPT_PACKET_OUT,
         "packet_out",
         sizeof (struct ofp_packet_out),
         ofp_packet_out,
     },
-    [OFPT_FLOW_MOD] = {
+    {
+        OFPT_FLOW_MOD,
         "flow_mod",
         sizeof (struct ofp_flow_mod),
         ofp_print_flow_mod,
     },
-    [OFPT_FLOW_EXPIRED] = {
+    {
+        OFPT_FLOW_EXPIRED,
         "flow_expired",
         sizeof (struct ofp_flow_expired),
         ofp_print_flow_expired,
     },
-    [OFPT_PORT_MOD] = {
+    {
+        OFPT_PORT_MOD,
         "port_mod",
         sizeof (struct ofp_port_mod),
         NULL,
     },
-    [OFPT_PORT_STATUS] = {
+    {
+        OFPT_PORT_STATUS,
         "port_status",
         sizeof (struct ofp_port_status),
         ofp_print_port_status
     },
-    [OFPT_ERROR] = {
+    {
+        OFPT_ERROR,
         "error_msg",
         sizeof (struct ofp_error_msg),
         ofp_print_error_msg,
     },
-    [OFPT_STATS_REQUEST] = {
+    {
+        OFPT_STATS_REQUEST,
         "stats_request",
         sizeof (struct ofp_stats_request),
         ofp_stats_request,
     },
-    [OFPT_STATS_REPLY] = {
+    {
+        OFPT_STATS_REPLY,
         "stats_reply",
         sizeof (struct ofp_stats_reply),
         ofp_stats_reply,
     },
-    [OFPT_ECHO_REQUEST] = {
+    {
+        OFPT_ECHO_REQUEST,
         "echo_request",
         sizeof (struct ofp_header),
         ofp_echo,
     },
-    [OFPT_ECHO_REPLY] = {
+    {
+        OFPT_ECHO_REPLY,
         "echo_reply",
         sizeof (struct ofp_header),
         ofp_echo,
@@ -1131,14 +1166,19 @@ ofp_to_string(const void *oh_, size_t len, int verbosity)
         ds_put_format(&string, "Bad OpenFlow version %"PRIu8":\n", oh->version);
         ds_put_hex_dump(&string, oh, len, 0, true);
         return ds_cstr(&string);
-    } else if (oh->type >= ARRAY_SIZE(packets) || !packets[oh->type].name) {
-        ds_put_format(&string, "Unknown OpenFlow packet type %"PRIu8":\n",
-                oh->type);
-        ds_put_hex_dump(&string, oh, len, 0, true);
-        return ds_cstr(&string);
     }
 
-    pkt = &packets[oh->type];
+    for (pkt = packets; ; pkt++) {
+        if (pkt >= &packets[ARRAY_SIZE(packets)]) {
+            ds_put_format(&string, "Unknown OpenFlow packet type %"PRIu8":\n",
+                          oh->type);
+            ds_put_hex_dump(&string, oh, len, 0, true);
+            return ds_cstr(&string);
+        } else if (oh->type == pkt->type) {
+            break;
+        }
+    }
+
     ds_put_format(&string, "%s (xid=0x%"PRIx32"):", pkt->name, oh->xid);
 
     if (ntohs(oh->length) > len)

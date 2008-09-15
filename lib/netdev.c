@@ -55,9 +55,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "list.h"
 #include "fatal-signal.h"
-#include "buffer.h"
+#include "list.h"
+#include "ofpbuf.h"
 #include "openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -343,11 +343,11 @@ netdev_close(struct netdev *netdev)
 /* Pads 'buffer' out with zero-bytes to the minimum valid length of an
  * Ethernet packet, if necessary.  */
 static void
-pad_to_minimum_length(struct buffer *buffer)
+pad_to_minimum_length(struct ofpbuf *buffer)
 {
     if (buffer->size < ETH_TOTAL_MIN) {
         size_t shortage = ETH_TOTAL_MIN - buffer->size;
-        memset(buffer_put_uninit(buffer, shortage), 0, shortage);
+        memset(ofpbuf_put_uninit(buffer, shortage), 0, shortage);
     }
 }
 
@@ -364,15 +364,15 @@ pad_to_minimum_length(struct buffer *buffer)
  * be returned.
  */
 int
-netdev_recv(struct netdev *netdev, struct buffer *buffer)
+netdev_recv(struct netdev *netdev, struct ofpbuf *buffer)
 {
     ssize_t n_bytes;
 
     assert(buffer->size == 0);
-    assert(buffer_tailroom(buffer) >= ETH_TOTAL_MIN);
+    assert(ofpbuf_tailroom(buffer) >= ETH_TOTAL_MIN);
     do {
         n_bytes = recv(netdev->fd,
-                       buffer_tail(buffer), buffer_tailroom(buffer),
+                       ofpbuf_tail(buffer), ofpbuf_tailroom(buffer),
                        MSG_DONTWAIT);
     } while (n_bytes < 0 && errno == EINTR);
     if (n_bytes < 0) {
@@ -419,7 +419,7 @@ netdev_drain(struct netdev *netdev)
  * The kernel maintains a packet transmission queue, so the caller is not
  * expected to do additional queuing of packets. */
 int
-netdev_send(struct netdev *netdev, const struct buffer *buffer)
+netdev_send(struct netdev *netdev, const struct ofpbuf *buffer)
 {
     ssize_t n_bytes;
     const struct eth_header *eh;
@@ -430,7 +430,7 @@ netdev_send(struct netdev *netdev, const struct buffer *buffer)
                      buffer->size, netdev->name);
         return EMSGSIZE;
     }
-    eh = buffer_at_assert(buffer, 0, sizeof *eh);
+    eh = ofpbuf_at_assert(buffer, 0, sizeof *eh);
 
     do {
         n_bytes = sendto(netdev->fd, buffer->data, buffer->size, 0, NULL, 0);
@@ -773,7 +773,7 @@ init_netdev(void)
         fatal_signal_add_hook(restore_all_flags, NULL, true);
         af_inet_sock = socket(AF_INET, SOCK_DGRAM, 0);
         if (af_inet_sock < 0) {
-            fatal(errno, "socket(AF_INET)");
+            ofp_fatal(errno, "socket(AF_INET)");
         }
     }
 }

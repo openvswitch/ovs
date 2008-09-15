@@ -98,8 +98,8 @@ main(int argc, char *argv[])
     argc -= optind;
     argv += optind;
     if (argc < 1) {
-        fatal(0, "need at least one non-option argument; "
-              "use --help for usage");
+        ofp_fatal(0, "need at least one non-option argument; "
+                  "use --help for usage");
     }
 
     ifaces = xmalloc(argc * sizeof *ifaces);
@@ -110,7 +110,7 @@ main(int argc, char *argv[])
         }
     }
     if (!n_ifaces) {
-        fatal(0, "failed to initialize any DHCP clients");
+        ofp_fatal(0, "failed to initialize any DHCP clients");
     }
 
     for (i = 0; i < n_ifaces; i++) {
@@ -125,12 +125,12 @@ main(int argc, char *argv[])
         size_t length = regerror(retval, &accept_controller_regex, NULL, 0);
         char *buffer = xmalloc(length);
         regerror(retval, &accept_controller_regex, buffer, length);
-        fatal(0, "%s: %s", accept_controller_re, buffer);
+        ofp_fatal(0, "%s: %s", accept_controller_re, buffer);
     }
 
     retval = vlog_server_listen(NULL, NULL);
     if (retval) {
-        fatal(retval, "Could not listen for vlog connections");
+        ofp_fatal(retval, "Could not listen for vlog connections");
     }
 
     die_if_already_running();
@@ -230,12 +230,12 @@ iface_init(struct iface *iface, const char *netdev_name)
 
         retval = netdev_open(iface->name, NETDEV_ETH_TYPE_NONE, &netdev);
         if (retval) {
-            error(retval, "Could not open %s device", iface->name);
+            ofp_error(retval, "Could not open %s device", iface->name);
             return false;
         }
         retval = netdev_turn_flags_on(netdev, NETDEV_UP, true);
         if (retval) {
-            error(retval, "Could not bring %s device up", iface->name);
+            ofp_error(retval, "Could not bring %s device up", iface->name);
             return false;
         }
         netdev_close(netdev);
@@ -244,7 +244,7 @@ iface_init(struct iface *iface, const char *netdev_name)
     retval = dhclient_create(iface->name, modify_dhcp_request,
                              validate_dhcp_offer, NULL, &iface->dhcp);
     if (retval) {
-        error(retval, "%s: failed to initialize DHCP client", iface->name);
+        ofp_error(retval, "%s: failed to initialize DHCP client", iface->name);
         return false;
     }
 
@@ -352,8 +352,8 @@ parse_options(int argc, char *argv[])
         case 't':
             timeout = strtoul(optarg, NULL, 10);
             if (timeout <= 0) {
-                fatal(0, "value %s on -t or --timeout is not at least 1",
-                      optarg);
+                ofp_fatal(0, "value %s on -t or --timeout is not at least 1",
+                          optarg);
             } else {
                 time_alarm(timeout);
             }
@@ -381,8 +381,8 @@ parse_options(int argc, char *argv[])
     free(short_options);
 
     if ((exit_without_bind + exit_after_bind + !detach_after_bind) > 1) {
-        fatal(0, "--exit-without-bind, --exit-after-bind, and --no-detach "
-              "are mutually exclusive");
+        ofp_fatal(0, "--exit-without-bind, --exit-after-bind, and --no-detach "
+                  "are mutually exclusive");
     }
     if (detach_after_bind) {
         set_detach();

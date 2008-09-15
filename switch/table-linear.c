@@ -36,6 +36,7 @@
 #include <stdlib.h>
 #include "flow.h"
 #include "list.h"
+#include "openflow.h"
 #include "switch-flow.h"
 #include "datapath.h"
 

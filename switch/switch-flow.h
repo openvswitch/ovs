@@ -82,6 +82,6 @@ void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from);
 
 void print_flow(const struct sw_flow_key *);
 bool flow_timeout(struct sw_flow *flow);
-void flow_used(struct sw_flow *flow, struct buffer *buffer);
+void flow_used(struct sw_flow *flow, struct ofpbuf *buffer);
 
 #endif /* switch-flow.h */

@@ -40,12 +40,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "buffer.h"
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
 #include "fault.h"
 #include "learning-switch.h"
+#include "ofpbuf.h"
 #include "openflow.h"
 #include "poll-loop.h"
 #include "rconn.h"
@@ -97,12 +97,13 @@ main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
 
     if (argc - optind < 1) {
-        fatal(0, "at least one vconn argument required; use --help for usage");
+        ofp_fatal(0, "at least one vconn argument required; "
+                  "use --help for usage");
     }
 
     retval = vlog_server_listen(NULL, NULL);
     if (retval) {
-        fatal(retval, "Could not listen for vlog connections");
+        ofp_fatal(retval, "Could not listen for vlog connections");
     }
 
     n_switches = n_listeners = 0;
@@ -114,7 +115,7 @@ main(int argc, char *argv[])
         retval = vconn_open(name, OFP_VERSION, &vconn);
         if (!retval) {
             if (n_switches >= MAX_SWITCHES) {
-                fatal(0, "max %d switch connections", n_switches);
+                ofp_fatal(0, "max %d switch connections", n_switches);
             }
             new_switch(&switches[n_switches++], vconn, name);
             continue;
@@ -123,7 +124,7 @@ main(int argc, char *argv[])
             retval = pvconn_open(name, &pvconn);
             if (!retval) {
                 if (n_listeners >= MAX_LISTENERS) {
-                    fatal(0, "max %d passive connections", n_listeners);
+                    ofp_fatal(0, "max %d passive connections", n_listeners);
                 }
                 listeners[n_listeners++] = pvconn;
             }
@@ -133,7 +134,7 @@ main(int argc, char *argv[])
         }
     }
     if (n_switches == 0 && n_listeners == 0) {
-        fatal(0, "no active or passive switch connections");
+        ofp_fatal(0, "no active or passive switch connections");
     }
 
     die_if_already_running();
@@ -212,14 +213,14 @@ static int
 do_switching(struct switch_ *sw)
 {
     unsigned int packets_sent;
-    struct buffer *msg;
+    struct ofpbuf *msg;
 
     packets_sent = rconn_packets_sent(sw->rconn);
 
     msg = rconn_recv(sw->rconn);
     if (msg) {
         lswitch_process_packet(sw->lswitch, sw->rconn, msg);
-        buffer_delete(msg);
+        ofpbuf_delete(msg);
     }
     rconn_run(sw->rconn);
 
@@ -283,8 +284,8 @@ parse_options(int argc, char *argv[])
             } else {
                 max_idle = atoi(optarg);
                 if (max_idle < 1 || max_idle > 65535) {
-                    fatal(0, "--max-idle argument must be between 1 and "
-                          "65535 or the word 'permanent'");
+                    ofp_fatal(0, "--max-idle argument must be between 1 and "
+                              "65535 or the word 'permanent'");
                 }
             }
             break;

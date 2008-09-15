@@ -88,7 +88,7 @@ tcp_open(const char *name, char *suffix, struct vconn **vconnp)
     host_name = strtok_r(suffix, "::", &save_ptr);
     port_string = strtok_r(NULL, "::", &save_ptr);
     if (!host_name) {
-        error(0, "%s: bad peer name format", name);
+        ofp_error(0, "%s: bad peer name format", name);
         return EAFNOSUPPORT;
     }
 
@@ -127,8 +127,13 @@ tcp_open(const char *name, char *suffix, struct vconn **vconnp)
 }
 
 struct vconn_class tcp_vconn_class = {
-    .name = "tcp",
-    .open = tcp_open,
+    "tcp",                      /* name */
+    tcp_open,                   /* open */
+    NULL,                       /* close */
+    NULL,                       /* connect */
+    NULL,                       /* recv */
+    NULL,                       /* send */
+    NULL,                       /* wait */
 };
 
 /* Passive TCP. */
