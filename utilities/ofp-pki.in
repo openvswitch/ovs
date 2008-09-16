@@ -6,6 +6,8 @@ prev=
 force=no
 batch=no
 log=ofp-pki.log
+keytype=rsa
+bits=2048
 for option; do
     # This option-parsing mechanism borrowed from a Autoconf-generated
     # configure script under the following license:
@@ -59,21 +61,46 @@ The following additional commands manage an online PKI:
 
 Each TYPE above is a certificate type: 'switch' (default) or 'controller'.
 
-The valid OPTIONS are:
+Options for 'init', 'req', and 'req+sign' only:
+  -k, --key=rsa|dsa    Type of keys to use (default: rsa)
+  -B, --bits=NBITS     Number of bits in keys (default: 2048).  For DSA keys,
+                         this has an effect only on 'init'.
+  -D, --dsaparam=FILE  File with DSA parameters (DSA only)
+                         (default: dsaparam.pem within PKI directory)
+Options for use with the 'sign' and 'approve' commands:
+  -b, --batch          Skip fingerprint verification
+Options that apply to any command:
   -d, --dir=DIR        Directory where the PKI is located
                          (default: $pkidir)
   -f, --force          Continue even if file or directory already exists
-  -b, --batch          Skip fingerprint verification
   -l, --log=FILE       Log openssl output to FILE (default: ofp-log.log)
   -h, --help           Print this usage message.
 EOF
             exit 0
             ;;
-        --d*=*)
+        --di*=*)
             pkidir=$optarg
             ;;
-        --d*|-d)
+        --di*|-d)
             prev=pkidir
+            ;;
+        --k*=*)
+            keytype=$optarg
+            ;;
+        --k*|-k)
+            prev=keytype
+            ;;
+        --bi*=*)
+            bits=$optarg
+            ;;
+        --bi*|-B)
+            prev=bits
+            ;;
+        --ds*=*)
+            dsaparam=$optarg
+            ;;
+        --ds*|-D)
+            prev=dsaparam
             ;;
         --l*=*)
             log=$optarg
@@ -84,7 +111,7 @@ EOF
         --force|-f)
             force=yes
             ;;
-        --batch|-b)
+        --ba*|-b)
             batch=yes
             ;;
         -*)
@@ -115,10 +142,21 @@ if test -z "$command"; then
     echo "$0: missing command name; use --help for help" >&2
     exit 1
 fi
+if test "$keytype" != rsa && test "$keytype" != dsa; then
+    echo "$0: argument to -k or --key must be rsa or dsa"
+    exit 1
+fi
+if test "$bits" -lt 1024; then
+    echo "$0: argument to -B or --bits must be at least 1024"
+    exit 1
+fi
+if test -z "$dsaparam"; then
+    dsaparam=$pkidir/dsaparam.pem
+fi
 
 if test "$command" = "init"; then
     if test -e "$pkidir" && test "$force" != "yes"; then
-        echo "$0: $pkidir already exists" >&2
+        echo "$0: $pkidir already exists and --force not specified" >&2
         exit 1
     fi
 
@@ -128,26 +166,9 @@ if test "$command" = "init"; then
     cd "$pkidir"
     exec 3>>$log
 
-    if test ! -e dsaparam.pem; then
+    if test $keytype = dsa && test ! -e dsaparam.pem; then
         echo "Generating DSA parameters, please wait..." >&2
-        openssl dsaparam -out dsaparam.pem 2048 1>&3 2>&3
-    fi
-
-    # Create the request configuration.
-    if test ! -e req.cnf; then
-        cat > req.cnf <<EOF
-[ req ]
-prompt = no
-distinguished_name = req_distinguished_name
-
-[ req_distinguished_name ]
-C = US
-ST = CA
-L = Palo Alto
-O = OpenFlow
-OU = OpenFlow certifier
-CN = OpenFlow certificate
-EOF
+        openssl dsaparam -out dsaparam.pem $bits 1>&3 2>&3
     fi
 
     # Create the CAs.
@@ -165,7 +186,7 @@ EOF
         test -e serial || echo 01 > serial
 
         # Put DSA parameters in directory.
-        if test ! -e dsaparam.pem; then
+        if test $keytype = dsa && test ! -e dsaparam.pem; then
             cp ../dsaparam.pem .
         fi
 
@@ -216,8 +237,13 @@ EOF
         fi
 
         # Create certificate authority.
+        if test $keytype = dsa; then
+            newkey=dsa:dsaparam.pem
+        else
+            newkey=rsa:$bits
+        fi
         openssl req -config ca.cnf -nodes \
-            -newkey dsa:dsaparam.pem -keyout private/cakey.pem -out careq.pem \
+            -newkey $newkey -keyout private/cakey.pem -out careq.pem \
             1>&3 2>&3
         openssl ca -config ca.cnf -create_serial -out cacert.pem \
             -days 1095 -batch -keyfile private/cakey.pem -selfsign \
@@ -386,10 +412,28 @@ pkidir_must_exist() {
 make_request() {
     must_not_exist "$arg1-privkey.pem"
     must_not_exist "$arg1-req.pem"
-    pkidir_must_exist
-    openssl req -config "$pkidir/req.cnf" -text -nodes \
-        -newkey "dsa:$pkidir/dsaparam.pem" -keyout "$1-privkey.pem" \
-        -out "$1-req.pem" 1>&3 2>&3
+    make_tmpdir
+    cat > "$TMP/req.cnf" <<EOF
+[ req ]
+prompt = no
+distinguished_name = req_distinguished_name
+
+[ req_distinguished_name ]
+C = US
+ST = CA
+L = Palo Alto
+O = OpenFlow
+OU = OpenFlow certifier
+CN = OpenFlow certificate for $arg1
+EOF
+    if test $keytype = rsa; then
+        newkey=rsa:$bits
+    else
+        must_exist "$dsaparam"
+        newkey=dsa:$dsaparam
+    fi
+    openssl req -config "$TMP/req.cnf" -text -nodes \
+        -newkey $newkey -keyout "$1-privkey.pem" -out "$1-req.pem" 1>&3 2>&3
 }
 
 sign_request() {
@@ -434,6 +478,7 @@ elif test "$command" = req+sign; then
     one_or_two_args
     check_type "$arg2"
 
+    pkidir_must_exist
     make_request "$arg1"
     sign_request "$arg1-req.pem" "$arg1-cert.pem"
     fingerprint "$arg1-req.pem"
