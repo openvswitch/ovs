@@ -39,24 +39,25 @@
 bool vconn_ssl_is_configured(void);
 void vconn_ssl_set_private_key_file(const char *file_name);
 void vconn_ssl_set_certificate_file(const char *file_name);
-void vconn_ssl_set_ca_cert_file(const char *file_name);
+void vconn_ssl_set_ca_cert_file(const char *file_name, bool bootstrap);
+void vconn_ssl_set_peer_ca_cert_file(const char *file_name);
 
 #define VCONN_SSL_LONG_OPTIONS                      \
         {"private-key", required_argument, 0, 'p'}, \
         {"certificate", required_argument, 0, 'c'}, \
         {"ca-cert",     required_argument, 0, 'C'},
 
-#define VCONN_SSL_OPTION_HANDLERS                   \
-        case 'p':                                   \
-            vconn_ssl_set_private_key_file(optarg); \
-            break;                                  \
-                                                    \
-        case 'c':                                   \
-            vconn_ssl_set_certificate_file(optarg); \
-            break;                                  \
-                                                    \
-        case 'C':                                   \
-            vconn_ssl_set_ca_cert_file(optarg);     \
+#define VCONN_SSL_OPTION_HANDLERS                       \
+        case 'p':                                       \
+            vconn_ssl_set_private_key_file(optarg);     \
+            break;                                      \
+                                                        \
+        case 'c':                                       \
+            vconn_ssl_set_certificate_file(optarg);     \
+            break;                                      \
+                                                        \
+        case 'C':                                       \
+            vconn_ssl_set_ca_cert_file(optarg, false);  \
             break;
 #else /* !HAVE_OPENSSL */
 static inline bool vconn_ssl_is_configured(void) 

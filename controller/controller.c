@@ -232,7 +232,10 @@ do_switching(struct switch_ *sw)
 static void
 parse_options(int argc, char *argv[])
 {
-    enum { OPT_MAX_IDLE = UCHAR_MAX + 1 };
+    enum {
+        OPT_MAX_IDLE = UCHAR_MAX + 1,
+        OPT_PEER_CA_CERT
+    };
     static struct option long_options[] = {
         {"detach",      no_argument, 0, 'D'},
         {"pidfile",     optional_argument, 0, 'P'},
@@ -243,7 +246,10 @@ parse_options(int argc, char *argv[])
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
+#ifdef HAVE_OPENSSL
         VCONN_SSL_LONG_OPTIONS
+        {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
+#endif
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -301,7 +307,13 @@ parse_options(int argc, char *argv[])
             vlog_set_verbosity(optarg);
             break;
 
+#ifdef HAVE_OPENSSL
         VCONN_SSL_OPTION_HANDLERS
+
+        case OPT_PEER_CA_CERT:
+            vconn_ssl_set_peer_ca_cert_file(optarg);
+            break;
+#endif
 
         case '?':
             exit(EXIT_FAILURE);
@@ -320,7 +332,7 @@ usage(void)
            "usage: %s [OPTIONS] METHOD\n"
            "where METHOD is any OpenFlow connection method.\n",
            program_name, program_name);
-    vconn_usage(true, true);
+    vconn_usage(true, true, false);
     printf("\nOther options:\n"
            "  -D, --detach            run in background as daemon\n"
            "  -P, --pidfile[=FILE]    create pidfile (default: %s/controller.pid)\n"

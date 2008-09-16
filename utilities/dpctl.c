@@ -213,7 +213,7 @@ usage(void)
            "  benchmark VCONN N COUNT     bandwidth of COUNT N-byte echos\n"
            "where each SWITCH is an active OpenFlow connection method.\n",
            program_name, program_name);
-    vconn_usage(true, false);
+    vconn_usage(true, false, false);
     printf("\nOptions:\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
            "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"

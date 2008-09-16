@@ -129,9 +129,10 @@ check_vconn_classes(void)
 }
 
 /* Prints information on active (if 'active') and passive (if 'passive')
- * connection methods supported by the vconn. */
+ * connection methods supported by the vconn.  If 'bootstrap' is true, also
+ * advertises options to bootstrap the CA certificate. */
 void
-vconn_usage(bool active, bool passive)
+vconn_usage(bool active, bool passive, bool bootstrap UNUSED)
 {
     /* Really this should be implemented via callbacks into the vconn
      * providers, but that seems too heavy-weight to bother with at the
@@ -172,6 +173,10 @@ vconn_usage(bool active, bool passive)
            "  -p, --private-key=FILE  file with private key\n"
            "  -c, --certificate=FILE  file with certificate for private key\n"
            "  -C, --ca-cert=FILE      file with peer CA certificate\n");
+    if (bootstrap) {
+        printf("  --bootstrap-ca-cert=FILE  file with peer CA certificate "
+               "to read or create\n");
+    }
 #endif
 }
 

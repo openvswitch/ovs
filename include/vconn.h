@@ -44,7 +44,7 @@ struct ofp_header;
 struct pvconn;
 struct vconn;
 
-void vconn_usage(bool active, bool passive);
+void vconn_usage(bool active, bool passive, bool bootstrap);
 
 /* Active vconns: virtual connections to OpenFlow devices. */
 int vconn_open(const char *name, int min_version, struct vconn **);

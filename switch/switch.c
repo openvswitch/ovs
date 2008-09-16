@@ -162,7 +162,8 @@ parse_options(int argc, char *argv[])
         OPT_MFR_DESC,
         OPT_HW_DESC,
         OPT_SW_DESC,
-        OPT_SERIAL_NUM
+        OPT_SERIAL_NUM,
+        OPT_BOOTSTRAP_CA_CERT
     };
 
     static struct option long_options[] = {
@@ -180,7 +181,10 @@ parse_options(int argc, char *argv[])
         {"hw-desc",     required_argument, 0, OPT_HW_DESC},
         {"sw-desc",     required_argument, 0, OPT_SW_DESC},
         {"serial_num",  required_argument, 0, OPT_SERIAL_NUM},
+#ifdef HAVE_OPENSSL
         VCONN_SSL_LONG_OPTIONS
+        {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
+#endif
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -271,7 +275,13 @@ parse_options(int argc, char *argv[])
             listen_pvconn_name = optarg;
             break;
 
+#ifdef HAVE_OPENSSL
         VCONN_SSL_OPTION_HANDLERS
+
+        case OPT_BOOTSTRAP_CA_CERT:
+            vconn_ssl_set_ca_cert_file(optarg, true);
+            break;
+#endif
 
         case '?':
             exit(EXIT_FAILURE);
@@ -290,7 +300,7 @@ usage(void)
            "usage: %s [OPTIONS] CONTROLLER\n"
            "where CONTROLLER is an active OpenFlow connection method.\n",
            program_name, program_name);
-    vconn_usage(true, true);
+    vconn_usage(true, true, true);
     printf("\nConfiguration options:\n"
            "  -i, --interfaces=NETDEV[,NETDEV]...\n"
            "                          add specified initial switch ports\n"

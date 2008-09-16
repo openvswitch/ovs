@@ -83,6 +83,7 @@ extern "C" {
 
 void set_program_name(const char *);
 
+void out_of_memory(void);
 void *xmalloc(size_t);
 void *xcalloc(size_t, size_t);
 void *xrealloc(void *, size_t);

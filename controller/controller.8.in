@@ -68,9 +68,23 @@ controller's certificate authority (CA), that certifies the switch's
 private key to identify a trustworthy switch.
 
 .TP
-\fB-C\fR, \fB--ca-cert=\fIcacert.pem\fR
+\fB-C\fR, \fB--ca-cert=\fIswitch-cacert.pem\fR
 Specifies a PEM file containing the CA certificate used to verify that
 the switch is connected to a trustworthy controller.
+
+.TP
+\fB--peer-ca-cert=\fIcontroller-cacert.pem\fR
+Specifies a PEM file that contains one or more additional certificates
+to send to switches.  \fIcontroller-cacert.pem\fR should be the CA
+certificate used to sign the controller's own certificate (the
+certificate specified on \fB-c\fR or \fB--certificate\fR).
+
+This option is not useful in normal operation, because the switch must
+already have the controller CA certificate for it to have any
+confidence in the controller's identity.  However, this option allows
+a newly installed switch to obtain the controller CA certificate on
+first boot using, e.g., the \fB--bootstrap-ca-cert\fR option to
+\fBsecchan\fR(8).
 
 .TP
 .BR \-n ", " \-\^\-noflow

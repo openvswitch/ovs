@@ -342,6 +342,26 @@ Specifies a PEM file containing the CA certificate used to verify that
 the switch is connected to a trustworthy controller.
 
 .TP
+\fB--bootstrap-ca-cert=\fIcacert.pem\fR
+When \fIcacert.pem\fR exists, this option has the same effect as
+\fB-C\fR or \fB--ca-cert\fR.  If it does not exist, then \fBsecchan\fR
+will attempt to obtain the CA certificate from the controller on its
+first SSL connection and save it to the named PEM file.  If it is
+successful, it will immediately drop the connection and reconnect, and
+from then on all SSL connections must be authenticated by a
+certificate signed by the CA certificate thus obtained.
+
+\fBThis option exposes the SSL connection to a man-in-the-middle
+attack obtaining the initial CA certificate\fR, but it may be useful
+for bootstrapping.
+
+This option is only useful if the controller sends its CA certificate
+as part of the SSL certificate chain.  The SSL protocol does not
+require the controller to send the CA certificate, but
+\fBcontroller\fR(8) can be configured to do so with the
+\fB--peer-ca-cert\fR option.
+
+.TP
 \fB-P\fR[\fIpidfile\fR], \fB--pidfile\fR[\fB=\fIpidfile\fR]
 Causes a file (by default, \fBsecchan.pid\fR) to be created indicating
 the PID of the running process.  If \fIpidfile\fR is not specified, or

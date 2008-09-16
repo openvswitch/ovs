@@ -40,7 +40,7 @@
 
 const char *program_name;
 
-static void
+void
 out_of_memory(void) 
 {
     ofp_fatal(0, "virtual memory exhausted");

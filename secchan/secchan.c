@@ -1993,7 +1993,8 @@ parse_options(int argc, char *argv[], struct settings *s)
         OPT_MAX_IDLE,
         OPT_MAX_BACKOFF,
         OPT_RATE_LIMIT,
-        OPT_BURST_LIMIT
+        OPT_BURST_LIMIT,
+        OPT_BOOTSTRAP_CA_CERT
     };
     static struct option long_options[] = {
         {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
@@ -2012,7 +2013,10 @@ parse_options(int argc, char *argv[], struct settings *s)
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
+#ifdef HAVE_OPENSSL
         VCONN_SSL_LONG_OPTIONS
+        {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
+#endif
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -2142,7 +2146,13 @@ parse_options(int argc, char *argv[], struct settings *s)
             vlog_set_verbosity(optarg);
             break;
 
+#ifdef HAVE_OPENSSL
         VCONN_SSL_OPTION_HANDLERS
+
+        case OPT_BOOTSTRAP_CA_CERT:
+            vconn_ssl_set_ca_cert_file(optarg, true);
+            break;
+#endif
 
         case '?':
             exit(EXIT_FAILURE);
@@ -2235,7 +2245,7 @@ usage(void)
            "CONTROLLER is an active OpenFlow connection method; if it is\n"
            "omitted, then secchan performs controller discovery.\n",
            program_name, program_name);
-    vconn_usage(true, true);
+    vconn_usage(true, true, true);
     printf("\nController discovery options:\n"
            "  --accept-vconn=REGEX    accept matching discovered controllers\n"
            "  --no-resolv-conf        do not update /etc/resolv.conf\n"
