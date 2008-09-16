@@ -171,7 +171,7 @@ EOF
 
     # Write CA configuration file.
         if test ! -e ca.cnf; then
-            cat > ca.cnf <<'EOF'
+            sed "s/@ca@/$ca/g" > ca.cnf <<'EOF'
 [ req ]
 prompt = no
 distinguished_name = req_distinguished_name
@@ -181,8 +181,8 @@ C = US
 ST = CA
 L = Palo Alto
 O = OpenFlow
-OU = OpenFlow
-CN = OpenFlow
+OU = @ca@
+CN = OpenFlow @ca@ CA Certificate
 
 [ ca ]
 default_ca = the_ca
