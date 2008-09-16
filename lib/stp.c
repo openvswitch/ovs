@@ -230,9 +230,9 @@ stp_create(const char *name, stp_identifier bridge_id,
     if (!(stp->bridge_id >> 48)) {
         stp->bridge_id |= UINT64_C(32768) << 48;
     }
-    stp->max_age = SECONDS_TO_TIMER(20);
-    stp->hello_time = SECONDS_TO_TIMER(2);
-    stp->forward_delay = SECONDS_TO_TIMER(15);
+    stp->max_age = SECONDS_TO_TIMER(6);
+    stp->hello_time = SECONDS_TO_TIMER(1);
+    stp->forward_delay = SECONDS_TO_TIMER(4);
     stp->bridge_max_age = stp->max_age;
     stp->bridge_hello_time = stp->hello_time;
     stp->bridge_forward_delay = stp->forward_delay;
