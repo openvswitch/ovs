@@ -696,13 +696,6 @@ static void fill_port_desc(struct net_bridge_port *p, struct ofp_phy_port *desc)
 	desc->features = 0;
 	desc->speed = 0;
 
-	if (p->port_no < 255) {
-		/* FIXME: this is a layering violation and should really be
-		 * done in the secchan, as with OFPC_STP in
-		 * OFP_SUPPORTED_CAPABILITIES. */
-		desc->features |= OFPPF_STP;
-	}
-
 	spin_lock_irqsave(&p->lock, flags);
 	desc->flags = htonl(p->flags | p->status);
 	spin_unlock_irqrestore(&p->lock, flags);

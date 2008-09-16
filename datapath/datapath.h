@@ -24,7 +24,6 @@
 #define OFP_SUPPORTED_CAPABILITIES ( OFPC_FLOW_STATS \
 		| OFPC_TABLE_STATS \
 		| OFPC_PORT_STATS \
-		| OFPC_STP \
 		| OFPC_MULTI_PHY_TX )
 
 /* Actions supported by this implementation. */

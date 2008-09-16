@@ -586,13 +586,15 @@ relay_destroy(struct relay *r)
 
 /* Port status watcher. */
 
-typedef void port_watcher_cb_func(uint16_t port_no,
+typedef void edit_port_cb_func(struct ofp_phy_port *port, void *aux);
+typedef void port_changed_cb_func(uint16_t port_no,
                                   const struct ofp_phy_port *old,
                                   const struct ofp_phy_port *new,
                                   void *aux);
 
 struct port_watcher_cb {
-    port_watcher_cb_func *function;
+    edit_port_cb_func *edit_port;
+    port_changed_cb_func *port_changed;
     void *aux;
 };
 
@@ -643,14 +645,29 @@ port_no_to_pw_idx(int port_no)
 }
 
 static void
-call_pw_callbacks(struct port_watcher *pw, int port_no,
-                  const struct ofp_phy_port *old,
-                  const struct ofp_phy_port *new)
+call_port_changed_callbacks(struct port_watcher *pw, int port_no,
+                            const struct ofp_phy_port *old,
+                            const struct ofp_phy_port *new)
 {
     if (opp_differs(old, new)) {
         int i;
         for (i = 0; i < pw->n_cbs; i++) {
-            pw->cbs[i].function(port_no, old, new, pw->cbs[i].aux);
+            port_changed_cb_func *port_changed = pw->cbs[i].port_changed;
+            if (port_changed) {
+                (port_changed)(port_no, old, new, pw->cbs[i].aux);
+            }
+        }
+    }
+}
+
+static void
+call_edit_port_callbacks(struct port_watcher *pw, struct ofp_phy_port *p)
+{
+    int i;
+    for (i = 0; i < pw->n_cbs; i++) {
+        edit_port_cb_func *edit_port = pw->cbs[i].edit_port;
+        if (edit_port) {
+            (edit_port)(p, pw->cbs[i].aux); 
         }
     }
 }
@@ -683,7 +700,7 @@ update_phy_port(struct port_watcher *pw, struct ofp_phy_port *opp,
         *pw_opp = *opp;
         sanitize_opp(pw_opp);
     }
-    call_pw_callbacks(pw, port_no, &old, pw_opp);
+    call_port_changed_callbacks(pw, port_no, &old, pw_opp);
 }
 
 static bool
@@ -707,7 +724,9 @@ port_watcher_local_packet_cb(struct relay *r, void *pw_)
         n_ports = ((msg->size - offsetof(struct ofp_switch_features, ports))
                    / sizeof *osf->ports);
         for (i = 0; i < n_ports; i++) {
-            update_phy_port(pw, &osf->ports[i], OFPPR_MOD, seen);
+            struct ofp_phy_port *opp = &osf->ports[i];
+            call_edit_port_callbacks(pw, opp);
+            update_phy_port(pw, opp, OFPPR_MOD, seen);
         }
 
         /* Delete all the ports not included in the message. */
@@ -719,6 +738,7 @@ port_watcher_local_packet_cb(struct relay *r, void *pw_)
     } else if (oh->type == OFPT_PORT_STATUS
                && msg->size >= sizeof(struct ofp_port_status)) {
         struct ofp_port_status *ops = msg->data;
+        call_edit_port_callbacks(pw, &ops->desc);
         update_phy_port(pw, &ops->desc, ops->reason, NULL);
     }
     return false;
@@ -742,7 +762,7 @@ port_watcher_remote_packet_cb(struct relay *r, void *pw_)
                 struct ofp_phy_port old = *pw_opp;
                 pw_opp->flags = ((pw_opp->flags & ~opm->mask)
                                  | (opm->desc.flags & opm->mask));
-                call_pw_callbacks(pw, port_no, &old, pw_opp);
+                call_port_changed_callbacks(pw, port_no, &old, pw_opp);
             }
         }
     }
@@ -827,11 +847,13 @@ log_port_status(uint16_t port_no,
 
 static void
 port_watcher_register_callback(struct port_watcher *pw,
-                               port_watcher_cb_func *function,
+                               edit_port_cb_func *edit_port,
+                               port_changed_cb_func *port_changed,
                                void *aux)
 {
     assert(pw->n_cbs < ARRAY_SIZE(pw->cbs));
-    pw->cbs[pw->n_cbs].function = function;
+    pw->cbs[pw->n_cbs].edit_port = edit_port;
+    pw->cbs[pw->n_cbs].port_changed = port_changed;
     pw->cbs[pw->n_cbs].aux = aux;
     pw->n_cbs++;
 }
@@ -867,7 +889,7 @@ port_watcher_set_flags(struct port_watcher *pw,
 
     /* Update our idea of the flags. */
     p->flags = htonl((ntohl(p->flags) & ~mask) | (flags & mask));
-    call_pw_callbacks(pw, port_no, &old, p);
+    call_port_changed_callbacks(pw, port_no, &old, p);
 
     /* Change the flags in the datapath. */
     opm = make_openflow(sizeof *opm, OFPT_PORT_MOD, &b);
@@ -902,7 +924,7 @@ port_watcher_create(struct rconn *local_rconn, struct rconn *remote_rconn,
     for (i = 0; i < OFPP_MAX; i++) {
         pw->ports[i].port_no = htons(OFPP_NONE);
     }
-    port_watcher_register_callback(pw, log_port_status, NULL);
+    port_watcher_register_callback(pw, NULL, log_port_status, NULL);
     return make_hook(port_watcher_local_packet_cb,
                      port_watcher_remote_packet_cb,
                      port_watcher_periodic_cb, NULL, pw);
@@ -927,6 +949,8 @@ struct stp_data {
 static bool
 stp_local_packet_cb(struct relay *r, void *stp_)
 {
+    struct ofpbuf *msg = r->halves[HALF_LOCAL].rxbuf;
+    struct ofp_header *oh;
     struct stp_data *stp = stp_;
     struct ofp_packet_in *opi;
     struct eth_header *eth;
@@ -934,6 +958,14 @@ stp_local_packet_cb(struct relay *r, void *stp_)
     struct ofpbuf payload;
     uint16_t port_no;
     struct flow flow;
+
+    oh = msg->data;
+    if (oh->type == OFPT_FEATURES_REPLY
+        && msg->size >= offsetof(struct ofp_switch_features, ports)) {
+        struct ofp_switch_features *osf = msg->data;
+        osf->capabilities |= htonl(OFPC_STP);
+        return false;
+    }
 
     if (!get_ofp_packet_eth_header(r, &opi, &eth)
         || !eth_addr_equals(eth->eth_dst, stp_eth_addr)) {
@@ -1082,8 +1114,25 @@ send_bpdu(const void *bpdu, size_t bpdu_size, int port_no, void *stp_)
     rconn_send_with_limit(stp->local_rconn, opo, &stp->n_txq, OFPP_MAX);
 }
 
+static bool
+stp_is_port_supported(uint16_t port_no)
+{
+    /* STP only supports a maximum of 255 ports, one less than OpenFlow.  We
+     * don't support STP on OFPP_LOCAL, either.  */
+    return port_no < STP_MAX_PORTS;
+}
+
 static void
-stp_port_watcher_cb(uint16_t port_no,
+stp_edit_port_cb(struct ofp_phy_port *p, void *stp_ UNUSED)
+{
+    uint16_t port_no = ntohs(p->port_no);
+    if (stp_is_port_supported(port_no)) {
+        p->features |= htonl(OFPPF_STP);
+    }
+}
+
+static void
+stp_port_changed_cb(uint16_t port_no,
                     const struct ofp_phy_port *old,
                     const struct ofp_phy_port *new,
                     void *stp_)
@@ -1091,9 +1140,7 @@ stp_port_watcher_cb(uint16_t port_no,
     struct stp_data *stp = stp_;
     struct stp_port *p;
 
-    /* STP only supports a maximum of 255 ports, one less than OpenFlow.  We
-     * don't support STP on OFPP_LOCAL, either.  */
-    if (port_no >= STP_MAX_PORTS) {
+    if (!stp_is_port_supported(port_no)) {
         return;
     }
 
@@ -1131,7 +1178,8 @@ stp_hook_create(const struct settings *s, struct port_watcher *pw,
     stp->remote_rconn = remote;
     stp->last_tick_256ths = time_256ths();
 
-    port_watcher_register_callback(pw, stp_port_watcher_cb, stp);
+    port_watcher_register_callback(pw, stp_edit_port_cb,
+                                   stp_port_changed_cb, stp);
     return make_hook(stp_local_packet_cb, NULL,
                      stp_periodic_cb, stp_wait_cb, stp);
 }
