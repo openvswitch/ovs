@@ -98,7 +98,7 @@ static int table_dummy_insert(struct sw_table *swt, struct sw_flow *flow)
 }
 
 static int table_dummy_modify(struct sw_table *swt, 
-		const struct sw_flow_key *key,
+		const struct sw_flow_key *key, uint16_t priority, int strict,
 		const struct ofp_action *actions, int n_actions)
 {
 	struct sw_table_dummy *td = (struct sw_table_dummy *) swt;
@@ -106,7 +106,8 @@ static int table_dummy_modify(struct sw_table *swt,
 	unsigned int count = 0;
 
 	list_for_each_entry (flow, &td->flows, node) {
-		if (flow_matches_1wild(&flow->key, key)) {
+		if (flow_matches_desc(&flow->key, key, strict)
+				&& (!strict || (flow->priority == priority))) {
 			flow_replace_acts(flow, actions, n_actions);
 			/* xxx Do whatever is necessary to modify the entry in hardware */
 			count++;
@@ -135,7 +136,7 @@ static int table_dummy_delete(struct sw_table *swt,
 	unsigned int count = 0;
 
 	list_for_each_entry (flow, &td->flows, node) {
-		if (flow_del_matches(&flow->key, key, strict)
+		if (flow_matches_desc(&flow->key, key, strict)
 		    && (!strict || (flow->priority == priority)))
 			count += do_delete(swt, flow);
 	}

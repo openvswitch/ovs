@@ -172,15 +172,18 @@ described in \fBFLOW SYNTAX\fR, below.
 .TP
 \fBmod-flows \fIswitch flow\fR
 Modify the actions in entries from the datapath \fIswitch\fR's tables 
-that match \fIflow\fR.  See \fBFLOW SYNTAX\fR, below, for the syntax 
-of \fIflows\fR.
+that match \fIflow\fR.  When invoked with the \fB--strict\fR option,
+wildcards are not treated as active for matching purposes.  See 
+\fBFLOW SYNTAX\fR, below, for the syntax of \fIflows\fR.
 
 .TP
 \fBdel-flows \fIswitch \fR[\fIflow\fR]
 Deletes entries from the datapath \fIswitch\fR's tables that match
-\fIflow\fR.  If \fIflow\fR is omitted, all flows in the datapath's
-tables are removed.  See \fBFLOW SYNTAX\fR, below, for the syntax of
-\fIflows\fR.
+\fIflow\fR.  When invoked with the \fB--strict\fR option, wildcards are 
+not treated as active for matching purposes.  If \fIflow\fR is 
+omitted and the \fB--strict\fR option is not used, all flows in the 
+datapath's tables are removed.  See \fBFLOW SYNTAX\fR, below, for the 
+syntax of \fIflows\fR.
 
 .TP
 \fBmonitor \fIswitch\fR
@@ -388,6 +391,10 @@ If this field is not specified, or if \fInumber\fR is given as
 \fB255\fR, statistics are gathered about flows from all tables.
 
 .SH OPTIONS
+.TP
+\fB--strict\fR
+Uses strict matching when running flow modification commands.
+
 .TP
 \fB-t\fR, \fB--timeout=\fIsecs\fR
 Limits \fBdpctl\fR runtime to approximately \fIsecs\fR seconds.  If

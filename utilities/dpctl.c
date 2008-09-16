@@ -76,26 +76,33 @@
 #define MOD_PORT_CMD_FLOOD   "flood"
 #define MOD_PORT_CMD_NOFLOOD "noflood"
 
+
+/* Settings that may be configured by the user. */
+struct settings {
+    bool strict;        /* Use strict matching for flow mod commands */
+};
+
 struct command {
     const char *name;
     int min_args;
     int max_args;
-    void (*handler)(int argc, char *argv[]);
+    void (*handler)(const struct settings *, int argc, char *argv[]);
 };
 
 static struct command all_commands[];
 
 static void usage(void) NO_RETURN;
-static void parse_options(int argc, char *argv[]);
+static void parse_options(int argc, char *argv[], struct settings *);
 
 int main(int argc, char *argv[])
 {
+    struct settings s;
     struct command *p;
 
     set_program_name(argv[0]);
     time_init();
     vlog_init();
-    parse_options(argc, argv);
+    parse_options(argc, argv, &s);
     signal(SIGPIPE, SIG_IGN);
 
     argc -= optind;
@@ -113,7 +120,7 @@ int main(int argc, char *argv[])
                 ofp_fatal(0, "'%s' command takes at most %d arguments",
                           p->name, p->max_args);
             else {
-                p->handler(argc, argv);
+                p->handler(&s, argc, argv);
                 exit(0);
             }
         }
@@ -124,17 +131,24 @@ int main(int argc, char *argv[])
 }
 
 static void
-parse_options(int argc, char *argv[])
+parse_options(int argc, char *argv[], struct settings *s)
 {
+    enum {
+        OPT_STRICT = UCHAR_MAX + 1
+    };
     static struct option long_options[] = {
         {"timeout", required_argument, 0, 't'},
         {"verbose", optional_argument, 0, 'v'},
+        {"strict", no_argument, 0, OPT_STRICT},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
         VCONN_SSL_LONG_OPTIONS
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
+
+    /* Set defaults that we can figure out before parsing options. */
+    s->strict = false;
 
     for (;;) {
         unsigned long int timeout;
@@ -165,6 +179,10 @@ parse_options(int argc, char *argv[])
 
         case 'v':
             vlog_set_verbosity(optarg);
+            break;
+
+        case OPT_STRICT:
+            s->strict = true;
             break;
 
         VCONN_SSL_OPTION_HANDLERS
@@ -215,6 +233,7 @@ usage(void)
            program_name, program_name);
     vconn_usage(true, false, false);
     printf("\nOptions:\n"
+           "  --strict                    use strict match for flow commands\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
            "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose               set maximum verbosity level\n"
@@ -271,7 +290,7 @@ static void open_nl_vconn(const char *name, bool subscribe, struct dpif *dpif)
     run(dpif_open(atoi(name + 3), subscribe, dpif), "opening datapath");
 }
 
-static void do_add_dp(int argc UNUSED, char *argv[])
+static void do_add_dp(const struct settings *s, int argc UNUSED, char *argv[])
 {
     struct dpif dp;
     open_nl_vconn(argv[1], false, &dp);
@@ -279,7 +298,7 @@ static void do_add_dp(int argc UNUSED, char *argv[])
     dpif_close(&dp);
 }
 
-static void do_del_dp(int argc UNUSED, char *argv[])
+static void do_del_dp(const struct settings *s, int argc UNUSED, char *argv[])
 {
     struct dpif dp;
     open_nl_vconn(argv[1], false, &dp);
@@ -316,12 +335,14 @@ static int ifup_and_add_port(struct dpif *dpif, const char *netdev)
     return retval ? retval : dpif_add_port(dpif, netdev);
 }
 
-static void do_add_port(int argc UNUSED, char *argv[])
+static void do_add_port(const struct settings *s, int argc UNUSED, 
+        char *argv[])
 {
     add_del_ports(argc, argv, ifup_and_add_port, "add", "to");
 }
 
-static void do_del_port(int argc UNUSED, char *argv[])
+static void do_del_port(const struct settings *s, int argc UNUSED, 
+        char *argv[])
 {
     add_del_ports(argc, argv, dpif_del_port, "remove", "from");
 }
@@ -414,14 +435,14 @@ dump_trivial_stats_transaction(const char *vconn_name, uint8_t stats_type)
 }
 
 static void
-do_show(int argc UNUSED, char *argv[])
+do_show(const struct settings *s, int argc UNUSED, char *argv[])
 {
     dump_trivial_transaction(argv[1], OFPT_FEATURES_REQUEST);
     dump_trivial_transaction(argv[1], OFPT_GET_CONFIG_REQUEST);
 }
 
 static void
-do_status(int argc, char *argv[])
+do_status(const struct settings *s, int argc, char *argv[])
 {
     struct nicira_header *request, *reply;
     struct vconn *vconn;
@@ -452,13 +473,13 @@ do_status(int argc, char *argv[])
 }
 
 static void
-do_dump_desc(int argc, char *argv[])
+do_dump_desc(const struct settings *s, int argc, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_DESC);
 }
 
 static void
-do_dump_tables(int argc, char *argv[])
+do_dump_tables(const struct settings *s, int argc, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_TABLE);
 }
@@ -767,7 +788,7 @@ str_to_flow(char *string, struct ofp_match *match,
     match->wildcards = htonl(wildcards);
 }
 
-static void do_dump_flows(int argc, char *argv[])
+static void do_dump_flows(const struct settings *s, int argc, char *argv[])
 {
     struct ofp_flow_stats_request *req;
     struct ofpbuf *request;
@@ -780,7 +801,8 @@ static void do_dump_flows(int argc, char *argv[])
     dump_stats_transaction(argv[1], request);
 }
 
-static void do_dump_aggregate(int argc, char *argv[])
+static void do_dump_aggregate(const struct settings *s, int argc, 
+        char *argv[])
 {
     struct ofp_aggregate_stats_request *req;
     struct ofpbuf *request;
@@ -793,7 +815,7 @@ static void do_dump_aggregate(int argc, char *argv[])
     dump_stats_transaction(argv[1], request);
 }
 
-static void do_add_flow(int argc, char *argv[])
+static void do_add_flow(const struct settings *s, int argc, char *argv[])
 {
     struct vconn *vconn;
     struct ofpbuf *buffer;
@@ -822,7 +844,7 @@ static void do_add_flow(int argc, char *argv[])
     vconn_close(vconn);
 }
 
-static void do_add_flows(int argc, char *argv[])
+static void do_add_flows(const struct settings *s, int argc, char *argv[])
 {
     struct vconn *vconn;
     FILE *file;
@@ -875,9 +897,9 @@ static void do_add_flows(int argc, char *argv[])
     fclose(file);
 }
 
-static void do_mod_flows(int argc, char *argv[])
+static void do_mod_flows(const struct settings *s, int argc, char *argv[])
 {
-    uint16_t idle_timeout, hard_timeout;
+    uint16_t priority, idle_timeout, hard_timeout;
     struct vconn *vconn;
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
@@ -888,12 +910,16 @@ static void do_mod_flows(int argc, char *argv[])
     size = sizeof *ofm + (sizeof ofm->actions[0] * MAX_ADD_ACTS);
     ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argv[2], &ofm->match, &ofm->actions[0], &n_actions, 
-                NULL, NULL, &idle_timeout, &hard_timeout);
-    ofm->command = htons(OFPFC_MODIFY);
+                NULL, &priority, &idle_timeout, &hard_timeout);
+    if (s->strict) {
+        ofm->command = htons(OFPFC_MODIFY_STRICT);
+    } else {
+        ofm->command = htons(OFPFC_MODIFY);
+    }
     ofm->idle_timeout = htons(idle_timeout);
     ofm->hard_timeout = htons(hard_timeout);
     ofm->buffer_id = htonl(UINT32_MAX);
-    ofm->priority = htons(0);
+    ofm->priority = htons(priority);
     ofm->reserved = htonl(0);
 
     /* xxx Should we use the buffer library? */
@@ -904,7 +930,7 @@ static void do_mod_flows(int argc, char *argv[])
     vconn_close(vconn);
 }
 
-static void do_del_flows(int argc, char *argv[])
+static void do_del_flows(const struct settings *s, int argc, char *argv[])
 {
     struct vconn *vconn;
     uint16_t priority;
@@ -917,7 +943,11 @@ static void do_del_flows(int argc, char *argv[])
     ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argc > 2 ? argv[2] : "", &ofm->match, NULL, 0, NULL, 
                 &priority, NULL, NULL);
-    ofm->command = htons(OFPFC_DELETE);
+    if (s->strict) {
+        ofm->command = htons(OFPFC_DELETE_STRICT);
+    } else {
+        ofm->command = htons(OFPFC_DELETE);
+    }
     ofm->idle_timeout = htons(0);
     ofm->hard_timeout = htons(0);
     ofm->buffer_id = htonl(UINT32_MAX);
@@ -930,7 +960,7 @@ static void do_del_flows(int argc, char *argv[])
 }
 
 static void
-do_monitor(int argc UNUSED, char *argv[])
+do_monitor(const struct settings *s, int argc UNUSED, char *argv[])
 {
     struct vconn *vconn;
     const char *name;
@@ -953,13 +983,13 @@ do_monitor(int argc UNUSED, char *argv[])
 }
 
 static void
-do_dump_ports(int argc, char *argv[])
+do_dump_ports(const struct settings *s, int argc, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_PORT);
 }
 
 static void
-do_probe(int argc, char *argv[])
+do_probe(const struct settings *s, int argc, char *argv[])
 {
     struct ofpbuf *request;
     struct vconn *vconn;
@@ -976,7 +1006,7 @@ do_probe(int argc, char *argv[])
 }
 
 static void
-do_mod_port(int argc, char *argv[])
+do_mod_port(const struct settings *s, int argc, char *argv[])
 {
     struct ofpbuf *request, *reply;
     struct ofp_switch_features *osf;
@@ -1054,7 +1084,7 @@ do_mod_port(int argc, char *argv[])
 }
 
 static void
-do_ping(int argc, char *argv[])
+do_ping(const struct settings *s, int argc, char *argv[])
 {
     size_t max_payload = 65535 - sizeof(struct ofp_header);
     unsigned int payload;
@@ -1101,7 +1131,7 @@ do_ping(int argc, char *argv[])
 }
 
 static void
-do_benchmark(int argc, char *argv[])
+do_benchmark(const struct settings *s, int argc, char *argv[])
 {
     size_t max_payload = 65535 - sizeof(struct ofp_header);
     struct timeval start, end;
@@ -1143,7 +1173,8 @@ do_benchmark(int argc, char *argv[])
            count * message_size / (duration / 1000.0));
 }
 
-static void do_help(int argc UNUSED, char *argv[] UNUSED)
+static void do_help(const struct settings *s, int argc UNUSED, 
+        char *argv[] UNUSED)
 {
     usage();
 }

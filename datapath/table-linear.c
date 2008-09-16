@@ -48,11 +48,6 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 		if (f->priority == flow->priority
 				&& f->key.wildcards == flow->key.wildcards
 				&& flow_matches_2wild(&f->key, &flow->key)) {
-			/* Keep stats from the original flow */
-			flow->init_time = f->init_time;
-			flow->packet_count = f->packet_count;
-			flow->byte_count = f->byte_count;
-
 			flow->serial = f->serial;
 			list_replace_rcu(&f->node, &flow->node);
 			list_replace_rcu(&f->iter_node, &flow->iter_node);
@@ -78,7 +73,7 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 }
 
 static int table_linear_modify(struct sw_table *swt,
-				const struct sw_flow_key *key,
+				const struct sw_flow_key *key, uint16_t priority, int strict,
 				const struct ofp_action *actions, int n_actions)
 {
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
@@ -86,7 +81,8 @@ static int table_linear_modify(struct sw_table *swt,
 	unsigned int count = 0;
 
 	list_for_each_entry (flow, &tl->flows, node) {
-		if (flow_matches_1wild(&flow->key, key)) {
+		if (flow_matches_desc(&flow->key, key, strict)
+				&& (!strict || (flow->priority == priority))) {
 			flow_replace_acts(flow, actions, n_actions);
 			count++;
 		}
@@ -110,7 +106,7 @@ static int table_linear_delete(struct sw_table *swt,
 	unsigned int count = 0;
 
 	list_for_each_entry (flow, &tl->flows, node) {
-		if (flow_del_matches(&flow->key, key, strict)
+		if (flow_matches_desc(&flow->key, key, strict)
 				&& (!strict || (flow->priority == priority)))
 			count += do_delete(swt, flow);
 	}

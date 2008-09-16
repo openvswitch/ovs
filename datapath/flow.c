@@ -66,17 +66,18 @@ int flow_matches_2wild(const struct sw_flow_key *a,
 EXPORT_SYMBOL(flow_matches_2wild);
 
 /* Returns nonzero if 't' (the table entry's key) and 'd' (the key
- * describing the deletion) match, that is, if their fields are
+ * describing the match) match, that is, if their fields are
  * equal modulo wildcards, zero otherwise.  If 'strict' is nonzero, the
  * wildcards must match in both 't_key' and 'd_key'.  Note that the
  * table's wildcards are ignored unless 'strict' is set. */
-int flow_del_matches(const struct sw_flow_key *t, const struct sw_flow_key *d, int strict)
+int flow_matches_desc(const struct sw_flow_key *t, const struct sw_flow_key *d, 
+		int strict)
 {
 	if (strict && d->wildcards != t->wildcards)
 		return 0;
 	return flow_matches_1wild(t, d);
 }
-EXPORT_SYMBOL(flow_del_matches);
+EXPORT_SYMBOL(flow_matches_desc);
 
 static uint32_t make_nw_mask(int n_wild_bits)
 {

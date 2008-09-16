@@ -353,6 +353,7 @@ OFP_ASSERT(sizeof(struct ofp_packet_out) == 16);
 enum ofp_flow_mod_command {
     OFPFC_ADD,              /* New flow. */
     OFPFC_MODIFY,           /* Modify all matching flows. */
+    OFPFC_MODIFY_STRICT,    /* Modify entry strictly matching wildcards */
     OFPFC_DELETE,           /* Delete all matching flows. */
     OFPFC_DELETE_STRICT     /* Strictly match wildcards and priority. */
 };

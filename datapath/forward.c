@@ -495,6 +495,8 @@ mod_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 	int i;
 	int n_actions;
 	struct sw_flow_key key;
+	uint16_t priority;
+	int strict;
 
 	/* To prevent loops, make sure there's no action to send to the
 	 * OFP_TABLE virtual port.
@@ -514,7 +516,9 @@ mod_flow(struct sw_chain *chain, const struct ofp_flow_mod *ofm)
 	}
 
 	flow_extract_match(&key, &ofm->match);
-	chain_modify(chain, &key, ofm->actions, n_actions);
+	priority = key.wildcards ? ntohs(ofm->priority) : -1;
+	strict = (ofm->command == htons(OFPFC_MODIFY_STRICT)) ? 1 : 0;
+	chain_modify(chain, &key, priority, strict, ofm->actions, n_actions);
 
 	if (ntohl(ofm->buffer_id) != (uint32_t) -1) {
 		struct sk_buff *skb = retrieve_skb(ntohl(ofm->buffer_id));
@@ -543,7 +547,7 @@ recv_flow(struct sw_chain *chain, const struct sender *sender, const void *msg)
 
 	if (command == OFPFC_ADD) {
 		return add_flow(chain, ofm);
-	} else if (command == OFPFC_MODIFY) {
+	} else if ((command == OFPFC_MODIFY) || (command == OFPFC_MODIFY_STRICT)) {
 		return mod_flow(chain, ofm);
 	}  else if (command == OFPFC_DELETE) {
 		struct sw_flow_key key;

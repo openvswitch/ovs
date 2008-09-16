@@ -99,7 +99,7 @@ struct sw_flow {
 
 int flow_matches_1wild(const struct sw_flow_key *, const struct sw_flow_key *);
 int flow_matches_2wild(const struct sw_flow_key *, const struct sw_flow_key *);
-int flow_del_matches(const struct sw_flow_key *, const struct sw_flow_key *, 
+int flow_matches_desc(const struct sw_flow_key *, const struct sw_flow_key *, 
 		int);
 struct sw_flow *flow_alloc(int n_actions, gfp_t flags);
 void flow_free(struct sw_flow *);

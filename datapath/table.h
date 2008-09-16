@@ -55,9 +55,11 @@ struct sw_table {
 	 * retained by the caller. */
 	int (*insert)(struct sw_table *table, struct sw_flow *flow);
 
-	/* Modifies the actions in 'table' that match 'key'.  Returns the
-	 * number of flows that were modified. */
+	/* Modifies the actions in 'table' that match 'key'.  If 'strict'
+	 * set, wildcards and priority must match.  Returns the number of flows 
+	 * that were modified. */
 	int (*modify)(struct sw_table *table, const struct sw_flow_key *key,
+			uint16_t priority, int strict,
 			const struct ofp_action *actions, int n_actions);
 
 	/* Deletes from 'table' any and all flows that match 'key' from

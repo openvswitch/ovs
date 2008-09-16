@@ -57,7 +57,7 @@ struct sw_chain *chain_create(void);
 struct sw_flow *chain_lookup(struct sw_chain *, const struct sw_flow_key *);
 int chain_insert(struct sw_chain *, struct sw_flow *);
 int chain_modify(struct sw_chain *, const struct sw_flow_key *, 
-        const struct ofp_action *, int);
+        uint16_t, int, const struct ofp_action *, int);
 int chain_delete(struct sw_chain *, const struct sw_flow_key *, uint16_t, int);
 void chain_timeout(struct sw_chain *, struct list *deleted);
 void chain_destroy(struct sw_chain *);

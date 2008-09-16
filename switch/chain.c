@@ -114,14 +114,15 @@ chain_insert(struct sw_chain *chain, struct sw_flow *flow)
     return -ENOBUFS;
 }
 
-/* Modifies actions in 'chain' that match 'key'.  Returns the number of 
- * flows that were modified.
+/* Modifies actions in 'chain' that match 'key'.  If 'strict' set, wildcards 
+ * and priority must match.  Returns the number of flows that were modified.
  *
  * Expensive in the general case as currently implemented, since it requires
  * iterating through the entire contents of each table for keys that contain
  * wildcards.  Relatively cheap for fully specified keys. */
 int
 chain_modify(struct sw_chain *chain, const struct sw_flow_key *key,
+        uint16_t priority, int strict,
         const struct ofp_action *actions, int n_actions)
 {
     int count = 0;
@@ -129,14 +130,15 @@ chain_modify(struct sw_chain *chain, const struct sw_flow_key *key,
 
     for (i = 0; i < chain->n_tables; i++) {
         struct sw_table *t = chain->tables[i];
-        count += t->modify(t, key, actions, n_actions);
+        count += t->modify(t, key, priority, strict, actions, n_actions);
     }
 
     return count;
 }
 
-/* Deletes from 'chain' any and all flows that match 'key'.  Returns the number
- * of flows that were deleted.
+/* Deletes from 'chain' any and all flows that match 'key'.   If 'strict' set, 
+ * wildcards and priority must match.  Returns the number of flows that were 
+ * deleted.
  *
  * Expensive in the general case as currently implemented, since it requires
  * iterating through the entire contents of each table for keys that contain

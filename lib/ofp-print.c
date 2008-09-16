@@ -565,6 +565,9 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
     case OFPFC_MODIFY:
         ds_put_cstr(string, " MOD: ");
         break;
+    case OFPFC_MODIFY_STRICT:
+        ds_put_cstr(string, " MOD_STRICT: ");
+        break;
     case OFPFC_DELETE:
         ds_put_cstr(string, " DEL: ");
         break;
