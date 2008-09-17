@@ -137,3 +137,11 @@ AC_DEFUN([OFP_ENABLE_EXT],
    fi
    AC_SUBST([ofp_top_srcdir], ['$(top_srcdir)'])
    AM_CONDITIONAL([HAVE_EXT], [test $HAVE_EXT = yes])])
+
+dnl Checks for dpkg-buildpackage.  If this is available then we check
+dnl that the Debian packaging is functional at "make distcheck" time.
+AC_DEFUN([OFP_CHECK_DPKG_BUILDPACKAGE],
+  [AC_CHECK_PROG([HAVE_DPKG_BUILDPACKAGE], [dpkg-buildpackage], [yes], [no])
+   AM_CONDITIONAL([HAVE_DPKG_BUILDPACKAGE], 
+                  [test $HAVE_DPKG_BUILDPACKAGE = yes])])
+   
