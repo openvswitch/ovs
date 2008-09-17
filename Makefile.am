@@ -9,7 +9,8 @@ SUBDIRS = \
 	switch \
 	tests \
 	include \
-	third-party
+	third-party \
+	debian
 if HAVE_EXT
 SUBDIRS += ext
 endif

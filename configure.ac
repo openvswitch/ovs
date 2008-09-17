@@ -72,6 +72,7 @@ switch/Makefile
 tests/Makefile
 datapath/tests/Makefile
 third-party/Makefile
+debian/Makefile
 datapath/linux-2.6/Kbuild
 datapath/linux-2.6/Makefile
 datapath/linux-2.6/Makefile.main
