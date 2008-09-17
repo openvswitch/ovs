@@ -13,6 +13,7 @@ SUBDIRS = \
 	debian
 if HAVE_EXT
 SUBDIRS += ext
+distdir = $(PACKAGE)+ext-$(VERSION)
 endif
 
 DIST_SUBDIRS = $(SUBDIRS)
