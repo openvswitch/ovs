@@ -1,9 +1,11 @@
 *.debhelper
+*.substvars
+/Makefile.am
+/Makefile.in
 /files
 /openflow
 /openflow-common
 /openflow-controller
+/openflow-datapath-source
 /openflow-pki
 /openflow-switch
-/openflow-datapath-source
-*.substvars
