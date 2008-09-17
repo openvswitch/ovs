@@ -1,4 +1,6 @@
-AUTOMAKE_OPTIONS=foreign
+# The goal of -Wno-syntax here is just to suppress the Automake warning
+# about overriding distdir, below.
+AUTOMAKE_OPTIONS=foreign -Wno-syntax
 ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = \
 	lib \
