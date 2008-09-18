@@ -1,3 +1,35 @@
+v0.9.0 - 18 Sep 2008
+--------------------
+    - Added support for IP netmasks
+    - Added new physical port stats
+    - Added IN_PORT virtual port
+    - Added echo request/response
+    - Added detection of link and port status changes
+    - Added ability to configure port status from controller
+    - Added support for vendor extensions
+    - More explicit handling for IP fragments
+    - Added support for 802.1D spanning tree
+    - Added OFPFC_MODIFY command to Flow Mod message
+    - Provided more flexible description of tables to controller
+    - Make port modification more explicit
+    - Made Packet Out message more consistent
+    - Added hard timeout value to Flow Mod message
+    - Added reason field for Flow Expired message
+    - Reworked initial handshake to support backwards compatibility
+    - Added OFPST_DESC stat for returning description of hw/sw 
+    - Added support for loadable hardware table support modules**
+    - In-band control now supported**
+    - 802.1D spanning tree support**
+    - Automatic controller discovery (via DHCP) now supported**
+    - Improved support for older 2.6.x kernels**
+    - Switch can now "fail open" as a MAC-learning switch if the controller cannot be contacted**
+    - Debian packages may now be built**
+    - Fixed bugs in SSL support
+    - Most programs now take --detach and --pidfile options to run as daemon
+    - Numerous bug fixes 
+
+      ** Only supported in the kernel module for the time-being.
+
 v0.8.1 - 14 May 2008
 --------------------
     - No longer set nwsrc/nwdst fields in flow structs on ARP packets
