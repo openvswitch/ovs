@@ -279,6 +279,7 @@ reconnect(struct rconn *rc)
         state_transition(rc, S_CONNECTING);
     } else {
         VLOG_WARN("%s: connection failed (%s)", rc->name, strerror(retval));
+        rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
         disconnect(rc, 0);
     }
     return retval;
