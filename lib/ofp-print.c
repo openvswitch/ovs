@@ -701,13 +701,11 @@ ofp_print_port_status(struct ds *string, const void *oh, size_t len,
     const struct ofp_port_status *ops = oh;
 
     if (ops->reason == OFPPR_ADD) {
-        ds_put_format(string, "add:");
+        ds_put_format(string, " ADD:");
     } else if (ops->reason == OFPPR_DELETE) {
-        ds_put_format(string, "del:");
+        ds_put_format(string, " DEL:");
     } else if (ops->reason == OFPPR_MOD) {
-        ds_put_format(string, "mod:");
-    } else {
-        ds_put_format(string, "err:");
+        ds_put_format(string, " MOD:");
     }
 
     ofp_print_phy_port(string, &ops->desc);
