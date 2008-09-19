@@ -208,6 +208,9 @@ int main(int argc, char *argv[])
             usage(argv[0], EXIT_SUCCESS);
             break;
 
+        case '?':
+            exit(EXIT_FAILURE);
+
         default:
             NOT_REACHED();
         }
