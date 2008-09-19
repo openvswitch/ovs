@@ -14,7 +14,7 @@ SUBDIRS = \
 	third-party \
 	debian
 if HAVE_EXT
-SUBDIRS += ext
+SUBDIRS += $(EXT)
 distdir = $(PACKAGE)+ext-$(VERSION)
 endif
 

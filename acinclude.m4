@@ -134,6 +134,7 @@ AC_DEFUN([OFP_ENABLE_EXT],
      AC_CONFIG_SUBDIRS([ext])
      AC_DEFINE([HAVE_EXT], [1], 
                [Whether the OpenFlow extensions submodule is available])
+     AC_SUBST([EXT], [ext])
    fi
    AC_SUBST([ofp_top_srcdir], ['$(top_srcdir)'])
    AM_CONDITIONAL([HAVE_EXT], [test $HAVE_EXT = yes])])
