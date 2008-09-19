@@ -6,6 +6,7 @@ openflow_sources = \
 	crc32.c \
 	datapath.c \
 	dp_dev.c \
+	dp_notify.c \
 	flow.c \
 	forward.c \
 	table-hash.c \

@@ -9,6 +9,7 @@
 /crc32.c
 /crc_t.c
 /dp_dev.c
+/dp_notify.c
 /flow.c
 /forward.c
 /forward_t.c

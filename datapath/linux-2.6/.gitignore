@@ -6,6 +6,7 @@
 /crc_t.c
 /datapath.c
 /dp_dev.c
+/dp_notify.c
 /flow.c
 /forward.c
 /forward_t.c

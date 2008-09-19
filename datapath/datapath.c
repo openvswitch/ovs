@@ -88,12 +88,10 @@ DEFINE_MUTEX(dp_mutex);
 EXPORT_SYMBOL(dp_mutex);
 
 static int dp_maint_func(void *data);
-static int update_port_status(struct net_bridge_port *p);
-static int send_port_status(struct net_bridge_port *p, uint8_t status);
+static void init_port_status(struct net_bridge_port *p);
 static int dp_genl_openflow_done(struct netlink_callback *);
 static struct net_bridge_port *new_nbp(struct datapath *,
 				       struct net_device *, int port_no);
-static int del_switch_port(struct net_bridge_port *);
 
 /* nla_shrink - reduce amount of space reserved by nla_reserve
  * @skb: socket buffer from which to recover room
@@ -309,7 +307,7 @@ static int new_dp(int dp_idx)
 	return 0;
 
 err_destroy_local_port:
-	del_switch_port(dp->local_port);
+	dp_del_switch_port(dp->local_port);
 err_destroy_chain:
 	chain_destroy(dp->chain);
 err_destroy_dp_dev:
@@ -378,16 +376,16 @@ int add_switch_port(struct datapath *dp, struct net_device *dev)
 	if (IS_ERR(p))
 		return PTR_ERR(p);
 
-	update_port_status(p);
+	init_port_status(p);
 
 	/* Notify the ctlpath that this port has been added */
-	send_port_status(p, OFPPR_ADD);
+	dp_send_port_status(p, OFPPR_ADD);
 
 	return 0;
 }
 
 /* Delete 'p' from switch. */
-static int del_switch_port(struct net_bridge_port *p)
+int dp_del_switch_port(struct net_bridge_port *p)
 {
 	/* First drop references to device. */
 	cancel_work_sync(&p->port_task);
@@ -403,7 +401,7 @@ static int del_switch_port(struct net_bridge_port *p)
 	synchronize_rcu();
 
 	/* Notify the ctlpath that this port no longer exists */
-	send_port_status(p, OFPPR_DELETE);
+	dp_send_port_status(p, OFPPR_DELETE);
 
 	dev_put(p->dev);
 	kfree(p);
@@ -419,7 +417,7 @@ static void del_dp(struct datapath *dp)
 
 	/* Drop references to DP. */
 	list_for_each_entry_safe (p, n, &dp->port_list, node)
-		del_switch_port(p);
+		dp_del_switch_port(p);
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
 	/* Kill off local_port dev references from buffered packets that have
@@ -443,15 +441,6 @@ static int dp_maint_func(void *data)
 	struct datapath *dp = (struct datapath *) data;
 
 	while (!kthread_should_stop()) {
-		struct net_bridge_port *p;
-
-		/* Check if port status has changed */
-		rcu_read_lock();
-		list_for_each_entry_rcu (p, &dp->port_list, node) 
-			if (update_port_status(p)) 
-				send_port_status(p, OFPPR_MOD);
-		rcu_read_unlock();
-
 		/* Timeout old entries */
 		chain_timeout(dp->chain);
 		msleep_interruptible(MAINT_SLEEP_MSECS);
@@ -886,20 +875,13 @@ dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm)
 	return 0;
 }
 
-/* Update the port status field of the bridge port.  A non-zero return
- * value indicates some field has changed. 
- *
- * NB: Callers of this function may hold the RCU read lock, so any
- * additional checks must not sleep.
- */
-static int
-update_port_status(struct net_bridge_port *p)
+/* Initialize the port status field of the bridge port. */
+static void
+init_port_status(struct net_bridge_port *p)
 {
 	unsigned long int flags;
-	uint32_t orig_status;
 
 	spin_lock_irqsave(&p->lock, flags);
-	orig_status = p->status;
 
 	if (p->dev->flags & IFF_UP) 
 		p->status &= ~OFPPFL_PORT_DOWN;
@@ -912,11 +894,10 @@ update_port_status(struct net_bridge_port *p)
 		p->status |= OFPPFL_LINK_DOWN;
 
 	spin_unlock_irqrestore(&p->lock, flags);
-	return (orig_status != p->status);
 }
 
-static int
-send_port_status(struct net_bridge_port *p, uint8_t status)
+int
+dp_send_port_status(struct net_bridge_port *p, uint8_t status)
 {
 	struct sk_buff *skb;
 	struct ofp_port_status *ops;
@@ -1162,7 +1143,7 @@ static int dp_genl_add_del_port(struct sk_buff *skb, struct genl_info *info)
 			err = -ENOENT;
 			goto out_put;
 		}
-		err = del_switch_port(port->br_port);
+		err = dp_del_switch_port(port->br_port);
 	}
 
 out_put:
@@ -1740,9 +1721,13 @@ static int __init dp_init(void)
 	if (err)
 		goto error;
 
-	err = dp_init_netlink();
+	err = register_netdevice_notifier(&dp_device_notifier);
 	if (err)
 		goto error_flow_exit;
+
+	err = dp_init_netlink();
+	if (err)
+		goto error_unreg_notifier;
 
 	/* Hook into callback used by the bridge to intercept packets.
 	 * Parasites we are. */
@@ -1752,6 +1737,8 @@ static int __init dp_init(void)
 
 	return 0;
 
+error_unreg_notifier:
+	unregister_netdevice_notifier(&dp_device_notifier);
 error_flow_exit:
 	flow_exit();
 error:
@@ -1763,6 +1750,7 @@ static void dp_cleanup(void)
 {
 	fwd_exit();
 	dp_uninit_netlink();
+	unregister_netdevice_notifier(&dp_device_notifier);
 	flow_exit();
 	br_handle_frame_hook = NULL;
 }
