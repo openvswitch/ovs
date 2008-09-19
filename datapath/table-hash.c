@@ -220,6 +220,7 @@ static void table_hash_stats(struct sw_table *swt,
 	stats->wildcards = 0;          /* No wildcards are supported. */
 	stats->n_flows   = th->n_flows;
 	stats->max_flows = th->bucket_mask + 1;
+	stats->n_lookup  = swt->n_lookup;
 	stats->n_matched = swt->n_matched;
 }
 
@@ -356,6 +357,7 @@ static void table_hash2_stats(struct sw_table *swt,
 	stats->wildcards = 0;          /* No wildcards are supported. */
 	stats->n_flows   = substats[0].n_flows + substats[1].n_flows;
 	stats->max_flows = substats[0].max_flows + substats[1].max_flows;
+	stats->n_lookup  = swt->n_lookup;
 	stats->n_matched = swt->n_matched;
 }
 

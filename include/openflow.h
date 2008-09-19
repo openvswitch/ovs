@@ -63,7 +63,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x91
+#define OFP_VERSION   0x92
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -618,9 +618,10 @@ struct ofp_table_stats {
                                 supported by the table. */
     uint32_t max_entries;    /* Max number of entries supported */
     uint32_t active_count;   /* Number of active entries */
+    uint64_t lookup_count;   /* Number of packets looked up in table */
     uint64_t matched_count;  /* Number of packets that hit table */
 };
-OFP_ASSERT(sizeof(struct ofp_table_stats) == 56);
+OFP_ASSERT(sizeof(struct ofp_table_stats) == 64);
 
 /* Body of reply to OFPST_PORT request. If a counter is unsupported, set
  * the field to all ones. */
@@ -649,7 +650,7 @@ OFP_ASSERT(sizeof(struct ofp_port_stats) == 104);
 struct ofp_vendor {
     struct ofp_header header;   /* Type OFPT_VENDOR. */
     uint32_t vendor;            /* Vendor ID:
-                                 * - MSB 0: low-order bytes are Ethernet OUI.
+                                 * - MSB 0: low-order bytes are IEEE OUI.
                                  * - MSB != 0: defined by OpenFlow
                                  *   consortium. */
     /* Vendor-defined arbitrary additional data. */

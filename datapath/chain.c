@@ -72,6 +72,7 @@ struct sw_flow *chain_lookup(struct sw_chain *chain,
 	for (i = 0; i < chain->n_tables; i++) {
 		struct sw_table *t = chain->tables[i];
 		struct sw_flow *flow = t->lookup(t, key);
+		t->n_lookup++;
 		if (flow) {
 			t->n_matched++;
 			return flow;

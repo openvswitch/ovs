@@ -891,9 +891,12 @@ ofp_table_stats_reply(struct ds *string, const void *body, size_t len,
         ds_put_format(string, "  %d: %-8s: ", ts->table_id, name);
         ds_put_format(string, "wild=0x%05"PRIx32", ", ntohl(ts->wildcards));
         ds_put_format(string, "max=%6"PRIu32", ", ntohl(ts->max_entries));
-        ds_put_format(string, "active=%6"PRIu32", ", ntohl(ts->active_count));
-        ds_put_format(string, "matched=%6"PRIu64"\n",
-                      ntohll(ts->matched_count));
+        ds_put_format(string, "active=%"PRIu32"\n", ntohl(ts->active_count));
+        ds_put_cstr(string, "               ");
+        ds_put_format(string, "lookup=%"PRIu64", ", 
+                    ntohll(ts->lookup_count));
+        ds_put_format(string, "matched=%"PRIu64"\n",
+                    ntohll(ts->matched_count));
      }
 }
 

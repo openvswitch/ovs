@@ -18,6 +18,7 @@ struct sw_table_stats {
 	                                supported by the table. */
 	unsigned int n_flows;        /* Number of active flows. */
 	unsigned int max_flows;      /* Flow capacity. */
+	unsigned long int n_lookup;  /* Number of packets looked up. */
 	unsigned long int n_matched; /* Number of packets that have hit. */
 };
 
@@ -35,10 +36,11 @@ struct sw_table_position {
  * rcu_read_lock.  destroy must be fully serialized.
  */
 struct sw_table {
-	/* Keep track of the number of packets that matched this table.  To
-	 * make this 100% accurate, it should be atomic.  However, we're
-	 * primarily concerned about speed. */
-	unsigned long int n_matched;
+	/* The number of packets that have been looked up and matched,
+	 * respecitvely.  To make these 100% accurate, they should be atomic.  
+	 * However, we're primarily concerned about speed. */
+	unsigned long long n_lookup;
+	unsigned long long n_matched;
 
 	/* Searches 'table' for a flow matching 'key', which must not have any
 	 * wildcard fields.  Returns the flow if successful, a null pointer
