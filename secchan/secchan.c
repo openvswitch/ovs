@@ -110,6 +110,9 @@ struct settings {
     regex_t accept_controller_regex;  /* Controller vconns to accept. */
     const char *accept_controller_re; /* String version of regex. */
     bool update_resolv_conf;          /* Update /etc/resolv.conf? */
+
+    /* Spanning tree protocol. */
+    bool enable_stp;
 };
 
 struct half {
@@ -288,7 +291,9 @@ main(int argc, char *argv[])
 
     /* Set up hooks. */
     hooks[n_hooks++] = port_watcher_create(local_rconn, remote_rconn, &pw);
-    hooks[n_hooks++] = stp_hook_create(&s, pw, local_rconn, remote_rconn);
+    if (s.enable_stp) {
+        hooks[n_hooks++] = stp_hook_create(&s, pw, local_rconn, remote_rconn);
+    }
     if (s.in_band) {
         hooks[n_hooks++] = in_band_hook_create(&s, switch_status,
                                                remote_rconn);
@@ -1491,7 +1496,9 @@ fail_open_hook_create(const struct settings *s, struct switch_status *ss,
     fail_open->remote_rconn = remote_rconn;
     fail_open->lswitch = NULL;
     fail_open->boot_deadline = time_now() + s->probe_interval * 3;
-    fail_open->boot_deadline += STP_EXTRA_BOOT_TIME;
+    if (s->enable_stp) {
+        fail_open->boot_deadline += STP_EXTRA_BOOT_TIME;
+    }
     switch_status_register_category(ss, "fail-open",
                                     fail_open_status_cb, fail_open);
     return make_hook(fail_open_local_packet_cb, NULL,
@@ -2042,7 +2049,8 @@ parse_options(int argc, char *argv[], struct settings *s)
         OPT_MAX_BACKOFF,
         OPT_RATE_LIMIT,
         OPT_BURST_LIMIT,
-        OPT_BOOTSTRAP_CA_CERT
+        OPT_BOOTSTRAP_CA_CERT,
+        OPT_NO_STP
     };
     static struct option long_options[] = {
         {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
@@ -2055,6 +2063,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         {"monitor",     required_argument, 0, 'm'},
         {"rate-limit",  optional_argument, 0, OPT_RATE_LIMIT},
         {"burst-limit", required_argument, 0, OPT_BURST_LIMIT},
+        {"no-stp",      no_argument, 0, OPT_NO_STP},
         {"detach",      no_argument, 0, 'D'},
         {"force",       no_argument, 0, 'f'},
         {"pidfile",     optional_argument, 0, 'P'},
@@ -2081,6 +2090,7 @@ parse_options(int argc, char *argv[], struct settings *s)
     s->update_resolv_conf = true;
     s->rate_limit = 0;
     s->burst_limit = 0;
+    s->enable_stp = true;
     for (;;) {
         int c;
 
@@ -2153,6 +2163,10 @@ parse_options(int argc, char *argv[], struct settings *s)
             if (s->burst_limit < 1) {
                 ofp_fatal(0, "--burst-limit argument must be at least 1");
             }
+            break;
+
+        case OPT_NO_STP:
+            s->enable_stp = false;
             break;
 
         case 'D':
@@ -2309,6 +2323,7 @@ usage(void)
            "                          (a passive OpenFlow connection method)\n"
            "  -m, --monitor=METHOD    copy traffic to/from kernel to METHOD\n"
            "                          (a passive OpenFlow connection method)\n"
+           "  --no-stp                disable 802.1D Spanning Tree Protocol\n"
            "\nRate-limiting of \"packet-in\" messages to the controller:\n"
            "  --rate-limit[=PACKETS]  max rate, in packets/s (default: 1000)\n"
            "  --burst-limit=BURST     limit on packet credit for idle time\n"

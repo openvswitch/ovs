@@ -326,6 +326,11 @@ basis.  In particular, if the socket buffer of the monitoring
 connection fills up, some messages will be lost.
 
 .TP
+\fB--no-stp\fR
+Disable implementation of IEEE 802.1D Spanning Tree Protocol at the
+switch.
+
+.TP
 \fB-p\fR, \fB--private-key=\fIprivkey.pem\fR
 Specifies a PEM file containing the private key used as the switch's
 identity for SSL connections to the controller.
