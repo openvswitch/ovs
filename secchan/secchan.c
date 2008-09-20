@@ -591,14 +591,12 @@ relay_destroy(struct relay *r)
 
 /* Port status watcher. */
 
-typedef void edit_port_cb_func(struct ofp_phy_port *port, void *aux);
 typedef void port_changed_cb_func(uint16_t port_no,
                                   const struct ofp_phy_port *old,
                                   const struct ofp_phy_port *new,
                                   void *aux);
 
 struct port_watcher_cb {
-    edit_port_cb_func *edit_port;
     port_changed_cb_func *port_changed;
     void *aux;
 };
@@ -666,18 +664,6 @@ call_port_changed_callbacks(struct port_watcher *pw, int port_no,
 }
 
 static void
-call_edit_port_callbacks(struct port_watcher *pw, struct ofp_phy_port *p)
-{
-    int i;
-    for (i = 0; i < pw->n_cbs; i++) {
-        edit_port_cb_func *edit_port = pw->cbs[i].edit_port;
-        if (edit_port) {
-            (edit_port)(p, pw->cbs[i].aux); 
-        }
-    }
-}
-
-static void
 update_phy_port(struct port_watcher *pw, struct ofp_phy_port *opp,
                 uint8_t reason, bool seen[OFPP_MAX + 1])
 {
@@ -730,7 +716,6 @@ port_watcher_local_packet_cb(struct relay *r, void *pw_)
                    / sizeof *osf->ports);
         for (i = 0; i < n_ports; i++) {
             struct ofp_phy_port *opp = &osf->ports[i];
-            call_edit_port_callbacks(pw, opp);
             update_phy_port(pw, opp, OFPPR_MOD, seen);
         }
 
@@ -743,7 +728,6 @@ port_watcher_local_packet_cb(struct relay *r, void *pw_)
     } else if (oh->type == OFPT_PORT_STATUS
                && msg->size >= sizeof(struct ofp_port_status)) {
         struct ofp_port_status *ops = msg->data;
-        call_edit_port_callbacks(pw, &ops->desc);
         update_phy_port(pw, &ops->desc, ops->reason, NULL);
     }
     return false;
@@ -852,12 +836,10 @@ log_port_status(uint16_t port_no,
 
 static void
 port_watcher_register_callback(struct port_watcher *pw,
-                               edit_port_cb_func *edit_port,
                                port_changed_cb_func *port_changed,
                                void *aux)
 {
     assert(pw->n_cbs < ARRAY_SIZE(pw->cbs));
-    pw->cbs[pw->n_cbs].edit_port = edit_port;
     pw->cbs[pw->n_cbs].port_changed = port_changed;
     pw->cbs[pw->n_cbs].aux = aux;
     pw->n_cbs++;
@@ -929,7 +911,7 @@ port_watcher_create(struct rconn *local_rconn, struct rconn *remote_rconn,
     for (i = 0; i < OFPP_MAX; i++) {
         pw->ports[i].port_no = htons(OFPP_NONE);
     }
-    port_watcher_register_callback(pw, NULL, log_port_status, NULL);
+    port_watcher_register_callback(pw, log_port_status, NULL);
     return make_hook(port_watcher_local_packet_cb,
                      port_watcher_remote_packet_cb,
                      port_watcher_periodic_cb, NULL, pw);
@@ -1175,7 +1157,7 @@ stp_hook_create(const struct settings *s, struct port_watcher *pw,
     stp->remote_rconn = remote;
     stp->last_tick_256ths = time_256ths();
 
-    port_watcher_register_callback(pw, NULL, stp_port_changed_cb, stp);
+    port_watcher_register_callback(pw, stp_port_changed_cb, stp);
     return make_hook(stp_local_packet_cb, NULL,
                      stp_periodic_cb, stp_wait_cb, stp);
 }
