@@ -76,7 +76,7 @@
 /* Port numbering.  Physical ports are numbered starting from 0. */
 enum ofp_port {
     /* Maximum number of physical switch ports. */
-    OFPP_MAX = 0x100,
+    OFPP_MAX = 255,
 
     /* Fake output "ports". */
     OFPP_IN_PORT    = 0xfff8,  /* Send the packet out the input port.  This 
@@ -213,7 +213,6 @@ enum ofp_port_features {
     OFPPF_1GB_HD     = 1 << 4, /* 1 Gb half-duplex rate support. */
     OFPPF_1GB_FD     = 1 << 5, /* 1 Gb full-duplex rate support. */
     OFPPF_10GB_FD    = 1 << 6, /* 10 Gb full-duplex rate support. */
-    OFPPF_STP        = 1 << 7, /* 802.1D spanning tree supported on port. */
 };
 
 

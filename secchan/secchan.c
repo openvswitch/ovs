@@ -1122,18 +1122,10 @@ send_bpdu(const void *bpdu, size_t bpdu_size, int port_no, void *stp_)
 static bool
 stp_is_port_supported(uint16_t port_no)
 {
-    /* STP only supports a maximum of 255 ports, one less than OpenFlow.  We
-     * don't support STP on OFPP_LOCAL, either.  */
+    /* We should be able to support STP on all possible OpenFlow physical
+     * ports.  (But we don't support STP on OFPP_LOCAL.)  */
+    BUILD_ASSERT_DECL(STP_MAX_PORTS >= OFPP_MAX);
     return port_no < STP_MAX_PORTS;
-}
-
-static void
-stp_edit_port_cb(struct ofp_phy_port *p, void *stp_ UNUSED)
-{
-    uint16_t port_no = ntohs(p->port_no);
-    if (stp_is_port_supported(port_no)) {
-        p->features |= htonl(OFPPF_STP);
-    }
 }
 
 static void
@@ -1183,8 +1175,7 @@ stp_hook_create(const struct settings *s, struct port_watcher *pw,
     stp->remote_rconn = remote;
     stp->last_tick_256ths = time_256ths();
 
-    port_watcher_register_callback(pw, stp_edit_port_cb,
-                                   stp_port_changed_cb, stp);
+    port_watcher_register_callback(pw, NULL, stp_port_changed_cb, stp);
     return make_hook(stp_local_packet_cb, NULL,
                      stp_periodic_cb, stp_wait_cb, stp);
 }

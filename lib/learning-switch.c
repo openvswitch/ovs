@@ -291,7 +291,7 @@ static void
 process_phy_port(struct lswitch *sw, struct rconn *rconn,
                  const struct ofp_phy_port *opp)
 {
-    if (sw->capabilities & OFPC_STP && opp->features & ntohl(OFPPF_STP)) {
+    if (sw->capabilities & OFPC_STP && ntohs(opp->port_no) < OFPP_MAX) {
         uint32_t flags = ntohl(opp->flags);
         uint32_t new_flags = flags & ~(OFPPFL_NO_RECV | OFPPFL_NO_RECV_STP
                                        | OFPPFL_NO_FWD | OFPPFL_NO_PACKET_IN);
