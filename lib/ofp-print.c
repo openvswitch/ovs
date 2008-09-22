@@ -377,6 +377,51 @@ compare_ports(const void *a_, const void *b_)
     return ap < bp ? -1 : ap > bp;
 }
 
+static void ofp_print_port_features(struct ds *string, uint32_t features)
+{
+    if (features == 0) {
+        ds_put_cstr(string, "Unsupported\n");
+        return;
+    }
+    if (features & OFPPF_10MB_HD) {
+        ds_put_cstr(string, "10MB-HD ");
+    }
+    if (features & OFPPF_10MB_FD) {
+        ds_put_cstr(string, "10MB-FD ");
+    }
+    if (features & OFPPF_100MB_HD) {
+        ds_put_cstr(string, "100MB-HD ");
+    }
+    if (features & OFPPF_100MB_FD) {
+        ds_put_cstr(string, "100MB-FD ");
+    }
+    if (features & OFPPF_1GB_HD) {
+        ds_put_cstr(string, "1GB-HD ");
+    }
+    if (features & OFPPF_1GB_FD) {
+        ds_put_cstr(string, "1GB-FD ");
+    }
+    if (features & OFPPF_10GB_FD) {
+        ds_put_cstr(string, "10GB-FD ");
+    }
+    if (features & OFPPF_COPPER) {
+        ds_put_cstr(string, "COPPER ");
+    }
+    if (features & OFPPF_FIBER) {
+        ds_put_cstr(string, "FIBER ");
+    }
+    if (features & OFPPF_AUTONEG) {
+        ds_put_cstr(string, "AUTO_NEG ");
+    }
+    if (features & OFPPF_PAUSE) {
+        ds_put_cstr(string, "AUTO_PAUSE ");
+    }
+    if (features & OFPPF_PAUSE_ASYM) {
+        ds_put_cstr(string, "AUTO_PAUSE_ASYM ");
+    }
+    ds_put_char(string, '\n');
+}
+
 static void
 ofp_print_phy_port(struct ds *string, const struct ofp_phy_port *port)
 {
@@ -393,10 +438,25 @@ ofp_print_phy_port(struct ds *string, const struct ofp_phy_port *port)
 
     ds_put_char(string, ' ');
     ofp_print_port_name(string, ntohs(port->port_no));
-    ds_put_format(string, "(%s): addr:"ETH_ADDR_FMT", speed:%d, flags:%#x, "
-            "feat:%#x\n", name, 
-            ETH_ADDR_ARGS(port->hw_addr), ntohl(port->speed),
-            ntohl(port->flags), ntohl(port->features));
+    ds_put_format(string, "(%s): addr:"ETH_ADDR_FMT", config: %#x, state:%#x\n",
+            name, ETH_ADDR_ARGS(port->hw_addr), ntohl(port->config),
+            ntohl(port->state));
+    if (port->curr) {
+        ds_put_format(string, "     current:    ");
+        ofp_print_port_features(string, ntohl(port->curr));
+    }
+    if (port->advertised) {
+        ds_put_format(string, "     advertised: ");
+        ofp_print_port_features(string, ntohl(port->advertised));
+    }
+    if (port->supported) {
+        ds_put_format(string, "     supported:  ");
+        ofp_print_port_features(string, ntohl(port->supported));
+    }
+    if (port->peer) {
+        ds_put_format(string, "     peer:       ");
+        ofp_print_port_features(string, ntohl(port->peer));
+    }
 }
 
 /* Pretty-print the struct ofp_switch_features of 'len' bytes at 'oh' to
@@ -704,7 +764,7 @@ ofp_print_port_status(struct ds *string, const void *oh, size_t len,
         ds_put_format(string, " ADD:");
     } else if (ops->reason == OFPPR_DELETE) {
         ds_put_format(string, " DEL:");
-    } else if (ops->reason == OFPPR_MOD) {
+    } else if (ops->reason == OFPPR_MODIFY) {
         ds_put_format(string, " MOD:");
     }
 

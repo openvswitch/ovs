@@ -506,12 +506,12 @@ static inline unsigned packet_length(const struct sk_buff *skb)
 static int
 output_all(struct datapath *dp, struct sk_buff *skb, int flood)
 {
-	u32 disable = flood ? OFPPFL_NO_FLOOD : 0;
+	u32 disable = flood ? OFPPC_NO_FLOOD : 0;
 	struct net_bridge_port *p;
 	int prev_port = -1;
 
 	list_for_each_entry_rcu (p, &dp->port_list, node) {
-		if (skb->dev == p->dev || p->flags & disable)
+		if (skb->dev == p->dev || p->config & disable)
 			continue;
 		if (prev_port != -1) {
 			struct sk_buff *clone = skb_clone(skb, GFP_ATOMIC);
@@ -613,7 +613,7 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port,
 				printk("can't directly forward to input port\n");
 			return -EINVAL;
 		}
-		if (p->flags & OFPPFL_NO_FWD && !ignore_no_fwd) {
+		if (p->config & OFPPC_NO_FWD && !ignore_no_fwd) {
 			kfree_skb(skb);
 			return 0;
 		}
@@ -681,12 +681,14 @@ static void fill_port_desc(struct net_bridge_port *p, struct ofp_phy_port *desc)
 	strncpy(desc->name, p->dev->name, OFP_MAX_PORT_NAME_LEN);
 	desc->name[OFP_MAX_PORT_NAME_LEN-1] = '\0';
 	memcpy(desc->hw_addr, p->dev->dev_addr, ETH_ALEN);
-	desc->flags = 0;
-	desc->features = 0;
-	desc->speed = 0;
+	desc->curr = 0;
+	desc->supported = 0;
+	desc->advertised = 0;
+	desc->peer = 0;
 
 	spin_lock_irqsave(&p->lock, flags);
-	desc->flags = htonl(p->flags | p->status);
+	desc->config = htonl(p->config);
+	desc->state = htonl(p->state);
 	spin_unlock_irqrestore(&p->lock, flags);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,24)
@@ -694,27 +696,86 @@ static void fill_port_desc(struct net_bridge_port *p, struct ofp_phy_port *desc)
 		struct ethtool_cmd ecmd = { .cmd = ETHTOOL_GSET };
 
 		if (!p->dev->ethtool_ops->get_settings(p->dev, &ecmd)) {
+			/* Set the supported features */
 			if (ecmd.supported & SUPPORTED_10baseT_Half) 
-				desc->features |= OFPPF_10MB_HD;
+				desc->supported |= OFPPF_10MB_HD;
 			if (ecmd.supported & SUPPORTED_10baseT_Full)
-				desc->features |= OFPPF_10MB_FD;
+				desc->supported |= OFPPF_10MB_FD;
 			if (ecmd.supported & SUPPORTED_100baseT_Half) 
-				desc->features |= OFPPF_100MB_HD;
+				desc->supported |= OFPPF_100MB_HD;
 			if (ecmd.supported & SUPPORTED_100baseT_Full)
-				desc->features |= OFPPF_100MB_FD;
+				desc->supported |= OFPPF_100MB_FD;
 			if (ecmd.supported & SUPPORTED_1000baseT_Half)
-				desc->features |= OFPPF_1GB_HD;
+				desc->supported |= OFPPF_1GB_HD;
 			if (ecmd.supported & SUPPORTED_1000baseT_Full)
-				desc->features |= OFPPF_1GB_FD;
-			/* 10Gbps half-duplex doesn't exist... */
+				desc->supported |= OFPPF_1GB_FD;
 			if (ecmd.supported & SUPPORTED_10000baseT_Full)
-				desc->features |= OFPPF_10GB_FD;
+				desc->supported |= OFPPF_10GB_FD;
+			if (ecmd.supported & SUPPORTED_TP)
+				desc->supported |= OFPPF_COPPER;
+			if (ecmd.supported & SUPPORTED_FIBRE)
+				desc->supported |= OFPPF_FIBER;
+			if (ecmd.supported & SUPPORTED_Autoneg)
+				desc->supported |= OFPPF_AUTONEG;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+			if (ecmd.supported & SUPPORTED_Pause)
+				desc->supported |= OFPPF_PAUSE;
+			if (ecmd.supported & SUPPORTED_Asym_Pause)
+				desc->supported |= OFPPF_PAUSE_ASYM;
+#endif /* kernel >= 2.6.14 */
 
-			desc->speed = htonl(ecmd.speed);
+			/* Set the advertised features */
+			if (ecmd.advertising & ADVERTISED_10baseT_Half) 
+				desc->advertised |= OFPPF_10MB_HD;
+			if (ecmd.advertising & ADVERTISED_10baseT_Full)
+				desc->advertised |= OFPPF_10MB_FD;
+			if (ecmd.advertising & ADVERTISED_100baseT_Half) 
+				desc->advertised |= OFPPF_100MB_HD;
+			if (ecmd.advertising & ADVERTISED_100baseT_Full)
+				desc->advertised |= OFPPF_100MB_FD;
+			if (ecmd.advertising & ADVERTISED_1000baseT_Half)
+				desc->advertised |= OFPPF_1GB_HD;
+			if (ecmd.advertising & ADVERTISED_1000baseT_Full)
+				desc->advertised |= OFPPF_1GB_FD;
+			if (ecmd.advertising & ADVERTISED_10000baseT_Full)
+				desc->advertised |= OFPPF_10GB_FD;
+			if (ecmd.advertising & ADVERTISED_TP)
+				desc->advertised |= OFPPF_COPPER;
+			if (ecmd.advertising & ADVERTISED_FIBRE)
+				desc->advertised |= OFPPF_FIBER;
+			if (ecmd.advertising & ADVERTISED_Autoneg)
+				desc->advertised |= OFPPF_AUTONEG;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+			if (ecmd.advertising & ADVERTISED_Pause)
+				desc->advertised |= OFPPF_PAUSE;
+			if (ecmd.advertising & ADVERTISED_Asym_Pause)
+				desc->advertised |= OFPPF_PAUSE_ASYM;
+#endif /* kernel >= 2.6.14 */
+
+			/* Set the current features */
+			if (ecmd.speed == SPEED_10)
+				desc->curr = (ecmd.duplex) ? OFPPF_10MB_FD : OFPPF_10MB_HD;
+			else if (ecmd.speed == SPEED_100)
+				desc->curr = (ecmd.duplex) ? OFPPF_100MB_FD : OFPPF_100MB_HD;
+			else if (ecmd.speed == SPEED_1000)
+				desc->curr = (ecmd.duplex) ? OFPPF_1GB_FD : OFPPF_1GB_HD;
+			else if (ecmd.speed == SPEED_10000)
+				desc->curr = OFPPF_10GB_FD;
+
+			if (ecmd.port == PORT_TP) 
+				desc->curr |= OFPPF_COPPER;
+			else if (ecmd.port == PORT_FIBRE) 
+				desc->curr |= OFPPF_FIBER;
+
+			if (ecmd.autoneg)
+				desc->curr |= OFPPF_AUTONEG;
 		}
 	}
 #endif
-	desc->features = htonl(desc->features);
+	desc->curr = htonl(desc->curr);
+	desc->supported = htonl(desc->supported);
+	desc->advertised = htonl(desc->advertised);
+	desc->peer = htonl(desc->peer);
 }
 
 static int 
@@ -815,7 +876,7 @@ down_port_cb(struct work_struct *work)
 		if (net_ratelimit())
 			printk("problem bringing up port %s\n", p->dev->name);
 	rtnl_unlock();
-	p->status |= OFPPFL_PORT_DOWN;
+	p->config |= OFPPC_PORT_DOWN;
 }
 
 /* Callback function for a workqueue to enable an interface */
@@ -830,42 +891,40 @@ up_port_cb(struct work_struct *work)
 		if (net_ratelimit())
 			printk("problem bringing down port %s\n", p->dev->name);
 	rtnl_unlock();
-	p->status &= ~OFPPFL_PORT_DOWN;
+	p->config &= ~OFPPC_PORT_DOWN;
 }
 
 int
 dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm)
 {
 	unsigned long int flags;
-	const struct ofp_phy_port *opp = &opm->desc;
-	int port_no = ntohs(opp->port_no);
+	int port_no = ntohs(opm->port_no);
 	struct net_bridge_port *p = (port_no < OFPP_MAX ? dp->ports[port_no]
 				     : port_no == OFPP_LOCAL ? dp->local_port
 				     : NULL);
-	uint32_t flag_mask;
 
 	/* Make sure the port id hasn't changed since this was sent */
-	if (!p || memcmp(opp->hw_addr, p->dev->dev_addr, ETH_ALEN))
+	if (!p || memcmp(opm->hw_addr, p->dev->dev_addr, ETH_ALEN))
 		return -1;
 
 	spin_lock_irqsave(&p->lock, flags);
-	flag_mask = ntohl(opm->mask) & PORT_FLAG_BITS;
-	if (flag_mask) {
-		p->flags &= ~flag_mask;
-		p->flags |= ntohl(opp->flags) & flag_mask;
+	if (opm->mask) {
+		uint32_t config_mask = ntohl(opm->mask);
+		p->config &= ~config_mask;
+		p->config |= ntohl(opm->config) & config_mask;
 	}
 
 	/* Modifying the status of an interface requires taking a lock
 	 * that cannot be done from here.  For this reason, we use a shared 
 	 * workqueue, which will cause it to be executed from a safer 
 	 * context. */
-	if (opm->mask & htonl(OFPPFL_PORT_DOWN)) {
-		if ((opp->flags & htonl(OFPPFL_PORT_DOWN))
-		    && (p->status & OFPPFL_PORT_DOWN) == 0) {
+	if (opm->mask & htonl(OFPPC_PORT_DOWN)) {
+		if ((opm->config & htonl(OFPPC_PORT_DOWN))
+		    && (p->config & OFPPC_PORT_DOWN) == 0) {
 			PREPARE_WORK(&p->port_task, down_port_cb);
 			schedule_work(&p->port_task);
-		} else if ((opp->flags & htonl(OFPPFL_PORT_DOWN)) == 0
-			   && (p->status & OFPPFL_PORT_DOWN)) {
+		} else if ((opm->config & htonl(OFPPC_PORT_DOWN)) == 0
+			   && (p->config & OFPPC_PORT_DOWN)) {
 			PREPARE_WORK(&p->port_task, up_port_cb);
 			schedule_work(&p->port_task);
 		}
@@ -884,14 +943,14 @@ init_port_status(struct net_bridge_port *p)
 	spin_lock_irqsave(&p->lock, flags);
 
 	if (p->dev->flags & IFF_UP) 
-		p->status &= ~OFPPFL_PORT_DOWN;
+		p->config &= ~OFPPC_PORT_DOWN;
 	else
-		p->status |= OFPPFL_PORT_DOWN;
+		p->config |= OFPPC_PORT_DOWN;
 
 	if (netif_carrier_ok(p->dev))
-		p->status &= ~OFPPFL_LINK_DOWN;
+		p->state &= ~OFPPS_LINK_DOWN;
 	else
-		p->status |= OFPPFL_LINK_DOWN;
+		p->state |= OFPPS_LINK_DOWN;
 
 	spin_unlock_irqrestore(&p->lock, flags);
 }

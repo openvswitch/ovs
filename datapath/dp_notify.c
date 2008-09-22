@@ -17,7 +17,7 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 	struct net_device *dev = ptr;
 	struct net_bridge_port *p = dev->br_port;
 	unsigned long int flags;
-	uint32_t orig_status;
+	uint32_t orig_state, orig_config;
 
 
 	/* Check if monitored port */
@@ -25,26 +25,26 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 		return NOTIFY_DONE;
 
 	spin_lock_irqsave(&p->lock, flags);
-	orig_status = p->status;
+	orig_state = p->state;
+	orig_config = p->config;
 
 	switch (event) {
 		case NETDEV_CHANGE:
 			if (netif_carrier_ok(p->dev))
-				p->status &= ~OFPPFL_LINK_DOWN;
+				p->state &= ~OFPPS_LINK_DOWN;
 			else
-				p->status |= OFPPFL_LINK_DOWN;
+				p->state |= OFPPS_LINK_DOWN;
 			break;
 
 		case NETDEV_DOWN:
-			p->status |= OFPPFL_PORT_DOWN;
+			p->config |= OFPPC_PORT_DOWN;
 			break;
 
 		case NETDEV_UP:
-			p->status &= ~OFPPFL_PORT_DOWN;
+			p->config &= ~OFPPC_PORT_DOWN;
 			break;
 
 		case NETDEV_UNREGISTER:
-			/* xxx Make sure this is correct */
 			spin_unlock_irqrestore(&p->lock, flags);
 			dp_del_switch_port(p);
 			return NOTIFY_DONE;
@@ -52,8 +52,8 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 	}
 	spin_unlock_irqrestore(&p->lock, flags);
 
-	if (orig_status != p->status) 
-		dp_send_port_status(p, OFPPR_MOD);
+	if ((orig_state != p->state) || (orig_config != p->config))
+		dp_send_port_status(p, OFPPR_MODIFY);
 
 	return NOTIFY_DONE;
 }

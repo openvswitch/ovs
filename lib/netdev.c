@@ -41,6 +41,7 @@
 #include <linux/types.h>
 #include <linux/ethtool.h>
 #include <linux/sockios.h>
+#include <linux/version.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -74,7 +75,14 @@ struct netdev {
     uint8_t etheraddr[ETH_ADDR_LEN];
     int speed;
     int mtu;
-    uint32_t features;
+
+    /* Bitmaps of OFPPF_* that describe features.  All bits disabled if
+     * unsupported or unavailable. */
+    uint32_t curr;              /* Current features. */
+    uint32_t advertised;        /* Features being advertised by the port. */
+    uint32_t supported;         /* Features supported by the port. */
+    uint32_t peer;              /* Features advertised by the peer. */
+
     struct in6_addr in6;
     int save_flags;             /* Initial device flags. */
     int changed_flags;          /* Flags that we changed. */
@@ -138,8 +146,10 @@ do_ethtool(struct netdev *netdev)
     struct ifreq ifr;
     struct ethtool_cmd ecmd;
 
-    netdev->speed = 0;
-    netdev->features = 0;
+    netdev->curr = 0;
+    netdev->supported = 0;
+    netdev->advertised = 0;
+    netdev->peer = 0;
 
     memset(&ifr, 0, sizeof ifr);
     strncpy(ifr.ifr_name, netdev->name, sizeof ifr.ifr_name);
@@ -149,48 +159,107 @@ do_ethtool(struct netdev *netdev)
     ecmd.cmd = ETHTOOL_GSET;
     if (ioctl(netdev->fd, SIOCETHTOOL, &ifr) == 0) {
         if (ecmd.supported & SUPPORTED_10baseT_Half) {
-            netdev->features |= OFPPF_10MB_HD;
+            netdev->supported |= OFPPF_10MB_HD;
         }
         if (ecmd.supported & SUPPORTED_10baseT_Full) {
-            netdev->features |= OFPPF_10MB_FD;
+            netdev->supported |= OFPPF_10MB_FD;
         }
         if (ecmd.supported & SUPPORTED_100baseT_Half)  {
-            netdev->features |= OFPPF_100MB_HD;
+            netdev->supported |= OFPPF_100MB_HD;
         }
         if (ecmd.supported & SUPPORTED_100baseT_Full) {
-            netdev->features |= OFPPF_100MB_FD;
+            netdev->supported |= OFPPF_100MB_FD;
         }
         if (ecmd.supported & SUPPORTED_1000baseT_Half) {
-            netdev->features |= OFPPF_1GB_HD;
+            netdev->supported |= OFPPF_1GB_HD;
         }
         if (ecmd.supported & SUPPORTED_1000baseT_Full) {
-            netdev->features |= OFPPF_1GB_FD;
+            netdev->supported |= OFPPF_1GB_FD;
         }
-        /* 10Gbps half-duplex doesn't exist... */
         if (ecmd.supported & SUPPORTED_10000baseT_Full) {
-            netdev->features |= OFPPF_10GB_FD;
+            netdev->supported |= OFPPF_10GB_FD;
+        }
+        if (ecmd.supported & SUPPORTED_TP) {
+            netdev->supported |= OFPPF_COPPER;
+        }
+        if (ecmd.supported & SUPPORTED_FIBRE) {
+            netdev->supported |= OFPPF_FIBER;
+        }
+        if (ecmd.supported & SUPPORTED_Autoneg) {
+            netdev->supported |= OFPPF_AUTONEG;
+        }
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+        if (ecmd.supported & SUPPORTED_Pause) {
+            netdev->supported |= OFPPF_PAUSE;
+        }
+        if (ecmd.supported & SUPPORTED_Asym_Pause) {
+            netdev->supported |= OFPPF_PAUSE_ASYM;
+        }
+#endif /* kernel >= 2.6.14 */
+
+        /* Set the advertised features */
+        if (ecmd.advertising & ADVERTISED_10baseT_Half) {
+            netdev->advertised |= OFPPF_10MB_HD;
+        }
+        if (ecmd.advertising & ADVERTISED_10baseT_Full) {
+            netdev->advertised |= OFPPF_10MB_FD;
+        }
+        if (ecmd.advertising & ADVERTISED_100baseT_Half) {
+            netdev->advertised |= OFPPF_100MB_HD;
+        }
+        if (ecmd.advertising & ADVERTISED_100baseT_Full) {
+            netdev->advertised |= OFPPF_100MB_FD;
+        }
+        if (ecmd.advertising & ADVERTISED_1000baseT_Half) {
+            netdev->advertised |= OFPPF_1GB_HD;
+        }
+        if (ecmd.advertising & ADVERTISED_1000baseT_Full) {
+            netdev->advertised |= OFPPF_1GB_FD;
+        }
+        if (ecmd.advertising & ADVERTISED_10000baseT_Full) {
+            netdev->advertised |= OFPPF_10GB_FD;
+        }
+        if (ecmd.advertising & ADVERTISED_TP) {
+            netdev->advertised |= OFPPF_COPPER;
+        }
+        if (ecmd.advertising & ADVERTISED_FIBRE) {
+            netdev->advertised |= OFPPF_FIBER;
+        }
+        if (ecmd.advertising & ADVERTISED_Autoneg) {
+            netdev->advertised |= OFPPF_AUTONEG;
+        }
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+        if (ecmd.advertising & ADVERTISED_Pause) {
+            netdev->advertised |= OFPPF_PAUSE;
+        }
+        if (ecmd.advertising & ADVERTISED_Asym_Pause) {
+            netdev->advertised |= OFPPF_PAUSE_ASYM;
+        }
+#endif /* kernel >= 2.6.14 */
+
+        /* Set the current features */
+        if (ecmd.speed == SPEED_10) {
+            netdev->curr = (ecmd.duplex) ? OFPPF_10MB_FD : OFPPF_10MB_HD;
+        }
+        else if (ecmd.speed == SPEED_100) {
+            netdev->curr = (ecmd.duplex) ? OFPPF_100MB_FD : OFPPF_100MB_HD;
+        }
+        else if (ecmd.speed == SPEED_1000) {
+            netdev->curr = (ecmd.duplex) ? OFPPF_1GB_FD : OFPPF_1GB_HD;
+        }
+        else if (ecmd.speed == SPEED_10000) {
+            netdev->curr = OFPPF_10GB_FD;
         }
 
-        switch (ecmd.speed) {
-        case SPEED_10:
-            netdev->speed = 10;
-            break;
+        if (ecmd.port == PORT_TP) {
+            netdev->curr |= OFPPF_COPPER;
+        }
+        else if (ecmd.port == PORT_FIBRE) {
+            netdev->curr |= OFPPF_FIBER;
+        }
 
-        case SPEED_100:
-            netdev->speed = 100;
-            break;
-
-        case SPEED_1000:
-            netdev->speed = 1000;
-            break;
-
-        case SPEED_2500:
-            netdev->speed = 2500;
-            break;
-
-        case SPEED_10000:
-            netdev->speed = 10000;
-            break;
+        if (ecmd.autoneg) {
+            netdev->curr |= OFPPF_AUTONEG;
         }
     } else {
         VLOG_DBG("ioctl(SIOCETHTOOL) failed: %s", strerror(errno));
@@ -495,14 +564,6 @@ netdev_get_mtu(const struct netdev *netdev)
     return netdev->mtu;
 }
 
-/* Returns the current speed of the network device that 'netdev' represents, in
- * megabits per second, or 0 if the speed is unknown. */
-int
-netdev_get_speed(const struct netdev *netdev) 
-{
-    return netdev->speed;
-}
-
 /* Checks the link status.  Returns 1 or 0 to indicate the link is active 
  * or not, respectively.  Any other return value indicates an error. */
 int
@@ -528,12 +589,25 @@ netdev_get_link_status(const struct netdev *netdev)
     return -1;
 }
 
-/* Returns the features supported by 'netdev', as a bitmap of bits from enum
- * ofp_phy_port, in host byte order. */
+/* Returns the features supported by 'netdev' of type 'type', as a bitmap 
+ * of bits from enum ofp_phy_features, in host byte order. */
 uint32_t
-netdev_get_features(const struct netdev *netdev) 
+netdev_get_features(struct netdev *netdev, int type) 
 {
-    return netdev->features;
+    do_ethtool(netdev);
+    switch (type) {
+    case NETDEV_FEAT_CURRENT:
+        return netdev->curr;
+    case NETDEV_FEAT_ADVERTISED:
+        return netdev->advertised;
+    case NETDEV_FEAT_SUPPORTED:
+        return netdev->supported;
+    case NETDEV_FEAT_PEER:
+        return netdev->peer;
+    default:
+        VLOG_WARN("Unknown feature type: %d\n", type);
+        return 0;
+    }
 }
 
 /* If 'netdev' has an assigned IPv4 address, sets '*in4' to that address (if

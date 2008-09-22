@@ -47,9 +47,9 @@ int run_flow_through_tables(struct sw_chain *chain, struct sk_buff *skb,
 		kfree_skb(skb);
 		return 0;
 	}
-	if (p && p->flags & (OFPPFL_NO_RECV | OFPPFL_NO_RECV_STP) &&
-	    p->flags & (compare_ether_addr(key.dl_dst, stp_eth_addr)
-			? OFPPFL_NO_RECV : OFPPFL_NO_RECV_STP)) {
+	if (p && p->config & (OFPPC_NO_RECV | OFPPC_NO_RECV_STP) &&
+	    p->config & (compare_ether_addr(key.dl_dst, stp_eth_addr)
+			? OFPPC_NO_RECV : OFPPC_NO_RECV_STP)) {
 		kfree_skb(skb);
 		return 0;
 	}

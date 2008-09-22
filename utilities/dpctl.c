@@ -1054,25 +1054,27 @@ do_mod_port(const struct settings *s, int argc, char *argv[])
     }
 
     opm = make_openflow(sizeof(struct ofp_port_mod), OFPT_PORT_MOD, &request);
-    memcpy(&opm->desc, &osf->ports[port_idx], sizeof osf->ports[0]);
-    opm->mask = 0;
-    opm->desc.flags = 0;
+    opm->port_no = osf->ports[port_idx].port_no;
+    memcpy(opm->hw_addr, osf->ports[port_idx].hw_addr, sizeof opm->hw_addr);
+    opm->config = htonl(0);
+    opm->mask = htonl(0);
+    opm->advertise = htonl(0);
 
     printf("modifying port: %s\n", osf->ports[port_idx].name);
 
     if (!strncasecmp(argv[3], MOD_PORT_CMD_UP, sizeof MOD_PORT_CMD_UP)) {
-        opm->mask |= htonl(OFPPFL_PORT_DOWN);
+        opm->mask |= htonl(OFPPC_PORT_DOWN);
     } else if (!strncasecmp(argv[3], MOD_PORT_CMD_DOWN, 
                 sizeof MOD_PORT_CMD_DOWN)) {
-        opm->mask |= htonl(OFPPFL_PORT_DOWN);
-        opm->desc.flags |= htonl(OFPPFL_PORT_DOWN);
+        opm->mask |= htonl(OFPPC_PORT_DOWN);
+        opm->config |= htonl(OFPPC_PORT_DOWN);
     } else if (!strncasecmp(argv[3], MOD_PORT_CMD_FLOOD, 
                 sizeof MOD_PORT_CMD_FLOOD)) {
-        opm->mask |= htonl(OFPPFL_NO_FLOOD);
+        opm->mask |= htonl(OFPPC_NO_FLOOD);
     } else if (!strncasecmp(argv[3], MOD_PORT_CMD_NOFLOOD, 
                 sizeof MOD_PORT_CMD_NOFLOOD)) {
-        opm->mask |= htonl(OFPPFL_NO_FLOOD);
-        opm->desc.flags |= htonl(OFPPFL_NO_FLOOD);
+        opm->mask |= htonl(OFPPC_NO_FLOOD);
+        opm->config |= htonl(OFPPC_NO_FLOOD);
     } else {
         ofp_fatal(0, "unknown mod-port command '%s'", argv[3]);
     }

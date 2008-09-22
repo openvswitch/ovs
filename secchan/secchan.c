@@ -191,10 +191,11 @@ struct port_watcher;
 static struct hook port_watcher_create(struct rconn *local,
                                        struct rconn *remote,
                                        struct port_watcher **);
-static uint32_t port_watcher_get_flags(const struct port_watcher *,
+static uint32_t port_watcher_get_config(const struct port_watcher *,
                                        int port_no);
-static void port_watcher_set_flags(struct port_watcher *,
-                                   int port_no, uint32_t flags, uint32_t mask);
+static void port_watcher_set_flags(struct port_watcher *, int port_no, 
+                                   uint32_t config, uint32_t c_mask,
+                                   uint32_t state, uint32_t s_mask);
 
 static struct hook stp_hook_create(const struct settings *,
                                    struct port_watcher *,
@@ -616,13 +617,16 @@ struct port_watcher {
 static int
 opp_differs(const struct ofp_phy_port *a, const struct ofp_phy_port *b)
 {
-    BUILD_ASSERT_DECL(sizeof *a == 36); /* Trips when we add or remove fields. */
+    BUILD_ASSERT_DECL(sizeof *a == 48); /* Trips when we add or remove fields. */
     return ((a->port_no != b->port_no)
             + (memcmp(a->hw_addr, b->hw_addr, sizeof a->hw_addr) != 0)
             + (memcmp(a->name, b->name, sizeof a->name) != 0)
-            + (a->flags != b->flags)
-            + (a->speed != b->speed)
-            + (a->features != b->features));
+            + (a->config != b->config)
+            + (a->state != b->state)
+            + (a->curr != b->curr)
+            + (a->advertised != b->advertised)
+            + (a->supported != b->supported)
+            + (a->peer != b->peer));
 }
 
 static void
@@ -687,7 +691,7 @@ update_phy_port(struct port_watcher *pw, struct ofp_phy_port *opp,
     if (reason == OFPPR_DELETE) {
         memset(pw_opp, 0, sizeof *pw_opp);
         pw_opp->port_no = htons(OFPP_NONE);
-    } else if (reason == OFPPR_MOD || reason == OFPPR_ADD) {
+    } else if (reason == OFPPR_MODIFY || reason == OFPPR_ADD) {
         *pw_opp = *opp;
         sanitize_opp(pw_opp);
     }
@@ -716,7 +720,7 @@ port_watcher_local_packet_cb(struct relay *r, void *pw_)
                    / sizeof *osf->ports);
         for (i = 0; i < n_ports; i++) {
             struct ofp_phy_port *opp = &osf->ports[i];
-            update_phy_port(pw, opp, OFPPR_MOD, seen);
+            update_phy_port(pw, opp, OFPPR_MODIFY, seen);
         }
 
         /* Delete all the ports not included in the message. */
@@ -743,14 +747,14 @@ port_watcher_remote_packet_cb(struct relay *r, void *pw_)
     if (oh->type == OFPT_PORT_MOD
         && msg->size >= sizeof(struct ofp_port_mod)) {
         struct ofp_port_mod *opm = msg->data;
-        uint16_t port_no = ntohs(opm->desc.port_no);
+        uint16_t port_no = ntohs(opm->port_no);
         int idx = port_no_to_pw_idx(port_no);
         if (idx >= 0) {
             struct ofp_phy_port *pw_opp = &pw->ports[idx];
             if (pw_opp->port_no != htons(OFPP_NONE)) {
                 struct ofp_phy_port old = *pw_opp;
-                pw_opp->flags = ((pw_opp->flags & ~opm->mask)
-                                 | (opm->desc.flags & opm->mask));
+                pw_opp->config = ((pw_opp->config & ~opm->mask)
+                                 | (opm->config & opm->mask));
                 call_port_changed_callbacks(pw, port_no, &old, pw_opp);
             }
         }
@@ -787,6 +791,31 @@ put_duplexes(struct ds *ds, const char *name, uint32_t features,
 }
 
 static void
+put_features(struct ds *ds, const char *name, uint32_t features) {
+    if (features & (OFPPF_10MB_HD | OFPPF_10MB_FD
+                    | OFPPF_100MB_HD | OFPPF_100MB_FD
+                    | OFPPF_1GB_HD | OFPPF_1GB_FD | OFPPF_10GB_FD)) {
+        ds_put_cstr(ds, name);
+        put_duplexes(ds, "10M", features, OFPPF_10MB_HD, OFPPF_10MB_FD);
+        put_duplexes(ds, "100M", features,
+                     OFPPF_100MB_HD, OFPPF_100MB_FD);
+        put_duplexes(ds, "1G", features, OFPPF_100MB_HD, OFPPF_100MB_FD);
+        if (features & OFPPF_10GB_FD) {
+            ds_put_cstr(ds, " 10G");
+        }
+        if (features & OFPPF_AUTONEG) {
+            ds_put_cstr(ds, " AUTO_NEG");
+        }
+        if (features & OFPPF_PAUSE) {
+            ds_put_cstr(ds, " PAUSE");
+        }
+        if (features & OFPPF_PAUSE_ASYM) {
+            ds_put_cstr(ds, " PAUSE_ASYM");
+        }
+    }
+}
+
+static void
 log_port_status(uint16_t port_no,
                 const struct ofp_phy_port *old,
                 const struct ofp_phy_port *new,
@@ -795,10 +824,12 @@ log_port_status(uint16_t port_no,
     if (VLOG_IS_DBG_ENABLED()) {
         bool was_enabled = old->port_no != htons(OFPP_NONE);
         bool now_enabled = new->port_no != htons(OFPP_NONE);
-        uint32_t features = ntohl(new->features);
+        uint32_t curr = ntohl(new->curr);
+        uint32_t supported = ntohl(new->supported);
         struct ds ds;
 
-        if (old->flags != new->flags && opp_differs(old, new) == 1) {
+        if (((old->config != new->config) || (old->state != new->state))
+                && opp_differs(old, new) == 1) {
             /* Don't care if only flags changed. */
             return;
         }
@@ -806,20 +837,11 @@ log_port_status(uint16_t port_no,
         ds_init(&ds);
         ds_put_format(&ds, "\"%s\", "ETH_ADDR_FMT, new->name,
                       ETH_ADDR_ARGS(new->hw_addr));
-        if (ntohl(new->speed)) {
-            ds_put_format(&ds, ", speed %"PRIu32, ntohl(new->speed));
+        if (curr) {
+            put_features(&ds, ", current", curr);
         }
-        if (features & (OFPPF_10MB_HD | OFPPF_10MB_FD
-                        | OFPPF_100MB_HD | OFPPF_100MB_FD
-                        | OFPPF_1GB_HD | OFPPF_1GB_FD | OFPPF_10GB_FD)) {
-            ds_put_cstr(&ds, ", supports");
-            put_duplexes(&ds, "10M", features, OFPPF_10MB_HD, OFPPF_10MB_FD);
-            put_duplexes(&ds, "100M", features,
-                         OFPPF_100MB_HD, OFPPF_100MB_FD);
-            put_duplexes(&ds, "1G", features, OFPPF_100MB_HD, OFPPF_100MB_FD);
-            if (features & OFPPF_10GB_FD) {
-                ds_put_cstr(&ds, " 10G");
-            }
+        if (supported) {
+            put_features(&ds, ", supports", supported);
         }
         if (was_enabled != now_enabled) {
             if (now_enabled) {
@@ -846,15 +868,16 @@ port_watcher_register_callback(struct port_watcher *pw,
 }
 
 static uint32_t
-port_watcher_get_flags(const struct port_watcher *pw, int port_no)
+port_watcher_get_config(const struct port_watcher *pw, int port_no)
 {
     int idx = port_no_to_pw_idx(port_no);
-    return idx >= 0 ? ntohl(pw->ports[idx].flags) : 0;
+    return idx >= 0 ? ntohl(pw->ports[idx].config) : 0;
 }
 
 static void
-port_watcher_set_flags(struct port_watcher *pw,
-                       int port_no, uint32_t flags, uint32_t mask)
+port_watcher_set_flags(struct port_watcher *pw, int port_no, 
+                       uint32_t config, uint32_t c_mask,
+                       uint32_t state, uint32_t s_mask)
 {
     struct ofp_phy_port old;
     struct ofp_phy_port *p;
@@ -869,24 +892,29 @@ port_watcher_set_flags(struct port_watcher *pw,
     }
 
     p = &pw->ports[idx];
-    if (!((ntohl(p->flags) ^ flags) & mask)) {
+    if (!((ntohl(p->state) ^ state) & s_mask) 
+            && (!((ntohl(p->config) ^ config) & c_mask))) {
         return;
     }
     old = *p;
 
     /* Update our idea of the flags. */
-    p->flags = htonl((ntohl(p->flags) & ~mask) | (flags & mask));
+    p->config = htonl((ntohl(p->config) & ~c_mask) | (config & c_mask));
+    p->state = htonl((ntohl(p->state) & ~s_mask) | (state & s_mask));
     call_port_changed_callbacks(pw, port_no, &old, p);
 
     /* Change the flags in the datapath. */
     opm = make_openflow(sizeof *opm, OFPT_PORT_MOD, &b);
-    opm->mask = htonl(mask);
-    opm->desc = *p;
+    opm->port_no = p->port_no;
+    memcpy(opm->hw_addr, p->hw_addr, OFP_ETH_ALEN);
+    opm->config = p->config;
+    opm->mask = htonl(c_mask);
+    opm->advertise = htonl(0);
     rconn_send(pw->local_rconn, b, NULL);
 
     /* Notify the controller that the flags changed. */
     ops = make_openflow(sizeof *ops, OFPT_PORT_STATUS, &b);
-    ops->reason = OFPPR_MOD;
+    ops->reason = OFPPR_MODIFY;
     ops->desc = *p;
     rconn_send(pw->remote_rconn, b, NULL);
 }
@@ -964,7 +992,7 @@ stp_local_packet_cb(struct relay *r, void *stp_)
         /* STP only supports 255 ports. */
         return false;
     }
-    if (port_watcher_get_flags(stp->pw, port_no) & OFPPFL_NO_STP) {
+    if (port_watcher_get_config(stp->pw, port_no) & OFPPC_NO_STP) {
         /* We're not doing STP on this port. */
         return false;
     }
@@ -1027,39 +1055,41 @@ stp_periodic_cb(void *stp_)
 
     while (stp_get_changed_port(stp->stp, &p)) {
         int port_no = stp_port_no(p);
-        enum stp_state state = stp_port_get_state(p);
+        enum stp_state s_state = stp_port_get_state(p);
 
-        if (state != STP_DISABLED) {
+        if (s_state != STP_DISABLED) {
             VLOG_WARN("STP: Port %d entered %s state",
-                      port_no, stp_state_name(state));
+                      port_no, stp_state_name(s_state));
         }
-        if (!(port_watcher_get_flags(stp->pw, port_no) & OFPPFL_NO_STP)) {
-            uint32_t flags;
-            switch (state) {
+        if (!(port_watcher_get_config(stp->pw, port_no) & OFPPC_NO_STP)) {
+            uint32_t p_config = 0;
+            uint32_t p_state;
+            switch (s_state) {
             case STP_LISTENING:
-                flags = OFPPFL_STP_LISTEN;
+                p_state = OFPPS_STP_LISTEN;
                 break;
             case STP_LEARNING:
-                flags = OFPPFL_STP_LEARN;
+                p_state = OFPPS_STP_LEARN;
                 break;
             case STP_DISABLED:
             case STP_FORWARDING:
-                flags = OFPPFL_STP_FORWARD;
+                p_state = OFPPS_STP_FORWARD;
                 break;
             case STP_BLOCKING:
-                flags = OFPPFL_STP_BLOCK;
+                p_state = OFPPS_STP_BLOCK;
                 break;
             default:
                 VLOG_DBG_RL(&vrl, "STP: Port %d has bad state %x",
-                            port_no, state);
-                flags = OFPPFL_STP_FORWARD;
+                            port_no, s_state);
+                p_state = OFPPS_STP_FORWARD;
                 break;
             }
-            if (!stp_forward_in_state(state)) {
-                flags |= OFPPFL_NO_FLOOD;
+            if (!stp_forward_in_state(s_state)) {
+                p_config = OFPPC_NO_FLOOD;
             }
-            port_watcher_set_flags(stp->pw, port_no, flags,
-                                   OFPPFL_STP_MASK | OFPPFL_NO_FLOOD);
+            port_watcher_set_flags(stp->pw, port_no, 
+                                   p_config, OFPPC_NO_FLOOD,
+                                   p_state, OFPPS_STP_MASK);
         } else {
             /* We don't own those flags. */
         }
@@ -1125,11 +1155,21 @@ stp_port_changed_cb(uint16_t port_no,
 
     p = stp_get_port(stp->stp, port_no);
     if (new->port_no == htons(OFPP_NONE)
-        || new->flags & htonl(OFPPFL_NO_STP)) {
+        || new->config & htonl(OFPPC_NO_STP)) {
         stp_port_disable(p);
     } else {
+        int speed = 0;
         stp_port_enable(p);
-        stp_port_set_speed(p, new->speed);
+        if (new->curr & (OFPPF_10MB_HD | OFPPF_10MB_FD)) {
+            speed = 10;
+        } else if (new->curr & (OFPPF_100MB_HD | OFPPF_100MB_FD)) {
+            speed = 100;
+        } else if (new->curr & (OFPPF_1GB_HD | OFPPF_1GB_FD)) {
+            speed = 1000;
+        } else if (new->curr & OFPPF_100MB_FD) {
+            speed = 10000;
+        }
+        stp_port_set_speed(p, speed);
     }
 }
 

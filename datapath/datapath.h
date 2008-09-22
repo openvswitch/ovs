@@ -69,13 +69,10 @@ struct sender {
 	uint32_t seq;		/* Netlink sequence ID of request. */
 };
 
-#define PORT_STATUS_BITS (OFPPFL_PORT_DOWN | OFPPFL_LINK_DOWN)
-#define PORT_FLAG_BITS (~PORT_STATUS_BITS)
-
 struct net_bridge_port {
 	u16	port_no;
-	u32 flags;		/* Some subset of PORT_FLAG_BITS. */
-	u32 status;		/* Some subset of PORT_STATUS_BITS. */
+	u32 config;		/* Some subset of OFPPC_* flags. */
+	u32 state;		/* Some subset of OFPPS_* flags. */
 	spinlock_t lock;
 	struct work_struct port_task;
 	struct datapath	*dp;

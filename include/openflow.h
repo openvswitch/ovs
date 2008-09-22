@@ -63,7 +63,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x92
+#define OFP_VERSION   0x93
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -167,65 +167,80 @@ OFP_ASSERT(sizeof(struct ofp_switch_config) == 12);
 
 /* Capabilities supported by the datapath. */
 enum ofp_capabilities {
-    OFPC_FLOW_STATS   = 1 << 0, /* Flow statistics. */
-    OFPC_TABLE_STATS  = 1 << 1, /* Table statistics. */
-    OFPC_PORT_STATS   = 1 << 2, /* Port statistics. */
-    OFPC_STP          = 1 << 3, /* 802.11d spanning tree. */
-    OFPC_MULTI_PHY_TX = 1 << 4, /* Supports transmitting through multiple
-                                   physical interfaces */
-    OFPC_IP_REASM     = 1 << 5  /* Can reassemble IP fragments. */
+    OFPC_FLOW_STATS     = 1 << 0,  /* Flow statistics. */
+    OFPC_TABLE_STATS    = 1 << 1,  /* Table statistics. */
+    OFPC_PORT_STATS     = 1 << 2,  /* Port statistics. */
+    OFPC_STP            = 1 << 3,  /* 802.1d spanning tree. */
+    OFPC_MULTI_PHY_TX   = 1 << 4,  /* Supports transmitting through multiple
+                                      physical interfaces */
+    OFPC_IP_REASM       = 1 << 5   /* Can reassemble IP fragments. */
 };
 
-/* Flags to indicate behavior of the physical port. */
-enum ofp_port_flags {
-    /* Read/write bits. */
-    OFPPFL_PORT_DOWN    = 1 << 1, /* Port is configured down. */
-    OFPPFL_NO_STP       = 1 << 3, /* Disable 802.1D spanning tree on port. */
-    OFPPFL_NO_RECV      = 1 << 4, /* Drop most packets received on port. */
-    OFPPFL_NO_RECV_STP  = 1 << 5, /* Drop received 802.1D STP packets. */
-    OFPPFL_NO_FWD       = 1 << 6, /* Drop packets forwarded to port. */
-    OFPPFL_NO_PACKET_IN = 1 << 7, /* Do not send packet-in msgs for port. */
+/* Flags to indicate behavior of the physical port.  These flags are
+ * used in ofp_phy_port to describe the current configuration.  They are
+ * used in the ofp_port_mod message to configure the port's behavior. 
+ */
+enum ofp_port_config {
+    OFPPC_PORT_DOWN    = 1 << 0,  /* Port is administratively down. */
 
-    /* Read-only bits. */
-    OFPPFL_LINK_DOWN    = 1 << 2, /* No physical link present. */
+    OFPPC_NO_STP       = 1 << 1,  /* Disable 802.1D spanning tree on port. */
+    OFPPC_NO_RECV      = 1 << 2,  /* Drop most packets received on port. */
+    OFPPC_NO_RECV_STP  = 1 << 3,  /* Drop received 802.1D STP packets. */
+    OFPPC_NO_FLOOD     = 1 << 4,  /* Do not include this port when flooding. */
+    OFPPC_NO_FWD       = 1 << 5,  /* Drop packets forwarded to port. */
+    OFPPC_NO_PACKET_IN = 1 << 6   /* Do not send packet-in msgs for port. */
+};
 
-    /* Read-only when STP is enabled (when OFPPFL_NO_STP is not set).
-     * Read/write when STP is disabled (when OFPPFL_NO_STP is set).
-     *
-     * The OFPPFL_STP_* bits have no effect on switch operation.  The
+/* Current state of the physical port.  These are not configurable from
+ * the controller.
+ */
+enum ofp_port_state {
+    OFPPS_LINK_DOWN   = 1 << 0, /* No physical link present. */
+
+    /* The OFPPFL_STP_* bits have no effect on switch operation.  The
      * controller must adjust OFPPFL_NO_RECV, OFPPFL_NO_FWD, and
      * OFPPFL_NO_PACKET_IN appropriately to fully implement an 802.1D spanning
      * tree. */
-    OFPPFL_NO_FLOOD     = 1 << 0, /* Do not include this port when flooding. */
-    OFPPFL_STP_LISTEN   = 0 << 8, /* Not learning or relaying frames. */
-    OFPPFL_STP_LEARN    = 1 << 8, /* Learning but not relaying frames. */
-    OFPPFL_STP_FORWARD  = 2 << 8, /* Learning and relaying frames. */
-    OFPPFL_STP_BLOCK    = 3 << 8, /* Not part of spanning tree. */
-    OFPPFL_STP_MASK     = 3 << 8, /* Bit mask for OFPPFL_STP_* values. */
+    OFPPS_STP_LISTEN  = 0 << 8, /* Not learning or relaying frames. */
+    OFPPS_STP_LEARN   = 1 << 8, /* Learning but not relaying frames. */
+    OFPPS_STP_FORWARD = 2 << 8, /* Learning and relaying frames. */
+    OFPPS_STP_BLOCK   = 3 << 8, /* Not part of spanning tree. */
+    OFPPS_STP_MASK    = 3 << 8  /* Bit mask for OFPPFL_STP_* values. */
 };
 
 /* Features of physical ports available in a datapath. */
 enum ofp_port_features {
-    OFPPF_10MB_HD    = 1 << 0, /* 10 Mb half-duplex rate support. */
-    OFPPF_10MB_FD    = 1 << 1, /* 10 Mb full-duplex rate support. */
-    OFPPF_100MB_HD   = 1 << 2, /* 100 Mb half-duplex rate support. */
-    OFPPF_100MB_FD   = 1 << 3, /* 100 Mb full-duplex rate support. */
-    OFPPF_1GB_HD     = 1 << 4, /* 1 Gb half-duplex rate support. */
-    OFPPF_1GB_FD     = 1 << 5, /* 1 Gb full-duplex rate support. */
-    OFPPF_10GB_FD    = 1 << 6, /* 10 Gb full-duplex rate support. */
+    OFPPF_10MB_HD    = 1 << 0,  /* 10 Mb half-duplex rate support. */
+    OFPPF_10MB_FD    = 1 << 1,  /* 10 Mb full-duplex rate support. */
+    OFPPF_100MB_HD   = 1 << 2,  /* 100 Mb half-duplex rate support. */
+    OFPPF_100MB_FD   = 1 << 3,  /* 100 Mb full-duplex rate support. */
+    OFPPF_1GB_HD     = 1 << 4,  /* 1 Gb half-duplex rate support. */
+    OFPPF_1GB_FD     = 1 << 5,  /* 1 Gb full-duplex rate support. */
+    OFPPF_10GB_FD    = 1 << 6,  /* 10 Gb full-duplex rate support. */
+    OFPPF_COPPER     = 1 << 7,  /* Copper medium */
+    OFPPF_FIBER      = 1 << 8,  /* Fiber medium */
+    OFPPF_AUTONEG    = 1 << 9,  /* Auto-negotiation */
+    OFPPF_PAUSE      = 1 << 10, /* Pause */
+    OFPPF_PAUSE_ASYM = 1 << 11  /* Asymmetric pause */
 };
-
 
 /* Description of a physical port */
 struct ofp_phy_port {
     uint16_t port_no;
     uint8_t hw_addr[OFP_ETH_ALEN];
     uint8_t name[OFP_MAX_PORT_NAME_LEN]; /* Null-terminated */
-    uint32_t flags;         /* Bitmap of "ofp_port_flags". */
-    uint32_t speed;         /* Current speed in Mbps */
-    uint32_t features;      /* Bitmap of supported "ofp_port_features"s. */
+
+    uint32_t config;        /* Bitmap of OFPPC_* flags. */
+    uint32_t state;         /* Bitmap of OFPPS_* flags. */
+
+    /* Bitmaps of OFPPF_* that describe features.  All bits zeroed if
+     * unsupported or unavailable. */
+    uint32_t curr;          /* Current features. */
+    uint32_t advertised;    /* Features being advertised by the port. */
+    uint32_t supported;     /* Features supported by the port. */
+    uint32_t peer;          /* Features advertised by peer. */
 };
-OFP_ASSERT(sizeof(struct ofp_phy_port) == 36);
+OFP_ASSERT(sizeof(struct ofp_phy_port) == 48);
 
 /* Switch features. */
 struct ofp_switch_features {
@@ -253,26 +268,36 @@ OFP_ASSERT(sizeof(struct ofp_switch_features) == 32);
 enum ofp_port_reason {
     OFPPR_ADD,              /* The port was added */
     OFPPR_DELETE,           /* The port was removed */
-    OFPPR_MOD               /* Some attribute of the port has changed */
+    OFPPR_MODIFY            /* Some attribute of the port has changed */
 };
 
 /* A physical port has changed in the datapath */
 struct ofp_port_status {
     struct ofp_header header;
     uint8_t reason;          /* One of OFPPR_* */
-    uint8_t pad[3];          /* Align to 32-bits */
+    uint8_t pad[7];          /* Align to 64-bits */
     struct ofp_phy_port desc;
 };
-OFP_ASSERT(sizeof(struct ofp_port_status) == 48);
+OFP_ASSERT(sizeof(struct ofp_port_status) == 64);
 
 /* Modify behavior of the physical port */
 struct ofp_port_mod {
     struct ofp_header header;
-    uint32_t mask;         /* Bitmap of "ofp_port_flags" that should be 
-                              changed. */
-    struct ofp_phy_port desc;
+    uint16_t port_no;
+    uint8_t hw_addr[OFP_ETH_ALEN]; /* The hardware address is not 
+                                      configurable.  This is used to 
+                                      sanity-check the request, so it must 
+                                      be the same as returned in an
+                                      ofp_phy_port struct. */
+
+    uint32_t config;        /* Bitmap of OFPPC_* flags. */
+    uint32_t mask;          /* Bitmap of OFPPC_* flags to be changed. */
+
+    uint32_t advertise;     /* Bitmap of "ofp_port_features"s.  Zero all 
+                               bits to prevent any action taking place. */
+    uint8_t pad[4];         /* Pad to 64-bits. */
 };
-OFP_ASSERT(sizeof(struct ofp_port_mod) == 48);
+OFP_ASSERT(sizeof(struct ofp_port_mod) == 32);
 
 /* Why is this packet being sent to the controller? */
 enum ofp_packet_in_reason {
@@ -539,7 +564,7 @@ struct ofp_stats_request {
 OFP_ASSERT(sizeof(struct ofp_stats_request) == 12);
 
 enum ofp_stats_reply_flags {
-    OFPSF_REPLY_MORE  = 1 << 0, /* More replies to follow */
+    OFPSF_REPLY_MORE  = 1 << 0  /* More replies to follow */
 };
 
 struct ofp_stats_reply {

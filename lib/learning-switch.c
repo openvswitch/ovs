@@ -292,41 +292,44 @@ process_phy_port(struct lswitch *sw, struct rconn *rconn,
                  const struct ofp_phy_port *opp)
 {
     if (sw->capabilities & OFPC_STP && ntohs(opp->port_no) < OFPP_MAX) {
-        uint32_t flags = ntohl(opp->flags);
-        uint32_t new_flags = flags & ~(OFPPFL_NO_RECV | OFPPFL_NO_RECV_STP
-                                       | OFPPFL_NO_FWD | OFPPFL_NO_PACKET_IN);
-        if (!(flags & (OFPPFL_NO_STP | OFPPFL_PORT_DOWN | OFPPFL_LINK_DOWN))) {
+        uint32_t config = ntohl(opp->config);
+        uint32_t state = ntohl(opp->state);
+        uint32_t new_config = config & ~(OFPPC_NO_RECV | OFPPC_NO_RECV_STP
+                                         | OFPPC_NO_FWD | OFPPC_NO_PACKET_IN);
+        if (!(config & (OFPPC_NO_STP | OFPPC_PORT_DOWN))
+                    && !(state & OFPPS_LINK_DOWN)) {
             bool forward = false;
             bool learn = false;
-            switch (flags & OFPPFL_STP_MASK) {
-            case OFPPFL_STP_LISTEN:
-            case OFPPFL_STP_BLOCK:
+            switch (state & OFPPS_STP_MASK) {
+            case OFPPS_STP_LISTEN:
+            case OFPPS_STP_BLOCK:
                 break;
-            case OFPPFL_STP_LEARN:
+            case OFPPS_STP_LEARN:
                 learn = true;
                 break;
-            case OFPPFL_STP_FORWARD:
+            case OFPPS_STP_FORWARD:
                 forward = learn = true;
                 break;
             }
             if (!forward) {
-                new_flags |= OFPPFL_NO_RECV | OFPPFL_NO_FWD;
+                new_config |= OFPPC_NO_RECV | OFPPC_NO_FWD;
             }
             if (!learn) {
-                new_flags |= OFPPFL_NO_PACKET_IN;
+                new_config |= OFPPC_NO_PACKET_IN;
             }
         }
-        if (flags != new_flags) {
+        if (config != new_config) {
             struct ofp_port_mod *opm;
             struct ofpbuf *b;
             int retval;
 
-            VLOG_WARN("port %d: flags=%x new_flags=%x",
-                      ntohs(opp->port_no), flags, new_flags);
+            VLOG_WARN("port %d: config=%x new_config=%x",
+                      ntohs(opp->port_no), config, new_config);
             opm = make_openflow(sizeof *opm, OFPT_PORT_MOD, &b);
-            opm->mask = htonl(flags ^ new_flags);
-            opm->desc = *opp;
-            opm->desc.flags = htonl(new_flags);
+            memcpy(opm->hw_addr, opp->hw_addr, OFP_ETH_ALEN);
+            opm->config = htonl(new_config);
+            opm->mask = htonl(config ^ new_config);
+            opm->advertise = htonl(0);
             retval = rconn_send(rconn, b, NULL);
             if (retval) {
                 if (retval != ENOTCONN) {

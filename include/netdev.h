@@ -47,6 +47,13 @@ struct ofpbuf;
 struct in_addr;
 struct in6_addr;
 
+enum netdev_feature_type {
+    NETDEV_FEAT_CURRENT,
+    NETDEV_FEAT_ADVERTISED,
+    NETDEV_FEAT_SUPPORTED,
+    NETDEV_FEAT_PEER
+};
+
 enum netdev_flags {
     NETDEV_UP = 0x0001,         /* Device enabled? */
     NETDEV_PROMISC = 0x0002     /* Promiscuous mode? */
@@ -68,9 +75,8 @@ int netdev_send(struct netdev *, const struct ofpbuf *);
 const uint8_t *netdev_get_etheraddr(const struct netdev *);
 const char *netdev_get_name(const struct netdev *);
 int netdev_get_mtu(const struct netdev *);
-int netdev_get_speed(const struct netdev *);
 int netdev_get_link_status(const struct netdev *);
-uint32_t netdev_get_features(const struct netdev *);
+uint32_t netdev_get_features(struct netdev *, int);
 bool netdev_get_in4(const struct netdev *, struct in_addr *);
 int netdev_set_in4(struct netdev *, struct in_addr addr, struct in_addr mask);
 int netdev_add_router(struct netdev *, struct in_addr router);
