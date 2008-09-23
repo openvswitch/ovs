@@ -197,15 +197,15 @@ enum ofp_port_config {
 enum ofp_port_state {
     OFPPS_LINK_DOWN   = 1 << 0, /* No physical link present. */
 
-    /* The OFPPFL_STP_* bits have no effect on switch operation.  The
-     * controller must adjust OFPPFL_NO_RECV, OFPPFL_NO_FWD, and
-     * OFPPFL_NO_PACKET_IN appropriately to fully implement an 802.1D spanning
+    /* The OFPPS_STP_* bits have no effect on switch operation.  The
+     * controller must adjust OFPPC_NO_RECV, OFPPC_NO_FWD, and
+     * OFPPC_NO_PACKET_IN appropriately to fully implement an 802.1D spanning
      * tree. */
     OFPPS_STP_LISTEN  = 0 << 8, /* Not learning or relaying frames. */
     OFPPS_STP_LEARN   = 1 << 8, /* Learning but not relaying frames. */
     OFPPS_STP_FORWARD = 2 << 8, /* Learning and relaying frames. */
     OFPPS_STP_BLOCK   = 3 << 8, /* Not part of spanning tree. */
-    OFPPS_STP_MASK    = 3 << 8  /* Bit mask for OFPPFL_STP_* values. */
+    OFPPS_STP_MASK    = 3 << 8  /* Bit mask for OFPPS_STP_* values. */
 };
 
 /* Features of physical ports available in a datapath. */
