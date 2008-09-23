@@ -683,11 +683,11 @@ ofp_print_port_mod(struct ds *string, const void *oh, size_t len,
     ds_put_format(string, "port: %d: addr:"ETH_ADDR_FMT", config: %#x, mask:%#x\n",
             ntohs(opm->port_no), ETH_ADDR_ARGS(opm->hw_addr), 
             ntohl(opm->config), ntohl(opm->mask));
-    ds_put_format(string, " advertised: ");
+    ds_put_format(string, "     advertise: ");
     if (opm->advertise) {
         ofp_print_port_features(string, ntohl(opm->advertise));
     } else {
-        ds_put_format(string, "Unchanged\n");
+        ds_put_format(string, "UNCHANGED\n");
     }
 }
 
