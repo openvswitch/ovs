@@ -674,6 +674,23 @@ ofp_print_flow_expired(struct ds *string, const void *oh, size_t len,
          ntohll(ofe->byte_count));
 }
 
+static void
+ofp_print_port_mod(struct ds *string, const void *oh, size_t len,
+                   int verbosity)
+{
+    const struct ofp_port_mod *opm = oh;
+
+    ds_put_format(string, "port: %d: addr:"ETH_ADDR_FMT", config: %#x, mask:%#x\n",
+            ntohs(opm->port_no), ETH_ADDR_ARGS(opm->hw_addr), 
+            ntohl(opm->config), ntohl(opm->mask));
+    ds_put_format(string, " advertised: ");
+    if (opm->advertise) {
+        ofp_print_port_features(string, ntohl(opm->advertise));
+    } else {
+        ds_put_format(string, "Unchanged\n");
+    }
+}
+
 struct error_type {
     int type;
     int code;
@@ -1186,7 +1203,7 @@ static const struct openflow_packet packets[] = {
         OFPT_PORT_MOD,
         "port_mod",
         sizeof (struct ofp_port_mod),
-        NULL,
+        ofp_print_port_mod,
     },
     {
         OFPT_PORT_STATUS,
