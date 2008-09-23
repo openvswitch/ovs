@@ -326,9 +326,11 @@ basis.  In particular, if the socket buffer of the monitoring
 connection fills up, some messages will be lost.
 
 .TP
-\fB--no-stp\fR
-Disable implementation of IEEE 802.1D Spanning Tree Protocol at the
-switch.
+\fB--stp\fR, \fB--no-stp\fR
+Enable or disable implementation of IEEE 802.1D Spanning Tree Protocol
+at the switch.  The default is \fB--no-stp\fR in this distribution,
+because bugs in the STP implementation are still being worked out.
+The default will change to \fB--stp\fR at some point in the future.
 
 .TP
 \fB-p\fR, \fB--private-key=\fIprivkey.pem\fR

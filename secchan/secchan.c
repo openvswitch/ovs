@@ -2064,6 +2064,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         OPT_RATE_LIMIT,
         OPT_BURST_LIMIT,
         OPT_BOOTSTRAP_CA_CERT,
+        OPT_STP,
         OPT_NO_STP
     };
     static struct option long_options[] = {
@@ -2077,6 +2078,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         {"monitor",     required_argument, 0, 'm'},
         {"rate-limit",  optional_argument, 0, OPT_RATE_LIMIT},
         {"burst-limit", required_argument, 0, OPT_BURST_LIMIT},
+        {"stp",         no_argument, 0, OPT_STP},
         {"no-stp",      no_argument, 0, OPT_NO_STP},
         {"detach",      no_argument, 0, 'D'},
         {"force",       no_argument, 0, 'f'},
@@ -2104,7 +2106,7 @@ parse_options(int argc, char *argv[], struct settings *s)
     s->update_resolv_conf = true;
     s->rate_limit = 0;
     s->burst_limit = 0;
-    s->enable_stp = true;
+    s->enable_stp = false;
     for (;;) {
         int c;
 
@@ -2177,6 +2179,10 @@ parse_options(int argc, char *argv[], struct settings *s)
             if (s->burst_limit < 1) {
                 ofp_fatal(0, "--burst-limit argument must be at least 1");
             }
+            break;
+
+        case OPT_STP:
+            s->enable_stp = true;
             break;
 
         case OPT_NO_STP:
@@ -2337,6 +2343,7 @@ usage(void)
            "                          (a passive OpenFlow connection method)\n"
            "  -m, --monitor=METHOD    copy traffic to/from kernel to METHOD\n"
            "                          (a passive OpenFlow connection method)\n"
+           "  --stp                   enable 802.1D Spanning Tree Protocol\n"
            "  --no-stp                disable 802.1D Spanning Tree Protocol\n"
            "\nRate-limiting of \"packet-in\" messages to the controller:\n"
            "  --rate-limit[=PACKETS]  max rate, in packets/s (default: 1000)\n"
