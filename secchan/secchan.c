@@ -1155,7 +1155,8 @@ stp_port_changed_cb(uint16_t port_no,
 
     p = stp_get_port(stp->stp, port_no);
     if (new->port_no == htons(OFPP_NONE)
-        || new->config & htonl(OFPPC_NO_STP)) {
+        || new->config & htonl(OFPPC_NO_STP | OFPPC_PORT_DOWN)
+        || new->state & htonl(OFPPS_LINK_DOWN)) {
         stp_port_disable(p);
     } else {
         int speed = 0;
