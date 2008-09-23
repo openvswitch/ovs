@@ -1,0 +1,338 @@
+\documentclass[10pt]{article} 
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{tabularx}
+
+\begin{document}
+
+%\lstset{language=C}
+
+\pagestyle{fancy}
+\fancyhead{}
+\chead{DO NOT BUILD A SWITCH FROM THIS SPECIFICATION!}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\fontfamily{cmr} % what about cmss?
+\selectfont
+
+\title{OpenFlow Switch Specification}
+\author{Version 0.9 Draft 3 ( Wire Protocol \input{define/OFP_VERSION})}
+\date{\today}
+\maketitle
+
+\begin{center}
+Current Maintainer: Brandon Heller
+\end{center}
+
+\section{Introduction}
+This document describes the requirements of an OpenFlow Switch.  We recommend that you read the latest version of the OpenFlow whitepaper before reading this specification. The whitepaper is available on the  OpenFlow Consortium website (\url{http://OpenFlowSwitch.org}). This specification covers the components and the basic functions of the switch, and the OpenFlow protocol to manage an OpenFlow switch from a remote controller. 
+\\\\
+OpenFlow Switches will be of ``Type 0'' or ``Type 1'', depending on their capabilities. Type 0 represents the minimum requirements for any conforming OpenFlow Switch. Type 1 requirements will be a superset of Type 0, and remain to be defined. It is expected that commercial OpenFlow Switches will initially be of Type 0, evolving to Type 1; and that vendors will support additional features over time. However, all switches are expected to use the same OpenFlow Protocol for communication between switch and controller. For the remainder of this version of the document, unless otherwise specified, all references to an OpenFlow Switch refer to Type 0.
+\\\\
+Version 1.0 of this document will be the first to specify a Type 0 switch suitable for implementation. Versions before Version 1.0 will be marked ``Draft", and will include the header: ``Do not build a switch from this specification!" We hope to generate feedback from versions prior to Version 1.0 from switch designers and network researchers.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=2.5in]{figure_flow_table_secchan.png}
+\caption{An OpenFlow switch communicates with a controller over a secure connection using the OpenFlow protocol.}
+\label{fig:flow table and controller}
+\end{figure}
+
+\section{Switch Components}
+An OpenFlow Switch consists of a \emph{flow table}, which performs packet lookup and forwarding, and a \emph{secure channel} to an external controller (Figure \ref{fig:flow table and controller}).  The controller manages the switch over the secure channel using the OpenFlow protocol.
+\\\\
+The flow table contains a set of flow entries (header values to match packets against), activity counters, and a set of zero or more actions to apply to matching packets.  All packets processed by the switch are compared against the flow table.  If a matching entry is found, any actions for that entry are performed on the packet (e.g., the action might be to forward a packet out a specified port).  If no match is found, the packet is forwarded to the controller over the secure channel.  The controller is responsible for determining how to handle packets without valid flow entries, and it manages the switch flow table by adding and removing flow entries.
+
+\section{Flow Table}
+The OpenFlow flow table is a set of flow entries, each containing: 
+\begin{itemize} 
+\item \textbf{header fields} to match against packets 
+\item \textbf{counters} to update for matching packet 
+\item \textbf{actions} to apply to matching packets (Table \ref{table:flow entry}) 
+\end{itemize} 
+
+\subsection{Flow Entry}
+
+\begin{table}[hbp]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline	
+Header Fields & Counters & Actions\\ 
+\hline	
+\end{tabular}
+\caption{A flow entry consists of header fields, counters, and actions.}
+\label{table:flow entry}
+\end{table}
+
+\subsubsection{Header Fields}
+Table 2 shows the header fields an incoming packet is compared against. Each entry contains a specific value, or an ANY, which matches any value. If the switch supports subnet masks on the IP source and/or destination fields, these can more precisely specify matches.  The fields in the OpenFlow 10-tuple are listed in Table \ref{table:header fields} and details on the properties of each field are described in Table \ref{table:header field details}.  
+
+\begin{table}[hbp]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{ |X|X|X|X|X|X|X|X|X|X| }
+\hline
+Ingress Port &
+Ether source &
+Ether dst &
+Ether type &
+VLAN id &
+IP src &
+IP dst &
+IP proto &
+TCP/ UDP src port &
+TCP/ UDP dst port
+\\ 
+\hline
+\end{tabularx}
+\caption{Fields from packets used to match against flow entries.}
+\label{table:header fields}
+\end{table}
+
+\begin{table}[hbp]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{ |X|X|X|X| }
+\hline Field & Bits & When applicable & Notes \\\hline Ingress Port & (Implementation dependent) & All packets & Numerical representation of incoming port.  \\\hline Ethernet source address & 48 & All packets on enabled ports & \\\hline Ethernet destination address & 48 & All packets on enabled ports & \\ \hline Ethernet type & 16 & All packets on enabled ports & A Type 0 switch is required to match the type in both standard Ethernet and 802.2 with a SNAP header and OUI of 0x000000. \\ \hline The special value of 0x05FF is used to match all 802.3 packets without SNAP headers.VLAN id & 12 & All packets of Ethernet type 0x8100 & \\\hline IP source address & 32 & All IP packets & Can be subnet masked \\\hline IP destination address & 32 & All IP packets & Can be subnet masked \\\hline IP protocol & 8 & All IP packets & \\\hline Transport source port & 16 & All TCP and UDP packets & \\\hline Transport destination port & 16 & All TCP and UDP packets & \\
+\hline
+\end{tabularx}
+\caption{Field lengths and the way they should be applied to flow entries.}
+\label{table:header field details}
+\end{table} 
+
+The field types contained in this document are derived from the OpenFlow protocol and used to describe the valid ranges.  Switch designers are free to implement the internals in any way convenient provided that correct functionality is preserved.  For example, while a flow may have multiple forward actions, each specifying a different port, a switch designer may choose to implement this as a single bitmask within the hardware forwarding table.
+
+\subsubsection{Counters}
+
+Counters are maintained per-table, per-flow, and per-port.  OpenFlow-compliant counters may be implemented in software and maintained by polling hardware counters with more limited ranges.
+\\\\
+Table \ref{table:counters} contains the required set of counters for Type 0 switches.
+
+\begin{table}[!hbp]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{ |X|X|X| }
+\hline Counter & Bits	& Description \\
+\hline \multicolumn{3}{|c|}{Per Table} \\
+\hline Packet Match & 64 & Number of matching packets \\
+\hline \multicolumn{3}{|c|}{Per Flow} \\
+\hline Packet & 64 & Number of packets received \\\hline Byte & 64 & Number of bytes received \\\hline Duration & 32 & Number of seconds flow has been active \\\hline  \multicolumn{3}{|c|}{Per Port} \\\hline Received (RX) & 64 & Number of packets received \\\hline Transmitted (TX) & 64 & Number of packets sent \\\hline Dropped & 64 & Number of packets dropped \\\hline Queued & 64 & Number of packets queued \\\hline Dropped (TX) & 64 & Number of packets dropped by TX \\\hline Overrun (TX) & 64 & Number of packets with TX overrun \\\hline Dropped (RX) & 64 & Number of packets dropped by RX \\\hline Overrun (RX) & 64 & Number of packets with RX overrun \\\hline CRC Errors & 64 & Number of CRC errors \\\hline CRC Collisions & 64 & Number of collisions \\
+\hline
+\end{tabularx}
+\caption{Required list of counters for use in statistics messages for tables, flows and ports.}
+\label{table:counters}
+\end{table}
+
+\subsubsection{Actions}
+Each flow entry is associated with zero or more actions that dictate how the switch handles matching packets.  Actions need not be executed in the order in which they are specified in the flow entry.  If no actions are present, the packet is dropped. 
+\\\\
+A switch is not required to support all action types --- just those marked ``Required Actions'' below. When connecting to the controller, a switch indicates which of the ``Optional Actions'' it supports.
+\\\\
+OpenFlow-compliant switches come in two types: \emph{OpenFlow-only}, and \emph{OpenFlow-enabled}. OpenFlow-only switches serve no other function and cannot handle non-OpenFlow traffic.  They must implement the following actions:
+\begin{itemize}
+\item Forward to external port(s)
+\item Drop
+\item Encapsulate and forward to controller over Secure Channel
+\end{itemize} 
+OpenFlow-enabled switches, routers, and access points are devices for which OpenFlow has been 
+added as  an optional feature.  These devices may implement a fourth action:
+
+\begin{itemize}
+\item Forward to the normal forwarding path of this switch (e.g. for normal L2/L3 processing). 
+\end{itemize}
+This specification defines these actions in a uniform way, by combining them into two required actions: \textit{Forward} and \textit{Drop}. 
+\\\\
+\textbf{Required Action:} \textit{Forward.} 
+Any Type 0 switch is required to support forwarding the packet to physical ports and the following virtual ones:
+\begin{itemize}
+\item \textbf{ALL:} Send the packet out all interfaces, not including the incoming interface.
+\item \textbf{CONTROLLER:} Encapsulate and send the packet to the controller.
+\item \textbf{LOCAL:} Send the packet to the switch’s local networking stack.
+\item \textbf{TABLE:} Perform actions in flow table.  Only for packet-out messages.
+\item \textbf{ALL\_PLUS\_IN:} Send the packet out all interface, including the incoming interface. 
+\end{itemize}
+The switch may optionally support the following virtual ports:
+
+\begin{itemize}
+\item \textbf{NORMAL:} Process the packet using the traditional forwarding path supported by the switch (i.e., traditional L2, VLAN, and L3 processing.)  At a minimum, the normal processing path must support L2 learning and forwarding.  A Type 0 switch may check the VLAN field to determine whether or not to forward the packet along the normal processing route.
+\item \textbf{FLOOD:} Flood the packet along the minimum spanning tree, not including the incoming interface.
+\end{itemize}
+Ideally, a switch will support flow-entries that can forward packets to any combination of the physical and virtual ports. For example, this could be expressed internally in the switch with a bitmap that includes all the physical and virtual ports. However, some switches will not be able to support any combination. Therefore, the requirement is that the switch support sending to any combination of physical ports and the “Controller” virtual port simultaneously. All other combinations are desired, but optional. 
+\\\\
+The controller will only ask the switch to send to multiple physical ports simultaneously if the switch indicates it supports this behavior in the initial handshake (see section \ref{cts:handshake}).  
+\\\\
+\textbf{Required Action:} \emph{Drop}.  A flow-entry with no specified action indicates that all matching packets should be dropped.
+\\\\
+\textbf{Optional Actions:}  While not strictly required, the following actions greatly increase the usefulness of an OpenFlow implementation.  To aid integration with existing networks, we suggest that the VLAN modification action be supported. 
+
+\begin{table}[hbp]
+\centering
+\footnotesize
+\begin{tabularx}{\linewidth}{ |X|X|X| }
+\hline
+Action & Associated Data & Description \\
+\hline
+Add/Modify/Remove VLAN tag &
+16 bits &
+If no VLAN is present on the packet, a new header is added with the specified VLAN ID (lower 12 bits).
+
+If a VLAN header already exists, the VLAN ID is replaced with the specified value. 
+
+If all 16 bits of the action value are set (0xffff) then remove VLAN tag. \\
+\hline
+Modify IPv4 source address & 
+32 bits: Value with which to replace existing IPv4 source address &
+Replace the existing IP source address with new value and update the IP checksum (and TCP/UDP 
+checksum if applicable). 
+
+This action is only applicable to IPv4 packets. \\
+\hline
+Modify IPv4 destination address & 
+32 bits: Value with which to replace existing IPv4 destination address &
+Replace the existing IP destination address with new value and update the IP checksum (and TCP/UDP checksum if applicable).
+
+This action is only applied to IPv4 packets. \\
+\hline
+Modify transport source port &
+16 bits: Value with which to replace existing TCP or UDP source port &
+Replace the existing TCP/UDP source port with new value and update the TCP/UDP checksum.
+
+This action is only applicable to TCP and UDP packets.\\
+\hline
+Modify transport destination port & 
+16 bits: Value with which to replace existing TCP or UDP destination port &
+Replace the existing TCP/UDP destination port with new value and update the TCP/UDP checksum
+
+This action is only applied to TCP and UDP packets.\\
+\hline
+Modify Ethernet source MAC address &
+48 bits: Value with which to replace existing source MAC address &
+48 bits: Value with which to replace existing source MAC address	Replace the existing Ethernet source MAC address with the new value \\
+\hline
+Modify Ethernet destination MAC address &
+48 bits: Value with which to replace existing destination MAC address &
+Replace the existing Ethernet destination MAC address with the new value \\
+\hline
+\end{tabularx}
+\caption{Fields from packets used to match against flow entries.}
+\end{table}
+
+\subsection{Dataflow}
+On receipt of a packet, an OpenFlow Switch performs the functions shown in Figure \ref{fig:packet_flow}.
+\\\\
+The flow table is checked for a matching flow entry.  The header fields used for the table lookup depend on the packet type as described below (and shown in Figure \ref{fig:flow_match}).
+
+\begin{itemize}
+\item Rules specifying an ingress port are matched against the physical port that received the packet.
+\item The Ethernet headers as specified in Table \ref{table:header fields} are used for all packets.
+\item If the packet is a VLAN (Ethernet type 0x8100), the VLAN ID is used in the lookup.
+\item For IP packets (Ethernet type equal to 0x0800), the lookup fields also include those in the IP header.
+\item For IP packets that are TCP or UDP (IP protocol is equal to 6 or 17), the lookup includes the transport ports.
+\end{itemize}
+A packet matches a flow table entry if the values in the header fields used for the lookup (as defined above) match those defined in the flow table.  If a flow table field has a value of ANY, it matches all possible values in the header.  
+\\\\
+To handle the various Ethernet framing types, matching the Ethernet type is handled in a slightly different manner.  If the packet is an Ethernet II frame, the Ethernet type is handled in the expected way.  If the packet is an 802.3 frame with a SNAP header and Organizationally Unique Identifier (OUI) of 0x000000, the SNAP’s protocol id is matched against the flow’s Ethernet type.  A flow entry that specifies an Ethernet type of 0x05FF, matches all Ethernet 802.2 frames without a SNAP header and those with SNAP headers that do not have an OUI of 0x000000.  
+\\\\
+Packets are matched against flow entries based on prioritization.  An entry that specifies an exact match (i.e., it has no wildcards) is always the highest priority.  All wildcard entries have a priority associated with them.  Higher priority entries must match before lower priority ones.  If multiple entries have the same priority, the switch is free to choose any ordering.  Higher numbers have higher priorities.
+\\\\
+For each packet that matches a flow entry, the associated counters for that entry are updated.  If no matching entry can be found for a packet, the packet is sent to the controller over the secure channel.
+\begin{figure}[!hbp]
+\centering
+\includegraphics[width=4.8in]{figure_packet_flow_flowchart.png}
+\caption{The functions performed on a packet as it moves through an OpenFlow switch.  As discussed in Section \ref{flow_table:stp_support}, support for 802.1d is optional in Type 0 switches.}
+\label{fig:packet_flow}
+\end{figure}
+
+
+\begin{figure}[!hbp]
+\centering
+\includegraphics[height=3in]{figure_flow_match_flowchart}
+\caption{A flow table showing how a packet is matched against a flow entry.}
+\label{fig:flow_match}
+\end{figure}
+
+\subsection{STP Support}
+\label{flow_table:stp_support}
+Type 0 switches may optionally support the 802.1d spanning tree protocols.  Those switches that do support it are expected to process all 802.1d packets locally before performing flow lookup.  Port status, as specified by the spanning tree protocol, is then used to limit packets forwarded to the \verb|OFP_FLOOD| port to only those ports along the spanning tree.  Port changes as a result of the spanning tree are sent to the controller via port-update messages.  Note that forward actions that specify the outgoing port or \verb|OFP_ALL| ignore the port status set by the spanning tree protocol.
+\\\\
+Switches that do not support 802.1d spanning tree must allow the controller to specify the port status for packet flooding through the port-mod messages. 
+
+\subsection{Interface with Secure Channel}
+The interface between the datapath and the secure channel is implementation-specific.  However, the controller must support the following flow table functions based on the OpenFlow messages:
+
+\begin{itemize}
+\item Add flow table entry
+\item Modify flow table entry
+\item Delete flow table entry 
+\item Forward packet out of port
+\item Send packet to the controller
+\item Report counter values for flow entries, flow tables and switch ports
+\end{itemize}
+The switch software must report some invalid flow mod attempts.  For example, if the controller sends a \verb|flow_mod| message with the \verb|OFPP_TABLE| virtual port as part of the action, the switch must respond with an \verb|OFPEFM_TABLE_PORT| message.  If the controller specifies a \verb|FLOOD| action but the switch doesn’t support it, the switch must reply with an \verb|OFPEFM_FLOOD_UNSUPPORTED| error message.  If the controller specifies a \verb|NORMAL| action but the switch doesn’t support it, the switch must reply with an \verb|OFPEFM_NORMAL_UNSUPPORTED| message. 
+\\\\
+Note that for all other \verb|flow_mod| messages, an error should only be reported if the \verb|REPORT_ERROR| flag is set in the message’s flags field.
+
+\subsubsection{Flow Insertion}
+For ADD commands with wildcard fields, the switch must first check for any already-inserted entries that conflict with the incoming entry (i.e., same priority and there exists an entry that could match both). If a conflict is found, the switch should refuse the addition and may respond with an \verb|OFPEFM_ADD_OVERLAP| error message.  The switch must then check its flow table for any entries that match the incoming message.  If an identical flow entry is found and the \verb|OFPFMF_FORCE| flag is not set, the switch must not change the flow table, and may respond with an \verb|OFPEFM_ADD_EXIST| error message.  If the \verb|OFPFMF_FORCE| flag is set, the existing entry is overwritten and no error is reported. 
+
+\subsubsection{Flow Modification}
+\label{flow_table:sec_chan:flow_mod}
+Each flow entry can be modified.  A modify operation must not change the current flow’s counters and idle time.   If the \verb|MODIFY| command is used, the wildcards are “active” and all flows that match the description are modified.  If the \verb|MODIFY_STRICT| command is used, all fields, including the wildcards and priority, are strictly matched against the entry, and only an identical flow is modified in the table.  For example, if a message to modify entries is sent that has all the wildcard flags set, the \verb|MODIFY| command would modify all flows from all tables, while the \verb|MODIFY_STRICT| command would only modify a rule that applies to all packets at the specified priority.  If a \verb|MODIFY| or \verb|MODIFY_STRICT| command arrives which matches no entries, and the \verb|OFPFMF_FORCE| flag is not set, the switch may respond with an \verb|OFPEFM_MODIFY_MISSING| error message.  If the \verb|OFPFMF_FORCE| flag is set, the switch will modify or add the flow entry, regardless of whether an entry was already there, and no error is reported.
+
+\subsubsection{Flow Removal}
+\label{flow_table:sec_chan:flow_removal}
+Each flow entry has an \verb|idle_timeout| and a \verb|hard_timeout| associated with it.  If no packet has matched the rule in the last \verb|idle_timeout| seconds, or it has been \verb|hard_timeout| seconds since the flow was inserted, the switch removes the entry and sends a flow expiration message.  In addition, the controller is able to actively remove entries by sending a flow message with the \verb|DELETE| or \verb|DELETE_STRICT| command.  Like the message used to add the entry, a removal message contains a description, which may include wild cards.
+\\\\
+If the \verb|DELETE| command is used, the wildcards are “active” and all flows that match the description are removed.  If the \verb|DELETE_STRICT| command is used, all fields, including the wildcards and priority, are strictly matched against the entry, and only an identical flow is removed from the table.  For example, if a message to remove entries is sent that has all the wildcard flags set, the \verb|DELETE| command would delete all flows from all tables, while the \verb|DELETE_STRICT| command would only delete a rule that applies to all packets at the specified priority.  If a \verb|DELETE| or \verb|DELETE_STRICT| command arrives which matches no entries, the switch may respond with an \verb|OFPEFM_DELETE_MISSING| error message.
+
+\section{Secure Channel}
+
+\subsection{Switch/Controller Connection}
+The switch and controller communicate through an SSL connection.  The switch must be able to establish the communication at a user-configurable (but otherwise fixed) IP address, using a user-specified port.  Traffic to and from the secure channel is not checked against the flow table.  Therefore, the switch must identify incoming traffic as local before checking it against the flow table.  Future versions of the protocol specification will describe a dynamic controller discovery protocol in which the IP address and port for communicating with the controller is determined at runtime.
+\\\\
+The SSL connection is initiated by the switch on startup to the controller’s server, which is located by default on TCP port 976.   The switch and controller mutually authenticate by exchanging certificates signed by a site-specific private key.  Each switch must be user-configurable with one certificate for authenticating the controller (controller certificate) and the other for authenticating to the controller (switch certificate).
+
+\subsection{OpenFlow Protocol Overview}
+The controller configures and manages the switch, and receives events from the switch, via the OpenFlow protocol, on the secure channel. 
+\\\\
+The OpenFlow protocol supports three message types, \emph{controller-to-switch}, \emph{asynchronous}, and \emph{symmetric}, each with multiple sub-types.  Controller-to-switch messages are initiated by the controller and used to directly manage or inspect the state of the switch.  Asynchronous messages are initiated by the switch and used to update the controller of network events and changes to the switch state. Symmetric messages are initiated by either the switch or the controller and used to verify the liveness of the other side.  The message types used by OpenFlow are described below.
+
+\subsubsection{Controller-to-Switch}
+Controller/switch messages are initiated by the controller and may or may not require a response from the switch.
+\\\\
+\textbf{Features:}  Upon SSL session establishment, the controller sends a features request message to the switch.  The switch must reply with a features reply that specifies the capabilities supported by the switch.
+\\\\
+\textbf{Configuration:} The controller is able to set and query configuration parameters in the switch.  The switch only responds to a query from the controller.
+\\\\
+\textbf{Modify-State:} Modify-State messages are sent by the controller to manage state on the switches.  Their primary purpose is to add/delete and modify flows in the flow tables and to set switch port properties.  
+\\\\
+\textbf{Read-State:} Read-State messages are used by the controller to collect statistics from the switch’s flow-tables, ports and the individual flow entries.
+\\\\\
+\textbf{Send-Packet}:  These are used by the controller to send packets out of a specified port on the switch.
+
+\subsubsection{Asynchronous}
+Asynchronous messages are sent without solicitation from the switch to the controller and denote a change in switch or network state.  The four main asynchronous message types are described below.
+\\\\
+\textbf{Packet-in:} For all packets that do not have a matching flow entry, a packet-in event is sent to the controller (or if a packet matches an entry with a ``send to controller" action).  If the switch has sufficient memory to buffer packets that are sent to the controller, the packet-in events contain some fraction of the packet header (by default 128 bytes) and a buffer ID to be used by the controller when it is ready for the switch to forward the packet.  Switches that do not support internal buffering (or have run out of internal buffering) must send the full packet to the controller as part of the event.  
+\\\\
+\textbf{Flow Expiration:} When a flow entry is added to the switch, an idle timeout value is included that indicates when the entry should be removed due to a lack of activity, as well as a hard timeout value that indicates when the entry should be removed, regardless of activity.  In the configuration message, the controller can indicate that it wishes to be informed when a flow expires.  If this flag is set, the switch sends a flow expiration event that includes the duration of the flow and the number of packets and bytes sent.  Flow expirations are only set when explicitly enabled by the controller, through the configuration message.
+\\\\
+\textbf{Port-status:} The switch is expected to send port-status messages to the controller as port configuration state changes.  These events include change in port status (for example, if it was brought down directly by a user) or a change in ports status as specified by 802.1d (see Section \ref{flow_table:stp_support} for a description of 802.1d support requirements).
+\\\\
+\textbf{Error:} The switch is able to notify the controller of problems using error messages. 
+
+\subsubsection{Symmetric}
+Symmetric messages are sent without solicitation, in either direction.
+\\\\
+\textbf{Echo:} Echo request/reply messages can be sent from either the switch or the controller, and must return an echo reply.  They can be used to indicate the latency, bandwidth, and/or liveness of a controller-switch connection.
+
+\input{appendix}
+
+ 
+ 
+ 
+ 
+\end{document} 

@@ -1,0 +1,3 @@
+To build the latest OpenFlow specification, you should just be able to
+type "make".  For this to work, you'll need to have the texinfo and 
+"listings.sty" packages installed.

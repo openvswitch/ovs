@@ -1,0 +1,224 @@
+%\appendix
+\section{Appendix A: The OpenFlow Protocol}
+All structs defined here are packed with padding and 8-byte aligned, as checked by the assertion statements.  
+
+\subsection{OpenFlow Header}
+All OpenFlow messages are sent in big-endian format.  Each OpenFlow message begins with the OpenFlow header:
+
+\input{struct/ofp_header}
+The version specifies the OpenFlow protocol version being used.  During this evolution of the OpenFlow protocol, the most significant bit will be set to indicate an experimental version and the lower-bits will indicate a revision number.  The current version is \input{define/OFP_VERSION}.  The final version for a Type 0 switch will be 0x00.  The length field indicates the total length of the message, so no additional framing is used to distinguish one frame from the next.  The type can have the following values:
+
+\input{enum/ofp_type}
+
+\subsection{Common Structures}
+A number of structures are used by many of the OpenFlow messages.  Physical ports are described with the following structure:
+
+\input{struct/ofp_phy_port}
+The name field is a null-terminated string containing a human-readable
+name for the interface.  The value of \verb|OFP_MAX_PORT_NAME_LEN| is
+16.  The \verb|port_no| field is a value the datapath associates with a
+physical port.   The \verb|mode| field represents the current operating
+mode of the PHY.  The \verb|config| field contains a bitmask of items
+that are configurable by the controller:
+
+\input{enum/ofp_port_config}
+The \verb|state| field contains a bitmask of items describing
+characteristics of the port:
+
+\input{enum/ofp_port_state}
+The port numbers use the following conventions:
+
+\input{enum/ofp_port}
+The \verb|features| field describes the characteristics of this port.  Multiple of these flags may be set simultaneously:
+
+\input{enum/ofp_port_features}
+The value  -1 in a \verb|set_config| command indicates that no changes should be applied to the port speed.  
+\\\\
+When describing a flow entry, the following structure is used:
+
+\input{struct/ofp_match}
+The \verb|wildcards| field has a number of flags that may be set:
+
+\input{enum/ofp_flow_wildcards}
+If no wildcards are set, then the \verb|ofp_match| exactly describes a flow.  On the other extreme, if all the wildcard flags are set, then every flow will match.  
+\\\\
+A number of actions may be associated with flows or packets.  The currently defined action types are:
+
+\input{enum/ofp_action_type} 
+An action definition contains the action type and any associated data:
+
+\input{struct/ofp_action}
+The \verb|vlan_id| field is 16 bits long, when an actual VLAN id is only 12 bits. The value \verb|0xffff| is used to indicate that no VLAN id was set, or if used as an action, that the VLAN header should be stripped.
+\\\\
+An \verb|action_output| has the following fields:
+
+\input{struct/ofp_action_output}
+The \verb|port| specifies the physical port from which packet packets should be sent.  The \verb|max_len| indicates the maximum amount of data from a packet that should be sent when the port is \verb|OFPP_CONTROLLER|.  If \verb|max_len| is zero, then the entire packet should be sent.
+
+\subsection{Controller-to-Switch Messages}
+
+\subsubsection{Handshake}
+\label{cts:handshake} 
+Upon SSL session establishment, the controller sends an \verb|OFPT_FEATURES_REQUEST| message.  This message does not contain a body beyond the OpenFlow header.  The switch responds with an \verb|OFPT_FEATURES_REPLY| message:
+
+\input{struct/ofp_switch_features}
+The \verb|actions| field is a bitmap of supported actions on the hardware.  It uses the values from \verb|ofp_action_type| as the number of bits to shift left for an associated action.  For example, \verb|OFPAT_SET_DL_VLAN| would use the flag \verb|0x00000002|.
+\\\\
+The \verb|capabilities| field uses the following flags to indicate supported capabilities of the datapath:
+
+\input{enum/ofp_capabilities} 
+Interleaving refers to the switch’s ability to do combinations of actions, beyond the OpenFlow requirement that modification actions precede output actions. For example, an application may need for a single entry:
+\begin{itemize}
+\item Send out port 5
+\item Add VLAN tag 99 and send out port 7
+\item Add VLAN tag 200 and send out port 9
+\end{itemize}
+This behavior may not be possible on some hardware platforms, because they must "squish" the actions flat and thus lose the ordering.  However, some switches may be able to handle this specific combination because a VLAN tag can be associated with a physical port outside of the actions.  If the switch supports this, it must set the \verb|OFPC_VO_INTERLEAVE| bit in the capabilities field.  If the controller attempts to send a flow mod message with an action that requires VLAN-output interleaving, and the switch does not support it, the switch must respond with an \verb|OFPEFM_VOI_UNSUPPORTED| error message.
+\\\\
+A switch may also support arbitrarily interleaved actions like this:
+\begin{itemize}
+\item Send out port 5
+\item Change source IP address to 172.16.99.244 and send out port 7
+\item Change VLAN tag to 200 and send out port 9
+\end{itemize}
+If the switch supports arbitrary interleaving, it must set the \verb|OFPC_ARB_INTERLEAVE| bit in the capabilities field. If the controller attempts to send a flow mod message with an action that requires arbitrary interleaving, and the switch does not support it, the switch must respond with an \verb|OFPEFM_AI_UNSUPPORTED| error message.
+\\\\
+The \verb|ports| field is an array of \verb|ofp_phy_port| structures that describe all the physical ports in the system that support OpenFlow.  The number of port elements is inferred from the length field in the OpenFlow header. 
+
+\subsubsection{Switch Configuration}
+The controller is able to set and query configuration parameters in the switch with the \verb|OFPT_SET_CONFIG| and \verb|OFPT_GET_CONFIG_REQUEST| messages, respectively.  The switch responds to a configuration request with an \verb|OFPT_GET_CONFIG_REPLY| message; it does not reply to a request to set the configuration.  
+\\\\
+There is no body for \verb|OFPT_GET_CONFIG_REQUEST| beyond the OpenFlow header.  The \verb|OFPT_SET_CONFIG| and \verb|OFPT_GET_CONFIG_REPLY| use the following:
+
+\input{struct/ofp_switch_config}
+The only configuration flag currently defined is \verb|OFPC_SEND_FLOW_EXP|, which has the value \verb|0x0001|.  When this flag is set, the switch sends flow expiration messages.  The default flags value is zero, indicating that the switch should not send flow expirations.
+
+\subsubsection{Modify State Messages}
+\paragraph{Modify Flow Entry Message}
+Modifications to the flow table from the controller are done with the \verb|OFPT_FLOW_MOD| message:
+
+\input{struct/ofp_flow_mod}
+The \verb|flags| field has two defined flags.  Errors are generated for failed \verb|flow_mod|s when \verb|OFPFMF_REPORT_ERROR| is set, and the switch will force an insert or modify when \verb|OFPFMF_FORCE| is set. 
+
+\input{enum/ofp_flow_mod_command}
+The interpretation of the \verb|priority| field depends on the type of entry to be inserted.  If the match field indicates that this is a wildcard entry, then the priority field indicates table priority, where higher numbers are higher priorities; the switch must keep the highest-priority wildcard entries in the lowest-numbered (fastest) wildcard table, to ensure correctness.  It is the responsibility of each switch implementer to ensure that exact entries always match before wildcards entries, regardless of the table configuration.  
+\\\\
+If the match field indicates that this is an exact entry, then the priority field must only have the value 0 or 1.  If an exact match with priority other than 0 or 1 is seen, the switch should reply with an \verb|OFPEFM_EXACT_PRIORITY| error message.  Exact priority of 1 indicates to the switch an important (or “pinned”) entry; it must attempt to insert this entry in the lowest-numbered (fastest) exact table, even if a priority-0 exact entry must be evicted.  In the case that the switch cannot insert this entry in the lowest-numbered table because other priority-1 entries have filled up the available spots, the switch must insert this entry anyway, and respond with an \verb|OFPEFM_PIN_FAILED| message.  
+\\\\
+The \verb|buffer_id| refers to a buffered packet sent by the \verb|OFPT_PACKET_IN| message. 
+\\\\\
+If a flow is added with an \verb|idle_timeout| value of 0x0000 and a \verb|hard_timeout| value of \verb|0x0000|, then the entry will never time out.  If a flow entry is added with a nonzero \verb|idle_timeout| value and a \verb|hard_timeout| value of \verb|0x0000|, then the flow will only timeout if the flow is idle for longer than \verb|idle_timeout| seconds.  If a flow entry is added with an \verb|idle_timeout| value of \verb|0x0000| and a nonzero \verb|hard_timeout|, then it will expire after exactly \verb|hard_timeout| seconds.  If both \verb|idle_timeout| and \verb|hard_timeout| are nonzero, the flow will timeout after \verb|idle_timeout| seconds of idleness, or \verb|hard_timeout| seconds, whichever comes first,
+\\\\
+The values of \verb|command| can be:
+
+\input{enum/ofp_flow_mod_command}
+The differences between \verb|OFPFC_MODIFY| and \verb|OFPFC_MODIFY_STRICT| are explained in Section \ref{flow_table:sec_chan:flow_mod} and differences between \verb|OFPFC_DELETE| and \verb|OFPFC_DELETE_STRICT| are explained more fully in Section \ref{flow_table:sec_chan:flow_removal}. 
+
+\paragraph{Port Modification Message}
+The controller uses the \verb|OFPT_PORT_MOD| message to modify the behavior of the physical port:
+
+\input{struct/ofp_port_mod}
+When the controller sends this message, the switch should attempt to replace as much of the current port struct as possible with the message.  For example, it may ignore part of the features bitmap if it doesn’t support a particular speed.  If the attempt fails, the switch must send an \verb|OFPET_PORT_MOD| message.
+
+\subsubsection{Read State Messages}
+While the system is running, the datapath may be queried about its current state using the \verb|OFPT_STATS_REQUEST| message:
+
+\input{struct/ofp_stats_request}
+The switch responds with one or more \verb|OFPT_STATS_REPLY| messages:
+
+\input{struct/ofp_stats_reply}
+ The only value defined for \verb|flags| in a reply is whether more replies will follow this one—this has the value \verb|0x0001|.  To ease implementation, the switch is allowed to send replies with no additional entries.  However, it must always send another reply following a message with the “more” flag set.  The transaction ids (xid) of replies must always match the request that prompted them.
+\\\\
+In both the request and response, the \verb|type| field specifies the kind of information being passed and determines how the \verb|body| field is interpreted:
+
+\input{enum/ofp_stats_types}
+
+\paragraph{Individual Flow Statistics}
+Information about individual flows is requested with the \verb|OFPST_FLOW| stats request type:
+
+\input{struct/ofp_flow_stats_request}
+The \verb|match| field contains a description of the flows that should be matched and may contain wildcards. 
+\\\\
+The \verb|body| of the reply consists of an array of the following:
+
+\input{struct/ofp_flow_stats}
+
+\paragraph{Aggregate Flow Statistics}
+Aggregate information about multiple flows is requested with the \verb|OFPST_AGGREGATE| stats request type:
+
+\input{struct/ofp_aggregate_stats_request}
+The \verb|match| field contains a description of the flows that should be matched and may contain wildcards. 
+\\\\
+The \verb|body| of the reply consists of the following:
+
+\input{struct/ofp_aggregate_stats_reply} 
+
+\paragraph{Table Statistics}
+Information about tables is requested with the \verb|OFPST_TABLE| stats request type.  The request does not contain any data in the body.
+\\\\
+The body of the reply consists of an array of the following:
+
+\input{struct/ofp_table_stats}
+\verb|OFP_MAX_TABLE_NAME_LEN| is 32.
+
+\paragraph{Port Statistics}
+Information about physical ports is requested with the \verb|OFPST_PORT| stats request type.  The request does not contain any data in the \verb|body|.
+\\\\
+The body of the reply consists of an array of the following:
+
+\input{struct/ofp_port_stats}
+The switch should return a value of -1 for unavailable counters.
+
+\subsubsection{Send Packet Message}
+When the controller wishes to send a packet out through the datapath, it uses the \verb|OFPT_PACKET_OUT| message:
+
+\input{struct/ofp_packet_out}
+The \verb|buffer_id| is the same given in the \verb|ofp_packet_in| message.  If the \verb|buffer_id| is -1, then the data is included in the data array. If \verb|OFPP_TABLE| is specified as the output port of an action, the \verb|in_port| in the \verb|packet_out| message is used in the flow table lookup.
+
+\subsection{Asynchronous Messages}
+\subsubsection{Packet-In Message}
+When packets are received by the datapath and sent to the controller, they use the \verb|OFPT_PACKET_IN| message:
+
+\input{struct/ofp_packet_in}
+The \verb|buffer_id| is an opaque value used by the datapath to identify a buffered packet.  When a packet is buffered, some number of bytes from the message will be included in the data portion of the message.  If the packet is sent because of a “send to controller” action, then \verb|max_len| bytes from the flow setup request are sent.  If the packet is sent because of a flow table miss, then at least \verb|miss_send_len| from the \verb|OFPT_SET_CONFIG| message are sent.  If the value was never sent, the default is 128 bytes.  If packet is not buffered, the entire packet is included in the data portion, and the \verb|buffer_id| is -1.  The reason field can be any of these values:
+
+\input{enum/ofp_packet_in_reason}
+ 
+\subsubsection{Flow Expiration Message}
+If the controller has requested to be notified when flows time out, the datapath does this with the \verb|OFPT_FLOW_EXPIRED| message:
+
+\input{struct/ofp_flow_expired}
+The \verb|match| and \verb|priority| fields is the same as was used in the flow setup request.  The duration field indicates the number of seconds the flow received traffic.  The \verb|packet_count| and \verb|byte_count| indicate the number of packets and bytes that were associated with this flow, respectively. 
+ 
+\subsubsection{Port Status Message}
+As physical ports are added, modified, and removed from the datapath, the controller needs to be informed with the \verb|OFPT_PORT_STATUS| message:
+
+\input{struct/ofp_port_status}
+The \verb|status| can be one of the following values:
+
+\input{enum/ofp_port_reason} 
+
+\subsubsection{Error Message}
+There are times that the switch needs to notify the controller of a problem.  This is done with the \verb|OFPT_ERROR_MSG| message: 	
+
+\input{struct/ofp_error_msg}
+The \verb|type| value indicates the high-level type of error.  The \verb|code| value is interpreted based on the type.  The \verb|data| is variable length and interpreted based on the \verb|type| and \verb|code|; in most cases this is the message that caused the problem.  
+
+\input{enum/ofp_error_type}
+If the controller sends a message with an unsupported version, it must respond with an \verb|OFPET_UNSUPPORTED_VER| error.  The data field must include the full message that failed.  
+\\\\
+If the controller attempts a \verb|flow_mod| and fails, and the \verb|flow_mod| entry had the \verb|REPORT_ERROR| flag set, then the switch responds with one of the following.  The data field must include the full message that failed. 
+
+xxx These flow errors are not supported in v0.9.0. --JDP
+%\input{enum/ofp_error_flow_mod}
+%If the controller attempts a \verb|port_mod| and fails, it should report an error.  The \verb|data| field must include the full message that failed. 
+
+\subsection{Symmetric Messages}
+\subsubsection{Echo Request}
+An echo request message consists of an OpenFlow header plus an arbitrary-length data field.  The data field might be a message timestamp to check latency, various lengths to measure bandwidth, or zero-size to verify liveness between the switch and controller.
+
+\subsubsection{Echo Reply}
+An echo reply message consists of an OpenFlow header plus the unmodified data field of an echo request message.
+\\\\
+In an OpenFlow protocol implementation divided into multiple layers, the echo request/reply logic should be implemented in the "deepest" practical layer.  For example, in the OpenFlow reference implementation that includes a userspace process that relays to a kernel module, echo request/reply is implemented in the kernel module.  Receiving a correctly formatted echo reply then shows a greater likelihood of correct end-to-end functionality than if the echo request/reply were implemented in the userspace process, as well as providing more accurate end-to-end latency timing.
+
