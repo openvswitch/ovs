@@ -326,6 +326,7 @@ process_phy_port(struct lswitch *sw, struct rconn *rconn,
             VLOG_WARN("port %d: config=%x new_config=%x",
                       ntohs(opp->port_no), config, new_config);
             opm = make_openflow(sizeof *opm, OFPT_PORT_MOD, &b);
+            opm->port_no = opp->port_no;
             memcpy(opm->hw_addr, opp->hw_addr, OFP_ETH_ALEN);
             opm->config = htonl(new_config);
             opm->mask = htonl(config ^ new_config);
