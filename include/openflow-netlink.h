@@ -44,9 +44,6 @@ enum {
 	DP_GENL_A_MC_GROUP,	 /* Generic netlink multicast group. */
 	DP_GENL_A_OPENFLOW,  /* OpenFlow packet. */
 
-    DP_GENL_A_NPACKETS,  /* Number of packets to send up netlink */
-    DP_GENL_A_PSIZE,     /* Size of packets to send up netlink */
-
 	__DP_GENL_A_MAX,
 	DP_GENL_A_MAX = __DP_GENL_A_MAX - 1
 };
@@ -65,4 +62,4 @@ enum dp_genl_command {
 	DP_GENL_C_MAX = __DP_GENL_C_MAX - 1
 };
 
-#endif /* openflow_netlink_h */
+#endif /* openflow_netlink.h */
