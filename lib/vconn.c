@@ -372,6 +372,7 @@ vcs_send_error(struct vconn *vconn)
     error->type = htons(OFPET_HELLO_FAILED);
     error->code = htons(OFPHFC_INCOMPATIBLE);
     ofpbuf_put(b, s, strlen(s));
+    update_openflow_length(b);
     retval = do_send(vconn, b);
     if (retval) {
         ofpbuf_delete(b);
