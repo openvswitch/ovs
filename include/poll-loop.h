@@ -43,7 +43,7 @@
  *
  * There is also some support for autonomous subroutines that are executed by
  * poll_block() when a file descriptor becomes ready.  To prevent these
- * routines from starving if events are continously ready, the application
+ * routines from starving if events are continuously ready, the application
  * should bound the amount of work it does between poll_block() calls. */
 
 #ifndef POLL_LOOP_H
