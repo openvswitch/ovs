@@ -63,7 +63,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x93
+#define OFP_VERSION   0x94
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -323,14 +323,16 @@ struct ofp_packet_in {
 OFP_ASSERT(sizeof(struct ofp_packet_in) == 20);
 
 enum ofp_action_type {
-    OFPAT_OUTPUT,           /* Output to switch port. */
-    OFPAT_SET_DL_VLAN,      /* VLAN. */
-    OFPAT_SET_DL_SRC,       /* Ethernet source address. */
-    OFPAT_SET_DL_DST,       /* Ethernet destination address. */
-    OFPAT_SET_NW_SRC,       /* IP source address. */
-    OFPAT_SET_NW_DST,       /* IP destination address. */
-    OFPAT_SET_TP_SRC,       /* TCP/UDP source port. */
-    OFPAT_SET_TP_DST        /* TCP/UDP destination port. */
+    OFPAT_OUTPUT,            /* Output to switch port. */
+    OFPAT_SET_VLAN_VID,      /* Set the 802.1q VLAN id. */
+    OFPAT_SET_VLAN_PCP,      /* Set the 802.1q priority. */
+    OFPAT_STRIP_VLAN,        /* Strip the 802.1q header. */
+    OFPAT_SET_DL_SRC,        /* Ethernet source address. */
+    OFPAT_SET_DL_DST,        /* Ethernet destination address. */
+    OFPAT_SET_NW_SRC,        /* IP source address. */
+    OFPAT_SET_NW_DST,        /* IP destination address. */
+    OFPAT_SET_TP_SRC,        /* TCP/UDP source port. */
+    OFPAT_SET_TP_DST         /* TCP/UDP destination port. */
 };
 
 /* An output action sends packets out 'port'.  When the 'port' is the
@@ -342,18 +344,12 @@ struct ofp_action_output {
 };
 OFP_ASSERT(sizeof(struct ofp_action_output) == 4);
 
-/* The VLAN id is 12-bits, so we'll use the entire 16 bits to indicate
- * special conditions.  All ones is used to indicate that no VLAN id was
- * set, or if used as an action, that the VLAN header should be
- * stripped.
- */
-#define OFP_VLAN_NONE      0xffff
-
 struct ofp_action {
     uint16_t type;                       /* One of OFPAT_* */
     union {
         struct ofp_action_output output; /* OFPAT_OUTPUT: output struct. */
-        uint16_t vlan_id;                /* OFPAT_SET_DL_VLAN: VLAN id. */
+        uint8_t vlan_pcp;                /* OFPAT_SET_VLAN_PCP: priority. */
+        uint16_t vlan_vid;               /* OFPAT_SET_VLAN_VID: VLAN id. */
         uint8_t  dl_addr[OFP_ETH_ALEN];  /* OFPAT_SET_DL_SRC/DST */
         uint32_t nw_addr OFP_PACKED;     /* OFPAT_SET_NW_SRC/DST */
         uint16_t tp;                     /* OFPAT_SET_TP_SRC/DST */
@@ -422,6 +418,11 @@ enum ofp_flow_wildcards {
  * Ethernet type.
  */
 #define OFP_DL_TYPE_NOT_ETH_TYPE  0x05ff
+
+/* The VLAN id is 12-bits, so we can use the entire 16 bits to indicate
+ * special conditions.  All ones indicates that no VLAN id was set.
+ */
+#define OFP_VLAN_NONE      0xffff
 
 /* Fields to match against flows */
 struct ofp_match {

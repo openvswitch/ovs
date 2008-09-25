@@ -35,10 +35,10 @@ void fwd_discard_all(void);
 void fwd_exit(void);
 
 void execute_actions(struct datapath *, struct sk_buff *,
-		     const struct sw_flow_key *, 
-		     const struct ofp_action *, int n_actions,
-		     int ignore_no_fwd);
+		    struct sw_flow_key *, 
+		    const struct ofp_action *, int n_actions,
+		    int ignore_no_fwd);
 struct sk_buff *execute_setter(struct sk_buff *, uint16_t,
-			const struct sw_flow_key *, const struct ofp_action *);
+			struct sw_flow_key *, const struct ofp_action *);
 
 #endif /* forward.h */

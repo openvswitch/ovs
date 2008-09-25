@@ -266,13 +266,16 @@ ofp_print_action(struct ds *string, const struct ofp_action *a)
         }
         break;
 
-    case OFPAT_SET_DL_VLAN:
-        ds_put_cstr(string, "mod_vlan:");
-        if (ntohs(a->arg.vlan_id) == OFP_VLAN_NONE) {
-            ds_put_cstr(string, "strip");
-        } else {
-            ds_put_format(string, "%"PRIu16, ntohs(a->arg.vlan_id));
-        }
+    case OFPAT_SET_VLAN_VID:
+        ds_put_format(string, "mod_vlan_vid:%"PRIu16, ntohs(a->arg.vlan_vid));
+        break;
+
+    case OFPAT_SET_VLAN_PCP:
+        ds_put_format(string, "mod_vlan_pcp:%"PRIu8, a->arg.vlan_pcp);
+        break;
+
+    case OFPAT_STRIP_VLAN:
+        ds_put_cstr(string, "strip_vlan");
         break;
 
     case OFPAT_SET_DL_SRC:

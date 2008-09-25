@@ -71,7 +71,9 @@ extern char serial_num;
 
 /* Actions supported by this implementation. */
 #define OFP_SUPPORTED_ACTIONS ( (1 << OFPAT_OUTPUT)         \
-                                | (1 << OFPAT_SET_DL_VLAN)  \
+                                | (1 << OFPAT_SET_VLAN_VID) \
+                                | (1 << OFPAT_SET_VLAN_PCP) \
+                                | (1 << OFPAT_STRIP_VLAN)   \
                                 | (1 << OFPAT_SET_DL_SRC)   \
                                 | (1 << OFPAT_SET_DL_DST)   \
                                 | (1 << OFPAT_SET_NW_SRC)   \
@@ -153,11 +155,12 @@ static int update_port_status(struct sw_port *p);
 static void send_port_status(struct sw_port *p, uint8_t status);
 static void del_switch_port(struct sw_port *p);
 static void execute_actions(struct datapath *, struct ofpbuf *,
-                            int in_port, const struct sw_flow_key *,
+                            int in_port, struct sw_flow_key *,
                             const struct ofp_action *, int n_actions,
                             bool ignore_no_fwd);
-static void modify_vlan(struct ofpbuf *buffer, const struct sw_flow_key *key,
-                        const struct ofp_action *a);
+static void modify_vlan_tci(struct ofpbuf *buffer, struct sw_flow_key *key,
+                            uint16_t tci, uint16_t mask);
+static void strip_vlan(struct ofpbuf *buffer);
 static void modify_nh(struct ofpbuf *buffer, uint16_t eth_proto,
                       uint8_t nw_proto, const struct ofp_action *a);
 static void modify_th(struct ofpbuf *buffer, uint16_t eth_proto,
@@ -902,7 +905,7 @@ do_output(struct datapath *dp, struct ofpbuf *buffer, int in_port,
 
 static void
 execute_actions(struct datapath *dp, struct ofpbuf *buffer,
-                int in_port, const struct sw_flow_key *key,
+                int in_port, struct sw_flow_key *key,
                 const struct ofp_action *actions, int n_actions,
                 bool ignore_no_fwd)
 {
@@ -934,8 +937,21 @@ execute_actions(struct datapath *dp, struct ofpbuf *buffer,
             max_len = ntohs(a->arg.output.max_len);
             break;
 
-        case OFPAT_SET_DL_VLAN:
-            modify_vlan(buffer, key, a);
+        case OFPAT_SET_VLAN_VID: {
+            uint16_t tci = ntohs(a->arg.vlan_vid);
+            modify_vlan_tci(buffer, key, tci, VLAN_VID_MASK);
+            break;
+        }
+
+        case OFPAT_SET_VLAN_PCP: {
+            uint16_t tci = (uint16_t)a->arg.vlan_pcp << 13;
+            modify_vlan_tci(buffer, key, tci, VLAN_PCP_MASK);
+            break;
+        }
+
+        case OFPAT_STRIP_VLAN:
+            strip_vlan(buffer);
+            key->flow.dl_vlan = htons(OFP_VLAN_NONE);
             break;
 
         case OFPAT_SET_DL_SRC:
@@ -1014,48 +1030,55 @@ static void modify_th(struct ofpbuf *buffer, uint16_t eth_proto,
     }
 }
 
+/* Modify vlan tag control information (TCI).  Only sets the TCI bits
+ * indicated by 'mask'.  If no vlan tag is present, one is added.
+ */
 static void
-modify_vlan(struct ofpbuf *buffer,
-            const struct sw_flow_key *key, const struct ofp_action *a)
+modify_vlan_tci(struct ofpbuf *buffer, struct sw_flow_key *key, 
+        uint16_t tci, uint16_t mask)
 {
-    uint16_t new_id = a->arg.vlan_id;
     struct vlan_eth_header *veh;
 
-    if (new_id != htons(OFP_VLAN_NONE)) {
-        if (key->flow.dl_vlan != htons(OFP_VLAN_NONE)) {
-            /* Modify vlan id, but maintain other TCI values */
-            veh = buffer->l2;
-            veh->veth_tci &= ~htons(VLAN_VID);
-            veh->veth_tci |= new_id;
-        } else {
-            /* Insert new vlan id. */
-            struct eth_header *eh = buffer->l2;
-            struct vlan_eth_header tmp;
-            memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
-            memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);
-            tmp.veth_type = htons(ETH_TYPE_VLAN);
-            tmp.veth_tci = new_id;
-            tmp.veth_next_type = eh->eth_type;
-            
-            veh = ofpbuf_push_uninit(buffer, VLAN_HEADER_LEN);
-            memcpy(veh, &tmp, sizeof tmp);
-            buffer->l2 = (char*)buffer->l2 - VLAN_HEADER_LEN;
-        }
-    } else  {
-        /* Remove an existing vlan header if it exists */
+    if (key->flow.dl_vlan != htons(OFP_VLAN_NONE)) {
+        /* Modify vlan id, but maintain other TCI values */
         veh = buffer->l2;
-        if (veh->veth_type == htons(ETH_TYPE_VLAN)) {
-            struct eth_header tmp;
-            
-            memcpy(tmp.eth_dst, veh->veth_dst, ETH_ADDR_LEN);
-            memcpy(tmp.eth_src, veh->veth_src, ETH_ADDR_LEN);
-            tmp.eth_type = veh->veth_next_type;
-            
-            buffer->size -= VLAN_HEADER_LEN;
-            buffer->data = (char*)buffer->data + VLAN_HEADER_LEN;
-            buffer->l2 = (char*)buffer->l2 + VLAN_HEADER_LEN;
-            memcpy(buffer->data, &tmp, sizeof tmp);
-        }
+        veh->veth_tci &= ~htons(mask);
+        veh->veth_tci |= htons(tci);
+    } else {
+        /* Insert new vlan id. */
+        struct eth_header *eh = buffer->l2;
+        struct vlan_eth_header tmp;
+        memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
+        memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);
+        tmp.veth_type = htons(ETH_TYPE_VLAN);
+        tmp.veth_tci = htons(tci);
+        tmp.veth_next_type = eh->eth_type;
+        
+        veh = ofpbuf_push_uninit(buffer, VLAN_HEADER_LEN);
+        memcpy(veh, &tmp, sizeof tmp);
+        buffer->l2 = (char*)buffer->l2 - VLAN_HEADER_LEN;
+    }
+
+    key->flow.dl_vlan = veh->veth_tci & htons(VLAN_VID_MASK);
+}
+
+/* Remove an existing vlan header if it exists. */
+static void
+strip_vlan(struct ofpbuf *buffer)
+{
+    struct vlan_eth_header *veh = buffer->l2;
+
+    if (veh->veth_type == htons(ETH_TYPE_VLAN)) {
+        struct eth_header tmp;
+        
+        memcpy(tmp.eth_dst, veh->veth_dst, ETH_ADDR_LEN);
+        memcpy(tmp.eth_src, veh->veth_src, ETH_ADDR_LEN);
+        tmp.eth_type = veh->veth_next_type;
+        
+        buffer->size -= VLAN_HEADER_LEN;
+        buffer->data = (char*)buffer->data + VLAN_HEADER_LEN;
+        buffer->l2 = (char*)buffer->l2 + VLAN_HEADER_LEN;
+        memcpy(buffer->data, &tmp, sizeof tmp);
     }
 }
 

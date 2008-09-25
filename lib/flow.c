@@ -144,7 +144,7 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, struct flow *flow)
             struct vlan_header *vh = pull_vlan(&b);
             if (vh) {
                 flow->dl_type = vh->vlan_next_type;
-                flow->dl_vlan = vh->vlan_tci & htons(VLAN_VID);
+                flow->dl_vlan = vh->vlan_tci & htons(VLAN_VID_MASK);
             }
         }
         memcpy(flow->dl_src, eth->eth_src, ETH_ADDR_LEN);

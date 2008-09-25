@@ -28,7 +28,9 @@
 
 /* Actions supported by this implementation. */
 #define OFP_SUPPORTED_ACTIONS ( (1 << OFPAT_OUTPUT) \
-		| (1 << OFPAT_SET_DL_VLAN) \
+		| (1 << OFPAT_SET_VLAN_VID) \
+		| (1 << OFPAT_SET_VLAN_PCP) \
+		| (1 << OFPAT_STRIP_VLAN) \
 		| (1 << OFPAT_SET_DL_SRC) \
 		| (1 << OFPAT_SET_DL_DST) \
 		| (1 << OFPAT_SET_NW_SRC) \

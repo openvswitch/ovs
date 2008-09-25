@@ -90,7 +90,7 @@ static int do_output(struct datapath *dp, struct sk_buff *skb, size_t max_len,
 }
 
 void execute_actions(struct datapath *dp, struct sk_buff *skb,
-		     const struct sw_flow_key *key,
+		     struct sw_flow_key *key,
 		     const struct ofp_action *actions, int n_actions,
 		     int ignore_no_fwd)
 {
@@ -235,41 +235,53 @@ static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 	return skb;
 }
 
-static struct sk_buff *modify_vlan(struct sk_buff *skb, 
-		const struct sw_flow_key *key, const struct ofp_action *a)
+static struct sk_buff *modify_vlan_tci(struct sk_buff *skb, 
+		struct sw_flow_key *key, uint16_t tci, uint16_t mask)
 {
-	uint16_t new_id = ntohs(a->arg.vlan_id);
+	struct vlan_ethhdr *vh = vlan_eth_hdr(skb);
 
-	if (new_id != OFP_VLAN_NONE) {
-		if (key->dl_vlan != htons(OFP_VLAN_NONE)) {
-			/* Modify vlan id, but maintain other TCI values */
-			struct vlan_ethhdr *vh = vlan_eth_hdr(skb);
-			vh->h_vlan_TCI = (vh->h_vlan_TCI 
-					& ~(htons(VLAN_VID_MASK))) | a->arg.vlan_id;
-		} else  {
-			/* Add vlan header */
-
-			/* xxx The vlan_put_tag function, doesn't seem to work
-			 * xxx reliably when it attempts to use the hardware-accelerated
-			 * xxx version.  We'll directly use the software version
-			 * xxx until the problem can be diagnosed.
-			 */
-			skb = __vlan_put_tag(skb, new_id);
-		}
+	if (key->dl_vlan != htons(OFP_VLAN_NONE)) {
+		/* Modify vlan id, but maintain other TCI values */
+		vh->h_vlan_TCI = (vh->h_vlan_TCI & ~(htons(mask))) | htons(tci);
 	} else  {
-		/* Remove an existing vlan header if it exists */
-		vlan_pull_tag(skb);
+		/* Add vlan header */
+
+		/* xxx The vlan_put_tag function, doesn't seem to work
+		 * xxx reliably when it attempts to use the hardware-accelerated
+		 * xxx version.  We'll directly use the software version
+		 * xxx until the problem can be diagnosed.
+		 */
+		skb = __vlan_put_tag(skb, tci);
+		vh = vlan_eth_hdr(skb);
 	}
+	key->dl_vlan = vh->h_vlan_TCI & htons(VLAN_VID_MASK);
 
 	return skb;
 }
 
+/* Mask for the priority bits in a vlan header.  The kernel doesn't
+ * define this like it does for VID. */
+#define VLAN_PCP_MASK 0xe000
+
 struct sk_buff *execute_setter(struct sk_buff *skb, uint16_t eth_proto,
-			const struct sw_flow_key *key, const struct ofp_action *a)
+			struct sw_flow_key *key, const struct ofp_action *a)
 {
 	switch (ntohs(a->type)) {
-	case OFPAT_SET_DL_VLAN:
-		skb = modify_vlan(skb, key, a);
+	case OFPAT_SET_VLAN_VID: {
+		uint16_t tci = ntohs(a->arg.vlan_vid);
+		skb = modify_vlan_tci(skb, key, tci, VLAN_VID_MASK);
+		break;
+	}
+
+	case OFPAT_SET_VLAN_PCP: {
+		uint16_t tci = (uint16_t)a->arg.vlan_pcp << 13;
+		skb = modify_vlan_tci(skb, key, tci, VLAN_PCP_MASK);
+		break;
+	}
+
+	case OFPAT_STRIP_VLAN:
+		vlan_pull_tag(skb);
+		key->dl_vlan = htons(OFP_VLAN_NONE);
 		break;
 
 	case OFPAT_SET_DL_SRC: {

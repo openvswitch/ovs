@@ -498,11 +498,11 @@ test_vlan(void)
 		eh = eth_hdr(skb);
 		orig_id = eh->h_proto;
 
-		action.type = htons(OFPAT_SET_DL_VLAN);
+		action.type = htons(OFPAT_SET_VLAN_VID);
 
 		// Add a random vlan tag
 		new_id = (uint16_t) random32() & VLAN_VID_MASK;
-		action.arg.vlan_id = new_id;
+		action.arg.vlan_vid = new_id;
 		skb = execute_setter(skb, eth_proto, &key, &action);
 		vh = vlan_eth_hdr(skb);
 		if (ntohs(vh->h_vlan_TCI) != new_id) {
@@ -521,7 +521,7 @@ test_vlan(void)
 
 		// Modify the tag
 		new_id = (uint16_t) random32() & VLAN_VID_MASK;
-		action.arg.vlan_id = new_id;
+		action.arg.vlan_vid = new_id;
 		skb = execute_setter(skb, eth_proto, &key, &action);
 		vh = vlan_eth_hdr(skb);
 		if (ntohs(vh->h_vlan_TCI) != new_id) {
@@ -539,7 +539,7 @@ test_vlan(void)
 #endif
 
 		// Remove the tag
-		action.arg.vlan_id = OFP_VLAN_NONE;
+		action.type = htons(OFPAT_STRIP_VLAN);
 		skb = execute_setter(skb, eth_proto, &key, &action);
 
 		eh = eth_hdr(skb);

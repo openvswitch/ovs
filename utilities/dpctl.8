@@ -342,12 +342,20 @@ Outputs the packet on the ``local port,'' which corresponds to the
 \fBof\fIn\fR network device (see \fBCONTACTING THE CONTROLLER\fR in
 \fBsecchan\fR(8) for information on the \fBof\fIn\fR network device).
 
-.IP \fBmod_vlan\fR:\fIvlan_id\fR
-Modifies the VLAN tag on a packet.  If \fIvlan_id\fR is a number, then 
-the VLAN tag is added or modified as necessary to match the value 
-specified.  If \fIvlan_id\fR is \fBSTRIP\fR, then the VLAN tag is 
-stripped from the packet if one is present.  (This action is not 
-implemented by all OpenFlow switches.)
+.IP \fBmod_vlan_vid\fR:\fIvlan_vid\fR
+Modifies the VLAN id on a packet.  The VLAN tag is added or modified 
+as necessary to match the value specified.  If the VLAN tag is added,
+a priority of zero is used (see the \fBmod_vlan_pcp\fR action to set
+this).
+
+.IP \fBmod_vlan_pcp\fR:\fIvlan_pcp\fR
+Modifies the VLAN priority on a packet.  The VLAN tag is added or modified 
+as necessary to match the value specified.  Valid values are between 0
+(lowest) and 7 (highest).  If the VLAN tag is added, a vid of zero is used 
+(see the \fBmod_vlan_vid\fR action to set this).
+
+.IP \fBstrip_vlan\fR
+Strips the VLAN tag from a packet if it is present.
 .RE
 
 .IP

@@ -586,14 +586,14 @@ str_to_action(char *str, struct ofp_action *action, int *n_actions)
             arg++;
         } 
 
-        if (!strcasecmp(act, "mod_vlan")) {
-            action[i].type = htons(OFPAT_SET_DL_VLAN);
-
-            if (!strcasecmp(arg, "strip")) {
-                action[i].arg.vlan_id = htons(OFP_VLAN_NONE);
-            } else {
-                action[i].arg.vlan_id = htons(str_to_int(arg));
-            }
+        if (!strcasecmp(act, "mod_vlan_vid")) {
+            action[i].type = htons(OFPAT_SET_VLAN_VID);
+            action[i].arg.vlan_vid = htons(str_to_int(arg));
+        } else if (!strcasecmp(act, "mod_vlan_pcp")) {
+            action[i].type = htons(OFPAT_SET_VLAN_PCP);
+            action[i].arg.vlan_pcp = str_to_int(arg);
+        } else if (!strcasecmp(act, "strip_vlan")) {
+            action[i].type = htons(OFPAT_STRIP_VLAN);
         } else if (!strcasecmp(act, "output")) {
             port = str_to_int(arg);
         } else if (!strcasecmp(act, "TABLE")) {
