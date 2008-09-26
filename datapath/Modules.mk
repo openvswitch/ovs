@@ -1,5 +1,5 @@
 all_modules = $(dist_modules)
-dist_modules = openflow unit
+dist_modules = openflow 
 
 openflow_sources = \
 	chain.c \
@@ -10,8 +10,7 @@ openflow_sources = \
 	flow.c \
 	forward.c \
 	table-hash.c \
-	table-linear.c \
-	unit-exports.c
+	table-linear.c 
 
 openflow_headers = \
 	chain.h \
@@ -22,14 +21,7 @@ openflow_headers = \
 	flow.h \
 	forward.h \
 	snap.h \
-	table.h \
-	unit.h
-
-unit_sources = \
-	crc_t.c \
-	forward_t.c \
-	table_t.c \
-	unit.c
+	table.h 
 
 dist_sources = $(foreach module,$(dist_modules),$($(module)_sources))
 dist_headers = $(foreach module,$(dist_modules),$($(module)_headers))

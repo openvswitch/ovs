@@ -1,4 +1,4 @@
-SUBDIRS = tests
+SUBDIRS = 
 if L26_ENABLED
 SUBDIRS += linux-2.6
 endif
