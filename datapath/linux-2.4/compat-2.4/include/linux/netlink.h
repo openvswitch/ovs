@@ -1,6 +1,8 @@
 #ifndef __LINUX_NETLINK_WRAPPER_H
 #define __LINUX_NETLINK_WRAPPER_H 1
 
+#include <linux/skbuff.h>
+
 #include_next <linux/netlink.h>
 
 #define NETLINK_GENERIC                16
