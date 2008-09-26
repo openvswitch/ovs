@@ -473,7 +473,8 @@ ofp_print_switch_features(struct ds *string, const void *oh, size_t len,
     int n_ports;
     int i;
 
-    ds_put_format(string, "dp id:%"PRIx64"\n", ntohll(osf->datapath_id));
+    ds_put_format(string, " ver:0x%x, dpid:%"PRIx64"\n", 
+            osf->header.version, ntohll(osf->datapath_id));
     ds_put_format(string, "n_tables:%d, n_buffers:%d\n", osf->n_tables,
             ntohl(osf->n_buffers));
     ds_put_format(string, "features: capabilities:%#x, actions:%#x\n",
