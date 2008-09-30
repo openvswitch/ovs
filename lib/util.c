@@ -33,6 +33,7 @@
 
 #include <config.h>
 #include "util.h"
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -138,6 +139,7 @@ ofp_fatal(int err_no, const char *format, ...)
 void
 ofp_error(int err_no, const char *format, ...)
 {
+    int save_errno = errno;
     va_list args;
 
     fprintf(stderr, "%s: ", program_name);
@@ -147,6 +149,8 @@ ofp_error(int err_no, const char *format, ...)
     if (err_no != 0)
         fprintf(stderr, " (%s)", strerror(err_no));
     putc('\n', stderr);
+
+    errno = save_errno;
 }
 
 /* Sets program_name based on 'argv0'.  Should be called at the beginning of
