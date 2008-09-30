@@ -173,11 +173,12 @@ struct sw_flow *
 flow_alloc(int n_actions)
 {
     struct sw_flow_actions *sfa;
+    size_t size = sizeof *sfa + (n_actions * sizeof sfa->actions[0]);
     struct sw_flow *flow = malloc(sizeof *flow);
     if (!flow)
         return NULL;
 
-    sfa = malloc(n_actions * sizeof sfa->actions[0]);
+    sfa = malloc(size);
     if (!sfa) {
         free(flow);
         return NULL;
