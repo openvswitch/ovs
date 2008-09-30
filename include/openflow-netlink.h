@@ -62,4 +62,4 @@ enum dp_genl_command {
 	DP_GENL_C_MAX = __DP_GENL_C_MAX - 1
 };
 
-#endif /* openflow_netlink.h */
+#endif /* openflow-netlink.h */
