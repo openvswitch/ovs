@@ -117,7 +117,7 @@ poll_immediate_wake(void)
  * elapses, or not at all if poll_immediate_wake() has been called.
  *
  * Also executes any autonomous subroutines registered with poll_fd_callback(),
- * if their file descriptor have become ready. */
+ * if their file descriptors have become ready. */
 void
 poll_block(void)
 {
