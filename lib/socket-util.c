@@ -254,3 +254,11 @@ error:
     close(fd);
     return -error;
 }
+
+int
+get_unix_name_len(socklen_t sun_len)
+{
+    return (sun_len >= offsetof(struct sockaddr_un, sun_path)
+            ? sun_len - offsetof(struct sockaddr_un, sun_path)
+            : 0);
+}

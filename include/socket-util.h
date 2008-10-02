@@ -45,5 +45,6 @@ int check_connection_completion(int fd);
 int drain_rcvbuf(int fd);
 int make_unix_socket(int style, bool nonblock, bool passcred,
                      const char *bind_path, const char *connect_path);
+int get_unix_name_len(socklen_t sun_len);
 
 #endif /* socket-util.h */

@@ -114,12 +114,11 @@ punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
              struct vconn **vconnp)
 {
     const struct sockaddr_un *sun = (const struct sockaddr_un *) sa;
+    int name_len = get_unix_name_len(sa_len);
     char name[128];
 
-    if (sa_len >= offsetof(struct sockaddr_un, sun_path)) {
-        snprintf(name, sizeof name, "unix:%.*s",
-                (int) (sa_len - offsetof(struct sockaddr_un, sun_path)),
-                sun->sun_path);
+    if (name_len > 0) {
+        snprintf(name, sizeof name, "unix:%.*s", name_len, sun->sun_path);
     } else {
         strcpy(name, "unix");
     }
