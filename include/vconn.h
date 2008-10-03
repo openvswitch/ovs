@@ -82,7 +82,7 @@ void *make_openflow_xid(size_t openflow_len, uint8_t type,
                         uint32_t xid, struct ofpbuf **);
 void update_openflow_length(struct ofpbuf *);
 struct ofpbuf *make_add_flow(const struct flow *, uint32_t buffer_id,
-                             uint16_t max_idle, size_t n_actions);
+                             uint16_t max_idle, size_t actions_len);
 struct ofpbuf *make_add_simple_flow(const struct flow *,
                                     uint32_t buffer_id, uint16_t out_port,
                                     uint16_t max_idle);

@@ -10,6 +10,10 @@ switch_SOURCES = \
 	crc32.h \
 	datapath.c \
 	datapath.h \
+	dp_act.c \
+	dp_act.h \
+	nx_act.c \
+	nx_act.h \
 	switch.c \
 	switch-flow.c \
 	switch-flow.h \

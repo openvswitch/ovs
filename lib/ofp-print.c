@@ -243,93 +243,202 @@ static void ofp_print_port_name(struct ds *string, uint16_t port)
     ds_put_cstr(string, name);
 }
 
-static void
-ofp_print_action(struct ds *string, const struct ofp_action *a) 
+static int
+ofp_print_action(struct ds *string, const struct ofp_action_header *ah, 
+        size_t actions_len) 
 {
-    switch (ntohs(a->type)) {
-    case OFPAT_OUTPUT:
-        {
-            uint16_t port = ntohs(a->arg.output.port); 
-            if (port < OFPP_MAX) {
-                ds_put_format(string, "output:%"PRIu16, port);
-            } else {
-                ofp_print_port_name(string, port);
-                if (port == OFPP_CONTROLLER) {
-                    if (a->arg.output.max_len) {
-                        ds_put_format(string, ":%"PRIu16, 
-                                ntohs(a->arg.output.max_len));
-                    } else {
-                        ds_put_cstr(string, ":all");
-                    }
+    uint16_t type;
+    size_t len;
+
+    struct openflow_action {
+        size_t min_size;
+        size_t max_size;
+    };
+
+    const struct openflow_action of_actions[] = {
+        [OFPAT_OUTPUT] = {
+            sizeof(struct ofp_action_output),
+            sizeof(struct ofp_action_output),
+        },
+        [OFPAT_SET_VLAN_VID] = {
+            sizeof(struct ofp_action_vlan_vid),
+            sizeof(struct ofp_action_vlan_vid),
+        },
+        [OFPAT_SET_VLAN_PCP] = {
+            sizeof(struct ofp_action_vlan_pcp),
+            sizeof(struct ofp_action_vlan_pcp),
+        },
+        [OFPAT_STRIP_VLAN] = {
+            sizeof(struct ofp_action_header),
+            sizeof(struct ofp_action_header),
+        },
+        [OFPAT_SET_DL_SRC] = {
+            sizeof(struct ofp_action_dl_addr),
+            sizeof(struct ofp_action_dl_addr),
+        },
+        [OFPAT_SET_DL_DST] = {
+            sizeof(struct ofp_action_dl_addr),
+            sizeof(struct ofp_action_dl_addr),
+        },
+        [OFPAT_SET_NW_SRC] = {
+            sizeof(struct ofp_action_nw_addr),
+            sizeof(struct ofp_action_nw_addr),
+        },
+        [OFPAT_SET_NW_DST] = {
+            sizeof(struct ofp_action_nw_addr),
+            sizeof(struct ofp_action_nw_addr),
+        },
+        [OFPAT_SET_TP_SRC] = {
+            sizeof(struct ofp_action_tp_port),
+            sizeof(struct ofp_action_tp_port),
+        },
+        [OFPAT_SET_TP_DST] = {
+            sizeof(struct ofp_action_tp_port),
+            sizeof(struct ofp_action_tp_port),
+        }
+        /* OFPAT_VENDOR is not here, since it would blow up the array size. */
+    };
+
+    if (actions_len < sizeof *ah) {
+        ds_put_format(string, "***action array too short for next action***\n");
+        return -1;
+    }
+
+    type = ntohs(ah->type);
+    len = ntohs(ah->len);
+    if (actions_len < len) {
+        ds_put_format(string, "***truncated action %"PRIu16"***\n", type);
+        return -1;
+    }
+
+    if ((len % 8) != 0) {
+        ds_put_format(string, 
+                "***action %"PRIu16" length not a multiple of 8***\n",
+                type);
+        return -1;
+    }
+
+    if (type < ARRAY_SIZE(of_actions)) {
+        const struct openflow_action *act = &of_actions[type];
+        if ((len < act->min_size) || (len > act->max_size)) {
+            ds_put_format(string, 
+                    "***action %"PRIu16" wrong length: %"PRIu16"***\n", 
+                    type, len);
+            return -1;
+        }
+    }
+    
+    switch (type) {
+    case OFPAT_OUTPUT: {
+        struct ofp_action_output *oa = (struct ofp_action_output *)ah;
+        uint16_t port = ntohs(oa->port); 
+        if (port < OFPP_MAX) {
+            ds_put_format(string, "output:%"PRIu16, port);
+        } else {
+            ofp_print_port_name(string, port);
+            if (port == OFPP_CONTROLLER) {
+                if (oa->max_len) {
+                    ds_put_format(string, ":%"PRIu16, ntohs(oa->max_len));
+                } else {
+                    ds_put_cstr(string, ":all");
                 }
             }
         }
         break;
+    }
 
-    case OFPAT_SET_VLAN_VID:
-        ds_put_format(string, "mod_vlan_vid:%"PRIu16, ntohs(a->arg.vlan_vid));
+    case OFPAT_SET_VLAN_VID: {
+        struct ofp_action_vlan_vid *va = (struct ofp_action_vlan_vid *)ah;
+        ds_put_format(string, "mod_vlan_vid:%"PRIu16, ntohs(va->vlan_vid));
         break;
+    }
 
-    case OFPAT_SET_VLAN_PCP:
-        ds_put_format(string, "mod_vlan_pcp:%"PRIu8, a->arg.vlan_pcp);
+    case OFPAT_SET_VLAN_PCP: {
+        struct ofp_action_vlan_pcp *va = (struct ofp_action_vlan_pcp *)ah;
+        ds_put_format(string, "mod_vlan_pcp:%"PRIu8, va->vlan_pcp);
         break;
+    }
 
     case OFPAT_STRIP_VLAN:
         ds_put_cstr(string, "strip_vlan");
         break;
 
-    case OFPAT_SET_DL_SRC:
+    case OFPAT_SET_DL_SRC: {
+        struct ofp_action_dl_addr *da = (struct ofp_action_dl_addr *)ah;
         ds_put_format(string, "mod_dl_src:"ETH_ADDR_FMT, 
-                ETH_ADDR_ARGS(a->arg.dl_addr));
+                ETH_ADDR_ARGS(da->dl_addr));
         break;
+    }
 
-    case OFPAT_SET_DL_DST:
+    case OFPAT_SET_DL_DST: {
+        struct ofp_action_dl_addr *da = (struct ofp_action_dl_addr *)ah;
         ds_put_format(string, "mod_dl_dst:"ETH_ADDR_FMT, 
-                ETH_ADDR_ARGS(a->arg.dl_addr));
+                ETH_ADDR_ARGS(da->dl_addr));
         break;
+    }
 
-    case OFPAT_SET_NW_SRC:
-        ds_put_format(string, "mod_nw_src:"IP_FMT, IP_ARGS(&a->arg.nw_addr));
+    case OFPAT_SET_NW_SRC: {
+        struct ofp_action_nw_addr *na = (struct ofp_action_nw_addr *)ah;
+        ds_put_format(string, "mod_nw_src:"IP_FMT, IP_ARGS(na->nw_addr));
         break;
+    }
 
-    case OFPAT_SET_NW_DST:
-        ds_put_format(string, "mod_nw_dst:"IP_FMT, IP_ARGS(&a->arg.nw_addr));
+    case OFPAT_SET_NW_DST: {
+        struct ofp_action_nw_addr *na = (struct ofp_action_nw_addr *)ah;
+        ds_put_format(string, "mod_nw_dst:"IP_FMT, IP_ARGS(na->nw_addr));
         break;
+    }
 
-    case OFPAT_SET_TP_SRC:
-        ds_put_format(string, "mod_tp_src:%d", ntohs(a->arg.tp));
+    case OFPAT_SET_TP_SRC: {
+        struct ofp_action_tp_port *ta = (struct ofp_action_tp_port *)ah;
+        ds_put_format(string, "mod_tp_src:%d", ntohs(ta->tp_port));
         break;
+    }
 
-    case OFPAT_SET_TP_DST:
-        ds_put_format(string, "mod_tp_dst:%d", ntohs(a->arg.tp));
+    case OFPAT_SET_TP_DST: {
+        struct ofp_action_tp_port *ta = (struct ofp_action_tp_port *)ah;
+        ds_put_format(string, "mod_tp_dst:%d", ntohs(ta->tp_port));
         break;
+    }
+
+    case OFPAT_VENDOR: {
+        struct ofp_action_vendor_header *avh 
+                = (struct ofp_action_vendor_header *)ah;
+        if (len < sizeof *avh) {
+            ds_put_format(string, "***ofpat_vendor truncated***\n");
+            return -1;
+        }
+        ds_put_format(string, "vendor action:0x%x", ntohl(avh->vendor));
+        break;
+    }
 
     default:
-        ds_put_format(string, "(decoder %"PRIu16" not implemented)", 
-                ntohs(a->type));
+        ds_put_format(string, "(decoder %"PRIu16" not implemented)", type);
         break;
     }
+
+    return len;
 }
 
-static void ofp_print_actions(struct ds *string,
-                              const struct ofp_action actions[],
-                              size_t n_bytes) 
+static void 
+ofp_print_actions(struct ds *string, const struct ofp_action_header *action,
+                  size_t actions_len) 
 {
-    size_t i;
-    int n_actions = n_bytes / sizeof *actions;
+    uint8_t *p = (uint8_t *)action;
+    size_t len = 0;
 
-    ds_put_format(string, "action%s=", n_actions == 1 ? "" : "s");
-    for (i = 0; i < n_actions; i++) {
-        if (i) {
+    ds_put_cstr(string, "actions=");
+    while (actions_len > 0) {
+        if (len) {
             ds_put_cstr(string, ",");
         }
-        ofp_print_action(string, &actions[i]);
-    }
-    if (n_bytes % sizeof *actions) {
-        if (i) {
-            ds_put_cstr(string, ",");
+        len = ofp_print_action(string, (struct ofp_action_header *)p, 
+                actions_len);
+        if (len < 0) {
+            return;
         }
-        ds_put_cstr(string, ", ***trailing garbage***");
+        p += len;
+        actions_len -= len;
     }
 }
 
@@ -339,25 +448,24 @@ static void ofp_packet_out(struct ds *string, const void *oh, size_t len,
                            int verbosity) 
 {
     const struct ofp_packet_out *opo = oh;
-    int n_actions = ntohs(opo->n_actions);
-    int act_len = n_actions * sizeof opo->actions[0];
+    size_t actions_len = ntohs(opo->actions_len);
 
     ds_put_cstr(string, " in_port=");
     ofp_print_port_name(string, ntohs(opo->in_port));
 
-    ds_put_format(string, " n_actions=%d ", n_actions);
-    if (act_len > (ntohs(opo->header.length) - sizeof *opo)) {
-        ds_put_format(string, "***packet too short for number of actions***\n");
+    ds_put_format(string, " actions_len=%zu ", actions_len);
+    if (actions_len > (ntohs(opo->header.length) - sizeof *opo)) {
+        ds_put_format(string, "***packet too short for action length***\n");
         return;
     }
-    ofp_print_actions(string, opo->actions, act_len);
+    ofp_print_actions(string, opo->actions, actions_len);
 
     if (ntohl(opo->buffer_id) == UINT32_MAX) {
-        int data_len = len - sizeof *opo - act_len;
+        int data_len = len - sizeof *opo - actions_len;
         ds_put_format(string, " data_len=%d", data_len);
         if (verbosity > 0 && len > sizeof *opo) {
-            char *packet = ofp_packet_to_string(&opo->actions[n_actions], 
-                                                data_len, data_len);
+            char *packet = ofp_packet_to_string(
+                    (uint8_t *)opo->actions + actions_len, data_len, data_len);
             ds_put_char(string, '\n');
             ds_put_cstr(string, packet);
             free(packet);
@@ -712,6 +820,13 @@ static const struct error_type error_types[] = {
     ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_TYPE),
     ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_STAT),
     ERROR_CODE(OFPET_BAD_REQUEST, OFPBRC_BAD_VERSION),
+
+    ERROR_TYPE(OFPET_BAD_ACTION),
+    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE),
+    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_LEN),
+    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR),
+    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE),
+    ERROR_CODE(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT),
 };
 #define N_ERROR_TYPES ARRAY_SIZE(error_types)
 

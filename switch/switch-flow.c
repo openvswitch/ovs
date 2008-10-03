@@ -167,13 +167,13 @@ flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
     to->pad           = 0;
 }
 
-/* Allocates and returns a new flow with 'n_actions' action, using allocation
- * flags 'flags'.  Returns the new flow or a null pointer on failure. */
+/* Allocates and returns a new flow with room for 'actions_len' actions. 
+ * Returns the new flow or a null pointer on failure. */
 struct sw_flow *
-flow_alloc(int n_actions)
+flow_alloc(size_t actions_len)
 {
     struct sw_flow_actions *sfa;
-    size_t size = sizeof *sfa + (n_actions * sizeof sfa->actions[0]);
+    size_t size = sizeof *sfa + actions_len;
     struct sw_flow *flow = malloc(sizeof *flow);
     if (!flow)
         return NULL;
@@ -183,7 +183,7 @@ flow_alloc(int n_actions)
         free(flow);
         return NULL;
     }
-    sfa->n_actions = n_actions;
+    sfa->actions_len = actions_len;
     flow->sf_acts = sfa;
     return flow;
 }
@@ -201,18 +201,18 @@ flow_free(struct sw_flow *flow)
 
 /* Copies 'actions' into a newly allocated structure for use by 'flow'
  * and frees the structure that defined the previous actions. */
-void flow_replace_acts(struct sw_flow *flow, const struct ofp_action *actions,
-        int n_actions)
+void flow_replace_acts(struct sw_flow *flow, 
+        const struct ofp_action_header *actions, size_t actions_len)
 {
     struct sw_flow_actions *sfa;
-    int size = sizeof *sfa + (n_actions * sizeof sfa->actions[0]);
+    int size = sizeof *sfa + actions_len;
 
     sfa = malloc(size);
     if (unlikely(!sfa))
         return;
 
-    sfa->n_actions = n_actions;
-    memcpy(sfa->actions, actions, n_actions * sizeof sfa->actions[0]);
+    sfa->actions_len = actions_len;
+    memcpy(sfa->actions, actions, actions_len);
 
     free(flow->sf_acts);
     flow->sf_acts = sfa;

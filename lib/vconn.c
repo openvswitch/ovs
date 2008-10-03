@@ -759,10 +759,10 @@ update_openflow_length(struct ofpbuf *buffer)
 
 struct ofpbuf *
 make_add_flow(const struct flow *flow, uint32_t buffer_id,
-              uint16_t idle_timeout, size_t n_actions)
+              uint16_t idle_timeout, size_t actions_len)
 {
     struct ofp_flow_mod *ofm;
-    size_t size = sizeof *ofm + n_actions * sizeof ofm->actions[0];
+    size_t size = sizeof *ofm + actions_len;
     struct ofpbuf *out = ofpbuf_new(size);
     ofm = ofpbuf_put_uninit(out, size);
     memset(ofm, 0, size);
@@ -792,11 +792,14 @@ make_add_simple_flow(const struct flow *flow,
                      uint32_t buffer_id, uint16_t out_port,
                      uint16_t idle_timeout)
 {
-    struct ofpbuf *buffer = make_add_flow(flow, buffer_id, idle_timeout, 1);
+    struct ofp_action_output *oao;
+    struct ofpbuf *buffer = make_add_flow(flow, buffer_id, idle_timeout, 
+            sizeof *oao);
     struct ofp_flow_mod *ofm = buffer->data;
-    ofm->actions[0].type = htons(OFPAT_OUTPUT);
-    ofm->actions[0].arg.output.max_len = htons(0);
-    ofm->actions[0].arg.output.port = htons(out_port);
+    oao = (struct ofp_action_output *)&ofm->actions[0];
+    oao->type = htons(OFPAT_OUTPUT);
+    oao->len = htons(sizeof *oao);
+    oao->port = htons(out_port);
     return buffer;
 }
 
@@ -805,18 +808,24 @@ make_unbuffered_packet_out(const struct ofpbuf *packet,
                            uint16_t in_port, uint16_t out_port)
 {
     struct ofp_packet_out *opo;
-    size_t size = sizeof *opo + sizeof opo->actions[0];
+    struct ofp_action_output *oao;
+    size_t size = sizeof *opo + sizeof *oao;
     struct ofpbuf *out = ofpbuf_new(size + packet->size);
+
     opo = ofpbuf_put_uninit(out, size);
     memset(opo, 0, size);
     opo->header.version = OFP_VERSION;
     opo->header.type = OFPT_PACKET_OUT;
     opo->buffer_id = htonl(UINT32_MAX);
     opo->in_port = htons(in_port);
-    opo->n_actions = htons(1);
-    opo->actions[0].type = htons(OFPAT_OUTPUT);
-    opo->actions[0].arg.output.max_len = htons(0);
-    opo->actions[0].arg.output.port = htons(out_port);
+
+    oao = (struct ofp_action_output *)&opo->actions[0];
+    oao->type = htons(OFPAT_OUTPUT);
+    oao->len = htons(sizeof *oao);
+    oao->port = htons(out_port);
+
+    opo->actions_len = htons(sizeof *oao);
+
     ofpbuf_put(out, packet->data, packet->size);
     update_openflow_length(out);
     return out;
@@ -827,7 +836,8 @@ make_buffered_packet_out(uint32_t buffer_id,
                          uint16_t in_port, uint16_t out_port)
 {
     struct ofp_packet_out *opo;
-    size_t size = sizeof *opo + sizeof opo->actions[0];
+    struct ofp_action_output *oao;
+    size_t size = sizeof *opo + sizeof *oao;
     struct ofpbuf *out = ofpbuf_new(size);
     opo = ofpbuf_put_uninit(out, size);
     memset(opo, 0, size);
@@ -836,10 +846,13 @@ make_buffered_packet_out(uint32_t buffer_id,
     opo->header.length = htons(size);
     opo->buffer_id = htonl(buffer_id);
     opo->in_port = htons(in_port);
-    opo->n_actions = htons(1);
-    opo->actions[0].type = htons(OFPAT_OUTPUT);
-    opo->actions[0].arg.output.max_len = htons(0);
-    opo->actions[0].arg.output.port = htons(out_port);
+
+    oao = (struct ofp_action_output *)&opo->actions[0];
+    oao->type = htons(OFPAT_OUTPUT);
+    oao->len = htons(sizeof *oao);
+    oao->port = htons(out_port);
+
+    opo->actions_len = htons(sizeof *oao);
     return out;
 }
 

@@ -165,12 +165,13 @@ int flow_timeout(struct sw_flow *flow)
 }
 EXPORT_SYMBOL(flow_timeout);
 
-/* Allocates and returns a new flow with 'n_actions' action, using allocation
- * flags 'flags'.  Returns the new flow or a null pointer on failure. */
-struct sw_flow *flow_alloc(int n_actions, gfp_t flags)
+/* Allocates and returns a new flow with room for 'actions_len' actions, 
+ * using allocation flags 'flags'.  Returns the new flow or a null pointer 
+ * on failure. */
+struct sw_flow *flow_alloc(size_t actions_len, gfp_t flags)
 {
 	struct sw_flow_actions *sfa;
-	int size = sizeof *sfa + (n_actions * sizeof sfa->actions[0]);
+	size_t size = sizeof *sfa + actions_len;
 	struct sw_flow *flow = kmem_cache_alloc(flow_cache, flags);
 	if (unlikely(!flow))
 		return NULL;
@@ -180,7 +181,7 @@ struct sw_flow *flow_alloc(int n_actions, gfp_t flags)
 		kmem_cache_free(flow_cache, flow);
 		return NULL;
 	}
-	sfa->n_actions = n_actions;
+	sfa->actions_len = actions_len;
 	flow->sf_acts = sfa;
 
 	return flow;
@@ -229,19 +230,19 @@ EXPORT_SYMBOL(flow_deferred_free_acts);
 
 /* Copies 'actions' into a newly allocated structure for use by 'flow'
  * and safely frees the structure that defined the previous actions. */
-void flow_replace_acts(struct sw_flow *flow, const struct ofp_action *actions,
-			int n_actions)
+void flow_replace_acts(struct sw_flow *flow, 
+		const struct ofp_action_header *actions, size_t actions_len)
 {
 	struct sw_flow_actions *sfa;
 	struct sw_flow_actions *orig_sfa = flow->sf_acts;
-	int size = sizeof *sfa + (n_actions * sizeof sfa->actions[0]);
+	size_t size = sizeof *sfa + actions_len;
 
 	sfa = kmalloc(size, GFP_ATOMIC);
 	if (unlikely(!sfa))
 		return;
 
-	sfa->n_actions = n_actions;
-	memcpy(sfa->actions, actions, n_actions * sizeof sfa->actions[0]);
+	sfa->actions_len = actions_len;
+	memcpy(sfa->actions, actions, actions_len);
 
 	rcu_assign_pointer(flow->sf_acts, sfa);
 	flow_deferred_free_acts(orig_sfa);

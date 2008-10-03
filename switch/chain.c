@@ -124,14 +124,14 @@ chain_insert(struct sw_chain *chain, struct sw_flow *flow)
 int
 chain_modify(struct sw_chain *chain, const struct sw_flow_key *key,
         uint16_t priority, int strict,
-        const struct ofp_action *actions, int n_actions)
+        const struct ofp_action_header *actions, size_t actions_len)
 {
     int count = 0;
     int i;
 
     for (i = 0; i < chain->n_tables; i++) {
         struct sw_table *t = chain->tables[i];
-        count += t->modify(t, key, priority, strict, actions, n_actions);
+        count += t->modify(t, key, priority, strict, actions, actions_len);
     }
 
     return count;

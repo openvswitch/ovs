@@ -37,11 +37,12 @@
 #ifndef TABLE_H
 #define TABLE_H 1
 
+#include <stddef.h>
 #include <stdint.h>
 
 struct sw_flow;
 struct sw_flow_key;
-struct ofp_action;
+struct ofp_action_header;
 struct list;
 
 /* Table statistics. */
@@ -91,7 +92,7 @@ struct sw_table {
      * that were modified. */
     int (*modify)(struct sw_table *table, const struct sw_flow_key *key,
             uint16_t priority, int strict,
-            const struct ofp_action *actions, int n_actions);
+            const struct ofp_action_header *actions, size_t actions_len);
 
     /* Deletes from 'table' any and all flows that match 'key' from
      * 'table'.  If 'strict' set, wildcards must match.  Returns the 

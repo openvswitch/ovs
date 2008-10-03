@@ -50,8 +50,8 @@ struct sw_flow_key {
 };
 
 struct sw_flow_actions {
-    unsigned int n_actions;
-    struct ofp_action actions[0];
+    size_t actions_len;
+    struct ofp_action_header actions[0];
 };
 
 struct sw_flow {
@@ -78,11 +78,12 @@ int flow_matches_1wild(const struct sw_flow_key *, const struct sw_flow_key *);
 int flow_matches_2wild(const struct sw_flow_key *, const struct sw_flow_key *);
 int flow_matches_desc(const struct sw_flow_key *, const struct sw_flow_key *, 
                      int);
-struct sw_flow *flow_alloc(int n_actions);
+struct sw_flow *flow_alloc(size_t);
 void flow_free(struct sw_flow *);
 void flow_deferred_free(struct sw_flow *);
 void flow_deferred_free_acts(struct sw_flow_actions *);
-void flow_replace_acts(struct sw_flow *, const struct ofp_action *, int);
+void flow_replace_acts(struct sw_flow *, const struct ofp_action_header *, 
+        size_t);
 void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from);
 void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from);
 

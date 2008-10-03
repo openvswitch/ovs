@@ -8,6 +8,7 @@
 /compat24.c
 /crc32.c
 /crc_t.c
+/dp_act.c
 /dp_dev.c
 /dp_notify.c
 /flow.c
@@ -18,6 +19,7 @@
 /kernel.c
 /kthread.c
 /netlink.c
+/nx_act.c
 /random32.c
 /rcupdate.c
 /sched.c

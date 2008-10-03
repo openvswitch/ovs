@@ -63,7 +63,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x94
+#define OFP_VERSION   0x95
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -323,47 +323,109 @@ struct ofp_packet_in {
 OFP_ASSERT(sizeof(struct ofp_packet_in) == 20);
 
 enum ofp_action_type {
-    OFPAT_OUTPUT,            /* Output to switch port. */
-    OFPAT_SET_VLAN_VID,      /* Set the 802.1q VLAN id. */
-    OFPAT_SET_VLAN_PCP,      /* Set the 802.1q priority. */
-    OFPAT_STRIP_VLAN,        /* Strip the 802.1q header. */
-    OFPAT_SET_DL_SRC,        /* Ethernet source address. */
-    OFPAT_SET_DL_DST,        /* Ethernet destination address. */
-    OFPAT_SET_NW_SRC,        /* IP source address. */
-    OFPAT_SET_NW_DST,        /* IP destination address. */
-    OFPAT_SET_TP_SRC,        /* TCP/UDP source port. */
-    OFPAT_SET_TP_DST         /* TCP/UDP destination port. */
+    OFPAT_OUTPUT,           /* Output to switch port. */
+    OFPAT_SET_VLAN_VID,     /* Set the 802.1q VLAN id. */
+    OFPAT_SET_VLAN_PCP,     /* Set the 802.1q priority. */
+    OFPAT_STRIP_VLAN,       /* Strip the 802.1q header. */
+    OFPAT_SET_DL_SRC,       /* Ethernet source address. */
+    OFPAT_SET_DL_DST,       /* Ethernet destination address. */
+    OFPAT_SET_NW_SRC,       /* IP source address. */
+    OFPAT_SET_NW_DST,       /* IP destination address. */
+    OFPAT_SET_TP_SRC,       /* TCP/UDP source port. */
+    OFPAT_SET_TP_DST,       /* TCP/UDP destination port. */
+    OFPAT_VENDOR = 0xffff
 };
 
-/* An output action sends packets out 'port'.  When the 'port' is the
- * OFPP_CONTROLLER, 'max_len' indicates the max number of bytes to
- * send.  A 'max_len' of zero means the entire packet should be sent. */
+/* Action structure for OFPAT_OUTPUT, which sends packets out 'port'.  
+ * When the 'port' is the OFPP_CONTROLLER, 'max_len' indicates the max 
+ * number of bytes to send.  A 'max_len' of zero means the entire packet 
+ * should be sent. */
 struct ofp_action_output {
-    uint16_t max_len;
-    uint16_t port;
+    uint16_t type;                  /* OFPAT_OUTPUT. */
+    uint16_t len;                   /* Length is 8. */
+    uint16_t port;                  /* Ouptut port. */
+    uint16_t max_len;               /* Max length to send to controller. */
 };
-OFP_ASSERT(sizeof(struct ofp_action_output) == 4);
+OFP_ASSERT(sizeof(struct ofp_action_output) == 8);
 
-struct ofp_action {
-    uint16_t type;                       /* One of OFPAT_* */
-    union {
-        struct ofp_action_output output; /* OFPAT_OUTPUT: output struct. */
-        uint8_t vlan_pcp;                /* OFPAT_SET_VLAN_PCP: priority. */
-        uint16_t vlan_vid;               /* OFPAT_SET_VLAN_VID: VLAN id. */
-        uint8_t  dl_addr[OFP_ETH_ALEN];  /* OFPAT_SET_DL_SRC/DST */
-        uint32_t nw_addr OFP_PACKED;     /* OFPAT_SET_NW_SRC/DST */
-        uint16_t tp;                     /* OFPAT_SET_TP_SRC/DST */
-    } arg;
+/* The VLAN id is 12 bits, so we can use the entire 16 bits to indicate
+ * special conditions.  All ones is used to match that no VLAN id was
+ * set. */
+#define OFP_VLAN_NONE      0xffff
+
+/* Action structure for OFPAT_SET_VLAN_VID. */
+struct ofp_action_vlan_vid {
+    uint16_t type;                  /* OFPAT_SET_VLAN_VID. */
+    uint16_t len;                   /* Length is 8. */
+    uint16_t vlan_vid;              /* VLAN id. */
+    uint8_t pad[2];
 };
-OFP_ASSERT(sizeof(struct ofp_action) == 8);
+OFP_ASSERT(sizeof(struct ofp_action_vlan_vid) == 8);
+
+/* Action structure for OFPAT_SET_VLAN_PCP. */
+struct ofp_action_vlan_pcp {
+    uint16_t type;                  /* OFPAT_SET_VLAN_PCP. */
+    uint16_t len;                   /* Length is 8. */
+    uint8_t vlan_pcp;               /* VLAN priority. */
+    uint8_t pad[3];
+};
+OFP_ASSERT(sizeof(struct ofp_action_vlan_vid) == 8);
+
+/* Action structure for OFPAT_SET_DL_SRC/DST. */
+struct ofp_action_dl_addr {
+    uint16_t type;                  /* OFPAT_SET_DL_SRC/DST. */
+    uint16_t len;                   /* Length is 16. */
+    uint8_t dl_addr[OFP_ETH_ALEN];  /* Ethernet address. */
+    uint8_t pad[6];
+};
+OFP_ASSERT(sizeof(struct ofp_action_dl_addr) == 16);
+
+/* Action structure for OFPAT_SET_NW_SRC/DST. */
+struct ofp_action_nw_addr {
+    uint16_t type;                  /* OFPAT_SET_TW_SRC/DST. */
+    uint16_t len;                   /* Length is 8. */
+    uint32_t nw_addr;               /* IP address. */
+};
+OFP_ASSERT(sizeof(struct ofp_action_nw_addr) == 8);
+
+/* Action structure for OFPAT_SET_TP_SRC/DST. */
+struct ofp_action_tp_port {
+    uint16_t type;                  /* OFPAT_SET_TP_SRC/DST. */
+    uint16_t len;                   /* Length is 8. */
+    uint16_t tp_port;               /* TCP/UDP port. */
+    uint8_t pad[2];
+};
+OFP_ASSERT(sizeof(struct ofp_action_tp_port) == 8);
+
+/* Action header for OFPAT_VENDOR. The rest of the body is vendor-defined. */
+struct ofp_action_vendor_header {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 8. */
+    uint32_t vendor;                /* Vendor ID, which takes the same form 
+                                       as in "struct ofp_vendor". */ 
+};
+OFP_ASSERT(sizeof(struct ofp_action_vendor_header) == 8);
+
+/* Action header that is common to all actions.  The length includes the 
+ * header and any padding used to make the action 64-bit aligned.  
+ * NB: The length of an action *must* always be a multiple of eight. */
+struct ofp_action_header {
+    uint16_t type;                  /* One of OFPAT_*. */
+    uint16_t len;                   /* Length of action, including this 
+                                       header.  This is the length of action, 
+                                       including any padding to make it 
+                                       64-bit aligned. */
+    uint8_t pad[4];
+};
+OFP_ASSERT(sizeof(struct ofp_action_header) == 8);
 
 /* Send packet (controller -> datapath). */
 struct ofp_packet_out {
     struct ofp_header header;
     uint32_t buffer_id;           /* ID assigned by datapath (-1 if none). */
     uint16_t in_port;             /* Packet's input port (OFPP_NONE if none). */
-    uint16_t n_actions;           /* Number of actions. */
-    struct ofp_action actions[0]; /* Actions. */
+    uint16_t actions_len;          /* Size of action array in bytes. */
+    struct ofp_action_header actions[0]; /* Actions. */
     /* uint8_t data[0]; */        /* Packet data.  The length is inferred 
                                      from the length field in the header.  
                                      (Only meaningful if buffer_id == -1.) */
@@ -461,8 +523,9 @@ struct ofp_flow_mod {
     uint32_t buffer_id;           /* Buffered packet to apply to (or -1). 
                                      Not meaningful for OFPFC_DELETE*. */
     uint32_t reserved;            /* Reserved for future use. */
-    struct ofp_action actions[0]; /* The number of actions is inferred from
-                                     the length field in the header. */
+    struct ofp_action_header actions[0]; /* The action length is inferred 
+                                            from the length field in the 
+                                            header. */
 };
 OFP_ASSERT(sizeof(struct ofp_flow_mod) == 60);
 
@@ -493,7 +556,8 @@ OFP_ASSERT(sizeof(struct ofp_flow_expired) == 72);
  * be added). */
 enum ofp_error_type {
     OFPET_HELLO_FAILED,         /* Hello protocol failed. */
-    OFPET_BAD_REQUEST           /* Request was not understood. */
+    OFPET_BAD_REQUEST,          /* Request was not understood. */
+    OFPET_BAD_ACTION            /* Error in action description. */
 };
 
 /* ofp_error_msg 'code' values for OFPET_HELLO_FAILED.  'data' contains an
@@ -510,6 +574,16 @@ enum ofp_bad_request_code {
     OFPBRC_BAD_STAT,            /* ofp_stats_request.type not supported. */
     OFPBRC_BAD_VENDOR           /* Vendor not supported (in ofp_vendor or
                                  * ofp_stats_request or ofp_stats_reply). */
+};
+
+/* ofp_error_msg 'code' values for OFPET_BAD_ACTION.  'data' contains at least 
+ * the first 64 bytes of the failed request. */
+enum ofp_bad_action_code {
+    OFPBAC_BAD_TYPE,           /* Unknown action type. */
+    OFPBAC_BAD_LEN,            /* Length problem in actions. */
+    OFPBAC_BAD_VENDOR,         /* Unknown vendor id specified. */
+    OFPBAC_BAD_VENDOR_TYPE,    /* Unknown action type for vendor id. */
+    OFPBAC_BAD_OUT_PORT        /* Problem validating output action. */
 };
 
 /* OFPT_ERROR: Error message (datapath -> controller). */
@@ -611,7 +685,7 @@ struct ofp_flow_stats {
     uint16_t pad2[3];         /* Pad to 64 bits. */
     uint64_t packet_count;    /* Number of packets in flow. */
     uint64_t byte_count;      /* Number of bytes in flow. */
-    struct ofp_action actions[0]; /* Actions. */
+    struct ofp_action_header actions[0]; /* Actions. */
 };
 OFP_ASSERT(sizeof(struct ofp_flow_stats) == 72);
 

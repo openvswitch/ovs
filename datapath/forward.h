@@ -7,7 +7,6 @@
 
 struct sk_buff;
 struct sw_chain;
-struct ofp_action;
 struct sender;
 
 /* Buffers are identified to userspace by a 31-bit opaque ID.  We divide the ID
@@ -33,12 +32,5 @@ uint32_t fwd_save_skb(struct sk_buff *skb);
 void fwd_discard_all(void);
 
 void fwd_exit(void);
-
-void execute_actions(struct datapath *, struct sk_buff *,
-		    struct sw_flow_key *, 
-		    const struct ofp_action *, int n_actions,
-		    int ignore_no_fwd);
-struct sk_buff *execute_setter(struct sk_buff *, uint16_t,
-			struct sw_flow_key *, const struct ofp_action *);
 
 #endif /* forward.h */

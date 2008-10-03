@@ -74,7 +74,7 @@ static int table_linear_insert(struct sw_table *swt, struct sw_flow *flow)
 
 static int table_linear_modify(struct sw_table *swt,
 				const struct sw_flow_key *key, uint16_t priority, int strict,
-				const struct ofp_action *actions, int n_actions)
+				const struct ofp_action_header *actions, size_t actions_len)
 {
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
 	struct sw_flow *flow;
@@ -83,7 +83,7 @@ static int table_linear_modify(struct sw_table *swt,
 	list_for_each_entry (flow, &tl->flows, node) {
 		if (flow_matches_desc(&flow->key, key, strict)
 				&& (!strict || (flow->priority == priority))) {
-			flow_replace_acts(flow, actions, n_actions);
+			flow_replace_acts(flow, actions, actions_len);
 			count++;
 		}
 	}

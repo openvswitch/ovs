@@ -69,7 +69,9 @@
 #define THIS_MODULE VLM_dpctl
 
 #define DEFAULT_IDLE_TIMEOUT 60
-#define MAX_ADD_ACTS 5
+
+/* Maximum size of action buffer for adding and modify flows */
+#define MAX_ACT_LEN 60
 
 #define MOD_PORT_CMD_UP      "up"
 #define MOD_PORT_CMD_DOWN    "down"
@@ -564,19 +566,22 @@ str_to_ip(const char *str_, uint32_t *ip)
 }
 
 static void
-str_to_action(char *str, struct ofp_action *action, int *n_actions) 
+str_to_action(char *str, struct ofp_action_header *actions, 
+        size_t *actions_len) 
 {
-    uint16_t port;
-    int i;
-    int max_actions = *n_actions;
+    size_t len = *actions_len;
     char *act, *arg;
     char *saveptr = NULL;
+    uint8_t *p = (uint8_t *)actions;
     
-    memset(action, 0, sizeof(*action) * max_actions);
-    for (i=0, act = strtok_r(str, ", \t\r\n", &saveptr); 
-         i<max_actions && act;
-         i++, act = strtok_r(NULL, ", \t\r\n", &saveptr)) 
+    memset(actions, 0, len);
+    for (act = strtok_r(str, ", \t\r\n", &saveptr); 
+         (len >= sizeof(struct ofp_action_header)) && act;
+         act = strtok_r(NULL, ", \t\r\n", &saveptr)) 
     {
+        uint16_t port;
+        struct ofp_action_header *ah = (struct ofp_action_header *)p;
+        int act_len = sizeof *ah;
         port = OFPP_MAX;
 
         /* Arguments are separated by colons */
@@ -587,13 +592,27 @@ str_to_action(char *str, struct ofp_action *action, int *n_actions)
         } 
 
         if (!strcasecmp(act, "mod_vlan_vid")) {
-            action[i].type = htons(OFPAT_SET_VLAN_VID);
-            action[i].arg.vlan_vid = htons(str_to_int(arg));
+            struct ofp_action_vlan_vid *va = (struct ofp_action_vlan_vid *)ah;
+
+            if (len < sizeof *va) {
+                ofp_fatal(0, "Insufficient room for vlan vid action\n");
+            }
+
+            act_len = sizeof *va;
+            va->type = htons(OFPAT_SET_VLAN_VID);
+            va->vlan_vid = htons(str_to_int(arg));
         } else if (!strcasecmp(act, "mod_vlan_pcp")) {
-            action[i].type = htons(OFPAT_SET_VLAN_PCP);
-            action[i].arg.vlan_pcp = str_to_int(arg);
+            struct ofp_action_vlan_pcp *va = (struct ofp_action_vlan_pcp *)ah;
+
+            if (len < sizeof *va) {
+                ofp_fatal(0, "Insufficient room for vlan pcp action\n");
+            }
+
+            act_len = sizeof *va;
+            va->type = htons(OFPAT_SET_VLAN_PCP);
+            va->vlan_pcp = str_to_int(arg);
         } else if (!strcasecmp(act, "strip_vlan")) {
-            action[i].type = htons(OFPAT_STRIP_VLAN);
+            ah->type = htons(OFPAT_STRIP_VLAN);
         } else if (!strcasecmp(act, "output")) {
             port = str_to_int(arg);
         } else if (!strcasecmp(act, "TABLE")) {
@@ -605,13 +624,20 @@ str_to_action(char *str, struct ofp_action *action, int *n_actions)
         } else if (!strcasecmp(act, "ALL")) {
             port = OFPP_ALL;
         } else if (!strcasecmp(act, "CONTROLLER")) {
-            port = OFPP_CONTROLLER;
-            if (arg) {
-                if (!strcasecmp(arg, "all")) {
-                    action[i].arg.output.max_len= htons(0);
-                } else {
-                    action[i].arg.output.max_len= htons(str_to_int(arg));
-                }
+            struct ofp_action_output *ca = (struct ofp_action_output *)ah;
+
+            if (act_len < sizeof *ca) {
+                ofp_fatal(0, "Insufficient room for controller action\n");
+            }
+
+            act_len = sizeof *ca;
+            ca->type = htons(OFPAT_OUTPUT);
+            ca->port = htons(OFPP_CONTROLLER);
+
+            /* Unless a numeric argument is specified, we send the whole
+             * packet to the controller. */
+            if (arg && (strspn(act, "0123456789") == strlen(act))) {
+               ca->max_len= htons(str_to_int(arg));
             }
         } else if (!strcasecmp(act, "LOCAL")) {
             port = OFPP_LOCAL;
@@ -622,12 +648,23 @@ str_to_action(char *str, struct ofp_action *action, int *n_actions)
         }
 
         if (port != OFPP_MAX) {
-            action[i].type = htons(OFPAT_OUTPUT);
-            action[i].arg.output.port = htons(port);
+            struct ofp_action_output *oa = (struct ofp_action_output *)p;
+
+            if (act_len < sizeof *oa) {
+                ofp_fatal(0, "Insufficient room for output action\n");
+            }
+
+            act_len = sizeof *oa;
+            oa->type = htons(OFPAT_OUTPUT);
+            oa->port = htons(port);
         }
+
+        ah->len = htons(act_len);
+        p += act_len;
+        len -= act_len;
     }
 
-    *n_actions = i;
+    *actions_len -= len;
 }
 
 struct protocol {
@@ -697,8 +734,9 @@ parse_field(const char *name, const struct field **f_out)
 
 static void
 str_to_flow(char *string, struct ofp_match *match, 
-            struct ofp_action *action, int *n_actions, uint8_t *table_idx, 
-            uint16_t *priority, uint16_t *idle_timeout, uint16_t *hard_timeout)
+            struct ofp_action_header *actions, size_t *actions_len, 
+            uint8_t *table_idx, uint16_t *priority, 
+            uint16_t *idle_timeout, uint16_t *hard_timeout)
 {
 
     char *name;
@@ -716,7 +754,7 @@ str_to_flow(char *string, struct ofp_match *match,
     if (hard_timeout) {
         *hard_timeout = OFP_FLOW_PERMANENT;
     }
-    if (action) {
+    if (actions) {
         char *act_str = strstr(string, "action");
         if (!act_str) {
             ofp_fatal(0, "must specify an action");
@@ -730,7 +768,7 @@ str_to_flow(char *string, struct ofp_match *match,
 
         act_str++;
 
-        str_to_action(act_str, action, n_actions);
+        str_to_action(act_str, actions, actions_len);
     }
     memset(match, 0, sizeof *match);
     wildcards = OFPFW_ALL;
@@ -822,12 +860,12 @@ static void do_add_flow(const struct settings *s, int argc, char *argv[])
     struct ofp_flow_mod *ofm;
     uint16_t priority, idle_timeout, hard_timeout;
     size_t size;
-    int n_actions = MAX_ADD_ACTS;
+    size_t actions_len = MAX_ACT_LEN;
 
     /* Parse and send. */
-    size = sizeof *ofm + (sizeof ofm->actions[0] * MAX_ADD_ACTS);
+    size = sizeof *ofm + actions_len;
     ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
-    str_to_flow(argv[2], &ofm->match, &ofm->actions[0], &n_actions, 
+    str_to_flow(argv[2], &ofm->match, &ofm->actions[0], &actions_len, 
                 NULL, &priority, &idle_timeout, &hard_timeout);
     ofm->command = htons(OFPFC_ADD);
     ofm->idle_timeout = htons(idle_timeout);
@@ -837,7 +875,7 @@ static void do_add_flow(const struct settings *s, int argc, char *argv[])
     ofm->reserved = htonl(0);
 
     /* xxx Should we use the ofpbuf library? */
-    buffer->size -= (MAX_ADD_ACTS - n_actions) * sizeof ofm->actions[0];
+    buffer->size -= MAX_ACT_LEN - actions_len;
 
     open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, buffer);
@@ -861,7 +899,7 @@ static void do_add_flows(const struct settings *s, int argc, char *argv[])
         struct ofp_flow_mod *ofm;
         uint16_t priority, idle_timeout, hard_timeout;
         size_t size;
-        int n_actions = MAX_ADD_ACTS;
+        size_t actions_len = MAX_ACT_LEN;
 
         char *comment;
 
@@ -877,9 +915,9 @@ static void do_add_flows(const struct settings *s, int argc, char *argv[])
         }
 
         /* Parse and send. */
-        size = sizeof *ofm + (sizeof ofm->actions[0] * MAX_ADD_ACTS);
+        size = sizeof *ofm + actions_len;
         ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
-        str_to_flow(line, &ofm->match, &ofm->actions[0], &n_actions, 
+        str_to_flow(line, &ofm->match, &ofm->actions[0], &actions_len, 
                     NULL, &priority, &idle_timeout, &hard_timeout);
         ofm->command = htons(OFPFC_ADD);
         ofm->idle_timeout = htons(idle_timeout);
@@ -889,7 +927,7 @@ static void do_add_flows(const struct settings *s, int argc, char *argv[])
         ofm->reserved = htonl(0);
 
         /* xxx Should we use the ofpbuf library? */
-        buffer->size -= (MAX_ADD_ACTS - n_actions) * sizeof ofm->actions[0];
+        buffer->size -= MAX_ACT_LEN - actions_len;
 
         send_openflow_buffer(vconn, buffer);
     }
@@ -904,12 +942,12 @@ static void do_mod_flows(const struct settings *s, int argc, char *argv[])
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
     size_t size;
-    int n_actions = MAX_ADD_ACTS;
+    size_t actions_len = MAX_ACT_LEN;
 
     /* Parse and send. */
-    size = sizeof *ofm + (sizeof ofm->actions[0] * MAX_ADD_ACTS);
+    size = sizeof *ofm + actions_len;
     ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
-    str_to_flow(argv[2], &ofm->match, &ofm->actions[0], &n_actions, 
+    str_to_flow(argv[2], &ofm->match, &ofm->actions[0], &actions_len, 
                 NULL, &priority, &idle_timeout, &hard_timeout);
     if (s->strict) {
         ofm->command = htons(OFPFC_MODIFY_STRICT);
@@ -923,7 +961,7 @@ static void do_mod_flows(const struct settings *s, int argc, char *argv[])
     ofm->reserved = htonl(0);
 
     /* xxx Should we use the buffer library? */
-    buffer->size -= (MAX_ADD_ACTS - n_actions) * sizeof ofm->actions[0];
+    buffer->size -= MAX_ACT_LEN - actions_len;
 
     open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, buffer);

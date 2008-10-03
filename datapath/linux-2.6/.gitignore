@@ -5,6 +5,7 @@
 /crc32.c
 /crc_t.c
 /datapath.c
+/dp_act.c
 /dp_dev.c
 /dp_notify.c
 /flow.c
@@ -12,6 +13,7 @@
 /forward_t.c
 /genetlink.c
 /hwtable_dummy.c
+/nx_act.c
 /random32.c
 /table-hash.c
 /table-linear.c

@@ -54,6 +54,7 @@
 #include "timeval.h"
 #include "vconn.h"
 #include "xtoxll.h"
+#include "dp_act.h"
 
 #define THIS_MODULE VLM_datapath
 #include "vlog.h"
@@ -144,27 +145,12 @@ static void remote_run(struct datapath *, struct remote *);
 static void remote_wait(struct remote *);
 static void remote_destroy(struct remote *);
 
-void dp_output_port(struct datapath *, struct ofpbuf *,
-                    int in_port, int out_port, bool ignore_no_fwd);
 void dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm);
-void dp_output_control(struct datapath *, struct ofpbuf *, int in_port,
-                       size_t max_len, int reason);
 static void send_flow_expired(struct datapath *, struct sw_flow *,
                               enum ofp_flow_expired_reason);
 static int update_port_status(struct sw_port *p);
 static void send_port_status(struct sw_port *p, uint8_t status);
 static void del_switch_port(struct sw_port *p);
-static void execute_actions(struct datapath *, struct ofpbuf *,
-                            int in_port, struct sw_flow_key *,
-                            const struct ofp_action *, int n_actions,
-                            bool ignore_no_fwd);
-static void modify_vlan_tci(struct ofpbuf *buffer, struct sw_flow_key *key,
-                            uint16_t tci, uint16_t mask);
-static void strip_vlan(struct ofpbuf *buffer);
-static void modify_nh(struct ofpbuf *buffer, uint16_t eth_proto,
-                      uint8_t nw_proto, const struct ofp_action *a);
-static void modify_th(struct ofpbuf *buffer, uint16_t eth_proto,
-                          uint8_t nw_proto, const struct ofp_action *a);
 
 /* Buffers are identified to userspace by a 31-bit opaque ID.  We divide the ID
  * into a buffer number (low bits) and a cookie (high bits).  The buffer number
@@ -815,7 +801,7 @@ fill_flow_stats(struct ofpbuf *buffer, struct sw_flow *flow,
                 int table_idx, time_t now)
 {
     struct ofp_flow_stats *ofs;
-    int length = sizeof *ofs + sizeof *ofs->actions * flow->sf_acts->n_actions;
+    int length = sizeof *ofs + flow->sf_acts->actions_len;
     ofs = ofpbuf_put_uninit(buffer, length);
     ofs->length          = htons(length);
     ofs->table_id        = table_idx;
@@ -839,8 +825,7 @@ fill_flow_stats(struct ofpbuf *buffer, struct sw_flow *flow,
     memset(ofs->pad2, 0, sizeof ofs->pad2);
     ofs->packet_count    = htonll(flow->packet_count);
     ofs->byte_count      = htonll(flow->byte_count);
-    memcpy(ofs->actions, flow->sf_acts->actions,
-           sizeof *ofs->actions * flow->sf_acts->n_actions);
+    memcpy(ofs->actions, flow->sf_acts->actions, flow->sf_acts->actions_len);
 }
 
 
@@ -871,9 +856,8 @@ int run_flow_through_tables(struct datapath *dp, struct ofpbuf *buffer,
     flow = chain_lookup(dp->chain, &key);
     if (flow != NULL) {
         flow_used(flow, buffer);
-        execute_actions(dp, buffer, port_no(dp, p),
-                        &key, flow->sf_acts->actions, 
-                        flow->sf_acts->n_actions, false);
+        execute_actions(dp, buffer, &key, flow->sf_acts->actions, 
+                        flow->sf_acts->actions_len, false);
         return 0;
     } else {
         return -ESRCH;
@@ -889,196 +873,6 @@ void fwd_port_input(struct datapath *dp, struct ofpbuf *buffer,
     if (run_flow_through_tables(dp, buffer, p)) {
         dp_output_control(dp, buffer, port_no(dp, p),
                           dp->miss_send_len, OFPR_NO_MATCH);
-    }
-}
-
-static void
-do_output(struct datapath *dp, struct ofpbuf *buffer, int in_port,
-          size_t max_len, int out_port, bool ignore_no_fwd)
-{
-    if (out_port != OFPP_CONTROLLER) {
-        dp_output_port(dp, buffer, in_port, out_port, ignore_no_fwd);
-    } else {
-        dp_output_control(dp, buffer, in_port, max_len, OFPR_ACTION);
-    }
-}
-
-static void
-execute_actions(struct datapath *dp, struct ofpbuf *buffer,
-                int in_port, struct sw_flow_key *key,
-                const struct ofp_action *actions, int n_actions,
-                bool ignore_no_fwd)
-{
-    /* Every output action needs a separate clone of 'buffer', but the common
-     * case is just a single output action, so that doing a clone and then
-     * freeing the original buffer is wasteful.  So the following code is
-     * slightly obscure just to avoid that. */
-    int prev_port;
-    size_t max_len=0;        /* Initialze to make compiler happy */
-    uint16_t eth_proto;
-    int i;
-
-    prev_port = -1;
-    eth_proto = ntohs(key->flow.dl_type);
-
-    for (i = 0; i < n_actions; i++) {
-        const struct ofp_action *a = &actions[i];
-        struct eth_header *eh = buffer->l2;
-
-        if (prev_port != -1) {
-            do_output(dp, ofpbuf_clone(buffer), in_port, max_len, prev_port,
-                      ignore_no_fwd);
-            prev_port = -1;
-        }
-
-        switch (ntohs(a->type)) {
-        case OFPAT_OUTPUT:
-            prev_port = ntohs(a->arg.output.port);
-            max_len = ntohs(a->arg.output.max_len);
-            break;
-
-        case OFPAT_SET_VLAN_VID: {
-            uint16_t tci = ntohs(a->arg.vlan_vid);
-            modify_vlan_tci(buffer, key, tci, VLAN_VID_MASK);
-            break;
-        }
-
-        case OFPAT_SET_VLAN_PCP: {
-            uint16_t tci = (uint16_t)a->arg.vlan_pcp << 13;
-            modify_vlan_tci(buffer, key, tci, VLAN_PCP_MASK);
-            break;
-        }
-
-        case OFPAT_STRIP_VLAN:
-            strip_vlan(buffer);
-            key->flow.dl_vlan = htons(OFP_VLAN_NONE);
-            break;
-
-        case OFPAT_SET_DL_SRC:
-            memcpy(eh->eth_src, a->arg.dl_addr, sizeof eh->eth_src);
-            break;
-
-        case OFPAT_SET_DL_DST:
-            memcpy(eh->eth_dst, a->arg.dl_addr, sizeof eh->eth_dst);
-            break;
-
-        case OFPAT_SET_NW_SRC:
-        case OFPAT_SET_NW_DST:
-            modify_nh(buffer, eth_proto, key->flow.nw_proto, a);
-            break;
-
-        case OFPAT_SET_TP_SRC:
-        case OFPAT_SET_TP_DST:
-            modify_th(buffer, eth_proto, key->flow.nw_proto, a);
-            break;
-
-        default:
-            NOT_REACHED();
-        }
-    }
-    if (prev_port != -1)
-        do_output(dp, buffer, in_port, max_len, prev_port, ignore_no_fwd);
-    else
-        ofpbuf_delete(buffer);
-}
-
-static void modify_nh(struct ofpbuf *buffer, uint16_t eth_proto,
-                      uint8_t nw_proto, const struct ofp_action *a)
-{
-    if (eth_proto == ETH_TYPE_IP) {
-        struct ip_header *nh = buffer->l3;
-        uint32_t new, *field;
-
-        new = a->arg.nw_addr;
-        field = a->type == OFPAT_SET_NW_SRC ? &nh->ip_src : &nh->ip_dst;
-        if (nw_proto == IP_TYPE_TCP) {
-            struct tcp_header *th = buffer->l4;
-            th->tcp_csum = recalc_csum32(th->tcp_csum, *field, new);
-        } else if (nw_proto == IP_TYPE_UDP) {
-            struct udp_header *th = buffer->l4;
-            if (th->udp_csum) {
-                th->udp_csum = recalc_csum32(th->udp_csum, *field, new);
-                if (!th->udp_csum) {
-                    th->udp_csum = 0xffff;
-                }
-            }
-        }
-        nh->ip_csum = recalc_csum32(nh->ip_csum, *field, new);
-        *field = new;
-    }
-}
-
-static void modify_th(struct ofpbuf *buffer, uint16_t eth_proto,
-                      uint8_t nw_proto, const struct ofp_action *a)
-{
-    if (eth_proto == ETH_TYPE_IP) {
-        uint16_t new, *field;
-
-        new = a->arg.tp;
-
-        if (nw_proto == IP_TYPE_TCP) {
-            struct tcp_header *th = buffer->l4;
-            field = a->type == OFPAT_SET_TP_SRC ? &th->tcp_src : &th->tcp_dst;
-            th->tcp_csum = recalc_csum16(th->tcp_csum, *field, new);
-            *field = new;
-        } else if (nw_proto == IP_TYPE_UDP) {
-            struct udp_header *th = buffer->l4;
-            field = a->type == OFPAT_SET_TP_SRC ? &th->udp_src : &th->udp_dst;
-            th->udp_csum = recalc_csum16(th->udp_csum, *field, new);
-            *field = new;
-        }
-    }
-}
-
-/* Modify vlan tag control information (TCI).  Only sets the TCI bits
- * indicated by 'mask'.  If no vlan tag is present, one is added.
- */
-static void
-modify_vlan_tci(struct ofpbuf *buffer, struct sw_flow_key *key, 
-        uint16_t tci, uint16_t mask)
-{
-    struct vlan_eth_header *veh;
-
-    if (key->flow.dl_vlan != htons(OFP_VLAN_NONE)) {
-        /* Modify vlan id, but maintain other TCI values */
-        veh = buffer->l2;
-        veh->veth_tci &= ~htons(mask);
-        veh->veth_tci |= htons(tci);
-    } else {
-        /* Insert new vlan id. */
-        struct eth_header *eh = buffer->l2;
-        struct vlan_eth_header tmp;
-        memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
-        memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);
-        tmp.veth_type = htons(ETH_TYPE_VLAN);
-        tmp.veth_tci = htons(tci);
-        tmp.veth_next_type = eh->eth_type;
-        
-        veh = ofpbuf_push_uninit(buffer, VLAN_HEADER_LEN);
-        memcpy(veh, &tmp, sizeof tmp);
-        buffer->l2 = (char*)buffer->l2 - VLAN_HEADER_LEN;
-    }
-
-    key->flow.dl_vlan = veh->veth_tci & htons(VLAN_VID_MASK);
-}
-
-/* Remove an existing vlan header if it exists. */
-static void
-strip_vlan(struct ofpbuf *buffer)
-{
-    struct vlan_eth_header *veh = buffer->l2;
-
-    if (veh->veth_type == htons(ETH_TYPE_VLAN)) {
-        struct eth_header tmp;
-        
-        memcpy(tmp.eth_dst, veh->veth_dst, ETH_ADDR_LEN);
-        memcpy(tmp.eth_src, veh->veth_src, ETH_ADDR_LEN);
-        tmp.eth_type = veh->veth_next_type;
-        
-        buffer->size -= VLAN_HEADER_LEN;
-        buffer->data = (char*)buffer->data + VLAN_HEADER_LEN;
-        buffer->l2 = (char*)buffer->l2 + VLAN_HEADER_LEN;
-        memcpy(buffer->data, &tmp, sizeof tmp);
     }
 }
 
@@ -1124,25 +918,25 @@ recv_set_config(struct datapath *dp, const struct sender *sender UNUSED,
 }
 
 static int
-recv_packet_out(struct datapath *dp, const struct sender *sender UNUSED,
+recv_packet_out(struct datapath *dp, const struct sender *sender,
                 const void *msg)
 {
     const struct ofp_packet_out *opo = msg;
     struct sw_flow_key key;
+    uint16_t v_code;
     struct ofpbuf *buffer;
-    int n_actions = ntohs(opo->n_actions);
-    int act_len = n_actions * sizeof opo->actions[0];
+    size_t actions_len = ntohs(opo->actions_len);
 
-    if (act_len > (ntohs(opo->header.length) - sizeof *opo)) {
+    if (actions_len > (ntohs(opo->header.length) - sizeof *opo)) {
         VLOG_DBG_RL(&rl, "message too short for number of actions");
         return -EINVAL;
     }
 
     if (ntohl(opo->buffer_id) == (uint32_t) -1) {
         /* FIXME: can we avoid copying data here? */
-        int data_len = ntohs(opo->header.length) - sizeof *opo - act_len;
+        int data_len = ntohs(opo->header.length) - sizeof *opo - actions_len;
         buffer = ofpbuf_new(data_len);
-        ofpbuf_put(buffer, &opo->actions[n_actions], data_len);
+        ofpbuf_put(buffer, (uint8_t *)opo->actions + actions_len, data_len);
     } else {
         buffer = retrieve_buffer(ntohl(opo->buffer_id));
         if (!buffer) {
@@ -1151,10 +945,21 @@ recv_packet_out(struct datapath *dp, const struct sender *sender UNUSED,
     }
  
     flow_extract(buffer, ntohs(opo->in_port), &key.flow);
-    execute_actions(dp, buffer, ntohs(opo->in_port),
-                    &key, opo->actions, n_actions, true);
 
-   return 0;
+    v_code = validate_actions(dp, &key, opo->actions, actions_len);
+    if (v_code != ACT_VALIDATION_OK) {
+        dp_send_error_msg(dp, sender, OFPET_BAD_ACTION, v_code,
+                  msg, ntohs(opo->header.length));
+        goto error;
+    }
+
+    execute_actions(dp, buffer, &key, opo->actions, actions_len, true);
+
+    return 0;
+
+error:
+    ofpbuf_delete(buffer);
+    return -EINVAL;
 }
 
 static int
@@ -1169,47 +974,37 @@ recv_port_mod(struct datapath *dp, const struct sender *sender UNUSED,
 }
 
 static int
-add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
+add_flow(struct datapath *dp, const struct sender *sender,
+        const struct ofp_flow_mod *ofm)
 {
     int error = -ENOMEM;
-    int n_actions;
-    int i;
-    struct sw_flow *flow;
-
-
-    /* To prevent loops, make sure there's no action to send to the
-     * OFP_TABLE virtual port.
-     */
-    n_actions = (ntohs(ofm->header.length) - sizeof *ofm) 
-            / sizeof *ofm->actions;
-    for (i=0; i<n_actions; i++) {
-        const struct ofp_action *a = &ofm->actions[i];
-
-        if (a->type == htons(OFPAT_OUTPUT)
-                    && (a->arg.output.port == htons(OFPP_TABLE)
-                        || a->arg.output.port == htons(OFPP_NONE)
-                        || a->arg.output.port == ofm->match.in_port)) {
-            /* xxx Send fancy new error message? */
-            goto error;
-        }
-    }
+    uint16_t v_code;
+    struct sw_flow *flow; 
+    size_t actions_len = ntohs(ofm->header.length) - sizeof *ofm;
 
     /* Allocate memory. */
-    flow = flow_alloc(n_actions);
+    flow = flow_alloc(actions_len);
     if (flow == NULL)
         goto error;
 
-    /* Fill out flow. */
     flow_extract_match(&flow->key, &ofm->match);
+
+    v_code = validate_actions(dp, &flow->key, ofm->actions, actions_len);
+    if (v_code != ACT_VALIDATION_OK) {
+        dp_send_error_msg(dp, sender, OFPET_BAD_ACTION, v_code,
+                  ofm, ntohs(ofm->header.length));
+        goto error;
+    }
+
+    /* Fill out flow. */
     flow->priority = flow->key.wildcards ? ntohs(ofm->priority) : -1;
     flow->idle_timeout = ntohs(ofm->idle_timeout);
     flow->hard_timeout = ntohs(ofm->hard_timeout);
     flow->used = flow->created = time_now();
-    flow->sf_acts->n_actions = n_actions;
+    flow->sf_acts->actions_len = actions_len;
     flow->byte_count = 0;
     flow->packet_count = 0;
-    memcpy(flow->sf_acts->actions, ofm->actions, 
-                n_actions * sizeof *flow->sf_acts->actions);
+    memcpy(flow->sf_acts->actions, ofm->actions, actions_len);
 
     /* Act. */
     error = chain_insert(dp->chain, flow);
@@ -1224,8 +1019,8 @@ add_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
             uint16_t in_port = ntohs(ofm->match.in_port);
             flow_used(flow, buffer);
             flow_extract(buffer, in_port, &key.flow);
-            execute_actions(dp, buffer, in_port, &key,
-                            ofm->actions, n_actions, false);
+            execute_actions(dp, buffer, &key, 
+                    ofm->actions, actions_len, false);
         } else {
             error = -ESRCH; 
         }
@@ -1241,37 +1036,30 @@ error:
 }
 
 static int
-mod_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
+mod_flow(struct datapath *dp, const struct sender *sender,
+        const struct ofp_flow_mod *ofm)
 {
     int error = -ENOMEM;
-    int n_actions;
-    int i;
+    uint16_t v_code;
+    size_t actions_len;
     struct sw_flow_key key;
     uint16_t priority;
     int strict;
 
-
-    /* To prevent loops, make sure there's no action to send to the
-     * OFP_TABLE virtual port.
-     */
-    n_actions = (ntohs(ofm->header.length) - sizeof *ofm) 
-            / sizeof *ofm->actions;
-    for (i=0; i<n_actions; i++) {
-        const struct ofp_action *a = &ofm->actions[i];
-
-        if (a->type == htons(OFPAT_OUTPUT)
-                    && (a->arg.output.port == htons(OFPP_TABLE)
-                        || a->arg.output.port == htons(OFPP_NONE)
-                        || a->arg.output.port == ofm->match.in_port)) {
-            /* xxx Send fancy new error message? */
-            goto error;
-        }
+    flow_extract_match(&key, &ofm->match);
+ 
+    actions_len = ntohs(ofm->header.length) - sizeof *ofm;
+ 
+    v_code = validate_actions(dp, &key, ofm->actions, actions_len);
+    if (v_code != ACT_VALIDATION_OK) {
+        dp_send_error_msg(dp, sender, OFPET_BAD_ACTION, v_code,
+                  ofm, ntohs(ofm->header.length));
+        goto error;
     }
 
-    flow_extract_match(&key, &ofm->match);
     priority = key.wildcards ? ntohs(ofm->priority) : -1;
     strict = (ofm->command == htons(OFPFC_MODIFY_STRICT)) ? 1 : 0;
-    chain_modify(dp->chain, &key, priority, strict, ofm->actions, n_actions);
+    chain_modify(dp->chain, &key, priority, strict, ofm->actions, actions_len);
 
     if (ntohl(ofm->buffer_id) != UINT32_MAX) {
         struct ofpbuf *buffer = retrieve_buffer(ntohl(ofm->buffer_id));
@@ -1279,8 +1067,8 @@ mod_flow(struct datapath *dp, const struct ofp_flow_mod *ofm)
             struct sw_flow_key skb_key;
             uint16_t in_port = ntohs(ofm->match.in_port);
             flow_extract(buffer, in_port, &skb_key.flow);
-            execute_actions(dp, buffer, in_port, &skb_key,
-                            ofm->actions, n_actions, false);
+            execute_actions(dp, buffer, &skb_key,
+                            ofm->actions, actions_len, false);
         } else {
             error = -ESRCH; 
         }
@@ -1294,16 +1082,16 @@ error:
 }
 
 static int
-recv_flow(struct datapath *dp, const struct sender *sender UNUSED,
+recv_flow(struct datapath *dp, const struct sender *sender,
           const void *msg)
 {
     const struct ofp_flow_mod *ofm = msg;
     uint16_t command = ntohs(ofm->command);
 
     if (command == OFPFC_ADD) {
-        return add_flow(dp, ofm);
+        return add_flow(dp, sender, ofm);
     } else if ((command == OFPFC_MODIFY) || (command == OFPFC_MODIFY_STRICT)) {
-        return mod_flow(dp, ofm);
+        return mod_flow(dp, sender, ofm);
     }  else if (command == OFPFC_DELETE) {
         struct sw_flow_key key;
         flow_extract_match(&key, &ofm->match);

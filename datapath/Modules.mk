@@ -5,10 +5,12 @@ openflow_sources = \
 	chain.c \
 	crc32.c \
 	datapath.c \
+	dp_act.c \
 	dp_dev.c \
 	dp_notify.c \
 	flow.c \
 	forward.c \
+	nx_act.c \
 	table-hash.c \
 	table-linear.c 
 

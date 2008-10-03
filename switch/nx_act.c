@@ -31,36 +31,22 @@
  * derivatives without specific, written prior permission.
  */
 
-#ifndef CHAIN_H
-#define CHAIN_H 1
+/* Functions for Nicira-extended actions. */
+#include "nicira-ext.h"
+#include "nx_act.h"
 
-#include <stddef.h>
-#include <stdint.h>
+uint16_t
+nx_validate_act(struct datapath *dp, const struct sw_flow_key *key,
+		const struct ofp_action_vendor_header *avh, uint16_t len)
+{
+	/* Nothing to validate yet */
+	return OFPBAC_BAD_VENDOR_TYPE;
+}
 
-struct sw_flow;
-struct sw_flow_key;
-struct ofp_action_header;
-struct list;
+void
+nx_execute_act(struct ofpbuf *buffer, const struct sw_flow_key *key,
+		const struct ofp_action_vendor_header *avh)
+{
+	/* Nothing to execute yet */
+}
 
-#define TABLE_LINEAR_MAX_FLOWS  100
-#define TABLE_HASH_MAX_FLOWS    65536
-#define TABLE_MAC_MAX_FLOWS      1024
-#define TABLE_MAC_NUM_BUCKETS   1024
-
-/* Set of tables chained together in sequence from cheap to expensive. */
-#define CHAIN_MAX_TABLES 4
-struct sw_chain {
-    int n_tables;
-    struct sw_table *tables[CHAIN_MAX_TABLES];
-};
-
-struct sw_chain *chain_create(void);
-struct sw_flow *chain_lookup(struct sw_chain *, const struct sw_flow_key *);
-int chain_insert(struct sw_chain *, struct sw_flow *);
-int chain_modify(struct sw_chain *, const struct sw_flow_key *, 
-        uint16_t, int, const struct ofp_action_header *, size_t);
-int chain_delete(struct sw_chain *, const struct sw_flow_key *, uint16_t, int);
-void chain_timeout(struct sw_chain *, struct list *deleted);
-void chain_destroy(struct sw_chain *);
-
-#endif /* chain.h */
