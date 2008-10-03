@@ -201,6 +201,10 @@ make_unix_socket(int style, bool nonblock, bool passcred UNUSED,
         return -errno;
     }
 
+    /* Set nonblocking mode right away, if we want it.  This prevents blocking
+     * in connect(), if connect_path != NULL.  (In turn, that's a corner case:
+     * it will only happen if style is SOCK_STREAM or SOCK_SEQPACKET, and only
+     * if a backlog of un-accepted connections has built up in the kernel.)  */
     if (nonblock) {
         int flags = fcntl(fd, F_GETFL, 0);
         if (flags == -1) {
