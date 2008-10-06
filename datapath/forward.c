@@ -246,6 +246,7 @@ add_flow(struct sw_chain *chain, const struct sender *sender,
 		if (skb) {
 			struct sw_flow_key key;
 			flow_used(flow, skb);
+			dp_set_origin(chain->dp, ntohs(ofm->match.in_port), skb);
 			flow_extract(skb, ntohs(ofm->match.in_port), &key);
 			execute_actions(chain->dp, skb, &key, ofm->actions, actions_len, 0);
 		}
