@@ -174,8 +174,8 @@ main(int argc, char *argv[])
                     }
                     i++;
                 } else {
-                    lswitch_destroy(this->lswitch);
                     rconn_destroy(this->rconn);
+                    lswitch_destroy(this->lswitch);
                     switches[i] = switches[--n_switches];
                 }
             }
