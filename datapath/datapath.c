@@ -533,17 +533,16 @@ output_all(struct datapath *dp, struct sk_buff *skb, int flood)
 
 /* Marks 'skb' as having originated from 'in_port' in 'dp'.
    FIXME: how are devices reference counted? */
-int dp_set_origin(struct datapath *dp, uint16_t in_port,
+void dp_set_origin(struct datapath *dp, uint16_t in_port,
 			   struct sk_buff *skb)
 {
 	struct net_bridge_port *p = (in_port < OFPP_MAX ? dp->ports[in_port]
 				     : in_port == OFPP_LOCAL ? dp->local_port
 				     : NULL);
-	if (p) {
+	if (p) 
 		skb->dev = p->dev;
-		return 0;
-	}
-	return -ENOENT;
+	 else 
+		skb->dev = NULL;
 }
 
 static int xmit_skb(struct sk_buff *skb)

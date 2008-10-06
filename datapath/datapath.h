@@ -90,7 +90,7 @@ int dp_output_port(struct datapath *, struct sk_buff *, int out_port,
 		   int ignore_no_fwd);
 int dp_output_control(struct datapath *, struct sk_buff *, uint32_t, 
 			size_t, int);
-int dp_set_origin(struct datapath *, uint16_t, struct sk_buff *);
+void dp_set_origin(struct datapath *, uint16_t, struct sk_buff *);
 int dp_send_features_reply(struct datapath *, const struct sender *);
 int dp_send_config_reply(struct datapath *, const struct sender *);
 int dp_send_port_status(struct net_bridge_port *p, uint8_t status);
