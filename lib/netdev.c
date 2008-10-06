@@ -491,15 +491,6 @@ int
 netdev_send(struct netdev *netdev, const struct ofpbuf *buffer)
 {
     ssize_t n_bytes;
-    const struct eth_header *eh;
-
-    /* Pull out the Ethernet header. */
-    if (buffer->size < ETH_HEADER_LEN) {
-        VLOG_WARN_RL(&rl, "cannot send %zu-byte frame on %s",
-                     buffer->size, netdev->name);
-        return EMSGSIZE;
-    }
-    eh = ofpbuf_at_assert(buffer, 0, sizeof *eh);
 
     do {
         n_bytes = sendto(netdev->fd, buffer->data, buffer->size, 0, NULL, 0);
