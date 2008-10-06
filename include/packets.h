@@ -86,6 +86,8 @@ static inline void eth_addr_from_uint64(uint64_t x, uint8_t ea[ETH_ADDR_LEN])
 static inline void eth_addr_random(uint8_t ea[ETH_ADDR_LEN])
 {
     random_bytes(ea, ETH_ADDR_LEN);
+    ea[0] &= ~1;                /* Unicast. */
+    ea[0] |= 2;                 /* Private. */
 }
 
 #define ETH_ADDR_FMT                                                    \
