@@ -170,6 +170,24 @@ drain_rcvbuf(int fd)
     return 0;
 }
 
+/* Reads and discards up to 'n' datagrams from 'fd', stopping as soon as no
+ * more data can be immediately read.  ('fd' should therefore be in
+ * non-blocking mode.)*/
+void
+drain_fd(int fd, size_t n_packets)
+{
+    for (; n_packets > 0; n_packets--) {
+        /* 'buffer' only needs to be 1 byte long in most circumstances.  This
+         * size is defensive against the possibility that we someday want to
+         * use a Linux tap device without TUN_NO_PI, in which case a buffer
+         * smaller than sizeof(struct tun_pi) will give EINVAL on read. */
+        char buffer[128];
+        if (read(fd, buffer, sizeof buffer) <= 0) {
+            break;
+        }
+    }
+}
+
 /* Stores in '*un' a sockaddr_un that refers to file 'name'.  Stores in
  * '*un_len' the size of the sockaddr_un. */
 static void
