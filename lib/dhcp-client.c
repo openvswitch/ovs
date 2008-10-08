@@ -219,6 +219,14 @@ dhclient_destroy(struct dhclient *cli)
     }
 }
 
+/* Returns the network device in use by 'cli'.  The caller must not destroy
+ * the returned device. */
+struct netdev *
+dhclient_get_netdev(struct dhclient *cli)
+{
+    return cli->netdev;
+}
+
 /* Forces 'cli' into a (re)initialization state, in which no address is bound
  * but the client is advertising to obtain one.  If 'requested_ip' is nonzero,
  * then the client will attempt to re-bind to that IP address; otherwise, it

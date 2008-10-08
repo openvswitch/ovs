@@ -46,6 +46,8 @@ int dhclient_create(const char *netdev,
                     void *aux, struct dhclient **);
 void dhclient_destroy(struct dhclient *);
 
+struct netdev *dhclient_get_netdev(struct dhclient *);
+
 void dhclient_init(struct dhclient *, uint32_t requested_ip);
 void dhclient_release(struct dhclient *);
 void dhclient_force_renew(struct dhclient *, int deadline);
