@@ -62,6 +62,7 @@ struct stp *stp_create(const char *name, stp_identifier bridge_id,
                        void *aux);
 void stp_destroy(struct stp *);
 void stp_tick(struct stp *, int elapsed);
+void stp_set_bridge_id(struct stp *, stp_identifier bridge_id);
 void stp_set_bridge_priority(struct stp *, uint16_t new_priority);
 
 /* STP properties. */

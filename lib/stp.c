@@ -298,27 +298,42 @@ stp_tick(struct stp *stp, int elapsed)
     }
 }
 
+static void
+set_bridge_id(struct stp *stp, stp_identifier new_bridge_id)
+{
+    if (new_bridge_id != stp->bridge_id) {
+        bool root;
+        struct stp_port *p;
+
+        root = stp_is_root_bridge(stp);
+        FOR_EACH_ENABLED_PORT (p, stp) {
+            if (stp_is_designated_port(p)) {
+                p->designated_bridge = new_bridge_id;
+            }
+        }
+        stp->bridge_id = new_bridge_id;
+        stp_configuration_update(stp);
+        stp_port_state_selection(stp);
+        if (stp_is_root_bridge(stp) && !root) {
+            stp_become_root_bridge(stp);
+        }
+    }
+}
+
+void
+stp_set_bridge_id(struct stp *stp, stp_identifier bridge_id)
+{
+    const uint64_t mac_bits = (UINT64_C(1) << 48) - 1;
+    const uint64_t pri_bits = ~mac_bits;
+    set_bridge_id(stp, (stp->bridge_id & pri_bits) | (bridge_id & mac_bits));
+}
+
 void
 stp_set_bridge_priority(struct stp *stp, uint16_t new_priority)
 {
-    stp_identifier new_bridge_id;
-    bool root;
-    struct stp_port *p;
-
-    new_bridge_id = ((stp->bridge_id & UINT64_C(0xffffffffffff))
-                     | ((uint64_t) new_priority << 48));
-    root = stp_is_root_bridge(stp);
-    FOR_EACH_ENABLED_PORT (p, stp) {
-        if (stp_is_designated_port(p)) {
-            p->designated_bridge = new_bridge_id;
-        }
-    }
-    stp->bridge_id = new_bridge_id;
-    stp_configuration_update(stp);
-    stp_port_state_selection(stp);
-    if (stp_is_root_bridge(stp) && !root) {
-        stp_become_root_bridge(stp);
-    }
+    const uint64_t mac_bits = (UINT64_C(1) << 48) - 1;
+    set_bridge_id(stp, ((stp->bridge_id & mac_bits)
+                        | ((uint64_t) new_priority << 48)));
 }
 
 /* Returns the name given to 'stp' in the call to stp_create(). */
