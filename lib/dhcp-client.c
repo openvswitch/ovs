@@ -206,6 +206,19 @@ dhclient_create(const char *netdev_name,
     return 0;
 }
 
+/* Destroys 'cli' and frees all related resources. */
+void
+dhclient_destroy(struct dhclient *cli)
+{
+    if (cli) {
+        dhcp_msg_uninit(cli->binding);
+        free(cli->binding);
+        netdev_close(cli->netdev);
+        ds_destroy(&cli->s);
+        free(cli);
+    }
+}
+
 /* Forces 'cli' into a (re)initialization state, in which no address is bound
  * but the client is advertising to obtain one.  If 'requested_ip' is nonzero,
  * then the client will attempt to re-bind to that IP address; otherwise, it
