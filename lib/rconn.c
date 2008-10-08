@@ -227,18 +227,20 @@ rconn_connect_unreliably(struct rconn *rc,
 void
 rconn_disconnect(struct rconn *rc)
 {
-    if (rc->vconn) {
-        vconn_close(rc->vconn);
-        rc->vconn = NULL;
+    if (rc->state != S_VOID) {
+        if (rc->vconn) {
+            vconn_close(rc->vconn);
+            rc->vconn = NULL;
+        }
+        free(rc->name);
+        rc->name = xstrdup("void");
+        rc->reliable = false;
+
+        rc->backoff = 0;
+        rc->backoff_deadline = TIME_MIN;
+
+        state_transition(rc, S_VOID);
     }
-    free(rc->name);
-    rc->name = xstrdup("void");
-    rc->reliable = false;
-
-    rc->backoff = 0;
-    rc->backoff_deadline = TIME_MIN;
-
-    state_transition(rc, S_VOID);
 }
 
 /* Disconnects 'rc' and frees the underlying storage. */
