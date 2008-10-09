@@ -89,8 +89,7 @@ struct settings {
     bool in_band;             /* Connect to controller in-band? */
 
     /* Related vconns and network devices. */
-    const char *nl_name;        /* Local datapath (must be "nl:" vconn). */
-    char *of_name;              /* ofX network device name. */
+    const char *dp_name;        /* Local datapath. */
     const char *controller_name; /* Controller (if not discovery mode). */
     const char *listener_names[MAX_MGMT]; /* Listen for mgmt connections. */
     size_t n_listeners;          /* Number of mgmt connection listeners. */
@@ -177,7 +176,9 @@ static void status_reply_put(struct status_reply *, const char *, ...)
 
 static void rconn_status_cb(struct status_reply *, void *rconn_);
 
+struct port_watcher;
 static struct discovery *discovery_init(const struct settings *,
+                                        struct port_watcher *,
                                         struct switch_status *);
 static void discovery_question_connectivity(struct discovery *);
 static bool discovery_run(struct discovery *, char **controller_name);
@@ -185,9 +186,9 @@ static void discovery_wait(struct discovery *);
 
 static struct hook in_band_hook_create(const struct settings *,
                                        struct switch_status *,
+                                       struct port_watcher *,
                                        struct rconn *remote);
 
-struct port_watcher;
 static struct hook port_watcher_create(struct rconn *local,
                                        struct rconn *remote,
                                        struct port_watcher **);
@@ -254,9 +255,6 @@ main(int argc, char *argv[])
     /* Initialize switch status hook. */
     hooks[n_hooks++] = switch_status_hook_create(&s, &switch_status);
 
-    /* Start controller discovery. */
-    discovery = s.discovery ? discovery_init(&s, switch_status) : NULL;
-
     /* Start listening for vlogconf requests. */
     retval = vlog_server_listen(NULL, NULL);
     if (retval) {
@@ -271,7 +269,7 @@ main(int argc, char *argv[])
 
     /* Connect to datapath. */
     local_rconn = rconn_create(0, s.max_backoff);
-    rconn_connect(local_rconn, s.nl_name);
+    rconn_connect(local_rconn, s.dp_name);
     switch_status_register_category(switch_status, "local",
                                     rconn_status_cb, local_rconn);
 
@@ -292,11 +290,12 @@ main(int argc, char *argv[])
 
     /* Set up hooks. */
     hooks[n_hooks++] = port_watcher_create(local_rconn, remote_rconn, &pw);
+    discovery = s.discovery ? discovery_init(&s, pw, switch_status) : NULL;
     if (s.enable_stp) {
         hooks[n_hooks++] = stp_hook_create(&s, pw, local_rconn, remote_rconn);
     }
     if (s.in_band) {
-        hooks[n_hooks++] = in_band_hook_create(&s, switch_status,
+        hooks[n_hooks++] = in_band_hook_create(&s, switch_status, pw,
                                                remote_rconn);
     }
     if (s.fail_mode == FAIL_OPEN) {
@@ -454,8 +453,9 @@ static struct relay *
 relay_accept(const struct settings *s, struct pvconn *pvconn)
 {
     struct vconn *new_remote, *new_local;
-    char *nl_name_without_subscription;
     struct rconn *r1, *r2;
+    char *vconn_name;
+    int nl_index;
     int retval;
 
     new_remote = accept_vconn(pvconn);
@@ -463,26 +463,35 @@ relay_accept(const struct settings *s, struct pvconn *pvconn)
         return NULL;
     }
 
-    /* nl:123 or nl:123:1 opens a netlink connection to local datapath 123.  We
-     * only accept the former syntax in main().
-     *
-     * nl:123:0 opens a netlink connection to local datapath 123 without
-     * obtaining a subscription for ofp_packet_in or ofp_flow_expired
-     * messages.*/
-    nl_name_without_subscription = xasprintf("%s:0", s->nl_name);
-    retval = vconn_open(nl_name_without_subscription, OFP_VERSION, &new_local);
+    if (sscanf(s->dp_name, "nl:%d", &nl_index) == 1) {
+        /* nl:123 or nl:123:1 opens a netlink connection to local datapath 123.
+         * nl:123:0 opens a netlink connection to local datapath 123 without
+         * obtaining a subscription for ofp_packet_in or ofp_flow_expired
+         * messages.  That's what we want here; management connections should
+         * not receive those messages, at least by default. */
+        vconn_name = xasprintf("nl:%d:0", nl_index);
+    } else {
+        /* We don't have a way to specify not to subscribe to those messages
+         * for other transports.  (That's a defect: really this should be in
+         * the OpenFlow protocol, not the Netlink transport). */
+        VLOG_WARN_RL(&vrl, "new management connection will receive "
+                     "asynchronous messages");
+        vconn_name = xstrdup(s->dp_name);
+    }
+
+    retval = vconn_open(vconn_name, OFP_VERSION, &new_local);
     if (retval) {
         VLOG_ERR_RL(&vrl, "could not connect to %s (%s)",
-                    nl_name_without_subscription, strerror(retval));
+                    vconn_name, strerror(retval));
         vconn_close(new_remote);
-        free(nl_name_without_subscription);
+        free(vconn_name);
         return NULL;
     }
 
     /* Create and return relay. */
     r1 = rconn_create(0, 0);
-    rconn_connect_unreliably(r1, nl_name_without_subscription, new_local);
-    free(nl_name_without_subscription);
+    rconn_connect_unreliably(r1, vconn_name, new_local);
+    free(vconn_name);
 
     r2 = rconn_create(0, 0);
     rconn_connect_unreliably(r2, "passive", new_remote);
@@ -602,6 +611,14 @@ struct port_watcher_cb {
     void *aux;
 };
 
+typedef void local_port_changed_cb_func(const struct ofp_phy_port *new,
+                                        void *aux);
+
+struct port_watcher_local_cb {
+    local_port_changed_cb_func *local_port_changed;
+    void *aux;
+};
+
 struct port_watcher {
     struct rconn *local_rconn;
     struct rconn *remote_rconn;
@@ -611,6 +628,9 @@ struct port_watcher {
     int n_txq;
     struct port_watcher_cb cbs[2];
     int n_cbs;
+    struct port_watcher_local_cb local_cbs[2];
+    int n_local_cbs;
+    char local_port_name[OFP_MAX_PORT_NAME_LEN + 1];
 };
 
 /* Returns the number of fields that differ from 'a' to 'b'. */
@@ -660,10 +680,56 @@ call_port_changed_callbacks(struct port_watcher *pw, int port_no,
         int i;
         for (i = 0; i < pw->n_cbs; i++) {
             port_changed_cb_func *port_changed = pw->cbs[i].port_changed;
-            if (port_changed) {
-                (port_changed)(port_no, old, new, pw->cbs[i].aux);
-            }
+            (port_changed)(port_no, old, new, pw->cbs[i].aux);
         }
+    }
+}
+
+static void
+get_port_name(const struct ofp_phy_port *port, char *name, size_t name_size)
+{
+    char *p;
+
+    memcpy(name, port->name, MIN(name_size, sizeof port->name));
+    name[name_size - 1] = '\0';
+    for (p = name; *p != '\0'; p++) {
+        if (*p < 32 || *p > 126) {
+            *p = '.';
+        }
+    }
+}
+
+static void
+call_local_port_changed_callbacks(struct port_watcher *pw)
+{
+    char name[OFP_MAX_PORT_NAME_LEN + 1];
+    const struct ofp_phy_port *port;
+    int i;
+
+    /* Pass the local port to the callbacks, if it exists.
+       Pass a null pointer if there is no local port. */
+    port = &pw->ports[port_no_to_pw_idx(OFPP_LOCAL)];
+    if (port->port_no != htons(OFPP_LOCAL)) {
+        port = NULL;
+    }
+
+    /* Log the name of the local port. */
+    if (port) {
+        get_port_name(port, name, sizeof name);
+    } else {
+        name[0] = '\0';
+    }
+    if (strcmp(pw->local_port_name, name)) {
+        VLOG_WARN("Identified data path local port as \"%s\".", name);
+    } else {
+        VLOG_WARN("Data path has no local port.");
+    }
+    strcpy(pw->local_port_name, name);
+
+    /* Invoke callbacks. */
+    for (i = 0; i < pw->n_local_cbs; i++) {
+        local_port_changed_cb_func *cb = pw->local_cbs[i].local_port_changed;
+        (cb)(port, pw->local_cbs[i].aux);
     }
 }
 
@@ -729,10 +795,15 @@ port_watcher_local_packet_cb(struct relay *r, void *pw_)
                 update_phy_port(pw, &pw->ports[i], OFPPR_DELETE, NULL);
             }
         }
+
+        call_local_port_changed_callbacks(pw);
     } else if (oh->type == OFPT_PORT_STATUS
                && msg->size >= sizeof(struct ofp_port_status)) {
         struct ofp_port_status *ops = msg->data;
         update_phy_port(pw, &ops->desc, ops->reason, NULL);
+        if (ops->desc.port_no == htons(OFPP_LOCAL)) {
+            call_local_port_changed_callbacks(pw);
+        }
     }
     return false;
 }
@@ -756,6 +827,9 @@ port_watcher_remote_packet_cb(struct relay *r, void *pw_)
                 pw_opp->config = ((pw_opp->config & ~opm->mask)
                                  | (opm->config & opm->mask));
                 call_port_changed_callbacks(pw, port_no, &old, pw_opp);
+                if (pw_opp->port_no == htons(OFPP_LOCAL)) {
+                    call_local_port_changed_callbacks(pw);
+                }
             }
         }
     }
@@ -767,11 +841,26 @@ port_watcher_periodic_cb(void *pw_)
 {
     struct port_watcher *pw = pw_;
 
-    if (!pw->got_feature_reply && time_now() >= pw->last_feature_request + 5) {
+    if (!pw->got_feature_reply
+        && time_now() >= pw->last_feature_request + 5
+        && rconn_is_connected(pw->local_rconn)) {
         struct ofpbuf *b;
         make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &b);
         rconn_send_with_limit(pw->local_rconn, b, &pw->n_txq, 1);
         pw->last_feature_request = time_now();
+    }
+}
+
+static void
+port_watcher_wait_cb(void *pw_)
+{
+    struct port_watcher *pw = pw_;
+    if (!pw->got_feature_reply && rconn_is_connected(pw->local_rconn)) {
+        if (pw->last_feature_request != TIME_MIN) {
+            poll_timer_wait(pw->last_feature_request + 5 - time_now());
+        } else {
+            poll_immediate_wake();
+        }
     }
 }
 
@@ -791,7 +880,8 @@ put_duplexes(struct ds *ds, const char *name, uint32_t features,
 }
 
 static void
-put_features(struct ds *ds, const char *name, uint32_t features) {
+put_features(struct ds *ds, const char *name, uint32_t features)
+{
     if (features & (OFPPF_10MB_HD | OFPPF_10MB_FD
                     | OFPPF_100MB_HD | OFPPF_100MB_FD
                     | OFPPF_1GB_HD | OFPPF_1GB_FD | OFPPF_10GB_FD)) {
@@ -867,6 +957,17 @@ port_watcher_register_callback(struct port_watcher *pw,
     pw->n_cbs++;
 }
 
+static void
+port_watcher_register_local_port_callback(struct port_watcher *pw,
+                                          local_port_changed_cb_func *cb,
+                                          void *aux)
+{
+    assert(pw->n_local_cbs < ARRAY_SIZE(pw->local_cbs));
+    pw->local_cbs[pw->n_local_cbs].local_port_changed = cb;
+    pw->local_cbs[pw->n_local_cbs].aux = aux;
+    pw->n_local_cbs++;
+}
+
 static uint32_t
 port_watcher_get_config(const struct port_watcher *pw, int port_no)
 {
@@ -939,10 +1040,12 @@ port_watcher_create(struct rconn *local_rconn, struct rconn *remote_rconn,
     for (i = 0; i < OFPP_MAX; i++) {
         pw->ports[i].port_no = htons(OFPP_NONE);
     }
+    pw->local_port_name[0] = '\0';
     port_watcher_register_callback(pw, log_port_status, NULL);
     return make_hook(port_watcher_local_packet_cb,
                      port_watcher_remote_packet_cb,
-                     port_watcher_periodic_cb, NULL, pw);
+                     port_watcher_periodic_cb,
+                     port_watcher_wait_cb, pw);
 }
 
 /* Spanning tree protocol. */
@@ -956,7 +1059,6 @@ struct stp_data {
     struct port_watcher *pw;
     struct rconn *local_rconn;
     struct rconn *remote_rconn;
-    uint8_t dpid[ETH_ADDR_LEN];
     long long int last_tick_256ths;
     int n_txq;
 };
@@ -1174,31 +1276,33 @@ stp_port_changed_cb(uint16_t port_no,
     }
 }
 
+static void
+stp_local_port_changed_cb(const struct ofp_phy_port *port, void *stp_)
+{
+    struct stp_data *stp = stp_;
+    if (port) {
+        stp_set_bridge_id(stp->stp, eth_addr_to_uint64(port->hw_addr));
+    }
+}
+
 static struct hook
 stp_hook_create(const struct settings *s, struct port_watcher *pw,
                 struct rconn *local, struct rconn *remote)
 {
     uint8_t dpid[ETH_ADDR_LEN];
-    struct netdev *netdev;
     struct stp_data *stp;
-    int retval;
-
-    retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE, &netdev);
-    if (retval) {
-        ofp_fatal(retval, "Could not open %s device", s->of_name);
-    }
-    memcpy(dpid, netdev_get_etheraddr(netdev), ETH_ADDR_LEN);
-    netdev_close(netdev);
 
     stp = xcalloc(1, sizeof *stp);
+    eth_addr_random(dpid);
     stp->stp = stp_create("stp", eth_addr_to_uint64(dpid), send_bpdu, stp);
     stp->pw = pw;
-    memcpy(stp->dpid, dpid, ETH_ADDR_LEN);
     stp->local_rconn = local;
     stp->remote_rconn = remote;
     stp->last_tick_256ths = time_256ths();
 
     port_watcher_register_callback(pw, stp_port_changed_cb, stp);
+    port_watcher_register_local_port_callback(pw, stp_local_port_changed_cb,
+                                              stp);
     return make_hook(stp_local_packet_cb, NULL,
                      stp_periodic_cb, stp_wait_cb, stp);
 }
@@ -1210,7 +1314,6 @@ struct in_band_data {
     struct mac_learning *ml;
     struct netdev *of_device;
     struct rconn *controller;
-    uint8_t mac[ETH_ADDR_LEN];
     int n_queued;
 };
 
@@ -1237,11 +1340,11 @@ get_controller_mac(struct in_band_data *in_band)
 
         /* Look up MAC address. */
         memset(mac, 0, sizeof mac);
-        if (ip) {
+        if (ip && in_band->of_device) {
             int retval = netdev_arp_lookup(in_band->of_device, ip, mac);
             if (retval) {
-                VLOG_DBG("cannot look up controller hw address ("IP_FMT"): %s",
-                         IP_ARGS(&ip), strerror(retval));
+                VLOG_DBG_RL(&vrl, "cannot look up controller hw address "
+                            "("IP_FMT"): %s", IP_ARGS(&ip), strerror(retval));
             }
         }
         have_mac = !eth_addr_is_zero(mac);
@@ -1299,7 +1402,7 @@ in_band_local_packet_cb(struct relay *r, void *in_band_)
     uint16_t in_port;
     int out_port;
 
-    if (!get_ofp_packet_eth_header(r, &opi, &eth)) {
+    if (!get_ofp_packet_eth_header(r, &opi, &eth) || !in_band->of_device) {
         return false;
     }
     in_port = ntohs(opi->in_port);
@@ -1308,7 +1411,8 @@ in_band_local_packet_cb(struct relay *r, void *in_band_)
     if (in_port == OFPP_LOCAL) {
         /* Sent by secure channel. */
         out_port = mac_learning_lookup(in_band->ml, eth->eth_dst);
-    } else if (eth_addr_equals(eth->eth_dst, in_band->mac)) {
+    } else if (eth_addr_equals(eth->eth_dst,
+                               netdev_get_etheraddr(in_band->of_device))) {
         /* Sent to secure channel. */
         out_port = OFPP_LOCAL;
         in_band_learn_mac(in_band, in_port, eth->eth_src);
@@ -1380,21 +1484,23 @@ in_band_status_cb(struct status_reply *sr, void *in_band_)
     uint32_t controller_ip;
     const uint8_t *controller_mac;
 
-    if (netdev_get_in4(in_band->of_device, &local_ip)) {
-        status_reply_put(sr, "local-ip="IP_FMT, IP_ARGS(&local_ip.s_addr));
-    }
-    status_reply_put(sr, "local-mac="ETH_ADDR_FMT,
-                     ETH_ADDR_ARGS(in_band->mac));
+    if (in_band->of_device) {
+        const uint8_t *mac = netdev_get_etheraddr(in_band->of_device);
+        if (netdev_get_in4(in_band->of_device, &local_ip)) {
+            status_reply_put(sr, "local-ip="IP_FMT, IP_ARGS(&local_ip.s_addr));
+        }
+        status_reply_put(sr, "local-mac="ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
 
-    controller_ip = rconn_get_ip(in_band->controller);
-    if (controller_ip) {
-        status_reply_put(sr, "controller-ip="IP_FMT,
-                      IP_ARGS(&controller_ip));
-    }
-    controller_mac = get_controller_mac(in_band);
-    if (controller_mac) {
-        status_reply_put(sr, "controller-mac="ETH_ADDR_FMT,
-                      ETH_ADDR_ARGS(controller_mac));
+        controller_ip = rconn_get_ip(in_band->controller);
+        if (controller_ip) {
+            status_reply_put(sr, "controller-ip="IP_FMT,
+                             IP_ARGS(&controller_ip));
+        }
+        controller_mac = get_controller_mac(in_band);
+        if (controller_mac) {
+            status_reply_put(sr, "controller-mac="ETH_ADDR_FMT,
+                             ETH_ADDR_ARGS(controller_mac));
+        }
     }
 }
 
@@ -1406,25 +1512,46 @@ get_ofp_packet_payload(struct ofp_packet_in *opi, struct ofpbuf *payload)
                                                          data);
 }
 
+static void
+in_band_local_port_cb(const struct ofp_phy_port *port, void *in_band_)
+{
+    struct in_band_data *in_band = in_band_;
+    if (port) {
+        char name[sizeof port->name + 1];
+        get_port_name(port, name, sizeof name);
+
+        if (!in_band->of_device
+            || strcmp(netdev_get_name(in_band->of_device), name))
+        {
+            int error;
+            netdev_close(in_band->of_device);
+            error = netdev_open(name, NETDEV_ETH_TYPE_NONE,
+                                &in_band->of_device);
+            if (error) {
+                VLOG_ERR("failed to open in-band control network device "
+                         "\"%s\": %s", name, strerror(errno));
+            }
+        }
+    } else {
+        netdev_close(in_band->of_device);
+        in_band->of_device = NULL;
+    }
+}
+
 static struct hook
 in_band_hook_create(const struct settings *s, struct switch_status *ss,
-                    struct rconn *remote)
+                    struct port_watcher *pw, struct rconn *remote)
 {
     struct in_band_data *in_band;
-    int retval;
 
     in_band = xcalloc(1, sizeof *in_band);
     in_band->s = s;
     in_band->ml = mac_learning_create();
-    retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE,
-                         &in_band->of_device);
-    if (retval) {
-        ofp_fatal(retval, "Could not open %s device", s->of_name);
-    }
-    memcpy(in_band->mac, netdev_get_etheraddr(in_band->of_device),
-           ETH_ADDR_LEN);
+    in_band->of_device = NULL;
     in_band->controller = remote;
     switch_status_register_category(ss, "in-band", in_band_status_cb, in_band);
+    port_watcher_register_local_port_callback(pw, in_band_local_port_cb,
+                                              in_band);
     return make_hook(in_band_local_packet_cb, NULL, NULL, NULL, in_band);
 }
 
@@ -1911,74 +2038,108 @@ discovery_status_cb(struct status_reply *sr, void *d_)
 
     status_reply_put(sr, "accept-remote=%s", d->s->accept_controller_re);
     status_reply_put(sr, "n-changes=%d", d->n_changes);
-    status_reply_put(sr, "state=%s", dhclient_get_state(d->dhcp));
-    status_reply_put(sr, "state-elapsed=%u",
-                     dhclient_get_state_elapsed(d->dhcp));
-    if (dhclient_is_bound(d->dhcp)) {
-        uint32_t ip = dhclient_get_ip(d->dhcp);
-        uint32_t netmask = dhclient_get_netmask(d->dhcp);
-        uint32_t router = dhclient_get_router(d->dhcp);
+    if (d->dhcp) {
+        status_reply_put(sr, "state=%s", dhclient_get_state(d->dhcp));
+        status_reply_put(sr, "state-elapsed=%u",
+                         dhclient_get_state_elapsed(d->dhcp)); 
+        if (dhclient_is_bound(d->dhcp)) {
+            uint32_t ip = dhclient_get_ip(d->dhcp);
+            uint32_t netmask = dhclient_get_netmask(d->dhcp);
+            uint32_t router = dhclient_get_router(d->dhcp);
 
-        const struct dhcp_msg *cfg = dhclient_get_config(d->dhcp);
-        uint32_t dns_server;
-        char *domain_name;
-        int i;
+            const struct dhcp_msg *cfg = dhclient_get_config(d->dhcp);
+            uint32_t dns_server;
+            char *domain_name;
+            int i;
 
-        status_reply_put(sr, "ip="IP_FMT, IP_ARGS(&ip));
-        status_reply_put(sr, "netmask="IP_FMT, IP_ARGS(&netmask));
-        if (router) {
-            status_reply_put(sr, "router="IP_FMT, IP_ARGS(&router));
+            status_reply_put(sr, "ip="IP_FMT, IP_ARGS(&ip));
+            status_reply_put(sr, "netmask="IP_FMT, IP_ARGS(&netmask));
+            if (router) {
+                status_reply_put(sr, "router="IP_FMT, IP_ARGS(&router));
+            }
+
+            for (i = 0; dhcp_msg_get_ip(cfg, DHCP_CODE_DNS_SERVER, i,
+                                        &dns_server);
+                 i++) {
+                status_reply_put(sr, "dns%d="IP_FMT, i, IP_ARGS(&dns_server));
+            }
+
+            domain_name = dhcp_msg_get_string(cfg, DHCP_CODE_DOMAIN_NAME);
+            if (domain_name) {
+                status_reply_put(sr, "domain=%s", domain_name);
+                free(domain_name);
+            }
+
+            status_reply_put(sr, "lease-remaining=%u",
+                             dhclient_get_lease_remaining(d->dhcp));
         }
-
-        for (i = 0; dhcp_msg_get_ip(cfg, DHCP_CODE_DNS_SERVER, i, &dns_server);
-             i++) {
-            status_reply_put(sr, "dns%d="IP_FMT, i, IP_ARGS(&dns_server));
-        }
-
-        domain_name = dhcp_msg_get_string(cfg, DHCP_CODE_DOMAIN_NAME);
-        if (domain_name) {
-            status_reply_put(sr, "domain=%s", domain_name);
-            free(domain_name);
-        }
-
-        status_reply_put(sr, "lease-remaining=%u",
-                         dhclient_get_lease_remaining(d->dhcp));
     }
 }
 
-static struct discovery *
-discovery_init(const struct settings *s, struct switch_status *ss)
+static void
+discovery_local_port_cb(const struct ofp_phy_port *port, void *d_) 
 {
-    struct netdev *netdev;
+    struct discovery *d = d_;
+    if (port) {
+        char name[OFP_MAX_PORT_NAME_LEN + 1];
+        struct netdev *netdev;
+        int retval;
+
+        /* Check that this was really a change. */
+        get_port_name(port, name, sizeof name);
+        if (d->dhcp && !strcmp(netdev_get_name(dhclient_get_netdev(d->dhcp)),
+                               name)) {
+            return;
+        }
+
+        /* Destroy current DHCP client. */
+        dhclient_destroy(d->dhcp);
+        d->dhcp = NULL;
+
+        /* Bring local network device up. */
+        retval = netdev_open(name, NETDEV_ETH_TYPE_NONE, &netdev);
+        if (retval) {
+            VLOG_ERR("Could not open %s device, discovery disabled: %s",
+                     name, strerror(retval));
+            return;
+        }
+        retval = netdev_turn_flags_on(netdev, NETDEV_UP, true);
+        if (retval) {
+            VLOG_ERR("Could not bring %s device up, discovery disabled: %s",
+                     name, strerror(retval));
+            return;
+        }
+        netdev_close(netdev);
+
+        /* Initialize DHCP client. */
+        retval = dhclient_create(name, modify_dhcp_request,
+                                 validate_dhcp_offer, (void *) d->s, &d->dhcp);
+        if (retval) {
+            VLOG_ERR("Failed to initialize DHCP client, "
+                     "discovery disabled: %s", strerror(retval));
+            return;
+        }
+        dhclient_init(d->dhcp, 0);
+    } else {
+        dhclient_destroy(d->dhcp);
+        d->dhcp = NULL;
+    }
+}
+
+
+static struct discovery *
+discovery_init(const struct settings *s, struct port_watcher *pw,
+               struct switch_status *ss)
+{
     struct discovery *d;
-    struct dhclient *dhcp;
-    int retval;
-
-    /* Bring ofX network device up. */
-    retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE, &netdev);
-    if (retval) {
-        ofp_fatal(retval, "Could not open %s device", s->of_name);
-    }
-    retval = netdev_turn_flags_on(netdev, NETDEV_UP, true);
-    if (retval) {
-        ofp_fatal(retval, "Could not bring %s device up", s->of_name);
-    }
-    netdev_close(netdev);
-
-    /* Initialize DHCP client. */
-    retval = dhclient_create(s->of_name, modify_dhcp_request,
-                             validate_dhcp_offer, (void *) s, &dhcp);
-    if (retval) {
-        ofp_fatal(retval, "Failed to initialize DHCP client");
-    }
-    dhclient_init(dhcp, 0);
 
     d = xmalloc(sizeof *d);
     d->s = s;
-    d->dhcp = dhcp;
+    d->dhcp = NULL;
     d->n_changes = 0;
 
     switch_status_register_category(ss, "discovery", discovery_status_cb, d);
+    port_watcher_register_local_port_callback(pw, discovery_local_port_cb, d);
 
     return d;
 }
@@ -1986,12 +2147,19 @@ discovery_init(const struct settings *s, struct switch_status *ss)
 static void
 discovery_question_connectivity(struct discovery *d)
 {
-    dhclient_force_renew(d->dhcp, 15);
+    if (d->dhcp) {
+        dhclient_force_renew(d->dhcp, 15); 
+    }
 }
 
 static bool
 discovery_run(struct discovery *d, char **controller_name)
 {
+    if (!d->dhcp) {
+        *controller_name = NULL;
+        return true;
+    }
+
     dhclient_run(d->dhcp);
     if (!dhclient_changed(d->dhcp)) {
         return false;
@@ -2020,7 +2188,9 @@ discovery_run(struct discovery *d, char **controller_name)
 static void
 discovery_wait(struct discovery *d)
 {
-    dhclient_wait(d->dhcp);
+    if (d->dhcp) {
+        dhclient_wait(d->dhcp); 
+    }
 }
 
 static void
@@ -2065,7 +2235,9 @@ parse_options(int argc, char *argv[], struct settings *s)
         OPT_BURST_LIMIT,
         OPT_BOOTSTRAP_CA_CERT,
         OPT_STP,
-        OPT_NO_STP
+        OPT_NO_STP,
+        OPT_OUT_OF_BAND,
+        OPT_IN_BAND
     };
     static struct option long_options[] = {
         {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
@@ -2080,6 +2252,8 @@ parse_options(int argc, char *argv[], struct settings *s)
         {"burst-limit", required_argument, 0, OPT_BURST_LIMIT},
         {"stp",         no_argument, 0, OPT_STP},
         {"no-stp",      no_argument, 0, OPT_NO_STP},
+        {"out-of-band", no_argument, 0, OPT_OUT_OF_BAND},
+        {"in-band",     no_argument, 0, OPT_IN_BAND},
         {"detach",      no_argument, 0, 'D'},
         {"force",       no_argument, 0, 'f'},
         {"pidfile",     optional_argument, 0, 'P'},
@@ -2107,6 +2281,7 @@ parse_options(int argc, char *argv[], struct settings *s)
     s->rate_limit = 0;
     s->burst_limit = 0;
     s->enable_stp = false;
+    s->in_band = true;
     for (;;) {
         int c;
 
@@ -2189,6 +2364,14 @@ parse_options(int argc, char *argv[], struct settings *s)
             s->enable_stp = false;
             break;
 
+        case OPT_OUT_OF_BAND:
+            s->in_band = false;
+            break;
+
+        case OPT_IN_BAND:
+            s->in_band = true;
+            break;
+
         case 'D':
             set_detach();
             break;
@@ -2253,14 +2436,7 @@ parse_options(int argc, char *argv[], struct settings *s)
     }
 
     /* Local and remote vconns. */
-    s->nl_name = argv[0];
-    if (strncmp(s->nl_name, "nl:", 3)
-        || strlen(s->nl_name) < 4
-        || s->nl_name[strspn(s->nl_name + 3, "0123456789") + 3]) {
-        ofp_fatal(0, "%s: argument is not of the form \"nl:DP_IDX\"",
-                  s->nl_name);
-    }
-    s->of_name = xasprintf("of%s", s->nl_name + 3);
+    s->dp_name = argv[0];
     s->controller_name = argc > 1 ? xstrdup(argv[1]) : NULL;
 
     /* Set accept_controller_regex. */
@@ -2279,29 +2455,8 @@ parse_options(int argc, char *argv[], struct settings *s)
 
     /* Mode of operation. */
     s->discovery = s->controller_name == NULL;
-    if (s->discovery) {
-        s->in_band = true;
-    } else {
-        enum netdev_flags flags;
-        struct netdev *netdev;
-
-        retval = netdev_open(s->of_name, NETDEV_ETH_TYPE_NONE, &netdev);
-        if (retval) {
-            ofp_fatal(retval, "Could not open %s device", s->of_name);
-        }
-
-        retval = netdev_get_flags(netdev, &flags);
-        if (retval) {
-            ofp_fatal(retval, "Could not get flags for %s device", s->of_name);
-        }
-
-        s->in_band = (flags & NETDEV_UP) != 0;
-        if (s->in_band && netdev_get_in6(netdev, NULL)) {
-            VLOG_WARN("Ignoring IPv6 address on %s device: IPv6 not supported",
-                      s->of_name);
-        }
-
-        netdev_close(netdev);
+    if (s->discovery && !s->in_band) {
+        ofp_fatal(0, "Cannot perform discovery with out-of-band control");
     }
 
     /* Rate limiting. */
@@ -2343,6 +2498,7 @@ usage(void)
            "                          (a passive OpenFlow connection method)\n"
            "  -m, --monitor=METHOD    copy traffic to/from kernel to METHOD\n"
            "                          (a passive OpenFlow connection method)\n"
+           "  --out-of-band           controller connection is out-of-band\n"
            "  --stp                   enable 802.1D Spanning Tree Protocol\n"
            "  --no-stp                disable 802.1D Spanning Tree Protocol\n"
            "\nRate-limiting of \"packet-in\" messages to the controller:\n"
