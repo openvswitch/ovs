@@ -573,7 +573,7 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port,
 		if (!skb->dev) {
 			if (net_ratelimit())
 				printk("skb device not set forwarding to in_port\n");
-			kfree(skb);
+			kfree_skb(skb);
 			return -ESRCH;
 		}
 		return xmit_skb(skb);
