@@ -92,6 +92,17 @@ struct rconn {
     time_t last_connected;
     unsigned int packets_sent;
 
+    /* In S_ACTIVE and S_IDLE, probably_admitted reports whether we believe
+     * that the peer has made a (positive) admission control decision on our
+     * connection.  If we have not yet been (probably) admitted, then the
+     * connection does not reset the timer used for deciding whether the switch
+     * should go into fail-open mode.
+     *
+     * last_admitted reports the last time we believe such a positive admission
+     * control decision was made. */
+    bool probably_admitted;
+    time_t last_admitted;
+
     /* These values are simply for statistics reporting, not used directly by
      * anything internal to the rconn (or the secchan for that matter). */
     unsigned int packets_received;
@@ -131,6 +142,8 @@ static void disconnect(struct rconn *, int error);
 static void flush_queue(struct rconn *);
 static void question_connectivity(struct rconn *);
 static void copy_to_monitor(struct rconn *, const struct ofpbuf *);
+static bool is_connected_state(enum state);
+static bool is_admitted_msg(const struct ofpbuf *);
 
 /* Creates a new rconn, connects it (reliably) to 'name', and returns it. */
 struct rconn *
@@ -183,6 +196,9 @@ rconn_create(int probe_interval, int max_backoff)
     rc->last_connected = time_now();
 
     rc->packets_sent = 0;
+
+    rc->probably_admitted = false;
+    rc->last_admitted = time_now();
 
     rc->packets_received = 0;
     rc->n_attempted_connections = 0;
@@ -436,6 +452,11 @@ rconn_recv(struct rconn *rc)
         int error = vconn_recv(rc->vconn, &buffer);
         if (!error) {
             copy_to_monitor(rc, buffer);
+            if (is_admitted_msg(buffer)
+                || time_now() - rc->last_connected >= 30) {
+                rc->probably_admitted = true;
+                rc->last_admitted = time_now();
+            }
             rc->last_received = time_now();
             rc->packets_received++;
             if (rc->state == S_IDLE) {
@@ -558,15 +579,21 @@ rconn_is_alive(const struct rconn *rconn)
 bool
 rconn_is_connected(const struct rconn *rconn)
 {
-    return rconn->state & (S_ACTIVE | S_IDLE);
+    return is_connected_state(rconn->state);
 }
 
-/* Returns 0 if 'rconn' is connected, otherwise the number of seconds that it
- * has been disconnected. */
+/* Returns 0 if 'rconn' is connected and the connection is believed to have
+ * been accepted by the controller.  Otherwise, if 'rconn' is in a "failure
+ * mode" (that is, it is not connected or if it has recently connected and the
+ * controller is not yet believed to have made an admission control decision
+ * for this switch), returns the number of seconds that it has been in failure
+ * mode. */
 int
-rconn_disconnected_duration(const struct rconn *rconn)
+rconn_failure_duration(const struct rconn *rconn)
 {
-    return rconn_is_connected(rconn) ? 0 : time_now() - rconn->last_received;
+    return (rconn_is_connected(rconn) && rconn->probably_admitted
+            ? 0
+            : time_now() - rconn->last_admitted);
 }
 
 /* Returns the IP address of the peer, or 0 if the peer is not connected over
@@ -773,6 +800,9 @@ timed_out(const struct rconn *rc)
 static void
 state_transition(struct rconn *rc, enum state state)
 {
+    if (is_connected_state(state) && !is_connected_state(rc->state)) {
+        rc->probably_admitted = false;
+    }
     if (rconn_is_connected(rc)) {
         rc->total_time_connected += elapsed_in_this_state(rc);
     }
@@ -817,4 +847,28 @@ copy_to_monitor(struct rconn *rc, const struct ofpbuf *b)
         i++;
     }
     ofpbuf_delete(clone);
+}
+
+static bool
+is_connected_state(enum state state) 
+{
+    return (state & (S_ACTIVE | S_IDLE)) != 0;
+}
+
+static bool
+is_admitted_msg(const struct ofpbuf *b)
+{
+    struct ofp_header *oh = b->data;
+    uint8_t type = oh->type;
+    return !(type < 32
+             && (1u << type) & ((1u << OFPT_HELLO) |
+                                (1u << OFPT_ERROR) |
+                                (1u << OFPT_ECHO_REQUEST) |
+                                (1u << OFPT_ECHO_REPLY) |
+                                (1u << OFPT_VENDOR) |
+                                (1u << OFPT_FEATURES_REQUEST) |
+                                (1u << OFPT_FEATURES_REPLY) |
+                                (1u << OFPT_GET_CONFIG_REQUEST) |
+                                (1u << OFPT_GET_CONFIG_REPLY) |
+                                (1u << OFPT_SET_CONFIG)));
 }

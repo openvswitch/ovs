@@ -78,7 +78,7 @@ void rconn_add_monitor(struct rconn *, struct vconn *);
 const char *rconn_get_name(const struct rconn *);
 bool rconn_is_alive(const struct rconn *);
 bool rconn_is_connected(const struct rconn *);
-int rconn_disconnected_duration(const struct rconn *);
+int rconn_failure_duration(const struct rconn *);
 bool rconn_is_connectivity_questionable(struct rconn *);
 
 uint32_t rconn_get_ip(const struct rconn *);

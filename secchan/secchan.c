@@ -1579,7 +1579,7 @@ fail_open_periodic_cb(void *fail_open_)
     if (time_now() < fail_open->boot_deadline) {
         return;
     }
-    disconn_secs = rconn_disconnected_duration(fail_open->remote_rconn);
+    disconn_secs = rconn_failure_duration(fail_open->remote_rconn);
     open = disconn_secs >= fail_open->s->probe_interval * 3;
     if (open != (fail_open->lswitch != NULL)) {
         if (!open) {
@@ -1620,7 +1620,7 @@ fail_open_status_cb(struct status_reply *sr, void *fail_open_)
     struct fail_open_data *fail_open = fail_open_;
     const struct settings *s = fail_open->s;
     int trigger_duration = s->probe_interval * 3;
-    int cur_duration = rconn_disconnected_duration(fail_open->remote_rconn);
+    int cur_duration = rconn_failure_duration(fail_open->remote_rconn);
 
     status_reply_put(sr, "trigger-duration=%d", trigger_duration);
     status_reply_put(sr, "current-duration=%d", cur_duration);
