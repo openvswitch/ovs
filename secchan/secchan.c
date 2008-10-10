@@ -720,11 +720,13 @@ call_local_port_changed_callbacks(struct port_watcher *pw)
         name[0] = '\0';
     }
     if (strcmp(pw->local_port_name, name)) {
-        VLOG_WARN("Identified data path local port as \"%s\".", name);
-    } else {
-        VLOG_WARN("Data path has no local port.");
+        if (name[0]) {
+            VLOG_WARN("Identified data path local port as \"%s\".", name);
+        } else {
+            VLOG_WARN("Data path has no local port.");
+        }
+        strcpy(pw->local_port_name, name);
     }
-    strcpy(pw->local_port_name, name);
 
     /* Invoke callbacks. */
     for (i = 0; i < pw->n_local_cbs; i++) {
