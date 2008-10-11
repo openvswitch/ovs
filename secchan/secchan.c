@@ -198,6 +198,8 @@ static void port_watcher_set_flags(struct port_watcher *, int port_no,
                                    uint32_t config, uint32_t c_mask,
                                    uint32_t state, uint32_t s_mask);
 
+static struct hook snat_hook_create(struct port_watcher *pw);
+
 static struct hook stp_hook_create(const struct settings *,
                                    struct port_watcher *,
                                    struct rconn *local, struct rconn *remote);
@@ -291,6 +293,7 @@ main(int argc, char *argv[])
     /* Set up hooks. */
     hooks[n_hooks++] = port_watcher_create(local_rconn, remote_rconn, &pw);
     discovery = s.discovery ? discovery_init(&s, pw, switch_status) : NULL;
+    hooks[n_hooks++] = snat_hook_create(pw);
     if (s.enable_stp) {
         hooks[n_hooks++] = stp_hook_create(&s, pw, local_rconn, remote_rconn);
     }
@@ -1048,6 +1051,254 @@ port_watcher_create(struct rconn *local_rconn, struct rconn *remote_rconn,
                      port_watcher_remote_packet_cb,
                      port_watcher_periodic_cb,
                      port_watcher_wait_cb, pw);
+}
+
+struct snat_port_conf {
+    struct list node;
+    struct nx_snat_config config;
+};
+
+struct snat_data {
+    struct port_watcher *pw;
+    struct list port_list;
+};
+
+
+/* Source-NAT configuration monitor. */
+#define SNAT_CMD_LEN 1024
+
+/* Commands to configure iptables.  There is no programmatic interface
+ * to iptables from the kernel, so we're stuck making command-line calls
+ * in user-space. */
+#define SNAT_FLUSH_ALL_CMD "/sbin/iptables -t nat -F"
+#define SNAT_FLUSH_CHAIN_CMD "/sbin/iptables -t nat -F of-snat-%s"
+
+#define SNAT_ADD_CHAIN_CMD "/sbin/iptables -t nat -N of-snat-%s"
+#define SNAT_CONF_CHAIN_CMD "/sbin/iptables -t nat -A POSTROUTING -o %s -j of-snat-%s"
+
+#define SNAT_ADD_IP_CMD "/sbin/iptables -t nat -A of-snat-%s -j SNAT --to %s-%s"
+#define SNAT_ADD_TCP_CMD "/sbin/iptables -t nat -A of-snat-%s -j SNAT -p TCP --to %s-%s:%d-%d"
+#define SNAT_ADD_UDP_CMD "/sbin/iptables -t nat -A of-snat-%s -j SNAT -p UDP --to %s-%s:%d-%d"
+
+#define SNAT_UNSET_CHAIN_CMD "/sbin/iptables -t nat -D POSTROUTING -o %s -j of-snat-%s"
+#define SNAT_DEL_CHAIN_CMD "/sbin/iptables -t nat -X of-snat-%s"
+
+static void 
+snat_add_rules(const struct nx_snat_config *sc, const uint8_t *dev_name)
+{
+    char command[SNAT_CMD_LEN];
+    char ip_str_start[16];
+    char ip_str_end[16];
+
+
+    snprintf(ip_str_start, sizeof ip_str_start, IP_FMT, 
+            IP_ARGS(&sc->ip_addr_start));
+    snprintf(ip_str_end, sizeof ip_str_end, IP_FMT, 
+            IP_ARGS(&sc->ip_addr_end));
+
+    /* We always attempt to remove existing entries, so that we know
+     * there's a pristine state for SNAT on the interface.  We just ignore 
+     * the results of these calls, since iptables will complain about 
+     * any non-existent entries. */
+
+    /* Flush the chain that does the SNAT. */
+    snprintf(command, sizeof(command), SNAT_FLUSH_CHAIN_CMD, dev_name);
+    system(command);
+
+    /* We always try to create the a new chain. */
+    snprintf(command, sizeof(command), SNAT_ADD_CHAIN_CMD, dev_name);
+    system(command);
+
+    /* Disassociate any old SNAT chain from the POSTROUTING chain. */
+    snprintf(command, sizeof(command), SNAT_UNSET_CHAIN_CMD, dev_name, 
+            dev_name);
+    system(command);
+
+    /* Associate the new chain with the POSTROUTING hook. */
+    snprintf(command, sizeof(command), SNAT_CONF_CHAIN_CMD, dev_name, 
+            dev_name);
+    if (system(command) != 0) {
+        VLOG_ERR("SNAT: problem flushing chain for add");
+        return;
+    }
+
+    /* If configured, restrict TCP source port ranges. */
+    if ((sc->tcp_start != 0) && (sc->tcp_end != 0)) {
+        snprintf(command, sizeof(command), SNAT_ADD_TCP_CMD, 
+                dev_name, ip_str_start, ip_str_end,
+                ntohs(sc->tcp_start), ntohs(sc->tcp_end));
+        if (system(command) != 0) {
+            VLOG_ERR("SNAT: problem adding TCP rule");
+            return;
+        }
+    }
+
+    /* If configured, restrict UDP source port ranges. */
+    if ((sc->udp_start != 0) && (sc->udp_end != 0)) {
+        snprintf(command, sizeof(command), SNAT_ADD_UDP_CMD, 
+                dev_name, ip_str_start, ip_str_end,
+                ntohs(sc->udp_start), ntohs(sc->udp_end));
+        if (system(command) != 0) {
+            VLOG_ERR("SNAT: problem adding UDP rule");
+            return;
+        }
+    }
+
+    /* Add a rule that covers all IP traffic that would not be covered
+     * by the prior TCP or UDP ranges. */
+    snprintf(command, sizeof(command), SNAT_ADD_IP_CMD, 
+            dev_name, ip_str_start, ip_str_end);
+    if (system(command) != 0) {
+        VLOG_ERR("SNAT: problem adding base rule");
+        return;
+    }
+}
+
+static void 
+snat_del_rules(const uint8_t *dev_name)
+{
+    char command[SNAT_CMD_LEN];
+
+    /* Flush the chain that does the SNAT. */
+    snprintf(command, sizeof(command), SNAT_FLUSH_CHAIN_CMD, dev_name);
+    if (system(command) != 0) {
+        VLOG_ERR("SNAT: problem flushing chain for deletion");
+        return;
+    }
+
+    /* Disassociate the SNAT chain from the POSTROUTING chain. */
+    snprintf(command, sizeof(command), SNAT_UNSET_CHAIN_CMD, dev_name, 
+            dev_name);
+    if (system(command) != 0) {
+        VLOG_ERR("SNAT: problem unsetting chain");
+        return;
+    }
+
+    /* Now we can finally delete our SNAT chain. */
+    snprintf(command, sizeof(command), SNAT_DEL_CHAIN_CMD, dev_name);
+    if (system(command) != 0) {
+        VLOG_ERR("SNAT: problem deleting chain");
+        return;
+    }
+}
+
+static void 
+snat_config(const struct nx_snat_config *sc, struct snat_data *snat)
+{
+    int idx;
+    struct port_watcher *pw = snat->pw;
+    struct ofp_phy_port *pw_opp;
+    struct snat_port_conf *c, *spc=NULL;
+    uint16_t port_no;
+
+    port_no = ntohs(sc->port);
+    idx = port_no_to_pw_idx(port_no);
+    if (idx < 0) {
+        return;
+    }
+
+    pw_opp = &pw->ports[idx];
+    if (htons(pw_opp->port_no) != port_no) {
+        return;
+    }
+
+    LIST_FOR_EACH(c, struct snat_port_conf, node, &snat->port_list) {
+        if (c->config.port == sc->port) {
+            spc = c;
+            break;
+        }
+    }
+
+    if (sc->command == NXSC_ADD) {
+        if (!spc) {
+            spc = xmalloc(sizeof(*c));
+            if (!spc) {
+                VLOG_ERR("SNAT: no memory for new entry");
+                return;
+            }
+            list_push_back(&snat->port_list, &spc->node);
+        }
+        memcpy(&spc->config, sc, sizeof(spc->config));
+        snat_add_rules(sc, pw_opp->name);
+    } else if (spc) {
+        snat_del_rules(pw_opp->name);
+        list_remove(&spc->node);
+    }
+}
+
+static bool
+snat_remote_packet_cb(struct relay *r, void *snat_)
+{
+    struct snat_data *snat = snat_;
+    struct ofpbuf *msg = r->halves[HALF_REMOTE].rxbuf;
+    struct nicira_header *request = msg->data;
+    struct nx_act_config *nac = msg->data;
+    int n_configs, i;
+
+
+    if (msg->size < sizeof(struct nx_act_config)) {
+        return false;
+    }
+    request = msg->data;
+    if (request->header.type != OFPT_VENDOR
+        || request->vendor != htonl(NX_VENDOR_ID)
+        || request->subtype != htonl(NXT_ACT_SET_CONFIG)) {
+        return false;
+    }
+
+    /* We're only interested in attempts to configure SNAT */
+    if (nac->type != htons(NXAST_SNAT)) {
+        return false;
+    }
+
+    n_configs = (msg->size - sizeof *nac) / sizeof *nac->snat;
+    for (i=0; i<n_configs; i++) {
+        snat_config(&nac->snat[i], snat);
+    }
+
+    return false;
+}
+
+static void
+snat_port_changed_cb(uint16_t port_no,
+                    const struct ofp_phy_port *old,
+                    const struct ofp_phy_port *new,
+                    void *snat_)
+{
+    struct snat_data *snat = snat_;
+    struct snat_port_conf *c;
+
+    /* We're only interested in ports that went away */
+    if (new->port_no != htons(OFPP_NONE)) {
+        return;
+    }
+
+    LIST_FOR_EACH(c, struct snat_port_conf, node, &snat->port_list) {
+        if (c->config.port == old->port_no) {
+            snat_del_rules(old->name);
+            list_remove(&c->node);
+            return;
+        }
+    }
+}
+
+static struct hook
+snat_hook_create(struct port_watcher *pw)
+{
+    int ret;
+    struct snat_data *snat;
+
+    ret = system(SNAT_FLUSH_ALL_CMD); 
+    if (ret != 0) {
+        VLOG_ERR("SNAT: problum flushing tables");
+    }
+
+    snat = xcalloc(1, sizeof *snat);
+    snat->pw = pw;
+    list_init(&snat->port_list);
+
+    port_watcher_register_callback(pw, snat_port_changed_cb, snat);
+    return make_hook(NULL, snat_remote_packet_cb, NULL, NULL, snat);
 }
 
 /* Spanning tree protocol. */
@@ -1890,7 +2141,7 @@ switch_status_remote_packet_cb(struct relay *r, void *ss_)
     }
     request = msg->data;
     if (request->header.type != OFPT_VENDOR
-        || request->vendor_id != htonl(NX_VENDOR_ID)
+        || request->vendor != htonl(NX_VENDOR_ID)
         || request->subtype != htonl(NXT_STATUS_REQUEST)) {
         return false;
     }
@@ -1907,7 +2158,7 @@ switch_status_remote_packet_cb(struct relay *r, void *ss_)
     }
     reply = make_openflow_xid(sizeof *reply + sr.output.length,
                               OFPT_VENDOR, request->header.xid, &b);
-    reply->vendor_id = htonl(NX_VENDOR_ID);
+    reply->vendor = htonl(NX_VENDOR_ID);
     reply->subtype = htonl(NXT_STATUS_REPLY);
     memcpy(reply + 1, sr.output.string, sr.output.length);
     retval = rconn_send(rc, b, NULL);

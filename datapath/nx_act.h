@@ -5,10 +5,10 @@
 
 
 uint16_t nx_validate_act(struct datapath *dp, const struct sw_flow_key *key,
-		const struct ofp_action_vendor_header *avh, uint16_t len);
+		const struct nx_action_header *nah, uint16_t len);
 
 struct sk_buff *nx_execute_act(struct sk_buff *skb, 
 		const struct sw_flow_key *key,
-		const struct ofp_action_vendor_header *avh);
+		const struct nx_action_header *nah);
 
 #endif /* nx_act.h */

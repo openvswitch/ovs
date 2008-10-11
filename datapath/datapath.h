@@ -79,13 +79,15 @@ struct net_bridge_port {
 	struct work_struct port_task;
 	struct datapath	*dp;
 	struct net_device *dev;
-	struct list_head node; /* Element in datapath.ports. */
+	struct snat_conf *snat;  /* Only set if SNAT is configured for this port. */
+	struct list_head node;   /* Element in datapath.ports. */
 };
 
 extern struct mutex dp_mutex;
 extern struct notifier_block dp_device_notifier;
 
 int dp_del_switch_port(struct net_bridge_port *);
+int dp_xmit_skb(struct sk_buff *skb);
 int dp_output_port(struct datapath *, struct sk_buff *, int out_port,
 		   int ignore_no_fwd);
 int dp_output_control(struct datapath *, struct sk_buff *, uint32_t, 

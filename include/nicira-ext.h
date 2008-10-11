@@ -1,34 +1,6 @@
-/* Copyright (c) 2008 The Board of Trustees of The Leland Stanford
- * Junior University
- *
- * We are making the OpenFlow specification and associated documentation
- * (Software) available for public use and benefit with the expectation
- * that others will use, modify and enhance the Software and contribute
- * those enhancements back to the community. However, since we would
- * like to make the Software available for broadest use, with as few
- * restrictions as possible permission is hereby granted, free of
- * charge, to any person obtaining a copy of this Software to deal in
- * the Software under the copyrights without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- * The name and trademarks of copyright holder(s) may NOT be used in
- * advertising or publicity pertaining to the Software or any
- * derivatives without specific, written prior permission.
+/*
+ * Distributed under the terms of the GNU GPL version 2.
+ * Copyright (c) 2008 Nicira Networks
  */
 
 #ifndef NICIRA_EXT_H
@@ -50,14 +22,89 @@ enum nicira_type {
 
     /* Switch status reply.  The reply body is an ASCII string of key-value
      * pairs in the form "key=value\n". */
-    NXT_STATUS_REPLY
+    NXT_STATUS_REPLY,
+
+    /* Configure an action.  Most actions do not require configuration
+     * beyond that supplied in the actual action call. */
+    NXT_ACT_SET_CONFIG,
+
+    /* Get configuration of action. */
+    NXT_ACT_GET_CONFIG
 };
 
 struct nicira_header {
     struct ofp_header header;
-    uint32_t vendor_id;         /* NX_VENDOR_ID. */
+    uint32_t vendor;            /* NX_VENDOR_ID. */
     uint32_t subtype;           /* One of NXT_* above. */
 };
-OFP_ASSERT(sizeof(struct nicira_header) == sizeof(struct ofp_vendor) + 4);
+OFP_ASSERT(sizeof(struct nicira_header) == sizeof(struct ofp_vendor_header) + 4);
+
+
+enum nx_snat_command {
+    NXSC_ADD,
+    NXSC_DELETE
+};
+
+/* Configuration for source-NATing */
+struct nx_snat_config {
+    uint8_t command;        /* One of NXSC_*. */
+    uint8_t pad[3];
+    uint16_t port;          /* Physical switch port. */
+    uint16_t mac_timeout;   /* Time to cache MAC addresses of SNAT'd hosts
+                               in seconds.  0 uses the default value. */
+
+    /* Range of IP addresses to impersonate.  Set both values to the
+     * same to support a single address.  */
+    uint32_t ip_addr_start; 
+    uint32_t ip_addr_end;
+
+    /* Range of transport ports that should be used as new source port.  A
+     * value of zero, let's the switch choose.*/
+    uint16_t tcp_start;
+    uint16_t tcp_end;
+    uint16_t udp_start;
+    uint16_t udp_end;
+};
+OFP_ASSERT(sizeof(struct nx_snat_config) == 24);
+
+/* Action configuration.  Not all actions require separate configuration. */
+struct nx_act_config {
+    struct nicira_header header;
+    uint16_t type;          /* One of OFPAT_* */
+    uint8_t pad[2];
+    union {
+        struct nx_snat_config snat[0];
+    };                      /* Array of action configurations.  The number 
+                               is inferred from the length field in the 
+                               header. */
+};
+OFP_ASSERT(sizeof(struct nx_act_config) == 20);
+
+
+enum nx_action_subtype {
+    NXAST_SNAT                      /* Source-NAT */
+};
+
+/* Action structure for NXAST_SNAT. */
+struct nx_action_snat {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 8. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_SNAT. */
+    uint16_t port;                  /* Output port--it must be previously 
+                                       configured. */
+    uint8_t pad[4];
+};
+OFP_ASSERT(sizeof(struct nx_action_snat) == 16);
+
+/* Header for Nicira-defined actions. */
+struct nx_action_header {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 8. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_*. */
+    uint8_t pad[6];
+};
+OFP_ASSERT(sizeof(struct nx_action_header) == 16);
 
 #endif /* nicira-ext.h */

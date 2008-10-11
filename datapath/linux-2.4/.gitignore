@@ -20,6 +20,8 @@
 /kthread.c
 /netlink.c
 /nx_act.c
+/nx_act_snat.c
+/nx_msg.c
 /random32.c
 /rcupdate.c
 /sched.c

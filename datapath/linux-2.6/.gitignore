@@ -14,6 +14,8 @@
 /genetlink.c
 /hwtable_dummy.c
 /nx_act.c
+/nx_act_snat.c
+/nx_msg.c
 /random32.c
 /table-hash.c
 /table-linear.c

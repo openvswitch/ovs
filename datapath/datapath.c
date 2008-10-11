@@ -26,6 +26,7 @@
 #include <linux/random.h>
 #include <asm/system.h>
 #include <linux/netfilter_bridge.h>
+#include <linux/netfilter_ipv4.h>
 #include <linux/inetdevice.h>
 #include <linux/list.h>
 #include <linux/rculist.h>
@@ -33,6 +34,7 @@
 
 #include "openflow-netlink.h"
 #include "datapath.h"
+#include "nx_act_snat.h"
 #include "table.h"
 #include "chain.h"
 #include "dp_dev.h"
@@ -387,6 +389,10 @@ int add_switch_port(struct datapath *dp, struct net_device *dev)
 /* Delete 'p' from switch. */
 int dp_del_switch_port(struct net_bridge_port *p)
 {
+#ifdef SUPPORT_SNAT
+	unsigned long flags;
+#endif
+
 	/* First drop references to device. */
 	cancel_work_sync(&p->port_task);
 	rtnl_lock();
@@ -399,6 +405,13 @@ int dp_del_switch_port(struct net_bridge_port *p)
 
 	/* Then wait until no one is still using it, and destroy it. */
 	synchronize_rcu();
+
+#ifdef SUPPORT_SNAT
+	/* Free any SNAT configuration on the port. */
+	spin_lock_irqsave(&p->lock, flags);
+	snat_free_conf(p);
+	spin_unlock_irqrestore(&p->lock, flags);
+#endif
 
 	/* Notify the ctlpath that this port no longer exists */
 	dp_send_port_status(p, OFPPR_DELETE);
@@ -441,6 +454,16 @@ static int dp_maint_func(void *data)
 	struct datapath *dp = (struct datapath *) data;
 
 	while (!kthread_should_stop()) {
+#ifdef SUPPORT_SNAT
+		struct net_bridge_port *p;
+
+		/* Expire old SNAT entries */
+		rcu_read_lock();
+		list_for_each_entry_rcu (p, &dp->port_list, node) 
+			snat_maint(p);
+		rcu_read_unlock();
+#endif
+
 		/* Timeout old entries */
 		chain_timeout(dp->chain);
 		msleep_interruptible(MAINT_SLEEP_MSECS);
@@ -452,6 +475,14 @@ static int dp_maint_func(void *data)
 static void
 do_port_input(struct net_bridge_port *p, struct sk_buff *skb) 
 {
+#ifdef SUPPORT_SNAT
+	/* Check if this packet needs early SNAT processing. */
+	if (snat_pre_route(skb)) {
+		kfree_skb(skb);
+		return;
+	}
+#endif
+
 	/* Push the Ethernet header back on. */
 	skb_push(skb, ETH_HLEN);
 	fwd_port_input(p->dp->chain, skb, p);
@@ -545,7 +576,8 @@ void dp_set_origin(struct datapath *dp, uint16_t in_port,
 		skb->dev = NULL;
 }
 
-static int xmit_skb(struct sk_buff *skb)
+int 
+dp_xmit_skb(struct sk_buff *skb)
 {
 	int len = skb->len;
 	if (packet_length(skb) > skb->dev->mtu) {
@@ -576,7 +608,7 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port,
 			kfree_skb(skb);
 			return -ESRCH;
 		}
-		return xmit_skb(skb);
+		return dp_xmit_skb(skb);
 		
 	case OFPP_TABLE: {
 		int retval = run_flow_through_tables(dp->chain, skb,
@@ -617,7 +649,7 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port,
 			return 0;
 		}
 		skb->dev = p->dev; 
-		return xmit_skb(skb);
+		return dp_xmit_skb(skb);
 	}
 
 	default:

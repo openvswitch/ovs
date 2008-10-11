@@ -11,6 +11,8 @@ openflow_sources = \
 	flow.c \
 	forward.c \
 	nx_act.c \
+	nx_act_snat.c \
+	nx_msg.c \
 	table-hash.c \
 	table-linear.c 
 
@@ -22,6 +24,9 @@ openflow_headers = \
 	dp_dev.h \
 	flow.h \
 	forward.h \
+	nx_act.h \
+	nx_act_snat.h \
+	nx_msg.h \
 	snap.h \
 	table.h 
 

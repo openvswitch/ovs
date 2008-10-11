@@ -19,8 +19,6 @@
 #include "nicira-ext.h"
 #include "nx_act.h"
 
-static int make_writable(struct sk_buff **);
-
 
 static uint16_t
 validate_output(struct datapath *dp, const struct sw_flow_key *key, 
@@ -341,7 +339,7 @@ validate_vendor(struct datapath *dp, const struct sw_flow_key *key,
 
 	switch(ntohl(avh->vendor)) {
 	case NX_VENDOR_ID: 
-		ret = nx_validate_act(dp, key, avh, len);
+		ret = nx_validate_act(dp, key, (struct nx_action_header *)avh, len);
 		break;
 
 	default:
@@ -426,7 +424,7 @@ execute_vendor(struct sk_buff *skb, const struct sw_flow_key *key,
 
 	switch(ntohl(avh->vendor)) {
 	case NX_VENDOR_ID: 
-		skb = nx_execute_act(skb, key, avh);
+		skb = nx_execute_act(skb, key, (struct nx_action_header *)avh);
 		break;
 
 	default:
@@ -501,7 +499,7 @@ void execute_actions(struct datapath *dp, struct sk_buff *skb,
 /* Makes '*pskb' writable, possibly copying it and setting '*pskb' to point to
  * the copy.
  * Returns 1 if successful, 0 on failure. */
-static int
+int
 make_writable(struct sk_buff **pskb)
 {
 	/* Based on skb_make_writable() in net/netfilter/core.c. */

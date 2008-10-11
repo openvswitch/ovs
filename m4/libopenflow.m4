@@ -89,6 +89,25 @@ AC_DEFUN([OFP_CHECK_OPENSSL],
       AC_DEFINE([HAVE_OPENSSL], [1], [Define to 1 if OpenSSL is installed.])
    fi])
 
+dnl Checks for --enable-snat and defines SUPPORT_SNAT if it is specified.
+AC_DEFUN([OFP_CHECK_SNAT],
+  [AC_ARG_ENABLE(
+     [snat],
+     [AC_HELP_STRING([--enable-snat], 
+                     [Enable support for source-NAT action])],
+     [case "${enableval}" in
+        (yes) snat=true ;;
+        (no)  snat=false ;;
+        (*) AC_MSG_ERROR([bad value ${enableval} for --enable-snat]) ;;
+      esac],
+     [snat=false])
+   AM_CONDITIONAL([SUPPORT_SNAT], [test x$snat = xtrue])
+   if test x$snat = xtrue; then
+      AC_DEFINE([SUPPORT_SNAT], [1], [Define to 1 if SNAT is desired.])
+      SUPPORT_SNAT=-DSUPPORT_SNAT
+      AC_SUBST([SUPPORT_SNAT])
+   fi])
+
 dnl Checks for libraries needed by lib/fault.c.
 AC_DEFUN([OFP_CHECK_FAULT_LIBS],
   [AC_CHECK_LIB([dl], [dladdr], [FAULT_LIBS=-ldl])
@@ -106,6 +125,7 @@ AC_DEFUN([OFP_CHECK_LIBOPENFLOW],
    AC_REQUIRE([OFP_CHECK_NDEBUG])
    AC_REQUIRE([OFP_CHECK_NETLINK])
    AC_REQUIRE([OFP_CHECK_OPENSSL])
+   AC_REQUIRE([OFP_CHECK_SNAT])
    AC_REQUIRE([OFP_CHECK_FAULT_LIBS])
    AC_REQUIRE([OFP_CHECK_SOCKET_LIBS])])
 

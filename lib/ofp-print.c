@@ -48,6 +48,7 @@
 #include "flow.h"
 #include "ofpbuf.h"
 #include "openflow.h"
+#include "nicira-ext.h"
 #include "packets.h"
 #include "util.h"
 
@@ -243,6 +244,25 @@ static void ofp_print_port_name(struct ds *string, uint16_t port)
     ds_put_cstr(string, name);
 }
 
+static void
+ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
+{
+
+    if (nah->subtype == htonl(NXAST_SNAT)) {
+        const struct nx_action_snat *nas = (struct nx_action_snat *)nah;
+        uint16_t port = ntohs(nas->port);
+
+        if (port < OFPP_MAX) {
+            ds_put_format(string, "nat:%"PRIu16, port);
+        } else {
+            ds_put_format(string, "nat:%"PRIu16" (invalid port)", port);
+        }
+    } else {
+        ds_put_format(string, "***unknown Nicira action:%d***\n", 
+                ntohl(nah->subtype));
+    }
+}
+
 static int
 ofp_print_action(struct ds *string, const struct ofp_action_header *ah, 
         size_t actions_len) 
@@ -408,7 +428,11 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
             ds_put_format(string, "***ofpat_vendor truncated***\n");
             return -1;
         }
-        ds_put_format(string, "vendor action:0x%x", ntohl(avh->vendor));
+        if (avh->vendor == htonl(NX_VENDOR_ID)) {
+            ofp_print_nx_action(string, (struct nx_action_header *)avh);
+        } else {
+            ds_put_format(string, "vendor action:0x%x", ntohl(avh->vendor));
+        }
         break;
     }
 

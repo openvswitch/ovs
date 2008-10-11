@@ -222,6 +222,8 @@ usage(void)
            "  dump-flows SWITCH FLOW      print matching FLOWs\n"
            "  dump-aggregate SWITCH       print aggregate flow statistics\n"
            "  dump-aggregate SWITCH FLOW  print aggregate stats for FLOWs\n"
+           "  add-snat SWITCH IFACE IP    add SNAT config to IFACE\n"
+           "  del-snat SWITCH IFACE       delete SNAT config on IFACE\n"
            "  add-flow SWITCH FLOW        add flow described by FLOW\n"
            "  add-flows SWITCH FILE       add flows from FILE\n"
            "  mod-flows SWITCH FLOW       modify actions of matching FLOWs\n"
@@ -451,7 +453,7 @@ do_status(const struct settings *s, int argc, char *argv[])
     struct ofpbuf *b;
 
     request = make_openflow(sizeof *request, OFPT_VENDOR, &b);
-    request->vendor_id = htonl(NX_VENDOR_ID);
+    request->vendor = htonl(NX_VENDOR_ID);
     request->subtype = htonl(NXT_STATUS_REQUEST);
     if (argc > 2) {
         ofpbuf_put(b, argv[2], strlen(argv[2]));
@@ -465,7 +467,7 @@ do_status(const struct settings *s, int argc, char *argv[])
     }
     reply = b->data;
     if (reply->header.type != OFPT_VENDOR
-        || reply->vendor_id != ntohl(NX_VENDOR_ID)
+        || reply->vendor != ntohl(NX_VENDOR_ID)
         || reply->subtype != ntohl(NXT_STATUS_REPLY)) {
         ofp_print(stderr, b->data, b->size, 2);
         ofp_fatal(0, "bad reply");
@@ -615,6 +617,22 @@ str_to_action(char *str, struct ofp_action_header *actions,
             ah->type = htons(OFPAT_STRIP_VLAN);
         } else if (!strcasecmp(act, "output")) {
             port = str_to_int(arg);
+        } else if (!strcasecmp(act, "nat")) {
+            struct nx_action_snat *sa = (struct nx_action_snat *)ah;
+
+            if (len < sizeof *sa) {
+                ofp_fatal(0, "Insufficient room for SNAT action\n");
+            }
+
+            if (str_to_int(arg) > OFPP_MAX) {
+                ofp_fatal(0, "Invalid nat port: %s\n", arg);
+            }
+
+            act_len = sizeof *sa;
+            sa->type = htons(OFPAT_VENDOR);
+            sa->vendor = htonl(NX_VENDOR_ID);
+            sa->subtype = htons(NXAST_SNAT);
+            sa->port = htons(str_to_int(arg));
         } else if (!strcasecmp(act, "TABLE")) {
             port = OFPP_TABLE;
         } else if (!strcasecmp(act, "NORMAL")) {
@@ -851,6 +869,56 @@ static void do_dump_aggregate(const struct settings *s, int argc,
     memset(req->pad, 0, sizeof req->pad);
 
     dump_stats_transaction(argv[1], request);
+}
+
+static void do_add_snat(const struct settings *s, int argc, char *argv[])
+{
+    struct vconn *vconn;
+    struct ofpbuf *buffer;
+    struct nx_act_config *nac;
+    size_t size;
+
+    /* Parse and send. */
+    size = sizeof *nac + sizeof nac->snat[0];
+    nac = make_openflow(size, OFPT_VENDOR, &buffer);
+
+    nac->header.vendor = htonl(NX_VENDOR_ID);
+    nac->header.subtype = htonl(NXT_ACT_SET_CONFIG);
+
+    nac->type = htons(NXAST_SNAT);
+    nac->snat[0].command = NXSC_ADD;
+    nac->snat[0].port = htons(str_to_int(argv[2]));
+    nac->snat[0].mac_timeout = htons(0);
+    str_to_ip(argv[3], &nac->snat[0].ip_addr_start);
+    str_to_ip(argv[3], &nac->snat[0].ip_addr_end);
+
+    open_vconn(argv[1], &vconn);
+    send_openflow_buffer(vconn, buffer);
+    vconn_close(vconn);
+}
+
+static void do_del_snat(const struct settings *s, int argc, char *argv[])
+{
+    struct vconn *vconn;
+    struct ofpbuf *buffer;
+    struct nx_act_config *nac;
+    size_t size;
+
+    /* Parse and send. */
+    size = sizeof *nac + sizeof nac->snat[0];
+    nac = make_openflow(size, OFPT_VENDOR, &buffer);
+
+    nac->header.vendor = htonl(NX_VENDOR_ID);
+    nac->header.subtype = htonl(NXT_ACT_SET_CONFIG);
+
+    nac->type = htons(NXAST_SNAT);
+    nac->snat[0].command = NXSC_DELETE;
+    nac->snat[0].port = htons(str_to_int(argv[2]));
+    nac->snat[0].mac_timeout = htons(0);
+
+    open_vconn(argv[1], &vconn);
+    send_openflow_buffer(vconn, buffer);
+    vconn_close(vconn);
 }
 
 static void do_add_flow(const struct settings *s, int argc, char *argv[])
@@ -1236,6 +1304,8 @@ static struct command all_commands[] = {
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 1, 2, do_dump_flows },
     { "dump-aggregate", 1, 2, do_dump_aggregate },
+    { "add-snat", 3, 3, do_add_snat },
+    { "del-snat", 2, 2, do_del_snat },
     { "add-flow", 2, 2, do_add_flow },
     { "add-flows", 2, 2, do_add_flows },
     { "mod-flows", 2, 2, do_mod_flows },

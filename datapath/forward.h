@@ -30,7 +30,6 @@ int fwd_control_input(struct sw_chain *, const struct sender *,
 
 uint32_t fwd_save_skb(struct sk_buff *skb);
 void fwd_discard_all(void);
-
 void fwd_exit(void);
 
 #endif /* forward.h */

@@ -12,6 +12,7 @@ EXTRA_CFLAGS := -DVERSION=\"$(VERSION)\"
 EXTRA_CFLAGS += -I$(srcdir)/.. 
 EXTRA_CFLAGS += -I$(builddir)/..
 EXTRA_CFLAGS += -I$(top_srcdir)/include
+EXTRA_CFLAGS += @SUPPORT_SNAT@
 
 # These include directories have to go before -I$(KSRC)/include.
 # NOSTDINC_FLAGS just happens to be a variable that goes in the

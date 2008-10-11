@@ -12,7 +12,9 @@
 #include <linux/types.h>
 #include "forward.h"
 #include "datapath.h"
+#include "nicira-ext.h"
 #include "dp_act.h"
+#include "nx_msg.h"
 #include "chain.h"
 #include "flow.h"
 
@@ -333,6 +335,25 @@ recv_flow(struct sw_chain *chain, const struct sender *sender, const void *msg)
 	}
 }
 
+static int
+recv_vendor(struct sw_chain *chain, const struct sender *sender, 
+		const void *msg)
+{
+	const struct ofp_vendor_header *ovh = msg;
+
+	switch(ntohl(ovh->vendor))
+	{
+	case NX_VENDOR_ID:
+		return nx_recv_msg(chain, sender, msg);
+	default:
+		if (net_ratelimit())
+			printk("Uknown vendor: %#x\n", ntohl(ovh->vendor));
+		dp_send_error_msg(chain->dp, sender, OFPET_BAD_REQUEST,
+				  OFPBRC_BAD_VENDOR, msg, ovh->header.length);
+		return -EINVAL;
+	}
+}
+
 /* 'msg', which is 'length' bytes long, was received across Netlink from
  * 'sender'.  Apply it to 'chain'. */
 int
@@ -350,6 +371,18 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 		[OFPT_HELLO] = {
 			sizeof (struct ofp_header),
 			recv_hello,
+		},
+		[OFPT_ECHO_REQUEST] = {
+			sizeof (struct ofp_header),
+			recv_echo_request,
+		},
+		[OFPT_ECHO_REPLY] = {
+			sizeof (struct ofp_header),
+			recv_echo_reply,
+		},
+		[OFPT_VENDOR] = {
+			sizeof (struct ofp_vendor_header),
+			recv_vendor,
 		},
 		[OFPT_FEATURES_REQUEST] = {
 			sizeof (struct ofp_header),
@@ -374,15 +407,7 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 		[OFPT_PORT_MOD] = {
 			sizeof (struct ofp_port_mod),
 			recv_port_mod,
-		},
-		[OFPT_ECHO_REQUEST] = {
-			sizeof (struct ofp_header),
-			recv_echo_request,
-		},
-		[OFPT_ECHO_REPLY] = {
-			sizeof (struct ofp_header),
-			recv_echo_reply,
-		},
+		}
 	};
 
 	struct ofp_header *oh;
@@ -399,8 +424,12 @@ fwd_control_input(struct sw_chain *chain, const struct sender *sender,
 				  OFPBRC_BAD_VERSION, msg, length);
 		return -EINVAL;
 	}
-	if (ntohs(oh->length) > length)
+	if (ntohs(oh->length) != length) {
+		if (net_ratelimit())
+			printk("received message length wrong: %d/%d\n", 
+				ntohs(oh->length), length);
 		return -EINVAL;
+	}
 
 	if (oh->type < ARRAY_SIZE(packets)) {
 		const struct openflow_packet *pkt = &packets[oh->type];
@@ -528,4 +557,3 @@ void fwd_exit(void)
 {
 	fwd_discard_all();
 }
-

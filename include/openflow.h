@@ -572,8 +572,9 @@ enum ofp_bad_request_code {
     OFPBRC_BAD_VERSION,         /* ofp_header.version not supported. */
     OFPBRC_BAD_TYPE,            /* ofp_header.type not supported. */
     OFPBRC_BAD_STAT,            /* ofp_stats_request.type not supported. */
-    OFPBRC_BAD_VENDOR           /* Vendor not supported (in ofp_vendor or
+    OFPBRC_BAD_VENDOR,          /* Vendor not supported (in ofp_vendor or
                                  * ofp_stats_request or ofp_stats_reply). */
+    OFPBRC_BAD_SUBTYPE          /* Vendor subtype not supported. */
 };
 
 /* ofp_error_msg 'code' values for OFPET_BAD_ACTION.  'data' contains at least 
@@ -583,7 +584,8 @@ enum ofp_bad_action_code {
     OFPBAC_BAD_LEN,            /* Length problem in actions. */
     OFPBAC_BAD_VENDOR,         /* Unknown vendor id specified. */
     OFPBAC_BAD_VENDOR_TYPE,    /* Unknown action type for vendor id. */
-    OFPBAC_BAD_OUT_PORT        /* Problem validating output action. */
+    OFPBAC_BAD_OUT_PORT,       /* Problem validating output action. */
+    OFPBAC_BAD_ARGUMENT        /* Bad action argument. */
 };
 
 /* OFPT_ERROR: Error message (datapath -> controller). */
@@ -746,7 +748,7 @@ struct ofp_port_stats {
 OFP_ASSERT(sizeof(struct ofp_port_stats) == 104);
 
 /* Vendor extension. */
-struct ofp_vendor {
+struct ofp_vendor_header {
     struct ofp_header header;   /* Type OFPT_VENDOR. */
     uint32_t vendor;            /* Vendor ID:
                                  * - MSB 0: low-order bytes are IEEE OUI.
@@ -754,6 +756,6 @@ struct ofp_vendor {
                                  *   consortium. */
     /* Vendor-defined arbitrary additional data. */
 };
-OFP_ASSERT(sizeof(struct ofp_vendor) == 12);
+OFP_ASSERT(sizeof(struct ofp_vendor_header) == 12);
 
 #endif /* openflow.h */
