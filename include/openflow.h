@@ -63,7 +63,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x95
+#define OFP_VERSION   0x96
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -119,7 +119,6 @@ enum ofp_type {
     OFPT_PACKET_OUT,          /* Controller/switch message */
     OFPT_FLOW_MOD,            /* Controller/switch message */
     OFPT_PORT_MOD,            /* Controller/switch message */
-    OFPT_TABLE,               /* Controller/switch message */
 
     /* Statistics messages. */
     OFPT_STATS_REQUEST,       /* Controller/switch message */
