@@ -311,7 +311,7 @@ snat_pre_route(struct sk_buff *skb)
 	skb->dst = (struct dst_entry *)&__fake_rtable;
 	dst_hold(skb->dst);
 
-	return NF_HOOK(PF_INET, NF_IP_PRE_ROUTING, skb, skb->dev, NULL,
+	return NF_HOOK(PF_INET, NF_INET_PRE_ROUTING, skb, skb->dev, NULL,
 			snat_pre_route_finish);
 
 ipv4_error:
@@ -322,7 +322,7 @@ ipv4_error:
 static int 
 snat_skb_finish(struct sk_buff *skb)
 {
-	NF_HOOK(PF_INET, NF_IP_POST_ROUTING, skb, NULL, skb->dev, 
+	NF_HOOK(PF_INET, NF_INET_POST_ROUTING, skb, NULL, skb->dev, 
 			dp_xmit_skb_push);
 
 	return 0;
@@ -398,7 +398,7 @@ snat_skb(struct datapath *dp, struct sk_buff *skb, int out_port)
 	/* Take the Ethernet header back off for netfilter hooks. */
 	skb_pull(nskb, ETH_HLEN);
 
-	NF_HOOK(PF_INET, NF_IP_FORWARD, nskb, skb->dev, nskb->dev, 
+	NF_HOOK(PF_INET, NF_INET_FORWARD, nskb, skb->dev, nskb->dev, 
 			snat_skb_finish);
 }
 
