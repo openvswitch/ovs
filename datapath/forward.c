@@ -349,7 +349,7 @@ recv_vendor(struct sw_chain *chain, const struct sender *sender,
 		if (net_ratelimit())
 			printk("Uknown vendor: %#x\n", ntohl(ovh->vendor));
 		dp_send_error_msg(chain->dp, sender, OFPET_BAD_REQUEST,
-				  OFPBRC_BAD_VENDOR, msg, ovh->header.length);
+				  OFPBRC_BAD_VENDOR, msg, ntohs(ovh->header.length));
 		return -EINVAL;
 	}
 }

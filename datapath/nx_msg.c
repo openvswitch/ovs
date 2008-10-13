@@ -33,7 +33,7 @@ nx_recv_msg(struct sw_chain *chain, const struct sender *sender,
 
 	default:
 		dp_send_error_msg(chain->dp, sender, OFPET_BAD_REQUEST,
-				  OFPBRC_BAD_SUBTYPE, msg, nh->header.length);
+				  OFPBRC_BAD_SUBTYPE, msg, ntohs(nh->header.length));
 		return -EINVAL;
 	}
 
