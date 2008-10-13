@@ -582,18 +582,15 @@ rconn_is_connected(const struct rconn *rconn)
     return is_connected_state(rconn->state);
 }
 
-/* Returns 0 if 'rconn' is connected and the connection is believed to have
- * been accepted by the controller.  Otherwise, if 'rconn' is in a "failure
- * mode" (that is, it is not connected or if it has recently connected and the
- * controller is not yet believed to have made an admission control decision
- * for this switch), returns the number of seconds that it has been in failure
- * mode. */
+/* Returns 0 if 'rconn' is connected.  Otherwise, if 'rconn' is in a "failure
+ * mode" (that is, it is not connected), returns the number of seconds that it
+ * has been in failure mode, ignoring any times that it connected but the
+ * controller's admission control policy caused it to be quickly
+ * disconnected. */
 int
 rconn_failure_duration(const struct rconn *rconn)
 {
-    return (rconn_is_connected(rconn) && rconn->probably_admitted
-            ? 0
-            : time_now() - rconn->last_admitted);
+    return rconn_is_connected(rconn) ? 0 : time_now() - rconn->last_admitted;
 }
 
 /* Returns the IP address of the peer, or 0 if the peer is not connected over
