@@ -727,7 +727,7 @@ disconnect(struct rconn *rc, int error)
                           rc->name, strerror(error));
             } else if (error == EOF) {
                 if (rc->reliable) {
-                    VLOG_WARN("%s: connection closed", rc->name);
+                    VLOG_WARN("%s: connection closed by peer", rc->name);
                 }
             } else {
                 VLOG_WARN("%s: connection dropped", rc->name);
