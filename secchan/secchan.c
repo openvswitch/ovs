@@ -198,7 +198,9 @@ static void port_watcher_set_flags(struct port_watcher *, int port_no,
                                    uint32_t config, uint32_t c_mask,
                                    uint32_t state, uint32_t s_mask);
 
+#ifdef SUPPORT_SNAT
 static struct hook snat_hook_create(struct port_watcher *pw);
+#endif
 
 static struct hook stp_hook_create(const struct settings *,
                                    struct port_watcher *,
@@ -293,7 +295,9 @@ main(int argc, char *argv[])
     /* Set up hooks. */
     hooks[n_hooks++] = port_watcher_create(local_rconn, remote_rconn, &pw);
     discovery = s.discovery ? discovery_init(&s, pw, switch_status) : NULL;
+#ifdef SUPPORT_SNAT
     hooks[n_hooks++] = snat_hook_create(pw);
+#endif
     if (s.enable_stp) {
         hooks[n_hooks++] = stp_hook_create(&s, pw, local_rconn, remote_rconn);
     }
@@ -1053,6 +1057,7 @@ port_watcher_create(struct rconn *local_rconn, struct rconn *remote_rconn,
                      port_watcher_wait_cb, pw);
 }
 
+#ifdef SUPPORT_SNAT
 struct snat_port_conf {
     struct list node;
     struct nx_snat_config config;
@@ -1300,6 +1305,7 @@ snat_hook_create(struct port_watcher *pw)
     port_watcher_register_callback(pw, snat_port_changed_cb, snat);
     return make_hook(NULL, snat_remote_packet_cb, NULL, NULL, snat);
 }
+#endif /* SUPPORT_SNAT */
 
 /* Spanning tree protocol. */
 

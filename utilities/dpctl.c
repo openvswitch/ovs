@@ -222,8 +222,10 @@ usage(void)
            "  dump-flows SWITCH FLOW      print matching FLOWs\n"
            "  dump-aggregate SWITCH       print aggregate flow statistics\n"
            "  dump-aggregate SWITCH FLOW  print aggregate stats for FLOWs\n"
+#ifdef SUPPORT_SNAT
            "  add-snat SWITCH IFACE IP    add SNAT config to IFACE\n"
            "  del-snat SWITCH IFACE       delete SNAT config on IFACE\n"
+#endif
            "  add-flow SWITCH FLOW        add flow described by FLOW\n"
            "  add-flows SWITCH FILE       add flows from FILE\n"
            "  mod-flows SWITCH FLOW       modify actions of matching FLOWs\n"
@@ -617,6 +619,7 @@ str_to_action(char *str, struct ofp_action_header *actions,
             ah->type = htons(OFPAT_STRIP_VLAN);
         } else if (!strcasecmp(act, "output")) {
             port = str_to_int(arg);
+#ifdef SUPPORT_SNAT
         } else if (!strcasecmp(act, "nat")) {
             struct nx_action_snat *sa = (struct nx_action_snat *)ah;
 
@@ -633,6 +636,7 @@ str_to_action(char *str, struct ofp_action_header *actions,
             sa->vendor = htonl(NX_VENDOR_ID);
             sa->subtype = htons(NXAST_SNAT);
             sa->port = htons(str_to_int(arg));
+#endif
         } else if (!strcasecmp(act, "TABLE")) {
             port = OFPP_TABLE;
         } else if (!strcasecmp(act, "NORMAL")) {
@@ -871,6 +875,7 @@ static void do_dump_aggregate(const struct settings *s, int argc,
     dump_stats_transaction(argv[1], request);
 }
 
+#ifdef SUPPORT_SNAT
 static void do_add_snat(const struct settings *s, int argc, char *argv[])
 {
     struct vconn *vconn;
@@ -920,6 +925,7 @@ static void do_del_snat(const struct settings *s, int argc, char *argv[])
     send_openflow_buffer(vconn, buffer);
     vconn_close(vconn);
 }
+#endif /* SUPPORT_SNAT */
 
 static void do_add_flow(const struct settings *s, int argc, char *argv[])
 {
@@ -1304,8 +1310,10 @@ static struct command all_commands[] = {
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 1, 2, do_dump_flows },
     { "dump-aggregate", 1, 2, do_dump_aggregate },
+#ifdef SUPPORT_SNAT
     { "add-snat", 3, 3, do_add_snat },
     { "del-snat", 2, 2, do_del_snat },
+#endif
     { "add-flow", 2, 2, do_add_flow },
     { "add-flows", 2, 2, do_add_flows },
     { "mod-flows", 2, 2, do_mod_flows },
