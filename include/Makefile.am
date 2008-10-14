@@ -24,6 +24,7 @@ noinst_HEADERS = \
 	openflow-netlink.h \
 	packets.h \
 	poll-loop.h \
+	port-array.h \
 	queue.h \
 	random.h \
 	rconn.h \

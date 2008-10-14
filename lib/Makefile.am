@@ -20,6 +20,7 @@ libopenflow_a_SOURCES = \
 	ofpbuf.c \
 	ofp-print.c \
 	poll-loop.c \
+	port-array.c \
 	queue.c \
 	random.c \
 	rconn.c \

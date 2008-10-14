@@ -47,6 +47,7 @@
 #include "openflow.h"
 #include "queue.h"
 #include "rconn.h"
+#include "stp.h"
 #include "timeval.h"
 #include "vconn.h"
 #include "xtoxll.h"
@@ -291,7 +292,7 @@ static void
 process_phy_port(struct lswitch *sw, struct rconn *rconn,
                  const struct ofp_phy_port *opp)
 {
-    if (sw->capabilities & OFPC_STP && ntohs(opp->port_no) < OFPP_MAX) {
+    if (sw->capabilities & OFPC_STP && ntohs(opp->port_no) < STP_MAX_PORTS) {
         uint32_t config = ntohl(opp->config);
         uint32_t state = ntohl(opp->state);
         uint32_t new_config = config & ~(OFPPC_NO_RECV | OFPPC_NO_RECV_STP

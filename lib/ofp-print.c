@@ -601,7 +601,7 @@ ofp_print_switch_features(struct ds *string, const void *oh, size_t len,
                           int verbosity)
 {
     const struct ofp_switch_features *osf = oh;
-    struct ofp_phy_port port_list[OFPP_MAX];
+    struct ofp_phy_port *port_list;
     int n_ports;
     int i;
 
@@ -617,11 +617,12 @@ ofp_print_switch_features(struct ds *string, const void *oh, size_t len,
     }
     n_ports = (len - sizeof *osf) / sizeof *osf->ports;
 
-    memcpy(port_list, osf->ports, (len - sizeof *osf));
-    qsort(port_list, n_ports, sizeof port_list[0], compare_ports);
+    port_list = xmemdup(osf->ports, len - sizeof *osf); 
+    qsort(port_list, n_ports, sizeof *port_list, compare_ports);
     for (i = 0; i < n_ports; i++) {
         ofp_print_phy_port(string, &port_list[i]);
     }
+    free(port_list);
 }
 
 /* Pretty-print the struct ofp_switch_config of 'len' bytes at 'oh' to 'string'

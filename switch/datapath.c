@@ -116,6 +116,9 @@ struct remote {
     void *cb_aux;
 };
 
+#define DP_MAX_PORTS 255
+BUILD_ASSERT_DECL(DP_MAX_PORTS <= OFPP_MAX);
+
 struct datapath {
     /* Remote connections. */
     struct remote *controller;  /* Connection to controller. */
@@ -134,7 +137,7 @@ struct datapath {
     uint16_t miss_send_len;
 
     /* Switch ports. */
-    struct sw_port ports[OFPP_MAX];
+    struct sw_port ports[DP_MAX_PORTS];
     struct list port_list; /* List of ports, for flooding. */
 };
 
@@ -533,7 +536,7 @@ output_all(struct datapath *dp, struct ofpbuf *buffer, int in_port, int flood)
 void
 output_packet(struct datapath *dp, struct ofpbuf *buffer, int out_port) 
 {
-    if (out_port >= 0 && out_port < OFPP_MAX) { 
+    if (out_port >= 0 && out_port < DP_MAX_PORTS) { 
         struct sw_port *p = &dp->ports[out_port];
         if (p->netdev != NULL && !(p->config & OFPPC_PORT_DOWN)) {
             if (!netdev_send(p->netdev, buffer)) {
@@ -567,7 +570,7 @@ dp_output_port(struct datapath *dp, struct ofpbuf *buffer,
     } else if (out_port == OFPP_IN_PORT) {
         output_packet(dp, buffer, in_port);
     } else if (out_port == OFPP_TABLE) {
-        struct sw_port *p = in_port < OFPP_MAX ? &dp->ports[in_port] : 0;
+        struct sw_port *p = in_port < DP_MAX_PORTS ? &dp->ports[in_port] : 0;
 		if (run_flow_through_tables(dp, buffer, p)) {
 			ofpbuf_delete(buffer);
         }
@@ -682,7 +685,7 @@ void
 dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm)
 {
     int port_no = ntohs(opm->port_no);
-    if (port_no < OFPP_MAX) {
+    if (port_no < DP_MAX_PORTS) {
         struct sw_port *p = &dp->ports[port_no];
 
         /* Make sure the port id hasn't changed since this was sent */
@@ -1288,7 +1291,7 @@ static int port_stats_dump(struct datapath *dp, void *state,
     struct port_stats_state *s = state;
     int i;
 
-    for (i = s->port; i < OFPP_MAX; i++) {
+    for (i = s->port; i < DP_MAX_PORTS; i++) {
         struct sw_port *p = &dp->ports[i];
         struct ofp_port_stats *ops;
         if (!p->netdev) {

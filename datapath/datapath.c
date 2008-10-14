@@ -325,7 +325,7 @@ err_unlock:
 static int find_portno(struct datapath *dp)
 {
 	int i;
-	for (i = 0; i < OFPP_MAX; i++)
+	for (i = 0; i < DP_MAX_PORTS; i++)
 		if (dp->ports[i] == NULL)
 			return i;
 	return -EXFULL;
@@ -354,7 +354,7 @@ static struct net_bridge_port *new_nbp(struct datapath *dp,
 	INIT_WORK(&p->port_task, NULL);
 	if (port_no != OFPP_LOCAL)
 		rcu_assign_pointer(dev->br_port, p);
-	if (port_no < OFPP_MAX)
+	if (port_no < DP_MAX_PORTS)
 		rcu_assign_pointer(dp->ports[port_no], p); 
 	list_add_rcu(&p->node, &dp->port_list);
 
@@ -567,9 +567,10 @@ output_all(struct datapath *dp, struct sk_buff *skb, int flood)
 void dp_set_origin(struct datapath *dp, uint16_t in_port,
 			   struct sk_buff *skb)
 {
-	struct net_bridge_port *p = (in_port < OFPP_MAX ? dp->ports[in_port]
-				     : in_port == OFPP_LOCAL ? dp->local_port
-				     : NULL);
+	struct net_bridge_port *p;
+	p = (in_port < DP_MAX_PORTS ? dp->ports[in_port]
+	     : in_port == OFPP_LOCAL ? dp->local_port
+	     : NULL);
 	if (p) 
 		skb->dev = p->dev;
 	 else 
@@ -633,7 +634,7 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port,
 		return dev ? dp_dev_recv(dev, skb) : -ESRCH;
 	}
 
-	case 0 ... OFPP_MAX-1: {
+	case 0 ... DP_MAX_PORTS - 1: {
 		struct net_bridge_port *p = dp->ports[out_port];
 		if (p == NULL)
 			goto bad_port;
@@ -840,7 +841,7 @@ dp_send_features_reply(struct datapath *dp, const struct sender *sender)
 	int port_count;
 
 	/* Overallocate. */
-	port_max_len = sizeof(struct ofp_phy_port) * OFPP_MAX;
+	port_max_len = sizeof(struct ofp_phy_port) * DP_MAX_PORTS;
 	ofr = alloc_openflow_skb(dp, sizeof(*ofr) + port_max_len,
 				 OFPT_FEATURES_REPLY, sender, &skb);
 	if (!ofr)
@@ -930,9 +931,10 @@ dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm)
 {
 	unsigned long int flags;
 	int port_no = ntohs(opm->port_no);
-	struct net_bridge_port *p = (port_no < OFPP_MAX ? dp->ports[port_no]
-				     : port_no == OFPP_LOCAL ? dp->local_port
-				     : NULL);
+	struct net_bridge_port *p;
+	p = (port_no < DP_MAX_PORTS ? dp->ports[port_no]
+	     : port_no == OFPP_LOCAL ? dp->local_port
+	     : NULL);
 
 	/* Make sure the port id hasn't changed since this was sent */
 	if (!p || memcmp(opm->hw_addr, p->dev->dev_addr, ETH_ALEN))
@@ -1524,7 +1526,7 @@ static int port_stats_dump(struct datapath *dp, void *state,
 	ops = body;
 
 	n_ports = 0;
-	for (i = s->port; i < OFPP_MAX && n_ports < max_ports; i++) {
+	for (i = s->port; i < DP_MAX_PORTS && n_ports < max_ports; i++) {
 		struct net_bridge_port *p = dp->ports[i];
 		struct net_device_stats *stats;
 		if (!p)

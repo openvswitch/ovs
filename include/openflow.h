@@ -76,7 +76,7 @@
 /* Port numbering.  Physical ports are numbered starting from 0. */
 enum ofp_port {
     /* Maximum number of physical switch ports. */
-    OFPP_MAX = 255,
+    OFPP_MAX = 0xff00,
 
     /* Fake output "ports". */
     OFPP_IN_PORT    = 0xfff8,  /* Send the packet out the input port.  This 
@@ -342,7 +342,7 @@ enum ofp_action_type {
 struct ofp_action_output {
     uint16_t type;                  /* OFPAT_OUTPUT. */
     uint16_t len;                   /* Length is 8. */
-    uint16_t port;                  /* Ouptut port. */
+    uint16_t port;                  /* Output port. */
     uint16_t max_len;               /* Max length to send to controller. */
 };
 OFP_ASSERT(sizeof(struct ofp_action_output) == 8);

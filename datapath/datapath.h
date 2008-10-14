@@ -3,6 +3,7 @@
 #ifndef DATAPATH_H
 #define DATAPATH_H 1
 
+#include <linux/kernel.h>
 #include <linux/mutex.h>
 #include <linux/netlink.h>
 #include <linux/netdevice.h>
@@ -40,6 +41,8 @@
 
 struct sk_buff;
 
+#define DP_MAX_PORTS 255
+
 struct datapath {
 	int dp_idx;
 
@@ -59,7 +62,7 @@ struct datapath {
 	uint16_t miss_send_len;
 
 	/* Switch ports. */
-	struct net_bridge_port *ports[OFPP_MAX];
+	struct net_bridge_port *ports[DP_MAX_PORTS];
 	struct net_bridge_port *local_port; /* OFPP_LOCAL port. */
 	struct list_head port_list; /* All ports, including local_port. */
 };

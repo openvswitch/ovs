@@ -62,6 +62,7 @@
 #include "openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "port-array.h"
 #include "rconn.h"
 #include "stp.h"
 #include "timeval.h"
@@ -193,8 +194,12 @@ static struct hook port_watcher_create(struct rconn *local,
                                        struct rconn *remote,
                                        struct port_watcher **);
 static uint32_t port_watcher_get_config(const struct port_watcher *,
-                                       int port_no);
-static void port_watcher_set_flags(struct port_watcher *, int port_no, 
+                                        uint16_t port_no);
+static const char *port_watcher_get_name(const struct port_watcher *,
+                                         uint16_t port_no) UNUSED;
+static const uint8_t *port_watcher_get_hwaddr(const struct port_watcher *,
+                                              uint16_t port_no);
+static void port_watcher_set_flags(struct port_watcher *, uint16_t port_no, 
                                    uint32_t config, uint32_t c_mask,
                                    uint32_t state, uint32_t s_mask);
 
@@ -629,7 +634,7 @@ struct port_watcher_local_cb {
 struct port_watcher {
     struct rconn *local_rconn;
     struct rconn *remote_rconn;
-    struct ofp_phy_port ports[OFPP_MAX + 1];
+    struct port_array ports;
     time_t last_feature_request;
     bool got_feature_reply;
     int n_txq;
@@ -670,25 +675,15 @@ sanitize_opp(struct ofp_phy_port *opp)
     opp->name[sizeof opp->name - 1] = '\0';
 }
 
-static int
-port_no_to_pw_idx(int port_no)
-{
-    return (port_no < OFPP_MAX ? port_no
-            : port_no == OFPP_LOCAL ? OFPP_MAX
-            : -1);
-}
-
 static void
 call_port_changed_callbacks(struct port_watcher *pw, int port_no,
                             const struct ofp_phy_port *old,
                             const struct ofp_phy_port *new)
 {
-    if (opp_differs(old, new)) {
-        int i;
-        for (i = 0; i < pw->n_cbs; i++) {
-            port_changed_cb_func *port_changed = pw->cbs[i].port_changed;
-            (port_changed)(port_no, old, new, pw->cbs[i].aux);
-        }
+    int i;
+    for (i = 0; i < pw->n_cbs; i++) {
+        port_changed_cb_func *port_changed = pw->cbs[i].port_changed;
+        (port_changed)(port_no, old, new, pw->cbs[i].aux);
     }
 }
 
@@ -706,6 +701,12 @@ get_port_name(const struct ofp_phy_port *port, char *name, size_t name_size)
     }
 }
 
+static struct ofp_phy_port *
+lookup_port(const struct port_watcher *pw, uint16_t port_no)
+{
+    return port_array_get(&pw->ports, port_no);
+}
+
 static void
 call_local_port_changed_callbacks(struct port_watcher *pw)
 {
@@ -715,10 +716,7 @@ call_local_port_changed_callbacks(struct port_watcher *pw)
 
     /* Pass the local port to the callbacks, if it exists.
        Pass a null pointer if there is no local port. */
-    port = &pw->ports[port_no_to_pw_idx(OFPP_LOCAL)];
-    if (port->port_no != htons(OFPP_LOCAL)) {
-        port = NULL;
-    }
+    port = lookup_port(pw, OFPP_LOCAL);
 
     /* Log the name of the local port. */
     if (port) {
@@ -744,33 +742,29 @@ call_local_port_changed_callbacks(struct port_watcher *pw)
 
 static void
 update_phy_port(struct port_watcher *pw, struct ofp_phy_port *opp,
-                uint8_t reason, bool seen[OFPP_MAX + 1])
+                uint8_t reason)
 {
-    struct ofp_phy_port *pw_opp;
-    struct ofp_phy_port old;
+    struct ofp_phy_port *old;
     uint16_t port_no;
-    int idx;
 
     port_no = ntohs(opp->port_no);
-    idx = port_no_to_pw_idx(port_no);
-    if (idx < 0) {
-        return;
-    }
+    old = lookup_port(pw, port_no);
 
-    if (seen) {
-        seen[idx] = true;
+    if (reason == OFPPR_DELETE && old) {
+        call_port_changed_callbacks(pw, port_no, old, NULL);
+        free(old);
+        port_array_set(&pw->ports, port_no, NULL);
+    } else if ((reason == OFPPR_MODIFY || reason == OFPPR_ADD)
+               && (!old || opp_differs(opp, old))) {
+        struct ofp_phy_port new = *opp;
+        sanitize_opp(&new);
+        call_port_changed_callbacks(pw, port_no, old, &new);
+        if (old) {
+            *old = new;
+        } else {
+            port_array_set(&pw->ports, port_no, xmemdup(&new, sizeof new));
+        }
     }
-
-    pw_opp = &pw->ports[idx];
-    old = *pw_opp;
-    if (reason == OFPPR_DELETE) {
-        memset(pw_opp, 0, sizeof *pw_opp);
-        pw_opp->port_no = htons(OFPP_NONE);
-    } else if (reason == OFPPR_MODIFY || reason == OFPPR_ADD) {
-        *pw_opp = *opp;
-        sanitize_opp(pw_opp);
-    }
-    call_port_changed_callbacks(pw, port_no, &old, pw_opp);
 }
 
 static bool
@@ -783,25 +777,29 @@ port_watcher_local_packet_cb(struct relay *r, void *pw_)
     if (oh->type == OFPT_FEATURES_REPLY
         && msg->size >= offsetof(struct ofp_switch_features, ports)) {
         struct ofp_switch_features *osf = msg->data;
-        bool seen[ARRAY_SIZE(pw->ports)];
+        bool seen[PORT_ARRAY_SIZE];
+        struct ofp_phy_port *p;
+        unsigned int port_no;
         size_t n_ports;
         size_t i;
 
         pw->got_feature_reply = true;
 
         /* Update each port included in the message. */
-        memset(seen, 0, sizeof seen);
+        memset(seen, false, sizeof seen);
         n_ports = ((msg->size - offsetof(struct ofp_switch_features, ports))
                    / sizeof *osf->ports);
         for (i = 0; i < n_ports; i++) {
             struct ofp_phy_port *opp = &osf->ports[i];
-            update_phy_port(pw, opp, OFPPR_MODIFY, seen);
+            update_phy_port(pw, opp, OFPPR_MODIFY);
+            seen[ntohs(opp->port_no)] = true;
         }
 
         /* Delete all the ports not included in the message. */
-        for (i = 0; i < ARRAY_SIZE(pw->ports); i++) {
-            if (!seen[i]) {
-                update_phy_port(pw, &pw->ports[i], OFPPR_DELETE, NULL);
+        for (p = port_array_first(&pw->ports, &port_no); p;
+             p = port_array_next(&pw->ports, &port_no)) {
+            if (!seen[port_no]) {
+                update_phy_port(pw, p, OFPPR_DELETE);
             }
         }
 
@@ -809,7 +807,7 @@ port_watcher_local_packet_cb(struct relay *r, void *pw_)
     } else if (oh->type == OFPT_PORT_STATUS
                && msg->size >= sizeof(struct ofp_port_status)) {
         struct ofp_port_status *ops = msg->data;
-        update_phy_port(pw, &ops->desc, ops->reason, NULL);
+        update_phy_port(pw, &ops->desc, ops->reason);
         if (ops->desc.port_no == htons(OFPP_LOCAL)) {
             call_local_port_changed_callbacks(pw);
         }
@@ -828,17 +826,14 @@ port_watcher_remote_packet_cb(struct relay *r, void *pw_)
         && msg->size >= sizeof(struct ofp_port_mod)) {
         struct ofp_port_mod *opm = msg->data;
         uint16_t port_no = ntohs(opm->port_no);
-        int idx = port_no_to_pw_idx(port_no);
-        if (idx >= 0) {
-            struct ofp_phy_port *pw_opp = &pw->ports[idx];
-            if (pw_opp->port_no != htons(OFPP_NONE)) {
-                struct ofp_phy_port old = *pw_opp;
-                pw_opp->config = ((pw_opp->config & ~opm->mask)
-                                 | (opm->config & opm->mask));
-                call_port_changed_callbacks(pw, port_no, &old, pw_opp);
-                if (pw_opp->port_no == htons(OFPP_LOCAL)) {
-                    call_local_port_changed_callbacks(pw);
-                }
+        struct ofp_phy_port *pw_opp = lookup_port(pw, port_no);
+        if (pw_opp->port_no != htons(OFPP_NONE)) {
+            struct ofp_phy_port old = *pw_opp;
+            pw_opp->config = ((pw_opp->config & ~opm->mask)
+                              | (opm->config & opm->mask));
+            call_port_changed_callbacks(pw, port_no, &old, pw_opp);
+            if (pw_opp->port_no == htons(OFPP_LOCAL)) {
+                call_local_port_changed_callbacks(pw);
             }
         }
     }
@@ -921,37 +916,31 @@ log_port_status(uint16_t port_no,
                 void *aux)
 {
     if (VLOG_IS_DBG_ENABLED()) {
-        bool was_enabled = old->port_no != htons(OFPP_NONE);
-        bool now_enabled = new->port_no != htons(OFPP_NONE);
-        uint32_t curr = ntohl(new->curr);
-        uint32_t supported = ntohl(new->supported);
-        struct ds ds;
-
-        if (((old->config != new->config) || (old->state != new->state))
-                && opp_differs(old, new) == 1) {
-            /* Don't care if only flags changed. */
-            return;
-        }
-
-        ds_init(&ds);
-        ds_put_format(&ds, "\"%s\", "ETH_ADDR_FMT, new->name,
-                      ETH_ADDR_ARGS(new->hw_addr));
-        if (curr) {
-            put_features(&ds, ", current", curr);
-        }
-        if (supported) {
-            put_features(&ds, ", supports", supported);
-        }
-        if (was_enabled != now_enabled) {
-            if (now_enabled) {
-                VLOG_DBG("Port %d added: %s", port_no, ds_cstr(&ds));
-            } else {
+        if (old && new && (opp_differs(old, new)
+                           == ((old->config != new->config)
+                               + (old->state != new->state))))
+        {
+            /* Don't care if only state or config changed. */
+        } else if (!new) {
+            if (old) {
                 VLOG_DBG("Port %d deleted", port_no);
             }
         } else {
-            VLOG_DBG("Port %d changed: %s", port_no, ds_cstr(&ds));
+            struct ds ds = DS_EMPTY_INITIALIZER;
+            uint32_t curr = ntohl(new->curr);
+            uint32_t supported = ntohl(new->supported);
+            ds_put_format(&ds, "\"%s\", "ETH_ADDR_FMT, new->name,
+                          ETH_ADDR_ARGS(new->hw_addr));
+            if (curr) {
+                put_features(&ds, ", current", curr);
+            }
+            if (supported) {
+                put_features(&ds, ", supports", supported);
+            }
+            VLOG_DBG("Port %d %s: %s",
+                     port_no, old ? "changed" : "added", ds_cstr(&ds));
+            ds_destroy(&ds);
         }
-        ds_destroy(&ds);
     }
 }
 
@@ -978,14 +967,28 @@ port_watcher_register_local_port_callback(struct port_watcher *pw,
 }
 
 static uint32_t
-port_watcher_get_config(const struct port_watcher *pw, int port_no)
+port_watcher_get_config(const struct port_watcher *pw, uint16_t port_no)
 {
-    int idx = port_no_to_pw_idx(port_no);
-    return idx >= 0 ? ntohl(pw->ports[idx].config) : 0;
+    struct ofp_phy_port *p = lookup_port(pw, port_no);
+    return p ? ntohl(p->config) : 0;
+}
+
+static const char *
+port_watcher_get_name(const struct port_watcher *pw, uint16_t port_no)
+{
+    struct ofp_phy_port *p = lookup_port(pw, port_no);
+    return p ? (const char *) p->name : NULL;
+}
+
+static const uint8_t *
+port_watcher_get_hwaddr(const struct port_watcher *pw, uint16_t port_no) 
+{
+    struct ofp_phy_port *p = lookup_port(pw, port_no);
+    return p ? p->hw_addr : NULL;
 }
 
 static void
-port_watcher_set_flags(struct port_watcher *pw, int port_no, 
+port_watcher_set_flags(struct port_watcher *pw, uint16_t port_no, 
                        uint32_t config, uint32_t c_mask,
                        uint32_t state, uint32_t s_mask)
 {
@@ -994,14 +997,14 @@ port_watcher_set_flags(struct port_watcher *pw, int port_no,
     struct ofp_port_mod *opm;
     struct ofp_port_status *ops;
     struct ofpbuf *b;
-    int idx;
 
-    idx = port_no_to_pw_idx(port_no);
-    if (idx < 0) {
+    p = lookup_port(pw, port_no);
+    if (!p) {
+        VLOG_WARN_RL(&vrl, "attempting to set flags on nonexistent port %"
+                     PRIu16, port_no);
         return;
     }
 
-    p = &pw->ports[idx];
     if (!((ntohl(p->state) ^ state) & s_mask) 
             && (!((ntohl(p->config) ^ config) & c_mask))) {
         return;
@@ -1040,15 +1043,12 @@ port_watcher_create(struct rconn *local_rconn, struct rconn *remote_rconn,
                     struct port_watcher **pwp)
 {
     struct port_watcher *pw;
-    int i;
 
     pw = *pwp = xcalloc(1, sizeof *pw);
     pw->local_rconn = local_rconn;
     pw->remote_rconn = remote_rconn;
     pw->last_feature_request = TIME_MIN;
-    for (i = 0; i < OFPP_MAX; i++) {
-        pw->ports[i].port_no = htons(OFPP_NONE);
-    }
+    port_array_init(&pw->ports);
     pw->local_port_name[0] = '\0';
     port_watcher_register_callback(pw, log_port_status, NULL);
     return make_hook(port_watcher_local_packet_cb,
@@ -1190,20 +1190,12 @@ snat_del_rules(const uint8_t *dev_name)
 static void 
 snat_config(const struct nx_snat_config *sc, struct snat_data *snat)
 {
-    int idx;
-    struct port_watcher *pw = snat->pw;
-    struct ofp_phy_port *pw_opp;
     struct snat_port_conf *c, *spc=NULL;
-    uint16_t port_no;
+    const uint8_t *netdev_name;
 
-    port_no = ntohs(sc->port);
-    idx = port_no_to_pw_idx(port_no);
-    if (idx < 0) {
-        return;
-    }
-
-    pw_opp = &pw->ports[idx];
-    if (htons(pw_opp->port_no) != port_no) {
+    netdev_name = (const uint8_t *) port_watcher_get_name(snat->pw,
+                                                          ntohs(sc->port));
+    if (!netdev_name) {
         return;
     }
 
@@ -1224,9 +1216,9 @@ snat_config(const struct nx_snat_config *sc, struct snat_data *snat)
             list_push_back(&snat->port_list, &spc->node);
         }
         memcpy(&spc->config, sc, sizeof(spc->config));
-        snat_add_rules(sc, pw_opp->name);
+        snat_add_rules(sc, netdev_name);
     } else if (spc) {
-        snat_del_rules(pw_opp->name);
+        snat_del_rules(netdev_name);
         list_remove(&spc->node);
     }
 }
@@ -1274,7 +1266,7 @@ snat_port_changed_cb(uint16_t port_no,
     struct snat_port_conf *c;
 
     /* We're only interested in ports that went away */
-    if (new->port_no != htons(OFPP_NONE)) {
+    if (old && !new) {
         return;
     }
 
@@ -1467,9 +1459,16 @@ static void
 send_bpdu(const void *bpdu, size_t bpdu_size, int port_no, void *stp_)
 {
     struct stp_data *stp = stp_;
+    const uint8_t *port_mac;
     struct eth_header *eth;
     struct llc_header *llc;
     struct ofpbuf pkt, *opo;
+
+    port_mac = port_watcher_get_hwaddr(stp->pw, port_no);
+    if (!port_mac) {
+        VLOG_WARN_RL(&vrl, "cannot send BPDU on missing port %d", port_no);
+        return;
+    }
 
     /* Packet skeleton. */
     ofpbuf_init(&pkt, ETH_HEADER_LEN + LLC_HEADER_LEN + bpdu_size);
@@ -1479,7 +1478,7 @@ send_bpdu(const void *bpdu, size_t bpdu_size, int port_no, void *stp_)
 
     /* 802.2 header. */
     memcpy(eth->eth_dst, stp_eth_addr, ETH_ADDR_LEN);
-    memcpy(eth->eth_src, stp->pw->ports[port_no].hw_addr, ETH_ADDR_LEN);
+    memcpy(eth->eth_src, port_mac, ETH_ADDR_LEN);
     eth->eth_type = htons(pkt.size - ETH_HEADER_LEN);
 
     /* LLC header. */
@@ -1495,9 +1494,6 @@ send_bpdu(const void *bpdu, size_t bpdu_size, int port_no, void *stp_)
 static bool
 stp_is_port_supported(uint16_t port_no)
 {
-    /* We should be able to support STP on all possible OpenFlow physical
-     * ports.  (But we don't support STP on OFPP_LOCAL.)  */
-    BUILD_ASSERT_DECL(STP_MAX_PORTS >= OFPP_MAX);
     return port_no < STP_MAX_PORTS;
 }
 
@@ -1515,7 +1511,7 @@ stp_port_changed_cb(uint16_t port_no,
     }
 
     p = stp_get_port(stp->stp, port_no);
-    if (new->port_no == htons(OFPP_NONE)
+    if (!new
         || new->config & htonl(OFPPC_NO_STP | OFPPC_PORT_DOWN)
         || new->state & htonl(OFPPS_LINK_DOWN)) {
         stp_port_disable(p);
