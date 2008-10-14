@@ -1295,7 +1295,7 @@ snat_hook_create(struct port_watcher *pw)
 
     ret = system(SNAT_FLUSH_ALL_CMD); 
     if (ret != 0) {
-        VLOG_ERR("SNAT: problum flushing tables");
+        VLOG_ERR("SNAT: problem flushing tables");
     }
 
     snat = xcalloc(1, sizeof *snat);
