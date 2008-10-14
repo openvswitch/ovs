@@ -640,7 +640,7 @@ struct port_watcher {
     int n_txq;
     struct port_watcher_cb cbs[2];
     int n_cbs;
-    struct port_watcher_local_cb local_cbs[2];
+    struct port_watcher_local_cb local_cbs[4];
     int n_local_cbs;
     char local_port_name[OFP_MAX_PORT_NAME_LEN + 1];
 };
