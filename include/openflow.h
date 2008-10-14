@@ -556,7 +556,8 @@ OFP_ASSERT(sizeof(struct ofp_flow_expired) == 72);
 enum ofp_error_type {
     OFPET_HELLO_FAILED,         /* Hello protocol failed. */
     OFPET_BAD_REQUEST,          /* Request was not understood. */
-    OFPET_BAD_ACTION            /* Error in action description. */
+    OFPET_BAD_ACTION,           /* Error in action description. */
+    OFPET_FLOW_MOD_FAILED       /* Problem modifying flow entry. */
 };
 
 /* ofp_error_msg 'code' values for OFPET_HELLO_FAILED.  'data' contains an
@@ -585,6 +586,12 @@ enum ofp_bad_action_code {
     OFPBAC_BAD_VENDOR_TYPE,    /* Unknown action type for vendor id. */
     OFPBAC_BAD_OUT_PORT,       /* Problem validating output action. */
     OFPBAC_BAD_ARGUMENT        /* Bad action argument. */
+};
+
+/* ofp_error_msg 'code' values for OFPET_FLOW_MOD_FAILED.  'data' contains 
+ * at least the first 64 bytes of the failed request. */
+enum ofp_flow_mod_failed_code {
+    OFPFMFC_ALL_TABLES_FULL    /* Flow not added because of full tables. */
 };
 
 /* OFPT_ERROR: Error message (datapath -> controller). */

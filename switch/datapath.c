@@ -1008,7 +1008,11 @@ add_flow(struct datapath *dp, const struct sender *sender,
 
     /* Act. */
     error = chain_insert(dp->chain, flow);
-    if (error) {
+    if (error == -ENOBUFS) {
+        dp_send_error_msg(dp, sender, OFPET_FLOW_MOD_FAILED, 
+                OFPFMFC_ALL_TABLES_FULL, ofm, ntohs(ofm->header.length));
+        goto error_free_flow; 
+    } else if (error) {
         goto error_free_flow; 
     }
     error = 0;

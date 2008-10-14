@@ -240,7 +240,11 @@ add_flow(struct sw_chain *chain, const struct sender *sender,
 
 	/* Act. */
 	error = chain_insert(chain, flow);
-	if (error)
+	if (error == -ENOBUFS) {
+		dp_send_error_msg(chain->dp, sender, OFPET_FLOW_MOD_FAILED, 
+				OFPFMFC_ALL_TABLES_FULL, ofm, ntohs(ofm->header.length));
+		goto error_free_flow;
+	} else if (error)
 		goto error_free_flow;
 	error = 0;
 	if (ntohl(ofm->buffer_id) != (uint32_t) -1) {
