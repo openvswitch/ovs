@@ -507,8 +507,7 @@ static void
 pad_to_minimum_length(struct ofpbuf *buffer)
 {
     if (buffer->size < ETH_TOTAL_MIN) {
-        size_t shortage = ETH_TOTAL_MIN - buffer->size;
-        memset(ofpbuf_put_uninit(buffer, shortage), 0, shortage);
+        ofpbuf_put_zeros(buffer, ETH_TOTAL_MIN - buffer->size);
     }
 }
 

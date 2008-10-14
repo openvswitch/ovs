@@ -176,6 +176,17 @@ ofpbuf_put_uninit(struct ofpbuf *b, size_t size)
     return p;
 }
 
+/* Appends 'size' zeroed bytes to the tail end of 'b'.  Data in 'b' is
+ * reallocated and copied if necessary.  Returns a pointer to the first byte of
+ * the data's location in the ofpbuf. */
+void *
+ofpbuf_put_zeros(struct ofpbuf *b, size_t size)
+{
+    void *dst = ofpbuf_put_uninit(b, size);
+    memset(dst, 0, size);
+    return dst;
+}
+
 /* Appends the 'size' bytes of data in 'p' to the tail end of 'b'.  Data in 'b'
  * is reallocated and copied if necessary.  Returns a pointer to the first
  * byte of the data's location in the ofpbuf. */

@@ -674,8 +674,7 @@ dp_send_features_reply(struct datapath *dp, const struct sender *sender)
     ofr->capabilities = htonl(OFP_SUPPORTED_CAPABILITIES);
     ofr->actions      = htonl(OFP_SUPPORTED_ACTIONS);
     LIST_FOR_EACH (p, struct sw_port, node, &dp->port_list) {
-        struct ofp_phy_port *opp = ofpbuf_put_uninit(buffer, sizeof *opp);
-        memset(opp, 0, sizeof *opp);
+        struct ofp_phy_port *opp = ofpbuf_put_zeros(buffer, sizeof *opp);
         fill_port_desc(dp, p, opp);
     }
     send_openflow_buffer(dp, buffer, sender);
@@ -805,10 +804,9 @@ fill_flow_stats(struct ofpbuf *buffer, struct sw_flow *flow,
 {
     struct ofp_flow_stats *ofs;
     int length = sizeof *ofs + flow->sf_acts->actions_len;
-    ofs = ofpbuf_put_uninit(buffer, length);
+    ofs = ofpbuf_put_zeros(buffer, length);
     ofs->length          = htons(length);
     ofs->table_id        = table_idx;
-    ofs->pad             = 0;
     ofs->match.wildcards = htonl(flow->key.wildcards);
     ofs->match.in_port   = flow->key.flow.in_port;
     memcpy(ofs->match.dl_src, flow->key.flow.dl_src, ETH_ADDR_LEN);
@@ -818,14 +816,12 @@ fill_flow_stats(struct ofpbuf *buffer, struct sw_flow *flow,
     ofs->match.nw_src    = flow->key.flow.nw_src;
     ofs->match.nw_dst    = flow->key.flow.nw_dst;
     ofs->match.nw_proto  = flow->key.flow.nw_proto;
-    ofs->match.pad       = 0;
     ofs->match.tp_src    = flow->key.flow.tp_src;
     ofs->match.tp_dst    = flow->key.flow.tp_dst;
     ofs->duration        = htonl(now - flow->created);
     ofs->priority        = htons(flow->priority);
     ofs->idle_timeout    = htons(flow->idle_timeout);
     ofs->hard_timeout    = htons(flow->hard_timeout);
-    memset(ofs->pad2, 0, sizeof ofs->pad2);
     ofs->packet_count    = htonll(flow->packet_count);
     ofs->byte_count      = htonll(flow->byte_count);
     memcpy(ofs->actions, flow->sf_acts->actions, flow->sf_acts->actions_len);
@@ -1117,7 +1113,7 @@ recv_flow(struct datapath *dp, const struct sender *sender,
 static int desc_stats_dump(struct datapath *dp, void *state,
                               struct ofpbuf *buffer)
 {
-    struct ofp_desc_stats *ods = ofpbuf_put_uninit(buffer, sizeof *ods);
+    struct ofp_desc_stats *ods = ofpbuf_put_zeros(buffer, sizeof *ods);
 
     strncpy(ods->mfr_desc, &mfr_desc, sizeof ods->mfr_desc);
     strncpy(ods->hw_desc, &hw_desc, sizeof ods->hw_desc);
@@ -1220,8 +1216,7 @@ static int aggregate_stats_dump(struct datapath *dp, void *state,
     struct sw_flow_key match_key;
     int table_idx;
 
-    rpy = ofpbuf_put_uninit(buffer, sizeof *rpy);
-    memset(rpy, 0, sizeof *rpy);
+    rpy = ofpbuf_put_zeros(buffer, sizeof *rpy);
 
     flow_extract_match(&match_key, &rq->match);
     table_idx = rq->table_id == 0xff ? 0 : rq->table_id;
@@ -1257,13 +1252,12 @@ static int table_stats_dump(struct datapath *dp, void *state,
 {
     int i;
     for (i = 0; i < dp->chain->n_tables; i++) {
-        struct ofp_table_stats *ots = ofpbuf_put_uninit(buffer, sizeof *ots);
+        struct ofp_table_stats *ots = ofpbuf_put_zeros(buffer, sizeof *ots);
         struct sw_table_stats stats;
         dp->chain->tables[i]->stats(dp->chain->tables[i], &stats);
         strncpy(ots->name, stats.name, sizeof ots->name);
         ots->table_id = i;
         ots->wildcards = htonl(stats.wildcards);
-        memset(ots->pad, 0, sizeof ots->pad);
         ots->max_entries = htonl(stats.max_flows);
         ots->active_count = htonl(stats.n_flows);
         ots->lookup_count = htonll(stats.n_lookup);
@@ -1297,9 +1291,8 @@ static int port_stats_dump(struct datapath *dp, void *state,
         if (!p->netdev) {
             continue;
         }
-        ops = ofpbuf_put_uninit(buffer, sizeof *ops);
+        ops = ofpbuf_put_zeros(buffer, sizeof *ops);
         ops->port_no = htons(port_no(dp, p));
-        memset(ops->pad, 0, sizeof ops->pad);
         ops->rx_packets   = htonll(p->rx_packets);
         ops->tx_packets   = htonll(p->tx_packets);
         ops->rx_bytes     = htonll(p->rx_bytes);

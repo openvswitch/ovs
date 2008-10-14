@@ -739,8 +739,7 @@ make_openflow_xid(size_t openflow_len, uint8_t type, uint32_t xid,
     assert(openflow_len >= sizeof *oh);
     assert(openflow_len <= UINT16_MAX);
     buffer = *bufferp = ofpbuf_new(openflow_len);
-    oh = ofpbuf_put_uninit(buffer, openflow_len);
-    memset(oh, 0, openflow_len);
+    oh = ofpbuf_put_zeros(buffer, openflow_len);
     oh->version = OFP_VERSION;
     oh->type = type;
     oh->length = htons(openflow_len);
@@ -764,8 +763,7 @@ make_add_flow(const struct flow *flow, uint32_t buffer_id,
     struct ofp_flow_mod *ofm;
     size_t size = sizeof *ofm + actions_len;
     struct ofpbuf *out = ofpbuf_new(size);
-    ofm = ofpbuf_put_uninit(out, size);
-    memset(ofm, 0, size);
+    ofm = ofpbuf_put_zeros(out, size);
     ofm->header.version = OFP_VERSION;
     ofm->header.type = OFPT_FLOW_MOD;
     ofm->header.length = htons(size);
@@ -812,8 +810,7 @@ make_unbuffered_packet_out(const struct ofpbuf *packet,
     size_t size = sizeof *opo + sizeof *oao;
     struct ofpbuf *out = ofpbuf_new(size + packet->size);
 
-    opo = ofpbuf_put_uninit(out, size);
-    memset(opo, 0, size);
+    opo = ofpbuf_put_zeros(out, size);
     opo->header.version = OFP_VERSION;
     opo->header.type = OFPT_PACKET_OUT;
     opo->buffer_id = htonl(UINT32_MAX);
@@ -839,8 +836,7 @@ make_buffered_packet_out(uint32_t buffer_id,
     struct ofp_action_output *oao;
     size_t size = sizeof *opo + sizeof *oao;
     struct ofpbuf *out = ofpbuf_new(size);
-    opo = ofpbuf_put_uninit(out, size);
-    memset(opo, 0, size);
+    opo = ofpbuf_put_zeros(out, size);
     opo->header.version = OFP_VERSION;
     opo->header.type = OFPT_PACKET_OUT;
     opo->header.length = htons(size);

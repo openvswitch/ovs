@@ -70,6 +70,7 @@ void *ofpbuf_tail(const struct ofpbuf *);
 void *ofpbuf_end(const struct ofpbuf *);
 
 void *ofpbuf_put_uninit(struct ofpbuf *, size_t);
+void *ofpbuf_put_zeros(struct ofpbuf *, size_t);
 void *ofpbuf_put(struct ofpbuf *, const void *, size_t);
 void ofpbuf_reserve(struct ofpbuf *, size_t);
 void *ofpbuf_push_uninit(struct ofpbuf *b, size_t);
