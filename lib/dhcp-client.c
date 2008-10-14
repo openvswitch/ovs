@@ -943,8 +943,12 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
         ofpbuf_pull(&b, (char *)b.l7 - (char*)b.data);
         error = dhcp_parse(msg, &b);
         if (!error) {
-            VLOG_DBG_RL(&rl, "received %s",
-                        dhcp_msg_to_string(msg, false, &cli->s));
+            if (VLOG_IS_DBG_ENABLED()) {
+                VLOG_DBG_RL(&rl, "received %s",
+                            dhcp_msg_to_string(msg, false, &cli->s)); 
+            } else {
+                VLOG_WARN_RL(&rl, "received %s", dhcp_type_name(msg->type));
+            }
             ofpbuf_uninit(&b);
             return true;
         }
@@ -1019,7 +1023,11 @@ do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
      * frame to have to be discarded or fragmented if it travels over a regular
      * Ethernet at some point.  1500 bytes should be enough for anyone. */
     if (b.size <= ETH_TOTAL_MAX) {
-        VLOG_DBG("sending %s", dhcp_msg_to_string(msg, false, &cli->s));
+        if (VLOG_IS_DBG_ENABLED()) {
+            VLOG_DBG("sending %s", dhcp_msg_to_string(msg, false, &cli->s)); 
+        } else {
+            VLOG_WARN("sending %s", dhcp_type_name(msg->type));
+        }
         error = netdev_send(cli->netdev, &b);
         if (error) {
             VLOG_ERR("send failed on %s: %s",
