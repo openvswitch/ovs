@@ -800,7 +800,13 @@ void
 dhclient_wait(struct dhclient *cli)
 {
     if (cli->min_timeout != UINT_MAX) {
-        poll_timer_wait(sat_mul(cli->min_timeout, 1000));
+        time_t now = time_now();
+        unsigned int wake = sat_add(cli->state_entered, cli->min_timeout);
+        if (wake <= now) {
+            poll_immediate_wake();
+        } else {
+            poll_timer_wait(sat_mul(sat_sub(wake, now), 1000));
+        }
     }
     /* Reset timeout to 1 second.  This will have no effect ordinarily, because
      * dhclient_run() will typically set it back to a higher value.  If,
