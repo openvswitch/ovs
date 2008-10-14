@@ -103,6 +103,7 @@ struct dhclient {
     bool changed;
 
     unsigned int retransmit, delay; /* Used by send_reliably(). */
+    unsigned int max_timeout;
 
     unsigned int init_delay;    /* Used by S_INIT. */
 
@@ -199,11 +200,21 @@ dhclient_create(const char *netdev_name,
     cli->ipaddr = 0;
     cli->server_ip = 0;
     cli->retransmit = cli->delay = 0;
+    cli->max_timeout = 64;
     cli->min_timeout = 1;
     ds_init(&cli->s);
     cli->changed = true;
     *cli_ = cli;
     return 0;
+}
+
+/* Sets the maximum amount of timeout that 'cli' will wait for a reply from
+ * the DHCP server before retransmitting, in seconds, to 'max_timeout'.  The
+ * default is 64 seconds. */
+void
+dhclient_set_max_timeout(struct dhclient *cli, unsigned int max_timeout)
+{
+    cli->max_timeout = MAX(2, max_timeout);
 }
 
 /* Destroys 'cli' and frees all related resources. */
@@ -867,7 +878,7 @@ send_reliably(struct dhclient *cli,
             cli->modify_request(&msg, cli->aux);
         }
         do_send_msg(cli, &msg);
-        cli->delay = MIN(64, MAX(4, cli->delay * 2));
+        cli->delay = MIN(cli->max_timeout, MAX(4, cli->delay * 2));
         cli->retransmit += fuzz(cli->delay, 1);
         timeout(cli, cli->retransmit);
         dhcp_msg_uninit(&msg);

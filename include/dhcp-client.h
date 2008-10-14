@@ -44,6 +44,7 @@ int dhclient_create(const char *netdev,
                     void (*modify_request)(struct dhcp_msg *, void *aux),
                     bool (*validate_offer)(const struct dhcp_msg *, void *aux),
                     void *aux, struct dhclient **);
+void dhclient_set_max_timeout(struct dhclient *, unsigned int max_timeout);
 void dhclient_destroy(struct dhclient *);
 
 struct netdev *dhclient_get_netdev(struct dhclient *);

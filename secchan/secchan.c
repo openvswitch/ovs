@@ -2378,6 +2378,7 @@ discovery_local_port_cb(const struct ofp_phy_port *port, void *d_)
                      "discovery disabled: %s", strerror(retval));
             return;
         }
+        dhclient_set_max_timeout(d->dhcp, 3);
         dhclient_init(d->dhcp, 0);
     } else {
         dhclient_destroy(d->dhcp);
