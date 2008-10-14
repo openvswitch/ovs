@@ -92,10 +92,10 @@ vlog_server_listen(const char *path, struct vlog_server **serverp)
     server->fd = make_unix_socket(SOCK_DGRAM, true, true, server->path, NULL);
     if (server->fd < 0) {
         int fd = server->fd;
-        free(server->path);
-        free(server);
         fprintf(stderr, "Could not initialize vlog configuration socket: %s\n",
                 strerror(-server->fd));
+        free(server->path);
+        free(server);
         if (serverp) {
             *serverp = NULL; 
         }
