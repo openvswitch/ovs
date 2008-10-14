@@ -686,7 +686,7 @@ dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm)
         struct sw_port *p = &dp->ports[port_no];
 
         /* Make sure the port id hasn't changed since this was sent */
-        if (!p || memcmp(opm->hw_addr, netdev_get_etheraddr(p->netdev),
+        if (memcmp(opm->hw_addr, netdev_get_etheraddr(p->netdev),
                          ETH_ADDR_LEN) != 0) {
             return;
         }
