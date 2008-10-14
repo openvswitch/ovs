@@ -1000,8 +1000,6 @@ port_watcher_set_flags(struct port_watcher *pw, uint16_t port_no,
 
     p = lookup_port(pw, port_no);
     if (!p) {
-        VLOG_WARN_RL(&vrl, "attempting to set flags on nonexistent port %"
-                     PRIu16, port_no);
         return;
     }
 
