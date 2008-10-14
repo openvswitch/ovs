@@ -70,6 +70,7 @@
 #include "vconn-ssl.h"
 #include "vconn.h"
 #include "vlog-socket.h"
+#include "xtoxll.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_secchan
@@ -637,6 +638,7 @@ struct port_watcher {
     struct port_array ports;
     time_t last_feature_request;
     bool got_feature_reply;
+    uint64_t datapath_id;
     int n_txq;
     struct port_watcher_cb cbs[2];
     int n_cbs;
@@ -784,6 +786,10 @@ port_watcher_local_packet_cb(struct relay *r, void *pw_)
         size_t i;
 
         pw->got_feature_reply = true;
+        if (pw->datapath_id != osf->datapath_id) {
+            pw->datapath_id = osf->datapath_id;
+            VLOG_WARN("Datapath id is %012"PRIx64, ntohll(pw->datapath_id));
+        }
 
         /* Update each port included in the message. */
         memset(seen, false, sizeof seen);
