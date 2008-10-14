@@ -237,6 +237,10 @@ stp_create(const char *name, stp_identifier bridge_id,
     stp->bridge_hello_time = stp->hello_time;
     stp->bridge_forward_delay = stp->forward_delay;
 
+    /* Verify constraints stated by 802.1D. */
+    assert(2 * (stp->forward_delay - SECONDS_TO_TIMER(1)) >= stp->max_age);
+    assert(stp->max_age >= 2 * (stp->hello_time + SECONDS_TO_TIMER(1)));
+
     stp->designated_root = stp->bridge_id;
     stp->root_path_cost = 0;
     stp->root_port = NULL;

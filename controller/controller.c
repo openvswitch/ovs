@@ -183,6 +183,10 @@ main(int argc, char *argv[])
                 break;
             }
         }
+        for (i = 0; i < n_switches; i++) {
+            struct switch_ *this = &switches[i];
+            lswitch_run(this->lswitch, this->rconn);
+        }
 
         /* Wait for something to happen. */
         if (n_switches < MAX_SWITCHES) {
@@ -194,6 +198,7 @@ main(int argc, char *argv[])
             struct switch_ *sw = &switches[i];
             rconn_run_wait(sw->rconn);
             rconn_recv_wait(sw->rconn);
+            lswitch_wait(sw->lswitch);
         }
         poll_block();
     }

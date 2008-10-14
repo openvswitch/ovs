@@ -756,15 +756,20 @@ update_phy_port(struct port_watcher *pw, struct ofp_phy_port *opp,
         call_port_changed_callbacks(pw, port_no, old, NULL);
         free(old);
         port_array_set(&pw->ports, port_no, NULL);
-    } else if ((reason == OFPPR_MODIFY || reason == OFPPR_ADD)
-               && (!old || opp_differs(opp, old))) {
-        struct ofp_phy_port new = *opp;
-        sanitize_opp(&new);
-        call_port_changed_callbacks(pw, port_no, old, &new);
+    } else if (reason == OFPPR_MODIFY || reason == OFPPR_ADD) {
         if (old) {
-            *old = new;
-        } else {
-            port_array_set(&pw->ports, port_no, xmemdup(&new, sizeof new));
+            uint32_t s_mask = htonl(OFPPS_STP_MASK);
+            opp->state = (opp->state & ~s_mask) | (old->state & s_mask);
+        }
+        if (!old || opp_differs(opp, old)) {
+            struct ofp_phy_port new = *opp;
+            sanitize_opp(&new);
+            call_port_changed_callbacks(pw, port_no, old, &new);
+            if (old) {
+                *old = new;
+            } else {
+                port_array_set(&pw->ports, port_no, xmemdup(&new, sizeof new));
+            }
         }
     }
 }
@@ -1855,6 +1860,18 @@ fail_open_periodic_cb(void *fail_open_)
                   "from controller", disconn_secs);
         fail_open->last_disconn_secs = disconn_secs;
     }
+    if (fail_open->lswitch) {
+        lswitch_run(fail_open->lswitch, fail_open->local_rconn);
+    }
+}
+
+static void
+fail_open_wait_cb(void *fail_open_)
+{
+    struct fail_open_data *fail_open = fail_open_;
+    if (fail_open->lswitch) {
+        lswitch_wait(fail_open->lswitch);
+    }
 }
 
 static bool
@@ -1902,7 +1919,7 @@ fail_open_hook_create(const struct settings *s, struct switch_status *ss,
     switch_status_register_category(ss, "fail-open",
                                     fail_open_status_cb, fail_open);
     return make_hook(fail_open_local_packet_cb, NULL,
-                     fail_open_periodic_cb, NULL, fail_open);
+                     fail_open_periodic_cb, fail_open_wait_cb, fail_open);
 }
 
 struct rate_limiter {
