@@ -37,6 +37,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "timeval.h"
 #include "util.h"
 
 void
@@ -72,21 +73,32 @@ ds_reserve(struct ds *ds, size_t min_length)
     }
 }
 
+char *
+ds_put_uninit(struct ds *ds, size_t n)
+{
+    ds_reserve(ds, ds->length + n);
+    ds->length += n;
+    ds->string[ds->length] = '\0';
+    return &ds->string[ds->length - n];
+}
+
 void
 ds_put_char(struct ds *ds, char c)
 {
-    ds_reserve(ds, ds->length + 1);
-    ds->string[ds->length++] = c;
-    ds->string[ds->length] = '\0';
+    *ds_put_uninit(ds, 1) = c;
+}
+
+void
+ds_put_char_multiple(struct ds *ds, char c, size_t n)
+{
+    memset(ds_put_uninit(ds, n), ' ', n);
 }
 
 void
 ds_put_cstr(struct ds *ds, const char *s)
 {
     size_t s_len = strlen(s);
-    ds_reserve(ds, ds->length + s_len);
-    memcpy(&ds->string[ds->length], s, s_len + 1);
-    ds->length += s_len;
+    memcpy(ds_put_uninit(ds, s_len), s, s_len);
 }
 
 void
@@ -145,6 +157,10 @@ ds_put_printable(struct ds *ds, const char *s, size_t n)
 void
 ds_put_strftime(struct ds *ds, const char *template, const struct tm *tm)
 {
+    if (!tm) {
+        time_t now = time_now();
+        tm = localtime(&now);
+    }
     for (;;) {
         size_t avail = ds->string ? ds->allocated - ds->length + 1 : 0;
         size_t used = strftime(&ds->string[ds->length], avail, template, tm);
