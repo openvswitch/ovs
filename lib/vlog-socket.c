@@ -433,4 +433,3 @@ vlog_client_target(const struct vlog_client *client)
 {
     return client->connect_path;
 }
-
