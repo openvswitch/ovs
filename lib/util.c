@@ -101,23 +101,45 @@ xstrdup(const char *s)
 }
 
 char *
-xasprintf(const char *format, ...)
+xvasprintf(const char *format, va_list args)
 {
-    va_list args;
+    va_list args2;
     size_t needed;
     char *s;
 
-    va_start(args, format);
+    va_copy(args2, args);
     needed = vsnprintf(NULL, 0, format, args);
-    va_end(args);
 
     s = xmalloc(needed + 1);
 
+    vsnprintf(s, needed + 1, format, args2);
+    va_end(args2);
+
+    return s;
+}
+
+char *
+xasprintf(const char *format, ...)
+{
+    va_list args;
+    char *s;
+
     va_start(args, format);
-    vsnprintf(s, needed + 1, format, args);
+    s = xvasprintf(format, args);
     va_end(args);
 
     return s;
+}
+
+void
+strlcpy(char *dst, const char *src, size_t size)
+{
+    if (size > 0) {
+        size_t n = strlen(src);
+        size_t n_copy = MIN(n, size - 1);
+        memcpy(dst, src, n_copy);
+        dst[n_copy] = '\0';
+    }
 }
 
 void

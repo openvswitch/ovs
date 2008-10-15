@@ -34,11 +34,21 @@
 #ifndef UTIL_H
 #define UTIL_H 1
 
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include "compiler.h"
+
+#ifndef va_copy
+#ifdef __va_copy
+#define va_copy __va_copy
+#else
+#define va_copy(dst, src) ((dst) = (src))
+#endif
+#endif
 
 #ifndef __cplusplus
 /* Build-time assertion for use in a statement context. */
@@ -91,6 +101,11 @@ void *xmemdup(const void *, size_t);
 char *xmemdup0(const char *, size_t);
 char *xstrdup(const char *);
 char *xasprintf(const char *format, ...) PRINTF_FORMAT(1, 2);
+char *xvasprintf(const char *format, va_list) PRINTF_FORMAT(1, 0);
+
+#ifndef HAVE_STRLCPY
+void strlcpy(char *dst, const char *src, size_t size);
+#endif
 
 void ofp_fatal(int err_no, const char *format, ...)
     PRINTF_FORMAT(2, 3) NO_RETURN;

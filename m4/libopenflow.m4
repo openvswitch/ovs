@@ -118,6 +118,7 @@ AC_DEFUN([OFP_CHECK_SOCKET_LIBS],
   [AC_CHECK_LIB([socket], [connect])
    AC_SEARCH_LIBS([gethostbyname], [resolv], [RESOLVER_LIBS=-lresolv])])
 
+
 dnl Runs the checks required to include the headers in include/ and
 dnl link against lib/libopenflow.a.
 AC_DEFUN([OFP_CHECK_LIBOPENFLOW],
@@ -127,5 +128,6 @@ AC_DEFUN([OFP_CHECK_LIBOPENFLOW],
    AC_REQUIRE([OFP_CHECK_OPENSSL])
    AC_REQUIRE([OFP_CHECK_SNAT])
    AC_REQUIRE([OFP_CHECK_FAULT_LIBS])
-   AC_REQUIRE([OFP_CHECK_SOCKET_LIBS])])
+   AC_REQUIRE([OFP_CHECK_SOCKET_LIBS])
+   AC_CHECK_FUNCS([strlcpy])])
 
