@@ -423,7 +423,7 @@ run as a background process.
 Prints a brief help message to the console.
 
 .TP
-\fB-v\fR \fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]], \fB--verbose=\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]
+\fB-v\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]], \fB--verbose=\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]
 Sets the logging level for \fImodule\fR in \fIfacility\fR to
 \fIlevel\fR.  The \fImodule\fR may be any valid module name (as
 displayed by the \fB--list\fR action on \fBvlogconf\fR(8)), or the
