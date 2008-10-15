@@ -1878,7 +1878,7 @@ static bool
 fail_open_local_packet_cb(struct relay *r, void *fail_open_)
 {
     struct fail_open_data *fail_open = fail_open_;
-    if (!fail_open->lswitch) {
+    if (rconn_is_connected(fail_open->remote_rconn) || !fail_open->lswitch) {
         return false;
     } else {
         lswitch_process_packet(fail_open->lswitch, fail_open->local_rconn,
