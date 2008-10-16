@@ -34,7 +34,6 @@ AC_PREREQ(2.59)
 AC_INIT(openflow, 0.9.0~b1, info@openflowswitch.org)
 AC_CONFIG_SRCDIR([README.hwtables])
 AC_CONFIG_MACRO_DIR([m4])
-AC_CONFIG_MACRO_DIR([ext/m4])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE

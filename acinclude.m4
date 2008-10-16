@@ -118,7 +118,7 @@ AC_DEFUN([OFP_ENABLE_EXT],
        HAVE_EXT=no
        ;;
      (*)
-       if test -e "$srcdir/ext/configure"; then
+       if test -e "$srcdir/ext/automake.mk"; then
          HAVE_EXT=yes
        else
          HAVE_EXT=no

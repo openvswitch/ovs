@@ -1,7 +1,7 @@
 # The goal of -Wno-syntax here is just to suppress the Automake warning
 # about overriding distdir, below.
 AUTOMAKE_OPTIONS = foreign -Wno-syntax subdir-objects
-ACLOCAL_AMFLAGS = -I m4 -I ext/m4
+ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = datapath
 
 if HAVE_DPKG_BUILDPACKAGE
