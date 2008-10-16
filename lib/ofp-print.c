@@ -126,7 +126,7 @@ ofp_packet_to_string(const void *data, size_t len, size_t total_len)
     }
     rewind(pcap);
 
-    snprintf(command, sizeof command, "tcpdump -e -n -r /dev/fd/%d 2>/dev/null",
+    snprintf(command, sizeof command, "/usr/sbin/tcpdump -e -n -r /dev/fd/%d 2>/dev/null",
              fileno(pcap));
     tcpdump = popen(command, "r");
     fclose(pcap);
