@@ -235,3 +235,13 @@ daemonize(void)
     }
 }
 
+void
+daemon_usage(void)
+{
+    printf(
+        "\nDaemon options:\n"
+        "  -D, --detach            run in background as daemon\n"
+        "  -P, --pidfile[=FILE]    create pidfile (default: %s/%s.pid)\n"
+        "  -f, --force             with -P, start even if already running\n",
+        RUNDIR, program_name);
+}

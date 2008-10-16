@@ -171,9 +171,6 @@ parse_options(int argc, char *argv[])
         {"datapath-id", required_argument, 0, 'd'},
         {"max-backoff", required_argument, 0, OPT_MAX_BACKOFF},
         {"listen",      required_argument, 0, 'l'},
-        {"detach",      no_argument, 0, 'D'},
-        {"pidfile",     optional_argument, 0, 'P'},
-        {"force",       no_argument, 0, 'f'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -181,6 +178,7 @@ parse_options(int argc, char *argv[])
         {"hw-desc",     required_argument, 0, OPT_HW_DESC},
         {"sw-desc",     required_argument, 0, OPT_SW_DESC},
         {"serial_num",  required_argument, 0, OPT_SERIAL_NUM},
+        DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         VCONN_SSL_LONG_OPTIONS
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
@@ -218,18 +216,6 @@ parse_options(int argc, char *argv[])
         case 'V':
             printf("%s "VERSION" compiled "__DATE__" "__TIME__"\n", argv[0]);
             exit(EXIT_SUCCESS);
-
-        case 'D':
-            set_detach();
-            break;
-
-        case 'P':
-            set_pidfile(optarg);
-            break;
-
-        case 'f':
-            ignore_existing_pidfile();
-            break;
 
         case 'v':
             vlog_set_verbosity(optarg);
@@ -275,6 +261,8 @@ parse_options(int argc, char *argv[])
             listen_pvconn_name = optarg;
             break;
 
+        DAEMON_OPTION_HANDLERS
+
 #ifdef HAVE_OPENSSL
         VCONN_SSL_OPTION_HANDLERS
 
@@ -309,15 +297,12 @@ usage(void)
            "  --max-backoff=SECS      max time between controller connection\n"
            "                          attempts (default: 15 seconds)\n"
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
-           "                          (a passive OpenFlow connection method)\n"
-           "\nOther options:\n"
-           "  -D, --detach            run in background as daemon\n"
-           "  -P, --pidfile[=FILE]    create pidfile (default: %s/switch.pid)\n"
-           "  -f, --force             with -P, start even if already running\n"
+           "                          (a passive OpenFlow connection method)\n");
+    daemon_usage();
+    printf("\nOther options:\n"
            "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
-           "  -V, --version           display version information\n",
-        RUNDIR);
+           "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);
 }

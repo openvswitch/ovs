@@ -36,6 +36,24 @@
 
 #include <stdbool.h>
 
+#define DAEMON_LONG_OPTIONS                         \
+        {"detach",      no_argument, 0, 'D'},       \
+        {"force",       no_argument, 0, 'f'},       \
+        {"pidfile",     optional_argument, 0, 'P'}
+
+#define DAEMON_OPTION_HANDLERS                  \
+        case 'D':                               \
+            set_detach();                       \
+            break;                              \
+                                                \
+        case 'P':                               \
+            set_pidfile(optarg);                \
+            break;                              \
+                                                \
+        case 'f':                               \
+            ignore_existing_pidfile();          \
+            break;
+
 char *make_pidfile_name(const char *name);
 void set_pidfile(const char *name);
 const char *get_pidfile(void);
@@ -43,5 +61,6 @@ void set_detach(void);
 void daemonize(void);
 void die_if_already_running(void);
 void ignore_existing_pidfile(void);
+void daemon_usage(void);
 
 #endif /* daemon.h */

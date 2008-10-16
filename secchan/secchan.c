@@ -2531,12 +2531,10 @@ parse_options(int argc, char *argv[], struct settings *s)
         {"no-stp",      no_argument, 0, OPT_NO_STP},
         {"out-of-band", no_argument, 0, OPT_OUT_OF_BAND},
         {"in-band",     no_argument, 0, OPT_IN_BAND},
-        {"detach",      no_argument, 0, 'D'},
-        {"force",       no_argument, 0, 'f'},
-        {"pidfile",     optional_argument, 0, 'P'},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
+        DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         VCONN_SSL_LONG_OPTIONS
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
@@ -2649,18 +2647,6 @@ parse_options(int argc, char *argv[], struct settings *s)
             s->in_band = true;
             break;
 
-        case 'D':
-            set_detach();
-            break;
-
-        case 'P':
-            set_pidfile(optarg);
-            break;
-
-        case 'f':
-            ignore_existing_pidfile();
-            break;
-
         case 'l':
             if (s->n_listeners >= MAX_MGMT) {
                 ofp_fatal(0,
@@ -2687,6 +2673,8 @@ parse_options(int argc, char *argv[], struct settings *s)
         case 'v':
             vlog_set_verbosity(optarg);
             break;
+
+        DAEMON_OPTION_HANDLERS
 
 #ifdef HAVE_OPENSSL
         VCONN_SSL_OPTION_HANDLERS
@@ -2780,15 +2768,12 @@ usage(void)
            "  --no-stp                disable 802.1D Spanning Tree Protocol\n"
            "\nRate-limiting of \"packet-in\" messages to the controller:\n"
            "  --rate-limit[=PACKETS]  max rate, in packets/s (default: 1000)\n"
-           "  --burst-limit=BURST     limit on packet credit for idle time\n"
-           "\nOther options:\n"
-           "  -D, --detach            run in background as daemon\n"
-           "  -P, --pidfile[=FILE]    create pidfile (default: %s/secchan.pid)\n"
-           "  -f, --force             with -P, start even if already running\n"
+           "  --burst-limit=BURST     limit on packet credit for idle time\n");
+    daemon_usage();
+    printf("\nOther options:\n"
            "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
-           "  -V, --version           display version information\n",
-           RUNDIR);
+           "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);
 }

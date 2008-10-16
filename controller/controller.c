@@ -242,15 +242,13 @@ parse_options(int argc, char *argv[])
         OPT_PEER_CA_CERT
     };
     static struct option long_options[] = {
-        {"detach",      no_argument, 0, 'D'},
-        {"pidfile",     optional_argument, 0, 'P'},
-        {"force",       no_argument, 0, 'f'},
         {"hub",         no_argument, 0, 'H'},
         {"noflow",      no_argument, 0, 'n'},
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
+        DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         VCONN_SSL_LONG_OPTIONS
         {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
@@ -269,18 +267,6 @@ parse_options(int argc, char *argv[])
         }
 
         switch (c) {
-        case 'D':
-            set_detach();
-            break;
-
-        case 'P':
-            set_pidfile(optarg);
-            break;
-
-        case 'f':
-            ignore_existing_pidfile();
-            break;
-
         case 'H':
             learn_macs = false;
             break;
@@ -312,6 +298,8 @@ parse_options(int argc, char *argv[])
             vlog_set_verbosity(optarg);
             break;
 
+        DAEMON_OPTION_HANDLERS
+
 #ifdef HAVE_OPENSSL
         VCONN_SSL_OPTION_HANDLERS
 
@@ -338,17 +326,14 @@ usage(void)
            "where METHOD is any OpenFlow connection method.\n",
            program_name, program_name);
     vconn_usage(true, true, false);
+    daemon_usage();
     printf("\nOther options:\n"
-           "  -D, --detach            run in background as daemon\n"
-           "  -P, --pidfile[=FILE]    create pidfile (default: %s/controller.pid)\n"
-           "  -f, --force             with -P, start even if already running\n"
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"
            "  --max-idle=SECS         max idle time for new flows\n"
            "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
-           "  -V, --version           display version information\n",
-           RUNDIR);
+           "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);
 }
