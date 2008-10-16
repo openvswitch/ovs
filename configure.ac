@@ -34,11 +34,13 @@ AC_PREREQ(2.59)
 AC_INIT(openflow, 0.9.0~b1, info@openflowswitch.org)
 AC_CONFIG_SRCDIR([README.hwtables])
 AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_MACRO_DIR([ext/m4])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
 
 AC_PROG_CC
+AM_PROG_CC_C_O
 AC_PROG_CPP
 AC_PROG_RANLIB
 
@@ -62,18 +64,10 @@ OFP_CHECK_DPKG_BUILDPACKAGE
 CFLAGS="$CFLAGS -Wall -Wno-sign-compare -Wpointer-arith -Wdeclaration-after-statement"
 
 OFP_ENABLE_EXT
+m4_include(ext/configure.m4)
 
 AC_CONFIG_FILES([Makefile 
 datapath/Makefile 
-lib/Makefile
-include/Makefile
-controller/Makefile
-utilities/Makefile
-secchan/Makefile
-switch/Makefile
-tests/Makefile
-third-party/Makefile
-debian/Makefile
 datapath/linux-2.6/Kbuild
 datapath/linux-2.6/Makefile
 datapath/linux-2.6/Makefile.main

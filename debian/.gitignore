@@ -1,7 +1,6 @@
 *.debhelper
 *.substvars
-/Makefile.am
-/Makefile.in
+/automake.mk
 /files
 /openflow
 /openflow-common

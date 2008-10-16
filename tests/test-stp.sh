@@ -3,5 +3,5 @@ set -e
 progress=
 for d in ${stp_files}; do
     echo "Testing $d..."
-    $SUPERVISOR ./test-stp ${srcdir}/$d
+    $SUPERVISOR ./tests/test-stp ${srcdir}/$d
 done
