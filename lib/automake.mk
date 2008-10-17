@@ -45,10 +45,10 @@ lib_libopenflow_a_SOURCES += \
 	lib/vconn-ssl.c 
 nodist_lib_libopenflow_a_SOURCES = lib/dhparams.c
 lib/dhparams.c: lib/dh1024.pem lib/dh2048.pem lib/dh4096.pem
-	(echo '#include "dhparams.h"' &&			\
-	 openssl dhparam -C -in $(srcdir)/dh1024.pem -noout &&	\
-	 openssl dhparam -C -in $(srcdir)/dh2048.pem -noout &&	\
-	 openssl dhparam -C -in $(srcdir)/dh4096.pem -noout)	\
+	(echo '#include "lib/dhparams.h"' &&				\
+	 openssl dhparam -C -in $(srcdir)/lib/dh1024.pem -noout &&	\
+	 openssl dhparam -C -in $(srcdir)/lib/dh2048.pem -noout &&	\
+	 openssl dhparam -C -in $(srcdir)/lib/dh4096.pem -noout)	\
 	| sed 's/\(get_dh[0-9]*\)()/\1(void)/' > lib/dhparams.c.tmp
 	mv lib/dhparams.c.tmp lib/dhparams.c
 endif
