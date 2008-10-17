@@ -39,7 +39,7 @@ Description: OpenFlow switch implementations
 
 Package: openflow-pki
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, apache2
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, openflow-common, apache2
 Description: OpenFlow public key infrastructure
  openflow-pki provides PKI (public key infrastructure) support for
  OpenFlow switches and controllers, reducing the risk of
