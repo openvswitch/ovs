@@ -63,7 +63,7 @@ OFP_CHECK_DPKG_BUILDPACKAGE
 CFLAGS="$CFLAGS -Wall -Wno-sign-compare -Wpointer-arith -Wdeclaration-after-statement"
 
 OFP_ENABLE_EXT
-m4_include(ext/configure.m4)
+m4_include([ext.m4])
 
 AC_CONFIG_FILES([Makefile 
 datapath/Makefile 

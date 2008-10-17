@@ -60,4 +60,4 @@ include tests/automake.mk
 include include/automake.mk
 include third-party/automake.mk
 include debian/automake.mk
-include ext/automake.mk
+include ext.mk
