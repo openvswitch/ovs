@@ -30,15 +30,25 @@ done
 # Find the "include ext/automake.mk" line in Makefile.am and comment
 # it out or in according to whether ext is available, and similarly
 # for "m4_include(ext/configure.m4)" in configure.ac.
+subst() {
+    perl -pe "$1" < "$2" > "$2.tmp"
+    if cmp -s "$2.tmp" "$2"; then
+	rm "$2.tmp"
+    else
+	mv "$2.tmp" "$2"
+    fi
+}
 if test "$have_ext" = yes; then
     echo 'Enabling openflowext...'
-    perl -i.bak -pe 's|^#(include ext/automake\.mk)$|$1|' Makefile.am
-    perl -i.bak -pe 's|^#(m4_include\(ext/configure\.m4\))$|$1|' configure.ac
+    OC='#'
+    NC=
 else
     echo 'Disabling openflowext...'
-    perl -i.bak -pe 's|^(include ext/automake\.mk)$|#$1|' Makefile.am
-    perl -i.bak -pe 's|^(m4_include\(ext/configure\.m4\))$|#$1|' configure.ac
+    OC=
+    NC='#'
 fi
+subst "s|^$OC(include ext/automake\\.mk)\$|$NC\$1|" Makefile.am
+subst "s|^$OC(m4_include\\(ext/configure\.m4\\))\$|$NC\$1|" configure.ac
 
 # Bootstrap configure system from .ac/.am files
 autoreconf --install -I config --force
