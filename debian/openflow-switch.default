@@ -78,5 +78,12 @@ SWITCH_IP=dhcp
 # Required if SSL enabled.
 #CACERT=/etc/openflow-switch/cacert.pem
 
-# Additional options to pass to secchan, e.g. "--fail=open"
+# MGMT_VCONNS: List of vconns (space-separated) on which secchan
+# should listen for management connections from dpctl, etc.
+# openflow-switchmon by default connects to
+# unix:/var/run/secchan.socket, so do not disable this if you want to
+# use openflow-switchmon.
+MGMT_VCONNS="punix:/var/run/secchan.socket"
+
+# DAEMON_OPTS: Additional options to pass to secchan, e.g. "--fail=open"
 DAEMON_OPTS=""
