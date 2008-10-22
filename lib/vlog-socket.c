@@ -285,6 +285,7 @@ struct vlog_client {
 int
 vlog_client_connect(const char *path, struct vlog_client **clientp)
 {
+    static int counter;
     struct vlog_client *client;
     int fd;
 
@@ -293,7 +294,8 @@ vlog_client_connect(const char *path, struct vlog_client **clientp)
                             ? xstrdup(path)
                             : xasprintf("/tmp/vlogs.%s", path));
 
-    client->bind_path = xasprintf("/tmp/vlog.%ld", (long int) getpid());
+    client->bind_path = xasprintf("/tmp/vlog.%ld.%d",
+                                  (long int) getpid(), counter++);
     fd = make_unix_socket(SOCK_DGRAM, false, false,
                           client->bind_path, client->connect_path);
 
