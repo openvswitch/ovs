@@ -115,15 +115,21 @@ check_op() {
 }
 
 configure_ssl() {
-    if test ! -e "$PRIVKEY" || test ! -e "$CERT" || test ! -e "$CACERT"; then
+    if (test "$CACERT_MODE" != secure && test "$CACERT_MODE" != bootstrap) \
+       || test ! -e "$PRIVKEY" || test ! -e "$CERT" \
+       || (test ! -e "$CACERT" && test "$CACERT_MODE" != bootstrap); then
+        if test "$CACERT_MODE" != secure && test "$CACERT_MODE" != bootstrap
+        then
+            echo "CACERT_MODE is not set to 'secure' or 'bootstrap'"
+        fi
         if test ! -e "$PRIVKEY"; then
             echo "$PRIVKEY: private key missing" >&2
         fi
         if test ! -e "$CERT"; then
             echo "$CERT: certificate for private key missing" >&2
         fi
-        if test ! -e "$CACERT"; then
-            echo "$CACERT: CA certificate missing" >&2
+        if test ! -e "$CACERT" && test "$CACERT_MODE" != bootstrap; then
+            echo "$CACERT: CA certificate missing (and CA certificate bootstrapping not enabled)" >&2
         fi
         echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
         if test "$MODE" = discovery; then
@@ -131,7 +137,13 @@ configure_ssl() {
         fi
         exit 1
     fi
-    SSL_OPTS="--private-key=$PRIVKEY --certificate=$CERT --ca-cert=$CACERT"
+
+    SSL_OPTS="--private-key=$PRIVKEY --certificate=$CERT"
+    if test ! -e "$CACERT" && test "$CACERT_MODE" = bootstrap; then
+        SSL_OPTS="$SSL_OPTS --bootstrap-ca-cert=$CACERT"
+    else
+        SSL_OPTS="$SSL_OPTS --ca-cert=$CACERT"
+    fi
 }
 
 case "$1" in

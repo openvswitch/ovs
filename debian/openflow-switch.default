@@ -78,6 +78,20 @@ SWITCH_IP=dhcp
 # Required if SSL enabled.
 #CACERT=/etc/openflow-switch/cacert.pem
 
+# CACERT_MODE: Two modes are available:
+#
+# * secure: The controller CA certificate named in CACERT above must exist.
+#   (You must copy it manually from the PKI server or another trusted source.)
+#
+# * bootstrap: If the controller CA certificate named in CACERT above does
+#   not exist, the switch will obtain it from the controller the first time
+#   it connects and save a copy to the file named in CACERT.  This is insecure,
+#   in the same way that initial connections with ssh are insecure, but
+#   it is convenient.
+# 
+# Set CACERT_MODE to 'secure' or 'bootstrap' for these respective cases.
+#CACERT=secure
+
 # MGMT_VCONNS: List of vconns (space-separated) on which secchan
 # should listen for management connections from dpctl, etc.
 # openflow-switchmon by default connects to
