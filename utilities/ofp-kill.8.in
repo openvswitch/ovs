@@ -16,7 +16,7 @@ the PID of the process to kill as a text string.  It then uses
 owns a lock on \fIpidfile\fR before it sends the signal.
 
 A \fIpidfile\fR whose name begins with \fB/\fR is used literally.
-Otherwise, \fB@rundir@/\fR is prefixed.
+Otherwise, \fB@RUNDIR@/\fR is prefixed.
 
 This program exists for use by \fBofp\-switch\-setup\fR, which cannot
 easily implement its functionality since Perl has no portable

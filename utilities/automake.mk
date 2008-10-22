@@ -39,8 +39,6 @@ utilities_ofp_discover_LDADD = lib/libopenflow.a
 utilities_ofp_kill_SOURCES = utilities/ofp-kill.c
 utilities_ofp_kill_LDADD = lib/libopenflow.a
 
-pkidir = $(pkgdatadir)/pki
-
 utilities/ofp-pki: utilities/ofp-pki.in Makefile
 	$(do_subst) < $(srcdir)/utilities/ofp-pki.in \
 		| $(ro_script) > utilities/ofp-pki

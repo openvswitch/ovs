@@ -31,6 +31,7 @@ lib_libopenflow_a_SOURCES = \
 	lib/vconn-stream.c \
 	lib/vconn.c \
 	lib/vlog-socket.c \
+	lib/dirs.c \
 	lib/vlog.c
 
 if HAVE_NETLINK
@@ -58,3 +59,9 @@ EXTRA_DIST += \
 	lib/dh2048.pem \
 	lib/dh4096.pem \
 	lib/dhparams.h
+
+lib/dirs.c: Makefile
+	($(ro_c) && \
+	 echo 'const char ofp_rundir[] = "@RUNDIR@";' && \
+	 echo 'const char ofp_logdir[] = "@LOGDIR@";') > lib/dirs.c.tmp
+	mv lib/dirs.c.tmp lib/dirs.c

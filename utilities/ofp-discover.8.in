@@ -77,7 +77,7 @@ This option is mutually exclusive with \fB--exit-without-bind\fR and
 Causes a file (by default, \fBofp\-discover.pid\fR) to be created indicating
 the PID of the running process.  If \fIpidfile\fR is not specified, or
 if it does not begin with \fB/\fR, then it is created in
-\fB@rundir@\fR.
+\fB@RUNDIR@\fR.
 
 The \fIpidfile\fR is created when \fBofp\-discover\fR detaches, so
 this this option has no effect when one of \fB--exit-without-bind\fR,

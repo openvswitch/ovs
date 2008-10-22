@@ -89,7 +89,7 @@ the switch is connected to a trustworthy controller.
 Causes a file (by default, \fBswitch.pid\fR) to be created indicating
 the PID of the running process.  If \fIpidfile\fR is not specified, or
 if it does not begin with \fB/\fR, then it is created in
-\fB@rundir@\fR.
+\fB@RUNDIR@\fR.
 
 .TP
 \fB-f\fR, \fB--force\fR

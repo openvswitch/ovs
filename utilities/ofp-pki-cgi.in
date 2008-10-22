@@ -9,7 +9,7 @@ $CGI::POST_MAX = 65536;    # Limit POSTs to 64 kB.
 use strict;
 use warnings;
 
-my $pkidir = '@pkidir@';
+my $pkidir = '@PKIDIR@';
 my $q = new CGI;
 
 die unless $q->request_method() eq 'POST';

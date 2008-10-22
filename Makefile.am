@@ -20,12 +20,6 @@ endif
 
 AM_CFLAGS = -Wstrict-prototypes
 
-rundir = $(localstatedir)/run
-AM_CPPFLAGS += -DRUNDIR=\"$(rundir)\"
-
-logdir = $(localstatedir)/log/$(PACKAGE)
-AM_CPPFLAGS += -DLOGDIR=\"$(logdir)\"
-
 if NDEBUG
 AM_CPPFLAGS += -DNDEBUG
 AM_CFLAGS += -fomit-frame-pointer
@@ -46,11 +40,12 @@ noinst_LIBRARIES =
 noinst_PROGRAMS =
 noinst_SCRIPTS =
 
-do_subst = sed -e 's,[@]pkidir[@],$(pkidir),g' \
-               -e 's,[@]rundir[@],$(rundir),g' \
+do_subst = sed -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
+               -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
                -e 's,[@]PERL[@],$(PERL),g'
 ro_script = sed "`printf '1a\\' && printf '\\n\# -*- buffer-read-only: t -*-'`"
 ro_man = printf '.\\" Local\040variables:\n.\\" buffer-read-only: t\n.\\" End:\n'
+ro_c = echo '/* -*- mode: c; buffer-read-only: t -*- */'
 
 EXTRA_DIST += README.hwtables
 

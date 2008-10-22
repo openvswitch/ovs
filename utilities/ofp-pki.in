@@ -1,6 +1,6 @@
 #! /bin/sh -e
 
-pkidir='@pkidir@'
+pkidir='@PKIDIR@'
 command=
 prev=
 force=no

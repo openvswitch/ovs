@@ -39,6 +39,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "fatal-signal.h"
+#include "dirs.h"
 #include "util.h"
 
 #define THIS_MODULE VLM_daemon
@@ -58,9 +59,9 @@ static bool force;
 char *
 make_pidfile_name(const char *name) 
 {
-    return (!name ? xasprintf("%s/%s.pid", RUNDIR, program_name)
+    return (!name ? xasprintf("%s/%s.pid", ofp_rundir, program_name)
             : *name == '/' ? xstrdup(name)
-            : xasprintf("%s/%s", RUNDIR, name));
+            : xasprintf("%s/%s", ofp_rundir, name));
 }
 
 /* Sets up a following call to daemonize() to create a pidfile named 'name'.
@@ -243,5 +244,5 @@ daemon_usage(void)
         "  -D, --detach            run in background as daemon\n"
         "  -P, --pidfile[=FILE]    create pidfile (default: %s/%s.pid)\n"
         "  -f, --force             with -P, start even if already running\n",
-        RUNDIR, program_name);
+        ofp_rundir, program_name);
 }

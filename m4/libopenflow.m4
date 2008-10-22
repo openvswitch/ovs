@@ -1,3 +1,5 @@
+# -*- autoconf -*-
+
 # Copyright (c) 2008 The Board of Trustees of The Leland Stanford
 # Junior University
 #
@@ -118,6 +120,35 @@ AC_DEFUN([OFP_CHECK_SOCKET_LIBS],
   [AC_CHECK_LIB([socket], [connect])
    AC_SEARCH_LIBS([gethostbyname], [resolv], [RESOLVER_LIBS=-lresolv])])
 
+dnl Checks for the directory in which to store the PKI.
+AC_DEFUN([OFP_CHECK_PKIDIR],
+  [AC_ARG_WITH(
+     [pkidir], 
+     AC_HELP_STRING([--with-pkidir=DIR], 
+                    [PKI hierarchy directory [[DATADIR/openflow/pki]]]),
+     [PKIDIR=$withval],
+     [PKIDIR='${pkgdatadir}/pki'])
+   AC_SUBST([PKIDIR])])
+
+dnl Checks for the directory in which to store pidfiles.
+AC_DEFUN([OFP_CHECK_RUNDIR],
+  [AC_ARG_WITH(
+     [rundir], 
+     AC_HELP_STRING([--with-rundir=DIR], 
+                    [directory used for pidfiles [[LOCALSTATEDIR/run]]]),
+     [RUNDIR=$withval],
+     [RUNDIR='${localstatedir}/run'])
+   AC_SUBST([RUNDIR])])
+
+dnl Checks for the directory in which to store logs.
+AC_DEFUN([OFP_CHECK_LOGDIR],
+  [AC_ARG_WITH(
+     [logdir], 
+     AC_HELP_STRING([--with-logdir=DIR], 
+                    [directory used for logs [[LOCALSTATEDIR/log/PACKAGE]]]),
+     [LOGDIR=$withval],
+     [LOGDIR='${localstatedir}/log/${PACKAGE}'])
+   AC_SUBST([LOGDIR])])
 
 dnl Runs the checks required to include the headers in include/ and
 dnl link against lib/libopenflow.a.
@@ -129,5 +160,8 @@ AC_DEFUN([OFP_CHECK_LIBOPENFLOW],
    AC_REQUIRE([OFP_CHECK_SNAT])
    AC_REQUIRE([OFP_CHECK_FAULT_LIBS])
    AC_REQUIRE([OFP_CHECK_SOCKET_LIBS])
+   AC_REQUIRE([OFP_CHECK_PKIDIR])
+   AC_REQUIRE([OFP_CHECK_RUNDIR])
+   AC_REQUIRE([OFP_CHECK_LOGDIR])
    AC_CHECK_FUNCS([strlcpy])])
 

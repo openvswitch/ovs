@@ -5,6 +5,7 @@ noinst_HEADERS += \
 	include/daemon.h \
 	include/dhcp-client.h \
 	include/dhcp.h \
+	include/dirs.h \
 	include/dynamic-string.h \
 	include/dpif.h \
 	include/fatal-signal.h \

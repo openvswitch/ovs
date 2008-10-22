@@ -42,6 +42,7 @@
 #include "daemon.h"
 #include "dhcp-client.h"
 #include "dhcp.h"
+#include "dirs.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "netdev.h"
@@ -413,6 +414,6 @@ usage(void)
            "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n",
-           program_name, program_name, RUNDIR, program_name);
+           program_name, program_name, ofp_rundir, program_name);
     exit(EXIT_SUCCESS);
 }

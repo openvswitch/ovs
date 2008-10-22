@@ -67,7 +67,7 @@ administration:
 
 .TP
 \fBinit\fR
-Initializes a new PKI (by default in directory \fB@pkidir@\fR) and populates
+Initializes a new PKI (by default in directory \fB@PKIDIR@\fR) and populates
 it with a pair of certificate authorities for controllers and
 switches.
 
@@ -115,7 +115,7 @@ bits in the generated RSA key.
 When DSA keys are used (as specified with \fB\-\^\-key=dsa\fR), \fBreq\fR
 needs access to the \fBdsaparam.pem\fR file created as part of the PKI
 hierarchy (but not to other files in that tree).  By default,
-\fBofp\-pki\fR looks for this file in \fB@pkidir@/dsaparam.pem\fR, but
+\fBofp\-pki\fR looks for this file in \fB@PKIDIR@/dsaparam.pem\fR, but
 the \fB\-D\fR or \fB\-\^\-dsaparam\fR option (see below) may be used to
 specify an alternate location.
 
@@ -288,7 +288,7 @@ Suppresses the interactive verification of fingerprints that the
 .TP
 \fB\-d\fR \fIdir\fR | \fB\-\^\-dir=\fR\fIdir\fR
 Specifies the location of the PKI hierarchy to be used or created by
-the command (default: \fB@pkidir@\fR).  All commands, except \fBreq\fR,
+the command (default: \fB@PKIDIR@\fR).  All commands, except \fBreq\fR,
 need access to a PKI hierarchy.
 
 .TP
