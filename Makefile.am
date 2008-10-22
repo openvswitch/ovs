@@ -46,7 +46,7 @@ do_subst = sed -e 's,[@]pkidir[@],$(pkidir),g' \
                -e 's,[@]rundir[@],$(rundir),g' \
                -e 's,[@]PERL[@],$(PERL),g'
 ro_script = sed "`printf '1a\\' && printf '\\n\# -*- buffer-read-only: t -*-'`"
-ro_man = printf '.\\" Local variables:\n.\\" buffer-read-only: t\n.\\" End:\n'
+ro_man = printf '.\\" Local\040variables:\n.\\" buffer-read-only: t\n.\\" End:\n'
 
 EXTRA_DIST += README.hwtables
 
