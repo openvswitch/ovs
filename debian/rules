@@ -32,7 +32,8 @@ configure-stamp:
 	test -d _debian || mkdir _debian
 	cd _debian && ( \
 		test -e Makefile || \
-		../configure --prefix=/usr --localstatedir=/var --enable-ssl)
+		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
+			--enable-snat)
 	touch configure-stamp
 
 #Architecture 
