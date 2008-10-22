@@ -28,6 +28,7 @@ struct snat_conf {
 
 #define MAC_TIMEOUT_DEFAULT 120
 
+void snat_local_in(struct sk_buff *skb);
 int snat_pre_route(struct sk_buff *skb);
 void snat_skb(struct datapath *dp, struct sk_buff *skb, int out_port);
 void snat_maint(struct net_bridge_port *p);

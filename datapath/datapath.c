@@ -631,6 +631,9 @@ int dp_output_port(struct datapath *dp, struct sk_buff *skb, int out_port,
 
 	case OFPP_LOCAL: {
 		struct net_device *dev = dp->netdev;
+#ifdef SUPPORT_SNAT
+		snat_local_in(skb);
+#endif
 		return dev ? dp_dev_recv(dev, skb) : -ESRCH;
 	}
 

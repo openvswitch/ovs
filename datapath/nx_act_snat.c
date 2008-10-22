@@ -97,6 +97,17 @@ done:
 	spin_unlock_irqrestore(&p->lock, flags);
 }
 
+/* When the packet is bound for a local interface, strip off the fake
+ * routing table.
+ */
+void snat_local_in(struct sk_buff *skb)
+{
+	if (skb->dst == (struct dst_entry *)&__fake_rtable) {
+		dst_release(skb->dst);
+		skb->dst = NULL;
+	}
+}
+
 /* Check whether destination IP's address is in the IP->MAC mappings.
  * If it is, then overwrite the destination MAC with the value from the
  * cache.
@@ -146,6 +157,9 @@ static int
 snat_pre_route_finish(struct sk_buff *skb)
 {
 	struct net_bridge_port *p = skb->dev->br_port;
+
+	skb->dst = (struct dst_entry *)&__fake_rtable;
+	dst_hold(skb->dst);
 
 	/* If SNAT is configured for this input device, check the IP->MAC
 	 * mappings to see if we should update the destination MAC. */
@@ -307,9 +321,6 @@ snat_pre_route(struct sk_buff *skb)
 
 	if (pskb_trim_rcsum(skb, len))
 		goto ipv4_error;
-
-	skb->dst = (struct dst_entry *)&__fake_rtable;
-	dst_hold(skb->dst);
 
 	return NF_HOOK(PF_INET, NF_INET_PRE_ROUTING, skb, skb->dev, NULL,
 			snat_pre_route_finish);
