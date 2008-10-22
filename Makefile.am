@@ -21,10 +21,11 @@ endif
 AM_CFLAGS = -Wstrict-prototypes
 
 rundir = $(localstatedir)/run
-AM_CFLAGS += -DRUNDIR=\"$(rundir)\"
+AM_CPPFLAGS += -DRUNDIR=\"$(rundir)\"
 
 if NDEBUG
-AM_CFLAGS += -DNDEBUG -fomit-frame-pointer
+AM_CPPFLAGS += -DNDEBUG
+AM_CFLAGS += -fomit-frame-pointer
 else
 AM_LDFLAGS = -export-dynamic
 endif
