@@ -18,8 +18,7 @@ if HAVE_EXT
 AM_CPPFLAGS += -I $(top_srcdir)/ext/include
 endif
 
-AM_CFLAGS = -DVERSION=\"$(VERSION)\"
-AM_CFLAGS += -Wstrict-prototypes
+AM_CFLAGS = -Wstrict-prototypes
 
 rundir = $(localstatedir)/run
 AM_CFLAGS += -DRUNDIR=\"$(rundir)\"
