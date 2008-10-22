@@ -138,10 +138,10 @@ void vlog_rate_limit(enum vlog_module, enum vlog_level,
  *      #define THIS_MODULE VLM_netlink
  * Guaranteed to preserve errno.
  */
-#define VLOG_EMER(...) vlog(THIS_MODULE, VLL_EMER, __VA_ARGS__)
-#define VLOG_ERR(...) vlog(THIS_MODULE, VLL_ERR, __VA_ARGS__)
-#define VLOG_WARN(...) vlog(THIS_MODULE, VLL_WARN, __VA_ARGS__)
-#define VLOG_DBG(...) vlog(THIS_MODULE, VLL_DBG, __VA_ARGS__)
+#define VLOG_EMER(...) VLOG(VLL_EMER, __VA_ARGS__)
+#define VLOG_ERR(...) VLOG(VLL_ERR, __VA_ARGS__)
+#define VLOG_WARN(...) VLOG(VLL_WARN, __VA_ARGS__)
+#define VLOG_DBG(...) VLOG(VLL_DBG, __VA_ARGS__)
 
 /* More convenience macros, for testing whether a given level is enabled in
  * THIS_MODULE.  When constructing a log message is expensive, this enables it
@@ -163,5 +163,14 @@ void vlog_rate_limit(enum vlog_module, enum vlog_level,
         vlog_rate_limit(THIS_MODULE, VLL_WARN, RL, __VA_ARGS__)
 #define VLOG_DBG_RL(RL, ...) \
         vlog_rate_limit(THIS_MODULE, VLL_DBG, RL, __VA_ARGS__)
+
+/* Implementation details. */
+#define VLOG(LEVEL, ...)                                \
+    do {                                                \
+        if (min_vlog_levels[THIS_MODULE] >= LEVEL) {    \
+            vlog(THIS_MODULE, LEVEL, __VA_ARGS__);      \
+        }                                               \
+    } while (0)
+extern enum vlog_level min_vlog_levels[VLM_N_MODULES];
 
 #endif /* vlog.h */

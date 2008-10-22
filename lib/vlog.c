@@ -86,6 +86,10 @@ static struct facility facilities[VLF_N_FACILITIES] = {
 /* Current log levels. */
 static int levels[VLM_N_MODULES][VLF_N_FACILITIES];
 
+/* For fast checking whether we're logging anything for a given module and
+ * level.*/
+enum vlog_level min_vlog_levels[VLM_N_MODULES];
+
 /* Time at which vlog was initialized, in milliseconds. */
 static long long int boot_time;
 
@@ -169,6 +173,18 @@ vlog_get_level(enum vlog_module module, enum vlog_facility facility)
 }
 
 static void
+update_min_level(enum vlog_module module)
+{
+    enum vlog_level min_level = VLL_EMER;
+    enum vlog_facility facility;
+
+    for (facility = 0; facility < VLF_N_FACILITIES; facility++) {
+        min_level = MAX(min_level, levels[module][facility]);
+    }
+    min_vlog_levels[module] = min_level;
+}
+
+static void
 set_facility_level(enum vlog_facility facility, enum vlog_module module,
                    enum vlog_level level)
 {
@@ -178,9 +194,11 @@ set_facility_level(enum vlog_facility facility, enum vlog_module module,
     if (module == VLM_ANY_MODULE) {
         for (module = 0; module < VLM_N_MODULES; module++) {
             levels[module][facility] = level;
+            update_min_level(module);
         }
     } else {
         levels[module][facility] = level;
+        update_min_level(module);
     }
 }
 
@@ -359,8 +377,7 @@ vlog_get_levels(void)
 bool
 vlog_is_enabled(enum vlog_module module, enum vlog_level level)
 {
-    return (levels[module][VLF_CONSOLE] >= level
-            || levels[module][VLF_SYSLOG] >= level);
+    return min_vlog_levels[module] >= level;
 }
 
 static const char *
