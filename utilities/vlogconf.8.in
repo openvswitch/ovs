@@ -15,6 +15,7 @@ The available \fIaction\fR options are:
 [\fB-l\fR | \fB--list\fR] [\fB-s\fR
 \fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]] |
 \fB--set=\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]]
+[\fB-r\fR | \fB--reopen\fR]
 
 .SH DESCRIPTION
 The \fBvlogconf\fR program configures the logging system used by 
@@ -29,10 +30,30 @@ target processes.  Targets may be specified as:
 All running processes that \fBvlogconf\fR can control.
 
 .TP
-\fB-t \fIpid\fR, \fB--target=\fIpid\fR
-The process with the specified \fIpid\fR.  \fIpid\fR may also specify
-an absolute path (beginning with `/') to the Unix domain socket for a
+\fB-t \fItarget\fR, \fB--target=\fItarget\fR
+The specified \fItarget\fR, which must take one of the following forms:
+
+.RS
+.IP \(bu
+A PID (process ID).
+
+.IP \(bu
+An absolute path (beginning with `/') to the Unix domain socket for a
 \fBvlogconf\fR-controllable process.
+
+.IP \(bu
+An absolute path (beginning with `/') to a pidfile (created by, e.g.,
+passing the \fB-P\fR or \fB--pidfile\fR option to one of the OpenFlow
+programs).  
+
+.IP \(bu
+None of the above, in which case \fItarget\fR prefixed by
+\fB@RUNDIR@/\fR must match one of the cases for absolute paths listed
+above.  (The default name for a program's pidfile is
+\fB@RUNDIR@/\fIprogram\fB.pid\fR, so this means that, say,
+\fBsecchan\fR's default pidfile may be referred to simply as
+\fBsecchan.pid\fR.)
+.RE
 
 .PP
 The available actions are:
@@ -142,6 +163,12 @@ width.  (A field wider than \fIwidth\fR is not truncated to fit.)
 .IP
 The default pattern for console output is \fB%d{%b %d
 %H:%M:%S}|%05N|%c|%p|%m\fR; for syslog output, \fB%05N|%c|%p|%m\fR.
+
+.TP
+\fB-r\fR, \fB--reopen\fR
+Causes the target application to close and reopen its log file.  (This
+is useful after rotating log files, to cause a new log file to be
+used.)
 
 .SH OPTIONS
 .TP

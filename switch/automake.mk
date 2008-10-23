@@ -23,6 +23,3 @@ switch_switch_LDADD = lib/libopenflow.a $(FAULT_LIBS) $(SSL_LIBS)
 
 EXTRA_DIST += switch/switch.8.in
 DISTCLEANFILES += switch/switch.8
-switch/switch.8: switch/switch.8.in Makefile
-	($(do_subst) && $(ro_man)) \
-		< $(srcdir)/switch/switch.8.in > switch/switch.8

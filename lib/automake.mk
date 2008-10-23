@@ -60,6 +60,7 @@ EXTRA_DIST += \
 	lib/dh4096.pem \
 	lib/dhparams.h
 
+CLEANFILES += lib/dirs.c
 lib/dirs.c: Makefile
 	($(ro_c) && \
 	 echo 'const char ofp_rundir[] = "@RUNDIR@";' && \

@@ -27,6 +27,7 @@ else
 AM_LDFLAGS = -export-dynamic
 endif
 
+CLEANFILES =
 DISTCLEANFILES =
 EXTRA_DIST =
 TESTS =
@@ -40,14 +41,18 @@ noinst_LIBRARIES =
 noinst_PROGRAMS =
 noinst_SCRIPTS =
 
-do_subst = sed -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
-               -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
-               -e 's,[@]PERL[@],$(PERL),g'
+EXTRA_DIST += README.hwtables
+
+do_subst = ($(srcdir)/subst VLOG_OPTIONS $(srcdir)/lib/vlog.man | \
+	    sed -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
+                -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
+                -e 's,[@]PERL[@],$(PERL),g')
 ro_script = sed "`printf '1a\\' && printf '\\n\# -*- buffer-read-only: t -*-'`"
-ro_man = printf '.\\" Local\040variables:\n.\\" buffer-read-only: t\n.\\" End:\n'
 ro_c = echo '/* -*- mode: c; buffer-read-only: t -*- */'
 
-EXTRA_DIST += README.hwtables
+SUFFIXES = .in
+.in:
+	$(do_subst) < $< > $@
 
 include lib/automake.mk
 include secchan/automake.mk

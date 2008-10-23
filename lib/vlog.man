@@ -1,0 +1,45 @@
+.TP
+\fB-v\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]], \fB--verbose=\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]
+
+Sets the logging level for \fImodule\fR in \fIfacility\fR to
+\fIlevel\fR:
+
+.RS
+.IP \(bu
+\fImodule\fR may be any valid module name (as displayed by the
+\fB--list\fR action on \fBvlogconf\fR(8)), or the special name
+\fBANY\fR to set the logging levels for all modules.
+
+.IP \(bu
+\fIfacility\fR may be \fBsyslog\fR, \fBconsole\fR, or \fBfile\fR to
+set the levels for logging to the system log, the console, or a file
+respectively, or \fBANY\fR to set the logging levels for both
+facilities.  If it is omitted, \fIfacility\fR defaults to \fBANY\fR.
+
+Regardless of the log levels set for \fBfile\fR, logging to a file
+will not take place unless \fB--log-file\fR is also specified (see
+below).
+
+.IP \(bu 
+\fIlevel\fR must be one of \fBemer\fR, \fBerr\fR, \fBwarn\fR, or
+\fBdbg\fR, designating the minimum severity of a message for it to be
+logged.  If it is omitted, \fIlevel\fR defaults to \fBdbg\fR.
+.RE
+
+.TP
+\fB-v\fR, \fB--verbose\fR
+Sets the maximum logging verbosity level, equivalent to
+\fB--verbose=ANY:ANY:dbg\fR.
+
+.TP
+\fB-vPATTERN:\fIfacility\fB:\fIpattern\fR, \fB--verbose=PATTERN:\fIfacility\fB:\fIpattern\fR
+Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Refer to
+\fBvlogconf\fR(8) for a description of the valid syntax for \fIpattern\fR.
+
+.TP
+\fB--log-file\fR[\fB=\fIfile\fR]
+Enables logging to a file.  If \fIfile\fR is specified, then it is
+used as the exact name for the log file.  The default log file name
+used if \fIfile\fR is omitted is @LOGDIR@/\fIprogram\fR.log, where
+\fIprogram\fR is the name of the program as invoked
+(e.g. \fBsecchan\fR).
