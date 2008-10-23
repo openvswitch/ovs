@@ -65,3 +65,8 @@ lib/dirs.c: Makefile
 	 echo 'const char ofp_rundir[] = "@RUNDIR@";' && \
 	 echo 'const char ofp_logdir[] = "@LOGDIR@";') > lib/dirs.c.tmp
 	mv lib/dirs.c.tmp lib/dirs.c
+
+install-data-local:
+	$(MKDIR_P) $(DESTDIR)$(RUNDIR)
+	$(MKDIR_P) $(DESTDIR)$(PKIDIR)
+	$(MKDIR_P) $(DESTDIR)$(LOGDIR)
