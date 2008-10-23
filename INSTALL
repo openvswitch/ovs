@@ -372,9 +372,6 @@ Userspace Switch
 These instructions use the OpenFlow userspace switch that runs as an
 integrated userspace program.
 
-0. The commands below must run as root, so log in as root, or use a
-   program such as "su" to become root temporarily.
-
 1. Start the OpenFlow controller running in the background, by running
    the "controller" program with a command like the following:
 
@@ -383,8 +380,14 @@ integrated userspace program.
    This command causes the controller to bind to port 6633 (the
    default) awaiting connections from OpenFlow switches.  See
    controller(8) for details.
+
+   The "controller" program does not require any special privilege, so
+   you do not need to run it as root.
    
-2. On the same machine, use the "switch" program to start an OpenFlow
+2. The "switch" program must run as root, so log in as root, or use a
+   program such as "su" to become root temporarily.
+
+3. On the same machine, use the "switch" program to start an OpenFlow
    switch, specifying network devices to use as switch ports on the -i
    option as a comma-separated list, like so:
 
@@ -393,7 +396,7 @@ integrated userspace program.
    The network devices that you specify should not have configured IP
    addresses.
 
-3. The controller causes each switch that connects to it to act like a
+4. The controller causes each switch that connects to it to act like a
    learning Ethernet switch.  Thus, devices plugged into the specified
    network ports should now be able to send packets to each other, as
    if they were plugged into ports on a conventional Ethernet switch.
@@ -409,9 +412,6 @@ These instructions use the OpenFlow userspace datapath ("udatapath").
 The udatapath program is part of the OpenFlow extensions repository,
 which is not included in every OpenFlow distribution.
 
-0. The commands below must run as root, so log in as root, or use a
-   program such as "su" to become root temporarily.
-
 1. Start the OpenFlow controller running in the background, by running
    the "controller" program with a command like the following:
 
@@ -420,20 +420,26 @@ which is not included in every OpenFlow distribution.
    This command causes the controller to bind to the specified Unix
    domain socket, awaiting connections from OpenFlow switches.  See
    controller(8) for details.
+
+   The "controller" program does not require any special privilege, so
+   you do not need to run it as root.
    
-2. Create a datapath instance running in the background.  The command
+2. The commands below must run as root, so log in as root, or use a
+   program such as "su" to become root temporarily.
+
+3. Create a datapath instance running in the background.  The command
    below creates a datapath that listens for connections from secchan
    on a Unix domain socket located in /var/run and services physical
    ports eth1 and eth2:
 
       # udatapath punix:/var/run/dp0.sock -i eth1,eth2 &
 
-3. Run secchan to start the secure channel connecting the datapath and
+4. Run secchan to start the secure channel connecting the datapath and
    the controller:
 
       # secchan unix:/var/run/controller.sock unix:/var/run/dp0.sock &
    
-4. Devices plugged into the network ports specified in step 2 should
+5. Devices plugged into the network ports specified in step 2 should
    now be able to send packets to each other, as if they were plugged
    into ports on a conventional Ethernet switch.
 
@@ -469,8 +475,7 @@ Controller Setup
 
 On the machine that is to be the OpenFlow controller, start the
 "controller" program listening for connections from switches on TCP
-port 6633 (the default), as shown below.  (Because it listens on a
-low-numbered port, this command must run as root.)
+port 6633 (the default), as shown below.
 
    # controller -v ptcp:
 
