@@ -23,6 +23,9 @@ AM_CFLAGS = -Wstrict-prototypes
 rundir = $(localstatedir)/run
 AM_CPPFLAGS += -DRUNDIR=\"$(rundir)\"
 
+logdir = $(localstatedir)/log/$(PACKAGE)
+AM_CPPFLAGS += -DLOGDIR=\"$(logdir)\"
+
 if NDEBUG
 AM_CPPFLAGS += -DNDEBUG
 AM_CFLAGS += -fomit-frame-pointer
