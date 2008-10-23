@@ -29,6 +29,7 @@ VLOG_MODULE(vconn_stream)
 VLOG_MODULE(vconn_unix)
 VLOG_MODULE(vconn)
 VLOG_MODULE(vlog)
+VLOG_MODULE(vlog_socket)
 
 #ifdef HAVE_EXT
 #include "ext/vlogext-modules.def"

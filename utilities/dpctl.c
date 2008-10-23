@@ -238,11 +238,10 @@ usage(void)
            "where each SWITCH is an active OpenFlow connection method.\n",
            program_name, program_name);
     vconn_usage(true, false, false);
-    printf("\nOptions:\n"
+    vlog_usage();
+    printf("\nOther options:\n"
            "  --strict                    use strict match for flow commands\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"
-           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
-           "  -v, --verbose               set maximum verbosity level\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);

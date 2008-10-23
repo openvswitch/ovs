@@ -405,15 +405,15 @@ usage(void)
            "  --accept-vconn=REGEX    accept matching discovered controllers\n"
            "  --exit-without-bind     exit after discovery, without binding\n"
            "  --exit-after-bind       exit after discovery, after binding\n"
-           "  --no-detach             do not detach after discovery\n"
-           "\nOther options:\n"
+           "  --no-detach             do not detach after discovery\n",
+           program_name, program_name);
+    vlog_usage();
+    printf("\nOther options:\n"
            "  -t, --timeout=SECS      give up discovery after SECS seconds\n"
            "  -P, --pidfile[=FILE]    create pidfile (default: %s/%s.pid)\n"
            "  -f, --force             with -P, start even if already running\n"
-           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
-           "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n",
-           program_name, program_name, ofp_rundir, program_name);
+           ofp_rundir, program_name);
     exit(EXIT_SUCCESS);
 }

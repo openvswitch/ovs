@@ -35,6 +35,7 @@
 #define DAEMON_H 1
 
 #include <stdbool.h>
+#include <sys/types.h>
 
 #define DAEMON_LONG_OPTIONS                         \
         {"detach",      no_argument, 0, 'D'},       \
@@ -62,5 +63,6 @@ void daemonize(void);
 void die_if_already_running(void);
 void ignore_existing_pidfile(void);
 void daemon_usage(void);
+pid_t read_pidfile(const char *name);
 
 #endif /* daemon.h */

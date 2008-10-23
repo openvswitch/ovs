@@ -59,7 +59,8 @@ enum vlog_level vlog_get_level_val(const char *name);
 /* Facilities that we can log to. */
 #define VLOG_FACILITIES                                         \
     VLOG_FACILITY(SYSLOG, "%05N|%c|%p|%m")                      \
-    VLOG_FACILITY(CONSOLE, "%d{%b %d %H:%M:%S}|%05N|%c|%p|%m")
+    VLOG_FACILITY(CONSOLE, "%d{%b %d %H:%M:%S}|%05N|%c|%p|%m")  \
+    VLOG_FACILITY(FILE, "%d{%b %d %H:%M:%S}|%05N|%c|%p|%m")
 enum vlog_facility {
 #define VLOG_FACILITY(NAME, PATTERN) VLF_##NAME,
     VLOG_FACILITIES
@@ -115,11 +116,16 @@ struct vlog_rate_limit {
 /* Configuring how each module logs messages. */
 enum vlog_level vlog_get_level(enum vlog_module, enum vlog_facility);
 void vlog_set_levels(enum vlog_module, enum vlog_facility, enum vlog_level);
-void vlog_set_pattern(enum vlog_facility, const char *pattern);
 char *vlog_set_levels_from_string(const char *);
 char *vlog_get_levels(void);
 bool vlog_is_enabled(enum vlog_module, enum vlog_level);
 void vlog_set_verbosity(const char *arg);
+
+/* Configuring log facilities. */
+void vlog_set_pattern(enum vlog_facility, const char *pattern);
+const char *vlog_get_log_file(void);
+int vlog_set_log_file(const char *file_name);
+int vlog_reopen_log_file(void);
 
 /* Function for actual logging. */
 void vlog_init(void);
@@ -164,6 +170,20 @@ void vlog_rate_limit(enum vlog_module, enum vlog_level,
 #define VLOG_DBG_RL(RL, ...) \
         vlog_rate_limit(THIS_MODULE, VLL_DBG, RL, __VA_ARGS__)
 
+/* Command line processing. */
+#define VLOG_OPTION_ENUMS OPT_LOG_FILE
+#define VLOG_LONG_OPTIONS                                   \
+        {"verbose",     optional_argument, 0, 'v'},         \
+        {"log-file",    optional_argument, 0, OPT_LOG_FILE}
+#define VLOG_OPTION_HANDLERS                    \
+        case 'v':                               \
+            vlog_set_verbosity(optarg);         \
+            break;                              \
+        case OPT_LOG_FILE:                      \
+            vlog_set_log_file(optarg);          \
+            break;
+void vlog_usage(void);
+
 /* Implementation details. */
 #define VLOG(LEVEL, ...)                                \
     do {                                                \
@@ -172,5 +192,6 @@ void vlog_rate_limit(enum vlog_module, enum vlog_level,
         }                                               \
     } while (0)
 extern enum vlog_level min_vlog_levels[VLM_N_MODULES];
+
 
 #endif /* vlog.h */

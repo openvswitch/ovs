@@ -2514,7 +2514,8 @@ parse_options(int argc, char *argv[], struct settings *s)
         OPT_STP,
         OPT_NO_STP,
         OPT_OUT_OF_BAND,
-        OPT_IN_BAND
+        OPT_IN_BAND,
+        VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
@@ -2535,6 +2536,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
         DAEMON_LONG_OPTIONS,
+        VLOG_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         VCONN_SSL_LONG_OPTIONS
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
@@ -2670,11 +2672,9 @@ parse_options(int argc, char *argv[], struct settings *s)
             printf("%s "VERSION" compiled "__DATE__" "__TIME__"\n", argv[0]);
             exit(EXIT_SUCCESS);
 
-        case 'v':
-            vlog_set_verbosity(optarg);
-            break;
-
         DAEMON_OPTION_HANDLERS
+
+        VLOG_OPTION_HANDLERS
 
 #ifdef HAVE_OPENSSL
         VCONN_SSL_OPTION_HANDLERS
@@ -2770,9 +2770,8 @@ usage(void)
            "  --rate-limit[=PACKETS]  max rate, in packets/s (default: 1000)\n"
            "  --burst-limit=BURST     limit on packet credit for idle time\n");
     daemon_usage();
+    vlog_usage();
     printf("\nOther options:\n"
-           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
-           "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);

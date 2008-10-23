@@ -43,6 +43,7 @@
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
+#include "dirs.h"
 #include "dynamic-string.h"
 #include "sat-math.h"
 #include "timeval.h"
@@ -92,6 +93,10 @@ enum vlog_level min_vlog_levels[VLM_N_MODULES];
 
 /* Time at which vlog was initialized, in milliseconds. */
 static long long int boot_time;
+
+/* VLF_FILE configuration. */
+static char *log_file_name;
+static FILE *log_file;
 
 /* Searches the 'n_names' in 'names'.  Returns the index of a match for
  * 'target', or 'n_names' if no name matches. */
@@ -179,7 +184,9 @@ update_min_level(enum vlog_module module)
     enum vlog_facility facility;
 
     for (facility = 0; facility < VLF_N_FACILITIES; facility++) {
-        min_level = MAX(min_level, levels[module][facility]);
+        if (log_file || facility != VLF_FILE) {
+            min_level = MAX(min_level, levels[module][facility]); 
+        }
     }
     min_vlog_levels[module] = min_level;
 }
@@ -241,6 +248,71 @@ vlog_set_pattern(enum vlog_facility facility, const char *pattern)
     } else {
         do_set_pattern(facility, pattern);
     }
+}
+
+/* Returns the name of the log file used by VLF_FILE, or a null pointer if no
+ * log file has been set.  (A non-null return value does not assert that the
+ * named log file is in use: if vlog_set_log_file() or vlog_reopen_log_file()
+ * fails, it still sets the log file name.) */
+const char *
+vlog_get_log_file(void)
+{
+    return log_file_name;
+}
+
+/* Sets the name of the log file used by VLF_FILE to 'file_name', or to the
+ * default file name if 'file_name' is null.  Returns 0 if successful,
+ * otherwise a positive errno value. */
+int
+vlog_set_log_file(const char *file_name)
+{
+    char *old_log_file_name;
+    enum vlog_module module;
+    int error;
+
+    /* Close old log file. */
+    if (log_file) {
+        VLOG_WARN("closing log file");
+        fclose(log_file);
+        log_file = NULL;
+    }
+
+    /* Update log file name and free old name.  The ordering is important
+     * because 'file_name' might be 'log_file_name' or some suffix of it. */
+    old_log_file_name = log_file_name;
+    log_file_name = (file_name
+                     ? xstrdup(file_name)
+                     : xasprintf("%s/%s.log", ofp_logdir, program_name));
+    free(old_log_file_name);
+    file_name = NULL;           /* Might have been freed. */
+
+    /* Open new log file and update min_levels[] to reflect whether we actually
+     * have a log_file. */
+    log_file = fopen(log_file_name, "a");
+    for (module = 0; module < VLM_N_MODULES; module++) {
+        update_min_level(module);
+    }
+
+    /* Log success or failure. */
+    if (!log_file) {
+        VLOG_WARN("failed to open %s for logging: %s",
+                  log_file_name, strerror(errno));
+        error = errno;
+    } else {
+        VLOG_WARN("opened log file %s", log_file_name);
+        error = 0;
+    }
+
+    return error;
+}
+
+/* Closes and then attempts to re-open the current log file.  (This is useful
+ * just after log rotation, to ensure that the new log file starts being used.)
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+vlog_reopen_log_file(void)
+{
+    return vlog_set_log_file(log_file_name);
 }
 
 /* Set debugging levels:
@@ -358,14 +430,15 @@ vlog_get_levels(void)
     struct ds s = DS_EMPTY_INITIALIZER;
     enum vlog_module module;
 
-    ds_put_format(&s, "                 console    syslog\n");
-    ds_put_format(&s, "                 -------    ------\n");
+    ds_put_format(&s, "                 console    syslog    file\n");
+    ds_put_format(&s, "                 -------    ------    ------\n");
 
     for (module = 0; module < VLM_N_MODULES; module++) {
-        ds_put_format(&s, "%-16s  %4s       %4s\n",
+        ds_put_format(&s, "%-16s  %4s       %4s       %4s\n",
            vlog_get_module_name(module),
            vlog_get_level_name(vlog_get_level(module, VLF_CONSOLE)),
-           vlog_get_level_name(vlog_get_level(module, VLF_SYSLOG)));
+           vlog_get_level_name(vlog_get_level(module, VLF_SYSLOG)),
+           vlog_get_level_name(vlog_get_level(module, VLF_FILE)));
     }
 
     return ds_cstr(&s);
@@ -489,9 +562,10 @@ void
 vlog_valist(enum vlog_module module, enum vlog_level level,
             const char *message, va_list args)
 {
-    bool log_console = levels[module][VLF_CONSOLE] >= level;
-    bool log_syslog = levels[module][VLF_SYSLOG] >= level;
-    if (log_console || log_syslog) {
+    bool log_to_console = levels[module][VLF_CONSOLE] >= level;
+    bool log_to_syslog = levels[module][VLF_SYSLOG] >= level;
+    bool log_to_file = levels[module][VLF_FILE] >= level && log_file;
+    if (log_to_console || log_to_syslog || log_to_file) {
         int save_errno = errno;
         static unsigned int msg_num;
         struct ds s;
@@ -500,14 +574,14 @@ vlog_valist(enum vlog_module module, enum vlog_level level,
         ds_reserve(&s, 1024);
         msg_num++;
 
-        if (log_console) {
+        if (log_to_console) {
             format_log_message(module, level, VLF_CONSOLE, msg_num,
                                message, args, &s);
             ds_put_char(&s, '\n');
             fputs(ds_cstr(&s), stderr);
         }
 
-        if (log_syslog) {
+        if (log_to_syslog) {
             int syslog_level = syslog_levels[level];
             char *save_ptr = NULL;
             char *line;
@@ -518,6 +592,14 @@ vlog_valist(enum vlog_module module, enum vlog_level level,
                  line = strtok_r(NULL, "\n", &save_ptr)) {
                 syslog(syslog_level, "%s", line);
             }
+        }
+
+        if (log_to_file) {
+            format_log_message(module, level, VLF_FILE, msg_num,
+                               message, args, &s);
+            ds_put_char(&s, '\n');
+            fputs(ds_cstr(&s), log_file);
+            fflush(log_file);
         }
 
         ds_destroy(&s);
@@ -577,4 +659,15 @@ vlog_rate_limit(enum vlog_module module, enum vlog_level level,
              rl->n_dropped, (unsigned int) (time_now() - rl->first_dropped));
         rl->n_dropped = 0;
     }
+}
+
+void
+vlog_usage(void) 
+{
+    printf("\nLogging options:\n"
+           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
+           "  -v, --verbose           set maximum verbosity level\n"
+           "  --log-file[=FILE]       enable logging to specified FILE\n"
+           "                          (default: %s/%s.log)\n",
+           ofp_logdir, program_name);
 }

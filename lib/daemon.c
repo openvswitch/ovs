@@ -246,3 +246,51 @@ daemon_usage(void)
         "  -f, --force             with -P, start even if already running\n",
         ofp_rundir, program_name);
 }
+
+/* Opens and reads a PID from 'pidfile'.  Returns the nonnegative PID if
+ * successful, otherwise a negative errno value. */
+pid_t
+read_pidfile(const char *pidfile)
+{
+    char line[128];
+    struct flock lck;
+    FILE *file;
+    int error;
+
+    file = fopen(pidfile, "r");
+    if (!file) {
+        error = errno;
+        VLOG_WARN("%s: open: %s", pidfile, strerror(error));
+        goto error;
+    }
+
+    lck.l_type = F_WRLCK;
+    lck.l_whence = SEEK_SET;
+    lck.l_start = 0;
+    lck.l_len = 0;
+    if (fcntl(fileno(file), F_GETLK, &lck)) {
+        error = errno;
+        VLOG_WARN("%s: fcntl: %s", pidfile, strerror(error));
+        goto error;
+    }
+
+    if (!fgets(line, sizeof line, file)) {
+        error = errno;
+        VLOG_WARN("%s: read: %s", pidfile, strerror(error));
+        goto error;
+    }
+
+    if (lck.l_pid != strtoul(line, NULL, 10)) {
+        error = ESRCH;
+        VLOG_WARN("l_pid (%ld) != %s pid (%s)",
+                   (long int) lck.l_pid, pidfile, line);
+        goto error;
+    }
+
+    fclose(file);
+    return lck.l_pid;
+
+error:
+    fclose(file);
+    return -error;
+}

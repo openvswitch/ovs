@@ -194,13 +194,12 @@ usage(void)
            "                          do not request a specific IP)\n"
            "  --vendor-class=STRING   use STRING as vendor class (default:\n"
            "                          none); use OpenFlow to imitate secchan\n"
-           "  --no-resolv-conf        do not update /etc/resolv.conf\n"
-           "\nOther options:\n"
-           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
-           "  -v, --verbose           set maximum verbosity level\n"
-           "  -h, --help              display this help message\n"
-           "  -V, --version           display version information\n",
+           "  --no-resolv-conf        do not update /etc/resolv.conf\n",
            program_name, program_name);
+    vlog_usage();
+    printf("\nOther options:\n"
+           "  -h, --help              display this help message\n"
+           "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);
 }
 

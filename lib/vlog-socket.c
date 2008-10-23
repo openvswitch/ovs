@@ -33,6 +33,7 @@
 
 #include <config.h>
 #include "vlog-socket.h"
+#include <ctype.h>
 #include <errno.h>
 #include <sys/un.h>
 #include <fcntl.h>
@@ -43,16 +44,19 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "daemon.h"
 #include "fatal-signal.h"
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "timeval.h"
 #include "util.h"
-#include "vlog.h"
 
 #ifndef SCM_CREDENTIALS
 #include <time.h>
 #endif
+
+#define THIS_MODULE VLM_vlog_socket
+#include "vlog.h"
 
 /* Server for Vlog control connection. */
 struct vlog_server {
@@ -256,6 +260,12 @@ poll_server(int fd UNUSED, short int events, void *server_)
             reply = msg ? msg : xstrdup("ack");
         } else if (!strcmp(cmd_buf, "list")) {
             reply = vlog_get_levels();
+        } else if (!strcmp(cmd_buf, "reopen")) {
+            int error = vlog_reopen_log_file();
+            reply = (error
+                     ? xasprintf("could not reopen log file \"%s\": %s",
+                                 vlog_get_log_file(), strerror(error))
+                     : xstrdup("ack"));
         } else {
             reply = xstrdup("nak");
         }
@@ -274,11 +284,18 @@ struct vlog_client {
     int fd;
 };
 
-/* Connects to a Vlog server socket.  If 'path' does not start with '/', then
- * it start with a PID as a string.  If a non-null, non-absolute name was
- * passed to Vlog_server_socket::listen(), then it must follow the PID in
- * 'path'.  If 'path' starts with '/', then it must be an absolute path that
- * gives the exact name of the Unix domain socket to connect to.
+/* Connects to a Vlog server socket.  'path' may be:
+ *
+ *      - A string that starts with a PID.  If a non-null, non-absolute name
+ *        was passed to Vlog_server_socket::listen(), then it must follow the
+ *        PID in 'path'.
+ *
+ *      - An absolute path (starting with '/') to a Vlog server socket or a
+ *        pidfile.  If it is a pidfile, the pidfile will be read and translated
+ *        into a Vlog server socket file name.
+ *
+ *      - A relative path, which is translated into a pidfile name and then
+ *        treated as above.
  *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
  * sets '*clientp' to the new vlog_client, otherwise to NULL. */
@@ -287,29 +304,52 @@ vlog_client_connect(const char *path, struct vlog_client **clientp)
 {
     static int counter;
     struct vlog_client *client;
-    int fd;
+    struct stat s;
+    int error;
 
     client = xmalloc(sizeof *client);
-    client->connect_path = (path[0] == '/'
-                            ? xstrdup(path)
-                            : xasprintf("/tmp/vlogs.%s", path));
+    if (path[0] == '/') {
+        client->connect_path = xstrdup(path);
+    } else if (isdigit((unsigned char) path[0])) {
+        client->connect_path = xasprintf("/tmp/vlogs.%s", path);
+    } else {
+        client->connect_path = make_pidfile_name(path);
+    }
+    client->bind_path = NULL;
 
+    if (stat(client->connect_path, &s)) {
+        error = errno;
+        VLOG_WARN("could not stat \"%s\": %s",
+                  client->connect_path, strerror(error));
+        goto error;
+    } else if (S_ISREG(s.st_mode)) {
+        pid_t pid = read_pidfile(client->connect_path);
+        if (pid < 0) {
+            error = -pid;
+            VLOG_WARN("could not read pidfile \"%s\": %s",
+                      client->connect_path, strerror(error));
+            goto error;
+        }
+        free(client->connect_path);
+        client->connect_path = xasprintf("/tmp/vlogs.%ld", (long int) pid);
+    }
     client->bind_path = xasprintf("/tmp/vlog.%ld.%d",
                                   (long int) getpid(), counter++);
-    fd = make_unix_socket(SOCK_DGRAM, false, false,
-                          client->bind_path, client->connect_path);
-
-    if (fd >= 0) {
-        client->fd = fd;
-        *clientp = client;
-        return 0;
-    } else {
-        free(client->connect_path);
-        free(client->bind_path);
-        free(client);
-        *clientp = NULL;
-        return errno;
+    client->fd = make_unix_socket(SOCK_DGRAM, false, false,
+                                  client->bind_path, client->connect_path);
+    if (client->fd < 0) {
+        error = -client->fd;
+        goto error;
     }
+    *clientp = client;
+    return 0;
+
+error:
+    free(client->connect_path);
+    free(client->bind_path);
+    free(client);
+    *clientp = NULL;
+    return error;
 }
 
 /* Destroys 'client'. */

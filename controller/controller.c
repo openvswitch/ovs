@@ -239,13 +239,13 @@ parse_options(int argc, char *argv[])
 {
     enum {
         OPT_MAX_IDLE = UCHAR_MAX + 1,
-        OPT_PEER_CA_CERT
+        OPT_PEER_CA_CERT,
+        VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"hub",         no_argument, 0, 'H'},
         {"noflow",      no_argument, 0, 'n'},
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
-        {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
         DAEMON_LONG_OPTIONS,
@@ -294,10 +294,7 @@ parse_options(int argc, char *argv[])
             printf("%s "VERSION" compiled "__DATE__" "__TIME__"\n", argv[0]);
             exit(EXIT_SUCCESS);
 
-        case 'v':
-            vlog_set_verbosity(optarg);
-            break;
-
+        VLOG_OPTION_HANDLERS
         DAEMON_OPTION_HANDLERS
 
 #ifdef HAVE_OPENSSL
@@ -327,12 +324,11 @@ usage(void)
            program_name, program_name);
     vconn_usage(true, true, false);
     daemon_usage();
+    vlog_usage();
     printf("\nOther options:\n"
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"
            "  --max-idle=SECS         max idle time for new flows\n"
-           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
-           "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);

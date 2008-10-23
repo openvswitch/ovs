@@ -299,9 +299,8 @@ usage(void)
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
            "                          (a passive OpenFlow connection method)\n");
     daemon_usage();
+    vlog_usage();
     printf("\nOther options:\n"
-           "  -v, --verbose=MODULE[:FACILITY[:LEVEL]]  set logging levels\n"
-           "  -v, --verbose           set maximum verbosity level\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);

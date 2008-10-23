@@ -53,15 +53,17 @@ usage(char *prog_name, int exit_code)
     printf("Usage: %s [TARGET] [ACTION...]\n"
            "Targets:\n"
            "  -a, --all            Apply to all targets (default)\n"
-           "  -t, --target=TARGET  Specify target program, as a pid or an\n"
-           "                       absolute path to a Unix domain socket\n"
+           "  -t, --target=TARGET  Specify target program, as a pid, a\n"
+           "                       pidfile, or an absolute path to a Unix\n"
+           "                       domain socket\n"
            "Actions:\n"
            "  -l, --list         List current settings\n"
            "  -s, --set=MODULE[:FACILITY[:LEVEL]]\n"
            "        Set MODULE and FACILITY log level to LEVEL\n"
            "        MODULE may be any valid module name or 'ANY'\n"
-           "        FACILITY may be 'syslog' or 'console' or 'ANY' (default)\n"
-           "        LEVEL may be 'emer', 'err', 'warn', or 'dbg (default)'\n"
+           "        FACILITY may be 'syslog', 'console', 'file', or 'ANY' (default)\n"
+           "        LEVEL may be 'emer', 'err', 'warn', or 'dbg' (default)\n"
+           "  -r, --reopen       Make the program reopen its log file\n"
            "  -h, --help         Print this helpful information\n",
            prog_name);
     exit(exit_code);
@@ -147,6 +149,7 @@ int main(int argc, char *argv[])
         /* Action options come afterward. */
         {"list", no_argument, NULL, 'l'},
         {"set", required_argument, NULL, 's'},
+        {"reopen", no_argument, NULL, 'r'},
         {0, 0, 0, 0},
     };
     char *short_options;
@@ -199,6 +202,15 @@ int main(int argc, char *argv[])
             for (i = 0; i < n_clients; i++) {
                 struct vlog_client *client = clients[i];
                 char *request = xasprintf("set %s", optarg);
+                transact_ack(client, request, &ok);
+                free(request);
+            }
+            break;
+
+        case 'r':
+            for (i = 0; i < n_clients; i++) {
+                struct vlog_client *client = clients[i];
+                char *request = xasprintf("reopen");
                 transact_ack(client, request, &ok);
                 free(request);
             }
