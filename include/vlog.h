@@ -42,12 +42,12 @@
 
 /* Logging importance levels. */
 #define VLOG_LEVELS                             \
-    VLOG_LEVEL(EMER)                            \
-    VLOG_LEVEL(ERR)                             \
-    VLOG_LEVEL(WARN)                            \
-    VLOG_LEVEL(DBG)
+    VLOG_LEVEL(EMER, LOG_ALERT)                 \
+    VLOG_LEVEL(ERR, LOG_ERR)                    \
+    VLOG_LEVEL(WARN, LOG_WARNING)               \
+    VLOG_LEVEL(DBG, LOG_DEBUG)
 enum vlog_level {
-#define VLOG_LEVEL(NAME) VLL_##NAME,
+#define VLOG_LEVEL(NAME, SYSLOG_LEVEL) VLL_##NAME,
     VLOG_LEVELS
 #undef VLOG_LEVEL
     VLL_N_LEVELS
@@ -57,11 +57,11 @@ const char *vlog_get_level_name(enum vlog_level);
 enum vlog_level vlog_get_level_val(const char *name);
 
 /* Facilities that we can log to. */
-#define VLOG_FACILITIES                         \
-    VLOG_FACILITY(SYSLOG)                       \
-    VLOG_FACILITY(CONSOLE)
+#define VLOG_FACILITIES                                         \
+    VLOG_FACILITY(SYSLOG, "%05N|%c|%p|%m")                      \
+    VLOG_FACILITY(CONSOLE, "%d{%b %d %H:%M:%S}|%05N|%c|%p|%m")
 enum vlog_facility {
-#define VLOG_FACILITY(NAME) VLF_##NAME,
+#define VLOG_FACILITY(NAME, PATTERN) VLF_##NAME,
     VLOG_FACILITIES
 #undef VLOG_FACILITY
     VLF_N_FACILITIES,
@@ -115,6 +115,7 @@ struct vlog_rate_limit {
 /* Configuring how each module logs messages. */
 enum vlog_level vlog_get_level(enum vlog_module, enum vlog_facility);
 void vlog_set_levels(enum vlog_module, enum vlog_facility, enum vlog_level);
+void vlog_set_pattern(enum vlog_facility, const char *pattern);
 char *vlog_set_levels_from_string(const char *);
 char *vlog_get_levels(void);
 bool vlog_is_enabled(enum vlog_module, enum vlog_level);

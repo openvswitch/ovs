@@ -442,6 +442,11 @@ Sets the maximum logging verbosity level, equivalent to
 \fB--verbose=ANY:ANY:dbg\fR.
 
 .TP
+\fB-vPATTERN:\fIfacility\fB:\fIpattern\fR, \fB--verbose=PATTERN:\fIfacility\fB:\fIpattern\fR
+Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Refer to
+\fBvlogconf\fR(8) for a description of the valid syntax for \fIpattern\fR.
+
+.TP
 .BR \-V ", " \-\^\-version
 Prints version information to the console.
 

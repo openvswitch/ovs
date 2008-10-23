@@ -57,6 +57,92 @@ logging levels for both facilities.  If it is omitted,
 minimum severity of a message for it to be logged.  If it is omitted,
 \fIlevel\fR defaults to \fBdbg\fR.
 
+.TP
+\fB-s PATTERN:\fIfacility\fB:\fIpattern\fR, \fB--set=PATTERN:\fIfacility\fB:\fIpattern\fR
+
+Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Each time a
+message is logged to \fIfacility\fR, \fIpattern\fR determines the
+message's formatting.  Most characters in \fIpattern\fR are copied
+literally to the log, but special escapes beginning with \fB%\fR are
+expanded as follows:
+
+.RS
+.TP
+\fB%A\fR
+The name of the application logging the message, e.g. \fBsecchan\fR.
+
+.TP
+\fB%c\fR
+The name of the module (as shown by \fBvlogconf --list\fR) logging
+the message.
+
+.TP
+\fB%d\fR
+The current date and time in ISO 8601 format (YYYY-MM-DD HH:MM:SS).
+
+.TP
+\fB%d{\fIformat\fB}\fR
+The current date and time in the specified \fIformat\fR, which takes
+the same format as the \fItemplate\fR argument to \fBstrftime\fR(3).
+
+.TP
+\fB%m\fR
+The message being logged.
+
+.TP
+\fB%N\fR
+A serial number for this message within this run of the program, as a
+decimal number.  The first message a program logs has serial number 1,
+the second one has serial number 2, and so on.
+
+.TP
+\fB%n\fR
+A new-line.
+
+.TP
+\fB%p\fR
+The level at which the message is logged, e.g. \fBDBG\fR.
+
+.TP
+\fB%P\fR
+The program's process ID (pid), as a decimal number.
+
+.TP
+\fB%r\fR
+The number of milliseconds elapsed from the start of the application
+to the time the message was logged.
+
+.TP
+\fB%%\fR
+A literal \fB%\fR.
+.RE
+
+.IP
+A few options may appear between the \fB%\fR and the format specifier
+character, in this order:
+
+.RS
+.TP
+\fB-\fR
+Left justify the escape's expansion within its field width.  Right
+justification is the default.
+
+.TP
+\fB0\fR
+Pad the field to the field width with \fB0\fRs.  Padding with spaces
+is the default.
+
+.TP
+\fIwidth\fR
+A number specifies the minimum field width.  If the escape expands to
+fewer characters than \fIwidth\fR then it is padded to fill the field
+width.  (A field wider than \fIwidth\fR is not truncated to fit.)
+.RE
+
+.IP
+The default pattern for console output is \fB%d{%b %d
+%H:%M:%S}|%05N|%c|%p|%m\fR; for syslog output, \fB%05N|%c|%p|%m\fR.
+
 .SH OPTIONS
 .TP
 \fB\-h\fR, \fB\-\^\-help\fR

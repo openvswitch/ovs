@@ -34,14 +34,15 @@
 #include <config.h>
 #include "vlog.h"
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
+#include <sys/types.h>
 #include <syslog.h>
 #include <time.h>
+#include <unistd.h>
 #include "dynamic-string.h"
 #include "sat-math.h"
 #include "timeval.h"
@@ -51,25 +52,42 @@
 
 /* Name for each logging level. */
 static const char *level_names[VLL_N_LEVELS] = {
-#define VLOG_LEVEL(NAME) #NAME,
+#define VLOG_LEVEL(NAME, SYSLOG_LEVEL) #NAME,
     VLOG_LEVELS
 #undef VLOG_LEVEL
 };
 
-/* Name for each logging facility. */
-static const char *facility_names[VLF_N_FACILITIES] = { 
-#define VLOG_FACILITY(NAME) #NAME,
-    VLOG_FACILITIES
-#undef VLOG_FACILITY
+/* Syslog value for each logging level. */
+static int syslog_levels[VLL_N_LEVELS] = {
+#define VLOG_LEVEL(NAME, SYSLOG_LEVEL) SYSLOG_LEVEL,
+    VLOG_LEVELS
+#undef VLOG_LEVEL
 };
 
 /* Name for each logging module */
 static const char *module_names[VLM_N_MODULES] = { 
 #define VLOG_MODULE(NAME) #NAME,
 #include "vlog-modules.def"
+#undef VLOG_MODULE
 };
 
+/* Information about each facility. */
+struct facility {
+    const char *name;           /* Name. */
+    char *pattern;              /* Current pattern. */
+    bool default_pattern;       /* Whether current pattern is the default. */
+};
+static struct facility facilities[VLF_N_FACILITIES] = {
+#define VLOG_FACILITY(NAME, PATTERN) {#NAME, PATTERN, true},
+    VLOG_FACILITIES
+#undef VLOG_FACILITY
+};
+
+/* Current log levels. */
 static int levels[VLM_N_MODULES][VLF_N_FACILITIES];
+
+/* Time at which vlog was initialized, in milliseconds. */
+static long long int boot_time;
 
 /* Searches the 'n_names' in 'names'.  Returns the index of a match for
  * 'target', or 'n_names' if no name matches. */
@@ -108,7 +126,7 @@ const char *
 vlog_get_facility_name(enum vlog_facility facility) 
 {
     assert(facility < VLF_N_FACILITIES);
-    return facility_names[facility];
+    return facilities[facility].name;
 }
 
 /* Returns the logging facility named 'name', or VLF_N_FACILITIES if 'name' is
@@ -116,7 +134,14 @@ vlog_get_facility_name(enum vlog_facility facility)
 enum vlog_facility
 vlog_get_facility_val(const char *name) 
 {
-    return search_name_array(name, facility_names, ARRAY_SIZE(facility_names));
+    size_t i;
+
+    for (i = 0; i < VLF_N_FACILITIES; i++) {
+        if (!strcasecmp(facilities[i].name, name)) {
+            break;
+        }
+    }
+    return i;
 }
 
 /* Returns the name for logging module 'module'. */
@@ -174,6 +199,32 @@ vlog_set_levels(enum vlog_module module, enum vlog_facility facility,
     }
 }
 
+static void
+do_set_pattern(enum vlog_facility facility, const char *pattern) 
+{
+    struct facility *f = &facilities[facility];
+    if (!f->default_pattern) {
+        free(f->pattern);
+    } else {
+        f->default_pattern = false;
+    }
+    f->pattern = xstrdup(pattern);
+}
+
+/* Sets the pattern for the given 'facility' to 'pattern'. */
+void
+vlog_set_pattern(enum vlog_facility facility, const char *pattern)
+{
+    assert(facility < VLF_N_FACILITIES || facility == VLF_ANY_FACILITY);
+    if (facility == VLF_ANY_FACILITY) {
+        for (facility = 0; facility < VLF_N_FACILITIES; facility++) {
+            do_set_pattern(facility, pattern);
+        }
+    } else {
+        do_set_pattern(facility, pattern);
+    }
+}
+
 /* Set debugging levels:
  *
  *  mod[:facility[:level]] mod2[:facility[:level]] ...
@@ -186,27 +237,14 @@ vlog_set_levels_from_string(const char *s_)
 {
     char *save_ptr;
     char *s = xstrdup(s_);
-    char *module, *level, *facility;
+    char *module, *facility;
 
     for (module = strtok_r(s, ": \t", &save_ptr); module != NULL;
          module = strtok_r(NULL, ": \t", &save_ptr)) {
         enum vlog_module e_module;
-        enum vlog_level e_level;
         enum vlog_facility e_facility;
 
         facility = strtok_r(NULL, ":", &save_ptr);
-        level = strtok_r(NULL, ":", &save_ptr);
-
-        if (!strcmp(module, "ANY")) {
-            e_module = VLM_ANY_MODULE;
-        } else {
-            e_module = vlog_get_module_val(module);
-            if (e_module >= VLM_N_MODULES) {
-                char *msg = xasprintf("unknown module \"%s\"", module);
-                free(s);
-                return msg;
-            }
-        }
 
         if (!facility || !strcmp(facility, "ANY")) {
             e_facility = VLF_ANY_FACILITY;
@@ -219,14 +257,34 @@ vlog_set_levels_from_string(const char *s_)
             }
         }
 
-        e_level = level ? vlog_get_level_val(level) : VLL_DBG;
-        if (e_level >= VLL_N_LEVELS) {
-            char *msg = xasprintf("unknown level \"%s\"", level);
-            free(s);
-            return msg;
-        }
+        if (!strcmp(module, "PATTERN")) {
+            vlog_set_pattern(e_facility, save_ptr);
+            break;
+        } else {
+            char *level;
+            enum vlog_level e_level;
 
-        vlog_set_levels(e_module, e_facility, e_level);
+            if (!strcmp(module, "ANY")) {
+                e_module = VLM_ANY_MODULE;
+            } else {
+                e_module = vlog_get_module_val(module);
+                if (e_module >= VLM_N_MODULES) {
+                    char *msg = xasprintf("unknown module \"%s\"", module);
+                    free(s);
+                    return msg;
+                }
+            }
+
+            level = strtok_r(NULL, ":", &save_ptr);
+            e_level = level ? vlog_get_level_val(level) : VLL_DBG;
+            if (e_level >= VLL_N_LEVELS) {
+                char *msg = xasprintf("unknown level \"%s\"", level);
+                free(s);
+                return msg;
+            }
+
+            vlog_set_levels(e_module, e_facility, e_level);
+        }
     }
     free(s);
     return NULL;
@@ -256,6 +314,7 @@ vlog_init(void)
     openlog(program_name, LOG_NDELAY, LOG_DAEMON);
     vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_WARN);
 
+    boot_time = time_msec();
     now = time_now();
     if (now < 0) {
         struct tm tm;
@@ -304,6 +363,107 @@ vlog_is_enabled(enum vlog_module module, enum vlog_level level)
             || levels[module][VLF_SYSLOG] >= level);
 }
 
+static const char *
+fetch_braces(const char *p, const char *def, char *out, size_t out_size)
+{
+    if (*p == '{') {
+        size_t n = strcspn(p + 1, "}");
+        size_t n_copy = MIN(n, out_size - 1);
+        memcpy(out, p + 1, n_copy);
+        out[n_copy] = '\0';
+        p += n + 2;
+    } else {
+        strlcpy(out, def, out_size);
+    }
+    return p;
+}
+
+static void
+format_log_message(enum vlog_module module, enum vlog_level level,
+                   enum vlog_facility facility, unsigned int msg_num,
+                   const char *message, va_list args_, struct ds *s)
+{
+    char tmp[128];
+    va_list args;
+    const char *p;
+
+    ds_clear(s);
+    for (p = facilities[facility].pattern; *p != '\0'; ) {
+        enum { LEFT, RIGHT } justify = RIGHT;
+        int pad = '0';
+        size_t length, field, used;
+
+        if (*p != '%') {
+            ds_put_char(s, *p++);
+            continue;
+        }
+
+        p++;
+        if (*p == '-') {
+            justify = LEFT;
+            p++;
+        }
+        if (*p == '0') {
+            pad = '0';
+            p++;
+        }
+        field = 0;
+        while (isdigit(*p)) {
+            field = (field * 10) + (*p - '0');
+            p++;
+        }
+
+        length = s->length;
+        switch (*p++) {
+        case 'A':
+            ds_put_cstr(s, program_name);
+            break;
+        case 'c':
+            p = fetch_braces(p, "", tmp, sizeof tmp);
+            ds_put_cstr(s, vlog_get_module_name(module));
+            break;
+        case 'd':
+            p = fetch_braces(p, "%Y-%m-%d %H:%M:%S", tmp, sizeof tmp);
+            ds_put_strftime(s, tmp, NULL);
+            break;
+        case 'm':
+            va_copy(args, args_);
+            ds_put_format_valist(s, message, args);
+            va_end(args);
+            break;
+        case 'N':
+            ds_put_format(s, "%u", msg_num);
+            break;
+        case 'n':
+            ds_put_char(s, '\n');
+            break;
+        case 'p':
+            ds_put_cstr(s, vlog_get_level_name(level));
+            break;
+        case 'P':
+            ds_put_format(s, "%ld", (long int) getpid());
+            break;
+        case 'r':
+            ds_put_format(s, "%lld", time_msec() - boot_time);
+            break;
+        default:
+            ds_put_char(s, p[-1]);
+            break;
+        }
+        used = s->length - length;
+        if (used < field) {
+            size_t n_pad = field - used;
+            if (justify == RIGHT) {
+                ds_put_uninit(s, n_pad);
+                memmove(&s->string[length + n_pad], &s->string[length], used);
+                memset(&s->string[length], pad, n_pad);
+            } else {
+                ds_put_char_multiple(s, pad, n_pad);
+            }
+        }
+    }
+}
+
 /* Writes 'message' to the log at the given 'level' and as coming from the
  * given 'module'.
  *
@@ -316,43 +476,28 @@ vlog_valist(enum vlog_module module, enum vlog_level level,
     bool log_syslog = levels[module][VLF_SYSLOG] >= level;
     if (log_console || log_syslog) {
         int save_errno = errno;
-        static int msg_num;
-        const char *module_name = vlog_get_module_name(module);
-        const char *level_name = vlog_get_level_name(level);
-        time_t now;
-        struct tm tm;
-        size_t time_len;
+        static unsigned int msg_num;
         struct ds s;
 
-        now = time_now();
-        localtime_r(&now, &tm);
-
-        /* Compose log message. */
         ds_init(&s);
         ds_reserve(&s, 1024);
-        ds_put_strftime(&s, "%b %d %H:%M:%S|", &tm);
-        time_len = s.length;
-        ds_put_format(&s, "%05d|%s|%s:", ++msg_num, module_name, level_name);
-        ds_put_format_valist(&s, message, args);
-        ds_chomp(&s, '\n');
+        msg_num++;
 
         if (log_console) {
-            fprintf(stderr, "%s\n", s.string);
+            format_log_message(module, level, VLF_CONSOLE, msg_num,
+                               message, args, &s);
+            ds_put_char(&s, '\n');
+            fputs(ds_cstr(&s), stderr);
         }
 
         if (log_syslog) {
-            int syslog_level = LOG_ALERT;
+            int syslog_level = syslog_levels[level];
             char *save_ptr = NULL;
             char *line;
 
-            switch (level) {
-            case VLL_EMER: syslog_level = LOG_ALERT; break;
-            case VLL_ERR: syslog_level = LOG_ERR; break;
-            case VLL_WARN: syslog_level = LOG_WARNING; break;
-            case VLL_DBG: syslog_level = LOG_DEBUG; break;
-            case VLL_N_LEVELS: NOT_REACHED();
-            }
-            for (line = strtok_r(&s.string[time_len], "\n", &save_ptr); line;
+            format_log_message(module, level, VLF_SYSLOG, msg_num,
+                               message, args, &s);
+            for (line = strtok_r(s.string, "\n", &save_ptr); line;
                  line = strtok_r(NULL, "\n", &save_ptr)) {
                 syslog(syslog_level, "%s", line);
             }
