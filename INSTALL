@@ -380,7 +380,7 @@ integrated userspace program.
 
       # controller ptcp: &
 
-   This command causes the controller to bind to port 975 (the
+   This command causes the controller to bind to port 6633 (the
    default) awaiting connections from OpenFlow switches.  See
    controller(8) for details.
    
@@ -469,7 +469,7 @@ Controller Setup
 
 On the machine that is to be the OpenFlow controller, start the
 "controller" program listening for connections from switches on TCP
-port 975 (the default), as shown below.  (Because it listens on a
+port 6633 (the default), as shown below.  (Because it listens on a
 low-numbered port, this command must run as root.)
 
    # controller -v ptcp:
@@ -495,7 +495,7 @@ userspace datapath-based switches do not have this limitation.)
    the IP address of the controller as the first argument to the
    switch program, and the network devices to include in the switch as
    arguments to the -i option.  For example, if the controller is
-   running on host 192.168.1.2 port 975 (the default port), and eth1
+   running on host 192.168.1.2 port 6633 (the default port), and eth1
    and eth2 are to be the switch ports, the switch invocation would
    look like this:
 
@@ -564,7 +564,7 @@ every OpenFlow distribution.
 
 4. Run secchan to start the secure channel connecting the datapath to
    a remote controller.  If the controller is running on host
-   192.168.1.2 port 975 (the default port), the secchan invocation
+   192.168.1.2 port 6633 (the default port), the secchan invocation
    would look like this:
 
       # secchan unix:/var/run/dp0.sock tcp:192.168.1.2
@@ -657,7 +657,7 @@ The OpenFlow kernel module must be loaded, as described under
 
 4. Run secchan to start the secure channel connecting the datapath to
    a remote controller.  If the controller is running on host
-   192.168.1.2 port 975 (the default port), the secchan invocation
+   192.168.1.2 port 6633 (the default port), the secchan invocation
    would look like this:
 
       # secchan nl:0 tcp:192.168.1.2
@@ -697,7 +697,7 @@ controllers and one for switches.  If you have an established PKI,
 OpenFlow can use it directly.  Otherwise, refer to "Establishing a
 Public Key Infrastructure" below.
 
-To configure the controller to listen for SSL connections on port 976
+To configure the controller to listen for SSL connections on port 6633
 (the default), invoke it as follows:
 
       # controller -v pssl: --private-key=PRIVKEY --certificate=CERT \
@@ -712,7 +712,7 @@ with the instructions below, then the invocation would look like:
       # controller -v pssl: --private-key=ctl-privkey.pem \
             --certificate=ctl-cert.pem --ca-cert=pki/switchca/cacert.pem
 
-To configure a switch to connect to a controller running on port 976
+To configure a switch to connect to a controller running on port 6633
 (the default) on host 192.168.1.2 over SSL, invoke secchan as follows:
 
       # secchan -v DATAPATH ssl:192.168.1.2 --private-key=PRIVKEY \

@@ -5,11 +5,11 @@
 # This is a space-delimited list of connection methods:
 #
 # * "pssl:[PORT]": Listen for SSL connections on the specified PORT
-#   (default: 976).  The private key, certificate, and CA certificate
+#   (default: 6633).  The private key, certificate, and CA certificate
 #   must be specified below.
 #
 # * "pctp:[PORT]": Listen for TCP connections on the specified PORT
-#   (default: 975).  Not recommended for security reasons.
+#   (default: 6633).  Not recommended for security reasons.
 #
 # * "nl:DP_IDX": Listen on local datapath DP_IDX.  Used only if this
 #   machine is also an OpenFlow switch and not running the secure
