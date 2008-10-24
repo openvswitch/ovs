@@ -90,7 +90,7 @@ SWITCH_IP=dhcp
 #   it is convenient.
 # 
 # Set CACERT_MODE to 'secure' or 'bootstrap' for these respective cases.
-#CACERT=secure
+#CACERT_MODE=secure
 
 # MGMT_VCONNS: List of vconns (space-separated) on which secchan
 # should listen for management connections from dpctl, etc.
