@@ -286,9 +286,18 @@ stp_local_port_changed_cb(const struct ofp_phy_port *port, void *stp_)
     }
 }
 
-struct hook
-stp_hook_create(const struct settings *s, struct port_watcher *pw,
-                struct rconn *local, struct rconn *remote)
+static struct hook_class stp_hook_class = {
+    stp_local_packet_cb,        /* local_packet_cb */
+    NULL,                       /* remote_packet_cb */
+    stp_periodic_cb,            /* periodic_cb */
+    stp_wait_cb,                /* wait_cb */
+    NULL,                       /* closing_cb */
+};
+
+void
+stp_start(struct secchan *secchan, const struct settings *s,
+          struct port_watcher *pw,
+          struct rconn *local, struct rconn *remote)
 {
     uint8_t dpid[ETH_ADDR_LEN];
     struct stp_data *stp;
@@ -304,6 +313,5 @@ stp_hook_create(const struct settings *s, struct port_watcher *pw,
     port_watcher_register_callback(pw, stp_port_changed_cb, stp);
     port_watcher_register_local_port_callback(pw, stp_local_port_changed_cb,
                                               stp);
-    return make_hook(stp_local_packet_cb, NULL,
-                     stp_periodic_cb, stp_wait_cb, stp);
+    add_hook(secchan, &stp_hook_class, stp);
 }

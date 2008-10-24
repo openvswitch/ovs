@@ -34,13 +34,13 @@
 #ifndef FAIL_OPEN_H
 #define FAIL_OPEN_H 1
 
+struct rconn;
+struct secchan;
 struct settings;
 struct switch_status;
-struct rconn;
 
-struct hook fail_open_hook_create(const struct settings *,
-                                  struct switch_status *,
-                                  struct rconn *local,
-                                  struct rconn *remote);
+void fail_open_start(struct secchan *, const struct settings *,
+                     struct switch_status *,
+                     struct rconn *local, struct rconn *remote);
 
 #endif /* fail-open.h */

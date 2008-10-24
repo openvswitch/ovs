@@ -36,12 +36,12 @@
 
 struct port_watcher;
 struct rconn;
+struct secchan;
 struct settings;
 struct switch_status;
 
-struct hook in_band_hook_create(const struct settings *,
-                                struct switch_status *,
-                                struct port_watcher *,
-                                struct rconn *remote);
+void in_band_start(struct secchan *, const struct settings *,
+                   struct switch_status *, struct port_watcher *,
+                   struct rconn *remote);
 
 #endif /* in-band.h */

@@ -265,8 +265,16 @@ snat_port_changed_cb(uint16_t port_no,
     }
 }
 
-struct hook
-snat_hook_create(struct port_watcher *pw)
+static struct hook_class snat_hook_class = {
+    NULL,                       /* local_packet_cb */
+    snat_remote_packet_cb,      /* remote_packet_cb */
+    NULL,                       /* periodic_cb */
+    NULL,                       /* wait_cb */
+    NULL,                       /* closing_cb */
+};
+
+void
+snat_start(struct secchan *secchan, struct port_watcher *pw)
 {
     int ret;
     struct snat_data *snat;
@@ -281,5 +289,5 @@ snat_hook_create(struct port_watcher *pw)
     list_init(&snat->port_list);
 
     port_watcher_register_callback(pw, snat_port_changed_cb, snat);
-    return make_hook(NULL, snat_remote_packet_cb, NULL, NULL, snat);
+    add_hook(secchan, &snat_hook_class, snat);
 }

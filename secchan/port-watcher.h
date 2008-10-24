@@ -40,10 +40,11 @@
 
 struct ofp_phy_port;
 struct port_watcher;
+struct secchan;
 
-struct hook port_watcher_create(struct rconn *local,
-                                struct rconn *remote,
-                                struct port_watcher **);
+void port_watcher_start(struct secchan *,
+                        struct rconn *local, struct rconn *remote,
+                        struct port_watcher **);
 bool port_watcher_is_ready(const struct port_watcher *);
 uint32_t port_watcher_get_config(const struct port_watcher *,
                                  uint16_t port_no);

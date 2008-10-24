@@ -131,9 +131,18 @@ fail_open_status_cb(struct status_reply *sr, void *fail_open_)
     status_reply_put(sr, "max-idle=%d", s->max_idle);
 }
 
-struct hook
-fail_open_hook_create(const struct settings *s, struct switch_status *ss,
-                      struct rconn *local_rconn, struct rconn *remote_rconn)
+static struct hook_class fail_open_hook_class = {
+    fail_open_local_packet_cb,  /* local_packet_cb */
+    NULL,                       /* remote_packet_cb */
+    fail_open_periodic_cb,      /* periodic_cb */
+    fail_open_wait_cb,          /* wait_cb */
+    NULL,                       /* closing_cb */
+};
+
+void
+fail_open_start(struct secchan *secchan, const struct settings *s,
+                struct switch_status *ss,
+                struct rconn *local_rconn, struct rconn *remote_rconn)
 {
     struct fail_open_data *fail_open = xmalloc(sizeof *fail_open);
     fail_open->s = s;
@@ -146,6 +155,5 @@ fail_open_hook_create(const struct settings *s, struct switch_status *ss,
     }
     switch_status_register_category(ss, "fail-open",
                                     fail_open_status_cb, fail_open);
-    return make_hook(fail_open_local_packet_cb, NULL,
-                     fail_open_periodic_cb, fail_open_wait_cb, fail_open);
+    add_hook(secchan, &fail_open_hook_class, fail_open);
 }

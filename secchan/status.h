@@ -36,11 +36,12 @@
 
 #include "secchan.h"
 
-struct switch_status;
+struct secchan;
 struct status_reply;
+struct switch_status;
 
-struct hook switch_status_hook_create(const struct settings *,
-                                      struct switch_status **);
+void switch_status_start(struct secchan *, const struct settings *,
+                         struct switch_status **);
 void switch_status_register_category(struct switch_status *,
                                      const char *category,
                                      void (*cb)(struct status_reply *,

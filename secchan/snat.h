@@ -37,7 +37,8 @@
 #include "secchan.h"
 
 struct port_watcher;
+struct secchan;
 
-struct hook snat_hook_create(struct port_watcher *pw);
+void snat_start(struct secchan *, struct port_watcher *);
 
 #endif /* snat.h */

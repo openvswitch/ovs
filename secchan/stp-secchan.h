@@ -40,9 +40,11 @@
 
 struct port_watcher;
 struct rconn;
+struct secchan;
 struct settings;
 
-struct hook stp_hook_create(const struct settings *s, struct port_watcher *pw,
-                            struct rconn *local, struct rconn *remote);
+void stp_start(struct secchan *, const struct settings *,
+               struct port_watcher *,
+               struct rconn *local, struct rconn *remote);
 
 #endif /* stp-secchan.h */

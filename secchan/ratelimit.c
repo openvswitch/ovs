@@ -227,9 +227,18 @@ rate_limit_wait_cb(void *rl_)
     }
 }
 
-struct hook
-rate_limit_hook_create(const struct settings *s, struct switch_status *ss,
-                       struct rconn *local, struct rconn *remote)
+static struct hook_class rate_limit_hook_class = {
+    rate_limit_local_packet_cb, /* local_packet_cb */
+    NULL,                       /* remote_packet_cb */
+    rate_limit_periodic_cb,     /* periodic_cb */
+    rate_limit_wait_cb,         /* wait_cb */
+    NULL,                       /* closing_cb */
+};
+
+void
+rate_limit_start(struct secchan *secchan, const struct settings *s,
+                 struct switch_status *ss,
+                 struct rconn *local, struct rconn *remote)
 {
     struct rate_limiter *rl;
     size_t i;
@@ -244,6 +253,5 @@ rate_limit_hook_create(const struct settings *s, struct switch_status *ss,
     rl->tokens = s->rate_limit * 100;
     switch_status_register_category(ss, "rate-limit",
                                     rate_limit_status_cb, rl);
-    return make_hook(rate_limit_local_packet_cb, NULL, rate_limit_periodic_cb,
-                     rate_limit_wait_cb, rl);
+    add_hook(secchan, &rate_limit_hook_class, rl);
 }

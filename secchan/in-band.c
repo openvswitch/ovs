@@ -284,9 +284,18 @@ in_band_local_port_cb(const struct ofp_phy_port *port, void *in_band_)
     }
 }
 
-struct hook
-in_band_hook_create(const struct settings *s, struct switch_status *ss,
-                    struct port_watcher *pw, struct rconn *remote)
+static struct hook_class in_band_hook_class = {
+    in_band_local_packet_cb,    /* local_packet_cb */
+    NULL,                       /* remote_packet_cb */
+    NULL,                       /* periodic_cb */
+    NULL,                       /* wait_cb */
+    NULL,                       /* closing_cb */
+};
+
+void
+in_band_start(struct secchan *secchan,
+              const struct settings *s, struct switch_status *ss,
+              struct port_watcher *pw, struct rconn *remote)
 {
     struct in_band_data *in_band;
 
@@ -298,5 +307,5 @@ in_band_hook_create(const struct settings *s, struct switch_status *ss,
     switch_status_register_category(ss, "in-band", in_band_status_cb, in_band);
     port_watcher_register_local_port_callback(pw, in_band_local_port_cb,
                                               in_band);
-    return make_hook(in_band_local_packet_cb, NULL, NULL, NULL, in_band);
+    add_hook(secchan, &in_band_hook_class, in_band);
 }

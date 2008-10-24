@@ -70,6 +70,16 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_secchan
 
+struct hook {
+    const struct hook_class *class;
+    void *aux;
+};
+
+struct secchan {
+    struct hook *hooks;
+    size_t n_hooks, allocated_hooks;
+};
+
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
 static void parse_options(int argc, char *argv[], struct settings *);
@@ -81,7 +91,7 @@ static struct vconn *accept_vconn(struct pvconn *pvconn);
 static struct relay *relay_create(struct rconn *local, struct rconn *remote,
                                   bool is_mgmt_conn);
 static struct relay *relay_accept(const struct settings *, struct pvconn *);
-static void relay_run(struct relay *, const struct hook[], size_t n_hooks);
+static void relay_run(struct relay *, struct secchan *);
 static void relay_wait(struct relay *);
 static void relay_destroy(struct relay *);
 
@@ -92,8 +102,7 @@ main(int argc, char *argv[])
 
     struct list relays = LIST_INITIALIZER(&relays);
 
-    struct hook hooks[8];
-    size_t n_hooks = 0;
+    struct secchan secchan;
 
     struct pvconn *monitor;
 
@@ -115,6 +124,10 @@ main(int argc, char *argv[])
     parse_options(argc, argv, &s);
     signal(SIGPIPE, SIG_IGN);
 
+    secchan.hooks = NULL;
+    secchan.n_hooks = 0;
+    secchan.allocated_hooks = 0;
+
     /* Start listening for management and monitoring connections. */
     n_listeners = 0;
     for (i = 0; i < s.n_listeners; i++) {
@@ -123,7 +136,7 @@ main(int argc, char *argv[])
     monitor = s.monitor_name ? open_passive_vconn(s.monitor_name) : NULL;
 
     /* Initialize switch status hook. */
-    hooks[n_hooks++] = switch_status_hook_create(&s, &switch_status);
+    switch_status_start(&secchan, &s, &switch_status);
 
     /* Start listening for vlogconf requests. */
     retval = vlog_server_listen(NULL, NULL);
@@ -159,27 +172,25 @@ main(int argc, char *argv[])
     list_push_back(&relays, &controller_relay->node);
 
     /* Set up hooks. */
-    hooks[n_hooks++] = port_watcher_create(local_rconn, remote_rconn, &pw);
+    port_watcher_start(&secchan, local_rconn, remote_rconn, &pw);
     discovery = s.discovery ? discovery_init(&s, pw, switch_status) : NULL;
 #ifdef SUPPORT_SNAT
-    hooks[n_hooks++] = snat_hook_create(pw);
+    snat_start(&secchan, pw);
 #endif
     if (s.enable_stp) {
-        hooks[n_hooks++] = stp_hook_create(&s, pw, local_rconn, remote_rconn);
+        stp_start(&secchan, &s, pw, local_rconn, remote_rconn);
     }
     if (s.in_band) {
-        hooks[n_hooks++] = in_band_hook_create(&s, switch_status, pw,
-                                               remote_rconn);
+        in_band_start(&secchan, &s, switch_status, pw, remote_rconn);
     }
     if (s.fail_mode == FAIL_OPEN) {
-        hooks[n_hooks++] = fail_open_hook_create(&s, switch_status,
-                                                 local_rconn, remote_rconn);
+        fail_open_start(&secchan, &s, switch_status,
+                        local_rconn, remote_rconn);
     }
     if (s.rate_limit) {
-        hooks[n_hooks++] = rate_limit_hook_create(&s, switch_status,
-                                                  local_rconn, remote_rconn);
+        rate_limit_start(&secchan, &s, switch_status,
+                         local_rconn, remote_rconn);
     }
-    assert(n_hooks <= ARRAY_SIZE(hooks));
 
     for (;;) {
         struct relay *r, *n;
@@ -187,7 +198,7 @@ main(int argc, char *argv[])
 
         /* Do work. */
         LIST_FOR_EACH_SAFE (r, n, struct relay, node, &relays) {
-            relay_run(r, hooks, n_hooks);
+            relay_run(r, &secchan);
         }
         for (i = 0; i < n_listeners; i++) {
             for (;;) {
@@ -204,9 +215,9 @@ main(int argc, char *argv[])
                 rconn_add_monitor(local_rconn, new);
             }
         }
-        for (i = 0; i < n_hooks; i++) {
-            if (hooks[i].periodic_cb) {
-                hooks[i].periodic_cb(hooks[i].aux);
+        for (i = 0; i < secchan.n_hooks; i++) {
+            if (secchan.hooks[i].class->periodic_cb) {
+                secchan.hooks[i].class->periodic_cb(secchan.hooks[i].aux);
             }
         }
         if (s.discovery) {
@@ -233,9 +244,9 @@ main(int argc, char *argv[])
         if (monitor) {
             pvconn_wait(monitor);
         }
-        for (i = 0; i < n_hooks; i++) {
-            if (hooks[i].wait_cb) {
-                hooks[i].wait_cb(hooks[i].aux);
+        for (i = 0; i < secchan.n_hooks; i++) {
+            if (secchan.hooks[i].class->wait_cb) {
+                secchan.hooks[i].class->wait_cb(secchan.hooks[i].aux);
             }
         }
         if (discovery) {
@@ -273,20 +284,20 @@ accept_vconn(struct pvconn *pvconn)
     return new;
 }
 
-struct hook
-make_hook(bool (*local_packet_cb)(struct relay *, void *aux),
-          bool (*remote_packet_cb)(struct relay *, void *aux),
-          void (*periodic_cb)(void *aux),
-          void (*wait_cb)(void *aux),
-          void *aux)
+void
+add_hook(struct secchan *secchan, const struct hook_class *class, void *aux)
 {
-    struct hook h;
-    h.packet_cb[HALF_LOCAL] = local_packet_cb;
-    h.packet_cb[HALF_REMOTE] = remote_packet_cb;
-    h.periodic_cb = periodic_cb;
-    h.wait_cb = wait_cb;
-    h.aux = aux;
-    return h;
+    struct hook *hook;
+
+    if (secchan->n_hooks >= secchan->allocated_hooks) {
+        secchan->allocated_hooks = secchan->allocated_hooks * 2 + 1;
+        secchan->hooks = xrealloc(secchan->hooks,
+                                  (sizeof *secchan->hooks
+                                   * secchan->allocated_hooks));
+    }
+    hook = &secchan->hooks[secchan->n_hooks++];
+    hook->class = class;
+    hook->aux = aux;
 }
 
 struct ofp_packet_in *
@@ -381,8 +392,34 @@ relay_create(struct rconn *local, struct rconn *remote, bool is_mgmt_conn)
     return r;
 }
 
+static bool
+call_local_packet_cbs(struct secchan *secchan, struct relay *r)
+{
+    const struct hook *h;
+    for (h = secchan->hooks; h < &secchan->hooks[secchan->n_hooks]; h++) {
+        bool (*cb)(struct relay *, void *aux) = h->class->local_packet_cb;
+        if (cb && (cb)(r, h->aux)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool
+call_remote_packet_cbs(struct secchan *secchan, struct relay *r)
+{
+    const struct hook *h;
+    for (h = secchan->hooks; h < &secchan->hooks[secchan->n_hooks]; h++) {
+        bool (*cb)(struct relay *, void *aux) = h->class->remote_packet_cb;
+        if (cb && (cb)(r, h->aux)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void
-relay_run(struct relay *r, const struct hook hooks[], size_t n_hooks)
+relay_run(struct relay *r, struct secchan *secchan)
 {
     int iteration;
     int i;
@@ -401,14 +438,14 @@ relay_run(struct relay *r, const struct hook hooks[], size_t n_hooks)
             if (!this->rxbuf) {
                 this->rxbuf = rconn_recv(this->rconn);
                 if (this->rxbuf && (i == HALF_REMOTE || !r->is_mgmt_conn)) {
-                    const struct hook *h;
-                    for (h = hooks; h < &hooks[n_hooks]; h++) {
-                        if (h->packet_cb[i] && h->packet_cb[i](r, h->aux)) {
-                            ofpbuf_delete(this->rxbuf);
-                            this->rxbuf = NULL;
-                            progress = true;
-                            break;
-                        }
+                    if (i == HALF_LOCAL
+                        ? call_local_packet_cbs(secchan, r)
+                        : call_remote_packet_cbs(secchan, r))
+                    {
+                        ofpbuf_delete(this->rxbuf);
+                        this->rxbuf = NULL;
+                        progress = true;
+                        break;
                     }
                 }
             }

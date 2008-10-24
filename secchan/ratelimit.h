@@ -35,12 +35,12 @@
 #define RATELIMIT_H 1
 
 struct rconn;
+struct secchan;
 struct settings;
 struct switch_status;
 
-struct hook rate_limit_hook_create(const struct settings *,
-                                   struct switch_status *,
-                                   struct rconn *local,
-                                   struct rconn *remote);
+void rate_limit_start(struct secchan *, const struct settings *,
+                      struct switch_status *,
+                      struct rconn *local, struct rconn *remote);
 
 #endif /* ratelimit.h */

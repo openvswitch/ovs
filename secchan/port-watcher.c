@@ -475,9 +475,18 @@ port_watcher_is_ready(const struct port_watcher *pw)
     return pw->got_feature_reply;
 }
 
-struct hook
-port_watcher_create(struct rconn *local_rconn, struct rconn *remote_rconn,
-                    struct port_watcher **pwp)
+static struct hook_class port_watcher_hook_class = { 
+    port_watcher_local_packet_cb,                        /* local_packet_cb */
+    port_watcher_remote_packet_cb,                       /* remote_packet_cb */
+    port_watcher_periodic_cb,                            /* periodic_cb */
+    port_watcher_wait_cb,                                /* wait_cb */
+    NULL,                                                /* closing_cb */
+};
+
+void
+port_watcher_start(struct secchan *secchan,
+                   struct rconn *local_rconn, struct rconn *remote_rconn,
+                   struct port_watcher **pwp)
 {
     struct port_watcher *pw;
 
@@ -488,8 +497,5 @@ port_watcher_create(struct rconn *local_rconn, struct rconn *remote_rconn,
     port_array_init(&pw->ports);
     pw->local_port_name[0] = '\0';
     port_watcher_register_callback(pw, log_port_status, NULL);
-    return make_hook(port_watcher_local_packet_cb,
-                     port_watcher_remote_packet_cb,
-                     port_watcher_periodic_cb,
-                     port_watcher_wait_cb, pw);
+    add_hook(secchan, &port_watcher_hook_class, pw);
 }

@@ -165,8 +165,17 @@ switch_status_cb(struct status_reply *sr, void *ss_)
     status_reply_put(sr, "pid=%ld", (long int) getpid());
 }
 
-struct hook
-switch_status_hook_create(const struct settings *s, struct switch_status **ssp)
+static struct hook_class switch_status_hook_class = {
+    NULL,                           /* local_packet_cb */
+    switch_status_remote_packet_cb, /* remote_packet_cb */
+    NULL,                           /* periodic_cb */
+    NULL,                           /* wait_cb */
+    NULL,                           /* closing_cb */
+};
+
+void
+switch_status_start(struct secchan *secchan, const struct settings *s,
+                    struct switch_status **ssp)
 {
     struct switch_status *ss = xcalloc(1, sizeof *ss);
     ss->s = s;
@@ -175,7 +184,7 @@ switch_status_hook_create(const struct settings *s, struct switch_status **ssp)
                                     config_status_cb, (void *) s);
     switch_status_register_category(ss, "switch", switch_status_cb, ss);
     *ssp = ss;
-    return make_hook(NULL, switch_status_remote_packet_cb, NULL, NULL, ss);
+    add_hook(secchan, &switch_status_hook_class, ss);
 }
 
 void
