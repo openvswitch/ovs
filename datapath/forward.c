@@ -224,7 +224,7 @@ add_flow(struct sw_chain *chain, const struct sender *sender,
 	if (v_code != ACT_VALIDATION_OK) {
 		dp_send_error_msg(chain->dp, sender, OFPET_BAD_ACTION, v_code,
 				  ofm, ntohs(ofm->header.length));
-		goto error;
+		goto error_free_flow;
 	}
 
 	/* Fill out flow. */
