@@ -34,6 +34,17 @@ DODTIME=1                   # Time to wait for the server to die, in seconds
                             # 'restart' will not work
 
 # Include secchan defaults if available
+unset NETDEVS
+unset MODE
+unset SWITCH_IP
+unset CONTROLLER
+unset PRIVKEY
+unset CERT
+unset CACERT
+unset CACERT_MODE
+unset MGMT_VCONNS
+unset COMMANDS
+unset DAEMON_OPTS
 default=/etc/default/openflow-switch
 if [ -f $default ] ; then
 	. $default
@@ -223,10 +234,16 @@ case "$1" in
             MGMT_OPTS="$MGMT_OPTS --listen=$vconn"
         done
 
+        COMMAND_OPT=
+        if test -n "$COMMANDS"; then
+            COMMAND_OPT="--commands=$COMMANDS"
+        fi
+
 	echo -n "Starting $DESC: "
 	start-stop-daemon --start --quiet --pidfile $PIDFILE \
 	    --exec $DAEMON -- nl:0 $CONTROLLER --detach --pidfile=$PIDFILE \
-            --verbose=ANY:console:emer $DAEMON_OPTS $MGMT_OPTS $SSL_OPTS
+            --verbose=ANY:console:emer $DAEMON_OPTS $MGMT_OPTS $SSL_OPTS \
+            "$COMMAND_OPT"
         if running; then
             echo "$NAME."
         else

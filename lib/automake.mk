@@ -63,6 +63,7 @@ EXTRA_DIST += \
 CLEANFILES += lib/dirs.c
 lib/dirs.c: Makefile
 	($(ro_c) && \
+	 echo 'const char ofp_pkgdatadir[] = "$(pkgdatadir$)";' && \
 	 echo 'const char ofp_rundir[] = "@RUNDIR@";' && \
 	 echo 'const char ofp_logdir[] = "@LOGDIR@";') > lib/dirs.c.tmp
 	mv lib/dirs.c.tmp lib/dirs.c

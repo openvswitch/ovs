@@ -34,6 +34,7 @@ TESTS =
 TESTS_ENVIRONMENT =
 bin_PROGRAMS =
 bin_SCRIPTS =
+dist_commands_DATA =
 dist_man_MANS =
 man_MANS =
 noinst_HEADERS =
@@ -46,6 +47,7 @@ EXTRA_DIST += README.hwtables
 do_subst = ($(srcdir)/subst VLOG_OPTIONS $(srcdir)/lib/vlog.man | \
 	    sed -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
                 -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
+                -e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
                 -e 's,[@]PERL[@],$(PERL),g')
 ro_script = sed "`printf '1a\\' && printf '\\n\# -*- buffer-read-only: t -*-'`"
 ro_c = echo '/* -*- mode: c; buffer-read-only: t -*- */'

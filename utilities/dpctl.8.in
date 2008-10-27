@@ -198,6 +198,16 @@ messages), but it will not print any messages sent to the kernel by
 \fBsecchan\fR and other processes, nor will it print replies sent by
 the kernel in response to those messages.
 
+.TP
+\fBexecute \fIswitch command \fR[\fIarg\fR...]
+
+Sends a request to \fIswitch\fR to execute \fIcommand\fR along with
+each \fIarg\fR, if any, then waits for the command to complete and
+reports its completion status on \fBstderr\fR and its output, if any,
+on \fBstdout\fR.  The set of available commands and their argument is
+switch-dependent.  (This command uses a Nicira extension to OpenFlow
+that may not be available on all switches.)
+
 .PP
 The following commands can be used regardless of the connection
 method.  They apply to OpenFlow switches and controllers.

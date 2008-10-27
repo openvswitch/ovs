@@ -44,7 +44,9 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
+#include "dirs.h"
 #include "discovery.h"
+#include "executer.h"
 #include "fail-open.h"
 #include "fault.h"
 #include "in-band.h"
@@ -190,6 +192,9 @@ main(int argc, char *argv[])
     if (s.rate_limit) {
         rate_limit_start(&secchan, &s, switch_status,
                          local_rconn, remote_rconn);
+    }
+    if (s.command_acl[0]) {
+        executer_start(&secchan, &s);
     }
 
     for (;;) {
@@ -526,6 +531,8 @@ parse_options(int argc, char *argv[], struct settings *s)
         OPT_NO_STP,
         OPT_OUT_OF_BAND,
         OPT_IN_BAND,
+        OPT_COMMAND_ACL,
+        OPT_COMMAND_DIR,
         VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
@@ -543,6 +550,8 @@ parse_options(int argc, char *argv[], struct settings *s)
         {"no-stp",      no_argument, 0, OPT_NO_STP},
         {"out-of-band", no_argument, 0, OPT_OUT_OF_BAND},
         {"in-band",     no_argument, 0, OPT_IN_BAND},
+        {"command-acl", required_argument, 0, OPT_COMMAND_ACL},
+        {"command-dir", required_argument, 0, OPT_COMMAND_DIR},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -570,6 +579,8 @@ parse_options(int argc, char *argv[], struct settings *s)
     s->burst_limit = 0;
     s->enable_stp = false;
     s->in_band = true;
+    s->command_acl = "";
+    s->command_dir = xasprintf("%s/commands", ofp_pkgdatadir);
     for (;;) {
         int c;
 
@@ -658,6 +669,16 @@ parse_options(int argc, char *argv[], struct settings *s)
 
         case OPT_IN_BAND:
             s->in_band = true;
+            break;
+
+        case OPT_COMMAND_ACL:
+            s->command_acl = (s->command_acl[0]
+                              ? xasprintf("%s,%s", s->command_acl, optarg)
+                              : optarg);
+            break;
+
+        case OPT_COMMAND_DIR:
+            s->command_dir = optarg;
             break;
 
         case 'l':
@@ -779,7 +800,11 @@ usage(void)
            "  --no-stp                disable 802.1D Spanning Tree Protocol\n"
            "\nRate-limiting of \"packet-in\" messages to the controller:\n"
            "  --rate-limit[=PACKETS]  max rate, in packets/s (default: 1000)\n"
-           "  --burst-limit=BURST     limit on packet credit for idle time\n");
+           "  --burst-limit=BURST     limit on packet credit for idle time\n"
+           "\nRemote command execution options:\n"
+           "  --command-acl=[!]GLOB[,[!]GLOB...] set allowed/denied commands\n"
+           "  --command-dir=DIR       set command dir (default: %s/commands)\n",
+           ofp_pkgdatadir);
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"

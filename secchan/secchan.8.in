@@ -361,6 +361,32 @@ because bugs in the STP implementation are still being worked out.
 The default will change to \fB--stp\fR at some point in the future.
 
 .TP
+\fB--command-acl=\fR[\fB!\fR]\fIglob\fR[\fB,\fR[\fB!\fR]\fIglob\fR...]
+Configures the commands that remote OpenFlow connections are allowed
+to invoke using (e.g.) \fBdpctl execute\fR.  The argument is a
+comma-separated sequence of shell glob patterns.  A glob pattern
+specified without a leading \fB!\fR is a ``whitelist'' that specifies
+a set of commands that are that may be invoked, whereas a pattern that
+does begin with \fB!\fR is a ``blacklist'' that specifies commands
+that may not be invoked.  To be permitted, a command name must be
+whitelisted and must not be blacklisted;
+e.g. \fB--command-acl=up*,!upgrade\fR would allow any command whose name
+begins with \fBup\fR except for the command named \fBupgrade\fR.
+Command names that include characters other than upper- and lower-case
+English letters, digits, and the underscore and hyphen characters are
+unconditionally disallowed.
+
+When the whitelist and blacklist permit a command name, \fBsecchan\fR
+looks for a program with the same name as the command in the commands
+directory (see below).  Other directories are not searched.
+
+.TP
+\fB--command-dir=\fIdirectory\fR
+Sets the directory searched for remote command execution to
+\fBdirectory\fR.  The default directory is
+\fB@pkgdatadir@/commands\fR.
+
+.TP
 \fB-p\fR, \fB--private-key=\fIprivkey.pem\fR
 Specifies a PEM file containing the private key used as the switch's
 identity for SSL connections to the controller.

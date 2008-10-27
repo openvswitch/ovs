@@ -4,3 +4,4 @@ _debian/utilities/dpctl usr/sbin
 _debian/utilities/ofp-discover usr/sbin
 _debian/utilities/ofp-kill usr/sbin
 debian/ofp-switch-setup usr/sbin
+debian/openflow/usr/share/openflow/commands usr/share/openflow/commands

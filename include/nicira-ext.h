@@ -29,7 +29,16 @@ enum nicira_type {
     NXT_ACT_SET_CONFIG,
 
     /* Get configuration of action. */
-    NXT_ACT_GET_CONFIG
+    NXT_ACT_GET_CONFIG,
+
+    /* Remote command execution.  The request body is a sequence of strings
+     * delimited by null bytes.  The first string is a command name.
+     * Subsequent strings are command arguments. */
+    NXT_COMMAND_REQUEST,
+
+    /* Remote command execution reply, sent when the command's execution
+     * completes.  The reply body is struct nx_command_reply. */
+    NXT_COMMAND_REPLY
 };
 
 struct nicira_header {
@@ -106,5 +115,23 @@ struct nx_action_header {
     uint8_t pad[6];
 };
 OFP_ASSERT(sizeof(struct nx_action_header) == 16);
+
+/* Status bits for NXT_COMMAND_REPLY. */
+enum {
+    NXT_STATUS_EXITED = 0x8000,   /* Exited normally. */
+    NXT_STATUS_SIGNALED = 0x4000, /* Exited due to signal. */
+    NXT_STATUS_UNKNOWN = 0x2000,  /* Exited for unknown reason. */
+    NXT_STATUS_COREDUMP = 0x1000, /* Exited with core dump. */
+    NXT_STATUS_EXITSTATUS = 0xff, /* Exit code mask if NXT_STATUS_EXITED. */
+    NXT_STATUS_TERMSIG = 0xff,    /* Signal number if NXT_STATUS_SIGNALED. */
+};
+
+/* NXT_COMMAND_REPLY. */
+struct nx_command_reply {
+    struct nicira_header nxh;
+    uint32_t status;            /* Status bits defined above. */
+    /* Followed by any number of bytes of process output. */
+};
+OFP_ASSERT(sizeof(struct nx_command_reply) == 20);
 
 #endif /* nicira-ext.h */

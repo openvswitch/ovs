@@ -41,6 +41,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/un.h>
 #include <unistd.h>
 #include "fatal-signal.h"
@@ -66,6 +67,26 @@ set_nonblocking(int fd)
         VLOG_ERR("fcntl(F_GETFL) failed: %s", strerror(errno));
         return errno;
     }
+}
+
+/* Returns the maximum valid FD value, plus 1. */
+int
+get_max_fds(void)
+{
+    static int max_fds = -1;
+    if (max_fds < 0) {
+        struct rlimit r;
+        if (!getrlimit(RLIMIT_NOFILE, &r)
+            && r.rlim_cur != RLIM_INFINITY
+            && r.rlim_cur != RLIM_SAVED_MAX
+            && r.rlim_cur != RLIM_SAVED_CUR) {
+            max_fds = r.rlim_cur;
+        } else {
+            VLOG_WARN("failed to obtain fd limit, defaulting to 1024");
+            max_fds = 1024;
+        }
+    }
+    return max_fds;
 }
 
 /* Translates 'host_name', which may be a DNS name or an IP address, into a

@@ -1286,6 +1286,57 @@ do_benchmark(const struct settings *s, int argc, char *argv[])
            count * message_size / (duration / 1000.0));
 }
 
+static void
+do_execute(const struct settings *s, int argc, char *argv[])
+{
+    struct vconn *vconn;
+    struct ofpbuf *request, *reply;
+    struct nicira_header *nicira;
+    struct nx_command_reply *ncr;
+    int status;
+    int i;
+
+    nicira = make_openflow(sizeof *nicira, OFPT_VENDOR, &request);
+    nicira->vendor = htonl(NX_VENDOR_ID);
+    nicira->subtype = htonl(NXT_COMMAND_REQUEST);
+    ofpbuf_put(request, argv[2], strlen(argv[2]));
+    for (i = 3; i < argc; i++) {
+        ofpbuf_put_zeros(request, 1);
+        ofpbuf_put(request, argv[i], strlen(argv[i]));
+    }
+    update_openflow_length(request);
+
+    open_vconn(argv[1], &vconn);
+    run(vconn_transact(vconn, request, &reply), "transact");
+    if (reply->size < sizeof *ncr) {
+        ofp_fatal(0, "reply is too short (%zu bytes < %zu bytes)",
+                  reply->size, sizeof *ncr);
+    }
+    ncr = reply->data;
+    if (ncr->nxh.header.type != OFPT_VENDOR
+        || ncr->nxh.vendor != htonl(NX_VENDOR_ID)
+        || ncr->nxh.subtype != htonl(NXT_COMMAND_REPLY)) {
+        ofp_fatal(0, "reply is invalid");
+    }
+
+    status = ntohl(ncr->status);
+    if (status & NXT_STATUS_EXITED) {
+        fprintf(stderr, "process terminated normally with exit code %d",
+                status & NXT_STATUS_EXITSTATUS);
+    } else if (status & NXT_STATUS_SIGNALED) {
+        fprintf(stderr, "process terminated by signal %d",
+                status & NXT_STATUS_TERMSIG);
+    } else {
+        fprintf(stderr, "process terminated for unknown reason");
+    }
+    if (status & NXT_STATUS_COREDUMP) {
+        fprintf(stderr, " (core dumped)");
+    }
+    putc('\n', stderr);
+
+    fwrite(ncr + 1, reply->size - sizeof *ncr, 1, stdout);
+}
+
 static void do_help(const struct settings *s, int argc UNUSED, 
         char *argv[] UNUSED)
 {
@@ -1322,5 +1373,6 @@ static struct command all_commands[] = {
     { "probe", 1, 1, do_probe },
     { "ping", 1, 2, do_ping },
     { "benchmark", 3, 3, do_benchmark },
+    { "execute", 2, INT_MAX, do_execute },
     { NULL, 0, 0, NULL },
 };

@@ -34,7 +34,8 @@
 #ifndef DIRS_H
 #define DIRS_H 1
 
-extern const char ofp_rundir[];  /* /usr/local/var/run */
-extern const char ofp_logdir[];  /* /usr/local/var/log */
+extern const char ofp_pkgdatadir[]; /* /usr/local/share/openflow */
+extern const char ofp_rundir[];     /* /usr/local/var/run */
+extern const char ofp_logdir[];     /* /usr/local/var/log */
 
 #endif /* dirs.h */

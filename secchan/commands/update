@@ -1,0 +1,3 @@
+#! /bin/sh -e
+apt-get update -qy
+apt-get upgrade -qy

@@ -4,6 +4,8 @@ man_MANS += secchan/secchan.8
 secchan_secchan_SOURCES = \
 	secchan/discovery.c \
 	secchan/discovery.h \
+	secchan/executer.c \
+	secchan/executer.h \
 	secchan/fail-open.c \
 	secchan/fail-open.h \
 	secchan/in-band.c \
@@ -13,6 +15,7 @@ secchan_secchan_SOURCES = \
 	secchan/ratelimit.c \
 	secchan/ratelimit.h \
 	secchan/secchan.c \
+	secchan/secchan.h \
 	secchan/status.c \
 	secchan/status.h \
 	secchan/stp-secchan.c \
@@ -26,3 +29,5 @@ secchan_secchan_LDADD = lib/libopenflow.a $(FAULT_LIBS) $(SSL_LIBS)
 
 EXTRA_DIST += secchan/secchan.8.in
 DISTCLEANFILES += secchan/secchan.8
+
+include secchan/commands/automake.mk

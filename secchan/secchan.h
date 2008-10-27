@@ -81,6 +81,10 @@ struct settings {
 
     /* Spanning tree protocol. */
     bool enable_stp;
+
+    /* Remote command execution. */
+    char *command_acl;          /* Command white/blacklist, as shell globs. */
+    char *command_dir;          /* Directory that contains commands. */
 };
 
 struct half {

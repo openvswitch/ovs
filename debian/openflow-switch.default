@@ -99,5 +99,12 @@ SWITCH_IP=dhcp
 # use openflow-switchmon.
 MGMT_VCONNS="punix:/var/run/secchan.socket"
 
+# COMMANDS: Access control list for the commands that can be executed
+# remotely over the OpenFlow protocol, as a comma-separated list of
+# shell glob patterns.  Negative patterns (beginning with !) act as a
+# blacklist.  To be executable, a command name must match one positive
+# pattern and not match any negative patterns.
+#COMMANDS="reboot,update"
+
 # DAEMON_OPTS: Additional options to pass to secchan, e.g. "--fail=open"
 DAEMON_OPTS=""
