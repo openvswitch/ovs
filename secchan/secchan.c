@@ -153,6 +153,11 @@ main(int argc, char *argv[])
     VLOG_WARN("OpenFlow protocol version 0x%02x", OFP_VERSION);
 
     /* Connect to datapath. */
+    if (strncmp(s.dp_name, "nl:", 3) && strncmp(s.dp_name, "unix:", 5)
+        && !s.controller_name) {
+        VLOG_WARN("Controller not specified and datapath is not nl: or "
+                  "unix:.  (Did you forget to specify the datapath?)");
+    }
     local_rconn = rconn_create(0, s.max_backoff);
     rconn_connect(local_rconn, s.dp_name);
     switch_status_register_category(switch_status, "local",
