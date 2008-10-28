@@ -89,6 +89,11 @@ struct executer {
     int null_fd;                /* FD for /dev/null. */
 };
 
+static void send_child_status(struct relay *, uint32_t xid, uint32_t status,
+                              const void *data, size_t size);
+static void send_child_message(struct relay *, uint32_t xid, uint32_t status,
+                               const char *message);
+
 /* Returns true if 'cmd' is allowed by 'acl', which is a command-separated
  * access control list in the format described for --command-acl in
  * secchan(8). */
@@ -164,6 +169,8 @@ executer_remote_packet_cb(struct relay *r, void *e_)
     /* Verify limit on children not exceeded.
      * XXX should probably kill children when the connection drops? */
     if (e->n_children >= MAX_CHILDREN) {
+        send_child_message(r, request->header.xid, NXT_STATUS_ERROR,
+                           "too many child processes");
         VLOG_WARN("limit of %d child processes reached, dropping request",
                   MAX_CHILDREN);
         return false;
@@ -190,16 +197,22 @@ executer_remote_packet_cb(struct relay *r, void *e_)
 
     /* Check permissions. */
     if (!executer_is_permitted(e->s->command_acl, argv[0])) {
+        send_child_message(r, request->header.xid, NXT_STATUS_ERROR,
+                           "command not allowed");
         goto done;
     }
 
     /* Find the executable. */
     exec_file = xasprintf("%s/%s", e->s->command_dir, argv[0]);
     if (stat(exec_file, &s)) {
+        send_child_message(r, request->header.xid, NXT_STATUS_ERROR,
+                           "command not allowed");
         VLOG_WARN("failed to stat \"%s\": %s", exec_file, strerror(errno));
         goto done;
     }
     if (!S_ISREG(s.st_mode)) {
+        send_child_message(r, request->header.xid, NXT_STATUS_ERROR,
+                           "command not allowed");
         VLOG_WARN("\"%s\" is not a regular file", exec_file);
         goto done;
     }
@@ -207,6 +220,8 @@ executer_remote_packet_cb(struct relay *r, void *e_)
 
     /* Arrange to capture output. */
     if (pipe(output_fds)) {
+        send_child_message(r, request->header.xid, NXT_STATUS_ERROR,
+                           "internal error (pipe)");
         VLOG_WARN("pipe failed: %s", strerror(errno));
         goto done;
     }
@@ -237,6 +252,7 @@ executer_remote_packet_cb(struct relay *r, void *e_)
         /* Running in parent. */
         struct child *child;
 
+        send_child_status(r, request->header.xid, NXT_STATUS_STARTED, NULL, 0);
         VLOG_WARN("started \"%s\" subprocess", argv[0]);
         child = &e->children[e->n_children++];
         child->name = xstrdup(argv[0]);
@@ -249,6 +265,8 @@ executer_remote_packet_cb(struct relay *r, void *e_)
         set_nonblocking(output_fds[0]);
         close(output_fds[1]);
     } else {
+        send_child_message(r, request->header.xid, NXT_STATUS_ERROR,
+                           "internal error (fork)");
         VLOG_WARN("fork failed: %s", strerror(errno));
         close(output_fds[0]);
         close(output_fds[1]);
@@ -261,12 +279,42 @@ done:
     return true;
 }
 
+static void
+send_child_status(struct relay *relay, uint32_t xid, uint32_t status,
+                  const void *data, size_t size)
+{
+    if (relay) {
+        struct nx_command_reply *r;
+        struct ofpbuf *buffer;
+
+        r = make_openflow_xid(sizeof *r, OFPT_VENDOR, xid, &buffer);
+        r->nxh.vendor = htonl(NX_VENDOR_ID);
+        r->nxh.subtype = htonl(NXT_COMMAND_REPLY);
+        r->status = htonl(status);
+        ofpbuf_put(buffer, data, size);
+        update_openflow_length(buffer);
+        if (rconn_send(relay->halves[HALF_REMOTE].rconn, buffer, NULL)) {
+            ofpbuf_delete(buffer);
+        }
+    }
+}
+
+static void
+send_child_message(struct relay *relay, uint32_t xid, uint32_t status,
+                   const char *message)
+{
+    send_child_status(relay, xid, status, message, strlen(message));
+}
+
 /* 'child' died with 'status' as its return code.  Deal with it. */
 static void
 child_terminated(struct child *child, int status)
 {
+    struct ds ds;
+    uint32_t ofp_status;
+
     /* Log how it terminated. */
-    struct ds ds = DS_EMPTY_INITIALIZER;
+    ds_init(&ds);
     if (WIFEXITED(status)) {
         ds_put_format(&ds, "normally with status %d", WEXITSTATUS(status));
     } else if (WIFSIGNALED(status)) {
@@ -285,30 +333,18 @@ child_terminated(struct child *child, int status)
 
     /* Send a status message back to the controller that requested the
      * command. */
-    if (child->relay) {
-        struct nx_command_reply *r;
-        struct ofpbuf *buffer;
-
-        r = make_openflow_xid(sizeof *r, OFPT_VENDOR, child->xid, &buffer);
-        r->nxh.vendor = htonl(NX_VENDOR_ID);
-        r->nxh.subtype = htonl(NXT_COMMAND_REPLY);
-        if (WIFEXITED(status)) {
-            r->status = htonl(WEXITSTATUS(status) | NXT_STATUS_EXITED);
-        } else if (WIFSIGNALED(status)) {
-            r->status = htonl(WTERMSIG(status) | NXT_STATUS_SIGNALED);
-        } else {
-            r->status = htonl(NXT_STATUS_UNKNOWN);
-        }
-        if (WCOREDUMP(status)) {
-            r->status |= htonl(NXT_STATUS_COREDUMP);
-        }
-        ofpbuf_put(buffer, child->output, child->output_size);
-        update_openflow_length(buffer);
-        if (rconn_send(child->relay->halves[HALF_REMOTE].rconn, buffer,
-                       NULL)) {
-            ofpbuf_delete(buffer);
-        }
+    if (WIFEXITED(status)) {
+        ofp_status = WEXITSTATUS(status) | NXT_STATUS_EXITED;
+    } else if (WIFSIGNALED(status)) {
+        ofp_status = WTERMSIG(status) | NXT_STATUS_SIGNALED;
+    } else {
+        ofp_status = NXT_STATUS_UNKNOWN;
     }
+    if (WCOREDUMP(status)) {
+        ofp_status |= NXT_STATUS_COREDUMP;
+    }
+    send_child_status(child->relay, child->xid, ofp_status,
+                      child->output, child->output_size);
 }
 
 /* Read output from 'child' and append it to its output buffer. */

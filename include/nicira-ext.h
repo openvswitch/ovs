@@ -118,12 +118,14 @@ OFP_ASSERT(sizeof(struct nx_action_header) == 16);
 
 /* Status bits for NXT_COMMAND_REPLY. */
 enum {
-    NXT_STATUS_EXITED = 0x8000,   /* Exited normally. */
-    NXT_STATUS_SIGNALED = 0x4000, /* Exited due to signal. */
-    NXT_STATUS_UNKNOWN = 0x2000,  /* Exited for unknown reason. */
-    NXT_STATUS_COREDUMP = 0x1000, /* Exited with core dump. */
-    NXT_STATUS_EXITSTATUS = 0xff, /* Exit code mask if NXT_STATUS_EXITED. */
-    NXT_STATUS_TERMSIG = 0xff,    /* Signal number if NXT_STATUS_SIGNALED. */
+    NXT_STATUS_EXITED = 1 << 31,   /* Exited normally. */
+    NXT_STATUS_SIGNALED = 1 << 30, /* Exited due to signal. */
+    NXT_STATUS_UNKNOWN = 1 << 29,  /* Exited for unknown reason. */
+    NXT_STATUS_COREDUMP = 1 << 28, /* Exited with core dump. */
+    NXT_STATUS_ERROR = 1 << 27,    /* Command could not be executed. */
+    NXT_STATUS_STARTED = 1 << 26,  /* Command was started. */
+    NXT_STATUS_EXITSTATUS = 0xff,  /* Exit code mask if NXT_STATUS_EXITED. */
+    NXT_STATUS_TERMSIG = 0xff,     /* Signal number if NXT_STATUS_SIGNALED. */
 };
 
 /* NXT_COMMAND_REPLY. */

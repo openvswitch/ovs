@@ -1290,13 +1290,14 @@ static void
 do_execute(const struct settings *s, int argc, char *argv[])
 {
     struct vconn *vconn;
-    struct ofpbuf *request, *reply;
+    struct ofpbuf *request;
     struct nicira_header *nicira;
     struct nx_command_reply *ncr;
-    int status;
+    uint32_t xid;
     int i;
 
     nicira = make_openflow(sizeof *nicira, OFPT_VENDOR, &request);
+    xid = nicira->header.xid;
     nicira->vendor = htonl(NX_VENDOR_ID);
     nicira->subtype = htonl(NXT_COMMAND_REQUEST);
     ofpbuf_put(request, argv[2], strlen(argv[2]));
@@ -1307,34 +1308,47 @@ do_execute(const struct settings *s, int argc, char *argv[])
     update_openflow_length(request);
 
     open_vconn(argv[1], &vconn);
-    run(vconn_transact(vconn, request, &reply), "transact");
-    if (reply->size < sizeof *ncr) {
-        ofp_fatal(0, "reply is too short (%zu bytes < %zu bytes)",
-                  reply->size, sizeof *ncr);
-    }
-    ncr = reply->data;
-    if (ncr->nxh.header.type != OFPT_VENDOR
-        || ncr->nxh.vendor != htonl(NX_VENDOR_ID)
-        || ncr->nxh.subtype != htonl(NXT_COMMAND_REPLY)) {
-        ofp_fatal(0, "reply is invalid");
-    }
+    run(vconn_send_block(vconn, request), "send");
 
-    status = ntohl(ncr->status);
-    if (status & NXT_STATUS_EXITED) {
-        fprintf(stderr, "process terminated normally with exit code %d",
-                status & NXT_STATUS_EXITSTATUS);
-    } else if (status & NXT_STATUS_SIGNALED) {
-        fprintf(stderr, "process terminated by signal %d",
-                status & NXT_STATUS_TERMSIG);
-    } else {
-        fprintf(stderr, "process terminated for unknown reason");
-    }
-    if (status & NXT_STATUS_COREDUMP) {
-        fprintf(stderr, " (core dumped)");
-    }
-    putc('\n', stderr);
+    for (;;) {
+        struct ofpbuf *reply;
+        uint32_t status;
 
-    fwrite(ncr + 1, reply->size - sizeof *ncr, 1, stdout);
+        run(vconn_recv_xid(vconn, xid, &reply), "recv_xid");
+        if (reply->size < sizeof *ncr) {
+            ofp_fatal(0, "reply is too short (%zu bytes < %zu bytes)",
+                      reply->size, sizeof *ncr);
+        }
+        ncr = reply->data;
+        if (ncr->nxh.header.type != OFPT_VENDOR
+            || ncr->nxh.vendor != htonl(NX_VENDOR_ID)
+            || ncr->nxh.subtype != htonl(NXT_COMMAND_REPLY)) {
+            ofp_fatal(0, "reply is invalid");
+        }
+
+        status = ntohl(ncr->status);
+        if (status & NXT_STATUS_STARTED) {
+            /* Wait for a second reply. */
+            continue;
+        } else if (status & NXT_STATUS_EXITED) {
+            fprintf(stderr, "process terminated normally with exit code %d",
+                    status & NXT_STATUS_EXITSTATUS);
+        } else if (status & NXT_STATUS_SIGNALED) {
+            fprintf(stderr, "process terminated by signal %d",
+                    status & NXT_STATUS_TERMSIG);
+        } else if (status & NXT_STATUS_ERROR) {
+            fprintf(stderr, "error executing command");
+        } else {
+            fprintf(stderr, "process terminated for unknown reason");
+        }
+        if (status & NXT_STATUS_COREDUMP) {
+            fprintf(stderr, " (core dumped)");
+        }
+        putc('\n', stderr);
+
+        fwrite(ncr + 1, reply->size - sizeof *ncr, 1, stdout);
+        break;
+    }
 }
 
 static void do_help(const struct settings *s, int argc UNUSED, 

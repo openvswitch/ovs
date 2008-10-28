@@ -54,6 +54,7 @@ uint32_t vconn_get_ip(const struct vconn *);
 int vconn_connect(struct vconn *);
 int vconn_recv(struct vconn *, struct ofpbuf **);
 int vconn_send(struct vconn *, struct ofpbuf *);
+int vconn_recv_xid(struct vconn *, uint32_t xid, struct ofpbuf **);
 int vconn_transact(struct vconn *, struct ofpbuf *, struct ofpbuf **);
 
 int vconn_open_block(const char *name, int min_version, struct vconn **);
