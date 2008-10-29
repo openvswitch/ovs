@@ -249,6 +249,7 @@ parse_options(int argc, char *argv[])
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
         DAEMON_LONG_OPTIONS,
+        VLOG_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         VCONN_SSL_LONG_OPTIONS
         {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
