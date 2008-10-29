@@ -75,6 +75,7 @@ int netdev_recv(struct netdev *, struct ofpbuf *);
 void netdev_recv_wait(struct netdev *);
 int netdev_drain(struct netdev *);
 int netdev_send(struct netdev *, const struct ofpbuf *);
+int netdev_set_etheraddr(struct netdev *, const uint8_t mac[6]);
 const uint8_t *netdev_get_etheraddr(const struct netdev *);
 const char *netdev_get_name(const struct netdev *);
 int netdev_get_mtu(const struct netdev *);

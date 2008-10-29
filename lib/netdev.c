@@ -86,6 +86,7 @@ struct netdev {
     int speed;
     int mtu;
     int txqlen;
+    int hwaddr_family;
 
     /* Bitmaps of OFPPF_* that describe features.  All bits disabled if
      * unsupported or unavailable. */
@@ -354,6 +355,7 @@ do_open_netdev(const char *name, int ethertype, int tap_fd,
     struct in6_addr in6;
     int mtu;
     int txqlen;
+    int hwaddr_family;
     int error;
     struct netdev *netdev;
 
@@ -411,10 +413,10 @@ do_open_netdev(const char *name, int ethertype, int tap_fd,
                  name, strerror(errno));
         goto error;
     }
-    if (ifr.ifr_hwaddr.sa_family != AF_UNSPEC
-        && ifr.ifr_hwaddr.sa_family != ARPHRD_ETHER) {
+    hwaddr_family = ifr.ifr_hwaddr.sa_family;
+    if (hwaddr_family != AF_UNSPEC && hwaddr_family != ARPHRD_ETHER) {
         VLOG_WARN("%s device has unknown hardware address family %d",
-                  name, (int) ifr.ifr_hwaddr.sa_family);
+                  name, hwaddr_family);
     }
     memcpy(etheraddr, ifr.ifr_hwaddr.sa_data, sizeof etheraddr);
 
@@ -441,6 +443,7 @@ do_open_netdev(const char *name, int ethertype, int tap_fd,
     netdev->name = xstrdup(name);
     netdev->ifindex = ifindex;
     netdev->txqlen = txqlen;
+    netdev->hwaddr_family = hwaddr_family;
     netdev->netdev_fd = netdev_fd;
     netdev->tap_fd = tap_fd < 0 ? netdev_fd : tap_fd;
     memcpy(netdev->etheraddr, etheraddr, sizeof etheraddr);
@@ -628,6 +631,26 @@ netdev_send_wait(struct netdev *netdev)
         /* TAP device always accepts packets.*/
         poll_immediate_wake();
     }
+}
+
+/* Attempts to set 'netdev''s MAC address to 'mac'.  Returns 0 if successful,
+ * otherwise a positive errno value. */
+int
+netdev_set_etheraddr(struct netdev *netdev, const uint8_t mac[ETH_ADDR_LEN])
+{
+    struct ifreq ifr;
+
+    memset(&ifr, 0, sizeof ifr);
+    strncpy(ifr.ifr_name, netdev->name, sizeof ifr.ifr_name);
+    ifr.ifr_hwaddr.sa_family = netdev->hwaddr_family;
+    memcpy(ifr.ifr_hwaddr.sa_data, mac, ETH_ADDR_LEN);
+    if (ioctl(netdev->netdev_fd, SIOCSIFHWADDR, &ifr) < 0) {
+        VLOG_ERR("ioctl(SIOCSIFHWADDR) on %s device failed: %s",
+                 netdev->name, strerror(errno));
+        return errno;
+    }
+    memcpy(netdev->etheraddr, mac, ETH_ADDR_LEN);
+    return 0;
 }
 
 /* Returns a pointer to 'netdev''s MAC address.  The caller must not modify or
