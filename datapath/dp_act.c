@@ -16,7 +16,7 @@
 #include <net/checksum.h>
 #include "forward.h"
 #include "dp_act.h"
-#include "nicira-ext.h"
+#include "openflow/nicira-ext.h"
 #include "nx_act.h"
 
 

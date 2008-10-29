@@ -31,8 +31,8 @@
  * derivatives without specific, written prior permission.
  */
 
-#ifndef OPENFLOW_NETLINK_H
-#define OPENFLOW_NETLINK_H 1
+#ifndef OPENFLOW_OPENFLOW_NETLINK_H
+#define OPENFLOW_OPENFLOW_NETLINK_H 1
 
 #define DP_GENL_FAMILY_NAME "OpenFlow"
 
@@ -62,4 +62,4 @@ enum dp_genl_command {
 	DP_GENL_C_MAX = __DP_GENL_C_MAX - 1
 };
 
-#endif /* openflow-netlink.h */
+#endif /* openflow/openflow-netlink.h */

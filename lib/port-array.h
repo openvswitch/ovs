@@ -35,7 +35,7 @@
 #define PORT_ARRAY_H 1
 
 #include <assert.h>
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "util.h"
 
 static inline uint16_t

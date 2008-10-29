@@ -10,7 +10,7 @@
 #include <linux/skbuff.h>
 #include <linux/if_ether.h>
 
-#include "openflow.h"
+#include "openflow/openflow.h"
 
 struct sk_buff;
 struct ofp_flow_mod;

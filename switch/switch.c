@@ -44,7 +44,7 @@
 #include "daemon.h"
 #include "datapath.h"
 #include "fault.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "queue.h"
 #include "util.h"

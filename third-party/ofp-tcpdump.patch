@@ -78,7 +78,7 @@ diff -rNu tcpdump/print-openflow.c tcpdump/print-openflow.c
 +#include <stdlib.h>
 +
 +#include "interface.h"
-+#include "../../include/openflow.h"
++#include "../../include/openflow/openflow.h"
 +#include "../../include/ofp-print.h"
 +
 +void

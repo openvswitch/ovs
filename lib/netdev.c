@@ -61,7 +61,7 @@
 #include "fatal-signal.h"
 #include "list.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "socket-util.h"

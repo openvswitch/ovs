@@ -44,7 +44,7 @@
 #include "mac-learning.h"
 #include "ofpbuf.h"
 #include "ofp-print.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "queue.h"
 #include "rconn.h"

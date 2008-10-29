@@ -4,7 +4,7 @@
  */
 
 /* Functions for Nicira-extended actions. */
-#include "nicira-ext.h"
+#include "openflow/nicira-ext.h"
 #include "dp_act.h"
 #include "nx_act.h"
 #include "nx_act_snat.h"

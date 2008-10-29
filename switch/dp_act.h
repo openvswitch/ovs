@@ -34,7 +34,7 @@
 #ifndef DP_ACT_H
 #define DP_ACT_H 1
 
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "switch-flow.h"
 #include "datapath.h"
 

@@ -32,7 +32,7 @@
 #include <linux/rculist.h>
 #include <linux/workqueue.h>
 
-#include "openflow-netlink.h"
+#include "openflow/openflow-netlink.h"
 #include "datapath.h"
 #include "nx_act_snat.h"
 #include "table.h"

@@ -38,7 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "packets.h"
 #include "timeval.h"
 

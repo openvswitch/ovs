@@ -44,7 +44,7 @@
 #include "flow.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "random.h"
 #include "util.h"

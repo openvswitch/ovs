@@ -6,7 +6,7 @@
 #include <linux/skbuff.h>
 #include <linux/rcupdate.h>
 
-#include "nicira-ext.h"
+#include "openflow/nicira-ext.h"
 #include "datapath.h"
 
 /* Cache of IP->MAC mappings on the side hidden by the SNAT */

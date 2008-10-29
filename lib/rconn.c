@@ -39,7 +39,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "sat-math.h"
 #include "timeval.h"

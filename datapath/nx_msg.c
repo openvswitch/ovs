@@ -5,7 +5,7 @@
 
 #include "chain.h"
 #include "datapath.h"
-#include "nicira-ext.h"
+#include "openflow/nicira-ext.h"
 #include "nx_act_snat.h"
 #include "nx_msg.h"
 

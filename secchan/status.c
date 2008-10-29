@@ -38,9 +38,9 @@
 #include <errno.h>
 #include <unistd.h>
 #include "dynamic-string.h"
-#include "nicira-ext.h"
+#include "openflow/nicira-ext.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "rconn.h"
 #include "timeval.h"
 #include "vconn.h"

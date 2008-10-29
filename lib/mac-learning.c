@@ -40,7 +40,7 @@
 
 #include "hash.h"
 #include "list.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "timeval.h"
 #include "util.h"
 

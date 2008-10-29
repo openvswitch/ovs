@@ -44,7 +44,7 @@
 #include "list.h"
 #include "netdev.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"

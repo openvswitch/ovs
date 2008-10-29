@@ -35,7 +35,7 @@
 #define SWITCH_FLOW_H 1
 
 #include <time.h>
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "flow.h"
 #include "list.h"
 

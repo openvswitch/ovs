@@ -36,7 +36,7 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "queue.h"
 #include "rconn.h"

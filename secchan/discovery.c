@@ -39,7 +39,7 @@
 #include "dhcp-client.h"
 #include "dhcp.h"
 #include "netdev.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "packets.h"
 #include "port-watcher.h"
 #include "secchan.h"

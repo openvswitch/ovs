@@ -47,8 +47,8 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "ofpbuf.h"
-#include "openflow.h"
-#include "nicira-ext.h"
+#include "openflow/openflow.h"
+#include "openflow/nicira-ext.h"
 #include "packets.h"
 #include "util.h"
 

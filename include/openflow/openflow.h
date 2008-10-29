@@ -33,8 +33,8 @@
 
 /* OpenFlow: protocol between controller and datapath. */
 
-#ifndef OPENFLOW_H
-#define OPENFLOW_H 1
+#ifndef OPENFLOW_OPENFLOW_H
+#define OPENFLOW_OPENFLOW_H 1
 
 #ifdef __KERNEL__
 #include <linux/types.h>
@@ -764,4 +764,4 @@ struct ofp_vendor_header {
 };
 OFP_ASSERT(sizeof(struct ofp_vendor_header) == 12);
 
-#endif /* openflow.h */
+#endif /* openflow/openflow.h */

@@ -32,7 +32,7 @@
  */
 
 /* Functions for Nicira-extended actions. */
-#include "nicira-ext.h"
+#include "openflow/nicira-ext.h"
 #include "nx_act.h"
 
 uint16_t

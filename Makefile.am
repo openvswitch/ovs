@@ -14,6 +14,7 @@ endif
 
 AM_CPPFLAGS = $(SSL_CFLAGS)
 AM_CPPFLAGS += -I $(top_srcdir)/include
+AM_CPPFLAGS += -I $(top_srcdir)/lib
 if HAVE_EXT
 AM_CPPFLAGS += -I $(top_srcdir)/ext/include
 endif

@@ -41,7 +41,7 @@
 #include "mac-learning.h"
 #include "netdev.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "packets.h"
 #include "port-watcher.h"
 #include "rconn.h"

@@ -47,16 +47,16 @@
 #ifdef HAVE_NETLINK
 #include "netdev.h"
 #include "netlink.h"
-#include "openflow-netlink.h"
+#include "openflow/openflow-netlink.h"
 #endif
 
 #include "command-line.h"
 #include "compiler.h"
 #include "dpif.h"
-#include "nicira-ext.h"
+#include "openflow/nicira-ext.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "packets.h"
 #include "random.h"
 #include "socket-util.h"

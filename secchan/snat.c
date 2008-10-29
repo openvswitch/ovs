@@ -36,9 +36,9 @@
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <stdlib.h>
-#include "nicira-ext.h"
+#include "openflow/nicira-ext.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "port-watcher.h"
 
 #define THIS_MODULE VLM_snat

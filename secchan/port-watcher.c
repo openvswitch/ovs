@@ -39,7 +39,7 @@
 #include <stdlib.h>
 #include "dynamic-string.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "port-array.h"
 #include "rconn.h"

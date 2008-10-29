@@ -12,7 +12,7 @@
 #include <linux/types.h>
 #include "forward.h"
 #include "datapath.h"
-#include "nicira-ext.h"
+#include "openflow/nicira-ext.h"
 #include "dp_act.h"
 #include "nx_msg.h"
 #include "chain.h"

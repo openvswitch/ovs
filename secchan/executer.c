@@ -45,9 +45,9 @@
 #include <unistd.h>
 #include "dynamic-string.h"
 #include "fatal-signal.h"
-#include "nicira-ext.h"
+#include "openflow/nicira-ext.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "rconn.h"
 #include "secchan.h"

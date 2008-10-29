@@ -9,7 +9,7 @@
 #include <linux/netdevice.h>
 #include <linux/workqueue.h>
 #include <linux/skbuff.h>
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "flow.h"
 
 

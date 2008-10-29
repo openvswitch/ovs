@@ -3,10 +3,10 @@
  * Copyright (c) 2008 Nicira Networks
  */
 
-#ifndef NICIRA_EXT_H
-#define NICIRA_EXT_H 1
+#ifndef OPENFLOW_NICIRA_EXT_H
+#define OPENFLOW_NICIRA_EXT_H 1
 
-#include "openflow.h"
+#include "openflow/openflow.h"
 
 /* The following vendor extensions, proposed by Nicira Networks, are not yet
  * ready for standardization (and may never be), so they are not included in
@@ -136,4 +136,4 @@ struct nx_command_reply {
 };
 OFP_ASSERT(sizeof(struct nx_command_reply) == 20);
 
-#endif /* nicira-ext.h */
+#endif /* openflow/nicira-ext.h */

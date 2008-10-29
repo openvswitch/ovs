@@ -38,7 +38,7 @@
 #include <string.h>
 #include "hash.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "packets.h"
 
 #include "vlog.h"

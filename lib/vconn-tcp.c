@@ -44,7 +44,7 @@
 #include "packets.h"
 #include "socket-util.h"
 #include "util.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "vconn-provider.h"
 #include "vconn-stream.h"
 

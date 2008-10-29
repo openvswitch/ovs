@@ -20,7 +20,7 @@
 #include <linux/rcupdate.h>
 #include <net/ip.h>
 
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "compat.h"
 #include "snap.h"
 

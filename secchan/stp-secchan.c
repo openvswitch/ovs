@@ -38,7 +38,7 @@
 #include "flow.h"
 #include "secchan.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "port-watcher.h"
 #include "rconn.h"

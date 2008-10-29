@@ -41,7 +41,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "util.h"

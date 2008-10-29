@@ -37,7 +37,7 @@
 #include "csum.h"
 #include "packets.h"
 #include "dp_act.h"
-#include "nicira-ext.h"
+#include "openflow/nicira-ext.h"
 #include "nx_act.h"
 
 

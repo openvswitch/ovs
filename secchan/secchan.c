@@ -52,7 +52,7 @@
 #include "in-band.h"
 #include "list.h"
 #include "ofpbuf.h"
-#include "openflow.h"
+#include "openflow/openflow.h"
 #include "packets.h"
 #include "port-watcher.h"
 #include "poll-loop.h"
