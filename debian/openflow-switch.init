@@ -239,6 +239,10 @@ case "$1" in
             COMMAND_OPT="--commands=$COMMANDS"
         fi
 
+        if test "$MODE" = out-of-band; then
+            DAEMON_OPTS="$DAEMON_OPTS --out-of-band"
+        fi
+
 	echo -n "Starting $DESC: "
 	start-stop-daemon --start --quiet --pidfile $PIDFILE \
 	    --exec $DAEMON -- nl:0 $CONTROLLER --detach --pidfile=$PIDFILE \
