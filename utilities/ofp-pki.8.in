@@ -166,7 +166,7 @@ the message ``\fINAME\fR\fB\-cert.pem\fR: OK''; otherwise, it prints an
 error message.
 
 .TP
-\fBofp\-pki\fR \fBfingerprint\fR \fIFILE\fR
+\fBfingerprint\fR \fIFILE\fR
 Prints the fingerprint for \fIFILE\fR.  If \fIFILE\fR is a
 certificate, then this is the SHA\-1 digest of the DER encoded version
 of the certificate; otherwise, it is the SHA\-1 digest of the entire
