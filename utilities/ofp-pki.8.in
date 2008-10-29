@@ -19,6 +19,8 @@ Stand\-alone commands with their arguments:
 \fBofp\-pki\fR \fBverify\fR \fINAME\fR [\fITYPE\fR]
 .br
 \fBofp\-pki\fR \fBfingerprint\fR \fIFILE\fR
+.br
+\fBofp\-pki\fR \self-sign\fR \fINAME\fR
 .sp
 The following additional commands manage an online PKI:
 .br
@@ -171,6 +173,15 @@ Prints the fingerprint for \fIFILE\fR.  If \fIFILE\fR is a
 certificate, then this is the SHA\-1 digest of the DER encoded version
 of the certificate; otherwise, it is the SHA\-1 digest of the entire
 file.
+
+.TP
+\fBself-sign\fR \fINAME\fR
+Signs the certificate request named \fINAME\fB\-req.pem\fR using the
+private key \fINAME\fB-privkey.pem\fR, producing a self-signed
+certificate named \fINAMEfB\-cert.pem\fR.  The input files should have
+been produced with \fBofp\-pki req\fR.
+
+Some controllers accept such self-signed certificates.
 
 .SH "ONLINE COMMANDS"
 

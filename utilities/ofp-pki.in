@@ -45,6 +45,8 @@ The valid stand-alone commands and their arguments are:
   req+sign NAME [TYPE] Combine the above two steps, producing all three files.
   verify NAME [TYPE]   Checks that NAME-cert.pem is a valid TYPE certificate
   fingerprint FILE     Prints the fingerprint for FILE
+  self-sign NAME       Sign NAME-req.pem with NAME-privkey.pem,
+                       producing self-signed certificate NAME-cert.pem
 
 The following additional commands manage an online PKI:
   ls [PREFIX] [TYPE]   Lists incoming requests of the given TYPE, optionally 
@@ -493,6 +495,14 @@ elif test "$command" = fingerprint; then
     one_arg
 
     fingerprint "$arg1"
+elif test "$command" = self-sign; then
+    one_arg
+    must_exist "$arg1-req.pem"
+    must_exist "$arg1-privkey.pem"
+    must_not_exist "$arg1-cert.pem"
+
+    openssl x509 -in "$arg1-req.pem" -out "$arg1-cert.pem" \
+        -signkey "$arg1-privkey.pem" -req -text
 elif test "$command" = ls; then
     check_type "$arg2"
 
