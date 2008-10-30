@@ -39,11 +39,23 @@ Description: OpenFlow switch implementations
 
 Package: openflow-pki
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, openflow-common, apache2
+Depends: ${shlibs:Depends}, ${misc:Depends}, openflow-common
 Description: OpenFlow public key infrastructure
  openflow-pki provides PKI (public key infrastructure) support for
  OpenFlow switches and controllers, reducing the risk of
  man-in-the-middle attacks on the OpenFlow network infrastructure.
+ .
+ OpenFlow is a protocol for flow-based control over network switching.
+
+Package: openflow-pki-server
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, openflow-pki, apache2
+Description: OpenFlow public key infrastructure (HTTP server support)
+ openflow-pki-server provides HTTP access to the OpenFlow PKI (public
+ key infrastructure) maintained on the local machine by the
+ openflow-pki package.  This HTTP access is needed for secure and
+ convenient OpenFlow switch setup using the ofp-switch-setup program
+ in the openflow-switch package.
  .
  OpenFlow is a protocol for flow-based control over network switching.
 

@@ -104,7 +104,7 @@ install-indep: build-indep
 	cp _debian/openflow.tar.gz $(MODDIR)
 	cd debian; cp changelog control compat *.modules.in rules $(MODDIR)/debian
 	cd debian/openflow-datapath-source/usr/src && tar -c modules | bzip2 -9 > openflow-datapath.tar.bz2 && rm -rf modules
-	install -m644 debian/openflow-pki.apache2 debian/openflow-pki/etc/apache2/sites-available/openflow-pki
+	install -m644 debian/openflow-pki-server.apache2 debian/openflow-pki-server/etc/apache2/sites-available/openflow-pki
 	dh_install -i
 
 install-arch: build-arch

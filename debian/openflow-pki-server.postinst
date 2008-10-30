@@ -19,9 +19,12 @@ set -e
 
 case "$1" in
     configure)
-        # Create certificate authorities.
-        if test ! -d /usr/share/openflow/pki; then
-            ofp-pki init
+        # Enable site under Apache.
+        a2ensite openflow-pki >/dev/null
+        if command -v invoke-rc.d >/dev/null 2>&1; then
+                invoke-rc.d apache2 force-reload || :
+        else
+                [ -x /etc/init.d/apache2 ] && /etc/init.d/apache2 force-reload || :
         fi
         ;;
 
