@@ -95,14 +95,11 @@ binary-modules: prep-deb-files
 	dh_builddeb --destdir=$(DEB_DESTDIR)
 
 install: install-indep install-arch
-install-indep: MODDIR = $(CURDIR)/debian/openflow-datapath-source/usr/src/modules/openflow-datapath
 install-indep: build-indep
 	dh_testdir
 	dh_testroot
 	dh_clean -k -i 
 	dh_installdirs -i
-	cp _debian/openflow.tar.gz $(MODDIR)
-	cd debian; cp changelog control compat *.modules.in rules $(MODDIR)/debian
 	cd debian/openflow-datapath-source/usr/src && tar -c modules | bzip2 -9 > openflow-datapath.tar.bz2 && rm -rf modules
 	install -m644 debian/openflow-pki-server.apache2 debian/openflow-pki-server/etc/apache2/sites-available/openflow-pki
 	dh_install -i

@@ -1,0 +1,6 @@
+debian/changelog usr/src/modules/openflow-datapath
+debian/control usr/src/modules/openflow-datapath
+debian/compat usr/src/modules/openflow-datapath
+debian/*.modules.in usr/src/modules/openflow-datapath
+debian/rules usr/src/modules/openflow-datapath
+_debian/openflow.tar.gz usr/src/modules/openflow-datapath
