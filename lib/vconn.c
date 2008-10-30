@@ -598,7 +598,9 @@ vconn_transact(struct vconn *vconn, struct ofpbuf *request,
 
     *replyp = NULL;
     error = vconn_send_block(vconn, request);
-    ofpbuf_delete(request);
+    if (error) {
+        ofpbuf_delete(request);
+    }
     return error ? error : vconn_recv_xid(vconn, send_xid, replyp);
 }
 
