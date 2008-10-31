@@ -5,7 +5,7 @@ command=
 prev=
 force=no
 batch=no
-log=ofp-pki.log
+log='@LOGDIR@/ofp-pki.log'
 keytype=rsa
 bits=2048
 for option; do

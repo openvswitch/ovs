@@ -46,7 +46,8 @@ noinst_SCRIPTS =
 EXTRA_DIST += README.hwtables
 
 do_subst = ($(srcdir)/subst VLOG_OPTIONS $(srcdir)/lib/vlog.man | \
-	    sed -e 's,[@]PKIDIR[@],$(PKIDIR),g' \
+	    sed -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
+		-e 's,[@]PKIDIR[@],$(PKIDIR),g' \
                 -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
                 -e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
                 -e 's,[@]PERL[@],$(PERL),g')

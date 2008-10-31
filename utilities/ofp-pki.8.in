@@ -310,8 +310,8 @@ directories.  This option overrides this behavior.
 .TP
 \fB\-l\fR \fIfile\fR | \fB\-\^\-log=\fIfile\fR
 Sets the log file to \fIfile\fR.  If \fIfile\fR starts with \fB/\fR,
-it is taken as an absolute path; otherwise it is relative to the PKI
-hierarchy.  Default: \fBofp\-pki.log\fR.
+it is taken as an absolute path; otherwise it is relative to @LOGDIR@.
+Default: \fBofp\-pki.log\fR.
 
 .TP
 \fB\-h\fR | \fB\-\^\-help\fR
