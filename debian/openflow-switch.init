@@ -238,7 +238,7 @@ case "$1" in
 
         COMMAND_OPT=
         if test -n "$COMMANDS"; then
-            COMMAND_OPT="--commands=$COMMANDS"
+            COMMAND_OPT="--command-acl=$COMMANDS"
         fi
 
         if test "$MODE" = out-of-band; then
