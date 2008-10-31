@@ -25,6 +25,8 @@ MA_DIR ?= /usr/share/modass
 # load default rules
 -include $(MA_DIR)/include/common-rules.make
 
+-include debian/rules.ext
+
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
@@ -34,6 +36,7 @@ configure-stamp:
 		test -e Makefile || \
 		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
 			--enable-snat)
+	$(ext_configure)
 	touch configure-stamp
 
 #Architecture 
@@ -42,11 +45,13 @@ build: build-arch build-indep
 build-arch: build-arch-stamp
 build-arch-stamp: configure-stamp 
 	$(MAKE) -C _debian
+	$(ext_build_arch)
 	touch $@
 
 build-indep: build-indep-stamp
 build-indep-stamp: configure-stamp 
 	$(MAKE) -C _debian dist distdir=openflow
+	$(ext_build_indep)
 	touch $@
 
 clean:
@@ -55,6 +60,7 @@ clean:
 	rm -f build-arch-stamp build-indep-stamp configure-stamp
 	rm -rf _debian
 	[ ! -f Makefile ] || $(MAKE) distclean
+	$(ext_clean)
 	dh_clean 
 	debconf-updatepo
 
@@ -103,6 +109,7 @@ install-indep: build-indep
 	cd debian/openflow-datapath-source/usr/src && tar -c modules | bzip2 -9 > openflow-datapath.tar.bz2 && rm -rf modules
 	install -m644 debian/openflow-pki-server.apache2 debian/openflow-pki-server/etc/apache2/sites-available/openflow-pki
 	dh_install -i
+	$(ext_install_indep)
 
 install-arch: build-arch
 	dh_testdir
@@ -112,6 +119,7 @@ install-arch: build-arch
 	$(MAKE) -C _debian DESTDIR=$(CURDIR)/debian/openflow install
 	cp debian/openflow-switch-config.overrides debian/openflow-switch-config/usr/share/lintian/overrides/openflow-switch-config
 	dh_install -s
+	$(ext_install_arch)
 
 # Must not depend on anything. This is to be called by
 # binary-arch/binary-indep
