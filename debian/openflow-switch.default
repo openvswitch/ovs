@@ -4,8 +4,8 @@
 # uncomment them.  Afterward, the secure channel will come up
 # automatically at boot time.  It can be started immediately with
 #       /etc/init.d/openflow-switch start
-# Alternatively, use the ofp-switch-setup program to do everything
-# automatically.
+# Alternatively, use the ofp-switch-setup program (from the
+# openflow-switch-config package) to do everything automatically.
 
 # NETDEVS: Which network devices should the OpenFlow switch include?
 #

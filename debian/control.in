@@ -29,11 +29,19 @@ Description: OpenFlow common components
 Package: openflow-switch
 Architecture: any
 Suggests: openflow-datapath-module
-Depends: ${shlibs:Depends}, ${misc:Depends}, openflow-common, libwww-perl, libdigest-sha1-perl, dhcp3-client
+Depends: ${shlibs:Depends}, ${misc:Depends}, openflow-common, dhcp3-client
 Description: OpenFlow switch implementations
  openflow-switch provides the userspace components and utilities for
- the OpenFlow kernel-based switch.  It also includes a userspace-only
- implementation of an OpenFlow switch.
+ the OpenFlow kernel-based switch.  
+ .
+ OpenFlow is a protocol for flow-based control over network switching.
+
+Package: openflow-switch-config
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, openflow-switch, libwww-perl, libdigest-sha1-perl
+Description: OpenFlow switch implementations
+ openflow-switch-config provides a utility for interactively configuring
+ the OpenFlow switch provided in the openflow-switch package.
  .
  OpenFlow is a protocol for flow-based control over network switching.
 

@@ -12,6 +12,7 @@
 /openflow-pki
 /openflow-pki-server
 /openflow-switch
+/openflow-switch-config
 /openflow-switch.copyright
 /openflow-switchmon
 /openflow-switchmon.copyright
@@ -19,3 +20,4 @@
 /openflow-switchmon.dirs
 /openflow-switchmon.init
 /openflow-switchmon.install
+/rules.ext

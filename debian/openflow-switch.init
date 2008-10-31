@@ -142,7 +142,7 @@ configure_ssl() {
         if test ! -e "$CACERT" && test "$CACERT_MODE" != bootstrap; then
             echo "$CACERT: CA certificate missing (and CA certificate bootstrapping not enabled)" >&2
         fi
-        echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
+        echo "Run ofp-switch-setup (in the openflow-switch-config package) or edit /etc/default/openflow-switch to configure" >&2
         if test "$MODE" = discovery; then
             echo "You may also delete or rename $PRIVKEY to disable SSL requirement" >&2
         fi
@@ -161,7 +161,7 @@ case "$1" in
     start)
         if test -z "$NETDEVS"; then
             echo "$default: No network devices configured, switch disabled" >&2
-            echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
+            echo "Run ofp-switch-setup (in the openflow-switch-config package) or edit /etc/default/openflow-switch to configure" >&2
             exit 0
         fi
         if test "$MODE" = discovery; then
@@ -169,12 +169,12 @@ case "$1" in
         elif test "$MODE" = in-band || test "$MODE" = out-of-band; then
             if test -z "$CONTROLLER"; then
                 echo "$default: No controller configured and not configured for discovery, switch disabled" >&2
-                echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
+                echo "Run ofp-switch-setup (in the openflow-switch-config package) or edit /etc/default/openflow-switch to configure" >&2
                 exit 0
             fi
         else
             echo "$default: MODE must set to 'discovery', 'in-band', or 'out-of-band'" >&2
-            echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
+            echo "Run ofp-switch-setup (in the openflow-switch-config package) or edit /etc/default/openflow-switch to configure" >&2
             exit 1
         fi
         : ${PRIVKEY:=/etc/openflow-switch/of0-privkey.pem}
@@ -194,7 +194,7 @@ case "$1" in
                 ;;
             *)
                 echo "$default: CONTROLLER must be in the form 'ssl:HOST[:PORT]' or 'tcp:HOST[:PORT]' when not in discovery mode" >&2
-                echo "Run ofp-switch-setup or edit /etc/default/openflow-switch to configure" >&2
+                echo "Run ofp-switch-setup (in the openflow-switch-config package) or edit /etc/default/openflow-switch to configure" >&2
                 exit 1
         esac
 
