@@ -2,7 +2,7 @@ Source: openflow
 Section: net
 Priority: extra
 Maintainer: OpenFlow Team <openflow-dev@lists.stanford.edu>
-Build-Depends: debhelper (>= 5), autoconf (>= 2.60), automake1.10, libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl
+Build-Depends: debhelper (>= 5), autoconf (>= 2.60), automake1.10, libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl, libncurses5-dev
 Standards-Version: 3.7.3
 
 Package: openflow-datapath-source
