@@ -225,7 +225,17 @@ case "$1" in
             if test "$SWITCH_IP" = dhcp; then
                 must_succeed "Temporarily disabling of0" ifconfig of0 down
             else
-                must_succeed "Configuring of0 as $SWITCH_IP" ifconfig of0 $SWITCH_IP
+                COMMAND="ifconfig of0 $SWITCH_IP"
+                if test -n "$SWITCH_NETMASK"; then
+                    COMMAND="$COMMAND netmask $SWITCH_NETMASK"
+                fi
+                must_succeed "Configuring of0: $COMMAND" $COMMAND
+                if test -n "$SWITCH_GATEWAY"; then
+                    # This can fail because the route already exists,
+                    # so we don't insist that it succeed.
+                    COMMAND="route add default gw $SWITCH_GATEWAY"
+                    check_op "Adding default route: $COMMAND" $COMMAND
+                fi
             fi
         else
             must_succeed "Disabling of0" ifconfig of0 down

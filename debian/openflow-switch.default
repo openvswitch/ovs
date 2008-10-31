@@ -48,7 +48,8 @@ MODE=discovery
 # configured statically or dynamically:
 # 
 # * For static configuration, specify the switch's IP address as a
-#   string.
+#   string.  In this case you may also set SWITCH_NETMASK and
+#   SWITCH_GATEWAY appropriately.
 # 
 # * For dynamic configuration with DHCP (the most common case),
 #   specify "dhcp".  Configuration with DHCP will only work reliably
@@ -57,6 +58,8 @@ MODE=discovery
 #
 # This setting has no effect unless MODE is set to 'in-band'.
 SWITCH_IP=dhcp
+#SWITCH_NETMASK=255.255.255.0
+#SWITCH_GATEWAY=192.168.1.1
 
 # CONTROLLER: Location of controller.
 # One of the following formats:
