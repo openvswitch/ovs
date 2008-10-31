@@ -106,9 +106,9 @@ install-indep: build-indep
 	dh_testroot
 	dh_clean -k -i 
 	dh_installdirs -i
+	dh_install -i
 	cd debian/openflow-datapath-source/usr/src && tar -c modules | bzip2 -9 > openflow-datapath.tar.bz2 && rm -rf modules
 	install -m644 debian/openflow-pki-server.apache2 debian/openflow-pki-server/etc/apache2/sites-available/openflow-pki
-	dh_install -i
 	$(ext_install_indep)
 
 install-arch: build-arch
