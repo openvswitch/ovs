@@ -10,6 +10,7 @@
 /openflow-controller
 /openflow-datapath-source
 /openflow-pki
+/openflow-pki-server
 /openflow-switch
 /openflow-switch.copyright
 /openflow-switchmon
