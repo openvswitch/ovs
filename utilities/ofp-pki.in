@@ -498,7 +498,7 @@ elif test "$command" = self-sign; then
     must_not_exist "$arg1-cert.pem"
 
     openssl x509 -in "$arg1-req.pem" -out "$arg1-cert.pem" \
-        -signkey "$arg1-privkey.pem" -req -text
+        -signkey "$arg1-privkey.pem" -req -text 2>&3
 elif test "$command" = ls; then
     check_type "$arg2"
 
