@@ -258,8 +258,8 @@ case "$1" in
 	echo -n "Starting $DESC: "
 	start-stop-daemon --start --quiet --pidfile $PIDFILE \
 	    --exec $DAEMON -- nl:0 $CONTROLLER --detach --pidfile=$PIDFILE \
-            --verbose=ANY:console:emer $DAEMON_OPTS $MGMT_OPTS $SSL_OPTS \
-            "$COMMAND_OPT"
+            --verbose=ANY:console:emer --verbose=ANY:syslog:err --log-file \
+            $DAEMON_OPTS $MGMT_OPTS $SSL_OPTS
         if running; then
             echo "$NAME."
         else
