@@ -1,0 +1,11 @@
+/var/log/openflow/secchan.log {
+        daily
+        compress
+        create 640 root adm
+        delaycompress
+        missingok
+        rotate 30
+        postrotate
+                vlogconf --reopen /var/run/secchan.pid
+        endscript
+}

@@ -131,7 +131,7 @@ binary-common:
 	dh_installdocs
 	dh_installexamples
 	dh_installdebconf
-#	dh_installlogrotate
+	dh_installlogrotate
 	dh_installinit
 	dh_installman
 	dh_link
