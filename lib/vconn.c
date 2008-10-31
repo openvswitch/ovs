@@ -468,11 +468,11 @@ do_recv(struct vconn *vconn, struct ofpbuf **msgp)
             && oh->type != OFPT_VENDOR)
         {
             if (vconn->version < 0) {
-                VLOG_ERR_RL(&rl, "%s: received OpenFlow version %02"PRIx8" "
+                VLOG_ERR_RL(&rl, "%s: received OpenFlow message type %"PRIu8" "
                             "before version negotiation complete",
-                            vconn->name, oh->version);
+                            vconn->name, oh->type);
             } else {
-                VLOG_ERR_RL(&rl, "%s: received OpenFlow version %02"PRIx8" "
+                VLOG_ERR_RL(&rl, "%s: received OpenFlow version 0x%02"PRIx8" "
                             "!= expected %02x",
                             vconn->name, oh->version, vconn->version);
             }
