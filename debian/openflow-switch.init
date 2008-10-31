@@ -199,10 +199,12 @@ case "$1" in
         esac
 
         echo -n "Loading openflow_mod: "
-        if modprobe openflow_mod; then
+        if grep -q '^openflow_mod$' /proc/modules; then
+            echo "already loaded, nothing to do."
+        elif modprobe openflow_mod; then
             echo "success."
         else
-            echo " ERROR."
+            echo "ERROR."
             echo "openflow_mod has probably not been built for this kernel."
             if ! test -d /usr/share/doc/openflow-datapath-source; then
                 echo "Install the openflow-datapath-source package, then read"
