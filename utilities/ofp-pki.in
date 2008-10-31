@@ -155,6 +155,10 @@ fi
 if test -z "$dsaparam"; then
     dsaparam=$pkidir/dsaparam.pem
 fi
+case $log in
+    /*) ;;
+    *) $log="$PWD/$log" ;;
+esac
 
 if test "$command" = "init"; then
     if test -e "$pkidir" && test "$force" != "yes"; then
@@ -456,15 +460,7 @@ glob() {
     fi
 }
 
-case $log in
-    /*)
-        exec 3>>$log || true
-        ;;
-    *)
-        exec 3>>$pkidir/$log || true
-        ;;
-esac
-
+exec 3>>$log || true
 if test "$command" = req; then
     one_arg
 
