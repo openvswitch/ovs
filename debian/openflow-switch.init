@@ -259,7 +259,7 @@ case "$1" in
 	start-stop-daemon --start --quiet --pidfile $PIDFILE \
 	    --exec $DAEMON -- nl:0 $CONTROLLER --detach --pidfile=$PIDFILE \
             --verbose=ANY:console:emer --verbose=ANY:syslog:err --log-file \
-            $DAEMON_OPTS $MGMT_OPTS $SSL_OPTS
+            $DAEMON_OPTS $MGMT_OPTS $SSL_OPTS "$COMMAND_OPT"
         if running; then
             echo "$NAME."
         else
