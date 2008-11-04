@@ -4,6 +4,7 @@ srcdir = @abs_srcdir@
 top_srcdir = @abs_top_srcdir@
 KSRC = @KSRC24@
 VERSION = @VERSION@
+BUILDNR = @BUILDNR@
 
 # File Lists
 include $(srcdir)/../Modules.mk
@@ -15,9 +16,17 @@ include @HW_TABLES@
 # mechanism the kernel provides to add cflags is the EXTRA_CFLAGS variable,
 # which gets inserted into the build command after the internal kernel CFLAGS.
 # Since our stuff needs to come first, we override the variable.
-OF_CFLAGS = -I$(srcdir)/compat-2.4/include -I$(srcdir)/compat-2.4/include-$(ARCH) \
-            -I$(srcdir)/compat-2.4 -I$(srcdir)/.. -I$(srcdir)/../../include \
-						 -I$(builddir)/.. $(CFLAGS) -DVERSION=\"$(VERSION)\"
+OF_CFLAGS = -I$(srcdir)/compat-2.4/include \
+	    -I$(srcdir)/compat-2.4/include-$(ARCH) \
+            -I$(srcdir)/compat-2.4 -I$(srcdir)/.. \
+            -I$(srcdir)/../../include \
+	    -I$(builddir)/.. $(CFLAGS) \
+            -DVERSION=\"$(VERSION)\"
+ifeq '$(BUILDNR)' '0'
+OF_CFLAGS += -DBUILDNR=\"\"
+else
+OF_CFLAGS += -DBUILDNR=\"+build$(BUILDNR)\"
+endif
 override CFLAGS := $(OF_CFLAGS)
 
 # Multipart objects

@@ -1,3 +1,5 @@
+# -*- autoconf -*-
+
 # Copyright (c) 2008 The Board of Trustees of The Leland Stanford
 # Junior University
 #
@@ -30,51 +32,17 @@
 # advertising or publicity pertaining to the Software or any
 # derivatives without specific, written prior permission.
 
-AC_PREREQ(2.59)
-AC_INIT(openflow, 0.9.0~b1, info@openflowswitch.org)
-NX_BUILDNR
-AC_CONFIG_SRCDIR([README.hwtables])
-AC_CONFIG_MACRO_DIR([m4])
-AC_CONFIG_AUX_DIR([build-aux])
-AC_CONFIG_HEADERS([config.h])
-AM_INIT_AUTOMAKE
-
-AC_PROG_CC
-AM_PROG_CC_C_O
-AC_PROG_CPP
-AC_PROG_RANLIB
-
-AC_ARG_VAR([PERL], [path to Perl interpreter])
-AC_PATH_PROG([PERL], perl, no)
-if test "$PERL" = no; then
-   AC_MSG_ERROR([Perl interpreter not found in $PATH or $PERL.])
-fi
-
-OFP_CHECK_LIBOPENFLOW
-OFP_CHECK_IF_PACKET
-OFP_CHECK_HWTABLES
-
-AC_CHECK_FUNCS([strsignal])
-
-AC_ARG_VAR(KARCH, [Kernel Architecture String])
-AC_SUBST(KARCH)
-OFP_CHECK_LINUX(l26, 2.6, 2.6, KSRC26, L26_ENABLED)
-OFP_CHECK_LINUX(l24, 2.4, 2.4, KSRC24, L24_ENABLED)
-
-OFP_CHECK_DPKG_BUILDPACKAGE
-
-CFLAGS="$CFLAGS -Wall -Wno-sign-compare -Wpointer-arith -Wdeclaration-after-statement"
-
-OFP_ENABLE_EXT
-m4_include([ext.m4])
-
-AC_CONFIG_FILES([Makefile 
-datapath/Makefile 
-datapath/linux-2.6/Kbuild
-datapath/linux-2.6/Makefile
-datapath/linux-2.6/Makefile.main
-datapath/linux-2.4/Kbuild
-datapath/linux-2.4/Makefile
-datapath/linux-2.4/Makefile.main])
-
-AC_OUTPUT
+dnl NX_BUILDNR([NUMBER])
+dnl
+dnl If NUMBER is empty, substitutes BUILDNR with 0 and sets C
+dnl preprocessor variable BUILDNR to "".
+dnl
+dnl If NUMBER is nonempty, substitutes a Makefile variable BUILDNR
+dnl with NUMBER, and sets a C preprocessor variable BUILDNR to
+dnl "+buildNUMBER".
+AC_DEFUN([NX_BUILDNR],
+  [AC_SUBST([BUILDNR], 
+            [m4_if([$1], [], [0], [$1])])
+   AC_DEFINE([BUILDNR],
+             [m4_if([$1], [], [""], ["+build$1"])], 
+             [Official build number.])])

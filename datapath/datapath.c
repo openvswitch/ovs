@@ -50,7 +50,7 @@
  * is queriable through the switch description stats message. */
 static char mfr_desc[DESC_STR_LEN] = "Nicira Networks, Inc.";
 static char hw_desc[DESC_STR_LEN] = "Reference Linux Kernel Module";
-static char sw_desc[DESC_STR_LEN] = VERSION;
+static char sw_desc[DESC_STR_LEN] = VERSION BUILDNR;
 static char serial_num[SERIAL_NUM_LEN] = "None";
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
@@ -1814,8 +1814,8 @@ static int __init dp_init(void)
 {
 	int err;
 
-	printk("OpenFlow "VERSION", built "__DATE__" "__TIME__", "
-	       "protocol 0x%02x\n", OFP_VERSION);
+	printk("OpenFlow %s, built "__DATE__" "__TIME__", "
+	       "protocol 0x%02x\n", VERSION BUILDNR, OFP_VERSION);
 
 	err = flow_init();
 	if (err)

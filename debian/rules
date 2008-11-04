@@ -98,7 +98,7 @@ binary-modules: prep-deb-files
 	dh_compress
 	dh_fixperms
 	dh_installdeb
-	dh_gencontrol -- -v$(VERSION)
+	dh_gencontrol
 	dh_md5sums
 	dh_builddeb --destdir=$(DEB_DESTDIR)
 

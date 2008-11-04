@@ -365,7 +365,8 @@ parse_options(int argc, char *argv[])
             usage();
 
         case 'V':
-            printf("%s "VERSION" compiled "__DATE__" "__TIME__"\n", argv[0]);
+            printf("%s %s compiled "__DATE__" "__TIME__"\n",
+                   program_name, VERSION BUILDNR);
             exit(EXIT_SUCCESS);
 
         case 'v':

@@ -149,7 +149,7 @@ main(int argc, char *argv[])
     die_if_already_running();
     daemonize();
 
-    VLOG_WARN("OpenFlow reference implementation version %s", VERSION);
+    VLOG_WARN("OpenFlow reference implementation version %s", VERSION BUILDNR);
     VLOG_WARN("OpenFlow protocol version 0x%02x", OFP_VERSION);
 
     /* Connect to datapath. */
@@ -706,7 +706,8 @@ parse_options(int argc, char *argv[], struct settings *s)
             usage();
 
         case 'V':
-            printf("%s "VERSION" compiled "__DATE__" "__TIME__"\n", argv[0]);
+            printf("%s %s compiled "__DATE__" "__TIME__"\n",
+                   program_name, VERSION BUILDNR);
             exit(EXIT_SUCCESS);
 
         DAEMON_OPTION_HANDLERS
