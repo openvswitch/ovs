@@ -27,6 +27,8 @@ MA_DIR ?= /usr/share/modass
 
 -include debian/rules.ext
 
+DATAPATH_CONFIGURE_OPTS = --enable-snat
+
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
@@ -35,7 +37,7 @@ configure-stamp:
 	cd _debian && ( \
 		test -e Makefile || \
 		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
-			--enable-snat)
+			$(DATAPATH_CONFIGURE_OPTS))
 	$(ext_configure)
 	touch configure-stamp
 
@@ -87,7 +89,7 @@ binary-modules: prep-deb-files
 	dh_testroot
 	dh_clean -k
 	tar xzf openflow.tar.gz
-	cd openflow && ./configure --with-$(l2x)=$(KSRC)
+	cd openflow && ./configure --with-$(l2x)=$(KSRC) $(DATAPATH_CONFIGURE_OPTS)
 	cd openflow && $(MAKE) -C $(dpdir)
 	install -d -m755 $(DSTDIR)
 	install -m644 openflow/$(dpdir)/*_mod.$(KO)o $(DSTDIR)/
