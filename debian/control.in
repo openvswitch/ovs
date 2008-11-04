@@ -19,7 +19,7 @@ Description: Source code for OpenFlow datapath Linux module
 
 Package: openflow-common
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, openssl
 Description: OpenFlow common components
  openflow-common provides components required by both openflow-switch
  and openflow-controller.
