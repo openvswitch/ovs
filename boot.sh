@@ -1,4 +1,6 @@
-#! /bin/sh -e
+#! /bin/sh
+
+set -e
 
 have_ext=$(if test -e ext/automake.mk; then echo yes; else echo no; fi)
 for opt
