@@ -1,2 +1,3 @@
 #! /bin/sh
+ofp-kill --force --signal=USR1 ofp-switchmon.pid
 reboot
