@@ -205,24 +205,24 @@ executer_remote_packet_cb(struct relay *r, void *e_)
     /* Find the executable. */
     exec_file = xasprintf("%s/%s", e->s->command_dir, argv[0]);
     if (stat(exec_file, &s)) {
+        VLOG_WARN("failed to stat \"%s\": %s", exec_file, strerror(errno));
         send_child_message(r, request->header.xid, NXT_STATUS_ERROR,
                            "command not allowed");
-        VLOG_WARN("failed to stat \"%s\": %s", exec_file, strerror(errno));
         goto done;
     }
     if (!S_ISREG(s.st_mode)) {
+        VLOG_WARN("\"%s\" is not a regular file", exec_file);
         send_child_message(r, request->header.xid, NXT_STATUS_ERROR,
                            "command not allowed");
-        VLOG_WARN("\"%s\" is not a regular file", exec_file);
         goto done;
     }
     argv[0] = exec_file;
 
     /* Arrange to capture output. */
     if (pipe(output_fds)) {
+        VLOG_WARN("pipe failed: %s", strerror(errno));
         send_child_message(r, request->header.xid, NXT_STATUS_ERROR,
                            "internal error (pipe)");
-        VLOG_WARN("pipe failed: %s", strerror(errno));
         goto done;
     }
 
@@ -252,8 +252,8 @@ executer_remote_packet_cb(struct relay *r, void *e_)
         /* Running in parent. */
         struct child *child;
 
-        send_child_status(r, request->header.xid, NXT_STATUS_STARTED, NULL, 0);
         VLOG_WARN("started \"%s\" subprocess", argv[0]);
+        send_child_status(r, request->header.xid, NXT_STATUS_STARTED, NULL, 0);
         child = &e->children[e->n_children++];
         child->name = xstrdup(argv[0]);
         child->pid = pid;
@@ -265,9 +265,9 @@ executer_remote_packet_cb(struct relay *r, void *e_)
         set_nonblocking(output_fds[0]);
         close(output_fds[1]);
     } else {
+        VLOG_WARN("fork failed: %s", strerror(errno));
         send_child_message(r, request->header.xid, NXT_STATUS_ERROR,
                            "internal error (fork)");
-        VLOG_WARN("fork failed: %s", strerror(errno));
         close(output_fds[0]);
         close(output_fds[1]);
     }
