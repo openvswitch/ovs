@@ -38,6 +38,7 @@ bin_SCRIPTS =
 dist_commands_DATA =
 dist_man_MANS =
 dist_pkgdata_SCRIPTS =
+dist_sbin_SCRIPTS =
 man_MANS =
 noinst_HEADERS =
 noinst_LIBRARIES =
