@@ -294,6 +294,7 @@ case "$1" in
             check_op "Removing $netdev from datapath" dpctl delif nl:0 $netdev
         done
         check_op "Deleting datapath" dpctl deldp nl:0
+        check_op "Unloading kernel module" modprobe -r openflow_mod
 	;;
     force-stop)
 	echo -n "Forcefully stopping $DESC: "
