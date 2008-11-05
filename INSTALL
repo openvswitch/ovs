@@ -192,7 +192,7 @@ distribution in the ordinary way using "configure" and "make".
         ext/ezio/ezio-term.
 
       - Switch monitoring UI for small text displays:
-        ext/ezio/ofp-switchmon.
+        ext/ezio/ofp-switchui.
 
    If you passed --with-l26 to configure, "make" will also build the
    following kernel modules:
