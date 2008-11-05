@@ -111,3 +111,10 @@ MGMT_VCONNS="punix:/var/run/secchan.socket"
 
 # DAEMON_OPTS: Additional options to pass to secchan, e.g. "--fail=open"
 DAEMON_OPTS=""
+
+# CORE_LIMIT: Maximum size for core dumps.
+#
+# Leaving this unset will use the system default.  Setting it to 0
+# will disable core dumps.  Setting it to "unlimited" will dump all
+# core files regardless of size.
+#CORE_LIMIT=unlimited

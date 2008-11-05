@@ -45,6 +45,7 @@ unset CACERT_MODE
 unset MGMT_VCONNS
 unset COMMANDS
 unset DAEMON_OPTS
+unset CORE_LIMIT
 default=/etc/default/openflow-switch
 if [ -f $default ] ; then
 	. $default
@@ -253,6 +254,10 @@ case "$1" in
 
         if test "$MODE" = out-of-band; then
             DAEMON_OPTS="$DAEMON_OPTS --out-of-band"
+        fi
+
+        if test -n "$CORE_LIMIT"; then
+            check_ops "Setting core limit to $CORE_LIMIT" ulimit -c "$CORE_LIMIT"
         fi
 
 	echo -n "Starting $DESC: "
