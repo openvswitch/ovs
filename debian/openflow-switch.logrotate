@@ -6,6 +6,6 @@
         missingok
         rotate 30
         postrotate
-                vlogconf --reopen /var/run/secchan.pid
+                vlogconf --target /var/run/secchan.pid --reopen
         endscript
 }
