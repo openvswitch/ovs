@@ -1,0 +1,128 @@
+#! /usr/bin/perl
+
+use POSIX;
+use strict;
+use warnings;
+
+my $default = '/etc/default/openflow-switch';
+
+my (%config) = load_config($default);
+if (@ARGV) {
+    foreach my $arg (@ARGV) {
+        my ($key, $value) = $arg =~ /^([^=]+)=(.*)/
+          or die "bad argument '$arg'\n";
+        if ($value ne '') {
+            $config{$key} = $value;
+        } else {
+            delete $config{$key};
+        }
+    }
+    save_config($default, %config);
+}
+print "$_=$config{$_}\n" foreach sort(keys(%config));
+
+sub load_config {
+    my ($file) = @_;
+
+    # Get the list of the variables that the shell sets automatically.
+    my (%auto_vars) = read_vars("set -a && env");
+
+    # Get the variables from $default.
+    my (%config) = read_vars("set -a && . '$default' && env");
+
+    # Subtract.
+    delete @config{keys %auto_vars};
+
+    return %config;
+}
+
+sub read_vars {
+    my ($cmd) = @_;
+    local @ENV;
+    if (!open(VARS, '-|', $cmd)) {
+        print STDERR "$cmd: failed to execute: $!\n";
+        return ();
+    }
+    my (%config);
+    while (<VARS>) {
+        my ($var, $value) = /^([^=]+)=(.*)$/ or next;
+        $config{$var} = $value;
+    }
+    close(VARS);
+    return %config;
+}
+
+sub shell_escape {
+    local $_ = $_[0];
+    if ($_ eq '') {
+        return '""';
+    } elsif (m&^[-a-zA-Z0-9:./%^_+,]*$&) {
+        return $_;
+    } else {
+        s/'/'\\''/;
+        return "'$_'";
+    }
+}
+
+sub shell_assign {
+    my ($var, $value) = @_;
+    return $var . '=' . shell_escape($value);
+}
+
+sub save_config {
+    my ($file, %config) = @_;
+    my (@lines);
+    if (open(FILE, '<', $file)) {
+        @lines = <FILE>;
+        chomp @lines;
+        close(FILE);
+    }
+
+    # Replace all existing variable assignments.
+    for (my ($i) = 0; $i <= $#lines; $i++) {
+        local $_ = $lines[$i];
+        my ($var, $value) = /^\s*([^=#]+)=(.*)$/ or next;
+        if (exists($config{$var})) {
+            $lines[$i] = shell_assign($var, $config{$var});
+            delete $config{$var};
+        } else {
+            $lines[$i] = "#$lines[$i]";
+        }
+    }
+
+    # Find a place to put any remaining variable assignments.
+  VAR:
+    for my $var (keys(%config)) {
+        my $assign = shell_assign($var, $config{$var});
+
+        # Replace the last commented-out variable assignment to $var, if any.
+        for (my ($i) = $#lines; $i >= 0; $i--) {
+            local $_ = $lines[$i];
+            if (/^\s*#\s*$var=/) {
+                $lines[$i] = $assign;
+                next VAR;
+            }
+        }
+
+        # Find a place to add the var: after the final commented line
+        # just after a line that contains "$var:".
+        for (my ($i) = 0; $i <= $#lines; $i++) {
+            if ($lines[$i] =~ /^\s*#\s*$var:/) {
+                for (my ($j) = $i + 1; $j <= $#lines; $j++) {
+                    if ($lines[$j] !~ /^\s*#/) {
+                        splice(@lines, $j, 0, $assign);
+                        next VAR;
+                    }
+                }
+            }
+        }
+
+        # Just append it.
+        push(@lines, $assign);
+    }
+
+    open(NEWFILE, '>', "$file.tmp") or die "$file.tmp: create: $!\n";
+    print NEWFILE join('', map("$_\n", @lines));
+    close(NEWFILE);
+    rename("$file.tmp", $file) or die "$file.tmp: rename to $file: $!\n";
+}
