@@ -38,8 +38,9 @@ db_subst('netdevs', 'choices',
          join(', ', map($netdevs{$_}, sort(keys(%netdevs)))));
 db_set('netdevs', join(', ', grep(!/IP/, values(%netdevs))));
 
+my %oldconfig;
 if (-e $default) {
-    my (%config) = load_config($default);
+    %oldconfig = load_config($default);
 
     my (%map) =
       (NETDEVS => sub {
@@ -58,7 +59,7 @@ if (-e $default) {
       );
 
     for my $key (keys(%map)) {
-        local $_ = $config{$key};
+        local $_ = $oldconfig{$key};
         &{$map{$key}}() if defined && !/^\s*$/;
     }
 }
@@ -336,7 +337,7 @@ for (;;) {
     $state += $direction;
 }
 
-my %config;
+my %config = %oldconfig;
 $config{NETDEVS} = join(' ', netdev_names());
 $config{MODE} = db_get('mode');
 if (db_get('mode') eq 'in-band') {
@@ -481,10 +482,25 @@ sub find_netdevs {
 
 sub load_config {
     my ($file) = @_;
-    my ($cmd) = "set -a && . $file && env";
+
+    # Get the list of the variables that the shell sets automatically.
+    my (%auto_vars) = read_vars("set -a && env");
+
+    # Get the variables from $default.
+    my (%config) = read_vars("set -a && . '$default' && env");
+
+    # Subtract.
+    delete @config{keys %auto_vars};
+
+    return %config;
+}
+
+sub read_vars {
+    my ($cmd) = @_;
+    local @ENV;
     if (!open(VARS, '-|', $cmd)) {
         print STDERR "$cmd: failed to execute: $!\n";
-        return;
+        return ();
     }
     my (%config);
     while (<VARS>) {
