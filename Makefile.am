@@ -44,7 +44,7 @@ noinst_LIBRARIES =
 noinst_PROGRAMS =
 noinst_SCRIPTS =
 
-EXTRA_DIST += README.hwtables
+EXTRA_DIST += README.hwtables subst
 
 do_subst = ($(srcdir)/subst VLOG_OPTIONS $(srcdir)/lib/vlog.man | \
 	    sed -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
