@@ -79,6 +79,11 @@ static void poll_server(int fd, short int events, void *server_);
  *      - An absolute path (starting with '/') that gives the exact name of
  *        the Unix domain socket to listen on.
  *
+ * A program that (optionally) daemonizes itself should call this function
+ * *after* daemonization, so that the socket name contains the pid of the
+ * daemon instead of the pid of the program that exited.  (Otherwise, "vlogconf
+ * --target <program>.pid" will fail.)
+ *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
  * sets '*serverp' to the new vlog_server, otherwise to NULL. */
 int

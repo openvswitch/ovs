@@ -101,11 +101,6 @@ main(int argc, char *argv[])
                   "use --help for usage");
     }
 
-    retval = vlog_server_listen(NULL, NULL);
-    if (retval) {
-        ofp_fatal(retval, "Could not listen for vlog connections");
-    }
-
     n_switches = n_listeners = 0;
     for (i = optind; i < argc; i++) {
         const char *name = argv[i];
@@ -139,6 +134,11 @@ main(int argc, char *argv[])
 
     die_if_already_running();
     daemonize();
+
+    retval = vlog_server_listen(NULL, NULL);
+    if (retval) {
+        ofp_fatal(retval, "Could not listen for vlog connections");
+    }
 
     while (n_switches > 0 || n_listeners > 0) {
         int iteration;

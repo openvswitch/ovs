@@ -119,13 +119,13 @@ main(int argc, char *argv[])
         add_ports(dp, port_list); 
     }
 
+    die_if_already_running();
+    daemonize();
+
     error = vlog_server_listen(NULL, NULL);
     if (error) {
         ofp_fatal(error, "could not listen for vlog connections");
     }
-
-    die_if_already_running();
-    daemonize();
 
     for (;;) {
         dp_run(dp);

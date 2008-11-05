@@ -140,14 +140,14 @@ main(int argc, char *argv[])
     /* Initialize switch status hook. */
     switch_status_start(&secchan, &s, &switch_status);
 
+    die_if_already_running();
+    daemonize();
+
     /* Start listening for vlogconf requests. */
     retval = vlog_server_listen(NULL, NULL);
     if (retval) {
         ofp_fatal(retval, "Could not listen for vlog connections");
     }
-
-    die_if_already_running();
-    daemonize();
 
     VLOG_WARN("OpenFlow reference implementation version %s", VERSION BUILDNR);
     VLOG_WARN("OpenFlow protocol version 0x%02x", OFP_VERSION);
