@@ -1,0 +1,5 @@
+#! /bin/sh
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+tmpreaper 7d --mtime --all /var/log/core

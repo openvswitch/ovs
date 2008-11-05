@@ -3,6 +3,7 @@
 *.substvars
 /automake.mk
 /control
+/corekeeper
 /files
 /openflow
 /openflow-common

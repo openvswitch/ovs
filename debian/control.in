@@ -76,3 +76,10 @@ Description: OpenFlow controller implementation
  .
  OpenFlow is a protocol for flow-based control over network switching.
 
+Package: corekeeper
+Architecture: all
+Depends: tmpreaper
+Description: Core file centralizer and reaper
+ The corekeeper package configures the system to dump all core files to
+ /var/log/core.  It also deletes core files older than 7 days.
+
