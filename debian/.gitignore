@@ -9,6 +9,11 @@
 /openflow-common.copyright
 /openflow-controller
 /openflow-datapath-source
+/openflow-monitor.copyright
+/openflow-monitor.default
+/openflow-monitor.dirs
+/openflow-monitor.init
+/openflow-monitor.install
 /openflow-pki
 /openflow-pki-server
 /openflow-switch
@@ -20,4 +25,9 @@
 /openflow-switchmon.dirs
 /openflow-switchmon.init
 /openflow-switchmon.install
+/openflow-wdt.copyright
+/openflow-wdt.default
+/openflow-wdt.dirs
+/openflow-wdt.init
+/openflow-wdt.install
 /rules.ext
