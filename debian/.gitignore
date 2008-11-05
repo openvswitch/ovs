@@ -9,6 +9,7 @@
 /openflow-common.copyright
 /openflow-controller
 /openflow-datapath-source
+/openflow-monitor
 /openflow-monitor.copyright
 /openflow-monitor.default
 /openflow-monitor.dirs
@@ -25,6 +26,7 @@
 /openflow-switchmon.dirs
 /openflow-switchmon.init
 /openflow-switchmon.install
+/openflow-wdt
 /openflow-wdt.copyright
 /openflow-wdt.default
 /openflow-wdt.dirs
