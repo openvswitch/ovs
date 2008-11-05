@@ -232,6 +232,7 @@ usage(void)
            "  mod-flows SWITCH FLOW       modify actions of matching FLOWs\n"
            "  del-flows SWITCH [FLOW]     delete matching FLOWs\n"
            "  monitor SWITCH              print packets received from SWITCH\n"
+           "  execute SWITCH CMD [ARG...] execute CMD with ARGS on SWITCH\n"
            "\nFor local datapaths, remote switches, and controllers:\n"
            "  probe VCONN                 probe whether VCONN is up\n"
            "  ping VCONN [N]              latency of N-byte echos\n"
