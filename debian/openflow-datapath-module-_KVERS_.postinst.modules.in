@@ -9,6 +9,17 @@ depmod -a
 
 #DEBHELPER#
 
+# If the switch is running, restart it.  This ensures that we are using the
+# latest kernel module, because the init script will unload and reload the
+# module.
+#
+# (Ideally we'd only want to do this if this package corresponds to the
+# running kernel, but I don't know a reliable way to check.)
+INIT=/etc/init.d/openflow-switch
+if test -x $INIT && $INIT status; then
+    $INIT restart || true
+fi
+
 exit 0
 
 
