@@ -98,9 +98,13 @@ SWITCH_IP=dhcp
 # MGMT_VCONNS: List of vconns (space-separated) on which secchan
 # should listen for management connections from dpctl, etc.
 # openflow-switchui by default connects to
-# unix:/var/run/secchan.socket, so do not disable this if you want to
+# unix:/var/run/secchan.mgmt, so do not disable this if you want to
 # use openflow-switchui.
-MGMT_VCONNS="punix:/var/run/secchan.socket"
+MGMT_VCONNS="punix:/var/run/secchan.mgmt"
+
+# MONITOR_VCONN:  Name of vconn on which secchan should listen for 
+# monitoring connections from dpctl.
+MONITOR_VCONN="punix:/var/run/secchan.monitor"
 
 # COMMANDS: Access control list for the commands that can be executed
 # remotely over the OpenFlow protocol, as a comma-separated list of

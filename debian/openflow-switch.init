@@ -247,6 +247,11 @@ case "$1" in
             MGMT_OPTS="$MGMT_OPTS --listen=$vconn"
         done
 
+        MONITOR_OPT=
+        if test -n "$MONITOR_VCONN"; then
+            MONITOR_OPT="--monitor=$MONITOR_VCONN"
+        fi
+
         COMMAND_OPT=
         if test -n "$COMMANDS"; then
             COMMAND_OPT="--command-acl=$COMMANDS"
@@ -264,7 +269,7 @@ case "$1" in
 	start-stop-daemon --start --quiet --pidfile $PIDFILE \
 	    --exec $DAEMON -- nl:0 $CONTROLLER --detach --pidfile=$PIDFILE \
             --verbose=ANY:console:emer --verbose=ANY:syslog:err --log-file \
-            $DAEMON_OPTS $MGMT_OPTS $SSL_OPTS "$COMMAND_OPT"
+            $DAEMON_OPTS $MGMT_OPTS $MONITOR_OPT $SSL_OPTS "$COMMAND_OPT"
         if running; then
             echo "$NAME."
         else
