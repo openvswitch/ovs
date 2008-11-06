@@ -257,7 +257,7 @@ case "$1" in
         fi
 
         if test -n "$CORE_LIMIT"; then
-            check_ops "Setting core limit to $CORE_LIMIT" ulimit -c "$CORE_LIMIT"
+            check_op "Setting core limit to $CORE_LIMIT" ulimit -c "$CORE_LIMIT"
         fi
 
 	echo -n "Starting $DESC: "
