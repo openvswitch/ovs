@@ -139,7 +139,7 @@ binary-common:
 	dh_installcron
 	dh_installman
 	dh_link
-	dh_strip
+	dh_strip --dbg-package=openflow-dbg
 	dh_compress 
 	dh_fixperms -X var/log/core
 	dh_perl

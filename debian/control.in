@@ -83,3 +83,11 @@ Description: Core file centralizer and reaper
  The corekeeper package configures the system to dump all core files to
  /var/log/core.  It also deletes core files older than 7 days.
 
+Package: openflow-dbg
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: Debug symbols for OpenFlow packages
+ This package contains the debug symbols for all the other openflow-*
+ packages.  Install it to debug one of them or to examine a core dump
+ produced by one of them.
+

@@ -10,6 +10,7 @@
 /openflow-common.copyright
 /openflow-controller
 /openflow-datapath-source
+/openflow-dbg
 /openflow-monitor
 /openflow-monitor.copyright
 /openflow-monitor.default
