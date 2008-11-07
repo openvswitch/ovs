@@ -29,6 +29,9 @@ MA_DIR ?= /usr/share/modass
 
 DATAPATH_CONFIGURE_OPTS = --enable-snat
 
+# Official build number.  Leave set to 0 if not an official build.
+BUILD_NUMBER = 0
+
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
@@ -37,6 +40,7 @@ configure-stamp:
 	cd _debian && ( \
 		test -e Makefile || \
 		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
+			--with-build-number=$(BUILD_NUMBER) \
 			$(DATAPATH_CONFIGURE_OPTS))
 	$(ext_configure)
 	touch configure-stamp

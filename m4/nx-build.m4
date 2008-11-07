@@ -32,17 +32,40 @@
 # advertising or publicity pertaining to the Software or any
 # derivatives without specific, written prior permission.
 
-dnl NX_BUILDNR([NUMBER])
+dnl NX_BUILDNR
 dnl
-dnl If NUMBER is empty, substitutes BUILDNR with 0 and sets C
-dnl preprocessor variable BUILDNR to "".
+dnl If --with-build-number=NUMBER is used, substitutes a Makefile
+dnl variable BUILDNR with NUMBER, and sets a C preprocessor variable
+dnl BUILDNR to "+buildNUMBER".
 dnl
-dnl If NUMBER is nonempty, substitutes a Makefile variable BUILDNR
-dnl with NUMBER, and sets a C preprocessor variable BUILDNR to
-dnl "+buildNUMBER".
+dnl Otherwise, if --with-build-number is not used, substitutes BUILDNR
+dnl with 0 and sets C preprocessor variable BUILDNR to "".
 AC_DEFUN([NX_BUILDNR],
-  [AC_SUBST([BUILDNR], 
-            [m4_if([$1], [], [0], [$1])])
-   AC_DEFINE([BUILDNR],
-             [m4_if([$1], [], [""], ["+build$1"])], 
-             [Official build number.])])
+  [AC_ARG_WITH(
+     [build-number],
+     [AS_HELP_STRING([--with-build-number=NUMBER],
+                     [Official build number (default is none)])])
+   AC_MSG_CHECKING([build number])
+   case $with_build_number in # (
+     [[0-9]] | \
+     [[0-9]][[0-9]] | \
+     [[0-9]][[0-9]][[0-9]] | \
+     [[0-9]][[0-9]][[0-9]][[0-9]] | \
+     [[0-9]][[0-9]][[0-9]][[0-9]][[0-9]])
+       BUILDNR=$with_build_number
+       buildnr='"+build'$BUILDNR'"'
+       AC_MSG_RESULT([$with_build_number])
+       ;; # (
+     ''|no)
+       BUILDNR=0
+       buildnr='""'
+       AC_MSG_RESULT([none])
+       ;; # (
+     *)
+       AC_MSG_ERROR([invalid build number $with_build_number])
+       ;;
+   esac
+   AC_SUBST([BUILDNR])
+   AC_DEFINE_UNQUOTED([BUILDNR], [$buildnr],
+     [Official build number as a VERSION suffix string, e.g. "+build123",
+      or "" if this is not an official build.])])
