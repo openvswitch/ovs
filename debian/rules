@@ -93,7 +93,7 @@ binary-modules: prep-deb-files
 	dh_testroot
 	dh_clean -k
 	tar xzf openflow.tar.gz
-	cd openflow && ./configure --with-$(l2x)=$(KSRC) $(DATAPATH_CONFIGURE_OPTS)
+	cd openflow && ./configure --with-$(l2x)=$(KSRC) $(DATAPATH_CONFIGURE_OPTS) --with-build-number=$(BUILD_NUMBER)
 	cd openflow && $(MAKE) -C $(dpdir)
 	install -d -m755 $(DSTDIR)
 	install -m644 openflow/$(dpdir)/*_mod.$(KO)o $(DSTDIR)/
