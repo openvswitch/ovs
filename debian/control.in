@@ -29,7 +29,7 @@ Description: OpenFlow common components
 Package: openflow-switch
 Architecture: any
 Suggests: openflow-datapath-module
-Depends: ${shlibs:Depends}, ${misc:Depends}, openflow-common, dhcp3-client, module-init-tools, acpi-support, debianutils
+Depends: ${shlibs:Depends}, ${misc:Depends}, openflow-common, dhcp3-client, module-init-tools, dmidecode, procps, debianutils
 Description: OpenFlow switch implementations
  openflow-switch provides the userspace components and utilities for
  the OpenFlow kernel-based switch.  
