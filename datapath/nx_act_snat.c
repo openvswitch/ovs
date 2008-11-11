@@ -116,23 +116,13 @@ void snat_local_in(struct sk_buff *skb)
 static int
 dnat_mac(struct net_bridge_port *p, struct sk_buff *skb)
 {
-	struct snat_conf *sc;
+	struct snat_conf *sc = p->snat;
 	struct iphdr *iph = ip_hdr(skb);
 	struct ethhdr *eh = eth_hdr(skb);
 	struct snat_mapping *m;
-	unsigned long flags;
 
-	spin_lock_irqsave(&p->lock, flags);
-	sc = p->snat;
-	if (!sc) {
-		spin_unlock_irqrestore(&p->lock, flags);
-		return -EINVAL;
-	}
-
-	if (skb->protocol != htons(ETH_P_IP)) {
-		spin_unlock_irqrestore(&p->lock, flags);
+	if (skb->protocol != htons(ETH_P_IP)) 
 		return 0;
-	}
 
 	list_for_each_entry (m, &sc->mappings, node) {
 		if (m->ip_addr == iph->daddr){
@@ -140,7 +130,6 @@ dnat_mac(struct net_bridge_port *p, struct sk_buff *skb)
 			if (!make_writable(&skb)) {
 				if (net_ratelimit())
 					printk("make_writable failed\n");
-				spin_unlock_irqrestore(&p->lock, flags);
 				return -EINVAL;
 			}
 			m->used = jiffies;
@@ -149,7 +138,6 @@ dnat_mac(struct net_bridge_port *p, struct sk_buff *skb)
 		}
 	}
 
-	spin_unlock_irqrestore(&p->lock, flags);
 	return 0;
 }
 
@@ -157,14 +145,30 @@ static int
 snat_pre_route_finish(struct sk_buff *skb)
 {
 	struct net_bridge_port *p = skb->dev->br_port;
+	struct snat_conf *sc;
+	struct iphdr *iph = ip_hdr(skb);
+	uint32_t ip_addr;
+	unsigned long flags;
 
 	skb->dst = (struct dst_entry *)&__fake_rtable;
 	dst_hold(skb->dst);
 
+	/* Don't process packets that were not translated due to NAT */
+	spin_lock_irqsave(&p->lock, flags);
+	sc = p->snat;
+	ip_addr = ntohl(iph->daddr);
+	if (sc && (ip_addr >= sc->ip_addr_start) 
+			&& (ip_addr <= sc->ip_addr_end)) {
+		spin_unlock_irqrestore(&p->lock, flags);
+		return -1;
+	}
+
 	/* If SNAT is configured for this input device, check the IP->MAC
 	 * mappings to see if we should update the destination MAC. */
-	if (p->snat)
+	if (sc)
 		dnat_mac(skb->dev->br_port, skb);
+
+	spin_unlock_irqrestore(&p->lock, flags);
 
 	return 0;
 }
