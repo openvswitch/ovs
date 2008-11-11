@@ -399,6 +399,9 @@ snat_skb(struct datapath *dp, const struct sk_buff *skb, int out_port)
 	if (!p)
 		return;
 
+	/* FIXME: Expensive.  Just need to skb_clone() here?
+	 * (However, the skb_copy() does linearize and ensure that the headers
+	 * are accessible.) */
 	nskb = skb_copy(skb, GFP_ATOMIC);
 	if (!nskb)
 		return;
