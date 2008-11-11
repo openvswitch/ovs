@@ -366,6 +366,8 @@ update_mapping(struct net_bridge_port *p, struct sk_buff *skb)
 	}
 
 	m = kmalloc(sizeof *m, GFP_ATOMIC);
+	if (!m)
+		goto done;
 	m->ip_addr = iph->saddr;
 	memcpy(m->hw_addr, eh->h_source, ETH_ALEN);
 	m->used = jiffies;
