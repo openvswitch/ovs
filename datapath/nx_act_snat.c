@@ -205,6 +205,9 @@ handle_arp_snat(struct sk_buff *skb)
 	struct net_bridge_port *p = skb->dev->br_port;
 	struct ip_arphdr *ah = (struct ip_arphdr *)arp_hdr(skb);
 
+	if (!pskb_may_pull(skb, sizeof *ah))
+		return 0;
+
 	if ((ah->ar_op != htons(ARPOP_REQUEST)) 
 			|| ah->ar_hln != ETH_ALEN
 			|| ah->ar_pro != htons(ETH_P_IP)
@@ -304,6 +307,9 @@ snat_pre_route(struct sk_buff *skb)
 		return handle_arp_snat(skb);
 	else if (skb->protocol != htons(ETH_P_IP)) 
 		return 0;
+
+	if (!pskb_may_pull(skb, sizeof *iph))
+		goto ipv4_error;
 
 	iph = ip_hdr(skb);
 	if (iph->ihl < 5 || iph->version != 4)
