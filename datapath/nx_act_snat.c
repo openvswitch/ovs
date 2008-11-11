@@ -492,7 +492,7 @@ snat_add_port(struct datapath *dp, uint16_t port,
 	spin_lock_irqsave(&p->lock, flags);
 	if (p->snat) {
 		if ((p->snat->ip_addr_start == ip_addr_start) 
-				&& (p->snat->ip_addr_end = ip_addr_end)) {
+				&& (p->snat->ip_addr_end == ip_addr_end)) {
 			p->snat->mac_timeout = mac_timeout;
 			spin_unlock_irqrestore(&p->lock, flags);
 			return 0;
