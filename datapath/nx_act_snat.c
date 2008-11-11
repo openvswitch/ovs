@@ -346,12 +346,12 @@ snat_skb_finish(struct sk_buff *skb)
 /* Update the MAC->IP mappings for the private side of the SNAT'd
  * interface. */
 static void
-update_mapping(struct net_bridge_port *p, struct sk_buff *skb)
+update_mapping(struct net_bridge_port *p, const struct sk_buff *skb)
 {
 	unsigned long flags;
 	struct snat_conf *sc;
-	struct iphdr *iph = ip_hdr(skb);
-	struct ethhdr *eh = eth_hdr(skb);
+	const struct iphdr *iph = ip_hdr(skb);
+	const struct ethhdr *eh = eth_hdr(skb);
 	struct snat_mapping *m;
 
 	spin_lock_irqsave(&p->lock, flags);
@@ -387,7 +387,7 @@ done:
  * unmodified.  'skb' is not consumed, so caller will need to free it.
  */
 void 
-snat_skb(struct datapath *dp, struct sk_buff *skb, int out_port)
+snat_skb(struct datapath *dp, const struct sk_buff *skb, int out_port)
 {
 	struct net_bridge_port *p = dp->ports[out_port];
 	struct sk_buff *nskb;
