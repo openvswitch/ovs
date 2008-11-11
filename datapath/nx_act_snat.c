@@ -361,9 +361,7 @@ update_mapping(struct net_bridge_port *p, const struct sk_buff *skb)
 	
 	list_for_each_entry (m, &sc->mappings, node) {
 		if (m->ip_addr == iph->saddr){
-			if (memcmp(m->hw_addr, eh->h_source, ETH_ALEN)) {
-				memcpy(m->hw_addr, eh->h_source, ETH_ALEN);
-			}
+			memcpy(m->hw_addr, eh->h_source, ETH_ALEN);
 			m->used = jiffies;
 			goto done;
 		}
