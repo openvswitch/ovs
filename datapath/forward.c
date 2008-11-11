@@ -69,6 +69,7 @@ void fwd_port_input(struct sw_chain *chain, struct sk_buff *skb,
 		    struct net_bridge_port *p)
 {
 	WARN_ON_ONCE(skb_shared(skb));
+	WARN_ON_ONCE(skb->destructor);
 	if (run_flow_through_tables(chain, skb, p))
 		dp_output_control(chain->dp, skb, fwd_save_skb(skb), 
 				  chain->dp->miss_send_len,
