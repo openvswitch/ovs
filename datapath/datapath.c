@@ -465,6 +465,7 @@ do_port_input(struct net_bridge_port *p, struct sk_buff *skb)
 
 	/* Push the Ethernet header back on. */
 	skb_push(skb, ETH_HLEN);
+	skb_reset_mac_header(skb);
 	fwd_port_input(p->dp->chain, skb, p);
 }
 
