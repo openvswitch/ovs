@@ -3,6 +3,7 @@
 
 #include_next <linux/kernel.h>
 #include <linux/config.h>
+#include <asm/bug.h>
 
 /**
  * container_of - cast a member of a structure out to the containing structure
