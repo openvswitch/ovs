@@ -670,7 +670,6 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb,
 	 * forward the whole packet? */
 	struct sk_buff *f_skb;
 	struct ofp_packet_in *opi;
-	struct net_bridge_port *p;
 	size_t fwd_len, opi_len;
 	int err;
 
@@ -686,8 +685,9 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb,
 	}
 	opi->buffer_id      = htonl(buffer_id);
 	opi->total_len      = htons(skb->len);
-	p = skb->dev->br_port;
-	opi->in_port        = htons(p ? p->port_no : OFPP_LOCAL);
+	opi->in_port        = htons(skb->dev && skb->dev->br_port
+				    ? skb->dev->br_port->port_no
+				    : OFPP_LOCAL);
 	opi->reason         = reason;
 	opi->pad            = 0;
 	memcpy(opi->data, skb_mac_header(skb), fwd_len);
