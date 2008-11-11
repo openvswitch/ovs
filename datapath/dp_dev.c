@@ -57,10 +57,23 @@ static int dp_dev_mac_addr(struct net_device *dev, void *p)
 	return 0;
 }
 
-static int dp_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
+static int dp_dev_xmit(struct sk_buff *oskb, struct net_device *netdev)
 {
 	struct dp_dev *dp_dev = dp_dev_priv(netdev);
 	struct datapath *dp = dp_dev->dp;
+	struct sk_buff *skb;
+
+	/* FIXME: doing a full copy here is far too expensive and most the time
+	 * it is unnecessary.  However, it is a stopgap fix for bug #478. */
+	skb = skb_copy(oskb, GFP_ATOMIC);
+	skb->dev = oskb->dev;
+	kfree_skb(oskb);
+	if (!skb) {
+		if (net_ratelimit()) {
+			printk("failed to copy skb destined for dp_dev\n");
+		}
+		return 0;
+	}
 
 	dp_dev->stats.tx_packets++;
 	dp_dev->stats.tx_bytes += skb->len;
