@@ -13,6 +13,7 @@
 #include <linux/ip.h>
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
+#include <linux/llc.h>
 #include <linux/module.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
@@ -22,7 +23,6 @@
 
 #include "openflow/openflow.h"
 #include "compat.h"
-#include "snap.h"
 
 struct kmem_cache *flow_cache;
 
@@ -275,10 +275,40 @@ void print_flow(const struct sw_flow_key *key)
 }
 EXPORT_SYMBOL(print_flow);
 
+#define SNAP_OUI_LEN 3
+
+struct eth_snap_hdr
+{
+	struct ethhdr eth;
+	uint8_t  dsap;  /* Always 0xAA */
+	uint8_t  ssap;  /* Always 0xAA */
+	uint8_t  ctrl;
+	uint8_t  oui[SNAP_OUI_LEN];
+	uint16_t ethertype;
+} __attribute__ ((packed));
+
+static int is_snap(const struct eth_snap_hdr *esh)
+{
+	return (esh->dsap == LLC_SAP_SNAP
+		&& esh->ssap == LLC_SAP_SNAP
+		&& !memcmp(esh->oui, "\0\0\0", 3));
+}
+
+static int iphdr_ok(struct sk_buff *skb)
+{
+	int nh_ofs = skb_network_offset(skb);
+	if (skb->len >= nh_ofs + sizeof(struct iphdr)) {
+		int ip_len = ip_hdrlen(skb);
+		return (ip_len >= sizeof(struct iphdr)
+			&& pskb_may_pull(skb, nh_ofs + ip_len));
+	}
+	return 0;
+}
+
 static int tcphdr_ok(struct sk_buff *skb)
 {
 	int th_ofs = skb_transport_offset(skb);
-	if (skb->len >= th_ofs + sizeof(struct tcphdr)) {
+	if (pskb_may_pull(skb, th_ofs + sizeof(struct tcphdr))) {
 		int tcp_len = tcp_hdrlen(skb);
 		return (tcp_len >= sizeof(struct tcphdr)
 			&& skb->len >= th_ofs + tcp_len);
@@ -289,7 +319,7 @@ static int tcphdr_ok(struct sk_buff *skb)
 static int udphdr_ok(struct sk_buff *skb)
 {
 	int th_ofs = skb_transport_offset(skb);
-	return skb->len >= th_ofs + sizeof(struct udphdr);
+	return pskb_may_pull(skb, th_ofs + sizeof(struct udphdr));
 }
 
 /* Parses the Ethernet frame in 'skb', which was received on 'in_port',
@@ -298,58 +328,55 @@ static int udphdr_ok(struct sk_buff *skb)
 int flow_extract(struct sk_buff *skb, uint16_t in_port,
 		 struct sw_flow_key *key)
 {
-	struct ethhdr *mac;
-	int nh_ofs, th_ofs;
+	struct ethhdr *eth;
+	struct eth_snap_hdr *esh;
 	int retval = 0;
+	int nh_ofs;
 
+	memset(key, 0, sizeof *key);
+	key->dl_vlan = htons(OFP_VLAN_NONE);
 	key->in_port = htons(in_port);
-	key->pad = 0;
-	key->wildcards = 0;
-	key->nw_src_mask = 0;
-	key->nw_dst_mask = 0;
 
-	/* This code doesn't check that skb->len is long enough to contain the
-	 * MAC or network header.  With a 46-byte minimum length frame this
-	 * assumption is always correct. */
+	if (skb->len < sizeof *eth)
+		return 0;
+	if (!pskb_may_pull(skb, skb->len >= 64 ? 64 : skb->len)) {
+		return 0;
+	}
 
-	/* Doesn't verify checksums.  Should it? */
-
-	/* Data link layer.  We only support Ethernet. */
-	mac = eth_hdr(skb);
-	nh_ofs = sizeof(struct ethhdr);
-	if (likely(ntohs(mac->h_proto) >= OFP_DL_TYPE_ETH2_CUTOFF)) {
-		/* This is an Ethernet II frame */
-		key->dl_type = mac->h_proto;
+	eth = eth_hdr(skb);
+	esh = (struct eth_snap_hdr *) eth;
+	nh_ofs = sizeof *eth;
+	if (likely(ntohs(eth->h_proto) >= OFP_DL_TYPE_ETH2_CUTOFF))
+		key->dl_type = eth->h_proto;
+	else if (skb->len >= sizeof *esh && is_snap(esh)) {
+		key->dl_type = esh->ethertype;
+		nh_ofs = sizeof *esh;
 	} else {
-		/* This is an 802.2 frame */
-		if (snap_get_ethertype(skb, &key->dl_type) != -EINVAL) {
-			nh_ofs += sizeof(struct snap_hdr);
-		} else {
-			key->dl_type = htons(OFP_DL_TYPE_NOT_ETH_TYPE);
-			nh_ofs += sizeof(struct llc_pdu_un);
+		key->dl_type = htons(OFP_DL_TYPE_NOT_ETH_TYPE);
+		if (skb->len >= nh_ofs + sizeof(struct llc_pdu_un)) {
+			nh_ofs += sizeof(struct llc_pdu_un); 
 		}
 	}
 
 	/* Check for a VLAN tag */
-	if (likely(key->dl_type != htons(ETH_P_8021Q))) {
-		key->dl_vlan = htons(OFP_VLAN_NONE);
-	} else {
-		struct vlan_hdr *vh = (struct vlan_hdr *)(skb_mac_header(skb) + nh_ofs);
+	if (key->dl_type == htons(ETH_P_8021Q) &&
+	    skb->len >= nh_ofs + sizeof(struct vlan_hdr)) {
+		struct vlan_hdr *vh = (struct vlan_hdr*)(skb->data + nh_ofs);
 		key->dl_type = vh->h_vlan_encapsulated_proto;
 		key->dl_vlan = vh->h_vlan_TCI & htons(VLAN_VID_MASK);
-		nh_ofs += sizeof(*vh);
+		nh_ofs += sizeof(struct vlan_hdr);
 	}
-	memcpy(key->dl_src, mac->h_source, ETH_ALEN);
-	memcpy(key->dl_dst, mac->h_dest, ETH_ALEN);
+	memcpy(key->dl_src, eth->h_source, ETH_ALEN);
+	memcpy(key->dl_dst, eth->h_dest, ETH_ALEN);
 	skb_set_network_header(skb, nh_ofs);
 
 	/* Network layer. */
-	if (likely(key->dl_type == htons(ETH_P_IP))) {
+	if (key->dl_type == htons(ETH_P_IP) && iphdr_ok(skb)) {
 		struct iphdr *nh = ip_hdr(skb);
+		int th_ofs = nh_ofs + nh->ihl * 4;
 		key->nw_src = nh->saddr;
 		key->nw_dst = nh->daddr;
 		key->nw_proto = nh->protocol;
-		th_ofs = nh_ofs + nh->ihl * 4;
 		skb_set_transport_header(skb, th_ofs);
 
 		/* Transport layer. */
@@ -363,7 +390,7 @@ int flow_extract(struct sk_buff *skb, uint16_t in_port,
 					/* Avoid tricking other code into
 					 * thinking that this packet has an L4
 					 * header. */
-					goto no_proto;
+					key->nw_proto = 0;
 				}
 			} else if (key->nw_proto == IPPROTO_UDP) {
 				if (udphdr_ok(skb)) {
@@ -374,28 +401,15 @@ int flow_extract(struct sk_buff *skb, uint16_t in_port,
 					/* Avoid tricking other code into
 					 * thinking that this packet has an L4
 					 * header. */
-					goto no_proto;
+					key->nw_proto = 0;
 				}
-			} else {
-				goto no_th;
 			}
 		} else {
 			retval = 1;
-			goto no_th;
 		}
-
-		return 0;
+	} else {
+		skb_reset_transport_header(skb);
 	}
-
-	key->nw_src = 0;
-	key->nw_dst = 0;
-
-no_proto:
-	key->nw_proto = 0;
-
-no_th:
-	key->tp_src = 0;
-	key->tp_dst = 0;
 	return retval;
 }
 
