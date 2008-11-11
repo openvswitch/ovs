@@ -142,12 +142,35 @@ dnat_mac(struct net_bridge_port *p, struct sk_buff *skb)
 }
 
 static int
+__snat_this_address(struct snat_conf *sc, u32 ip_addr)
+{
+	if (sc) {
+		u32 h_ip_addr = ntohl(ip_addr);
+		return (h_ip_addr >= sc->ip_addr_start &&
+			h_ip_addr <= sc->ip_addr_end);
+	}
+	return 0;
+}
+
+static int
+snat_this_address(struct net_bridge_port *p, u32 ip_addr)
+{
+	unsigned long int flags;
+	int retval;
+
+	spin_lock_irqsave(&p->lock, flags);
+	retval = __snat_this_address(p->snat, ip_addr);
+	spin_unlock_irqrestore(&p->lock, flags);
+
+	return retval;
+}
+
+static int
 snat_pre_route_finish(struct sk_buff *skb)
 {
 	struct net_bridge_port *p = skb->dev->br_port;
 	struct snat_conf *sc;
 	struct iphdr *iph = ip_hdr(skb);
-	uint32_t ip_addr;
 	unsigned long flags;
 
 	skb->dst = (struct dst_entry *)&__fake_rtable;
@@ -156,9 +179,7 @@ snat_pre_route_finish(struct sk_buff *skb)
 	/* Don't process packets that were not translated due to NAT */
 	spin_lock_irqsave(&p->lock, flags);
 	sc = p->snat;
-	ip_addr = ntohl(iph->daddr);
-	if (sc && (ip_addr >= sc->ip_addr_start) 
-			&& (ip_addr <= sc->ip_addr_end)) {
+	if (__snat_this_address(sc, iph->daddr)) {
 		spin_unlock_irqrestore(&p->lock, flags);
 		return -1;
 	}
@@ -183,9 +204,6 @@ handle_arp_snat(struct sk_buff *skb)
 {
 	struct net_bridge_port *p = skb->dev->br_port;
 	struct ip_arphdr *ah = (struct ip_arphdr *)arp_hdr(skb);
-	uint32_t ip_addr;
-	unsigned long flags;
-	struct snat_conf *sc;
 
 	if ((ah->ar_op != htons(ARPOP_REQUEST)) 
 			|| ah->ar_hln != ETH_ALEN
@@ -193,17 +211,10 @@ handle_arp_snat(struct sk_buff *skb)
 			|| ah->ar_pln != 4)
 		return 0;
 
-	ip_addr = ntohl(ah->ar_tip);
-	spin_lock_irqsave(&p->lock, flags);
-	sc = p->snat;
-
 	/* We're only interested in addresses we rewrite. */
-	if (!sc || (sc && ((ip_addr < sc->ip_addr_start) 
-			|| (ip_addr > sc->ip_addr_end)))) {
-		spin_unlock_irqrestore(&p->lock, flags);
+	if (!snat_this_address(p, ah->ar_tip)) {
 		return 0;
 	}
-	spin_unlock_irqrestore(&p->lock, flags);
 
 	arp_send(ARPOP_REPLY, ETH_P_ARP, ah->ar_sip, skb->dev, ah->ar_tip, 
 			 ah->ar_sha, p->dp->netdev->dev_addr, ah->ar_sha);
@@ -220,29 +231,18 @@ static int
 handle_icmp_snat(struct sk_buff *skb)
 {
 	struct net_bridge_port *p = skb->dev->br_port;
-	struct snat_conf *sc;
 	struct ethhdr *eh;
 	struct iphdr *iph = ip_hdr(skb);
-	uint32_t ip_addr;
 	struct icmphdr *icmph;
 	unsigned int datalen;
 	uint8_t tmp_eth[ETH_ALEN];
 	uint32_t tmp_ip;
 	struct sk_buff *nskb;
-	unsigned long flags;
-
-
-	ip_addr = ntohl(iph->daddr);
-	spin_lock_irqsave(&p->lock, flags);
-	sc = p->snat;
 
 	/* We're only interested in addresses we rewrite. */
-	if (!sc || (sc && ((ip_addr < sc->ip_addr_start) 
-			|| (ip_addr > sc->ip_addr_end)))) {
-		spin_unlock_irqrestore(&p->lock, flags);
+	if (!snat_this_address(p, iph->daddr)) {
 		return 0;
 	}
-	spin_unlock_irqrestore(&p->lock, flags);
 
 	icmph = (struct icmphdr *) ((u_int32_t *)iph + iph->ihl);
 	datalen = skb->len - iph->ihl * 4;
