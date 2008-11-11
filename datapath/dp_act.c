@@ -460,6 +460,7 @@ void execute_actions(struct datapath *dp, struct sk_buff *skb,
 		struct ofp_action_header *ah = (struct ofp_action_header *)p;
 		size_t len = htons(ah->len);
 
+		WARN_ON_ONCE(skb_shared(skb));
 		if (prev_port != -1) {
 			do_output(dp, skb_clone(skb, GFP_ATOMIC),
 				  max_len, prev_port, ignore_no_fwd);
