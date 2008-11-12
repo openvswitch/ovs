@@ -343,6 +343,7 @@ int flow_extract(struct sk_buff *skb, uint16_t in_port,
 		return 0;
 	}
 
+	skb_reset_mac_header(skb);
 	eth = eth_hdr(skb);
 	esh = (struct eth_snap_hdr *) eth;
 	nh_ofs = sizeof *eth;
