@@ -690,7 +690,7 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb,
 				    : OFPP_LOCAL);
 	opi->reason         = reason;
 	opi->pad            = 0;
-	memcpy(opi->data, skb_mac_header(skb), fwd_len);
+	skb_copy_bits(skb, 0, opi->data, fwd_len);
 	err = send_openflow_skb(f_skb, NULL);
 
 out:
