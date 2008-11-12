@@ -235,29 +235,28 @@ handle_icmp_snat(struct sk_buff *skb)
 {
 	struct net_bridge_port *p = skb->dev->br_port;
 	struct ethhdr *eh;
-	struct iphdr *iph = ip_hdr(skb);
+	struct iphdr *iph;
 	struct icmphdr *icmph;
-	unsigned int datalen;
 	uint8_t tmp_eth[ETH_ALEN];
 	uint32_t tmp_ip;
 	struct sk_buff *nskb;
 
 	/* We're only interested in addresses we rewrite. */
+	iph = ip_hdr(skb);
 	if (!snat_this_address(p, iph->daddr)) {
 		return 0;
 	}
 
-	icmph = (struct icmphdr *) ((u_int32_t *)iph + iph->ihl);
-	datalen = skb->len - iph->ihl * 4;
-
 	/* Drop fragments and packets not long enough to hold the ICMP
 	 * header. */
-	if (((ntohs(iph->frag_off) & IP_OFFSET) != 0) || datalen < 4) 
+	if ((ntohs(iph->frag_off) & IP_OFFSET) != 0 ||
+	    !pskb_may_pull(skb, skb_transport_offset(skb) + 4))
 		return 0;
 
 	/* We only respond to echo requests to our address.  Continue 
 	 * processing replies and other ICMP messages since they may be 
 	 * intended for NAT'd hosts. */
+	icmph = icmp_hdr(skb);
 	if (icmph->type != ICMP_ECHO)
 		return 0;
 
@@ -269,19 +268,31 @@ handle_icmp_snat(struct sk_buff *skb)
 		return -1;
 	}
 
+	/* Update Ethernet header. */
 	eh = eth_hdr(nskb);
-	iph = ip_hdr(nskb);
-	icmph = (struct icmphdr *) ((u_int32_t *)iph + iph->ihl);
-
-	tmp_ip = iph->daddr;
-	iph->daddr = iph->saddr;
-	iph->saddr = tmp_ip;
-
 	memcpy(tmp_eth, eh->h_dest, ETH_ALEN);
 	memcpy(eh->h_dest, eh->h_source, ETH_ALEN);
 	memcpy(eh->h_source, tmp_eth, ETH_ALEN);
-	
+
+	/* Update IP header.
+	 * This is kind of busted, at least in that it doesn't check that the
+	 * echoed IP options make sense. */
+	iph = ip_hdr(nskb);
+	iph->id = 0;
+	iph->frag_off = 0;
+	iph->ttl = IPDEFTTL;
+	iph->check = 0;
+	tmp_ip = iph->daddr;
+	iph->daddr = iph->saddr;
+	iph->saddr = tmp_ip;
+	iph->check = ip_fast_csum(iph, iph->ihl);
+
+	/* Update ICMP header. */
+	icmph = icmp_hdr(nskb);
 	icmph->type = ICMP_ECHOREPLY;
+	icmph->checksum = 0;
+	icmph->checksum = ip_compute_csum(icmph,
+					  nskb->tail - nskb->transport_header);
 
 	dp_xmit_skb_push(nskb);
 
@@ -303,6 +314,7 @@ snat_pre_route(struct sk_buff *skb)
 	struct iphdr *iph;
 	int len;
 
+	WARN_ON_ONCE(skb_network_offset(skb));
 	if (skb->protocol == htons(ETH_P_ARP)) 
 		return handle_arp_snat(skb);
 	else if (skb->protocol != htons(ETH_P_IP)) 
@@ -315,14 +327,17 @@ snat_pre_route(struct sk_buff *skb)
 	if (iph->ihl < 5 || iph->version != 4)
 		goto ipv4_error;
 
-	if (!pskb_may_pull(skb, iph->ihl*4))
+	if (!pskb_may_pull(skb, ip_hdrlen(skb)))
 		goto ipv4_error;
+	skb_set_transport_header(skb, ip_hdrlen(skb));
 
 	/* Check if we need to echo reply for this address */
+	iph = ip_hdr(skb);
 	if ((iph->protocol == IPPROTO_ICMP) && (handle_icmp_snat(skb))) 
 		return -1;
 
-	if (unlikely(ip_fast_csum((u8 *)iph, iph->ihl)))
+	iph = ip_hdr(skb);
+	if (unlikely(ip_fast_csum(iph, iph->ihl)))
 		goto ipv4_error;
 
 	len = ntohs(iph->tot_len);
