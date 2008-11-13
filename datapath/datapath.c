@@ -466,7 +466,6 @@ do_port_input(struct net_bridge_port *p, struct sk_buff *skb)
 #ifdef SUPPORT_SNAT
 	/* Check if this packet needs early SNAT processing. */
 	if (snat_pre_route(skb)) {
-		kfree_skb(skb);
 		return;
 	}
 #endif

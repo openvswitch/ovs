@@ -179,17 +179,21 @@ snat_pre_route_finish(struct sk_buff *skb)
 	/* Don't process packets that were not translated due to NAT */
 	spin_lock_irqsave(&p->lock, flags);
 	sc = p->snat;
-	if (__snat_this_address(sc, iph->daddr)) {
-		spin_unlock_irqrestore(&p->lock, flags);
-		return -1;
+	if (!__snat_this_address(sc, iph->daddr)) {
+		/* If SNAT is configured for this input device, check the
+		 * IP->MAC mappings to see if we should update the destination
+		 * MAC. */
+		if (sc)
+			dnat_mac(skb->dev->br_port, skb);
+
 	}
-
-	/* If SNAT is configured for this input device, check the IP->MAC
-	 * mappings to see if we should update the destination MAC. */
-	if (sc)
-		dnat_mac(skb->dev->br_port, skb);
-
 	spin_unlock_irqrestore(&p->lock, flags);
+
+	/* Pass the translated packet as input to the OpenFlow stack, which
+	 * consumes it. */
+	skb_push(skb, ETH_HLEN);
+	skb_reset_mac_header(skb);
+	fwd_port_input(p->dp->chain, skb, p);
 
 	return 0;
 }
@@ -305,9 +309,8 @@ handle_icmp_snat(struct sk_buff *skb)
  * modification based on prior SNAT action and responding to ARP and
  * echo requests for the SNAT interface. 
  *
- * Returns 0 if 'skb' should continue to be processed by the caller.
- * Returns -1 if the packet was handled, and the caller should free
- * 'skb'.
+ * Returns -1 if the packet was handled and consumed, 0 if the caller
+ * should continue to process 'skb'.
  */
 int
 snat_pre_route(struct sk_buff *skb)
@@ -316,42 +319,47 @@ snat_pre_route(struct sk_buff *skb)
 	int len;
 
 	WARN_ON_ONCE(skb_network_offset(skb));
-	if (skb->protocol == htons(ETH_P_ARP)) 
-		return handle_arp_snat(skb);
+	if (skb->protocol == htons(ETH_P_ARP)) {
+		if (handle_arp_snat(skb))
+			goto consume;
+		return 0;
+	}
 	else if (skb->protocol != htons(ETH_P_IP)) 
 		return 0;
 
 	if (!pskb_may_pull(skb, sizeof *iph))
-		goto ipv4_error;
+		goto consume;
 
 	iph = ip_hdr(skb);
 	if (iph->ihl < 5 || iph->version != 4)
-		goto ipv4_error;
+		goto consume;
 
 	if (!pskb_may_pull(skb, ip_hdrlen(skb)))
-		goto ipv4_error;
+		goto consume;
 	skb_set_transport_header(skb, ip_hdrlen(skb));
 
 	/* Check if we need to echo reply for this address */
 	iph = ip_hdr(skb);
 	if ((iph->protocol == IPPROTO_ICMP) && (handle_icmp_snat(skb))) 
-		return -1;
+		goto consume;
 
 	iph = ip_hdr(skb);
 	if (unlikely(ip_fast_csum(iph, iph->ihl)))
-		goto ipv4_error;
+		goto consume;
 
 	len = ntohs(iph->tot_len);
 	if ((skb->len < len) || len < (iph->ihl*4))
-		goto ipv4_error;
+		goto consume;
 
 	if (pskb_trim_rcsum(skb, len))
-		goto ipv4_error;
+		goto consume;
 
-	return NF_HOOK(PF_INET, NF_INET_PRE_ROUTING, skb, skb->dev, NULL,
-			snat_pre_route_finish);
+	NF_HOOK(PF_INET, NF_INET_PRE_ROUTING, skb, skb->dev, NULL,
+		snat_pre_route_finish);
+	return -1;
 
-ipv4_error:
+consume:
+	kfree_skb(skb);
 	return -1;
 }
 
