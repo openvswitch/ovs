@@ -122,8 +122,6 @@ recv_packet_out(struct sw_chain *chain, const struct sender *sender,
 {
 	const struct ofp_packet_out *opo = msg;
 	struct sk_buff *skb;
-	struct vlan_ethhdr *mac;
-	int nh_ofs;
 	uint16_t v_code;
 	struct sw_flow_key key;
 	size_t actions_len = ntohs(opo->actions_len);
@@ -145,16 +143,11 @@ recv_packet_out(struct sw_chain *chain, const struct sender *sender,
 		/* FIXME?  We don't reserve NET_IP_ALIGN or NET_SKB_PAD since
 		 * we're just transmitting this raw without examining anything
 		 * at those layers. */
-		memcpy(skb_put(skb, data_len), (uint8_t *)opo->actions + actions_len, 
-				data_len);
-
-		skb_set_mac_header(skb, 0);
-		mac = vlan_eth_hdr(skb);
-		if (likely(mac->h_vlan_proto != htons(ETH_P_8021Q)))
-			nh_ofs = sizeof(struct ethhdr);
-		else
-			nh_ofs = sizeof(struct vlan_ethhdr);
-		skb_set_network_header(skb, nh_ofs);
+		skb_put(skb, data_len);
+		skb_copy_to_linear_data(skb,
+					(uint8_t *)opo->actions + actions_len, 
+					data_len);
+		skb_reset_mac_header(skb);
 	} else {
 		skb = retrieve_skb(ntohl(opo->buffer_id));
 		if (!skb)

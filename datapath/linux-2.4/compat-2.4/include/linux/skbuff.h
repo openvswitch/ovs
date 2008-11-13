@@ -125,6 +125,11 @@ static inline void skb_set_tail_pointer(struct sk_buff *skb, const int offset)
 #define NET_IP_ALIGN	2
 #endif
 
-
+static inline void skb_copy_to_linear_data(struct sk_buff *skb,
+					   const void *from,
+					   const unsigned int len)
+{
+	memcpy(skb->data, from, len);
+}
 
 #endif
