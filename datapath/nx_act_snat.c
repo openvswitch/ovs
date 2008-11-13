@@ -203,11 +203,12 @@ static int
 handle_arp_snat(struct sk_buff *skb)
 {
 	struct net_bridge_port *p = skb->dev->br_port;
-	struct ip_arphdr *ah = (struct ip_arphdr *)arp_hdr(skb);
+	struct ip_arphdr *ah;
 
 	if (!pskb_may_pull(skb, sizeof *ah))
 		return 0;
 
+	ah = (struct ip_arphdr *)arp_hdr(skb);
 	if ((ah->ar_op != htons(ARPOP_REQUEST)) 
 			|| ah->ar_hln != ETH_ALEN
 			|| ah->ar_pro != htons(ETH_P_IP)
