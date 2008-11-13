@@ -465,6 +465,11 @@ uint32_t fwd_save_skb(struct sk_buff *skb)
 	unsigned long int flags;
 	uint32_t id;
 
+	/* FIXME: Probably just need a skb_clone() here. */
+	skb = skb_copy(skb, GFP_ATOMIC);
+	if (!skb)
+		return -1;
+
 	spin_lock_irqsave(&buffer_lock, flags);
 	buffer_idx = (buffer_idx + 1) & PKT_BUFFER_MASK;
 	p = &buffers[buffer_idx];
@@ -473,9 +478,13 @@ uint32_t fwd_save_skb(struct sk_buff *skb)
 		 * OVERWRITE_SECS old. */
 		if (time_before(jiffies, p->exp_jiffies)) {
 			spin_unlock_irqrestore(&buffer_lock, flags);
+			kfree_skb(skb);
 			return -1;
 		} else {
-			/* Defer kfree_skb() until interrupts re-enabled. */
+			/* Defer kfree_skb() until interrupts re-enabled.
+			 * FIXME: we only need to do that if it has a
+			 * destructor, but it never should since we orphan
+			 * sk_buffs on entry. */
 			old_skb = p->skb;
 		}
 	}
@@ -483,7 +492,6 @@ uint32_t fwd_save_skb(struct sk_buff *skb)
 	 * special. */
 	if (++p->cookie >= (1u << PKT_COOKIE_BITS) - 1)
 		p->cookie = 0;
-	skb_get(skb);
 	p->skb = skb;
 	p->exp_jiffies = jiffies + OVERWRITE_JIFFIES;
 	id = buffer_idx | (p->cookie << PKT_BUFFER_BITS);
