@@ -1180,8 +1180,7 @@ static int dp_genl_query(struct sk_buff *skb, struct genl_info *info)
 	}
 err:
 nla_put_failure:
-	if (ans_skb)
-		kfree_skb(ans_skb);
+	kfree_skb(ans_skb);
 	rcu_read_unlock();
 	return err;
 }
