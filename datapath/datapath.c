@@ -1176,8 +1176,7 @@ static int dp_genl_query(struct sk_buff *skb, struct genl_info *info)
 
 		genlmsg_end(ans_skb, data);
 		err = genlmsg_reply(ans_skb, info);
-		if (!err)
-			ans_skb = NULL;
+		ans_skb = NULL;
 	}
 err:
 nla_put_failure:
