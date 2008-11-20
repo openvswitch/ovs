@@ -342,8 +342,7 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
         const struct openflow_action *act = &of_actions[type];
         if ((len < act->min_size) || (len > act->max_size)) {
             ds_put_format(string, 
-                    "***action %"PRIu16" wrong length: %"PRIu16"***\n", 
-                    type, len);
+                    "***action %"PRIu16" wrong length: %zu***\n", type, len);
             return -1;
         }
     }
