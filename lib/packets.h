@@ -160,9 +160,13 @@ struct vlan_eth_header {
 } __attribute__((packed));
 BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
 
+/* The "(void) (ip)[0]" below has no effect on the value, since it's the first
+ * argument of a comma expression, but it makes sure that 'ip' is a pointer.
+ * This is useful since a common mistake is to pass an integer instead of a
+ * pointer to IP_ARGS. */
 #define IP_FMT "%"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8
 #define IP_ARGS(ip)                             \
-        ((uint8_t *) ip)[0],                    \
+        ((void) (ip)[0], ((uint8_t *) ip)[0]),  \
         ((uint8_t *) ip)[1],                    \
         ((uint8_t *) ip)[2],                    \
         ((uint8_t *) ip)[3]
