@@ -398,13 +398,13 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
 
     case OFPAT_SET_NW_SRC: {
         struct ofp_action_nw_addr *na = (struct ofp_action_nw_addr *)ah;
-        ds_put_format(string, "mod_nw_src:"IP_FMT, IP_ARGS(na->nw_addr));
+        ds_put_format(string, "mod_nw_src:"IP_FMT, IP_ARGS(&na->nw_addr));
         break;
     }
 
     case OFPAT_SET_NW_DST: {
         struct ofp_action_nw_addr *na = (struct ofp_action_nw_addr *)ah;
-        ds_put_format(string, "mod_nw_dst:"IP_FMT, IP_ARGS(na->nw_addr));
+        ds_put_format(string, "mod_nw_dst:"IP_FMT, IP_ARGS(&na->nw_addr));
         break;
     }
 
