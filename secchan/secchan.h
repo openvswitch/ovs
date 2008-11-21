@@ -100,7 +100,18 @@ struct relay {
 #define HALF_REMOTE 1
     struct half halves[2];
 
-    bool is_mgmt_conn;
+    /* The secchan has a primary connection (relay) to an OpenFlow controller.
+     * This primary connection actually makes two connections to the datapath:
+     * one for OpenFlow requests and responses, and one that is only used for
+     * receiving asynchronous events such as 'ofp_packet_in' events.  This
+     * design keeps replies to OpenFlow requests from being dropped by the
+     * kernel due to a flooded network device.
+     *
+     * The secchan may also have any number of secondary "management"
+     * connections (relays).  These connections do not receive asychronous
+     * events and thus have a null 'async_rconn'. */
+    bool is_mgmt_conn;          /* Is this a management connection? */
+    struct rconn *async_rconn;  /* For receiving asynchronous events. */
 };
 
 struct hook_class {
