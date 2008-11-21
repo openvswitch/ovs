@@ -57,8 +57,8 @@ struct switch_status_category {
 struct switch_status {
     const struct settings *s;
     time_t booted;
-    struct switch_status_category categories[8];
-    int n_categories;
+    struct switch_status_category *categories;
+    int n_categories, allocated_categories;
 };
 
 struct status_reply {
@@ -190,12 +190,16 @@ switch_status_start(struct secchan *secchan, const struct settings *s,
 void
 switch_status_register_category(struct switch_status *ss,
                                 const char *category,
-                                void (*cb)(struct status_reply *,
-                                           void *aux),
+                                void (*cb)(struct status_reply *, void *aux),
                                 void *aux)
 {
     struct switch_status_category *c;
-    assert(ss->n_categories < ARRAY_SIZE(ss->categories));
+    if (ss->n_categories >= ss->allocated_categories) {
+        ss->allocated_categories = 1 + ss->allocated_categories * 2;
+        ss->categories = xrealloc(ss->categories,
+                                  (sizeof *ss->categories
+                                   * ss->allocated_categories));
+    }
     c = &ss->categories[ss->n_categories++];
     c->cb = cb;
     c->aux = aux;
