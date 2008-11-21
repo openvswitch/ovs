@@ -244,8 +244,7 @@ static struct hook_class rate_limit_hook_class = {
 
 void
 rate_limit_start(struct secchan *secchan, const struct settings *s,
-                 struct switch_status *ss,
-                 struct rconn *local, struct rconn *remote)
+                 struct switch_status *ss, struct rconn *remote)
 {
     struct rate_limiter *rl;
     size_t i;

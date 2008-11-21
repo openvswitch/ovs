@@ -40,7 +40,6 @@ struct settings;
 struct switch_status;
 
 void rate_limit_start(struct secchan *, const struct settings *,
-                      struct switch_status *,
-                      struct rconn *local, struct rconn *remote);
+                      struct switch_status *, struct rconn *remote);
 
 #endif /* ratelimit.h */

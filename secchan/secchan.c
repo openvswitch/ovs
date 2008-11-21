@@ -195,8 +195,7 @@ main(int argc, char *argv[])
                         local_rconn, remote_rconn);
     }
     if (s.rate_limit) {
-        rate_limit_start(&secchan, &s, switch_status,
-                         local_rconn, remote_rconn);
+        rate_limit_start(&secchan, &s, switch_status, remote_rconn);
     }
     if (s.command_acl[0]) {
         executer_start(&secchan, &s);
