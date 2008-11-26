@@ -46,10 +46,6 @@ struct sk_buff;
 struct datapath {
 	int dp_idx;
 
-	/* Unique identifier for this datapath, incorporates the dp_idx and
-	 * a hardware address */
-	uint64_t  id;
-
 	struct timer_list timer;	/* Expiration timer. */
 	struct sw_chain *chain;	 /* Forwarding rules. */
 	struct task_struct *dp_task; /* Kernel thread for maintenance. */

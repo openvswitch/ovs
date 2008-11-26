@@ -265,7 +265,6 @@ static int new_dp(int dp_idx)
 		goto err_free_dp;
 
 	dp->dp_idx = dp_idx;
-	dp->id = get_datapath_id(dp->netdev);
 	dp->chain = chain_create(dp);
 	if (dp->chain == NULL)
 		goto err_destroy_dp_dev;
@@ -805,9 +804,10 @@ static int
 fill_features_reply(struct datapath *dp, struct ofp_switch_features *ofr)
 {
 	struct net_bridge_port *p;
+	uint64_t dpid = get_datapath_id(dp->netdev);
 	int port_count = 0;
 
-	ofr->datapath_id  = cpu_to_be64(dp->id); 
+	ofr->datapath_id  = cpu_to_be64(dpid);
 
 	ofr->n_buffers    = htonl(N_PKT_BUFFERS);
 	ofr->n_tables     = dp->chain->n_tables;
