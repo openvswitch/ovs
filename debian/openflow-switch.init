@@ -46,6 +46,7 @@ unset MGMT_VCONNS
 unset COMMANDS
 unset DAEMON_OPTS
 unset CORE_LIMIT
+unset DATAPATH_ID
 default=/etc/default/openflow-switch
 if [ -f $default ] ; then
 	. $default
@@ -221,6 +222,20 @@ case "$1" in
         for netdev in $NETDEVS; do
             must_succeed "Adding $netdev to datapath" dpctl addif nl:0 $netdev
         done
+
+        xx='[0-9abcdefABCDEF][0-9abcdefABCDEF]'
+        case $DATAPATH_ID in
+            '')
+                ;;
+            $xx:$xx:$xx:$xx:$xx:$xx)
+                ifconfig of0 down
+                must_succeed "Setting of0 MAC address to $DATAPATH_ID" ifconfig of0 hw ether $DATAPATH_ID
+                ifconfig of0 up
+                ;;
+            *)
+                echo "DATAPATH_ID is not a valid MAC address in the form XX:XX:XX:XX:XX:XX, ignoring" >&2
+                ;;
+        esac
 
         if test "$MODE" = in-band; then
             if test "$SWITCH_IP" = dhcp; then

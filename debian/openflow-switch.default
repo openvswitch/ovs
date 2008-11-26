@@ -122,3 +122,13 @@ DAEMON_OPTS=""
 # will disable core dumps.  Setting it to "unlimited" will dump all
 # core files regardless of size.
 #CORE_LIMIT=unlimited
+
+# DATAPATH_ID: Identifier for this switch.
+#
+# By default, the switch generates a new, random datapath ID every time
+# it starts up.  By setting this value, the datapath ID will be consistent
+# from one run to the next.
+#
+# Set DATAPATH_ID to a MAC address in the form XX:XX:XX:XX:XX:XX where each
+# X is a hexadecimal digit (0-9 or a-f).
+#DATAPATH_ID=XX:XX:XX:XX:XX:XX 
