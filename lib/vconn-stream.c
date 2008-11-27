@@ -163,7 +163,7 @@ again:
             return EOF;
         }
     } else {
-        return retval ? errno : EAGAIN;
+        return errno;
     }
 }
 
