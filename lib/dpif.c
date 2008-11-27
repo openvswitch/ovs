@@ -103,7 +103,9 @@ dpif_open(int dp_idx, bool subscribe, struct dpif *dp)
 void
 dpif_close(struct dpif *dp) 
 {
-    nl_sock_destroy(dp->sock);
+    if (dp) {
+        nl_sock_destroy(dp->sock);
+    }
 }
 
 static const struct nl_policy openflow_policy[] = {
