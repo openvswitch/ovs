@@ -264,10 +264,15 @@ void
 rconn_destroy(struct rconn *rc)
 {
     if (rc) {
+        size_t i;
+
         free(rc->name);
         vconn_close(rc->vconn);
         flush_queue(rc);
         queue_destroy(&rc->txq);
+        for (i = 0; i < rc->n_monitors; i++) {
+            vconn_close(rc->monitors[i]);
+        }
         free(rc);
     }
 }
