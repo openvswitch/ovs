@@ -202,6 +202,14 @@ struct ip_header {
 };
 BUILD_ASSERT_DECL(IP_HEADER_LEN == sizeof(struct ip_header));
 
+#define ICMP_HEADER_LEN 4
+struct icmp_header {
+    uint8_t icmp_type;
+    uint8_t icmp_code;
+    uint16_t icmp_csum;
+};
+BUILD_ASSERT_DECL(ICMP_HEADER_LEN == sizeof(struct icmp_header));
+
 #define UDP_HEADER_LEN 8
 struct udp_header {
     uint16_t udp_src;

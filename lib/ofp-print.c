@@ -739,10 +739,17 @@ static void ofp_print_match(struct ds *f, const struct ofp_match *om,
         print_wild(f, "nw_proto=", w & OFPFW_NW_PROTO, verbosity,
                    "%u", om->nw_proto);
     }
-    print_wild(f, "tp_src=", w & OFPFW_TP_SRC, verbosity,
-               "%d", ntohs(om->tp_src));
-    print_wild(f, "tp_dst=", w & OFPFW_TP_DST, verbosity,
-               "%d", ntohs(om->tp_dst));
+    if (om->nw_proto == IP_TYPE_ICMP) {
+        print_wild(f, "icmp_type=", w & OFPFW_ICMP_TYPE, verbosity,
+                   "%d", ntohs(om->icmp_type));
+        print_wild(f, "icmp_code=", w & OFPFW_ICMP_CODE, verbosity,
+                   "%d", ntohs(om->icmp_code));
+    } else {
+        print_wild(f, "tp_src=", w & OFPFW_TP_SRC, verbosity,
+                   "%d", ntohs(om->tp_src));
+        print_wild(f, "tp_dst=", w & OFPFW_TP_DST, verbosity,
+                   "%d", ntohs(om->tp_dst));
+    }
 }
 
 /* Pretty-print the OFPT_FLOW_MOD packet of 'len' bytes at 'oh' to 'string'

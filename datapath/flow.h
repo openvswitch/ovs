@@ -39,6 +39,11 @@ struct sw_flow_key {
 	uint32_t nw_dst_mask;	/* 1-bit in each significant nw_dst bit. */
 };
 
+/* The match fields for ICMP type and code use the transport source and 
+ * destination port fields, respectively. */
+#define icmp_type tp_src
+#define icmp_code tp_dst
+
 /* Compare two sw_flow_keys and return true if they are the same flow, false
  * otherwise.  Wildcards and netmasks are not considered. */
 static inline int flow_keys_equal(const struct sw_flow_key *a,

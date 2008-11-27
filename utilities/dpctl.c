@@ -742,6 +742,8 @@ parse_field(const char *name, const struct field **f_out)
         { "nw_proto", OFPFW_NW_PROTO, F_U8, F_OFS(nw_proto) },
         { "tp_src", OFPFW_TP_SRC, F_U16, F_OFS(tp_src) },
         { "tp_dst", OFPFW_TP_DST, F_U16, F_OFS(tp_dst) },
+        { "icmp_type", OFPFW_ICMP_TYPE, F_U16, F_OFS(icmp_type) },
+        { "icmp_code", OFPFW_ICMP_CODE, F_U16, F_OFS(icmp_code) }
     };
     const struct field *f;
 

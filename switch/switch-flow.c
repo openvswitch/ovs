@@ -129,7 +129,8 @@ flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
              * protocol is unknown. */
             to->wildcards |= OFPFW_TP;
         } else if (from->nw_proto == IPPROTO_TCP 
-                || from->nw_proto == IPPROTO_UDP) {
+                || from->nw_proto == IPPROTO_UDP
+                || from->nw_proto == IPPROTO_ICMP) {
             to->flow.tp_src = from->tp_src;
             to->flow.tp_dst = from->tp_dst;
         } else {

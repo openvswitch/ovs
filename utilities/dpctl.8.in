@@ -296,6 +296,13 @@ packets originating from a HTTP server.
 .IP \fBtp_dst=\fIport\fR
 Matches UDP or TCP destination port \fIport\fR.
 
+.IP \fBicmp_type=\fItype\fR
+Matches ICMP message with \fItype\fR, which should be specified as a decimal 
+number between 0 and 255, inclusive.
+
+.IP \fBicmp_code=\fIcode\fR
+Matches ICMP messages with \fIcode\fR.
+
 .PP
 The following shorthand notations are also available:
 

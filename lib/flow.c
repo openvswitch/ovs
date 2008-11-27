@@ -76,6 +76,12 @@ pull_udp(struct ofpbuf *packet)
     return ofpbuf_try_pull(packet, UDP_HEADER_LEN);
 }
 
+static struct icmp_header *
+pull_icmp(struct ofpbuf *packet) 
+{
+    return ofpbuf_try_pull(packet, ICMP_HEADER_LEN);
+}
+
 static struct eth_header *
 pull_eth(struct ofpbuf *packet) 
 {
@@ -175,6 +181,17 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, struct flow *flow)
                         if (udp) {
                             flow->tp_src = udp->udp_src;
                             flow->tp_dst = udp->udp_dst;
+                            packet->l7 = b.data;
+                        } else {
+                            /* Avoid tricking other code into thinking that
+                             * this packet has an L4 header. */
+                            flow->nw_proto = 0;
+                        }
+                    } else if (flow->nw_proto == IP_TYPE_ICMP) {
+                        const struct icmp_header *icmp = pull_icmp(&b);
+                        if (icmp) {
+                            flow->icmp_type = htons(icmp->icmp_type);
+                            flow->icmp_code = htons(icmp->icmp_code);
                             packet->l7 = b.data;
                         } else {
                             /* Avoid tricking other code into thinking that

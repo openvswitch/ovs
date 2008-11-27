@@ -17,6 +17,7 @@
 #include <linux/module.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#include <linux/icmp.h>
 #include <linux/in.h>
 #include <linux/rcupdate.h>
 #include <net/ip.h>
@@ -114,7 +115,8 @@ void flow_extract_match(struct sw_flow_key* to, const struct ofp_match* from)
 			 * network protocol is unknown. */
 			to->wildcards |= OFPFW_TP;
 		} else if (from->nw_proto == IPPROTO_TCP
-			   || from->nw_proto == IPPROTO_UDP) {
+				|| from->nw_proto == IPPROTO_UDP
+				|| from->nw_proto == IPPROTO_ICMP) {
 			to->tp_src = from->tp_src;
 			to->tp_dst = from->tp_dst;
 		} else {
@@ -322,6 +324,12 @@ static int udphdr_ok(struct sk_buff *skb)
 	return pskb_may_pull(skb, th_ofs + sizeof(struct udphdr));
 }
 
+static int icmphdr_ok(struct sk_buff *skb)
+{
+	int th_ofs = skb_transport_offset(skb);
+	return pskb_may_pull(skb, th_ofs + sizeof(struct icmphdr));
+}
+
 /* Parses the Ethernet frame in 'skb', which was received on 'in_port',
  * and initializes 'key' to match.  Returns 1 if 'skb' contains an IP
  * fragment, 0 otherwise. */
@@ -398,6 +406,20 @@ int flow_extract(struct sk_buff *skb, uint16_t in_port,
 					struct udphdr *udp = udp_hdr(skb);
 					key->tp_src = udp->source;
 					key->tp_dst = udp->dest;
+				} else {
+					/* Avoid tricking other code into
+					 * thinking that this packet has an L4
+					 * header. */
+					key->nw_proto = 0;
+				}
+			} else if (key->nw_proto == IPPROTO_ICMP) {
+				if (icmphdr_ok(skb)) {
+					struct icmphdr *icmp = icmp_hdr(skb);
+					/* The ICMP type and code fields use the 16-bit
+					 * transport port fields, so we need to store them
+					 * in 16-bit network byte order. */
+					key->icmp_type = htons(icmp->type);
+					key->icmp_code = htons(icmp->code);
 				} else {
 					/* Avoid tricking other code into
 					 * thinking that this packet has an L4
