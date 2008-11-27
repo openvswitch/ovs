@@ -170,6 +170,7 @@ static int ssl_init(void);
 static int do_ssl_init(void);
 static bool ssl_wants_io(int ssl_error);
 static void ssl_close(struct vconn *);
+static void ssl_clear_txbuf(struct ssl_vconn *);
 static int interpret_ssl_error(const char *function, int ret, int error,
                                int *want);
 static void ssl_tx_poll_callback(int fd, short int revents, void *vconn_);
@@ -482,6 +483,8 @@ ssl_close(struct vconn *vconn)
 {
     struct ssl_vconn *sslv = ssl_vconn_cast(vconn);
     poll_cancel(sslv->tx_waiter);
+    ssl_clear_txbuf(sslv);
+    ofpbuf_delete(sslv->rxbuf);
     SSL_free(sslv->ssl);
     close(sslv->fd);
     free(sslv);

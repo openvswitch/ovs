@@ -66,6 +66,8 @@ static struct vconn_class stream_vconn_class;
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 25);
 
+static void stream_clear_txbuf(struct stream_vconn *);
+
 int
 new_stream_vconn(const char *name, int fd, int connect_status,
                  uint32_t ip, struct vconn **vconnp)
@@ -94,6 +96,8 @@ stream_close(struct vconn *vconn)
 {
     struct stream_vconn *s = stream_vconn_cast(vconn);
     poll_cancel(s->tx_waiter);
+    stream_clear_txbuf(s);
+    ofpbuf_delete(s->rxbuf);
     close(s->fd);
     free(s);
 }
