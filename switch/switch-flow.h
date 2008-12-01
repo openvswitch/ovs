@@ -78,6 +78,7 @@ int flow_matches_1wild(const struct sw_flow_key *, const struct sw_flow_key *);
 int flow_matches_2wild(const struct sw_flow_key *, const struct sw_flow_key *);
 int flow_matches_desc(const struct sw_flow_key *, const struct sw_flow_key *, 
                      int);
+int flow_has_out_port(struct sw_flow *flow, uint16_t out_port);
 struct sw_flow *flow_alloc(size_t);
 void flow_free(struct sw_flow *);
 void flow_deferred_free(struct sw_flow *);

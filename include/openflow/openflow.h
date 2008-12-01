@@ -63,7 +63,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x96
+#define OFP_VERSION   0x97
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -531,12 +531,17 @@ struct ofp_flow_mod {
     uint16_t priority;            /* Priority level of flow entry. */
     uint32_t buffer_id;           /* Buffered packet to apply to (or -1). 
                                      Not meaningful for OFPFC_DELETE*. */
+    uint16_t out_port;            /* For OFPFC_DELETE* commands, require 
+                                     matching entries to include this as an 
+                                     output port.  A value of OFPP_NONE 
+                                     indicates no restriction. */
+    uint8_t pad[2];               /* Align to 32-bits. */
     uint32_t reserved;            /* Reserved for future use. */
     struct ofp_action_header actions[0]; /* The action length is inferred 
                                             from the length field in the 
                                             header. */
 };
-OFP_ASSERT(sizeof(struct ofp_flow_mod) == 60);
+OFP_ASSERT(sizeof(struct ofp_flow_mod) == 64);
 
 /* Why did this flow expire? */
 enum ofp_flow_expired_reason {
@@ -685,7 +690,10 @@ struct ofp_flow_stats_request {
     struct ofp_match match;   /* Fields to match */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
                                  or 0xff for all tables. */
-    uint8_t pad[3];           /* Align to 32 bits. */
+    uint8_t pad;              /* Align to 32 bits. */
+    uint16_t out_port;        /* Require matching entries to include this 
+                                 as an output port.  A value of OFPP_NONE 
+                                 indicates no restriction. */
 };
 OFP_ASSERT(sizeof(struct ofp_flow_stats_request) == 40);
 
@@ -712,7 +720,10 @@ struct ofp_aggregate_stats_request {
     struct ofp_match match;   /* Fields to match */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
                                  or 0xff for all tables. */
-    uint8_t pad[3];           /* Align to 32 bits. */
+    uint8_t pad;              /* Align to 32 bits. */
+    uint16_t out_port;        /* Require matching entries to include this 
+                                 as an output port.  A value of OFPP_NONE 
+                                 indicates no restriction. */
 };
 OFP_ASSERT(sizeof(struct ofp_aggregate_stats_request) == 40);
 

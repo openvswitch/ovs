@@ -95,10 +95,12 @@ struct sw_table {
             const struct ofp_action_header *actions, size_t actions_len);
 
     /* Deletes from 'table' any and all flows that match 'key' from
-     * 'table'.  If 'strict' set, wildcards must match.  Returns the 
+     * 'table'.  If 'out_port' is not OFPP_NONE, then matching entries
+     * must have that port as an argument for an output action.  If 
+     * 'strict' is set, wildcards and priority must match.  Returns the 
      * number of flows that were deleted. */
     int (*delete)(struct sw_table *table, const struct sw_flow_key *key, 
-                  uint16_t priority, int strict);
+                  uint16_t out_port, uint16_t priority, int strict);
 
     /* Performs timeout processing on all the flow entries in 'table'.
      * Appends all the flow entries removed from 'table' to 'deleted' for the
@@ -109,10 +111,11 @@ struct sw_table {
     void (*destroy)(struct sw_table *table);
 
     /* Iterates through the flow entries in 'table', passing each one
-     * matches 'key' to 'callback'.  The callback function should return 0
-     * to continue iteration or a nonzero error code to stop.  The iterator
-     * function returns either 0 if the table iteration completed or the
-     * value returned by the callback function otherwise.
+     * matches 'key' and output port 'out_port' to 'callback'.  The 
+     * callback function should return 0 to continue iteration or a 
+     * nonzero error code to stop.  The iterator function returns either 
+     * 0 if the table iteration completed or the value returned by the 
+     * callback function otherwise.
      *
      * The iteration starts at 'position', which may be initialized to
      * all-zero-bits to iterate from the beginning of the table.  If the
@@ -121,7 +124,7 @@ struct sw_table {
      * iterator function to resume iteration later with the following
      * flow. */
     int (*iterate)(struct sw_table *table,
-               const struct sw_flow_key *key,
+               const struct sw_flow_key *key, uint16_t out_port,
                struct sw_table_position *position,
                int (*callback)(struct sw_flow *flow, void *private),
                void *private);

@@ -404,6 +404,14 @@ regardless of activity.  A value of 0 (the default) gives the flow no
 hard expiration deadline.
 
 .PP
+The \fBdump-flows\fR, \fBdump-aggregate\fR, \fBdel-flow\fR 
+and \fBdel-flows\fR commands support the additional optional field:
+
+.TP
+\fBout_port=\fIport\fR
+If set, a matching flow must include an output action to \fIport\fR.
+
+.PP
 The \fBdump-flows\fR and \fBdump-aggregate\fR commands support an
 additional optional field:
 

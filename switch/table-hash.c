@@ -136,6 +136,7 @@ do_delete(struct sw_flow **bucket)
  * priority. */
 static int table_hash_delete(struct sw_table *swt,
                              const struct sw_flow_key *key, 
+                             uint16_t out_port,
                              uint16_t priority, int strict)
 {
     struct sw_table_hash *th = (struct sw_table_hash *) swt;
@@ -144,7 +145,8 @@ static int table_hash_delete(struct sw_table *swt,
     if (key->wildcards == 0) {
         struct sw_flow **bucket = find_bucket(swt, key);
         struct sw_flow *flow = *bucket;
-        if (flow && !flow_compare(&flow->key.flow, &key->flow)) {
+        if (flow && !flow_compare(&flow->key.flow, &key->flow)
+                && flow_has_out_port(flow, out_port)) {
             do_delete(bucket);
             count = 1;
         }
@@ -154,7 +156,8 @@ static int table_hash_delete(struct sw_table *swt,
         for (i = 0; i <= th->bucket_mask; i++) {
             struct sw_flow **bucket = &th->buckets[i];
             struct sw_flow *flow = *bucket;
-            if (flow && flow_matches_desc(&flow->key, key, strict)) {
+            if (flow && flow_matches_desc(&flow->key, key, strict)
+                    && flow_has_out_port(flow, out_port)) {
                 do_delete(bucket);
                 count++;
             }
@@ -194,7 +197,7 @@ static void table_hash_destroy(struct sw_table *swt)
 }
 
 static int table_hash_iterate(struct sw_table *swt,
-                              const struct sw_flow_key *key,
+                              const struct sw_flow_key *key, uint16_t out_port,
                               struct sw_table_position *position,
                               int (*callback)(struct sw_flow *, void *private),
                               void *private) 
@@ -207,13 +210,17 @@ static int table_hash_iterate(struct sw_table *swt,
     if (key->wildcards == 0) {
         struct sw_flow *flow = table_hash_lookup(swt, key);
         position->private[0] = -1;
-        return flow ? callback(flow, private) : 0;
+        if (!flow || !flow_has_out_port(flow, out_port)) {
+            return 0;
+        }
+        return callback(flow, private);
     } else {
         int i;
 
         for (i = position->private[0]; i <= th->bucket_mask; i++) {
             struct sw_flow *flow = th->buckets[i];
-            if (flow && flow_matches_1wild(&flow->key, key)) {
+            if (flow && flow_matches_1wild(&flow->key, key)
+                    && flow_has_out_port(flow, out_port)) {
                 int error = callback(flow, private);
                 if (error) {
                     position->private[0] = i + 1;
@@ -316,11 +323,13 @@ static int table_hash2_modify(struct sw_table *swt,
 
 static int table_hash2_delete(struct sw_table *swt,
                               const struct sw_flow_key *key, 
+                              uint16_t out_port,
                               uint16_t priority, int strict)
 {
     struct sw_table_hash2 *t2 = (struct sw_table_hash2 *) swt;
-    return (table_hash_delete(t2->subtable[0], key, priority, strict)
-            + table_hash_delete(t2->subtable[1], key, priority, strict));
+    return (table_hash_delete(t2->subtable[0], key, out_port, priority, strict)
+            + table_hash_delete(t2->subtable[1], key, out_port, priority, 
+                strict));
 }
 
 static void table_hash2_timeout(struct sw_table *swt, struct list *deleted)
@@ -339,7 +348,8 @@ static void table_hash2_destroy(struct sw_table *swt)
 }
 
 static int table_hash2_iterate(struct sw_table *swt,
-                               const struct sw_flow_key *key,
+                               const struct sw_flow_key *key, 
+                               uint16_t out_port,
                                struct sw_table_position *position,
                                int (*callback)(struct sw_flow *, void *),
                                void *private)
@@ -348,8 +358,8 @@ static int table_hash2_iterate(struct sw_table *swt,
     int i;
 
     for (i = position->private[1]; i < 2; i++) {
-        int error = table_hash_iterate(t2->subtable[i], key, position,
-                                       callback, private);
+        int error = table_hash_iterate(t2->subtable[i], key, out_port, 
+                                       position, callback, private);
         if (error) {
             return error;
         }

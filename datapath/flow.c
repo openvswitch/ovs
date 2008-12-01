@@ -167,6 +167,40 @@ int flow_timeout(struct sw_flow *flow)
 }
 EXPORT_SYMBOL(flow_timeout);
 
+/* Returns nonzero if 'flow' contains an output action to 'out_port' or
+ * has the value OFPP_NONE. 'out_port' is in network-byte order. */
+int flow_has_out_port(struct sw_flow *flow, uint16_t out_port)
+{
+	struct sw_flow_actions *sf_acts;
+	size_t actions_len;
+	uint8_t *p;
+
+	if (out_port == htons(OFPP_NONE))
+		return 1;
+
+	sf_acts = rcu_dereference(flow->sf_acts);
+
+	actions_len = sf_acts->actions_len;
+	p = (uint8_t *)sf_acts->actions;
+
+	while (actions_len > 0) {
+		struct ofp_action_header *ah = (struct ofp_action_header *)p;
+		size_t len = ntohs(ah->len);
+
+		if (ah->type == htons(OFPAT_OUTPUT)) {
+			struct ofp_action_output *oa = (struct ofp_action_output *)p;
+			if (oa->port == out_port)
+				return 1;
+		}
+
+		p += len;
+		actions_len -= len;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(flow_has_out_port);
+
 /* Allocates and returns a new flow with room for 'actions_len' actions, 
  * using allocation flags 'flags'.  Returns the new flow or a null pointer 
  * on failure. */

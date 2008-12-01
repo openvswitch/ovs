@@ -760,7 +760,7 @@ parse_field(const char *name, const struct field **f_out)
 static void
 str_to_flow(char *string, struct ofp_match *match, 
             struct ofp_action_header *actions, size_t *actions_len, 
-            uint8_t *table_idx, uint16_t *priority, 
+            uint8_t *table_idx, uint16_t *out_port, uint16_t *priority, 
             uint16_t *idle_timeout, uint16_t *hard_timeout)
 {
 
@@ -769,6 +769,9 @@ str_to_flow(char *string, struct ofp_match *match,
 
     if (table_idx) {
         *table_idx = 0xff;
+    }
+    if (out_port) {
+        *out_port = OFPP_NONE;
     }
     if (priority) {
         *priority = OFP_DEFAULT_PRIORITY;
@@ -819,6 +822,8 @@ str_to_flow(char *string, struct ofp_match *match,
         
             if (table_idx && !strcmp(name, "table")) {
                 *table_idx = atoi(value);
+            } else if (out_port && !strcmp(name, "out_port")) {
+                *out_port = atoi(value);
             } else if (priority && !strcmp(name, "priority")) {
                 *priority = atoi(value);
             } else if (idle_timeout && !strcmp(name, "idle_timeout")) {
@@ -854,12 +859,14 @@ str_to_flow(char *string, struct ofp_match *match,
 static void do_dump_flows(const struct settings *s, int argc, char *argv[])
 {
     struct ofp_flow_stats_request *req;
+    uint16_t out_port;
     struct ofpbuf *request;
 
     req = alloc_stats_request(sizeof *req, OFPST_FLOW, &request);
     str_to_flow(argc > 2 ? argv[2] : "", &req->match, NULL, 0, 
-                &req->table_id, NULL, NULL, NULL);
-    memset(req->pad, 0, sizeof req->pad);
+                &req->table_id, &out_port, NULL, NULL, NULL);
+    memset(&req->pad, 0, sizeof req->pad);
+    req->out_port = htons(out_port);
 
     dump_stats_transaction(argv[1], request);
 }
@@ -869,11 +876,13 @@ static void do_dump_aggregate(const struct settings *s, int argc,
 {
     struct ofp_aggregate_stats_request *req;
     struct ofpbuf *request;
+    uint16_t out_port;
 
     req = alloc_stats_request(sizeof *req, OFPST_AGGREGATE, &request);
     str_to_flow(argc > 2 ? argv[2] : "", &req->match, NULL, 0,
-                &req->table_id, NULL, NULL, NULL);
-    memset(req->pad, 0, sizeof req->pad);
+                &req->table_id, &out_port, NULL, NULL, NULL);
+    memset(&req->pad, 0, sizeof req->pad);
+    req->out_port = htons(out_port);
 
     dump_stats_transaction(argv[1], request);
 }
@@ -943,7 +952,7 @@ static void do_add_flow(const struct settings *s, int argc, char *argv[])
     size = sizeof *ofm + actions_len;
     ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argv[2], &ofm->match, &ofm->actions[0], &actions_len, 
-                NULL, &priority, &idle_timeout, &hard_timeout);
+                NULL, NULL, &priority, &idle_timeout, &hard_timeout);
     ofm->command = htons(OFPFC_ADD);
     ofm->idle_timeout = htons(idle_timeout);
     ofm->hard_timeout = htons(hard_timeout);
@@ -995,7 +1004,7 @@ static void do_add_flows(const struct settings *s, int argc, char *argv[])
         size = sizeof *ofm + actions_len;
         ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
         str_to_flow(line, &ofm->match, &ofm->actions[0], &actions_len, 
-                    NULL, &priority, &idle_timeout, &hard_timeout);
+                    NULL, NULL, &priority, &idle_timeout, &hard_timeout);
         ofm->command = htons(OFPFC_ADD);
         ofm->idle_timeout = htons(idle_timeout);
         ofm->hard_timeout = htons(hard_timeout);
@@ -1025,7 +1034,7 @@ static void do_mod_flows(const struct settings *s, int argc, char *argv[])
     size = sizeof *ofm + actions_len;
     ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argv[2], &ofm->match, &ofm->actions[0], &actions_len, 
-                NULL, &priority, &idle_timeout, &hard_timeout);
+                NULL, NULL, &priority, &idle_timeout, &hard_timeout);
     if (s->strict) {
         ofm->command = htons(OFPFC_MODIFY_STRICT);
     } else {
@@ -1049,6 +1058,7 @@ static void do_del_flows(const struct settings *s, int argc, char *argv[])
 {
     struct vconn *vconn;
     uint16_t priority;
+    uint16_t out_port;
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
     size_t size;
@@ -1057,7 +1067,7 @@ static void do_del_flows(const struct settings *s, int argc, char *argv[])
     size = sizeof *ofm;
     ofm = make_openflow(size, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argc > 2 ? argv[2] : "", &ofm->match, NULL, 0, NULL, 
-                &priority, NULL, NULL);
+                &out_port, &priority, NULL, NULL);
     if (s->strict) {
         ofm->command = htons(OFPFC_DELETE_STRICT);
     } else {
@@ -1066,6 +1076,7 @@ static void do_del_flows(const struct settings *s, int argc, char *argv[])
     ofm->idle_timeout = htons(0);
     ofm->hard_timeout = htons(0);
     ofm->buffer_id = htonl(UINT32_MAX);
+    ofm->out_port = htons(out_port);
     ofm->priority = htons(priority);
     ofm->reserved = htonl(0);
 

@@ -1098,13 +1098,14 @@ recv_flow(struct datapath *dp, const struct sender *sender,
     }  else if (command == OFPFC_DELETE) {
         struct sw_flow_key key;
         flow_extract_match(&key, &ofm->match);
-        return chain_delete(dp->chain, &key, 0, 0) ? 0 : -ESRCH;
+        return chain_delete(dp->chain, &key, ofm->out_port, 0, 0) ? 0 : -ESRCH;
     } else if (command == OFPFC_DELETE_STRICT) {
         struct sw_flow_key key;
         uint16_t priority;
         flow_extract_match(&key, &ofm->match);
         priority = key.wildcards ? ntohs(ofm->priority) : -1;
-        return chain_delete(dp->chain, &key, priority, 1) ? 0 : -ESRCH;
+        return chain_delete(dp->chain, &key, ofm->out_port, 
+                priority, 1) ? 0 : -ESRCH;
     } else {
         return -ENODEV;
     }
@@ -1167,8 +1168,8 @@ static int flow_stats_dump(struct datapath *dp, void *state,
     {
         struct sw_table *table = dp->chain->tables[s->table_idx];
 
-        if (table->iterate(table, &match_key, &s->position,
-                           flow_stats_dump_callback, s))
+        if (table->iterate(table, &match_key, s->rq.out_port,
+                    &s->position, flow_stats_dump_callback, s))
             break;
 
         s->table_idx++;
@@ -1227,7 +1228,7 @@ static int aggregate_stats_dump(struct datapath *dp, void *state,
         struct sw_table *table = dp->chain->tables[table_idx];
         int error;
 
-        error = table->iterate(table, &match_key, &position,
+        error = table->iterate(table, &match_key, rq->out_port, &position,
                                aggregate_stats_dump_callback, rpy);
         if (error)
             return error;

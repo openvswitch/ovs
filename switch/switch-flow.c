@@ -262,6 +262,34 @@ bool flow_timeout(struct sw_flow *flow)
     }
 }
 
+/* Returns nonzero if 'flow' contains an output action to 'out_port' or
+ * has the value OFPP_NONE. 'out_port' is in network-byte order. */
+int flow_has_out_port(struct sw_flow *flow, uint16_t out_port)
+{
+    struct sw_flow_actions *sf_acts = flow->sf_acts;
+    size_t actions_len = sf_acts->actions_len;
+    uint8_t *p = (uint8_t *)sf_acts->actions;
+
+    if (out_port == htons(OFPP_NONE))
+        return 1;
+
+    while (actions_len > 0) {
+        struct ofp_action_header *ah = (struct ofp_action_header *)p;
+        size_t len = ntohs(ah->len);
+
+        if (ah->type == htons(OFPAT_OUTPUT)) {
+            struct ofp_action_output *oa = (struct ofp_action_output *)p;
+            if (oa->port == out_port) {
+                return 1;
+            }
+        }
+        p += len;
+        actions_len -= len;
+    }
+
+    return 0;
+}
+
 void flow_used(struct sw_flow *flow, struct ofpbuf *buffer)
 {
     flow->used = time_now();

@@ -99,7 +99,8 @@ static int do_delete(struct sw_table *swt, struct sw_flow *flow)
 }
 
 static int table_linear_delete(struct sw_table *swt,
-				const struct sw_flow_key *key, uint16_t priority, int strict)
+				const struct sw_flow_key *key, uint16_t out_port,
+				uint16_t priority, int strict)
 {
 	struct sw_table_linear *tl = (struct sw_table_linear *) swt;
 	struct sw_flow *flow;
@@ -107,6 +108,7 @@ static int table_linear_delete(struct sw_table *swt,
 
 	list_for_each_entry (flow, &tl->flows, node) {
 		if (flow_matches_desc(&flow->key, key, strict)
+				&& flow_has_out_port(flow, out_port)
 				&& (!strict || (flow->priority == priority)))
 			count += do_delete(swt, flow);
 	}
@@ -147,7 +149,7 @@ static void table_linear_destroy(struct sw_table *swt)
 }
 
 static int table_linear_iterate(struct sw_table *swt,
-				const struct sw_flow_key *key,
+				const struct sw_flow_key *key, uint16_t out_port,
 				struct sw_table_position *position,
 				int (*callback)(struct sw_flow *, void *),
 				void *private)
@@ -159,7 +161,8 @@ static int table_linear_iterate(struct sw_table *swt,
 	start = position->private[0];
 	list_for_each_entry (flow, &tl->iter_flows, iter_node) {
 		if (flow->serial >= start
-		    && flow_matches_2wild(key, &flow->key)) {
+				&& flow_matches_2wild(key, &flow->key)
+				&& flow_has_out_port(flow, out_port)) {
 			int error = callback(flow, private);
 			if (error) {
 				position->private[0] = flow->serial;

@@ -322,13 +322,14 @@ recv_flow(struct sw_chain *chain, const struct sender *sender, const void *msg)
 	}  else if (command == OFPFC_DELETE) {
 		struct sw_flow_key key;
 		flow_extract_match(&key, &ofm->match);
-		return chain_delete(chain, &key, 0, 0) ? 0 : -ESRCH;
+		return chain_delete(chain, &key, ofm->out_port, 0, 0) ? 0 : -ESRCH;
 	} else if (command == OFPFC_DELETE_STRICT) {
 		struct sw_flow_key key;
 		uint16_t priority;
 		flow_extract_match(&key, &ofm->match);
 		priority = key.wildcards ? ntohs(ofm->priority) : -1;
-		return chain_delete(chain, &key, priority, 1) ? 0 : -ESRCH;
+		return chain_delete(chain, &key, ofm->out_port, 
+				priority, 1) ? 0 : -ESRCH;
 	} else {
 		return -ENOTSUPP;
 	}
