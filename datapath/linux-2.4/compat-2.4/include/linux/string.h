@@ -7,4 +7,6 @@
 size_t strcspn(const char *s, const char *reject);
 #endif
 
+size_t strlcpy(char *, const char *, size_t);
+
 #endif /* linux/string.h */

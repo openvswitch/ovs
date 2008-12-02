@@ -1,5 +1,5 @@
-#ifndef __LINUX_DMI_H
-#define __LINUX_DMI_H 1
+#ifndef __LINUX_DMI_WRAPPER_H
+#define __LINUX_DMI_WRAPPER_H 1
 
 enum dmi_field {
 	DMI_NONE,

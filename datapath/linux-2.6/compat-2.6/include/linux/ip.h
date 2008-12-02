@@ -13,6 +13,11 @@ static inline struct iphdr *ip_hdr(const struct sk_buff *skb)
 {
 	return (struct iphdr *)skb_network_header(skb);
 }
+
+static inline unsigned int ip_hdrlen(const struct sk_buff *skb)
+{
+	return ip_hdr(skb)->ihl * 4;
+}
 #endif /* __KERNEL__ */
 
 #endif /* linux kernel < 2.6.22 */
