@@ -319,7 +319,7 @@ vcs_recv_hello(struct vconn *vconn)
                 struct ds msg = DS_EMPTY_INITIALIZER;
                 ds_put_format(&msg, "%s: extra-long hello:\n", vconn->name);
                 ds_put_hex_dump(&msg, b->data, b->size, 0, true);
-                VLOG_WARN_RL(&rl, ds_cstr(&msg));
+                VLOG_WARN_RL(&rl, "%s", ds_cstr(&msg));
                 ds_destroy(&msg);
             }
 
