@@ -30,7 +30,7 @@
 # advertising or publicity pertaining to the Software or any
 # derivatives without specific, written prior permission.
 
-AC_PREREQ(2.59)
+AC_PREREQ(2.60)
 AC_INIT(openflow, 0.8.9~1, info@openflowswitch.org)
 NX_BUILDNR
 AC_CONFIG_SRCDIR([README.hwtables])
@@ -43,6 +43,7 @@ AC_PROG_CC
 AM_PROG_CC_C_O
 AC_PROG_CPP
 AC_PROG_RANLIB
+AC_PROG_MKDIR_P
 
 AC_ARG_VAR([PERL], [path to Perl interpreter])
 AC_PATH_PROG([PERL], perl, no)
