@@ -1,4 +1,4 @@
-v0.9.0 - 18 Sep 2008
+v0.8.9 - 01 Dec 2008
 --------------------
     - Added support for IP netmasks
     - Added new physical port stats
@@ -7,6 +7,11 @@ v0.9.0 - 18 Sep 2008
     - Added detection of link and port status changes
     - Added ability to configure port status from controller
     - Added support for vendor extensions
+    - Added support for variable length actions
+    - Added support for matching ICMP type and code
+    - Added support for listing and deleting flows based on output port action
+    - Added support for modifying VLAN priority tag
+    - Increased max supported ports to 65280
     - More explicit handling for IP fragments
     - Added support for 802.1D spanning tree
     - Added OFPFC_MODIFY command to Flow Mod message
