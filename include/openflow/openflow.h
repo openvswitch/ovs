@@ -150,8 +150,8 @@ enum ofp_config_flags {
 
     /* Handling of IP fragments. */
     OFPC_FRAG_NORMAL   = 0 << 1,  /* No special handling for fragments. */
-    OFPC_FRAG_DROP     = 1 << 1,    /* Drop fragments. */
-    OFPC_FRAG_REASM    = 2 << 1,   /* Reassemble (only if OFPC_IP_REASM set). */
+    OFPC_FRAG_DROP     = 1 << 1,  /* Drop fragments. */
+    OFPC_FRAG_REASM    = 2 << 1,  /* Reassemble (only if OFPC_IP_REASM set). */
     OFPC_FRAG_MASK     = 3 << 1
 };
 
@@ -216,11 +216,11 @@ enum ofp_port_features {
     OFPPF_1GB_HD     = 1 << 4,  /* 1 Gb half-duplex rate support. */
     OFPPF_1GB_FD     = 1 << 5,  /* 1 Gb full-duplex rate support. */
     OFPPF_10GB_FD    = 1 << 6,  /* 10 Gb full-duplex rate support. */
-    OFPPF_COPPER     = 1 << 7,  /* Copper medium */
-    OFPPF_FIBER      = 1 << 8,  /* Fiber medium */
-    OFPPF_AUTONEG    = 1 << 9,  /* Auto-negotiation */
-    OFPPF_PAUSE      = 1 << 10, /* Pause */
-    OFPPF_PAUSE_ASYM = 1 << 11  /* Asymmetric pause */
+    OFPPF_COPPER     = 1 << 7,  /* Copper medium. */
+    OFPPF_FIBER      = 1 << 8,  /* Fiber medium. */
+    OFPPF_AUTONEG    = 1 << 9,  /* Auto-negotiation. */
+    OFPPF_PAUSE      = 1 << 10, /* Pause. */
+    OFPPF_PAUSE_ASYM = 1 << 11  /* Asymmetric pause. */
 };
 
 /* Description of a physical port */
@@ -265,16 +265,16 @@ OFP_ASSERT(sizeof(struct ofp_switch_features) == 32);
 
 /* What changed about the physical port */
 enum ofp_port_reason {
-    OFPPR_ADD,              /* The port was added */
-    OFPPR_DELETE,           /* The port was removed */
-    OFPPR_MODIFY            /* Some attribute of the port has changed */
+    OFPPR_ADD,              /* The port was added. */
+    OFPPR_DELETE,           /* The port was removed. */
+    OFPPR_MODIFY            /* Some attribute of the port has changed. */
 };
 
 /* A physical port has changed in the datapath */
 struct ofp_port_status {
     struct ofp_header header;
-    uint8_t reason;          /* One of OFPPR_* */
-    uint8_t pad[7];          /* Align to 64-bits */
+    uint8_t reason;          /* One of OFPPR_*. */
+    uint8_t pad[7];          /* Align to 64-bits. */
     struct ofp_phy_port desc;
 };
 OFP_ASSERT(sizeof(struct ofp_port_status) == 64);
@@ -423,7 +423,7 @@ struct ofp_packet_out {
     struct ofp_header header;
     uint32_t buffer_id;           /* ID assigned by datapath (-1 if none). */
     uint16_t in_port;             /* Packet's input port (OFPP_NONE if none). */
-    uint16_t actions_len;          /* Size of action array in bytes. */
+    uint16_t actions_len;         /* Size of action array in bytes. */
     struct ofp_action_header actions[0]; /* Actions. */
     /* uint8_t data[0]; */        /* Packet data.  The length is inferred 
                                      from the length field in the header.  
@@ -516,7 +516,7 @@ OFP_ASSERT(sizeof(struct ofp_match) == 36);
  * is permanent. */
 #define OFP_FLOW_PERMANENT 0
 
-/* By default, choose a priority in the middle */
+/* By default, choose a priority in the middle. */
 #define OFP_DEFAULT_PRIORITY 0x8000
 
 /* Flow setup and teardown (controller -> datapath). */
@@ -552,7 +552,7 @@ enum ofp_flow_expired_reason {
 /* Flow expiration (datapath -> controller). */
 struct ofp_flow_expired {
     struct ofp_header header;
-    struct ofp_match match;   /* Description of fields */
+    struct ofp_match match;   /* Description of fields. */
 
     uint16_t priority;        /* Priority level of flow entry. */
     uint8_t reason;           /* One of OFPER_*. */
@@ -662,7 +662,7 @@ struct ofp_stats_request {
 OFP_ASSERT(sizeof(struct ofp_stats_request) == 12);
 
 enum ofp_stats_reply_flags {
-    OFPSF_REPLY_MORE  = 1 << 0  /* More replies to follow */
+    OFPSF_REPLY_MORE  = 1 << 0  /* More replies to follow. */
 };
 
 struct ofp_stats_reply {
@@ -687,7 +687,7 @@ OFP_ASSERT(sizeof(struct ofp_desc_stats) == 800);
 
 /* Body for ofp_stats_request of type OFPST_FLOW. */
 struct ofp_flow_stats_request {
-    struct ofp_match match;   /* Fields to match */
+    struct ofp_match match;   /* Fields to match. */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
                                  or 0xff for all tables. */
     uint8_t pad;              /* Align to 32 bits. */
@@ -717,7 +717,7 @@ OFP_ASSERT(sizeof(struct ofp_flow_stats) == 72);
 
 /* Body for ofp_stats_request of type OFPST_AGGREGATE. */
 struct ofp_aggregate_stats_request {
-    struct ofp_match match;   /* Fields to match */
+    struct ofp_match match;   /* Fields to match. */
     uint8_t table_id;         /* ID of table to read (from ofp_table_stats)
                                  or 0xff for all tables. */
     uint8_t pad;              /* Align to 32 bits. */
@@ -740,14 +740,14 @@ OFP_ASSERT(sizeof(struct ofp_aggregate_stats_reply) == 24);
 struct ofp_table_stats {
     uint8_t table_id;        /* Identifier of table.  Lower numbered tables 
                                 are consulted first. */
-    uint8_t pad[3];          /* Align to 32-bits */
+    uint8_t pad[3];          /* Align to 32-bits. */
     char name[OFP_MAX_TABLE_NAME_LEN];
     uint32_t wildcards;      /* Bitmap of OFPFW_* wildcards that are 
                                 supported by the table. */
-    uint32_t max_entries;    /* Max number of entries supported */
-    uint32_t active_count;   /* Number of active entries */
-    uint64_t lookup_count;   /* Number of packets looked up in table */
-    uint64_t matched_count;  /* Number of packets that hit table */
+    uint32_t max_entries;    /* Max number of entries supported. */
+    uint32_t active_count;   /* Number of active entries. */
+    uint64_t lookup_count;   /* Number of packets looked up in table. */
+    uint64_t matched_count;  /* Number of packets that hit table. */
 };
 OFP_ASSERT(sizeof(struct ofp_table_stats) == 64);
 
