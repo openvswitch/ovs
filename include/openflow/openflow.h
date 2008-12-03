@@ -401,7 +401,7 @@ struct ofp_action_vendor_header {
     uint16_t type;                  /* OFPAT_VENDOR. */
     uint16_t len;                   /* Length is 8. */
     uint32_t vendor;                /* Vendor ID, which takes the same form 
-                                       as in "struct ofp_vendor". */ 
+                                       as in "struct ofp_vendor_header". */ 
 };
 OFP_ASSERT(sizeof(struct ofp_action_vendor_header) == 8);
 
@@ -587,8 +587,8 @@ enum ofp_bad_request_code {
     OFPBRC_BAD_VERSION,         /* ofp_header.version not supported. */
     OFPBRC_BAD_TYPE,            /* ofp_header.type not supported. */
     OFPBRC_BAD_STAT,            /* ofp_stats_request.type not supported. */
-    OFPBRC_BAD_VENDOR,          /* Vendor not supported (in ofp_vendor or
-                                 * ofp_stats_request or ofp_stats_reply). */
+    OFPBRC_BAD_VENDOR,          /* Vendor not supported (in ofp_vendor_header 
+                                 * or ofp_stats_request or ofp_stats_reply). */
     OFPBRC_BAD_SUBTYPE          /* Vendor subtype not supported. */
 };
 
@@ -648,8 +648,8 @@ enum ofp_stats_types {
 
     /* Vendor extension.
      * The request and reply bodies begin with a 32-bit vendor ID, which takes
-     * the same form as in "struct ofp_vendor".  The request and reply bodies
-     * are otherwise vendor-defined. */
+     * the same form as in "struct ofp_vendor_header".  The request and reply 
+     * bodies are otherwise vendor-defined. */
     OFPST_VENDOR = 0xffff
 };
 
