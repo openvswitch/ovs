@@ -91,7 +91,7 @@ ds_put_char(struct ds *ds, char c)
 void
 ds_put_char_multiple(struct ds *ds, char c, size_t n)
 {
-    memset(ds_put_uninit(ds, n), ' ', n);
+    memset(ds_put_uninit(ds, n), c, n);
 }
 
 void
