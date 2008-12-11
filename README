@@ -30,10 +30,10 @@ Specification [2].
 What's here?
 ------------
 
-This distribution includes two different reference implementations of
-an OpenFlow switch.  The first implementation, which is closely tied
-to Linux because it is partially implemented in the Linux kernel, has
-the following components:
+This distribution includes three different reference implementations
+of an OpenFlow switch.  The first implementation, which is closely
+tied to Linux because it is partially implemented in the Linux kernel,
+has the following components:
 
 	- A Linux kernel module that implements the flow table and
           OpenFlow protocol, in the datapath directory.
@@ -43,8 +43,19 @@ the following components:
 
 	- dpctl, a tool for configuring the kernel module.
 
-The second implementation is a single userspace program, named
-"switch", that integrates all three parts of an OpenFlow switch.
+The second implementation has the following components:
+
+        - udatapath, which implements the same functionality as the
+          Linux kernel module in userspace, at a cost in performance.
+
+        - secchan, a program that implements the secure channel
+          component of the reference switch (the same program used in
+          the kernel-based implementation).
+
+The third implementation is a single userspace program, named
+"switch", that integrates all three parts of an OpenFlow switch.  This
+implementation is deprecated.  It lacks features present in the other
+two implementations.
 
 This distribution includes some additional software as well:
 
@@ -73,15 +84,15 @@ compile under Unix-like environments such as Linux, FreeBSD, Mac OS X,
 and Solaris.  Our primary test environment is Debian GNU/Linux.
 Please contact us with portability-related bug reports or patches.
 
-The Linux kernel module is, of course, Linux-specific, and the secchan
-and dpctl utilities will not be as useful without the kernel module.
-The testing of the kernel module has focused on Linux 2.6.23.  Linux
-2.6 releases from 2.6.15 onward and Linux 2.4 releases from 2.4.20
-onward should also work.
+The Linux kernel module is, of course, Linux-specific, and the dpctl
+utility will not be useful without the kernel module.  The testing of
+the kernel module has focused on Linux 2.6.26.  Linux 2.6 releases
+from 2.6.15 onward and Linux 2.4 releases from 2.4.20 onward should
+also work.
 
-The userspace switch implementation should be easy to port to
+The userspace datapath implementation should be easy to port to
 Unix-like systems.  The interface to network devices, in netdev.c, is
-the only code that should need to change.  So far, only Linux is
+the code most likely to need changes.  So far, only Linux is
 supported.  We welcome ports to other platforms.
 
 GCC is the expected compiler.
@@ -89,7 +100,7 @@ GCC is the expected compiler.
 Bugs/Shortcomings
 -----------------
 
-- The flowtable does not support the "normal processing" action.
+- The flow table does not support the "normal processing" action.
 
 References
 ----------

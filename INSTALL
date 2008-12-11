@@ -11,11 +11,6 @@ Contents
 The OpenFlow reference implementation includes three separate
 OpenFlow switch implementations:
 
-        - The "userspace switch": This implements an OpenFlow switch
-          as a single user program (built as switch/switch).  The
-          userspace switch is the easiest to build and use but it is
-          much less featureful than the other switch implementations.
-
         - The "kernel-based switch": This divides the switch into a
           "datapath" Linux kernel module (openflow_mod.o for Linux 2.4
           or openflow_mod.ko for Linux 2.6) and a userspace program
@@ -28,11 +23,17 @@ OpenFlow switch implementations:
           switch into a userspace "datapath" (built as
           udatapath/udatapath) and the same userspace program used by
           the kernel-based switch (secchan).  The userspace
-          datapath-based switch is as featureful as the kernel-based
-          switch and it does not require building a kernel module, but
-          it is not as fast as the kernel-based switch and it is part
-          of the OpenFlow extensions distribution, not the main
-          OpenFlow distribution.
+          datapath-based switch does not require building a kernel
+          module, but it is not as fast as the kernel-based switch.
+
+        - The "userspace switch": This implements an OpenFlow switch
+          as a single user program (built as switch/switch).  The
+          userspace switch is the easiest to build and use but it is
+          much less featureful than the other switch implementations.
+
+          The userspace switch is deprecated in favor of the userspace
+          datapath-based switch.  It will likely be removed in a
+          future OpenFlow release.
 
 The reference implementation also contains a simple OpenFlow
 controller (built as controller/controller) and a number of related
@@ -65,7 +66,7 @@ reference distribution, you will need the following software:
     - libssl, from OpenSSL (http://www.openssl.org/), is optional but
       recommended.  libssl is required to establish confidentiality
       and authenticity in the connections among OpenFlow switches and
-      controllers.  To enable, configure with --enable-ssl=yes
+      controllers.  To enable, configure with --enable-ssl=yes.
 
 If you are working from a Git tree or snapshot (instead of from a
 distribution tarball), or if you modify the OpenFlow build system, you
@@ -168,7 +169,7 @@ distribution in the ordinary way using "configure" and "make".
 
    The following binaries will be built:
 
-      - Switch executable: switch/switch.
+      - Userspace datapath: udatapath/udatapath.
 
       - Secure channel executable: secchan/secchan.
 
@@ -183,10 +184,10 @@ distribution in the ordinary way using "configure" and "make".
 
       - Tests: various binaries in tests/.
 
+      - Switch executable: switch/switch.
+
    If your distribution includes the OpenFlow extensions, the
    following additional binaries will be built:
-
-      - Userspace datapath: ext/udatapath/udatapath.
 
       - ANSI terminal support for EZIO 16x2 LCD panel:
         ext/ezio/ezio-term.
@@ -300,7 +301,7 @@ Follow these instructions to build Debian packages for OpenFlow.
         openflow-pki (see below).
 
       - openflow-switch: Install this package on a machine that acts
-        as an OpenFlow userspace or kernel switch.
+        as an OpenFlow kernel switch.
 
       - openflow-datapath-source: Source code for OpenFlow's Linux
         kernel module.
@@ -366,51 +367,10 @@ reference implementation as a switch on a single machine.  This can be
 used to verify that the distribution built properly.  For full
 installation instructions, refer to the Installation section below.
 
-Userspace Switch
-----------------
-
-These instructions use the OpenFlow userspace switch that runs as an
-integrated userspace program.
-
-1. Start the OpenFlow controller running in the background, by running
-   the "controller" program with a command like the following:
-
-      # controller ptcp: &
-
-   This command causes the controller to bind to port 6633 (the
-   default) awaiting connections from OpenFlow switches.  See
-   controller(8) for details.
-
-   The "controller" program does not require any special privilege, so
-   you do not need to run it as root.
-   
-2. The "switch" program must run as root, so log in as root, or use a
-   program such as "su" to become root temporarily.
-
-3. On the same machine, use the "switch" program to start an OpenFlow
-   switch, specifying network devices to use as switch ports on the -i
-   option as a comma-separated list, like so:
-
-      # switch tcp:127.0.0.1 -i eth1,eth2
-   
-   The network devices that you specify should not have configured IP
-   addresses.
-
-4. The controller causes each switch that connects to it to act like a
-   learning Ethernet switch.  Thus, devices plugged into the specified
-   network ports should now be able to send packets to each other, as
-   if they were plugged into ports on a conventional Ethernet switch.
-
-Troubleshooting: if the commands above do not work, try using the -v
-or --verbose option on the controller or switch commands, which will
-cause a large amount of debug output from each program.
-
 Userspace Datapath
 ------------------
 
 These instructions use the OpenFlow userspace datapath ("udatapath").
-The udatapath program is part of the OpenFlow extensions repository,
-which is not included in every OpenFlow distribution.
 
 1. Start the OpenFlow controller running in the background, by running
    the "controller" program with a command like the following:
@@ -443,6 +403,42 @@ which is not included in every OpenFlow distribution.
    now be able to send packets to each other, as if they were plugged
    into ports on a conventional Ethernet switch.
 
+Userspace Switch
+----------------
+
+These instructions use the OpenFlow userspace switch that runs as an
+integrated userspace program.  Keep in mind that the userspace switch
+is deprecated: you should use the userspace datapath instead.
+
+1. Start the OpenFlow controller running in the background, by running
+   the "controller" program with a command like the following:
+
+      # controller ptcp: &
+
+   This command causes the controller to bind to port 6633 (the
+   default) awaiting connections from OpenFlow switches.  See
+   controller(8) for details.
+
+   The "controller" program does not require any special privilege, so
+   you do not need to run it as root.
+   
+2. The "switch" program must run as root, so log in as root, or use a
+   program such as "su" to become root temporarily.
+
+3. On the same machine, use the "switch" program to start an OpenFlow
+   switch, specifying network devices to use as switch ports on the -i
+   option as a comma-separated list, like so:
+
+      # switch tcp:127.0.0.1 -i eth1,eth2
+   
+   The network devices that you specify should not have configured IP
+   addresses.
+
+4. The controller causes each switch that connects to it to act like a
+   learning Ethernet switch.  Thus, devices plugged into the specified
+   network ports should now be able to send packets to each other, as
+   if they were plugged into ports on a conventional Ethernet switch.
+
 Installation
 ============
 
@@ -456,9 +452,6 @@ each switch to reach the controller over the network:
         location of the controller must be configured manually in this
         case.
 
-        All three switch implementations support only out-of-band
-        control.
-
       - Use the same network for control and for data ("in-band
         control").  When in-band control is used, the location of the
         controller may be configured manually or discovered
@@ -466,9 +459,8 @@ each switch to reach the controller over the network:
         please refer to secchan(8) for instructions on setting up
         controller discovery.  
 
-        The userspace datapath-based and kernel-based switch
-        implementations support in-band control.  The userspace switch
-        does not.
+        The (deprecated) userspace switch does not support in-band
+        control.
 
 Controller Setup
 ----------------
@@ -484,44 +476,11 @@ port 6633 (the default), as shown below.
 Make sure the machine hosting the controller is reachable by the
 switch.
 
-Userspace Switch-Based Setup
-----------------------------
-
-To set up an OpenFlow switch using the userspace switch, follow this
-procedure.  The userspace switch must be connected to the controller
-over a "control network" that is physically separate from the one that
-the switch and controller are controlling.  (The kernel-based and
-userspace datapath-based switches do not have this limitation.)
-
-0. The commands below must run as root, so log in as root, or use a
-   program such as "su" to become root temporarily.
-
-1. Use the "switch" program to start an OpenFlow switch, specifying
-   the IP address of the controller as the first argument to the
-   switch program, and the network devices to include in the switch as
-   arguments to the -i option.  For example, if the controller is
-   running on host 192.168.1.2 port 6633 (the default port), and eth1
-   and eth2 are to be the switch ports, the switch invocation would
-   look like this:
-
-      # switch tcp:127.0.0.1 -i eth1,eth2
-   
-   The network devices that you specify should not have configured IP
-   addresses.
-
-2. The controller causes each switch that connects to it to act like a
-   learning Ethernet switch.  Thus, devices plugged into the specified
-   network ports should now be able to send packets to each other, as
-   if they were plugged into ports on a conventional Ethernet switch.
-
 Userspace Datapath-Based Setup
 ------------------------------
 
 On a machine that is to host an OpenFlow userspace datapath-based
-switch, follow the procedure below.  These instructions require the
-OpenFlow userspace datapath ("udatapath").  The udatapath program is
-part of the OpenFlow extensions repository, which is not included in
-every OpenFlow distribution.
+switch, follow the procedure below.
 
 0. The commands below must run as root, so log in as root, or use a
    program such as "su" to become root temporarily.
@@ -606,9 +565,9 @@ The OpenFlow kernel module must be loaded, as described under
 
       # dpctl adddp nl:0
    
-   (In principle, openflow_mod supports multiple datapaths within the
-   same host which would be identified as nl:1, nl:2, etc., but this
-   is rarely useful in practice.)
+   (nl:0 is the first datapath within a host.  openflow_mod supports
+   multiple datapaths within the same host, which would be identified
+   as nl:1, nl:2, etc.)
 
    Creating datapath nl:0 also creates a new network device named of0.
    This network device, called the datapath's "local port", will be
@@ -683,6 +642,36 @@ The OpenFlow kernel module must be loaded, as described under
    seconds.  It may take a little longer if controller discovery is in
    use, because the switch must then also obtain its own IP address
    and the controller's location via DHCP.
+
+Userspace Switch-Based Setup
+----------------------------
+
+To set up an OpenFlow switch using the (deprecated) userspace switch,
+follow this procedure.  The userspace switch must be connected to the
+controller over a "control network" that is physically separate from
+the one that the switch and controller are controlling.  (The other
+switch implementations do not have this limitation.)
+
+0. The commands below must run as root, so log in as root, or use a
+   program such as "su" to become root temporarily.
+
+1. Use the "switch" program to start an OpenFlow switch, specifying
+   the IP address of the controller as the first argument to the
+   switch program, and the network devices to include in the switch as
+   arguments to the -i option.  For example, if the controller is
+   running on host 192.168.1.2 port 6633 (the default port), and eth1
+   and eth2 are to be the switch ports, the switch invocation would
+   look like this:
+
+      # switch tcp:127.0.0.1 -i eth1,eth2
+   
+   The network devices that you specify should not have configured IP
+   addresses.
+
+2. The controller causes each switch that connects to it to act like a
+   learning Ethernet switch.  Thus, devices plugged into the specified
+   network ports should now be able to send packets to each other, as
+   if they were plugged into ports on a conventional Ethernet switch.
 
 Configuration
 =============
