@@ -71,7 +71,7 @@ If you are working from a Git tree or snapshot (instead of from a
 distribution tarball), or if you modify the OpenFlow build system, you
 will also need the following software:
 
-    - Autoconf version 2.59 or later (http://www.gnu.org/software/autoconf).
+    - Autoconf version 2.60 or later (http://www.gnu.org/software/autoconf).
 
     - Automake version 1.10 or later (http://www.gnu.org/software/automake).  
 
