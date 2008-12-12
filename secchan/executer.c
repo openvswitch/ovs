@@ -504,7 +504,7 @@ executer_start(struct secchan *secchan, const struct settings *settings)
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_NOCLDSTOP | SA_RESTART;
     if (sigaction(SIGCHLD, &sa, NULL)) {
-        ofp_fatal(errno, "sigaction(SIGCHLD) faile");
+        ofp_fatal(errno, "sigaction(SIGCHLD) failed");
     }
 
     /* Add hook. */
