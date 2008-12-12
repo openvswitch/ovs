@@ -33,8 +33,8 @@
 
 /* OpenFlow protocol pretty-printer. */
 
-#ifndef __OFP_PRINT_H__
-#define __OFP_ORINT_H __1
+#ifndef OFP_PRINT_H
+#define OFP_PRINT_H 1
 
 #include <stdio.h>
 
@@ -54,4 +54,4 @@ char *ofp_packet_to_string(const void *data, size_t len, size_t total_len);
 }
 #endif
 
-#endif /* ofppp.h */
+#endif /* ofp-print.h */
