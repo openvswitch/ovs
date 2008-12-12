@@ -1114,7 +1114,7 @@ static int dp_genl_del(struct sk_buff *skb, struct genl_info *info)
 	if (!info->attrs[DP_GENL_A_DP_IDX])
 		return -EINVAL;
 
-	dp = dp_get(nla_get_u32((info->attrs[DP_GENL_A_DP_IDX])));
+	dp = dp_get(nla_get_u32(info->attrs[DP_GENL_A_DP_IDX]));
 	if (!dp)
 		err = -ENOENT;
 	else {
