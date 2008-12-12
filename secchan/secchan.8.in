@@ -28,6 +28,7 @@ Attach to the userspace datapath implemented by \fBudatapath\fR(8).
 The \fIfile\fR argument must the same one specified on the
 \fBudatapath\fR command line.
 
+.PP
 The optional \fIcontroller\fR argument specifies how to connect to
 the OpenFlow controller.  It takes one of the following forms:
 
@@ -46,6 +47,7 @@ The specified TCP \fIport\fR (default: 6633) on the given remote
 \fBunix:\fIfile\fR
 The Unix domain server socket named \fIfile\fR.
 
+.PP
 If \fIcontroller\fR is omitted, \fBsecchan\fR attempts to discover the
 location of the controller automatically (see below).
 
@@ -288,8 +290,8 @@ more information about in-band control).
 .RE
 
 .IP
-As a result, when both \fB--fail=open\fR and in-band control are not
-in use, this option has no effect.
+As a result, when both \fB--fail=closed\fR and \fB--out-of-band\fR are
+specified, this option has no effect.
 
 .TP
 \fB--max-backoff=\fIsecs\fR
