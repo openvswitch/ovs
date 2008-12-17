@@ -95,6 +95,12 @@ ds_put_char_multiple(struct ds *ds, char c, size_t n)
 }
 
 void
+ds_put_buffer(struct ds *ds, const char *s, size_t n)
+{
+    memcpy(ds_put_uninit(ds, n), s, n);
+}
+
+void
 ds_put_cstr(struct ds *ds, const char *s)
 {
     size_t s_len = strlen(s);
