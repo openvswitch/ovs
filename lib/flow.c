@@ -107,7 +107,7 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, struct flow *flow)
          * can end up with runt frames, e.g. frames that only ever passed
          * through virtual network devices and never touched a physical
          * Ethernet. */
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 60);
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_DBG_RL(&rl, "packet length %zu less than minimum size %d",
                     b.size, ETH_TOTAL_MIN);
     }
