@@ -38,6 +38,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include "compiler.h"
 
 struct tm;
@@ -67,6 +68,8 @@ void ds_put_strftime(struct ds *, const char *, const struct tm *)
     STRFTIME_FORMAT(2);
 void ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
                      uintptr_t ofs, bool ascii);
+int ds_get_line(struct ds *, FILE *);
+
 char *ds_cstr(struct ds *);
 void ds_destroy(struct ds *);
 
