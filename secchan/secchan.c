@@ -93,7 +93,8 @@ static struct pvconn *open_passive_vconn(const char *name);
 static struct vconn *accept_vconn(struct pvconn *pvconn);
 
 static struct relay *relay_create(struct rconn *async,
-                                  struct rconn *local, struct rconn *remote);
+                                  struct rconn *local, struct rconn *remote,
+                                  bool is_mgmt_conn);
 static struct relay *relay_accept(const struct settings *, struct pvconn *);
 static void relay_run(struct relay *, struct secchan *);
 static void relay_wait(struct relay *);
@@ -162,11 +163,25 @@ main(int argc, char *argv[])
                   "unix:.  (Did you forget to specify the datapath?)");
     }
 
-    /* Connect to datapath with a subscription for asynchronous events. */
-    async_rconn = rconn_create(0, s.max_backoff);
-    rconn_connect(async_rconn, s.dp_name);
-    switch_status_register_category(switch_status, "async",
-                                    rconn_status_cb, async_rconn);
+    if (!strncmp(s.dp_name, "nl:", 3)) {
+        /* Connect to datapath with a subscription for asynchronous events.  By
+         * separating the connection for asynchronous events from that for
+         * request and replies we prevent the socket receive buffer from being
+         * filled up by received packet data, which in turn would prevent
+         * getting replies to any Netlink messages we send to the kernel. */
+        async_rconn = rconn_create(0, s.max_backoff);
+        rconn_connect(async_rconn, s.dp_name);
+        switch_status_register_category(switch_status, "async",
+                                        rconn_status_cb, async_rconn);
+    } else {
+        /* No need for a separate asynchronous connection: we must be connected
+         * to the user datapath, which is smart enough to discard packet events
+         * instead of message replies.  In fact, having a second connection
+         * would work against us since we'd get double copies of asynchronous
+         * event messages (the user datapath provides no way to turn off
+         * asynchronous events). */
+        async_rconn = NULL;
+    }
 
     /* Connect to datapath without a subscription, for requests and replies. */
     local_rconn_name = vconn_name_without_subscription(s.dp_name);
@@ -188,7 +203,8 @@ main(int argc, char *argv[])
                                     rconn_status_cb, remote_rconn);
 
     /* Start relaying. */
-    controller_relay = relay_create(async_rconn, local_rconn, remote_rconn);
+    controller_relay = relay_create(async_rconn, local_rconn, remote_rconn,
+                                    false);
     list_push_back(&relays, &controller_relay->node);
 
     /* Set up hooks. */
@@ -411,16 +427,17 @@ relay_accept(const struct settings *s, struct pvconn *pvconn)
     r2 = rconn_create(0, 0);
     rconn_connect_unreliably(r2, "passive", new_remote);
 
-    return relay_create(NULL, r1, r2);
+    return relay_create(NULL, r1, r2, true);
 }
 
 static struct relay *
-relay_create(struct rconn *async, struct rconn *local, struct rconn *remote)
+relay_create(struct rconn *async, struct rconn *local, struct rconn *remote,
+             bool is_mgmt_conn)
 {
     struct relay *r = xcalloc(1, sizeof *r);
     r->halves[HALF_LOCAL].rconn = local;
     r->halves[HALF_REMOTE].rconn = remote;
-    r->is_mgmt_conn = async == NULL;
+    r->is_mgmt_conn = is_mgmt_conn;
     r->async_rconn = async;
     return r;
 }
