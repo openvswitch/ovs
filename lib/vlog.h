@@ -163,12 +163,9 @@ void vlog_rate_limit(enum vlog_module, enum vlog_level,
  *      #define THIS_MODULE VLM_netlink
  * Guaranteed to preserve errno.
  */
-#define VLOG_ERR_RL(RL, ...) \
-        vlog_rate_limit(THIS_MODULE, VLL_ERR, RL, __VA_ARGS__)
-#define VLOG_WARN_RL(RL, ...) \
-        vlog_rate_limit(THIS_MODULE, VLL_WARN, RL, __VA_ARGS__)
-#define VLOG_DBG_RL(RL, ...) \
-        vlog_rate_limit(THIS_MODULE, VLL_DBG, RL, __VA_ARGS__)
+#define VLOG_ERR_RL(RL, ...) VLOG_RL(RL, VLL_ERR, __VA_ARGS__)
+#define VLOG_WARN_RL(RL, ...) VLOG_RL(RL, VLL_WARN, __VA_ARGS__)
+#define VLOG_DBG_RL(RL, ...) VLOG_RL(RL, VLL_DBG, __VA_ARGS__)
 
 /* Command line processing. */
 #define VLOG_OPTION_ENUMS OPT_LOG_FILE
@@ -190,6 +187,12 @@ void vlog_usage(void);
         if (min_vlog_levels[THIS_MODULE] >= LEVEL) {    \
             vlog(THIS_MODULE, LEVEL, __VA_ARGS__);      \
         }                                               \
+    } while (0)
+#define VLOG_RL(RL, LEVEL, ...)                                     \
+    do {                                                            \
+        if (min_vlog_levels[THIS_MODULE] >= LEVEL) {                \
+            vlog_rate_limit(THIS_MODULE, LEVEL, RL, __VA_ARGS__);   \
+        }                                                           \
     } while (0)
 extern enum vlog_level min_vlog_levels[VLM_N_MODULES];
 
