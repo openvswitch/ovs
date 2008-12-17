@@ -457,11 +457,14 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     return;
 
 drop_it:
-    /* Set up a flow to drop packets, or just drop the packet if we don't set
-     * up flows at all. */
     if (sw->max_idle >= 0) {
+        /* Set up a flow to drop packets. */
         queue_tx(sw, rconn, make_add_flow(&flow, ntohl(opi->buffer_id),
                                           sw->max_idle, 0));
+    } else {
+        /* Just drop the packet, since we don't set up flows at all.
+         * XXX we should send a packet_out with no actions if buffer_id !=
+         * UINT32_MAX, to avoid clogging the kernel buffers. */
     }
     return;
 }
