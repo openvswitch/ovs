@@ -96,7 +96,7 @@ struct vlog_rate_limit {
     unsigned int n_dropped;     /* Number of messages dropped. */
 };
 
-/* Number of tokens to emit a message.  We add 'rate' token per second, which
+/* Number of tokens to emit a message.  We add 'rate' tokens per second, which
  * is 60 times the unit used for 'rate', thus 60 tokens are required to emit
  * one message. */
 #define VLOG_MSG_TOKENS 60
