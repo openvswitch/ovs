@@ -814,8 +814,8 @@ static void
 usage(void)
 {
     printf("%s: secure channel, a relay for OpenFlow messages.\n"
-           "usage: %s [OPTIONS] nl:DP_IDX [CONTROLLER]\n"
-           "where nl:DP_IDX is a datapath that has been added with dpctl.\n"
+           "usage: %s [OPTIONS] DATAPATH [CONTROLLER]\n"
+           "DATAPATH is an active connection method to a local datapath.\n"
            "CONTROLLER is an active OpenFlow connection method; if it is\n"
            "omitted, then secchan performs controller discovery.\n",
            program_name, program_name);
