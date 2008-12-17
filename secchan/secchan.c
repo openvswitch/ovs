@@ -61,6 +61,7 @@
 #ifdef SUPPORT_SNAT
 #include "snat.h"
 #endif
+#include "flow-end.h"
 #include "stp-secchan.h"
 #include "status.h"
 #include "timeval.h"
@@ -196,6 +197,7 @@ main(int argc, char *argv[])
 #ifdef SUPPORT_SNAT
     snat_start(&secchan, pw);
 #endif
+    flow_end_start(&secchan, s.netflow_dst, local_rconn, remote_rconn);
     if (s.enable_stp) {
         stp_start(&secchan, &s, pw, local_rconn, remote_rconn);
     }
@@ -572,6 +574,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         OPT_IN_BAND,
         OPT_COMMAND_ACL,
         OPT_COMMAND_DIR,
+        OPT_NETFLOW,
         VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
@@ -591,6 +594,7 @@ parse_options(int argc, char *argv[], struct settings *s)
         {"in-band",     no_argument, 0, OPT_IN_BAND},
         {"command-acl", required_argument, 0, OPT_COMMAND_ACL},
         {"command-dir", required_argument, 0, OPT_COMMAND_DIR},
+        {"netflow",     required_argument, 0, OPT_NETFLOW},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -620,6 +624,7 @@ parse_options(int argc, char *argv[], struct settings *s)
     s->in_band = true;
     s->command_acl = "";
     s->command_dir = xasprintf("%s/commands", ofp_pkgdatadir);
+    s->netflow_dst = NULL;
     for (;;) {
         int c;
 
@@ -718,6 +723,13 @@ parse_options(int argc, char *argv[], struct settings *s)
 
         case OPT_COMMAND_DIR:
             s->command_dir = optarg;
+            break;
+
+        case OPT_NETFLOW:
+            if (s->netflow_dst) {
+                ofp_fatal(0, "--netflow may only be specified once");
+            }
+            s->netflow_dst = optarg;
             break;
 
         case 'l':
@@ -838,6 +850,7 @@ usage(void)
            "  --out-of-band           controller connection is out-of-band\n"
            "  --stp                   enable 802.1D Spanning Tree Protocol\n"
            "  --no-stp                disable 802.1D Spanning Tree Protocol\n"
+           "  --netflow=HOST:PORT     send NetFlow v5 messages when flows end\n"
            "\nRate-limiting of \"packet-in\" messages to the controller:\n"
            "  --rate-limit[=PACKETS]  max rate, in packets/s (default: 1000)\n"
            "  --burst-limit=BURST     limit on packet credit for idle time\n"

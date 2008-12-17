@@ -69,7 +69,8 @@ struct sw_table {
 	 * must have that port as an argument for an output action.  If 
 	 * 'strict' is set, wildcards and priority must match.  Returns the 
 	 * number of flows that were deleted. */
-	int (*delete)(struct sw_table *table, const struct sw_flow_key *key, 
+	int (*delete)(struct datapath *dp, struct sw_table *table, 
+			const struct sw_flow_key *key, 
 			uint16_t out_port, uint16_t priority, int strict);
 
 	/* Performs timeout processing on all the flow entries in 'table'.

@@ -85,6 +85,9 @@ struct settings {
     /* Remote command execution. */
     char *command_acl;          /* Command white/blacklist, as shell globs. */
     char *command_dir;          /* Directory that contains commands. */
+
+    /* NetFlow logging. */
+    char *netflow_dst;          /* Host and port to send NetFlow traffic. */
 };
 
 struct half {

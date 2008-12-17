@@ -37,6 +37,7 @@
 #include "flow.h"
 #include "list.h"
 #include "openflow/openflow.h"
+#include "openflow/nicira-ext.h"
 #include "switch-flow.h"
 #include "datapath.h"
 
@@ -126,7 +127,7 @@ do_delete(struct sw_flow *flow)
     flow_free(flow);
 }
 
-static int table_linear_delete(struct sw_table *swt,
+static int table_linear_delete(struct datapath *dp, struct sw_table *swt,
                                const struct sw_flow_key *key, 
                                uint16_t out_port, 
                                uint16_t priority, int strict)
@@ -139,6 +140,7 @@ static int table_linear_delete(struct sw_table *swt,
         if (flow_matches_desc(&flow->key, key, strict)
                 && flow_has_out_port(flow, out_port)
                 && (!strict || (flow->priority == priority))) {
+            dp_send_flow_end(dp, flow, NXFER_DELETE);
             do_delete(flow);
             count++;
         }

@@ -31,40 +31,28 @@
  * derivatives without specific, written prior permission.
  */
 
-#ifndef CHAIN_H
-#define CHAIN_H 1
+#include <errno.h>
+#include <arpa/inet.h>
+#include "openflow/nicira-ext.h"
+#include "nx_msg.h"
 
-#include <stddef.h>
-#include <stdint.h>
+int nx_recv_msg(struct datapath *dp, const struct sender *sender,
+        const void *oh)
+{
+    const struct nicira_header *nh = oh;
 
-struct sw_flow;
-struct sw_flow_key;
-struct ofp_action_header;
-struct list;
-struct datapath;
+    switch (ntohl(nh->subtype)) {
+    case NXT_FLOW_END_CONFIG: {
+        const struct nx_flow_end_config *nfec = oh;
+        dp->send_flow_end = nfec->enable;
+        return 0;
+    }
 
-#define TABLE_LINEAR_MAX_FLOWS  100
-#define TABLE_HASH_MAX_FLOWS    65536
-#define TABLE_MAC_MAX_FLOWS      1024
-#define TABLE_MAC_NUM_BUCKETS   1024
+    default:
+        dp_send_error_msg(dp, sender, OFPET_BAD_REQUEST,
+                OFPBRC_BAD_SUBTYPE, oh, ntohs(nh->header.length));
+        return -EINVAL;
+    }
 
-/* Set of tables chained together in sequence from cheap to expensive. */
-#define CHAIN_MAX_TABLES 4
-struct sw_chain {
-    int n_tables;
-    struct sw_table *tables[CHAIN_MAX_TABLES];
-
-    struct datapath *dp;
-};
-
-struct sw_chain *chain_create(struct datapath *);
-struct sw_flow *chain_lookup(struct sw_chain *, const struct sw_flow_key *);
-int chain_insert(struct sw_chain *, struct sw_flow *);
-int chain_modify(struct sw_chain *, const struct sw_flow_key *, 
-        uint16_t, int, const struct ofp_action_header *, size_t);
-int chain_delete(struct sw_chain *, const struct sw_flow_key *, uint16_t,
-        uint16_t, int);
-void chain_timeout(struct sw_chain *, struct list *deleted);
-void chain_destroy(struct sw_chain *);
-
-#endif /* chain.h */
+    return -EINVAL;
+}

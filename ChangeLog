@@ -1,5 +1,9 @@
-v0.8.9 - 01 Dec 2008
---------------------
+v0.8.9~2 - ?? Jan 2009
+----------------------
+    - Added support to secchan for sending NetFlow v5 events
+
+v0.8.9~1 - 01 Dec 2008
+----------------------
     - Added support for IP netmasks
     - Added new physical port stats
     - Added IN_PORT virtual port

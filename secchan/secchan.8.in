@@ -389,6 +389,11 @@ Sets the directory searched for remote command execution to
 \fB@pkgdatadir@/commands\fR.
 
 .TP
+\fB--netflow=\fIhost\fB:\fIport\fR
+When flows end on the switch, send NetFlow v5 messages to
+\fIhost\fR on UDP \fIport\fR.
+
+.TP
 \fB-p\fR, \fB--private-key=\fIprivkey.pem\fR
 Specifies a PEM file containing the private key used as the switch's
 identity for SSL connections to the controller.

@@ -143,7 +143,7 @@ int chain_delete(struct sw_chain *chain, const struct sw_flow_key *key,
 	might_sleep();
 	for (i = 0; i < chain->n_tables; i++) {
 		struct sw_table *t = chain->tables[i];
-		count += t->delete(t, key, out_port, priority, strict);
+		count += t->delete(chain->dp, t, key, out_port, priority, strict);
 	}
 
 	return count;

@@ -15,6 +15,7 @@
 #include <net/genetlink.h>
 #include <linux/ip.h>
 #include <linux/delay.h>
+#include <linux/time.h>
 #include <linux/etherdevice.h>
 #include <linux/kernel.h>
 #include <linux/kthread.h>
@@ -25,6 +26,7 @@
 #include <linux/ethtool.h>
 #include <linux/random.h>
 #include <asm/system.h>
+#include <asm/div64.h>
 #include <linux/netfilter_bridge.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/inetdevice.h>
@@ -996,34 +998,55 @@ dp_send_port_status(struct net_bridge_port *p, uint8_t status)
 	return send_openflow_skb(skb, NULL);
 }
 
+/* Convert jiffies_64 to milliseconds. */
+static u64 inline jiffies_64_to_msecs(const u64 j)
+{
+#if HZ <= MSEC_PER_SEC && !(MSEC_PER_SEC % HZ)
+		return (MSEC_PER_SEC / HZ) * j;
+#elif HZ > MSEC_PER_SEC && !(HZ % MSEC_PER_SEC)
+		return (j + (HZ / MSEC_PER_SEC) - 1)/(HZ / MSEC_PER_SEC);
+#else
+		return (j * MSEC_PER_SEC) / HZ;
+#endif
+}
+
 int 
-dp_send_flow_expired(struct datapath *dp, struct sw_flow *flow,
-		     enum ofp_flow_expired_reason reason)
+dp_send_flow_end(struct datapath *dp, struct sw_flow *flow,
+		     enum nx_flow_end_reason reason)
 {
 	struct sk_buff *skb;
-	struct ofp_flow_expired *ofe;
+	struct nx_flow_end *nfe;
 
-	if (!(dp->flags & OFPC_SEND_FLOW_EXP))
+	if (!dp->send_flow_end)
 		return 0;
 
-	ofe = alloc_openflow_skb(dp, sizeof *ofe, OFPT_FLOW_EXPIRED, 0, &skb);
-	if (!ofe)
+	nfe = alloc_openflow_skb(dp, sizeof *nfe, OFPT_VENDOR, 0, &skb);
+	if (!nfe)
 		return -ENOMEM;
 
-	flow_fill_match(&ofe->match, &flow->key);
+	nfe->header.vendor = htonl(NX_VENDOR_ID);
+	nfe->header.subtype = htonl(NXT_FLOW_END);
 
-	ofe->priority = htons(flow->priority);
-	ofe->reason = reason;
-	memset(ofe->pad, 0, sizeof ofe->pad);
+	flow_fill_match(&nfe->match, &flow->key);
 
-	ofe->duration     = htonl((jiffies - flow->init_time) / HZ);
-	memset(ofe->pad2, 0, sizeof ofe->pad2);
-	ofe->packet_count = cpu_to_be64(flow->packet_count);
-	ofe->byte_count   = cpu_to_be64(flow->byte_count);
+	nfe->priority = htons(flow->priority);
+	nfe->reason = reason;
+
+	nfe->tcp_flags = flow->tcp_flags;
+	nfe->ip_tos = flow->ip_tos;
+
+	memset(nfe->pad, 0, sizeof nfe->pad);
+
+	nfe->init_time = cpu_to_be64(jiffies_64_to_msecs(flow->created));
+	nfe->used_time = cpu_to_be64(jiffies_64_to_msecs(flow->used));
+	nfe->end_time = cpu_to_be64(jiffies_64_to_msecs(get_jiffies_64()));
+
+	nfe->packet_count = cpu_to_be64(flow->packet_count);
+	nfe->byte_count   = cpu_to_be64(flow->byte_count);
 
 	return send_openflow_skb(skb, NULL);
 }
-EXPORT_SYMBOL(dp_send_flow_expired);
+EXPORT_SYMBOL(dp_send_flow_end);
 
 int
 dp_send_error_msg(struct datapath *dp, const struct sender *sender, 
@@ -1331,6 +1354,7 @@ static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 	struct flow_stats_state *s = private;
 	struct ofp_flow_stats *ofs;
 	int length;
+	uint64_t duration;
 
 	length = sizeof *ofs + sf_acts->actions_len;
 	if (length + s->bytes_used > s->bytes_allocated)
@@ -1352,7 +1376,14 @@ static int flow_stats_dump_callback(struct sw_flow *flow, void *private)
 	ofs->match.pad       = 0;
 	ofs->match.tp_src    = flow->key.tp_src;
 	ofs->match.tp_dst    = flow->key.tp_dst;
-	ofs->duration        = htonl((jiffies - flow->init_time) / HZ);
+
+	/* The kernel doesn't support 64-bit division, so use the 'do_div' 
+	 * macro instead.  The first argument is replaced with the quotient,
+	 * while the remainder is the return value. */
+	duration = get_jiffies_64() - flow->created;
+	do_div(duration, HZ);
+	ofs->duration        = htonl(duration);
+
 	ofs->priority        = htons(flow->priority);
 	ofs->idle_timeout    = htons(flow->idle_timeout);
 	ofs->hard_timeout    = htons(flow->hard_timeout);

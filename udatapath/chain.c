@@ -60,12 +60,13 @@ static int add_table(struct sw_chain *chain, struct sw_table *table)
 
 /* Creates and returns a new chain.  Returns NULL if the chain cannot be
  * created. */
-struct sw_chain *chain_create(void)
+struct sw_chain *chain_create(struct datapath *dp)
 {
     struct sw_chain *chain = calloc(1, sizeof *chain);
     if (chain == NULL)
         return NULL;
 
+    chain->dp = dp;
     if (add_table(chain, table_hash2_create(0x1EDC6F41, TABLE_HASH_MAX_FLOWS,
                                                0x741B8CD7, TABLE_HASH_MAX_FLOWS))
         || add_table(chain, table_linear_create(TABLE_LINEAR_MAX_FLOWS))) {
@@ -154,7 +155,7 @@ chain_delete(struct sw_chain *chain, const struct sw_flow_key *key,
 
     for (i = 0; i < chain->n_tables; i++) {
         struct sw_table *t = chain->tables[i];
-        count += t->delete(t, key, out_port, priority, strict);
+        count += t->delete(chain->dp, t, key, out_port, priority, strict);
     }
 
     return count;

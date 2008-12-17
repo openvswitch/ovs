@@ -39,6 +39,7 @@
 #include <string.h>
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openflow/nicira-ext.h"
 #include "packets.h"
 #include "timeval.h"
 
@@ -248,14 +249,14 @@ print_flow(const struct sw_flow_key *key)
 
 bool flow_timeout(struct sw_flow *flow)
 {
-    time_t now = time_now();
+    uint64_t now = time_msec();
     if (flow->idle_timeout != OFP_FLOW_PERMANENT
-        && now > flow->used + flow->idle_timeout) {
-        flow->reason = OFPER_IDLE_TIMEOUT;
+            && now > flow->used + flow->idle_timeout * 1000) {
+        flow->reason = NXFER_IDLE_TIMEOUT;
         return true;
     } else if (flow->hard_timeout != OFP_FLOW_PERMANENT
-               && now > flow->created + flow->hard_timeout) {
-        flow->reason = OFPER_HARD_TIMEOUT;
+            && now > flow->created + flow->hard_timeout * 1000) {
+        flow->reason = NXFER_HARD_TIMEOUT;
         return true;
     } else {
         return false;
@@ -292,7 +293,18 @@ int flow_has_out_port(struct sw_flow *flow, uint16_t out_port)
 
 void flow_used(struct sw_flow *flow, struct ofpbuf *buffer)
 {
-    flow->used = time_now();
+    flow->used = time_msec();
+
+    if (flow->key.flow.dl_type == htons(ETH_TYPE_IP)) {
+        struct ip_header *nh = buffer->l3;
+        flow->ip_tos = nh->ip_tos;
+
+        if (flow->key.flow.nw_proto == IP_TYPE_TCP) {
+            struct tcp_header *th = buffer->l4;
+            flow->tcp_flags |= TCP_FLAGS(th->tcp_ctl);
+        }
+    }
+
     flow->packet_count++;
     flow->byte_count += buffer->size;
 }

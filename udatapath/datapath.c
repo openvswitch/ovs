@@ -41,19 +41,19 @@
 #include "chain.h"
 #include "csum.h"
 #include "flow.h"
-#include "list.h"
 #include "netdev.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openflow/nicira-ext.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"
 #include "stp.h"
 #include "switch-flow.h"
 #include "table.h"
-#include "timeval.h"
 #include "vconn.h"
 #include "xtoxll.h"
+#include "nx_msg.h"
 #include "dp_act.h"
 
 #define THIS_MODULE VLM_datapath
@@ -82,18 +82,6 @@ extern char serial_num;
                                 | (1 << OFPAT_SET_TP_SRC)   \
                                 | (1 << OFPAT_SET_TP_DST) )
 
-struct sw_port {
-    uint32_t config;            /* Some subset of OFPPC_* flags. */
-    uint32_t state;             /* Some subset of OFPPS_* flags. */
-    struct datapath *dp;
-    struct netdev *netdev;
-    struct list node; /* Element in datapath.ports. */
-    unsigned long long int rx_packets, tx_packets;
-    unsigned long long int rx_bytes, tx_bytes;
-    unsigned long long int tx_dropped;
-    uint16_t port_no;
-};
-
 /* The origin of a received OpenFlow message, to enable sending a reply. */
 struct sender {
     struct remote *remote;      /* The device that sent the message. */
@@ -117,34 +105,6 @@ struct remote {
     void *cb_aux;
 };
 
-#define DP_MAX_PORTS 255
-BUILD_ASSERT_DECL(DP_MAX_PORTS <= OFPP_MAX);
-
-struct datapath {
-    /* Remote connections. */
-    struct list remotes;        /* All connections (including controller). */
-
-    /* Listeners. */
-    struct pvconn **listeners;
-    size_t n_listeners;
-
-    time_t last_timeout;
-
-    /* Unique identifier for this datapath */
-    uint64_t  id;
-
-    struct sw_chain *chain;  /* Forwarding rules. */
-
-    /* Configuration set from controller. */
-    uint16_t flags;
-    uint16_t miss_send_len;
-
-    /* Switch ports. */
-    struct sw_port ports[DP_MAX_PORTS];
-    struct sw_port *local_port;  /* OFPP_LOCAL port, if any. */
-    struct list port_list; /* All ports, including local_port. */
-};
-
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
 static struct remote *remote_create(struct datapath *, struct rconn *);
@@ -153,8 +113,6 @@ static void remote_wait(struct remote *);
 static void remote_destroy(struct remote *);
 
 static void update_port_flags(struct datapath *, const struct ofp_port_mod *);
-static void send_flow_expired(struct datapath *, struct sw_flow *,
-                              enum ofp_flow_expired_reason);
 static int update_port_status(struct sw_port *p);
 static void send_port_status(struct sw_port *p, uint8_t status);
 static void del_switch_port(struct sw_port *p);
@@ -215,7 +173,7 @@ dp_new(struct datapath **dp_, uint64_t dpid)
     dp->listeners = NULL;
     dp->n_listeners = 0;
     dp->id = dpid <= UINT64_C(0xffffffffffff) ? dpid : gen_datapath_id();
-    dp->chain = chain_create();
+    dp->chain = chain_create(dp);
     if (!dp->chain) {
         VLOG_ERR("could not create chain");
         free(dp);
@@ -348,7 +306,7 @@ dp_run(struct datapath *dp)
 
         chain_timeout(dp->chain, &deleted);
         LIST_FOR_EACH_SAFE (f, n, struct sw_flow, node, &deleted) {
-            send_flow_expired(dp, f, f->reason);
+            dp_send_flow_end(dp, f, f->reason);
             list_remove(&f->node);
             flow_free(f);
         }
@@ -853,22 +811,40 @@ send_port_status(struct sw_port *p, uint8_t status)
 }
 
 void
-send_flow_expired(struct datapath *dp, struct sw_flow *flow,
-                  enum ofp_flow_expired_reason reason)
+dp_send_flow_end(struct datapath *dp, struct sw_flow *flow,
+              enum nx_flow_end_reason reason)
 {
     struct ofpbuf *buffer;
-    struct ofp_flow_expired *ofe;
-    ofe = make_openflow_xid(sizeof *ofe, OFPT_FLOW_EXPIRED, 0, &buffer);
-    flow_fill_match(&ofe->match, &flow->key);
+    struct nx_flow_end *nfe;
 
-    ofe->priority = htons(flow->priority);
-    ofe->reason = reason;
-    memset(ofe->pad, 0, sizeof ofe->pad);
+    if (!dp->send_flow_end) {
+        return;
+    }
 
-    ofe->duration     = htonl(time_now() - flow->created);
-    memset(ofe->pad2, 0, sizeof ofe->pad2);
-    ofe->packet_count = htonll(flow->packet_count);
-    ofe->byte_count   = htonll(flow->byte_count);
+    nfe = make_openflow_xid(sizeof *nfe, OFPT_VENDOR, 0, &buffer);
+    if (!nfe) {
+        return;
+    }
+    nfe->header.vendor = htonl(NX_VENDOR_ID);
+    nfe->header.subtype = htonl(NXT_FLOW_END);
+
+    flow_fill_match(&nfe->match, &flow->key);
+
+    nfe->priority = htons(flow->priority);
+    nfe->reason = reason;
+
+    nfe->tcp_flags = flow->tcp_flags;
+    nfe->ip_tos = flow->ip_tos;
+
+    memset(nfe->pad, 0, sizeof nfe->pad);
+
+    nfe->init_time = htonll(flow->created);
+    nfe->used_time = htonll(flow->used);
+    nfe->end_time = htonll(time_msec());
+
+    nfe->packet_count = htonll(flow->packet_count);
+    nfe->byte_count   = htonll(flow->byte_count);
+
     send_openflow_buffer(dp, buffer, NULL);
 }
 
@@ -887,7 +863,7 @@ dp_send_error_msg(struct datapath *dp, const struct sender *sender,
 
 static void
 fill_flow_stats(struct ofpbuf *buffer, struct sw_flow *flow,
-                int table_idx, time_t now)
+                int table_idx, uint64_t now)
 {
     struct ofp_flow_stats *ofs;
     int length = sizeof *ofs + flow->sf_acts->actions_len;
@@ -907,7 +883,7 @@ fill_flow_stats(struct ofpbuf *buffer, struct sw_flow *flow,
     ofs->match.pad       = 0;
     ofs->match.tp_src    = flow->key.flow.tp_src;
     ofs->match.tp_dst    = flow->key.flow.tp_dst;
-    ofs->duration        = htonl(now - flow->created);
+    ofs->duration        = htonl((now - flow->created) / 1000);
     ofs->priority        = htons(flow->priority);
     ofs->idle_timeout    = htons(flow->idle_timeout);
     ofs->hard_timeout    = htons(flow->hard_timeout);
@@ -1089,10 +1065,12 @@ add_flow(struct datapath *dp, const struct sender *sender,
     flow->priority = flow->key.wildcards ? ntohs(ofm->priority) : -1;
     flow->idle_timeout = ntohs(ofm->idle_timeout);
     flow->hard_timeout = ntohs(ofm->hard_timeout);
-    flow->used = flow->created = time_now();
+    flow->used = flow->created = time_msec();
     flow->sf_acts->actions_len = actions_len;
     flow->byte_count = 0;
     flow->packet_count = 0;
+    flow->tcp_flags = 0;
+    flow->ip_tos = 0;
     memcpy(flow->sf_acts->actions, ofm->actions, actions_len);
 
     /* Act. */
@@ -1110,8 +1088,8 @@ add_flow(struct datapath *dp, const struct sender *sender,
         if (buffer) {
             struct sw_flow_key key;
             uint16_t in_port = ntohs(ofm->match.in_port);
-            flow_used(flow, buffer);
             flow_extract(buffer, in_port, &key.flow);
+            flow_used(flow, buffer);
             execute_actions(dp, buffer, &key, 
                     ofm->actions, actions_len, false);
         } else {
@@ -1218,7 +1196,7 @@ struct flow_stats_state {
     int table_idx;
     struct sw_table_position position;
     struct ofp_flow_stats_request rq;
-    time_t now;
+    uint64_t now;                  /* Current time in milliseconds */
 
     struct ofpbuf *buffer;
 };
@@ -1252,7 +1230,7 @@ static int flow_stats_dump(struct datapath *dp, void *state,
 
     flow_extract_match(&match_key, &s->rq.match);
     s->buffer = buffer;
-    s->now = time_now();
+    s->now = time_msec();
     while (s->table_idx < dp->chain->n_tables
            && (s->rq.table_id == 0xff || s->rq.table_id == s->table_idx))
     {
@@ -1614,6 +1592,25 @@ recv_echo_reply(struct datapath *dp UNUSED, const struct sender *sender UNUSED,
     return 0;
 }
 
+static int
+recv_vendor(struct datapath *dp, const struct sender *sender,
+                  const void *oh)
+{
+    const struct ofp_vendor_header *ovh = oh;
+
+    switch (ntohl(ovh->vendor)) 
+    {
+    case NX_VENDOR_ID:
+        return nx_recv_msg(dp, sender, oh);
+
+    default:
+        VLOG_WARN_RL(&rl, "unknown vendor: 0x%x\n", ntohl(ovh->vendor));
+        dp_send_error_msg(dp, sender, OFPET_BAD_REQUEST,
+                OFPBRC_BAD_VENDOR, oh, ntohs(ovh->header.length));
+        return -EINVAL;
+    }
+}
+
 /* 'msg', which is 'length' bytes long, was received from the control path.
  * Apply it to 'chain'. */
 int
@@ -1668,6 +1665,10 @@ fwd_control_input(struct datapath *dp, const struct sender *sender,
     case OFPT_ECHO_REPLY:
         min_size = sizeof(struct ofp_header);
         handler = recv_echo_reply;
+        break;
+    case OFPT_VENDOR:
+        min_size = sizeof(struct ofp_vendor_header);
+        handler = recv_vendor;
         break;
     default:
         dp_send_error_msg(dp, sender, OFPET_BAD_REQUEST, OFPBRC_BAD_TYPE,

@@ -5,10 +5,16 @@
 #include <linux/spinlock.h>
 #include <linux/list.h>
 #include <linux/types.h>
+#include <linux/jiffies.h>
 #include <linux/rcupdate.h>
 #include <linux/gfp.h>
 #include <linux/skbuff.h>
 #include <linux/if_ether.h>
+#include <linux/ip.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
+#include <linux/icmp.h>
+#include <net/ip.h>
 
 #include "openflow/openflow.h"
 
@@ -84,7 +90,7 @@ struct sw_flow {
 	uint16_t priority;      /* Only used on entries with wildcards. */
 	uint16_t idle_timeout;	/* Idle time before discarding (seconds). */
 	uint16_t hard_timeout;  /* Hard expiration time (seconds) */
-	unsigned long used;     /* Last used time (in jiffies). */
+	uint64_t used;          /* Last used time (in jiffies). */
 
 	struct sw_flow_actions *sf_acts;
 
@@ -95,9 +101,12 @@ struct sw_flow {
 	void *private;
 
 	spinlock_t lock;         /* Lock this entry...mostly for stat updates */
-	unsigned long init_time; /* When the flow was created (in jiffies). */
+	uint64_t created;        /* When the flow was created (in jiffies_64). */
 	uint64_t packet_count;   /* Number of packets associated with this entry */
 	uint64_t byte_count;     /* Number of bytes associated with this entry */
+
+	uint8_t tcp_flags;       /* Union of seen TCP flags. */
+	uint8_t ip_tos;          /* IP TOS value. */
 
 	struct rcu_head rcu;
 };
@@ -120,13 +129,65 @@ int flow_timeout(struct sw_flow *);
 
 void print_flow(const struct sw_flow_key *);
 
+static inline int iphdr_ok(struct sk_buff *skb)
+{
+	int nh_ofs = skb_network_offset(skb);
+	if (skb->len >= nh_ofs + sizeof(struct iphdr)) {
+		int ip_len = ip_hdrlen(skb);
+		return (ip_len >= sizeof(struct iphdr)
+			&& pskb_may_pull(skb, nh_ofs + ip_len));
+	}
+	return 0;
+}
+
+static inline int tcphdr_ok(struct sk_buff *skb)
+{
+	int th_ofs = skb_transport_offset(skb);
+	if (pskb_may_pull(skb, th_ofs + sizeof(struct tcphdr))) {
+		int tcp_len = tcp_hdrlen(skb);
+		return (tcp_len >= sizeof(struct tcphdr)
+			&& skb->len >= th_ofs + tcp_len);
+	}
+	return 0;
+}
+
+static inline int udphdr_ok(struct sk_buff *skb)
+{
+	int th_ofs = skb_transport_offset(skb);
+	return pskb_may_pull(skb, th_ofs + sizeof(struct udphdr));
+}
+
+static inline int icmphdr_ok(struct sk_buff *skb)
+{
+	int th_ofs = skb_transport_offset(skb);
+	return pskb_may_pull(skb, th_ofs + sizeof(struct icmphdr));
+}
+
+#define TCP_FLAGS_OFFSET 13
+#define TCP_FLAG_MASK 0x3f
+
+static inline struct ofp_tcphdr *ofp_tcp_hdr(const struct sk_buff *skb)
+{
+	return (struct ofp_tcphdr *)skb_transport_header(skb);
+}
+
 static inline void flow_used(struct sw_flow *flow, struct sk_buff *skb) 
 {
 	unsigned long flags;
 
-	flow->used = jiffies;
+	flow->used = get_jiffies_64();
 
 	spin_lock_irqsave(&flow->lock, flags);
+	if (flow->key.dl_type == htons(ETH_P_IP) && iphdr_ok(skb)) {
+		struct iphdr *nh = ip_hdr(skb);
+		flow->ip_tos = nh->tos;
+
+		if (flow->key.nw_proto == IPPROTO_TCP && tcphdr_ok(skb)) {
+			uint8_t *tcp = (uint8_t *)tcp_hdr(skb);
+			flow->tcp_flags |= *(tcp + TCP_FLAGS_OFFSET) & TCP_FLAG_MASK;
+		}
+	}
+
 	flow->packet_count++;
 	flow->byte_count += skb->len;
 	spin_unlock_irqrestore(&flow->lock, flags);

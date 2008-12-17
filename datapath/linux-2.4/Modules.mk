@@ -50,6 +50,7 @@ compat24_headers = \
 	linux-2.4/compat-2.4/include/linux/spinlock.h \
 	linux-2.4/compat-2.4/include/linux/string.h \
 	linux-2.4/compat-2.4/include/linux/tcp.h \
+	linux-2.4/compat-2.4/include/linux/time.h \
 	linux-2.4/compat-2.4/include/linux/timer.h \
 	linux-2.4/compat-2.4/include/linux/types.h \
 	linux-2.4/compat-2.4/include/linux/udp.h \

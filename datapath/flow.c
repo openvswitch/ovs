@@ -10,19 +10,15 @@
 #include <linux/if_ether.h>
 #include <linux/if_vlan.h>
 #include <net/llc_pdu.h>
-#include <linux/ip.h>
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/llc.h>
 #include <linux/module.h>
-#include <linux/tcp.h>
-#include <linux/udp.h>
-#include <linux/icmp.h>
 #include <linux/in.h>
 #include <linux/rcupdate.h>
-#include <net/ip.h>
 
 #include "openflow/openflow.h"
+#include "openflow/nicira-ext.h"
 #include "compat.h"
 
 struct kmem_cache *flow_cache;
@@ -156,12 +152,12 @@ void flow_fill_match(struct ofp_match* to, const struct sw_flow_key* from)
 int flow_timeout(struct sw_flow *flow)
 {
 	if (flow->idle_timeout != OFP_FLOW_PERMANENT
-	    && time_after(jiffies, flow->used + flow->idle_timeout * HZ))
-		return OFPER_IDLE_TIMEOUT;
+	    && time_after64(get_jiffies_64(), flow->used + flow->idle_timeout * HZ))
+		return NXFER_IDLE_TIMEOUT;
 	else if (flow->hard_timeout != OFP_FLOW_PERMANENT
-		 && time_after(jiffies,
-			       flow->init_time + flow->hard_timeout * HZ))
-		return OFPER_HARD_TIMEOUT;
+		 && time_after64(get_jiffies_64(),
+			       flow->created + flow->hard_timeout * HZ))
+		return NXFER_HARD_TIMEOUT;
 	else
 		return -1;
 }
@@ -328,40 +324,6 @@ static int is_snap(const struct eth_snap_hdr *esh)
 	return (esh->dsap == LLC_SAP_SNAP
 		&& esh->ssap == LLC_SAP_SNAP
 		&& !memcmp(esh->oui, "\0\0\0", 3));
-}
-
-static int iphdr_ok(struct sk_buff *skb)
-{
-	int nh_ofs = skb_network_offset(skb);
-	if (skb->len >= nh_ofs + sizeof(struct iphdr)) {
-		int ip_len = ip_hdrlen(skb);
-		return (ip_len >= sizeof(struct iphdr)
-			&& pskb_may_pull(skb, nh_ofs + ip_len));
-	}
-	return 0;
-}
-
-static int tcphdr_ok(struct sk_buff *skb)
-{
-	int th_ofs = skb_transport_offset(skb);
-	if (pskb_may_pull(skb, th_ofs + sizeof(struct tcphdr))) {
-		int tcp_len = tcp_hdrlen(skb);
-		return (tcp_len >= sizeof(struct tcphdr)
-			&& skb->len >= th_ofs + tcp_len);
-	}
-	return 0;
-}
-
-static int udphdr_ok(struct sk_buff *skb)
-{
-	int th_ofs = skb_transport_offset(skb);
-	return pskb_may_pull(skb, th_ofs + sizeof(struct udphdr));
-}
-
-static int icmphdr_ok(struct sk_buff *skb)
-{
-	int th_ofs = skb_transport_offset(skb);
-	return pskb_may_pull(skb, th_ofs + sizeof(struct icmphdr));
 }
 
 /* Parses the Ethernet frame in 'skb', which was received on 'in_port',

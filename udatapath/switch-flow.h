@@ -60,11 +60,14 @@ struct sw_flow {
     uint16_t priority;          /* Only used on entries with wildcards. */
     uint16_t idle_timeout;      /* Idle time before discarding (seconds). */
     uint16_t hard_timeout;      /* Hard expiration time (seconds) */
-    time_t used;                /* Last used time. */
-    time_t created;             /* When the flow was created. */
+    uint64_t used;              /* Last used time. */
+    uint64_t created;           /* When the flow was created. */
     uint64_t packet_count;      /* Number of packets seen. */
     uint64_t byte_count;        /* Number of bytes seen. */
-    uint8_t reason;             /* Reason flow expired (one of OFPER_*). */
+    uint8_t reason;             /* Reason flow expired (one of NXFER_*). */
+
+    uint8_t tcp_flags;          /* Union of seen TCP flags. */
+    uint8_t ip_tos;             /* IP TOS value. */
 
     struct sw_flow_actions *sf_acts;
 

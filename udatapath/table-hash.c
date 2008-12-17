@@ -36,6 +36,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include "openflow/nicira-ext.h"
 #include "crc32.h"
 #include "datapath.h"
 #include "flow.h"
@@ -134,7 +135,7 @@ do_delete(struct sw_flow **bucket)
 /* Returns number of deleted flows.  We can igonre the priority
  * argument, since all exact-match entries are the same (highest)
  * priority. */
-static int table_hash_delete(struct sw_table *swt,
+static int table_hash_delete(struct datapath *dp, struct sw_table *swt,
                              const struct sw_flow_key *key, 
                              uint16_t out_port,
                              uint16_t priority, int strict)
@@ -147,6 +148,7 @@ static int table_hash_delete(struct sw_table *swt,
         struct sw_flow *flow = *bucket;
         if (flow && !flow_compare(&flow->key.flow, &key->flow)
                 && flow_has_out_port(flow, out_port)) {
+            dp_send_flow_end(dp, flow, NXFER_DELETE);
             do_delete(bucket);
             count = 1;
         }
@@ -158,6 +160,7 @@ static int table_hash_delete(struct sw_table *swt,
             struct sw_flow *flow = *bucket;
             if (flow && flow_matches_desc(&flow->key, key, strict)
                     && flow_has_out_port(flow, out_port)) {
+                dp_send_flow_end(dp, flow, NXFER_DELETE);
                 do_delete(bucket);
                 count++;
             }
@@ -321,15 +324,16 @@ static int table_hash2_modify(struct sw_table *swt,
                     actions, actions_len));
 }
 
-static int table_hash2_delete(struct sw_table *swt,
+static int table_hash2_delete(struct datapath *dp, struct sw_table *swt,
                               const struct sw_flow_key *key, 
                               uint16_t out_port,
                               uint16_t priority, int strict)
 {
     struct sw_table_hash2 *t2 = (struct sw_table_hash2 *) swt;
-    return (table_hash_delete(t2->subtable[0], key, out_port, priority, strict)
-            + table_hash_delete(t2->subtable[1], key, out_port, priority, 
-                strict));
+    return (table_hash_delete(dp, t2->subtable[0], key, out_port, 
+                priority, strict)
+            + table_hash_delete(dp, t2->subtable[1], key, out_port, 
+                priority, strict));
 }
 
 static void table_hash2_timeout(struct sw_table *swt, struct list *deleted)

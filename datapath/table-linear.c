@@ -98,7 +98,7 @@ static int do_delete(struct sw_table *swt, struct sw_flow *flow)
 	return 1;
 }
 
-static int table_linear_delete(struct sw_table *swt,
+static int table_linear_delete(struct datapath *dp, struct sw_table *swt,
 				const struct sw_flow_key *key, uint16_t out_port,
 				uint16_t priority, int strict)
 {
@@ -111,6 +111,7 @@ static int table_linear_delete(struct sw_table *swt,
 				&& flow_has_out_port(flow, out_port)
 				&& (!strict || (flow->priority == priority)))
 			count += do_delete(swt, flow);
+			dp_send_flow_end(dp, flow, NXFER_DELETE);
 	}
 	tl->n_flows -= count;
 	return count;
@@ -127,7 +128,7 @@ static int table_linear_timeout(struct datapath *dp, struct sw_table *swt)
 		int reason = flow_timeout(flow);
 		if (reason >= 0) {
 			count += do_delete(swt, flow);
-			dp_send_flow_expired(dp, flow, reason);
+			dp_send_flow_end(dp, flow, reason);
 		}
 	}
 	tl->n_flows -= count;

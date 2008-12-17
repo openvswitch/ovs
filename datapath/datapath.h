@@ -10,6 +10,7 @@
 #include <linux/workqueue.h>
 #include <linux/skbuff.h>
 #include "openflow/openflow.h"
+#include "openflow/nicira-ext.h"
 #include "flow.h"
 
 
@@ -57,6 +58,9 @@ struct datapath {
 	uint16_t flags;
 	uint16_t miss_send_len;
 
+	/* Flag controlling whether Flow End messages are generated. */
+	uint8_t send_flow_end;
+
 	/* Switch ports. */
 	struct net_bridge_port *ports[DP_MAX_PORTS];
 	struct net_bridge_port *local_port; /* OFPP_LOCAL port. */
@@ -95,8 +99,8 @@ void dp_set_origin(struct datapath *, uint16_t, struct sk_buff *);
 int dp_send_features_reply(struct datapath *, const struct sender *);
 int dp_send_config_reply(struct datapath *, const struct sender *);
 int dp_send_port_status(struct net_bridge_port *p, uint8_t status);
-int dp_send_flow_expired(struct datapath *, struct sw_flow *,
-			 enum ofp_flow_expired_reason);
+int dp_send_flow_end(struct datapath *, struct sw_flow *,
+			 enum nx_flow_end_reason);
 int dp_send_error_msg(struct datapath *, const struct sender *, 
 			uint16_t, uint16_t, const void *, size_t);
 int dp_update_port_flags(struct datapath *dp, const struct ofp_port_mod *opm);
