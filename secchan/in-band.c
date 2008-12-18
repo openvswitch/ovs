@@ -152,6 +152,8 @@ in_band_local_packet_cb(struct relay *r, void *in_band_)
         return false;
     }
     in_port = ntohs(opi->in_port);
+    get_ofp_packet_payload(opi, &payload);
+    flow_extract(&payload, in_port, &flow);
 
     /* Deal with local stuff. */
     if (in_port == OFPP_LOCAL) {
@@ -167,8 +169,14 @@ in_band_local_packet_cb(struct relay *r, void *in_band_)
                && is_controller_mac(eth->eth_src, in_band)) {
         /* ARP sent by controller. */
         out_port = OFPP_FLOOD;
-    } else if (is_controller_mac(eth->eth_dst, in_band)
-               || is_controller_mac(eth->eth_src, in_band)) {
+    } else if ((is_controller_mac(eth->eth_dst, in_band)
+                || is_controller_mac(eth->eth_src, in_band))
+               && flow.dl_type == htons(ETH_TYPE_IP)
+               && flow.nw_proto == IP_TYPE_TCP
+               && (flow.tp_src == htons(OFP_TCP_PORT)
+                   || flow.tp_src == htons(OFP_SSL_PORT)
+                   || flow.tp_dst == htons(OFP_TCP_PORT)
+                   || flow.tp_dst == htons(OFP_SSL_PORT))) {
         /* Traffic to or from controller.  Switch it by hand. */
         in_band_learn_mac(in_band, in_port, eth->eth_src);
         out_port = mac_learning_lookup(in_band->ml, eth->eth_dst);
@@ -190,8 +198,6 @@ in_band_local_packet_cb(struct relay *r, void *in_band_)
         }
     }
 
-    get_ofp_packet_payload(opi, &payload);
-    flow_extract(&payload, in_port, &flow);
     if (in_port == out_port) {
         /* The input and output port match.  Set up a flow to drop packets. */
         queue_tx(rc, in_band, make_add_flow(&flow, ntohl(opi->buffer_id),
