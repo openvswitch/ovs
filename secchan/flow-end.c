@@ -222,7 +222,11 @@ send_nx_flow_end_config(const struct flow_end_data *fe)
     nfec = make_openflow(sizeof(*nfec), OFPT_VENDOR, &b);
     nfec->header.vendor  = htonl(NX_VENDOR_ID);
     nfec->header.subtype = htonl(NXT_FLOW_END_CONFIG);
-    nfec->enable = fe->send_ofp_exp ? 1 : 0;
+    if ((fe->send_ofp_exp == false) && (fe->netflow_fd < 0)) {
+        nfec->enable = 0;
+    } else {
+        nfec->enable = 1;
+    }
 
     rconn_send(fe->local_rconn, b, NULL);
 }
