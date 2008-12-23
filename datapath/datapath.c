@@ -261,12 +261,13 @@ static int new_dp(int dp_idx)
 	if (dp == NULL)
 		goto err_unlock;
 
+	dp->dp_idx = dp_idx;
+
 	/* Setup our "of" device */
 	err = dp_dev_setup(dp);
 	if (err)
 		goto err_free_dp;
 
-	dp->dp_idx = dp_idx;
 	dp->chain = chain_create(dp);
 	if (dp->chain == NULL)
 		goto err_destroy_dp_dev;
