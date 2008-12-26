@@ -210,6 +210,7 @@ lswitch_run(struct lswitch *sw, struct rconn *rconn)
             ofsr = (struct ofp_flow_stats_request *) osr->body;
             ofsr->match.wildcards = htonl(OFPFW_ALL);
             ofsr->table_id = 0xff;
+            ofsr->out_port = htons(OFPP_NONE);
 
             error = rconn_send(rconn, b, NULL);
             if (error) {
