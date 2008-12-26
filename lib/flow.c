@@ -102,16 +102,6 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, struct flow *flow)
     struct eth_header *eth;
     int retval = 0;
 
-    if (b.size < ETH_TOTAL_MIN) {
-        /* This message is not too useful since there are various ways that we
-         * can end up with runt frames, e.g. frames that only ever passed
-         * through virtual network devices and never touched a physical
-         * Ethernet. */
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_DBG_RL(&rl, "packet length %zu less than minimum size %d",
-                    b.size, ETH_TOTAL_MIN);
-    }
-
     memset(flow, 0, sizeof *flow);
     flow->dl_vlan = htons(OFP_VLAN_NONE);
     flow->in_port = htons(in_port);
