@@ -177,8 +177,8 @@ ds_cstr(struct ds *ds)
 {
     if (!ds->string) {
         ds_reserve(ds, 0);
-        ds->string[0] = '\0';
     }
+    ds->string[ds->length] = '\0';
     return ds->string;
 }
 
