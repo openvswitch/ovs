@@ -1125,7 +1125,7 @@ static struct genl_ops dp_genl_ops_add_dp = {
 
 struct datapath *dp_get(int dp_idx)
 {
-	if (dp_idx < 0 || dp_idx > DP_MAX)
+	if (dp_idx < 0 || dp_idx >= DP_MAX)
 		return NULL;
 	return rcu_dereference(dps[dp_idx]);
 }
