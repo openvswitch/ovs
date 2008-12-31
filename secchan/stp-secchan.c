@@ -270,7 +270,7 @@ stp_port_changed_cb(uint16_t port_no,
             speed = 100;
         } else if (new->curr & (OFPPF_1GB_HD | OFPPF_1GB_FD)) {
             speed = 1000;
-        } else if (new->curr & OFPPF_100MB_FD) {
+        } else if (new->curr & OFPPF_10GB_FD) {
             speed = 10000;
         }
         stp_port_set_speed(p, speed);

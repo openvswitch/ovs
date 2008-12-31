@@ -332,7 +332,7 @@ put_features(struct ds *ds, const char *name, uint32_t features)
         put_duplexes(ds, "10M", features, OFPPF_10MB_HD, OFPPF_10MB_FD);
         put_duplexes(ds, "100M", features,
                      OFPPF_100MB_HD, OFPPF_100MB_FD);
-        put_duplexes(ds, "1G", features, OFPPF_100MB_HD, OFPPF_100MB_FD);
+        put_duplexes(ds, "1G", features, OFPPF_1GB_HD, OFPPF_1GB_FD);
         if (features & OFPPF_10GB_FD) {
             ds_put_cstr(ds, " 10G");
         }
