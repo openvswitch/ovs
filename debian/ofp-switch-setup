@@ -14,6 +14,7 @@ use warnings;
 my $debconf_owner = 'openflow-switch';
 
 my $default = '/etc/default/openflow-switch';
+my $template = '/usr/share/openflow/switch/default.template';
 my $etc = '/etc/openflow-switch';
 my $rundir = '/var/run';
 my $privkey_file = "$etc/of0-privkey.pem";
@@ -62,6 +63,8 @@ if (-e $default) {
         local $_ = $oldconfig{$key};
         &{$map{$key}}() if defined && !/^\s*$/;
     }
+} elsif (-e $template) {
+    %oldconfig = load_config($template);
 }
 
 my $cacert_preverified = -e $cacert_file;

@@ -125,6 +125,7 @@ install-arch: build-arch
 	dh_installdirs -s
 	$(MAKE) -C _debian DESTDIR=$(CURDIR)/debian/openflow install
 	cp debian/openflow-switch-config.overrides debian/openflow-switch-config/usr/share/lintian/overrides/openflow-switch-config
+	cp debian/openflow-switch.template debian/openflow-switch/usr/share/openflow/switch/default.template
 	dh_install -s
 	$(ext_install_arch)
 
