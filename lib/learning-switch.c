@@ -417,6 +417,10 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
         }
     }
 
+    if (eth_addr_is_reserved(flow.dl_src)) {
+        goto drop_it;
+    }
+
     if (!may_recv(sw, in_port, false)) {
         /* STP prevents receiving anything on this port. */
         goto drop_it;
