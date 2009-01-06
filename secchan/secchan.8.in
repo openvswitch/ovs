@@ -467,5 +467,5 @@ Prints version information to the console.
 .BR ofp-discover (8),
 .BR controller (8),
 .BR ofp-pki (8),
-.BR vlogconf (8),
-.BR switch (8)
+.BR udatapath (8),
+.BR vlogconf (8)

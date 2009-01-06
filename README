@@ -30,10 +30,10 @@ Specification [2].
 What's here?
 ------------
 
-This distribution includes three different reference implementations
-of an OpenFlow switch.  The first implementation, which is closely
-tied to Linux because it is partially implemented in the Linux kernel,
-has the following components:
+This distribution includes two reference implementations of an
+OpenFlow switch.  The first implementation, which is closely tied to
+Linux because it is partially implemented in the Linux kernel, has the
+following components:
 
 	- A Linux kernel module that implements the flow table and
           OpenFlow protocol, in the datapath directory.
@@ -51,11 +51,6 @@ The second implementation has the following components:
         - secchan, a program that implements the secure channel
           component of the reference switch (the same program used in
           the kernel-based implementation).
-
-The third implementation is a single userspace program, named
-"switch", that integrates all three parts of an OpenFlow switch.  This
-implementation is deprecated.  It lacks features present in the other
-two implementations.
 
 This distribution includes some additional software as well:
 

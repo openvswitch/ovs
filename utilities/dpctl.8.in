@@ -505,6 +505,6 @@ Delete the datapath:
 .SH "SEE ALSO"
 
 .BR secchan (8),
-.BR switch (8),
 .BR controller (8),
+.BR udatapath (8),
 .BR vlogconf (8)

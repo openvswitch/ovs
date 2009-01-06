@@ -8,8 +8,8 @@ reference implementation of OpenFlow.  Please send any comments to:
 Contents
 ========
 
-The OpenFlow reference implementation includes three separate
-OpenFlow switch implementations:
+The OpenFlow reference implementation includes two OpenFlow switch
+implementations:
 
         - The "kernel-based switch": This divides the switch into a
           "datapath" Linux kernel module (openflow_mod.o for Linux 2.4
@@ -25,15 +25,6 @@ OpenFlow switch implementations:
           the kernel-based switch (secchan).  The userspace
           datapath-based switch does not require building a kernel
           module, but it is not as fast as the kernel-based switch.
-
-        - The "userspace switch": This implements an OpenFlow switch
-          as a single user program (built as switch/switch).  The
-          userspace switch is the easiest to build and use but it is
-          much less featureful than the other switch implementations.
-
-          The userspace switch is deprecated in favor of the userspace
-          datapath-based switch.  It will likely be removed in a
-          future OpenFlow release.
 
 The reference implementation also contains a simple OpenFlow
 controller (built as controller/controller) and a number of related
@@ -184,8 +175,6 @@ distribution in the ordinary way using "configure" and "make".
 
       - Tests: various binaries in tests/.
 
-      - Switch executable: switch/switch.
-
    If your distribution includes the OpenFlow extensions, the
    following additional binaries will be built:
 
@@ -333,8 +322,8 @@ Follow these instructions to build Debian packages for OpenFlow.
       - Completely by hand, as described under the Testing section
         below.
 
-        For the userspace switch, this is the only supported form of
-        configuration.
+        For the userspace datapath-based switch, this is the only
+        supported form of configuration.
 
       - By editing /etc/default/openflow-switch.  You must at least
         configure some network devices, by uncommenting NETDEVS and
@@ -347,7 +336,7 @@ Follow these instructions to build Debian packages for OpenFlow.
            % /etc/init.d/openflow-switch restart
 
         This form of configuration is not supported for the userspace
-        switch.
+        datapath-based switch.
 
       - By running the ofp-switch-setup program.  This interactive
         program will walk you through all the steps of configuring an
@@ -357,7 +346,7 @@ Follow these instructions to build Debian packages for OpenFlow.
            % ofp-switch-setup
 
         This form of configuration is not supported for the userspace
-        switch.
+        datapath-based switch.
 
 Testing
 =======
@@ -403,42 +392,6 @@ These instructions use the OpenFlow userspace datapath ("udatapath").
    now be able to send packets to each other, as if they were plugged
    into ports on a conventional Ethernet switch.
 
-Userspace Switch
-----------------
-
-These instructions use the OpenFlow userspace switch that runs as an
-integrated userspace program.  Keep in mind that the userspace switch
-is deprecated: you should use the userspace datapath instead.
-
-1. Start the OpenFlow controller running in the background, by running
-   the "controller" program with a command like the following:
-
-      # controller ptcp: &
-
-   This command causes the controller to bind to port 6633 (the
-   default) awaiting connections from OpenFlow switches.  See
-   controller(8) for details.
-
-   The "controller" program does not require any special privilege, so
-   you do not need to run it as root.
-   
-2. The "switch" program must run as root, so log in as root, or use a
-   program such as "su" to become root temporarily.
-
-3. On the same machine, use the "switch" program to start an OpenFlow
-   switch, specifying network devices to use as switch ports on the -i
-   option as a comma-separated list, like so:
-
-      # switch tcp:127.0.0.1 -i eth1,eth2
-   
-   The network devices that you specify should not have configured IP
-   addresses.
-
-4. The controller causes each switch that connects to it to act like a
-   learning Ethernet switch.  Thus, devices plugged into the specified
-   network ports should now be able to send packets to each other, as
-   if they were plugged into ports on a conventional Ethernet switch.
-
 Installation
 ============
 
@@ -458,9 +411,6 @@ each switch to reach the controller over the network:
         automatically.  We will assume manual configuration here;
         please refer to secchan(8) for instructions on setting up
         controller discovery.  
-
-        The (deprecated) userspace switch does not support in-band
-        control.
 
 Controller Setup
 ----------------
@@ -643,36 +593,6 @@ The OpenFlow kernel module must be loaded, as described under
    use, because the switch must then also obtain its own IP address
    and the controller's location via DHCP.
 
-Userspace Switch-Based Setup
-----------------------------
-
-To set up an OpenFlow switch using the (deprecated) userspace switch,
-follow this procedure.  The userspace switch must be connected to the
-controller over a "control network" that is physically separate from
-the one that the switch and controller are controlling.  (The other
-switch implementations do not have this limitation.)
-
-0. The commands below must run as root, so log in as root, or use a
-   program such as "su" to become root temporarily.
-
-1. Use the "switch" program to start an OpenFlow switch, specifying
-   the IP address of the controller as the first argument to the
-   switch program, and the network devices to include in the switch as
-   arguments to the -i option.  For example, if the controller is
-   running on host 192.168.1.2 port 6633 (the default port), and eth1
-   and eth2 are to be the switch ports, the switch invocation would
-   look like this:
-
-      # switch tcp:127.0.0.1 -i eth1,eth2
-   
-   The network devices that you specify should not have configured IP
-   addresses.
-
-2. The controller causes each switch that connects to it to act like a
-   learning Ethernet switch.  Thus, devices plugged into the specified
-   network ports should now be able to send packets to each other, as
-   if they were plugged into ports on a conventional Ethernet switch.
-
 Configuration
 =============
 
@@ -744,9 +664,8 @@ controllerca subdirectory contains controller certificate authority
 related files, including the following:
 
     - cacert.pem: Root certificate for the controller certificate
-      authority.  This file must be provided to the switch or secchan
-      program with the --ca-cert option to enable it to authenticate
-      valid controllers.
+      authority.  This file must be provided to secchan with the
+      --ca-cert option to enable it to authenticate valid controllers.
 
     - private/cakey.pem: Private signing key for the controller
       certificate authority.  This file must be kept secret.  There is
@@ -780,7 +699,7 @@ named sc-privkey.pem and sc-cert.pem, for example, you could run:
 sc-privkey.pem and sc-cert.pem would need to be copied to the switch
 for its use at runtime (they could then be deleted from their original
 locations).  The --private-key and --certificate options,
-respectively, of switch and secchan would point to these files.
+respectively, of secchan would point to these files.
 
 Bug Reporting
 -------------

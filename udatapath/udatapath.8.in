@@ -1,7 +1,7 @@
 .TH udatapath 8 "May 2008" "OpenFlow" "OpenFlow Manual"
 
 .SH NAME
-udatapath \- userspace implementation of OpenFlow switch
+udatapath \- userspace implementation of datapath for OpenFlow switch
 
 .SH SYNOPSIS
 .B udatapath

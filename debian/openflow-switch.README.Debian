@@ -12,5 +12,7 @@ README.Debian for openflow-switch
   the openflow-datapath-source package, then follow the instructions
   given in /usr/share/doc/openflow-datapath-source/README.Debian
 
-* This package does not yet support the userspace switch
-  implementation.
+* This package does not yet support the userspace datapath-based
+  switch implementation.
+
+ -- Ben Pfaff <blp@nicira.com>, Tue,  6 Jan 2009 13:52:33 -0800

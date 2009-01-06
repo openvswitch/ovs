@@ -64,7 +64,6 @@ include lib/automake.mk
 include secchan/automake.mk
 include controller/automake.mk
 include utilities/automake.mk
-include switch/automake.mk
 include udatapath/automake.mk
 include tests/automake.mk
 include include/automake.mk

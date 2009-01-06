@@ -171,6 +171,6 @@ To bind locally to port 6633 (the default) and wait for incoming connections fro
 .SH "SEE ALSO"
 
 .BR dpctl (8),
-.BR switch (8),
 .BR secchan (8),
+.BR udatapath (8),
 .BR vlogconf (8)
