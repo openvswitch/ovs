@@ -448,7 +448,7 @@ ofp_print_actions(struct ds *string, const struct ofp_action_header *action,
                   size_t actions_len) 
 {
     uint8_t *p = (uint8_t *)action;
-    size_t len = 0;
+    int len = 0;
 
     ds_put_cstr(string, "actions=");
     while (actions_len > 0) {
