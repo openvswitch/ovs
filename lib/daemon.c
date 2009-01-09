@@ -213,7 +213,9 @@ daemonize(void)
             /* Parent process: wait for child to create pidfile, then exit. */
             close(fds[1]);
             fatal_signal_fork();
-            read(fds[0], &c, 1);
+            if (read(fds[0], &c, 1) != 1) {
+                ofp_fatal(errno, "daemon child failed to signal startup");
+            }
             exit(0);
 
         case 0:
