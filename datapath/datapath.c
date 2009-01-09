@@ -571,7 +571,7 @@ int
 dp_xmit_skb(struct sk_buff *skb)
 {
 	int len = skb->len;
-	if (packet_length(skb) > skb->dev->mtu) {
+	if (packet_length(skb) > skb->dev->mtu && !skb_is_gso(skb)) {
 		printk("dropped over-mtu packet: %d > %d\n",
 			   packet_length(skb), skb->dev->mtu);
 		kfree_skb(skb);
