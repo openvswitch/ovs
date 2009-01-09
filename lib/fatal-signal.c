@@ -167,7 +167,7 @@ atexit_handler(void)
 static void
 call_hooks(int sig_nr)
 {
-    volatile sig_atomic_t recurse = 0;
+    static volatile sig_atomic_t recurse = 0;
     if (!recurse) {
         size_t i;
 
