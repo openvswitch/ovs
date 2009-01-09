@@ -380,10 +380,14 @@ run_ACTIVE(struct rconn *rc)
 {
     if (timed_out(rc)) {
         unsigned int base = MAX(rc->last_received, rc->state_entered);
-        rconn_send(rc, make_echo_request(), NULL);
         VLOG_DBG("%s: idle %u seconds, sending inactivity probe",
                  rc->name, (unsigned int) (time_now() - base));
+
+        /* Ordering is important here: rconn_send() can transition to BACKOFF,
+         * and we don't want to transition back to IDLE if so, because then we
+         * can end up queuing a packet with vconn == NULL and then *boom*. */
         state_transition(rc, S_IDLE);
+        rconn_send(rc, make_echo_request(), NULL);
         return;
     }
 
