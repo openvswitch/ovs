@@ -356,7 +356,12 @@ dhclient_get_state_elapsed(const struct dhclient *cli)
 unsigned int
 dhclient_get_lease_remaining(const struct dhclient *cli)
 {
-    return dhclient_is_bound(cli) ? cli->lease_expiration - time_now() : 0;
+    if (dhclient_is_bound(cli)) {
+        time_t now = time_now();
+        return cli->lease_expiration > now ? cli->lease_expiration - now : 0;
+    } else {
+        return 0;
+    }
 }
 
 /* If 'cli' is bound to an IP address, returns that IP address; otherwise,
