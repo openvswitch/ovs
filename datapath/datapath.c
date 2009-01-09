@@ -1826,7 +1826,11 @@ static void dp_uninit_netlink(void)
 static void set_desc(void)
 {
 	const char *uuid = dmi_get_system_info(DMI_PRODUCT_UUID);
-	const char *uptr = uuid + 24;
+	const char *vendor = dmi_get_system_info(DMI_SYS_VENDOR);
+	const char *name = dmi_get_system_info(DMI_PRODUCT_NAME);
+	const char *version = dmi_get_system_info(DMI_PRODUCT_VERSION);
+	const char *serial = dmi_get_system_info(DMI_PRODUCT_SERIAL);
+	const char *uptr;
 
 	if (!uuid || *uuid == '\0' || strlen(uuid) != 36) 
 		return;
@@ -1837,6 +1841,7 @@ static void set_desc(void)
 		return;
 
 	/* Only set if the UUID is from Nicira. */
+	uptr = uuid + 24;
 	if (strncmp(uptr, NICIRA_OUI_STR, strlen(NICIRA_OUI_STR)))
 		return;
 

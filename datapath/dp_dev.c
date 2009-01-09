@@ -129,7 +129,7 @@ static void
 set_uuid_mac(struct net_device *netdev)
 {
 	const char *uuid = dmi_get_system_info(DMI_PRODUCT_UUID);
-	const char *uptr = uuid + 24;
+	const char *uptr;
 	uint8_t mac[ETH_ALEN];
 	int i;
 
@@ -143,6 +143,7 @@ set_uuid_mac(struct net_device *netdev)
 
 	/* Pull out the embedded MAC address.  The kernel's sscanf doesn't
 	 * support field widths on hex digits, so we use this hack. */
+	uptr = uuid + 24;
 	for (i=0; i<ETH_ALEN; i++) {
 		unsigned char d[3];
 		
