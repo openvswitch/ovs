@@ -1124,7 +1124,7 @@ do_probe(const struct settings *s, int argc, char *argv[])
     make_openflow(sizeof(struct ofp_header), OFPT_ECHO_REQUEST, &request);
     open_vconn(argv[1], &vconn);
     run(vconn_transact(vconn, request, &reply), "talking to %s", argv[1]);
-    if (reply->size != request->size) {
+    if (reply->size != sizeof(struct ofp_header)) {
         ofp_fatal(0, "reply does not match request");
     }
     ofpbuf_delete(reply);
