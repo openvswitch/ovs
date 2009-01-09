@@ -1845,12 +1845,14 @@ static void set_desc(void)
 	if (strncmp(uptr, NICIRA_OUI_STR, strlen(NICIRA_OUI_STR)))
 		return;
 
-	strlcpy(mfr_desc, dmi_get_system_info(DMI_SYS_VENDOR), sizeof(mfr_desc));
-	snprintf(hw_desc, sizeof(hw_desc), "%s %s", 
-			dmi_get_system_info(DMI_PRODUCT_NAME), 
-			dmi_get_system_info(DMI_PRODUCT_VERSION));
-	strlcpy(serial_num, dmi_get_system_info(DMI_PRODUCT_SERIAL), 
-			sizeof(serial_num));
+	if (vendor)
+		strlcpy(mfr_desc, vendor, sizeof(mfr_desc));
+	if (name || version)
+		snprintf(hw_desc, sizeof(hw_desc), "%s %s",
+			 name ? name : "",
+			 version ? version : "");
+	if (serial)
+		strlcpy(serial_num, serial, sizeof(serial_num));
 }
 
 static int __init dp_init(void)
