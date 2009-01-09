@@ -145,6 +145,7 @@ get_ipv6_address(const char *name, struct in6_addr *in6)
                    ifname) == 17
             && !strcmp(name, ifname))
         {
+            fclose(file);
             return;
         }
     }
