@@ -135,7 +135,7 @@ static int table_hash_delete(struct datapath *dp, struct sw_table *swt,
 			struct sw_flow *flow = *bucket;
 			if (flow && flow_matches_desc(&flow->key, key, strict)
 					&& flow_has_out_port(flow, out_port))
-				count = do_delete(dp, bucket, flow, NXFER_DELETE);
+				count += do_delete(dp, bucket, flow, NXFER_DELETE);
 		}
 	}
 	th->n_flows -= count;
