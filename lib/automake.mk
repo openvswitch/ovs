@@ -55,6 +55,8 @@ lib_libopenflow_a_SOURCES = \
 	lib/socket-util.h \
 	lib/stp.c \
 	lib/stp.h \
+	lib/svec.c \
+	lib/svec.h \
 	lib/timeval.c \
 	lib/timeval.h \
 	lib/type-props.h \
