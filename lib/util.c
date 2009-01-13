@@ -118,6 +118,13 @@ xvasprintf(const char *format, va_list args)
     return s;
 }
 
+void *
+x2nrealloc(void *p, size_t *n, size_t s)
+{
+    *n = *n == 0 ? 1 : 2 * *n;
+    return xrealloc(p, *n * s);
+}
+
 char *
 xasprintf(const char *format, ...)
 {

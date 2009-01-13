@@ -102,6 +102,7 @@ char *xmemdup0(const char *, size_t);
 char *xstrdup(const char *);
 char *xasprintf(const char *format, ...) PRINTF_FORMAT(1, 2);
 char *xvasprintf(const char *format, va_list) PRINTF_FORMAT(1, 0);
+void *x2nrealloc(void *p, size_t *n, size_t s);
 
 #ifndef HAVE_STRLCPY
 void strlcpy(char *dst, const char *src, size_t size);
