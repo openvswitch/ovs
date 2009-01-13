@@ -42,6 +42,8 @@ lib_libopenflow_a_SOURCES = \
 	lib/poll-loop.h \
 	lib/port-array.c \
 	lib/port-array.h \
+	lib/process.c \
+	lib/process.h \
 	lib/queue.c \
 	lib/queue.h \
 	lib/random.c \
