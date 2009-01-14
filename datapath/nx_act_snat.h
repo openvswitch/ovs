@@ -23,6 +23,9 @@ struct snat_conf {
 	uint32_t ip_addr_start;      /* Stored in host-order */
 	uint32_t ip_addr_end;        /* Stored in host-order */
 	uint16_t mac_timeout;
+
+	uint8_t mac_addr[ETH_ALEN];
+
 	struct list_head mappings;   /* List of snat_mapping entries */
 };
 

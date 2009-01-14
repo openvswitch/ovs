@@ -82,8 +82,16 @@ struct nx_snat_config {
     uint16_t tcp_end;
     uint16_t udp_start;
     uint16_t udp_end;
+
+    /* MAC address to use for ARP requests for a SNAT IP address that 
+     * comes in on a different interface than 'port'.  A value of all 
+     * zeros silently drops those ARP requests.  Requests that arrive 
+     * on 'port' get a response with the mac address of the datapath 
+     * device. */
+    uint8_t mac_addr[OFP_ETH_ALEN];
+    uint8_t pad2[2];
 };
-OFP_ASSERT(sizeof(struct nx_snat_config) == 24);
+OFP_ASSERT(sizeof(struct nx_snat_config) == 32);
 
 /* Action configuration.  Not all actions require separate configuration. */
 struct nx_act_config {
