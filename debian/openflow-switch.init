@@ -269,7 +269,7 @@ case "$1" in
 
         COMMAND_OPT=
         if test -n "$COMMANDS"; then
-            COMMAND_OPT="--command-acl=$COMMANDS"
+            COMMAND_OPT="--command-acl='$COMMANDS'"
         fi
 
         if test "$MODE" = out-of-band; then
@@ -284,7 +284,7 @@ case "$1" in
 	start-stop-daemon --start --quiet --pidfile $PIDFILE \
 	    --exec $DAEMON -- nl:0 $CONTROLLER --detach --pidfile=$PIDFILE \
             --verbose=ANY:console:emer --verbose=ANY:syslog:err --log-file \
-            $DAEMON_OPTS $MGMT_OPTS $MONITOR_OPT $SSL_OPTS "$COMMAND_OPT"
+            $DAEMON_OPTS $MGMT_OPTS $MONITOR_OPT $SSL_OPTS $COMMAND_OPT
         if running; then
             echo "$NAME."
         else
