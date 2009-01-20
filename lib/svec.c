@@ -293,3 +293,19 @@ svec_equal(const struct svec *a, const struct svec *b)
     }
     return true;
 }
+
+char *
+svec_join(const struct svec *svec, const char *delimiter)
+{
+    struct ds ds;
+    size_t i;
+
+    ds_init(&ds);
+    for (i = 0; i < svec->n; i++) {
+        if (i) {
+            ds_put_cstr(&ds, delimiter);
+        }
+        ds_put_cstr(&ds, svec->names[i]);
+    }
+    return ds_cstr(&ds);
+}
