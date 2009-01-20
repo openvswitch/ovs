@@ -159,6 +159,29 @@ configure_ssl() {
     fi
 }
 
+check_int_var() {
+    eval value=\$$1
+    if test -n "$value"; then
+        if expr "X$value" : 'X[0-9][0-9]*$'; then
+            if test $value -lt $2; then
+                echo "warning: The $1 option may not be set to a value below $2, treating as $2" >&2
+                eval $1=$2
+            fi
+        else
+            echo "warning: The $1 option must be set to a number, ignoring" >&2
+            unset $1
+        fi
+    fi
+}
+
+check_new_option() {
+    case $DAEMON_OPTS in
+        *$1*)
+            echo "warning: The $1 option in DAEMON_OPTS may now be set with the $2 variable in $default.  The setting in DAEMON_OPTS will override the $2 variable, which will prevent the switch UI from configuring $1." >&2
+            ;;
+    esac
+}
+
 case "$1" in
     start)
         if test -z "$NETDEVS"; then
@@ -198,6 +221,24 @@ case "$1" in
                 echo "$default: CONTROLLER must be in the form 'ssl:HOST[:PORT]' or 'tcp:HOST[:PORT]' when not in discovery mode" >&2
                 echo "Run ofp-switch-setup (in the openflow-switch-config package) or edit /etc/default/openflow-switch to configure" >&2
                 exit 1
+        esac
+        case $DISCONNECTED_MODE in
+            ''|switch|drop) ;; 
+            *) echo "$default: warning: DISCONNECTED_MODE is not 'switch' or 'drop'" >&2 ;;
+        esac
+
+        check_int_var RATE_LIMIT 100
+        check_int_var INACTIVITY_PROBE 5
+        check_int_var MAX_BACKOFF 1
+
+        check_new_option --fail DISCONNECTED_MODE
+        check_new_option --stp STP
+        check_new_option --rate-limit RATE_LIMIT
+        check_new_option --inactivity INACTIVITY_PROBE
+        check_new_option --max-backoff MAX_BACKOFF
+        case $DAEMON_OPTS in
+            *--rate-limit*)
+                echo "$default: --rate-limit may now be set with RATE_LIMIT" >&2
         esac
 
         echo -n "Loading openflow_mod: "
@@ -257,34 +298,49 @@ case "$1" in
             must_succeed "Disabling of0" ifconfig of0 down
         fi
 
-        MGMT_OPTS=
-        for vconn in $MGMT_VCONNS; do
-            MGMT_OPTS="$MGMT_OPTS --listen=$vconn"
-        done
-
-        MONITOR_OPT=
-        if test -n "$MONITOR_VCONN"; then
-            MONITOR_OPT="--monitor=$MONITOR_VCONN"
-        fi
-
-        COMMAND_OPT=
-        if test -n "$COMMANDS"; then
-            COMMAND_OPT="--command-acl='$COMMANDS'"
-        fi
-
-        if test "$MODE" = out-of-band; then
-            DAEMON_OPTS="$DAEMON_OPTS --out-of-band"
-        fi
-
         if test -n "$CORE_LIMIT"; then
             check_op "Setting core limit to $CORE_LIMIT" ulimit -c "$CORE_LIMIT"
         fi
 
+        # Compose secchan options.
+        set --
+        set -- "$@" --verbose=ANY:console:emer --verbose=ANY:syslog:err
+        set -- "$@" --log-file
+        set -- "$@" --detach --pidfile=$PIDFILE
+        for vconn in $MGMT_VCONNS; do
+            set -- "$@" --listen="$vconn"
+        done
+        if test -n "$MONITOR_VCONN"; then
+            set -- "$@" --monitor="$MONITOR_VCONN"
+        fi
+        if test -n "$COMMANDS"; then
+            set -- "$@" --command-acl="$COMMANDS"
+        fi
+        case $STP in
+            yes) set -- "$@" --stp ;;
+            no) set -- "$@" --no-stp ;;
+        esac
+        case $DISCONNECTED_MODE in
+            switch) set -- "$@" --fail=open ;;
+            drop) set -- "$@" --fail=closed ;;
+        esac
+        if test -n "$RATE_LIMIT"; then
+            set -- "$@" --rate-limit=$RATE_LIMIT
+        fi
+        if test -n "$INACTIVITY_PROBE"; then
+            set -- "$@" --inactivity-probe=$INACTIVITY_PROBE
+        fi
+        if test -n "$MAX_BACKOFF"; then
+            set -- "$@" --max-backoff=$MAX_BACKOFF
+        fi
+        set -- "$@" $SSL_OPTS $DAEMON_OPTS
+        if test "$MODE" = out-of-band; then
+            set -- "$@" --out-of-band
+        fi
+        set -- "$@" nl:0 "$CONTROLLER"
 	echo -n "Starting $DESC: "
 	start-stop-daemon --start --quiet --pidfile $PIDFILE \
-	    --exec $DAEMON -- nl:0 $CONTROLLER --detach --pidfile=$PIDFILE \
-            --verbose=ANY:console:emer --verbose=ANY:syslog:err --log-file \
-            $DAEMON_OPTS $MGMT_OPTS $MONITOR_OPT $SSL_OPTS $COMMAND_OPT
+	    --exec $DAEMON -- "$@"
         if running; then
             echo "$NAME."
         else

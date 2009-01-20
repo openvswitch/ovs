@@ -49,7 +49,7 @@ MODE=discovery
 # 
 # * For static configuration, specify the switch's IP address as a
 #   string.  In this case you may also set SWITCH_NETMASK and
-#   SWITCH_GATEWAY appropriately.
+#   SWITCH_GATEWAY appropriately (see below).
 # 
 # * For dynamic configuration with DHCP (the most common case),
 #   specify "dhcp".  Configuration with DHCP will only work reliably
@@ -58,7 +58,13 @@ MODE=discovery
 #
 # This setting has no effect unless MODE is set to 'in-band'.
 SWITCH_IP=dhcp
+
+# SWITCH_NETMASK: IP netmask to use in 'in-band' mode when the switch
+# IP address is not 'dhcp'.
 #SWITCH_NETMASK=255.255.255.0
+
+# SWITCH_GATEWAY: IP gateway to use in 'in-band' mode when the switch
+# IP address is not 'dhcp'.
 #SWITCH_GATEWAY=192.168.1.1
 
 # CONTROLLER: Location of controller.
@@ -112,6 +118,34 @@ MONITOR_VCONN="punix:/var/run/secchan.monitor"
 # blacklist.  To be executable, a command name must match one positive
 # pattern and not match any negative patterns.
 #COMMANDS="reboot,update"
+
+# DISCONNECTED_MODE: Switch behavior when attempts to connect to the
+# controller repeatedly fail, either 'switch', to act as an L2 switch
+# in this case, or 'drop', to drop all packets (except those necessary
+# to connect to the controller).  If unset, the default is 'drop'.
+#DISCONNECTED_MODE=switch
+
+# STP: Enable or disabled 802.1D-1998 Spanning Tree Protocol.  Set to
+# 'yes' to enable STP, 'no' to disable it.  If unset, secchan's
+# current default is 'no' (but this may change in the future).
+#STP=no
+
+# RATE_LIMIT: Maximum number of received frames, that do not match any
+# existing switch flow, to forward up to the controller per second.
+# The valid range is 100 and up.  If unset, this rate will not be
+# limited.
+#RATE_LIMIT=1000
+
+# INACTIVITY_PROBE: The maximum number of seconds of inactivity on the
+# controller connection before secchan sends an inactivity probe
+# message to the controller.  The valid range is 5 and up.  If unset,
+# secchan defaults to 15 seconds.
+#INACTIVITY_PROBE=5
+
+# MAX_BACKOFF: The maximum time that secchan will wait between
+# attempts to connect to the controller.  The valid range is 1 and up.
+# If unset, secchan defaults to 15 seconds.
+#MAX_BACKOFF=15
 
 # DAEMON_OPTS: Additional options to pass to secchan, e.g. "--fail=open"
 DAEMON_OPTS=""

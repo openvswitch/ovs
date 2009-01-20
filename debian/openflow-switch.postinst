@@ -24,9 +24,14 @@ case "$1" in
 	TEMPLATE=/usr/share/openflow/switch/default.template
 	if ! test -e $DEFAULT; then
 	    cp $TEMPLATE $DEFAULT
-	elif ! grep DATAPATH_ID $DEFAULT; then
-	    echo >> $DEFAULT
-	    sed -n '/DATAPATH_ID:/,/DATAPATH_ID=/p' $TEMPLATE >> $DEFAULT
+	else
+            for var in $(awk -F'[ :]' '/^# [_A-Z0-9]+:/{print $2}' $TEMPLATE)
+            do
+                if ! grep $var $DEFAULT >/dev/null 2>&1; then
+	            echo >> $DEFAULT
+	            sed -n "/$var:/,/$var=/p" $TEMPLATE >> $DEFAULT
+                fi
+            done
 	fi
         ;;
 
