@@ -46,6 +46,7 @@
 struct ofpbuf;
 struct in_addr;
 struct in6_addr;
+struct svec;
 
 enum netdev_feature_type {
     NETDEV_FEAT_CURRENT,
@@ -90,5 +91,7 @@ int netdev_set_flags(struct netdev *, enum netdev_flags, bool permanent);
 int netdev_turn_flags_on(struct netdev *, enum netdev_flags, bool permanent);
 int netdev_turn_flags_off(struct netdev *, enum netdev_flags, bool permanent);
 int netdev_arp_lookup(const struct netdev *, uint32_t ip, uint8_t mac[6]);
+
+void netdev_enumerate(struct svec *);
 
 #endif /* netdev.h */
