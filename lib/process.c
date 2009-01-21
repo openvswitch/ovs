@@ -337,21 +337,22 @@ process_wait(struct process *p)
 static void
 sigchld_handler(int signr UNUSED)
 {
-    for (;;) {
-        struct process *p;
-        int status;
-        pid_t pid;
+    struct process *p;
 
-        pid = waitpid(-1, &status, WNOHANG);
-        if (pid <= 0) {
-            break;
-        }
-
-        LIST_FOR_EACH (p, struct process, node, &all_processes) {
-            if (p->pid == pid) {
+    LIST_FOR_EACH (p, struct process, node, &all_processes) {
+        if (!p->exited) {
+            int retval, status;
+            do {
+                retval = waitpid(p->pid, &status, WNOHANG);
+            } while (retval == -1 && errno == EINTR);
+            if (retval == p->pid) {
                 p->exited = true;
                 p->status = status;
-                break;
+            } else if (retval < 0) {
+                /* XXX We want to log something but we're in a signal
+                 * handler. */
+                p->exited = true;
+                p->status = -1;
             }
         }
     }
