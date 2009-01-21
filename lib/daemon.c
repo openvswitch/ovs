@@ -277,8 +277,13 @@ read_pidfile(const char *pidfile)
     }
 
     if (!fgets(line, sizeof line, file)) {
-        error = errno;
-        VLOG_WARN("%s: read: %s", pidfile, strerror(error));
+        if (ferror(file)) {
+            error = errno;
+            VLOG_WARN("%s: read: %s", pidfile, strerror(error));
+        } else {
+            error = ESRCH;
+            VLOG_WARN("%s: read: unexpected end of file", pidfile);
+        }
         goto error;
     }
 
