@@ -7,6 +7,7 @@
 #include <linux/etherdevice.h>
 #include <linux/netdevice.h>
 #include <linux/netfilter.h>
+#include <linux/netfilter_bridge.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/in.h>
 #include <net/ip.h>
@@ -59,6 +60,42 @@ struct ip_arphdr {
 } __attribute__((packed));
 OFP_ASSERT(sizeof(struct ip_arphdr) == 28);
 
+static inline struct nf_bridge_info *nf_bridge_alloc(struct sk_buff *skb)
+{
+	skb->nf_bridge = kzalloc(sizeof(struct nf_bridge_info), GFP_ATOMIC);
+	if (likely(skb->nf_bridge))
+		atomic_set(&(skb->nf_bridge->use), 1);
+
+	return skb->nf_bridge;
+}
+
+/* Save a copy of the original Ethernet header. */
+static inline void snat_save_header(struct sk_buff *skb)
+{
+	int header_size = ETH_HLEN + nf_bridge_encap_header_len(skb);
+
+	skb_copy_from_linear_data_offset(skb, -header_size, 
+			skb->nf_bridge->data, header_size);
+}
+
+/* Restore a saved Ethernet header. */
+int snat_copy_header(struct sk_buff *skb)
+{
+	int err;
+	int header_size = ETH_HLEN + nf_bridge_encap_header_len(skb);
+
+	if (!skb->nf_bridge)
+		return 0;
+
+	err = skb_cow_head(skb, header_size);
+	if (err)
+		return err;
+
+	skb_copy_to_linear_data_offset(skb, -header_size, 
+			skb->nf_bridge->data, header_size);
+	__skb_push(skb, nf_bridge_encap_header_len(skb));
+	return 0;
+}
 
 /* Push the Ethernet header back on and tranmit the packet. */
 static int
@@ -205,6 +242,7 @@ snat_pre_route_finish(struct sk_buff *skb)
 
 	/* Pass the translated packet as input to the OpenFlow stack, which
 	 * consumes it. */
+	snat_save_header(skb);
 	skb_push(skb, ETH_HLEN);
 	skb_reset_mac_header(skb);
 	fwd_port_input(p->dp->chain, skb, p);
@@ -380,6 +418,10 @@ snat_pre_route(struct sk_buff *skb)
 
 	if (pskb_trim_rcsum(skb, len))
 		goto consume;
+
+	nf_bridge_put(skb->nf_bridge);
+	if (!nf_bridge_alloc(skb))
+		return 0;
 
 	NF_HOOK(PF_INET, NF_INET_PRE_ROUTING, skb, skb->dev, NULL,
 		snat_pre_route_finish);

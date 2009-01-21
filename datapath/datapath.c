@@ -467,9 +467,8 @@ do_port_input(struct net_bridge_port *p, struct sk_buff *skb)
 
 #ifdef SUPPORT_SNAT
 	/* Check if this packet needs early SNAT processing. */
-	if (snat_pre_route(skb)) {
+	if (snat_pre_route(skb)) 
 		return;
-	}
 #endif
 
 	/* Push the Ethernet header back on. */
@@ -567,6 +566,53 @@ void dp_set_origin(struct datapath *dp, uint16_t in_port,
 		skb->dev = NULL;
 }
 
+#ifdef SUPPORT_SNAT
+static int 
+dp_xmit_skb_finish(struct sk_buff *skb)
+{
+	/* The ip_fragment function does not copy the Ethernet header into
+	 * the newly generated frames, so put back the values stowed
+	 * earlier. */
+	if (snat_copy_header(skb)) {
+		kfree_skb(skb);
+		return -EINVAL;
+	}
+	skb_reset_mac_header(skb);
+
+	if (packet_length(skb) > skb->dev->mtu && !skb_is_gso(skb)) {
+		printk("dropped over-mtu packet: %d > %d\n",
+			   packet_length(skb), skb->dev->mtu);
+		kfree_skb(skb);
+		return -E2BIG;
+	}
+
+	skb_push(skb, ETH_HLEN);
+	dev_queue_xmit(skb);
+
+	return 0;
+}
+
+int
+dp_xmit_skb(struct sk_buff *skb)
+{
+	int len = skb->len;
+	int err;
+
+	skb_pull(skb, ETH_HLEN);
+
+	if (skb->protocol == htons(ETH_P_IP) &&
+			skb->len > skb->dev->mtu &&
+			!skb_is_gso(skb)) {
+		err = ip_fragment(skb, dp_xmit_skb_finish);
+	} else {
+		err = dp_xmit_skb_finish(skb);
+	}
+	if (err)
+		return err;
+
+	return len;
+}
+#else
 int 
 dp_xmit_skb(struct sk_buff *skb)
 {
@@ -582,6 +628,7 @@ dp_xmit_skb(struct sk_buff *skb)
 
 	return len;
 }
+#endif
 
 /* Takes ownership of 'skb' and transmits it to 'out_port' on 'dp'.
  */
