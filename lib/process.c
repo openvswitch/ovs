@@ -107,6 +107,33 @@ process_init(void)
     }
 }
 
+char *
+process_escape_args(char **argv)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    char **argp;
+    for (argp = argv; *argp; argp++) {
+        const char *arg = *argp;
+        const char *p;
+        if (argp != argv) {
+            ds_put_char(&ds, ' ');
+        }
+        if (arg[strcspn(arg, " \t\r\n\v\\")]) {
+            ds_put_char(&ds, '"');
+            for (p = arg; *p; p++) {
+                if (*p == '\\' || *p == '\"') {
+                    ds_put_char(&ds, '\\');
+                }
+                ds_put_char(&ds, *p);
+            }
+            ds_put_char(&ds, '"');
+        } else {
+            ds_put_cstr(&ds, arg);
+        }
+    }
+    return ds_cstr(&ds);
+}
+
 /* Starts a subprocess with the arguments in the null-terminated argv[] array.
  * argv[0] is used as the name of the process.  Searches the PATH environment
  * variable to find the program to execute.
@@ -131,29 +158,9 @@ process_start(char **argv,
     process_init();
 
     if (VLOG_IS_DBG_ENABLED()) {
-        struct ds ds = DS_EMPTY_INITIALIZER;
-        char **argp;
-        for (argp = argv; *argp; argp++) {
-            const char *arg = *argp;
-            const char *p;
-            if (argp != argv) {
-                ds_put_char(&ds, ' ');
-            }
-            if (arg[strcspn(arg, " \t\r\n\v\\")]) {
-                ds_put_char(&ds, '"');
-                for (p = arg; *p; p++) {
-                    if (*p == '\\' || *p == '\"') {
-                        ds_put_char(&ds, '\\');
-                    }
-                    ds_put_char(&ds, *p);
-                }
-                ds_put_char(&ds, '"');
-            } else {
-                ds_put_cstr(&ds, arg);
-            }
-        }
-        VLOG_DBG("starting subprocess: %s", ds_cstr(&ds));
-        ds_destroy(&ds);
+        char *args = process_escape_args(argv);
+        VLOG_DBG("starting subprocess: %s", args);
+        free(args);
     }
 
     /* execvp() will search PATH too, but the error in that case is more

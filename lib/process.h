@@ -39,6 +39,7 @@
 
 struct process;
 void process_init(void);
+char *process_escape_args(char **argv);
 int process_start(char **argv,
                   const int *keep_fds, size_t n_keep_fds,
                   const int *null_fds, size_t n_null_fds,
