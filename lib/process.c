@@ -313,15 +313,19 @@ process_status_msg(int status)
     struct ds ds = DS_EMPTY_INITIALIZER;
     if (WIFEXITED(status)) {
         ds_put_format(&ds, "exit status %d", WEXITSTATUS(status));
-    } else if (WIFSIGNALED(status)) {
+    } else if (WIFSIGNALED(status) || WIFSTOPPED(status)) {
+        int signr = WIFSIGNALED(status) ? WTERMSIG(status) : WSTOPSIG(status);
         const char *name = NULL;
 #ifdef HAVE_STRSIGNAL
-        name = strsignal(WTERMSIG(status));
+        name = strsignal(signr);
 #endif
-        ds_put_format(&ds, "killed by signal %d", WTERMSIG(status));
+        ds_put_format(&ds, "%s by signal %d",
+                      WIFSIGNALED(status) ? "killed" : "stopped", signr);
         if (name) {
             ds_put_format(&ds, " (%s)", name);
         }
+    } else {
+        ds_put_format(&ds, "terminated abnormally (%x)", status);
     }
     if (WCOREDUMP(status)) {
         ds_put_cstr(&ds, ", core dumped");
