@@ -293,6 +293,8 @@ read_pidfile(const char *pidfile)
     return lck.l_pid;
 
 error:
-    fclose(file);
+    if (file) {
+        fclose(file);
+    }
     return -error;
 }
