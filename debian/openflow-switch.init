@@ -259,6 +259,10 @@ case "$1" in
             exit 1
         fi
 
+        for netdev in $NETDEVS; do
+            check_op "Removing IP address from $netdev" ifconfig $netdev 0.0.0.0
+        done
+
         must_succeed "Adding datapath" dpctl adddp nl:0
         for netdev in $NETDEVS; do
             must_succeed "Adding $netdev to datapath" dpctl addif nl:0 $netdev
