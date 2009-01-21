@@ -275,6 +275,11 @@ read_pidfile(const char *pidfile)
         VLOG_WARN("%s: fcntl: %s", pidfile, strerror(error));
         goto error;
     }
+    if (lck.l_type == F_UNLCK) {
+        error = ESRCH;
+        VLOG_WARN("%s: pid file is not locked", pidfile);
+        goto error;
+    }
 
     if (!fgets(line, sizeof line, file)) {
         if (ferror(file)) {
