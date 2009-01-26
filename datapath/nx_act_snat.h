@@ -34,6 +34,7 @@ struct snat_conf {
 void snat_local_in(struct sk_buff *skb);
 int snat_pre_route(struct sk_buff *skb);
 void snat_skb(struct datapath *dp, const struct sk_buff *skb, int out_port);
+void snat_save_header(struct sk_buff *skb);
 int snat_copy_header(struct sk_buff *skb);
 void snat_maint(struct net_bridge_port *p);
 int snat_mod_config(struct datapath *, const struct nx_act_config *);

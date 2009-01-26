@@ -570,10 +570,8 @@ void dp_set_origin(struct datapath *dp, uint16_t in_port,
 static int 
 dp_xmit_skb_finish(struct sk_buff *skb)
 {
-	/* The ip_fragment function does not copy the Ethernet header into
-	 * the newly generated frames, so put back the values stowed
-	 * earlier. */
-	if (snat_copy_header(skb)) {
+	/* Copy back the Ethernet header that was stowed earlier. */
+	if (skb->protocol == htons(ETH_P_IP) && snat_copy_header(skb)) {
 		kfree_skb(skb);
 		return -EINVAL;
 	}
@@ -599,6 +597,11 @@ dp_xmit_skb(struct sk_buff *skb)
 	int err;
 
 	skb_pull(skb, ETH_HLEN);
+
+	/* The ip_fragment function does not copy the Ethernet header into
+	 * the newly generated frames, so stow the original. */
+	if (skb->protocol == htons(ETH_P_IP))
+		snat_save_header(skb);
 
 	if (skb->protocol == htons(ETH_P_IP) &&
 			skb->len > skb->dev->mtu &&

@@ -70,9 +70,12 @@ static inline struct nf_bridge_info *nf_bridge_alloc(struct sk_buff *skb)
 }
 
 /* Save a copy of the original Ethernet header. */
-static inline void snat_save_header(struct sk_buff *skb)
+void snat_save_header(struct sk_buff *skb)
 {
 	int header_size = ETH_HLEN + nf_bridge_encap_header_len(skb);
+
+	if (!skb->nf_bridge)
+		return;
 
 	skb_copy_from_linear_data_offset(skb, -header_size, 
 			skb->nf_bridge->data, header_size);
@@ -242,7 +245,6 @@ snat_pre_route_finish(struct sk_buff *skb)
 
 	/* Pass the translated packet as input to the OpenFlow stack, which
 	 * consumes it. */
-	snat_save_header(skb);
 	skb_push(skb, ETH_HLEN);
 	skb_reset_mac_header(skb);
 	fwd_port_input(p->dp->chain, skb, p);
