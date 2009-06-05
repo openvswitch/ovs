@@ -84,17 +84,45 @@ OFP_ASSERT(sizeof(struct ofmp_capability_reply) == 32);
 /* Resource TLV for datapath description. */
 struct ofmptsr_dp {
     uint16_t type;                        /* OFMPTSR_DP. */
-    uint16_t len;                         /* 28. */
+    uint16_t len;                         /* 32. */
     uint8_t pad[4];
     uint64_t dp_id;                       /* Datapath ID. */
     uint8_t name[OFP_MAX_PORT_NAME_LEN];  /* Null-terminated name. */
 };
 OFP_ASSERT(sizeof(struct ofmptsr_dp) == 32);
 
+/* UUIDs will be passed around as *non-terminated* strings in their
+ * canonical form (e.g., 550e8400-e29b-41d4-a716-446655440000).
+ */
+#define OFMP_UUID_LEN 36
+
+/* Resource TLV for UUIDs associated with this datapath. */
+struct ofmptsr_dp_uuid {
+    uint16_t type;                        /* OFMPTSR_DP_UUID. */
+    uint16_t len;                         /* Length. */
+    uint8_t pad[4];
+    uint64_t dp_id;                       /* Datapath ID. */
+    uint8_t uuid_list[0];                 /* List of UUID associated with 
+                                           * this datapath. */
+};
+OFP_ASSERT(sizeof(struct ofmptsr_dp_uuid) == 16);
+
+/* Resource TLV for UUID associated with this managment instance. */
+struct ofmptsr_mgmt_uuid {
+    uint16_t type;                        /* OFMPTSR_MGMT_UUID. */
+    uint16_t len;                         /* 52. */
+    uint8_t pad[4];
+    uint64_t mgmt_id;                     /* Management ID. */
+    uint8_t uuid[OFMP_UUID_LEN];          /* Null-terminated name. */
+};
+OFP_ASSERT(sizeof(struct ofmptsr_mgmt_uuid) == 52);
+
 /* TLV types for switch resource descriptions. */
 enum ofmp_switch_resources {
     OFMPTSR_END = 0,                      /* Terminator. */
     OFMPTSR_DP,                           /* Datapath. */
+    OFMPTSR_DP_UUID,                      /* Xen: datapath uuid's. */
+    OFMPTSR_MGMT_UUID,                    /* Xen: management uuid. */
 };
 
 /* Body of resources request.

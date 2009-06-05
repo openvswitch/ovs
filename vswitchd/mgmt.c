@@ -47,6 +47,7 @@
 #include "svec.h"
 #include "vconn.h"
 #include "vconn-ssl.h"
+#include "xenserver.h"
 #include "xtoxll.h"
 
 #define THIS_MODULE VLM_mgmt
@@ -305,6 +306,7 @@ send_resources_update(uint32_t xid, bool use_xid)
     struct ofmp_resources_update *ofmpru;
     struct ofmp_tlv *tlv;
     struct svec br_list;
+    const char *host_uuid;
     int i;
 
     if (use_xid) {
@@ -314,11 +316,28 @@ send_resources_update(uint32_t xid, bool use_xid)
         ofmpru = make_ofmp(sizeof *ofmpru, OFMPT_RESOURCES_UPDATE, &buffer);
     }
 
+    /* On XenServer systems, each host has its own UUID, which we provide
+     * to the controller. 
+     */ 
+    host_uuid = xenserver_get_host_uuid();
+    if (host_uuid) {
+        struct ofmptsr_mgmt_uuid *mgmt_uuid_tlv;
+
+        mgmt_uuid_tlv = ofpbuf_put_zeros(buffer, sizeof(*mgmt_uuid_tlv));
+        mgmt_uuid_tlv->type = htons(OFMPTSR_MGMT_UUID);
+        mgmt_uuid_tlv->len = htons(sizeof(*mgmt_uuid_tlv));
+        mgmt_uuid_tlv->mgmt_id = htonll(mgmt_id);
+        memcpy(mgmt_uuid_tlv->uuid, host_uuid, OFMP_UUID_LEN);
+    }
+
     svec_init(&br_list);
     cfg_get_subsections(&br_list, "bridge");
     for (i=0; i < br_list.n; i++) {
         struct ofmptsr_dp *dp_tlv;
-        uint64_t dp_id = bridge_get_datapathid(br_list.names[i]);
+        uint64_t dp_id;
+        int n_uuid;
+
+        dp_id = bridge_get_datapathid(br_list.names[i]);
         if (!dp_id) {
             VLOG_WARN_RL(&rl, "bridge %s doesn't seem to exist", 
                     br_list.names[i]);
@@ -330,6 +349,36 @@ send_resources_update(uint32_t xid, bool use_xid)
 
         dp_tlv->dp_id = htonll(dp_id);
         memcpy(dp_tlv->name, br_list.names[i], strlen(br_list.names[i])+1);
+
+        /* On XenServer systems, each network has one or more UUIDs
+         * associated with it, which we provide to the controller. 
+         */
+        n_uuid = cfg_count("bridge.%s.xs-network-uuids", br_list.names[i]);
+        if (n_uuid) {
+            struct ofmptsr_dp_uuid *dp_uuid_tlv;
+            size_t tlv_len = sizeof(*dp_uuid_tlv) + n_uuid * OFMP_UUID_LEN;
+            int j;
+
+            dp_uuid_tlv = ofpbuf_put_zeros(buffer, sizeof(*dp_uuid_tlv));
+            dp_uuid_tlv->type = htons(OFMPTSR_DP_UUID);
+            dp_uuid_tlv->len = htons(tlv_len);
+            dp_uuid_tlv->dp_id = htonll(dp_id);
+
+            for (j=0; j<n_uuid; j++) {
+                const char *dp_uuid = cfg_get_string(j, 
+                        "bridge.%s.xs-network-uuids", br_list.names[i]);
+
+                /* The UUID list could change underneath us, so just
+                 * fill with zeros in that case.  Another update will be
+                 * initiated shortly, which should contain corrected data.
+                 */
+                if (dp_uuid) {
+                    ofpbuf_put(buffer, dp_uuid, OFMP_UUID_LEN);
+                } else {
+                    ofpbuf_put_zeros(buffer, OFMP_UUID_LEN);
+                }
+            }
+        }
     }
 
     /* Put end marker. */
