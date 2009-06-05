@@ -69,7 +69,7 @@ output_directory = None
 db = None
 management_pif = None
 
-dbcache_file = "/etc/vswitch.dbcache"
+dbcache_file = "/etc/ovs-vswitch.dbcache"
 vswitch_config_dir = "/etc/openvswitch"
 
 class Usage(Exception):

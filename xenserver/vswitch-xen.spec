@@ -114,7 +114,7 @@ EOF
     fi
 fi
 
-if test ! -e /etc/vswitch.dbcache; then
+if test ! -e /etc/ovs-vswitch.dbcache; then
     if test "$1" = 1; then
         printf "Creating xapi database cache...  "
     else
@@ -141,7 +141,7 @@ try:
 finally:
     session.xenapi.session.logout()
 
-dbcache_file = "/etc/vswitch.dbcache"
+dbcache_file = "/etc/ovs-vswitch.dbcache"
 f = open(dbcache_file, 'w')
 pickle.dump({'vlans': vlans,
              'bonds': bonds,
