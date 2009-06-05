@@ -1116,6 +1116,12 @@ get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats)
 int
 netdev_get_carrier(const struct netdev *netdev, bool *carrier)
 {
+    return netdev_nodev_get_carrier(netdev->name, carrier);
+}
+
+int
+netdev_nodev_get_carrier(const char *netdev_name, bool *carrier)
+{
     char line[8];
     int retval;
     int error;
@@ -1124,7 +1130,7 @@ netdev_get_carrier(const struct netdev *netdev, bool *carrier)
 
     *carrier = false;
 
-    fn = xasprintf("/sys/class/net/%s/carrier", netdev->name);
+    fn = xasprintf("/sys/class/net/%s/carrier", netdev_name);
     fd = open(fn, O_RDONLY);
     if (fd < 0) {
         error = errno;

@@ -110,6 +110,7 @@ int netdev_nodev_set_etheraddr(const char *name, const uint8_t mac[6]);
 int netdev_nodev_get_etheraddr(const char *netdev_name, uint8_t mac[6]);
 int netdev_nodev_set_policing(const char *netdev_name, uint32_t kbits_rate, 
                               uint32_t kbits_burst);
+int netdev_nodev_get_carrier(const char *netdev_name, bool *carrier);
 
 int netdev_get_vlan_vid(const char *netdev_name, int *vlan_vid);
 
