@@ -2467,7 +2467,6 @@ port_update_vlan_compat(struct port *port)
 static void
 iface_create(struct port *port, const char *name)
 {
-    enum netdev_flags flags;
     struct iface *iface;
 
     iface = xcalloc(1, sizeof *iface);
@@ -2476,14 +2475,10 @@ iface_create(struct port *port, const char *name)
     iface->name = xstrdup(name);
     iface->dp_ifidx = -1;
     iface->tag = tag_create_random();
-    iface->enabled = true;
     iface->delay_expires = LLONG_MAX;
 
     netdev_nodev_get_etheraddr(name, iface->mac);
-
-    if (!netdev_nodev_get_flags(name, &flags)) {
-        iface->enabled = (flags & NETDEV_UP) != 0;
-    }
+    netdev_nodev_get_carrier(name, &iface->enabled);
 
     if (port->n_ifaces >= port->allocated_ifaces) {
         port->ifaces = x2nrealloc(port->ifaces, &port->allocated_ifaces,
