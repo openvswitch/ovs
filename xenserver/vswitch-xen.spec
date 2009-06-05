@@ -25,6 +25,7 @@ License: GPL3
 Release: 1
 Source: openvswitch-%{vswitch_version}.tar.gz
 Buildroot: /tmp/vswitch-xen-rpm
+Requires: kernel-xen = %(echo '%{xen_version}' | sed 's/xen$//')
 
 %description
 The vswitch provides standard network bridging functions augmented with
