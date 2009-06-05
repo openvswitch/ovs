@@ -786,6 +786,10 @@ def action_up(pif):
         bond_master = pif
     else:
         bond_master = None
+    if bond_master:
+        bond_slaves = get_bond_slaves_of_pif(bond_master)
+    else:
+        bond_slaves = []
     bond_masters = get_bond_masters_of_pif(pif)
 
     # Support "rpm -e vswitch" gracefully by keeping Centos configuration
@@ -872,6 +876,16 @@ def action_up(pif):
         net = db.get_pif_record(nwpif)['network']
         network_uuids += [db.get_network_record(net)['uuid']]
 
+    # Bring up bond slaves early, because ovs-vswitchd initially
+    # enables or disables bond slaves based on whether carrier is
+    # detected when they are added, and a network device that is down
+    # always reports "no carrier".
+    bond_slave_physdevs = []
+    for slave in bond_slaves:
+        bond_slave_physdevs += physdev_names(slave)
+    for slave_physdev in bond_slave_physdevs:
+        up_netdev(slave_physdev)
+
     # Now modify the ovs-vswitchd config file.
     argv = []
     for port in set(del_ports):
@@ -906,10 +920,11 @@ def action_up(pif):
     # Configure network devices.
     configure_netdev(pif)
 
-    # Bring up VLAN slave and bond slaves.
+    # Bring up VLAN slave, plus physical devices other than bond
+    # slaves (which we brought up earlier).
     if vlan_slave:
         up_netdev(ipdev_name(vlan_slave))
-    for physdev in physdevs:
+    for physdev in set(physdevs) - set(bond_slave_physdevs):
         up_netdev(physdev)
 
     # Update /etc/issue (which contains the IP address of the management interface)
