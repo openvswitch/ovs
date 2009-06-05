@@ -114,8 +114,9 @@ struct ofmptsr_mgmt_uuid {
     uint8_t pad[4];
     uint64_t mgmt_id;                     /* Management ID. */
     uint8_t uuid[OFMP_UUID_LEN];          /* Null-terminated name. */
+    uint8_t pad2[4];                      /* Pad for 64-bit systems. */
 };
-OFP_ASSERT(sizeof(struct ofmptsr_mgmt_uuid) == 52);
+OFP_ASSERT(sizeof(struct ofmptsr_mgmt_uuid) == 56);
 
 /* TLV types for switch resource descriptions. */
 enum ofmp_switch_resources {
