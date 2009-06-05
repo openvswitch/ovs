@@ -102,7 +102,7 @@ struct ofmptsr_dp_uuid {
     uint16_t len;                         /* Length. */
     uint8_t pad[4];
     uint64_t dp_id;                       /* Datapath ID. */
-    uint8_t uuid_list[0];                 /* List of UUID associated with 
+    uint8_t uuid_list[0];                 /* List of UUIDs associated with 
                                            * this datapath. */
 };
 OFP_ASSERT(sizeof(struct ofmptsr_dp_uuid) == 16);
@@ -113,7 +113,7 @@ struct ofmptsr_mgmt_uuid {
     uint16_t len;                         /* 52. */
     uint8_t pad[4];
     uint64_t mgmt_id;                     /* Management ID. */
-    uint8_t uuid[OFMP_UUID_LEN];          /* Null-terminated name. */
+    uint8_t uuid[OFMP_UUID_LEN];          /* System UUID. */
     uint8_t pad2[4];                      /* Pad for 64-bit systems. */
 };
 OFP_ASSERT(sizeof(struct ofmptsr_mgmt_uuid) == 56);
