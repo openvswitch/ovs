@@ -218,6 +218,7 @@ static uint64_t dpid_from_hash(const void *, size_t nbytes);
 static void bond_run(struct bridge *);
 static void bond_wait(struct bridge *);
 static void bond_rebalance_port(struct port *);
+static void bond_send_learning_packets(struct port *);
 
 static void port_create(struct bridge *, const char *name);
 static void port_reconfigure(struct port *);
@@ -481,7 +482,6 @@ bridge_reconfigure(void)
         uint8_t engine_id = br->dpif.minor;
         bool add_id_to_iface = false;
         struct svec nf_hosts;
-
 
         bridge_fetch_dp_ifaces(br);
         for (i = 0; i < br->n_ports; ) {
@@ -1279,7 +1279,7 @@ bond_choose_iface(const struct port *port)
 }
 
 static bool
-choose_output_iface(const struct port *port, const flow_t *flow,
+choose_output_iface(const struct port *port, const uint8_t *dl_src,
                     uint16_t *dp_ifidx, tag_type *tags)
 {
     struct iface *iface;
@@ -1288,7 +1288,7 @@ choose_output_iface(const struct port *port, const flow_t *flow,
     if (port->n_ifaces == 1) {
         iface = port->ifaces[0];
     } else {
-        struct bond_entry *e = lookup_bond_entry(port, flow->dl_src);
+        struct bond_entry *e = lookup_bond_entry(port, dl_src);
         if (e->iface_idx < 0 || e->iface_idx >= port->n_ifaces
             || !port->ifaces[e->iface_idx]->enabled) {
             /* XXX select interface properly.  The current interface selection
@@ -1379,10 +1379,12 @@ bond_run(struct bridge *br)
                                            port->active_iface_tag);
                         bond_choose_active_iface(port);
                     }
+                    bond_send_learning_packets(port);
                 } else {
                     if (port->active_iface < 0) {
                         ofproto_revalidate(br->ofproto, port->no_ifaces_tag);
                         bond_choose_active_iface(port);
+                        bond_send_learning_packets(port);
                     }
                     iface->tag = tag_create_random();
                 }
@@ -1430,7 +1432,7 @@ set_dst(struct dst *p, const flow_t *flow,
     p->vlan = (out_port->vlan >= 0 ? OFP_VLAN_NONE
               : in_port->vlan >= 0 ? in_port->vlan
               : ntohs(flow->dl_vlan));
-    return choose_output_iface(out_port, flow, &p->dp_ifidx, tags);
+    return choose_output_iface(out_port, flow->dl_src, &p->dp_ifidx, tags);
 }
 
 static void
@@ -1908,6 +1910,8 @@ static struct ofhooks bridge_ofhooks = {
     bridge_account_checkpoint_ofhook_cb,
 };
 
+/* Bonding functions. */
+
 /* Statistics for a single interface on a bonded port, used for load-based
  * bond rebalancing.  */
 struct slave_balance {
@@ -2165,6 +2169,89 @@ bond_rebalance_port(struct port *port)
      * historical data to decay to <1% in 7 rebalancing runs.  */
     for (e = &port->bond_hash[0]; e <= &port->bond_hash[BOND_MASK]; e++) {
         e->tx_bytes /= 2;
+    }
+}
+
+static void
+bond_send_learning_packets(struct port *port)
+{
+    struct bridge *br = port->bridge;
+    struct mac_entry *e;
+    struct ofpbuf packet;
+    int error, n_packets, n_errors;
+
+    if (!port->n_ifaces || port->active_iface < 0 || !br->ml) {
+        return;
+    }
+
+    ofpbuf_init(&packet, 128);
+    error = n_packets = n_errors = 0;
+    LIST_FOR_EACH (e, struct mac_entry, lru_node, &br->ml->lrus) {
+        static const char s[] = "Open vSwitch Bond Failover";
+        union ofp_action actions[2], *a;
+        struct eth_header *eth;
+        struct llc_snap_header *llc_snap;
+        uint16_t dp_ifidx;
+        tag_type tags = 0;
+        flow_t flow;
+        int retval;
+
+        if (e->port == port->port_idx
+            || !choose_output_iface(port, e->mac, &dp_ifidx, &tags)) {
+            continue;
+        }
+
+        /* Compose packet to send. */
+        ofpbuf_clear(&packet);
+        eth = ofpbuf_put_zeros(&packet, ETH_HEADER_LEN);
+        llc_snap = ofpbuf_put_zeros(&packet, LLC_SNAP_HEADER_LEN);
+        ofpbuf_put(&packet, s, sizeof s); /* Includes null byte. */
+        ofpbuf_put(&packet, e->mac, ETH_ADDR_LEN);
+
+        memcpy(eth->eth_dst, eth_addr_broadcast, ETH_ADDR_LEN);
+        memcpy(eth->eth_src, e->mac, ETH_ADDR_LEN);
+        eth->eth_type = htons(packet.size - ETH_HEADER_LEN);
+
+        llc_snap->llc.llc_dsap = LLC_DSAP_SNAP;
+        llc_snap->llc.llc_ssap = LLC_SSAP_SNAP;
+        llc_snap->llc.llc_cntl = LLC_CNTL_SNAP;
+        memcpy(llc_snap->snap.snap_org, "\x00\x23\x20", 3);
+        llc_snap->snap.snap_type = htons(0xf177); /* Random number. */
+
+        /* Compose actions. */
+        memset(actions, 0, sizeof actions);
+        a = actions;
+        if (e->vlan) {
+            a->vlan_vid.type = htons(OFPAT_SET_VLAN_VID);
+            a->vlan_vid.len = htons(sizeof *a);
+            a->vlan_vid.vlan_vid = htons(e->vlan);
+            a++;
+        }
+        a->output.type = htons(OFPAT_OUTPUT);
+        a->output.len = htons(sizeof *a);
+        a->output.port = htons(odp_port_to_ofp_port(dp_ifidx));
+        a++;
+
+        /* Send packet. */
+        n_packets++;
+        flow_extract(&packet, ODPP_NONE, &flow);
+        retval = ofproto_send_packet(br->ofproto, &flow, actions, a - actions,
+                                     &packet);
+        if (retval) {
+            error = retval;
+            n_errors++;
+        }
+    }
+    ofpbuf_uninit(&packet);
+
+    if (n_errors) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "bond %s: %d errors sending %d gratuitous learning "
+                     "packets, last error was: %s",
+                     port->name, n_errors, n_packets, strerror(error));
+    } else {
+        VLOG_DBG("bond %s: sent %d gratuitous learning packets",
+                 port->name, n_packets);
     }
 }
 
@@ -2517,6 +2604,7 @@ iface_destroy(struct iface *iface)
         if (del_active) {
             ofproto_revalidate(port->bridge->ofproto, port->active_iface_tag);
             bond_choose_active_iface(port);
+            bond_send_learning_packets(port);
         }
 
         port_update_bonding(port);
