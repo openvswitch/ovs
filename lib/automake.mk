@@ -14,7 +14,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/compiler.h \
 	lib/coverage.c \
 	lib/coverage.h \
-	lib/coverage-counters.c \
 	lib/coverage-counters.h \
 	lib/csum.c \
 	lib/csum.h \
@@ -105,6 +104,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/vlog.h \
 	lib/xtoxll.h
 nodist_lib_libopenvswitch_a_SOURCES = \
+	lib/coverage-counters.c \
 	lib/dirs.c
 CLEANFILES += $(nodist_lib_libopenvswitch_a_SOURCES)
 
