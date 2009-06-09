@@ -20,7 +20,7 @@ Stand\-alone commands with their arguments:
 .br
 \fBovs\-pki\fR \fBfingerprint\fR \fIFILE\fR
 .br
-\fBovs\-pki\fR \self-sign\fR \fINAME\fR
+\fBovs\-pki\fR \fBself-sign\fR \fINAME\fR
 .sp
 The following additional commands manage an online PKI:
 .br
@@ -178,7 +178,7 @@ file.
 \fBself-sign\fR \fINAME\fR
 Signs the certificate request named \fINAME\fB\-req.pem\fR using the
 private key \fINAME\fB-privkey.pem\fR, producing a self-signed
-certificate named \fINAMEfB\-cert.pem\fR.  The input files should have
+certificate named \fINAME\fB\-cert.pem\fR.  The input files should have
 been produced with \fBovs\-pki req\fR.
 
 Some controllers accept such self-signed certificates.
