@@ -30,6 +30,17 @@ DATAPATH_CONFIGURE_OPTS =
 # Official build number.  Leave set to 0 if not an official build.
 BUILD_NUMBER = 0
 
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+CFLAGS += -O0
+else
+CFLAGS += -O2
+endif
+
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
@@ -39,7 +50,7 @@ configure-stamp:
 		test -e Makefile || \
 		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
 			--with-build-number=$(BUILD_NUMBER) \
-			$(DATAPATH_CONFIGURE_OPTS))
+			CFLAGS="$(CFLAGS)" $(DATAPATH_CONFIGURE_OPTS))
 	touch configure-stamp
 
 #Architecture 
