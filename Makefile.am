@@ -3,14 +3,6 @@ ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = datapath
 
 if ENABLE_USERSPACE
-if HAVE_DPKG_BUILDPACKAGE
-distcheck-hook: 
-	cd $(srcdir) && dpkg-buildpackage -rfakeroot -us -uc
-	cd $(srcdir) && fakeroot ./debian/rules clean
-else
-distcheck-hook: 
-endif
-
 AM_CPPFLAGS = $(SSL_CFLAGS)
 AM_CPPFLAGS += $(NCURSES_CFLAGS)
 AM_CPPFLAGS += $(PCRE_CFLAGS)

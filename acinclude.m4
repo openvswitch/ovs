@@ -154,13 +154,6 @@ AC_DEFUN([OVS_CHECK_IF_PACKET],
                 [Define to 1 if net/if_packet.h is available.])
    fi])
 
-dnl Checks for dpkg-buildpackage.  If this is available then we check
-dnl that the Debian packaging is functional at "make distcheck" time.
-AC_DEFUN([OVS_CHECK_DPKG_BUILDPACKAGE],
-  [AC_CHECK_PROG([HAVE_DPKG_BUILDPACKAGE], [dpkg-buildpackage], [yes], [no])
-   AM_CONDITIONAL([HAVE_DPKG_BUILDPACKAGE], 
-                  [test $HAVE_DPKG_BUILDPACKAGE = yes])])
-
 dnl ----------------------------------------------------------------------
 dnl These macros are from GNU PSPP, with the following original license:
 dnl Copyright (C) 2005, 2006, 2007 Free Software Foundation, Inc.
