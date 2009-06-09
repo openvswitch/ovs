@@ -37,7 +37,7 @@ traffic.
 
 %build
 ./configure --prefix=%{_prefix} --localstatedir=%{_localstatedir} --with-l26=/lib/modules/%{xen_version}/build --enable-ssl %{build_number}
-make
+make %{_smp_mflags}
 
 %install
 rm -rf $RPM_BUILD_ROOT
