@@ -19,7 +19,7 @@
 Name: vswitch
 Summary: Virtual switch
 Group: System Environment/Daemons
-URL: http://www.vswitch.org/
+URL: http://www.openvswitch.org/
 Version: %{vswitch_version}
 License: GPL3
 Release: 1
