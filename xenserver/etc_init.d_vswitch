@@ -242,6 +242,10 @@ EOF
 }
 
 function start {
+    if [ "$FORCE_COREFILES" = "y" ]; then
+        turn_on_corefiles
+    fi
+
     insert_modules_if_required
     start_vswitchd
     start_brcompatd
@@ -262,9 +266,6 @@ function restart {
 
 case "$1" in
     start)
-        if [ "$FORCE_COREFILES" == "y" ]; then
-            turn_on_corefiles
-        fi
         start
         ;;
     stop)
