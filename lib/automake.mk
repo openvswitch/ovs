@@ -25,7 +25,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/dhcp.c \
 	lib/dhcp.h \
 	lib/dhparams.h \
-	lib/dirs.c \
 	lib/dirs.h \
 	lib/dynamic-string.c \
 	lib/dynamic-string.h \
@@ -105,6 +104,9 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/vlog.c \
 	lib/vlog.h \
 	lib/xtoxll.h
+nodist_lib_libopenvswitch_a_SOURCES = \
+	lib/dirs.c
+CLEANFILES += $(nodist_lib_libopenvswitch_a_SOURCES)
 
 if HAVE_NETLINK
 lib_libopenvswitch_a_SOURCES += \
@@ -118,7 +120,7 @@ endif
 if HAVE_OPENSSL
 lib_libopenvswitch_a_SOURCES += \
 	lib/vconn-ssl.c 
-nodist_lib_libopenvswitch_a_SOURCES = lib/dhparams.c
+nodist_lib_libopenvswitch_a_SOURCES += lib/dhparams.c
 lib/dhparams.c: lib/dh1024.pem lib/dh2048.pem lib/dh4096.pem
 	(echo '#include "lib/dhparams.h"' &&				\
 	 openssl dhparam -C -in $(srcdir)/lib/dh1024.pem -noout &&	\
@@ -142,7 +144,6 @@ EXTRA_DIST += \
 	lib/vlog.man
 
 
-CLEANFILES += lib/dirs.c
 lib/dirs.c: Makefile
 	($(ro_c) && \
 	 echo 'const char ovs_pkgdatadir[] = "$(pkgdatadir)";' && \
