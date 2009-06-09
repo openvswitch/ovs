@@ -1,0 +1,171 @@
+                 How to Install Open vSwitch on Linux
+                 ====================================
+
+This document describes how to build and install Open vSwitch on a
+generic Linux host host.  If you want to install Open vSwitch on a
+Citrix XenServer 5.5.0, see INSTALL.XenServer instead.
+
+This version of Open vSwitch should be built manually with "configure"
+and "make".  Debian packaging for Open vSwitch is also included, but
+they have not been recently tested, and so Debian packages are not a
+recommended way to use this version of Open vSwitch.
+
+Build Requirements
+------------------
+
+To compile the userspace programs in the Open vSwitch distribution,
+you will need the following software:
+
+    - A make program, e.g. GNU make.  BSD make should also work.
+
+    - The GNU C compiler.  We generally test with version 4.1, 4.2, or
+      4.3.
+
+    - libssl, from OpenSSL, is optional but recommended if you plan to
+      connect the Open vSwitch to an OpenFlow controller.  libssl is
+      required to establish confidentiality and authenticity in the
+      connections from an Open vSwitch to an OpenFlow controller.  To
+      enable, configure with --enable-ssl=yes.
+
+To compile the kernel module (which is required for operation), you
+must also install the following:
+
+    - A supported Linux kernel version.  Please refer to README for a
+      list of supported versions.
+
+      The Open vSwitch datapath requires bridging support
+      (CONFIG_BRIDGE) to be built as a kernel module.  (This is common
+      in kernels provided by Linux distributions.)  The bridge module
+      must not be loaded or in use.  If the bridge module is running
+      (check with "lsmod | grep bridge"), you must remove it ("rmmod
+      bridge") before starting the datapath.
+
+      For optional support of ingress policing, you must enable kernel
+      configuration options NET_CLS_ACT, NET_CLS_U32, NET_SCH_INGRESS,
+      and NET_ACT_POLICE, either built-in or as modules.
+      (NET_CLS_POLICE is obsolete and not needed.)
+
+    - To build a kernel module, you need the same version of GCC that
+      was used to build that kernel.
+
+    - A kernel build directory corresponding to the Linux kernel image
+      the module is to run on.  Under Debian and Ubuntu, for example,
+      each linux-image package containing a kernel binary has a
+      corresponding linux-headers package with the required build
+      infrastructure.
+
+If you are working from a Git tree or snapshot (instead of from a
+distribution tarball), or if you modify the Open vSwitch build system,
+you will also need the following software:
+
+    - Autoconf version 2.60 or later.
+
+    - Automake version 1.10 or later.
+
+    - pkg-config.  We test with version 0.22.
+
+Installation Requirements
+-------------------------
+
+The machine on which Open vSwitch is to be installed must have the
+following software:
+
+    - libc compatible with the libc used for build.
+
+    - libssl compatible with the libssl used for build, if OpenSSL was
+      used for the build.
+
+    - The Linux kernel version configured as part of the build.
+
+    - For optional support of ingress policing, the "tc" program from
+      iproute2 (part of all major distributions and available at
+      http://www.linux-foundation.org/en/Net:Iproute2).
+
+    - For debugging purposes, Open vSwitch expects that "tcpdump" is
+      installed as /usr/sbin/tcpdump.  If tcpdump is not installed, or
+      if it is installed in a different location, then some Open
+      vSwitch log messages will not be as detailed.
+
+Building and Installing Open vSwitch for Linux
+==============================================
+
+Once you have installed all the prerequisites listed above in the Base
+Prerequisites section, follow the procedure below to build.
+
+1. In the top source directory, configure the package by running the
+   configure script.  You can usually invoke configure without any
+   arguments:
+
+      % ./configure
+
+   By default all files are installed under /usr/local.  If you want
+   to install into, e.g., /usr and /var instead of /usr/local and
+   /usr/local/var, add options as shown here:
+
+      % ./configure --prefix=/usr --localstatedir=/var
+
+   To use a specific C compiler for compiling Open vSwitch user
+   programs, also specify it on the configure command line, like so:
+
+      % ./configure CC=gcc-4.2
+
+   To build the Linux kernel module, so that you can run the
+   kernel-based switch, pass the location of the kernel build
+   directory on --with-l26.  For example, to build for a running
+   instance of Linux 2.6:
+
+      % ./configure --with-l26=/lib/modules/`uname -r`/build
+
+   If you wish to build the kernel module for an architecture other
+   than the architecture of the machine used for the build, you may
+   specify the kernel architecture string using the KARCH variable
+   when invoking the configure script.  For example, to build for MIPS
+   with Linux 2.6:
+
+      % ./configure --with-l26=/path/to/linux-2.6 KARCH=mips
+
+   The configure script accepts a number of other options and honors
+   additional environment variables.  For a full list, invoke
+   configure with the --help option.
+
+2. Run make in the top source directory: 
+
+      % make
+
+3. Become root by running "su" or another program.
+
+4. Run "make install" to install the executables and manpages into the
+   running system, by default under /usr/local.
+
+5. If you built kernel modules, you may load them with "insmod", e.g.:
+
+      % insmod datapath/linux-2.6/openvswitch_mod.ko
+
+   You may need to specify a full path to insmod, e.g. /sbin/insmod.
+   To verify that the modules have been loaded, run "/sbin/lsmod" and
+   check that openvswitch_mod is listed.
+
+Configuration
+=============
+
+Open vSwitch is configured primarily through a configuration file,
+whose name is specified on the ovs-vswitchd command line.  Please
+refer to ovs-vswitchd(8) and ovs-vswitchd.conf(5) for information on
+how to start ovs-vswitchd and the syntax of its configuration file,
+respectively.
+
+At runtime, you may make ovs-vswitchd reload its configuration file
+and update its configuration accordingly by sending it a SIGHUP
+signal.  The ovs-appctl utility can also be used to do this with a
+command such as:
+
+    % ovs-appctl -t <pid> -e vswitchd/reload
+
+where <pid> is ovs-vswitchd's process ID.  In the latter case,
+ovs-appctl will not exit until the reload and reconfiguration is
+complete.
+
+Bug Reporting
+-------------
+
+Please report problems to ovs-bugs@openvswitch.org.
