@@ -42,14 +42,21 @@ Each \fITYPE\fR above is a certificate type, either \fBswitch\fR
 The available options are:
 .br
 [\fB\-k\fR \fItype\fR | \fB\-\^\-key=\fItype\fR]
-[\fB\-B\fR \fInbits\fR | \fB\-\^\-bits=\fInbits\fR]
-[\fB\-D\fR \fIfile\fR | \fB\-\^\-dsaparam=\fIfile\fR]
-[\fB\-b\fR | \fB\-\^\-batch\fR]
-[\fB\-f\fR | \fB\-\^\-force\fR]
-[\fB\-d\fR \fIdir\fR | \fB\-\^\-dir=\fR\fIdir\fR]
-[\fB\-l\fR \fIfile\fR | \fB\-\^\-log=\fIfile\fR]
-[\fB\-h\fR | \fB\-\^\-help\fR]
 .br
+[\fB\-B\fR \fInbits\fR | \fB\-\^\-bits=\fInbits\fR]
+.br
+[\fB\-D\fR \fIfile\fR | \fB\-\^\-dsaparam=\fIfile\fR]
+.br
+[\fB\-b\fR | \fB\-\^\-batch\fR]
+.br
+[\fB\-f\fR | \fB\-\^\-force\fR]
+.br
+[\fB\-d\fR \fIdir\fR | \fB\-\^\-dir=\fR\fIdir\fR]
+.br
+[\fB\-l\fR \fIfile\fR | \fB\-\^\-log=\fIfile\fR]
+.br
+[\fB\-h\fR | \fB\-\^\-help\fR]
+.sp
 Some options do not apply to every command.
 
 .SH DESCRIPTION
