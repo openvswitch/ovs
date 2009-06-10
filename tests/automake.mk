@@ -29,6 +29,11 @@ noinst_PROGRAMS += tests/test-list
 tests_test_list_SOURCES = tests/test-list.c
 tests_test_list_LDADD = lib/libopenvswitch.a
 
+TESTS += tests/test-sha1
+noinst_PROGRAMS += tests/test-sha1
+tests_test_sha1_SOURCES = tests/test-sha1.c
+tests_test_sha1_LDADD = lib/libopenvswitch.a
+
 TESTS += tests/test-type-props
 noinst_PROGRAMS += tests/test-type-props
 tests_test_type_props_SOURCES = tests/test-type-props.c
