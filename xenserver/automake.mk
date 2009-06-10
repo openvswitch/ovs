@@ -15,5 +15,6 @@ EXTRA_DIST += \
 	xenserver/etc_xapi.d_plugins_vswitch-cfg-update \
 	xenserver/etc_xensource_scripts_vif \
 	xenserver/opt_xensource_libexec_interface-reconfigure \
+	xenserver/root_vswitch_scripts_dump-vif-details \
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
 	xenserver/vswitch-xen.spec
