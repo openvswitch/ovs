@@ -275,11 +275,17 @@ dropped.  Shaping uses queues to delay packets so that egress traffic
 leaves at the specified rate.
 
 .ST "Ingress Policing"
-The rate at which traffic is allowed to enter through a particular
-physical port can be configured with ingress policing.  The rate is 
-specified in kilobits (1000 bits) per second with a maximum burst size 
-specified in kilobits (1000 bits).  The burst size should be at least
-the size of the port's MTU. 
+The rate at which traffic is allowed to enter through a port may be 
+configured with ingress policing.  Note that "ingress" is from the 
+perspective of \fBovs\-vswitchd\fR.  If configured on a physical port, 
+then it limits the rate at which traffic is allowed into the system from 
+the outside.  If configured on a virtual interface that is connected to 
+a virtual machine, then it limits the rate at which the guest is able to 
+transmit.
+
+The rate is specified in kilobits (1000 bits) per second with a maximum 
+burst size specified in kilobits (1000 bits).  The burst size should be at 
+least the size of the interface's MTU.  
 
 A port may be configured to enforce ingress policing by defining the
 key \fBport.\fIname\fB.ingress.policing-rate\fR with an integer
