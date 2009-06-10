@@ -1,5 +1,5 @@
 /* Copyright (c) 2008, 2009 Nicira Networks
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -1744,12 +1744,25 @@ process_flow(struct bridge *br, const flow_t *flow,
         goto done;
     }
 
-    /* Drop multicast and broadcast packets on inactive bonded interfaces, to
+    /* Multicast (and broadcast) packets on bonds need special attention, to
      * avoid receiving duplicates. */
     if (in_port->n_ifaces > 1 && eth_addr_is_multicast(flow->dl_dst)) {
         *tags |= in_port->active_iface_tag;
         if (in_port->active_iface != in_iface->port_ifidx) {
+            /* Drop all multicast packets on inactive slaves. */
             goto done;
+        } else {
+            /* Drop all multicast packets for which we have learned a different
+             * input port, because we probably sent the packet on one slaves
+             * and got it back on the active slave.  Broadcast ARP replies are
+             * an exception to this rule: the host has moved to another
+             * switch. */
+            int src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
+            if (src_idx != -1
+                && src_idx != in_port->port_idx
+                && !is_bcast_arp_reply(flow, packet)) {
+                goto done;
+            }
         }
     }
 
@@ -1757,27 +1770,9 @@ process_flow(struct bridge *br, const flow_t *flow,
     out_port = FLOOD_PORT;
     if (br->ml) {
         int out_port_idx;
-        bool may_learn;
 
-        if (!packet) {
-            /* Don't try to learn from revalidation. */
-            may_learn = false;
-        } else if (in_port->n_ifaces > 1) {
-            /* If the packet arrived on a bonded port, don't learn from it
-             * unless we haven't learned any port at all for that address
-             * (because we probably sent the packet on one bonded interface and
-             * got it back on the other).  Broadcast ARP replies are an
-             * exception to this rule: the host has moved to another switch. */
-            int src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
-            may_learn = (src_idx < 0
-                         || src_idx == in_port->port_idx
-                         || is_bcast_arp_reply(flow, packet));
-        } else {
-            may_learn = true;
-        }
-
-        /* Learn source MAC. */
-        if (may_learn) {
+        /* Learn source MAC (but don't try to learn from revalidation). */
+        if (packet) {
             tag_type rev_tag = mac_learning_learn(br->ml, flow->dl_src,
                                                   vlan, in_port->port_idx);
             if (rev_tag) {
