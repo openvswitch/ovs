@@ -381,6 +381,7 @@ send_resources_update(uint32_t xid, bool use_xid)
             }
         }
     }
+    svec_destroy(&br_list);
 
     /* On XenServer systems, extended information about virtual interfaces 
      * (VIFs) is available, which is needed by the controller. 
@@ -423,6 +424,7 @@ send_resources_update(uint32_t xid, bool use_xid)
         vif_mac = cfg_get_mac(0, "port.%s.vif-mac", port_list.names[i]);
         vif_tlv->vif_mac = htonll(vif_mac);
     }
+    svec_destroy(&port_list);
 
     /* Put end marker. */
     tlv = ofpbuf_put_zeros(buffer, sizeof(*tlv));
