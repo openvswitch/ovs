@@ -97,7 +97,7 @@ add_to_bridge()
         --del-match="vlan.$vif.[!0-9]*" \
         --del-match="port.$vif.[!0-9]*" \
         --add="bridge.$bridge.port=$vif" \
-        $vid $vif_details -c >/tmp/j
+        $vid $vif_details -c 
     $service vswitch reload
 
     ${IP} link set "${vif}" up                          || logger -t scripts-vif "Failed to ip link set ${vif} up"
