@@ -54,6 +54,7 @@
 #include "odp-util.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
+#include "packets.h"
 #include "poll-loop.h"
 #include "port-array.h"
 #include "proc-net-compat.h"
@@ -64,6 +65,7 @@
 #include "svec.h"
 #include "timeval.h"
 #include "util.h"
+#include "unixctl.h"
 #include "vconn.h"
 #include "vconn-ssl.h"
 #include "xenserver.h"
@@ -215,6 +217,7 @@ static uint64_t bridge_pick_datapath_id(struct bridge *,
                                         const char *devname);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 
+static void bond_init(void);
 static void bond_run(struct bridge *);
 static void bond_wait(struct bridge *);
 static void bond_rebalance_port(struct port *);
@@ -224,6 +227,7 @@ static void port_create(struct bridge *, const char *name);
 static void port_reconfigure(struct port *);
 static void port_destroy(struct port *);
 static struct port *port_lookup(const struct bridge *, const char *name);
+static struct iface *port_lookup_iface(const struct port *, const char *name);
 static struct port *port_from_dp_ifidx(const struct bridge *,
                                        uint16_t dp_ifidx);
 static void port_update_bond_compat(struct port *);
@@ -284,6 +288,8 @@ bridge_init(void)
 {
     int retval;
     int i;
+
+    bond_init();
 
     for (i = 0; i < DP_MAX; i++) {
         struct dpif dpif;
@@ -1259,11 +1265,16 @@ bridge_fetch_dp_ifaces(struct bridge *br)
 
 /* Bridge packet processing functions. */
 
+static int
+bond_hash(const uint8_t mac[ETH_ADDR_LEN])
+{
+    return hash_bytes(mac, ETH_ADDR_LEN, 0) & BOND_MASK;
+}
+
 static struct bond_entry *
 lookup_bond_entry(const struct port *port, const uint8_t mac[ETH_ADDR_LEN])
 {
-    size_t h = hash_bytes(mac, ETH_ADDR_LEN, 0);
-    return &port->bond_hash[h & BOND_MASK];
+    return &port->bond_hash[bond_hash(mac)];
 }
 
 static int
@@ -1355,6 +1366,38 @@ bond_choose_active_iface(struct port *port)
 }
 
 static void
+bond_enable_slave(struct iface *iface, bool enable)
+{
+    struct port *port = iface->port;
+    struct bridge *br = port->bridge;
+
+    iface->delay_expires = LLONG_MAX;
+    if (enable == iface->enabled) {
+        return;
+    }
+
+    iface->enabled = enable;
+    if (!iface->enabled) {
+        VLOG_WARN("interface %s: enabled", iface->name);
+        ofproto_revalidate(br->ofproto, iface->tag);
+        if (iface->port_ifidx == port->active_iface) {
+            ofproto_revalidate(br->ofproto,
+                               port->active_iface_tag);
+            bond_choose_active_iface(port);
+        }
+        bond_send_learning_packets(port);
+    } else {
+        VLOG_WARN("interface %s: disabled", iface->name);
+        if (port->active_iface < 0) {
+            ofproto_revalidate(br->ofproto, port->no_ifaces_tag);
+            bond_choose_active_iface(port);
+            bond_send_learning_packets(port);
+        }
+        iface->tag = tag_create_random();
+    }
+}
+
+static void
 bond_run(struct bridge *br)
 {
     size_t i, j;
@@ -1367,27 +1410,7 @@ bond_run(struct bridge *br)
         for (j = 0; j < port->n_ifaces; j++) {
             struct iface *iface = port->ifaces[j];
             if (time_msec() >= iface->delay_expires) {
-                iface->delay_expires = LLONG_MAX;
-                iface->enabled = !iface->enabled;
-                VLOG_WARN("interface %s: %s",
-                          iface->name,
-                          iface->enabled ? "enabled" : "disabled");
-                if (!iface->enabled) {
-                    ofproto_revalidate(br->ofproto, iface->tag);
-                    if (iface->port_ifidx == port->active_iface) {
-                        ofproto_revalidate(br->ofproto,
-                                           port->active_iface_tag);
-                        bond_choose_active_iface(port);
-                    }
-                    bond_send_learning_packets(port);
-                } else {
-                    if (port->active_iface < 0) {
-                        ofproto_revalidate(br->ofproto, port->no_ifaces_tag);
-                        bond_choose_active_iface(port);
-                        bond_send_learning_packets(port);
-                    }
-                    iface->tag = tag_create_random();
-                }
+                bond_enable_slave(iface, !iface->enabled);
             }
         }
     }
@@ -2062,7 +2085,6 @@ bond_shift_load(struct slave_balance *from, struct slave_balance *to,
     ofproto_revalidate(port->bridge->ofproto, hash->iface_tag);
     hash->iface_idx = to->iface->port_ifidx;
     hash->iface_tag = tag_create_random();
-
 }
 
 static void
@@ -2253,6 +2275,286 @@ bond_send_learning_packets(struct port *port)
         VLOG_DBG("bond %s: sent %d gratuitous learning packets",
                  port->name, n_packets);
     }
+}
+
+/* Bonding unixctl user interface functions. */
+
+static void
+bond_unixctl_list(struct unixctl_conn *conn, const char *args UNUSED)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct bridge *br;
+
+    ds_put_cstr(&ds, "bridge\tbond\tslaves\n");
+
+    LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
+        size_t i;
+
+        for (i = 0; i < br->n_ports; i++) {
+            const struct port *port = br->ports[i];
+            if (port->n_ifaces > 1) {
+                size_t j;
+
+                ds_put_format(&ds, "%s\t%s\t", br->name, port->name);
+                for (j = 0; j < port->n_ifaces; j++) {
+                    const struct iface *iface = port->ifaces[j];
+                    if (j) {
+                        ds_put_cstr(&ds, ", ");
+                    }
+                    ds_put_cstr(&ds, iface->name);
+                }
+                ds_put_char(&ds, '\n');
+            }
+        }
+    }
+    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+static struct port *
+bond_find(const char *name)
+{
+    const struct bridge *br;
+
+    LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
+        size_t i;
+
+        for (i = 0; i < br->n_ports; i++) {
+            struct port *port = br->ports[i];
+            if (!strcmp(port->name, name) && port->n_ifaces > 1) {
+                return port;
+            }
+        }
+    }
+    return NULL;
+}
+
+static void
+bond_unixctl_show(struct unixctl_conn *conn, const char *args)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct port *port;
+    size_t j;
+
+    port = bond_find(args);
+    if (!port) {
+        unixctl_command_reply(conn, 501, "no such bond");
+        return;
+    }
+
+    ds_put_format(&ds, "updelay: %d ms\n", port->updelay);
+    ds_put_format(&ds, "downdelay: %d ms\n", port->downdelay);
+    ds_put_format(&ds, "next rebalance: %lld ms\n",
+                  port->bridge->bond_next_rebalance - time_msec());
+    for (j = 0; j < port->n_ifaces; j++) {
+        const struct iface *iface = port->ifaces[j];
+        struct bond_entry *be;
+
+        /* Basic info. */
+        ds_put_format(&ds, "slave %s: %s\n",
+                      iface->name, iface->enabled ? "enabled" : "disabled");
+        if (j == port->active_iface) {
+            ds_put_cstr(&ds, "\tactive slave\n");
+        }
+        if (iface->delay_expires != LLONG_MAX) {
+            ds_put_format(&ds, "\t%s expires in %lld ms\n",
+                          iface->enabled ? "downdelay" : "updelay",
+                          iface->delay_expires - time_msec());
+        }
+
+        /* Hashes. */
+        for (be = port->bond_hash; be <= &port->bond_hash[BOND_MASK]; be++) {
+            int hash = be - port->bond_hash;
+            struct mac_entry *me;
+
+            if (be->iface_idx != j) {
+                continue;
+            }
+
+            ds_put_format(&ds, "\thash %d: %lld kB load\n",
+                          hash, be->tx_bytes / 1024);
+
+            /* MACs. */
+            if (!port->bridge->ml) {
+                break;
+            }
+
+            LIST_FOR_EACH (me, struct mac_entry, lru_node,
+                           &port->bridge->ml->lrus) {
+                uint16_t dp_ifidx;
+                tag_type tags = 0;
+                if (bond_hash(me->mac) == hash
+                    && me->port != port->port_idx
+                    && choose_output_iface(port, me->mac, &dp_ifidx, &tags)
+                    && dp_ifidx == iface->dp_ifidx)
+                {
+                    ds_put_format(&ds, "\t\t"ETH_ADDR_FMT"\n",
+                                  ETH_ADDR_ARGS(me->mac));
+                }
+            }
+        }
+    }
+    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+static void
+bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_)
+{
+    char *args = (char *) args_;
+    char *save_ptr = NULL;
+    char *bond_s, *hash_s, *slave_s;
+    uint8_t mac[ETH_ADDR_LEN];
+    struct port *port;
+    struct iface *iface;
+    struct bond_entry *entry;
+    int hash;
+
+    bond_s = strtok_r(args, " ", &save_ptr);
+    hash_s = strtok_r(NULL, " ", &save_ptr);
+    slave_s = strtok_r(NULL, " ", &save_ptr);
+    if (!slave_s) {
+        unixctl_command_reply(conn, 501,
+                              "usage: bond/migrate BOND HASH SLAVE");
+        return;
+    }
+
+    port = bond_find(bond_s);
+    if (!port) {
+        unixctl_command_reply(conn, 501, "no such bond");
+        return;
+    }
+
+    if (sscanf(hash_s, "%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8,
+               &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]) == 6) {
+        hash = bond_hash(mac);
+    } else if (strspn(hash_s, "0123456789") == strlen(hash_s)) {
+        hash = atoi(hash_s) & BOND_MASK;
+    } else {
+        unixctl_command_reply(conn, 501, "bad hash");
+        return;
+    }
+
+    iface = port_lookup_iface(port, slave_s);
+    if (!iface) {
+        unixctl_command_reply(conn, 501, "no such slave");
+        return;
+    }
+
+    if (!iface->enabled) {
+        unixctl_command_reply(conn, 501, "cannot migrate to disabled slave");
+        return;
+    }
+
+    entry = &port->bond_hash[hash];
+    ofproto_revalidate(port->bridge->ofproto, entry->iface_tag);
+    entry->iface_idx = iface->port_ifidx;
+    entry->iface_tag = tag_create_random();
+    unixctl_command_reply(conn, 200, "migrated");
+}
+
+static void
+bond_unixctl_set_active_slave(struct unixctl_conn *conn, const char *args_)
+{
+    char *args = (char *) args_;
+    char *save_ptr = NULL;
+    char *bond_s, *slave_s;
+    struct port *port;
+    struct iface *iface;
+
+    bond_s = strtok_r(args, " ", &save_ptr);
+    slave_s = strtok_r(NULL, " ", &save_ptr);
+    if (!slave_s) {
+        unixctl_command_reply(conn, 501,
+                              "usage: bond/set-active-slave BOND SLAVE");
+        return;
+    }
+
+    port = bond_find(bond_s);
+    if (!port) {
+        unixctl_command_reply(conn, 501, "no such bond");
+        return;
+    }
+
+    iface = port_lookup_iface(port, slave_s);
+    if (!iface) {
+        unixctl_command_reply(conn, 501, "no such slave");
+        return;
+    }
+
+    if (!iface->enabled) {
+        unixctl_command_reply(conn, 501, "cannot make disabled slave active");
+        return;
+    }
+
+    if (port->active_iface != iface->port_ifidx) {
+        ofproto_revalidate(port->bridge->ofproto, port->active_iface_tag);
+        port->active_iface = iface->port_ifidx;
+        port->active_iface_tag = tag_create_random();
+        VLOG_INFO("port %s: active interface is now %s",
+                  port->name, iface->name);
+        bond_send_learning_packets(port);
+        unixctl_command_reply(conn, 200, "done");
+    } else {
+        unixctl_command_reply(conn, 200, "no change");
+    }
+}
+
+static void
+enable_slave(struct unixctl_conn *conn, const char *args_, bool enable)
+{
+    char *args = (char *) args_;
+    char *save_ptr = NULL;
+    char *bond_s, *slave_s;
+    struct port *port;
+    struct iface *iface;
+
+    bond_s = strtok_r(args, " ", &save_ptr);
+    slave_s = strtok_r(NULL, " ", &save_ptr);
+    if (!slave_s) {
+        unixctl_command_reply(conn, 501,
+                              "usage: bond/enable/disable-slave BOND SLAVE");
+        return;
+    }
+
+    port = bond_find(bond_s);
+    if (!port) {
+        unixctl_command_reply(conn, 501, "no such bond");
+        return;
+    }
+
+    iface = port_lookup_iface(port, slave_s);
+    if (!iface) {
+        unixctl_command_reply(conn, 501, "no such slave");
+        return;
+    }
+
+    bond_enable_slave(iface, enable);
+    unixctl_command_reply(conn, 501, enable ? "enabled" : "disabled");
+}
+
+static void
+bond_unixctl_enable_slave(struct unixctl_conn *conn, const char *args)
+{
+    enable_slave(conn, args, true);
+}
+
+static void
+bond_unixctl_disable_slave(struct unixctl_conn *conn, const char *args)
+{
+    enable_slave(conn, args, false);
+}
+
+static void
+bond_init(void)
+{
+    unixctl_command_register("bond/list", bond_unixctl_list);
+    unixctl_command_register("bond/show", bond_unixctl_show);
+    unixctl_command_register("bond/migrate", bond_unixctl_migrate);
+    unixctl_command_register("bond/set-active-slave",
+                             bond_unixctl_set_active_slave);
+    unixctl_command_register("bond/enable-slave", bond_unixctl_enable_slave);
+    unixctl_command_register("bond/disable-slave", bond_unixctl_disable_slave);
 }
 
 /* Port functions. */
@@ -2451,6 +2753,20 @@ port_lookup(const struct bridge *br, const char *name)
         struct port *port = br->ports[i];
         if (!strcmp(port->name, name)) {
             return port;
+        }
+    }
+    return NULL;
+}
+
+static struct iface *
+port_lookup_iface(const struct port *port, const char *name)
+{
+    size_t j;
+
+    for (j = 0; j < port->n_ifaces; j++) {
+        struct iface *iface = port->ifaces[j];
+        if (!strcmp(iface->name, name)) {
+            return iface;
         }
     }
     return NULL;
