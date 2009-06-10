@@ -96,7 +96,7 @@ OFP_ASSERT(sizeof(struct ofmptsr_dp) == 32);
  */
 #define OFMP_UUID_LEN 36
 
-/* Resource TLV for UUIDs associated with this datapath. */
+/* Resource TLV for XenServer UUIDs associated with this datapath. */
 struct ofmptsr_dp_uuid {
     uint16_t type;                        /* OFMPTSR_DP_UUID. */
     uint16_t len;                         /* Length. */
@@ -107,7 +107,9 @@ struct ofmptsr_dp_uuid {
 };
 OFP_ASSERT(sizeof(struct ofmptsr_dp_uuid) == 16);
 
-/* Resource TLV for UUID associated with this managment instance. */
+/* Resource TLV for XenServer UUID associated with this managment 
+ * instance. 
+ */
 struct ofmptsr_mgmt_uuid {
     uint16_t type;                        /* OFMPTSR_MGMT_UUID. */
     uint16_t len;                         /* 52. */
@@ -118,12 +120,25 @@ struct ofmptsr_mgmt_uuid {
 };
 OFP_ASSERT(sizeof(struct ofmptsr_mgmt_uuid) == 56);
 
+/* Resource TLV for details about this XenServer vif. */
+struct ofmptsr_vif {
+    uint16_t type;                        /* OFMPTSR_VIF. */
+    uint16_t len;                         /* 136. */
+    uint8_t name[OFP_MAX_PORT_NAME_LEN];  /* Null-terminated name. */
+    uint8_t vif_uuid[OFMP_UUID_LEN];      /* VIF UUID. */
+    uint8_t vm_uuid[OFMP_UUID_LEN];       /* VM UUID. */
+    uint8_t net_uuid[OFMP_UUID_LEN];      /* Network UUID. */
+    uint64_t vif_mac;                     /* Management ID. */
+};
+OFP_ASSERT(sizeof(struct ofmptsr_vif) == 136);
+
 /* TLV types for switch resource descriptions. */
 enum ofmp_switch_resources {
     OFMPTSR_END = 0,                      /* Terminator. */
     OFMPTSR_DP,                           /* Datapath. */
     OFMPTSR_DP_UUID,                      /* Xen: datapath uuid's. */
     OFMPTSR_MGMT_UUID,                    /* Xen: management uuid. */
+    OFMPTSR_VIF,                          /* Xen: vif details. */
 };
 
 /* Body of resources request.

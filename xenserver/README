@@ -48,6 +48,12 @@ files are:
 
         vswitch-aware replacement for Citrix script of the same name.
 
+    root_vswitch_scripts_dump-vif-details
+
+        Script to retrieve extended information about VIFs that are
+        needed by the controller.  This is called by the "vif" script,
+        which is run when virtual interfaces are added and removed.
+
     usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py
 
         xsconsole plugin to configure the pool-wide configuration keys

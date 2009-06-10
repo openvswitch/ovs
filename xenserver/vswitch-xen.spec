@@ -65,6 +65,8 @@ install -m 755 xenserver/opt_xensource_libexec_interface-reconfigure \
              $RPM_BUILD_ROOT%{_prefix}/scripts/interface-reconfigure
 install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT%{_prefix}/scripts/vif
+install -m 755 xenserver/root_vswitch_scripts_dump-vif-details \
+               $RPM_BUILD_ROOT%{_prefix}/scripts/dump-vif-details
 install -m 755 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
                $RPM_BUILD_ROOT%{_prefix}/scripts/XSFeatureVSwitch.py
@@ -286,6 +288,7 @@ fi
 /root/vswitch/kernel_modules/brcompat_mod.ko
 /root/vswitch/kernel_modules/openvswitch_mod.ko
 /root/vswitch/kernel_modules/veth_mod.ko
+/root/vswitch/scripts/dump-vif-details
 /root/vswitch/scripts/interface-reconfigure
 /root/vswitch/scripts/vif
 /root/vswitch/scripts/XSFeatureVSwitch.py

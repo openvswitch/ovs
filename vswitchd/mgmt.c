@@ -306,6 +306,7 @@ send_resources_update(uint32_t xid, bool use_xid)
     struct ofmp_resources_update *ofmpru;
     struct ofmp_tlv *tlv;
     struct svec br_list;
+    struct svec port_list;
     const char *host_uuid;
     int i;
 
@@ -379,6 +380,48 @@ send_resources_update(uint32_t xid, bool use_xid)
                 }
             }
         }
+    }
+
+    /* On XenServer systems, extended information about virtual interfaces 
+     * (VIFs) is available, which is needed by the controller. 
+     */ 
+    svec_init(&port_list);
+    bridge_get_ifaces(&port_list);
+    for (i=0; i < port_list.n; i++) {
+        const char *vif_uuid, *vm_uuid, *net_uuid;
+        uint64_t vif_mac;
+        struct ofmptsr_vif *vif_tlv;
+
+        vif_uuid = cfg_get_string(0, "port.%s.vif-uuid", port_list.names[i]);
+        if (!vif_uuid) {
+            continue;
+        }
+
+        vif_tlv = ofpbuf_put_zeros(buffer, sizeof(*vif_tlv));
+        vif_tlv->type = htons(OFMPTSR_VIF);
+        vif_tlv->len = htons(sizeof(*vif_tlv));
+
+        memcpy(vif_tlv->name, port_list.names[i], strlen(port_list.names[i])+1);
+        memcpy(vif_tlv->vif_uuid, vif_uuid, sizeof(vif_tlv->vif_uuid));
+
+        vm_uuid = cfg_get_string(0, "port.%s.vm-uuid", port_list.names[i]);
+        if (vm_uuid) {
+            memcpy(vif_tlv->vm_uuid, vm_uuid, sizeof(vif_tlv->vm_uuid));
+        } else {
+            /* In case the vif disappeared underneath us. */
+            memset(vif_tlv->vm_uuid, '\0', sizeof(vif_tlv->vm_uuid));
+        }
+
+        net_uuid = cfg_get_string(0, "port.%s.net-uuid", port_list.names[i]);
+        if (net_uuid) {
+            memcpy(vif_tlv->net_uuid, net_uuid, sizeof(vif_tlv->net_uuid));
+        } else {
+            /* In case the vif disappeared underneath us. */
+            memset(vif_tlv->net_uuid, '\0', sizeof(vif_tlv->net_uuid));
+        }
+
+        vif_mac = cfg_get_mac(0, "port.%s.vif-mac", port_list.names[i]);
+        vif_tlv->vif_mac = htonll(vif_mac);
     }
 
     /* Put end marker. */

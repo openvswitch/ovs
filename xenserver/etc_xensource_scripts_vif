@@ -14,6 +14,7 @@
 # Keep other-config/ keys in sync with device.ml:vif_udev_keys
 
 cfg_mod="/root/vswitch/bin/ovs-cfg-mod"
+dump_vif_details="/root/vswitch/scripts/dump-vif-details"
 service="/sbin/service"
 
 TYPE=`echo ${XENBUS_PATH} | cut -f 2 -d '/'`
@@ -86,12 +87,17 @@ add_to_bridge()
     ${IP} link set "${vif}" address "${address}"        || logger -t scripts-vif "Failed to ip link set ${vif} address ${address}"
     ${IP} addr flush "${vif}"                           || logger -t scripts-vif "Failed to ip addr flush ${vif}"
 
+    local vif_details=$($dump_vif_details $DOMID $DEVID)
+    if [ $? -ne 0 -o -z "${vif_details}" ]; then
+	    logger -t scripts-vif "Failed to retrieve vif details for vswitch"
+    fi
+
     $cfg_mod -F /etc/ovs-vswitchd.conf \
         --del-match="bridge.*.port=$vif" \
         --del-match="vlan.$vif.[!0-9]*" \
         --del-match="port.$vif.[!0-9]*" \
         --add="bridge.$bridge.port=$vif" \
-        $vid -c
+        $vid $vif_details -c >/tmp/j
     $service vswitch reload
 
     ${IP} link set "${vif}" up                          || logger -t scripts-vif "Failed to ip link set ${vif} up"
