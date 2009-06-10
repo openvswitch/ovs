@@ -3,6 +3,11 @@ noinst_PROGRAMS += tests/test-classifier
 tests_test_classifier_SOURCES = tests/test-classifier.c
 tests_test_classifier_LDADD = lib/libopenvswitch.a
 
+TESTS += tests/test-csum
+noinst_PROGRAMS += tests/test-csum
+tests_test_csum_SOURCES = tests/test-csum.c
+tests_test_csum_LDADD = lib/libopenvswitch.a
+
 TESTS += tests/test-flows.sh
 noinst_PROGRAMS += tests/test-flows
 tests_test_flows_SOURCES = tests/test-flows.c

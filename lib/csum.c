@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2009 Nicira Networks.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,7 +17,12 @@
 #include <config.h>
 #include "csum.h"
 
-/* Returns the IP checksum of the 'n' bytes in 'data'. */
+/* Returns the IP checksum of the 'n' bytes in 'data'.
+ *
+ * The return value has the same endianness as the data.  That is, if 'data'
+ * consists of a packet in network byte order, then the return value is a value
+ * in network byte order, and if 'data' consists of a data structure in host
+ * byte order, then the return value is in host byte order. */
 uint16_t
 csum(const void *data, size_t n)
 {
@@ -62,7 +67,12 @@ csum_continue(uint32_t partial, const void *data_, size_t n)
 }
 
 /* Returns the IP checksum corresponding to 'partial', which is a value updated
- * by some combination of csum_add16(), csum_add32(), and csum_continue(). */
+ * by some combination of csum_add16(), csum_add32(), and csum_continue().
+ *
+ * The return value has the same endianness as the checksummed data.  That is,
+ * if the data consist of a packet in network byte order, then the return value
+ * is a value in network byte order, and if the data are a data structure in
+ * host byte order, then the return value is in host byte order. */
 uint16_t
 csum_finish(uint32_t partial)
 {
