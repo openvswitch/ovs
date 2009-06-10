@@ -279,12 +279,8 @@ ssl_open(const char *name, char *suffix, struct vconn **vconnp)
         return retval;
     }
 
-    /* Glibc 2.7 has a bug in strtok_r when compiling with optimization that
-     * can cause segfaults here:
-     * http://sources.redhat.com/bugzilla/show_bug.cgi?id=5614.
-     * Using "::" instead of the obvious ":" works around it. */
-    host_name = strtok_r(suffix, "::", &save_ptr);
-    port_string = strtok_r(NULL, "::", &save_ptr);
+    host_name = strtok_r(suffix, ":", &save_ptr);
+    port_string = strtok_r(NULL, ":", &save_ptr);
     if (!host_name) {
         ovs_error(0, "%s: bad peer name format", name);
         return EAFNOSUPPORT;

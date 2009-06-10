@@ -118,8 +118,8 @@ open_collector(char *dst)
      * can cause segfaults here:
      * http://sources.redhat.com/bugzilla/show_bug.cgi?id=5614.
      * Using "::" instead of the obvious ":" works around it. */
-    host_name = strtok_r(dst, "::", &save_ptr);
-    port_string = strtok_r(NULL, "::", &save_ptr);
+    host_name = strtok_r(dst, ":", &save_ptr);
+    port_string = strtok_r(NULL, ":", &save_ptr);
     if (!host_name) {
         ovs_error(0, "%s: bad peer name format", dst);
         return -EAFNOSUPPORT;

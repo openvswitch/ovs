@@ -457,14 +457,14 @@ str_to_ip(const char *str_, uint32_t *ip)
     struct in_addr in_addr;
     int n_wild, retval;
 
-    name = strtok_r(str, "//", &save_ptr);
+    name = strtok_r(str, "/", &save_ptr);
     retval = name ? lookup_ip(name, &in_addr) : EINVAL;
     if (retval) {
         ovs_fatal(0, "%s: could not convert to IP address", str);
     }
     *ip = in_addr.s_addr;
 
-    netmask = strtok_r(NULL, "//", &save_ptr);
+    netmask = strtok_r(NULL, "/", &save_ptr);
     if (netmask) {
         uint8_t o[4];
         if (sscanf(netmask, "%"SCNu8".%"SCNu8".%"SCNu8".%"SCNu8,

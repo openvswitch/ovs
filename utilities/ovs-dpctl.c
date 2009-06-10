@@ -281,7 +281,7 @@ do_add_if(int argc UNUSED, char *argv[])
         int flags = 0;
         int error;
 
-        devname = strtok_r(argv[i], ",,", &save_ptr);
+        devname = strtok_r(argv[i], ",", &save_ptr);
         if (!devname) {
             ovs_error(0, "%s is not a valid network device name", argv[i]);
             continue;

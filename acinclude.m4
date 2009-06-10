@@ -154,6 +154,37 @@ AC_DEFUN([OVS_CHECK_IF_PACKET],
                 [Define to 1 if net/if_packet.h is available.])
    fi])
 
+dnl Checks for buggy strtok_r.
+dnl
+dnl Some versions of glibc 2.7 has a bug in strtok_r when compiling
+dnl with optimization that can cause segfaults:
+dnl
+dnl http://sources.redhat.com/bugzilla/show_bug.cgi?id=5614.
+AC_DEFUN([OVS_CHECK_STRTOK_R],
+  [AC_CACHE_CHECK(
+     [whether strtok_r macro segfaults on some inputs],
+     [ovs_cv_strtok_r_bug],
+     [AC_RUN_IFELSE(
+        [AC_LANG_PROGRAM([#include <stdio.h>
+                          #include <string.h>
+                         ],
+                         [[char string[] = ":::";
+                           char *save_ptr = (char *) 0xc0ffee;
+                           char *token1, *token2;
+                           token1 = strtok_r(string, ":", &save_ptr);
+                           token2 = strtok_r(NULL, ":", &save_ptr);
+                           printf ("%s %s\n", token1, token2);
+                           return 0;
+                          ]])],
+        [ovs_cv_strtok_r_bug=no],
+        [ovs_cv_strtok_r_bug=yes],
+        [ovs_cv_strtok_r_bug=yes])])
+   if test $ovs_cv_strtok_r_bug = yes; then
+     AC_DEFINE([HAVE_STRTOK_R_BUG], [1],
+               [Define if strtok_r macro segfaults on some inputs])
+   fi
+])
+
 dnl ----------------------------------------------------------------------
 dnl These macros are from GNU PSPP, with the following original license:
 dnl Copyright (C) 2005, 2006, 2007 Free Software Foundation, Inc.
