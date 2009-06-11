@@ -497,7 +497,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
     /* Set accept_controller_regex. */
     if (!s->accept_controller_re) {
-        s->accept_controller_re = vconn_ssl_is_configured() ? "^ssl:.*" : ".*";
+        s->accept_controller_re
+            = vconn_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*";
     }
 
     /* Mode of operation. */

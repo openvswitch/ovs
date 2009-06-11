@@ -410,8 +410,8 @@ the regular expression will be accepted.
 .IP
 The default regular expression is \fBssl:.*\fR, meaning that only SSL
 controller connections will be accepted, when SSL is configured (see
-\fBSSL Configuration\fR), and \fB.*\fR otherwise, meaning that any
-controller will be accepted.
+\fBSSL Configuration\fR), and \fBtcp:.*\fR otherwise, meaning that only
+TCP controller connections will be accepted.
 .IP
 The regular expression is implicitly anchored at the beginning of the
 controller location string, as if it begins with \fB^\fR.

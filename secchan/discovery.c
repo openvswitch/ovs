@@ -168,7 +168,7 @@ discovery_set_accept_controller_re(struct discovery *d, const char *re_)
     int error;
     char *re;
 
-    re = (!re_ ? xstrdup(vconn_ssl_is_configured() ? "^ssl:.*" : ".*")
+    re = (!re_ ? xstrdup(vconn_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*")
           : re_[0] == '^' ? xstrdup(re_) : xasprintf("^%s", re_));
     regex = xmalloc(sizeof *regex);
     error = regcomp(regex, re, REG_NOSUB | REG_EXTENDED);

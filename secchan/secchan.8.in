@@ -182,8 +182,8 @@ names match the regular expression will be accepted.
 The default regular expression is \fBssl:.*\fR (meaning that only SSL
 controller connections will be accepted) when any of the SSL
 configuration options \fB--private-key\fR, \fB--certificate\fR, or
-\fB--ca-cert\fR is specified.  The default is \fB.*\fR otherwise
-(meaning that any controller will be accepted).
+\fB--ca-cert\fR is specified.  The default is \fB^tcp:.*\fR otherwise
+(meaning that only TCP controller connections will be accepted).
 
 The \fIregex\fR is implicitly anchored at the beginning of the
 controller location string, as if it begins with \fB^\fR.
