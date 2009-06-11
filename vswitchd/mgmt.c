@@ -61,6 +61,7 @@ static uint8_t cfg_cookie[CFG_COOKIE_LEN];
 static struct rconn *mgmt_rconn;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 static struct svec capabilities;
+static struct ofpbuf ext_data_buffer;
 uint64_t mgmt_id;
 
 
@@ -70,6 +71,7 @@ struct rconn_packet_counter *txqlen; /* # pkts queued for tx on mgmt_rconn. */
 static uint64_t pick_fallback_mgmt_id(void);
 static void send_config_update(uint32_t xid, bool use_xid);
 static void send_resources_update(uint32_t xid, bool use_xid);
+static int recv_ofmp(uint32_t xid, struct ofmp_header *ofmph, size_t len);
 
 void
 mgmt_init(void)
@@ -86,6 +88,8 @@ mgmt_init(void)
         /* Randomly generate a mgmt id */
         mgmt_id = pick_fallback_mgmt_id();
     }
+
+    ofpbuf_init(&ext_data_buffer, 0);
 }
 
 #ifdef HAVE_OPENSSL
@@ -220,40 +224,6 @@ mgmt_reconfigure(void)
     }
 }
 
-static int
-send_openflow_buffer(struct ofpbuf *buffer)
-{               
-    int retval;
-
-    if (!mgmt_rconn) {
-        VLOG_ERR("attempt to send openflow packet with no rconn\n");
-        return EINVAL;
-    }
-
-    update_openflow_length(buffer);
-    retval = rconn_send_with_limit(mgmt_rconn, buffer, txqlen, TXQ_LIMIT);
-    if (retval) {
-        VLOG_WARN_RL(&rl, "send to %s failed: %s",
-                     rconn_get_name(mgmt_rconn), strerror(retval));
-    }   
-    return retval;
-}   
-    
-static void
-send_features_reply(uint32_t xid)
-{
-    struct ofpbuf *buffer;
-    struct ofp_switch_features *ofr;
-
-    ofr = make_openflow_xid(sizeof *ofr, OFPT_FEATURES_REPLY, xid, &buffer);
-    ofr->datapath_id  = 0;
-    ofr->n_tables     = 0;
-    ofr->n_buffers    = 0;
-    ofr->capabilities = 0;
-    ofr->actions      = 0;
-    send_openflow_buffer(buffer);
-}
-
 static void *
 make_ofmp_xid(size_t ofmp_len, uint16_t type, uint32_t xid,
         struct ofpbuf **bufferp)
@@ -279,6 +249,93 @@ make_ofmp(size_t ofmp_len, uint16_t type, struct ofpbuf **bufferp)
     oh->type = htons(type);
 
     return oh;
+}
+
+static int
+send_openflow_buffer(struct ofpbuf *buffer)
+{               
+    int retval;
+
+    if (!mgmt_rconn) {
+        VLOG_ERR("attempt to send openflow packet with no rconn\n");
+        return EINVAL;
+    }
+
+    /* OpenFlow messages use a 16-bit length field, so messages over 64K
+     * must be broken into multiple pieces. 
+     */
+    if (buffer->size <= 65535) {
+        update_openflow_length(buffer);
+        retval = rconn_send_with_limit(mgmt_rconn, buffer, txqlen, TXQ_LIMIT);
+        if (retval) {
+            VLOG_WARN_RL(&rl, "send to %s failed: %s",
+                         rconn_get_name(mgmt_rconn), strerror(retval));
+        }   
+        return retval;
+    } else {
+        struct ofmp_header *header = (struct ofmp_header *)buffer->data;
+        uint32_t xid = header->header.header.xid;
+        size_t remain = buffer->size;
+        uint8_t *ptr = buffer->data;
+        
+        /* Mark the OpenFlow header with a zero length to indicate some
+         * funkiness. 
+         */
+        header->header.header.length = 0;
+
+        while (remain > 0) {
+            struct ofpbuf *new_buffer;
+            struct ofmp_extended_data *oed;
+            size_t new_len = MIN(65535 - sizeof *oed, remain);
+
+            oed = make_ofmp_xid(sizeof *oed, OFMPT_EXTENDED_DATA, xid, 
+                    &new_buffer);
+            oed->type = header->type;
+
+            if (remain > 65535) {
+                oed->flags |= OFMPEDF_MORE_DATA;
+            }
+
+            printf("xxx SENDING LEN: %d\n", new_len);
+
+            /* Copy the entire original message, including the OpenFlow
+             * header, since management protocol structure definitions
+             * include these headers.
+             */
+            ofpbuf_put(new_buffer, ptr, new_len);
+
+            update_openflow_length(new_buffer);
+            retval = rconn_send_with_limit(mgmt_rconn, new_buffer, txqlen, 
+                    TXQ_LIMIT);
+            if (retval) {
+                VLOG_WARN_RL(&rl, "send to %s failed: %s",
+                             rconn_get_name(mgmt_rconn), strerror(retval));
+                ofpbuf_delete(buffer);
+                return retval;
+            }   
+
+            remain -= new_len;
+            ptr += new_len;
+        }
+
+        ofpbuf_delete(buffer);
+        return 0;
+    }
+}   
+    
+static void
+send_features_reply(uint32_t xid)
+{
+    struct ofpbuf *buffer;
+    struct ofp_switch_features *ofr;
+
+    ofr = make_openflow_xid(sizeof *ofr, OFPT_FEATURES_REPLY, xid, &buffer);
+    ofr->datapath_id  = 0;
+    ofr->n_tables     = 0;
+    ofr->n_buffers    = 0;
+    ofr->capabilities = 0;
+    ofr->actions      = 0;
+    send_openflow_buffer(buffer);
 }
 
 static void 
@@ -520,11 +577,12 @@ recv_set_config(uint32_t xid UNUSED, const void *msg UNUSED)
 }
 
 static int
-recv_ofmp_capability_request(uint32_t xid, const struct ofmp_header *ofmph)
+recv_ofmp_capability_request(uint32_t xid, const struct ofmp_header *ofmph,
+        size_t len)
 {
     struct ofmp_capability_request *ofmpcr;
 
-    if (htons(ofmph->header.header.length) != sizeof(*ofmpcr)) {
+    if (len != sizeof(*ofmpcr)) {
         /* xxx Send error */
         return -EINVAL;
     }
@@ -541,18 +599,20 @@ recv_ofmp_capability_request(uint32_t xid, const struct ofmp_header *ofmph)
 }
 
 static int
-recv_ofmp_resources_request(uint32_t xid, const void *msg UNUSED)
+recv_ofmp_resources_request(uint32_t xid, const void *msg UNUSED, 
+        size_t len UNUSED)
 {
     send_resources_update(xid, true);
     return 0;
 }
 
 static int
-recv_ofmp_config_request(uint32_t xid, const struct ofmp_header *ofmph)
+recv_ofmp_config_request(uint32_t xid, const struct ofmp_header *ofmph, 
+        size_t len)
 {
     struct ofmp_config_request *ofmpcr;
 
-    if (htons(ofmph->header.header.length) != sizeof(*ofmpcr)) {
+    if (len != sizeof(*ofmpcr)) {
         /* xxx Send error */
         return -EINVAL;
     }
@@ -569,12 +629,13 @@ recv_ofmp_config_request(uint32_t xid, const struct ofmp_header *ofmph)
 }
 
 static int
-recv_ofmp_config_update(uint32_t xid, const struct ofmp_header *ofmph)
+recv_ofmp_config_update(uint32_t xid, const struct ofmp_header *ofmph,
+        size_t len)
 {
     struct ofmp_config_update *ofmpcu;
     int data_len;
 
-    data_len = htons(ofmph->header.header.length) - sizeof(*ofmpcu);
+    data_len = len - sizeof(*ofmpcu);
     if (data_len <= sizeof(*ofmpcu)) {
         /* xxx Send error. */
         return -EINVAL;
@@ -612,20 +673,60 @@ recv_ofmp_config_update(uint32_t xid, const struct ofmp_header *ofmph)
     return 0;
 }
 
-static
-int recv_ofmp(uint32_t xid, struct ofmp_header *ofmph)
+static int
+recv_ofmp_extended_data(uint32_t xid, const struct ofmp_header *ofmph,
+        size_t len)
 {
+    size_t data_len;
+    struct ofmp_extended_data *ofmped;
+    uint8_t *ptr;
+
+    data_len = len - sizeof(*ofmped);
+    if (data_len <= sizeof(*ofmped)) {
+        /* xxx Send error. */
+        return -EINVAL;
+    }
+
+    ofmped = (struct ofmp_extended_data *)ofmph;
+
+    ptr = ofpbuf_put(&ext_data_buffer, ofmped->data, data_len);
+
+    if (!ofmped->flags & OFMPEDF_MORE_DATA) {
+        recv_ofmp(xid, ext_data_buffer.data, ext_data_buffer.size);
+        ofpbuf_clear(&ext_data_buffer);
+    }
+
+    return 0;
+}
+
+/* Handles receiving a management message.  Generally, this function
+ * will be called 'len' set to zero, and the length will be derived by
+ * the OpenFlow header.  With the extended data message, management
+ * messages are not constrained by OpenFlow's 64K message length limit.  
+ * The extended data handler calls this function with the 'len' set to
+ * the total message length and the OpenFlow header's length field is 
+ * ignored.
+ */
+static
+int recv_ofmp(uint32_t xid, struct ofmp_header *ofmph, size_t len)
+{
+    if (!len) {
+        len = ntohs(ofmph->header.header.length);
+    }
+
     /* xxx Should sanity-check for min/max length */
     switch (ntohs(ofmph->type)) 
     {
         case OFMPT_CAPABILITY_REQUEST:
-            return recv_ofmp_capability_request(xid, ofmph);
+            return recv_ofmp_capability_request(xid, ofmph, len);
         case OFMPT_RESOURCES_REQUEST:
-            return recv_ofmp_resources_request(xid, ofmph);
+            return recv_ofmp_resources_request(xid, ofmph, len);
         case OFMPT_CONFIG_REQUEST:
-            return recv_ofmp_config_request(xid, ofmph);
+            return recv_ofmp_config_request(xid, ofmph, len);
         case OFMPT_CONFIG_UPDATE:
-            return recv_ofmp_config_update(xid, ofmph);
+            return recv_ofmp_config_update(xid, ofmph, len);
+        case OFMPT_EXTENDED_DATA:
+            return recv_ofmp_extended_data(xid, ofmph, len);
         default:
             VLOG_WARN_RL(&rl, "unknown mgmt message: %d", 
                     ntohs(ofmph->type));
@@ -641,11 +742,11 @@ recv_nx_msg(uint32_t xid, const void *oh)
     switch (ntohl(nh->subtype)) {
 
     case NXT_MGMT:
-        return recv_ofmp(xid, (struct ofmp_header *)oh);
+        return recv_ofmp(xid, (struct ofmp_header *)oh, 0);
 
     default:
         send_error_msg(xid, OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE, 
-                oh, htons(nh->header.length));
+                oh, ntohs(nh->header.length));
         return -EINVAL;
     }
 }

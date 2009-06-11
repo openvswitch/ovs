@@ -27,7 +27,8 @@ enum ofmp_type {
     OFMPT_CONFIG_REQUEST,
     OFMPT_CONFIG_UPDATE,
     OFMPT_CONFIG_UPDATE_ACK,
-    OFMPT_ERROR
+    OFMPT_ERROR,
+    OFMPT_EXTENDED_DATA
 };
 
 /* Header on all OpenFlow management packets. */
@@ -234,5 +235,25 @@ struct ofmp_error_msg {
                                  on the type and code. */
 };
 OFP_ASSERT(sizeof(struct ofmp_error_msg) == 24);
+
+/* Bitmask of extended data message flags. */
+enum ofmp_extended_data_flags {
+    OFMPEDF_MORE_DATA = 1 << 0,         /* More data follows. */
+};
+
+/* Body of extended data message.  May be sent by either the switch or the
+ * controller to send messages that are greater than 65535 bytes in
+ * length.
+ *
+ * OFMPT_EXTENDED_DATA (switch <-> controller) */
+struct ofmp_extended_data {
+    struct ofmp_header header;
+
+    uint16_t type;            /* Type code of the encapsulated message. */
+    uint8_t flags;            /* One of OFMPEDF_*. */
+    uint8_t pad;
+    uint8_t data[0];          /* Variable-length data. */
+};
+OFP_ASSERT(sizeof(struct ofmp_extended_data) == 24);
 
 #endif /* openflow/openflow-mgmt.h */
