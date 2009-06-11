@@ -32,6 +32,7 @@ def dump_vif_info(domid, devid, vif_ref):
 		net_rec = session.xenapi.network.get_record(vif_rec["network"])
 		vm_rec = session.xenapi.VM.get_record(vif_rec["VM"])
 
+		# Data to allow vNetManager to associate VIFs with xapi data
 		sys.stdout.write('--add=port.vif%s.%s.network-uuid=%s ' 
 				% (domid, devid, net_rec["uuid"]))
 		sys.stdout.write('--add=port.vif%s.%s.vif-mac=%s ' 
@@ -40,6 +41,22 @@ def dump_vif_info(domid, devid, vif_ref):
 				% (domid, devid, vif_rec["uuid"]))
 		sys.stdout.write('--add=port.vif%s.%s.vm-uuid=%s ' 
 				% (domid, devid, vm_rec["uuid"]))
+
+		# vNetManager needs to know the network UUID(s) associated with
+		# each datapath.  Normally interface-reconfigure adds them, but
+		# interface-reconfigure never gets called for internal networks
+		# (xapi does the addbr ioctl internally), so we have to do it
+		# here instead for internal networks.  This is only acceptable
+		# because xapi is lazy about creating internal networks: it
+		# only creates one just before it adds the first vif to it.
+		# There may still be a brief delay between the initial
+		# ovs-vswitchd connection to vNetManager and setting this
+		# configuration variable, but vNetManager can tolerate that.
+		if len(net_rec['PIFs']) == 0:
+			key = 'bridge.%s.xs-network-uuids' % net_rec['bridge']
+			value = net_rec['uuid']
+			sys.stdout.write('--del-match=%s=* ' % key)
+			sys.stdout.write('--add=%s=%s ' % (key, value))
 	finally:
 		session.xenapi.session.logout()
 	
