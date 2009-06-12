@@ -339,7 +339,7 @@ vcs_recv_hello(struct vconn *vconn)
 
     if (retval != EAGAIN) {
         vconn->state = VCS_DISCONNECTED;
-        vconn->error = retval;
+        vconn->error = retval == EOF ? ECONNRESET : retval;
     }
 }
 
