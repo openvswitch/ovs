@@ -574,6 +574,7 @@ static int dp_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 #endif
 
 #ifdef CONFIG_XEN
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 /* This code is copied verbatim from net/dev/core.c in Xen's
  * linux-2.6.18-92.1.10.el5.xs5.0.0.394.644.  We can't call those functions
  * directly because they aren't exported. */
@@ -620,7 +621,8 @@ int skb_checksum_setup(struct sk_buff *skb)
 out:
 	return -EPROTO;
 }
-#endif
+#endif /* linux == 2.6.18 */
+#endif /* CONFIG_XEN */
 
 int
 dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
