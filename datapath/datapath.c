@@ -421,10 +421,13 @@ int dp_del_port(struct net_bridge_port *p, struct list_head *dp_devs)
 {
 	ASSERT_RTNL();
 
-#ifdef SUPPORT_SYSFS
-	if (p->port_no != ODPP_LOCAL && dp_del_if_hook)
+	if (p->port_no != ODPP_LOCAL && dp_del_if_hook) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
 		sysfs_remove_link(&p->dp->ifobj, p->dev->name);
+#else
+		sysfs_remove_link(p->dp->ifobj, p->dev->name);
 #endif
+	}
 	dp_ifinfo_notify(RTM_DELLINK, p);
 
 	p->dp->n_ports--;

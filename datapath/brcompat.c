@@ -404,18 +404,14 @@ int brc_add_dp(struct datapath *dp)
 {
 	if (!try_module_get(THIS_MODULE))
 		return -ENODEV;
-#ifdef SUPPORT_SYSFS
 	brc_sysfs_add_dp(dp);
-#endif
 
 	return 0;
 }
 
 int brc_del_dp(struct datapath *dp) 
 {
-#ifdef SUPPORT_SYSFS
 	brc_sysfs_del_dp(dp);
-#endif
 	module_put(THIS_MODULE);
 
 	return 0;
@@ -450,10 +446,8 @@ __init brc_init(void)
 	dp_del_dp_hook = brc_del_dp;
 
 	/* Register hooks for interface adds and deletes */
-#ifdef SUPPORT_SYSFS
 	dp_add_if_hook = brc_sysfs_add_if;
 	dp_del_if_hook = brc_sysfs_del_if;
-#endif
 
 	/* Randomize the initial sequence number.  This is not a security
 	 * feature; it only helps avoid crossed wires between userspace and

@@ -10,6 +10,7 @@
 #include <linux/netdevice.h>
 #include <linux/workqueue.h>
 #include <linux/skbuff.h>
+#include <linux/version.h>
 #include "flow.h"
 #include "brc_sysfs.h"
 
@@ -58,8 +59,12 @@ struct datapath {
 	struct mutex mutex;
 	int dp_idx;
 
-#ifdef SUPPORT_SYSFS
+#ifdef CONFIG_SYSFS
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
 	struct kobject ifobj;
+#else
+	struct kobject *ifobj;
+#endif
 #endif
 
 	int drop_frags;
@@ -88,7 +93,7 @@ struct net_bridge_port {
 	u16 port_no;
 	struct datapath	*dp;
 	struct net_device *dev;
-#ifdef SUPPORT_SYSFS
+#ifdef CONFIG_SYSFS
 	struct kobject kobj;
 #endif
 	struct list_head node;   /* Element in datapath.ports. */

@@ -13,7 +13,7 @@
 #include "brc_sysfs.h"
 #include "datapath.h"
 
-#ifdef SUPPORT_SYSFS
+#ifdef CONFIG_SYSFS
 
 struct brport_attribute {
 	struct attribute	attr;
@@ -281,18 +281,14 @@ int brc_sysfs_add_if(struct net_bridge_port *p)
 	struct brport_attribute **a;
 	int err;
 
-	kobject_init(&p->kobj);
-	kobject_set_name(&p->kobj, SYSFS_BRIDGE_PORT_ATTR);
-	p->kobj.ktype = &brport_ktype;
-	p->kobj.kset = NULL;
-	p->kobj.parent = &(p->dev->class_dev.kobj);
-
-	err = kobject_add(&p->kobj);
+	err = kobject_init_and_add(&p->kobj, &brport_ktype,
+				   &(p->dev->NETDEV_DEV_MEMBER.kobj),
+				   SYSFS_BRIDGE_PORT_ATTR);
 	if (err)
-		goto err_put;
+		goto err;
 
 	err = sysfs_create_link(&p->kobj,
-				&dp->ports[ODPP_LOCAL]->dev->class_dev.kobj,
+				&dp->ports[ODPP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj,
 				SYSFS_BRIDGE_PORT_LINK);
 	if (err)
 		goto err_del;
@@ -303,7 +299,11 @@ int brc_sysfs_add_if(struct net_bridge_port *p)
 			goto err_del;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
 	err = sysfs_create_link(&dp->ifobj, &p->kobj, p->dev->name);
+#else
+	err = sysfs_create_link(dp->ifobj, &p->kobj, p->dev->name);
+#endif
 	if (err)
 		goto err_del;
 
@@ -313,8 +313,8 @@ int brc_sysfs_add_if(struct net_bridge_port *p)
 
 err_del:
 	kobject_del(&p->kobj);
-err_put:
 	kobject_put(&p->kobj);
+err:
 	return err;
 }
 
@@ -331,4 +331,4 @@ int brc_sysfs_del_if(struct net_bridge_port *p)
 
 	return 0;
 }
-#endif /* SUPPORT_SYSFS */
+#endif /* CONFIG_SYSFS */

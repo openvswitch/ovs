@@ -20,22 +20,26 @@
 #include "datapath.h"
 #include "dp_dev.h"
 
-#ifdef SUPPORT_SYSFS
+#ifdef CONFIG_SYSFS
 #define to_dev(obj)	container_of(obj, struct device, kobj)
 
 /* Hack to attempt to build on more platforms. */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
-#define to_kobj(d) &(d)->class_dev.kobj
 #define BRC_DEVICE_ATTR CLASS_DEVICE_ATTR
+#define DEVICE_PARAMS struct class_device *d
+#define DEVICE_ARGS d
+#define DEV_ATTR(NAME) class_device_attr_##NAME
 #else
-#define to_kobj(d) &(d)->dev.kobj
 #define BRC_DEVICE_ATTR DEVICE_ATTR
+#define DEVICE_PARAMS struct device *d, struct device_attribute *attr
+#define DEVICE_ARGS d, attr
+#define DEV_ATTR(NAME) dev_attr_##NAME
 #endif
 
 /*
  * Common code for storing bridge parameters.
  */
-static ssize_t store_bridge_parm(struct class_device *d,
+static ssize_t store_bridge_parm(DEVICE_PARAMS,
 				 const char *buf, size_t len,
 				 void (*set)(struct datapath *, unsigned long))
 {
@@ -68,8 +72,7 @@ static ssize_t store_bridge_parm(struct class_device *d,
 }
 
 
-static ssize_t show_forward_delay(struct class_device *d,
-				  char *buf)
+static ssize_t show_forward_delay(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
@@ -91,15 +94,15 @@ static void set_forward_delay(struct datapath *dp, unsigned long val)
 #endif
 }
 
-static ssize_t store_forward_delay(struct class_device *d,
+static ssize_t store_forward_delay(DEVICE_PARAMS,
 				   const char *buf, size_t len)
 {
-	return store_bridge_parm(d, buf, len, set_forward_delay);
+	return store_bridge_parm(DEVICE_ARGS, buf, len, set_forward_delay);
 }
 static BRC_DEVICE_ATTR(forward_delay, S_IRUGO | S_IWUSR,
 		   show_forward_delay, store_forward_delay);
 
-static ssize_t show_hello_time(struct class_device *d, char *buf)
+static ssize_t show_hello_time(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	return sprintf(buf, "%lu\n",
@@ -121,17 +124,16 @@ static void set_hello_time(struct datapath *dp, unsigned long val)
 #endif
 }
 
-static ssize_t store_hello_time(struct class_device *d,
+static ssize_t store_hello_time(DEVICE_PARAMS,
 				const char *buf,
 				size_t len)
 {
-	return store_bridge_parm(d, buf, len, set_hello_time);
+	return store_bridge_parm(DEVICE_ARGS, buf, len, set_hello_time);
 }
 static BRC_DEVICE_ATTR(hello_time, S_IRUGO | S_IWUSR, show_hello_time,
 		   store_hello_time);
 
-static ssize_t show_max_age(struct class_device *d, 
-			    char *buf)
+static ssize_t show_max_age(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	return sprintf(buf, "%lu\n",
@@ -153,15 +155,14 @@ static void set_max_age(struct datapath *dp, unsigned long val)
 #endif
 }
 
-static ssize_t store_max_age(struct class_device *d, 
+static ssize_t store_max_age(DEVICE_PARAMS,
 			     const char *buf, size_t len)
 {
-	return store_bridge_parm(d, buf, len, set_max_age);
+	return store_bridge_parm(DEVICE_ARGS, buf, len, set_max_age);
 }
 static BRC_DEVICE_ATTR(max_age, S_IRUGO | S_IWUSR, show_max_age, store_max_age);
 
-static ssize_t show_ageing_time(struct class_device *d,
-				char *buf)
+static ssize_t show_ageing_time(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
@@ -180,16 +181,15 @@ static void set_ageing_time(struct datapath *dp, unsigned long val)
 #endif
 }
 
-static ssize_t store_ageing_time(struct class_device *d,
+static ssize_t store_ageing_time(DEVICE_PARAMS,
 				 const char *buf, size_t len)
 {
-	return store_bridge_parm(d, buf, len, set_ageing_time);
+	return store_bridge_parm(DEVICE_ARGS, buf, len, set_ageing_time);
 }
 static BRC_DEVICE_ATTR(ageing_time, S_IRUGO | S_IWUSR, show_ageing_time,
 		   store_ageing_time);
 
-static ssize_t show_stp_state(struct class_device *d,
-			      char *buf)
+static ssize_t show_stp_state(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
@@ -200,7 +200,7 @@ static ssize_t show_stp_state(struct class_device *d,
 }
 
 
-static ssize_t store_stp_state(struct class_device *d,
+static ssize_t store_stp_state(DEVICE_PARAMS,
 			       const char *buf,
 			       size_t len)
 {
@@ -228,8 +228,7 @@ static ssize_t store_stp_state(struct class_device *d,
 static BRC_DEVICE_ATTR(stp_state, S_IRUGO | S_IWUSR, show_stp_state,
 		   store_stp_state);
 
-static ssize_t show_priority(struct class_device *d, 
-			     char *buf)
+static ssize_t show_priority(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
@@ -249,15 +248,14 @@ static void set_priority(struct datapath *dp, unsigned long val)
 #endif
 }
 
-static ssize_t store_priority(struct class_device *d, 
+static ssize_t store_priority(DEVICE_PARAMS,
 			       const char *buf, size_t len)
 {
-	return store_bridge_parm(d, buf, len, set_priority);
+	return store_bridge_parm(DEVICE_ARGS, buf, len, set_priority);
 }
 static BRC_DEVICE_ATTR(priority, S_IRUGO | S_IWUSR, show_priority, store_priority);
 
-static ssize_t show_root_id(struct class_device *d, 
-			    char *buf)
+static ssize_t show_root_id(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	return br_show_bridge_id(buf, &to_bridge(d)->designated_root);
@@ -267,8 +265,7 @@ static ssize_t show_root_id(struct class_device *d,
 }
 static BRC_DEVICE_ATTR(root_id, S_IRUGO, show_root_id, NULL);
 
-static ssize_t show_bridge_id(struct class_device *d, 
-			      char *buf)
+static ssize_t show_bridge_id(DEVICE_PARAMS, char *buf)
 {
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
 	const unsigned char *addr = dp->ports[ODPP_LOCAL]->dev->dev_addr;
@@ -279,8 +276,7 @@ static ssize_t show_bridge_id(struct class_device *d,
 }
 static BRC_DEVICE_ATTR(bridge_id, S_IRUGO, show_bridge_id, NULL);
 
-static ssize_t show_root_port(struct class_device *d, 
-			      char *buf)
+static ssize_t show_root_port(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	return sprintf(buf, "%d\n", to_bridge(d)->root_port);
@@ -290,8 +286,7 @@ static ssize_t show_root_port(struct class_device *d,
 }
 static BRC_DEVICE_ATTR(root_port, S_IRUGO, show_root_port, NULL);
 
-static ssize_t show_root_path_cost(struct class_device *d,
-				   char *buf)
+static ssize_t show_root_path_cost(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	return sprintf(buf, "%d\n", to_bridge(d)->root_path_cost);
@@ -301,8 +296,7 @@ static ssize_t show_root_path_cost(struct class_device *d,
 }
 static BRC_DEVICE_ATTR(root_path_cost, S_IRUGO, show_root_path_cost, NULL);
 
-static ssize_t show_topology_change(struct class_device *d,
-				    char *buf)
+static ssize_t show_topology_change(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	return sprintf(buf, "%d\n", to_bridge(d)->topology_change);
@@ -312,8 +306,7 @@ static ssize_t show_topology_change(struct class_device *d,
 }
 static BRC_DEVICE_ATTR(topology_change, S_IRUGO, show_topology_change, NULL);
 
-static ssize_t show_topology_change_detected(struct class_device *d,
-					     char *buf)
+static ssize_t show_topology_change_detected(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
@@ -325,8 +318,7 @@ static ssize_t show_topology_change_detected(struct class_device *d,
 static BRC_DEVICE_ATTR(topology_change_detected, S_IRUGO,
 		   show_topology_change_detected, NULL);
 
-static ssize_t show_hello_timer(struct class_device *d,
-				char *buf)
+static ssize_t show_hello_timer(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
@@ -337,8 +329,7 @@ static ssize_t show_hello_timer(struct class_device *d,
 }
 static BRC_DEVICE_ATTR(hello_timer, S_IRUGO, show_hello_timer, NULL);
 
-static ssize_t show_tcn_timer(struct class_device *d, 
-			      char *buf)
+static ssize_t show_tcn_timer(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
@@ -349,8 +340,7 @@ static ssize_t show_tcn_timer(struct class_device *d,
 }
 static BRC_DEVICE_ATTR(tcn_timer, S_IRUGO, show_tcn_timer, NULL);
 
-static ssize_t show_topology_change_timer(struct class_device *d,
-					  char *buf)
+static ssize_t show_topology_change_timer(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
@@ -362,8 +352,7 @@ static ssize_t show_topology_change_timer(struct class_device *d,
 static BRC_DEVICE_ATTR(topology_change_timer, S_IRUGO, show_topology_change_timer,
 		   NULL);
 
-static ssize_t show_gc_timer(struct class_device *d, 
-			     char *buf)
+static ssize_t show_gc_timer(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
@@ -374,8 +363,7 @@ static ssize_t show_gc_timer(struct class_device *d,
 }
 static BRC_DEVICE_ATTR(gc_timer, S_IRUGO, show_gc_timer, NULL);
 
-static ssize_t show_group_addr(struct class_device *d,
-			       char *buf)
+static ssize_t show_group_addr(DEVICE_PARAMS, char *buf)
 {
 #if 0
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
@@ -388,7 +376,7 @@ static ssize_t show_group_addr(struct class_device *d,
 #endif
 }
 
-static ssize_t store_group_addr(struct class_device *d,
+static ssize_t store_group_addr(DEVICE_PARAMS,
 				const char *buf, size_t len)
 {
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
@@ -431,23 +419,23 @@ static BRC_DEVICE_ATTR(group_addr, S_IRUGO | S_IWUSR,
 		   show_group_addr, store_group_addr);
 
 static struct attribute *bridge_attrs[] = {
-	&class_device_attr_forward_delay.attr,
-	&class_device_attr_hello_time.attr,
-	&class_device_attr_max_age.attr,
-	&class_device_attr_ageing_time.attr,
-	&class_device_attr_stp_state.attr,
-	&class_device_attr_priority.attr,
-	&class_device_attr_bridge_id.attr,
-	&class_device_attr_root_id.attr,
-	&class_device_attr_root_path_cost.attr,
-	&class_device_attr_root_port.attr,
-	&class_device_attr_topology_change.attr,
-	&class_device_attr_topology_change_detected.attr,
-	&class_device_attr_hello_timer.attr,
-	&class_device_attr_tcn_timer.attr,
-	&class_device_attr_topology_change_timer.attr,
-	&class_device_attr_gc_timer.attr,
-	&class_device_attr_group_addr.attr,
+	&DEV_ATTR(forward_delay).attr,
+	&DEV_ATTR(hello_time).attr,
+	&DEV_ATTR(max_age).attr,
+	&DEV_ATTR(ageing_time).attr,
+	&DEV_ATTR(stp_state).attr,
+	&DEV_ATTR(priority).attr,
+	&DEV_ATTR(bridge_id).attr,
+	&DEV_ATTR(root_id).attr,
+	&DEV_ATTR(root_path_cost).attr,
+	&DEV_ATTR(root_port).attr,
+	&DEV_ATTR(topology_change).attr,
+	&DEV_ATTR(topology_change_detected).attr,
+	&DEV_ATTR(hello_timer).attr,
+	&DEV_ATTR(tcn_timer).attr,
+	&DEV_ATTR(topology_change_timer).attr,
+	&DEV_ATTR(gc_timer).attr,
+	&DEV_ATTR(group_addr).attr,
 	NULL
 };
 
@@ -468,7 +456,7 @@ static struct attribute_group bridge_group = {
  */
 int brc_sysfs_add_dp(struct datapath *dp)
 {
-	struct kobject *kobj = to_kobj(dp->ports[ODPP_LOCAL]->dev);
+	struct kobject *kobj = &dp->ports[ODPP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj;
 	int err;
 
 	err = sysfs_create_group(kobj, &bridge_group);
@@ -487,12 +475,12 @@ int brc_sysfs_add_dp(struct datapath *dp)
 	err = kobject_register(&dp->ifobj);
 	if (err) {
 		pr_info("%s: can't add kobject (directory) %s/%s\n",
-				__FUNCTION__, dp_name(dp), dp->ifobj.name);
+			__FUNCTION__, dp_name(dp), kobject_name(&dp->ifobj));
 		goto out2;
 	}
 #else
-	br->ifobj = kobject_create_and_add(SYSFS_BRIDGE_PORT_SUBDIR, kobj);
-	if (!br->ifobj) {
+	dp->ifobj = kobject_create_and_add(SYSFS_BRIDGE_PORT_SUBDIR, kobj);
+	if (!dp->ifobj) {
 		pr_info("%s: can't add kobject (directory) %s/%s\n",
 			__func__, dp_name(dp), SYSFS_BRIDGE_PORT_SUBDIR);
 		goto out2;
@@ -508,7 +496,7 @@ int brc_sysfs_add_dp(struct datapath *dp)
 
 int brc_sysfs_del_dp(struct datapath *dp)
 {
-	struct kobject *kobj = to_kobj(dp->ports[ODPP_LOCAL]->dev);
+	struct kobject *kobj = &dp->ports[ODPP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
 	kobject_unregister(&dp->ifobj);
@@ -519,7 +507,7 @@ int brc_sysfs_del_dp(struct datapath *dp)
 
 	return 0;
 }
-#else /* !SUPPORT_SYSFS */
+#else /* !CONFIG_SYSFS */
 int brc_sysfs_add_dp(struct datapath *dp) { return 0; }
 int brc_sysfs_del_dp(struct datapath *dp) { return 0; }
 int brc_sysfs_add_if(struct net_bridge_port *p) { return 0; }
@@ -529,4 +517,4 @@ int brc_sysfs_del_if(struct net_bridge_port *p)
 	kfree(p);
 	return 0;
 }
-#endif /* !SUPPORT_SYSFS */
+#endif /* !CONFIG_SYSFS */

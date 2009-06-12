@@ -5,8 +5,19 @@
 
 struct net;
 
+/* Before 2.6.21, struct net_device has a "struct class_device" member named
+ * class_dev.  Beginning with 2.6.21, struct net_device instead has a "struct
+ * device" member named dev.  Otherwise the usage of these members is pretty
+ * much the same. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
+#define NETDEV_DEV_MEMBER class_dev
+#else
+#define NETDEV_DEV_MEMBER dev
+#endif
+
 #ifndef to_net_dev
-#define to_net_dev(class) container_of(class, struct net_device, class_dev)
+#define to_net_dev(class) \
+	container_of(class, struct net_device, NETDEV_DEV_MEMBER)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
