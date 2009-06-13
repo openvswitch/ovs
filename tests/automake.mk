@@ -64,3 +64,9 @@ stp_files = \
 TESTS_ENVIRONMENT += stp_files='$(stp_files)'
 
 EXTRA_DIST += $(stp_files)
+
+TESTS += tests/test-vconn
+noinst_PROGRAMS += tests/test-vconn
+tests_test_vconn_SOURCES = tests/test-vconn.c
+tests_test_vconn_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
+
