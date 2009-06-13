@@ -270,23 +270,7 @@ new_pstream_pvconn(const char *name, int fd,
                                    size_t sa_len, struct vconn **),
                   struct pvconn **pvconnp)
 {
-    struct pstream_pvconn *ps;
-    int retval;
-
-    retval = set_nonblocking(fd);
-    if (retval) {
-        close(fd);
-        return retval;
-    }
-
-    if (listen(fd, 10) < 0) {
-        int error = errno;
-        VLOG_ERR("%s: listen: %s", name, strerror(error));
-        close(fd);
-        return error;
-    }
-
-    ps = xmalloc(sizeof *ps);
+    struct pstream_pvconn *ps = xmalloc(sizeof *ps);
     pvconn_init(&ps->pvconn, &pstream_pvconn_class, name);
     ps->fd = fd;
     ps->accept_cb = accept_cb;

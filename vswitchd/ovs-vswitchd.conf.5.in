@@ -618,8 +618,11 @@ Listens for connections on the Unix domain server socket named \fIfile\fR.
 Listens for SSL connections on \fIport\fR (default: 6633).  SSL must
 be configured when this form is used (see \fBSSL Configuration\fR,
 above).
-.IP "\fBptcp:\fR[\fIport\fR]"
+.IP "\fBptcp:\fR[\fIport\fR][\fB:\fIip\fR]"
 Listens for TCP connections on \fIport\fR (default: 6633).
+By default, \fB\ovs\-vswitchd\fR listens for connections to any local
+IP address, but \fIip\fR may be specified to limit connections to the
+specified local \fIip\fR.
 .RE
 To entirely disable listening for management connections, set
 \fBbridge.\fIname\fB.openflow.listeners\fR to the single value

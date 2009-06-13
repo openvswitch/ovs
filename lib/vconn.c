@@ -139,12 +139,12 @@ vconn_usage(bool active, bool passive, bool bootstrap UNUSED)
 
     if (passive) {
         printf("Passive OpenFlow connection methods:\n");
-        printf("  ptcp:[PORT]             "
-               "listen to TCP PORT (default: %d)\n",
+        printf("  ptcp:[PORT][:IP]        "
+               "listen to TCP PORT (default: %d) on IP\n",
                OFP_TCP_PORT);
 #ifdef HAVE_OPENSSL
-        printf("  pssl:[PORT]             "
-               "listen for SSL on PORT (default: %d)\n",
+        printf("  pssl:[PORT][:IP]        "
+               "listen for SSL on PORT (default: %d) on IP\n",
                OFP_SSL_PORT);
 #endif
         printf("  punix:FILE              "
