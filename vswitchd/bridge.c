@@ -1758,10 +1758,17 @@ process_flow(struct bridge *br, const flow_t *flow,
              * an exception to this rule: the host has moved to another
              * switch. */
             int src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
-            if (src_idx != -1
-                && src_idx != in_port->port_idx
-                && !is_bcast_arp_reply(flow, packet)) {
-                goto done;
+            if (src_idx != -1 && src_idx != in_port->port_idx) {
+                if (packet) {
+                    if (!is_bcast_arp_reply(flow, packet)) {
+                        goto done;
+                    }
+                } else {
+                    /* No way to know whether it's an ARP reply, because the
+                     * flow entry doesn't include enough information and we
+                     * don't have a packet.  Punt. */
+                    return false;
+                }
             }
         }
     }
