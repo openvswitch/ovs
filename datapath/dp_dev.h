@@ -1,3 +1,11 @@
+/*
+ * Copyright (c) 2009 Nicira Networks.
+ * Distributed under the terms of the GNU GPL version 2.
+ *
+ * Significant portions of this file may be copied from parts of the Linux
+ * kernel, by Linus Torvalds and others.
+ */
+
 #ifndef DP_DEV_H
 #define DP_DEV_H 1
 
