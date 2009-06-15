@@ -84,7 +84,7 @@ rm -rf \
     $RPM_BUILD_ROOT/root/vswitch/bin/ovs-switchui \
     $RPM_BUILD_ROOT/root/vswitch/bin/ovs-wdt \
     $RPM_BUILD_ROOT/root/vswitch/bin/secchan \
-    $RPM_BUILD_ROOT/root/vswitch/kernel_modudules/veth_mod.ko \
+    $RPM_BUILD_ROOT/root/vswitch/kernel_modules/veth_mod.ko \
     $RPM_BUILD_ROOT/root/vswitch/sbin/ovs-monitor \
     $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-controller.8 \
     $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-discover.8 \
