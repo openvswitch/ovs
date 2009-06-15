@@ -112,7 +112,8 @@ discovery_create(const char *re, bool update_resolv_conf,
     d->update_resolv_conf = update_resolv_conf;
 
     /* Initialize DHCP client. */
-    error = dpif_get_name(dpif, local_name, sizeof local_name);
+    error = dpif_port_get_name(dpif, ODPP_LOCAL,
+                               local_name, sizeof local_name);
     if (error) {
         VLOG_ERR("failed to query datapath local port: %s", strerror(error));
         goto error_regfree;

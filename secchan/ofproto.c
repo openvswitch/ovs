@@ -3233,7 +3233,8 @@ pick_datapath_id(struct dpif *dpif, uint64_t fallback_dpid)
     uint8_t ea[ETH_ADDR_LEN];
     int error;
 
-    error = dpif_get_name(dpif, local_name, sizeof local_name);
+    error = dpif_port_get_name(dpif, ODPP_LOCAL,
+                               local_name, sizeof local_name);
     if (!error) {
         error = netdev_nodev_get_etheraddr(local_name, ea);
         if (!error) {

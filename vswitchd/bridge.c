@@ -288,7 +288,8 @@ bridge_init(void)
         retval = dpif_open(devname, &dpif);
         if (!retval) {
             char dpif_name[IF_NAMESIZE];
-            if (dpif_get_name(&dpif, dpif_name, sizeof dpif_name)
+            if (dpif_port_get_name(&dpif, ODPP_LOCAL,
+                                   dpif_name, sizeof dpif_name)
                 || !cfg_has("bridge.%s.port", dpif_name)) {
                 dpif_delete(&dpif);
             }

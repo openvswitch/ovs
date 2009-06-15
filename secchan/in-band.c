@@ -321,7 +321,8 @@ in_band_create(struct ofproto *ofproto,
     int error;
 
     *in_bandp = NULL;
-    error = dpif_get_name(dpif, local_name, sizeof local_name);
+    error = dpif_port_get_name(dpif, ODPP_LOCAL,
+                               local_name, sizeof local_name);
     if (error) {
         return error;
     }

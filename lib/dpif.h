@@ -40,7 +40,6 @@ int dpif_create(const char *name, struct dpif *);
 void dpif_close(struct dpif *);
 
 static inline unsigned int dpif_id(const struct dpif *dpif);
-int dpif_get_name(struct dpif *, char *name, size_t name_size);
 
 int dpif_delete(struct dpif *);
 
@@ -59,6 +58,8 @@ int dpif_port_query_by_number(const struct dpif *, uint16_t port_no,
                               struct odp_port *);
 int dpif_port_query_by_name(const struct dpif *, const char *devname,
                             struct odp_port *);
+int dpif_port_get_name(struct dpif *, uint16_t port_no,
+                       char *name, size_t name_size);
 int dpif_port_list(const struct dpif *, struct odp_port **, size_t *n_ports);
 
 int dpif_port_group_set(struct dpif *, uint16_t group,

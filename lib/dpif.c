@@ -169,22 +169,6 @@ dpif_create(const char *name, struct dpif *dpif)
 }
 
 int
-dpif_get_name(struct dpif *dpif, char *name, size_t name_size)
-{
-    struct odp_port port;
-    int error;
-
-    assert(name_size > 0);
-    *name = '\0';
-
-    error = dpif_port_query_by_number(dpif, ODPP_LOCAL, &port);
-    if (!error) {
-        ovs_strlcpy(name, port.devname, name_size);
-    }
-    return error;
-}
-
-int
 dpif_delete(struct dpif *dpif)
 {
     COVERAGE_INC(dpif_destroy);
@@ -320,6 +304,24 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
                      dpif->minor, devname, strerror(errno));
         return errno;
     }
+}
+
+int
+dpif_port_get_name(struct dpif *dpif, uint16_t port_no,
+                   char *name, size_t name_size)
+{
+    struct odp_port port;
+    int error;
+
+    assert(name_size > 0);
+
+    error = dpif_port_query_by_number(dpif, port_no, &port);
+    if (!error) {
+        ovs_strlcpy(name, port.devname, name_size);
+    } else {
+        *name = '\0';
+    }
+    return error;
 }
 
 int
@@ -698,7 +700,8 @@ dpifmon_create(const char *datapath_name, struct dpifmon **monp)
     if (error) {
         goto error;
     }
-    error = dpif_get_name(&mon->dpif, local_name, sizeof local_name);
+    error = dpif_port_get_name(&mon->dpif, ODPP_LOCAL,
+                               local_name, sizeof local_name);
     if (error) {
         goto error_close_dpif;
     }
