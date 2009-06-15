@@ -1,4 +1,12 @@
 /*
+ * Copyright (c) 2009 Nicira Networks.
+ * Distributed under the terms of the GNU GPL version 2.
+ *
+ * Significant portions of this file may be copied from parts of the Linux
+ * kernel, by Linus Torvalds and others.
+ */
+
+/*
  *	Sysfs attributes of bridge ports for Open vSwitch
  *
  *  This has been shamelessly copied from the kernel sources.

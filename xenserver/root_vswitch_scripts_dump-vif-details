@@ -33,7 +33,7 @@ def dump_vif_info(domid, devid, vif_ref):
 		vm_rec = session.xenapi.VM.get_record(vif_rec["VM"])
 
 		# Data to allow vNetManager to associate VIFs with xapi data
-		sys.stdout.write('--add=port.vif%s.%s.network-uuid=%s ' 
+		sys.stdout.write('--add=port.vif%s.%s.net-uuid=%s ' 
 				% (domid, devid, net_rec["uuid"]))
 		sys.stdout.write('--add=port.vif%s.%s.vif-mac=%s ' 
 				% (domid, devid, vif_rec["MAC"]))

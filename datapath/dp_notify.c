@@ -1,6 +1,9 @@
 /*
  * Distributed under the terms of the GNU GPL version 2.
  * Copyright (c) 2007, 2008, 2009 Nicira Networks.
+ *
+ * Significant portions of this file may be copied from parts of the Linux
+ * kernel, by Linus Torvalds and others.
  */
 
 /* Handle changes to managed devices */

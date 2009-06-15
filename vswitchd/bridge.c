@@ -1,28 +1,16 @@
 /* Copyright (c) 2008, 2009 Nicira Networks
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- * In addition, as a special exception, Nicira Networks gives permission
- * to link the code of its release of vswitchd with the OpenSSL project's
- * "OpenSSL" library (or with modified versions of it that use the same
- * license as the "OpenSSL" library), and distribute the linked
- * executables.  You must obey the GNU General Public License in all
- * respects for all of the code used other than "OpenSSL".  If you modify
- * this file, you may extend this exception to your version of the file,
- * but you are not obligated to do so.  If you do not wish to do so,
- * delete this exception statement from your version.
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <config.h>
@@ -732,10 +720,10 @@ bridge_pick_datapath_id(struct bridge *br,
 static uint64_t
 dpid_from_hash(const void *data, size_t n)
 {
-    uint8_t hash[SHA1HashSize];
+    uint8_t hash[SHA1_DIGEST_SIZE];
 
     BUILD_ASSERT_DECL(sizeof hash >= ETH_ADDR_LEN);
-    SHA1Bytes(data, n, hash);
+    sha1_bytes(data, n, hash);
     eth_addr_mark_random(hash);
     return eth_addr_to_uint64(hash);
 }
@@ -1758,10 +1746,17 @@ process_flow(struct bridge *br, const flow_t *flow,
              * an exception to this rule: the host has moved to another
              * switch. */
             int src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
-            if (src_idx != -1
-                && src_idx != in_port->port_idx
-                && !is_bcast_arp_reply(flow, packet)) {
-                goto done;
+            if (src_idx != -1 && src_idx != in_port->port_idx) {
+                if (packet) {
+                    if (!is_bcast_arp_reply(flow, packet)) {
+                        goto done;
+                    }
+                } else {
+                    /* No way to know whether it's an ARP reply, because the
+                     * flow entry doesn't include enough information and we
+                     * don't have a packet.  Punt. */
+                    return false;
+                }
             }
         }
     }

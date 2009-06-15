@@ -1,17 +1,17 @@
 /*
  * Copyright (c) 2009 Nicira Networks.
  *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <config.h>
@@ -94,25 +94,24 @@ static const struct test_vector vectors[] = {
 static void
 test_one(const struct test_vector *vec)
 {
-    uint8_t md[SHA1HashSize];
+    uint8_t md[SHA1_DIGEST_SIZE];
     int i;
 
     /* All at once. */
-    SHA1Bytes(vec->data, vec->size, md);
-    assert(!memcmp(md, vec->output, SHA1HashSize));
+    sha1_bytes(vec->data, vec->size, md);
+    assert(!memcmp(md, vec->output, SHA1_DIGEST_SIZE));
 
     /* In two pieces. */
     for (i = 0; i < 20; i++) {
         int n0 = vec->size ? random_range(vec->size) : 0;
         int n1 = vec->size - n0;
-        SHA1Context sha1;
+        struct sha1_ctx sha1;
 
-        assert(SHA1Reset(&sha1) == shaSuccess);
-        assert(SHA1Input(&sha1, (const void *) vec->data, n0) == shaSuccess);
-        assert(SHA1Input(&sha1, (const void *) (vec->data + n0), n1)
-               == shaSuccess);
-        assert(SHA1Result(&sha1, md) == shaSuccess);
-        assert(!memcmp(md, vec->output, SHA1HashSize));
+        sha1_init(&sha1);
+        sha1_update(&sha1, (const void *) vec->data, n0);
+        sha1_update(&sha1, (const void *) (vec->data + n0), n1);
+        sha1_final(&sha1, md);
+        assert(!memcmp(md, vec->output, SHA1_DIGEST_SIZE));
     }
 
     putchar('.');
@@ -145,6 +144,8 @@ main(void)
     }
 
     test_big_vector();
+
+    putchar('\n');
 
     return 0;
 }
