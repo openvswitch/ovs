@@ -143,22 +143,15 @@ cfg_set_file(const char *file_name)
 static int
 update_cookie(void)
 {
+    struct sha1_ctx context;
     int i;
-    SHA1Context context;
 
-    if (SHA1Reset(&context) != shaSuccess) {
-        return -1;
-    }
+    sha1_init(&context);
     for (i = 0; i < cfg.n; i++) {
-        if (SHA1Input(&context, (uint8_t *)cfg.names[i], 
-                    strlen(cfg.names[i])) != shaSuccess) {
-            return -1;
-        }
-        SHA1Input(&context, (uint8_t *)"\n", 1);
+        sha1_update(&context, cfg.names[i], strlen(cfg.names[i]));
+        sha1_update(&context, "\n", 1);
     }
-    if (SHA1Result(&context, cfg_cookie) != shaSuccess) {
-        return -1;
-    }
+    sha1_final(&context, cfg_cookie);
 
     return 0;
 }

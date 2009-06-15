@@ -94,25 +94,24 @@ static const struct test_vector vectors[] = {
 static void
 test_one(const struct test_vector *vec)
 {
-    uint8_t md[SHA1HashSize];
+    uint8_t md[SHA1_DIGEST_SIZE];
     int i;
 
     /* All at once. */
-    SHA1Bytes(vec->data, vec->size, md);
-    assert(!memcmp(md, vec->output, SHA1HashSize));
+    sha1_bytes(vec->data, vec->size, md);
+    assert(!memcmp(md, vec->output, SHA1_DIGEST_SIZE));
 
     /* In two pieces. */
     for (i = 0; i < 20; i++) {
         int n0 = vec->size ? random_range(vec->size) : 0;
         int n1 = vec->size - n0;
-        SHA1Context sha1;
+        struct sha1_ctx sha1;
 
-        assert(SHA1Reset(&sha1) == shaSuccess);
-        assert(SHA1Input(&sha1, (const void *) vec->data, n0) == shaSuccess);
-        assert(SHA1Input(&sha1, (const void *) (vec->data + n0), n1)
-               == shaSuccess);
-        assert(SHA1Result(&sha1, md) == shaSuccess);
-        assert(!memcmp(md, vec->output, SHA1HashSize));
+        sha1_init(&sha1);
+        sha1_update(&sha1, (const void *) vec->data, n0);
+        sha1_update(&sha1, (const void *) (vec->data + n0), n1);
+        sha1_final(&sha1, md);
+        assert(!memcmp(md, vec->output, SHA1_DIGEST_SIZE));
     }
 
     putchar('.');
@@ -145,6 +144,8 @@ main(void)
     }
 
     test_big_vector();
+
+    putchar('\n');
 
     return 0;
 }

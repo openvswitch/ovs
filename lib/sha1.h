@@ -1,74 +1,51 @@
 /*
- *  sha1.h
- *
- *  Description:
- *      This is the header file for code which implements the Secure
- *      Hashing Algorithm 1 as defined in FIPS PUB 180-1 published
- *      April 17, 1995.
- *
- *      Many of the variable names in this code, especially the
- *      single character names, were used because those were the names
- *      used in the publication.
- *
- *      Please read the file sha1.c for more information.
- *
+ * This file is from the Apache Portable Runtime Library.
+ * The full upstream copyright and license statement is included below.
+ * Modifications copyright (c) 2009 Nicira Networks.
  */
-#ifndef _SHA1_H_
-#define _SHA1_H_
 
+/* Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+/* NIST Secure Hash Algorithm
+ * 	heavily modified by Uwe Hollerbach uh@alumni.caltech edu
+ * 	from Peter C. Gutmann's implementation as found in
+ * 	Applied Cryptography by Bruce Schneier
+ * 	This code is hereby placed in the public domain
+ */
+
+#ifndef SHA1_H
+#define SHA1_H
+
+#include <stddef.h>
 #include <stdint.h>
-/*
- * If you do not have the ISO standard stdint.h header file, then you
- * must typdef the following:
- *    name              meaning
- *  uint32_t         unsigned 32 bit integer
- *  uint8_t          unsigned 8 bit integer (i.e., unsigned char)
- *  int_least16_t    integer of >= 16 bits
- *
- */
 
-#ifndef _SHA_enum_
-#define _SHA_enum_
-enum
-{
-    shaSuccess = 0,
-    shaNull,            /* Null pointer parameter */
-    shaInputTooLong,    /* input data too long */
-    shaStateError       /* called Input after Result */
+/* Size of the SHA1 digest. */
+#define SHA1_DIGEST_SIZE 20
+
+/* SHA1 context structure. */
+struct sha1_ctx {
+    uint32_t digest[5];          /* Message digest. */
+    uint32_t count_lo, count_hi; /* 64-bit bit counts. */
+    uint32_t data[16];           /* SHA data buffer */
+    int local;                   /* Unprocessed amount in data. */
 };
-#endif
-#define SHA1HashSize 20
 
-/*
- *  This structure will hold context information for the SHA-1
- *  hashing operation
- */
-typedef struct SHA1Context
-{
-    uint32_t Intermediate_Hash[SHA1HashSize/4]; /* Message Digest  */
+void sha1_init(struct sha1_ctx *);
+void sha1_update(struct sha1_ctx *, const void *, size_t);
+void sha1_final(struct sha1_ctx *, uint8_t digest[SHA1_DIGEST_SIZE]);
+void sha1_bytes(const void *, size_t, uint8_t digest[SHA1_DIGEST_SIZE]);
 
-    uint32_t Length_Low;            /* Message length in bits      */
-    uint32_t Length_High;           /* Message length in bits      */
-
-                               /* Index into message block array   */
-    int_least16_t Message_Block_Index;
-    uint8_t Message_Block[64];      /* 512-bit message blocks      */
-
-    int Computed;               /* Is the digest computed?         */
-    int Corrupted;             /* Is the message digest corrupted? */
-} SHA1Context;
-
-/*
- *  Function Prototypes
- */
-int SHA1Reset(  SHA1Context *);
-int SHA1Input(  SHA1Context *,
-                const uint8_t *,
-                unsigned int);
-int SHA1Result( SHA1Context *,
-                uint8_t Message_Digest[SHA1HashSize]);
-
-void SHA1Bytes(const void *data, unsigned int n,
-               uint8_t Message_Digest[SHA1HashSize]);
-
-#endif
+#endif  /* sha1.h */

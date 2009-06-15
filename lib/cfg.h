@@ -36,7 +36,7 @@ bool cfg_is_dirty(void);
 
 void cfg_get_all(struct svec *);
 
-#define CFG_COOKIE_LEN SHA1HashSize
+#define CFG_COOKIE_LEN SHA1_DIGEST_SIZE
 int cfg_get_cookie(uint8_t *cookie);
 
 void cfg_buf_put(struct ofpbuf *buffer);

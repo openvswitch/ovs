@@ -720,10 +720,10 @@ bridge_pick_datapath_id(struct bridge *br,
 static uint64_t
 dpid_from_hash(const void *data, size_t n)
 {
-    uint8_t hash[SHA1HashSize];
+    uint8_t hash[SHA1_DIGEST_SIZE];
 
     BUILD_ASSERT_DECL(sizeof hash >= ETH_ADDR_LEN);
-    SHA1Bytes(data, n, hash);
+    sha1_bytes(data, n, hash);
     eth_addr_mark_random(hash);
     return eth_addr_to_uint64(hash);
 }
