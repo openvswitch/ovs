@@ -89,6 +89,8 @@ dpif_id(const struct dpif *dpif)
 {
     return dpif->minor;
 }
+void dpif_get_netflow_ids(const struct dpif *,
+                          uint8_t *engine_type, uint8_t *engine_id);
 
 struct dpifmon;
 

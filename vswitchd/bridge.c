@@ -481,8 +481,7 @@ bridge_reconfigure(void)
         uint64_t dpid;
         struct iface *local_iface = NULL;
         const char *devname;
-        uint8_t engine_type = br->dpif.minor;
-        uint8_t engine_id = br->dpif.minor;
+        uint8_t engine_type, engine_id;
         bool add_id_to_iface = false;
         struct svec nf_hosts;
 
@@ -529,6 +528,7 @@ bridge_reconfigure(void)
         ofproto_set_datapath_id(br->ofproto, dpid);
 
         /* Set NetFlow configuration on this bridge. */
+        dpif_get_netflow_ids(&br->dpif, &engine_type, &engine_id);
         if (cfg_has("netflow.%s.engine-type", br->name)) {
             engine_type = cfg_get_int(0, "netflow.%s.engine-type", 
                     br->name);

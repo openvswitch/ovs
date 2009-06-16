@@ -680,6 +680,13 @@ dpif_recv_wait(struct dpif *dpif)
 {
     poll_fd_wait(dpif->fd, POLLIN);
 }
+
+void
+dpif_get_netflow_ids(const struct dpif *dpif,
+                     uint8_t *engine_type, uint8_t *engine_id)
+{
+    *engine_type = *engine_id = dpif->minor;
+}
 
 struct dpifmon {
     struct dpif dpif;
