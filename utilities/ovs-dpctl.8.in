@@ -41,14 +41,13 @@ The following commands manage datapaths.
 
 Creates datapath \fIdp\fR.  The name of the new datapath's local port
 depends on how \fIdp\fR is specified: if it takes the form
-\fBdp\fIN\fR, the local port will be named \fBdp\fIN\fR; if \fIdp\fR
-is \fBnl:\fI, the local port will be named \fBof\fIN\fR; otherwise,
+\fBdp\fIN\fR, the local port will be named \fBdp\fIN\fR; otherwise,
 the local port's name will be \fIdp\fR.
 
 This will fail if the host already has 256 datapaths, if a network
 device with the same name as the new datapath's local port already
-exists, or if \fIdp\fR is given in the form \fBdp\fIN\fR or
-\fBnl:\fIN\fR and a datapath numbered \fIN\fR already exists.
+exists, or if \fIdp\fR is given in the form \fBdp\fIN\fR
+and a datapath numbered \fIN\fR already exists.
 
 If \fInetdev\fRs are specified, \fBovs\-dpctl\fR adds them to the datapath.
 

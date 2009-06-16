@@ -151,13 +151,7 @@ dpif_create(const char *name, struct dpif **dpifp)
             return error;
         }
 
-        if (!strncmp(name, "nl:", 3)) {
-            char devname[128];
-            sprintf(devname, "of%u", minor);
-            error = ioctl(dpif->fd, ODP_DP_CREATE, devname) < 0 ? errno : 0;
-        } else {
-            error = ioctl(dpif->fd, ODP_DP_CREATE, name) < 0 ? errno : 0;
-        }
+        error = ioctl(dpif->fd, ODP_DP_CREATE, name) < 0 ? errno : 0;
         if (!error) {
             *dpifp = dpif;
         } else {
@@ -1031,10 +1025,6 @@ get_minor_from_name(const char *name, unsigned int *minor)
 {
     if (!strncmp(name, "dp", 2) && isdigit(name[2])) {
         *minor = atoi(name + 2);
-        return 0;
-    } else if (!strncmp(name, "nl:", 3) && isdigit(name[3])) {
-        /* This is for compatibility only and will be dropped. */
-        *minor = atoi(name + 3);
         return 0;
     } else {
         return EINVAL;

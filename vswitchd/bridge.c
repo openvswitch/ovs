@@ -369,10 +369,9 @@ bridge_reconfigure(void)
     svec_init(&new_br);
     for (i = 0; i < raw_new_br.n; i++) {
         const char *name = raw_new_br.names[i];
-        if ((!strncmp(name, "dp", 2) && isdigit(name[2])) ||
-            (!strncmp(name, "nl:", 3) && isdigit(name[3]))) {
+        if (!strncmp(name, "dp", 2) && isdigit(name[2])) {
             VLOG_ERR("%s is not a valid bridge name (bridges may not be "
-                     "named \"dp\" or \"nl:\" followed by a digit)", name);
+                     "named \"dp\" followed by a digit)", name);
         } else {
             svec_add(&new_br, name);
         }
