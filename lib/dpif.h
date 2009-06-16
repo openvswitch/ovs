@@ -27,17 +27,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+struct dpif;
 struct ofpbuf;
 
-/* A datapath interface.  Opaque. */
-struct dpif {
-    char *name;
-    unsigned int minor;
-    int fd;
-};
-
-int dpif_open(const char *name, struct dpif *);
-int dpif_create(const char *name, struct dpif *);
+int dpif_open(const char *name, struct dpif **);
+int dpif_create(const char *name, struct dpif **);
 void dpif_close(struct dpif *);
 
 const char *dpif_name(const struct dpif *);

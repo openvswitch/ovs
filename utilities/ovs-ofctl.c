@@ -251,7 +251,7 @@ static void run(int retval, const char *message, ...)
 static void
 open_vconn(const char *name, struct vconn **vconnp)
 {
-    struct dpif dpif;
+    struct dpif *dpif;
     struct stat s;
 
     if (strstr(name, ":")) {
@@ -268,9 +268,9 @@ open_vconn(const char *name, struct vconn **vconnp)
         char *socket_name;
         char *vconn_name;
 
-        run(dpif_port_get_name(&dpif, ODPP_LOCAL, dpif_name, sizeof dpif_name),
+        run(dpif_port_get_name(dpif, ODPP_LOCAL, dpif_name, sizeof dpif_name),
             "obtaining name of %s", dpif_name);
-        dpif_close(&dpif);
+        dpif_close(dpif);
         if (strcmp(dpif_name, name)) {
             VLOG_INFO("datapath %s is named %s", name, dpif_name);
         }

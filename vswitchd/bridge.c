@@ -158,7 +158,7 @@ struct bridge {
     struct ofproto *ofproto;    /* OpenFlow switch. */
 
     /* Kernel datapath information. */
-    struct dpif dpif;           /* Kernel datapath. */
+    struct dpif *dpif;          /* Datapath. */
     struct port_array ifaces;   /* Indexed by kernel datapath port number. */
 
     /* Bridge ports. */
@@ -260,7 +260,7 @@ bridge_get_ifaces(struct svec *svec)
                 struct iface *iface = port->ifaces[j];
                 if (iface->dp_ifidx < 0) {
                     VLOG_ERR("%s interface not in datapath %s, ignoring",
-                             iface->name, dpif_name(&br->dpif));
+                             iface->name, dpif_name(br->dpif));
                 } else {
                     if (iface->dp_ifidx != ODPP_LOCAL) {
                         svec_add(svec, iface->name);
@@ -281,19 +281,19 @@ bridge_init(void)
     bond_init();
 
     for (i = 0; i < DP_MAX; i++) {
-        struct dpif dpif;
+        struct dpif *dpif;
         char devname[16];
 
         sprintf(devname, "dp%d", i);
         retval = dpif_open(devname, &dpif);
         if (!retval) {
             char dpif_name[IF_NAMESIZE];
-            if (dpif_port_get_name(&dpif, ODPP_LOCAL,
+            if (dpif_port_get_name(dpif, ODPP_LOCAL,
                                    dpif_name, sizeof dpif_name)
                 || !cfg_has("bridge.%s.port", dpif_name)) {
-                dpif_delete(&dpif);
+                dpif_delete(dpif);
             }
-            dpif_close(&dpif);
+            dpif_close(dpif);
         } else if (retval != ENODEV) {
             VLOG_ERR("failed to delete datapath dp%d: %s",
                      i, strerror(retval));
@@ -418,16 +418,16 @@ bridge_reconfigure(void)
         size_t n_dpif_ports;
         struct svec want_ifaces;
 
-        dpif_port_list(&br->dpif, &dpif_ports, &n_dpif_ports);
+        dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
         bridge_get_all_ifaces(br, &want_ifaces);
         for (i = 0; i < n_dpif_ports; i++) {
             const struct odp_port *p = &dpif_ports[i];
             if (!svec_contains(&want_ifaces, p->devname)
                 && strcmp(p->devname, br->name)) {
-                int retval = dpif_port_del(&br->dpif, p->port);
+                int retval = dpif_port_del(br->dpif, p->port);
                 if (retval) {
                     VLOG_ERR("failed to remove %s interface from %s: %s",
-                             p->devname, dpif_name(&br->dpif),
+                             p->devname, dpif_name(br->dpif),
                              strerror(retval));
                 }
             }
@@ -441,7 +441,7 @@ bridge_reconfigure(void)
         struct svec cur_ifaces, want_ifaces, add_ifaces;
         int next_port_no;
 
-        dpif_port_list(&br->dpif, &dpif_ports, &n_dpif_ports);
+        dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
         svec_init(&cur_ifaces);
         for (i = 0; i < n_dpif_ports; i++) {
             svec_add(&cur_ifaces, dpif_ports[i].devname);
@@ -456,17 +456,17 @@ bridge_reconfigure(void)
             const char *if_name = add_ifaces.names[i];
             for (;;) {
                 int internal = cfg_get_bool(0, "iface.%s.internal", if_name);
-                int error = dpif_port_add(&br->dpif, if_name, next_port_no++,
+                int error = dpif_port_add(br->dpif, if_name, next_port_no++,
                                           internal ? ODP_PORT_INTERNAL : 0);
                 if (error != EEXIST) {
                     if (next_port_no >= 256) {
                         VLOG_ERR("ran out of valid port numbers on %s",
-                                 dpif_name(&br->dpif));
+                                 dpif_name(br->dpif));
                         goto out;
                     }
                     if (error) {
                         VLOG_ERR("failed to add %s interface to %s: %s",
-                                 if_name, dpif_name(&br->dpif),
+                                 if_name, dpif_name(br->dpif),
                                  strerror(error));
                     }
                     break;
@@ -495,14 +495,14 @@ bridge_reconfigure(void)
                 struct iface *iface = port->ifaces[j];
                 if (iface->dp_ifidx < 0) {
                     VLOG_ERR("%s interface not in %s, dropping",
-                             iface->name, dpif_name(&br->dpif));
+                             iface->name, dpif_name(br->dpif));
                     iface_destroy(iface);
                 } else {
                     if (iface->dp_ifidx == ODPP_LOCAL) {
                         local_iface = iface;
                     }
                     VLOG_DBG("%s has interface %s on port %d",
-                             dpif_name(&br->dpif),
+                             dpif_name(br->dpif),
                              iface->name, iface->dp_ifidx);
                     j++;
                 }
@@ -531,7 +531,7 @@ bridge_reconfigure(void)
         ofproto_set_datapath_id(br->ofproto, dpid);
 
         /* Set NetFlow configuration on this bridge. */
-        dpif_get_netflow_ids(&br->dpif, &engine_type, &engine_id);
+        dpif_get_netflow_ids(br->dpif, &engine_type, &engine_id);
         if (cfg_has("netflow.%s.engine-type", br->name)) {
             engine_type = cfg_get_int(0, "netflow.%s.engine-type", 
                     br->name);
@@ -812,7 +812,7 @@ bridge_create(const char *name)
             free(br);
             return NULL;
         }
-        dpif_flow_flush(&br->dpif);
+        dpif_flow_flush(br->dpif);
     } else if (error) {
         VLOG_ERR("failed to create datapath %s: %s", name, strerror(error));
         free(br);
@@ -822,8 +822,8 @@ bridge_create(const char *name)
     error = ofproto_create(name, &bridge_ofhooks, br, &br->ofproto);
     if (error) {
         VLOG_ERR("failed to create switch %s: %s", name, strerror(error));
-        dpif_delete(&br->dpif);
-        dpif_close(&br->dpif);
+        dpif_delete(br->dpif);
+        dpif_close(br->dpif);
         free(br);
         return NULL;
     }
@@ -840,7 +840,7 @@ bridge_create(const char *name)
 
     list_push_back(&all_bridges, &br->node);
 
-    VLOG_INFO("created bridge %s on %s", br->name, dpif_name(&br->dpif));
+    VLOG_INFO("created bridge %s on %s", br->name, dpif_name(br->dpif));
 
     return br;
 }
@@ -855,12 +855,12 @@ bridge_destroy(struct bridge *br)
             port_destroy(br->ports[br->n_ports - 1]);
         }
         list_remove(&br->node);
-        error = dpif_delete(&br->dpif);
+        error = dpif_delete(br->dpif);
         if (error && error != ENOENT) {
             VLOG_ERR("failed to delete %s: %s",
-                     dpif_name(&br->dpif), strerror(error));
+                     dpif_name(br->dpif), strerror(error));
         }
-        dpif_close(&br->dpif);
+        dpif_close(br->dpif);
         ofproto_destroy(br->ofproto);
         free(br->controller);
         mac_learning_destroy(br->ml);
@@ -1248,17 +1248,17 @@ bridge_fetch_dp_ifaces(struct bridge *br)
     }
     port_array_clear(&br->ifaces);
 
-    dpif_port_list(&br->dpif, &dpif_ports, &n_dpif_ports);
+    dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
     for (i = 0; i < n_dpif_ports; i++) {
         struct odp_port *p = &dpif_ports[i];
         struct iface *iface = iface_lookup(br, p->devname);
         if (iface) {
             if (iface->dp_ifidx >= 0) {
                 VLOG_WARN("%s reported interface %s twice",
-                          dpif_name(&br->dpif), p->devname);
+                          dpif_name(br->dpif), p->devname);
             } else if (iface_from_dp_ifidx(br, p->port)) {
                 VLOG_WARN("%s reported interface %"PRIu16" twice",
-                          dpif_name(&br->dpif), p->port);
+                          dpif_name(br->dpif), p->port);
             } else {
                 port_array_set(&br->ifaces, p->port, iface);
                 iface->dp_ifidx = p->port;

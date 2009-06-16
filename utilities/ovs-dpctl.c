@@ -211,9 +211,9 @@ static int if_up(const char *netdev_name)
 static void
 do_add_dp(int argc UNUSED, char *argv[])
 {
-    struct dpif dpif;
+    struct dpif *dpif;
     run(dpif_create(argv[1], &dpif), "add_dp");
-    dpif_close(&dpif);
+    dpif_close(dpif);
     if (argc > 2) {
         do_add_if(argc, argv);
     }
@@ -222,10 +222,10 @@ do_add_dp(int argc UNUSED, char *argv[])
 static void
 do_del_dp(int argc UNUSED, char *argv[])
 {
-    struct dpif dpif;
+    struct dpif *dpif;
     run(dpif_open(argv[1], &dpif), "opening datapath");
-    run(dpif_delete(&dpif), "del_dp");
-    dpif_close(&dpif);
+    run(dpif_delete(dpif), "del_dp");
+    dpif_close(dpif);
 }
 
 static int
@@ -270,7 +270,7 @@ static void
 do_add_if(int argc UNUSED, char *argv[])
 {
     bool failure = false;
-    struct dpif dpif;
+    struct dpif *dpif;
     int i;
 
     run(dpif_open(argv[1], &dpif), "opening datapath");
@@ -320,10 +320,10 @@ do_add_if(int argc UNUSED, char *argv[])
             }
         }
         if (port < 0) {
-            port = get_free_port(&dpif);
+            port = get_free_port(dpif);
         }
 
-        error = dpif_port_add(&dpif, devname, port, flags);
+        error = dpif_port_add(dpif, devname, port, flags);
         if (error) {
             ovs_error(error, "adding %s as port %"PRIu16" of %s failed",
                       devname, port, argv[1]);
@@ -332,7 +332,7 @@ do_add_if(int argc UNUSED, char *argv[])
             failure = true;
         }
     }
-    dpif_close(&dpif);
+    dpif_close(dpif);
     if (failure) {
         exit(EXIT_FAILURE);
     }
@@ -362,7 +362,7 @@ static void
 do_del_if(int argc UNUSED, char *argv[])
 {
     bool failure = false;
-    struct dpif dpif;
+    struct dpif *dpif;
     int i;
 
     run(dpif_open(argv[1], &dpif), "opening datapath");
@@ -373,18 +373,18 @@ do_del_if(int argc UNUSED, char *argv[])
 
         if (!name[strspn(name, "0123456789")]) {
             port = atoi(name);
-        } else if (!get_port_number(&dpif, name, &port)) {
+        } else if (!get_port_number(dpif, name, &port)) {
             failure = true;
             continue;
         }
 
-        error = dpif_port_del(&dpif, port);
+        error = dpif_port_del(dpif, port);
         if (error) {
             ovs_error(error, "deleting port %s from %s failed", name, argv[1]);
             failure = true;
         }
     }
-    dpif_close(&dpif);
+    dpif_close(dpif);
     if (failure) {
         exit(EXIT_FAILURE);
     }
@@ -432,12 +432,12 @@ do_show(int argc UNUSED, char *argv[])
         int i;
         for (i = 1; i < argc; i++) {
             const char *name = argv[i];
-            struct dpif dpif;
+            struct dpif *dpif;
             int error;
 
             error = dpif_open(name, &dpif);
             if (!error) {
-                show_dpif(&dpif);
+                show_dpif(dpif);
             } else {
                 ovs_error(error, "opening datapath %s failed", name);
                 failure = true;
@@ -447,13 +447,13 @@ do_show(int argc UNUSED, char *argv[])
         unsigned int i;
         for (i = 0; i < ODP_MAX; i++) {
             char name[128];
-            struct dpif dpif;
+            struct dpif *dpif;
             int error;
 
             sprintf(name, "dp%u", i);
             error = dpif_open(name, &dpif);
             if (!error) {
-                show_dpif(&dpif);
+                show_dpif(dpif);
             } else if (error != ENODEV) {
                 ovs_error(error, "opening datapath %s failed", name);
                 failure = true;
@@ -469,13 +469,13 @@ static void
 do_dump_flows(int argc UNUSED, char *argv[])
 {
     struct odp_flow *flows;
-    struct dpif dpif;
+    struct dpif *dpif;
     size_t n_flows;
     struct ds ds;
     size_t i;
 
     run(dpif_open(argv[1], &dpif), "opening datapath");
-    run(dpif_flow_list_all(&dpif, &flows, &n_flows), "listing all flows");
+    run(dpif_flow_list_all(dpif, &flows, &n_flows), "listing all flows");
 
     ds_init(&ds);
     for (i = 0; i < n_flows; i++) {
@@ -485,40 +485,40 @@ do_dump_flows(int argc UNUSED, char *argv[])
 
         f->actions = actions;
         f->n_actions = MAX_ACTIONS;
-        dpif_flow_get(&dpif, f);
+        dpif_flow_get(dpif, f);
 
         ds_clear(&ds);
         format_odp_flow(&ds, f);
         printf("%s\n", ds_cstr(&ds));
     }
     ds_destroy(&ds);
-    dpif_close(&dpif);
+    dpif_close(dpif);
 }
 
 static void
 do_del_flows(int argc UNUSED, char *argv[])
 {
-    struct dpif dpif;
+    struct dpif *dpif;
 
     run(dpif_open(argv[1], &dpif), "opening datapath");
-    run(dpif_flow_flush(&dpif), "deleting all flows");
-    dpif_close(&dpif);
+    run(dpif_flow_flush(dpif), "deleting all flows");
+    dpif_close(dpif);
 }
 
 static void
 do_dump_groups(int argc UNUSED, char *argv[])
 {
     struct odp_stats stats;
-    struct dpif dpif;
+    struct dpif *dpif;
     unsigned int i;
 
     run(dpif_open(argv[1], &dpif), "opening datapath");
-    run(dpif_get_dp_stats(&dpif, &stats), "get datapath stats");
+    run(dpif_get_dp_stats(dpif, &stats), "get datapath stats");
     for (i = 0; i < stats.max_groups; i++) {
         uint16_t ports[UINT16_MAX];
         size_t n_ports;
 
-        if (!dpif_port_group_get(&dpif, i, ports,
+        if (!dpif_port_group_get(dpif, i, ports,
                                  ARRAY_SIZE(ports), &n_ports) && n_ports) {
             size_t j;
 
@@ -529,7 +529,7 @@ do_dump_groups(int argc UNUSED, char *argv[])
             printf("\n");
         }
     }
-    dpif_close(&dpif);
+    dpif_close(dpif);
 }
 
 static void

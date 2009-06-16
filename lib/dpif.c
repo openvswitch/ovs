@@ -49,6 +49,13 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_dpif
 
+/* A datapath interface. */
+struct dpif {
+    char *name;
+    unsigned int minor;
+    int fd;
+};
+
 /* Rate limit for individual messages going to or from the datapath, output at
  * DBG level.  This is very high because, if these are enabled, it is because
  * we really need to see them. */
@@ -60,24 +67,26 @@ static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 static int get_minor_from_name(const char *name, unsigned int *minor);
 static int name_to_minor(const char *name, unsigned int *minor);
 static int lookup_minor(const char *name, unsigned int *minor);
-static int open_by_minor(unsigned int minor, struct dpif *);
+static int open_by_minor(unsigned int minor, struct dpif **dpifp);
 static int make_openvswitch_device(unsigned int minor, char **fnp);
 static void check_rw_odp_flow(struct odp_flow *);
 
 int
-dpif_open(const char *name, struct dpif *dpif)
+dpif_open(const char *name, struct dpif **dpifp)
 {
+    struct dpif *dpif;
+    unsigned int minor;
     int listen_mask;
     int error;
 
-    dpif->fd = -1;
+    *dpifp = NULL;
 
-    error = name_to_minor(name, &dpif->minor);
+    error = name_to_minor(name, &minor);
     if (error) {
         return error;
     }
 
-    error = open_by_minor(dpif->minor, dpif);
+    error = open_by_minor(minor, &dpif);
     if (error) {
         return error;
     }
@@ -95,6 +104,7 @@ dpif_open(const char *name, struct dpif *dpif)
         dpif_close(dpif);
         return error;
     }
+    *dpifp = dpif;
     return 0;
 }
 
@@ -103,9 +113,8 @@ dpif_close(struct dpif *dpif)
 {
     if (dpif) {
         free(dpif->name);
-        dpif->name = NULL;
         close(dpif->fd);
-        dpif->fd = -1;
+        free(dpif);
     }
 }
 
@@ -127,14 +136,17 @@ do_ioctl(const struct dpif *dpif, int cmd, const char *cmd_name,
 }
 
 int
-dpif_create(const char *name, struct dpif *dpif)
+dpif_create(const char *name, struct dpif **dpifp)
 {
     unsigned int minor;
     int error;
 
+    *dpifp = NULL;
     if (!get_minor_from_name(name, &minor)) {
         /* Minor was specified in 'name', go ahead and create it. */
-        error = open_by_minor(minor, dpif);
+        struct dpif *dpif;
+
+        error = open_by_minor(minor, &dpif);
         if (error) {
             return error;
         }
@@ -146,19 +158,24 @@ dpif_create(const char *name, struct dpif *dpif)
         } else {
             error = ioctl(dpif->fd, ODP_DP_CREATE, name) < 0 ? errno : 0;
         }
-        if (error) {
+        if (!error) {
+            *dpifp = dpif;
+        } else {
             dpif_close(dpif);
         }
         return error;
     } else {
         for (minor = 0; minor < ODP_MAX; minor++) {
-            error = open_by_minor(minor, dpif);
+            struct dpif *dpif;
+
+            error = open_by_minor(minor, &dpif);
             if (error) {
                 return error;
             }
 
             error = ioctl(dpif->fd, ODP_DP_CREATE, name) < 0 ? errno : 0;
             if (!error) {
+                *dpifp = dpif;
                 return 0;
             }
             dpif_close(dpif);
@@ -700,7 +717,7 @@ dpif_get_netflow_ids(const struct dpif *dpif,
 }
 
 struct dpifmon {
-    struct dpif dpif;
+    struct dpif *dpif;
     struct nl_sock *sock;
     int local_ifindex;
 };
@@ -718,7 +735,7 @@ dpifmon_create(const char *datapath_name, struct dpifmon **monp)
     if (error) {
         goto error;
     }
-    error = dpif_port_get_name(&mon->dpif, ODPP_LOCAL,
+    error = dpif_port_get_name(mon->dpif, ODPP_LOCAL,
                                local_name, sizeof local_name);
     if (error) {
         goto error_close_dpif;
@@ -741,7 +758,7 @@ dpifmon_create(const char *datapath_name, struct dpifmon **monp)
     return 0;
 
 error_close_dpif:
-    dpif_close(&mon->dpif);
+    dpif_close(mon->dpif);
 error:
     free(mon);
     *monp = NULL;
@@ -752,7 +769,7 @@ void
 dpifmon_destroy(struct dpifmon *mon)
 {
     if (mon) {
-        dpif_close(&mon->dpif);
+        dpif_close(mon->dpif);
         nl_sock_destroy(mon->sock);
     }
 }
@@ -1025,14 +1042,14 @@ get_minor_from_name(const char *name, unsigned int *minor)
 }
 
 static int
-open_by_minor(unsigned int minor, struct dpif *dpif)
+open_by_minor(unsigned int minor, struct dpif **dpifp)
 {
+    struct dpif *dpif;
     int error;
     char *fn;
     int fd;
 
-    dpif->minor = -1;
-    dpif->fd = -1;
+    *dpifp = NULL;
     error = make_openvswitch_device(minor, &fn);
     if (error) {
         return error;
@@ -1045,11 +1062,13 @@ open_by_minor(unsigned int minor, struct dpif *dpif)
         free(fn);
         return error;
     }
-
     free(fn);
+
+    dpif = xmalloc(sizeof *dpif);
     dpif->name = xasprintf("dp%u", dpif->minor);
     dpif->minor = minor;
     dpif->fd = fd;
+    *dpifp = dpif;
     return 0;
 }
 
