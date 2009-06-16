@@ -959,8 +959,6 @@ static int put_actions(const struct sw_flow *flow, struct odp_flow __user *ufp)
 
 	if (!n_actions)
 		return 0;
-	if (ufp->n_actions > INT_MAX / sizeof(union odp_action))
-		return -EINVAL;
 
 	sf_acts = rcu_dereference(flow->sf_acts);
 	if (__put_user(sf_acts->n_actions, &ufp->n_actions) ||
