@@ -398,7 +398,7 @@ show_dpif(struct dpif *dpif)
     size_t n_ports;
     size_t i;
 
-    printf("dp%u:\n", dpif_id(dpif));
+    printf("%s:\n", dpif_name(dpif));
     if (!dpif_get_dp_stats(dpif, &stats)) {
         printf("\tflows: cur:%"PRIu32", soft-max:%"PRIu32", "
                "hard-max:%"PRIu32"\n",

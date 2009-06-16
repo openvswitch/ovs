@@ -31,7 +31,8 @@ struct ofpbuf;
 
 /* A datapath interface.  Opaque. */
 struct dpif {
-    unsigned int minor;         /* For use in error messages. */
+    char *name;
+    unsigned int minor;
     int fd;
 };
 
@@ -39,7 +40,7 @@ int dpif_open(const char *name, struct dpif *);
 int dpif_create(const char *name, struct dpif *);
 void dpif_close(struct dpif *);
 
-static inline unsigned int dpif_id(const struct dpif *dpif);
+const char *dpif_name(const struct dpif *);
 
 int dpif_delete(struct dpif *);
 
@@ -84,11 +85,6 @@ int dpif_execute(struct dpif *, uint16_t in_port,
 int dpif_recv(struct dpif *, struct ofpbuf **);
 void dpif_recv_wait(struct dpif *);
 
-static inline unsigned int
-dpif_id(const struct dpif *dpif)
-{
-    return dpif->minor;
-}
 void dpif_get_netflow_ids(const struct dpif *,
                           uint8_t *engine_type, uint8_t *engine_id);
 

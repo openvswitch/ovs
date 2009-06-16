@@ -89,8 +89,8 @@ dpif_open(const char *name, struct dpif *dpif)
     if (ioctl(dpif->fd, ODP_GET_LISTEN_MASK, &listen_mask)) {
         error = errno;
         if (error != ENODEV) {
-            VLOG_WARN("dp%u: probe returned unexpected error: %s",
-                      dpif->minor, strerror(error));
+            VLOG_WARN("%s: probe returned unexpected error: %s",
+                      dpif_name(dpif), strerror(error));
         }
         dpif_close(dpif);
         return error;
@@ -102,6 +102,8 @@ void
 dpif_close(struct dpif *dpif)
 {
     if (dpif) {
+        free(dpif->name);
+        dpif->name = NULL;
         close(dpif->fd);
         dpif->fd = -1;
     }
@@ -114,11 +116,11 @@ do_ioctl(const struct dpif *dpif, int cmd, const char *cmd_name,
     int error = ioctl(dpif->fd, cmd, arg) ? errno : 0;
     if (cmd_name) {
         if (error) {
-            VLOG_WARN_RL(&error_rl, "dp%u: ioctl(%s) failed (%s)",
-                         dpif->minor, cmd_name, strerror(error));
+            VLOG_WARN_RL(&error_rl, "%s: ioctl(%s) failed (%s)",
+                         dpif_name(dpif), cmd_name, strerror(error));
         } else {
-            VLOG_DBG_RL(&dpmsg_rl, "dp%u: ioctl(%s): success",
-                        dpif->minor, cmd_name);
+            VLOG_DBG_RL(&dpmsg_rl, "%s: ioctl(%s): success",
+                        dpif_name(dpif), cmd_name);
         }
     }
     return error;
@@ -166,6 +168,12 @@ dpif_create(const char *name, struct dpif *dpif)
         }
         return ENOBUFS;
     }
+}
+
+const char *
+dpif_name(const struct dpif *dpif)
+{
+    return dpif->name;
 }
 
 int
@@ -253,13 +261,12 @@ dpif_port_add(struct dpif *dpif, const char *devname, uint16_t port_no,
     port.port = port_no;
     port.flags = flags;
     if (!ioctl(dpif->fd, ODP_PORT_ADD, &port)) {
-        VLOG_DBG_RL(&dpmsg_rl, "dp%u: added %s as port %"PRIu16,
-                    dpif->minor, devname, port_no);
+        VLOG_DBG_RL(&dpmsg_rl, "%s: added %s as port %"PRIu16,
+                    dpif_name(dpif), devname, port_no);
         return 0;
     } else {
-        VLOG_WARN_RL(&error_rl, "dp%u: failed to add %s as port "
-                     "%"PRIu16": %s", dpif->minor, devname, port_no,
-                     strerror(errno));
+        VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port %"PRIu16": %s",
+                     dpif_name(dpif), devname, port_no, strerror(errno));
         return errno;
     }
 }
@@ -279,12 +286,12 @@ dpif_port_query_by_number(const struct dpif *dpif, uint16_t port_no,
     memset(port, 0, sizeof *port);
     port->port = port_no;
     if (!ioctl(dpif->fd, ODP_PORT_QUERY, port)) {
-        VLOG_DBG_RL(&dpmsg_rl, "dp%u: port %"PRIu16" is device %s",
-                    dpif->minor, port_no, port->devname);
+        VLOG_DBG_RL(&dpmsg_rl, "%s: port %"PRIu16" is device %s",
+                    dpif_name(dpif), port_no, port->devname);
         return 0;
     } else {
-        VLOG_WARN_RL(&error_rl, "dp%u: failed to query port %"PRIu16": %s",
-                     dpif->minor, port_no, strerror(errno));
+        VLOG_WARN_RL(&error_rl, "%s: failed to query port %"PRIu16": %s",
+                     dpif_name(dpif), port_no, strerror(errno));
         return errno;
     }
 }
@@ -296,12 +303,12 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
     memset(port, 0, sizeof *port);
     strncpy(port->devname, devname, sizeof port->devname);
     if (!ioctl(dpif->fd, ODP_PORT_QUERY, port)) {
-        VLOG_DBG_RL(&dpmsg_rl, "dp%u: device %s is on port %"PRIu16,
-                    dpif->minor, devname, port->port);
+        VLOG_DBG_RL(&dpmsg_rl, "%s: device %s is on port %"PRIu16,
+                    dpif_name(dpif), devname, port->port);
         return 0;
     } else {
-        VLOG_WARN_RL(&error_rl, "dp%u: failed to query port %s: %s",
-                     dpif->minor, devname, strerror(errno));
+        VLOG_WARN_RL(&error_rl, "%s: failed to query port %s: %s",
+                     dpif_name(dpif), devname, strerror(errno));
         return errno;
     }
 }
@@ -415,7 +422,7 @@ log_flow_message(const struct dpif *dpif, int error,
                  const union odp_action *actions, size_t n_actions)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
-    ds_put_format(&ds, "dp%u: ", dpif->minor);
+    ds_put_format(&ds, "%s: ", dpif_name(dpif));
     if (error) {
         ds_put_cstr(&ds, "failed to ");
     }
@@ -538,12 +545,13 @@ dpif_flow_list(const struct dpif *dpif, struct odp_flow flows[], size_t n,
     error = do_ioctl(dpif, ODP_FLOW_LIST, NULL, &fv);
     if (error) {
         *n_out = 0;
-        VLOG_WARN_RL(&error_rl, "dp%u: flow list failed (%s)",
-                     dpif->minor, strerror(error));
+        VLOG_WARN_RL(&error_rl, "%s: flow list failed (%s)",
+                     dpif_name(dpif), strerror(error));
     } else {
         COVERAGE_ADD(dpif_flow_query_list_n, fv.n_flows);
         *n_out = fv.n_flows;
-        VLOG_DBG_RL(&dpmsg_rl, "dp%u: listed %zu flows", dpif->minor, *n_out);
+        VLOG_DBG_RL(&dpmsg_rl, "%s: listed %zu flows",
+                    dpif_name(dpif), *n_out);
     }
     return error;
 }
@@ -573,9 +581,9 @@ dpif_flow_list_all(const struct dpif *dpif,
     }
 
     if (stats.n_flows != n_flows) {
-        VLOG_WARN_RL(&error_rl, "dp%u: datapath stats reported %"PRIu32" "
+        VLOG_WARN_RL(&error_rl, "%s: datapath stats reported %"PRIu32" "
                      "flows but flow listing reported %zu",
-                     dpif->minor, stats.n_flows, n_flows);
+                     dpif_name(dpif), stats.n_flows, n_flows);
     }
     *flowsp = flows;
     *np = n_flows;
@@ -606,7 +614,7 @@ dpif_execute(struct dpif *dpif, uint16_t in_port,
     if (!(error ? VLOG_DROP_WARN(&error_rl) : VLOG_DROP_DBG(&dpmsg_rl))) {
         struct ds ds = DS_EMPTY_INITIALIZER;
         char *packet = ofp_packet_to_string(buf->data, buf->size, buf->size);
-        ds_put_format(&ds, "dp%u: execute ", dpif->minor);
+        ds_put_format(&ds, "%s: execute ", dpif_name(dpif));
         format_odp_actions(&ds, actions, n_actions);
         if (error) {
             ds_put_format(&ds, " failed (%s)", strerror(error));
@@ -631,8 +639,8 @@ dpif_recv(struct dpif *dpif, struct ofpbuf **bufp)
     if (retval < 0) {
         error = errno;
         if (error != EAGAIN) {
-            VLOG_WARN_RL(&error_rl, "dp%u: read failed: %s",
-                         dpif->minor, strerror(error));
+            VLOG_WARN_RL(&error_rl, "%s: read failed: %s",
+                         dpif_name(dpif), strerror(error));
         }
     } else if (retval >= sizeof(struct odp_msg)) {
         struct odp_msg *msg = buf->data;
@@ -642,8 +650,8 @@ dpif_recv(struct dpif *dpif, struct ofpbuf **bufp)
                 void *payload = msg + 1;
                 size_t length = buf->size - sizeof *msg;
                 char *s = ofp_packet_to_string(payload, length, length);
-                VLOG_DBG_RL(&dpmsg_rl, "dp%u: received %s message of length "
-                            "%zu on port %"PRIu16": %s", dpif->minor,
+                VLOG_DBG_RL(&dpmsg_rl, "%s: received %s message of length "
+                            "%zu on port %"PRIu16": %s", dpif_name(dpif),
                             (msg->type == _ODPL_MISS_NR ? "miss"
                              : msg->type == _ODPL_ACTION_NR ? "action"
                              : "<unknown>"),
@@ -655,18 +663,18 @@ dpif_recv(struct dpif *dpif, struct ofpbuf **bufp)
             COVERAGE_INC(dpif_recv);
             return 0;
         } else {
-            VLOG_WARN_RL(&error_rl, "dp%u: discarding message truncated "
+            VLOG_WARN_RL(&error_rl, "%s: discarding message truncated "
                          "from %zu bytes to %d",
-                         dpif->minor, msg->length, retval);
+                         dpif_name(dpif), msg->length, retval);
             error = ERANGE;
         }
     } else if (!retval) {
-        VLOG_WARN_RL(&error_rl, "dp%u: unexpected end of file", dpif->minor);
+        VLOG_WARN_RL(&error_rl, "%s: unexpected end of file", dpif_name(dpif));
         error = EPROTO;
     } else {
         VLOG_WARN_RL(&error_rl,
-                     "dp%u: discarding too-short message (%d bytes)",
-                     dpif->minor, retval);
+                     "%s: discarding too-short message (%d bytes)",
+                     dpif_name(dpif), retval);
         error = ERANGE;
     }
 
@@ -1040,6 +1048,7 @@ open_by_minor(unsigned int minor, struct dpif *dpif)
     }
 
     free(fn);
+    dpif->name = xasprintf("dp%u", dpif->minor);
     dpif->minor = minor;
     dpif->fd = fd;
     return 0;

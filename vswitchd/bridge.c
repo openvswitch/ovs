@@ -259,8 +259,8 @@ bridge_get_ifaces(struct svec *svec)
             for (j = 0; j < port->n_ifaces; j++) {
                 struct iface *iface = port->ifaces[j];
                 if (iface->dp_ifidx < 0) {
-                    VLOG_ERR("%s interface not in dp%u, ignoring",
-                             iface->name, dpif_id(&br->dpif));
+                    VLOG_ERR("%s interface not in datapath %s, ignoring",
+                             iface->name, dpif_name(&br->dpif));
                 } else {
                     if (iface->dp_ifidx != ODPP_LOCAL) {
                         svec_add(svec, iface->name);
@@ -426,8 +426,9 @@ bridge_reconfigure(void)
                 && strcmp(p->devname, br->name)) {
                 int retval = dpif_port_del(&br->dpif, p->port);
                 if (retval) {
-                    VLOG_ERR("failed to remove %s interface from dp%u: %s",
-                             p->devname, dpif_id(&br->dpif), strerror(retval));
+                    VLOG_ERR("failed to remove %s interface from %s: %s",
+                             p->devname, dpif_name(&br->dpif),
+                             strerror(retval));
                 }
             }
         }
@@ -459,13 +460,14 @@ bridge_reconfigure(void)
                                           internal ? ODP_PORT_INTERNAL : 0);
                 if (error != EEXIST) {
                     if (next_port_no >= 256) {
-                        VLOG_ERR("ran out of valid port numbers on dp%u",
-                                 dpif_id(&br->dpif));
+                        VLOG_ERR("ran out of valid port numbers on %s",
+                                 dpif_name(&br->dpif));
                         goto out;
                     }
                     if (error) {
-                        VLOG_ERR("failed to add %s interface to dp%u: %s",
-                                 if_name, dpif_id(&br->dpif), strerror(error));
+                        VLOG_ERR("failed to add %s interface to %s: %s",
+                                 if_name, dpif_name(&br->dpif),
+                                 strerror(error));
                     }
                     break;
                 }
@@ -492,15 +494,16 @@ bridge_reconfigure(void)
             for (j = 0; j < port->n_ifaces; ) {
                 struct iface *iface = port->ifaces[j];
                 if (iface->dp_ifidx < 0) {
-                    VLOG_ERR("%s interface not in dp%u, dropping",
-                             iface->name, dpif_id(&br->dpif));
+                    VLOG_ERR("%s interface not in %s, dropping",
+                             iface->name, dpif_name(&br->dpif));
                     iface_destroy(iface);
                 } else {
                     if (iface->dp_ifidx == ODPP_LOCAL) {
                         local_iface = iface;
                     }
-                    VLOG_DBG("dp%u has interface %s on port %d",
-                             dpif_id(&br->dpif), iface->name, iface->dp_ifidx);
+                    VLOG_DBG("%s has interface %s on port %d",
+                             dpif_name(&br->dpif),
+                             iface->name, iface->dp_ifidx);
                     j++;
                 }
             }
@@ -837,7 +840,7 @@ bridge_create(const char *name)
 
     list_push_back(&all_bridges, &br->node);
 
-    VLOG_INFO("created bridge %s on dp%u", br->name, dpif_id(&br->dpif));
+    VLOG_INFO("created bridge %s on %s", br->name, dpif_name(&br->dpif));
 
     return br;
 }
@@ -854,8 +857,8 @@ bridge_destroy(struct bridge *br)
         list_remove(&br->node);
         error = dpif_delete(&br->dpif);
         if (error && error != ENOENT) {
-            VLOG_ERR("failed to delete dp%u: %s",
-                     dpif_id(&br->dpif), strerror(error));
+            VLOG_ERR("failed to delete %s: %s",
+                     dpif_name(&br->dpif), strerror(error));
         }
         dpif_close(&br->dpif);
         ofproto_destroy(br->ofproto);
@@ -1251,11 +1254,11 @@ bridge_fetch_dp_ifaces(struct bridge *br)
         struct iface *iface = iface_lookup(br, p->devname);
         if (iface) {
             if (iface->dp_ifidx >= 0) {
-                VLOG_WARN("dp%u reported interface %s twice",
-                          dpif_id(&br->dpif), p->devname);
+                VLOG_WARN("%s reported interface %s twice",
+                          dpif_name(&br->dpif), p->devname);
             } else if (iface_from_dp_ifidx(br, p->port)) {
-                VLOG_WARN("dp%u reported interface %"PRIu16" twice",
-                          dpif_id(&br->dpif), p->port);
+                VLOG_WARN("%s reported interface %"PRIu16" twice",
+                          dpif_name(&br->dpif), p->port);
             } else {
                 port_array_set(&br->ifaces, p->port, iface);
                 iface->dp_ifidx = p->port;
