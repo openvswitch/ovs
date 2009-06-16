@@ -307,8 +307,11 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
                     dpif_name(dpif), devname, port->port);
         return 0;
     } else {
-        VLOG_WARN_RL(&error_rl, "%s: failed to query port %s: %s",
-                     dpif_name(dpif), devname, strerror(errno));
+        /* Log level is DBG here because all the current callers are interested
+         * in whether 'dpif' actually has a port 'devname', so that it's not an
+         * issue worth logging if it doesn't. */
+        VLOG_DBG_RL(&error_rl, "%s: failed to query port %s: %s",
+                    dpif_name(dpif), devname, strerror(errno));
         return errno;
     }
 }
@@ -784,13 +787,9 @@ again:
                 uint32_t master_ifindex = nl_attr_get_u32(attrs[IFLA_MASTER]);
                 for_us = master_ifindex == mon->local_ifindex;
             } else {
-                /* It's for us if that device is one of our ports.  This is
-                 * open-coded instead of using dpif_port_query_by_name() to
-                 * avoid logging a warning on failure. */
+                /* It's for us if that device is one of our ports. */
                 struct odp_port port;
-                memset(&port, 0, sizeof port);
-                strncpy(port.devname, devname, sizeof port.devname);
-                for_us = !ioctl(mon->dpif.fd, ODP_PORT_QUERY, &port);
+                for_us = !dpif_port_query_by_name(mon->dpif, devname, &port);
             }
 
             if (!for_us) {
