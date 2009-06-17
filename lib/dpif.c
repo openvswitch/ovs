@@ -15,24 +15,14 @@
  */
 
 #include <config.h>
-#include "dpif.h"
+#include "dpif-provider.h"
 
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <inttypes.h>
-#include <net/if.h>
-#include <linux/rtnetlink.h>
-#include <linux/ethtool.h>
-#include <linux/sockios.h>
-#include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
-#include <sys/stat.h>
-#include <sys/sysmacros.h>
-#include <unistd.h>
 
 #include "coverage.h"
 #include "dynamic-string.h"
@@ -49,12 +39,10 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_dpif
 
-/* A datapath interface. */
-struct dpif {
-    char *name;
-    unsigned int minor;
-    int fd;
+static struct dpif_class *dpif_classes[] = {
+    &dpif_linux_class,
 };
+enum { N_DPIF_CLASSES = ARRAY_SIZE(dpif_classes) };
 
 /* Rate limit for individual messages going to or from the datapath, output at
  * DBG level.  This is very high because, if these are enabled, it is because
@@ -64,207 +52,164 @@ static struct vlog_rate_limit dpmsg_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 /* Not really much point in logging many dpif errors. */
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 
-static int get_minor_from_name(const char *name, unsigned int *minor);
-static int name_to_minor(const char *name, unsigned int *minor);
-static int lookup_minor(const char *name, unsigned int *minor);
-static int open_by_minor(unsigned int minor, struct dpif **dpifp);
-static int make_openvswitch_device(unsigned int minor, char **fnp);
+static void log_operation(const struct dpif *, const char *operation,
+                          int error);
+static void log_flow_operation(const struct dpif *, const char *operation,
+                               int error, struct odp_flow *flow);
+static void log_flow_put(struct dpif *, int error,
+                         const struct odp_flow_put *);
+static bool should_log_flow_message(int error);
 static void check_rw_odp_flow(struct odp_flow *);
 
+static int
+do_open(const char *name_, bool create, struct dpif **dpifp)
+{
+    char *name = xstrdup(name_);
+    char *prefix, *suffix, *colon;
+    struct dpif *dpif = NULL;
+    int error;
+    int i;
+
+    colon = strchr(name, ':');
+    if (colon) {
+        *colon = '\0';
+        prefix = name;
+        suffix = colon + 1;
+    } else {
+        prefix = "";
+        suffix = name;
+    }
+
+    for (i = 0; i < N_DPIF_CLASSES; i++) {
+        const struct dpif_class *class = dpif_classes[i];
+        if (!strcmp(prefix, class->prefix)) {
+            error = class->open(name_, suffix, create, &dpif);
+            goto exit;
+        }
+    }
+    error = EAFNOSUPPORT;
+
+exit:
+    *dpifp = error ? NULL : dpif;
+    return error;
+}
+
+/* Tries to open an existing datapath named 'name'.  Will fail if no datapath
+ * named 'name' exists.  Returns 0 if successful, otherwise a positive errno
+ * value.  On success stores a pointer to the datapath in '*dpifp', otherwise a
+ * null pointer. */
 int
 dpif_open(const char *name, struct dpif **dpifp)
 {
-    struct dpif *dpif;
-    unsigned int minor;
-    int listen_mask;
-    int error;
-
-    *dpifp = NULL;
-
-    error = name_to_minor(name, &minor);
-    if (error) {
-        return error;
-    }
-
-    error = open_by_minor(minor, &dpif);
-    if (error) {
-        return error;
-    }
-
-    /* We can open the device, but that doesn't mean that it's been created.
-     * If it hasn't been, then any command other than ODP_DP_CREATE will
-     * return ENODEV.  Try something innocuous. */
-    listen_mask = 0;            /* Make Valgrind happy. */
-    if (ioctl(dpif->fd, ODP_GET_LISTEN_MASK, &listen_mask)) {
-        error = errno;
-        if (error != ENODEV) {
-            VLOG_WARN("%s: probe returned unexpected error: %s",
-                      dpif_name(dpif), strerror(error));
-        }
-        dpif_close(dpif);
-        return error;
-    }
-    *dpifp = dpif;
-    return 0;
+    return do_open(name, false, dpifp);
 }
 
+/* Tries to create and open a new datapath with the given 'name'.  Will fail if
+ * a datapath named 'name' already exists.  Returns 0 if successful, otherwise
+ * a positive errno value.  On success stores a pointer to the datapath in
+ * '*dpifp', otherwise a null pointer.*/
+int
+dpif_create(const char *name, struct dpif **dpifp)
+{
+    return do_open(name, true, dpifp);
+}
+
+/* Closes and frees the connection to 'dpif'.  Does not destroy the datapath
+ * itself; call dpif_delete() first, instead, if that is desirable. */
 void
 dpif_close(struct dpif *dpif)
 {
     if (dpif) {
-        free(dpif->name);
-        close(dpif->fd);
-        free(dpif);
+        char *name = dpif->name;
+        dpif->class->close(dpif);
+        free(name);
     }
 }
 
-static int
-do_ioctl(const struct dpif *dpif, int cmd, const char *cmd_name,
-         const void *arg)
-{
-    int error = ioctl(dpif->fd, cmd, arg) ? errno : 0;
-    if (cmd_name) {
-        if (error) {
-            VLOG_WARN_RL(&error_rl, "%s: ioctl(%s) failed (%s)",
-                         dpif_name(dpif), cmd_name, strerror(error));
-        } else {
-            VLOG_DBG_RL(&dpmsg_rl, "%s: ioctl(%s): success",
-                        dpif_name(dpif), cmd_name);
-        }
-    }
-    return error;
-}
-
-int
-dpif_create(const char *name, struct dpif **dpifp)
-{
-    unsigned int minor;
-    int error;
-
-    *dpifp = NULL;
-    if (!get_minor_from_name(name, &minor)) {
-        /* Minor was specified in 'name', go ahead and create it. */
-        struct dpif *dpif;
-
-        error = open_by_minor(minor, &dpif);
-        if (error) {
-            return error;
-        }
-
-        error = ioctl(dpif->fd, ODP_DP_CREATE, name) < 0 ? errno : 0;
-        if (!error) {
-            *dpifp = dpif;
-        } else {
-            dpif_close(dpif);
-        }
-        return error;
-    } else {
-        for (minor = 0; minor < ODP_MAX; minor++) {
-            struct dpif *dpif;
-
-            error = open_by_minor(minor, &dpif);
-            if (error) {
-                return error;
-            }
-
-            error = ioctl(dpif->fd, ODP_DP_CREATE, name) < 0 ? errno : 0;
-            if (!error) {
-                *dpifp = dpif;
-                return 0;
-            }
-            dpif_close(dpif);
-            if (error != EBUSY) {
-                return error;
-            }
-        }
-        return ENOBUFS;
-    }
-}
-
+/* Returns the name of datapath 'dpif' (for use in log messages). */
 const char *
 dpif_name(const struct dpif *dpif)
 {
     return dpif->name;
 }
 
+/* Destroys the datapath that 'dpif' is connected to, first removing all of its
+ * ports.  After calling this function, it does not make sense to pass 'dpif'
+ * to any functions other than dpif_name() or dpif_close(). */
 int
 dpif_delete(struct dpif *dpif)
 {
+    int error;
+
     COVERAGE_INC(dpif_destroy);
-    return do_ioctl(dpif, ODP_DP_DESTROY, "ODP_DP_DESTROY", NULL);
-}
 
-int
-dpif_get_dp_stats(const struct dpif *dpif, struct odp_stats *stats)
-{
-    memset(stats, 0, sizeof *stats);
-    return do_ioctl(dpif, ODP_DP_STATS, "ODP_DP_STATS", stats);
-}
-
-int
-dpif_get_drop_frags(const struct dpif *dpif, bool *drop_frags)
-{
-    int tmp;
-    int error = do_ioctl(dpif, ODP_GET_DROP_FRAGS, "ODP_GET_DROP_FRAGS", &tmp);
-    *drop_frags = error ? tmp & 1 : false;
+    error = dpif->class->delete(dpif);
+    log_operation(dpif, "delete", error);
     return error;
 }
 
+/* Retrieves statistics for 'dpif' into 'stats'.  Returns 0 if successful,
+ * otherwise a positive errno value. */
+int
+dpif_get_dp_stats(const struct dpif *dpif, struct odp_stats *stats)
+{
+    int error = dpif->class->get_stats(dpif, stats);
+    if (error) {
+        memset(stats, 0, sizeof *stats);
+    }
+    log_operation(dpif, "get_stats", error);
+    return error;
+}
+
+/* Retrieves the current IP fragment handling policy for 'dpif' into
+ * '*drop_frags': true indicates that fragments are dropped, false indicates
+ * that fragments are treated in the same way as other IP packets (except that
+ * the L4 header cannot be read).  Returns 0 if successful, otherwise a
+ * positive errno value. */
+int
+dpif_get_drop_frags(const struct dpif *dpif, bool *drop_frags)
+{
+    int error = dpif->class->get_drop_frags(dpif, drop_frags);
+    if (error) {
+        *drop_frags = false;
+    }
+    log_operation(dpif, "get_drop_frags", error);
+    return error;
+}
+
+/* Changes 'dpif''s treatment of IP fragments to 'drop_frags', whose meaning is
+ * the same as for the get_drop_frags member function.  Returns 0 if
+ * successful, otherwise a positive errno value. */
 int
 dpif_set_drop_frags(struct dpif *dpif, bool drop_frags)
 {
-    int tmp = drop_frags;
-    return do_ioctl(dpif, ODP_SET_DROP_FRAGS, "ODP_SET_DROP_FRAGS", &tmp);
+    int error = dpif->class->set_drop_frags(dpif, drop_frags);
+    log_operation(dpif, "set_drop_frags", error);
+    return error;
 }
 
-int
-dpif_recv_purge(struct dpif *dpif)
-{
-    struct odp_stats stats;
-    unsigned int i;
-    int error;
-
-    COVERAGE_INC(dpif_purge);
-
-    error = dpif_get_dp_stats(dpif, &stats);
-    if (error) {
-        return error;
-    }
-
-    for (i = 0; i < stats.max_miss_queue + stats.max_action_queue; i++) {
-        struct ofpbuf *buf;
-        error = dpif_recv(dpif, &buf);
-        if (error) {
-            return error == EAGAIN ? 0 : error;
-        }
-        ofpbuf_delete(buf);
-    }
-    return 0;
-}
-
+/* Attempts to add 'devname' as a port on 'dpif', given the combination of
+ * ODP_PORT_* flags in 'flags'.  If successful, returns 0 and sets '*port_nop'
+ * to the new port's port number (if 'port_nop' is non-null).  On failure,
+ * returns a positive errno value and sets '*port_nop' to UINT16_MAX (if
+ * 'port_nop' is non-null). */
 int
 dpif_port_add(struct dpif *dpif, const char *devname, uint16_t flags,
               uint16_t *port_nop)
 {
-    struct odp_port port;
     uint16_t port_no;
     int error;
 
     COVERAGE_INC(dpif_port_add);
 
-    memset(&port, 0, sizeof port);
-    strncpy(port.devname, devname, sizeof port.devname);
-    port.flags = flags;
-
-    error = do_ioctl(dpif, ODP_PORT_ADD, NULL, &port);
+    error = dpif->class->port_add(dpif, devname, flags, &port_no);
     if (!error) {
-        port_no = port.port;
         VLOG_DBG_RL(&dpmsg_rl, "%s: added %s as port %"PRIu16,
                     dpif_name(dpif), devname, port_no);
     } else {
-        port_no = UINT16_MAX;
         VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
-                     dpif_name(dpif), devname, strerror(errno));
+                     dpif_name(dpif), devname, strerror(error));
+        port_no = UINT16_MAX;
     }
     if (port_nop) {
         *port_nop = port_no;
@@ -272,51 +217,66 @@ dpif_port_add(struct dpif *dpif, const char *devname, uint16_t flags,
     return error;
 }
 
+/* Attempts to remove 'dpif''s port number 'port_no'.  Returns 0 if successful,
+ * otherwise a positive errno value. */
 int
 dpif_port_del(struct dpif *dpif, uint16_t port_no)
 {
-    int tmp = port_no;
+    int error;
+
     COVERAGE_INC(dpif_port_del);
-    return do_ioctl(dpif, ODP_PORT_DEL, "ODP_PORT_DEL", &tmp);
+
+    error = dpif->class->port_del(dpif, port_no);
+    log_operation(dpif, "port_del", error);
+    return error;
 }
 
+/* Looks up port number 'port_no' in 'dpif'.  On success, returns 0 and
+ * initializes '*port' appropriately; on failure, returns a positive errno
+ * value. */
 int
 dpif_port_query_by_number(const struct dpif *dpif, uint16_t port_no,
                           struct odp_port *port)
 {
-    memset(port, 0, sizeof *port);
-    port->port = port_no;
-    if (!ioctl(dpif->fd, ODP_PORT_QUERY, port)) {
+    int error = dpif->class->port_query_by_number(dpif, port_no, port);
+    if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: port %"PRIu16" is device %s",
                     dpif_name(dpif), port_no, port->devname);
-        return 0;
     } else {
+        memset(port, 0, sizeof *port);
         VLOG_WARN_RL(&error_rl, "%s: failed to query port %"PRIu16": %s",
-                     dpif_name(dpif), port_no, strerror(errno));
-        return errno;
+                     dpif_name(dpif), port_no, strerror(error));
     }
+    return error;
 }
 
+/* Looks up port named 'devname' in 'dpif'.  On success, returns 0 and
+ * initializes '*port' appropriately; on failure, returns a positive errno
+ * value. */
 int
 dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
                         struct odp_port *port)
 {
-    memset(port, 0, sizeof *port);
-    strncpy(port->devname, devname, sizeof port->devname);
-    if (!ioctl(dpif->fd, ODP_PORT_QUERY, port)) {
+    int error = dpif->class->port_query_by_name(dpif, devname, port);
+    if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: device %s is on port %"PRIu16,
                     dpif_name(dpif), devname, port->port);
-        return 0;
     } else {
+        memset(port, 0, sizeof *port);
+
         /* Log level is DBG here because all the current callers are interested
          * in whether 'dpif' actually has a port 'devname', so that it's not an
          * issue worth logging if it doesn't. */
         VLOG_DBG_RL(&error_rl, "%s: failed to query port %s: %s",
-                    dpif_name(dpif), devname, strerror(errno));
-        return errno;
+                    dpif_name(dpif), devname, strerror(error));
     }
+    return error;
 }
 
+/* Looks up port number 'port_no' in 'dpif'.  On success, returns 0 and copies
+ * the port's name into the 'name_size' bytes in 'name', ensuring that the
+ * result is null-terminated.  On failure, returns a positive errno value and
+ * makes 'name' the empty string. */
 int
 dpif_port_get_name(struct dpif *dpif, uint16_t port_no,
                    char *name, size_t name_size)
@@ -335,6 +295,15 @@ dpif_port_get_name(struct dpif *dpif, uint16_t port_no,
     return error;
 }
 
+/* Obtains a list of all the ports in 'dpif'.
+ *
+ * If successful, returns 0 and sets '*portsp' to point to an array of
+ * appropriately initialized port structures and '*n_portsp' to the number of
+ * ports in the array.  The caller is responsible for freeing '*portp' by
+ * calling free().
+ *
+ * On failure, returns a positive errno value and sets '*portsp' to NULL and
+ * '*n_portsp' to 0. */
 int
 dpif_port_list(const struct dpif *dpif,
                struct odp_port **portsp, size_t *n_portsp)
@@ -345,7 +314,7 @@ dpif_port_list(const struct dpif *dpif,
 
     for (;;) {
         struct odp_stats stats;
-        struct odp_portvec pv;
+        int retval;
 
         error = dpif_get_dp_stats(dpif, &stats);
         if (error) {
@@ -353,17 +322,16 @@ dpif_port_list(const struct dpif *dpif,
         }
 
         ports = xcalloc(stats.n_ports, sizeof *ports);
-        pv.ports = ports;
-        pv.n_ports = stats.n_ports;
-        error = do_ioctl(dpif, ODP_PORT_LIST, "ODP_PORT_LIST", &pv);
-        if (error) {
+        retval = dpif->class->port_list(dpif, ports, stats.n_ports);
+        if (retval < 0) {
             /* Hard error. */
+            error = -retval;
             free(ports);
             goto exit;
-        } else if (pv.n_ports <= stats.n_ports) {
+        } else if (retval <= stats.n_ports) {
             /* Success. */
             error = 0;
-            n_ports = pv.n_ports;
+            n_ports = retval;
             goto exit;
         } else {
             /* Soft error: port count increased behind our back.  Try again. */
@@ -379,23 +347,19 @@ exit:
         *portsp = ports;
         *n_portsp = n_ports;
     }
+    log_operation(dpif, "port_list", error);
     return error;
 }
 
-int
-dpif_port_group_set(struct dpif *dpif, uint16_t group,
-                    const uint16_t ports[], size_t n_ports)
-{
-    struct odp_port_group pg;
-
-    COVERAGE_INC(dpif_port_group_set);
-    assert(n_ports <= UINT16_MAX);
-    pg.group = group;
-    pg.ports = (uint16_t *) ports;
-    pg.n_ports = n_ports;
-    return do_ioctl(dpif, ODP_PORT_GROUP_SET, "ODP_PORT_GROUP_SET", &pg);
-}
-
+/* Retrieves a list of the port numbers in port group 'group' in 'dpif'.
+ *
+ * On success, returns 0 and points '*ports' to a newly allocated array of
+ * integers, each of which is a 'dpif' port number for a port in
+ * 'group'.  Stores the number of elements in the array in '*n_ports'.  The
+ * caller is responsible for freeing '*ports' by calling free().
+ *
+ * On failure, returns a positive errno value and sets '*ports' to NULL and
+ * '*n_ports' to 0. */
 int
 dpif_port_group_get(const struct dpif *dpif, uint16_t group,
                     uint16_t **ports, size_t *n_ports)
@@ -405,185 +369,206 @@ dpif_port_group_get(const struct dpif *dpif, uint16_t group,
     *ports = NULL;
     *n_ports = 0;
     for (;;) {
-        struct odp_port_group pg;
-        pg.group = group;
-        pg.ports = *ports;
-        pg.n_ports = *n_ports;
-
-        error = do_ioctl(dpif, ODP_PORT_GROUP_GET, "ODP_PORT_GROUP_GET", &pg);
-        if (error) {
+        int retval = dpif->class->port_group_get(dpif, group,
+                                                 *ports, *n_ports);
+        if (retval < 0) {
             /* Hard error. */
+            error = -retval;
             free(*ports);
             *ports = NULL;
             *n_ports = 0;
             break;
-        } else if (pg.n_ports <= *n_ports) {
+        } else if (retval <= *n_ports) {
             /* Success. */
-            *n_ports = pg.n_ports;
+            error = 0;
+            *n_ports = retval;
             break;
         } else {
             /* Soft error: there were more ports than we expected in the
              * group.  Try again. */
             free(*ports);
-            *ports = xcalloc(pg.n_ports, sizeof **ports);
-            *n_ports = pg.n_ports;
+            *ports = xcalloc(retval, sizeof **ports);
+            *n_ports = retval;
         }
     }
+    log_operation(dpif, "port_group_get", error);
     return error;
 }
 
+/* Updates port group 'group' in 'dpif', making it contain the 'n_ports' ports
+ * whose 'dpif' port numbers are given in 'n_ports'.  Returns 0 if
+ * successful, otherwise a positive errno value.
+ *
+ * Behavior is undefined if the values in ports[] are not unique. */
+int
+dpif_port_group_set(struct dpif *dpif, uint16_t group,
+                    const uint16_t ports[], size_t n_ports)
+{
+    int error;
+
+    COVERAGE_INC(dpif_port_group_set);
+
+    error = dpif->class->port_group_set(dpif, group, ports, n_ports);
+    log_operation(dpif, "port_group_set", error);
+    return error;
+}
+
+/* Deletes all flows from 'dpif'.  Returns 0 if successful, otherwise a
+ * positive errno value.  */
 int
 dpif_flow_flush(struct dpif *dpif)
 {
+    int error;
+
     COVERAGE_INC(dpif_flow_flush);
-    return do_ioctl(dpif, ODP_FLOW_FLUSH, "ODP_FLOW_FLUSH", NULL);
-}
 
-static enum vlog_level
-flow_message_log_level(int error)
-{
-    return error ? VLL_WARN : VLL_DBG;
-}
-
-static bool
-should_log_flow_message(int error)
-{
-    return !vlog_should_drop(THIS_MODULE, flow_message_log_level(error),
-                             error ? &error_rl : &dpmsg_rl);
-}
-
-static void
-log_flow_message(const struct dpif *dpif, int error,
-                 const char *operation,
-                 const flow_t *flow, const struct odp_flow_stats *stats,
-                 const union odp_action *actions, size_t n_actions)
-{
-    struct ds ds = DS_EMPTY_INITIALIZER;
-    ds_put_format(&ds, "%s: ", dpif_name(dpif));
-    if (error) {
-        ds_put_cstr(&ds, "failed to ");
-    }
-    ds_put_format(&ds, "%s ", operation);
-    if (error) {
-        ds_put_format(&ds, "(%s) ", strerror(error));
-    }
-    flow_format(&ds, flow);
-    if (stats) {
-        ds_put_cstr(&ds, ", ");
-        format_odp_flow_stats(&ds, stats);
-    }
-    if (actions || n_actions) {
-        ds_put_cstr(&ds, ", actions:");
-        format_odp_actions(&ds, actions, n_actions);
-    }
-    vlog(THIS_MODULE, flow_message_log_level(error), "%s", ds_cstr(&ds));
-    ds_destroy(&ds);
-}
-
-static int
-do_flow_ioctl(const struct dpif *dpif, int cmd, struct odp_flow *flow,
-              const char *operation, bool show_stats)
-{
-    int error = do_ioctl(dpif, cmd, NULL, flow);
-    if (error && show_stats) {
-        flow->n_actions = 0;
-    }
-    if (should_log_flow_message(error)) {
-        log_flow_message(dpif, error, operation, &flow->key,
-                         show_stats && !error ? &flow->stats : NULL,
-                         flow->actions, flow->n_actions);
-    }
+    error = dpif->class->flow_flush(dpif);
+    log_operation(dpif, "flow_flush", error);
     return error;
 }
 
-int
-dpif_flow_put(struct dpif *dpif, struct odp_flow_put *put)
-{
-    int error = do_ioctl(dpif, ODP_FLOW_PUT, NULL, put);
-    COVERAGE_INC(dpif_flow_put);
-    if (should_log_flow_message(error)) {
-        struct ds operation = DS_EMPTY_INITIALIZER;
-        ds_put_cstr(&operation, "put");
-        if (put->flags & ODPPF_CREATE) {
-            ds_put_cstr(&operation, "[create]");
-        }
-        if (put->flags & ODPPF_MODIFY) {
-            ds_put_cstr(&operation, "[modify]");
-        }
-        if (put->flags & ODPPF_ZERO_STATS) {
-            ds_put_cstr(&operation, "[zero]");
-        }
-#define ODPPF_ALL (ODPPF_CREATE | ODPPF_MODIFY | ODPPF_ZERO_STATS)
-        if (put->flags & ~ODPPF_ALL) {
-            ds_put_format(&operation, "[%x]", put->flags & ~ODPPF_ALL);
-        }
-        log_flow_message(dpif, error, ds_cstr(&operation), &put->flow.key,
-                         !error ? &put->flow.stats : NULL,
-                         put->flow.actions, put->flow.n_actions);
-        ds_destroy(&operation);
-    }
-    return error;
-}
-
-int
-dpif_flow_del(struct dpif *dpif, struct odp_flow *flow)
-{
-    COVERAGE_INC(dpif_flow_del);
-    check_rw_odp_flow(flow);
-    memset(&flow->stats, 0, sizeof flow->stats);
-    return do_flow_ioctl(dpif, ODP_FLOW_DEL, flow, "delete flow", true);
-}
-
+/* Queries 'dpif' for a flow entry matching 'flow->key'.
+ *
+ * If a flow matching 'flow->key' exists in 'dpif', stores statistics for the
+ * flow into 'flow->stats'.  If 'flow->n_actions' is zero, then 'flow->actions'
+ * is ignored.  If 'flow->n_actions' is nonzero, then 'flow->actions' should
+ * point to an array of the specified number of actions.  At most that many of
+ * the flow's actions will be copied into that array.  'flow->n_actions' will
+ * be updated to the number of actions actually present in the flow, which may
+ * be greater than the number stored if the flow has more actions than space
+ * available in the array.
+ *
+ * If no flow matching 'flow->key' exists in 'dpif', returns ENOENT.  On other
+ * failure, returns a positive errno value. */
 int
 dpif_flow_get(const struct dpif *dpif, struct odp_flow *flow)
 {
-    struct odp_flowvec fv;
     int error;
 
     COVERAGE_INC(dpif_flow_get);
 
     check_rw_odp_flow(flow);
-    fv.flows = flow;
-    fv.n_flows = 1;
-    error = do_ioctl(dpif, ODP_FLOW_GET, "ODP_FLOW_GET", &fv);
+    error = dpif->class->flow_get(dpif, flow, 1);
     if (!error) {
         error = flow->stats.error;
-        if (error) {
-            VLOG_WARN_RL(&error_rl, "%s: ioctl(ODP_FLOW_GET) failed (%s)",
-                         dpif_name(dpif), strerror(error));
-        }
+    }
+    if (should_log_flow_message(error)) {
+        log_flow_operation(dpif, "flow_get", error, flow);
     }
     return error;
 }
 
+/* For each flow 'flow' in the 'n' flows in 'flows':
+ *
+ * - If a flow matching 'flow->key' exists in 'dpif':
+ *
+ *     Stores 0 into 'flow->stats.error' and stores statistics for the flow
+ *     into 'flow->stats'.
+ *
+ *     If 'flow->n_actions' is zero, then 'flow->actions' is ignored.  If
+ *     'flow->n_actions' is nonzero, then 'flow->actions' should point to an
+ *     array of the specified number of actions.  At most that many of the
+ *     flow's actions will be copied into that array.  'flow->n_actions' will
+ *     be updated to the number of actions actually present in the flow, which
+ *     may be greater than the number stored if the flow has more actions than
+ *     space available in the array.
+ *
+ * - Flow-specific errors are indicated by a positive errno value in
+ *   'flow->stats.error'.  In particular, ENOENT indicates that no flow
+ *   matching 'flow->key' exists in 'dpif'.  When an error value is stored, the
+ *   contents of 'flow->key' are preserved but other members of 'flow' should
+ *   be treated as indeterminate.
+ *
+ * Returns 0 if all 'n' flows in 'flows' were updated (whether they were
+ * individually successful or not is indicated by 'flow->stats.error',
+ * however).  Returns a positive errno value if an error that prevented this
+ * update occurred, in which the caller must not depend on any elements in
+ * 'flows' being updated or not updated.
+ */
 int
 dpif_flow_get_multiple(const struct dpif *dpif,
                        struct odp_flow flows[], size_t n)
 {
-    struct odp_flowvec fv;
+    int error;
     size_t i;
 
-    COVERAGE_ADD(dpif_flow_query_multiple, n);
-    fv.flows = flows;
-    fv.n_flows = n;
+    COVERAGE_ADD(dpif_flow_get, n);
+
     for (i = 0; i < n; i++) {
         check_rw_odp_flow(&flows[i]);
     }
-    return do_ioctl(dpif, ODP_FLOW_GET, "ODP_FLOW_GET",
-                    &fv);
+
+    error = dpif->class->flow_get(dpif, flows, n);
+    log_operation(dpif, "flow_get_multiple", error);
+    return error;
 }
 
+/* Adds or modifies a flow in 'dpif' as specified in 'put':
+ *
+ * - If the flow specified in 'put->flow' does not exist in 'dpif', then
+ *   behavior depends on whether ODPPF_CREATE is specified in 'put->flags': if
+ *   it is, the flow will be added, otherwise the operation will fail with
+ *   ENOENT.
+ *
+ * - Otherwise, the flow specified in 'put->flow' does exist in 'dpif'.
+ *   Behavior in this case depends on whether ODPPF_MODIFY is specified in
+ *   'put->flags': if it is, the flow's actions will be updated, otherwise the
+ *   operation will fail with EEXIST.  If the flow's actions are updated, then
+ *   its statistics will be zeroed if ODPPF_ZERO_STATS is set in 'put->flags',
+ *   left as-is otherwise.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.
+ */
+int
+dpif_flow_put(struct dpif *dpif, struct odp_flow_put *put)
+{
+    int error;
+
+    COVERAGE_INC(dpif_flow_put);
+
+    error = dpif->class->flow_put(dpif, put);
+    if (should_log_flow_message(error)) {
+        log_flow_put(dpif, error, put);
+    }
+    return error;
+}
+
+/* Deletes a flow matching 'flow->key' from 'dpif' or returns ENOENT if 'dpif'
+ * does not contain such a flow.
+ *
+ * If successful, updates 'flow->stats', 'flow->n_actions', and 'flow->actions'
+ * as described for dpif_flow_get(). */
+int
+dpif_flow_del(struct dpif *dpif, struct odp_flow *flow)
+{
+    int error;
+
+    COVERAGE_INC(dpif_flow_del);
+
+    check_rw_odp_flow(flow);
+    memset(&flow->stats, 0, sizeof flow->stats);
+
+    error = dpif->class->flow_del(dpif, flow);
+    if (should_log_flow_message(error)) {
+        log_flow_operation(dpif, "delete flow", error, flow);
+    }
+    return error;
+}
+
+/* Stores up to 'n' flows in 'dpif' into 'flows', including their statistics
+ * but not including any information about their actions.  If successful,
+ * returns 0 and sets '*n_out' to the number of flows actually present in
+ * 'dpif', which might be greater than the number stored (if 'dpif' has more
+ * than 'n' flows).  On failure, returns a negative errno value and sets
+ * '*n_out' to 0. */
 int
 dpif_flow_list(const struct dpif *dpif, struct odp_flow flows[], size_t n,
                size_t *n_out)
 {
-    struct odp_flowvec fv;
     uint32_t i;
-    int error;
+    int retval;
 
     COVERAGE_INC(dpif_flow_query_list);
-    fv.flows = flows;
-    fv.n_flows = n;
     if (RUNNING_ON_VALGRIND) {
         memset(flows, 0, n * sizeof *flows);
     } else {
@@ -592,20 +577,31 @@ dpif_flow_list(const struct dpif *dpif, struct odp_flow flows[], size_t n,
             flows[i].n_actions = 0;
         }
     }
-    error = do_ioctl(dpif, ODP_FLOW_LIST, NULL, &fv);
-    if (error) {
+    retval = dpif->class->flow_list(dpif, flows, n);
+    if (retval < 0) {
         *n_out = 0;
         VLOG_WARN_RL(&error_rl, "%s: flow list failed (%s)",
-                     dpif_name(dpif), strerror(error));
+                     dpif_name(dpif), strerror(-retval));
+        return -retval;
     } else {
-        COVERAGE_ADD(dpif_flow_query_list_n, fv.n_flows);
-        *n_out = fv.n_flows;
-        VLOG_DBG_RL(&dpmsg_rl, "%s: listed %zu flows",
-                    dpif_name(dpif), *n_out);
+        COVERAGE_ADD(dpif_flow_query_list_n, retval);
+        *n_out = MIN(n, retval);
+        VLOG_DBG_RL(&dpmsg_rl, "%s: listed %zu flows (of %d)",
+                    dpif_name(dpif), *n_out, retval);
+        return 0;
     }
-    return error;
 }
 
+/* Retrieves all of the flows in 'dpif'.
+ *
+ * If successful, returns 0 and stores in '*flowsp' a pointer to a newly
+ * allocated array of flows, including their statistics but not including any
+ * information about their actions, and sets '*np' to the number of flows in
+ * '*flowsp'.  The caller is responsible for freeing '*flowsp' by calling
+ * free().
+ *
+ * On failure, returns a positive errno value and sets '*flowsp' to NULL and
+ * '*np' to 0. */
 int
 dpif_flow_list_all(const struct dpif *dpif,
                    struct odp_flow **flowsp, size_t *np)
@@ -640,6 +636,15 @@ dpif_flow_list_all(const struct dpif *dpif,
     return 0;
 }
 
+/* Causes 'dpif' to perform the 'n_actions' actions in 'actions' on the
+ * Ethernet frame specified in 'packet'.
+ *
+ * Pretends that the frame was originally received on the port numbered
+ * 'in_port'.  This affects only ODPAT_OUTPUT_GROUP actions, which will not
+ * send a packet out their input port.  Specify the number of an unused port
+ * (e.g. UINT16_MAX is currently always unused) to avoid this behavior.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
 int
 dpif_execute(struct dpif *dpif, uint16_t in_port,
              const union odp_action actions[], size_t n_actions,
@@ -649,14 +654,7 @@ dpif_execute(struct dpif *dpif, uint16_t in_port,
 
     COVERAGE_INC(dpif_execute);
     if (n_actions > 0) {
-        struct odp_execute execute;
-        memset(&execute, 0, sizeof execute);
-        execute.in_port = in_port;
-        execute.actions = (union odp_action *) actions;
-        execute.n_actions = n_actions;
-        execute.data = buf->data;
-        execute.length = buf->size;
-        error = do_ioctl(dpif, ODP_EXECUTE, NULL, &execute);
+        error = dpif->class->execute(dpif, in_port, actions, n_actions, buf);
     } else {
         error = 0;
     }
@@ -677,93 +675,242 @@ dpif_execute(struct dpif *dpif, uint16_t in_port,
     return error;
 }
 
+/* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  Each ODPL_* bit set
+ * in '*listen_mask' indicates that dpif_recv() will receive messages of that
+ * type.  Returns 0 if successful, otherwise a positive errno value. */
 int
 dpif_recv_get_mask(const struct dpif *dpif, int *listen_mask)
 {
-    int error = do_ioctl(dpif, ODP_GET_LISTEN_MASK, "ODP_GET_LISTEN_MASK",
-                         listen_mask);
+    int error = dpif->class->recv_get_mask(dpif, listen_mask);
     if (error) {
         *listen_mask = 0;
     }
+    log_operation(dpif, "recv_get_mask", error);
     return error;
 }
 
+/* Sets 'dpif''s "listen mask" to 'listen_mask'.  Each ODPL_* bit set in
+ * '*listen_mask' requests that dpif_recv() receive messages of that type.
+ * Returns 0 if successful, otherwise a positive errno value. */
 int
 dpif_recv_set_mask(struct dpif *dpif, int listen_mask)
 {
-    return do_ioctl(dpif, ODP_SET_LISTEN_MASK, "ODP_SET_LISTEN_MASK",
-                    &listen_mask);
-}
-
-int
-dpif_recv(struct dpif *dpif, struct ofpbuf **bufp)
-{
-    struct ofpbuf *buf;
-    int retval;
-    int error;
-
-    buf = ofpbuf_new(65536);
-    retval = read(dpif->fd, ofpbuf_tail(buf), ofpbuf_tailroom(buf));
-    if (retval < 0) {
-        error = errno;
-        if (error != EAGAIN) {
-            VLOG_WARN_RL(&error_rl, "%s: read failed: %s",
-                         dpif_name(dpif), strerror(error));
-        }
-    } else if (retval >= sizeof(struct odp_msg)) {
-        struct odp_msg *msg = buf->data;
-        if (msg->length <= retval) {
-            buf->size += retval;
-            if (VLOG_IS_DBG_ENABLED()) {
-                void *payload = msg + 1;
-                size_t length = buf->size - sizeof *msg;
-                char *s = ofp_packet_to_string(payload, length, length);
-                VLOG_DBG_RL(&dpmsg_rl, "%s: received %s message of length "
-                            "%zu on port %"PRIu16": %s", dpif_name(dpif),
-                            (msg->type == _ODPL_MISS_NR ? "miss"
-                             : msg->type == _ODPL_ACTION_NR ? "action"
-                             : "<unknown>"),
-                            msg->length - sizeof(struct odp_msg),
-                            msg->port, s);
-                free(s);
-            }
-            *bufp = buf;
-            COVERAGE_INC(dpif_recv);
-            return 0;
-        } else {
-            VLOG_WARN_RL(&error_rl, "%s: discarding message truncated "
-                         "from %zu bytes to %d",
-                         dpif_name(dpif), msg->length, retval);
-            error = ERANGE;
-        }
-    } else if (!retval) {
-        VLOG_WARN_RL(&error_rl, "%s: unexpected end of file", dpif_name(dpif));
-        error = EPROTO;
-    } else {
-        VLOG_WARN_RL(&error_rl,
-                     "%s: discarding too-short message (%d bytes)",
-                     dpif_name(dpif), retval);
-        error = ERANGE;
-    }
-
-    *bufp = NULL;
-    ofpbuf_delete(buf);
+    int error = dpif->class->recv_set_mask(dpif, listen_mask);
+    log_operation(dpif, "recv_set_mask", error);
     return error;
 }
 
+/* Attempts to receive a message from 'dpif'.  If successful, stores the
+ * message into '*packetp'.  The message, if one is received, will begin with
+ * 'struct odp_msg' as a header.  Only messages of the types selected with
+ * dpif_set_listen_mask() will ordinarily be received (but if a message type is
+ * enabled and then later disabled, some stragglers might pop up).
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  Returns EAGAIN
+ * if no message is immediately available. */
+int
+dpif_recv(struct dpif *dpif, struct ofpbuf **packetp)
+{
+    int error = dpif->class->recv(dpif, packetp);
+    if (!error) {
+        if (VLOG_IS_DBG_ENABLED()) {
+            struct ofpbuf *buf = *packetp;
+            struct odp_msg *msg = buf->data;
+            void *payload = msg + 1;
+            size_t payload_len = buf->size - sizeof *msg;
+            char *s = ofp_packet_to_string(payload, payload_len, payload_len);
+            VLOG_DBG_RL(&dpmsg_rl, "%s: received %s message of length "
+                        "%zu on port %"PRIu16": %s", dpif_name(dpif),
+                        (msg->type == _ODPL_MISS_NR ? "miss"
+                         : msg->type == _ODPL_ACTION_NR ? "action"
+                         : "<unknown>"),
+                        payload_len, msg->port, s);
+            free(s);
+        }
+    } else {
+        *packetp = NULL;
+    }
+    return error;
+}
+
+/* Discards all messages that would otherwise be received by dpif_recv() on
+ * 'dpif'.  Returns 0 if successful, otherwise a positive errno value. */
+int
+dpif_recv_purge(struct dpif *dpif)
+{
+    struct odp_stats stats;
+    unsigned int i;
+    int error;
+
+    COVERAGE_INC(dpif_purge);
+
+    error = dpif_get_dp_stats(dpif, &stats);
+    if (error) {
+        return error;
+    }
+
+    for (i = 0; i < stats.max_miss_queue + stats.max_action_queue; i++) {
+        struct ofpbuf *buf;
+        error = dpif_recv(dpif, &buf);
+        if (error) {
+            return error == EAGAIN ? 0 : error;
+        }
+        ofpbuf_delete(buf);
+    }
+    return 0;
+}
+
+/* Arranges for the poll loop to wake up when 'dpif' has a message queued to be
+ * received with dpif_recv(). */
 void
 dpif_recv_wait(struct dpif *dpif)
 {
-    poll_fd_wait(dpif->fd, POLLIN);
+    dpif->class->recv_wait(dpif);
 }
 
+/* Obtains the NetFlow engine type and engine ID for 'dpif' into '*engine_type'
+ * and '*engine_id', respectively. */
 void
 dpif_get_netflow_ids(const struct dpif *dpif,
                      uint8_t *engine_type, uint8_t *engine_id)
 {
-    *engine_type = *engine_id = dpif->minor;
+    *engine_type = dpif->netflow_engine_type;
+    *engine_id = dpif->netflow_engine_id;
 }
 
+void
+dpif_init(struct dpif *dpif, const struct dpif_class *class, const char *name,
+          uint8_t netflow_engine_type, uint8_t netflow_engine_id)
+{
+    dpif->class = class;
+    dpif->name = xstrdup(name);
+    dpif->netflow_engine_type = netflow_engine_type;
+    dpif->netflow_engine_id = netflow_engine_id;
+}
+
+static void
+log_operation(const struct dpif *dpif, const char *operation, int error)
+{
+    if (!error) {
+        VLOG_DBG_RL(&dpmsg_rl, "%s: %s success", dpif_name(dpif), operation);
+    } else {
+        VLOG_WARN_RL(&error_rl, "%s: %s failed (%s)",
+                     dpif_name(dpif), operation, strerror(error));
+    }
+}
+
+static enum vlog_level
+flow_message_log_level(int error)
+{
+    return error ? VLL_WARN : VLL_DBG;
+}
+
+static bool
+should_log_flow_message(int error)
+{
+    return !vlog_should_drop(THIS_MODULE, flow_message_log_level(error),
+                             error ? &error_rl : &dpmsg_rl);
+}
+
+static void
+log_flow_message(const struct dpif *dpif, int error, const char *operation,
+                 const flow_t *flow, const struct odp_flow_stats *stats,
+                 const union odp_action *actions, size_t n_actions)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    ds_put_format(&ds, "%s: ", dpif_name(dpif));
+    if (error) {
+        ds_put_cstr(&ds, "failed to ");
+    }
+    ds_put_format(&ds, "%s ", operation);
+    if (error) {
+        ds_put_format(&ds, "(%s) ", strerror(error));
+    }
+    flow_format(&ds, flow);
+    if (stats) {
+        ds_put_cstr(&ds, ", ");
+        format_odp_flow_stats(&ds, stats);
+    }
+    if (actions || n_actions) {
+        ds_put_cstr(&ds, ", actions:");
+        format_odp_actions(&ds, actions, n_actions);
+    }
+    vlog(THIS_MODULE, flow_message_log_level(error), "%s", ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+static void
+log_flow_operation(const struct dpif *dpif, const char *operation, int error,
+                   struct odp_flow *flow)
+{
+    if (error) {
+        flow->n_actions = 0;
+    }
+    log_flow_message(dpif, error, operation, &flow->key,
+                     !error ? &flow->stats : NULL,
+                     flow->actions, flow->n_actions);
+}
+
+static void
+log_flow_put(struct dpif *dpif, int error, const struct odp_flow_put *put)
+{
+    enum { ODPPF_ALL = ODPPF_CREATE | ODPPF_MODIFY | ODPPF_ZERO_STATS };
+    struct ds s;
+
+    ds_init(&s);
+    ds_put_cstr(&s, "put");
+    if (put->flags & ODPPF_CREATE) {
+        ds_put_cstr(&s, "[create]");
+    }
+    if (put->flags & ODPPF_MODIFY) {
+        ds_put_cstr(&s, "[modify]");
+    }
+    if (put->flags & ODPPF_ZERO_STATS) {
+        ds_put_cstr(&s, "[zero]");
+    }
+    if (put->flags & ~ODPPF_ALL) {
+        ds_put_format(&s, "[%x]", put->flags & ~ODPPF_ALL);
+    }
+    log_flow_message(dpif, error, ds_cstr(&s), &put->flow.key,
+                     !error ? &put->flow.stats : NULL,
+                     put->flow.actions, put->flow.n_actions);
+    ds_destroy(&s);
+}
+
+/* There is a tendency to construct odp_flow objects on the stack and to
+ * forget to properly initialize their "actions" and "n_actions" members.
+ * When this happens, we get memory corruption because the kernel
+ * writes through the random pointer that is in the "actions" member.
+ *
+ * This function attempts to combat the problem by:
+ *
+ *      - Forcing a segfault if "actions" points to an invalid region (instead
+ *        of just getting back EFAULT, which can be easily missed in the log).
+ *
+ *      - Storing a distinctive value that is likely to cause an
+ *        easy-to-identify error later if it is dereferenced, etc.
+ *
+ *      - Triggering a warning on uninitialized memory from Valgrind if
+ *        "actions" or "n_actions" was not initialized.
+ */
+static void
+check_rw_odp_flow(struct odp_flow *flow)
+{
+    if (flow->n_actions) {
+        memset(&flow->actions[0], 0xcc, sizeof flow->actions[0]);
+    }
+}
+
+#include <net/if.h>
+#include <linux/rtnetlink.h>
+#include <linux/ethtool.h>
+#include <linux/sockios.h>
+#include <netinet/in.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
+#include <unistd.h>
+
 struct dpifmon {
     struct dpif *dpif;
     struct nl_sock *sock;
@@ -894,248 +1041,4 @@ void
 dpifmon_wait(struct dpifmon *mon)
 {
     nl_sock_wait(mon->sock, POLLIN);
-}
-
-static int get_openvswitch_major(void);
-static int get_major(const char *target, int default_major);
-
-static int
-lookup_minor(const char *name, unsigned int *minor)
-{
-    struct ethtool_drvinfo drvinfo;
-    struct ifreq ifr;
-    int error;
-    int sock;
-
-    *minor = -1;
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) {
-        VLOG_WARN("socket(AF_INET) failed: %s", strerror(errno));
-        error = errno;
-        goto error;
-    }
-
-    memset(&ifr, 0, sizeof ifr);
-    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
-    ifr.ifr_data = (caddr_t) &drvinfo;
-
-    memset(&drvinfo, 0, sizeof drvinfo);
-    drvinfo.cmd = ETHTOOL_GDRVINFO;
-    if (ioctl(sock, SIOCETHTOOL, &ifr)) {
-        VLOG_WARN("ioctl(SIOCETHTOOL) failed: %s", strerror(errno));
-        error = errno;
-        goto error_close_sock;
-    }
-
-    if (strcmp(drvinfo.driver, "openvswitch")) {
-        VLOG_WARN("%s is not an openvswitch device", name);
-        error = EOPNOTSUPP;
-        goto error_close_sock;
-    }
-
-    if (!isdigit(drvinfo.bus_info[0])) {
-        VLOG_WARN("%s ethtool info does not contain an openvswitch minor",
-                  name);
-        error = EPROTOTYPE;
-        goto error_close_sock;
-    }
-
-    *minor = atoi(drvinfo.bus_info);
-    close(sock);
-    return 0;
-
-error_close_sock:
-    close(sock);
-error:
-    return error;
-}
-
-static int
-make_openvswitch_device(unsigned int minor, char **fnp)
-{
-    dev_t dev = makedev(get_openvswitch_major(), minor);
-    const char dirname[] = "/dev/net";
-    struct stat s;
-    char fn[128];
-
-    *fnp = NULL;
-    sprintf(fn, "%s/dp%d", dirname, minor);
-    if (!stat(fn, &s)) {
-        if (!S_ISCHR(s.st_mode)) {
-            VLOG_WARN_RL(&error_rl, "%s is not a character device, fixing",
-                         fn);
-        } else if (s.st_rdev != dev) {
-            VLOG_WARN_RL(&error_rl,
-                         "%s is device %u:%u instead of %u:%u, fixing",
-                         fn, major(s.st_rdev), minor(s.st_rdev),
-                         major(dev), minor(dev));
-        } else {
-            goto success;
-        }
-        if (unlink(fn)) {
-            VLOG_WARN_RL(&error_rl, "%s: unlink failed (%s)",
-                         fn, strerror(errno));
-            return errno;
-        }
-    } else if (errno == ENOENT) {
-        if (stat(dirname, &s)) {
-            if (errno == ENOENT) {
-                if (mkdir(dirname, 0755)) {
-                    VLOG_WARN_RL(&error_rl, "%s: mkdir failed (%s)",
-                                 dirname, strerror(errno));
-                    return errno;
-                }
-            } else {
-                VLOG_WARN_RL(&error_rl, "%s: stat failed (%s)",
-                             dirname, strerror(errno));
-                return errno;
-            }
-        }
-    } else {
-        VLOG_WARN_RL(&error_rl, "%s: stat failed (%s)", fn, strerror(errno));
-        return errno;
-    }
-
-    /* The device needs to be created. */
-    if (mknod(fn, S_IFCHR | 0700, dev)) {
-        VLOG_WARN_RL(&error_rl,
-                     "%s: creating character device %u:%u failed (%s)",
-                     fn, major(dev), minor(dev), strerror(errno));
-        return errno;
-    }
-
-success:
-    *fnp = xstrdup(fn);
-    return 0;
-}
-
-
-static int
-get_openvswitch_major(void)
-{
-    static unsigned int openvswitch_major;
-    if (!openvswitch_major) {
-        enum { DEFAULT_MAJOR = 248 };
-        openvswitch_major = get_major("openvswitch", DEFAULT_MAJOR);
-    }
-    return openvswitch_major;
-}
-
-static int
-get_major(const char *target, int default_major)
-{
-    const char fn[] = "/proc/devices";
-    char line[128];
-    FILE *file;
-    int ln;
-
-    file = fopen(fn, "r");
-    if (!file) {
-        VLOG_ERR("opening %s failed (%s)", fn, strerror(errno));
-        goto error;
-    }
-
-    for (ln = 1; fgets(line, sizeof line, file); ln++) {
-        char name[64];
-        int major;
-
-        if (!strncmp(line, "Character", 9) || line[0] == '\0') {
-            /* Nothing to do. */
-        } else if (!strncmp(line, "Block", 5)) {
-            /* We only want character devices, so skip the rest of the file. */
-            break;
-        } else if (sscanf(line, "%d %63s", &major, name)) {
-            if (!strcmp(name, target)) {
-                fclose(file);
-                return major;
-            }
-        } else {
-            static bool warned;
-            if (!warned) {
-                VLOG_WARN("%s:%d: syntax error", fn, ln);
-            }
-            warned = true;
-        }
-    }
-
-    VLOG_ERR("%s: %s major not found (is the module loaded?), using "
-             "default major %d", fn, target, default_major);
-error:
-    VLOG_INFO("using default major %d for %s", default_major, target);
-    return default_major;
-}
-
-static int
-name_to_minor(const char *name, unsigned int *minor)
-{
-    if (!get_minor_from_name(name, minor)) {
-        return 0;
-    }
-    return lookup_minor(name, minor);
-}
-
-static int
-get_minor_from_name(const char *name, unsigned int *minor)
-{
-    if (!strncmp(name, "dp", 2) && isdigit(name[2])) {
-        *minor = atoi(name + 2);
-        return 0;
-    } else {
-        return EINVAL;
-    }
-}
-
-static int
-open_by_minor(unsigned int minor, struct dpif **dpifp)
-{
-    struct dpif *dpif;
-    int error;
-    char *fn;
-    int fd;
-
-    *dpifp = NULL;
-    error = make_openvswitch_device(minor, &fn);
-    if (error) {
-        return error;
-    }
-
-    fd = open(fn, O_RDONLY | O_NONBLOCK);
-    if (fd < 0) {
-        error = errno;
-        VLOG_WARN("%s: open failed (%s)", fn, strerror(error));
-        free(fn);
-        return error;
-    }
-    free(fn);
-
-    dpif = xmalloc(sizeof *dpif);
-    dpif->name = xasprintf("dp%u", dpif->minor);
-    dpif->minor = minor;
-    dpif->fd = fd;
-    *dpifp = dpif;
-    return 0;
-}
-
-/* There is a tendency to construct odp_flow objects on the stack and to
- * forget to properly initialize their "actions" and "n_actions" members.
- * When this happens, we get memory corruption because the kernel
- * writes through the random pointer that is in the "actions" member.
- *
- * This function attempts to combat the problem by:
- *
- *      - Forcing a segfault if "actions" points to an invalid region (instead
- *        of just getting back EFAULT, which can be easily missed in the log).
- *
- *      - Storing a distinctive value that is likely to cause an
- *        easy-to-identify error later if it is dereferenced, etc.
- *
- *      - Triggering a warning on uninitialized memory from Valgrind if
- *        "actions" or "n_actions" was not initialized.
- */
-static void
-check_rw_odp_flow(struct odp_flow *flow)
-{
-    if (flow->n_actions) {
-        memset(&flow->actions[0], 0xcc, sizeof flow->actions[0]);
-    }
 }

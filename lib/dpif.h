@@ -53,10 +53,10 @@ int dpif_port_get_name(struct dpif *, uint16_t port_no,
                        char *name, size_t name_size);
 int dpif_port_list(const struct dpif *, struct odp_port **, size_t *n_ports);
 
-int dpif_port_group_set(struct dpif *, uint16_t group,
-                        const uint16_t ports[], size_t n_ports);
 int dpif_port_group_get(const struct dpif *, uint16_t group,
                         uint16_t **ports, size_t *n_ports);
+int dpif_port_group_set(struct dpif *, uint16_t group,
+                        const uint16_t ports[], size_t n_ports);
 
 int dpif_flow_flush(struct dpif *);
 int dpif_flow_put(struct dpif *, struct odp_flow_put *);

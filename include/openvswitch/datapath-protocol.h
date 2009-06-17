@@ -70,13 +70,12 @@
 #define ODP_PORT_GROUP_GET      _IOWR('O', 12, struct odp_port_group)
 
 #define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flow)
+#define ODP_FLOW_PUT            _IOWR('O', 14, struct odp_flow)
 #define ODP_FLOW_LIST           _IOWR('O', 15, struct odp_flowvec)
-
 #define ODP_FLOW_FLUSH          _IO('O', 16)
-#define ODP_FLOW_PUT            _IOWR('O', 17, struct odp_flow)
-#define ODP_FLOW_DEL            _IOWR('O', 18, struct odp_flow)
+#define ODP_FLOW_DEL            _IOWR('O', 17, struct odp_flow)
 
-#define ODP_EXECUTE             _IOR('O', 19, struct odp_execute)
+#define ODP_EXECUTE             _IOR('O', 18, struct odp_execute)
 
 struct odp_stats {
     /* Flows. */

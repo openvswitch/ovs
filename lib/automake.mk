@@ -32,6 +32,10 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/dhcp.h \
 	lib/dhparams.h \
 	lib/dirs.h \
+	lib/dpif-linux.c \
+	lib/dpif-provider.h \
+	lib/dpif.c \
+	lib/dpif.h \
 	lib/dynamic-string.c \
 	lib/dynamic-string.h \
 	lib/fatal-signal.c \
@@ -117,8 +121,6 @@ CLEANFILES += $(nodist_lib_libopenvswitch_a_SOURCES)
 
 if HAVE_NETLINK
 lib_libopenvswitch_a_SOURCES += \
-	lib/dpif.c \
-	lib/dpif.h \
 	lib/netlink-protocol.h \
 	lib/netlink.c \
 	lib/netlink.h
