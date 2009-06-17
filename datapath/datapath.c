@@ -1344,24 +1344,28 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 	/* Handle commands with special locking requirements up front. */
 	switch (cmd) {
 	case ODP_DP_CREATE:
-		return create_dp(dp_idx, (char __user *)argp);
+		err = create_dp(dp_idx, (char __user *)argp);
+		goto exit;
 
 	case ODP_DP_DESTROY:
-		return destroy_dp(dp_idx);
+		err = destroy_dp(dp_idx);
+		goto exit;
 
 	case ODP_PORT_ADD:
-		return add_port(dp_idx, (struct odp_port __user *)argp);
+		err = add_port(dp_idx, (struct odp_port __user *)argp);
+		goto exit;
 
 	case ODP_PORT_DEL:
 		err = get_user(port_no, (int __user *)argp);
-		if (err)
-			return err;
-		return del_port(dp_idx, port_no);
+		if (!err)
+			err = del_port(dp_idx, port_no);
+		goto exit;
 	}
 
 	dp = get_dp_locked(dp_idx);
+	err = -ENODEV;
 	if (!dp)
-		return -ENODEV;
+		goto exit;
 
 	switch (cmd) {
 	case ODP_DP_STATS:
@@ -1443,6 +1447,7 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		break;
 	}
 	mutex_unlock(&dp->mutex);
+exit:
 	return err;
 }
 
