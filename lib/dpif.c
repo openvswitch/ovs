@@ -337,33 +337,48 @@ dpif_port_get_name(struct dpif *dpif, uint16_t port_no,
 
 int
 dpif_port_list(const struct dpif *dpif,
-               struct odp_port **ports, size_t *n_ports)
+               struct odp_port **portsp, size_t *n_portsp)
 {
-    struct odp_portvec pv;
-    struct odp_stats stats;
+    struct odp_port *ports;
+    size_t n_ports;
     int error;
 
-    do {
+    for (;;) {
+        struct odp_stats stats;
+        struct odp_portvec pv;
+
         error = dpif_get_dp_stats(dpif, &stats);
         if (error) {
-            goto error;
+            goto exit;
         }
 
-        *ports = xcalloc(1, stats.n_ports * sizeof **ports);
-        pv.ports = *ports;
+        ports = xcalloc(stats.n_ports, sizeof *ports);
+        pv.ports = ports;
         pv.n_ports = stats.n_ports;
         error = do_ioctl(dpif, ODP_PORT_LIST, "ODP_PORT_LIST", &pv);
         if (error) {
-            free(*ports);
-            goto error;
+            /* Hard error. */
+            free(ports);
+            goto exit;
+        } else if (pv.n_ports <= stats.n_ports) {
+            /* Success. */
+            error = 0;
+            n_ports = pv.n_ports;
+            goto exit;
+        } else {
+            /* Soft error: port count increased behind our back.  Try again. */
+            free(ports);
         }
-    } while (pv.n_ports != stats.n_ports);
-    *n_ports = pv.n_ports;
-    return 0;
+    }
 
-error:
-    *ports = NULL;
-    *n_ports = 0;
+exit:
+    if (error) {
+        *portsp = NULL;
+        *n_portsp = 0;
+    } else {
+        *portsp = ports;
+        *n_portsp = n_ports;
+    }
     return error;
 }
 

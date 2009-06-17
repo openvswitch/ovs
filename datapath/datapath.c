@@ -1260,7 +1260,7 @@ list_ports(struct datapath *dp, struct odp_portvec __user *pvp)
 				break;
 		}
 	}
-	return put_user(idx, &pvp->n_ports);
+	return put_user(dp->n_ports, &pvp->n_ports);
 }
 
 /* RCU callback for freeing a dp_port_group */
