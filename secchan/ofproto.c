@@ -280,7 +280,7 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
         dpif_close(dpif);
         return error;
     }
-    error = dpif_set_listen_mask(dpif, ODPL_MISS | ODPL_ACTION);
+    error = dpif_recv_set_mask(dpif, ODPL_MISS | ODPL_ACTION);
     if (error) {
         VLOG_ERR("failed to listen on datapath %s: %s",
                  datapath, strerror(error));
@@ -288,7 +288,7 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
         return error;
     }
     dpif_flow_flush(dpif);
-    dpif_purge(dpif);
+    dpif_recv_purge(dpif);
 
     /* Start monitoring datapath ports for status changes. */
     error = dpifmon_create(datapath, &dpifmon);

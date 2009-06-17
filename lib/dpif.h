@@ -42,10 +42,6 @@ int dpif_get_dp_stats(const struct dpif *, struct odp_stats *);
 int dpif_get_drop_frags(const struct dpif *, bool *drop_frags);
 int dpif_set_drop_frags(struct dpif *, bool drop_frags);
 
-int dpif_get_listen_mask(const struct dpif *, int *listen_mask);
-int dpif_set_listen_mask(struct dpif *, int listen_mask);
-int dpif_purge(struct dpif *);
-
 int dpif_port_add(struct dpif *, const char *devname, uint16_t port_no,
                   uint16_t flags);
 int dpif_port_del(struct dpif *, uint16_t port_no);
@@ -76,7 +72,10 @@ int dpif_execute(struct dpif *, uint16_t in_port,
                  const union odp_action[], size_t n_actions,
                  const struct ofpbuf *);
 
+int dpif_recv_get_mask(const struct dpif *, int *listen_mask);
+int dpif_recv_set_mask(struct dpif *, int listen_mask);
 int dpif_recv(struct dpif *, struct ofpbuf **);
+int dpif_recv_purge(struct dpif *);
 void dpif_recv_wait(struct dpif *);
 
 void dpif_get_netflow_ids(const struct dpif *,

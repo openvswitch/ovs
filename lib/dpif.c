@@ -218,25 +218,7 @@ dpif_set_drop_frags(struct dpif *dpif, bool drop_frags)
 }
 
 int
-dpif_get_listen_mask(const struct dpif *dpif, int *listen_mask)
-{
-    int error = do_ioctl(dpif, ODP_GET_LISTEN_MASK, "ODP_GET_LISTEN_MASK",
-                         listen_mask);
-    if (error) {
-        *listen_mask = 0;
-    }
-    return error;
-}
-
-int
-dpif_set_listen_mask(struct dpif *dpif, int listen_mask)
-{
-    return do_ioctl(dpif, ODP_SET_LISTEN_MASK, "ODP_SET_LISTEN_MASK",
-                    &listen_mask);
-}
-
-int
-dpif_purge(struct dpif *dpif)
+dpif_recv_purge(struct dpif *dpif)
 {
     struct odp_stats stats;
     unsigned int i;
@@ -657,6 +639,24 @@ dpif_execute(struct dpif *dpif, uint16_t in_port,
         free(packet);
     }
     return error;
+}
+
+int
+dpif_recv_get_mask(const struct dpif *dpif, int *listen_mask)
+{
+    int error = do_ioctl(dpif, ODP_GET_LISTEN_MASK, "ODP_GET_LISTEN_MASK",
+                         listen_mask);
+    if (error) {
+        *listen_mask = 0;
+    }
+    return error;
+}
+
+int
+dpif_recv_set_mask(struct dpif *dpif, int listen_mask)
+{
+    return do_ioctl(dpif, ODP_SET_LISTEN_MASK, "ODP_SET_LISTEN_MASK",
+                    &listen_mask);
 }
 
 int
