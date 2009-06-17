@@ -1355,7 +1355,7 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 	case ODP_PORT_DEL:
 		err = get_user(port_no, (int __user *)argp);
 		if (err)
-			break;
+			return err;
 		return del_port(dp_idx, port_no);
 	}
 
