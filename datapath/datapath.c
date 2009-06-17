@@ -831,6 +831,7 @@ static void get_stats(struct sw_flow *flow, struct odp_flow_stats *stats)
 	stats->n_bytes = flow->byte_count;
 	stats->ip_tos = flow->ip_tos;
 	stats->tcp_flags = flow->tcp_flags;
+	stats->error = 0;
 }
 
 static void clear_stats(struct sw_flow *flow)
@@ -984,9 +985,7 @@ static int answer_query(struct sw_flow *flow, struct odp_flow __user *ufp)
 	return put_actions(flow, ufp);
 }
 
-static int del_or_query_flow(struct datapath *dp,
-			     struct odp_flow __user *ufp,
-			     unsigned int cmd)
+static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 {
 	struct dp_table *table = rcu_dereference(dp->table);
 	struct odp_flow uf;
@@ -1003,29 +1002,24 @@ static int del_or_query_flow(struct datapath *dp,
 	if (!flow)
 		goto error;
 
-	if (cmd == ODP_FLOW_DEL) {
-		/* XXX redundant lookup */
-		error = dp_table_delete(table, flow);
-		if (error)
-			goto error;
+	/* XXX redundant lookup */
+	error = dp_table_delete(table, flow);
+	if (error)
+		goto error;
 
-		/* XXX These statistics might lose a few packets, since other
-		 * CPUs can be using this flow.  We used to synchronize_rcu()
-		 * to make sure that we get completely accurate stats, but that
-		 * blows our performance, badly. */
-		dp->n_flows--;
-		error = answer_query(flow, ufp);
-		flow_deferred_free(flow);
-	} else {
-		error = answer_query(flow, ufp);
-	}
+	/* XXX These statistics might lose a few packets, since other CPUs can
+	 * be using this flow.  We used to synchronize_rcu() to make sure that
+	 * we get completely accurate stats, but that blows our performance,
+	 * badly. */
+	dp->n_flows--;
+	error = answer_query(flow, ufp);
+	flow_deferred_free(flow);
 
 error:
 	return error;
 }
 
-static int query_multiple_flows(struct datapath *dp,
-				const struct odp_flowvec *flowvec)
+static int query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 {
 	struct dp_table *table = rcu_dereference(dp->table);
 	int i;
@@ -1041,7 +1035,7 @@ static int query_multiple_flows(struct datapath *dp,
 
 		flow = dp_table_lookup(table, &uf.key);
 		if (!flow)
-			error = __clear_user(&ufp->stats, sizeof ufp->stats);
+			error = __put_user(ENOENT, &ufp->stats.error);
 		else
 			error = answer_query(flow, ufp);
 		if (error)
@@ -1430,13 +1424,11 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		break;
 
 	case ODP_FLOW_DEL:
-	case ODP_FLOW_GET:
-		err = del_or_query_flow(dp, (struct odp_flow __user *)argp,
-					cmd);
+		err = del_flow(dp, (struct odp_flow __user *)argp);
 		break;
 
-	case ODP_FLOW_GET_MULTIPLE:
-		err = do_flowvec_ioctl(dp, argp, query_multiple_flows);
+	case ODP_FLOW_GET:
+		err = do_flowvec_ioctl(dp, argp, query_flows);
 		break;
 
 	case ODP_FLOW_LIST:

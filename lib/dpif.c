@@ -522,10 +522,23 @@ dpif_flow_del(struct dpif *dpif, struct odp_flow *flow)
 int
 dpif_flow_get(const struct dpif *dpif, struct odp_flow *flow)
 {
-    COVERAGE_INC(dpif_flow_query);
+    struct odp_flowvec fv;
+    int error;
+
+    COVERAGE_INC(dpif_flow_get);
+
     check_rw_odp_flow(flow);
-    memset(&flow->stats, 0, sizeof flow->stats);
-    return do_flow_ioctl(dpif, ODP_FLOW_GET, flow, "get flow", true);
+    fv.flows = flow;
+    fv.n_flows = 1;
+    error = do_ioctl(dpif, ODP_FLOW_GET, "ODP_FLOW_GET", &fv);
+    if (!error) {
+        error = flow->stats.error;
+        if (error) {
+            VLOG_WARN_RL(&error_rl, "%s: ioctl(ODP_FLOW_GET) failed (%s)",
+                         dpif_name(dpif), strerror(error));
+        }
+    }
+    return error;
 }
 
 int
@@ -541,7 +554,7 @@ dpif_flow_get_multiple(const struct dpif *dpif,
     for (i = 0; i < n; i++) {
         check_rw_odp_flow(&flows[i]);
     }
-    return do_ioctl(dpif, ODP_FLOW_GET_MULTIPLE, "ODP_FLOW_GET_MULTIPLE",
+    return do_ioctl(dpif, ODP_FLOW_GET, "ODP_FLOW_GET",
                     &fv);
 }
 

@@ -70,7 +70,6 @@
 #define ODP_PORT_GROUP_GET      _IOWR('O', 12, struct odp_port_group)
 
 #define ODP_FLOW_GET            _IOWR('O', 13, struct odp_flow)
-#define ODP_FLOW_GET_MULTIPLE   _IOWR('O', 14, struct odp_flowvec)
 #define ODP_FLOW_LIST           _IOWR('O', 15, struct odp_flowvec)
 
 #define ODP_FLOW_FLUSH          _IO('O', 16)
@@ -149,7 +148,7 @@ struct odp_flow_stats {
     __u32 used_nsec;
     __u8 tcp_flags;
     __u8 ip_tos;
-    __u16 reserved;
+    __u16 error;                /* Used by ODP_FLOW_GET. */
 };
 
 struct odp_flow_key {
