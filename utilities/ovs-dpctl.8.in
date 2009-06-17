@@ -70,11 +70,6 @@ A \fInetdev\fR may be followed by a comma-separated list of options.
 The following options are currently supported:
 
 .RS
-.IP "\fBport=\fIportno\fR"
-Specifies \fIportno\fR (a number between 1 and 255) as the port number
-at which \fInetdev\fR will be attached.  By default, \fBadd\-if\fR
-automatically selects the lowest available port number.
-
 .IP "\fBinternal\fR"
 Instead of attaching an existing \fInetdev\fR, creates an internal
 port (analogous to the local port) with that name.

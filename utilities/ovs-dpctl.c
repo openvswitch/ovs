@@ -243,29 +243,6 @@ query_ports(struct dpif *dpif, struct odp_port **ports, size_t *n_ports)
     qsort(*ports, *n_ports, sizeof **ports, compare_ports);
 }
 
-static uint16_t
-get_free_port(struct dpif *dpif)
-{
-    struct odp_port *ports;
-    size_t n_ports;
-    int port_no;
-
-    query_ports(dpif, &ports, &n_ports);
-    for (port_no = 0; port_no <= UINT16_MAX; port_no++) {
-        size_t i;
-        for (i = 0; i < n_ports; i++) {
-            if (ports[i].port == port_no) {
-                goto next_portno;
-            }
-        }
-        free(ports);
-        return port_no;
-
-    next_portno: ;
-    }
-    ovs_fatal(0, "no free datapath ports");
-}
-
 static void
 do_add_if(int argc UNUSED, char *argv[])
 {
@@ -277,7 +254,6 @@ do_add_if(int argc UNUSED, char *argv[])
     for (i = 2; i < argc; i++) {
         char *save_ptr = NULL;
         char *devname, *suboptions;
-        int port = -1;
         int flags = 0;
         int error;
 
@@ -290,11 +266,9 @@ do_add_if(int argc UNUSED, char *argv[])
         suboptions = strtok_r(NULL, "", &save_ptr);
         if (suboptions) {
             enum {
-                AP_PORT,
                 AP_INTERNAL
             };
             static char *options[] = {
-                "port",
                 "internal"
             };
 
@@ -302,13 +276,6 @@ do_add_if(int argc UNUSED, char *argv[])
                 char *value;
 
                 switch (getsubopt(&suboptions, options, &value)) {
-                case AP_PORT:
-                    if (!value) {
-                        ovs_error(0, "'port' suboption requires a value");
-                    }
-                    port = atoi(value);
-                    break;
-
                 case AP_INTERNAL:
                     flags |= ODP_PORT_INTERNAL;
                     break;
@@ -319,14 +286,10 @@ do_add_if(int argc UNUSED, char *argv[])
                 }
             }
         }
-        if (port < 0) {
-            port = get_free_port(dpif);
-        }
 
-        error = dpif_port_add(dpif, devname, port, flags);
+        error = dpif_port_add(dpif, devname, flags, NULL);
         if (error) {
-            ovs_error(error, "adding %s as port %"PRIu16" of %s failed",
-                      devname, port, argv[1]);
+            ovs_error(error, "adding %s to %s failed", devname, argv[1]);
             failure = true;
         } else if (if_up(devname)) {
             failure = true;

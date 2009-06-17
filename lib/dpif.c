@@ -243,25 +243,33 @@ dpif_recv_purge(struct dpif *dpif)
 }
 
 int
-dpif_port_add(struct dpif *dpif, const char *devname, uint16_t port_no,
-              uint16_t flags)
+dpif_port_add(struct dpif *dpif, const char *devname, uint16_t flags,
+              uint16_t *port_nop)
 {
     struct odp_port port;
+    uint16_t port_no;
+    int error;
 
     COVERAGE_INC(dpif_port_add);
+
     memset(&port, 0, sizeof port);
     strncpy(port.devname, devname, sizeof port.devname);
-    port.port = port_no;
     port.flags = flags;
-    if (!ioctl(dpif->fd, ODP_PORT_ADD, &port)) {
+
+    error = do_ioctl(dpif, ODP_PORT_ADD, NULL, &port);
+    if (!error) {
+        port_no = port.port;
         VLOG_DBG_RL(&dpmsg_rl, "%s: added %s as port %"PRIu16,
                     dpif_name(dpif), devname, port_no);
-        return 0;
     } else {
-        VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port %"PRIu16": %s",
-                     dpif_name(dpif), devname, port_no, strerror(errno));
-        return errno;
+        port_no = UINT16_MAX;
+        VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
+                     dpif_name(dpif), devname, strerror(errno));
     }
+    if (port_nop) {
+        *port_nop = port_no;
+    }
+    return error;
 }
 
 int

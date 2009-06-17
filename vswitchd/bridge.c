@@ -438,7 +438,6 @@ bridge_reconfigure(void)
         struct odp_port *dpif_ports;
         size_t n_dpif_ports;
         struct svec cur_ifaces, want_ifaces, add_ifaces;
-        int next_port_no;
 
         dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
         svec_init(&cur_ifaces);
@@ -450,29 +449,20 @@ bridge_reconfigure(void)
         bridge_get_all_ifaces(br, &want_ifaces);
         svec_diff(&want_ifaces, &cur_ifaces, &add_ifaces, NULL, NULL);
 
-        next_port_no = 1;
         for (i = 0; i < add_ifaces.n; i++) {
             const char *if_name = add_ifaces.names[i];
-            for (;;) {
-                int internal = cfg_get_bool(0, "iface.%s.internal", if_name);
-                int error = dpif_port_add(br->dpif, if_name, next_port_no++,
-                                          internal ? ODP_PORT_INTERNAL : 0);
-                if (error != EEXIST) {
-                    if (next_port_no >= 256) {
-                        VLOG_ERR("ran out of valid port numbers on %s",
-                                 dpif_name(br->dpif));
-                        goto out;
-                    }
-                    if (error) {
-                        VLOG_ERR("failed to add %s interface to %s: %s",
-                                 if_name, dpif_name(br->dpif),
-                                 strerror(error));
-                    }
-                    break;
-                }
+            int internal = cfg_get_bool(0, "iface.%s.internal", if_name);
+            int flags = internal ? ODP_PORT_INTERNAL : 0;
+            int error = dpif_port_add(br->dpif, if_name, flags, NULL);
+            if (error == EXFULL) {
+                VLOG_ERR("ran out of valid port numbers on %s",
+                         dpif_name(br->dpif));
+                break;
+            } else if (error) {
+                VLOG_ERR("failed to add %s interface to %s: %s",
+                         if_name, dpif_name(br->dpif), strerror(error));
             }
         }
-    out:
         svec_destroy(&cur_ifaces);
         svec_destroy(&want_ifaces);
         svec_destroy(&add_ifaces);

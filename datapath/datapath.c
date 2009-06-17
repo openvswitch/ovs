@@ -370,11 +370,6 @@ static int add_port(int dp_idx, struct odp_port __user *portp)
 	if (copy_from_user(&port, portp, sizeof port))
 		goto out;
 	port.devname[IFNAMSIZ - 1] = '\0';
-	port_no = port.port;
-
-	err = -EINVAL;
-	if (port_no < 0 || port_no >= DP_MAX_PORTS)
-		goto out;
 
 	rtnl_lock();
 	dp = get_dp_locked(dp_idx);
@@ -382,10 +377,13 @@ static int add_port(int dp_idx, struct odp_port __user *portp)
 	if (!dp)
 		goto out_unlock_rtnl;
 
-	err = -EEXIST;
-	if (dp->ports[port_no])
-		goto out_unlock_dp;
+	for (port_no = 1; port_no < DP_MAX_PORTS; port_no++)
+		if (!dp->ports[port_no])
+			goto got_port_no;
+	err = -EXFULL;
+	goto out_unlock_dp;
 
+got_port_no:
 	if (!(port.flags & ODP_PORT_INTERNAL)) {
 		err = -ENODEV;
 		dev = dev_get_by_name(&init_net, port.devname);
@@ -410,6 +408,8 @@ static int add_port(int dp_idx, struct odp_port __user *portp)
 
 	if (dp_add_if_hook)
 		dp_add_if_hook(dp->ports[port_no]);
+
+	err = __put_user(port_no, &port.port);
 
 out_put:
 	dev_put(dev);

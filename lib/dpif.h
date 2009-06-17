@@ -42,8 +42,8 @@ int dpif_get_dp_stats(const struct dpif *, struct odp_stats *);
 int dpif_get_drop_frags(const struct dpif *, bool *drop_frags);
 int dpif_set_drop_frags(struct dpif *, bool drop_frags);
 
-int dpif_port_add(struct dpif *, const char *devname, uint16_t port_no,
-                  uint16_t flags);
+int dpif_port_add(struct dpif *, const char *devname, uint16_t flags,
+                  uint16_t *port_no);
 int dpif_port_del(struct dpif *, uint16_t port_no);
 int dpif_port_query_by_number(const struct dpif *, uint16_t port_no,
                               struct odp_port *);
