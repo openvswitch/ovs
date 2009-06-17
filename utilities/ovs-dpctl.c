@@ -515,11 +515,10 @@ do_dump_groups(int argc UNUSED, char *argv[])
     run(dpif_open(argv[1], &dpif), "opening datapath");
     run(dpif_get_dp_stats(dpif, &stats), "get datapath stats");
     for (i = 0; i < stats.max_groups; i++) {
-        uint16_t ports[UINT16_MAX];
+        uint16_t *ports;
         size_t n_ports;
 
-        if (!dpif_port_group_get(dpif, i, ports,
-                                 ARRAY_SIZE(ports), &n_ports) && n_ports) {
+        if (!dpif_port_group_get(dpif, i, &ports, &n_ports) && n_ports) {
             size_t j;
 
             printf("group %u:", i);
@@ -528,6 +527,7 @@ do_dump_groups(int argc UNUSED, char *argv[])
             }
             printf("\n");
         }
+        free(ports);
     }
     dpif_close(dpif);
 }

@@ -391,21 +391,39 @@ dpif_port_group_set(struct dpif *dpif, uint16_t group,
     return do_ioctl(dpif, ODP_PORT_GROUP_SET, "ODP_PORT_GROUP_SET", &pg);
 }
 
-/* Careful: '*n_out' can be greater than 'n_ports' on return, if 'n_ports' is
- * less than the number of ports in 'group'. */
 int
 dpif_port_group_get(const struct dpif *dpif, uint16_t group,
-                    uint16_t ports[], size_t n_ports, size_t *n_out)
+                    uint16_t **ports, size_t *n_ports)
 {
-    struct odp_port_group pg;
     int error;
 
-    assert(n_ports <= UINT16_MAX);
-    pg.group = group;
-    pg.ports = ports;
-    pg.n_ports = n_ports;
-    error = do_ioctl(dpif, ODP_PORT_GROUP_GET, "ODP_PORT_GROUP_GET", &pg);
-    *n_out = error ? 0 : pg.n_ports;
+    *ports = NULL;
+    *n_ports = 0;
+    for (;;) {
+        struct odp_port_group pg;
+        pg.group = group;
+        pg.ports = *ports;
+        pg.n_ports = *n_ports;
+
+        error = do_ioctl(dpif, ODP_PORT_GROUP_GET, "ODP_PORT_GROUP_GET", &pg);
+        if (error) {
+            /* Hard error. */
+            free(*ports);
+            *ports = NULL;
+            *n_ports = 0;
+            break;
+        } else if (pg.n_ports <= *n_ports) {
+            /* Success. */
+            *n_ports = pg.n_ports;
+            break;
+        } else {
+            /* Soft error: there were more ports than we expected in the
+             * group.  Try again. */
+            free(*ports);
+            *ports = xcalloc(pg.n_ports, sizeof **ports);
+            *n_ports = pg.n_ports;
+        }
+    }
     return error;
 }
 
