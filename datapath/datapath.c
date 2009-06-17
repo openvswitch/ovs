@@ -1168,8 +1168,7 @@ error:
 	return err;
 }
 
-static int
-get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
+static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 {
 	struct odp_stats stats;
 	int i;
