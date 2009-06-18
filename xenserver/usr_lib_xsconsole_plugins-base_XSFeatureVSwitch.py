@@ -90,7 +90,11 @@ class VSwitchControllerDialogue(Dialogue):
 
         self.hostsInPool = 0
         self.hostsUpdated = 0
-        self.controller = data.GetPoolForThisHost().get("other_config", {}).get("vSwitchController", "")
+        pool = data.GetPoolForThisHost()
+        if pool is not None:
+            self.controller = pool.get("other_config", {}).get("vSwitchController", "")
+        else:
+            self.controller = ""
 
         choiceDefs = [
             ChoiceDef(Lang("Set pool-wide controller"),
@@ -253,7 +257,13 @@ class XSFeatureVSwitch:
         inPane.AddStatusField(Lang("Version", 20), versionStr)
 
         inPane.NewLine()
-        dbController = data.GetPoolForThisHost().get("other_config", {}).get("vSwitchController", "")
+
+        pool = data.GetPoolForThisHost()
+        if pool is not None:
+            dbController = pool.get("other_config", {}).get("vSwitchController", "")
+        else:
+            dbController = ""
+
         if dbController == "":
             dbController = Lang("<None>")
         inPane.AddStatusField(Lang("Controller (config)", 20), dbController)
