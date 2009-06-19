@@ -61,6 +61,38 @@ static void log_flow_put(struct dpif *, int error,
 static bool should_log_flow_message(int error);
 static void check_rw_odp_flow(struct odp_flow *);
 
+/* Performs periodic work needed by all the various kinds of dpifs.
+ *
+ * If your program opens any dpifs, it must call this function within its main
+ * poll loop. */
+void
+dp_run(void)
+{
+    int i;
+    for (i = 0; i < N_DPIF_CLASSES; i++) {
+        const struct dpif_class *class = dpif_classes[i];
+        if (class->run) {
+            class->run();
+        }
+    }
+}
+
+/* Arranges for poll_block() to wake up when dp_run() needs to be called.
+ *
+ * If your program opens any dpifs, it must call this function within its main
+ * poll loop. */
+void
+dp_wait(void)
+{
+    int i;
+    for (i = 0; i < N_DPIF_CLASSES; i++) {
+        const struct dpif_class *class = dpif_classes[i];
+        if (class->wait) {
+            class->wait();
+        }
+    }
+}
+
 static int
 do_open(const char *name_, bool create, struct dpif **dpifp)
 {

@@ -62,6 +62,14 @@ struct dpif_class {
     /* Class name, for use in error messages. */
     const char *name;
 
+    /* Performs periodic work needed by dpifs of this class, if any is
+     * necessary. */
+    void (*run)(void);
+
+    /* Arranges for poll_block() to wake up if the "run" member function needs
+     * to be called. */
+    void (*wait)(void);
+
     /* Attempts to open an existing dpif, if 'create' is false, or to open an
      * existing dpif or create a new one, if 'create' is true.  'name' is the
      * full dpif name provided by the user, e.g. "udatapath:/var/run/mypath".

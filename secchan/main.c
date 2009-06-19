@@ -198,9 +198,11 @@ main(int argc, char *argv[])
             ovs_fatal(error, "unrecoverable datapath error");
         }
         unixctl_server_run(unixctl);
+        dp_run();
 
         ofproto_wait(ofproto);
         unixctl_server_wait(unixctl);
+        dp_wait();
         poll_block();
     }
 

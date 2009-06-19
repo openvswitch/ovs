@@ -355,6 +355,8 @@ dpif_linux_recv_wait(struct dpif *dpif_)
 const struct dpif_class dpif_linux_class = {
     "",                         /* This is the default class. */
     "linux",
+    NULL,                       /* run */
+    NULL,                       /* wait */
     dpif_linux_open,
     dpif_linux_close,
     dpif_linux_delete,

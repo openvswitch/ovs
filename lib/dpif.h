@@ -30,6 +30,9 @@
 struct dpif;
 struct ofpbuf;
 
+void dp_run(void);
+void dp_wait(void);
+
 int dpif_open(const char *name, struct dpif **);
 int dpif_create(const char *name, struct dpif **);
 void dpif_close(struct dpif *);

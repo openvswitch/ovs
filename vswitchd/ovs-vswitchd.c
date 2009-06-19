@@ -28,6 +28,7 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
+#include "dpif.h"
 #include "fault.h"
 #include "leak-checker.h"
 #include "mgmt.h"
@@ -100,6 +101,7 @@ main(int argc, char *argv[])
             need_reconfigure = true;
         }
         unixctl_server_run(unixctl);
+        dp_run();
 
         if (need_reconfigure) {
             poll_immediate_wake();
@@ -108,6 +110,7 @@ main(int argc, char *argv[])
         mgmt_wait();
         bridge_wait();
         unixctl_server_wait(unixctl);
+        dp_wait();
         poll_block();
     }
 
