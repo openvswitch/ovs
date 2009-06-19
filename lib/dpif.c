@@ -39,8 +39,9 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_dpif
 
-static struct dpif_class *dpif_classes[] = {
+static const struct dpif_class *dpif_classes[] = {
     &dpif_linux_class,
+    &dpif_netdev_class,
 };
 enum { N_DPIF_CLASSES = ARRAY_SIZE(dpif_classes) };
 

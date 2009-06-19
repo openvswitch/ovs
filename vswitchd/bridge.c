@@ -940,9 +940,16 @@ bridge_reconfigure_one(struct bridge *br)
     svec_init(&new_ports);
     cfg_get_all_keys(&new_ports, "bridge.%s.port", br->name);
     svec_sort(&new_ports);
-    if (bridge_get_controller(br) && !svec_contains(&new_ports, br->name)) {
-        svec_add(&new_ports, br->name);
-        svec_sort(&new_ports);
+    if (bridge_get_controller(br)) {
+        char local_name[IF_NAMESIZE];
+        int error;
+
+        error = dpif_port_get_name(br->dpif, ODPP_LOCAL,
+                                   local_name, sizeof local_name);
+        if (!error && !svec_contains(&new_ports, local_name)) {
+            svec_add(&new_ports, local_name);
+            svec_sort(&new_ports);
+        }
     }
     if (!svec_is_unique(&new_ports)) {
         VLOG_WARN("bridge %s: %s specified twice as bridge port",
@@ -1074,6 +1081,7 @@ bridge_reconfigure_controller(struct bridge *br)
                                   cfg_get_bool(0, "%s.update-resolv.conf",
                                                pfx));
         } else {
+            char local_name[IF_NAMESIZE];
             struct netdev *netdev;
             bool in_band;
             int error;
@@ -1084,7 +1092,11 @@ bridge_reconfigure_controller(struct bridge *br)
             ofproto_set_discovery(br->ofproto, false, NULL, NULL);
             ofproto_set_in_band(br->ofproto, in_band);
 
-            error = netdev_open(br->name, NETDEV_ETH_TYPE_NONE, &netdev);
+            error = dpif_port_get_name(br->dpif, ODPP_LOCAL,
+                                       local_name, sizeof local_name);
+            if (!error) {
+                error = netdev_open(local_name, NETDEV_ETH_TYPE_NONE, &netdev);
+            }
             if (!error) {
                 if (cfg_is_valid(CFG_IP | CFG_REQUIRED, "%s.ip", pfx)) {
                     struct in_addr ip, mask, gateway;

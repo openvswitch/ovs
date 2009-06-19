@@ -33,6 +33,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/dhparams.h \
 	lib/dirs.h \
 	lib/dpif-linux.c \
+	lib/dpif-netdev.c \
 	lib/dpif-provider.h \
 	lib/dpif.c \
 	lib/dpif.h \

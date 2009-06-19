@@ -34,7 +34,8 @@ struct svec;
 
 enum netdev_flags {
     NETDEV_UP = 0x0001,         /* Device enabled? */
-    NETDEV_PROMISC = 0x0002     /* Promiscuous mode? */
+    NETDEV_PROMISC = 0x0002,    /* Promiscuous mode? */
+    NETDEV_LOOPBACK = 0x0004    /* This is a loopback device. */
 };
 
 enum netdev_pseudo_ethertype {

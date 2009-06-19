@@ -265,5 +265,6 @@ struct dpif_class {
 };
 
 extern const struct dpif_class dpif_linux_class;
+extern const struct dpif_class dpif_netdev_class;
 
 #endif /* dpif-provider.h */
