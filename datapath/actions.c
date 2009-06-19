@@ -361,7 +361,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 	 * then freeing the original skbuff is wasteful.  So the following code
 	 * is slightly obscure just to avoid that. */
 	int prev_port = -1;
-	int err = 0;
+	int err;
 	for (; n_actions > 0; a++, n_actions--) {
 		WARN_ON_ONCE(skb_shared(skb));
 		if (prev_port != -1) {
@@ -420,5 +420,5 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		do_output(dp, skb, prev_port);
 	else
 		kfree_skb(skb);
-	return err;
+	return 0;
 }
