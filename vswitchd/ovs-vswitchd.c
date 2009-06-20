@@ -93,7 +93,9 @@ main(int argc, char *argv[])
             vlog_reopen_log_file();
             reconfigure();
         }
-        mgmt_run();
+        if (mgmt_run()) {
+            need_reconfigure = true;
+        }
         if (bridge_run()) {
             need_reconfigure = true;
         }

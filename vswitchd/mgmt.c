@@ -46,6 +46,7 @@
 
 static struct svec mgmt_cfg;
 static uint8_t cfg_cookie[CFG_COOKIE_LEN];
+static bool need_reconfigure = false;
 static struct rconn *mgmt_rconn;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 static struct svec capabilities;
@@ -655,8 +656,7 @@ recv_ofmp_config_update(uint32_t xid, const struct ofmp_header *ofmph,
      * connection settings may have changed. */
     send_config_update_ack(xid, true);
 
-    reconfigure();
-
+    need_reconfigure = true;
 
     return 0;
 }
@@ -807,15 +807,16 @@ handle_msg(uint32_t xid, const void *msg, size_t length)
     return handler(xid, msg);
 }
 
-void 
+bool 
 mgmt_run(void)
 {
     int i;
 
     if (!mgmt_rconn) {
-        return;
+        return false;
     }
 
+    need_reconfigure = false;
     rconn_run(mgmt_rconn);
 
     /* Do some processing, but cap it at a reasonable amount so that
@@ -837,6 +838,8 @@ mgmt_run(void)
             VLOG_WARN_RL(&rl, "received too-short OpenFlow message");
         }
     }
+
+    return need_reconfigure;
 }
 
 void
