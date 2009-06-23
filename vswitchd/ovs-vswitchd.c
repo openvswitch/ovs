@@ -228,7 +228,7 @@ parse_options(int argc, char *argv[])
 static void
 usage(void)
 {
-    printf("%s: virtual switch daemon\n"
+    printf("%s: Open vSwitch daemon\n"
            "usage: %s [OPTIONS] CONFIG\n"
            "CONFIG is a configuration file in ovs-vswitchd.conf(5) format.\n",
            program_name, program_name);

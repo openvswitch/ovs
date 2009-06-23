@@ -16,14 +16,14 @@
 .  RE
 .  PP
 ..
-.TH ovs\-vswitchd.conf 5 "April 2009" "Open vSwitch" "OpenVSwitch Manual"
+.TH ovs\-vswitchd.conf 5 "June 2009" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME
 ovs\-vswitchd.conf \- configuration file for \fBovs\-vswitchd\fR
 .
 .SH DESCRIPTION
 This manual page describes the syntax for the configuration file used 
-by \fBovs\-vswitchd\fR(8), the virtual switch daemon.
+by \fBovs\-vswitchd\fR(8), the Open vSwitch daemon.
 .PP
 The configuration file is based on key-value pairs, which are given
 one per line in the form \fIkey\fB=\fIvalue\fR.  Each \fIkey\fR
@@ -56,8 +56,8 @@ with \fBdp\fR or \fBnl:\fR followed by a digit.)
 The names given on \fBbridge.\fIname\fB.port\fR must be the names of
 existing network devices, except for ``internal ports.''  An internal
 port is a simulated network device that receives traffic only
-through the virtual switch and switches any traffic sent it through
-virtual switch.  An internal port may configured with an IP address,
+through the switch and switches any traffic sent it through the
+switch.  An internal port may configured with an IP address,
 etc. using the usual system tools (e.g. \fBifconfig\fR, \fBip\fR).  To
 designate network device \fInetdev\fR as an internal port, add
 \fBiface.\fInetdev\fB.internal=true\fR to the configuration file.
@@ -322,7 +322,7 @@ This can be overridden with the \fBnetflow.\fIbridge\fB.engine-type\fR and
 \fBnetflow.\fIbridge\fB.engine-id\fR, respectively.  Each takes a value
 between 0 and 255, inclusive. 
 
-Many NetFlow collectors do not expect multiple virtual switches to be
+Many NetFlow collectors do not expect multiple switches to be
 sending messages from the same host, and they do not store the engine
 information which could be used to disambiguate the traffic.  To prevent
 flows from multiple switches appearing as if they came on the interface,
@@ -473,7 +473,7 @@ This optional setting may be set to \fIsecs\fR, a number of seconds.
 The minimum value of \fIsecs\fR is 5 seconds.  The default is taken
 from \fBmgmt.inactivity-probe\fR (see above).
 .IP
-When the virtual switch is connected to the controller, it waits for a
+When the switch is connected to the controller, it waits for a
 message to be received from the controller for \fIsecs\fR seconds
 before it sends a inactivity probe to the controller.  After sending
 the inactivity probe, if no response is received for an additional
@@ -485,7 +485,7 @@ before entering standalone mode (see below).
 .IP "\fBbridge.\fIname\fB.controller.fail-mode=\fBstandalone\fR|\fBsecure\fR"
 .IQ "\fBmgmt.fail-mode=standalone\fR|\fBsecure\fR"
 When a controller is configured, it is, ordinarily, responsible for
-setting up all flows on the virtual switch.  Thus, if the connection to
+setting up all flows on the switch.  Thus, if the connection to
 the controller fails, no new network connections can be set up.  If
 the connection to the controller stays down long enough, no packets
 can pass through the switch at all.
@@ -510,7 +510,7 @@ connection attempts starts at 1 second and doubles on each failing
 attempt until it reaches the maximum.  The default maximum backoff
 time is taken from \fBmgmt.max-backoff\fR.
 .ST "Controller Rate-Limiting"
-These settings configure how the virtual switch applies a ``token
+These settings configure how the switch applies a ``token
 bucket'' to limit the rate at which packets in unknown flows are
 forwarded to the OpenFlow controller for flow-setup processing.  This
 feature prevents a single bridge from overwhelming a controller.
@@ -563,24 +563,23 @@ When \fBovs\-vswitchd\fR is configured to connect over SSL for management or
 for controller connectivity, the following settings are required:
 .TP
 \fBssl.private-key=\fIprivkey.pem\fR
-Specifies a PEM file containing the private key used as the virtual
+Specifies a PEM file containing the private key used as the 
 switch's identity for SSL connections to the controller.
 .TP
 \fBssl.certificate=\fIcert.pem\fR
 Specifies a PEM file containing a certificate, signed by the
 certificate authority (CA) used by the controller and manager, that
-certifies the virtual switch's private key, identifying a trustworthy
+certifies the switch's private key, identifying a trustworthy
 switch.
 .TP
 \fBssl.ca-cert=\fIcacert.pem\fR
 Specifies a PEM file containing the CA certificate used to verify that
-the virtual switch is connected to a trustworthy controller.
+the switch is connected to a trustworthy controller.
 .PP
 These files are read only once, at \fBovs\-vswitchd\fR startup time.  If
 their contents change, \fBovs\-vswitchd\fR must be killed and restarted.
 .PP
-These SSL settings apply to all SSL connections made by the virtual
-switch.
+These SSL settings apply to all SSL connections made by the switch.
 .ST "CA Certificate Bootstrap"
 Ordinarily, all of the files named in the SSL configuration must exist
 when \fBovs\-vswitchd\fR starts.  However, if \fBssl.bootstrap-ca-cert\fR

@@ -1,4 +1,4 @@
-.TH ovs\-ofctl 8 "March 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-ofctl 8 "June 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-ofctl
 
 .SH NAME
@@ -224,8 +224,8 @@ Matches physical port \fIport_no\fR.  Switch ports are numbered as
 displayed by \fBovs\-ofctl show\fR.
 
 .IP \fBdl_vlan=\fIvlan\fR
-Matches IEEE 802.1q virtual LAN tag \fIvlan\fR.  Specify \fB0xffff\fR
-as \fIvlan\fR to match packets that are not tagged with a virtual LAN;
+Matches IEEE 802.1q Virtual LAN tag \fIvlan\fR.  Specify \fB0xffff\fR
+as \fIvlan\fR to match packets that are not tagged with a Virtual LAN;
 otherwise, specify a number between 0 and 4095, inclusive, as the
 12-bit VLAN ID to match.
 

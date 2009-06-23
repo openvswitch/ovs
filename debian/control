@@ -15,8 +15,7 @@ Description: Source code for Open vSwitch datapath Linux module
  from it using module-assistant or make-kpkg.  README.Debian in this
  package provides further instructions.
  .
- Open vSwitch is a software-based Ethernet switch targeted at virtual
- servers.
+ Open vSwitch is a full-featured software-based Ethernet switch.
 
 Package: openvswitch-common
 Architecture: any
@@ -25,8 +24,7 @@ Description: Open vSwitch common components
  openvswitch-common provides components required by both openvswitch-switch
  and openvswitch-controller.
  .
- Open vSwitch is a software-based Ethernet switch targeted at virtual
- servers.
+ Open vSwitch is a full-featured software-based Ethernet switch.
 
 Package: openvswitch-switch
 Architecture: any
@@ -36,8 +34,7 @@ Description: Open vSwitch switch implementations
  openvswitch-switch provides the userspace components and utilities for
  the Open vSwitch kernel-based switch.  
  .
- Open vSwitch is a software-based Ethernet switch targeted at virtual
- servers.
+ Open vSwitch is a full-featured software-based Ethernet switch.
 
 Package: openvswitch-switch-config
 Architecture: any
@@ -46,8 +43,7 @@ Description: Open vSwitch switch implementations
  openvswitch-switch-config provides a utility for interactively configuring
  the Open vSwitch switch provided in the openvswitch-switch package.
  .
- Open vSwitch is a software-based Ethernet switch targeted at virtual
- servers.
+ Open vSwitch is a full-featured software-based Ethernet switch.
 
 Package: openvswitch-switchui
 Architecture: any
@@ -71,8 +67,7 @@ Description: Open vSwitch public key infrastructure
  Open vSwitch switches and controllers, reducing the risk of
  man-in-the-middle attacks on the Open vSwitch network infrastructure.
  .
- Open vSwitch is a software-based Ethernet switch targeted at virtual
- servers.
+ Open vSwitch is a full-featured software-based Ethernet switch.
 
 Package: openvswitch-pki-server
 Architecture: all
@@ -84,8 +79,7 @@ Description: Open vSwitch public key infrastructure (HTTP server support)
  convenient OpenFlow switch setup using the ovs-switch-setup program
  in the openvswitch-switch package.
  .
- Open vSwitch is a software-based Ethernet switch targeted at virtual
- servers.
+ Open vSwitch is a full-featured software-based Ethernet switch.
 
 Package: openvswitch-controller
 Architecture: any
@@ -94,8 +88,7 @@ Description: Open vSwitch controller implementation
  The Open vSwitch controller enables OpenFlow switches that connect to it
  to act as MAC-learning Ethernet switches.
  .
- Open vSwitch is a software-based Ethernet switch targeted at virtual
- servers.
+ Open vSwitch is a full-featured software-based Ethernet switch.
 
 Package: corekeeper
 Architecture: all
