@@ -729,6 +729,7 @@ netdev_get_features(struct netdev *netdev,
                            peer ? peer : &dummy[3]);
 }
 
+/* Set the features advertised by 'netdev' to 'advertise'. */
 int
 netdev_set_advertisements(struct netdev *netdev, uint32_t advertise)
 {
@@ -1113,6 +1114,8 @@ get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats)
     return ENODEV;
 }
 
+/* Sets 'carrier' to true if carrier is active (link light is on) on 
+ * 'netdev'. */
 int
 netdev_get_carrier(const struct netdev *netdev, bool *carrier)
 {
@@ -1169,6 +1172,7 @@ exit:
     return error;
 }
 
+/* Retrieves current device stats for 'netdev'. */
 int
 netdev_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
