@@ -257,12 +257,12 @@ prune_ports(void)
 
             error = netdev_nodev_get_flags(iface_name, &flags);
             if (error == ENODEV) {
-                VLOG_DBG_RL(&rl, "removing dead interface %s from %s", 
-                        iface_name, br_name);
+                VLOG_INFO_RL(&rl, "removing dead interface %s from %s",
+                             iface_name, br_name);
                 svec_add(&delete, iface_name);
             } else if (error) {
-                VLOG_DBG_RL(&rl, "unknown error %d on interface %s from %s", 
-                        error, iface_name, br_name);
+                VLOG_INFO_RL(&rl, "unknown error %d on interface %s from %s",
+                             error, iface_name, br_name);
             }
         }
         svec_destroy(&ifaces);
