@@ -51,6 +51,12 @@ shash_clear(struct shash *sh)
     }
 }
 
+bool
+shash_is_empty(const struct shash *shash)
+{
+    return hmap_is_empty(&shash->map);
+}
+
 /* It is the caller's responsible to avoid duplicate names, if that is
  * desirable. */
 void
