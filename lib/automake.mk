@@ -56,6 +56,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/list.h \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
+	lib/netdev-linux.c \
+	lib/netdev-linux.h \
 	lib/netdev.c \
 	lib/netdev.h \
 	lib/odp-util.c \
@@ -174,6 +176,7 @@ COVERAGE_FILES = \
 	lib/hmap.c \
 	lib/mac-learning.c \
 	lib/netdev.c \
+	lib/netdev-linux.c \
 	lib/netlink.c \
 	lib/odp-util.c \
 	lib/poll-loop.c \

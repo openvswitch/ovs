@@ -126,6 +126,30 @@ struct dpif_class {
      * value. */
     int (*port_list)(const struct dpif *dpif, struct odp_port *ports, int n);
 
+    /* Polls for changes in the set of ports in 'dpif'.  If the set of ports in
+     * 'dpif' has changed, then this function should do one of the
+     * following:
+     *
+     * - Preferably: store the name of the device that was added to or deleted
+     *   from 'dpif' in '*devnamep' and return 0.  The caller is responsible
+     *   for freeing '*devnamep' (with free()) when it no longer needs it.
+     *
+     * - Alternatively: return ENOBUFS, without indicating the device that was
+     *   added or deleted.
+     *
+     * Occasional 'false positives', in which the function returns 0 while
+     * indicating a device that was not actually added or deleted or returns
+     * ENOBUFS without any change, are acceptable.
+     *
+     * If the set of ports in 'dpif' has not changed, returns EAGAIN.  May also
+     * return other positive errno values to indicate that something has gone
+     * wrong. */
+    int (*port_poll)(const struct dpif *dpif, char **devnamep);
+
+    /* Arranges for the poll loop to wake up when 'port_poll' will return a
+     * value other than EAGAIN. */
+    void (*port_poll_wait)(const struct dpif *dpif);
+
     /* Stores in 'ports' the port numbers of up to 'n' ports that belong to
      * 'group' in 'dpif'.  Returns the number of ports in 'group' (not the
      * number stored), if successful, otherwise a negative errno value. */

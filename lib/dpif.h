@@ -56,6 +56,9 @@ int dpif_port_get_name(struct dpif *, uint16_t port_no,
                        char *name, size_t name_size);
 int dpif_port_list(const struct dpif *, struct odp_port **, size_t *n_ports);
 
+int dpif_port_poll(const struct dpif *, char **devnamep);
+void dpif_port_poll_wait(const struct dpif *);
+
 int dpif_port_group_get(const struct dpif *, uint16_t group,
                         uint16_t **ports, size_t *n_ports);
 int dpif_port_group_set(struct dpif *, uint16_t group,
@@ -83,15 +86,5 @@ void dpif_recv_wait(struct dpif *);
 
 void dpif_get_netflow_ids(const struct dpif *,
                           uint8_t *engine_type, uint8_t *engine_id);
-
-struct dpifmon;
-
-int dpifmon_create(const char *datapath_name, struct dpifmon **);
-void dpifmon_destroy(struct dpifmon *);
-
-int dpifmon_poll(struct dpifmon *, char **devnamep);
-
-void dpifmon_run(struct dpifmon *);
-void dpifmon_wait(struct dpifmon *);
 
 #endif /* dpif.h */

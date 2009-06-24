@@ -114,4 +114,12 @@ int netdev_nodev_get_carrier(const char *netdev_name, bool *carrier);
 
 int netdev_get_vlan_vid(const char *netdev_name, int *vlan_vid);
 
+struct netdev_monitor;
+int netdev_monitor_create(struct netdev_monitor **);
+void netdev_monitor_destroy(struct netdev_monitor *);
+void netdev_monitor_add(struct netdev_monitor *, struct netdev *);
+void netdev_monitor_remove(struct netdev_monitor *, struct netdev *);
+int netdev_monitor_poll(struct netdev_monitor *, char **devnamep);
+void netdev_monitor_poll_wait(const struct netdev_monitor *);
+
 #endif /* netdev.h */

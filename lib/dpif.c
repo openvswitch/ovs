@@ -383,6 +383,40 @@ exit:
     return error;
 }
 
+/* Polls for changes in the set of ports in 'dpif'.  If the set of ports in
+ * 'dpif' has changed, this function does one of the following:
+ *
+ * - Stores the name of the device that was added to or deleted from 'dpif' in
+ *   '*devnamep' and returns 0.  The caller is responsible for freeing
+ *   '*devnamep' (with free()) when it no longer needs it.
+ *
+ * - Returns ENOBUFS and sets '*devnamep' to NULL.
+ *
+ * This function may also return 'false positives', where it returns 0 and
+ * '*devnamep' names a device that was not actually added or deleted or it
+ * returns ENOBUFS without any change.
+ *
+ * Returns EAGAIN if the set of ports in 'dpif' has not changed.  May also
+ * return other positive errno values to indicate that something has gone
+ * wrong. */
+int
+dpif_port_poll(const struct dpif *dpif, char **devnamep)
+{
+    int error = dpif->class->port_poll(dpif, devnamep);
+    if (error) {
+        *devnamep = NULL;
+    }
+    return error;
+}
+
+/* Arranges for the poll loop to wake up when port_poll(dpif) will return a
+ * value other than EAGAIN. */
+void
+dpif_port_poll_wait(const struct dpif *dpif)
+{
+    dpif->class->port_poll_wait(dpif);
+}
+
 /* Retrieves a list of the port numbers in port group 'group' in 'dpif'.
  *
  * On success, returns 0 and points '*ports' to a newly allocated array of
@@ -931,146 +965,4 @@ check_rw_odp_flow(struct odp_flow *flow)
     if (flow->n_actions) {
         memset(&flow->actions[0], 0xcc, sizeof flow->actions[0]);
     }
-}
-
-#include <net/if.h>
-#include <linux/rtnetlink.h>
-#include <linux/ethtool.h>
-#include <linux/sockios.h>
-#include <netinet/in.h>
-#include <sys/ioctl.h>
-#include <sys/stat.h>
-#include <sys/sysmacros.h>
-#include <unistd.h>
-
-struct dpifmon {
-    struct dpif *dpif;
-    struct nl_sock *sock;
-    int local_ifindex;
-};
-
-int
-dpifmon_create(const char *datapath_name, struct dpifmon **monp)
-{
-    struct dpifmon *mon;
-    char local_name[IFNAMSIZ];
-    int error;
-
-    mon = *monp = xmalloc(sizeof *mon);
-
-    error = dpif_open(datapath_name, &mon->dpif);
-    if (error) {
-        goto error;
-    }
-    error = dpif_port_get_name(mon->dpif, ODPP_LOCAL,
-                               local_name, sizeof local_name);
-    if (error) {
-        goto error_close_dpif;
-    }
-
-    mon->local_ifindex = if_nametoindex(local_name);
-    if (!mon->local_ifindex) {
-        error = errno;
-        VLOG_WARN("could not get ifindex of %s device: %s",
-                  local_name, strerror(errno));
-        goto error_close_dpif;
-    }
-
-    error = nl_sock_create(NETLINK_ROUTE, RTNLGRP_LINK, 0, 0, &mon->sock);
-    if (error) {
-        VLOG_WARN("could not create rtnetlink socket: %s", strerror(error));
-        goto error_close_dpif;
-    }
-
-    return 0;
-
-error_close_dpif:
-    dpif_close(mon->dpif);
-error:
-    free(mon);
-    *monp = NULL;
-    return error;
-}
-
-void
-dpifmon_destroy(struct dpifmon *mon)
-{
-    if (mon) {
-        dpif_close(mon->dpif);
-        nl_sock_destroy(mon->sock);
-    }
-}
-
-int
-dpifmon_poll(struct dpifmon *mon, char **devnamep)
-{
-    static struct vlog_rate_limit slow_rl = VLOG_RATE_LIMIT_INIT(1, 5);
-    static const struct nl_policy rtnlgrp_link_policy[] = {
-        [IFLA_IFNAME] = { .type = NL_A_STRING },
-        [IFLA_MASTER] = { .type = NL_A_U32, .optional = true },
-    };
-    struct nlattr *attrs[ARRAY_SIZE(rtnlgrp_link_policy)];
-    struct ofpbuf *buf;
-    int error;
-
-    *devnamep = NULL;
-again:
-    error = nl_sock_recv(mon->sock, &buf, false);
-    switch (error) {
-    case 0:
-        if (!nl_policy_parse(buf, NLMSG_HDRLEN + sizeof(struct ifinfomsg),
-                             rtnlgrp_link_policy,
-                             attrs, ARRAY_SIZE(rtnlgrp_link_policy))) {
-            VLOG_WARN_RL(&slow_rl, "received bad rtnl message");
-            error = ENOBUFS;
-        } else {
-            const char *devname = nl_attr_get_string(attrs[IFLA_IFNAME]);
-            bool for_us;
-
-            if (attrs[IFLA_MASTER]) {
-                uint32_t master_ifindex = nl_attr_get_u32(attrs[IFLA_MASTER]);
-                for_us = master_ifindex == mon->local_ifindex;
-            } else {
-                /* It's for us if that device is one of our ports. */
-                struct odp_port port;
-                for_us = !dpif_port_query_by_name(mon->dpif, devname, &port);
-            }
-
-            if (!for_us) {
-                /* Not for us, try again. */
-                ofpbuf_delete(buf);
-                COVERAGE_INC(dpifmon_poll_false_wakeup);
-                goto again;
-            }
-            COVERAGE_INC(dpifmon_poll_changed);
-            *devnamep = xstrdup(devname);
-        }
-        ofpbuf_delete(buf);
-        break;
-
-    case EAGAIN:
-        /* Nothing to do. */
-        break;
-
-    case ENOBUFS:
-        VLOG_WARN_RL(&slow_rl, "dpifmon socket overflowed");
-        break;
-
-    default:
-        VLOG_WARN_RL(&slow_rl, "error on dpifmon socket: %s", strerror(error));
-        break;
-    }
-    return error;
-}
-
-void
-dpifmon_run(struct dpifmon *mon UNUSED)
-{
-    /* Nothing to do in this implementation. */
-}
-
-void
-dpifmon_wait(struct dpifmon *mon)
-{
-    nl_sock_wait(mon->sock, POLLIN);
 }

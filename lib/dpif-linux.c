@@ -24,14 +24,17 @@
 #include <inttypes.h>
 #include <net/if.h>
 #include <linux/ethtool.h>
+#include <linux/rtnetlink.h>
 #include <linux/sockios.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
 #include "dpif-provider.h"
+#include "netdev-linux.h"
 #include "ofpbuf.h"
 #include "poll-loop.h"
+#include "svec.h"
 #include "util.h"
 
 #include "vlog.h"
@@ -41,21 +44,41 @@
 struct dpif_linux {
     struct dpif dpif;
     int fd;
+
+    /* Change notification. */
+    int local_ifindex;          /* Ifindex of local port. */
+    struct svec changed_ports;  /* Ports that have changed. */
+    struct linux_netdev_notifier port_notifier;
 };
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 
 static int do_ioctl(const struct dpif *, int cmd, const void *arg);
 static int lookup_minor(const char *name, int *minor);
+static int finish_open(struct dpif *, const char *local_ifname);
 static int create_minor(const char *name, int minor, struct dpif **dpifp);
 static int open_minor(int minor, struct dpif **dpifp);
 static int make_openvswitch_device(int minor, char **fnp);
+static void dpif_linux_port_changed(const struct linux_netdev_change *,
+                                    void *dpif);
 
 static struct dpif_linux *
 dpif_linux_cast(const struct dpif *dpif)
 {
     dpif_assert_class(dpif, &dpif_linux_class);
     return CONTAINER_OF(dpif, struct dpif_linux, dpif);
+}
+
+static void
+dpif_linux_run(void)
+{
+    linux_netdev_notifier_run();
+}
+
+static void
+dpif_linux_wait(void)
+{
+    linux_netdev_notifier_wait();
 }
 
 static int
@@ -82,7 +105,7 @@ dpif_linux_open(const char *name UNUSED, char *suffix, bool create,
         }
     } else {
         struct dpif_linux *dpif;
-        int listen_mask;
+        struct odp_port port;
         int error;
 
         if (minor < 0) {
@@ -98,19 +121,22 @@ dpif_linux_open(const char *name UNUSED, char *suffix, bool create,
         }
         dpif = dpif_linux_cast(*dpifp);
 
-        /* We can open the device, but that doesn't mean that it's been
-         * created.  If it hasn't been, then any command other than
-         * ODP_DP_CREATE will return ENODEV.  Try something innocuous. */
-        listen_mask = 0;            /* Make Valgrind happy. */
-        error = do_ioctl(*dpifp, ODP_GET_LISTEN_MASK, &listen_mask);
-        if (error) {
+        /* We need the local port's ifindex for the poll function.  Start by
+         * getting the local port's name. */
+        memset(&port, 0, sizeof port);
+        port.port = ODPP_LOCAL;
+        if (ioctl(dpif->fd, ODP_PORT_QUERY, &port)) {
+            error = errno;
             if (error != ENODEV) {
                 VLOG_WARN("%s: probe returned unexpected error: %s",
                           dpif_name(*dpifp), strerror(error));
             }
             dpif_close(*dpifp);
+            return error;
         }
-        return error;
+
+        /* Then use that to finish up opening. */
+        return finish_open(&dpif->dpif, port.devname);
     }
 }
 
@@ -118,6 +144,8 @@ static void
 dpif_linux_close(struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    linux_netdev_notifier_unregister(&dpif->port_notifier);
+    svec_destroy(&dpif->changed_ports);
     close(dpif->fd);
     free(dpif);
 }
@@ -212,6 +240,36 @@ dpif_linux_port_list(const struct dpif *dpif_, struct odp_port *ports, int n)
     pv.n_ports = n;
     error = do_ioctl(dpif_, ODP_PORT_LIST, &pv);
     return error ? -error : pv.n_ports;
+}
+
+static int
+dpif_linux_port_poll(const struct dpif *dpif_, char **devnamep)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    int error;
+
+    error = linux_netdev_notifier_get_error(&dpif->port_notifier);
+    if (!error) {
+        if (!dpif->changed_ports.n) {
+            return EAGAIN;
+        }
+        *devnamep = dpif->changed_ports.names[--dpif->changed_ports.n];
+    } else {
+        svec_clear(&dpif->changed_ports);
+    }
+    return error;
+}
+
+static void
+dpif_linux_port_poll_wait(const struct dpif *dpif_)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    if (dpif->changed_ports.n
+        || linux_netdev_notifier_peek_error(&dpif->port_notifier)) {
+        poll_immediate_wake();
+    } else {
+        linux_netdev_notifier_wait();
+    }
 }
 
 static int
@@ -355,8 +413,8 @@ dpif_linux_recv_wait(struct dpif *dpif_)
 const struct dpif_class dpif_linux_class = {
     "",                         /* This is the default class. */
     "linux",
-    NULL,                       /* run */
-    NULL,                       /* wait */
+    dpif_linux_run,
+    dpif_linux_wait,
     dpif_linux_open,
     dpif_linux_close,
     dpif_linux_delete,
@@ -368,6 +426,8 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_port_query_by_number,
     dpif_linux_port_query_by_name,
     dpif_linux_port_list,
+    dpif_linux_port_poll,
+    dpif_linux_port_poll_wait,
     dpif_linux_port_group_get,
     dpif_linux_port_group_set,
     dpif_linux_flow_get,
@@ -558,12 +618,29 @@ error:
 }
 
 static int
+finish_open(struct dpif *dpif_, const char *local_ifname)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    dpif->local_ifindex = if_nametoindex(local_ifname);
+    if (!dpif->local_ifindex) {
+        int error = errno;
+        dpif_close(dpif_);
+        VLOG_WARN("could not get ifindex of %s device: %s",
+                  local_ifname, strerror(errno));
+        return error;
+    }
+    return 0;
+}
+
+static int
 create_minor(const char *name, int minor, struct dpif **dpifp)
 {
     int error = open_minor(minor, dpifp);
     if (!error) {
         error = do_ioctl(*dpifp, ODP_DP_CREATE, name);
-        if (error) {
+        if (!error) {
+            error = finish_open(*dpifp, name);
+        } else {
             dpif_close(*dpifp);
         }
     }
@@ -584,17 +661,23 @@ open_minor(int minor, struct dpif **dpifp)
 
     fd = open(fn, O_RDONLY | O_NONBLOCK);
     if (fd >= 0) {
-        struct dpif_linux *dpif;
-        char *name;
+        struct dpif_linux *dpif = xmalloc(sizeof *dpif);
+        error = linux_netdev_notifier_register(&dpif->port_notifier,
+                                               dpif_linux_port_changed, dpif);
+        if (!error) {
+            char *name;
 
-        name = xasprintf("dp%d", minor);
+            name = xasprintf("dp%d", minor);
+            dpif_init(&dpif->dpif, &dpif_linux_class, name, minor, minor);
+            free(name);
 
-        dpif = xmalloc(sizeof *dpif);
-        dpif_init(&dpif->dpif, &dpif_linux_class, name, minor, minor);
-        dpif->fd = fd;
-        *dpifp = &dpif->dpif;
-
-        free(name);
+            dpif->fd = fd;
+            dpif->local_ifindex = 0;
+            svec_init(&dpif->changed_ports);
+            *dpifp = &dpif->dpif;
+        } else {
+            free(dpif);
+        }
     } else {
         error = errno;
         VLOG_WARN("%s: open failed (%s)", fn, strerror(error));
@@ -602,4 +685,22 @@ open_minor(int minor, struct dpif **dpifp)
     free(fn);
 
     return error;
+}
+
+static void
+dpif_linux_port_changed(const struct linux_netdev_change *change, void *dpif_)
+{
+    struct dpif_linux *dpif = dpif_;
+
+    if (change->master_ifindex == dpif->local_ifindex
+        && (change->nlmsg_type == RTM_NEWLINK
+            || change->nlmsg_type == RTM_DELLINK))
+    {
+        /* Our datapath changed, either adding a new port or deleting an
+         * existing one. */
+        if (!svec_contains(&dpif->changed_ports, change->ifname)) {
+            svec_add(&dpif->changed_ports, change->ifname);
+            svec_sort(&dpif->changed_ports);
+        }
+    }
 }

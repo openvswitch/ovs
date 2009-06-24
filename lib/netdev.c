@@ -46,11 +46,13 @@
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "list.h"
+#include "netdev-linux.h"
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "shash.h"
 #include "socket-util.h"
 #include "svec.h"
 
@@ -1366,6 +1368,106 @@ done:
         *vlan_vid = -1;
     }
     return error;
+}
+
+struct netdev_monitor {
+    struct linux_netdev_notifier notifier;
+    struct shash polled_netdevs;
+    struct shash changed_netdevs;
+};
+
+static void netdev_monitor_change(const struct linux_netdev_change *change,
+                                  void *monitor);
+
+int
+netdev_monitor_create(struct netdev_monitor **monitorp)
+{
+    struct netdev_monitor *monitor;
+    int error;
+
+    monitor = xmalloc(sizeof *monitor);
+    error = linux_netdev_notifier_register(&monitor->notifier,
+                                           netdev_monitor_change, monitor);
+    if (error) {
+        free(monitor);
+        return error;
+    }
+    shash_init(&monitor->polled_netdevs);
+    shash_init(&monitor->changed_netdevs);
+    *monitorp = monitor;
+    return 0;
+}
+
+void
+netdev_monitor_destroy(struct netdev_monitor *monitor)
+{
+    if (monitor) {
+        linux_netdev_notifier_unregister(&monitor->notifier);
+        shash_destroy(&monitor->polled_netdevs);
+        free(monitor);
+    }
+}
+
+void
+netdev_monitor_add(struct netdev_monitor *monitor, struct netdev *netdev)
+{
+    if (!shash_find(&monitor->polled_netdevs, netdev_get_name(netdev))) {
+        shash_add(&monitor->polled_netdevs, netdev_get_name(netdev), NULL);
+    }
+}
+
+void
+netdev_monitor_remove(struct netdev_monitor *monitor, struct netdev *netdev)
+{
+    struct shash_node *node;
+
+    node = shash_find(&monitor->polled_netdevs, netdev_get_name(netdev));
+    if (node) {
+        shash_delete(&monitor->polled_netdevs, node);
+        node = shash_find(&monitor->changed_netdevs, netdev_get_name(netdev));
+        if (node) {
+            shash_delete(&monitor->changed_netdevs, node);
+        }
+    }
+}
+
+int
+netdev_monitor_poll(struct netdev_monitor *monitor, char **devnamep)
+{
+    int error = linux_netdev_notifier_get_error(&monitor->notifier);
+    *devnamep = NULL;
+    if (!error) {
+        struct shash_node *node = shash_first(&monitor->changed_netdevs);
+        if (!node) {
+            return EAGAIN;
+        }
+        *devnamep = xstrdup(node->name);
+        shash_delete(&monitor->changed_netdevs, node);
+    } else {
+        shash_clear(&monitor->changed_netdevs);
+    }
+    return error;
+}
+
+void
+netdev_monitor_poll_wait(const struct netdev_monitor *monitor)
+{
+    if (!shash_is_empty(&monitor->changed_netdevs)
+        || linux_netdev_notifier_peek_error(&monitor->notifier)) {
+        poll_immediate_wake();
+    } else {
+        linux_netdev_notifier_wait();
+    }
+}
+
+static void
+netdev_monitor_change(const struct linux_netdev_change *change, void *monitor_)
+{
+    struct netdev_monitor *monitor = monitor_;
+    if (shash_find(&monitor->polled_netdevs, change->ifname)
+        && !shash_find(&monitor->changed_netdevs, change->ifname)) {
+        shash_add(&monitor->changed_netdevs, change->ifname, NULL);
+    }
 }
 
 static void restore_all_flags(void *aux);

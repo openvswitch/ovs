@@ -193,7 +193,7 @@ struct ofproto {
 
     /* Datapath. */
     struct dpif *dpif;
-    struct dpifmon *dpifmon;
+    struct netdev_monitor *netdev_monitor;
     struct port_array ports;    /* Index is ODP port nr; ofport->opp.port_no is
                                  * OFP port nr. */
     struct shash port_by_name;
@@ -259,7 +259,7 @@ int
 ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
                struct ofproto **ofprotop)
 {
-    struct dpifmon *dpifmon;
+    struct netdev_monitor *netdev_monitor;
     struct odp_stats stats;
     struct ofproto *p;
     struct dpif *dpif;
@@ -290,8 +290,8 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     dpif_flow_flush(dpif);
     dpif_recv_purge(dpif);
 
-    /* Start monitoring datapath ports for status changes. */
-    error = dpifmon_create(datapath, &dpifmon);
+    /* Arrange to monitor datapath ports for status changes. */
+    error = netdev_monitor_create(&netdev_monitor);
     if (error) {
         VLOG_ERR("failed to starting monitoring datapath %s: %s",
                  datapath, strerror(error));
@@ -311,7 +311,7 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
 
     /* Initialize datapath. */
     p->dpif = dpif;
-    p->dpifmon = dpifmon;
+    p->netdev_monitor = netdev_monitor;
     port_array_init(&p->ports);
     shash_init(&p->port_by_name);
     p->max_ports = stats.max_ports;
@@ -706,7 +706,7 @@ ofproto_destroy(struct ofproto *p)
     }
 
     dpif_close(p->dpif);
-    dpifmon_destroy(p->dpifmon);
+    netdev_monitor_destroy(p->netdev_monitor);
     PORT_ARRAY_FOR_EACH (ofport, &p->ports, port_no) {
         ofport_free(ofport);
     }
@@ -748,6 +748,17 @@ ofproto_run(struct ofproto *p)
     return error;
 }
 
+static void
+process_port_change(struct ofproto *ofproto, int error, char *devname)
+{
+    if (error == ENOBUFS) {
+        reinit_ports(ofproto);
+    } else if (!error) {
+        update_port(ofproto, devname);
+        free(devname);
+    }
+}
+
 int
 ofproto_run1(struct ofproto *p)
 {
@@ -777,13 +788,12 @@ ofproto_run1(struct ofproto *p)
         handle_odp_msg(p, buf);
     }
 
-    while ((error = dpifmon_poll(p->dpifmon, &devname)) != EAGAIN) {
-        if (error == ENOBUFS) {
-            reinit_ports(p);
-        } else if (!error) {
-            update_port(p, devname);
-            free(devname);
-        }
+    while ((error = dpif_port_poll(p->dpif, &devname)) != EAGAIN) {
+        process_port_change(p, error, devname);
+    }
+    while ((error = netdev_monitor_poll(p->netdev_monitor,
+                                        &devname)) != EAGAIN) {
+        process_port_change(p, error, devname);
     }
 
     if (p->in_band) {
@@ -896,7 +906,8 @@ ofproto_wait(struct ofproto *p)
     size_t i;
 
     dpif_recv_wait(p->dpif);
-    dpifmon_wait(p->dpifmon);
+    dpif_port_poll_wait(p->dpif);
+    netdev_monitor_poll_wait(p->netdev_monitor);
     LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
         ofconn_wait(ofconn);
     }
@@ -1178,6 +1189,7 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
 static void
 ofport_install(struct ofproto *p, struct ofport *ofport)
 {
+    netdev_monitor_add(p->netdev_monitor, ofport->netdev);
     port_array_set(&p->ports, ofp_port_to_odp_port(ofport->opp.port_no),
                    ofport);
     shash_add(&p->port_by_name, (char *) ofport->opp.name, ofport);
@@ -1186,6 +1198,7 @@ ofport_install(struct ofproto *p, struct ofport *ofport)
 static void
 ofport_remove(struct ofproto *p, struct ofport *ofport)
 {
+    netdev_monitor_remove(p->netdev_monitor, ofport->netdev);
     port_array_set(&p->ports, ofp_port_to_odp_port(ofport->opp.port_no), NULL);
     shash_delete(&p->port_by_name,
                  shash_find(&p->port_by_name, (char *) ofport->opp.name));
