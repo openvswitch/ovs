@@ -97,3 +97,11 @@ shash_find_data(const struct shash *sh, const char *name)
     struct shash_node *node = shash_find(sh, name);
     return node ? node->data : NULL;
 }
+
+struct shash_node *
+shash_first(const struct shash *shash)
+{
+    struct hmap_node *node = hmap_first(&shash->map);
+    return node ? CONTAINER_OF(node, struct shash_node, node) : NULL;
+}
+
