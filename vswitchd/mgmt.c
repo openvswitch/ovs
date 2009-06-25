@@ -131,6 +131,7 @@ mgmt_reconfigure(void)
     int retval;
 
     if (!cfg_has_section("mgmt")) {
+        svec_clear(&mgmt_cfg);
         if (mgmt_rconn) {
             rconn_destroy(mgmt_rconn);
             mgmt_rconn = NULL;
