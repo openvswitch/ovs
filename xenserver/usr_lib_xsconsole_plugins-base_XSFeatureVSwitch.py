@@ -12,6 +12,7 @@ log = logging.getLogger("vswitch-cfg-update")
 logging.basicConfig(filename="/var/log/vswitch-xsplugin.log", level=logging.DEBUG)
 
 import os
+import socket
 import subprocess
 
 cfg_mod="/root/vswitch/bin/ovs-cfg-mod"
@@ -162,6 +163,14 @@ class VSwitchControllerDialogue(Dialogue):
             inputValues = pane.GetFieldValues()
             self.controller = inputValues['address']
             Layout.Inst().PopDialogue()
+
+            # Make sure the controller is specified as a valid dotted quad
+            try:
+                socket.inet_aton(self.controller)
+            except socket.error:
+                Layout.Inst().PushDialogue(InfoDialogue(Lang("Please enter in dotted quad format")))
+                return True
+
             Layout.Inst().TransientBanner(Lang("Setting controller..."))
             try:
                 self.SetController(self.controller)
