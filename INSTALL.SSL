@@ -314,4 +314,4 @@ configured, so for security you should use only "ssl:" connections.
 Reporting Bugs
 --------------
 
-Please report problems to ovs-bugs@openvswitch.org.
+Please report problems to bugs@openvswitch.org.

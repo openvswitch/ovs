@@ -2,4 +2,4 @@ openvswitch (0.90.0) unstable; urgency=low
 
   * Development version.
 
- -- Open vSwitch developers <ovs-dev@openvswitch.org>  Mon, 19 Nov 2007 14:57:52 -0800
+ -- Open vSwitch developers <dev@openvswitch.org>  Mon, 19 Nov 2007 14:57:52 -0800

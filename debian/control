@@ -1,7 +1,7 @@
 Source: openvswitch
 Section: net
 Priority: extra
-Maintainer: Open vSwitch developers <ovs-dev@openvswitch.org>
+Maintainer: Open vSwitch developers <dev@openvswitch.org>
 Build-Depends: debhelper (>= 5), autoconf (>= 2.60), automake1.10, libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl, libncurses5-dev, libpcre3-dev
 Standards-Version: 3.7.3
 

@@ -7,7 +7,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"Report-Msgid-Bugs-To: ovs-dev@openvswitch.org\n"
+"Report-Msgid-Bugs-To: dev@openvswitch.org\n"
 "POT-Creation-Date: 2009-05-11 13:38-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"

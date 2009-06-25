@@ -1,7 +1,7 @@
 Source: openvswitch
 Section: net
 Priority: extra
-Maintainer: Open vSwitch developers <ovs-dev@openvswitch.org>
+Maintainer: Open vSwitch developers <dev@openvswitch.org>
 Build-Depends: debhelper (>= 5.0.37)
 Standards-Version: 3.7.3
 
