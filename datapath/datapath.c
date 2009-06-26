@@ -284,7 +284,6 @@ static void do_destroy_dp(struct datapath *dp, struct list_head *dp_devs)
 		dp_del_port(p, dp_devs);
 
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
-	synchronize_rcu();
 
 	/* Wait until no longer in use, then destroy it. */
 	synchronize_rcu();
