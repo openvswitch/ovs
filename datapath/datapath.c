@@ -276,18 +276,19 @@ static void do_destroy_dp(struct datapath *dp, struct list_head *dp_devs)
 	struct net_bridge_port *p, *n;
 	int i;
 
+	list_for_each_entry_safe (p, n, &dp->port_list, node)
+		if (p->port_no != ODPP_LOCAL)
+			dp_del_port(p, dp_devs);
+
 	if (dp_del_dp_hook)
 		dp_del_dp_hook(dp);
 
-	/* Drop references to DP. */
-	list_for_each_entry_safe (p, n, &dp->port_list, node)
-		dp_del_port(p, dp_devs);
-
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
-	/* Wait until no longer in use, then destroy it. */
-	synchronize_rcu();
+	dp_del_port(dp->ports[ODPP_LOCAL], dp_devs);
+
 	dp_table_destroy(dp->table, 1);
+
 	for (i = 0; i < DP_N_QUEUES; i++)
 		skb_queue_purge(&dp->queues[i]);
 	for (i = 0; i < DP_MAX_GROUPS; i++)
@@ -1463,6 +1464,7 @@ static int dp_has_packet_of_interest(struct datapath *dp, int listeners)
 ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 		      loff_t *ppos)
 {
+	/* XXX is there sufficient synchronization here? */
 	int listeners = (int) f->private_data;
 	int dp_idx = iminor(f->f_dentry->d_inode);
 	struct datapath *dp = get_dp(dp_idx);
@@ -1517,6 +1519,7 @@ error:
 
 static unsigned int openvswitch_poll(struct file *file, poll_table *wait)
 {
+	/* XXX is there sufficient synchronization here? */
 	int dp_idx = iminor(file->f_dentry->d_inode);
 	struct datapath *dp = get_dp(dp_idx);
 	unsigned int mask;
