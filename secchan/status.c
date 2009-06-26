@@ -106,6 +106,8 @@ rconn_status_cb(struct status_reply *sr, void *rconn_)
                      rconn_get_successful_connections(rconn));
     status_reply_put(sr, "last-connection=%ld",
                      (long int) (now - rconn_get_last_connection(rconn)));
+    status_reply_put(sr, "last-received=%ld",
+                     (long int) (now - rconn_get_last_received(rconn)));
     status_reply_put(sr, "time-connected=%lu",
                      rconn_get_total_time_connected(rconn));
     status_reply_put(sr, "state-elapsed=%u", rconn_get_state_elapsed(rconn));
