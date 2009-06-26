@@ -27,6 +27,7 @@
 #include <strings.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include "bitmap.h"
 #include "cfg.h"
@@ -323,6 +324,7 @@ bridge_configure_ssl(void)
     static char *private_key_file;
     static char *certificate_file;
     static char *cacert_file;
+    struct stat s;
 
     if (config_string_change("ssl.private-key", &private_key_file)) {
         vconn_ssl_set_private_key_file(private_key_file);
@@ -332,7 +334,13 @@ bridge_configure_ssl(void)
         vconn_ssl_set_certificate_file(certificate_file);
     }
 
-    if (config_string_change("ssl.ca-cert", &cacert_file)) {
+    /* We assume that even if the filename hasn't changed, if the CA cert 
+     * file has been removed, that we want to move back into
+     * boot-strapping mode.  This opens a small security hole, because
+     * the old certificate will still be trusted until vSwitch is
+     * restarted.  We may want to address this in vconn's SSL library. */
+    if (config_string_change("ssl.ca-cert", &cacert_file)
+            || (stat(cacert_file, &s) && errno == ENOENT)) {
         vconn_ssl_set_ca_cert_file(cacert_file,
                                    cfg_get_bool(0, "ssl.bootstrap-ca-cert"));
     }
