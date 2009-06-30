@@ -96,6 +96,7 @@ rconn_status_cb(struct status_reply *sr, void *rconn_)
     status_reply_put(sr, "name=%s", rconn_get_name(rconn));
     status_reply_put(sr, "state=%s", rconn_get_state(rconn));
     status_reply_put(sr, "backoff=%d", rconn_get_backoff(rconn));
+    status_reply_put(sr, "probe-interval=%d", rconn_get_probe_interval(rconn));
     status_reply_put(sr, "is-connected=%s",
                      rconn_is_connected(rconn) ? "true" : "false");
     status_reply_put(sr, "sent-msgs=%u", rconn_packets_sent(rconn));

@@ -1131,8 +1131,13 @@ bridge_reconfigure_controller(struct bridge *br)
                              || !strcmp(fail_mode, "open")));
 
         probe = cfg_get_int(0, "%s.inactivity-probe", pfx);
-        ofproto_set_probe_interval(br->ofproto,
-                                   probe ? probe : cfg_get_int(0, "mgmt.inactivity-probe"));
+        if (probe < 5) {
+            probe = cfg_get_int(0, "mgmt.inactivity-probe");
+            if (probe < 5) {
+                probe = 15;
+            }
+        }
+        ofproto_set_probe_interval(br->ofproto, probe);
 
         max_backoff = cfg_get_int(0, "%s.max-backoff", pfx);
         if (!max_backoff) {
