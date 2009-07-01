@@ -12,6 +12,7 @@ log = logging.getLogger("vswitch-cfg-update")
 logging.basicConfig(filename="/var/log/vswitch-xsplugin.log", level=logging.DEBUG)
 
 import os
+import socket
 import subprocess
 
 cfg_mod="/root/vswitch/bin/ovs-cfg-mod"
@@ -90,7 +91,11 @@ class VSwitchControllerDialogue(Dialogue):
 
         self.hostsInPool = 0
         self.hostsUpdated = 0
-        self.controller = data.GetPoolForThisHost().get("other_config", {}).get("vSwitchController", "")
+        pool = data.GetPoolForThisHost()
+        if pool is not None:
+            self.controller = pool.get("other_config", {}).get("vSwitchController", "")
+        else:
+            self.controller = ""
 
         choiceDefs = [
             ChoiceDef(Lang("Set pool-wide controller"),
@@ -158,6 +163,14 @@ class VSwitchControllerDialogue(Dialogue):
             inputValues = pane.GetFieldValues()
             self.controller = inputValues['address']
             Layout.Inst().PopDialogue()
+
+            # Make sure the controller is specified as a valid dotted quad
+            try:
+                socket.inet_aton(self.controller)
+            except socket.error:
+                Layout.Inst().PushDialogue(InfoDialogue(Lang("Please enter in dotted quad format")))
+                return True
+
             Layout.Inst().TransientBanner(Lang("Setting controller..."))
             try:
                 self.SetController(self.controller)
@@ -253,7 +266,13 @@ class XSFeatureVSwitch:
         inPane.AddStatusField(Lang("Version", 20), versionStr)
 
         inPane.NewLine()
-        dbController = data.GetPoolForThisHost().get("other_config", {}).get("vSwitchController", "")
+
+        pool = data.GetPoolForThisHost()
+        if pool is not None:
+            dbController = pool.get("other_config", {}).get("vSwitchController", "")
+        else:
+            dbController = ""
+
         if dbController == "":
             dbController = Lang("<None>")
         inPane.AddStatusField(Lang("Controller (config)", 20), dbController)

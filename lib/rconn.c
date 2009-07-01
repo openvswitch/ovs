@@ -698,6 +698,15 @@ rconn_get_last_connection(const struct rconn *rc)
     return rc->last_connected;
 }
 
+/* Returns the time at which the last OpenFlow message was received by 'rc'.
+ * If no packets have been received on 'rc', returns the time at which 'rc'
+ * was created. */
+time_t
+rconn_get_last_received(const struct rconn *rc)
+{
+    return rc->last_received;
+}
+
 /* Returns the time at which 'rc' was created. */
 time_t
 rconn_get_creation_time(const struct rconn *rc)

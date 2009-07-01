@@ -128,9 +128,10 @@ remove)
 	xenstore-rm "${HOTPLUG}/hotplug"
 	vif=vif${DOMID}.${DEVID}
 	logger -t scripts-vif "${vif} has been removed"
-        $cfg_mod -vANY:console:emer -F /etc/ovs-vswitchd.conf \
-            --del-match="bridge.*.port=${vif}" \
+	$cfg_mod -vANY:console:emer -F /etc/ovs-vswitchd.conf \
+	    --del-match="bridge.*.port=${vif}" \
 	    --del-match="vlan.${vif}.[!0-9]*" \
 	    --del-match="port.${vif}.[!0-9]*" -c
+	$service vswitch reload
 	;;
 esac

@@ -19,6 +19,9 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 
 #include "bridge.h"
 #include "cfg.h"
@@ -46,6 +49,7 @@
 
 static struct svec mgmt_cfg;
 static uint8_t cfg_cookie[CFG_COOKIE_LEN];
+static bool need_reconfigure = false;
 static struct rconn *mgmt_rconn;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 static struct svec capabilities;
@@ -100,6 +104,7 @@ mgmt_configure_ssl(void)
     static char *private_key_file;
     static char *certificate_file;
     static char *cacert_file;
+    struct stat s;
 
     /* XXX SSL should be configurable separate from the bridges.
      * XXX should be possible to de-configure SSL. */
@@ -111,7 +116,13 @@ mgmt_configure_ssl(void)
         vconn_ssl_set_certificate_file(certificate_file);
     }
 
-    if (config_string_change("ssl.ca-cert", &cacert_file)) {
+    /* We assume that even if the filename hasn't changed, if the CA cert 
+     * file has been removed, that we want to move back into
+     * boot-strapping mode.  This opens a small security hole, because
+     * the old certificate will still be trusted until vSwitch is
+     * restarted.  We may want to address this in vconn's SSL library. */
+    if (config_string_change("ssl.ca-cert", &cacert_file) 
+            || (stat(cacert_file, &s) && errno == ENOENT)) {
         vconn_ssl_set_ca_cert_file(cacert_file,
                 cfg_get_bool(0, "ssl.bootstrap-ca-cert"));
     }
@@ -130,6 +141,7 @@ mgmt_reconfigure(void)
     int retval;
 
     if (!cfg_has_section("mgmt")) {
+        svec_clear(&mgmt_cfg);
         if (mgmt_rconn) {
             rconn_destroy(mgmt_rconn);
             mgmt_rconn = NULL;
@@ -655,8 +667,7 @@ recv_ofmp_config_update(uint32_t xid, const struct ofmp_header *ofmph,
      * connection settings may have changed. */
     send_config_update_ack(xid, true);
 
-    reconfigure();
-
+    need_reconfigure = true;
 
     return 0;
 }
@@ -807,15 +818,16 @@ handle_msg(uint32_t xid, const void *msg, size_t length)
     return handler(xid, msg);
 }
 
-void 
+bool 
 mgmt_run(void)
 {
     int i;
 
     if (!mgmt_rconn) {
-        return;
+        return false;
     }
 
+    need_reconfigure = false;
     rconn_run(mgmt_rconn);
 
     /* Do some processing, but cap it at a reasonable amount so that
@@ -837,6 +849,8 @@ mgmt_run(void)
             VLOG_WARN_RL(&rl, "received too-short OpenFlow message");
         }
     }
+
+    return need_reconfigure;
 }
 
 void

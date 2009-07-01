@@ -18,7 +18,7 @@
 
 void mgmt_init(void);
 void mgmt_reconfigure(void);
-void mgmt_run(void);
+bool mgmt_run(void);
 void mgmt_wait(void);
 uint64_t mgmt_get_mgmt_id(void);
 

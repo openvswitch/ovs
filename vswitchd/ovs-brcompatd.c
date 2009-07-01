@@ -257,12 +257,12 @@ prune_ports(void)
 
             error = netdev_nodev_get_flags(iface_name, &flags);
             if (error == ENODEV) {
-                VLOG_DBG_RL(&rl, "removing dead interface %s from %s", 
-                        iface_name, br_name);
+                VLOG_INFO_RL(&rl, "removing dead interface %s from %s",
+                             iface_name, br_name);
                 svec_add(&delete, iface_name);
             } else if (error) {
-                VLOG_DBG_RL(&rl, "unknown error %d on interface %s from %s", 
-                        error, iface_name, br_name);
+                VLOG_INFO_RL(&rl, "unknown error %d on interface %s from %s",
+                             error, iface_name, br_name);
             }
         }
         svec_destroy(&ifaces);
@@ -292,7 +292,9 @@ prune_ports(void)
  * context, since ovs-vswitchd.conf may cause vswitchd to create or destroy
  * network devices based on iface.*.internal settings.
  *
- * XXX may want to move this to lib/netdev. */
+ * XXX may want to move this to lib/netdev.
+ *
+ * XXX why not just use netdev_nodev_get_flags() or similar function? */
 static bool
 netdev_exists(const char *name)
 {
@@ -563,6 +565,7 @@ rtnl_recv_update(void)
             char br_name[IFNAMSIZ];
             uint32_t br_idx = nl_attr_get_u32(attrs[IFLA_MASTER]);
             struct svec ports;
+            enum netdev_flags flags;
 
             if (!if_indextoname(br_idx, br_name)) {
                 ofpbuf_delete(buf);
@@ -576,12 +579,62 @@ rtnl_recv_update(void)
                 return;
             }
 
-            svec_init(&ports);
-            cfg_get_all_keys(&ports, "bridge.%s.port", br_name);
-            svec_sort(&ports);
-            if (svec_contains(&ports, port_name)) {
-                del_port(br_name, port_name);
-                rewrite_and_reload_config();
+            if (netdev_nodev_get_flags(port_name, &flags) == ENODEV) {
+                /* Network device is really gone. */
+                VLOG_INFO("network device %s destroyed, "
+                          "removing from bridge %s", port_name, br_name);
+                svec_init(&ports);
+                cfg_get_all_keys(&ports, "bridge.%s.port", br_name);
+                svec_sort(&ports);
+                if (svec_contains(&ports, port_name)) {
+                    del_port(br_name, port_name);
+                    rewrite_and_reload_config();
+                }
+            } else {
+                /* A network device by that name exists even though the kernel
+                 * told us it had disappeared.  Probably, what happened was
+                 * this:
+                 *
+                 *      1. Device destroyed.
+                 *      2. Notification sent to us.
+                 *      3. New device created with same name as old one.
+                 *      4. ovs-brcompatd notified, removes device from bridge.
+                 *
+                 * There's no a priori reason that in this situation that the
+                 * new device with the same name should remain in the bridge;
+                 * on the contrary, that would be unexpected.  *But* there is
+                 * one important situation where, if we do this, bad things
+                 * happen.  This is the case of XenServer Tools version 5.0.0,
+                 * which on boot of a Windows VM cause something like this to
+                 * happen on the Xen host:
+                 *
+                 *      i. Create tap1.0 and vif1.0.
+                 *      ii. Delete tap1.0.
+                 *      iii. Delete vif1.0.
+                 *      iv. Re-create vif1.0.
+                 *
+                 * (XenServer Tools 5.5.0 does not exhibit this behavior, and
+                 * neither does a VM without Tools installed at all.@.)
+                 *
+                 * Steps iii and iv happen within a few seconds of each other.
+                 * Step iv causes /etc/xensource/scripts/vif to run, which in
+                 * turn calls ovs-cfg-mod to add the new device to the bridge.
+                 * If step iv happens after step 4 (in our first list of
+                 * steps), then all is well, but if it happens between 3 and 4
+                 * (which can easily happen if ovs-brcompatd has to wait to
+                 * lock the configuration file), then we will remove the new
+                 * incarnation from the bridge instead of the old one!
+                 *
+                 * So, to avoid this problem, we do nothing here.  This is
+                 * strictly incorrect except for this one particular case, and
+                 * perhaps that will bite us someday.  If that happens, then we
+                 * will have to somehow track network devices by ifindex, since
+                 * a new device will have a new ifindex even if it has the same
+                 * name as an old device.
+                 */
+                VLOG_INFO("kernel reported network device %s removed but "
+                          "a device by that name exists (XS Tools 5.0.0?)",
+                          port_name);
             }
             cfg_unlock();
         }

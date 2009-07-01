@@ -27,10 +27,20 @@ logging.basicConfig(filename="/var/log/vswitch-cfg-update.log", level=logging.DE
 
 import XenAPIPlugin
 import XenAPI
+import os
 import subprocess
 
 cfg_mod="/root/vswitch/bin/ovs-cfg-mod"
 vswitchd_cfg_filename="/etc/ovs-vswitchd.conf"
+cacert_filename="/etc/ovs-vswitchd.cacert"
+
+# Delete the CA certificate, so that we go back to boot-strapping mode
+def delete_cacert():
+    try:
+        os.remove(cacert_filename)
+    except OSError:
+        # Ignore error if file doesn't exist
+        pass
 
 def update(session, args):
     pools = session.xenapi.pool.get_all()
@@ -49,6 +59,7 @@ def update(session, args):
     currentController = vswitchCurrentController()
     if controller == "" and currentController != "":
         log.debug("Removing controller configuration.")
+        delete_cacert()
         removeControllerCfg()
         return "Successfully removed controller config"
     elif controller != currentController:
@@ -56,6 +67,7 @@ def update(session, args):
             log.debug("Setting controller to: %s" % (controller))
         else:
             log.debug("Changing controller from %s to %s" % (currentController, controller))
+        delete_cacert()
         setControllerCfg(controller)
         return "Successfully set controller to " + controller
     else:

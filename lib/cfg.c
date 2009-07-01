@@ -332,13 +332,16 @@ try_lock(int fd, bool block)
 int
 cfg_lock(uint8_t *cookie, int timeout)
 {
-    long long int start = time_msec();
+    long long int start;
     long long int elapsed = 0;
     int fd;
     uint8_t curr_cookie[CFG_COOKIE_LEN];
 
     assert(lock_fd < 0);
     COVERAGE_INC(cfg_lock);
+
+    time_refresh();
+    start = time_msec();
     for (;;) {
         int error;
 
