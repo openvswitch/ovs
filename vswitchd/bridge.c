@@ -1076,10 +1076,14 @@ bridge_reconfigure_controller(struct bridge *br)
         int rate_limit, burst_limit;
 
         if (!strcmp(controller, "discover")) {
+            bool update_resolv_conf = true;
+
+            if (cfg_has("%s.update-resolv.conf", pfx)) {
+                update_resolv_conf = cfg_get_bool(0, "%s.update-resolv.conf");
+            }
             ofproto_set_discovery(br->ofproto, true,
                                   cfg_get_string(0, "%s.accept-regex", pfx),
-                                  cfg_get_bool(0, "%s.update-resolv.conf",
-                                               pfx));
+                                  update_resolv_conf);
         } else {
             struct netdev *netdev;
             bool in_band;
