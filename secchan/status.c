@@ -27,6 +27,7 @@
 #include "ofpbuf.h"
 #include "ofproto.h"
 #include "openflow/nicira-ext.h"
+#include "packets.h"
 #include "rconn.h"
 #include "svec.h"
 #include "timeval.h"
@@ -93,8 +94,18 @@ rconn_status_cb(struct status_reply *sr, void *rconn_)
 {
     struct rconn *rconn = rconn_;
     time_t now = time_now();
+    uint32_t remote_ip = rconn_get_remote_ip(rconn);
+    uint32_t local_ip = rconn_get_local_ip(rconn);
 
     status_reply_put(sr, "name=%s", rconn_get_name(rconn));
+    if (remote_ip) {
+        status_reply_put(sr, "remote-ip="IP_FMT, IP_ARGS(&remote_ip));
+        status_reply_put(sr, "remote-port=%d", 
+                         ntohs(rconn_get_remote_port(rconn)));
+        status_reply_put(sr, "local-ip="IP_FMT, IP_ARGS(&local_ip));
+        status_reply_put(sr, "local-port=%d", 
+                         ntohs(rconn_get_local_port(rconn)));
+    }
     status_reply_put(sr, "state=%s", rconn_get_state(rconn));
     status_reply_put(sr, "backoff=%d", rconn_get_backoff(rconn));
     status_reply_put(sr, "probe-interval=%d", rconn_get_probe_interval(rconn));
