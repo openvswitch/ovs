@@ -16,6 +16,7 @@
 #ifndef PACKETS_H
 #define PACKETS_H 1
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
 #include "compiler.h"
