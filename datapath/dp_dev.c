@@ -124,7 +124,7 @@ static void dp_getinfo(struct net_device *netdev, struct ethtool_drvinfo *info)
 {
 	struct dp_dev *dp_dev = dp_dev_priv(netdev);
 	strcpy(info->driver, "openvswitch");
-	sprintf(info->bus_info, "%d", dp_dev->dp->dp_idx);
+	sprintf(info->bus_info, "%d.%d", dp_dev->dp->dp_idx, dp_dev->port_no);
 }
 
 static struct ethtool_ops dp_ethtool_ops = {

@@ -453,9 +453,10 @@ do_ioctl(const struct dpif *dpif_, int cmd, const void *arg)
 }
 
 static int
-lookup_minor(const char *name, int *minor)
+lookup_minor(const char *name, int *minorp)
 {
     struct ethtool_drvinfo drvinfo;
+    int minor, port_no;
     struct ifreq ifr;
     int error;
     int sock;
@@ -485,14 +486,20 @@ lookup_minor(const char *name, int *minor)
         goto error_close_sock;
     }
 
-    if (!isdigit(drvinfo.bus_info[0])) {
-        VLOG_WARN("%s ethtool info does not contain an openvswitch minor",
-                  name);
+    if (sscanf(drvinfo.bus_info, "%d.%d", &minor, &port_no) != 2) {
+        VLOG_WARN("%s ethtool bus_info has unexpected format", name);
         error = EPROTOTYPE;
+        goto error_close_sock;
+    } else if (port_no != ODPP_LOCAL) {
+        /* This is an Open vSwitch device but not the local port.  We
+         * intentionally support only using the name of the local port as the
+         * name of a datapath; otherwise, it would be too difficult to
+         * enumerate all the names of a datapath. */
+        error = EOPNOTSUPP;
         goto error_close_sock;
     }
 
-    *minor = atoi(drvinfo.bus_info);
+    *minorp = minor;
     close(sock);
     return 0;
 
