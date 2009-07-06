@@ -784,12 +784,14 @@ netdev_set_advertisements(struct netdev *netdev, uint32_t advertise)
 /* If 'netdev' has an assigned IPv4 address, sets '*in4' to that address (if
  * 'in4' is non-null) and returns true.  Otherwise, returns false. */
 bool
-netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
+netdev_nodev_get_in4(const char *netdev_name, struct in_addr *in4)
 {
     struct ifreq ifr;
     struct in_addr ip = { INADDR_ANY };
 
-    strncpy(ifr.ifr_name, netdev->name, sizeof ifr.ifr_name);
+    init_netdev();
+
+    strncpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     ifr.ifr_addr.sa_family = AF_INET;
     COVERAGE_INC(netdev_get_in4);
     if (ioctl(af_inet_sock, SIOCGIFADDR, &ifr) == 0) {
@@ -797,12 +799,18 @@ netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
         ip = sin->sin_addr;
     } else {
         VLOG_DBG_RL(&rl, "%s: ioctl(SIOCGIFADDR) failed: %s",
-                    netdev->name, strerror(errno));
+                    netdev_name, strerror(errno));
     }
     if (in4) {
         *in4 = ip;
     }
     return ip.s_addr != INADDR_ANY;
+}
+
+bool
+netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
+{
+    return netdev_nodev_get_in4(netdev->name, in4);
 }
 
 static void
@@ -970,12 +978,14 @@ netdev_turn_flags_off(struct netdev *netdev, enum netdev_flags flags,
  * returns 0.  Otherwise, it returns a positive errno value; in particular,
  * ENXIO indicates that there is not ARP table entry for 'ip' on 'netdev'. */
 int
-netdev_arp_lookup(const struct netdev *netdev,
-                  uint32_t ip, uint8_t mac[ETH_ADDR_LEN]) 
+netdev_nodev_arp_lookup(const char *netdev_name, uint32_t ip, 
+                        uint8_t mac[ETH_ADDR_LEN]) 
 {
     struct arpreq r;
     struct sockaddr_in *pa;
     int retval;
+
+    init_netdev();
 
     memset(&r, 0, sizeof r);
     pa = (struct sockaddr_in *) &r.arp_pa;
@@ -984,16 +994,23 @@ netdev_arp_lookup(const struct netdev *netdev,
     pa->sin_port = 0;
     r.arp_ha.sa_family = ARPHRD_ETHER;
     r.arp_flags = 0;
-    strncpy(r.arp_dev, netdev->name, sizeof r.arp_dev);
+    strncpy(r.arp_dev, netdev_name, sizeof r.arp_dev);
     COVERAGE_INC(netdev_arp_lookup);
     retval = ioctl(af_inet_sock, SIOCGARP, &r) < 0 ? errno : 0;
     if (!retval) {
         memcpy(mac, r.arp_ha.sa_data, ETH_ADDR_LEN);
     } else if (retval != ENXIO) {
         VLOG_WARN_RL(&rl, "%s: could not look up ARP entry for "IP_FMT": %s",
-                     netdev->name, IP_ARGS(&ip), strerror(retval));
+                     netdev_name, IP_ARGS(&ip), strerror(retval));
     }
     return retval;
+}
+
+int
+netdev_arp_lookup(const struct netdev *netdev, uint32_t ip, 
+                  uint8_t mac[ETH_ADDR_LEN]) 
+{
+    return netdev_nodev_arp_lookup(netdev->name, ip, mac);
 }
 
 static int
@@ -1273,6 +1290,45 @@ netdev_enumerate(struct svec *svec)
         VLOG_WARN("could not obtain list of network device names: %s",
                   strerror(errno));
     }
+}
+
+/* Attempts to locate a device based on its IPv4 address.  The caller
+ * may provide a hint as to the device by setting 'netdev_name' to a
+ * likely device name.  This string must be malloc'd, since if it is 
+ * not correct then it will be freed.  If there is no hint, then
+ * 'netdev_name' must be the NULL pointer.
+ *
+ * If the device is found, the return value will be true and 'netdev_name' 
+ * contains the device's name as a string, which the caller is responsible 
+ * for freeing.  If the device is not found, the return value is false. */
+bool
+netdev_find_dev_by_in4(const struct in_addr *in4, char **netdev_name)
+{
+    int i;
+    struct in_addr dev_in4;
+    struct svec dev_list;
+
+    /* Check the hint first. */
+    if (*netdev_name && (netdev_nodev_get_in4(*netdev_name, &dev_in4)) 
+            && (dev_in4.s_addr == in4->s_addr)) {
+        return true;
+    }
+
+    free(*netdev_name);
+    *netdev_name = NULL;
+    netdev_enumerate(&dev_list);
+
+    for (i=0; i<dev_list.n; i++) {
+        if ((netdev_nodev_get_in4(dev_list.names[i], &dev_in4)) 
+                && (dev_in4.s_addr == in4->s_addr)) {
+            *netdev_name = xstrdup(dev_list.names[i]);
+            svec_destroy(&dev_list);
+            return true;
+        }
+    }
+
+    svec_destroy(&dev_list);
+    return false;
 }
 
 /* Obtains the current flags for the network device named 'netdev_name' and

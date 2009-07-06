@@ -105,11 +105,15 @@ int netdev_set_policing(struct netdev *, uint32_t kbits_rate,
                         uint32_t kbits_burst);
 
 void netdev_enumerate(struct svec *);
+bool netdev_find_dev_by_in4(const struct in_addr *in4, char **netdev_name);
 int netdev_nodev_get_flags(const char *netdev_name, enum netdev_flags *);
+bool netdev_nodev_get_in4(const char *netdev_name, struct in_addr *);
 int netdev_nodev_set_etheraddr(const char *name, const uint8_t mac[6]);
 int netdev_nodev_get_etheraddr(const char *netdev_name, uint8_t mac[6]);
 int netdev_nodev_set_policing(const char *netdev_name, uint32_t kbits_rate, 
                               uint32_t kbits_burst);
+int netdev_nodev_arp_lookup(const char *netdev_name, uint32_t ip, 
+                            uint8_t mac[6]);
 int netdev_nodev_get_carrier(const char *netdev_name, bool *carrier);
 
 int netdev_get_vlan_vid(const char *netdev_name, int *vlan_vid);
