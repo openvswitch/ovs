@@ -345,7 +345,7 @@ bridge_configure_ssl(void)
      * the old certificate will still be trusted until vSwitch is
      * restarted.  We may want to address this in vconn's SSL library. */
     if (config_string_change("ssl.ca-cert", &cacert_file)
-            || (stat(cacert_file, &s) && errno == ENOENT)) {
+        || (cacert_file && stat(cacert_file, &s) && errno == ENOENT)) {
         vconn_ssl_set_ca_cert_file(cacert_file,
                                    cfg_get_bool(0, "ssl.bootstrap-ca-cert"));
     }
