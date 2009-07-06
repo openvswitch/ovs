@@ -70,6 +70,17 @@ struct dpif_class {
      * to be called. */
     void (*wait)(void);
 
+    /* Enumerates the names of all known created datapaths, if possible, into
+     * 'all_dps'.  The caller has already initialized 'all_dps' and other dpif
+     * classes might already have added names to it.
+     *
+     * This is used by the vswitch at startup, so that it can delete any
+     * datapaths that are not configured.
+     *
+     * Some kinds of datapaths might not be practically enumerable, in which
+     * case this function may be a null pointer. */
+    int (*enumerate)(struct svec *all_dps);
+
     /* Attempts to open an existing dpif, if 'create' is false, or to open an
      * existing dpif or create a new one, if 'create' is true.  'name' is the
      * full dpif name provided by the user, e.g. "udatapath:/var/run/mypath".
@@ -84,6 +95,23 @@ struct dpif_class {
 
     /* Closes 'dpif' and frees associated memory. */
     void (*close)(struct dpif *dpif);
+
+    /* Enumerates all names that may be used to open 'dpif' into 'all_names'.
+     * The Linux datapath, for example, supports opening a datapath both by
+     * number, e.g. "dp0", and by the name of the datapath's local port.  For
+     * some datapaths, this might be an infinite set (e.g. in a file name,
+     * slashes may be duplicated any number of times), in which case only the
+     * names most likely to be used should be enumerated.
+     *
+     * The caller has already initialized 'all_names' and might already have
+     * added some names to it.  This function should not disturb any existing
+     * names in 'all_names'.
+     *
+     * If a datapath class does not support multiple names for a datapath, this
+     * function may be a null pointer.
+     *
+     * This is used by the vswitch at startup, */
+    int (*get_all_names)(const struct dpif *dpif, struct svec *all_names);
 
     /* Attempts to destroy the dpif underlying 'dpif'.
      *

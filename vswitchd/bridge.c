@@ -275,31 +275,35 @@ bridge_get_ifaces(struct svec *svec)
 void
 bridge_init(void)
 {
-    int retval;
-    int i;
+    struct svec dpif_names;
+    size_t i;
 
-    bond_init();
-
-    for (i = 0; i < DP_MAX; i++) {
+    dp_enumerate(&dpif_names);
+    for (i = 0; i < dpif_names.n; i++) {
+        const char *dpif_name = dpif_names.names[i];
         struct dpif *dpif;
-        char devname[16];
+        int retval;
 
-        sprintf(devname, "dp%d", i);
-        retval = dpif_open(devname, &dpif);
+        retval = dpif_open(dpif_name, &dpif);
         if (!retval) {
-            char dpif_name[IF_NAMESIZE];
-            if (dpif_port_get_name(dpif, ODPP_LOCAL,
-                                   dpif_name, sizeof dpif_name)
-                || !cfg_has("bridge.%s.port", dpif_name)) {
-                dpif_delete(dpif);
+            struct svec all_names;
+            size_t j;
+
+            svec_init(&all_names);
+            dpif_get_all_names(dpif, &all_names);
+            for (j = 0; j < all_names.n; j++) {
+                if (cfg_has("bridge.%s.port", all_names.names[j])) {
+                    goto found;
+                }
             }
+            dpif_delete(dpif);
+        found:
+            svec_destroy(&all_names);
             dpif_close(dpif);
-        } else if (retval != ENODEV) {
-            VLOG_ERR("failed to delete datapath dp%d: %s",
-                     i, strerror(retval));
         }
     }
 
+    bond_init();
     bridge_reconfigure();
 }
 

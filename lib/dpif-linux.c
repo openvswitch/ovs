@@ -45,6 +45,10 @@ struct dpif_linux {
     struct dpif dpif;
     int fd;
 
+    /* Used by dpif_linux_get_all_names(). */
+    char *local_ifname;
+    int minor;
+
     /* Change notification. */
     int local_ifindex;          /* Ifindex of local port. */
     struct svec changed_ports;  /* Ports that have changed. */
@@ -79,6 +83,30 @@ static void
 dpif_linux_wait(void)
 {
     linux_netdev_notifier_wait();
+}
+
+static int
+dpif_linux_enumerate(struct svec *all_dps)
+{
+    int error;
+    int i;
+
+    error = 0;
+    for (i = 0; i < ODP_MAX; i++) {
+        struct dpif *dpif;
+        char devname[16];
+        int retval;
+
+        sprintf(devname, "dp%d", i);
+        retval = dpif_open(devname, &dpif);
+        if (!retval) {
+            svec_add(all_dps, devname);
+            dpif_close(dpif);
+        } else if (retval != ENODEV && !error) {
+            error = retval;
+        }
+    }
+    return error;
 }
 
 static int
@@ -146,8 +174,19 @@ dpif_linux_close(struct dpif *dpif_)
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
     linux_netdev_notifier_unregister(&dpif->port_notifier);
     svec_destroy(&dpif->changed_ports);
+    free(dpif->local_ifname);
     close(dpif->fd);
     free(dpif);
+}
+
+static int
+dpif_linux_get_all_names(const struct dpif *dpif_, struct svec *all_names)
+{
+    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+
+    svec_add_nocopy(all_names, xasprintf("dp%d", dpif->minor));
+    svec_add(all_names, dpif->local_ifname);
+    return 0;
 }
 
 static int
@@ -415,8 +454,10 @@ const struct dpif_class dpif_linux_class = {
     "linux",
     dpif_linux_run,
     dpif_linux_wait,
+    dpif_linux_enumerate,
     dpif_linux_open,
     dpif_linux_close,
+    dpif_linux_get_all_names,
     dpif_linux_delete,
     dpif_linux_get_stats,
     dpif_linux_get_drop_frags,
@@ -628,6 +669,7 @@ static int
 finish_open(struct dpif *dpif_, const char *local_ifname)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    dpif->local_ifname = strdup(local_ifname);
     dpif->local_ifindex = if_nametoindex(local_ifname);
     if (!dpif->local_ifindex) {
         int error = errno;
@@ -679,6 +721,8 @@ open_minor(int minor, struct dpif **dpifp)
             free(name);
 
             dpif->fd = fd;
+            dpif->local_ifname = NULL;
+            dpif->minor = minor;
             dpif->local_ifindex = 0;
             svec_init(&dpif->changed_ports);
             *dpifp = &dpif->dpif;

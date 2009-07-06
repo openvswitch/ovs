@@ -33,6 +33,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "svec.h"
 #include "util.h"
 #include "valgrind.h"
 
@@ -92,6 +93,34 @@ dp_wait(void)
             class->wait();
         }
     }
+}
+
+/* Initializes 'all_dps' and enumerates the names of all known created
+ * datapaths, where possible, into it.  Returns 0 if successful, otherwise a
+ * positive errno value.
+ *
+ * Some kinds of datapaths might not be practically enumerable.  This is not
+ * considered an error. */
+int
+dp_enumerate(struct svec *all_dps)
+{
+    int error;
+    int i;
+
+    svec_init(all_dps);
+    error = 0;
+    for (i = 0; i < N_DPIF_CLASSES; i++) {
+        const struct dpif_class *class = dpif_classes[i];
+        int retval = class->enumerate ? class->enumerate(all_dps) : 0;
+        if (retval) {
+            VLOG_WARN("failed to enumerate %s datapaths: %s",
+                      class->name, strerror(retval));
+            if (!error) {
+                error = retval;
+            }
+        }
+    }
+    return error;
 }
 
 static int
@@ -164,6 +193,32 @@ const char *
 dpif_name(const struct dpif *dpif)
 {
     return dpif->name;
+}
+
+/* Enumerates all names that may be used to open 'dpif' into 'all_names'.  The
+ * Linux datapath, for example, supports opening a datapath both by number,
+ * e.g. "dp0", and by the name of the datapath's local port.  For some
+ * datapaths, this might be an infinite set (e.g. in a file name, slashes may
+ * be duplicated any number of times), in which case only the names most likely
+ * to be used will be enumerated.
+ *
+ * The caller must already have initialized 'all_names'.  Any existing names in
+ * 'all_names' will not be disturbed. */
+int
+dpif_get_all_names(const struct dpif *dpif, struct svec *all_names)
+{
+    if (dpif->class->get_all_names) {
+        int error = dpif->class->get_all_names(dpif, all_names);
+        if (error) {
+            VLOG_WARN_RL(&error_rl,
+                         "failed to retrieve names for datpath %s: %s",
+                         dpif_name(dpif), strerror(error));
+        }
+        return error;
+    } else {
+        svec_add(all_names, dpif_name(dpif));
+        return 0;
+    }
 }
 
 /* Destroys the datapath that 'dpif' is connected to, first removing all of its

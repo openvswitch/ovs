@@ -29,15 +29,18 @@
 
 struct dpif;
 struct ofpbuf;
+struct svec;
 
 void dp_run(void);
 void dp_wait(void);
+int dp_enumerate(struct svec *);
 
 int dpif_open(const char *name, struct dpif **);
 int dpif_create(const char *name, struct dpif **);
 void dpif_close(struct dpif *);
 
 const char *dpif_name(const struct dpif *);
+int dpif_get_all_names(const struct dpif *, struct svec *);
 
 int dpif_delete(struct dpif *);
 
