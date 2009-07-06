@@ -60,7 +60,7 @@ unix_open(const char *name, char *suffix, struct vconn **vconnp)
     }
 
     return new_stream_vconn(name, fd, check_connection_completion(fd),
-                            0, true, vconnp);
+                            0, 0, true, NULL, vconnp);
 }
 
 struct vconn_class unix_vconn_class = {
@@ -105,7 +105,7 @@ punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
     } else {
         strcpy(name, "unix");
     }
-    return new_stream_vconn(name, fd, 0, 0, true, vconnp);
+    return new_stream_vconn(name, fd, 0, 0, 0, true, NULL, vconnp);
 }
 
 struct pvconn_class punix_pvconn_class = {

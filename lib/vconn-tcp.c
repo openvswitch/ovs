@@ -36,6 +36,8 @@
 
 /* Active TCP. */
 
+void tcp_connect_success_cb(struct vconn *vconn, int fd);
+
 static int
 new_tcp_vconn(const char *name, int fd, int connect_status,
               const struct sockaddr_in *sin, struct vconn **vconnp)
@@ -50,8 +52,9 @@ new_tcp_vconn(const char *name, int fd, int connect_status,
         return errno;
     }
 
-    return new_stream_vconn(name, fd, connect_status, sin->sin_addr.s_addr,
-                            true, vconnp);
+    return new_stream_vconn(name, fd, connect_status, 
+                            sin->sin_addr.s_addr, sin->sin_port, 
+                            true, tcp_connect_success_cb, vconnp);
 }
 
 static int
@@ -103,6 +106,22 @@ tcp_open(const char *name, char *suffix, struct vconn **vconnp)
     } else {
         return new_tcp_vconn(name, fd, 0, &sin, vconnp);
     }
+}
+
+void
+tcp_connect_success_cb(struct vconn *vconn, int fd)
+{
+    int retval;
+    struct sockaddr_in local_addr;
+    socklen_t addrlen = sizeof(local_addr);
+
+    /* Get the local IP and port information */
+    retval = getsockname(fd, (struct sockaddr *)&local_addr, &addrlen);
+    if (retval) {
+        memset(&local_addr, 0, sizeof local_addr);
+    }
+    vconn_set_local_ip(vconn, local_addr.sin_addr.s_addr);
+    vconn_set_local_port(vconn, local_addr.sin_port);
 }
 
 struct vconn_class tcp_vconn_class = {

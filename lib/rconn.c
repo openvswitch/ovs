@@ -638,9 +638,34 @@ rconn_failure_duration(const struct rconn *rconn)
 /* Returns the IP address of the peer, or 0 if the peer is not connected over
  * an IP-based protocol or if its IP address is not known. */
 uint32_t
-rconn_get_ip(const struct rconn *rconn) 
+rconn_get_remote_ip(const struct rconn *rconn) 
 {
-    return rconn->vconn ? vconn_get_ip(rconn->vconn) : 0;
+    return rconn->vconn ? vconn_get_remote_ip(rconn->vconn) : 0;
+}
+
+/* Returns the transport port of the peer, or 0 if the peer does not 
+ * contain a port or if the port is not known. */
+uint16_t
+rconn_get_remote_port(const struct rconn *rconn) 
+{
+    return rconn->vconn ? vconn_get_remote_port(rconn->vconn) : 0;
+}
+
+/* Returns the IP address used to connect to the peer, or 0 if the
+ * connection is not an IP-based protocol or if its IP address is not 
+ * known. */
+uint32_t
+rconn_get_local_ip(const struct rconn *rconn) 
+{
+    return rconn->vconn ? vconn_get_local_ip(rconn->vconn) : 0;
+}
+
+/* Returns the transport port used to connect to the peer, or 0 if the
+ * connection does not contain a port or if the port is not known. */
+uint16_t
+rconn_get_local_port(const struct rconn *rconn) 
+{
+    return rconn->vconn ? vconn_get_local_port(rconn->vconn) : 0;
 }
 
 /* If 'rconn' can't connect to the peer, it could be for any number of reasons.

@@ -25,8 +25,12 @@ struct vconn;
 struct pvconn;
 struct sockaddr;
 
+typedef void connect_success_cb_func(struct vconn *, int);
+
 int new_stream_vconn(const char *name, int fd, int connect_status,
-                     uint32_t ip, bool reconnectable, struct vconn **vconnp);
+                     uint32_t remote_ip, uint16_t remote_port,
+                     bool reconnectable, connect_success_cb_func *,
+                     struct vconn **vconnp);
 int new_pstream_pvconn(const char *name, int fd,
                       int (*accept_cb)(int fd, const struct sockaddr *,
                                        size_t sa_len, struct vconn **),

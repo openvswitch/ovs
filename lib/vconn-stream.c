@@ -41,6 +41,7 @@ struct stream_vconn
 {
     struct vconn vconn;
     int fd;
+    void (*connect_success_cb)(struct vconn *, int);
     struct ofpbuf *rxbuf;
     struct ofpbuf *txbuf;
     struct poll_waiter *tx_waiter;
@@ -54,17 +55,21 @@ static void stream_clear_txbuf(struct stream_vconn *);
 
 int
 new_stream_vconn(const char *name, int fd, int connect_status,
-                 uint32_t ip, bool reconnectable, struct vconn **vconnp)
+                 uint32_t remote_ip, uint16_t remote_port, 
+                 bool reconnectable, 
+                 connect_success_cb_func *connect_success_cb,
+                 struct vconn **vconnp)
 {
     struct stream_vconn *s;
 
     s = xmalloc(sizeof *s);
-    vconn_init(&s->vconn, &stream_vconn_class, connect_status, ip, name,
-               reconnectable);
+    vconn_init(&s->vconn, &stream_vconn_class, connect_status, remote_ip, 
+               remote_port, name, reconnectable);
     s->fd = fd;
     s->txbuf = NULL;
     s->tx_waiter = NULL;
     s->rxbuf = NULL;
+    s->connect_success_cb = connect_success_cb;
     *vconnp = &s->vconn;
     return 0;
 }
@@ -91,7 +96,14 @@ static int
 stream_connect(struct vconn *vconn)
 {
     struct stream_vconn *s = stream_vconn_cast(vconn);
-    return check_connection_completion(s->fd);
+    int retval = check_connection_completion(s->fd);
+    if (retval) {
+        return retval;
+    }
+    if (s->connect_success_cb) {
+        s->connect_success_cb(vconn, s->fd);
+    }
+    return 0;
 }
 
 static int

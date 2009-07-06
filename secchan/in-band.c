@@ -92,7 +92,7 @@ get_controller_mac(struct in_band *ib)
     time_t now = time_now();
     uint32_t ip;
 
-    ip = rconn_get_ip(ib->controller);
+    ip = rconn_get_remote_ip(ib->controller);
     if (ip != ib->ip || now >= ib->next_refresh) {
         bool have_mac;
 
@@ -165,7 +165,7 @@ in_band_status_cb(struct status_reply *sr, void *in_band_)
                          ETH_ADDR_ARGS(local_mac));
     }
 
-    controller_ip = rconn_get_ip(in_band->controller);
+    controller_ip = rconn_get_remote_ip(in_band->controller);
     if (controller_ip) {
         status_reply_put(sr, "controller-ip="IP_FMT,
                          IP_ARGS(&controller_ip));
