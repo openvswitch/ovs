@@ -351,32 +351,19 @@ bridge_configure_ssl(void)
 void
 bridge_reconfigure(void)
 {
-    struct svec old_br, new_br, raw_new_br;
+    struct svec old_br, new_br;
     struct bridge *br, *next;
     size_t i, j;
 
     COVERAGE_INC(bridge_reconfigure);
 
-    /* Collect old bridges. */
+    /* Collect old and new bridges. */
     svec_init(&old_br);
+    svec_init(&new_br);
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         svec_add(&old_br, br->name);
     }
-
-    /* Collect new bridges. */
-    svec_init(&raw_new_br);
-    cfg_get_subsections(&raw_new_br, "bridge");
-    svec_init(&new_br);
-    for (i = 0; i < raw_new_br.n; i++) {
-        const char *name = raw_new_br.names[i];
-        if (!strncmp(name, "dp", 2) && isdigit(name[2])) {
-            VLOG_ERR("%s is not a valid bridge name (bridges may not be "
-                     "named \"dp\" followed by a digit)", name);
-        } else {
-            svec_add(&new_br, name);
-        }
-    }
-    svec_destroy(&raw_new_br);
+    cfg_get_subsections(&new_br, "bridge");
 
     /* Get rid of deleted bridges and add new bridges. */
     svec_sort(&old_br);
@@ -793,7 +780,7 @@ bridge_create(const char *name)
     br = xcalloc(1, sizeof *br);
 
     error = dpif_create(name, &br->dpif);
-    if (error == EEXIST) {
+    if (error == EEXIST || error == EBUSY) {
         error = dpif_open(name, &br->dpif);
         if (error) {
             VLOG_ERR("datapath %s already exists but cannot be opened: %s",

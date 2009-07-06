@@ -50,8 +50,7 @@ configure \fBovs\-vswitchd\fR.
 .SS "Bridge Configuration"
 A bridge (switch) with a given \fIname\fR is configured by specifying
 the names of its network devices as values for key
-\fBbridge.\fIname\fB.port\fR.  (The specified \fIname\fR may not begin
-with \fBdp\fR followed by a digit.)
+\fBbridge.\fIname\fB.port\fR.
 .PP
 The names given on \fBbridge.\fIname\fB.port\fR must be the names of
 existing network devices, except for ``internal ports.''  An internal
