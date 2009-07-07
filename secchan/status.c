@@ -19,6 +19,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include "dynamic-string.h"
@@ -118,9 +119,20 @@ static void
 config_status_cb(struct status_reply *sr, void *ofproto_)
 {
     const struct ofproto *ofproto = ofproto_;
+    uint64_t datapath_id, mgmt_id;
     struct svec listeners;
     int probe_interval, max_backoff;
     size_t i;
+
+    datapath_id = ofproto_get_datapath_id(ofproto);
+    if (datapath_id) {
+        status_reply_put(sr, "datapath-id=%"PRIx64, datapath_id);
+    }
+
+    mgmt_id = ofproto_get_mgmt_id(ofproto);
+    if (mgmt_id) {
+        status_reply_put(sr, "mgmt-id=%"PRIx64, mgmt_id);
+    }
 
     svec_init(&listeners);
     ofproto_get_listeners(ofproto, &listeners);

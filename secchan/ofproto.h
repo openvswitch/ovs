@@ -72,6 +72,7 @@ int ofproto_set_remote_execution(struct ofproto *, const char *command_acl,
 
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
+uint64_t ofproto_get_mgmt_id(const struct ofproto *);
 int ofproto_get_probe_interval(const struct ofproto *);
 int ofproto_get_max_backoff(const struct ofproto *);
 bool ofproto_get_in_band(const struct ofproto *);

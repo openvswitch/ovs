@@ -635,6 +635,12 @@ ofproto_get_datapath_id(const struct ofproto *ofproto)
     return ofproto->datapath_id;
 }
 
+uint64_t
+ofproto_get_mgmt_id(const struct ofproto *ofproto)
+{
+    return ofproto->mgmt_id;
+}
+
 int
 ofproto_get_probe_interval(const struct ofproto *ofproto)
 {
