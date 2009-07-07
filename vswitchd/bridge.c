@@ -1079,7 +1079,8 @@ bridge_reconfigure_controller(struct bridge *br)
             bool update_resolv_conf = true;
 
             if (cfg_has("%s.update-resolv.conf", pfx)) {
-                update_resolv_conf = cfg_get_bool(0, "%s.update-resolv.conf");
+                update_resolv_conf = cfg_get_bool(0, "%s.update-resolv.conf",
+                        pfx);
             }
             ofproto_set_discovery(br->ofproto, true,
                                   cfg_get_string(0, "%s.accept-regex", pfx),
