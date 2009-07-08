@@ -72,7 +72,7 @@ new_tcp_vconn(const char *name, int fd, int connect_status,
 static int
 tcp_open(const char *name, char *suffix, struct vconn **vconnp)
 {
-    char *save_ptr;
+    char *save_ptr = NULL;
     const char *host_name;
     const char *port_string;
     struct sockaddr_in sin;

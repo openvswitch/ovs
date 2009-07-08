@@ -314,7 +314,7 @@ vlog_reopen_log_file(void)
 char *
 vlog_set_levels_from_string(const char *s_)
 {
-    char *save_ptr;
+    char *save_ptr = NULL;
     char *s = xstrdup(s_);
     char *module, *facility;
 

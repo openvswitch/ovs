@@ -280,7 +280,8 @@ ssl_vconn_cast(struct vconn *vconn)
 static int
 ssl_open(const char *name, char *suffix, struct vconn **vconnp)
 {
-    char *save_ptr, *host_name, *port_string;
+    char *save_ptr = NULL;
+    char *host_name, *port_string;
     struct sockaddr_in sin;
     int retval;
     int fd;

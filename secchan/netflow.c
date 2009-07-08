@@ -107,7 +107,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static int
 open_collector(char *dst)
 {
-    char *save_ptr;
+    char *save_ptr = NULL;
     const char *host_name;
     const char *port_string;
     struct sockaddr_in sin;
