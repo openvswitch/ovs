@@ -527,20 +527,6 @@ send_config_update_ack(uint32_t xid, bool success)
 }
 
 static void
-send_ofmp_error_msg(uint32_t xid, uint16_t type, uint16_t code, 
-            const void *data, size_t len)
-{
-    struct ofpbuf *buffer;
-    struct ofmp_error_msg *oem;
-
-    oem = make_ofmp_xid(sizeof(*oem)+len, OFMPT_ERROR, xid, &buffer);
-    oem->type = htons(type);
-    oem->code = htons(code);
-    memcpy(oem->data, data, len);
-    send_openflow_buffer(buffer);
-}
-
-static void
 send_error_msg(uint32_t xid, uint16_t type, uint16_t code, 
             const void *data, size_t len)
 {
