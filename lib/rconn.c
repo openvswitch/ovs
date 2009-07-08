@@ -89,7 +89,7 @@ struct rconn {
     time_t last_admitted;
 
     /* These values are simply for statistics reporting, not used directly by
-     * anything internal to the rconn (or the secchan for that matter). */
+     * anything internal to the rconn (or ofproto for that matter). */
     unsigned int packets_received;
     unsigned int n_attempted_connections, n_successful_connections;
     time_t creation_time;

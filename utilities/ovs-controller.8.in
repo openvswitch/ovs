@@ -82,7 +82,7 @@ already have the controller CA certificate for it to have any
 confidence in the controller's identity.  However, this option allows
 a newly installed switch to obtain the controller CA certificate on
 first boot using, e.g., the \fB--bootstrap-ca-cert\fR option to
-\fBsecchan\fR(8).
+\fBovs\-openflowd\fR(8).
 
 .IP "\fB-n\fR, \fB--noflow\fR"
 By default, \fBovs\-controller\fR sets up a flow in each OpenFlow switch
@@ -103,7 +103,7 @@ recommended, flows will never expire.  The default is 60 seconds.
 This option affects only flows set up by the OpenFlow controller.  In
 some configurations, the switch can set up some flows
 on its own.  To set the idle time for those flows, pass
-\fB--max-idle\fR to \fBsecchan\fR (on the switch).
+\fB--max-idle\fR to \fBovs\-openflowd\fR (on the switch).
 
 This option has no effect when \fB-n\fR (or \fB--noflow\fR) is in use
 (because the controller does not set up flows in that case).
@@ -133,6 +133,6 @@ To bind locally to port 6633 (the default) and wait for incoming connections fro
 
 .SH "SEE ALSO"
 
-.BR secchan (8),
+.BR ovs\-openflowd (8),
 .BR ovs\-appctl (8),
 .BR ovs\-dpctl (8)

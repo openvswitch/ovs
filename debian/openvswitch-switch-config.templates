@@ -64,7 +64,7 @@ _Description: Preparing to discover controller.
  The setup program will now attempt to discover the OpenFlow controller.
  Controller discovery may take up to 30 seconds.  Please be patient.
  .
- See secchan(8) for instructions on how to configure a DHCP server for
+ See ovs-openflowd(8) for instructions on how to configure a DHCP server for
  controller discovery.
 
 Template: openvswitch-switch/discovery-failure
@@ -73,7 +73,7 @@ _Description: Controller discovery failed.
  The controller's location could not be determined automatically.
  .
  Ensure that the OpenFlow DHCP server is properly configured.  See
- secchan(8) for instructions on how to configure a DHCP server for
+ ovs-openflowd(8) for instructions on how to configure a DHCP server for
  controller discovery.
 
 Template: openvswitch-switch/discovery-success

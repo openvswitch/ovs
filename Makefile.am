@@ -57,7 +57,7 @@ SUFFIXES = .in
                 -e 's,[@]PERL[@],$(PERL),g' > $@
 
 include lib/automake.mk
-include secchan/automake.mk
+include ofproto/automake.mk
 include utilities/automake.mk
 include tests/automake.mk
 include include/automake.mk

@@ -1,4 +1,4 @@
-_debian/secchan/secchan.8
+_debian/utilities/ovs-openflowd.8
 _debian/utilities/ovs-discover.8
 _debian/utilities/ovs-dpctl.8
 _debian/utilities/ovs-kill.8

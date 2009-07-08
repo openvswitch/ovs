@@ -1,7 +1,7 @@
 # This is a POSIX shell fragment                -*- sh -*-
 
-# To configure the switch monitor, modify the following.  Afterward,
-# the secure channel will come up automatically at boot time.  It can
+# To configure the switch UI, modify the following.  Afterward,
+# the switch UI will come up automatically at boot time.  It can
 # be restarted immediately with
 #       /etc/init.d/openvswitch-switchui start
 
@@ -9,11 +9,11 @@
 # sourced by /etc/init.d/openvswitch-switchui
 # installed at /etc/default/openvswitch-switchui by the maintainer scripts
 
-# SWITCH_VCONN: The vconn used to connect to the switch (secchan).
-# The secchan must be configured to listen to this vconn.  The default
+# SWITCH_VCONN: The vconn used to connect to the switch (ovs-openflowd).
+# The ovs-openflowd must be configured to listen to this vconn.  The default
 # here set is also listened to by default by the openvswitch-switch
 # package, so ordinarily there is no need to modify this.
-SWITCH_VCONN="unix:/var/run/secchan.mgmt"
+SWITCH_VCONN="unix:/var/run/ovs-openflowd.mgmt"
 
 # EZIO3_DEVICE: To display the switch monitor on an EZIO3 (aka
 # MTB-134) 16x2 LCD displays found on server appliances made by

@@ -28,21 +28,17 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "dirs.h"
-#include "discovery.h"
 #include "dpif.h"
-#include "fail-open.h"
 #include "fault.h"
-#include "in-band.h"
 #include "leak-checker.h"
 #include "list.h"
 #include "netdev.h"
 #include "ofpbuf.h"
-#include "ofproto.h"
+#include "ofproto/ofproto.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"
-#include "status.h"
 #include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -51,7 +47,7 @@
 #include "vconn.h"
 
 #include "vlog.h"
-#define THIS_MODULE VLM_secchan
+#define THIS_MODULE VLM_openflowd
 
 /* Behavior when the connection to the controller fails. */
 enum fail_mode {
@@ -522,7 +518,7 @@ usage(void)
            "usage: %s [OPTIONS] DATAPATH [CONTROLLER]\n"
            "DATAPATH is a local datapath (e.g. \"dp0\").\n"
            "CONTROLLER is an active OpenFlow connection method; if it is\n"
-           "omitted, then secchan performs controller discovery.\n",
+           "omitted, then ovs-openflowd performs controller discovery.\n",
            program_name, program_name);
     vconn_usage(true, true, true);
     printf("\nOpenFlow options:\n"
@@ -542,7 +538,7 @@ usage(void)
            "                            closed: drop all packets\n"
            "                            open (default): act as learning switch\n"
            "  --inactivity-probe=SECS time between inactivity probes\n"
-           "  --max-idle=SECS         max idle for flows set up by secchan\n"
+           "  --max-idle=SECS         max idle for flows set up by switch\n"
            "  --max-backoff=SECS      max time between controller connection\n"
            "                          attempts (default: 15 seconds)\n"
            "  -l, --listen=METHOD     allow management connections on METHOD\n"

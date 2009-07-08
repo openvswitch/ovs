@@ -187,8 +187,8 @@ COVERAGE_FILES = \
 	lib/unixctl.c \
 	lib/util.c \
 	lib/vconn.c \
-	secchan/ofproto.c \
-	secchan/pktbuf.c \
+	ofproto/ofproto.c \
+	ofproto/pktbuf.c \
 	vswitchd/bridge.c \
 	vswitchd/mgmt.c \
 	vswitchd/ovs-brcompatd.c

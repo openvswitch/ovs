@@ -110,9 +110,9 @@ Architecture: any
 Recommends: openvswitch-switch
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Monitor utility for Open vSwitch switches
- The ovs-monitor utility included in this package monitors the secure
- channel and datapath.  If either become unresponsive, the switch is
- rebooted.
+ The ovs-monitor utility included in this package monitors the
+ ovs-openflowd process and the kernel datapath.  If either become
+ unresponsive, it reboots the machine.
 
 Package: openvswitch-wdt
 Architecture: any

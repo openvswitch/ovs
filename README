@@ -40,15 +40,15 @@ The main components of this distribution are:
       to be installed on a Citrix XenServer host as a drop-in
       replacement for its switch, with additional functionality.
 
-    * vlog-appctl, a utility that can control Open vSwitch daemons,
+    * ovs-appctl, a utility that can control Open vSwitch daemons,
       adjusting their logging levels among other uses.
 
 Open vSwitch also provides an OpenFlow implementation and tools for
 those interested in OpenFlow but not additional Open vSwitch features:
 
-    * secchan, a program that implements a simple OpenFlow switch
-      (without the special features provided by ovs-vswitchd) using
-      the same kernel module as ovs-vswitchd.
+    * ovs-openflowd, a program that implements a simple OpenFlow
+      switch (without the special features provided by ovs-vswitchd)
+      using the same kernel module as ovs-vswitchd.
 
     * ovs-controller, a simple OpenFlow controller.
 

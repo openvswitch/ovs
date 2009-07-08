@@ -37,7 +37,7 @@
  * ----------------------------------------------------------------------
  */
 
-/* Protocol between secchan and datapath. */
+/* Protocol between userspace and kernel datapath. */
 
 #ifndef OPENVSWITCH_DATAPATH_PROTOCOL_H
 #define OPENVSWITCH_DATAPATH_PROTOCOL_H 1

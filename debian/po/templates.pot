@@ -168,7 +168,7 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:5001
 msgid ""
-"See secchan(8) for instructions on how to configure a DHCP server for "
+"See ovs-openflowd(8) for instructions on how to configure a DHCP server for "
 "controller discovery."
 msgstr ""
 
@@ -188,7 +188,7 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:6001
 msgid ""
-"Ensure that the OpenFlow DHCP server is properly configured.  See secchan(8) "
+"Ensure that the OpenFlow DHCP server is properly configured.  See ovs-openflowd(8) "
 "for instructions on how to configure a DHCP server for controller discovery."
 msgstr ""
 

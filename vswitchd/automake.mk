@@ -22,7 +22,7 @@ vswitchd_ovs_vswitchd_SOURCES = \
 	vswitchd/xenserver.c \
 	vswitchd/xenserver.h
 vswitchd_ovs_vswitchd_LDADD = \
-	secchan/libsecchan.a \
+	ofproto/libofproto.a \
 	lib/libopenvswitch.a \
 	$(FAULT_LIBS) \
 	$(SSL_LIBS)

@@ -19,9 +19,9 @@
 ### END INIT INFO
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-DAEMON=/usr/sbin/secchan
-NAME=secchan
-DESC=secchan
+DAEMON=/usr/sbin/ovs-openflowd
+NAME=ovs-openflowd
+DESC=ovs-openflowd
 
 test -x $DAEMON || exit 0
 
@@ -35,7 +35,7 @@ DODTIME=1                   # Time to wait for the server to die, in seconds
                             # let some servers to die gracefully and
                             # 'restart' will not work
 
-# Include secchan defaults if available
+# Include ovs-openflowd defaults if available
 unset NETDEVS
 unset MODE
 unset SWITCH_IP
@@ -319,7 +319,7 @@ case "$1" in
             check_op "Setting core limit to $CORE_LIMIT" ulimit -c "$CORE_LIMIT"
         fi
 
-        # Compose secchan options.
+        # Compose ovs-openflowd options.
         set --
         set -- "$@" --verbose=ANY:console:emer --verbose=ANY:syslog:err
         set -- "$@" --log-file

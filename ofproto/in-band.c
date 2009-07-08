@@ -43,8 +43,8 @@
 #define IB_BASE_PRIORITY 18181800
 
 enum {
-    IBR_FROM_LOCAL_PORT,        /* Sent by secure channel. */
-    IBR_TO_LOCAL_PORT,          /* Sent to secure channel.  */
+    IBR_FROM_LOCAL_PORT,        /* Sent by ofproto local port. */
+    IBR_TO_LOCAL_PORT,          /* Sent to ofproto local port.  */
     IBR_ARP_FROM_CTL,           /* ARP from the controller. */
     IBR_TO_CTL_OFP_SRC,         /* To controller, OpenFlow source port. */
     IBR_TO_CTL_OFP_DST,         /* To controller, OpenFlow dest port. */
@@ -228,13 +228,13 @@ in_band_run(struct in_band *in_band)
     controller_mac = get_controller_mac(in_band);
     local_mac = get_local_mac(in_band);
 
-    /* Switch traffic sent by the secure channel. */
+    /* Switch traffic sent from the local port. */
     memset(&flow, 0, sizeof flow);
     flow.in_port = ODPP_LOCAL;
     setup_flow(in_band, IBR_FROM_LOCAL_PORT, &flow, OFPFW_IN_PORT,
                OFPP_NORMAL);
 
-    /* Deliver traffic sent to the secure channel to the local port. */
+    /* Deliver traffic sent to the local port. */
     if (local_mac) {
         memset(&flow, 0, sizeof flow);
         memcpy(flow.dl_dst, local_mac, ETH_ADDR_LEN);

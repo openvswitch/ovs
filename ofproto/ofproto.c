@@ -133,7 +133,7 @@ rule_is_hidden(const struct rule *rule)
         return true;
     }
 
-    /* Rules with priority higher than UINT16_MAX are set up by secchan itself
+    /* Rules with priority higher than UINT16_MAX are set up by ofproto itself
      * (e.g. by in-band control) and are intentionally hidden from the
      * controller. */
     if (rule->cr.priority > UINT16_MAX) {

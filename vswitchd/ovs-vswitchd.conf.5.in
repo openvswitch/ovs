@@ -396,7 +396,7 @@ switch will perform all configured bridging and switching locally.
 .TP
 \fBdiscover\fR
 Use controller discovery to find the local OpenFlow controller.
-Refer to \fBsecchan\fR(8) for information on how to configure a DHCP
+Refer to \fB\ovs\-openflowd\fR(8) for information on how to configure a DHCP
 server to support controller discovery.  The following additional
 options control the discovery process:
 .
@@ -454,7 +454,7 @@ not in use, the following additional settings are honored:
 By default, or if this is set to \fBtrue\fR, \fBovs\-vswitchd\fR connects
 to the controller in-band.  If this is set to \fBfalse\fR,
 \fBovs\-vswitchd\fR connects to the controller out-of-band.  Refer to
-\fBsecchan\fR(8) for a description of in-band and out-of-band control.
+\fBovs\-openflowd\fR(8) for a description of in-band and out-of-band control.
 .IP "\fBbridge.\fIname\fB.controller.ip=\fIip\fR"
 If specified, the IP address to configure on the bridge's local port.
 .IP "\fBbridge.\fIname\fB.controller.netmask=\fInetmask\fR"
@@ -476,7 +476,7 @@ When the switch is connected to the controller, it waits for a
 message to be received from the controller for \fIsecs\fR seconds
 before it sends a inactivity probe to the controller.  After sending
 the inactivity probe, if no response is received for an additional
-\fIsecs\fR seconds, the secure channel assumes that the connection has
+\fIsecs\fR seconds, \fBovs-vswitchd\fR assumes that the connection has
 been broken and attempts to reconnect.
 .IP
 Changing the inactivity probe interval also changes the interval

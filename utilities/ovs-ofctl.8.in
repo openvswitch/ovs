@@ -147,7 +147,7 @@ syntax of \fIflows\fR.
 \fBmonitor \fIswitch\fR [\fImiss-len\fR [\fIsend-exp]]
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Usually, \fIswitch\fR should specify a connection
-named on \fBsecchan\fR(8)'s \fB-l\fR or \fB--listen\fR command line
+named on \fBovs\-openflowd\fR(8)'s \fB-l\fR or \fB--listen\fR command line
 option.
 
 If \fImiss-len\fR is provided, \fBovs\-ofctl\fR sends an OpenFlow ``set
@@ -327,7 +327,7 @@ omitted, then the entire packet is sent.
 .IP \fBlocal\fR
 Outputs the packet on the ``local port,'' which corresponds to the
 \fBof\fIn\fR network device (see \fBCONTACTING THE CONTROLLER\fR in
-\fBsecchan\fR(8) for information on the \fBof\fIn\fR network device).
+\fBovs\-openflowd\fR(8) for information on the \fBof\fIn\fR network device).
 
 .IP \fBdrop\fR
 Discards the packet, so no further processing or forwarding takes place.
@@ -471,7 +471,7 @@ The following examples assume that an OpenFlow switch on the local
 host has been configured to listen for management connections on a
 Unix domain socket named \fB@RUNDIR@/openflow.sock\fR, e.g. by
 specifying \fB--listen=punix:@RUNDIR@/openflow.sock\fR on the
-\fBsecchan\fR(8) command line.
+\fBovs\-openflowd\fR(8) command line.
 
 .TP
 \fBovs\-ofctl dump-tables unix:@RUNDIR@/openflow.sock\fR
