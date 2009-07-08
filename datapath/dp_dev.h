@@ -9,16 +9,14 @@
 #ifndef DP_DEV_H
 #define DP_DEV_H 1
 
+#include <linux/percpu.h>
+
 struct dp_dev {
 	struct datapath *dp;
 	int port_no;
 
 	struct net_device *dev;
 	struct net_device_stats stats;
-	struct sk_buff_head xmit_queue;
-	struct work_struct xmit_work;
-
-	struct list_head list;
 };
 
 static inline struct dp_dev *dp_dev_priv(struct net_device *netdev)

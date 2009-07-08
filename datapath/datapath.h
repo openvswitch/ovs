@@ -120,7 +120,7 @@ int dp_table_foreach(struct dp_table *table,
 		     void *aux);
 
 void dp_process_received_packet(struct sk_buff *, struct net_bridge_port *);
-int dp_del_port(struct net_bridge_port *, struct list_head *);
+int dp_del_port(struct net_bridge_port *);
 int dp_output_control(struct datapath *, struct sk_buff *, int, u32 arg);
 
 struct datapath *get_dp(int dp_idx);
