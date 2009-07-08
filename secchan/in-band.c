@@ -46,6 +46,7 @@ enum {
     IBR_FROM_LOCAL_PORT,        /* Sent by the local port. */
     IBR_OFP_TO_LOCAL,           /* Sent to secure channel on local port. */
     IBR_ARP_FROM_LOCAL,         /* ARP from the local port. */
+    IBR_ARP_TO_LOCAL,           /* ARP to the local port. */
     IBR_ARP_FROM_CTL,           /* ARP from the controller. */
     IBR_TO_CTL_OFP_SRC,         /* To controller, OpenFlow source port. */
     IBR_TO_CTL_OFP_DST,         /* To controller, OpenFlow dest port. */
@@ -223,6 +224,11 @@ in_band_run(struct in_band *in_band)
     if (time_now() < MIN(in_band->next_refresh, in_band->next_local_refresh)) {
         return;
     }
+ 
+    /* NOTE: A router may sit between the switch and controller, so
+     * we could not tie this to the controller's MAC address.  If the
+     * switch and controller are on different subnets, we should be
+     * using the router's MAC address in the 'controller_mac'. */
     controller_mac = get_controller_mac(in_band);
     local_mac = get_local_mac(in_band);
 
@@ -233,11 +239,16 @@ in_band_run(struct in_band *in_band)
                OFPP_NORMAL);
 
     if (local_mac) {
-        /* Deliver traffic sent to the connection's interface. */
+        /* Deliver traffic sent over the secure channel to the connection's
+         * interface. */
         memset(&flow, 0, sizeof flow);
+        flow.dl_type = htons(ETH_TYPE_IP);
         memcpy(flow.dl_dst, local_mac, ETH_ADDR_LEN);
-        setup_flow(in_band, IBR_OFP_TO_LOCAL, &flow, OFPFW_DL_DST,
-                    OFPP_NORMAL);
+        flow.nw_proto = IP_TYPE_TCP;
+        flow.tp_src = htons(OFP_TCP_PORT);
+        setup_flow(in_band, IBR_OFP_TO_LOCAL, &flow, 
+                    (OFPFW_DL_TYPE | OFPFW_DL_DST | OFPFW_NW_PROTO 
+                     | OFPFW_TP_SRC), OFPP_NORMAL);
 
         /* Allow the connection's interface to be the source of ARP traffic. */
         memset(&flow, 0, sizeof flow);
@@ -245,9 +256,17 @@ in_band_run(struct in_band *in_band)
         memcpy(flow.dl_src, local_mac, ETH_ADDR_LEN);
         setup_flow(in_band, IBR_ARP_FROM_LOCAL, &flow,
                    OFPFW_DL_TYPE | OFPFW_DL_SRC, OFPP_NORMAL);
+
+        /* Allow the connection's interface to receive directed ARP traffic. */
+        memset(&flow, 0, sizeof flow);
+        flow.dl_type = htons(ETH_TYPE_ARP);
+        memcpy(flow.dl_dst, local_mac, ETH_ADDR_LEN);
+        setup_flow(in_band, IBR_ARP_TO_LOCAL, &flow, 
+                   OFPFW_DL_TYPE | OFPFW_DL_DST, OFPP_NORMAL);
     } else {
         drop_flow(in_band, IBR_OFP_TO_LOCAL);
         drop_flow(in_band, IBR_ARP_FROM_LOCAL);
+        drop_flow(in_band, IBR_ARP_TO_LOCAL);
     }
 
     if (controller_mac) {
