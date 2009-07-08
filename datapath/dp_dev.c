@@ -17,6 +17,13 @@
 #include "datapath.h"
 #include "dp_dev.h"
 
+struct pcpu_lstats {
+	unsigned long rx_packets;
+	unsigned long rx_bytes;
+	unsigned long tx_packets;
+	unsigned long tx_bytes;
+};
+
 struct datapath *dp_dev_get_dp(struct net_device *netdev)
 {
 	return dp_dev_priv(netdev)->dp;
@@ -26,12 +33,27 @@ EXPORT_SYMBOL(dp_dev_get_dp);
 static struct net_device_stats *dp_dev_get_stats(struct net_device *netdev)
 {
 	struct dp_dev *dp_dev = dp_dev_priv(netdev);
-	return &dp_dev->stats;
+	struct net_device_stats *stats;
+	int i;
+
+	stats = &dp_dev->stats;
+	memset(stats, 0, sizeof *stats);
+	for_each_possible_cpu(i) {
+		const struct pcpu_lstats *lb_stats;
+
+		lb_stats = per_cpu_ptr(dp_dev->lstats, i);
+		stats->rx_bytes   += lb_stats->rx_bytes;
+		stats->rx_packets += lb_stats->rx_packets;
+		stats->tx_bytes   += lb_stats->tx_bytes;
+		stats->tx_packets += lb_stats->tx_packets;
+	}
+	return stats;
 }
 
 int dp_dev_recv(struct net_device *netdev, struct sk_buff *skb) 
 {
 	struct dp_dev *dp_dev = dp_dev_priv(netdev);
+	struct pcpu_lstats *lb_stats;
 	int len;
 	len = skb->len;
 	skb->pkt_type = PACKET_HOST;
@@ -41,8 +63,9 @@ int dp_dev_recv(struct net_device *netdev, struct sk_buff *skb)
 	else
 		netif_rx_ni(skb);
 	netdev->last_rx = jiffies;
-	dp_dev->stats.rx_packets++;
-	dp_dev->stats.rx_bytes += len;
+	lb_stats = per_cpu_ptr(dp_dev->lstats, smp_processor_id());
+	lb_stats->rx_packets++;
+	lb_stats->rx_bytes += len;
 	return len;
 }
 
@@ -61,6 +84,7 @@ static int dp_dev_mac_addr(struct net_device *dev, void *p)
 static int dp_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
 	struct dp_dev *dp_dev = dp_dev_priv(netdev);
+	struct pcpu_lstats *lb_stats;
 
 	/* By orphaning 'skb' we will screw up socket accounting slightly, but
 	 * the effect is limited to the device queue length.  If we don't
@@ -73,8 +97,9 @@ static int dp_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 	if (!skb)
 		return 0;
 
-	dp_dev->stats.tx_packets++;
-	dp_dev->stats.tx_bytes += skb->len;
+	lb_stats = per_cpu_ptr(dp_dev->lstats, smp_processor_id());
+	lb_stats->tx_packets++;
+	lb_stats->tx_bytes += skb->len;
 
 	skb_reset_mac_header(skb);
 	rcu_read_lock_bh();
@@ -111,6 +136,25 @@ static struct ethtool_ops dp_ethtool_ops = {
 	.get_tso = ethtool_op_get_tso,
 };
 
+static int dp_dev_init(struct net_device *netdev)
+{
+	struct dp_dev *dp_dev = dp_dev_priv(netdev);
+
+	dp_dev->lstats = alloc_percpu(struct pcpu_lstats);
+	if (!dp_dev->lstats)
+		return -ENOMEM;
+
+	return 0;
+}
+
+static void dp_dev_free(struct net_device *netdev)
+{
+	struct dp_dev *dp_dev = dp_dev_priv(netdev);
+
+	free_percpu(dp_dev->lstats);
+	free_netdev(netdev);
+}
+
 static void
 do_setup(struct net_device *netdev)
 {
@@ -124,7 +168,8 @@ do_setup(struct net_device *netdev)
 	netdev->stop = dp_dev_stop;
 	netdev->tx_queue_len = 0;
 	netdev->set_mac_address = dp_dev_mac_addr;
-	netdev->destructor = free_netdev;
+	netdev->init = dp_dev_init;
+	netdev->destructor = dp_dev_free;
 
 	netdev->flags = IFF_BROADCAST | IFF_MULTICAST;
 	netdev->features = NETIF_F_LLTX; /* XXX other features? */

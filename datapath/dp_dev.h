@@ -17,6 +17,7 @@ struct dp_dev {
 
 	struct net_device *dev;
 	struct net_device_stats stats;
+	struct pcpu_lstats *lstats;
 };
 
 static inline struct dp_dev *dp_dev_priv(struct net_device *netdev)
