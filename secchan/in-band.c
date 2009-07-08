@@ -21,7 +21,7 @@
 #include <inttypes.h>
 #include <net/if.h>
 #include <string.h>
-#include "dpif.h"
+#include <stdlib.h>
 #include "flow.h"
 #include "mac-learning.h"
 #include "netdev.h"
@@ -43,8 +43,9 @@
 #define IB_BASE_PRIORITY 18181800
 
 enum {
-    IBR_FROM_LOCAL_PORT,        /* Sent by secure channel. */
-    IBR_TO_LOCAL_PORT,          /* Sent to secure channel.  */
+    IBR_FROM_LOCAL_PORT,        /* Sent by the local port. */
+    IBR_OFP_TO_LOCAL,           /* Sent to secure channel on local port. */
+    IBR_ARP_FROM_LOCAL,         /* ARP from the local port. */
     IBR_ARP_FROM_CTL,           /* ARP from the controller. */
     IBR_TO_CTL_OFP_SRC,         /* To controller, OpenFlow source port. */
     IBR_TO_CTL_OFP_DST,         /* To controller, OpenFlow dest port. */
@@ -65,7 +66,6 @@ struct ib_rule {
 
 struct in_band {
     struct ofproto *ofproto;
-    struct netdev *netdev;
     struct rconn *controller;
     struct status_category *ss_cat;
 
@@ -74,6 +74,7 @@ struct in_band {
     uint32_t last_ip;           /* Last known IP, 0 if never known. */
     uint8_t mac[ETH_ADDR_LEN];  /* Current MAC, 0 if unknown. */
     uint8_t last_mac[ETH_ADDR_LEN]; /* Last known MAC, 0 if never known */
+    char *dev_name;
     time_t next_refresh;        /* Next time to refresh MAC address. */
 
     /* Keeping track of the local port's MAC address. */
@@ -90,22 +91,33 @@ static const uint8_t *
 get_controller_mac(struct in_band *ib)
 {
     time_t now = time_now();
-    uint32_t ip;
+    uint32_t controller_ip;
 
-    ip = rconn_get_remote_ip(ib->controller);
-    if (ip != ib->ip || now >= ib->next_refresh) {
+    controller_ip = rconn_get_remote_ip(ib->controller);
+    if (controller_ip != ib->ip || now >= ib->next_refresh) {
         bool have_mac;
 
-        ib->ip = ip;
+        ib->ip = controller_ip;
 
         /* Look up MAC address. */
         memset(ib->mac, 0, sizeof ib->mac);
         if (ib->ip) {
-            int retval = netdev_arp_lookup(ib->netdev, ib->ip, ib->mac);
-            if (retval) {
-                VLOG_DBG_RL(&rl, "cannot look up controller hw address "
-                            "("IP_FMT"): %s",
-                            IP_ARGS(&ib->ip), strerror(retval));
+            uint32_t local_ip = rconn_get_local_ip(ib->controller);
+            struct in_addr in4;
+            int retval;
+
+            in4.s_addr = local_ip;
+            if (netdev_find_dev_by_in4(&in4, &ib->dev_name)) {
+                retval = netdev_nodev_arp_lookup(ib->dev_name, ib->ip,
+                        ib->mac);
+                if (retval) {
+                    VLOG_DBG_RL(&rl, "cannot look up controller MAC address "
+                                "("IP_FMT"): %s",
+                                IP_ARGS(&ib->ip), strerror(retval));
+                }
+            } else {
+                VLOG_DBG_RL(&rl, "cannot find device with IP address "IP_FMT,
+                    IP_ARGS(&local_ip));
             }
         }
         have_mac = !eth_addr_is_zero(ib->mac);
@@ -139,7 +151,7 @@ get_local_mac(struct in_band *ib)
     time_t now = time_now();
     if (now >= ib->next_local_refresh) {
         uint8_t ea[ETH_ADDR_LEN];
-        if (!netdev_nodev_get_etheraddr(netdev_get_name(ib->netdev), ea)) {
+        if (ib->dev_name && (!netdev_nodev_get_etheraddr(ib->dev_name, ea))) {
             memcpy(ib->local_mac, ea, ETH_ADDR_LEN);
         }
         ib->next_local_refresh = now + 1;
@@ -151,25 +163,15 @@ static void
 in_band_status_cb(struct status_reply *sr, void *in_band_)
 {
     struct in_band *in_band = in_band_;
-    struct in_addr local_ip;
     const uint8_t *local_mac;
-    uint32_t controller_ip;
     const uint8_t *controller_mac;
 
-    if (netdev_get_in4(in_band->netdev, &local_ip)) {
-        status_reply_put(sr, "local-ip="IP_FMT, IP_ARGS(&local_ip.s_addr));
-    }
     local_mac = get_local_mac(in_band);
     if (local_mac) {
         status_reply_put(sr, "local-mac="ETH_ADDR_FMT,
                          ETH_ADDR_ARGS(local_mac));
     }
 
-    controller_ip = rconn_get_remote_ip(in_band->controller);
-    if (controller_ip) {
-        status_reply_put(sr, "controller-ip="IP_FMT,
-                         IP_ARGS(&controller_ip));
-    }
     controller_mac = get_controller_mac(in_band);
     if (controller_mac) {
         status_reply_put(sr, "controller-mac="ETH_ADDR_FMT,
@@ -228,20 +230,28 @@ in_band_run(struct in_band *in_band)
     controller_mac = get_controller_mac(in_band);
     local_mac = get_local_mac(in_band);
 
-    /* Switch traffic sent by the secure channel. */
+    /* Switch traffic sent by the local port. */
     memset(&flow, 0, sizeof flow);
     flow.in_port = ODPP_LOCAL;
     setup_flow(in_band, IBR_FROM_LOCAL_PORT, &flow, OFPFW_IN_PORT,
                OFPP_NORMAL);
 
-    /* Deliver traffic sent to the secure channel to the local port. */
     if (local_mac) {
+        /* Deliver traffic sent to the connection's interface. */
         memset(&flow, 0, sizeof flow);
         memcpy(flow.dl_dst, local_mac, ETH_ADDR_LEN);
-        setup_flow(in_band, IBR_TO_LOCAL_PORT, &flow, OFPFW_DL_DST,
-                   OFPP_NORMAL);
+        setup_flow(in_band, IBR_OFP_TO_LOCAL, &flow, OFPFW_DL_DST,
+                    OFPP_NORMAL);
+
+        /* Allow the connection's interface to be the source of ARP traffic. */
+        memset(&flow, 0, sizeof flow);
+        flow.dl_type = htons(ETH_TYPE_ARP);
+        memcpy(flow.dl_src, local_mac, ETH_ADDR_LEN);
+        setup_flow(in_band, IBR_ARP_FROM_LOCAL, &flow,
+                   OFPFW_DL_TYPE | OFPFW_DL_SRC, OFPP_NORMAL);
     } else {
-        drop_flow(in_band, IBR_TO_LOCAL_PORT);
+        drop_flow(in_band, IBR_OFP_TO_LOCAL);
+        drop_flow(in_band, IBR_ARP_FROM_LOCAL);
     }
 
     if (controller_mac) {
@@ -310,47 +320,28 @@ in_band_flushed(struct in_band *in_band)
     }
 }
 
-int
-in_band_create(struct ofproto *ofproto,
-               struct dpif *dpif, struct switch_status *ss,
+void
+in_band_create(struct ofproto *ofproto, struct switch_status *ss,
                struct rconn *controller, struct in_band **in_bandp)
 {
     struct in_band *in_band;
-    struct netdev *netdev;
-    char local_name[IF_NAMESIZE];
-    int error;
-
-    *in_bandp = NULL;
-    error = dpif_get_name(dpif, local_name, sizeof local_name);
-    if (error) {
-        return error;
-    }
-
-    error = netdev_open(local_name, NETDEV_ETH_TYPE_NONE, &netdev);
-    if (error) {
-        VLOG_ERR("failed to open %s network device: %s",
-                 local_name, strerror(error));
-        return error;
-    }
 
     in_band = xcalloc(1, sizeof *in_band);
     in_band->ofproto = ofproto;
-    in_band->netdev = netdev;
     in_band->controller = controller;
     in_band->ss_cat = switch_status_register(ss, "in-band",
                                              in_band_status_cb, in_band);
     in_band->next_refresh = TIME_MIN;
     in_band->next_local_refresh = TIME_MIN;
+    in_band->dev_name = NULL;
 
     *in_bandp = in_band;
-    return 0;
 }
 
 void
 in_band_destroy(struct in_band *in_band)
 {
     if (in_band) {
-        netdev_close(in_band->netdev);
         switch_status_unregister(in_band->ss_cat);
         /* We don't own the rconn. */
     }

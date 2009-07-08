@@ -549,7 +549,7 @@ show_dpid_ip(struct rconn *rconn, const struct dict *dict)
     const char *is_connected, *local_ip;
 
     dict_lookup(dict, "local.is-connected", &is_connected);
-    dict_lookup(dict, "in-band.local-ip", &local_ip);
+    dict_lookup(dict, "remote.local-ip", &local_ip);
     if (!is_connected && !local_ip) {
         /* If we're not connected to the datapath and don't have a local IP,
          * then we won't have anything useful to show anyhow. */
@@ -1209,7 +1209,7 @@ show_data_rates(struct rconn *rconn, const struct dict *dict)
     static bool inited = false;
 
     dict_lookup(dict, "local.is-connected", &is_connected);
-    dict_lookup(dict, "in-band.local-ip", &local_ip);
+    dict_lookup(dict, "remote.local-ip", &local_ip);
     if (!is_connected && !local_ip) {
         /* If we're not connected to the datapath and don't have a local IP,
          * then we won't have anything useful to show anyhow. */
