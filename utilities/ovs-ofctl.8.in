@@ -1,0 +1,489 @@
+.TH ovs\-ofctl 8 "March 2009" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovs\-ofctl
+
+.SH NAME
+ovs\-ofctl \- administer OpenFlow switches
+
+.SH SYNOPSIS
+.B ovs\-ofctl
+[\fIoptions\fR] \fIcommand \fR[\fIswitch\fR] [\fIargs\fR\&...]
+
+.SH DESCRIPTION
+The
+.B ovs\-ofctl
+program is a command line tool for monitoring and administering
+OpenFlow switches.  It can also show the current state of an OpenFlow
+switch, including features, configuration, and table entries.
+
+.SS "OpenFlow Switch Management Commands"
+
+These commands allow \fBovs\-ofctl\fR to monitor and administer an OpenFlow
+switch.  It is able to show the current state of a switch, including
+features, configuration, and table entries.
+
+Most of these commands take an argument that specifies the method for
+connecting to an OpenFlow switch.  The following connection methods
+are supported:
+
+.RS
+.TP
+\fBssl:\fIhost\fR[\fB:\fIport\fR]
+The specified SSL \fIport\fR (default: 6633) on the given remote
+\fIhost\fR.  The \fB--private-key\fR, \fB--certificate\fR, and
+\fB--ca-cert\fR options are mandatory when this form is used.
+
+.TP
+\fBtcp:\fIhost\fR[\fB:\fIport\fR]
+The specified TCP \fIport\fR (default: 6633) on the given remote
+\fIhost\fR.
+
+.TP
+\fBunix:\fIfile\fR
+The Unix domain server socket named \fIfile\fR.  
+
+.IP "\fIfile\fR"
+This is short for \fBunix:\fIfile\fR, as long as \fIfile\fR does not
+contain a colon.
+
+.IP \fIdp\fR
+This is short for \fBunix:@RUNDIR@/\fIdp\fB.mgmt\fR, as long as
+\fIdp\fR does not contain a colon.
+.RE
+
+.TP
+\fBshow \fIswitch\fR
+Prints to the console information on \fIswitch\fR, including
+information on its flow tables and ports.
+
+.TP
+\fBstatus \fIswitch\fR [\fIkey\fR]
+Prints to the console a series of key-value pairs that report the
+status of \fIswitch\fR.  If \fIkey\fR is specified, only the key-value
+pairs whose key names begin with \fIkey\fR are printed.  If \fIkey\fR is
+omitted, all key-value pairs are printed.
+
+.TP
+\fBdump-tables \fIswitch\fR
+Prints to the console statistics for each of the flow tables used by
+\fIswitch\fR.
+
+.TP
+\fBdump-ports \fIswitch\fR
+Prints to the console statistics for each of the network devices
+associated with \fIswitch\fR.
+
+.TP
+\fBmod-port \fIswitch\fR \fInetdev\fR \fIaction\fR
+Modify characteristics of an interface monitored by \fIswitch\fR.  
+\fInetdev\fR can be referred to by its OpenFlow assigned port number or 
+the device name, e.g. \fBeth0\fR.  The \fIaction\fR may be any one of the
+following:
+
+.RS
+.IP \fBup\fR
+Enables the interface.  This is equivalent to ``ifconfig up'' on a Unix
+system.
+
+.IP \fBdown\fR
+Disables the interface.  This is equivalent to ``ifconfig down'' on a Unix
+system.
+
+.IP \fBflood\fR
+When a \fIflood\fR action is specified, traffic will be sent out this
+interface.  This is the default posture for monitored ports.
+
+.IP \fBnoflood\fR
+When a \fIflood\fR action is specified, traffic will not be sent out 
+this interface.  This is primarily useful to prevent loops when a
+spanning tree protocol is not in use.
+
+.RE
+
+.TP
+\fBdump-flows \fIswitch \fR[\fIflows\fR]
+Prints to the console all flow entries in \fIswitch\fR's
+tables that match \fIflows\fR.  If \fIflows\fR is omitted, all flows
+in the switch are retrieved.  See \fBFlow Syntax\fR, below, for the
+syntax of \fIflows\fR.  The output format is described in 
+\fBTable Entry Output\fR.
+
+.TP
+\fBdump-aggregate \fIswitch \fR[\fIflows\fR]
+Prints to the console aggregate statistics for flows in 
+\fIswitch\fR's tables that match \fIflows\fR.  If \fIflows\fR is omitted, 
+the statistics are aggregated across all flows in the switch's flow
+tables.  See \fBFlow Syntax\fR, below, for the syntax of \fIflows\fR.
+The output format is descrbed in \fBTable Entry Output\fR.
+
+.TP
+\fBadd-flow \fIswitch flow\fR
+Add the flow entry as described by \fIflow\fR to the \fIswitch\fR's 
+tables.  The flow entry is in the format described in \fBFlow Syntax\fR, 
+below.
+
+.TP
+\fBadd-flows \fIswitch file\fR
+Add flow entries as described in \fIfile\fR to \fIswitch\fR's 
+tables.  Each line in \fIfile\fR is a flow entry in the format
+described in \fBFlow Syntax\fR, below.
+
+.TP
+\fBmod-flows \fIswitch flow\fR
+Modify the actions in entries from the \fIswitch\fR's tables 
+that match \fIflow\fR.  When invoked with the \fB--strict\fR option,
+wildcards are not treated as active for matching purposes.  See 
+\fBFlow Syntax\fR, below, for the syntax of \fIflows\fR.
+
+.TP
+\fBdel-flows \fIswitch \fR[\fIflow\fR]
+Deletes entries from the \fIswitch\fR's tables that match
+\fIflow\fR.  When invoked with the \fB--strict\fR option, wildcards are 
+not treated as active for matching purposes.  If \fIflow\fR is 
+omitted and the \fB--strict\fR option is not used, all flows in the 
+switch's tables are removed.  See \fBFlow Syntax\fR, below, for the 
+syntax of \fIflows\fR.
+
+.TP
+\fBmonitor \fIswitch\fR [\fImiss-len\fR [\fIsend-exp]]
+Connects to \fIswitch\fR and prints to the console all OpenFlow
+messages received.  Usually, \fIswitch\fR should specify a connection
+named on \fBsecchan\fR(8)'s \fB-l\fR or \fB--listen\fR command line
+option.
+
+If \fImiss-len\fR is provided, \fBovs\-ofctl\fR sends an OpenFlow ``set
+configuration'' message at connection setup time that requests
+\fImiss-len\fR bytes of each packet that misses the flow table.  The
+OpenFlow reference implementation not send these messages to the
+\fBovs\-ofctl monitor\fR client connection unless a nonzero value is
+specified on this argument.
+
+If \fIsend-exp\fR is specified as \fB1\fR, \fBovs\-ofctl\fR will also
+request to be sent flow expiration messages.  If this argument is
+omitted, or \fB0\fR is specified, then \fRovs\-ofctl\fR will not request
+flow expirations.
+
+This command may be useful for debugging switch or controller
+implementations.
+
+.TP
+\fBexecute \fIswitch command \fR[\fIarg\fR...]
+Sends a request to \fIswitch\fR to execute \fIcommand\fR along with
+each \fIarg\fR, if any, then waits for the command to complete and
+reports its completion status on \fBstderr\fR and its output, if any,
+on \fBstdout\fR.  The set of available commands and their argument is
+switch-dependent.  (This command uses a Nicira extension to OpenFlow
+that may not be available on all switches.)
+
+.SS "OpenFlow Switch and Controller Commands"
+
+The following commands, like those in the previous section, may be
+applied to OpenFlow switches, using any of the connection methods
+described in that section.  Unlike those commands, these may also be
+applied to OpenFlow controllers.
+
+.TP
+\fBprobe \fItarget\fR
+Sends a single OpenFlow echo-request message to \fItarget\fR and waits
+for the response.  With the \fB-t\fR or \fB--timeout\fR option, this
+command can test whether an OpenFlow switch or controller is up and
+running.
+
+.TP
+\fBping \fItarget \fR[\fIn\fR]
+Sends a series of 10 echo request packets to \fItarget\fR and times
+each reply.  The echo request packets consist of an OpenFlow header
+plus \fIn\fR bytes (default: 64) of randomly generated payload.  This
+measures the latency of individual requests.
+
+.TP
+\fBbenchmark \fItarget n count\fR
+Sends \fIcount\fR echo request packets that each consist of an
+OpenFlow header plus \fIn\fR bytes of payload and waits for each
+response.  Reports the total time required.  This is a measure of the
+maximum bandwidth to \fItarget\fR for round-trips of \fIn\fR-byte
+messages.
+
+.SS "Flow Syntax"
+
+Some \fBovs\-ofctl\fR commands accept an argument that describes a flow or
+flows.  Such flow descriptions comprise a series
+\fIfield\fB=\fIvalue\fR assignments, separated by commas or white
+space.  (Embedding spaces into a flow description normally requires
+quoting to prevent the shell from breaking the description into
+multiple arguments.)
+
+The following field assignments describe how a flow matches a packet.
+If any of these assignments is omitted from the flow syntax, the field
+is treated as a wildcard; thus, if all of them are omitted, the
+resulting flow matches all packets.  The string \fB*\fR or \fBANY\fR
+may be specified to explicitly mark any of these fields as a wildcard.  
+(\fB*\fR should be quoted to protect it from shell expansion.)
+
+.IP \fBin_port=\fIport_no\fR
+Matches physical port \fIport_no\fR.  Switch ports are numbered as
+displayed by \fBovs\-ofctl show\fR.
+
+.IP \fBdl_vlan=\fIvlan\fR
+Matches IEEE 802.1q virtual LAN tag \fIvlan\fR.  Specify \fB0xffff\fR
+as \fIvlan\fR to match packets that are not tagged with a virtual LAN;
+otherwise, specify a number between 0 and 4095, inclusive, as the
+12-bit VLAN ID to match.
+
+.IP \fBdl_src=\fImac\fR
+Matches Ethernet source address \fImac\fR, which is specified as 6 pairs 
+of hexadecimal digits delimited by colons (e.g. \fB00:0A:E4:25:6B:B0\fR).
+
+.IP \fBdl_dst=\fImac\fR
+Matches Ethernet destination address \fImac\fR.
+
+.IP \fBdl_type=\fIethertype\fR
+Matches Ethernet protocol type \fIethertype\fR, which is specified as an
+integer between 0 and 65535, inclusive, either in decimal or as a 
+hexadecimal number prefixed by \fB0x\fR (e.g. \fB0x0806\fR to match ARP 
+packets).
+
+.IP \fBnw_src=\fIip\fR[\fB/\fInetmask\fR]
+Matches IPv4 source address \fIip\fR, which may be specified as an
+IP address or host name (e.g. \fB192.168.1.1\fR or
+\fBwww.example.com\fR).  The optional \fInetmask\fR allows restricting a
+match to an IPv4 address prefix.  The netmask may be specified as a dotted 
+quad (e.g. \fB192.168.1.0/255.255.255.0\fR) or as a CIDR block 
+(e.g. \fB192.168.1.0/24\fR).
+
+.IP \fBnw_dst=\fIip\fR[\fB/\fInetmask\fR]
+Matches IPv4 destination address \fIip\fR.
+
+.IP \fBnw_proto=\fIproto\fR
+Matches IP protocol type \fIproto\fR, which is specified as a decimal 
+number between 0 and 255, inclusive (e.g. 6 to match TCP packets).
+
+.IP \fBtp_src=\fIport\fR
+Matches UDP or TCP source port \fIport\fR, which is specified as a decimal 
+number between 0 and 65535, inclusive (e.g. 80 to match packets originating 
+from a HTTP server).
+
+.IP \fBtp_dst=\fIport\fR
+Matches UDP or TCP destination port \fIport\fR.
+
+.IP \fBicmp_type=\fItype\fR
+Matches ICMP message with \fItype\fR, which is specified as a decimal 
+number between 0 and 255, inclusive.
+
+.IP \fBicmp_code=\fIcode\fR
+Matches ICMP messages with \fIcode\fR.
+
+.PP
+The following shorthand notations are also available:
+
+.IP \fBip\fR
+Same as \fBdl_type=0x0800\fR.
+
+.IP \fBicmp\fR
+Same as \fBdl_type=0x0800,nw_proto=1\fR.
+
+.IP \fBtcp\fR
+Same as \fBdl_type=0x0800,nw_proto=6\fR.
+
+.IP \fBudp\fR
+Same as \fBdl_type=0x0800,nw_proto=17\fR.
+
+.IP \fBarp\fR
+Same as \fBdl_type=0x0806\fR.
+
+.PP
+The \fBadd-flow\fR and \fBadd-flows\fR commands require an additional field:
+
+.IP \fBactions=\fR[\fItarget\fR][\fB,\fItarget\fR...]\fR
+Specifies a comma-separated list of actions to take on a packet when the 
+flow entry matches.  If no \fItarget\fR is specified, then packets
+matching the flow are dropped.  The \fItarget\fR may be a decimal port 
+number designating the physical port on which to output the packet, or one 
+of the following keywords:
+
+.RS
+.IP \fBoutput\fR:\fIport\fR
+Outputs the packet on the port specified by \fIport\fR.
+
+.IP \fBnormal\fR
+Subjects the packet to the device's normal L2/L3 processing.  (This
+action is not implemented by all OpenFlow switches.)
+
+.IP \fBflood\fR
+Outputs the packet on all switch physical ports other than the port on
+which it was received and any ports on which flooding is disabled
+(typically, these would be ports disabled by the IEEE 802.1D spanning
+tree protocol).
+
+.IP \fBall\fR
+Outputs the packet on all switch physical ports other than the port on
+which it was received.
+
+.IP \fBcontroller\fR:\fImax_len\fR
+Sends the packet to the OpenFlow controller as a ``packet in''
+message.  If \fImax_len\fR is a number, then it specifies the maximum
+number of bytes that should be sent.  If \fImax_len\fR is \fBALL\fR or
+omitted, then the entire packet is sent.
+
+.IP \fBlocal\fR
+Outputs the packet on the ``local port,'' which corresponds to the
+\fBof\fIn\fR network device (see \fBCONTACTING THE CONTROLLER\fR in
+\fBsecchan\fR(8) for information on the \fBof\fIn\fR network device).
+
+.IP \fBdrop\fR
+Discards the packet, so no further processing or forwarding takes place.
+If a drop action is used, no other actions may be specified.
+
+.IP \fBmod_vlan_vid\fR:\fIvlan_vid\fR
+Modifies the VLAN id on a packet.  The VLAN tag is added or modified 
+as necessary to match the value specified.  If the VLAN tag is added,
+a priority of zero is used (see the \fBmod_vlan_pcp\fR action to set
+this).
+
+.IP \fBmod_vlan_pcp\fR:\fIvlan_pcp\fR
+Modifies the VLAN priority on a packet.  The VLAN tag is added or modified 
+as necessary to match the value specified.  Valid values are between 0
+(lowest) and 7 (highest).  If the VLAN tag is added, a vid of zero is used 
+(see the \fBmod_vlan_vid\fR action to set this).
+
+.IP \fBstrip_vlan\fR
+Strips the VLAN tag from a packet if it is present.
+
+.IP \fBmod_dl_src\fB:\fImac\fR
+Sets the source Ethernet address to \fImac\fR.
+
+.IP \fBmod_dl_dst\fB:\fImac\fR
+Sets the destination Ethernet address to \fImac\fR.
+.RE
+
+.IP
+(The OpenFlow protocol supports other actions that \fBovs\-ofctl\fR does
+not yet expose to the user.)
+
+.PP
+The \fBadd-flow\fR, \fBadd-flows\fR, and \fBdel-flows\fR commands
+support an additional optional field:
+
+.IP \fBpriority=\fIvalue\fR
+The priority at which a wildcarded entry will match in comparison to
+others.  \fIvalue\fR is a number between 0 and 65535, inclusive.  A higher 
+\fIvalue\fR will match before a lower one.  An exact-match entry will always 
+have priority over an entry containing wildcards, so it has an implicit 
+priority value of 65535.  When adding a flow, if the field is not specified, 
+the flow's priority will default to 32768.
+
+.PP
+The \fBadd-flow\fR and \fBadd-flows\fR commands support additional
+optional fields:
+
+.TP
+\fBidle_timeout=\fIseconds\fR
+Causes the flow to expire after the given number of seconds of
+inactivity.  A value of 0 prevents a flow from expiring due to
+inactivity.  The default is 60 seconds.
+
+.IP \fBhard_timeout=\fIseconds\fR
+Causes the flow to expire after the given number of seconds,
+regardless of activity.  A value of 0 (the default) gives the flow no
+hard expiration deadline.
+
+.PP
+The \fBdump-flows\fR, \fBdump-aggregate\fR, \fBdel-flow\fR 
+and \fBdel-flows\fR commands support one additional optional field:
+
+.TP
+\fBout_port=\fIport\fR
+If set, a matching flow must include an output action to \fIport\fR.
+
+.PP
+The \fBdump-flows\fR and \fBdump-aggregate\fR commands support an
+additional optional field:
+
+.IP \fBtable=\fInumber\fR
+If specified, limits the flows about which statistics are gathered to
+those in the table with the given \fInumber\fR.  Tables are numbered
+as shown by the \fBdump-tables\fR command.
+
+If this field is not specified, or if \fInumber\fR is given as
+\fB255\fR, statistics are gathered about flows from all tables.
+
+.SS "Table Entry Output"
+
+The \fBdump-tables\fR and \fBdump-aggregate\fR commands print information 
+about the entries in a datapath's tables.  Each line of output is a 
+unique flow entry, which begins with some common information:
+
+.IP \fBduration\fR
+The number of seconds the entry has been in the table.
+
+.IP \fBtable_id\fR
+The table that contains the flow.  When a packet arrives, the switch 
+begins searching for an entry at the lowest numbered table.  Tables are 
+numbered as shown by the \fBdump-tables\fR command.
+
+.IP \fBpriority\fR
+The priority of the entry in relation to other entries within the same
+table.  A higher value will match before a lower one.
+
+.IP \fBn_packets\fR
+The number of packets that have matched the entry.
+
+.IP \fBn_bytes\fR
+The total number of bytes from packets that have matched the entry.
+
+.PP
+The rest of the line consists of a description of the flow entry as 
+described in \fBFlow Syntax\fR, above.
+
+
+.SH OPTIONS
+.TP
+\fB--strict\fR
+Uses strict matching when running flow modification commands.
+
+.TP
+\fB-t\fR, \fB--timeout=\fIsecs\fR
+Limits \fBovs\-ofctl\fR runtime to approximately \fIsecs\fR seconds.  If
+the timeout expires, \fBovs\-ofctl\fR will exit with a \fBSIGALRM\fR
+signal.
+
+.TP
+\fB-p\fR, \fB--private-key=\fIprivkey.pem\fR
+Specifies a PEM file containing the private key used as the
+identity for SSL connections to a switch.
+
+.TP
+\fB-c\fR, \fB--certificate=\fIcert.pem\fR
+Specifies a PEM file containing a certificate, signed by the
+controller's certificate authority (CA), that certifies the
+private key to identify a trustworthy controller.
+
+.TP
+\fB-C\fR, \fB--ca-cert=\fIcacert.pem\fR
+Specifies a PEM file containing the CA certificate used to verify that
+a switch is trustworthy.
+
+.so lib/vlog.man
+.so lib/common.man
+
+.SH EXAMPLES
+
+The following examples assume that an OpenFlow switch on the local
+host has been configured to listen for management connections on a
+Unix domain socket named \fB@RUNDIR@/openflow.sock\fR, e.g. by
+specifying \fB--listen=punix:@RUNDIR@/openflow.sock\fR on the
+\fBsecchan\fR(8) command line.
+
+.TP
+\fBovs\-ofctl dump-tables unix:@RUNDIR@/openflow.sock\fR
+Prints out the switch's table stats.  (This is more interesting after
+some traffic has passed through.)
+
+.TP
+\fBovs\-ofctl dump-flows unix:@RUNDIR@/openflow.sock\fR
+Prints the flow entries in the switch.
+
+.SH "SEE ALSO"
+
+.BR ovs\-appctl (8),
+.BR ovs\-controller (8),
+.BR ovs\-vswitchd (8)

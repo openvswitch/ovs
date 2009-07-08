@@ -1,0 +1,615 @@
+#! /usr/bin/perl
+
+use POSIX;
+use Debconf::Client::ConfModule ':all';
+use HTTP::Request;
+use LWP::UserAgent;
+use Digest::SHA1 'sha1_hex';
+use strict;
+use warnings;
+
+# XXX should support configuring SWITCH_NETMASK and SWITCH_GATEWAY
+# when the mode is in-band.
+
+my $debconf_owner = 'openvswitch-switch';
+
+my $default = '/etc/default/openvswitch-switch';
+my $template = '/usr/share/openvswitch/switch/default.template';
+my $etc = '/etc/openvswitch-switch';
+my $rundir = '/var/run';
+my $privkey_file = "$etc/of0-privkey.pem";
+my $req_file = "$etc/of0-req.pem";
+my $cert_file = "$etc/of0-cert.pem";
+my $cacert_file = "$etc/cacert.pem";
+my $ovs_discover_pidfile = "$rundir/ovs-discover.pid";
+
+my $ua = LWP::UserAgent->new;
+$ua->timeout(10);
+$ua->env_proxy;
+
+system("/etc/init.d/openvswitch-switch stop 1>&2");
+kill_ovs_discover();
+
+version('2.0');
+capb('backup');
+title('Open vSwitch Switch Setup');
+
+my (%netdevs) = find_netdevs();
+db_subst('netdevs', 'choices',
+         join(', ', map($netdevs{$_}, sort(keys(%netdevs)))));
+db_set('netdevs', join(', ', grep(!/IP/, values(%netdevs))));
+
+my %oldconfig;
+if (-e $default) {
+    %oldconfig = load_config($default);
+
+    my (%map) =
+      (NETDEVS => sub {
+           db_set('netdevs', join(', ', map($netdevs{$_},
+                                            grep(exists $netdevs{$_}, split))))
+       },
+       MODE => sub {
+           db_set('mode',
+                  $_ eq 'in-band' || $_ eq 'out-of-band' ? $_ : 'discovery')
+       },
+       SWITCH_IP => sub { db_set('switch-ip', $_) },
+       CONTROLLER => sub { db_set('controller-vconn', $_) },
+       PRIVKEY => sub { $privkey_file = $_ },
+       CERT => sub { $cert_file = $_ },
+       CACERT => sub { $cacert_file = $_ },
+      );
+
+    for my $key (keys(%map)) {
+        local $_ = $oldconfig{$key};
+        &{$map{$key}}() if defined && !/^\s*$/;
+    }
+} elsif (-e $template) {
+    %oldconfig = load_config($template);
+}
+
+my $cacert_preverified = -e $cacert_file;
+my ($req, $req_fingerprint);
+
+my %options;
+
+my (@states) =
+  (sub {
+       # User backed up from first dialog box.
+       exit(10);
+   },
+   sub {
+       # Prompt for ports to include in switch.
+       db_input('netdevs');
+       return;
+   },
+   sub {
+       # Validate the chosen ports.
+       my (@netdevs) = split(', ', db_get('netdevs'));
+       if (!@netdevs) {
+           # No ports chosen.  Disable switch.
+           db_input('no-netdevs');
+           return 'prev' if db_go();
+           return 'done';
+       } elsif (my (@conf_netdevs) = grep(/IP/, @netdevs)) {
+           # Point out that some ports have configured IP addresses.
+           db_subst('configured-netdevs', 'configured-netdevs',
+                    join(', ', @conf_netdevs));
+           db_input('configured-netdevs');
+           return;
+       } else {
+           # Otherwise proceed.
+           return 'skip';
+       }
+   },
+   sub {
+       # Discovery or in-band or out-of-band controller?
+       db_input('mode');
+       return;
+   },
+   sub {
+       return 'skip' if db_get('mode') ne 'discovery';
+       for (;;) {
+           # Notify user that we are going to do discovery.
+           db_input('discover');
+           return 'prev' if db_go();
+           print STDERR "Please wait up to 30 seconds for discovery...\n";
+
+           # Make sure that there's no running discovery process.
+           kill_ovs_discover();
+
+           # Do discovery.
+           %options = ();
+           open(DISCOVER, '-|', 'ovs-discover --timeout=30 --pidfile '
+                . join(' ', netdev_names()));
+           while (<DISCOVER>) {
+               chomp;
+               if (my ($name, $value) = /^([^=]+)=(.*)$/) {
+                   if ($value =~ /^"(.*)"$/) {
+                       $value = $1;
+                       $value =~ s/\\([0-7][0-7][0-7])/chr($1)/ge;
+                   } else {
+                       $value =~ s/^(0x[[:xdigit:]]+)$/hex($1)/e;
+                       $value = '' if $value eq 'empty';
+                       next if $value eq 'null'; # Shouldn't happen.
+                   }
+                   $options{$name} = $value;
+               }
+               last if /^$/;
+           }
+
+           # Check results.
+           my $vconn = $options{'ovs-controller-vconn'};
+           my $pki_uri = $options{'ovs-pki-uri'};
+           return 'next'
+             if (defined($vconn)
+                 && is_valid_vconn($vconn)
+                 && (!is_ssl_vconn($vconn) || defined($pki_uri)));
+
+           # Try again?
+           kill_ovs_discover();
+           db_input('discovery-failure');
+           db_go();
+       }
+   },
+   sub {
+       return 'skip' if db_get('mode') ne 'discovery';
+
+       my $vconn = $options{'ovs-controller-vconn'};
+       my $pki_uri = $options{'ovs-pki-uri'};
+       db_subst('discovery-success', 'controller-vconn', $vconn);
+       db_subst('discovery-success',
+                'pki-uri', is_ssl_vconn($vconn) ? $pki_uri : "no PKI in use");
+       db_input('discovery-success');
+       return 'prev' if db_go();
+       db_set('controller-vconn', $vconn);
+       db_set('pki-uri', $pki_uri);
+       return 'next';
+   },
+   sub {
+       return 'skip' if db_get('mode') ne 'in-band';
+       for (;;) {
+           db_input('switch-ip');
+           return 'prev' if db_go();
+
+           my $ip = db_get('switch-ip');
+           return 'next' if $ip =~ /^dhcp|\d+\.\d+.\d+.\d+$/i;
+
+           db_input('switch-ip-error');
+           db_go();
+       }
+   },
+   sub {
+       return 'skip' if db_get('mode') eq 'discovery';
+       for (;;) {
+           my $old_vconn = db_get('controller-vconn');
+           db_input('controller-vconn');
+           return 'prev' if db_go();
+
+           my $vconn = db_get('controller-vconn');
+           if (is_valid_vconn($vconn)) {
+               if ($old_vconn ne $vconn || db_get('pki-uri') eq '') {
+                   db_set('pki-uri', pki_host_to_uri($2));
+               }
+               return 'next';
+           }
+
+           db_input('controller-vconn-error');
+           db_go();
+       }
+   },
+   sub {
+       return 'skip' if !ssl_enabled();
+
+       if (! -e $privkey_file) {
+           my $old_umask = umask(077);
+           run_cmd("ovs-pki req $etc/of0 >&2 2>/dev/null");
+           chmod(0644, $req_file) or die "$req_file: chmod: $!\n";
+           umask($old_umask);
+       }
+
+       if (! -e $cert_file) {
+           open(REQ, '<', $req_file) or die "$req_file: open: $!\n";
+           $req = join('', <REQ>);
+           close(REQ);
+           $req_fingerprint = sha1_hex($req);
+       }
+       return 'skip';
+   },
+   sub {
+       return 'skip' if !ssl_enabled();
+       return 'skip' if -e $cacert_file && -e $cert_file;
+
+       db_input('pki-uri');
+       return 'prev' if db_go();
+       return;
+   },
+   sub {
+       return 'skip' if !ssl_enabled();
+       return 'skip' if -e $cacert_file;
+
+       my $pki_uri = db_get('pki-uri');
+       if ($pki_uri !~ /:/) {
+           $pki_uri = pki_host_to_uri($pki_uri);
+       } else {
+           # Trim trailing slashes.
+           $pki_uri =~ s%/+$%%;
+       }
+       db_set('pki-uri', $pki_uri);
+
+       my $url = "$pki_uri/controllerca/cacert.pem";
+       my $response = $ua->get($url, ':content_file' => $cacert_file);
+       if ($response->is_success) {
+           return 'next';
+       }
+
+       db_subst('fetch-cacert-failed', 'url', $url);
+       db_subst('fetch-cacert-failed', 'error', $response->status_line);
+       db_subst('fetch-cacert-failed', 'pki-uri', $pki_uri);
+       db_input('fetch-cacert-failed');
+       db_go();
+       return 'prev';
+   },
+   sub {
+       return 'skip' if !ssl_enabled();
+       return 'skip' if -e $cert_file;
+
+       for (;;) {
+           db_set('send-cert-req', 'yes');
+           db_input('send-cert-req');
+           return 'prev' if db_go();
+           return 'next' if db_get('send-cert-req') eq 'no';
+
+           my $pki_uri = db_get('pki-uri');
+           my ($pki_base_uri) = $pki_uri =~ m%^([^/]+://[^/]+)/%;
+           my $url = "$pki_base_uri/cgi-bin/ovs-pki-cgi";
+           my $response = $ua->post($url, {'type' => 'switch',
+                                           'req' => $req});
+           return 'next' if $response->is_success;
+
+           db_subst('send-cert-req-failed', 'url', $url);
+           db_subst('send-cert-req-failed', 'error',
+                    $response->status_line);
+           db_subst('send-cert-req-failed', 'pki-uri', $pki_uri);
+           db_input('send-cert-req-failed');
+           db_go();
+       }
+   },
+   sub {
+       return 'skip' if !ssl_enabled();
+       return 'skip' if $cacert_preverified;
+
+       my ($cacert_fingerprint) = x509_fingerprint($cacert_file);
+       db_subst('verify-controller-ca', 'fingerprint', $cacert_fingerprint);
+       db_input('verify-controller-ca');
+       return 'prev' if db_go();
+       return 'next' if db_get('verify-controller-ca') eq 'yes';
+       unlink($cacert_file);
+       return 'prev';
+   },
+   sub {
+       return 'skip' if !ssl_enabled();
+       return 'skip' if -e $cert_file;
+
+       for (;;) {
+           db_set('fetch-switch-cert', 'yes');
+           db_input('fetch-switch-cert');
+           return 'prev' if db_go();
+           exit(1) if db_get('fetch-switch-cert') eq 'no';
+
+           my $pki_uri = db_get('pki-uri');
+           my $url = "$pki_uri/switchca/certs/$req_fingerprint-cert.pem";
+           my $response = $ua->get($url, ':content_file' => $cert_file);
+           if ($response->is_success) {
+               return 'next';
+           }
+
+           db_subst('fetch-switch-cert-failed', 'url', $url);
+           db_subst('fetch-switch-cert-failed', 'error',
+                    $response->status_line);
+           db_subst('fetch-switch-cert-failed', 'pki-uri', $pki_uri);
+           db_input('fetch-switch-cert-failed');
+           db_go();
+       }
+   },
+   sub {
+       db_input('complete');
+       db_go();
+       return;
+   },
+   sub {
+       return 'done';
+   },
+);
+
+my $state = 1;
+my $direction = 1;
+for (;;) {
+    my $ret = &{$states[$state]}();
+    $ret = db_go() ? 'prev' : 'next' if !defined $ret;
+    if ($ret eq 'next') {
+        $direction = 1;
+    } elsif ($ret eq 'prev') {
+        $direction = -1;
+    } elsif ($ret eq 'skip') {
+        # Nothing to do.
+    } elsif ($ret eq 'done') {
+        last;
+    } else {
+        die "unknown ret $ret";
+    }
+    $state += $direction;
+}
+
+my %config = %oldconfig;
+$config{NETDEVS} = join(' ', netdev_names());
+$config{MODE} = db_get('mode');
+if (db_get('mode') eq 'in-band') {
+    $config{SWITCH_IP} = db_get('switch-ip');
+}
+if (db_get('mode') ne 'discovery') {
+    $config{CONTROLLER} = db_get('controller-vconn');
+}
+$config{PRIVKEY} = $privkey_file;
+$config{CERT} = $cert_file;
+$config{CACERT} = $cacert_file;
+save_config($default, %config);
+
+dup2(2, 1);                     # Get stdout back.
+kill_ovs_discover();
+system("/etc/init.d/openvswitch-switch start");
+
+sub ssl_enabled {
+    return is_ssl_vconn(db_get('controller-vconn'));
+}
+
+sub db_subst {
+    my ($question, $key, $value) = @_;
+    $question = "$debconf_owner/$question";
+    my ($ret, $seen) = subst($question, $key, $value);
+    if ($ret && $ret != 30) {
+        die "Error substituting $value for $key in debconf question "
+          . "$question: $seen";
+    }
+}
+
+sub db_set {
+    my ($question, $value) = @_;
+   $question = "$debconf_owner/$question";
+    my ($ret, $seen) = set($question, $value);
+    if ($ret && $ret != 30) {
+        die "Error setting debconf question $question to $value: $seen";
+    }
+}
+
+sub db_get {
+    my ($question) = @_;
+    $question = "$debconf_owner/$question";
+    my ($ret, $seen) = get($question);
+    if ($ret) {
+        die "Error getting debconf question $question answer: $seen";
+    }
+    return $seen;
+}
+
+sub db_fset {
+    my ($question, $flag, $value) = @_;
+    $question = "$debconf_owner/$question";
+    my ($ret, $seen) = fset($question, $flag, $value);
+    if ($ret && $ret != 30) {
+        die "Error setting debconf question $question flag $flag to $value: "
+          . "$seen";
+    }
+}
+
+sub db_fget {
+    my ($question, $flag) = @_;
+    $question = "$debconf_owner/$question";
+    my ($ret, $seen) = fget($question, $flag);
+    if ($ret) {
+        die "Error getting debconf question $question flag $flag: $seen";
+    }
+    return $seen;
+}
+
+sub db_input {
+    my ($question) = @_;
+    db_fset($question, "seen", "false");
+
+    $question = "$debconf_owner/$question";
+    my ($ret, $seen) = input('high', $question);
+    if ($ret && $ret != 30) {
+        die "Error requesting debconf question $question: $seen";
+    }
+    return $ret;
+}
+
+sub db_go {
+    my ($ret, $seen) = go();
+    if (!defined($ret)) {
+        exit(1);                # Cancel button was pushed.
+    }
+    if ($ret && $ret != 30) {
+        die "Error asking debconf questions: $seen";
+    }
+    return $ret;
+}
+
+sub run_cmd {
+    my ($cmd) = @_;
+    return if system($cmd) == 0;
+
+    if ($? == -1) {
+        die "$cmd: failed to execute: $!\n";
+    } elsif ($? & 127) {
+        die sprintf("$cmd: child died with signal %d, %s coredump\n",
+                    ($? & 127),  ($? & 128) ? 'with' : 'without');
+    } else {
+        die sprintf("$cmd: child exited with value %d\n", $? >> 8);
+    }
+}
+
+sub x509_fingerprint {
+    my ($file) = @_;
+    my $cmd = "openssl x509 -noout -in $file -fingerprint";
+    open(OPENSSL, '-|', $cmd) or die "$cmd: failed to execute: $!\n";
+    my $line = <OPENSSL>;
+    close(OPENSSL);
+    my ($fingerprint) = $line =~ /SHA1 Fingerprint=(.*)/;
+    return $line if !defined $fingerprint;
+    $fingerprint =~ s/://g;
+    return $fingerprint;
+}
+
+sub find_netdevs {
+    my ($netdev, %netdevs);
+    open(IFCONFIG, "/sbin/ifconfig -a|") or die "ifconfig failed: $!";
+    while (<IFCONFIG>) {
+        if (my ($nd) = /^([^\s]+)/) {
+            $netdev = $nd;
+            $netdevs{$netdev} = "$netdev";
+            if (my ($hwaddr) = /HWaddr (\S+)/) {
+                $netdevs{$netdev} .= " (MAC: $hwaddr)";
+            }
+        } elsif (my ($ip4) = /^\s*inet addr:(\S+)/) {
+            $netdevs{$netdev} .= " (IP: $ip4)";
+        } elsif (my ($ip6) = /^\s*inet6 addr:(\S+)/) {
+            $netdevs{$netdev} .= " (IPv6: $ip6)";
+        }
+    }
+    foreach my $nd (keys(%netdevs)) {
+        delete $netdevs{$nd} if $nd eq 'lo' || $nd =~ /^wmaster/;
+    }
+    close(IFCONFIG);
+    return %netdevs;
+}
+
+sub load_config {
+    my ($file) = @_;
+
+    # Get the list of the variables that the shell sets automatically.
+    my (%auto_vars) = read_vars("set -a && env");
+
+    # Get the variables from $default.
+    my (%config) = read_vars("set -a && . '$default' && env");
+
+    # Subtract.
+    delete @config{keys %auto_vars};
+
+    return %config;
+}
+
+sub read_vars {
+    my ($cmd) = @_;
+    local @ENV;
+    if (!open(VARS, '-|', $cmd)) {
+        print STDERR "$cmd: failed to execute: $!\n";
+        return ();
+    }
+    my (%config);
+    while (<VARS>) {
+        my ($var, $value) = /^([^=]+)=(.*)$/ or next;
+        $config{$var} = $value;
+    }
+    close(VARS);
+    return %config;
+}
+
+sub shell_escape {
+    local $_ = $_[0];
+    if ($_ eq '') {
+        return '""';
+    } elsif (m&^[-a-zA-Z0-9:./%^_+,]*$&) {
+        return $_;
+    } else {
+        s/'/'\\''/;
+        return "'$_'";
+    }
+}
+
+sub shell_assign {
+    my ($var, $value) = @_;
+    return $var . '=' . shell_escape($value);
+}
+
+sub save_config {
+    my ($file, %config) = @_;
+    my (@lines);
+    if (open(FILE, '<', $file)) {
+        @lines = <FILE>;
+        chomp @lines;
+        close(FILE);
+    }
+
+    # Replace all existing variable assignments.
+    for (my ($i) = 0; $i <= $#lines; $i++) {
+        local $_ = $lines[$i];
+        my ($var, $value) = /^\s*([^=#]+)=(.*)$/ or next;
+        if (exists($config{$var})) {
+            $lines[$i] = shell_assign($var, $config{$var});
+            delete $config{$var};
+        } else {
+            $lines[$i] = "#$lines[$i]";
+        }
+    }
+
+    # Find a place to put any remaining variable assignments.
+  VAR:
+    for my $var (keys(%config)) {
+        my $assign = shell_assign($var, $config{$var});
+
+        # Replace the last commented-out variable assignment to $var, if any.
+        for (my ($i) = $#lines; $i >= 0; $i--) {
+            local $_ = $lines[$i];
+            if (/^\s*#\s*$var=/) {
+                $lines[$i] = $assign;
+                next VAR;
+            }
+        }
+
+        # Find a place to add the var: after the final commented line
+        # just after a line that contains "$var:".
+        for (my ($i) = 0; $i <= $#lines; $i++) {
+            if ($lines[$i] =~ /^\s*#\s*$var:/) {
+                for (my ($j) = $i + 1; $j <= $#lines; $j++) {
+                    if ($lines[$j] !~ /^\s*#/) {
+                        splice(@lines, $j, 0, $assign);
+                        next VAR;
+                    }
+                }
+            }
+        }
+
+        # Just append it.
+        push(@lines, $assign);
+    }
+
+    open(NEWFILE, '>', "$file.tmp") or die "$file.tmp: create: $!\n";
+    print NEWFILE join('', map("$_\n", @lines));
+    close(NEWFILE);
+    rename("$file.tmp", $file) or die "$file.tmp: rename to $file: $!\n";
+}
+
+sub pki_host_to_uri {
+    my ($pki_host) = @_;
+    return "http://$pki_host/openvswitch/pki";
+}
+
+sub kill_ovs_discover {
+    # Delegate this to a subprocess because there is no portable way
+    # to invoke fcntl(F_GETLK) from Perl.
+    system("ovs-kill --force $ovs_discover_pidfile");
+}
+
+sub netdev_names {
+    return map(/^(\S+)/, split(', ', db_get('netdevs')));
+}
+
+sub is_valid_vconn {
+    my ($vconn) = @_;
+    return scalar($vconn =~ /^(tcp|ssl):([^:]+)(:.*)?/);
+}
+
+sub is_ssl_vconn {
+    my ($vconn) = @_;
+    return scalar($vconn =~ /^ssl:/);
+}

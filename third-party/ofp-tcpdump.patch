@@ -1,0 +1,109 @@
+--- tcpdump/interface.h	2007-06-13 18:03:20.000000000 -0700
++++ tcpdump/interface.h	2008-04-15 18:28:55.000000000 -0700
+@@ -148,7 +148,8 @@
+ 
+ extern const char *dnaddr_string(u_short);
+ 
+-extern void error(const char *, ...)
++#define error(fmt, args...)   tcpdump_error(fmt, ## args)
++extern void tcpdump_error(const char *, ...)
+     __attribute__((noreturn, format (printf, 1, 2)));
+ extern void warning(const char *, ...) __attribute__ ((format (printf, 1, 2)));
+ 
+@@ -176,6 +177,7 @@
+ extern void hex_print_with_offset(const char *, const u_char *, u_int, u_int);
+ extern void hex_print(const char *, const u_char *, u_int);
+ extern void telnet_print(const u_char *, u_int);
++extern void openflow_print(const u_char *, u_int);
+ extern int ether_encap_print(u_short, const u_char *, u_int, u_int, u_short *);
+ extern int llc_print(const u_char *, u_int, u_int, const u_char *,
+ 	const u_char *, u_short *);
+--- tcpdump/Makefile.in	2007-09-25 18:59:52.000000000 -0700
++++ tcpdump/Makefile.in	2009-05-11 15:59:28.000000000 -0700
+@@ -49,10 +49,10 @@
+ CFLAGS = $(CCOPT) $(DEFS) $(INCLS)
+ 
+ # Standard LDFLAGS
+-LDFLAGS = @LDFLAGS@
++LDFLAGS = @LDFLAGS@ -L../../lib
+ 
+ # Standard LIBS
+-LIBS = @LIBS@
++LIBS = @LIBS@ -lopenvswitch
+ 
+ INSTALL = @INSTALL@
+ INSTALL_PROGRAM = @INSTALL_PROGRAM@
+@@ -87,7 +87,8 @@
+ 	print-slow.c print-snmp.c print-stp.c print-sunatm.c print-sunrpc.c \
+ 	print-symantec.c print-syslog.c print-tcp.c print-telnet.c print-tftp.c \
+ 	print-timed.c print-token.c print-udp.c print-vjc.c print-vrrp.c \
+-	print-wb.c print-zephyr.c setsignal.c tcpdump.c util.c
++	print-wb.c print-zephyr.c setsignal.c tcpdump.c util.c \
++	print-openflow.c
+ 
+ LOCALSRC = @LOCALSRC@
+ GENSRC = version.c
+--- tcpdump/print-openflow.c	1969-12-31 16:00:00.000000000 -0800
++++ tcpdump/print-openflow.c	2009-05-11 15:38:41.000000000 -0700
+@@ -0,0 +1,40 @@
++/* Copyright (C) 2007, 2008, 2009 Nicira Networks.
++ *
++ * Permission to use, copy, modify, and/or distribute this software for any
++ * purpose with or without fee is hereby granted, provided that the above
++ * copyright notice and this permission notice appear in all copies.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
++ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
++ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
++ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++ */
++ *
++
++#ifdef HAVE_CONFIG_H
++#include "config.h"
++#endif
++
++#include <stdlib.h>
++
++#include "interface.h"
++#include "../../include/openflow/openflow.h"
++#include "../../lib/ofp-print.h"
++
++void
++openflow_print(const u_char *sp, u_int length)
++{
++    const struct ofp_header *ofp = (struct ofp_header *)sp;
++
++    if (!TTEST2(*sp, ntohs(ofp->length)))
++            goto trunc;
++
++    ofp_print(stdout, sp, length, vflag);
++    return;
++
++trunc:
++    printf("[|openflow]");
++}
+--- tcpdump/print-tcp.c	2006-09-19 12:07:57.000000000 -0700
++++ tcpdump/print-tcp.c	2009-05-11 15:38:25.000000000 -0700
+@@ -52,6 +52,8 @@
+ 
+ #include "nameser.h"
+ 
++#include "../../include/openflow/openflow.h"
++
+ #ifdef HAVE_LIBCRYPTO
+ #include <openssl/md5.h>
+ 
+@@ -680,7 +682,8 @@
+ 		}
+                 else if (length > 0 && (sport == LDP_PORT || dport == LDP_PORT)) {
+                         ldp_print(bp, length);
+-		}
++		} else if (sport == OFP_TCP_PORT || dport == OFP_TCP_PORT)
++			openflow_print(bp, length);
+ 	}
+ 	return;
+ bad:

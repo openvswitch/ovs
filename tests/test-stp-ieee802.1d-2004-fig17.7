@@ -1,0 +1,17 @@
+# This is the STP example from IEEE 802.1D-2004 figure 17.7.
+bridge 0 0xaa = b
+bridge 1 0x111 = a b d f h g e c
+bridge 2 0x222 = g h j l n m k i
+run 1000
+check 0 = root
+check 1 = F F:10 F F F F F F
+check 2 = B F:20 F F F F F F
+
+# This is not the port priority change described in that figure,
+# but I don't understand what port priority change would cause
+# that change.
+bridge 2 = g X j l n m k i
+run 1000
+check 0 = root
+check 1 = F F:10 F F F F F F
+check 2 = F:20 D F F F F F F

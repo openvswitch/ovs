@@ -1,0 +1,14 @@
+# Copyright (C) 2009 Nicira Networks, Inc.
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.  This file is offered as-is,
+# without warranty of any kind.
+
+/var/log/ovs-vswitchd.log {
+	sharedscripts
+	postrotate
+        # Send sighup to vswitch which will cause it to reopen its log files.
+        /sbin/service vswitch reload
+	endscript
+}

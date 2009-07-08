@@ -1,0 +1,12 @@
+# This is the STP example from IEEE 802.1D-1998.
+bridge 0 0x42 = a b
+bridge 1 0x97 = c:5 a d:5
+bridge 2 0x45 = b e
+bridge 3 0x57 = b:5 e:5
+bridge 4 0x83 = a:5 e:5
+run 1000
+check 0 = root
+check 1 = F F:10 F
+check 2 = F:10 B
+check 3 = F:5 F
+check 4 = F:5 B

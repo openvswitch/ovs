@@ -1,0 +1,101 @@
+.\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.TH ovs\-cfg\-mod 8 "June 2009" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovs\-cfg\-mod
+.
+.SH NAME
+ovs\-cfg\-mod \- Safely manage a ovs\-vswitchd.conf\-style configuration file
+.
+.SH SYNOPSIS
+\fB ovs\-cfg\-mod \fR[\fB\-T \fItimeout\fR] \fB\-F \fIfile\fR
+[\fIaction\fR] [\fIaction\fR...\fR]
+.
+.SH DESCRIPTION
+A program for managing a \fovs\-vswitchd.conf\fR(5)\-style configuration
+file.  \fBovs\-cfg\-mod\fR uses the same locking mechanisms as
+\fBovs\-vswitchd\fR and its related utilities.  This allows it to be
+run safely on ``live'' configurations.
+.
+.SH OPTIONS
+.SS "Specifying the Configuration File"
+.
+.IP "\fB\-T\fR \fItimeout\fR
+.IQ "\fB\-\-timeout=\fItimeout\fR
+By default, \fBovs\-cfg\-mod\fR will wait forever to lock the
+configuration file specified on \fB\-F\fR or \fB\-\-config\-file\fR.  This
+option makes \fBovs\-cfg\-mod\fR wait no more than \fItimeout\fR
+milliseconds to obtain the lock, after which it exits unsuccessfully.
+.
+If it is present, this option must be specified before \fB\-F\fR or
+\fB\-\-config\-file\fR.
+.
+.IP "\fB\-F\fR \fIfile\fR"
+.IQ "\fB\-\-config\-file=\fIfile\fR"
+Use \fIfile\fR as the configuration file to query or modify.
+.
+This option is required.  It must be specified before any action
+options.
+.
+.SS "Specifying Actions"
+A series of one or more action options may follow the configuration
+file options.  These are executed in the order provided and under a
+single lock instance, so they appear atomic to external viewers of
+\fIfile\fR.
+.
+As discussed in \fBovs\-vswitchd.conf\fR(5), each line in the
+configuration file consists of a key\-value pair.  Actions generally
+take either a \fIkey\fR or \fIentry\fR argument.  A \fIkey\fR is a
+dot\-separated description of a configuration option.  A \fIentry\fR is
+a key\-value pair, separated by the \fB=\fR sign.
+.
+The following actions are supported:
+.
+.IP "\fB\-a\fR \fIentry\fR"
+.IQ "\fB\-\-add=\fIentry\fR"
+Add \fIentry\fR to \fIfile\fR.  Please note that duplicates are
+allowed, so if a unique key is required, a delete must be done first.
+.
+.IP "\fB\-d\fR \fIentry\fR"
+.IQ "\fB\-\-del\-entry=\fIentry\fR"
+Delete \fIentry\fR from \fIfile\fR.  Deletes only the first entry 
+that matches \fIentry\fR.  
+.
+.IP "\fB\-D\fR \fIkey\fR"
+.IQ "\fB\-\-del\-section=\fIkey\fR"
+Delete section \fIkey\fR from \fIfile\fR.  
+.
+.IP "\fB\-\-del\-match=\fIpattern\fR"
+Deletes every entry that matches the given shell glob \fIpattern\fR.
+For example, \fB\-\-del\-match=bridge.*.port=*\fR deletes all the ports
+from every bridge, and \fB\-\-del\-match=bonding.bond0.*\fR is equivalent
+to \fB\-\-del\-section=bonding.bond0\fR.
+.
+.IP "\fB\-q\fR \fIkey\fR"
+.IQ "\fB\-\-query=\fIkey\fR"
+Queries \fIfile\fR for entries that match \fIkey\fR.  Each matching
+value is printed on a separate line.  Duplicates will be printed
+multiple times.  
+.
+.IP "\fB\-c\fR"
+.IQ "\fB\-\-changes\fR"
+Logs all of the changes made to the configuration file in a ``unified
+diff''\-like format.  Only actual changes are logged, so that if, for
+example, a \fB\-\-del\-match\fR action did not match any key\-value pairs,
+then nothing will be logged due to that action.  Furthermore, only the
+net effects of changes are logged: if a key\-value pair was deleted and
+then an identical key\-value pair was added back, then nothing would be
+logged due to those changes.
+.
+This action logs changes that have taken effect at the point where it
+is inserted.  Thus, if it is given before any other action, it will
+not log any changes.  If \fB\-\-changes\fR is given more than once,
+instances after the first log only the changes since the previous
+instance.
+.
+.SH "SEE ALSO"
+.BR ovs\-vswitchd (8),
+.BR ovs\-vswitchd.conf (5)

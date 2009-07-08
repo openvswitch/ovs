@@ -1,0 +1,143 @@
+Source: openvswitch
+Section: net
+Priority: extra
+Maintainer: Open vSwitch developers <ovs-dev@openvswitch.org>
+Build-Depends: debhelper (>= 5), autoconf (>= 2.60), automake1.10, libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl, libncurses5-dev, libpcre3-dev
+Standards-Version: 3.7.3
+
+Package: openvswitch-datapath-source
+Architecture: all
+Depends: module-assistant, bzip2, debhelper (>= 5.0.37)
+Suggests: openvswitch-switch
+Description: Source code for Open vSwitch datapath Linux module
+ This package provides the Open vSwitch datapath module source code
+ that is needed by openvswitch-switch.  The kernel module can be built
+ from it using module-assistant or make-kpkg.  README.Debian in this
+ package provides further instructions.
+ .
+ Open vSwitch is a software-based Ethernet switch targeted at virtual
+ servers.
+
+Package: openvswitch-common
+Architecture: any
+Depends: ${shlibs:Depends}, openssl
+Description: Open vSwitch common components
+ openvswitch-common provides components required by both openvswitch-switch
+ and openvswitch-controller.
+ .
+ Open vSwitch is a software-based Ethernet switch targeted at virtual
+ servers.
+
+Package: openvswitch-switch
+Architecture: any
+Suggests: openvswitch-datapath-module
+Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common, dhcp3-client, module-init-tools, dmidecode, procps, debianutils
+Description: Open vSwitch switch implementations
+ openvswitch-switch provides the userspace components and utilities for
+ the Open vSwitch kernel-based switch.  
+ .
+ Open vSwitch is a software-based Ethernet switch targeted at virtual
+ servers.
+
+Package: openvswitch-switch-config
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-switch, libwww-perl, libdigest-sha1-perl
+Description: Open vSwitch switch implementations
+ openvswitch-switch-config provides a utility for interactively configuring
+ the Open vSwitch switch provided in the openvswitch-switch package.
+ .
+ Open vSwitch is a software-based Ethernet switch targeted at virtual
+ servers.
+
+Package: openvswitch-switchui
+Architecture: any
+Recommends: openvswitch-switch
+Depends: ${shlibs:Depends}, ${misc:Depends}, console-tools
+Description: Monitoring utility for OpenFlow switches
+ The ovs-switchui utility included in this package provides a
+ "front-panel display" to allow administrators to view the status of
+ an OpenFlow switch at a glance.
+ .
+ The ezio-term utility, also included, provides a VT100-compatible
+ terminal interface for EZIO3 (aka MTB-134) 16x2 LCD displays found on
+ server appliances made by Portwell.  It allows ovs-switchui to work
+ with such displays.
+
+Package: openvswitch-pki
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common
+Description: Open vSwitch public key infrastructure
+ openvswitch-pki provides PKI (public key infrastructure) support for
+ Open vSwitch switches and controllers, reducing the risk of
+ man-in-the-middle attacks on the Open vSwitch network infrastructure.
+ .
+ Open vSwitch is a software-based Ethernet switch targeted at virtual
+ servers.
+
+Package: openvswitch-pki-server
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, openvswitch-pki, apache2
+Description: Open vSwitch public key infrastructure (HTTP server support)
+ openvswitch-pki-server provides HTTP access to the Open vSwitch PKI (public
+ key infrastructure) maintained on the local machine by the
+ openvswitch-pki package.  This HTTP access is needed for secure and
+ convenient OpenFlow switch setup using the ovs-switch-setup program
+ in the openvswitch-switch package.
+ .
+ Open vSwitch is a software-based Ethernet switch targeted at virtual
+ servers.
+
+Package: openvswitch-controller
+Architecture: any
+Depends: ${shlibs:Depends}, openvswitch-common, openvswitch-pki
+Description: Open vSwitch controller implementation
+ The Open vSwitch controller enables OpenFlow switches that connect to it
+ to act as MAC-learning Ethernet switches.
+ .
+ Open vSwitch is a software-based Ethernet switch targeted at virtual
+ servers.
+
+Package: corekeeper
+Architecture: all
+Depends: tmpreaper
+Description: Core file centralizer and reaper
+ The corekeeper package configures the system to dump all core files to
+ /var/log/core.  It also deletes core files older than 7 days.
+
+Package: openvswitch-dbg
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: Debug symbols for Open vSwitch packages
+ This package contains the debug symbols for all the other openvswitch-*
+ packages.  Install it to debug one of them or to examine a core dump
+ produced by one of them.
+
+Package: openvswitch-monitor
+Architecture: any
+Recommends: openvswitch-switch
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Monitor utility for Open vSwitch switches
+ The ovs-monitor utility included in this package monitors the secure
+ channel and datapath.  If either become unresponsive, the switch is
+ rebooted.
+
+Package: openvswitch-wdt
+Architecture: any
+Recommends: openvswitch-switch
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Watchdog utility for Open vSwitch switches
+ The ovs-wdt program included in this package manages the hardware
+ watchdog timer in switches based on the Portwell NAR-5520 hardware.
+
+Package: nicira-switch
+Architecture: all
+Depends: 
+ openvswitch-common (= ${source:Version}), 
+ openvswitch-switch (= ${source:Version}), 
+ openvswitch-switchui (= ${source:Version}), 
+ openvswitch-datapath-module (= ${source:Version}),
+ corekeeper, openvswitch-monitor, openvswitch-wdt
+Description: Metapackage for installing a Nicira Open vSwitch switch
+ Installing this package will install everything needed for a Nicira
+ Portwell-based Open vSwitch switch, including monitoring and the switch UI.
+

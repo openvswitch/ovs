@@ -1,0 +1,8 @@
+# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Protocol Operations Test Suite
+# Version 2.3":
+# Test STP.op.1.4 ­ All Ports Initialized to Designated Ports
+bridge 0 0x123 = a b c d e f
+check 0 = Li Li Li Li Li Li
+run 1000
+check 0 = F F F F F F

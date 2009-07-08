@@ -1,0 +1,128 @@
+#!/bin/sh
+
+# Copyright (C) 2008, 2009 Nicira Networks, Inc.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+SECCHAN_PID=/var/run/secchan.pid
+SECCHAN_SOCK=/var/run/secchan.mgmt
+LOG_FILE=/var/log/openflow/monitor
+INTERVAL=1
+FAIL_THRESH=3
+
+usage() {
+    echo usage: $0 options
+    echo
+    echo "OPTIONS:"
+    echo "  -h   Show this message"
+    echo "  -p   PID file for secchan (default: $SECCHAN_PID)"
+    echo "  -s   Unix socket for secchan (default: $SECCHAN_SOCK)"
+    echo "  -l   File to log messages (default: $LOG_FILE)"
+    echo "  -i   Interval to send probes in seconds (default: $INTERVAL)"
+    echo "  -c   Number of failed probes before reboot (default: $FAIL_THRESH)"
+}
+
+log() {
+    echo `date +"%b %d %X"`:$1 
+    echo `date +"%b %d %X"`:$1 >> $LOG_FILE
+}
+
+
+while getopts "hp:s:l:i:c:" OPTION; do
+    case $OPTION in
+        h)
+            usage
+            exit 1
+            ;;
+
+        p) 
+            SECCHAN_PID=$OPTARG
+            ;;
+
+        s) 
+            SECCHAN_SOCK=$OPTARG
+            ;;
+
+        l) 
+            LOG_FILE=$OPTARG
+            ;;
+
+        i) 
+            INTERVAL=$OPTARG
+            ;;
+
+        c) 
+            FAIL_THRESH=$OPTARG
+            ;;
+
+        *)
+            echo "Unknown option: ${OPTION}"
+    esac
+done
+
+
+if [ ! -f $SECCHAN_PID ]; then
+    log "No secchan pid file: ${SECCHAN_PID}" 
+    echo "No secchan pid file: ${SECCHAN_PID}" 
+fi
+
+if [ ! -S $SECCHAN_SOCK ]; then
+    log "No secchan sock file: ${SECCHAN_SOCK}" 
+    echo "No secchan sock file: ${SECCHAN_SOCK}" 
+fi
+
+if [ ! -d `dirname $LOG_FILE` ]; then
+    mkdir -p `dirname $LOG_FILE`
+fi
+
+let DP_DOWN=0
+let SECCHAN_DOWN=0
+log "===== Starting Monitor ===="
+while `/bin/true`; do
+    # Only check for liveness if the secchan's PID file exists.  The PID
+    # file is removed when secchan is brought down gracefully.
+    if [ -f $SECCHAN_PID ]; then
+        pid=`cat $SECCHAN_PID`
+        if [ -d /proc/$pid ]; then
+            # Check if the secchan and datapath still can communicate
+            if [ -S $SECCHAN_SOCK ]; then
+                ovs-ofctl probe -t 2 unix:$SECCHAN_SOCK 
+                if [ $? -ne 0 ]; then
+                    log "datapath probe failed"
+                    let DP_DOWN++
+                else 
+                    let DP_DOWN=0
+                fi
+            fi
+            let SECCHAN_DOWN=0
+        else
+            log "secchan probe failed"
+            let SECCHAN_DOWN++
+        fi
+    fi
+
+    if [ $SECCHAN_DOWN -ge $FAIL_THRESH ]; then
+        log "Failed to probe secchan after ${SECCHAN_DOWN} tries...rebooting!"
+        reboot
+    fi
+
+    if [ $DP_DOWN -ge $FAIL_THRESH ]; then
+        log "Failed to probe datapath after ${DP_DOWN} tries...rebooting!"
+        reboot
+    fi
+
+    sleep $INTERVAL 
+done

@@ -1,0 +1,11 @@
+/var/log/openvswitch/secchan.log {
+        daily
+        compress
+        create 640 root adm
+        delaycompress
+        missingok
+        rotate 30
+        postrotate
+                ovs-appctl --target /var/run/secchan.pid --reopen
+        endscript
+}

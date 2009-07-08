@@ -1,0 +1,13 @@
+# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Interoperability Test Suite
+# Version 1.5":
+# STP.io.1.4: Network Initialization
+bridge 0 0x111 = a b c
+bridge 1 0x222 = b d e
+bridge 2 0x333 = a d f
+bridge 3 0x444 = c e f
+run 1000
+check 0 = root
+check 1 = F:10 F F
+check 2 = F:10 B F
+check 3 = F:10 B B

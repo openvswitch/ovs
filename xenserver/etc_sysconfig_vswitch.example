@@ -1,0 +1,79 @@
+### Configuration options for vswitch
+
+# Copyright (C) 2009 Nicira Networks, Inc.
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.  This file is offered as-is,
+# without warranty of any kind.
+
+# VSWITCH_BASE: Root directory where vswitch binaries are installed
+# VSWITCH_BASE=/root/vswitch/openvswitch/build
+
+# ENABLE_BRCOMPAT: If 'y' than emulate linux bridging interfaces
+#    using the brcompat kernel module and ovs-brcompatd daemon
+# ENABLE_BRCOMPAT=y
+
+# ENABLE_FAKE_PROC_NET: If 'y' then emulate linux bonding and vlan
+#    files in /proc as if the bonding and vlan demultiplexing done in
+#    ovs-vswitchd were being implemented using existing Linux mechanisms.
+#    This is useful in some cases when replacing existing solutions.
+# ENABLE_FAKE_PROC_NET=y
+
+# FORCE_COREFILES: If 'y' then core files will be enabled.
+# FORCE_COREFILES=n
+
+# COREFILE_PATTERN: Pattern used to determine path and filename for
+#     core files when FORCE_COREFILES is 'y'.  This is Linux specific.
+#     See the manpage for "core".
+# COREFILE_PATTERN="/var/log/%e-%t"
+
+# VSWITCHD_CONF: File in which ovs-vswitchd stores its configuration.
+# VSWITCHD_CONF=/etc/ovs-vswitchd.conf
+
+# VSWITCHD_PIDFILE: File in which to store the pid of the running
+#     ovs-vswitchd.
+# VSWITCHD_PIDFILE=/var/run/ovs-vswitchd.pid
+
+# VSWITCHD_PRIORITY: "nice" priority at which to run ovs-vswitchd and related
+#     processes.
+# VSWITCHD_PRIORITY=-5
+
+# VSWITCHD_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
+# VSWITCHD_LOGFILE=/var/log/ovs-vswitchd.log
+
+# VSWITCHD_FILE_LOGLEVEL: Log level at which to log into the
+#     VSWITCHD_LOG file.  If this is null or not set the logfile will
+#     not be created and nothing will be sent to it.  This is the
+#     default.  The available options are: EMER, WARN, INFO and DBG.
+# VSWITCHD_FILE_LOGLEVEL=""
+
+# VSWITCHD_SYSLOG_LOGLEVEL: Log level at which to log into syslog.  If
+#     this is null or not set the default is to log to syslog
+#     emergency and warning level messages only.
+# VSWITCHD_SYSLOG_LOGLEVEL="WARN"
+
+# BRCOMPATD_PIDFILE: File in which to store the pid of the running
+#     ovs-brcompatd (the Linux bridge compatibility daemon for ovs-vswitchd).
+#     If this is the empty string, ovs-brcompatd will not be started and
+#     the brcompat_mod kernel module will not be inserted.  Note that
+#     the default is to use brcompat!
+# BRCOMPATD_PIDFILE=/var/run/ovs-brcompatd.pid
+
+# BRCOMPATD_PRIORITY: "nice" priority at which to run ovs-vswitchd and related
+#     processes.
+# BRCOMPATD_PRIORITY=-5
+
+# BRCOMPATD_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
+# BRCOMPATD_LOGFILE=/var/log/ovs-brcompatd.log
+
+# BRCOMPATD_FILE_LOGLEVEL: Log level at which to log into the
+#     BRCOMPATD_LOG file.  If this is null or not set the logfile will
+#     not be created and nothing will be sent to it.  This is the
+#     default.  The available options are: EMER, WARN, INFO and DBG.
+# BRCOMPATD_FILE_LOGLEVEL=""
+
+# BRCOMPATD_SYSLOG_LOGLEVEL: Log level at which to log into syslog.  If
+#     this is null or not set the default is to log to syslog
+#     emergency and warning level messages only.
+# BRCOMPATD_SYSLOG_LOGLEVEL="WARN"

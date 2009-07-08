@@ -1,0 +1,302 @@
+#!/bin/bash
+#
+# vswitch
+#
+# chkconfig: 2345 09 91
+# description: Manage vswitch kernel modules and user-space daemon
+
+# Copyright (C) 2009 Nicira Networks, Inc.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+. /etc/init.d/functions
+
+test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
+
+# General config variables in /etc/sysconfig/vswitch
+VSWITCH_BASE="${VSWITCH_BASE:-/root/vswitch}"
+ENABLE_BRCOMPAT="${ENABLE_BRCOMPAT:-y}"
+ENABLE_FAKE_PROC_NET="${ENABLE_FAKE_PROC_NET:-y}"
+FORCE_COREFILES="${FORCE_COREFILES:-n}"
+COREFILE_PATTERN="${COREFILE_PATTERN:-/var/log/%e-%t}"
+
+# Config variables specific to ovs-vswitchd
+VSWITCHD_CONF="${VSWITCHD_CONF:-/etc/ovs-vswitchd.conf}"
+VSWITCHD_PIDFILE="${VSWITCHD_PIDFILE:-/var/run/ovs-vswitchd.pid}"
+VSWITCHD_PRIORITY="${VSWITCHD_PRIORITY:--5}"
+VSWITCHD_LOGFILE="${VSWITCHD_LOGFILE:-/var/log/ovs-vswitchd.log}"
+VSWITCHD_FILE_LOGLEVEL="${VSWITCHD_FILE_LOGLEVEL:-}"
+VSWITCHD_SYSLOG_LOGLEVEL="${VSWITCHD_SYSLOG_LOGLEVEL:-WARN}"
+VSWITCHD_MEMLEAK_LOGFILE="${VSWITCHD_MEMLEAK_LOGFILE:-}"
+VSWITCHD_STRACE_LOG="${VSWITCHD_STRACE_LOG:-}"
+VSWITCHD_STRACE_OPT="${VSWITCHD_STRACE_OPT:-}"
+VSWITCHD_VALGRIND_LOG="${VSWITCHD_VALGRIND_LOG:-}"
+VSWITCHD_VALGRIND_OPT="${VSWITCHD_VALGRIND_OPT:-}"
+
+# Config variables specific to ovs-brcompatd
+BRCOMPATD_PIDFILE="${BRCOMPATD_PIDFILE:-/var/run/ovs-brcompatd.pid}"
+BRCOMPATD_PRIORITY="${BRCOMPATD_PRIORITY:--5}"
+BRCOMPATD_LOGFILE="${BRCOMPATD_LOGFILE:-/var/log/ovs-brcompatd.log}"
+BRCOMPATD_FILE_LOGLEVEL="${BRCOMPATD_FILE_LOGLEVEL:-}"
+BRCOMPATD_SYSLOG_LOGLEVEL="${BRCOMPATD_SYSLOG_LOGLEVEL:-WARN}"
+BRCOMPATD_MEMLEAK_LOGFILE="${BRCOMPATD_MEMLEAK_LOGFILE:-}"
+BRCOMPATD_STRACE_LOG="${BRCOMPATD_STRACE_LOG:-}"
+BRCOMPATD_STRACE_OPT="${BRCOMPATD_STRACE_OPT:-}"
+BRCOMPATD_VALGRIND_LOG="${BRCOMPATD_VALGRIND_LOG:-}"
+BRCOMPATD_VALGRIND_OPT="${BRCOMPATD_VALGRIND_OPT:-}"
+
+
+
+
+# Full paths to executables & modules
+vswitchd="$VSWITCH_BASE/sbin/ovs-vswitchd"
+brcompatd="$VSWITCH_BASE/sbin/ovs-brcompatd"
+dpctl="$VSWITCH_BASE/bin/ovs-dpctl"
+appctl="$VSWITCH_BASE/bin/ovs-appctl"
+ofctl="$VSWITCH_BASE/bin/ovs-ofctl"
+
+
+if [ "$ENABLE_FAKE_PROC_NET" == "y" ]; then
+    if [ "$ENABLE_BRCOMPAT" != "y" ]; then
+        warning "FAKE_PROC_NET required BRCOMPAT which was disabled.  Force enabling."
+        ENABLE_BRCOMPAT="y"
+    fi
+fi
+
+function dp_list {
+    "$dpctl" show | grep '^dp[0-9]\+:' | cut -d':' -f 1
+}
+
+function turn_on_corefiles {
+    # This has global effect so should not normally be used...
+    ulimit -c unlimited
+    echo "$COREFILE_PATTERN" > /proc/sys/kernel/core_pattern
+}
+
+function remove_all_dp {
+    for dp in $(dp_list); do
+        action "Removing datapath: $dp" "$dpctl" del-dp "$dp"
+    done
+}
+
+function insert_modules_if_required {
+    if ! lsmod | grep -q "openvswitch_mod"; then
+        action "Inserting llc module" modprobe llc
+        action "Inserting openvswitch module" insmod $VSWITCH_BASE/kernel_modules/openvswitch_mod.ko
+    fi
+    if [ -n "$BRCOMPATD_PIDFILE" ] && ! lsmod | grep -q "brcompat_mod"; then
+        action "Inserting brcompat module" insmod $VSWITCH_BASE/kernel_modules/brcompat_mod.ko
+    fi
+}
+
+function remove_modules {
+    if lsmod | grep -q "brcompat_mod"; then
+        action "Removing brcompat module" rmmod brcompat_mod.ko
+    fi
+    if lsmod | grep -q "openvswitch_mod"; then
+        action "Removing openvswitch module" rmmod openvswitch_mod.ko
+    fi
+}
+
+function reload_vswitchd {
+    if [ -f "$VSWITCHD_PIDFILE" ]; then
+        "$appctl" \
+            --target=ovs-vswitchd.$(cat "$VSWITCHD_PIDFILE").ctl \
+            --execute=vswitchd/reload
+    fi
+}
+
+function start_vswitchd {
+    local syslog_opt="-vANY:SYSLOG:${VSWITCHD_SYSLOG_LOGLEVEL}"
+    local logfile_file_opt=""
+    local logfile_level_opt=""
+    if [ -n "$VSWITCHD_FILE_LOGLEVEL" ]; then
+        logfile_level_opt="-vANY:FILE:${VSWITCHD_FILE_LOGLEVEL}"
+        logfile_file_opt="--log-file=$VSWITCHD_LOGFILE"
+    fi
+    local leak_opt=""
+    if [ -n "$VSWITCHD_MEMLEAK_LOGFILE" ]; then
+        leak_opt="--check-leaks=$VSWITCHD_MEMLEAK_LOGFILE"
+        if [ -e "$VSWITCHD_MEMLEAK_LOGFILE" ]; then
+            mv "$VSWITCHD_MEMLEAK_LOGFILE" "$VSWITCHD_MEMLEAK_LOGFILE.prev"
+        fi
+    fi
+    local strace_opt=""
+    local daemonize="y"
+    if [ -n "$VSWITCHD_STRACE_LOG" ] && [ -n "$VSWITCHD_VALGRIND_LOG" ]; then
+        printf "Can not start with both VALGRIND and STRACE\n"
+        exit 1
+    fi
+    if [ -n "$VSWITCHD_STRACE_LOG" ]; then
+        strace_opt="strace -o $VSWITCHD_STRACE_LOG $VSWITCHD_STRACE_OPT"
+        daemonize="n"
+    fi
+    if [ -n "$VSWITCHD_VALGRIND_LOG" ]; then
+        valgrind_opt="valgrind --log-file=$VSWITCHD_VALGRIND_LOG $VSWITCHD_VALGRIND_OPT"
+        daemonize="n"
+    fi
+    local fake_proc_net_opt=""
+    if [ "$ENABLE_FAKE_PROC_NET" == "y" ]; then
+        fake_proc_net_opt="--fake-proc-net"
+    fi
+    if [ "$daemonize" != "y" ]; then
+        # Start in background and force a "success" message
+        action "Starting ovs-vswitchd ($strace_opt$valgrind_opt)" true
+        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" -P"$VSWITCHD_PIDFILE" -D $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
+    else
+        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" -P"$VSWITCHD_PIDFILE" -D $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
+    fi
+}
+
+function start_brcompatd {
+    local syslog_opt="-vANY:SYSLOG:${BRCOMPATD_SYSLOG_LOGLEVEL}"
+    local logfile_file_opt=""
+    local logfile_level_opt=""
+    if [ -n "$BRCOMPATD_FILE_LOGLEVEL" ]; then
+        logfile_level_opt="-vANY:FILE:${BRCOMPATD_FILE_LOGLEVEL}"
+        logfile_file_opt="--log-file=$BRCOMPATD_LOGFILE"
+    fi
+    local leak_opt=""
+    if [ -n "$BRCOMPATD_MEMLEAK_LOG" ]; then
+        leak_opt="--check-leaks=$BRCOMPATD_MEMLEAK_LOGFILE"
+        if [ -e "$BRCOMPATD_MEMLEAK_LOGFILE" ]; then
+            mv "$BRCOMPATD_MEMLEAK_LOGFILE" "$BRCOMPATD_MEMLEAK_LOGFILE.prev"
+        fi
+    fi
+    local strace_opt=""
+    local daemonize="y"
+    if [ -n "$BRCOMPATD_STRACE_LOG" ] && [ -n "$BRCOMPATD_VALGRIND_LOG" ]; then
+        printf "Can not start with both VALGRIND and STRACE\n"
+        exit 1
+    fi
+    if [ -n "$BRCOMPATD_STRACE_LOG" ]; then
+        strace_opt="strace -o $BRCOMPATD_STRACE_LOG $BRCOMPATD_STRACE_OPT"
+        daemonize="n"
+    fi
+    if [ -n "$VALGRIND_LOG" ]; then
+        valgrind_opt="valgrind --log-file=$BRCOMPATD_VALGRIND_LOG $BRCOMPATD_VALGRIND_OPT"
+        daemonize="n"
+    fi
+    reload_cmd='/root/vswitch/bin/ovs-appctl -t /var/run/ovs-vswitchd.`cat /var/run/ovs-vswitchd.pid`.ctl -e vswitchd/reload 2>&1 | /usr/bin/logger -t brcompatd-reload'
+    if [ "$daemonize" != "y" ]; then
+        # Start in background and force a "success" message
+        action "Starting ovs-brcompatd ($strace_opt$valgrind_opt)" true
+        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --reload-command="$reload_cmd" -P$BRCOMPATD_PIDFILE -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
+    else
+        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --reload-command="$reload_cmd" -P$BRCOMPATD_PIDFILE -D -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
+    fi
+}
+
+function stop_vswitchd {
+    if [ -f "$VSWITCHD_PIDFILE" ]; then
+        local pid=$(cat "$VSWITCHD_PIDFILE")
+        action "Killing ovs-vswitchd ($pid)" kill -TERM $pid
+        rm -f "$VSWITCHD_PIDFILE"
+    fi
+}
+
+function stop_brcompatd {
+    if [ -f "$BRCOMPATD_PIDFILE" ]; then
+        local pid=$(cat "$BRCOMPATD_PIDFILE")
+        action "Killing ovs-brcompatd ($pid)" kill -TERM $pid
+        rm -f "$BRCOMPATD_PIDFILE"
+    fi
+}
+
+function restart_approval {
+    if test ! -t 0; then
+        # Don't prompt if invoked non-interactively.
+        return 0
+    fi
+    cat <<EOF
+
+WARNING!!!
+
+Restarting vswitch on a live server is not guaranteed to work.  It is
+provided as a convenience for those situations in which it does work.
+If you just want to reload the configuration file, use "reload"
+instead of restart.
+
+EOF
+    read -s -r -n 1 -p "Countinue with restart (y/N): " response
+    printf "\n"
+    case "$response" in
+        y|Y)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+function start {
+    insert_modules_if_required
+    start_vswitchd
+    start_brcompatd
+    reload_vswitchd  # ensures ovs-vswitchd has fully read config file.
+}
+
+function stop {
+    stop_brcompatd
+    stop_vswitchd
+}
+
+function restart {
+    if restart_approval; then
+        stop
+        start
+    fi
+}
+
+case "$1" in
+    start)
+        if [ "$FORCE_COREFILES" == "y" ]; then
+            turn_on_corefiles
+        fi
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        restart
+        ;;
+    reload)
+        reload_vswitchd
+        ;;
+    strace-vswitchd)
+        shift
+        strace -p $(cat "$VSWITCHD_PIDFILE") "$@"
+        ;;
+    strace-brcompatd)
+        shift
+        strace -p $(cat "$BRCOMPATD_PIDFILE") "$@"
+        ;;
+    status)
+        status -p ovs-vswitchd.pid ovs-vswitchd
+        status -p ovs-brcompatd.pid ovs-brcompatd
+        ;;
+    version)
+        "$VSWITCH_BASE"/sbin/ovs-vswitchd -V
+        "$VSWITCH_BASE"/sbin/ovs-brcompatd -V
+        ;;
+    help)
+        printf "vswitch [start|stop|restart|reload|unload|status|version]\n"
+        ;;
+    *)
+        printf "Unknown command: $1\n"
+        exit 1
+        ;;
+esac

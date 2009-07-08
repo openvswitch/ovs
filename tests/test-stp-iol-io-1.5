@@ -1,0 +1,40 @@
+# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Interoperability Test Suite
+# Version 1.5":
+# STP.io.1.5: Topology Change
+bridge 0 0x111 = a b d c
+bridge 1 0x222 = a b f e
+bridge 2 0x333 = c d g h
+bridge 3 0x444 = e f g h
+run 1000
+check 0 = root
+check 1 = F:10 B F F
+check 2 = B F:10 F F
+check 3 = B F:20 B B
+bridge 1^0x7000
+run 1000
+check 0 = F:10 B F F
+check 1 = root
+check 2 = B F:20 B B
+check 3 = B F:10 F F
+bridge 2^0x6000
+run 1000
+check 0 = F F B F:10
+check 1 = F:20 B B B
+check 2 = root
+check 3 = F F F:10 B
+bridge 3^0x5000
+run 1000
+check 0 = B B B F:20
+check 1 = F F B F:10
+check 2 = F F F:10 B
+check 3 = root
+bridge 0^0x4000
+bridge 1^0x4001
+bridge 2^0x4002
+bridge 3^0x4003
+run 1000
+check 0 = root
+check 1 = F:10 B F F
+check 2 = B F:10 F F
+check 3 = B F:20 B B

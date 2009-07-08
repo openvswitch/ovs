@@ -1,0 +1,7 @@
+/Makefile
+/Makefile.in
+*.cmd
+*.ko
+*.mod.c
+Module.symvers
+

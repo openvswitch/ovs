@@ -1,0 +1,71 @@
+#!/bin/bash
+#
+# vswitch-xapi-update
+#
+# chkconfig: 2345 95 01
+# description: Update vswitch configuration from XAPI database at boot
+
+# Copyright (C) 2009 Nicira Networks, Inc.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+. /etc/init.d/functions
+
+test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
+VSWITCH_BASE="${VSWITCH_BASE:-/root/vswitch}"
+VSWITCHD_CONF="${VSWITCHD_CONF:-/etc/ovs-vswitchd.conf}"
+VSWITCHD_PIDFILE="${VSWITCHD_PIDFILE:-/var/run/ovs-vswitchd.pid}"
+VSWITCHD_PRIORITY="${VSWITCHD_PRIORITY:--5}"
+VSWITCHD_LOGFILE="${VSWITCHD_LOGFILE:-/var/log/ovs-vswitchd.log}"
+VSWITCHD_FILE_LOGLEVEL="${VSWITCHD_FILE_LOGLEVEL:-}"
+VSWITCHD_SYSLOG_LOGLEVEL="${VSWITCHD_SYSLOG_LOGLEVEL:-WARN}"
+VSWITCHD_MEMLEAK_LOGFILE="${VSWITCHD_MEMLEAK_LOGFILE:-}"
+BRCOMPATD_PIDFILE="${BRCOMPATD_PIDFILE:-/var/run/ovs-brcompatd.pid}"
+BRCOMPATD_PRIORITY="${BRCOMPATD_PRIORITY:--5}"
+BRCOMPATD_LOGFILE="${BRCOMPATD_LOGFILE:-/var/log/ovs-brcompatd.log}"
+BRCOMPATD_FILE_LOGLEVEL="${BRCOMPATD_FILE_LOGLEVEL:-}"
+BRCOMPATD_SYSLOG_LOGLEVEL="${BRCOMPATD_SYSLOG_LOGLEVEL:-WARN}"
+BRCOMPATD_MEMLEAK_LOGFILE="${BRCOMPATD_MEMLEAK_LOGFILE:-}"
+
+function do_host_call {
+    xe host-call-plugin host-uuid="$INSTALLATION_UUID" plugin="vswitch-cfg-update" fn="update" >/dev/null
+}
+
+function start {
+    if [ ! -f /etc/xensource-inventory ]; then
+        printf "vxwitch-xapi-update ERROR: XenSource inventory not present in /etc/xensource-inventory\n"
+        exit 1
+    fi
+    source /etc/xensource-inventory
+    action "Updating configuration" do_host_call
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        # Nothing to do here.
+        ;;
+    restart)
+        start
+        ;;
+    help)
+        printf "vswitch [start|stop|restart]\n"
+        ;;
+    *)
+        printf "Unknown command: $1\n"
+        exit 1
+        ;;
+esac

@@ -1,0 +1,31 @@
+Open vSwitch for Debian
+----------------------
+
+* How do I build this module the Debian way?
+
+    - Building with module-assistant:
+
+        $ module-assistant auto-install openvswitch
+      or
+        $ m-a a-i openvswitch
+
+      If kernel source or headers are in a non-standard directory, add
+      the option -k /path/to/kernel/source with the correct path.
+
+    - Building with make-kpkg
+
+        $ cd /usr/src/
+        $ tar jxvf openvswitch.tar.bz2
+        $ cd /usr/src/kernel-source-2.6.9
+        $ make-kpkg --added-modules=openvswitch modules
+
+    - Building without make-kpkg
+
+        $ cd /usr/src/
+        $ tar jxvf openvswitch.tar.bz2
+        $ cd modules/openvswitch
+        $ fakeroot debian/rules kdist_image
+
+      If you run this as root, fakeroot is not needed.
+
+ -- Ben Pfaff <blp@nicira.com>, Mon, 11 May 2009 13:27:50 -0700

@@ -1,0 +1,18 @@
+README.Debian for openvswitch-switch
+---------------------------------
+
+* The switch must be configured before it can be used.  To configure
+  it interactively, install the openvswitch-switch-config package and run
+  the ovs-switch-setup program.  Alternatively, edit
+  /etc/default/openvswitch-switch by hand, then start the switch manually
+  with "/etc/init.d/openvswitch-switch start".
+
+* To use the Linux kernel-based switch implementation, you will need
+  to build and install the Open vSwitch kernel module.  To do so, install
+  the openvswitch-datapath-source package, then follow the instructions
+  given in /usr/share/doc/openvswitch-datapath-source/README.Debian
+
+* This package does not yet support the userspace datapath-based
+  switch implementation.
+
+ -- Ben Pfaff <blp@nicira.com>, Mon, 11 May 2009 13:29:43 -0700

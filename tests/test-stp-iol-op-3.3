@@ -1,0 +1,11 @@
+# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Protocol Operations Test Suite
+# Version 2.3":
+# Test STP.op.3.3 ­ Root Bridge Selection: Bridge ID Values
+bridge 0 0x333^0x6000 = a
+bridge 1 0x222^0x7000 = b
+bridge 2 0x111 = a b
+run 1000
+check 0 = rootid:0x333^0x6000 root
+check 1 = rootid:0x333^0x6000 F:20
+check 2 = rootid:0x333^0x6000 F:10 F

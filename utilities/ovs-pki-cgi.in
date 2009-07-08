@@ -1,0 +1,41 @@
+#! @PERL@
+
+use CGI;
+use Digest::SHA1;
+use Fcntl;
+
+$CGI::POST_MAX = 65536;    # Limit POSTs to 64 kB.
+
+use strict;
+use warnings;
+
+my $pkidir = '@PKIDIR@';
+my $q = new CGI;
+
+die unless $q->request_method() eq 'POST';
+
+my $type = $q->param('type');
+die unless defined $type;
+die unless $type eq 'switch' or $type eq 'controller';
+
+my $req = $q->param('req');
+die unless defined $req;
+die unless $req =~ /^-----BEGIN CERTIFICATE REQUEST-----$/m;
+die unless $req =~ /^-----END CERTIFICATE REQUEST-----$/m;
+
+my $digest = Digest::SHA1::sha1_hex($req);
+my $incoming = "$pkidir/${type}ca/incoming";
+my $dst = "$incoming/$digest-req.pem";
+
+sysopen(REQUEST, "$dst.tmp", O_RDWR | O_CREAT | O_EXCL, 0600)
+  or die "sysopen $dst.tmp: $!";
+print REQUEST $req;
+close(REQUEST) or die "close $dst.tmp: $!";
+
+rename("$dst.tmp", $dst) or die "rename $dst.tmp to $dst: $!";
+
+print $q->header('text/html', '204 No response');
+
+# Local Variables:
+# mode: perl
+# End:

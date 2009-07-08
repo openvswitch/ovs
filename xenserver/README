@@ -1,0 +1,78 @@
+This directory contains files for seamless integration of vswitch on
+Citrix XenServer hosts managed by the Citrix management tools.
+
+Some of these files are modifications of Citrix's proprietary code.
+Citrix has given permission to distribute these modified files.
+Citrix has not specified a particular license for them.  There is no
+guarantee that, should Citrix specify a license, that it would be
+DFSG-compliant or GPL-compatible.
+
+Most of the files in this directory is installed on a XenServer system
+under the same name, if underscores are replaced by slashes.  The
+files are:
+
+    etc_init.d_vswitch
+
+        Initializes the vswitch at boot and shuts it down at shutdown.
+
+    etc_init.d_vswitch-xapi-update
+
+        Init script to ensure vswitch-cfg-update is called for the
+        current host at boot.
+
+    etc_logrotate.d_vswitch
+
+        Ensures that /var/log/ovs-vswitchd.log is rotated periodically
+        and that ovs-vswitchd reopens its log file at that point.
+
+    etc_profile.d_vswitch.sh
+
+        vswitch-related shell functions for the administrator's
+        convenience.
+
+    etc_sysconfig_vswitch.example
+
+        Example configuration options for vswitch.
+
+    etc_xapi.d_plugins_vswitch-cfg-update
+
+        xapi plugin script to update the cache of configuration items
+        in the ovs-vswitchd configuration file that are managed in the
+        xapi database when integrated with Citrix management tools.
+
+    etc_xensource_scripts_vif
+
+        vswitch-aware replacement for Citrix script of the same name.
+
+    opt_xensource_libexec_interface-reconfigure
+
+        vswitch-aware replacement for Citrix script of the same name.
+
+    usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py
+
+        xsconsole plugin to configure the pool-wide configuration keys
+        used to control vswitch when integrated with Citrix management
+        tools.
+
+    vswitch-xen.spec
+
+        spec file for building RPMs to install on a XenServer host.
+
+To install, build the vswitch RPM with a command like this:
+
+        rpmbuild -D "vswitch_version $full_version" \
+                -D "xen_version $XENKERNEL" \
+                -D "build_number --with-build-number=$buildnr" \
+                -bb vswitch-xen.spec
+
+Then, "rpm -U" the resulting vswitch package on the XenServer hosts in
+question and reboot them.  (The vswitch-dbg package that is also
+produced need not be installed, but it is harmless to do so.)
+
+----------------------------------------------------------------------
+Copyright (C) 2009 Nicira Networks, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.  This file is offered as-is,
+without warranty of any kind.

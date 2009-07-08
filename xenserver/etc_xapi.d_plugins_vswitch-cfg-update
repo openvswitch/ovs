@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+#
+# xapi plugin script to update the cache of configuration items in the
+# ovs-vswitchd configuration file that are managed in the xapi database
+# when integrated with Citrix management tools.
+
+# Copyright (C) 2009 Nicira Networks, Inc.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# TBD: - error handling needs to be improved.  Currently this can leave
+# TBD:   the system in a bad state if anything goes wrong.
+
+import logging
+log = logging.getLogger("vswitch-cfg-update")
+logging.basicConfig(filename="/var/log/vswitch-cfg-update.log", level=logging.DEBUG)
+
+import XenAPIPlugin
+import XenAPI
+import subprocess
+
+cfg_mod="/root/vswitch/bin/ovs-cfg-mod"
+vswitchd_cfg_filename="/etc/ovs-vswitchd.conf"
+
+def update(session, args):
+    pools = session.xenapi.pool.get_all()
+    # We assume there is only ever one pool...
+    if len(pools) == 0:
+        log.error("No pool for host.")
+        raise XenAPIPlugin.Failure("NO_POOL_FOR_HOST", [])
+    if len(pools) > 1:
+        log.error("More than one pool for host.")
+        raise XenAPIPlugin.Failure("MORE_THAN_ONE_POOL_FOR_HOST", [])
+    pool = session.xenapi.pool.get_record(pools[0])
+    try:
+        controller = pool["other_config"]["vSwitchController"]
+    except KeyError, e:
+        controller = ""
+    currentController = vswitchCurrentController()
+    if controller == "" and currentController != "":
+        log.debug("Removing controller configuration.")
+        removeControllerCfg()
+        return "Successfully removed controller config"
+    elif controller != currentController:
+        if len(controller) == 0:
+            log.debug("Setting controller to: %s" % (controller))
+        else:
+            log.debug("Changing controller from %s to %s" % (currentController, controller))
+        setControllerCfg(controller)
+        return "Successfully set controller to " + controller
+    else:
+        log.debug("No change to controller configuration required.")
+    return "No change to configuration"
+        
+def vswitchCurrentController():
+    controller = vswitchCfgQuery("mgmt.controller")
+    if controller == "":
+        return controller
+    if len(controller) < 4 or controller[0:4] != "ssl:":
+        log.warning("Controller does not specify ssl connection type, returning entire string.")
+        return controller
+    else:
+        return controller[4:]
+
+def removeControllerCfg():
+    vswitchCfgMod(["--del-match", "mgmt.controller=*",
+                   "--del-match", "ssl.bootstrap-ca-cert=*",
+                   "--del-match", "ssl.ca-cert=*",
+                   "--del-match", "ssl.private-key=*",
+                   "--del-match", "ssl.certificate=*"])
+                                       
+def setControllerCfg(controller):
+    vswitchCfgMod(["--del-match", "mgmt.controller=*",
+                   "--del-match", "ssl.bootstrap-ca-cert=*",
+                   "--del-match", "ssl.ca-cert=*",
+                   "--del-match", "ssl.private-key=*",
+                   "--del-match", "ssl.certificate=*",
+                   "-a", "mgmt.controller=ssl:" + controller,
+                   "-a", "ssl.bootstrap-ca-cert=true",
+                   "-a", "ssl.ca-cert=/etc/ovs-vswitchd.cacert",
+                   "-a", "ssl.private-key=/etc/xensource/xapi-ssl.pem",
+                   "-a", "ssl.certificate=/etc/xensource/xapi-ssl.pem"])
+
+def vswitchCfgQuery(key):
+    cmd = [cfg_mod, "--config-file=" + vswitchd_cfg_filename, "-q", key]
+    output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()
+    if len(output) == 0 or output[0] == None:
+        output = ""
+    else:
+        output = output[0].strip()
+    return output
+
+def vswitchCfgMod(action_args):
+    cmd = [cfg_mod, "-vANY:console:emer",
+           "--config-file=" + vswitchd_cfg_filename] + action_args
+    exitcode = subprocess.call(cmd)
+    if exitcode != 0:
+        log.error("ovs-cfg-mod failed with exit code "
+                  + str(exitcode) + " for " + repr(action_args))
+        raise XenAPIPlugin.Failure("VSWITCH_CONFIG_MOD_FAILURE",
+                                   [ str(exitcode) , str(action_args) ])
+    vswitchReload()
+    
+def vswitchReload():
+    exitcode = subprocess.call(["/sbin/service", "vswitch", "reload"])
+    if exitcode != 0:
+        log.error("vswitch reload failed with exit code " + str(exitcode))
+        raise XenAPIPlugin.Failure("VSWITCH_CFG_RELOAD_FAILURE", [ str(exitcode) ])
+    
+
+if __name__ == "__main__":
+    XenAPIPlugin.dispatch({"update": update})

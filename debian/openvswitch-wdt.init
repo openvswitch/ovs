@@ -1,0 +1,176 @@
+#!/bin/sh 
+#
+# Example init.d script with LSB support.
+#
+# Please read this init.d carefully and modify the sections to
+# adjust it to the program you want to run.
+#
+# Copyright (c) 2007, 2009 Javier Fernandez-Sanguino <jfs@debian.org>
+#
+# This is free software; you may redistribute it and/or modify
+# it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2,
+# or (at your option) any later version.
+#
+# This is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License with
+# the Debian operating system, in /usr/share/common-licenses/GPL;  if
+# not, write to the Free Software Foundation, Inc., 59 Temple Place,
+# Suite 330, Boston, MA 02111-1307 USA
+#
+### BEGIN INIT INFO
+# Provides:          openvswitch-wdt
+# Required-Start:    $network $local_fs
+# Required-Stop:     
+# Should-Start:      $named $syslog openvswitch-switch
+# Should-Stop:       
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Open vSwitch switch watchdog
+### END INIT INFO
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+DAEMON=/usr/sbin/ovs-wdt
+NAME=openvswitch-wdt
+DESC="Open vSwitch switch watchdog"
+
+PIDFILE=/var/run/$NAME.pid 
+
+test -x $DAEMON || exit 0
+
+. /lib/lsb/init-functions
+
+# Default options, these can be overriden by the information
+# at /etc/default/$NAME
+DAEMON_OPTS=""          # Additional options given to the daemon 
+
+DODTIME=10              # Time to wait for the daemon to die, in seconds
+                        # If this value is set too low you might not
+                        # let some daemons to die gracefully and
+                        # 'restart' will not work
+                        
+# Include defaults if available
+if [ -f /etc/default/$NAME ] ; then
+	. /etc/default/$NAME
+fi
+
+set -e
+
+running_pid() {
+# Check if a given process pid's cmdline matches a given name
+    pid=$1
+    name=$2
+    [ -z "$pid" ] && return 1 
+    [ ! -d /proc/$pid ] &&  return 1
+    return 0
+}
+
+running() {
+# Check if the process is running looking at /proc
+# (works for all users)
+
+    # No pidfile, probably no daemon present
+    [ ! -f "$PIDFILE" ] && return 1
+    pid=`cat $PIDFILE`
+    running_pid $pid $DAEMON || return 1
+    return 0
+}
+
+start_daemon() {
+# Start the process using the wrapper
+    if test $WDT_TIMEOUT != 0; then
+        start-stop-daemon --start --quiet -m --background --pidfile $PIDFILE \
+            --exec $DAEMON -- --timeout=$WDT_TIMEOUT --interval=$WDT_INTERVAL $DAEMON_OPTS 
+    fi
+
+    # Wait up to 3 seconds for the daemon to start.
+    for i in 1 2 3; do
+        if running; then
+            break
+        fi
+        sleep 1
+    done
+
+    echo $OOPS_REBOOT_TIME > /proc/sys/kernel/panic
+    echo 1 > /proc/sys/kernel/panic_on_oops
+}
+
+stop_daemon() {
+    start-stop-daemon -o --stop --pidfile $PIDFILE
+    rm $PIDFILE
+}
+
+case "$1" in
+  start)
+	log_daemon_msg "Starting $DESC " "$NAME"
+        # Check if it's running first
+        if running ;  then
+            log_progress_msg "apparently already running"
+            log_end_msg 0
+            exit 0
+        fi
+        if start_daemon && running ;  then
+            # It's ok, the daemon started and is running
+            log_end_msg 0
+        else
+            # Either we could not start it or it is not running
+            # after we did
+            # NOTE: Some daemons might die some time after they start,
+            # this code does not try to detect this and might give
+            # a false positive (use 'status' for that)
+            log_end_msg 1
+        fi
+	;;
+  stop)
+        log_daemon_msg "Stopping $DESC" "$NAME"
+        if running ; then
+            # Only stop the daemon if we see it running
+            stop_daemon
+            log_end_msg $?
+        else
+            # If it's not running don't do anything
+            log_progress_msg "apparently not running"
+            log_end_msg 0
+            exit 0
+        fi
+        ;;
+  restart|force-reload)
+        log_daemon_msg "Restarting $DESC" "$NAME"
+        if running ;  then
+            stop_daemon
+            # Wait some sensible amount, some daemons need this
+            [ -n "$DIETIME" ] && sleep $DIETIME
+        fi
+        start_daemon
+        running
+        log_end_msg $?
+	;;
+  status)
+        log_daemon_msg "Checking status of $DESC" "$NAME"
+        if running ;  then
+            log_progress_msg "running"
+            log_end_msg 0
+        else
+            log_progress_msg "apparently not running"
+            log_end_msg 1
+            exit 1
+        fi
+        ;;
+  # Use this if the daemon cannot reload
+  reload)
+        log_warning_msg "Reloading $NAME daemon: not implemented, as the daemon"
+        log_warning_msg "cannot re-read the config file (use restart)."
+        ;;
+  *)
+	N=/etc/init.d/$NAME
+	echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
+	exit 1
+	;;
+esac
+
+exit 0

@@ -1,0 +1,29 @@
+# This is a POSIX shell fragment                -*- sh -*-
+
+# LISTEN: What OpenFlow connection methods should the controller listen on?
+#
+# This is a space-delimited list of connection methods:
+#
+# * "pssl:[PORT]": Listen for SSL connections on the specified PORT
+#   (default: 6633).  The private key, certificate, and CA certificate
+#   must be specified below.
+#
+# * "pctp:[PORT]": Listen for TCP connections on the specified PORT
+#   (default: 6633).  Not recommended for security reasons.
+#
+LISTEN="pssl:"
+
+# PRIVKEY: Name of file containing controller's private key.
+# Required if SSL enabled.
+PRIVKEY=/etc/openvswitch-controller/privkey.pem
+
+# CERT: Name of file containing certificate for private key.
+# Required if SSL enabled.
+CERT=/etc/openvswitch-controller/cert.pem
+
+# CACERT: Name of file containing switch CA certificate.
+# Required if SSL enabled.
+CACERT=/etc/openvswitch-controller/cacert.pem
+
+# Additional options to pass to controller, e.g. "--hub"
+DAEMON_OPTS=""

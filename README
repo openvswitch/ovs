@@ -1,0 +1,74 @@
+                 Open vSwitch <http://openvswitch.org>
+
+What is Open vSwitch?
+---------------------
+
+Open vSwitch is an Ethernet switch for virtual servers with the
+following features:
+
+	* NIC bonding with automatic fail-over and source MAC-based TX
+	  load balancing ("SLB").
+
+	* 802.1Q VLAN support.
+
+	* Port mirroring, with optional VLAN tagging.
+
+	* NetFlow v5 flow logging.
+
+	* Connectivity to an external OpenFlow controller, such as
+          NOX.
+
+What's here?
+------------
+
+The most important components of this distribution are:
+
+	- A Linux kernel module for flow-based switching, in the
+          datapath directory.
+
+        - ovs-vswitchd, a daemon that implements the virtual switch.
+
+	- ovs-dpctl, a tool for configuring the kernel module and
+          controlling OpenFlow switches.
+
+This distribution includes some additional software as well:
+
+	- secchan, a program that implements a simple OpenFlow switch
+          (without the special features provided by ovs-vswitchd) using
+          the same kernel module as ovs-vswitchd.
+
+	- ovs-controller, a simple OpenFlow switch
+
+	- ovs-ofctl, a utility for querying and controlling OpenFlow
+          switches and controllers.
+
+	- vlog-appctl, a utility that can control Open vSwitch daemons,
+          adjusting their logging levels among other uses.
+
+	- ovs-pki, a utility for creating and managing the public-key
+          infrastructure for OpenFlow switches.
+
+	- A patch to tcpdump that enables it to parse OpenFlow
+          messages.
+
+For installation instructions, read INSTALL.  Each userspace program
+is also accompanied by a manpage.
+
+Platform support
+----------------
+
+Our primary test environment is Debian GNU/Linux.  Ports to other
+platforms are welcome.  Please contact us with portability-related bug
+reports or patches.
+
+The testing of the kernel module has focused on version 2.6.18 from
+Xen and version 2.6.26 from kernel.org.  Linux 2.6 releases from
+2.6.15 onward should also work.
+
+GCC is the expected compiler.
+
+Contact 
+-------
+
+ovs-bugs@openvswitch.org
+http://openvswitch.org/

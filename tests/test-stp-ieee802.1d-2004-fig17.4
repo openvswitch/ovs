@@ -1,0 +1,31 @@
+# This is the STP example from IEEE 802.1D-2004 figures 17.4 and 17.5.
+bridge 0 0x111 = a b e c
+bridge 1 0x222 = a b d f
+bridge 2 0x333 = c d l j h g
+bridge 3 0x444 = e f n m k i
+bridge 4 0x555 = g i 0 0
+bridge 5 0x666 = h k 0 0
+bridge 6 0x777 = j m 0 0
+bridge 7 0x888 = l n 0 0
+run 1000
+check 0 = root
+check 1 = F:10 B F F
+check 2 = F:10 B F F F F
+check 3 = F:10 B F F F F
+check 4 = F:20 B F F
+check 5 = F:20 B F F
+check 6 = F:20 B F F
+check 7 = F:20 B F F
+
+# Now connect two ports of bridge 7 to the same LAN.
+bridge 7 = l n o o
+# Same results except for bridge 7:
+run 1000
+check 0 = root
+check 1 = F:10 B F F
+check 2 = F:10 B F F F F
+check 3 = F:10 B F F F F
+check 4 = F:20 B F F
+check 5 = F:20 B F F
+check 6 = F:20 B F F
+check 7 = F:20 B F B

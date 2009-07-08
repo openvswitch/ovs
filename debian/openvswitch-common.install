@@ -1,0 +1,3 @@
+_debian/utilities/ovs-appctl usr/sbin
+_debian/utilities/ovs-parse-leaks usr/bin
+_debian/utilities/ovs-pki usr/sbin

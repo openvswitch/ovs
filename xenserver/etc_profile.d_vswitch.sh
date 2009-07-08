@@ -1,0 +1,56 @@
+# Copyright (C) 2009 Nicira Networks, Inc.
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.  This file is offered as-is,
+# without warranty of any kind.
+
+PATH=/root/vswitch/bin:$PATH
+export PATH
+MANPATH=/root/vswitch/share/man:$MANPATH
+export MANPATH
+
+alias vswitch='service vswitch'
+
+function watchconf {
+    watch cat /etc/ovs-vswitchd.conf
+}
+
+function watchdp {
+	watch ovs-dpctl show "$@"
+}
+
+function watchdpflows {
+	local grep=""
+	local dp=$1
+	shift
+	if [ $# -gt 0 ]; then
+		grep="| grep $@"
+	fi
+	watch "ovs-dpctl dump-flows $dp $grep"
+}
+
+function watchflows {
+	local grep=""
+	local dp=$1
+	shift
+	bridge=$(ovs-dpctl show $dp | grep 'port 0:' | cut -d' ' -f 3)
+	if [ $# -gt 0 ]; then
+		grep="| grep $@"
+	fi
+	watch "ovs-ofctl dump-flows unix:/var/run/$bridge.mgmt $grep"
+}
+
+function monitorlogs {
+    local grep=""
+    if [ $# -gt 0 ]; then
+        grep="| grep --line-buffered '^==> .* <==$"
+        for i in "$@"; do
+            grep="$grep\|$i"
+        done
+        grep="$grep'"
+    fi
+    cmd="tail -F /var/log/messages /var/log/ovs-vswitchd.log /var/log/xensource.log $grep | tee /var/log/monitorlogs.out"
+    printf "cmd: $cmd\n"
+    eval "$cmd"
+}

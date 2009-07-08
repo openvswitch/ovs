@@ -1,0 +1,10 @@
+/Makefile
+/Makefile.in
+/test-classifier
+/test-dhcp-client
+/test-flows
+/test-hash
+/test-hmap
+/test-list
+/test-stp
+/test-type-props

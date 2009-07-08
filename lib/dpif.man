@@ -1,0 +1,16 @@
+.RS
+.TP
+\fBdp\fIN\fR
+Datapath number \fIN\fR, where \fIN\fR is a number between 0 and 255,
+inclusive.
+
+.TP
+\fIname\fR
+The name of the network device associated with the datapath's local
+port.  (\fB\*(PN\fR internally converts this into a datapath number,
+as above.)
+
+.TP
+\fBnl:\fIN\fR
+This is an obsolete synonym for \fBdp\fIN\fR.
+.RE

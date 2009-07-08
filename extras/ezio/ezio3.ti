@@ -1,0 +1,21 @@
+# Copyright (C) 2008, 2009 Nicira Networks, Inc.
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty.  This file is offered
+# as-is, without warranty of any kind.
+
+ezio3|16x2 EZIO3 LCD display,
+        cols#40, lines#2, it#8, am, xenl, npc, 
+        bel=, clear=\E[H\E[J, cr=^M,
+        cub=\E[%p1%dD, cub1=^H, cud=\E[%p1%dB, cud1=^J,
+        cuf=\E[%p1%dC, cuf1=\E[C$<2>,
+        cup=\E[%i%p1%d;%p2%dH, cuu=\E[%p1%dA,
+        cuu1=\E[A, ed=\E[J, el=\E[K, el1=\E[1K,
+        home=\E[H, ht=^I, ind=^J, kbs=^H,
+        kcub1=\E[D, kcud1=\E[B, kcuf1=\E[C, kcuu1=\E[A,
+        civis=\E[1r, cnorm=\E[2r, cvvis=\E[3r,
+        ri=\EM, rs2=\Ec, rmacs=^O, smacs=^N,
+        dico=\E[%p1%d;%p2%d;%p3%d;%p4%d;%p5%d;%p6%d;%p7%d;%p8%d;%p9%dp,
+        cico=\E[%p1%dq,
+        acsc=}\355\,\177+\176~\245f\337{\367,
+

@@ -1,0 +1,25 @@
+# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Interoperability Test Suite
+# Version 1.5":
+# STP.io.1.1: Link Failure
+bridge 0 0x111 = a b c
+bridge 1 0x222 = a b c
+run 1000
+check 0 = root
+check 1 = F:10 B B
+bridge 1 = 0 _ _
+run 1000
+check 0 = root
+check 1 = F F:10 B
+bridge 1 = X _ _
+run 1000
+check 0 = root
+check 1 = D F:10 B
+bridge 1 = _ 0 _
+run 1000
+check 0 = root
+check 1 = D F F:10
+bridge 1 = _ X _
+run 1000
+check 0 = root
+check 1 = D D F:10

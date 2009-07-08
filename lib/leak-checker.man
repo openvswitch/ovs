@@ -1,0 +1,7 @@
+.TP
+\fB--check-leaks=\fIfile\fR
+.
+Logs information about memory allocation and deallocation to
+\fIfile\fR, to allow for debugging memory leaks in \fB\*(PN\fR.  This
+option slows down \fB\*(PN\fR considerably, so it should only be used
+when a memory leak is suspected.

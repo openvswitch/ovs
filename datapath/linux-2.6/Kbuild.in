@@ -1,0 +1,34 @@
+# -*- makefile -*-
+export builddir = @abs_builddir@
+export srcdir = @abs_srcdir@
+export top_srcdir = @abs_top_srcdir@
+export VERSION = @VERSION@
+export BUILDNR = @BUILDNR@
+
+include $(srcdir)/../Modules.mk
+include $(srcdir)/Modules.mk
+
+EXTRA_CFLAGS := -DVERSION=\"$(VERSION)\"
+EXTRA_CFLAGS += -I$(srcdir)/.. 
+EXTRA_CFLAGS += -I$(builddir)/..
+EXTRA_CFLAGS += -I$(top_srcdir)/include
+ifeq '$(BUILDNR)' '0'
+EXTRA_CFLAGS += -DBUILDNR=\"\"
+else
+EXTRA_CFLAGS += -DBUILDNR=\"+build$(BUILDNR)\"
+endif
+EXTRA_CFLAGS += -g
+EXTRA_CFLAGS += -include $(builddir)/kcompat.h
+
+# These include directories have to go before -I$(KSRC)/include.
+# NOSTDINC_FLAGS just happens to be a variable that goes in the
+# right place, even though it's conceptually incorrect.
+NOSTDINC_FLAGS += -I$(srcdir)/compat-2.6 -I$(srcdir)/compat-2.6/include 
+
+obj-m := $(patsubst %,%_mod.o,$(build_modules))
+
+define module_template
+$(1)_mod-y = $$(notdir $$(patsubst %.c,%.o,$($(1)_sources)))
+endef
+
+$(foreach module,$(build_modules),$(eval $(call module_template,$(module))))

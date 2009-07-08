@@ -1,0 +1,14 @@
+# This test file approximates the following test from "Bridge
+# Functions Consortium Spanning Tree Interoperability Test Suite
+# Version 1.5":
+# STP.io.1.2: Repeated Network
+bridge 0 0x111 = a a
+bridge 1 0x222 = a a
+run 1000
+check 0 = rootid:0x111 F B
+check 1 = rootid:0x111 F:10 B
+bridge 1 = a^0x90 _
+run 1000
+check 0 = rootid:0x111 F B
+check 1 = rootid:0x111 B F:10
+

@@ -1,0 +1,21 @@
+.TP
+\fB-P\fR[\fIpidfile\fR], \fB--pidfile\fR[\fB=\fIpidfile\fR]
+Causes a file (by default, \fB\*(PN.pid\fR) to be created indicating
+the PID of the running process.  If \fIpidfile\fR is not specified, or
+if it does not begin with \fB/\fR, then it is created in
+\fB@RUNDIR@\fR.
+
+.TP
+\fB-f\fR, \fB--force\fR
+By default, when \fB-P\fR or \fB--pidfile\fR is specified and the
+specified pidfile already exists and is locked by a running process,
+\fB\*(PN\fR refuses to start.  Specify \fB-f\fR or \fB--force\fR
+to cause it to instead overwrite the pidfile.
+
+When \fB-P\fR or \fB--pidfile\fR is not specified, this option has no
+effect.
+
+.TP
+\fB-D\fR, \fB--detach\fR
+Causes \fB\*(PN\fR to detach itself from the foreground session and
+run as a background process.

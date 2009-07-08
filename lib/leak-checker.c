@@ -1,0 +1,244 @@
+/*
+ * Copyright (c) 2008, 2009 Nicira Networks.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <config.h>
+#include "leak-checker.h"
+#include <inttypes.h>
+#include "backtrace.h"
+
+#define THIS_MODULE VLM_leak_checker
+#include "vlog.h"
+
+#ifndef HAVE_MALLOC_HOOKS
+void
+leak_checker_start(const char *file_name UNUSED)
+{
+    VLOG_WARN("not enabling leak checker because the libc in use does not "
+              "have the required hooks");
+}
+
+void
+leak_checker_set_limit(off_t max_size UNUSED)
+{
+}
+
+void
+leak_checker_claim(const void *p UNUSED)
+{
+}
+
+void
+leak_checker_usage(void)
+{
+    printf("  --check-leaks=FILE      (accepted but ignored in this build)\n");
+}
+#else /* HAVE_MALLOC_HOOKS */
+#include <errno.h>
+#include <fcntl.h>
+#include <malloc.h>
+#include <sys/stat.h>
+
+typedef void *malloc_hook_type(size_t, const void *);
+typedef void *realloc_hook_type(void *, size_t, const void *);
+typedef void free_hook_type(void *, const void *);
+
+struct hooks {
+    malloc_hook_type *malloc_hook_func;
+    realloc_hook_type *realloc_hook_func;
+    free_hook_type *free_hook_func;
+};
+
+static malloc_hook_type hook_malloc;
+static realloc_hook_type hook_realloc;
+static free_hook_type hook_free;
+
+static struct hooks libc_hooks;
+static const struct hooks our_hooks = { hook_malloc, hook_realloc, hook_free };
+
+static FILE *file;
+static off_t limit = 10 * 1000 * 1000;
+
+static void
+get_hooks(struct hooks *hooks)
+{
+    hooks->malloc_hook_func = __malloc_hook;
+    hooks->realloc_hook_func = __realloc_hook;
+    hooks->free_hook_func = __free_hook;
+}
+
+static void
+set_hooks(const struct hooks *hooks)
+{
+    __malloc_hook = hooks->malloc_hook_func;
+    __realloc_hook = hooks->realloc_hook_func;
+    __free_hook = hooks->free_hook_func;
+}
+
+void
+leak_checker_start(const char *file_name)
+{
+    if (!file) {
+        file = fopen(file_name, "w");
+        if (!file) {
+            VLOG_WARN("failed to create \"%s\": %s",
+                      file_name, strerror(errno));
+            return;
+        }
+        setvbuf(file, NULL, _IOLBF, 0);
+        VLOG_WARN("enabled memory leak logging to \"%s\"", file_name);
+        get_hooks(&libc_hooks);
+        set_hooks(&our_hooks);
+    }
+}
+
+void
+leak_checker_stop(void)
+{
+    if (file) {
+        fclose(file);
+        file = NULL;
+        set_hooks(&libc_hooks);
+        VLOG_WARN("disabled memory leak logging");
+    }
+}
+
+void
+leak_checker_set_limit(off_t limit_)
+{
+    limit = limit_;
+}
+
+void
+leak_checker_usage(void)
+{
+    printf("  --check-leaks=FILE      log malloc and free calls to FILE\n");
+}
+
+static void PRINTF_FORMAT(1, 2)
+log_callers(const char *format, ...)
+{
+    struct backtrace backtrace;
+    va_list args;
+    int i;
+
+    va_start(args, format);
+    vfprintf(file, format, args);
+    va_end(args);
+
+    putc(':', file);
+    backtrace_capture(&backtrace);
+    for (i = 0; i < backtrace.n_frames; i++) {
+        fprintf(file, " 0x%x", backtrace.frames[i]);
+    }
+    putc('\n', file);
+}
+
+static void
+reset_hooks(void)
+{
+    static int count;
+
+    if (file) {
+        if (ferror(file)) {
+            VLOG_WARN("error writing leak checker log file");
+            leak_checker_stop();
+            return;
+        }
+
+        if (count++ >= 100 && limit) {
+            struct stat s;
+            count = 0;
+            if (fstat(fileno(file), &s) < 0) {
+                VLOG_WARN("cannot fstat leak checker log file: %s",
+                          strerror(errno));
+                leak_checker_stop();
+                return;
+            }
+            if (s.st_size > limit) {
+                VLOG_WARN("leak checker log file size exceeded limit");
+                leak_checker_stop();
+                return;
+            }
+        }
+    }
+    if (file) {
+        set_hooks(&our_hooks);
+    }
+}
+
+static void *
+hook_malloc(size_t size, const void *caller UNUSED)
+{
+    void *p;
+
+    set_hooks(&libc_hooks);
+    p = malloc(size);
+    get_hooks(&libc_hooks);
+
+    log_callers("malloc(%zu) -> %p", size, p);
+
+    reset_hooks();
+    return p;
+}
+
+void
+leak_checker_claim(const void *p)
+{
+    if (!file) {
+        return;
+    }
+
+    if (p) {
+        set_hooks(&libc_hooks);
+        log_callers("claim(%p)", p);
+        reset_hooks();
+    }
+}
+
+static void
+hook_free(void *p, const void *caller UNUSED)
+{
+    if (!p) {
+        return;
+    }
+
+    set_hooks(&libc_hooks);
+    free(p);
+    get_hooks(&libc_hooks);
+
+    log_callers("free(%p)", p);
+
+    reset_hooks();
+}
+
+static void *
+hook_realloc(void *p, size_t size, const void *caller UNUSED)
+{
+    void *q;
+
+    set_hooks(&libc_hooks);
+    q = realloc(p, size);
+    get_hooks(&libc_hooks);
+
+    if (p != q) {
+        log_callers("realloc(%p, %zu) -> %p", p, size, q);
+    }
+
+    reset_hooks();
+
+    return q;
+}
+#endif /* HAVE_MALLOC_HOOKS */

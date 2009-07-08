@@ -1,0 +1,7 @@
+_debian/secchan/secchan usr/sbin
+_debian/utilities/ovs-dpctl usr/sbin
+_debian/utilities/ovs-discover usr/sbin
+_debian/utilities/ovs-kill usr/sbin
+_debian/utilities/ovs-ofctl usr/sbin
+debian/openvswitch/usr/share/openvswitch/commands/* usr/share/openvswitch/commands
+debian/commands/* usr/share/openvswitch/commands

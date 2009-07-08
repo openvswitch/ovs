@@ -1,0 +1,25 @@
+#!/bin/sh
+# postinst script for #PACKAGE#
+#
+# see: dh_installdeb(1)
+
+set -e
+
+depmod -a
+
+#DEBHELPER#
+
+# If the switch is running, restart it.  This ensures that we are using the
+# latest kernel module, because the init script will unload and reload the
+# module.
+#
+# (Ideally we'd only want to do this if this package corresponds to the
+# running kernel, but I don't know a reliable way to check.)
+INIT=/etc/init.d/openvswitch-switch
+if test -x $INIT && $INIT status; then
+    $INIT restart || true
+fi
+
+exit 0
+
+

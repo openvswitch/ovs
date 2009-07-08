@@ -1,0 +1,60 @@
+.TH ovs\-kill 8 "May 2008" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovs\-kill
+
+.SH NAME
+ovs\-kill \- kills processes given their pidfiles
+
+.SH SYNOPSIS
+.B ovs\-kill
+[\fIoptions\fR] \fIpidfile\fR [\fIpidfile\fR...]
+
+.SH DESCRIPTION
+The \fBovs\-kill\fR program reads each \fIpidfile\fR specified on the
+command line and sends a signal to the program associated with it, if
+any.  It reads one line of text from \fIpidfile\fR, which must contain
+the PID of the process to kill as a text string.  It then uses
+\fBfcntl\fR(2) to verify that a process with the PID from the file
+owns a lock on \fIpidfile\fR before it sends the signal.
+
+A \fIpidfile\fR whose name begins with \fB/\fR is used literally.
+Otherwise, \fB@RUNDIR@/\fR is prefixed.
+
+This program exists for use by \fBovs\-switch\-setup\fR, which cannot
+easily implement its functionality since Perl has no portable
+interface to \fBfcntl\fR-based file locking.
+
+.SH OPTIONS
+.TP
+\fB-s \fInumber\fR|\fIname\fR, \fB\-\^\-signal=\fInumber\fR|\fIname\fR
+Sets the signal to be sent to each process.  Signals may be given by
+number (e.g. \fB1\fR) or by name (e.g. \fBHUP\fR or \fBSIGHUP\fR).
+By default, \fBSIGTERM\fR is sent.
+
+.TP
+\fB-f\fR, \fB\-\^\-force\fR
+Causes \fBovs\-kill\fR to ignore all errors without printing a message
+to \fBstderr\fR, and to exit with return code 0.
+
+.so lib/common.man
+
+.SH "EXIT CODE"
+
+Without \fB-f\fR or \fB\-\^\-force\fR, \fBovs\-kill\fR exits with
+status 0 if at least one \fIpidfile\fR was given and the process
+represented by every \fIpidfile\fR was signaled successfully,
+otherwise with status 1.
+
+With \fB-f\fR or \fB\-\^\-force\fR, \fBovs\-kill\fR always exits with
+status 0.
+
+.SH BUGS
+
+There is a race between verifying the lock on \fIpidfile\fR and
+actually killing the process.
+
+\fBovs\-kill\fR does not wait for the signaled processes to die before
+exiting.
+
+.SH "SEE ALSO"
+
+.BR ovs\-switch\-setup (8)

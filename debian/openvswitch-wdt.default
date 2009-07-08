@@ -1,0 +1,24 @@
+# This is a POSIX shell fragment                -*- sh -*-
+
+# To configure the Open vSwitch reliability packages, modify the following.
+# Afterward, the watchdog timer and oops handling will be configured 
+# automatically at boot time.  It can be started immediately with
+#       /etc/init.d/openvswitch-wdt start
+
+# Defaults for initscript
+# sourced by /etc/init.d/openvswitch-wdt
+# installed at /etc/default/openvswitch-wdt by the maintainer scripts
+
+# OOPS_REBOOT_TIME: The number of seconds the system should wait until it
+# reboots when the kernel oops.  A value of zero causes the system to 
+# wait forever.
+OOPS_REBOOT_TIME=1
+
+# WDT_TIMEOUT: The number of seconds the watchdog timer should wait until
+# it reboots the system when it hasn't received a keep-alive.  A value
+# of zero disables the watchdog timer.
+WDT_TIMEOUT=30
+
+# WDT_INTERVAL: The number of seconds to wait between sending keep-alive
+# messages to the watchdog timer.
+WDT_INTERVAL=1

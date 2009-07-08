@@ -1,0 +1,117 @@
+/*
+ * Copyright (c) 2008, 2009 Nicira Networks.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#ifndef UTIL_H
+#define UTIL_H 1
+
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include "compiler.h"
+
+#ifndef va_copy
+#ifdef __va_copy
+#define va_copy __va_copy
+#else
+#define va_copy(dst, src) ((dst) = (src))
+#endif
+#endif
+
+#ifndef __cplusplus
+/* Build-time assertion building block. */
+#define BUILD_ASSERT__(EXPR) \
+        sizeof(struct { unsigned int build_assert_failed : (EXPR) ? 1 : -1; })
+
+/* Build-time assertion for use in a statement context. */
+#define BUILD_ASSERT(EXPR) (void) BUILD_ASSERT__(EXPR)
+
+/* Build-time assertion for use in a declaration context. */
+#define BUILD_ASSERT_DECL(EXPR) \
+        extern int (*build_assert(void))[BUILD_ASSERT__(EXPR)]
+#else /* __cplusplus */
+#include <boost/static_assert.hpp>
+#define BUILD_ASSERT BOOST_STATIC_ASSERT
+#define BUILD_ASSERT_DECL BOOST_STATIC_ASSERT
+#endif /* __cplusplus */
+
+extern const char *program_name;
+
+#define ARRAY_SIZE(ARRAY) (sizeof ARRAY / sizeof *ARRAY)
+#define ROUND_UP(X, Y) (((X) + ((Y) - 1)) / (Y) * (Y))
+#define ROUND_DOWN(X, Y) ((X) / (Y) * (Y))
+#define IS_POW2(X) ((X) && !((X) & ((X) - 1)))
+
+#ifndef MIN
+#define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+#endif
+
+#ifndef MAX
+#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
+#endif
+
+#define NOT_REACHED() abort()
+#define NOT_IMPLEMENTED() abort()
+#define NOT_TESTED() ((void) 0) /* XXX should print a message. */
+
+/* Given POINTER, the address of the given MEMBER in a STRUCT object, returns
+   the STRUCT object. */
+#define CONTAINER_OF(POINTER, STRUCT, MEMBER)                           \
+        ((STRUCT *) ((char *) (POINTER) - offsetof (STRUCT, MEMBER)))
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
+void set_program_name(const char *);
+
+void ovs_print_version(char *date, char *time, 
+                       uint8_t min_ofp, uint8_t max_ofp);
+#define OVS_PRINT_VERSION(min_ofp, max_ofp) \
+        ovs_print_version(__DATE__, __TIME__, (min_ofp), (max_ofp))
+
+void out_of_memory(void) NO_RETURN;
+void *xmalloc(size_t) MALLOC_LIKE;
+void *xcalloc(size_t, size_t) MALLOC_LIKE;
+void *xrealloc(void *, size_t);
+void *xmemdup(const void *, size_t) MALLOC_LIKE;
+char *xmemdup0(const char *, size_t) MALLOC_LIKE;
+char *xstrdup(const char *) MALLOC_LIKE;
+char *xasprintf(const char *format, ...) PRINTF_FORMAT(1, 2) MALLOC_LIKE;
+char *xvasprintf(const char *format, va_list) PRINTF_FORMAT(1, 0) MALLOC_LIKE;
+void *x2nrealloc(void *p, size_t *n, size_t s);
+
+void ovs_strlcpy(char *dst, const char *src, size_t size);
+
+void ovs_fatal(int err_no, const char *format, ...)
+    PRINTF_FORMAT(2, 3) NO_RETURN;
+void ovs_error(int err_no, const char *format, ...) PRINTF_FORMAT(2, 3);
+void ovs_hex_dump(FILE *, const void *, size_t, uintptr_t offset, bool ascii);
+
+bool str_to_int(const char *, int base, int *);
+bool str_to_long(const char *, int base, long *);
+bool str_to_llong(const char *, int base, long long *);
+bool str_to_uint(const char *, int base, unsigned int *);
+bool str_to_ulong(const char *, int base, unsigned long *);
+bool str_to_ullong(const char *, int base, unsigned long long *);
+
+#ifdef  __cplusplus
+}
+#endif
+
+#endif /* util.h */
