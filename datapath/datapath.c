@@ -217,28 +217,30 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	dp = kzalloc(sizeof *dp, GFP_KERNEL);
 	if (dp == NULL)
 		goto err_put_module;
-
+	INIT_LIST_HEAD(&dp->port_list);
 	mutex_init(&dp->mutex);
 	dp->dp_idx = dp_idx;
 	for (i = 0; i < DP_N_QUEUES; i++)
 		skb_queue_head_init(&dp->queues[i]);
 	init_waitqueue_head(&dp->waitqueue);
 
+	/* Allocate table. */
+	err = -ENOMEM;
+	rcu_assign_pointer(dp->table, dp_table_create(DP_L1_SIZE));
+	if (!dp->table)
+		goto err_free_dp;
+
 	/* Setup our datapath device */
 	dp_dev = dp_dev_create(dp, devname, ODPP_LOCAL);
 	err = PTR_ERR(dp_dev);
 	if (IS_ERR(dp_dev))
-		goto err_free_dp;
-
-	err = -ENOMEM;
-	rcu_assign_pointer(dp->table, dp_table_create(DP_L1_SIZE));
-	if (!dp->table)
-		goto err_destroy_dp_dev;
-	INIT_LIST_HEAD(&dp->port_list);
+		goto err_destroy_table;
 
 	err = new_nbp(dp, dp_dev, ODPP_LOCAL);
-	if (err)
+	if (err) {
+		dp_dev_destroy(dp_dev);
 		goto err_destroy_table;
+	}
 
 	dp->drop_frags = 0;
 	dp->stats_percpu = alloc_percpu(struct dp_stats_percpu);
@@ -258,8 +260,6 @@ err_destroy_local_port:
 	dp_del_port(dp->ports[ODPP_LOCAL]);
 err_destroy_table:
 	dp_table_destroy(dp->table, 0);
-err_destroy_dp_dev:
-	dp_dev_destroy(dp_dev);
 err_free_dp:
 	kfree(dp);
 err_put_module:
