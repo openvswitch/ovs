@@ -21,12 +21,34 @@
 #include "coverage-counters.h"
 #include "dynamic-string.h"
 #include "hash.h"
+#include "unixctl.h"
 #include "util.h"
 
 #define THIS_MODULE VLM_coverage
 #include "vlog.h"
 
 static unsigned int epoch;
+
+static void
+coverage_unixctl_log(struct unixctl_conn *conn, const char *args UNUSED)
+{
+    coverage_log(VLL_WARN, false);
+    unixctl_command_reply(conn, 200, NULL);
+}
+
+static void
+coverage_unixctl_clear(struct unixctl_conn *conn, const char *args UNUSED)
+{
+    coverage_clear();
+    unixctl_command_reply(conn, 200, NULL);
+}
+
+void
+coverage_init(void)
+{
+    unixctl_command_register("coverage/log", coverage_unixctl_log);
+    unixctl_command_register("coverage/clear", coverage_unixctl_clear);
+}
 
 /* Sorts coverage counters in descending order by count, within equal counts
  * alphabetically by name. */
@@ -107,9 +129,10 @@ coverage_log_counter(enum vlog_level level, const struct coverage_counter *c)
     VLOG(level, "%-24s %5u / %9llu", c->name, c->count, c->count + c->total);
 }
 
-/* Logs the coverage counters at the given vlog 'level'. */
+/* Logs the coverage counters at the given vlog 'level'.  If
+ * 'suppress_dups' is true, then duplicate events are not displayed. */
 void
-coverage_log(enum vlog_level level)
+coverage_log(enum vlog_level level, bool suppress_dups)
 {
     size_t n_never_hit;
     uint32_t hash;
@@ -119,11 +142,13 @@ coverage_log(enum vlog_level level)
         return;
     }
 
-    hash = coverage_hash();
-    if (coverage_hit(hash)) {
-        VLOG(level, "Skipping details of duplicate event coverage for "
-             "hash=%08"PRIx32" in epoch %u", hash, epoch);
-        return;
+    if (suppress_dups) {
+        hash = coverage_hash();
+        if (coverage_hit(hash)) {
+            VLOG(level, "Skipping details of duplicate event coverage for "
+                 "hash=%08"PRIx32" in epoch %u", hash, epoch);
+            return;
+        }
     }
 
     n_never_hit = 0;

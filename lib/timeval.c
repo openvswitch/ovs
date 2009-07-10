@@ -63,6 +63,8 @@ time_init(void)
         return;
     }
 
+    coverage_init();
+
     inited = true;
     gettimeofday(&now, NULL);
     tick = false;
@@ -292,7 +294,7 @@ log_poll_interval(long long int last_wakeup, const struct rusage *last_rusage)
                       rusage.ru_nvcsw - last_rusage->ru_nvcsw,
                       rusage.ru_nivcsw - last_rusage->ru_nivcsw);
         }
-        coverage_log(VLL_WARN);
+        coverage_log(VLL_WARN, true);
     }
 
     /* Update exponentially weighted moving average.  With these parameters, a
