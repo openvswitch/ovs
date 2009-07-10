@@ -65,10 +65,10 @@ to update system scripts to follow these steps.
       % brctl show
 
    Each of these commands actually uses or modifies the Open vSwitch
-   configuration.  For example, after executing the commands above
-   starting from an empty configuration file, "cat
-   /etc/ovs-vswitchd.conf" should show that the configuration file now
-   contains the following:
+   configuration file, then notifies the ovs-vswitchd daemon of the
+   change.  For example, after executing the commands above starting
+   from an empty configuration file, "cat /etc/ovs-vswitchd.conf"
+   should show that the configuration file now contains the following:
 
       bridge.br0.port=br0
       bridge.br0.port=eth0
