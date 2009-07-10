@@ -56,7 +56,7 @@ to modify datapaths when \fBovs\-vswitchd\fR is running can interfere with
 its operation.  (\fBovs\-dpctl\fR may still be useful for diagnostics.)
 .PP
 An Open vSwitch datapath kernel module must be loaded for \fBovs\-vswitchd\fR
-to be useful.  Please refer to the \fBINSTALL\fR file included in the
+to be useful.  Please refer to the \fBINSTALL.Linux\fR file included in the
 Open vSwitch distribution for instructions on how to build and load
 the Open vSwitch kernel module.
 .PP
@@ -84,4 +84,4 @@ Only Linux 2.6.\fIx\fR is currently supported.
 .BR ovs\-appctl (8),
 .BR ovs\-vswitchd.conf (5),
 .BR ovs\-brcompatd (8),
-\fBINSTALL\fR in the Open vSwitch distribution.
+\fBINSTALL.Linux\fR in the Open vSwitch distribution.
