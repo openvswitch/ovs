@@ -36,18 +36,10 @@ coverage_unixctl_log(struct unixctl_conn *conn, const char *args UNUSED)
     unixctl_command_reply(conn, 200, NULL);
 }
 
-static void
-coverage_unixctl_clear(struct unixctl_conn *conn, const char *args UNUSED)
-{
-    coverage_clear();
-    unixctl_command_reply(conn, 200, NULL);
-}
-
 void
 coverage_init(void)
 {
     unixctl_command_register("coverage/log", coverage_unixctl_log);
-    unixctl_command_register("coverage/clear", coverage_unixctl_clear);
 }
 
 /* Sorts coverage counters in descending order by count, within equal counts
