@@ -86,6 +86,12 @@ static int dp_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 	struct dp_dev *dp_dev = dp_dev_priv(netdev);
 	struct pcpu_lstats *lb_stats;
 
+	/* By orphaning 'skb' we will screw up socket accounting slightly, but
+	 * the effect is limited to the device queue length.  If we don't
+	 * do this, then the sk_buff will be destructed eventually, but it is
+	 * harder to predict when. */
+	skb_orphan(skb);
+
 	/* dp_process_received_packet() needs its own clone. */
 	skb = skb_share_check(skb, GFP_ATOMIC);
 	if (!skb)
