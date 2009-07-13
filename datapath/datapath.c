@@ -516,7 +516,6 @@ void dp_process_received_packet(struct sk_buff *skb, struct net_bridge_port *p)
 	struct sw_flow *flow;
 
 	WARN_ON_ONCE(skb_shared(skb));
-	WARN_ON_ONCE(skb->destructor);
 
 	/* BHs are off so we don't have to use get_cpu()/put_cpu() here. */
 	stats = percpu_ptr(dp->stats_percpu, smp_processor_id());
