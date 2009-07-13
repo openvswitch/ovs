@@ -1384,7 +1384,7 @@ bond_enable_slave(struct iface *iface, bool enable)
 
     iface->enabled = enable;
     if (!iface->enabled) {
-        VLOG_WARN("interface %s: enabled", iface->name);
+        VLOG_WARN("interface %s: disabled", iface->name);
         ofproto_revalidate(br->ofproto, iface->tag);
         if (iface->port_ifidx == port->active_iface) {
             ofproto_revalidate(br->ofproto,
@@ -1393,7 +1393,7 @@ bond_enable_slave(struct iface *iface, bool enable)
         }
         bond_send_learning_packets(port);
     } else {
-        VLOG_WARN("interface %s: disabled", iface->name);
+        VLOG_WARN("interface %s: enabled", iface->name);
         if (port->active_iface < 0) {
             ofproto_revalidate(br->ofproto, port->no_ifaces_tag);
             bond_choose_active_iface(port);
