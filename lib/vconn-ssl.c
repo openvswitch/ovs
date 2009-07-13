@@ -181,9 +181,11 @@ want_to_poll_events(int want)
 
 static int
 new_ssl_vconn(const char *name, int fd, enum session_type type,
-              enum ssl_state state, const struct sockaddr_in *sin,
+              enum ssl_state state, const struct sockaddr_in *remote,
               struct vconn **vconnp)
 {
+    struct sockaddr_in local;
+    socklen_t local_len = sizeof local;
     struct ssl_vconn *sslv;
     SSL *ssl = NULL;
     int on = 1;
@@ -212,6 +214,12 @@ new_ssl_vconn(const char *name, int fd, enum session_type type,
         goto error;
     }
 
+    /* Get the local IP and port information */
+    retval = getsockname(fd, (struct sockaddr *) &local, &local_len);
+    if (retval) {
+        memset(&local, 0, sizeof local);
+    }
+
     /* Disable Nagle. */
     retval = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof on);
     if (retval) {
@@ -238,8 +246,11 @@ new_ssl_vconn(const char *name, int fd, enum session_type type,
 
     /* Create and return the ssl_vconn. */
     sslv = xmalloc(sizeof *sslv);
-    vconn_init(&sslv->vconn, &ssl_vconn_class, EAGAIN, 
-               sin->sin_addr.s_addr, sin->sin_port, name, true);
+    vconn_init(&sslv->vconn, &ssl_vconn_class, EAGAIN, name, true);
+    vconn_set_remote_ip(&sslv->vconn, remote->sin_addr.s_addr);
+    vconn_set_remote_port(&sslv->vconn, remote->sin_port);
+    vconn_set_local_ip(&sslv->vconn, local.sin_addr.s_addr);
+    vconn_set_local_port(&sslv->vconn, local.sin_port);
     sslv->state = state;
     sslv->type = type;
     sslv->fd = fd;
@@ -426,19 +437,7 @@ ssl_connect(struct vconn *vconn)
         sslv->state = STATE_SSL_CONNECTING;
         /* Fall through. */
 
-    case STATE_SSL_CONNECTING: {
-        struct sockaddr_in local_addr;
-        socklen_t addrlen = sizeof(local_addr);
-
-        /* Get the local IP and port information */
-        retval = getsockname(sslv->fd, (struct sockaddr *)&local_addr, 
-                             &addrlen);
-        if (retval) {
-            memset(&local_addr, 0, sizeof local_addr);
-        }
-        vconn_set_local_ip(vconn, local_addr.sin_addr.s_addr);
-        vconn_set_local_port(vconn, local_addr.sin_port);
-
+    case STATE_SSL_CONNECTING:
         retval = (sslv->type == CLIENT
                    ? SSL_connect(sslv->ssl) : SSL_accept(sslv->ssl));
         if (retval != 1) {
@@ -469,8 +468,6 @@ ssl_connect(struct vconn *vconn)
             return EPROTO;
         } else {
             return 0;
-        }
-
         }
     }
 

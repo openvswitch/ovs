@@ -1407,8 +1407,7 @@ normalize_match(struct ofp_match *m)
 
 void
 vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
-           uint32_t remote_ip, uint16_t remote_port, const char *name, 
-           bool reconnectable)
+           const char *name, bool reconnectable)
 {
     vconn->class = class;
     vconn->state = (connect_status == EAGAIN ? VCS_CONNECTING
@@ -1417,12 +1416,24 @@ vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
     vconn->error = connect_status;
     vconn->version = -1;
     vconn->min_version = -1;
-    vconn->remote_ip = remote_ip;
-    vconn->remote_port = remote_port;
+    vconn->remote_ip = 0;
+    vconn->remote_port = 0;
     vconn->local_ip = 0;
     vconn->local_port = 0;
     vconn->name = xstrdup(name);
     vconn->reconnectable = reconnectable;
+}
+
+void
+vconn_set_remote_ip(struct vconn *vconn, uint32_t ip)
+{
+    vconn->remote_ip = ip;
+}
+
+void
+vconn_set_remote_port(struct vconn *vconn, uint16_t port)
+{
+    vconn->remote_port = port;
 }
 
 void 

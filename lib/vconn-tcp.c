@@ -36,14 +36,20 @@
 
 /* Active TCP. */
 
-void tcp_connect_success_cb(struct vconn *vconn, int fd);
-
 static int
 new_tcp_vconn(const char *name, int fd, int connect_status,
-              const struct sockaddr_in *sin, struct vconn **vconnp)
+              const struct sockaddr_in *remote, struct vconn **vconnp)
 {
+    struct sockaddr_in local;
+    socklen_t local_len = sizeof local;
     int on = 1;
     int retval;
+
+    /* Get the local IP and port information */
+    retval = getsockname(fd, (struct sockaddr *)&local, &local_len);
+    if (retval) {
+        memset(&local, 0, sizeof local);
+    }
 
     retval = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof on);
     if (retval) {
@@ -52,9 +58,15 @@ new_tcp_vconn(const char *name, int fd, int connect_status,
         return errno;
     }
 
-    return new_stream_vconn(name, fd, connect_status, 
-                            sin->sin_addr.s_addr, sin->sin_port, 
-                            true, tcp_connect_success_cb, vconnp);
+    retval = new_stream_vconn(name, fd, connect_status, true, vconnp);
+    if (!retval) {
+        struct vconn *vconn = *vconnp;
+        vconn_set_remote_ip(vconn, remote->sin_addr.s_addr);
+        vconn_set_remote_port(vconn, remote->sin_port);
+        vconn_set_local_ip(vconn, local.sin_addr.s_addr);
+        vconn_set_local_port(vconn, local.sin_port);
+    }
+    return retval;
 }
 
 static int
@@ -106,22 +118,6 @@ tcp_open(const char *name, char *suffix, struct vconn **vconnp)
     } else {
         return new_tcp_vconn(name, fd, 0, &sin, vconnp);
     }
-}
-
-void
-tcp_connect_success_cb(struct vconn *vconn, int fd)
-{
-    int retval;
-    struct sockaddr_in local_addr;
-    socklen_t addrlen = sizeof(local_addr);
-
-    /* Get the local IP and port information */
-    retval = getsockname(fd, (struct sockaddr *)&local_addr, &addrlen);
-    if (retval) {
-        memset(&local_addr, 0, sizeof local_addr);
-    }
-    vconn_set_local_ip(vconn, local_addr.sin_addr.s_addr);
-    vconn_set_local_port(vconn, local_addr.sin_port);
 }
 
 struct vconn_class tcp_vconn_class = {
