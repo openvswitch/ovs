@@ -1341,6 +1341,10 @@ bond_link_status_update(struct iface *iface, bool carrier)
         iface->delay_expires = LLONG_MAX;
         VLOG_INFO_RL(&rl, "interface %s: will not be %s",
                      iface->name, carrier ? "disabled" : "enabled");
+    } else if (carrier && port->updelay && port->active_iface < 0) {
+        iface->delay_expires = time_msec();
+        VLOG_INFO_RL(&rl, "interface %s: skipping %d ms updelay since no "
+                     "other interface is up", iface->name, port->updelay);
     } else {
         int delay = carrier ? port->updelay : port->downdelay;
         iface->delay_expires = time_msec() + delay;
