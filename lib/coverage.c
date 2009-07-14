@@ -134,8 +134,8 @@ coverage_log(enum vlog_level level, bool suppress_dups)
         return;
     }
 
+    hash = coverage_hash();
     if (suppress_dups) {
-        hash = coverage_hash();
         if (coverage_hit(hash)) {
             VLOG(level, "Skipping details of duplicate event coverage for "
                  "hash=%08"PRIx32" in epoch %u", hash, epoch);
