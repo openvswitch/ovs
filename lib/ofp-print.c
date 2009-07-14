@@ -37,8 +37,6 @@
 #include "util.h"
 
 static void ofp_print_port_name(struct ds *string, uint16_t port);
-static void ofp_print_match(struct ds *, const struct ofp_match *,
-                            int verbosity);
 
 /* Returns a string that represents the contents of the Ethernet frame in the
  * 'len' bytes starting at 'data' to 'stream' as output by tcpdump.
@@ -380,7 +378,7 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
     return len;
 }
 
-static void 
+void 
 ofp_print_actions(struct ds *string, const struct ofp_action_header *action,
                   size_t actions_len) 
 {
@@ -627,7 +625,7 @@ print_ip_netmask(struct ds *string, const char *leader, uint32_t ip,
     ds_put_char(string, ',');
 }
 
-static void
+void
 ofp_print_match(struct ds *f, const struct ofp_match *om, int verbosity)
 {
     char *s = ofp_match_to_string(om, verbosity);

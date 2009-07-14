@@ -192,6 +192,7 @@ enum { DP_MAX = 256 };
 static struct bridge *bridge_create(const char *name);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
+static void bridge_unixctl_dump_flows(struct unixctl_conn *, const char *);
 static int bridge_run_one(struct bridge *);
 static void bridge_reconfigure_one(struct bridge *);
 static void bridge_reconfigure_controller(struct bridge *);
@@ -302,6 +303,8 @@ bridge_init(void)
                      i, strerror(retval));
         }
     }
+
+    unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows);
 
     bridge_reconfigure();
 }
@@ -956,6 +959,27 @@ bridge_get_datapathid(const char *name)
 {
     struct bridge *br = bridge_lookup(name);
     return br ? ofproto_get_datapath_id(br->ofproto) : 0;
+}
+
+/* Handle requests for a listing of all flows known by the OpenFlow
+ * stack, including those normally hidden. */
+static void
+bridge_unixctl_dump_flows(struct unixctl_conn *conn, const char *args)
+{
+    struct bridge *br;
+    struct ds results;
+    
+    br = bridge_lookup(args);
+    if (!br) {
+        unixctl_command_reply(conn, 501, "Unknown bridge");
+        return;
+    }
+
+    ds_init(&results);
+    ofproto_get_all_flows(br->ofproto, &results);
+
+    unixctl_command_reply(conn, 200, ds_cstr(&results));
+    ds_destroy(&results);
 }
 
 static int

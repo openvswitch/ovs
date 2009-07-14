@@ -80,6 +80,7 @@ bool ofproto_get_discovery(const struct ofproto *);
 const char *ofproto_get_controller(const struct ofproto *);
 void ofproto_get_listeners(const struct ofproto *, struct svec *);
 void ofproto_get_snoops(const struct ofproto *, struct svec *);
+void ofproto_get_all_flows(struct ofproto *p, struct ds *);
 
 /* Functions for use by ofproto implementation modules, not by clients. */
 int ofproto_send_packet(struct ofproto *, const flow_t *,

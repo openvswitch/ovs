@@ -26,6 +26,7 @@
 #include "coverage.h"
 #include "discovery.h"
 #include "dpif.h"
+#include "dynamic-string.h"
 #include "executer.h"
 #include "fail-open.h"
 #include "in-band.h"
@@ -51,6 +52,7 @@
 #include "svec.h"
 #include "tag.h"
 #include "timeval.h"
+#include "unixctl.h"
 #include "vconn.h"
 #include "vconn-ssl.h"
 #include "xtoxll.h"
@@ -2469,6 +2471,59 @@ handle_flow_stats_request(struct ofproto *p, struct ofconn *ofconn,
                               flow_stats_cb, &cbdata);
     queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
     return 0;
+}
+
+struct flow_stats_ds_cbdata {
+    struct ofproto *ofproto;
+    struct ds *results;
+};
+
+static void
+flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
+{
+    struct rule *rule = rule_from_cls_rule(rule_);
+    struct flow_stats_ds_cbdata *cbdata = cbdata_;
+    struct ds *results = cbdata->results;
+    struct ofp_match match;
+    uint64_t packet_count, byte_count;
+    size_t act_len = sizeof *rule->actions * rule->n_actions;
+
+    /* Don't report on subrules. */
+    if (rule->super != NULL) {
+        return;
+    }
+
+    query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
+    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &match);
+
+    ds_put_format(results, "duration=%llds, ",
+                  (time_msec() - rule->created) / 1000);
+    ds_put_format(results, "priority=%u", rule->cr.priority);
+    ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
+    ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
+    ofp_print_match(results, &match, true);
+    ofp_print_actions(results, &rule->actions->header, act_len);
+    ds_put_cstr(results, "\n");
+}
+
+/* Adds a pretty-printed description of all flows to 'results', including 
+ * those marked hidden by secchan (e.g., by in-band control). */
+void
+ofproto_get_all_flows(struct ofproto *p, struct ds *results)
+{
+    struct ofp_match match;
+    struct cls_rule target;
+    struct flow_stats_ds_cbdata cbdata;
+
+    memset(&match, 0, sizeof match);
+    match.wildcards = htonl(OFPFW_ALL);
+
+    cbdata.ofproto = p;
+    cbdata.results = results;
+
+    cls_rule_from_match(&target, &match, 0);
+    classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
+                              flow_stats_ds_cb, &cbdata);
 }
 
 struct aggregate_stats_cbdata {
