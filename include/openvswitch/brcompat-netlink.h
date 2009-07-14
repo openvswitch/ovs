@@ -45,13 +45,29 @@
 /* Attributes that can be attached to the datapath's netlink messages. */
 enum {
 	BRC_GENL_A_UNSPEC,
-	BRC_GENL_A_DP_NAME,	    /* Datapath name. */
-	BRC_GENL_A_PORT_NAME,   /* Interface name. */
-	BRC_GENL_A_ERR_CODE,    /* Positive error code. */
-	BRC_GENL_A_MC_GROUP,    /* Generic netlink multicast group. */
-	BRC_GENL_A_PROC_DIR,    /* Name of subdirectory in /proc. */
-	BRC_GENL_A_PROC_NAME,   /* Name of file in /proc. */
-	BRC_GENL_A_PROC_DATA,   /* Contents of file in /proc. */
+
+	/*
+	 * "K:" messages appear in messages from the kernel to userspace.
+	 * "U:" messages appear in messages from userspace to the kernel.
+	 */
+
+	/* BRC_GENL_C_DP_ADD, BRC_GENL_C_DP_DEL. */
+	BRC_GENL_A_DP_NAME,		/* K: Datapath name. */
+
+	/* BRC_GENL_C_DP_ADD, BRC_GENL_C_DP_DEL,
+	   BRC_GENL_C_PORT_ADD, BRC_GENL_C_PORT_DEL. */
+	BRC_GENL_A_PORT_NAME,	/* K: Interface name. */
+
+	/* BRC_GENL_C_DP_RESULT. */
+	BRC_GENL_A_ERR_CODE,	/* U: Positive error code. */
+
+	/* BRC_GENL_C_QUERY_MC. */
+	BRC_GENL_A_MC_GROUP,	/* K: Generic netlink multicast group. */
+
+	/* BRC_GENL_C_SET_PROC. */
+	BRC_GENL_A_PROC_DIR,	/* U: Name of subdirectory in /proc. */
+	BRC_GENL_A_PROC_NAME,	/* U: Name of file in /proc. */
+	BRC_GENL_A_PROC_DATA,	/* U: Contents of file in /proc. */
 
 	__BRC_GENL_A_MAX,
 	BRC_GENL_A_MAX = __BRC_GENL_A_MAX - 1
@@ -65,13 +81,13 @@ enum brc_genl_command {
 	 * "K:" messages are sent by the kernel to userspace.
 	 * "U:" messages are sent by userspace to the kernel.
 	 */
-	BRC_GENL_C_DP_ADD,      /* K: Datapath created. */
-	BRC_GENL_C_DP_DEL,      /* K: Datapath destroyed. */
-	BRC_GENL_C_DP_RESULT,   /* U: Return code from ovs-brcompatd. */
-	BRC_GENL_C_PORT_ADD,    /* K: Port added to datapath. */
-	BRC_GENL_C_PORT_DEL,    /* K: Port removed from datapath. */
-	BRC_GENL_C_QUERY_MC,    /* U: Get multicast group for brcompat. */
-	BRC_GENL_C_SET_PROC,    /* U: Set contents of file in /proc. */
+	BRC_GENL_C_DP_ADD,		/* K: Datapath created. */
+	BRC_GENL_C_DP_DEL,		/* K: Datapath destroyed. */
+	BRC_GENL_C_DP_RESULT,	/* U: Return code from ovs-brcompatd. */
+	BRC_GENL_C_PORT_ADD,	/* K: Port added to datapath. */
+	BRC_GENL_C_PORT_DEL,	/* K: Port removed from datapath. */
+	BRC_GENL_C_QUERY_MC,	/* U: Get multicast group for brcompat. */
+	BRC_GENL_C_SET_PROC,	/* U: Set contents of file in /proc. */
 
 	__BRC_GENL_C_MAX,
 	BRC_GENL_C_MAX = __BRC_GENL_C_MAX - 1
