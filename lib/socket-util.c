@@ -72,25 +72,16 @@ get_max_fds(void)
     return max_fds;
 }
 
-/* Translates 'host_name', which may be a DNS name or an IP address, into a
- * numeric IP address in '*addr'.  Returns 0 if successful, otherwise a
- * positive errno value. */
+/* Translates 'host_name', which must be a string representation of an IP
+ * address, into a numeric IP address in '*addr'.  Returns 0 if successful,
+ * otherwise a positive errno value. */
 int
 lookup_ip(const char *host_name, struct in_addr *addr) 
 {
     if (!inet_aton(host_name, addr)) {
-        struct hostent *he = gethostbyname(host_name);
-        if (he == NULL) {
-            struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            VLOG_ERR_RL(&rl, "gethostbyname(%s): %s", host_name,
-                        (h_errno == HOST_NOT_FOUND ? "host not found"
-                         : h_errno == TRY_AGAIN ? "try again"
-                         : h_errno == NO_RECOVERY ? "non-recoverable error"
-                         : h_errno == NO_ADDRESS ? "no address"
-                         : "unknown error"));
-            return ENOENT;
-        }
-        addr->s_addr = *(uint32_t *) he->h_addr;
+        struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_ERR_RL(&rl, "\"%s\" is not a valid IP address", host_name);
+        return ENOENT;
     }
     return 0;
 }
