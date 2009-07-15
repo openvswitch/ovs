@@ -45,4 +45,8 @@ void process_wait(struct process *);
 
 char *process_search_path(const char *);
 
+#define PROCESS_MAX_CAPTURE 65536
+int process_run_capture(char **argv, char **stdout_log, char **stderr_log,
+                        int *status);
+
 #endif /* process.h */
