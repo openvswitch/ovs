@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include "coverage.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "list.h"
 #include "poll-loop.h"
 #include "socket-util.h"
@@ -51,6 +52,7 @@ static int fds[2];
 /* All processes. */
 static struct list all_processes = LIST_INITIALIZER(&all_processes);
 
+static bool sigchld_is_blocked(void);
 static void block_sigchld(sigset_t *);
 static void unblock_sigchld(const sigset_t *);
 static void sigchld_handler(int signr UNUSED);
@@ -158,8 +160,10 @@ process_start(char **argv,
     free(binary);
 
     block_sigchld(&oldsigs);
+    fatal_signal_block();
     pid = fork();
     if (pid < 0) {
+        fatal_signal_unblock();
         unblock_sigchld(&oldsigs);
         VLOG_WARN("fork failed: %s", strerror(errno));
         return errno;
@@ -176,6 +180,7 @@ process_start(char **argv,
 
         list_push_back(&all_processes, &p->node);
         unblock_sigchld(&oldsigs);
+        fatal_signal_unblock();
 
         *pp = p;
         return 0;
@@ -184,6 +189,8 @@ process_start(char **argv,
         int fd_max = get_max_fds();
         int fd;
 
+        fatal_signal_fork();
+        fatal_signal_unblock();
         unblock_sigchld(&oldsigs);
         for (fd = 0; fd < fd_max; fd++) {
             if (is_member(fd, null_fds, n_null_fds)) {
