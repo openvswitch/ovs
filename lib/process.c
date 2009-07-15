@@ -187,6 +187,8 @@ process_start(char **argv,
         unblock_sigchld(&oldsigs);
         for (fd = 0; fd < fd_max; fd++) {
             if (is_member(fd, null_fds, n_null_fds)) {
+                /* We can't use get_null_fd() here because we might have
+                 * already closed its fd. */
                 int nullfd = open("/dev/null", O_RDWR);
                 dup2(nullfd, fd);
                 close(nullfd);

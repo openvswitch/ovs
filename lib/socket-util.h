@@ -32,6 +32,7 @@ int make_unix_socket(int style, bool nonblock, bool passcred,
                      const char *bind_path, const char *connect_path);
 int get_unix_name_len(socklen_t sun_len);
 uint32_t guess_netmask(uint32_t ip);
+int get_null_fd(void);
 
 int read_fully(int fd, void *, size_t, size_t *bytes_read);
 int write_fully(int fd, const void *, size_t, size_t *bytes_written);
