@@ -200,6 +200,32 @@ rewrite_and_reload_config(void)
     return 0;
 }
 
+/* Get all the interfaces for 'bridge' as 'ifaces', breaking bonded interfaces
+ * down into their constituent parts. */
+static void
+get_bridge_ifaces(const char *bridge, struct svec *ifaces)
+{
+    struct svec ports;
+    int i;
+
+    svec_init(&ports);
+    svec_init(ifaces);
+    cfg_get_all_keys(&ports, "bridge.%s.port", bridge);
+    for (i = 0; i < ports.n; i++) {
+        const char *port_name = ports.names[i];
+        if (cfg_has_section("bonding.%s", port_name)) {
+            struct svec slaves;
+            svec_init(&slaves);
+            cfg_get_all_keys(&slaves, "bonding.%s.slave", port_name);
+            svec_append(ifaces, &slaves);
+            svec_destroy(&slaves);
+        } else {
+            svec_add(ifaces, port_name);
+        }
+    }
+    svec_destroy(&ports);
+}
+
 /* Go through the configuration file and remove any ports that no longer
  * exist associated with a bridge. */
 static void
@@ -219,29 +245,10 @@ prune_ports(void)
     cfg_get_subsections(&bridges, "bridge");
     for (i=0; i<bridges.n; i++) {
         const char *br_name = bridges.names[i];
-        struct svec ports, ifaces;
+        struct svec ifaces;
 
-        svec_init(&ports);
-
-        /* Get all the interfaces for the given bridge, breaking bonded
-         * interfaces down into their constituent parts. */
-        svec_init(&ifaces);
-        cfg_get_all_keys(&ports, "bridge.%s.port", br_name);
-        for (j=0; j<ports.n; j++) {
-            const char *port_name = ports.names[j];
-            if (cfg_has_section("bonding.%s", port_name)) {
-                struct svec slaves;
-                svec_init(&slaves);
-                cfg_get_all_keys(&slaves, "bonding.%s.slave", port_name);
-                svec_append(&ifaces, &slaves);
-                svec_destroy(&slaves);
-            } else {
-                svec_add(&ifaces, port_name);
-            }
-        }
-        svec_destroy(&ports);
-
-        /* Check that the interfaces exist. */
+        /* Check that each bridge interface exists. */
+        get_bridge_ifaces(br_name, &ifaces);
         for (j = 0; j < ifaces.n; j++) {
             const char *iface_name = ifaces.names[j];
             enum netdev_flags flags;
