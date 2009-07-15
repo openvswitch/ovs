@@ -617,6 +617,8 @@ str_to_action(char *str, struct ofpbuf *b)
              * packet to the controller. */
             if (arg && (strspn(act, "0123456789") == strlen(act))) {
                oao->max_len = htons(str_to_u32(arg));
+            } else {
+                oao->max_len = htons(UINT16_MAX);
             }
         } else if (parse_port_name(act, &port)) {
             put_output_action(b, port);
