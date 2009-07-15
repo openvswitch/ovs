@@ -98,10 +98,33 @@ static inline bool eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
             && (ea[5] & 0xf0) == 0x00);
 }
 
+/* Example:
+ *
+ * uint8_t mac[ETH_ADDR_LEN];
+ *    [...]
+ * printf("The Ethernet address is "ETH_ADDR_FMT"\n", ETH_ADDR_ARGS(mac));
+ *
+ */
 #define ETH_ADDR_FMT                                                    \
     "%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8":%02"PRIx8
 #define ETH_ADDR_ARGS(ea)                                   \
     (ea)[0], (ea)[1], (ea)[2], (ea)[3], (ea)[4], (ea)[5]
+
+/* Example:
+ *
+ * char *string = "1 00:11:22:33:44:55 2";
+ * uint8_t mac[ETH_ADDR_LEN];
+ * int a, b;
+ *
+ * if (sscanf(string, "%d"ETH_ADDR_SCAN_FMT"%d",
+ *     &a, ETH_ADDR_SCAN_ARGS(mac), &b) == 1 + ETH_ADDR_SCAN_COUNT + 1) {
+ *     ...
+ * }
+ */
+#define ETH_ADDR_SCAN_FMT "%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8
+#define ETH_ADDR_SCAN_ARGS(ea) \
+        &(ea)[0], &(ea)[1], &(ea)[2], &(ea)[3], &(ea)[4], &(ea)[5]
+#define ETH_ADDR_SCAN_COUNT 6
 
 #define ETH_TYPE_IP            0x0800
 #define ETH_TYPE_ARP           0x0806

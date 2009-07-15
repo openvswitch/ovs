@@ -442,8 +442,8 @@ str_to_u32(const char *str)
 static void
 str_to_mac(const char *str, uint8_t mac[6]) 
 {
-    if (sscanf(str, "%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8,
-               &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]) != 6) {
+    if (sscanf(str, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
+        != ETH_ADDR_SCAN_COUNT) {
         ovs_fatal(0, "invalid mac address %s", str);
     }
 }

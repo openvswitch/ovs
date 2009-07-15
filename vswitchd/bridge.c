@@ -2437,8 +2437,8 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_)
         return;
     }
 
-    if (sscanf(hash_s, "%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8,
-               &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]) == 6) {
+    if (sscanf(hash_s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
+        == ETH_ADDR_SCAN_COUNT) {
         hash = bond_hash(mac);
     } else if (strspn(hash_s, "0123456789") == strlen(hash_s)) {
         hash = atoi(hash_s) & BOND_MASK;
