@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2009 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -185,6 +185,17 @@ ds_cstr(struct ds *ds)
     }
     ds->string[ds->length] = '\0';
     return ds->string;
+}
+
+/* Returns a null-terminated string representing the current contents of 'ds',
+ * which the caller is expected to free with free(), then clears the contents
+ * of 'ds'. */
+char *
+ds_steal_cstr(struct ds *ds)
+{
+    char *s = ds_cstr(ds);
+    ds_init(ds);
+    return s;
 }
 
 void
