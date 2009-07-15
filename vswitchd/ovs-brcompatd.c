@@ -15,6 +15,7 @@
 
 #include <config.h>
 
+#include <asm/param.h>
 #include <assert.h>
 #include <errno.h>
 #include <getopt.h>
@@ -28,6 +29,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -37,6 +39,7 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
+#include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "fault.h"
 #include "leak-checker.h"
@@ -44,6 +47,7 @@
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openvswitch/brcompat-netlink.h"
+#include "packets.h"
 #include "poll-loop.h"
 #include "process.h"
 #include "signals.h"
@@ -82,9 +86,10 @@ static int prune_timeout = 5000;
 /* Config file shared with ovs-vswitchd (usually ovs-vswitchd.conf). */
 static char *config_file;
 
-/* Command to run (via system()) to reload the ovs-vswitchd configuration
- * file. */
-static char *reload_command;
+/* Shell command to execute (via popen()) to send a control command to the
+ * running ovs-vswitchd process.  The string must contain one instance of %s,
+ * which is replaced by the control command. */
+static char *appctl_command;
 
 /* Netlink socket to listen for interface changes. */
 static struct nl_sock *rtnl_sock;
@@ -176,26 +181,61 @@ bridge_exists(const char *name)
 }
 
 static int
+execute_appctl_command(const char *unixctl_command, char **output)
+{
+    char *stdout_log, *stderr_log;
+    int error, status;
+    char *argv[5];
+
+    argv[0] = "/bin/sh";
+    argv[1] = "-c";
+    argv[2] = xasprintf(appctl_command, unixctl_command);
+    argv[3] = NULL;
+
+    /* Run process and log status. */
+    error = process_run_capture(argv, &stdout_log, &stderr_log, &status);
+    if (error) {
+        VLOG_ERR("failed to execute %s command via ovs-appctl: %s",
+                 unixctl_command, strerror(error));
+    } else if (status) {
+        char *msg = process_status_msg(status);
+        VLOG_ERR("ovs-appctl exited with error (%s)", msg);
+        free(msg);
+        error = ECHILD;
+    }
+
+    /* Deal with stdout_log. */
+    if (output) {
+        *output = stdout_log;
+    } else {
+        free(stdout_log);
+    }
+
+    /* Deal with stderr_log */
+    if (stderr_log && *stderr_log) {
+        VLOG_INFO("ovs-appctl wrote to stderr:\n%s", stderr_log);
+    }
+    free(stderr_log);
+
+    free(argv[2]);
+
+    return error;
+}
+
+static int
 rewrite_and_reload_config(void)
 {
     if (cfg_is_dirty()) {
         int error1 = cfg_write();
         int error2 = cfg_read();
         long long int reload_start = time_msec();
-        int error3 = system(reload_command);
+        int error3 = execute_appctl_command("vswitchd/reload", NULL);
         long long int elapsed = time_msec() - reload_start;
         COVERAGE_INC(brcompatd_reload);
         if (elapsed > 0) {
             VLOG_INFO("reload command executed in %lld ms", elapsed);
         }
-        if (error3 == -1) {
-            VLOG_ERR("failed to execute reload command: %s", strerror(errno));
-        } else if (error3 != 0) {
-            char *msg = process_status_msg(error3);
-            VLOG_ERR("reload command exited with error (%s)", msg);
-            free(msg);
-        }
-        return error1 ? error1 : error2 ? error2 : error3 ? ECHILD : 0;
+        return error1 ? error1 : error2 ? error2 : error3;
     }
     return 0;
 }
@@ -356,17 +396,21 @@ del_bridge(const char *br_name)
 
 static int
 parse_command(struct ofpbuf *buffer, uint32_t *seq, const char **br_name,
-              const char **port_name)
+              const char **port_name, uint64_t *count, uint64_t *skip)
 {
     static const struct nl_policy policy[] = {
         [BRC_GENL_A_DP_NAME] = { .type = NL_A_STRING },
         [BRC_GENL_A_PORT_NAME] = { .type = NL_A_STRING, .optional = true },
+        [BRC_GENL_A_FDB_COUNT] = { .type = NL_A_U64, .optional = true },
+        [BRC_GENL_A_FDB_SKIP] = { .type = NL_A_U64, .optional = true },
     };
     struct nlattr *attrs[ARRAY_SIZE(policy)];
 
     if (!nl_policy_parse(buffer, NLMSG_HDRLEN + GENL_HDRLEN, policy,
                          attrs, ARRAY_SIZE(policy))
-        || (port_name && !attrs[BRC_GENL_A_PORT_NAME])) {
+        || (port_name && !attrs[BRC_GENL_A_PORT_NAME])
+        || (count && !attrs[BRC_GENL_A_FDB_COUNT])
+        || (skip && !attrs[BRC_GENL_A_FDB_SKIP])) {
         return EINVAL;
     }
 
@@ -375,11 +419,17 @@ parse_command(struct ofpbuf *buffer, uint32_t *seq, const char **br_name,
     if (port_name) {
         *port_name = nl_attr_get_string(attrs[BRC_GENL_A_PORT_NAME]);
     }
+    if (count) {
+        *count = nl_attr_get_u64(attrs[BRC_GENL_A_FDB_COUNT]);
+    }
+    if (skip) {
+        *skip = nl_attr_get_u64(attrs[BRC_GENL_A_FDB_SKIP]);
+    }
     return 0;
 }
 
 static void
-send_reply(uint32_t seq, int error)
+send_reply(uint32_t seq, int error, struct ofpbuf *fdb_query_data)
 {
     struct ofpbuf msg;
     int retval;
@@ -390,6 +440,10 @@ send_reply(uint32_t seq, int error)
                           BRC_GENL_C_DP_RESULT, 1);
     ((struct nlmsghdr *) msg.data)->nlmsg_seq = seq;
     nl_msg_put_u32(&msg, BRC_GENL_A_ERR_CODE, error);
+    if (fdb_query_data) {
+        nl_msg_put_unspec(&msg, BRC_GENL_A_FDB_DATA,
+                          fdb_query_data->data, fdb_query_data->size);
+    }
 
     /* Send reply. */
     retval = nl_sock_send(brc_sock, &msg, false);
@@ -407,13 +461,13 @@ handle_bridge_cmd(struct ofpbuf *buffer, bool add)
     uint32_t seq;
     int error;
 
-    error = parse_command(buffer, &seq, &br_name, NULL);
+    error = parse_command(buffer, &seq, &br_name, NULL, NULL, NULL);
     if (!error) {
         error = add ? add_bridge(br_name) : del_bridge(br_name);
         if (!error) {
             error = rewrite_and_reload_config();
         }
-        send_reply(seq, error);
+        send_reply(seq, error, NULL);
     }
     return error;
 }
@@ -439,7 +493,7 @@ handle_port_cmd(struct ofpbuf *buffer, bool add)
     uint32_t seq;
     int error;
 
-    error = parse_command(buffer, &seq, &br_name, &port_name);
+    error = parse_command(buffer, &seq, &br_name, &port_name, NULL, NULL);
     if (!error) {
         if (!bridge_exists(br_name)) {
             VLOG_WARN("%s %s %s: no bridge named %s",
@@ -458,10 +512,131 @@ handle_port_cmd(struct ofpbuf *buffer, bool add)
             VLOG_INFO("%s %s %s: success", cmd_name, br_name, port_name);
             error = rewrite_and_reload_config();
         }
-        send_reply(seq, error);
+        send_reply(seq, error, NULL);
     }
 
     return error;
+}
+
+static int
+handle_fdb_query_cmd(struct ofpbuf *buffer)
+{
+    /* This structure is copied directly from the Linux 2.6.30 header files.
+     * It would be more straightforward to #include <linux/if_bridge.h>, but
+     * the 'port_hi' member was only introduced in Linux 2.6.26 and so systems
+     * with old header files won't have it. */
+    struct __fdb_entry {
+        __u8 mac_addr[6];
+        __u8 port_no;
+        __u8 is_local;
+        __u32 ageing_timer_value;
+        __u8 port_hi;
+        __u8 pad0;
+        __u16 unused;
+    };
+
+    struct mac {
+        uint8_t addr[6];
+    };
+    struct mac *local_macs;
+    int n_local_macs;
+    int i;
+
+    struct ofpbuf query_data;
+    char *unixctl_command;
+    uint64_t count, skip;
+    const char *br_name;
+    struct svec ifaces;
+    char *output;
+    char *save_ptr;
+    uint32_t seq;
+    int error;
+
+    /* Parse the command received from brcompat_mod. */
+    error = parse_command(buffer, &seq, &br_name, NULL, &count, &skip);
+    if (error) {
+        return error;
+    }
+
+    /* Fetch the forwarding database using ovs-appctl. */
+    unixctl_command = xasprintf("fdb/show %s", br_name);
+    error = execute_appctl_command(unixctl_command, &output);
+    free(unixctl_command);
+    if (error) {
+        send_reply(seq, error, NULL);
+        return error;
+    }
+
+    /* Fetch the MAC address for each interface on the bridge, so that we can
+     * fill in the is_local field in the response. */
+    cfg_read();
+    get_bridge_ifaces(br_name, &ifaces);
+    local_macs = xmalloc(ifaces.n * sizeof *local_macs);
+    n_local_macs = 0;
+    for (i = 0; i < ifaces.n; i++) {
+        const char *iface_name = ifaces.names[i];
+        struct mac *mac = &local_macs[n_local_macs];
+        if (!netdev_nodev_get_etheraddr(iface_name, mac->addr)) {
+            n_local_macs++;
+        }
+    }
+    svec_destroy(&ifaces);
+
+    /* Parse the response from ovs-appctl and convert it to binary format to
+     * pass back to the kernel. */
+    ofpbuf_init(&query_data, sizeof(struct __fdb_entry) * 8);
+    save_ptr = NULL;
+    strtok_r(output, "\n", &save_ptr); /* Skip header line. */
+    while (count > 0) {
+        struct __fdb_entry *entry;
+        int port, vlan, age;
+        uint8_t mac[ETH_ADDR_LEN];
+        char *line;
+        bool is_local;
+
+        line = strtok_r(NULL, "\n", &save_ptr);
+        if (!line) {
+            break;
+        }
+
+        if (sscanf(line, "%d %d "ETH_ADDR_SCAN_FMT" %d",
+                   &port, &vlan, ETH_ADDR_SCAN_ARGS(mac), &age)
+            != 2 + ETH_ADDR_SCAN_COUNT + 1) {
+            struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_INFO_RL(&rl, "fdb/show output has invalid format: %s", line);
+            continue;
+        }
+
+        if (skip > 0) {
+            skip--;
+            continue;
+        }
+
+        /* Is this the MAC address of an interface on the bridge? */
+        is_local = false;
+        for (i = 0; i < n_local_macs; i++) {
+            if (eth_addr_equals(local_macs[i].addr, mac)) {
+                is_local = true;
+                break;
+            }
+        }
+
+        entry = ofpbuf_put_uninit(&query_data, sizeof *entry);
+        memcpy(entry->mac_addr, mac, ETH_ADDR_LEN);
+        entry->port_no = port & 0xff;
+        entry->is_local = is_local;
+        entry->ageing_timer_value = age * HZ;
+        entry->port_hi = (port & 0xff00) >> 8;
+        entry->pad0 = 0;
+        entry->unused = 0;
+        count--;
+    }
+    free(output);
+
+    send_reply(seq, 0, &query_data);
+    ofpbuf_uninit(&query_data);
+
+    return 0;
 }
 
 static int
@@ -520,6 +695,10 @@ brc_recv_update(void)
 
     case BRC_GENL_C_PORT_DEL:
         retval = handle_port_cmd(buffer, false);
+        break;
+
+    case BRC_GENL_C_FDB_QUERY:
+        retval = handle_fdb_query_cmd(buffer);
         break;
 
     default:
@@ -715,12 +894,33 @@ main(int argc, char *argv[])
 }
 
 static void
+validate_appctl_command(void)
+{
+    const char *p;
+    int n;
+
+    n = 0;
+    for (p = strchr(appctl_command, '%'); p; p = strchr(p + 2, '%')) {
+        if (p[1] == '%') {
+            /* Nothing to do. */
+        } else if (p[1] == 's') {
+            n++;
+        } else {
+            ovs_fatal(0, "only '%%s' and '%%%%' allowed in --appctl-command");
+        }
+    }
+    if (n != 1) {
+        ovs_fatal(0, "'%%s' must appear exactly once in --appctl-command");
+    }
+}
+
+static void
 parse_options(int argc, char *argv[])
 {
     enum {
         OPT_LOCK_TIMEOUT = UCHAR_MAX + 1,
         OPT_PRUNE_TIMEOUT,
-        OPT_RELOAD_COMMAND,
+        OPT_APPCTL_COMMAND,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS
     };
@@ -729,7 +929,7 @@ parse_options(int argc, char *argv[])
         {"version",          no_argument, 0, 'V'},
         {"lock-timeout",     required_argument, 0, OPT_LOCK_TIMEOUT},
         {"prune-timeout",    required_argument, 0, OPT_PRUNE_TIMEOUT},
-        {"reload-command",   required_argument, 0, OPT_RELOAD_COMMAND},
+        {"appctl-command",   required_argument, 0, OPT_APPCTL_COMMAND},
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
@@ -738,10 +938,9 @@ parse_options(int argc, char *argv[])
     char *short_options = long_options_to_short_options(long_options);
     int error;
 
-    reload_command = xasprintf("%s/ovs-appctl -t "
+    appctl_command = xasprintf("%s/ovs-appctl -t "
                                "%s/ovs-vswitchd.`cat %s/ovs-vswitchd.pid`.ctl "
-                               "-e vswitchd/reload 2>&1 "
-                               "| /usr/bin/logger -t brcompatd-reload",
+                               "-e '%%s'",
                                ovs_bindir, ovs_rundir, ovs_rundir);
     for (;;) {
         int c;
@@ -768,8 +967,8 @@ parse_options(int argc, char *argv[])
             prune_timeout = atoi(optarg) * 1000;
             break;
 
-        case OPT_RELOAD_COMMAND:
-            reload_command = optarg;
+        case OPT_APPCTL_COMMAND:
+            appctl_command = optarg;
             break;
 
         VLOG_OPTION_HANDLERS
@@ -784,6 +983,8 @@ parse_options(int argc, char *argv[])
         }
     }
     free(short_options);
+
+    validate_appctl_command();
 
     argc -= optind;
     argv += optind;
@@ -809,7 +1010,7 @@ usage(void)
            "CONFIG is the configuration file used by ovs-vswitchd.\n",
            program_name, program_name);
     printf("\nConfiguration options:\n"
-           "  --reload-command=COMMAND  shell command to reload ovs-vswitchd\n"
+           "  --appctl-command=COMMAND  shell command to run ovs-appctl\n"
            "  --prune-timeout=SECS    wait at most SECS before pruning ports\n"
            "  --lock-timeout=MSECS    wait at most MSECS for CONFIG to unlock\n"
           );
@@ -819,6 +1020,6 @@ usage(void)
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
     leak_checker_usage();
-    printf("\nThe default reload command is:\n%s\n", reload_command);
+    printf("\nThe default appctl command is:\n%s\n", appctl_command);
     exit(EXIT_SUCCESS);
 }

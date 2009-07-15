@@ -187,13 +187,13 @@ function start_brcompatd {
         valgrind_opt="valgrind --log-file=$BRCOMPATD_VALGRIND_LOG $BRCOMPATD_VALGRIND_OPT"
         daemonize="n"
     fi
-    reload_cmd='/root/vswitch/bin/ovs-appctl -t /var/run/ovs-vswitchd.`cat /var/run/ovs-vswitchd.pid`.ctl -e vswitchd/reload 2>&1 | /usr/bin/logger -t brcompatd-reload'
+    appctl_cmd="$appctl -t /var/run/ovs-vswitchd.\`cat $VSWITCHD_PIDFILE\`.ctl -e '%s'"
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovs-brcompatd ($strace_opt$valgrind_opt)" true
-        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --reload-command="$reload_cmd" -P$BRCOMPATD_PIDFILE -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
+        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --appctl-command="$appctl_cmd" -P$BRCOMPATD_PIDFILE -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
     else
-        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --reload-command="$reload_cmd" -P$BRCOMPATD_PIDFILE -D -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
+        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --appctl-command="$appctl_cmd" -P$BRCOMPATD_PIDFILE -D -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
     fi
 }
 

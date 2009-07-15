@@ -261,6 +261,64 @@ brc_get_port_list(struct net_device *dev, int __user *uindices, int num)
 	return num;
 }
 
+/*
+ * Format up to a page worth of forwarding table entries
+ * userbuf -- where to copy result
+ * maxnum  -- maximum number of entries desired
+ *            (limited to a page for sanity)
+ * offset  -- number of records to skip
+ */
+static int brc_get_fdb_entries(struct net_device *dev, void __user *userbuf, 
+			       unsigned long maxnum, unsigned long offset)
+{
+	struct nlattr *attrs[BRC_GENL_A_MAX + 1];
+	struct sk_buff *request, *reply;
+	int retval;
+	int len;
+
+	/* Clamp size to PAGE_SIZE, test maxnum to avoid overflow */
+	if (maxnum > PAGE_SIZE/sizeof(struct __fdb_entry))
+		maxnum = PAGE_SIZE/sizeof(struct __fdb_entry);
+
+	request = brc_make_request(BRC_GENL_C_FDB_QUERY, dev->name, NULL);
+	if (!request)
+		return -ENOMEM;
+	NLA_PUT_U64(request, BRC_GENL_A_FDB_COUNT, maxnum);
+	NLA_PUT_U64(request, BRC_GENL_A_FDB_SKIP, offset);
+
+	rtnl_unlock();
+	reply = brc_send_command(request, attrs);
+	retval = PTR_ERR(reply);
+	if (IS_ERR(reply))
+		goto exit;
+
+	retval = -nla_get_u32(attrs[BRC_GENL_A_ERR_CODE]);
+	if (retval < 0)
+		goto exit_free_skb;
+
+	retval = -EINVAL;
+	if (!attrs[BRC_GENL_A_FDB_DATA])
+		goto exit_free_skb;
+	len = nla_len(attrs[BRC_GENL_A_FDB_DATA]);
+	if (len % sizeof(struct __fdb_entry) ||
+	    len / sizeof(struct __fdb_entry) > maxnum)
+		goto exit_free_skb;
+
+	retval = len / sizeof(struct __fdb_entry);
+	if (copy_to_user(userbuf, nla_data(attrs[BRC_GENL_A_FDB_DATA]), len))
+		retval = -EFAULT;
+
+exit_free_skb:
+	kfree_skb(reply);
+exit:
+	rtnl_lock();
+	return retval;
+
+nla_put_failure:
+	kfree_skb(request);
+	return -ENOMEM;
+}
+
 /* Legacy ioctl's through SIOCDEVPRIVATE.  Called with rtnl_lock. */
 static int
 old_dev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
@@ -281,6 +339,10 @@ old_dev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 
 	case BRCTL_GET_PORT_LIST:
 		return brc_get_port_list(dev, (int __user *)args[1], args[2]);
+
+	case BRCTL_GET_FDB_ENTRIES:
+		return brc_get_fdb_entries(dev, (void __user *)args[1],
+					   args[2], args[3]);
 	}
 
 	return -EOPNOTSUPP;
@@ -357,9 +419,12 @@ static struct genl_ops brc_genl_ops_query_dp = {
 /* Attribute policy: what each attribute may contain.  */
 static struct nla_policy brc_genl_policy[BRC_GENL_A_MAX + 1] = {
 	[BRC_GENL_A_ERR_CODE] = { .type = NLA_U32 },
+
 	[BRC_GENL_A_PROC_DIR] = { .type = NLA_NUL_STRING },
 	[BRC_GENL_A_PROC_NAME] = { .type = NLA_NUL_STRING },
 	[BRC_GENL_A_PROC_DATA] = { .type = NLA_NUL_STRING },
+
+	[BRC_GENL_A_FDB_DATA] = { .type = NLA_UNSPEC },
 };
 
 static int

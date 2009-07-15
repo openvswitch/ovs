@@ -69,6 +69,13 @@ enum {
 	BRC_GENL_A_PROC_NAME,	/* U: Name of file in /proc. */
 	BRC_GENL_A_PROC_DATA,	/* U: Contents of file in /proc. */
 
+	/* BRC_GENL_C_FDB_QUERY. */
+	BRC_GENL_A_FDB_COUNT,	/* K: Number of FDB entries to read. */
+	BRC_GENL_A_FDB_SKIP,	/* K: Record offset into FDB to start reading. */
+
+	/* BRC_GENL_C_DP_RESULT. */
+	BRC_GENL_A_FDB_DATA,    /* U: FDB records. */
+
 	__BRC_GENL_A_MAX,
 	BRC_GENL_A_MAX = __BRC_GENL_A_MAX - 1
 };
@@ -88,6 +95,7 @@ enum brc_genl_command {
 	BRC_GENL_C_PORT_DEL,	/* K: Port removed from datapath. */
 	BRC_GENL_C_QUERY_MC,	/* U: Get multicast group for brcompat. */
 	BRC_GENL_C_SET_PROC,	/* U: Set contents of file in /proc. */
+	BRC_GENL_C_FDB_QUERY,	/* K: Read records from forwarding database. */
 
 	__BRC_GENL_C_MAX,
 	BRC_GENL_C_MAX = __BRC_GENL_C_MAX - 1
