@@ -119,6 +119,59 @@ process_escape_args(char **argv)
     return ds_cstr(&ds);
 }
 
+/* Prepare to start a process whose command-line arguments are given by the
+ * null-terminated 'argv' array.  Returns 0 if successful, otherwise a
+ * positive errno value. */
+static int
+process_prestart(char **argv)
+{
+    char *binary;
+
+    process_init();
+
+    /* Log the process to be started. */
+    if (VLOG_IS_DBG_ENABLED()) {
+        char *args = process_escape_args(argv);
+        VLOG_DBG("starting subprocess: %s", args);
+        free(args);
+    }
+
+    /* execvp() will search PATH too, but the error in that case is more
+     * obscure, since it is only reported post-fork. */
+    binary = process_search_path(argv[0]);
+    if (!binary) {
+        VLOG_ERR("%s not found in PATH", argv[0]);
+        return ENOENT;
+    }
+    free(binary);
+
+    return 0;
+}
+
+/* Creates and returns a new struct process with the specified 'name' and
+ * 'pid'.
+ *
+ * This is racy unless SIGCHLD is blocked (and has been blocked since before
+ * the fork()) that created the subprocess.  */
+static struct process *
+process_register(const char *name, pid_t pid)
+{
+    struct process *p;
+    const char *slash;
+
+    assert(sigchld_is_blocked());
+
+    p = xcalloc(1, sizeof *p);
+    p->pid = pid;
+    slash = strrchr(name, '/');
+    p->name = xstrdup(slash ? slash + 1 : name);
+    p->exited = false;
+
+    list_push_back(&all_processes, &p->node);
+
+    return p;
+}
+
 /* Starts a subprocess with the arguments in the null-terminated argv[] array.
  * argv[0] is used as the name of the process.  Searches the PATH environment
  * variable to find the program to execute.
@@ -137,27 +190,15 @@ process_start(char **argv,
               struct process **pp)
 {
     sigset_t oldsigs;
-    char *binary;
     pid_t pid;
+    int error;
 
     *pp = NULL;
-    process_init();
     COVERAGE_INC(process_start);
-
-    if (VLOG_IS_DBG_ENABLED()) {
-        char *args = process_escape_args(argv);
-        VLOG_DBG("starting subprocess: %s", args);
-        free(args);
+    error = process_prestart(argv);
+    if (error) {
+        return error;
     }
-
-    /* execvp() will search PATH too, but the error in that case is more
-     * obscure, since it is only reported post-fork. */
-    binary = process_search_path(argv[0]);
-    if (!binary) {
-        VLOG_ERR("%s not found in PATH", argv[0]);
-        return ENOENT;
-    }
-    free(binary);
 
     block_sigchld(&oldsigs);
     fatal_signal_block();
@@ -169,20 +210,9 @@ process_start(char **argv,
         return errno;
     } else if (pid) {
         /* Running in parent process. */
-        struct process *p;
-        const char *slash;
-
-        p = xcalloc(1, sizeof *p);
-        p->pid = pid;
-        slash = strrchr(argv[0], '/');
-        p->name = xstrdup(slash ? slash + 1 : argv[0]);
-        p->exited = false;
-
-        list_push_back(&all_processes, &p->node);
-        unblock_sigchld(&oldsigs);
+        *pp = process_register(argv[0], pid);
         fatal_signal_unblock();
-
-        *pp = p;
+        unblock_sigchld(&oldsigs);
         return 0;
     } else {
         /* Running in child process. */
@@ -404,6 +434,16 @@ is_member(int x, const int *array, size_t n)
         }
     }
     return false;
+}
+
+static bool
+sigchld_is_blocked(void)
+{
+    sigset_t sigs;
+    if (sigprocmask(SIG_SETMASK, NULL, &sigs)) {
+        ovs_fatal(errno, "sigprocmask");
+    }
+    return sigismember(&sigs, SIGCHLD);
 }
 
 static void
