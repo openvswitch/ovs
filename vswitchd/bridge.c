@@ -206,6 +206,8 @@ static uint64_t bridge_pick_datapath_id(struct bridge *,
                                         const char *devname);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 
+static void bridge_unixctl_fdb_show(struct unixctl_conn *, const char *args);
+
 static void bond_init(void);
 static void bond_run(struct bridge *);
 static void bond_wait(struct bridge *);
@@ -279,6 +281,8 @@ bridge_init(void)
     int i;
 
     bond_init();
+
+    unixctl_command_register("fdb/show", bridge_unixctl_fdb_show);
 
     for (i = 0; i < DP_MAX; i++) {
         struct dpif dpif;
@@ -786,6 +790,32 @@ bridge_flush(struct bridge *br)
     if (br->ml) {
         mac_learning_flush(br->ml);
     }
+}
+
+/* Bridge unixctl user interface functions. */
+static void
+bridge_unixctl_fdb_show(struct unixctl_conn *conn, const char *args)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct bridge *br;
+
+    br = bridge_lookup(args);
+    if (!br) {
+        unixctl_command_reply(conn, 501, "no such bridge");
+        return;
+    }
+
+    ds_put_cstr(&ds, " port  VLAN  MAC                Age\n");
+    if (br->ml) {
+        const struct mac_entry *e;
+        LIST_FOR_EACH (e, struct mac_entry, lru_node, &br->ml->lrus) {
+            ds_put_format(&ds, "%5d  %4d  "ETH_ADDR_FMT"  %3d\n",
+                          e->port, e->vlan, ETH_ADDR_ARGS(e->mac),
+                          mac_entry_age(e));
+        }
+    }
+    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    ds_destroy(&ds);
 }
 
 /* Bridge reconfiguration functions. */
