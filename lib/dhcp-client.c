@@ -923,7 +923,7 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
         flow_extract(&b, 0, &flow);
         if (flow.dl_type != htons(ETH_TYPE_IP)
             || flow.nw_proto != IP_TYPE_UDP
-            || flow.tp_dst != htons(68)
+            || flow.tp_dst != htons(DHCP_CLIENT_PORT)
             || !(eth_addr_is_broadcast(flow.dl_dst)
                  || eth_addr_equals(flow.dl_dst,
                                     netdev_get_etheraddr(cli->netdev)))) {
@@ -1006,8 +1006,8 @@ do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
     nh.ip_dst = INADDR_BROADCAST;
     nh.ip_csum = csum(&nh, sizeof nh);
 
-    th.udp_src = htons(66);
-    th.udp_dst = htons(67);
+    th.udp_src = htons(DHCP_CLIENT_PORT);
+    th.udp_dst = htons(DHCP_SERVER_PORT);
     th.udp_len = htons(UDP_HEADER_LEN + b.size);
     th.udp_csum = 0;
     udp_csum = csum_add32(0, nh.ip_src);

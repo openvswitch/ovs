@@ -24,6 +24,10 @@
 struct ds;
 struct ofpbuf;
 
+/* Ports used by DHCP. */
+#define DHCP_SERVER_PORT        67       /* Port used by DHCP server. */
+#define DHCP_CLIENT_PORT        68       /* Port used by DHCP client. */
+
 /* Values for 'op' field. */
 #define DHCP_BOOTREQUEST        1        /* Message sent by DHCP client. */
 #define DHCP_BOOTREPLY          2        /* Message sent by DHCP server. */
