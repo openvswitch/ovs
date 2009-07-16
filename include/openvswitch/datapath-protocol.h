@@ -153,17 +153,17 @@ struct odp_flow_stats {
 };
 
 struct odp_flow_key {
-	__be32 nw_src;               /* IP source address. */
-	__be32 nw_dst;               /* IP destination address. */
-	__u16  in_port;              /* Input switch port. */
-	__be16 dl_vlan;              /* Input VLAN. */
-	__be16 dl_type;              /* Ethernet frame type. */
-	__be16 tp_src;               /* TCP/UDP source port. */
-	__be16 tp_dst;               /* TCP/UDP destination port. */
-	__u8   dl_src[ETH_ALEN];     /* Ethernet source address. */
-	__u8   dl_dst[ETH_ALEN];     /* Ethernet destination address. */
-	__u8   nw_proto;             /* IP protocol. */
-	__u8   reserved;             /* Pad to 64 bits. */
+    __be32 nw_src;               /* IP source address. */
+    __be32 nw_dst;               /* IP destination address. */
+    __u16  in_port;              /* Input switch port. */
+    __be16 dl_vlan;              /* Input VLAN. */
+    __be16 dl_type;              /* Ethernet frame type. */
+    __be16 tp_src;               /* TCP/UDP source port. */
+    __be16 tp_dst;               /* TCP/UDP destination port. */
+    __u8   dl_src[ETH_ALEN];     /* Ethernet source address. */
+    __u8   dl_dst[ETH_ALEN];     /* Ethernet destination address. */
+    __u8   nw_proto;             /* IP protocol. */
+    __u8   reserved;             /* Pad to 64 bits. */
 };
 
 struct odp_flow {
