@@ -63,6 +63,8 @@ void cfg_add_entry(const char *key, ...) PRINTF_FORMAT(1, 2);
 void cfg_del_entry(const char *key, ...) PRINTF_FORMAT(1, 2);
 void cfg_del_section(const char *key, ...) PRINTF_FORMAT(1, 2);
 void cfg_del_match(const char *pattern, ...) PRINTF_FORMAT(1, 2);
+void cfg_get_matches(struct svec *svec, const char *pattern, ...)
+    PRINTF_FORMAT(2, 3);
 void cfg_get_section(struct svec *svec, const char *key, ...) 
     PRINTF_FORMAT(2, 3);
 

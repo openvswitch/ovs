@@ -676,6 +676,25 @@ cfg_del_match(const char *pattern_, ...)
     free(pattern);
 }
 
+/* Fills 'svec' with all of the key-value pairs that match shell glob pattern
+ * 'pattern'.  The caller must first initialize 'svec'. */
+void
+cfg_get_matches(struct svec *svec, const char *pattern_, ...)
+{
+    char *pattern;
+    char **p;
+
+    FORMAT_KEY(pattern_, pattern);
+
+    for (p = cfg.names; *p; p++) {
+        if (!fnmatch(pattern, *p, 0)) {
+            svec_add(svec, *p);
+        }
+    }
+
+    free(pattern);
+}
+
 /* Fills 'svec' with all of the key-value pairs that have sections that
  * begin with 'section'.  The caller must first initialize 'svec'. */
 void
