@@ -809,9 +809,12 @@ bridge_unixctl_fdb_show(struct unixctl_conn *conn, const char *args)
     if (br->ml) {
         const struct mac_entry *e;
         LIST_FOR_EACH (e, struct mac_entry, lru_node, &br->ml->lrus) {
+            if (e->port < 0 || e->port >= br->n_ports) {
+                continue;
+            }
             ds_put_format(&ds, "%5d  %4d  "ETH_ADDR_FMT"  %3d\n",
-                          e->port, e->vlan, ETH_ADDR_ARGS(e->mac),
-                          mac_entry_age(e));
+                          br->ports[e->port]->ifaces[0]->dp_ifidx,
+                          e->vlan, ETH_ADDR_ARGS(e->mac), mac_entry_age(e));
         }
     }
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
