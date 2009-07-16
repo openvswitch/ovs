@@ -31,6 +31,12 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_flow
 
+static struct arp_eth_header *
+pull_arp(struct ofpbuf *packet)
+{
+    return ofpbuf_try_pull(packet, ARP_ETH_HEADER_LEN);
+}
+
 static struct ip_header *
 pull_ip(struct ofpbuf *packet)
 {
@@ -185,6 +191,23 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, flow_t *flow)
                     retval = 1;
                 }
             }
+        } else if (flow->dl_type == htons(ETH_TYPE_ARP)) {
+            const struct arp_eth_header *arp = pull_arp(&b);
+            if (arp && arp->ar_hrd == htons(1)
+                    && arp->ar_pro == htons(ETH_TYPE_IP) 
+                    && arp->ar_hln == ETH_ADDR_LEN
+                    && arp->ar_pln == 4) {
+                /* We only match on the lower 8 bits of the opcode. */
+                if (ntohs(arp->ar_op) <= 0xff) {
+                    flow->nw_proto = ntohs(arp->ar_op);
+                }
+
+                if ((flow->nw_proto == ARP_OP_REQUEST) 
+                        || (flow->nw_proto == ARP_OP_REPLY)) {
+                    flow->nw_src = arp->ar_spa;
+                    flow->nw_dst = arp->ar_tpa;
+                }
+            }
         }
     }
     return retval;
@@ -212,8 +235,12 @@ flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
     stats->n_packets = 1;
 }
 
+/* The Open vSwitch datapath supports matching on ARP payloads, which 
+ * OpenFlow does not.  This function is identical to 'flow_to_match',
+ * but does not hide the datapath's ability to match on ARP. */
 void
-flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
+flow_to_ovs_match(const flow_t *flow, uint32_t wildcards, 
+                  struct ofp_match *match)
 {
     match->wildcards = htonl(wildcards);
     match->in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
@@ -230,6 +257,26 @@ flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
     match->pad = 0;
 }
 
+/* Extract 'flow' with 'wildcards' into the OpenFlow match structure
+ * 'match'. */
+void
+flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
+{
+    flow_to_ovs_match(flow, wildcards, match);
+
+    /* The datapath supports matching on an ARP's opcode and IP addresses, 
+     * but OpenFlow does not.  We wildcard and zero out the appropriate
+     * fields so that OpenFlow is unaware of our trickery. */
+    if (flow->dl_type == htons(ETH_TYPE_ARP)) {
+        wildcards |= (OFPFW_NW_PROTO | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL);
+        match->nw_src = 0;
+        match->nw_dst = 0;
+        match->nw_proto = 0;
+    }
+    match->wildcards = htonl(wildcards);
+}
+
+
 void
 flow_from_match(flow_t *flow, uint32_t *wildcards,
                 const struct ofp_match *match)
@@ -237,6 +284,14 @@ flow_from_match(flow_t *flow, uint32_t *wildcards,
     if (wildcards) {
         *wildcards = ntohl(match->wildcards);
     }
+    /* The datapath supports matching on an ARP's opcode and IP addresses, 
+     * but OpenFlow does not.  In case the controller hasn't, we need to 
+     * set the appropriate wildcard bits so that we're externally 
+     * OpenFlow-compliant. */
+    if (match->dl_type == htons(ETH_TYPE_ARP)) {
+        *wildcards |= (OFPFW_NW_PROTO | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL);
+    }
+
     flow->nw_src = match->nw_src;
     flow->nw_dst = match->nw_dst;
     flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL

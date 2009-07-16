@@ -2512,7 +2512,7 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
     }
 
     query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &match);
+    flow_to_ovs_match(&rule->cr.flow, rule->cr.wc.wildcards, &match);
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);

@@ -18,6 +18,7 @@
 #include <linux/module.h>
 #include <linux/in.h>
 #include <linux/rcupdate.h>
+#include <linux/if_arp.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/tcp.h>
@@ -28,6 +29,27 @@
 #include "compat.h"
 
 struct kmem_cache *flow_cache;
+
+struct arp_eth_header
+{
+	__be16      ar_hrd;	/* format of hardware address   */
+	__be16      ar_pro;	/* format of protocol address   */
+	unsigned char   ar_hln;	/* length of hardware address   */
+	unsigned char   ar_pln;	/* length of protocol address   */
+	__be16      ar_op;	/* ARP opcode (command)     */
+
+	/* Ethernet+IPv4 specific members. */
+	unsigned char       ar_sha[ETH_ALEN];	/* sender hardware address  */
+	unsigned char       ar_sip[4];		/* sender IP address        */
+	unsigned char       ar_tha[ETH_ALEN];	/* target hardware address  */
+	unsigned char       ar_tip[4];		/* target IP address        */
+} __attribute__((packed));
+
+static inline int arphdr_ok(struct sk_buff *skb)
+{
+	int nh_ofs = skb_network_offset(skb);
+	return pskb_may_pull(skb, nh_ofs + sizeof(struct arp_eth_header));
+}
 
 static inline int iphdr_ok(struct sk_buff *skb)
 {
@@ -266,6 +288,27 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 		} else {
 			retval = 1;
 		}
+	} else if (key->dl_type == htons(ETH_P_ARP) && arphdr_ok(skb)) {
+		struct arp_eth_header *arp;
+
+		arp = (struct arp_eth_header *)skb_network_header(skb);
+
+        if (arp->ar_hrd == htons(1)
+                && arp->ar_pro == htons(ETH_P_IP)
+                && arp->ar_hln == ETH_ALEN
+                && arp->ar_pln == 4) {
+
+            /* We only match on the lower 8 bits of the opcode. */
+            if (ntohs(arp->ar_op) <= 0xff) {
+                key->nw_proto = ntohs(arp->ar_op);
+            }
+
+            if (key->nw_proto == ARPOP_REQUEST 
+                    || key->nw_proto == ARPOP_REPLY) {
+                memcpy(&key->nw_src, arp->ar_sip, sizeof(key->nw_src));
+                memcpy(&key->nw_dst, arp->ar_tip, sizeof(key->nw_dst));
+            }
+        }
 	} else {
 		skb_reset_transport_header(skb);
 	}

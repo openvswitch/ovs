@@ -162,7 +162,8 @@ struct odp_flow_key {
     __be16 tp_dst;               /* TCP/UDP destination port. */
     __u8   dl_src[ETH_ALEN];     /* Ethernet source address. */
     __u8   dl_dst[ETH_ALEN];     /* Ethernet destination address. */
-    __u8   nw_proto;             /* IP protocol. */
+    __u8   nw_proto;             /* IP protocol or lower 8 bits of 
+                                    ARP opcode. */
     __u8   reserved;             /* Pad to 64 bits. */
 };
 
