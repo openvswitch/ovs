@@ -32,6 +32,7 @@ int make_unix_socket(int style, bool nonblock, bool passcred,
                      const char *bind_path, const char *connect_path);
 int get_unix_name_len(socklen_t sun_len);
 uint32_t guess_netmask(uint32_t ip);
+int get_null_fd(void);
 
 int tcp_open_active(const char *target, uint16_t default_port,
                     struct sockaddr_in *sinp, int *fdp);

@@ -16,11 +16,27 @@ that attach to them.  It modifies \fIconfig\fR and forces
 \fBovs\-vswitchd\fR to reload its configuration file.
 .PP
 .SH OPTIONS
-.IP "\fB--reload-command=\fIcommand\fR"
-Sets the command that \fBovs\-brcompatd\fR runs to force \fBovs\-vswitchd\fR to
-reload its configuration file to \fIcommand\fR.  The command is run in
-a subshell, so it may contain arbitrary shell metacharacters, etc.
-The \fB--help\fR option displays the default reload command.
+.IP "\fB--appctl-command=\fIcommand\fR"
+Sets the command that \fBovs\-brcompatd\fR runs to communicate with
+\fBovs\-vswitchd\fR.  The command is run in \fB/bin/sh\fR as a shell
+command, so \fIcommand\fR may contain arbitrary shell metacharacters,
+etc.  The \fB--help\fR option displays the default command.
+.IP
+\fIcommand\fR must contain exactly one instance of \fB%s\fR, which
+\fBovs\-brcompatd\fR replaces by a command from the set understood by
+\fBovs\-vswitchd\fR.  Any instances of \fB%%\fR in \fIcommand\fR are
+replaced by a single \fB%\fR.  The \fB%\fR character may not otherwise
+appear in \fIcommand\fR.
+.IP
+The commands that are substituted into \fIcommand\fR are those that
+can be listed by passing \fB-e help\fR to \fBovs\-appctl\fR with
+\fBovs\-vswitchd\fR as target.  The command that is substituted may
+include white space-separated arguments, so \fIcommand\fR should include
+shell quotes around \fB%s\fR.
+.IP
+\fIcommand\fR must not redirect \fBovs\-appctl\fR's standard output or
+standard error streams, because \fBovs\-brcompatd\fR expects to read
+both of these streams separately.
 .TP
 \fB--prune-timeout=\fIsecs\fR
 .

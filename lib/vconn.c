@@ -251,9 +251,34 @@ vconn_get_name(const struct vconn *vconn)
 /* Returns the IP address of the peer, or 0 if the peer is not connected over
  * an IP-based protocol or if its IP address is not yet known. */
 uint32_t
-vconn_get_ip(const struct vconn *vconn) 
+vconn_get_remote_ip(const struct vconn *vconn) 
 {
-    return vconn->ip;
+    return vconn->remote_ip;
+}
+
+/* Returns the transport port of the peer, or 0 if the connection does not 
+ * contain a port or if the port is not yet known. */
+uint16_t
+vconn_get_remote_port(const struct vconn *vconn) 
+{
+    return vconn->remote_port;
+}
+
+/* Returns the IP address used to connect to the peer, or 0 if the 
+ * connection is not an IP-based protocol or if its IP address is not 
+ * yet known. */
+uint32_t
+vconn_get_local_ip(const struct vconn *vconn) 
+{
+    return vconn->local_ip;
+}
+
+/* Returns the transport port used to connect to the peer, or 0 if the 
+ * connection does not contain a port or if the port is not yet known. */
+uint16_t
+vconn_get_local_port(const struct vconn *vconn) 
+{
+    return vconn->local_port;
 }
 
 static void
@@ -1365,7 +1390,7 @@ normalize_match(struct ofp_match *m)
 
 void
 vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
-           uint32_t ip, const char *name, bool reconnectable)
+           const char *name, bool reconnectable)
 {
     vconn->class = class;
     vconn->state = (connect_status == EAGAIN ? VCS_CONNECTING
@@ -1374,9 +1399,36 @@ vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
     vconn->error = connect_status;
     vconn->version = -1;
     vconn->min_version = -1;
-    vconn->ip = ip;
+    vconn->remote_ip = 0;
+    vconn->remote_port = 0;
+    vconn->local_ip = 0;
+    vconn->local_port = 0;
     vconn->name = xstrdup(name);
     vconn->reconnectable = reconnectable;
+}
+
+void
+vconn_set_remote_ip(struct vconn *vconn, uint32_t ip)
+{
+    vconn->remote_ip = ip;
+}
+
+void
+vconn_set_remote_port(struct vconn *vconn, uint16_t port)
+{
+    vconn->remote_port = port;
+}
+
+void 
+vconn_set_local_ip(struct vconn *vconn, uint32_t ip)
+{
+    vconn->local_ip = ip;
+}
+
+void 
+vconn_set_local_port(struct vconn *vconn, uint16_t port)
+{
+    vconn->local_port = port;
 }
 
 void

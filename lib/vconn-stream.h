@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2009 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ struct pvconn;
 struct sockaddr;
 
 int new_stream_vconn(const char *name, int fd, int connect_status,
-                     uint32_t ip, bool reconnectable, struct vconn **vconnp);
+                     bool reconnectable, struct vconn **vconnp);
 int new_pstream_pvconn(const char *name, int fd,
                       int (*accept_cb)(int fd, const struct sockaddr *,
                                        size_t sa_len, struct vconn **),

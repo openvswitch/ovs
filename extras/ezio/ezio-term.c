@@ -106,7 +106,7 @@ main(int argc, char *argv[])
     argv += optind;
 
     /* Make sure that the ezio3 terminfo entry is available. */
-    dummy_fd = open("/dev/null", O_RDWR);
+    dummy_fd = get_null_fd();
     if (dummy_fd >= 0) {
         if (setupterm("ezio3", dummy_fd, &retval) == ERR) {
             if (retval == 0) {
@@ -118,9 +118,6 @@ main(int argc, char *argv[])
             }
         }
         del_curterm(cur_term);
-        close(dummy_fd);
-    } else {
-        ovs_error(errno, "failed to open /dev/null");
     }
 
     /* Lock serial port. */

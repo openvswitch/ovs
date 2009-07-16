@@ -218,28 +218,30 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	dp = kzalloc(sizeof *dp, GFP_KERNEL);
 	if (dp == NULL)
 		goto err_put_module;
-
+	INIT_LIST_HEAD(&dp->port_list);
 	mutex_init(&dp->mutex);
 	dp->dp_idx = dp_idx;
 	for (i = 0; i < DP_N_QUEUES; i++)
 		skb_queue_head_init(&dp->queues[i]);
 	init_waitqueue_head(&dp->waitqueue);
 
+	/* Allocate table. */
+	err = -ENOMEM;
+	rcu_assign_pointer(dp->table, dp_table_create(DP_L1_SIZE));
+	if (!dp->table)
+		goto err_free_dp;
+
 	/* Setup our datapath device */
 	dp_dev = dp_dev_create(dp, devname, ODPP_LOCAL);
 	err = PTR_ERR(dp_dev);
 	if (IS_ERR(dp_dev))
-		goto err_free_dp;
-
-	err = -ENOMEM;
-	rcu_assign_pointer(dp->table, dp_table_create(DP_L1_SIZE));
-	if (!dp->table)
-		goto err_destroy_dp_dev;
-	INIT_LIST_HEAD(&dp->port_list);
+		goto err_destroy_table;
 
 	err = new_nbp(dp, dp_dev, ODPP_LOCAL);
-	if (err)
+	if (err) {
+		dp_dev_destroy(dp_dev);
 		goto err_destroy_table;
+	}
 
 	dp->drop_frags = 0;
 	dp->stats_percpu = alloc_percpu(struct dp_stats_percpu);
@@ -256,11 +258,9 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	return 0;
 
 err_destroy_local_port:
-	dp_del_port(dp->ports[ODPP_LOCAL], NULL);
+	dp_del_port(dp->ports[ODPP_LOCAL]);
 err_destroy_table:
 	dp_table_destroy(dp->table, 0);
-err_destroy_dp_dev:
-	dp_dev_destroy(dp_dev);
 err_free_dp:
 	kfree(dp);
 err_put_module:
@@ -272,21 +272,21 @@ err:
 	return err;
 }
 
-static void do_destroy_dp(struct datapath *dp, struct list_head *dp_devs)
+static void do_destroy_dp(struct datapath *dp)
 {
 	struct net_bridge_port *p, *n;
 	int i;
 
 	list_for_each_entry_safe (p, n, &dp->port_list, node)
 		if (p->port_no != ODPP_LOCAL)
-			dp_del_port(p, dp_devs);
+			dp_del_port(p);
 
 	if (dp_del_dp_hook)
 		dp_del_dp_hook(dp);
 
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
-	dp_del_port(dp->ports[ODPP_LOCAL], dp_devs);
+	dp_del_port(dp->ports[ODPP_LOCAL]);
 
 	dp_table_destroy(dp->table, 1);
 
@@ -301,9 +301,7 @@ static void do_destroy_dp(struct datapath *dp, struct list_head *dp_devs)
 
 static int destroy_dp(int dp_idx)
 {
-	struct dp_dev *dp_dev, *next;
 	struct datapath *dp;
-	LIST_HEAD(dp_devs);
 	int err;
 
 	rtnl_lock();
@@ -313,14 +311,12 @@ static int destroy_dp(int dp_idx)
 	if (!dp)
 		goto err_unlock;
 
-	do_destroy_dp(dp, &dp_devs);
+	do_destroy_dp(dp);
 	err = 0;
 
 err_unlock:
 	mutex_unlock(&dp_mutex);
 	rtnl_unlock();
-	list_for_each_entry_safe (dp_dev, next, &dp_devs, list)
-		free_netdev(dp_dev->dev);
 	return err;
 }
 
@@ -421,7 +417,7 @@ out:
 	return err;
 }
 
-int dp_del_port(struct net_bridge_port *p, struct list_head *dp_devs)
+int dp_del_port(struct net_bridge_port *p)
 {
 	ASSERT_RTNL();
 
@@ -454,10 +450,6 @@ int dp_del_port(struct net_bridge_port *p, struct list_head *dp_devs)
 
 	if (is_dp_dev(p->dev)) {
 		dp_dev_destroy(p->dev);
-		if (dp_devs) {
-			struct dp_dev *dp_dev = dp_dev_priv(p->dev);
-			list_add(&dp_dev->list, dp_devs);
-		}
 	}
 	if (p->port_no != ODPP_LOCAL && dp_del_if_hook) {
 		dp_del_if_hook(p);
@@ -471,7 +463,6 @@ int dp_del_port(struct net_bridge_port *p, struct list_head *dp_devs)
 
 static int del_port(int dp_idx, int port_no)
 {
-	struct dp_dev *dp_dev, *next;
 	struct net_bridge_port *p;
 	struct datapath *dp;
 	LIST_HEAD(dp_devs);
@@ -492,15 +483,13 @@ static int del_port(int dp_idx, int port_no)
 	if (!p)
 		goto out_unlock_dp;
 
-	err = dp_del_port(p, &dp_devs);
+	err = dp_del_port(p);
 
 out_unlock_dp:
 	mutex_unlock(&dp->mutex);
 out_unlock_rtnl:
 	rtnl_unlock();
 out:
-	list_for_each_entry_safe (dp_dev, next, &dp_devs, list)
-		free_netdev(dp_dev->dev);
 	return err;
 }
 
@@ -531,7 +520,6 @@ void dp_process_received_packet(struct sk_buff *skb, struct net_bridge_port *p)
 	struct sw_flow *flow;
 
 	WARN_ON_ONCE(skb_shared(skb));
-	WARN_ON_ONCE(skb->destructor);
 
 	/* BHs are off so we don't have to use get_cpu()/put_cpu() here. */
 	stats = percpu_ptr(dp->stats_percpu, smp_processor_id());

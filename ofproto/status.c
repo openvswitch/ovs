@@ -19,6 +19,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include "dynamic-string.h"
@@ -26,6 +27,7 @@
 #include "ofpbuf.h"
 #include "ofproto.h"
 #include "openflow/nicira-ext.h"
+#include "packets.h"
 #include "rconn.h"
 #include "svec.h"
 #include "timeval.h"
@@ -92,8 +94,18 @@ rconn_status_cb(struct status_reply *sr, void *rconn_)
 {
     struct rconn *rconn = rconn_;
     time_t now = time_now();
+    uint32_t remote_ip = rconn_get_remote_ip(rconn);
+    uint32_t local_ip = rconn_get_local_ip(rconn);
 
     status_reply_put(sr, "name=%s", rconn_get_name(rconn));
+    if (remote_ip) {
+        status_reply_put(sr, "remote-ip="IP_FMT, IP_ARGS(&remote_ip));
+        status_reply_put(sr, "remote-port=%d", 
+                         ntohs(rconn_get_remote_port(rconn)));
+        status_reply_put(sr, "local-ip="IP_FMT, IP_ARGS(&local_ip));
+        status_reply_put(sr, "local-port=%d", 
+                         ntohs(rconn_get_local_port(rconn)));
+    }
     status_reply_put(sr, "state=%s", rconn_get_state(rconn));
     status_reply_put(sr, "backoff=%d", rconn_get_backoff(rconn));
     status_reply_put(sr, "probe-interval=%d", rconn_get_probe_interval(rconn));
@@ -118,9 +130,20 @@ static void
 config_status_cb(struct status_reply *sr, void *ofproto_)
 {
     const struct ofproto *ofproto = ofproto_;
+    uint64_t datapath_id, mgmt_id;
     struct svec listeners;
     int probe_interval, max_backoff;
     size_t i;
+
+    datapath_id = ofproto_get_datapath_id(ofproto);
+    if (datapath_id) {
+        status_reply_put(sr, "datapath-id=%"PRIx64, datapath_id);
+    }
+
+    mgmt_id = ofproto_get_mgmt_id(ofproto);
+    if (mgmt_id) {
+        status_reply_put(sr, "mgmt-id=%"PRIx64, mgmt_id);
+    }
 
     svec_init(&listeners);
     ofproto_get_listeners(ofproto, &listeners);

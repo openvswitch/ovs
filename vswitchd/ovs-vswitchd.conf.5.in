@@ -166,6 +166,10 @@ enabling or disabling an interface, set the value of
 \fBbonding.\fIname\fB.updelay\fR or
 \fBbonding.\fIname\fB.downdelay\fR, respectively, to a positive
 integer, interpreted in milliseconds.
+The \fBupdelay\fR setting is honored only when at least one bonded
+interface is already enabled.  When no interfaces are enabled, then
+the first bond interface to come up is enabled immediately.  The
+\fBdowndelay\fR setting is always honored.
 .PP
 The following syntax bonds \fBeth0\fR and \fBeth1\fR into a bonding
 device named \fBbond0\fR, which is added to bridge \fBmybr\fR along

@@ -40,10 +40,11 @@ static DEFINE_MUTEX(brc_serial);
 /* Userspace communication. */
 static DEFINE_SPINLOCK(brc_lock);    /* Ensure atomic access to these vars. */
 static DECLARE_COMPLETION(brc_done); /* Userspace signaled operation done? */
-static int brc_err;		     /* Error code from userspace. */
+static struct sk_buff *brc_reply;    /* Reply from userspace. */
 static u32 brc_seq;		     /* Sequence number for current op. */
 
-static int brc_send_command(const char *bridge, const char *port, int op);
+static struct sk_buff *brc_send_command(struct sk_buff *, struct nlattr **attrs);
+static int brc_send_simple_command(struct sk_buff *);
 
 static int
 get_dp_ifindices(int *indices, int num)
@@ -75,16 +76,55 @@ get_port_ifindices(struct datapath *dp, int *ifindices, int num)
 	rcu_read_unlock();
 }
 
+static struct sk_buff *
+brc_make_request(int op, const char *bridge, const char *port)
+{
+	struct sk_buff *skb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
+	if (!skb)
+		goto error;
+
+	genlmsg_put(skb, 0, 0, &brc_genl_family, 0, op);
+	NLA_PUT_STRING(skb, BRC_GENL_A_DP_NAME, bridge);
+	if (port)
+		NLA_PUT_STRING(skb, BRC_GENL_A_PORT_NAME, port);
+	return skb;
+
+nla_put_failure:
+	kfree_skb(skb);
+error:
+	return NULL;
+}
+
+static int brc_send_simple_command(struct sk_buff *request)
+{
+	struct nlattr *attrs[BRC_GENL_A_MAX + 1];
+	struct sk_buff *reply;
+	int error;
+
+	reply = brc_send_command(request, attrs);
+	if (IS_ERR(reply))
+		return PTR_ERR(reply);
+
+	error = nla_get_u32(attrs[BRC_GENL_A_ERR_CODE]);
+	kfree_skb(reply);
+	return -error;
+}
+
 static int brc_add_del_bridge(char __user *uname, int add)
 {
+	struct sk_buff *request;
 	char name[IFNAMSIZ];
 
 	if (copy_from_user(name, uname, IFNAMSIZ))
 		return -EFAULT;
 
 	name[IFNAMSIZ - 1] = 0;
-	return brc_send_command(name, NULL,
-				add ? BRC_GENL_C_DP_ADD : BRC_GENL_C_DP_DEL);
+	request = brc_make_request(add ? BRC_GENL_C_DP_ADD : BRC_GENL_C_DP_DEL,
+				   name, NULL);
+	if (!request)
+		return -ENOMEM;
+
+	return brc_send_simple_command(request);
 }
 
 static int brc_get_bridges(int __user *uindices, int n)
@@ -154,8 +194,8 @@ brc_ioctl_deviceless_stub(struct net *net, unsigned int cmd, void __user *uarg)
 static int
 brc_add_del_port(struct net_device *dev, int port_ifindex, int add)
 {
+	struct sk_buff *request;
 	struct net_device *port;
-	char dev_name[IFNAMSIZ], port_name[IFNAMSIZ];
 	int err;
 
 	port = __dev_get_by_index(&init_net, port_ifindex);
@@ -163,13 +203,14 @@ brc_add_del_port(struct net_device *dev, int port_ifindex, int add)
 		return -EINVAL;
 
 	/* Save name of dev and port because there's a race between the
-	 * rtnl_unlock() and the brc_send_command(). */
-	strcpy(dev_name, dev->name);
-	strcpy(port_name, port->name);
+	 * rtnl_unlock() and the brc_send_simple_command(). */
+	request = brc_make_request(add ? BRC_GENL_C_PORT_ADD : BRC_GENL_C_PORT_DEL,
+				   dev->name, port->name);
+	if (!request)
+		return -ENOMEM;
 
 	rtnl_unlock();
-	err = brc_send_command(dev_name, port_name,
-			       add ? BRC_GENL_C_PORT_ADD : BRC_GENL_C_PORT_DEL);
+	err = brc_send_simple_command(request);
 	rtnl_lock();
 
 	return err;
@@ -220,6 +261,64 @@ brc_get_port_list(struct net_device *dev, int __user *uindices, int num)
 	return num;
 }
 
+/*
+ * Format up to a page worth of forwarding table entries
+ * userbuf -- where to copy result
+ * maxnum  -- maximum number of entries desired
+ *            (limited to a page for sanity)
+ * offset  -- number of records to skip
+ */
+static int brc_get_fdb_entries(struct net_device *dev, void __user *userbuf, 
+			       unsigned long maxnum, unsigned long offset)
+{
+	struct nlattr *attrs[BRC_GENL_A_MAX + 1];
+	struct sk_buff *request, *reply;
+	int retval;
+	int len;
+
+	/* Clamp size to PAGE_SIZE, test maxnum to avoid overflow */
+	if (maxnum > PAGE_SIZE/sizeof(struct __fdb_entry))
+		maxnum = PAGE_SIZE/sizeof(struct __fdb_entry);
+
+	request = brc_make_request(BRC_GENL_C_FDB_QUERY, dev->name, NULL);
+	if (!request)
+		return -ENOMEM;
+	NLA_PUT_U64(request, BRC_GENL_A_FDB_COUNT, maxnum);
+	NLA_PUT_U64(request, BRC_GENL_A_FDB_SKIP, offset);
+
+	rtnl_unlock();
+	reply = brc_send_command(request, attrs);
+	retval = PTR_ERR(reply);
+	if (IS_ERR(reply))
+		goto exit;
+
+	retval = -nla_get_u32(attrs[BRC_GENL_A_ERR_CODE]);
+	if (retval < 0)
+		goto exit_free_skb;
+
+	retval = -EINVAL;
+	if (!attrs[BRC_GENL_A_FDB_DATA])
+		goto exit_free_skb;
+	len = nla_len(attrs[BRC_GENL_A_FDB_DATA]);
+	if (len % sizeof(struct __fdb_entry) ||
+	    len / sizeof(struct __fdb_entry) > maxnum)
+		goto exit_free_skb;
+
+	retval = len / sizeof(struct __fdb_entry);
+	if (copy_to_user(userbuf, nla_data(attrs[BRC_GENL_A_FDB_DATA]), len))
+		retval = -EFAULT;
+
+exit_free_skb:
+	kfree_skb(reply);
+exit:
+	rtnl_lock();
+	return retval;
+
+nla_put_failure:
+	kfree_skb(request);
+	return -ENOMEM;
+}
+
 /* Legacy ioctl's through SIOCDEVPRIVATE.  Called with rtnl_lock. */
 static int
 old_dev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
@@ -240,6 +339,10 @@ old_dev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 
 	case BRCTL_GET_PORT_LIST:
 		return brc_get_port_list(dev, (int __user *)args[1], args[2]);
+
+	case BRCTL_GET_FDB_ENTRIES:
+		return brc_get_fdb_entries(dev, (void __user *)args[1],
+					   args[2], args[3]);
 	}
 
 	return -EOPNOTSUPP;
@@ -316,9 +419,12 @@ static struct genl_ops brc_genl_ops_query_dp = {
 /* Attribute policy: what each attribute may contain.  */
 static struct nla_policy brc_genl_policy[BRC_GENL_A_MAX + 1] = {
 	[BRC_GENL_A_ERR_CODE] = { .type = NLA_U32 },
+
 	[BRC_GENL_A_PROC_DIR] = { .type = NLA_NUL_STRING },
 	[BRC_GENL_A_PROC_NAME] = { .type = NLA_NUL_STRING },
 	[BRC_GENL_A_PROC_DATA] = { .type = NLA_NUL_STRING },
+
+	[BRC_GENL_A_FDB_DATA] = { .type = NLA_UNSPEC },
 };
 
 static int
@@ -330,12 +436,22 @@ brc_genl_dp_result(struct sk_buff *skb, struct genl_info *info)
 	if (!info->attrs[BRC_GENL_A_ERR_CODE])
 		return -EINVAL;
 
+	skb = skb_clone(skb, GFP_KERNEL);
+	if (!skb)
+		return -ENOMEM;
+
 	spin_lock_irqsave(&brc_lock, flags);
 	if (brc_seq == info->snd_seq) {
-		brc_err = nla_get_u32(info->attrs[BRC_GENL_A_ERR_CODE]);
+		brc_seq++;
+
+		if (brc_reply)
+			kfree_skb(brc_reply);
+		brc_reply = skb;
+
 		complete(&brc_done);
 		err = 0;
 	} else {
+		kfree_skb(skb);
 		err = -ESTALE;
 	}
 	spin_unlock_irqrestore(&brc_lock, flags);
@@ -359,11 +475,10 @@ static struct genl_ops brc_genl_ops_set_proc = {
 	.dumpit = NULL
 };
 
-static int brc_send_command(const char *bridge, const char *port, int op)
+static struct sk_buff *brc_send_command(struct sk_buff *request, struct nlattr **attrs)
 {
 	unsigned long int flags;
-	struct sk_buff *skb;
-	void *data;
+	struct sk_buff *reply;
 	int error;
 
 	mutex_lock(&brc_serial);
@@ -371,41 +486,41 @@ static int brc_send_command(const char *bridge, const char *port, int op)
 	/* Increment sequence number first, so that we ignore any replies
 	 * to stale requests. */
 	spin_lock_irqsave(&brc_lock, flags);
-	brc_seq++;
+	nlmsg_hdr(request)->nlmsg_seq = ++brc_seq;
 	INIT_COMPLETION(brc_done);
 	spin_unlock_irqrestore(&brc_lock, flags);
 
-	/* Compose message. */
-	skb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
-	error = -ENOMEM;
-	if (skb == NULL)
-		goto exit_unlock;
-	data = genlmsg_put(skb, 0, brc_seq, &brc_genl_family, 0, op);
-
-	NLA_PUT_STRING(skb, BRC_GENL_A_DP_NAME, bridge);
-	if (port)
-		NLA_PUT_STRING(skb, BRC_GENL_A_PORT_NAME, port);
-
-	genlmsg_end(skb, data);
+	nlmsg_end(request, nlmsg_hdr(request));
 
 	/* Send message. */
-	error = genlmsg_multicast(skb, 0, brc_mc_group.id, GFP_KERNEL);
+	error = genlmsg_multicast(request, 0, brc_mc_group.id, GFP_KERNEL);
 	if (error < 0)
-		goto exit_unlock;
+		goto error;
 
 	/* Wait for reply. */
 	error = -ETIMEDOUT;
 	if (!wait_for_completion_timeout(&brc_done, BRC_TIMEOUT))
-		goto exit_unlock;
+		goto error;
 
-	error = -brc_err;
-	goto exit_unlock;
+	/* Grab reply. */
+	spin_lock_irqsave(&brc_lock, flags);
+	reply = brc_reply;
+	brc_reply = NULL;
+	spin_unlock_irqrestore(&brc_lock, flags);
 
-nla_put_failure:
-	kfree_skb(skb);
-exit_unlock:
 	mutex_unlock(&brc_serial);
-	return error;
+
+	/* Re-parse message.  Can't fail, since it parsed correctly once
+	 * already. */
+	error = nlmsg_parse(nlmsg_hdr(reply), GENL_HDRLEN,
+			    attrs, BRC_GENL_A_MAX, brc_genl_policy);
+	WARN_ON(error);
+
+	return reply;
+
+error:
+	mutex_unlock(&brc_serial);
+	return ERR_PTR(error);
 }
 
 int brc_add_dp(struct datapath *dp)

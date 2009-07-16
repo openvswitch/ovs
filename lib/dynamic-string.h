@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2009 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,7 @@ void ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
 int ds_get_line(struct ds *, FILE *);
 
 char *ds_cstr(struct ds *);
+char *ds_steal_cstr(struct ds *);
 void ds_destroy(struct ds *);
 
 int ds_last(const struct ds *);

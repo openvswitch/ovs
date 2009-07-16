@@ -71,10 +71,7 @@ struct executer {
 };
 
 /* File descriptors for waking up when a child dies. */
-static int signal_fds[2];
-
-/* File descriptor for /dev/null. */
-static int null_fd = -1;
+static int signal_fds[2] = {-1, -1};
 
 static void send_child_status(struct rconn *, uint32_t xid, uint32_t status,
                               const void *data, size_t size);
@@ -205,9 +202,9 @@ executer_handle_request(struct executer *e, struct rconn *rconn,
          * subprocesses at once?  Would also want to catch fatal signals and
          * kill them at the same time though. */
         fatal_signal_fork();
-        dup2(null_fd, 0);
+        dup2(get_null_fd(), 0);
         dup2(output_fds[1], 1);
-        dup2(null_fd, 2);
+        dup2(get_null_fd(), 2);
         max_fds = get_max_fds();
         for (i = 3; i < max_fds; i++) {
             close(i);
@@ -448,7 +445,13 @@ executer_create(const char *command_acl, const char *command_dir,
     struct sigaction sa;
 
     *executerp = NULL;
-    if (null_fd == -1) {
+    if (signal_fds[0] == -1) {
+        /* Make sure we can get a fd for /dev/null. */
+        int null_fd = get_null_fd();
+        if (null_fd < 0) {
+            return -null_fd;
+        }
+
         /* Create pipe for notifying us that SIGCHLD was invoked. */
         if (pipe(signal_fds)) {
             VLOG_ERR("pipe failed: %s", strerror(errno));
@@ -456,16 +459,6 @@ executer_create(const char *command_acl, const char *command_dir,
         }
         set_nonblocking(signal_fds[0]);
         set_nonblocking(signal_fds[1]);
-
-        /* Open /dev/null. */
-        null_fd = open("/dev/null", O_RDWR);
-        if (null_fd < 0) {
-            int error = errno;
-            VLOG_ERR("could not open /dev/null: %s", strerror(error));
-            close(signal_fds[0]);
-            close(signal_fds[1]);
-            return error;
-        }
     }
 
     /* Set up signal handler. */

@@ -54,13 +54,13 @@ static void stream_clear_txbuf(struct stream_vconn *);
 
 int
 new_stream_vconn(const char *name, int fd, int connect_status,
-                 uint32_t ip, bool reconnectable, struct vconn **vconnp)
+                 bool reconnectable, struct vconn **vconnp)
 {
     struct stream_vconn *s;
 
     s = xmalloc(sizeof *s);
-    vconn_init(&s->vconn, &stream_vconn_class, connect_status, ip, name,
-               reconnectable);
+    vconn_init(&s->vconn, &stream_vconn_class, connect_status,
+               name, reconnectable);
     s->fd = fd;
     s->txbuf = NULL;
     s->tx_waiter = NULL;

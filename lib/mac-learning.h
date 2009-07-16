@@ -28,6 +28,9 @@
 
 #define MAC_MAX 1024
 
+/* Time, in seconds, before expiring a mac_entry due to inactivity. */
+#define MAC_ENTRY_IDLE_TIME 60
+
 /* A MAC learning table entry. */
 struct mac_entry {
     struct list hash_node;      /* Element in a mac_learning 'table' list. */
@@ -38,6 +41,8 @@ struct mac_entry {
     int port;                   /* Port on which MAC was most recently seen. */
     tag_type tag;               /* Tag for this learning entry. */
 };
+
+int mac_entry_age(const struct mac_entry *);
 
 /* MAC learning table. */
 struct mac_learning {

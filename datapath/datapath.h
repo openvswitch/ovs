@@ -22,8 +22,6 @@
 #include "flow.h"
 #include "brc_sysfs.h"
 
-struct sk_buff;
-
 /* Mask for the priority bits in a vlan header.  If we ever merge upstream
  * then this should go into include/linux/if_vlan.h. */
 #define VLAN_PCP_MASK 0xe000
@@ -127,11 +125,8 @@ int dp_table_foreach(struct dp_table *table,
 		     void *aux);
 
 void dp_process_received_packet(struct sk_buff *, struct net_bridge_port *);
-int dp_del_port(struct net_bridge_port *, struct list_head *);
-int dp_output_port(struct datapath *, struct sk_buff *, int out_port,
-		   int ignore_no_fwd);
+int dp_del_port(struct net_bridge_port *);
 int dp_output_control(struct datapath *, struct sk_buff *, int, u32 arg);
-void dp_set_origin(struct datapath *, u16, struct sk_buff *);
 
 struct datapath *get_dp(int dp_idx);
 

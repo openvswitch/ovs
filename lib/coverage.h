@@ -52,7 +52,8 @@ struct coverage_counter {
         NAME##_count.count += AMOUNT;                   \
     } while (0)
 
-void coverage_log(enum vlog_level);
+void coverage_init(void);
+void coverage_log(enum vlog_level, bool suppress_dups);
 void coverage_clear(void);
 
 #endif /* coverage.h */

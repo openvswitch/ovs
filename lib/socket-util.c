@@ -466,6 +466,24 @@ exit:
     return error ? -error : fd;
 }
 
+/* Returns a readable and writable fd for /dev/null, if successful, otherwise
+ * a negative errno value.  The caller must not close the returned fd (because
+ * the same fd will be handed out to subsequent callers). */
+int
+get_null_fd(void)
+{
+    static int null_fd = -1;
+    if (null_fd < 0) {
+        null_fd = open("/dev/null", O_RDWR);
+        if (null_fd < 0) {
+            int error = errno;
+            VLOG_ERR("could not open /dev/null: %s", strerror(error));
+            return -error;
+        }
+    }
+    return null_fd;
+}
+
 int
 read_fully(int fd, void *p_, size_t size, size_t *bytes_read)
 {

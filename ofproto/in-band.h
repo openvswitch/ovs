@@ -26,8 +26,8 @@ struct rconn;
 struct settings;
 struct switch_status;
 
-int in_band_create(struct ofproto *, struct dpif *, struct switch_status *,
-                   struct rconn *controller, struct in_band **);
+void in_band_create(struct ofproto *, struct switch_status *,
+                    struct rconn *controller, struct in_band **);
 void in_band_destroy(struct in_band *);
 void in_band_run(struct in_band *);
 void in_band_wait(struct in_band *);

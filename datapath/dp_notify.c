@@ -21,7 +21,7 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 	if (event == NETDEV_UNREGISTER && p) {
 		struct datapath *dp = p->dp;
 		mutex_lock(&dp->mutex);
-		dp_del_port(p, NULL);
+		dp_del_port(p);
 		mutex_unlock(&dp->mutex);
 	}
 	return NOTIFY_DONE;

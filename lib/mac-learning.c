@@ -32,6 +32,14 @@
 #define THIS_MODULE VLM_mac_learning
 #include "vlog.h"
 
+/* Returns the number of seconds since 'e' was last learned. */
+int
+mac_entry_age(const struct mac_entry *e)
+{
+    time_t remaining = e->expires - time_now();
+    return MAC_ENTRY_IDLE_TIME - remaining;
+}
+
 static uint32_t
 mac_table_hash(const uint8_t mac[ETH_ADDR_LEN], uint16_t vlan)
 {
@@ -174,7 +182,7 @@ mac_learning_learn(struct mac_learning *ml,
     /* Make the entry most-recently-used. */
     list_remove(&e->lru_node);
     list_push_back(&ml->lrus, &e->lru_node);
-    e->expires = time_now() + 60;
+    e->expires = time_now() + MAC_ENTRY_IDLE_TIME;
 
     /* Did we learn something? */
     if (e->port != src_port) {

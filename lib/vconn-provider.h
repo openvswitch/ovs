@@ -34,13 +34,20 @@ struct vconn {
     int error;
     int min_version;
     int version;
-    uint32_t ip;
+    uint32_t remote_ip;
+    uint16_t remote_port;
+    uint32_t local_ip;
+    uint16_t local_port;
     char *name;
     bool reconnectable;
 };
 
 void vconn_init(struct vconn *, struct vconn_class *, int connect_status,
-                uint32_t ip, const char *name, bool reconnectable);
+                const char *name, bool reconnectable);
+void vconn_set_remote_ip(struct vconn *, uint32_t remote_ip);
+void vconn_set_remote_port(struct vconn *, uint16_t remote_port);
+void vconn_set_local_ip(struct vconn *, uint32_t local_ip);
+void vconn_set_local_port(struct vconn *, uint16_t local_port);
 static inline void vconn_assert_class(const struct vconn *vconn,
                                       const struct vconn_class *class)
 {

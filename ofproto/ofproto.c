@@ -431,8 +431,9 @@ ofproto_set_in_band(struct ofproto *p, bool in_band)
 {
     if (in_band != (p->in_band != NULL)) {
         if (in_band) {
-            return in_band_create(p, p->dpif, p->switch_status,
-                                  p->controller->rconn, &p->in_band);
+            in_band_create(p, p->switch_status, p->controller->rconn, 
+                           &p->in_band);
+            return 0;
         } else {
             ofproto_set_discovery(p, false, NULL, true);
             in_band_destroy(p->in_band);
@@ -633,6 +634,12 @@ uint64_t
 ofproto_get_datapath_id(const struct ofproto *ofproto)
 {
     return ofproto->datapath_id;
+}
+
+uint64_t
+ofproto_get_mgmt_id(const struct ofproto *ofproto)
+{
+    return ofproto->mgmt_id;
 }
 
 int

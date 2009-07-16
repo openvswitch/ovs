@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include "coverage.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "list.h"
 #include "poll-loop.h"
 #include "socket-util.h"
@@ -51,6 +52,7 @@ static int fds[2];
 /* All processes. */
 static struct list all_processes = LIST_INITIALIZER(&all_processes);
 
+static bool sigchld_is_blocked(void);
 static void block_sigchld(sigset_t *);
 static void unblock_sigchld(const sigset_t *);
 static void sigchld_handler(int signr UNUSED);
@@ -117,6 +119,59 @@ process_escape_args(char **argv)
     return ds_cstr(&ds);
 }
 
+/* Prepare to start a process whose command-line arguments are given by the
+ * null-terminated 'argv' array.  Returns 0 if successful, otherwise a
+ * positive errno value. */
+static int
+process_prestart(char **argv)
+{
+    char *binary;
+
+    process_init();
+
+    /* Log the process to be started. */
+    if (VLOG_IS_DBG_ENABLED()) {
+        char *args = process_escape_args(argv);
+        VLOG_DBG("starting subprocess: %s", args);
+        free(args);
+    }
+
+    /* execvp() will search PATH too, but the error in that case is more
+     * obscure, since it is only reported post-fork. */
+    binary = process_search_path(argv[0]);
+    if (!binary) {
+        VLOG_ERR("%s not found in PATH", argv[0]);
+        return ENOENT;
+    }
+    free(binary);
+
+    return 0;
+}
+
+/* Creates and returns a new struct process with the specified 'name' and
+ * 'pid'.
+ *
+ * This is racy unless SIGCHLD is blocked (and has been blocked since before
+ * the fork()) that created the subprocess.  */
+static struct process *
+process_register(const char *name, pid_t pid)
+{
+    struct process *p;
+    const char *slash;
+
+    assert(sigchld_is_blocked());
+
+    p = xcalloc(1, sizeof *p);
+    p->pid = pid;
+    slash = strrchr(name, '/');
+    p->name = xstrdup(slash ? slash + 1 : name);
+    p->exited = false;
+
+    list_push_back(&all_processes, &p->node);
+
+    return p;
+}
+
 /* Starts a subprocess with the arguments in the null-terminated argv[] array.
  * argv[0] is used as the name of the process.  Searches the PATH environment
  * variable to find the program to execute.
@@ -135,58 +190,42 @@ process_start(char **argv,
               struct process **pp)
 {
     sigset_t oldsigs;
-    char *binary;
     pid_t pid;
+    int error;
 
     *pp = NULL;
-    process_init();
     COVERAGE_INC(process_start);
-
-    if (VLOG_IS_DBG_ENABLED()) {
-        char *args = process_escape_args(argv);
-        VLOG_DBG("starting subprocess: %s", args);
-        free(args);
+    error = process_prestart(argv);
+    if (error) {
+        return error;
     }
-
-    /* execvp() will search PATH too, but the error in that case is more
-     * obscure, since it is only reported post-fork. */
-    binary = process_search_path(argv[0]);
-    if (!binary) {
-        VLOG_ERR("%s not found in PATH", argv[0]);
-        return ENOENT;
-    }
-    free(binary);
 
     block_sigchld(&oldsigs);
+    fatal_signal_block();
     pid = fork();
     if (pid < 0) {
+        fatal_signal_unblock();
         unblock_sigchld(&oldsigs);
         VLOG_WARN("fork failed: %s", strerror(errno));
         return errno;
     } else if (pid) {
         /* Running in parent process. */
-        struct process *p;
-        const char *slash;
-
-        p = xcalloc(1, sizeof *p);
-        p->pid = pid;
-        slash = strrchr(argv[0], '/');
-        p->name = xstrdup(slash ? slash + 1 : argv[0]);
-        p->exited = false;
-
-        list_push_back(&all_processes, &p->node);
+        *pp = process_register(argv[0], pid);
+        fatal_signal_unblock();
         unblock_sigchld(&oldsigs);
-
-        *pp = p;
         return 0;
     } else {
         /* Running in child process. */
         int fd_max = get_max_fds();
         int fd;
 
+        fatal_signal_fork();
+        fatal_signal_unblock();
         unblock_sigchld(&oldsigs);
         for (fd = 0; fd < fd_max; fd++) {
             if (is_member(fd, null_fds, n_null_fds)) {
+                /* We can't use get_null_fd() here because we might have
+                 * already closed its fd. */
                 int nullfd = open("/dev/null", O_RDWR);
                 dup2(nullfd, fd);
                 close(nullfd);
@@ -358,6 +397,203 @@ process_search_path(const char *name)
     return NULL;
 }
 
+/* process_run_capture() and supporting functions. */
+
+struct stream {
+    struct ds log;
+    int fds[2];
+};
+
+static int
+stream_open(struct stream *s)
+{
+    ds_init(&s->log);
+    if (pipe(s->fds)) {
+        VLOG_WARN("failed to create pipe: %s", strerror(errno));
+        return errno;
+    }
+    set_nonblocking(s->fds[0]);
+    return 0;
+}
+
+static void
+stream_read(struct stream *s)
+{
+    int error = 0;
+
+    if (s->fds[0] < 0) {
+        return;
+    }
+
+    error = 0;
+    for (;;) {
+        char buffer[512];
+        size_t n;
+
+        error = read_fully(s->fds[0], buffer, sizeof buffer, &n);
+        ds_put_buffer(&s->log, buffer, n);
+        if (error) {
+            if (error == EAGAIN || error == EWOULDBLOCK) {
+                return;
+            } else {
+                if (error != EOF) {
+                    VLOG_WARN("error reading subprocess pipe: %s",
+                              strerror(error));
+                }
+                break;
+            }
+        } else if (s->log.length > PROCESS_MAX_CAPTURE) {
+            VLOG_WARN("subprocess output overflowed %d-byte buffer",
+                      PROCESS_MAX_CAPTURE);
+            break;
+        }
+    }
+    close(s->fds[0]);
+    s->fds[0] = -1;
+}
+
+static void
+stream_wait(struct stream *s)
+{
+    if (s->fds[0] >= 0) {
+        poll_fd_wait(s->fds[0], POLLIN);
+    }
+}
+
+static void
+stream_close(struct stream *s)
+{
+    ds_destroy(&s->log);
+    if (s->fds[0] >= 0) {
+        close(s->fds[0]);
+    }
+    if (s->fds[1] >= 0) {
+        close(s->fds[1]);
+    }
+}
+
+/* Starts the process whose arguments are given in the null-terminated array
+ * 'argv' and waits for it to exit.  On success returns 0 and stores the
+ * process exit value (suitable for passing to process_status_msg()) in
+ * '*status'.  On failure, returns a positive errno value and stores 0 in
+ * '*status'.
+ *
+ * If 'stdout_log' is nonnull, then the subprocess's output to stdout (up to a
+ * limit of PROCESS_MAX_CAPTURE bytes) is captured in a memory buffer, which
+ * when this function returns 0 is stored as a null-terminated string in
+ * '*stdout_log'.  The caller is responsible for freeing '*stdout_log' (by
+ * passing it to free()).  When this function returns an error, '*stdout_log'
+ * is set to NULL.
+ *
+ * If 'stderr_log' is nonnull, then it is treated like 'stdout_log' except
+ * that it captures the subprocess's output to stderr. */
+int
+process_run_capture(char **argv, char **stdout_log, char **stderr_log,
+                    int *status)
+{
+    struct stream s_stdout, s_stderr;
+    sigset_t oldsigs;
+    pid_t pid;
+    int error;
+
+    COVERAGE_INC(process_run_capture);
+    if (stdout_log) {
+        *stdout_log = NULL;
+    }
+    if (stderr_log) {
+        *stderr_log = NULL;
+    }
+    *status = 0;
+    error = process_prestart(argv);
+    if (error) {
+        return error;
+    }
+
+    error = stream_open(&s_stdout);
+    if (error) {
+        return error;
+    }
+
+    error = stream_open(&s_stderr);
+    if (error) {
+        stream_close(&s_stdout);
+        return error;
+    }
+
+    block_sigchld(&oldsigs);
+    fatal_signal_block();
+    pid = fork();
+    if (pid < 0) {
+        int error = errno;
+
+        fatal_signal_unblock();
+        unblock_sigchld(&oldsigs);
+        VLOG_WARN("fork failed: %s", strerror(error));
+
+        stream_close(&s_stdout);
+        stream_close(&s_stderr);
+        *status = 0;
+        return error;
+    } else if (pid) {
+        /* Running in parent process. */
+        struct process *p;
+
+        p = process_register(argv[0], pid);
+        fatal_signal_unblock();
+        unblock_sigchld(&oldsigs);
+
+        close(s_stdout.fds[1]);
+        close(s_stderr.fds[1]);
+        while (!process_exited(p)) {
+            stream_read(&s_stdout);
+            stream_read(&s_stderr);
+
+            stream_wait(&s_stdout);
+            stream_wait(&s_stderr);
+            process_wait(p);
+            poll_block();
+        }
+        stream_read(&s_stdout);
+        stream_read(&s_stderr);
+
+        if (stdout_log) {
+            *stdout_log = ds_steal_cstr(&s_stdout.log);
+        }
+        if (stderr_log) {
+            *stderr_log = ds_steal_cstr(&s_stderr.log);
+        }
+
+        stream_close(&s_stdout);
+        stream_close(&s_stderr);
+
+        *status = process_status(p);
+        process_destroy(p);
+        return 0;
+    } else {
+        /* Running in child process. */
+        int max_fds;
+        int i;
+
+        fatal_signal_fork();
+        fatal_signal_unblock();
+        unblock_sigchld(&oldsigs);
+
+        dup2(get_null_fd(), 0);
+        dup2(s_stdout.fds[1], 1);
+        dup2(s_stderr.fds[1], 2);
+
+        max_fds = get_max_fds();
+        for (i = 3; i < max_fds; i++) {
+            close(i);
+        }
+
+        execvp(argv[0], argv);
+        fprintf(stderr, "execvp(\"%s\") failed: %s\n",
+                argv[0], strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+}
+
 static void
 sigchld_handler(int signr UNUSED)
 {
@@ -395,6 +631,16 @@ is_member(int x, const int *array, size_t n)
         }
     }
     return false;
+}
+
+static bool
+sigchld_is_blocked(void)
+{
+    sigset_t sigs;
+    if (sigprocmask(SIG_SETMASK, NULL, &sigs)) {
+        ovs_fatal(errno, "sigprocmask");
+    }
+    return sigismember(&sigs, SIGCHLD);
 }
 
 static void

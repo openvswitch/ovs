@@ -206,6 +206,8 @@ static uint64_t bridge_pick_datapath_id(struct bridge *,
                                         const char *devname);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 
+static void bridge_unixctl_fdb_show(struct unixctl_conn *, const char *args);
+
 static void bond_init(void);
 static void bond_run(struct bridge *);
 static void bond_wait(struct bridge *);
@@ -277,6 +279,8 @@ bridge_init(void)
 {
     struct svec dpif_names;
     size_t i;
+
+    unixctl_command_register("fdb/show", bridge_unixctl_fdb_show);
 
     dp_enumerate(&dpif_names);
     for (i = 0; i < dpif_names.n; i++) {
@@ -772,6 +776,32 @@ bridge_flush(struct bridge *br)
     }
 }
 
+/* Bridge unixctl user interface functions. */
+static void
+bridge_unixctl_fdb_show(struct unixctl_conn *conn, const char *args)
+{
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    const struct bridge *br;
+
+    br = bridge_lookup(args);
+    if (!br) {
+        unixctl_command_reply(conn, 501, "no such bridge");
+        return;
+    }
+
+    ds_put_cstr(&ds, " port  VLAN  MAC                Age\n");
+    if (br->ml) {
+        const struct mac_entry *e;
+        LIST_FOR_EACH (e, struct mac_entry, lru_node, &br->ml->lrus) {
+            ds_put_format(&ds, "%5d  %4d  "ETH_ADDR_FMT"  %3d\n",
+                          e->port, e->vlan, ETH_ADDR_ARGS(e->mac),
+                          mac_entry_age(e));
+        }
+    }
+    unixctl_command_reply(conn, 200, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
 /* Bridge reconfiguration functions. */
 
 static struct bridge *
@@ -1067,10 +1097,15 @@ bridge_reconfigure_controller(struct bridge *br)
         int rate_limit, burst_limit;
 
         if (!strcmp(controller, "discover")) {
+            bool update_resolv_conf = true;
+
+            if (cfg_has("%s.update-resolv.conf", pfx)) {
+                update_resolv_conf = cfg_get_bool(0, "%s.update-resolv.conf",
+                        pfx);
+            }
             ofproto_set_discovery(br->ofproto, true,
                                   cfg_get_string(0, "%s.accept-regex", pfx),
-                                  cfg_get_bool(0, "%s.update-resolv.conf",
-                                               pfx));
+                                  update_resolv_conf);
         } else {
             char local_name[IF_NAMESIZE];
             struct netdev *netdev;
@@ -1332,6 +1367,10 @@ bond_link_status_update(struct iface *iface, bool carrier)
         iface->delay_expires = LLONG_MAX;
         VLOG_INFO_RL(&rl, "interface %s: will not be %s",
                      iface->name, carrier ? "disabled" : "enabled");
+    } else if (carrier && port->updelay && port->active_iface < 0) {
+        iface->delay_expires = time_msec();
+        VLOG_INFO_RL(&rl, "interface %s: skipping %d ms updelay since no "
+                     "other interface is up", iface->name, port->updelay);
     } else {
         int delay = carrier ? port->updelay : port->downdelay;
         iface->delay_expires = time_msec() + delay;
@@ -1375,7 +1414,7 @@ bond_enable_slave(struct iface *iface, bool enable)
 
     iface->enabled = enable;
     if (!iface->enabled) {
-        VLOG_WARN("interface %s: enabled", iface->name);
+        VLOG_WARN("interface %s: disabled", iface->name);
         ofproto_revalidate(br->ofproto, iface->tag);
         if (iface->port_ifidx == port->active_iface) {
             ofproto_revalidate(br->ofproto,
@@ -1384,7 +1423,7 @@ bond_enable_slave(struct iface *iface, bool enable)
         }
         bond_send_learning_packets(port);
     } else {
-        VLOG_WARN("interface %s: disabled", iface->name);
+        VLOG_WARN("interface %s: enabled", iface->name);
         if (port->active_iface < 0) {
             ofproto_revalidate(br->ofproto, port->no_ifaces_tag);
             bond_choose_active_iface(port);
@@ -2424,8 +2463,8 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_)
         return;
     }
 
-    if (sscanf(hash_s, "%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8":%"SCNx8,
-               &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]) == 6) {
+    if (sscanf(hash_s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
+        == ETH_ADDR_SCAN_COUNT) {
         hash = bond_hash(mac);
     } else if (strspn(hash_s, "0123456789") == strlen(hash_s)) {
         hash = atoi(hash_s) & BOND_MASK;

@@ -17,8 +17,13 @@ static inline struct sk_buff *nlmsg_new_proper(int size, gfp_t flags)
 {
 	return alloc_skb(size, flags);
 }
-
 #endif /* linux kernel < 2.6.19 */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+static inline struct nlmsghdr *nlmsg_hdr(const struct sk_buff *skb)
+{
+	return (struct nlmsghdr *)skb->data;
+}
+#endif
 
 #endif

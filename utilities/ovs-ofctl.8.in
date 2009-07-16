@@ -153,7 +153,7 @@ option.
 If \fImiss-len\fR is provided, \fBovs\-ofctl\fR sends an OpenFlow ``set
 configuration'' message at connection setup time that requests
 \fImiss-len\fR bytes of each packet that misses the flow table.  The
-OpenFlow reference implementation not send these messages to the
+OpenFlow reference implementation does not send these messages to the
 \fBovs\-ofctl monitor\fR client connection unless a nonzero value is
 specified on this argument.
 
