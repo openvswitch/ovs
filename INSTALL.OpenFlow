@@ -2,12 +2,14 @@
             ==============================================
 
 Open vSwitch uses OpenFlow as its preferred method of remote flow table
-configuration.  Running ovs-vswitchd(8) with the bridge.<name>.controller 
-set of parameters as described in ovs-vswitchd.conf(5) will cause it to
-connect to the specified controller using OpenFlow.  We recommend using
-OpenFlow in this manner, however, it is also possible to use Open vSwitch 
-as a simple OpenFlow switch like that provided by the OpenFlow reference 
-implementation [1].
+configuration.  This is the simplest method of using it with an OpenFlow
+controller.  All that is required is to follow the instructions in
+INSTALL.Linux and add the bridge.<name>.controller set of parameters to the 
+ovs-vswitchd(8) configuration file as described in ovs-vswitchd.conf(5).  
+We recommend using OpenFlow in this manner.  However, it is also possible to 
+use Open vSwitch as a simple OpenFlow switch like that provided by the 
+OpenFlow reference implementation [1].  The remainder of this file describes 
+how to user it in that manner.
 
 What is OpenFlow?
 -----------------
@@ -66,8 +68,8 @@ OpenFlow switch.
    
    Creating datapath dp0 creates a new network device, also named dp0.
    This network device, called the datapath's "local port", will be
-   bridged to the physical switch ports by ovs-openflowd(8), for use in
-   in-band control.
+   bridged to the physical switch ports by ovs-openflowd(8).  It is
+   optionally used for in-band control as described in step 5.
 
 4. Use ovs-dpctl to attach the datapath to physical interfaces on the
    machine.  Say, for example, you want to create a trivial 2-port
@@ -82,8 +84,14 @@ OpenFlow switch.
 
       # ovs-dpctl show dp0
 
-5. Arrange so that the switch can reach the controller over the
-   network.
+5. Arrange so that the switch can reach the controller over the network.  
+   This can be done in two ways.  The switch may be configured for 
+   out-of-band control, which means it uses a network separate from the 
+   data traffic that it controls.  Alternatively, the switch may be 
+   configured to contact the controller over one of the network devices 
+   under its control.  In-band control is often more convenient than 
+   out-of-band, because it is not necessary to maintain two independent 
+   networks.
 
       - If you are using out-of-band control, at this point make sure
         that the switch machine can reach the controller over the
@@ -103,12 +111,13 @@ OpenFlow switch.
 
            * If the switch does not have a static IP address, e.g. its
              IP address is obtained dynamically via DHCP, then proceed
-             to step 4.  The DHCP client will not be able to contact
-             the DHCP server until the secure channel has started up.
+             to the next step.  The DHCP client will not be able to 
+             contact the DHCP server until the secure channel has 
+             started.  The address will be obtained in step 7.
 
       - If you are using in-band control with controller discovery, no
         configuration is required at this point.  You may proceed to
-        step 4.
+        the next step.
 
 6. Run ovs-openflowd to start the secure channel connecting the datapath to
    a remote controller.  If the controller is running on host
