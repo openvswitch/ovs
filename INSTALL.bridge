@@ -4,10 +4,12 @@
 This file documents how Open vSwitch may be used as a drop-in
 replacement for a Linux kernel bridge in an environment that includes
 elements that are tightly tied to the Linux bridge tools
-(e.g. "brctl") and architecture.  We do not recommend using the
-approach described here outside such an environment, since the other
-tools included with Open vSwitch are easier to use and more
-general-purpose than the Linux bridging tools.
+(e.g. "brctl") and architecture.  We recommend directly using the
+management tools provided with Open vSwitch rather than these
+compatibility hooks for environments that are not tightly tied to the
+Linux bridging tools; they are more efficient and better reflect the
+actual operation and status.
+
 
 Installation Procedure
 ----------------------
@@ -40,10 +42,11 @@ to update system scripts to follow these steps.
    bridge interfaces), to ensure that the Open vSwitch kernel modules
    are loaded before the Linux kernel bridge module.
 
-3. Create an initial ovs-vswitchd.conf file.  This file may be empty
-   when ovs-vswitchd, or you may add any valid configuration
-   directives to it (as described in ovs-vswitchd.conf(5)), but it
-   must exist.
+3. Create an initial version of the configuration file, for example
+   /etc/ovs-vswitchd.conf.  This file may be empty initially or may
+   contain add any valid configuration directives described in
+   ovs-vswitchd.conf(5).  However, it must exist when you start
+   ovs-vswitchd.
 
    To create an empty configuration file:
 
