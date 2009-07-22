@@ -44,7 +44,7 @@ shash_clear(struct shash *sh)
 {
     struct shash_node *node, *next;
 
-    HMAP_FOR_EACH_SAFE (node, next, struct shash_node, node, &sh->map) {
+    SHASH_FOR_EACH_SAFE (node, next, sh) {
         hmap_remove(&sh->map, &node->node);
         free(node->name);
         free(node);

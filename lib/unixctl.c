@@ -82,7 +82,7 @@ unixctl_help(struct unixctl_conn *conn, const char *args UNUSED)
     struct shash_node *node;
 
     ds_put_cstr(&ds, "The available commands are:\n");
-    HMAP_FOR_EACH (node, struct shash_node, node, &commands.map) {
+    SHASH_FOR_EACH (node, &commands) {
         ds_put_format(&ds, "\t%s\n", node->name);
     }
     unixctl_command_reply(conn, 214, ds_cstr(&ds));

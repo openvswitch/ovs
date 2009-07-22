@@ -31,6 +31,13 @@ struct shash {
 
 #define SHASH_INITIALIZER(SHASH) { HMAP_INITIALIZER(&(SHASH)->map) }
 
+#define SHASH_FOR_EACH(SHASH_NODE, SHASH)                               \
+    HMAP_FOR_EACH (SHASH_NODE, struct shash_node, node, &(SHASH)->map)
+
+#define SHASH_FOR_EACH_SAFE(SHASH_NODE, NEXT, SHASH)                \
+    HMAP_FOR_EACH_SAFE (SHASH_NODE, NEXT, struct shash_node, node,  \
+                        &(SHASH)->map)
+
 void shash_init(struct shash *);
 void shash_destroy(struct shash *);
 void shash_clear(struct shash *);
