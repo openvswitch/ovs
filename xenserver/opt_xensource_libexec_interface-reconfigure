@@ -750,6 +750,9 @@ def configure_bond(pif):
     argv += ["--add=bonding.%s.slave=%s" % (interface, slave)
              for slave in physdevs]
 
+    if pifrec['MAC'] != "":
+        argv += ['--add=port.%s.mac=%s' % (interface, pifrec['MAC'])]
+
     # Bonding options.
     bond_options = { 
         "mode":   "balance-slb",

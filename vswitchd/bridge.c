@@ -613,30 +613,62 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
     memset(ea, 0xff, sizeof ea);
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
+        uint8_t iface_ea[ETH_ADDR_LEN];
+        uint64_t iface_ea_u64;
+        struct iface *iface;
+
+        /* Mirror output ports don't participate. */
         if (port->is_mirror_output_port) {
             continue;
         }
-        for (j = 0; j < port->n_ifaces; j++) {
-            struct iface *iface = port->ifaces[j];
-            uint8_t iface_ea[ETH_ADDR_LEN];
+
+        /* Choose the MAC address to represent the port. */
+        iface_ea_u64 = cfg_get_mac(0, "port.%s.mac", port->name);
+        if (iface_ea_u64) {
+            /* User specified explicitly. */
+            eth_addr_from_uint64(iface_ea_u64, iface_ea);
+        } else {
+            /* Choose the interface whose MAC address will represent the port.
+             * The Linux kernel bonding code always chooses the MAC address of
+             * the first slave added to a bond, and the Fedora networking
+             * scripts always add slaves to a bond in alphabetical order, so
+             * for compatibility we choose the interface with the name that is
+             * first in alphabetical order. */
+            iface = port->ifaces[0];
+            for (j = 1; j < port->n_ifaces; j++) {
+                struct iface *candidate = port->ifaces[j];
+                if (strcmp(candidate->name, iface->name) < 0) {
+                    iface = candidate;
+                }
+            }
+
+            /* The local port doesn't count (since we're trying to choose its
+             * MAC address anyway).  Other internal ports don't count because
+             * we really want a physical MAC if we can get it, and internal
+             * ports typically have randomly generated MACs. */
             if (iface->dp_ifidx == ODPP_LOCAL
                 || cfg_get_bool(0, "iface.%s.internal", iface->name)) {
                 continue;
             }
+
+            /* Grab MAC. */
             error = netdev_nodev_get_etheraddr(iface->name, iface_ea);
-            if (!error) {
-                if (!eth_addr_is_multicast(iface_ea) &&
-                    !eth_addr_is_reserved(iface_ea) &&
-                    !eth_addr_is_zero(iface_ea) &&
-                    memcmp(iface_ea, ea, ETH_ADDR_LEN) < 0) {
-                    memcpy(ea, iface_ea, ETH_ADDR_LEN);
-                    *devname = iface->name;
-                }
-            } else {
+            if (error) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
                 VLOG_ERR_RL(&rl, "failed to obtain Ethernet address of %s: %s",
                             iface->name, strerror(error));
+                continue;
             }
+        }
+
+        /* Compare against our current choice. */
+        if (!eth_addr_is_multicast(iface_ea) &&
+            !eth_addr_is_reserved(iface_ea) &&
+            !eth_addr_is_zero(iface_ea) &&
+            memcmp(iface_ea, ea, ETH_ADDR_LEN) < 0)
+        {
+            memcpy(ea, iface_ea, ETH_ADDR_LEN);
+            *devname = iface->name;
         }
     }
     if (eth_addr_is_multicast(ea) || eth_addr_is_vif(ea)) {

@@ -72,11 +72,23 @@ in the bridge, by specifying it as one of the values for key
 included, then its MAC address is by default the lowest-numbered MAC
 address among the other bridge ports, ignoring other internal ports
 and bridge ports that are
-used as port mirroring destinations (see \fBPort Mirroring\fR, below).  To
-use a specific MAC address instead, set \fBbridge.\fIname\fB.mac\fR to
-a MAC address in the format
+used as port mirroring destinations (see \fBPort Mirroring\fR, below).
+For this purpose, the MAC of a bonded port (see \fBNetwork Device
+Bonding\fR, below) is by default the MAC of its slave whose name is first in
+alphabetical order.
+There are two ways to modify this algorithm for selecting the MAC
+address of the local port:
+.IP \(bu
+To use a specific MAC address for the local port, set
+\fBbridge.\fIname\fB.mac\fR to a MAC address in the format
 \fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR, where each
-\fIx\fR is a hex digit.  If no valid MAC address can be determined
+\fIx\fR is a hex digit.
+.IP \(bu
+To override the MAC of a port for the purpose of this algorithm, set
+\fBport.\fIport\fB.mac\fR to a MAC address in the format described
+above.
+.PP
+If no valid MAC address can be determined
 either of these ways, then a MAC address is randomly generated.
 .PP
 The following syntax defines a bridge named \fBmybr\fR, configured
