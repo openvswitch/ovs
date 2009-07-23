@@ -119,7 +119,7 @@ int netdev_nodev_arp_lookup(const char *netdev_name, uint32_t ip,
                             uint8_t mac[6]);
 int netdev_nodev_get_carrier(const char *netdev_name, bool *carrier);
 
-int netdev_get_vlan_vid(const char *netdev_name, int *vlan_vid);
+int netdev_get_vlan_vid(const struct netdev *, int *vlan_vid);
 
 struct netdev_monitor;
 int netdev_monitor_create(struct netdev_monitor **);

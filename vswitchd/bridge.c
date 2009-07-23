@@ -724,8 +724,7 @@ bridge_pick_datapath_id(struct bridge *br,
 
     if (hw_addr_iface) {
         int vlan;
-        if (!netdev_get_vlan_vid(netdev_get_name(hw_addr_iface->netdev),
-                                 &vlan)) {
+        if (!netdev_get_vlan_vid(hw_addr_iface->netdev, &vlan)) {
             /*
              * A bridge whose MAC address is taken from a VLAN network device
              * (that is, a network device created with vconfig(8) or similar

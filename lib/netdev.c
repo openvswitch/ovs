@@ -1379,13 +1379,13 @@ netdev_nodev_get_etheraddr(const char *netdev_name, uint8_t mac[6])
     return get_etheraddr(netdev_name, mac, NULL);
 }
 
-/* If 'netdev_name' is the name of a VLAN network device (e.g. one created with
- * vconfig(8)), sets '*vlan_vid' to the VLAN VID associated with that device
- * and returns 0.  Otherwise returns a errno value (specifically ENOENT if
- * 'netdev_name' is the name of a network device that is not a VLAN device) and
- * sets '*vlan_vid' to -1. */
+/* If 'netdev' is a VLAN network device (e.g. one created with vconfig(8)),
+ * sets '*vlan_vid' to the VLAN VID associated with that device and returns 0.
+ * Otherwise returns a errno value (specifically ENOENT if 'netdev_name' is the
+ * name of a network device that is not a VLAN device) and sets '*vlan_vid' to
+ * -1. */
 int
-netdev_get_vlan_vid(const char *netdev_name, int *vlan_vid)
+netdev_get_vlan_vid(const struct netdev *netdev, int *vlan_vid)
 {
     struct ds line = DS_EMPTY_INITIALIZER;
     FILE *stream = NULL;
@@ -1393,7 +1393,7 @@ netdev_get_vlan_vid(const char *netdev_name, int *vlan_vid)
     char *fn;
 
     COVERAGE_INC(netdev_get_vlan_vid);
-    fn = xasprintf("/proc/net/vlan/%s", netdev_name);
+    fn = xasprintf("/proc/net/vlan/%s", netdev_get_name(netdev));
     stream = fopen(fn, "r");
     if (!stream) {
         error = errno;
