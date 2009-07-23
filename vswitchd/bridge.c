@@ -82,7 +82,6 @@ struct iface {
      * be initialized.*/
     int dp_ifidx;               /* Index within kernel datapath. */
     struct netdev *netdev;      /* Network device. */
-    uint8_t mac[ETH_ADDR_LEN];  /* Ethernet address (all zeros if unknowns). */
     bool enabled;               /* May be chosen for flows? */
 };
 
@@ -370,7 +369,6 @@ init_iface_netdev(struct bridge *br UNUSED, struct iface *iface,
         return true;
     } else if (!netdev_open(iface->name, NETDEV_ETH_TYPE_NONE,
                             &iface->netdev)) {
-        netdev_get_etheraddr(iface->netdev, iface->mac);
         netdev_get_carrier(iface->netdev, &iface->enabled);
         return true;
     } else {
@@ -1941,7 +1939,6 @@ bridge_port_changed_ofhook_cb(enum ofp_port_reason reason,
 
         bridge_flush(br);
     } else {
-        memcpy(iface->mac, opp->hw_addr, ETH_ADDR_LEN);
         if (port->n_ifaces > 1) {
             bool up = !(opp->state & OFPPS_LINK_DOWN);
             bond_link_status_update(iface, up);
@@ -2914,7 +2911,7 @@ port_update_bond_compat(struct port *port)
         if (slave->up) {
             bond.up = true;
         }
-        memcpy(slave->mac, iface->mac, ETH_ADDR_LEN);
+        netdev_get_etheraddr(iface->netdev, slave->mac);
     }
     proc_net_compat_update_bond(port->name, &bond);
     free(bond.slaves);
@@ -2944,7 +2941,8 @@ port_update_vlan_compat(struct port *port)
                 && p->n_ifaces
                 && (!vlandev_name || strcmp(p->name, vlandev_name) <= 0))
             {
-                const uint8_t *ea = p->ifaces[0]->mac;
+                uint8_t ea[ETH_ADDR_LEN];
+                netdev_get_etheraddr(p->ifaces[0]->netdev, ea);
                 if (!eth_addr_is_multicast(ea) &&
                     !eth_addr_is_reserved(ea) &&
                     !eth_addr_is_zero(ea)) {
@@ -3350,23 +3348,25 @@ brstp_send_bpdu(struct ofpbuf *pkt, int port_no, void *br_)
     if (!iface) {
         VLOG_WARN_RL(&rl, "%s: cannot send BPDU on unknown port %d",
                      br->name, port_no);
-    } else if (eth_addr_is_zero(iface->mac)) {
-        VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d with unknown MAC",
-                     br->name, port_no);
     } else {
-        union ofp_action action;
         struct eth_header *eth = pkt->l2;
-        flow_t flow;
 
-        memcpy(eth->eth_src, iface->mac, ETH_ADDR_LEN);
+        netdev_get_etheraddr(iface->netdev, eth->eth_src);
+        if (eth_addr_is_zero(eth->eth_src)) {
+            VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d "
+                         "with unknown MAC", br->name, port_no);
+        } else {
+            union ofp_action action;
+            flow_t flow;
 
-        memset(&action, 0, sizeof action);
-        action.type = htons(OFPAT_OUTPUT);
-        action.output.len = htons(sizeof action);
-        action.output.port = htons(port_no);
+            memset(&action, 0, sizeof action);
+            action.type = htons(OFPAT_OUTPUT);
+            action.output.len = htons(sizeof action);
+            action.output.port = htons(port_no);
 
-        flow_extract(pkt, ODPP_NONE, &flow);
-        ofproto_send_packet(br->ofproto, &flow, &action, 1, pkt);
+            flow_extract(pkt, ODPP_NONE, &flow);
+            ofproto_send_packet(br->ofproto, &flow, &action, 1, pkt);
+        }
     }
     ofpbuf_delete(pkt);
 }
