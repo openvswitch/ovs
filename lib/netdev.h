@@ -75,7 +75,6 @@ struct netdev_stats {
 struct netdev;
 
 int netdev_open(const char *name, int ethertype, struct netdev **);
-int netdev_open_tap(const char *name, struct netdev **);
 void netdev_close(struct netdev *);
 
 int netdev_recv(struct netdev *, struct ofpbuf *);

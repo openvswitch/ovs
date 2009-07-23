@@ -335,58 +335,48 @@ do_get_features(struct netdev *netdev,
 int
 netdev_open(const char *name, int ethertype, struct netdev **netdevp) 
 {
-    if (!strncmp(name, "tap:", 4)) {
-        return netdev_open_tap(name + 4, netdevp);
-    } else {
+    if (strncmp(name, "tap:", 4)) {
         return do_open_netdev(name, ethertype, -1, netdevp); 
+    } else {
+        static const char tap_dev[] = "/dev/net/tun";
+        struct ifreq ifr;
+        int error;
+        int tap_fd;
+
+        tap_fd = open(tap_dev, O_RDWR);
+        if (tap_fd < 0) {
+            ovs_error(errno, "opening \"%s\" failed", tap_dev);
+            return errno;
+        }
+
+        memset(&ifr, 0, sizeof ifr);
+        ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
+        if (name) {
+            strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+        }
+        if (ioctl(tap_fd, TUNSETIFF, &ifr) < 0) {
+            int error = errno;
+            ovs_error(error, "ioctl(TUNSETIFF) on \"%s\" failed", tap_dev);
+            close(tap_fd);
+            return error;
+        }
+
+        error = set_nonblocking(tap_fd);
+        if (error) {
+            ovs_error(error, "set_nonblocking on \"%s\" failed", tap_dev);
+            close(tap_fd);
+            return error;
+        }
+
+        error = do_open_netdev(ifr.ifr_name, NETDEV_ETH_TYPE_NONE, tap_fd,
+                               netdevp);
+        if (error) {
+            close(tap_fd);
+        }
+        return error;
     }
 }
 
-/* Opens a TAP virtual network device.  If 'name' is a nonnull, non-empty
- * string, attempts to assign that name to the TAP device (failing if the name
- * is already in use); otherwise, a name is automatically assigned.  Returns
- * zero if successful, otherwise a positive errno value.  On success, sets
- * '*netdevp' to the new network device, otherwise to null.  */
-int
-netdev_open_tap(const char *name, struct netdev **netdevp)
-{
-    static const char tap_dev[] = "/dev/net/tun";
-    struct ifreq ifr;
-    int error;
-    int tap_fd;
-
-    tap_fd = open(tap_dev, O_RDWR);
-    if (tap_fd < 0) {
-        ovs_error(errno, "opening \"%s\" failed", tap_dev);
-        return errno;
-    }
-
-    memset(&ifr, 0, sizeof ifr);
-    ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-    if (name) {
-        strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
-    }
-    if (ioctl(tap_fd, TUNSETIFF, &ifr) < 0) {
-        int error = errno;
-        ovs_error(error, "ioctl(TUNSETIFF) on \"%s\" failed", tap_dev);
-        close(tap_fd);
-        return error;
-    }
-
-    error = set_nonblocking(tap_fd);
-    if (error) {
-        ovs_error(error, "set_nonblocking on \"%s\" failed", tap_dev);
-        close(tap_fd);
-        return error;
-    }
-
-    error = do_open_netdev(ifr.ifr_name, NETDEV_ETH_TYPE_NONE, tap_fd,
-                           netdevp);
-    if (error) {
-        close(tap_fd);
-    }
-    return error;
-}
 
 static int
 do_open_netdev(const char *name, int ethertype, int tap_fd,

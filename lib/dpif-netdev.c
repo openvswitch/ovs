@@ -377,7 +377,9 @@ do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
     if (!internal) {
         error = netdev_open(devname, NETDEV_ETH_TYPE_ANY, &netdev);
     } else {
-        error = netdev_open_tap(devname, &netdev);
+        char *tapname = xasprintf("tap:%s", devname);
+        error = netdev_open(tapname, NETDEV_ETH_TYPE_ANY, &netdev);
+        free(tapname);
     }
     if (error) {
         return error;
