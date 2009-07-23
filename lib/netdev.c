@@ -686,13 +686,6 @@ netdev_set_etheraddr(struct netdev *netdev, const uint8_t mac[ETH_ADDR_LEN])
     return error;
 }
 
-int
-netdev_nodev_set_etheraddr(const char *name, const uint8_t mac[ETH_ADDR_LEN])
-{
-    init_netdev();
-    return set_etheraddr(name, ARPHRD_ETHER, mac);
-}
-
 /* Retrieves 'netdev''s MAC address.  If successful, returns 0 and copies the
  * the MAC address into 'mac'.  On failure, returns a positive errno value and
  * clears 'mac' to all-zeros. */
@@ -800,8 +793,9 @@ netdev_set_advertisements(struct netdev *netdev, uint32_t advertise)
  * 'in4' is non-null) and returns 0.  Otherwise, returns a positive errno value
  * and sets '*in4' to INADDR_ANY (0). */
 int
-netdev_nodev_get_in4(const char *netdev_name, struct in_addr *in4)
+netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
 {
+    const char *netdev_name = netdev_get_name(netdev);
     struct ifreq ifr;
     struct in_addr ip = { INADDR_ANY };
     int error;
@@ -824,12 +818,6 @@ netdev_nodev_get_in4(const char *netdev_name, struct in_addr *in4)
         *in4 = ip;
     }
     return error;
-}
-
-int
-netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
-{
-    return netdev_nodev_get_in4(netdev->name, in4);
 }
 
 static void
@@ -918,7 +906,23 @@ netdev_get_in6(const struct netdev *netdev, struct in6_addr *in6)
 int
 netdev_get_flags(const struct netdev *netdev, enum netdev_flags *flagsp)
 {
-    return netdev_nodev_get_flags(netdev->name, flagsp);
+    int error, flags;
+
+    init_netdev();
+
+    *flagsp = 0;
+    error = get_flags(netdev_get_name(netdev), &flags);
+    if (error) {
+        return error;
+    }
+
+    if (flags & IFF_UP) {
+        *flagsp |= NETDEV_UP;
+    }
+    if (flags & IFF_PROMISC) {
+        *flagsp |= NETDEV_PROMISC;
+    }
+    return 0;
 }
 
 static int
@@ -998,9 +1002,10 @@ netdev_turn_flags_off(struct netdev *netdev, enum netdev_flags flags,
  * returns 0.  Otherwise, it returns a positive errno value; in particular,
  * ENXIO indicates that there is not ARP table entry for 'ip' on 'netdev'. */
 int
-netdev_nodev_arp_lookup(const char *netdev_name, uint32_t ip, 
-                        uint8_t mac[ETH_ADDR_LEN]) 
+netdev_arp_lookup(const struct netdev *netdev, uint32_t ip, 
+                  uint8_t mac[ETH_ADDR_LEN]) 
 {
+    const char *netdev_name = netdev_get_name(netdev);
     struct arpreq r;
     struct sockaddr_in *pa;
     int retval;
@@ -1024,13 +1029,6 @@ netdev_nodev_arp_lookup(const char *netdev_name, uint32_t ip,
                      netdev_name, IP_ARGS(&ip), strerror(retval));
     }
     return retval;
-}
-
-int
-netdev_arp_lookup(const struct netdev *netdev, uint32_t ip, 
-                  uint8_t mac[ETH_ADDR_LEN]) 
-{
-    return netdev_nodev_arp_lookup(netdev->name, ip, mac);
 }
 
 static int
@@ -1155,12 +1153,6 @@ get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats)
 int
 netdev_get_carrier(const struct netdev *netdev, bool *carrier)
 {
-    return netdev_nodev_get_carrier(netdev->name, carrier);
-}
-
-int
-netdev_nodev_get_carrier(const char *netdev_name, bool *carrier)
-{
     char line[8];
     int retval;
     int error;
@@ -1169,7 +1161,7 @@ netdev_nodev_get_carrier(const char *netdev_name, bool *carrier)
 
     *carrier = false;
 
-    fn = xasprintf("/sys/class/net/%s/carrier", netdev_name);
+    fn = xasprintf("/sys/class/net/%s/carrier", netdev_get_name(netdev));
     fd = open(fn, O_RDONLY);
     if (fd < 0) {
         error = errno;
@@ -1243,9 +1235,10 @@ netdev_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 
 /* Attempts to set input rate limiting (policing) policy. */
 int
-netdev_nodev_set_policing(const char *netdev_name, uint32_t kbits_rate,
-                          uint32_t kbits_burst)
+netdev_set_policing(struct netdev *netdev, uint32_t kbits_rate,
+                    uint32_t kbits_burst)
 {
+    const char *netdev_name = netdev_get_name(netdev);
     char command[1024];
 
     init_netdev();
@@ -1285,13 +1278,6 @@ netdev_nodev_set_policing(const char *netdev_name, uint32_t kbits_rate,
     }
 
     return 0;
-}
-
-int
-netdev_set_policing(struct netdev *netdev, uint32_t kbits_rate,
-                    uint32_t kbits_burst)
-{
-    return netdev_nodev_set_policing(netdev->name, kbits_rate, kbits_burst);
 }
 
 /* Initializes 'svec' with a list of the names of all known network devices. */
@@ -1341,42 +1327,6 @@ netdev_find_dev_by_in4(const struct in_addr *in4)
 exit:
     svec_destroy(&dev_list);
     return netdev;
-}
-
-/* Obtains the current flags for the network device named 'netdev_name' and
- * stores them into '*flagsp'.  Returns 0 if successful, otherwise a positive
- * errno value.  On error, stores 0 into '*flagsp'.
- *
- * If only device flags are needed, this is more efficient than calling
- * netdev_open(), netdev_get_flags(), netdev_close(). */
-int
-netdev_nodev_get_flags(const char *netdev_name, enum netdev_flags *flagsp)
-{
-    int error, flags;
-
-    init_netdev();
-
-    *flagsp = 0;
-    error = get_flags(netdev_name, &flags);
-    if (error) {
-        return error;
-    }
-
-    if (flags & IFF_UP) {
-        *flagsp |= NETDEV_UP;
-    }
-    if (flags & IFF_PROMISC) {
-        *flagsp |= NETDEV_PROMISC;
-    }
-    return 0;
-}
-
-int
-netdev_nodev_get_etheraddr(const char *netdev_name, uint8_t mac[6])
-{
-    init_netdev();
-
-    return get_etheraddr(netdev_name, mac, NULL);
 }
 
 /* If 'netdev' is a VLAN network device (e.g. one created with vconfig(8)),
@@ -1690,6 +1640,7 @@ get_etheraddr(const char *netdev_name, uint8_t ea[ETH_ADDR_LEN],
 {
     struct ifreq ifr;
 
+    *hwaddr_familyp = 0;
     memset(&ifr, 0, sizeof ifr);
     strncpy(ifr.ifr_name, netdev_name, sizeof ifr.ifr_name);
     COVERAGE_INC(netdev_get_hwaddr);
