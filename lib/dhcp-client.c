@@ -411,7 +411,7 @@ dhclient_configure_netdev(struct dhclient *cli)
     }
 
     if (!error && router.s_addr) {
-        error = netdev_add_router(router);
+        error = netdev_add_router(cli->netdev, router);
         if (error) {
             VLOG_ERR("failed to add default route to "IP_FMT" on %s: %s",
                      IP_ARGS(&router), netdev_get_name(cli->netdev),

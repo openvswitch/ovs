@@ -1145,7 +1145,7 @@ bridge_reconfigure_controller(struct bridge *br)
                     }
 
                     if (gateway.s_addr) {
-                        if (!netdev_add_router(gateway)) {
+                        if (!netdev_add_router(netdev, gateway)) {
                             VLOG_INFO("bridge %s: configured gateway "IP_FMT,
                                       br->name, IP_ARGS(&gateway.s_addr));
                         }

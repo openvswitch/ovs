@@ -879,9 +879,10 @@ netdev_set_in4(struct netdev *netdev, struct in_addr addr, struct in_addr mask)
     return error;
 }
 
-/* Adds 'router' as a default IP gateway. */
+/* Adds 'router' as a default IP gateway for the TCP/IP stack that corresponds
+ * to 'netdev'. */
 int
-netdev_add_router(struct in_addr router)
+netdev_add_router(struct netdev *netdev UNUSED, struct in_addr router)
 {
     struct in_addr any = { INADDR_ANY };
     struct rtentry rt;

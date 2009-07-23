@@ -94,7 +94,7 @@ int netdev_get_features(struct netdev *,
 int netdev_set_advertisements(struct netdev *, uint32_t advertise);
 int netdev_get_in4(const struct netdev *, struct in_addr *);
 int netdev_set_in4(struct netdev *, struct in_addr addr, struct in_addr mask);
-int netdev_add_router(struct in_addr router);
+int netdev_add_router(struct netdev *, struct in_addr router);
 bool netdev_get_in6(const struct netdev *, struct in6_addr *);
 int netdev_get_flags(const struct netdev *, enum netdev_flags *);
 int netdev_set_flags(struct netdev *, enum netdev_flags, bool permanent);
