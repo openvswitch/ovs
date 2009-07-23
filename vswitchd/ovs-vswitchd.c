@@ -34,7 +34,6 @@
 #include "mgmt.h"
 #include "ovs-vswitchd.h"
 #include "poll-loop.h"
-#include "port.h"
 #include "proc-net-compat.h"
 #include "process.h"
 #include "signals.h"
@@ -84,7 +83,6 @@ main(int argc, char *argv[])
     cfg_read();
     mgmt_init();
     bridge_init();
-    port_init();
     mgmt_reconfigure();
 
     need_reconfigure = false;
@@ -133,7 +131,6 @@ reconfigure(void)
     cfg_read();
     bridge_reconfigure();
     mgmt_reconfigure();
-    port_reconfigure();
 
     for (i = 0; i < n_conns; i++) {
         unixctl_command_reply(conns[i], 202, NULL);

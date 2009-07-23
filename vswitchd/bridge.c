@@ -399,6 +399,16 @@ check_iface_dp_ifidx(struct bridge *br, struct iface *iface,
     }
 }
 
+static bool
+set_iface_policing(struct bridge *br UNUSED, struct iface *iface,
+                   void *aux UNUSED)
+{
+    int rate = cfg_get_int(0, "port.%s.ingress.policing-rate", iface->name);
+    int burst = cfg_get_int(0, "port.%s.ingress.policing-burst", iface->name);
+    netdev_set_policing(iface->netdev, rate, burst);
+    return true;
+}
+
 /* Calls 'cb' for each interfaces in 'br', passing along the 'aux' argument.
  * Deletes from 'br' all the interfaces for which 'cb' returns false, and then
  * deletes from 'br' any ports that no longer have any interfaces. */
@@ -617,6 +627,7 @@ bridge_reconfigure(void)
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         brstp_reconfigure(br);
+        iterate_and_prune_ifaces(br, set_iface_policing, NULL);
     }
 }
 

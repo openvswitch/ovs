@@ -13,8 +13,6 @@ vswitchd_ovs_vswitchd_SOURCES = \
 	vswitchd/bridge.h \
 	vswitchd/mgmt.c \
 	vswitchd/mgmt.h \
-	vswitchd/port.c \
-	vswitchd/port.h \
 	vswitchd/proc-net-compat.c \
 	vswitchd/proc-net-compat.h \
 	vswitchd/ovs-vswitchd.c \
