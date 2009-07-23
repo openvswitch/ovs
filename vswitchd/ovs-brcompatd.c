@@ -611,8 +611,14 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
     for (i = 0; i < ifaces.n; i++) {
         const char *iface_name = ifaces.names[i];
         struct mac *mac = &local_macs[n_local_macs];
-        if (!netdev_nodev_get_etheraddr(iface_name, mac->addr)) {
-            n_local_macs++;
+        struct netdev *netdev;
+
+        error = netdev_open(iface_name, NETDEV_ETH_TYPE_NONE, &netdev);
+        if (netdev) {
+            if (!netdev_get_etheraddr(netdev, mac->addr)) {
+                n_local_macs++;
+            }
+            netdev_close(netdev);
         }
     }
     svec_destroy(&ifaces);

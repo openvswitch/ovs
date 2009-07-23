@@ -201,10 +201,11 @@ static void bridge_fetch_dp_ifaces(struct bridge *);
 static void bridge_flush(struct bridge *);
 static void bridge_pick_local_hw_addr(struct bridge *,
                                       uint8_t ea[ETH_ADDR_LEN],
-                                      const char **devname);
+                                      struct iface **hw_addr_iface);
 static uint64_t bridge_pick_datapath_id(struct bridge *,
                                         const uint8_t bridge_ea[ETH_ADDR_LEN],
-                                        const char *devname);
+                                        struct iface *hw_addr_iface);
+static struct iface *bridge_get_local_iface(struct bridge *);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 
 static void bridge_unixctl_fdb_show(struct unixctl_conn *, const char *args);
@@ -379,15 +380,9 @@ init_iface_netdev(struct bridge *br UNUSED, struct iface *iface,
 }
 
 static bool
-check_iface_dp_ifidx(struct bridge *br, struct iface *iface,
-                     void *local_ifacep_)
+check_iface_dp_ifidx(struct bridge *br, struct iface *iface, void *aux UNUSED)
 {
-    struct iface **local_ifacep = local_ifacep_;
-
     if (iface->dp_ifidx >= 0) {
-        if (iface->dp_ifidx == ODPP_LOCAL) {
-            *local_ifacep = iface;
-        }
         VLOG_DBG("%s has interface %s on port %d",
                  dpif_name(br->dpif),
                  iface->name, iface->dp_ifidx);
@@ -549,8 +544,8 @@ bridge_reconfigure(void)
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         uint8_t ea[8];
         uint64_t dpid;
-        struct iface *local_iface = NULL;
-        const char *devname;
+        struct iface *local_iface;
+        struct iface *hw_addr_iface;
         uint8_t engine_type, engine_id;
         bool add_id_to_iface = false;
         struct svec nf_hosts;
@@ -558,13 +553,13 @@ bridge_reconfigure(void)
         bridge_fetch_dp_ifaces(br);
         iterate_and_prune_ifaces(br, init_iface_netdev, NULL);
 
-        local_iface = NULL;
-        iterate_and_prune_ifaces(br, check_iface_dp_ifidx, &local_iface);
+        iterate_and_prune_ifaces(br, check_iface_dp_ifidx, NULL);
 
         /* Pick local port hardware address, datapath ID. */
-        bridge_pick_local_hw_addr(br, ea, &devname);
+        bridge_pick_local_hw_addr(br, ea, &hw_addr_iface);
+        local_iface = bridge_get_local_iface(br);
         if (local_iface) {
-            int error = netdev_nodev_set_etheraddr(local_iface->name, ea);
+            int error = netdev_set_etheraddr(local_iface->netdev, ea);
             if (error) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
                 VLOG_ERR_RL(&rl, "bridge %s: failed to set bridge "
@@ -573,7 +568,7 @@ bridge_reconfigure(void)
             }
         }
 
-        dpid = bridge_pick_datapath_id(br, ea, devname);
+        dpid = bridge_pick_datapath_id(br, ea, hw_addr_iface);
         ofproto_set_datapath_id(br->ofproto, dpid);
 
         /* Set NetFlow configuration on this bridge. */
@@ -633,13 +628,13 @@ bridge_reconfigure(void)
 
 static void
 bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
-                          const char **devname)
+                          struct iface **hw_addr_iface)
 {
     uint64_t requested_ea;
     size_t i, j;
     int error;
 
-    *devname = NULL;
+    *hw_addr_iface = NULL;
 
     /* Did the user request a particular MAC? */
     requested_ea = cfg_get_mac(0, "bridge.%s.mac", br->name);
@@ -671,14 +666,14 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
                 || cfg_get_bool(0, "iface.%s.internal", iface->name)) {
                 continue;
             }
-            error = netdev_nodev_get_etheraddr(iface->name, iface_ea);
+            error = netdev_get_etheraddr(iface->netdev, iface_ea);
             if (!error) {
                 if (!eth_addr_is_multicast(iface_ea) &&
                     !eth_addr_is_reserved(iface_ea) &&
                     !eth_addr_is_zero(iface_ea) &&
                     memcmp(iface_ea, ea, ETH_ADDR_LEN) < 0) {
                     memcpy(ea, iface_ea, ETH_ADDR_LEN);
-                    *devname = iface->name;
+                    *hw_addr_iface = iface;
                 }
             } else {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -689,7 +684,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
     }
     if (eth_addr_is_multicast(ea) || eth_addr_is_vif(ea)) {
         memcpy(ea, br->default_ea, ETH_ADDR_LEN);
-        *devname = NULL;
+        *hw_addr_iface = NULL;
         VLOG_WARN("bridge %s: using default bridge Ethernet "
                   "address "ETH_ADDR_FMT, br->name, ETH_ADDR_ARGS(ea));
     } else {
@@ -700,13 +695,13 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
 
 /* Choose and returns the datapath ID for bridge 'br' given that the bridge
  * Ethernet address is 'bridge_ea'.  If 'bridge_ea' is the Ethernet address of
- * a network device, then that network device's name must be passed in as
- * 'devname'; if 'bridge_ea' was derived some other way, then 'devname' must be
- * passed in as a null pointer. */
+ * an interface on 'br', then that interface must be passed in as
+ * 'hw_addr_iface'; if 'bridge_ea' was derived some other way, then
+ * 'hw_addr_iface' must be passed in as a null pointer. */
 static uint64_t
 bridge_pick_datapath_id(struct bridge *br,
                         const uint8_t bridge_ea[ETH_ADDR_LEN],
-                        const char *devname)
+                        struct iface *hw_addr_iface)
 {
     /*
      * The procedure for choosing a bridge MAC address will, in the most
@@ -727,9 +722,10 @@ bridge_pick_datapath_id(struct bridge *br,
         return dpid;
     }
 
-    if (devname) {
+    if (hw_addr_iface) {
         int vlan;
-        if (!netdev_get_vlan_vid(devname, &vlan)) {
+        if (!netdev_get_vlan_vid(netdev_get_name(hw_addr_iface->netdev),
+                                 &vlan)) {
             /*
              * A bridge whose MAC address is taken from a VLAN network device
              * (that is, a network device created with vconfig(8) or similar
@@ -838,6 +834,26 @@ bridge_flush(struct bridge *br)
     if (br->ml) {
         mac_learning_flush(br->ml);
     }
+}
+
+/* Returns the 'br' interface for the ODPP_LOCAL port, or null if 'br' has no
+ * such interface. */
+static struct iface *
+bridge_get_local_iface(struct bridge *br)
+{
+    size_t i, j;
+
+    for (i = 0; i < br->n_ports; i++) {
+        struct port *port = br->ports[i];
+        for (j = 0; j < port->n_ifaces; j++) {
+            struct iface *iface = port->ifaces[j];
+            if (iface->dp_ifidx == ODPP_LOCAL) {
+                return iface;
+            }
+        }
+    }
+
+    return NULL;
 }
 
 /* Bridge unixctl user interface functions. */
@@ -1169,10 +1185,8 @@ bridge_reconfigure_controller(struct bridge *br)
                                   cfg_get_string(0, "%s.accept-regex", pfx),
                                   update_resolv_conf);
         } else {
-            char local_name[IF_NAMESIZE];
-            struct netdev *netdev;
+            struct iface *local_iface;
             bool in_band;
-            int error;
 
             in_band = (!cfg_is_valid(CFG_BOOL | CFG_REQUIRED,
                                      "%s.in-band", pfx)
@@ -1180,37 +1194,32 @@ bridge_reconfigure_controller(struct bridge *br)
             ofproto_set_discovery(br->ofproto, false, NULL, NULL);
             ofproto_set_in_band(br->ofproto, in_band);
 
-            error = dpif_port_get_name(br->dpif, ODPP_LOCAL,
-                                       local_name, sizeof local_name);
-            if (!error) {
-                error = netdev_open(local_name, NETDEV_ETH_TYPE_NONE, &netdev);
-            }
-            if (!error) {
-                if (cfg_is_valid(CFG_IP | CFG_REQUIRED, "%s.ip", pfx)) {
-                    struct in_addr ip, mask, gateway;
-                    ip.s_addr = cfg_get_ip(0, "%s.ip", pfx);
-                    mask.s_addr = cfg_get_ip(0, "%s.netmask", pfx);
-                    gateway.s_addr = cfg_get_ip(0, "%s.gateway", pfx);
+            local_iface = bridge_get_local_iface(br);
+            if (local_iface
+                && cfg_is_valid(CFG_IP | CFG_REQUIRED, "%s.ip", pfx)) {
+                struct netdev *netdev = local_iface->netdev;
+                struct in_addr ip, mask, gateway;
+                ip.s_addr = cfg_get_ip(0, "%s.ip", pfx);
+                mask.s_addr = cfg_get_ip(0, "%s.netmask", pfx);
+                gateway.s_addr = cfg_get_ip(0, "%s.gateway", pfx);
 
-                    netdev_turn_flags_on(netdev, NETDEV_UP, true);
-                    if (!mask.s_addr) {
-                        mask.s_addr = guess_netmask(ip.s_addr);
-                    }
-                    if (!netdev_set_in4(netdev, ip, mask)) {
-                        VLOG_INFO("bridge %s: configured IP address "IP_FMT", "
-                                  "netmask "IP_FMT,
-                                  br->name, IP_ARGS(&ip.s_addr),
-                                  IP_ARGS(&mask.s_addr));
-                    }
+                netdev_turn_flags_on(netdev, NETDEV_UP, true);
+                if (!mask.s_addr) {
+                    mask.s_addr = guess_netmask(ip.s_addr);
+                }
+                if (!netdev_set_in4(netdev, ip, mask)) {
+                    VLOG_INFO("bridge %s: configured IP address "IP_FMT", "
+                              "netmask "IP_FMT,
+                              br->name, IP_ARGS(&ip.s_addr),
+                              IP_ARGS(&mask.s_addr));
+                }
 
-                    if (gateway.s_addr) {
-                        if (!netdev_add_router(netdev, gateway)) {
-                            VLOG_INFO("bridge %s: configured gateway "IP_FMT,
-                                      br->name, IP_ARGS(&gateway.s_addr));
-                        }
+                if (gateway.s_addr) {
+                    if (!netdev_add_router(netdev, gateway)) {
+                        VLOG_INFO("bridge %s: configured gateway "IP_FMT,
+                                  br->name, IP_ARGS(&gateway.s_addr));
                     }
                 }
-                netdev_close(netdev);
             }
         }
 
