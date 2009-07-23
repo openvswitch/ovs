@@ -528,6 +528,21 @@ netdev_close(struct netdev *netdev)
     }
 }
 
+/* Checks whether a network device named 'name' exists and returns true if so,
+ * false otherwise. */
+bool
+netdev_exists(const char *name)
+{
+    struct stat s;
+    char *filename;
+    int error;
+
+    filename = xasprintf("/sys/class/net/%s", name);
+    error = stat(filename, &s);
+    free(filename);
+    return !error;
+}
+
 /* Pads 'buffer' out with zero-bytes to the minimum valid length of an
  * Ethernet packet, if necessary.  */
 static void

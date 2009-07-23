@@ -286,7 +286,6 @@ static void
 prune_ports(void)
 {
     int i, j;
-    int error;
     struct svec bridges, delete;
 
     if (cfg_lock(NULL, 0)) {
@@ -305,7 +304,6 @@ prune_ports(void)
         get_bridge_ifaces(br_name, &ifaces, -1);
         for (j = 0; j < ifaces.n; j++) {
             const char *iface_name = ifaces.names[j];
-            enum netdev_flags flags;
 
             /* The local port and internal ports are created and destroyed by
              * ovs-vswitchd itself, so don't bother checking for them at all.
@@ -316,14 +314,10 @@ prune_ports(void)
                 continue;
             }
 
-            error = netdev_nodev_get_flags(iface_name, &flags);
-            if (error == ENODEV) {
+            if (!netdev_exists(iface_name)) {
                 VLOG_INFO_RL(&rl, "removing dead interface %s from %s",
                              iface_name, br_name);
                 svec_add(&delete, iface_name);
-            } else if (error) {
-                VLOG_INFO_RL(&rl, "unknown error %d on interface %s from %s",
-                             error, iface_name, br_name);
             }
         }
         svec_destroy(&ifaces);
@@ -343,30 +337,6 @@ prune_ports(void)
         cfg_unlock();
     }
     svec_destroy(&delete);
-}
-
-
-/* Checks whether a network device named 'name' exists and returns true if so,
- * false otherwise.
- *
- * XXX it is possible that this doesn't entirely accomplish what we want in
- * context, since ovs-vswitchd.conf may cause vswitchd to create or destroy
- * network devices based on iface.*.internal settings.
- *
- * XXX may want to move this to lib/netdev.
- *
- * XXX why not just use netdev_nodev_get_flags() or similar function? */
-static bool
-netdev_exists(const char *name)
-{
-    struct stat s;
-    char *filename;
-    int error;
-
-    filename = xasprintf("/sys/class/net/%s", name);
-    error = stat(filename, &s);
-    free(filename);
-    return !error;
 }
 
 static int
@@ -821,7 +791,6 @@ rtnl_recv_update(void)
             char br_name[IFNAMSIZ];
             uint32_t br_idx = nl_attr_get_u32(attrs[IFLA_MASTER]);
             struct svec ports;
-            enum netdev_flags flags;
 
             if (!if_indextoname(br_idx, br_name)) {
                 ofpbuf_delete(buf);
@@ -835,7 +804,7 @@ rtnl_recv_update(void)
                 return;
             }
 
-            if (netdev_nodev_get_flags(port_name, &flags) == ENODEV) {
+            if (!netdev_exists(port_name)) {
                 /* Network device is really gone. */
                 VLOG_INFO("network device %s destroyed, "
                           "removing from bridge %s", port_name, br_name);

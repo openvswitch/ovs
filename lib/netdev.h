@@ -77,6 +77,8 @@ struct netdev;
 int netdev_open(const char *name, int ethertype, struct netdev **);
 void netdev_close(struct netdev *);
 
+bool netdev_exists(const char *netdev_name);
+
 int netdev_recv(struct netdev *, struct ofpbuf *);
 void netdev_recv_wait(struct netdev *);
 int netdev_drain(struct netdev *);
