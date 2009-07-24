@@ -1315,43 +1315,32 @@ netdev_enumerate(struct svec *svec)
     }
 }
 
-/* Attempts to locate a device based on its IPv4 address.  The caller
- * may provide a hint as to the device by setting 'netdev_name' to a
- * likely device name.  This string must be malloc'd, since if it is 
- * not correct then it will be freed.  If there is no hint, then
- * 'netdev_name' must be the NULL pointer.
- *
- * If the device is found, the return value will be true and 'netdev_name' 
- * contains the device's name as a string, which the caller is responsible 
- * for freeing.  If the device is not found, the return value is false. */
-bool
-netdev_find_dev_by_in4(const struct in_addr *in4, char **netdev_name)
+/* Returns a network device that has 'in4' as its IP address, if one exists,
+ * otherwise a null pointer. */
+struct netdev *
+netdev_find_dev_by_in4(const struct in_addr *in4)
 {
-    int i;
-    struct in_addr dev_in4;
+    struct netdev *netdev;
     struct svec dev_list;
+    size_t i;
 
-    /* Check the hint first. */
-    if (*netdev_name && !netdev_nodev_get_in4(*netdev_name, &dev_in4)
-            && (dev_in4.s_addr == in4->s_addr)) {
-        return true;
-    }
-
-    free(*netdev_name);
-    *netdev_name = NULL;
     netdev_enumerate(&dev_list);
+    for (i = 0; i < dev_list.n; i++) {
+        const char *name = dev_list.names[i];
+        struct in_addr dev_in4;
 
-    for (i=0; i<dev_list.n; i++) {
-        if (!netdev_nodev_get_in4(dev_list.names[i], &dev_in4)
-                && (dev_in4.s_addr == in4->s_addr)) {
-            *netdev_name = xstrdup(dev_list.names[i]);
-            svec_destroy(&dev_list);
-            return true;
+        if (!netdev_open(name, NETDEV_ETH_TYPE_NONE, &netdev)
+            && !netdev_get_in4(netdev, &dev_in4)
+            && dev_in4.s_addr == in4->s_addr) {
+            goto exit;
         }
+        netdev_close(netdev);
     }
+    netdev = NULL;
 
+exit:
     svec_destroy(&dev_list);
-    return false;
+    return netdev;
 }
 
 /* Obtains the current flags for the network device named 'netdev_name' and
