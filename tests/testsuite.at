@@ -16,5 +16,7 @@ limitations under the License.])
 
 AT_TESTED([ovs-vswitchd])
 
+m4_include([tests/lcov-pre.at])
 m4_include([tests/library.at])
 m4_include([tests/stp.at])
+m4_include([tests/lcov-post.at])

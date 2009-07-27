@@ -1,0 +1,31 @@
+Building with gcov support
+==========================
+
+The Open vSwitch "configure" script supports the following
+code-coverage related options:
+
+  --disable-coverage
+  --enable-coverage=no
+
+    Do not build with gcov code coverage support.
+
+    This is the default if no coverage option is passed to
+    "configure".
+
+  --enable-coverage
+  --enable-coverage=yes
+
+    Build with gcov code coverage support, but do not assume that any
+    coverage-related tools are installed and do not add special
+    coverage support to the test suite.
+
+  --enable-coverage=lcov
+
+    Build with gcov code coverage support, as above, but also add
+    support for coverage analysis to the test suite.  Running "make
+    check" will produce a directory "tests/coverage.html" in the build
+    directory with an analysis of the test suite's coverage.
+
+    This setting requires the lcov suite of utilities to be installed.
+    The "lcov" and "genhtml" programs from lcov must be in PATH.  lcov
+    is available at: http://ltp.sourceforge.net/coverage/lcov.php

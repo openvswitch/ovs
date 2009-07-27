@@ -6,8 +6,10 @@ EXTRA_DIST += \
 	$(srcdir)/tests/testsuite
 TESTSUITE_AT = \
 	tests/testsuite.at \
+	tests/lcov-pre.at \
 	tests/library.at \
-	tests/stp.at
+	tests/stp.at \
+	tests/lcov-post.at
 TESTSUITE = $(srcdir)/tests/testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal $(TESTSUITE)
 

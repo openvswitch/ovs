@@ -14,6 +14,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+dnl Checks for --enable-coverage and updates CFLAGS and LDFLAGS appropriately.
+AC_DEFUN([OVS_CHECK_COVERAGE],
+  [AC_REQUIRE([AC_PROG_CC])
+   AC_ARG_ENABLE(
+     [coverage],
+     [AC_HELP_STRING([--enable-coverage], 
+                     [Enable gcov coverage tool.])],
+     [case "${enableval}" in
+        (lcov) coverage=true lcov=true ;;
+        (yes) coverage=true lcov=false ;;
+        (no)  coverage=false lcov=false ;;
+        (*) AC_MSG_ERROR([bad value ${enableval} for --enable-coverage]) ;;
+      esac],
+     [coverage=false lcov=false])
+   if $coverage; then
+     CFLAGS="$CFLAGS -O0 --coverage"
+     LDFLAGS="$LDFLAGS --coverage"
+   fi
+   if $lcov; then
+     if lcov --version >/dev/null 2>&1; then :; else
+       AC_MSG_ERROR([--enable-coverage=lcov was specified but lcov is not in \$PATH])
+     fi
+   fi
+   AC_SUBST([LCOV], [$lcov])])
+
 dnl Checks for --enable-ndebug and defines NDEBUG if it is specified.
 AC_DEFUN([OVS_CHECK_NDEBUG],
   [AC_ARG_ENABLE(
