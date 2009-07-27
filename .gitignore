@@ -36,6 +36,7 @@
 /depcomp
 /install-sh
 /missing
+/package.m4
 /stamp-h1
 Module.symvers
 TAGS

@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-AC_PREREQ(2.60)
+AC_PREREQ(2.63)
 AC_INIT(openvswitch, 0.90.3, bugs@openvswitch.org)
 NX_BUILDNR
 AC_CONFIG_SRCDIR([datapath/datapath.c])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_TESTDIR([tests])
 AM_INIT_AUTOMAKE
 
 AC_PROG_CC
@@ -84,6 +85,7 @@ AC_CONFIG_FILES([Makefile
 datapath/Makefile 
 datapath/linux-2.6/Kbuild
 datapath/linux-2.6/Makefile
-datapath/linux-2.6/Makefile.main])
+datapath/linux-2.6/Makefile.main
+tests/atlocal])
 
 AC_OUTPUT
