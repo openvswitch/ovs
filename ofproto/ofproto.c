@@ -235,7 +235,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static const struct ofhooks default_ofhooks;
 
-static uint64_t pick_datapath_id(struct dpif *, uint64_t fallback_dpid);
+static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
 static void send_packet_in_miss(struct ofpbuf *, void *ofproto);
 static void send_packet_in_action(struct ofpbuf *, void *ofproto);
@@ -302,8 +302,7 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     /* Initialize settings. */
     p = xcalloc(1, sizeof *p);
     p->fallback_dpid = pick_fallback_dpid();
-    p->datapath_id = pick_datapath_id(dpif, p->fallback_dpid);
-    VLOG_INFO("using datapath ID %012"PRIx64, p->datapath_id);
+    p->datapath_id = p->fallback_dpid;
     p->manufacturer = xstrdup("Nicira Networks, Inc.");
     p->hardware = xstrdup("Reference Implementation");
     p->software = xstrdup(VERSION BUILDNR);
@@ -363,6 +362,10 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
         return error;
     }
 
+    /* Pick final datapath ID. */
+    p->datapath_id = pick_datapath_id(p);
+    VLOG_INFO("using datapath ID %012"PRIx64, p->datapath_id);
+
     *ofprotop = p;
     return 0;
 }
@@ -371,9 +374,7 @@ void
 ofproto_set_datapath_id(struct ofproto *p, uint64_t datapath_id)
 {
     uint64_t old_dpid = p->datapath_id;
-    p->datapath_id = (datapath_id
-                      ? datapath_id
-                      : pick_datapath_id(p->dpif, p->fallback_dpid));
+    p->datapath_id = datapath_id ? datapath_id : pick_datapath_id(p);
     if (p->datapath_id != old_dpid) {
         VLOG_INFO("datapath ID changed to %012"PRIx64, p->datapath_id);
         rconn_reconnect(p->controller->rconn);
@@ -3247,24 +3248,23 @@ send_packet_in_miss(struct ofpbuf *packet, void *p_)
 }
 
 static uint64_t
-pick_datapath_id(struct dpif *dpif, uint64_t fallback_dpid)
+pick_datapath_id(const struct ofproto *ofproto)
 {
-    char local_name[IF_NAMESIZE];
-    uint8_t ea[ETH_ADDR_LEN];
-    int error;
+    const struct ofport *port;
 
-    error = dpif_port_get_name(dpif, ODPP_LOCAL,
-                               local_name, sizeof local_name);
-    if (!error) {
-        error = netdev_nodev_get_etheraddr(local_name, ea);
+    port = port_array_get(&ofproto->ports, ODPP_LOCAL);
+    if (port) {
+        uint8_t ea[ETH_ADDR_LEN];
+        int error;
+
+        error = netdev_get_etheraddr(port->netdev, ea);
         if (!error) {
             return eth_addr_to_uint64(ea);
         }
         VLOG_WARN("could not get MAC address for %s (%s)",
-                  local_name, strerror(error));
+                  netdev_get_name(port->netdev), strerror(error));
     }
-
-    return fallback_dpid;
+    return ofproto->fallback_dpid;
 }
 
 static uint64_t
