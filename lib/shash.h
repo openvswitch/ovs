@@ -35,7 +35,7 @@ void shash_init(struct shash *);
 void shash_destroy(struct shash *);
 void shash_clear(struct shash *);
 bool shash_is_empty(const struct shash *);
-void shash_add(struct shash *, const char *, void *);
+struct shash_node *shash_add(struct shash *, const char *, void *);
 void shash_delete(struct shash *, struct shash_node *);
 struct shash_node *shash_find(const struct shash *, const char *);
 void *shash_find_data(const struct shash *, const char *);

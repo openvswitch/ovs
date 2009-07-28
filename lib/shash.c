@@ -57,15 +57,16 @@ shash_is_empty(const struct shash *shash)
     return hmap_is_empty(&shash->map);
 }
 
-/* It is the caller's responsible to avoid duplicate names, if that is
+/* It is the caller's responsibility to avoid duplicate names, if that is
  * desirable. */
-void
+struct shash_node *
 shash_add(struct shash *sh, const char *name, void *data)
 {
     struct shash_node *node = xmalloc(sizeof *node);
     node->name = xstrdup(name);
     node->data = data;
     hmap_insert(&sh->map, &node->node, hash_name(name));
+    return node;
 }
 
 void
