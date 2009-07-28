@@ -31,9 +31,9 @@
 #include <unistd.h>
 
 #include "dpif-provider.h"
-#include "netdev-linux.h"
 #include "ofpbuf.h"
 #include "poll-loop.h"
+#include "rtnetlink.h"
 #include "svec.h"
 #include "util.h"
 

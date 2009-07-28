@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef NETDEV_LINUX_H
-#define NETDEV_LINUX_H 1
+#ifndef RTNETLINK_H
+#define RTNETLINK_H 1
 
-/* These functions are specific to the Linux implementation of dpif and netdev.
- * They should only be used directly by Linux-specific code. */
+/* These functions are Linux specific, so they should be used directly only by
+ * Linux-specific code. */
 
 #include "list.h"
 
@@ -55,4 +55,4 @@ void rtnetlink_notifier_unregister(struct rtnetlink_notifier *);
 void rtnetlink_notifier_run(void);
 void rtnetlink_notifier_wait(void);
 
-#endif /* netdev-linux.h */
+#endif /* rtnetlink.h */

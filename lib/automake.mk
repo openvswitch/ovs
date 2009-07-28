@@ -58,7 +58,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
 	lib/netdev-linux.c \
-	lib/netdev-linux.h \
 	lib/netdev.c \
 	lib/netdev.h \
 	lib/odp-util.c \
@@ -82,6 +81,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/random.h \
 	lib/rconn.c \
 	lib/rconn.h \
+	lib/rtnetlink.c \
+	lib/rtnetlink.h \
 	lib/sat-math.h \
 	lib/sha1.c \
 	lib/sha1.h \
@@ -183,6 +184,7 @@ COVERAGE_FILES = \
 	lib/poll-loop.c \
 	lib/process.c \
 	lib/rconn.c \
+	lib/rtnetlink.c \
 	lib/timeval.c \
 	lib/unixctl.c \
 	lib/util.c \

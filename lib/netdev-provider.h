@@ -73,7 +73,7 @@ struct netdev_class {
     const char *name;
 
     /* Called only once, at program startup.  Returning an error from this
-     * function will prevent any network device, of any class, from being
+     * function will prevent any network device in this class from being
      * opened.
      *
      * This function may be set to null if a network device class needs no

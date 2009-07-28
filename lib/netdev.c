@@ -43,7 +43,7 @@ static const struct netdev_class *netdev_classes[] = {
     &netdev_linux_class,
     &netdev_tap_class,
 };
-enum { N_NETDEV_CLASSES = ARRAY_SIZE(netdev_classes) };
+static int n_netdev_classes = ARRAY_SIZE(netdev_classes);
 
 /* All open network devices. */
 static struct list netdev_list = LIST_INITIALIZER(&netdev_list);
@@ -65,16 +65,18 @@ netdev_initialize(void)
 {
     static int status = -1;
     if (status < 0) {
-        int i;
+        int i, j;
 
         fatal_signal_add_hook(restore_all_flags, NULL, true);
 
         status = 0;
-        for (i = 0; i < N_NETDEV_CLASSES; i++) {
+        for (i = j = 0; i < n_netdev_classes; i++) {
             const struct netdev_class *class = netdev_classes[i];
             if (class->init) {
                 int retval = class->init();
-                if (retval) {
+                if (!retval) {
+                    netdev_classes[j++] = class;
+                } else {
                     VLOG_ERR("failed to initialize %s network device "
                              "class: %s", class->name, strerror(retval));
                     if (!status) {
@@ -83,6 +85,7 @@ netdev_initialize(void)
                 }
             }
         }
+        n_netdev_classes = j;
     }
     return status;
 }
@@ -95,7 +98,7 @@ void
 netdev_run(void)
 {
     int i;
-    for (i = 0; i < N_NETDEV_CLASSES; i++) {
+    for (i = 0; i < n_netdev_classes; i++) {
         const struct netdev_class *class = netdev_classes[i];
         if (class->run) {
             class->run();
@@ -111,7 +114,7 @@ void
 netdev_wait(void)
 {
     int i;
-    for (i = 0; i < N_NETDEV_CLASSES; i++) {
+    for (i = 0; i < n_netdev_classes; i++) {
         const struct netdev_class *class = netdev_classes[i];
         if (class->wait) {
             class->wait();
@@ -136,11 +139,7 @@ netdev_open(const char *name_, int ethertype, struct netdev **netdevp)
     int error;
     int i;
 
-    error = netdev_initialize();
-    if (error) {
-        return error;
-    }
-
+    netdev_initialize();
     colon = strchr(name, ':');
     if (colon) {
         *colon = '\0';
@@ -151,7 +150,7 @@ netdev_open(const char *name_, int ethertype, struct netdev **netdevp)
         suffix = name;
     }
 
-    for (i = 0; i < N_NETDEV_CLASSES; i++) {
+    for (i = 0; i < n_netdev_classes; i++) {
         const struct netdev_class *class = netdev_classes[i];
         if (!strcmp(prefix, class->prefix)) {
             error = class->open(name_, suffix, ethertype, &netdev);
@@ -220,13 +219,10 @@ netdev_enumerate(struct svec *svec)
 
     svec_init(svec);
 
-    error = netdev_initialize();
-    if (error) {
-        return error;
-    }
+    netdev_initialize();
 
     error = 0;
-    for (i = 0; i < N_NETDEV_CLASSES; i++) {
+    for (i = 0; i < n_netdev_classes; i++) {
         const struct netdev_class *class = netdev_classes[i];
         if (class->enumerate) {
             int retval = class->enumerate(svec);

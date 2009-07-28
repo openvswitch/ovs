@@ -15,9 +15,6 @@
  */
 
 #include <config.h>
-
-#include "netdev-linux.h"
-
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -53,6 +50,7 @@
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "rtnetlink.h"
 #include "socket-util.h"
 #include "shash.h"
 #include "svec.h"
@@ -106,17 +104,6 @@ struct netdev_linux_cache {
 
 static struct shash cache_map = SHASH_INITIALIZER(&cache_map);
 static struct rtnetlink_notifier netdev_linux_cache_notifier;
-
-/* Policy for RTNLGRP_LINK messages.
- *
- * There are *many* more fields in these messages, but currently we only care
- * about interface names. */
-static const struct nl_policy rtnlgrp_link_policy[] = {
-    [IFLA_IFNAME] = { .type = NL_A_STRING, .optional = false },
-    [IFLA_MASTER] = { .type = NL_A_U32, .optional = true },
-    [IFLA_STATS] = { .type = NL_A_UNSPEC, .optional = true,
-                     .min_len = sizeof(struct rtnl_link_stats) },
-};
 
 /* An AF_INET socket (used for ioctl operations). */
 static int af_inet_sock = -1;
@@ -1336,6 +1323,17 @@ const struct netdev_class netdev_tap_class = {
 static int
 get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
 {
+    /* Policy for RTNLGRP_LINK messages.
+     *
+     * There are *many* more fields in these messages, but currently we only
+     * care about these fields. */
+    static const struct nl_policy rtnlgrp_link_policy[] = {
+        [IFLA_IFNAME] = { .type = NL_A_STRING, .optional = false },
+        [IFLA_STATS] = { .type = NL_A_UNSPEC, .optional = true,
+                         .min_len = sizeof(struct rtnl_link_stats) },
+    };
+
+
     static struct nl_sock *rtnl_sock;
     struct ofpbuf request;
     struct ofpbuf *reply;
@@ -1592,147 +1590,4 @@ netdev_linux_do_ioctl(const struct netdev *netdev, struct ifreq *ifr,
         return errno;
     }
     return 0;
-}
-
-/* rtnetlink socket. */
-static struct nl_sock *notify_sock;
-
-/* All registered notifiers. */
-static struct list all_notifiers = LIST_INITIALIZER(&all_notifiers);
-
-static void rtnetlink_report_change(const struct nlmsghdr *,
-                                    const struct ifinfomsg *,
-                                    struct nlattr *attrs[]);
-static void rtnetlink_report_notify_error(void);
-
-/* Registers 'cb' to be called with auxiliary data 'aux' with network device
- * change notifications.  The notifier is stored in 'notifier', which the
- * caller must not modify or free.
- *
- * This is probably not the function that you want.  You should probably be
- * using dpif_port_poll() or netdev_monitor_create(), which unlike this
- * function are not Linux-specific.
- *
- * Returns 0 if successful, otherwise a positive errno value. */
-int
-rtnetlink_notifier_register(struct rtnetlink_notifier *notifier,
-                            rtnetlink_notify_func *cb, void *aux)
-{
-    if (!notify_sock) {
-        int error = nl_sock_create(NETLINK_ROUTE, RTNLGRP_LINK, 0, 0,
-                                   &notify_sock);
-        if (error) {
-            VLOG_WARN("could not create rtnetlink socket: %s",
-                      strerror(error));
-            return error;
-        }
-    } else {
-        /* Catch up on notification work so that the new notifier won't
-         * receive any stale notifications. */
-        rtnetlink_notifier_run();
-    }
-
-    list_push_back(&all_notifiers, &notifier->node);
-    notifier->cb = cb;
-    notifier->aux = aux;
-    return 0;
-}
-
-/* Cancels notification on 'notifier', which must have previously been
- * registered with lxnetdev_notifier_register(). */
-void
-rtnetlink_notifier_unregister(struct rtnetlink_notifier *notifier)
-{
-    list_remove(&notifier->node);
-    if (list_is_empty(&all_notifiers)) {
-        nl_sock_destroy(notify_sock);
-        notify_sock = NULL;
-    }
-}
-
-/* Calls all of the registered notifiers, passing along any as-yet-unreported
- * netdev change events. */
-void
-rtnetlink_notifier_run(void)
-{
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-    if (!notify_sock) {
-        return;
-    }
-
-    for (;;) {
-        struct nlattr *attrs[ARRAY_SIZE(rtnlgrp_link_policy)];
-        struct ofpbuf *buf;
-        int error;
-
-        error = nl_sock_recv(notify_sock, &buf, false);
-        if (!error) {
-            if (nl_policy_parse(buf, NLMSG_HDRLEN + sizeof(struct ifinfomsg),
-                                rtnlgrp_link_policy,
-                                attrs, ARRAY_SIZE(rtnlgrp_link_policy))) {
-                struct ifinfomsg *ifinfo;
-
-                ifinfo = (void *) ((char *) buf->data + NLMSG_HDRLEN);
-                rtnetlink_report_change(buf->data, ifinfo, attrs);
-            } else {
-                VLOG_WARN_RL(&rl, "received bad rtnl message");
-                rtnetlink_report_notify_error();
-            }
-            ofpbuf_delete(buf);
-        } else if (error == EAGAIN) {
-            return;
-        } else {
-            if (error == ENOBUFS) {
-                VLOG_WARN_RL(&rl, "rtnetlink receive buffer overflowed");
-            } else {
-                VLOG_WARN_RL(&rl, "error reading rtnetlink socket: %s",
-                             strerror(error));
-            }
-            rtnetlink_report_notify_error();
-        }
-    }
-}
-
-/* Causes poll_block() to wake up when network device change notifications are
- * ready. */
-void
-rtnetlink_notifier_wait(void)
-{
-    if (notify_sock) {
-        nl_sock_wait(notify_sock, POLLIN);
-    }
-}
-
-static void
-rtnetlink_report_change(const struct nlmsghdr *nlmsg,
-                           const struct ifinfomsg *ifinfo,
-                           struct nlattr *attrs[])
-{
-    struct rtnetlink_notifier *notifier;
-    struct rtnetlink_change change;
-
-    COVERAGE_INC(rtnetlink_changed);
-
-    change.nlmsg_type = nlmsg->nlmsg_type;
-    change.ifi_index = ifinfo->ifi_index;
-    change.ifname = nl_attr_get_string(attrs[IFLA_IFNAME]);
-    change.master_ifindex = (attrs[IFLA_MASTER]
-                             ? nl_attr_get_u32(attrs[IFLA_MASTER]) : 0);
-
-    LIST_FOR_EACH (notifier, struct rtnetlink_notifier, node,
-                   &all_notifiers) {
-        notifier->cb(&change, notifier->aux);
-    }
-}
-
-static void
-rtnetlink_report_notify_error(void)
-{
-    struct rtnetlink_notifier *notifier;
-
-    LIST_FOR_EACH (notifier, struct rtnetlink_notifier, node,
-                   &all_notifiers) {
-        notifier->cb(NULL, notifier->aux);
-    }
 }
