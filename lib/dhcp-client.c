@@ -909,7 +909,7 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
     struct ofpbuf b;
     int mtu;
 
-    mtu = netdev_get_mtu(cli->netdev);
+    netdev_get_mtu(cli->netdev, &mtu);
     ofpbuf_init(&b, mtu + VLAN_ETH_HEADER_LEN);
     netdev_get_etheraddr(cli->netdev, cli_mac);
     for (; cli->received < 50; cli->received++) {

@@ -706,13 +706,18 @@ netdev_get_name(const struct netdev *netdev)
     return netdev->name;
 }
 
-/* Returns the maximum size of transmitted (and received) packets on 'netdev',
- * in bytes, not including the hardware header; thus, this is typically 1500
- * bytes for Ethernet devices. */
+/* Retrieves the MTU of 'netdev'.  The MTU is the maximum size of transmitted
+ * (and received) packets, in bytes, not including the hardware header; thus,
+ * this is typically 1500 bytes for Ethernet devices.
+ *
+ * If successful, returns 0 and stores the MTU size in '*mtup'.  On failure,
+ * returns a positive errno value and stores ETH_PAYLOAD_MAX (1500) in
+ * '*mtup'. */
 int
-netdev_get_mtu(const struct netdev *netdev) 
+netdev_get_mtu(const struct netdev *netdev, int *mtup)
 {
-    return netdev->mtu;
+    *mtup = netdev->mtu;
+    return 0;
 }
 
 /* Stores the features supported by 'netdev' into each of '*current',

@@ -396,7 +396,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
     port->netdev = netdev;
     port->internal = internal;
 
-    mtu = netdev_get_mtu(netdev);
+    netdev_get_mtu(netdev, &mtu);
     if (mtu > max_mtu) {
         max_mtu = mtu;
     }

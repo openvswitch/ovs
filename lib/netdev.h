@@ -86,7 +86,7 @@ void netdev_send_wait(struct netdev *);
 int netdev_set_etheraddr(struct netdev *, const uint8_t mac[6]);
 int netdev_get_etheraddr(const struct netdev *, uint8_t mac[6]);
 const char *netdev_get_name(const struct netdev *);
-int netdev_get_mtu(const struct netdev *);
+int netdev_get_mtu(const struct netdev *, int *mtup);
 int netdev_get_features(struct netdev *,
                         uint32_t *current, uint32_t *advertised,
                         uint32_t *supported, uint32_t *peer);

@@ -168,7 +168,7 @@ prototype:
   Omit parameter names from function prototypes when the names do not
 give useful information, e.g.:
 
-    int netdev_get_mtu(const struct netdev *);
+    int netdev_get_mtu(const struct netdev *, int *mtup);
 
 
 STATEMENTS
