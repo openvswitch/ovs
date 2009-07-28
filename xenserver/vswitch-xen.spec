@@ -167,6 +167,21 @@ fi
 %post
 source /etc/xensource-inventory
 
+if grep -F net.ipv4.conf.all.arp_filter /etc/sysctl.conf >/dev/null 2>&1; then :; else
+    cat >>/etc/sysctl.conf <<EOF
+# This works around an issue in xhad, which binds to a particular
+# Ethernet device, which in turn causes ICMP port unreachable messages
+# if packets are received are on the wrong interface, which in turn
+# can happen if we send out ARP replies on every interface (as Linux
+# does by default) instead of just on the interface that has the IP
+# address being ARPed for, which this sysctl setting in turn works
+# around.
+#
+# Bug #1378.
+net.ipv4.conf.all.arp_filter = 1
+EOF
+fi
+
 xe host-param-set \
     "other-config:vSwitchVersion=%{version}" uuid="$INSTALLATION_UUID" ||
     echo "Could not set vSwitchVersion config parameter"
