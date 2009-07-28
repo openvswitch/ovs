@@ -91,7 +91,7 @@ int netdev_get_features(struct netdev *,
                         uint32_t *current, uint32_t *advertised,
                         uint32_t *supported, uint32_t *peer);
 int netdev_set_advertisements(struct netdev *, uint32_t advertise);
-bool netdev_get_in4(const struct netdev *, struct in_addr *);
+int netdev_get_in4(const struct netdev *, struct in_addr *);
 int netdev_set_in4(struct netdev *, struct in_addr addr, struct in_addr mask);
 int netdev_add_router(struct in_addr router);
 bool netdev_get_in6(const struct netdev *, struct in6_addr *);
@@ -108,7 +108,7 @@ int netdev_set_policing(struct netdev *, uint32_t kbits_rate,
 void netdev_enumerate(struct svec *);
 bool netdev_find_dev_by_in4(const struct in_addr *in4, char **netdev_name);
 int netdev_nodev_get_flags(const char *netdev_name, enum netdev_flags *);
-bool netdev_nodev_get_in4(const char *netdev_name, struct in_addr *);
+int netdev_nodev_get_in4(const char *netdev_name, struct in_addr *);
 int netdev_nodev_set_etheraddr(const char *name, const uint8_t mac[6]);
 int netdev_nodev_get_etheraddr(const char *netdev_name, uint8_t mac[6]);
 int netdev_nodev_set_policing(const char *netdev_name, uint32_t kbits_rate, 

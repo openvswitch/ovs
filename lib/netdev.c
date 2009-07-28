@@ -792,12 +792,14 @@ netdev_set_advertisements(struct netdev *netdev, uint32_t advertise)
 }
 
 /* If 'netdev' has an assigned IPv4 address, sets '*in4' to that address (if
- * 'in4' is non-null) and returns true.  Otherwise, returns false. */
-bool
+ * 'in4' is non-null) and returns 0.  Otherwise, returns a positive errno value
+ * and sets '*in4' to INADDR_ANY (0). */
+int
 netdev_nodev_get_in4(const char *netdev_name, struct in_addr *in4)
 {
     struct ifreq ifr;
     struct in_addr ip = { INADDR_ANY };
+    int error;
 
     init_netdev();
 
@@ -807,17 +809,19 @@ netdev_nodev_get_in4(const char *netdev_name, struct in_addr *in4)
     if (ioctl(af_inet_sock, SIOCGIFADDR, &ifr) == 0) {
         struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
         ip = sin->sin_addr;
+        error = ip.s_addr != INADDR_ANY ? 0 : EADDRNOTAVAIL;
     } else {
         VLOG_DBG_RL(&rl, "%s: ioctl(SIOCGIFADDR) failed: %s",
                     netdev_name, strerror(errno));
+        error = errno;
     }
     if (in4) {
         *in4 = ip;
     }
-    return ip.s_addr != INADDR_ANY;
+    return error;
 }
 
-bool
+int
 netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
 {
     return netdev_nodev_get_in4(netdev->name, in4);
@@ -1322,7 +1326,7 @@ netdev_find_dev_by_in4(const struct in_addr *in4, char **netdev_name)
     struct svec dev_list;
 
     /* Check the hint first. */
-    if (*netdev_name && (netdev_nodev_get_in4(*netdev_name, &dev_in4)) 
+    if (*netdev_name && !netdev_nodev_get_in4(*netdev_name, &dev_in4)
             && (dev_in4.s_addr == in4->s_addr)) {
         return true;
     }
@@ -1332,7 +1336,7 @@ netdev_find_dev_by_in4(const struct in_addr *in4, char **netdev_name)
     netdev_enumerate(&dev_list);
 
     for (i=0; i<dev_list.n; i++) {
-        if ((netdev_nodev_get_in4(dev_list.names[i], &dev_in4)) 
+        if (!netdev_nodev_get_in4(dev_list.names[i], &dev_in4)
                 && (dev_in4.s_addr == in4->s_addr)) {
             *netdev_name = xstrdup(dev_list.names[i]);
             svec_destroy(&dev_list);
