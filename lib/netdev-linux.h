@@ -22,7 +22,7 @@
 
 #include "list.h"
 
-struct linux_netdev_change {
+struct rtnetlink_change {
     /* Copied from struct nlmsghdr. */
     int nlmsg_type;             /* e.g. RTM_NEWLINK, RTM_DELLINK. */
 
@@ -34,19 +34,19 @@ struct linux_netdev_change {
     int master_ifindex;         /* Ifindex of datapath master (0 if none). */
 };
 
-typedef void linux_netdev_notify_func(const struct linux_netdev_change *,
+typedef void rtnetlink_notify_func(const struct rtnetlink_change *,
                                       void *aux);
 
-struct linux_netdev_notifier {
+struct rtnetlink_notifier {
     struct list node;
-    linux_netdev_notify_func *cb;
+    rtnetlink_notify_func *cb;
     void *aux;
 };
 
-int linux_netdev_notifier_register(struct linux_netdev_notifier *,
-                                   linux_netdev_notify_func *, void *aux);
-void linux_netdev_notifier_unregister(struct linux_netdev_notifier *);
-void linux_netdev_notifier_run(void);
-void linux_netdev_notifier_wait(void);
+int rtnetlink_notifier_register(struct rtnetlink_notifier *,
+                                rtnetlink_notify_func *, void *aux);
+void rtnetlink_notifier_unregister(struct rtnetlink_notifier *);
+void rtnetlink_notifier_run(void);
+void rtnetlink_notifier_wait(void);
 
 #endif /* netdev-linux.h */

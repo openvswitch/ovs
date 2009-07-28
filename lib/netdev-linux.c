@@ -105,7 +105,7 @@ struct netdev_linux_cache {
 };
 
 static struct shash cache_map = SHASH_INITIALIZER(&cache_map);
-static struct linux_netdev_notifier netdev_linux_cache_notifier;
+static struct rtnetlink_notifier netdev_linux_cache_notifier;
 
 /* Policy for RTNLGRP_LINK messages.
  *
@@ -128,7 +128,7 @@ struct netdev_linux_notifier {
 
 static struct shash netdev_linux_notifiers =
     SHASH_INITIALIZER(&netdev_linux_notifiers);
-static struct linux_netdev_notifier netdev_linux_poll_notifier;
+static struct rtnetlink_notifier netdev_linux_poll_notifier;
 
 /* This is set pretty low because we probably won't learn anything from the
  * additional log messages. */
@@ -175,17 +175,17 @@ netdev_linux_init(void)
 static void
 netdev_linux_run(void)
 {
-    linux_netdev_notifier_run();
+    rtnetlink_notifier_run();
 }
 
 static void
 netdev_linux_wait(void)
 {
-    linux_netdev_notifier_wait();
+    rtnetlink_notifier_wait();
 }
 
 static void
-netdev_linux_cache_cb(const struct linux_netdev_change *change,
+netdev_linux_cache_cb(const struct rtnetlink_change *change,
                       void *aux UNUSED)
 {
     struct netdev_linux_cache *cache;
@@ -219,7 +219,7 @@ netdev_linux_open(const char *name, char *suffix, int ethertype,
     netdev->cache = shash_find_data(&cache_map, suffix);
     if (!netdev->cache) {
         if (shash_is_empty(&cache_map)) {
-            int error = linux_netdev_notifier_register(
+            int error = rtnetlink_notifier_register(
                 &netdev_linux_cache_notifier, netdev_linux_cache_cb, NULL);
             if (error) {
                 netdev_close(&netdev->netdev);
@@ -336,7 +336,7 @@ netdev_linux_close(struct netdev *netdev_)
         free(netdev->cache);
 
         if (shash_is_empty(&cache_map)) {
-            linux_netdev_notifier_unregister(&netdev_linux_cache_notifier);
+            rtnetlink_notifier_unregister(&netdev_linux_cache_notifier);
         }
     }
     if (netdev->netdev_fd >= 0) {
@@ -1175,7 +1175,7 @@ poll_notify(struct list *list)
 }
 
 static void
-netdev_linux_poll_cb(const struct linux_netdev_change *change,
+netdev_linux_poll_cb(const struct rtnetlink_change *change,
                      void *aux UNUSED)
 {
     if (change) {
@@ -1202,7 +1202,7 @@ netdev_linux_poll_add(struct netdev *netdev,
     struct list *list;
 
     if (shash_is_empty(&netdev_linux_notifiers)) {
-        int error = linux_netdev_notifier_register(&netdev_linux_poll_notifier,
+        int error = rtnetlink_notifier_register(&netdev_linux_poll_notifier,
                                                    netdev_linux_poll_cb, NULL);
         if (error) {
             return error;
@@ -1243,7 +1243,7 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
 
     /* If that was the last notifier, unregister. */
     if (shash_is_empty(&netdev_linux_notifiers)) {
-        linux_netdev_notifier_unregister(&netdev_linux_poll_notifier);
+        rtnetlink_notifier_unregister(&netdev_linux_poll_notifier);
     }
 }
 
@@ -1600,14 +1600,14 @@ static struct nl_sock *notify_sock;
 /* All registered notifiers. */
 static struct list all_notifiers = LIST_INITIALIZER(&all_notifiers);
 
-static void linux_netdev_report_change(const struct nlmsghdr *,
-                                       const struct ifinfomsg *,
-                                       struct nlattr *attrs[]);
-static void linux_netdev_report_notify_error(void);
+static void rtnetlink_report_change(const struct nlmsghdr *,
+                                    const struct ifinfomsg *,
+                                    struct nlattr *attrs[]);
+static void rtnetlink_report_notify_error(void);
 
 int
-linux_netdev_notifier_register(struct linux_netdev_notifier *notifier,
-                               linux_netdev_notify_func *cb, void *aux)
+rtnetlink_notifier_register(struct rtnetlink_notifier *notifier,
+                            rtnetlink_notify_func *cb, void *aux)
 {
     if (!notify_sock) {
         int error = nl_sock_create(NETLINK_ROUTE, RTNLGRP_LINK, 0, 0,
@@ -1620,7 +1620,7 @@ linux_netdev_notifier_register(struct linux_netdev_notifier *notifier,
     } else {
         /* Catch up on notification work so that the new notifier won't
          * receive any stale notifications. */
-        linux_netdev_notifier_run();
+        rtnetlink_notifier_run();
     }
 
     list_push_back(&all_notifiers, &notifier->node);
@@ -1630,7 +1630,7 @@ linux_netdev_notifier_register(struct linux_netdev_notifier *notifier,
 }
 
 void
-linux_netdev_notifier_unregister(struct linux_netdev_notifier *notifier)
+rtnetlink_notifier_unregister(struct rtnetlink_notifier *notifier)
 {
     list_remove(&notifier->node);
     if (list_is_empty(&all_notifiers)) {
@@ -1640,7 +1640,7 @@ linux_netdev_notifier_unregister(struct linux_netdev_notifier *notifier)
 }
 
 void
-linux_netdev_notifier_run(void)
+rtnetlink_notifier_run(void)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
@@ -1661,10 +1661,10 @@ linux_netdev_notifier_run(void)
                 struct ifinfomsg *ifinfo;
 
                 ifinfo = (void *) ((char *) buf->data + NLMSG_HDRLEN);
-                linux_netdev_report_change(buf->data, ifinfo, attrs);
+                rtnetlink_report_change(buf->data, ifinfo, attrs);
             } else {
                 VLOG_WARN_RL(&rl, "received bad rtnl message");
-                linux_netdev_report_notify_error();
+                rtnetlink_report_notify_error();
             }
             ofpbuf_delete(buf);
         } else if (error == EAGAIN) {
@@ -1676,13 +1676,13 @@ linux_netdev_notifier_run(void)
                 VLOG_WARN_RL(&rl, "error reading rtnetlink socket: %s",
                              strerror(error));
             }
-            linux_netdev_report_notify_error();
+            rtnetlink_report_notify_error();
         }
     }
 }
 
 void
-linux_netdev_notifier_wait(void)
+rtnetlink_notifier_wait(void)
 {
     if (notify_sock) {
         nl_sock_wait(notify_sock, POLLIN);
@@ -1690,14 +1690,14 @@ linux_netdev_notifier_wait(void)
 }
 
 static void
-linux_netdev_report_change(const struct nlmsghdr *nlmsg,
+rtnetlink_report_change(const struct nlmsghdr *nlmsg,
                            const struct ifinfomsg *ifinfo,
                            struct nlattr *attrs[])
 {
-    struct linux_netdev_notifier *notifier;
-    struct linux_netdev_change change;
+    struct rtnetlink_notifier *notifier;
+    struct rtnetlink_change change;
 
-    COVERAGE_INC(linux_netdev_changed);
+    COVERAGE_INC(rtnetlink_changed);
 
     change.nlmsg_type = nlmsg->nlmsg_type;
     change.ifi_index = ifinfo->ifi_index;
@@ -1705,18 +1705,18 @@ linux_netdev_report_change(const struct nlmsghdr *nlmsg,
     change.master_ifindex = (attrs[IFLA_MASTER]
                              ? nl_attr_get_u32(attrs[IFLA_MASTER]) : 0);
 
-    LIST_FOR_EACH (notifier, struct linux_netdev_notifier, node,
+    LIST_FOR_EACH (notifier, struct rtnetlink_notifier, node,
                    &all_notifiers) {
         notifier->cb(&change, notifier->aux);
     }
 }
 
 static void
-linux_netdev_report_notify_error(void)
+rtnetlink_report_notify_error(void)
 {
-    struct linux_netdev_notifier *notifier;
+    struct rtnetlink_notifier *notifier;
 
-    LIST_FOR_EACH (notifier, struct linux_netdev_notifier, node,
+    LIST_FOR_EACH (notifier, struct rtnetlink_notifier, node,
                    &all_notifiers) {
         notifier->cb(NULL, notifier->aux);
     }
