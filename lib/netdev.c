@@ -688,12 +688,14 @@ netdev_nodev_set_etheraddr(const char *name, const uint8_t mac[ETH_ADDR_LEN])
     return set_etheraddr(name, ARPHRD_ETHER, mac);
 }
 
-/* Returns a pointer to 'netdev''s MAC address.  The caller must not modify or
- * free the returned buffer. */
-const uint8_t *
-netdev_get_etheraddr(const struct netdev *netdev)
+/* Retrieves 'netdev''s MAC address.  If successful, returns 0 and copies the
+ * the MAC address into 'mac'.  On failure, returns a positive errno value and
+ * clears 'mac' to all-zeros. */
+int
+netdev_get_etheraddr(const struct netdev *netdev, uint8_t mac[ETH_ADDR_LEN])
 {
-    return netdev->etheraddr;
+    memcpy(mac, netdev->etheraddr, ETH_ADDR_LEN);
+    return 0;
 }
 
 /* Returns the name of the network device that 'netdev' represents,

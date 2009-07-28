@@ -882,7 +882,7 @@ dhclient_msg_init(struct dhclient *cli, enum dhcp_msg_type type,
     msg->xid = cli->xid;
     msg->secs = cli->secs;
     msg->type = type;
-    memcpy(msg->chaddr, netdev_get_etheraddr(cli->netdev), ETH_ADDR_LEN);
+    netdev_get_etheraddr(cli->netdev, msg->chaddr);
 }
 
 /* If time goes backward this returns a large number, which makes it look like
@@ -905,9 +905,13 @@ timeout(struct dhclient *cli, unsigned int secs)
 static bool
 do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
 {
+    uint8_t cli_mac[ETH_ADDR_LEN];
     struct ofpbuf b;
+    int mtu;
 
-    ofpbuf_init(&b, netdev_get_mtu(cli->netdev) + VLAN_ETH_HEADER_LEN);
+    mtu = netdev_get_mtu(cli->netdev);
+    ofpbuf_init(&b, mtu + VLAN_ETH_HEADER_LEN);
+    netdev_get_etheraddr(cli->netdev, cli_mac);
     for (; cli->received < 50; cli->received++) {
         const struct ip_header *ip;
         const struct dhcp_header *dhcp;
@@ -925,8 +929,7 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
             || flow.nw_proto != IP_TYPE_UDP
             || flow.tp_dst != htons(68)
             || !(eth_addr_is_broadcast(flow.dl_dst)
-                 || eth_addr_equals(flow.dl_dst,
-                                    netdev_get_etheraddr(cli->netdev)))) {
+                 || eth_addr_equals(flow.dl_dst, cli_mac))) {
             continue;
         }
 
@@ -977,7 +980,7 @@ do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
 
     dhcp_assemble(msg, &b);
 
-    memcpy(eh.eth_src, netdev_get_etheraddr(cli->netdev), ETH_ADDR_LEN);
+    netdev_get_etheraddr(cli->netdev, eh.eth_src);
     memcpy(eh.eth_dst, eth_addr_broadcast, ETH_ADDR_LEN);
     eh.eth_type = htons(ETH_TYPE_IP);
 

@@ -1121,7 +1121,7 @@ make_ofport(const struct odp_port *odp_port)
     ofport = xmalloc(sizeof *ofport);
     ofport->netdev = netdev;
     ofport->opp.port_no = odp_port_to_ofp_port(odp_port->port);
-    memcpy(ofport->opp.hw_addr, netdev_get_etheraddr(netdev), ETH_ALEN);
+    netdev_get_etheraddr(netdev, ofport->opp.hw_addr);
     memcpy(ofport->opp.name, odp_port->devname,
            MIN(sizeof ofport->opp.name, sizeof odp_port->devname));
     ofport->opp.name[sizeof ofport->opp.name - 1] = '\0';
