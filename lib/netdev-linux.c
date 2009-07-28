@@ -1605,6 +1605,15 @@ static void rtnetlink_report_change(const struct nlmsghdr *,
                                     struct nlattr *attrs[]);
 static void rtnetlink_report_notify_error(void);
 
+/* Registers 'cb' to be called with auxiliary data 'aux' with network device
+ * change notifications.  The notifier is stored in 'notifier', which the
+ * caller must not modify or free.
+ *
+ * This is probably not the function that you want.  You should probably be
+ * using dpif_port_poll() or netdev_monitor_create(), which unlike this
+ * function are not Linux-specific.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
 int
 rtnetlink_notifier_register(struct rtnetlink_notifier *notifier,
                             rtnetlink_notify_func *cb, void *aux)
@@ -1629,6 +1638,8 @@ rtnetlink_notifier_register(struct rtnetlink_notifier *notifier,
     return 0;
 }
 
+/* Cancels notification on 'notifier', which must have previously been
+ * registered with lxnetdev_notifier_register(). */
 void
 rtnetlink_notifier_unregister(struct rtnetlink_notifier *notifier)
 {
@@ -1639,6 +1650,8 @@ rtnetlink_notifier_unregister(struct rtnetlink_notifier *notifier)
     }
 }
 
+/* Calls all of the registered notifiers, passing along any as-yet-unreported
+ * netdev change events. */
 void
 rtnetlink_notifier_run(void)
 {
@@ -1681,6 +1694,8 @@ rtnetlink_notifier_run(void)
     }
 }
 
+/* Causes poll_block() to wake up when network device change notifications are
+ * ready. */
 void
 rtnetlink_notifier_wait(void)
 {

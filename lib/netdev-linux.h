@@ -22,6 +22,8 @@
 
 #include "list.h"
 
+/* A digested version of an rtnetlink message sent down by the kernel to
+ * indicate that a network device has been created or destroyed or changed.  */
 struct rtnetlink_change {
     /* Copied from struct nlmsghdr. */
     int nlmsg_type;             /* e.g. RTM_NEWLINK, RTM_DELLINK. */
@@ -34,8 +36,12 @@ struct rtnetlink_change {
     int master_ifindex;         /* Ifindex of datapath master (0 if none). */
 };
 
-typedef void rtnetlink_notify_func(const struct rtnetlink_change *,
-                                      void *aux);
+/* Function called to report that a netdev has changed.  'change' describes the
+ * specific change.  It may be null if the buffer of change information
+ * overflowed, in which case the function must assume that every device may
+ * have changed.  'aux' is as specified in the call to
+ * lxnetdev_notifier_register().  */
+typedef void rtnetlink_notify_func(const struct rtnetlink_change *, void *aux);
 
 struct rtnetlink_notifier {
     struct list node;
