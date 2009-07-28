@@ -333,7 +333,7 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
 
     /* Initialize OpenFlow connections. */
     list_init(&p->all_conns);
-    p->controller = ofconn_create(p, rconn_create(15, 15));
+    p->controller = ofconn_create(p, rconn_create(15, 8));
     p->controller->pktbuf = pktbuf_create();
     p->controller->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
     p->listeners = NULL;

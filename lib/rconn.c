@@ -159,7 +159,7 @@ rconn_new_from_vconn(const char *name, struct vconn *vconn)
  * 'max_backoff' is the maximum number of seconds between attempts to connect
  * to the peer.  The actual interval starts at 1 second and doubles on each
  * failure until it reaches 'max_backoff'.  If 0 is specified, the default of
- * 60 seconds is used. */
+ * 8 seconds is used. */
 struct rconn *
 rconn_create(int probe_interval, int max_backoff)
 {
@@ -175,7 +175,7 @@ rconn_create(int probe_interval, int max_backoff)
     queue_init(&rc->txq);
 
     rc->backoff = 0;
-    rc->max_backoff = max_backoff ? max_backoff : 60;
+    rc->max_backoff = max_backoff ? max_backoff : 8;
     rc->backoff_deadline = TIME_MIN;
     rc->last_received = time_now();
     rc->last_connected = time_now();

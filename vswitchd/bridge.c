@@ -1213,7 +1213,7 @@ bridge_reconfigure_controller(struct bridge *br)
         if (!max_backoff) {
             max_backoff = cfg_get_int(0, "mgmt.max-backoff");
             if (!max_backoff) {
-                max_backoff = 15;
+                max_backoff = 8;
             }
         }
         ofproto_set_max_backoff(br->ofproto, max_backoff);

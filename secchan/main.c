@@ -291,7 +291,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->fail_mode = FAIL_OPEN;
     s->max_idle = 0;
     s->probe_interval = 0;
-    s->max_backoff = 15;
+    s->max_backoff = 8;
     s->update_resolv_conf = true;
     s->rate_limit = 0;
     s->burst_limit = 0;
@@ -541,7 +541,7 @@ usage(void)
            "  --inactivity-probe=SECS time between inactivity probes\n"
            "  --max-idle=SECS         max idle for flows set up by secchan\n"
            "  --max-backoff=SECS      max time between controller connection\n"
-           "                          attempts (default: 15 seconds)\n"
+           "                          attempts (default: 8 seconds)\n"
            "  -l, --listen=METHOD     allow management connections on METHOD\n"
            "                          (a passive OpenFlow connection method)\n"
            "  --snoop=METHOD          allow controller snooping on METHOD\n"

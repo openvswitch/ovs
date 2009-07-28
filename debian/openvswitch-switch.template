@@ -140,8 +140,8 @@ MGMT_VCONNS="punix:/var/run/secchan.mgmt"
 
 # MAX_BACKOFF: The maximum time that secchan will wait between
 # attempts to connect to the controller.  The valid range is 1 and up.
-# If unset, secchan defaults to 15 seconds.
-#MAX_BACKOFF=15
+# If unset, secchan defaults to 8 seconds.
+#MAX_BACKOFF=8
 
 # DAEMON_OPTS: Additional options to pass to secchan, e.g. "--fail=open"
 DAEMON_OPTS=""

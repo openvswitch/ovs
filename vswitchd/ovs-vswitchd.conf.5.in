@@ -376,7 +376,7 @@ The specified TCP \fIport\fR (default: 6633) on the host at the given
 .PP
 The maximum time between attempts to connect to the controller may be
 specified in integral seconds with the \fBmgmt.max-backoff\fR key.  The
-default maximum backoff is 15 seconds, and the minimum value is 1
+default maximum backoff is 8 seconds, and the minimum value is 1
 second.
 
 An inactivity probe may be configured with the \fBmgmt.inactivity-probe\fR
