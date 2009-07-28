@@ -165,8 +165,6 @@ EOF
 fi
 
 %post
-source /etc/xensource-inventory
-
 if grep -F net.ipv4.conf.all.arp_filter /etc/sysctl.conf >/dev/null 2>&1; then :; else
     cat >>/etc/sysctl.conf <<EOF
 # This works around an issue in xhad, which binds to a particular
@@ -181,10 +179,6 @@ if grep -F net.ipv4.conf.all.arp_filter /etc/sysctl.conf >/dev/null 2>&1; then :
 net.ipv4.conf.all.arp_filter = 1
 EOF
 fi
-
-xe host-param-set \
-    "other-config:vSwitchVersion=%{version}" uuid="$INSTALLATION_UUID" ||
-    echo "Could not set vSwitchVersion config parameter"
 
 # Ensure ovs-vswitchd.conf exists
 touch /etc/ovs-vswitchd.conf
@@ -272,18 +266,6 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     rm -f /etc/sysconfig/vswitch
     rm -f /var/log/vswitch*
     rm -f /etc/ovs-vswitchd.cacert
-
-    if [ ! -f /etc/xensource-inventory ]; then
-        printf "XenSource inventory not present in /etc/xensource-inventory\n"
-        printf "Could not remove vSwitchVersion from XAPI database.\n"
-        exit 1
-    else
-        source /etc/xensource-inventory
-        xe host-param-remove \
-            param-name=other-config param-key=vSwitchVersion \
-            uuid="$INSTALLATION_UUID" ||
-            echo "Could not clear vSwitchVersion config parameter."
-    fi
 
     printf "\nYou MUST reboot the server now to complete the change to\n"
     printf "standard Xen networking.  Attempts to modify networking on the\n"
