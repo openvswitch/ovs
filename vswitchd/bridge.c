@@ -130,6 +130,7 @@ struct port {
     tag_type active_iface_tag;  /* Tag for bcast flows. */
     tag_type no_ifaces_tag;     /* Tag for flows when all ifaces disabled. */
     int updelay, downdelay;     /* Delay before iface goes up/down, in ms. */
+    bool bond_compat_is_stale;  /* Need to call port_update_bond_compat()? */
 
     /* Port mirroring info. */
     mirror_mask_t src_mirrors;  /* Mirrors triggered when packet received. */
@@ -1405,6 +1406,7 @@ choose_output_iface(const struct port *port, const uint8_t *dl_src,
                 return false;
             }
             e->iface_tag = tag_create_random();
+            ((struct port *) port)->bond_compat_is_stale = true;
         }
         *tags |= e->iface_tag;
         iface = port->ifaces[e->iface_idx];
@@ -1503,6 +1505,12 @@ bond_run(struct bridge *br)
 
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
+
+        if (port->bond_compat_is_stale) {
+            port->bond_compat_is_stale = false;
+            port_update_bond_compat(port);
+        }
+
         if (port->n_ifaces < 2) {
             continue;
         }
@@ -2285,6 +2293,7 @@ bond_rebalance_port(struct port *port)
             } else {
                 from++;
             }
+            port->bond_compat_is_stale = true;
         }
     }
 
@@ -2551,6 +2560,7 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_)
     ofproto_revalidate(port->bridge->ofproto, entry->iface_tag);
     entry->iface_idx = iface->port_ifidx;
     entry->iface_tag = tag_create_random();
+    port->bond_compat_is_stale = true;
     unixctl_command_reply(conn, 200, "migrated");
 }
 
@@ -2815,6 +2825,7 @@ port_destroy(struct port *port)
         size_t i;
 
         proc_net_compat_update_vlan(port->name, NULL, 0);
+        proc_net_compat_update_bond(port->name, NULL);
 
         for (i = 0; i < MAX_MIRRORS; i++) {
             struct mirror *m = br->mirrors[i];
@@ -2881,7 +2892,7 @@ port_update_bonding(struct port *port)
         if (port->bond_hash) {
             free(port->bond_hash);
             port->bond_hash = NULL;
-            proc_net_compat_update_bond(port->name, NULL);
+            port->bond_compat_is_stale = true;
         }
     } else {
         if (!port->bond_hash) {
@@ -2896,7 +2907,7 @@ port_update_bonding(struct port *port)
             port->no_ifaces_tag = tag_create_random();
             bond_choose_active_iface(port);
         }
-        port_update_bond_compat(port);
+        port->bond_compat_is_stale = true;
     }
 }
 
@@ -2908,6 +2919,7 @@ port_update_bond_compat(struct port *port)
     size_t i;
 
     if (port->n_ifaces < 2) {
+        proc_net_compat_update_bond(port->name, NULL);
         return;
     }
 
