@@ -254,7 +254,7 @@ channel waits for a message to be received from the controller for
 controller.  After sending the inactivity probe, if no response is
 received for an additional \fIsecs\fR seconds, the secure channel
 assumes that the connection has been broken and attempts to reconnect.
-The default is 15 seconds, and the minimum value is 5 seconds.
+The default and the minimum value are both 5 seconds.
 
 When fail-open mode is configured, changing the inactivity probe
 interval also changes the interval before entering fail-open mode (see

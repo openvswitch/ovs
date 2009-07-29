@@ -1204,7 +1204,7 @@ bridge_reconfigure_controller(struct bridge *br)
         if (probe < 5) {
             probe = cfg_get_int(0, "mgmt.inactivity-probe");
             if (probe < 5) {
-                probe = 15;
+                probe = 5;
             }
         }
         ofproto_set_probe_interval(br->ofproto, probe);

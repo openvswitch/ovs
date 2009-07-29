@@ -384,7 +384,7 @@ key.  If \fBovs\-vswitchd\fR does not communicate with the controller for the
 specified number of seconds, it will send a probe.  If a response is not
 received for an additional amount of that time, \fBovs\-vswitchd\fR assumes
 the connection has been broken and attempts to reconnect.  The default
-is 15 seconds, and the minimum value is 5 seconds.
+and minimum values are both 5 seconds.
 
 A management id may be specified with the \fBmgmt.id\fR key.  It takes
 an id in the form of exactly 12 hexadecimal digits.  If one is not

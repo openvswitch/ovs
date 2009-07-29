@@ -135,7 +135,7 @@ MGMT_VCONNS="punix:/var/run/secchan.mgmt"
 # INACTIVITY_PROBE: The maximum number of seconds of inactivity on the
 # controller connection before secchan sends an inactivity probe
 # message to the controller.  The valid range is 5 and up.  If unset,
-# secchan defaults to 15 seconds.
+# secchan defaults to 5 seconds.
 #INACTIVITY_PROBE=5
 
 # MAX_BACKOFF: The maximum time that secchan will wait between
