@@ -38,7 +38,6 @@ AC_USE_SYSTEM_EXTENSIONS
 AC_C_BIGENDIAN
 AC_SYS_LARGEFILE
 
-OVS_CHECK_USERSPACE
 OVS_CHECK_COVERAGE
 OVS_CHECK_NDEBUG
 OVS_CHECK_NETLINK
@@ -50,33 +49,31 @@ OVS_CHECK_PCRE
 OVS_CHECK_IF_PACKET
 OVS_CHECK_STRTOK_R
 
-if $build_userspace; then
-    OVS_CHECK_PKIDIR
-    OVS_CHECK_RUNDIR
-    OVS_CHECK_MALLOC_HOOKS
-    OVS_CHECK_VALGRIND
-    OVS_CHECK_TTY_LOCK_DIR
-    OVS_CHECK_SOCKET_LIBS
-    OVS_CHECK_FAULT_LIBS
+OVS_CHECK_PKIDIR
+OVS_CHECK_RUNDIR
+OVS_CHECK_MALLOC_HOOKS
+OVS_CHECK_VALGRIND
+OVS_CHECK_TTY_LOCK_DIR
+OVS_CHECK_SOCKET_LIBS
+OVS_CHECK_FAULT_LIBS
 
-    AC_CHECK_FUNCS([strsignal])
+AC_CHECK_FUNCS([strsignal])
 
-    OVS_ENABLE_OPTION([-Wall])
-    OVS_ENABLE_OPTION([-Wno-sign-compare])
-    OVS_ENABLE_OPTION([-Wpointer-arith])
-    OVS_ENABLE_OPTION([-Wdeclaration-after-statement])
-    OVS_ENABLE_OPTION([-Wformat-security])
-    OVS_ENABLE_OPTION([-Wswitch-enum])
-    OVS_ENABLE_OPTION([-Wunused-parameter])
-    OVS_ENABLE_OPTION([-Wstrict-aliasing])
-    OVS_ENABLE_OPTION([-Wbad-function-cast])
-    OVS_ENABLE_OPTION([-Wcast-align])
-    OVS_ENABLE_OPTION([-Wstrict-prototypes])
-    OVS_ENABLE_OPTION([-Wold-style-definition])
-    OVS_ENABLE_OPTION([-Wmissing-prototypes])
-    OVS_ENABLE_OPTION([-Wmissing-field-initializers])
-    OVS_ENABLE_OPTION([-Wno-override-init])
-fi
+OVS_ENABLE_OPTION([-Wall])
+OVS_ENABLE_OPTION([-Wno-sign-compare])
+OVS_ENABLE_OPTION([-Wpointer-arith])
+OVS_ENABLE_OPTION([-Wdeclaration-after-statement])
+OVS_ENABLE_OPTION([-Wformat-security])
+OVS_ENABLE_OPTION([-Wswitch-enum])
+OVS_ENABLE_OPTION([-Wunused-parameter])
+OVS_ENABLE_OPTION([-Wstrict-aliasing])
+OVS_ENABLE_OPTION([-Wbad-function-cast])
+OVS_ENABLE_OPTION([-Wcast-align])
+OVS_ENABLE_OPTION([-Wstrict-prototypes])
+OVS_ENABLE_OPTION([-Wold-style-definition])
+OVS_ENABLE_OPTION([-Wmissing-prototypes])
+OVS_ENABLE_OPTION([-Wmissing-field-initializers])
+OVS_ENABLE_OPTION([-Wno-override-init])
 
 AC_ARG_VAR(KARCH, [Kernel Architecture String])
 AC_SUBST(KARCH)

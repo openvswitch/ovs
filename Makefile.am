@@ -9,7 +9,6 @@ AUTOMAKE_OPTIONS = foreign subdir-objects
 ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = datapath
 
-if ENABLE_USERSPACE
 AM_CPPFLAGS = $(SSL_CFLAGS)
 AM_CPPFLAGS += $(NCURSES_CFLAGS)
 AM_CPPFLAGS += $(PCRE_CFLAGS)
@@ -72,4 +71,3 @@ if HAVE_PCRE
 include extras/ezio/automake.mk
 endif
 endif
-endif # ENABLE_USERSPACE
