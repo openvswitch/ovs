@@ -241,9 +241,14 @@ rewrite_and_reload_config(void)
 }
 
 /* Get all the interfaces for 'bridge' as 'ifaces', breaking bonded interfaces
- * down into their constituent parts. */
+ * down into their constituent parts.
+ *
+ * If 'vlan' < 0, all interfaces on 'bridge' are reported.  If 'vlan' == 0,
+ * then only interfaces for trunk ports or ports with implicit VLAN 0 are
+ * reported.  If 'vlan' > 0, only interfaces with implict VLAN 'vlan' are
+ * reported.  */
 static void
-get_bridge_ifaces(const char *bridge, struct svec *ifaces)
+get_bridge_ifaces(const char *bridge, struct svec *ifaces, int vlan)
 {
     struct svec ports;
     int i;
@@ -253,6 +258,15 @@ get_bridge_ifaces(const char *bridge, struct svec *ifaces)
     cfg_get_all_keys(&ports, "bridge.%s.port", bridge);
     for (i = 0; i < ports.n; i++) {
         const char *port_name = ports.names[i];
+        if (vlan >= 0) {
+            int port_vlan = cfg_get_vlan(0, "vlan.%s.tag", port_name);
+            if (port_vlan < 0) {
+                port_vlan = 0;
+            }
+            if (vlan != port_vlan) {
+                continue;
+            }
+        }
         if (cfg_has_section("bonding.%s", port_name)) {
             struct svec slaves;
             svec_init(&slaves);
@@ -288,7 +302,7 @@ prune_ports(void)
         struct svec ifaces;
 
         /* Check that each bridge interface exists. */
-        get_bridge_ifaces(br_name, &ifaces);
+        get_bridge_ifaces(br_name, &ifaces, -1);
         for (j = 0; j < ifaces.n; j++) {
             const char *iface_name = ifaces.names[j];
             enum netdev_flags flags;
@@ -518,6 +532,27 @@ handle_port_cmd(struct ofpbuf *buffer, bool add)
     return error;
 }
 
+/* Returns the name of the bridge that contains a port named 'port_name', as a
+ * malloc'd string that the caller must free, or a null pointer if no bridge
+ * contains a port named 'port_name'. */
+static char *
+get_bridge_containing_port(const char *port_name)
+{
+    struct svec matches;
+    const char *start, *end;
+
+    svec_init(&matches);
+    cfg_get_matches(&matches, "bridge.*.port=%s", port_name);
+    if (!matches.n) {
+        return 0;
+    }
+
+    start = matches.names[0] + strlen("bridge.");
+    end = strstr(start, ".port=");
+    assert(end);
+    return xmemdup0(start, end - start);
+}
+
 static int
 handle_fdb_query_cmd(struct ofpbuf *buffer)
 {
@@ -542,35 +577,65 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
     int n_local_macs;
     int i;
 
+    /* Impedance matching between the vswitchd and Linux kernel notions of what
+     * a bridge is.  The kernel only handles a single VLAN per bridge, but
+     * vswitchd can deal with all the VLANs on a single bridge.  We have to
+     * pretend that the former is the case even though the latter is the
+     * implementation. */
+    const char *linux_bridge;   /* Name used by brctl. */
+    char *ovs_bridge;           /* Name used by ovs-vswitchd. */
+    int br_vlan;                /* VLAN tag. */
+    struct svec ifaces;
+
     struct ofpbuf query_data;
     char *unixctl_command;
     uint64_t count, skip;
-    const char *br_name;
-    struct svec ifaces;
     char *output;
     char *save_ptr;
     uint32_t seq;
     int error;
 
     /* Parse the command received from brcompat_mod. */
-    error = parse_command(buffer, &seq, &br_name, NULL, &count, &skip);
+    error = parse_command(buffer, &seq, &linux_bridge, NULL, &count, &skip);
     if (error) {
         return error;
     }
 
+    /* Figure out vswitchd bridge and VLAN. */
+    cfg_read();
+    if (bridge_exists(linux_bridge)) {
+        /* Bridge name is the same.  We are interested in VLAN 0. */
+        ovs_bridge = xstrdup(linux_bridge);
+        br_vlan = 0;
+    } else {
+        /* No such Open vSwitch bridge 'linux_bridge', but there might be an
+         * internal port named 'linux_bridge' on some other bridge
+         * 'ovs_bridge'.  If so then we are interested in the VLAN assigned to
+         * port 'linux_bridge' on the bridge named 'ovs_bridge'. */
+        const char *port_name = linux_bridge;
+
+        ovs_bridge = get_bridge_containing_port(port_name);
+        br_vlan = cfg_get_vlan(0, "vlan.%s.tag", port_name);
+        if (!ovs_bridge || br_vlan < 0) {
+            free(ovs_bridge);
+            send_reply(seq, ENODEV, NULL);
+            return error;
+        }
+    }
+
     /* Fetch the forwarding database using ovs-appctl. */
-    unixctl_command = xasprintf("fdb/show %s", br_name);
+    unixctl_command = xasprintf("fdb/show %s", ovs_bridge);
     error = execute_appctl_command(unixctl_command, &output);
     free(unixctl_command);
     if (error) {
+        free(ovs_bridge);
         send_reply(seq, error, NULL);
         return error;
     }
 
     /* Fetch the MAC address for each interface on the bridge, so that we can
      * fill in the is_local field in the response. */
-    cfg_read();
-    get_bridge_ifaces(br_name, &ifaces);
+    get_bridge_ifaces(ovs_bridge, &ifaces, br_vlan);
     local_macs = xmalloc(ifaces.n * sizeof *local_macs);
     n_local_macs = 0;
     for (i = 0; i < ifaces.n; i++) {
@@ -607,6 +672,10 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
             continue;
         }
 
+        if (vlan != br_vlan) {
+            continue;
+        }
+
         if (skip > 0) {
             skip--;
             continue;
@@ -635,6 +704,7 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
 
     send_reply(seq, 0, &query_data);
     ofpbuf_uninit(&query_data);
+    free(ovs_bridge);
 
     return 0;
 }

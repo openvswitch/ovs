@@ -32,6 +32,17 @@ class VSwitchService:
         if self.processname == None:
             self.processname = name
 
+    def version(self):
+        try:
+            output = ShellPipe(["service", self.name, "version"]).Stdout()
+        except StandardError, e:
+            log.error("version retrieval error: " + str(e))
+            return "<unknown>"
+        for line in output:
+            if self.processname in line:
+                return line.split()[-1]
+        return "<unknown>"
+
     def status(self):
         try:
             output = ShellPipe(["service", self.name, "status"]).Stdout()
@@ -40,12 +51,12 @@ class VSwitchService:
             return "<unknown>"
         if len(output) == 0:
             return "<unknown>"
-        for l in output:
-            if self.processname not in l:
+        for line in output:
+            if self.processname not in line:
                 continue
-            elif "running" in l:
+            elif "running" in line:
                 return "Running"
-            elif "stop" in l:
+            elif "stop" in line:
                 return "Stopped"
             else:
                 return "<unknown>"
@@ -262,8 +273,8 @@ class XSFeatureVSwitch:
 
         inPane.NewLine()
 
-        versionStr = data.host.other_config({}).get("vSwitchVersion", "<Unknown>")
-        inPane.AddStatusField(Lang("Version", 20), versionStr)
+        inPane.AddStatusField(Lang("Version", 20),
+                              VSwitchService.Inst("vswitch", "ovs-vswitchd").version())
 
         inPane.NewLine()
 

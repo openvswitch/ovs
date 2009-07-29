@@ -23,16 +23,15 @@ The optional \fIcontroller\fR argument specifies how to connect to
 the OpenFlow controller.  It takes one of the following forms:
 
 .RS
-.TP
-\fBssl:\fIhost\fR[\fB:\fIport\fR]
-The specified SSL \fIport\fR (default: 6633) on the given remote
-\fIhost\fR.  The \fB--private-key\fR, \fB--certificate\fR, and
-\fB--ca-cert\fR options are mandatory when this form is used.
+.IP "\fBssl:\fIip\fR[\fB:\fIport\fR]"
+The specified SSL \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
+The \fB--private-key\fR, \fB--certificate\fR, and \fB--ca-cert\fR
+options are mandatory when this form is used.
 
-.TP
-\fBtcp:\fIhost\fR[\fB:\fIport\fR]
-The specified TCP \fIport\fR (default: 6633) on the given remote
-\fIhost\fR.
+.IP "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
+The specified TCP \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
 
 .TP
 \fBunix:\fIfile\fR
@@ -348,9 +347,10 @@ mode (see \fBContacting the Controller\fR above).  When neither option
 is given, the default is in-band control.
 
 .TP
-\fB--netflow=\fIhost\fB:\fIport\fR
-Configures the given UDP \fIport\fR on the specified IP \fIhost\fR as
-a recipient of NetFlow messages for expired flows.
+\fB--netflow=\fIip\fB:\fIport\fR
+Configures the given UDP \fIport\fR on the specified IP \fIip\fR as
+a recipient of NetFlow messages for expired flows.  The \fIip\fR must
+be specified numerically, not as a DNS name.
 
 This option may be specified multiple times to configure additional
 NetFlow collectors.

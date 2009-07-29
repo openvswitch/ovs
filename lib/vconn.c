@@ -128,11 +128,11 @@ vconn_usage(bool active, bool passive, bool bootstrap UNUSED)
     printf("\n");
     if (active) {
         printf("Active OpenFlow connection methods:\n");
-        printf("  tcp:HOST[:PORT]         "
-               "PORT (default: %d) on remote TCP HOST\n", OFP_TCP_PORT);
+        printf("  tcp:IP[:PORT]         "
+               "PORT (default: %d) at remote IP\n", OFP_TCP_PORT);
 #ifdef HAVE_OPENSSL
-        printf("  ssl:HOST[:PORT]         "
-               "SSL PORT (default: %d) on remote HOST\n", OFP_SSL_PORT);
+        printf("  ssl:IP[:PORT]         "
+               "SSL PORT (default: %d) at remote IP\n", OFP_SSL_PORT);
 #endif
         printf("  unix:FILE               Unix domain socket named FILE\n");
     }

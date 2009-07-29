@@ -220,7 +220,7 @@ case "$1" in
                 configure_ssl
                 ;;
             *)
-                echo "$default: CONTROLLER must be in the form 'ssl:HOST[:PORT]' or 'tcp:HOST[:PORT]' when not in discovery mode" >&2
+                echo "$default: CONTROLLER must be in the form 'ssl:IP[:PORT]' or 'tcp:IP[:PORT]' when not in discovery mode" >&2
                 echo "Run ovs-switch-setup (in the openvswitch-switch-config package) or edit /etc/default/openvswitch-switch to configure" >&2
                 exit 1
         esac

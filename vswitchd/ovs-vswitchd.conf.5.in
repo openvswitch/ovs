@@ -317,8 +317,9 @@ NetFlow is a protocol that exports a number of details about terminating
 IP flows, such as the principals involved and duration.  A bridge may be 
 configured to send NetFlow v5 records to NetFlow collectors when flows 
 end.  To enable, define the key \fBnetflow.\fIbridge\fB.host\fR for each 
-collector in the form \fIhost\fB:\fIport\fR.  Records from \fIbridge\fR 
-will be sent to each \fIhost\fR on UDP \fIport\fR.
+collector in the form \fIip\fB:\fIport\fR.  Records from \fIbridge\fR 
+will be sent to each \fIip\fR on UDP \fIport\fR.  The \fIip\fR must
+be specified numerically, not as a DNS name.
 
 The NetFlow messages will use the datapath index for the engine type and id.  
 This can be overridden with the \fBnetflow.\fIbridge\fB.engine-type\fR and 
@@ -350,16 +351,15 @@ supports the OpenFlow Management Protocol, such as NOX.  This
 functionality is enabled by setting the key \fBmgmt.controller\fR to one 
 of the following values:
 .
-.TP
-\fBssl:\fIhost\fR[\fB:\fIport\fR]
-The specified SSL \fIport\fR (default: 6633) on the given remote
-\fIhost\fR.  SSL must be configured when this form is used (see \fBSSL
+.IP "\fBssl:\fIip\fR[\fB:\fIport\fR]"
+The specified SSL \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
+SSL must be configured when this form is used (see \fBSSL
 Configuration\fR, below).
 .
-.TP
-\fBtcp:\fIhost\fR[\fB:\fIport\fR]
-The specified TCP \fIport\fR (default: 6633) on the given remote
-\fIhost\fR.
+.IP "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
+The specified TCP \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
 .PP
 The maximum time between attempts to connect to the controller may be
 specified in integral seconds with the \fBmgmt.max-backoff\fR key.  The
@@ -430,15 +430,16 @@ that it receives specifies one or more DNS servers.
 .RE
 .
 .TP
-\fBssl:\fIhost\fR[\fB:\fIport\fR]
-The specified SSL \fIport\fR (default: 6633) on the given remote
-\fIhost\fR.  SSL must be configured when this form is used (see \fBSSL
+\fBssl:\fIip\fR[\fB:\fIport\fR]
+The specified SSL \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
+SSL must be configured when this form is used (see \fBSSL
 Configuration\fR, below).
 .
 .TP
-\fBtcp:\fIhost\fR[\fB:\fIport\fR]
-The specified TCP \fIport\fR (default: 6633) on the given remote
-\fIhost\fR.
+\fBtcp:\fIip\fR[\fB:\fIport\fR]
+The specified TCP \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
 .
 .TP
 \fBunix:\fIfile\fR

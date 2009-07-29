@@ -69,8 +69,8 @@ SWITCH_IP=dhcp
 
 # CONTROLLER: Location of controller.
 # One of the following formats:
-#  tcp:HOST[:PORT]         via TCP to PORT (default: 6633) on HOST
-#  ssl:HOST[:PORT]         via SSL to PORT (default: 6633) on HOST
+#  tcp:IP[:PORT]         via TCP to PORT (default: 6633) at IP
+#  ssl:IP[:PORT]         via SSL to PORT (default: 6633) at IP
 # The default below assumes that the controller is running locally.
 # This setting has no effect when MODE is set to 'discovery'.
 #CONTROLLER="tcp:127.0.0.1"

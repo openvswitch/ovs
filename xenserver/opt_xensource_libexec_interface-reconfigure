@@ -835,6 +835,15 @@ def action_up(pif):
     for physdev in physdevs:
         down_netdev(physdev)
 
+    # If we are bringing up a bond, remove IP addresses from the
+    # slaves (because we are implicitly being asked to take them down).
+    # 
+    # Conversely, if we are bringing up an interface that has bond
+    # masters, remove IP addresses from the bond master (because we
+    # are implicitly being asked to take it down).
+    for bond_pif in bond_slaves + bond_masters:
+        run_command(["/sbin/ifconfig", ipdev_name(bond_pif), '0.0.0.0']) 
+
     # Remove all keys related to pif and any bond masters linked to PIF.
     del_ports = [ipdev] + physdevs + bond_masters
     if vlan_slave and bond_master:
@@ -929,6 +938,19 @@ def action_up(pif):
 
     # Update /etc/issue (which contains the IP address of the management interface)
     os.system("/sbin/update-issue")
+
+    if bond_slaves:
+        # There seems to be a race somewhere: without this sleep, using
+        # XenCenter to create a bond that becomes the management interface
+        # fails with "The underlying connection was closed: A connection that
+        # was expected to be kept alive was closed by the server." on every
+        # second or third try, even though /var/log/messages doesn't show
+        # anything unusual.
+        #
+        # The race is probably present even without vswitch, but bringing up a
+        # bond without vswitch involves a built-in pause of 10 seconds or more
+        # to wait for the bond to transition from learning to forwarding state.
+        time.sleep(5)
         
 def action_down(pif):
     rec = db.get_pif_record(pif)    

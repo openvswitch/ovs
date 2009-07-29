@@ -38,16 +38,15 @@ to the given \fIip\fR.
 Listens for connections from OpenFlow switches on the Unix domain
 server socket named \fIfile\fR.
 
-.TP
-\fBssl:\fIhost\fR[\fB:\fIport\fR]
-The specified SSL \fIport\fR (default: 6633) on the given remote
-\fIhost\fR.  The \fB--private-key\fR, \fB--certificate\fR, and
-\fB--ca-cert\fR options are mandatory when this form is used.
+.IP "\fBssl:\fIip\fR[\fB:\fIport\fR]"
+The specified SSL \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
+The \fB--private-key\fR, \fB--certificate\fR, and \fB--ca-cert\fR
+options are mandatory when this form is used.
 
-.TP
-\fBtcp:\fIhost\fR[\fB:\fIport\fR]
-The specified TCP \fIport\fR (default: 6633) on the given remote
-\fIhost\fR.
+.IP "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
+The specified TCP \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
 
 .TP
 \fBunix:\fIfile\fR

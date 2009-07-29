@@ -278,8 +278,8 @@ msgstr ""
 #: ../openvswitch-switch-config.templates:10001
 msgid ""
 "Specify how the OpenFlow switch should connect to the OpenFlow controller. "
-"The value should be in form \"ssl:HOST[:PORT]\" to connect to the controller "
-"over SSL (recommended for security) or \"tcp:HOST[:PORT]\" to connect over "
+"The value should be in form \"ssl:IP[:PORT]\" to connect to the controller "
+"over SSL (recommended for security) or \"tcp:IP[:PORT]\" to connect over "
 "cleartext TCP."
 msgstr ""
 
@@ -293,8 +293,8 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:11001
 msgid ""
-"The controller location must be specifed as \"ssl:HOST[:PORT]\" to connect "
-"to the controller over SSL (recommended for security) or \"tcp:HOST[:PORT]\" "
+"The controller location must be specifed as \"ssl:IP[:PORT]\" to connect "
+"to the controller over SSL (recommended for security) or \"tcp:IP[:PORT]\" "
 "to connect over cleartext TCP."
 msgstr ""
 
