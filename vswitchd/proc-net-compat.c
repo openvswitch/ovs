@@ -154,6 +154,12 @@ proc_net_compat_update_bond(const char *name, const struct compat_bond *bond)
         "\n"
         "Source load balancing info:\n",
         bond->up ? "up" : "down", bond->updelay, bond->downdelay);
+
+    for (i = 0; i < bond->n_hashes; i++) {
+        const struct compat_bond_hash *cbh = &bond->hashes[i];
+        ds_put_format(&ds, " [%03d] = %s\n", cbh->hash, cbh->netdev_name);
+    }
+
     for (i = 0; i < bond->n_slaves; i++) {
         const struct compat_bond_slave *slave = &bond->slaves[i];
         ds_put_format(

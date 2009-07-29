@@ -22,8 +22,17 @@ struct compat_bond {
     bool up;
     int updelay;
     int downdelay;
+
+    int n_hashes;
+    struct compat_bond_hash *hashes;
+
     int n_slaves;
     struct compat_bond_slave *slaves;
+};
+
+struct compat_bond_hash {
+    int hash;
+    const char *netdev_name;
 };
 
 struct compat_bond_slave {

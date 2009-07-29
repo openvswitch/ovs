@@ -2903,6 +2903,7 @@ port_update_bonding(struct port *port)
 static void
 port_update_bond_compat(struct port *port)
 {
+    struct compat_bond_hash compat_hashes[BOND_MASK + 1];
     struct compat_bond bond;
     size_t i;
 
@@ -2913,6 +2914,20 @@ port_update_bond_compat(struct port *port)
     bond.up = false;
     bond.updelay = port->updelay;
     bond.downdelay = port->downdelay;
+
+    bond.n_hashes = 0;
+    bond.hashes = compat_hashes;
+    if (port->bond_hash) {
+        const struct bond_entry *e;
+        for (e = port->bond_hash; e <= &port->bond_hash[BOND_MASK]; e++) {
+            if (e->iface_idx >= 0 && e->iface_idx < port->n_ifaces) {
+                struct compat_bond_hash *cbh = &bond.hashes[bond.n_hashes++];
+                cbh->hash = e - port->bond_hash;
+                cbh->netdev_name = port->ifaces[e->iface_idx]->name;
+            }
+        }
+    }
+
     bond.n_slaves = port->n_ifaces;
     bond.slaves = xmalloc(port->n_ifaces * sizeof *bond.slaves);
     for (i = 0; i < port->n_ifaces; i++) {
@@ -2926,6 +2941,7 @@ port_update_bond_compat(struct port *port)
         }
         memcpy(slave->mac, iface->mac, ETH_ADDR_LEN);
     }
+
     proc_net_compat_update_bond(port->name, &bond);
     free(bond.slaves);
 }
