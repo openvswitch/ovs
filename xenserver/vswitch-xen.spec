@@ -21,7 +21,9 @@ Summary: Virtual switch
 Group: System Environment/Daemons
 URL: http://www.openvswitch.org/
 Version: %{vswitch_version}
-License: GPL3
+
+# The entire source code is ASL 2.0 except datapath/ which is GPLv2
+License: ASL 2.0 and GPLv2
 Release: 1
 Source: openvswitch-%{vswitch_version}.tar.gz
 Buildroot: /tmp/vswitch-xen-rpm
