@@ -64,8 +64,4 @@ include third-party/automake.mk
 include debian/automake.mk
 include vswitchd/automake.mk
 include xenserver/automake.mk
-if HAVE_CURSES
-if HAVE_PCRE
 include extras/ezio/automake.mk
-endif
-endif
