@@ -565,6 +565,33 @@ get_bridge_containing_port(const char *port_name)
 }
 
 static int
+linux_bridge_to_ovs_bridge(const char *linux_bridge,
+                           char **ovs_bridge, int *br_vlan)
+{
+    if (bridge_exists(linux_bridge)) {
+        /* Bridge name is the same.  We are interested in VLAN 0. */
+        *ovs_bridge = xstrdup(linux_bridge);
+        *br_vlan = 0;
+        return 0;
+    } else {
+        /* No such Open vSwitch bridge 'linux_bridge', but there might be an
+         * internal port named 'linux_bridge' on some other bridge
+         * 'ovs_bridge'.  If so then we are interested in the VLAN assigned to
+         * port 'linux_bridge' on the bridge named 'ovs_bridge'. */
+        const char *port_name = linux_bridge;
+
+        *ovs_bridge = get_bridge_containing_port(port_name);
+        *br_vlan = cfg_get_vlan(0, "vlan.%s.tag", port_name);
+        if (*ovs_bridge && *br_vlan >= 0) {
+            return 0;
+        } else {
+            free(*ovs_bridge);
+            return ENODEV;
+        }
+    }
+}
+
+static int
 handle_fdb_query_cmd(struct ofpbuf *buffer)
 {
     /* This structure is copied directly from the Linux 2.6.30 header files.
@@ -615,24 +642,10 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
 
     /* Figure out vswitchd bridge and VLAN. */
     cfg_read();
-    if (bridge_exists(linux_bridge)) {
-        /* Bridge name is the same.  We are interested in VLAN 0. */
-        ovs_bridge = xstrdup(linux_bridge);
-        br_vlan = 0;
-    } else {
-        /* No such Open vSwitch bridge 'linux_bridge', but there might be an
-         * internal port named 'linux_bridge' on some other bridge
-         * 'ovs_bridge'.  If so then we are interested in the VLAN assigned to
-         * port 'linux_bridge' on the bridge named 'ovs_bridge'. */
-        const char *port_name = linux_bridge;
-
-        ovs_bridge = get_bridge_containing_port(port_name);
-        br_vlan = cfg_get_vlan(0, "vlan.%s.tag", port_name);
-        if (!ovs_bridge || br_vlan < 0) {
-            free(ovs_bridge);
-            send_simple_reply(seq, ENODEV);
-            return ENODEV;
-        }
+    error = linux_bridge_to_ovs_bridge(linux_bridge, &ovs_bridge, &br_vlan);
+    if (error) {
+        send_simple_reply(seq, error);
+        return error;
     }
 
     /* Fetch the forwarding database using ovs-appctl. */
