@@ -6,6 +6,9 @@
 # without warranty of any kind.
 
 EXTRA_DIST += extras/ezio/ezio3.ti
+
+if HAVE_CURSES
+if HAVE_PCRE
 install-data-hook:
 	@echo tic -x $(srcdir)/extras/ezio/ezio3.ti
 	@if ! tic -x $(srcdir)/extras/ezio/ezio3.ti; then			      \
@@ -47,3 +50,5 @@ extras_ezio_ovs_switchui_LDADD = \
 	$(PCRE_LIBS) \
 	$(SSL_LIBS) \
 	-lm
+endif # HAVE_PCRE
+endif # HAVE_CURSES
