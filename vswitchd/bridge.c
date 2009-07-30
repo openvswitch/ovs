@@ -71,17 +71,19 @@ struct dst {
 extern uint64_t mgmt_id;
 
 struct iface {
+    /* These members are always valid. */
     struct port *port;          /* Containing port. */
     size_t port_ifidx;          /* Index within containing port. */
-
     char *name;                 /* Host network device name. */
-    int dp_ifidx;               /* Index within kernel datapath. */
-
-    uint8_t mac[ETH_ADDR_LEN];  /* Ethernet address (all zeros if unknowns). */
-
     tag_type tag;               /* Tag associated with this interface. */
-    bool enabled;               /* May be chosen for flows? */
     long long delay_expires;    /* Time after which 'enabled' may change. */
+
+    /* These members are valid only after bridge_reconfigure() causes them to
+     * be initialized.*/
+    int dp_ifidx;               /* Index within kernel datapath. */
+    struct netdev *netdev;      /* Network device. */
+    uint8_t mac[ETH_ADDR_LEN];  /* Ethernet address (all zeros if unknowns). */
+    bool enabled;               /* May be chosen for flows? */
 };
 
 #define BOND_MASK 0xff
@@ -223,6 +225,7 @@ static struct port *port_from_dp_ifidx(const struct bridge *,
                                        uint16_t dp_ifidx);
 static void port_update_bond_compat(struct port *);
 static void port_update_vlan_compat(struct port *);
+static void port_update_bonding(struct port *);
 
 static void mirror_create(struct bridge *, const char *name);
 static void mirror_destroy(struct mirror *);
@@ -355,6 +358,27 @@ bridge_configure_ssl(void)
     }
 }
 #endif
+
+/* iterate_and_prune_ifaces() callback function that opens the network device
+ * for 'iface', if it is not already open, and retrieves the interface's MAC
+ * address and carrier status. */
+static bool
+init_iface_netdev(struct bridge *br UNUSED, struct iface *iface,
+                  void *aux UNUSED)
+{
+    if (iface->netdev) {
+        return true;
+    } else if (!netdev_open(iface->name, NETDEV_ETH_TYPE_NONE,
+                            &iface->netdev)) {
+        netdev_get_etheraddr(iface->netdev, iface->mac);
+        netdev_get_carrier(iface->netdev, &iface->enabled);
+        return true;
+    } else {
+        /* If the network device can't be opened, then we're not going to try
+         * to do anything with this interface. */
+        return false;
+    }
+}
 
 static bool
 check_iface_dp_ifidx(struct bridge *br, struct iface *iface,
@@ -524,6 +548,7 @@ bridge_reconfigure(void)
         struct svec nf_hosts;
 
         bridge_fetch_dp_ifaces(br);
+        iterate_and_prune_ifaces(br, init_iface_netdev, NULL);
 
         local_iface = NULL;
         iterate_and_prune_ifaces(br, check_iface_dp_ifidx, &local_iface);
@@ -589,6 +614,7 @@ bridge_reconfigure(void)
         for (i = 0; i < br->n_ports; i++) {
             struct port *port = br->ports[i];
             port_update_vlan_compat(port);
+            port_update_bonding(port);
         }
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
@@ -2944,9 +2970,7 @@ iface_create(struct port *port, const char *name)
     iface->dp_ifidx = -1;
     iface->tag = tag_create_random();
     iface->delay_expires = LLONG_MAX;
-
-    netdev_nodev_get_etheraddr(name, iface->mac);
-    netdev_nodev_get_carrier(name, &iface->enabled);
+    iface->netdev = NULL;
 
     if (port->n_ifaces >= port->allocated_ifaces) {
         port->ifaces = x2nrealloc(port->ifaces, &port->allocated_ifaces,
@@ -2959,7 +2983,6 @@ iface_create(struct port *port, const char *name)
 
     VLOG_DBG("attached network device %s to port %s", iface->name, port->name);
 
-    port_update_bonding(port);
     bridge_flush(port->bridge);
 }
 
@@ -2979,6 +3002,7 @@ iface_destroy(struct iface *iface)
         del = port->ifaces[iface->port_ifidx] = port->ifaces[--port->n_ifaces];
         del->port_ifidx = iface->port_ifidx;
 
+        netdev_close(iface->netdev);
         free(iface->name);
         free(iface);
 
@@ -2988,7 +3012,6 @@ iface_destroy(struct iface *iface)
             bond_send_learning_packets(port);
         }
 
-        port_update_bonding(port);
         bridge_flush(port->bridge);
     }
 }
