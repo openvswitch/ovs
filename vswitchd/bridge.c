@@ -356,12 +356,64 @@ bridge_configure_ssl(void)
 }
 #endif
 
+static bool
+check_iface_dp_ifidx(struct bridge *br, struct iface *iface,
+                     void *local_ifacep_)
+{
+    struct iface **local_ifacep = local_ifacep_;
+
+    if (iface->dp_ifidx >= 0) {
+        if (iface->dp_ifidx == ODPP_LOCAL) {
+            *local_ifacep = iface;
+        }
+        VLOG_DBG("%s has interface %s on port %d",
+                 dpif_name(br->dpif),
+                 iface->name, iface->dp_ifidx);
+        return true;
+    } else {
+        VLOG_ERR("%s interface not in %s, dropping",
+                 iface->name, dpif_name(br->dpif));
+        return false;
+    }
+}
+
+/* Calls 'cb' for each interfaces in 'br', passing along the 'aux' argument.
+ * Deletes from 'br' all the interfaces for which 'cb' returns false, and then
+ * deletes from 'br' any ports that no longer have any interfaces. */
+static void
+iterate_and_prune_ifaces(struct bridge *br,
+                         bool (*cb)(struct bridge *, struct iface *,
+                                    void *aux),
+                         void *aux)
+{
+    size_t i, j;
+
+    for (i = 0; i < br->n_ports; ) {
+        struct port *port = br->ports[i];
+        for (j = 0; j < port->n_ifaces; ) {
+            struct iface *iface = port->ifaces[j];
+            if (cb(br, iface, aux)) {
+                j++;
+            } else {
+                iface_destroy(iface);
+            }
+        }
+
+        if (port->n_ifaces) {
+            i++;
+        } else  {
+            VLOG_ERR("%s port has no interfaces, dropping", port->name);
+            port_destroy(port);
+        }
+    }
+}
+
 void
 bridge_reconfigure(void)
 {
     struct svec old_br, new_br;
     struct bridge *br, *next;
-    size_t i, j;
+    size_t i;
 
     COVERAGE_INC(bridge_reconfigure);
 
@@ -472,32 +524,9 @@ bridge_reconfigure(void)
         struct svec nf_hosts;
 
         bridge_fetch_dp_ifaces(br);
-        for (i = 0; i < br->n_ports; ) {
-            struct port *port = br->ports[i];
 
-            for (j = 0; j < port->n_ifaces; ) {
-                struct iface *iface = port->ifaces[j];
-                if (iface->dp_ifidx < 0) {
-                    VLOG_ERR("%s interface not in %s, dropping",
-                             iface->name, dpif_name(br->dpif));
-                    iface_destroy(iface);
-                } else {
-                    if (iface->dp_ifidx == ODPP_LOCAL) {
-                        local_iface = iface;
-                    }
-                    VLOG_DBG("%s has interface %s on port %d",
-                             dpif_name(br->dpif),
-                             iface->name, iface->dp_ifidx);
-                    j++;
-                }
-            }
-            if (!port->n_ifaces) {
-                VLOG_ERR("%s port has no interfaces, dropping", port->name);
-                port_destroy(port);
-                continue;
-            }
-            i++;
-        }
+        local_iface = NULL;
+        iterate_and_prune_ifaces(br, check_iface_dp_ifidx, &local_iface);
 
         /* Pick local port hardware address, datapath ID. */
         bridge_pick_local_hw_addr(br, ea, &devname);
@@ -944,13 +973,29 @@ bridge_get_controller(const struct bridge *br)
     return controller && controller[0] ? controller : NULL;
 }
 
+static bool
+check_duplicate_ifaces(struct bridge *br, struct iface *iface, void *ifaces_)
+{
+    struct svec *ifaces = ifaces_;
+    if (!svec_contains(ifaces, iface->name)) {
+        svec_add(ifaces, iface->name);
+        svec_sort(ifaces);
+        return true;
+    } else {
+        VLOG_ERR("bridge %s: %s interface is on multiple ports, "
+                 "removing from %s",
+                 br->name, iface->name, iface->port->name);
+        return false;
+    }
+}
+
 static void
 bridge_reconfigure_one(struct bridge *br)
 {
     struct svec old_ports, new_ports, ifaces;
     struct svec listeners, old_listeners;
     struct svec snoops, old_snoops;
-    size_t i, j;
+    size_t i;
 
     /* Collect old ports. */
     svec_init(&old_ports);
@@ -1008,28 +1053,7 @@ bridge_reconfigure_one(struct bridge *br)
 
     /* Check and delete duplicate interfaces. */
     svec_init(&ifaces);
-    for (i = 0; i < br->n_ports; ) {
-        struct port *port = br->ports[i];
-        for (j = 0; j < port->n_ifaces; ) {
-            struct iface *iface = port->ifaces[j];
-            if (svec_contains(&ifaces, iface->name)) {
-                VLOG_ERR("bridge %s: %s interface is on multiple ports, "
-                         "removing from %s",
-                         br->name, iface->name, port->name);
-                iface_destroy(iface);
-            } else {
-                svec_add(&ifaces, iface->name);
-                svec_sort(&ifaces);
-                j++;
-            }
-        }
-        if (!port->n_ifaces) {
-            VLOG_ERR("%s port has no interfaces, dropping", port->name);
-            port_destroy(port);
-        } else {
-            i++;
-        }
-    }
+    iterate_and_prune_ifaces(br, check_duplicate_ifaces, &ifaces);
     svec_destroy(&ifaces);
 
     /* Delete all flows if we're switching from connected to standalone or vice
