@@ -65,8 +65,8 @@ static void check_rw_odp_flow(struct odp_flow *);
 
 /* Performs periodic work needed by all the various kinds of dpifs.
  *
- * If your program opens any dpifs, it must call this function within its main
- * poll loop. */
+ * If your program opens any dpifs, it must call both this function and
+ * netdev_run() within its main poll loop. */
 void
 dp_run(void)
 {
@@ -81,8 +81,8 @@ dp_run(void)
 
 /* Arranges for poll_block() to wake up when dp_run() needs to be called.
  *
- * If your program opens any dpifs, it must call this function within its main
- * poll loop. */
+ * If your program opens any dpifs, it must call both this function and
+ * netdev_wait() within its main poll loop. */
 void
 dp_wait(void)
 {

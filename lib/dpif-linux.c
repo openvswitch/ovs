@@ -53,6 +53,7 @@ struct dpif_linux {
     int local_ifindex;          /* Ifindex of local port. */
     struct svec changed_ports;  /* Ports that have changed. */
     struct linux_netdev_notifier port_notifier;
+    bool change_error;
 };
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
@@ -71,18 +72,6 @@ dpif_linux_cast(const struct dpif *dpif)
 {
     dpif_assert_class(dpif, &dpif_linux_class);
     return CONTAINER_OF(dpif, struct dpif_linux, dpif);
-}
-
-static void
-dpif_linux_run(void)
-{
-    linux_netdev_notifier_run();
-}
-
-static void
-dpif_linux_wait(void)
-{
-    linux_netdev_notifier_wait();
 }
 
 static int
@@ -285,26 +274,24 @@ static int
 dpif_linux_port_poll(const struct dpif *dpif_, char **devnamep)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    int error;
 
-    error = linux_netdev_notifier_get_error(&dpif->port_notifier);
-    if (!error) {
-        if (!dpif->changed_ports.n) {
-            return EAGAIN;
-        }
-        *devnamep = dpif->changed_ports.names[--dpif->changed_ports.n];
-    } else {
+    if (dpif->change_error) {
+        dpif->change_error = false;
         svec_clear(&dpif->changed_ports);
+        return ENOBUFS;
+    } else if (dpif->changed_ports.n) {
+        *devnamep = dpif->changed_ports.names[--dpif->changed_ports.n];
+        return 0;
+    } else {
+        return EAGAIN;
     }
-    return error;
 }
 
 static void
 dpif_linux_port_poll_wait(const struct dpif *dpif_)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    if (dpif->changed_ports.n
-        || linux_netdev_notifier_peek_error(&dpif->port_notifier)) {
+    if (dpif->changed_ports.n || dpif->change_error) {
         poll_immediate_wake();
     } else {
         linux_netdev_notifier_wait();
@@ -452,8 +439,8 @@ dpif_linux_recv_wait(struct dpif *dpif_)
 const struct dpif_class dpif_linux_class = {
     "",                         /* This is the default class. */
     "linux",
-    dpif_linux_run,
-    dpif_linux_wait,
+    NULL,
+    NULL,
     dpif_linux_enumerate,
     dpif_linux_open,
     dpif_linux_close,
@@ -725,6 +712,7 @@ open_minor(int minor, struct dpif **dpifp)
             dpif->minor = minor;
             dpif->local_ifindex = 0;
             svec_init(&dpif->changed_ports);
+            dpif->change_error = false;
             *dpifp = &dpif->dpif;
         } else {
             free(dpif);
@@ -743,15 +731,19 @@ dpif_linux_port_changed(const struct linux_netdev_change *change, void *dpif_)
 {
     struct dpif_linux *dpif = dpif_;
 
-    if (change->master_ifindex == dpif->local_ifindex
-        && (change->nlmsg_type == RTM_NEWLINK
-            || change->nlmsg_type == RTM_DELLINK))
-    {
-        /* Our datapath changed, either adding a new port or deleting an
-         * existing one. */
-        if (!svec_contains(&dpif->changed_ports, change->ifname)) {
-            svec_add(&dpif->changed_ports, change->ifname);
-            svec_sort(&dpif->changed_ports);
+    if (change) {
+        if (change->master_ifindex == dpif->local_ifindex
+            && (change->nlmsg_type == RTM_NEWLINK
+                || change->nlmsg_type == RTM_DELLINK))
+        {
+            /* Our datapath changed, either adding a new port or deleting an
+             * existing one. */
+            if (!svec_contains(&dpif->changed_ports, change->ifname)) {
+                svec_add(&dpif->changed_ports, change->ifname);
+                svec_sort(&dpif->changed_ports);
+            }
         }
+    } else {
+        dpif->change_error = true;
     }
 }

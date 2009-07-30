@@ -195,10 +195,12 @@ main(int argc, char *argv[])
         }
         unixctl_server_run(unixctl);
         dp_run();
+        netdev_run();
 
         ofproto_wait(ofproto);
         unixctl_server_wait(unixctl);
         dp_wait();
+        netdev_wait();
         poll_block();
     }
 

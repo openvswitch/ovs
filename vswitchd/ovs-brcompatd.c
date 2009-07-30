@@ -38,7 +38,6 @@
 #include "coverage.h"
 #include "daemon.h"
 #include "dirs.h"
-#include "dpif.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "fault.h"
@@ -911,6 +910,7 @@ main(int argc, char *argv[])
     for (;;) {
         unixctl_server_run(unixctl);
         brc_recv_update();
+        netdev_run();
 
         /* If 'prune_timeout' is non-zero, we actively prune from the
          * config file any 'bridge.<br_name>.port' entries that are no 
@@ -932,6 +932,7 @@ main(int argc, char *argv[])
 
         nl_sock_wait(brc_sock, POLLIN);
         unixctl_server_wait(unixctl);
+        netdev_wait();
         poll_block();
     }
 

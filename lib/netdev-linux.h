@@ -39,7 +39,6 @@ typedef void linux_netdev_notify_func(const struct linux_netdev_change *,
 
 struct linux_netdev_notifier {
     struct list node;
-    int error;
     linux_netdev_notify_func *cb;
     void *aux;
 };
@@ -47,8 +46,6 @@ struct linux_netdev_notifier {
 int linux_netdev_notifier_register(struct linux_netdev_notifier *,
                                    linux_netdev_notify_func *, void *aux);
 void linux_netdev_notifier_unregister(struct linux_netdev_notifier *);
-int linux_netdev_notifier_get_error(struct linux_netdev_notifier *);
-int linux_netdev_notifier_peek_error(const struct linux_netdev_notifier *);
 void linux_netdev_notifier_run(void);
 void linux_netdev_notifier_wait(void);
 

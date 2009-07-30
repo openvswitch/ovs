@@ -259,7 +259,6 @@ int
 ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
                struct ofproto **ofprotop)
 {
-    struct netdev_monitor *netdev_monitor;
     struct odp_stats stats;
     struct ofproto *p;
     struct dpif *dpif;
@@ -290,15 +289,6 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     dpif_flow_flush(dpif);
     dpif_recv_purge(dpif);
 
-    /* Arrange to monitor datapath ports for status changes. */
-    error = netdev_monitor_create(&netdev_monitor);
-    if (error) {
-        VLOG_ERR("failed to starting monitoring datapath %s: %s",
-                 datapath, strerror(error));
-        dpif_close(dpif);
-        return error;
-    }
-
     /* Initialize settings. */
     p = xcalloc(1, sizeof *p);
     p->fallback_dpid = pick_fallback_dpid();
@@ -310,7 +300,7 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
 
     /* Initialize datapath. */
     p->dpif = dpif;
-    p->netdev_monitor = netdev_monitor;
+    p->netdev_monitor = netdev_monitor_create();
     port_array_init(&p->ports);
     shash_init(&p->port_by_name);
     p->max_ports = stats.max_ports;

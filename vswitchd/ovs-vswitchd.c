@@ -32,6 +32,7 @@
 #include "fault.h"
 #include "leak-checker.h"
 #include "mgmt.h"
+#include "netdev.h"
 #include "ovs-vswitchd.h"
 #include "poll-loop.h"
 #include "proc-net-compat.h"
@@ -100,6 +101,7 @@ main(int argc, char *argv[])
         }
         unixctl_server_run(unixctl);
         dp_run();
+        netdev_run();
 
         if (need_reconfigure) {
             poll_immediate_wake();
@@ -109,6 +111,7 @@ main(int argc, char *argv[])
         bridge_wait();
         unixctl_server_wait(unixctl);
         dp_wait();
+        netdev_wait();
         poll_block();
     }
 
