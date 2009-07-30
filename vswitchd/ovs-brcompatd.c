@@ -445,30 +445,38 @@ parse_command(struct ofpbuf *buffer, uint32_t *seq, const char **br_name,
     return 0;
 }
 
-static void
-send_reply(uint32_t seq, int error, struct ofpbuf *fdb_query_data)
+/* Composes and returns a reply to a request made by the datapath with Netlink
+ * sequence number 'seq' and error code 'error'.  The caller may add additional
+ * attributes to the message, then it may send it with send_reply(). */
+static struct ofpbuf *
+compose_reply(uint32_t seq, int error)
 {
-    struct ofpbuf msg;
-    int retval;
-
-    /* Compose reply. */
-    ofpbuf_init(&msg, 0);
-    nl_msg_put_genlmsghdr(&msg, brc_sock, 32, brc_family, NLM_F_REQUEST,
+    struct ofpbuf *reply = ofpbuf_new(4096);
+    nl_msg_put_genlmsghdr(reply, brc_sock, 32, brc_family, NLM_F_REQUEST,
                           BRC_GENL_C_DP_RESULT, 1);
-    ((struct nlmsghdr *) msg.data)->nlmsg_seq = seq;
-    nl_msg_put_u32(&msg, BRC_GENL_A_ERR_CODE, error);
-    if (fdb_query_data) {
-        nl_msg_put_unspec(&msg, BRC_GENL_A_FDB_DATA,
-                          fdb_query_data->data, fdb_query_data->size);
-    }
+    ((struct nlmsghdr *) reply->data)->nlmsg_seq = seq;
+    nl_msg_put_u32(reply, BRC_GENL_A_ERR_CODE, error);
+    return reply;
+}
 
-    /* Send reply. */
-    retval = nl_sock_send(brc_sock, &msg, false);
+/* Sends 'reply' to the datapath and frees it. */
+static void
+send_reply(struct ofpbuf *reply)
+{
+    int retval = nl_sock_send(brc_sock, reply, false);
     if (retval) {
         VLOG_WARN_RL(&rl, "replying to brcompat request: %s",
                      strerror(retval));
     }
-    ofpbuf_uninit(&msg);
+    ofpbuf_delete(reply);
+}
+
+/* Composes and sends a reply to a request made by the datapath with Netlink
+ * sequence number 'seq' and error code 'error'. */
+static void
+send_simple_reply(uint32_t seq, int error)
+{
+    send_reply(compose_reply(seq, error));
 }
 
 static int
@@ -484,7 +492,7 @@ handle_bridge_cmd(struct ofpbuf *buffer, bool add)
         if (!error) {
             error = rewrite_and_reload_config();
         }
-        send_reply(seq, error, NULL);
+        send_simple_reply(seq, error);
     }
     return error;
 }
@@ -529,7 +537,7 @@ handle_port_cmd(struct ofpbuf *buffer, bool add)
             VLOG_INFO("%s %s %s: success", cmd_name, br_name, port_name);
             error = rewrite_and_reload_config();
         }
-        send_reply(seq, error, NULL);
+        send_simple_reply(seq, error);
     }
 
     return error;
@@ -591,6 +599,7 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
     struct svec ifaces;
 
     struct ofpbuf query_data;
+    struct ofpbuf *reply;
     char *unixctl_command;
     uint64_t count, skip;
     char *output;
@@ -621,7 +630,7 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
         br_vlan = cfg_get_vlan(0, "vlan.%s.tag", port_name);
         if (!ovs_bridge || br_vlan < 0) {
             free(ovs_bridge);
-            send_reply(seq, ENODEV, NULL);
+            send_simple_reply(seq, ENODEV);
             return error;
         }
     }
@@ -632,7 +641,7 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
     free(unixctl_command);
     if (error) {
         free(ovs_bridge);
-        send_reply(seq, error, NULL);
+        send_simple_reply(seq, error);
         return error;
     }
 
@@ -705,7 +714,13 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
     }
     free(output);
 
-    send_reply(seq, 0, &query_data);
+    /* Compose and send reply to datapath. */
+    reply = compose_reply(seq, 0);
+    nl_msg_put_unspec(reply, BRC_GENL_A_FDB_DATA,
+                      query_data.data, query_data.size);
+    send_reply(reply);
+
+    /* Free memory. */
     ofpbuf_uninit(&query_data);
     free(ovs_bridge);
 
