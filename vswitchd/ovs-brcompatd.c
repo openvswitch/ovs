@@ -413,7 +413,7 @@ parse_command(struct ofpbuf *buffer, uint32_t *seq, const char **br_name,
               const char **port_name, uint64_t *count, uint64_t *skip)
 {
     static const struct nl_policy policy[] = {
-        [BRC_GENL_A_DP_NAME] = { .type = NL_A_STRING },
+        [BRC_GENL_A_DP_NAME] = { .type = NL_A_STRING, .optional = true },
         [BRC_GENL_A_PORT_NAME] = { .type = NL_A_STRING, .optional = true },
         [BRC_GENL_A_FDB_COUNT] = { .type = NL_A_U64, .optional = true },
         [BRC_GENL_A_FDB_SKIP] = { .type = NL_A_U64, .optional = true },
@@ -422,6 +422,7 @@ parse_command(struct ofpbuf *buffer, uint32_t *seq, const char **br_name,
 
     if (!nl_policy_parse(buffer, NLMSG_HDRLEN + GENL_HDRLEN, policy,
                          attrs, ARRAY_SIZE(policy))
+        || (br_name && !attrs[BRC_GENL_A_DP_NAME])
         || (port_name && !attrs[BRC_GENL_A_PORT_NAME])
         || (count && !attrs[BRC_GENL_A_FDB_COUNT])
         || (skip && !attrs[BRC_GENL_A_FDB_SKIP])) {
@@ -429,7 +430,9 @@ parse_command(struct ofpbuf *buffer, uint32_t *seq, const char **br_name,
     }
 
     *seq = ((struct nlmsghdr *) buffer->data)->nlmsg_seq;
-    *br_name = nl_attr_get_string(attrs[BRC_GENL_A_DP_NAME]);
+    if (br_name) {
+        *br_name = nl_attr_get_string(attrs[BRC_GENL_A_DP_NAME]);
+    }
     if (port_name) {
         *port_name = nl_attr_get_string(attrs[BRC_GENL_A_PORT_NAME]);
     }
