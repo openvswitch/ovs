@@ -631,7 +631,7 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
         if (!ovs_bridge || br_vlan < 0) {
             free(ovs_bridge);
             send_simple_reply(seq, ENODEV);
-            return error;
+            return ENODEV;
         }
     }
 
