@@ -57,4 +57,13 @@ char *svec_join(const struct svec *,
 const char *svec_back(const struct svec *);
 void svec_pop_back(struct svec *);
 
+/* Iterates over the names in SVEC, assigning each name in turn to NAME and its
+ * index to INDEX. */
+#define SVEC_FOR_EACH(INDEX, NAME, SVEC)        \
+    for ((INDEX) = 0;                           \
+         ((INDEX) < (SVEC)->n                   \
+          ? (NAME) = (SVEC)->names[INDEX], 1    \
+          : 0);                                 \
+         (INDEX)++)
+
 #endif /* svec.h */
