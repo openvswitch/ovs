@@ -113,7 +113,7 @@ struct netdev_class {
      *
      * If this netdev class does not support enumeration, this may be a null
      * pointer. */
-    int (*enumerate)(struct svec *all_anmes);
+    int (*enumerate)(struct svec *all_names);
 
     /* Attempts to receive a packet from 'netdev' into the 'size' bytes in
      * 'buffer'.  If successful, returns the number of bytes in the received
