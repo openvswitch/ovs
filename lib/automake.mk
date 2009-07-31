@@ -58,6 +58,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
 	lib/netdev-linux.c \
+	lib/netdev-provider.h \
 	lib/netdev.c \
 	lib/netdev.h \
 	lib/odp-util.c \
