@@ -1184,6 +1184,29 @@ get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 	return copy_to_user(statsp, &stats, sizeof stats) ? -EFAULT : 0;
 }
 
+/* MTU of the dp pseudo-device: ETH_DATA_LEN or the minimum of the ports */
+int dp_min_mtu(const struct datapath *dp)
+{
+	struct net_bridge_port *p;
+	int mtu = 0;
+
+	ASSERT_RTNL();
+
+	list_for_each_entry_rcu (p, &dp->port_list, node) {
+		struct net_device *dev = p->dev;
+
+		/* Skip any internal ports, since that's what we're trying to
+		 * set. */
+		if (is_dp_dev(dev))
+			continue;
+
+		if (!mtu || dev->mtu < mtu)
+			mtu = dev->mtu;
+	}
+
+	return mtu ? mtu : ETH_DATA_LEN;
+}
+
 static int
 put_port(const struct net_bridge_port *p, struct odp_port __user *uop)
 {

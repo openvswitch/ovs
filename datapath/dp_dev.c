@@ -130,6 +130,15 @@ static struct ethtool_ops dp_ethtool_ops = {
 	.get_tso = ethtool_op_get_tso,
 };
 
+static int dp_dev_change_mtu(struct net_device *dev, int new_mtu)
+{
+	if (new_mtu < 68 || new_mtu > dp_min_mtu(dp_dev_get_dp(dev)))
+		return -EINVAL;
+
+	dev->mtu = new_mtu;
+	return 0;
+}
+
 static int dp_dev_init(struct net_device *netdev)
 {
 	struct dp_dev *dp_dev = dp_dev_priv(netdev);
@@ -162,6 +171,7 @@ do_setup(struct net_device *netdev)
 	netdev->stop = dp_dev_stop;
 	netdev->tx_queue_len = 0;
 	netdev->set_mac_address = dp_dev_mac_addr;
+	netdev->change_mtu = dp_dev_change_mtu;
 	netdev->init = dp_dev_init;
 	netdev->destructor = dp_dev_free;
 
