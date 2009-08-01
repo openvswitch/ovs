@@ -60,6 +60,7 @@ open_config(char *config_file, int timeout)
 {
     int error;
 
+    cfg_init();
     error = cfg_set_file(config_file);
     if (error) {
         ovs_fatal(error, "failed to add configuration file \"%s\"",

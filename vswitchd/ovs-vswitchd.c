@@ -80,7 +80,10 @@ main(int argc, char *argv[])
     }
     unixctl_command_register("vswitchd/reload", reload);
 
-    cfg_read();
+    retval = cfg_read();
+    if (retval) {
+        ovs_fatal(retval, "could not read config file");
+    }
     mgmt_init();
     bridge_init();
     port_init();
@@ -219,6 +222,7 @@ parse_options(int argc, char *argv[])
                 "use --help for usage");
     }
 
+    cfg_init();
     config_file = argv[0];
     error = cfg_set_file(config_file);
     if (error) {

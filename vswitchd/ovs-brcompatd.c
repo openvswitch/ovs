@@ -931,7 +931,10 @@ main(int argc, char *argv[])
         }
     }
 
-    cfg_read();
+    retval = cfg_read();
+    if (retval) {
+        ovs_fatal(retval, "could not read config file");
+    }
 
     for (;;) {
         unixctl_server_run(unixctl);
@@ -1064,6 +1067,7 @@ parse_options(int argc, char *argv[])
                 "use --help for usage");
     }
 
+    cfg_init();
     config_file = argv[0];
     error = cfg_set_file(config_file);
     if (error) {
