@@ -26,6 +26,7 @@
 struct svec;
 struct ofpbuf;
 
+void cfg_init(void);
 int cfg_set_file(const char *file_name);
 int cfg_read(void);
 int cfg_lock(uint8_t *cookie, int timeout);

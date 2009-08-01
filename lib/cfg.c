@@ -92,6 +92,12 @@ static bool is_type(const char *s, enum cfg_flags);
 #define CC_FILE_NAME CC_ALNUM "._-"
 #define CC_KEY CC_ALNUM "._-@$:+"
 
+void
+cfg_init(void)
+{
+    svec_terminate(&cfg);
+}
+
 /* Sets 'file_name' as the configuration file read by cfg_read().  Returns 0 on
  * success, otherwise a positive errno value if 'file_name' cannot be opened.
  *
@@ -183,6 +189,7 @@ cfg_read(void)
     file = fopen(cfg_name, "r");
     if (!file) {
         VLOG_ERR("failed to open \"%s\": %s", cfg_name, strerror(errno));
+        svec_terminate(&cfg);
         return errno;
     }
 
