@@ -239,9 +239,11 @@ netdev_linux_open(const char *name, char *suffix, int ethertype,
 
         /* Create tap device. */
         ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-        error = netdev_linux_do_ioctl(&netdev->netdev, &ifr,
-                                      TUNSETIFF, "TUNSETIFF");
-        if (error) {
+        strncpy(ifr.ifr_name, suffix, sizeof ifr.ifr_name);
+        if (ioctl(netdev->tap_fd, TUNSETIFF, &ifr) == -1) {
+            VLOG_WARN("%s: creating tap device failed: %s", suffix,
+                      strerror(errno));
+            error = errno;
             goto error;
         }
 
