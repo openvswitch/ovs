@@ -83,6 +83,8 @@ netdev_initialize(void)
                         status = retval;
                     }
                 }
+            } else {
+                netdev_classes[j++] = class;
             }
         }
         n_netdev_classes = j;
