@@ -427,7 +427,7 @@ show_dpif(struct dpif *dpif)
 }
 
 static void
-do_show(int argc UNUSED, char *argv[])
+do_show(int argc, char *argv[])
 {
     bool failure = false;
     if (argc > 1) {
