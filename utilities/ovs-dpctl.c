@@ -36,6 +36,7 @@
 #include "dynamic-string.h"
 #include "netdev.h"
 #include "odp-util.h"
+#include "svec.h"
 #include "timeval.h"
 #include "util.h"
 
@@ -157,6 +158,7 @@ usage(void)
            "  del-dp DP                delete local datapath DP\n"
            "  add-if DP IFACE...       add each IFACE as a port on DP\n"
            "  del-if DP IFACE...       delete each IFACE from DP\n"
+           "  dump-dps                 display names of all datapaths\n"
            "  show                     show basic info on all datapaths\n"
            "  show DP...               show basic info on each DP\n"
            "  dump-flows DP            display flows in DP\n"
@@ -466,6 +468,35 @@ do_show(int argc UNUSED, char *argv[])
 }
 
 static void
+do_dump_dps(int argc UNUSED, char *argv[] UNUSED)
+{
+    struct svec all_dps;
+    unsigned int i;
+    int error;
+
+    svec_init(&all_dps);
+    error = dp_enumerate(&all_dps);
+
+    for (i = 0; i < all_dps.n; i++) {
+        struct dpif dpif;
+        char dpif_name[IF_NAMESIZE];
+
+        if (dpif_open(all_dps.names[i], &dpif)) {
+            continue;
+        }
+        if (!dpif_get_name(&dpif, dpif_name, sizeof dpif_name)) {
+            printf("%s\n", dpif_name);
+        }
+        dpif_close(&dpif);
+    }
+
+    svec_destroy(&all_dps);
+    if (error) {
+        exit(EXIT_FAILURE);
+    }
+}
+
+static void
 do_dump_flows(int argc UNUSED, char *argv[])
 {
     struct odp_flow *flows;
@@ -543,6 +574,7 @@ static struct command all_commands[] = {
     { "del-dp", 1, 1, do_del_dp },
     { "add-if", 2, INT_MAX, do_add_if },
     { "del-if", 2, INT_MAX, do_del_if },
+    { "dump-dps", 0, 0, do_dump_dps },
     { "show", 0, INT_MAX, do_show },
     { "dump-flows", 1, 1, do_dump_flows },
     { "del-flows", 1, 1, do_del_flows },

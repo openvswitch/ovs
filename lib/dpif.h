@@ -28,12 +28,15 @@
 #include <stdint.h>
 
 struct ofpbuf;
+struct svec;
 
 /* A datapath interface.  Opaque. */
 struct dpif {
     unsigned int minor;         /* For use in error messages. */
     int fd;
 };
+
+int dp_enumerate(struct svec *);
 
 int dpif_open(const char *name, struct dpif *);
 int dpif_create(const char *name, struct dpif *);

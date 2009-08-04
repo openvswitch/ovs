@@ -1,4 +1,4 @@
-.TH ovs\-dpctl 8 "March 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-dpctl 8 "August 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-dpctl
 
 .SH NAME
@@ -85,6 +85,10 @@ port (analogous to the local port) with that name.
 \fBdel\-if \fIdp netdev\fR...
 Removes each \fInetdev\fR from the list of network devices datapath
 \fIdp\fR monitors.
+
+.TP
+\fBdump-dps\fR
+Prints the name of each configured datapath on a separate line.
 
 .TP
 \fBshow \fR[\fIdp\fR...]

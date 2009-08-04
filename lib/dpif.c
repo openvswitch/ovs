@@ -43,6 +43,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "svec.h"
 #include "util.h"
 #include "valgrind.h"
 
@@ -63,6 +64,35 @@ static int lookup_minor(const char *name, unsigned int *minor);
 static int open_by_minor(unsigned int minor, struct dpif *);
 static int make_openvswitch_device(unsigned int minor, char **fnp);
 static void check_rw_odp_flow(struct odp_flow *);
+
+
+/* Clears 'all_dps' and enumerates the names of all known created
+ * datapaths into it.  Returns 0 if successful, otherwise a positive 
+ * errno value. */
+int
+dp_enumerate(struct svec *all_dps)
+{
+    int error;
+    int i;
+
+    svec_clear(all_dps);
+    error = 0;
+    for (i = 0; i < ODP_MAX; i++) {
+        struct dpif dpif;
+        char devname[16];
+        int retval;
+
+        sprintf(devname, "dp%d", i);
+        retval = dpif_open(devname, &dpif);
+        if (!retval) {
+            svec_add(all_dps, devname);
+            dpif_close(&dpif);
+        } else if (retval != ENODEV && !error) {
+            error = retval;
+        }
+    }
+    return error;
+}
 
 int
 dpif_open(const char *name, struct dpif *dpif)
