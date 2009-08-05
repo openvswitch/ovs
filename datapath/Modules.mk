@@ -11,6 +11,8 @@ dist_modules = $(both_modules)	# Modules to distribute
 
 openvswitch_sources = \
 	actions.c \
+	brc_sysfs_dp.c \
+	brc_sysfs_if.c \
 	datapath.c \
 	dp_dev.c \
 	dp_notify.c \
@@ -19,6 +21,7 @@ openvswitch_sources = \
 
 openvswitch_headers = \
 	actions.h \
+	brc_sysfs.h \
 	compat.h \
 	datapath.h \
 	dp_dev.h \

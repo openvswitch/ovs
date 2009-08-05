@@ -37,12 +37,9 @@ both_modules += brcompat
 brcompat_sources = \
 	linux-2.6/compat-2.6/genetlink-brcompat.c \
 	brcompat.c \
-	brc_procfs.c \
-	brc_sysfs_dp.c \
-	brc_sysfs_if.c 
+	brc_procfs.c
 brcompat_headers = \
-	brc_procfs.h \
-	brc_sysfs.h 
+	brc_procfs.h
 
 dist_modules += veth
 build_modules += $(if $(BUILD_VETH),veth)

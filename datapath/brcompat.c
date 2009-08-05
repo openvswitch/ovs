@@ -523,27 +523,6 @@ error:
 	return ERR_PTR(error);
 }
 
-int brc_add_dp(struct datapath *dp)
-{
-	if (!try_module_get(THIS_MODULE))
-		return -ENODEV;
-#ifdef SUPPORT_SYSFS
-	brc_sysfs_add_dp(dp);
-#endif
-
-	return 0;
-}
-
-int brc_del_dp(struct datapath *dp) 
-{
-#ifdef SUPPORT_SYSFS
-	brc_sysfs_del_dp(dp);
-#endif
-	module_put(THIS_MODULE);
-
-	return 0;
-}
-
 static int 
 __init brc_init(void)
 {
@@ -567,16 +546,6 @@ __init brc_init(void)
 
 	/* Set the openvswitch_mod device ioctl handler */
 	dp_ioctl_hook = brc_dev_ioctl;
-
-	/* Register hooks for datapath adds and deletes */
-	dp_add_dp_hook = brc_add_dp;
-	dp_del_dp_hook = brc_del_dp;
-
-	/* Register hooks for interface adds and deletes */
-#ifdef SUPPORT_SYSFS
-	dp_add_if_hook = brc_sysfs_add_if;
-	dp_del_if_hook = brc_sysfs_del_if;
-#endif
 
 	/* Randomize the initial sequence number.  This is not a security
 	 * feature; it only helps avoid crossed wires between userspace and
@@ -618,14 +587,6 @@ error:
 static void 
 brc_cleanup(void)
 {
-	/* Unregister hooks for datapath adds and deletes */
-	dp_add_dp_hook = NULL;
-	dp_del_dp_hook = NULL;
-	
-	/* Unregister hooks for interface adds and deletes */
-	dp_add_if_hook = NULL;
-	dp_del_if_hook = NULL;
-
 	/* Unregister ioctl hooks */
 	dp_ioctl_hook = NULL;
 	brioctl_set(NULL);

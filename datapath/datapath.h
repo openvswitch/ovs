@@ -102,10 +102,6 @@ struct net_bridge_port {
 
 extern struct notifier_block dp_device_notifier;
 extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
-extern int (*dp_add_dp_hook)(struct datapath *dp);
-extern int (*dp_del_dp_hook)(struct datapath *dp);
-extern int (*dp_add_if_hook)(struct net_bridge_port *p);
-extern int (*dp_del_if_hook)(struct net_bridge_port *p);
 
 /* Flow table. */
 struct dp_table *dp_table_create(unsigned int n_buckets);

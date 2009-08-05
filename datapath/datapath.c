@@ -55,18 +55,6 @@
 int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 EXPORT_SYMBOL(dp_ioctl_hook);
 
-int (*dp_add_dp_hook)(struct datapath *dp);
-EXPORT_SYMBOL(dp_add_dp_hook);
-
-int (*dp_del_dp_hook)(struct datapath *dp);
-EXPORT_SYMBOL(dp_del_dp_hook);
-
-int (*dp_add_if_hook)(struct net_bridge_port *p);
-EXPORT_SYMBOL(dp_add_if_hook);
-
-int (*dp_del_if_hook)(struct net_bridge_port *p);
-EXPORT_SYMBOL(dp_del_if_hook);
-
 /* Datapaths.  Protected on the read side by rcu_read_lock, on the write side
  * by dp_mutex.  dp_mutex is almost completely redundant with genl_mutex
  * maintained by the Generic Netlink code, but the timeout path needs mutual
@@ -251,8 +239,9 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	mutex_unlock(&dp_mutex);
 	rtnl_unlock();
 
-	if (dp_add_dp_hook)
-		dp_add_dp_hook(dp);
+#ifdef SUPPORT_SYSFS
+	brc_sysfs_add_dp(dp);
+#endif
 
 	return 0;
 
@@ -280,8 +269,9 @@ static void do_destroy_dp(struct datapath *dp)
 		if (p->port_no != ODPP_LOCAL)
 			dp_del_port(p);
 
-	if (dp_del_dp_hook)
-		dp_del_dp_hook(dp);
+#ifdef SUPPORT_SYSFS
+	brc_sysfs_del_dp(dp);
+#endif
 
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
@@ -403,8 +393,9 @@ static int add_port(int dp_idx, struct odp_port __user *portp)
 	if (err)
 		goto out_put;
 
-	if (dp_add_if_hook)
-		dp_add_if_hook(dp->ports[port_no]);
+#ifdef SUPPORT_SYSFS
+	brc_sysfs_add_if(dp->ports[port_no]);
+#endif
 
 out_put:
 	dev_put(dev);
@@ -421,7 +412,7 @@ int dp_del_port(struct net_bridge_port *p)
 	ASSERT_RTNL();
 
 #ifdef SUPPORT_SYSFS
-	if (p->port_no != ODPP_LOCAL && dp_del_if_hook)
+	if (p->port_no != ODPP_LOCAL)
 		sysfs_remove_link(&p->dp->ifobj, p->dev->name);
 #endif
 	dp_ifinfo_notify(RTM_DELLINK, p);
@@ -447,8 +438,8 @@ int dp_del_port(struct net_bridge_port *p)
 	if (is_dp_dev(p->dev)) {
 		dp_dev_destroy(p->dev);
 	}
-	if (p->port_no != ODPP_LOCAL && dp_del_if_hook) {
-		dp_del_if_hook(p);
+	if (p->port_no != ODPP_LOCAL) {
+		brc_sysfs_del_if(p);
 	} else {
 		dev_put(p->dev);
 		kfree(p);
