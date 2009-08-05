@@ -60,6 +60,10 @@ files are:
         used to control vswitch when integrated with Citrix management
         tools.
 
+    usr_sbin_xen-bugtool
+
+        vswitch-aware replacement for Citrix script of the same name.
+
     vswitch-xen.spec
 
         spec file for building RPMs to install on a XenServer host.

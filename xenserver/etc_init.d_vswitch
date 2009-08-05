@@ -27,12 +27,12 @@ test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 VSWITCH_BASE="${VSWITCH_BASE:-/root/vswitch}"
 ENABLE_BRCOMPAT="${ENABLE_BRCOMPAT:-y}"
 ENABLE_FAKE_PROC_NET="${ENABLE_FAKE_PROC_NET:-y}"
-FORCE_COREFILES="${FORCE_COREFILES:-n}"
-COREFILE_PATTERN="${COREFILE_PATTERN:-/var/log/%e-%t}"
+FORCE_COREFILES="${FORCE_COREFILES:-y}"
 
 # Config variables specific to ovs-vswitchd
 VSWITCHD_CONF="${VSWITCHD_CONF:-/etc/ovs-vswitchd.conf}"
 VSWITCHD_PIDFILE="${VSWITCHD_PIDFILE:-/var/run/ovs-vswitchd.pid}"
+VSWITCHD_RUN_DIR="${VSWITCHD_RUN_DIR:-/var/xen/vswitch}"
 VSWITCHD_PRIORITY="${VSWITCHD_PRIORITY:--5}"
 VSWITCHD_LOGFILE="${VSWITCHD_LOGFILE:-/var/log/ovs-vswitchd.log}"
 VSWITCHD_FILE_LOGLEVEL="${VSWITCHD_FILE_LOGLEVEL:-}"
@@ -45,6 +45,7 @@ VSWITCHD_VALGRIND_OPT="${VSWITCHD_VALGRIND_OPT:-}"
 
 # Config variables specific to ovs-brcompatd
 BRCOMPATD_PIDFILE="${BRCOMPATD_PIDFILE:-/var/run/ovs-brcompatd.pid}"
+BRCOMPATD_RUN_DIR="${BRCOMPATD_RUN_DIR:-/var/xen/vswitch}"
 BRCOMPATD_PRIORITY="${BRCOMPATD_PRIORITY:--5}"
 BRCOMPATD_LOGFILE="${BRCOMPATD_LOGFILE:-/var/log/ovs-brcompatd.log}"
 BRCOMPATD_FILE_LOGLEVEL="${BRCOMPATD_FILE_LOGLEVEL:-}"
@@ -78,9 +79,7 @@ function dp_list {
 }
 
 function turn_on_corefiles {
-    # This has global effect so should not normally be used...
-    ulimit -c unlimited
-    echo "$COREFILE_PATTERN" > /proc/sys/kernel/core_pattern
+    ulimit -Sc 67108864
 }
 
 function remove_all_dp {
@@ -120,6 +119,10 @@ function start_vswitchd {
     local syslog_opt="-vANY:SYSLOG:${VSWITCHD_SYSLOG_LOGLEVEL}"
     local logfile_file_opt=""
     local logfile_level_opt=""
+    if [ ! -d "$VSWITCHD_RUN_DIR" ]; then
+        mkdir -p "$VSWITCHD_RUN_DIR"
+    fi
+    cd "$VSWITCHD_RUN_DIR"
     if [ -n "$VSWITCHD_FILE_LOGLEVEL" ]; then
         logfile_level_opt="-vANY:FILE:${VSWITCHD_FILE_LOGLEVEL}"
         logfile_file_opt="--log-file=$VSWITCHD_LOGFILE"
@@ -152,9 +155,9 @@ function start_vswitchd {
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovs-vswitchd ($strace_opt$valgrind_opt)" true
-        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
+        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
     else
-        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
+        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
     fi
 }
 
@@ -162,7 +165,11 @@ function start_brcompatd {
     local syslog_opt="-vANY:SYSLOG:${BRCOMPATD_SYSLOG_LOGLEVEL}"
     local logfile_file_opt=""
     local logfile_level_opt=""
-    if [ -n "$BRCOMPATD_FILE_LOGLEVEL" ]; then
+    if [ -d "$BRCOMPATD_RUN_DIR" ]; then
+        mkdir -p "$BRCOMPATD_RUN_DIR"
+    fi
+    cd "$BRCOMPATD_RUN_DIR"
+    if [ ! -n "$BRCOMPATD_FILE_LOGLEVEL" ]; then
         logfile_level_opt="-vANY:FILE:${BRCOMPATD_FILE_LOGLEVEL}"
         logfile_file_opt="--log-file=$BRCOMPATD_LOGFILE"
     fi
@@ -191,9 +198,9 @@ function start_brcompatd {
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovs-brcompatd ($strace_opt$valgrind_opt)" true
-        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
+        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd"--no-chdir --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
     else
-        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE --detach -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
+        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --no-chdir --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE --detach -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
     fi
 }
 

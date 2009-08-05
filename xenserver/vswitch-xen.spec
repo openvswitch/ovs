@@ -69,6 +69,8 @@ install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT%{_prefix}/scripts/vif
 install -m 755 xenserver/root_vswitch_scripts_dump-vif-details \
                $RPM_BUILD_ROOT%{_prefix}/scripts/dump-vif-details
+install -m 755 xenserver/usr_sbin_xen-bugtool \
+             $RPM_BUILD_ROOT%{_prefix}/scripts/xen-bugtool
 install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
                $RPM_BUILD_ROOT%{_prefix}/scripts/XSFeatureVSwitch.py
@@ -107,6 +109,7 @@ if [ "$1" = "1" ]; then
     if ! md5sum -c --status <<EOF
 b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
 51970ad613a3996d5997e18e44db47da  /opt/xensource/libexec/interface-reconfigure
+5654c8c36699fcc8744ca9cd5b855414  /usr/sbin/xen-bugtool
 EOF
     then
         printf "\nThe original XenServer scripts replaced by this package\n"
@@ -190,7 +193,8 @@ mkdir -p %{_prefix}/xs-original \
     || printf "Could not create script backup directory.\n"
 for f in \
     /opt/xensource/libexec/interface-reconfigure \
-    /etc/xensource/scripts/vif
+    /etc/xensource/scripts/vif \
+    /usr/sbin/xen-bugtool
 do
     s=$(basename "$f")
     t=$(readlink "$f")
@@ -247,7 +251,8 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     # Restore original XenServer scripts
     for f in \
         /opt/xensource/libexec/interface-reconfigure \
-        /etc/xensource/scripts/vif
+        /etc/xensource/scripts/vif \
+        /usr/sbin/xen-bugtool
     do
         s=$(basename "$f")
         if [ ! -f "%{_prefix}/xs-original/$s" ]; then
@@ -290,6 +295,7 @@ fi
 /root/vswitch/scripts/dump-vif-details
 /root/vswitch/scripts/interface-reconfigure
 /root/vswitch/scripts/vif
+/root/vswitch/scripts/xen-bugtool
 /root/vswitch/scripts/XSFeatureVSwitch.py
 # Following two files are generated automatically by rpm.  We don't
 # really need them and they won't be used on the XenServer, but there

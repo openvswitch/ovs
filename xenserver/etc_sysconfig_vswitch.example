@@ -21,7 +21,7 @@
 # ENABLE_FAKE_PROC_NET=y
 
 # FORCE_COREFILES: If 'y' then core files will be enabled.
-# FORCE_COREFILES=n
+# FORCE_COREFILES=y
 
 # COREFILE_PATTERN: Pattern used to determine path and filename for
 #     core files when FORCE_COREFILES is 'y'.  This is Linux specific.
@@ -34,6 +34,10 @@
 # VSWITCHD_PIDFILE: File in which to store the pid of the running
 #     ovs-vswitchd.
 # VSWITCHD_PIDFILE=/var/run/ovs-vswitchd.pid
+
+# VSWITCHD_RUN_DIR: Set the directory in which ovs-vswitchd should be
+#     run.  This mainly affects where core files will be placed.
+# VSWITCHD_RUN_DIR=/var/xen/vswitch
 
 # VSWITCHD_PRIORITY: "nice" priority at which to run ovs-vswitchd and related
 #     processes.
@@ -59,6 +63,10 @@
 #     the brcompat_mod kernel module will not be inserted.  Note that
 #     the default is to use brcompat!
 # BRCOMPATD_PIDFILE=/var/run/ovs-brcompatd.pid
+
+# BRCOMPATD_RUN_DIR: Set the directory in which ovs-brcompatd should be
+#     run.  This mainly affects where core files will be placed.
+# BRCOMPATD_RUN_DIR=/var/xen/vswitch
 
 # BRCOMPATD_PRIORITY: "nice" priority at which to run ovs-vswitchd and related
 #     processes.
