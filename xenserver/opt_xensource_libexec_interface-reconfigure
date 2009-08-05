@@ -543,6 +543,15 @@ def run_command(command):
         return False
     return True
 
+def read_first_line_of_file(name):
+    file = None
+    try:
+        file = open(name, 'r')
+        return file.readline().rstrip('\n')
+    finally:
+        if file != None:
+            file.close()
+
 def down_netdev(interface, deconfigure=True):
     if not interface_exists(interface):
         log("down_netdev: interface %s does not exist, ignoring" % interface)
@@ -550,14 +559,10 @@ def down_netdev(interface, deconfigure=True):
     if deconfigure:
         # Kill dhclient.
         pidfile_name = '/var/run/dhclient-%s.pid' % interface
-        pidfile = None
         try:
-            pidfile = open(pidfile_name, 'r')
-            os.kill(int(pidfile.readline()), signal.SIGTERM)
+            os.kill(int(read_first_line_of_file(pidfile_name)), signal.SIGTERM)
         except:
             pass
-        if pidfile != None:
-            pidfile.close()
 
         # Remove dhclient pidfile.
         try:
