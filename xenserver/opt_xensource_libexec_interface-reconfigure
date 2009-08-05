@@ -547,10 +547,7 @@ def down_netdev(interface, deconfigure=True):
     if not interface_exists(interface):
         log("down_netdev: interface %s does not exist, ignoring" % interface)
         return
-    argv = ["/sbin/ifconfig", interface, 'down']
     if deconfigure:
-        argv += ['0.0.0.0']
-
         # Kill dhclient.
         pidfile_name = '/var/run/dhclient-%s.pid' % interface
         pidfile = None
@@ -567,7 +564,10 @@ def down_netdev(interface, deconfigure=True):
             os.remove(pidfile_name)
         except:
             pass
-    run_command(argv)
+        
+        run_command(["/sbin/ifconfig", interface, '0.0.0.0'])
+
+    run_command(["/sbin/ifconfig", interface, 'down'])
 
 def up_netdev(interface):
     run_command(["/sbin/ifconfig", interface, 'up'])
