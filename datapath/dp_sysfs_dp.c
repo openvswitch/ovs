@@ -24,7 +24,7 @@
 #include <linux/times.h>
 #include <linux/version.h>
 
-#include "brc_sysfs.h"
+#include "dp_sysfs.h"
 #include "datapath.h"
 #include "dp_dev.h"
 
@@ -34,10 +34,10 @@
 /* Hack to attempt to build on more platforms. */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
 #define to_kobj(d) &(d)->class_dev.kobj
-#define BRC_DEVICE_ATTR CLASS_DEVICE_ATTR
+#define DP_DEVICE_ATTR CLASS_DEVICE_ATTR
 #else
 #define to_kobj(d) &(d)->dev.kobj
-#define BRC_DEVICE_ATTR DEVICE_ATTR
+#define DP_DEVICE_ATTR DEVICE_ATTR
 #endif
 
 /*
@@ -104,7 +104,7 @@ static ssize_t store_forward_delay(struct class_device *d,
 {
 	return store_bridge_parm(d, buf, len, set_forward_delay);
 }
-static BRC_DEVICE_ATTR(forward_delay, S_IRUGO | S_IWUSR,
+static DP_DEVICE_ATTR(forward_delay, S_IRUGO | S_IWUSR,
 		   show_forward_delay, store_forward_delay);
 
 static ssize_t show_hello_time(struct class_device *d, char *buf)
@@ -135,7 +135,7 @@ static ssize_t store_hello_time(struct class_device *d,
 {
 	return store_bridge_parm(d, buf, len, set_hello_time);
 }
-static BRC_DEVICE_ATTR(hello_time, S_IRUGO | S_IWUSR, show_hello_time,
+static DP_DEVICE_ATTR(hello_time, S_IRUGO | S_IWUSR, show_hello_time,
 		   store_hello_time);
 
 static ssize_t show_max_age(struct class_device *d, 
@@ -166,7 +166,7 @@ static ssize_t store_max_age(struct class_device *d,
 {
 	return store_bridge_parm(d, buf, len, set_max_age);
 }
-static BRC_DEVICE_ATTR(max_age, S_IRUGO | S_IWUSR, show_max_age, store_max_age);
+static DP_DEVICE_ATTR(max_age, S_IRUGO | S_IWUSR, show_max_age, store_max_age);
 
 static ssize_t show_ageing_time(struct class_device *d,
 				char *buf)
@@ -193,7 +193,7 @@ static ssize_t store_ageing_time(struct class_device *d,
 {
 	return store_bridge_parm(d, buf, len, set_ageing_time);
 }
-static BRC_DEVICE_ATTR(ageing_time, S_IRUGO | S_IWUSR, show_ageing_time,
+static DP_DEVICE_ATTR(ageing_time, S_IRUGO | S_IWUSR, show_ageing_time,
 		   store_ageing_time);
 
 static ssize_t show_stp_state(struct class_device *d,
@@ -233,7 +233,7 @@ static ssize_t store_stp_state(struct class_device *d,
 
 	return len;
 }
-static BRC_DEVICE_ATTR(stp_state, S_IRUGO | S_IWUSR, show_stp_state,
+static DP_DEVICE_ATTR(stp_state, S_IRUGO | S_IWUSR, show_stp_state,
 		   store_stp_state);
 
 static ssize_t show_priority(struct class_device *d, 
@@ -262,7 +262,7 @@ static ssize_t store_priority(struct class_device *d,
 {
 	return store_bridge_parm(d, buf, len, set_priority);
 }
-static BRC_DEVICE_ATTR(priority, S_IRUGO | S_IWUSR, show_priority, store_priority);
+static DP_DEVICE_ATTR(priority, S_IRUGO | S_IWUSR, show_priority, store_priority);
 
 static ssize_t show_root_id(struct class_device *d, 
 			    char *buf)
@@ -273,7 +273,7 @@ static ssize_t show_root_id(struct class_device *d,
 	return sprintf(buf, "0000.010203040506\n");
 #endif
 }
-static BRC_DEVICE_ATTR(root_id, S_IRUGO, show_root_id, NULL);
+static DP_DEVICE_ATTR(root_id, S_IRUGO, show_root_id, NULL);
 
 static ssize_t show_bridge_id(struct class_device *d, 
 			      char *buf)
@@ -285,7 +285,7 @@ static ssize_t show_bridge_id(struct class_device *d,
 	return sprintf(buf, "%.2x%.2x.%.2x%.2x%.2x%.2x%.2x%.2x\n",
 			0, 0, addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
 }
-static BRC_DEVICE_ATTR(bridge_id, S_IRUGO, show_bridge_id, NULL);
+static DP_DEVICE_ATTR(bridge_id, S_IRUGO, show_bridge_id, NULL);
 
 static ssize_t show_root_port(struct class_device *d, 
 			      char *buf)
@@ -296,7 +296,7 @@ static ssize_t show_root_port(struct class_device *d,
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static BRC_DEVICE_ATTR(root_port, S_IRUGO, show_root_port, NULL);
+static DP_DEVICE_ATTR(root_port, S_IRUGO, show_root_port, NULL);
 
 static ssize_t show_root_path_cost(struct class_device *d,
 				   char *buf)
@@ -307,7 +307,7 @@ static ssize_t show_root_path_cost(struct class_device *d,
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static BRC_DEVICE_ATTR(root_path_cost, S_IRUGO, show_root_path_cost, NULL);
+static DP_DEVICE_ATTR(root_path_cost, S_IRUGO, show_root_path_cost, NULL);
 
 static ssize_t show_topology_change(struct class_device *d,
 				    char *buf)
@@ -318,7 +318,7 @@ static ssize_t show_topology_change(struct class_device *d,
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static BRC_DEVICE_ATTR(topology_change, S_IRUGO, show_topology_change, NULL);
+static DP_DEVICE_ATTR(topology_change, S_IRUGO, show_topology_change, NULL);
 
 static ssize_t show_topology_change_detected(struct class_device *d,
 					     char *buf)
@@ -330,7 +330,7 @@ static ssize_t show_topology_change_detected(struct class_device *d,
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static BRC_DEVICE_ATTR(topology_change_detected, S_IRUGO,
+static DP_DEVICE_ATTR(topology_change_detected, S_IRUGO,
 		   show_topology_change_detected, NULL);
 
 static ssize_t show_hello_timer(struct class_device *d,
@@ -343,7 +343,7 @@ static ssize_t show_hello_timer(struct class_device *d,
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static BRC_DEVICE_ATTR(hello_timer, S_IRUGO, show_hello_timer, NULL);
+static DP_DEVICE_ATTR(hello_timer, S_IRUGO, show_hello_timer, NULL);
 
 static ssize_t show_tcn_timer(struct class_device *d, 
 			      char *buf)
@@ -355,7 +355,7 @@ static ssize_t show_tcn_timer(struct class_device *d,
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static BRC_DEVICE_ATTR(tcn_timer, S_IRUGO, show_tcn_timer, NULL);
+static DP_DEVICE_ATTR(tcn_timer, S_IRUGO, show_tcn_timer, NULL);
 
 static ssize_t show_topology_change_timer(struct class_device *d,
 					  char *buf)
@@ -367,7 +367,7 @@ static ssize_t show_topology_change_timer(struct class_device *d,
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static BRC_DEVICE_ATTR(topology_change_timer, S_IRUGO, show_topology_change_timer,
+static DP_DEVICE_ATTR(topology_change_timer, S_IRUGO, show_topology_change_timer,
 		   NULL);
 
 static ssize_t show_gc_timer(struct class_device *d, 
@@ -380,7 +380,7 @@ static ssize_t show_gc_timer(struct class_device *d,
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static BRC_DEVICE_ATTR(gc_timer, S_IRUGO, show_gc_timer, NULL);
+static DP_DEVICE_ATTR(gc_timer, S_IRUGO, show_gc_timer, NULL);
 
 static ssize_t show_group_addr(struct class_device *d,
 			       char *buf)
@@ -435,7 +435,7 @@ static ssize_t store_group_addr(struct class_device *d,
 	return len;
 }
 
-static BRC_DEVICE_ATTR(group_addr, S_IRUGO | S_IWUSR,
+static DP_DEVICE_ATTR(group_addr, S_IRUGO | S_IWUSR,
 		   show_group_addr, store_group_addr);
 
 static struct attribute *bridge_attrs[] = {
@@ -474,7 +474,7 @@ static struct attribute_group bridge_group = {
  *   to hold links.  The ifobj exists in the same data structure
  *   as its parent the bridge so reference counting works.
  */
-int brc_sysfs_add_dp(struct datapath *dp)
+int dp_sysfs_add_dp(struct datapath *dp)
 {
 	struct kobject *kobj = to_kobj(dp->ports[ODPP_LOCAL]->dev);
 	int err;
@@ -515,7 +515,7 @@ int brc_sysfs_add_dp(struct datapath *dp)
 	return err;
 }
 
-int brc_sysfs_del_dp(struct datapath *dp)
+int dp_sysfs_del_dp(struct datapath *dp)
 {
 	struct kobject *kobj = to_kobj(dp->ports[ODPP_LOCAL]->dev);
 
@@ -529,10 +529,10 @@ int brc_sysfs_del_dp(struct datapath *dp)
 	return 0;
 }
 #else /* !SUPPORT_SYSFS */
-int brc_sysfs_add_dp(struct datapath *dp) { return 0; }
-int brc_sysfs_del_dp(struct datapath *dp) { return 0; }
-int brc_sysfs_add_if(struct net_bridge_port *p) { return 0; }
-int brc_sysfs_del_if(struct net_bridge_port *p)
+int dp_sysfs_add_dp(struct datapath *dp) { return 0; }
+int dp_sysfs_del_dp(struct datapath *dp) { return 0; }
+int dp_sysfs_add_if(struct net_bridge_port *p) { return 0; }
+int dp_sysfs_del_if(struct net_bridge_port *p)
 {
 	dev_put(p->dev);
 	kfree(p);

@@ -19,7 +19,7 @@
 #include <linux/workqueue.h>
 #include <linux/skbuff.h>
 #include "flow.h"
-#include "brc_sysfs.h"
+#include "dp_sysfs.h"
 
 /* Mask for the priority bits in a vlan header.  If we ever merge upstream
  * then this should go into include/linux/if_vlan.h. */

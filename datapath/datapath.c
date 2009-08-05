@@ -240,7 +240,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	rtnl_unlock();
 
 #ifdef SUPPORT_SYSFS
-	brc_sysfs_add_dp(dp);
+	dp_sysfs_add_dp(dp);
 #endif
 
 	return 0;
@@ -270,7 +270,7 @@ static void do_destroy_dp(struct datapath *dp)
 			dp_del_port(p);
 
 #ifdef SUPPORT_SYSFS
-	brc_sysfs_del_dp(dp);
+	dp_sysfs_del_dp(dp);
 #endif
 
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
@@ -394,7 +394,7 @@ static int add_port(int dp_idx, struct odp_port __user *portp)
 		goto out_put;
 
 #ifdef SUPPORT_SYSFS
-	brc_sysfs_add_if(dp->ports[port_no]);
+	dp_sysfs_add_if(dp->ports[port_no]);
 #endif
 
 out_put:
@@ -439,7 +439,7 @@ int dp_del_port(struct net_bridge_port *p)
 		dp_dev_destroy(p->dev);
 	}
 	if (p->port_no != ODPP_LOCAL) {
-		brc_sysfs_del_if(p);
+		dp_sysfs_del_if(p);
 	} else {
 		dev_put(p->dev);
 		kfree(p);

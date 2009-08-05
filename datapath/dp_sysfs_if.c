@@ -18,7 +18,7 @@
 #include <linux/if_bridge.h>
 #include <linux/rtnetlink.h>
 #include <linux/spinlock.h>
-#include "brc_sysfs.h"
+#include "dp_sysfs.h"
 #include "datapath.h"
 
 #ifdef SUPPORT_SYSFS
@@ -283,7 +283,7 @@ struct kobj_type brport_ktype = {
  * Creates a brport subdirectory with bridge attributes.
  * Puts symlink in bridge's brport subdirectory
  */
-int brc_sysfs_add_if(struct net_bridge_port *p)
+int dp_sysfs_add_if(struct net_bridge_port *p)
 {
 	struct datapath *dp = p->dp;
 	struct brport_attribute **a;
@@ -332,7 +332,7 @@ err_put:
 	return err;
 }
 
-int brc_sysfs_del_if(struct net_bridge_port *p)
+int dp_sysfs_del_if(struct net_bridge_port *p)
 {
 	struct net_device *dev = p->dev;
 

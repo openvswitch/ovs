@@ -20,7 +20,6 @@
 #include "compat.h"
 #include "openvswitch/brcompat-netlink.h"
 #include "brc_procfs.h"
-#include "brc_sysfs.h"
 #include "datapath.h"
 #include "dp_dev.h"
 

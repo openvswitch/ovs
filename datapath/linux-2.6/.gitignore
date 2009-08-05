@@ -3,8 +3,8 @@
 /Makefile.main
 /actions.c
 /brcompat.c
-/brc_sysfs_dp.c
-/brc_sysfs_if.c
+/dp_sysfs_dp.c
+/dp_sysfs_if.c
 /datapath.c
 /dp_dev.c
 /dp_notify.c

@@ -6,19 +6,19 @@
  * kernel, by Linus Torvalds and others.
  */
 
-#ifndef BRC_SYSFS_H
-#define BRC_SYSFS_H 1
+#ifndef DP_SYSFS_H
+#define DP_SYSFS_H 1
 
 struct datapath;
 struct net_bridge_port;
 
-/* brc_sysfs_dp.c */
-int brc_sysfs_add_dp(struct datapath *dp);
-int brc_sysfs_del_dp(struct datapath *dp);
+/* dp_sysfs_dp.c */
+int dp_sysfs_add_dp(struct datapath *dp);
+int dp_sysfs_del_dp(struct datapath *dp);
 
-/* brc_sysfs_if.c */
-int brc_sysfs_add_if(struct net_bridge_port *p);
-int brc_sysfs_del_if(struct net_bridge_port *p);
+/* dp_sysfs_if.c */
+int dp_sysfs_add_if(struct net_bridge_port *p);
+int dp_sysfs_del_if(struct net_bridge_port *p);
 
 #include <linux/version.h>
 #if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
@@ -29,5 +29,5 @@ int brc_sysfs_del_if(struct net_bridge_port *p);
  * multiple versions. */
 #endif
 
-#endif /* brc_sysfs.h */
+#endif /* dp_sysfs.h */
 
