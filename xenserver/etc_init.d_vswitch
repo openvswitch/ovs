@@ -152,9 +152,9 @@ function start_vswitchd {
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovs-vswitchd ($strace_opt$valgrind_opt)" true
-        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" -P"$VSWITCHD_PIDFILE" -D $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
+        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
     else
-        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" -P"$VSWITCHD_PIDFILE" -D $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
+        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
     fi
 }
 
@@ -191,9 +191,9 @@ function start_brcompatd {
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovs-brcompatd ($strace_opt$valgrind_opt)" true
-        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --appctl-command="$appctl_cmd" -P$BRCOMPATD_PIDFILE -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
+        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
     else
-        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --appctl-command="$appctl_cmd" -P$BRCOMPATD_PIDFILE -D -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
+        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE --detach -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
     fi
 }
 

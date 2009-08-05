@@ -282,7 +282,7 @@ parse_options(int argc, char *argv[])
         OPT_ACCEPT_VCONN = UCHAR_MAX + 1,
         OPT_EXIT_WITHOUT_BIND,
         OPT_EXIT_AFTER_BIND,
-        OPT_NO_DETACH,
+        OPT_NO_DETACH
     };
     static struct option long_options[] = {
         {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
@@ -290,8 +290,8 @@ parse_options(int argc, char *argv[])
         {"exit-after-bind", no_argument, 0, OPT_EXIT_AFTER_BIND},
         {"no-detach",   no_argument, 0, OPT_NO_DETACH},
         {"timeout",     required_argument, 0, 't'},
-        {"pidfile",     optional_argument, 0, 'P'},
-        {"force",       no_argument, 0, 'f'},
+        {"pidfile",     optional_argument, 0, OPT_PIDFILE},
+        {"overwrite-pidfile", no_argument, 0, OPT_OVERWRITE_PIDFILE},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -328,11 +328,11 @@ parse_options(int argc, char *argv[])
             detach_after_bind = false;
             break;
 
-        case 'P':
+        case OPT_PIDFILE:
             set_pidfile(optarg);
             break;
 
-        case 'f':
+        case OPT_OVERWRITE_PIDFILE:
             ignore_existing_pidfile();
             break;
 
@@ -396,8 +396,9 @@ usage(void)
     vlog_usage();
     printf("\nOther options:\n"
            "  -t, --timeout=SECS      give up discovery after SECS seconds\n"
-           "  -P, --pidfile[=FILE]    create pidfile (default: %s/%s.pid)\n"
-           "  -f, --force             with -P, start even if already running\n"
+           "  --pidfile[=FILE]        create pidfile (default: %s/%s.pid)\n"
+           "  --overwrite-pidfile     with --pidfile, start even if already "
+                                      "running\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n",
            ovs_rundir, program_name);

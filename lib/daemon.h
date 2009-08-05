@@ -22,17 +22,20 @@
 #include <sys/types.h>
 
 enum {
-    OPT_NO_CHDIR = UCHAR_MAX + 2048
+    OPT_DETACH = UCHAR_MAX + 2048,
+    OPT_NO_CHDIR,
+    OPT_OVERWRITE_PIDFILE,
+    OPT_PIDFILE,
 };
 
-#define DAEMON_LONG_OPTIONS                             \
-        {"detach",      no_argument, 0, 'D'},           \
-        {"no-chdir",    no_argument, 0, OPT_NO_CHDIR},  \
-        {"force",       no_argument, 0, 'f'},           \
-        {"pidfile",     optional_argument, 0, 'P'}
+#define DAEMON_LONG_OPTIONS                                          \
+        {"detach",            no_argument, 0, OPT_DETACH},           \
+        {"no-chdir",          no_argument, 0, OPT_NO_CHDIR},         \
+        {"pidfile",           optional_argument, 0, OPT_PIDFILE},    \
+        {"overwrite-pidfile", no_argument, 0, OPT_OVERWRITE_PIDFILE}
 
 #define DAEMON_OPTION_HANDLERS                  \
-        case 'D':                               \
+        case OPT_DETACH:                        \
             set_detach();                       \
             break;                              \
                                                 \
@@ -40,11 +43,11 @@ enum {
             set_no_chdir();                     \
             break;                              \
                                                 \
-        case 'P':                               \
+        case OPT_PIDFILE:                       \
             set_pidfile(optarg);                \
             break;                              \
                                                 \
-        case 'f':                               \
+        case OPT_OVERWRITE_PIDFILE:             \
             ignore_existing_pidfile();          \
             break;
 

@@ -74,7 +74,7 @@ This option is mutually exclusive with \fB--exit-without-bind\fR and
 \fB--exit-after-bind\fR.
 
 .TP
-\fB-P\fR[\fIpidfile\fR], \fB--pidfile\fR[\fB=\fIpidfile\fR]
+\fB--pidfile\fR[\fB=\fIpidfile\fR]
 Causes a file (by default, \fBovs\-discover.pid\fR) to be created indicating
 the PID of the running process.  If \fIpidfile\fR is not specified, or
 if it does not begin with \fB/\fR, then it is created in
@@ -85,14 +85,13 @@ this this option has no effect when one of \fB--exit-without-bind\fR,
 \fB--exit-after-bind\fR, or \fB--no-detach\fR is also given.
 
 .TP
-\fB-f\fR, \fB--force\fR
-By default, when \fB-P\fR or \fB--pidfile\fR is specified and the
-specified pidfile already exists and is locked by a running process,
-\fBcontroller\fR refuses to start.  Specify \fB-f\fR or \fB--force\fR
-to cause it to instead overwrite the pidfile.
+\fB--overwrite-pidfile\fR
+By default, when \fB--pidfile\fR is specified and the specified pidfile 
+already exists and is locked by a running process, \fBcontroller\fR refuses 
+to start.  Specify \fB--overwrite-pidfile\fR to cause it to instead 
+overwrite the pidfile.
 
-When \fB-P\fR or \fB--pidfile\fR is not specified, this option has no
-effect.
+When \fB--pidfile\fR is not specified, this option has no effect.
 
 .so lib/vlog.man
 .so lib/common.man

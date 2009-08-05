@@ -35,7 +35,7 @@ static bool detach;
 static char *pidfile;
 
 /* Create pidfile even if one already exists and is locked? */
-static bool force;
+static bool overwrite_pidfile;
 
 /* Should we chdir to "/". */
 static bool chdir_ = true;
@@ -85,7 +85,7 @@ set_no_chdir(void)
 void
 ignore_existing_pidfile(void)
 {
-    force = true;
+    overwrite_pidfile = true;
 }
 
 /* Sets up a following call to daemonize() to detach from the foreground
@@ -127,7 +127,7 @@ die_if_already_running(void)
 {
     pid_t pid = already_running();
     if (pid) {
-        if (!force) {
+        if (!overwrite_pidfile) {
             ovs_fatal(0, "%s: already running as pid %ld",
                       get_pidfile(), (long int) pid);
         } else {
@@ -239,10 +239,11 @@ daemon_usage(void)
 {
     printf(
         "\nDaemon options:\n"
-        "  -D, --detach            run in background as daemon\n"
+        "  --detach                run in background as daemon\n"
         "  --no-chdir              do not chdir to '/'\n"
-        "  -P, --pidfile[=FILE]    create pidfile (default: %s/%s.pid)\n"
-        "  -f, --force             with -P, start even if already running\n",
+        "  --pidfile[=FILE]        create pidfile (default: %s/%s.pid)\n"
+        "  --overwrite-pidfile     with --pidfile, start even if already "
+                                   "running\n",
         ovs_rundir, program_name);
 }
 
