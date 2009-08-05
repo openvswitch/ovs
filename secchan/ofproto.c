@@ -1213,53 +1213,71 @@ static void
 update_port(struct ofproto *p, const char *devname)
 {
     struct odp_port odp_port;
-    struct ofport *ofport;
+    struct ofport *old_ofport;
+    struct ofport *new_ofport;
     int error;
 
     COVERAGE_INC(ofproto_update_port);
-    ofport = shash_find_data(&p->port_by_name, devname);
-    error = dpif_port_query_by_name(&p->dpif, devname, &odp_port);
-    if (!error) {
-        if (!ofport) {
-            /* New port. */
-            if (!ofport_conflicts(p, &odp_port)) {
-                ofport = make_ofport(&odp_port);
-                if (ofport) {
-                    ofport_install(p, ofport);
-                    send_port_status(p, ofport, OFPPR_ADD);
-                }
-            }
-        } else {
-            /* Modified port. */
-            struct ofport *new_ofport = make_ofport(&odp_port);
-            if (!new_ofport) {
-                return;
-            }
 
-            new_ofport->opp.config &= OFPPC_PORT_DOWN;
-            new_ofport->opp.config |= ofport->opp.config & ~OFPPC_PORT_DOWN;
-            if (ofport_equal(ofport, new_ofport)) {
-                /* False alarm--no change. */
-                ofport_free(new_ofport);
-            } else {
-                ofport_remove(p, ofport);
-                ofport_install(p, new_ofport);
-                ofport_free(ofport);
-                send_port_status(p, new_ofport, OFPPR_MODIFY);
-            }
+    /* Query the datapath for port information. */
+    error = dpif_port_query_by_name(&p->dpif, devname, &odp_port);
+
+    /* Find the old ofport. */
+    old_ofport = shash_find_data(&p->port_by_name, devname);
+    if (!error) {
+        if (!old_ofport) {
+            /* There's no port named 'devname' but there might be a port with
+             * the same port number.  This could happen if a port is deleted
+             * and then a new one added in its place very quickly, or if a port
+             * is renamed.  In the former case we want to send an OFPPR_DELETE
+             * and an OFPPR_ADD, and in the latter case we want to send a
+             * single OFPPR_MODIFY.  We can distinguish the cases by comparing
+             * the old port's ifindex against the new port, or perhaps less
+             * reliably but more portably by comparing the old port's MAC
+             * against the new port's MAC.  However, this code isn't that smart
+             * and always sends an OFPPR_MODIFY (XXX). */
+            old_ofport = port_array_get(&p->ports, odp_port.port);
         }
-    } else if (error == ENOENT || error == ENODEV) {
-        /* Deleted port. */
-        if (ofport) {
-            send_port_status(p, ofport, OFPPR_DELETE);
-            ofport_remove(p, ofport);
-            ofport_free(ofport);
-        }
-    } else {
+    } else if (error != ENOENT && error != ENODEV) {
         VLOG_WARN_RL(&rl, "dpif_port_query_by_name returned unexpected error "
                      "%s", strerror(error));
         return;
     }
+
+    /* Create a new ofport. */
+    new_ofport = !error ? make_ofport(&odp_port) : NULL;
+
+    /* Eliminate a few pathological cases. */
+    if (!old_ofport && !new_ofport) {
+        return;
+    } else if (old_ofport && new_ofport) {
+        /* Most of the 'config' bits are OpenFlow soft state, but
+         * OFPPC_PORT_DOWN is maintained the kernel.  So transfer the OpenFlow
+         * bits from old_ofport.  (make_ofport() only sets OFPPC_PORT_DOWN and
+         * leaves the other bits 0.)  */
+        new_ofport->opp.config |= old_ofport->opp.config & ~OFPPC_PORT_DOWN;
+
+        if (ofport_equal(old_ofport, new_ofport)) {
+            /* False alarm--no change. */
+            ofport_free(new_ofport);
+            return;
+        }
+    }
+
+    /* Now deal with the normal cases. */
+    if (old_ofport) {
+        ofport_remove(p, old_ofport);
+    }
+    if (new_ofport) {
+        ofport_install(p, new_ofport);
+    }
+    send_port_status(p, new_ofport ? new_ofport : old_ofport,
+                     (!old_ofport ? OFPPR_ADD
+                      : !new_ofport ? OFPPR_DELETE
+                      : OFPPR_MODIFY));
+    ofport_free(old_ofport);
+
+    /* Update port groups. */
     refresh_port_groups(p);
 }
 
