@@ -631,6 +631,18 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
         if (iface_ea_u64) {
             /* User specified explicitly. */
             eth_addr_from_uint64(iface_ea_u64, iface_ea);
+
+            /* Find the interface with this Ethernet address (if any) so that
+             * we can provide the correct devname to the caller. */
+            iface = NULL;
+            for (j = 0; j < port->n_ifaces; j++) {
+                struct iface *candidate = port->ifaces[j];
+                uint8_t candidate_ea[ETH_ADDR_LEN];
+                if (!netdev_nodev_get_etheraddr(candidate->name, candidate_ea)
+                    && eth_addr_equals(iface_ea, candidate_ea)) {
+                    iface = candidate;
+                }
+            }
         } else {
             /* Choose the interface whose MAC address will represent the port.
              * The Linux kernel bonding code always chooses the MAC address of
@@ -672,7 +684,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
             memcmp(iface_ea, ea, ETH_ADDR_LEN) < 0)
         {
             memcpy(ea, iface_ea, ETH_ADDR_LEN);
-            *devname = iface->name;
+            *devname = iface ? iface->name : NULL;
         }
     }
     if (eth_addr_is_multicast(ea) || eth_addr_is_vif(ea)) {
