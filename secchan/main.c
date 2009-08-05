@@ -353,8 +353,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             } else if (!strcmp(optarg, "closed")) {
                 s->fail_mode = FAIL_CLOSED;
             } else {
-                ovs_fatal(0, "-f or --fail argument must be \"open\" "
-                          "or \"closed\"");
+                ovs_fatal(0, "--fail argument must be \"open\" or \"closed\"");
             }
             break;
 
