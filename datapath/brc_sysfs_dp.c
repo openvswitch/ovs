@@ -486,8 +486,9 @@ int brc_sysfs_add_dp(struct datapath *dp)
 		goto out1;
 	}
 
+	/* Create /sys/class/net/<devname>/bridge directory. */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
-	kobject_set_name(&dp->ifobj, SYSFS_BRIDGE_PORT_SUBDIR);
+	kobject_set_name(&dp->ifobj, SYSFS_BRIDGE_PORT_SUBDIR); /* "bridge" */
 	dp->ifobj.ktype = NULL;
 	dp->ifobj.kset = NULL;
 	dp->ifobj.parent = kobj;

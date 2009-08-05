@@ -289,8 +289,9 @@ int brc_sysfs_add_if(struct net_bridge_port *p)
 	struct brport_attribute **a;
 	int err;
 
+	/* Create /sys/class/net/<devname>/brport directory. */
 	kobject_init(&p->kobj);
-	kobject_set_name(&p->kobj, SYSFS_BRIDGE_PORT_ATTR);
+	kobject_set_name(&p->kobj, SYSFS_BRIDGE_PORT_ATTR); /* "brport" */
 	p->kobj.ktype = &brport_ktype;
 	p->kobj.kset = NULL;
 	p->kobj.parent = &(p->dev->class_dev.kobj);
@@ -299,18 +300,23 @@ int brc_sysfs_add_if(struct net_bridge_port *p)
 	if (err)
 		goto err_put;
 
+	/* Create symlink from /sys/class/net/<devname>/brport/bridge to
+	 * /sys/class/net/<bridgename>. */
 	err = sysfs_create_link(&p->kobj,
 				&dp->ports[ODPP_LOCAL]->dev->class_dev.kobj,
-				SYSFS_BRIDGE_PORT_LINK);
+				SYSFS_BRIDGE_PORT_LINK); /* "bridge" */
 	if (err)
 		goto err_del;
 
+	/* Populate /sys/class/net/<devname>/brport directory with files. */
 	for (a = brport_attrs; *a; ++a) {
 		err = sysfs_create_file(&p->kobj, &((*a)->attr));
 		if (err)
 			goto err_del;
 	}
 
+	/* Create symlink from /sys/class/net/<bridgename>/brif/<devname> to
+	 * /sys/class/net/<devname>/brport.  */
 	err = sysfs_create_link(&dp->ifobj, &p->kobj, p->dev->name);
 	if (err)
 		goto err_del;
