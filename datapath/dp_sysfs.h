@@ -29,5 +29,9 @@ int dp_sysfs_del_if(struct net_bridge_port *p);
  * multiple versions. */
 #endif
 
+#ifdef SUPPORT_SYSFS
+extern struct sysfs_ops brport_sysfs_ops;
+#endif
+
 #endif /* dp_sysfs.h */
 

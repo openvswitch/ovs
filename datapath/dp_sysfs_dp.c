@@ -487,12 +487,7 @@ int dp_sysfs_add_dp(struct datapath *dp)
 	}
 
 	/* Create /sys/class/net/<devname>/bridge directory. */
-	kobject_set_name(&dp->ifobj, SYSFS_BRIDGE_PORT_SUBDIR); /* "bridge" */
-	dp->ifobj.ktype = NULL;
-	dp->ifobj.kset = NULL;
 	dp->ifobj.parent = kobj;
-	kboject_init(&dp->ifobj);
-
 	err = kobject_add(&dp->ifobj);
 	if (err) {
 		pr_info("%s: can't add kobject (directory) %s/%s\n",
@@ -513,7 +508,6 @@ int dp_sysfs_del_dp(struct datapath *dp)
 	struct kobject *kobj = to_kobj(dp->ports[ODPP_LOCAL]->dev);
 
 	kobject_del(&dp->ifobj);
-	kobject_put(&dp->ifobj);
 	sysfs_remove_group(kobj, &bridge_group);
 
 	return 0;

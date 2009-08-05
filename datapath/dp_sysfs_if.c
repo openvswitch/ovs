@@ -266,18 +266,6 @@ struct sysfs_ops brport_sysfs_ops = {
 	.store = brport_store,
 };
 
-static void release_nbp(struct kobject *kobj)
-{
-	struct net_bridge_port *p
-		= container_of(kobj, struct net_bridge_port, kobj);
-	kfree(p);
-}
-
-struct kobj_type brport_ktype = {
-	.sysfs_ops = &brport_sysfs_ops,
-	.release = release_nbp
-};
-
 /*
  * Add sysfs entries to ethernet device added to a bridge.
  * Creates a brport subdirectory with bridge attributes.
@@ -290,12 +278,6 @@ int dp_sysfs_add_if(struct net_bridge_port *p)
 	int err;
 
 	/* Create /sys/class/net/<devname>/brport directory. */
-	kobject_set_name(&p->kobj, SYSFS_BRIDGE_PORT_ATTR); /* "brport" */
-	p->kobj.ktype = &brport_ktype;
-	p->kobj.kset = NULL;
-	p->kobj.parent = &(p->dev->class_dev.kobj);
-	kobject_init(&p->kobj);
-
 	err = kobject_add(&p->kobj);
 	if (err)
 		goto err_put;
@@ -303,7 +285,7 @@ int dp_sysfs_add_if(struct net_bridge_port *p)
 	/* Create symlink from /sys/class/net/<devname>/brport/bridge to
 	 * /sys/class/net/<bridgename>. */
 	err = sysfs_create_link(&p->kobj,
-				&dp->ports[ODPP_LOCAL]->dev->class_dev.kobj,
+				&dp->ports[ODPP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj,
 				SYSFS_BRIDGE_PORT_LINK); /* "bridge" */
 	if (err)
 		goto err_del;
@@ -329,20 +311,18 @@ err_del:
 	kobject_del(&p->kobj);
 err_put:
 	kobject_put(&p->kobj);
+
+	/* Ensure that dp_sysfs_del_if becomes a no-op. */
+	p->kobj.dentry = NULL;
 	return err;
 }
 
 int dp_sysfs_del_if(struct net_bridge_port *p)
 {
-	struct net_device *dev = p->dev;
-
-	kobject_uevent(&p->kobj, KOBJ_REMOVE);
-	kobject_del(&p->kobj);
-
-	dev_put(dev);
-
-	kobject_put(&p->kobj);
-
+	if (p->kobj.dentry) {
+		kobject_uevent(&p->kobj, KOBJ_REMOVE);
+		kobject_del(&p->kobj);
+	}
 	return 0;
 }
 #endif /* SUPPORT_SYSFS */

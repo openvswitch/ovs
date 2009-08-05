@@ -171,6 +171,16 @@ errout:
 		rtnl_set_sk_err(net, RTNLGRP_LINK, err);
 }
 
+static void release_dp(struct kobject *kobj)
+{
+	struct datapath *dp = container_of(kobj, struct datapath, ifobj);
+	kfree(dp);
+}
+
+struct kobj_type dp_ktype = {
+	.release = release_dp
+};
+
 static int create_dp(int dp_idx, const char __user *devnamep)
 {
 	struct net_device *dp_dev;
@@ -211,6 +221,13 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	for (i = 0; i < DP_N_QUEUES; i++)
 		skb_queue_head_init(&dp->queues[i]);
 	init_waitqueue_head(&dp->waitqueue);
+
+	/* Initialize kobject for bridge.  This will be added as
+	 * /sys/class/net/<devname>/bridge later, if sysfs is enabled. */
+	kobject_set_name(&dp->ifobj, SYSFS_BRIDGE_PORT_SUBDIR); /* "bridge" */
+	dp->ifobj.kset = NULL;
+	dp->ifobj.parent = NULL;
+	kobject_init(&dp->ifobj, &dp_ktype);
 
 	/* Allocate table. */
 	err = -ENOMEM;
@@ -284,7 +301,7 @@ static void do_destroy_dp(struct datapath *dp)
 	for (i = 0; i < DP_MAX_GROUPS; i++)
 		kfree(dp->groups[i]);
 	free_percpu(dp->stats_percpu);
-	kfree(dp);
+	kobject_put(&dp->ifobj);
 	module_put(THIS_MODULE);
 }
 
@@ -308,6 +325,19 @@ err_unlock:
 	rtnl_unlock();
 	return err;
 }
+
+static void release_nbp(struct kobject *kobj)
+{
+	struct net_bridge_port *p = container_of(kobj, struct net_bridge_port, kobj);
+	kfree(p);
+}
+
+struct kobj_type brport_ktype = {
+#ifdef SUPPORT_SYSFS
+	.sysfs_ops = &brport_sysfs_ops,
+#endif
+	.release = release_nbp
+};
 
 /* Called with RTNL lock and dp_mutex. */
 static int new_nbp(struct datapath *dp, struct net_device *dev, int port_no)
@@ -337,6 +367,13 @@ static int new_nbp(struct datapath *dp, struct net_device *dev, int port_no)
 	rcu_assign_pointer(dp->ports[port_no], p);
 	list_add_rcu(&p->node, &dp->port_list);
 	dp->n_ports++;
+
+	/* Initialize kobject for bridge.  This will be added as
+	 * /sys/class/net/<devname>/brport later, if sysfs is enabled. */
+	kobject_set_name(&p->kobj, SYSFS_BRIDGE_PORT_ATTR); /* "brport" */
+	p->kobj.kset = NULL;
+	p->kobj.parent = &p->dev->NETDEV_DEV_MEMBER.kobj;
+	kobject_init(&p->kobj, &brport_ktype);
 
 	dp_ifinfo_notify(RTM_NEWLINK, p);
 
@@ -435,15 +472,12 @@ int dp_del_port(struct net_bridge_port *p)
 	/* Then wait until no one is still using it, and destroy it. */
 	synchronize_rcu();
 
-	if (is_dp_dev(p->dev)) {
+	if (is_dp_dev(p->dev))
 		dp_dev_destroy(p->dev);
-	}
-	if (p->port_no != ODPP_LOCAL) {
+	if (p->port_no != ODPP_LOCAL)
 		dp_sysfs_del_if(p);
-	} else {
-		dev_put(p->dev);
-		kfree(p);
-	}
+	dev_put(p->dev);
+	kobject_put(&p->kobj);
 
 	return 0;
 }

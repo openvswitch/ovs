@@ -64,9 +64,7 @@ struct datapath {
 	struct mutex mutex;
 	int dp_idx;
 
-#ifdef SUPPORT_SYSFS
 	struct kobject ifobj;
-#endif
 
 	int drop_frags;
 
@@ -94,9 +92,7 @@ struct net_bridge_port {
 	u16 port_no;
 	struct datapath	*dp;
 	struct net_device *dev;
-#ifdef SUPPORT_SYSFS
 	struct kobject kobj;
-#endif
 	struct list_head node;   /* Element in datapath.ports. */
 };
 
