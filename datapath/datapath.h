@@ -93,6 +93,7 @@ struct net_bridge_port {
 	struct datapath	*dp;
 	struct net_device *dev;
 	struct kobject kobj;
+	char linkname[IFNAMSIZ];
 	struct list_head node;   /* Element in datapath.ports. */
 };
 

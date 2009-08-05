@@ -302,6 +302,7 @@ int dp_sysfs_add_if(struct net_bridge_port *p)
 	err = sysfs_create_link(&dp->ifobj, &p->kobj, p->dev->name);
 	if (err)
 		goto err_del;
+	strcpy(p->linkname, p->dev->name);
 
 	kobject_uevent(&p->kobj, KOBJ_ADD);
 
@@ -319,6 +320,10 @@ err_put:
 
 int dp_sysfs_del_if(struct net_bridge_port *p)
 {
+	if (p->linkname[0]) {
+		sysfs_remove_link(&p->dp->ifobj, p->linkname);
+		p->linkname[0] = '\0';
+	}
 	if (p->kobj.dentry) {
 		kobject_uevent(&p->kobj, KOBJ_REMOVE);
 		kobject_del(&p->kobj);

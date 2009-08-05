@@ -450,7 +450,7 @@ int dp_del_port(struct net_bridge_port *p)
 
 #ifdef SUPPORT_SYSFS
 	if (p->port_no != ODPP_LOCAL)
-		sysfs_remove_link(&p->dp->ifobj, p->dev->name);
+		dp_sysfs_del_if(p);
 #endif
 	dp_ifinfo_notify(RTM_DELLINK, p);
 
@@ -474,8 +474,6 @@ int dp_del_port(struct net_bridge_port *p)
 
 	if (is_dp_dev(p->dev))
 		dp_dev_destroy(p->dev);
-	if (p->port_no != ODPP_LOCAL)
-		dp_sysfs_del_if(p);
 	dev_put(p->dev);
 	kobject_put(&p->kobj);
 

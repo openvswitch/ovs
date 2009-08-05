@@ -17,12 +17,29 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 		void *ptr) 
 {
 	struct net_device *dev = ptr;
-	struct net_bridge_port *p = dev->br_port;
-	if (event == NETDEV_UNREGISTER && p) {
-		struct datapath *dp = p->dp;
+	struct net_bridge_port *p;
+	struct datapath *dp;
+
+	p = dev->br_port;
+	if (!p)
+		return NOTIFY_DONE;
+	dp = p->dp;
+
+	switch (event) {
+	case NETDEV_UNREGISTER:
 		mutex_lock(&dp->mutex);
 		dp_del_port(p);
 		mutex_unlock(&dp->mutex);
+		break;
+
+	case NETDEV_CHANGENAME:
+		if (p->port_no != ODPP_LOCAL) {
+			mutex_lock(&dp->mutex);
+			dp_sysfs_del_if(p);
+			dp_sysfs_add_if(p);
+			mutex_unlock(&dp->mutex);
+		}
+		break;
 	}
 	return NOTIFY_DONE;
 }
