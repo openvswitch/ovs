@@ -17,17 +17,27 @@
 #ifndef DAEMON_H
 #define DAEMON_H 1
 
+#include <limits.h>
 #include <stdbool.h>
 #include <sys/types.h>
 
-#define DAEMON_LONG_OPTIONS                         \
-        {"detach",      no_argument, 0, 'D'},       \
-        {"force",       no_argument, 0, 'f'},       \
+enum {
+    OPT_NO_CHDIR = UCHAR_MAX + 2048
+};
+
+#define DAEMON_LONG_OPTIONS                             \
+        {"detach",      no_argument, 0, 'D'},           \
+        {"no-chdir",    no_argument, 0, OPT_NO_CHDIR},  \
+        {"force",       no_argument, 0, 'f'},           \
         {"pidfile",     optional_argument, 0, 'P'}
 
 #define DAEMON_OPTION_HANDLERS                  \
         case 'D':                               \
             set_detach();                       \
+            break;                              \
+                                                \
+        case OPT_NO_CHDIR:                      \
+            set_no_chdir();                     \
             break;                              \
                                                 \
         case 'P':                               \
@@ -41,6 +51,7 @@
 char *make_pidfile_name(const char *name);
 void set_pidfile(const char *name);
 const char *get_pidfile(void);
+void set_no_chdir(void);
 void set_detach(void);
 void daemonize(void);
 void die_if_already_running(void);

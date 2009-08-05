@@ -37,6 +37,9 @@ static char *pidfile;
 /* Create pidfile even if one already exists and is locked? */
 static bool force;
 
+/* Should we chdir to "/". */
+static bool chdir_ = true;
+
 /* Returns the file name that would be used for a pidfile if 'name' were
  * provided to set_pidfile().  The caller must free the returned string. */
 char *
@@ -67,6 +70,13 @@ const char *
 get_pidfile(void)
 {
     return pidfile;
+}
+
+/* Sets that we do not chdir to "/". */
+void
+set_no_chdir(void)
+{
+    chdir_ = false;
 }
 
 /* Normally, die_if_already_running() will terminate the program with a message
@@ -209,7 +219,9 @@ daemonize(void)
             write(fds[1], &c, 1);
             close(fds[1]);
             setsid();
-            chdir("/");
+            if (chdir_) {
+                chdir("/");
+            }
             break;
 
         case -1:
@@ -228,6 +240,7 @@ daemon_usage(void)
     printf(
         "\nDaemon options:\n"
         "  -D, --detach            run in background as daemon\n"
+        "  --no-chdir              do not chdir to '/'\n"
         "  -P, --pidfile[=FILE]    create pidfile (default: %s/%s.pid)\n"
         "  -f, --force             with -P, start even if already running\n",
         ovs_rundir, program_name);

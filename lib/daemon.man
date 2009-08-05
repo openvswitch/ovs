@@ -19,3 +19,20 @@ effect.
 \fB-D\fR, \fB--detach\fR
 Causes \fB\*(PN\fR to detach itself from the foreground session and
 run as a background process.
+
+.TP
+\fB--no-chdir\fR
+By default, when \fB-D\fR or \fB--detach\fR is specified, \fB\*(PN\fR 
+changes its current working directory to the root directory after it 
+detaches.  Otherwise, invoking \fB\*(PN\fR from a carelessly chosen 
+directory would prevent the administrator from unmounting the file 
+system that holds that directory.
+.IP
+Specifying \fB--no-chdir\fR suppresses this behavior, preventing
+\fB\*(PN\fR from changing its current working directory.  This may be 
+useful for collecting core files, since it is common behavior to write 
+core dumps into the current working directory and the root directory 
+is not a good directory to use.
+.IP
+This option has no effect when neither \fB-D\fR nor \fB--detach\fR is 
+specified.
