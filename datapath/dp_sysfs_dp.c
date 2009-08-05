@@ -487,26 +487,19 @@ int dp_sysfs_add_dp(struct datapath *dp)
 	}
 
 	/* Create /sys/class/net/<devname>/bridge directory. */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
 	kobject_set_name(&dp->ifobj, SYSFS_BRIDGE_PORT_SUBDIR); /* "bridge" */
 	dp->ifobj.ktype = NULL;
 	dp->ifobj.kset = NULL;
 	dp->ifobj.parent = kobj;
+	kboject_init(&dp->ifobj);
 
-	err = kobject_register(&dp->ifobj);
+	err = kobject_add(&dp->ifobj);
 	if (err) {
 		pr_info("%s: can't add kobject (directory) %s/%s\n",
 				__FUNCTION__, dp_name(dp), dp->ifobj.name);
 		goto out2;
 	}
-#else
-	br->ifobj = kobject_create_and_add(SYSFS_BRIDGE_PORT_SUBDIR, kobj);
-	if (!br->ifobj) {
-		pr_info("%s: can't add kobject (directory) %s/%s\n",
-			__func__, dp_name(dp), SYSFS_BRIDGE_PORT_SUBDIR);
-		goto out2;
-	}
-#endif
+	kobject_uevent(&dp->ifobj, KOBJ_ADD);
 	return 0;
 
  out2:
@@ -519,11 +512,8 @@ int dp_sysfs_del_dp(struct datapath *dp)
 {
 	struct kobject *kobj = to_kobj(dp->ports[ODPP_LOCAL]->dev);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
-	kobject_unregister(&dp->ifobj);
-#else 
-	kobject_put(dp->ifobj);
-#endif
+	kobject_del(&dp->ifobj);
+	kobject_put(&dp->ifobj);
 	sysfs_remove_group(kobj, &bridge_group);
 
 	return 0;

@@ -290,11 +290,11 @@ int dp_sysfs_add_if(struct net_bridge_port *p)
 	int err;
 
 	/* Create /sys/class/net/<devname>/brport directory. */
-	kobject_init(&p->kobj);
 	kobject_set_name(&p->kobj, SYSFS_BRIDGE_PORT_ATTR); /* "brport" */
 	p->kobj.ktype = &brport_ktype;
 	p->kobj.kset = NULL;
 	p->kobj.parent = &(p->dev->class_dev.kobj);
+	kobject_init(&p->kobj);
 
 	err = kobject_add(&p->kobj);
 	if (err)
