@@ -3009,8 +3009,17 @@ iface_create(struct port *port, const char *name)
     iface->tag = tag_create_random();
     iface->delay_expires = LLONG_MAX;
 
-    netdev_nodev_get_etheraddr(name, iface->mac);
-    netdev_nodev_get_carrier(name, &iface->enabled);
+    if (!cfg_get_bool(0, "iface.%s.internal", iface->name)) {
+        netdev_nodev_get_etheraddr(name, iface->mac);
+        netdev_nodev_get_carrier(name, &iface->enabled);
+    } else {
+        /* Internal interfaces are created later by the call to dpif_port_add()
+         * in bridge_reconfigure().  Until then, we can't obtain any
+         * information about them.  (There's no real value in doing so, anyway,
+         * because the 'mac' and 'enabled' values are only used for interfaces
+         * that are bond slaves, and it doesn't normally make sense to bond an
+         * internal interface.) */
+    }
 
     if (port->n_ifaces >= port->allocated_ifaces) {
         port->ifaces = x2nrealloc(port->ifaces, &port->allocated_ifaces,
