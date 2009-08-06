@@ -249,6 +249,18 @@ def interface_exists(i):
     return os.path.exists("/sys/class/net/" + i)
 
 class DatabaseCache(object):
+    def __get_pif_records_from_xapi(self, session):
+        self.__pifs = session.xenapi.PIF.get_all_records()
+    
+    def __get_vlan_records_from_xapi(self, session):
+        self.__vlans = session.xenapi.VLAN.get_all_records()
+    
+    def __get_bond_records_from_xapi(self, session):
+        self.__bonds = session.xenapi.Bond.get_all_records()
+    
+    def __get_network_records_from_xapi(self, session):
+        self.__networks = session.xenapi.network.get_all_records()
+    
     def __init__(self, session_ref=None, cache_file=None):
         if session_ref and cache_file:
             raise Error("can't specify session reference and cache file")
@@ -263,10 +275,10 @@ class DatabaseCache(object):
                 session._session = session_ref
 
             try:
-                self.__vlans = session.xenapi.VLAN.get_all_records()
-                self.__bonds = session.xenapi.Bond.get_all_records()
-                self.__pifs = session.xenapi.PIF.get_all_records()
-                self.__networks = session.xenapi.network.get_all_records()
+                self.__get_pif_records_from_xapi(session)
+                self.__get_vlan_records_from_xapi(session)
+                self.__get_bond_records_from_xapi(session)
+                self.__get_network_records_from_xapi(session)
             finally:
                 if not session_ref:
                     session.xenapi.session.logout()
