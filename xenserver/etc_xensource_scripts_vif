@@ -31,8 +31,8 @@ handle_promiscuous()
     local arg=$(xenstore-read "${PRIVATE}/other-config/promiscuous")
     if [ $? -eq 0 -a -n "${arg}" ] ; then
         case "${arg}" in 
-            true|on) echo 1 > /sys/class/net/${vif}/brport/promisc ;;
-            *) echo 0 > /sys/class/net/${vif}/brport/promisc ;;
+            true|on) logger -t script-vif "${vif}: Promiscuous ports are not supported via vSwitch." ;;
+            *) ;;
         esac
     fi
 }
