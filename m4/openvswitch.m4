@@ -228,7 +228,7 @@ dnl Checks for libpcre.
 AC_DEFUN([OVS_CHECK_PCRE],
   [dnl Make sure that pkg-config is installed.
    m4_pattern_forbid([PKG_CHECK_MODULES])
-   PKG_CHECK_MODULES([PCRE], [libpcre], [HAVE_PCRE=yes], [HAVE_PCRE=no])
+   PKG_CHECK_MODULES([PCRE], [libpcre >= 7.2], [HAVE_PCRE=yes], [HAVE_PCRE=no])
    AM_CONDITIONAL([HAVE_PCRE], [test "$HAVE_PCRE" = yes])
    if test "$HAVE_PCRE" = yes; then
       AC_DEFINE([HAVE_PCRE], [1], [Define to 1 if libpcre is installed.])
