@@ -249,15 +249,32 @@ def interface_exists(i):
     return os.path.exists("/sys/class/net/" + i)
 
 class DatabaseCache(object):
-    def __get_pif_records_from_xapi(self, session):
-        self.__pifs = session.xenapi.PIF.get_all_records()
-    
+    def __read_xensource_inventory(self):
+        filename = "/etc/xensource-inventory"
+        f = open(filename, "r")
+        lines = [x.strip("\n") for x in f.readlines()]
+        f.close()
+
+        defs = [ (l[:l.find("=")], l[(l.find("=") + 1):]) for l in lines ]
+        defs = [ (a, b.strip("'")) for (a,b) in defs ]
+
+        return dict(defs)
+
+    def __pif_on_host(self,pif):
+        return self.__pifs.has_key(pif)
+        
+    def __get_pif_records_from_xapi(self, session, host):
+        recs = session.xenapi.PIF.get_all_records()
+        self.__pifs = dict(filter(lambda (ref,rec): rec['host'] == host, recs.iteritems()))
+
     def __get_vlan_records_from_xapi(self, session):
-        self.__vlans = session.xenapi.VLAN.get_all_records()
+        self.__vlans = dict(filter(lambda (ref,rec): self.__pif_on_host(rec['untagged_PIF']),
+                                   session.xenapi.VLAN.get_all_records().iteritems()))
     
     def __get_bond_records_from_xapi(self, session):
-        self.__bonds = session.xenapi.Bond.get_all_records()
-    
+        self.__bonds = dict(filter(lambda (ref,rec): self.__pif_on_host(rec['master']),
+                                   session.xenapi.Bond.get_all_records().iteritems()))
+
     def __get_network_records_from_xapi(self, session):
         self.__networks = session.xenapi.network.get_all_records()
     
@@ -275,7 +292,15 @@ class DatabaseCache(object):
                 session._session = session_ref
 
             try:
-                self.__get_pif_records_from_xapi(session)
+                
+                inventory = self.__read_xensource_inventory()
+                assert(inventory.has_key('INSTALLATION_UUID'))
+                log("host uuid is %s" % inventory['INSTALLATION_UUID'])
+                
+                host = session.xenapi.host.get_by_uuid(inventory['INSTALLATION_UUID'])
+                
+                self.__get_pif_records_from_xapi(session, host)
+
                 self.__get_vlan_records_from_xapi(session)
                 self.__get_bond_records_from_xapi(session)
                 self.__get_network_records_from_xapi(session)
@@ -286,7 +311,6 @@ class DatabaseCache(object):
             log("Loading xapi database cache from %s" % cache_file)
             f = open(cache_file, 'r')
             members = pickle.load(f)
-            self.extras = pickle.load(f)
             f.close()
 
             self.__vlans = members['vlans']
@@ -294,13 +318,12 @@ class DatabaseCache(object):
             self.__pifs = members['pifs']
             self.__networks = members['networks']
 
-    def save(self, cache_file, extras):
+    def save(self, cache_file):
         f = open(cache_file, 'w')
         pickle.dump({'vlans': self.__vlans,
                      'bonds': self.__bonds,
                      'pifs': self.__pifs,
                      'networks': self.__networks}, f)
-        pickle.dump(extras, f)
         f.close()
 
     def get_pif_by_uuid(self, uuid):
@@ -314,33 +337,12 @@ class DatabaseCache(object):
 
         return pifs[0]
 
-    def get_pifs_by_record(self, record):
-        """record is partial pif record.
-        Get the pif(s) whose record matches.
-        """
-        def match(pifrec):
-            for key in record:
-                if record[key] != pifrec[key]:
-                    return False
-            return True
-            
+    def get_pifs_by_device(self, device):
         return map(lambda (ref,rec): ref,
-                   filter(lambda (ref,rec): match(rec),
+                   filter(lambda (ref,rec): rec['device'] == device,
                           self.__pifs.items()))
 
-    def get_pif_by_record(self, record):
-        """record is partial pif record.
-        Get the pif whose record matches.
-        """
-        pifs = self.get_pifs_by_record(record)
-        if len(pifs) == 0:
-            raise Error("No matching PIF \"%s\"" % str(record))
-        elif len(pifs) > 1:
-            raise Error("Multiple matching PIFs \"%s\"" % str(record))
-
-        return pifs[0]
-
-    def get_pif_by_bridge(self, host, bridge):
+    def get_pif_by_bridge(self, bridge):
         networks = map(lambda (ref,rec): ref,
                        filter(lambda (ref,rec): rec['bridge'] == bridge,
                               self.__networks.items()))
@@ -352,13 +354,11 @@ class DatabaseCache(object):
             nwrec = self.get_network_record(network)
             for pif in nwrec['PIFs']:
                 pifrec = self.get_pif_record(pif)
-                if pifrec['host'] != host:
-                    continue
                 if answer:
-                    raise Error("Multiple PIFs on %s for network %s" % (host, bridge))
+                    raise Error("Multiple PIFs on host for network %s" % (bridge))
                 answer = pif
         if not answer:
-            raise Error("No PIF on %s for network %s" % (host, bridge))
+            raise Error("No PIF on host for network %s" % (bridge))
         return answer
 
     def get_pif_record(self, pif):
@@ -370,14 +370,13 @@ class DatabaseCache(object):
     def pif_exists(self, pif):
         return self.__pifs.has_key(pif)
     
-    def get_management_pif(self, host):
+    def get_management_pif(self):
         """ Returns the management pif on host
         """
         all = self.get_all_pifs()
         for pif in all: 
             pifrec = self.get_pif_record(pif)
-            if pifrec['management'] and pifrec['host'] == host :
-                return pif
+            if pifrec['management']: return pif
         return None
 
     def get_network_record(self, network):
@@ -498,7 +497,6 @@ def get_bond_slaves_of_pif(pif):
     """Returns a list of PIFs which make up the given bonded pif."""
     
     pifrec = db.get_pif_record(pif)
-    host = pifrec['host']
 
     bmo = pifrec['bond_master_of']
     if len(bmo) > 1:
@@ -594,10 +592,8 @@ This is because when we are called to bring up an interface with a bond master, 
 we should bring down that master."""
 
     pifrec = db.get_pif_record(pif)
-    host = pifrec['host']
 
-    pifs_on_host = [ __pif for __pif in db.get_all_pifs() if
-                     db.get_pif_record(__pif)['host'] == host and 
+    pifs = [ __pif for __pif in db.get_all_pifs() if
                      (not  __pif in get_bond_masters_of_pif(pif)) ]
 
     peerdns_pif = None
@@ -606,7 +602,7 @@ we should bring down that master."""
     # loop through all the pifs on this host looking for one with
     #   other-config:peerdns = true, and one with
     #   other-config:default-route=true
-    for __pif in pifs_on_host:
+    for __pif in pifs:
         __pifrec = db.get_pif_record(__pif)
         __oc = __pifrec['other_config']
         if __oc.has_key('peerdns') and __oc['peerdns'] == 'true':
@@ -673,7 +669,6 @@ def configure_netdev(pif):
     datapath = datapath_name(pif)
     ipdev = ipdev_name(pif)
 
-    host = pifrec['host']
     nw = pifrec['network']
     nwrec = db.get_network_record(nw)
 
@@ -892,8 +887,7 @@ def action_up(pif):
     # - The networks corresponding to any VLANs attached to the
     #   datapath's PIF.
     network_uuids = []
-    for nwpif in db.get_pifs_by_record({'device': pifrec['device'],
-                                        'host': pifrec['host']}):
+    for nwpif in db.get_pifs_by_device({'device': pifrec['device']}):
         net = db.get_pif_record(nwpif)['network']
         network_uuids += [db.get_network_record(net)['uuid']]
 
@@ -1152,9 +1146,8 @@ def main(argv=None):
                 action_force_rewrite(force_interface, force_rewrite_config)
             else:
                 db = DatabaseCache(cache_file=dbcache_file)
-                host = db.extras['host']
-                pif = db.get_pif_by_bridge(host, force_interface)
-                management_pif = db.get_management_pif(host)
+                pif = db.get_pif_by_bridge(force_interface)
+                management_pif = db.get_management_pif()
 
                 if action == "up":
                     action_up(pif)
@@ -1178,8 +1171,7 @@ def main(argv=None):
                 # pif is not going to be the management pif.
                 # Search DB cache for pif on same host with management=true
                 pifrec = db.get_pif_record(pif)
-                host = pifrec['host']
-                management_pif = db.get_management_pif(host)
+                management_pif = db.get_management_pif()
 
             log_pif_action(action, pif)
 
@@ -1197,7 +1189,7 @@ def main(argv=None):
 
             # Save cache.
             pifrec = db.get_pif_record(pif)
-            db.save(dbcache_file, {'host': pifrec['host']})
+            db.save(dbcache_file)
         
     except Usage, err:
         print >>sys.stderr, err.msg
@@ -1363,7 +1355,6 @@ def configure_network(pif, f):
     """
     
     pifrec = db.get_pif_record(pif)
-    host = pifrec['host']
     nw = pifrec['network']
     nwrec = db.get_network_record(nw)
     oc = None
@@ -1418,8 +1409,7 @@ def configure_network(pif, f):
     # This is because when we are called to bring up an interface with a bond master, it is implicit that
     # we should bring down that master.
     pifs_on_host = [ __pif for __pif in db.get_all_pifs() if
-                     db.get_pif_record(__pif)['host'] == host and 
-                     (not  __pif in get_bond_masters_of_pif(pif)) ]
+                     not __pif in get_bond_masters_of_pif(pif) ]
     other_pifs_on_host = [ __pif for __pif in pifs_on_host if __pif != pif ]
 
     peerdns_pif = None
