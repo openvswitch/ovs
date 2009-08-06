@@ -62,7 +62,8 @@ import syslog
 import traceback
 import time
 import re
-import pickle
+from xml.dom.minidom import getDOMImplementation
+from xml.dom.minidom import parse as parseXML
 
 output_directory = None
 
@@ -248,46 +249,129 @@ def check_allowed(pif):
 def interface_exists(i):
     return os.path.exists("/sys/class/net/" + i)
 
+#
+# Helper functions for encoding/decoding database attributes to/from XML.
+#
+def str_to_xml(xml, parent, tag, val):
+    e = xml.createElement(tag)
+    parent.appendChild(e)
+    v = xml.createTextNode(val)
+    e.appendChild(v)
+def str_from_xml(n):
+    def getText(nodelist):
+        rc = ""
+        for node in nodelist:
+            if node.nodeType == node.TEXT_NODE:
+                rc = rc + node.data
+        return rc
+    return getText(n.childNodes).strip()
+
+
+def bool_to_xml(xml, parent, tag, val):
+    if val:
+        str_to_xml(xml, parent, tag, "True")
+    else:
+        str_to_xml(xml, parent, tag, "False")
+def bool_from_xml(n):
+    s = str_from_xml(n)
+    if s == "True":
+        return True
+    elif s == "False":
+        return False
+    else:
+        raise Error("Unknown boolean value %s" % s);
+
+def strlist_to_xml(xml, parent, ltag, itag, val):
+    e = xml.createElement(ltag)
+    parent.appendChild(e)
+    for v in val:
+        c = xml.createElement(itag)
+        e.appendChild(c)
+        cv = xml.createTextNode(v)
+        c.appendChild(cv)
+def strlist_from_xml(n, ltag, itag):
+    ret = []
+    for n in n.childNodes:
+        if n.nodeName == itag:
+            ret.append(str_from_xml(n))
+    return ret
+
+def otherconfig_to_xml(xml, parent, val, attrs):
+    otherconfig = xml.createElement("other_config")
+    parent.appendChild(otherconfig)
+    for n,v in val.items():
+        if not n in attrs:
+            raise Error("Unknown other-config attribute: %s" % n)
+        str_to_xml(xml, otherconfig, n, v)
+def otherconfig_from_xml(n, attrs):
+    ret = {}
+    for n in n.childNodes:
+        if n.nodeName in attrs:
+            ret[n.nodeName] = str_from_xml(n)
+    return ret
+
+#
+# Definitions of the database objects (and their attributes) used by interface-reconfigure.
+#
+# Each object is defined by a dictionary mapping an attribute name in
+# the xapi database to a tuple containing two items:
+#  - a function which takes this attribute and encodes it as XML.
+#  - a function which takes XML and decocdes it into a value.
+#
+# other-config attributes are specified as a simple array of strings
+
+PIF_XML_TAG = "pif"
+VLAN_XML_TAG = "vlan"
+BOND_XML_TAG = "bond"
+NETWORK_XML_TAG = "network"
+
 ETHTOOL_OTHERCONFIG_ATTRS = ['ethtool-%s' % x for x in 'autoneg', 'speed', 'duplex', 'rx', 'tx', 'sg', 'tso', 'ufo', 'gso' ]
 
-PIF_ATTRS = [ 'uuid',
-              'management',
-              'network',
-              'device',
-              'bond_master_of',
-              'bond_slave_of',
-              'VLAN',
-              'VLAN_master_of',
-              'VLAN_slave_of',
-              'ip_configuration_mode',
-              'IP',
-              'netmask',
-              'gateway',
-              'DNS',
-              'MAC'
-            ]
+PIF_ATTRS = { 'uuid': (str_to_xml,str_from_xml),
+              'management': (bool_to_xml,bool_from_xml),
+              'network': (str_to_xml,str_from_xml),
+              'device': (str_to_xml,str_from_xml),
+              'bond_master_of': (lambda x, p, t, v: strlist_to_xml(x, p, 'bond_master_of', 'slave', v),
+                                 lambda n: strlist_from_xml(n, 'bond_master_of', 'slave')),
+              'bond_slave_of': (str_to_xml,str_from_xml),
+              'VLAN': (str_to_xml,str_from_xml),
+              'VLAN_master_of': (str_to_xml,str_from_xml),
+              'VLAN_slave_of': (lambda x, p, t, v: strlist_to_xml(x, p, 'VLAN_slave_of', 'master', v),
+                                lambda n: strlist_from_xml(n, 'VLAN_slave_Of', 'master')),
+              'ip_configuration_mode': (str_to_xml,str_from_xml),
+              'IP': (str_to_xml,str_from_xml),
+              'netmask': (str_to_xml,str_from_xml),
+              'gateway': (str_to_xml,str_from_xml),
+              'DNS': (str_to_xml,str_from_xml),
+              'MAC': (str_to_xml,str_from_xml),
+              'other_config': (lambda x, p, t, v: otherconfig_to_xml(x, p, v, PIF_OTHERCONFIG_ATTRS),
+                               lambda n: otherconfig_from_xml(n, PIF_OTHERCONFIG_ATTRS)),
+            }
 
 PIF_OTHERCONFIG_ATTRS = [ 'domain', 'peerdns', 'defaultroute', 'mtu', 'static-routes' ] + \
                         [ 'bond-%s' % x for x in 'mode', 'miimon', 'downdelay', 'updelay', 'use_carrier' ] + \
                         ETHTOOL_OTHERCONFIG_ATTRS
 
-VLAN_ATTRS = [ 'uuid',
-               'tagged_PIF',
-               'untagged_PIF'
-             ]
+VLAN_ATTRS = { 'uuid': (str_to_xml,str_from_xml),
+               'tagged_PIF': (str_to_xml,str_from_xml),
+               'untagged_PIF': (str_to_xml,str_from_xml),
+             }
     
-BOND_ATTRS = [ 'uuid',
-               'master',
-               'slaves'
-             ]
+BOND_ATTRS = { 'uuid': (str_to_xml,str_from_xml),
+               'master': (str_to_xml,str_from_xml),
+               'slaves': (lambda x, p, t, v: strlist_to_xml(x, p, 'slaves', 'slave', v),
+                          lambda n: strlist_from_xml(n, 'slaves', 'slave')),
+             }
 
-NETWORK_ATTRS = [ 'uuid',
-                  'PIFs',
-                  'bridge'
-                ]
+NETWORK_ATTRS = { 'uuid': (str_to_xml,str_from_xml),
+                  'bridge': (str_to_xml,str_from_xml),
+                  'PIFs': (lambda x, p, t, v: strlist_to_xml(x, p, 'PIFs', 'PIF', v),
+                           lambda n: strlist_from_xml(n, 'PIFs', 'PIF')),
+                  'other_config': (lambda x, p, t, v: otherconfig_to_xml(x, p, v, NETWORK_OTHERCONFIG_ATTRS),
+                                   lambda n: otherconfig_from_xml(n, NETWORK_OTHERCONFIG_ATTRS)),
+                }
 
 NETWORK_OTHERCONFIG_ATTRS = [ 'mtu', 'static-routes' ] + ETHTOOL_OTHERCONFIG_ATTRS
-
 
 class DatabaseCache(object):
     def __read_xensource_inventory(self):
@@ -300,11 +384,8 @@ class DatabaseCache(object):
         defs = [ (a, b.strip("'")) for (a,b) in defs ]
 
         return dict(defs)
-
-
     def __pif_on_host(self,pif):
         return self.__pifs.has_key(pif)
-
 
     def __get_pif_records_from_xapi(self, session, host):
         self.__pifs = {}
@@ -350,7 +431,30 @@ class DatabaseCache(object):
             for f in NETWORK_OTHERCONFIG_ATTRS:
                 if not rec['other_config'].has_key(f): continue
                 self.__networks[n]['other_config'][f] = rec['other_config'][f]
-                
+
+    def __to_xml(self, xml, parent, key, ref, rec, attrs):
+        """Encode a database object as XML"""
+        e = xml.createElement(key)
+        parent.appendChild(e)
+        if ref:
+            e.setAttribute('ref', ref)
+
+        for n,v in rec.items():
+            if attrs.has_key(n):
+                h,_ = attrs[n]
+                h(xml, e, n, v)
+            else:
+                raise Error("Unknown attribute %s" % n)
+    def __from_xml(self, e, attrs):
+        """Decode a database object from XML"""
+        ref = e.attributes['ref'].value
+        rec = {}
+        for n in e.childNodes:
+            if n.nodeName in attrs:
+                _,h = attrs[n.nodeName]
+                rec[n.nodeName] = h(n)
+        return (ref,rec)
+    
     def __init__(self, session_ref=None, cache_file=None):
         if session_ref and cache_file:
             raise Error("can't specify session reference and cache file")
@@ -381,21 +485,53 @@ class DatabaseCache(object):
                     session.xenapi.session.logout()
         else:
             log("Loading xapi database cache from %s" % cache_file)
-            f = open(cache_file, 'r')
-            members = pickle.load(f)
-            f.close()
 
-            self.__vlans = members['vlans']
-            self.__bonds = members['bonds']
-            self.__pifs = members['pifs']
-            self.__networks = members['networks']
+            xml = parseXML(cache_file)
+
+            self.__pifs = {}
+            self.__bonds = {}
+            self.__vlans = {}
+            self.__networks = {}
+
+            assert(len(xml.childNodes) == 1)
+            toplevel = xml.childNodes[0]
+            
+            assert(toplevel.nodeName == "xenserver-network-configuration")
+            
+            for n in toplevel.childNodes:
+                if n.nodeName == "#text":
+                    pass
+                elif n.nodeName == PIF_XML_TAG:
+                    (ref,rec) = self.__from_xml(n, PIF_ATTRS)
+                    self.__pifs[ref] = rec
+                elif n.nodeName == BOND_XML_TAG:
+                    (ref,rec) = self.__from_xml(n, BOND_ATTRS)
+                    self.__bonds[ref] = rec
+                elif n.nodeName == VLAN_XML_TAG:
+                    (ref,rec) = self.__from_xml(n, VLAN_ATTRS)
+                    self.__vlans[ref] = rec
+                elif n.nodeName == NETWORK_XML_TAG:
+                    (ref,rec) = self.__from_xml(n, NETWORK_ATTRS)
+                    self.__networks[ref] = rec
+                else:
+                    raise Error("Unknown XML element %s" % n.nodeName)
 
     def save(self, cache_file):
+
+        xml = getDOMImplementation().createDocument(
+            None, "xenserver-network-configuration", None)
+        for (ref,rec) in self.__pifs.items():
+            self.__to_xml(xml, xml.documentElement, PIF_XML_TAG, ref, rec, PIF_ATTRS)
+        for (ref,rec) in self.__bonds.items():
+            self.__to_xml(xml, xml.documentElement, BOND_XML_TAG, ref, rec, BOND_ATTRS)
+        for (ref,rec) in self.__vlans.items():
+            self.__to_xml(xml, xml.documentElement, VLAN_XML_TAG, ref, rec, VLAN_ATTRS)
+        for (ref,rec) in self.__networks.items():
+            self.__to_xml(xml, xml.documentElement, NETWORK_XML_TAG, ref, rec,
+                          NETWORK_ATTRS)
+            
         f = open(cache_file, 'w')
-        pickle.dump({'vlans': self.__vlans,
-                     'bonds': self.__bonds,
-                     'pifs': self.__pifs,
-                     'networks': self.__networks}, f)
+        f.write(xml.toprettyxml())
         f.close()
 
     def get_pif_by_uuid(self, uuid):
@@ -436,7 +572,7 @@ class DatabaseCache(object):
     def get_pif_record(self, pif):
         if self.__pifs.has_key(pif):
             return self.__pifs[pif]
-        raise Error("Unknown PIF \"%s\"" % pif)
+        raise Error("Unknown PIF \"%s\" (get_pif_record)" % pif)
     def get_all_pifs(self):
         return self.__pifs
     def pif_exists(self, pif):
@@ -500,6 +636,7 @@ For a VLAN PIF, the datapath name is the bridge name for the PIF's VLAN slave.
 use it.)
 """
 
+
     pifrec = db.get_pif_record(pif)
 
     if pifrec['VLAN'] == '-1':
@@ -522,7 +659,6 @@ For a VLAN PIF, the physical devices are the VLAN slave's physical devices.
 For a bond master PIF, the physical devices are the bond slaves.
 For a non-VLAN, non-bond master PIF, the physical device is the PIF itself.
 """
-
     pifrec = db.get_pif_record(pif)
 
     if pifrec['VLAN'] != '-1':
@@ -537,13 +673,16 @@ For a non-VLAN, non-bond master PIF, the physical device is the PIF itself.
 
 def log_pif_action(action, pif):
     pifrec = db.get_pif_record(pif)
-    pifrec['action'] = action
-    pifrec['interface-name'] = interface_name(pif)
+    rec = {}
+    rec['uuid'] = pifrec['uuid']
+    rec['ip_configuration_mode'] = pifrec['ip_configuration_mode']
+    rec['action'] = action
+    rec['interface-name'] = interface_name(pif)
     if action == "rewrite":
-        pifrec['message'] = "Rewrite PIF %(uuid)s configuration" % pifrec
+        rec['message'] = "Rewrite PIF %(uuid)s configuration" % rec
     else:
-        pifrec['message'] = "Bring %(action)s PIF %(uuid)s" % pifrec
-    log("%(message)s: %(interface-name)s configured as %(ip_configuration_mode)s" % pifrec)
+        rec['message'] = "Bring %(action)s PIF %(uuid)s" % rec
+    log("%(message)s: %(interface-name)s configured as %(ip_configuration_mode)s" % rec)
 
 def get_bond_masters_of_pif(pif):
     """Returns a list of PIFs which are bond masters of this PIF"""
