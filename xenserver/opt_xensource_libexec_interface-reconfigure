@@ -758,12 +758,13 @@ def configure_netdev(pif):
     else:
         raise Error("Unknown IP-configuration-mode %s" % pifrec['ip_configuration_mode'])
 
-    oc = {}
-    if pifrec.has_key('other_config'):
-        oc = pifrec['other_config']
-        if oc.has_key('mtu'):
+    oc = pifrec['other_config']
+    if oc.has_key('mtu'):
+        try:
             int(oc['mtu'])      # Check that the value is an integer
             ifconfig_argv += ['mtu', oc['mtu']]
+        except ValueError, x:
+            log("Invalid value for mtu = %s" % mtu)
 
     run_command(ifconfig_argv)
     
