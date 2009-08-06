@@ -1,8 +1,6 @@
 #!/bin/sh
 
-# This file is based on /etc/xensource/script/vif from Citrix XenServer 5.0.0.
-# The original file did not contain a copyright notice or license statement.
-#
+# Copyright (C) 2008,2009 Citrix Systems, Inc. All rights reserved.
 # Copyright (C) 2009 Nicira Networks, Inc.
 
 # CA-23900: Warning: when VIFs are added to windows guests with PV drivers the backend vif device is registered,
