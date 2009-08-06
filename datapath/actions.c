@@ -96,7 +96,7 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		 * when we send the packet out on the wire, and it will fail at
 		 * that point because skb_checksum_setup() will not look inside
 		 * an 802.1Q header. */
-		skb_checksum_setup(skb);
+		vswitch_skb_checksum_setup(skb);
 
 		/* GSO is not implemented for packets with an 802.1Q header, so
 		 * we have to do segmentation before we add that header.

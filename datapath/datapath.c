@@ -568,8 +568,7 @@ static int dp_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 #error
 #endif
 
-#ifdef CONFIG_XEN
-#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+#if defined(CONFIG_XEN) && LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 /* This code is copied verbatim from net/dev/core.c in Xen's
  * linux-2.6.18-92.1.10.el5.xs5.0.0.394.644.  We can't call those functions
  * directly because they aren't exported. */
@@ -585,7 +584,7 @@ static int skb_pull_up_to(struct sk_buff *skb, void *ptr)
 	}
 }
 
-int skb_checksum_setup(struct sk_buff *skb)
+int vswitch_skb_checksum_setup(struct sk_buff *skb)
 {
 	if (skb->proto_csum_blank) {
 		if (skb->protocol != htons(ETH_P_IP))
@@ -616,8 +615,9 @@ int skb_checksum_setup(struct sk_buff *skb)
 out:
 	return -EPROTO;
 }
-#endif /* linux == 2.6.18 */
-#endif /* CONFIG_XEN */
+#else
+int vswitch_skb_checksum_setup(struct sk_buff *skb) { return 0; }
+#endif /* CONFIG_XEN && linux == 2.6.18 */
 
 int
 dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
@@ -643,7 +643,7 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 	 * the non-Xen case, but it is difficult to trigger or test this case
 	 * there, hence the WARN_ON_ONCE().
  	 */
-	err = skb_checksum_setup(skb);
+	err = vswitch_skb_checksum_setup(skb);
  	if (err)
 		goto err_kfree_skb;
 #ifndef CHECKSUM_HW

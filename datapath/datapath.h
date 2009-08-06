@@ -144,4 +144,6 @@ static inline int skb_checksum_setup(struct sk_buff *skb)
 }
 #endif
 
+int vswitch_skb_checksum_setup(struct sk_buff *skb);
+
 #endif /* datapath.h */
