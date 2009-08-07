@@ -755,6 +755,10 @@ def configure_netdev(pif):
     nw = pifrec['network']
     nwrec = db.get_network_record(nw)
 
+    pif_oc = pifrec['other_config']
+    nw_oc = nwrec['other_config']
+
+    # IP (except DHCP) and MTU.
     ifconfig_argv = ['/sbin/ifconfig', ipdev, 'up']
     gateway = ''
     if pifrec['ip_configuration_mode'] == "DHCP":
@@ -768,35 +772,37 @@ def configure_netdev(pif):
         pass
     else:
         raise Error("Unknown IP-configuration-mode %s" % pifrec['ip_configuration_mode'])
-    ifconfig_argv += mtu_setting(oc)
+    ifconfig_argv += mtu_setting(nw_oc)
     run_command(ifconfig_argv)
     
     (peerdns_pif, defaultroute_pif) = find_distinguished_pifs(pif)
 
+    # /etc/resolv.conf
     if peerdns_pif == pif:
         f = ConfigurationFile('resolv.conf', "/etc")
-        if oc.has_key('domain'):
-            f.write("search %s\n" % oc['domain'])
+        if pif_oc.has_key('domain'):
+            f.write("search %s\n" % pif_oc['domain'])
         for dns in pifrec['DNS'].split(","): 
             f.write("nameserver %s\n" % dns)
         f.close()
         f.apply()
         f.commit()
 
+    # Routing.
     if defaultroute_pif == pif and gateway != '':
         run_command(['/sbin/ip', 'route', 'replace', 'default',
                      'via', gateway, 'dev', ipdev])
-    
-    if oc.has_key('static-routes'):
-        for line in oc['static-routes'].split(','):
+    if nw_oc.has_key('static-routes'):
+        for line in nw_oc['static-routes'].split(','):
             network, masklen, gateway = line.split('/')
             run_command(['/sbin/ip', 'route', 'add',
                          '%s/%s' % (network, masklen), 'via', gateway,
                          'dev', ipdev])
 
     # Ethtool.
-    run_ethtool(ipdev, oc)
+    run_ethtool(ipdev, nw_oc)
 
+    # DHCP.
     if pifrec['ip_configuration_mode'] == "DHCP":
         print
         print "Determining IP information for %s..." % ipdev,
