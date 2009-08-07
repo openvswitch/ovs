@@ -461,7 +461,7 @@ The ipdev name is the same as the bridge name.
     pifrec = db.get_pif_record(pif)
     return bridge_name(pif)
 
-def physdev_pifs(pif):
+def get_physdev_pifs(pif):
     """Return the PIFs for the physical network device(s) associated with pif.
 For a VLAN PIF, this is the VLAN slave's physical device PIF.
 For a bond master PIF, these are the bond slave PIFs.
@@ -477,14 +477,14 @@ For a non-VLAN, non-bond master PIF, the PIF is its own physical device PIF.
     else:
         return [pif]
 
-def physdev_names(pif):
+def get_physdev_names(pif):
     """Return the name(s) of the physical network device(s) associated with pif.
 For a VLAN PIF, the physical devices are the VLAN slave's physical devices.
 For a bond master PIF, the physical devices are the bond slaves.
 For a non-VLAN, non-bond master PIF, the physical device is the PIF itself.
 """
 
-    return [db.get_pif_record(phys)['device'] for phys in physdev_pifs(pif)]
+    return [db.get_pif_record(phys)['device'] for phys in get_physdev_pifs(pif)]
 
 def log_pif_action(action, pif):
     pifrec = db.get_pif_record(pif)
@@ -824,11 +824,11 @@ def configure_bond(pif):
     interface = interface_name(pif)
     ipdev = ipdev_name(pif)
     datapath = datapath_name(pif)
-    physdevs = physdev_names(pif)
+    physdev_names = get_physdev_names(pif)
 
     argv = ['--del-match=bonding.%s.[!0-9]*' % interface]
     argv += ["--add=bonding.%s.slave=%s" % (interface, slave)
-             for slave in physdevs]
+             for slave in physdev_names]
     argv += ['--add=bonding.%s.fake-iface=true']
 
     if pifrec['MAC'] != "":
@@ -860,7 +860,8 @@ def action_up(pif):
     interface = interface_name(pif)
     ipdev = ipdev_name(pif)
     datapath = datapath_name(pif)
-    physdevs = physdev_names(pif)
+    physdev_pifs = get_physdev_pifs(pif)
+    physdev_names = get_physdev_names(pif)
     vlan_slave = None
     if pifrec['VLAN'] != '-1':
         vlan_slave = get_vlan_slave_of_pif(pif)
@@ -916,13 +917,13 @@ def action_up(pif):
 
     # Check the MAC address of each network device and remap if
     # necessary to make names match our expectations.
-    for physdev_pif in physdev_pifs(pif):
+    for physdev_pif in physdev_pifs:
         remap_pif(physdev_pif)
 
     # "ifconfig down" the network device and delete its IP address, etc.
     down_netdev(ipdev)
-    for physdev in physdevs:
-        down_netdev(physdev)
+    for physdev_name in physdev_names:
+        down_netdev(physdev_name)
 
     # If we are bringing up a bond, remove IP addresses from the
     # slaves (because we are implicitly being asked to take them down).
@@ -934,7 +935,7 @@ def action_up(pif):
         run_command(["/sbin/ifconfig", ipdev_name(bond_pif), '0.0.0.0']) 
 
     # Remove all keys related to pif and any bond masters linked to PIF.
-    del_ports = [ipdev] + physdevs + bond_masters
+    del_ports = [ipdev] + physdev_names + bond_masters
     if vlan_slave and bond_master:
         del_ports += [interface_name(bond_master)]
     
@@ -945,7 +946,7 @@ def action_up(pif):
     # port.
     add_ports = [ipdev, datapath]
     if not bond_master:
-        add_ports += physdevs
+        add_ports += physdev_names
     else:
         add_ports += [interface_name(bond_master)]
 
@@ -960,7 +961,7 @@ def action_up(pif):
     #  - The bond masters for pif.  (Ordinarily pif shouldn't have any
     #    bond masters.  If it does then interface-reconfigure is
     #    implicitly being asked to take them down.)
-    del_ports = add_ports + physdevs + bond_masters
+    del_ports = add_ports + physdev_names + bond_masters
 
     # What networks does this datapath carry?
     #
@@ -978,11 +979,11 @@ def action_up(pif):
     # enables or disables bond slaves based on whether carrier is
     # detected when they are added, and a network device that is down
     # always reports "no carrier".
-    bond_slave_physdevs = []
+    bond_slave_physdev_names = []
     for slave in bond_slaves:
-        bond_slave_physdevs += physdev_names(slave)
-    for slave_physdev in bond_slave_physdevs:
-        up_netdev(slave_physdev)
+        bond_slave_physdev_names += physdev_names(slave)
+    for slave_physdev_name in bond_slave_physdev_names:
+        up_netdev(slave_physdev_name)
 
     # Now modify the ovs-vswitchd config file.
     argv = []
@@ -1019,8 +1020,8 @@ def action_up(pif):
     # slaves (which we brought up earlier).
     if vlan_slave:
         up_netdev(ipdev_name(vlan_slave))
-    for physdev in set(physdevs) - set(bond_slave_physdevs):
-        up_netdev(physdev)
+    for physdev_name in set(physdev_names) - set(bond_slave_physdev_names):
+        up_netdev(physdev_name)
 
     # Configure network devices.
     configure_netdev(pif)
