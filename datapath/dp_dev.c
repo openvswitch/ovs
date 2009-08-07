@@ -28,7 +28,6 @@ struct datapath *dp_dev_get_dp(struct net_device *netdev)
 {
 	return dp_dev_priv(netdev)->dp;
 }
-EXPORT_SYMBOL(dp_dev_get_dp);
 
 static struct net_device_stats *dp_dev_get_stats(struct net_device *netdev)
 {
@@ -235,4 +234,3 @@ int is_dp_dev(struct net_device *netdev)
 {
 	return netdev->open == dp_dev_open;
 }
-EXPORT_SYMBOL(is_dp_dev);
