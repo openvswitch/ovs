@@ -267,7 +267,7 @@ def get_netdev_tx_queue_len(device):
 def get_netdev_by_mac(mac):
     maybe = None
     for device in os.listdir("/sys/class/net"):
-        dev_mac = get_netdev_by_mac(device)
+        dev_mac = get_netdev_mac(device)
         if dev_mac and mac.lower() == dev_mac.lower():
             if get_netdev_tx_queue_len(device):
                 return device
