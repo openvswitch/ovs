@@ -63,6 +63,7 @@ import traceback
 import time
 import re
 import pickle
+import random
 
 output_directory = None
 
@@ -247,6 +248,33 @@ def check_allowed(pif):
 
 def interface_exists(i):
     return os.path.exists("/sys/class/net/" + i)
+
+def get_netdev_mac(device):
+    try:
+        return read_first_line_of_file("/sys/class/net/%s/address" % device)
+    except:
+        # Probably no such device.
+        return None
+
+def get_netdev_tx_queue_len(device):
+    try:
+        return int(read_first_line_of_file("/sys/class/net/%s/tx_queue_len"
+                                           % device))
+    except:
+        # Probably no such device.
+        return None
+
+def get_netdev_by_mac(mac):
+    maybe = None
+    for device in os.listdir("/sys/class/net"):
+        dev_mac = get_netdev_by_mac(device)
+        if dev_mac and mac.lower() == dev_mac.lower():
+            if get_netdev_tx_queue_len(device):
+                return device
+            if not maybe:
+                # Probably a datapath internal port.
+                maybe = device
+    return maybe
 
 class DatabaseCache(object):
     def __init__(self, session_ref=None, cache_file=None):
@@ -433,6 +461,22 @@ The ipdev name is the same as the bridge name.
     pifrec = db.get_pif_record(pif)
     return bridge_name(pif)
 
+def physdev_pifs(pif):
+    """Return the PIFs for the physical network device(s) associated with pif.
+For a VLAN PIF, this is the VLAN slave's physical device PIF.
+For a bond master PIF, these are the bond slave PIFs.
+For a non-VLAN, non-bond master PIF, the PIF is its own physical device PIF.
+"""
+
+    pifrec = db.get_pif_record(pif)
+
+    if pifrec['VLAN'] != '-1':
+        return [get_vlan_slave_of_pif(pif)]
+    elif len(pifrec['bond_master_of']) != 0:
+        return get_bond_slaves_of_pif(pif)
+    else:
+        return [pif]
+
 def physdev_names(pif):
     """Return the name(s) of the physical network device(s) associated with pif.
 For a VLAN PIF, the physical devices are the VLAN slave's physical devices.
@@ -440,17 +484,7 @@ For a bond master PIF, the physical devices are the bond slaves.
 For a non-VLAN, non-bond master PIF, the physical device is the PIF itself.
 """
 
-    pifrec = db.get_pif_record(pif)
-
-    if pifrec['VLAN'] != '-1':
-        return physdev_names(get_vlan_slave_of_pif(pif))
-    elif len(pifrec['bond_master_of']) != 0:
-        physdevs = []
-        for slave in get_bond_slaves_of_pif(pif):
-            physdevs += physdev_names(slave)
-        return physdevs
-    else:
-        return [pifrec['device']]
+    return [db.get_pif_record(phys)['device'] for phys in physdev_pifs(pif)]
 
 def log_pif_action(action, pif):
     pifrec = db.get_pif_record(pif)
@@ -542,6 +576,46 @@ def run_command(command):
         log("Command failed: " + ' '.join(command))
         return False
     return True
+
+def rename_netdev(old_name, new_name):
+    log("Changing the name of %s to %s" % (old_name, new_name))
+    run_command(['/sbin/ifconfig', old_name, 'down'])
+    if not run_command(['/sbin/ip', 'link', 'set', old_name,
+                        'name', new_name]):
+        raise Error("Could not rename %s to %s" % (old_name, new_name))
+
+# Check whether 'pif' exists and has the correct MAC.
+# If not, try to find a device with the correct MAC and rename it.
+# 'already_renamed' is used to avoid infinite recursion.
+def remap_pif(pif, already_renamed=[]):
+    pifrec = db.get_pif_record(pif)
+    device = pifrec['device']
+    mac = pifrec['MAC']
+
+    # Is there a network device named 'device' at all?
+    device_exists = interface_exists(device)
+    if device_exists:
+        # Yes.  Does it have MAC 'mac'?
+        found_mac = get_netdev_mac(device)
+        if found_mac and mac.lower() == found_mac.lower():
+            # Yes, everything checks out the way we want.  Nothing to do.
+            return
+    else:
+        log("No network device %s" % device)
+
+    # What device has MAC 'mac'?
+    cur_device = get_netdev_by_mac(mac)
+    if not cur_device:
+        log("No network device has MAC %s" % mac)
+        return
+
+    # First rename 'device', if it exists, to get it out of the way
+    # for 'cur_device' to replace it.
+    if device_exists:
+        rename_netdev(device, "dev%d" % random.getrandbits(24))
+
+    # Rename 'cur_device' to 'device'.
+    rename_netdev(cur_device, device)
 
 def read_first_line_of_file(name):
     file = None
@@ -837,6 +911,11 @@ def action_up(pif):
     # Update all configuration files (both ours and Centos's).
     f.apply()
     f.commit()
+
+    # Check the MAC address of each network device and remap if
+    # necessary to make names match our expectations.
+    for physdev_pif in physdev_pifs(pif):
+        remap_pif(physdev_pif)
 
     # "ifconfig down" the network device and delete its IP address, etc.
     down_netdev(ipdev)
