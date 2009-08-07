@@ -285,6 +285,7 @@ bridge_init(void)
 
     unixctl_command_register("fdb/show", bridge_unixctl_fdb_show);
 
+    svec_init(&dpif_names);
     dp_enumerate(&dpif_names);
     for (i = 0; i < dpif_names.n; i++) {
         const char *dpif_name = dpif_names.names[i];

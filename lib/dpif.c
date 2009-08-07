@@ -95,9 +95,9 @@ dp_wait(void)
     }
 }
 
-/* Initializes 'all_dps' and enumerates the names of all known created
- * datapaths, where possible, into it.  Returns 0 if successful, otherwise a
- * positive errno value.
+/* Clears 'all_dps' and enumerates the names of all known created datapaths, 
+ * where possible, into it.  The caller must first initialize 'all_dps'.
+ * Returns 0 if successful, otherwise a positive errno value.
  *
  * Some kinds of datapaths might not be practically enumerable.  This is not
  * considered an error. */
@@ -107,7 +107,7 @@ dp_enumerate(struct svec *all_dps)
     int error;
     int i;
 
-    svec_init(all_dps);
+    svec_clear(all_dps);
     error = 0;
     for (i = 0; i < N_DPIF_CLASSES; i++) {
         const struct dpif_class *class = dpif_classes[i];
