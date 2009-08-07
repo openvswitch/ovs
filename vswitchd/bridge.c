@@ -461,9 +461,23 @@ bridge_reconfigure(void)
         for (i = 0; i < add_ifaces.n; i++) {
             const char *if_name = add_ifaces.names[i];
             for (;;) {
-                int internal = cfg_get_bool(0, "iface.%s.internal", if_name);
-                int error = dpif_port_add(&br->dpif, if_name, next_port_no++,
-                                          internal ? ODP_PORT_INTERNAL : 0);
+                bool internal;
+                int error;
+
+                /* It's an internal interface if it's marked that way, or if
+                 * it's a bonded interface for which we're faking up a network
+                 * device. */
+                internal = cfg_get_bool(0, "iface.%s.internal", if_name);
+                if (cfg_get_bool(0, "bonding.%s.fake-iface", if_name)) {
+                    struct port *port = port_lookup(br, if_name);
+                    if (port && port->n_ifaces > 1) {
+                        internal = true;
+                    }
+                }
+
+                /* Add to datapath. */
+                error = dpif_port_add(&br->dpif, if_name, next_port_no++,
+                                      internal ? ODP_PORT_INTERNAL : 0);
                 if (error != EEXIST) {
                     if (next_port_no >= 256) {
                         VLOG_ERR("ran out of valid port numbers on dp%u",
@@ -1321,9 +1335,12 @@ bridge_get_all_ifaces(const struct bridge *br, struct svec *ifaces)
             struct iface *iface = port->ifaces[j];
             svec_add(ifaces, iface->name);
         }
+        if (port->n_ifaces > 1
+            && cfg_get_bool(0, "bonding.%s.fake-iface", port->name)) {
+            svec_add(ifaces, port->name);
+        }
     }
-    svec_sort(ifaces);
-    assert(svec_is_unique(ifaces));
+    svec_sort_unique(ifaces);
 }
 
 /* For robustness, in case the administrator moves around datapath ports behind
