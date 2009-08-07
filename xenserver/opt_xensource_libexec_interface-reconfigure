@@ -697,8 +697,8 @@ we should bring down that master."""
 
     return peerdns_pif, defaultroute_pif
 
-def ethtool_settings(oc):
-    # Options for "ethtool -s"
+def run_ethtool(device, oc):
+    # Run "ethtool -s" if there are any settings.
     settings = []
     if oc.has_key('ethtool-speed'):
         val = oc['ethtool-speed']
@@ -720,8 +720,10 @@ def ethtool_settings(oc):
             settings += ['autoneg', 'off']
         else:
             log("Invalid value for ethtool-autoneg = %s. Must be on|true|off|false." % val)
+    if settings:
+        run_command(['/sbin/ethtool', '-s', device] + settings)
 
-    # Options for "ethtool -K"
+    # Run "ethtool -K" if there are any offload settings.
     offload = []
     for opt in ("rx", "tx", "sg", "tso", "ufo", "gso"):
         if oc.has_key("ethtool-" + opt):
@@ -732,8 +734,17 @@ def ethtool_settings(oc):
                 offload += [opt, 'off']
             else:
                 log("Invalid value for ethtool-%s = %s. Must be on|true|off|false." % (opt, val))
+    if offload:
+        run_command(['/sbin/ethtool', '-K', device] + offload)
 
-    return settings, offload
+def mtu_setting(oc):
+    if oc.has_key('mtu'):
+        try:
+            int(oc['mtu'])      # Check that the value is an integer
+            return ['mtu', oc['mtu']]
+        except ValueError, x:
+            log("Invalid value for mtu = %s" % mtu)
+    return []
 
 def configure_netdev(pif):
     pifrec = db.get_pif_record(pif)
@@ -757,15 +768,7 @@ def configure_netdev(pif):
         pass
     else:
         raise Error("Unknown IP-configuration-mode %s" % pifrec['ip_configuration_mode'])
-
-    oc = pifrec['other_config']
-    if oc.has_key('mtu'):
-        try:
-            int(oc['mtu'])      # Check that the value is an integer
-            ifconfig_argv += ['mtu', oc['mtu']]
-        except ValueError, x:
-            log("Invalid value for mtu = %s" % mtu)
-
+    ifconfig_argv += mtu_setting(oc)
     run_command(ifconfig_argv)
     
     (peerdns_pif, defaultroute_pif) = find_distinguished_pifs(pif)
@@ -791,11 +794,8 @@ def configure_netdev(pif):
                          '%s/%s' % (network, masklen), 'via', gateway,
                          'dev', ipdev])
 
-    settings, offload = ethtool_settings(oc)
-    if settings:
-        run_command(['/sbin/ethtool', '-s', ipdev] + settings)
-    if offload:
-        run_command(['/sbin/ethtool', '-K', ipdev] + offload)
+    # Ethtool.
+    run_ethtool(ipdev, oc)
 
     if pifrec['ip_configuration_mode'] == "DHCP":
         print
