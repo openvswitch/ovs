@@ -9,10 +9,8 @@
 #include <linux/kernel.h>
 #include <asm/uaccess.h>
 #include <linux/completion.h>
-#include <linux/delay.h>
 #include <linux/etherdevice.h>
 #include <linux/if_bridge.h>
-#include <linux/rculist.h>
 #include <linux/netdevice.h>
 #include <linux/rtnetlink.h>
 #include <net/genetlink.h>
@@ -21,7 +19,6 @@
 #include "openvswitch/brcompat-netlink.h"
 #include "brc_procfs.h"
 #include "datapath.h"
-#include "dp_dev.h"
 
 static struct genl_family brc_genl_family;
 static struct genl_multicast_group brc_mc_group;
