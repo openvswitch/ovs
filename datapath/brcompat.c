@@ -515,20 +515,9 @@ error:
 static int 
 __init brc_init(void)
 {
-	int i;
 	int err;
 
 	printk("Open vSwitch Bridge Compatibility, built "__DATE__" "__TIME__"\n");
-
-	rcu_read_lock();
-	for (i=0; i<ODP_MAX; i++) {
-		if (get_dp(i)) {
-			rcu_read_unlock();
-			printk(KERN_EMERG "brcompat: no datapaths may exist!\n");
-			return -EEXIST;
-		}
-	}
-	rcu_read_unlock();
 
 	/* Set the bridge ioctl handler */
 	brioctl_set(brc_ioctl_deviceless_stub);
