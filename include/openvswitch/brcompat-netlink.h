@@ -47,8 +47,8 @@ enum {
 	BRC_GENL_A_UNSPEC,
 
 	/*
-	 * "K:" messages appear in messages from the kernel to userspace.
-	 * "U:" messages appear in messages from userspace to the kernel.
+	 * "K:" attributes appear in messages from the kernel to userspace.
+	 * "U:" attributes appear in messages from userspace to the kernel.
 	 */
 
 	/* BRC_GENL_C_DP_ADD, BRC_GENL_C_DP_DEL. */
@@ -75,6 +75,7 @@ enum {
 
 	/* BRC_GENL_C_DP_RESULT. */
 	BRC_GENL_A_FDB_DATA,    /* U: FDB records. */
+	BRC_GENL_A_IFINDEXES,   /* U: "int" ifindexes of bridges or ports. */
 
 	__BRC_GENL_A_MAX,
 	BRC_GENL_A_MAX = __BRC_GENL_A_MAX - 1
@@ -96,6 +97,8 @@ enum brc_genl_command {
 	BRC_GENL_C_QUERY_MC,	/* U: Get multicast group for brcompat. */
 	BRC_GENL_C_SET_PROC,	/* U: Set contents of file in /proc. */
 	BRC_GENL_C_FDB_QUERY,	/* K: Read records from forwarding database. */
+	BRC_GENL_C_GET_BRIDGES, /* K: Get ifindexes of all bridges. */
+	BRC_GENL_C_GET_PORTS,   /* K: Get ifindexes of all ports on a bridge. */
 
 	__BRC_GENL_C_MAX,
 	BRC_GENL_C_MAX = __BRC_GENL_C_MAX - 1

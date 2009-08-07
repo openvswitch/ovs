@@ -240,21 +240,14 @@ rewrite_and_reload_config(void)
     return 0;
 }
 
-/* Get all the interfaces for 'bridge' as 'ifaces', breaking bonded interfaces
- * down into their constituent parts.
- *
- * If 'vlan' < 0, all interfaces on 'bridge' are reported.  If 'vlan' == 0,
- * then only interfaces for trunk ports or ports with implicit VLAN 0 are
- * reported.  If 'vlan' > 0, only interfaces with implict VLAN 'vlan' are
- * reported.  */
 static void
-get_bridge_ifaces(const char *bridge, struct svec *ifaces, int vlan)
+do_get_bridge_parts(const char *bridge, struct svec *parts, int vlan,
+                    bool break_down_bonds)
 {
     struct svec ports;
     int i;
 
     svec_init(&ports);
-    svec_init(ifaces);
     cfg_get_all_keys(&ports, "bridge.%s.port", bridge);
     for (i = 0; i < ports.n; i++) {
         const char *port_name = ports.names[i];
@@ -267,17 +260,42 @@ get_bridge_ifaces(const char *bridge, struct svec *ifaces, int vlan)
                 continue;
             }
         }
-        if (cfg_has_section("bonding.%s", port_name)) {
+        if (break_down_bonds && cfg_has_section("bonding.%s", port_name)) {
             struct svec slaves;
             svec_init(&slaves);
             cfg_get_all_keys(&slaves, "bonding.%s.slave", port_name);
-            svec_append(ifaces, &slaves);
+            svec_append(parts, &slaves);
             svec_destroy(&slaves);
         } else {
-            svec_add(ifaces, port_name);
+            svec_add(parts, port_name);
         }
     }
     svec_destroy(&ports);
+}
+
+/* Add all the interfaces for 'bridge' to 'ifaces', breaking bonded interfaces
+ * down into their constituent parts.
+ *
+ * If 'vlan' < 0, all interfaces on 'bridge' are reported.  If 'vlan' == 0,
+ * then only interfaces for trunk ports or ports with implicit VLAN 0 are
+ * reported.  If 'vlan' > 0, only interfaces with implicit VLAN 'vlan' are
+ * reported.  */
+static void
+get_bridge_ifaces(const char *bridge, struct svec *ifaces, int vlan)
+{
+    do_get_bridge_parts(bridge, ifaces, vlan, true);
+}
+
+/* Add all the ports for 'bridge' to 'ports'.  Bonded ports are reported under
+ * the bond name, not broken down into their constituent interfaces.
+ *
+ * If 'vlan' < 0, all ports on 'bridge' are reported.  If 'vlan' == 0, then
+ * only trunk ports or ports with implicit VLAN 0 are reported.  If 'vlan' > 0,
+ * only port with implicit VLAN 'vlan' are reported.  */
+static void
+get_bridge_ports(const char *bridge, struct svec *ports, int vlan)
+{
+    do_get_bridge_parts(bridge, ports, vlan, false);
 }
 
 /* Go through the configuration file and remove any ports that no longer
@@ -302,6 +320,7 @@ prune_ports(void)
         struct svec ifaces;
 
         /* Check that each bridge interface exists. */
+        svec_init(&ifaces);
         get_bridge_ifaces(br_name, &ifaces, -1);
         for (j = 0; j < ifaces.n; j++) {
             const char *iface_name = ifaces.names[j];
@@ -344,7 +363,6 @@ prune_ports(void)
     }
     svec_destroy(&delete);
 }
-
 
 /* Checks whether a network device named 'name' exists and returns true if so,
  * false otherwise.
@@ -660,6 +678,7 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
 
     /* Fetch the MAC address for each interface on the bridge, so that we can
      * fill in the is_local field in the response. */
+    svec_init(&ifaces);
     get_bridge_ifaces(ovs_bridge, &ifaces, br_vlan);
     local_macs = xmalloc(ifaces.n * sizeof *local_macs);
     n_local_macs = 0;
@@ -740,6 +759,119 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
     return 0;
 }
 
+static void
+send_ifindex_reply(uint32_t seq, struct svec *ifaces)
+{
+    struct ofpbuf *reply;
+    const char *iface;
+    size_t n_indices;
+    int *indices;
+    size_t i;
+
+    /* Make sure that any given interface only occurs once.  This shouldn't
+     * happen, but who knows what people put into their configuration files. */
+    svec_sort_unique(ifaces);
+
+    /* Convert 'ifaces' into ifindexes. */
+    n_indices = 0;
+    indices = xmalloc(ifaces->n * sizeof *indices);
+    SVEC_FOR_EACH (i, iface, ifaces) {
+        int ifindex = if_nametoindex(iface);
+        if (ifindex) {
+            indices[n_indices++] = ifindex;
+        }
+    }
+
+    /* Compose and send reply. */
+    reply = compose_reply(seq, 0);
+    nl_msg_put_unspec(reply, BRC_GENL_A_IFINDEXES,
+                      indices, n_indices * sizeof *indices);
+    send_reply(reply);
+
+    /* Free memory. */
+    free(indices);
+}
+
+static int
+handle_get_bridges_cmd(struct ofpbuf *buffer)
+{
+    struct svec bridges;
+    const char *br_name;
+    size_t i;
+
+    uint32_t seq;
+
+    int error;
+
+    /* Parse Netlink command.
+     *
+     * The command doesn't actually have any arguments, but we need the
+     * sequence number to send the reply. */
+    error = parse_command(buffer, &seq, NULL, NULL, NULL, NULL);
+    if (error) {
+        return error;
+    }
+
+    /* Get all the real bridges and all the fake ones. */
+    cfg_read();
+    cfg_get_subsections(&bridges, "bridge");
+    SVEC_FOR_EACH (i, br_name, &bridges) {
+        const char *iface_name;
+        struct svec ifaces;
+        size_t j;
+
+        svec_init(&ifaces);
+        get_bridge_ifaces(br_name, &ifaces, -1);
+        SVEC_FOR_EACH (j, iface_name, &ifaces) {
+            if (cfg_get_bool(0, "iface.%s.fake-bridge", iface_name)) {
+                svec_add(&bridges, iface_name);
+            }
+        }
+        svec_destroy(&ifaces);
+    }
+
+    send_ifindex_reply(seq, &bridges);
+    svec_destroy(&bridges);
+
+    return 0;
+}
+
+static int
+handle_get_ports_cmd(struct ofpbuf *buffer)
+{
+    uint32_t seq;
+
+    const char *linux_bridge;
+    char *ovs_bridge;
+    int br_vlan;
+
+    struct svec ports;
+
+    int error;
+
+    /* Parse Netlink command. */
+    error = parse_command(buffer, &seq, &linux_bridge, NULL, NULL, NULL);
+    if (error) {
+        return error;
+    }
+
+    cfg_read();
+    error = linux_bridge_to_ovs_bridge(linux_bridge, &ovs_bridge, &br_vlan);
+    if (error) {
+        send_simple_reply(seq, error);
+        return error;
+    }
+
+    svec_init(&ports);
+    get_bridge_ports(ovs_bridge, &ports, br_vlan);
+    send_ifindex_reply(seq, &ports); /* XXX bonds won't show up */
+    svec_destroy(&ports);
+
+    free(ovs_bridge);
+
+    return 0;
+}
+
 static int
 brc_recv_update(void)
 {
@@ -800,6 +932,14 @@ brc_recv_update(void)
 
     case BRC_GENL_C_FDB_QUERY:
         retval = handle_fdb_query_cmd(buffer);
+        break;
+
+    case BRC_GENL_C_GET_BRIDGES:
+        retval = handle_get_bridges_cmd(buffer);
+        break;
+
+    case BRC_GENL_C_GET_PORTS:
+        retval = handle_get_ports_cmd(buffer);
         break;
 
     default:

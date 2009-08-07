@@ -45,36 +45,6 @@ static u32 brc_seq;		     /* Sequence number for current op. */
 static struct sk_buff *brc_send_command(struct sk_buff *, struct nlattr **attrs);
 static int brc_send_simple_command(struct sk_buff *);
 
-static int
-get_dp_ifindices(int *indices, int num)
-{
-	int i, index = 0;
-
-	rcu_read_lock();
-	for (i=0; i < ODP_MAX && index < num; i++) {
-		struct datapath *dp = get_dp(i);
-		if (!dp)
-			continue;
-		indices[index++] = dp->ports[ODPP_LOCAL]->dev->ifindex;
-	}
-	rcu_read_unlock();
-
-	return index;
-}
-
-static void
-get_port_ifindices(struct datapath *dp, int *ifindices, int num)
-{
-	struct net_bridge_port *p;
-
-	rcu_read_lock();
-	list_for_each_entry_rcu (p, &dp->port_list, node) {
-		if (p->port_no < num)
-			ifindices[p->port_no] = p->dev->ifindex;
-	}
-	rcu_read_unlock();
-}
-
 static struct sk_buff *
 brc_make_request(int op, const char *bridge, const char *port)
 {
@@ -83,7 +53,8 @@ brc_make_request(int op, const char *bridge, const char *port)
 		goto error;
 
 	genlmsg_put(skb, 0, 0, &brc_genl_family, 0, op);
-	NLA_PUT_STRING(skb, BRC_GENL_A_DP_NAME, bridge);
+	if (bridge)
+		NLA_PUT_STRING(skb, BRC_GENL_A_DP_NAME, bridge);
 	if (port)
 		NLA_PUT_STRING(skb, BRC_GENL_A_PORT_NAME, port);
 	return skb;
@@ -126,24 +97,55 @@ static int brc_add_del_bridge(char __user *uname, int add)
 	return brc_send_simple_command(request);
 }
 
-static int brc_get_bridges(int __user *uindices, int n)
+static int brc_get_indices(int op, const char *br_name,
+			   int __user *uindices, int n)
 {
+	struct nlattr *attrs[BRC_GENL_A_MAX + 1];
+	struct sk_buff *request, *reply;
 	int *indices;
 	int ret;
+	int len;
 
+	if (n < 0)
+		return -EINVAL;
 	if (n >= 2048)
 		return -ENOMEM;
 
-	indices = kcalloc(n, sizeof(int), GFP_KERNEL);
-	if (indices == NULL)
+	request = brc_make_request(op, br_name, NULL);
+	if (!request)
 		return -ENOMEM;
 
-	n = get_dp_ifindices(indices, n);
+	reply = brc_send_command(request, attrs);
+	ret = PTR_ERR(reply);
+	if (IS_ERR(reply))
+		goto exit;
 
+	ret = -nla_get_u32(attrs[BRC_GENL_A_ERR_CODE]);
+	if (ret < 0)
+		goto exit_free_skb;
+
+	ret = -EINVAL;
+	if (!attrs[BRC_GENL_A_IFINDEXES])
+		goto exit_free_skb;
+
+	len = nla_len(attrs[BRC_GENL_A_IFINDEXES]);
+	indices = nla_data(attrs[BRC_GENL_A_IFINDEXES]);
+	if (len % sizeof(int))
+		goto exit_free_skb;
+
+	n = min_t(int, n, len / sizeof(int));
 	ret = copy_to_user(uindices, indices, n * sizeof(int)) ? -EFAULT : n;
 
-	kfree(indices);
+exit_free_skb:
+	kfree_skb(reply);
+exit:
 	return ret;
+}
+
+/* Called with br_ioctl_mutex. */
+static int brc_get_bridges(int __user *uindices, int n)
+{
+	return brc_get_indices(BRC_GENL_C_GET_BRIDGES, NULL, uindices, n);
 }
 
 /* Legacy deviceless bridge ioctl's.  Called with br_ioctl_mutex. */
@@ -238,26 +240,14 @@ brc_get_bridge_info(struct net_device *dev, struct __bridge_info __user *ub)
 static int
 brc_get_port_list(struct net_device *dev, int __user *uindices, int num)
 {
-	struct dp_dev *dp_dev = netdev_priv(dev);
-	struct datapath *dp = dp_dev->dp;
-	int *indices;
+	int retval;
 
-	if (num < 0)
-		return -EINVAL;
-	if (num == 0)
-		num = 256;
-	if (num > DP_MAX_PORTS)
-		num = DP_MAX_PORTS;
+	rtnl_unlock();
+	retval = brc_get_indices(BRC_GENL_C_GET_PORTS, dev->name,
+				 uindices, num);
+	rtnl_lock();
 
-	indices = kcalloc(num, sizeof(int), GFP_KERNEL);
-	if (indices == NULL)
-		return -ENOMEM;
-
-	get_port_ifindices(dp, indices, num);
-	if (copy_to_user(uindices, indices, num * sizeof(int)))
-		num = -EFAULT;
-	kfree(indices);
-	return num;
+	return retval;
 }
 
 /*
