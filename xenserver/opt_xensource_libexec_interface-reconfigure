@@ -1015,15 +1015,15 @@ def action_up(pif):
         argv += configure_bond(bond_master)
     modify_config(argv)
 
-    # Configure network devices.
-    configure_netdev(pif)
-
     # Bring up VLAN slave, plus physical devices other than bond
     # slaves (which we brought up earlier).
     if vlan_slave:
         up_netdev(ipdev_name(vlan_slave))
     for physdev in set(physdevs) - set(bond_slave_physdevs):
         up_netdev(physdev)
+
+    # Configure network devices.
+    configure_netdev(pif)
 
     # Update /etc/issue (which contains the IP address of the management interface)
     os.system("/sbin/update-issue")
