@@ -746,7 +746,7 @@ def mtu_setting(oc):
             log("Invalid value for mtu = %s" % mtu)
     return []
 
-def configure_netdev(pif):
+def configure_local_port(pif):
     pifrec = db.get_pif_record(pif)
     datapath = datapath_name(pif)
     ipdev = ipdev_name(pif)
@@ -814,6 +814,14 @@ def configure_netdev(pif):
             print 'done.'
         else:
             print 'failed.'
+
+def configure_physdev(pif):
+    pifrec = db.get_pif_record(pif)
+    device = pifrec['device']
+    oc = pifrec['other_config']
+
+    run_command(['/sbin/ifconfig', device, 'up'] + mtu_setting(oc))
+    run_ethtool(device, oc)
 
 def modify_config(commands):
     run_command(['/root/vswitch/bin/ovs-cfg-mod', '-vANY:console:emer',
@@ -985,11 +993,11 @@ def action_up(pif):
     # enables or disables bond slaves based on whether carrier is
     # detected when they are added, and a network device that is down
     # always reports "no carrier".
-    bond_slave_physdev_names = []
+    bond_slave_physdev_pifs = []
     for slave in bond_slaves:
-        bond_slave_physdev_names += physdev_names(slave)
-    for slave_physdev_name in bond_slave_physdev_names:
-        up_netdev(slave_physdev_name)
+        bond_slave_physdev_pifs += get_physdev_pifs(slave)
+    for slave_physdev_pif in set(bond_slave_physdev_pifs):
+        configure_physdev(slave_physdev_pif)
 
     # Now modify the ovs-vswitchd config file.
     argv = []
@@ -1026,11 +1034,11 @@ def action_up(pif):
     # slaves (which we brought up earlier).
     if vlan_slave:
         up_netdev(ipdev_name(vlan_slave))
-    for physdev_name in set(physdev_names) - set(bond_slave_physdev_names):
-        up_netdev(physdev_name)
+    for physdev_pif in set(physdev_pifs) - set(bond_slave_physdev_pifs):
+        configure_physdev(physdev_pif)
 
-    # Configure network devices.
-    configure_netdev(pif)
+    # Configure network device for local port.
+    configure_local_port(pif)
 
     # Update /etc/issue (which contains the IP address of the management interface)
     os.system("/sbin/update-issue")
