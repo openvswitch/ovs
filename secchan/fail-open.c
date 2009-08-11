@@ -53,8 +53,9 @@ fail_open_run(struct fail_open *fo)
             memset(&flow, 0, sizeof flow);
             ofproto_delete_flow(fo->ofproto, &flow, OFPFW_ALL, 70000);
         } else {
-            VLOG_WARN("Could not connect to controller for %d seconds, "
-                      "failing open", disconn_secs);
+            VLOG_WARN("Could not connect to controller (or switch failed "
+                      "controller's post-connection admission control "
+                      "policy) for %d seconds, failing open", disconn_secs);
             fo->last_disconn_secs = disconn_secs;
 
             /* Flush all OpenFlow and datapath flows.  We will set up our
