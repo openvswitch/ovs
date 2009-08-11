@@ -640,6 +640,14 @@ recv_ofmp_config_update(uint32_t xid, const struct ofmp_header *ofmph,
         /* xxx cfg_lock can fail for other reasons, such as being
          * xxx locked... */
         VLOG_WARN_RL(&rl, "config update failed due to bad cookie\n");
+
+        /* Check if our local view matches the controller, in which
+         * case, it is likely that there were local modifications
+         * without our being told to reread the config file. */
+        if (!memcmp(cfg_cookie, ofmpcu->cookie, sizeof cfg_cookie)) {
+            VLOG_WARN_RL(&rl, "config appears to have been locally modified "
+                              "without having told ovs-vswitchd to reload");
+        }
         send_config_update_ack(xid, false);
         return 0;
     }
