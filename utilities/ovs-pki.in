@@ -193,6 +193,9 @@ if test "$command" = "init"; then
         openssl dsaparam -out dsaparam.pem $bits 1>&3 2>&3
     fi
 
+    # Get the current date to add some uniqueness to this certificate
+    curr_date=`date +"%Y %b %d %T"`
+
     # Create the CAs.
     for ca in controllerca switchca; do
         echo "Creating $ca..." >&2
@@ -212,9 +215,9 @@ if test "$command" = "init"; then
             cp ../dsaparam.pem .
         fi
 
-    # Write CA configuration file.
+        # Write CA configuration file.
         if test ! -e ca.cnf; then
-            sed "s/@ca@/$ca/g" > ca.cnf <<'EOF'
+            sed "s/@ca@/$ca/g;s/@curr_date@/$curr_date/g" > ca.cnf <<'EOF'
 [ req ]
 prompt = no
 distinguished_name = req_distinguished_name
@@ -225,7 +228,7 @@ ST = CA
 L = Palo Alto
 O = Open vSwitch
 OU = @ca@
-CN = Open vSwitch @ca@ CA Certificate
+CN = OVS @ca@ CA Certificate (@curr_date@)
 
 [ ca ]
 default_ca = the_ca
