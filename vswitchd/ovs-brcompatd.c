@@ -992,7 +992,6 @@ rtnl_recv_update(void)
             const char *port_name = nl_attr_get_string(attrs[IFLA_IFNAME]);
             char br_name[IFNAMSIZ];
             uint32_t br_idx = nl_attr_get_u32(attrs[IFLA_MASTER]);
-            struct svec ports;
             enum netdev_flags flags;
 
             if (!if_indextoname(br_idx, br_name)) {
@@ -1009,8 +1008,11 @@ rtnl_recv_update(void)
 
             if (netdev_nodev_get_flags(port_name, &flags) == ENODEV) {
                 /* Network device is really gone. */
+                struct svec ports;
+
                 VLOG_INFO("network device %s destroyed, "
                           "removing from bridge %s", port_name, br_name);
+
                 svec_init(&ports);
                 cfg_get_all_keys(&ports, "bridge.%s.port", br_name);
                 svec_sort(&ports);
@@ -1018,6 +1020,7 @@ rtnl_recv_update(void)
                     del_port(br_name, port_name);
                     rewrite_and_reload_config();
                 }
+                svec_destroy(&ports);
             } else {
                 /* A network device by that name exists even though the kernel
                  * told us it had disappeared.  Probably, what happened was
