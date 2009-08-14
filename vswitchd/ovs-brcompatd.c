@@ -814,6 +814,7 @@ handle_get_bridges_cmd(struct ofpbuf *buffer)
 
     /* Get all the real bridges and all the fake ones. */
     cfg_read();
+    svec_init(&bridges);
     cfg_get_subsections(&bridges, "bridge");
     SVEC_FOR_EACH (i, br_name, &bridges) {
         const char *iface_name;
