@@ -1791,13 +1791,11 @@ compose_actions(struct bridge *br, const flow_t *flow, uint16_t vlan,
 }
 
 static bool
-is_bcast_arp_reply(const flow_t *flow, const struct ofpbuf *packet)
+is_bcast_arp_reply(const flow_t *flow)
 {
-    struct arp_eth_header *arp = (struct arp_eth_header *) packet->data;
     return (flow->dl_type == htons(ETH_TYPE_ARP)
-            && eth_addr_is_broadcast(flow->dl_dst)
-            && packet->size >= sizeof(struct arp_eth_header)
-            && arp->ar_op == ARP_OP_REQUEST);
+            && flow->nw_proto == ARP_OP_REPLY
+            && eth_addr_is_broadcast(flow->dl_dst));
 }
 
 /* If the composed actions may be applied to any packet in the given 'flow',
@@ -1915,7 +1913,7 @@ process_flow(struct bridge *br, const flow_t *flow,
          * to this rule: the host has moved to another switch. */
         src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
         if (src_idx != -1 && src_idx != in_port->port_idx &&
-            (!packet || !is_bcast_arp_reply(flow, packet))) {
+            !is_bcast_arp_reply(flow)) {
                 goto done;
         }
     }
@@ -1964,15 +1962,7 @@ process_flow(struct bridge *br, const flow_t *flow,
 done:
     compose_actions(br, flow, vlan, in_port, out_port, tags, actions);
 
-    /*
-     * We send out only a single packet, instead of setting up a flow, if the
-     * packet is an ARP directed to broadcast that arrived on a bonded
-     * interface.  In such a situation ARP requests and replies must be handled
-     * differently, but OpenFlow unfortunately can't distinguish them.
-     */
-    return (in_port->n_ifaces < 2
-            || flow->dl_type != htons(ETH_TYPE_ARP)
-            || !eth_addr_is_broadcast(flow->dl_dst));
+    return true;
 }
 
 /* Careful: 'opp' is in host byte order and opp->port_no is an OFP port
