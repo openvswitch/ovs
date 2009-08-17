@@ -843,7 +843,7 @@ def configure_bond(pif):
     argv = ['--del-match=bonding.%s.[!0-9]*' % interface]
     argv += ["--add=bonding.%s.slave=%s" % (interface, slave)
              for slave in physdev_names]
-    argv += ['--add=bonding.%s.fake-iface=true']
+    argv += ['--add=bonding.%s.fake-iface=true' % interface]
 
     if pifrec['MAC'] != "":
         argv += ['--add=port.%s.mac=%s' % (interface, pifrec['MAC'])]
