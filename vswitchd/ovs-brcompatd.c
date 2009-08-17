@@ -865,6 +865,8 @@ handle_get_ports_cmd(struct ofpbuf *buffer)
 
     svec_init(&ports);
     get_bridge_ports(ovs_bridge, &ports, br_vlan);
+    svec_sort(&ports);
+    svec_del(&ports, linux_bridge);
     send_ifindex_reply(seq, &ports); /* XXX bonds won't show up */
     svec_destroy(&ports);
 
