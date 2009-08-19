@@ -60,6 +60,11 @@ files are:
         used to control vswitch when integrated with Citrix management
         tools.
 
+    usr_sbin_brctl
+
+        wrapper for /usr/sbin/brctl that provides some additional
+        bridge compatibility
+
     usr_sbin_xen-bugtool
 
         vswitch-aware replacement for Citrix script of the same name.
