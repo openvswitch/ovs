@@ -265,16 +265,12 @@ def get_netdev_tx_queue_len(device):
         return None
 
 def get_netdev_by_mac(mac):
-    maybe = None
     for device in os.listdir("/sys/class/net"):
         dev_mac = get_netdev_mac(device)
-        if dev_mac and mac.lower() == dev_mac.lower():
-            if get_netdev_tx_queue_len(device):
+        if (dev_mac and mac.lower() == dev_mac.lower() and
+            get_netdev_tx_queue_len(device)):
                 return device
-            if not maybe:
-                # Probably a datapath internal port.
-                maybe = device
-    return maybe
+    return None
 
 class DatabaseCache(object):
     def __init__(self, session_ref=None, cache_file=None):
