@@ -71,6 +71,8 @@ install -m 755 xenserver/root_vswitch_scripts_dump-vif-details \
                $RPM_BUILD_ROOT%{_prefix}/scripts/dump-vif-details
 install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT%{_prefix}/scripts/xen-bugtool
+install -m 755 xenserver/usr_sbin_brctl \
+             $RPM_BUILD_ROOT%{_prefix}/scripts/brctl
 install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
                $RPM_BUILD_ROOT%{_prefix}/scripts/XSFeatureVSwitch.py
@@ -116,10 +118,27 @@ EOF
         printf "\nThe original XenServer scripts replaced by this package\n"
         printf "are different than expected.  This could lead to unexpected\n"
         printf "behavior of your server.  Unless you are sure you know what\n"
-        printf "you are doing, it is highly recomended that you remove this\n"
+        printf "you are doing, it is highly recommended that you remove this\n"
         printf "package immediately after the install completes, which\n"
         printf "will restore the XenServer scripts that you were previously\n"
         printf "using.\n\n"
+    fi
+    if test "`/usr/sbin/brctl --version`" != "bridge-utils, 1.1"; then
+cat <<EOF
+
+/usr/sbin/brctl replaced by this package reports the following version:
+
+`/usr/sbin/brctl --version`
+
+The expected version was:
+
+bridge-utils, 1.1
+
+Unless you are sure you know what you are doing, it is highly recommended that
+you remove this package immediately after the install completes, which will
+restore the original /usr/sbin/brctl.
+
+EOF
     fi
 fi
 
@@ -189,13 +208,14 @@ fi
 # Ensure ovs-vswitchd.conf exists
 touch /etc/ovs-vswitchd.conf
 
-# Replace original XenServer files
+# Replace XenServer files by our versions.
 mkdir -p %{_prefix}/xs-original \
     || printf "Could not create script backup directory.\n"
 for f in \
     /opt/xensource/libexec/interface-reconfigure \
     /etc/xensource/scripts/vif \
-    /usr/sbin/xen-bugtool
+    /usr/sbin/xen-bugtool \
+    /usr/sbin/brctl
 do
     s=$(basename "$f")
     t=$(readlink "$f")
@@ -253,7 +273,8 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     for f in \
         /opt/xensource/libexec/interface-reconfigure \
         /etc/xensource/scripts/vif \
-        /usr/sbin/xen-bugtool
+        /usr/sbin/xen-bugtool \
+        /usr/sbin/brctl
     do
         s=$(basename "$f")
         if [ ! -f "%{_prefix}/xs-original/$s" ]; then
@@ -297,6 +318,7 @@ fi
 /root/vswitch/scripts/vif
 /root/vswitch/scripts/xen-bugtool
 /root/vswitch/scripts/XSFeatureVSwitch.py
+/root/vswitch/scripts/brctl
 # Following two files are generated automatically by rpm.  We don't
 # really need them and they won't be used on the XenServer, but there
 # isn't an obvious place to get rid of them since they are generated

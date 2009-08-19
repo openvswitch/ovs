@@ -224,7 +224,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	init_waitqueue_head(&dp->waitqueue);
 
 	/* Initialize kobject for bridge.  This will be added as
-	 * /sys/class/net/<devname>/bridge later, if sysfs is enabled. */
+	 * /sys/class/net/<devname>/brif later, if sysfs is enabled. */
 	dp->ifobj.kset = NULL;
 	kobject_init(&dp->ifobj, &dp_ktype);
 

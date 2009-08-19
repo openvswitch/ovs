@@ -790,6 +790,7 @@ handle_get_bridges_cmd(struct ofpbuf *buffer)
 
     /* Get all the real bridges and all the fake ones. */
     cfg_read();
+    svec_init(&bridges);
     cfg_get_subsections(&bridges, "bridge");
     SVEC_FOR_EACH (i, br_name, &bridges) {
         const char *iface_name;
@@ -840,6 +841,8 @@ handle_get_ports_cmd(struct ofpbuf *buffer)
 
     svec_init(&ports);
     get_bridge_ports(ovs_bridge, &ports, br_vlan);
+    svec_sort(&ports);
+    svec_del(&ports, linux_bridge);
     send_ifindex_reply(seq, &ports); /* XXX bonds won't show up */
     svec_destroy(&ports);
 
@@ -967,7 +970,6 @@ rtnl_recv_update(void)
             const char *port_name = nl_attr_get_string(attrs[IFLA_IFNAME]);
             char br_name[IFNAMSIZ];
             uint32_t br_idx = nl_attr_get_u32(attrs[IFLA_MASTER]);
-            struct svec ports;
 
             if (!if_indextoname(br_idx, br_name)) {
                 ofpbuf_delete(buf);
@@ -983,8 +985,11 @@ rtnl_recv_update(void)
 
             if (!netdev_exists(port_name)) {
                 /* Network device is really gone. */
+                struct svec ports;
+
                 VLOG_INFO("network device %s destroyed, "
                           "removing from bridge %s", port_name, br_name);
+
                 svec_init(&ports);
                 cfg_get_all_keys(&ports, "bridge.%s.port", br_name);
                 svec_sort(&ports);
@@ -992,6 +997,7 @@ rtnl_recv_update(void)
                     del_port(br_name, port_name);
                     rewrite_and_reload_config();
                 }
+                svec_destroy(&ports);
             } else {
                 /* A network device by that name exists even though the kernel
                  * told us it had disappeared.  Probably, what happened was

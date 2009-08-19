@@ -448,7 +448,7 @@ static struct attribute *bridge_attrs[] = {
 };
 
 static struct attribute_group bridge_group = {
-	.name = SYSFS_BRIDGE_ATTR,
+	.name = SYSFS_BRIDGE_ATTR, /* "bridge" */
 	.attrs = bridge_attrs,
 };
 
@@ -467,6 +467,7 @@ int dp_sysfs_add_dp(struct datapath *dp)
 	struct kobject *kobj = &dp->ports[ODPP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj;
 	int err;
 
+	/* Create /sys/class/net/<devname>/bridge directory. */
 	err = sysfs_create_group(kobj, &bridge_group);
 	if (err) {
 		pr_info("%s: can't create group %s/%s\n",

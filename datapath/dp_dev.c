@@ -211,16 +211,17 @@ struct net_device *dp_dev_create(struct datapath *dp, const char *dp_name, int p
 	if (!netdev)
 		return ERR_PTR(-ENOMEM);
 
+	dp_dev = dp_dev_priv(netdev);
+	dp_dev->dp = dp;
+	dp_dev->port_no = port_no;
+	dp_dev->dev = netdev;
+
 	err = register_netdevice(netdev);
 	if (err) {
 		free_netdev(netdev);
 		return ERR_PTR(err);
 	}
 
-	dp_dev = dp_dev_priv(netdev);
-	dp_dev->dp = dp;
-	dp_dev->port_no = port_no;
-	dp_dev->dev = netdev;
 	return netdev;
 }
 
