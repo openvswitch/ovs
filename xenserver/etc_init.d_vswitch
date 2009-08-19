@@ -67,7 +67,7 @@ appctl="$VSWITCH_BASE/bin/ovs-appctl"
 ofctl="$VSWITCH_BASE/bin/ovs-ofctl"
 
 
-if [ "$ENABLE_FAKE_PROC_NET" == "y" ]; then
+if [ "$ENABLE_FAKE_PROC_NET" = "y" ]; then
     if [ "$ENABLE_BRCOMPAT" != "y" ]; then
         warning "FAKE_PROC_NET required BRCOMPAT which was disabled.  Force enabling."
         ENABLE_BRCOMPAT="y"
@@ -149,7 +149,7 @@ function start_vswitchd {
         daemonize="n"
     fi
     local fake_proc_net_opt=""
-    if [ "$ENABLE_FAKE_PROC_NET" == "y" ]; then
+    if [ "$ENABLE_FAKE_PROC_NET" = "y" ]; then
         fake_proc_net_opt="--fake-proc-net"
     fi
     if [ "$daemonize" != "y" ]; then
