@@ -11,7 +11,7 @@
 #include <linux/netdevice.h>
 
 #include "datapath.h"
-
+#include "dp_dev.h"
 
 static int dp_device_event(struct notifier_block *unused, unsigned long event, 
 		void *ptr) 
@@ -20,7 +20,12 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 	struct net_bridge_port *p;
 	struct datapath *dp;
 
-	p = dev->br_port;
+	if (is_dp_dev(dev)) {
+		struct dp_dev *dp_dev = dp_dev_priv(dev);
+		p = dp_dev->dp->ports[dp_dev->port_no];
+	} else {
+		p = dev->br_port;
+	}
 	if (!p)
 		return NOTIFY_DONE;
 	dp = p->dp;
