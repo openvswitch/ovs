@@ -1,0 +1,157 @@
+            Using Open vSwitch as a Simple OpenFlow Switch
+            ==============================================
+
+Open vSwitch uses OpenFlow as its preferred method of remote flow table
+configuration.  This is the simplest method of using it with an OpenFlow
+controller.  All that is required is to follow the instructions in
+INSTALL.Linux and add the bridge.<name>.controller set of parameters to the 
+ovs-vswitchd(8) configuration file as described in ovs-vswitchd.conf(5).  
+We recommend using OpenFlow in this manner.  However, it is also possible to 
+use Open vSwitch as a simple OpenFlow switch like that provided by the 
+OpenFlow reference implementation [1].  The remainder of this file describes 
+how to user it in that manner.
+
+What is OpenFlow?
+-----------------
+
+OpenFlow is a flow-based switch specification designed to enable
+researchers to run experiments in live networks.  OpenFlow is based on a
+simple Ethernet flow switch that exposes a standardized interface for
+adding and removing flow entries.
+
+An OpenFlow switch consists of three parts: (1) A "flow table" in
+which each flow entry is associated with an action telling the switch
+how to process the flow, (2) a "secure channel" that connects the switch
+to a remote process (a controller), allowing commands and packets to
+be sent between the controller and the switch, and (3) an OpenFlow
+protocol implementation, providing an open and standard way for a
+controller to talk to the switch.
+
+An OpenFlow switch can thus serve as a simple datapath element that
+forwards packets between ports according to flow actions defined by
+the controller using OpenFlow commands.  Example actions are:
+
+    - Forward this flow's packets to the given port(s)
+    - Drop this flow's packets
+    - Encapsulate and forward this flow's packets to the controller.
+
+The OpenFlow switch is defined in detail in the OpenFlow switch
+Specification [2].
+
+Installation Procedure
+----------------------
+
+The procedure below explains how to use the Open vSwitch as a simple
+OpenFlow switch. 
+
+1. Build and install the Open vSwitch kernel modules and userspace
+   programs as described in INSTALL.Linux.
+
+   It is important to run "make install", because some Open vSwitch
+   programs expect to find files in locations selected at installation
+   time.
+
+2. Load the openvswitch kernel module (which was built in step 1), e.g.:
+
+      % insmod datapath/linux-2.6/openvswitch_mod.ko
+
+   This kernel module cannot be loaded if the Linux bridge module is
+   already loaded.  Thus, you may need to remove any existing bridges
+   and unload the bridge module with "rmmod bridge" before you can do
+   this.
+
+3. Create a datapath instance.  The command below creates a datapath
+   identified as dp0 (see ovs-dpctl(8) for more detailed usage
+   information).
+
+      # ovs-dpctl add-dp dp0
+   
+   Creating datapath dp0 creates a new network device, also named dp0.
+   This network device, called the datapath's "local port", will be
+   bridged to the physical switch ports by ovs-openflowd(8).  It is
+   optionally used for in-band control as described in step 5.
+
+4. Use ovs-dpctl to attach the datapath to physical interfaces on the
+   machine.  Say, for example, you want to create a trivial 2-port
+   switch using interfaces eth1 and eth2, you would issue the following
+   commands:
+
+      # ovs-dpctl add-if dp0 eth1
+      # ovs-dpctl add-if dp0 eth2
+
+   You can verify that the interfaces were successfully added by asking
+   ovs-dpctl to print the current status of datapath dp0:
+
+      # ovs-dpctl show dp0
+
+5. Arrange so that the switch can reach the controller over the network.  
+   This can be done in two ways.  The switch may be configured for 
+   out-of-band control, which means it uses a network separate from the 
+   data traffic that it controls.  Alternatively, the switch may be 
+   configured to contact the controller over one of the network devices 
+   under its control.  In-band control is often more convenient than 
+   out-of-band, because it is not necessary to maintain two independent 
+   networks.
+
+      - If you are using out-of-band control, at this point make sure
+        that the switch machine can reach the controller over the
+        network.
+
+      - If you are using in-band control, then at this point you must
+        configure the dp0 network device created in step 3.  This
+        device is not yet bridged to any physical network (because
+        ovs-openflowd does that, and it is not yet running), so the next
+        step depends on whether connectivity is required to configure
+        the device's IP address:
+
+           * If the switch has a static IP address, you may configure
+             its IP address now, e.g.:
+
+                # ifconfig dp0 192.168.1.1
+
+           * If the switch does not have a static IP address, e.g. its
+             IP address is obtained dynamically via DHCP, then proceed
+             to the next step.  The DHCP client will not be able to 
+             contact the DHCP server until the secure channel has 
+             started.  The address will be obtained in step 7.
+
+      - If you are using in-band control with controller discovery, no
+        configuration is required at this point.  You may proceed to
+        the next step.
+
+6. Run ovs-openflowd to start the secure channel connecting the datapath to
+   a remote controller.  If the controller is running on host
+   192.168.1.2 port 6633 (the default port), the ovs-openflowd invocation
+   would look like this:
+
+      # ovs-openflowd dp0 tcp:192.168.1.2
+
+   - If you are using in-band control with controller discovery, omit
+     the second argument to the ovs-openflowd command.
+
+   - If you are using out-of-band control, add --out-of-band to the
+     command line.
+
+   Using the "tcp:<controller_ip>" argument causes the switch to connect
+   in an insecure manner.  Please see INSTALL.SSL for a description of
+   how to connect securely using SSL.
+
+7. If you are using in-band control with manual configuration, and the
+   switch obtains its IP address dynamically, then you may now obtain
+   the switch's IP address, e.g. by invoking a DHCP client.  The
+   secure channel will only be able to connect to the controller after
+   an IP address has been obtained.
+
+8. The secure channel should connect to the controller within a few
+   seconds.  It may take a little longer if controller discovery is in
+   use, because the switch must then also obtain its own IP address
+   and the controller's location via DHCP.
+
+References
+----------
+
+    [1] OpenFlow Reference Implementation.
+        <http://www.openflowswitch.org/wp/downloads/>
+
+    [2] OpenFlow Switch Specification.
+        <http://openflowswitch.org/documents/openflow-spec-latest.pdf>

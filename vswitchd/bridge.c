@@ -43,12 +43,12 @@
 #include "odp-util.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
+#include "ofproto/ofproto.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "port-array.h"
 #include "proc-net-compat.h"
 #include "process.h"
-#include "secchan/ofproto.h"
 #include "socket-util.h"
 #include "stp.h"
 #include "svec.h"
@@ -71,17 +71,18 @@ struct dst {
 extern uint64_t mgmt_id;
 
 struct iface {
+    /* These members are always valid. */
     struct port *port;          /* Containing port. */
     size_t port_ifidx;          /* Index within containing port. */
-
     char *name;                 /* Host network device name. */
-    int dp_ifidx;               /* Index within kernel datapath. */
-
-    uint8_t mac[ETH_ADDR_LEN];  /* Ethernet address (all zeros if unknowns). */
-
     tag_type tag;               /* Tag associated with this interface. */
-    bool enabled;               /* May be chosen for flows? */
     long long delay_expires;    /* Time after which 'enabled' may change. */
+
+    /* These members are valid only after bridge_reconfigure() causes them to
+     * be initialized.*/
+    int dp_ifidx;               /* Index within kernel datapath. */
+    struct netdev *netdev;      /* Network device. */
+    bool enabled;               /* May be chosen for flows? */
 };
 
 #define BOND_MASK 0xff
@@ -159,7 +160,7 @@ struct bridge {
     struct ofproto *ofproto;    /* OpenFlow switch. */
 
     /* Kernel datapath information. */
-    struct dpif dpif;           /* Kernel datapath. */
+    struct dpif *dpif;          /* Datapath. */
     struct port_array ifaces;   /* Indexed by kernel datapath port number. */
 
     /* Bridge ports. */
@@ -202,10 +203,11 @@ static void bridge_fetch_dp_ifaces(struct bridge *);
 static void bridge_flush(struct bridge *);
 static void bridge_pick_local_hw_addr(struct bridge *,
                                       uint8_t ea[ETH_ADDR_LEN],
-                                      const char **devname);
+                                      struct iface **hw_addr_iface);
 static uint64_t bridge_pick_datapath_id(struct bridge *,
                                         const uint8_t bridge_ea[ETH_ADDR_LEN],
-                                        const char *devname);
+                                        struct iface *hw_addr_iface);
+static struct iface *bridge_get_local_iface(struct bridge *);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 
 static void bridge_unixctl_fdb_show(struct unixctl_conn *, const char *args);
@@ -225,6 +227,7 @@ static struct port *port_from_dp_ifidx(const struct bridge *,
                                        uint16_t dp_ifidx);
 static void port_update_bond_compat(struct port *);
 static void port_update_vlan_compat(struct port *);
+static void port_update_bonding(struct port *);
 
 static void mirror_create(struct bridge *, const char *name);
 static void mirror_destroy(struct mirror *);
@@ -263,8 +266,8 @@ bridge_get_ifaces(struct svec *svec)
             for (j = 0; j < port->n_ifaces; j++) {
                 struct iface *iface = port->ifaces[j];
                 if (iface->dp_ifidx < 0) {
-                    VLOG_ERR("%s interface not in dp%u, ignoring",
-                             iface->name, dpif_id(&br->dpif));
+                    VLOG_ERR("%s interface not in datapath %s, ignoring",
+                             iface->name, dpif_name(br->dpif));
                 } else {
                     if (iface->dp_ifidx != ODPP_LOCAL) {
                         svec_add(svec, iface->name);
@@ -279,34 +282,40 @@ bridge_get_ifaces(struct svec *svec)
 void
 bridge_init(void)
 {
-    int retval;
-    int i;
-
-    bond_init();
+    struct svec dpif_names;
+    size_t i;
 
     unixctl_command_register("fdb/show", bridge_unixctl_fdb_show);
 
-    for (i = 0; i < DP_MAX; i++) {
-        struct dpif dpif;
-        char devname[16];
+    svec_init(&dpif_names);
+    dp_enumerate(&dpif_names);
+    for (i = 0; i < dpif_names.n; i++) {
+        const char *dpif_name = dpif_names.names[i];
+        struct dpif *dpif;
+        int retval;
 
-        sprintf(devname, "dp%d", i);
-        retval = dpif_open(devname, &dpif);
+        retval = dpif_open(dpif_name, &dpif);
         if (!retval) {
-            char dpif_name[IF_NAMESIZE];
-            if (dpif_get_name(&dpif, dpif_name, sizeof dpif_name)
-                || !cfg_has("bridge.%s.port", dpif_name)) {
-                dpif_delete(&dpif);
+            struct svec all_names;
+            size_t j;
+
+            svec_init(&all_names);
+            dpif_get_all_names(dpif, &all_names);
+            for (j = 0; j < all_names.n; j++) {
+                if (cfg_has("bridge.%s.port", all_names.names[j])) {
+                    goto found;
+                }
             }
-            dpif_close(&dpif);
-        } else if (retval != ENODEV) {
-            VLOG_ERR("failed to delete datapath dp%d: %s",
-                     i, strerror(retval));
+            dpif_delete(dpif);
+        found:
+            svec_destroy(&all_names);
+            dpif_close(dpif);
         }
     }
 
     unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows);
 
+    bond_init();
     bridge_reconfigure();
 }
 
@@ -348,43 +357,105 @@ bridge_configure_ssl(void)
      * the old certificate will still be trusted until vSwitch is
      * restarted.  We may want to address this in vconn's SSL library. */
     if (config_string_change("ssl.ca-cert", &cacert_file)
-            || (stat(cacert_file, &s) && errno == ENOENT)) {
+        || (cacert_file && stat(cacert_file, &s) && errno == ENOENT)) {
         vconn_ssl_set_ca_cert_file(cacert_file,
                                    cfg_get_bool(0, "ssl.bootstrap-ca-cert"));
     }
 }
 #endif
 
+/* iterate_and_prune_ifaces() callback function that opens the network device
+ * for 'iface', if it is not already open, and retrieves the interface's MAC
+ * address and carrier status. */
+static bool
+init_iface_netdev(struct bridge *br UNUSED, struct iface *iface,
+                  void *aux UNUSED)
+{
+    if (iface->netdev) {
+        return true;
+    } else if (!netdev_open(iface->name, NETDEV_ETH_TYPE_NONE,
+                            &iface->netdev)) {
+        netdev_get_carrier(iface->netdev, &iface->enabled);
+        return true;
+    } else {
+        /* If the network device can't be opened, then we're not going to try
+         * to do anything with this interface. */
+        return false;
+    }
+}
+
+static bool
+check_iface_dp_ifidx(struct bridge *br, struct iface *iface, void *aux UNUSED)
+{
+    if (iface->dp_ifidx >= 0) {
+        VLOG_DBG("%s has interface %s on port %d",
+                 dpif_name(br->dpif),
+                 iface->name, iface->dp_ifidx);
+        return true;
+    } else {
+        VLOG_ERR("%s interface not in %s, dropping",
+                 iface->name, dpif_name(br->dpif));
+        return false;
+    }
+}
+
+static bool
+set_iface_policing(struct bridge *br UNUSED, struct iface *iface,
+                   void *aux UNUSED)
+{
+    int rate = cfg_get_int(0, "port.%s.ingress.policing-rate", iface->name);
+    int burst = cfg_get_int(0, "port.%s.ingress.policing-burst", iface->name);
+    netdev_set_policing(iface->netdev, rate, burst);
+    return true;
+}
+
+/* Calls 'cb' for each interfaces in 'br', passing along the 'aux' argument.
+ * Deletes from 'br' all the interfaces for which 'cb' returns false, and then
+ * deletes from 'br' any ports that no longer have any interfaces. */
+static void
+iterate_and_prune_ifaces(struct bridge *br,
+                         bool (*cb)(struct bridge *, struct iface *,
+                                    void *aux),
+                         void *aux)
+{
+    size_t i, j;
+
+    for (i = 0; i < br->n_ports; ) {
+        struct port *port = br->ports[i];
+        for (j = 0; j < port->n_ifaces; ) {
+            struct iface *iface = port->ifaces[j];
+            if (cb(br, iface, aux)) {
+                j++;
+            } else {
+                iface_destroy(iface);
+            }
+        }
+
+        if (port->n_ifaces) {
+            i++;
+        } else  {
+            VLOG_ERR("%s port has no interfaces, dropping", port->name);
+            port_destroy(port);
+        }
+    }
+}
+
 void
 bridge_reconfigure(void)
 {
-    struct svec old_br, new_br, raw_new_br;
+    struct svec old_br, new_br;
     struct bridge *br, *next;
-    size_t i, j;
+    size_t i;
 
     COVERAGE_INC(bridge_reconfigure);
 
-    /* Collect old bridges. */
+    /* Collect old and new bridges. */
     svec_init(&old_br);
+    svec_init(&new_br);
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         svec_add(&old_br, br->name);
     }
-
-    /* Collect new bridges. */
-    svec_init(&raw_new_br);
-    cfg_get_subsections(&raw_new_br, "bridge");
-    svec_init(&new_br);
-    for (i = 0; i < raw_new_br.n; i++) {
-        const char *name = raw_new_br.names[i];
-        if ((!strncmp(name, "dp", 2) && isdigit(name[2])) ||
-            (!strncmp(name, "nl:", 3) && isdigit(name[3]))) {
-            VLOG_ERR("%s is not a valid bridge name (bridges may not be "
-                     "named \"dp\" or \"nl:\" followed by a digit)", name);
-        } else {
-            svec_add(&new_br, name);
-        }
-    }
-    svec_destroy(&raw_new_br);
+    cfg_get_subsections(&new_br, "bridge");
 
     /* Get rid of deleted bridges and add new bridges. */
     svec_sort(&old_br);
@@ -425,16 +496,17 @@ bridge_reconfigure(void)
         size_t n_dpif_ports;
         struct svec want_ifaces;
 
-        dpif_port_list(&br->dpif, &dpif_ports, &n_dpif_ports);
+        dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
         bridge_get_all_ifaces(br, &want_ifaces);
         for (i = 0; i < n_dpif_ports; i++) {
             const struct odp_port *p = &dpif_ports[i];
             if (!svec_contains(&want_ifaces, p->devname)
                 && strcmp(p->devname, br->name)) {
-                int retval = dpif_port_del(&br->dpif, p->port);
+                int retval = dpif_port_del(br->dpif, p->port);
                 if (retval) {
-                    VLOG_ERR("failed to remove %s interface from dp%u: %s",
-                             p->devname, dpif_id(&br->dpif), strerror(retval));
+                    VLOG_ERR("failed to remove %s interface from %s: %s",
+                             p->devname, dpif_name(br->dpif),
+                             strerror(retval));
                 }
             }
         }
@@ -445,9 +517,8 @@ bridge_reconfigure(void)
         struct odp_port *dpif_ports;
         size_t n_dpif_ports;
         struct svec cur_ifaces, want_ifaces, add_ifaces;
-        int next_port_no;
 
-        dpif_port_list(&br->dpif, &dpif_ports, &n_dpif_ports);
+        dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
         svec_init(&cur_ifaces);
         for (i = 0; i < n_dpif_ports; i++) {
             svec_add(&cur_ifaces, dpif_ports[i].devname);
@@ -457,42 +528,34 @@ bridge_reconfigure(void)
         bridge_get_all_ifaces(br, &want_ifaces);
         svec_diff(&want_ifaces, &cur_ifaces, &add_ifaces, NULL, NULL);
 
-        next_port_no = 1;
         for (i = 0; i < add_ifaces.n; i++) {
             const char *if_name = add_ifaces.names[i];
-            for (;;) {
-                bool internal;
-                int error;
+            bool internal;
+            int error;
 
-                /* It's an internal interface if it's marked that way, or if
-                 * it's a bonded interface for which we're faking up a network
-                 * device. */
-                internal = cfg_get_bool(0, "iface.%s.internal", if_name);
-                if (cfg_get_bool(0, "bonding.%s.fake-iface", if_name)) {
-                    struct port *port = port_lookup(br, if_name);
-                    if (port && port->n_ifaces > 1) {
-                        internal = true;
-                    }
-                }
-
-                /* Add to datapath. */
-                error = dpif_port_add(&br->dpif, if_name, next_port_no++,
-                                      internal ? ODP_PORT_INTERNAL : 0);
-                if (error != EEXIST) {
-                    if (next_port_no >= 256) {
-                        VLOG_ERR("ran out of valid port numbers on dp%u",
-                                 dpif_id(&br->dpif));
-                        goto out;
-                    }
-                    if (error) {
-                        VLOG_ERR("failed to add %s interface to dp%u: %s",
-                                 if_name, dpif_id(&br->dpif), strerror(error));
-                    }
-                    break;
+            /* It's an internal interface if it's marked that way, or if
+             * it's a bonded interface for which we're faking up a network
+             * device. */
+            internal = cfg_get_bool(0, "iface.%s.internal", if_name);
+            if (cfg_get_bool(0, "bonding.%s.fake-iface", if_name)) {
+                struct port *port = port_lookup(br, if_name);
+                if (port && port->n_ifaces > 1) {
+                    internal = true;
                 }
             }
+
+            /* Add to datapath. */
+            error = dpif_port_add(br->dpif, if_name,
+                                  internal ? ODP_PORT_INTERNAL : 0, NULL);
+            if (error == EXFULL) {
+                VLOG_ERR("ran out of valid port numbers on %s",
+                         dpif_name(br->dpif));
+                break;
+            } else if (error) {
+                VLOG_ERR("failed to add %s interface to %s: %s",
+                         if_name, dpif_name(br->dpif), strerror(error));
+            }
         }
-    out:
         svec_destroy(&cur_ifaces);
         svec_destroy(&want_ifaces);
         svec_destroy(&add_ifaces);
@@ -500,44 +563,22 @@ bridge_reconfigure(void)
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         uint8_t ea[8];
         uint64_t dpid;
-        struct iface *local_iface = NULL;
-        const char *devname;
-        uint8_t engine_type = br->dpif.minor;
-        uint8_t engine_id = br->dpif.minor;
+        struct iface *local_iface;
+        struct iface *hw_addr_iface;
+        uint8_t engine_type, engine_id;
         bool add_id_to_iface = false;
         struct svec nf_hosts;
 
         bridge_fetch_dp_ifaces(br);
-        for (i = 0; i < br->n_ports; ) {
-            struct port *port = br->ports[i];
+        iterate_and_prune_ifaces(br, init_iface_netdev, NULL);
 
-            for (j = 0; j < port->n_ifaces; ) {
-                struct iface *iface = port->ifaces[j];
-                if (iface->dp_ifidx < 0) {
-                    VLOG_ERR("%s interface not in dp%u, dropping",
-                             iface->name, dpif_id(&br->dpif));
-                    iface_destroy(iface);
-                } else {
-                    if (iface->dp_ifidx == ODPP_LOCAL) {
-                        local_iface = iface;
-                    }
-                    VLOG_DBG("dp%u has interface %s on port %d",
-                             dpif_id(&br->dpif), iface->name, iface->dp_ifidx);
-                    j++;
-                }
-            }
-            if (!port->n_ifaces) {
-                VLOG_ERR("%s port has no interfaces, dropping", port->name);
-                port_destroy(port);
-                continue;
-            }
-            i++;
-        }
+        iterate_and_prune_ifaces(br, check_iface_dp_ifidx, NULL);
 
         /* Pick local port hardware address, datapath ID. */
-        bridge_pick_local_hw_addr(br, ea, &devname);
+        bridge_pick_local_hw_addr(br, ea, &hw_addr_iface);
+        local_iface = bridge_get_local_iface(br);
         if (local_iface) {
-            int error = netdev_nodev_set_etheraddr(local_iface->name, ea);
+            int error = netdev_set_etheraddr(local_iface->netdev, ea);
             if (error) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
                 VLOG_ERR_RL(&rl, "bridge %s: failed to set bridge "
@@ -546,10 +587,11 @@ bridge_reconfigure(void)
             }
         }
 
-        dpid = bridge_pick_datapath_id(br, ea, devname);
+        dpid = bridge_pick_datapath_id(br, ea, hw_addr_iface);
         ofproto_set_datapath_id(br->ofproto, dpid);
 
         /* Set NetFlow configuration on this bridge. */
+        dpif_get_netflow_ids(br->dpif, &engine_type, &engine_id);
         if (cfg_has("netflow.%s.engine-type", br->name)) {
             engine_type = cfg_get_int(0, "netflow.%s.engine-type", 
                     br->name);
@@ -594,22 +636,24 @@ bridge_reconfigure(void)
         for (i = 0; i < br->n_ports; i++) {
             struct port *port = br->ports[i];
             port_update_vlan_compat(port);
+            port_update_bonding(port);
         }
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         brstp_reconfigure(br);
+        iterate_and_prune_ifaces(br, set_iface_policing, NULL);
     }
 }
 
 static void
 bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
-                          const char **devname)
+                          struct iface **hw_addr_iface)
 {
     uint64_t requested_ea;
     size_t i, j;
     int error;
 
-    *devname = NULL;
+    *hw_addr_iface = NULL;
 
     /* Did the user request a particular MAC? */
     requested_ea = cfg_get_mac(0, "bridge.%s.mac", br->name);
@@ -652,7 +696,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
             for (j = 0; j < port->n_ifaces; j++) {
                 struct iface *candidate = port->ifaces[j];
                 uint8_t candidate_ea[ETH_ADDR_LEN];
-                if (!netdev_nodev_get_etheraddr(candidate->name, candidate_ea)
+                if (!netdev_get_etheraddr(candidate->netdev, candidate_ea)
                     && eth_addr_equals(iface_ea, candidate_ea)) {
                     iface = candidate;
                 }
@@ -682,7 +726,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
             }
 
             /* Grab MAC. */
-            error = netdev_nodev_get_etheraddr(iface->name, iface_ea);
+            error = netdev_get_etheraddr(iface->netdev, iface_ea);
             if (error) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
                 VLOG_ERR_RL(&rl, "failed to obtain Ethernet address of %s: %s",
@@ -697,13 +741,12 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
             !eth_addr_is_zero(iface_ea) &&
             memcmp(iface_ea, ea, ETH_ADDR_LEN) < 0)
         {
-            memcpy(ea, iface_ea, ETH_ADDR_LEN);
-            *devname = iface ? iface->name : NULL;
+            *hw_addr_iface = iface;
         }
     }
     if (eth_addr_is_multicast(ea) || eth_addr_is_vif(ea)) {
         memcpy(ea, br->default_ea, ETH_ADDR_LEN);
-        *devname = NULL;
+        *hw_addr_iface = NULL;
         VLOG_WARN("bridge %s: using default bridge Ethernet "
                   "address "ETH_ADDR_FMT, br->name, ETH_ADDR_ARGS(ea));
     } else {
@@ -714,13 +757,13 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
 
 /* Choose and returns the datapath ID for bridge 'br' given that the bridge
  * Ethernet address is 'bridge_ea'.  If 'bridge_ea' is the Ethernet address of
- * a network device, then that network device's name must be passed in as
- * 'devname'; if 'bridge_ea' was derived some other way, then 'devname' must be
- * passed in as a null pointer. */
+ * an interface on 'br', then that interface must be passed in as
+ * 'hw_addr_iface'; if 'bridge_ea' was derived some other way, then
+ * 'hw_addr_iface' must be passed in as a null pointer. */
 static uint64_t
 bridge_pick_datapath_id(struct bridge *br,
                         const uint8_t bridge_ea[ETH_ADDR_LEN],
-                        const char *devname)
+                        struct iface *hw_addr_iface)
 {
     /*
      * The procedure for choosing a bridge MAC address will, in the most
@@ -741,9 +784,9 @@ bridge_pick_datapath_id(struct bridge *br,
         return dpid;
     }
 
-    if (devname) {
+    if (hw_addr_iface) {
         int vlan;
-        if (!netdev_get_vlan_vid(devname, &vlan)) {
+        if (!netdev_get_vlan_vid(hw_addr_iface->netdev, &vlan)) {
             /*
              * A bridge whose MAC address is taken from a VLAN network device
              * (that is, a network device created with vconfig(8) or similar
@@ -853,6 +896,26 @@ bridge_flush(struct bridge *br)
         mac_learning_flush(br->ml);
     }
 }
+
+/* Returns the 'br' interface for the ODPP_LOCAL port, or null if 'br' has no
+ * such interface. */
+static struct iface *
+bridge_get_local_iface(struct bridge *br)
+{
+    size_t i, j;
+
+    for (i = 0; i < br->n_ports; i++) {
+        struct port *port = br->ports[i];
+        for (j = 0; j < port->n_ifaces; j++) {
+            struct iface *iface = port->ifaces[j];
+            if (iface->dp_ifidx == ODPP_LOCAL) {
+                return iface;
+            }
+        }
+    }
+
+    return NULL;
+}
 
 /* Bridge unixctl user interface functions. */
 static void
@@ -895,7 +958,7 @@ bridge_create(const char *name)
     br = xcalloc(1, sizeof *br);
 
     error = dpif_create(name, &br->dpif);
-    if (error == EEXIST) {
+    if (error == EEXIST || error == EBUSY) {
         error = dpif_open(name, &br->dpif);
         if (error) {
             VLOG_ERR("datapath %s already exists but cannot be opened: %s",
@@ -903,7 +966,7 @@ bridge_create(const char *name)
             free(br);
             return NULL;
         }
-        dpif_flow_flush(&br->dpif);
+        dpif_flow_flush(br->dpif);
     } else if (error) {
         VLOG_ERR("failed to create datapath %s: %s", name, strerror(error));
         free(br);
@@ -913,8 +976,8 @@ bridge_create(const char *name)
     error = ofproto_create(name, &bridge_ofhooks, br, &br->ofproto);
     if (error) {
         VLOG_ERR("failed to create switch %s: %s", name, strerror(error));
-        dpif_delete(&br->dpif);
-        dpif_close(&br->dpif);
+        dpif_delete(br->dpif);
+        dpif_close(br->dpif);
         free(br);
         return NULL;
     }
@@ -931,7 +994,7 @@ bridge_create(const char *name)
 
     list_push_back(&all_bridges, &br->node);
 
-    VLOG_INFO("created bridge %s on dp%u", br->name, dpif_id(&br->dpif));
+    VLOG_INFO("created bridge %s on %s", br->name, dpif_name(br->dpif));
 
     return br;
 }
@@ -946,12 +1009,12 @@ bridge_destroy(struct bridge *br)
             port_destroy(br->ports[br->n_ports - 1]);
         }
         list_remove(&br->node);
-        error = dpif_delete(&br->dpif);
+        error = dpif_delete(br->dpif);
         if (error && error != ENOENT) {
-            VLOG_ERR("failed to delete dp%u: %s",
-                     dpif_id(&br->dpif), strerror(error));
+            VLOG_ERR("failed to delete %s: %s",
+                     dpif_name(br->dpif), strerror(error));
         }
-        dpif_close(&br->dpif);
+        dpif_close(br->dpif);
         ofproto_destroy(br->ofproto);
         free(br->controller);
         mac_learning_destroy(br->ml);
@@ -1043,13 +1106,29 @@ bridge_get_controller(const struct bridge *br)
     return controller && controller[0] ? controller : NULL;
 }
 
+static bool
+check_duplicate_ifaces(struct bridge *br, struct iface *iface, void *ifaces_)
+{
+    struct svec *ifaces = ifaces_;
+    if (!svec_contains(ifaces, iface->name)) {
+        svec_add(ifaces, iface->name);
+        svec_sort(ifaces);
+        return true;
+    } else {
+        VLOG_ERR("bridge %s: %s interface is on multiple ports, "
+                 "removing from %s",
+                 br->name, iface->name, iface->port->name);
+        return false;
+    }
+}
+
 static void
 bridge_reconfigure_one(struct bridge *br)
 {
     struct svec old_ports, new_ports, ifaces;
     struct svec listeners, old_listeners;
     struct svec snoops, old_snoops;
-    size_t i, j;
+    size_t i;
 
     /* Collect old ports. */
     svec_init(&old_ports);
@@ -1063,9 +1142,16 @@ bridge_reconfigure_one(struct bridge *br)
     svec_init(&new_ports);
     cfg_get_all_keys(&new_ports, "bridge.%s.port", br->name);
     svec_sort(&new_ports);
-    if (bridge_get_controller(br) && !svec_contains(&new_ports, br->name)) {
-        svec_add(&new_ports, br->name);
-        svec_sort(&new_ports);
+    if (bridge_get_controller(br)) {
+        char local_name[IF_NAMESIZE];
+        int error;
+
+        error = dpif_port_get_name(br->dpif, ODPP_LOCAL,
+                                   local_name, sizeof local_name);
+        if (!error && !svec_contains(&new_ports, local_name)) {
+            svec_add(&new_ports, local_name);
+            svec_sort(&new_ports);
+        }
     }
     if (!svec_is_unique(&new_ports)) {
         VLOG_WARN("bridge %s: %s specified twice as bridge port",
@@ -1100,28 +1186,7 @@ bridge_reconfigure_one(struct bridge *br)
 
     /* Check and delete duplicate interfaces. */
     svec_init(&ifaces);
-    for (i = 0; i < br->n_ports; ) {
-        struct port *port = br->ports[i];
-        for (j = 0; j < port->n_ifaces; ) {
-            struct iface *iface = port->ifaces[j];
-            if (svec_contains(&ifaces, iface->name)) {
-                VLOG_ERR("bridge %s: %s interface is on multiple ports, "
-                         "removing from %s",
-                         br->name, iface->name, port->name);
-                iface_destroy(iface);
-            } else {
-                svec_add(&ifaces, iface->name);
-                svec_sort(&ifaces);
-                j++;
-            }
-        }
-        if (!port->n_ifaces) {
-            VLOG_ERR("%s port has no interfaces, dropping", port->name);
-            port_destroy(port);
-        } else {
-            i++;
-        }
-    }
+    iterate_and_prune_ifaces(br, check_duplicate_ifaces, &ifaces);
     svec_destroy(&ifaces);
 
     /* Delete all flows if we're switching from connected to standalone or vice
@@ -1202,9 +1267,8 @@ bridge_reconfigure_controller(struct bridge *br)
                                   cfg_get_string(0, "%s.accept-regex", pfx),
                                   update_resolv_conf);
         } else {
-            struct netdev *netdev;
+            struct iface *local_iface;
             bool in_band;
-            int error;
 
             in_band = (!cfg_is_valid(CFG_BOOL | CFG_REQUIRED,
                                      "%s.in-band", pfx)
@@ -1212,33 +1276,32 @@ bridge_reconfigure_controller(struct bridge *br)
             ofproto_set_discovery(br->ofproto, false, NULL, NULL);
             ofproto_set_in_band(br->ofproto, in_band);
 
-            error = netdev_open(br->name, NETDEV_ETH_TYPE_NONE, &netdev);
-            if (!error) {
-                if (cfg_is_valid(CFG_IP | CFG_REQUIRED, "%s.ip", pfx)) {
-                    struct in_addr ip, mask, gateway;
-                    ip.s_addr = cfg_get_ip(0, "%s.ip", pfx);
-                    mask.s_addr = cfg_get_ip(0, "%s.netmask", pfx);
-                    gateway.s_addr = cfg_get_ip(0, "%s.gateway", pfx);
+            local_iface = bridge_get_local_iface(br);
+            if (local_iface
+                && cfg_is_valid(CFG_IP | CFG_REQUIRED, "%s.ip", pfx)) {
+                struct netdev *netdev = local_iface->netdev;
+                struct in_addr ip, mask, gateway;
+                ip.s_addr = cfg_get_ip(0, "%s.ip", pfx);
+                mask.s_addr = cfg_get_ip(0, "%s.netmask", pfx);
+                gateway.s_addr = cfg_get_ip(0, "%s.gateway", pfx);
 
-                    netdev_turn_flags_on(netdev, NETDEV_UP, true);
-                    if (!mask.s_addr) {
-                        mask.s_addr = guess_netmask(ip.s_addr);
-                    }
-                    if (!netdev_set_in4(netdev, ip, mask)) {
-                        VLOG_INFO("bridge %s: configured IP address "IP_FMT", "
-                                  "netmask "IP_FMT,
-                                  br->name, IP_ARGS(&ip.s_addr),
-                                  IP_ARGS(&mask.s_addr));
-                    }
+                netdev_turn_flags_on(netdev, NETDEV_UP, true);
+                if (!mask.s_addr) {
+                    mask.s_addr = guess_netmask(ip.s_addr);
+                }
+                if (!netdev_set_in4(netdev, ip, mask)) {
+                    VLOG_INFO("bridge %s: configured IP address "IP_FMT", "
+                              "netmask "IP_FMT,
+                              br->name, IP_ARGS(&ip.s_addr),
+                              IP_ARGS(&mask.s_addr));
+                }
 
-                    if (gateway.s_addr) {
-                        if (!netdev_add_router(gateway)) {
-                            VLOG_INFO("bridge %s: configured gateway "IP_FMT,
-                                      br->name, IP_ARGS(&gateway.s_addr));
-                        }
+                if (gateway.s_addr) {
+                    if (!netdev_add_router(netdev, gateway)) {
+                        VLOG_INFO("bridge %s: configured gateway "IP_FMT,
+                                  br->name, IP_ARGS(&gateway.s_addr));
                     }
                 }
-                netdev_close(netdev);
             }
         }
 
@@ -1368,17 +1431,17 @@ bridge_fetch_dp_ifaces(struct bridge *br)
     }
     port_array_clear(&br->ifaces);
 
-    dpif_port_list(&br->dpif, &dpif_ports, &n_dpif_ports);
+    dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
     for (i = 0; i < n_dpif_ports; i++) {
         struct odp_port *p = &dpif_ports[i];
         struct iface *iface = iface_lookup(br, p->devname);
         if (iface) {
             if (iface->dp_ifidx >= 0) {
-                VLOG_WARN("dp%u reported interface %s twice",
-                          dpif_id(&br->dpif), p->devname);
+                VLOG_WARN("%s reported interface %s twice",
+                          dpif_name(br->dpif), p->devname);
             } else if (iface_from_dp_ifidx(br, p->port)) {
-                VLOG_WARN("dp%u reported interface %"PRIu16" twice",
-                          dpif_id(&br->dpif), p->port);
+                VLOG_WARN("%s reported interface %"PRIu16" twice",
+                          dpif_name(br->dpif), p->port);
             } else {
                 port_array_set(&br->ifaces, p->port, iface);
                 iface->dp_ifidx = p->port;
@@ -1988,7 +2051,6 @@ bridge_port_changed_ofhook_cb(enum ofp_port_reason reason,
 
         bridge_flush(br);
     } else {
-        memcpy(iface->mac, opp->hw_addr, ETH_ADDR_LEN);
         if (port->n_ifaces > 1) {
             bool up = !(opp->state & OFPPS_LINK_DOWN);
             bond_link_status_update(iface, up);
@@ -2980,7 +3042,7 @@ port_update_bond_compat(struct port *port)
         if (slave->up) {
             bond.up = true;
         }
-        memcpy(slave->mac, iface->mac, ETH_ADDR_LEN);
+        netdev_get_etheraddr(iface->netdev, slave->mac);
     }
 
     proc_net_compat_update_bond(port->name, &bond);
@@ -3011,7 +3073,8 @@ port_update_vlan_compat(struct port *port)
                 && p->n_ifaces
                 && (!vlandev_name || strcmp(p->name, vlandev_name) <= 0))
             {
-                const uint8_t *ea = p->ifaces[0]->mac;
+                uint8_t ea[ETH_ADDR_LEN];
+                netdev_get_etheraddr(p->ifaces[0]->netdev, ea);
                 if (!eth_addr_is_multicast(ea) &&
                     !eth_addr_is_reserved(ea) &&
                     !eth_addr_is_zero(ea)) {
@@ -3037,18 +3100,7 @@ iface_create(struct port *port, const char *name)
     iface->dp_ifidx = -1;
     iface->tag = tag_create_random();
     iface->delay_expires = LLONG_MAX;
-
-    if (!cfg_get_bool(0, "iface.%s.internal", iface->name)) {
-        netdev_nodev_get_etheraddr(name, iface->mac);
-        netdev_nodev_get_carrier(name, &iface->enabled);
-    } else {
-        /* Internal interfaces are created later by the call to dpif_port_add()
-         * in bridge_reconfigure().  Until then, we can't obtain any
-         * information about them.  (There's no real value in doing so, anyway,
-         * because the 'mac' and 'enabled' values are only used for interfaces
-         * that are bond slaves, and it doesn't normally make sense to bond an
-         * internal interface.) */
-    }
+    iface->netdev = NULL;
 
     if (port->n_ifaces >= port->allocated_ifaces) {
         port->ifaces = x2nrealloc(port->ifaces, &port->allocated_ifaces,
@@ -3061,7 +3113,6 @@ iface_create(struct port *port, const char *name)
 
     VLOG_DBG("attached network device %s to port %s", iface->name, port->name);
 
-    port_update_bonding(port);
     bridge_flush(port->bridge);
 }
 
@@ -3081,6 +3132,7 @@ iface_destroy(struct iface *iface)
         del = port->ifaces[iface->port_ifidx] = port->ifaces[--port->n_ifaces];
         del->port_ifidx = iface->port_ifidx;
 
+        netdev_close(iface->netdev);
         free(iface->name);
         free(iface);
 
@@ -3090,7 +3142,6 @@ iface_destroy(struct iface *iface)
             bond_send_learning_packets(port);
         }
 
-        port_update_bonding(port);
         bridge_flush(port->bridge);
     }
 }
@@ -3429,23 +3480,25 @@ brstp_send_bpdu(struct ofpbuf *pkt, int port_no, void *br_)
     if (!iface) {
         VLOG_WARN_RL(&rl, "%s: cannot send BPDU on unknown port %d",
                      br->name, port_no);
-    } else if (eth_addr_is_zero(iface->mac)) {
-        VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d with unknown MAC",
-                     br->name, port_no);
     } else {
-        union ofp_action action;
         struct eth_header *eth = pkt->l2;
-        flow_t flow;
 
-        memcpy(eth->eth_src, iface->mac, ETH_ADDR_LEN);
+        netdev_get_etheraddr(iface->netdev, eth->eth_src);
+        if (eth_addr_is_zero(eth->eth_src)) {
+            VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d "
+                         "with unknown MAC", br->name, port_no);
+        } else {
+            union ofp_action action;
+            flow_t flow;
 
-        memset(&action, 0, sizeof action);
-        action.type = htons(OFPAT_OUTPUT);
-        action.output.len = htons(sizeof action);
-        action.output.port = htons(port_no);
+            memset(&action, 0, sizeof action);
+            action.type = htons(OFPAT_OUTPUT);
+            action.output.len = htons(sizeof action);
+            action.output.port = htons(port_no);
 
-        flow_extract(pkt, ODPP_NONE, &flow);
-        ofproto_send_packet(br->ofproto, &flow, &action, 1, pkt);
+            flow_extract(pkt, ODPP_NONE, &flow);
+            ofproto_send_packet(br->ofproto, &flow, &action, 1, pkt);
+        }
     }
     ofpbuf_delete(pkt);
 }

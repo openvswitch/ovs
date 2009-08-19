@@ -320,8 +320,8 @@ enum ofp_action_type {
 
 /* Action structure for OFPAT_OUTPUT, which sends packets out 'port'.  
  * When the 'port' is the OFPP_CONTROLLER, 'max_len' indicates the max 
- * number of bytes to send.  A 'max_len' of zero means the entire packet 
- * should be sent. */
+ * number of bytes to send.  A 'max_len' of zero means no bytes of the
+ * packet should be sent. */
 struct ofp_action_output {
     uint16_t type;                  /* OFPAT_OUTPUT. */
     uint16_t len;                   /* Length is 8. */

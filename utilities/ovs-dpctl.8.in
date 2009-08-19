@@ -41,14 +41,13 @@ The following commands manage datapaths.
 
 Creates datapath \fIdp\fR.  The name of the new datapath's local port
 depends on how \fIdp\fR is specified: if it takes the form
-\fBdp\fIN\fR, the local port will be named \fBdp\fIN\fR; if \fIdp\fR
-is \fBnl:\fI, the local port will be named \fBof\fIN\fR; otherwise,
+\fBdp\fIN\fR, the local port will be named \fBdp\fIN\fR; otherwise,
 the local port's name will be \fIdp\fR.
 
 This will fail if the host already has 256 datapaths, if a network
 device with the same name as the new datapath's local port already
-exists, or if \fIdp\fR is given in the form \fBdp\fIN\fR or
-\fBnl:\fIN\fR and a datapath numbered \fIN\fR already exists.
+exists, or if \fIdp\fR is given in the form \fBdp\fIN\fR
+and a datapath numbered \fIN\fR already exists.
 
 If \fInetdev\fRs are specified, \fBovs\-dpctl\fR adds them to the datapath.
 
@@ -71,11 +70,6 @@ A \fInetdev\fR may be followed by a comma-separated list of options.
 The following options are currently supported:
 
 .RS
-.IP "\fBport=\fIportno\fR"
-Specifies \fIportno\fR (a number between 1 and 255) as the port number
-at which \fInetdev\fR will be attached.  By default, \fBadd\-if\fR
-automatically selects the lowest available port number.
-
 .IP "\fBinternal\fR"
 Instead of attaching an existing \fInetdev\fR, creates an internal
 port (analogous to the local port) with that name.
@@ -120,9 +114,10 @@ up may be confused about their disappearance.
 .IP "\fBdump-groups \fIdp\fR"
 Prints to the console the sets of port groups maintained by datapath
 \fIdp\fR.  Ordinarily there are at least 2 port groups in a datapath
-that \fBsecchan\fR or \fBvswitch\fR is controlling: group 0 contains
+that \fBovs\-openflowd\fR or \fBovs\-vswitch\fR is controlling: group
+0 contains
 all ports except those disabled by STP, and group 1 contains all
-ports.  Additional groups might be used in the future.
+ports.  Additional or different groups might be used in the future.
 
 This command is primarily useful for debugging Open vSwitch.  OpenFlow
 does not have a concept of port groups.
@@ -151,7 +146,7 @@ Creates datapath number 0.
 Adds two network devices to the new datapath.
 
 .PP
-At this point one would ordinarily start \fBsecchan\fR(8) on
+At this point one would ordinarily start \fBovs\-openflowd\fR(8) on
 \fBdp0\fR, transforming \fBdp0\fR into an OpenFlow switch.  Then, when
 the switch and the datapath is no longer needed:
 
@@ -165,6 +160,6 @@ Deletes the datapath.
 
 .SH "SEE ALSO"
 
-.BR secchan (8),
 .BR ovs\-appctl (8),
+.BR ovs\-openflowd (8),
 .BR ovs\-vswitchd (8)

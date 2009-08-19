@@ -280,59 +280,21 @@ ssl_vconn_cast(struct vconn *vconn)
 static int
 ssl_open(const char *name, char *suffix, struct vconn **vconnp)
 {
-    char *save_ptr = NULL;
-    char *host_name, *port_string;
     struct sockaddr_in sin;
-    int retval;
-    int fd;
+    int error, fd;
 
-    retval = ssl_init();
-    if (retval) {
-        return retval;
+    error = ssl_init();
+    if (error) {
+        return error;
     }
 
-    host_name = strtok_r(suffix, ":", &save_ptr);
-    port_string = strtok_r(NULL, ":", &save_ptr);
-    if (!host_name) {
-        ovs_error(0, "%s: bad peer name format", name);
-        return EAFNOSUPPORT;
-    }
-
-    memset(&sin, 0, sizeof sin);
-    sin.sin_family = AF_INET;
-    if (lookup_ip(host_name, &sin.sin_addr)) {
-        return ENOENT;
-    }
-    sin.sin_port = htons(port_string && *port_string ? atoi(port_string)
-                         : OFP_SSL_PORT);
-
-    /* Create socket. */
-    fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) {
-        VLOG_ERR("%s: socket: %s", name, strerror(errno));
-        return errno;
-    }
-    retval = set_nonblocking(fd);
-    if (retval) {
-        close(fd);
-        return retval;
-    }
-
-    /* Connect socket. */
-    retval = connect(fd, (struct sockaddr *) &sin, sizeof sin);
-    if (retval < 0) {
-        if (errno == EINPROGRESS) {
-            return new_ssl_vconn(name, fd, CLIENT, STATE_TCP_CONNECTING,
-                                 &sin, vconnp);
-        } else {
-            int error = errno;
-            VLOG_ERR("%s: connect: %s", name, strerror(error));
-            close(fd);
-            return error;
-        }
+    error = tcp_open_active(suffix, OFP_SSL_PORT, &sin, &fd);
+    if (fd >= 0) {
+        int state = error ? STATE_TCP_CONNECTING : STATE_SSL_CONNECTING;
+        return new_ssl_vconn(name, fd, CLIENT, state, &sin, vconnp);
     } else {
-        return new_ssl_vconn(name, fd, CLIENT, STATE_SSL_CONNECTING,
-                             &sin, vconnp);
+        VLOG_ERR("%s: connect: %s", name, strerror(error));
+        return error;
     }
 }
 
@@ -805,55 +767,18 @@ pssl_pvconn_cast(struct pvconn *pvconn)
 static int
 pssl_open(const char *name, char *suffix, struct pvconn **pvconnp)
 {
-    struct sockaddr_in sin;
     struct pssl_pvconn *pssl;
     int retval;
     int fd;
-    unsigned int yes = 1;
 
     retval = ssl_init();
     if (retval) {
         return retval;
     }
 
-    /* Create socket. */
-    fd = socket(AF_INET, SOCK_STREAM, 0);
+    fd = tcp_open_passive(suffix, OFP_SSL_PORT);
     if (fd < 0) {
-        int error = errno;
-        VLOG_ERR("%s: socket: %s", name, strerror(error));
-        return error;
-    }
-
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) < 0) {
-        int error = errno;
-        VLOG_ERR("%s: setsockopt(SO_REUSEADDR): %s", name, strerror(errno));
-        return error;
-    }
-
-    memset(&sin, 0, sizeof sin);
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = htonl(INADDR_ANY);
-    sin.sin_port = htons(atoi(suffix) ? atoi(suffix) : OFP_SSL_PORT);
-    retval = bind(fd, (struct sockaddr *) &sin, sizeof sin);
-    if (retval < 0) {
-        int error = errno;
-        VLOG_ERR("%s: bind: %s", name, strerror(error));
-        close(fd);
-        return error;
-    }
-
-    retval = listen(fd, 10);
-    if (retval < 0) {
-        int error = errno;
-        VLOG_ERR("%s: listen: %s", name, strerror(error));
-        close(fd);
-        return error;
-    }
-
-    retval = set_nonblocking(fd);
-    if (retval) {
-        close(fd);
-        return retval;
+        return -fd;
     }
 
     pssl = xmalloc(sizeof *pssl);

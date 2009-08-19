@@ -23,6 +23,7 @@
 #include <poll.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/un.h>
@@ -288,6 +289,172 @@ guess_netmask(uint32_t ip)
             : (ip >> 30) == 2 ? htonl(0xffff0000) /* Class B */
             : (ip >> 29) == 6 ? htonl(0xffffff00) /* Class C */
             : htonl(0));                          /* ??? */
+}
+
+/* Opens a non-blocking TCP socket and connects to 'target', which should be a
+ * string in the format "<host>[:<port>]", where <host> is required and <port>
+ * is optional, with 'default_port' assumed if <port> is omitted.
+ *
+ * On success, returns 0 (indicating connection complete) or EAGAIN (indicating
+ * connection in progress), in which case the new file descriptor is stored
+ * into '*fdp'.  On failure, returns a positive errno value other than EAGAIN
+ * and stores -1 into '*fdp'.
+ *
+ * If 'sinp' is non-null, then on success the target address is stored into
+ * '*sinp'. */
+int
+tcp_open_active(const char *target_, uint16_t default_port,
+                struct sockaddr_in *sinp, int *fdp)
+{
+    char *target = xstrdup(target_);
+    char *save_ptr = NULL;
+    const char *host_name;
+    const char *port_string;
+    struct sockaddr_in sin;
+    int fd = -1;
+    int error;
+
+    /* Defaults. */
+    memset(&sin, 0, sizeof sin);
+    sin.sin_family = AF_INET;
+    sin.sin_port = htons(default_port);
+
+    /* Tokenize. */
+    host_name = strtok_r(target, ":", &save_ptr);
+    port_string = strtok_r(NULL, ":", &save_ptr);
+    if (!host_name) {
+        ovs_error(0, "%s: bad peer name format", target_);
+        error = EAFNOSUPPORT;
+        goto exit;
+    }
+
+    /* Look up IP, port. */
+    error = lookup_ip(host_name, &sin.sin_addr);
+    if (error) {
+        goto exit;
+    }
+    if (port_string && atoi(port_string)) {
+        sin.sin_port = htons(atoi(port_string));
+    }
+
+    /* Create non-blocking socket. */
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        VLOG_ERR("%s: socket: %s", target_, strerror(errno));
+        error = errno;
+        goto exit;
+    }
+    error = set_nonblocking(fd);
+    if (error) {
+        goto exit_close;
+    }
+
+    /* Connect. */
+    error = connect(fd, (struct sockaddr *) &sin, sizeof sin) == 0 ? 0 : errno;
+    if (error == EINPROGRESS) {
+        error = EAGAIN;
+    } else if (error && error != EAGAIN) {
+        goto exit_close;
+    }
+
+    /* Success: error is 0 or EAGAIN. */
+    goto exit;
+
+exit_close:
+    close(fd);
+exit:
+    if (!error || error == EAGAIN) {
+        if (sinp) {
+            *sinp = sin;
+        }
+        *fdp = fd;
+    } else {
+        *fdp = -1;
+    }
+    free(target);
+    return error;
+}
+
+/* Opens a non-blocking TCP socket, binds to 'target', and listens for incoming
+ * connections.  'target' should be a string in the format "[<port>][:<ip>]",
+ * where both <port> and <ip> are optional.  If <port> is omitted, it defaults
+ * to 'default_port'; if <ip> is omitted it defaults to the wildcard IP
+ * address.
+ *
+ * The socket will have SO_REUSEADDR turned on.
+ *
+ * On success, returns a non-negative file descriptor.  On failure, returns a
+ * negative errno value. */
+int
+tcp_open_passive(const char *target_, uint16_t default_port)
+{
+    char *target = xstrdup(target_);
+    char *string_ptr = target;
+    struct sockaddr_in sin;
+    const char *host_name;
+    const char *port_string;
+    int fd, error;
+    unsigned int yes  = 1;
+
+    /* Address defaults. */
+    memset(&sin, 0, sizeof sin);
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = htonl(INADDR_ANY);
+    sin.sin_port = htons(default_port);
+
+    /* Parse optional port number. */
+    port_string = strsep(&string_ptr, ":");
+    if (port_string && atoi(port_string)) {
+        sin.sin_port = htons(atoi(port_string));
+    }
+
+    /* Parse optional bind IP. */
+    host_name = strsep(&string_ptr, ":");
+    if (host_name && host_name[0]) {
+        error = lookup_ip(host_name, &sin.sin_addr);
+        if (error) {
+            goto exit;
+        }
+    }
+
+    /* Create non-blocking socket, set SO_REUSEADDR. */
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        error = errno;
+        VLOG_ERR("%s: socket: %s", target_, strerror(error));
+        goto exit;
+    }
+    error = set_nonblocking(fd);
+    if (error) {
+        goto exit_close;
+    }
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) < 0) {
+        error = errno;
+        VLOG_ERR("%s: setsockopt(SO_REUSEADDR): %s", target_, strerror(error));
+        goto exit_close;
+    }
+
+    /* Bind. */
+    if (bind(fd, (struct sockaddr *) &sin, sizeof sin) < 0) {
+        error = errno;
+        VLOG_ERR("%s: bind: %s", target_, strerror(error));
+        goto exit_close;
+    }
+
+    /* Listen. */
+    if (listen(fd, 10) < 0) {
+        error = errno;
+        VLOG_ERR("%s: listen: %s", target_, strerror(error));
+        goto exit_close;
+    }
+    error = 0;
+    goto exit;
+
+exit_close:
+    close(fd);
+exit:
+    free(target);
+    return error ? -error : fd;
 }
 
 /* Returns a readable and writable fd for /dev/null, if successful, otherwise

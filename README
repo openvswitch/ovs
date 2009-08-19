@@ -3,20 +3,30 @@
 What is Open vSwitch?
 ---------------------
 
-Open vSwitch is an Ethernet switch for virtual servers with the
-following features:
+Open vSwitch is a multilayer software switch licensed under the open
+source Apache 2 license.  Our goal is to implement a production
+quality switch platform that supports standard management interfaces
+(e.g. NetFlow, RSPAN, ERSPAN, IOS-like CLI), and opens the forwarding
+functions to programmatic extension and control.
 
-	* NIC bonding with automatic fail-over and source MAC-based TX
-	  load balancing ("SLB").
+Open vSwitch is well suited to function as a virtual switch in VM
+environments.  In addition to exposing standard control and visibility
+interfaces to the virtual networking layer, it was designed to support
+distribution across multiple physical servers.  Open vSwitch supports
+multiple Linux-based virtualization technologies including
+Xen/XenServer, KVM, and VirtualBox.
 
-	* 802.1Q VLAN support.
+The bulk of the code is written in platform-independent C and is
+easily ported to other environments.  The current release of Open
+vSwitch supports the following features:
 
-	* Port mirroring, with optional VLAN tagging.
-
-	* NetFlow v5 flow logging.
-
-	* Connectivity to an external OpenFlow controller, such as
-          NOX.
+    * Visibility into inter-VM communication via NetFlow, SPAN, and RSPAN
+    * Standard 802.1Q VLAN model with trunking
+    * Per VM policing
+    * NIC bonding with source-MAC load balancing
+    * Kernel-based forwarding
+    * Support for OpenFlow
+    * Compatibility layer for the Linux bridging code
 
 Open vSwitch supports Linux 2.6.15 and up, with testing focused on
 2.6.18 with Centos and Xen patches and version 2.6.26 from kernel.org.
@@ -27,48 +37,47 @@ What's here?
 
 The main components of this distribution are:
 
-        - ovs-vswitchd, a daemon that implements the virtual switch,
-          along with a companion Linux kernel module for flow-based
-          switching.
+    * ovs-vswitchd, a daemon that implements the switch, along with 
+      a companion Linux kernel module for flow-based switching.
 
-        - ovs-brcompatd, a daemon that allows ovs-vswitchd to act as a
-          drop-in replacement for the Linux bridge in many
-          environments, along with a companion Linux kernel module to
-          intercept bridge ioctls.
+    * ovs-brcompatd, a daemon that allows ovs-vswitchd to act as a
+      drop-in replacement for the Linux bridge in many environments, 
+      along with a companion Linux kernel module to intercept bridge 
+      ioctls.
 
-	- ovs-dpctl, a tool for configuring the virtual switch kernel
-          module.
+    * ovs-dpctl, a tool for configuring the switch kernel module.
 
-        - Scripts and specs for building RPMs that allow Open vSwitch
-          to be installed on a Citrix XenServer host as a drop-in
-          replacement for its virtual switch, with additional
-          functionality.
+    * Scripts and specs for building RPMs that allow Open vSwitch
+      to be installed on a Citrix XenServer host as a drop-in
+      replacement for its switch, with additional functionality.
 
-	- vlog-appctl, a utility that can control Open vSwitch daemons,
-          adjusting their logging levels among other uses.
+    * ovs-appctl, a utility that can control Open vSwitch daemons,
+      adjusting their logging levels among other uses.
 
 Open vSwitch also provides an OpenFlow implementation and tools for
 those interested in OpenFlow but not additional Open vSwitch features:
 
-	- secchan, a program that implements a simple OpenFlow switch
-          (without the special features provided by ovs-vswitchd) using
-          the same kernel module as ovs-vswitchd.
+    * ovs-openflowd, a program that implements a simple OpenFlow
+      switch (without the special features provided by ovs-vswitchd)
+      using the same kernel module as ovs-vswitchd.
 
-	- ovs-controller, a simple OpenFlow controller.
+    * ovs-controller, a simple OpenFlow controller.
 
-	- ovs-ofctl, a utility for querying and controlling OpenFlow
-          switches and controllers.
+    * ovs-ofctl, a utility for querying and controlling OpenFlow
+      switches and controllers.
 
-	- ovs-pki, a utility for creating and managing the public-key
-          infrastructure for OpenFlow switches.
+    * ovs-pki, a utility for creating and managing the public-key
+      infrastructure for OpenFlow switches.
 
-	- A patch to tcpdump that enables it to parse OpenFlow
-          messages.
+    * A patch to tcpdump that enables it to parse OpenFlow messages.
 
 What other documentation is available?
 --------------------------------------
 
 To install Open vSwitch on a regular Linux machine, read INSTALL.Linux.
+
+To use Open vSwitch as a drop-in replacement for the Linux bridge,
+read INSTALL.bridge.
 
 To build RPMs for installing Open vSwitch on a Citrix XenServer host
 or resource pool, read INSTALL.XenServer.
@@ -83,5 +92,5 @@ the manpages.
 Contact 
 -------
 
-ovs-bugs@openvswitch.org
+bugs@openvswitch.org
 http://openvswitch.org/

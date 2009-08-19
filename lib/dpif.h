@@ -27,23 +27,20 @@
 #include <stddef.h>
 #include <stdint.h>
 
+struct dpif;
 struct ofpbuf;
 struct svec;
 
-/* A datapath interface.  Opaque. */
-struct dpif {
-    unsigned int minor;         /* For use in error messages. */
-    int fd;
-};
-
+void dp_run(void);
+void dp_wait(void);
 int dp_enumerate(struct svec *);
 
-int dpif_open(const char *name, struct dpif *);
-int dpif_create(const char *name, struct dpif *);
+int dpif_open(const char *name, struct dpif **);
+int dpif_create(const char *name, struct dpif **);
 void dpif_close(struct dpif *);
 
-static inline unsigned int dpif_id(const struct dpif *dpif);
-int dpif_get_name(struct dpif *, char *name, size_t name_size);
+const char *dpif_name(const struct dpif *);
+int dpif_get_all_names(const struct dpif *, struct svec *);
 
 int dpif_delete(struct dpif *);
 
@@ -51,23 +48,24 @@ int dpif_get_dp_stats(const struct dpif *, struct odp_stats *);
 int dpif_get_drop_frags(const struct dpif *, bool *drop_frags);
 int dpif_set_drop_frags(struct dpif *, bool drop_frags);
 
-int dpif_get_listen_mask(const struct dpif *, int *listen_mask);
-int dpif_set_listen_mask(struct dpif *, int listen_mask);
-int dpif_purge(struct dpif *);
-
-int dpif_port_add(struct dpif *, const char *devname, uint16_t port_no,
-                  uint16_t flags);
+int dpif_port_add(struct dpif *, const char *devname, uint16_t flags,
+                  uint16_t *port_no);
 int dpif_port_del(struct dpif *, uint16_t port_no);
 int dpif_port_query_by_number(const struct dpif *, uint16_t port_no,
                               struct odp_port *);
 int dpif_port_query_by_name(const struct dpif *, const char *devname,
                             struct odp_port *);
+int dpif_port_get_name(struct dpif *, uint16_t port_no,
+                       char *name, size_t name_size);
 int dpif_port_list(const struct dpif *, struct odp_port **, size_t *n_ports);
 
+int dpif_port_poll(const struct dpif *, char **devnamep);
+void dpif_port_poll_wait(const struct dpif *);
+
+int dpif_port_group_get(const struct dpif *, uint16_t group,
+                        uint16_t **ports, size_t *n_ports);
 int dpif_port_group_set(struct dpif *, uint16_t group,
                         const uint16_t ports[], size_t n_ports);
-int dpif_port_group_get(const struct dpif *, uint16_t group,
-                        uint16_t ports[], size_t n_ports, size_t *n_out);
 
 int dpif_flow_flush(struct dpif *);
 int dpif_flow_put(struct dpif *, struct odp_flow_put *);
@@ -83,23 +81,13 @@ int dpif_execute(struct dpif *, uint16_t in_port,
                  const union odp_action[], size_t n_actions,
                  const struct ofpbuf *);
 
+int dpif_recv_get_mask(const struct dpif *, int *listen_mask);
+int dpif_recv_set_mask(struct dpif *, int listen_mask);
 int dpif_recv(struct dpif *, struct ofpbuf **);
+int dpif_recv_purge(struct dpif *);
 void dpif_recv_wait(struct dpif *);
 
-static inline unsigned int
-dpif_id(const struct dpif *dpif)
-{
-    return dpif->minor;
-}
-
-struct dpifmon;
-
-int dpifmon_create(const char *datapath_name, struct dpifmon **);
-void dpifmon_destroy(struct dpifmon *);
-
-int dpifmon_poll(struct dpifmon *, char **devnamep);
-
-void dpifmon_run(struct dpifmon *);
-void dpifmon_wait(struct dpifmon *);
+void dpif_get_netflow_ids(const struct dpif *,
+                          uint8_t *engine_type, uint8_t *engine_id);
 
 #endif /* dpif.h */

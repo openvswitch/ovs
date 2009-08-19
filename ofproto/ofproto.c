@@ -135,7 +135,7 @@ rule_is_hidden(const struct rule *rule)
         return true;
     }
 
-    /* Rules with priority higher than UINT16_MAX are set up by secchan itself
+    /* Rules with priority higher than UINT16_MAX are set up by ofproto itself
      * (e.g. by in-band control) and are intentionally hidden from the
      * controller. */
     if (rule->cr.priority > UINT16_MAX) {
@@ -194,8 +194,8 @@ struct ofproto {
     char *serial;               /* Serial number. */
 
     /* Datapath. */
-    struct dpif dpif;
-    struct dpifmon *dpifmon;
+    struct dpif *dpif;
+    struct netdev_monitor *netdev_monitor;
     struct port_array ports;    /* Index is ODP port nr; ofport->opp.port_no is
                                  * OFP port nr. */
     struct shash port_by_name;
@@ -237,7 +237,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static const struct ofhooks default_ofhooks;
 
-static uint64_t pick_datapath_id(struct dpif *, uint64_t fallback_dpid);
+static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
 static void send_packet_in_miss(struct ofpbuf *, void *ofproto);
 static void send_packet_in_action(struct ofpbuf *, void *ofproto);
@@ -261,10 +261,9 @@ int
 ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
                struct ofproto **ofprotop)
 {
-    struct dpifmon *dpifmon;
     struct odp_stats stats;
     struct ofproto *p;
-    struct dpif dpif;
+    struct dpif *dpif;
     int error;
 
     *ofprotop = NULL;
@@ -275,37 +274,27 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
         VLOG_ERR("failed to open datapath %s: %s", datapath, strerror(error));
         return error;
     }
-    error = dpif_get_dp_stats(&dpif, &stats);
+    error = dpif_get_dp_stats(dpif, &stats);
     if (error) {
         VLOG_ERR("failed to obtain stats for datapath %s: %s",
                  datapath, strerror(error));
-        dpif_close(&dpif);
+        dpif_close(dpif);
         return error;
     }
-    error = dpif_set_listen_mask(&dpif, ODPL_MISS | ODPL_ACTION);
+    error = dpif_recv_set_mask(dpif, ODPL_MISS | ODPL_ACTION);
     if (error) {
         VLOG_ERR("failed to listen on datapath %s: %s",
                  datapath, strerror(error));
-        dpif_close(&dpif);
+        dpif_close(dpif);
         return error;
     }
-    dpif_flow_flush(&dpif);
-    dpif_purge(&dpif);
-
-    /* Start monitoring datapath ports for status changes. */
-    error = dpifmon_create(datapath, &dpifmon);
-    if (error) {
-        VLOG_ERR("failed to starting monitoring datapath %s: %s",
-                 datapath, strerror(error));
-        dpif_close(&dpif);
-        return error;
-    }
+    dpif_flow_flush(dpif);
+    dpif_recv_purge(dpif);
 
     /* Initialize settings. */
     p = xcalloc(1, sizeof *p);
     p->fallback_dpid = pick_fallback_dpid();
-    p->datapath_id = pick_datapath_id(&dpif, p->fallback_dpid);
-    VLOG_INFO("using datapath ID %012"PRIx64, p->datapath_id);
+    p->datapath_id = p->fallback_dpid;
     p->manufacturer = xstrdup("Nicira Networks, Inc.");
     p->hardware = xstrdup("Reference Implementation");
     p->software = xstrdup(VERSION BUILDNR);
@@ -313,7 +302,7 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
 
     /* Initialize datapath. */
     p->dpif = dpif;
-    p->dpifmon = dpifmon;
+    p->netdev_monitor = netdev_monitor_create();
     port_array_init(&p->ports);
     shash_init(&p->port_by_name);
     p->max_ports = stats.max_ports;
@@ -365,6 +354,10 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
         return error;
     }
 
+    /* Pick final datapath ID. */
+    p->datapath_id = pick_datapath_id(p);
+    VLOG_INFO("using datapath ID %012"PRIx64, p->datapath_id);
+
     *ofprotop = p;
     return 0;
 }
@@ -373,9 +366,7 @@ void
 ofproto_set_datapath_id(struct ofproto *p, uint64_t datapath_id)
 {
     uint64_t old_dpid = p->datapath_id;
-    p->datapath_id = (datapath_id
-                      ? datapath_id
-                      : pick_datapath_id(&p->dpif, p->fallback_dpid));
+    p->datapath_id = datapath_id ? datapath_id : pick_datapath_id(p);
     if (p->datapath_id != old_dpid) {
         VLOG_INFO("datapath ID changed to %012"PRIx64, p->datapath_id);
         rconn_reconnect(p->controller->rconn);
@@ -457,7 +448,7 @@ ofproto_set_discovery(struct ofproto *p, bool discovery,
                 return error;
             }
             error = discovery_create(re, update_resolv_conf,
-                                     &p->dpif, p->switch_status,
+                                     p->dpif, p->switch_status,
                                      &p->discovery);
             if (error) {
                 return error;
@@ -714,8 +705,8 @@ ofproto_destroy(struct ofproto *p)
         ofconn_destroy(ofconn, p);
     }
 
-    dpif_close(&p->dpif);
-    dpifmon_destroy(p->dpifmon);
+    dpif_close(p->dpif);
+    netdev_monitor_destroy(p->netdev_monitor);
     PORT_ARRAY_FOR_EACH (ofport, &p->ports, port_no) {
         ofport_free(ofport);
     }
@@ -757,6 +748,17 @@ ofproto_run(struct ofproto *p)
     return error;
 }
 
+static void
+process_port_change(struct ofproto *ofproto, int error, char *devname)
+{
+    if (error == ENOBUFS) {
+        reinit_ports(ofproto);
+    } else if (!error) {
+        update_port(ofproto, devname);
+        free(devname);
+    }
+}
+
 int
 ofproto_run1(struct ofproto *p)
 {
@@ -769,15 +771,15 @@ ofproto_run1(struct ofproto *p)
         struct ofpbuf *buf;
         int error;
 
-        error = dpif_recv(&p->dpif, &buf);
+        error = dpif_recv(p->dpif, &buf);
         if (error) {
             if (error == ENODEV) {
                 /* Someone destroyed the datapath behind our back.  The caller
                  * better destroy us and give up, because we're just going to
                  * spin from here on out. */
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-                VLOG_ERR_RL(&rl, "dp%u: datapath was destroyed externally",
-                            dpif_id(&p->dpif));
+                VLOG_ERR_RL(&rl, "%s: datapath was destroyed externally",
+                            dpif_name(p->dpif));
                 return ENODEV;
             }
             break;
@@ -786,13 +788,12 @@ ofproto_run1(struct ofproto *p)
         handle_odp_msg(p, buf);
     }
 
-    while ((error = dpifmon_poll(p->dpifmon, &devname)) != EAGAIN) {
-        if (error == ENOBUFS) {
-            reinit_ports(p);
-        } else if (!error) {
-            update_port(p, devname);
-            free(devname);
-        }
+    while ((error = dpif_port_poll(p->dpif, &devname)) != EAGAIN) {
+        process_port_change(p, error, devname);
+    }
+    while ((error = netdev_monitor_poll(p->netdev_monitor,
+                                        &devname)) != EAGAIN) {
+        process_port_change(p, error, devname);
     }
 
     if (p->in_band) {
@@ -904,8 +905,9 @@ ofproto_wait(struct ofproto *p)
     struct ofconn *ofconn;
     size_t i;
 
-    dpif_recv_wait(&p->dpif);
-    dpifmon_wait(p->dpifmon);
+    dpif_recv_wait(p->dpif);
+    dpif_port_poll_wait(p->dpif);
+    netdev_monitor_poll_wait(p->netdev_monitor);
     LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
         ofconn_wait(ofconn);
     }
@@ -975,7 +977,7 @@ ofproto_send_packet(struct ofproto *p, const flow_t *flow,
 
     /* XXX Should we translate the dpif_execute() errno value into an OpenFlow
      * error code? */
-    dpif_execute(&p->dpif, flow->in_port, odp_actions.actions,
+    dpif_execute(p->dpif, flow->in_port, odp_actions.actions,
                  odp_actions.n_actions, packet);
     return 0;
 }
@@ -1027,7 +1029,7 @@ ofproto_flush_flows(struct ofproto *ofproto)
 {
     COVERAGE_INC(ofproto_flush);
     classifier_for_each(&ofproto->cls, CLS_INC_ALL, destroy_rule, ofproto);
-    dpif_flow_flush(&ofproto->dpif);
+    dpif_flow_flush(ofproto->dpif);
     if (ofproto->in_band) {
         in_band_flushed(ofproto->in_band);
     }
@@ -1050,7 +1052,7 @@ reinit_ports(struct ofproto *p)
     PORT_ARRAY_FOR_EACH (ofport, &p->ports, port_no) {
         svec_add (&devnames, (char *) ofport->opp.name);
     }
-    dpif_port_list(&p->dpif, &odp_ports, &n_odp_ports);
+    dpif_port_list(p->dpif, &odp_ports, &n_odp_ports);
     for (i = 0; i < n_odp_ports; i++) {
         svec_add (&devnames, odp_ports[i].devname);
     }
@@ -1080,7 +1082,7 @@ refresh_port_group(struct ofproto *p, unsigned int group)
             ports[n_ports++] = port_no;
         }
     }
-    dpif_port_group_set(&p->dpif, group, ports, n_ports);
+    dpif_port_group_set(p->dpif, group, ports, n_ports);
     free(ports);
 }
 
@@ -1112,7 +1114,7 @@ make_ofport(const struct odp_port *odp_port)
     ofport = xmalloc(sizeof *ofport);
     ofport->netdev = netdev;
     ofport->opp.port_no = odp_port_to_ofp_port(odp_port->port);
-    memcpy(ofport->opp.hw_addr, netdev_get_etheraddr(netdev), ETH_ALEN);
+    netdev_get_etheraddr(netdev, ofport->opp.hw_addr);
     memcpy(ofport->opp.name, odp_port->devname,
            MIN(sizeof ofport->opp.name, sizeof odp_port->devname));
     ofport->opp.name[sizeof ofport->opp.name - 1] = '\0';
@@ -1187,6 +1189,7 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
 static void
 ofport_install(struct ofproto *p, struct ofport *ofport)
 {
+    netdev_monitor_add(p->netdev_monitor, ofport->netdev);
     port_array_set(&p->ports, ofp_port_to_odp_port(ofport->opp.port_no),
                    ofport);
     shash_add(&p->port_by_name, (char *) ofport->opp.name, ofport);
@@ -1195,6 +1198,7 @@ ofport_install(struct ofproto *p, struct ofport *ofport)
 static void
 ofport_remove(struct ofproto *p, struct ofport *ofport)
 {
+    netdev_monitor_remove(p->netdev_monitor, ofport->netdev);
     port_array_set(&p->ports, ofp_port_to_odp_port(ofport->opp.port_no), NULL);
     shash_delete(&p->port_by_name,
                  shash_find(&p->port_by_name, (char *) ofport->opp.name));
@@ -1220,7 +1224,7 @@ update_port(struct ofproto *p, const char *devname)
     COVERAGE_INC(ofproto_update_port);
 
     /* Query the datapath for port information. */
-    error = dpif_port_query_by_name(&p->dpif, devname, &odp_port);
+    error = dpif_port_query_by_name(p->dpif, devname, &odp_port);
 
     /* Find the old ofport. */
     old_ofport = shash_find_data(&p->port_by_name, devname);
@@ -1289,7 +1293,7 @@ init_ports(struct ofproto *p)
     size_t i;
     int error;
 
-    error = dpif_port_list(&p->dpif, &ports, &n_ports);
+    error = dpif_port_list(p->dpif, &ports, &n_ports);
     if (error) {
         return error;
     }
@@ -1491,7 +1495,7 @@ rule_execute(struct ofproto *ofproto, struct rule *rule,
     }
 
     /* Execute the ODP actions. */
-    if (!dpif_execute(&ofproto->dpif, flow->in_port,
+    if (!dpif_execute(ofproto->dpif, flow->in_port,
                       actions, n_actions, packet)) {
         struct odp_flow_stats stats;
         flow_extract_stats(flow, packet, &stats);
@@ -1600,7 +1604,7 @@ do_put_flow(struct ofproto *ofproto, struct rule *rule, int flags,
     put->flow.actions = rule->odp_actions;
     put->flow.n_actions = rule->n_odp_actions;
     put->flags = flags;
-    return dpif_flow_put(&ofproto->dpif, put);
+    return dpif_flow_put(ofproto->dpif, put);
 }
 
 static void
@@ -1681,7 +1685,7 @@ rule_uninstall(struct ofproto *p, struct rule *rule)
         odp_flow.key = rule->cr.flow;
         odp_flow.actions = NULL;
         odp_flow.n_actions = 0;
-        if (!dpif_flow_del(&p->dpif, &odp_flow)) {
+        if (!dpif_flow_del(p->dpif, &odp_flow)) {
             update_stats(rule, &odp_flow.stats);
         }
         rule->installed = false;
@@ -1829,7 +1833,7 @@ handle_get_config_request(struct ofproto *p, struct ofconn *ofconn,
     bool drop_frags;
 
     /* Figure out flags. */
-    dpif_get_drop_frags(&p->dpif, &drop_frags);
+    dpif_get_drop_frags(p->dpif, &drop_frags);
     flags = drop_frags ? OFPC_FRAG_DROP : OFPC_FRAG_NORMAL;
     if (ofconn->send_flow_exp) {
         flags |= OFPC_SEND_FLOW_EXP;
@@ -1862,10 +1866,10 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
     if (ofconn == p->controller) {
         switch (flags & OFPC_FRAG_MASK) {
         case OFPC_FRAG_NORMAL:
-            dpif_set_drop_frags(&p->dpif, false);
+            dpif_set_drop_frags(p->dpif, false);
             break;
         case OFPC_FRAG_DROP:
-            dpif_set_drop_frags(&p->dpif, true);
+            dpif_set_drop_frags(p->dpif, true);
             break;
         default:
             VLOG_WARN_RL(&rl, "requested bad fragment mode (flags=%"PRIx16")",
@@ -2170,7 +2174,7 @@ handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
         return error;
     }
 
-    dpif_execute(&p->dpif, flow.in_port, actions.actions, actions.n_actions,
+    dpif_execute(p->dpif, flow.in_port, actions.actions, actions.n_actions,
                  &payload);
     ofpbuf_delete(buffer);
 
@@ -2313,7 +2317,7 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
     n_wild = classifier_count(&p->cls) - classifier_count_exact(&p->cls);
 
     /* Hash table. */
-    dpif_get_dp_stats(&p->dpif, &dpstats);
+    dpif_get_dp_stats(p->dpif, &dpstats);
     ots = append_stats_reply(sizeof *ots, ofconn, &msg);
     memset(ots, 0, sizeof *ots);
     ots->table_id = TABLEID_HASH;
@@ -2408,7 +2412,7 @@ query_stats(struct ofproto *p, struct rule *rule,
 
     packet_count = rule->packet_count;
     byte_count = rule->byte_count;
-    if (!dpif_flow_get_multiple(&p->dpif, odp_flows, n_odp_flows)) {
+    if (!dpif_flow_get_multiple(p->dpif, odp_flows, n_odp_flows)) {
         size_t i;
         for (i = 0; i < n_odp_flows; i++) {
             struct odp_flow *odp_flow = &odp_flows[i];
@@ -3219,7 +3223,7 @@ update_used(struct ofproto *p)
     size_t i;
     int error;
 
-    error = dpif_flow_list_all(&p->dpif, &flows, &n_flows);
+    error = dpif_flow_list_all(p->dpif, &flows, &n_flows);
     if (error) {
         return;
     }
@@ -3232,7 +3236,7 @@ update_used(struct ofproto *p)
             classifier_find_rule_exactly(&p->cls, &f->key, 0, UINT16_MAX));
         if (!rule || !rule->installed) {
             COVERAGE_INC(ofproto_unexpected_rule);
-            dpif_flow_del(&p->dpif, f);
+            dpif_flow_del(p->dpif, f);
             continue;
         }
 
@@ -3307,23 +3311,23 @@ send_packet_in_miss(struct ofpbuf *packet, void *p_)
 }
 
 static uint64_t
-pick_datapath_id(struct dpif *dpif, uint64_t fallback_dpid)
+pick_datapath_id(const struct ofproto *ofproto)
 {
-    char local_name[IF_NAMESIZE];
-    uint8_t ea[ETH_ADDR_LEN];
-    int error;
+    const struct ofport *port;
 
-    error = dpif_get_name(dpif, local_name, sizeof local_name);
-    if (!error) {
-        error = netdev_nodev_get_etheraddr(local_name, ea);
+    port = port_array_get(&ofproto->ports, ODPP_LOCAL);
+    if (port) {
+        uint8_t ea[ETH_ADDR_LEN];
+        int error;
+
+        error = netdev_get_etheraddr(port->netdev, ea);
         if (!error) {
             return eth_addr_to_uint64(ea);
         }
         VLOG_WARN("could not get MAC address for %s (%s)",
-                  local_name, strerror(error));
+                  netdev_get_name(port->netdev), strerror(error));
     }
-
-    return fallback_dpid;
+    return ofproto->fallback_dpid;
 }
 
 static uint64_t

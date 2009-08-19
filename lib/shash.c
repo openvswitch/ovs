@@ -44,22 +44,29 @@ shash_clear(struct shash *sh)
 {
     struct shash_node *node, *next;
 
-    HMAP_FOR_EACH_SAFE (node, next, struct shash_node, node, &sh->map) {
+    SHASH_FOR_EACH_SAFE (node, next, sh) {
         hmap_remove(&sh->map, &node->node);
         free(node->name);
         free(node);
     }
 }
 
-/* It is the caller's responsible to avoid duplicate names, if that is
+bool
+shash_is_empty(const struct shash *shash)
+{
+    return hmap_is_empty(&shash->map);
+}
+
+/* It is the caller's responsibility to avoid duplicate names, if that is
  * desirable. */
-void
+struct shash_node *
 shash_add(struct shash *sh, const char *name, void *data)
 {
     struct shash_node *node = xmalloc(sizeof *node);
     node->name = xstrdup(name);
     node->data = data;
     hmap_insert(&sh->map, &node->node, hash_name(name));
+    return node;
 }
 
 void
@@ -91,3 +98,11 @@ shash_find_data(const struct shash *sh, const char *name)
     struct shash_node *node = shash_find(sh, name);
     return node ? node->data : NULL;
 }
+
+struct shash_node *
+shash_first(const struct shash *shash)
+{
+    struct hmap_node *node = hmap_first(&shash->map);
+    return node ? CONTAINER_OF(node, struct shash_node, node) : NULL;
+}
+

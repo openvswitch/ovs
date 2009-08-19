@@ -21,7 +21,6 @@
 
 struct nicira_header;
 struct rconn;
-struct secchan;
 struct ofproto;
 struct status_reply;
 

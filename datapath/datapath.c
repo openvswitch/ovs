@@ -165,7 +165,8 @@ static void dp_ifinfo_notify(int event, struct net_bridge_port *port)
 		kfree_skb(skb);
 		goto errout;
 	}
-	err = rtnl_notify(skb, net, 0, RTNLGRP_LINK, NULL, GFP_KERNEL);
+	rtnl_notify(skb, net, 0, RTNLGRP_LINK, NULL, GFP_KERNEL);
+	return;
 errout:
 	if (err < 0)
 		rtnl_set_sk_err(net, RTNLGRP_LINK, err);
@@ -224,9 +225,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 
 	/* Initialize kobject for bridge.  This will be added as
 	 * /sys/class/net/<devname>/bridge later, if sysfs is enabled. */
-	kobject_set_name(&dp->ifobj, SYSFS_BRIDGE_PORT_SUBDIR); /* "bridge" */
 	dp->ifobj.kset = NULL;
-	dp->ifobj.parent = NULL;
 	kobject_init(&dp->ifobj, &dp_ktype);
 
 	/* Allocate table. */
@@ -256,9 +255,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	mutex_unlock(&dp_mutex);
 	rtnl_unlock();
 
-#ifdef SUPPORT_SYSFS
 	dp_sysfs_add_dp(dp);
-#endif
 
 	return 0;
 
@@ -286,9 +283,7 @@ static void do_destroy_dp(struct datapath *dp)
 		if (p->port_no != ODPP_LOCAL)
 			dp_del_port(p);
 
-#ifdef SUPPORT_SYSFS
 	dp_sysfs_del_dp(dp);
-#endif
 
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
@@ -333,7 +328,7 @@ static void release_nbp(struct kobject *kobj)
 }
 
 struct kobj_type brport_ktype = {
-#ifdef SUPPORT_SYSFS
+#ifdef CONFIG_SYSFS
 	.sysfs_ops = &brport_sysfs_ops,
 #endif
 	.release = release_nbp
@@ -370,9 +365,7 @@ static int new_nbp(struct datapath *dp, struct net_device *dev, int port_no)
 
 	/* Initialize kobject for bridge.  This will be added as
 	 * /sys/class/net/<devname>/brport later, if sysfs is enabled. */
-	kobject_set_name(&p->kobj, SYSFS_BRIDGE_PORT_ATTR); /* "brport" */
 	p->kobj.kset = NULL;
-	p->kobj.parent = &p->dev->NETDEV_DEV_MEMBER.kobj;
 	kobject_init(&p->kobj, &brport_ktype);
 
 	dp_ifinfo_notify(RTM_NEWLINK, p);
@@ -392,11 +385,6 @@ static int add_port(int dp_idx, struct odp_port __user *portp)
 	if (copy_from_user(&port, portp, sizeof port))
 		goto out;
 	port.devname[IFNAMSIZ - 1] = '\0';
-	port_no = port.port;
-
-	err = -EINVAL;
-	if (port_no < 0 || port_no >= DP_MAX_PORTS)
-		goto out;
 
 	rtnl_lock();
 	dp = get_dp_locked(dp_idx);
@@ -404,10 +392,13 @@ static int add_port(int dp_idx, struct odp_port __user *portp)
 	if (!dp)
 		goto out_unlock_rtnl;
 
-	err = -EEXIST;
-	if (dp->ports[port_no])
-		goto out_unlock_dp;
+	for (port_no = 1; port_no < DP_MAX_PORTS; port_no++)
+		if (!dp->ports[port_no])
+			goto got_port_no;
+	err = -EXFULL;
+	goto out_unlock_dp;
 
+got_port_no:
 	if (!(port.flags & ODP_PORT_INTERNAL)) {
 		err = -ENODEV;
 		dev = dev_get_by_name(&init_net, port.devname);
@@ -430,9 +421,9 @@ static int add_port(int dp_idx, struct odp_port __user *portp)
 	if (err)
 		goto out_put;
 
-#ifdef SUPPORT_SYSFS
 	dp_sysfs_add_if(dp->ports[port_no]);
-#endif
+
+	err = __put_user(port_no, &port.port);
 
 out_put:
 	dev_put(dev);
@@ -448,10 +439,8 @@ int dp_del_port(struct net_bridge_port *p)
 {
 	ASSERT_RTNL();
 
-#ifdef SUPPORT_SYSFS
 	if (p->port_no != ODPP_LOCAL)
 		dp_sysfs_del_if(p);
-#endif
 	dp_ifinfo_notify(RTM_DELLINK, p);
 
 	p->dp->n_ports--;
@@ -587,7 +576,7 @@ static int dp_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 #error
 #endif
 
-#ifdef CONFIG_XEN
+#if defined(CONFIG_XEN) && LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 /* This code is copied verbatim from net/dev/core.c in Xen's
  * linux-2.6.18-92.1.10.el5.xs5.0.0.394.644.  We can't call those functions
  * directly because they aren't exported. */
@@ -603,7 +592,7 @@ static int skb_pull_up_to(struct sk_buff *skb, void *ptr)
 	}
 }
 
-int skb_checksum_setup(struct sk_buff *skb)
+int vswitch_skb_checksum_setup(struct sk_buff *skb)
 {
 	if (skb->proto_csum_blank) {
 		if (skb->protocol != htons(ETH_P_IP))
@@ -634,7 +623,9 @@ int skb_checksum_setup(struct sk_buff *skb)
 out:
 	return -EPROTO;
 }
-#endif
+#else
+int vswitch_skb_checksum_setup(struct sk_buff *skb) { return 0; }
+#endif /* CONFIG_XEN && linux == 2.6.18 */
 
 int
 dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
@@ -660,7 +651,7 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 	 * the non-Xen case, but it is difficult to trigger or test this case
 	 * there, hence the WARN_ON_ONCE().
  	 */
-	err = skb_checksum_setup(skb);
+	err = vswitch_skb_checksum_setup(skb);
  	if (err)
 		goto err_kfree_skb;
 #ifndef CHECKSUM_HW
@@ -836,6 +827,7 @@ static void get_stats(struct sw_flow *flow, struct odp_flow_stats *stats)
 	stats->n_bytes = flow->byte_count;
 	stats->ip_tos = flow->ip_tos;
 	stats->tcp_flags = flow->tcp_flags;
+	stats->error = 0;
 }
 
 static void clear_stats(struct sw_flow *flow)
@@ -964,8 +956,6 @@ static int put_actions(const struct sw_flow *flow, struct odp_flow __user *ufp)
 
 	if (!n_actions)
 		return 0;
-	if (ufp->n_actions > INT_MAX / sizeof(union odp_action))
-		return -EINVAL;
 
 	sf_acts = rcu_dereference(flow->sf_acts);
 	if (__put_user(sf_acts->n_actions, &ufp->n_actions) ||
@@ -991,9 +981,7 @@ static int answer_query(struct sw_flow *flow, struct odp_flow __user *ufp)
 	return put_actions(flow, ufp);
 }
 
-static int del_or_query_flow(struct datapath *dp,
-			     struct odp_flow __user *ufp,
-			     unsigned int cmd)
+static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 {
 	struct dp_table *table = rcu_dereference(dp->table);
 	struct odp_flow uf;
@@ -1010,29 +998,24 @@ static int del_or_query_flow(struct datapath *dp,
 	if (!flow)
 		goto error;
 
-	if (cmd == ODP_FLOW_DEL) {
-		/* XXX redundant lookup */
-		error = dp_table_delete(table, flow);
-		if (error)
-			goto error;
+	/* XXX redundant lookup */
+	error = dp_table_delete(table, flow);
+	if (error)
+		goto error;
 
-		/* XXX These statistics might lose a few packets, since other
-		 * CPUs can be using this flow.  We used to synchronize_rcu()
-		 * to make sure that we get completely accurate stats, but that
-		 * blows our performance, badly. */
-		dp->n_flows--;
-		error = answer_query(flow, ufp);
-		flow_deferred_free(flow);
-	} else {
-		error = answer_query(flow, ufp);
-	}
+	/* XXX These statistics might lose a few packets, since other CPUs can
+	 * be using this flow.  We used to synchronize_rcu() to make sure that
+	 * we get completely accurate stats, but that blows our performance,
+	 * badly. */
+	dp->n_flows--;
+	error = answer_query(flow, ufp);
+	flow_deferred_free(flow);
 
 error:
 	return error;
 }
 
-static int query_multiple_flows(struct datapath *dp,
-				const struct odp_flowvec *flowvec)
+static int query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 {
 	struct dp_table *table = rcu_dereference(dp->table);
 	int i;
@@ -1048,7 +1031,7 @@ static int query_multiple_flows(struct datapath *dp,
 
 		flow = dp_table_lookup(table, &uf.key);
 		if (!flow)
-			error = __clear_user(&ufp->stats, sizeof ufp->stats);
+			error = __put_user(ENOENT, &ufp->stats.error);
 		else
 			error = answer_query(flow, ufp);
 		if (error)
@@ -1181,8 +1164,7 @@ error:
 	return err;
 }
 
-static int
-get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
+static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 {
 	struct odp_stats stats;
 	int i;
@@ -1297,7 +1279,7 @@ list_ports(struct datapath *dp, struct odp_portvec __user *pvp)
 				break;
 		}
 	}
-	return put_user(idx, &pvp->n_ports);
+	return put_user(dp->n_ports, &pvp->n_ports);
 }
 
 /* RCU callback for freeing a dp_port_group */
@@ -1381,24 +1363,28 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 	/* Handle commands with special locking requirements up front. */
 	switch (cmd) {
 	case ODP_DP_CREATE:
-		return create_dp(dp_idx, (char __user *)argp);
+		err = create_dp(dp_idx, (char __user *)argp);
+		goto exit;
 
 	case ODP_DP_DESTROY:
-		return destroy_dp(dp_idx);
+		err = destroy_dp(dp_idx);
+		goto exit;
 
 	case ODP_PORT_ADD:
-		return add_port(dp_idx, (struct odp_port __user *)argp);
+		err = add_port(dp_idx, (struct odp_port __user *)argp);
+		goto exit;
 
 	case ODP_PORT_DEL:
 		err = get_user(port_no, (int __user *)argp);
-		if (err)
-			break;
-		return del_port(dp_idx, port_no);
+		if (!err)
+			err = del_port(dp_idx, port_no);
+		goto exit;
 	}
 
 	dp = get_dp_locked(dp_idx);
+	err = -ENODEV;
 	if (!dp)
-		return -ENODEV;
+		goto exit;
 
 	switch (cmd) {
 	case ODP_DP_STATS:
@@ -1460,13 +1446,11 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		break;
 
 	case ODP_FLOW_DEL:
-	case ODP_FLOW_GET:
-		err = del_or_query_flow(dp, (struct odp_flow __user *)argp,
-					cmd);
+		err = del_flow(dp, (struct odp_flow __user *)argp);
 		break;
 
-	case ODP_FLOW_GET_MULTIPLE:
-		err = do_flowvec_ioctl(dp, argp, query_multiple_flows);
+	case ODP_FLOW_GET:
+		err = do_flowvec_ioctl(dp, argp, query_flows);
 		break;
 
 	case ODP_FLOW_LIST:
@@ -1482,6 +1466,7 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		break;
 	}
 	mutex_unlock(&dp->mutex);
+exit:
 	return err;
 }
 

@@ -213,9 +213,9 @@ static int if_up(const char *netdev_name)
 static void
 do_add_dp(int argc UNUSED, char *argv[])
 {
-    struct dpif dpif;
+    struct dpif *dpif;
     run(dpif_create(argv[1], &dpif), "add_dp");
-    dpif_close(&dpif);
+    dpif_close(dpif);
     if (argc > 2) {
         do_add_if(argc, argv);
     }
@@ -224,10 +224,10 @@ do_add_dp(int argc UNUSED, char *argv[])
 static void
 do_del_dp(int argc UNUSED, char *argv[])
 {
-    struct dpif dpif;
+    struct dpif *dpif;
     run(dpif_open(argv[1], &dpif), "opening datapath");
-    run(dpif_delete(&dpif), "del_dp");
-    dpif_close(&dpif);
+    run(dpif_delete(dpif), "del_dp");
+    dpif_close(dpif);
 }
 
 static int
@@ -245,41 +245,17 @@ query_ports(struct dpif *dpif, struct odp_port **ports, size_t *n_ports)
     qsort(*ports, *n_ports, sizeof **ports, compare_ports);
 }
 
-static uint16_t
-get_free_port(struct dpif *dpif)
-{
-    struct odp_port *ports;
-    size_t n_ports;
-    int port_no;
-
-    query_ports(dpif, &ports, &n_ports);
-    for (port_no = 0; port_no <= UINT16_MAX; port_no++) {
-        size_t i;
-        for (i = 0; i < n_ports; i++) {
-            if (ports[i].port == port_no) {
-                goto next_portno;
-            }
-        }
-        free(ports);
-        return port_no;
-
-    next_portno: ;
-    }
-    ovs_fatal(0, "no free datapath ports");
-}
-
 static void
 do_add_if(int argc UNUSED, char *argv[])
 {
     bool failure = false;
-    struct dpif dpif;
+    struct dpif *dpif;
     int i;
 
     run(dpif_open(argv[1], &dpif), "opening datapath");
     for (i = 2; i < argc; i++) {
         char *save_ptr = NULL;
         char *devname, *suboptions;
-        int port = -1;
         int flags = 0;
         int error;
 
@@ -292,11 +268,9 @@ do_add_if(int argc UNUSED, char *argv[])
         suboptions = strtok_r(NULL, "", &save_ptr);
         if (suboptions) {
             enum {
-                AP_PORT,
                 AP_INTERNAL
             };
             static char *options[] = {
-                "port",
                 "internal"
             };
 
@@ -304,13 +278,6 @@ do_add_if(int argc UNUSED, char *argv[])
                 char *value;
 
                 switch (getsubopt(&suboptions, options, &value)) {
-                case AP_PORT:
-                    if (!value) {
-                        ovs_error(0, "'port' suboption requires a value");
-                    }
-                    port = atoi(value);
-                    break;
-
                 case AP_INTERNAL:
                     flags |= ODP_PORT_INTERNAL;
                     break;
@@ -321,20 +288,16 @@ do_add_if(int argc UNUSED, char *argv[])
                 }
             }
         }
-        if (port < 0) {
-            port = get_free_port(&dpif);
-        }
 
-        error = dpif_port_add(&dpif, devname, port, flags);
+        error = dpif_port_add(dpif, devname, flags, NULL);
         if (error) {
-            ovs_error(error, "adding %s as port %"PRIu16" of %s failed",
-                      devname, port, argv[1]);
+            ovs_error(error, "adding %s to %s failed", devname, argv[1]);
             failure = true;
         } else if (if_up(devname)) {
             failure = true;
         }
     }
-    dpif_close(&dpif);
+    dpif_close(dpif);
     if (failure) {
         exit(EXIT_FAILURE);
     }
@@ -364,7 +327,7 @@ static void
 do_del_if(int argc UNUSED, char *argv[])
 {
     bool failure = false;
-    struct dpif dpif;
+    struct dpif *dpif;
     int i;
 
     run(dpif_open(argv[1], &dpif), "opening datapath");
@@ -375,18 +338,18 @@ do_del_if(int argc UNUSED, char *argv[])
 
         if (!name[strspn(name, "0123456789")]) {
             port = atoi(name);
-        } else if (!get_port_number(&dpif, name, &port)) {
+        } else if (!get_port_number(dpif, name, &port)) {
             failure = true;
             continue;
         }
 
-        error = dpif_port_del(&dpif, port);
+        error = dpif_port_del(dpif, port);
         if (error) {
             ovs_error(error, "deleting port %s from %s failed", name, argv[1]);
             failure = true;
         }
     }
-    dpif_close(&dpif);
+    dpif_close(dpif);
     if (failure) {
         exit(EXIT_FAILURE);
     }
@@ -400,7 +363,7 @@ show_dpif(struct dpif *dpif)
     size_t n_ports;
     size_t i;
 
-    printf("dp%u:\n", dpif_id(dpif));
+    printf("%s:\n", dpif_name(dpif));
     if (!dpif_get_dp_stats(dpif, &stats)) {
         printf("\tflows: cur:%"PRIu32", soft-max:%"PRIu32", "
                "hard-max:%"PRIu32"\n",
@@ -434,12 +397,12 @@ do_show(int argc, char *argv[])
         int i;
         for (i = 1; i < argc; i++) {
             const char *name = argv[i];
-            struct dpif dpif;
+            struct dpif *dpif;
             int error;
 
             error = dpif_open(name, &dpif);
             if (!error) {
-                show_dpif(&dpif);
+                show_dpif(dpif);
             } else {
                 ovs_error(error, "opening datapath %s failed", name);
                 failure = true;
@@ -449,13 +412,13 @@ do_show(int argc, char *argv[])
         unsigned int i;
         for (i = 0; i < ODP_MAX; i++) {
             char name[128];
-            struct dpif dpif;
+            struct dpif *dpif;
             int error;
 
             sprintf(name, "dp%u", i);
             error = dpif_open(name, &dpif);
             if (!error) {
-                show_dpif(&dpif);
+                show_dpif(dpif);
             } else if (error != ENODEV) {
                 ovs_error(error, "opening datapath %s failed", name);
                 failure = true;
@@ -478,16 +441,11 @@ do_dump_dps(int argc UNUSED, char *argv[] UNUSED)
     error = dp_enumerate(&all_dps);
 
     for (i = 0; i < all_dps.n; i++) {
-        struct dpif dpif;
-        char dpif_name[IF_NAMESIZE];
-
-        if (dpif_open(all_dps.names[i], &dpif)) {
-            continue;
+        struct dpif *dpif;
+        if (!dpif_open(all_dps.names[i], &dpif)) {
+            printf("%s\n", dpif_name(dpif));
+            dpif_close(dpif);
         }
-        if (!dpif_get_name(&dpif, dpif_name, sizeof dpif_name)) {
-            printf("%s\n", dpif_name);
-        }
-        dpif_close(&dpif);
     }
 
     svec_destroy(&all_dps);
@@ -500,13 +458,13 @@ static void
 do_dump_flows(int argc UNUSED, char *argv[])
 {
     struct odp_flow *flows;
-    struct dpif dpif;
+    struct dpif *dpif;
     size_t n_flows;
     struct ds ds;
     size_t i;
 
     run(dpif_open(argv[1], &dpif), "opening datapath");
-    run(dpif_flow_list_all(&dpif, &flows, &n_flows), "listing all flows");
+    run(dpif_flow_list_all(dpif, &flows, &n_flows), "listing all flows");
 
     ds_init(&ds);
     for (i = 0; i < n_flows; i++) {
@@ -516,41 +474,40 @@ do_dump_flows(int argc UNUSED, char *argv[])
 
         f->actions = actions;
         f->n_actions = MAX_ACTIONS;
-        dpif_flow_get(&dpif, f);
+        dpif_flow_get(dpif, f);
 
         ds_clear(&ds);
         format_odp_flow(&ds, f);
         printf("%s\n", ds_cstr(&ds));
     }
     ds_destroy(&ds);
-    dpif_close(&dpif);
+    dpif_close(dpif);
 }
 
 static void
 do_del_flows(int argc UNUSED, char *argv[])
 {
-    struct dpif dpif;
+    struct dpif *dpif;
 
     run(dpif_open(argv[1], &dpif), "opening datapath");
-    run(dpif_flow_flush(&dpif), "deleting all flows");
-    dpif_close(&dpif);
+    run(dpif_flow_flush(dpif), "deleting all flows");
+    dpif_close(dpif);
 }
 
 static void
 do_dump_groups(int argc UNUSED, char *argv[])
 {
     struct odp_stats stats;
-    struct dpif dpif;
+    struct dpif *dpif;
     unsigned int i;
 
     run(dpif_open(argv[1], &dpif), "opening datapath");
-    run(dpif_get_dp_stats(&dpif, &stats), "get datapath stats");
+    run(dpif_get_dp_stats(dpif, &stats), "get datapath stats");
     for (i = 0; i < stats.max_groups; i++) {
-        uint16_t ports[UINT16_MAX];
+        uint16_t *ports;
         size_t n_ports;
 
-        if (!dpif_port_group_get(&dpif, i, ports,
-                                 ARRAY_SIZE(ports), &n_ports) && n_ports) {
+        if (!dpif_port_group_get(dpif, i, &ports, &n_ports) && n_ports) {
             size_t j;
 
             printf("group %u:", i);
@@ -559,8 +516,9 @@ do_dump_groups(int argc UNUSED, char *argv[])
             }
             printf("\n");
         }
+        free(ports);
     }
-    dpif_close(&dpif);
+    dpif_close(dpif);
 }
 
 static void

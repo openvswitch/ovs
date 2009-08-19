@@ -80,7 +80,7 @@ static void send_child_message(struct rconn *, uint32_t xid, uint32_t status,
 
 /* Returns true if 'cmd' is allowed by 'acl', which is a command-separated
  * access control list in the format described for --command-acl in
- * secchan(8). */
+ * ovs-openflowd(8). */
 static bool
 executer_is_permitted(const char *acl_, const char *cmd)
 {

@@ -84,16 +84,17 @@ rm -rf \
     $RPM_BUILD_ROOT/root/vswitch/bin/ovs-controller \
     $RPM_BUILD_ROOT/root/vswitch/bin/ovs-discover \
     $RPM_BUILD_ROOT/root/vswitch/bin/ovs-kill \
+    $RPM_BUILD_ROOT/root/vswitch/bin/ovs-openflowd \
     $RPM_BUILD_ROOT/root/vswitch/bin/ovs-pki \
     $RPM_BUILD_ROOT/root/vswitch/bin/ovs-switchui \
     $RPM_BUILD_ROOT/root/vswitch/bin/ovs-wdt \
-    $RPM_BUILD_ROOT/root/vswitch/bin/secchan \
+    $RPM_BUILD_ROOT/root/vswitch/kernel_modules/veth_mod.ko \
     $RPM_BUILD_ROOT/root/vswitch/sbin/ovs-monitor \
     $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-controller.8 \
     $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-discover.8 \
     $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-kill.8 \
+    $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-openflowd.8 \
     $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-pki.8 \
-    $RPM_BUILD_ROOT/root/vswitch/share/man/man8/secchan.8 \
     $RPM_BUILD_ROOT/root/vswitch/share/openvswitch
 
 %clean
@@ -291,7 +292,6 @@ fi
 /etc/profile.d/vswitch.sh
 /root/vswitch/kernel_modules/brcompat_mod.ko
 /root/vswitch/kernel_modules/openvswitch_mod.ko
-/root/vswitch/kernel_modules/veth_mod.ko
 /root/vswitch/scripts/dump-vif-details
 /root/vswitch/scripts/interface-reconfigure
 /root/vswitch/scripts/vif

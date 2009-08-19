@@ -6,6 +6,7 @@ bin_PROGRAMS += \
 	utilities/ovs-dpctl \
 	utilities/ovs-kill \
 	utilities/ovs-ofctl \
+	utilities/ovs-openflowd \
 	utilities/ovs-wdt
 noinst_PROGRAMS += utilities/nlmon
 bin_SCRIPTS += utilities/ovs-pki
@@ -20,6 +21,7 @@ EXTRA_DIST += \
 	utilities/ovs-dpctl.8.in \
 	utilities/ovs-kill.8.in \
 	utilities/ovs-ofctl.8.in \
+	utilities/ovs-openflowd.8.in \
 	utilities/ovs-parse-leaks.in \
 	utilities/ovs-pki-cgi.in \
 	utilities/ovs-pki.8.in \
@@ -32,6 +34,7 @@ DISTCLEANFILES += \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-kill.8 \
 	utilities/ovs-ofctl.8 \
+	utilities/ovs-openflowd.8 \
 	utilities/ovs-parse-leaks \
 	utilities/ovs-pki \
 	utilities/ovs-pki.8 \
@@ -45,6 +48,7 @@ man_MANS += \
 	utilities/ovs-dpctl.8 \
 	utilities/ovs-kill.8 \
 	utilities/ovs-ofctl.8 \
+	utilities/ovs-openflowd.8 \
 	utilities/ovs-pki.8
 
 utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
@@ -67,6 +71,13 @@ utilities_ovs_kill_LDADD = lib/libopenvswitch.a
 
 utilities_ovs_ofctl_SOURCES = utilities/ovs-ofctl.c
 utilities_ovs_ofctl_LDADD = lib/libopenvswitch.a $(FAULT_LIBS) $(SSL_LIBS)
+
+utilities_ovs_openflowd_SOURCES = utilities/ovs-openflowd.c
+utilities_ovs_openflowd_LDADD = \
+	ofproto/libofproto.a \
+	lib/libopenvswitch.a \
+	$(FAULT_LIBS) \
+	$(SSL_LIBS)
 
 utilities_ovs_wdt_SOURCES = utilities/ovs-wdt.c
 

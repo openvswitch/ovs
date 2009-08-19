@@ -1,16 +1,16 @@
-.TH ovs\-vswitchd 8 "March 2009" "Open vSwitch" "OpenVSwitch Manual"
+.TH ovs\-vswitchd 8 "June 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-vswitchd
 .
 .SH NAME
-ovs\-vswitchd \- virtual switch daemon
+ovs\-vswitchd \- Open vSwitch daemon
 .
 .SH SYNOPSIS
 .B ovs\-vswitchd
 \fIconfig\fR
 .
 .SH DESCRIPTION
-A daemon that manages and controls any number of virtual switches on
-the local machine.
+A daemon that manages and controls any number of Open vSwitch switches 
+on the local machine.
 .PP
 The mandatory \fIconfig\fR argument specifies a configuration file.
 For a description of \fBovs\-vswitchd\fR configuration syntax, see
@@ -22,8 +22,8 @@ operates switching across each bridge described in its configuration
 files.  If a logfile was specified on the command line it will also 
 be opened or reopened.
 .PP
-\fBovs\-vswitchd\fR virtual switches may be configured with any of the
-following features:
+\fBovs\-vswitchd\fR switches may be configured with any of the following 
+features:
 .
 .IP \(bu
 L2 switching with MAC learning.
@@ -46,17 +46,17 @@ Connectivity to an external OpenFlow controller, such as NOX.
 .
 .PP
 Only a single instance of \fBovs\-vswitchd\fR is intended to run at a time.
-A single \fBovs\-vswitchd\fR can manage any number of virtual switches, up
+A single \fBovs\-vswitchd\fR can manage any number of switch instances, up
 to the maximum number of supported Open vSwitch datapaths.
 .PP
-\fBovs\-vswitchd\fR does all the necessary management of OpenVSwitch datapaths
+\fBovs\-vswitchd\fR does all the necessary management of Open vSwitch datapaths
 itself.  Thus, external tools, such \fBovs\-dpctl\fR(8), are not needed for
 managing datapaths in conjunction with \fBovs\-vswitchd\fR, and their use
 to modify datapaths when \fBovs\-vswitchd\fR is running can interfere with
 its operation.  (\fBovs\-dpctl\fR may still be useful for diagnostics.)
 .PP
 An Open vSwitch datapath kernel module must be loaded for \fBovs\-vswitchd\fR
-to be useful.  Please refer to the \fBINSTALL\fR file included in the
+to be useful.  Please refer to the \fBINSTALL.Linux\fR file included in the
 Open vSwitch distribution for instructions on how to build and load
 the Open vSwitch kernel module.
 .PP
@@ -84,4 +84,4 @@ Only Linux 2.6.\fIx\fR is currently supported.
 .BR ovs\-appctl (8),
 .BR ovs\-vswitchd.conf (5),
 .BR ovs\-brcompatd (8),
-\fBINSTALL\fR in the Open vSwitch distribution.
+\fBINSTALL.Linux\fR in the Open vSwitch distribution.

@@ -9,7 +9,6 @@ AUTOMAKE_OPTIONS = foreign subdir-objects
 ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = datapath
 
-if ENABLE_USERSPACE
 AM_CPPFLAGS = $(SSL_CFLAGS)
 AM_CPPFLAGS += $(NCURSES_CFLAGS)
 AM_CPPFLAGS += $(PCRE_CFLAGS)
@@ -27,9 +26,11 @@ endif
 
 CLEANFILES =
 DISTCLEANFILES =
-EXTRA_DIST = INSTALL.Linux INSTALL.XenServer INSTALL.SSL
-TESTS =
-TESTS_ENVIRONMENT =
+EXTRA_DIST = INSTALL.bridge \
+	INSTALL.Linux \
+	INSTALL.OpenFlow \
+	INSTALL.SSL \
+	INSTALL.XenServer 
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =
@@ -57,7 +58,7 @@ SUFFIXES = .in
                 -e 's,[@]PERL[@],$(PERL),g' > $@
 
 include lib/automake.mk
-include secchan/automake.mk
+include ofproto/automake.mk
 include utilities/automake.mk
 include tests/automake.mk
 include include/automake.mk
@@ -65,9 +66,4 @@ include third-party/automake.mk
 include debian/automake.mk
 include vswitchd/automake.mk
 include xenserver/automake.mk
-if HAVE_CURSES
-if HAVE_PCRE
 include extras/ezio/automake.mk
-endif
-endif
-endif # ENABLE_USERSPACE

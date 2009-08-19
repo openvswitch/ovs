@@ -1,0 +1,21 @@
+AT_BANNER([code coverage])
+
+m4_define([_OVS_RUN_LCOV], [test $LCOV = false || lcov -b $abs_top_builddir -d $abs_top_builddir $1])
+
+AT_SETUP([initialize lcov])
+AT_CHECK([rm -fr $abs_builddir/coverage.html])
+AT_CHECK([rm -f $abs_builddir/coverage.info])
+AT_CHECK([$LCOV || exit 77])
+AT_CHECK([_OVS_RUN_LCOV([-c -i -o - > $abs_builddir/coverage.info])], [0], [ignore], [ignore])
+AT_CLEANUP
+
+# OVS_CHECK_LCOV(COMMAND, [STATUS = `0'], [STDOUT = `'], [STDERR = `'], 
+#                [RUN-IF-FAIL], [RUN-IF-PASS])
+#
+# This macro is equivalent to AT_CHECK, except that COMMAND should be a single
+# shell command that invokes a program whose code coverage is to be measured
+# (if configure was invoked with --coverage).  
+m4_define([OVS_CHECK_LCOV],
+    [AT_CHECK([_OVS_RUN_LCOV([-z])], [0], [ignore], [ignore])
+     AT_CHECK($@)
+     AT_CHECK([_OVS_RUN_LCOV([-c -o - >> $abs_builddir/coverage.info])], [0], [ignore], [ignore])])

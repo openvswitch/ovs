@@ -74,7 +74,7 @@ struct in_band {
     uint32_t last_ip;           /* Last known IP, 0 if never known. */
     uint8_t mac[ETH_ADDR_LEN];  /* Current MAC, 0 if unknown. */
     uint8_t last_mac[ETH_ADDR_LEN]; /* Last known MAC, 0 if never known */
-    char *dev_name;
+    struct netdev *netdev;
     time_t next_refresh;        /* Next time to refresh MAC address. */
 
     /* Keeping track of the local port's MAC address. */
@@ -102,14 +102,21 @@ get_controller_mac(struct in_band *ib)
         /* Look up MAC address. */
         memset(ib->mac, 0, sizeof ib->mac);
         if (ib->ip) {
-            uint32_t local_ip = rconn_get_local_ip(ib->controller);
+            struct in_addr local_in4 = { rconn_get_local_ip(ib->controller) };
             struct in_addr in4;
             int retval;
 
-            in4.s_addr = local_ip;
-            if (netdev_find_dev_by_in4(&in4, &ib->dev_name)) {
-                retval = netdev_nodev_arp_lookup(ib->dev_name, ib->ip,
-                        ib->mac);
+            /* Refresh device with IP address 'in4'. */
+            if (!ib->netdev
+                || netdev_get_in4(ib->netdev, &in4)
+                || in4.s_addr != local_in4.s_addr)
+            {
+                netdev_close(ib->netdev);
+                ib->netdev = netdev_find_dev_by_in4(&local_in4);
+            }
+
+            if (ib->netdev) {
+                retval = netdev_arp_lookup(ib->netdev, ib->ip, ib->mac);
                 if (retval) {
                     VLOG_DBG_RL(&rl, "cannot look up controller MAC address "
                                 "("IP_FMT"): %s",
@@ -117,7 +124,7 @@ get_controller_mac(struct in_band *ib)
                 }
             } else {
                 VLOG_DBG_RL(&rl, "cannot find device with IP address "IP_FMT,
-                    IP_ARGS(&local_ip));
+                    IP_ARGS(&local_in4.s_addr));
             }
         }
         have_mac = !eth_addr_is_zero(ib->mac);
@@ -151,7 +158,7 @@ get_local_mac(struct in_band *ib)
     time_t now = time_now();
     if (now >= ib->next_local_refresh) {
         uint8_t ea[ETH_ADDR_LEN];
-        if (ib->dev_name && (!netdev_nodev_get_etheraddr(ib->dev_name, ea))) {
+        if (ib->netdev && !netdev_get_etheraddr(ib->netdev, ea)) {
             memcpy(ib->local_mac, ea, ETH_ADDR_LEN);
         }
         ib->next_local_refresh = now + 1;
@@ -333,7 +340,7 @@ in_band_create(struct ofproto *ofproto, struct switch_status *ss,
                                              in_band_status_cb, in_band);
     in_band->next_refresh = TIME_MIN;
     in_band->next_local_refresh = TIME_MIN;
-    in_band->dev_name = NULL;
+    in_band->netdev = NULL;
 
     *in_bandp = in_band;
 }
@@ -343,6 +350,7 @@ in_band_destroy(struct in_band *in_band)
 {
     if (in_band) {
         switch_status_unregister(in_band->ss_cat);
+        netdev_close(in_band->netdev);
         /* We don't own the rconn. */
     }
 }

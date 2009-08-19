@@ -81,12 +81,25 @@ static int punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
 static int
 punix_open(const char *name UNUSED, char *suffix, struct pvconn **pvconnp)
 {
-    int fd;
+    int fd, error;
 
     fd = make_unix_socket(SOCK_STREAM, true, true, suffix, NULL);
     if (fd < 0) {
         VLOG_ERR("%s: binding failed: %s", suffix, strerror(errno));
         return errno;
+    }
+
+    error = set_nonblocking(fd);
+    if (error) {
+        close(fd);
+        return error;
+    }
+
+    if (listen(fd, 10) < 0) {
+        error = errno;
+        VLOG_ERR("%s: listen: %s", name, strerror(error));
+        close(fd);
+        return error;
     }
 
     return new_pstream_pvconn("punix", fd, punix_accept, pvconnp);

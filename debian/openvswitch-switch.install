@@ -1,4 +1,4 @@
-_debian/secchan/secchan usr/sbin
+_debian/utilities/ovs-openflowd usr/sbin
 _debian/utilities/ovs-dpctl usr/sbin
 _debian/utilities/ovs-discover usr/sbin
 _debian/utilities/ovs-kill usr/sbin

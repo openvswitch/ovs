@@ -62,4 +62,4 @@ loaded.
 .BR ovs\-appctl (8),
 .BR ovs\-vswitchd (8),
 .BR ovs\-vswitchd.conf (5),
-\fBINSTALL\fR in the Open vSwitch distribution.
+\fBINSTALL.bridge\fR in the Open vSwitch distribution.

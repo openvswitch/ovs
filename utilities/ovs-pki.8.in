@@ -325,6 +325,6 @@ Prints a help usage message and exits.
 
 .SH "SEE ALSO"
 
-.BR controller (8),
-.BR ovs\-pki\-cgi (8),
-.BR secchan (8)
+.BR ovs\-controller (8),
+.BR ovs\-openflowd (8),
+.BR ovs\-pki\-cgi (8)

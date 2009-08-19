@@ -1,0 +1,6 @@
+AT_BANNER([code coverage])
+
+AT_SETUP([generate coverage.html with lcov])
+AT_CHECK([$LCOV || exit 77])
+AT_CHECK([cd $abs_builddir && genhtml -o coverage.html coverage.info], [0], [ignore], [ignore])
+AT_CLEANUP

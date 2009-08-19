@@ -1,4 +1,4 @@
-/var/log/openvswitch/secchan.log {
+/var/log/openvswitch/ovs-openflowd.log {
         daily
         compress
         create 640 root adm
@@ -6,6 +6,6 @@
         missingok
         rotate 30
         postrotate
-                ovs-appctl --target /var/run/secchan.pid --reopen
+                ovs-appctl --target /var/run/ovs-openflowd.pid --reopen
         endscript
 }

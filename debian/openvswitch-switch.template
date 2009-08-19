@@ -1,7 +1,7 @@
 # This is a POSIX shell fragment                -*- sh -*-
 
-# To configure the secure channel, fill in the following properly and
-# uncomment them.  Afterward, the secure channel will come up
+# To configure the OpenFlow switch, fill in the following properly and
+# uncomment them.  Afterward, the switch will come up
 # automatically at boot time.  It can be started immediately with
 #       /etc/init.d/openvswitch-switch start
 # Alternatively, use the ovs-switch-setup program (from the
@@ -101,12 +101,12 @@ SWITCH_IP=dhcp
 # Set CACERT_MODE to 'secure' or 'bootstrap' for these respective cases.
 #CACERT_MODE=secure
 
-# MGMT_VCONNS: List of vconns (space-separated) on which secchan
+# MGMT_VCONNS: List of vconns (space-separated) on which ovs-openflowd
 # should listen for management connections from ovs-ofctl, etc.
 # openvswitch-switchui by default connects to
-# unix:/var/run/secchan.mgmt, so do not disable this if you want to
+# unix:/var/run/ovs-openflowd.mgmt, so do not disable this if you want to
 # use openvswitch-switchui.
-MGMT_VCONNS="punix:/var/run/secchan.mgmt"
+MGMT_VCONNS="punix:/var/run/ovs-openflowd.mgmt"
 
 # COMMANDS: Access control list for the commands that can be executed
 # remotely over the OpenFlow protocol, as a comma-separated list of
@@ -122,7 +122,7 @@ MGMT_VCONNS="punix:/var/run/secchan.mgmt"
 #DISCONNECTED_MODE=switch
 
 # STP: Enable or disabled 802.1D-1998 Spanning Tree Protocol.  Set to
-# 'yes' to enable STP, 'no' to disable it.  If unset, secchan's
+# 'yes' to enable STP, 'no' to disable it.  If unset, ovs-openflowd's
 # current default is 'no' (but this may change in the future).
 #STP=no
 
@@ -133,17 +133,17 @@ MGMT_VCONNS="punix:/var/run/secchan.mgmt"
 #RATE_LIMIT=1000
 
 # INACTIVITY_PROBE: The maximum number of seconds of inactivity on the
-# controller connection before secchan sends an inactivity probe
+# controller connection before ovs-openflowd sends an inactivity probe
 # message to the controller.  The valid range is 5 and up.  If unset,
-# secchan defaults to 5 seconds.
+# ovs-openflowd defaults to 5 seconds.
 #INACTIVITY_PROBE=5
 
-# MAX_BACKOFF: The maximum time that secchan will wait between
+# MAX_BACKOFF: The maximum time that ovs-openflowd will wait between
 # attempts to connect to the controller.  The valid range is 1 and up.
-# If unset, secchan defaults to 8 seconds.
+# If unset, ovs-openflowd defaults to 8 seconds.
 #MAX_BACKOFF=8
 
-# DAEMON_OPTS: Additional options to pass to secchan, e.g. "--fail=open"
+# DAEMON_OPTS: Additional options to pass to ovs-openflowd, e.g. "--fail=open"
 DAEMON_OPTS=""
 
 # CORE_LIMIT: Maximum size for core dumps.

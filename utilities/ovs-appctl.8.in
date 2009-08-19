@@ -79,7 +79,7 @@ expanded as follows:
 
 .RS
 .IP \fB%A\fR
-The name of the application logging the message, e.g. \fBsecchan\fR.
+The name of the application logging the message, e.g. \fBovs-vswitchd\fR.
 
 .IP \fB%c\fR
 The name of the module (as shown by \fBovs\-appctl --list\fR) logging
@@ -163,4 +163,4 @@ error occurs.  Use \fB-e help\fR to print a list of available commands.
 
 .BR ovs\-controller (8),
 .BR ovs\-dpctl (8),
-.BR secchan (8)
+.BR ovs\-openflowd (8)

@@ -48,7 +48,7 @@ static int n_ifaces;
 
 /* --accept-vconn: Regular expression specifying the class of controller vconns
  * that we will accept during autodiscovery. */
-static const char *accept_controller_re = ".*";
+static const char *accept_controller_re = "tcp:.*";
 static regex_t accept_controller_regex;
 
 /* --exit-without-bind: Exit after discovering the controller, without binding

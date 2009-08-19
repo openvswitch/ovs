@@ -28,12 +28,13 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
+#include "dpif.h"
 #include "fault.h"
 #include "leak-checker.h"
 #include "mgmt.h"
+#include "netdev.h"
 #include "ovs-vswitchd.h"
 #include "poll-loop.h"
-#include "port.h"
 #include "proc-net-compat.h"
 #include "process.h"
 #include "signals.h"
@@ -86,7 +87,6 @@ main(int argc, char *argv[])
     }
     mgmt_init();
     bridge_init();
-    port_init();
     mgmt_reconfigure();
 
     need_reconfigure = false;
@@ -103,6 +103,8 @@ main(int argc, char *argv[])
             need_reconfigure = true;
         }
         unixctl_server_run(unixctl);
+        dp_run();
+        netdev_run();
 
         if (need_reconfigure) {
             poll_immediate_wake();
@@ -111,6 +113,8 @@ main(int argc, char *argv[])
         mgmt_wait();
         bridge_wait();
         unixctl_server_wait(unixctl);
+        dp_wait();
+        netdev_wait();
         poll_block();
     }
 
@@ -133,7 +137,6 @@ reconfigure(void)
     cfg_read();
     bridge_reconfigure();
     mgmt_reconfigure();
-    port_reconfigure();
 
     for (i = 0; i < n_conns; i++) {
         unixctl_command_reply(conns[i], 202, NULL);
@@ -234,7 +237,7 @@ parse_options(int argc, char *argv[])
 static void
 usage(void)
 {
-    printf("%s: virtual switch daemon\n"
+    printf("%s: Open vSwitch daemon\n"
            "usage: %s [OPTIONS] CONFIG\n"
            "CONFIG is a configuration file in ovs-vswitchd.conf(5) format.\n",
            program_name, program_name);

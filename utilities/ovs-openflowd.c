@@ -28,21 +28,17 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "dirs.h"
-#include "discovery.h"
 #include "dpif.h"
-#include "fail-open.h"
 #include "fault.h"
-#include "in-band.h"
 #include "leak-checker.h"
 #include "list.h"
 #include "netdev.h"
 #include "ofpbuf.h"
-#include "ofproto.h"
+#include "ofproto/ofproto.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"
-#include "status.h"
 #include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
@@ -51,7 +47,7 @@
 #include "vconn.h"
 
 #include "vlog.h"
-#define THIS_MODULE VLM_secchan
+#define THIS_MODULE VLM_openflowd
 
 /* Behavior when the connection to the controller fails. */
 enum fail_mode {
@@ -198,9 +194,13 @@ main(int argc, char *argv[])
             ovs_fatal(error, "unrecoverable datapath error");
         }
         unixctl_server_run(unixctl);
+        dp_run();
+        netdev_run();
 
         ofproto_wait(ofproto);
         unixctl_server_wait(unixctl);
+        dp_wait();
+        netdev_wait();
         poll_block();
     }
 
@@ -496,7 +496,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
     /* Set accept_controller_regex. */
     if (!s->accept_controller_re) {
-        s->accept_controller_re = vconn_ssl_is_configured() ? "^ssl:.*" : ".*";
+        s->accept_controller_re
+            = vconn_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*";
     }
 
     /* Mode of operation. */
@@ -518,7 +519,7 @@ usage(void)
            "usage: %s [OPTIONS] DATAPATH [CONTROLLER]\n"
            "DATAPATH is a local datapath (e.g. \"dp0\").\n"
            "CONTROLLER is an active OpenFlow connection method; if it is\n"
-           "omitted, then secchan performs controller discovery.\n",
+           "omitted, then ovs-openflowd performs controller discovery.\n",
            program_name, program_name);
     vconn_usage(true, true, true);
     printf("\nOpenFlow options:\n"
@@ -538,7 +539,7 @@ usage(void)
            "                            closed: drop all packets\n"
            "                            open (default): act as learning switch\n"
            "  --inactivity-probe=SECS time between inactivity probes\n"
-           "  --max-idle=SECS         max idle for flows set up by secchan\n"
+           "  --max-idle=SECS         max idle for flows set up by switch\n"
            "  --max-backoff=SECS      max time between controller connection\n"
            "                          attempts (default: 8 seconds)\n"
            "  -l, --listen=METHOD     allow management connections on METHOD\n"

@@ -34,7 +34,8 @@ struct svec;
 
 enum netdev_flags {
     NETDEV_UP = 0x0001,         /* Device enabled? */
-    NETDEV_PROMISC = 0x0002     /* Promiscuous mode? */
+    NETDEV_PROMISC = 0x0002,    /* Promiscuous mode? */
+    NETDEV_LOOPBACK = 0x0004    /* This is a loopback device. */
 };
 
 enum netdev_pseudo_ethertype {
@@ -43,6 +44,9 @@ enum netdev_pseudo_ethertype {
     NETDEV_ETH_TYPE_802_2        /* Receive all IEEE 802.2 frames. */
 };
 
+/* Network device statistics.
+ *
+ * Values of unsupported statistics are set to all-1-bits (UINT64_MAX). */
 struct netdev_stats {
     uint64_t rx_packets;        /* Total packets received. */
     uint64_t tx_packets;        /* Total packets transmitted. */
@@ -73,49 +77,59 @@ struct netdev_stats {
 
 struct netdev;
 
+int netdev_initialize(void);
+void netdev_run(void);
+void netdev_wait(void);
+
 int netdev_open(const char *name, int ethertype, struct netdev **);
-int netdev_open_tap(const char *name, struct netdev **);
 void netdev_close(struct netdev *);
+
+bool netdev_exists(const char *name);
+
+int netdev_enumerate(struct svec *);
+
+const char *netdev_get_name(const struct netdev *);
+int netdev_get_mtu(const struct netdev *, int *mtup);
 
 int netdev_recv(struct netdev *, struct ofpbuf *);
 void netdev_recv_wait(struct netdev *);
 int netdev_drain(struct netdev *);
+
 int netdev_send(struct netdev *, const struct ofpbuf *);
 void netdev_send_wait(struct netdev *);
+
 int netdev_set_etheraddr(struct netdev *, const uint8_t mac[6]);
-const uint8_t *netdev_get_etheraddr(const struct netdev *);
-const char *netdev_get_name(const struct netdev *);
-int netdev_get_mtu(const struct netdev *);
+int netdev_get_etheraddr(const struct netdev *, uint8_t mac[6]);
+
+int netdev_get_carrier(const struct netdev *, bool *carrier);
 int netdev_get_features(struct netdev *,
                         uint32_t *current, uint32_t *advertised,
                         uint32_t *supported, uint32_t *peer);
 int netdev_set_advertisements(struct netdev *, uint32_t advertise);
-bool netdev_get_in4(const struct netdev *, struct in_addr *);
+
+int netdev_get_in4(const struct netdev *, struct in_addr *);
 int netdev_set_in4(struct netdev *, struct in_addr addr, struct in_addr mask);
-int netdev_add_router(struct in_addr router);
-bool netdev_get_in6(const struct netdev *, struct in6_addr *);
+int netdev_get_in6(const struct netdev *, struct in6_addr *);
+int netdev_add_router(struct netdev *, struct in_addr router);
+int netdev_arp_lookup(const struct netdev *, uint32_t ip, uint8_t mac[6]);
+
 int netdev_get_flags(const struct netdev *, enum netdev_flags *);
 int netdev_set_flags(struct netdev *, enum netdev_flags, bool permanent);
 int netdev_turn_flags_on(struct netdev *, enum netdev_flags, bool permanent);
 int netdev_turn_flags_off(struct netdev *, enum netdev_flags, bool permanent);
-int netdev_arp_lookup(const struct netdev *, uint32_t ip, uint8_t mac[6]);
-int netdev_get_carrier(const struct netdev *, bool *carrier);
+
 int netdev_get_stats(const struct netdev *, struct netdev_stats *);
 int netdev_set_policing(struct netdev *, uint32_t kbits_rate, 
                         uint32_t kbits_burst);
 
-void netdev_enumerate(struct svec *);
-bool netdev_find_dev_by_in4(const struct in_addr *in4, char **netdev_name);
-int netdev_nodev_get_flags(const char *netdev_name, enum netdev_flags *);
-bool netdev_nodev_get_in4(const char *netdev_name, struct in_addr *);
-int netdev_nodev_set_etheraddr(const char *name, const uint8_t mac[6]);
-int netdev_nodev_get_etheraddr(const char *netdev_name, uint8_t mac[6]);
-int netdev_nodev_set_policing(const char *netdev_name, uint32_t kbits_rate, 
-                              uint32_t kbits_burst);
-int netdev_nodev_arp_lookup(const char *netdev_name, uint32_t ip, 
-                            uint8_t mac[6]);
-int netdev_nodev_get_carrier(const char *netdev_name, bool *carrier);
+int netdev_get_vlan_vid(const struct netdev *, int *vlan_vid);
+struct netdev *netdev_find_dev_by_in4(const struct in_addr *);
 
-int netdev_get_vlan_vid(const char *netdev_name, int *vlan_vid);
+struct netdev_monitor *netdev_monitor_create(void);
+void netdev_monitor_destroy(struct netdev_monitor *);
+int netdev_monitor_add(struct netdev_monitor *, struct netdev *);
+void netdev_monitor_remove(struct netdev_monitor *, struct netdev *);
+int netdev_monitor_poll(struct netdev_monitor *, char **devnamep);
+void netdev_monitor_poll_wait(const struct netdev_monitor *);
 
 #endif /* netdev.h */

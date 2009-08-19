@@ -139,12 +139,12 @@ vconn_usage(bool active, bool passive, bool bootstrap UNUSED)
 
     if (passive) {
         printf("Passive OpenFlow connection methods:\n");
-        printf("  ptcp:[PORT]             "
-               "listen to TCP PORT (default: %d)\n",
+        printf("  ptcp:[PORT][:IP]        "
+               "listen to TCP PORT (default: %d) on IP\n",
                OFP_TCP_PORT);
 #ifdef HAVE_OPENSSL
-        printf("  pssl:[PORT]             "
-               "listen for SSL on PORT (default: %d)\n",
+        printf("  pssl:[PORT][:IP]        "
+               "listen for SSL on PORT (default: %d) on IP\n",
                OFP_SSL_PORT);
 #endif
         printf("  punix:FILE              "
@@ -364,7 +364,7 @@ vcs_recv_hello(struct vconn *vconn)
 
     if (retval != EAGAIN) {
         vconn->state = VCS_DISCONNECTED;
-        vconn->error = retval;
+        vconn->error = retval == EOF ? ECONNRESET : retval;
     }
 }
 
@@ -458,10 +458,7 @@ vconn_recv(struct vconn *vconn, struct ofpbuf **msgp)
 static int
 do_recv(struct vconn *vconn, struct ofpbuf **msgp)
 {
-    int retval;
-
-again:
-    retval = (vconn->class->recv)(vconn, msgp);
+    int retval = (vconn->class->recv)(vconn, msgp);
     if (!retval) {
         struct ofp_header *oh;
 
@@ -481,20 +478,6 @@ again:
             && oh->type != OFPT_VENDOR)
         {
             if (vconn->version < 0) {
-                if (oh->type == OFPT_PACKET_IN
-                    || oh->type == OFPT_FLOW_EXPIRED
-                    || oh->type == OFPT_PORT_STATUS) {
-                    /* The kernel datapath is stateless and doesn't really
-                     * support version negotiation, so it can end up sending
-                     * these asynchronous message before version negotiation
-                     * is complete.  Just ignore them.
-                     *
-                     * (After we move OFPT_PORT_STATUS messages from the kernel
-                     * into secchan, we won't get those here, since secchan
-                     * does proper version negotiation.) */
-                    ofpbuf_delete(*msgp);
-                    goto again;
-                }
                 VLOG_ERR_RL(&bad_ofmsg_rl,
                             "%s: received OpenFlow message type %"PRIu8" "
                             "before version negotiation complete",

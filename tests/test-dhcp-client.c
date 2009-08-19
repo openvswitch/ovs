@@ -176,8 +176,8 @@ usage(void)
            "\nDHCP options:\n"
            "  --request-ip=IP         request specified IP address (default:\n"
            "                          do not request a specific IP)\n"
-           "  --vendor-class=STRING   use STRING as vendor class (default:\n"
-           "                          none); use OpenFlow to imitate secchan\n"
+           "  --vendor-class=STRING   use STRING as vendor class; use\n"
+           "                          OpenFlow to imitate ovs-openflowd\n"
            "  --no-resolv-conf        do not update /etc/resolv.conf\n",
            program_name, program_name);
     vlog_usage();

@@ -20,16 +20,7 @@ int dp_sysfs_del_dp(struct datapath *dp);
 int dp_sysfs_add_if(struct net_bridge_port *p);
 int dp_sysfs_del_if(struct net_bridge_port *p);
 
-#include <linux/version.h>
-#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
-#define SUPPORT_SYSFS 1
-#else
-/* We only support sysfs on Linux 2.6.18 because that's the only place we
- * really need it (on Xen, for brcompat) and it's a big pain to try to support
- * multiple versions. */
-#endif
-
-#ifdef SUPPORT_SYSFS
+#ifdef CONFIG_SYSFS
 extern struct sysfs_ops brport_sysfs_ops;
 #endif
 

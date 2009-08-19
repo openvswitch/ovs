@@ -23,7 +23,6 @@ struct dpif;
 struct in_band;
 struct ofproto;
 struct rconn;
-struct secchan;
 struct settings;
 struct switch_status;
 

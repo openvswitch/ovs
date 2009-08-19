@@ -21,7 +21,7 @@
 #include "dp_sysfs.h"
 #include "datapath.h"
 
-#ifdef SUPPORT_SYSFS
+#ifdef CONFIG_SYSFS
 
 struct brport_attribute {
 	struct attribute	attr;
@@ -278,9 +278,10 @@ int dp_sysfs_add_if(struct net_bridge_port *p)
 	int err;
 
 	/* Create /sys/class/net/<devname>/brport directory. */
-	err = kobject_add(&p->kobj);
+	err = kobject_add(&p->kobj, &p->dev->NETDEV_DEV_MEMBER.kobj,
+			  SYSFS_BRIDGE_PORT_ATTR);
 	if (err)
-		goto err_put;
+		goto err;
 
 	/* Create symlink from /sys/class/net/<devname>/brport/bridge to
 	 * /sys/class/net/<bridgename>. */
@@ -306,15 +307,12 @@ int dp_sysfs_add_if(struct net_bridge_port *p)
 
 	kobject_uevent(&p->kobj, KOBJ_ADD);
 
-	return err;
+	return 0;
 
 err_del:
 	kobject_del(&p->kobj);
-err_put:
-	kobject_put(&p->kobj);
-
-	/* Ensure that dp_sysfs_del_if becomes a no-op. */
-	p->kobj.dentry = NULL;
+err:
+	p->linkname[0] = 0;
 	return err;
 }
 
@@ -322,12 +320,10 @@ int dp_sysfs_del_if(struct net_bridge_port *p)
 {
 	if (p->linkname[0]) {
 		sysfs_remove_link(&p->dp->ifobj, p->linkname);
-		p->linkname[0] = '\0';
-	}
-	if (p->kobj.dentry) {
 		kobject_uevent(&p->kobj, KOBJ_REMOVE);
 		kobject_del(&p->kobj);
+		p->linkname[0] = '\0';
 	}
 	return 0;
 }
-#endif /* SUPPORT_SYSFS */
+#endif /* CONFIG_SYSFS */

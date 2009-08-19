@@ -6,7 +6,8 @@ README.Debian for openvswitch-controller
 
 * To enable OpenFlow switches to automatically discover the location
   of the controller, you must install and configure a DHCP server.
-  The secchan(8) manpage (found in the openvswitch-switch package) gives
-  a working example configuration file for the ISC DHCP server.
+  The ovs-openflowd(8) manpage (found in the openvswitch-switch
+  package) gives a working example configuration file for the ISC DHCP
+  server.
 
- -- Ben Pfaff <blp@nicira.com>, Mon, 11 May 2009 13:26:38 -0700
+ -- Ben Pfaff <blp@nicira.com>, Wed,  8 Jul 2009 09:39:53 -0700

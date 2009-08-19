@@ -17,7 +17,7 @@ receives an acceptable DHCP response.  It will accept any valid DHCP
 reply that has the same vendor class identifier and includes a
 vendor-specific option with code 1 whose contents are a string
 specifying the location of the controller in the same format used on
-the \fBsecchan\fR command line (e.g. \fBssl:192.168.0.1\fR).
+the \fBovs\-openflowd\fR command line (e.g. \fBssl:192.168.0.1\fR).
 
 When \fBovs\-discover\fR receives an acceptable response, it prints
 the details of the response on \fBstdout\fR.  Then, by default, it
@@ -28,15 +28,16 @@ itself to the background.
 .SH OPTIONS
 .TP
 \fB--accept-vconn=\fIregex\fR
-By default, \fBovs\-discover\fR accepts any controller location
-advertised over DHCP.  With this option, only controllers whose names
-match POSIX extended regular expression \fIregex\fR will be accepted.
-Specifying \fBssl:.*\fR for \fIregex\fR, for example, would cause only
-SSL controller connections to be accepted.
+With this option, only controllers whose names match POSIX extended
+regular expression \fIregex\fR will be accepted.  Specifying
+\fBssl:.*\fR for \fIregex\fR, for example, would cause only SSL
+controller connections to be accepted.
 
 The \fIregex\fR is implicitly anchored at the beginning of the
 controller location string, as if it begins with \fB^\fR.
 
+When this option is not given, the default \fIregex\fR is
+\fBtcp:.*\fR.
 .TP
 \fB--exit-without-bind\fR
 By default, \fBovs\-discover\fR binds the network device that receives
@@ -113,5 +114,5 @@ arriving IP packets, will not.
 
 .SH "SEE ALSO"
 
-.BR secchan (8),
-.BR ovs-pki (8)
+.BR ovs\-openflowd (8),
+.BR ovs\-pki (8)

@@ -16,8 +16,8 @@
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-SECCHAN_PID=/var/run/secchan.pid
-SECCHAN_SOCK=/var/run/secchan.mgmt
+OPENFLOWD_PID=/var/run/ovs-openflowd.pid
+OPENFLOWD_SOCK=/var/run/ovs-openflowd.mgmt
 LOG_FILE=/var/log/openflow/monitor
 INTERVAL=1
 FAIL_THRESH=3
@@ -27,8 +27,8 @@ usage() {
     echo
     echo "OPTIONS:"
     echo "  -h   Show this message"
-    echo "  -p   PID file for secchan (default: $SECCHAN_PID)"
-    echo "  -s   Unix socket for secchan (default: $SECCHAN_SOCK)"
+    echo "  -p   PID file for ovs-openflowd (default: $OPENFLOWD_PID)"
+    echo "  -s   Unix socket for ovs-openflowd (default: $OPENFLOWD_SOCK)"
     echo "  -l   File to log messages (default: $LOG_FILE)"
     echo "  -i   Interval to send probes in seconds (default: $INTERVAL)"
     echo "  -c   Number of failed probes before reboot (default: $FAIL_THRESH)"
@@ -48,11 +48,11 @@ while getopts "hp:s:l:i:c:" OPTION; do
             ;;
 
         p) 
-            SECCHAN_PID=$OPTARG
+            OPENFLOWD_PID=$OPTARG
             ;;
 
         s) 
-            SECCHAN_SOCK=$OPTARG
+            OPENFLOWD_SOCK=$OPTARG
             ;;
 
         l) 
@@ -73,14 +73,14 @@ while getopts "hp:s:l:i:c:" OPTION; do
 done
 
 
-if [ ! -f $SECCHAN_PID ]; then
-    log "No secchan pid file: ${SECCHAN_PID}" 
-    echo "No secchan pid file: ${SECCHAN_PID}" 
+if [ ! -f $OPENFLOWD_PID ]; then
+    log "No ovs-openflowd pid file: ${OPENFLOWD_PID}"
+    echo "No ovs-openflowd pid file: ${OPENFLOWD_PID}"
 fi
 
-if [ ! -S $SECCHAN_SOCK ]; then
-    log "No secchan sock file: ${SECCHAN_SOCK}" 
-    echo "No secchan sock file: ${SECCHAN_SOCK}" 
+if [ ! -S $OPENFLOWD_SOCK ]; then
+    log "No ovs-openflowd sock file: ${OPENFLOWD_SOCK}"
+    echo "No ovs-openflowd sock file: ${OPENFLOWD_SOCK}"
 fi
 
 if [ ! -d `dirname $LOG_FILE` ]; then
@@ -88,17 +88,17 @@ if [ ! -d `dirname $LOG_FILE` ]; then
 fi
 
 let DP_DOWN=0
-let SECCHAN_DOWN=0
+let OPENFLOWD_DOWN=0
 log "===== Starting Monitor ===="
 while `/bin/true`; do
-    # Only check for liveness if the secchan's PID file exists.  The PID
-    # file is removed when secchan is brought down gracefully.
-    if [ -f $SECCHAN_PID ]; then
-        pid=`cat $SECCHAN_PID`
+    # Only check for liveness if ovs-openflowd's PID file exists.  The PID
+    # file is removed when ovs-openflowd is brought down gracefully.
+    if [ -f $OPENFLOWD_PID ]; then
+        pid=`cat $OPENFLOWD_PID`
         if [ -d /proc/$pid ]; then
-            # Check if the secchan and datapath still can communicate
-            if [ -S $SECCHAN_SOCK ]; then
-                ovs-ofctl probe -t 2 unix:$SECCHAN_SOCK 
+            # Check if the ovs-openflowd and datapath still can communicate
+            if [ -S $OPENFLOWD_SOCK ]; then
+                ovs-ofctl probe -t 2 unix:$OPENFLOWD_SOCK
                 if [ $? -ne 0 ]; then
                     log "datapath probe failed"
                     let DP_DOWN++
@@ -106,15 +106,15 @@ while `/bin/true`; do
                     let DP_DOWN=0
                 fi
             fi
-            let SECCHAN_DOWN=0
+            let OPENFLOWD_DOWN=0
         else
-            log "secchan probe failed"
-            let SECCHAN_DOWN++
+            log "ovs-openflowd probe failed"
+            let OPENFLOWD_DOWN++
         fi
     fi
 
-    if [ $SECCHAN_DOWN -ge $FAIL_THRESH ]; then
-        log "Failed to probe secchan after ${SECCHAN_DOWN} tries...rebooting!"
+    if [ $OPENFLOWD_DOWN -ge $FAIL_THRESH ]; then
+        log "Failed to probe ovs-openflowd after ${OPENFLOWD_DOWN} tries...rebooting!"
         reboot
     fi
 

@@ -14,20 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dnl Checks for --disable-userspace.
-AC_DEFUN([OVS_CHECK_USERSPACE],
-  [AC_ARG_ENABLE(
-     [userspace],
-     [AC_HELP_STRING([--disable-userspace], 
-                     [Disable building userspace components.])],
-     [case "${enableval}" in
-        (yes) build_userspace=true ;;
-        (no)  build_userspace=false ;;
-        (*) AC_MSG_ERROR([bad value ${enableval} for --enable-userspace]) ;;
-      esac],
-     [build_userspace=true])
-   AM_CONDITIONAL([ENABLE_USERSPACE], [$build_userspace])])
-
 dnl OVS_CHECK_LINUX(OPTION, VERSION, VARIABLE, CONDITIONAL)
 dnl
 dnl Configure linux kernel source tree 

@@ -18,6 +18,7 @@
 #include <linux/netdevice.h>
 #include <linux/workqueue.h>
 #include <linux/skbuff.h>
+#include <linux/version.h>
 #include "flow.h"
 #include "dp_sysfs.h"
 
@@ -132,5 +133,7 @@ static inline int skb_checksum_setup(struct sk_buff *skb)
 	return 0;
 }
 #endif
+
+int vswitch_skb_checksum_setup(struct sk_buff *skb);
 
 #endif /* datapath.h */

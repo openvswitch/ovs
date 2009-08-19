@@ -114,7 +114,7 @@ static void compose_messages(const struct dict *, struct rconn *rconn);
 
 static void show_flows(struct rconn *);
 static void show_dpid_ip(struct rconn *, const struct dict *);
-static void show_secchan_state(const struct dict *);
+static void show_ofproto_state(const struct dict *);
 static void show_fail_open_state(const struct dict *);
 static void show_discovery_state(const struct dict *);
 static void show_remote_state(const struct dict *);
@@ -257,7 +257,7 @@ compose_messages(const struct dict *dict, struct rconn *rconn)
     if (!show_reboot_state()) {
         show_flows(rconn);
         show_dpid_ip(rconn, dict);
-        show_secchan_state(dict);
+        show_ofproto_state(dict);
         show_fail_open_state(dict);
         show_discovery_state(dict);
         show_remote_state(dict);
@@ -648,7 +648,7 @@ addf(const char *format, ...)
 }
 
 static void
-show_secchan_state(const struct dict *dict)
+show_ofproto_state(const struct dict *dict)
 {
     static struct message *msg;
     const char *is_connected;
@@ -2480,7 +2480,7 @@ choose_netdevs(struct svec *choices)
 
         retval = netdev_open(name, NETDEV_ETH_TYPE_NONE, &netdev);
         if (!retval) {
-            bool exclude = netdev_get_in4(netdev, NULL);
+            bool exclude = netdev_get_in4(netdev, NULL) == 0;
             netdev_close(netdev);
             if (exclude) {
                 continue;

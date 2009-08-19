@@ -1,16 +1,16 @@
-.TH secchan 8 "March 2009" "Open vSwitch" "Open vSwitch Manual"
-.ds PN secchan
+.TH ovs\-openflowd 8 "March 2009" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovs\-openflowd
 
 .SH NAME
-secchan \- OpenFlow switch implementation
+ovs\-openflowd \- OpenFlow switch implementation
 
 .SH SYNOPSIS
-.B secchan
+.B ovs\-openflowd
 [\fIoptions\fR] \fIdatapath\fR [\fIcontroller\fR]
 
 .SH DESCRIPTION
-The \fBsecchan\fR program implements an OpenFlow switch using a
-flow-based datapath.  \fBsecchan\fR connects to an OpenFlow controller
+The \fBovs\-openflowd\fR program implements an OpenFlow switch using a
+flow-based datapath.  \fBovs\-openflowd\fR connects to an OpenFlow controller
 over TCP or SSL.
 
 The mandatory \fIdatapath\fR argument argument specifies the local datapath
@@ -39,7 +39,7 @@ The Unix domain server socket named \fIfile\fR.
 .RE
 
 .PP
-If \fIcontroller\fR is omitted, \fBsecchan\fR attempts to discover the
+If \fIcontroller\fR is omitted, \fBovs\-openflowd\fR attempts to discover the
 location of the controller automatically (see below).
 
 .SS "Contacting the Controller"
@@ -52,9 +52,9 @@ the data traffic that it controls, that is, the switch does not use
 any of the network devices added to the datapath with \fBovs\-dpctl
 add\-if\fR in its communication with the controller.
 
-To use \fBsecchan\fR in a network with out-of-band control, specify
-\fB--out-of-band\fR on the \fBsecchan\fR command line.  The control
-network must be configured separately, before or after \fBsecchan\fR
+To use \fBovs\-openflowd\fR in a network with out-of-band control, specify
+\fB--out-of-band\fR on the \fBovs\-openflowd\fR command line.  The control
+network must be configured separately, before or after \fBovs\-openflowd\fR
 is started.
 
 .IP in-band
@@ -65,7 +65,7 @@ add\-if\fR.  This configuration is often more convenient than
 out-of-band control, because it is not necessary to maintain two
 independent networks.
 
-In-band control is the default for \fBsecchan\fR, so no special
+In-band control is the default for \fBovs\-openflowd\fR, so no special
 command-line option is required.
 
 With in-band control, the location of the controller can be configured
@@ -73,23 +73,23 @@ manually or discovered automatically:
 
 .RS
 .IP "controller discovery"
-To make \fBsecchan\fR discover the location of the controller
+To make \fBovs\-openflowd\fR discover the location of the controller
 automatically, do not specify the location of the controller on the
-\fBsecchan\fR command line.
+\fBovs\-openflowd\fR command line.
 
-In this mode, \fBsecchan\fR will broadcast a DHCP request with vendor
+In this mode, \fBovs\-openflowd\fR will broadcast a DHCP request with vendor
 class identifier \fBOpenFlow\fR across the network devices added to
 the datapath with \fBovs\-dpctl add\-if\fR.  It will accept any valid DHCP
 reply that has the same vendor class identifier and includes a
 vendor-specific option with code 1 whose contents are a string
 specifying the location of the controller in the same format used on
-the \fBsecchan\fR command line (e.g. \fBssl:192.168.0.1\fR).
+the \fBovs\-openflowd\fR command line (e.g. \fBssl:192.168.0.1\fR).
 
 The DHCP reply may also, optionally, include a vendor-specific option
 with code 2 whose contents are a string specifying the URI to the base
 of the OpenFlow PKI (e.g. \fBhttp://192.168.0.1/openflow/pki\fR).
 This URI is used only for bootstrapping the OpenFlow PKI at initial
-switch setup; \fBsecchan\fR does not use it at all.
+switch setup; \fBovs\-openflowd\fR does not use it at all.
 
 The following ISC DHCP server configuration file assigns the IP
 address range 192.168.0.20 through 192.168.0.30 to OpenFlow switches
@@ -143,28 +143,28 @@ subnet 192.168.0.0 netmask 255.255.255.0 {
 
 .IP "manual configuration"
 To configure in-band control manually, specify the location of the
-controller on the \fBsecchan\fR command line as the \fIcontroller\fR
+controller on the \fBovs\-openflowd\fR command line as the \fIcontroller\fR
 argument.  You must also configure the network device for the OpenFlow
-``local port'' to allow \fBsecchan\fR to connect to that controller.
-The OpenFlow local port is a virtual network port that \fBsecchan\fR
+``local port'' to allow \fBovs\-openflowd\fR to connect to that controller.
+The OpenFlow local port is a virtual network port that \fBovs\-openflowd\fR
 bridges to the physical switch ports.  The name of the local port for
 a given \fIdatapath\fR may be seen by running \fBovs\-dpctl show
 \fIdatapath\fR; the local port is listed as port 0 in \fBshow\fR's
 output.
 
 .IP
-Before \fBsecchan\fR starts, the local port network device is not
+Before \fBovs\-openflowd\fR starts, the local port network device is not
 bridged to any physical network, so the next step depends on whether
 connectivity is required to configure the device's IP address.  If the
 switch has a static IP address, you may configure its IP address now
 with a command such as 
 .B ifconfig of0 192.168.1.1
-and then invoke \fBsecchan\fR.
+and then invoke \fBovs\-openflowd\fR.
 
 On the other hand, if the switch does not have a static IP address,
 e.g. it obtains its IP address dynamically via DHCP, the DHCP client
-will not be able to contact the DHCP server until the secure channel
-has started up.  Thus, start \fBsecchan\fR without configuring
+will not be able to contact the DHCP server until the OpenFlow switch
+has started up.  Thus, start \fBovs\-openflowd\fR without configuring
 the local port network device, and start the DHCP client afterward.
 .RE
 
@@ -172,7 +172,7 @@ the local port network device, and start the DHCP client afterward.
 .SS "Controller Discovery Options"
 .TP
 \fB--accept-vconn=\fIregex\fR
-When \fBsecchan\fR performs controller discovery (see \fBContacting
+When \fBovs\-openflowd\fR performs controller discovery (see \fBContacting
 the Controller\fR, above, for more information about controller
 discovery), it validates the controller location obtained via DHCP
 with a POSIX extended regular expression.  Only controllers whose
@@ -181,8 +181,8 @@ names match the regular expression will be accepted.
 The default regular expression is \fBssl:.*\fR (meaning that only SSL
 controller connections will be accepted) when any of the SSL
 configuration options \fB--private-key\fR, \fB--certificate\fR, or
-\fB--ca-cert\fR is specified.  The default is \fB.*\fR otherwise
-(meaning that any controller will be accepted).
+\fB--ca-cert\fR is specified.  The default is \fB^tcp:.*\fR otherwise
+(meaning that only TCP controller connections will be accepted).
 
 The \fIregex\fR is implicitly anchored at the beginning of the
 controller location string, as if it begins with \fB^\fR.
@@ -191,7 +191,7 @@ When controller discovery is not performed, this option has no effect.
 
 .TP
 \fB--no-resolv-conf\fR
-When \fBsecchan\fR performs controller discovery (see \fBContacting
+When \fBovs\-openflowd\fR performs controller discovery (see \fBContacting
 the Controller\fR, above, for more information about controller
 discovery), by default it overwrites the system's
 \fB/etc/resolv.conf\fR with domain information and DNS servers
@@ -199,10 +199,10 @@ obtained via DHCP.  If the location of the controller is specified
 using a hostname, rather than an IP address, and the network's DNS
 servers ever change, this behavior is essential.  But because it also
 interferes with any administrator or process that manages
-\fB/etc/resolv.conf\fR, when this option is specified, \fBsecchan\fR
+\fB/etc/resolv.conf\fR, when this option is specified, \fBovs\-openflowd\fR
 will not modify \fB/etc/resolv.conf\fR.
 
-\fBsecchan\fR will only modify \fBresolv.conf\fR if the DHCP response
+\fBovs\-openflowd\fR will only modify \fBresolv.conf\fR if the DHCP response
 that it receives specifies one or more DNS servers.
 
 When controller discovery is not performed, this option has no effect.
@@ -234,25 +234,25 @@ no new network connections can be set up.  If the connection to the
 controller stays down long enough, no packets can pass through the
 switch at all.
 
-If this option is set to \fBopen\fR (the default), \fBsecchan\fR will
+If this option is set to \fBopen\fR (the default), \fBovs\-openflowd\fR will
 take over responsibility for setting up flows in the local datapath
 when no message has been received from the controller for three times
 the inactivity probe interval (see below), or 45 seconds by default.
-In this ``fail open'' mode, \fBsecchan\fR causes the datapath to act
-like an ordinary MAC-learning switch.  \fBsecchan\fR will continue to
+In this ``fail open'' mode, \fBovs\-openflowd\fR causes the datapath to act
+like an ordinary MAC-learning switch.  \fBovs\-openflowd\fR will continue to
 retry connection to the controller in the background and, when the
 connection succeeds, it discontinues its fail-open behavior.
 
-If this option is set to \fBclosed\fR, then \fBsecchan\fR will not
+If this option is set to \fBclosed\fR, then \fBovs\-openflowd\fR will not
 set up flows on its own when the controller connection fails.
 
 .TP
 \fB--inactivity-probe=\fIsecs\fR
-When the secure channel is connected to the controller, the secure
-channel waits for a message to be received from the controller for
+When the OpenFlow switch is connected to the controller, the
+switch waits for a message to be received from the controller for
 \fIsecs\fR seconds before it sends a inactivity probe to the
 controller.  After sending the inactivity probe, if no response is
-received for an additional \fIsecs\fR seconds, the secure channel
+received for an additional \fIsecs\fR seconds, the switch
 assumes that the connection has been broken and attempts to reconnect.
 The default and the minimum value are both 5 seconds.
 
@@ -263,19 +263,19 @@ above).
 .TP
 \fB--max-idle=\fIsecs\fR|\fBpermanent\fR
 Sets \fIsecs\fR as the number of seconds that a flow set up by the
-secure channel will remain in the switch's flow table without any
+OpenFlow switch will remain in the switch's flow table without any
 matching packets being seen.  If \fBpermanent\fR is specified, which
-is not recommended, flows set up by the secure channel will never
+is not recommended, flows set up by the switch will never
 expire.  The default is 15 seconds.
 
-Most flows are set up by the OpenFlow controller, not by the secure
-channel.  This option affects only the following flows, which the
-secure channel sets up itself:
+Most flows are set up by the OpenFlow controller, not by the
+switch.  This option affects only the following flows, which the
+OpenFlow switch sets up itself:
 
 .RS
 .IP \(bu
-When \fB--fail=open\fR is specified, flows set up when the secure
-channel has not been able to contact the controller for the configured
+When \fB--fail=open\fR is specified, flows set up when the
+switch has not been able to contact the controller for the configured
 fail-open delay.
 
 .IP \(bu
@@ -306,14 +306,20 @@ multiple connection methods.
 
 .RS
 .TP
-\fBpssl:\fR[\fIport\fR]
+\fBpssl:\fR[\fIport\fR][\fB:\fIip\fR]
 Listens for SSL connections on \fIport\fR (default: 6633).  The
 \fB--private-key\fR, \fB--certificate\fR, and \fB--ca-cert\fR options
 are mandatory when this form is used.
+By default, \fB\*(PN\fR listens for connections to any local IP
+address, but \fIip\fR may be specified to listen only for connections
+to the given \fIip\fR.
 
 .TP
-\fBptcp:\fR[\fIport\fR]
+\fBptcp:\fR[\fIport\fR][\fB:\fIip\fR]
 Listens for TCP connections on \fIport\fR (default: 6633).
+By default, \fB\*(PN\fR listens for connections to any local IP
+address, but \fIip\fR may be specified to listen only for connections
+to the given \fIip\fR.
 
 .TP
 \fBpunix:\fIfile\fR
@@ -336,7 +342,7 @@ problems.
 
 .TP
 \fB--in-band\fR, \fB--out-of-band\fR
-Configures \fBsecchan\fR to operate in in-band or out-of-band control
+Configures \fBovs\-openflowd\fR to operate in in-band or out-of-band control
 mode (see \fBContacting the Controller\fR above).  When neither option
 is given, the default is in-band control.
 
@@ -395,7 +401,7 @@ Command names that include characters other than upper- and lower-case
 English letters, digits, and the underscore and hyphen characters are
 unconditionally disallowed.
 
-When the whitelist and blacklist permit a command name, \fBsecchan\fR
+When the whitelist and blacklist permit a command name, \fBovs\-openflowd\fR
 looks for a program with the same name as the command in the commands
 directory (see below).  Other directories are not searched.
 
@@ -429,7 +435,7 @@ the switch is connected to a trustworthy controller.
 .TP
 \fB--bootstrap-ca-cert=\fIcacert.pem\fR
 When \fIcacert.pem\fR exists, this option has the same effect as
-\fB-C\fR or \fB--ca-cert\fR.  If it does not exist, then \fBsecchan\fR
+\fB-C\fR or \fB--ca-cert\fR.  If it does not exist, then \fBovs\-openflowd\fR
 will attempt to obtain the CA certificate from the controller on its
 first SSL connection and save it to the named PEM file.  If it is
 successful, it will immediately drop the connection and reconnect, and

@@ -108,6 +108,14 @@ hmap_count(const struct hmap *hmap)
     return hmap->n;
 }
 
+/* Returns the maximum number of nodes that 'hmap' may hold before it should be
+ * rehashed. */
+static inline size_t
+hmap_capacity(const struct hmap *hmap)
+{
+    return hmap->mask * 2 + 1;
+}
+
 /* Returns true if 'hmap' currently contains no nodes,
  * false otherwise. */
 static inline bool

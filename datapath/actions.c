@@ -96,7 +96,7 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		 * when we send the packet out on the wire, and it will fail at
 		 * that point because skb_checksum_setup() will not look inside
 		 * an 802.1Q header. */
-		skb_checksum_setup(skb);
+		vswitch_skb_checksum_setup(skb);
 
 		/* GSO is not implemented for packets with an 802.1Q header, so
 		 * we have to do segmentation before we add that header.
@@ -361,7 +361,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 	 * then freeing the original skbuff is wasteful.  So the following code
 	 * is slightly obscure just to avoid that. */
 	int prev_port = -1;
-	int err = 0;
+	int err;
 	for (; n_actions > 0; a++, n_actions--) {
 		WARN_ON_ONCE(skb_shared(skb));
 		if (prev_port != -1) {
@@ -420,5 +420,5 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		do_output(dp, skb, prev_port);
 	else
 		kfree_skb(skb);
-	return err;
+	return 0;
 }

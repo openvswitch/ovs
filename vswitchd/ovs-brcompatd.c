@@ -38,7 +38,6 @@
 #include "coverage.h"
 #include "daemon.h"
 #include "dirs.h"
-#include "dpif.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "fault.h"
@@ -304,7 +303,6 @@ static void
 prune_ports(void)
 {
     int i, j;
-    int error;
     struct svec bridges, delete;
 
     if (cfg_lock(NULL, 0)) {
@@ -324,7 +322,6 @@ prune_ports(void)
         get_bridge_ifaces(br_name, &ifaces, -1);
         for (j = 0; j < ifaces.n; j++) {
             const char *iface_name = ifaces.names[j];
-            enum netdev_flags flags;
 
             /* The local port and internal ports are created and destroyed by
              * ovs-vswitchd itself, so don't bother checking for them at all.
@@ -335,14 +332,10 @@ prune_ports(void)
                 continue;
             }
 
-            error = netdev_nodev_get_flags(iface_name, &flags);
-            if (error == ENODEV) {
+            if (!netdev_exists(iface_name)) {
                 VLOG_INFO_RL(&rl, "removing dead interface %s from %s",
                              iface_name, br_name);
                 svec_add(&delete, iface_name);
-            } else if (error) {
-                VLOG_INFO_RL(&rl, "unknown error %d on interface %s from %s",
-                             error, iface_name, br_name);
             }
         }
         svec_destroy(&ifaces);
@@ -362,29 +355,6 @@ prune_ports(void)
         cfg_unlock();
     }
     svec_destroy(&delete);
-}
-
-/* Checks whether a network device named 'name' exists and returns true if so,
- * false otherwise.
- *
- * XXX it is possible that this doesn't entirely accomplish what we want in
- * context, since ovs-vswitchd.conf may cause vswitchd to create or destroy
- * network devices based on iface.*.internal settings.
- *
- * XXX may want to move this to lib/netdev.
- *
- * XXX why not just use netdev_nodev_get_flags() or similar function? */
-static bool
-netdev_exists(const char *name)
-{
-    struct stat s;
-    char *filename;
-    int error;
-
-    filename = xasprintf("/sys/class/net/%s", name);
-    error = stat(filename, &s);
-    free(filename);
-    return !error;
 }
 
 static int
@@ -685,8 +655,14 @@ handle_fdb_query_cmd(struct ofpbuf *buffer)
     for (i = 0; i < ifaces.n; i++) {
         const char *iface_name = ifaces.names[i];
         struct mac *mac = &local_macs[n_local_macs];
-        if (!netdev_nodev_get_etheraddr(iface_name, mac->addr)) {
-            n_local_macs++;
+        struct netdev *netdev;
+
+        error = netdev_open(iface_name, NETDEV_ETH_TYPE_NONE, &netdev);
+        if (netdev) {
+            if (!netdev_get_etheraddr(netdev, mac->addr)) {
+                n_local_macs++;
+            }
+            netdev_close(netdev);
         }
     }
     svec_destroy(&ifaces);
@@ -992,7 +968,6 @@ rtnl_recv_update(void)
             char br_name[IFNAMSIZ];
             uint32_t br_idx = nl_attr_get_u32(attrs[IFLA_MASTER]);
             struct svec ports;
-            enum netdev_flags flags;
 
             if (!if_indextoname(br_idx, br_name)) {
                 ofpbuf_delete(buf);
@@ -1006,7 +981,7 @@ rtnl_recv_update(void)
                 return;
             }
 
-            if (netdev_nodev_get_flags(port_name, &flags) == ENODEV) {
+            if (!netdev_exists(port_name)) {
                 /* Network device is really gone. */
                 VLOG_INFO("network device %s destroyed, "
                           "removing from bridge %s", port_name, br_name);
@@ -1110,6 +1085,7 @@ main(int argc, char *argv[])
     for (;;) {
         unixctl_server_run(unixctl);
         brc_recv_update();
+        netdev_run();
 
         /* If 'prune_timeout' is non-zero, we actively prune from the
          * config file any 'bridge.<br_name>.port' entries that are no 
@@ -1131,6 +1107,7 @@ main(int argc, char *argv[])
 
         nl_sock_wait(brc_sock, POLLIN);
         unixctl_server_wait(unixctl);
+        netdev_wait();
         poll_block();
     }
 

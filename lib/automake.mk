@@ -32,6 +32,11 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/dhcp.h \
 	lib/dhparams.h \
 	lib/dirs.h \
+	lib/dpif-linux.c \
+	lib/dpif-netdev.c \
+	lib/dpif-provider.h \
+	lib/dpif.c \
+	lib/dpif.h \
 	lib/dynamic-string.c \
 	lib/dynamic-string.h \
 	lib/fatal-signal.c \
@@ -52,6 +57,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/list.h \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
+	lib/netdev-linux.c \
+	lib/netdev-provider.h \
 	lib/netdev.c \
 	lib/netdev.h \
 	lib/odp-util.c \
@@ -75,6 +82,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/random.h \
 	lib/rconn.c \
 	lib/rconn.h \
+	lib/rtnetlink.c \
+	lib/rtnetlink.h \
 	lib/sat-math.h \
 	lib/sha1.c \
 	lib/sha1.h \
@@ -117,8 +126,6 @@ CLEANFILES += $(nodist_lib_libopenvswitch_a_SOURCES)
 
 if HAVE_NETLINK
 lib_libopenvswitch_a_SOURCES += \
-	lib/dpif.c \
-	lib/dpif.h \
 	lib/netlink-protocol.h \
 	lib/netlink.c \
 	lib/netlink.h
@@ -172,17 +179,19 @@ COVERAGE_FILES = \
 	lib/hmap.c \
 	lib/mac-learning.c \
 	lib/netdev.c \
+	lib/netdev-linux.c \
 	lib/netlink.c \
 	lib/odp-util.c \
 	lib/poll-loop.c \
 	lib/process.c \
 	lib/rconn.c \
+	lib/rtnetlink.c \
 	lib/timeval.c \
 	lib/unixctl.c \
 	lib/util.c \
 	lib/vconn.c \
-	secchan/ofproto.c \
-	secchan/pktbuf.c \
+	ofproto/ofproto.c \
+	ofproto/pktbuf.c \
 	vswitchd/bridge.c \
 	vswitchd/mgmt.c \
 	vswitchd/ovs-brcompatd.c

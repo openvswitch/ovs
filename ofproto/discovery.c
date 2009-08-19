@@ -112,7 +112,8 @@ discovery_create(const char *re, bool update_resolv_conf,
     d->update_resolv_conf = update_resolv_conf;
 
     /* Initialize DHCP client. */
-    error = dpif_get_name(dpif, local_name, sizeof local_name);
+    error = dpif_port_get_name(dpif, ODPP_LOCAL,
+                               local_name, sizeof local_name);
     if (error) {
         VLOG_ERR("failed to query datapath local port: %s", strerror(error));
         goto error_regfree;
@@ -168,7 +169,7 @@ discovery_set_accept_controller_re(struct discovery *d, const char *re_)
     int error;
     char *re;
 
-    re = (!re_ ? xstrdup(vconn_ssl_is_configured() ? "^ssl:.*" : ".*")
+    re = (!re_ ? xstrdup(vconn_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*")
           : re_[0] == '^' ? xstrdup(re_) : xasprintf("^%s", re_));
     regex = xmalloc(sizeof *regex);
     error = regcomp(regex, re, REG_NOSUB | REG_EXTENDED);

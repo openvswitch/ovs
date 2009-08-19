@@ -72,51 +72,15 @@ new_tcp_vconn(const char *name, int fd, int connect_status,
 static int
 tcp_open(const char *name, char *suffix, struct vconn **vconnp)
 {
-    char *save_ptr = NULL;
-    const char *host_name;
-    const char *port_string;
     struct sockaddr_in sin;
-    int retval;
-    int fd;
+    int fd, error;
 
-    host_name = strtok_r(suffix, ":", &save_ptr);
-    port_string = strtok_r(NULL, ":", &save_ptr);
-    if (!host_name) {
-        ovs_error(0, "%s: bad peer name format", name);
-        return EAFNOSUPPORT;
-    }
-
-    memset(&sin, 0, sizeof sin);
-    sin.sin_family = AF_INET;
-    if (lookup_ip(host_name, &sin.sin_addr)) {
-        return ENOENT;
-    }
-    sin.sin_port = htons(port_string ? atoi(port_string) : OFP_TCP_PORT);
-
-    fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) {
-        VLOG_ERR("%s: socket: %s", name, strerror(errno));
-        return errno;
-    }
-
-    retval = set_nonblocking(fd);
-    if (retval) {
-        close(fd);
-        return retval;
-    }
-
-    retval = connect(fd, (struct sockaddr *) &sin, sizeof sin);
-    if (retval < 0) {
-        if (errno == EINPROGRESS) {
-            return new_tcp_vconn(name, fd, EAGAIN, &sin, vconnp);
-        } else {
-            int error = errno;
-            VLOG_ERR("%s: connect: %s", name, strerror(error));
-            close(fd);
-            return error;
-        }
+    error = tcp_open_active(suffix, OFP_TCP_PORT, NULL, &fd);
+    if (fd >= 0) {
+        return new_tcp_vconn(name, fd, error, &sin, vconnp);
     } else {
-        return new_tcp_vconn(name, fd, 0, &sin, vconnp);
+        VLOG_ERR("%s: connect: %s", name, strerror(error));
+        return error;
     }
 }
 
@@ -136,37 +100,16 @@ static int ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
                        struct vconn **vconnp);
 
 static int
-ptcp_open(const char *name, char *suffix, struct pvconn **pvconnp)
+ptcp_open(const char *name UNUSED, char *suffix, struct pvconn **pvconnp)
 {
-    struct sockaddr_in sin;
-    int retval;
     int fd;
-    unsigned int yes  = 1;
 
-    fd = socket(AF_INET, SOCK_STREAM, 0);
+    fd = tcp_open_passive(suffix, OFP_TCP_PORT);
     if (fd < 0) {
-        VLOG_ERR("%s: socket: %s", name, strerror(errno));
-        return errno;
+        return -fd;
+    } else {
+        return new_pstream_pvconn("ptcp", fd, ptcp_accept, pvconnp);
     }
-
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) < 0) {
-        VLOG_ERR("%s: setsockopt(SO_REUSEADDR): %s", name, strerror(errno));
-        return errno;
-    }
-
-    memset(&sin, 0, sizeof sin);
-    sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = htonl(INADDR_ANY);
-    sin.sin_port = htons(atoi(suffix) ? atoi(suffix) : OFP_TCP_PORT);
-    retval = bind(fd, (struct sockaddr *) &sin, sizeof sin);
-    if (retval < 0) {
-        int error = errno;
-        VLOG_ERR("%s: bind: %s", name, strerror(error));
-        close(fd);
-        return error;
-    }
-
-    return new_pstream_pvconn("ptcp", fd, ptcp_accept, pvconnp);
 }
 
 static int
