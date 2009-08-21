@@ -197,7 +197,6 @@ netflow_expire(struct netflow *nf, const struct ofexpired *expired)
         uint16_t iface = (nf->engine_id & 0x7f) << 9;
         nf_rec->input = htons(iface | (expired->flow.in_port & 0x1ff));
         nf_rec->output = htons(iface);
-        printf("input: %x\n", ntohs(nf_rec->input));
     } else {
         nf_rec->input = htons(expired->flow.in_port);
         nf_rec->output = htons(0);
