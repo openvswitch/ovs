@@ -1710,11 +1710,13 @@ compose_dsts(const struct bridge *br, const flow_t *flow, uint16_t vlan,
                 for (i = 0; i < br->n_ports; i++) {
                     struct port *port = br->ports[i];
                     if (port_includes_vlan(port, m->out_vlan)
-                        && set_dst(dst, flow, in_port, port, tags)
-                        && !dst_is_duplicate(dsts, dst - dsts, dst))
+                        && set_dst(dst, flow, in_port, port, tags))
                     {
                         if (port->vlan < 0) {
                             dst->vlan = m->out_vlan;
+                        }
+                        if (dst_is_duplicate(dsts, dst - dsts, dst)) {
+                            continue;
                         }
                         if (dst->dp_ifidx == flow->in_port
                             && dst->vlan == vlan) {
