@@ -3319,6 +3319,7 @@ mirror_reconfigure_one(struct mirror *m)
     int *vlans;
     size_t i;
     bool mirror_all_ports;
+    bool any_ports_specified;
 
     /* Get output port. */
     out_port_name = cfg_get_key(0, "mirror.%s.%s.output.port",
@@ -3357,11 +3358,18 @@ mirror_reconfigure_one(struct mirror *m)
     cfg_get_all_keys(&src_ports, "%s.select.src-port", pfx);
     cfg_get_all_keys(&dst_ports, "%s.select.dst-port", pfx);
     cfg_get_all_keys(&ports, "%s.select.port", pfx);
+    any_ports_specified = src_ports.n || dst_ports.n || ports.n;
     svec_append(&src_ports, &ports);
     svec_append(&dst_ports, &ports);
     svec_destroy(&ports);
     prune_ports(m, &src_ports);
     prune_ports(m, &dst_ports);
+    if (any_ports_specified && !src_ports.n && !dst_ports.n) {
+        VLOG_ERR("%s: none of the specified ports exist; "
+                 "disabling port mirror %s", pfx, pfx);
+        mirror_destroy(m);
+        goto exit;
+    }
 
     /* Get all the vlans, and drop duplicate and invalid vlans. */
     svec_init(&vlan_strings);
@@ -3413,6 +3421,7 @@ mirror_reconfigure_one(struct mirror *m)
     }
 
     /* Clean up. */
+exit:
     svec_destroy(&src_ports);
     svec_destroy(&dst_ports);
     free(pfx);
