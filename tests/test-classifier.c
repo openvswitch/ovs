@@ -223,26 +223,27 @@ tcls_delete_matches(struct tcls *cls,
 }
 
 #ifdef WORDS_BIGENDIAN
-#define HTONL(VALUE) ((uint32_t) (VALUE))
-#define HTONS(VALUE) ((uint32_t) (VALUE))
+#define T_HTONL(VALUE) ((uint32_t) (VALUE))
+#define T_HTONS(VALUE) ((uint32_t) (VALUE))
 #else
-#define HTONL(VALUE) (((((uint32_t) (VALUE)) & 0x000000ff) << 24) | \
+#define T_HTONL(VALUE) (((((uint32_t) (VALUE)) & 0x000000ff) << 24) | \
                       ((((uint32_t) (VALUE)) & 0x0000ff00) <<  8) | \
                       ((((uint32_t) (VALUE)) & 0x00ff0000) >>  8) | \
                       ((((uint32_t) (VALUE)) & 0xff000000) >> 24))
-#define HTONS(VALUE) (((((uint16_t) (VALUE)) & 0xff00) >> 8) |  \
+#define T_HTONS(VALUE) (((((uint16_t) (VALUE)) & 0xff00) >> 8) |  \
                       ((((uint16_t) (VALUE)) & 0x00ff) << 8))
 #endif
 
-static uint32_t nw_src_values[] = { HTONL(0xc0a80001),
-                                    HTONL(0xc0a04455) };
-static uint32_t nw_dst_values[] = { HTONL(0xc0a80002),
-                                    HTONL(0xc0a04455) };
-static uint16_t in_port_values[] = { HTONS(1), HTONS(OFPP_LOCAL) };
-static uint16_t dl_vlan_values[] = { HTONS(101), HTONS(0) };
-static uint16_t dl_type_values[] = { HTONS(ETH_TYPE_IP), HTONS(ETH_TYPE_ARP) };
-static uint16_t tp_src_values[] = { HTONS(49362), HTONS(80) };
-static uint16_t tp_dst_values[] = { HTONS(6667), HTONS(22) };
+static uint32_t nw_src_values[] = { T_HTONL(0xc0a80001),
+                                    T_HTONL(0xc0a04455) };
+static uint32_t nw_dst_values[] = { T_HTONL(0xc0a80002),
+                                    T_HTONL(0xc0a04455) };
+static uint16_t in_port_values[] = { T_HTONS(1), T_HTONS(OFPP_LOCAL) };
+static uint16_t dl_vlan_values[] = { T_HTONS(101), T_HTONS(0) };
+static uint16_t dl_type_values[]
+            = { T_HTONS(ETH_TYPE_IP), T_HTONS(ETH_TYPE_ARP) };
+static uint16_t tp_src_values[] = { T_HTONS(49362), T_HTONS(80) };
+static uint16_t tp_dst_values[] = { T_HTONS(6667), T_HTONS(22) };
 static uint8_t dl_src_values[][6] = { { 0x00, 0x02, 0xe3, 0x0f, 0x80, 0xa4 },
                                       { 0x5e, 0x33, 0x7f, 0x5f, 0x1e, 0x99 } };
 static uint8_t dl_dst_values[][6] = { { 0x4a, 0x27, 0x71, 0xae, 0x64, 0xc1 },
