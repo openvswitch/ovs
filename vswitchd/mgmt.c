@@ -54,6 +54,7 @@ static struct rconn *mgmt_rconn;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 static struct svec capabilities;
 static struct ofpbuf ext_data_buffer;
+static uint32_t ext_data_xid = UINT32_MAX;
 uint64_t mgmt_id;
 
 
@@ -222,6 +223,10 @@ mgmt_reconfigure(void)
     if (retval == EAFNOSUPPORT) {
         VLOG_ERR("no support for %s vconn", controller_name);
     }
+
+    /* Reset the extended message buffer when we create a new
+     * management connection. */
+    ofpbuf_clear(&ext_data_buffer);
 }
 
 static void *
@@ -261,12 +266,18 @@ send_openflow_buffer(struct ofpbuf *buffer)
         return EINVAL;
     }
 
+    /* Make sure there's room to transmit the data.  We don't want to
+     * fail part way through a send. */
+    if (rconn_packet_counter_read(txqlen) >= TXQ_LIMIT) {
+        return EAGAIN;
+    }
+
     /* OpenFlow messages use a 16-bit length field, so messages over 64K
      * must be broken into multiple pieces. 
      */
     if (buffer->size <= 65535) {
         update_openflow_length(buffer);
-        retval = rconn_send_with_limit(mgmt_rconn, buffer, txqlen, TXQ_LIMIT);
+        retval = rconn_send(mgmt_rconn, buffer, txqlen);
         if (retval) {
             VLOG_WARN_RL(&rl, "send to %s failed: %s",
                          rconn_get_name(mgmt_rconn), strerror(retval));
@@ -292,11 +303,9 @@ send_openflow_buffer(struct ofpbuf *buffer)
                     &new_buffer);
             oed->type = header->type;
 
-            if (remain > 65535) {
+            if (remain > new_len) {
                 oed->flags |= OFMPEDF_MORE_DATA;
             }
-
-            printf("xxx SENDING LEN: %d\n", new_len);
 
             /* Copy the entire original message, including the OpenFlow
              * header, since management protocol structure definitions
@@ -305,8 +314,7 @@ send_openflow_buffer(struct ofpbuf *buffer)
             ofpbuf_put(new_buffer, ptr, new_len);
 
             update_openflow_length(new_buffer);
-            retval = rconn_send_with_limit(mgmt_rconn, new_buffer, txqlen, 
-                    TXQ_LIMIT);
+            retval = rconn_send(mgmt_rconn, new_buffer, txqlen);
             if (retval) {
                 VLOG_WARN_RL(&rl, "send to %s failed: %s",
                              rconn_get_name(mgmt_rconn), strerror(retval));
@@ -670,23 +678,48 @@ static int
 recv_ofmp_extended_data(uint32_t xid, const struct ofmp_header *ofmph,
         size_t len)
 {
-    size_t data_len;
+    int data_len;
     struct ofmp_extended_data *ofmped;
-    uint8_t *ptr;
 
-    data_len = len - sizeof(*ofmped);
-    if (data_len <= sizeof(*ofmped)) {
+    if (len <= sizeof(*ofmped)) {
         /* xxx Send error. */
         return -EINVAL;
     }
 
+    ext_data_xid = xid;
     ofmped = (struct ofmp_extended_data *)ofmph;
 
-    ptr = ofpbuf_put(&ext_data_buffer, ofmped->data, data_len);
+    data_len = len - sizeof(*ofmped);
+    ofpbuf_put(&ext_data_buffer, ofmped->data, data_len);
 
-    if (!ofmped->flags & OFMPEDF_MORE_DATA) {
-        recv_ofmp(xid, ext_data_buffer.data, ext_data_buffer.size);
+    if (!(ofmped->flags & OFMPEDF_MORE_DATA)) {
+        struct ofmp_header *new_oh;
+        int error;
+
+        /* An embedded message must be greater than the size of an
+         * OpenFlow message. */
+        new_oh = ofpbuf_at(&ext_data_buffer, 0, 65536);
+        if (!new_oh) {
+            VLOG_WARN_RL(&rl, "received short embedded message: %d\n",
+                    ext_data_buffer.size);
+            return -EINVAL;
+        }
+
+        /* Make sure that this is a management message and that there's
+         * not an embedded extended data message. */
+        if ((new_oh->header.vendor != htonl(NX_VENDOR_ID))
+                || (new_oh->header.subtype != htonl(NXT_MGMT))
+                || (new_oh->type == htonl(OFMPT_EXTENDED_DATA))) {
+            VLOG_WARN_RL(&rl, "received bad embedded message\n");
+            return -EINVAL;
+        }
+        new_oh->header.header.xid = ext_data_xid;
+        new_oh->header.header.length = 0;
+
+        error = recv_ofmp(xid, ext_data_buffer.data, ext_data_buffer.size);
         ofpbuf_clear(&ext_data_buffer);
+
+        return error;
     }
 
     return 0;
@@ -705,6 +738,12 @@ int recv_ofmp(uint32_t xid, struct ofmp_header *ofmph, size_t len)
 {
     if (!len) {
         len = ntohs(ofmph->header.header.length);
+    }
+
+    /* Reset the extended data buffer if this isn't a continuation of an 
+     * existing extended data message. */
+    if (ext_data_xid != xid) {
+        ofpbuf_clear(&ext_data_buffer);
     }
 
     /* xxx Should sanity-check for min/max length */
