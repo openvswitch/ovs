@@ -104,7 +104,8 @@ dpif_linux_open(const char *name UNUSED, char *suffix, bool create,
 {
     int minor;
 
-    minor = !strncmp(name, "dp", 2) && isdigit(name[2]) ? atoi(name + 2) : -1;
+    minor = !strncmp(name, "dp", 2)
+            && isdigit((unsigned char)name[2]) ? atoi(name + 2) : -1;
     if (create) {
         if (minor >= 0) {
             return create_minor(suffix, minor, dpifp);

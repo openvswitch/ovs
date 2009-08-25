@@ -160,7 +160,7 @@ get_dp_netdev(const struct dpif *dpif)
 static int
 name_to_dp_idx(const char *name)
 {
-    if (!strncmp(name, "dp", 2) && isdigit(name[2])) {
+    if (!strncmp(name, "dp", 2) && isdigit((unsigned char)name[2])) {
         int dp_idx = atoi(name + 2);
         if (dp_idx >= 0 && dp_idx < N_DP_NETDEVS) {
             return dp_idx;

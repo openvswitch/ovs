@@ -2801,7 +2801,8 @@ cmd_configure(const struct dict *dict UNUSED)
             out = prompt("Ctlr rate limit:", in,
                          "^(Disabled|("NUM100_TO_99999_RE")/s)$");
             free(in);
-            config.rate_limit = isdigit(out[0]) ? atoi(out) : -1;
+            config.rate_limit
+                    = isdigit((unsigned char)out[0]) ? atoi(out) : -1;
             free(out);
             break;
 
@@ -2812,7 +2813,8 @@ cmd_configure(const struct dict *dict UNUSED)
             out = prompt("Activity probe:", in,
                          "^(Default|("NUM5_TO_99999_RE") s)$");
             free(in);
-            config.inactivity_probe = isdigit(out[0]) ? atoi(out) : -1;
+            config.inactivity_probe
+                    = isdigit((unsigned char)out[0]) ? atoi(out) : -1;
             free(out);
             break;
 
@@ -2823,7 +2825,8 @@ cmd_configure(const struct dict *dict UNUSED)
             out = prompt("Max backoff:", in,
                          "^(Default|("NUM1_TO_99999_RE") s)$");
             free(in);
-            config.max_backoff = isdigit(out[0]) ? atoi(out) : -1;
+            config.max_backoff
+                    = isdigit((unsigned char)out[0]) ? atoi(out) : -1;
             free(out);
             break;
         }

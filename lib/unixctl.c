@@ -553,7 +553,9 @@ unixctl_client_transact(struct unixctl_client *client,
 
         s = ds_cstr(&line);
         if (*reply_code == -1) {
-            if (!isdigit(s[0]) || !isdigit(s[1]) || !isdigit(s[2])) {
+            if (!isdigit((unsigned char)s[0])
+                    || !isdigit((unsigned char)s[1])
+                    || !isdigit((unsigned char)s[2])) {
                 VLOG_WARN("reply from %s does not start with 3-digit code",
                           client->connect_path);
                 error = EPROTO;

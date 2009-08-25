@@ -522,7 +522,7 @@ format_log_message(enum vlog_module module, enum vlog_level level,
             p++;
         }
         field = 0;
-        while (isdigit(*p)) {
+        while (isdigit((unsigned char)*p)) {
             field = (field * 10) + (*p - '0');
             p++;
         }
