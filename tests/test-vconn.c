@@ -78,7 +78,7 @@ fpv_create(const char *type, struct fake_pvconn *fpv)
 
         /* Retrieve socket's port number. */
         sin_len = sizeof sin;
-        if (getsockname(fd, &sin, &sin_len) < 0) {
+        if (getsockname(fd, (struct sockaddr *)&sin, &sin_len) < 0) {
             ovs_fatal(errno, "failed to read TCP socket name");
         }
         if (sin_len != sizeof sin || sin.sin_family != AF_INET) {
