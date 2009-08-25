@@ -686,7 +686,7 @@ For a non-VLAN, non-bond master PIF, the PIF is its own physical device PIF.
     pifrec = db.get_pif_record(pif)
 
     if pifrec['VLAN'] != '-1':
-        return [get_vlan_slave_of_pif(pif)]
+        return get_physdev_pifs(get_vlan_slave_of_pif(pif))
     elif len(pifrec['bond_master_of']) != 0:
         return get_bond_slaves_of_pif(pif)
     else:
