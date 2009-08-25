@@ -3131,7 +3131,7 @@ send_flow_exp(struct ofproto *p, struct rule *rule,
 {
     struct ofconn *ofconn;
     struct ofconn *prev;
-    struct ofpbuf *buf;
+    struct ofpbuf *buf = NULL;
 
     /* We limit the maximum number of queued flow expirations it by accounting
      * them under the counter for replies.  That works because preventing

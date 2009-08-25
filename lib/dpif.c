@@ -397,7 +397,7 @@ dpif_port_list(const struct dpif *dpif,
                struct odp_port **portsp, size_t *n_portsp)
 {
     struct odp_port *ports;
-    size_t n_ports;
+    size_t n_ports = 0;
     int error;
 
     for (;;) {
