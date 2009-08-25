@@ -501,7 +501,8 @@ main(int argc, char *argv[])
 
                         if (!strcmp(token, "0")) {
                             lan = NULL;
-                        } else if (strlen(token) == 1 && islower(*token)) {
+                        } else if (strlen(token) == 1
+                                && islower((unsigned char)*token)) {
                             lan = tc->lans[*token - 'a']; 
                         } else {
                             err("%s is not a valid LAN name "
