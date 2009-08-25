@@ -23,15 +23,11 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <net/if.h>
-#include <linux/rtnetlink.h>
-#include <linux/ethtool.h>
-#include <linux/sockios.h>
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
-#include <sys/sysmacros.h>
 #include <unistd.h>
 
 #include "csum.h"
@@ -424,7 +420,7 @@ dpif_netdev_port_add(struct dpif *dpif, const char *devname, uint16_t flags,
             return do_add_port(dp, devname, flags, port_no);
         }
     }
-    return EXFULL;
+    return EFBIG;
 }
 
 static int
@@ -829,7 +825,7 @@ dpif_netdev_flow_put(struct dpif *dpif, struct odp_flow_put *put)
             if (hmap_count(&dp->flow_table) < MAX_FLOWS) {
                 return add_flow(dpif, &put->flow);
             } else {
-                return EXFULL;
+                return EFBIG;
             }
         } else {
             return ENOENT;
@@ -892,7 +888,7 @@ dpif_netdev_execute(struct dpif *dpif, uint16_t in_port,
     flow_t flow;
     int error;
 
-    if (packet->size < ETH_HLEN || packet->size > UINT16_MAX) {
+    if (packet->size < ETH_HEADER_LEN || packet->size > UINT16_MAX) {
         return EINVAL;
     }
 
@@ -990,7 +986,7 @@ dp_netdev_flow_used(struct dp_netdev_flow *flow, const flow_t *key,
     time_timeval(&flow->used);
     flow->packet_count++;
     flow->byte_count += packet->size;
-    if (key->dl_type == htons(ETH_P_IP)) {
+    if (key->dl_type == htons(ETH_TYPE_IP)) {
         struct ip_header *nh = packet->l3;
         flow->ip_tos = nh->ip_tos;
 
@@ -1163,7 +1159,7 @@ static void
 dp_netdev_set_tp_port(struct ofpbuf *packet, flow_t *key,
                       const struct odp_action_tp_port *a)
 {
-	if (key->dl_type == htons(ETH_P_IP)) {
+	if (key->dl_type == htons(ETH_TYPE_IP)) {
         uint16_t *field;
         if (key->nw_proto == IPPROTO_TCP) {
             struct tcp_header *th = packet->l4;

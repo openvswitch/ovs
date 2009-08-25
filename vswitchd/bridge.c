@@ -547,7 +547,7 @@ bridge_reconfigure(void)
             /* Add to datapath. */
             error = dpif_port_add(br->dpif, if_name,
                                   internal ? ODP_PORT_INTERNAL : 0, NULL);
-            if (error == EXFULL) {
+            if (error == EFBIG) {
                 VLOG_ERR("ran out of valid port numbers on %s",
                          dpif_name(br->dpif));
                 break;

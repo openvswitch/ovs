@@ -395,7 +395,7 @@ static int add_port(int dp_idx, struct odp_port __user *portp)
 	for (port_no = 1; port_no < DP_MAX_PORTS; port_no++)
 		if (!dp->ports[port_no])
 			goto got_port_no;
-	err = -EXFULL;
+	err = -EFBIG;
 	goto out_unlock_dp;
 
 got_port_no:
