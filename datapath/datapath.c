@@ -865,7 +865,7 @@ retry:
 	bucket = dp_table_lookup_for_insert(table, &uf.flow.key);
 	if (!bucket) {
 		/* No such flow, and the slots where it could go are full. */
-		error = uf.flags & ODPPF_CREATE ? -EXFULL : -ENOENT;
+		error = uf.flags & ODPPF_CREATE ? -EFBIG : -ENOENT;
 		goto error;
 	} else if (!*bucket) {
 		/* No such flow, but we found an available slot for it. */
