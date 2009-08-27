@@ -22,20 +22,20 @@
 . /etc/init.d/functions
 
 test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
-VSWITCH_BASE="${VSWITCH_BASE:-/root/vswitch}"
-VSWITCHD_CONF="${VSWITCHD_CONF:-/etc/ovs-vswitchd.conf}"
-VSWITCHD_PIDFILE="${VSWITCHD_PIDFILE:-/var/run/ovs-vswitchd.pid}"
-VSWITCHD_PRIORITY="${VSWITCHD_PRIORITY:--5}"
-VSWITCHD_LOGFILE="${VSWITCHD_LOGFILE:-/var/log/ovs-vswitchd.log}"
-VSWITCHD_FILE_LOGLEVEL="${VSWITCHD_FILE_LOGLEVEL:-}"
-VSWITCHD_SYSLOG_LOGLEVEL="${VSWITCHD_SYSLOG_LOGLEVEL:-WARN}"
-VSWITCHD_MEMLEAK_LOGFILE="${VSWITCHD_MEMLEAK_LOGFILE:-}"
-BRCOMPATD_PIDFILE="${BRCOMPATD_PIDFILE:-/var/run/ovs-brcompatd.pid}"
-BRCOMPATD_PRIORITY="${BRCOMPATD_PRIORITY:--5}"
-BRCOMPATD_LOGFILE="${BRCOMPATD_LOGFILE:-/var/log/ovs-brcompatd.log}"
-BRCOMPATD_FILE_LOGLEVEL="${BRCOMPATD_FILE_LOGLEVEL:-}"
-BRCOMPATD_SYSLOG_LOGLEVEL="${BRCOMPATD_SYSLOG_LOGLEVEL:-WARN}"
-BRCOMPATD_MEMLEAK_LOGFILE="${BRCOMPATD_MEMLEAK_LOGFILE:-}"
+: ${VSWITCH_BASE:=/root/vswitch}
+: ${VSWITCHD_CONF:=/etc/ovs-vswitchd.conf}
+: ${VSWITCHD_PIDFILE:=/var/run/ovs-vswitchd.pid}
+: ${VSWITCHD_PRIORITY:=-5}
+: ${VSWITCHD_LOGFILE:=/var/log/ovs-vswitchd.log}
+: ${VSWITCHD_FILE_LOGLEVEL:=}
+: ${VSWITCHD_SYSLOG_LOGLEVEL:=WARN}
+: ${VSWITCHD_MEMLEAK_LOGFILE:=}
+: ${BRCOMPATD_PIDFILE:=/var/run/ovs-brcompatd.pid}
+: ${BRCOMPATD_PRIORITY:=-5}
+: ${BRCOMPATD_LOGFILE:=/var/log/ovs-brcompatd.log}
+: ${BRCOMPATD_FILE_LOGLEVEL:=}
+: ${BRCOMPATD_SYSLOG_LOGLEVEL:=WARN}
+: ${BRCOMPATD_MEMLEAK_LOGFILE:=}
 
 function do_host_call {
     xe host-call-plugin host-uuid="$INSTALLATION_UUID" plugin="vswitch-cfg-update" fn="update" >/dev/null
