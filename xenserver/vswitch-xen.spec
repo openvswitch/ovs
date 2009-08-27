@@ -308,10 +308,9 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     find  %{_prefix} -type d -depth -exec rmdir \{\} \; \
         || printf "Could not remove vSwitch install directory.\n"
 
-    # Remove all configuration and log files
+    # Remove all configuration files
     rm -f /etc/ovs-vswitchd.conf
     rm -f /etc/sysconfig/vswitch
-    rm -f /var/log/vswitch*
     rm -f /etc/ovs-vswitchd.cacert
 
     printf "\nYou MUST reboot the server now to complete the change to\n"
