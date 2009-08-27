@@ -163,19 +163,15 @@ static void
 in_band_status_cb(struct status_reply *sr, void *in_band_)
 {
     struct in_band *in_band = in_band_;
-    const uint8_t *local_mac;
-    const uint8_t *controller_mac;
 
-    local_mac = get_local_mac(in_band);
-    if (local_mac) {
+    if (!eth_addr_is_zero(in_band->local_mac)) {
         status_reply_put(sr, "local-mac="ETH_ADDR_FMT,
-                         ETH_ADDR_ARGS(local_mac));
+                         ETH_ADDR_ARGS(in_band->local_mac));
     }
 
-    controller_mac = get_controller_mac(in_band);
-    if (controller_mac) {
+    if (!eth_addr_is_zero(in_band->mac)) {
         status_reply_put(sr, "controller-mac="ETH_ADDR_FMT,
-                         ETH_ADDR_ARGS(controller_mac));
+                         ETH_ADDR_ARGS(in_band->mac));
     }
 }
 
