@@ -83,8 +83,8 @@ install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
                $RPM_BUILD_ROOT/usr/share/vswitch/scripts/XSFeatureVSwitch.py
 
-install -d -m 755 $RPM_BUILD_ROOT/root/vswitch/kernel_modules
-find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/root/vswitch/kernel_modules/ \;
+install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/net/vswitch
+find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/net/vswitch \;
 
 # Get rid of stuff we don't want to make RPM happy.
 rm \
@@ -100,7 +100,7 @@ rm \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-kill.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-openflowd.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-pki.8
-rm -f $RPM_BUILD_ROOT/root/vswitch/kernel_modules/veth_mod.ko 
+rm -f $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/net/vswitch/veth_mod.ko
 rm -r \
     $RPM_BUILD_ROOT/usr/share/openvswitch/commands
 
@@ -165,6 +165,9 @@ if test ! -e /var/lib/openvswitch/dbcache; then
         exit 1
     fi
 fi
+
+# Ensure that modprobe will find our modules.
+depmod %{xen_version}
 
 if grep -F net.ipv4.conf.all.arp_filter /etc/sysctl.conf >/dev/null 2>&1; then :; else
     cat >>/etc/sysctl.conf <<EOF
@@ -297,8 +300,8 @@ fi
 /etc/xapi.d/plugins/vswitch-cfg-update
 /etc/logrotate.d/vswitch
 /etc/profile.d/vswitch.sh
-/root/vswitch/kernel_modules/brcompat_mod.ko
-/root/vswitch/kernel_modules/openvswitch_mod.ko
+/lib/modules/%{xen_version}/kernel/net/vswitch/openvswitch_mod.ko
+/lib/modules/%{xen_version}/kernel/net/vswitch/brcompat_mod.ko
 /usr/share/vswitch/scripts/dump-vif-details
 /usr/share/vswitch/scripts/interface-reconfigure
 /usr/share/vswitch/scripts/vif

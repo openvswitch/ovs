@@ -87,10 +87,10 @@ function remove_all_dp {
 function insert_modules_if_required {
     if ! lsmod | grep -q "openvswitch_mod"; then
         action "Inserting llc module" modprobe llc
-        action "Inserting openvswitch module" insmod $VSWITCH_BASE/kernel_modules/openvswitch_mod.ko
+        action "Inserting openvswitch module" modprobe openvswitch_mod
     fi
     if [ -n "$BRCOMPATD_PIDFILE" ] && ! lsmod | grep -q "brcompat_mod"; then
-        action "Inserting brcompat module" insmod $VSWITCH_BASE/kernel_modules/brcompat_mod.ko
+        action "Inserting brcompat module" modprobe brcompat_mod
     fi
 }
 
