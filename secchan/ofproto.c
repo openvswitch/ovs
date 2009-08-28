@@ -1696,7 +1696,7 @@ rule_post_uninstall(struct ofproto *ofproto, struct rule *rule)
     struct rule *super = rule->super;
 
     rule_account(ofproto, rule, 0);
-    if (ofproto->netflow) {
+    if (ofproto->netflow && rule->byte_count) {
         struct ofexpired expired;
         expired.flow = rule->cr.flow;
         expired.packet_count = rule->packet_count;
