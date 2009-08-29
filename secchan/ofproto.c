@@ -2516,7 +2516,7 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);
-    ds_put_format(results, "priority=%u", rule->cr.priority);
+    ds_put_format(results, "priority=%u, ", rule->cr.priority);
     ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
     ofp_print_match(results, &match, true);
