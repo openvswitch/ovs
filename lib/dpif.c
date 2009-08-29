@@ -352,6 +352,28 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
     }
 }
 
+/* Looks up port number 'port_no' in 'dpif'.  On success, returns 0 and copies
+ * the port's name into the 'name_size' bytes in 'name', ensuring that the
+ * result is null-terminated.  On failure, returns a positive errno value and
+ * makes 'name' the empty string. */
+int
+dpif_port_get_name(struct dpif *dpif, uint16_t port_no,
+                   char *name, size_t name_size)
+{
+    struct odp_port port;
+    int error;
+
+    assert(name_size > 0);
+
+    error = dpif_port_query_by_number(dpif, port_no, &port);
+    if (!error) {
+        ovs_strlcpy(name, port.devname, name_size);
+    } else {
+        *name = '\0';
+    }
+    return error;
+}
+
 int
 dpif_port_list(const struct dpif *dpif,
                struct odp_port **ports, size_t *n_ports)
