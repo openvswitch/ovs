@@ -1345,6 +1345,73 @@ netdev_find_dev_by_in4(const struct in_addr *in4, char **netdev_name)
     return false;
 }
 
+/* Looks up the next hop for 'ip'.  If the next hop can be found, the 
+ * address is stored in 'next_hop'.  If a gateway is not required to
+ * reach 'ip', zero is stored in 'next_hop'.  In either case, zero is
+ * returned and a copy of the name of the device to reach 'ip' is stored
+ * in 'netdev_name', which the caller is responsible for freeing.  If a 
+ * route could not be determined, a positive errno is returned. */
+int
+netdev_get_next_hop(const struct in_addr *host, struct in_addr *next_hop, 
+                    char **netdev_name) 
+{
+    static const char fn[] = "/proc/net/route";
+    FILE *stream;
+    char line[256];
+    int ln;
+
+    *netdev_name = NULL;
+    stream = fopen(fn, "r");
+    if (stream == NULL) {
+        VLOG_WARN_RL(&rl, "%s: open failed: %s", fn, strerror(errno));
+        return errno;
+    }
+
+    ln = 0;
+    while (fgets(line, sizeof line, stream)) {
+        if (++ln >= 2) {
+            char iface[17];
+            uint32_t dest, gateway, mask;
+            int refcnt, metric, mtu;
+            unsigned int flags, use, window, irtt;
+
+            if (sscanf(line,
+                       "%16s %"SCNx32" %"SCNx32" %04X %d %u %d %"SCNx32
+                       " %d %u %u\n",
+                       iface, &dest, &gateway, &flags, &refcnt,
+                       &use, &metric, &mask, &mtu, &window, &irtt) != 11) {
+
+                VLOG_WARN_RL(&rl, "%s: could not parse line %d: %s", 
+                        fn, ln, line);
+                continue;
+            }
+            if (!(flags & RTF_UP)) {
+                /* Skip routes that aren't up. */
+                continue;
+            }
+
+            /* The output of 'dest', 'mask', and 'gateway' were given in
+             * network byte order, so we don't need need any endian 
+             * conversions here. */
+            if ((dest & mask) == (host->s_addr & mask)) {
+                if (!gateway) {
+                    /* The host is directly reachable. */
+                    next_hop->s_addr = 0;
+                } else {
+                    /* To reach the host, we must go through a gateway. */
+                    next_hop->s_addr = gateway;
+                }
+                *netdev_name = xstrdup(iface);
+                fclose(stream);
+                return 0;
+            }
+        }
+    }
+
+    fclose(stream);
+    return ENXIO;
+}
+
 /* Obtains the current flags for the network device named 'netdev_name' and
  * stores them into '*flagsp'.  Returns 0 if successful, otherwise a positive
  * errno value.  On error, stores 0 into '*flagsp'.

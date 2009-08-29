@@ -107,6 +107,8 @@ int netdev_set_policing(struct netdev *, uint32_t kbits_rate,
 
 void netdev_enumerate(struct svec *);
 bool netdev_find_dev_by_in4(const struct in_addr *in4, char **netdev_name);
+int netdev_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
+                        char **netdev_name);
 int netdev_nodev_get_flags(const char *netdev_name, enum netdev_flags *);
 bool netdev_nodev_get_in4(const char *netdev_name, struct in_addr *in4,
                           struct in_addr *mask);
