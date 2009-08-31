@@ -433,8 +433,8 @@ ofproto_set_in_band(struct ofproto *p, bool in_band)
 {
     if (in_band != (p->in_band != NULL)) {
         if (in_band) {
-            in_band_create(p, p->switch_status, p->controller->rconn, 
-                           &p->in_band);
+            in_band_create(p, &p->dpif, p->switch_status, 
+                           p->controller->rconn, &p->in_band);
             return 0;
         } else {
             ofproto_set_discovery(p, false, NULL, true);
@@ -2123,6 +2123,13 @@ xlate_actions(const union ofp_action *in, size_t n_in,
     ctx.tags = tags ? tags : &no_tags;
     ctx.may_setup_flow = true;
     do_xlate_actions(in, n_in, &ctx);
+
+    /* Check with in-band control to see if we're allowed to setup this
+     * flow. */
+    if (!in_band_rule_check(ofproto->in_band, flow, out)) {
+        ctx.may_setup_flow = false;
+    }
+
     if (may_setup_flow) {
         *may_setup_flow = ctx.may_setup_flow;
     }
@@ -3023,6 +3030,17 @@ handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
     payload.data = msg + 1;
     payload.size = msg->length - sizeof *msg;
     flow_extract(&payload, msg->port, &flow);
+
+    /* Check with in-band control to see if this packet should be sent
+     * to the local port regardless of the flow table. */
+    if (in_band_msg_in_hook(p->in_band, &flow, &payload)) {
+        union odp_action action;
+
+        memset(&action, 0, sizeof(action));
+        action.output.type = ODPAT_OUTPUT;
+        action.output.port = ODPP_LOCAL;
+        dpif_execute(&p->dpif, flow.in_port, &action, 1, &payload);
+    }
 
     rule = lookup_valid_rule(p, &flow);
     if (!rule) {
