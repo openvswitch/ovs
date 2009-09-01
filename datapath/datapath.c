@@ -646,17 +646,14 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 
  	/* If a checksum-deferred packet is forwarded to the controller,
 	 * correct the pointers and checksum.  This happens on a regular basis
-	 * only on Xen (the CHECKSUM_HW case), on which VMs can pass up packets
-	 * that do not have their checksum computed.  We also implement it for
-	 * the non-Xen case, but it is difficult to trigger or test this case
-	 * there, hence the WARN_ON_ONCE().
+	 * only on Xen, on which VMs can pass up packets that do not have their
+	 * checksum computed.
  	 */
 	err = vswitch_skb_checksum_setup(skb);
  	if (err)
 		goto err_kfree_skb;
 #ifndef CHECKSUM_HW
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
-		WARN_ON_ONCE(1);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 		/* Until 2.6.22, the start of the transport header was also the
 		 * start of data to be checksummed.  Linux 2.6.22 introduced
