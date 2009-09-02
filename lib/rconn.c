@@ -111,6 +111,18 @@ struct rconn {
      * a response. */
     int probe_interval;         /* Secs of inactivity before sending probe. */
 
+    /* When we create a vconn we obtain these values, to save them past the end
+     * of the vconn's lifetime.  Otherwise, in-band control will only allow
+     * traffic when a vconn is actually open, but it is nice to allow ARP to
+     * complete even between connection attempts, and it is also polite to
+     * allow traffic from other switches to go through to the controller
+     * whether or not we are connected.
+     *
+     * We don't cache the local port, because that changes from one connection
+     * attempt to the next. */
+    uint32_t local_ip, remote_ip;
+    uint16_t remote_port;
+
     /* Messages sent or received are copied to the monitor connections. */
 #define MAX_MONITORS 8
     struct vconn *monitors[8];
@@ -121,6 +133,7 @@ static unsigned int elapsed_in_this_state(const struct rconn *);
 static unsigned int timeout(const struct rconn *);
 static bool timed_out(const struct rconn *);
 static void state_transition(struct rconn *, enum state);
+static void set_vconn_name(struct rconn *, const char *name);
 static int try_send(struct rconn *);
 static int reconnect(struct rconn *);
 static void disconnect(struct rconn *, int error);
@@ -236,8 +249,7 @@ int
 rconn_connect(struct rconn *rc, const char *name)
 {
     rconn_disconnect(rc);
-    free(rc->name);
-    rc->name = xstrdup(name);
+    set_vconn_name(rc, name);
     rc->reliable = true;
     return reconnect(rc);
 }
@@ -248,8 +260,7 @@ rconn_connect_unreliably(struct rconn *rc,
 {
     assert(vconn != NULL);
     rconn_disconnect(rc);
-    free(rc->name);
-    rc->name = xstrdup(name);
+    set_vconn_name(rc, name);
     rc->reliable = false;
     rc->vconn = vconn;
     rc->last_connected = time_now();
@@ -273,8 +284,7 @@ rconn_disconnect(struct rconn *rc)
             vconn_close(rc->vconn);
             rc->vconn = NULL;
         }
-        free(rc->name);
-        rc->name = xstrdup("void");
+        set_vconn_name(rc, "void");
         rc->reliable = false;
 
         rc->backoff = 0;
@@ -323,6 +333,9 @@ reconnect(struct rconn *rc)
     rc->n_attempted_connections++;
     retval = vconn_open(rc->name, OFP_VERSION, &rc->vconn);
     if (!retval) {
+        rc->remote_ip = vconn_get_remote_ip(rc->vconn);
+        rc->local_ip = vconn_get_local_ip(rc->vconn);
+        rc->remote_port = vconn_get_remote_port(rc->vconn);
         rc->backoff_deadline = time_now() + rc->backoff;
         state_transition(rc, S_CONNECTING);
     } else {
@@ -635,20 +648,20 @@ rconn_failure_duration(const struct rconn *rconn)
     return rconn_is_connected(rconn) ? 0 : time_now() - rconn->last_admitted;
 }
 
-/* Returns the IP address of the peer, or 0 if the peer is not connected over
- * an IP-based protocol or if its IP address is not known. */
+/* Returns the IP address of the peer, or 0 if the peer's IP address is not
+ * known. */
 uint32_t
 rconn_get_remote_ip(const struct rconn *rconn) 
 {
-    return rconn->vconn ? vconn_get_remote_ip(rconn->vconn) : 0;
+    return rconn->remote_ip;
 }
 
-/* Returns the transport port of the peer, or 0 if the peer does not 
- * contain a port or if the port is not known. */
+/* Returns the transport port of the peer, or 0 if the peer's port is not
+ * known. */
 uint16_t
 rconn_get_remote_port(const struct rconn *rconn) 
 {
-    return rconn->vconn ? vconn_get_remote_port(rconn->vconn) : 0;
+    return rconn->remote_port;
 }
 
 /* Returns the IP address used to connect to the peer, or 0 if the
@@ -657,7 +670,7 @@ rconn_get_remote_port(const struct rconn *rconn)
 uint32_t
 rconn_get_local_ip(const struct rconn *rconn) 
 {
-    return rconn->vconn ? vconn_get_local_ip(rconn->vconn) : 0;
+    return rconn->local_ip;
 }
 
 /* Returns the transport port used to connect to the peer, or 0 if the
@@ -805,6 +818,19 @@ rconn_packet_counter_dec(struct rconn_packet_counter *c)
     }
 }
 
+/* Set the name of the remote vconn to 'name' and clear out the cached IP
+ * address and port information, since changing the name also likely changes
+ * these values. */
+static void
+set_vconn_name(struct rconn *rc, const char *name)
+{
+    free(rc->name);
+    rc->name = xstrdup(name);
+    rc->local_ip = 0;
+    rc->remote_ip = 0;
+    rc->remote_port = 0;
+}
+
 /* Tries to send a packet from 'rc''s send buffer.  Returns 0 if successful,
  * otherwise a positive errno value. */
 static int
