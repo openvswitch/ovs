@@ -107,10 +107,13 @@ int netdev_get_features(struct netdev *,
                         uint32_t *supported, uint32_t *peer);
 int netdev_set_advertisements(struct netdev *, uint32_t advertise);
 
-int netdev_get_in4(const struct netdev *, struct in_addr *);
+int netdev_get_in4(const struct netdev *, struct in_addr *address,
+                   struct in_addr *netmask);
 int netdev_set_in4(struct netdev *, struct in_addr addr, struct in_addr mask);
 int netdev_get_in6(const struct netdev *, struct in6_addr *);
 int netdev_add_router(struct netdev *, struct in_addr router);
+int netdev_get_next_hop(const struct netdev *, const struct in_addr *host,
+                        struct in_addr *next_hop, char **);
 int netdev_arp_lookup(const struct netdev *, uint32_t ip, uint8_t mac[6]);
 
 int netdev_get_flags(const struct netdev *, enum netdev_flags *);

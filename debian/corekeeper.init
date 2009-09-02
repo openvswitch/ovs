@@ -6,6 +6,7 @@
 # adjust it to the program you want to run.
 #
 # Copyright (c) 2007 Javier Fernandez-Sanguino <jfs@debian.org>
+# Copyright (c) 2009 Nicira Networks, Inc.
 #
 # This is free software; you may redistribute it and/or modify
 # it under the terms of the GNU General Public License as
@@ -42,7 +43,7 @@ set -e
 case "$1" in
   start)
 	log_daemon_msg "Initializing core dump location..."
-        if echo "/var/log/core/core.%e.%t" > /proc/sys/kernel/core_pattern
+        if echo "/var/log/core/core.%e.%t.%p" > /proc/sys/kernel/core_pattern
         then
             log_progress_msg "success"
             log_end_msg 0

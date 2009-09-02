@@ -22,6 +22,8 @@
 #include <net/if.h>
 #include <string.h>
 #include <stdlib.h>
+#include "dhcp.h"
+#include "dpif.h"
 #include "flow.h"
 #include "mac-learning.h"
 #include "netdev.h"
@@ -30,6 +32,7 @@
 #include "ofproto.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openvswitch/datapath-protocol.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"
@@ -43,14 +46,15 @@
 #define IB_BASE_PRIORITY 18181800
 
 enum {
-    IBR_FROM_LOCAL_PORT,        /* Sent by the local port. */
-    IBR_OFP_TO_LOCAL,           /* Sent to secure channel on local port. */
-    IBR_ARP_FROM_LOCAL,         /* ARP from the local port. */
-    IBR_ARP_FROM_CTL,           /* ARP from the controller. */
-    IBR_TO_CTL_OFP_SRC,         /* To controller, OpenFlow source port. */
-    IBR_TO_CTL_OFP_DST,         /* To controller, OpenFlow dest port. */
-    IBR_FROM_CTL_OFP_SRC,       /* From controller, OpenFlow source port. */
-    IBR_FROM_CTL_OFP_DST,       /* From controller, OpenFlow dest port. */
+    IBR_FROM_LOCAL_DHCP,          /* From local port, DHCP. */
+    IBR_TO_LOCAL_ARP,             /* To local port, ARP. */
+    IBR_FROM_LOCAL_ARP,           /* From local port, ARP. */
+    IBR_TO_REMOTE_ARP,            /* To remote MAC, ARP. */
+    IBR_FROM_REMOTE_ARP,          /* From remote MAC, ARP. */
+    IBR_TO_CTL_ARP,               /* To controller IP, ARP. */
+    IBR_FROM_CTL_ARP,             /* From controller IP, ARP. */
+    IBR_TO_CTL_OFP,               /* To controller, OpenFlow port. */
+    IBR_FROM_CTL_OFP,             /* From controller, OpenFlow port. */
 #if OFP_TCP_PORT != OFP_SSL_PORT
 #error Need to support separate TCP and SSL flows.
 #endif
@@ -69,17 +73,17 @@ struct in_band {
     struct rconn *controller;
     struct status_category *ss_cat;
 
-    /* Keeping track of controller's MAC address. */
-    uint32_t ip;                /* Current IP, 0 if unknown. */
-    uint32_t last_ip;           /* Last known IP, 0 if never known. */
-    uint8_t mac[ETH_ADDR_LEN];  /* Current MAC, 0 if unknown. */
-    uint8_t last_mac[ETH_ADDR_LEN]; /* Last known MAC, 0 if never known */
-    struct netdev *netdev;
-    time_t next_refresh;        /* Next time to refresh MAC address. */
+    /* Keep track of local port's information. */
+    uint8_t local_mac[ETH_ADDR_LEN];       /* Current MAC. */
+    struct netdev *local_netdev;           /* Local port's network device. */
+    time_t next_local_refresh;
 
-    /* Keeping track of the local port's MAC address. */
-    uint8_t local_mac[ETH_ADDR_LEN]; /* Current MAC. */
-    time_t next_local_refresh;  /* Next time to refresh MAC address. */
+    /* Keep track of controller and next hop's information. */
+    uint32_t controller_ip;                /* Controller IP, 0 if unknown. */
+    uint8_t remote_mac[ETH_ADDR_LEN];      /* Remote MAC. */
+    struct netdev *remote_netdev;
+    uint8_t last_remote_mac[ETH_ADDR_LEN]; /* Previous remote MAC. */
+    time_t next_remote_refresh;
 
     /* Rules that we set up. */
     struct ib_rule rules[N_IB_RULES];
@@ -88,58 +92,64 @@ struct in_band {
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
 
 static const uint8_t *
-get_controller_mac(struct in_band *ib)
+get_remote_mac(struct in_band *ib)
 {
+    int retval;
+    bool have_mac;
+    struct in_addr c_in4;   /* Controller's IP address. */
+    struct in_addr r_in4;   /* Next hop IP address. */
+    char *next_hop_dev;
     time_t now = time_now();
-    uint32_t controller_ip;
 
-    controller_ip = rconn_get_remote_ip(ib->controller);
-    if (controller_ip != ib->ip || now >= ib->next_refresh) {
-        bool have_mac;
+    if (now >= ib->next_remote_refresh) {
+        /* Find the next-hop IP address. */
+        c_in4.s_addr = ib->controller_ip;
+        memset(ib->remote_mac, 0, sizeof ib->remote_mac);
+        retval = netdev_get_next_hop(ib->local_netdev,
+                                     &c_in4, &r_in4, &next_hop_dev);
+        if (retval) {
+            VLOG_WARN("cannot find route for controller ("IP_FMT"): %s",
+                    IP_ARGS(&ib->controller_ip), strerror(retval));
+            ib->next_remote_refresh = now + 1;
+            return NULL;
+        }
+        if (!r_in4.s_addr) {
+            r_in4.s_addr = c_in4.s_addr;
+        }
 
-        ib->ip = controller_ip;
-
-        /* Look up MAC address. */
-        memset(ib->mac, 0, sizeof ib->mac);
-        if (ib->ip) {
-            struct in_addr local_in4 = { rconn_get_local_ip(ib->controller) };
-            struct in_addr in4;
-            int retval;
-
-            /* Refresh device with IP address 'in4'. */
-            if (!ib->netdev
-                || netdev_get_in4(ib->netdev, &in4)
-                || in4.s_addr != local_in4.s_addr)
-            {
-                netdev_close(ib->netdev);
-                ib->netdev = netdev_find_dev_by_in4(&local_in4);
-            }
-
-            if (ib->netdev) {
-                retval = netdev_arp_lookup(ib->netdev, ib->ip, ib->mac);
-                if (retval) {
-                    VLOG_DBG_RL(&rl, "cannot look up controller MAC address "
-                                "("IP_FMT"): %s",
-                                IP_ARGS(&ib->ip), strerror(retval));
-                }
-            } else {
-                VLOG_DBG_RL(&rl, "cannot find device with IP address "IP_FMT,
-                    IP_ARGS(&local_in4.s_addr));
+        /* Get the next-hop IP and network device. */
+        if (!ib->remote_netdev
+            || strcmp(netdev_get_name(ib->remote_netdev), next_hop_dev))
+        {
+            netdev_close(ib->remote_netdev);
+            retval = netdev_open(next_hop_dev, NETDEV_ETH_TYPE_NONE,
+                                 &ib->remote_netdev);
+            if (retval) {
+                VLOG_WARN_RL(&rl, "cannot open netdev %s (next hop "
+                             "to controller "IP_FMT"): %s",
+                             next_hop_dev, IP_ARGS(&ib->controller_ip),
+                             strerror(retval));
+                ib->next_remote_refresh = now + 1;
+                return NULL;
             }
         }
-        have_mac = !eth_addr_is_zero(ib->mac);
 
-        /* Log changes in IP, MAC addresses. */
-        if (ib->ip && ib->ip != ib->last_ip) {
-            VLOG_DBG("controller IP address changed from "IP_FMT
-                     " to "IP_FMT, IP_ARGS(&ib->last_ip), IP_ARGS(&ib->ip));
-            ib->last_ip = ib->ip;
+        /* Look up the MAC address of the next-hop IP address. */
+        retval = netdev_arp_lookup(ib->remote_netdev, r_in4.s_addr,
+                                   ib->remote_mac);
+        if (retval) {
+            VLOG_DBG_RL(&rl, "cannot look up remote MAC address ("IP_FMT"): %s",
+                        IP_ARGS(&r_in4.s_addr), strerror(retval));
         }
-        if (have_mac && memcmp(ib->last_mac, ib->mac, ETH_ADDR_LEN)) {
-            VLOG_DBG("controller MAC address changed from "ETH_ADDR_FMT" to "
+        have_mac = !eth_addr_is_zero(ib->remote_mac);
+        free(next_hop_dev);
+        if (have_mac
+            && !eth_addr_equals(ib->last_remote_mac, ib->remote_mac)) {
+            VLOG_DBG("remote MAC address changed from "ETH_ADDR_FMT" to "
                      ETH_ADDR_FMT,
-                     ETH_ADDR_ARGS(ib->last_mac), ETH_ADDR_ARGS(ib->mac));
-            memcpy(ib->last_mac, ib->mac, ETH_ADDR_LEN);
+                     ETH_ADDR_ARGS(ib->last_remote_mac),
+                     ETH_ADDR_ARGS(ib->remote_mac));
+            memcpy(ib->last_remote_mac, ib->remote_mac, ETH_ADDR_LEN);
         }
 
         /* Schedule next refresh.
@@ -147,9 +157,11 @@ get_controller_mac(struct in_band *ib)
          * If we have an IP address but not a MAC address, then refresh
          * quickly, since we probably will get a MAC address soon (via ARP).
          * Otherwise, we can afford to wait a little while. */
-        ib->next_refresh = now + (!ib->ip || have_mac ? 10 : 1);
+        ib->next_remote_refresh 
+                = now + (!ib->controller_ip || have_mac ? 10 : 1);
     }
-    return !eth_addr_is_zero(ib->mac) ? ib->mac : NULL;
+
+    return !eth_addr_is_zero(ib->remote_mac) ? ib->remote_mac : NULL;
 }
 
 static const uint8_t *
@@ -158,7 +170,7 @@ get_local_mac(struct in_band *ib)
     time_t now = time_now();
     if (now >= ib->next_local_refresh) {
         uint8_t ea[ETH_ADDR_LEN];
-        if (ib->netdev && !netdev_get_etheraddr(ib->netdev, ea)) {
+        if (ib->local_netdev && netdev_get_etheraddr(ib->local_netdev, ea)) {
             memcpy(ib->local_mac, ea, ETH_ADDR_LEN);
         }
         ib->next_local_refresh = now + 1;
@@ -170,19 +182,15 @@ static void
 in_band_status_cb(struct status_reply *sr, void *in_band_)
 {
     struct in_band *in_band = in_band_;
-    const uint8_t *local_mac;
-    const uint8_t *controller_mac;
 
-    local_mac = get_local_mac(in_band);
-    if (local_mac) {
+    if (!eth_addr_is_zero(in_band->local_mac)) {
         status_reply_put(sr, "local-mac="ETH_ADDR_FMT,
-                         ETH_ADDR_ARGS(local_mac));
+                         ETH_ADDR_ARGS(in_band->local_mac));
     }
 
-    controller_mac = get_controller_mac(in_band);
-    if (controller_mac) {
-        status_reply_put(sr, "controller-mac="ETH_ADDR_FMT,
-                         ETH_ADDR_ARGS(controller_mac));
+    if (!eth_addr_is_zero(in_band->remote_mac)) {
+        status_reply_put(sr, "remote-mac="ETH_ADDR_FMT,
+                         ETH_ADDR_ARGS(in_band->remote_mac));
     }
 }
 
@@ -224,54 +232,174 @@ setup_flow(struct in_band *in_band, int rule_idx, const flow_t *flow,
     }
 }
 
+/* Returns true if 'packet' should be sent to the local port regardless
+ * of the flow table. */ 
+bool
+in_band_msg_in_hook(struct in_band *in_band, const flow_t *flow, 
+                    const struct ofpbuf *packet)
+{
+    if (!in_band) {
+        return false;
+    }
+
+    /* Regardless of how the flow table is configured, we want to be
+     * able to see replies to our DHCP requests. */
+    if (flow->dl_type == htons(ETH_TYPE_IP)
+            && flow->nw_proto == IP_TYPE_UDP
+            && flow->tp_src == htons(DHCP_SERVER_PORT)
+            && flow->tp_dst == htons(DHCP_CLIENT_PORT)
+            && packet->l7) {
+        struct dhcp_header *dhcp;
+        const uint8_t *local_mac;
+
+        dhcp = ofpbuf_at(packet, (char *)packet->l7 - (char *)packet->data,
+                         sizeof *dhcp);
+        if (!dhcp) {
+            return false;
+        }
+
+        local_mac = get_local_mac(in_band);
+        if (eth_addr_equals(dhcp->chaddr, local_mac)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* Returns true if the rule that would match 'flow' with 'actions' is 
+ * allowed to be set up in the datapath. */
+bool
+in_band_rule_check(struct in_band *in_band, const flow_t *flow,
+                   const struct odp_actions *actions)
+{
+    if (!in_band) {
+        return true;
+    }
+
+    /* Don't allow flows that would prevent DHCP replies from being seen
+     * by the local port. */
+    if (flow->dl_type == htons(ETH_TYPE_IP)
+            && flow->nw_proto == IP_TYPE_UDP
+            && flow->tp_src == htons(DHCP_SERVER_PORT) 
+            && flow->tp_dst == htons(DHCP_CLIENT_PORT)) {
+        int i;
+
+        for (i=0; i<actions->n_actions; i++) {
+            if (actions->actions[i].output.type == ODPAT_OUTPUT 
+                    && actions->actions[i].output.port == ODPP_LOCAL) {
+                return true;
+            }   
+        }
+        return false;
+    }
+
+    return true;
+}
+
 void
 in_band_run(struct in_band *in_band)
 {
-    const uint8_t *controller_mac;
+    time_t now = time_now();
+    uint32_t controller_ip;
+    const uint8_t *remote_mac;
     const uint8_t *local_mac;
     flow_t flow;
 
-    if (time_now() < MIN(in_band->next_refresh, in_band->next_local_refresh)) {
+    if (now < in_band->next_remote_refresh 
+            && now < in_band->next_local_refresh) {
         return;
     }
-    controller_mac = get_controller_mac(in_band);
+
+    controller_ip = rconn_get_remote_ip(in_band->controller);
+    if (in_band->controller_ip && controller_ip != in_band->controller_ip) {
+        VLOG_DBG("controller IP address changed from "IP_FMT" to "IP_FMT, 
+                 IP_ARGS(&in_band->controller_ip),
+                 IP_ARGS(&controller_ip));
+    }
+    in_band->controller_ip = controller_ip;
+
+    remote_mac = get_remote_mac(in_band);
     local_mac = get_local_mac(in_band);
 
-    /* Switch traffic sent by the local port. */
-    memset(&flow, 0, sizeof flow);
-    flow.in_port = ODPP_LOCAL;
-    setup_flow(in_band, IBR_FROM_LOCAL_PORT, &flow, OFPFW_IN_PORT,
-               OFPP_NORMAL);
-
     if (local_mac) {
-        /* Deliver traffic sent to the connection's interface. */
+        /* Allow DHCP requests to be sent from the local port. */
         memset(&flow, 0, sizeof flow);
+        flow.in_port = ODPP_LOCAL;
+        flow.dl_type = htons(ETH_TYPE_IP);
+        memcpy(flow.dl_src, local_mac, ETH_ADDR_LEN);
+        flow.nw_proto = IP_TYPE_UDP;
+        flow.tp_src = htons(DHCP_CLIENT_PORT);
+        flow.tp_dst = htons(DHCP_SERVER_PORT);
+        setup_flow(in_band, IBR_FROM_LOCAL_DHCP, &flow,
+                   (OFPFW_IN_PORT | OFPFW_DL_TYPE | OFPFW_DL_SRC
+                    | OFPFW_NW_PROTO | OFPFW_TP_SRC | OFPFW_TP_DST), 
+                   OFPP_NORMAL);
+
+        /* Allow the connection's interface to receive directed ARP traffic. */
+        memset(&flow, 0, sizeof flow);
+        flow.dl_type = htons(ETH_TYPE_ARP);
         memcpy(flow.dl_dst, local_mac, ETH_ADDR_LEN);
-        setup_flow(in_band, IBR_OFP_TO_LOCAL, &flow, OFPFW_DL_DST,
-                    OFPP_NORMAL);
+        flow.nw_proto = ARP_OP_REPLY;
+        setup_flow(in_band, IBR_TO_LOCAL_ARP, &flow,
+                   (OFPFW_DL_TYPE | OFPFW_DL_DST | OFPFW_NW_PROTO), 
+                   OFPP_NORMAL);
 
         /* Allow the connection's interface to be the source of ARP traffic. */
         memset(&flow, 0, sizeof flow);
         flow.dl_type = htons(ETH_TYPE_ARP);
         memcpy(flow.dl_src, local_mac, ETH_ADDR_LEN);
-        setup_flow(in_band, IBR_ARP_FROM_LOCAL, &flow,
-                   OFPFW_DL_TYPE | OFPFW_DL_SRC, OFPP_NORMAL);
+        flow.nw_proto = ARP_OP_REQUEST;
+        setup_flow(in_band, IBR_FROM_LOCAL_ARP, &flow,
+                   (OFPFW_DL_TYPE | OFPFW_DL_SRC | OFPFW_NW_PROTO),
+                   OFPP_NORMAL);
     } else {
-        drop_flow(in_band, IBR_OFP_TO_LOCAL);
-        drop_flow(in_band, IBR_ARP_FROM_LOCAL);
+        drop_flow(in_band, IBR_TO_LOCAL_ARP);
+        drop_flow(in_band, IBR_FROM_LOCAL_ARP);
     }
 
-    if (controller_mac) {
-        /* Switch ARP requests sent by the controller.  (OFPP_NORMAL will "do
-         * the right thing" regarding VLANs here.) */
+    if (remote_mac) {
+        /* Allow ARP replies to the remote side's MAC. */
         memset(&flow, 0, sizeof flow);
         flow.dl_type = htons(ETH_TYPE_ARP);
-        memcpy(flow.dl_dst, eth_addr_broadcast, ETH_ADDR_LEN);
-        memcpy(flow.dl_src, controller_mac, ETH_ADDR_LEN);
-        setup_flow(in_band, IBR_ARP_FROM_CTL, &flow,
-                   OFPFW_DL_TYPE | OFPFW_DL_DST | OFPFW_DL_SRC,
+        memcpy(flow.dl_dst, remote_mac, ETH_ADDR_LEN);
+        flow.nw_proto = ARP_OP_REPLY;
+        setup_flow(in_band, IBR_TO_REMOTE_ARP, &flow,
+                   (OFPFW_DL_TYPE | OFPFW_DL_DST | OFPFW_NW_PROTO), 
                    OFPP_NORMAL);
 
+       /* Allow ARP requests from the remote side's MAC. */
+        memset(&flow, 0, sizeof flow);
+        flow.dl_type = htons(ETH_TYPE_ARP);
+        memcpy(flow.dl_src, remote_mac, ETH_ADDR_LEN);
+        flow.nw_proto = ARP_OP_REQUEST;
+        setup_flow(in_band, IBR_FROM_REMOTE_ARP, &flow,
+                   (OFPFW_DL_TYPE | OFPFW_DL_SRC | OFPFW_NW_PROTO), 
+                   OFPP_NORMAL);
+    } else {
+        drop_flow(in_band, IBR_TO_REMOTE_ARP);
+        drop_flow(in_band, IBR_FROM_REMOTE_ARP);
+    }
+
+    if (controller_ip) {
+        /* Allow ARP replies to the controller's IP. */
+        memset(&flow, 0, sizeof flow);
+        flow.dl_type = htons(ETH_TYPE_ARP);
+        flow.nw_proto = ARP_OP_REPLY;
+        flow.nw_dst = controller_ip;
+        setup_flow(in_band, IBR_TO_CTL_ARP, &flow,
+                   (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_DST_MASK),
+                   OFPP_NORMAL);
+
+       /* Allow ARP requests from the controller's IP. */
+        memset(&flow, 0, sizeof flow);
+        flow.dl_type = htons(ETH_TYPE_ARP);
+        flow.nw_proto = ARP_OP_REQUEST;
+        flow.nw_src = controller_ip;
+        setup_flow(in_band, IBR_FROM_CTL_ARP, &flow,
+                   (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_SRC_MASK),
+                   OFPP_NORMAL);
+     
         /* OpenFlow traffic to or from the controller.
          *
          * (A given field's value is completely ignored if it is wildcarded,
@@ -279,29 +407,22 @@ in_band_run(struct in_band *in_band)
          * case here.) */
         memset(&flow, 0, sizeof flow);
         flow.dl_type = htons(ETH_TYPE_IP);
-        memcpy(flow.dl_src, controller_mac, ETH_ADDR_LEN);
-        memcpy(flow.dl_dst, controller_mac, ETH_ADDR_LEN);
         flow.nw_proto = IP_TYPE_TCP;
+        flow.nw_src = controller_ip;
+        flow.nw_dst = controller_ip;
         flow.tp_src = htons(OFP_TCP_PORT);
         flow.tp_dst = htons(OFP_TCP_PORT);
-        setup_flow(in_band, IBR_TO_CTL_OFP_SRC, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_DL_DST | OFPFW_NW_PROTO
-                    | OFPFW_TP_SRC), OFPP_NORMAL);
-        setup_flow(in_band, IBR_TO_CTL_OFP_DST, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_DL_DST | OFPFW_NW_PROTO
+        setup_flow(in_band, IBR_TO_CTL_OFP, &flow,
+                   (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_DST_MASK 
                     | OFPFW_TP_DST), OFPP_NORMAL);
-        setup_flow(in_band, IBR_FROM_CTL_OFP_SRC, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_DL_SRC | OFPFW_NW_PROTO
+        setup_flow(in_band, IBR_FROM_CTL_OFP, &flow,
+                   (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_SRC_MASK
                     | OFPFW_TP_SRC), OFPP_NORMAL);
-        setup_flow(in_band, IBR_FROM_CTL_OFP_DST, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_DL_SRC | OFPFW_NW_PROTO
-                    | OFPFW_TP_DST), OFPP_NORMAL);
     } else {
-        drop_flow(in_band, IBR_ARP_FROM_CTL);
-        drop_flow(in_band, IBR_TO_CTL_OFP_DST);
-        drop_flow(in_band, IBR_TO_CTL_OFP_SRC);
-        drop_flow(in_band, IBR_FROM_CTL_OFP_DST);
-        drop_flow(in_band, IBR_FROM_CTL_OFP_SRC);
+        drop_flow(in_band, IBR_TO_CTL_ARP);
+        drop_flow(in_band, IBR_FROM_CTL_ARP);
+        drop_flow(in_band, IBR_TO_CTL_OFP);
+        drop_flow(in_band, IBR_FROM_CTL_OFP);
     }
 }
 
@@ -309,7 +430,8 @@ void
 in_band_wait(struct in_band *in_band)
 {
     time_t now = time_now();
-    time_t wakeup = MIN(in_band->next_refresh, in_band->next_local_refresh);
+    time_t wakeup 
+            = MIN(in_band->next_remote_refresh, in_band->next_local_refresh);
     if (wakeup > now) {
         poll_timer_wait((wakeup - now) * 1000);
     } else {
@@ -327,22 +449,44 @@ in_band_flushed(struct in_band *in_band)
     }
 }
 
-void
-in_band_create(struct ofproto *ofproto, struct switch_status *ss,
-               struct rconn *controller, struct in_band **in_bandp)
+int
+in_band_create(struct ofproto *ofproto, struct dpif *dpif,
+               struct switch_status *ss, struct rconn *controller, 
+               struct in_band **in_bandp)
 {
     struct in_band *in_band;
+    char local_name[IF_NAMESIZE];
+    struct netdev *local_netdev;
+    int error;
+
+    error = dpif_port_get_name(dpif, ODPP_LOCAL,
+                               local_name, sizeof local_name);
+    if (error) {
+        VLOG_ERR("failed to initialize in-band control: cannot get name "
+                 "of datapath local port (%s)", strerror(error));
+        return error;
+    }
+
+    error = netdev_open(local_name, NETDEV_ETH_TYPE_NONE, &local_netdev);
+    if (error) {
+        VLOG_ERR("failed to initialize in-band control: cannot open "
+                 "datapath local port %s (%s)", local_name, strerror(error));
+        return error;
+    }
 
     in_band = xcalloc(1, sizeof *in_band);
     in_band->ofproto = ofproto;
     in_band->controller = controller;
     in_band->ss_cat = switch_status_register(ss, "in-band",
                                              in_band_status_cb, in_band);
-    in_band->next_refresh = TIME_MIN;
+    in_band->local_netdev = local_netdev;
     in_band->next_local_refresh = TIME_MIN;
-    in_band->netdev = NULL;
+    in_band->remote_netdev = NULL;
+    in_band->next_remote_refresh = TIME_MIN;
 
     *in_bandp = in_band;
+
+    return 0;
 }
 
 void
@@ -350,7 +494,8 @@ in_band_destroy(struct in_band *in_band)
 {
     if (in_band) {
         switch_status_unregister(in_band->ss_cat);
-        netdev_close(in_band->netdev);
+        netdev_close(in_band->local_netdev);
+        netdev_close(in_band->remote_netdev);
         /* We don't own the rconn. */
     }
 }

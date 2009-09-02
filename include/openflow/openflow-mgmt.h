@@ -243,7 +243,8 @@ enum ofmp_extended_data_flags {
 
 /* Body of extended data message.  May be sent by either the switch or the
  * controller to send messages that are greater than 65535 bytes in
- * length.
+ * length.  The OpenFlow transaction id (xid) must be the same for all
+ * the individual OpenFlow messages that make up an extended message.
  *
  * OFMPT_EXTENDED_DATA (switch <-> controller) */
 struct ofmp_extended_data {

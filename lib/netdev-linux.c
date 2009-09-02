@@ -96,7 +96,7 @@ struct netdev_linux_cache {
 
     int ifindex;
     uint8_t etheraddr[ETH_ADDR_LEN];
-    struct in_addr in4;
+    struct in_addr address, netmask;
     struct in6_addr in6;
     int mtu;
     int carrier;
@@ -124,6 +124,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 static int netdev_linux_do_ethtool(struct netdev *, struct ethtool_cmd *,
                                    int cmd, const char *cmd_name);
 static int netdev_linux_do_ioctl(const struct netdev *, struct ifreq *,
+                                 int cmd, const char *cmd_name);
+static int netdev_linux_get_ipv4(const struct netdev *, struct in_addr *,
                                  int cmd, const char *cmd_name);
 static int get_flags(const struct netdev *, int *flagsp);
 static int set_flags(struct netdev *, int flags);
@@ -935,49 +937,48 @@ netdev_linux_set_policing(struct netdev *netdev,
     return 0;
 }
 
-/* If 'netdev' has an assigned IPv4 address, sets '*in4' to that address (if
- * 'in4' is non-null) and returns true.  Otherwise, returns false. */
 static int
-netdev_linux_get_in4(const struct netdev *netdev_, struct in_addr *in4)
+netdev_linux_get_in4(const struct netdev *netdev_,
+                     struct in_addr *address, struct in_addr *netmask)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     if (!(netdev->cache->valid & VALID_IN4)) {
-        const struct sockaddr_in *sin;
-        struct ifreq ifr;
         int error;
 
-        ifr.ifr_addr.sa_family = AF_INET;
-        error = netdev_linux_do_ioctl(netdev_, &ifr,
+        error = netdev_linux_get_ipv4(netdev_, &netdev->cache->address,
                                       SIOCGIFADDR, "SIOCGIFADDR");
         if (error) {
             return error;
         }
 
-        sin = (struct sockaddr_in *) &ifr.ifr_addr;
-        netdev->cache->in4 = sin->sin_addr;
+        error = netdev_linux_get_ipv4(netdev_, &netdev->cache->netmask,
+                                      SIOCGIFNETMASK, "SIOCGIFNETMASK");
+        if (error) {
+            return error;
+        }
+
         netdev->cache->valid |= VALID_IN4;
     }
-    *in4 = netdev->cache->in4;
-    return in4->s_addr == INADDR_ANY ? EADDRNOTAVAIL : 0;
+    *address = netdev->cache->address;
+    *netmask = netdev->cache->netmask;
+    return address->s_addr == INADDR_ANY ? EADDRNOTAVAIL : 0;
 }
 
-/* Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If
- * 'addr' is INADDR_ANY, 'netdev''s IPv4 address is cleared.  Returns a
- * positive errno value. */
 static int
-netdev_linux_set_in4(struct netdev *netdev_, struct in_addr addr,
-                     struct in_addr mask)
+netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
+                     struct in_addr netmask)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
-    error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", addr);
+    error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", address);
     if (!error) {
         netdev->cache->valid |= VALID_IN4;
-        netdev->cache->in4 = addr;
-        if (addr.s_addr != INADDR_ANY) {
+        netdev->cache->address = address;
+        netdev->cache->netmask = netmask;
+        if (address.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
-                                "SIOCSIFNETMASK", mask);
+                                "SIOCSIFNETMASK", netmask);
         }
     }
     return error;
@@ -1074,6 +1075,67 @@ netdev_linux_add_router(struct netdev *netdev UNUSED, struct in_addr router)
         VLOG_WARN("ioctl(SIOCADDRT): %s", strerror(error));
     }
     return error;
+}
+
+static int
+netdev_linux_get_next_hop(const struct in_addr *host, struct in_addr *next_hop,
+                          char **netdev_name)
+{
+    static const char fn[] = "/proc/net/route";
+    FILE *stream;
+    char line[256];
+    int ln;
+
+    *netdev_name = NULL;
+    stream = fopen(fn, "r");
+    if (stream == NULL) {
+        VLOG_WARN_RL(&rl, "%s: open failed: %s", fn, strerror(errno));
+        return errno;
+    }
+
+    ln = 0;
+    while (fgets(line, sizeof line, stream)) {
+        if (++ln >= 2) {
+            char iface[17];
+            uint32_t dest, gateway, mask;
+            int refcnt, metric, mtu;
+            unsigned int flags, use, window, irtt;
+
+            if (sscanf(line,
+                       "%16s %"SCNx32" %"SCNx32" %04X %d %u %d %"SCNx32
+                       " %d %u %u\n",
+                       iface, &dest, &gateway, &flags, &refcnt,
+                       &use, &metric, &mask, &mtu, &window, &irtt) != 11) {
+
+                VLOG_WARN_RL(&rl, "%s: could not parse line %d: %s", 
+                        fn, ln, line);
+                continue;
+            }
+            if (!(flags & RTF_UP)) {
+                /* Skip routes that aren't up. */
+                continue;
+            }
+
+            /* The output of 'dest', 'mask', and 'gateway' were given in
+             * network byte order, so we don't need need any endian 
+             * conversions here. */
+            if ((dest & mask) == (host->s_addr & mask)) {
+                if (!gateway) {
+                    /* The host is directly reachable. */
+                    next_hop->s_addr = 0;
+                } else {
+                    /* To reach the host, we must go through a gateway. */
+                    next_hop->s_addr = gateway;
+                }
+                *netdev_name = xstrdup(iface);
+                fclose(stream);
+                return 0;
+            }
+        }
+    }
+
+    fclose(stream);
+    return ENXIO;
 }
 
 /* Looks up the ARP table entry for 'ip' on 'netdev'.  If one exists and can be
@@ -1269,6 +1331,7 @@ const struct netdev_class netdev_linux_class = {
     netdev_linux_set_in4,
     netdev_linux_get_in6,
     netdev_linux_add_router,
+    netdev_linux_get_next_hop,
     netdev_linux_arp_lookup,
 
     netdev_linux_update_flags,
@@ -1312,6 +1375,7 @@ const struct netdev_class netdev_tap_class = {
     netdev_linux_set_in4,
     netdev_linux_get_in6,
     netdev_linux_add_router,
+    netdev_linux_get_next_hop,
     netdev_linux_arp_lookup,
 
     netdev_linux_update_flags,
@@ -1590,4 +1654,20 @@ netdev_linux_do_ioctl(const struct netdev *netdev, struct ifreq *ifr,
         return errno;
     }
     return 0;
+}
+
+static int
+netdev_linux_get_ipv4(const struct netdev *netdev, struct in_addr *ip,
+                      int cmd, const char *cmd_name)
+{
+    struct ifreq ifr;
+    int error;
+
+    ifr.ifr_addr.sa_family = AF_INET;
+    error = netdev_linux_do_ioctl(netdev, &ifr, cmd, cmd_name);
+    if (!error) {
+        const struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
+        *ip = sin->sin_addr;
+    }
+    return error;
 }

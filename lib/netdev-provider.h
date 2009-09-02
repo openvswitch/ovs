@@ -208,7 +208,8 @@ struct netdev_class {
     int (*set_policing)(struct netdev *netdev, unsigned int kbits_rate,
                         unsigned int kbits_burst);
 
-    /* If 'netdev' has an assigned IPv4 address, sets '*in4' to that address.
+    /* If 'netdev' has an assigned IPv4 address, sets '*address' to that
+     * address and '*netmask' to the associated netmask.
      *
      * The following error values have well-defined meanings:
      *
@@ -218,7 +219,8 @@ struct netdev_class {
      *
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
-    int (*get_in4)(const struct netdev *netdev, struct in_addr *in4);
+    int (*get_in4)(const struct netdev *netdev, struct in_addr *address,
+                   struct in_addr *netmask);
 
     /* Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If
      * 'addr' is INADDR_ANY, 'netdev''s IPv4 address is cleared.
@@ -245,6 +247,17 @@ struct netdev_class {
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
     int (*add_router)(struct netdev *netdev, struct in_addr router);
+
+    /* Looks up the next hop for 'host'.  If succesful, stores the next hop
+     * gateway's address (0 if 'host' is on a directly connected network) in
+     * '*next_hop' and a copy of the name of the device to reach 'host' in
+     * '*netdev_name', and returns 0.  The caller is responsible for freeing
+     * '*netdev_name' (by calling free()).
+     *
+     * This function may be set to null if it would always return EOPNOTSUPP
+     * anyhow. */
+    int (*get_next_hop)(const struct in_addr *host, struct in_addr *next_hop,
+                        char **netdev_name);
 
     /* Looks up the ARP table entry for 'ip' on 'netdev' and stores the
      * corresponding MAC address in 'mac'.  A return value of ENXIO, in

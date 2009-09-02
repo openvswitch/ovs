@@ -21,15 +21,20 @@
 
 struct dpif;
 struct in_band;
+struct odp_actions;
 struct ofproto;
 struct rconn;
 struct settings;
 struct switch_status;
 
-void in_band_create(struct ofproto *, struct switch_status *,
-                    struct rconn *controller, struct in_band **);
+int in_band_create(struct ofproto *, struct dpif *, struct switch_status *,
+                   struct rconn *controller, struct in_band **);
 void in_band_destroy(struct in_band *);
 void in_band_run(struct in_band *);
+bool in_band_msg_in_hook(struct in_band *, const flow_t *, 
+                         const struct ofpbuf *packet);
+bool in_band_rule_check(struct in_band *, const flow_t *,
+                        const struct odp_actions *);
 void in_band_wait(struct in_band *);
 void in_band_flushed(struct in_band *);
 

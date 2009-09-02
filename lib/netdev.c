@@ -391,9 +391,9 @@ netdev_set_advertisements(struct netdev *netdev, uint32_t advertise)
             : EOPNOTSUPP);
 }
 
-/* If 'netdev' has an assigned IPv4 address, sets '*in4' to that address and
- * returns 0.  Otherwise, returns a positive errno value and sets '*in4' to 0
- * (INADDR_ANY).
+/* If 'netdev' has an assigned IPv4 address, sets '*address' to that address
+ * and '*netmask' to its netmask and returns 0.  Otherwise, returns a positive
+ * errno value and sets '*address' to 0 (INADDR_ANY).
  *
  * The following error values have well-defined meanings:
  *
@@ -401,18 +401,24 @@ netdev_set_advertisements(struct netdev *netdev, uint32_t advertise)
  *
  *   - EOPNOTSUPP: No IPv4 network stack attached to 'netdev'.
  *
- * 'in4' may be null, in which case the address itself is not reported. */
+ * 'address' or 'netmask' or both may be null, in which case the address or netmask
+ * is not reported. */
 int
-netdev_get_in4(const struct netdev *netdev, struct in_addr *in4)
+netdev_get_in4(const struct netdev *netdev,
+               struct in_addr *address_, struct in_addr *netmask_)
 {
-    struct in_addr dummy;
+    struct in_addr address;
+    struct in_addr netmask;
     int error;
 
     error = (netdev->class->get_in4
-             ? netdev->class->get_in4(netdev, in4 ? in4 : &dummy)
+             ? netdev->class->get_in4(netdev, &address, &netmask)
              : EOPNOTSUPP);
-    if (error && in4) {
-        in4->s_addr = 0;
+    if (address_) {
+        address_->s_addr = error ? 0 : address.s_addr;
+    }
+    if (netmask_) {
+        netmask_->s_addr = error ? 0 : netmask.s_addr;
     }
     return error;
 }
@@ -437,6 +443,28 @@ netdev_add_router(struct netdev *netdev, struct in_addr router)
     return (netdev->class->add_router
             ? netdev->class->add_router(netdev, router)
             : EOPNOTSUPP);
+}
+
+/* Looks up the next hop for 'host' for the TCP/IP stack that corresponds to
+ * 'netdev'.  If a route cannot not be determined, sets '*next_hop' to 0,
+ * '*netdev_name' to null, and returns a positive errno value.  Otherwise, if a
+ * next hop is found, stores the next hop gateway's address (0 if 'host' is on
+ * a directly connected network) in '*next_hop' and a copy of the name of the
+ * device to reach 'host' in '*netdev_name', and returns 0.  The caller is
+ * responsible for freeing '*netdev_name' (by calling free()). */
+int
+netdev_get_next_hop(const struct netdev *netdev,
+                    const struct in_addr *host, struct in_addr *next_hop,
+                    char **netdev_name)
+{
+    int error = (netdev->class->get_next_hop
+                 ? netdev->class->get_next_hop(host, next_hop, netdev_name)
+                 : EOPNOTSUPP);
+    if (error) {
+        next_hop->s_addr = 0;
+        *netdev_name = NULL;
+    }
+    return error;
 }
 
 /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address and
@@ -633,7 +661,7 @@ netdev_find_dev_by_in4(const struct in_addr *in4)
         struct in_addr dev_in4;
 
         if (!netdev_open(name, NETDEV_ETH_TYPE_NONE, &netdev)
-            && !netdev_get_in4(netdev, &dev_in4)
+            && !netdev_get_in4(netdev, &dev_in4, NULL)
             && dev_in4.s_addr == in4->s_addr) {
             goto exit;
         }

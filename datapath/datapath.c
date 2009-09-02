@@ -839,7 +839,7 @@ static void clear_stats(struct sw_flow *flow)
 static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 {
 	struct odp_flow_put uf;
-	struct sw_flow *flow, **bucket;
+	struct sw_flow *flow;
 	struct dp_table *table;
 	struct odp_flow_stats stats;
 	int error;
@@ -849,15 +849,10 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 		goto error;
 	uf.flow.key.reserved = 0;
 
-retry:
 	table = rcu_dereference(dp->table);
-	bucket = dp_table_lookup_for_insert(table, &uf.flow.key);
-	if (!bucket) {
-		/* No such flow, and the slots where it could go are full. */
-		error = uf.flags & ODPPF_CREATE ? -EFBIG : -ENOENT;
-		goto error;
-	} else if (!*bucket) {
-		/* No such flow, but we found an available slot for it. */
+	flow = dp_table_lookup(table, &uf.flow.key);
+	if (!flow) {
+		/* No such flow. */
 		struct sw_flow_actions *acts;
 
 		error = -ENOENT;
@@ -865,14 +860,15 @@ retry:
 			goto error;
 
 		/* Expand table, if necessary, to make room. */
-		if (dp->n_flows * 4 >= table->n_buckets &&
-		    table->n_buckets < DP_MAX_BUCKETS) {
+		if (dp->n_flows >= table->n_buckets) {
+			error = -ENOSPC;
+			if (table->n_buckets >= DP_MAX_BUCKETS)
+				goto error;
+
 			error = dp_table_expand(dp);
 			if (error)
 				goto error;
-
-			/* The bucket's location has changed.  Try again. */
-			goto retry;
+			table = rcu_dereference(dp->table);
 		}
 
 		/* Allocate flow. */
@@ -892,12 +888,13 @@ retry:
 		rcu_assign_pointer(flow->sf_acts, acts);
 
 		/* Put flow in bucket. */
-		rcu_assign_pointer(*bucket, flow);
+		error = dp_table_insert(table, flow);
+		if (error)
+			goto error_free_flow_acts;
 		dp->n_flows++;
 		memset(&stats, 0, sizeof(struct odp_flow_stats));
 	} else {
 		/* We found a matching flow. */
-		struct sw_flow *flow = *rcu_dereference(bucket);
 		struct sw_flow_actions *old_acts, *new_acts;
 		unsigned long int flags;
 
@@ -935,6 +932,8 @@ retry:
 		return -EFAULT;
 	return 0;
 
+error_free_flow_acts:
+	kfree(flow->sf_acts);
 error_free_flow:
 	kmem_cache_free(flow_cache, flow);
 error:
@@ -1167,8 +1166,8 @@ static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 	int i;
 
 	stats.n_flows = dp->n_flows;
-	stats.cur_capacity = rcu_dereference(dp->table)->n_buckets * 2;
-	stats.max_capacity = DP_MAX_BUCKETS * 2;
+	stats.cur_capacity = rcu_dereference(dp->table)->n_buckets;
+	stats.max_capacity = DP_MAX_BUCKETS;
 	stats.n_ports = dp->n_ports;
 	stats.max_ports = DP_MAX_PORTS;
 	stats.max_groups = DP_MAX_GROUPS;

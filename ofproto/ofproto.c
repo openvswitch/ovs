@@ -424,9 +424,8 @@ ofproto_set_in_band(struct ofproto *p, bool in_band)
 {
     if (in_band != (p->in_band != NULL)) {
         if (in_band) {
-            in_band_create(p, p->switch_status, p->controller->rconn, 
-                           &p->in_band);
-            return 0;
+            return in_band_create(p, p->dpif, p->switch_status,
+                                  p->controller->rconn, &p->in_band);
         } else {
             ofproto_set_discovery(p, false, NULL, true);
             in_band_destroy(p->in_band);
@@ -1700,7 +1699,7 @@ rule_post_uninstall(struct ofproto *ofproto, struct rule *rule)
     struct rule *super = rule->super;
 
     rule_account(ofproto, rule, 0);
-    if (ofproto->netflow) {
+    if (ofproto->netflow && rule->byte_count) {
         struct ofexpired expired;
         expired.flow = rule->cr.flow;
         expired.packet_count = rule->packet_count;
@@ -2127,6 +2126,13 @@ xlate_actions(const union ofp_action *in, size_t n_in,
     ctx.tags = tags ? tags : &no_tags;
     ctx.may_setup_flow = true;
     do_xlate_actions(in, n_in, &ctx);
+
+    /* Check with in-band control to see if we're allowed to setup this
+     * flow. */
+    if (!in_band_rule_check(ofproto->in_band, flow, out)) {
+        ctx.may_setup_flow = false;
+    }
+
     if (may_setup_flow) {
         *may_setup_flow = ctx.may_setup_flow;
     }
@@ -2516,11 +2522,11 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
     }
 
     query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &match);
+    flow_to_ovs_match(&rule->cr.flow, rule->cr.wc.wildcards, &match);
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);
-    ds_put_format(results, "priority=%u", rule->cr.priority);
+    ds_put_format(results, "priority=%u, ", rule->cr.priority);
     ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
     ofp_print_match(results, &match, true);
@@ -3027,6 +3033,17 @@ handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
     payload.data = msg + 1;
     payload.size = msg->length - sizeof *msg;
     flow_extract(&payload, msg->port, &flow);
+
+    /* Check with in-band control to see if this packet should be sent
+     * to the local port regardless of the flow table. */
+    if (in_band_msg_in_hook(p->in_band, &flow, &payload)) {
+        union odp_action action;
+
+        memset(&action, 0, sizeof(action));
+        action.output.type = ODPAT_OUTPUT;
+        action.output.port = ODPP_LOCAL;
+        dpif_execute(p->dpif, flow.in_port, &action, 1, &payload);
+    }
 
     rule = lookup_valid_rule(p, &flow);
     if (!rule) {
