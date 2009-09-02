@@ -170,7 +170,7 @@ get_local_mac(struct in_band *ib)
     time_t now = time_now();
     if (now >= ib->next_local_refresh) {
         uint8_t ea[ETH_ADDR_LEN];
-        if (ib->local_netdev && netdev_get_etheraddr(ib->local_netdev, ea)) {
+        if (ib->local_netdev && !netdev_get_etheraddr(ib->local_netdev, ea)) {
             memcpy(ib->local_mac, ea, ETH_ADDR_LEN);
         }
         ib->next_local_refresh = now + 1;
