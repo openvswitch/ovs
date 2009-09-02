@@ -75,7 +75,7 @@ tcp_open(const char *name, char *suffix, struct vconn **vconnp)
     struct sockaddr_in sin;
     int fd, error;
 
-    error = tcp_open_active(suffix, OFP_TCP_PORT, NULL, &fd);
+    error = tcp_open_active(suffix, OFP_TCP_PORT, &sin, &fd);
     if (fd >= 0) {
         return new_tcp_vconn(name, fd, error, &sin, vconnp);
     } else {
