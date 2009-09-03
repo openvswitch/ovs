@@ -267,6 +267,22 @@ a trunk port, the frame's VLAN tag will be set to \fIvid\fR, replacing
 any existing tag; when it is sent out an implicit VLAN port, the frame
 will not be tagged.  This type of mirroring may be referred to as
 RSPAN.
+.IP
+Please note that mirroring to a VLAN can disrupt a network that
+contains unmanaged switches.  Consider an unmanaged physical switch
+with two ports: port 1, connected to an end host, and port 2,
+connected to an Open vSwitch configured to mirror received packets
+into VLAN 123 on port 2.  Suppose that the end host sends a packet on
+port 1 that the physical switch forwards to port 2.  The Open vSwitch
+forwards this packet to its destination and then reflects it back on
+port 2 in VLAN 123.  This reflected packet causes the unmanaged
+physical switch to replace the MAC learning table entry, which
+correctly pointed to port 1, with one that incorrectly points to port
+2.  Afterward, the physical switch will direct packets destined for
+the end host to the Open vSwitch on port 2, instead of to the end host
+on port 1, disrupting connectivity.  If mirroring to a VLAN is desired
+in this scenario, then the physical switch must be replaced by one
+that learns Ethernet addresses on a per-VLAN basis.
 .ST "Example"
 The following \fBovs\-vswitchd\fR configuration copies all frames received
 on \fBeth1\fR or \fBeth2\fR to \fBeth3\fR.
