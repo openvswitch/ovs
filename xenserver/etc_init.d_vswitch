@@ -286,6 +286,11 @@ function start {
     # ovs-vswitchd needs a few per bridge
     ulimit -n 4096
 
+    if [ ! -e "$VSWITCHD_CONF" ]; then
+        warning "$VSWITCHD_CONF does not exist"
+        action "Creating empty $VSWITCHD_CONF" touch "$VSWITCHD_CONF"
+    fi
+
     start_vswitchd
     start_brcompatd
     reload_vswitchd  # ensures ovs-vswitchd has fully read config file.
