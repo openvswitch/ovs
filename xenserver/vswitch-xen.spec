@@ -51,8 +51,6 @@ install -m 755 xenserver/etc_init.d_vswitch \
 install -m 755 xenserver/etc_init.d_vswitch-xapi-update \
          $RPM_BUILD_ROOT/etc/init.d/vswitch-xapi-update
 install -d -m 755 $RPM_BUILD_ROOT/etc/sysconfig
-install -m 755 xenserver/etc_sysconfig_vswitch.example \
-         $RPM_BUILD_ROOT/etc/sysconfig/vswitch.example
 install -d -m 755 $RPM_BUILD_ROOT/etc/logrotate.d
 install -m 755 xenserver/etc_logrotate.d_vswitch \
          $RPM_BUILD_ROOT/etc/logrotate.d/vswitch
@@ -73,6 +71,8 @@ install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT%{_prefix}/scripts/xen-bugtool
 install -m 755 xenserver/usr_sbin_brctl \
              $RPM_BUILD_ROOT%{_prefix}/scripts/brctl
+install -m 755 xenserver/root_vswitch_scripts_sysconfig.template \
+         $RPM_BUILD_ROOT/root/vswitch/scripts/sysconfig.template
 install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
                $RPM_BUILD_ROOT%{_prefix}/scripts/XSFeatureVSwitch.py
@@ -207,6 +207,21 @@ fi
 # Ensure ovs-vswitchd.conf exists
 touch /etc/ovs-vswitchd.conf
 
+# Create default or update existing /etc/sysconfig/vswitch.
+SYSCONFIG=/etc/sysconfig/vswitch
+TEMPLATE=/root/vswitch/scripts/sysconfig.template
+if [ ! -e $SYSCONFIG ]; then
+    cp $TEMPLATE $SYSCONFIG
+else
+    for var in $(awk -F'[ :]' '/^# [_A-Z0-9]+:/{print $2}' $TEMPLATE)
+    do
+        if ! grep $var $SYSCONFIG >/dev/null 2>&1; then
+            echo >> $SYSCONFIG
+            sed -n "/$var:/,/$var=/p" $TEMPLATE >> $SYSCONFIG
+        fi
+    done
+fi
+
 # Replace XenServer files by our versions.
 mkdir -p %{_prefix}/xs-original \
     || printf "Could not create script backup directory.\n"
@@ -307,7 +322,6 @@ fi
 /etc/init.d/vswitch
 /etc/init.d/vswitch-xapi-update
 /etc/xapi.d/plugins/vswitch-cfg-update
-/etc/sysconfig/vswitch.example
 /etc/logrotate.d/vswitch
 /etc/profile.d/vswitch.sh
 /root/vswitch/kernel_modules/brcompat_mod.ko
@@ -319,6 +333,7 @@ fi
 /root/vswitch/scripts/xen-bugtool
 /root/vswitch/scripts/XSFeatureVSwitch.py
 /root/vswitch/scripts/brctl
+/root/vswitch/scripts/sysconfig.template
 # Following two files are generated automatically by rpm.  We don't
 # really need them and they won't be used on the XenServer, but there
 # isn't an obvious place to get rid of them since they are generated
