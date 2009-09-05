@@ -30,10 +30,6 @@ files are:
         vswitch-related shell functions for the administrator's
         convenience.
 
-    etc_sysconfig_vswitch.example
-
-        Example configuration options for vswitch.
-
     etc_xapi.d_plugins_vswitch-cfg-update
 
         xapi plugin script to update the cache of configuration items
@@ -53,6 +49,11 @@ files are:
         Script to retrieve extended information about VIFs that are
         needed by the controller.  This is called by the "vif" script,
         which is run when virtual interfaces are added and removed.
+
+    root_vswitch_scripts_sysconfig.template
+
+        Template for vswitch's /etc/sysconfig/vswitch configuration
+        file.
 
     usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py
 

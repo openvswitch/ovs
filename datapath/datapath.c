@@ -1107,6 +1107,7 @@ static int do_execute(struct datapath *dp, const struct odp_execute *executep)
 	struct odp_flow_key key;
 	struct sk_buff *skb;
 	struct sw_flow_actions *actions;
+	struct ethhdr *eth;
 	int err;
 
 	err = -EFAULT;
@@ -1145,6 +1146,17 @@ static int do_execute(struct datapath *dp, const struct odp_execute *executep)
 	if (copy_from_user(skb_put(skb, execute.length), execute.data,
 			   execute.length))
 		goto error_free_skb;
+
+	skb_reset_mac_header(skb);
+	eth = eth_hdr(skb);
+
+    /* Normally, setting the skb 'protocol' field would be handled by a
+     * call to eth_type_trans(), but it assumes there's a sending
+     * device, which we may not have. */
+	if (ntohs(eth->h_proto) >= 1536)
+		skb->protocol = eth->h_proto;
+	else
+		skb->protocol = htons(ETH_P_802_2);
 
 	flow_extract(skb, execute.in_port, &key);
 	err = execute_actions(dp, skb, &key, actions->actions,
