@@ -109,34 +109,30 @@ if [ ! -f /etc/xensource-inventory ]; then
 fi
 
 if [ "$1" = "1" ]; then
-    if ! md5sum -c --status <<EOF
+    if md5sum -c --status <<EOF
+ca141d60061dcfdade73e75abc6529b5  /usr/sbin/brctl
 b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
 51970ad613a3996d5997e18e44db47da  /opt/xensource/libexec/interface-reconfigure
 5654c8c36699fcc8744ca9cd5b855414  /usr/sbin/xen-bugtool
 EOF
     then
-        printf "\nThe original XenServer scripts replaced by this package\n"
-        printf "are different than expected.  This could lead to unexpected\n"
-        printf "behavior of your server.  Unless you are sure you know what\n"
-        printf "you are doing, it is highly recommended that you remove this\n"
-        printf "package immediately after the install completes, which\n"
-        printf "will restore the XenServer scripts that you were previously\n"
-        printf "using.\n\n"
-    fi
-    if test "`/usr/sbin/brctl --version`" != "bridge-utils, 1.1"; then
+        printf "\nVerified host scripts from XenServer 5.5.0.\n\n"
+    elif md5sum -c --status <<EOF
+ca141d60061dcfdade73e75abc6529b5  /usr/sbin/brctl
+b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
+ce451d3c985fd1db6497a363f0d9dedb  /opt/xensource/libexec/interface-reconfigure
+2b53f500431fcba5276c896e9e4281b9  /usr/sbin/xen-bugtool
+EOF
+        printf "\nVerified host scripts from XenServer 5.5.900.\n\n"
+    else
 cat <<EOF
 
-/usr/sbin/brctl replaced by this package reports the following version:
-
-`/usr/sbin/brctl --version`
-
-The expected version was:
-
-bridge-utils, 1.1
-
-Unless you are sure you know what you are doing, it is highly recommended that
-you remove this package immediately after the install completes, which will
-restore the original /usr/sbin/brctl.
+The original XenServer scripts replaced by this package are not those
+of any supported version of XenServer.  This could lead to unexpected
+behavior of your server.  Unless you are sure you know what you are
+doing, it is highly recommended that you remove this package
+immediately after the install completes, which will restore the
+XenServer scripts that you were previously using.
 
 EOF
     fi
