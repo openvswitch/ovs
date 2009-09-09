@@ -71,8 +71,8 @@ add_to_bridge()
     logger -t scripts-vif "Adding ${vif} to ${bridge} with address ${address}"
 
     vid=
-    if [ -e "/etc/openvswitch/br-$bridge" ]; then
-	. "/etc/openvswitch/br-$bridge"
+    if [ -e "/var/lib/openvswitch/br-$bridge" ]; then
+	. "/var/lib/openvswitch/br-$bridge"
 	if [ -n "$VLAN_SLAVE" -a -n "$VLAN_VID" ]; then
 	    bridge=$VLAN_SLAVE
 	    vid="--add=vlan.$vif.tag=$VLAN_VID"
