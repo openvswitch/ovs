@@ -16,7 +16,7 @@
 .  RE
 .  PP
 ..
-.TH ovs\-vswitchd.conf 5 "April 2009" "Open vSwitch" "OpenVSwitch Manual"
+.TH ovs\-vswitchd.conf 5 "April 2009" "Open vSwitch" "Open vSwitch Manual"
 .
 .SH NAME
 ovs\-vswitchd.conf \- configuration file for \fBovs\-vswitchd\fR
