@@ -41,7 +41,7 @@
 
 # VSWITCHD_PRIORITY: "nice" priority at which to run ovs-vswitchd and related
 #     processes.
-# VSWITCHD_PRIORITY=-5
+# VSWITCHD_PRIORITY=-10
 
 # VSWITCHD_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
 # VSWITCHD_LOGFILE=/var/log/ovs-vswitchd.log
@@ -103,7 +103,7 @@
 
 # BRCOMPATD_PRIORITY: "nice" priority at which to run ovs-vswitchd and related
 #     processes.
-# BRCOMPATD_PRIORITY=-5
+# BRCOMPATD_PRIORITY=-10
 
 # BRCOMPATD_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
 # BRCOMPATD_LOGFILE=/var/log/ovs-brcompatd.log
