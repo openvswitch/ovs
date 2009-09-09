@@ -33,7 +33,7 @@ test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 : ${VSWITCHD_CONF:=/etc/ovs-vswitchd.conf}
 : ${VSWITCHD_PIDFILE:=/var/run/ovs-vswitchd.pid}
 : ${VSWITCHD_RUN_DIR:=/var/xen/vswitch}
-: ${VSWITCHD_PRIORITY:=-5}
+: ${VSWITCHD_PRIORITY:=-10}
 : ${VSWITCHD_LOGFILE:=/var/log/ovs-vswitchd.log}
 : ${VSWITCHD_FILE_LOGLEVEL:=}
 : ${VSWITCHD_SYSLOG_LOGLEVEL:=WARN}
@@ -46,7 +46,7 @@ test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 # Config variables specific to ovs-brcompatd
 : ${BRCOMPATD_PIDFILE:=/var/run/ovs-brcompatd.pid}
 : ${BRCOMPATD_RUN_DIR:=/var/xen/vswitch}
-: ${BRCOMPATD_PRIORITY:=-5}
+: ${BRCOMPATD_PRIORITY:=-10}
 : ${BRCOMPATD_LOGFILE:=/var/log/ovs-brcompatd.log}
 : ${BRCOMPATD_FILE_LOGLEVEL:=}
 : ${BRCOMPATD_SYSLOG_LOGLEVEL:=INFO}
