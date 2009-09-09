@@ -370,6 +370,12 @@ PIF_ATTRS = { 'uuid': (str_to_xml,str_from_xml),
               'MAC': (str_to_xml,str_from_xml),
               'other_config': (lambda x, p, t, v: otherconfig_to_xml(x, p, v, PIF_OTHERCONFIG_ATTRS),
                                lambda n: otherconfig_from_xml(n, PIF_OTHERCONFIG_ATTRS)),
+              
+              # Special case: We write the current value
+              # PIF.currently-attached to the cache but since it will
+              # not be valid when we come to use the cache later
+              # (i.e. after a reboot) we always read it as False.
+              'currently_attached': (bool_to_xml, lambda n: False),
             }
 
 PIF_OTHERCONFIG_ATTRS = [ 'domain', 'peerdns', 'defaultroute', 'mtu', 'static-routes' ] + \
