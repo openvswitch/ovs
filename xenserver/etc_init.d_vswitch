@@ -34,7 +34,6 @@ VSWITCHD_CONF="${VSWITCHD_CONF:-/etc/ovs-vswitchd.conf}"
 VSWITCHD_PIDFILE="${VSWITCHD_PIDFILE:-/var/run/ovs-vswitchd.pid}"
 VSWITCHD_RUN_DIR="${VSWITCHD_RUN_DIR:-/var/xen/vswitch}"
 VSWITCHD_PRIORITY="${VSWITCHD_PRIORITY:--5}"
-VSWITCHD_NETBACK_PRIORITY="${VSWITCHD_NETBACK_PRIORITY:-0}"
 VSWITCHD_LOGFILE="${VSWITCHD_LOGFILE:-/var/log/ovs-vswitchd.log}"
 VSWITCHD_FILE_LOGLEVEL="${VSWITCHD_FILE_LOGLEVEL:-}"
 VSWITCHD_SYSLOG_LOGLEVEL="${VSWITCHD_SYSLOG_LOGLEVEL:-WARN}"
@@ -116,28 +115,6 @@ function reload_vswitchd {
     fi
 }
 
-function quietly {
-    "$@" > /dev/null
-}
-
-# renice_netback PRIORITY PID [PID...]
-#
-# Renices the netback processes given as each PID to nice level PRIORITY.
-function renice_netback {
-    local pri=$1
-    shift
-
-    if test $# = 0; then
-        warning "Netback not running, nothing to renice"
-        return
-    fi
-
-    for pid
-    do
-        action "Renicing netback (pid $pid) to priority $pri" quietly renice $pri -p $pid
-    done
-}
-
 function start_vswitchd {
     local syslog_opt="-vANY:SYSLOG:${VSWITCHD_SYSLOG_LOGLEVEL}"
     local logfile_file_opt=""
@@ -174,11 +151,6 @@ function start_vswitchd {
     local fake_proc_net_opt=""
     if [ "$ENABLE_FAKE_PROC_NET" = "y" ]; then
         fake_proc_net_opt="--fake-proc-net"
-    fi
-    if [ "$VSWITCHD_NETBACK_PRIORITY" != default ]; then
-        renice_netback $VSWITCHD_NETBACK_PRIORITY $(pidof netback)
-    else
-        warning "Netback renicing disabled (see /etc/sysconfig/vswitch)"
     fi
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
