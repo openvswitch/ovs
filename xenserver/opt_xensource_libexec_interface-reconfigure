@@ -456,7 +456,11 @@ class DatabaseCache(object):
             rec = session.xenapi.network.get_record(n)
             self.__networks[n] = {}
             for f in NETWORK_ATTRS:
-                self.__networks[n][f] = rec[f]
+                if f == "PIFs":
+                    # drop PIFs on other hosts
+                    self.__networks[n][f] = [p for p in rec[f] if self.__pif_on_host(p)]
+                else:
+                    self.__networks[n][f] = rec[f]
             self.__networks[n]['other_config'] = {}
             for f in NETWORK_OTHERCONFIG_ATTRS:
                 if not rec['other_config'].has_key(f): continue
