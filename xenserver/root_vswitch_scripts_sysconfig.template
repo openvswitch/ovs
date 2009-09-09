@@ -43,13 +43,6 @@
 #     processes.
 # VSWITCHD_PRIORITY=-5
 
-# VSWITCHD_NETBACK_PRIORITY: "nice" priority at which to run netback.
-#     It is a good idea to run ovs-vswitchd at a higher priority than
-#     netback to ensure that it gets enough CPU time to set up flows
-#     (bug #1656).  Set this to 'default' to avoid changing netback's
-#     priority.
-# VSWITCHD_NETBACK_PRIORITY=0
-
 # VSWITCHD_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
 # VSWITCHD_LOGFILE=/var/log/ovs-vswitchd.log
 
