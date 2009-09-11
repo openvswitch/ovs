@@ -38,24 +38,6 @@
 # 3. A network may have an associated bridge, allowing vifs to be attached
 # 4. A network may be bridgeless (there's no point having a bridge over a storage pif)
 
-# XXX: --force-interface=all down
-
-# XXX: --force-interface rewrite
-
-# XXX: Sometimes this leaves "orphaned" datapaths, e.g. a datapath whose
-#      only port is the local port.  Should delete those.
-
-# XXX: This can leave crud in ovs-vswitchd.conf in this scenario:
-#      - Create bond in XenCenter.
-#      - Create VLAN on bond in XenCenter.
-#      - Attempt to delete bond in XenCenter (this will fail because there
-#        is a VLAN on the bond, although the error may not be reported
-#        until the next step)
-#      - Delete VLAN in XenCenter.
-#      - Delete bond in XenCenter.
-# At this point there will still be some configuration data for the bond
-# or the VLAN in ovs-vswitchd.conf.
-
 import XenAPI
 import os, sys, getopt, time, signal
 import syslog
