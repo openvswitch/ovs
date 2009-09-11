@@ -130,6 +130,7 @@ b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
 ce451d3c985fd1db6497a363f0d9dedb  /opt/xensource/libexec/interface-reconfigure
 2b53f500431fcba5276c896e9e4281b9  /usr/sbin/xen-bugtool
 EOF
+    then
         printf "\nVerified host scripts from XenServer 5.5.900.\n\n"
     else
 cat <<EOF
