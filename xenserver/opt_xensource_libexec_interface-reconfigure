@@ -1491,7 +1491,6 @@ def main(argv=None):
                 raise Usage("Unknown action %s"  % action)
 
             # Save cache.
-            pifrec = db.get_pif_record(pif)
             db.save(dbcache_file)
         
     except Usage, err:
