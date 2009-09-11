@@ -115,6 +115,13 @@ function reload_vswitchd {
     fi
 }
 
+function reload_brcompatd {
+    if [ -f "$BRCOMPATD_PIDFILE" ]; then
+        "$appctl" \
+            --target=ovs-brcompatd.$(cat "$BRCOMPATD_PIDFILE").ctl --reopen
+    fi
+}
+
 function start_vswitchd {
     local syslog_opt="-vANY:SYSLOG:${VSWITCHD_SYSLOG_LOGLEVEL}"
     local logfile_file_opt=""
@@ -292,6 +299,7 @@ case "$1" in
         ;;
     reload)
         reload_vswitchd
+        reload_brcompatd
         ;;
     strace-vswitchd)
         shift
