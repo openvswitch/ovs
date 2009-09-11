@@ -14,7 +14,6 @@
 #include <asm/page.h>
 #include <linux/kernel.h>
 #include <linux/mutex.h>
-#include <linux/netlink.h>
 #include <linux/netdevice.h>
 #include <linux/workqueue.h>
 #include <linux/skbuff.h>

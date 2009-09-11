@@ -56,9 +56,7 @@ int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 EXPORT_SYMBOL(dp_ioctl_hook);
 
 /* Datapaths.  Protected on the read side by rcu_read_lock, on the write side
- * by dp_mutex.  dp_mutex is almost completely redundant with genl_mutex
- * maintained by the Generic Netlink code, but the timeout path needs mutual
- * exclusion too.
+ * by dp_mutex.
  *
  * dp_mutex nests inside the RTNL lock: if you need both you must take the RTNL
  * lock first.
