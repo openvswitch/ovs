@@ -22,7 +22,7 @@ import sys
 
 argv0 = sys.argv[0]
 
-BRCTL = "/root/vswitch/xs-original/brctl"
+BRCTL = "/usr/lib/vswitch/xs-original/brctl"
 VSWITCHD_CONF = "/etc/ovs-vswitchd.conf"
 
 # Execute the real brctl program, passing the same arguments that were passed

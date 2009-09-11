@@ -15,7 +15,7 @@ import os
 import socket
 import subprocess
 
-cfg_mod="/root/vswitch/bin/ovs-cfg-mod"
+cfg_mod="/usr/bin/ovs-cfg-mod"
 vswitchd_cfg_filename="/etc/ovs-vswitchd.conf"
 
 if __name__ == "__main__":

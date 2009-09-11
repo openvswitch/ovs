@@ -1031,7 +1031,7 @@ def configure_physdev(pif):
     run_ethtool(device, oc)
 
 def modify_config(commands):
-    run_command(['/root/vswitch/bin/ovs-cfg-mod', '-vANY:console:emer',
+    run_command(['/usr/bin/ovs-cfg-mod', '-vANY:console:emer',
                  '-F', '/etc/ovs-vswitchd.conf']
                 + commands + ['-c'])
     run_command(['/sbin/service', 'vswitch', 'reload'])

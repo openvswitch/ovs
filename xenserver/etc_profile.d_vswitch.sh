@@ -5,11 +5,6 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
-PATH=/root/vswitch/bin:$PATH
-export PATH
-MANPATH=/root/vswitch/share/man:$MANPATH
-export MANPATH
-
 alias vswitch='service vswitch'
 
 function watchconf {

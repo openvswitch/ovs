@@ -7,9 +7,6 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
-# VSWITCH_BASE: Root directory where vswitch binaries are installed
-# VSWITCH_BASE=/root/vswitch/openvswitch/build
-
 # ENABLE_BRCOMPAT: If 'y' than emulate linux bridging interfaces
 #    using the brcompat kernel module and ovs-brcompatd daemon
 # ENABLE_BRCOMPAT=y

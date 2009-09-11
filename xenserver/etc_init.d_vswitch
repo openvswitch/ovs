@@ -24,7 +24,6 @@
 test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 
 # General config variables in /etc/sysconfig/vswitch
-: ${VSWITCH_BASE:=/root/vswitch}
 : ${ENABLE_BRCOMPAT:=y}
 : ${ENABLE_FAKE_PROC_NET:=y}
 : ${FORCE_COREFILES:=y}
@@ -57,11 +56,11 @@ test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 : ${BRCOMPATD_VALGRIND_OPT:=}
 
 # Full paths to executables & modules
-vswitchd="$VSWITCH_BASE/sbin/ovs-vswitchd"
-brcompatd="$VSWITCH_BASE/sbin/ovs-brcompatd"
-dpctl="$VSWITCH_BASE/bin/ovs-dpctl"
-appctl="$VSWITCH_BASE/bin/ovs-appctl"
-ofctl="$VSWITCH_BASE/bin/ovs-ofctl"
+vswitchd="/usr/sbin/ovs-vswitchd"
+brcompatd="/usr/sbin/ovs-brcompatd"
+dpctl="/usr/bin/ovs-dpctl"
+appctl="/usr/bin/ovs-appctl"
+ofctl="/usr/bin/ovs-ofctl"
 
 
 if [ "$ENABLE_FAKE_PROC_NET" = "y" ]; then
@@ -303,8 +302,8 @@ case "$1" in
         status -p ovs-brcompatd.pid ovs-brcompatd
         ;;
     version)
-        "$VSWITCH_BASE"/sbin/ovs-vswitchd -V
-        "$VSWITCH_BASE"/sbin/ovs-brcompatd -V
+        /usr/sbin/ovs-vswitchd -V
+        /usr/sbin/ovs-brcompatd -V
         ;;
     help)
         printf "vswitch [start|stop|restart|reload|unload|status|version]\n"

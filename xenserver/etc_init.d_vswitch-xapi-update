@@ -22,7 +22,6 @@
 . /etc/init.d/functions
 
 test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
-: ${VSWITCH_BASE:=/root/vswitch}
 : ${VSWITCHD_CONF:=/etc/ovs-vswitchd.conf}
 : ${VSWITCHD_PIDFILE:=/var/run/ovs-vswitchd.pid}
 : ${VSWITCHD_PRIORITY:=-5}

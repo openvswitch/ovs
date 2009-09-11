@@ -14,7 +14,6 @@
 #    rpmbuild -D "vswitch_version 0.8.9~1+build123" -D "xen_version 2.6.18-128.1.1.el5.xs5.1.0.483.1000xen" -D "build_number --with-build-number=123" -bb /usr/src/redhat/SPECS/vswitch-xen.spec
 #
 %define version %{vswitch_version}-%{xen_version}
-%define _prefix /root/vswitch
 
 Name: vswitch
 Summary: Virtual switch
@@ -45,12 +44,12 @@ traffic.
 %setup -q -n openvswitch-%{vswitch_version}
 
 %build
-./configure --prefix=%{_prefix} --localstatedir=%{_localstatedir} --with-l26=/lib/modules/%{xen_version}/build --enable-ssl %{build_number}
+./configure --prefix=/usr --localstatedir=%{_localstatedir} --with-l26=/lib/modules/%{xen_version}/build --enable-ssl %{build_number}
 make %{_smp_mflags}
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make install DESTDIR=$RPM_BUILD_ROOT prefix=%{_prefix}
+make install DESTDIR=$RPM_BUILD_ROOT
 install -d -m 755 $RPM_BUILD_ROOT/etc
 install -d -m 755 $RPM_BUILD_ROOT/etc/init.d
 install -m 755 xenserver/etc_init.d_vswitch \
@@ -67,44 +66,43 @@ install -m 755 xenserver/etc_profile.d_vswitch.sh \
 install -d -m 755 $RPM_BUILD_ROOT/etc/xapi.d/plugins
 install -m 755 xenserver/etc_xapi.d_plugins_vswitch-cfg-update \
          $RPM_BUILD_ROOT/etc/xapi.d/plugins/vswitch-cfg-update
-install -d -m 755 $RPM_BUILD_ROOT%{_prefix}/scripts
+install -d -m 755 $RPM_BUILD_ROOT/usr/share/vswitch/scripts
 install -m 755 xenserver/opt_xensource_libexec_interface-reconfigure \
-             $RPM_BUILD_ROOT%{_prefix}/scripts/interface-reconfigure
+             $RPM_BUILD_ROOT/usr/share/vswitch/scripts/interface-reconfigure
 install -m 755 xenserver/etc_xensource_scripts_vif \
-             $RPM_BUILD_ROOT%{_prefix}/scripts/vif
-install -m 755 xenserver/root_vswitch_scripts_dump-vif-details \
-               $RPM_BUILD_ROOT%{_prefix}/scripts/dump-vif-details
+             $RPM_BUILD_ROOT/usr/share/vswitch/scripts/vif
+install -m 755 xenserver/usr_share_vswitch_scripts_dump-vif-details \
+               $RPM_BUILD_ROOT/usr/share/vswitch/scripts/dump-vif-details
 install -m 755 xenserver/usr_sbin_xen-bugtool \
-             $RPM_BUILD_ROOT%{_prefix}/scripts/xen-bugtool
+             $RPM_BUILD_ROOT/usr/share/vswitch/scripts/xen-bugtool
 install -m 755 xenserver/usr_sbin_brctl \
-             $RPM_BUILD_ROOT%{_prefix}/scripts/brctl
-install -m 755 xenserver/root_vswitch_scripts_sysconfig.template \
-         $RPM_BUILD_ROOT/root/vswitch/scripts/sysconfig.template
+             $RPM_BUILD_ROOT/usr/share/vswitch/scripts/brctl
+install -m 755 xenserver/usr_share_vswitch_scripts_sysconfig.template \
+         $RPM_BUILD_ROOT/usr/share/vswitch/scripts/sysconfig.template
 install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
-               $RPM_BUILD_ROOT%{_prefix}/scripts/XSFeatureVSwitch.py
+               $RPM_BUILD_ROOT/usr/share/vswitch/scripts/XSFeatureVSwitch.py
 
-install -d -m 755 $RPM_BUILD_ROOT%{_prefix}/kernel_modules
-find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT%{_prefix}/kernel_modules/ \;
+install -d -m 755 $RPM_BUILD_ROOT/root/vswitch/kernel_modules
+find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/root/vswitch/kernel_modules/ \;
 
 # Get rid of stuff we don't want to make RPM happy.
-rm -rf \
-    $RPM_BUILD_ROOT/root/vswitch/bin/ezio-term \
-    $RPM_BUILD_ROOT/root/vswitch/bin/ovs-controller \
-    $RPM_BUILD_ROOT/root/vswitch/bin/ovs-discover \
-    $RPM_BUILD_ROOT/root/vswitch/bin/ovs-kill \
-    $RPM_BUILD_ROOT/root/vswitch/bin/ovs-openflowd \
-    $RPM_BUILD_ROOT/root/vswitch/bin/ovs-pki \
-    $RPM_BUILD_ROOT/root/vswitch/bin/ovs-switchui \
-    $RPM_BUILD_ROOT/root/vswitch/bin/ovs-wdt \
-    $RPM_BUILD_ROOT/root/vswitch/kernel_modules/veth_mod.ko \
-    $RPM_BUILD_ROOT/root/vswitch/sbin/ovs-monitor \
-    $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-controller.8 \
-    $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-discover.8 \
-    $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-kill.8 \
-    $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-openflowd.8 \
-    $RPM_BUILD_ROOT/root/vswitch/share/man/man8/ovs-pki.8 \
-    $RPM_BUILD_ROOT/root/vswitch/share/openvswitch
+rm \
+    $RPM_BUILD_ROOT/usr/bin/ovs-controller \
+    $RPM_BUILD_ROOT/usr/bin/ovs-discover \
+    $RPM_BUILD_ROOT/usr/bin/ovs-kill \
+    $RPM_BUILD_ROOT/usr/bin/ovs-openflowd \
+    $RPM_BUILD_ROOT/usr/bin/ovs-pki \
+    $RPM_BUILD_ROOT/usr/bin/ovs-wdt \
+    $RPM_BUILD_ROOT/usr/sbin/ovs-monitor \
+    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-controller.8 \
+    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-discover.8 \
+    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-kill.8 \
+    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-openflowd.8 \
+    $RPM_BUILD_ROOT/usr/share/man/man8/ovs-pki.8
+rm -f $RPM_BUILD_ROOT/root/vswitch/kernel_modules/veth_mod.ko 
+rm -r \
+    $RPM_BUILD_ROOT/usr/share/openvswitch/commands
 
 install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
 
@@ -157,7 +155,7 @@ if test ! -e /var/lib/openvswitch/dbcache; then
         printf "Re-creating xapi database cache...  "
     fi
 
-    if /root/vswitch/scripts/interface-reconfigure init-dbcache; then
+    if /usr/share/vswitch/scripts/interface-reconfigure init-dbcache; then
         printf "done.\n"
     else
         printf "FAILED\n"
@@ -188,7 +186,7 @@ touch /etc/ovs-vswitchd.conf
 
 # Create default or update existing /etc/sysconfig/vswitch.
 SYSCONFIG=/etc/sysconfig/vswitch
-TEMPLATE=/root/vswitch/scripts/sysconfig.template
+TEMPLATE=/usr/share/vswitch/scripts/sysconfig.template
 if [ ! -e $SYSCONFIG ]; then
     cp $TEMPLATE $SYSCONFIG
 else
@@ -202,7 +200,7 @@ else
 fi
 
 # Replace XenServer files by our versions.
-mkdir -p %{_prefix}/xs-original \
+mkdir -p /usr/lib/vswitch/xs-original \
     || printf "Could not create script backup directory.\n"
 for f in \
     /opt/xensource/libexec/interface-reconfigure \
@@ -212,19 +210,19 @@ for f in \
 do
     s=$(basename "$f")
     t=$(readlink "$f")
-    if [ "$t" != "%{_prefix}/scripts/$s" ]; then
-        mv "$f" %{_prefix}/xs-original/ \
+    if [ "$t" != "/usr/share/vswitch/scripts/$s" ]; then
+        mv "$f" /usr/lib/vswitch/xs-original/ \
             || printf "Could not save original XenServer $s script\n"
-        ln -s "%{_prefix}/scripts/$s" "$f" \
+        ln -s "/usr/share/vswitch/scripts/$s" "$f" \
             || printf "Could not link to vSwitch $s script\n"
     fi
 done
 
 # Install xsconsole plugin
 plugin=$(readlink /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py)
-if [ "$plugin" != "/root/vswitch/scripts/XSFeatureVSwitch.py" ]; then
+if [ "$plugin" != "/usr/share/vswitch/scripts/XSFeatureVSwitch.py" ]; then
     rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py
-    ln -s /root/vswitch/scripts/XSFeatureVSwitch.py /usr/lib/xsconsole/plugins-base/ || printf "Could not link to vSswitch xsconsole plugin.\n"
+    ln -s /usr/share/vswitch/scripts/XSFeatureVSwitch.py /usr/lib/xsconsole/plugins-base/ || printf "Could not link to vSswitch xsconsole plugin.\n"
 fi
 
 # Ensure all required services are set to run
@@ -270,18 +268,15 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
         /usr/sbin/brctl
     do
         s=$(basename "$f")
-        if [ ! -f "%{_prefix}/xs-original/$s" ]; then
-            printf "Original XenServer $s script not present in %{_prefix}/xs-original\n"
+        if [ ! -f "/usr/lib/vswitch/xs-original/$s" ]; then
+            printf "Original XenServer $s script not present in /usr/lib/vswitch/xs-original\n"
             printf "Could not restore original XenServer script.\n"
         else
             (rm -f "$f" \
-                && mv "%{_prefix}/xs-original/$s" "$f") \
+                && mv "/usr/lib/vswitch/xs-original/$s" "$f") \
                 || printf "Could not restore original XenServer $s script.\n"
         fi
     done
-
-    find  %{_prefix} -type d -depth -exec rmdir \{\} \; \
-        || printf "Could not remove vSwitch install directory.\n"
 
     # Remove all configuration files
     rm -f /etc/ovs-vswitchd.conf
@@ -304,31 +299,31 @@ fi
 /etc/profile.d/vswitch.sh
 /root/vswitch/kernel_modules/brcompat_mod.ko
 /root/vswitch/kernel_modules/openvswitch_mod.ko
-/root/vswitch/scripts/dump-vif-details
-/root/vswitch/scripts/interface-reconfigure
-/root/vswitch/scripts/vif
-/root/vswitch/scripts/xen-bugtool
-/root/vswitch/scripts/XSFeatureVSwitch.py
-/root/vswitch/scripts/brctl
-/root/vswitch/scripts/sysconfig.template
+/usr/share/vswitch/scripts/dump-vif-details
+/usr/share/vswitch/scripts/interface-reconfigure
+/usr/share/vswitch/scripts/vif
+/usr/share/vswitch/scripts/xen-bugtool
+/usr/share/vswitch/scripts/XSFeatureVSwitch.py
+/usr/share/vswitch/scripts/brctl
+/usr/share/vswitch/scripts/sysconfig.template
 # Following two files are generated automatically by rpm.  We don't
 # really need them and they won't be used on the XenServer, but there
 # isn't an obvious place to get rid of them since they are generated
 # after the install script runs.  Since they are small, we just
 # include them.
-/root/vswitch/scripts/XSFeatureVSwitch.pyc
-/root/vswitch/scripts/XSFeatureVSwitch.pyo
-/root/vswitch/sbin/ovs-brcompatd
-/root/vswitch/sbin/ovs-vswitchd
-/root/vswitch/bin/ovs-appctl
-/root/vswitch/bin/ovs-cfg-mod
-/root/vswitch/bin/ovs-dpctl
-/root/vswitch/bin/ovs-ofctl
-/root/vswitch/share/man/man5/ovs-vswitchd.conf.5
-/root/vswitch/share/man/man8/ovs-appctl.8
-/root/vswitch/share/man/man8/ovs-brcompatd.8
-/root/vswitch/share/man/man8/ovs-cfg-mod.8
-/root/vswitch/share/man/man8/ovs-dpctl.8
-/root/vswitch/share/man/man8/ovs-ofctl.8
-/root/vswitch/share/man/man8/ovs-vswitchd.8
+/usr/share/vswitch/scripts/XSFeatureVSwitch.pyc
+/usr/share/vswitch/scripts/XSFeatureVSwitch.pyo
+/usr/sbin/ovs-brcompatd
+/usr/sbin/ovs-vswitchd
+/usr/bin/ovs-appctl
+/usr/bin/ovs-cfg-mod
+/usr/bin/ovs-dpctl
+/usr/bin/ovs-ofctl
+/usr/share/man/man5/ovs-vswitchd.conf.5.gz
+/usr/share/man/man8/ovs-appctl.8.gz
+/usr/share/man/man8/ovs-brcompatd.8.gz
+/usr/share/man/man8/ovs-cfg-mod.8.gz
+/usr/share/man/man8/ovs-dpctl.8.gz
+/usr/share/man/man8/ovs-ofctl.8.gz
+/usr/share/man/man8/ovs-vswitchd.8.gz
 /var/lib/openvswitch

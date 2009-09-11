@@ -11,8 +11,8 @@
 
 # Keep other-config/ keys in sync with device.ml:vif_udev_keys
 
-cfg_mod="/root/vswitch/bin/ovs-cfg-mod"
-dump_vif_details="/root/vswitch/scripts/dump-vif-details"
+cfg_mod="/usr/bin/ovs-cfg-mod"
+dump_vif_details="/usr/share/vswitch/scripts/dump-vif-details"
 service="/sbin/service"
 
 TYPE=`echo ${XENBUS_PATH} | cut -f 2 -d '/'`
