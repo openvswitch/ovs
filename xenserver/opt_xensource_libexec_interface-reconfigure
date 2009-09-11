@@ -8,6 +8,7 @@
     %(command-name)s --session <SESSION-REF> --pif <PIF-REF> [up|down|rewrite]
     %(command-name)s --force <BRIDGE> [up|down|rewrite <CONFIG>]
     %(command-name)s --force all down
+    %(command-name)s init-dbcache
 
     where,
           <CONFIG> = --device=<INTERFACE> --mode=dhcp
@@ -1441,6 +1442,9 @@ def main(argv=None):
         if len(force_rewrite_config) and not (force_interface and action == "rewrite"):
             raise Usage("\"--force rewrite\" needed for --device, --mode, --ip, --netmask, and --gateway")
 
+        if action == "init-dbcache" and arglist:
+            raise Usage("\"init-dbcache\" action does not accept any options")
+
         global db
         if force_interface:
             log("Force interface %s %s" % (force_interface, action))
@@ -1458,6 +1462,8 @@ def main(argv=None):
                     action_down(pif)
                 else:
                     raise Usage("Unknown action %s"  % action)
+        elif action == "init-dbcache":
+            DatabaseCache().save(dbcache_file)
         else:
             db = DatabaseCache(session_ref=session)
 
