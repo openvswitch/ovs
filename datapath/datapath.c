@@ -1582,6 +1582,8 @@ struct file_operations openvswitch_fops = {
 };
 
 static int major;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
 static struct llc_sap *dp_stp_sap;
 
 static int dp_stp_rcv(struct sk_buff *skb, struct net_device *dev,
@@ -1594,12 +1596,8 @@ static int dp_stp_rcv(struct sk_buff *skb, struct net_device *dev,
 	return 0;
 }
 
-static int __init dp_init(void)
+static int dp_avoid_bridge_init(void)
 {
-	int err;
-
-	printk("Open vSwitch %s, built "__DATE__" "__TIME__"\n", VERSION BUILDNR);
-
 	/* Register to receive STP packets because the bridge module also
 	 * attempts to do so.  Since there can only be a single listener for a
 	 * given protocol, this provides mutual exclusion against the bridge
@@ -1610,6 +1608,43 @@ static int __init dp_init(void)
 		printk(KERN_ERR "openvswitch: can't register sap for STP (probably the bridge module is loaded)\n");
 		return -EADDRINUSE;
 	}
+	return 0;
+}
+
+static void dp_avoid_bridge_exit(void)
+{
+	llc_sap_put(dp_stp_sap);
+}
+#else  /* Linux 2.6.27 or later. */
+static int dp_avoid_bridge_init(void)
+{
+	/* Linux 2.6.27 introduces a way for multiple clients to register for
+	 * STP packets, which interferes with what we try to do above.
+	 * Instead, just check whether there's a bridge hook defined.  This is
+	 * not as safe--the bridge module is willing to load over the top of
+	 * us--but it provides a little bit of protection. */
+	if (br_handle_frame_hook) {
+		printk(KERN_ERR "openvswitch: bridge module is loaded, cannot load over it\n");
+		return -EADDRINUSE;
+	}
+	return 0;
+}
+
+static void dp_avoid_bridge_exit(void)
+{
+	/* Nothing to do. */
+}
+#endif	/* Linux 2.6.27 or later */
+
+static int __init dp_init(void)
+{
+	int err;
+
+	printk("Open vSwitch %s, built "__DATE__" "__TIME__"\n", VERSION BUILDNR);
+
+	err = dp_avoid_bridge_init();
+	if (err)
+		return err;
 
 	err = flow_init();
 	if (err)
@@ -1644,7 +1679,7 @@ static void dp_cleanup(void)
 	unregister_netdevice_notifier(&dp_device_notifier);
 	flow_exit();
 	br_handle_frame_hook = NULL;
-	llc_sap_put(dp_stp_sap);
+	dp_avoid_bridge_exit();
 }
 
 module_init(dp_init);
