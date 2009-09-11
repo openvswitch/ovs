@@ -25,7 +25,7 @@
  * then this should go into include/linux/if_vlan.h. */
 #define VLAN_PCP_MASK 0xe000
 
-#define DP_MAX_PORTS 256
+#define DP_MAX_PORTS 1024
 #define DP_MAX_GROUPS 16
 
 #define DP_L2_BITS (PAGE_SHIFT - ilog2(sizeof(struct dp_bucket*)))
