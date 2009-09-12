@@ -278,6 +278,7 @@ CAP_SYSTEM_SERVICES      = 'system-services'
 CAP_TAPDISK_LOGS         = 'tapdisk-logs'
 CAP_VNCTERM              = 'vncterm'
 CAP_VSWITCH_CONFIG       = 'vswitch-config'
+CAP_VSWITCH_LOGS         = 'vswitch-logs'
 CAP_VSWITCH_STATUS       = 'vswitch-status'
 CAP_WLB                  = 'wlb'
 CAP_X11_LOGS             = 'X11'
@@ -345,6 +346,7 @@ cap(CAP_TAPDISK_LOGS,        PII_NO,                    max_size=64*KB)
 cap(CAP_VNCTERM,             PII_MAYBE, checked = False)
 cap(CAP_VSWITCH_CONFIG,      PII_YES,
                                         min_size=0,     max_size=20*MB)
+cap(CAP_VSWITCH_LOGS,        PII_YES,                   max_size=20*MB)
 cap(CAP_VSWITCH_STATUS,      PII_YES,                   max_size=19*KB,
     max_time=30)
 cap(CAP_WLB,                 PII_NO,                    max_size=3*MB,
@@ -494,7 +496,7 @@ def main(argv = None):
                    CAP_NETWORK_CONFIG, CAP_NETWORK_STATUS, CAP_PROCESS_LIST, CAP_HIGH_AVAILABILITY,
                    CAP_PAM, CAP_PERSISTENT_STATS, CAP_MULTIPATH,
                    CAP_SYSTEM_LOGS, CAP_SYSTEM_SERVICES, CAP_TAPDISK_LOGS,
-                   CAP_VNCTERM, CAP_VSWITCH_CONFIG, CAP_VSWITCH_STATUS, CAP_WLB, 
+                   CAP_VNCTERM, CAP_VSWITCH_CONFIG, CAP_VSWITCH_LOGS, CAP_VSWITCH_STATUS, CAP_WLB, 
                    CAP_X11_LOGS, CAP_X11_AUTH, CAP_XAPI_DEBUG, CAP_XAPI_SUBPROCESS, 
                    CAP_XENSERVER_CONFIG, CAP_XENSERVER_DOMAINS, CAP_XENSERVER_DATABASES, 
                    CAP_XENSERVER_INSTALL, CAP_XENSERVER_LOGS, CAP_XEN_INFO, CAP_XHA_LIVESET, CAP_YUM]
@@ -708,6 +710,13 @@ exclude those logs from the archive.
     tree_output(CAP_VNCTERM, VNCTERM_CORE_DIR)
 
     file_output(CAP_VSWITCH_CONFIG, [OVS_VSWITCH_CONF])
+
+    file_output(CAP_VSWITCH_LOGS, 
+         [ VAR_LOG_DIR + x for x in
+           [ 'ovs-brcompatd.log', 'ovs-vswitchd.log', 'vswitch-cfg-update.log', 'vswitch-xsplugin.log' ] +
+           [ f % n for n in range(1, 20) \
+                 for f in ['ovs-brcompatd.log.%d', 'ovs-brcompatd.log.%d.gz', 
+                           'ovs-vswitchd.log.%d', 'ovs-vswitchd.log.%d.gz']]])
 
     cmd_output(CAP_VSWITCH_STATUS, [OVS_DPCTL, 'show'])
     tree_output(CAP_VSWITCH_STATUS, VSWITCH_CORE_DIR)
