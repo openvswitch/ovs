@@ -122,7 +122,10 @@ coverage_log_counter(enum vlog_level level, const struct coverage_counter *c)
 }
 
 /* Logs the coverage counters at the given vlog 'level'.  If
- * 'suppress_dups' is true, then duplicate events are not displayed. */
+ * 'suppress_dups' is true, then duplicate events are not displayed. 
+ * Care should be taken in the value used for 'level'.  Depending on the
+ * configuration, syslog can write changes synchronously, which can
+ * cause the coverage messages to take several seconds to write. */
 void
 coverage_log(enum vlog_level level, bool suppress_dups)
 {

@@ -155,6 +155,7 @@ EXTRA_DIST += \
 	lib/daemon.man \
 	lib/dpif.man \
 	lib/leak-checker.man \
+	lib/vlog-unixctl.man \
 	lib/vlog.man
 
 

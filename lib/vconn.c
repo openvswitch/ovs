@@ -1230,7 +1230,7 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
 {
     int error;
 
-    switch (a->type) {
+    switch (ntohs(a->type)) {
     case OFPAT_OUTPUT:
         error = check_action_port(ntohs(a->output.port), max_ports);
         if (error) {

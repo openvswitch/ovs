@@ -1955,7 +1955,7 @@ process_flow(struct bridge *br, const flow_t *flow,
             goto done;
         } else {
             /* Drop all multicast packets for which we have learned a different
-             * input port, because we probably sent the packet on one slaves
+             * input port, because we probably sent the packet on one slave
              * and got it back on the active slave.  Broadcast ARP replies are
              * an exception to this rule: the host has moved to another
              * switch. */

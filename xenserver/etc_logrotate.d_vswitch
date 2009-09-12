@@ -5,10 +5,10 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
-/var/log/ovs-vswitchd.log {
+/var/log/ovs-vswitchd.log /var/log/ovs-brcompatd.log {
 	sharedscripts
 	postrotate
-        # Send sighup to vswitch which will cause it to reopen its log files.
-        /sbin/service vswitch reload
+	# Tell ovs-vswitchd and ovs-brcompatd to reopen their log files
+	/sbin/service vswitch reload
 	endscript
 }

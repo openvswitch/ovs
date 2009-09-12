@@ -73,13 +73,71 @@ to be loaded.
 .so lib/common.man
 .so lib/leak-checker.man
 .
-.SH "BUGS"
+.SH "RUNTIME MANAGEMENT COMMANDS"
+\fBovs\-appctl\fR(8) can send commands to a running
+\fBovs\-vswitchd\fR process.  The currently supported commands are
+described below.  The command descriptions assume an understanding of
+how to configure Open vSwitch, as described in
+\fBovs-vswitchd.conf\fR(5).
+.SS "OVS\-VSWITCHD COMMANDS"
+These commands manage the \fBovs-vswitchd\fR process.
+.IP "\fBvswitchd/reload\fR"
+Reloads the \fBovs\-vswitchd\fR configuration file, as if a
+\fBSIGHUP\fR signal were received.  The command completes only after
+reloading is finished, in particular after all datapaths have been
+created and destroyed and ports added and removed as specified by the
+new configuration.
+.SS "BRIDGE COMMANDS"
+These commands manage bridges.
+.IP "\fBfdb/show\fR \fIbridge\fR"
+Lists each MAC address/VLAN pair learned by the specified \fIbridge\fR,
+along with the port on which it was learned and the age of the entry,
+in seconds.
+.SS "BOND COMMANDS"
+These commands manage bonded ports on an Open vSwitch's bridges.  To
+understand some of these commands, it is important to understand a
+detail of the bonding implementation called ``MAC hashing.''  Instead
+of directly assigning Ethernet source addresses to slaves, the bonding
+implementation computes a function that maps an 48-bit Ethernet source
+addresses into an 8-bit value (a ``MAC hash'' value).  All of the
+Ethernet addresses that map to a single 8-bit value are then assigned
+to a single slave.
+.IP "\fBbond/list\fR"
+Lists all of the bonds, and their slaves, on each bridge.
 .
-Only Open vSwitch kernel-based datapaths are currently supported.  In the
-future, this restriction may be lifted.
-.PP
-Only Linux 2.6.\fIx\fR is currently supported.
+.IP "\fBbond/show\fR \fIport\fR"
+Lists all of the bond-specific information about the given bonded
+\fIport\fR: updelay, downdelay, time until the next rebalance.  Also
+lists information about each slave: whether it is enabled or disabled,
+the time to completion of an updelay or downdelay if one is in
+progress, whether it is the active slave, the MAC hashes assigned to
+the slave, and the MAC learning table entries that hash to each MAC.
+.IP "\fBbond/migrate\fR \fIport\fR \fIhash\fR \fIslave\fR"
+Assigns a given MAC hash to a new slave.  \fIport\fR specifies the
+bond port, \fIhash\fR either the MAC hash to be migrated (as a decimal
+number between 0 and 255) or an Ethernet address to be hashed, and
+\fIslave\fR the new slave to be assigned.
+.IP
+The reassignment is not permanent: rebalancing or fail-over will
+cause the MAC hash to be shifted to a new slave in the usual
+manner.
+.IP
+A MAC hash cannot be migrated to a disabled slave.
+.IP "\fBbond/set-active-slave\fR \fIport\fR \fIslave\fR"
+Sets \fIslave\fR as the active slave on \fIport\fR.  \fIslave\fR must
+currently be enabled.
+.IP
+The setting is not permanent: a new active slave will be selected
+if \fIslave\fR becomes disabled.
+.IP "\fBbond/enable-slave\fR \fIport\fR \fIslave\fR"
+.IQ "\fBbond/disable-slave\fR \fIport\fR \fIslave\fR"
+Enables (or disables) \fIslave\fR on the given bond \fIport\fR, skipping any
+updelay (or downdelay).
+.IP
+This setting is not permanent: it persists only until the carrier
+status of \fIslave\fR changes.
 .
+.so lib/vlog-unixctl.man
 .SH "SEE ALSO"
 .BR ovs\-appctl (8),
 .BR ovs\-vswitchd.conf (5),

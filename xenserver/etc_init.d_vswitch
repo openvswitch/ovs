@@ -34,8 +34,8 @@ test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 : ${VSWITCHD_RUN_DIR:=/var/xen/vswitch}
 : ${VSWITCHD_PRIORITY:=-10}
 : ${VSWITCHD_LOGFILE:=/var/log/ovs-vswitchd.log}
-: ${VSWITCHD_FILE_LOGLEVEL:=}
-: ${VSWITCHD_SYSLOG_LOGLEVEL:=WARN}
+: ${VSWITCHD_FILE_LOGLEVEL:=INFO}
+: ${VSWITCHD_SYSLOG_LOGLEVEL:=ERR}
 : ${VSWITCHD_MEMLEAK_LOGFILE:=}
 : ${VSWITCHD_STRACE_LOG:=}
 : ${VSWITCHD_STRACE_OPT:=}
@@ -47,8 +47,8 @@ test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 : ${BRCOMPATD_RUN_DIR:=/var/xen/vswitch}
 : ${BRCOMPATD_PRIORITY:=-10}
 : ${BRCOMPATD_LOGFILE:=/var/log/ovs-brcompatd.log}
-: ${BRCOMPATD_FILE_LOGLEVEL:=}
-: ${BRCOMPATD_SYSLOG_LOGLEVEL:=INFO}
+: ${BRCOMPATD_FILE_LOGLEVEL:=INFO}
+: ${BRCOMPATD_SYSLOG_LOGLEVEL:=ERR}
 : ${BRCOMPATD_MEMLEAK_LOGFILE:=}
 : ${BRCOMPATD_STRACE_LOG:=}
 : ${BRCOMPATD_STRACE_OPT:=}
@@ -111,6 +111,13 @@ function reload_vswitchd {
     fi
 }
 
+function reload_brcompatd {
+    if [ -f "$BRCOMPATD_PIDFILE" ]; then
+        "$appctl" \
+            --target=ovs-brcompatd.$(cat "$BRCOMPATD_PIDFILE").ctl --reopen
+    fi
+}
+
 function start_vswitchd {
     local syslog_opt="-vANY:SYSLOG:${VSWITCHD_SYSLOG_LOGLEVEL}"
     local logfile_file_opt=""
@@ -165,7 +172,7 @@ function start_brcompatd {
         mkdir -p "$BRCOMPATD_RUN_DIR"
     fi
     cd "$BRCOMPATD_RUN_DIR"
-    if [ ! -n "$BRCOMPATD_FILE_LOGLEVEL" ]; then
+    if [ -n "$BRCOMPATD_FILE_LOGLEVEL" ]; then
         logfile_level_opt="-vANY:FILE:${BRCOMPATD_FILE_LOGLEVEL}"
         logfile_file_opt="--log-file=$BRCOMPATD_LOGFILE"
     fi
@@ -288,6 +295,7 @@ case "$1" in
         ;;
     reload)
         reload_vswitchd
+        reload_brcompatd
         ;;
     strace-vswitchd)
         shift
