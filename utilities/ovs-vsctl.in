@@ -277,7 +277,9 @@ Bridge commands:
   del-br BRIDGE               delete BRIDGE and all of its ports
   list-br                     print the names of all the bridges
   br-exists BRIDGE            test whether BRIDGE exists
-
+  br-to-vlan BRIDGE           print the VLAN which BRIDGE is on
+  br-to-parent BRIDGE         print the parent of BRIDGE
+  
 Port commands:
   list-ports BRIDGE           print the names of all the ports on BRIDGE
   add-port BRIDGE PORT        add network device PORT to BRIDGE
@@ -427,6 +429,16 @@ def cmd_iface_to_br(iface):
             return
     raise Error("no interface named %s" % iface)
 
+def cmd_br_to_vlan(bridge):
+    cfg = cfg_read(VSWITCHD_CONF)
+    parent, vlan = find_bridge(cfg, bridge)
+    print vlan
+
+def cmd_br_to_parent(bridge):
+    cfg = cfg_read(VSWITCHD_CONF)
+    parent, vlan = find_bridge(cfg, bridge)
+    print parent
+    
 def main():
     # Parse command line.
     try:
@@ -475,6 +487,8 @@ def main():
                 'add-bond': (cmd_add_bond, lambda n: n >= 4),
                 'del-port': (cmd_del_port, 2),
                 'port-to-br': (cmd_port_to_br, 1),
+                'br-to-vlan': (cmd_br_to_vlan, 1),
+                'br-to-parent': (cmd_br_to_parent, 1),
                 'list-ifaces': (cmd_list_ifaces, 1),
                 'iface-to-br': (cmd_iface_to_br, 1)}
     command = args[0]
