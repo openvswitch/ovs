@@ -1,0 +1,180 @@
+.\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.TH ovs\-vsctl 8 "September 2009" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovs\-vsctl
+.
+.SH NAME
+ovs\-vsctl \- utility for querying and configuring \fBovs\-vswitchd\fR
+.
+.SH SYNOPSIS
+\fBovs\-vsctl\fR [\fIoptions\fR] \fIcommand \fR[\fIargs\fR\&...]
+.
+.SH DESCRIPTION
+The \fBovs\-vsctl\fR program configures \fBovs\-vswitchd\fR(8), mainly
+by providing a high\-level interface to editing its configuration file
+\fBovs\-vswitchd.conf\fR(5).  This program is mainly intended for use
+when \fBovs\-vswitchd\fR is running, but it can also be used when
+\fBovs\-vswitchd\fR is not running.  In the latter case configuration
+changes will only take effect when \fBovs\-vswitchd\fR is started.
+.PP
+By default, each time \fBovs\-vsctl\fR runs, it examines and,
+depending on the requested command, possibly applies changes to an
+\fBovs\-vswitchd.conf\fR file.  Then, if it applied any changes and if
+\fBovs\-vswitchd\fR is running, it tells \fBovs\-vswitchd\fR to reload
+the modified configuration file and waits for the reload to complete
+before exiting.
+.
+.SS "Linux VLAN Bridging Compatibility"
+The \fBovs\-vsctl\fR program supports the model of a bridge
+implemented by Open vSwitch, in which a single bridge supports ports
+on multiple VLANs.  In this model, each port on a bridge is either a
+trunk port that potentially passes packets tagged with 802.1Q headers
+that designate VLANs or it is assigned a single implicit VLAN that is
+never tagged with an 802.1Q header.
+.PP
+For compatibility with software designed for the Linux bridge,
+\fBovs\-vsctl\fR also supports a model in which traffic associated
+with a given 802.1Q VLAN is segregated into a separate bridge.  A
+special form of the \fBadd\-br\fR command (see below) creates a ``fake
+bridge'' within an Open vSwitch bridge to simulate this behavior.
+When such a ``fake bridge'' is active, \fBovs\-vsctl\fR will treat it
+much like a bridge separate from its ``parent bridge,'' but the actual
+implementation in Open vSwitch uses only a single bridge, with ports on
+the fake bridge assigned the implicit VLAN of the fake bridge of which
+they are members.
+.
+.SH OPTIONS
+.
+The following options affect the general outline of \fBovs\-vsctl\fR's
+activities:
+.
+.IP "\fB\-c \fIfile\fR"
+.IQ "\fB\-\-config=\fIfile\fR"
+Sets the configuration file that \fBovs\-vsctl\fR reads and possibly
+modifies.  The default is \fB@localstatedir@/ovs\-vswitchd.conf\fR.
+.IP
+If \fIfile\fR is specified as \fB\-\fR, then \fBovs\-vsctl\fR reads
+the configuration file from standard input and, for commands that
+modify the configuration, writes the new one to standard output.  This
+is useful for testing but it should not be used in production because
+it bypasses the Open vSwitch configuration file locking protocol.
+.
+.IP "\fB\-t \fItarget\fR"
+.IQ "\fB\-\-target=\fItarget\fR"
+Configures how \fBovs\-vsctl\fR contacts \fBovs\-vswitchd\fR to
+instruct it to reload its configuration file.  The \fItarget\fR takes
+one of two forms:
+.RS
+.IP \(bu
+The name of a Unix domain socket on which \fBovs\-vswitchd\fR is
+listening for control channel connections.  By default,
+\fBovs\-vswitchd\fR listens on a Unix domain socket named
+\fB@RUNDIR@/ovs\-vswitchd.\fIpid\fR.ctl\fR, where \fIpid\fR is the
+\fBovs\-vswitchd\fR process's process ID.
+.IP \(bu
+The name of a pidfile, that is, a file whose contents are the process
+ID of a running process as a decimal number.  \fBovs\-vswitchd\fR
+creates a pidfile if it is invoked with the \fB\-\-pidfile\fR option.
+\fBovs\-vsctl\fR reads the pidfile, then looks for a Unix socket named
+\fB@RUNDIR@/ovs\-vswitchd.\fIpid\fR.ctl\fR, where \fIpid\fR is
+replaced by the process ID read from \fItarget\fR, and uses that file
+as if it had been specified directly as the target.
+.RE
+.IP
+If \fItarget\fR does not begin with \fB/\fR, then \fB@RUNDIR@/\fR is
+implicitly prefixed to it.
+.IP
+If neither \fB\-t\fR nor \fB\-\-target\fR is specified, the default target is
+\fB@RUNDIR@/ovs\-vswitchd.pid\fR.
+.IP "\fB\-\-no\-reload\fR"
+Prevents \fBovs\-vsctl\fR from telling \fBovs\-vswitchd\fR to reload
+its configuration file.
+.
+.SH COMMANDS
+The commands implemented by \fBovs\-vsctl\fR are described in the
+sections below.
+.
+.SS "Bridge Commands"
+These commands examine and manipulate Open vSwitch bridges.
+.
+.IP "\fBadd\-br \fIbridge\fR"
+Creates a new bridge named \fIbridge\fR.  Initially the bridge will
+have no ports (other than \fIbridge\fR itself).
+.
+.IP "\fBadd\-br \fIbridge parent vlan\fR"
+Creates a ``fake bridge'' named \fIbridge\fR within the existing Open
+vSwitch bridge \fIparent\fR, which must already exist and must not
+itself be a fake bridge.  The new fake bridge will be on 802.1Q VLAN
+\fIvlan\fR, which must be an integer between 1 and 4095.  Initially
+\fIbridge\fR will have no ports (other than \fIbridge\fR itself).
+.
+.IP "\fBdel\-br \fIbridge\fR"
+Deletes \fIbridge\fR and all of its ports.  If \fIbridge\fR is a real
+bridge, this command also deletes any fake bridges that were created
+with \fIbridge\fR as parent, including all of their ports.
+.
+.IP "\fBlist\-br\fR"
+Lists all existing real and fake bridges on standard output, one per
+line.
+.
+.IP "\fBbr\-exists \fIbridge\fR"
+Tests whether \fIbridge\fR exists as a real or fake bridge.  If so,
+\fBovs\-vsctl\fR exits successfully with exit code 0.  If not,
+\fBovs\-vsctl\fR exits unsuccessfully with exit code 2.
+.
+.SS "Port Commands"
+.
+These commands examine and manipulate Open vSwitch ports.  These
+commands treat a bonded port as a single entity.
+.
+.IP "\fBlist\-ports \fIbridge\fR"
+Lists all of the ports within \fIbridge\fR on standard output, one per
+line.  The local port \fIbridge\fR is not included in the list.
+.
+.IP "\fBadd\-port \fIbridge port\fR"
+Creates on \fIbridge\fR a new port named \fIport\fR from the network
+device of the same name.
+.
+.IP "\fBadd\-bond \fIbridge port iface\fR\&..."
+Creates on \fIbridge\fR a new port named \fIport\fR that bonds
+together the network devices given as each \fIiface\fR.  At least two
+interfaces must be named.
+.
+.IP "\fBdel\-port \fIbridge port\fR"
+Deletes \fBport\fR from \fIbridge\fR.
+.
+.IP "\fBport\-to\-br \fIport\fR"
+Prints the name of the bridge that contains \fIport\fR on standard
+output.
+.
+.SS "Interface Commands"
+.
+These commands examine the interfaces attached to an Open vSwitch
+bridge.  These commands treat a bonded port as a collection of two or
+more interfaces, rather than as a single port.
+.
+.IP "\fBlist\-ifaces \fIbridge\fR"
+Lists all of the interfaces within \fIbridge\fR on standard output,
+one per line.  The local port \fIbridge\fR is not included in the
+list.
+.
+.IP "\fBiface\-to\-br \fIiface\fR"
+Prints the name of the bridge that contains \fIiface\fR on standard
+output.
+.
+.SH "EXIT STATUS"
+.IP "0"
+Successful program execution.
+.IP "1"
+Usage, syntax, or configuration file error.
+.IP "2"
+The \fIbridge\fR argument to \fBbr\-exists\fR specified the name of a
+bridge that does not exist.
+.SH "SEE ALSO"
+.
+.BR ovs\-vswitchd.conf (5),
+.BR ovs\-vswitchd (8).

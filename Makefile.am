@@ -51,11 +51,22 @@ ro_c = echo '/* -*- mode: c; buffer-read-only: t -*- */'
 SUFFIXES = .in
 .in:
 	$(PERL) $(srcdir)/soexpand.pl -I$(srcdir) < $< | \
-	    sed -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
+	    sed \
 		-e 's,[@]PKIDIR[@],$(PKIDIR),g' \
+                -e 's,[@]LOGDIR[@],$(LOGDIR),g' \
+                -e 's,[@]PERL[@],$(PERL),g' \
+                -e 's,[@]PYTHON[@],$(PYTHON),g' \
                 -e 's,[@]RUNDIR[@],$(RUNDIR),g' \
+                -e 's,[@]VERSION[@],$(VERSION),g' \
+                -e 's,[@]localstatedir[@],$(localstatedir),g' \
                 -e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
-                -e 's,[@]PERL[@],$(PERL),g' > $@
+                -e 's,[@]sysconfdir[@],$(sysconfdir),g' \
+            > $@.tmp
+	@if head -n 1 $@.tmp | grep -q '#!'; then \
+	    echo chmod +x $@.tmp; \
+	    chmod +x $@.tmp; \
+	fi
+	mv $@.tmp $@
 
 include lib/automake.mk
 include ofproto/automake.mk

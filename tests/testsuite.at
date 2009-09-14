@@ -15,8 +15,10 @@ See the License for the specific language governing permissions and
 limitations under the License.])
 
 AT_TESTED([ovs-vswitchd])
+AT_TESTED([ovs-vsctl])
 
 m4_include([tests/lcov-pre.at])
 m4_include([tests/library.at])
 m4_include([tests/stp.at])
+m4_include([tests/ovs-vsctl.at])
 m4_include([tests/lcov-post.at])

@@ -51,8 +51,11 @@ The main components of this distribution are:
       to be installed on a Citrix XenServer host as a drop-in
       replacement for its switch, with additional functionality.
 
-    * ovs-appctl, a utility that can control Open vSwitch daemons,
-      adjusting their logging levels among other uses.
+    * ovs-vsctl, a utility for querying and updating the configuration
+      of ovs-vswitchd.
+
+    * ovs-appctl, a utility that sends commands to running Open
+      vSwitch daemons.
 
 Open vSwitch also provides an OpenFlow implementation and tools for
 those interested in OpenFlow but not additional Open vSwitch features:

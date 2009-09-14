@@ -9,7 +9,7 @@ bin_PROGRAMS += \
 	utilities/ovs-openflowd \
 	utilities/ovs-wdt
 noinst_PROGRAMS += utilities/nlmon
-bin_SCRIPTS += utilities/ovs-pki
+bin_SCRIPTS += utilities/ovs-pki utilities/ovs-vsctl
 noinst_SCRIPTS += utilities/ovs-pki-cgi utilities/ovs-parse-leaks
 dist_sbin_SCRIPTS += utilities/ovs-monitor 
 
@@ -25,7 +25,9 @@ EXTRA_DIST += \
 	utilities/ovs-parse-leaks.in \
 	utilities/ovs-pki-cgi.in \
 	utilities/ovs-pki.8.in \
-	utilities/ovs-pki.in
+	utilities/ovs-pki.in \
+	utilities/ovs-vsctl.8.in \
+	utilities/ovs-vsctl.in
 DISTCLEANFILES += \
 	utilities/ovs-appctl.8 \
 	utilities/ovs-cfg-mod.8 \
@@ -37,8 +39,10 @@ DISTCLEANFILES += \
 	utilities/ovs-openflowd.8 \
 	utilities/ovs-parse-leaks \
 	utilities/ovs-pki \
+	utilities/ovs-pki-cgi \
 	utilities/ovs-pki.8 \
-	utilities/ovs-pki-cgi
+	utilities/ovs-vsctl \
+	utilities/ovs-vsctl.8
 
 man_MANS += \
 	utilities/ovs-appctl.8 \
@@ -49,7 +53,8 @@ man_MANS += \
 	utilities/ovs-kill.8 \
 	utilities/ovs-ofctl.8 \
 	utilities/ovs-openflowd.8 \
-	utilities/ovs-pki.8
+	utilities/ovs-pki.8 \
+	utilities/ovs-vsctl.8
 
 utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
 utilities_ovs_appctl_LDADD = lib/libopenvswitch.a

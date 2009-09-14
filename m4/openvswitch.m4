@@ -233,3 +233,31 @@ AC_DEFUN([OVS_CHECK_PCRE],
    if test "$HAVE_PCRE" = yes; then
       AC_DEFINE([HAVE_PCRE], [1], [Define to 1 if libpcre is installed.])
    fi])
+
+dnl Checks for Python 2.x, x >= 4.
+AC_DEFUN([OVS_CHECK_PYTHON],
+  [AC_ARG_VAR([PYTHON], [path to Python 2.x])
+   AC_CACHE_CHECK(
+     [for Python 2.x for x >= 4],
+     [ovs_cv_python],
+     [if test -n "$PYTHON"; then
+        ovs_cv_python=$PYTHON
+      else
+        ovs_cv_python=no
+        for binary in python python2.4 python2.5; do
+          ovs_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+          for dir in $PATH; do
+            IFS=$ovs_save_IFS
+            test -z "$dir" && dir=.
+            if test -x $dir/$binary && $dir/$binary -c 'import sys
+if sys.hexversion >= 0x02040000 and sys.hexversion < 0x03000000:
+    sys.exit(0)
+else:
+    sys.exit(1)'; then
+              ovs_cv_python=$dir/$binary
+              break 2
+            fi
+          done
+        done
+      fi])
+   PYTHON=$ovs_cv_python])

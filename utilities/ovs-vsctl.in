@@ -1,0 +1,503 @@
+#! @PYTHON@
+# Copyright (c) 2009 Nicira Networks.                       -*- python -*-
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import errno
+import fcntl
+import fnmatch
+import getopt
+import os
+import re
+import stat
+import sys
+
+argv0 = sys.argv[0]
+if argv0.find('/') >= 0:
+    argv0 = argv0[argv0.rfind('/') + 1:]
+
+DEFAULT_VSWITCHD_CONF = "@sysconfdir@/ovs-vswitchd.conf"
+VSWITCHD_CONF = DEFAULT_VSWITCHD_CONF
+
+DEFAULT_VSWITCHD_TARGET = "@RUNDIR@/ovs-vswitchd.pid"
+VSWITCHD_TARGET = DEFAULT_VSWITCHD_TARGET
+
+RELOAD_VSWITCHD = True
+
+class Error(Exception):
+    def __init__(self, msg):
+        Exception.__init__(self)
+        self.msg = msg
+
+# XXX Most of the functions below should be integrated into a
+# VSwitchConfiguration object with logically named fields and methods
+# instead of this mishmash of functionality.
+
+# Locks 'filename' for writing.
+def cfg_lock(filename):
+    if filename == '-':
+        return
+
+    if '/' in filename:
+        lastSlash = filename.rfind('/')
+        prefix = filename[:lastSlash]
+        suffix = filename[lastSlash + 1:]
+        lock_name = "%s/.%s.~lock~" % (prefix, suffix)
+    else:
+        lock_name = ".%s.~lock~" % filename
+
+    while True:
+        # Try to open an existing lock file.
+        try:
+            f = open(lock_name, 'r')
+        except IOError, e:
+            if e.errno != errno.ENOENT:
+                raise
+
+            # Try to create a new lock file.
+            try:
+                fd = os.open(lock_name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0600)
+            except OSError, e:
+                if e.errno != errno.EEXIST:
+                    raise
+                # Someone else created the lock file, try again.
+            os.close(fd)
+            continue
+    
+        fcntl.flock(f, fcntl.LOCK_EX)
+        return
+
+# Read the ovs-vswitchd.conf file named 'filename' and return its contents as a
+# dictionary that maps from string keys to lists of string values.  (Even
+# singleton values are represented as lists.)
+def cfg_read(filename, lock=False):
+    if lock:
+        cfg_lock(filename)
+
+    try:
+        if filename == '-':
+            f = open('/dev/stdin')
+        else:
+            f = open(filename)
+    except IOError, e:
+        sys.stderr.write("%s: could not open %s (%s)\n"
+                         % (argv0, filename, e.strerror))
+        sys.exit(1)
+
+    cfg = {}
+    rx = re.compile('([-._@$:+a-zA-Z0-9]+)(?:[ \t\r\n\v]*)=(?:[ \t\r\n\v]*)(.*)$')
+    for line in f:
+        line = line.strip()
+        if len(line) == 0 or line[0] == '#':
+            continue
+
+        match = rx.match(line)
+        if match == None:
+            continue
+
+        key, value = match.groups()
+        if key not in cfg:
+            cfg[key] = []
+        cfg[key].append(value)
+    return cfg
+
+def do_cfg_save(cfg, file):
+    for key in sorted(cfg.keys()):
+        for value in sorted(cfg[key]):
+            file.write("%s=%s\n" % (key, value))
+
+def cfg_reload():
+    target = VSWITCHD_TARGET
+    s = os.stat(target)
+    if stat.S_ISREG(s.st_mode):
+        pid = read_first_line_of_file(target)
+        target = "@RUNDIR@/ovs-vswitchd.%s.ctl" % pid
+        s = os.stat(target)
+    if not stat.S_ISSOCK(s.st_mode):
+        raise Error("%s is not a Unix domain socket, cannot reload" % target)
+    f = open(target, "r+")
+    f.write("vswitchd/reload\n")
+    f.flush()
+    f.readline()
+    f.close()
+
+def cfg_save(cfg, filename):
+    if filename == '-':
+        do_cfg_save(cfg, sys.stdout)
+    else:
+        tmp_name = filename + ".~tmp~"
+        f = open(tmp_name, 'w')
+        do_cfg_save(cfg, f)
+        f.close()
+        os.rename(tmp_name, filename)
+        if RELOAD_VSWITCHD:
+            cfg_reload()
+
+# Returns a set of the immediate subsections of 'section' within 'cfg'.  For
+# example, if 'section' is "bridge" and keys bridge.a, bridge.b, bridge.b.c,
+# and bridge.c.x.y.z exist, returns set(['a', 'b', 'c']).
+def cfg_get_subsections(cfg, section):
+    subsections = set()
+    for key in cfg:
+        if key.startswith(section + "."):
+            dot = key.find(".", len(section) + 1)
+            if dot == -1:
+                dot = len(key)
+            subsections.add(key[len(section) + 1:dot])
+    return subsections
+
+# Returns True if 'cfg' contains a key whose single value is 'true'.  Otherwise
+# returns False.
+def cfg_get_bool(cfg, name):
+    return name in cfg and cfg[name] == ['true']
+
+# If 'cfg' has a port named 'port' configured with an implicit VLAN, returns
+# that VLAN number.  Otherwise, returns 0.
+def get_port_vlan(cfg, port):
+    try:
+        return int(cfg["vlan.%s.tag" % port][0])
+    except (ValueError, KeyError):
+        return 0
+
+# Returns all the ports within 'bridge' in 'cfg'.  If 'vlan' is nonnegative,
+# the ports returned are only those configured with implicit VLAN 'vlan'.
+def get_bridge_ports(cfg, bridge, vlan):
+    ports = []
+    for port in cfg["bridge.%s.port" % bridge]:
+        if vlan < 0 or get_port_vlan(cfg, port) == vlan:
+            ports.append(port)
+    return ports
+
+# Returns all the interfaces within 'bridge' in 'cfg'.  If 'vlan' is
+# nonnegative, the interfaces returned are only those whose ports are
+# configured with implicit VLAN 'vlan'.
+def get_bridge_ifaces(cfg, bridge, vlan):
+    ifaces = []
+    for port in get_bridge_ports(cfg, bridge, vlan):
+        ifaces.extend(cfg.get("bonding.%s.slave" % port, [port]))
+    return ifaces
+
+# Returns the first line of the file named 'name', with the trailing new-line
+# (if any) stripped off.
+def read_first_line_of_file(name):
+    file = None
+    try:
+        file = open(name, 'r')
+        return file.readline().rstrip('\n')
+    finally:
+        if file != None:
+            file.close()
+
+# Returns a bridge ID constructed from the MAC address of network device
+# 'netdev', in the format "8000.000102030405".
+def get_bridge_id(netdev):
+    try:
+        hwaddr = read_first_line_of_file("/sys/class/net/%s/address" % netdev)
+        return "8000.%s" % (hwaddr.replace(":", ""))
+    except:
+        return "8000.002320ffffff"
+
+# Returns a list of 3-tuples based on 'cfg'.  Each 3-tuple represents
+# one real bridge or one fake bridge and has the form (bridge, parent,
+# vlan), where 'bridge' is the real or fake bridge name, 'parent' is
+# the same as 'bridge' for a real bridge or the name of the containing
+# bridge for a fake bridge, and 'vlan' is 0 for a real bridge or a
+# VLAN number for a fake bridge.
+def get_bridge_info(cfg):
+    real_bridges = [(br, br, 0) for br in get_real_bridges(cfg)]
+    fake_bridges = []
+    for linux_bridge, ovs_bridge, vlan in real_bridges:
+        for iface in get_bridge_ifaces(cfg, ovs_bridge, -1):
+            if cfg_get_bool(cfg, "iface.%s.fake-bridge" % iface):
+                fake_bridges.append((iface, ovs_bridge,
+                                     get_port_vlan(cfg, iface)))
+    return real_bridges + fake_bridges
+
+# Returns the real bridges configured in 'cfg'.
+def get_real_bridges(cfg):
+    return cfg_get_subsections(cfg, "bridge")
+
+# Returns the fake bridges configured in 'cfg'.
+def get_fake_bridges(cfg):
+    return [bridge for bridge, parent, vlan in get_bridge_info(cfg)
+            if bridge != parent]
+
+# Returns all the real and fake bridges configured in 'cfg'.
+def get_all_bridges(cfg):
+    return [bridge for bridge, parent, vlan in get_bridge_info(cfg)]
+
+# Returns the parent bridge and VLAN of real or fake 'bridge' in
+# 'cfg', where the parent bridge and VLAN are as defined in the
+# description of get_bridge_info().  Raises an error if no bridge
+# named 'bridge' exists in 'cfg'.
+def find_bridge(cfg, bridge):
+    for br, parent, vlan in get_bridge_info(cfg):
+        if br == bridge:
+            return parent, vlan
+    raise Error("no bridge named %s" % bridge)
+
+def del_matching_keys(cfg, pattern):
+    for key in [key for key in cfg.keys() if fnmatch.fnmatch(key, pattern)]:
+        del cfg[key]
+
+# Deletes anything related to a port named 'port' from 'cfg'.  No port
+# named 'port' need actually exist; this function will clean up
+# regardless.
+def del_port(cfg, port):
+    # The use of [!0-9] keeps an interface of 'eth0' from matching
+    # VLANs attached to eth0 (such as 'eth0.123'), which are distinct
+    # interfaces.
+    for iface in cfg.get('bonding.%s.slave' % port, [port]):
+        del_matching_keys(cfg, 'iface.%s.[!0-9]*' % iface)
+        # Yes, this "port" setting applies to interfaces, not ports, *sigh*.
+        del_matching_keys(cfg, 'port.%s.ingress-policing*' % iface)
+    del_matching_keys(cfg, 'bonding.%s.[!0-9]*' % port)
+    del_matching_keys(cfg, 'vlan.%s.[!0-9]*' % port)
+    for key in cfg.keys():
+        if fnmatch.fnmatch(key, 'bridge.*.port'):
+            cfg[key] = [s for s in cfg[key] if s != port]
+
+def usage():
+    print """%(argv0)s: ovs-vswitchd management utility
+usage: %(argv0)s [OPTIONS] COMMAND [ARG...]
+
+Bridge commands:
+  add-br BRIDGE               create a new bridge named BRIDGE
+  add-br BRIDGE PARENT VLAN   create new fake bridge BRIDGE in PARENT on VLAN
+  del-br BRIDGE               delete BRIDGE and all of its ports
+  list-br                     print the names of all the bridges
+  br-exists BRIDGE            test whether BRIDGE exists
+
+Port commands:
+  list-ports BRIDGE           print the names of all the ports on BRIDGE
+  add-port BRIDGE PORT        add network device PORT to BRIDGE
+  add-bond BRIDGE PORT IFACE...  add new bonded port PORT in BRIDGE from IFACES
+  del-port BRIDGE PORT        delete PORT (which may be bonded) from BRIDGE
+  port-to-br PORT             print name of bridge that contains PORT
+A bond is considered to be a single port.
+
+Interface commands (a bond consists of multiple interfaces):
+  list-ifaces BRIDGE          print the names of all the interfaces on BRIDGE
+  iface-to-br IFACE           print name of bridge that contains IFACE
+A bond is considered to consist of interfaces.
+
+General options:
+  -c, --config=FILE           set configuration file
+                              (default: %(config)s)
+  -t, --target=PIDFILE|SOCKET set ovs-vswitchd target
+                              (default: %(target)s)
+  --no-reload                 do not make ovs-vswitchd reload its configuration
+  -h, --help                  display this help message and exit
+  -V, --version               display version information and exit
+Report bugs to bugs@openvswitch.org.""" % {'argv0': argv0,
+                                           'config': DEFAULT_VSWITCHD_CONF,
+                                           'target': DEFAULT_VSWITCHD_TARGET}
+    sys.exit(0)
+
+def version():
+    print "ovs-vsctl (Open vSwitch) @VERSION@"
+    sys.exit(0)
+
+def check_conflicts(cfg, name, op):
+    bridges = get_bridge_info(cfg)
+    if name in [bridge for bridge, parent, vlan in bridges]:
+        raise Error("%s because a bridge named %s already exists" % (op, name))
+
+    for bridge, parent, vlan in bridges:
+        if name in get_bridge_ports(cfg, parent, vlan):
+            raise Error("%s because a port named %s already exists on bridge %s" % (op, name, bridge))
+        if name in get_bridge_ifaces(cfg, parent, vlan):
+            raise Error("%s because an interface named %s already exists on bridge %s" % (op, name, bridge))
+    
+def cmd_add_br(bridge, parent=None, vlan=None):
+    cfg = cfg_read(VSWITCHD_CONF, True)
+
+    check_conflicts(cfg, bridge, "cannot create a bridge named %s" % bridge)
+    
+    if parent and vlan:
+        if parent in get_fake_bridges(cfg):
+            raise Error("cannot create bridge with fake bridge as parent")
+        if parent not in get_real_bridges(cfg):
+            raise Error("parent bridge %s does not exist" % bridge)
+        try:
+            if int(vlan) < 0 or int(vlan) > 4095:
+                raise ValueError
+        except ValueError:
+            raise Error("invalid VLAN number %s" % vlan)
+
+        # Create fake bridge internal port.
+        cfg['iface.%s.internal' % bridge] = ['true']
+        cfg['iface.%s.fake-bridge' % bridge] = ['true']
+        cfg['vlan.%s.tag' % bridge] = [vlan]
+
+        # Add fake bridge port to parent.
+        cfg['bridge.%s.port' % parent].append(bridge)
+    else:
+        cfg['bridge.%s.port' % bridge] = [bridge]
+    cfg_save(cfg, VSWITCHD_CONF)
+
+def cmd_del_br(bridge):
+    cfg = cfg_read(VSWITCHD_CONF, True)
+    parent, vlan = find_bridge(cfg, bridge)
+    if vlan == 0:
+        vlan = -1
+    for port in set(get_bridge_ports(cfg, parent, vlan) + [bridge]):
+        del_port(cfg, port)
+    if vlan < 0: 
+        del_matching_keys(cfg, 'bridge.%s.[!0-9]*' % bridge)
+    cfg_save(cfg, VSWITCHD_CONF)
+
+def cmd_list_br():
+    cfg = cfg_read(VSWITCHD_CONF)
+    for bridge in get_all_bridges(cfg):
+        print bridge
+
+def cmd_br_exists(bridge):
+    cfg = cfg_read(VSWITCHD_CONF)
+    if bridge not in get_all_bridges(cfg):
+        sys.exit(2)
+
+def cmd_list_ports(bridge):
+    cfg = cfg_read(VSWITCHD_CONF)
+    parent, vlan = find_bridge(cfg, bridge)
+    for port in get_bridge_ports(cfg, parent, vlan):
+        if port != bridge:
+            print port
+
+def do_add_port(cfg, bridge, parent, port, vlan):
+    check_conflicts(cfg, port, "cannot create a port named %s" % port)
+    cfg['bridge.%s.port' % parent].append(port)
+    if vlan > 0:
+        cfg['vlan.%s.tag' % port] = [vlan]
+
+def cmd_add_port(bridge, port):
+    cfg = cfg_read(VSWITCHD_CONF, True)
+    parent, vlan = find_bridge(cfg, bridge)
+    do_add_port(cfg, bridge, parent, port, vlan)
+    cfg_save(cfg, VSWITCHD_CONF)
+
+def cmd_add_bond(bridge, port, *slaves):
+    cfg = cfg_read(VSWITCHD_CONF, True)
+    parent, vlan = find_bridge(cfg, bridge)
+    do_add_port(cfg, bridge, parent, port, vlan)
+    cfg['bonding.%s.slave' % port] = list(slaves)
+    cfg_save(cfg, VSWITCHD_CONF)
+
+def cmd_del_port(bridge, port):
+    cfg = cfg_read(VSWITCHD_CONF, True)
+    parent, vlan = find_bridge(cfg, bridge)
+    if port not in get_bridge_ports(cfg, parent, vlan):
+        if port in get_bridge_ports(cfg, parent, -1):
+            raise Error("bridge %s does not have a port %s (although its parent bridge %s does)" % (bridge, port, parent))
+        else:
+            raise Error("bridge %s does not have a port %s" % (bridge, port))
+    del_port(cfg, port)
+    cfg_save(cfg, VSWITCHD_CONF)
+
+def cmd_port_to_br(port):
+    cfg = cfg_read(VSWITCHD_CONF)
+    for bridge, parent, vlan in get_bridge_info(cfg):
+        if port != bridge and port in get_bridge_ports(cfg, parent, vlan):
+            print bridge
+            return
+    raise Error("no port named %s" % port)
+
+def cmd_list_ifaces(bridge):
+    cfg = cfg_read(VSWITCHD_CONF)
+    parent, vlan = find_bridge(cfg, bridge)
+    for iface in get_bridge_ifaces(cfg, parent, vlan):
+        if iface != bridge:
+            print iface
+
+def cmd_iface_to_br(iface):
+    cfg = cfg_read(VSWITCHD_CONF)
+    for bridge, parent, vlan in get_bridge_info(cfg):
+        if iface != bridge and iface in get_bridge_ifaces(cfg, parent, vlan):
+            print bridge
+            return
+    raise Error("no interface named %s" % iface)
+
+def main():
+    # Parse command line.
+    try:
+        options, args = getopt.gnu_getopt(sys.argv[1:], "c:t:hV",
+                                          ["config=",
+                                           "target=",
+                                           "no-reload",
+                                           "help",
+                                           "version"])
+    except getopt.GetoptError, msg:
+        sys.stderr.write("%s: %s (use --help for help)\n" % (argv0, msg))
+        sys.exit(1)
+
+    # Handle options.
+    for opt, optarg in options:
+        if opt == "-c" or opt == "--config":
+            global VSWITCHD_CONF
+            VSWITCHD_CONF = optarg
+        elif opt == "-t" or opt == "--target":
+            global VSWITCHD_TARGET
+            if optarg[0] != '/':
+                optarg = '@RUNDIR@/' + optarg
+            VSWITCHD_TARGET = optarg
+        elif opt == "--no-reload":
+            global RELOAD_VSWITCHD
+            RELOAD_VSWITCHD = False
+        elif opt == "-h" or opt == "--help":
+            usage()
+        elif opt == "-V" or opt == "--version":
+            version()
+        else:
+            raise RuntimeError("unhandled option %s" % opt)
+
+    # Execute commands.
+    if not args:
+        sys.stderr.write("%s: missing command name (use --help for help)\n"
+                         % argv0)
+        sys.exit(1)
+
+    commands = {'add-br': (cmd_add_br, lambda n: n == 1 or n == 3),
+                'del-br': (cmd_del_br, 1),
+                'list-br': (cmd_list_br, 0),
+                'br-exists': (cmd_br_exists, 1),
+                'list-ports': (cmd_list_ports, 1),
+                'add-port': (cmd_add_port, 2),
+                'add-bond': (cmd_add_bond, lambda n: n >= 4),
+                'del-port': (cmd_del_port, 2),
+                'port-to-br': (cmd_port_to_br, 1),
+                'list-ifaces': (cmd_list_ifaces, 1),
+                'iface-to-br': (cmd_iface_to_br, 1)}
+    command = args[0]
+    args = args[1:]
+    if command not in commands:
+        sys.stderr.write("%s: unknown command '%s' (use --help for help)\n"
+                         % (argv0, command))
+        sys.exit(1)
+
+    function, nargs = commands[command]
+    if callable(nargs) and not nargs(len(args)):
+        sys.stderr.write("%s: '%s' command does not accept %d arguments (use --help for help)\n" % (argv0, command, len(args)))
+        sys.exit(1)
+    elif not callable(nargs) and len(args) != nargs:
+        sys.stderr.write("%s: '%s' command takes %d arguments but %d were supplied (use --help for help)\n" % (argv0, command, nargs, len(args)))
+        sys.exit(1)
+    else:
+        function(*args)
+        sys.exit(0)
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Error, msg:
+        sys.stderr.write("%s: %s\n" % (argv0, msg.msg))
+        sys.exit(1)

@@ -322,11 +322,13 @@ fi
 /usr/bin/ovs-cfg-mod
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-ofctl
+/usr/bin/ovs-vsctl
 /usr/share/man/man5/ovs-vswitchd.conf.5.gz
 /usr/share/man/man8/ovs-appctl.8.gz
 /usr/share/man/man8/ovs-brcompatd.8.gz
 /usr/share/man/man8/ovs-cfg-mod.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
+/usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
 /var/lib/openvswitch
