@@ -3157,7 +3157,7 @@ send_flow_exp(struct ofproto *p, struct rule *rule,
     LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
         if (ofconn->send_flow_exp && rconn_is_connected(ofconn->rconn)) {
             if (prev) {
-                queue_tx(ofpbuf_clone(buf), prev, ofconn->reply_counter);
+                queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
             } else {
                 buf = compose_flow_exp(rule, now, reason);
             }
@@ -3165,7 +3165,7 @@ send_flow_exp(struct ofproto *p, struct rule *rule,
         }
     }
     if (prev) {
-        queue_tx(buf, prev, ofconn->reply_counter);
+        queue_tx(buf, prev, prev->reply_counter);
     }
 }
 
