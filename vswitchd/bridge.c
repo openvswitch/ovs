@@ -1525,6 +1525,7 @@ bond_enable_slave(struct iface *iface, bool enable)
         }
         iface->tag = tag_create_random();
     }
+    port_update_bond_compat(port);
 }
 
 static void
@@ -2977,8 +2978,7 @@ port_update_bond_compat(struct port *port)
         struct iface *iface = port->ifaces[i];
         struct compat_bond_slave *slave = &bond.slaves[i];
         slave->name = iface->name;
-        slave->up = ((iface->enabled && iface->delay_expires == LLONG_MAX) ||
-                     (!iface->enabled && iface->delay_expires != LLONG_MAX));
+        slave->up = iface->enabled;
         if (slave->up) {
             bond.up = true;
         }
