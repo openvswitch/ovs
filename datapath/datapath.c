@@ -625,13 +625,93 @@ out:
 int vswitch_skb_checksum_setup(struct sk_buff *skb) { return 0; }
 #endif /* CONFIG_XEN && linux == 2.6.18 */
 
+/* Append each packet in 'skb' list to 'queue'.  There will be only one packet
+ * unless we broke up a GSO packet. */
+static int
+queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
+		      int queue_no, u32 arg)
+{
+	struct sk_buff *nskb;
+	int port_no;
+	int err;
+
+	port_no = ODPP_LOCAL;
+	if (skb->dev) {
+		if (skb->dev->br_port)
+			port_no = skb->dev->br_port->port_no;
+		else if (is_dp_dev(skb->dev))
+			port_no = dp_dev_priv(skb->dev)->port_no;
+	}
+
+	do {
+		struct odp_msg *header;
+
+		nskb = skb->next;
+		skb->next = NULL;
+
+		/* If a checksum-deferred packet is forwarded to the
+		 * controller, correct the pointers and checksum.  This happens
+		 * on a regular basis only on Xen, on which VMs can pass up
+		 * packets that do not have their checksum computed.
+		 */
+		err = vswitch_skb_checksum_setup(skb);
+		if (err)
+			goto err_kfree_skbs;
+#ifndef CHECKSUM_HW
+		if (skb->ip_summed == CHECKSUM_PARTIAL) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+			/* Until 2.6.22, the start of the transport header was
+			 * also the start of data to be checksummed.  Linux
+			 * 2.6.22 introduced the csum_start field for this
+			 * purpose, but we should point the transport header to
+			 * it anyway for backward compatibility, as
+			 * dev_queue_xmit() does even in 2.6.28. */
+			skb_set_transport_header(skb, skb->csum_start -
+						 skb_headroom(skb));
+#endif
+			err = skb_checksum_help(skb);
+			if (err)
+				goto err_kfree_skbs;
+		}
+#else
+		if (skb->ip_summed == CHECKSUM_HW) {
+			err = skb_checksum_help(skb, 0);
+			if (err)
+				goto err_kfree_skbs;
+		}
+#endif
+
+		err = skb_cow(skb, sizeof *header);
+		if (err)
+			goto err_kfree_skbs;
+
+		header = (struct odp_msg*)__skb_push(skb, sizeof *header);
+		header->type = queue_no;
+		header->length = skb->len;
+		header->port = port_no;
+		header->reserved = 0;
+		header->arg = arg;
+		skb_queue_tail(queue, skb);
+
+		skb = nskb;
+	} while (skb);
+	return 0;
+
+err_kfree_skbs:
+	kfree_skb(skb);
+	while ((skb = nskb) != NULL) {
+		nskb = skb->next;
+		kfree_skb(skb);
+	}
+	return err;
+}
+
 int
 dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 		  u32 arg)
 {
 	struct dp_stats_percpu *stats;
 	struct sk_buff_head *queue;
-	int port_no;
 	int err;
 
 	WARN_ON_ONCE(skb_shared(skb));
@@ -641,37 +721,6 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 	err = -ENOBUFS;
 	if (skb_queue_len(queue) >= DP_MAX_QUEUE_LEN)
 		goto err_kfree_skb;
-
- 	/* If a checksum-deferred packet is forwarded to the controller,
-	 * correct the pointers and checksum.  This happens on a regular basis
-	 * only on Xen, on which VMs can pass up packets that do not have their
-	 * checksum computed.
- 	 */
-	err = vswitch_skb_checksum_setup(skb);
- 	if (err)
-		goto err_kfree_skb;
-#ifndef CHECKSUM_HW
-	if (skb->ip_summed == CHECKSUM_PARTIAL) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
-		/* Until 2.6.22, the start of the transport header was also the
-		 * start of data to be checksummed.  Linux 2.6.22 introduced
-		 * the csum_start field for this purpose, but we should point
-		 * the transport header to it anyway for backward
-		 * compatibility, as dev_queue_xmit() does even in 2.6.28. */
-		skb_set_transport_header(skb, skb->csum_start -
-					      skb_headroom(skb));
-#endif
-		err = skb_checksum_help(skb);
-		if (err)
-			goto err_kfree_skb;
-	}
-#else
-	if (skb->ip_summed == CHECKSUM_HW) {
-		err = skb_checksum_help(skb, 0);
-		if (err)
-			goto err_kfree_skb;
-	}
-#endif
 
 	/* Break apart GSO packets into their component pieces.  Otherwise
 	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */
@@ -690,45 +739,9 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 		}
 	}
 
-	/* Figure out port number. */
-	port_no = ODPP_LOCAL;
-	if (skb->dev) {
-		if (skb->dev->br_port)
-			port_no = skb->dev->br_port->port_no;
-		else if (is_dp_dev(skb->dev))
-			port_no = dp_dev_priv(skb->dev)->port_no;
-	}
-
-	/* Append each packet to queue.  There will be only one packet unless
-	 * we broke up a GSO packet above. */
-	do {
-		struct odp_msg *header;
-		struct sk_buff *nskb = skb->next;
-		skb->next = NULL;
-
-		err = skb_cow(skb, sizeof *header);
-		if (err) {
-			while (nskb) {
-				kfree_skb(skb);
-				skb = nskb;
-				nskb = skb->next;
-			}
-			goto err_kfree_skb;
-		}
-
-		header = (struct odp_msg*)__skb_push(skb, sizeof *header);
-		header->type = queue_no;
-		header->length = skb->len;
-		header->port = port_no;
-		header->reserved = 0;
-		header->arg = arg;
-		skb_queue_tail(queue, skb);
-
-		skb = nskb;
-	} while (skb);
-
+	err = queue_control_packets(skb, queue, queue_no, arg);
 	wake_up_interruptible(&dp->waitqueue);
-	return 0;
+	return err;
 
 err_kfree_skb:
 	kfree_skb(skb);
