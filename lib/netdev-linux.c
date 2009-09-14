@@ -85,7 +85,8 @@ enum {
     VALID_IN4 = 1 << 2,
     VALID_IN6 = 1 << 3,
     VALID_MTU = 1 << 4,
-    VALID_CARRIER = 1 << 5
+    VALID_CARRIER = 1 << 5,
+    VALID_IS_INTERNAL = 1 << 6
 };
 
 /* Cached network device information. */
@@ -100,6 +101,7 @@ struct netdev_linux_cache {
     struct in6_addr in6;
     int mtu;
     int carrier;
+    bool is_internal;
 };
 
 static struct shash cache_map = SHASH_INITIALIZER(&cache_map);
@@ -625,25 +627,81 @@ check_for_working_netlink_stats(void)
  * XXX All of the members of struct netdev_stats are 64 bits wide, but on
  * 32-bit architectures the Linux network stats are only 32 bits. */
 static int
-netdev_linux_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
+netdev_linux_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
 {
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     static int use_netlink_stats = -1;
     int error;
+    struct netdev_stats raw_stats;
+    struct netdev_stats *collect_stats = stats;
 
     COVERAGE_INC(netdev_get_stats);
+
+    if (!(netdev->cache->valid & VALID_IS_INTERNAL)) {
+        netdev->cache->is_internal = (netdev->tap_fd != -1);
+
+        if (!netdev->cache->is_internal) {
+            struct ethtool_drvinfo drvinfo;
+
+            memset(&drvinfo, 0, sizeof drvinfo);
+            error = netdev_linux_do_ethtool(&netdev->netdev,
+                                            (struct ethtool_cmd *)&drvinfo,
+                                            ETHTOOL_GDRVINFO,
+                                            "ETHTOOL_GDRVINFO");
+
+            if (!error) {
+                netdev->cache->is_internal = !strcmp(drvinfo.driver,
+                                                     "openvswitch");
+            }
+        }
+    }
+
+    if (netdev->cache->is_internal) {
+        collect_stats = &raw_stats;
+    }
+
     if (use_netlink_stats < 0) {
         use_netlink_stats = check_for_working_netlink_stats();
     }
     if (use_netlink_stats) {
         int ifindex;
 
-        error = get_ifindex(netdev, &ifindex);
+        error = get_ifindex(&netdev->netdev, &ifindex);
         if (!error) {
-            error = get_stats_via_netlink(ifindex, stats);
+            error = get_stats_via_netlink(ifindex, collect_stats);
         }
     } else {
-        error = get_stats_via_proc(netdev->name, stats);
+        error = get_stats_via_proc(netdev->netdev.name, collect_stats);
     }
+
+    /* If this port is an internal port then the transmit and receive stats
+     * will appear to be swapped relative to the other ports since we are the
+     * one sending the data, not a remote computer.  For consistency, we swap
+     * them back here. */
+    if (netdev->cache->is_internal) {
+        stats->rx_packets = raw_stats.tx_packets;
+        stats->tx_packets = raw_stats.rx_packets;
+        stats->rx_bytes = raw_stats.tx_bytes;
+        stats->tx_bytes = raw_stats.rx_bytes;
+        stats->rx_errors = raw_stats.tx_errors;
+        stats->tx_errors = raw_stats.rx_errors;
+        stats->rx_dropped = raw_stats.tx_dropped;
+        stats->tx_dropped = raw_stats.rx_dropped;
+        stats->multicast = raw_stats.multicast;
+        stats->collisions = raw_stats.collisions;
+        stats->rx_length_errors = 0;
+        stats->rx_over_errors = 0;
+        stats->rx_crc_errors = 0;
+        stats->rx_frame_errors = 0;
+        stats->rx_fifo_errors = 0;
+        stats->rx_missed_errors = 0;
+        stats->tx_aborted_errors = 0;
+        stats->tx_carrier_errors = 0;
+        stats->tx_fifo_errors = 0;
+        stats->tx_heartbeat_errors = 0;
+        stats->tx_window_errors = 0;
+    }
+
     return error;
 }
 
