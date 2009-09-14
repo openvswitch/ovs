@@ -126,6 +126,14 @@ Tests whether \fIbridge\fR exists as a real or fake bridge.  If so,
 \fBovs\-vsctl\fR exits successfully with exit code 0.  If not,
 \fBovs\-vsctl\fR exits unsuccessfully with exit code 2.
 .
+.IP "\fBbr\-to\-vlan \fIbridge\fR"
+If \fIbridge\fR is a fake bridge, prints the bridge's 802.1Q VLAN as a
+decimal integer.  If \fIbridge\fR is a real bridge, prints 0.
+.
+.IP "\fBbr\-to\-parent \fIbridge\fR"
+If \fIbridge\fR is a fake bridge, prints the name of its parent
+bridge.  If \fIbridge\fR is a real bridge, print \fIbridge\fR.
+.
 .SS "Port Commands"
 .
 These commands examine and manipulate Open vSwitch ports.  These
