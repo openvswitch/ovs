@@ -2960,7 +2960,21 @@ port_update_bond_compat(struct port *port)
         struct iface *iface = port->ifaces[i];
         struct compat_bond_slave *slave = &bond.slaves[i];
         slave->name = iface->name;
-        slave->up = iface->enabled;
+
+        /* We need to make the same determination as the Linux bonding
+         * code to determine whether a slave should be consider "up".
+         * The Linux function bond_miimon_inspect() supports four 
+         * BOND_LINK_* states:
+         *      
+         *    - BOND_LINK_UP: carrier detected, updelay has passed.
+         *    - BOND_LINK_FAIL: carrier lost, downdelay in progress.
+         *    - BOND_LINK_DOWN: carrier lost, downdelay has passed.
+         *    - BOND_LINK_BACK: carrier detected, updelay in progress.
+         *
+         * The function bond_info_show_slave() only considers BOND_LINK_UP 
+         * to be "up" and anything else to be "down".
+         */
+        slave->up = iface->enabled && iface->delay_expires == LLONG_MAX;
         if (slave->up) {
             bond.up = true;
         }
