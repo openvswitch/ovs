@@ -3264,25 +3264,22 @@ static void
 do_send_packet_in(struct ofconn *ofconn, uint32_t buffer_id,
                   const struct ofpbuf *packet, int send_len)
 {
-    struct ofp_packet_in *opi;
-    struct ofpbuf payload, *buf;
-    struct odp_msg *msg;
+    struct odp_msg *msg = packet->data;
+    struct ofpbuf payload;
+    struct ofpbuf *opi;
+    uint8_t reason;
 
-    msg = packet->data;
+    /* Extract packet payload from 'msg'. */
     payload.data = msg + 1;
     payload.size = msg->length - sizeof *msg;
 
-    send_len = MIN(send_len, payload.size);
-    buf = ofpbuf_new(sizeof *opi + send_len);
-    opi = put_openflow_xid(offsetof(struct ofp_packet_in, data),
-                           OFPT_PACKET_IN, 0, buf);
-    opi->buffer_id = htonl(buffer_id);
-    opi->total_len = htons(payload.size);
-    opi->in_port = htons(odp_port_to_ofp_port(msg->port));
-    opi->reason = msg->type == _ODPL_ACTION_NR ? OFPR_ACTION : OFPR_NO_MATCH;
-    ofpbuf_put(buf, payload.data, MIN(send_len, payload.size));
-    update_openflow_length(buf);
-    rconn_send_with_limit(ofconn->rconn, buf, ofconn->packet_in_counter, 100);
+    /* Construct ofp_packet_in message. */
+    reason = msg->type == _ODPL_ACTION_NR ? OFPR_ACTION : OFPR_NO_MATCH;
+    opi = make_packet_in(buffer_id, odp_port_to_ofp_port(msg->port), reason,
+                         &payload, send_len);
+
+    /* Send. */
+    rconn_send_with_limit(ofconn->rconn, opi, ofconn->packet_in_counter, 100);
 }
 
 static void
