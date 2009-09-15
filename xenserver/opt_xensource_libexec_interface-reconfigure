@@ -5,23 +5,26 @@
 #
 """Usage:
 
-    %(command-name)s --session <SESSION-REF> --pif <PIF-REF> [up|down|rewrite]
-    %(command-name)s --force <BRIDGE> [up|down|rewrite <CONFIG>]
+    %(command-name)s <PIF> up
+    %(command-name)s <PIF> down
+    %(command-name)s [<PIF>] rewrite
+    %(command-name)s --force <BRIDGE> up
+    %(command-name)s --force <BRIDGE> down
+    %(command-name)s --force <BRIDGE> rewrite --device=<INTERFACE> <CONFIG>
     %(command-name)s --force all down
-    %(command-name)s init-dbcache
 
-    where,
-          <CONFIG> = --device=<INTERFACE> --mode=dhcp
-          <CONFIG> = --device=<INTERFACE> --mode=static --ip=<IPADDR> --netmask=<NM> [--gateway=<GW>]
+    where <PIF> is one of:
+       --session <SESSION-REF> --pif <PIF-REF>
+       --pif-uuid <PIF-UUID>
+    and <CONFIG> is one of:
+       --mode=dhcp
+       --mode=static --ip=<IPADDR> --netmask=<NM> [--gateway=<GW>]
 
   Options:
     --session		A session reference to use to access the xapi DB
-    --pif               A PIF reference.
-    --force-interface	An interface name. Mutually exclusive with --session/--pif.
-
-  Either both --session and --pif  or just --pif-uuid.
-  
-  <ACTION> is either "up" or "down" or "rewrite"
+    --pif               A PIF reference within the session.
+    --pif-uuid          The UUID of a PIF.
+    --force             An interface name.
 """
 
 #
@@ -29,7 +32,6 @@
 #
 #  --output-directory=<DIR>	Write configuration to <DIR>. Also disables actually
 #                               raising/lowering the interfaces
-#  --pif-uuid			A PIF UUID, use instead of --session/--pif.
 #
 #
 #
@@ -701,10 +703,7 @@ def log_pif_action(action, pif):
     rec['ip_configuration_mode'] = pifrec['ip_configuration_mode']
     rec['action'] = action
     rec['interface-name'] = interface_name(pif)
-    if action == "rewrite":
-        rec['message'] = "Rewrite PIF %(uuid)s configuration" % rec
-    else:
-        rec['message'] = "Bring %(action)s PIF %(uuid)s" % rec
+    rec['message'] = "Bring %(action)s PIF %(uuid)s" % rec
     log("%(message)s: %(interface-name)s configured as %(ip_configuration_mode)s" % rec)
 
 def get_bond_masters_of_pif(pif):
@@ -1442,9 +1441,6 @@ def main(argv=None):
         if len(force_rewrite_config) and not (force_interface and action == "rewrite"):
             raise Usage("\"--force rewrite\" needed for --device, --mode, --ip, --netmask, and --gateway")
 
-        if action == "init-dbcache" and arglist:
-            raise Usage("\"init-dbcache\" action does not accept any options")
-
         global db
         if force_interface:
             log("Force interface %s %s" % (force_interface, action))
@@ -1462,39 +1458,40 @@ def main(argv=None):
                     action_down(pif)
                 else:
                     raise Usage("Unknown action %s"  % action)
-        elif action == "init-dbcache":
-            DatabaseCache().save(dbcache_file)
         else:
             db = DatabaseCache(session_ref=session)
 
             if pif_uuid:
                 pif = db.get_pif_by_uuid(pif_uuid)
-        
-            if not pif:
-                raise Usage("No PIF given")
 
-            if force_management:
-                # pif is going to be the management pif 
-                management_pif = pif
+            if action == "rewrite" and not pif:
+                pass
             else:
-                # pif is not going to be the management pif.
-                # Search DB cache for pif on same host with management=true
-                pifrec = db.get_pif_record(pif)
-                management_pif = db.get_management_pif()
+                if not pif:
+                    raise Usage("No PIF given")
 
-            log_pif_action(action, pif)
+                if force_management:
+                    # pif is going to be the management pif 
+                    management_pif = pif
+                else:
+                    # pif is not going to be the management pif.
+                    # Search DB cache for pif on same host with management=true
+                    pifrec = db.get_pif_record(pif)
+                    management_pif = db.get_management_pif()
 
-            if not check_allowed(pif):
-                return 0
+                log_pif_action(action, pif)
 
-            if action == "up":
-                action_up(pif)
-            elif action == "down":
-                action_down(pif)
-            elif action == "rewrite":
-                action_rewrite(pif)
-            else:
-                raise Usage("Unknown action %s"  % action)
+                if not check_allowed(pif):
+                    return 0
+
+                if action == "up":
+                    action_up(pif)
+                elif action == "down":
+                    action_down(pif)
+                elif action == "rewrite":
+                    action_rewrite(pif)
+                else:
+                    raise Usage("Unknown action %s"  % action)
 
             # Save cache.
             db.save(dbcache_file)

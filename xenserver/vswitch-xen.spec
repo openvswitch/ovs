@@ -155,7 +155,7 @@ if test ! -e /var/lib/openvswitch/dbcache; then
         printf "Re-creating xapi database cache...  "
     fi
 
-    if /usr/share/vswitch/scripts/interface-reconfigure init-dbcache; then
+    if /usr/share/vswitch/scripts/interface-reconfigure rewrite; then
         printf "done.\n"
     else
         printf "FAILED\n"
