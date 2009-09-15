@@ -2351,10 +2351,7 @@ bond_send_learning_packets(struct port *port)
     ofpbuf_init(&packet, 128);
     error = n_packets = n_errors = 0;
     LIST_FOR_EACH (e, struct mac_entry, lru_node, &br->ml->lrus) {
-        static const char s[] = "Open vSwitch Bond Failover";
         union ofp_action actions[2], *a;
-        struct eth_header *eth;
-        struct llc_snap_header *llc_snap;
         uint16_t dp_ifidx;
         tag_type tags = 0;
         flow_t flow;
@@ -2364,23 +2361,6 @@ bond_send_learning_packets(struct port *port)
             || !choose_output_iface(port, e->mac, &dp_ifidx, &tags)) {
             continue;
         }
-
-        /* Compose packet to send. */
-        ofpbuf_clear(&packet);
-        eth = ofpbuf_put_zeros(&packet, ETH_HEADER_LEN);
-        llc_snap = ofpbuf_put_zeros(&packet, LLC_SNAP_HEADER_LEN);
-        ofpbuf_put(&packet, s, sizeof s); /* Includes null byte. */
-        ofpbuf_put(&packet, e->mac, ETH_ADDR_LEN);
-
-        memcpy(eth->eth_dst, eth_addr_broadcast, ETH_ADDR_LEN);
-        memcpy(eth->eth_src, e->mac, ETH_ADDR_LEN);
-        eth->eth_type = htons(packet.size - ETH_HEADER_LEN);
-
-        llc_snap->llc.llc_dsap = LLC_DSAP_SNAP;
-        llc_snap->llc.llc_ssap = LLC_SSAP_SNAP;
-        llc_snap->llc.llc_cntl = LLC_CNTL_SNAP;
-        memcpy(llc_snap->snap.snap_org, "\x00\x23\x20", 3);
-        llc_snap->snap.snap_type = htons(0xf177); /* Random number. */
 
         /* Compose actions. */
         memset(actions, 0, sizeof actions);
@@ -2398,6 +2378,8 @@ bond_send_learning_packets(struct port *port)
 
         /* Send packet. */
         n_packets++;
+        compose_benign_packet(&packet, "Open vSwitch Bond Failover", 0xf177,
+                              e->mac);
         flow_extract(&packet, ODPP_NONE, &flow);
         retval = ofproto_send_packet(br->ofproto, &flow, actions, a - actions,
                                      &packet);

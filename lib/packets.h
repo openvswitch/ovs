@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #ifndef PACKETS_H
 #define PACKETS_H 1
 
@@ -22,6 +23,8 @@
 #include "compiler.h"
 #include "random.h"
 #include "util.h"
+
+struct ofpbuf;
 
 #define ETH_ADDR_LEN           6
 
@@ -97,6 +100,10 @@ static inline bool eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
             && ea[4] == 0x00
             && (ea[5] & 0xf0) == 0x00);
 }
+
+void compose_benign_packet(struct ofpbuf *, const char *tag,
+                           uint16_t snap_type,
+                           const uint8_t eth_src[ETH_ADDR_LEN]);
 
 /* Example:
  *

@@ -60,6 +60,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/ofp-print.h \
 	lib/ofpbuf.c \
 	lib/ofpbuf.h \
+	lib/packets.c \
 	lib/packets.h \
 	lib/pcap.c \
 	lib/pcap.h \
