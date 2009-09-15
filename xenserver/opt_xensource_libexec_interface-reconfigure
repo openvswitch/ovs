@@ -1191,7 +1191,7 @@ def action_up(pif):
     # - The networks corresponding to any VLANs attached to the
     #   datapath's PIF.
     network_uuids = []
-    for nwpif in db.get_pifs_by_device({'device': pifrec['device']}):
+    for nwpif in db.get_pifs_by_device(pifrec['device']):
         net = db.get_pif_record(nwpif)['network']
         network_uuids += [db.get_network_record(net)['uuid']]
 
