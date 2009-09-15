@@ -19,6 +19,7 @@ import fnmatch
 import getopt
 import os
 import re
+import socket
 import stat
 import sys
 
@@ -125,7 +126,9 @@ def cfg_reload():
         s = os.stat(target)
     if not stat.S_ISSOCK(s.st_mode):
         raise Error("%s is not a Unix domain socket, cannot reload" % target)
-    f = open(target, "r+")
+    skt = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    skt.connect(target)
+    f = os.fdopen(skt.fileno(), "r+")
     f.write("vswitchd/reload\n")
     f.flush()
     f.readline()
