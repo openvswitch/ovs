@@ -113,6 +113,13 @@ through the controller and every packet is flooded.
 This option is most useful for debugging.  It reduces switching
 performance, so it should not be used in production.
 
+.IP "\fB--mute\fR"
+Prevents ovs\-controller from replying to any OpenFlow messages sent
+to it by switches.
+.IP
+This option is only for debugging the Open vSwitch implementation of
+``fail open'' mode.  It must not be used in production.
+
 .so lib/daemon.man
 .so lib/vlog.man
 .so lib/common.man

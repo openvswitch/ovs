@@ -499,7 +499,7 @@ rconn_recv(struct rconn *rc)
         int error = vconn_recv(rc->vconn, &buffer);
         if (!error) {
             copy_to_monitor(rc, buffer);
-            if (is_admitted_msg(buffer)
+            if (rc->probably_admitted || is_admitted_msg(buffer)
                 || time_now() - rc->last_connected >= 30) {
                 rc->probably_admitted = true;
                 rc->last_admitted = time_now();
@@ -637,15 +637,22 @@ rconn_is_connected(const struct rconn *rconn)
     return is_connected_state(rconn->state);
 }
 
-/* Returns 0 if 'rconn' is connected.  Otherwise, if 'rconn' is in a "failure
- * mode" (that is, it is not connected), returns the number of seconds that it
- * has been in failure mode, ignoring any times that it connected but the
- * controller's admission control policy caused it to be quickly
- * disconnected. */
+/* Returns true if 'rconn' is connected and thought to have been accepted by
+ * the peer's admission-control policy. */
+bool
+rconn_is_admitted(const struct rconn *rconn)
+{
+    return (rconn_is_connected(rconn)
+            && rconn->last_admitted >= rconn->last_connected);
+}
+
+/* Returns 0 if 'rconn' is currently connected and considered to have been
+ * accepted by the peer's admission-control policy, otherwise the number of
+ * seconds since 'rconn' was last in such a state. */
 int
 rconn_failure_duration(const struct rconn *rconn)
 {
-    return rconn_is_connected(rconn) ? 0 : time_now() - rconn->last_admitted;
+    return rconn_is_admitted(rconn) ? 0 : time_now() - rconn->last_admitted;
 }
 
 /* Returns the IP address of the peer, or 0 if the peer's IP address is not

@@ -51,6 +51,7 @@ struct packet {
 struct pktbuf {
     struct packet packets[PKTBUF_CNT];
     unsigned int buffer_idx;
+    unsigned int null_idx;
 };
 
 int
@@ -78,6 +79,22 @@ pktbuf_destroy(struct pktbuf *pb)
     }
 }
 
+static unsigned int
+make_id(unsigned int buffer_idx, unsigned int cookie)
+{
+    return buffer_idx | (cookie << PKTBUF_BITS);
+}
+
+/* Attempts to allocate an OpenFlow packet buffer id within 'pb'.  The packet
+ * buffer will store a copy of 'buffer' and the port number 'in_port', which
+ * should be the datapath port number on which 'buffer' was received.
+ *
+ * If successful, returns the packet buffer id (a number other than
+ * UINT32_MAX).  pktbuf_retrieve() can later be used to retrieve the buffer and
+ * its input port number (buffers do expire after a time, so this is not
+ * guaranteed to be true forever).  On failure, returns UINT32_MAX.
+ *
+ * The caller retains ownership of 'buffer'. */
 uint32_t
 pktbuf_save(struct pktbuf *pb, struct ofpbuf *buffer, uint16_t in_port)
 {
@@ -97,9 +114,46 @@ pktbuf_save(struct pktbuf *pb, struct ofpbuf *buffer, uint16_t in_port)
     p->buffer = ofpbuf_clone(buffer);
     p->timeout = time_msec() + OVERWRITE_MSECS;
     p->in_port = in_port;
-    return (p - pb->packets) | (p->cookie << PKTBUF_BITS);
+    return make_id(p - pb->packets, p->cookie);
 }
 
+/*
+ * Allocates and returns a "null" packet buffer id.  The returned packet buffer
+ * id is considered valid by pktbuf_retrieve(), but it is not associated with
+ * actual buffered data.
+ *
+ * This function is always successful.
+ *
+ * This is useful in one special case: with the current OpenFlow design, the
+ * "fail-open" code cannot always know whether a connection to a controller is
+ * actually valid until it receives a OFPT_PACKET_OUT or OFPT_FLOW_MOD request,
+ * but at that point the packet in question has already been forwarded (since
+ * we are still in "fail-open" mode).  If the packet was buffered in the usual
+ * way, then the OFPT_PACKET_OUT or OFPT_FLOW_MOD would cause a duplicate
+ * packet in the network.  Null packet buffer ids identify such a packet that
+ * has already been forwarded, so that Open vSwitch can quietly ignore the
+ * request to re-send it.  (After that happens, the switch exits fail-open
+ * mode.)
+ *
+ * See the top-level comment in fail-open.c for an overview.
+ */
+uint32_t
+pktbuf_get_null(void)
+{
+    return make_id(0, COOKIE_MAX);
+}
+
+/* Attempts to retrieve a saved packet with the given 'id' from 'pb'.  Returns
+ * 0 if successful, otherwise an OpenFlow error code constructed with
+ * ofp_mkerr().
+ *
+ * On success, ordinarily stores the buffered packet in '*bufferp' and the
+ * datapath port number on which the packet was received in '*in_port'.  The
+ * caller becomes responsible for freeing the buffer.  However, if 'id'
+ * identifies a "null" packet buffer (created with pktbuf_get_null()), stores
+ * NULL in '*bufferp' and -1 in '*in_port'.
+ *
+ * On failure, stores NULL in in '*bufferp' and -1 in '*in_port'. */
 int
 pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
                 uint16_t *in_port)
@@ -128,11 +182,16 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
             VLOG_WARN_RL(&rl, "attempt to reuse buffer %08"PRIx32, id);
             error = ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BUFFER_EMPTY);
         }
-    } else {
+    } else if (id >> PKTBUF_BITS != COOKIE_MAX) {
         COVERAGE_INC(pktbuf_bad_cookie);
         VLOG_WARN_RL(&rl, "cookie mismatch: %08"PRIx32" != %08"PRIx32,
                      id, (id & PKTBUF_MASK) | (p->cookie << PKTBUF_BITS));
         error = ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_COOKIE);
+    } else {
+        COVERAGE_INC(pktbuf_null_cookie);
+        VLOG_INFO_RL(&rl, "Received null cookie %08"PRIx32" (this is normal "
+                     "if the switch was recently in fail-open mode)", id);
+        error = 0;
     }
     *bufferp = NULL;
     *in_port = -1;

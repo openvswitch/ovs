@@ -811,9 +811,6 @@ ofproto_run1(struct ofproto *p)
             }
         }
     }
-    if (p->fail_open) {
-        fail_open_run(p->fail_open);
-    }
     pinsched_run(p->miss_sched, send_packet_in_miss, p);
     pinsched_run(p->action_sched, send_packet_in_action, p);
     if (p->executer) {
@@ -823,6 +820,12 @@ ofproto_run1(struct ofproto *p)
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, struct ofconn, node,
                         &p->all_conns) {
         ofconn_run(ofconn, p);
+    }
+
+    /* Fail-open maintenance.  Do this after processing the ofconns since
+     * fail-open checks the status of the controller rconn. */
+    if (p->fail_open) {
+        fail_open_run(p->fail_open);
     }
 
     for (i = 0; i < p->n_listeners; i++) {
@@ -1351,6 +1354,9 @@ ofconn_run(struct ofconn *ofconn, struct ofproto *p)
             struct ofpbuf *of_msg = rconn_recv(ofconn->rconn);
             if (!of_msg) {
                 break;
+            }
+            if (p->fail_open) {
+                fail_open_maybe_recover(p->fail_open);
             }
             handle_openflow(ofconn, p, of_msg);
             ofpbuf_delete(of_msg);
@@ -2162,7 +2168,7 @@ handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
     if (opo->buffer_id != htonl(UINT32_MAX)) {
         error = pktbuf_retrieve(ofconn->pktbuf, ntohl(opo->buffer_id),
                                 &buffer, &in_port);
-        if (error) {
+        if (error || !buffer) {
             return error;
         }
         payload = *buffer;
@@ -3078,7 +3084,23 @@ handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
 
     rule_execute(p, rule, &payload, &flow);
     rule_reinstall(p, rule);
-    ofpbuf_delete(packet);
+
+    if (rule->super && rule->super->cr.priority == FAIL_OPEN_PRIORITY
+        && rconn_is_connected(p->controller->rconn)) {
+        /*
+         * Extra-special case for fail-open mode.
+         *
+         * We are in fail-open mode and the packet matched the fail-open rule,
+         * but we are connected to a controller too.  We should send the packet
+         * up to the controller in the hope that it will try to set up a flow
+         * and thereby allow us to exit fail-open.
+         *
+         * See the top-level comment in fail-open.c for more information.
+         */
+        pinsched_send(p->miss_sched, in_port, packet, send_packet_in_miss, p);
+    } else {
+        ofpbuf_delete(packet);
+    }
 }
 
 static void
@@ -3302,6 +3324,7 @@ static void
 send_packet_in_miss(struct ofpbuf *packet, void *p_)
 {
     struct ofproto *p = p_;
+    bool in_fail_open = p->fail_open && fail_open_is_active(p->fail_open);
     struct ofconn *ofconn;
     struct ofpbuf payload;
     struct odp_msg *msg;
@@ -3311,8 +3334,10 @@ send_packet_in_miss(struct ofpbuf *packet, void *p_)
     payload.size = msg->length - sizeof *msg;
     LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
         if (ofconn->miss_send_len) {
-            uint32_t buffer_id = pktbuf_save(ofconn->pktbuf, &payload,
-                                             msg->port);
+            struct pktbuf *pb = ofconn->pktbuf;
+            uint32_t buffer_id = (in_fail_open
+                                  ? pktbuf_get_null()
+                                  : pktbuf_save(pb, &payload, msg->port));
             int send_len = (buffer_id != UINT32_MAX ? ofconn->miss_send_len
                             : UINT32_MAX);
             do_send_packet_in(ofconn, buffer_id, packet, send_len);

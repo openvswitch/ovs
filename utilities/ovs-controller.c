@@ -58,6 +58,10 @@ static bool setup_flows = true;
 /* --max-idle: Maximum idle time, in seconds, before flows expire. */
 static int max_idle = 60;
 
+/* --mute: If true, accept connections from switches but do not reply to any
+ * of their messages (for debugging fail-open mode). */
+static bool mute = false;
+
 static int do_switching(struct switch_ *);
 static void new_switch(struct switch_ *, struct vconn *, const char *name);
 static void parse_options(int argc, char *argv[]);
@@ -211,7 +215,9 @@ do_switching(struct switch_ *sw)
 
     msg = rconn_recv(sw->rconn);
     if (msg) {
-        lswitch_process_packet(sw->lswitch, sw->rconn, msg);
+        if (!mute) {
+            lswitch_process_packet(sw->lswitch, sw->rconn, msg);
+        }
         ofpbuf_delete(msg);
     }
     rconn_run(sw->rconn);
@@ -227,12 +233,14 @@ parse_options(int argc, char *argv[])
     enum {
         OPT_MAX_IDLE = UCHAR_MAX + 1,
         OPT_PEER_CA_CERT,
+        OPT_MUTE,
         VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"hub",         no_argument, 0, 'H'},
         {"noflow",      no_argument, 0, 'n'},
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
+        {"mute",        no_argument, 0, OPT_MUTE},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
         DAEMON_LONG_OPTIONS,
@@ -261,6 +269,10 @@ parse_options(int argc, char *argv[])
 
         case 'n':
             setup_flows = false;
+            break;
+
+        case OPT_MUTE:
+            mute = true;
             break;
 
         case OPT_MAX_IDLE:
