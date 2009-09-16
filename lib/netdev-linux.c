@@ -654,6 +654,8 @@ netdev_linux_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
                                                      "openvswitch");
             }
         }
+
+        netdev->cache->valid |= VALID_IS_INTERNAL;
     }
 
     if (netdev->cache->is_internal) {
