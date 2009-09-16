@@ -15,7 +15,7 @@ ovs\-appctl \- utility for configuring running Open vSwitch daemons
 .sp 1
 The available \fItarget\fR options are:
 .br
-[\fB-t\fR \fIpid\fR | \fB--target=\fIpid\fR]
+[\fB-t\fR \fIsocket\fR | \fB--target=\fIsocket\fR]
 .sp 1
 The available \fIaction\fR options are:
 .br
