@@ -269,11 +269,13 @@ function start {
     start_vswitchd
     start_brcompatd
     reload_vswitchd  # ensures ovs-vswitchd has fully read config file.
+    touch /var/lock/subsys/vswitch
 }
 
 function stop {
     stop_brcompatd
     stop_vswitchd
+    rm -f /var/lock/subsys/vswitch
 }
 
 function restart {
