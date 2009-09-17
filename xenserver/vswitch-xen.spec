@@ -285,6 +285,7 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     rm -f /etc/ovs-vswitchd.conf
     rm -f /etc/sysconfig/vswitch
     rm -f /etc/ovs-vswitchd.cacert
+    rm -f /var/lib/openvswitch/dbcache
 
     printf "\nYou MUST reboot the server now to complete the change to\n"
     printf "standard Xen networking.  Attempts to modify networking on the\n"
