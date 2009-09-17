@@ -1237,6 +1237,8 @@ def action_up(pif):
 
     # Bring up VLAN slave, plus physical devices other than bond
     # slaves (which we brought up earlier).
+    # XXX need to bring up bond itself.
+    # XXX need to set MAC address on fake bridge
     if vlan_slave:
         up_netdev(ipdev_name(vlan_slave))
     for physdev_pif in set(physdev_pifs) - set(bond_slave_physdev_pifs):
@@ -1313,6 +1315,7 @@ def action_down(pif):
         log("VLAN masters of %s - %s" % (rec['device'], [interface_name(m) for m in vlan_masters]))
         for m in vlan_masters:
             if db.get_pif_record(m)['currently_attached']:
+                # XXX remove IP address
                 log("Leaving %s up due to currently attached VLAN master %s" % (interface, interface_name(m)))
                 return
 
@@ -1368,6 +1371,9 @@ def action_rewrite(pif):
     # We have no code of our own to run here.
     pass
 
+def action_force_rewrite(interface, config):
+    raise Error("Force rewrite is not implemented yet.")
+
 def main(argv=None):
     global output_directory, management_pif
     
@@ -1390,7 +1396,6 @@ def main(argv=None):
                         "force=",
                         "force-interface=",
                         "management",
-                        "test-mode",
                         "device=", "mode=", "ip=", "netmask=", "gateway=",
                         "help" ]
             arglist, args = getopt.gnu_getopt(argv[1:], shortops, longops)
@@ -1427,6 +1432,10 @@ def main(argv=None):
             raise Usage("Too many arguments")
 
         action = args[0]
+
+        if not action in ["up", "down", "rewrite", "rewrite-configuration"]:
+            raise Usage("Unknown action \"%s\"" % action)
+
         # backwards compatibility
         if action == "rewrite-configuration": action = "rewrite"
         
@@ -1438,6 +1447,8 @@ def main(argv=None):
             raise Usage("--session and --pif must be used together.")
         if force_interface and ( session or pif or pif_uuid ):
             raise Usage("--force is mutually exclusive with --session, --pif and --pif-uuid")
+        if force_interface == "all" and action != "down":
+            raise Usage("\"--force all\" only valid for down action")
         if len(force_rewrite_config) and not (force_interface and action == "rewrite"):
             raise Usage("\"--force rewrite\" needed for --device, --mode, --ip, --netmask, and --gateway")
 
@@ -1447,7 +1458,10 @@ def main(argv=None):
 
             if action == "rewrite":
                 action_force_rewrite(force_interface, force_rewrite_config)
-            else:
+            elif action in ["up", "down"]:
+                if action == "down" and force_interface == "all":
+                    raise Error("Force all interfaces down not implemented yet")
+
                 db = DatabaseCache(cache_file=dbcache_file)
                 pif = db.get_pif_by_bridge(force_interface)
                 management_pif = db.get_management_pif()
@@ -1456,8 +1470,8 @@ def main(argv=None):
                     action_up(pif)
                 elif action == "down":
                     action_down(pif)
-                else:
-                    raise Usage("Unknown action %s"  % action)
+            else:
+                raise Error("Unknown action %s"  % action)
         else:
             db = DatabaseCache(session_ref=session)
 
@@ -1491,7 +1505,7 @@ def main(argv=None):
                 elif action == "rewrite":
                     action_rewrite(pif)
                 else:
-                    raise Usage("Unknown action %s"  % action)
+                    raise Error("Unknown action %s"  % action)
 
             # Save cache.
             db.save(dbcache_file)
