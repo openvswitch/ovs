@@ -312,6 +312,7 @@ bridge_init(void)
             dpif_close(dpif);
         }
     }
+    svec_destroy(&dpif_names);
 
     unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows);
 
