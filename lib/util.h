@@ -53,7 +53,8 @@
 extern const char *program_name;
 
 #define ARRAY_SIZE(ARRAY) (sizeof ARRAY / sizeof *ARRAY)
-#define ROUND_UP(X, Y) (((X) + ((Y) - 1)) / (Y) * (Y))
+#define DIV_ROUND_UP(X, Y) (((X) + ((Y) - 1)) / (Y))
+#define ROUND_UP(X, Y) (DIV_ROUND_UP(X, Y) * (Y))
 #define ROUND_DOWN(X, Y) ((X) / (Y) * (Y))
 #define IS_POW2(X) ((X) && !((X) & ((X) - 1)))
 

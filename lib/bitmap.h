@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2009 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,8 @@ bitmap_bit__(size_t offset)
 static inline unsigned long *
 bitmap_allocate(size_t n_bits)
 {
-    return xcalloc(1, ROUND_UP(n_bits, BITMAP_ULONG_BITS));
+    size_t n_longs = DIV_ROUND_UP(n_bits, BITMAP_ULONG_BITS);
+    return xcalloc(sizeof(unsigned long int), n_longs);
 }
 
 static inline void
