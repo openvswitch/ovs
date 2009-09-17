@@ -2751,6 +2751,25 @@ bond_unixctl_disable_slave(struct unixctl_conn *conn, const char *args)
 }
 
 static void
+bond_unixctl_hash(struct unixctl_conn *conn, const char *args)
+{
+	uint8_t mac[ETH_ADDR_LEN];
+	uint8_t hash;
+	char *hash_cstr;
+
+	if (sscanf(args, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))
+	    == ETH_ADDR_SCAN_COUNT) {
+		hash = bond_hash(mac);
+
+		hash_cstr = xasprintf("%u", hash);
+		unixctl_command_reply(conn, 200, hash_cstr);
+		free(hash_cstr);
+	} else {
+		unixctl_command_reply(conn, 501, "invalid mac");
+	}
+}
+
+static void
 bond_init(void)
 {
     unixctl_command_register("bond/list", bond_unixctl_list);
@@ -2760,6 +2779,7 @@ bond_init(void)
                              bond_unixctl_set_active_slave);
     unixctl_command_register("bond/enable-slave", bond_unixctl_enable_slave);
     unixctl_command_register("bond/disable-slave", bond_unixctl_disable_slave);
+    unixctl_command_register("bond/hash", bond_unixctl_hash);
 }
 
 /* Port functions. */

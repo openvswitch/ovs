@@ -136,6 +136,8 @@ updelay (or downdelay).
 .IP
 This setting is not permanent: it persists only until the carrier
 status of \fIslave\fR changes.
+.IP "\fBbond/hash\fR \fImac\fR"
+Returns the hash value which would be used for \fImac\fR.
 .
 .so lib/vlog-unixctl.man
 .SH "SEE ALSO"
