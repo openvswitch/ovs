@@ -52,10 +52,19 @@
 
 extern const char *program_name;
 
+/* Returns the number of elements in ARRAY. */
 #define ARRAY_SIZE(ARRAY) (sizeof ARRAY / sizeof *ARRAY)
+
+/* Returns X / Y, rounding up.  X must be nonnegative to round correctly. */
 #define DIV_ROUND_UP(X, Y) (((X) + ((Y) - 1)) / (Y))
+
+/* Returns X rounded up to the nearest multiple of Y. */
 #define ROUND_UP(X, Y) (DIV_ROUND_UP(X, Y) * (Y))
+
+/* Returns X rounded down to the nearest multiple of Y. */
 #define ROUND_DOWN(X, Y) ((X) / (Y) * (Y))
+
+/* Returns true if X is a power of 2, otherwise false. */
 #define IS_POW2(X) ((X) && !((X) & ((X) - 1)))
 
 #ifndef MIN
