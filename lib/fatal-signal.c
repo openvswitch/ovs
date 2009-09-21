@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "shash.h"
 #include "util.h"
 
 /* Signals to catch. */
@@ -165,8 +166,7 @@ call_hooks(int sig_nr)
     }
 }
 
-static char **files;
-static size_t n_files, max_files;
+static struct shash files = SHASH_INITIALIZER(&files);
 
 static void unlink_files(void *aux);
 static void do_unlink_files(void);
@@ -183,10 +183,9 @@ fatal_signal_add_file_to_unlink(const char *file)
     }
 
     fatal_signal_block();
-    if (n_files >= max_files) {
-        files = x2nrealloc(files, &max_files, sizeof *files);
+    if (!shash_find(&files, file)) {
+        shash_add(&files, file, NULL);
     }
-    files[n_files++] = xstrdup(file);
     fatal_signal_unblock();
 }
 
@@ -195,15 +194,12 @@ fatal_signal_add_file_to_unlink(const char *file)
 void
 fatal_signal_remove_file_to_unlink(const char *file)
 {
-    size_t i;
+    struct shash_node *node;
 
     fatal_signal_block();
-    for (i = 0; i < n_files; i++) {
-        if (!strcmp(files[i], file)) {
-            free(files[i]);
-            files[i] = files[--n_files];
-            break;
-        }
+    node = shash_find(&files, file);
+    if (node) {
+        shash_delete(&files, node);
     }
     fatal_signal_unblock();
 }
@@ -217,10 +213,10 @@ unlink_files(void *aux UNUSED)
 static void
 do_unlink_files(void)
 {
-    size_t i;
+    struct shash_node *node;
 
-    for (i = 0; i < n_files; i++) {
-        unlink(files[i]);
+    SHASH_FOR_EACH (node, &files) {
+        unlink(node->name);
     }
 }
 
