@@ -26,10 +26,11 @@ struct pvconn;
 struct sockaddr;
 
 int new_stream_vconn(const char *name, int fd, int connect_status,
-                     struct vconn **vconnp);
+                     char *unlink_path, struct vconn **vconnp);
 int new_pstream_pvconn(const char *name, int fd,
                       int (*accept_cb)(int fd, const struct sockaddr *,
                                        size_t sa_len, struct vconn **),
+                      char *unlink_path,
                       struct pvconn **pvconnp);
 
 #endif /* vconn-stream.h */

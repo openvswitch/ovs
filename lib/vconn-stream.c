@@ -23,6 +23,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "fatal-signal.h"
 #include "leak-checker.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -44,6 +45,7 @@ struct stream_vconn
     struct ofpbuf *rxbuf;
     struct ofpbuf *txbuf;
     struct poll_waiter *tx_waiter;
+    char *unlink_path;
 };
 
 static struct vconn_class stream_vconn_class;
@@ -51,10 +53,20 @@ static struct vconn_class stream_vconn_class;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 25);
 
 static void stream_clear_txbuf(struct stream_vconn *);
+static void maybe_unlink_and_free(char *path);
 
+/* Creates a new vconn named 'name' that will send and receive data on 'fd' and
+ * stores a pointer to the vconn in '*vconnp'.  Initial connection status
+ * 'connect_status' is interpreted as described for vconn_init().
+ *
+ * When '*vconnp' is closed, then 'unlink_path' (if nonnull) will be passed to
+ * fatal_signal_unlink_file_now() and then freed with free().
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  (The current
+ * implementation never fails.) */
 int
 new_stream_vconn(const char *name, int fd, int connect_status,
-                 struct vconn **vconnp)
+                 char *unlink_path, struct vconn **vconnp)
 {
     struct stream_vconn *s;
 
@@ -64,6 +76,7 @@ new_stream_vconn(const char *name, int fd, int connect_status,
     s->txbuf = NULL;
     s->tx_waiter = NULL;
     s->rxbuf = NULL;
+    s->unlink_path = unlink_path;
     *vconnp = &s->vconn;
     return 0;
 }
@@ -83,6 +96,7 @@ stream_close(struct vconn *vconn)
     stream_clear_txbuf(s);
     ofpbuf_delete(s->rxbuf);
     close(s->fd);
+    maybe_unlink_and_free(s->unlink_path);
     free(s);
 }
 
@@ -252,6 +266,7 @@ struct pstream_pvconn
     int fd;
     int (*accept_cb)(int fd, const struct sockaddr *, size_t sa_len,
                      struct vconn **);
+    char *unlink_path;
 };
 
 static struct pvconn_class pstream_pvconn_class;
@@ -263,16 +278,31 @@ pstream_pvconn_cast(struct pvconn *pvconn)
     return CONTAINER_OF(pvconn, struct pstream_pvconn, pvconn);
 }
 
+/* Creates a new pvconn named 'name' that will accept new socket connections on
+ * 'fd' and stores a pointer to the vconn in '*pvconnp'.
+ *
+ * When a connection has been accepted, 'accept_cb' will be called with the new
+ * socket fd 'fd' and the remote address of the connection 'sa' and 'sa_len'.
+ * accept_cb must return 0 if the connection is successful, in which case it
+ * must initialize '*vconnp' to the new vconn, or a positive errno value on
+ * error.  In either case accept_cb takes ownership of the 'fd' passed in.
+ *
+ * When '*pvconnp' is closed, then 'unlink_path' (if nonnull) will be passed to
+ * fatal_signal_unlink_file_now() and freed with free().
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  (The current
+ * implementation never fails.) */
 int
 new_pstream_pvconn(const char *name, int fd,
-                  int (*accept_cb)(int fd, const struct sockaddr *,
-                                   size_t sa_len, struct vconn **),
-                  struct pvconn **pvconnp)
+                  int (*accept_cb)(int fd, const struct sockaddr *sa,
+                                   size_t sa_len, struct vconn **vconnp),
+                  char *unlink_path, struct pvconn **pvconnp)
 {
     struct pstream_pvconn *ps = xmalloc(sizeof *ps);
     pvconn_init(&ps->pvconn, &pstream_pvconn_class, name);
     ps->fd = fd;
     ps->accept_cb = accept_cb;
+    ps->unlink_path = unlink_path;
     *pvconnp = &ps->pvconn;
     return 0;
 }
@@ -282,6 +312,7 @@ pstream_close(struct pvconn *pvconn)
 {
     struct pstream_pvconn *ps = pstream_pvconn_cast(pvconn);
     close(ps->fd);
+    maybe_unlink_and_free(ps->unlink_path);
     free(ps);
 }
 
@@ -327,3 +358,13 @@ static struct pvconn_class pstream_pvconn_class = {
     pstream_accept,
     pstream_wait
 };
+
+/* Helper functions. */
+static void
+maybe_unlink_and_free(char *path)
+{
+    if (path) {
+        fatal_signal_unlink_file_now(path);
+        free(path);
+    }
+}

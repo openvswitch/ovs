@@ -47,20 +47,21 @@ static int
 unix_open(const char *name, char *suffix, struct vconn **vconnp)
 {
     const char *connect_path = suffix;
-    char bind_path[128];
+    char *bind_path;
     int fd;
 
-    sprintf(bind_path, "/tmp/vconn-unix.%ld.%d",
-            (long int) getpid(), n_unix_sockets++);
+    bind_path = xasprintf("/tmp/vconn-unix.%ld.%d",
+                          (long int) getpid(), n_unix_sockets++);
     fd = make_unix_socket(SOCK_STREAM, true, false, bind_path, connect_path);
     if (fd < 0) {
         VLOG_ERR("%s: connection to %s failed: %s",
                  bind_path, connect_path, strerror(-fd));
+        free(bind_path);
         return -fd;
     }
 
     return new_stream_vconn(name, fd, check_connection_completion(fd),
-                            vconnp);
+                            bind_path, vconnp);
 }
 
 struct vconn_class unix_vconn_class = {
@@ -102,7 +103,8 @@ punix_open(const char *name UNUSED, char *suffix, struct pvconn **pvconnp)
         return error;
     }
 
-    return new_pstream_pvconn("punix", fd, punix_accept, pvconnp);
+    return new_pstream_pvconn("punix", fd, punix_accept,
+                              xstrdup(suffix), pvconnp);
 }
 
 static int
@@ -118,7 +120,7 @@ punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
     } else {
         strcpy(name, "unix");
     }
-    return new_stream_vconn(name, fd, 0, vconnp);
+    return new_stream_vconn(name, fd, 0, NULL, vconnp);
 }
 
 struct pvconn_class punix_pvconn_class = {

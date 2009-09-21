@@ -58,7 +58,7 @@ new_tcp_vconn(const char *name, int fd, int connect_status,
         return errno;
     }
 
-    retval = new_stream_vconn(name, fd, connect_status, vconnp);
+    retval = new_stream_vconn(name, fd, connect_status, NULL, vconnp);
     if (!retval) {
         struct vconn *vconn = *vconnp;
         vconn_set_remote_ip(vconn, remote->sin_addr.s_addr);
@@ -108,7 +108,7 @@ ptcp_open(const char *name UNUSED, char *suffix, struct pvconn **pvconnp)
     if (fd < 0) {
         return -fd;
     } else {
-        return new_pstream_pvconn("ptcp", fd, ptcp_accept, pvconnp);
+        return new_pstream_pvconn("ptcp", fd, ptcp_accept, NULL, pvconnp);
     }
 }
 
