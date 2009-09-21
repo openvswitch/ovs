@@ -60,7 +60,11 @@ static void call_hooks(int sig_nr);
 
 /* Registers 'hook' to be called when a process termination signal is raised.
  * If 'run_at_exit' is true, 'hook' is also called during normal process
- * termination, e.g. when exit() is called or when main() returns. */
+ * termination, e.g. when exit() is called or when main() returns.
+ *
+ * 'func' will be invoked from an asynchronous signal handler, so it must be
+ * written appropriately.  For example, it must not call most C library
+ * functions, including malloc() or free(). */
 void
 fatal_signal_add_hook(void (*func)(void *aux), void *aux, bool run_at_exit)
 {
@@ -228,6 +232,12 @@ unlink_files(void *aux UNUSED)
     do_unlink_files(); 
 }
 
+/* This is a fatal_signal_add_hook() callback (via unlink_files()).  It will be
+ * invoked from an asynchronous signal handler, so it cannot call most C
+ * library functions (unlink() is an explicit exception, see
+ * http://www.opengroup.org/onlinepubs/009695399/functions/xsh_chap02_04.html).
+ * That includes free(), so it doesn't try to free the 'files' data
+ * structure. */
 static void
 do_unlink_files(void)
 {
