@@ -438,8 +438,7 @@ unixctl_server_destroy(struct unixctl_server *server)
         }
 
         close(server->fd);
-        unlink(server->path);
-        fatal_signal_remove_file_to_unlink(server->path);
+        fatal_signal_unlink_file_now(server->path);
         free(server->path);
         free(server);
     }
@@ -504,8 +503,7 @@ void
 unixctl_client_destroy(struct unixctl_client *client)
 {
     if (client) {
-        unlink(client->bind_path);
-        fatal_signal_remove_file_to_unlink(client->bind_path);
+        fatal_signal_unlink_file_now(client->bind_path);
         free(client->bind_path);
         free(client->connect_path);
         fclose(client->stream);

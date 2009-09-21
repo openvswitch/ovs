@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2009 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ void fatal_signal_fork(void);
  * exit(). */
 void fatal_signal_add_file_to_unlink(const char *);
 void fatal_signal_remove_file_to_unlink(const char *);
+int fatal_signal_unlink_file_now(const char *);
 
 /* Interface for other code that catches one of our signals and needs to pass
  * it through. */

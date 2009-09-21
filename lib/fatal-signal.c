@@ -26,6 +26,9 @@
 #include "shash.h"
 #include "util.h"
 
+#define THIS_MODULE VLM_fatal_signal
+#include "vlog.h"
+
 /* Signals to catch. */
 static const int fatal_signals[] = { SIGTERM, SIGINT, SIGHUP, SIGALRM };
 
@@ -202,6 +205,21 @@ fatal_signal_remove_file_to_unlink(const char *file)
         shash_delete(&files, node);
     }
     fatal_signal_unblock();
+}
+
+/* Like fatal_signal_remove_file_to_unlink(), but also unlinks 'file'.
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+fatal_signal_unlink_file_now(const char *file)
+{
+    int error = unlink(file) ? errno : 0;
+    if (error) {
+        VLOG_WARN("could not unlink \"%s\" (%s)", file, strerror(error));
+    }
+
+    fatal_signal_remove_file_to_unlink(file);
+
+    return error;
 }
 
 static void
