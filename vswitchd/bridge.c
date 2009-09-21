@@ -578,6 +578,7 @@ bridge_reconfigure(void)
             VLOG_ERR("bridge %s: problem setting netflow collectors", 
                     br->name);
         }
+        svec_destroy(&nf_hosts);
 
         /* Update the controller and related settings.  It would be more
          * straightforward to call this from bridge_reconfigure_one(), but we
