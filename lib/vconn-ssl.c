@@ -246,7 +246,7 @@ new_ssl_vconn(const char *name, int fd, enum session_type type,
 
     /* Create and return the ssl_vconn. */
     sslv = xmalloc(sizeof *sslv);
-    vconn_init(&sslv->vconn, &ssl_vconn_class, EAGAIN, name, true);
+    vconn_init(&sslv->vconn, &ssl_vconn_class, EAGAIN, name);
     vconn_set_remote_ip(&sslv->vconn, remote->sin_addr.s_addr);
     vconn_set_remote_port(&sslv->vconn, remote->sin_port);
     vconn_set_local_ip(&sslv->vconn, local.sin_addr.s_addr);

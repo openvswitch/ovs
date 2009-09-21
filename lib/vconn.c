@@ -1388,9 +1388,26 @@ normalize_match(struct ofp_match *m)
     m->wildcards = htonl(wc);
 }
 
+/* Initializes 'vconn' as a new vconn named 'name', implemented via 'class'.
+ * The initial connection status, supplied as 'connect_status', is interpreted
+ * as follows:
+ *
+ *      - 0: 'vconn' is connected.  Its 'send' and 'recv' functions may be
+ *        called in the normal fashion.
+ *
+ *      - EAGAIN: 'vconn' is trying to complete a connection.  Its 'connect'
+ *        function should be called to complete the connection.
+ *
+ *      - Other positive errno values indicate that the connection failed with
+ *        the specified error.
+ *
+ * After calling this function, vconn_close() must be used to destroy 'vconn',
+ * otherwise resources will be leaked.
+ *
+ * The caller retains ownership of 'name'. */
 void
 vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
-           const char *name, bool reconnectable)
+           const char *name)
 {
     vconn->class = class;
     vconn->state = (connect_status == EAGAIN ? VCS_CONNECTING
@@ -1404,7 +1421,6 @@ vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
     vconn->local_ip = 0;
     vconn->local_port = 0;
     vconn->name = xstrdup(name);
-    vconn->reconnectable = reconnectable;
 }
 
 void

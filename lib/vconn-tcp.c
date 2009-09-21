@@ -58,7 +58,7 @@ new_tcp_vconn(const char *name, int fd, int connect_status,
         return errno;
     }
 
-    retval = new_stream_vconn(name, fd, connect_status, true, vconnp);
+    retval = new_stream_vconn(name, fd, connect_status, vconnp);
     if (!retval) {
         struct vconn *vconn = *vconnp;
         vconn_set_remote_ip(vconn, remote->sin_addr.s_addr);
