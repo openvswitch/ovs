@@ -85,6 +85,9 @@ struct ofpbuf *make_del_flow(const flow_t *);
 struct ofpbuf *make_add_simple_flow(const flow_t *,
                                     uint32_t buffer_id, uint16_t out_port,
                                     uint16_t max_idle);
+struct ofpbuf *make_packet_in(uint32_t buffer_id, uint16_t in_port,
+                              uint8_t reason,
+                              const struct ofpbuf *payload, int max_send_len);
 struct ofpbuf *make_packet_out(const struct ofpbuf *packet, uint32_t buffer_id,
                                uint16_t in_port,
                                const struct ofp_action_header *,

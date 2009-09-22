@@ -912,6 +912,28 @@ make_add_simple_flow(const flow_t *flow,
 }
 
 struct ofpbuf *
+make_packet_in(uint32_t buffer_id, uint16_t in_port, uint8_t reason,
+               const struct ofpbuf *payload, int max_send_len)
+{
+    struct ofp_packet_in *opi;
+    struct ofpbuf *buf;
+    int send_len;
+
+    send_len = MIN(max_send_len, payload->size);
+    buf = ofpbuf_new(sizeof *opi + send_len);
+    opi = put_openflow_xid(offsetof(struct ofp_packet_in, data),
+                           OFPT_PACKET_IN, 0, buf);
+    opi->buffer_id = htonl(buffer_id);
+    opi->total_len = htons(payload->size);
+    opi->in_port = htons(in_port);
+    opi->reason = reason;
+    ofpbuf_put(buf, payload->data, send_len);
+    update_openflow_length(buf);
+
+    return buf;
+}
+
+struct ofpbuf *
 make_packet_out(const struct ofpbuf *packet, uint32_t buffer_id,
                 uint16_t in_port,
                 const struct ofp_action_header *actions, size_t n_actions)

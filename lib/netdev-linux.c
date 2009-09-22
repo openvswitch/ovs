@@ -1496,6 +1496,7 @@ get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
 
     if (!attrs[IFLA_STATS]) {
         VLOG_WARN_RL(&rl, "RTM_GETLINK reply lacks stats");
+        ofpbuf_delete(reply);
         return EPROTO;
     }
 
@@ -1521,6 +1522,8 @@ get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
     stats->tx_fifo_errors = rtnl_stats->tx_fifo_errors;
     stats->tx_heartbeat_errors = rtnl_stats->tx_heartbeat_errors;
     stats->tx_window_errors = rtnl_stats->tx_window_errors;
+
+    ofpbuf_delete(reply);
 
     return 0;
 }

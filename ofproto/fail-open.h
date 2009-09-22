@@ -26,13 +26,21 @@ struct ofproto;
 struct rconn;
 struct switch_status;
 
+/* Priority of the rule added by the fail-open subsystem when a switch enters
+ * fail-open mode.  This priority value uniquely identifies a fail-open flow
+ * (OpenFlow priorities max out at 65535 and nothing else in Open vSwitch
+ * creates flows with this priority). */
+#define FAIL_OPEN_PRIORITY 70000
+
 struct fail_open *fail_open_create(struct ofproto *, int trigger_duration,
                                    struct switch_status *,
                                    struct rconn *controller);
 void fail_open_set_trigger_duration(struct fail_open *, int trigger_duration);
 void fail_open_destroy(struct fail_open *);
 void fail_open_wait(struct fail_open *);
+bool fail_open_is_active(const struct fail_open *);
 void fail_open_run(struct fail_open *);
+void fail_open_maybe_recover(struct fail_open *);
 void fail_open_flushed(struct fail_open *);
 
 #endif /* fail-open.h */

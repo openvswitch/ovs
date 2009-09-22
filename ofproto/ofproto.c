@@ -811,9 +811,6 @@ ofproto_run1(struct ofproto *p)
             }
         }
     }
-    if (p->fail_open) {
-        fail_open_run(p->fail_open);
-    }
     pinsched_run(p->miss_sched, send_packet_in_miss, p);
     pinsched_run(p->action_sched, send_packet_in_action, p);
     if (p->executer) {
@@ -823,6 +820,12 @@ ofproto_run1(struct ofproto *p)
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, struct ofconn, node,
                         &p->all_conns) {
         ofconn_run(ofconn, p);
+    }
+
+    /* Fail-open maintenance.  Do this after processing the ofconns since
+     * fail-open checks the status of the controller rconn. */
+    if (p->fail_open) {
+        fail_open_run(p->fail_open);
     }
 
     for (i = 0; i < p->n_listeners; i++) {
@@ -1354,6 +1357,9 @@ ofconn_run(struct ofconn *ofconn, struct ofproto *p)
             struct ofpbuf *of_msg = rconn_recv(ofconn->rconn);
             if (!of_msg) {
                 break;
+            }
+            if (p->fail_open) {
+                fail_open_maybe_recover(p->fail_open);
             }
             handle_openflow(ofconn, p, of_msg);
             ofpbuf_delete(of_msg);
@@ -2165,7 +2171,7 @@ handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
     if (opo->buffer_id != htonl(UINT32_MAX)) {
         error = pktbuf_retrieve(ofconn->pktbuf, ntohl(opo->buffer_id),
                                 &buffer, &in_port);
-        if (error) {
+        if (error || !buffer) {
             return error;
         }
         payload = *buffer;
@@ -3081,7 +3087,23 @@ handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
 
     rule_execute(p, rule, &payload, &flow);
     rule_reinstall(p, rule);
-    ofpbuf_delete(packet);
+
+    if (rule->super && rule->super->cr.priority == FAIL_OPEN_PRIORITY
+        && rconn_is_connected(p->controller->rconn)) {
+        /*
+         * Extra-special case for fail-open mode.
+         *
+         * We are in fail-open mode and the packet matched the fail-open rule,
+         * but we are connected to a controller too.  We should send the packet
+         * up to the controller in the hope that it will try to set up a flow
+         * and thereby allow us to exit fail-open.
+         *
+         * See the top-level comment in fail-open.c for more information.
+         */
+        pinsched_send(p->miss_sched, in_port, packet, send_packet_in_miss, p);
+    } else {
+        ofpbuf_delete(packet);
+    }
 }
 
 static void
@@ -3160,7 +3182,7 @@ send_flow_exp(struct ofproto *p, struct rule *rule,
     LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
         if (ofconn->send_flow_exp && rconn_is_connected(ofconn->rconn)) {
             if (prev) {
-                queue_tx(ofpbuf_clone(buf), prev, ofconn->reply_counter);
+                queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
             } else {
                 buf = compose_flow_exp(rule, now, reason);
             }
@@ -3168,7 +3190,7 @@ send_flow_exp(struct ofproto *p, struct rule *rule,
         }
     }
     if (prev) {
-        queue_tx(buf, prev, ofconn->reply_counter);
+        queue_tx(buf, prev, prev->reply_counter);
     }
 }
 
@@ -3267,25 +3289,22 @@ static void
 do_send_packet_in(struct ofconn *ofconn, uint32_t buffer_id,
                   const struct ofpbuf *packet, int send_len)
 {
-    struct ofp_packet_in *opi;
-    struct ofpbuf payload, *buf;
-    struct odp_msg *msg;
+    struct odp_msg *msg = packet->data;
+    struct ofpbuf payload;
+    struct ofpbuf *opi;
+    uint8_t reason;
 
-    msg = packet->data;
+    /* Extract packet payload from 'msg'. */
     payload.data = msg + 1;
     payload.size = msg->length - sizeof *msg;
 
-    send_len = MIN(send_len, payload.size);
-    buf = ofpbuf_new(sizeof *opi + send_len);
-    opi = put_openflow_xid(offsetof(struct ofp_packet_in, data),
-                           OFPT_PACKET_IN, 0, buf);
-    opi->buffer_id = htonl(buffer_id);
-    opi->total_len = htons(payload.size);
-    opi->in_port = htons(odp_port_to_ofp_port(msg->port));
-    opi->reason = msg->type == _ODPL_ACTION_NR ? OFPR_ACTION : OFPR_NO_MATCH;
-    ofpbuf_put(buf, payload.data, MIN(send_len, payload.size));
-    update_openflow_length(buf);
-    rconn_send_with_limit(ofconn->rconn, buf, ofconn->packet_in_counter, 100);
+    /* Construct ofp_packet_in message. */
+    reason = msg->type == _ODPL_ACTION_NR ? OFPR_ACTION : OFPR_NO_MATCH;
+    opi = make_packet_in(buffer_id, odp_port_to_ofp_port(msg->port), reason,
+                         &payload, send_len);
+
+    /* Send. */
+    rconn_send_with_limit(ofconn->rconn, opi, ofconn->packet_in_counter, 100);
 }
 
 static void
@@ -3308,6 +3327,7 @@ static void
 send_packet_in_miss(struct ofpbuf *packet, void *p_)
 {
     struct ofproto *p = p_;
+    bool in_fail_open = p->fail_open && fail_open_is_active(p->fail_open);
     struct ofconn *ofconn;
     struct ofpbuf payload;
     struct odp_msg *msg;
@@ -3317,8 +3337,10 @@ send_packet_in_miss(struct ofpbuf *packet, void *p_)
     payload.size = msg->length - sizeof *msg;
     LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
         if (ofconn->miss_send_len) {
-            uint32_t buffer_id = pktbuf_save(ofconn->pktbuf, &payload,
-                                             msg->port);
+            struct pktbuf *pb = ofconn->pktbuf;
+            uint32_t buffer_id = (in_fail_open
+                                  ? pktbuf_get_null()
+                                  : pktbuf_save(pb, &payload, msg->port));
             int send_len = (buffer_id != UINT32_MAX ? ofconn->miss_send_len
                             : UINT32_MAX);
             do_send_packet_in(ofconn, buffer_id, packet, send_len);

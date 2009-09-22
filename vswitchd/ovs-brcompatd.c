@@ -495,7 +495,7 @@ del_port(const char *br_name, const char *port_name)
 {
     cfg_del_entry("bridge.%s.port=%s", br_name, port_name);
     cfg_del_match("bonding.*.slave=%s", port_name);
-    cfg_del_match("vlan.%s.*", port_name);
+    cfg_del_match("vlan.%s.[!0-9]*", port_name);
 }
 
 static int

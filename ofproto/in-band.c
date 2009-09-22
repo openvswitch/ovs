@@ -43,18 +43,168 @@
 #define THIS_MODULE VLM_in_band
 #include "vlog.h"
 
+/* In-band control allows a single network to be used for OpenFlow
+ * traffic and other data traffic.  Refer to ovs-vswitchd.conf(5) and 
+ * secchan(8) for a description of configuring in-band control.
+ *
+ * This comment is an attempt to describe how in-band control works at a
+ * wire- and implementation-level.  Correctly implementing in-band
+ * control has proven difficult due to its many subtleties, and has thus
+ * gone through many iterations.  Please read through and understand the
+ * reasoning behind the chosen rules before making modifications.
+ *
+ * In Open vSwitch, in-band control is implemented as "hidden" flows (in
+ * that they are not visible through OpenFlow) and at a higher priority
+ * than wildcarded flows can be setup by the controller.  This is done 
+ * so that the controller cannot interfere with them and possibly break 
+ * connectivity with its switches.  It is possible to see all flows, 
+ * including in-band ones, with the ovs-appctl "bridge/dump-flows" 
+ * command.
+ *
+ * The following rules are always enabled with the "normal" action by a 
+ * switch with in-band control:
+ *
+ *    a. DHCP requests sent from the local port.
+ *    b. ARP replies to the local port's MAC address.
+ *    c. ARP requests from the local port's MAC address.
+ *    d. ARP replies to the remote side's MAC address.  Note that the 
+ *       remote side is either the controller or the gateway to reach 
+ *       the controller.
+ *    e. ARP requests from the remote side's MAC address.  Note that
+ *       like (d), the MAC is either for the controller or gateway.
+ *    f. ARP replies containing the controller's IP address as a target.
+ *    g. ARP requests containing the controller's IP address as a source.
+ *    h. OpenFlow (6633/tcp) traffic to the controller's IP.
+ *    i. OpenFlow (6633/tcp) traffic from the controller's IP.
+ *
+ * The goal of these rules is to be as narrow as possible to allow a
+ * switch to join a network and be able to communicate with a
+ * controller.  As mentioned earlier, these rules have higher priority
+ * than the controller's rules, so if they are too broad, they may 
+ * prevent the controller from implementing its policy.  As such,
+ * in-band actively monitors some aspects of flow and packet processing
+ * so that the rules can be made more precise.
+ *
+ * In-band control monitors attempts to add flows into the datapath that
+ * could interfere with its duties.  The datapath only allows exact
+ * match entries, so in-band control is able to be very precise about
+ * the flows it prevents.  Flows that miss in the datapath are sent to
+ * userspace to be processed, so preventing these flows from being
+ * cached in the "fast path" does not affect correctness.  The only type 
+ * of flow that is currently prevented is one that would prevent DHCP 
+ * replies from being seen by the local port.  For example, a rule that 
+ * forwarded all DHCP traffic to the controller would not be allowed, 
+ * but one that forwarded to all ports (including the local port) would.
+ *
+ * As mentioned earlier, packets that miss in the datapath are sent to
+ * the userspace for processing.  The userspace has its own flow table,
+ * the "classifier", so in-band checks whether any special processing 
+ * is needed before the classifier is consulted.  If a packet is a DHCP 
+ * response to a request from the local port, the packet is forwarded to 
+ * the local port, regardless of the flow table.  Note that this requires 
+ * L7 processing of DHCP replies to determine whether the 'chaddr' field 
+ * matches the MAC address of the local port.
+ *
+ * It is interesting to note that for an L3-based in-band control
+ * mechanism, the majority of rules are devoted to ARP traffic.  At first 
+ * glance, some of these rules appear redundant.  However, each serves an 
+ * important role.  First, in order to determine the MAC address of the 
+ * remote side (controller or gateway) for other ARP rules, we must allow 
+ * ARP traffic for our local port with rules (b) and (c).  If we are 
+ * between a switch and its connection to the controller, we have to 
+ * allow the other switch's ARP traffic to through.  This is done with 
+ * rules (d) and (e), since we do not know the addresses of the other
+ * switches a priori, but do know the controller's or gateway's.  Finally, 
+ * if the controller is running in a local guest VM that is not reached 
+ * through the local port, the switch that is connected to the VM must 
+ * allow ARP traffic based on the controller's IP address, since it will 
+ * not know the MAC address of the local port that is sending the traffic 
+ * or the MAC address of the controller in the guest VM.
+ *
+ * With a few notable exceptions below, in-band should work in most
+ * network setups.  The following are considered "supported' in the
+ * current implementation: 
+ *
+ *    - Locally Connected.  The switch and controller are on the same
+ *      subnet.  This uses rules (a), (b), (c), (h), and (i).
+ *
+ *    - Reached through Gateway.  The switch and controller are on
+ *      different subnets and must go through a gateway.  This uses
+ *      rules (a), (b), (c), (h), and (i).
+ *
+ *    - Between Switch and Controller.  This switch is between another
+ *      switch and the controller, and we want to allow the other
+ *      switch's traffic through.  This uses rules (d), (e), (h), and
+ *      (i).  It uses (b) and (c) indirectly in order to know the MAC
+ *      address for rules (d) and (e).  Note that DHCP for the other
+ *      switch will not work unless the controller explicitly lets this 
+ *      switch pass the traffic.
+ *
+ *    - Between Switch and Gateway.  This switch is between another
+ *      switch and the gateway, and we want to allow the other switch's
+ *      traffic through.  This uses the same rules and logic as the
+ *      "Between Switch and Controller" configuration described earlier.
+ *
+ *    - Controller on Local VM.  The controller is a guest VM on the
+ *      system running in-band control.  This uses rules (a), (b), (c), 
+ *      (h), and (i).
+ *
+ *    - Controller on Local VM with Different Networks.  The controller
+ *      is a guest VM on the system running in-band control, but the
+ *      local port is not used to connect to the controller.  For
+ *      example, an IP address is configured on eth0 of the switch.  The
+ *      controller's VM is connected through eth1 of the switch, but an
+ *      IP address has not been configured for that port on the switch.
+ *      As such, the switch will use eth0 to connect to the controller,
+ *      and eth1's rules about the local port will not work.  In the
+ *      example, the switch attached to eth0 would use rules (a), (b), 
+ *      (c), (h), and (i) on eth0.  The switch attached to eth1 would use 
+ *      rules (f), (g), (h), and (i).
+ *
+ * The following are explicitly *not* supported by in-band control:
+ *
+ *    - Specify Controller by Name.  Currently, the controller must be 
+ *      identified by IP address.  A naive approach would be to permit
+ *      all DNS traffic.  Unfortunately, this would prevent the
+ *      controller from defining any policy over DNS.  Since switches
+ *      that are located behind us need to connect to the controller, 
+ *      in-band cannot simply add a rule that allows DNS traffic from
+ *      the local port.  The "correct" way to support this is to parse
+ *      DNS requests to allow all traffic related to a request for the
+ *      controller's name through.  Due to the potential security
+ *      problems and amount of processing, we decided to hold off for
+ *      the time-being.
+ *
+ *    - Multiple Controllers.  There is nothing intrinsic in the high-
+ *      level design that prevents using multiple (known) controllers, 
+ *      however, the current implementation's data structures assume
+ *      only one.
+ *
+ *    - Differing Controllers for Switches.  All switches must know
+ *      the L3 addresses for all the controllers that other switches 
+ *      may use, since rules need to be setup to allow traffic related 
+ *      to those controllers through.  See rules (f), (g), (h), and (i).
+ *
+ *    - Differing Routes for Switches.  In order for the switch to 
+ *      allow other switches to connect to a controller through a 
+ *      gateway, it allows the gateway's traffic through with rules (d)
+ *      and (e).  If the routes to the controller differ for the two
+ *      switches, we will not know the MAC address of the alternate 
+ *      gateway.
+ */
+
 #define IB_BASE_PRIORITY 18181800
 
 enum {
-    IBR_FROM_LOCAL_DHCP,          /* From local port, DHCP. */
-    IBR_TO_LOCAL_ARP,             /* To local port, ARP. */
-    IBR_FROM_LOCAL_ARP,           /* From local port, ARP. */
-    IBR_TO_REMOTE_ARP,            /* To remote MAC, ARP. */
-    IBR_FROM_REMOTE_ARP,          /* From remote MAC, ARP. */
-    IBR_TO_CTL_ARP,               /* To controller IP, ARP. */
-    IBR_FROM_CTL_ARP,             /* From controller IP, ARP. */
-    IBR_TO_CTL_OFP,               /* To controller, OpenFlow port. */
-    IBR_FROM_CTL_OFP,             /* From controller, OpenFlow port. */
+    IBR_FROM_LOCAL_DHCP,          /* (a) From local port, DHCP. */
+    IBR_TO_LOCAL_ARP,             /* (b) To local port, ARP. */
+    IBR_FROM_LOCAL_ARP,           /* (c) From local port, ARP. */
+    IBR_TO_REMOTE_ARP,            /* (d) To remote MAC, ARP. */
+    IBR_FROM_REMOTE_ARP,          /* (e) From remote MAC, ARP. */
+    IBR_TO_CTL_ARP,               /* (f) To controller IP, ARP. */
+    IBR_FROM_CTL_ARP,             /* (g) From controller IP, ARP. */
+    IBR_TO_CTL_OFP,               /* (h) To controller, OpenFlow port. */
+    IBR_FROM_CTL_OFP,             /* (i) From controller, OpenFlow port. */
 #if OFP_TCP_PORT != OFP_SSL_PORT
 #error Need to support separate TCP and SSL flows.
 #endif
