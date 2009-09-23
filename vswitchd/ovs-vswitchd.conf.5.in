@@ -546,6 +546,19 @@ These settings configure how the switch applies a ``token
 bucket'' to limit the rate at which packets in unknown flows are
 forwarded to the OpenFlow controller for flow-setup processing.  This
 feature prevents a single bridge from overwhelming a controller.
+.PP
+In addition, when a high rate triggers rate-limiting,
+\fBovs\-vswitchd\fR queues controller packets for each port and
+transmits them to the controller at the configured rate.  The number
+of queued packets is limited by a ``burst size'' parameter.  The
+packet queue is shared fairly among the ports on a bridge.
+.PP
+\fBovs\-vswitchd\fR maintains two such packet rate-limiters per
+bridge.  One of these applies to packets sent up to the controller
+because they do not correspond to any flow.  The other applies to
+packets sent up to the controller by request through flow actions.
+When both rate-limiters are filled with packets, the actual rate that
+packets are sent to the controller is up to twice the specified rate.
 .IP "\fBbridge.\fIname\fB.controller.rate-limit=\fIrate\fR"
 .IQ "\fBmgmt.rate-limit=\fIrate\fR"
 Limits the maximum rate at which packets will be forwarded to the
