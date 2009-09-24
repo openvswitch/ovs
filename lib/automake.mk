@@ -8,6 +8,8 @@
 noinst_LIBRARIES += lib/libopenvswitch.a
 
 lib_libopenvswitch_a_SOURCES = \
+	lib/aes128.c \
+	lib/aes128.h \
 	lib/backtrace.c \
 	lib/backtrace.h \
 	lib/bitmap.c \
@@ -107,6 +109,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/timeval.c \
 	lib/timeval.h \
 	lib/type-props.h \
+	lib/uuid.c \
+	lib/uuid.h \
 	lib/unixctl.c \
 	lib/unixctl.h \
 	lib/unicode.c \

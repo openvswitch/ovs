@@ -8,6 +8,8 @@ TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/lcov-pre.at \
 	tests/library.at \
+	tests/aes128.at \
+	tests/uuid.at \
 	tests/json.at \
 	tests/timeval.at \
 	tests/lockfile.at \
@@ -39,6 +41,10 @@ $(srcdir)/package.m4: $(top_srcdir)/configure.ac
 	  echo 'm4_define([AT_PACKAGE_STRING],    [@PACKAGE_STRING@])' && \
 	  echo 'm4_define([AT_PACKAGE_BUGREPORT], [@PACKAGE_BUGREPORT@])'; \
 	} >'$(srcdir)/package.m4'
+
+noinst_PROGRAMS += tests/test-aes128
+tests_test_aes128_SOURCES = tests/test-aes128.c
+tests_test_aes128_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-classifier
 tests_test_classifier_SOURCES = tests/test-classifier.c
@@ -91,6 +97,10 @@ tests_test_dhcp_client_LDADD = lib/libopenvswitch.a $(FAULT_LIBS)
 noinst_PROGRAMS += tests/test-stp
 tests_test_stp_SOURCES = tests/test-stp.c
 tests_test_stp_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-uuid
+tests_test_uuid_SOURCES = tests/test-uuid.c
+tests_test_uuid_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-vconn
 tests_test_vconn_SOURCES = tests/test-vconn.c
