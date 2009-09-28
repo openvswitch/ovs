@@ -29,7 +29,7 @@ Description: Open vSwitch common components
 Package: openvswitch-switch
 Architecture: any
 Suggests: openvswitch-datapath-module
-Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common, dhcp3-client, module-init-tools, dmidecode, procps, debianutils
+Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (= ${source:Version}), dhcp3-client, module-init-tools, dmidecode, procps, debianutils
 Description: Open vSwitch switch implementations
  openvswitch-switch provides the userspace components and utilities for
  the Open vSwitch kernel-based switch.  
@@ -38,7 +38,7 @@ Description: Open vSwitch switch implementations
 
 Package: openvswitch-switch-config
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-switch, libwww-perl, libdigest-sha1-perl
+Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-switch (= ${source:Version}), libwww-perl, libdigest-sha1-perl
 Description: Open vSwitch switch implementations
  openvswitch-switch-config provides a utility for interactively configuring
  the Open vSwitch switch provided in the openvswitch-switch package.
@@ -61,7 +61,7 @@ Description: Monitoring utility for OpenFlow switches
 
 Package: openvswitch-pki
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common
+Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (= ${source:Version})
 Description: Open vSwitch public key infrastructure
  openvswitch-pki provides PKI (public key infrastructure) support for
  Open vSwitch switches and controllers, reducing the risk of
@@ -71,7 +71,7 @@ Description: Open vSwitch public key infrastructure
 
 Package: openvswitch-pki-server
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, openvswitch-pki, apache2
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, openvswitch-pki (= ${source:Version}), apache2
 Description: Open vSwitch public key infrastructure (HTTP server support)
  openvswitch-pki-server provides HTTP access to the Open vSwitch PKI (public
  key infrastructure) maintained on the local machine by the
@@ -83,7 +83,7 @@ Description: Open vSwitch public key infrastructure (HTTP server support)
 
 Package: openvswitch-controller
 Architecture: any
-Depends: ${shlibs:Depends}, openvswitch-common, openvswitch-pki
+Depends: ${shlibs:Depends}, openvswitch-common (= ${source:Version}), openvswitch-pki (= ${source:Version})
 Description: Open vSwitch controller implementation
  The Open vSwitch controller enables OpenFlow switches that connect to it
  to act as MAC-learning Ethernet switches.
