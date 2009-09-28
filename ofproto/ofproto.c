@@ -292,7 +292,7 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     dpif_recv_purge(dpif);
 
     /* Initialize settings. */
-    p = xcalloc(1, sizeof *p);
+    p = xzalloc(sizeof *p);
     p->fallback_dpid = pick_fallback_dpid();
     p->datapath_id = p->fallback_dpid;
     p->manufacturer = xstrdup("Nicira Networks, Inc.");
@@ -1389,7 +1389,7 @@ rule_create(struct rule *super,
             const union ofp_action *actions, size_t n_actions,
             uint16_t idle_timeout, uint16_t hard_timeout)
 {
-    struct rule *rule = xcalloc(1, sizeof *rule);
+    struct rule *rule = xzalloc(sizeof *rule);
     rule->idle_timeout = idle_timeout;
     rule->hard_timeout = hard_timeout;
     rule->used = rule->created = time_msec();
@@ -2427,7 +2427,7 @@ query_stats(struct ofproto *p, struct rule *rule,
     byte_count = rule->byte_count;
 
     n_odp_flows = rule->cr.wc.wildcards ? list_size(&rule->list) : 1;
-    odp_flows = xcalloc(1, n_odp_flows * sizeof *odp_flows);
+    odp_flows = xzalloc(n_odp_flows * sizeof *odp_flows);
     if (rule->cr.wc.wildcards) {
         size_t i = 0;
         LIST_FOR_EACH (subrule, struct rule, list, &rule->list) {

@@ -446,7 +446,7 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
         }
     }
 
-    rule = xcalloc(1, sizeof *rule);
+    rule = xzalloc(sizeof *rule);
     cls_rule_from_flow(&rule->cls_rule, &flow, wildcards,
                        !wildcards ? UINT_MAX : priority);
     return rule;

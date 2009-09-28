@@ -964,7 +964,7 @@ bridge_create(const char *name)
     int error;
 
     assert(!bridge_lookup(name));
-    br = xcalloc(1, sizeof *br);
+    br = xzalloc(sizeof *br);
 
     error = dpif_create(name, &br->dpif);
     if (error == EEXIST || error == EBUSY) {
@@ -2838,7 +2838,7 @@ port_create(struct bridge *br, const char *name)
 {
     struct port *port;
 
-    port = xcalloc(1, sizeof *port);
+    port = xzalloc(sizeof *port);
     port->bridge = br;
     port->port_idx = br->n_ports;
     port->vlan = -1;
@@ -3191,7 +3191,7 @@ iface_create(struct port *port, const char *name)
 {
     struct iface *iface;
 
-    iface = xcalloc(1, sizeof *iface);
+    iface = xzalloc(sizeof *iface);
     iface->port = port;
     iface->port_ifidx = port->n_ifaces;
     iface->name = xstrdup(name);
@@ -3398,7 +3398,7 @@ mirror_create(struct bridge *br, const char *name)
     VLOG_INFO("created port mirror %s on bridge %s", name, br->name);
     bridge_flush(br);
 
-    br->mirrors[i] = m = xcalloc(1, sizeof *m);
+    br->mirrors[i] = m = xzalloc(sizeof *m);
     m->bridge = br;
     m->idx = i;
     m->name = xstrdup(name);

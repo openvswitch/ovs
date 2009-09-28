@@ -102,7 +102,7 @@ discovery_create(const char *re, bool update_resolv_conf,
     char local_name[IF_NAMESIZE];
     int error;
 
-    d = xcalloc(1, sizeof *d);
+    d = xzalloc(sizeof *d);
 
     /* Controller regular expression. */
     error = discovery_set_accept_controller_re(d, re);

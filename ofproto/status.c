@@ -177,7 +177,7 @@ switch_status_cb(struct status_reply *sr, void *ss_)
 struct switch_status *
 switch_status_create(const struct ofproto *ofproto)
 {
-    struct switch_status *ss = xcalloc(1, sizeof *ss);
+    struct switch_status *ss = xzalloc(sizeof *ss);
     ss->booted = time_now();
     list_init(&ss->categories);
     ss->config_cat = switch_status_register(ss, "config", config_status_cb,

@@ -193,7 +193,7 @@ index 32647ea..00cffbc 100644
      /* Get rid of deleted bridges and add new bridges. */
      svec_sort(&old_br);
 @@ -793,7 +780,7 @@ bridge_create(const char *name)
-     br = xcalloc(1, sizeof *br);
+     br = xzalloc(sizeof *br);
  
      error = dpif_create(name, &br->dpif);
 -    if (error == EEXIST) {

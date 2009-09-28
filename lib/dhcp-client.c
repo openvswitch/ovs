@@ -172,7 +172,7 @@ dhclient_create(const char *netdev_name,
         return error;
     }
 
-    cli = xcalloc(1, sizeof *cli);
+    cli = xzalloc(sizeof *cli);
     cli->modify_request = modify_request;
     cli->validate_offer = validate_offer;
     cli->aux = aux;

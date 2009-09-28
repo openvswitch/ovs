@@ -176,7 +176,7 @@ rconn_new_from_vconn(const char *name, struct vconn *vconn)
 struct rconn *
 rconn_create(int probe_interval, int max_backoff)
 {
-    struct rconn *rc = xcalloc(1, sizeof *rc);
+    struct rconn *rc = xzalloc(sizeof *rc);
 
     rc->state = S_VOID;
     rc->state_entered = time_now();

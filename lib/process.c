@@ -161,7 +161,7 @@ process_register(const char *name, pid_t pid)
 
     assert(sigchld_is_blocked());
 
-    p = xcalloc(1, sizeof *p);
+    p = xzalloc(sizeof *p);
     p->pid = pid;
     slash = strrchr(name, '/');
     p->name = xstrdup(slash ? slash + 1 : name);

@@ -203,7 +203,7 @@ netdev_linux_open(const char *name, char *suffix, int ethertype,
     int error;
 
     /* Allocate network device. */
-    netdev = xcalloc(1, sizeof *netdev);
+    netdev = xzalloc(sizeof *netdev);
     netdev_init(&netdev->netdev, suffix, &netdev_linux_class);
     netdev->netdev_fd = -1;
     netdev->tap_fd = -1;

@@ -624,7 +624,7 @@ in_band_create(struct ofproto *ofproto, struct dpif *dpif,
         return error;
     }
 
-    in_band = xcalloc(1, sizeof *in_band);
+    in_band = xzalloc(sizeof *in_band);
     in_band->ofproto = ofproto;
     in_band->controller = controller;
     in_band->ss_cat = switch_status_register(ss, "in-band",

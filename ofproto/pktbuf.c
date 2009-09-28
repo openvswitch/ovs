@@ -63,7 +63,7 @@ pktbuf_capacity(void)
 struct pktbuf *
 pktbuf_create(void)
 {
-    return xcalloc(1, sizeof *pktbuf_create());
+    return xzalloc(sizeof *pktbuf_create());
 }
 
 void

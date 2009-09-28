@@ -471,7 +471,7 @@ executer_create(const char *command_acl, const char *command_dir,
         return errno;
     }
 
-    e = xcalloc(1, sizeof *e);
+    e = xzalloc(sizeof *e);
     e->command_acl = xstrdup(command_acl);
     e->command_dir = (command_dir
                       ? xstrdup(command_dir)

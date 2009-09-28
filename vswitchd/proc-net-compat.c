@@ -256,7 +256,7 @@ proc_net_compat_update_vlan(const char *tagged_dev, const char *trunk_dev,
         }
         if (!vlan) {
             /* Create a new compat_vlan for (trunk_dev,vid). */
-            vlan = xcalloc(1, sizeof *vlan);
+            vlan = xzalloc(sizeof *vlan);
             vlan->trunk_dev = xstrdup(trunk_dev);
             vlan->vid = vid;
             vlan->vlan_dev = xasprintf("%s.%d", trunk_dev, vid);

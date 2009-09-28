@@ -110,7 +110,7 @@ lswitch_create(struct rconn *rconn, bool learn_macs, int max_idle)
     struct lswitch *sw;
     size_t i;
 
-    sw = xcalloc(1, sizeof *sw);
+    sw = xzalloc(sizeof *sw);
     sw->max_idle = max_idle;
     sw->datapath_id = 0;
     sw->last_features_request = time_now() - 1;

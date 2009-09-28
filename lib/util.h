@@ -98,6 +98,7 @@ void ovs_print_version(char *date, char *time,
 void out_of_memory(void) NO_RETURN;
 void *xmalloc(size_t) MALLOC_LIKE;
 void *xcalloc(size_t, size_t) MALLOC_LIKE;
+void *xzalloc(size_t) MALLOC_LIKE;
 void *xrealloc(void *, size_t);
 void *xmemdup(const void *, size_t) MALLOC_LIKE;
 char *xmemdup0(const char *, size_t) MALLOC_LIKE;

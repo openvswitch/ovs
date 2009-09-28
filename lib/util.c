@@ -43,6 +43,12 @@ xcalloc(size_t count, size_t size)
 }
 
 void *
+xzalloc(size_t size)
+{
+    return xcalloc(1, size);
+}
+
+void *
 xmalloc(size_t size) 
 {
     void *p = malloc(size ? size : 1);

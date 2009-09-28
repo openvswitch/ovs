@@ -1247,7 +1247,7 @@ allocate_message(struct message **msgp)
 {
     if (!*msgp) {
         /* Allocate and initialize message. */
-        *msgp = xcalloc(1, sizeof **msgp);
+        *msgp = xzalloc(sizeof **msgp);
         (*msgp)->index = n_messages;
 
         /* Add to list of messages. */

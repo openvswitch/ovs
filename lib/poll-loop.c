@@ -253,7 +253,7 @@ poll_cancel(struct poll_waiter *pw)
 static struct poll_waiter *
 new_waiter(int fd, short int events)
 {
-    struct poll_waiter *waiter = xcalloc(1, sizeof *waiter);
+    struct poll_waiter *waiter = xzalloc(sizeof *waiter);
     assert(fd >= 0);
     waiter->fd = fd;
     waiter->events = events;

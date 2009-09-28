@@ -219,7 +219,7 @@ create_dp_netdev(const char *name, int dp_idx, struct dpif **dpifp)
     }
 
     /* Create datapath. */
-    dp_netdevs[dp_idx] = dp = xcalloc(1, sizeof *dp);
+    dp_netdevs[dp_idx] = dp = xzalloc(sizeof *dp);
     list_push_back(&dp_netdev_list, &dp->node);
     dp->dp_idx = dp_idx;
     dp->open_cnt = 0;
@@ -788,7 +788,7 @@ add_flow(struct dpif *dpif, struct odp_flow *odp_flow)
     struct dp_netdev_flow *flow;
     int error;
 
-    flow = xcalloc(1, sizeof *flow);
+    flow = xzalloc(sizeof *flow);
     flow->key = odp_flow->key;
     flow->key.reserved = 0;
 
