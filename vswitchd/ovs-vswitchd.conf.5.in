@@ -282,7 +282,14 @@ correctly pointed to port 1, with one that incorrectly points to port
 the end host to the Open vSwitch on port 2, instead of to the end host
 on port 1, disrupting connectivity.  If mirroring to a VLAN is desired
 in this scenario, then the physical switch must be replaced by one
-that learns Ethernet addresses on a per-VLAN basis.
+that learns Ethernet addresses on a per-VLAN basis.  In addition,
+learning should be disabled on the VLAN containing mirrored traffic.
+If this is not done then the intermediate switch will learn the MAC
+address of each end host from the mirrored traffic.  If packets being
+sent to that end host are also mirrored, then they will be dropped
+since the switch will attempt to send them out the input port.
+Disabling learning for the VLAN will cause the switch to correctly
+send the packet out all ports configured for that VLAN.
 .ST "Example"
 The following \fBovs\-vswitchd\fR configuration copies all frames received
 on \fBeth1\fR or \fBeth2\fR to \fBeth3\fR.
