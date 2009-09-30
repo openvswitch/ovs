@@ -7,9 +7,7 @@
 
 # Copyright (c) 2009 Nicira Networks.
 
-import logging
-log = logging.getLogger("vswitch-cfg-update")
-logging.basicConfig(filename="/var/log/vswitch-xsplugin.log", level=logging.DEBUG)
+from XSConsoleLog import *
 
 import os
 import socket
@@ -36,7 +34,7 @@ class VSwitchService:
         try:
             output = ShellPipe(["service", self.name, "version"]).Stdout()
         except StandardError, e:
-            log.error("version retrieval error: " + str(e))
+            XSLogError("vswitch version retrieval error: " + str(e))
             return "<unknown>"
         for line in output:
             if self.processname in line:
@@ -47,7 +45,7 @@ class VSwitchService:
         try:
             output = ShellPipe(["service", self.name, "status"]).Stdout()
         except StandardError, e:
-            log.error("status retrieval error: " + str(e))
+            XSLogError("vswitch status retrieval error: " + str(e))
             return "<unknown>"
         if len(output) == 0:
             return "<unknown>"
@@ -66,7 +64,7 @@ class VSwitchService:
         try:
             ShellPipe(["service", self.name, "restart"]).Call()
         except StandardError, e:
-            log.error("restart error: " + str(e))
+            XSLogError("vswitch restart error: " + str(e))
 
     @classmethod
     def Inst(cls, name, processname=None):
@@ -85,7 +83,7 @@ class VSwitchConfig:
             output = ShellPipe([cfg_mod, "-vANY:console:emer", "-F", 
                     vswitchd_cfg_filename, "-q", key]).Stdout()
         except StandardError, e:
-            log.error("config retrieval error: " + str(e))
+            XSLogError("config retrieval error: " + str(e))
             return "<unknown>"
 
         if len(output) == 0:
