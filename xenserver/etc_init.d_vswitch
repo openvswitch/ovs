@@ -24,8 +24,8 @@
 test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 
 # General config variables in /etc/sysconfig/vswitch
-: ${ENABLE_BRCOMPAT:=y}
-: ${ENABLE_FAKE_PROC_NET:=y}
+: ${ENABLE_BRCOMPAT:=n}
+: ${ENABLE_FAKE_PROC_NET:=n}
 : ${FORCE_COREFILES:=y}
 
 # Config variables specific to ovs-vswitchd
@@ -89,7 +89,7 @@ function insert_modules_if_required {
         action "Inserting llc module" modprobe llc
         action "Inserting openvswitch module" modprobe openvswitch_mod
     fi
-    if [ -n "$BRCOMPATD_PIDFILE" ] && ! lsmod | grep -q "brcompat_mod"; then
+    if [ "$ENABLE_BRCOMPATD" = "y" ] && [ -n "$BRCOMPATD_PIDFILE" ] && ! lsmod | grep -q "brcompat_mod"; then
         action "Inserting brcompat module" modprobe brcompat_mod
     fi
 }
@@ -267,7 +267,9 @@ function start {
     fi
 
     start_vswitchd
-    start_brcompatd
+    if [ "${ENABLE_BRCOMPATD}" = "y" ] ; then
+	start_brcompatd
+    fi
     reload_vswitchd  # ensures ovs-vswitchd has fully read config file.
     touch /var/lock/subsys/vswitch
 }
