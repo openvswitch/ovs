@@ -492,9 +492,17 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
                            const uint8_t mac[ETH_ADDR_LEN])
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    int error = set_etheraddr(netdev_get_name(netdev_), ARPHRD_ETHER, mac);
-    if (!error) {
-        memcpy(netdev->cache->etheraddr, mac, ETH_ADDR_LEN);
+    int error;
+
+    if (!(netdev->cache->valid & VALID_ETHERADDR)
+        || !eth_addr_equals(netdev->cache->etheraddr, mac)) {
+        error = set_etheraddr(netdev_get_name(netdev_), ARPHRD_ETHER, mac);
+        if (!error) {
+            netdev->cache->valid |= VALID_ETHERADDR;
+            memcpy(netdev->cache->etheraddr, mac, ETH_ADDR_LEN);
+        }
+    } else {
+        error = 0;
     }
     return error;
 }
