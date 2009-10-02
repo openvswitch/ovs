@@ -370,7 +370,7 @@ netdev_linux_recv(struct netdev *netdev_, void *data, size_t size)
 
     if (netdev->tap_fd < 0) {
         /* Device was opened with NETDEV_ETH_TYPE_NONE. */
-        return EAGAIN;
+        return -EAGAIN;
     }
 
     for (;;) {
@@ -382,7 +382,7 @@ netdev_linux_recv(struct netdev *netdev_, void *data, size_t size)
                 VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
                              strerror(errno), netdev_get_name(netdev_));
             }
-            return errno;
+            return -errno;
         }
     }
 }
