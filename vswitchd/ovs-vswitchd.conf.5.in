@@ -22,10 +22,73 @@
 ovs\-vswitchd.conf \- configuration file for \fBovs\-vswitchd\fR
 .
 .SH DESCRIPTION
-This manual page describes the syntax for the configuration file used 
-by \fBovs\-vswitchd\fR(8), the virtual switch daemon.
+This manual page explains how to configure \fBovs\-vswitchd\fR, the
+Open vSwitch virtual switch daemon.  Refer to \fBovs\-vswitchd\fR(8)
+for instructions on how to start, stop, and control the virtual switch
+daemon and for an overview of its features.
+.SS "Overview"
+\fBovs\-vswitchd\fR configuration is hierarchical.
+.ST "Global Configuration"
+A few aspects of configuration apply to the entire \fBovs\-vswitchd\fR
+process:
+.IP \(bu
+Remote management (see \fBRemote Management\fR below).
+.IP \(bu
+SSL key and certificate configuration (see \fBSSL Configuration\fR
+below).
+.ST "Bridge Configuration"
+\fBovs\-vswitchd\fR manages one or more ``bridges.''  A bridge is,
+conceptually, an Ethernet switch.  Properties configurable at the
+bridge level include:
+.
+.IP \(bu
+The set of bridge ports (see \fBBridge Configuration\fR below).
+.IP \(bu
+Mirroring of packets across ports and VLANs (see \fBPort mirroring
+(SPAN and RSPAN)\fR below).
+.IP \(bu
+Flow logging via NetFlow (see \fBNetFlow v5 Flow Logging\fR below).
+.IP \(bu
+Connectivity to an OpenFlow controller (see \fBOpenFlow Controller
+Connectivity\fR below).
+.IP \(bu
+Addresses on which to listen for OpenFlow management connections (see
+\fBOpenFlow Management Connections\fR below) or for snooping on the
+connection to the primary OpenFlow controller (see \fBOpenFlow
+Controller Connection Snooping\fR below).
 .PP
-The configuration file is based on key-value pairs, which are given
+.ST "Port Configuration"
+Each bridge has one or more ``ports.''  The main configurable property
+of a port is its 802.1Q VLAN configuration (see \fB802.1Q VLAN
+support\fR below).
+.PP
+Most commonly, a port has exactly one ``interface.''  Such a port
+logically corresponds to a port on a physical Ethernet switch.
+.PP
+A port that has more than one interface is a ``bonded port.''  Bonding
+allows for load balancing and fail-over (see \fBNetwork Device
+Bonding\fR below).
+.ST "Interface Configuration"
+There are two different kinds of interfaces:
+.IP "``external interfaces''"
+These interfaces are ordinary network devices, e.g. \fBeth0\fR on
+Linux.
+.IP "``internal interfaces''"
+These interfaces are simulated network device that sent and receive
+traffic.  Every bridge has one internal interface called the ``local
+interface'' and may also have additional internal interfaces.  It does
+not make sense to bond an internal interface, so the terms ``port''
+and ``interface'' are often used imprecisely for internal interfaces.
+.PP
+Interfaces have a few configurable properties of their own:
+.IP \(bu
+Ingress rate-limiting (see \fBInterface Rate-Limiting\fR below).
+.IP \(bu
+Ethernet address (internal interfaces only, see \fBBridge
+Configuration\fR below).
+.SS "Configuration File Syntax"
+The \fBovs\-vswitchd\fR configuration file syntax is based on
+key-value pairs, which are given
 one per line in the form \fIkey\fB=\fIvalue\fR.  Each \fIkey\fR
 consists of one or more parts separated by dots,
 e.g. \fIpart1\fB.\fIpart2\fB.\fIpart3\fR.  Each \fIpart\fR may consist
@@ -53,16 +116,16 @@ the names of its network devices as values for key
 \fBbridge.\fIname\fB.port\fR.  (The specified \fIname\fR may not begin
 with \fBdp\fR or \fBnl:\fR followed by a digit.)
 .PP
-The names given on \fBbridge.\fIname\fB.port\fR must be the names of
-existing network devices, except for ``internal ports.''  An internal
-port is a simulated network device that receives traffic only
-through the virtual switch and switches any traffic sent it through
-virtual switch.  An internal port may configured with an IP address,
-etc. using the usual system tools (e.g. \fBifconfig\fR, \fBip\fR).  To
-designate network device \fInetdev\fR as an internal port, add
-\fBiface.\fInetdev\fB.internal=true\fR to the configuration file.
-\fBovs\-vswitchd\fR will honor this configuration setting by automatically
-creating the named internal port.
+To designate network device \fInetdev\fR as an internal port, add
+\fBiface.\fInetdev\fB.internal=true\fR to the configuration file,
+which causes \fBovs\-vswitchd\fR to automatically creates
+\fInetdev\fR, which may then be configured using the usual system
+tools (e.g. \fBifconfig\fR, \fBip\fR).  An internal interface by
+default has a random Ethernet address, but you may configure a
+specific address by setting \fBiface.\fInetdev\fB.mac\fR to a MAC
+address in the format
+\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR, where each
+\fIx\fR is a hex digit.
 .PP
 A bridge with a given \fIname\fR always has an internal port with the
 same \fIname\fR, called the ``local port.''  This network device may
@@ -307,16 +370,16 @@ mirror.mybr.a.output.port=eth3
         
 .fi
 .RE
-.SS "Port Rate-Limiting"
-Traffic policing and shaping are configured on physical ports.  Policing
+.SS "Interface Rate-Limiting"
+Traffic policing and shaping are configured on interfaces.  Policing
 defines a hard limit at which traffic that exceeds the specified rate is
 dropped.  Shaping uses queues to delay packets so that egress traffic
 leaves at the specified rate.
 
 .ST "Ingress Policing"
-The rate at which traffic is allowed to enter through a port may be 
+The rate at which traffic is allowed to enter through a interface may be 
 configured with ingress policing.  Note that "ingress" is from the 
-perspective of \fBovs\-vswitchd\fR.  If configured on a physical port, 
+perspective of \fBovs\-vswitchd\fR.  If configured on a physical interface, 
 then it limits the rate at which traffic is allowed into the system from 
 the outside.  If configured on a virtual interface that is connected to 
 a virtual machine, then it limits the rate at which the guest is able to 
@@ -326,9 +389,9 @@ The rate is specified in kilobits (1000 bits) per second with a maximum
 burst size specified in kilobits (1000 bits).  The burst size should be at 
 least the size of the interface's MTU.  
 
-A port may be configured to enforce ingress policing by defining the
+An interface may be configured to enforce ingress policing by defining the
 key \fBport.\fIname\fB.ingress.policing-rate\fR with an integer
-indicating the rate.  The port \fIname\fR will only allow traffic to be
+indicating the rate.  The interface \fIname\fR will only allow traffic to be
 received at the rate specified in kilobits per second.  If the rate is zero 
 or the key is not defined, then ingress policing is disabled.
 
@@ -338,7 +401,7 @@ indicating the burst rate in kilobits.  If the key is not supplied or is
 zero, then the default burst is 10 kilobits.
 
 .PP
-The following syntax limits port \fBeth1\fR to receiving traffic at
+The following syntax limits interface \fBeth1\fR to receiving traffic at
 \fB512\fR kilobits per second with a burst of \fB20\fR kilobits:
 .PP
 .RS

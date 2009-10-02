@@ -243,6 +243,7 @@ static struct iface *iface_lookup(const struct bridge *, const char *name);
 static struct iface *iface_from_dp_ifidx(const struct bridge *,
                                          uint16_t dp_ifidx);
 static bool iface_is_internal(const struct bridge *, const char *name);
+static void iface_set_mac(struct iface *);
 
 /* Hooks into ofproto processing. */
 static struct ofhooks bridge_ofhooks;
@@ -585,7 +586,16 @@ bridge_reconfigure(void)
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         for (i = 0; i < br->n_ports; i++) {
             struct port *port = br->ports[i];
+
             port_update_vlan_compat(port);
+
+            for (j = 0; j < port->n_ifaces; j++) {
+                struct iface *iface = port->ifaces[j];
+                if (iface->dp_ifidx != ODPP_LOCAL
+                    && iface_is_internal(br, iface->name)) {
+                    iface_set_mac(iface);
+                }
+            }
         }
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
@@ -3134,6 +3144,32 @@ iface_is_internal(const struct bridge *br, const char *iface)
     }
 
     return false;
+}
+
+/* Set Ethernet address of 'iface', if one is specified in the configuration
+ * file. */
+static void
+iface_set_mac(struct iface *iface)
+{
+    uint64_t mac = cfg_get_mac(0, "iface.%s.mac", iface->name);
+    if (mac) {
+        static uint8_t ea[ETH_ADDR_LEN];
+
+        eth_addr_from_uint64(mac, ea);
+        if (eth_addr_is_multicast(ea)) {
+            VLOG_ERR("interface %s: cannot set MAC to multicast address",
+                     iface->name);
+        } else if (iface->dp_ifidx == ODPP_LOCAL) {
+            VLOG_ERR("ignoring iface.%s.mac; use bridge.%s.mac instead",
+                     iface->name, iface->name);
+        } else {
+            int error = netdev_nodev_set_etheraddr(iface->name, ea);
+            if (error) {
+                VLOG_ERR("interface %s: setting MAC failed (%s)",
+                         iface->name, strerror(error));
+            }
+        }
+    }
 }
 
 /* Port mirroring. */
