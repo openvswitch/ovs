@@ -111,8 +111,6 @@ class VSwitchControllerDialogue(Dialogue):
                       lambda: self.getController()),
             ChoiceDef(Lang("Delete pool-wide controller"),
                       lambda: self.deleteController()),
-            ChoiceDef(Lang("Resync server controller config"),
-                      lambda: self.syncController()),
 #             ChoiceDef(Lang("Restart ovs-vswitchd"),
 #                       lambda: self.restartService("vswitch")),
 #             ChoiceDef(Lang("Restart ovs-brcompatd"),
@@ -211,21 +209,10 @@ class VSwitchControllerDialogue(Dialogue):
         except Exception, e:
             Layout.Inst().PushDialogue(InfoDialogue(Lang("Controller deletion failed")))
 
-    def syncController(self):
-        Layout.Inst().PopDialogue()
-        Layout.Inst().TransientBanner(Lang("Resyncing controller setting..."))
-        try:
-            Task.Sync(lambda s: self._updateThisServer(s))
-            Layout.Inst().PushDialogue(InfoDialogue(Lang("Resyncing controller config successful")))
-        except Exception, e:
-            Layout.Inst().PushDialogue(InfoDialogue(Lang("Resyncing controller config failed")))
-
     def SetController(self, ip):
         self.hostsInPool = 0
         self.hostsUpdated = 0
-        Task.Sync(lambda s: self._modifyPoolConfig(s, ip))
-        # Should be done asynchronously, maybe with an external script?
-        Task.Sync(lambda s: self._updateActiveServers(s))
+        Task.Sync(lambda s: self._modifyPoolConfig(s, ip or ""))
 
     def _modifyPoolConfig(self, session, value):
         """Modify pool configuration.
@@ -234,28 +221,13 @@ class VSwitchControllerDialogue(Dialogue):
         pools = session.xenapi.pool.get_all()
         # We assume there is only ever one pool...
         if len(pools) == 0:
-            raise XenAPIPlugin.Failure("NO_POOL_FOR_HOST", [])
+            XSLogFatal(Lang("No pool found for host."))
+            return
         if len(pools) > 1:
-            raise XenAPIPlugin.Failure("MORE_THAN_ONE_POOL_FOR_HOST", [])
+            XSLogFatal(Lang("More than one pool for host."))
+            return
         session.xenapi.pool.set_vswitch_controller(value)
         Data.Inst().Update()
-
-    def _updateActiveServers(self, session):
-        hosts = session.xenapi.host.get_all()
-        self.hostsUpdated = 0
-        self.hostsInPool = len(hosts)
-        self.UpdateFields()
-        for host in hosts:
-            Layout.Inst().TransientBanner("Updating host %d out of %d" 
-                    % (self.hostsUpdated + 1, self.hostsInPool))
-            session.xenapi.host.call_plugin(host, "vswitch-cfg-update", "update", {})
-            self.hostsUpdated = self.hostsUpdated + 1
-
-    def _updateThisServer(self, session):
-        data = Data.Inst()
-        host = data.host.opaqueref()
-        session.xenapi.host.call_plugin(host, "vswitch-cfg-update", "update", {})
-
 
 class XSFeatureVSwitch:
 
@@ -291,8 +263,8 @@ class XSFeatureVSwitch:
         inPane.NewLine()
         inPane.AddStatusField(Lang("ovs-vswitchd status", 20),
                               VSwitchService.Inst("vswitch", "ovs-vswitchd").status())
-        inPane.AddStatusField(Lang("ovs-brcompatd status", 20),
-                              VSwitchService.Inst("vswitch", "ovs-brcompatd").status())
+        #inPane.AddStatusField(Lang("ovs-brcompatd status", 20),
+        #                      VSwitchService.Inst("vswitch", "ovs-brcompatd").status())
 
         inPane.AddKeyHelpField( {
             Lang("<Enter>") : Lang("Reconfigure"),
