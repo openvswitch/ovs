@@ -569,7 +569,7 @@ make_openvswitch_device(int minor, char **fnp)
                          fn);
         } else if (s.st_rdev != dev) {
             VLOG_WARN_RL(&error_rl,
-                         "%s is device %u:%u instead of %u:%u, fixing",
+                         "%s is device %u:%u but should be %u:%u, fixing",
                          fn, major(s.st_rdev), minor(s.st_rdev),
                          major(dev), minor(dev));
         } else {
