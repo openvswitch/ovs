@@ -1930,9 +1930,21 @@ static void
 add_output_action(struct action_xlate_ctx *ctx, uint16_t port)
 {
     const struct ofport *ofport = port_array_get(&ctx->ofproto->ports, port);
-    if (!ofport || !(ofport->opp.config & OFPPC_NO_FWD)) {
-        odp_actions_add(ctx->out, ODPAT_OUTPUT)->output.port = port;
+
+    if (ofport) {
+        if (ofport->opp.config & OFPPC_NO_FWD) {
+            /* Forwarding disabled on port. */
+            return;
+        }
+    } else {
+        /*
+         * We don't have an ofport record for this port, but it doesn't hurt to
+         * allow forwarding to it anyhow.  Maybe such a port will appear later
+         * and we're pre-populating the flow table.
+         */
     }
+
+    odp_actions_add(ctx->out, ODPAT_OUTPUT)->output.port = port;
 }
 
 static struct rule *
