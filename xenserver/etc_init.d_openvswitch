@@ -384,7 +384,9 @@ function start {
     set_system_uuid
 
     start_vswitchd
-    start_brcompatd
+    if [ "${ENABLE_BRCOMPAT}" = "y" ] ; then
+        start_brcompatd
+    fi
     touch /var/lock/subsys/openvswitch
 }
 
@@ -423,7 +425,9 @@ case "$1" in
     status)
         status -p "$OVSDB_SERVER_PIDFILE" ovsdb-server
         status -p "$VSWITCHD_PIDFILE" ovs-vswitchd
-        status -p "$BRCOMPATD_PIDFILE" ovs-brcompatd
+        if [ "$ENABLE_BRCOMPAT" = "y" ] ; then
+            status -p ovs-brcompatd.pid ovs-brcompatd
+        fi
         ;;
     version)
         /usr/sbin/ovsdb-server -V
