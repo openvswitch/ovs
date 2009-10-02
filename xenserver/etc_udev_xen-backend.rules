@@ -1,0 +1,10 @@
+SUBSYSTEM=="xen-backend", KERNEL=="tap*", RUN+="/etc/xensource/scripts/tap $env{ACTION}"
+SUBSYSTEM=="xen-backend", KERNEL=="vbd*", RUN+="/etc/xensource/scripts/block $env{ACTION}"
+
+SUBSYSTEM=="xen-backend", KERNEL=="vif*", RUN+="/etc/xensource/scripts/vif $env{ACTION} vif"
+SUBSYSTEM=="net",         KERNEL=="tap*", RUN+="/etc/xensource/scripts/vif $env{ACTION} tap"
+
+KERNEL=="evtchn", NAME="xen/%k"
+
+# blktap devices created by blktapctrl
+KERNEL=="blktap[0-9]*", OPTIONS="ignore_device"

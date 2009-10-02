@@ -71,14 +71,14 @@ install -m 755 xenserver/opt_xensource_libexec_interface-reconfigure \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/interface-reconfigure
 install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/vif
-install -m 755 xenserver/usr_share_vswitch_scripts_dump-vif-details \
-               $RPM_BUILD_ROOT/usr/share/vswitch/scripts/dump-vif-details
 install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/xen-bugtool
 install -m 755 xenserver/usr_sbin_brctl \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/brctl
 install -m 755 xenserver/usr_share_vswitch_scripts_sysconfig.template \
          $RPM_BUILD_ROOT/usr/share/vswitch/scripts/sysconfig.template
+install -m 644 xenserver/etc_udev_xen-backend.rules \
+        $RPM_BUILD_ROOT/usr/share/vswitch/scripts/xen-backend.rules
 install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
                $RPM_BUILD_ROOT/usr/share/vswitch/scripts/XSFeatureVSwitch.py
@@ -121,6 +121,7 @@ ca141d60061dcfdade73e75abc6529b5  /usr/sbin/brctl
 b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
 51970ad613a3996d5997e18e44db47da  /opt/xensource/libexec/interface-reconfigure
 5654c8c36699fcc8744ca9cd5b855414  /usr/sbin/xen-bugtool
+883820a78723ee21340f31099b18f18e  /etc/udev/xen-backend.rules
 EOF
     then
         printf "\nVerified host scripts from XenServer 5.5.0.\n\n"
@@ -129,6 +130,7 @@ ca141d60061dcfdade73e75abc6529b5  /usr/sbin/brctl
 b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
 ce451d3c985fd1db6497a363f0d9dedb  /opt/xensource/libexec/interface-reconfigure
 2b53f500431fcba5276c896e9e4281b9  /usr/sbin/xen-bugtool
+883820a78723ee21340f31099b18f18e  /etc/udev/xen-backend.rules
 EOF
     then
         printf "\nVerified host scripts from XenServer 5.5.900.\n\n"
@@ -209,7 +211,8 @@ for f in \
     /opt/xensource/libexec/interface-reconfigure \
     /etc/xensource/scripts/vif \
     /usr/sbin/xen-bugtool \
-    /usr/sbin/brctl
+    /usr/sbin/brctl \
+    /etc/udev/xen-backend.rules
 do
     s=$(basename "$f")
     t=$(readlink "$f")
@@ -268,7 +271,8 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
         /opt/xensource/libexec/interface-reconfigure \
         /etc/xensource/scripts/vif \
         /usr/sbin/xen-bugtool \
-        /usr/sbin/brctl
+        /usr/sbin/brctl \
+        /etc/udev/xen-backend.rules
     do
         s=$(basename "$f")
         if [ ! -f "/usr/lib/vswitch/xs-original/$s" ]; then
@@ -303,13 +307,13 @@ fi
 /etc/profile.d/vswitch.sh
 /lib/modules/%{xen_version}/kernel/net/vswitch/openvswitch_mod.ko
 /lib/modules/%{xen_version}/kernel/net/vswitch/brcompat_mod.ko
-/usr/share/vswitch/scripts/dump-vif-details
 /usr/share/vswitch/scripts/interface-reconfigure
 /usr/share/vswitch/scripts/vif
 /usr/share/vswitch/scripts/xen-bugtool
 /usr/share/vswitch/scripts/XSFeatureVSwitch.py
 /usr/share/vswitch/scripts/brctl
 /usr/share/vswitch/scripts/sysconfig.template
+/usr/share/vswitch/scripts/xen-backend.rules
 # Following two files are generated automatically by rpm.  We don't
 # really need them and they won't be used on the XenServer, but there
 # isn't an obvious place to get rid of them since they are generated

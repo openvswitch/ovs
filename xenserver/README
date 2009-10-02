@@ -30,6 +30,10 @@ files are:
         vswitch-related shell functions for the administrator's
         convenience.
 
+    etc_udev_xen-backend.rules
+
+        udev rules for invoking the XenServer "vif" and "tap" scripts.
+
     etc_xapi.d_plugins_vswitch-cfg-update
 
         xapi plugin script to update the cache of configuration items
@@ -43,12 +47,6 @@ files are:
     opt_xensource_libexec_interface-reconfigure
 
         vswitch-aware replacement for Citrix script of the same name.
-
-    root_vswitch_scripts_dump-vif-details
-
-        Script to retrieve extended information about VIFs that are
-        needed by the controller.  This is called by the "vif" script,
-        which is run when virtual interfaces are added and removed.
 
     root_vswitch_scripts_sysconfig.template
 
