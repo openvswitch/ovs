@@ -268,7 +268,7 @@ function start {
 
     start_vswitchd
     if [ "${ENABLE_BRCOMPAT}" = "y" ] ; then
-	start_brcompatd
+        start_brcompatd
     fi
     reload_vswitchd  # ensures ovs-vswitchd has fully read config file.
     touch /var/lock/subsys/vswitch
@@ -311,7 +311,9 @@ case "$1" in
         ;;
     status)
         status -p ovs-vswitchd.pid ovs-vswitchd
-        status -p ovs-brcompatd.pid ovs-brcompatd
+        if [ "$ENABLE_BRCOMPAT" = "y" ] ; then
+            status -p ovs-brcompatd.pid ovs-brcompatd
+        fi
         ;;
     version)
         /usr/sbin/ovs-vswitchd -V
