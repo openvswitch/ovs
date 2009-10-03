@@ -2983,6 +2983,19 @@ port_update_bond_compat(struct port *port)
         memcpy(slave->mac, iface->mac, ETH_ADDR_LEN);
     }
 
+    if (cfg_get_bool(0, "bonding.%s.fake-iface", port->name)) {
+        struct netdev *bond_netdev;
+
+        if (!netdev_open(port->name, NETDEV_ETH_TYPE_NONE, &bond_netdev)) {
+            if (bond.up) {
+                netdev_turn_flags_on(bond_netdev, NETDEV_UP, true);
+            } else {
+                netdev_turn_flags_off(bond_netdev, NETDEV_UP, true);
+            }
+            netdev_close(bond_netdev);
+        }
+    }
+
     proc_net_compat_update_bond(port->name, &bond);
     free(bond.slaves);
 }
