@@ -36,6 +36,7 @@ shash_destroy(struct shash *sh)
 {
     if (sh) {
         shash_clear(sh);
+        hmap_destroy(&sh->map);
     }
 }
 
