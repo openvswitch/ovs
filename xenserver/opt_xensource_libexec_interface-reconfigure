@@ -1448,9 +1448,13 @@ def action_up(pif):
 
         for nwpif in db.get_pifs_by_device(db.get_pif_record(pif)['device']):
             rec = db.get_pif_record(nwpif)
-            if nwpif != pif and not rec['currently_attached']:
-                log("Network PIF %s not currently attached (%s)" % (rec['uuid'],pifrec['uuid']))
-                continue
+            
+            # When state is read from dbcache PIF.currently_attached
+            # is always assumed to be false... Err on the side of
+            # listing even detached networks for the time being.
+            #if nwpif != pif and not rec['currently_attached']:
+            #    log("Network PIF %s not currently attached (%s)" % (rec['uuid'],pifrec['uuid']))
+            #    continue
             nwrec = db.get_network_record(rec['network'])
             cfgmod_argv += ['--add=bridge.%s.xs-network-uuids=%s' % (bridge, nwrec['uuid'])]
 
@@ -1514,10 +1518,10 @@ def action_down(pif):
     ifdown(ipdev)
 
     if dp:
-        nw = db.get_pif_record(pif)['network']
-        nwrec = db.get_network_record(nw)
-        cfgmod_argv += ['# deconfigure xs-network-uuids']
-        cfgmod_argv += ['--del-entry=bridge.%s.xs-network-uuids=%s' % (bridge,nwrec['uuid'])]
+        #nw = db.get_pif_record(pif)['network']
+        #nwrec = db.get_network_record(nw)
+        #cfgmod_argv += ['# deconfigure xs-network-uuids']
+        #cfgmod_argv += ['--del-entry=bridge.%s.xs-network-uuids=%s' % (bridge,nwrec['uuid'])]
 
         log("deconfigure ipdev %s on %s" % (ipdev,bridge))
         cfgmod_argv += ["# deconfigure ipdev %s" % ipdev]
