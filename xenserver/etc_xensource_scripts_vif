@@ -12,6 +12,7 @@
 # Keep other-config/ keys in sync with device.ml:vif_udev_keys
 
 cfg_mod="/usr/bin/ovs-cfg-mod"
+vsctl="/usr/bin/ovs-vsctl"
 dump_vif_details="/usr/share/vswitch/scripts/dump-vif-details"
 service="/sbin/service"
 
@@ -70,13 +71,11 @@ add_to_bridge()
     fi
     logger -t scripts-vif "Adding ${vif} to ${bridge} with address ${address}"
 
-    vid=
-    if [ -e "/var/lib/openvswitch/br-$bridge" ]; then
-	. "/var/lib/openvswitch/br-$bridge"
-	if [ -n "$VLAN_SLAVE" -a -n "$VLAN_VID" ]; then
-	    bridge=$VLAN_SLAVE
-	    vid="--add=vlan.$vif.tag=$VLAN_VID"
-	fi
+    local VLAN_ID=$($vsctl br-to-vlan $bridge)
+    local vid=
+    if [ "$VLAN_ID" -ne 0 ] ; then
+	bridge=$($vsctl br-to-parent $bridge)
+	vid="--add=vlan.${dev}.tag=${VLAN_ID}"
     fi
 
     ${IP} link set "${vif}" down                        || logger -t scripts-vif "Failed to ip link set ${vif} down"

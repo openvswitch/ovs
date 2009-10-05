@@ -1473,17 +1473,6 @@ def action_up(pif):
         cfgmod_argv += ['--add=vlan.%s.tag=%s' % (ipdev, pifrec['VLAN'])]
         cfgmod_argv += ['--add=iface.%s.internal=true' % (ipdev)]
         cfgmod_argv += ['--add=iface.%s.fake-bridge=true' % (ipdev)]
-        if not os.path.exists(vswitch_state_dir):
-            os.mkdir(vswitch_state_dir)
-        br = ConfigurationFile("br-%s" % ipdev, vswitch_state_dir)
-        br.write("VLAN_SLAVE=%s\n" % bridge)
-        br.write("VLAN_VID=%s\n" % pifrec['VLAN'])
-        br.close()
-        f.attach_child(br)
-    else:
-        br = ConfigurationFile("br-%s" % ipdev, vswitch_state_dir)
-        br.unlink()
-        f.attach_child(br)
         
     # Apply updated configuration.
     try:
