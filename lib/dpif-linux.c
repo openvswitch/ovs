@@ -61,6 +61,7 @@ static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 static int do_ioctl(const struct dpif *, int cmd, const void *arg);
 static int lookup_minor(const char *name, int *minor);
 static int finish_open(struct dpif *, const char *local_ifname);
+static int get_openvswitch_major(void);
 static int create_minor(const char *name, int minor, struct dpif **dpifp);
 static int open_minor(int minor, struct dpif **dpifp);
 static int make_openvswitch_device(int minor, char **fnp);
@@ -77,8 +78,15 @@ dpif_linux_cast(const struct dpif *dpif)
 static int
 dpif_linux_enumerate(struct svec *all_dps)
 {
+    int major;
     int error;
     int i;
+
+    /* Check that the Open vSwitch module is loaded. */
+    major = get_openvswitch_major();
+    if (major < 0) {
+        return -major;
+    }
 
     error = 0;
     for (i = 0; i < ODP_MAX; i++) {
@@ -472,7 +480,7 @@ const struct dpif_class dpif_linux_class = {
 };
 
 static int get_openvswitch_major(void);
-static int get_major(const char *target, int default_major);
+static int get_major(const char *target);
 
 static int
 do_ioctl(const struct dpif *dpif_, int cmd, const void *arg)
@@ -541,10 +549,17 @@ error:
 static int
 make_openvswitch_device(int minor, char **fnp)
 {
-    dev_t dev = makedev(get_openvswitch_major(), minor);
     const char dirname[] = "/dev/net";
+    int major;
+    dev_t dev;
     struct stat s;
     char fn[128];
+
+    major = get_openvswitch_major();
+    if (major < 0) {
+        return -major;
+    }
+    dev = makedev(major, minor);
 
     *fnp = NULL;
     sprintf(fn, "%s/dp%d", dirname, minor);
@@ -554,7 +569,7 @@ make_openvswitch_device(int minor, char **fnp)
                          fn);
         } else if (s.st_rdev != dev) {
             VLOG_WARN_RL(&error_rl,
-                         "%s is device %u:%u instead of %u:%u, fixing",
+                         "%s is device %u:%u but should be %u:%u, fixing",
                          fn, major(s.st_rdev), minor(s.st_rdev),
                          major(dev), minor(dev));
         } else {
@@ -597,20 +612,20 @@ success:
     return 0;
 }
 
-
+/* Return the major device number of the Open vSwitch device.  If it
+ * cannot be determined, a negative errno is returned. */
 static int
 get_openvswitch_major(void)
 {
-    static unsigned int openvswitch_major;
-    if (!openvswitch_major) {
-        enum { DEFAULT_MAJOR = 248 };
-        openvswitch_major = get_major("openvswitch", DEFAULT_MAJOR);
+    static int openvswitch_major = -1;
+    if (openvswitch_major < 0) {
+        openvswitch_major = get_major("openvswitch");
     }
     return openvswitch_major;
 }
 
 static int
-get_major(const char *target, int default_major)
+get_major(const char *target)
 {
     const char fn[] = "/proc/devices";
     char line[128];
@@ -620,7 +635,7 @@ get_major(const char *target, int default_major)
     file = fopen(fn, "r");
     if (!file) {
         VLOG_ERR("opening %s failed (%s)", fn, strerror(errno));
-        goto error;
+        return -errno;
     }
 
     for (ln = 1; fgets(line, sizeof line, file); ln++) {
@@ -646,11 +661,8 @@ get_major(const char *target, int default_major)
         }
     }
 
-    VLOG_ERR("%s: %s major not found (is the module loaded?), using "
-             "default major %d", fn, target, default_major);
-error:
-    VLOG_INFO("using default major %d for %s", default_major, target);
-    return default_major;
+    VLOG_ERR("%s: %s major not found (is the module loaded?)", fn, target);
+    return -ENODEV;
 }
 
 static int

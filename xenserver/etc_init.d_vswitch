@@ -264,6 +264,14 @@ function start {
     if [ ! -e "$VSWITCHD_CONF" ]; then
         warning "$VSWITCHD_CONF does not exist"
         action "Creating empty $VSWITCHD_CONF" touch "$VSWITCHD_CONF"
+    elif [ ! -e /var/run/vswitch.booted ]; then
+        touch /var/run/vswitch.booted
+        /usr/bin/ovs-cfg-mod '-vANY:console:emer' -F "$VSWITCHD_CONF" \
+            '--del-match=bridge.*' \
+            '--del-match=port.*' \
+            '--del-match=bonding.*' \
+            '--del-match=iface.*' \
+            '--del-match=vlan.*'
     fi
 
     start_vswitchd

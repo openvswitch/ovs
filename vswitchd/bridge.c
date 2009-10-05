@@ -245,6 +245,8 @@ static void iface_destroy(struct iface *);
 static struct iface *iface_lookup(const struct bridge *, const char *name);
 static struct iface *iface_from_dp_ifidx(const struct bridge *,
                                          uint16_t dp_ifidx);
+static bool iface_is_internal(const struct bridge *, const char *name);
+static void iface_set_mac(struct iface *);
 
 /* Hooks into ofproto processing. */
 static struct ofhooks bridge_ofhooks;
@@ -401,12 +403,23 @@ check_iface_dp_ifidx(struct bridge *br, struct iface *iface, void *aux UNUSED)
 }
 
 static bool
-set_iface_policing(struct bridge *br UNUSED, struct iface *iface,
+set_iface_properties(struct bridge *br UNUSED, struct iface *iface,
                    void *aux UNUSED)
 {
-    int rate = cfg_get_int(0, "port.%s.ingress.policing-rate", iface->name);
-    int burst = cfg_get_int(0, "port.%s.ingress.policing-burst", iface->name);
+    int rate, burst;
+
+    /* Set policing attributes. */
+    rate = cfg_get_int(0, "port.%s.ingress.policing-rate", iface->name);
+    burst = cfg_get_int(0, "port.%s.ingress.policing-burst", iface->name);
     netdev_set_policing(iface->netdev, rate, burst);
+
+    /* Set MAC address of internal interfaces other than the local
+     * interface. */
+    if (iface->dp_ifidx != ODPP_LOCAL
+        && iface_is_internal(br, iface->name)) {
+        iface_set_mac(iface);
+    }
+
     return true;
 }
 
@@ -534,18 +547,8 @@ bridge_reconfigure(void)
             bool internal;
             int error;
 
-            /* It's an internal interface if it's marked that way, or if
-             * it's a bonded interface for which we're faking up a network
-             * device. */
-            internal = cfg_get_bool(0, "iface.%s.internal", if_name);
-            if (cfg_get_bool(0, "bonding.%s.fake-iface", if_name)) {
-                struct port *port = port_lookup(br, if_name);
-                if (port && port->n_ifaces > 1) {
-                    internal = true;
-                }
-            }
-
             /* Add to datapath. */
+            internal = iface_is_internal(br, if_name);
             error = dpif_port_add(br->dpif, if_name,
                                   internal ? ODP_PORT_INTERNAL : 0, NULL);
             if (error == EFBIG) {
@@ -637,13 +640,14 @@ bridge_reconfigure(void)
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         for (i = 0; i < br->n_ports; i++) {
             struct port *port = br->ports[i];
+
             port_update_vlan_compat(port);
             port_update_bonding(port);
         }
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         brstp_reconfigure(br);
-        iterate_and_prune_ifaces(br, set_iface_policing, NULL);
+        iterate_and_prune_ifaces(br, set_iface_properties, NULL);
     }
 }
 
@@ -3188,6 +3192,60 @@ static struct iface *
 iface_from_dp_ifidx(const struct bridge *br, uint16_t dp_ifidx)
 {
     return port_array_get(&br->ifaces, dp_ifidx);
+}
+
+/* Returns true if 'iface' is the name of an "internal" interface on bridge
+ * 'br', that is, an interface that is entirely simulated within the datapath.
+ * The local port (ODPP_LOCAL) is always an internal interface.  Other local
+ * interfaces are created by setting "iface.<iface>.internal = true".
+ *
+ * In addition, we have a kluge-y feature that creates an internal port with
+ * the name of a bonded port if "bonding.<bondname>.fake-iface = true" is set.
+ * This feature needs to go away in the long term.  Until then, this is one
+ * reason why this function takes a name instead of a struct iface: the fake
+ * interfaces created this way do not have a struct iface. */
+static bool
+iface_is_internal(const struct bridge *br, const char *iface)
+{
+    if (!strcmp(iface, br->name)
+        || cfg_get_bool(0, "iface.%s.internal", iface)) {
+        return true;
+    }
+
+    if (cfg_get_bool(0, "bonding.%s.fake-iface", iface)) {
+        struct port *port = port_lookup(br, iface);
+        if (port && port->n_ifaces > 1) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* Set Ethernet address of 'iface', if one is specified in the configuration
+ * file. */
+static void
+iface_set_mac(struct iface *iface)
+{
+    uint64_t mac = cfg_get_mac(0, "iface.%s.mac", iface->name);
+    if (mac) {
+        static uint8_t ea[ETH_ADDR_LEN];
+
+        eth_addr_from_uint64(mac, ea);
+        if (eth_addr_is_multicast(ea)) {
+            VLOG_ERR("interface %s: cannot set MAC to multicast address",
+                     iface->name);
+        } else if (iface->dp_ifidx == ODPP_LOCAL) {
+            VLOG_ERR("ignoring iface.%s.mac; use bridge.%s.mac instead",
+                     iface->name, iface->name);
+        } else {
+            int error = netdev_set_etheraddr(iface->netdev, ea);
+            if (error) {
+                VLOG_ERR("interface %s: setting MAC failed (%s)",
+                         iface->name, strerror(error));
+            }
+        }
+    }
 }
 
 /* Port mirroring. */

@@ -83,6 +83,8 @@ netdev_initialize(void)
                         status = retval;
                     }
                 }
+            } else {
+                netdev_classes[j++] = class;
             }
         }
         n_netdev_classes = j;
@@ -161,6 +163,7 @@ netdev_open(const char *name_, int ethertype, struct netdev **netdevp)
 
 exit:
     *netdevp = error ? NULL : netdev;
+    free(name);
     return error;
 }
 

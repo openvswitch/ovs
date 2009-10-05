@@ -239,9 +239,11 @@ netdev_linux_open(const char *name, char *suffix, int ethertype,
 
         /* Create tap device. */
         ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-        error = netdev_linux_do_ioctl(&netdev->netdev, &ifr,
-                                      TUNSETIFF, "TUNSETIFF");
-        if (error) {
+        strncpy(ifr.ifr_name, suffix, sizeof ifr.ifr_name);
+        if (ioctl(netdev->tap_fd, TUNSETIFF, &ifr) == -1) {
+            VLOG_WARN("%s: creating tap device failed: %s", suffix,
+                      strerror(errno));
+            error = errno;
             goto error;
         }
 
@@ -368,7 +370,7 @@ netdev_linux_recv(struct netdev *netdev_, void *data, size_t size)
 
     if (netdev->tap_fd < 0) {
         /* Device was opened with NETDEV_ETH_TYPE_NONE. */
-        return EAGAIN;
+        return -EAGAIN;
     }
 
     for (;;) {
@@ -380,7 +382,7 @@ netdev_linux_recv(struct netdev *netdev_, void *data, size_t size)
                 VLOG_WARN_RL(&rl, "error receiving Ethernet packet on %s: %s",
                              strerror(errno), netdev_get_name(netdev_));
             }
-            return errno;
+            return -errno;
         }
     }
 }
@@ -490,9 +492,17 @@ netdev_linux_set_etheraddr(struct netdev *netdev_,
                            const uint8_t mac[ETH_ADDR_LEN])
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    int error = set_etheraddr(netdev_get_name(netdev_), ARPHRD_ETHER, mac);
-    if (!error) {
-        memcpy(netdev->cache->etheraddr, mac, ETH_ADDR_LEN);
+    int error;
+
+    if (!(netdev->cache->valid & VALID_ETHERADDR)
+        || !eth_addr_equals(netdev->cache->etheraddr, mac)) {
+        error = set_etheraddr(netdev_get_name(netdev_), ARPHRD_ETHER, mac);
+        if (!error) {
+            netdev->cache->valid |= VALID_ETHERADDR;
+            memcpy(netdev->cache->etheraddr, mac, ETH_ADDR_LEN);
+        }
+    } else {
+        error = 0;
     }
     return error;
 }
