@@ -121,6 +121,7 @@ VAR_LOG_DIR = '/var/log/'
 VNCTERM_CORE_DIR = '/var/xen/vncterm'
 VSWITCH_CORE_DIR = '/var/xen/vswitch'
 OVS_VSWITCH_CONF = '/etc/ovs-vswitchd.conf'
+OVS_VSWITCH_DBCACHE = '/etc/ovs-vswitch.dbcache'
 XENSOURCE_INVENTORY = '/etc/xensource-inventory'
 OEM_CONFIG_DIR = '/var/xsconfig'
 OEM_CONFIG_FILES_RE = re.compile(r'^.*xensource-inventory$')
@@ -710,6 +711,7 @@ exclude those logs from the archive.
     tree_output(CAP_VNCTERM, VNCTERM_CORE_DIR)
 
     file_output(CAP_VSWITCH_CONFIG, [OVS_VSWITCH_CONF])
+    file_output(CAP_VSWITCH_CONFIG, [OVS_VSWITCH_DBCACHE])
 
     file_output(CAP_VSWITCH_LOGS, 
          [ VAR_LOG_DIR + x for x in

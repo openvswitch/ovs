@@ -221,9 +221,8 @@ netflow_expire(struct netflow *nf, const struct ofexpired *expired)
     nf_rec->ip_proto = expired->flow.nw_proto;
     nf_rec->ip_tos = expired->ip_tos;
 
-    /* NetFlow messages are limited to 30 records.  A length of 1400
-     * bytes guarantees that the limit is not exceeded.  */
-    if (nf->packet.size >= 1400) {
+    /* NetFlow messages are limited to 30 records. */
+    if (ntohs(nf_hdr->count) >= 30) {
         netflow_run(nf);
     }
 }
