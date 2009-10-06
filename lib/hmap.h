@@ -66,17 +66,46 @@ static inline void hmap_moved(struct hmap *,
 static inline void hmap_replace(struct hmap *, const struct hmap_node *old,
                                 struct hmap_node *new);
 
-/* Search. */
+/* Search.
+ *
+ * HMAP_FOR_EACH_WITH_HASH iterates NODE over all of the nodes in HMAP that
+ * have hash value equal to HASH.  HMAP_FOR_EACH_IN_BUCKET iterates NODE over
+ * all of the nodes in HMAP that would fall in the same bucket as HASH.  STRUCT
+ * and MEMBER must be the name of the struct that contains the 'struct
+ * hmap_node' and the name of the 'struct hmap_node' member, respectively.
+ *
+ * These macros may be used interchangeably to search for a particular value in
+ * an hmap, see, e.g. shash_find() for an example.  Usually, using
+ * HMAP_FOR_EACH_WITH_HASH provides an optimization, because comparing a hash
+ * value is usually cheaper than comparing an entire hash map key.  But for
+ * simple hash map keys, it makes sense to use HMAP_FOR_EACH_IN_BUCKET because
+ * it avoids doing two comparisons when a single simple comparison suffices.
+ *
+ * The loop should not change NODE to point to a different node or insert or
+ * delete nodes in HMAP (unless it "break"s out of the loop to terminate
+ * iteration).
+ *
+ * HASH is only evaluated once.
+ */
 #define HMAP_FOR_EACH_WITH_HASH(NODE, STRUCT, MEMBER, HASH, HMAP)       \
     for ((NODE) = CONTAINER_OF(hmap_first_with_hash(HMAP, HASH),        \
                                STRUCT, MEMBER);                         \
          &(NODE)->MEMBER != NULL;                                       \
          (NODE) = CONTAINER_OF(hmap_next_with_hash(&(NODE)->MEMBER),    \
                                STRUCT, MEMBER))
+#define HMAP_FOR_EACH_IN_BUCKET(NODE, STRUCT, MEMBER, HASH, HMAP)       \
+    for ((NODE) = CONTAINER_OF(hmap_first_in_bucket(HMAP, HASH),        \
+                               STRUCT, MEMBER);                         \
+         &(NODE)->MEMBER != NULL;                                       \
+         (NODE) = CONTAINER_OF(hmap_next_in_bucket(&(NODE)->MEMBER),    \
+                               STRUCT, MEMBER))
 
 static inline struct hmap_node *hmap_first_with_hash(const struct hmap *,
                                                      size_t hash);
 static inline struct hmap_node *hmap_next_with_hash(const struct hmap_node *);
+static inline struct hmap_node *hmap_first_in_bucket(const struct hmap *,
+                                                     size_t hash);
+static inline struct hmap_node *hmap_next_in_bucket(const struct hmap_node *);
 
 /* Iteration.
  *
@@ -208,6 +237,28 @@ static inline struct hmap_node *
 hmap_first_with_hash(const struct hmap *hmap, size_t hash)
 {
     return hmap_next_with_hash__(hmap->buckets[hash & hmap->mask], hash);
+}
+
+/* Returns the first node in 'hmap' in the bucket in which the given 'hash'
+ * would land, or a null pointer if that bucket is empty. */
+static inline struct hmap_node *
+hmap_first_in_bucket(const struct hmap *hmap, size_t hash)
+{
+    return hmap->buckets[hash & hmap->mask];
+}
+
+/* Returns the next node in the same bucket as 'node', or a null pointer if
+ * there are no more nodes in that bucket.
+ *
+ * If the hash map has been reallocated since 'node' was visited, some nodes
+ * may be skipped; if new nodes with the same hash value have been added, they
+ * will be skipped.  (Removing 'node' from the hash map does not prevent
+ * calling this function, since node->next is preserved, although freeing
+ * 'node' of course does.) */
+static inline struct hmap_node *
+hmap_next_in_bucket(const struct hmap_node *node)
+{
+    return node->next;
 }
 
 /* Returns the next node in the same hash map as 'node' with the same hash
