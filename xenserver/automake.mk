@@ -16,6 +16,7 @@ EXTRA_DIST += \
 	xenserver/opt_xensource_libexec_interface-reconfigure \
 	xenserver/root_vswitch_scripts_sysconfig.template \
 	xenserver/root_vswitch_scripts_dump-vif-details \
+	xenserver/root_vswitch_scripts_refresh-xs-network-uuids \
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
 	xenserver/usr_sbin_brctl \
 	xenserver/usr_sbin_xen-bugtool \

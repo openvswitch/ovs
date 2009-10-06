@@ -1,0 +1,12 @@
+#! /bin/sh
+
+. /etc/xensource-inventory
+
+for pif in $(xe pif-list --minimal host-uuid=${INSTALLATION_UUID} currently-attached=true VLAN=-1 | sed 's/,/ /g'); do
+    printf "Refreshing PIF %s...  " $pif
+    if /opt/xensource/libexec/interface-reconfigure --pif-uuid=$pif up; then
+        printf "done\n"
+    else
+        printf "error!\n"
+    fi
+done

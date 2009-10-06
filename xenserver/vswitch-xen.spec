@@ -67,6 +67,8 @@ install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT%{_prefix}/scripts/vif
 install -m 755 xenserver/root_vswitch_scripts_dump-vif-details \
                $RPM_BUILD_ROOT%{_prefix}/scripts/dump-vif-details
+install -m 755 xenserver/root_vswitch_scripts_refresh-xs-network-uuids \
+               $RPM_BUILD_ROOT%{_prefix}/scripts/refresh-xs-network-uuids
 install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT%{_prefix}/scripts/xen-bugtool
 install -m 755 xenserver/usr_sbin_brctl \
@@ -329,6 +331,7 @@ fi
 /root/vswitch/kernel_modules/openvswitch_mod.ko
 /root/vswitch/kernel_modules/veth_mod.ko
 /root/vswitch/scripts/dump-vif-details
+/root/vswitch/scripts/refresh-xs-network-uuids
 /root/vswitch/scripts/interface-reconfigure
 /root/vswitch/scripts/vif
 /root/vswitch/scripts/xen-bugtool
