@@ -44,7 +44,7 @@ traffic.
 %setup -q -n openvswitch-%{vswitch_version}
 
 %build
-./configure --prefix=/usr --localstatedir=%{_localstatedir} --with-l26=/lib/modules/%{xen_version}/build --enable-ssl %{build_number}
+./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --with-l26=/lib/modules/%{xen_version}/build --enable-ssl %{build_number}
 make %{_smp_mflags}
 
 %install
