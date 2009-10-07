@@ -103,7 +103,7 @@ rm -rf \
 %clean
 rm -rf $RPM_BUILD_ROOT
 
-%pre
+%post
 if [ ! -f /etc/xensource-inventory ]; then
     printf "XenSource inventory not present in /etc/xensource-inventory"
     exit 1
@@ -143,7 +143,7 @@ EOF
     fi
 fi
 
-if test ! -e /etc/ovs-vswitch.dbcache; then
+if test ! -e /var/lib/openvswitch/dbcache; then
     if test "$1" = 1; then
         printf "Creating xapi database cache...  "
     else
@@ -152,34 +152,8 @@ if test ! -e /etc/ovs-vswitch.dbcache; then
         printf "Re-creating xapi database cache...  "
     fi
 
-    source /etc/xensource-inventory
-    if python - "$INSTALLATION_UUID" <<EOF
-import XenAPI
-import pickle
-import sys
-
-session = XenAPI.xapi_local()
-try:
-    session.xenapi.login_with_password("root", "")
-
-    vlans = session.xenapi.VLAN.get_all_records()
-    bonds = session.xenapi.Bond.get_all_records()
-    pifs = session.xenapi.PIF.get_all_records()
-    networks = session.xenapi.network.get_all_records()
-    host = session.xenapi.host.get_by_uuid(sys.argv[1])
-finally:
-    session.xenapi.session.logout()
-
-dbcache_file = "/etc/ovs-vswitch.dbcache"
-f = open(dbcache_file, 'w')
-pickle.dump({'vlans': vlans,
-             'bonds': bonds,
-             'pifs': pifs,
-             'networks': networks}, f)
-pickle.dump({'host': host}, f)
-f.close()
-EOF
-    then
+    mkdir -p /var/lib/openvswitch
+    if /root/vswitch/scripts/interface-reconfigure rewrite; then
         printf "done.\n"
     else
         printf "FAILED\n"
@@ -190,7 +164,6 @@ EOF
     fi
 fi
 
-%post
 if grep -F net.ipv4.conf.all.arp_filter /etc/sysctl.conf >/dev/null 2>&1; then :; else
     cat >>/etc/sysctl.conf <<EOF
 # This works around an issue in xhad, which binds to a particular
@@ -311,7 +284,7 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     rm -f /etc/sysconfig/vswitch
     rm -f /var/log/vswitch*
     rm -f /etc/ovs-vswitchd.cacert
-    rm -f /etc/ovs-vswitch.dbcache
+    rm -f /var/lib/openvswitch/dbcache
 
     printf "\nYou MUST reboot the server now to complete the change to\n"
     printf "standard Xen networking.  Attempts to modify networking on the\n"
