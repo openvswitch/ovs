@@ -783,7 +783,8 @@ static int validate_actions(const struct sw_flow_actions *actions)
 			break;
 
 		case ODPAT_SET_VLAN_PCP:
-			if (a->vlan_pcp.vlan_pcp & ~VLAN_PCP_MASK)
+			if (a->vlan_pcp.vlan_pcp
+			    & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT))
 				return -EINVAL;
 			break;
 
