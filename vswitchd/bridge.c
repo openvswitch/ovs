@@ -1721,8 +1721,7 @@ compose_dsts(const struct bridge *br, const flow_t *flow, uint16_t vlan,
                         if (dst_is_duplicate(dsts, dst - dsts, dst)) {
                             continue;
                         }
-                        if (dst->dp_ifidx == flow->in_port
-                            && dst->vlan == vlan) {
+                        if (port == in_port && dst->vlan == vlan) {
                             /* Don't send out input port on same VLAN. */
                             continue;
                         }
