@@ -1715,13 +1715,26 @@ compose_dsts(const struct bridge *br, const flow_t *flow, uint16_t vlan,
                     if (port_includes_vlan(port, m->out_vlan)
                         && set_dst(dst, flow, in_port, port, tags))
                     {
+                        int flow_vlan;
+
                         if (port->vlan < 0) {
                             dst->vlan = m->out_vlan;
                         }
                         if (dst_is_duplicate(dsts, dst - dsts, dst)) {
                             continue;
                         }
-                        if (port == in_port && dst->vlan == vlan) {
+
+                        /* Use the vlan tag on the original flow instead of
+                         * the one passed in the vlan parameter.  This ensures
+                         * that we compare the vlan from before any implicit
+                         * tagging tags place. This is necessary because
+                         * dst->vlan is the final vlan, after removing implicit
+                         * tags. */
+                        flow_vlan = ntohs(flow->dl_vlan);
+                        if (flow_vlan == 0) {
+                            flow_vlan = OFP_VLAN_NONE;
+                        }
+                        if (port == in_port && dst->vlan == flow_vlan) {
                             /* Don't send out input port on same VLAN. */
                             continue;
                         }
