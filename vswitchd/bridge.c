@@ -1897,32 +1897,26 @@ process_flow(struct bridge *br, const flow_t *flow,
         goto done;
     }
 
-    /* Multicast (and broadcast) packets on bonds need special attention, to
-     * avoid receiving duplicates. */
-    if (in_port->n_ifaces > 1 && eth_addr_is_multicast(flow->dl_dst)) {
-        *tags |= in_port->active_iface_tag;
-        if (in_port->active_iface != in_iface->port_ifidx) {
-            /* Drop all multicast packets on inactive slaves. */
-            goto done;
-        } else {
-            /* Drop all multicast packets for which we have learned a different
-             * input port, because we probably sent the packet on one slave
-             * and got it back on the active slave.  Broadcast ARP replies are
-             * an exception to this rule: the host has moved to another
-             * switch. */
-            int src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
-            if (src_idx != -1 && src_idx != in_port->port_idx) {
-                if (packet) {
-                    if (!is_bcast_arp_reply(flow, packet)) {
-                        goto done;
-                    }
-                } else {
-                    /* No way to know whether it's an ARP reply, because the
-                     * flow entry doesn't include enough information and we
-                     * don't have a packet.  Punt. */
-                    return false;
-                }
+    /* Packets received on bonds need special attention to avoid duplicates. */
+    if (in_port->n_ifaces > 1) {
+        int src_idx;
+
+        if (eth_addr_is_multicast(flow->dl_dst)) {
+            *tags |= in_port->active_iface_tag;
+            if (in_port->active_iface != in_iface->port_ifidx) {
+                /* Drop all multicast packets on inactive slaves. */
+                goto done;
             }
+        }
+
+        /* Drop all packets for which we have learned a different input
+         * port, because we probably sent the packet on one slave and got
+         * it back on the other.  Broadcast ARP replies are an exception
+         * to this rule: the host has moved to another switch. */
+        src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
+        if (src_idx != -1 && src_idx != in_port->port_idx &&
+            (!packet || !is_bcast_arp_reply(flow, packet))) {
+                goto done;
         }
     }
 
