@@ -1561,7 +1561,7 @@ ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 		}
 	}
 success:
-	copy_bytes = min(skb->len, nbytes);
+	copy_bytes = min_t(size_t, skb->len, nbytes);
 	iov.iov_base = buf;
 	iov.iov_len = copy_bytes;
 	retval = skb_copy_datagram_iovec(skb, 0, &iov, iov.iov_len);
