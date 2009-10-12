@@ -1382,6 +1382,16 @@ get_port_group(struct datapath *dp, struct odp_port_group *upg)
 	return 0;
 }
 
+static int get_listen_mask(const struct file *f)
+{
+	return (long)f->private_data;
+}
+
+static void set_listen_mask(struct file *f, int listen_mask)
+{
+	f->private_data = (void*)(long)listen_mask;
+}
+
 static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 			   unsigned long argp)
 {
@@ -1433,7 +1443,7 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		break;
 
 	case ODP_GET_LISTEN_MASK:
-		err = put_user((int)f->private_data, (int __user *)argp);
+		err = put_user(get_listen_mask(f), (int __user *)argp);
 		break;
 
 	case ODP_SET_LISTEN_MASK:
@@ -1444,7 +1454,7 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		if (listeners & ~ODPL_ALL)
 			break;
 		err = 0;
-		f->private_data = (void*)listeners;
+		set_listen_mask(f, listeners);
 		break;
 
 	case ODP_PORT_QUERY:
@@ -1511,7 +1521,7 @@ ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 		      loff_t *ppos)
 {
 	/* XXX is there sufficient synchronization here? */
-	int listeners = (int) f->private_data;
+	int listeners = get_listen_mask(f);
 	int dp_idx = iminor(f->f_dentry->d_inode);
 	struct datapath *dp = get_dp(dp_idx);
 	struct sk_buff *skb;
@@ -1573,7 +1583,7 @@ static unsigned int openvswitch_poll(struct file *file, poll_table *wait)
 	if (dp) {
 		mask = 0;
 		poll_wait(file, &dp->waitqueue, wait);
-		if (dp_has_packet_of_interest(dp, (int)file->private_data))
+		if (dp_has_packet_of_interest(dp, get_listen_mask(file)))
 			mask |= POLLIN | POLLRDNORM;
 	} else {
 		mask = POLLIN | POLLRDNORM | POLLHUP;
