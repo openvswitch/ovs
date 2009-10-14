@@ -7,6 +7,7 @@
 
 /var/log/openvswitch/* {
 	sharedscripts
+	missingok
 	postrotate
 	# Tell Open vSwitch daemons to reopen their log files
 	/usr/bin/ovs-appctl -t ovs-vswitchd vlog/reopen
