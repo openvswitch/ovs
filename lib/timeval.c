@@ -51,7 +51,6 @@ static void block_sigalrm(sigset_t *);
 static void unblock_sigalrm(const sigset_t *);
 static void log_poll_interval(long long int last_wakeup,
                               const struct rusage *last_rusage);
-static long long int timeval_to_msec(const struct timeval *);
 
 /* Initializes the timetracking module. */
 void
@@ -255,7 +254,7 @@ unblock_sigalrm(const sigset_t *oldsigs)
     }
 }
 
-static long long int
+long long int
 timeval_to_msec(const struct timeval *tv)
 {
     return (long long int) tv->tv_sec * 1000 + tv->tv_usec / 1000;

@@ -49,4 +49,6 @@ void time_timeval(struct timeval *);
 void time_alarm(unsigned int secs);
 int time_poll(struct pollfd *, int n_pollfds, int timeout);
 
+long long int timeval_to_msec(const struct timeval *);
+
 #endif /* timeval.h */

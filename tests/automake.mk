@@ -8,6 +8,7 @@ TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/lcov-pre.at \
 	tests/library.at \
+	tests/timeval.at \
 	tests/stp.at \
 	tests/ovs-vsctl.at \
 	tests/lcov-post.at
@@ -65,6 +66,10 @@ tests_test_list_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-sha1
 tests_test_sha1_SOURCES = tests/test-sha1.c
 tests_test_sha1_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-timeval
+tests_test_timeval_SOURCES = tests/test-timeval.c
+tests_test_timeval_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-type-props
 tests_test_type_props_SOURCES = tests/test-type-props.c
