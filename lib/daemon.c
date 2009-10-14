@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include "fatal-signal.h"
 #include "dirs.h"
+#include "lockfile.h"
 #include "timeval.h"
 #include "util.h"
 
@@ -224,6 +225,7 @@ daemonize(void)
                 chdir("/");
             }
             time_postfork();
+            lockfile_postfork();
             break;
 
         case -1:

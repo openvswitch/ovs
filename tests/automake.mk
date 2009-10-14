@@ -9,6 +9,7 @@ TESTSUITE_AT = \
 	tests/lcov-pre.at \
 	tests/library.at \
 	tests/timeval.at \
+	tests/lockfile.at \
 	tests/stp.at \
 	tests/ovs-vsctl.at \
 	tests/lcov-post.at
@@ -62,6 +63,10 @@ tests_test_hmap_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-list
 tests_test_list_SOURCES = tests/test-list.c
 tests_test_list_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-lockfile
+tests_test_lockfile_SOURCES = tests/test-lockfile.c
+tests_test_lockfile_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-sha1
 tests_test_sha1_SOURCES = tests/test-sha1.c

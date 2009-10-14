@@ -55,6 +55,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/learning-switch.h \
 	lib/list.c \
 	lib/list.h \
+	lib/lockfile.c \
+	lib/lockfile.h \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
 	lib/netdev-linux.c \
@@ -175,9 +177,9 @@ install-data-local:
 
 # All the source files that have coverage counters.
 COVERAGE_FILES = \
-	lib/cfg.c \
 	lib/dpif.c \
 	lib/flow.c \
+	lib/lockfile.c \
 	lib/hmap.c \
 	lib/mac-learning.c \
 	lib/netdev.c \

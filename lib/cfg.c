@@ -25,10 +25,9 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include "coverage.h"
 #include "dynamic-string.h"
+#include "lockfile.h"
 #include "ofpbuf.h"
 #include "packets.h"
 #include "svec.h"
@@ -52,8 +51,7 @@ static char *cfg_name;
 static char *tmp_name;
 
 /* Lock information. */
-static char *lock_name;
-static int lock_fd = -1;
+static struct lockfile *lockfile;
 
 /* Flag to indicate whether local modifications have been made. */
 static bool dirty;
@@ -106,15 +104,14 @@ cfg_init(void)
 int
 cfg_set_file(const char *file_name)
 {
-    const char *slash;
+    char *lock_name;
     int fd;
 
     if (cfg_name) {
-        assert(lock_fd < 0);
+        assert(!lockfile);
         free(cfg_name);
-        free(lock_name);
         free(tmp_name);
-        cfg_name = lock_name = tmp_name = NULL;
+        cfg_name = tmp_name = NULL;
     }
 
     /* Make sure that we can open this file for reading. */
@@ -131,18 +128,11 @@ cfg_set_file(const char *file_name)
      * rename(tmp_name, cfg_name) will work. */
     tmp_name = xasprintf("%s.~tmp~", file_name);
 
-    /* Put the lock file in the same directory as cfg_name, but prefixed by
-     * a dot so as not to garner administrator interest. */
-    slash = strrchr(file_name, '/');
-    if (slash) {
-        lock_name = xasprintf("%.*s/.%s.~lock~",
-                              slash - file_name, file_name, slash + 1);
-    } else {
-        lock_name = xasprintf(".%s.~lock~", file_name);
-    }
-
+    lock_name = lockfile_name(file_name);
     VLOG_INFO("using \"%s\" as configuration file, \"%s\" as lock file",
               file_name, lock_name);
+    free(lock_name);
+
     return 0;
 }
 
@@ -280,59 +270,10 @@ cfg_get_cookie(uint8_t *cookie)
 void
 cfg_unlock(void)
 {
-    if (lock_fd != -1) {
-        COVERAGE_INC(cfg_unlock);
-        close(lock_fd);
-        lock_fd = -1;
+    if (lockfile) {
+        lockfile_unlock(lockfile);
+        lockfile = NULL;
     }
-}
-
-static int
-open_lockfile(const char *name)
-{
-    for (;;) {
-        /* Try to open an existing lock file. */
-        int fd = open(name, O_RDWR);
-        if (fd >= 0) {
-            return fd;
-        } else if (errno != ENOENT) {
-            VLOG_WARN("%s: failed to open lock file: %s",
-                      name, strerror(errno));
-            return -errno;
-        }
-
-        /* Try to create a new lock file. */
-        VLOG_INFO("%s: lock file does not exist, creating", name);
-        fd = open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
-        if (fd >= 0) {
-            return fd;
-        } else if (errno != EEXIST) {
-            VLOG_WARN("%s: failed to create lock file: %s",
-                      name, strerror(errno));
-            return -errno;
-        }
-
-        /* Someone else created the lock file.  Try again. */
-    }
-}
-
-static int
-try_lock(int fd, bool block)
-{
-    struct flock l;
-    int error;
-
-    memset(&l, 0, sizeof l);
-    l.l_type = F_WRLCK;
-    l.l_whence = SEEK_SET;
-    l.l_start = 0;
-    l.l_len = 0;
-
-    time_disable_restart();
-    error = fcntl(fd, block ? F_SETLKW : F_SETLK, &l) == -1 ? errno : 0;
-    time_enable_restart();
-    
-    return error;
 }
 
 /* Locks the configuration file against modification by other processes and
@@ -346,65 +287,18 @@ try_lock(int fd, bool block)
 int
 cfg_lock(uint8_t *cookie, int timeout)
 {
-    long long int start;
-    long long int elapsed = 0;
-    int fd;
-    uint8_t curr_cookie[CFG_COOKIE_LEN];
+    int error;
 
-    assert(lock_fd < 0);
-    COVERAGE_INC(cfg_lock);
-
-    time_refresh();
-    start = time_msec();
-    for (;;) {
-        int error;
-
-        /* Open lock file. */
-        fd = open_lockfile(lock_name);
-        if (fd < 0) {
-            return -fd;
-        }
-
-        /* Try to lock it.  This will block (if 'timeout' > 0). */
-        error = try_lock(fd, timeout > 0);
-        time_refresh();
-        elapsed = time_msec() - start;
-        if (!error) {
-            /* Success! */
-            break;
-        }
-
-        /* Lock failed.  Close the lock file and reopen it on the next
-         * iteration, just in case someone deletes it underneath us (even
-         * though that should not happen). */
-        close(fd);
-        if (error != EINTR) {
-            /* Hard error, give up. */
-            COVERAGE_INC(cfg_lock_error);
-            VLOG_WARN("%s: failed to lock file "
-                      "(after %lld ms, with %d-ms timeout): %s",
-                      lock_name, elapsed, timeout, strerror(error));
-            return error;
-        }
-
-        /* Probably, the periodic timer set up by time_init() woke up us.  Just
-         * check whether it's time to give up. */
-        if (timeout != INT_MAX && elapsed >= timeout) {
-            COVERAGE_INC(cfg_lock_timeout);
-            VLOG_WARN("%s: giving up on lock file after %lld ms",
-                      lock_name, elapsed);
-            return ETIMEDOUT;
-        }
-        COVERAGE_INC(cfg_lock_retry);
+    assert(!lockfile);
+    error = lockfile_lock(cfg_name, timeout, &lockfile);
+    if (error) {
+        return error;
     }
-    if (elapsed) {
-        VLOG_WARN("%s: waited %lld ms for lock file", lock_name, elapsed);
-    }
-    lock_fd = fd;
 
     cfg_read();
 
     if (cookie) {
+        uint8_t curr_cookie[CFG_COOKIE_LEN];
         cfg_get_cookie(curr_cookie);
 
         if (memcmp(curr_cookie, cookie, sizeof *curr_cookie)) {
