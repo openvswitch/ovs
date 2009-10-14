@@ -319,9 +319,12 @@ case "$1" in
         ;;
     status)
         status -p ovs-vswitchd.pid ovs-vswitchd
-        if [ "$ENABLE_BRCOMPAT" = "y" ] ; then
+        rc=$?
+        if [ $rc -eq 0 ] && [ "$ENABLE_BRCOMPAT" = "y" ] ; then
             status -p ovs-brcompatd.pid ovs-brcompatd
+            rc=$?
         fi
+        exit $rc
         ;;
     version)
         /usr/sbin/ovs-vswitchd -V
