@@ -423,11 +423,10 @@ case "$1" in
         strace -p $(cat "$BRCOMPATD_PIDFILE") "$@"
         ;;
     status)
-        status -p "$OVSDB_SERVER_PIDFILE" ovsdb-server
-        status -p "$VSWITCHD_PIDFILE" ovs-vswitchd
-        if [ "$ENABLE_BRCOMPAT" = "y" ] ; then
-            status -p ovs-brcompatd.pid ovs-brcompatd
-        fi
+        status -p "$OVSDB_SERVER_PIDFILE" ovsdb-server &&
+        status -p "$VSWITCHD_PIDFILE" ovs-vswitchd &&
+        (test "$ENABLE_BRCOMPAT" != "y" || 
+            status -p "$BRCOMPATD_PIDFILE" ovs-brcompatd)
         ;;
     version)
         /usr/sbin/ovsdb-server -V
