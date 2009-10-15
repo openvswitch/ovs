@@ -157,8 +157,10 @@ Creates on \fIbridge\fR a new port named \fIport\fR that bonds
 together the network devices given as each \fIiface\fR.  At least two
 interfaces must be named.
 .
-.IP "\fBdel\-port \fIbridge port\fR"
-Deletes \fBport\fR from \fIbridge\fR.
+.IP "\fBdel\-port \fR[\fIbridge\fR] \fIport\fR"
+Deletes \fIport\fR.  If \fIbridge\fR is omitted, \fIport\fR is removed
+from whatever bridge contains it; if \fIbridge\fR is specified, it
+must be the real or fake bridge that contains \fIport\fR.
 .
 .IP "\fBport\-to\-br \fIport\fR"
 Prints the name of the bridge that contains \fIport\fR on standard

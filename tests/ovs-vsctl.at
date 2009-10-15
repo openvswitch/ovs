@@ -165,12 +165,12 @@ CHECK_PORTS([b], [b1])
 CHECK_IFACES([b], [b1])
 AT_CLEANUP
 
-AT_SETUP([add-br a, add-bond a bond0 a1 a2 a3, del-port a bond0])
+AT_SETUP([add-br a, add-bond a bond0 a1 a2 a3, del-port bond0])
 AT_KEYWORDS([ovs-vsctl])
 AT_CHECK([RUN_OVS_VSCTL(
   [add-br a], 
   [add-bond a bond0 a1 a2 a3],
-  [del-port a bond0])])
+  [del-port bond0])])
 AT_CHECK([cat conf], [0], [dnl
 bridge.a.port=a
 ])

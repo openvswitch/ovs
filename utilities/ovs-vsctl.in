@@ -310,6 +310,14 @@ def del_port(cfg, port):
         if fnmatch.fnmatch(key, 'bridge.*.port'):
             cfg[key] = [s for s in cfg[key] if s != port]
 
+# Returns the name of the (real or fake) bridge in 'cfg' that contains
+# port 'port', or None if there is no such port.
+def port_to_bridge(cfg, port):
+    for bridge, parent, vlan in get_bridge_info(cfg):
+        if port != bridge and port in get_bridge_ports(cfg, parent, vlan):
+            return bridge
+    return None
+
 def usage():
     print """%(argv0)s: ovs-vswitchd management utility
 usage: %(argv0)s [OPTIONS] COMMAND [ARG...]
@@ -327,7 +335,7 @@ Port commands:
   list-ports BRIDGE           print the names of all the ports on BRIDGE
   add-port BRIDGE PORT        add network device PORT to BRIDGE
   add-bond BRIDGE PORT IFACE...  add new bonded port PORT in BRIDGE from IFACES
-  del-port BRIDGE PORT        delete PORT (which may be bonded) from BRIDGE
+  del-port [BRIDGE] PORT      delete PORT (which may be bonded) from BRIDGE
   port-to-br PORT             print name of bridge that contains PORT
 A bond is considered to be a single port.
 
@@ -439,24 +447,30 @@ def cmd_add_bond(bridge, port, *slaves):
     cfg['bonding.%s.slave' % port] = list(slaves)
     cfg_save(cfg, VSWITCHD_CONF)
 
-def cmd_del_port(bridge, port):
+def cmd_del_port(*args):
     cfg = cfg_read(VSWITCHD_CONF, True)
-    parent, vlan = find_bridge(cfg, bridge)
-    if port not in get_bridge_ports(cfg, parent, vlan):
-        if port in get_bridge_ports(cfg, parent, -1):
-            raise Error("bridge %s does not have a port %s (although its parent bridge %s does)" % (bridge, port, parent))
-        else:
-            raise Error("bridge %s does not have a port %s" % (bridge, port))
+    if len(args) == 2:
+        bridge, port = args
+        parent, vlan = find_bridge(cfg, bridge)
+        if port not in get_bridge_ports(cfg, parent, vlan):
+            if port in get_bridge_ports(cfg, parent, -1):
+                raise Error("bridge %s does not have a port %s (although its parent bridge %s does)" % (bridge, port, parent))
+            else:
+                raise Error("bridge %s does not have a port %s" % (bridge, port))
+    else:
+        port, = args
+        if not port_to_bridge(cfg, port):
+            raise Error("no port %s on any bridge" % port)
     del_port(cfg, port)
     cfg_save(cfg, VSWITCHD_CONF)
 
 def cmd_port_to_br(port):
     cfg = cfg_read(VSWITCHD_CONF)
-    for bridge, parent, vlan in get_bridge_info(cfg):
-        if port != bridge and port in get_bridge_ports(cfg, parent, vlan):
-            print bridge
-            return
-    raise Error("no port named %s" % port)
+    bridge = port_to_bridge(cfg, port)
+    if bridge:
+        print bridge
+    else:
+        raise Error("no port named %s" % port)
 
 def cmd_list_ifaces(bridge):
     cfg = cfg_read(VSWITCHD_CONF)
@@ -537,7 +551,7 @@ def main():
                 'list-ports': (cmd_list_ports, 1),
                 'add-port': (cmd_add_port, 2),
                 'add-bond': (cmd_add_bond, lambda n: n >= 4),
-                'del-port': (cmd_del_port, 2),
+                'del-port': (cmd_del_port, lambda n: n == 1 or n == 2),
                 'port-to-br': (cmd_port_to_br, 1),
                 'br-to-vlan': (cmd_br_to_vlan, 1),
                 'br-to-parent': (cmd_br_to_parent, 1),
