@@ -44,6 +44,7 @@ static struct timeval now;
 static time_t deadline = TIME_MIN;
 
 static void setup_timer(void);
+static void setup_signal(int flags);
 static void sigalrm_handler(int);
 static void refresh_if_ticked(void);
 static time_t time_add(time_t, time_t);
@@ -56,7 +57,6 @@ static void log_poll_interval(long long int last_wakeup,
 void
 time_init(void)
 {
-    struct sigaction sa;
     if (inited) {
         return;
     }
@@ -67,17 +67,49 @@ time_init(void)
     gettimeofday(&now, NULL);
     tick = false;
 
-    /* Set up signal handler. */
+    setup_signal(SA_RESTART);
+    setup_timer();
+}
+
+static void
+setup_signal(int flags)
+{
+    struct sigaction sa;
+
     memset(&sa, 0, sizeof sa);
     sa.sa_handler = sigalrm_handler;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
+    sa.sa_flags = flags;
     if (sigaction(SIGALRM, &sa, NULL)) {
         ovs_fatal(errno, "sigaction(SIGALRM) failed");
     }
+}
 
-    /* Set up periodic signal. */
-    setup_timer();
+/* Remove SA_RESTART from the flags for SIGALRM, so that any system call that
+ * is interrupted by the periodic timer interrupt will return EINTR instead of
+ * continuing after the signal handler returns.
+ *
+ * time_disable_restart() and time_enable_restart() may be usefully wrapped
+ * around function calls that might otherwise block forever unless interrupted
+ * by a signal, e.g.:
+ *
+ *   time_disable_restart();
+ *   fcntl(fd, F_SETLKW, &lock);
+ *   time_enable_restart();
+ */
+void
+time_disable_restart(void)
+{
+    setup_signal(0);
+}
+
+/* Add SA_RESTART to the flags for SIGALRM, so that any system call that
+ * is interrupted by the periodic timer interrupt will continue after the
+ * signal handler returns instead of returning EINTR. */
+void
+time_enable_restart(void)
+{
+    setup_signal(SA_RESTART);
 }
 
 static void

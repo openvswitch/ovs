@@ -320,12 +320,19 @@ static int
 try_lock(int fd, bool block)
 {
     struct flock l;
+    int error;
+
     memset(&l, 0, sizeof l);
     l.l_type = F_WRLCK;
     l.l_whence = SEEK_SET;
     l.l_start = 0;
     l.l_len = 0;
-    return fcntl(fd, block ? F_SETLKW : F_SETLK, &l) == -1 ? errno : 0;
+
+    time_disable_restart();
+    error = fcntl(fd, block ? F_SETLKW : F_SETLK, &l) == -1 ? errno : 0;
+    time_enable_restart();
+    
+    return error;
 }
 
 /* Locks the configuration file against modification by other processes and
