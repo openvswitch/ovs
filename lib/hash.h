@@ -19,6 +19,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include "util.h"
 
 /* This is the public domain lookup3 hash by Bob Jenkins from
  * http://burtleburtle.net/bob/c/lookup3.c, modified for style. */
@@ -47,6 +48,7 @@
     } while (0)
 
 uint32_t hash_words(const uint32_t *, size_t n_word, uint32_t basis);
+uint32_t hash_2words(const uint32_t *, uint32_t basis);
 uint32_t hash_bytes(const void *, size_t n_bytes, uint32_t basis);
 
 static inline uint32_t hash_string(const char *s, uint32_t basis)
@@ -66,6 +68,12 @@ static inline uint32_t hash_int(uint32_t x, uint32_t basis)
     x ^= x << 10;
     x ^= x >> 15;
     return x + basis;
+}
+
+static inline uint32_t hash_double(double x, uint32_t basis)
+{
+    BUILD_ASSERT_DECL(sizeof x == 8);
+    return hash_2words((const uint32_t *) &x, basis);
 }
 
 static inline uint32_t hash_pointer(const void *p, uint32_t basis)
