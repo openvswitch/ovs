@@ -373,9 +373,7 @@ def check_conflicts(cfg, name, op):
         if name in get_bridge_ifaces(cfg, parent, vlan):
             raise Error("%s because an interface named %s already exists on bridge %s" % (op, name, bridge))
     
-def cmd_add_br(bridge, parent=None, vlan=None):
-    cfg = cfg_read(VSWITCHD_CONF, True)
-
+def cmd_add_br(cfg, bridge, parent=None, vlan=None):
     check_conflicts(cfg, bridge, "cannot create a bridge named %s" % bridge)
     
     if parent and vlan:
@@ -398,10 +396,8 @@ def cmd_add_br(bridge, parent=None, vlan=None):
         cfg['bridge.%s.port' % parent].append(bridge)
     else:
         cfg['bridge.%s.port' % bridge] = [bridge]
-    cfg_save(cfg, VSWITCHD_CONF)
 
-def cmd_del_br(bridge):
-    cfg = cfg_read(VSWITCHD_CONF, True)
+def cmd_del_br(cfg, bridge):
     parent, vlan = find_bridge(cfg, bridge)
     if vlan == 0:
         vlan = -1
@@ -409,24 +405,21 @@ def cmd_del_br(bridge):
         del_port(cfg, port)
     if vlan < 0: 
         del_matching_keys(cfg, 'bridge.%s.[!0-9]*' % bridge)
-    cfg_save(cfg, VSWITCHD_CONF)
 
-def cmd_list_br():
-    cfg = cfg_read(VSWITCHD_CONF)
-    for bridge in get_all_bridges(cfg):
-        print bridge
+def cmd_list_br(cfg):
+    return get_all_bridges(cfg)
 
-def cmd_br_exists(bridge):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_br_exists(cfg, bridge):
     if bridge not in get_all_bridges(cfg):
         sys.exit(2)
 
-def cmd_list_ports(bridge):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_list_ports(cfg, bridge):
+    ports = []
     parent, vlan = find_bridge(cfg, bridge)
     for port in get_bridge_ports(cfg, parent, vlan):
         if port != bridge:
-            print port
+            ports.append(port)
+    return ports
 
 def do_add_port(cfg, bridge, parent, port, vlan):
     check_conflicts(cfg, port, "cannot create a port named %s" % port)
@@ -434,21 +427,16 @@ def do_add_port(cfg, bridge, parent, port, vlan):
     if vlan > 0:
         cfg['vlan.%s.tag' % port] = [vlan]
 
-def cmd_add_port(bridge, port):
-    cfg = cfg_read(VSWITCHD_CONF, True)
+def cmd_add_port(cfg, bridge, port):
     parent, vlan = find_bridge(cfg, bridge)
     do_add_port(cfg, bridge, parent, port, vlan)
-    cfg_save(cfg, VSWITCHD_CONF)
 
-def cmd_add_bond(bridge, port, *slaves):
-    cfg = cfg_read(VSWITCHD_CONF, True)
+def cmd_add_bond(cfg, bridge, port, *slaves):
     parent, vlan = find_bridge(cfg, bridge)
     do_add_port(cfg, bridge, parent, port, vlan)
     cfg['bonding.%s.slave' % port] = list(slaves)
-    cfg_save(cfg, VSWITCHD_CONF)
 
-def cmd_del_port(*args):
-    cfg = cfg_read(VSWITCHD_CONF, True)
+def cmd_del_port(cfg, *args):
     if len(args) == 2:
         bridge, port = args
         parent, vlan = find_bridge(cfg, bridge)
@@ -462,40 +450,35 @@ def cmd_del_port(*args):
         if not port_to_bridge(cfg, port):
             raise Error("no port %s on any bridge" % port)
     del_port(cfg, port)
-    cfg_save(cfg, VSWITCHD_CONF)
 
-def cmd_port_to_br(port):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_port_to_br(cfg, port):
     bridge = port_to_bridge(cfg, port)
     if bridge:
-        print bridge
+        return (bridge,)
     else:
         raise Error("no port named %s" % port)
 
-def cmd_list_ifaces(bridge):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_list_ifaces(cfg, bridge):
+    ifaces = []
     parent, vlan = find_bridge(cfg, bridge)
     for iface in get_bridge_ifaces(cfg, parent, vlan):
         if iface != bridge:
-            print iface
+            ifaces.append(iface)
+    return ifaces
 
-def cmd_iface_to_br(iface):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_iface_to_br(cfg, iface):
     for bridge, parent, vlan in get_bridge_info(cfg):
         if iface != bridge and iface in get_bridge_ifaces(cfg, parent, vlan):
-            print bridge
-            return
+            return (bridge,)
     raise Error("no interface named %s" % iface)
 
-def cmd_br_to_vlan(bridge):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_br_to_vlan(cfg, bridge):
     parent, vlan = find_bridge(cfg, bridge)
-    print vlan
+    return (vlan,)
 
-def cmd_br_to_parent(bridge):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_br_to_parent(cfg, bridge):
     parent, vlan = find_bridge(cfg, bridge)
-    print parent
+    return (parent,)
     
 def main():
     # Parse command line.
@@ -505,6 +488,7 @@ def main():
                                            "target=",
                                            "no-reload",
                                            "no-syslog",
+                                           "oneline",
                                            "help",
                                            "version"])
     except getopt.GetoptError, msg:
@@ -512,6 +496,7 @@ def main():
         sys.exit(1)
 
     # Handle options.
+    oneline = False
     for opt, optarg in options:
         if opt == "-c" or opt == "--config":
             global VSWITCHD_CONF
@@ -531,6 +516,8 @@ def main():
         elif opt == "--no-syslog":
             global SYSLOG
             SYSLOG = False
+        elif opt == "--oneline":
+            oneline = True
         else:
             raise RuntimeError("unhandled option %s" % opt)
 
@@ -544,19 +531,19 @@ def main():
                          % argv0)
         sys.exit(1)
 
-    commands = {'add-br': (cmd_add_br, lambda n: n == 1 or n == 3),
-                'del-br': (cmd_del_br, 1),
-                'list-br': (cmd_list_br, 0),
-                'br-exists': (cmd_br_exists, 1),
-                'list-ports': (cmd_list_ports, 1),
-                'add-port': (cmd_add_port, 2),
-                'add-bond': (cmd_add_bond, lambda n: n >= 4),
-                'del-port': (cmd_del_port, lambda n: n == 1 or n == 2),
-                'port-to-br': (cmd_port_to_br, 1),
-                'br-to-vlan': (cmd_br_to_vlan, 1),
-                'br-to-parent': (cmd_br_to_parent, 1),
-                'list-ifaces': (cmd_list_ifaces, 1),
-                'iface-to-br': (cmd_iface_to_br, 1)}
+    commands = {'add-br': (cmd_add_br, True, lambda n: n == 1 or n == 3),
+                'del-br': (cmd_del_br, True, 1),
+                'list-br': (cmd_list_br, False, 0),
+                'br-exists': (cmd_br_exists, False, 1),
+                'list-ports': (cmd_list_ports, False, 1),
+                'add-port': (cmd_add_port, True, 2),
+                'add-bond': (cmd_add_bond, True, lambda n: n >= 4),
+                'del-port': (cmd_del_port, True, lambda n: n == 1 or n == 2),
+                'port-to-br': (cmd_port_to_br, False, 1),
+                'br-to-vlan': (cmd_br_to_vlan, False, 1),
+                'br-to-parent': (cmd_br_to_parent, False, 1),
+                'list-ifaces': (cmd_list_ifaces, False, 1),
+                'iface-to-br': (cmd_iface_to_br, False, 1)}
     command = args[0]
     args = args[1:]
     if command not in commands:
@@ -564,7 +551,7 @@ def main():
                          % (argv0, command))
         sys.exit(1)
 
-    function, nargs = commands[command]
+    function, is_mutator, nargs = commands[command]
     if callable(nargs) and not nargs(len(args)):
         sys.stderr.write("%s: '%s' command does not accept %d arguments (use --help for help)\n" % (argv0, command, len(args)))
         sys.exit(1)
@@ -572,7 +559,17 @@ def main():
         sys.stderr.write("%s: '%s' command takes %d arguments but %d were supplied (use --help for help)\n" % (argv0, command, nargs, len(args)))
         sys.exit(1)
     else:
-        function(*args)
+        cfg = cfg_read(VSWITCHD_CONF, is_mutator)
+        output = function(cfg, *args)
+        if output != None:
+            if oneline:
+                print '\\n'.join([str(s).replace('\\', '\\\\')
+                                  for s in output])
+            else:
+                for line in output:
+                    print line
+        if is_mutator:
+            cfg_save(cfg, VSWITCHD_CONF)
         sys.exit(0)
 
 if __name__ == "__main__":

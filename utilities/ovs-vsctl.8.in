@@ -98,6 +98,11 @@ its configuration file.
 By default, \fBovs\-vsctl\fR logs its arguments and the details of any
 changes that it makes to the system log.  This option disables this
 logging.
+.IP "\fB\-\-oneline\fR"
+Modifies the output format so that the output for a command is printed
+on a single line.  New-line characters that would otherwise separate
+lines are printed as \fB\\n\fR, and any instances of \fB\\fR that
+would otherwise appear in the output are doubled.
 .
 .SH COMMANDS
 The commands implemented by \fBovs\-vsctl\fR are described in the
