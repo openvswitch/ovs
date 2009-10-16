@@ -124,6 +124,14 @@ CHECK_PORTS([a])
 CHECK_IFACES([a])
 AT_CLEANUP
 
+AT_SETUP([add-br a, add-br a])
+AT_KEYWORDS([ovs-vsctl])
+AT_CHECK([RUN_OVS_VSCTL([add-br a])])
+AT_CHECK([RUN_OVS_VSCTL([add-br a])], [1], [],
+  [ovs-vsctl: cannot create a bridge named a because a bridge named a already exists
+])
+AT_CLEANUP
+
 AT_SETUP([add-br a, add-br b])
 AT_KEYWORDS([ovs-vsctl])
 AT_CHECK([RUN_OVS_VSCTL([add-br a], [add-br b])])
@@ -163,6 +171,20 @@ bridge.a.port=a2
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a], [a1], [a2])
 CHECK_IFACES([a], [a1], [a2])
+AT_CLEANUP
+
+AT_SETUP([add-br a, add-port a a1, add-port a a1])
+AT_KEYWORDS([ovs-vsctl])
+AT_CHECK([RUN_OVS_VSCTL(
+   [add-br a], 
+   [add-port a a1])])
+AT_CHECK([cat conf], [0],
+  [bridge.a.port=a
+bridge.a.port=a1
+])
+AT_CHECK([RUN_OVS_VSCTL([add-port a a1])], [1], [],
+  [ovs-vsctl: cannot create a port named a1 because a port named a1 already exists on bridge a
+])
 AT_CLEANUP
 
 AT_SETUP([add-br a b, add-port a a1, add-port b b1, del-br a])
@@ -313,7 +335,8 @@ AT_CLEANUP
 AT_SETUP([fake bridge on bond + del-br fake bridge])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 AT_DATA([conf], [BOND_FAKE_CONF])
-AT_CHECK([RUN_OVS_VSCTL([del-br xapi2])])
+AT_CHECK([RUN_OVS_VSCTL([--oneline del-br xapi2])], [0], [
+])
 CHECK_BRIDGES([xapi1, xapi1, 0])
 CHECK_PORTS([xapi1], [bond0])
 CHECK_IFACES([xapi1], [eth0], [eth1])
