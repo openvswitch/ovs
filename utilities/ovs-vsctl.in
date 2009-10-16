@@ -480,17 +480,66 @@ def cmd_br_to_parent(cfg, bridge):
     parent, vlan = find_bridge(cfg, bridge)
     return (parent,)
     
+cmdTable = {'add-br': (cmd_add_br, True, lambda n: n == 1 or n == 3),
+            'del-br': (cmd_del_br, True, 1),
+            'list-br': (cmd_list_br, False, 0),
+            'br-exists': (cmd_br_exists, False, 1),
+            'list-ports': (cmd_list_ports, False, 1),
+            'add-port': (cmd_add_port, True, 2),
+            'add-bond': (cmd_add_bond, True, lambda n: n >= 4),
+            'del-port': (cmd_del_port, True, lambda n: n == 1 or n == 2),
+            'port-to-br': (cmd_port_to_br, False, 1),
+            'br-to-vlan': (cmd_br_to_vlan, False, 1),
+            'br-to-parent': (cmd_br_to_parent, False, 1),
+            'list-ifaces': (cmd_list_ifaces, False, 1),
+            'iface-to-br': (cmd_iface_to_br, False, 1)}
+
+# Break up commands at -- boundaries.
+def split_commands(args):
+    commands = []
+    command = []
+    for arg in args:
+        if arg == '--':
+            if command:
+                commands.append(command)
+            command = []
+        else:
+            command.append(arg)
+    if command:
+        commands.append(command)
+    return commands
+
+def check_command(args):
+    command, args = args[0], args[1:]
+    if command not in cmdTable:
+        sys.stderr.write("%s: unknown command '%s' (use --help for help)\n"
+                         % (argv0, command))
+        sys.exit(1)
+
+    function, is_mutator, nargs = cmdTable[command]
+    if callable(nargs) and not nargs(len(args)):
+        sys.stderr.write("%s: '%s' command does not accept %d arguments (use --help for help)\n" % (argv0, command, len(args)))
+        sys.exit(1)
+    elif not callable(nargs) and len(args) != nargs:
+        sys.stderr.write("%s: '%s' command takes %d arguments but %d were supplied (use --help for help)\n" % (argv0, command, nargs, len(args)))
+        sys.exit(1)
+
+def run_command(cfg, args):
+    command, args = args[0], args[1:]
+    function, need_lock, nargs = cmdTable[command]
+    return function(cfg, *args)
+
 def main():
     # Parse command line.
     try:
-        options, args = getopt.gnu_getopt(sys.argv[1:], "c:t:hV",
-                                          ["config=",
-                                           "target=",
-                                           "no-reload",
-                                           "no-syslog",
-                                           "oneline",
-                                           "help",
-                                           "version"])
+        options, args = getopt.getopt(sys.argv[1:], "c:t:hV",
+                                      ["config=",
+                                       "target=",
+                                       "no-reload",
+                                       "no-syslog",
+                                       "oneline",
+                                       "help",
+                                       "version"])
     except getopt.GetoptError, msg:
         sys.stderr.write("%s: %s (use --help for help)\n" % (argv0, msg))
         sys.exit(1)
@@ -525,52 +574,35 @@ def main():
         syslog.openlog("ovs-vsctl")
         log("Called as %s" % ' '.join(sys.argv[1:]))
 
-    # Execute commands.
-    if not args:
+    # Break arguments into a series of commands.
+    commands = split_commands(args)
+    if not commands:
         sys.stderr.write("%s: missing command name (use --help for help)\n"
                          % argv0)
         sys.exit(1)
 
-    commands = {'add-br': (cmd_add_br, True, lambda n: n == 1 or n == 3),
-                'del-br': (cmd_del_br, True, 1),
-                'list-br': (cmd_list_br, False, 0),
-                'br-exists': (cmd_br_exists, False, 1),
-                'list-ports': (cmd_list_ports, False, 1),
-                'add-port': (cmd_add_port, True, 2),
-                'add-bond': (cmd_add_bond, True, lambda n: n >= 4),
-                'del-port': (cmd_del_port, True, lambda n: n == 1 or n == 2),
-                'port-to-br': (cmd_port_to_br, False, 1),
-                'br-to-vlan': (cmd_br_to_vlan, False, 1),
-                'br-to-parent': (cmd_br_to_parent, False, 1),
-                'list-ifaces': (cmd_list_ifaces, False, 1),
-                'iface-to-br': (cmd_iface_to_br, False, 1)}
-    command = args[0]
-    args = args[1:]
-    if command not in commands:
-        sys.stderr.write("%s: unknown command '%s' (use --help for help)\n"
-                         % (argv0, command))
-        sys.exit(1)
+    # Check command syntax.
+    need_lock = False
+    for command in commands:
+        check_command(command)
+        if cmdTable[command[0]][1]:
+            need_lock = True
 
-    function, is_mutator, nargs = commands[command]
-    if callable(nargs) and not nargs(len(args)):
-        sys.stderr.write("%s: '%s' command does not accept %d arguments (use --help for help)\n" % (argv0, command, len(args)))
-        sys.exit(1)
-    elif not callable(nargs) and len(args) != nargs:
-        sys.stderr.write("%s: '%s' command takes %d arguments but %d were supplied (use --help for help)\n" % (argv0, command, nargs, len(args)))
-        sys.exit(1)
-    else:
-        cfg = cfg_read(VSWITCHD_CONF, is_mutator)
-        output = function(cfg, *args)
-        if output != None:
-            if oneline:
-                print '\\n'.join([str(s).replace('\\', '\\\\')
-                                  for s in output])
-            else:
-                for line in output:
-                    print line
-        if is_mutator:
-            cfg_save(cfg, VSWITCHD_CONF)
-        sys.exit(0)
+    # Execute commands.
+    cfg = cfg_read(VSWITCHD_CONF, need_lock)
+    for command in commands:
+        output = run_command(cfg, command)
+        if oneline:
+            if output == None:
+                output = ()
+            print '\\n'.join([str(s).replace('\\', '\\\\')
+                              for s in output])
+        elif output != None:
+            for line in output:
+                print line
+    if need_lock:
+        cfg_save(cfg, VSWITCHD_CONF)
+    sys.exit(0)
 
 if __name__ == "__main__":
     try:

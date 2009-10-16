@@ -7,6 +7,15 @@ m4_define([RUN_OVS_VSCTL],
 m4_foreach([command], [$@], [ovs-vsctl --no-reload --config=conf command
 ])])
 
+dnl RUN_OVS_VSCTL_TOGETHER(COMMAND, ...)
+dnl
+dnl Executes each ovs-vsctl COMMAND on a file named "conf" in the
+dnl current directory, in a single run of ovs-vsctl.  Creates "conf" if it
+dnl does not already exist.
+m4_define([RUN_OVS_VSCTL_TOGETHER],
+  [: >> conf
+   ovs-vsctl --no-reload --config=conf m4_join([ -- ], $@)])
+
 dnl CHECK_BRIDGES([BRIDGE, PARENT, VLAN], ...)
 dnl
 dnl Verifies that "ovs-vsctl list-br" prints the specified list of bridges,
@@ -24,6 +33,12 @@ m4_define([_CHECK_BRIDGE],
    # an integer instead of a string and that can cause type mismatches inside
    # python if not done carefully.)
    AT_CHECK([RUN_OVS_VSCTL([--oneline br-to-vlan $1])], [0], [$3
+])
+
+   # Check multiple queries in a single run.
+   AT_CHECK([RUN_OVS_VSCTL_TOGETHER([br-to-parent $1], [br-to-vlan $1])], [0],
+[$2
+$3
 ])])
 m4_define([CHECK_BRIDGES],
   [dnl Check that the bridges appear on list-br, without --oneline.
@@ -152,7 +167,7 @@ AT_CLEANUP
 
 AT_SETUP([add-br a b, add-port a a1, add-port b b1, del-br a])
 AT_KEYWORDS([ovs-vsctl])
-AT_CHECK([RUN_OVS_VSCTL(
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
    [add-br a], 
    [add-br b], 
    [add-port a a1],
@@ -206,7 +221,7 @@ AT_CLEANUP
 
 AT_SETUP([add-br a, add-bond a bond0 a1 a2 a3, del-port bond0])
 AT_KEYWORDS([ovs-vsctl])
-AT_CHECK([RUN_OVS_VSCTL(
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [add-br a], 
   [add-bond a bond0 a1 a2 a3],
   [del-port bond0])])

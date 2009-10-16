@@ -12,6 +12,7 @@ ovs\-vsctl \- utility for querying and configuring \fBovs\-vswitchd\fR
 .
 .SH SYNOPSIS
 \fBovs\-vsctl\fR [\fIoptions\fR] \fIcommand \fR[\fIargs\fR\&...]
+[\fB\-\-\fR \fIcommand \fR[\fIargs\fR\&...]]
 .
 .SH DESCRIPTION
 The \fBovs\-vsctl\fR program configures \fBovs\-vswitchd\fR(8), mainly
@@ -22,7 +23,8 @@ when \fBovs\-vswitchd\fR is running, but it can also be used when
 changes will only take effect when \fBovs\-vswitchd\fR is started.
 .PP
 By default, each time \fBovs\-vsctl\fR runs, it examines and,
-depending on the requested command, possibly applies changes to an
+depending on the requested command or commands, possibly applies
+changes to an
 \fBovs\-vswitchd.conf\fR file.  Then, if it applied any changes and if
 \fBovs\-vswitchd\fR is running, it tells \fBovs\-vswitchd\fR to reload
 the modified configuration file and waits for the reload to complete
@@ -99,10 +101,11 @@ By default, \fBovs\-vsctl\fR logs its arguments and the details of any
 changes that it makes to the system log.  This option disables this
 logging.
 .IP "\fB\-\-oneline\fR"
-Modifies the output format so that the output for a command is printed
+Modifies the output format so that the output for each command is printed
 on a single line.  New-line characters that would otherwise separate
-lines are printed as \fB\\n\fR, and any instances of \fB\\fR that
+lines are printed as \fB\\n\fR, and any instances of \fB\\\fR that
 would otherwise appear in the output are doubled.
+Prints a blank line for each command that has no output.
 .
 .SH COMMANDS
 The commands implemented by \fBovs\-vsctl\fR are described in the
@@ -185,6 +188,16 @@ list.
 .IP "\fBiface\-to\-br \fIiface\fR"
 Prints the name of the bridge that contains \fIiface\fR on standard
 output.
+.SH "EXAMPLES"
+Create a new bridge named br0 and add port eth0 to it:
+.IP
+.B "ovs-vsctl add\-br br0"
+.br
+.B "ovs-vsctl add\-port br0 eth0"
+.PP
+Alternatively, perform both operations in a single atomic transaction:
+.IP 
+.B "ovs-vsctl add\-br br0 \-\- add\-port br0 eth0"
 .
 .SH "EXIT STATUS"
 .IP "0"
