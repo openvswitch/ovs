@@ -22,6 +22,7 @@ import re
 import socket
 import stat
 import sys
+import syslog
 
 argv0 = sys.argv[0]
 if argv0.find('/') >= 0:
@@ -35,10 +36,16 @@ VSWITCHD_TARGET = DEFAULT_VSWITCHD_TARGET
 
 RELOAD_VSWITCHD = True
 
+SYSLOG = True
+
 class Error(Exception):
     def __init__(self, msg):
         Exception.__init__(self)
         self.msg = msg
+
+def log(message):
+    if SYSLOG:
+        syslog.syslog(message)
 
 # XXX Most of the functions below should be integrated into a
 # VSwitchConfiguration object with logically named fields and methods
@@ -110,9 +117,42 @@ def cfg_read(filename, lock=False):
         if key not in cfg:
             cfg[key] = []
         cfg[key].append(value)
+
+    global orig_cfg
+    orig_cfg = cfg_clone(cfg)
+
     return cfg
 
+# Returns a deep copy of 'cfg', which must be in the format returned
+# by cfg_read().
+def cfg_clone(cfg):
+    new = {}
+    for key in cfg:
+        new[key] = list(cfg[key])
+    return new
+
+# Returns a list of all the configuration lines that are in 'a' but
+# not in 'b'.
+def cfg_subtract(a, b):
+    difference = []
+    for key in a:
+        for value in a[key]:
+            if key not in b or value not in b[key]:
+                difference.append("%s=%s" % (key, value))
+    return difference
+
 def do_cfg_save(cfg, file):
+    # Log changes.
+    added = cfg_subtract(cfg, orig_cfg)
+    removed = cfg_subtract(orig_cfg, cfg)
+    if added or removed:
+        log("configuration changes:")
+        for line in removed:
+            log("-%s\n" % line)
+        for line in added:
+            log("+%s\n" % line)
+
+    # Write changes.
     for key in sorted(cfg.keys()):
         for value in sorted(cfg[key]):
             file.write("%s=%s\n" % (key, value))
@@ -297,6 +337,7 @@ Interface commands (a bond consists of multiple interfaces):
 A bond is considered to consist of interfaces.
 
 General options:
+  --no-syslog                 do not write mesages to syslog
   -c, --config=FILE           set configuration file
                               (default: %(config)s)
   -t, --target=PIDFILE|SOCKET set ovs-vswitchd target
@@ -449,6 +490,7 @@ def main():
                                           ["config=",
                                            "target=",
                                            "no-reload",
+                                           "no-syslog",
                                            "help",
                                            "version"])
     except getopt.GetoptError, msg:
@@ -472,8 +514,15 @@ def main():
             usage()
         elif opt == "-V" or opt == "--version":
             version()
+        elif opt == "--no-syslog":
+            global SYSLOG
+            SYSLOG = False
         else:
             raise RuntimeError("unhandled option %s" % opt)
+
+    if SYSLOG:
+        syslog.openlog("ovs-vsctl")
+        log("Called as %s" % ' '.join(sys.argv[1:]))
 
     # Execute commands.
     if not args:

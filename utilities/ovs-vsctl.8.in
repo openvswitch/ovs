@@ -94,6 +94,11 @@ If neither \fB\-t\fR nor \fB\-\-target\fR is specified, the default target is
 Prevents \fBovs\-vsctl\fR from telling \fBovs\-vswitchd\fR to reload
 its configuration file.
 .
+.IP "\fB\-\-no\-syslog\fR"
+By default, \fBovs\-vsctl\fR logs its arguments and the details of any
+changes that it makes to the system log.  This option disables this
+logging.
+.
 .SH COMMANDS
 The commands implemented by \fBovs\-vsctl\fR are described in the
 sections below.
