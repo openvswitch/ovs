@@ -8,6 +8,7 @@ TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/lcov-pre.at \
 	tests/library.at \
+	tests/dir_name.at \
 	tests/aes128.at \
 	tests/uuid.at \
 	tests/json.at \
@@ -53,6 +54,10 @@ tests_test_classifier_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-csum
 tests_test_csum_SOURCES = tests/test-csum.c
 tests_test_csum_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-dir_name
+tests_test_dir_name_SOURCES = tests/test-dir_name.c
+tests_test_dir_name_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-flows
 tests_test_flows_SOURCES = tests/test-flows.c

@@ -125,6 +125,8 @@ bool str_to_double(const char *, double *);
 
 int hexit_value(int c);
 
+char *dir_name(const char *file_name);
+
 #ifdef  __cplusplus
 }
 #endif

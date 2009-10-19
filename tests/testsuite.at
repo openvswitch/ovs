@@ -19,6 +19,7 @@ AT_TESTED([ovs-vsctl])
 
 m4_include([tests/lcov-pre.at])
 m4_include([tests/library.at])
+m4_include([tests/dir_name.at])
 m4_include([tests/aes128.at])
 m4_include([tests/uuid.at])
 m4_include([tests/json.at])

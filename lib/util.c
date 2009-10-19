@@ -357,3 +357,29 @@ hexit_value(int c)
 
     NOT_REACHED();
 }
+
+/* Returns the directory name portion of 'file_name' as a malloc()'d string,
+ * similar to the POSIX dirname() function but thread-safe. */
+char *
+dir_name(const char *file_name)
+{
+    size_t len = strlen(file_name);
+    while (len > 0 && file_name[len - 1] == '/') {
+        len--;
+    }
+    while (len > 0 && file_name[len - 1] != '/') {
+        len--;
+    }
+    while (len > 0 && file_name[len - 1] == '/') {
+        len--;
+    }
+    if (!len) {
+        return xstrdup((file_name[0] == '/'
+                        && file_name[1] == '/'
+                        && file_name[2] != '/') ? "//"
+                       : file_name[0] == '/' ? "/"
+                       : ".");
+    } else {
+        return xmemdup0(file_name, len);
+    }
+}
