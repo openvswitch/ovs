@@ -75,7 +75,7 @@ add_to_bridge()
     local vid=
     if [ "$VLAN_ID" -ne 0 ] ; then
 	bridge=$($vsctl br-to-parent $bridge)
-	vid="--add=vlan.${dev}.tag=${VLAN_ID}"
+	vid="--add=vlan.${vif}.tag=${VLAN_ID}"
     fi
 
     ${IP} link set "${vif}" down                        || logger -t scripts-vif "Failed to ip link set ${vif} down"
