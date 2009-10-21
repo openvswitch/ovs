@@ -2198,8 +2198,9 @@ log_bals(const struct slave_balance *bals, size_t n_bals, struct port *port)
 /* Shifts 'hash' from 'from' to 'to' within 'port'. */
 static void
 bond_shift_load(struct slave_balance *from, struct slave_balance *to,
-                struct bond_entry *hash)
+                int hash_idx)
 {
+    struct bond_entry *hash = from->hashes[hash_idx];
     struct port *port = from->iface->port;
     uint64_t delta = hash->tx_bytes;
 
@@ -2217,12 +2218,11 @@ bond_shift_load(struct slave_balance *from, struct slave_balance *to,
      * it require more work, the only purpose it would be to allow that hash to
      * be migrated to another slave in this rebalancing run, and there is no
      * point in doing that.  */
-    if (from->hashes[0] == hash) {
+    if (hash_idx == 0) {
         from->hashes++;
     } else {
-        int i = hash - from->hashes[0];
-        memmove(from->hashes + i, from->hashes + i + 1,
-                (from->n_hashes - (i + 1)) * sizeof *from->hashes);
+        memmove(from->hashes + hash_idx, from->hashes + hash_idx + 1,
+                (from->n_hashes - (hash_idx + 1)) * sizeof *from->hashes);
     }
     from->n_hashes--;
 
@@ -2307,22 +2307,60 @@ bond_rebalance_port(struct port *port)
             /* 'from' is carrying significantly more load than 'to', and that
              * load is split across at least two different hashes.  Pick a hash
              * to migrate to 'to' (the least-loaded slave), given that doing so
-             * must not cause 'to''s load to exceed 'from''s load.
+             * must decrease the ratio of the load on the two slaves by at
+             * least 0.1.
              *
              * The sort order we use means that we prefer to shift away the
              * smallest hashes instead of the biggest ones.  There is little
              * reason behind this decision; we could use the opposite sort
              * order to shift away big hashes ahead of small ones. */
             size_t i;
+            bool order_swapped;
 
             for (i = 0; i < from->n_hashes; i++) {
+                double old_ratio, new_ratio;
                 uint64_t delta = from->hashes[i]->tx_bytes;
-                if (to->tx_bytes + delta < from->tx_bytes - delta) {
+
+                if (delta == 0 || from->tx_bytes - delta == 0) {
+                    /* Pointless move. */
+                    continue;
+                }
+
+                order_swapped = from->tx_bytes - delta < to->tx_bytes + delta;
+
+                if (to->tx_bytes == 0) {
+                    /* Nothing on the new slave, move it. */
+                    break;
+                }
+
+                old_ratio = (double)from->tx_bytes / to->tx_bytes;
+                new_ratio = (double)(from->tx_bytes - delta) /
+                            (to->tx_bytes + delta);
+
+                if (new_ratio == 0) {
+                    /* Should already be covered but check to prevent division
+                     * by zero. */
+                    continue;
+                }
+
+                if (new_ratio < 1) {
+                    new_ratio = 1 / new_ratio;
+                }
+
+                if (old_ratio - new_ratio > 0.1) {
+                    /* Would decrease the ratio, move it. */
                     break;
                 }
             }
             if (i < from->n_hashes) {
-                bond_shift_load(from, to, from->hashes[i]);
+                bond_shift_load(from, to, i);
+                port->bond_compat_is_stale = true;
+
+                /* If the result of the migration changed the relative order of
+                 * 'from' and 'to' swap them back to maintain invariants. */
+                if (order_swapped) {
+                    swap_bals(from, to);
+                }
 
                 /* Re-sort 'bals'.  Note that this may make 'from' and 'to'
                  * point to different slave_balance structures.  It is only
@@ -2333,7 +2371,6 @@ bond_rebalance_port(struct port *port)
             } else {
                 from++;
             }
-            port->bond_compat_is_stale = true;
         }
     }
 

@@ -121,8 +121,9 @@ more heavily than data sent less recently.  It considers each of the
 slaves in order from most-loaded to least-loaded.  If highly loaded
 slave H is significantly more heavily loaded than the least-loaded
 slave L, and slave H carries at least two hashes, then vswitchd shifts
-one of H's hashes to L.  However, vswitchd will not shift a hash from
-H to L if that will cause L's load to exceed H's load.
+one of H's hashes to L.  However, vswitchd will only shift a hash from
+H to L if it will decrease the ratio of the load between H and L by at
+least 0.1.
 
 Currently, "significantly more loaded" means that H must carry at
 least 1 Mbps more traffic, and that traffic must be at least 3%
