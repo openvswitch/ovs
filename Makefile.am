@@ -30,7 +30,8 @@ EXTRA_DIST = INSTALL.bridge \
 	INSTALL.Linux \
 	INSTALL.OpenFlow \
 	INSTALL.SSL \
-	INSTALL.XenServer 
+	INSTALL.XenServer \
+	README-gcov
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =
