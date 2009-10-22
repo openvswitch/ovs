@@ -65,10 +65,11 @@ static inline uint32_t hash_int(uint32_t x, uint32_t basis)
     x ^= x >> 17;
     x -= x << 9;
     x ^= x << 4;
+    x += basis;
     x -= x << 3;
     x ^= x << 10;
     x ^= x >> 15;
-    return x + basis;
+    return x;
 }
 
 /* An attempt at a useful 1-bit hash function.  Has not been analyzed for
