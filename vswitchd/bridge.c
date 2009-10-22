@@ -1947,6 +1947,11 @@ process_flow(struct bridge *br, const flow_t *flow,
                                                tags);
         if (out_port_idx >= 0 && out_port_idx < br->n_ports) {
             out_port = br->ports[out_port_idx];
+        } else if (!packet) {
+            /* If we are revalidating but don't have a learning entry then
+             * eject the flow.  Installing a flow that floods packets will
+             * prevent us from seeing future packets and learning properly. */
+            return false;
         }
     }
 
