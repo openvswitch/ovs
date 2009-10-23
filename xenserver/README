@@ -50,6 +50,12 @@ files are:
         needed by the controller.  This is called by the "vif" script,
         which is run when virtual interfaces are added and removed.
 
+    usr_share_vswitch_scripts_refresh-xs-network-uuids
+
+        Script to refresh bridge.<bridge>.xs-network-uuids keys, which
+        can get out-of-sync following a pool join.  Running this script
+        is an alternative to rebooting the host.
+
     root_vswitch_scripts_sysconfig.template
 
         Template for vswitch's /etc/sysconfig/vswitch configuration

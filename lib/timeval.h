@@ -41,6 +41,7 @@ BUILD_ASSERT_DECL(TYPE_IS_SIGNED(time_t));
 #define TIME_UPDATE_INTERVAL 100
 
 void time_init(void);
+void time_postfork(void);
 void time_refresh(void);
 time_t time_now(void);
 long long int time_msec(void);

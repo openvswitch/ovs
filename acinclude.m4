@@ -119,6 +119,10 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
                   [OVS_DEFINE([HAVE_NLA_NUL_STRING])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/err.h], [ERR_CAST],
                   [OVS_DEFINE([HAVE_ERR_CAST])])
+  OVS_GREP_IFELSE([$KSRC26/include/net/checksum.h], [csum_unfold],
+                  [OVS_DEFINE([HAVE_CSUM_UNFOLD])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_cow],
+                  [OVS_DEFINE([HAVE_SKB_COW])])
   OVS_CHECK_LOG2_H
   OVS_CHECK_VETH
   if cmp -s datapath/linux-2.6/kcompat.h.new \

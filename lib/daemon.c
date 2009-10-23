@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include "fatal-signal.h"
 #include "dirs.h"
+#include "timeval.h"
 #include "util.h"
 
 #define THIS_MODULE VLM_daemon
@@ -222,6 +223,7 @@ daemonize(void)
             if (chdir_) {
                 chdir("/");
             }
+            time_postfork();
             break;
 
         case -1:

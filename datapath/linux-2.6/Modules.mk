@@ -4,6 +4,7 @@ openvswitch_sources += \
 openvswitch_headers += \
 	linux-2.6/compat-2.6/compat26.h \
 	linux-2.6/compat-2.6/include/asm-generic/bug.h \
+	linux-2.6/compat-2.6/include/linux/cpumask.h \
 	linux-2.6/compat-2.6/include/linux/dmi.h \
 	linux-2.6/compat-2.6/include/linux/err.h \
 	linux-2.6/compat-2.6/include/linux/icmp.h \
@@ -13,8 +14,8 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/linux/jiffies.h \
 	linux-2.6/compat-2.6/include/linux/kernel.h \
 	linux-2.6/compat-2.6/include/linux/kobject.h \
-	linux-2.6/compat-2.6/include/linux/log2.h \
 	linux-2.6/compat-2.6/include/linux/lockdep.h \
+	linux-2.6/compat-2.6/include/linux/log2.h \
 	linux-2.6/compat-2.6/include/linux/mutex.h \
 	linux-2.6/compat-2.6/include/linux/netdevice.h \
 	linux-2.6/compat-2.6/include/linux/netfilter_bridge.h \

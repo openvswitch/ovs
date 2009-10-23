@@ -19,4 +19,5 @@ EXTRA_DIST += \
 	xenserver/usr_sbin_xen-bugtool \
 	xenserver/usr_share_vswitch_scripts_sysconfig.template \
 	xenserver/usr_share_vswitch_scripts_dump-vif-details \
+	xenserver/usr_share_vswitch_scripts_refresh-xs-network-uuids \
 	xenserver/vswitch-xen.spec

@@ -83,12 +83,12 @@ received on other slaves are dropped.  Otherwise, every multicast
 packet would be duplicated, once for every bond slave, because the
 physical switch attached to the bond will flood those packets.
 
-Bonding also drops some multicast packets received on the active
-slave: those for the vswitch has learned that the packet's MAC is on a
-port other than the bond port itself.  This is because it is likely
-that the vswitch itself sent the multicast packet out the bond port,
-on a slave other than the active slave, and is now receiving the
-packet back on the active slave.  However, the vswitch makes an
+Bonding also drops received packets when the vswitch has learned that
+the packet's MAC is on a port other than the bond port itself.  This is
+because it is likely that the vswitch itself sent the packet out the
+bond port on a different slave and is now receiving the packet back.
+This occurs when the packet is multicast or the physical switch has not
+yet learned the MAC and is flooding it.  However, the vswitch makes an
 exception to this rule for broadcast ARP replies, which indicate that
 the MAC has moved to another switch, probably due to VM migration.
 (ARP replies are normally unicast, so this exception does not match
@@ -121,8 +121,9 @@ more heavily than data sent less recently.  It considers each of the
 slaves in order from most-loaded to least-loaded.  If highly loaded
 slave H is significantly more heavily loaded than the least-loaded
 slave L, and slave H carries at least two hashes, then vswitchd shifts
-one of H's hashes to L.  However, vswitchd will not shift a hash from
-H to L if that will cause L's load to exceed H's load.
+one of H's hashes to L.  However, vswitchd will only shift a hash from
+H to L if it will decrease the ratio of the load between H and L by at
+least 0.1.
 
 Currently, "significantly more loaded" means that H must carry at
 least 1 Mbps more traffic, and that traffic must be at least 3%

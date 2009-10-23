@@ -2423,12 +2423,17 @@ query_stats(struct ofproto *p, struct rule *rule,
     struct odp_flow *odp_flows;
     size_t n_odp_flows;
 
+    packet_count = rule->packet_count;
+    byte_count = rule->byte_count;
+
     n_odp_flows = rule->cr.wc.wildcards ? list_size(&rule->list) : 1;
     odp_flows = xcalloc(1, n_odp_flows * sizeof *odp_flows);
     if (rule->cr.wc.wildcards) {
         size_t i = 0;
         LIST_FOR_EACH (subrule, struct rule, list, &rule->list) {
             odp_flows[i++].key = subrule->cr.flow;
+            packet_count += subrule->packet_count;
+            byte_count += subrule->byte_count;
         }
     } else {
         odp_flows[0].key = rule->cr.flow;

@@ -1783,14 +1783,26 @@ compose_dsts(const struct bridge *br, const flow_t *flow, uint16_t vlan,
                     if (port_includes_vlan(port, m->out_vlan)
                         && set_dst(dst, flow, in_port, port, tags))
                     {
+                        int flow_vlan;
+
                         if (port->vlan < 0) {
                             dst->vlan = m->out_vlan;
                         }
                         if (dst_is_duplicate(dsts, dst - dsts, dst)) {
                             continue;
                         }
-                        if (dst->dp_ifidx == flow->in_port
-                            && dst->vlan == vlan) {
+
+                        /* Use the vlan tag on the original flow instead of
+                         * the one passed in the vlan parameter.  This ensures
+                         * that we compare the vlan from before any implicit
+                         * tagging tags place. This is necessary because
+                         * dst->vlan is the final vlan, after removing implicit
+                         * tags. */
+                        flow_vlan = ntohs(flow->dl_vlan);
+                        if (flow_vlan == 0) {
+                            flow_vlan = OFP_VLAN_NONE;
+                        }
+                        if (port == in_port && dst->vlan == flow_vlan) {
                             /* Don't send out input port on same VLAN. */
                             continue;
                         }
@@ -1953,32 +1965,26 @@ process_flow(struct bridge *br, const flow_t *flow,
         goto done;
     }
 
-    /* Multicast (and broadcast) packets on bonds need special attention, to
-     * avoid receiving duplicates. */
-    if (in_port->n_ifaces > 1 && eth_addr_is_multicast(flow->dl_dst)) {
-        *tags |= in_port->active_iface_tag;
-        if (in_port->active_iface != in_iface->port_ifidx) {
-            /* Drop all multicast packets on inactive slaves. */
-            goto done;
-        } else {
-            /* Drop all multicast packets for which we have learned a different
-             * input port, because we probably sent the packet on one slave
-             * and got it back on the active slave.  Broadcast ARP replies are
-             * an exception to this rule: the host has moved to another
-             * switch. */
-            int src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
-            if (src_idx != -1 && src_idx != in_port->port_idx) {
-                if (packet) {
-                    if (!is_bcast_arp_reply(flow, packet)) {
-                        goto done;
-                    }
-                } else {
-                    /* No way to know whether it's an ARP reply, because the
-                     * flow entry doesn't include enough information and we
-                     * don't have a packet.  Punt. */
-                    return false;
-                }
+    /* Packets received on bonds need special attention to avoid duplicates. */
+    if (in_port->n_ifaces > 1) {
+        int src_idx;
+
+        if (eth_addr_is_multicast(flow->dl_dst)) {
+            *tags |= in_port->active_iface_tag;
+            if (in_port->active_iface != in_iface->port_ifidx) {
+                /* Drop all multicast packets on inactive slaves. */
+                goto done;
             }
+        }
+
+        /* Drop all packets for which we have learned a different input
+         * port, because we probably sent the packet on one slave and got
+         * it back on the other.  Broadcast ARP replies are an exception
+         * to this rule: the host has moved to another switch. */
+        src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
+        if (src_idx != -1 && src_idx != in_port->port_idx &&
+            (!packet || !is_bcast_arp_reply(flow, packet))) {
+                goto done;
         }
     }
 
@@ -2009,6 +2015,11 @@ process_flow(struct bridge *br, const flow_t *flow,
                                                tags);
         if (out_port_idx >= 0 && out_port_idx < br->n_ports) {
             out_port = br->ports[out_port_idx];
+        } else if (!packet) {
+            /* If we are revalidating but don't have a learning entry then
+             * eject the flow.  Installing a flow that floods packets will
+             * prevent us from seeing future packets and learning properly. */
+            return false;
         }
     }
 
@@ -2259,8 +2270,9 @@ log_bals(const struct slave_balance *bals, size_t n_bals, struct port *port)
 /* Shifts 'hash' from 'from' to 'to' within 'port'. */
 static void
 bond_shift_load(struct slave_balance *from, struct slave_balance *to,
-                struct bond_entry *hash)
+                int hash_idx)
 {
+    struct bond_entry *hash = from->hashes[hash_idx];
     struct port *port = from->iface->port;
     uint64_t delta = hash->tx_bytes;
 
@@ -2278,12 +2290,11 @@ bond_shift_load(struct slave_balance *from, struct slave_balance *to,
      * it require more work, the only purpose it would be to allow that hash to
      * be migrated to another slave in this rebalancing run, and there is no
      * point in doing that.  */
-    if (from->hashes[0] == hash) {
+    if (hash_idx == 0) {
         from->hashes++;
     } else {
-        int i = hash - from->hashes[0];
-        memmove(from->hashes + i, from->hashes + i + 1,
-                (from->n_hashes - (i + 1)) * sizeof *from->hashes);
+        memmove(from->hashes + hash_idx, from->hashes + hash_idx + 1,
+                (from->n_hashes - (hash_idx + 1)) * sizeof *from->hashes);
     }
     from->n_hashes--;
 
@@ -2368,22 +2379,60 @@ bond_rebalance_port(struct port *port)
             /* 'from' is carrying significantly more load than 'to', and that
              * load is split across at least two different hashes.  Pick a hash
              * to migrate to 'to' (the least-loaded slave), given that doing so
-             * must not cause 'to''s load to exceed 'from''s load.
+             * must decrease the ratio of the load on the two slaves by at
+             * least 0.1.
              *
              * The sort order we use means that we prefer to shift away the
              * smallest hashes instead of the biggest ones.  There is little
              * reason behind this decision; we could use the opposite sort
              * order to shift away big hashes ahead of small ones. */
             size_t i;
+            bool order_swapped;
 
             for (i = 0; i < from->n_hashes; i++) {
+                double old_ratio, new_ratio;
                 uint64_t delta = from->hashes[i]->tx_bytes;
-                if (to->tx_bytes + delta < from->tx_bytes - delta) {
+
+                if (delta == 0 || from->tx_bytes - delta == 0) {
+                    /* Pointless move. */
+                    continue;
+                }
+
+                order_swapped = from->tx_bytes - delta < to->tx_bytes + delta;
+
+                if (to->tx_bytes == 0) {
+                    /* Nothing on the new slave, move it. */
+                    break;
+                }
+
+                old_ratio = (double)from->tx_bytes / to->tx_bytes;
+                new_ratio = (double)(from->tx_bytes - delta) /
+                            (to->tx_bytes + delta);
+
+                if (new_ratio == 0) {
+                    /* Should already be covered but check to prevent division
+                     * by zero. */
+                    continue;
+                }
+
+                if (new_ratio < 1) {
+                    new_ratio = 1 / new_ratio;
+                }
+
+                if (old_ratio - new_ratio > 0.1) {
+                    /* Would decrease the ratio, move it. */
                     break;
                 }
             }
             if (i < from->n_hashes) {
-                bond_shift_load(from, to, from->hashes[i]);
+                bond_shift_load(from, to, i);
+                port->bond_compat_is_stale = true;
+
+                /* If the result of the migration changed the relative order of
+                 * 'from' and 'to' swap them back to maintain invariants. */
+                if (order_swapped) {
+                    swap_bals(from, to);
+                }
 
                 /* Re-sort 'bals'.  Note that this may make 'from' and 'to'
                  * point to different slave_balance structures.  It is only
@@ -2394,7 +2443,6 @@ bond_rebalance_port(struct port *port)
             } else {
                 from++;
             }
-            port->bond_compat_is_stale = true;
         }
     }
 
