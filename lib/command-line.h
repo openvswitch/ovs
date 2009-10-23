@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2009 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,18 @@
 
 /* Utilities for command-line parsing. */
 
+#include "compiler.h"
+
 struct option;
+
+struct command {
+    const char *name;
+    int min_args;
+    int max_args;
+    void (*handler)(int argc, char *argv[]);
+};
+
 char *long_options_to_short_options(const struct option *options);
+void run_command(int argc, char *argv[], const struct command[]);
 
 #endif /* command-line.h */

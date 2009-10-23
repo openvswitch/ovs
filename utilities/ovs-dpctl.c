@@ -43,56 +43,20 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_dpctl
 
-struct command {
-    const char *name;
-    int min_args;
-    int max_args;
-    void (*handler)(int argc, char *argv[]);
-};
-
-static struct command all_commands[];
+static const struct command all_commands[];
 
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
-    struct command *p;
-
     set_program_name(argv[0]);
     time_init();
     vlog_init();
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
-
-    argc -= optind;
-    argv += optind;
-    if (argc < 1)
-        ovs_fatal(0, "missing command name; use --help for help");
-
-    for (p = all_commands; p->name != NULL; p++) {
-        if (!strcmp(p->name, argv[0])) {
-            int n_arg = argc - 1;
-            if (n_arg < p->min_args)
-                ovs_fatal(0, "'%s' command requires at least %d arguments",
-                          p->name, p->min_args);
-            else if (n_arg > p->max_args)
-                ovs_fatal(0, "'%s' command takes at most %d arguments",
-                          p->name, p->max_args);
-            else {
-                p->handler(argc, argv);
-                if (ferror(stdout)) {
-                    ovs_fatal(0, "write to stdout failed");
-                }
-                if (ferror(stderr)) {
-                    ovs_fatal(0, "write to stderr failed");
-                }
-                exit(0);
-            }
-        }
-    }
-    ovs_fatal(0, "unknown command '%s'; use --help for help", argv[0]);
-
+    run_command(argc - optind, argv + optind, all_commands);
     return 0;
 }
 
@@ -527,7 +491,7 @@ do_help(int argc UNUSED, char *argv[] UNUSED)
     usage();
 }
 
-static struct command all_commands[] = {
+static const struct command all_commands[] = {
     { "add-dp", 1, INT_MAX, do_add_dp },
     { "del-dp", 1, 1, do_del_dp },
     { "add-if", 2, INT_MAX, do_add_if },
