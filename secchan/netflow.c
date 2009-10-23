@@ -196,10 +196,10 @@ netflow_expire(struct netflow *nf, const struct ofexpired *expired)
     if (nf->add_id_to_iface) {
         uint16_t iface = (nf->engine_id & 0x7f) << 9;
         nf_rec->input = htons(iface | (expired->flow.in_port & 0x1ff));
-        nf_rec->output = htons(iface);
+        nf_rec->output = htons(iface | (expired->output_iface & 0x1ff));
     } else {
         nf_rec->input = htons(expired->flow.in_port);
-        nf_rec->output = htons(0);
+        nf_rec->output = htons(expired->output_iface);
     }
     nf_rec->packet_count = htonl(MIN(expired->packet_count, UINT32_MAX));
     nf_rec->byte_count = htonl(MIN(expired->byte_count, UINT32_MAX));

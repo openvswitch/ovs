@@ -48,6 +48,7 @@
 #include "port-array.h"
 #include "proc-net-compat.h"
 #include "process.h"
+#include "secchan/netflow.h"
 #include "secchan/ofproto.h"
 #include "socket-util.h"
 #include "stp.h"
@@ -1677,7 +1678,7 @@ port_includes_vlan(const struct port *port, uint16_t vlan)
 static size_t
 compose_dsts(const struct bridge *br, const flow_t *flow, uint16_t vlan,
              const struct port *in_port, const struct port *out_port,
-             struct dst dsts[], tag_type *tags)
+             struct dst dsts[], tag_type *tags, uint16_t *nf_output_iface)
 {
     mirror_mask_t mirrors = in_port->src_mirrors;
     struct dst *dst = dsts;
@@ -1696,7 +1697,9 @@ compose_dsts(const struct bridge *br, const flow_t *flow, uint16_t vlan,
                 dst++;
             }
         }
+        *nf_output_iface = NF_OUT_FLOOD;
     } else if (out_port && set_dst(dst, flow, in_port, out_port, tags)) {
+        *nf_output_iface = dst->dp_ifidx;
         mirrors |= out_port->dst_mirrors;
         dst++;
     }
@@ -1764,14 +1767,16 @@ print_dsts(const struct dst *dsts, size_t n)
 static void
 compose_actions(struct bridge *br, const flow_t *flow, uint16_t vlan,
                 const struct port *in_port, const struct port *out_port,
-                tag_type *tags, struct odp_actions *actions)
+                tag_type *tags, struct odp_actions *actions,
+                uint16_t *nf_output_iface)
 {
     struct dst dsts[DP_MAX_PORTS * (MAX_MIRRORS + 1)];
     size_t n_dsts;
     const struct dst *p;
     uint16_t cur_vlan;
 
-    n_dsts = compose_dsts(br, flow, vlan, in_port, out_port, dsts, tags);
+    n_dsts = compose_dsts(br, flow, vlan, in_port, out_port, dsts, tags,
+                          nf_output_iface);
 
     cur_vlan = ntohs(flow->dl_vlan);
     for (p = dsts; p < &dsts[n_dsts]; p++) {
@@ -1804,7 +1809,7 @@ is_bcast_arp_reply(const flow_t *flow)
 static bool
 process_flow(struct bridge *br, const flow_t *flow,
              const struct ofpbuf *packet, struct odp_actions *actions,
-             tag_type *tags)
+             tag_type *tags, uint16_t *nf_output_iface)
 {
     struct iface *in_iface;
     struct port *in_port;
@@ -1960,7 +1965,8 @@ process_flow(struct bridge *br, const flow_t *flow,
     }
 
 done:
-    compose_actions(br, flow, vlan, in_port, out_port, tags, actions);
+    compose_actions(br, flow, vlan, in_port, out_port, tags, actions,
+                    nf_output_iface);
 
     return true;
 }
@@ -2005,7 +2011,8 @@ bridge_port_changed_ofhook_cb(enum ofp_port_reason reason,
 
 static bool
 bridge_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
-                        struct odp_actions *actions, tag_type *tags, void *br_)
+                        struct odp_actions *actions, tag_type *tags,
+                        uint16_t *nf_output_iface, void *br_)
 {
     struct bridge *br = br_;
 
@@ -2018,7 +2025,7 @@ bridge_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
 #endif
 
     COVERAGE_INC(bridge_process_flow);
-    return process_flow(br, flow, packet, actions, tags);
+    return process_flow(br, flow, packet, actions, tags, nf_output_iface);
 }
 
 static void

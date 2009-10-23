@@ -36,6 +36,7 @@ struct ofexpired {
     long long int created;      /* Creation time. */
     uint8_t tcp_flags;          /* Bitwise-OR of all TCP flags seen. */
     uint8_t ip_tos;             /* Last-seen IP type-of-service. */
+    uint16_t output_iface;      /* Output interface index. */
 };
 
 int ofproto_create(const char *datapath, const struct ofhooks *, void *aux,
@@ -99,7 +100,8 @@ struct ofhooks {
     void (*port_changed_cb)(enum ofp_port_reason, const struct ofp_phy_port *,
                             void *aux);
     bool (*normal_cb)(const flow_t *, const struct ofpbuf *packet,
-                      struct odp_actions *, tag_type *, void *aux);
+                      struct odp_actions *, tag_type *,
+                      uint16_t *nf_output_iface, void *aux);
     void (*account_flow_cb)(const flow_t *, const union odp_action *,
                             size_t n_actions, unsigned long long int n_bytes,
                             void *aux);

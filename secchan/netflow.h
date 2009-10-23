@@ -22,6 +22,12 @@
 struct ofexpired;
 struct svec;
 
+enum netflow_output_ports {
+    NF_OUT_FLOOD = UINT16_MAX,
+    NF_OUT_MULTI = UINT16_MAX - 1,
+    NF_OUT_DROP = UINT16_MAX - 2
+};
+
 struct netflow *netflow_create(void);
 void netflow_destroy(struct netflow *);
 int netflow_set_collectors(struct netflow *, const struct svec *collectors);

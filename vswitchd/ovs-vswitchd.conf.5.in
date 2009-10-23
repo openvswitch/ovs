@@ -432,7 +432,14 @@ flows from multiple switches appearing as if they came on the interface,
 add \fBnetflow.\fIbridge\fB.add-id-to-iface=true\fR to the configuration
 file.  This will place the least significant 7 bits of the engine id
 into the most significant bits of the ingress and egress interface fields 
-of flow records.  By default, this behavior is disabled.
+of flow records.  When this option is enabled, a maximum of 508 ports are
+supported.  By default, this behavior is disabled.
+
+The egress interface field normally contains the OpenFlow port number,
+however, certain port values have special meaning: 0xFFFF indicates
+flooding, 0xFFFE is multiple controller-specified output interfaces, and
+0xFFFD means that packets from the flow were dropped.  If add-id-to-iface
+is enabled then these values become 0x1FF, 0x1FE, and 0x1FD respectively.
 
 The following syntax sends NetFlow records for \fBmybr\fR to the NetFlow
 collector \fBnflow.example.com\fR on UDP port \fB9995\fR:

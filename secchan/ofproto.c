@@ -82,7 +82,7 @@ static int xlate_actions(const union ofp_action *in, size_t n_in,
                          const flow_t *flow, struct ofproto *ofproto,
                          const struct ofpbuf *packet,
                          struct odp_actions *out, tag_type *tags,
-                         bool *may_set_up_flow);
+                         bool *may_set_up_flow, uint16_t *nf_output_iface);
 
 struct rule {
     struct cls_rule cr;
@@ -97,6 +97,7 @@ struct rule {
     uint8_t tcp_flags;          /* Bitwise-OR of all TCP flags seen. */
     uint8_t ip_tos;             /* Last-seen IP type-of-service. */
     tag_type tags;              /* Tags (set only by hooks). */
+    uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
 
     /* If 'super' is non-NULL, this rule is a subrule, that is, it is an
      * exact-match rule (having cr.wc.wildcards of 0) generated from the
@@ -971,7 +972,7 @@ ofproto_send_packet(struct ofproto *p, const flow_t *flow,
     int error;
 
     error = xlate_actions(actions, n_actions, flow, p, packet, &odp_actions,
-                          NULL, NULL);
+                          NULL, NULL, NULL);
     if (error) {
         return error;
     }
@@ -1486,7 +1487,7 @@ rule_execute(struct ofproto *ofproto, struct rule *rule,
     if (rule->cr.wc.wildcards || !flow_equal(flow, &rule->cr.flow)) {
         struct rule *super = rule->super ? rule->super : rule;
         if (xlate_actions(super->actions, super->n_actions, flow, ofproto,
-                          packet, &a, NULL, 0)) {
+                          packet, &a, NULL, 0, NULL)) {
             return;
         }
         actions = a.actions;
@@ -1582,7 +1583,8 @@ rule_make_actions(struct ofproto *p, struct rule *rule,
     super = rule->super ? rule->super : rule;
     rule->tags = 0;
     xlate_actions(super->actions, super->n_actions, &rule->cr.flow, p,
-                  packet, &a, &rule->tags, &rule->may_install);
+                  packet, &a, &rule->tags, &rule->may_install,
+                  &rule->nf_output_iface);
 
     actions_len = a.n_actions * sizeof *a.actions;
     if (rule->n_odp_actions != a.n_actions
@@ -1700,9 +1702,17 @@ static void
 rule_post_uninstall(struct ofproto *ofproto, struct rule *rule)
 {
     struct rule *super = rule->super;
+    bool controller_action;
 
     rule_account(ofproto, rule, 0);
-    if (ofproto->netflow && rule->byte_count) {
+
+    /* If the only action is send to the controller then don't report
+     * NetFlow expiration messages since it is just part of the control
+     * logic for the network and not real traffic. */
+    controller_action = rule->n_odp_actions == 1 &&
+                        rule->odp_actions[0].type == ODPAT_CONTROLLER;
+
+    if (ofproto->netflow && rule->byte_count && !controller_action) {
         struct ofexpired expired;
         expired.flow = rule->cr.flow;
         expired.packet_count = rule->packet_count;
@@ -1711,6 +1721,7 @@ rule_post_uninstall(struct ofproto *ofproto, struct rule *rule)
         expired.created = rule->created;
         expired.tcp_flags = rule->tcp_flags;
         expired.ip_tos = rule->ip_tos;
+        expired.output_iface = rule->nf_output_iface;
         netflow_expire(ofproto->netflow, &expired);
     }
     if (super) {
@@ -1894,9 +1905,14 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static void
-add_output_group_action(struct odp_actions *actions, uint16_t group)
+add_output_group_action(struct odp_actions *actions, uint16_t group,
+                        uint16_t *nf_output_iface)
 {
     odp_actions_add(actions, ODPAT_OUTPUT_GROUP)->output_group.group = group;
+
+    if (group == DP_GROUP_ALL || group == DP_GROUP_FLOOD) {
+        *nf_output_iface = NF_OUT_FLOOD;
+    }
 }
 
 static void
@@ -1921,6 +1937,7 @@ struct action_xlate_ctx {
     tag_type *tags;             /* Tags associated with OFPP_NORMAL actions. */
     bool may_set_up_flow;       /* True ordinarily; false if the actions must
                                  * be reassessed for every packet. */
+    uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
 };
 
 static void do_xlate_actions(const union ofp_action *in, size_t n_in,
@@ -1945,6 +1962,7 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t port)
     }
 
     odp_actions_add(ctx->out, ODPAT_OUTPUT)->output.port = port;
+    ctx->nf_output_iface = port;
 }
 
 static struct rule *
@@ -1994,6 +2012,9 @@ xlate_output_action(struct action_xlate_ctx *ctx,
                     const struct ofp_action_output *oao)
 {
     uint16_t odp_port;
+    uint16_t prev_nf_output_iface = ctx->nf_output_iface;
+
+    ctx->nf_output_iface = NF_OUT_DROP;
 
     switch (ntohs(oao->port)) {
     case OFPP_IN_PORT:
@@ -2005,16 +2026,18 @@ xlate_output_action(struct action_xlate_ctx *ctx,
     case OFPP_NORMAL:
         if (!ctx->ofproto->ofhooks->normal_cb(ctx->flow, ctx->packet,
                                               ctx->out, ctx->tags,
+                                              &ctx->nf_output_iface,
                                               ctx->ofproto->aux)) {
             COVERAGE_INC(ofproto_uninstallable);
             ctx->may_set_up_flow = false;
         }
         break;
     case OFPP_FLOOD:
-        add_output_group_action(ctx->out, DP_GROUP_FLOOD);
+        add_output_group_action(ctx->out, DP_GROUP_FLOOD,
+                                &ctx->nf_output_iface);
         break;
     case OFPP_ALL:
-        add_output_group_action(ctx->out, DP_GROUP_ALL);
+        add_output_group_action(ctx->out, DP_GROUP_ALL, &ctx->nf_output_iface);
         break;
     case OFPP_CONTROLLER:
         add_controller_action(ctx->out, oao);
@@ -2028,6 +2051,15 @@ xlate_output_action(struct action_xlate_ctx *ctx,
             add_output_action(ctx, odp_port);
         }
         break;
+    }
+
+    if (prev_nf_output_iface == NF_OUT_FLOOD) {
+        ctx->nf_output_iface = NF_OUT_FLOOD;
+    } else if (ctx->nf_output_iface == NF_OUT_DROP) {
+        ctx->nf_output_iface = prev_nf_output_iface;
+    } else if (prev_nf_output_iface != NF_OUT_DROP &&
+               ctx->nf_output_iface != NF_OUT_FLOOD) {
+        ctx->nf_output_iface = NF_OUT_MULTI;
     }
 }
 
@@ -2127,7 +2159,8 @@ static int
 xlate_actions(const union ofp_action *in, size_t n_in,
               const flow_t *flow, struct ofproto *ofproto,
               const struct ofpbuf *packet,
-              struct odp_actions *out, tag_type *tags, bool *may_set_up_flow)
+              struct odp_actions *out, tag_type *tags, bool *may_set_up_flow,
+              uint16_t *nf_output_iface)
 {
     tag_type no_tags = 0;
     struct action_xlate_ctx ctx;
@@ -2140,6 +2173,7 @@ xlate_actions(const union ofp_action *in, size_t n_in,
     ctx.out = out;
     ctx.tags = tags ? tags : &no_tags;
     ctx.may_set_up_flow = true;
+    ctx.nf_output_iface = NF_OUT_DROP;
     do_xlate_actions(in, n_in, &ctx);
 
     /* Check with in-band control to see if we're allowed to set up this
@@ -2150,6 +2184,9 @@ xlate_actions(const union ofp_action *in, size_t n_in,
 
     if (may_set_up_flow) {
         *may_set_up_flow = ctx.may_set_up_flow;
+    }
+    if (nf_output_iface) {
+        *nf_output_iface = ctx.nf_output_iface;
     }
     if (odp_actions_overflow(out)) {
         odp_actions_init(out);
@@ -2190,7 +2227,7 @@ handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
 
     flow_extract(&payload, ofp_port_to_odp_port(ntohs(opo->in_port)), &flow);
     error = xlate_actions((const union ofp_action *) opo->actions, n_actions,
-                          &flow, p, &payload, &actions, NULL, NULL);
+                          &flow, p, &payload, &actions, NULL, NULL, NULL);
     if (error) {
         return error;
     }
@@ -3395,7 +3432,7 @@ pick_fallback_dpid(void)
 static bool
 default_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
                          struct odp_actions *actions, tag_type *tags,
-                         void *ofproto_)
+                         uint16_t *nf_output_iface, void *ofproto_)
 {
     struct ofproto *ofproto = ofproto_;
     int out_port;
@@ -3422,9 +3459,10 @@ default_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
     /* Determine output port. */
     out_port = mac_learning_lookup_tag(ofproto->ml, flow->dl_dst, 0, tags);
     if (out_port < 0) {
-        add_output_group_action(actions, DP_GROUP_FLOOD);
+        add_output_group_action(actions, DP_GROUP_FLOOD, nf_output_iface);
     } else if (out_port != flow->in_port) {
         odp_actions_add(actions, ODPAT_OUTPUT)->output.port = out_port;
+        *nf_output_iface = out_port;
     } else {
         /* Drop. */
     }
