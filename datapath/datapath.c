@@ -236,7 +236,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	if (!dp->table)
 		goto err_free_dp;
 
-	/* Setup our datapath device */
+	/* Set up our datapath device. */
 	dp_dev = dp_dev_create(dp, devname, ODPP_LOCAL);
 	err = PTR_ERR(dp_dev);
 	if (IS_ERR(dp_dev))

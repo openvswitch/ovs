@@ -55,7 +55,7 @@
  *
  * In Open vSwitch, in-band control is implemented as "hidden" flows (in
  * that they are not visible through OpenFlow) and at a higher priority
- * than wildcarded flows can be setup by the controller.  This is done 
+ * than wildcarded flows can be set up by the controller.  This is done
  * so that the controller cannot interfere with them and possibly break 
  * connectivity with its switches.  It is possible to see all flows, 
  * including in-band ones, with the ovs-appctl "bridge/dump-flows" 
@@ -182,7 +182,7 @@
  *
  *    - Differing Controllers for Switches.  All switches must know
  *      the L3 addresses for all the controllers that other switches 
- *      may use, since rules need to be setup to allow traffic related 
+ *      may use, since rules need to be set up to allow traffic related
  *      to those controllers through.  See rules (f), (g), (h), and (i).
  *
  *    - Differing Routes for Switches.  In order for the switch to 
@@ -337,8 +337,8 @@ drop_flow(struct in_band *in_band, int rule_idx)
 
 /* out_port and fixed_fields are assumed never to change. */
 static void
-setup_flow(struct in_band *in_band, int rule_idx, const flow_t *flow,
-           uint32_t fixed_fields, uint16_t out_port)
+set_up_flow(struct in_band *in_band, int rule_idx, const flow_t *flow,
+            uint32_t fixed_fields, uint16_t out_port)
 {
     struct ib_rule *rule = &in_band->rules[rule_idx];
 
@@ -460,28 +460,28 @@ in_band_run(struct in_band *in_band)
         flow.nw_proto = IP_TYPE_UDP;
         flow.tp_src = htons(DHCP_CLIENT_PORT);
         flow.tp_dst = htons(DHCP_SERVER_PORT);
-        setup_flow(in_band, IBR_FROM_LOCAL_DHCP, &flow,
-                   (OFPFW_IN_PORT | OFPFW_DL_TYPE | OFPFW_DL_SRC
-                    | OFPFW_NW_PROTO | OFPFW_TP_SRC | OFPFW_TP_DST), 
-                   OFPP_NORMAL);
+        set_up_flow(in_band, IBR_FROM_LOCAL_DHCP, &flow,
+                    (OFPFW_IN_PORT | OFPFW_DL_TYPE | OFPFW_DL_SRC
+                     | OFPFW_NW_PROTO | OFPFW_TP_SRC | OFPFW_TP_DST), 
+                    OFPP_NORMAL);
 
         /* Allow the connection's interface to receive directed ARP traffic. */
         memset(&flow, 0, sizeof flow);
         flow.dl_type = htons(ETH_TYPE_ARP);
         memcpy(flow.dl_dst, local_mac, ETH_ADDR_LEN);
         flow.nw_proto = ARP_OP_REPLY;
-        setup_flow(in_band, IBR_TO_LOCAL_ARP, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_DL_DST | OFPFW_NW_PROTO), 
-                   OFPP_NORMAL);
+        set_up_flow(in_band, IBR_TO_LOCAL_ARP, &flow,
+                    (OFPFW_DL_TYPE | OFPFW_DL_DST | OFPFW_NW_PROTO), 
+                    OFPP_NORMAL);
 
         /* Allow the connection's interface to be the source of ARP traffic. */
         memset(&flow, 0, sizeof flow);
         flow.dl_type = htons(ETH_TYPE_ARP);
         memcpy(flow.dl_src, local_mac, ETH_ADDR_LEN);
         flow.nw_proto = ARP_OP_REQUEST;
-        setup_flow(in_band, IBR_FROM_LOCAL_ARP, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_DL_SRC | OFPFW_NW_PROTO),
-                   OFPP_NORMAL);
+        set_up_flow(in_band, IBR_FROM_LOCAL_ARP, &flow,
+                    (OFPFW_DL_TYPE | OFPFW_DL_SRC | OFPFW_NW_PROTO),
+                    OFPP_NORMAL);
     } else {
         drop_flow(in_band, IBR_TO_LOCAL_ARP);
         drop_flow(in_band, IBR_FROM_LOCAL_ARP);
@@ -493,18 +493,18 @@ in_band_run(struct in_band *in_band)
         flow.dl_type = htons(ETH_TYPE_ARP);
         memcpy(flow.dl_dst, remote_mac, ETH_ADDR_LEN);
         flow.nw_proto = ARP_OP_REPLY;
-        setup_flow(in_band, IBR_TO_REMOTE_ARP, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_DL_DST | OFPFW_NW_PROTO), 
-                   OFPP_NORMAL);
+        set_up_flow(in_band, IBR_TO_REMOTE_ARP, &flow,
+                    (OFPFW_DL_TYPE | OFPFW_DL_DST | OFPFW_NW_PROTO), 
+                    OFPP_NORMAL);
 
        /* Allow ARP requests from the remote side's MAC. */
         memset(&flow, 0, sizeof flow);
         flow.dl_type = htons(ETH_TYPE_ARP);
         memcpy(flow.dl_src, remote_mac, ETH_ADDR_LEN);
         flow.nw_proto = ARP_OP_REQUEST;
-        setup_flow(in_band, IBR_FROM_REMOTE_ARP, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_DL_SRC | OFPFW_NW_PROTO), 
-                   OFPP_NORMAL);
+        set_up_flow(in_band, IBR_FROM_REMOTE_ARP, &flow,
+                    (OFPFW_DL_TYPE | OFPFW_DL_SRC | OFPFW_NW_PROTO), 
+                    OFPP_NORMAL);
     } else {
         drop_flow(in_band, IBR_TO_REMOTE_ARP);
         drop_flow(in_band, IBR_FROM_REMOTE_ARP);
@@ -516,18 +516,18 @@ in_band_run(struct in_band *in_band)
         flow.dl_type = htons(ETH_TYPE_ARP);
         flow.nw_proto = ARP_OP_REPLY;
         flow.nw_dst = controller_ip;
-        setup_flow(in_band, IBR_TO_CTL_ARP, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_DST_MASK),
-                   OFPP_NORMAL);
+        set_up_flow(in_band, IBR_TO_CTL_ARP, &flow,
+                    (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_DST_MASK),
+                    OFPP_NORMAL);
 
        /* Allow ARP requests from the controller's IP. */
         memset(&flow, 0, sizeof flow);
         flow.dl_type = htons(ETH_TYPE_ARP);
         flow.nw_proto = ARP_OP_REQUEST;
         flow.nw_src = controller_ip;
-        setup_flow(in_band, IBR_FROM_CTL_ARP, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_SRC_MASK),
-                   OFPP_NORMAL);
+        set_up_flow(in_band, IBR_FROM_CTL_ARP, &flow,
+                    (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_SRC_MASK),
+                    OFPP_NORMAL);
      
         /* OpenFlow traffic to or from the controller.
          *
@@ -541,12 +541,12 @@ in_band_run(struct in_band *in_band)
         flow.nw_dst = controller_ip;
         flow.tp_src = htons(OFP_TCP_PORT);
         flow.tp_dst = htons(OFP_TCP_PORT);
-        setup_flow(in_band, IBR_TO_CTL_OFP, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_DST_MASK 
-                    | OFPFW_TP_DST), OFPP_NORMAL);
-        setup_flow(in_band, IBR_FROM_CTL_OFP, &flow,
-                   (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_SRC_MASK
-                    | OFPFW_TP_SRC), OFPP_NORMAL);
+        set_up_flow(in_band, IBR_TO_CTL_OFP, &flow,
+                    (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_DST_MASK 
+                     | OFPFW_TP_DST), OFPP_NORMAL);
+        set_up_flow(in_band, IBR_FROM_CTL_OFP, &flow,
+                    (OFPFW_DL_TYPE | OFPFW_NW_PROTO | OFPFW_NW_SRC_MASK
+                     | OFPFW_TP_SRC), OFPP_NORMAL);
     } else {
         drop_flow(in_band, IBR_TO_CTL_ARP);
         drop_flow(in_band, IBR_FROM_CTL_ARP);

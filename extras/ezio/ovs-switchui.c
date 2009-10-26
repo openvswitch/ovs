@@ -1486,7 +1486,7 @@ static int menu_show(const struct menu *, int start, bool select);
 static void cmd_shell(const struct dict *);
 static void cmd_show_version(const struct dict *);
 static void cmd_configure(const struct dict *);
-static void cmd_setup_pki(const struct dict *);
+static void cmd_set_up_pki(const struct dict *);
 static void cmd_browse_status(const struct dict *);
 static void cmd_show_motto(const struct dict *);
 
@@ -1542,7 +1542,7 @@ menu(const struct dict *dict)
     menu_add_item(&menu, "Exit");
     menu_add_item(&menu, "Show Version")->f = cmd_show_version;
     menu_add_item(&menu, "Configure")->f = cmd_configure;
-    menu_add_item(&menu, "Setup PKI")->f = cmd_setup_pki;
+    menu_add_item(&menu, "Set up PKI")->f = cmd_set_up_pki;
     if (debug_mode) {
         menu_add_item(&menu, "Browse Status")->f = cmd_browse_status;
         menu_add_item(&menu, "Shell")->f = cmd_shell;
@@ -2886,7 +2886,7 @@ cmd_configure(const struct dict *dict UNUSED)
 }
 
 static void
-cmd_setup_pki(const struct dict *dict UNUSED)
+cmd_set_up_pki(const struct dict *dict UNUSED)
 {
     static const char def_privkey_file[]
         = "/etc/openflow-switch/of0-privkey.pem";

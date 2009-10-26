@@ -43,7 +43,7 @@ static struct timeval now;
 /* Time at which to die with SIGALRM (if not TIME_MIN). */
 static time_t deadline = TIME_MIN;
 
-static void setup_timer(void);
+static void set_up_timer(void);
 static void sigalrm_handler(int);
 static void refresh_if_ticked(void);
 static time_t time_add(time_t, time_t);
@@ -78,11 +78,11 @@ time_init(void)
     }
 
     /* Set up periodic signal. */
-    setup_timer();
+    set_up_timer();
 }
 
 static void
-setup_timer(void)
+set_up_timer(void)
 {
     struct itimerval itimer;
 
@@ -102,7 +102,7 @@ setup_timer(void)
 void
 time_postfork(void)
 {
-    setup_timer();
+    set_up_timer();
 }
 
 /* Forces a refresh of the current time from the kernel.  It is not usually

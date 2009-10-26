@@ -82,7 +82,7 @@ static int xlate_actions(const union ofp_action *in, size_t n_in,
                          const flow_t *flow, struct ofproto *ofproto,
                          const struct ofpbuf *packet,
                          struct odp_actions *out, tag_type *tags,
-                         bool *may_setup_flow);
+                         bool *may_set_up_flow);
 
 struct rule {
     struct cls_rule cr;
@@ -1919,7 +1919,7 @@ struct action_xlate_ctx {
     /* Output. */
     struct odp_actions *out;    /* Datapath actions. */
     tag_type *tags;             /* Tags associated with OFPP_NORMAL actions. */
-    bool may_setup_flow;        /* True ordinarily; false if the actions must
+    bool may_set_up_flow;       /* True ordinarily; false if the actions must
                                  * be reassessed for every packet. */
 };
 
@@ -2007,7 +2007,7 @@ xlate_output_action(struct action_xlate_ctx *ctx,
                                               ctx->out, ctx->tags,
                                               ctx->ofproto->aux)) {
             COVERAGE_INC(ofproto_uninstallable);
-            ctx->may_setup_flow = false;
+            ctx->may_set_up_flow = false;
         }
         break;
     case OFPP_FLOOD:
@@ -2127,7 +2127,7 @@ static int
 xlate_actions(const union ofp_action *in, size_t n_in,
               const flow_t *flow, struct ofproto *ofproto,
               const struct ofpbuf *packet,
-              struct odp_actions *out, tag_type *tags, bool *may_setup_flow)
+              struct odp_actions *out, tag_type *tags, bool *may_set_up_flow)
 {
     tag_type no_tags = 0;
     struct action_xlate_ctx ctx;
@@ -2139,17 +2139,17 @@ xlate_actions(const union ofp_action *in, size_t n_in,
     ctx.packet = packet;
     ctx.out = out;
     ctx.tags = tags ? tags : &no_tags;
-    ctx.may_setup_flow = true;
+    ctx.may_set_up_flow = true;
     do_xlate_actions(in, n_in, &ctx);
 
-    /* Check with in-band control to see if we're allowed to setup this
+    /* Check with in-band control to see if we're allowed to set up this
      * flow. */
     if (!in_band_rule_check(ofproto->in_band, flow, out)) {
-        ctx.may_setup_flow = false;
+        ctx.may_set_up_flow = false;
     }
 
-    if (may_setup_flow) {
-        *may_setup_flow = ctx.may_setup_flow;
+    if (may_set_up_flow) {
+        *may_set_up_flow = ctx.may_set_up_flow;
     }
     if (odp_actions_overflow(out)) {
         odp_actions_init(out);
