@@ -92,7 +92,7 @@ parse_multiple(const char *input_file)
                 parser = json_parser_create(0);
             }
 
-            used = n - json_parser_feed(parser, &buffer[used], n - used);
+            used += json_parser_feed(parser, &buffer[used], n - used);
             if (used < n) {
                 if (!print_and_free_json(json_parser_finish(parser))) {
                     ok = false;

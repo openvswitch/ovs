@@ -12,6 +12,7 @@ TESTSUITE_AT = \
 	tests/aes128.at \
 	tests/uuid.at \
 	tests/json.at \
+	tests/jsonrpc.at \
 	tests/timeval.at \
 	tests/lockfile.at \
 	tests/stp.at \
@@ -75,6 +76,10 @@ tests_test_hmap_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-json
 tests_test_json_SOURCES = tests/test-json.c
 tests_test_json_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-jsonrpc
+tests_test_jsonrpc_SOURCES = tests/test-jsonrpc.c
+tests_test_jsonrpc_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-list
 tests_test_list_SOURCES = tests/test-list.c
