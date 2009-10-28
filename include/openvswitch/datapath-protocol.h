@@ -167,11 +167,15 @@ struct odp_flow_key {
     __u8   reserved;             /* Pad to 64 bits. */
 };
 
+/* Flags for ODP_FLOW. */
+#define ODPFF_ZERO_TCP_FLAGS (1 << 0) /* Zero the TCP flags. */
+
 struct odp_flow {
     struct odp_flow_stats stats;
     struct odp_flow_key key;
     union odp_action *actions;
     __u32 n_actions;
+    __u32 flags;
 };
 
 /* Flags for ODP_FLOW_PUT. */

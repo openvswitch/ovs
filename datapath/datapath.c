@@ -978,13 +978,18 @@ static int put_actions(const struct sw_flow *flow, struct odp_flow __user *ufp)
 	return 0;
 }
 
-static int answer_query(struct sw_flow *flow, struct odp_flow __user *ufp)
+static int answer_query(struct sw_flow *flow, u32 query_flags,
+			struct odp_flow __user *ufp)
 {
 	struct odp_flow_stats stats;
 	unsigned long int flags;
 
 	spin_lock_irqsave(&flow->lock, flags);
 	get_stats(flow, &stats);
+
+	if (query_flags & ODPFF_ZERO_TCP_FLAGS) {
+		flow->tcp_flags = 0;
+	}
 	spin_unlock_irqrestore(&flow->lock, flags);
 
 	if (__copy_to_user(&ufp->stats, &stats, sizeof(struct odp_flow_stats)))
@@ -1022,10 +1027,10 @@ static int del_or_query_flow(struct datapath *dp,
 		 * to make sure that we get completely accurate stats, but that
 		 * blows our performance, badly. */
 		dp->n_flows--;
-		error = answer_query(flow, ufp);
+		error = answer_query(flow, 0, ufp);
 		flow_deferred_free(flow);
 	} else {
-		error = answer_query(flow, ufp);
+		error = answer_query(flow, uf.flags, ufp);
 	}
 
 error:
@@ -1051,7 +1056,7 @@ static int query_multiple_flows(struct datapath *dp,
 		if (!flow)
 			error = __clear_user(&ufp->stats, sizeof ufp->stats);
 		else
-			error = answer_query(flow, ufp);
+			error = answer_query(flow, 0, ufp);
 		if (error)
 			return -EFAULT;
 	}
@@ -1072,7 +1077,7 @@ static int list_flow(struct sw_flow *flow, void *cbdata_)
 
 	if (__copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
 		return -EFAULT;
-	error = answer_query(flow, ufp);
+	error = answer_query(flow, 0, ufp);
 	if (error)
 		return error;
 
