@@ -14,7 +14,7 @@
  */
 
 #include <config.h>
-#include "extras/ezio/byteq.h"
+#include "byteq.h"
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
@@ -23,13 +23,6 @@
 
 /* The queue size must be a power of 2. */
 BUILD_ASSERT_DECL(!(BYTEQ_SIZE & (BYTEQ_SIZE - 1)));
-
-static uint8_t *head(struct byteq *);
-static int headroom(const struct byteq *);
-static void advance_head(struct byteq *, unsigned int n);
-static int tailroom(const struct byteq *);
-static const uint8_t *tail(const struct byteq *);
-static void advance_tail(struct byteq *, unsigned int n);
 
 /* Initializes 'q' as empty. */
 void
@@ -73,7 +66,7 @@ void
 byteq_put(struct byteq *q, uint8_t c)
 {
     assert(!byteq_is_full(q));
-    *head(q) = c;
+    *byteq_head(q) = c;
     q->head++;
 }
 
@@ -85,9 +78,9 @@ byteq_putn(struct byteq *q, const void *p_, size_t n)
     const uint8_t *p = p_;
     assert(byteq_avail(q) >= n);
     while (n > 0) {
-        size_t chunk = MIN(n, headroom(q));
-        memcpy(head(q), p, chunk);
-        advance_head(q, chunk);
+        size_t chunk = MIN(n, byteq_headroom(q));
+        memcpy(byteq_head(q), p, chunk);
+        byteq_advance_head(q, chunk);
         p += chunk;
         n -= chunk;
     }
@@ -108,7 +101,7 @@ byteq_get(struct byteq *q)
 {
     uint8_t c;
     assert(!byteq_is_empty(q));
-    c = *tail(q);
+    c = *byteq_tail(q);
     q->tail++;
     return c;
 }
@@ -120,9 +113,9 @@ int
 byteq_write(struct byteq *q, int fd)
 {
     while (!byteq_is_empty(q)) {
-        ssize_t n = write(fd, tail(q), tailroom(q));
+        ssize_t n = write(fd, byteq_tail(q), byteq_tailroom(q));
         if (n > 0) {
-            advance_tail(q, n);
+            byteq_advance_tail(q, n);
         } else {
             assert(n < 0);
             return errno;
@@ -139,20 +132,20 @@ int
 byteq_read(struct byteq *q, int fd)
 {
     while (!byteq_is_full(q)) {
-        ssize_t n = read(fd, head(q), headroom(q));
+        ssize_t n = read(fd, byteq_head(q), byteq_headroom(q));
         if (n > 0) {
-            advance_head(q, n);
+            byteq_advance_head(q, n);
         } else {
             return !n ? EOF : errno;
         }
     }
     return 0;
 }
-
+
 /* Returns the number of contiguous bytes of in-use space starting at the tail
  * of 'q'. */
-static int
-tailroom(const struct byteq *q)
+int
+byteq_tailroom(const struct byteq *q)
 {
     int used = byteq_used(q);
     int tail_to_end = BYTEQ_SIZE - (q->tail & (BYTEQ_SIZE - 1));
@@ -161,33 +154,33 @@ tailroom(const struct byteq *q)
 
 /* Returns the first in-use byte of 'q', the point at which data is removed
  * from 'q'. */
-static const uint8_t *
-tail(const struct byteq *q)
+const uint8_t *
+byteq_tail(const struct byteq *q)
 {
     return &q->buffer[q->tail & (BYTEQ_SIZE - 1)];
 }
 
 /* Removes 'n' bytes from the tail of 'q', which must have at least 'n' bytes
  * of tailroom. */
-static void
-advance_tail(struct byteq *q, unsigned int n)
+void
+byteq_advance_tail(struct byteq *q, unsigned int n)
 {
-    assert(tailroom(q) >= n);
+    assert(byteq_tailroom(q) >= n);
     q->tail += n;
 }
 
 /* Returns the byte after the last in-use byte of 'q', the point at which new
  * data will be added to 'q'. */
-static uint8_t *
-head(struct byteq *q)
+uint8_t *
+byteq_head(struct byteq *q)
 {
     return &q->buffer[q->head & (BYTEQ_SIZE - 1)];
 }
 
 /* Returns the number of contiguous bytes of free space starting at the head
  * of 'q'. */
-static int
-headroom(const struct byteq *q)
+int
+byteq_headroom(const struct byteq *q)
 {
     int avail = byteq_avail(q);
     int head_to_end = BYTEQ_SIZE - (q->head & (BYTEQ_SIZE - 1));
@@ -196,9 +189,9 @@ headroom(const struct byteq *q)
 
 /* Adds to 'q' the 'n' bytes after the last currently in-use byte of 'q'.  'q'
  * must have at least 'n' bytes of headroom. */
-static void
-advance_head(struct byteq *q, unsigned int n)
+void
+byteq_advance_head(struct byteq *q, unsigned int n)
 {
-    assert(headroom(q) >= n);
+    assert(byteq_headroom(q) >= n);
     q->head += n;
 }

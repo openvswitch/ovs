@@ -25,8 +25,6 @@ install-data-hook:
 
 bin_PROGRAMS += extras/ezio/ezio-term
 extras_ezio_ezio_term_SOURCES = \
-	extras/ezio/byteq.c \
-	extras/ezio/byteq.h \
 	extras/ezio/ezio-term.c \
 	extras/ezio/ezio.c \
 	extras/ezio/ezio.h \

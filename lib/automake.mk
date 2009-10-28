@@ -14,6 +14,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/backtrace.h \
 	lib/bitmap.c \
 	lib/bitmap.h \
+	lib/byteq.c \
+	lib/byteq.h \
 	lib/cfg.c \
 	lib/cfg.h \
 	lib/classifier.c \

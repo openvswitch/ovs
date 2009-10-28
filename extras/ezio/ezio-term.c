@@ -26,8 +26,8 @@
 #include <stdlib.h>
 #include <term.h>
 #include <unistd.h>
+#include "byteq.h"
 #include "command-line.h"
-#include "extras/ezio/byteq.h"
 #include "extras/ezio/tty.h"
 #include "extras/ezio/vt.h"
 #include "daemon.h"
