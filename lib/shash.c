@@ -100,6 +100,19 @@ shash_find_data(const struct shash *sh, const char *name)
     return node ? node->data : NULL;
 }
 
+void *
+shash_find_and_delete(struct shash *sh, const char *name)
+{
+    struct shash_node *node = shash_find(sh, name);
+    if (node) {
+        void *data = node->data;
+        shash_delete(sh, node);
+        return data;
+    } else {
+        return NULL;
+    }
+}
+
 struct shash_node *
 shash_first(const struct shash *shash)
 {
