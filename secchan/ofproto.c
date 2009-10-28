@@ -1731,15 +1731,15 @@ rule_post_uninstall(struct ofproto *ofproto, struct rule *rule)
         if (rule->packet_count) {
             super->ip_tos = rule->ip_tos;
         }
-    }
 
-    /* Reset counters to prevent double counting if the rule ever gets
-     * reinstalled. */
-    rule->packet_count = 0;
-    rule->byte_count = 0;
-    rule->accounted_bytes = 0;
-    rule->tcp_flags = 0;
-    rule->ip_tos = 0;
+        /* Reset counters to prevent double counting if the rule ever gets
+         * reinstalled. */
+        rule->packet_count = 0;
+        rule->byte_count = 0;
+        rule->accounted_bytes = 0;
+        rule->tcp_flags = 0;
+        rule->ip_tos = 0;
+    }
 }
 
 static void
