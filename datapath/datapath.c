@@ -975,13 +975,18 @@ static int put_actions(const struct sw_flow *flow, struct odp_flow __user *ufp)
 	return 0;
 }
 
-static int answer_query(struct sw_flow *flow, struct odp_flow __user *ufp)
+static int answer_query(struct sw_flow *flow, u32 query_flags,
+			struct odp_flow __user *ufp)
 {
 	struct odp_flow_stats stats;
 	unsigned long int flags;
 
 	spin_lock_irqsave(&flow->lock, flags);
 	get_stats(flow, &stats);
+
+	if (query_flags & ODPFF_ZERO_TCP_FLAGS) {
+		flow->tcp_flags = 0;
+	}
 	spin_unlock_irqrestore(&flow->lock, flags);
 
 	if (__copy_to_user(&ufp->stats, &stats, sizeof(struct odp_flow_stats)))
@@ -1016,7 +1021,7 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	 * we get completely accurate stats, but that blows our performance,
 	 * badly. */
 	dp->n_flows--;
-	error = answer_query(flow, ufp);
+	error = answer_query(flow, uf.flags, ufp);
 	flow_deferred_free(flow);
 
 error:
@@ -1041,7 +1046,7 @@ static int query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 		if (!flow)
 			error = __put_user(ENOENT, &ufp->stats.error);
 		else
-			error = answer_query(flow, ufp);
+			error = answer_query(flow, 0, ufp);
 		if (error)
 			return -EFAULT;
 	}
@@ -1062,7 +1067,7 @@ static int list_flow(struct sw_flow *flow, void *cbdata_)
 
 	if (__copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
 		return -EFAULT;
-	error = answer_query(flow, ufp);
+	error = answer_query(flow, 0, ufp);
 	if (error)
 		return error;
 
