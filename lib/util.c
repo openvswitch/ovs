@@ -168,8 +168,10 @@ ovs_error(int err_no, const char *format, ...)
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
-    if (err_no != 0)
-        fprintf(stderr, " (%s)", strerror(err_no));
+    if (err_no != 0) {
+        fprintf(stderr, " (%s)",
+                err_no == EOF ? "end of file" : strerror(err_no));
+    }
     putc('\n', stderr);
 
     errno = save_errno;
