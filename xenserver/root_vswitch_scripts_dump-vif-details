@@ -62,7 +62,7 @@ def dump_vif_info(domid, devid, vif_ref):
 	
 if __name__ == '__main__':
 	if (len(sys.argv) != 3):
-		sys.stderr.write("ERROR: %s <domid> <devid>\n")
+		sys.stderr.write("ERROR: %s <domid> <devid>\n" % sys.argv[0])
 		sys.exit(1)
 
 	domid = sys.argv[1]
