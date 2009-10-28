@@ -16,6 +16,7 @@ vsctl="/usr/bin/ovs-vsctl"
 dump_vif_details="/usr/share/vswitch/scripts/dump-vif-details"
 service="/sbin/service"
 IP="/sbin/ip"
+vif_on_internal_bridge="/usr/share/vswitch/scripts/vif-on-internal-bridge"
 
 handle_promiscuous()
 {
@@ -74,6 +75,27 @@ handle_vif_details()
     if [ -n "${vm_uuid}" ] ; then
 	vif_details="$vif_details --add=port.${dev}.vm-uuid=${vm_uuid}"
     fi
+
+    # vNetManager needs to know the network UUID(s) associated with
+    # each datapath.  Normally interface-reconfigure adds them, but
+    # interface-reconfigure never gets called for internal networks
+    # (xapi does the addbr ioctl internally), so we have to do it
+    # here instead for internal networks.  This is only acceptable
+    # because xapi is lazy about creating internal networks: it
+    # only creates one just before it adds the first vif to it.
+    # There may still be a brief delay between the initial
+    # ovs-vswitchd connection to vNetManager and setting this
+    # configuration variable, but vNetManager can tolerate that.
+    local internal=$(${vif_on_internal_bridge} ${DOMID} ${DEVID})
+    if [ "$internal" = "true" ]; then
+        local bridge=$(xenstore-read "${PRIVATE}/bridge" 2>/dev/null)
+        local net_uuid=$(xenstore-read "${PRIVATE}/network-uuid" 2>/dev/null)
+        local key="bridge.${bridge}.xs-network-uuids"
+
+        vif_details="$vif_details --del-match=${key}=*"
+        vif_details="$vif_details --add=${key}=${net_uuid}"
+    fi
+
     echo ${vif_details}
 }
 

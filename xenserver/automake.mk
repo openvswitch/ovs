@@ -19,4 +19,5 @@ EXTRA_DIST += \
 	xenserver/usr_sbin_brctl \
 	xenserver/usr_sbin_xen-bugtool \
 	xenserver/usr_share_vswitch_scripts_sysconfig.template \
+	xenserver/usr_share_vswitch_scripts_vif-on-internal-bridge \
 	xenserver/vswitch-xen.spec

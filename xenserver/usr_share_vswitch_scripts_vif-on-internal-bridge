@@ -1,0 +1,56 @@
+#!/usr/bin/python
+#
+# Script to determine whether a vif is on an internal bridge 
+
+# Copyright (C) 2009 Nicira Networks, Inc.
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.  This file is offered as-is,
+# without warranty of any kind.
+
+import sys
+import XenAPI
+import xen.lowlevel.xs
+
+# Query XenStore for the opaque reference of this vif
+def get_vif_ref(domid, devid):
+    xenstore = xen.lowlevel.xs.xs()
+    t = xenstore.transaction_start()
+    vif_ref = xenstore.read(t, '/xapi/%s/private/vif/%s/ref' % (domid, devid))
+    xenstore.transaction_end(t)
+    return vif_ref
+
+# Query XAPI for the information we need using the vif's opaque reference
+def dump_vif_info(domid, devid, vif_ref):
+    try:
+        session = XenAPI.xapi_local()
+        session.xenapi.login_with_password("root", "")
+        vif_rec = session.xenapi.VIF.get_record(vif_ref)
+        net_rec = session.xenapi.network.get_record(vif_rec["network"])
+
+        if len(net_rec['PIFs']) == 0:
+            sys.stdout.write("true\n")
+        else:
+            sys.stdout.write("false\n")
+       
+    finally:
+        session.xenapi.session.logout()
+
+if __name__ == '__main__':
+    if (len(sys.argv) != 3):
+        sys.stderr.write("ERROR: %s <domid> <devid>\n" % sys.argv[0])
+        sys.exit(1)
+
+    domid = sys.argv[1]
+    devid = sys.argv[2]
+
+    vif_ref = get_vif_ref(domid, devid)
+    if not vif_ref:
+        sys.stderr.write("ERROR: Could not find interface vif%s.%s\n"
+                % (domid, devid))
+        sys.exit(1)
+
+    dump_vif_info(domid, devid, vif_ref)
+    sys.exit(0)
+

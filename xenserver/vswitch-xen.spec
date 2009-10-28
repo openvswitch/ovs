@@ -71,6 +71,8 @@ install -m 755 xenserver/opt_xensource_libexec_interface-reconfigure \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/interface-reconfigure
 install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/vif
+install -m 755 xenserver/usr_share_vswitch_scripts_vif-on-internal-bridge \
+             $RPM_BUILD_ROOT/usr/share/vswitch/scripts/vif-on-internal-bridge
 install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/xen-bugtool
 install -m 755 xenserver/usr_sbin_brctl \
@@ -313,6 +315,7 @@ fi
 /usr/share/vswitch/scripts/XSFeatureVSwitch.py
 /usr/share/vswitch/scripts/brctl
 /usr/share/vswitch/scripts/sysconfig.template
+/usr/share/vswitch/scripts/vif-on-internal-bridge
 /usr/share/vswitch/scripts/xen-backend.rules
 # Following two files are generated automatically by rpm.  We don't
 # really need them and they won't be used on the XenServer, but there
