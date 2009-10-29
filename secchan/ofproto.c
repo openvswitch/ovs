@@ -3206,9 +3206,9 @@ compose_flow_exp(const struct rule *rule, long long int now, uint8_t reason)
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofe->match);
     ofe->priority = htons(rule->cr.priority);
     ofe->reason = reason;
-    ofe->duration = (now - rule->created) / 1000;
-    ofe->packet_count = rule->packet_count;
-    ofe->byte_count = rule->byte_count;
+    ofe->duration = htonl((now - rule->created) / 1000);
+    ofe->packet_count = htonll(rule->packet_count);
+    ofe->byte_count = htonll(rule->byte_count);
 
     return buf;
 }
