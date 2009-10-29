@@ -49,5 +49,6 @@ struct shash_node *shash_find(const struct shash *, const char *);
 void *shash_find_data(const struct shash *, const char *);
 void *shash_find_and_delete(struct shash *, const char *);
 struct shash_node *shash_first(const struct shash *);
+const struct shash_node **shash_sort(const struct shash *);
 
 #endif /* shash.h */

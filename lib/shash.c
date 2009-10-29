@@ -126,3 +126,34 @@ shash_first(const struct shash *shash)
     return node ? CONTAINER_OF(node, struct shash_node, node) : NULL;
 }
 
+static int
+compare_nodes_by_name(const void *a_, const void *b_)
+{
+    const struct shash_node *const *a = a_;
+    const struct shash_node *const *b = b_;
+    return strcmp((*a)->name, (*b)->name);
+}
+
+const struct shash_node **
+shash_sort(const struct shash *sh)
+{
+    if (shash_is_empty(sh)) {
+        return NULL;
+    } else {
+        const struct shash_node **nodes;
+        struct shash_node *node;
+        size_t i, n;
+
+        n = shash_count(sh);
+        nodes = xmalloc(n * sizeof *nodes);
+        i = 0;
+        SHASH_FOR_EACH (node, sh) {
+            nodes[i++] = node;
+        }
+        assert(i == n);
+
+        qsort(nodes, n, sizeof *nodes, compare_nodes_by_name);
+
+        return nodes;
+    }
+}
