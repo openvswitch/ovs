@@ -30,7 +30,8 @@
 static unsigned int epoch;
 
 static void
-coverage_unixctl_log(struct unixctl_conn *conn, const char *args UNUSED)
+coverage_unixctl_log(struct unixctl_conn *conn, const char *args UNUSED,
+                     void *aux UNUSED)
 {
     coverage_log(VLL_WARN, false);
     unixctl_command_reply(conn, 200, NULL);
@@ -39,7 +40,7 @@ coverage_unixctl_log(struct unixctl_conn *conn, const char *args UNUSED)
 void
 coverage_init(void)
 {
-    unixctl_command_register("coverage/log", coverage_unixctl_log);
+    unixctl_command_register("coverage/log", coverage_unixctl_log, NULL);
 }
 
 /* Sorts coverage counters in descending order by count, within equal counts

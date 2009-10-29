@@ -44,7 +44,8 @@
 #include "vlog.h"
 
 struct unixctl_command {
-    void (*cb)(struct unixctl_conn *, const char *args);
+    unixctl_cb_func *cb;
+    void *aux;
 };
 
 struct unixctl_conn {
@@ -76,7 +77,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
 static struct shash commands = SHASH_INITIALIZER(&commands);
 
 static void
-unixctl_help(struct unixctl_conn *conn, const char *args UNUSED)
+unixctl_help(struct unixctl_conn *conn, const char *args UNUSED,
+             void *aux UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct shash_node *node;
@@ -90,8 +92,7 @@ unixctl_help(struct unixctl_conn *conn, const char *args UNUSED)
 }
 
 void
-unixctl_command_register(const char *name,
-                         void (*cb)(struct unixctl_conn *, const char *args))
+unixctl_command_register(const char *name, unixctl_cb_func *cb, void *aux)
 {
     struct unixctl_command *command;
 
@@ -99,6 +100,7 @@ unixctl_command_register(const char *name,
            || shash_find_data(&commands, name) == cb);
     command = xmalloc(sizeof *command);
     command->cb = cb;
+    command->aux = aux;
     shash_add(&commands, name, command);
 }
 
@@ -178,7 +180,7 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
     struct unixctl_server *server;
     int error;
 
-    unixctl_command_register("help", unixctl_help);
+    unixctl_command_register("help", unixctl_help, NULL);
 
     server = xmalloc(sizeof *server);
     list_init(&server->conns);
@@ -282,7 +284,7 @@ process_command(struct unixctl_conn *conn, char *s)
 
     command = shash_find_data(&commands, name);
     if (command) {
-        command->cb(conn, args);
+        command->cb(conn, args, command->aux);
     } else {
         char *msg = xasprintf("\"%s\" is not a valid command", name);
         unixctl_command_reply(conn, 400, msg);

@@ -50,7 +50,7 @@
 
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
-static void reload(struct unixctl_conn *, const char *args);
+static unixctl_cb_func reload;
 
 static bool need_reconfigure;
 static struct unixctl_conn **conns;
@@ -79,7 +79,7 @@ main(int argc, char *argv[])
     if (retval) {
         ovs_fatal(retval, "could not listen for control connections");
     }
-    unixctl_command_register("vswitchd/reload", reload);
+    unixctl_command_register("vswitchd/reload", reload, NULL);
 
     retval = cfg_read();
     if (retval) {
@@ -122,7 +122,7 @@ main(int argc, char *argv[])
 }
 
 static void
-reload(struct unixctl_conn *conn, const char *args UNUSED)
+reload(struct unixctl_conn *conn, const char *args UNUSED, void *aux UNUSED)
 {
     need_reconfigure = true;
     conns = xrealloc(conns, sizeof *conns * (n_conns + 1));

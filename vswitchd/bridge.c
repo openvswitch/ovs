@@ -194,7 +194,7 @@ enum { DP_MAX = 256 };
 static struct bridge *bridge_create(const char *name);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
-static void bridge_unixctl_dump_flows(struct unixctl_conn *, const char *);
+static unixctl_cb_func bridge_unixctl_dump_flows;
 static int bridge_run_one(struct bridge *);
 static void bridge_reconfigure_one(struct bridge *);
 static void bridge_reconfigure_controller(struct bridge *);
@@ -210,7 +210,7 @@ static uint64_t bridge_pick_datapath_id(struct bridge *,
 static struct iface *bridge_get_local_iface(struct bridge *);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 
-static void bridge_unixctl_fdb_show(struct unixctl_conn *, const char *args);
+static unixctl_cb_func bridge_unixctl_fdb_show;
 
 static void bond_init(void);
 static void bond_run(struct bridge *);
@@ -287,7 +287,7 @@ bridge_init(void)
     struct svec dpif_names;
     size_t i;
 
-    unixctl_command_register("fdb/show", bridge_unixctl_fdb_show);
+    unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
 
     svec_init(&dpif_names);
     dp_enumerate(&dpif_names);
@@ -316,7 +316,8 @@ bridge_init(void)
     }
     svec_destroy(&dpif_names);
 
-    unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows);
+    unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
+                             NULL);
 
     bond_init();
     bridge_reconfigure();
@@ -926,7 +927,8 @@ bridge_get_local_iface(struct bridge *br)
 
 /* Bridge unixctl user interface functions. */
 static void
-bridge_unixctl_fdb_show(struct unixctl_conn *conn, const char *args)
+bridge_unixctl_fdb_show(struct unixctl_conn *conn,
+                        const char *args, void *aux UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct bridge *br;
@@ -1061,7 +1063,8 @@ bridge_get_datapathid(const char *name)
 /* Handle requests for a listing of all flows known by the OpenFlow
  * stack, including those normally hidden. */
 static void
-bridge_unixctl_dump_flows(struct unixctl_conn *conn, const char *args)
+bridge_unixctl_dump_flows(struct unixctl_conn *conn,
+                          const char *args, void *aux UNUSED)
 {
     struct bridge *br;
     struct ds results;
@@ -2521,7 +2524,8 @@ bond_send_learning_packets(struct port *port)
 /* Bonding unixctl user interface functions. */
 
 static void
-bond_unixctl_list(struct unixctl_conn *conn, const char *args UNUSED)
+bond_unixctl_list(struct unixctl_conn *conn,
+                  const char *args UNUSED, void *aux UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct bridge *br;
@@ -2571,7 +2575,8 @@ bond_find(const char *name)
 }
 
 static void
-bond_unixctl_show(struct unixctl_conn *conn, const char *args)
+bond_unixctl_show(struct unixctl_conn *conn,
+                  const char *args, void *aux UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct port *port;
@@ -2640,7 +2645,8 @@ bond_unixctl_show(struct unixctl_conn *conn, const char *args)
 }
 
 static void
-bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_)
+bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
+                     void *aux UNUSED)
 {
     char *args = (char *) args_;
     char *save_ptr = NULL;
@@ -2696,7 +2702,8 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_)
 }
 
 static void
-bond_unixctl_set_active_slave(struct unixctl_conn *conn, const char *args_)
+bond_unixctl_set_active_slave(struct unixctl_conn *conn, const char *args_,
+                              void *aux UNUSED)
 {
     char *args = (char *) args_;
     char *save_ptr = NULL;
@@ -2776,19 +2783,22 @@ enable_slave(struct unixctl_conn *conn, const char *args_, bool enable)
 }
 
 static void
-bond_unixctl_enable_slave(struct unixctl_conn *conn, const char *args)
+bond_unixctl_enable_slave(struct unixctl_conn *conn, const char *args,
+                          void *aux UNUSED)
 {
     enable_slave(conn, args, true);
 }
 
 static void
-bond_unixctl_disable_slave(struct unixctl_conn *conn, const char *args)
+bond_unixctl_disable_slave(struct unixctl_conn *conn, const char *args,
+                           void *aux UNUSED)
 {
     enable_slave(conn, args, false);
 }
 
 static void
-bond_unixctl_hash(struct unixctl_conn *conn, const char *args)
+bond_unixctl_hash(struct unixctl_conn *conn, const char *args,
+                  void *aux UNUSED)
 {
 	uint8_t mac[ETH_ADDR_LEN];
 	uint8_t hash;
@@ -2809,14 +2819,16 @@ bond_unixctl_hash(struct unixctl_conn *conn, const char *args)
 static void
 bond_init(void)
 {
-    unixctl_command_register("bond/list", bond_unixctl_list);
-    unixctl_command_register("bond/show", bond_unixctl_show);
-    unixctl_command_register("bond/migrate", bond_unixctl_migrate);
+    unixctl_command_register("bond/list", bond_unixctl_list, NULL);
+    unixctl_command_register("bond/show", bond_unixctl_show, NULL);
+    unixctl_command_register("bond/migrate", bond_unixctl_migrate, NULL);
     unixctl_command_register("bond/set-active-slave",
-                             bond_unixctl_set_active_slave);
-    unixctl_command_register("bond/enable-slave", bond_unixctl_enable_slave);
-    unixctl_command_register("bond/disable-slave", bond_unixctl_disable_slave);
-    unixctl_command_register("bond/hash", bond_unixctl_hash);
+                             bond_unixctl_set_active_slave, NULL);
+    unixctl_command_register("bond/enable-slave", bond_unixctl_enable_slave,
+                             NULL);
+    unixctl_command_register("bond/disable-slave", bond_unixctl_disable_slave,
+                             NULL);
+    unixctl_command_register("bond/hash", bond_unixctl_hash, NULL);
 }
 
 /* Port functions. */
