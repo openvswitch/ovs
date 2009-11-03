@@ -190,6 +190,7 @@ hmap_replace(struct hmap *hmap,
     }
     *bucket = new;
     new->hash = old->hash;
+    new->next = old->next;
 }
 
 static inline struct hmap_node *
