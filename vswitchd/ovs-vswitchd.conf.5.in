@@ -412,18 +412,24 @@ port.eth1.ingress.policing-burst=20
 
 .fi
 .SS "NetFlow v5 Flow Logging"
-NetFlow is a protocol that exports a number of details about terminating 
-IP flows, such as the principals involved and duration.  A bridge may be 
-configured to send NetFlow v5 records to NetFlow collectors when flows 
-end.  To enable, define the key \fBnetflow.\fIbridge\fB.host\fR for each 
-collector in the form \fIip\fB:\fIport\fR.  Records from \fIbridge\fR 
+NetFlow is a protocol that exports a number of details about terminating
+IP flows, such as the principals involved and duration.  A bridge may be
+configured to send NetFlow v5 records to NetFlow collectors when flows
+end.  To enable, define the key \fBnetflow.\fIbridge\fB.host\fR for each
+collector in the form \fIip\fB:\fIport\fR.  Records from \fIbridge\fR
 will be sent to each \fIip\fR on UDP \fIport\fR.  The \fIip\fR must
 be specified numerically, not as a DNS name.
 
-The NetFlow messages will use the datapath index for the engine type and id.  
-This can be overridden with the \fBnetflow.\fIbridge\fB.engine-type\fR and 
+In addition to terminating flows, NetFlow can also send records at a set
+interval for flows that are still active.  This interval can be configured
+by defining the key \fBnetflow.\fIbridge\fB\.active-timeout\fR.  The value
+is in seconds.  An active timeout of 0 will disable this functionality.  By
+default there is timeout value of 600 seconds.
+
+The NetFlow messages will use the datapath index for the engine type and id.
+This can be overridden with the \fBnetflow.\fIbridge\fB.engine-type\fR and
 \fBnetflow.\fIbridge\fB.engine-id\fR, respectively.  Each takes a value
-between 0 and 255, inclusive. 
+between 0 and 255, inclusive.
 
 Many NetFlow collectors do not expect multiple virtual switches to be
 sending messages from the same host, and they do not store the engine
@@ -431,7 +437,7 @@ information which could be used to disambiguate the traffic.  To prevent
 flows from multiple switches appearing as if they came on the interface,
 add \fBnetflow.\fIbridge\fB.add-id-to-iface=true\fR to the configuration
 file.  This will place the least significant 7 bits of the engine id
-into the most significant bits of the ingress and egress interface fields 
+into the most significant bits of the ingress and egress interface fields
 of flow records.  When this option is enabled, a maximum of 508 ports are
 supported.  By default, this behavior is disabled.
 

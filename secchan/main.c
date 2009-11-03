@@ -118,6 +118,7 @@ main(int argc, char *argv[])
     struct ofproto *ofproto;
     struct ofsettings s;
     int error;
+    struct netflow_options nf_options;
 
     set_program_name(argv[0]);
     register_fault_handlers();
@@ -168,7 +169,9 @@ main(int argc, char *argv[])
         ovs_fatal(error,
                   "failed to configure controller snooping connections");
     }
-    error = ofproto_set_netflow(ofproto, &s.netflow, 0, 0, false);
+    memset(&nf_options, 0, sizeof nf_options);
+    nf_options.collectors = s.netflow;
+    error = ofproto_set_netflow(ofproto, &nf_options);
     if (error) {
         ovs_fatal(error, "failed to configure NetFlow collectors");
     }

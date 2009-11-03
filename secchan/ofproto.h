@@ -21,6 +21,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "flow.h"
+#include "netflow.h"
 #include "tag.h"
 
 struct odp_actions;
@@ -30,13 +31,9 @@ struct svec;
 
 struct ofexpired {
     flow_t flow;
-    uint64_t packet_count;      /* Packets from *expired* subrules. */
-    uint64_t byte_count;        /* Bytes from *expired* subrules. */
+    uint64_t packet_count;      /* Packets from subrules. */
+    uint64_t byte_count;        /* Bytes from subrules. */
     long long int used;         /* Last-used time (0 if never used). */
-    long long int created;      /* Creation time. */
-    uint8_t tcp_flags;          /* Bitwise-OR of all TCP flags seen. */
-    uint8_t ip_tos;             /* Last-seen IP type-of-service. */
-    uint16_t output_iface;      /* Output interface index. */
 };
 
 int ofproto_create(const char *datapath, const struct ofhooks *, void *aux,
@@ -63,8 +60,8 @@ int ofproto_set_discovery(struct ofproto *, bool discovery,
 int ofproto_set_controller(struct ofproto *, const char *controller);
 int ofproto_set_listeners(struct ofproto *, const struct svec *listeners);
 int ofproto_set_snoops(struct ofproto *, const struct svec *snoops);
-int ofproto_set_netflow(struct ofproto *, const struct svec *collectors,
-        uint8_t engine_type, uint8_t engine_id, bool add_id_to_iface);
+int ofproto_set_netflow(struct ofproto *,
+                        const struct netflow_options *nf_options);
 void ofproto_set_failure(struct ofproto *, bool fail_open);
 void ofproto_set_rate_limit(struct ofproto *, int rate_limit, int burst_limit);
 int ofproto_set_stp(struct ofproto *, bool enable_stp);

@@ -495,10 +495,7 @@ bridge_reconfigure(void)
         uint64_t dpid;
         struct iface *local_iface = NULL;
         const char *devname;
-        uint8_t engine_type = br->dpif.minor;
-        uint8_t engine_id = br->dpif.minor;
-        bool add_id_to_iface = false;
-        struct svec nf_hosts;
+        struct netflow_options nf_options;
 
         bridge_fetch_dp_ifaces(br);
         for (i = 0; i < br->n_ports; ) {
@@ -543,35 +540,46 @@ bridge_reconfigure(void)
         ofproto_set_datapath_id(br->ofproto, dpid);
 
         /* Set NetFlow configuration on this bridge. */
+        memset(&nf_options, 0, sizeof nf_options);
+        nf_options.engine_type = br->dpif.minor;
+        nf_options.engine_id = br->dpif.minor;
+        nf_options.active_timeout = -1;
+
         if (cfg_has("netflow.%s.engine-type", br->name)) {
-            engine_type = cfg_get_int(0, "netflow.%s.engine-type", 
+            nf_options.engine_type = cfg_get_int(0, "netflow.%s.engine-type", 
                     br->name);
         }
         if (cfg_has("netflow.%s.engine-id", br->name)) {
-            engine_id = cfg_get_int(0, "netflow.%s.engine-id", br->name);
+            nf_options.engine_id = cfg_get_int(0, "netflow.%s.engine-id",
+                                               br->name);
+        }
+        if (cfg_has("netflow.%s.active-timeout", br->name)) {
+            nf_options.active_timeout = cfg_get_int(0,
+                                                    "netflow.%s.active-timeout",
+                                                    br->name);
         }
         if (cfg_has("netflow.%s.add-id-to-iface", br->name)) {
-            add_id_to_iface = cfg_get_bool(0, "netflow.%s.add-id-to-iface",
-                    br->name);
+            nf_options.add_id_to_iface = cfg_get_bool(0,
+                                                   "netflow.%s.add-id-to-iface",
+                                                    br->name);
         }
-        if (add_id_to_iface && engine_id > 0x7f) {
+        if (nf_options.add_id_to_iface && nf_options.engine_id > 0x7f) {
             VLOG_WARN("bridge %s: netflow port mangling may conflict with "
                     "another vswitch, choose an engine id less than 128", 
                     br->name);
         }
-        if (add_id_to_iface && br->n_ports > 0x1ff) {
+        if (nf_options.add_id_to_iface && br->n_ports > 508) {
             VLOG_WARN("bridge %s: netflow port mangling will conflict with "
-                    "another port when 512 or more ports are used", 
+                    "another port when more than 508 ports are used", 
                     br->name);
         }
-        svec_init(&nf_hosts);
-        cfg_get_all_keys(&nf_hosts, "netflow.%s.host", br->name);
-        if (ofproto_set_netflow(br->ofproto, &nf_hosts,  engine_type, 
-                    engine_id, add_id_to_iface)) {
+        svec_init(&nf_options.collectors);
+        cfg_get_all_keys(&nf_options.collectors, "netflow.%s.host", br->name);
+        if (ofproto_set_netflow(br->ofproto, &nf_options)) {
             VLOG_ERR("bridge %s: problem setting netflow collectors", 
                     br->name);
         }
-        svec_destroy(&nf_hosts);
+        svec_destroy(&nf_options.collectors);
 
         /* Update the controller and related settings.  It would be more
          * straightforward to call this from bridge_reconfigure_one(), but we

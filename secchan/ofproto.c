@@ -94,10 +94,8 @@ struct rule {
     uint64_t packet_count;      /* Number of packets received. */
     uint64_t byte_count;        /* Number of bytes received. */
     uint64_t accounted_bytes;   /* Number of bytes passed to account_cb. */
-    uint8_t tcp_flags;          /* Bitwise-OR of all TCP flags seen. */
-    uint8_t ip_tos;             /* Last-seen IP type-of-service. */
     tag_type tags;              /* Tags (set only by hooks). */
-    uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
+    struct netflow_flow nf_flow; /* Per-flow NetFlow tracking data. */
 
     /* If 'super' is non-NULL, this rule is a subrule, that is, it is an
      * exact-match rule (having cr.wc.wildcards of 0) generated from the
@@ -146,9 +144,9 @@ rule_is_hidden(const struct rule *rule)
     return false;
 }
 
-static struct rule *rule_create(struct rule *super, const union ofp_action *,
-                                size_t n_actions, uint16_t idle_timeout,
-                                uint16_t hard_timeout);
+static struct rule *rule_create(struct ofproto *, struct rule *super,
+                                const union ofp_action *, size_t n_actions,
+                                uint16_t idle_timeout, uint16_t hard_timeout);
 static void rule_free(struct rule *);
 static void rule_destroy(struct ofproto *, struct rule *);
 static struct rule *rule_from_cls_rule(const struct cls_rule *);
@@ -243,8 +241,10 @@ static uint64_t pick_fallback_dpid(void);
 static void send_packet_in_miss(struct ofpbuf *, void *ofproto);
 static void send_packet_in_action(struct ofpbuf *, void *ofproto);
 static void update_used(struct ofproto *);
-static void update_stats(struct rule *, const struct odp_flow_stats *);
+static void update_stats(struct ofproto *, struct rule *,
+                         const struct odp_flow_stats *);
 static void expire_rule(struct cls_rule *, void *ofproto);
+static void active_timeout(struct ofproto *ofproto, struct rule *rule);
 static bool revalidate_rule(struct ofproto *p, struct rule *rule);
 static void revalidate_cb(struct cls_rule *rule_, void *p_);
 
@@ -543,16 +543,14 @@ ofproto_set_snoops(struct ofproto *ofproto, const struct svec *snoops)
 }
 
 int
-ofproto_set_netflow(struct ofproto *ofproto, const struct svec *collectors,
-        uint8_t engine_type, uint8_t engine_id, bool add_id_to_iface)
+ofproto_set_netflow(struct ofproto *ofproto,
+                    const struct netflow_options *nf_options)
 {
-    if (collectors && collectors->n) {
+    if (nf_options->collectors.n) {
         if (!ofproto->netflow) {
             ofproto->netflow = netflow_create();
         }
-        netflow_set_engine(ofproto->netflow, engine_type, engine_id, 
-                add_id_to_iface);
-        return netflow_set_collectors(ofproto->netflow, collectors);
+        return netflow_set_options(ofproto->netflow, nf_options);
     } else {
         netflow_destroy(ofproto->netflow);
         ofproto->netflow = NULL;
@@ -991,7 +989,7 @@ ofproto_add_flow(struct ofproto *p,
                  int idle_timeout)
 {
     struct rule *rule;
-    rule = rule_create(NULL, actions, n_actions,
+    rule = rule_create(p, NULL, actions, n_actions,
                        idle_timeout >= 0 ? idle_timeout : 5 /* XXX */, 0);
     cls_rule_from_flow(&rule->cr, flow, wildcards, priority);
     rule_insert(p, rule, NULL, 0);
@@ -1383,7 +1381,7 @@ ofconn_wait(struct ofconn *ofconn)
 /* Caller is responsible for initializing the 'cr' member of the returned
  * rule. */
 static struct rule *
-rule_create(struct rule *super,
+rule_create(struct ofproto *ofproto, struct rule *super,
             const union ofp_action *actions, size_t n_actions,
             uint16_t idle_timeout, uint16_t hard_timeout)
 {
@@ -1399,6 +1397,9 @@ rule_create(struct rule *super,
     }
     rule->n_actions = n_actions;
     rule->actions = xmemdup(actions, n_actions * sizeof *actions);
+    netflow_flow_clear(&rule->nf_flow);
+    netflow_flow_update_time(ofproto->netflow, &rule->nf_flow, rule->created);
+
     return rule;
 }
 
@@ -1502,8 +1503,9 @@ rule_execute(struct ofproto *ofproto, struct rule *rule,
                       actions, n_actions, packet)) {
         struct odp_flow_stats stats;
         flow_extract_stats(flow, packet, &stats);
-        update_stats(rule, &stats);
+        update_stats(ofproto, rule, &stats);
         rule->used = time_msec();
+        netflow_flow_update_time(ofproto->netflow, &rule->nf_flow, rule->used);
     }
 }
 
@@ -1545,7 +1547,7 @@ static struct rule *
 rule_create_subrule(struct ofproto *ofproto, struct rule *rule,
                     const flow_t *flow)
 {
-    struct rule *subrule = rule_create(rule, NULL, 0,
+    struct rule *subrule = rule_create(ofproto, rule, NULL, 0,
                                        rule->idle_timeout, rule->hard_timeout);
     COVERAGE_INC(ofproto_subrule_create);
     cls_rule_from_flow(&subrule->cr, flow, 0,
@@ -1584,7 +1586,7 @@ rule_make_actions(struct ofproto *p, struct rule *rule,
     rule->tags = 0;
     xlate_actions(super->actions, super->n_actions, &rule->cr.flow, p,
                   packet, &a, &rule->tags, &rule->may_install,
-                  &rule->nf_output_iface);
+                  &rule->nf_flow.output_iface);
 
     actions_len = a.n_actions * sizeof *a.actions;
     if (rule->n_odp_actions != a.n_actions
@@ -1623,7 +1625,7 @@ rule_install(struct ofproto *p, struct rule *rule, struct rule *displaced_rule)
                          &put)) {
             rule->installed = true;
             if (displaced_rule) {
-                update_stats(rule, &put.flow.stats);
+                update_stats(p, rule, &put.flow.stats);
                 rule_post_uninstall(p, displaced_rule);
             }
         }
@@ -1690,7 +1692,7 @@ rule_uninstall(struct ofproto *p, struct rule *rule)
         odp_flow.actions = NULL;
         odp_flow.n_actions = 0;
         if (!dpif_flow_del(&p->dpif, &odp_flow)) {
-            update_stats(rule, &odp_flow.stats);
+            update_stats(p, rule, &odp_flow.stats);
         }
         rule->installed = false;
 
@@ -1698,47 +1700,50 @@ rule_uninstall(struct ofproto *p, struct rule *rule)
     }
 }
 
+static bool
+is_controller_rule(struct rule *rule)
+{
+    /* If the only action is send to the controller then don't report
+     * NetFlow expiration messages since it is just part of the control
+     * logic for the network and not real traffic. */
+
+    if (rule && rule->super) {
+        struct rule *super = rule->super;
+
+        return super->n_actions == 1 &&
+               super->actions[0].type == htons(OFPAT_OUTPUT) &&
+               super->actions[0].output.port == htons(OFPP_CONTROLLER);
+    }
+
+    return false;
+}
+
 static void
 rule_post_uninstall(struct ofproto *ofproto, struct rule *rule)
 {
     struct rule *super = rule->super;
-    bool controller_action;
 
     rule_account(ofproto, rule, 0);
 
-    /* If the only action is send to the controller then don't report
-     * NetFlow expiration messages since it is just part of the control
-     * logic for the network and not real traffic. */
-    controller_action = rule->n_odp_actions == 1 &&
-                        rule->odp_actions[0].type == ODPAT_CONTROLLER;
-
-    if (ofproto->netflow && rule->byte_count && !controller_action) {
+    if (ofproto->netflow && !is_controller_rule(rule)) {
         struct ofexpired expired;
         expired.flow = rule->cr.flow;
         expired.packet_count = rule->packet_count;
         expired.byte_count = rule->byte_count;
         expired.used = rule->used;
-        expired.created = rule->created;
-        expired.tcp_flags = rule->tcp_flags;
-        expired.ip_tos = rule->ip_tos;
-        expired.output_iface = rule->nf_output_iface;
-        netflow_expire(ofproto->netflow, &expired);
+        netflow_expire(ofproto->netflow, &rule->nf_flow, &expired);
     }
     if (super) {
         super->packet_count += rule->packet_count;
         super->byte_count += rule->byte_count;
-        super->tcp_flags |= rule->tcp_flags;
-        if (rule->packet_count) {
-            super->ip_tos = rule->ip_tos;
-        }
 
         /* Reset counters to prevent double counting if the rule ever gets
          * reinstalled. */
         rule->packet_count = 0;
         rule->byte_count = 0;
         rule->accounted_bytes = 0;
-        rule->tcp_flags = 0;
-        rule->ip_tos = 0;
+
+        netflow_flow_clear(&rule->nf_flow);
     }
 }
 
@@ -2717,23 +2722,26 @@ msec_from_nsec(uint64_t sec, uint32_t nsec)
 }
 
 static void
-update_time(struct rule *rule, const struct odp_flow_stats *stats)
+update_time(struct ofproto *ofproto, struct rule *rule,
+            const struct odp_flow_stats *stats)
 {
     long long int used = msec_from_nsec(stats->used_sec, stats->used_nsec);
     if (used > rule->used) {
         rule->used = used;
+        netflow_flow_update_time(ofproto->netflow, &rule->nf_flow, used);
     }
 }
 
 static void
-update_stats(struct rule *rule, const struct odp_flow_stats *stats)
+update_stats(struct ofproto *ofproto, struct rule *rule,
+             const struct odp_flow_stats *stats)
 {
-    update_time(rule, stats);
-    rule->packet_count += stats->n_packets;
-    rule->byte_count += stats->n_bytes;
-    rule->tcp_flags |= stats->tcp_flags;
     if (stats->n_packets) {
-        rule->ip_tos = stats->ip_tos;
+        update_time(ofproto, rule, stats);
+        rule->packet_count += stats->n_packets;
+        rule->byte_count += stats->n_bytes;
+        netflow_flow_update_flags(&rule->nf_flow, stats->ip_tos,
+                                  stats->tcp_flags);
     }
 }
 
@@ -2746,7 +2754,7 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
     uint16_t in_port;
     int error;
 
-    rule = rule_create(NULL, (const union ofp_action *) ofm->actions,
+    rule = rule_create(p, NULL, (const union ofp_action *) ofm->actions,
                        n_actions, ntohs(ofm->idle_timeout),
                        ntohs(ofm->hard_timeout));
     cls_rule_from_match(&rule->cr, &ofm->match, ntohs(ofm->priority));
@@ -3271,18 +3279,15 @@ expire_rule(struct cls_rule *cls_rule, void *p_)
                    ? rule->used + rule->idle_timeout * 1000
                    : LLONG_MAX);
     expire = MIN(hard_expire, idle_expire);
-    if (expire == LLONG_MAX) {
-        if (rule->installed && time_msec() >= rule->used + 5000) {
-            uninstall_idle_flow(p, rule);
-        }
-        return;
-    }
 
     now = time_msec();
     if (now < expire) {
         if (rule->installed && now >= rule->used + 5000) {
             uninstall_idle_flow(p, rule);
+        } else if (!rule->cr.wc.wildcards) {
+            active_timeout(p, rule);
         }
+
         return;
     }
 
@@ -3301,6 +3306,40 @@ expire_rule(struct cls_rule *cls_rule, void *p_)
                   (now >= hard_expire
                    ? OFPER_HARD_TIMEOUT : OFPER_IDLE_TIMEOUT));
     rule_remove(p, rule);
+}
+
+static void
+active_timeout(struct ofproto *ofproto, struct rule *rule)
+{
+    if (ofproto->netflow && !is_controller_rule(rule) &&
+        netflow_active_timeout_expired(ofproto->netflow, &rule->nf_flow)) {
+        struct ofexpired expired;
+        struct odp_flow odp_flow;
+
+        /* Get updated flow stats. */
+        memset(&odp_flow, 0, sizeof odp_flow);
+        odp_flow.key = rule->cr.flow;
+        odp_flow.flags = ODPFF_ZERO_TCP_FLAGS;
+        dpif_flow_get(&ofproto->dpif, &odp_flow);
+
+        if (odp_flow.stats.n_packets) {
+            update_time(ofproto, rule, &odp_flow.stats);
+            netflow_flow_update_flags(&rule->nf_flow, odp_flow.stats.ip_tos,
+                                      odp_flow.stats.tcp_flags);
+        }
+
+        expired.flow = rule->cr.flow;
+        expired.packet_count = rule->packet_count +
+                               odp_flow.stats.n_packets;
+        expired.byte_count = rule->byte_count + odp_flow.stats.n_bytes;
+        expired.used = rule->used;
+
+        netflow_expire(ofproto->netflow, &rule->nf_flow, &expired);
+
+        /* Schedule us to send the accumulated records once we have
+         * collected all of them. */
+        poll_immediate_wake();
+    }
 }
 
 static void
@@ -3328,7 +3367,7 @@ update_used(struct ofproto *p)
             continue;
         }
 
-        update_time(rule, &f->stats);
+        update_time(p, rule, &f->stats);
         rule_account(p, rule, f->stats.n_bytes);
     }
     free(flows);
