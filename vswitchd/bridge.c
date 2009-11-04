@@ -216,6 +216,7 @@ static void bond_run(struct bridge *);
 static void bond_wait(struct bridge *);
 static void bond_rebalance_port(struct port *);
 static void bond_send_learning_packets(struct port *);
+static void bond_enable_slave(struct iface *iface, bool enable);
 
 static void port_create(struct bridge *, const char *name);
 static void port_reconfigure(struct port *);
@@ -1416,13 +1417,31 @@ lookup_bond_entry(const struct port *port, const uint8_t mac[ETH_ADDR_LEN])
 static int
 bond_choose_iface(const struct port *port)
 {
-    size_t i;
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
+    size_t i, best_down_slave = -1;
+    long long next_delay_expiration = LLONG_MAX;
+
     for (i = 0; i < port->n_ifaces; i++) {
-        if (port->ifaces[i]->enabled) {
+        struct iface *iface = port->ifaces[i];
+
+        if (iface->enabled) {
             return i;
+        } else if (iface->delay_expires < next_delay_expiration) {
+            best_down_slave = i;
+            next_delay_expiration = iface->delay_expires;
         }
     }
-    return -1;
+
+    if (best_down_slave != -1) {
+        struct iface *iface = port->ifaces[best_down_slave];
+
+        VLOG_INFO_RL(&rl, "interface %s: skipping remaining %lli ms updelay "
+                     "since no other interface is up", iface->name,
+                     iface->delay_expires - time_msec());
+        bond_enable_slave(iface, true);
+    }
+
+    return best_down_slave;
 }
 
 static bool
@@ -1472,10 +1491,12 @@ bond_link_status_update(struct iface *iface, bool carrier)
         iface->delay_expires = LLONG_MAX;
         VLOG_INFO_RL(&rl, "interface %s: will not be %s",
                      iface->name, carrier ? "disabled" : "enabled");
-    } else if (carrier && port->updelay && port->active_iface < 0) {
-        iface->delay_expires = time_msec();
-        VLOG_INFO_RL(&rl, "interface %s: skipping %d ms updelay since no "
-                     "other interface is up", iface->name, port->updelay);
+    } else if (carrier && port->active_iface < 0) {
+        bond_enable_slave(iface, true);
+        if (port->updelay) {
+            VLOG_INFO_RL(&rl, "interface %s: skipping %d ms updelay since no "
+                         "other interface is up", iface->name, port->updelay);
+        }
     } else {
         int delay = carrier ? port->updelay : port->downdelay;
         iface->delay_expires = time_msec() + delay;
@@ -1512,6 +1533,12 @@ bond_enable_slave(struct iface *iface, bool enable)
     struct port *port = iface->port;
     struct bridge *br = port->bridge;
 
+    /* This acts as a recursion check.  If the act of disabling a slave
+     * causes a different slave to be enabled, the flag will allow us to
+     * skip redundant work when we reenter this function.  It must be
+     * cleared on exit to keep things safe with multiple bonds. */
+    static bool moving_active_iface = false;
+
     iface->delay_expires = LLONG_MAX;
     if (enable == iface->enabled) {
         return;
@@ -1524,19 +1551,29 @@ bond_enable_slave(struct iface *iface, bool enable)
         if (iface->port_ifidx == port->active_iface) {
             ofproto_revalidate(br->ofproto,
                                port->active_iface_tag);
+
+            /* Disabling a slave can lead to another slave being immediately
+             * enabled if there will be no active slaves but one is waiting
+             * on an updelay.  In this case we do not need to run most of the
+             * code for the newly enabled slave since there was no period
+             * without an active slave and it is redundant with the disabling
+             * path. */
+            moving_active_iface = true;
             bond_choose_active_iface(port);
         }
         bond_send_learning_packets(port);
     } else {
         VLOG_WARN("interface %s: enabled", iface->name);
-        if (port->active_iface < 0) {
+        if (port->active_iface < 0 && !moving_active_iface) {
             ofproto_revalidate(br->ofproto, port->no_ifaces_tag);
             bond_choose_active_iface(port);
             bond_send_learning_packets(port);
         }
         iface->tag = tag_create_random();
     }
-    port_update_bond_compat(port);
+
+    moving_active_iface = false;
+    port->bond_compat_is_stale = true;
 }
 
 static void
@@ -1547,19 +1584,18 @@ bond_run(struct bridge *br)
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
 
+        if (port->n_ifaces >= 2) {
+            for (j = 0; j < port->n_ifaces; j++) {
+                struct iface *iface = port->ifaces[j];
+                if (time_msec() >= iface->delay_expires) {
+                    bond_enable_slave(iface, !iface->enabled);
+                }
+            }
+        }
+
         if (port->bond_compat_is_stale) {
             port->bond_compat_is_stale = false;
             port_update_bond_compat(port);
-        }
-
-        if (port->n_ifaces < 2) {
-            continue;
-        }
-        for (j = 0; j < port->n_ifaces; j++) {
-            struct iface *iface = port->ifaces[j];
-            if (time_msec() >= iface->delay_expires) {
-                bond_enable_slave(iface, !iface->enabled);
-            }
         }
     }
 }
