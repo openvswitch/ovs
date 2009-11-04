@@ -68,4 +68,17 @@ static inline uint32_t hash_int(uint32_t x, uint32_t basis)
     return x + basis;
 }
 
+static inline uint32_t hash_pointer(const void *p, uint32_t basis)
+{
+    /* Often pointers are hashed simply by casting to integer type, but that
+     * has pitfalls since the lower bits of a pointer are often all 0 for
+     * alignment reasons.  It's hard to guess where the entropy really is, so
+     * we give up here and just use a high-quality hash function.
+     *
+     * The double cast suppresses a warning on 64-bit systems about casting to
+     * an integer to different size.  That's OK in this case, since most of the
+     * entropy in the pointer is almost certainly in the lower 32 bits. */
+    return hash_int((uint32_t) (uintptr_t) p, basis);
+}
+
 #endif /* hash.h */
