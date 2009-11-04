@@ -40,6 +40,7 @@ void ds_truncate(struct ds *, size_t new_length);
 void ds_reserve(struct ds *, size_t min_length);
 char *ds_put_uninit(struct ds *, size_t n);
 void ds_put_char(struct ds *, char);
+void ds_put_utf8(struct ds *, int uc);
 void ds_put_char_multiple(struct ds *, char, size_t n);
 void ds_put_buffer(struct ds *, const char *, size_t n);
 void ds_put_cstr(struct ds *, const char *);

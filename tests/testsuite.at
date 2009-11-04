@@ -19,6 +19,7 @@ AT_TESTED([ovs-vsctl])
 
 m4_include([tests/lcov-pre.at])
 m4_include([tests/library.at])
+m4_include([tests/json.at])
 m4_include([tests/timeval.at])
 m4_include([tests/lockfile.at])
 m4_include([tests/stp.at])

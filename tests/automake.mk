@@ -8,6 +8,7 @@ TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/lcov-pre.at \
 	tests/library.at \
+	tests/json.at \
 	tests/timeval.at \
 	tests/lockfile.at \
 	tests/stp.at \
@@ -59,6 +60,10 @@ tests_test_hash_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-hmap
 tests_test_hmap_SOURCES = tests/test-hmap.c
 tests_test_hmap_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-json
+tests_test_json_SOURCES = tests/test-json.c
+tests_test_json_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-list
 tests_test_list_SOURCES = tests/test-list.c

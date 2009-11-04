@@ -49,6 +49,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/hash.h \
 	lib/hmap.c \
 	lib/hmap.h \
+	lib/json.c \
+	lib/json.h \
 	lib/leak-checker.c \
 	lib/leak-checker.h \
 	lib/learning-switch.c \
@@ -107,6 +109,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/type-props.h \
 	lib/unixctl.c \
 	lib/unixctl.h \
+	lib/unicode.c \
+	lib/unicode.h \
 	lib/util.c \
 	lib/util.h \
 	lib/valgrind.h \

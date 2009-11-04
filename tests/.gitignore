@@ -5,6 +5,7 @@
 /test-flows
 /test-hash
 /test-hmap
+/test-json
 /test-list
 /test-stp
 /test-type-props

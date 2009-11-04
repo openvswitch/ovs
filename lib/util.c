@@ -300,3 +300,58 @@ str_to_ullong(const char *s, int base, unsigned long long *ull)
 {
     return str_to_llong(s, base, (long long *) ull);
 }
+
+/* Converts floating-point string 's' into a double.  If successful, stores
+ * the double in '*d' and returns true; on failure, stores 0 in '*d' and
+ * returns false.
+ *
+ * Underflow (e.g. "1e-9999") is not considered an error, but overflow
+ * (e.g. "1e9999)" is. */
+bool
+str_to_double(const char *s, double *d)
+{
+    int save_errno = errno;
+    char *tail;
+    errno = 0;
+    *d = strtod(s, &tail);
+    if (errno == EINVAL || (errno == ERANGE && *d != 0)
+        || tail == s || *tail != '\0') {
+        errno = save_errno;
+        *d = 0;
+        return false;
+    } else {
+        errno = save_errno;
+        return true;
+    }
+}
+
+/* Returns the value of 'c' as a hexadecimal digit. */
+int
+hexit_value(int c)
+{
+    switch (c) {
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+        return c - '0';
+
+    case 'a': case 'A':
+        return 0xa;
+
+    case 'b': case 'B':
+        return 0xb;
+
+    case 'c': case 'C':
+        return 0xc;
+
+    case 'd': case 'D':
+        return 0xd;
+
+    case 'e': case 'E':
+        return 0xe;
+
+    case 'f': case 'F':
+        return 0xf;
+    }
+
+    NOT_REACHED();
+}

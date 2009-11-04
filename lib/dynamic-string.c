@@ -71,6 +71,31 @@ ds_put_char(struct ds *ds, char c)
     *ds_put_uninit(ds, 1) = c;
 }
 
+/* Appends unicode code point 'uc' to 'ds' in UTF-8 encoding. */
+void
+ds_put_utf8(struct ds *ds, int uc)
+{
+    if (uc <= 0x7f) {
+        ds_put_char(ds, uc);
+    } else if (uc <= 0x7ff) {
+        ds_put_char(ds, 0xc0 | (uc >> 6));
+        ds_put_char(ds, 0x80 | (uc & 0x3f));
+    } else if (uc <= 0xffff) {
+        ds_put_char(ds, 0xe0 | (uc >> 12));
+        ds_put_char(ds, 0x80 | ((uc >> 6) & 0x3f));
+        ds_put_char(ds, 0x80 | (uc & 0x3f));
+    } else if (uc <= 0x10ffff) {
+        ds_put_char(ds, 0xf0 | (uc >> 18));
+        ds_put_char(ds, 0x80 | ((uc >> 12) & 0x3f));
+        ds_put_char(ds, 0x80 | ((uc >> 6) & 0x3f));
+        ds_put_char(ds, 0x80 | (uc & 0x3f));
+    } else {
+        /* Invalid code point.  Insert the Unicode general substitute
+         * REPLACEMENT CHARACTER. */
+        ds_put_utf8(ds, 0xfffd);
+    }
+}
+
 void
 ds_put_char_multiple(struct ds *ds, char c, size_t n)
 {

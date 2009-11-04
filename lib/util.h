@@ -121,6 +121,10 @@ bool str_to_uint(const char *, int base, unsigned int *);
 bool str_to_ulong(const char *, int base, unsigned long *);
 bool str_to_ullong(const char *, int base, unsigned long long *);
 
+bool str_to_double(const char *, double *);
+
+int hexit_value(int c);
+
 #ifdef  __cplusplus
 }
 #endif
