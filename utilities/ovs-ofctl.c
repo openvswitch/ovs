@@ -948,11 +948,15 @@ static void do_del_flows(const struct settings *s, int argc, char *argv[])
     uint16_t out_port;
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
+    struct ofp_match match;
 
-    /* Parse and send. */
-    ofm = make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
-    str_to_flow(argc > 2 ? argv[2] : "", &ofm->match, NULL, NULL, 
-                &out_port, &priority, NULL, NULL);
+    /* Parse and send.  str_to_flow() will expand and reallocate the data in
+     * 'buffer', so we can't keep pointers to across the str_to_flow() call. */
+    make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
+    str_to_flow(argc > 2 ? argv[2] : "", &match, buffer, 
+                NULL, &out_port, &priority, NULL, NULL);
+    ofm = buffer->data;
+    ofm->match = match;
     if (s->strict) {
         ofm->command = htons(OFPFC_DELETE_STRICT);
     } else {
