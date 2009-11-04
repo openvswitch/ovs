@@ -102,6 +102,13 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/socket-util.h \
 	lib/stp.c \
 	lib/stp.h \
+	lib/stream-fd.c \
+	lib/stream-fd.h \
+	lib/stream-provider.h \
+	lib/stream-tcp.c \
+	lib/stream-unix.c \
+	lib/stream.c \
+	lib/stream.h \
 	lib/svec.c \
 	lib/svec.h \
 	lib/tag.c \
@@ -198,6 +205,7 @@ COVERAGE_FILES = \
 	lib/process.c \
 	lib/rconn.c \
 	lib/rtnetlink.c \
+	lib/stream.c \
 	lib/timeval.c \
 	lib/unixctl.c \
 	lib/util.c \
