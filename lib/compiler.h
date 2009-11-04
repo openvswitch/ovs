@@ -26,5 +26,6 @@
 #define ALWAYS_INLINE __attribute__((always_inline))
 #define likely(x) __builtin_expect((x),1)
 #define unlikely(x) __builtin_expect((x),0)
+#define WARN_UNUSED_RESULT __attribute__((__warn_unused_result__))
 
 #endif /* compiler.h */

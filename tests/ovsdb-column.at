@@ -1,0 +1,18 @@
+AT_BANNER([OVSDB -- columns])
+
+OVSDB_CHECK_POSITIVE([ordinary column],
+  [[parse-column mycol '{"type": "integer"}']],
+  [[{"type":"integer"}]])
+
+OVSDB_CHECK_POSITIVE([immutable column],
+  [[parse-column mycol '{"type": "real", "mutable": false}']],
+  [[{"mutable":false,"type":"real"}]])
+
+OVSDB_CHECK_POSITIVE([ephemeral column],
+  [[parse-column mycol '{"type": "uuid", "ephemeral": true}']],
+  [[{"ephemeral":true,"type":"uuid"}]])
+
+OVSDB_CHECK_POSITIVE([column with comment],
+  [[parse-column mycol '{"type": "boolean",
+                         "comment": "extra information about this column"}']],
+  [[{"comment":"extra information about this column","type":"boolean"}]])

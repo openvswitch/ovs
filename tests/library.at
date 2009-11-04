@@ -11,6 +11,7 @@ OVS_CHECK_LCOV([test-csum], [0], [ignore])
 AT_CLEANUP
 
 AT_SETUP([test flow classifier])
+AT_KEYWORDS([slow])
 OVS_CHECK_LCOV([test-classifier], [0], [ignore])
 AT_CLEANUP
 

@@ -15,6 +15,18 @@ TESTSUITE_AT = \
 	tests/jsonrpc.at \
 	tests/timeval.at \
 	tests/lockfile.at \
+	tests/ovsdb.at \
+	tests/ovsdb-file.at \
+	tests/ovsdb-types.at \
+	tests/ovsdb-data.at \
+	tests/ovsdb-column.at \
+	tests/ovsdb-table.at \
+	tests/ovsdb-row.at \
+	tests/ovsdb-condition.at \
+	tests/ovsdb-query.at \
+	tests/ovsdb-transaction.at \
+	tests/ovsdb-execution.at \
+	tests/ovsdb-trigger.at \
 	tests/stp.at \
 	tests/ovs-vsctl.at \
 	tests/lcov-post.at
@@ -88,6 +100,11 @@ tests_test_list_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-lockfile
 tests_test_lockfile_SOURCES = tests/test-lockfile.c
 tests_test_lockfile_LDADD = lib/libopenvswitch.a
+
+noinst_PROGRAMS += tests/test-ovsdb
+tests_test_ovsdb_SOURCES = tests/test-ovsdb.c
+tests_test_ovsdb_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a
+EXTRA_DIST += tests/uuidfilt.pl
 
 noinst_PROGRAMS += tests/test-sha1
 tests_test_sha1_SOURCES = tests/test-sha1.c

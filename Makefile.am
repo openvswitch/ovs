@@ -77,5 +77,6 @@ include include/automake.mk
 include third-party/automake.mk
 include debian/automake.mk
 include vswitchd/automake.mk
+include ovsdb/automake.mk
 include xenserver/automake.mk
 include extras/ezio/automake.mk

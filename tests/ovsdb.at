@@ -1,0 +1,35 @@
+m4_define([OVSDB_CHECK_POSITIVE], 
+  [AT_SETUP([$1])
+   m4_if([$5], [], [], 
+         [AT_XFAIL_IF([m4_version_prereq([$5], [false], [true])])])
+   AT_KEYWORDS([ovsdb positive $4])
+   OVS_CHECK_LCOV([test-ovsdb $2], [0], [$3
+], [])
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_NEGATIVE], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb negative $4])
+   OVS_CHECK_LCOV([test-ovsdb $2], [1], [], [stderr])
+   m4_assert(m4_len([$3]))
+   AT_CHECK(
+     [if grep -F -e "AS_ESCAPE([$3])" stderr
+      then
+        :
+      else
+        exit 99
+      fi], 
+            [0], [ignore], [ignore])
+   AT_CLEANUP])
+
+m4_include([tests/ovsdb-file.at])
+m4_include([tests/ovsdb-types.at])
+m4_include([tests/ovsdb-data.at])
+m4_include([tests/ovsdb-column.at])
+m4_include([tests/ovsdb-table.at])
+m4_include([tests/ovsdb-row.at])
+m4_include([tests/ovsdb-condition.at])
+m4_include([tests/ovsdb-query.at])
+m4_include([tests/ovsdb-transaction.at])
+m4_include([tests/ovsdb-execution.at])
+m4_include([tests/ovsdb-trigger.at])

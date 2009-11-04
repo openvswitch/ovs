@@ -1,0 +1,613 @@
+/* Copyright (c) 2009 Nicira Networks
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <config.h>
+
+#include <assert.h>
+#include <limits.h>
+
+#include "column.h"
+#include "condition.h"
+#include "file.h"
+#include "json.h"
+#include "ovsdb-data.h"
+#include "ovsdb-error.h"
+#include "ovsdb-parser.h"
+#include "ovsdb.h"
+#include "query.h"
+#include "row.h"
+#include "table.h"
+#include "timeval.h"
+#include "transaction.h"
+
+struct ovsdb_execution {
+    struct ovsdb *db;
+    struct ovsdb_txn *txn;
+    struct ovsdb_symbol_table *symtab;
+    bool durable;
+
+    /* Triggers. */
+    long long int elapsed_msec;
+    long long int timeout_msec;
+};
+
+typedef struct ovsdb_error *ovsdb_operation_executor(struct ovsdb_execution *,
+                                                     struct ovsdb_parser *,
+                                                     struct json *result);
+
+static struct ovsdb_error *do_commit(struct ovsdb_execution *);
+static ovsdb_operation_executor ovsdb_execute_insert;
+static ovsdb_operation_executor ovsdb_execute_select;
+static ovsdb_operation_executor ovsdb_execute_update;
+static ovsdb_operation_executor ovsdb_execute_delete;
+static ovsdb_operation_executor ovsdb_execute_wait;
+static ovsdb_operation_executor ovsdb_execute_commit;
+static ovsdb_operation_executor ovsdb_execute_abort;
+
+static ovsdb_operation_executor *
+lookup_executor(const char *name)
+{
+    struct ovsdb_operation {
+        const char *name;
+        ovsdb_operation_executor *executor;
+    };
+
+    static const struct ovsdb_operation operations[] = {
+        { "insert", ovsdb_execute_insert },
+        { "select", ovsdb_execute_select },
+        { "update", ovsdb_execute_update },
+        { "delete", ovsdb_execute_delete },
+        { "wait", ovsdb_execute_wait },
+        { "commit", ovsdb_execute_commit },
+        { "abort", ovsdb_execute_abort },
+    };
+
+    size_t i;
+
+    for (i = 0; i < ARRAY_SIZE(operations); i++) {
+        const struct ovsdb_operation *c = &operations[i];
+        if (!strcmp(c->name, name)) {
+            return c->executor;
+        }
+    }
+    return NULL;
+}
+
+struct json *
+ovsdb_execute(struct ovsdb *db, const struct json *params,
+              long long int elapsed_msec, long long int *timeout_msec)
+{
+    struct ovsdb_execution x;
+    struct ovsdb_error *error;
+    struct json *results;
+    size_t n_operations;
+    size_t i;
+
+    if (params->type != JSON_ARRAY) {
+        struct ovsdb_error *error;
+
+        error = ovsdb_syntax_error(params, NULL, "array expected");
+        results = ovsdb_error_to_json(error);
+        ovsdb_error_destroy(error);
+        return results;
+    }
+
+    x.db = db;
+    x.txn = ovsdb_txn_create(db);
+    x.symtab = ovsdb_symbol_table_create();
+    x.durable = false;
+    x.elapsed_msec = elapsed_msec;
+    x.timeout_msec = LLONG_MAX;
+    results = NULL;
+
+    results = json_array_create_empty();
+    n_operations = params->u.array.n;
+    error = NULL;
+    for (i = 0; i < n_operations; i++) {
+        struct json *operation = params->u.array.elems[i];
+        struct ovsdb_error *parse_error;
+        struct ovsdb_parser parser;
+        struct json *result;
+        const struct json *op;
+
+        /* Parse and execute operation. */
+        ovsdb_parser_init(&parser, operation,
+                          "ovsdb operation %zu of %zu", i + 1, n_operations);
+        op = ovsdb_parser_member(&parser, "op", OP_ID);
+        result = json_object_create();
+        if (op) {
+            const char *op_name = json_string(op);
+            ovsdb_operation_executor *executor = lookup_executor(op_name);
+            if (executor) {
+                error = executor(&x, &parser, result);
+            } else {
+                error = ovsdb_syntax_error(operation, "unknown operation",
+                                           "No operation \"%s\"", op_name);
+            }
+        } else {
+            assert(ovsdb_parser_has_error(&parser));
+        }
+
+        /* A parse error overrides any other error.
+         * An error overrides any other result. */
+        parse_error = ovsdb_parser_finish(&parser);
+        if (parse_error) {
+            ovsdb_error_destroy(error);
+            error = parse_error;
+        }
+        if (error) {
+            json_destroy(result);
+            result = ovsdb_error_to_json(error);
+        }
+        if (error && !strcmp(ovsdb_error_get_tag(error), "not supported")
+            && timeout_msec) {
+            ovsdb_txn_abort(x.txn);
+            *timeout_msec = x.timeout_msec;
+            ovsdb_error_destroy(error);
+            json_destroy(results);
+            return NULL;
+        }
+
+        /* Add result to array. */
+        json_array_add(results, result);
+        if (error) {
+            break;
+        }
+    }
+
+    if (!error) {
+        /* Commit transaction.  Bail if commit encounters error.  */
+        error = do_commit(&x);
+        if (error) {
+            json_array_add(results, ovsdb_error_to_json(error));
+        }
+    } else {
+        ovsdb_txn_abort(x.txn);
+    }
+
+    while (json_array(results)->n < n_operations) {
+        json_array_add(results, json_null_create());
+    }
+
+    ovsdb_error_destroy(error);
+    ovsdb_symbol_table_destroy(x.symtab);
+
+    return results;
+}
+
+struct ovsdb_error *
+ovsdb_execute_commit(struct ovsdb_execution *x, struct ovsdb_parser *parser,
+                     struct json *result UNUSED)
+{
+    const struct json *durable;
+
+    durable = ovsdb_parser_member(parser, "durable", OP_BOOLEAN);
+    if (durable && json_boolean(durable)) {
+        x->durable = true;
+    }
+    return NULL;
+}
+
+static struct ovsdb_error *
+ovsdb_execute_abort(struct ovsdb_execution *x UNUSED,
+                    struct ovsdb_parser *parser UNUSED,
+                    struct json *result UNUSED)
+{
+    return ovsdb_error("aborted", "aborted by request");
+}
+
+static struct ovsdb_error *
+do_commit(struct ovsdb_execution *x)
+{
+    if (x->db->file) {
+        struct ovsdb_error *error;
+        struct json *json;
+
+        json = ovsdb_txn_to_json(x->txn);
+        if (!json) {
+            /* Nothing to commit. */
+            return NULL;
+        }
+
+        error = ovsdb_file_write(x->db->file, json);
+        json_destroy(json);
+        if (error) {
+            return ovsdb_wrap_error(error, "writing transaction failed");
+        }
+
+        if (x->durable) {
+            error = ovsdb_file_commit(x->db->file);
+            if (error) {
+                return ovsdb_wrap_error(error,
+                                        "committing transaction failed");
+            }
+        }
+    }
+
+    ovsdb_txn_commit(x->txn);
+    return NULL;
+}
+
+static struct ovsdb_table *
+parse_table(struct ovsdb_execution *x,
+            struct ovsdb_parser *parser, const char *member)
+{
+    struct ovsdb_table *table;
+    const char *table_name;
+    const struct json *json;
+
+    json = ovsdb_parser_member(parser, member, OP_ID);
+    if (!json) {
+        return NULL;
+    }
+    table_name = json_string(json);
+
+    table = shash_find_data(&x->db->tables, table_name);
+    if (!table) {
+        ovsdb_parser_raise_error(parser, "No table named %s.", table_name);
+    }
+    return table;
+}
+
+static WARN_UNUSED_RESULT struct ovsdb_error *
+parse_row(struct ovsdb_parser *parser, const char *member,
+          const struct ovsdb_table *table,
+          const struct ovsdb_symbol_table *symtab,
+          struct ovsdb_row **rowp, struct ovsdb_column_set *columns)
+{
+    struct ovsdb_error *error;
+    const struct json *json;
+    struct ovsdb_row *row;
+
+    *rowp = NULL;
+
+    if (!table) {
+        return OVSDB_BUG("null table");
+    }
+    json = ovsdb_parser_member(parser, member, OP_OBJECT);
+    if (!json) {
+        return OVSDB_BUG("null row member");
+    }
+
+    row = ovsdb_row_create(table);
+    error = ovsdb_row_from_json(row, json, symtab, columns);
+    if (error) {
+        ovsdb_row_destroy(row);
+        return error;
+    } else {
+        *rowp = row;
+        return NULL;
+    }
+}
+
+struct ovsdb_error *
+ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
+                     struct json *result)
+{
+    struct ovsdb_table *table;
+    struct ovsdb_row *row = NULL;
+    const struct json *uuid_name;
+    struct ovsdb_error *error;
+
+    table = parse_table(x, parser, "table");
+    uuid_name = ovsdb_parser_member(parser, "uuid-name", OP_ID | OP_OPTIONAL);
+    error = ovsdb_parser_get_error(parser);
+    if (!error) {
+        error = parse_row(parser, "row", table, x->symtab, &row, NULL);
+    }
+    if (!error) {
+        uuid_generate(ovsdb_row_get_uuid_rw(row));
+        if (uuid_name) {
+            ovsdb_symbol_table_put(x->symtab, json_string(uuid_name),
+                                   ovsdb_row_get_uuid(row));
+        }
+        ovsdb_txn_row_insert(x->txn, row);
+        json_object_put(result, "uuid",
+                        ovsdb_datum_to_json(&row->fields[OVSDB_COL_UUID],
+                                            &ovsdb_type_uuid));
+        row = NULL;
+    }
+    return error;
+}
+
+struct ovsdb_error *
+ovsdb_execute_select(struct ovsdb_execution *x, struct ovsdb_parser *parser,
+                     struct json *result)
+{
+    struct ovsdb_table *table;
+    const struct json *where, *columns_json, *sort_json;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
+    struct ovsdb_column_set sort = OVSDB_COLUMN_SET_INITIALIZER;
+    struct ovsdb_error *error;
+
+    table = parse_table(x, parser, "table");
+    where = ovsdb_parser_member(parser, "where", OP_ARRAY);
+    columns_json = ovsdb_parser_member(parser, "columns",
+                                       OP_ARRAY | OP_OPTIONAL);
+    sort_json = ovsdb_parser_member(parser, "sort", OP_ARRAY | OP_OPTIONAL);
+
+    error = ovsdb_parser_get_error(parser);
+    if (!error) {
+        error = ovsdb_condition_from_json(table->schema, where, x->symtab,
+                                          &condition);
+    }
+    if (!error) {
+        error = ovsdb_column_set_from_json(columns_json, table, &columns);
+    }
+    if (!error) {
+        error = ovsdb_column_set_from_json(sort_json, table, &sort);
+    }
+    if (!error) {
+        struct ovsdb_row_set rows = OVSDB_ROW_SET_INITIALIZER;
+
+        ovsdb_query_distinct(table, &condition, &columns, &rows);
+        ovsdb_row_set_sort(&rows, &sort);
+        json_object_put(result, "rows",
+                        ovsdb_row_set_to_json(&rows, &columns));
+
+        ovsdb_row_set_destroy(&rows);
+    }
+
+    ovsdb_column_set_destroy(&columns);
+    ovsdb_column_set_destroy(&sort);
+    ovsdb_condition_destroy(&condition);
+
+    return error;
+}
+
+struct update_row_cbdata {
+    size_t n_matches;
+    struct ovsdb_txn *txn;
+    const struct ovsdb_row *row;
+    const struct ovsdb_column_set *columns;
+};
+
+static bool
+update_row_cb(const struct ovsdb_row *row, void *ur_)
+{
+    struct update_row_cbdata *ur = ur_;
+
+    ur->n_matches++;
+    if (!ovsdb_row_equal_columns(row, ur->row, ur->columns)) {
+        ovsdb_row_update_columns(ovsdb_txn_row_modify(ur->txn, row),
+                                 ur->row, ur->columns);
+    }
+
+    return true;
+}
+
+struct ovsdb_error *
+ovsdb_execute_update(struct ovsdb_execution *x, struct ovsdb_parser *parser,
+                     struct json *result)
+{
+    struct ovsdb_table *table;
+    const struct json *where;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
+    struct ovsdb_row *row = NULL;
+    struct update_row_cbdata ur;
+    struct ovsdb_error *error;
+
+    table = parse_table(x, parser, "table");
+    where = ovsdb_parser_member(parser, "where", OP_ARRAY);
+    error = ovsdb_parser_get_error(parser);
+    if (!error) {
+        error = parse_row(parser, "row", table, x->symtab, &row, &columns);
+    }
+    if (!error) {
+        error = ovsdb_condition_from_json(table->schema, where, x->symtab,
+                                          &condition);
+    }
+    if (!error) {
+        ur.n_matches = 0;
+        ur.txn = x->txn;
+        ur.row = row;
+        ur.columns = &columns;
+        ovsdb_query(table, &condition, update_row_cb, &ur);
+        json_object_put(result, "count", json_integer_create(ur.n_matches));
+    }
+
+    ovsdb_row_destroy(row);
+    ovsdb_column_set_destroy(&columns);
+    ovsdb_condition_destroy(&condition);
+
+    return error;
+}
+
+struct delete_row_cbdata {
+    size_t n_matches;
+    const struct ovsdb_table *table;
+    struct ovsdb_txn *txn;
+};
+
+static bool
+delete_row_cb(const struct ovsdb_row *row, void *dr_)
+{
+    struct delete_row_cbdata *dr = dr_;
+
+    dr->n_matches++;
+    ovsdb_txn_row_delete(dr->txn, row);
+
+    return true;
+}
+
+struct ovsdb_error *
+ovsdb_execute_delete(struct ovsdb_execution *x, struct ovsdb_parser *parser,
+                     struct json *result)
+{
+    struct ovsdb_table *table;
+    const struct json *where;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_error *error;
+
+    where = ovsdb_parser_member(parser, "where", OP_ARRAY);
+    table = parse_table(x, parser, "table");
+    error = ovsdb_parser_get_error(parser);
+    if (!error) {
+        error = ovsdb_condition_from_json(table->schema, where, x->symtab,
+                                          &condition);
+    }
+    if (!error) {
+        struct delete_row_cbdata dr;
+
+        dr.n_matches = 0;
+        dr.table = table;
+        dr.txn = x->txn;
+        ovsdb_query(table, &condition, delete_row_cb, &dr);
+
+        json_object_put(result, "count", json_integer_create(dr.n_matches));
+    }
+
+    ovsdb_condition_destroy(&condition);
+
+    return error;
+}
+
+struct wait_auxdata {
+    struct ovsdb_row_hash *actual;
+    struct ovsdb_row_hash *expected;
+    bool *equal;
+};
+
+static bool
+ovsdb_execute_wait_query_cb(const struct ovsdb_row *row, void *aux_)
+{
+    struct wait_auxdata *aux = aux_;
+
+    if (ovsdb_row_hash_contains(aux->expected, row)) {
+        ovsdb_row_hash_insert(aux->actual, row);
+        return true;
+    } else {
+        /* The query row isn't in the expected result set, so the actual and
+         * expected results sets definitely differ and we can short-circuit the
+         * rest of the query. */
+        *aux->equal = false;
+        return false;
+    }
+}
+
+static struct ovsdb_error *
+ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
+                   struct json *result UNUSED)
+{
+    struct ovsdb_table *table;
+    const struct json *timeout, *where, *columns_json, *until, *rows;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
+    struct ovsdb_row_hash expected = OVSDB_ROW_HASH_INITIALIZER(expected);
+    struct ovsdb_row_hash actual = OVSDB_ROW_HASH_INITIALIZER(actual);
+    struct ovsdb_error *error;
+    struct wait_auxdata aux;
+    long long int timeout_msec = 0;
+    size_t i;
+
+    timeout = ovsdb_parser_member(parser, "timeout", OP_NUMBER | OP_OPTIONAL);
+    where = ovsdb_parser_member(parser, "where", OP_ARRAY);
+    columns_json = ovsdb_parser_member(parser, "columns",
+                                       OP_ARRAY | OP_OPTIONAL);
+    until = ovsdb_parser_member(parser, "until", OP_STRING);
+    rows = ovsdb_parser_member(parser, "rows", OP_ARRAY);
+    table = parse_table(x, parser, "table");
+    error = ovsdb_parser_get_error(parser);
+    if (!error) {
+        error = ovsdb_condition_from_json(table->schema, where, x->symtab,
+                                          &condition);
+    }
+    if (!error) {
+        error = ovsdb_column_set_from_json(columns_json, table, &columns);
+    }
+    if (!error) {
+        if (timeout) {
+            timeout_msec = MIN(LLONG_MAX, json_real(timeout));
+            if (timeout_msec < 0) {
+                error = ovsdb_syntax_error(timeout, NULL,
+                                           "timeout must be nonnegative");
+            } else if (timeout_msec < x->timeout_msec) {
+                x->timeout_msec = timeout_msec;
+            }
+        } else {
+            timeout_msec = LLONG_MAX;
+        }
+        if (strcmp(json_string(until), "==")
+            && strcmp(json_string(until), "!=")) {
+            error = ovsdb_syntax_error(until, NULL,
+                                       "\"until\" must be \"==\" or \"!=\"");
+        }
+    }
+    if (!error) {
+        /* Parse "rows" into 'expected'. */
+        ovsdb_row_hash_init(&expected, &columns);
+        for (i = 0; i < rows->u.array.n; i++) {
+            struct ovsdb_error *error;
+            struct ovsdb_row *row;
+
+            row = ovsdb_row_create(table);
+            error = ovsdb_row_from_json(row, rows->u.array.elems[i], x->symtab,
+                                        NULL);
+            if (error) {
+                break;
+            }
+
+            if (!ovsdb_row_hash_insert(&expected, row)) {
+                /* XXX Perhaps we should abort with an error or log a
+                 * warning. */
+                ovsdb_row_destroy(row);
+            }
+        }
+    }
+    if (!error) {
+        /* Execute query. */
+        bool equal = true;
+        ovsdb_row_hash_init(&actual, &columns);
+        aux.actual = &actual;
+        aux.expected = &expected;
+        aux.equal = &equal;
+        ovsdb_query(table, &condition, ovsdb_execute_wait_query_cb, &aux);
+        if (equal) {
+            /* We know that every row in 'actual' is also in 'expected'.  We
+             * also know that all of the rows in 'actual' are distinct and that
+             * all of the rows in 'expected' are distinct.  Therefore, if
+             * 'actual' and 'expected' have the same number of rows, then they
+             * have the same content. */
+            size_t n_actual = ovsdb_row_hash_count(&actual);
+            size_t n_expected = ovsdb_row_hash_count(&expected);
+            equal = n_actual == n_expected;
+        }
+        if (!strcmp(json_string(until), "==") != equal) {
+            if (timeout && x->elapsed_msec >= timeout_msec) {
+                if (x->elapsed_msec) {
+                    error = ovsdb_error("timed out",
+                                        "\"wait\" timed out after %lld ms",
+                                        x->elapsed_msec);
+                } else {
+                    error = ovsdb_error("timed out", "\"wait\" timed out");
+                }
+            } else {
+                /* ovsdb_execute() will change this, if triggers really are
+                 * supported. */
+                error = ovsdb_error("not supported", "triggers not supported");
+            }
+        }
+    }
+
+
+    ovsdb_row_hash_destroy(&expected, true);
+    ovsdb_row_hash_destroy(&actual, false);
+    ovsdb_column_set_destroy(&columns);
+    ovsdb_condition_destroy(&condition);
+
+    return error;
+}

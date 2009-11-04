@@ -77,6 +77,15 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/ofp-print.h \
 	lib/ofpbuf.c \
 	lib/ofpbuf.h \
+	lib/ovsdb-client.h \
+	lib/ovsdb-data.c \
+	lib/ovsdb-data.h \
+	lib/ovsdb-error.c \
+	lib/ovsdb-error.h \
+	lib/ovsdb-parser.c \
+	lib/ovsdb-parser.h \
+	lib/ovsdb-types.c \
+	lib/ovsdb-types.h \
 	lib/packets.c \
 	lib/packets.h \
 	lib/pcap.c \
@@ -104,6 +113,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/signals.h \
 	lib/socket-util.c \
 	lib/socket-util.h \
+	lib/sort.c \
+	lib/sort.h \
 	lib/stp.c \
 	lib/stp.h \
 	lib/stream-fd.c \

@@ -1,0 +1,259 @@
+AT_BANNER([OVSDB -- atoms])
+
+OVSDB_CHECK_POSITIVE([integer atom], 
+  [[parse-atoms '["integer"]' \
+    '[0]' \
+    '[-1]' \
+    '[1e3]' \
+    '[9223372036854775807]' \
+    '[-9223372036854775808]' ]], 
+  [0
+-1
+1000
+9223372036854775807
+-9223372036854775808])
+
+OVSDB_CHECK_POSITIVE([real atom], 
+  [[parse-atoms '["real"]' \
+    '[0]' \
+    '[0.0]' \
+    '[-0.0]' \
+    '[-1.25]' \
+    '[1e3]' \
+    '[1e37]' \
+    '[0.00390625]' ]], 
+  [0
+0
+0
+-1.25
+1000
+1e+37
+0.00390625])
+
+OVSDB_CHECK_POSITIVE([boolean atom],
+  [[parse-atoms '["boolean"]' '[true]' '[false]' ]],
+  [true
+false])
+
+OVSDB_CHECK_POSITIVE([string atom],
+  [[parse-atoms '["string"]' '[""]' '["true"]' '["\"\\\/\b\f\n\r\t"]']],
+  [""
+"true"
+"\"\\/\b\f\n\r\t"])
+
+OVSDB_CHECK_POSITIVE([uuid atom],
+  [[parse-atoms '["uuid"]' '["uuid", "550e8400-e29b-41d4-a716-446655440000"]']],
+  [[["uuid","550e8400-e29b-41d4-a716-446655440000"]]])
+
+OVSDB_CHECK_POSITIVE([integer atom sorting],
+  [[sort-atoms '["integer"]' '[55,0,-1,2,1]']],
+  [[[-1,0,1,2,55]]])
+
+OVSDB_CHECK_POSITIVE([real atom sorting],
+  [[sort-atoms '["real"]' '[1.25,1.23,0.0,-0.0,-1e99]']],
+  [[[-1e+99,0,0,1.23,1.25]]])
+
+OVSDB_CHECK_POSITIVE([boolean atom sorting],
+  [[sort-atoms '["boolean"]' '[true,false,true,false,false]']],
+  [[[false,false,false,true,true]]])
+
+OVSDB_CHECK_POSITIVE([string atom sorting],
+  [[sort-atoms '["string"]' '["abd","abc","\b","xxx"]']],
+  [[["\b","abc","abd","xxx"]]])
+
+OVSDB_CHECK_POSITIVE([uuid atom sorting],
+  [[sort-atoms '["uuid"]' '[
+    ["uuid", "00000000-0000-0000-0000-000000000001"],
+    ["uuid", "00000000-1000-0000-0000-000000000000"],
+    ["uuid", "00000000-0000-1000-0000-000000000000"],
+    ["uuid", "00010000-0000-0000-0000-000000000000"],
+    ["uuid", "00000000-0000-0000-0000-000000000100"],
+    ["uuid", "00000000-0000-0000-0000-000100000000"],
+    ["uuid", "00000000-0000-0010-0000-000000000000"],
+    ["uuid", "00000100-0000-0000-0000-000000000000"],
+    ["uuid", "00000000-0000-0001-0000-000000000000"],
+    ["uuid", "00000000-0000-0000-0000-000001000000"],
+    ["uuid", "01000000-0000-0000-0000-000000000000"],
+    ["uuid", "00000000-0000-0000-0000-000000001000"],
+    ["uuid", "00000000-0000-0000-0000-000010000000"],
+    ["uuid", "00000000-0000-0000-0000-010000000000"],
+    ["uuid", "00000000-0000-0100-0000-000000000000"],
+    ["uuid", "10000000-0000-0000-0000-000000000000"],
+    ["uuid", "00000000-0000-0000-0000-000000000010"],
+    ["uuid", "00000000-0100-0000-0000-000000000000"],
+    ["uuid", "00000000-0000-0000-0100-000000000000"],
+    ["uuid", "00000000-0000-0000-0001-000000000000"],
+    ["uuid", "00000010-0000-0000-0000-000000000000"],
+    ["uuid", "00000000-0000-0000-0010-000000000000"],
+    ["uuid", "00000000-0000-0000-0000-000000010000"],
+    ["uuid", "00000000-0000-0000-1000-000000000000"],
+    ["uuid", "00000000-0000-0000-0000-100000000000"],
+    ["uuid", "00000000-0000-0000-0000-001000000000"],
+    ["uuid", "00000000-0000-0000-0000-000000100000"],
+    ["uuid", "00000000-0000-0000-0000-000000000000"],
+    ["uuid", "00000000-0010-0000-0000-000000000000"],
+    ["uuid", "00100000-0000-0000-0000-000000000000"],
+    ["uuid", "00000000-0001-0000-0000-000000000000"],
+    ["uuid", "00000001-0000-0000-0000-000000000000"],
+    ["uuid", "00001000-0000-0000-0000-000000000000"]]']],
+  [[[["uuid","00000000-0000-0000-0000-000000000000"],["uuid","00000000-0000-0000-0000-000000000001"],["uuid","00000000-0000-0000-0000-000000000010"],["uuid","00000000-0000-0000-0000-000000000100"],["uuid","00000000-0000-0000-0000-000000001000"],["uuid","00000000-0000-0000-0000-000000010000"],["uuid","00000000-0000-0000-0000-000000100000"],["uuid","00000000-0000-0000-0000-000001000000"],["uuid","00000000-0000-0000-0000-000010000000"],["uuid","00000000-0000-0000-0000-000100000000"],["uuid","00000000-0000-0000-0000-001000000000"],["uuid","00000000-0000-0000-0000-010000000000"],["uuid","00000000-0000-0000-0000-100000000000"],["uuid","00000000-0000-0000-0001-000000000000"],["uuid","00000000-0000-0000-0010-000000000000"],["uuid","00000000-0000-0000-0100-000000000000"],["uuid","00000000-0000-0000-1000-000000000000"],["uuid","00000000-0000-0001-0000-000000000000"],["uuid","00000000-0000-0010-0000-000000000000"],["uuid","00000000-0000-0100-0000-000000000000"],["uuid","00000000-0000-1000-0000-000000000000"],["uuid","00000000-0001-0000-0000-000000000000"],["uuid","00000000-0010-0000-0000-000000000000"],["uuid","00000000-0100-0000-0000-000000000000"],["uuid","00000000-1000-0000-0000-000000000000"],["uuid","00000001-0000-0000-0000-000000000000"],["uuid","00000010-0000-0000-0000-000000000000"],["uuid","00000100-0000-0000-0000-000000000000"],["uuid","00001000-0000-0000-0000-000000000000"],["uuid","00010000-0000-0000-0000-000000000000"],["uuid","00100000-0000-0000-0000-000000000000"],["uuid","01000000-0000-0000-0000-000000000000"],["uuid","10000000-0000-0000-0000-000000000000"]]]])
+
+OVSDB_CHECK_NEGATIVE([real not acceptable integer atom],
+  [[parse-atoms '["integer"]' '[0.5]' ]],
+  [expected integer])
+
+OVSDB_CHECK_NEGATIVE([string "true" not acceptable boolean atom],
+  [[parse-atoms '["boolean"]' '["true"]' ]],
+  [expected boolean])
+
+OVSDB_CHECK_NEGATIVE([integer not acceptable string atom],
+  [[parse-atoms '["string"]' '[1]']],
+  [expected string])
+
+OVSDB_CHECK_NEGATIVE([uuid atom must be expressed as array],
+  [[parse-atoms '["uuid"]' '["550e8400-e29b-41d4-a716-446655440000"]']],
+  [[expected ["uuid", <string>]]])
+
+AT_BANNER([OSVDB -- simple data])
+
+OVSDB_CHECK_POSITIVE([integer datum],
+  [[parse-data '["integer"]' '[0]' '[1]' '[-1]']],
+  [0
+1
+-1])
+
+OVSDB_CHECK_POSITIVE([real datum], 
+  [[parse-data '["real"]' '[0]' '[1.0]' '[-1.25]']],
+  [0
+1
+-1.25])
+
+OVSDB_CHECK_POSITIVE([boolean datum],
+  [[parse-data '["boolean"]' '[true]' '[false]' ]],
+  [true
+false])
+
+OVSDB_CHECK_POSITIVE([string datum],
+  [[parse-data '["string"]' '[""]' '["true"]' '["\"\\\/\b\f\n\r\t"]']],
+  [""
+"true"
+"\"\\/\b\f\n\r\t"])
+
+AT_BANNER([OVSDB -- set data])
+
+OVSDB_CHECK_POSITIVE([optional boolean],
+  [[parse-data '{"key": "boolean", "min": 0}' \
+    '["set", [true]]' \
+    '["set", [false]]' \
+    '["set", []]']], 
+  [[["set",[true]]
+["set",[false]]
+["set",[]]]],
+  [set])
+
+OVSDB_CHECK_POSITIVE([set of 0 or more integers],
+  [[parse-data '{"key": "integer", "min": 0, "max": "unlimited"}' \
+    '["set", [0]]' \
+    '["set", [0, 1]]' \
+    '["set", [0, 1, 2]]' \
+    '["set", [0, 1, 2, 3, 4, 5]]' \
+    '["set", [0, 1, 2, 3, 4, 5, 6, 7, 8]]' \
+    '["set", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]']],
+  [[["set",[0]]
+["set",[0,1]]
+["set",[0,1,2]]
+["set",[0,1,2,3,4,5]]
+["set",[0,1,2,3,4,5,6,7,8]]
+["set",[0,1,2,3,4,5,6,7,8,9,10]]]])
+
+OVSDB_CHECK_POSITIVE([set of 1 to 3 uuids],
+  [[parse-data '{"key": "uuid", "min": 1, "max": 3}' \
+    '["set", [["uuid", "550e8400-e29b-41d4-a716-446655440000"]]]' \
+    '["set", [["uuid", "c5051240-30ff-43ed-b4b9-93cf3f050813"],
+              ["uuid", "90558331-09af-4d2f-a572-509cad2e9088"],
+              ["uuid", "550e8400-e29b-41d4-a716-446655440000"]]]']],
+  [[["set",[["uuid","550e8400-e29b-41d4-a716-446655440000"]]]
+["set",[["uuid","550e8400-e29b-41d4-a716-446655440000"],["uuid","90558331-09af-4d2f-a572-509cad2e9088"],["uuid","c5051240-30ff-43ed-b4b9-93cf3f050813"]]]]])
+
+OVSDB_CHECK_POSITIVE([set of 0 to 3 strings],
+  [[parse-data '{"key": "string", "min": 0, "max": 3}' \
+    '["set", []]' \
+    '["set", ["a relatively long string"]]' \
+    '["set", ["short string", "a relatively long string"]]' \
+    '["set", ["zzz", "short string", "a relatively long string"]]']],
+  [[["set",[]]
+["set",["a relatively long string"]]
+["set",["a relatively long string","short string"]]
+["set",["a relatively long string","short string","zzz"]]]])
+
+OVSDB_CHECK_NEGATIVE([duplicate boolean not allowed in set],
+  [[parse-data '{"key": "boolean", "max": 5}' '["set", [true, true]]']],
+  [ovsdb error: set contains duplicate])
+
+OVSDB_CHECK_NEGATIVE([duplicate integer not allowed in set],
+  [[parse-data '{"key": "integer", "max": 5}' '["set", [1, 2, 3, 1]]']],
+  [ovsdb error: set contains duplicate])
+
+OVSDB_CHECK_NEGATIVE([duplicate real not allowed in set],
+  [[parse-data '{"key": "real", "max": 5}' '["set", [0.0, -0.0]]']],
+  [ovsdb error: set contains duplicate])
+
+OVSDB_CHECK_NEGATIVE([duplicate string not allowed in set],
+  [[parse-data '{"key": "string", "max": 5}' '["set", ["asdf", "ASDF", "asdf"]]']],
+  [ovsdb error: set contains duplicate])
+
+OVSDB_CHECK_NEGATIVE([duplicate uuid not allowed in set],
+  [[parse-data '{"key": "uuid", "max": 5}' \
+    '["set", [["uuid", "7ef21525-0088-4a28-a418-5518413e43ea"],
+              ["uuid", "355ad037-f1da-40aa-b47c-ff9c7e8c6a38"],
+              ["uuid", "7ef21525-0088-4a28-a418-5518413e43ea"]]]']],
+  [ovsdb error: set contains duplicate])
+
+AT_BANNER([OVSDB -- map data])
+
+OVSDB_CHECK_POSITIVE([map of 1 integer to boolean],
+  [[parse-data '{"key": "integer", "value": "boolean"}' \
+    '["map", [[1, true]]]']],
+  [[["map",[[1,true]]]]])
+
+OVSDB_CHECK_POSITIVE([map of at least 1 integer to boolean],
+  [[parse-data '{"key": "integer", "value": "boolean", "max": "unlimited"}' \
+    '["map", [[1, true]]]' \
+    '["map", [[0, true], [1, false], [2, true], [3, true], [4, true]]]' \
+    '["map", [[3, false], [0, true], [4, false]]]']],
+  [[["map",[[1,true]]]
+["map",[[0,true],[1,false],[2,true],[3,true],[4,true]]]
+["map",[[0,true],[3,false],[4,false]]]]])
+
+OVSDB_CHECK_POSITIVE([map of 1 boolean to integer],
+ [[parse-data '{"key": "boolean", "value": "integer"}' \
+   '["map", [[true, 1]]]']],
+ [[["map",[[true,1]]]]])
+
+OVSDB_CHECK_POSITIVE([map of 5 uuid to real],
+  [[parse-data '{"key": "uuid", "value": "real", "min": 5, "max": 5}' \
+    '["map", [[["uuid", "cad8542b-6ee1-486b-971b-7dcbf6e14979"], 1.0],
+	      [["uuid", "6b94b968-2702-4f64-9457-314a34d69b8c"], 2.0],
+	      [["uuid", "d2c4a168-24de-47eb-a8a3-c1abfc814979"], 3.0],
+	      [["uuid", "25bfa475-d072-4f60-8be1-00f48643e9cb"], 4.0],
+	      [["uuid", "1c92b8ca-d5e4-4628-a85d-1dc2d099a99a"], 5.0]]]']],
+  [[["map",[[["uuid","1c92b8ca-d5e4-4628-a85d-1dc2d099a99a"],5],[["uuid","25bfa475-d072-4f60-8be1-00f48643e9cb"],4],[["uuid","6b94b968-2702-4f64-9457-314a34d69b8c"],2],[["uuid","cad8542b-6ee1-486b-971b-7dcbf6e14979"],1],[["uuid","d2c4a168-24de-47eb-a8a3-c1abfc814979"],3]]]]])
+
+OVSDB_CHECK_POSITIVE([map of 10 string to string],
+  [[parse-data '{"key": "string", "value": "string", "min": 10, "max": 10}' \
+    '["map", [["2 gills", "1 chopin"],
+	      ["2 chopins", "1 pint"],
+	      ["2 pints", "1 quart"],
+	      ["2 quarts", "1 pottle"],
+	      ["2 pottles", "1 gallon"],
+	      ["2 gallons", "1 peck"],
+	      ["2 pecks", "1 demibushel"],
+	      ["2 demibushel", "1 firkin"],
+	      ["2 firkins", "1 kilderkin"],
+	      ["2 kilderkins", "1 barrel"]]]']],
+   [[["map",[["2 chopins","1 pint"],["2 demibushel","1 firkin"],["2 firkins","1 kilderkin"],["2 gallons","1 peck"],["2 gills","1 chopin"],["2 kilderkins","1 barrel"],["2 pecks","1 demibushel"],["2 pints","1 quart"],["2 pottles","1 gallon"],["2 quarts","1 pottle"]]]]])
+
+OVSDB_CHECK_NEGATIVE([duplicate integer key not allowed in map],
+  [[parse-data '{"key": "integer", "value": "boolean", "max": 5}' \
+    '["map", [[1, true], [2, false], [1, false]]]']],
+  [ovsdb error: map contains duplicate key])

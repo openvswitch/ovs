@@ -1,0 +1,628 @@
+         ===================================================
+          Open vSwitch Configuration Database Specification
+         ===================================================
+
+Basic Notation
+--------------
+
+The descriptions below use the following shorthand notations for JSON
+values.  Additional notation is presented later.
+
+<string>
+
+    A JSON string.
+
+<id>
+
+    A JSON string matching [a-zA-Z_][a-zA-Z0-9_]*.
+
+    <id>s that begin with _ are reserved to the implementation and may
+    not be used by the user.
+
+<boolean>
+
+    A JSON true or false value.
+
+<number>
+
+    A JSON number.
+
+<integer>
+
+    A JSON number with an integer value, within a certain range
+    (currently -2**63...+2**63-1).
+
+Schema Format
+-------------
+
+An Open vSwitch configuration database consists of a set of tables,
+each of which has a number of columns and zero or more rows.  A schema
+is represented by <database-schema>, as described below.
+
+<database-schema>
+
+    A JSON object with the following members:
+
+        "name": <id>                            required
+        "comment": <string>                     optional
+        "tables": {<id>: <table-schema>, ...}   required
+
+    The "name" identifies the database as a whole.  The "comment"
+    optionally provides more information about the database.  The
+    value of "tables" is a JSON object whose names are table names and
+    whose values are <table-schema>s.
+
+<table-schema>
+
+    A JSON object with the following members:
+
+        "comment": <string>                       optional
+        "columns": {<id>: <column-schema>, ...}   required
+
+    The "comment" optionally provides information about this table for
+    a human reader.  The value of "tables" is a JSON object whose
+    names are table names and whose values are <column-schema>s.
+
+    Every table has the following columns whose definitions are not
+    included in the schema:
+
+        "_uuid": This column, which contains exactly one UUID value,
+        is initialized to a random value by the database engine when
+        it creates a row.  It is read-only, and its value never
+        changes during the lifetime of a row.
+
+        "_version": Like "_uuid", this column contains exactly one
+        UUID value, initialized to a random value by the database
+        engine when it creates a row, and it is read-only.  However,
+        its value changes to a new random value whenever any other
+        field in the row changes.  Furthermore, its value is
+        ephemeral: when the database is closed and reopened, or when
+        the database process is stopped and then started again, each
+        "_version" also changes to a new random value.
+
+<column-schema>
+
+    A JSON object with the following members:
+
+        "comment": <string>                       optional
+        "type": <type>                            required
+        "ephemeral": <boolean>                    optional
+
+    The "comment" optionally provides information about this column
+    for a human reader.  The "type" specifies the type of data stored
+    in this column.  If "ephemeral" is specified as true, then this
+    column's values are not guaranteed to be durable; they may be lost
+    when the database restarts.
+
+<type>
+
+    The type of a database column.  Either an <atomic-type> or a JSON
+    object that describes the type of a database column, with the
+    following members:
+
+        "key": <atomic-type>               required
+        "value": <atomic-type>             optional
+        "min": <integer>                   optional
+        "max": <integer> or "unlimited"    optional
+
+    If "min" or "max" is not specified, each defaults to 1.  If "max"
+    is specified as "unlimited", then there is no specified maximum
+    number of elements, although the implementation will enforce some
+    limit.  After considering defaults, "min" must be at least 0,
+    "max" must be at least 1, and "max" must be greater than or equal
+    to "min".
+
+    If "min" and "max" are both 1 and "value" is not specified, the
+    type is the scalar type specified by "key".
+
+    If "min" is not 1 or "max" is not 1, or both, and "value" is not
+    specified, the type is a set of scalar type "key".
+
+    If "value" is specified, the type is a map from type "key" to type
+    "value".
+
+<atomic-type>
+
+    One of the strings "integer", "real", "boolean", "string", or
+    "uuid", representing the specified scalar type.
+
+Wire Protocol
+-------------
+
+The database wire protocol is implemented in JSON-RPC 1.0.  It
+consists of the following JSON-RPC methods:
+
+get_schema
+..........
+
+Request object members:
+
+    "method": "get_schema"            required
+    "params": []                      required
+    "id": any JSON value except null  required
+
+Response object members:
+
+    "result": <database-schema>
+    "error": null
+    "id": same "id" as request
+
+This operation retrieves a <database-schema> that describes the
+hosted database.
+
+transact
+........
+
+Request object members:
+
+    "method": "transact"              required
+    "params": [<operation>*]          required
+    "id": any JSON value except null  required
+
+Response object members:
+
+    "result": [<object>*]
+    "error": null
+    "id": same "id" as request
+
+The "params" array for this method consists of zero or more JSON
+objects, each of which represents a single database operation.  The
+"Operations" section below describes the valid operations.
+
+The value of "id" must be unique among all in-flight transactions
+within the current JSON-RPC session.  Otherwise, the server may return
+a JSON-RPC error.
+
+The database server executes each of the specified operations in the
+specified order, except that if an operation fails, then the remaining
+operations are not executed.
+
+The set of operations is executed as a single atomic, consistent,
+isolated transaction.  The transaction is committed only if every
+operation succeeds.  Durability of the commit is not guaranteed unless
+the "commit" operation, with "durable" set to true, is included in the
+operation set (see below).
+
+Regardless of whether errors occur, the response is always a JSON-RPC
+response with null "error" and a "result" member that is an array with
+the same number of elements as "params".  Each element of the "result"
+array corresponds to the same element of the "params" array.  The
+"result" array elements may be interpreted as follows:
+
+    - A JSON object that does not contain an "error" member indicates
+      that the operation completed successfully.  The specific members
+      of the object are specified below in the descriptions of
+      individual operations.  Some operations do not produce any
+      results, in which case the object will have no members.
+
+    - A JSON object that contains a "error" member indicates that the
+      operation completed with an error.  The value of the "error"
+      member is a short string, specified in this document, that
+      broadly indicates the class of the error.  Besides the ones
+      listed for a specific operation, any operation may result in one
+      the following "error"s:
+
+      "error": "resources exhausted"
+
+          The operation or the transaction requires more resources
+          (memory, disk, CPU, etc.) than are currently available to
+          the database server.
+
+      "error": "syntax error"
+
+          The operation is not specified correctly: a required request
+          object member is missing, an unknown or unsupported request
+          object member is present, the operation attempts to act on a
+          table that does not exist, the operation modifies a
+          read-only table column, etc.
+
+      Database implementations may use "error" strings not specified
+      in this document to indicate errors that do not fit into any of
+      the specified categories.
+
+      Optionally, the object may include a "details" member, whose
+      value is a string that describes the error in more detail for
+      the benefit of a human user or administrator.  The object may
+      also have other members that describe the error in more detail.
+      This document does not specify the names or values of these
+      members.
+
+    - A JSON null value indicates that the operation was not attempted
+      because a prior operation failed.
+
+In general, "result" contains some number of successful results,
+possibly followed by an error, in turn followed by enough JSON null
+values to match the number of elements in "params".  There is one
+exception: if all of the operations succeed, but the results cannot be
+committed (e.g. due to I/O errors), then "result" will have one more
+element than "params", with the additional element describing the
+error.
+
+If "params" contains one or more "wait" operations, then the
+transaction may take an arbitrary amount of time to complete.  The
+database implementation must be capable of accepting, executing, and
+replying to other transactions and other JSON-RPC requests while a
+transaction or transactions containing "wait" operations are
+outstanding on the same or different JSON-RPC sessions.
+
+The section "Notation for the Wire Protocol" below describes
+additional notation for use with the wire protocol.  After that, the
+"Operations" section describes each operation.
+
+cancel
+......
+
+Request object members:
+
+    "method": "cancel"                              required
+    "params": the "id" for an outstanding request   required
+    "id": null                                      required
+
+Response object members:
+
+    <no response>
+
+This JSON-RPC notification instructs the database server to
+immediately complete or cancel the "transact" request whose "id" is
+the same as the notification's "params" value.  
+
+If the "transact" request can be completed immediately, then the
+server sends a response in the form described for "transact", above.
+Otherwise, the server sends a JSON-RPC error response of the following
+form:
+
+    "result": null
+    "error": "canceled"
+    "id": the request "id" member
+
+The "cancel" notification itself has no reply.
+
+Notation for the Wire Protocol
+------------------------------
+
+<table>
+
+    An <id> that names a table.
+
+<column>
+
+    An <id> that names a table column.
+
+<row>
+
+    A JSON object that describes a table row or a subset of a table
+    row.  Each member is the name of a table column paired with the
+    <value> of that column.
+
+<value>
+
+    A JSON value that represents the value of a column in a table row,
+    one of <atom>, a <set>, or a <map>.
+
+<atom>
+
+    A JSON value that represents a scalar value for a column, one of
+    <string>, <number>, <boolean>, <uuid>, <named-uuid>.
+
+<set>
+
+    A 2-element JSON array that represents a database set value.  The
+    first element of the array must be the string "set" and the second
+    element must be an array of zero or more <atom>s giving the values
+    in the set.  All of the <atom>s must have the same type.
+
+<map>
+
+    A 2-element JSON array that represents a database map value.  The
+    first element of the array must be the string "map" and the second
+    element must be an array of zero or more <pair>s giving the values
+    in the map.  All of the <pair>s must have the same key and value
+    types.
+
+    (JSON objects are not used to represent <map> because JSON only
+    allows string names in an object.)
+
+<pair>
+
+    A 2-element JSON array that represents a pair within a database
+    map.  The first element is an <atom> that represents the key, the
+    second element is an <atom> that represents the value.
+
+<uuid>
+
+    A 2-element JSON array that represents a UUID.  The first element
+    of the array must be the string "uuid" and the second element must
+    be a 36-character string giving the UUID in the format described
+    by RFC 4122.  For example, the following <uuid> represents the
+    UUID 550e8400-e29b-41d4-a716-446655440000:
+
+        ["uuid", "550e8400-e29b-41d4-a716-446655440000"]
+
+<named-uuid>
+
+    A 2-element JSON array that represents the UUID of a row inserted
+    in a previous "insert" operation within the same transaction.  The
+    first element of the array must be the string "named-uuid" and the
+    second element must be the string specified on a previous "insert"
+    operation's "uuid-name".  For example, if a previous "insert"
+    operation specified a "uuid-name" of "myrow", the following
+    <named-uuid> represents the UUID created by that operation:
+
+        ["named-uuid", "myrow"]
+
+<condition>
+
+    A 3-element JSON array of the form [<column>, <function>,
+    <value>] that represents a test on a column value.
+
+    Except as otherwise specified below, <value> must have the same
+    type as <column>.
+
+    The meaning depends on the type of <column>:
+
+        integer
+        real
+
+            <function> must be "<", "<=", "==", "!=", ">=", ">",
+            "includes", or "excludes".
+
+            The test is true if the column's value satisfies the
+            relation <function> <value>, e.g. if the column has value
+            1 and <value> is 2, the test is true if <function> is "<",
+            "<=" or "!=", but not otherwise.
+
+            "includes" is equivalent to "=="; "excludes" is equivalent
+            to "!=".
+
+        boolean
+        string
+        uuid
+
+            <function> must be "!=", "==", "includes", or "excludes".
+
+            If <function> is "==" or "includes", the test is true if
+            the column's value equals <value>.  If <function> is "!="
+            or "excludes", the test is inverted.
+
+        set
+        map
+
+            <function> must be "!=", "==", "includes", or "excludes".
+
+            If <function> is "==", the test is true if the column's
+            value contains exactly the same values (for sets) or pairs
+            (for maps).  If <function> is "!=", the test is inverted.
+
+            If <function> is "includes", the test is true if the
+            column's value contains all of the values (for sets) or
+            pairs (for maps) in <value>.  The column's value may also
+            contain other values or pairs.
+
+            If <function> is "excludes", the test is true if the
+            column's value does not contain any of the values (for
+            sets) or pairs (for maps) in <value>.  The column's value
+            may contain other values or pairs not in <value>.
+
+            If <function> is "includes" or "excludes", then the
+            required type of <value> is slightly relaxed, in that it
+            may have fewer than the minimum number of elements
+            specified by the column's type.  If <function> is
+            "excludes", then the required type is additionally relaxed
+            in that <value> may have more than the maximum number of
+            elements specified by the column's type.
+
+<function>
+
+    One of "<", "<=", "==", "!=", ">=", ">", "includes", "excludes".
+
+Operations
+----------
+
+Each of the available operations is described below.
+
+insert
+......
+
+Request object members:
+
+    "op": "insert"          required
+    "table": <table>        required
+    "row": <row>            required
+    "uuid-name": <string>   optional
+
+Result object members:
+
+    "uuid": <uuid>
+
+Semantics:
+
+    Inserts "row" into "table".  If "row" does not specify values
+    for all the columns in "table", those columns receive default
+    values.
+
+    The new row receives a new, randomly generated UUID, which is
+    returned as the "_uuid" member of the result.  If "uuid-name"
+    is supplied, then the UUID is made available under that name
+    to later operations within the same transaction.
+
+select
+......
+
+Request object members:
+
+    "op": "select"                required
+    "table": <table>              required
+    "where": [<condition>*]       required
+    "columns": [<column>*]        optional
+
+Result object members:
+
+    "rows": [<row>*]
+
+Semantics:
+
+    Searches "table" for rows that match all the conditions specified
+    in "where".  If "where" is an empty array, every row in "table" is
+    selected.
+
+    The "rows" member of the result is an array of objects.  Each
+    object corresponds to a matching row, with each column
+    specified in "columns" as a member, the column's name as the
+    member name and its value as the member value.  If "columns"
+    is not specified, all the table's columns are included.  If
+    two rows of the result have the same values for all included
+    columns, only one copy of that row is included in "rows".
+    Specifying "_uuid" within "columns" will avoid dropping
+    duplicates, since every row has a unique UUID.
+
+    The ordering of rows within "rows" is unspecified.
+
+update
+......
+
+Request object members:
+
+    "op": "update"                required
+    "table": <table>              required
+    "where": [<condition>*]       required
+    "row": <row>                  required
+
+Result object members:
+
+    "count": <integer>
+
+Semantics:
+
+    Updates rows in a table.
+
+    Searches "table" for rows that match all the conditions
+    specified in "where".  For each matching row, changes the
+    value of each column specified in "row" to the value for that
+    column specified in "row".
+
+    The "_uuid" and "_version" columns of a table may not be updated.
+    Columns designated read-only in the schema also may not be
+    updated.
+
+    The "count" member of the result specifies the number of rows
+    that matched.
+
+delete
+......
+
+Request object members:
+
+    "op": "delete"                required
+    "table": <table>              required
+    "where": [<condition>*]       required
+
+Result object members:
+
+    "count": <integer>
+
+Semantics:
+
+    Deletes all the rows from "table" that match all the conditions
+    specified in "where".
+
+    The "count" member of the result specifies the number of deleted
+    rows.
+
+wait
+....
+
+Request object members:
+
+    "op": "wait"                        required
+    "timeout": <integer>                optional
+    "table": <table>                    required
+    "where": [<condition>*]             required
+    "columns": [<column>*]              required
+    "until": "==" or "!="               required
+    "rows": [<row>*]                    required
+
+Result object members:
+
+    none
+
+Semantics:
+
+    Waits until a condition becomes true.
+
+    If "until" is "==", checks whether the query on "table" specified
+    by "where" and "columns", which is evaluated in the same way as
+    specified for "select", returns the result set specified by
+    "rows".  If it does, then the operation completes successfully.
+    Otherwise, the entire transaction rolls back.  It is automatically
+    restarted later, after a change in the database makes it possible
+    for the operation to succeed.  The client will not receive a
+    response until the operation permanently succeeds or fails.
+    
+    If "until" is "!=", the sense of the test is negated.  That is, as
+    long as the query on "table" specified by "where" and "columns"
+    returns "rows", the transaction will be rolled back and restarted
+    later.
+
+    If "timeout" is specified, then the transaction aborts after the
+    specified number of milliseconds.  The transaction is guaranteed
+    to be attempted at least once before it aborts.  A "timeout" of 0
+    will abort the transaction on the first mismatch.
+
+Errors:
+
+    "error": "not supported"
+
+        One or more of the columns in this table do not support
+        triggers.  This error will not occur if "timeout" is 0.
+
+    "error": "timed out"
+
+        The "timeout" was reached before the transaction was able to
+        complete.
+
+commit
+......
+
+Request object members:
+
+    "op": "commit"                      required
+    "durable": <boolean>                required
+
+Result object members:
+
+    none
+
+Semantics:
+
+    If "durable" is specified as true, then the transaction, if it
+    commits, will be stored durably (to disk) before the reply is sent
+    to the client.
+
+Errors:
+
+    "error": "not supported"
+
+        When "durable" is true, this database implementation does not
+        support durable commits.
+
+abort
+.....
+
+Request object members:
+
+    "op": "abort"                      required
+
+Result object members:
+
+    (never succeeds)
+
+Semantics:
+
+    Aborts the transaction with an error.  This may be useful for
+    testing.
+
+Errors:
+
+    "error": "aborted"
+
+        This operation always fails with this error.
