@@ -58,6 +58,12 @@ shash_is_empty(const struct shash *shash)
     return hmap_is_empty(&shash->map);
 }
 
+size_t
+shash_count(const struct shash *shash)
+{
+    return hmap_count(&shash->map);
+}
+
 /* It is the caller's responsibility to avoid duplicate names, if that is
  * desirable. */
 struct shash_node *
