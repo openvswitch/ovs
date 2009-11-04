@@ -16,6 +16,7 @@
 #ifndef HASH_H
 #define HASH_H 1
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -68,6 +69,15 @@ static inline uint32_t hash_int(uint32_t x, uint32_t basis)
     x ^= x << 10;
     x ^= x >> 15;
     return x + basis;
+}
+
+/* An attempt at a useful 1-bit hash function.  Has not been analyzed for
+ * quality. */
+static inline uint32_t hash_boolean(bool x, uint32_t basis)
+{
+    enum { P0 = 0xc2b73583 };   /* This is hash_int(1, 0). */
+    enum { P1 = 0xe90f1258 };   /* This is hash_int(2, 0). */
+    return (x ? P0 : P1) ^ HASH_ROT(basis, 1);
 }
 
 static inline uint32_t hash_double(double x, uint32_t basis)
