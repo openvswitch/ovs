@@ -1,0 +1,165 @@
+{"name": "ovs_vswitchd_db",
+ "comment": "Configuration for one or more Open vSwitch daemons.",
+ "tables": {
+    "OpenVSwitch": {
+        "comment": "Configuration for an Open vSwitch daemon.",
+        "columns": {
+            "bridges": {
+                "comment": "Set of bridges managed by the daemon.",
+                "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
+            "management_id": {
+                "comment": "Exactly 12 hex digits that identify the daemon.",
+                "type": "string"},
+            "controller": {
+                "comment": "Default Controller used by bridges.",
+                "type": {"key": "uuid", "min": 0, "max": 1}},
+            "ssl": {
+                "comment": "SSL used globally by the daemon.",
+                "type": {"key": "uuid", "min": 0, "max": 1}}}},
+    "Bridge": {
+        "comment": "Configuration for a bridge within an OpenVSwitch.",
+        "columns": {
+            "name": {
+                "comment": "Bridge identifier.  Should be alphanumeric and no more than about 8 bytes long.  Must be unique among the names of ports, interfaces, and bridges on a host.",
+                "type": "string"},
+            "datapath_id": {
+                "comment": "OpenFlow datapath ID.  Exactly 12 hex digits.",
+                "type": {"key": "string", "min": 0, "max": 1}},
+            "hwaddr": {
+                "comment": "Ethernet address to use for bridge.  Exactly 12 hex digits in the form XX:XX:XX:XX:XX:XX.",
+                "type": {"key": "string", "min": 0, "max": 1}},
+            "ports": {
+                "comment": "Ports included in the bridge.",
+                "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
+            "mirrors": {
+                "comment": "Port mirroring configuration.",
+                "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
+            "netflow": {
+                "comment": "NetFlow configuration.",
+                "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
+            "controller": {
+                "comment": "OpenFlow controller.  If unset, defaults to that specified by the parent OpenVSwitch.",
+                "type": {"key": "uuid", "min": 0, "max": 1}}}},
+    "Port": {
+        "comment": "A port within a Bridge.  May contain a single Interface or multiple (bonded) Interfaces.",
+        "columns": {
+            "name": {
+                "comment": "Port name.  Should be alphanumeric and no more than about 8 bytes long.    May be the same as the interface name, for non-bonded ports.  Must otherwise be unique among the names of ports, interfaces, and bridges on a host.",
+                "type": "string"},
+            "interfaces": {
+                "comment": "The Port's Interfaces.  If there is more than one, this is a bonded Port.",
+                "type": {"key": "uuid", "min": 1, "max": "unlimited"}},
+            "trunks": {
+                "comment": "The 802.1Q VLAN(s) that this port trunks.  Should be empty if this port trunks all VLAN(s) or if this is not a trunk port.",
+                "type": {"key": "integer", "min": 0, "max": 4096}},
+            "tag": {
+                "comment": "This port's implicitly tagged VLAN.  Should be empty if this is a trunk port.",
+                "type": {"key": "integer", "min": 0, "max": 1}},
+            "updelay": {
+                "comment": "For a bonded port, the number of milliseconds for which carrier must stay up on an interface before the interface is considered to be up.  Ignored for non-bonded ports.",
+                "type": "integer"},
+            "downdelay": {
+                "comment": "For a bonded port, the number of milliseconds for which carrier must stay down on an interface before the interface is considered to be down.  Ignored for non-bonded ports.",
+                "type": "integer"}}},
+    "Interface": {
+        "comment": "An interface within a Port.",
+        "columns": {
+            "name": {
+                "comment": "Interface name.  Should be alphanumeric and no more than about 8 bytes long.  May be the same as the port name, for non-bonded ports.  Must otherwise be unique among the names of ports, interfaces, and bridges on a host.",
+                "type": "string"},
+            "internal": {
+                "comment": "An \"internal\" port is one that is implemented in software as a logical device.",
+                "type": "boolean"},
+            "ingress_policing_rate": {
+                "comment": "Maximum rate for data received on this interface, in kbps.  Set to 0 to disable policing.",
+                "type": "integer"},
+            "ingress_policing_burst": {
+                "comment": "Maximum burst size for data received on this interface, in kb.  The default burst size if set to 0 is 10 kb.",
+                "type": "integer"}}},
+    "Mirror": {
+        "comment": "A port mirror within a Bridge.",
+        "columns": {
+            "name": {
+                "comment": "Arbitrary identifier for the Mirror.",
+                "type": "string"},
+            "select_src_port": {
+                "comment": "Ports on which arriving packets are selected for mirroring.",
+                 "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
+            "select_dst_port": {
+                "comment": "Ports on which departing packets are selected for mirroring.",
+                 "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
+            "select_vlan": {
+                "comment": "VLANs on which packets are selected for mirroring.",
+                "type": {"key": "integer", "min": 0, "max": 4096}},
+            "output_port": {
+                "comment": "Output port for selected packets.  Mutually exclusive with output_vlan.",
+                "type": {"key": "uuid", "min": 0, "max": 1}},
+            "output_vlan": {
+                "comment": "Output VLAN for selected packets.  Mutually exclusive with output_vlan.",
+                "type": {"key": "integer", "min": 0, "max": 1}}}},
+    "Netflow": {
+        "comment": "A Netflow target.",
+        "columns": {
+            "target": {
+                "comment": "Netflow target in the form \"IP:PORT\".",
+                "type": "string"},
+            "engine_type": {
+                "comment": "Engine type to use in NetFlow messages.  Defaults to datapath ID if not specified.",
+                "type": "integer"},
+            "engine_id": {
+                "comment": "Engine ID to use in NetFlow messages.  Defaults to datapath ID if not specified.",
+                "type": "integer"},
+            "add_id_to_interface": {
+                "comment": "Place least-significant 7 bits of engine ID into most significant bits of ingress and egress interface fields of NetFlow records?",
+                "type": "boolean"}}},
+    "Controller": {
+        "comment": "An OpenFlow controller.",
+        "columns": {
+            "target": {
+                "comment": "Connection method for controller, e.g. \"ssl:...\", \"tcp:...\".  The special string \"discover\" enables controller discovery.",
+                "type": "string"},
+            "max_backoff": {
+                "comment": "Maximum number of milliseconds to wait between connection attempts.  Default is implementation-specific.",
+                "type": {"key": "integer", "min": 0, "max": 1}},
+            "inactivity_probe": {
+                "comment": "Maximum number of milliseconds of idle time on connection to controller before sending an inactivity probe message.  Default is implementation-specific.",
+                "type": {"key": "integer", "min": 0, "max": 1}},
+            "fail_mode": {
+                "comment": "Either \"standalone\" or \"secure\", or empty to use the implementation's default.",
+                "type": {"key": "string", "min": 0, "max": 1}},
+            "discovery_accept_regex": {
+                "comment": "If \"target\" is \"discovery\", a POSIX extended regular expression against which the discovered controller location is validated.  If not specified, the default is implementation-specific.",
+                "type": {"key": "string", "min": 0, "max": 1}},
+            "discovery_update_resolv_conf": {
+                "comment": "If \"target\" is \"discovery\", whether to update /etc/resolv.conf when the controller is discovered.  If not specified, the default is implementation-specific.",
+                "type": {"key": "boolean", "min": 0, "max": 1}},
+            "connection_mode": {
+                "comment": "Either \"in-band\" or \"out-of-band\".  If not specified, the default is implementation-specific.",
+                "type": {"key": "string", "min": 0, "max": 1}},
+            "local_ip": {
+                "comment": "If \"target\" is not \"discovery\", the IP address to configure on the local port.",
+                "type": {"key": "string", "min": 0, "max": 1}},
+            "local_netmask": {
+                "comment": "If \"target\" is not \"discovery\", the IP netmask to configure on the local port.",
+                "type": {"key": "string", "min": 0, "max": 1}},
+            "local_gateway": {
+                "comment": "If \"target\" is not \"discovery\", the IP gateway to configure on the local port.",
+                "type": {"key": "string", "min": 0, "max": 1}},
+            "controller_rate_limit": {
+                "comment": "The maximum rate at which packets will be forwarded to the OpenFlow controller, in packets per second.  If not specified, the default is implementation-specific.",
+                "type": {"key": "integer", "min": 0, "max": 1}},
+            "controller_burst_limit": {
+                "comment": "The maximum number of unused packet credits that the bridge will allow to accumulate, in packets.  If not specified, the default is implementation-specific.",
+                "type": {"key": "integer", "min": 0, "max": 1}}}},
+    "SSL": {
+        "comment": "SSL configuration for an OpenVSwitch.",
+        "columns": {
+            "private_key": {
+                "comment": "Name of a PEM file containing the private key used as the switch's identity for SSL connections to the controller.",
+                "type": "string"},
+            "certificate": {
+                "comment": "Name of a PEM file containing a certificate, signed by the certificate authority (CA) used by the controller and manager, that certifies the switch's private key, identifying a trustworthy switch.",
+                "type": "string"},
+            "ca-cert": {
+                "comment": "Name of a PEM file containing the CA certificate used to verify that the switch is connected to a trustworthy controller.",
+                "type": "string"}}}}}
