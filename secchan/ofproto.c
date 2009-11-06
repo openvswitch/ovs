@@ -3318,14 +3318,16 @@ active_timeout(struct ofproto *ofproto, struct rule *rule)
 
         /* Get updated flow stats. */
         memset(&odp_flow, 0, sizeof odp_flow);
-        odp_flow.key = rule->cr.flow;
-        odp_flow.flags = ODPFF_ZERO_TCP_FLAGS;
-        dpif_flow_get(&ofproto->dpif, &odp_flow);
+        if (rule->installed) {
+            odp_flow.key = rule->cr.flow;
+            odp_flow.flags = ODPFF_ZERO_TCP_FLAGS;
+            dpif_flow_get(&ofproto->dpif, &odp_flow);
 
-        if (odp_flow.stats.n_packets) {
-            update_time(ofproto, rule, &odp_flow.stats);
-            netflow_flow_update_flags(&rule->nf_flow, odp_flow.stats.ip_tos,
-                                      odp_flow.stats.tcp_flags);
+            if (odp_flow.stats.n_packets) {
+                update_time(ofproto, rule, &odp_flow.stats);
+                netflow_flow_update_flags(&rule->nf_flow, odp_flow.stats.ip_tos,
+                                          odp_flow.stats.tcp_flags);
+            }
         }
 
         expired.flow = rule->cr.flow;
