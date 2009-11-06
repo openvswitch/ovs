@@ -48,8 +48,6 @@ static void parse_options(int argc, char *argv[], char **file_namep,
                           struct svec *active, struct svec *passive);
 static void usage(void) NO_RETURN;
 
-static void ovsdb_transact(struct unixctl_conn *, const char *args, void *db);
-
 int
 main(int argc, char *argv[])
 {
@@ -89,8 +87,6 @@ main(int argc, char *argv[])
     if (retval) {
         ovs_fatal(retval, "could not listen for control connections");
     }
-
-    unixctl_command_register("ovsdb/transact", ovsdb_transact, db);
 
     for (;;) {
         ovsdb_jsonrpc_server_run(jsonrpc);
@@ -197,27 +193,4 @@ usage(void)
            "  -V, --version           display version information\n");
     leak_checker_usage();
     exit(EXIT_SUCCESS);
-}
-
-static void
-ovsdb_transact(struct unixctl_conn *conn, const char *args, void *db_)
-{
-    struct ovsdb *db = db_;
-    struct json *request, *reply;
-    char *reply_string;
-
-    /* Parse JSON. */
-    request = json_from_string(args);
-    if (request->type == JSON_STRING) {
-        unixctl_command_reply(conn, 501, request->u.string);
-        json_destroy(request);
-        return;
-    }
-
-    /* Execute command. */
-    reply = ovsdb_execute(db, request, 0, NULL);
-    reply_string = json_to_string(reply, 0);
-    unixctl_command_reply(conn, 200, reply_string);
-    free(reply_string);
-    json_destroy(reply);
 }
