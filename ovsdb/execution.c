@@ -133,8 +133,8 @@ ovsdb_execute(struct ovsdb *db, const struct json *params,
             if (executor) {
                 error = executor(&x, &parser, result);
             } else {
-                error = ovsdb_syntax_error(operation, "unknown operation",
-                                           "No operation \"%s\"", op_name);
+                ovsdb_parser_raise_error(&parser, "No operation \"%s\"",
+                                         op_name);
             }
         } else {
             assert(ovsdb_parser_has_error(&parser));
