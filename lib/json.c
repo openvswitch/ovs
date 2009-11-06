@@ -500,14 +500,15 @@ json_hash(const struct json *json, size_t basis)
 static bool
 json_equal_object(const struct shash *a, const struct shash *b)
 {
-    struct shash_node *node;
+    struct shash_node *a_node;
 
     if (shash_count(a) != shash_count(b)) {
         return false;
     }
 
-    SHASH_FOR_EACH (node, a) {
-        if (!shash_find(b, node->name)) {
+    SHASH_FOR_EACH (a_node, a) {
+        struct shash_node *b_node = shash_find(b, a_node->name);
+        if (!b_node || !json_equal(a_node->data, b_node->data)) {
             return false;
         }
     }
