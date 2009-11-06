@@ -186,7 +186,7 @@ ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *svr)
     if (svr->n_sessions < svr->max_sessions) {
         size_t i;
 
-        for (i = 0; i < svr->n_sessions; i++) {
+        for (i = 0; i < svr->n_listeners; i++) {
             pstream_wait(svr->listeners[i]);
         }
     }
