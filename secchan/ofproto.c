@@ -2945,7 +2945,7 @@ handle_ofmp(struct ofproto *p, struct ofconn *ofconn,
 {
     size_t msg_len = ntohs(ofmph->header.header.length);
     if (msg_len < sizeof(*ofmph)) {
-        VLOG_WARN_RL(&rl, "dropping short managment message: %d\n", msg_len);
+        VLOG_WARN_RL(&rl, "dropping short managment message: %zu\n", msg_len);
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
     }
 
@@ -2953,7 +2953,7 @@ handle_ofmp(struct ofproto *p, struct ofconn *ofconn,
         struct ofmp_capability_request *ofmpcr;
 
         if (msg_len < sizeof(struct ofmp_capability_request)) {
-            VLOG_WARN_RL(&rl, "dropping short capability request: %d\n", 
+            VLOG_WARN_RL(&rl, "dropping short capability request: %zu\n",
                     msg_len);
             return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
         }

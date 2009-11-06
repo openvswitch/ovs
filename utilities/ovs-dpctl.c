@@ -408,9 +408,11 @@ show_dpif(struct dpif *dpif)
         printf("\tports: cur:%"PRIu32", max:%"PRIu32"\n",
                stats.n_ports, stats.max_ports);
         printf("\tgroups: max:%"PRIu16"\n", stats.max_groups);
-        printf("\tlookups: frags:%"PRIu64", hit:%"PRIu64", missed:%"PRIu64", "
-               "lost:%"PRIu64"\n",
-               stats.n_frags, stats.n_hit, stats.n_missed, stats.n_lost);
+        printf("\tlookups: frags:%llu, hit:%llu, missed:%llu, lost:%llu\n",
+               (unsigned long long int) stats.n_frags,
+               (unsigned long long int) stats.n_hit,
+               (unsigned long long int) stats.n_missed,
+               (unsigned long long int) stats.n_lost);
         printf("\tqueues: max-miss:%"PRIu16", max-action:%"PRIu16"\n",
                stats.max_miss_queue, stats.max_action_queue);
     }

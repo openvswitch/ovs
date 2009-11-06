@@ -54,7 +54,7 @@ log_backtrace(void)
         if (!dladdr(frame[1], &addrinfo) || !addrinfo.dli_sname) {
             fprintf(stderr, "  0x%08"PRIxPTR"\n", (uintptr_t) frame[1]);
         } else {
-            fprintf(stderr, "  0x%08"PRIxPTR" (%s+0x%x)\n",
+            fprintf(stderr, "  0x%08"PRIxPTR" (%s+0x%tx)\n",
                     (uintptr_t) frame[1], addrinfo.dli_sname,
                     (char *) frame[1] - (char *) addrinfo.dli_saddr); 
         }

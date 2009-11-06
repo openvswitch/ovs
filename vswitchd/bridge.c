@@ -2550,7 +2550,7 @@ bond_unixctl_show(struct unixctl_conn *conn, const char *args)
                 continue;
             }
 
-            ds_put_format(&ds, "\thash %d: %lld kB load\n",
+            ds_put_format(&ds, "\thash %d: %"PRIu64" kB load\n",
                           hash, be->tx_bytes / 1024);
 
             /* MACs. */

@@ -136,7 +136,7 @@ cfg_set_file(const char *file_name)
     slash = strrchr(file_name, '/');
     if (slash) {
         lock_name = xasprintf("%.*s/.%s.~lock~",
-                              slash - file_name, file_name, slash + 1);
+                              (int) (slash - file_name), file_name, slash + 1);
     } else {
         lock_name = xasprintf(".%s.~lock~", file_name);
     }
