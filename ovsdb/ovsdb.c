@@ -204,7 +204,7 @@ ovsdb_open(const char *file_name, bool read_only, struct ovsdb **dbp)
     }
     json_destroy(json);
 
-    db = ovsdb_create(read_only ? file : NULL, schema);
+    db = ovsdb_create(read_only ? NULL : file, schema);
     while ((error = ovsdb_file_read(file, &json)) == NULL && json) {
         struct ovsdb_txn *txn;
 
