@@ -263,6 +263,7 @@ ovsdb_jsonrpc_session_open(struct ovsdb_jsonrpc_server *svr,
     s->rpc = jsonrpc_open(stream);
     hmap_init(&s->triggers);
     list_init(&s->completions);
+    svr->n_sessions++;
 }
 
 static void
