@@ -77,7 +77,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/ofp-print.h \
 	lib/ofpbuf.c \
 	lib/ofpbuf.h \
-	lib/ovsdb-client.h \
 	lib/ovsdb-data.c \
 	lib/ovsdb-data.h \
 	lib/ovsdb-error.c \
