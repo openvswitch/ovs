@@ -184,10 +184,13 @@ EXTRA_DIST += \
 
 EXTRA_DIST += \
 	lib/common.man \
+	lib/common-syn.man \
 	lib/daemon.man \
+	lib/daemon-syn.man \
 	lib/dpif.man \
 	lib/leak-checker.man \
 	lib/vlog-unixctl.man \
+	lib/vlog-syn.man \
 	lib/vlog.man
 
 

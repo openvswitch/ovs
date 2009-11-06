@@ -28,17 +28,16 @@ ovsdb_libovsdb_a_SOURCES = \
 bin_PROGRAMS += ovsdb/ovsdb-tool
 ovsdb_ovsdb_tool_SOURCES = ovsdb/ovsdb-tool.c
 ovsdb_ovsdb_tool_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a
-
-## ovsdb-tool.8
-#man_MANS += ovsdb/ovsdb-tool.8
-#DISTCLEANFILES += ovsdb/ovsdb-tool.8
-#EXTRA_DIST += ovsdb/ovsdb-tool.8.in
+# ovsdb-tool.1
+man_MANS += ovsdb/ovsdb-tool.1
+DISTCLEANFILES += ovsdb/ovsdb-tool.1
+EXTRA_DIST += ovsdb/ovsdb-tool.1.in
 
 # ovsdb-server
 sbin_PROGRAMS += ovsdb/ovsdb-server
 ovsdb_ovsdb_server_SOURCES = ovsdb/ovsdb-server.c
 ovsdb_ovsdb_server_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(FAULT_LIBS)
-## ovsdb-server.8
-#man_MANS += ovsdb/ovsdb-server.8
-#DISTCLEANFILES += ovsdb/ovsdb-server.8
-#EXTRA_DIST += ovsdb/ovsdb-server.8.in
+# ovsdb-server.1
+man_MANS += ovsdb/ovsdb-server.1
+DISTCLEANFILES += ovsdb/ovsdb-server.1
+EXTRA_DIST += ovsdb/ovsdb-server.1.in

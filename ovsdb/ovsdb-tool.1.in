@@ -1,0 +1,74 @@
+.\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.\" -*- nroff -*-
+.TH ovsdb\-tool 1 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovsdb\-tool
+.
+.SH NAME
+ovsdb\-tool \- Open vSwitch database management utility
+.
+.SH SYNOPSIS
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBcreate\fI db schema\fR
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBquery\fI db transaction\fR
+.br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBtransact\fI db transaction\fR
+.br
+\fBovsdb\-tool help\fR
+.so lib/vlog-syn.man
+.so lib/common-syn.man
+.
+.SH DESCRIPTION
+The \fBovsdb\-tool\fR program is a command-line tool for managing Open
+vSwitch database (OVSDB) files.  It does not interact directly with
+running Open vSwitch database servers (instead, use
+\fBovsdb\-client\fR).
+.
+.SS "Basic Commands"
+.IP "\fBcreate\fI db schema\fR"
+Reads an OVSDB schema from the file named \fIschema\fR and creates a
+new OVSDB database file named \fIdb\fR using that schema.  The new
+database is initially empty.  This command will not overwrite an
+existing \fIdb\fR.
+.IP
+\fIschema\fR must contain an OVSDB schema in JSON format.  Refer to
+the OVSDB specification for details.
+.
+.IP "\fBquery\fI db transaction\fR"
+Opens \fIdb\fR, executes \fItransaction\fR on it, and prints the
+results.  The \fItransaction\fR must be a JSON array in the format of
+the \fBparams\fR array for the JSON-RPC \fBtransact\fR method, as
+described in the OVSDB specification.
+.IP
+The \fIdb\fR is opened for read-only access, so this command may
+safely run concurrently with other database activity, including
+\fBovsdb-server\fR and other database writers.  The \fItransaction\fR
+may specify database modifications, but these will have no effect on
+\fIdb\fR.
+.
+.IQ "\fBtransact\fI db transaction\fR"
+Opens \fIdb\fR, executes \fItransaction\fR on it, prints the results,
+and commits any changes to \fIdb\fR.  The \fItransaction\fR must be a
+JSON array in the format of the \fBparams\fR array for the JSON-RPC
+\fBtransact\fR method, as described in the OVSDB specification.
+.IP
+The \fIdb\fR is opened and locked for read/write access, so this
+command will fail if the database is opened for writing by any other
+process, including \fBovsdb-server\fR(1).  Use \fBovsdb\-client\fR(1),
+instead, to write to a database that is served by
+\fBovsdb-server\fR(1).
+.
+.SH OPTIONS
+.SS "Logging Options"
+.so lib/vlog.man
+.SS "Other Options"
+.so lib/common.man
+.SH "SEE ALSO"
+.
+\fBovsdb\-server\fR(1),
+\fBovsdb\-client\fR(1),
+and the OVSDB specification.

@@ -1,0 +1,72 @@
+.\" -*- nroff -*-
+.TH ovsdb\-server 1 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovsdb\-server
+.
+.SH NAME
+ovsdb\-server \- Open vSwitch database server
+.
+.SH SYNOPSIS
+\fBovsdb\-server\fR
+\fIdatabase\fR
+[\fB--connect \fIremote\fR]\&...
+[\fB--listen \fIlocal\fR]\&...
+.so lib/daemon-syn.man
+.so lib/vlog-syn.man
+.so lib/common-syn.man
+.
+.SH DESCRIPTION
+The \fBovsdb\-server\fR program provides RPC interfaces to an Open
+vSwitch database (OVSDB).  It can listen for JSON-RPC connections from
+TCP/IP or Unix domain socket clients (with \fB\-\-listen\fR), connect to
+remote JSON-RPC TCP/IP or Unix domain socket clients (with
+\fB\-\-connect\fR).
+.PP
+The name of the OVSDB file must be specified on the command line as
+\fIdatabase\fR, which must already have been created and initialized
+using, for example, \fBovsdb\-tool create\fR.
+.
+.SH OPTIONS
+.
+.IP "\fB\-\-listen=\fIlocal\fR"
+Makes \fBovsdb\-server\fR listen for JSON-RPC connections on
+\fIlocal\fR, which must take one of the following forms:
+.
+.RS
+.IP "\fBptcp:\fIport\fR[\fB:\fIip\fR]"
+Listens for JSON-RPC connections on the given TCP \fIport\fR.  By
+default, \fB\*(PN\fR listens for connections to any local IP address,
+but \fIip\fR may be specified to listen only for connections to the
+given \fIip\fR.
+.IP "\fBpunix:\fIfile\fR"
+Listens for JSON-RPC connections on the Unix domain server socket
+named \fIfile\fR.
+.RE
+.
+.IP "\fB\-\-connect=\fIremote\fR"
+Makes \fBovsdb\-server\fR initiate a JSON-RPC connection to
+\fIremote\fR, which must take one of the forms listed below.  The
+current implementation only attempts to connect once, and does not
+reconnect after a failure or after the connection closes.  This will
+be fixed later.
+.
+.RS
+.IP "\fBtcp:\fIip\fB:\fIport\fR"
+Connects to the given TCP \fIport\fR on \fIip\fR.
+.IP "\fBunix:\fIfile\fR"
+Connects to the Unix domain server socket named \fIfile\fR.
+.RE
+.
+.SS "Daemon Options"
+.so lib/daemon.man
+.SS "Logging Options"
+.so lib/vlog.man
+.SS "Other Options"
+.so lib/common.man
+.SH "RUNTIME MANAGEMENT COMMANDS"
+\fBovs\-appctl\fR(8) can send commands to a running
+\fBovsdb\-server\fR process.  The currently supported commands are
+described below.
+.so lib/vlog-unixctl.man
+.SH "SEE ALSO"
+.
+.BR ovsdb\-tool (1).

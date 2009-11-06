@@ -1,0 +1,4 @@
+.IP "Common options:"
+[\fB-h\fR | \fB--help\fR]
+[\fB-V\fR | \fB--version\fR]
+
