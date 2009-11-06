@@ -162,12 +162,12 @@ do_create(int argc UNUSED, char *argv[])
 }
 
 static void
-transact(int flags, const char *db_file_name, const char *transaction)
+transact(bool read_only, const char *db_file_name, const char *transaction)
 {
     struct json *request, *result;
     struct ovsdb *db;
 
-    check_ovsdb_error(ovsdb_open(db_file_name, flags, &db));
+    check_ovsdb_error(ovsdb_open(db_file_name, read_only, &db));
 
     request = parse_json(transaction);
     result = ovsdb_execute(db, request, 0, NULL);
@@ -180,13 +180,13 @@ transact(int flags, const char *db_file_name, const char *transaction)
 static void
 do_query(int argc UNUSED, char *argv[])
 {
-    transact(O_RDONLY, argv[1], argv[2]);
+    transact(true, argv[1], argv[2]);
 }
 
 static void
 do_transact(int argc UNUSED, char *argv[])
 {
-    transact(O_RDWR, argv[1], argv[2]);
+    transact(false, argv[1], argv[2]);
 }
 
 static void
