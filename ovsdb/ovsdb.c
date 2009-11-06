@@ -245,9 +245,10 @@ ovsdb_destroy(struct ovsdb *db)
         }
         shash_destroy(&db->tables);
 
-        /* Clear the schema's hash of table schemas.  The schemas, but not the
-         * table that points to them, were deleted in the previous step. */
-        shash_destroy(&db->schema->tables);
+        /* The schemas, but not the table that points to them, were deleted in
+         * the previous step, so we need to clear out the table.  We can't
+         * destroy the table, because ovsdb_schema_destroy() will do that. */
+        shash_clear(&db->schema->tables);
 
         ovsdb_schema_destroy(db->schema);
         ovsdb_file_close(db->file);
