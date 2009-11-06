@@ -42,7 +42,7 @@ get_max_stack(void)
     for (line_number = 1; fgets(line, sizeof line, f); line_number++) {
         if (strstr(line, "[stack]")) {
             uintptr_t end;
-            if (sscanf(line, "%*"SCNxPTR"-%"SCNxPTR, &end) != 1) {
+            if (sscanf(line, "%*x-%"SCNxPTR, &end) != 1) {
                 VLOG_WARN("%s:%d: parse error", file_name, line_number);
                 continue;
             }
