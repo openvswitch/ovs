@@ -1,0 +1,90 @@
+.\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.\" -*- nroff -*-
+.TH ovsdb\-client 1 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovsdb\-client
+.
+.SH NAME
+ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
+.
+.SH SYNOPSIS
+\fBovsdb\-client \fR[\fIoptions\fR] \fBget-schema\fI server\fR
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlist-tables\fI server\fR
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlist-columns\fI server \fR[\fItable\fR]
+.br
+\fBovsdb\-client help\fR
+.IP "Output formatting options:"
+[\fB--format=\fIformat\fR]
+[\fB--wide\fR]
+[\fB--no-heading\fR]
+.so lib/vlog-syn.man
+.so lib/common-syn.man
+.
+.SH DESCRIPTION
+The \fBovsdb\-client\fR program is a command-line client for
+interacting with a running \fBovsdb\-server\fR process.  For each
+command, the \fIserver\fR to connect to must be specified in one of
+the following forms:
+.IP "\fBtcp:\fIip\fB:\fIport\fR"
+Connect to the given TCP \fIport\fR on \fIip\fR.
+.IP "\fBunix:\fIfile\fR"
+Connect to the Unix domain server socket named \fIfile\fR.
+.
+.SS "Commands"
+The following commands are implemented:
+.IP "\fBget-schema\fI server\fR"
+Connects to \fIserver\fR, retrieves the database schema, and prints it
+in JSON format.
+.
+.IP "\fBlist-tables\fI server\fR"
+Connects to \fIserver\fR, retrieves the database schema, and prints
+a table listing the names and comments (if any) on each table within
+the database.
+.
+.IP "\fBlist-columns\fI server \fR[\fItable\fR]"
+Connects to \fIserver\fR, retrieves the database schema, and prints
+a table listing the names, type, and comment (if any) on each column.  If
+\fItable\fR is specified, only columns in that table are listed;
+otherwise, the tables include columns in all tables.
+.SH OPTIONS
+.SS "Output Formatting Options"
+Much of the output from \fBovsdb\-client\fR is in the form of tables.
+The following options controlling output formatting:
+.
+.IP "\fB-f \fIformat\fR"
+.IQ "\fB--format=\fIformat\fR"
+Sets the basic type of output formatting.  The following types of
+\fIformat\fR are available:
+.RS
+.IP "\fBtable\fR (default)"
+Text-based tables with aligned columns.
+.IP "\fBhtml\fR"
+HTML tables.
+.IP "\fBcvs\fR"
+Comma-separated values as defined in RFC 4180.
+.RE
+.
+.IP "\fB--wide\fR"
+In \fBtable\fR output (the default), when standard output is a
+terminal device, by default lines are truncated at a width of 79
+characters.  Specifying this option prevents line truncation.
+.
+.IP "\fB--no-heading\fR"
+This option suppresses the heading row that otherwise appears in the
+first row of table output.
+.
+.SS "Logging Options"
+.so lib/vlog.man
+.SS "Other Options"
+.so lib/common.man
+.SH "SEE ALSO"
+.
+\fBovsdb\-server\fR(1),
+\fBovsdb\-client\fR(1),
+and the OVSDB specification.

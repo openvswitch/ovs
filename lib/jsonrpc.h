@@ -46,6 +46,8 @@ void jsonrpc_recv_wait(struct jsonrpc *);
 
 int jsonrpc_send_block(struct jsonrpc *, struct jsonrpc_msg *);
 int jsonrpc_recv_block(struct jsonrpc *, struct jsonrpc_msg **);
+int jsonrpc_transact_block(struct jsonrpc *, struct jsonrpc_msg *,
+                           struct jsonrpc_msg **);
 
 /* Messages. */
 enum jsonrpc_msg_type {

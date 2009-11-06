@@ -261,6 +261,32 @@ jsonrpc_recv_block(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
     }
 }
 
+int
+jsonrpc_transact_block(struct jsonrpc *rpc, struct jsonrpc_msg *request,
+                       struct jsonrpc_msg **replyp)
+{
+    struct jsonrpc_msg *reply = NULL;
+    struct json *id;
+    int error;
+
+    id = json_clone(request->id);
+    error = jsonrpc_send_block(rpc, request);
+    if (!error) {
+        for (;;) {
+            error = jsonrpc_recv_block(rpc, &reply);
+            if (error
+                || (reply->type == JSONRPC_REPLY
+                    && json_equal(id, reply->id))) {
+                break;
+            }
+            jsonrpc_msg_destroy(reply);
+        }
+    }
+    *replyp = error ? NULL : reply;
+    json_destroy(id);
+    return error;
+}
+
 static void
 jsonrpc_received(struct jsonrpc *rpc)
 {

@@ -33,6 +33,15 @@ man_MANS += ovsdb/ovsdb-tool.1
 DISTCLEANFILES += ovsdb/ovsdb-tool.1
 EXTRA_DIST += ovsdb/ovsdb-tool.1.in
 
+# ovsdb-client
+bin_PROGRAMS += ovsdb/ovsdb-client
+ovsdb_ovsdb_client_SOURCES = ovsdb/ovsdb-client.c
+ovsdb_ovsdb_client_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a
+# ovsdb-client.1
+man_MANS += ovsdb/ovsdb-client.1
+DISTCLEANFILES += ovsdb/ovsdb-client.1
+EXTRA_DIST += ovsdb/ovsdb-client.1.in
+
 # ovsdb-server
 sbin_PROGRAMS += ovsdb/ovsdb-server
 ovsdb_ovsdb_server_SOURCES = ovsdb/ovsdb-server.c
