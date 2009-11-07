@@ -347,12 +347,15 @@ on port 1, disrupting connectivity.  If mirroring to a VLAN is desired
 in this scenario, then the physical switch must be replaced by one
 that learns Ethernet addresses on a per-VLAN basis.  In addition,
 learning should be disabled on the VLAN containing mirrored traffic.
-If this is not done then the intermediate switch will learn the MAC
+If this is not done then intermediate switches will learn the MAC
 address of each end host from the mirrored traffic.  If packets being
 sent to that end host are also mirrored, then they will be dropped
 since the switch will attempt to send them out the input port.
 Disabling learning for the VLAN will cause the switch to correctly
-send the packet out all ports configured for that VLAN.
+send the packet out all ports configured for that VLAN.  If Open
+vSwitch is being used as an intermediate switch learning can be disabled
+by setting the key \fBvlan.\fIbrname\fB.learning-disable=\fIvid\fR
+to the mirrored VLAN.
 .ST "Example"
 The following \fBovs\-vswitchd\fR configuration copies all frames received
 on \fBeth1\fR or \fBeth2\fR to \fBeth3\fR.

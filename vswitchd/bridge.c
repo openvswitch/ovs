@@ -3265,7 +3265,8 @@ static void
 mirror_reconfigure(struct bridge *br)
 {
     struct svec old_mirrors, new_mirrors;
-    size_t i;
+    size_t i, n_rspan_vlans;
+    unsigned long *rspan_vlans;
 
     /* Collect old and new mirrors. */
     svec_init(&old_mirrors);
@@ -3313,6 +3314,27 @@ mirror_reconfigure(struct bridge *br)
         if (m && m->out_port) {
             m->out_port->is_mirror_output_port = true;
         }
+    }
+
+    /* Update learning disabled vlans (for RSPAN). */
+    rspan_vlans = NULL;
+    n_rspan_vlans = cfg_count("vlan.%s.disable-learning", br->name);
+    if (n_rspan_vlans) {
+        rspan_vlans = bitmap_allocate(4096);
+
+        for (i = 0; i < n_rspan_vlans; i++) {
+            int vlan = cfg_get_vlan(i, "vlan.%s.disable-learning", br->name);
+            if (vlan >= 0) {
+                bitmap_set1(rspan_vlans, vlan);
+            } else {
+                VLOG_ERR("bridge %s: invalid value '%s' for learning disabled "
+                         "VLAN", br->name,
+                       cfg_get_string(i, "vlan.%s.disable-learning", br->name));
+            }
+        }
+    }
+    if (mac_learning_set_disabled_vlans(br->ml, rspan_vlans)) {
+        bridge_flush(br);
     }
 }
 
