@@ -4,7 +4,7 @@
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-vsctl 8 "September 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-vsctl 8 "November 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-vsctl
 .
 .SH NAME
@@ -68,30 +68,24 @@ it bypasses the Open vSwitch configuration file locking protocol.
 .IP "\fB\-t \fItarget\fR"
 .IQ "\fB\-\-target=\fItarget\fR"
 Configures how \fBovs\-vsctl\fR contacts \fBovs\-vswitchd\fR to
-instruct it to reload its configuration file.  The \fItarget\fR takes
-one of two forms:
-.RS
-.IP \(bu
-The name of a Unix domain socket on which \fBovs\-vswitchd\fR is
-listening for control channel connections.  By default,
-\fBovs\-vswitchd\fR listens on a Unix domain socket named
-\fB@RUNDIR@/ovs\-vswitchd.\fIpid\fR.ctl\fR, where \fIpid\fR is the
-\fBovs\-vswitchd\fR process's process ID.
-.IP \(bu
-The name of a pidfile, that is, a file whose contents are the process
-ID of a running process as a decimal number.  \fBovs\-vswitchd\fR
-creates a pidfile if it is invoked with the \fB\-\-pidfile\fR option.
-\fBovs\-vsctl\fR reads the pidfile, then looks for a Unix socket named
-\fB@RUNDIR@/ovs\-vswitchd.\fIpid\fR.ctl\fR, where \fIpid\fR is
+instruct it to reload its configuration file.
+.IP
+If \fItarget\fR begins with \fB/\fR it must name a Unix domain socket
+on which \fBovs\-vswitchd\fR is listening for control channel
+connections.  By default, \fBovs\-vswitchd\fR listens on a Unix domain
+socket named \fB@RUNDIR@/ovs\-vswitchd.\fIpid\fB.ctl\fR, where
+\fIpid\fR is \fBovs\-vswitchd\fR's process ID.
+.IP
+Otherwise, \fBovs\-appctl\fR looks for a pidfile, that is, a file
+whose contents are the process ID of a running process as a decimal
+number, named \fB@RUNDIR@/\fItarget\fB.pid\fR.  (The \fB\-\-pidfile\fR
+option makes an Open vSwitch daemon create a pidfile.)
+\fBovs\-appctl\fR reads the pidfile, then looks for a Unix socket
+named \fB@RUNDIR@/\fItarget\fB.\fIpid\fB.ctl\fR, where \fIpid\fR is
 replaced by the process ID read from \fItarget\fR, and uses that file
 as if it had been specified directly as the target.
-.RE
 .IP
-If \fItarget\fR does not begin with \fB/\fR, then \fB@RUNDIR@/\fR is
-implicitly prefixed to it.
-.IP
-If neither \fB\-t\fR nor \fB\-\-target\fR is specified, the default target is
-\fB@RUNDIR@/ovs\-vswitchd.pid\fR.
+The default target is \fBovs\-vswitchd\fR.
 .IP "\fB\-\-no\-reload\fR"
 Prevents \fBovs\-vsctl\fR from telling \fBovs\-vswitchd\fR to reload
 its configuration file.

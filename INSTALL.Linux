@@ -156,14 +156,12 @@ respectively.
 
 At runtime, you may make ovs-vswitchd reload its configuration file
 and update its configuration accordingly by sending it a SIGHUP
-signal.  The ovs-appctl utility can also be used to do this with a
-command such as:
+signal.  The ovs-appctl utility can also be used to do this:
 
-    % ovs-appctl -t <pid> -e vswitchd/reload
+    % ovs-appctl vswitchd/reload
 
-where <pid> is ovs-vswitchd's process ID.  In the latter case,
-ovs-appctl will not exit until the reload and reconfiguration is
-complete.
+In the latter case, ovs-appctl will wait for ovs-vswitchd to finish
+reloading before it exits.
 
 Bug Reporting
 -------------

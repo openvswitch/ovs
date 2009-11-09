@@ -31,7 +31,7 @@ if argv0.find('/') >= 0:
 DEFAULT_VSWITCHD_CONF = "@sysconfdir@/ovs-vswitchd.conf"
 VSWITCHD_CONF = DEFAULT_VSWITCHD_CONF
 
-DEFAULT_VSWITCHD_TARGET = "@RUNDIR@/ovs-vswitchd.pid"
+DEFAULT_VSWITCHD_TARGET = "ovs-vswitchd"
 VSWITCHD_TARGET = DEFAULT_VSWITCHD_TARGET
 
 RELOAD_VSWITCHD = True
@@ -159,11 +159,10 @@ def do_cfg_save(cfg, file):
 
 def cfg_reload():
     target = VSWITCHD_TARGET
+    if not target.startswith('/'):
+        pid = read_first_line_of_file('%s/%s.pid' % ('@RUNDIR@', target))
+        target = '%s/%s.%s.ctl' % ('@RUNDIR@', target, pid)
     s = os.stat(target)
-    if stat.S_ISREG(s.st_mode):
-        pid = read_first_line_of_file(target)
-        target = "@RUNDIR@/ovs-vswitchd.%s.ctl" % pid
-        s = os.stat(target)
     if not stat.S_ISSOCK(s.st_mode):
         raise Error("%s is not a Unix domain socket, cannot reload" % target)
     skt = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -348,7 +347,7 @@ General options:
   --no-syslog                 do not write mesages to syslog
   -c, --config=FILE           set configuration file
                               (default: %(config)s)
-  -t, --target=PIDFILE|SOCKET set ovs-vswitchd target
+  -t, --target=PROGRAM|SOCKET set ovs-vswitchd target
                               (default: %(target)s)
   --no-reload                 do not make ovs-vswitchd reload its configuration
   -h, --help                  display this help message and exit
@@ -552,8 +551,6 @@ def main():
             VSWITCHD_CONF = optarg
         elif opt == "-t" or opt == "--target":
             global VSWITCHD_TARGET
-            if optarg[0] != '/':
-                optarg = '@RUNDIR@/' + optarg
             VSWITCHD_TARGET = optarg
         elif opt == "--no-reload":
             global RELOAD_VSWITCHD

@@ -1165,10 +1165,7 @@ parse_options(int argc, char *argv[])
     char *short_options = long_options_to_short_options(long_options);
     int error;
 
-    appctl_command = xasprintf("%s/ovs-appctl -t "
-                               "%s/ovs-vswitchd.`cat %s/ovs-vswitchd.pid`.ctl "
-                               "-e '%%s'",
-                               ovs_bindir, ovs_rundir, ovs_rundir);
+    appctl_command = xasprintf("%s/ovs-appctl %%s", ovs_bindir);
     for (;;) {
         int c;
 

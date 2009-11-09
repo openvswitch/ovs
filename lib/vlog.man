@@ -7,7 +7,7 @@ Sets the logging level for \fImodule\fR in \fIfacility\fR to
 .RS
 .IP \(bu
 \fImodule\fR may be any valid module name (as displayed by the
-\fB--list\fR action on \fBovs-appctl\fR(8)), or the special name
+\fB--list\fR action on \fBovs\-appctl\fR(8)), or the special name
 \fBANY\fR to set the logging levels for all modules.
 
 .IP \(bu
@@ -35,7 +35,7 @@ Sets the maximum logging verbosity level, equivalent to
 .TP
 \fB-vPATTERN:\fIfacility\fB:\fIpattern\fR, \fB--verbose=PATTERN:\fIfacility\fB:\fIpattern\fR
 Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Refer to
-\fBovs-appctl\fR(8) for a description of the valid syntax for \fIpattern\fR.
+\fBovs\-appctl\fR(8) for a description of the valid syntax for \fIpattern\fR.
 
 .TP
 \fB--log-file\fR[\fB=\fIfile\fR]
