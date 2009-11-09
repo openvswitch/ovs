@@ -29,14 +29,14 @@ if argv0.find('/') >= 0:
     argv0 = argv0[argv0.rfind('/') + 1:]
 
 DEFAULT_VSWITCHD_CONF = "@sysconfdir@/ovs-vswitchd.conf"
-VSWITCHD_CONF = DEFAULT_VSWITCHD_CONF
+vswitchd_conf = DEFAULT_VSWITCHD_CONF
 
 DEFAULT_VSWITCHD_TARGET = "ovs-vswitchd"
-VSWITCHD_TARGET = DEFAULT_VSWITCHD_TARGET
+vswitchd_target = DEFAULT_VSWITCHD_TARGET
 
-RELOAD_VSWITCHD = True
+reload_vswitchd = True
 
-SYSLOG = True
+enable_syslog = True
 
 class Error(Exception):
     def __init__(self, msg):
@@ -44,7 +44,7 @@ class Error(Exception):
         self.msg = msg
 
 def log(message):
-    if SYSLOG:
+    if enable_syslog:
         syslog.syslog(message)
 
 # XXX Most of the functions below should be integrated into a
@@ -182,7 +182,7 @@ def cfg_save(cfg, filename):
         do_cfg_save(cfg, f)
         f.close()
         os.rename(tmp_name, filename)
-        if RELOAD_VSWITCHD:
+        if reload_vswitchd:
             cfg_reload()
 
 # Returns a set of the immediate subsections of 'section' within 'cfg'.  For
@@ -547,27 +547,27 @@ def main():
     oneline = False
     for opt, optarg in options:
         if opt == "-c" or opt == "--config":
-            global VSWITCHD_CONF
-            VSWITCHD_CONF = optarg
+            global vswitchd_conf
+            vswitchd_conf = optarg
         elif opt == "-t" or opt == "--target":
-            global VSWITCHD_TARGET
-            VSWITCHD_TARGET = optarg
+            global vswitchd_target
+            vswitchd_target = optarg
         elif opt == "--no-reload":
-            global RELOAD_VSWITCHD
-            RELOAD_VSWITCHD = False
+            global reload_vswitchd
+            reload_vswitchd = False
         elif opt == "-h" or opt == "--help":
             usage()
         elif opt == "-V" or opt == "--version":
             version()
         elif opt == "--no-syslog":
-            global SYSLOG
-            SYSLOG = False
+            global enable_syslog
+            enable_syslog = False
         elif opt == "--oneline":
             oneline = True
         else:
             raise RuntimeError("unhandled option %s" % opt)
 
-    if SYSLOG:
+    if enable_syslog:
         syslog.openlog("ovs-vsctl")
         log("Called as %s" % ' '.join(sys.argv[1:]))
 
@@ -586,7 +586,7 @@ def main():
             need_lock = True
 
     # Execute commands.
-    cfg = cfg_read(VSWITCHD_CONF, need_lock)
+    cfg = cfg_read(vswitchd_conf, need_lock)
     for command in commands:
         output = run_command(cfg, command)
         if oneline:
@@ -598,7 +598,7 @@ def main():
             for line in output:
                 print line
     if need_lock:
-        cfg_save(cfg, VSWITCHD_CONF)
+        cfg_save(cfg, vswitchd_conf)
     sys.exit(0)
 
 if __name__ == "__main__":
