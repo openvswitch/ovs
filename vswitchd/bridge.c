@@ -147,7 +147,7 @@ struct port {
 struct bridge {
     struct list node;           /* Node in global list of bridges. */
     char *name;                 /* User-specified arbitrary name. */
-    struct mac_learning *ml;    /* MAC learning table, or null not to learn. */
+    struct mac_learning *ml;    /* MAC learning table. */
     bool sent_config_request;   /* Successfully sent config request? */
     uint8_t default_ea[ETH_ADDR_LEN]; /* Default MAC. */
 
@@ -846,9 +846,7 @@ bridge_wait(void)
             continue;
         }
 
-        if (br->ml) {
-            mac_learning_wait(br->ml);
-        }
+        mac_learning_wait(br->ml);
         bond_wait(br);
         brstp_wait(br);
     }
@@ -861,9 +859,7 @@ bridge_flush(struct bridge *br)
 {
     COVERAGE_INC(bridge_flush);
     br->flush = true;
-    if (br->ml) {
-        mac_learning_flush(br->ml);
-    }
+    mac_learning_flush(br->ml);
 }
 
 /* Bridge unixctl user interface functions. */
@@ -872,6 +868,7 @@ bridge_unixctl_fdb_show(struct unixctl_conn *conn, const char *args)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct bridge *br;
+    const struct mac_entry *e;
 
     br = bridge_lookup(args);
     if (!br) {
@@ -880,16 +877,13 @@ bridge_unixctl_fdb_show(struct unixctl_conn *conn, const char *args)
     }
 
     ds_put_cstr(&ds, " port  VLAN  MAC                Age\n");
-    if (br->ml) {
-        const struct mac_entry *e;
-        LIST_FOR_EACH (e, struct mac_entry, lru_node, &br->ml->lrus) {
-            if (e->port < 0 || e->port >= br->n_ports) {
-                continue;
-            }
-            ds_put_format(&ds, "%5d  %4d  "ETH_ADDR_FMT"  %3d\n",
-                          br->ports[e->port]->ifaces[0]->dp_ifidx,
-                          e->vlan, ETH_ADDR_ARGS(e->mac), mac_entry_age(e));
+    LIST_FOR_EACH (e, struct mac_entry, lru_node, &br->ml->lrus) {
+        if (e->port < 0 || e->port >= br->n_ports) {
+            continue;
         }
+        ds_put_format(&ds, "%5d  %4d  "ETH_ADDR_FMT"  %3d\n",
+                      br->ports[e->port]->ifaces[0]->dp_ifidx,
+                      e->vlan, ETH_ADDR_ARGS(e->mac), mac_entry_age(e));
     }
     unixctl_command_reply(conn, 200, ds_cstr(&ds));
     ds_destroy(&ds);
@@ -1031,9 +1025,7 @@ bridge_run_one(struct bridge *br)
         return error;
     }
 
-    if (br->ml) {
-        mac_learning_run(br->ml, ofproto_get_revalidate_set(br->ofproto));
-    }
+    mac_learning_run(br->ml, ofproto_get_revalidate_set(br->ofproto));
     bond_run(br);
     brstp_run(br);
 
@@ -1859,6 +1851,7 @@ process_flow(struct bridge *br, const flow_t *flow,
     struct port *in_port;
     struct port *out_port = NULL; /* By default, drop the packet/flow. */
     int vlan;
+    int out_port_idx;
 
     /* Find the interface and port structure for the received packet. */
     in_iface = iface_from_dp_ifidx(br, flow->in_port);
@@ -1969,37 +1962,33 @@ process_flow(struct bridge *br, const flow_t *flow,
 
     /* MAC learning. */
     out_port = FLOOD_PORT;
-    if (br->ml) {
-        int out_port_idx;
-
-        /* Learn source MAC (but don't try to learn from revalidation). */
-        if (packet) {
-            tag_type rev_tag = mac_learning_learn(br->ml, flow->dl_src,
-                                                  vlan, in_port->port_idx);
-            if (rev_tag) {
-                /* The log messages here could actually be useful in debugging,
-                 * so keep the rate limit relatively high. */
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30,
-                                                                        300);
-                VLOG_DBG_RL(&rl, "bridge %s: learned that "ETH_ADDR_FMT" is "
-                            "on port %s in VLAN %d",
-                            br->name, ETH_ADDR_ARGS(flow->dl_src),
-                            in_port->name, vlan);
-                ofproto_revalidate(br->ofproto, rev_tag);
-            }
+    /* Learn source MAC (but don't try to learn from revalidation). */
+    if (packet) {
+        tag_type rev_tag = mac_learning_learn(br->ml, flow->dl_src,
+                                              vlan, in_port->port_idx);
+        if (rev_tag) {
+            /* The log messages here could actually be useful in debugging,
+             * so keep the rate limit relatively high. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30,
+                                                                    300);
+            VLOG_DBG_RL(&rl, "bridge %s: learned that "ETH_ADDR_FMT" is "
+                        "on port %s in VLAN %d",
+                        br->name, ETH_ADDR_ARGS(flow->dl_src),
+                        in_port->name, vlan);
+            ofproto_revalidate(br->ofproto, rev_tag);
         }
+    }
 
-        /* Determine output port. */
-        out_port_idx = mac_learning_lookup_tag(br->ml, flow->dl_dst, vlan,
-                                               tags);
-        if (out_port_idx >= 0 && out_port_idx < br->n_ports) {
-            out_port = br->ports[out_port_idx];
-        } else if (!packet) {
-            /* If we are revalidating but don't have a learning entry then
-             * eject the flow.  Installing a flow that floods packets will
-             * prevent us from seeing future packets and learning properly. */
-            return false;
-        }
+    /* Determine output port. */
+    out_port_idx = mac_learning_lookup_tag(br->ml, flow->dl_dst, vlan,
+                                           tags);
+    if (out_port_idx >= 0 && out_port_idx < br->n_ports) {
+        out_port = br->ports[out_port_idx];
+    } else if (!packet) {
+        /* If we are revalidating but don't have a learning entry then
+         * eject the flow.  Installing a flow that floods packets will
+         * prevent us from seeing future packets and learning properly. */
+        return false;
     }
 
     /* Don't send packets out their input ports.  Don't forward frames that STP
@@ -2435,7 +2424,7 @@ bond_send_learning_packets(struct port *port)
     struct ofpbuf packet;
     int error, n_packets, n_errors;
 
-    if (!port->n_ifaces || port->active_iface < 0 || !br->ml) {
+    if (!port->n_ifaces || port->active_iface < 0) {
         return;
     }
 
@@ -2590,10 +2579,6 @@ bond_unixctl_show(struct unixctl_conn *conn, const char *args)
                           hash, be->tx_bytes / 1024);
 
             /* MACs. */
-            if (!port->bridge->ml) {
-                break;
-            }
-
             LIST_FOR_EACH (me, struct mac_entry, lru_node,
                            &port->bridge->ml->lrus) {
                 uint16_t dp_ifidx;
