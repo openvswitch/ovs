@@ -1377,7 +1377,7 @@ normalize_match(struct ofp_match *m)
     if (wc & OFPFW_DL_TYPE) {
         m->dl_type = 0;
 
-        /* Can't sensibly m on network or transport headers if the
+        /* Can't sensibly match on network or transport headers if the
          * data link type is unknown. */
         wc |= OFPFW_NW | OFPFW_TP;
         m->nw_src = m->nw_dst = m->nw_proto = 0;
@@ -1386,7 +1386,7 @@ normalize_match(struct ofp_match *m)
         if (wc & OFPFW_NW_PROTO) {
             m->nw_proto = 0;
 
-            /* Can't sensibly m on transport headers if the network
+            /* Can't sensibly match on transport headers if the network
              * protocol is unknown. */
             wc |= OFPFW_TP;
             m->tp_src = m->tp_dst = 0;
@@ -1401,7 +1401,7 @@ normalize_match(struct ofp_match *m)
             }
         } else {
             /* Transport layer fields will always be extracted as zeros, so we
-             * can do an exact-m on those values.  */
+             * can do an exact-match on those values.  */
             wc &= ~OFPFW_TP;
             m->tp_src = m->tp_dst = 0;
         }
@@ -1413,7 +1413,7 @@ normalize_match(struct ofp_match *m)
         }
     } else {
         /* Network and transport layer fields will always be extracted as
-         * zeros, so we can do an exact-m on those values. */
+         * zeros, so we can do an exact-match on those values. */
         wc &= ~(OFPFW_NW | OFPFW_TP);
         m->nw_proto = m->nw_src = m->nw_dst = 0;
         m->tp_src = m->tp_dst = 0;
