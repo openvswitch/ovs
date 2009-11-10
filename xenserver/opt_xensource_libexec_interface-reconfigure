@@ -1507,10 +1507,10 @@ def action_down(pif):
     ifdown(ipdev)
 
     if dp:
-        #nw = db.get_pif_record(pif)['network']
-        #nwrec = db.get_network_record(nw)
-        #cfgmod_argv += ['# deconfigure xs-network-uuids']
-        #cfgmod_argv += ['--del-entry=bridge.%s.xs-network-uuids=%s' % (bridge,nwrec['uuid'])]
+        nw = db.get_pif_record(pif)['network']
+        nwrec = db.get_network_record(nw)
+        cfgmod_argv += ['# deconfigure xs-network-uuids']
+        cfgmod_argv += ['--del-entry=bridge.%s.xs-network-uuids=%s' % (bridge,nwrec['uuid'])]
 
         log("deconfigure ipdev %s on %s" % (ipdev,bridge))
         cfgmod_argv += ["# deconfigure ipdev %s" % ipdev]

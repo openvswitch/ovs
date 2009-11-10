@@ -37,6 +37,8 @@
 
 #define NETFLOW_V5_VERSION 5
 
+static const int ACTIVE_TIMEOUT_DEFAULT = 600;
+
 /* Every NetFlow v5 message contains the header that follows.  This is
  * followed by up to thirty records that describe a terminating flow.
  * We only send a single record per NetFlow message.
@@ -100,6 +102,8 @@ struct netflow {
                                    * bits of the interface fields. */
     uint32_t netflow_cnt;         /* Flow sequence number for NetFlow. */
     struct ofpbuf packet;         /* NetFlow packet being accumulated. */
+    long long int active_timeout; /* Timeout for flows that are still active. */
+    long long int reconfig_time;  /* When we reconfigured the timeouts. */
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -160,14 +164,19 @@ open_collector(char *dst)
 }
 
 void
-netflow_expire(struct netflow *nf, const struct ofexpired *expired)
+netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
+               struct ofexpired *expired)
 {
     struct netflow_v5_header *nf_hdr;
     struct netflow_v5_record *nf_rec;
     struct timeval now;
 
-    /* NetFlow only reports on IP packets. */
-    if (expired->flow.dl_type != htons(ETH_TYPE_IP)) {
+    nf_flow->last_expired += nf->active_timeout;
+
+    /* NetFlow only reports on IP packets and we should only report flows
+     * that actually have traffic. */
+    if (expired->flow.dl_type != htons(ETH_TYPE_IP) ||
+        expired->packet_count - nf_flow->packet_count_off == 0) {
         return;
     }
 
@@ -196,15 +205,17 @@ netflow_expire(struct netflow *nf, const struct ofexpired *expired)
     if (nf->add_id_to_iface) {
         uint16_t iface = (nf->engine_id & 0x7f) << 9;
         nf_rec->input = htons(iface | (expired->flow.in_port & 0x1ff));
-        nf_rec->output = htons(iface);
+        nf_rec->output = htons(iface | (nf_flow->output_iface & 0x1ff));
     } else {
         nf_rec->input = htons(expired->flow.in_port);
-        nf_rec->output = htons(0);
+        nf_rec->output = htons(nf_flow->output_iface);
     }
-    nf_rec->packet_count = htonl(MIN(expired->packet_count, UINT32_MAX));
-    nf_rec->byte_count = htonl(MIN(expired->byte_count, UINT32_MAX));
-    nf_rec->init_time = htonl(expired->created - nf->boot_time);
-    nf_rec->used_time = htonl(MAX(expired->created, expired->used)
+    nf_rec->packet_count = htonl(MIN(expired->packet_count -
+                                     nf_flow->packet_count_off, UINT32_MAX));
+    nf_rec->byte_count = htonl(MIN(expired->byte_count -
+                                   nf_flow->byte_count_off, UINT32_MAX));
+    nf_rec->init_time = htonl(nf_flow->created - nf->boot_time);
+    nf_rec->used_time = htonl(MAX(nf_flow->created, expired->used)
                              - nf->boot_time);
     if (expired->flow.nw_proto == IP_TYPE_ICMP) {
         /* In NetFlow, the ICMP type and code are concatenated and
@@ -217,9 +228,15 @@ netflow_expire(struct netflow *nf, const struct ofexpired *expired)
         nf_rec->src_port = expired->flow.tp_src;
         nf_rec->dst_port = expired->flow.tp_dst;
     }
-    nf_rec->tcp_flags = expired->tcp_flags;
+    nf_rec->tcp_flags = nf_flow->tcp_flags;
     nf_rec->ip_proto = expired->flow.nw_proto;
-    nf_rec->ip_tos = expired->ip_tos;
+    nf_rec->ip_tos = nf_flow->ip_tos;
+
+    /* Update flow tracking data. */
+    nf_flow->created = 0;
+    nf_flow->packet_count_off = expired->packet_count;
+    nf_flow->byte_count_off = expired->byte_count;
+    nf_flow->tcp_flags = 0;
 
     /* NetFlow messages are limited to 30 records. */
     if (ntohs(nf_hdr->count) >= 30) {
@@ -259,15 +276,21 @@ clear_collectors(struct netflow *nf)
 }
 
 int
-netflow_set_collectors(struct netflow *nf, const struct svec *collectors_)
+netflow_set_options(struct netflow *nf,
+                    const struct netflow_options *nf_options)
 {
     struct svec collectors;
     int error = 0;
     size_t i;
+    long long int old_timeout;
+
+    nf->engine_type = nf_options->engine_type;
+    nf->engine_id = nf_options->engine_id;
+    nf->add_id_to_iface = nf_options->add_id_to_iface;
 
     clear_collectors(nf);
 
-    svec_clone(&collectors, collectors_);
+    svec_clone(&collectors, &nf_options->collectors);
     svec_sort_unique(&collectors);
 
     nf->fds = xmalloc(sizeof *nf->fds * collectors.n);
@@ -288,16 +311,19 @@ netflow_set_collectors(struct netflow *nf, const struct svec *collectors_)
     }
 
     svec_destroy(&collectors);
-    return error;
-}
 
-void 
-netflow_set_engine(struct netflow *nf, uint8_t engine_type, 
-        uint8_t engine_id, bool add_id_to_iface)
-{
-    nf->engine_type = engine_type;
-    nf->engine_id = engine_id;
-    nf->add_id_to_iface = add_id_to_iface;
+    old_timeout = nf->active_timeout;
+    if (nf_options->active_timeout != -1) {
+        nf->active_timeout = nf_options->active_timeout;
+    } else {
+        nf->active_timeout = ACTIVE_TIMEOUT_DEFAULT;
+    }
+    nf->active_timeout *= 1000;
+    if (old_timeout != nf->active_timeout) {
+        nf->reconfig_time = time_msec();
+    }
+
+    return error;
 }
 
 struct netflow *
@@ -323,4 +349,47 @@ netflow_destroy(struct netflow *nf)
         clear_collectors(nf);
         free(nf);
     }
+}
+
+void
+netflow_flow_clear(struct netflow_flow *nf_flow)
+{
+    uint16_t output_iface = nf_flow->output_iface;
+
+    memset(nf_flow, 0, sizeof *nf_flow);
+    nf_flow->output_iface = output_iface;
+}
+
+void
+netflow_flow_update_time(struct netflow *nf, struct netflow_flow *nf_flow,
+                         long long int used)
+{
+    if (!nf_flow->created) {
+        nf_flow->created = used;
+    }
+
+    if (!nf || !nf->active_timeout || !nf_flow->last_expired ||
+        nf->reconfig_time > nf_flow->last_expired) {
+        /* Keep the time updated to prevent a flood of expiration in
+         * the future. */
+        nf_flow->last_expired = time_msec();
+    }
+}
+
+void
+netflow_flow_update_flags(struct netflow_flow *nf_flow, uint8_t ip_tos,
+                          uint8_t tcp_flags)
+{
+    nf_flow->ip_tos = ip_tos;
+    nf_flow->tcp_flags |= tcp_flags;
+}
+
+bool
+netflow_active_timeout_expired(struct netflow *nf, struct netflow_flow *nf_flow)
+{
+    if (nf->active_timeout) {
+        return time_msec() > nf_flow->last_expired + nf->active_timeout;
+    }
+
+    return false;
 }

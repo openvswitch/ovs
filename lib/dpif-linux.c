@@ -419,7 +419,7 @@ dpif_linux_recv(struct dpif *dpif_, struct ofpbuf **bufp)
             return 0;
         } else {
             VLOG_WARN_RL(&error_rl, "%s: discarding message truncated "
-                         "from %zu bytes to %d",
+                         "from %"PRIu32" bytes to %d",
                          dpif_name(dpif_), msg->length, retval);
             error = ERANGE;
         }

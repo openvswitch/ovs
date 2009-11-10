@@ -21,6 +21,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 
+#include "bitmap.h"
 #include "coverage.h"
 #include "hash.h"
 #include "list.h"
@@ -129,6 +130,7 @@ mac_learning_create(void)
         list_push_front(&ml->free, &s->lru_node);
     }
     ml->secret = random_uint32();
+    ml->non_learning_vlans = NULL;
     return ml;
 }
 
@@ -136,7 +138,34 @@ mac_learning_create(void)
 void
 mac_learning_destroy(struct mac_learning *ml)
 {
+    if (ml) {
+        bitmap_free(ml->non_learning_vlans);
+    }
     free(ml);
+}
+
+/* Provides a bitmap of VLANs which have learning disabled.  It takes
+ * ownership of the bitmap.  Returns true if the set has changed from
+ * the previous value. */
+bool
+mac_learning_set_disabled_vlans(struct mac_learning *ml, unsigned long *bitmap)
+{
+    bool ret = (bitmap == NULL
+        ? ml->non_learning_vlans != NULL
+        : (ml->non_learning_vlans == NULL
+          || !bitmap_equal(bitmap, ml->non_learning_vlans, 4096)));
+
+    bitmap_free(ml->non_learning_vlans);
+    ml->non_learning_vlans = bitmap;
+
+    return ret;
+}
+
+static bool
+is_learning_vlan(const struct mac_learning *ml, uint16_t vlan)
+{
+    return !(ml->non_learning_vlans
+            && bitmap_is_set(ml->non_learning_vlans, vlan));
 }
 
 /* Attempts to make 'ml' learn from the fact that a frame from 'src_mac' was
@@ -155,6 +184,10 @@ mac_learning_learn(struct mac_learning *ml,
 {
     struct mac_entry *e;
     struct list *bucket;
+
+    if (!is_learning_vlan(ml, vlan)) {
+        return 0;
+    }
 
     if (eth_addr_is_multicast(src_mac)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 30);
@@ -216,7 +249,7 @@ mac_learning_lookup_tag(const struct mac_learning *ml,
                         const uint8_t dst[ETH_ADDR_LEN], uint16_t vlan,
                         tag_type *tag)
 {
-    if (eth_addr_is_multicast(dst)) {
+    if (eth_addr_is_multicast(dst) || !is_learning_vlan(ml, vlan)) {
         return -1;
     } else {
         struct mac_entry *e = search_bucket(mac_table_bucket(ml, dst, vlan),

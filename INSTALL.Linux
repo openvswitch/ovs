@@ -92,7 +92,12 @@ Building and Installing Open vSwitch for Linux
 Once you have installed all the prerequisites listed above in the Base
 Prerequisites section, follow the procedure below to build.
 
-1. In the top source directory, configure the package by running the
+1. If you pulled the sources directly from an Open vSwitch Git tree, 
+   run boot.sh in the top source directory:
+
+      % ./boot.sh
+
+2. In the top source directory, configure the package by running the
    configure script.  You can usually invoke configure without any
    arguments:
 
@@ -128,16 +133,16 @@ Prerequisites section, follow the procedure below to build.
    additional environment variables.  For a full list, invoke
    configure with the --help option.
 
-2. Run make in the top source directory: 
+3. Run make in the top source directory: 
 
       % make
 
-3. Become root by running "su" or another program.
+4. Become root by running "su" or another program.
 
-4. Run "make install" to install the executables and manpages into the
+5. Run "make install" to install the executables and manpages into the
    running system, by default under /usr/local.
 
-5. If you built kernel modules, you may load them with "insmod", e.g.:
+6. If you built kernel modules, you may load them with "insmod", e.g.:
 
       % insmod datapath/linux-2.6/openvswitch_mod.ko
 

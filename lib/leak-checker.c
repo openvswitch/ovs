@@ -141,7 +141,7 @@ log_callers(const char *format, ...)
     putc(':', file);
     backtrace_capture(&backtrace);
     for (i = 0; i < backtrace.n_frames; i++) {
-        fprintf(file, " 0x%x", backtrace.frames[i]);
+        fprintf(file, " 0x%"PRIxPTR, backtrace.frames[i]);
     }
     putc('\n', file);
 }

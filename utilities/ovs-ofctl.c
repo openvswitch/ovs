@@ -1137,7 +1137,7 @@ do_ping(const struct settings *s UNUSED, int argc, char *argv[])
             printf("Reply:\n");
             ofp_print(stdout, reply, reply->size, 2);
         }
-        printf("%d bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
+        printf("%zu bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
                reply->size - sizeof *rpy_hdr, argv[1], rpy_hdr->xid,
                    (1000*(double)(end.tv_sec - start.tv_sec))
                    + (.001*(end.tv_usec - start.tv_usec)));

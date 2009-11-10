@@ -232,7 +232,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	if (!dp->table)
 		goto err_free_dp;
 
-	/* Setup our datapath device */
+	/* Set up our datapath device. */
 	dp_dev = dp_dev_create(dp, devname, ODPP_LOCAL);
 	err = PTR_ERR(dp_dev);
 	if (IS_ERR(dp_dev))
@@ -1021,7 +1021,7 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	 * we get completely accurate stats, but that blows our performance,
 	 * badly. */
 	dp->n_flows--;
-	error = answer_query(flow, uf.flags, ufp);
+	error = answer_query(flow, 0, ufp);
 	flow_deferred_free(flow);
 
 error:
@@ -1046,7 +1046,7 @@ static int query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 		if (!flow)
 			error = __put_user(ENOENT, &ufp->stats.error);
 		else
-			error = answer_query(flow, 0, ufp);
+			error = answer_query(flow, uf.flags, ufp);
 		if (error)
 			return -EFAULT;
 	}
