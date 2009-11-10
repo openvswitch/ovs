@@ -15,6 +15,7 @@ TESTSUITE_AT = \
 	tests/jsonrpc.at \
 	tests/timeval.at \
 	tests/lockfile.at \
+	tests/reconnect.at \
 	tests/ovsdb.at \
 	tests/ovsdb-file.at \
 	tests/ovsdb-types.at \
@@ -105,6 +106,10 @@ noinst_PROGRAMS += tests/test-ovsdb
 tests_test_ovsdb_SOURCES = tests/test-ovsdb.c
 tests_test_ovsdb_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a
 EXTRA_DIST += tests/uuidfilt.pl
+
+noinst_PROGRAMS += tests/test-reconnect
+tests_test_reconnect_SOURCES = tests/test-reconnect.c
+tests_test_reconnect_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-sha1
 tests_test_sha1_SOURCES = tests/test-sha1.c

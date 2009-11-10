@@ -101,6 +101,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/random.h \
 	lib/rconn.c \
 	lib/rconn.h \
+	lib/reconnect.c \
+	lib/reconnect.h \
 	lib/rtnetlink.c \
 	lib/rtnetlink.h \
 	lib/sat-math.h \
