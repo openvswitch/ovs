@@ -690,8 +690,13 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
     print_ip_netmask(&f, "nw_dst=", om->nw_dst,
                      (w & OFPFW_NW_DST_MASK) >> OFPFW_NW_DST_SHIFT, verbosity);
     if (!skip_proto) {
-        print_wild(&f, "nw_proto=", w & OFPFW_NW_PROTO, verbosity,
-                   "%u", om->nw_proto);
+        if (om->dl_type == htons(ETH_TYPE_ARP)) {
+            print_wild(&f, "opcode=", w & OFPFW_NW_PROTO, verbosity,
+                       "%u", om->nw_proto);
+        } else {
+            print_wild(&f, "nw_proto=", w & OFPFW_NW_PROTO, verbosity,
+                       "%u", om->nw_proto);
+        }
     }
     if (om->nw_proto == IP_TYPE_ICMP) {
         print_wild(&f, "icmp_type=", w & OFPFW_ICMP_TYPE, verbosity,

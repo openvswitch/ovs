@@ -1860,7 +1860,8 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
     osf->n_buffers = htonl(pktbuf_capacity());
     osf->n_tables = 2;
     osf->capabilities = htonl(OFPC_FLOW_STATS | OFPC_TABLE_STATS |
-                              OFPC_PORT_STATS | OFPC_MULTI_PHY_TX);
+                              OFPC_PORT_STATS | OFPC_MULTI_PHY_TX |
+                              OFPC_ARP_MATCH_IP);
     osf->actions = htonl((1u << OFPAT_OUTPUT) |
                          (1u << OFPAT_SET_VLAN_VID) |
                          (1u << OFPAT_SET_VLAN_PCP) |
@@ -2635,7 +2636,7 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
     }
 
     query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
-    flow_to_ovs_match(&rule->cr.flow, rule->cr.wc.wildcards, &match);
+    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &match);
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,7 +36,6 @@ int flow_extract(struct ofpbuf *, uint16_t in_port, flow_t *);
 void flow_extract_stats(const flow_t *flow, struct ofpbuf *packet, 
         struct odp_flow_stats *stats);
 void flow_to_match(const flow_t *, uint32_t wildcards, struct ofp_match *);
-void flow_to_ovs_match(const flow_t *, uint32_t wildcards, struct ofp_match *);
 void flow_from_match(flow_t *, uint32_t *wildcards, const struct ofp_match *);
 char *flow_to_string(const flow_t *);
 void flow_format(struct ds *, const flow_t *);
