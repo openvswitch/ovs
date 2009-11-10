@@ -1398,6 +1398,17 @@ normalize_match(struct ofp_match *m)
         if (wc & OFPFW_NW_DST_MASK) {
             m->nw_dst &= flow_nw_bits_to_mask(wc, OFPFW_NW_DST_SHIFT);
         }
+    } else if (m->dl_type == htons(ETH_TYPE_ARP)) {
+        if (wc & OFPFW_NW_PROTO) {
+            m->nw_proto = 0;
+        }
+        if (wc & OFPFW_NW_SRC_MASK) {
+            m->nw_src &= flow_nw_bits_to_mask(wc, OFPFW_NW_SRC_SHIFT);
+        }
+        if (wc & OFPFW_NW_DST_MASK) {
+            m->nw_dst &= flow_nw_bits_to_mask(wc, OFPFW_NW_DST_SHIFT);
+        }
+        m->tp_src = m->tp_dst = 0;
     } else {
         /* Network and transport layer fields will always be extracted as
          * zeros, so we can do an exact-match on those values. */

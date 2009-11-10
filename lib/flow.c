@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -236,12 +236,10 @@ flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
     stats->n_packets = 1;
 }
 
-/* The Open vSwitch datapath supports matching on ARP payloads, which 
- * OpenFlow does not.  This function is identical to 'flow_to_match',
- * but does not hide the datapath's ability to match on ARP. */
+/* Extract 'flow' with 'wildcards' into the OpenFlow match structure
+ * 'match'. */
 void
-flow_to_ovs_match(const flow_t *flow, uint32_t wildcards, 
-                  struct ofp_match *match)
+flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
 {
     match->wildcards = htonl(wildcards);
     match->in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
@@ -260,26 +258,6 @@ flow_to_ovs_match(const flow_t *flow, uint32_t wildcards,
     memset(match->pad2, '\0', sizeof match->pad2);
 }
 
-/* Extract 'flow' with 'wildcards' into the OpenFlow match structure
- * 'match'. */
-void
-flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
-{
-    flow_to_ovs_match(flow, wildcards, match);
-
-    /* The datapath supports matching on an ARP's opcode and IP addresses, 
-     * but OpenFlow does not.  We wildcard and zero out the appropriate
-     * fields so that OpenFlow is unaware of our trickery. */
-    if (flow->dl_type == htons(ETH_TYPE_ARP)) {
-        wildcards |= (OFPFW_NW_PROTO | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL);
-        match->nw_src = 0;
-        match->nw_dst = 0;
-        match->nw_proto = 0;
-    }
-    match->wildcards = htonl(wildcards);
-}
-
-
 void
 flow_from_match(flow_t *flow, uint32_t *wildcards,
                 const struct ofp_match *match)
@@ -287,14 +265,6 @@ flow_from_match(flow_t *flow, uint32_t *wildcards,
     if (wildcards) {
         *wildcards = ntohl(match->wildcards);
     }
-    /* The datapath supports matching on an ARP's opcode and IP addresses, 
-     * but OpenFlow does not.  In case the controller hasn't, we need to 
-     * set the appropriate wildcard bits so that we're externally 
-     * OpenFlow-compliant. */
-    if (match->dl_type == htons(ETH_TYPE_ARP)) {
-        *wildcards |= (OFPFW_NW_PROTO | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL);
-    }
-
     flow->nw_src = match->nw_src;
     flow->nw_dst = match->nw_dst;
     flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL

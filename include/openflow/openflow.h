@@ -156,7 +156,9 @@ enum ofp_capabilities {
     OFPC_STP            = 1 << 3,  /* 802.1d spanning tree. */
     OFPC_MULTI_PHY_TX   = 1 << 4,  /* Supports transmitting through multiple
                                       physical interfaces */
-    OFPC_IP_REASM       = 1 << 5   /* Can reassemble IP fragments. */
+    OFPC_IP_REASM       = 1 << 5,  /* Can reassemble IP fragments. */
+    OFPC_ARP_MATCH_IP   = 1 << 7   /* Match IP addresses in ARP
+                                      pkts. */
 };
 
 /* Flags to indicate behavior of the physical port.  These flags are
@@ -511,7 +513,8 @@ struct ofp_match {
     uint8_t dl_vlan_pcp;       /* Input VLAN priority. */
     uint8_t pad1[1];           /* Align to 64-bits. */
     uint16_t dl_type;          /* Ethernet frame type. */
-    uint8_t nw_proto;          /* IP protocol. */
+    uint8_t nw_proto;          /* IP protocol or lower 8 bits of 
+                                  ARP opcode. */
     uint8_t pad2[3];           /* Align to 64-bits. */
     uint32_t nw_src;           /* IP source address. */
     uint32_t nw_dst;           /* IP destination address. */
