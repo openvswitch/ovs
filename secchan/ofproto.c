@@ -3292,14 +3292,16 @@ expire_rule(struct cls_rule *cls_rule, void *p_)
     }
 
     COVERAGE_INC(ofproto_expired);
+
+    /* Update stats.  This code will be a no-op if the rule expired
+     * due to an idle timeout. */
     if (rule->cr.wc.wildcards) {
-        /* Update stats.  (This code will be a no-op if the rule expired
-         * due to an idle timeout, because in that case the rule has no
-         * subrules left.) */
         struct rule *subrule, *next;
         LIST_FOR_EACH_SAFE (subrule, next, struct rule, list, &rule->list) {
             rule_remove(p, subrule);
         }
+    } else {
+        rule_uninstall(p, rule);
     }
 
     send_flow_exp(p, rule, now,
