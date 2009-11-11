@@ -243,6 +243,10 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
             sizeof(struct ofp_action_nw_addr),
             sizeof(struct ofp_action_nw_addr),
         },
+        [OFPAT_SET_NW_TOS] = {
+            sizeof(struct ofp_action_nw_tos),
+            sizeof(struct ofp_action_nw_tos),
+        },
         [OFPAT_SET_TP_SRC] = {
             sizeof(struct ofp_action_tp_port),
             sizeof(struct ofp_action_tp_port),
@@ -340,6 +344,12 @@ ofp_print_action(struct ds *string, const struct ofp_action_header *ah,
     case OFPAT_SET_NW_DST: {
         struct ofp_action_nw_addr *na = (struct ofp_action_nw_addr *)ah;
         ds_put_format(string, "mod_nw_dst:"IP_FMT, IP_ARGS(&na->nw_addr));
+        break;
+    }
+
+    case OFPAT_SET_NW_TOS: {
+        struct ofp_action_nw_tos *nt = (struct ofp_action_nw_tos *)ah;
+        ds_put_format(string, "mod_nw_tos:%d", nt->nw_tos);
         break;
     }
 
@@ -669,6 +679,8 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
                "%d", ntohs(om->in_port));
     print_wild(&f, "dl_vlan=", w & OFPFW_DL_VLAN, verbosity,
                "0x%04x", ntohs(om->dl_vlan));
+    print_wild(&f, "dl_vlan_pcp=", w & OFPFW_DL_VLAN_PCP, verbosity,
+               "%d", om->dl_vlan_pcp);
     print_wild(&f, "dl_src=", w & OFPFW_DL_SRC, verbosity,
                ETH_ADDR_FMT, ETH_ADDR_ARGS(om->dl_src));
     print_wild(&f, "dl_dst=", w & OFPFW_DL_DST, verbosity,

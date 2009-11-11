@@ -240,6 +240,7 @@ static uint32_t nw_dst_values[] = { T_HTONL(0xc0a80002),
                                     T_HTONL(0xc0a04455) };
 static uint16_t in_port_values[] = { T_HTONS(1), T_HTONS(OFPP_LOCAL) };
 static uint16_t dl_vlan_values[] = { T_HTONS(101), T_HTONS(0) };
+static uint8_t dl_vlan_pcp_values[] = { 7, 0 };
 static uint16_t dl_type_values[]
             = { T_HTONS(ETH_TYPE_IP), T_HTONS(ETH_TYPE_ARP) };
 static uint16_t tp_src_values[] = { T_HTONS(49362), T_HTONS(80) };
@@ -260,6 +261,9 @@ init_values(void)
 
     values[CLS_F_IDX_DL_VLAN][0] = &dl_vlan_values[0];
     values[CLS_F_IDX_DL_VLAN][1] = &dl_vlan_values[1];
+
+    values[CLS_F_IDX_DL_VLAN_PCP][0] = &dl_vlan_pcp_values[0];
+    values[CLS_F_IDX_DL_VLAN_PCP][1] = &dl_vlan_pcp_values[1];
 
     values[CLS_F_IDX_DL_SRC][0] = dl_src_values[0];
     values[CLS_F_IDX_DL_SRC][1] = dl_src_values[1];
@@ -290,6 +294,7 @@ init_values(void)
 #define N_NW_DST_VALUES ARRAY_SIZE(nw_dst_values)
 #define N_IN_PORT_VALUES ARRAY_SIZE(in_port_values)
 #define N_DL_VLAN_VALUES ARRAY_SIZE(dl_vlan_values)
+#define N_DL_VLAN_PCP_VALUES ARRAY_SIZE(dl_vlan_pcp_values)
 #define N_DL_TYPE_VALUES ARRAY_SIZE(dl_type_values)
 #define N_TP_SRC_VALUES ARRAY_SIZE(tp_src_values)
 #define N_TP_DST_VALUES ARRAY_SIZE(tp_dst_values)
@@ -301,6 +306,7 @@ init_values(void)
                        N_NW_DST_VALUES *        \
                        N_IN_PORT_VALUES *       \
                        N_DL_VLAN_VALUES *       \
+                       N_DL_VLAN_PCP_VALUES *   \
                        N_DL_TYPE_VALUES *       \
                        N_TP_SRC_VALUES *        \
                        N_TP_DST_VALUES *        \
@@ -350,6 +356,8 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         flow.nw_dst = nw_dst_values[get_value(&x, N_NW_DST_VALUES)];
         flow.in_port = in_port_values[get_value(&x, N_IN_PORT_VALUES)];
         flow.dl_vlan = dl_vlan_values[get_value(&x, N_DL_VLAN_VALUES)];
+        flow.dl_vlan_pcp = dl_vlan_pcp_values[get_value(&x,
+                N_DL_VLAN_PCP_VALUES)];
         flow.dl_type = dl_type_values[get_value(&x, N_DL_TYPE_VALUES)];
         flow.tp_src = tp_src_values[get_value(&x, N_TP_SRC_VALUES)];
         flow.tp_dst = tp_dst_values[get_value(&x, N_TP_DST_VALUES)];
@@ -358,7 +366,6 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         memcpy(flow.dl_dst, dl_dst_values[get_value(&x, N_DL_DST_VALUES)],
                ETH_ADDR_LEN);
         flow.nw_proto = nw_proto_values[get_value(&x, N_NW_PROTO_VALUES)];
-        flow.reserved = 0;
 
         for (include = 1; include <= 3; include++) {
             cr0 = lookup_with_include_bits(cls, &flow, include);

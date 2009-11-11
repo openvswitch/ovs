@@ -80,6 +80,9 @@ format_odp_action(struct ds *ds, const union odp_action *a)
         ds_put_format(ds, "set_nw_dst("IP_FMT")",
                       IP_ARGS(&a->nw_addr.nw_addr));
         break;
+    case ODPAT_SET_NW_TOS:
+        ds_put_format(ds, "set_nw_tos(%"PRIu8")", a->nw_tos.nw_tos);
+        break;
     case ODPAT_SET_TP_SRC:
         ds_put_format(ds, "set_tp_src(%"PRIu16")", ntohs(a->tp_port.tp_port));
         break;
