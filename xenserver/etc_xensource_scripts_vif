@@ -92,7 +92,8 @@ add_to_bridge()
 
     $cfg_mod -F /etc/ovs-vswitchd.conf \
         --del-match="bridge.*.port=$vif" \
-        --del-match="vlan.$vif.[!0-9]*" \
+        --del-match="vlan.$vif.trunks=*" \
+        --del-match="vlan.$vif.tag=*" \
         --del-match="port.$vif.[!0-9]*" \
         --add="bridge.$bridge.port=$vif" \
         $vid $vif_details -c 
@@ -128,7 +129,8 @@ remove)
 	logger -t scripts-vif "${vif} has been removed"
 	$cfg_mod -vANY:console:emer -F /etc/ovs-vswitchd.conf \
 	    --del-match="bridge.*.port=${vif}" \
-	    --del-match="vlan.${vif}.[!0-9]*" \
+	    --del-match="vlan.${vif}.trunks=*" \
+	    --del-match="vlan.${vif}.tag=*" \
 	    --del-match="port.${vif}.[!0-9]*" -c
 	$service vswitch reload
 	;;

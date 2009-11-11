@@ -3361,6 +3361,8 @@ mirror_reconfigure(struct bridge *br)
             int vlan = cfg_get_vlan(i, "vlan.%s.disable-learning", br->name);
             if (vlan >= 0) {
                 bitmap_set1(rspan_vlans, vlan);
+                VLOG_INFO("bridge %s: disabling learning on vlan %d\n",
+                          br->name, vlan);
             } else {
                 VLOG_ERR("bridge %s: invalid value '%s' for learning disabled "
                          "VLAN", br->name,

@@ -275,7 +275,8 @@ function start {
             '--del-match=port.*' \
             '--del-match=bonding.*' \
             '--del-match=iface.*' \
-            '--del-match=vlan.*'
+            '--del-match=vlan.*.trunks=*' \
+            '--del-match=vlan.*.tag=*'
     fi
 
     start_vswitchd

@@ -1250,7 +1250,8 @@ def datapath_deconfigure_ipdev(interface):
     return ['--del-match=bridge.*.port=%s' % interface,
             '--del-match=port.%s.[!0-9]*' % interface,
             '--del-match=iface.%s.[!0-9]*' % interface,
-            '--del-match=vlan.%s.[!0-9]*' % interface]
+            '--del-match=vlan.%s.trunks=*' % interface,
+            '--del-match=vlan.%s.tag=*' % interface]
 
 def datapath_modify_config(commands):
     if debug_mode():
