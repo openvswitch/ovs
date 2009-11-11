@@ -228,6 +228,11 @@ as \fIvlan\fR to match packets that are not tagged with a Virtual LAN;
 otherwise, specify a number between 0 and 4095, inclusive, as the
 12-bit VLAN ID to match.
 
+.IP \fBdl_vlan_pcp=\fIpriority\fR
+Matches IEEE 802.1q Priority Code Point (PCP) \fIpriority\fR, which is
+specified as a value between 0 and 7, inclusive.  A higher value
+indicates a higher frame priority level.
+
 .IP \fBdl_src=\fImac\fR
 Matches Ethernet source address \fImac\fR, which is specified as 6 pairs 
 of hexadecimal digits delimited by colons (e.g. \fB00:0A:E4:25:6B:B0\fR).
@@ -364,6 +369,12 @@ Sets the TCP or UDP source port to \fIport\fR.
 
 .IP \fBmod_tp_dst\fB:\fIport\fR
 Sets the TCP or UDP destination port to \fIport\fR.
+
+.IP \fBmod_nw_tos\fB:\fItos\fR
+Sets the IP ToS/DSCP field to \fItos\fR.  Valid values are between 0 and
+255, inclusive.  Note that the two lower reserved bits are never
+modified.
+
 .RE
 
 .IP

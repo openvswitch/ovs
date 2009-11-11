@@ -1846,6 +1846,7 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
                          (1u << OFPAT_SET_DL_DST) |
                          (1u << OFPAT_SET_NW_SRC) |
                          (1u << OFPAT_SET_NW_DST) |
+                         (1u << OFPAT_SET_NW_TOS) |
                          (1u << OFPAT_SET_TP_SRC) |
                          (1u << OFPAT_SET_TP_DST));
 
@@ -2163,6 +2164,10 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
         case OFPAT_SET_NW_DST:
             oa = odp_actions_add(ctx->out, ODPAT_SET_NW_DST);
             oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
+
+        case OFPAT_SET_NW_TOS:
+            oa = odp_actions_add(ctx->out, ODPAT_SET_NW_TOS);
+            oa->nw_tos.nw_tos = ia->nw_tos.nw_tos;
             break;
 
         case OFPAT_SET_TP_SRC:
@@ -2547,7 +2552,7 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     ofs->priority = htons(rule->cr.priority);
     ofs->idle_timeout = htons(rule->idle_timeout);
     ofs->hard_timeout = htons(rule->hard_timeout);
-    memset(ofs->pad2, 0, sizeof ofs->pad2);
+    ofs->pad2 = 0;
     ofs->packet_count = htonll(packet_count);
     ofs->byte_count = htonll(byte_count);
     memcpy(ofs->actions, rule->actions, act_len);

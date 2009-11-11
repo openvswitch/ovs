@@ -865,6 +865,7 @@ make_flow_mod(uint16_t command, const flow_t *flow, size_t actions_len)
     memcpy(ofm->match.dl_src, flow->dl_src, sizeof ofm->match.dl_src);
     memcpy(ofm->match.dl_dst, flow->dl_dst, sizeof ofm->match.dl_dst);
     ofm->match.dl_vlan = flow->dl_vlan;
+    ofm->match.dl_vlan_pcp = flow->dl_vlan_pcp;
     ofm->match.dl_type = flow->dl_type;
     ofm->match.nw_src = flow->nw_src;
     ofm->match.nw_dst = flow->nw_dst;
@@ -1265,6 +1266,7 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
     case OFPAT_STRIP_VLAN:
     case OFPAT_SET_NW_SRC:
     case OFPAT_SET_NW_DST:
+    case OFPAT_SET_NW_TOS:
     case OFPAT_SET_TP_SRC:
     case OFPAT_SET_TP_DST:
         return check_action_exact_len(a, len, 8);

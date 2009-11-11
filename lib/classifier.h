@@ -60,6 +60,7 @@
     /*        -----------------  -----------  -------- */   \
     CLS_FIELD(OFPFW_IN_PORT,     in_port,     IN_PORT)      \
     CLS_FIELD(OFPFW_DL_VLAN,     dl_vlan,     DL_VLAN)      \
+    CLS_FIELD(OFPFW_DL_VLAN_PCP, dl_vlan_pcp, DL_VLAN_PCP)  \
     CLS_FIELD(OFPFW_DL_SRC,      dl_src,      DL_SRC)       \
     CLS_FIELD(OFPFW_DL_DST,      dl_dst,      DL_DST)       \
     CLS_FIELD(OFPFW_DL_TYPE,     dl_type,     DL_TYPE)      \

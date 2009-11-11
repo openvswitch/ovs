@@ -203,8 +203,9 @@ sub output {
                      1);        # in_port
     print FLOWS pack_ethaddr($flow{DL_SRC});
     print FLOWS pack_ethaddr($flow{DL_DST});
-    print FLOWS pack('nnCxNNnn',
+    print FLOWS pack('nCxnCxxxNNnn',
                      $flow{DL_VLAN},
+                     0,          # DL_VLAN_PCP
                      $flow{DL_TYPE},
                      $flow{NW_PROTO},
                      inet_aton($flow{NW_SRC}),

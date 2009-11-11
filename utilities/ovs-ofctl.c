@@ -613,6 +613,10 @@ str_to_action(char *str, struct ofpbuf *b)
             struct ofp_action_tp_port *ta;
             ta = put_action(b, sizeof *ta, OFPAT_SET_TP_DST);
             ta->tp_port = htons(str_to_u32(arg));
+        } else if (!strcasecmp(act, "mod_nw_tos")) {
+            struct ofp_action_nw_tos *nt;
+            nt = put_action(b, sizeof *nt, OFPAT_SET_NW_TOS);
+            nt->nw_tos = str_to_u32(arg);
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "drop")) {
@@ -686,6 +690,7 @@ parse_field(const char *name, const struct field **f_out)
     static const struct field fields[] = { 
         { "in_port", OFPFW_IN_PORT, F_U16, F_OFS(in_port), 0 },
         { "dl_vlan", OFPFW_DL_VLAN, F_U16, F_OFS(dl_vlan), 0 },
+        { "dl_vlan_pcp", OFPFW_DL_VLAN_PCP, F_U8, F_OFS(dl_vlan_pcp), 0 },
         { "dl_src", OFPFW_DL_SRC, F_MAC, F_OFS(dl_src), 0 },
         { "dl_dst", OFPFW_DL_DST, F_MAC, F_OFS(dl_dst), 0 },
         { "dl_type", OFPFW_DL_TYPE, F_U16, F_OFS(dl_type), 0 },

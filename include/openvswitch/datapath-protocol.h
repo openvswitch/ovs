@@ -162,7 +162,7 @@ struct odp_flow_key {
     __u8   dl_dst[ETH_ALEN];     /* Ethernet destination address. */
     __u8   nw_proto;             /* IP protocol or lower 8 bits of 
                                     ARP opcode. */
-    __u8   reserved;             /* Pad to 64 bits. */
+    __u8   dl_vlan_pcp;          /* Input VLAN priority. */
 };
 
 /* Flags for ODP_FLOW. */
@@ -208,9 +208,10 @@ struct odp_flowvec {
 #define ODPAT_SET_DL_DST        7    /* Ethernet destination address. */
 #define ODPAT_SET_NW_SRC        8    /* IP source address. */
 #define ODPAT_SET_NW_DST        9    /* IP destination address. */
-#define ODPAT_SET_TP_SRC        10   /* TCP/UDP source port. */
-#define ODPAT_SET_TP_DST        11   /* TCP/UDP destination port. */
-#define ODPAT_N_ACTIONS         12
+#define ODPAT_SET_NW_TOS        10   /* IP ToS/DSCP field (6 bits). */
+#define ODPAT_SET_TP_SRC        11   /* TCP/UDP source port. */
+#define ODPAT_SET_TP_DST        12   /* TCP/UDP destination port. */
+#define ODPAT_N_ACTIONS         13
 
 struct odp_action_output {
     __u16 type;                  /* ODPAT_OUTPUT. */
@@ -262,6 +263,14 @@ struct odp_action_nw_addr {
     __be32 nw_addr;             /* IP address. */
 };
 
+struct odp_action_nw_tos {
+    __u16 type;                  /* ODPAT_SET_NW_TOS. */
+    __u8 nw_tos;                 /* IP ToS/DSCP field (6 bits). */
+    __u8 reserved1;
+    __u16 reserved2;
+    __u16 reserved3;
+};
+
 /* Action structure for ODPAT_SET_TP_SRC/DST. */
 struct odp_action_tp_port {
     __u16 type;                  /* ODPAT_SET_TP_SRC/DST. */
@@ -279,6 +288,7 @@ union odp_action {
     struct odp_action_vlan_pcp vlan_pcp;
     struct odp_action_dl_addr dl_addr;
     struct odp_action_nw_addr nw_addr;
+    struct odp_action_nw_tos nw_tos;
     struct odp_action_tp_port tp_port;
 };
 

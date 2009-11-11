@@ -46,7 +46,7 @@
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
  */
-#define OFP_VERSION   0x97
+#define OFP_VERSION   0x98
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -313,6 +313,7 @@ enum ofp_action_type {
     OFPAT_SET_DL_DST,       /* Ethernet destination address. */
     OFPAT_SET_NW_SRC,       /* IP source address. */
     OFPAT_SET_NW_DST,       /* IP destination address. */
+    OFPAT_SET_NW_TOS,       /* IP ToS/DSCP field (6 bits). */
     OFPAT_SET_TP_SRC,       /* TCP/UDP source port. */
     OFPAT_SET_TP_DST,       /* TCP/UDP destination port. */
     OFPAT_VENDOR = 0xffff
@@ -370,6 +371,15 @@ struct ofp_action_nw_addr {
 };
 OFP_ASSERT(sizeof(struct ofp_action_nw_addr) == 8);
 
+/* Action structure for OFPAT_SET_NW_TOS. */
+struct ofp_action_nw_tos {
+    uint16_t type;                  /* OFPAT_SET_TW_TOS. */
+    uint16_t len;                   /* Length is 8. */
+    uint8_t nw_tos;                 /* IP ToS/DSCP (6 bits). */
+    uint8_t pad[3];
+};
+OFP_ASSERT(sizeof(struct ofp_action_nw_tos) == 8);
+
 /* Action structure for OFPAT_SET_TP_SRC/DST. */
 struct ofp_action_tp_port {
     uint16_t type;                  /* OFPAT_SET_TP_SRC/DST. */
@@ -409,6 +419,7 @@ union ofp_action {
     struct ofp_action_vlan_vid vlan_vid;
     struct ofp_action_vlan_pcp vlan_pcp;
     struct ofp_action_nw_addr nw_addr;
+    struct ofp_action_nw_tos nw_tos;
     struct ofp_action_tp_port tp_port;
 };
 OFP_ASSERT(sizeof(union ofp_action) == 8);
@@ -436,14 +447,14 @@ enum ofp_flow_mod_command {
 
 /* Flow wildcards. */
 enum ofp_flow_wildcards {
-    OFPFW_IN_PORT  = 1 << 0,  /* Switch input port. */
-    OFPFW_DL_VLAN  = 1 << 1,  /* VLAN. */
-    OFPFW_DL_SRC   = 1 << 2,  /* Ethernet source address. */
-    OFPFW_DL_DST   = 1 << 3,  /* Ethernet destination address. */
-    OFPFW_DL_TYPE  = 1 << 4,  /* Ethernet frame type. */
-    OFPFW_NW_PROTO = 1 << 5,  /* IP protocol. */
-    OFPFW_TP_SRC   = 1 << 6,  /* TCP/UDP source port. */
-    OFPFW_TP_DST   = 1 << 7,  /* TCP/UDP destination port. */
+    OFPFW_IN_PORT    = 1 << 0,  /* Switch input port. */
+    OFPFW_DL_VLAN    = 1 << 1,  /* VLAN. */
+    OFPFW_DL_SRC     = 1 << 2,  /* Ethernet source address. */
+    OFPFW_DL_DST     = 1 << 3,  /* Ethernet destination address. */
+    OFPFW_DL_TYPE    = 1 << 4,  /* Ethernet frame type. */
+    OFPFW_NW_PROTO   = 1 << 5,  /* IP protocol. */
+    OFPFW_TP_SRC     = 1 << 6,  /* TCP/UDP source port. */
+    OFPFW_TP_DST     = 1 << 7,  /* TCP/UDP destination port. */
 
     /* IP source address wildcard bit count.  0 is exact match, 1 ignores the
      * LSB, 2 ignores the 2 least-significant bits, ..., 32 and higher wildcard
@@ -460,8 +471,10 @@ enum ofp_flow_wildcards {
     OFPFW_NW_DST_MASK = ((1 << OFPFW_NW_DST_BITS) - 1) << OFPFW_NW_DST_SHIFT,
     OFPFW_NW_DST_ALL = 32 << OFPFW_NW_DST_SHIFT,
 
+    OFPFW_DL_VLAN_PCP = 1 << 20, /* VLAN priority. */
+
     /* Wildcard all fields. */
-    OFPFW_ALL = ((1 << 20) - 1)
+    OFPFW_ALL = ((1 << 21) - 1)
 };
 
 /* The wildcards for ICMP type and code fields use the transport source 
@@ -492,15 +505,17 @@ struct ofp_match {
     uint8_t dl_src[OFP_ETH_ALEN]; /* Ethernet source address. */
     uint8_t dl_dst[OFP_ETH_ALEN]; /* Ethernet destination address. */
     uint16_t dl_vlan;          /* Input VLAN. */
+    uint8_t dl_vlan_pcp;       /* Input VLAN priority. */
+    uint8_t pad1[1];           /* Align to 64-bits. */
     uint16_t dl_type;          /* Ethernet frame type. */
     uint8_t nw_proto;          /* IP protocol. */
-    uint8_t pad;               /* Align to 32-bits. */
+    uint8_t pad2[3];           /* Align to 64-bits. */
     uint32_t nw_src;           /* IP source address. */
     uint32_t nw_dst;           /* IP destination address. */
     uint16_t tp_src;           /* TCP/UDP source port. */
     uint16_t tp_dst;           /* TCP/UDP destination port. */
 };
-OFP_ASSERT(sizeof(struct ofp_match) == 36);
+OFP_ASSERT(sizeof(struct ofp_match) == 40);
 
 /* The match fields for ICMP type and code use the transport source and 
  * destination port fields, respectively. */
@@ -536,7 +551,7 @@ struct ofp_flow_mod {
                                             from the length field in the 
                                             header. */
 };
-OFP_ASSERT(sizeof(struct ofp_flow_mod) == 64);
+OFP_ASSERT(sizeof(struct ofp_flow_mod) == 68);
 
 /* Why did this flow expire? */
 enum ofp_flow_expired_reason {
@@ -558,7 +573,7 @@ struct ofp_flow_expired {
     uint64_t packet_count;    
     uint64_t byte_count;
 };
-OFP_ASSERT(sizeof(struct ofp_flow_expired) == 72);
+OFP_ASSERT(sizeof(struct ofp_flow_expired) == 76);
 
 /* Values for 'type' in ofp_error_message.  These values are immutable: they
  * will not change in future versions of the protocol (although new values may
@@ -703,7 +718,7 @@ struct ofp_flow_stats_request {
                                  as an output port.  A value of OFPP_NONE 
                                  indicates no restriction. */
 };
-OFP_ASSERT(sizeof(struct ofp_flow_stats_request) == 40);
+OFP_ASSERT(sizeof(struct ofp_flow_stats_request) == 44);
 
 /* Body of reply to OFPST_FLOW request. */
 struct ofp_flow_stats {
@@ -716,7 +731,7 @@ struct ofp_flow_stats {
                                  when this is not an exact-match entry. */
     uint16_t idle_timeout;    /* Number of seconds idle before expiration. */
     uint16_t hard_timeout;    /* Number of seconds before expiration. */
-    uint16_t pad2[3];         /* Pad to 64 bits. */
+    uint16_t pad2;            /* Pad to 64 bits. */
     uint64_t packet_count;    /* Number of packets in flow. */
     uint64_t byte_count;      /* Number of bytes in flow. */
     struct ofp_action_header actions[0]; /* Actions. */
@@ -733,7 +748,7 @@ struct ofp_aggregate_stats_request {
                                  as an output port.  A value of OFPP_NONE 
                                  indicates no restriction. */
 };
-OFP_ASSERT(sizeof(struct ofp_aggregate_stats_request) == 40);
+OFP_ASSERT(sizeof(struct ofp_aggregate_stats_request) == 44);
 
 /* Body of reply to OFPST_AGGREGATE request. */
 struct ofp_aggregate_stats_reply {

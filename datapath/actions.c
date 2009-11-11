@@ -252,6 +252,30 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 	return skb;
 }
 
+static struct sk_buff *set_nw_tos(struct sk_buff *skb,
+				   struct odp_flow_key *key,
+				   const struct odp_action_nw_tos *a,
+				   gfp_t gfp)
+{
+	if (key->dl_type != htons(ETH_P_IP))
+		return skb;
+
+	skb = make_writable(skb, 0, gfp);
+	if (skb) {
+		struct iphdr *nh = ip_hdr(skb);
+		u8 *f = &nh->tos;
+		u8 old = *f;
+
+		/* We only set the lower 6 bits. */
+		u8 new = (a->nw_tos & 0x3f) | (nh->tos & 0xc0);
+
+		update_csum(&nh->check, skb, htons((uint16_t)old),
+				htons((uint16_t)new), 0);
+		*f = new;
+	}
+	return skb;
+}
+
 static struct sk_buff *
 set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
 	    const struct odp_action_tp_port *a,
@@ -422,6 +446,10 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		case ODPAT_SET_NW_SRC:
 		case ODPAT_SET_NW_DST:
 			skb = set_nw_addr(skb, key, &a->nw_addr, gfp);
+			break;
+
+		case ODPAT_SET_NW_TOS:
+			skb = set_nw_tos(skb, key, &a->nw_tos, gfp);
 			break;
 
 		case ODPAT_SET_TP_SRC:

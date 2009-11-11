@@ -664,7 +664,6 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp, const flow_t *key)
 {
     struct dp_netdev_flow *flow;
 
-    assert(key->reserved == 0);
     HMAP_FOR_EACH_WITH_HASH (flow, struct dp_netdev_flow, node,
                              flow_hash(key, 0), &dp->flow_table) {
         if (flow_equal(&flow->key, key)) {
@@ -762,6 +761,7 @@ dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
         case ODPAT_SET_DL_DST:
         case ODPAT_SET_NW_SRC:
         case ODPAT_SET_NW_DST:
+        case ODPAT_SET_NW_TOS:
         case ODPAT_SET_TP_SRC:
         case ODPAT_SET_TP_DST:
             *mutates = true;
@@ -806,7 +806,6 @@ add_flow(struct dpif *dpif, struct odp_flow *odp_flow)
 
     flow = xcalloc(1, sizeof *flow);
     flow->key = odp_flow->key;
-    flow->key.reserved = 0;
 
     error = set_flow_actions(flow, odp_flow);
     if (error) {
@@ -1172,6 +1171,23 @@ dp_netdev_set_nw_addr(struct ofpbuf *packet, flow_t *key,
 }
 
 static void
+dp_netdev_set_nw_tos(struct ofpbuf *packet, flow_t *key,
+                     const struct odp_action_nw_tos *a)
+{
+    if (key->dl_type == htons(ETH_TYPE_IP)) {
+        struct ip_header *nh = packet->l3;
+        uint8_t *field = &nh->ip_tos;
+
+        /* We only set the lower 6 bits. */
+        uint8_t new = (a->nw_tos & 0x3f) | (nh->ip_tos & 0xc0);
+
+        nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
+                htons((uint16_t)a->nw_tos));
+        *field = new;
+    }
+}
+
+static void
 dp_netdev_set_tp_port(struct ofpbuf *packet, flow_t *key,
                       const struct odp_action_tp_port *a)
 {
@@ -1292,6 +1308,10 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 		case ODPAT_SET_NW_SRC:
 		case ODPAT_SET_NW_DST:
 			dp_netdev_set_nw_addr(packet, key, &a->nw_addr);
+			break;
+
+		case ODPAT_SET_NW_TOS:
+			dp_netdev_set_nw_tos(packet, key, &a->nw_tos);
 			break;
 
 		case ODPAT_SET_TP_SRC:

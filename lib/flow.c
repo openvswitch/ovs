@@ -139,6 +139,7 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, flow_t *flow)
             if (vh) {
                 flow->dl_type = vh->vlan_next_type;
                 flow->dl_vlan = vh->vlan_tci & htons(VLAN_VID_MASK);
+                flow->dl_vlan_pcp = (ntohs(vh->vlan_tci) & 0xe000) >> 13;
             }
         }
         memcpy(flow->dl_src, eth->eth_src, ETH_ADDR_LEN);
@@ -246,6 +247,7 @@ flow_to_ovs_match(const flow_t *flow, uint32_t wildcards,
     match->in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
                            : flow->in_port);
     match->dl_vlan = flow->dl_vlan;
+    match->dl_vlan_pcp = flow->dl_vlan_pcp;
     memcpy(match->dl_src, flow->dl_src, ETH_ADDR_LEN);
     memcpy(match->dl_dst, flow->dl_dst, ETH_ADDR_LEN);
     match->dl_type = flow->dl_type;
@@ -254,7 +256,8 @@ flow_to_ovs_match(const flow_t *flow, uint32_t wildcards,
     match->nw_proto = flow->nw_proto;
     match->tp_src = flow->tp_src;
     match->tp_dst = flow->tp_dst;
-    match->pad = 0;
+    memset(match->pad1, '\0', sizeof match->pad1);
+    memset(match->pad2, '\0', sizeof match->pad2);
 }
 
 /* Extract 'flow' with 'wildcards' into the OpenFlow match structure
@@ -297,13 +300,13 @@ flow_from_match(flow_t *flow, uint32_t *wildcards,
     flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
                      : ntohs(match->in_port));
     flow->dl_vlan = match->dl_vlan;
+    flow->dl_vlan_pcp = match->dl_vlan_pcp;
     flow->dl_type = match->dl_type;
     flow->tp_src = match->tp_src;
     flow->tp_dst = match->tp_dst;
     memcpy(flow->dl_src, match->dl_src, ETH_ADDR_LEN);
     memcpy(flow->dl_dst, match->dl_dst, ETH_ADDR_LEN);
     flow->nw_proto = match->nw_proto;
-    flow->reserved = 0;
 }
 
 char *
@@ -317,9 +320,10 @@ flow_to_string(const flow_t *flow)
 void
 flow_format(struct ds *ds, const flow_t *flow)
 {
-    ds_put_format(ds, "in_port%04x:vlan%d mac"ETH_ADDR_FMT"->"ETH_ADDR_FMT" "
-                  "type%04x proto%"PRId8" ip"IP_FMT"->"IP_FMT" port%d->%d",
-                  flow->in_port, ntohs(flow->dl_vlan),
+    ds_put_format(ds, "in_port%04x:vlan%d:pcp%d mac"ETH_ADDR_FMT
+                  "->"ETH_ADDR_FMT" type%04x proto%"PRId8" ip"IP_FMT
+                  "->"IP_FMT" port%d->%d",
+                  flow->in_port, ntohs(flow->dl_vlan), flow->dl_vlan_pcp,
                   ETH_ADDR_ARGS(flow->dl_src), ETH_ADDR_ARGS(flow->dl_dst),
                   ntohs(flow->dl_type), flow->nw_proto,
                   IP_ARGS(&flow->nw_src), IP_ARGS(&flow->nw_dst),

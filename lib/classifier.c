@@ -55,7 +55,6 @@ void
 cls_rule_from_flow(struct cls_rule *rule, const flow_t *flow,
                    uint32_t wildcards, unsigned int priority)
 {
-    assert(flow->reserved == 0);
     rule->flow = *flow;
     flow_wildcards_init(&rule->wc, wildcards);
     rule->priority = priority;
