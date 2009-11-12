@@ -35,6 +35,14 @@ the following forms:
 Connect to the given TCP \fIport\fR on \fIip\fR.
 .IP "\fBunix:\fIfile\fR"
 Connect to the Unix domain server socket named \fIfile\fR.
+.IP "\fBptcp:\fIport\fR[\fB:\fIip\fR]"
+Listen on the given TCP \fIport\fR for a connection.  By default,
+\fB\*(PN\fR listens for connections to any local IP address, but
+\fIip\fR may be specified to listen only for connections to the given
+\fIip\fR.
+.IP "\fBpunix:\fIfile\fR"
+Listen on the Unix domain server socket named \fIfile\fR for a
+connection.
 .
 .SS "Commands"
 The following commands are implemented:

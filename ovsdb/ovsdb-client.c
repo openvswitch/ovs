@@ -148,7 +148,7 @@ usage(void)
            "\n  list-columns SERVER [TABLE]\n"
            "    list columns in TABLE (or all tables) on SERVER\n",
            program_name, program_name);
-    stream_usage("SERVER", true, false);
+    stream_usage("SERVER", true, true);
     printf("\nOutput formatting options:\n"
            "  -f, --format=FORMAT         set output formatting to FORMAT\n"
            "                              (\"table\", \"html\", or \"csv\"\n"
@@ -168,7 +168,22 @@ open_jsonrpc(const char *server)
     int error;
 
     error = stream_open_block(server, &stream);
-    if (error) {
+    if (error == EAFNOSUPPORT) {
+        struct pstream *pstream;
+
+        error = pstream_open(server, &pstream);
+        if (error) {
+            ovs_fatal(error, "failed to connect or listen to \"%s\"", server);
+        }
+
+        VLOG_INFO("%s: waiting for connection...", server);
+        error = pstream_accept_block(pstream, &stream);
+        if (error) {
+            ovs_fatal(error, "failed to accept connection on \"%s\"", server);
+        }
+
+        pstream_close(pstream);
+    } else if (error) {
         ovs_fatal(error, "failed to connect to \"%s\"", server);
     }
 
