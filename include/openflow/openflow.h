@@ -529,6 +529,13 @@ OFP_ASSERT(sizeof(struct ofp_match) == 40);
 /* By default, choose a priority in the middle. */
 #define OFP_DEFAULT_PRIORITY 0x8000
 
+enum ofp_flow_mod_flags {
+    OFPFF_SEND_FLOW_REM = 1 << 0,  /* Send flow removed message when flow
+                                    * expires or is deleted. */
+    OFPFF_CHECK_OVERLAP = 1 << 1,  /* Check for overlapping entries first. */
+    OFPFF_EMERG         = 1 << 2   /* Ramark this is for emergency. */
+};
+
 /* Flow setup and teardown (controller -> datapath). */
 struct ofp_flow_mod {
     struct ofp_header header;
@@ -545,7 +552,7 @@ struct ofp_flow_mod {
                                      matching entries to include this as an 
                                      output port.  A value of OFPP_NONE 
                                      indicates no restriction. */
-    uint8_t pad[2];               /* Align to 32-bits. */
+    uint16_t flags;               /* One of OFPFF_*. */
     uint32_t reserved;            /* Reserved for future use. */
     struct ofp_action_header actions[0]; /* The action length is inferred 
                                             from the length field in the 
@@ -589,7 +596,8 @@ enum ofp_error_type {
 /* ofp_error_msg 'code' values for OFPET_HELLO_FAILED.  'data' contains an
  * ASCII text string that may give failure details. */
 enum ofp_hello_failed_code {
-    OFPHFC_INCOMPATIBLE         /* No compatible version. */
+    OFPHFC_INCOMPATIBLE,        /* No compatible version. */
+    OFPHFC_EPERM                /* Permissions error. */
 };
 
 /* ofp_error_msg 'code' values for OFPET_BAD_REQUEST.  'data' contains at least
@@ -601,9 +609,10 @@ enum ofp_bad_request_code {
     OFPBRC_BAD_VENDOR,          /* Vendor not supported (in ofp_vendor_header 
                                  * or ofp_stats_request or ofp_stats_reply). */
     OFPBRC_BAD_SUBTYPE,         /* Vendor subtype not supported. */
-    OFPBRC_BAD_LENGTH,          /* Wrong request length for type. */
+    OFPBRC_EPERM,               /* Permissions error. */
+    OFPBRC_BAD_LEN,             /* Wrong request length for type. */
     OFPBRC_BUFFER_EMPTY,        /* Specified buffer has already been used. */
-    OFPBRC_BAD_COOKIE           /* Specified buffer does not exist. */
+    OFPBRC_BUFFER_UNKNOWN       /* Specified buffer does not exist. */
 };
 
 /* ofp_error_msg 'code' values for OFPET_BAD_ACTION.  'data' contains at least 
@@ -615,6 +624,7 @@ enum ofp_bad_action_code {
     OFPBAC_BAD_VENDOR_TYPE,    /* Unknown action type for vendor id. */
     OFPBAC_BAD_OUT_PORT,       /* Problem validating output action. */
     OFPBAC_BAD_ARGUMENT,       /* Bad action argument. */
+    OFPBAC_EPERM,              /* Permissions error. */
     OFPBAC_TOO_MANY            /* Can't handle this many actions. */
 };
 
@@ -622,6 +632,11 @@ enum ofp_bad_action_code {
  * at least the first 64 bytes of the failed request. */
 enum ofp_flow_mod_failed_code {
     OFPFMFC_ALL_TABLES_FULL,    /* Flow not added because of full tables. */
+    OFPFMFC_OVERLAP,            /* Attempted to add overlapping flow with
+                                 * CHECK_OVERLAP flag set. */
+    OFPFMFC_EPERM,              /* Permissions error. */
+    OFPFMFC_BAD_EMERG_TIMEOUT,  /* Flow not added because of non-zero idle/hard
+                                 * timeout. */
     OFPFMFC_BAD_COMMAND         /* Unknown command. */
 };
 

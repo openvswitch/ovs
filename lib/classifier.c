@@ -48,6 +48,8 @@ static struct cls_rule *search_exact_table(const struct classifier *,
                                            size_t hash, const flow_t *);
 static bool rules_match_1wild(const struct cls_rule *fixed,
                               const struct cls_rule *wild, int field_idx);
+static bool rules_match_2wild(const struct cls_rule *wild1,
+                              const struct cls_rule *wild2, int field_idx);
 
 /* Converts the flow in 'flow' into a cls_rule in 'rule', with the given
  * 'wildcards' and 'priority'.*/
@@ -332,6 +334,43 @@ classifier_find_rule_exactly(const struct classifier *cls,
         }
     }
     return NULL;
+}
+
+/* Checks if the flow defined by 'target' with 'wildcards' at 'priority' 
+ * overlaps with any other rule at the same priority in the classifier.  
+ * Two rules are considered overlapping if a packet could match both. */
+bool
+classifier_rule_overlaps(const struct classifier *cls,
+                         const flow_t *target, uint32_t wildcards,
+                         unsigned int priority)
+{
+    struct cls_rule target_rule;
+    const struct hmap *tbl;
+
+    if (!wildcards) {
+        return search_exact_table(cls, flow_hash(target, 0), target) ?
+            true : false;
+    }
+
+    cls_rule_from_flow(&target_rule, target, wildcards, priority);
+
+    for (tbl = &cls->tables[0]; tbl < &cls->tables[CLS_N_FIELDS]; tbl++) {
+        struct cls_bucket *bucket;
+
+        HMAP_FOR_EACH (bucket, struct cls_bucket, hmap_node, tbl) {
+            struct cls_rule *rule;
+
+            LIST_FOR_EACH (rule, struct cls_rule, node.list,
+                           &bucket->rules) {
+                if (rule->priority == priority 
+                        && rules_match_2wild(rule, &target_rule, 0)) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
 }
 
 /* Ignores target->priority.
@@ -760,6 +799,23 @@ rules_match_1wild(const struct cls_rule *fixed, const struct cls_rule *wild,
 {
     return rules_match(fixed, wild, wild->wc.wildcards, wild->wc.nw_src_mask,
                        wild->wc.nw_dst_mask, field_idx);
+}
+
+/* Returns true if 'wild1' and 'wild2' match, that is, if their fields
+ * are equal modulo wildcards in 'wild1' or 'wild2'.
+ *
+ * 'field_idx' is the index of the first field to be compared; fields before
+ * 'field_idx' are assumed to match.  Always returns true if 'field_idx' is
+ * CLS_N_FIELDS. */
+static bool
+rules_match_2wild(const struct cls_rule *wild1, const struct cls_rule *wild2,
+                  int field_idx)
+{
+    return rules_match(wild1, wild2, 
+                       wild1->wc.wildcards | wild2->wc.wildcards, 
+                       wild1->wc.nw_src_mask & wild2->wc.nw_src_mask,
+                       wild1->wc.nw_dst_mask & wild2->wc.nw_dst_mask, 
+                       field_idx);
 }
 
 /* Searches 'bucket' for a rule that matches 'target'.  Returns the
