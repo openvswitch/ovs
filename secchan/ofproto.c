@@ -1625,7 +1625,7 @@ rule_install(struct ofproto *p, struct rule *rule, struct rule *displaced_rule)
                          &put)) {
             rule->installed = true;
             if (displaced_rule) {
-                update_stats(p, rule, &put.flow.stats);
+                update_stats(p, displaced_rule, &put.flow.stats);
                 rule_post_uninstall(p, displaced_rule);
             }
         }
