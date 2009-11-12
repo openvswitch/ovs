@@ -1649,14 +1649,27 @@ rule_reinstall(struct ofproto *ofproto, struct rule *rule)
 static void
 rule_update_actions(struct ofproto *ofproto, struct rule *rule)
 {
-    bool actions_changed = rule_make_actions(ofproto, rule, NULL);
+    bool actions_changed;
+    uint16_t new_out_iface, old_out_iface;
+
+    old_out_iface = rule->nf_flow.output_iface;
+    actions_changed = rule_make_actions(ofproto, rule, NULL);
+
     if (rule->may_install) {
         if (rule->installed) {
             if (actions_changed) {
-                /* XXX should really do rule_post_uninstall() for the *old* set
-                 * of actions, and distinguish the old stats from the new. */
                 struct odp_flow_put put;
-                do_put_flow(ofproto, rule, ODPPF_CREATE | ODPPF_MODIFY, &put);
+                do_put_flow(ofproto, rule, ODPPF_CREATE | ODPPF_MODIFY
+                                           | ODPPF_ZERO_STATS, &put);
+                update_stats(ofproto, rule, &put.flow.stats);
+
+                /* Temporarily set the old output iface so that NetFlow
+                 * messages have the correct output interface for the old
+                 * stats. */
+                new_out_iface = rule->nf_flow.output_iface;
+                rule->nf_flow.output_iface = old_out_iface;
+                rule_post_uninstall(ofproto, rule);
+                rule->nf_flow.output_iface = new_out_iface;
             }
         } else {
             rule_install(ofproto, rule, NULL);
