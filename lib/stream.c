@@ -422,6 +422,27 @@ pstream_accept(struct pstream *pstream, struct stream **new_stream)
     return retval;
 }
 
+/* Tries to accept a new connection on 'pstream'.  If successful, stores the
+ * new connection in '*new_stream' and returns 0.  Otherwise, returns a
+ * positive errno value.
+ *
+ * pstream_accept_block() blocks until a connection is ready or until an error
+ * occurs.  It will not return EAGAIN. */
+int
+pstream_accept_block(struct pstream *pstream, struct stream **new_stream)
+{
+    int error;
+
+    while ((error = pstream_accept(pstream, new_stream)) == EAGAIN) {
+        pstream_wait(pstream);
+        poll_block();
+    }
+    if (error) {
+        *new_stream = NULL;
+    }
+    return error;
+}
+
 void
 pstream_wait(struct pstream *pstream)
 {

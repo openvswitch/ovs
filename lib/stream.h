@@ -57,6 +57,7 @@ int pstream_open(const char *name, struct pstream **);
 const char *pstream_get_name(const struct pstream *);
 void pstream_close(struct pstream *);
 int pstream_accept(struct pstream *, struct stream **);
+int pstream_accept_block(struct pstream *, struct stream **);
 void pstream_wait(struct pstream *);
 
 #endif /* stream.h */
