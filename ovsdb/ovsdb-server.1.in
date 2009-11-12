@@ -45,9 +45,7 @@ named \fIfile\fR.
 .IP "\fB\-\-connect=\fIremote\fR"
 Makes \fBovsdb\-server\fR initiate a JSON-RPC connection to
 \fIremote\fR, which must take one of the forms listed below.  The
-current implementation only attempts to connect once, and does not
-reconnect after a failure or after the connection closes.  This will
-be fixed later.
+server will reconnect to \fIremote\fR as necessary.
 .
 .RS
 .IP "\fBtcp:\fIip\fB:\fIport\fR"

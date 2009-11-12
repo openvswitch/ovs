@@ -277,6 +277,28 @@ form:
 
 The "cancel" notification itself has no reply.
 
+echo
+....
+
+Request object members:
+
+    "method": "echo"                                required
+    "params": any JSON value                        required
+    "id": any JSON value                            required
+
+Response object members:
+
+    "result": same as "params"
+    "error": null
+    "id": the request "id" member
+
+Both the JSON-RPC client and the server must implement this request.
+
+This JSON-RPC request and response can be used to implement connection
+keepalives, by allowing the server to check that the client is still
+there or vice versa.
+
+
 Notation for the Wire Protocol
 ------------------------------
 
