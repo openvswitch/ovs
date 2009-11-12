@@ -165,7 +165,7 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
     if (!pb) {
         VLOG_WARN_RL(&rl, "attempt to send buffered packet via connection "
                      "without buffers");
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_COOKIE);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BUFFER_UNKNOWN);
     }
 
     p = &pb->packets[id & PKTBUF_MASK];
@@ -183,10 +183,10 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
             error = ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BUFFER_EMPTY);
         }
     } else if (id >> PKTBUF_BITS != COOKIE_MAX) {
-        COVERAGE_INC(pktbuf_bad_cookie);
+        COVERAGE_INC(pktbuf_buffer_unknown);
         VLOG_WARN_RL(&rl, "cookie mismatch: %08"PRIx32" != %08"PRIx32,
                      id, (id & PKTBUF_MASK) | (p->cookie << PKTBUF_BITS));
-        error = ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_COOKIE);
+        error = ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BUFFER_UNKNOWN);
     } else {
         COVERAGE_INC(pktbuf_null_cookie);
         VLOG_INFO_RL(&rl, "Received null cookie %08"PRIx32" (this is normal "

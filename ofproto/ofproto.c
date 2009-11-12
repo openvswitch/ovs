@@ -2584,7 +2584,7 @@ handle_flow_stats_request(struct ofproto *p, struct ofconn *ofconn,
     struct cls_rule target;
 
     if (arg_size != sizeof *fsr) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     fsr = (struct ofp_flow_stats_request *) osr->body;
 
@@ -2692,7 +2692,7 @@ handle_aggregate_stats_request(struct ofproto *p, struct ofconn *ofconn,
     struct ofpbuf *msg;
 
     if (arg_size != sizeof *asr) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     asr = (struct ofp_aggregate_stats_request *) osr->body;
 
@@ -2796,6 +2796,17 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
     struct rule *rule;
     uint16_t in_port;
     int error;
+
+    if (ofm->flags & htons(OFPFF_CHECK_OVERLAP)) {
+        flow_t flow;
+        uint32_t wildcards;
+
+        flow_from_match(&flow, &wildcards, &ofm->match);
+        if (classifier_rule_overlaps(&p->cls, &flow, wildcards,
+                                     ntohs(ofm->priority))) {
+            return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP);
+        }
+    }
 
     rule = rule_create(p, NULL, (const union ofp_action *) ofm->actions,
                        n_actions, ntohs(ofm->idle_timeout),
@@ -2932,6 +2943,14 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
         return error;
     }
 
+    /* We do not support the emergency flow cache.  It will hopefully
+     * get dropped from OpenFlow in the near future. */
+    if (ofm->flags & htons(OFPFF_EMERG)) {
+        /* There isn't a good fit for an error code, so just state that the
+         * flow table is full. */
+        return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_ALL_TABLES_FULL);
+    }
+
     normalize_match(&ofm->match);
     if (!ofm->match.wildcards) {
         ofm->priority = htons(UINT16_MAX);
@@ -2971,13 +2990,13 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
     struct nicira_header *nh;
 
     if (ntohs(ovh->header.length) < sizeof(struct ofp_vendor_header)) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     if (ovh->vendor != htonl(NX_VENDOR_ID)) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
     }
     if (ntohs(ovh->header.length) < sizeof(struct nicira_header)) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
     nh = msg;

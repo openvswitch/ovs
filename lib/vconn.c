@@ -1073,7 +1073,7 @@ check_ofp_message(const struct ofp_header *msg, uint8_t type, size_t size)
                      "received %s message of length %zu (expected %zu)",
                      type_name, got_size, size);
         free(type_name);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
     return 0;
@@ -1109,7 +1109,7 @@ check_ofp_message_array(const struct ofp_header *msg, uint8_t type,
                      "(expected at least %zu)",
                      type_name, got_size, min_size);
         free(type_name);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     if ((got_size - min_size) % array_elt_size) {
         char *type_name = ofp_message_type_to_string(type);
@@ -1120,7 +1120,7 @@ check_ofp_message_array(const struct ofp_header *msg, uint8_t type,
                      type_name, got_size, min_size, got_size - min_size,
                      array_elt_size, (got_size - min_size) % array_elt_size);
         free(type_name);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     if (n_array_elts) {
         *n_array_elts = (got_size - min_size) / array_elt_size;
@@ -1150,13 +1150,13 @@ check_ofp_packet_out(const struct ofp_header *oh, struct ofpbuf *data,
         VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out claims %u bytes of actions "
                      "but message has room for only %zu bytes",
                      actions_len, extra);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     if (actions_len % sizeof(union ofp_action)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out claims %u bytes of actions, "
                      "which is not a multiple of %zu",
                      actions_len, sizeof(union ofp_action));
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
     n_actions = actions_len / sizeof(union ofp_action);
