@@ -1,5 +1,5 @@
 {"name": "ovs_vswitchd_db",
- "comment": "Configuration for one or more Open vSwitch daemons.",
+ "comment": "Configuration for one Open vSwitch daemon.",
  "tables": {
     "OpenVSwitch": {
         "comment": "Configuration for an Open vSwitch daemon.",
