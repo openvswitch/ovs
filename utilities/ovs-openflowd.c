@@ -333,7 +333,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         case OPT_DATAPATH_ID:
             if (!dpid_from_string(optarg, &s->datapath_id)) {
                 ovs_fatal(0, "argument to --datapath-id must be "
-                          "exactly 12 hex digits and may not be all-zero");
+                          "exactly 16 hex digits and may not be all-zero");
             }
             break;
 
@@ -521,7 +521,7 @@ usage(void)
     vconn_usage(true, true, true);
     printf("\nOpenFlow options:\n"
            "  -d, --datapath-id=ID    Use ID as the OpenFlow switch ID\n"
-           "                          (ID must consist of 12 hex digits)\n"
+           "                          (ID must consist of 16 hex digits)\n"
            "  --manufacturer=MFR      Identify manufacturer as MFR\n"
            "  --hardware=HW           Identify hardware as HW\n"
            "  --software=SW           Identify software as SW\n"

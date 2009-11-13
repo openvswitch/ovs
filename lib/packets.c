@@ -23,7 +23,7 @@
 bool
 dpid_from_string(const char *s, uint64_t *dpidp)
 {
-    *dpidp = (strlen(s) == 12 && strspn(s, "0123456789abcdefABCDEF") == 12
+    *dpidp = (strlen(s) == 16 && strspn(s, "0123456789abcdefABCDEF") == 16
               ? strtoll(s, NULL, 16)
               : 0);
     return *dpidp != 0;

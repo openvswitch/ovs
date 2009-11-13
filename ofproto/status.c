@@ -137,7 +137,7 @@ config_status_cb(struct status_reply *sr, void *ofproto_)
 
     datapath_id = ofproto_get_datapath_id(ofproto);
     if (datapath_id) {
-        status_reply_put(sr, "datapath-id=%"PRIx64, datapath_id);
+        status_reply_put(sr, "datapath-id=%016"PRIx64, datapath_id);
     }
 
     svec_init(&listeners);

@@ -229,8 +229,9 @@ OFP_ASSERT(sizeof(struct ofp_phy_port) == 48);
 /* Switch features. */
 struct ofp_switch_features {
     struct ofp_header header;
-    uint64_t datapath_id;   /* Datapath unique ID.  Only the lower 48-bits
-                               are meaningful. */
+    uint64_t datapath_id;   /* Datapath unique ID.  The lower 48-bits are for 
+                               a MAC address, while the upper 16-bits are
+                               implementer-defined. */
 
     uint32_t n_buffers;     /* Max packets buffered at once. */
 
