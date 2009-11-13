@@ -22,7 +22,7 @@ m4_define([OVSDB_CHECK_NEGATIVE],
             [0], [ignore], [ignore])
    AT_CLEANUP])
 
-m4_include([tests/ovsdb-file.at])
+m4_include([tests/ovsdb-log.at])
 m4_include([tests/ovsdb-types.at])
 m4_include([tests/ovsdb-data.at])
 m4_include([tests/ovsdb-column.at])

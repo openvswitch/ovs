@@ -19,7 +19,7 @@
 
 #include <fcntl.h>
 
-#include "file.h"
+#include "log.h"
 #include "json.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
@@ -153,14 +153,14 @@ ovsdb_schema_to_json(const struct ovsdb_schema *schema)
 }
 
 struct ovsdb *
-ovsdb_create(struct ovsdb_file *file, struct ovsdb_schema *schema)
+ovsdb_create(struct ovsdb_log *log, struct ovsdb_schema *schema)
 {
     struct shash_node *node;
     struct ovsdb *db;
 
     db = xmalloc(sizeof *db);
     db->schema = schema;
-    db->file = file;
+    db->log = log;
     list_init(&db->triggers);
     db->run_triggers = false;
 
@@ -178,16 +178,16 @@ ovsdb_open(const char *file_name, bool read_only, struct ovsdb **dbp)
 {
     struct ovsdb_schema *schema;
     struct ovsdb_error *error;
-    struct ovsdb_file *file;
+    struct ovsdb_log *log;
     struct json *json;
     struct ovsdb *db;
 
-    error = ovsdb_file_open(file_name, read_only ? O_RDONLY : O_RDWR, &file);
+    error = ovsdb_log_open(file_name, read_only ? O_RDONLY : O_RDWR, &log);
     if (error) {
         return error;
     }
 
-    error = ovsdb_file_read(file, &json);
+    error = ovsdb_log_read(log, &json);
     if (error) {
         return error;
     } else if (!json) {
@@ -204,8 +204,8 @@ ovsdb_open(const char *file_name, bool read_only, struct ovsdb **dbp)
     }
     json_destroy(json);
 
-    db = ovsdb_create(read_only ? NULL : file, schema);
-    while ((error = ovsdb_file_read(file, &json)) == NULL && json) {
+    db = ovsdb_create(read_only ? NULL : log, schema);
+    while ((error = ovsdb_log_read(log, &json)) == NULL && json) {
         struct ovsdb_txn *txn;
 
         error = ovsdb_txn_from_json(db, json, &txn);
@@ -225,7 +225,7 @@ ovsdb_open(const char *file_name, bool read_only, struct ovsdb **dbp)
     }
 
     if (read_only) {
-        ovsdb_file_close(file);
+        ovsdb_log_close(log);
     }
 
     *dbp = db;
@@ -251,7 +251,7 @@ ovsdb_destroy(struct ovsdb *db)
         shash_clear(&db->schema->tables);
 
         ovsdb_schema_destroy(db->schema);
-        ovsdb_file_close(db->file);
+        ovsdb_log_close(db->log);
         free(db);
     }
 }

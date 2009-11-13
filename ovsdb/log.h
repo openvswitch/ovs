@@ -13,24 +13,24 @@
  * limitations under the License.
  */
 
-#ifndef OVSDB_FILE_H
-#define OVSDB_FILE_H 1
+#ifndef OVSDB_LOG_H
+#define OVSDB_LOG_H 1
 
 #include <sys/types.h>
 #include "compiler.h"
 
 struct json;
-struct ovsdb_file;
+struct ovsdb_log;
 
-struct ovsdb_error *ovsdb_file_open(const char *name, int flags,
-                                    struct ovsdb_file **) WARN_UNUSED_RESULT;
-void ovsdb_file_close(struct ovsdb_file *);
+struct ovsdb_error *ovsdb_log_open(const char *name, int flags,
+                                   struct ovsdb_log **) WARN_UNUSED_RESULT;
+void ovsdb_log_close(struct ovsdb_log *);
 
-struct ovsdb_error *ovsdb_file_read(struct ovsdb_file *, struct json **)
+struct ovsdb_error *ovsdb_log_read(struct ovsdb_log *, struct json **)
     WARN_UNUSED_RESULT;
-struct ovsdb_error *ovsdb_file_write(struct ovsdb_file *, struct json *)
+struct ovsdb_error *ovsdb_log_write(struct ovsdb_log *, struct json *)
     WARN_UNUSED_RESULT;
-struct ovsdb_error *ovsdb_file_commit(struct ovsdb_file *)
+struct ovsdb_error *ovsdb_log_commit(struct ovsdb_log *)
     WARN_UNUSED_RESULT;
 
-#endif /* ovsdb/file.h */
+#endif /* ovsdb/log.h */

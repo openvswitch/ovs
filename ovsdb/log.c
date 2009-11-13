@@ -15,7 +15,7 @@
 
 #include <config.h>
 
-#include "file.h"
+#include "log.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -26,34 +26,36 @@
 
 #include "json.h"
 #include "lockfile.h"
+#include "ovsdb.h"
 #include "ovsdb-error.h"
 #include "sha1.h"
+#include "transaction.h"
 #include "util.h"
 
-#define THIS_MODULE VLM_ovsdb_file
+#define THIS_MODULE VLM_ovsdb_log
 #include "vlog.h"
 
-enum ovsdb_file_mode {
-    OVSDB_FILE_READ,
-    OVSDB_FILE_WRITE
+enum ovsdb_log_mode {
+    OVSDB_LOG_READ,
+    OVSDB_LOG_WRITE
 };
 
-struct ovsdb_file {
+struct ovsdb_log {
     off_t offset;
     char *name;
     struct lockfile *lockfile;
     FILE *stream;
     struct ovsdb_error *read_error;
     struct ovsdb_error *write_error;
-    enum ovsdb_file_mode mode;
+    enum ovsdb_log_mode mode;
 };
 
 struct ovsdb_error *
-ovsdb_file_open(const char *name, int flags, struct ovsdb_file **filep)
+ovsdb_log_open(const char *name, int flags, struct ovsdb_log **filep)
 {
     struct lockfile *lockfile;
     struct ovsdb_error *error;
-    struct ovsdb_file *file;
+    struct ovsdb_log *file;
     struct stat s;
     FILE *stream;
     int accmode;
@@ -111,7 +113,7 @@ ovsdb_file_open(const char *name, int flags, struct ovsdb_file **filep)
     file->offset = 0;
     file->read_error = NULL;
     file->write_error = NULL;
-    file->mode = OVSDB_FILE_READ;
+    file->mode = OVSDB_LOG_READ;
     *filep = file;
     return NULL;
 
@@ -124,7 +126,7 @@ error:
 }
 
 void
-ovsdb_file_close(struct ovsdb_file *file)
+ovsdb_log_close(struct ovsdb_log *file)
 {
     if (file) {
         free(file->name);
@@ -170,15 +172,15 @@ parse_header(char *header, unsigned long int *length,
     return true;
 }
 
-struct ovsdb_file_read_cbdata {
+struct ovsdb_log_read_cbdata {
     char input[4096];
-    struct ovsdb_file *file;
+    struct ovsdb_log *file;
     int error;
     unsigned long length;
 };
 
 static struct ovsdb_error *
-parse_body(struct ovsdb_file *file, off_t offset, unsigned long int length,
+parse_body(struct ovsdb_log *file, off_t offset, unsigned long int length,
            uint8_t sha1[SHA1_DIGEST_SIZE], struct json **jsonp)
 {
     unsigned long int bytes_left;
@@ -212,7 +214,7 @@ parse_body(struct ovsdb_file *file, off_t offset, unsigned long int length,
 }
 
 struct ovsdb_error *
-ovsdb_file_read(struct ovsdb_file *file, struct json **jsonp)
+ovsdb_log_read(struct ovsdb_log *file, struct json **jsonp)
 {
     uint8_t expected_sha1[SHA1_DIGEST_SIZE];
     uint8_t actual_sha1[SHA1_DIGEST_SIZE];
@@ -226,7 +228,7 @@ ovsdb_file_read(struct ovsdb_file *file, struct json **jsonp)
 
     if (file->read_error) {
         return ovsdb_error_clone(file->read_error);
-    } else if (file->mode == OVSDB_FILE_WRITE) {
+    } else if (file->mode == OVSDB_LOG_WRITE) {
         return OVSDB_BUG("reading file in write mode");
     }
 
@@ -284,7 +286,7 @@ error:
 }
 
 struct ovsdb_error *
-ovsdb_file_write(struct ovsdb_file *file, struct json *json)
+ovsdb_log_write(struct ovsdb_log *file, struct json *json)
 {
     uint8_t sha1[SHA1_DIGEST_SIZE];
     struct ovsdb_error *error;
@@ -296,8 +298,8 @@ ovsdb_file_write(struct ovsdb_file *file, struct json *json)
 
     if (file->write_error) {
         return ovsdb_error_clone(file->write_error);
-    } else if (file->mode == OVSDB_FILE_READ) {
-        file->mode = OVSDB_FILE_WRITE;
+    } else if (file->mode == OVSDB_LOG_READ) {
+        file->mode = OVSDB_LOG_WRITE;
         if (fseeko(file->stream, file->offset, SEEK_SET)) {
             error = ovsdb_io_error(errno, "%s: cannot seek to offset %lld",
                                    file->name, (long long int) file->offset);
@@ -351,10 +353,11 @@ error:
 }
 
 struct ovsdb_error *
-ovsdb_file_commit(struct ovsdb_file *file)
+ovsdb_log_commit(struct ovsdb_log *file)
 {
     if (fsync(fileno(file->stream))) {
         return ovsdb_io_error(errno, "%s: fsync failed", file->name);
     }
     return 0;
 }
+

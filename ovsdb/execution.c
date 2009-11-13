@@ -20,8 +20,8 @@
 
 #include "column.h"
 #include "condition.h"
-#include "file.h"
 #include "json.h"
+#include "log.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
@@ -211,7 +211,7 @@ ovsdb_execute_abort(struct ovsdb_execution *x UNUSED,
 static struct ovsdb_error *
 do_commit(struct ovsdb_execution *x)
 {
-    if (x->db->file) {
+    if (x->db->log) {
         struct ovsdb_error *error;
         struct json *json;
 
@@ -221,14 +221,14 @@ do_commit(struct ovsdb_execution *x)
             return NULL;
         }
 
-        error = ovsdb_file_write(x->db->file, json);
+        error = ovsdb_log_write(x->db->log, json);
         json_destroy(json);
         if (error) {
             return ovsdb_wrap_error(error, "writing transaction failed");
         }
 
         if (x->durable) {
-            error = ovsdb_file_commit(x->db->file);
+            error = ovsdb_log_commit(x->db->log);
             if (error) {
                 return ovsdb_wrap_error(error,
                                         "committing transaction failed");

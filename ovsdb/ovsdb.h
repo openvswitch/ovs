@@ -46,7 +46,7 @@ struct json *ovsdb_schema_to_json(const struct ovsdb_schema *);
 /* Database. */
 struct ovsdb {
     struct ovsdb_schema *schema;
-    struct ovsdb_file *file;    /* Disk file (null for in-memory db). */
+    struct ovsdb_log *log;      /* Disk log (null for in-memory db). */
     struct shash tables;        /* Contains "struct ovsdb_table *"s. */
 
     /* Triggers. */
@@ -54,7 +54,7 @@ struct ovsdb {
     bool run_triggers;
 };
 
-struct ovsdb *ovsdb_create(struct ovsdb_file *, struct ovsdb_schema *);
+struct ovsdb *ovsdb_create(struct ovsdb_log *, struct ovsdb_schema *);
 struct ovsdb_error *ovsdb_open(const char *file_name, bool read_only,
                                struct ovsdb **)
     WARN_UNUSED_RESULT;

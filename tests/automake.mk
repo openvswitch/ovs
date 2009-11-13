@@ -17,7 +17,7 @@ TESTSUITE_AT = \
 	tests/lockfile.at \
 	tests/reconnect.at \
 	tests/ovsdb.at \
-	tests/ovsdb-file.at \
+	tests/ovsdb-log.at \
 	tests/ovsdb-types.at \
 	tests/ovsdb-data.at \
 	tests/ovsdb-column.at \

@@ -30,7 +30,7 @@
 #include "ovsdb-types.h"
 #include "ovsdb/column.h"
 #include "ovsdb/condition.h"
-#include "ovsdb/file.h"
+#include "ovsdb/log.h"
 #include "ovsdb/ovsdb.h"
 #include "ovsdb/query.h"
 #include "ovsdb/row.h"
@@ -98,7 +98,7 @@ usage(void)
 {
     printf("%s: Open vSwitch database test utility\n"
            "usage: %s [OPTIONS] COMMAND [ARG...]\n\n"
-           "  file-io FILE FLAGS COMMAND...\n"
+           "  log-io FILE FLAGS COMMAND...\n"
            "    open FILE with FLAGS, run COMMANDs\n"
            "  parse-atomic-type TYPE\n"
            "    parse TYPE as OVSDB atomic type, and re-serialize\n"
@@ -196,13 +196,13 @@ check_ovsdb_error(struct ovsdb_error *error)
 /* Command implementations. */
 
 static void
-do_file_io(int argc, char *argv[])
+do_log_io(int argc, char *argv[])
 {
     const char *name = argv[1];
     char *mode = argv[2];
 
     struct ovsdb_error *error;
-    struct ovsdb_file *file;
+    struct ovsdb_log *log;
     char *save_ptr = NULL;
     const char *token;
     int flags;
@@ -226,7 +226,7 @@ do_file_io(int argc, char *argv[])
         }
     }
 
-    check_ovsdb_error(ovsdb_file_open(name, flags, &file));
+    check_ovsdb_error(ovsdb_log_open(name, flags, &log));
     printf("%s: open successful\n", name);
 
     for (i = 3; i < argc; i++) {
@@ -234,24 +234,24 @@ do_file_io(int argc, char *argv[])
         if (!strcmp(command, "read")) {
             struct json *json;
 
-            error = ovsdb_file_read(file, &json);
+            error = ovsdb_log_read(log, &json);
             if (!error) {
                 printf("%s: read: ", name);
                 if (json) {
                     print_and_free_json(json);
                 } else {
-                    printf("end of file\n");
+                    printf("end of log\n");
                 }
                 continue;
             }
         } else if (!strncmp(command, "write:", 6)) {
             struct json *json = parse_json(command + 6);
-            error = ovsdb_file_write(file, json);
+            error = ovsdb_log_write(log, json);
             json_destroy(json);
         } else if (!strcmp(command, "commit")) {
-            error = ovsdb_file_commit(file);
+            error = ovsdb_log_commit(log);
         } else {
-            ovs_fatal(0, "unknown file-io command \"%s\"", command);
+            ovs_fatal(0, "unknown log-io command \"%s\"", command);
         }
         if (error) {
             char *s = ovsdb_error_to_string(error);
@@ -262,7 +262,7 @@ do_file_io(int argc, char *argv[])
         }
     }
 
-    ovsdb_file_close(file);
+    ovsdb_log_close(log);
 }
 
 static void
@@ -1207,7 +1207,7 @@ do_transact(int argc, char *argv[])
 }
 
 static struct command all_commands[] = {
-    { "file-io", 2, INT_MAX, do_file_io },
+    { "log-io", 2, INT_MAX, do_log_io },
     { "parse-atomic-type", 1, 1, do_parse_atomic_type },
     { "parse-type", 1, 1, do_parse_type },
     { "parse-atoms", 2, INT_MAX, do_parse_atoms },

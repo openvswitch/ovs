@@ -24,7 +24,7 @@
 
 #include "command-line.h"
 #include "compiler.h"
-#include "file.h"
+#include "log.h"
 #include "json.h"
 #include "ovsdb.h"
 #include "ovsdb-error.h"
@@ -144,7 +144,7 @@ do_create(int argc UNUSED, char *argv[])
     const char *db_file_name = argv[1];
     const char *schema_file_name = argv[2];
     struct ovsdb_schema *schema;
-    struct ovsdb_file *db_file;
+    struct ovsdb_log *log;
     struct json *json;
 
     /* Read schema from file and convert to JSON. */
@@ -152,11 +152,11 @@ do_create(int argc UNUSED, char *argv[])
     json = ovsdb_schema_to_json(schema);
 
     /* Create database file. */
-    check_ovsdb_error(ovsdb_file_open(db_file_name, O_RDWR | O_CREAT | O_EXCL,
-                                      &db_file));
-    check_ovsdb_error(ovsdb_file_write(db_file, json));
-    check_ovsdb_error(ovsdb_file_commit(db_file));
-    ovsdb_file_close(db_file);
+    check_ovsdb_error(ovsdb_log_open(db_file_name, O_RDWR | O_CREAT | O_EXCL,
+                                     &log));
+    check_ovsdb_error(ovsdb_log_write(log, json));
+    check_ovsdb_error(ovsdb_log_commit(log));
+    ovsdb_log_close(log);
 
     json_destroy(json);
 }
