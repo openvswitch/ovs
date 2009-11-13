@@ -368,7 +368,7 @@ ovsdb_jsonrpc_session_run(struct ovsdb_jsonrpc_session *s)
 
     case RECONNECT_PROBE:
         if (s->rpc) {
-            struct json *params = json_integer_create(0);
+            struct json *params = json_array_create_empty();
             jsonrpc_send(s->rpc, jsonrpc_create_request("echo", params));
         }
         break;
@@ -453,12 +453,15 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
 static void
 execute_cancel(struct ovsdb_jsonrpc_session *s, struct jsonrpc_msg *request)
 {
-    size_t hash = json_hash(request->id, 0);
-    struct ovsdb_jsonrpc_trigger *t;
+    if (json_array(request->params)->n == 1) {
+        struct ovsdb_jsonrpc_trigger *t;
+        struct json *id;
 
-    t = ovsdb_jsonrpc_trigger_find(s, request->params, hash);
-    if (t) {
-        ovsdb_jsonrpc_trigger_complete(t);
+        id = request->params->u.array.elems[0];
+        t = ovsdb_jsonrpc_trigger_find(s, id, json_hash(id, 0));
+        if (t) {
+            ovsdb_jsonrpc_trigger_complete(t);
+        }
     }
 }
 

@@ -32,6 +32,10 @@ values.  Additional notation is presented later.
     A JSON number with an integer value, within a certain range
     (currently -2**63...+2**63-1).
 
+<value>
+
+    Any JSON value.
+
 Schema Format
 -------------
 
@@ -255,7 +259,7 @@ cancel
 Request object members:
 
     "method": "cancel"                              required
-    "params": the "id" for an outstanding request   required
+    "params": [the "id" for an outstanding request] required
     "id": null                                      required
 
 Response object members:
@@ -283,8 +287,8 @@ echo
 Request object members:
 
     "method": "echo"                                required
-    "params": any JSON value                        required
-    "id": any JSON value                            required
+    "params": JSON array with any contents          required
+    "id": <value>                                   required
 
 Response object members:
 
