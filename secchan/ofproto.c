@@ -3317,9 +3317,11 @@ expire_rule(struct cls_rule *cls_rule, void *p_)
         rule_uninstall(p, rule);
     }
 
-    send_flow_exp(p, rule, now,
-                  (now >= hard_expire
-                   ? OFPER_HARD_TIMEOUT : OFPER_IDLE_TIMEOUT));
+    if (!rule_is_hidden(rule)) {
+        send_flow_exp(p, rule, now,
+                      (now >= hard_expire
+                       ? OFPER_HARD_TIMEOUT : OFPER_IDLE_TIMEOUT));
+    }
     rule_remove(p, rule);
 }
 
