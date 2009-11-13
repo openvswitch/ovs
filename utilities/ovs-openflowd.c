@@ -345,10 +345,10 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
         switch (c) {
         case OPT_DATAPATH_ID:
-            if (strlen(optarg) != 12
-                || strspn(optarg, "0123456789abcdefABCDEF") != 12) {
+            if (strlen(optarg) != 16
+                || strspn(optarg, "0123456789abcdefABCDEF") != 16) {
                 ovs_fatal(0, "argument to --datapath-id must be "
-                          "exactly 12 hex digits");
+                          "exactly 16 hex digits");
             }
             s->datapath_id = strtoll(optarg, NULL, 16);
             if (!s->datapath_id) {
@@ -467,10 +467,10 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             break;
 
         case OPT_MGMT_ID:
-            if (strlen(optarg) != 12
-                || strspn(optarg, "0123456789abcdefABCDEF") != 12) {
+            if (strlen(optarg) != 16
+                || strspn(optarg, "0123456789abcdefABCDEF") != 16) {
                 ovs_fatal(0, "argument to --mgmt-id must be "
-                          "exactly 12 hex digits");
+                          "exactly 16 hex digits");
             }
             s->mgmt_id = strtoll(optarg, NULL, 16);
             if (!s->mgmt_id) {
@@ -561,9 +561,9 @@ usage(void)
     vconn_usage(true, true, true);
     printf("\nOpenFlow options:\n"
            "  -d, --datapath-id=ID    Use ID as the OpenFlow switch ID\n"
-           "                          (ID must consist of 12 hex digits)\n"
+           "                          (ID must consist of 16 hex digits)\n"
            "  --mgmt-id=ID            Use ID as the management ID\n"
-           "                          (ID must consist of 12 hex digits)\n"
+           "                          (ID must consist of 16 hex digits)\n"
            "  --manufacturer=MFR      Identify manufacturer as MFR\n"
            "  --hardware=HW           Identify hardware as HW\n"
            "  --software=SW           Identify software as SW\n"

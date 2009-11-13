@@ -834,7 +834,7 @@ cfg_get_mac(int idx, const char *key_, ...)
 
 /* Returns the value numbered 'idx' of 'key', parsed as an datapath ID.
  * Returns 0 if 'idx' is greater than or equal to cfg_count(key) or if the
- * value 'idx' of 'key' is not a valid datapath ID consisting of exactly 12
+ * value 'idx' of 'key' is not a valid datapath ID consisting of exactly 16
  * hexadecimal digits.  */
 uint64_t
 cfg_get_dpid(int idx, const char *key_, ...)
@@ -1134,7 +1134,7 @@ parse_mac(const char *s, uint8_t mac[6])
 static bool
 parse_dpid(const char *s, uint64_t *dpid)
 {
-    if (strlen(s) == 12 && strspn(s, "0123456789abcdefABCDEF") == 12) {
+    if (strlen(s) == 16 && strspn(s, "0123456789abcdefABCDEF") == 16) {
         *dpid = strtoll(s, NULL, 16);
         return true;
     } else {

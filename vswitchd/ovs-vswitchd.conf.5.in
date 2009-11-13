@@ -488,7 +488,7 @@ the connection has been broken and attempts to reconnect.  The default
 and minimum values are both 5 seconds.
 
 A management id may be specified with the \fBmgmt.id\fR key.  It takes
-an id in the form of exactly 12 hexadecimal digits.  If one is not
+an id in the form of exactly 16 hexadecimal digits.  If one is not
 specified, a random id is generated each time \fBovs\-vswitchd\fR is started.
 .fi
 .RE
@@ -561,10 +561,11 @@ The Unix domain server socket named \fIfile\fR.
 .PP
 The datapath ID used by the bridge to identify itself to the remote
 controller may be specified as \fBbridge.\fIname\fB.datapath-id\fR,
-in the form of exactly 12 hexadecimal digits.  If the datapath ID
-is not specified, then it defaults to the bridge's MAC address (see
-\fBBridge Configuration\fR, above, for information on how the bridge's
-MAC address is chosen).
+in the form of exactly 16 hexadecimal digits.  If the datapath ID
+is not specified, then it defaults to the bridge's MAC address in
+the lower 48 bits (see \fBBridge Configuration\fR, above, for information 
+on how the bridge's MAC address is chosen) and zeros in the upper 16
+bits.
 .ST "Local Port Network Configuration"
 When an external controller is configured, but controller discovery is
 not in use, the following additional settings are honored:

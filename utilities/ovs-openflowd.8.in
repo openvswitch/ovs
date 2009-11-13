@@ -210,13 +210,13 @@ When controller discovery is not performed, this option has no effect.
 .SS "Networking Options"
 .TP
 \fB--datapath-id=\fIdpid\fR
-Sets \fIdpid\fR, which must consist of exactly 12 hexadecimal digits,
+Sets \fIdpid\fR, which must consist of exactly 16 hexadecimal digits,
 as the datapath ID that the switch will use to identify itself to the
 OpenFlow controller.
 
 If this option is omitted, the default datapath ID is taken from the
 Ethernet address of the datapath's local port (which is typically
-randomly generated).
+randomly generated) in the lower 48 bits and zeros in the upper 16.
 
 .TP
 \fB--mgmt-id=\fImgmtid\fR

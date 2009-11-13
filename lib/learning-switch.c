@@ -156,7 +156,7 @@ lswitch_run(struct lswitch *sw, struct rconn *rconn)
     /* If we're waiting for more replies, keeping waiting for up to 10 s. */
     if (sw->last_reply != LLONG_MIN) {
         if (now - sw->last_reply > 10000) {
-            VLOG_ERR_RL(&rl, "%012llx: No more flow stat replies last 10 s",
+            VLOG_ERR_RL(&rl, "%016llx: No more flow stat replies last 10 s",
                         sw->datapath_id);
             sw->last_reply = LLONG_MIN;
             sw->last_query = LLONG_MIN;
@@ -169,7 +169,7 @@ lswitch_run(struct lswitch *sw, struct rconn *rconn)
     /* If we're waiting for any reply at all, keep waiting for up to 10 s. */
     if (sw->last_query != LLONG_MIN) {
         if (now - sw->last_query > 10000) {
-            VLOG_ERR_RL(&rl, "%012llx: No flow stat replies in last 10 s",
+            VLOG_ERR_RL(&rl, "%016llx: No flow stat replies in last 10 s",
                         sw->datapath_id);
             sw->last_query = LLONG_MIN;
             schedule_query(sw, 0);
@@ -189,7 +189,7 @@ lswitch_run(struct lswitch *sw, struct rconn *rconn)
             struct ofpbuf *b;
             int error;
 
-            VLOG_DBG("%012llx: Sending flow stats request to implement STP",
+            VLOG_DBG("%016llx: Sending flow stats request to implement STP",
                      sw->datapath_id);
 
             sw->last_query = now;
@@ -208,7 +208,7 @@ lswitch_run(struct lswitch *sw, struct rconn *rconn)
 
             error = rconn_send(rconn, b, NULL);
             if (error) {
-                VLOG_WARN_RL(&rl, "%012llx: sending flow stats request "
+                VLOG_WARN_RL(&rl, "%016llx: sending flow stats request "
                              "failed: %s", sw->datapath_id, strerror(error));
                 ofpbuf_delete(b);
                 schedule_query(sw, 1000);
@@ -303,7 +303,7 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
     for (p = processors; p < &processors[n_processors]; p++) {
         if (oh->type == p->type) {
             if (msg->size < p->min_size) {
-                VLOG_WARN_RL(&rl, "%012llx: %s: too short (%zu bytes) for "
+                VLOG_WARN_RL(&rl, "%016llx: %s: too short (%zu bytes) for "
                              "type %"PRIu8" (min %zu)", sw->datapath_id,
                              rconn_get_name(rconn), msg->size, oh->type,
                              p->min_size);
@@ -317,7 +317,7 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
     }
     if (VLOG_IS_DBG_ENABLED()) {
         char *p = ofp_to_string(msg->data, msg->size, 2);
-        VLOG_DBG_RL(&rl, "%012llx: OpenFlow packet ignored: %s",
+        VLOG_DBG_RL(&rl, "%016llx: OpenFlow packet ignored: %s",
                     sw->datapath_id, p);
         free(p);
     }
@@ -350,10 +350,10 @@ queue_tx(struct lswitch *sw, struct rconn *rconn, struct ofpbuf *b)
     int retval = rconn_send_with_limit(rconn, b, sw->queued, 10);
     if (retval && retval != ENOTCONN) {
         if (retval == EAGAIN) {
-            VLOG_INFO_RL(&rl, "%012llx: %s: tx queue overflow",
+            VLOG_INFO_RL(&rl, "%016llx: %s: tx queue overflow",
                          sw->datapath_id, rconn_get_name(rconn));
         } else {
-            VLOG_WARN_RL(&rl, "%012llx: %s: send: %s",
+            VLOG_WARN_RL(&rl, "%016llx: %s: send: %s",
                          sw->datapath_id, rconn_get_name(rconn),
                          strerror(retval));
         }
@@ -408,7 +408,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
 
     if (may_learn(sw, in_port) && sw->ml) {
         if (mac_learning_learn(sw->ml, flow.dl_src, 0, in_port)) {
-            VLOG_DBG_RL(&rl, "%012llx: learned that "ETH_ADDR_FMT" is on "
+            VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
                         "port %"PRIu16, sw->datapath_id,
                         ETH_ADDR_ARGS(flow.dl_src), in_port);
         }
@@ -613,12 +613,12 @@ process_flow_stats(struct lswitch *sw, struct rconn *rconn,
         for (a = ofs->actions; (char *) a < end; a += len / 8) {
             len = ntohs(a->len);
             if (len > end - (char *) a) {
-                VLOG_DBG_RL(&rl, "%012llx: action exceeds available space "
+                VLOG_DBG_RL(&rl, "%016llx: action exceeds available space "
                             "(%zu > %td)",
                             sw->datapath_id, len, end - (char *) a);
                 break;
             } else if (len % 8) {
-                VLOG_DBG_RL(&rl, "%012llx: action length (%zu) not multiple "
+                VLOG_DBG_RL(&rl, "%016llx: action length (%zu) not multiple "
                             "of 8 bytes", sw->datapath_id, len);
                 break;
             }
@@ -664,7 +664,7 @@ process_stats_reply(struct lswitch *sw, struct rconn *rconn, void *osr_)
         process_flow_stats(sw, rconn, fs);
     }
     if (!(osr->flags & htons(OFPSF_REPLY_MORE))) {
-        VLOG_DBG("%012llx: Deleted %d of %d received flows to "
+        VLOG_DBG("%016llx: Deleted %d of %d received flows to "
                  "implement STP, %d because of no-recv, %d because of "
                  "no-send", sw->datapath_id,
                  sw->n_no_recv + sw->n_no_send, sw->n_flows,
