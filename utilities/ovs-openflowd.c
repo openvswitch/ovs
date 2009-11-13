@@ -156,6 +156,12 @@ main(int argc, char *argv[])
         ofproto_set_mgmt_id(ofproto, s.mgmt_id);
     }
     ofproto_set_desc(ofproto, s.mfr_desc, s.hw_desc, s.sw_desc, s.serial_desc);
+    if (!s.listeners.n) {
+        svec_add_nocopy(&s.listeners, xasprintf("punix:%s/%s.mgmt",
+                                              ovs_rundir, s.dp_name));
+    } else if (s.listeners.n == 1 && !strcmp(s.listeners.names[0], "none")) {
+        svec_clear(&s.listeners);
+    }
     error = ofproto_set_listeners(ofproto, &s.listeners);
     if (error) {
         ovs_fatal(error, "failed to configure management connections");
