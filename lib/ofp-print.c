@@ -1380,6 +1380,18 @@ static const struct openflow_packet packets[] = {
         sizeof (struct ofp_vendor_header),
         NULL,
     },
+    {
+        OFPT_BARRIER_REQUEST,
+        "barrier_request",
+        sizeof (struct ofp_header),
+        NULL,
+    },
+    {
+        OFPT_BARRIER_REPLY,
+        "barrier_reply",
+        sizeof (struct ofp_header),
+        NULL,
+    }
 };
 
 /* Composes and returns a string representing the OpenFlow packet of 'len'

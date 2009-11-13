@@ -3071,6 +3071,19 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
     return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
 }
 
+static int
+handle_barrier_request(struct ofconn *ofconn, struct ofp_header *oh)
+{
+    struct ofp_header *ob;
+    struct ofpbuf *buf;
+
+    /* Currently, everything executes synchronously, so we can just
+     * immediately send the barrier reply. */
+    ob = make_openflow_xid(sizeof *ob, OFPT_BARRIER_REPLY, oh->xid, &buf);
+    queue_tx(buf, ofconn, ofconn->reply_counter);
+    return 0;
+}
+
 static void
 handle_openflow(struct ofconn *ofconn, struct ofproto *p,
                 struct ofpbuf *ofp_msg)
@@ -3118,6 +3131,10 @@ handle_openflow(struct ofconn *ofconn, struct ofproto *p,
 
     case OFPT_VENDOR:
         error = handle_vendor(p, ofconn, ofp_msg->data);
+        break;
+
+    case OFPT_BARRIER_REQUEST:
+        error = handle_barrier_request(ofconn, oh);
         break;
 
     default:
