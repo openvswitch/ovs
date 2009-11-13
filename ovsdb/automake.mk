@@ -6,6 +6,8 @@ ovsdb_libovsdb_a_SOURCES = \
 	ovsdb/condition.c \
 	ovsdb/condition.h \
 	ovsdb/execution.c \
+	ovsdb/file.c \
+	ovsdb/file.h \
 	ovsdb/jsonrpc-server.c \
 	ovsdb/jsonrpc-server.h \
 	ovsdb/log.c \

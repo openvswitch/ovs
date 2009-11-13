@@ -24,6 +24,7 @@
 #include "command-line.h"
 #include "daemon.h"
 #include "fault.h"
+#include "file.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "jsonrpc-server.h"
@@ -68,7 +69,7 @@ main(int argc, char *argv[])
 
     parse_options(argc, argv, &file_name, &active, &passive);
 
-    error = ovsdb_open(file_name, false, &db);
+    error = ovsdb_file_open(file_name, false, &db);
     if (error) {
         ovs_fatal(0, "%s", ovsdb_error_to_string(error));
     }

@@ -20,8 +20,8 @@
 
 #include "column.h"
 #include "condition.h"
+#include "file.h"
 #include "json.h"
-#include "log.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
@@ -47,7 +47,6 @@ typedef struct ovsdb_error *ovsdb_operation_executor(struct ovsdb_execution *,
                                                      struct ovsdb_parser *,
                                                      struct json *result);
 
-static struct ovsdb_error *do_commit(struct ovsdb_execution *);
 static ovsdb_operation_executor ovsdb_execute_insert;
 static ovsdb_operation_executor ovsdb_execute_select;
 static ovsdb_operation_executor ovsdb_execute_update;
@@ -168,8 +167,7 @@ ovsdb_execute(struct ovsdb *db, const struct json *params,
     }
 
     if (!error) {
-        /* Commit transaction.  Bail if commit encounters error.  */
-        error = do_commit(&x);
+        error = ovsdb_txn_commit(x.txn, x.durable);
         if (error) {
             json_array_add(results, ovsdb_error_to_json(error));
         }
@@ -206,38 +204,6 @@ ovsdb_execute_abort(struct ovsdb_execution *x UNUSED,
                     struct json *result UNUSED)
 {
     return ovsdb_error("aborted", "aborted by request");
-}
-
-static struct ovsdb_error *
-do_commit(struct ovsdb_execution *x)
-{
-    if (x->db->log) {
-        struct ovsdb_error *error;
-        struct json *json;
-
-        json = ovsdb_txn_to_json(x->txn);
-        if (!json) {
-            /* Nothing to commit. */
-            return NULL;
-        }
-
-        error = ovsdb_log_write(x->db->log, json);
-        json_destroy(json);
-        if (error) {
-            return ovsdb_wrap_error(error, "writing transaction failed");
-        }
-
-        if (x->durable) {
-            error = ovsdb_log_commit(x->db->log);
-            if (error) {
-                return ovsdb_wrap_error(error,
-                                        "committing transaction failed");
-            }
-        }
-    }
-
-    ovsdb_txn_commit(x->txn);
-    return NULL;
 }
 
 static struct ovsdb_table *

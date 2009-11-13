@@ -24,6 +24,7 @@
 
 #include "command-line.h"
 #include "compiler.h"
+#include "file.h"
 #include "log.h"
 #include "json.h"
 #include "ovsdb.h"
@@ -167,7 +168,7 @@ transact(bool read_only, const char *db_file_name, const char *transaction)
     struct json *request, *result;
     struct ovsdb *db;
 
-    check_ovsdb_error(ovsdb_open(db_file_name, read_only, &db));
+    check_ovsdb_error(ovsdb_file_open(db_file_name, read_only, &db));
 
     request = parse_json(transaction);
     result = ovsdb_execute(db, request, 0, NULL);

@@ -17,17 +17,11 @@
 
 #include "ovsdb.h"
 
-#include <fcntl.h>
-
-#include "log.h"
 #include "json.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 #include "table.h"
 #include "transaction.h"
-
-#define THIS_MODULE VLM_ovsdb
-#include "vlog.h"
 
 struct ovsdb_schema *
 ovsdb_schema_create(const char *name, const char *comment)
@@ -153,14 +147,14 @@ ovsdb_schema_to_json(const struct ovsdb_schema *schema)
 }
 
 struct ovsdb *
-ovsdb_create(struct ovsdb_log *log, struct ovsdb_schema *schema)
+ovsdb_create(struct ovsdb_schema *schema)
 {
     struct shash_node *node;
     struct ovsdb *db;
 
     db = xmalloc(sizeof *db);
     db->schema = schema;
-    db->log = log;
+    list_init(&db->replicas);
     list_init(&db->triggers);
     db->run_triggers = false;
 
@@ -173,70 +167,19 @@ ovsdb_create(struct ovsdb_log *log, struct ovsdb_schema *schema)
     return db;
 }
 
-struct ovsdb_error *
-ovsdb_open(const char *file_name, bool read_only, struct ovsdb **dbp)
-{
-    struct ovsdb_schema *schema;
-    struct ovsdb_error *error;
-    struct ovsdb_log *log;
-    struct json *json;
-    struct ovsdb *db;
-
-    error = ovsdb_log_open(file_name, read_only ? O_RDONLY : O_RDWR, &log);
-    if (error) {
-        return error;
-    }
-
-    error = ovsdb_log_read(log, &json);
-    if (error) {
-        return error;
-    } else if (!json) {
-        return ovsdb_io_error(EOF, "%s: database file contains no schema",
-                              file_name);
-    }
-
-    error = ovsdb_schema_from_json(json, &schema);
-    if (error) {
-        json_destroy(json);
-        return ovsdb_wrap_error(error,
-                                "failed to parse \"%s\" as ovsdb schema",
-                                file_name);
-    }
-    json_destroy(json);
-
-    db = ovsdb_create(read_only ? NULL : log, schema);
-    while ((error = ovsdb_log_read(log, &json)) == NULL && json) {
-        struct ovsdb_txn *txn;
-
-        error = ovsdb_txn_from_json(db, json, &txn);
-        json_destroy(json);
-        if (error) {
-            break;
-        }
-
-        ovsdb_txn_commit(txn);
-    }
-    if (error) {
-        char *msg = ovsdb_error_to_string(error);
-        VLOG_WARN("%s", msg);
-        free(msg);
-
-        ovsdb_error_destroy(error);
-    }
-
-    if (read_only) {
-        ovsdb_log_close(log);
-    }
-
-    *dbp = db;
-    return NULL;
-}
-
 void
 ovsdb_destroy(struct ovsdb *db)
 {
     if (db) {
         struct shash_node *node;
+
+        /* Remove all the replicas. */
+        while (!list_is_empty(&db->replicas)) {
+            struct ovsdb_replica *r
+                = CONTAINER_OF(list_pop_back(&db->replicas),
+                               struct ovsdb_replica, node);
+            ovsdb_remove_replica(db, r);
+        }
 
         /* Delete all the tables.  This also deletes their schemas. */
         SHASH_FOR_EACH (node, &db->tables) {
@@ -251,7 +194,6 @@ ovsdb_destroy(struct ovsdb *db)
         shash_clear(&db->schema->tables);
 
         ovsdb_schema_destroy(db->schema);
-        ovsdb_log_close(db->log);
         free(db);
     }
 }
@@ -260,4 +202,24 @@ struct ovsdb_table *
 ovsdb_get_table(const struct ovsdb *db, const char *name)
 {
     return shash_find_data(&db->tables, name);
+}
+
+void
+ovsdb_replica_init(struct ovsdb_replica *r,
+                   const struct ovsdb_replica_class *class)
+{
+    r->class = class;
+}
+
+void
+ovsdb_add_replica(struct ovsdb *db, struct ovsdb_replica *r)
+{
+    list_push_back(&db->replicas, &r->node);
+}
+
+void
+ovsdb_remove_replica(struct ovsdb *db UNUSED, struct ovsdb_replica *r)
+{
+    list_remove(&r->node);
+    (r->class->destroy)(r);
 }

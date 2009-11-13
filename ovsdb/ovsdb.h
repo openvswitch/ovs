@@ -22,6 +22,8 @@
 #include "shash.h"
 
 struct json;
+struct ovsdb_log;
+struct ovsdb_txn;
 struct uuid;
 
 /* Database schema. */
@@ -46,7 +48,7 @@ struct json *ovsdb_schema_to_json(const struct ovsdb_schema *);
 /* Database. */
 struct ovsdb {
     struct ovsdb_schema *schema;
-    struct ovsdb_log *log;      /* Disk log (null for in-memory db). */
+    struct list replicas;       /* Contains "struct ovsdb_replica"s. */
     struct shash tables;        /* Contains "struct ovsdb_table *"s. */
 
     /* Triggers. */
@@ -54,10 +56,7 @@ struct ovsdb {
     bool run_triggers;
 };
 
-struct ovsdb *ovsdb_create(struct ovsdb_log *, struct ovsdb_schema *);
-struct ovsdb_error *ovsdb_open(const char *file_name, bool read_only,
-                               struct ovsdb **)
-    WARN_UNUSED_RESULT;
+struct ovsdb *ovsdb_create(struct ovsdb_schema *);
 void ovsdb_destroy(struct ovsdb *);
 
 struct ovsdb_error *ovsdb_from_json(const struct json *, struct ovsdb **)
@@ -69,5 +68,24 @@ struct ovsdb_table *ovsdb_get_table(const struct ovsdb *, const char *);
 struct json *ovsdb_execute(struct ovsdb *, const struct json *params,
                            long long int elapsed_msec,
                            long long int *timeout_msec);
+
+/* Database replication. */
+
+struct ovsdb_replica {
+    struct list node;           /* Element in "struct ovsdb" replicas list. */
+    const struct ovsdb_replica_class *class;
+};
+
+struct ovsdb_replica_class {
+    struct ovsdb_error *(*commit)(struct ovsdb_replica *,
+                                  const struct ovsdb_txn *, bool durable);
+    void (*destroy)(struct ovsdb_replica *);
+};
+
+void ovsdb_replica_init(struct ovsdb_replica *,
+                        const struct ovsdb_replica_class *);
+
+void ovsdb_add_replica(struct ovsdb *, struct ovsdb_replica *);
+void ovsdb_remove_replica(struct ovsdb *, struct ovsdb_replica *);
 
 #endif /* ovsdb/ovsdb.h */

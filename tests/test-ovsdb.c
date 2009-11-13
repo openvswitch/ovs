@@ -30,6 +30,7 @@
 #include "ovsdb-types.h"
 #include "ovsdb/column.h"
 #include "ovsdb/condition.h"
+#include "ovsdb/file.h"
 #include "ovsdb/log.h"
 #include "ovsdb/ovsdb.h"
 #include "ovsdb/query.h"
@@ -880,7 +881,7 @@ do_execute(int argc UNUSED, char *argv[])
     json = parse_json(argv[1]);
     check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
     json_destroy(json);
-    db = ovsdb_create(NULL, schema);
+    db = ovsdb_create(schema);
 
     for (i = 2; i < argc; i++) {
         struct json *params, *result;
@@ -931,7 +932,7 @@ do_trigger(int argc UNUSED, char *argv[])
     json = parse_json(argv[1]);
     check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
     json_destroy(json);
-    db = ovsdb_create(NULL, schema);
+    db = ovsdb_create(schema);
 
     list_init(&completions);
     now = 0;
@@ -986,7 +987,7 @@ static struct ovsdb_table *do_transact_table;
 static void
 do_transact_commit(int argc UNUSED, char *argv[] UNUSED)
 {
-    ovsdb_txn_commit(do_transact_txn);
+    ovsdb_txn_commit(do_transact_txn, false);
     do_transact_txn = NULL;
 }
 
@@ -1154,7 +1155,7 @@ do_transact(int argc, char *argv[])
                       "       \"j\": {\"type\": \"integer\"}}}}}");
     check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
     json_destroy(json);
-    do_transact_db = ovsdb_create(NULL, schema);
+    do_transact_db = ovsdb_create(schema);
     do_transact_table = ovsdb_get_table(do_transact_db, "mytable");
     assert(do_transact_table != NULL);
 

@@ -19,23 +19,24 @@
 #include <stdbool.h>
 #include "compiler.h"
 
+struct json;
 struct ovsdb;
 struct ovsdb_table;
 struct uuid;
 
 struct ovsdb_txn *ovsdb_txn_create(struct ovsdb *);
 void ovsdb_txn_abort(struct ovsdb_txn *);
-void ovsdb_txn_commit(struct ovsdb_txn *);
-
-struct json *ovsdb_txn_to_json(const struct ovsdb_txn *);
-struct ovsdb_error *ovsdb_txn_from_json(struct ovsdb *, const struct json *,
-                                        struct ovsdb_txn **)
-    WARN_UNUSED_RESULT;
+struct ovsdb_error *ovsdb_txn_commit(struct ovsdb_txn *, bool durable);
 
 struct ovsdb_row *ovsdb_txn_row_modify(struct ovsdb_txn *,
                                        const struct ovsdb_row *);
-
 void ovsdb_txn_row_insert(struct ovsdb_txn *, struct ovsdb_row *);
 void ovsdb_txn_row_delete(struct ovsdb_txn *, const struct ovsdb_row *);
+
+typedef bool ovsdb_txn_row_cb_func(const struct ovsdb_row *old,
+                                   const struct ovsdb_row *new,
+                                   void *aux);
+void ovsdb_txn_for_each_change(const struct ovsdb_txn *,
+                               ovsdb_txn_row_cb_func *, void *aux);
 
 #endif /* ovsdb/transaction.h */
