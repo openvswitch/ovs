@@ -56,7 +56,7 @@
 
 #define OFP_ETH_ALEN 6          /* Bytes in an Ethernet address. */
 
-/* Port numbering.  Physical ports are numbered starting from 0. */
+/* Port numbering.  Physical ports are numbered starting from 1. */
 enum ofp_port {
     /* Maximum number of physical switch ports. */
     OFPP_MAX = 0xff00,
@@ -163,7 +163,8 @@ enum ofp_port_config {
     OFPPC_PORT_DOWN    = 1 << 0,  /* Port is administratively down. */
 
     OFPPC_NO_STP       = 1 << 1,  /* Disable 802.1D spanning tree on port. */
-    OFPPC_NO_RECV      = 1 << 2,  /* Drop most packets received on port. */
+    OFPPC_NO_RECV      = 1 << 2,  /* Drop all packets except 802.1D
+                                     spanning tree packets. */
     OFPPC_NO_RECV_STP  = 1 << 3,  /* Drop received 802.1D STP packets. */
     OFPPC_NO_FLOOD     = 1 << 4,  /* Do not include this port when flooding. */
     OFPPC_NO_FWD       = 1 << 5,  /* Drop packets forwarded to port. */
@@ -445,7 +446,7 @@ enum ofp_flow_mod_command {
 /* Flow wildcards. */
 enum ofp_flow_wildcards {
     OFPFW_IN_PORT    = 1 << 0,  /* Switch input port. */
-    OFPFW_DL_VLAN    = 1 << 1,  /* VLAN. */
+    OFPFW_DL_VLAN    = 1 << 1,  /* VLAN vid. */
     OFPFW_DL_SRC     = 1 << 2,  /* Ethernet source address. */
     OFPFW_DL_DST     = 1 << 3,  /* Ethernet destination address. */
     OFPFW_DL_TYPE    = 1 << 4,  /* Ethernet frame type. */
