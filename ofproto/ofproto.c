@@ -3264,12 +3264,13 @@ compose_flow_exp(const struct rule *rule, long long int now, uint8_t reason)
 {
     struct ofp_flow_expired *ofe;
     struct ofpbuf *buf;
+    long long int last_used = rule->used ? now - rule->used : 0;
 
     ofe = make_openflow(sizeof *ofe, OFPT_FLOW_EXPIRED, &buf);
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofe->match);
     ofe->priority = htons(rule->cr.priority);
     ofe->reason = reason;
-    ofe->duration = htonl((now - rule->created) / 1000);
+    ofe->duration = htonl((now - rule->created - last_used) / 1000);
     ofe->packet_count = htonll(rule->packet_count);
     ofe->byte_count = htonll(rule->byte_count);
 
