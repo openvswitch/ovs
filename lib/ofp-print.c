@@ -582,10 +582,6 @@ ofp_print_switch_config(struct ds *string, const void *oh, size_t len UNUSED,
     uint16_t flags;
 
     flags = ntohs(osc->flags);
-    if (flags & OFPC_SEND_FLOW_EXP) {
-        flags &= ~OFPC_SEND_FLOW_EXP;
-        ds_put_format(string, " (sending flow expirations)");
-    }
     if (flags) {
         ds_put_format(string, " ***unknown flags 0x%04"PRIx16"***", flags);
     }
@@ -739,41 +735,45 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
     default:
         ds_put_format(string, " cmd:%d ", ntohs(ofm->command));
     }
-    ds_put_format(string, "idle:%d hard:%d pri:%d buf:%#x", 
+    ds_put_format(string, "idle:%d hard:%d pri:%d buf:%#x flags:%"PRIx16" ", 
             ntohs(ofm->idle_timeout), ntohs(ofm->hard_timeout),
             ofm->match.wildcards ? ntohs(ofm->priority) : (uint16_t)-1,
-            ntohl(ofm->buffer_id));
+            ntohl(ofm->buffer_id), ntohs(ofm->flags));
     ofp_print_actions(string, ofm->actions,
                       len - offsetof(struct ofp_flow_mod, actions));
     ds_put_char(string, '\n');
 }
 
-/* Pretty-print the OFPT_FLOW_EXPIRED packet of 'len' bytes at 'oh' to 'string'
+/* Pretty-print the OFPT_FLOW_REMOVED packet of 'len' bytes at 'oh' to 'string'
  * at the given 'verbosity' level. */
 static void
-ofp_print_flow_expired(struct ds *string, const void *oh, size_t len UNUSED, 
+ofp_print_flow_removed(struct ds *string, const void *oh, size_t len UNUSED, 
                        int verbosity)
 {
-    const struct ofp_flow_expired *ofe = oh;
+    const struct ofp_flow_removed *ofr = oh;
 
-    ofp_print_match(string, &ofe->match, verbosity);
+    ofp_print_match(string, &ofr->match, verbosity);
     ds_put_cstr(string, " reason=");
-    switch (ofe->reason) {
-    case OFPER_IDLE_TIMEOUT:
+    switch (ofr->reason) {
+    case OFPRR_IDLE_TIMEOUT:
         ds_put_cstr(string, "idle");
         break;
-    case OFPER_HARD_TIMEOUT:
+    case OFPRR_HARD_TIMEOUT:
         ds_put_cstr(string, "hard");
         break;
+    case OFPRR_DELETE:
+        ds_put_cstr(string, "delete");
+        break;
     default:
-        ds_put_format(string, "**%"PRIu8"**", ofe->reason);
+        ds_put_format(string, "**%"PRIu8"**", ofr->reason);
         break;
     }
     ds_put_format(string, 
-         " pri%"PRIu16" secs%"PRIu32" pkts%"PRIu64" bytes%"PRIu64"\n", 
-         ofe->match.wildcards ? ntohs(ofe->priority) : (uint16_t)-1,
-         ntohl(ofe->duration), ntohll(ofe->packet_count), 
-         ntohll(ofe->byte_count));
+         " pri%"PRIu16" secs%"PRIu32" idle%"PRIu16" pkts%"PRIu64
+         " bytes%"PRIu64"\n", 
+         ofr->match.wildcards ? ntohs(ofr->priority) : (uint16_t)-1,
+         ntohl(ofr->duration), ntohs(ofr->idle_timeout),
+         ntohll(ofr->packet_count), ntohll(ofr->byte_count));
 }
 
 static void
@@ -1327,10 +1327,10 @@ static const struct openflow_packet packets[] = {
         ofp_print_flow_mod,
     },
     {
-        OFPT_FLOW_EXPIRED,
-        "flow_expired",
-        sizeof (struct ofp_flow_expired),
-        ofp_print_flow_expired,
+        OFPT_FLOW_REMOVED,
+        "flow_removed",
+        sizeof (struct ofp_flow_removed),
+        ofp_print_flow_removed,
     },
     {
         OFPT_PORT_MOD,

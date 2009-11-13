@@ -999,12 +999,10 @@ do_monitor(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
     open_vconn(argv[1], &vconn);
     if (argc > 2) {
         int miss_send_len = atoi(argv[2]);
-        int send_flow_exp = argc > 3 ? atoi(argv[3]) : 0;
         struct ofp_switch_config *osc;
         struct ofpbuf *buf;
 
         osc = make_openflow(sizeof *osc, OFPT_SET_CONFIG, &buf);
-        osc->flags = htons(send_flow_exp ? OFPC_SEND_FLOW_EXP : 0);
         osc->miss_send_len = htons(miss_send_len);
         send_openflow_buffer(vconn, buf);
     }

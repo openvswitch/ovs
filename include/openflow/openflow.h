@@ -95,7 +95,7 @@ enum ofp_type {
 
     /* Asynchronous messages. */
     OFPT_PACKET_IN,           /* Async message */
-    OFPT_FLOW_EXPIRED,        /* Async message */
+    OFPT_FLOW_REMOVED,        /* Async message */
     OFPT_PORT_STATUS,         /* Async message */
 
     /* Controller command messages. */
@@ -128,9 +128,6 @@ struct ofp_hello {
 #define OFP_DEFAULT_MISS_SEND_LEN   128
 
 enum ofp_config_flags {
-    /* Tells datapath to notify the controller of expired flow entries. */
-    OFPC_SEND_FLOW_EXP = 1 << 0,
-
     /* Handling of IP fragments. */
     OFPC_FRAG_NORMAL   = 0 << 1,  /* No special handling for fragments. */
     OFPC_FRAG_DROP     = 1 << 1,  /* Drop fragments. */
@@ -560,27 +557,29 @@ struct ofp_flow_mod {
 };
 OFP_ASSERT(sizeof(struct ofp_flow_mod) == 68);
 
-/* Why did this flow expire? */
-enum ofp_flow_expired_reason {
-    OFPER_IDLE_TIMEOUT,         /* Flow idle time exceeded idle_timeout. */
-    OFPER_HARD_TIMEOUT          /* Time exceeded hard_timeout. */
+/* Why was this flow removed? */
+enum ofp_flow_removed_reason {
+    OFPRR_IDLE_TIMEOUT,         /* Flow idle time exceeded idle_timeout. */
+    OFPRR_HARD_TIMEOUT,         /* Time exceeded hard_timeout. */
+    OFPRR_DELETE                /* Evicted by a DELETE flow mod. */
 };
 
-/* Flow expiration (datapath -> controller). */
-struct ofp_flow_expired {
+/* Flow removed (datapath -> controller). */
+struct ofp_flow_removed {
     struct ofp_header header;
     struct ofp_match match;   /* Description of fields. */
 
     uint16_t priority;        /* Priority level of flow entry. */
-    uint8_t reason;           /* One of OFPER_*. */
+    uint8_t reason;           /* One of OFPRR_*. */
     uint8_t pad[1];           /* Align to 32-bits. */
 
     uint32_t duration;        /* Time flow was alive in seconds. */
-    uint8_t pad2[4];          /* Align to 64-bits. */
+    uint16_t idle_timeout;    /* Idle timeout from original flow mod. */
+    uint8_t pad2[6];          /* Align to 64-bits. */
     uint64_t packet_count;    
     uint64_t byte_count;
 };
-OFP_ASSERT(sizeof(struct ofp_flow_expired) == 76);
+OFP_ASSERT(sizeof(struct ofp_flow_removed) == 80);
 
 /* Values for 'type' in ofp_error_message.  These values are immutable: they
  * will not change in future versions of the protocol (although new values may

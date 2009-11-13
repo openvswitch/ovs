@@ -89,6 +89,7 @@ struct rule {
 
     uint16_t idle_timeout;      /* In seconds from time of last use. */
     uint16_t hard_timeout;      /* In seconds from time of creation. */
+    bool send_flow_removed;     /* Send a flow removed message? */
     long long int used;         /* Last-used time (0 if never used). */
     long long int created;      /* Creation time. */
     uint64_t packet_count;      /* Number of packets received. */
@@ -146,7 +147,8 @@ rule_is_hidden(const struct rule *rule)
 
 static struct rule *rule_create(struct ofproto *, struct rule *super,
                                 const union ofp_action *, size_t n_actions,
-                                uint16_t idle_timeout, uint16_t hard_timeout);
+                                uint16_t idle_timeout, uint16_t hard_timeout,
+                                bool send_flow_removed);
 static void rule_free(struct rule *);
 static void rule_destroy(struct ofproto *, struct rule *);
 static struct rule *rule_from_cls_rule(const struct cls_rule *);
@@ -159,12 +161,13 @@ static void rule_install(struct ofproto *, struct rule *,
                          struct rule *displaced_rule);
 static void rule_uninstall(struct ofproto *, struct rule *);
 static void rule_post_uninstall(struct ofproto *, struct rule *);
+static void send_flow_removed(struct ofproto *p, struct rule *rule,
+                              long long int now, uint8_t reason);
 
 struct ofconn {
     struct list node;
     struct rconn *rconn;
     struct pktbuf *pktbuf;
-    bool send_flow_exp;
     int miss_send_len;
 
     struct rconn_packet_counter *packet_in_counter;
@@ -991,7 +994,8 @@ ofproto_add_flow(struct ofproto *p,
 {
     struct rule *rule;
     rule = rule_create(p, NULL, actions, n_actions,
-                       idle_timeout >= 0 ? idle_timeout : 5 /* XXX */, 0);
+                       idle_timeout >= 0 ? idle_timeout : 5 /* XXX */, 
+                       0, false);
     cls_rule_from_flow(&rule->cr, flow, wildcards, priority);
     rule_insert(p, rule, NULL, 0);
 }
@@ -1320,7 +1324,6 @@ ofconn_create(struct ofproto *p, struct rconn *rconn)
     list_push_back(&p->all_conns, &ofconn->node);
     ofconn->rconn = rconn;
     ofconn->pktbuf = NULL;
-    ofconn->send_flow_exp = false;
     ofconn->miss_send_len = 0;
     ofconn->packet_in_counter = rconn_packet_counter_create ();
     ofconn->reply_counter = rconn_packet_counter_create ();
@@ -1386,12 +1389,14 @@ ofconn_wait(struct ofconn *ofconn)
 static struct rule *
 rule_create(struct ofproto *ofproto, struct rule *super,
             const union ofp_action *actions, size_t n_actions,
-            uint16_t idle_timeout, uint16_t hard_timeout)
+            uint16_t idle_timeout, uint16_t hard_timeout,
+            bool send_flow_removed)
 {
     struct rule *rule = xcalloc(1, sizeof *rule);
     rule->idle_timeout = idle_timeout;
     rule->hard_timeout = hard_timeout;
     rule->used = rule->created = time_msec();
+    rule->send_flow_removed = send_flow_removed;
     rule->super = super;
     if (super) {
         list_push_back(&super->list, &rule->list);
@@ -1551,7 +1556,8 @@ rule_create_subrule(struct ofproto *ofproto, struct rule *rule,
                     const flow_t *flow)
 {
     struct rule *subrule = rule_create(ofproto, rule, NULL, 0,
-                                       rule->idle_timeout, rule->hard_timeout);
+                                       rule->idle_timeout, rule->hard_timeout,
+                                       false);
     COVERAGE_INC(ofproto_subrule_create);
     cls_rule_from_flow(&subrule->cr, flow, 0,
                        (rule->cr.priority <= UINT16_MAX ? UINT16_MAX
@@ -1870,9 +1876,6 @@ handle_get_config_request(struct ofproto *p, struct ofconn *ofconn,
     /* Figure out flags. */
     dpif_get_drop_frags(p->dpif, &drop_frags);
     flags = drop_frags ? OFPC_FRAG_DROP : OFPC_FRAG_NORMAL;
-    if (ofconn->send_flow_exp) {
-        flags |= OFPC_SEND_FLOW_EXP;
-    }
 
     /* Send reply. */
     osc = make_openflow_xid(sizeof *osc, OFPT_GET_CONFIG_REPLY, oh->xid, &buf);
@@ -1895,8 +1898,6 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
         return error;
     }
     flags = ntohs(osc->flags);
-
-    ofconn->send_flow_exp = (flags & OFPC_SEND_FLOW_EXP) != 0;
 
     if (ofconn == p->controller) {
         switch (flags & OFPC_FRAG_MASK) {
@@ -2803,7 +2804,8 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
 
     rule = rule_create(p, NULL, (const union ofp_action *) ofm->actions,
                        n_actions, ntohs(ofm->idle_timeout),
-                       ntohs(ofm->hard_timeout));
+                       ntohs(ofm->hard_timeout),
+                       ofm->flags & htons(OFPFF_SEND_FLOW_REM));
     cls_rule_from_match(&rule->cr, &ofm->match, ntohs(ofm->priority));
 
     packet = NULL;
@@ -2827,6 +2829,8 @@ modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
     }
 
     if (command == OFPFC_DELETE) {
+        long long int now = time_msec();
+        send_flow_removed(p, rule, now, OFPRR_DELETE);
         rule_remove(p, rule);
     } else {
         size_t actions_len = n_actions * sizeof *rule->actions;
@@ -3260,51 +3264,22 @@ revalidate_rule(struct ofproto *p, struct rule *rule)
 }
 
 static struct ofpbuf *
-compose_flow_exp(const struct rule *rule, long long int now, uint8_t reason)
+compose_flow_removed(const struct rule *rule, long long int now, uint8_t reason)
 {
-    struct ofp_flow_expired *ofe;
+    struct ofp_flow_removed *ofr;
     struct ofpbuf *buf;
     long long int last_used = rule->used ? now - rule->used : 0;
 
-    ofe = make_openflow(sizeof *ofe, OFPT_FLOW_EXPIRED, &buf);
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofe->match);
-    ofe->priority = htons(rule->cr.priority);
-    ofe->reason = reason;
-    ofe->duration = htonl((now - rule->created - last_used) / 1000);
-    ofe->packet_count = htonll(rule->packet_count);
-    ofe->byte_count = htonll(rule->byte_count);
+    ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
+    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofr->match);
+    ofr->priority = htons(rule->cr.priority);
+    ofr->reason = reason;
+    ofr->duration = htonl((now - rule->created - last_used) / 1000);
+    ofr->idle_timeout = htons(rule->idle_timeout);
+    ofr->packet_count = htonll(rule->packet_count);
+    ofr->byte_count = htonll(rule->byte_count);
 
     return buf;
-}
-
-static void
-send_flow_exp(struct ofproto *p, struct rule *rule,
-              long long int now, uint8_t reason)
-{
-    struct ofconn *ofconn;
-    struct ofconn *prev;
-    struct ofpbuf *buf = NULL;
-
-    /* We limit the maximum number of queued flow expirations it by accounting
-     * them under the counter for replies.  That works because preventing
-     * OpenFlow requests from being processed also prevents new flows from
-     * being added (and expiring).  (It also prevents processing OpenFlow
-     * requests that would not add new flows, so it is imperfect.) */
-
-    prev = NULL;
-    LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
-        if (ofconn->send_flow_exp && rconn_is_connected(ofconn->rconn)) {
-            if (prev) {
-                queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
-            } else {
-                buf = compose_flow_exp(rule, now, reason);
-            }
-            prev = ofconn;
-        }
-    }
-    if (prev) {
-        queue_tx(buf, prev, prev->reply_counter);
-    }
 }
 
 static void
@@ -3319,6 +3294,36 @@ uninstall_idle_flow(struct ofproto *ofproto, struct rule *rule)
         rule_uninstall(ofproto, rule);
     }
 }
+static void
+send_flow_removed(struct ofproto *p, struct rule *rule,
+                  long long int now, uint8_t reason)
+{
+    struct ofconn *ofconn;
+    struct ofconn *prev;
+    struct ofpbuf *buf = NULL;
+
+    /* We limit the maximum number of queued flow expirations it by accounting
+     * them under the counter for replies.  That works because preventing
+     * OpenFlow requests from being processed also prevents new flows from
+     * being added (and expiring).  (It also prevents processing OpenFlow
+     * requests that would not add new flows, so it is imperfect.) */
+
+    prev = NULL;
+    LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
+        if (rule->send_flow_removed && rconn_is_connected(ofconn->rconn)) {
+            if (prev) {
+                queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
+            } else {
+                buf = compose_flow_removed(rule, now, reason);
+            }
+            prev = ofconn;
+        }
+    }
+    if (prev) {
+        queue_tx(buf, prev, prev->reply_counter);
+    }
+}
+
 
 static void
 expire_rule(struct cls_rule *cls_rule, void *p_)
@@ -3361,9 +3366,9 @@ expire_rule(struct cls_rule *cls_rule, void *p_)
     }
 
     if (!rule_is_hidden(rule)) {
-        send_flow_exp(p, rule, now,
-                      (now >= hard_expire
-                       ? OFPER_HARD_TIMEOUT : OFPER_IDLE_TIMEOUT));
+        send_flow_removed(p, rule, now,
+                          (now >= hard_expire
+                           ? OFPRR_HARD_TIMEOUT : OFPRR_IDLE_TIMEOUT));
     }
     rule_remove(p, rule);
 }
