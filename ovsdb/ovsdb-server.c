@@ -57,8 +57,10 @@ main(int argc, char *argv[])
     struct svec active, passive;
     struct ovsdb_error *error;
     struct ovsdb *db;
+    const char *name;
     char *file_name;
     int retval;
+    size_t i;
 
     set_program_name(argv[0]);
     register_fault_handlers();
@@ -74,9 +76,15 @@ main(int argc, char *argv[])
         ovs_fatal(0, "%s", ovsdb_error_to_string(error));
     }
 
-    retval = ovsdb_jsonrpc_server_create(db, &active, &passive, &jsonrpc);
-    if (retval) {
-        ovs_fatal(retval, "failed to initialize JSON-RPC server for OVSDB");
+    jsonrpc = ovsdb_jsonrpc_server_create(db);
+    SVEC_FOR_EACH (i, name, &active) {
+        ovsdb_jsonrpc_server_connect(jsonrpc, name);
+    }
+    SVEC_FOR_EACH (i, name, &passive) {
+        retval = ovsdb_jsonrpc_server_listen(jsonrpc, name);
+        if (retval) {
+            ovs_fatal(retval, "failed to listen on %s", name);
+        }
     }
     svec_destroy(&active);
     svec_destroy(&passive);

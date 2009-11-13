@@ -17,12 +17,14 @@
 #define OVSDB_JSONRPC_SERVER_H 1
 
 struct ovsdb;
-struct ovsdb_jsonrpc_server;
-struct svec;
 
-int ovsdb_jsonrpc_server_create(struct ovsdb *, const struct svec *active,
-                                const struct svec *passive,
-                                struct ovsdb_jsonrpc_server **);
+struct ovsdb_jsonrpc_server *ovsdb_jsonrpc_server_create(struct ovsdb *);
+
+int ovsdb_jsonrpc_server_listen(struct ovsdb_jsonrpc_server *,
+                                const char *name);
+void ovsdb_jsonrpc_server_connect(struct ovsdb_jsonrpc_server *,
+                                  const char *name);
+
 void ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *);
 void ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *);
 
