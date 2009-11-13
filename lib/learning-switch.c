@@ -283,8 +283,8 @@ lswitch_process_packet(struct lswitch *sw, struct rconn *rconn,
             process_stats_reply
         },
         {
-            OFPT_FLOW_EXPIRED,
-            sizeof(struct ofp_flow_expired),
+            OFPT_FLOW_REMOVED,
+            sizeof(struct ofp_flow_removed),
             NULL
         },
     };
@@ -337,7 +337,6 @@ send_features_request(struct lswitch *sw, struct rconn *rconn)
 
         /* Send OFPT_SET_CONFIG. */
         osc = make_openflow(sizeof *osc, OFPT_SET_CONFIG, &b);
-        osc->flags = htons(OFPC_SEND_FLOW_EXP);
         osc->miss_send_len = htons(OFP_DEFAULT_MISS_SEND_LEN);
         queue_tx(sw, rconn, b);
 

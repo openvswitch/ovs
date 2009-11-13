@@ -136,7 +136,7 @@ switch's tables are removed.  See \fBFlow Syntax\fR, below, for the
 syntax of \fIflows\fR.
 
 .TP
-\fBmonitor \fIswitch\fR [\fImiss-len\fR [\fIsend-exp]]
+\fBmonitor \fIswitch\fR [\fImiss-len\fR]
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Usually, \fIswitch\fR should specify a connection
 named on \fBovs\-openflowd\fR(8)'s \fB-l\fR or \fB--listen\fR command line
@@ -148,11 +148,6 @@ configuration'' message at connection setup time that requests
 OpenFlow reference implementation does not send these messages to the
 \fBovs\-ofctl monitor\fR client connection unless a nonzero value is
 specified on this argument.
-
-If \fIsend-exp\fR is specified as \fB1\fR, \fBovs\-ofctl\fR will also
-request to be sent flow expiration messages.  If this argument is
-omitted, or \fB0\fR is specified, then \fRovs\-ofctl\fR will not request
-flow expirations.
 
 This command may be useful for debugging switch or controller
 implementations.
