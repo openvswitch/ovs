@@ -105,7 +105,11 @@ enum ofp_type {
 
     /* Statistics messages. */
     OFPT_STATS_REQUEST,       /* Controller/switch message */
-    OFPT_STATS_REPLY          /* Controller/switch message */
+    OFPT_STATS_REPLY,         /* Controller/switch message */
+
+    /* Barrier messages. */
+    OFPT_BARRIER_REQUEST,     /* Controller/switch message */
+    OFPT_BARRIER_REPLY        /* Controller/switch message */
 };
 
 /* Header on all OpenFlow packets. */
