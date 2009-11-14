@@ -2733,6 +2733,9 @@ update_time(struct ofproto *ofproto, struct rule *rule,
     long long int used = msec_from_nsec(stats->used_sec, stats->used_nsec);
     if (used > rule->used) {
         rule->used = used;
+        if (rule->super && used > rule->super->used) {
+            rule->super->used = used;
+        }
         netflow_flow_update_time(ofproto->netflow, &rule->nf_flow, used);
     }
 }
