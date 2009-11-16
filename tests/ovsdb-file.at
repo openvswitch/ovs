@@ -1,0 +1,30 @@
+AT_BANNER([OVSDB -- file storage])
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates a database with the given SCHEMA and runs each of the
+# TRANSACTIONS (which should be a quoted list of quoted strings)
+# against it with ovsdb-tool one at a time.  
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb file positive $5])
+   AT_DATA([schema], [$2
+])
+   touch .db.~lock~
+   OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   m4_foreach([txn], [$3], 
+     [OVS_CHECK_LCOV([ovsdb-tool transact db 'txn'], [0], [stdout], [ignore])
+cat stdout >> output
+])
+   AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$4])
+   AT_CLEANUP])
+
+EXECUTION_EXAMPLES

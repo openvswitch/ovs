@@ -1,3 +1,11 @@
+# OVSDB_CHECK_POSITIVE(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ])
+#
+# Runs "test-ovsdb TEST-OVSDB-ARGS" and checks that it exits with
+# status 0 and prints OUTPUT on stdout.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.  If
+# PREREQ is specified then the test is skipped if the Autoconf version
+# is less than PREREQ.
 m4_define([OVSDB_CHECK_POSITIVE], 
   [AT_SETUP([$1])
    m4_if([$5], [], [], 
@@ -7,6 +15,11 @@ m4_define([OVSDB_CHECK_POSITIVE],
 ], [])
    AT_CLEANUP])
 
+# OVSDB_CHECK_NEGATIVE(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ])
+#
+# Runs "test-ovsdb TEST-OVSDB-ARGS" and checks that it exits with
+# status 1 and that its output on stdout contains substring OUTPUT.
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.  
 m4_define([OVSDB_CHECK_NEGATIVE], 
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb negative $4])
@@ -33,3 +46,5 @@ m4_include([tests/ovsdb-query.at])
 m4_include([tests/ovsdb-transaction.at])
 m4_include([tests/ovsdb-execution.at])
 m4_include([tests/ovsdb-trigger.at])
+m4_include([tests/ovsdb-file.at])
+m4_include([tests/ovsdb-server.at])

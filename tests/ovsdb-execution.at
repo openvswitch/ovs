@@ -1,51 +1,60 @@
 AT_BANNER([OVSDB -- execution])
 
 m4_define([ORDINAL_SCHEMA],
-  [['{"name": "mydb",
+  [[{"name": "mydb",
      "tables": {
        "ordinals": {
          "columns": {
            "number": {"type": "integer"},
-           "name": {"type": "string"}}}}}']])
+           "name": {"type": "string"}}}}}]])
 
-# This is like OVSDB_CHECK_POSITIVE, except that UUIDs in the output
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Runs "test-ovsdb execute" with the given SCHEMA and each of the
+# TRANSACTIONS (which should be a quoted list of quoted strings).
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
 # are replaced by markers of the form <N> where N is a number.  The
 # first unique UUID is replaced by <0>, the next by <1>, and so on.
 # If a given UUID appears more than once it is always replaced by the
 # same marker.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_EXECUTION], 
   [AT_SETUP([$1])
-   AT_KEYWORDS([ovsdb execute execution positive $4])
-   OVS_CHECK_LCOV([test-ovsdb execute $2], [0], [stdout], [])
-   AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [$3])
+   AT_KEYWORDS([ovsdb execute execution positive $5])
+   OVS_CHECK_LCOV([test-ovsdb execute '$2' m4_foreach([txn], [$3], [ 'txn'])],
+     [0], [stdout], [])
+   AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [$4])
    AT_CLEANUP])
 
+m4_define([EXECUTION_EXAMPLES], [
 OVSDB_CHECK_EXECUTION([insert row, query table],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA], 
+  [[[[{"op": "insert",
        "table": "ordinals",
-       "row": {"number": 0, "name": "zero"}}]' \
-    '[{"op": "select",
+       "row": {"number": 0, "name": "zero"}}]]],
+   [[[{"op": "select",
        "table": "ordinals",
-       "where": []}]']],
+       "where": []}]]]],
   [[[{"uuid":["uuid","<0>"]}]
 [{"rows":[{"_uuid":["uuid","<0>"],"_version":["uuid","<1>"],"name":"zero","number":0}]}]
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, query by value],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
-       "row": {"number": 0, "name": "zero"}}]' \
-    '[{"op": "insert",
+       "row": {"number": 0, "name": "zero"}}]]],
+   [[[{"op": "insert",
        "table": "ordinals",
-       "row": {"number": 1, "name": "one"}}]' \
-    '[{"op": "select",
+       "row": {"number": 1, "name": "one"}}]]],
+   [[[{"op": "select",
        "table": "ordinals",
-       "where": [["name", "==", "zero"]]}]'\ 
-    '[{"op": "select",
+       "where": [["name", "==", "zero"]]}]]],
+   [[[{"op": "select",
        "table": "ordinals",
-       "where": [["name", "==", "one"]]}]']],
+       "where": [["name", "==", "one"]]}]]]],
   [[[{"uuid":["uuid","<0>"]}]
 [{"uuid":["uuid","<1>"]}]
 [{"rows":[{"_uuid":["uuid","<0>"],"_version":["uuid","<2>"],"name":"zero","number":0}]}]
@@ -53,8 +62,8 @@ OVSDB_CHECK_EXECUTION([insert rows, query by value],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, query by named-uuid],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"},
        "uuid-name": "first"},
@@ -67,28 +76,28 @@ OVSDB_CHECK_EXECUTION([insert rows, query by named-uuid],
        "where": [["_uuid", "==", ["named-uuid", "first"]]]},
       {"op": "select",
        "table": "ordinals",
-       "where": [["_uuid", "==", ["named-uuid", "second"]]]}]']],
+       "where": [["_uuid", "==", ["named-uuid", "second"]]]}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"rows":[{"_uuid":["uuid","<0>"],"_version":["uuid","<2>"],"name":"zero","number":0}]},{"rows":[{"_uuid":["uuid","<1>"],"_version":["uuid","<3>"],"name":"one","number":1}]}]
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, update rows by value],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"},
-       "uuid-name": "first"}]' \
-    '[{"op": "insert",
+       "uuid-name": "first"}]]],
+   [[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 1, "name": "one"},
-       "uuid-name": "first"}]' \
-    '[{"op": "update",
+       "uuid-name": "first"}]]],
+   [[[{"op": "update",
        "table": "ordinals",
        "where": [["name", "==", "zero"]],
-       "row": {"name": "nought"}}]' \
-    '[{"op": "select",
+       "row": {"name": "nought"}}]]],
+   [[[{"op": "select",
        "table": "ordinals",
        "where": [],
-       "sort": ["number"]}]']],
+       "sort": ["number"]}]]]],
   [[[{"uuid":["uuid","<0>"]}]
 [{"uuid":["uuid","<1>"]}]
 [{"count":1}]
@@ -96,8 +105,8 @@ OVSDB_CHECK_EXECUTION([insert rows, update rows by value],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, delete by named-uuid],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"},
        "uuid-name": "first"},
@@ -111,26 +120,26 @@ OVSDB_CHECK_EXECUTION([insert rows, delete by named-uuid],
       {"op": "select",
        "table": "ordinals",
        "where": [],
-       "columns": ["name","number"]}]']],
+       "columns": ["name","number"]}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"count":1},{"rows":[{"name":"one","number":1}]}]
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, delete rows by value],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"},
-       "uuid-name": "first"}]' \
-    '[{"op": "insert",
+       "uuid-name": "first"}]]],
+   [[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 1, "name": "one"},
-       "uuid-name": "first"}]' \
-    '[{"op": "delete",
+       "uuid-name": "first"}]]],
+   [[[{"op": "delete",
        "table": "ordinals",
-       "where": [["name", "==", "zero"]]}]' \
-    '[{"op": "select",
+       "where": [["name", "==", "zero"]]}]]],
+   [[[{"op": "select",
        "table": "ordinals",
-       "where": []}]']],
+       "where": []}]]]],
   [[[{"uuid":["uuid","<0>"]}]
 [{"uuid":["uuid","<1>"]}]
 [{"count":1}]
@@ -138,22 +147,22 @@ OVSDB_CHECK_EXECUTION([insert rows, delete rows by value],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, delete by (non-matching) value],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"},
-       "uuid-name": "first"}]' \
-    '[{"op": "insert",
+       "uuid-name": "first"}]]],
+   [[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 1, "name": "one"},
-       "uuid-name": "first"}]' \
-    '[{"op": "delete",
+       "uuid-name": "first"}]]],
+   [[[{"op": "delete",
        "table": "ordinals",
-       "where": [["name", "==", "nought"]]}]' \
-    '[{"op": "select",
+       "where": [["name", "==", "nought"]]}]]],
+   [[[{"op": "select",
        "table": "ordinals",
        "where": [],
-       "sort": ["number"]}]']],
+       "sort": ["number"]}]]]],
   [[[{"uuid":["uuid","<0>"]}]
 [{"uuid":["uuid","<1>"]}]
 [{"count":0}]
@@ -161,8 +170,8 @@ OVSDB_CHECK_EXECUTION([insert rows, delete by (non-matching) value],
 ]])
 
 OVSDB_CHECK_EXECUTION([insert rows, delete all],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"},
        "uuid-name": "first"},
@@ -176,39 +185,39 @@ OVSDB_CHECK_EXECUTION([insert rows, delete all],
       {"op": "select",
        "table": "ordinals",
        "where": [],
-       "columns": ["name","number"]}]']],
+       "columns": ["name","number"]}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"count":2},{"rows":[]}]
 ]])
 
 OVSDB_CHECK_EXECUTION([insert row, query table, commit],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "select",
        "table": "ordinals",
        "where": []},
       {"op": "commit",
-       "durable": false}]']],
+       "durable": false}]]]],
   [[[{"uuid":["uuid","<0>"]},{"rows":[{"_uuid":["uuid","<0>"],"_version":["uuid","<1>"],"name":"zero","number":0}]},{}]
 ]])
 
 OVSDB_CHECK_EXECUTION([insert row, query table, commit durably],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "select",
        "table": "ordinals",
        "where": []},
       {"op": "commit",
-       "durable": true}]']],
+       "durable": true}]]]],
   [[[{"uuid":["uuid","<0>"]},{"rows":[{"_uuid":["uuid","<0>"],"_version":["uuid","<1>"],"name":"zero","number":0}]},{}]
 ]])
 
 OVSDB_CHECK_EXECUTION([equality wait with correct rows],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "insert",
@@ -221,13 +230,13 @@ OVSDB_CHECK_EXECUTION([equality wait with correct rows],
        "columns": ["name", "number"],
        "until": "==",
        "rows": [{"name": "zero", "number": 0},
-                {"name": "one", "number": 1}]}]']],
+                {"name": "one", "number": 1}]}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{}]
 ]])
 
 OVSDB_CHECK_EXECUTION([equality wait with extra row],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "insert",
@@ -241,13 +250,13 @@ OVSDB_CHECK_EXECUTION([equality wait with extra row],
        "until": "==",
        "rows": [{"name": "zero", "number": 0},
                 {"name": "one", "number": 1},
-                {"name": "two", "number": 2}]}]']],
+                {"name": "two", "number": 2}]}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"wait\" timed out","error":"timed out"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([equality wait with missing row],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "insert",
@@ -259,13 +268,13 @@ OVSDB_CHECK_EXECUTION([equality wait with missing row],
        "where": [],
        "columns": ["name", "number"],
        "until": "==",
-       "rows": [{"name": "one", "number": 1}]}]']],
+       "rows": [{"name": "one", "number": 1}]}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"wait\" timed out","error":"timed out"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([inequality wait with correct rows],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "insert",
@@ -278,13 +287,13 @@ OVSDB_CHECK_EXECUTION([inequality wait with correct rows],
        "columns": ["name", "number"],
        "until": "!=",
        "rows": [{"name": "zero", "number": 0},
-                {"name": "one", "number": 1}]}]']],
+                {"name": "one", "number": 1}]}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"wait\" timed out","error":"timed out"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([inequality wait with extra row],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "insert",
@@ -298,13 +307,13 @@ OVSDB_CHECK_EXECUTION([inequality wait with extra row],
        "until": "!=",
        "rows": [{"name": "zero", "number": 0},
                 {"name": "one", "number": 1},
-                {"name": "two", "number": 2}]}]']],
+                {"name": "two", "number": 2}]}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{}]
 ]])
 
 OVSDB_CHECK_EXECUTION([inequality wait with missing row],
-  [ORDINAL_SCHEMA [\
-    '[{"op": "insert",
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "insert",
@@ -316,6 +325,9 @@ OVSDB_CHECK_EXECUTION([inequality wait with missing row],
        "where": [],
        "columns": ["name", "number"],
        "until": "!=",
-       "rows": [{"name": "one", "number": 1}]}]']],
+       "rows": [{"name": "one", "number": 1}]}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{}]
 ]])
+])
+
+EXECUTION_EXAMPLES

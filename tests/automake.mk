@@ -28,6 +28,8 @@ TESTSUITE_AT = \
 	tests/ovsdb-transaction.at \
 	tests/ovsdb-execution.at \
 	tests/ovsdb-trigger.at \
+	tests/ovsdb-file.at \
+	tests/ovsdb-server.at \
 	tests/stp.at \
 	tests/ovs-vsctl.at \
 	tests/lcov-post.at
@@ -35,7 +37,7 @@ TESTSUITE = $(srcdir)/tests/testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal $(TESTSUITE)
 
 check-local: tests/atconfig tests/atlocal $(TESTSUITE)
-	$(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH='utilities:vswitchd:tests' $(TESTSUITEFLAGS)
+	$(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH='utilities:vswitchd:ovsdb:tests' $(TESTSUITEFLAGS)
 
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean
