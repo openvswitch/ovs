@@ -61,7 +61,7 @@ void ovsdb_parser_init(struct ovsdb_parser *, const struct json *,
                        const char *name, ...)
     PRINTF_FORMAT(3, 4);
 const struct json *ovsdb_parser_member(struct ovsdb_parser *, const char *name,
-                                     enum ovsdb_parser_types);
+                                       enum ovsdb_parser_types);
 
 void ovsdb_parser_raise_error(struct ovsdb_parser *parser,
                               const char *format, ...)
