@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <signal.h>
+#include <unistd.h>
 
 #include "command-line.h"
 #include "daemon.h"
@@ -59,6 +60,7 @@ main(int argc, char *argv[])
     struct ovsdb *db;
     const char *name;
     char *file_name;
+    bool do_chdir;
     int retval;
     size_t i;
 
@@ -70,6 +72,20 @@ main(int argc, char *argv[])
     process_init();
 
     parse_options(argc, argv, &file_name, &active, &passive);
+
+    if (get_detach() && is_chdir_enabled()) {
+        /* We need to skip chdir("/") in daemonize() and do it later, because
+         * we need to open the database and possible set up up Unix domain
+         * sockets in the current working directory after we daemonize.  We
+         * can't open the database before we daemonize because file locks
+         * aren't inherited by child processes.  */
+        do_chdir = true;
+        set_no_chdir();
+    } else {
+        do_chdir = false;
+    }
+    die_if_already_running();
+    daemonize();
 
     error = ovsdb_file_open(file_name, false, &db);
     if (error) {
@@ -89,14 +105,14 @@ main(int argc, char *argv[])
     svec_destroy(&active);
     svec_destroy(&passive);
 
-    die_if_already_running();
-    daemonize();
-
     retval = unixctl_server_create(NULL, &unixctl);
     if (retval) {
         ovs_fatal(retval, "could not listen for control connections");
     }
 
+    if (do_chdir) {
+        chdir("/");
+    }
     for (;;) {
         ovsdb_jsonrpc_server_run(jsonrpc);
         unixctl_server_run(unixctl);

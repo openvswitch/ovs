@@ -81,6 +81,13 @@ set_no_chdir(void)
     chdir_ = false;
 }
 
+/* Will we chdir to "/" as part of daemonizing? */
+bool
+is_chdir_enabled(void)
+{
+    return chdir_;
+}
+
 /* Normally, die_if_already_running() will terminate the program with a message
  * if a locked pidfile already exists.  If this function is called,
  * die_if_already_running() will merely log a warning. */
@@ -96,6 +103,13 @@ void
 set_detach(void)
 {
     detach = true;
+}
+
+/* Will daemonize() really detach? */
+bool
+get_detach(void)
+{
+    return detach;
 }
 
 /* If a pidfile has been configured and that pidfile already exists and is
