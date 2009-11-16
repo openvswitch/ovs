@@ -174,6 +174,19 @@ error:
                               "array of distinct column names expected");
 }
 
+struct json *
+ovsdb_column_set_to_json(const struct ovsdb_column_set *set)
+{
+    struct json *json;
+    size_t i;
+
+    json = json_array_create_empty();
+    for (i = 0; i < set->n_columns; i++) {
+        json_array_add(json, json_string_create(set->columns[i]->name));
+    }
+    return json;
+}
+
 void
 ovsdb_column_set_add(struct ovsdb_column_set *set,
                      const struct ovsdb_column *column)

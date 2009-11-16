@@ -281,6 +281,134 @@ form:
 
 The "cancel" notification itself has no reply.
 
+monitor
+.......
+
+Request object members:
+
+    "method": "monitor"                        required
+    "params": [<value>, <monitor-requests>]    required
+    "id": any JSON value except null           required
+
+<monitor-requests> is an object that maps from a table name to a
+<monitor-request>.
+
+Each <monitor-request> is an object with the following members:
+
+    "columns": [<column>*]            optional
+    "select": <monitor-select>        optional
+
+<monitor-select> is an object with the following members:
+
+    "initial": <boolean>              optional
+    "insert": <boolean>               optional
+    "delete": <boolean>               optional
+    "modify": <boolean>               optional
+
+Response object members:
+
+    "result": <table-updates>
+    "error": null
+    "id": same "id" as request
+
+This JSON-RPC request enables a client to replicate tables or subsets
+of tables.  Each <monitor-request> specifies a table to be replicated.
+The JSON-RPC response to the "monitor" includes the initial contents
+of each table.  Afterward, when changes to those tables are committed,
+the changes are automatically sent to the client using the "update"
+monitor notification.  This monitoring persists until the JSON-RPC
+session terminates or until the client sends a "monitor_cancel"
+JSON-RPC request.
+
+Each <monitor-request> describes how to monitor a table:
+
+    The circumstances in which an "update" notification is sent for a
+    row within the table are determined by <monitor-select>:
+
+        If "initial" is omitted or true, every row in the table is
+        sent as part of the reply to the "monitor" request.
+
+        If "insert" is omitted or true, "update" notifications are
+        sent for rows newly inserted into the table.
+
+        If "delete" is omitted or true, "update" notifications are
+        sent for rows deleted from the table.
+
+        If "modify" is omitted or true, "update" notifications are
+        sent whenever when a row in the table is modified.
+
+    The "columns" member specifies the columns whose values are
+    monitored.  If "columns" is omitted, all columns in the table,
+    except for "_uuid", are monitored.
+
+The "result" in the JSON-RPC response to the "monitor" request is a
+<table-updates> object (see below) that contains the contents of the
+tables for which "initial" rows are selected.  If no tables' initial
+contents are requested, then "result" is an empty object.
+
+update
+......
+
+Notification object members:
+
+    "method": "update"
+    "params": [<value>, <table-updates>]
+    "id": null
+
+The <value> in "params" is the same as the value passed as the <value>
+in "params" for the "monitor" request.
+
+<table-updates> is an object that maps from a table name to a
+<table-update>.
+
+A <table-update> is an object that maps from the row's UUID (as a
+36-byte string) to a <row-update> object.
+
+A <row-update> is an object with the following members:
+
+    "old": <row>         present for "delete" and "modify" updates
+    "new": <row>         present for "initial", "insert", and "modify" updates
+
+This JSON-RPC notification is sent from the server to the client to
+tell it about changes to a monitored table (or the initial state of a
+modified table).  Each table in which one or more rows has changed (or
+whose initial view is being presented) is represented in "updates".
+Each row that has changed (or whose initial view is being presented)
+is represented in its <table-update> as a member with its name taken
+from the row's _uuid member.  The corresponding value is a
+<row-update>:
+
+    The "old" member is present for "delete" and "modify" updates.
+    For "delete" updates, each monitored column is included.  For
+    "modify" updates, the prior value of each monitored column whose
+    value has changed is included (monitored columns that have not
+    changed are represented in "new").
+
+    The "new" member is present for "initial", "insert", and "modify"
+    updates.  For "initial" and "insert" updates, each monitored
+    column is included.  For "modify" updates, the new value of each
+    monitored column is included.
+
+monitor_cancel
+..............
+
+Request object members:
+
+    "method": "monitor_cancel"                              required
+    "params": [<value>]                                     required
+    "id": any JSON value except null                        required
+
+Response object members:
+
+    "result": {}
+    "error": null
+    "id": the request "id" member
+
+Cancels the ongoing table monitor request, identified by the <value>
+in "params" matching the <value> in "params" for an ongoing "monitor"
+request.  No more "update" messages will be sent for this table
+monitor.
+
 echo
 ....
 

@@ -30,6 +30,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-trigger.at \
 	tests/ovsdb-file.at \
 	tests/ovsdb-server.at \
+	tests/ovsdb-monitor.at \
 	tests/stp.at \
 	tests/ovs-vsctl.at \
 	tests/lcov-post.at

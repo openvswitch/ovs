@@ -20,7 +20,7 @@ m4_define([OVSDB_CHECK_EXECUTION],
    AT_DATA([schema], [$2
 ])
    OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server --verbose --detach --pidfile=$PWD/pid --listen=punix:socket db])
+   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --listen=punix:socket db])
    m4_foreach([txn], [$3], 
      [OVS_CHECK_LCOV([ovsdb-client transact unix:socket 'txn'], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`])
