@@ -146,7 +146,10 @@ usage(void)
            "\n  list-tables SERVER\n"
            "    list SERVER's tables\n"
            "\n  list-columns SERVER [TABLE]\n"
-           "    list columns in TABLE (or all tables) on SERVER\n",
+           "    list columns in TABLE (or all tables) on SERVER\n"
+           "\n  transact SERVER TRANSACTION\n"
+           "    run TRANSACTION (a JSON array of operations) on SERVER\n"
+           "    and print the results as JSON on stdout\n",
            program_name, program_name);
     stream_usage("SERVER", true, true);
     printf("\nOutput formatting options:\n"
@@ -161,6 +164,16 @@ usage(void)
     exit(EXIT_SUCCESS);
 }
 
+static struct json *
+parse_json(const char *s)
+{
+    struct json *json = json_from_string(s);
+    if (json->type == JSON_STRING) {
+        ovs_fatal(0, "\"%s\": %s", s, json->u.string);
+    }
+    return json;
+}
+
 static struct jsonrpc *
 open_jsonrpc(const char *server)
 {
@@ -577,6 +590,32 @@ do_list_columns(int argc UNUSED, char *argv[])
 }
 
 static void
+do_transact(int argc UNUSED, char *argv[] UNUSED)
+{
+    struct jsonrpc_msg *request, *reply;
+    struct json *transaction;
+    struct jsonrpc *rpc;
+    int error;
+
+    transaction = parse_json(argv[2]);
+
+    rpc = open_jsonrpc(argv[1]);
+    request = jsonrpc_create_request("transact", transaction);
+    error = jsonrpc_transact_block(rpc, request, &reply);
+    if (error) {
+        ovs_fatal(error, "transaction failed");
+    }
+    if (reply->error) {
+        ovs_fatal(error, "transaction returned error: %s",
+                  json_to_string(reply->error, JSSF_SORT));
+    }
+    print_json(reply->result);
+    putchar('\n');
+    jsonrpc_msg_destroy(reply);
+    jsonrpc_close(rpc);
+}
+
+static void
 do_help(int argc UNUSED, char *argv[] UNUSED)
 {
     usage();
@@ -586,6 +625,7 @@ static const struct command all_commands[] = {
     { "get-schema", 1, 1, do_get_schema },
     { "list-tables", 1, 1, do_list_tables },
     { "list-columns", 1, 2, do_list_columns },
+    { "transact", 2, 2, do_transact },
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };

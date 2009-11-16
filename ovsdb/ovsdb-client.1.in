@@ -18,6 +18,8 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBlist-columns\fI server \fR[\fItable\fR]
 .br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBtransact\fI server transaction\fR
+.br
 \fBovsdb\-client help\fR
 .IP "Output formatting options:"
 [\fB--format=\fIformat\fR]
@@ -60,6 +62,10 @@ Connects to \fIserver\fR, retrieves the database schema, and prints
 a table listing the names, type, and comment (if any) on each column.  If
 \fItable\fR is specified, only columns in that table are listed;
 otherwise, the tables include columns in all tables.
+.IP "\fBovsdb\-client \fR[\fIoptions\fR] \fBtransact\fI server transaction\fR"
+Connects to \fIserver\fR, sends it the specified \fItransaction\fR,
+which must be a JSON array containing one or more valid OVSDB
+operations, and prints the received reply on stdout.
 .SH OPTIONS
 .SS "Output Formatting Options"
 Much of the output from \fBovsdb\-client\fR is in the form of tables.
