@@ -1167,9 +1167,9 @@ static int do_execute(struct datapath *dp, const struct odp_execute *executep)
 	skb_reset_mac_header(skb);
 	eth = eth_hdr(skb);
 
-    /* Normally, setting the skb 'protocol' field would be handled by a
-     * call to eth_type_trans(), but it assumes there's a sending
-     * device, which we may not have. */
+	/* Normally, setting the skb 'protocol' field would be handled by a
+	 * call to eth_type_trans(), but it assumes there's a sending
+	 * device, which we may not have. */
 	if (ntohs(eth->h_proto) >= 1536)
 		skb->protocol = eth->h_proto;
 	else

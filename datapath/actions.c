@@ -307,7 +307,7 @@ do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 	dev = skb->dev = p->dev;
 	if (is_dp_dev(dev))
 		dp_dev_recv(dev, skb);
-        else
+	else
 		dp_xmit_skb(skb);
 	return;
 

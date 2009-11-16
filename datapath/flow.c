@@ -293,22 +293,22 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 
 		arp = (struct arp_eth_header *)skb_network_header(skb);
 
-        if (arp->ar_hrd == htons(1)
-                && arp->ar_pro == htons(ETH_P_IP)
-                && arp->ar_hln == ETH_ALEN
-                && arp->ar_pln == 4) {
+		if (arp->ar_hrd == htons(1)
+				&& arp->ar_pro == htons(ETH_P_IP)
+				&& arp->ar_hln == ETH_ALEN
+				&& arp->ar_pln == 4) {
 
-            /* We only match on the lower 8 bits of the opcode. */
-            if (ntohs(arp->ar_op) <= 0xff) {
-                key->nw_proto = ntohs(arp->ar_op);
-            }
+			/* We only match on the lower 8 bits of the opcode. */
+			if (ntohs(arp->ar_op) <= 0xff) {
+				key->nw_proto = ntohs(arp->ar_op);
+			}
 
-            if (key->nw_proto == ARPOP_REQUEST 
-                    || key->nw_proto == ARPOP_REPLY) {
-                memcpy(&key->nw_src, arp->ar_sip, sizeof(key->nw_src));
-                memcpy(&key->nw_dst, arp->ar_tip, sizeof(key->nw_dst));
-            }
-        }
+			if (key->nw_proto == ARPOP_REQUEST 
+					|| key->nw_proto == ARPOP_REPLY) {
+				memcpy(&key->nw_src, arp->ar_sip, sizeof(key->nw_src));
+				memcpy(&key->nw_dst, arp->ar_tip, sizeof(key->nw_dst));
+			}
+		}
 	} else {
 		skb_reset_transport_header(skb);
 	}
@@ -337,7 +337,7 @@ void print_flow(const struct odp_flow_key *key)
 {
 #define MAC_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
 #define MAC_ARG(x) ((u8*)(x))[0],((u8*)(x))[1],((u8*)(x))[2],((u8*)(x))[3],((u8*)(x))[4],((u8*)(x))[5]
-    printk("port%04x:vlan%d mac"MAC_FMT"->"MAC_FMT" "
+	printk("port%04x:vlan%d mac"MAC_FMT"->"MAC_FMT" "
 	   "type%04x proto%d ip%x->%x port%d->%d\n",
 	   key->in_port, ntohs(key->dl_vlan),
 	   MAC_ARG(key->dl_src), MAC_ARG(key->dl_dst),
