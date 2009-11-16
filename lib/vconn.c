@@ -1282,7 +1282,8 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
         break;
 
     default:
-        VLOG_WARN_RL(&bad_ofmsg_rl, "unknown action type %"PRIu16, a->type);
+        VLOG_WARN_RL(&bad_ofmsg_rl, "unknown action type %"PRIu16,
+                ntohs(a->type));
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
     }
 
