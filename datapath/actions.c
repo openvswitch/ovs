@@ -259,8 +259,8 @@ set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
 		u16 *f = a->type == ODPAT_SET_TP_SRC ? &th->source : &th->dest;
 		u16 old = *f;
 		u16 new = a->tp_port;
-		update_csum((u16*)((u8*)skb->data + check_ofs),
-			    skb, old, new, 1);
+		update_csum((u16*)(skb_transport_header(skb) + check_ofs), 
+				skb, old, new, 1);
 		*f = new;
 	}
 	return skb;
