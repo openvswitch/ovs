@@ -260,6 +260,10 @@ ovsdb_jsonrpc_session_run(struct ovsdb_jsonrpc_session *s)
                 ovsdb_jsonrpc_session_got_request(s, msg);
             } else if (msg->type == JSONRPC_NOTIFY) {
                 ovsdb_jsonrpc_session_got_notify(s, msg);
+            } else if (msg->type == JSONRPC_REPLY
+                       && msg->id && msg->id->type == JSON_STRING
+                       && !strcmp(msg->id->u.string, "echo")) {
+                /* It's a reply to our echo request.  Ignore it. */
             } else {
                 VLOG_WARN("%s: received unexpected %s message",
                           jsonrpc_get_name(s->rpc),
@@ -301,8 +305,14 @@ ovsdb_jsonrpc_session_run(struct ovsdb_jsonrpc_session *s)
 
     case RECONNECT_PROBE:
         if (s->rpc) {
-            struct json *params = json_array_create_empty();
-            jsonrpc_send(s->rpc, jsonrpc_create_request("echo", params));
+            struct json *params;
+            struct jsonrpc_msg *request;
+
+            params = json_array_create_empty();
+            request = jsonrpc_create_request("echo", params);
+            json_destroy(request->id);
+            request->id = json_string_create("echo");
+            jsonrpc_send(s->rpc, request);
         }
         break;
     }
