@@ -599,6 +599,22 @@ str_to_action(char *str, struct ofpbuf *b)
             put_dl_addr_action(b, OFPAT_SET_DL_SRC, arg);
         } else if (!strcasecmp(act, "mod_dl_dst")) {
             put_dl_addr_action(b, OFPAT_SET_DL_DST, arg);
+        } else if (!strcasecmp(act, "mod_nw_src")) {
+            struct ofp_action_nw_addr *na;
+            na = put_action(b, sizeof *na, OFPAT_SET_NW_SRC);
+            str_to_ip(arg, &na->nw_addr);
+        } else if (!strcasecmp(act, "mod_nw_dst")) {
+            struct ofp_action_nw_addr *na;
+            na = put_action(b, sizeof *na, OFPAT_SET_NW_DST);
+            str_to_ip(arg, &na->nw_addr);
+        } else if (!strcasecmp(act, "mod_tp_src")) {
+            struct ofp_action_tp_port *ta;
+            ta = put_action(b, sizeof *ta, OFPAT_SET_TP_SRC);
+            ta->tp_port = htons(str_to_u32(arg));
+        } else if (!strcasecmp(act, "mod_tp_dst")) {
+            struct ofp_action_tp_port *ta;
+            ta = put_action(b, sizeof *ta, OFPAT_SET_TP_DST);
+            ta->tp_port = htons(str_to_u32(arg));
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "drop")) {
