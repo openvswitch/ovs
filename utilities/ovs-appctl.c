@@ -170,7 +170,6 @@ connect_to_target(const char *target)
 
     if (target[0] != '/') {
         char *pidfile_name;
-        char *socket_name;
         pid_t pid;
 
         pidfile_name = xasprintf("%s/%s.pid", ovs_rundir, target);
