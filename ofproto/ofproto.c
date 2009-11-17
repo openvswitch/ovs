@@ -2147,8 +2147,18 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
             break;
 
+        case OFPAT_SET_NW_DST:
+            oa = odp_actions_add(ctx->out, ODPAT_SET_NW_DST);
+            oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
+            break;
+
         case OFPAT_SET_TP_SRC:
             oa = odp_actions_add(ctx->out, ODPAT_SET_TP_SRC);
+            oa->tp_port.tp_port = ia->tp_port.tp_port;
+            break;
+
+        case OFPAT_SET_TP_DST:
+            oa = odp_actions_add(ctx->out, ODPAT_SET_TP_DST);
             oa->tp_port.tp_port = ia->tp_port.tp_port;
             break;
 
