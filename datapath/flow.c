@@ -332,16 +332,3 @@ void flow_exit(void)
 {
 	kmem_cache_destroy(flow_cache);
 }
-
-void print_flow(const struct odp_flow_key *key)
-{
-#define MAC_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
-#define MAC_ARG(x) ((u8*)(x))[0],((u8*)(x))[1],((u8*)(x))[2],((u8*)(x))[3],((u8*)(x))[4],((u8*)(x))[5]
-	printk("port%04x:vlan%d mac"MAC_FMT"->"MAC_FMT" "
-	   "type%04x proto%d ip%x->%x port%d->%d\n",
-	   key->in_port, ntohs(key->dl_vlan),
-	   MAC_ARG(key->dl_src), MAC_ARG(key->dl_dst),
-	   ntohs(key->dl_type), key->nw_proto,
-	   key->nw_src, key->nw_dst,
-	   ntohs(key->tp_src), ntohs(key->tp_dst));
-}
