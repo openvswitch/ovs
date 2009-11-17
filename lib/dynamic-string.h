@@ -44,6 +44,7 @@ void ds_put_utf8(struct ds *, int uc);
 void ds_put_char_multiple(struct ds *, char, size_t n);
 void ds_put_buffer(struct ds *, const char *, size_t n);
 void ds_put_cstr(struct ds *, const char *);
+void ds_put_and_free_cstr(struct ds *, char *);
 void ds_put_format(struct ds *, const char *, ...) PRINTF_FORMAT(2, 3);
 void ds_put_format_valist(struct ds *, const char *, va_list)
     PRINTF_FORMAT(2, 0);

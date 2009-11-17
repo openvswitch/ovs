@@ -116,6 +116,13 @@ ds_put_cstr(struct ds *ds, const char *s)
 }
 
 void
+ds_put_and_free_cstr(struct ds *ds, char *s)
+{
+    ds_put_cstr(ds, s);
+    free(s);
+}
+
+void
 ds_put_format(struct ds *ds, const char *format, ...)
 {
     va_list args;

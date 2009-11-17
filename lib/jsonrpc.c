@@ -21,6 +21,7 @@
 #include <errno.h>
 
 #include "byteq.h"
+#include "dynamic-string.h"
 #include "json.h"
 #include "list.h"
 #include "ofpbuf.h"
@@ -133,6 +134,37 @@ jsonrpc_get_name(const struct jsonrpc *rpc)
     return rpc->name;
 }
 
+static void
+jsonrpc_log_msg(const struct jsonrpc *rpc, const char *title,
+                const struct jsonrpc_msg *msg)
+{
+    if (VLOG_IS_DBG_ENABLED()) {
+        struct ds s = DS_EMPTY_INITIALIZER;
+        if (msg->method) {
+            ds_put_format(&s, ", method=\"%s\"", msg->method);
+        }
+        if (msg->params) {
+            ds_put_cstr(&s, ", params=");
+            ds_put_and_free_cstr(&s, json_to_string(msg->params, 0));
+        }
+        if (msg->result) {
+            ds_put_cstr(&s, ", result=");
+            ds_put_and_free_cstr(&s, json_to_string(msg->result, 0));
+        }
+        if (msg->error) {
+            ds_put_cstr(&s, ", error=");
+            ds_put_and_free_cstr(&s, json_to_string(msg->error, 0));
+        }
+        if (msg->id) {
+            ds_put_cstr(&s, ", id=");
+            ds_put_and_free_cstr(&s, json_to_string(msg->id, 0));
+        }
+        VLOG_DBG("%s: %s %s%s", rpc->name, title,
+                 jsonrpc_msg_type_to_string(msg->type), ds_cstr(&s));
+        ds_destroy(&s);
+    }
+}
+
 int
 jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
 {
@@ -145,6 +177,8 @@ jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
         jsonrpc_msg_destroy(msg);
         return rpc->status;
     }
+
+    jsonrpc_log_msg(rpc, "send", msg);
 
     json = jsonrpc_msg_to_json(msg);
     s = json_to_string(json, 0);
@@ -313,6 +347,7 @@ jsonrpc_received(struct jsonrpc *rpc)
         return;
     }
 
+    jsonrpc_log_msg(rpc, "received", msg);
     rpc->received = msg;
 }
 
