@@ -46,13 +46,17 @@
 
 static const struct jsonrpc_server_cbs ovsdb_jsonrpc_cbs;
 
+static unixctl_cb_func ovsdb_server_exit;
+
 static void parse_options(int argc, char *argv[], char **file_namep,
-                          struct svec *active, struct svec *passive);
+                          struct svec *active, struct svec *passive,
+                          char **unixctl_pathp);
 static void usage(void) NO_RETURN;
 
 int
 main(int argc, char *argv[])
 {
+    char *unixctl_path = NULL;
     struct unixctl_server *unixctl;
     struct ovsdb_jsonrpc_server *jsonrpc;
     struct svec active, passive;
@@ -61,6 +65,7 @@ main(int argc, char *argv[])
     const char *name;
     char *file_name;
     bool do_chdir;
+    bool exiting;
     int retval;
     size_t i;
 
@@ -71,7 +76,7 @@ main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
     process_init();
 
-    parse_options(argc, argv, &file_name, &active, &passive);
+    parse_options(argc, argv, &file_name, &active, &passive, &unixctl_path);
 
     if (get_detach() && is_chdir_enabled()) {
         /* We need to skip chdir("/") in daemonize() and do it later, because
@@ -105,15 +110,19 @@ main(int argc, char *argv[])
     svec_destroy(&active);
     svec_destroy(&passive);
 
-    retval = unixctl_server_create(NULL, &unixctl);
+    retval = unixctl_server_create(unixctl_path, &unixctl);
     if (retval) {
         ovs_fatal(retval, "could not listen for control connections");
     }
 
+    unixctl_command_register("exit", ovsdb_server_exit, &exiting);
+
     if (do_chdir) {
         chdir("/");
     }
-    for (;;) {
+
+    exiting = false;
+    while (!exiting) {
         ovsdb_jsonrpc_server_run(jsonrpc);
         unixctl_server_run(unixctl);
         ovsdb_trigger_run(db, time_msec());
@@ -128,19 +137,31 @@ main(int argc, char *argv[])
 }
 
 static void
+ovsdb_server_exit(struct unixctl_conn *conn, const char *args UNUSED,
+                  void *exiting_)
+{
+    bool *exiting = exiting_;
+    *exiting = true;
+    unixctl_command_reply(conn, 200, NULL);
+}
+
+static void
 parse_options(int argc, char *argv[], char **file_namep,
-              struct svec *active, struct svec *passive)
+              struct svec *active, struct svec *passive,
+              char **unixctl_pathp)
 {
     enum {
         OPT_DUMMY = UCHAR_MAX + 1,
         OPT_CONNECT,
         OPT_LISTEN,
+        OPT_UNIXCTL,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"connect",     required_argument, 0, OPT_CONNECT},
         {"listen",      required_argument, 0, OPT_LISTEN},
+        {"unixctl",     required_argument, 0, OPT_UNIXCTL},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
         DAEMON_LONG_OPTIONS,
@@ -167,6 +188,10 @@ parse_options(int argc, char *argv[], char **file_namep,
 
         case OPT_LISTEN:
             svec_add(passive, optarg);
+            break;
+
+        case OPT_UNIXCTL:
+            *unixctl_pathp = optarg;
             break;
 
         case 'h':
