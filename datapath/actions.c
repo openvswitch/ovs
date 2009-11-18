@@ -28,6 +28,13 @@ make_writable(struct sk_buff *skb, gfp_t gfp)
 	if (skb_shared(skb) || skb_cloned(skb)) {
 		struct sk_buff *nskb = skb_copy(skb, gfp);
 		if (nskb) {
+#if defined(CONFIG_XEN) && LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+			/* These fields are copied in skb_clone but not in
+			 * skb_copy or related functions.  We need to manually
+			 * copy them over here. */
+			nskb->proto_data_valid = skb->proto_data_valid;
+			nskb->proto_csum_blank = skb->proto_csum_blank;
+#endif
 			kfree_skb(skb);
 			return nskb;
 		}
