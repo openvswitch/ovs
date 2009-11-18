@@ -14,41 +14,62 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dnl OVS_CHECK_LINUX(OPTION, VERSION, VARIABLE, CONDITIONAL)
+dnl OVS_CHECK_LINUX26
 dnl
 dnl Configure linux kernel source tree 
-AC_DEFUN([OVS_CHECK_LINUX], [
-  AC_ARG_WITH([$1],
-              [AC_HELP_STRING([--with-$1=/path/to/linux-$2],
-                              [Specify the linux $2 kernel sources])],
-              [path="$withval"], [path=])dnl
-  if test -n "$path"; then
-    path=`eval echo "$path"`
+AC_DEFUN([OVS_CHECK_LINUX26], [
+  AC_ARG_WITH([l26],
+              [AC_HELP_STRING([--with-l26=/path/to/linux-2.6],
+                              [Specify the linux 2.6 kernel sources])],
+              [KBUILD26="$withval"], [KBUILD26=])dnl
+  if test -n "$KBUILD26"; then
+    KBUILD26=`eval echo "$KBUILD26"`
 
-    AC_MSG_CHECKING([for $path directory])
-    if test -d "$path"; then
-	AC_MSG_RESULT([yes])
-	$3=$path
-	AC_SUBST($3)
+    # The build directory is what the user provided.
+    # Make sure that it exists.
+    AC_MSG_CHECKING([for Linux 2.6 build directory])
+    if test -d "$KBUILD26"; then
+	AC_MSG_RESULT([$KBUILD26])
+	AC_SUBST(KBUILD26)
     else
 	AC_MSG_RESULT([no])
-	AC_ERROR([source dir $path doesn't exist])
+	AC_ERROR([source dir $KBUILD26 doesn't exist])
     fi
 
-    AC_MSG_CHECKING([for $path kernel version])
-    patchlevel=`sed -n 's/^PATCHLEVEL = //p' "$path/Makefile"`
-    sublevel=`sed -n 's/^SUBLEVEL = //p' "$path/Makefile"`
+    # Debian breaks kernel headers into "source" header and "build" headers.
+    # We want the source headers, but $KBUILD26 gives us the "build" headers.
+    # Use heuristics to find the source headers.
+    AC_MSG_CHECKING([for Linux 2.6 source directory])
+    KSRC26=$KBUILD26
+    if test ! -e $KSRC26/include/linux/kernel.h; then
+      KSRC26=`(cd $KBUILD26 && pwd -P) | sed 's,-[[^-]]*$,-common,'`
+      if test ! -e $KSRC26/include/linux/kernel.h; then
+        AC_MSG_ERROR([cannot find source directory])
+      fi
+    fi
+    AC_MSG_RESULT([$KSRC26])
+
+    AC_MSG_CHECKING([for kernel version])
+    patchlevel=`sed -n 's/^PATCHLEVEL = //p' "$KSRC26/Makefile"`
+    sublevel=`sed -n 's/^SUBLEVEL = //p' "$KSRC26/Makefile"`
+    if test -z "$patchlevel" || test -z "$sublevel"; then
+       AC_ERROR([cannot determine kernel version])
+    fi
     AC_MSG_RESULT([2.$patchlevel.$sublevel])
-    if test "2.$patchlevel" != '$2'; then
-       AC_ERROR([Linux kernel source in $path is not version $2])
+    if test "2.$patchlevel" != '2.6'; then
+       if test "$BUILD26" = "$KSRC26"; then
+         AC_ERROR([Linux kernel in $KBUILD26 is not version 2.6])
+       else
+         AC_ERROR([Linux kernel in build tree $KBUILD26 (source tree $KSRC26) is not version 2.6])
+       fi
     fi
-    if ! test -e "$path"/include/linux/version.h || \
-       ! test -e "$path"/include/linux/autoconf.h; then
-	AC_MSG_ERROR([Linux kernel source in $path is not configured])
+    if ! test -e "$KBUILD26"/include/linux/version.h || \
+       ! test -e "$KBUILD26"/include/linux/autoconf.h; then
+	AC_MSG_ERROR([Linux kernel source in $KBUILD26 is not configured])
     fi
-    m4_if($2, [2.6], [OVS_CHECK_LINUX26_COMPAT])
+    OVS_CHECK_LINUX26_COMPAT
   fi
-  AM_CONDITIONAL($4, test -n "$path")
+  AM_CONDITIONAL(L26_ENABLED, test -n "$KBUILD26")
 ])
 
 dnl OVS_GREP_IFELSE(FILE, REGEX, IF-MATCH, IF-NO-MATCH)
@@ -103,7 +124,7 @@ AC_DEFUN([OVS_CHECK_LOG2_H], [
 dnl OVS_CHECK_LINUX26_COMPAT
 dnl
 dnl Runs various Autoconf checks on the Linux 2.6 kernel source in
-dnl the directory in $KSRC26.
+dnl the directory in $KBUILD26.
 AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   rm -f datapath/linux-2.6/kcompat.h.new
   mkdir -p datapath/linux-2.6
