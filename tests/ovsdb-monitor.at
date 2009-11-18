@@ -21,8 +21,8 @@ m4_define([OVSDB_CHECK_MONITOR],
    AT_DATA([schema], [$2
 ])
    OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [stdout], [ignore])
-   m4_if([$3], [], [],
-     [OVS_CHECK_LCOV([ovsdb-tool transact db '$2'], [0], [ignore], [ignore])])
+   m4_foreach([txn], [$3],
+     [OVS_CHECK_LCOV([ovsdb-tool transact db 'txn'], [0], [ignore], [ignore])])
    AT_CHECK([ovsdb-server --detach --pidfile=$PWD/server-pid --listen=punix:socket --unixctl=$PWD/unixctl db])
    AT_CHECK([ovsdb-client monitor --format=csv unix:socket $4 > output & echo $! > monitor-pid], 
             [0], [ignore], [ignore], [kill `cat server-pid`])
@@ -34,7 +34,7 @@ m4_define([OVSDB_CHECK_MONITOR],
    AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$6])
    AT_CLEANUP])
 
-OVSDB_CHECK_MONITOR([monitor initially empty table],
+OVSDB_CHECK_MONITOR([monitor insert into empty table],
   [ORDINAL_SCHEMA],
   [],
   [ordinals],
@@ -44,3 +44,117 @@ OVSDB_CHECK_MONITOR([monitor initially empty table],
   [[row,action,name,number,_version
 <0>,insert,"""zero""",0,"[""uuid"",""<1>""]"
 ]])
+
+OVSDB_CHECK_MONITOR([monitor insert into populated table],
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 10, "name": "ten"}}]]]],
+  [ordinals],
+  [[[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}}]]]],
+  [[row,action,name,number,_version
+<0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+row,action,name,number,_version
+<2>,insert,"""zero""",0,"[""uuid"",""<3>""]"
+]])
+
+OVSDB_CHECK_MONITOR([monitor delete],
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 10, "name": "ten"}}]]]],
+  [ordinals],
+  [[[[{"op": "delete",
+       "table": "ordinals",
+       "where": [["number", "==", 10]]}]]]],
+  [[row,action,name,number,_version
+<0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+row,action,name,number,_version
+<0>,delete,"""ten""",10,"[""uuid"",""<1>""]"
+]])
+
+OVSDB_CHECK_MONITOR([monitor row update],
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 10, "name": "ten"}}]]]],
+  [ordinals],
+  [[[[{"op": "update",
+       "table": "ordinals",
+       "where": [["number", "==", 10]],
+       "row": {"name": "five plus five"}}]]]],
+  [[row,action,name,number,_version
+<0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+row,action,name,number,_version
+<0>,old,"""ten""",,"[""uuid"",""<1>""]"
+,new,"""five plus five""",10,"[""uuid"",""<2>""]"
+]])
+
+OVSDB_CHECK_MONITOR([monitor no-op row updates],
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 10, "name": "ten"}}]]]],
+  [ordinals],
+  [[[[{"op": "update",
+       "table": "ordinals",
+       "where": [["number", "==", 10]],
+       "row": {"number": 10, "name": "ten"}}]]],
+   [[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 9, "name": "nine"}}]]]],
+  [[row,action,name,number,_version
+<0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+row,action,name,number,_version
+<2>,insert,"""nine""",9,"[""uuid"",""<3>""]"
+]])
+
+OVSDB_CHECK_MONITOR([monitor insert-and-update transaction],
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 10, "name": "ten"}}]]]],
+  [ordinals],
+  [[[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 9, "name": "nine"},
+       "uuid-name": "nine"},
+      {"op": "update",
+       "table": "ordinals",
+       "where": [["_uuid", "==", ["named-uuid", "nine"]]],
+       "row": {"name": "three squared"}}]]]],
+  [[row,action,name,number,_version
+<0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+row,action,name,number,_version
+<2>,insert,"""three squared""",9,"[""uuid"",""<3>""]"
+]])
+
+
+OVSDB_CHECK_MONITOR([monitor insert-update-and-delete transaction],
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 10, "name": "ten"}}]]]],
+  [ordinals],
+  [[[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 9, "name": "nine"},
+       "uuid-name": "nine"},
+      {"op": "update",
+       "table": "ordinals",
+       "where": [["_uuid", "==", ["named-uuid", "nine"]]],
+       "row": {"name": "three squared"}},
+      {"op": "delete",
+       "table": "ordinals",
+       "where": [["_uuid", "==", ["named-uuid", "nine"]]]},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 7, "name": "seven"}}]]]],
+  [[row,action,name,number,_version
+<0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+row,action,name,number,_version
+<2>,insert,"""seven""",7,"[""uuid"",""<3>""]"
+]])
+
