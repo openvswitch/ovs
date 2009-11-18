@@ -1628,7 +1628,7 @@ rule_install(struct ofproto *p, struct rule *rule, struct rule *displaced_rule)
                          &put)) {
             rule->installed = true;
             if (displaced_rule) {
-                update_stats(p, rule, &put.flow.stats);
+                update_stats(p, displaced_rule, &put.flow.stats);
                 rule_post_uninstall(p, displaced_rule);
             }
         }
@@ -1652,14 +1652,27 @@ rule_reinstall(struct ofproto *ofproto, struct rule *rule)
 static void
 rule_update_actions(struct ofproto *ofproto, struct rule *rule)
 {
-    bool actions_changed = rule_make_actions(ofproto, rule, NULL);
+    bool actions_changed;
+    uint16_t new_out_iface, old_out_iface;
+
+    old_out_iface = rule->nf_flow.output_iface;
+    actions_changed = rule_make_actions(ofproto, rule, NULL);
+
     if (rule->may_install) {
         if (rule->installed) {
             if (actions_changed) {
-                /* XXX should really do rule_post_uninstall() for the *old* set
-                 * of actions, and distinguish the old stats from the new. */
                 struct odp_flow_put put;
-                do_put_flow(ofproto, rule, ODPPF_CREATE | ODPPF_MODIFY, &put);
+                do_put_flow(ofproto, rule, ODPPF_CREATE | ODPPF_MODIFY
+                                           | ODPPF_ZERO_STATS, &put);
+                update_stats(ofproto, rule, &put.flow.stats);
+
+                /* Temporarily set the old output iface so that NetFlow
+                 * messages have the correct output interface for the old
+                 * stats. */
+                new_out_iface = rule->nf_flow.output_iface;
+                rule->nf_flow.output_iface = old_out_iface;
+                rule_post_uninstall(ofproto, rule);
+                rule->nf_flow.output_iface = new_out_iface;
             }
         } else {
             rule_install(ofproto, rule, NULL);
@@ -3310,19 +3323,23 @@ expire_rule(struct cls_rule *cls_rule, void *p_)
     }
 
     COVERAGE_INC(ofproto_expired);
+
+    /* Update stats.  This code will be a no-op if the rule expired
+     * due to an idle timeout. */
     if (rule->cr.wc.wildcards) {
-        /* Update stats.  (This code will be a no-op if the rule expired
-         * due to an idle timeout, because in that case the rule has no
-         * subrules left.) */
         struct rule *subrule, *next;
         LIST_FOR_EACH_SAFE (subrule, next, struct rule, list, &rule->list) {
             rule_remove(p, subrule);
         }
+    } else {
+        rule_uninstall(p, rule);
     }
 
-    send_flow_exp(p, rule, now,
-                  (now >= hard_expire
-                   ? OFPER_HARD_TIMEOUT : OFPER_IDLE_TIMEOUT));
+    if (!rule_is_hidden(rule)) {
+        send_flow_exp(p, rule, now,
+                      (now >= hard_expire
+                       ? OFPER_HARD_TIMEOUT : OFPER_IDLE_TIMEOUT));
+    }
     rule_remove(p, rule);
 }
 

@@ -1899,6 +1899,71 @@ compose_actions(struct bridge *br, const flow_t *flow, uint16_t vlan,
     }
 }
 
+/* Returns the effective vlan of a packet, taking into account both the
+ * 802.1Q header and implicitly tagged ports.  A value of 0 indicates that
+ * the packet is untagged and -1 indicates it has an invalid header and
+ * should be dropped. */
+static int flow_get_vlan(struct bridge *br, const flow_t *flow,
+                         struct port *in_port, bool have_packet)
+{
+    /* Note that dl_vlan of 0 and of OFP_VLAN_NONE both mean that the packet
+     * belongs to VLAN 0, so we should treat both cases identically.  (In the
+     * former case, the packet has an 802.1Q header that specifies VLAN 0,
+     * presumably to allow a priority to be specified.  In the latter case, the
+     * packet does not have any 802.1Q header.) */
+    int vlan = ntohs(flow->dl_vlan);
+    if (vlan == OFP_VLAN_NONE) {
+        vlan = 0;
+    }
+    if (in_port->vlan >= 0) {
+        if (vlan) {
+            /* XXX support double tagging? */
+            if (have_packet) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+                VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %"PRIu16" tagged "
+                             "packet received on port %s configured with "
+                             "implicit VLAN %"PRIu16,
+                             br->name, ntohs(flow->dl_vlan),
+                             in_port->name, in_port->vlan);
+            }
+            return -1;
+        }
+        vlan = in_port->vlan;
+    } else {
+        if (!port_includes_vlan(in_port, vlan)) {
+            if (have_packet) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+                VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %d tagged "
+                             "packet received on port %s not configured for "
+                             "trunking VLAN %d",
+                             br->name, vlan, in_port->name, vlan);
+            }
+            return -1;
+        }
+    }
+
+    return vlan;
+}
+
+static void
+update_learning_table(struct bridge *br, const flow_t *flow, int vlan,
+                      struct port *in_port)
+{
+    tag_type rev_tag = mac_learning_learn(br->ml, flow->dl_src,
+                                          vlan, in_port->port_idx);
+    if (rev_tag) {
+        /* The log messages here could actually be useful in debugging,
+         * so keep the rate limit relatively high. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30,
+                                                                300);
+        VLOG_DBG_RL(&rl, "bridge %s: learned that "ETH_ADDR_FMT" is "
+                    "on port %s in VLAN %d",
+                    br->name, ETH_ADDR_ARGS(flow->dl_src),
+                    in_port->name, vlan);
+        ofproto_revalidate(br->ofproto, rev_tag);
+    }
+}
+
 static bool
 is_bcast_arp_reply(const flow_t *flow)
 {
@@ -1947,41 +2012,9 @@ process_flow(struct bridge *br, const flow_t *flow,
         return true;
     }
     in_port = in_iface->port;
-
-    /* Figure out what VLAN this packet belongs to.
-     *
-     * Note that dl_vlan of 0 and of OFP_VLAN_NONE both mean that the packet
-     * belongs to VLAN 0, so we should treat both cases identically.  (In the
-     * former case, the packet has an 802.1Q header that specifies VLAN 0,
-     * presumably to allow a priority to be specified.  In the latter case, the
-     * packet does not have any 802.1Q header.) */
-    vlan = ntohs(flow->dl_vlan);
-    if (vlan == OFP_VLAN_NONE) {
-        vlan = 0;
-    }
-    if (in_port->vlan >= 0) {
-        if (vlan) {
-            /* XXX support double tagging? */
-            if (packet != NULL) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-                VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %"PRIu16" tagged "
-                             "packet received on port %s configured with "
-                             "implicit VLAN %"PRIu16,
-                             br->name, ntohs(flow->dl_vlan),
-                             in_port->name, in_port->vlan);
-            }
-            goto done;
-        }
-        vlan = in_port->vlan;
-    } else {
-        if (!port_includes_vlan(in_port, vlan)) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-            VLOG_WARN_RL(&rl, "bridge %s: dropping VLAN %d tagged "
-                         "packet received on port %s not configured for "
-                         "trunking VLAN %d",
-                         br->name, vlan, in_port->name, vlan);
-            goto done;
-        }
+    vlan = flow_get_vlan(br, flow, in_port, !!packet);
+    if (vlan < 0) {
+        goto done;
     }
 
     /* Drop frames for ports that STP wants entirely killed (both for
@@ -2032,19 +2065,7 @@ process_flow(struct bridge *br, const flow_t *flow,
     out_port = FLOOD_PORT;
     /* Learn source MAC (but don't try to learn from revalidation). */
     if (packet) {
-        tag_type rev_tag = mac_learning_learn(br->ml, flow->dl_src,
-                                              vlan, in_port->port_idx);
-        if (rev_tag) {
-            /* The log messages here could actually be useful in debugging,
-             * so keep the rate limit relatively high. */
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30,
-                                                                    300);
-            VLOG_DBG_RL(&rl, "bridge %s: learned that "ETH_ADDR_FMT" is "
-                        "on port %s in VLAN %d",
-                        br->name, ETH_ADDR_ARGS(flow->dl_src),
-                        in_port->name, vlan);
-            ofproto_revalidate(br->ofproto, rev_tag);
-        }
+        update_learning_table(br, flow, vlan, in_port);
     }
 
     /* Determine output port. */
@@ -2052,10 +2073,12 @@ process_flow(struct bridge *br, const flow_t *flow,
                                            tags);
     if (out_port_idx >= 0 && out_port_idx < br->n_ports) {
         out_port = br->ports[out_port_idx];
-    } else if (!packet) {
+    } else if (!packet && !eth_addr_is_multicast(flow->dl_dst)) {
         /* If we are revalidating but don't have a learning entry then
-         * eject the flow.  Installing a flow that floods packets will
-         * prevent us from seeing future packets and learning properly. */
+         * eject the flow.  Installing a flow that floods packets opens
+         * up a window of time where we could learn from a packet reflected
+         * on a bond and blackhole packets before the learning table is
+         * updated to reflect the correct port. */
         return false;
     }
 
@@ -2135,7 +2158,19 @@ bridge_account_flow_ofhook_cb(const flow_t *flow,
                               void *br_)
 {
     struct bridge *br = br_;
+    struct port *in_port;
     const union odp_action *a;
+
+    /* Feed information from the active flows back into the learning table
+     * to ensure that table is always in sync with what is actually flowing
+     * through the datapath. */
+    in_port = port_from_dp_ifidx(br, flow->in_port);
+    if (in_port) {
+        int vlan = flow_get_vlan(br, flow, in_port, false);
+         if (vlan >= 0) {
+            update_learning_table(br, flow, vlan, in_port);
+        }
+    }
 
     if (!br->has_bonded_ports) {
         return;
@@ -2143,9 +2178,10 @@ bridge_account_flow_ofhook_cb(const flow_t *flow,
 
     for (a = actions; a < &actions[n_actions]; a++) {
         if (a->type == ODPAT_OUTPUT) {
-            struct port *port = port_from_dp_ifidx(br, a->output.port);
-            if (port && port->n_ifaces >= 2) {
-                struct bond_entry *e = lookup_bond_entry(port, flow->dl_src);
+            struct port *out_port = port_from_dp_ifidx(br, a->output.port);
+            if (out_port && out_port->n_ifaces >= 2) {
+                struct bond_entry *e = lookup_bond_entry(out_port,
+                                                         flow->dl_src);
                 e->tx_bytes += n_bytes;
             }
         }
@@ -3402,6 +3438,8 @@ mirror_reconfigure(struct bridge *br)
             int vlan = cfg_get_vlan(i, "vlan.%s.disable-learning", br->name);
             if (vlan >= 0) {
                 bitmap_set1(rspan_vlans, vlan);
+                VLOG_INFO("bridge %s: disabling learning on vlan %d\n",
+                          br->name, vlan);
             } else {
                 VLOG_ERR("bridge %s: invalid value '%s' for learning disabled "
                          "VLAN", br->name,
