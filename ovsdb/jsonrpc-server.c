@@ -714,7 +714,9 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s,
     return ovsdb_jsonrpc_monitor_get_initial(m);
 
 error:
-    ovsdb_remove_replica(s->server->db, &m->replica);
+    if (m) {
+        ovsdb_remove_replica(s->server->db, &m->replica);
+    }
 
     json = ovsdb_error_to_json(error);
     ovsdb_error_destroy(error);
