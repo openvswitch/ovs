@@ -27,8 +27,11 @@ you will need the following software:
       connections from an Open vSwitch to an OpenFlow controller.  To
       enable, configure with --enable-ssl=yes.
 
-To compile the kernel module (which is required for operation), you
-must also install the following:
+To compile the kernel module, you must also install the following.  If
+you cannot build or install the kernel module, you may use the
+userspace-only implementation, at a cost in performance.  The
+userspace implementation may also lack some features.  Refer to
+INSTALL.userspace for more information.
 
     - A supported Linux kernel version.  Please refer to README for a
       list of supported versions.

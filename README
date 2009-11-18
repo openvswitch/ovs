@@ -28,9 +28,15 @@ vSwitch supports the following features:
     * Support for OpenFlow
     * Compatibility layer for the Linux bridging code
 
-Open vSwitch supports Linux 2.6.15 and up, with testing focused on
-2.6.18 with Centos and Xen patches and version 2.6.26 from kernel.org.
-Open vSwitch also has special support for Citrix XenServer hosts.
+The included Linux kernel module supports Linux 2.6.15 and up, with
+testing focused on 2.6.18 with Centos and Xen patches and version
+2.6.26 from kernel.org.  Open vSwitch also has special support for
+Citrix XenServer hosts.
+
+Open vSwitch can also operate, at a cost in performance, entirely in
+userspace, without assistance from a kernel module.  This userspace
+implementation should be easier to port than the kernel-based switch.
+It is considered experimental.
 
 What's here?
 ------------
@@ -84,6 +90,9 @@ read INSTALL.bridge.
 
 To build RPMs for installing Open vSwitch on a Citrix XenServer host
 or resource pool, read INSTALL.XenServer.
+
+To install Open vSwitch without using a kernel module, read
+INSTALL.userspace.
 
 To learn set up SSL support for Open vSwitch, read INSTALL.SSL.
 

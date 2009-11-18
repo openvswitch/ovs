@@ -28,6 +28,7 @@ CLEANFILES =
 DISTCLEANFILES =
 EXTRA_DIST = INSTALL.bridge \
 	INSTALL.Linux \
+	INSTALL.userspace \
 	INSTALL.OpenFlow \
 	INSTALL.SSL \
 	INSTALL.XenServer 
