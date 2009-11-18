@@ -3,14 +3,11 @@
 
 #include_next <net/checksum.h>
 
-#include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
-
+#ifndef HAVE_CSUM_UNFOLD
 static inline __wsum csum_unfold(__sum16 n)
 {
 	return (__force __wsum)n;
 }
-
-#endif /* linux kernel < 2.6.20 */
+#endif /* !HAVE_CSUM_UNFOLD */
 
 #endif /* checksum.h */

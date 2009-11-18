@@ -22,12 +22,28 @@
 #include "actions.h"
 #include "openvswitch/datapath-protocol.h"
 
-struct sk_buff *
-make_writable(struct sk_buff *skb, gfp_t gfp)
+static struct sk_buff *
+make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
 {
 	if (skb_shared(skb) || skb_cloned(skb)) {
-		struct sk_buff *nskb = skb_copy(skb, gfp);
+		struct sk_buff *nskb;
+		unsigned headroom = max(min_headroom, skb_headroom(skb));
+
+		nskb = skb_copy_expand(skb, headroom, skb_tailroom(skb), gfp);
 		if (nskb) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+			/* Before 2.6.24 these fields were not copied when
+			 * doing an skb_copy_expand. */
+			nskb->ip_summed = skb->ip_summed;
+			nskb->csum = skb->csum;
+#endif
+#if defined(CONFIG_XEN) && LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+			/* These fields are copied in skb_clone but not in
+			 * skb_copy or related functions.  We need to manually
+			 * copy them over here. */
+			nskb->proto_data_valid = skb->proto_data_valid;
+			nskb->proto_csum_blank = skb->proto_csum_blank;
+#endif
 			kfree_skb(skb);
 			return nskb;
 		}
@@ -80,7 +96,7 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		mask = VLAN_PCP_MASK;
 	}
 
-	skb = make_writable(skb, gfp);
+	skb = make_writable(skb, VLAN_HLEN, gfp);
 	if (!skb)
 		return ERR_PTR(-ENOMEM);
 
@@ -168,7 +184,7 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 static struct sk_buff *strip_vlan(struct sk_buff *skb,
 				  struct odp_flow_key *key, gfp_t gfp)
 {
-	skb = make_writable(skb, gfp);
+	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		vlan_pull_tag(skb);
 		key->dl_vlan = htons(ODP_VLAN_NONE);
@@ -180,7 +196,7 @@ static struct sk_buff *set_dl_addr(struct sk_buff *skb,
 				   const struct odp_action_dl_addr *a,
 				   gfp_t gfp)
 {
-	skb = make_writable(skb, gfp);
+	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		struct ethhdr *eh = eth_hdr(skb);
 		memcpy(a->type == ODPAT_SET_DL_SRC ? eh->h_source : eh->h_dest,
@@ -216,7 +232,7 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 	if (key->dl_type != htons(ETH_P_IP))
 		return skb;
 
-	skb = make_writable(skb, gfp);
+	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		struct iphdr *nh = ip_hdr(skb);
 		u32 *f = a->type == ODPAT_SET_NW_SRC ? &nh->saddr : &nh->daddr;
@@ -253,14 +269,14 @@ set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
 	else
 		return skb;
 
-	skb = make_writable(skb, gfp);
+	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		struct udphdr *th = udp_hdr(skb);
 		u16 *f = a->type == ODPAT_SET_TP_SRC ? &th->source : &th->dest;
 		u16 old = *f;
 		u16 new = a->tp_port;
-		update_csum((u16*)((u8*)skb->data + check_ofs),
-			    skb, old, new, 1);
+		update_csum((u16*)(skb_transport_header(skb) + check_ofs), 
+				skb, old, new, 1);
 		*f = new;
 	}
 	return skb;
@@ -307,7 +323,7 @@ do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 	dev = skb->dev = p->dev;
 	if (is_dp_dev(dev))
 		dp_dev_recv(dev, skb);
-        else
+	else
 		dp_xmit_skb(skb);
 	return;
 

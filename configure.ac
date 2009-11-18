@@ -13,7 +13,7 @@
 # limitations under the License.
 
 AC_PREREQ(2.63)
-AC_INIT(openvswitch, 0.90.5, ovs-bugs@openvswitch.org)
+AC_INIT(openvswitch, 0.90.6, ovs-bugs@openvswitch.org)
 NX_BUILDNR
 AC_CONFIG_SRCDIR([datapath/datapath.c])
 AC_CONFIG_MACRO_DIR([m4])
@@ -78,7 +78,7 @@ OVS_ENABLE_OPTION([-Wno-override-init])
 
 AC_ARG_VAR(KARCH, [Kernel Architecture String])
 AC_SUBST(KARCH)
-OVS_CHECK_LINUX(l26, 2.6, KSRC26, L26_ENABLED)
+OVS_CHECK_LINUX26
 
 AC_CONFIG_FILES([Makefile 
 datapath/Makefile 

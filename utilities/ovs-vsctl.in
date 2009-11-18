@@ -22,23 +22,30 @@ import re
 import socket
 import stat
 import sys
+import syslog
 
 argv0 = sys.argv[0]
 if argv0.find('/') >= 0:
     argv0 = argv0[argv0.rfind('/') + 1:]
 
 DEFAULT_VSWITCHD_CONF = "@sysconfdir@/ovs-vswitchd.conf"
-VSWITCHD_CONF = DEFAULT_VSWITCHD_CONF
+vswitchd_conf = DEFAULT_VSWITCHD_CONF
 
-DEFAULT_VSWITCHD_TARGET = "@RUNDIR@/ovs-vswitchd.pid"
-VSWITCHD_TARGET = DEFAULT_VSWITCHD_TARGET
+DEFAULT_VSWITCHD_TARGET = "ovs-vswitchd"
+vswitchd_target = DEFAULT_VSWITCHD_TARGET
 
-RELOAD_VSWITCHD = True
+reload_vswitchd = True
+
+enable_syslog = True
 
 class Error(Exception):
     def __init__(self, msg):
         Exception.__init__(self)
         self.msg = msg
+
+def log(message):
+    if enable_syslog:
+        syslog.syslog(message)
 
 # XXX Most of the functions below should be integrated into a
 # VSwitchConfiguration object with logically named fields and methods
@@ -110,20 +117,52 @@ def cfg_read(filename, lock=False):
         if key not in cfg:
             cfg[key] = []
         cfg[key].append(value)
+
+    global orig_cfg
+    orig_cfg = cfg_clone(cfg)
+
     return cfg
 
+# Returns a deep copy of 'cfg', which must be in the format returned
+# by cfg_read().
+def cfg_clone(cfg):
+    new = {}
+    for key in cfg:
+        new[key] = list(cfg[key])
+    return new
+
+# Returns a list of all the configuration lines that are in 'a' but
+# not in 'b'.
+def cfg_subtract(a, b):
+    difference = []
+    for key in a:
+        for value in a[key]:
+            if key not in b or value not in b[key]:
+                difference.append("%s=%s" % (key, value))
+    return difference
+
 def do_cfg_save(cfg, file):
+    # Log changes.
+    added = cfg_subtract(cfg, orig_cfg)
+    removed = cfg_subtract(orig_cfg, cfg)
+    if added or removed:
+        log("configuration changes:")
+        for line in removed:
+            log("-%s\n" % line)
+        for line in added:
+            log("+%s\n" % line)
+
+    # Write changes.
     for key in sorted(cfg.keys()):
         for value in sorted(cfg[key]):
             file.write("%s=%s\n" % (key, value))
 
 def cfg_reload():
     target = VSWITCHD_TARGET
+    if not target.startswith('/'):
+        pid = read_first_line_of_file('%s/%s.pid' % ('@RUNDIR@', target))
+        target = '%s/%s.%s.ctl' % ('@RUNDIR@', target, pid)
     s = os.stat(target)
-    if stat.S_ISREG(s.st_mode):
-        pid = read_first_line_of_file(target)
-        target = "@RUNDIR@/ovs-vswitchd.%s.ctl" % pid
-        s = os.stat(target)
     if not stat.S_ISSOCK(s.st_mode):
         raise Error("%s is not a Unix domain socket, cannot reload" % target)
     skt = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -143,7 +182,7 @@ def cfg_save(cfg, filename):
         do_cfg_save(cfg, f)
         f.close()
         os.rename(tmp_name, filename)
-        if RELOAD_VSWITCHD:
+        if reload_vswitchd:
             cfg_reload()
 
 # Returns a set of the immediate subsections of 'section' within 'cfg'.  For
@@ -270,6 +309,14 @@ def del_port(cfg, port):
         if fnmatch.fnmatch(key, 'bridge.*.port'):
             cfg[key] = [s for s in cfg[key] if s != port]
 
+# Returns the name of the (real or fake) bridge in 'cfg' that contains
+# port 'port', or None if there is no such port.
+def port_to_bridge(cfg, port):
+    for bridge, parent, vlan in get_bridge_info(cfg):
+        if port != bridge and port in get_bridge_ports(cfg, parent, vlan):
+            return bridge
+    return None
+
 def usage():
     print """%(argv0)s: ovs-vswitchd management utility
 usage: %(argv0)s [OPTIONS] COMMAND [ARG...]
@@ -287,7 +334,7 @@ Port commands:
   list-ports BRIDGE           print the names of all the ports on BRIDGE
   add-port BRIDGE PORT        add network device PORT to BRIDGE
   add-bond BRIDGE PORT IFACE...  add new bonded port PORT in BRIDGE from IFACES
-  del-port BRIDGE PORT        delete PORT (which may be bonded) from BRIDGE
+  del-port [BRIDGE] PORT      delete PORT (which may be bonded) from BRIDGE
   port-to-br PORT             print name of bridge that contains PORT
 A bond is considered to be a single port.
 
@@ -297,9 +344,10 @@ Interface commands (a bond consists of multiple interfaces):
 A bond is considered to consist of interfaces.
 
 General options:
+  --no-syslog                 do not write mesages to syslog
   -c, --config=FILE           set configuration file
                               (default: %(config)s)
-  -t, --target=PIDFILE|SOCKET set ovs-vswitchd target
+  -t, --target=PROGRAM|SOCKET set ovs-vswitchd target
                               (default: %(target)s)
   --no-reload                 do not make ovs-vswitchd reload its configuration
   -h, --help                  display this help message and exit
@@ -324,9 +372,7 @@ def check_conflicts(cfg, name, op):
         if name in get_bridge_ifaces(cfg, parent, vlan):
             raise Error("%s because an interface named %s already exists on bridge %s" % (op, name, bridge))
     
-def cmd_add_br(bridge, parent=None, vlan=None):
-    cfg = cfg_read(VSWITCHD_CONF, True)
-
+def cmd_add_br(cfg, bridge, parent=None, vlan=None):
     check_conflicts(cfg, bridge, "cannot create a bridge named %s" % bridge)
     
     if parent and vlan:
@@ -349,10 +395,8 @@ def cmd_add_br(bridge, parent=None, vlan=None):
         cfg['bridge.%s.port' % parent].append(bridge)
     else:
         cfg['bridge.%s.port' % bridge] = [bridge]
-    cfg_save(cfg, VSWITCHD_CONF)
 
-def cmd_del_br(bridge):
-    cfg = cfg_read(VSWITCHD_CONF, True)
+def cmd_del_br(cfg, bridge):
     parent, vlan = find_bridge(cfg, bridge)
     if vlan == 0:
         vlan = -1
@@ -360,24 +404,21 @@ def cmd_del_br(bridge):
         del_port(cfg, port)
     if vlan < 0: 
         del_matching_keys(cfg, 'bridge.%s.[!0-9]*' % bridge)
-    cfg_save(cfg, VSWITCHD_CONF)
 
-def cmd_list_br():
-    cfg = cfg_read(VSWITCHD_CONF)
-    for bridge in get_all_bridges(cfg):
-        print bridge
+def cmd_list_br(cfg):
+    return get_all_bridges(cfg)
 
-def cmd_br_exists(bridge):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_br_exists(cfg, bridge):
     if bridge not in get_all_bridges(cfg):
         sys.exit(2)
 
-def cmd_list_ports(bridge):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_list_ports(cfg, bridge):
+    ports = []
     parent, vlan = find_bridge(cfg, bridge)
     for port in get_bridge_ports(cfg, parent, vlan):
         if port != bridge:
-            print port
+            ports.append(port)
+    return ports
 
 def do_add_port(cfg, bridge, parent, port, vlan):
     check_conflicts(cfg, port, "cannot create a port named %s" % port)
@@ -385,132 +426,180 @@ def do_add_port(cfg, bridge, parent, port, vlan):
     if vlan > 0:
         cfg['vlan.%s.tag' % port] = [vlan]
 
-def cmd_add_port(bridge, port):
-    cfg = cfg_read(VSWITCHD_CONF, True)
+def cmd_add_port(cfg, bridge, port):
     parent, vlan = find_bridge(cfg, bridge)
     do_add_port(cfg, bridge, parent, port, vlan)
-    cfg_save(cfg, VSWITCHD_CONF)
 
-def cmd_add_bond(bridge, port, *slaves):
-    cfg = cfg_read(VSWITCHD_CONF, True)
+def cmd_add_bond(cfg, bridge, port, *slaves):
     parent, vlan = find_bridge(cfg, bridge)
     do_add_port(cfg, bridge, parent, port, vlan)
     cfg['bonding.%s.slave' % port] = list(slaves)
-    cfg_save(cfg, VSWITCHD_CONF)
 
-def cmd_del_port(bridge, port):
-    cfg = cfg_read(VSWITCHD_CONF, True)
-    parent, vlan = find_bridge(cfg, bridge)
-    if port not in get_bridge_ports(cfg, parent, vlan):
-        if port in get_bridge_ports(cfg, parent, -1):
-            raise Error("bridge %s does not have a port %s (although its parent bridge %s does)" % (bridge, port, parent))
-        else:
-            raise Error("bridge %s does not have a port %s" % (bridge, port))
+def cmd_del_port(cfg, *args):
+    if len(args) == 2:
+        bridge, port = args
+        parent, vlan = find_bridge(cfg, bridge)
+        if port not in get_bridge_ports(cfg, parent, vlan):
+            if port in get_bridge_ports(cfg, parent, -1):
+                raise Error("bridge %s does not have a port %s (although its parent bridge %s does)" % (bridge, port, parent))
+            else:
+                raise Error("bridge %s does not have a port %s" % (bridge, port))
+    else:
+        port, = args
+        if not port_to_bridge(cfg, port):
+            raise Error("no port %s on any bridge" % port)
     del_port(cfg, port)
-    cfg_save(cfg, VSWITCHD_CONF)
 
-def cmd_port_to_br(port):
-    cfg = cfg_read(VSWITCHD_CONF)
-    for bridge, parent, vlan in get_bridge_info(cfg):
-        if port != bridge and port in get_bridge_ports(cfg, parent, vlan):
-            print bridge
-            return
-    raise Error("no port named %s" % port)
+def cmd_port_to_br(cfg, port):
+    bridge = port_to_bridge(cfg, port)
+    if bridge:
+        return (bridge,)
+    else:
+        raise Error("no port named %s" % port)
 
-def cmd_list_ifaces(bridge):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_list_ifaces(cfg, bridge):
+    ifaces = []
     parent, vlan = find_bridge(cfg, bridge)
     for iface in get_bridge_ifaces(cfg, parent, vlan):
         if iface != bridge:
-            print iface
+            ifaces.append(iface)
+    return ifaces
 
-def cmd_iface_to_br(iface):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_iface_to_br(cfg, iface):
     for bridge, parent, vlan in get_bridge_info(cfg):
         if iface != bridge and iface in get_bridge_ifaces(cfg, parent, vlan):
-            print bridge
-            return
+            return (bridge,)
     raise Error("no interface named %s" % iface)
 
-def cmd_br_to_vlan(bridge):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_br_to_vlan(cfg, bridge):
     parent, vlan = find_bridge(cfg, bridge)
-    print vlan
+    return (vlan,)
 
-def cmd_br_to_parent(bridge):
-    cfg = cfg_read(VSWITCHD_CONF)
+def cmd_br_to_parent(cfg, bridge):
     parent, vlan = find_bridge(cfg, bridge)
-    print parent
+    return (parent,)
     
-def main():
-    # Parse command line.
-    try:
-        options, args = getopt.gnu_getopt(sys.argv[1:], "c:t:hV",
-                                          ["config=",
-                                           "target=",
-                                           "no-reload",
-                                           "help",
-                                           "version"])
-    except getopt.GetoptError, msg:
-        sys.stderr.write("%s: %s (use --help for help)\n" % (argv0, msg))
-        sys.exit(1)
+cmdTable = {'add-br': (cmd_add_br, True, lambda n: n == 1 or n == 3),
+            'del-br': (cmd_del_br, True, 1),
+            'list-br': (cmd_list_br, False, 0),
+            'br-exists': (cmd_br_exists, False, 1),
+            'list-ports': (cmd_list_ports, False, 1),
+            'add-port': (cmd_add_port, True, 2),
+            'add-bond': (cmd_add_bond, True, lambda n: n >= 4),
+            'del-port': (cmd_del_port, True, lambda n: n == 1 or n == 2),
+            'port-to-br': (cmd_port_to_br, False, 1),
+            'br-to-vlan': (cmd_br_to_vlan, False, 1),
+            'br-to-parent': (cmd_br_to_parent, False, 1),
+            'list-ifaces': (cmd_list_ifaces, False, 1),
+            'iface-to-br': (cmd_iface_to_br, False, 1)}
 
-    # Handle options.
-    for opt, optarg in options:
-        if opt == "-c" or opt == "--config":
-            global VSWITCHD_CONF
-            VSWITCHD_CONF = optarg
-        elif opt == "-t" or opt == "--target":
-            global VSWITCHD_TARGET
-            if optarg[0] != '/':
-                optarg = '@RUNDIR@/' + optarg
-            VSWITCHD_TARGET = optarg
-        elif opt == "--no-reload":
-            global RELOAD_VSWITCHD
-            RELOAD_VSWITCHD = False
-        elif opt == "-h" or opt == "--help":
-            usage()
-        elif opt == "-V" or opt == "--version":
-            version()
+# Break up commands at -- boundaries.
+def split_commands(args):
+    commands = []
+    command = []
+    for arg in args:
+        if arg == '--':
+            if command:
+                commands.append(command)
+            command = []
         else:
-            raise RuntimeError("unhandled option %s" % opt)
+            command.append(arg)
+    if command:
+        commands.append(command)
+    return commands
 
-    # Execute commands.
-    if not args:
-        sys.stderr.write("%s: missing command name (use --help for help)\n"
-                         % argv0)
-        sys.exit(1)
-
-    commands = {'add-br': (cmd_add_br, lambda n: n == 1 or n == 3),
-                'del-br': (cmd_del_br, 1),
-                'list-br': (cmd_list_br, 0),
-                'br-exists': (cmd_br_exists, 1),
-                'list-ports': (cmd_list_ports, 1),
-                'add-port': (cmd_add_port, 2),
-                'add-bond': (cmd_add_bond, lambda n: n >= 4),
-                'del-port': (cmd_del_port, 2),
-                'port-to-br': (cmd_port_to_br, 1),
-                'br-to-vlan': (cmd_br_to_vlan, 1),
-                'br-to-parent': (cmd_br_to_parent, 1),
-                'list-ifaces': (cmd_list_ifaces, 1),
-                'iface-to-br': (cmd_iface_to_br, 1)}
-    command = args[0]
-    args = args[1:]
-    if command not in commands:
+def check_command(args):
+    command, args = args[0], args[1:]
+    if command not in cmdTable:
         sys.stderr.write("%s: unknown command '%s' (use --help for help)\n"
                          % (argv0, command))
         sys.exit(1)
 
-    function, nargs = commands[command]
+    function, is_mutator, nargs = cmdTable[command]
     if callable(nargs) and not nargs(len(args)):
         sys.stderr.write("%s: '%s' command does not accept %d arguments (use --help for help)\n" % (argv0, command, len(args)))
         sys.exit(1)
     elif not callable(nargs) and len(args) != nargs:
         sys.stderr.write("%s: '%s' command takes %d arguments but %d were supplied (use --help for help)\n" % (argv0, command, nargs, len(args)))
         sys.exit(1)
-    else:
-        function(*args)
-        sys.exit(0)
+
+def run_command(cfg, args):
+    command, args = args[0], args[1:]
+    function, need_lock, nargs = cmdTable[command]
+    return function(cfg, *args)
+
+def main():
+    # Parse command line.
+    try:
+        options, args = getopt.getopt(sys.argv[1:], "c:t:hV",
+                                      ["config=",
+                                       "target=",
+                                       "no-reload",
+                                       "no-syslog",
+                                       "oneline",
+                                       "help",
+                                       "version"])
+    except getopt.GetoptError, msg:
+        sys.stderr.write("%s: %s (use --help for help)\n" % (argv0, msg))
+        sys.exit(1)
+
+    # Handle options.
+    oneline = False
+    for opt, optarg in options:
+        if opt == "-c" or opt == "--config":
+            global vswitchd_conf
+            vswitchd_conf = optarg
+        elif opt == "-t" or opt == "--target":
+            global vswitchd_target
+            vswitchd_target = optarg
+        elif opt == "--no-reload":
+            global reload_vswitchd
+            reload_vswitchd = False
+        elif opt == "-h" or opt == "--help":
+            usage()
+        elif opt == "-V" or opt == "--version":
+            version()
+        elif opt == "--no-syslog":
+            global enable_syslog
+            enable_syslog = False
+        elif opt == "--oneline":
+            oneline = True
+        else:
+            raise RuntimeError("unhandled option %s" % opt)
+
+    if enable_syslog:
+        syslog.openlog("ovs-vsctl")
+        log("Called as %s" % ' '.join(sys.argv[1:]))
+
+    # Break arguments into a series of commands.
+    commands = split_commands(args)
+    if not commands:
+        sys.stderr.write("%s: missing command name (use --help for help)\n"
+                         % argv0)
+        sys.exit(1)
+
+    # Check command syntax.
+    need_lock = False
+    for command in commands:
+        check_command(command)
+        if cmdTable[command[0]][1]:
+            need_lock = True
+
+    # Execute commands.
+    cfg = cfg_read(vswitchd_conf, need_lock)
+    for command in commands:
+        output = run_command(cfg, command)
+        if oneline:
+            if output == None:
+                output = ()
+            print '\\n'.join([str(s).replace('\\', '\\\\')
+                              for s in output])
+        elif output != None:
+            for line in output:
+                print line
+    if need_lock:
+        cfg_save(cfg, vswitchd_conf)
+    sys.exit(0)
 
 if __name__ == "__main__":
     try:

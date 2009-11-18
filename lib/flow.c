@@ -317,7 +317,7 @@ flow_to_string(const flow_t *flow)
 void
 flow_format(struct ds *ds, const flow_t *flow)
 {
-    ds_put_format(ds, "port%04x:vlan%d mac"ETH_ADDR_FMT"->"ETH_ADDR_FMT" "
+    ds_put_format(ds, "in_port%04x:vlan%d mac"ETH_ADDR_FMT"->"ETH_ADDR_FMT" "
                   "type%04x proto%"PRId8" ip"IP_FMT"->"IP_FMT" port%d->%d",
                   flow->in_port, ntohs(flow->dl_vlan),
                   ETH_ADDR_ARGS(flow->dl_src), ETH_ADDR_ARGS(flow->dl_dst),

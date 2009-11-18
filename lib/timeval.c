@@ -43,6 +43,7 @@ static struct timeval now;
 /* Time at which to die with SIGALRM (if not TIME_MIN). */
 static time_t deadline = TIME_MIN;
 
+static void set_up_timer(void);
 static void sigalrm_handler(int);
 static void refresh_if_ticked(void);
 static time_t time_add(time_t, time_t);
@@ -57,8 +58,6 @@ void
 time_init(void)
 {
     struct sigaction sa;
-    struct itimerval itimer;
-
     if (inited) {
         return;
     }
@@ -78,13 +77,32 @@ time_init(void)
         ovs_fatal(errno, "sigaction(SIGALRM) failed");
     }
 
-    /* Set up periodic timer. */
+    /* Set up periodic signal. */
+    set_up_timer();
+}
+
+static void
+set_up_timer(void)
+{
+    struct itimerval itimer;
+
     itimer.it_interval.tv_sec = 0;
     itimer.it_interval.tv_usec = TIME_UPDATE_INTERVAL * 1000;
     itimer.it_value = itimer.it_interval;
     if (setitimer(ITIMER_REAL, &itimer, NULL)) {
         ovs_fatal(errno, "setitimer failed");
     }
+}
+
+/* Set up the interval timer, to ensure that time advances even without calling
+ * time_refresh().
+ *
+ * A child created with fork() does not inherit the parent's interval timer, so
+ * this function needs to be called from the child after fork(). */
+void
+time_postfork(void)
+{
+    set_up_timer();
 }
 
 /* Forces a refresh of the current time from the kernel.  It is not usually

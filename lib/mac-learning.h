@@ -52,10 +52,13 @@ struct mac_learning {
     struct list table[MAC_HASH_SIZE]; /* Hash table. */
     struct mac_entry entries[MAC_MAX]; /* All entries. */
     uint32_t secret;            /* Secret for  */
+    unsigned long *non_learning_vlans; /* Bitmap of learning disabled VLANs. */
 };
 
 struct mac_learning *mac_learning_create(void);
 void mac_learning_destroy(struct mac_learning *);
+bool mac_learning_set_disabled_vlans(struct mac_learning *,
+                                     unsigned long *bitmap);
 tag_type mac_learning_learn(struct mac_learning *,
                             const uint8_t src[ETH_ADDR_LEN], uint16_t vlan,
                             uint16_t src_port);

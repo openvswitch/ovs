@@ -7,6 +7,15 @@ m4_define([RUN_OVS_VSCTL],
 m4_foreach([command], [$@], [ovs-vsctl --no-reload --config=conf command
 ])])
 
+dnl RUN_OVS_VSCTL_TOGETHER(COMMAND, ...)
+dnl
+dnl Executes each ovs-vsctl COMMAND on a file named "conf" in the
+dnl current directory, in a single run of ovs-vsctl.  Creates "conf" if it
+dnl does not already exist.
+m4_define([RUN_OVS_VSCTL_TOGETHER],
+  [: >> conf
+   ovs-vsctl --no-reload --config=conf m4_join([ -- ], $@)])
+
 dnl CHECK_BRIDGES([BRIDGE, PARENT, VLAN], ...)
 dnl
 dnl Verifies that "ovs-vsctl list-br" prints the specified list of bridges,
@@ -15,15 +24,36 @@ dnl specified PARENT and is on the given VLAN.
 m4_define([_CHECK_BRIDGE],
   [AT_CHECK([RUN_OVS_VSCTL([br-to-parent $1])], [0], [$2
 ])
+
+   # Check br-to-vlan, without --oneline.
    AT_CHECK([RUN_OVS_VSCTL([br-to-vlan $1])], [0], [$3
+])
+   # Check br-to-vlan, with --oneline.
+   # (This particular test is interesting with --oneline because it returns
+   # an integer instead of a string and that can cause type mismatches inside
+   # python if not done carefully.)
+   AT_CHECK([RUN_OVS_VSCTL([--oneline br-to-vlan $1])], [0], [$3
+])
+
+   # Check multiple queries in a single run.
+   AT_CHECK([RUN_OVS_VSCTL_TOGETHER([br-to-parent $1], [br-to-vlan $1])], [0],
+[$2
+$3
 ])])
 m4_define([CHECK_BRIDGES],
-  [dnl Check that the bridges appear on list-br.
+  [dnl Check that the bridges appear on list-br, without --oneline.
    AT_CHECK(
      [RUN_OVS_VSCTL([list-br])],
      [0],
      [m4_foreach([brinfo], [$@], [m4_car(brinfo)
 ])])
+
+   dnl Check that the bridges appear on list-br, with --oneline.
+   AT_CHECK(
+     [RUN_OVS_VSCTL([--oneline list-br])],
+     [0],
+     [m4_join([\n], m4_foreach([brinfo], [$@], [m4_car(brinfo),]))
+])
 
    dnl Check that each bridge exists according to br-exists and that
    dnl a bridge that should not exist does not.
@@ -41,11 +71,19 @@ dnl list of ports, which must be in alphabetical order.  Also checks
 dnl that "ovs-vsctl port-to-br" reports that each port is
 dnl in BRIDGE.
 m4_define([CHECK_PORTS],
-  [AT_CHECK(
+  [dnl Check ports without --oneline.
+   AT_CHECK(
      [RUN_OVS_VSCTL([list-ports $1])],
      [0],
      [m4_foreach([port], m4_cdr($@), [port
 ])])
+
+   dnl Check ports with --oneline.
+   AT_CHECK(
+     [RUN_OVS_VSCTL([--oneline list-ports $1])],
+     [0],
+     [m4_join([\n], m4_shift($@))
+])
    AT_CHECK([RUN_OVS_VSCTL([port-to-br $1])], [1], [], [ovs-vsctl: no port named $1
 ])
    m4_foreach(
@@ -86,6 +124,14 @@ CHECK_PORTS([a])
 CHECK_IFACES([a])
 AT_CLEANUP
 
+AT_SETUP([add-br a, add-br a])
+AT_KEYWORDS([ovs-vsctl])
+AT_CHECK([RUN_OVS_VSCTL([add-br a])])
+AT_CHECK([RUN_OVS_VSCTL([add-br a])], [1], [],
+  [ovs-vsctl: cannot create a bridge named a because a bridge named a already exists
+])
+AT_CLEANUP
+
 AT_SETUP([add-br a, add-br b])
 AT_KEYWORDS([ovs-vsctl])
 AT_CHECK([RUN_OVS_VSCTL([add-br a], [add-br b])])
@@ -111,9 +157,39 @@ CHECK_PORTS([b])
 CHECK_IFACES([b])
 AT_CLEANUP
 
-AT_SETUP([add-br a b, add-port a a1, add-port b b1, del-br a])
+AT_SETUP([add-br a, add-port a a1, add-port a a2])
 AT_KEYWORDS([ovs-vsctl])
 AT_CHECK([RUN_OVS_VSCTL(
+   [add-br a], 
+   [add-port a a1],
+   [add-port a a2])])
+AT_CHECK([cat conf], [0],
+  [bridge.a.port=a
+bridge.a.port=a1
+bridge.a.port=a2
+])
+CHECK_BRIDGES([a, a, 0])
+CHECK_PORTS([a], [a1], [a2])
+CHECK_IFACES([a], [a1], [a2])
+AT_CLEANUP
+
+AT_SETUP([add-br a, add-port a a1, add-port a a1])
+AT_KEYWORDS([ovs-vsctl])
+AT_CHECK([RUN_OVS_VSCTL(
+   [add-br a], 
+   [add-port a a1])])
+AT_CHECK([cat conf], [0],
+  [bridge.a.port=a
+bridge.a.port=a1
+])
+AT_CHECK([RUN_OVS_VSCTL([add-port a a1])], [1], [],
+  [ovs-vsctl: cannot create a port named a1 because a port named a1 already exists on bridge a
+])
+AT_CLEANUP
+
+AT_SETUP([add-br a b, add-port a a1, add-port b b1, del-br a])
+AT_KEYWORDS([ovs-vsctl])
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
    [add-br a], 
    [add-br b], 
    [add-port a a1],
@@ -165,12 +241,12 @@ CHECK_PORTS([b], [b1])
 CHECK_IFACES([b], [b1])
 AT_CLEANUP
 
-AT_SETUP([add-br a, add-bond a bond0 a1 a2 a3, del-port a bond0])
+AT_SETUP([add-br a, add-bond a bond0 a1 a2 a3, del-port bond0])
 AT_KEYWORDS([ovs-vsctl])
-AT_CHECK([RUN_OVS_VSCTL(
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [add-br a], 
   [add-bond a bond0 a1 a2 a3],
-  [del-port a bond0])])
+  [del-port bond0])])
 AT_CHECK([cat conf], [0], [dnl
 bridge.a.port=a
 ])
@@ -259,7 +335,8 @@ AT_CLEANUP
 AT_SETUP([fake bridge on bond + del-br fake bridge])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 AT_DATA([conf], [BOND_FAKE_CONF])
-AT_CHECK([RUN_OVS_VSCTL([del-br xapi2])])
+AT_CHECK([RUN_OVS_VSCTL([--oneline del-br xapi2])], [0], [
+])
 CHECK_BRIDGES([xapi1, xapi1, 0])
 CHECK_PORTS([xapi1], [bond0])
 CHECK_IFACES([xapi1], [eth0], [eth1])

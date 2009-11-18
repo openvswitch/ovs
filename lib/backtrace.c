@@ -42,7 +42,7 @@ get_max_stack(void)
     for (line_number = 1; fgets(line, sizeof line, f); line_number++) {
         if (strstr(line, "[stack]")) {
             uintptr_t end;
-            if (sscanf(line, "%*"SCNxPTR"-%"SCNxPTR, &end) != 1) {
+            if (sscanf(line, "%*x-%"SCNxPTR, &end) != 1) {
                 VLOG_WARN("%s:%d: parse error", file_name, line_number);
                 continue;
             }
@@ -72,6 +72,10 @@ stack_low(void)
 #ifdef __i386__
     uintptr_t low;
     asm("movl %%esp,%0" : "=g" (low));
+    return low;
+#elif __x86_64__
+    uintptr_t low;
+    asm("movq %%rsp,%0" : "=g" (low));
     return low;
 #else
     /* This causes a warning in GCC that cannot be disabled, so use it only on

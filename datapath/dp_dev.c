@@ -157,22 +157,47 @@ static void dp_dev_free(struct net_device *netdev)
 	free_netdev(netdev);
 }
 
+static int dp_dev_do_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
+{
+	if (dp_ioctl_hook)
+		return dp_ioctl_hook(dev, ifr, cmd);
+	return -EOPNOTSUPP;
+}
+
+#ifdef HAVE_NET_DEVICE_OPS
+static const struct net_device_ops dp_dev_netdev_ops = {
+	.ndo_init = dp_dev_init,
+	.ndo_open = dp_dev_open,
+	.ndo_stop = dp_dev_stop,
+	.ndo_start_xmit = dp_dev_xmit,
+	.ndo_set_mac_address = dp_dev_mac_addr,
+	.ndo_do_ioctl = dp_dev_do_ioctl,
+	.ndo_change_mtu = dp_dev_change_mtu,
+	.ndo_get_stats = dp_dev_get_stats,
+};
+#endif
+
 static void
 do_setup(struct net_device *netdev)
 {
 	ether_setup(netdev);
 
-	netdev->do_ioctl = dp_ioctl_hook;
+#ifdef HAVE_NET_DEVICE_OPS
+	netdev->netdev_ops = &dp_dev_netdev_ops;
+#else
+	netdev->do_ioctl = dp_dev_do_ioctl;
 	netdev->get_stats = dp_dev_get_stats;
 	netdev->hard_start_xmit = dp_dev_xmit;
 	netdev->open = dp_dev_open;
-	SET_ETHTOOL_OPS(netdev, &dp_ethtool_ops);
 	netdev->stop = dp_dev_stop;
-	netdev->tx_queue_len = 0;
 	netdev->set_mac_address = dp_dev_mac_addr;
 	netdev->change_mtu = dp_dev_change_mtu;
 	netdev->init = dp_dev_init;
+#endif
+
 	netdev->destructor = dp_dev_free;
+	SET_ETHTOOL_OPS(netdev, &dp_ethtool_ops);
+	netdev->tx_queue_len = 0;
 
 	netdev->flags = IFF_BROADCAST | IFF_MULTICAST;
 	netdev->features = NETIF_F_LLTX; /* XXX other features? */
@@ -233,5 +258,9 @@ void dp_dev_destroy(struct net_device *netdev)
 
 int is_dp_dev(struct net_device *netdev) 
 {
+#ifdef HAVE_NET_DEVICE_OPS
+	return netdev->netdev_ops == &dp_dev_netdev_ops;
+#else
 	return netdev->open == dp_dev_open;
+#endif
 }

@@ -232,7 +232,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	if (!dp->table)
 		goto err_free_dp;
 
-	/* Setup our datapath device */
+	/* Set up our datapath device. */
 	dp_dev = dp_dev_create(dp, devname, ODPP_LOCAL);
 	err = PTR_ERR(dp_dev);
 	if (IS_ERR(dp_dev))
@@ -782,7 +782,8 @@ static int validate_actions(const struct sw_flow_actions *actions)
 			break;
 
 		case ODPAT_SET_VLAN_PCP:
-			if (a->vlan_pcp.vlan_pcp & ~VLAN_PCP_MASK)
+			if (a->vlan_pcp.vlan_pcp
+			    & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT))
 				return -EINVAL;
 			break;
 
@@ -974,13 +975,18 @@ static int put_actions(const struct sw_flow *flow, struct odp_flow __user *ufp)
 	return 0;
 }
 
-static int answer_query(struct sw_flow *flow, struct odp_flow __user *ufp)
+static int answer_query(struct sw_flow *flow, u32 query_flags,
+			struct odp_flow __user *ufp)
 {
 	struct odp_flow_stats stats;
 	unsigned long int flags;
 
 	spin_lock_irqsave(&flow->lock, flags);
 	get_stats(flow, &stats);
+
+	if (query_flags & ODPFF_ZERO_TCP_FLAGS) {
+		flow->tcp_flags = 0;
+	}
 	spin_unlock_irqrestore(&flow->lock, flags);
 
 	if (__copy_to_user(&ufp->stats, &stats, sizeof(struct odp_flow_stats)))
@@ -1015,7 +1021,7 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	 * we get completely accurate stats, but that blows our performance,
 	 * badly. */
 	dp->n_flows--;
-	error = answer_query(flow, ufp);
+	error = answer_query(flow, 0, ufp);
 	flow_deferred_free(flow);
 
 error:
@@ -1040,7 +1046,7 @@ static int query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 		if (!flow)
 			error = __put_user(ENOENT, &ufp->stats.error);
 		else
-			error = answer_query(flow, ufp);
+			error = answer_query(flow, uf.flags, ufp);
 		if (error)
 			return -EFAULT;
 	}
@@ -1061,7 +1067,7 @@ static int list_flow(struct sw_flow *flow, void *cbdata_)
 
 	if (__copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
 		return -EFAULT;
-	error = answer_query(flow, ufp);
+	error = answer_query(flow, 0, ufp);
 	if (error)
 		return error;
 
@@ -1161,9 +1167,9 @@ static int do_execute(struct datapath *dp, const struct odp_execute *executep)
 	skb_reset_mac_header(skb);
 	eth = eth_hdr(skb);
 
-    /* Normally, setting the skb 'protocol' field would be handled by a
-     * call to eth_type_trans(), but it assumes there's a sending
-     * device, which we may not have. */
+	/* Normally, setting the skb 'protocol' field would be handled by a
+	 * call to eth_type_trans(), but it assumes there's a sending
+	 * device, which we may not have. */
 	if (ntohs(eth->h_proto) >= 1536)
 		skb->protocol = eth->h_proto;
 	else
@@ -1371,6 +1377,16 @@ get_port_group(struct datapath *dp, struct odp_port_group *upg)
 	return 0;
 }
 
+static int get_listen_mask(const struct file *f)
+{
+	return (long)f->private_data;
+}
+
+static void set_listen_mask(struct file *f, int listen_mask)
+{
+	f->private_data = (void*)(long)listen_mask;
+}
+
 static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 			   unsigned long argp)
 {
@@ -1426,7 +1442,7 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		break;
 
 	case ODP_GET_LISTEN_MASK:
-		err = put_user((int)f->private_data, (int __user *)argp);
+		err = put_user(get_listen_mask(f), (int __user *)argp);
 		break;
 
 	case ODP_SET_LISTEN_MASK:
@@ -1437,7 +1453,7 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		if (listeners & ~ODPL_ALL)
 			break;
 		err = 0;
-		f->private_data = (void*)listeners;
+		set_listen_mask(f, listeners);
 		break;
 
 	case ODP_PORT_QUERY:
@@ -1503,7 +1519,7 @@ ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 		      loff_t *ppos)
 {
 	/* XXX is there sufficient synchronization here? */
-	int listeners = (int) f->private_data;
+	int listeners = get_listen_mask(f);
 	int dp_idx = iminor(f->f_dentry->d_inode);
 	struct datapath *dp = get_dp(dp_idx);
 	struct sk_buff *skb;
@@ -1543,7 +1559,7 @@ ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 		}
 	}
 success:
-	copy_bytes = min(skb->len, nbytes);
+	copy_bytes = min_t(size_t, skb->len, nbytes);
 	iov.iov_base = buf;
 	iov.iov_len = copy_bytes;
 	retval = skb_copy_datagram_iovec(skb, 0, &iov, iov.iov_len);
@@ -1565,7 +1581,7 @@ static unsigned int openvswitch_poll(struct file *file, poll_table *wait)
 	if (dp) {
 		mask = 0;
 		poll_wait(file, &dp->waitqueue, wait);
-		if (dp_has_packet_of_interest(dp, (int)file->private_data))
+		if (dp_has_packet_of_interest(dp, get_listen_mask(file)))
 			mask |= POLLIN | POLLRDNORM;
 	} else {
 		mask = POLLIN | POLLRDNORM | POLLHUP;

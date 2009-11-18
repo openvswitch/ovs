@@ -1042,7 +1042,7 @@ check_ofp_message(const struct ofp_header *msg, uint8_t type, size_t size)
     if (got_size != size) {
         char *type_name = ofp_message_type_to_string(type);
         VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "received %s message of length %"PRIu16" (expected %zu)",
+                     "received %s message of length %zu (expected %zu)",
                      type_name, got_size, size);
         free(type_name);
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
@@ -1077,7 +1077,7 @@ check_ofp_message_array(const struct ofp_header *msg, uint8_t type,
     got_size = ntohs(msg->length);
     if (got_size < min_size) {
         char *type_name = ofp_message_type_to_string(type);
-        VLOG_WARN_RL(&bad_ofmsg_rl, "received %s message of length %"PRIu16" "
+        VLOG_WARN_RL(&bad_ofmsg_rl, "received %s message of length %zu "
                      "(expected at least %zu)",
                      type_name, got_size, min_size);
         free(type_name);
@@ -1086,7 +1086,7 @@ check_ofp_message_array(const struct ofp_header *msg, uint8_t type,
     if ((got_size - min_size) % array_elt_size) {
         char *type_name = ofp_message_type_to_string(type);
         VLOG_WARN_RL(&bad_ofmsg_rl,
-                     "received %s message of bad length %"PRIu16": the "
+                     "received %s message of bad length %zu: the "
                      "excess over %zu (%zu) is not evenly divisible by %zu "
                      "(remainder is %zu)",
                      type_name, got_size, min_size, got_size - min_size,
@@ -1119,13 +1119,13 @@ check_ofp_packet_out(const struct ofp_header *oh, struct ofpbuf *data,
 
     actions_len = ntohs(opo->actions_len);
     if (actions_len > extra) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out claims %zu bytes of actions "
+        VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out claims %u bytes of actions "
                      "but message has room for only %zu bytes",
                      actions_len, extra);
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
     }
     if (actions_len % sizeof(union ofp_action)) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out claims %zu bytes of actions, "
+        VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out claims %u bytes of actions, "
                      "which is not a multiple of %zu",
                      actions_len, sizeof(union ofp_action));
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
@@ -1282,7 +1282,8 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
         break;
 
     default:
-        VLOG_WARN_RL(&bad_ofmsg_rl, "unknown action type %"PRIu16, a->type);
+        VLOG_WARN_RL(&bad_ofmsg_rl, "unknown action type %"PRIu16,
+                ntohs(a->type));
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
     }
 
@@ -1312,7 +1313,7 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
 
         if (n_slots > slots_left) {
             VLOG_DBG_RL(&bad_ofmsg_rl,
-                        "action requires %u slots but only %td remain",
+                        "action requires %u slots but only %u remain",
                         n_slots, slots_left);
             return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
         }
@@ -1360,7 +1361,7 @@ normalize_match(struct ofp_match *m)
     if (wc & OFPFW_DL_TYPE) {
         m->dl_type = 0;
 
-        /* Can't sensibly m on network or transport headers if the
+        /* Can't sensibly match on network or transport headers if the
          * data link type is unknown. */
         wc |= OFPFW_NW | OFPFW_TP;
         m->nw_src = m->nw_dst = m->nw_proto = 0;
@@ -1369,7 +1370,7 @@ normalize_match(struct ofp_match *m)
         if (wc & OFPFW_NW_PROTO) {
             m->nw_proto = 0;
 
-            /* Can't sensibly m on transport headers if the network
+            /* Can't sensibly match on transport headers if the network
              * protocol is unknown. */
             wc |= OFPFW_TP;
             m->tp_src = m->tp_dst = 0;
@@ -1384,7 +1385,7 @@ normalize_match(struct ofp_match *m)
             }
         } else {
             /* Transport layer fields will always be extracted as zeros, so we
-             * can do an exact-m on those values.  */
+             * can do an exact-match on those values.  */
             wc &= ~OFPFW_TP;
             m->tp_src = m->tp_dst = 0;
         }
@@ -1396,7 +1397,7 @@ normalize_match(struct ofp_match *m)
         }
     } else {
         /* Network and transport layer fields will always be extracted as
-         * zeros, so we can do an exact-m on those values. */
+         * zeros, so we can do an exact-match on those values. */
         wc &= ~(OFPFW_NW | OFPFW_TP);
         m->nw_proto = m->nw_src = m->nw_dst = 0;
         m->tp_src = m->tp_dst = 0;

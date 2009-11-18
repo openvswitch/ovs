@@ -24,6 +24,7 @@
 /* Mask for the priority bits in a vlan header.  If we ever merge upstream
  * then this should go into include/linux/if_vlan.h. */
 #define VLAN_PCP_MASK 0xe000
+#define VLAN_PCP_SHIFT 13
 
 #define DP_MAX_PORTS 1024
 #define DP_MAX_GROUPS 16

@@ -53,7 +53,7 @@ struct switch_ {
 static bool learn_macs = true;
 
 /* Set up flows?  (If not, every packet is processed at the controller.) */
-static bool setup_flows = true;
+static bool set_up_flows = true;
 
 /* --max-idle: Maximum idle time, in seconds, before flows expire. */
 static int max_idle = 60;
@@ -202,7 +202,7 @@ new_switch(struct switch_ *sw, struct vconn *vconn, const char *name)
 {
     sw->rconn = rconn_new_from_vconn(name, vconn);
     sw->lswitch = lswitch_create(sw->rconn, learn_macs,
-                                 setup_flows ? max_idle : -1);
+                                 set_up_flows ? max_idle : -1);
 }
 
 static int
@@ -268,7 +268,7 @@ parse_options(int argc, char *argv[])
             break;
 
         case 'n':
-            setup_flows = false;
+            set_up_flows = false;
             break;
 
         case OPT_MUTE:

@@ -4,7 +4,7 @@
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-vsctl 8 "September 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-vsctl 8 "November 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-vsctl
 .
 .SH NAME
@@ -12,6 +12,7 @@ ovs\-vsctl \- utility for querying and configuring \fBovs\-vswitchd\fR
 .
 .SH SYNOPSIS
 \fBovs\-vsctl\fR [\fIoptions\fR] \fIcommand \fR[\fIargs\fR\&...]
+[\fB\-\-\fR \fIcommand \fR[\fIargs\fR\&...]]
 .
 .SH DESCRIPTION
 The \fBovs\-vsctl\fR program configures \fBovs\-vswitchd\fR(8), mainly
@@ -22,7 +23,8 @@ when \fBovs\-vswitchd\fR is running, but it can also be used when
 changes will only take effect when \fBovs\-vswitchd\fR is started.
 .PP
 By default, each time \fBovs\-vsctl\fR runs, it examines and,
-depending on the requested command, possibly applies changes to an
+depending on the requested command or commands, possibly applies
+changes to an
 \fBovs\-vswitchd.conf\fR file.  Then, if it applied any changes and if
 \fBovs\-vswitchd\fR is running, it tells \fBovs\-vswitchd\fR to reload
 the modified configuration file and waits for the reload to complete
@@ -66,33 +68,38 @@ it bypasses the Open vSwitch configuration file locking protocol.
 .IP "\fB\-t \fItarget\fR"
 .IQ "\fB\-\-target=\fItarget\fR"
 Configures how \fBovs\-vsctl\fR contacts \fBovs\-vswitchd\fR to
-instruct it to reload its configuration file.  The \fItarget\fR takes
-one of two forms:
-.RS
-.IP \(bu
-The name of a Unix domain socket on which \fBovs\-vswitchd\fR is
-listening for control channel connections.  By default,
-\fBovs\-vswitchd\fR listens on a Unix domain socket named
-\fB@RUNDIR@/ovs\-vswitchd.\fIpid\fR.ctl\fR, where \fIpid\fR is the
-\fBovs\-vswitchd\fR process's process ID.
-.IP \(bu
-The name of a pidfile, that is, a file whose contents are the process
-ID of a running process as a decimal number.  \fBovs\-vswitchd\fR
-creates a pidfile if it is invoked with the \fB\-\-pidfile\fR option.
-\fBovs\-vsctl\fR reads the pidfile, then looks for a Unix socket named
-\fB@RUNDIR@/ovs\-vswitchd.\fIpid\fR.ctl\fR, where \fIpid\fR is
+instruct it to reload its configuration file.
+.IP
+If \fItarget\fR begins with \fB/\fR it must name a Unix domain socket
+on which \fBovs\-vswitchd\fR is listening for control channel
+connections.  By default, \fBovs\-vswitchd\fR listens on a Unix domain
+socket named \fB@RUNDIR@/ovs\-vswitchd.\fIpid\fB.ctl\fR, where
+\fIpid\fR is \fBovs\-vswitchd\fR's process ID.
+.IP
+Otherwise, \fBovs\-appctl\fR looks for a pidfile, that is, a file
+whose contents are the process ID of a running process as a decimal
+number, named \fB@RUNDIR@/\fItarget\fB.pid\fR.  (The \fB\-\-pidfile\fR
+option makes an Open vSwitch daemon create a pidfile.)
+\fBovs\-appctl\fR reads the pidfile, then looks for a Unix socket
+named \fB@RUNDIR@/\fItarget\fB.\fIpid\fB.ctl\fR, where \fIpid\fR is
 replaced by the process ID read from \fItarget\fR, and uses that file
 as if it had been specified directly as the target.
-.RE
 .IP
-If \fItarget\fR does not begin with \fB/\fR, then \fB@RUNDIR@/\fR is
-implicitly prefixed to it.
-.IP
-If neither \fB\-t\fR nor \fB\-\-target\fR is specified, the default target is
-\fB@RUNDIR@/ovs\-vswitchd.pid\fR.
+The default target is \fBovs\-vswitchd\fR.
 .IP "\fB\-\-no\-reload\fR"
 Prevents \fBovs\-vsctl\fR from telling \fBovs\-vswitchd\fR to reload
 its configuration file.
+.
+.IP "\fB\-\-no\-syslog\fR"
+By default, \fBovs\-vsctl\fR logs its arguments and the details of any
+changes that it makes to the system log.  This option disables this
+logging.
+.IP "\fB\-\-oneline\fR"
+Modifies the output format so that the output for each command is printed
+on a single line.  New-line characters that would otherwise separate
+lines are printed as \fB\\n\fR, and any instances of \fB\\\fR that
+would otherwise appear in the output are doubled.
+Prints a blank line for each command that has no output.
 .
 .SH COMMANDS
 The commands implemented by \fBovs\-vsctl\fR are described in the
@@ -152,8 +159,10 @@ Creates on \fIbridge\fR a new port named \fIport\fR that bonds
 together the network devices given as each \fIiface\fR.  At least two
 interfaces must be named.
 .
-.IP "\fBdel\-port \fIbridge port\fR"
-Deletes \fBport\fR from \fIbridge\fR.
+.IP "\fBdel\-port \fR[\fIbridge\fR] \fIport\fR"
+Deletes \fIport\fR.  If \fIbridge\fR is omitted, \fIport\fR is removed
+from whatever bridge contains it; if \fIbridge\fR is specified, it
+must be the real or fake bridge that contains \fIport\fR.
 .
 .IP "\fBport\-to\-br \fIport\fR"
 Prints the name of the bridge that contains \fIport\fR on standard
@@ -173,6 +182,16 @@ list.
 .IP "\fBiface\-to\-br \fIiface\fR"
 Prints the name of the bridge that contains \fIiface\fR on standard
 output.
+.SH "EXAMPLES"
+Create a new bridge named br0 and add port eth0 to it:
+.IP
+.B "ovs-vsctl add\-br br0"
+.br
+.B "ovs-vsctl add\-port br0 eth0"
+.PP
+Alternatively, perform both operations in a single atomic transaction:
+.IP 
+.B "ovs-vsctl add\-br br0 \-\- add\-port br0 eth0"
 .
 .SH "EXIT STATUS"
 .IP "0"

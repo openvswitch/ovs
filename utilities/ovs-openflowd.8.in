@@ -298,11 +298,16 @@ time is 8 seconds.
 
 .TP
 \fB-l\fR, \fB--listen=\fImethod\fR
-Configures the switch to additionally listen for incoming OpenFlow
-connections for switch management with \fBovs\-ofctl\fR.  The \fImethod\fR
+By default, the switch listens for OpenFlow management connections on a
+Unix domain socket named \fB@RUNDIR@/\fIdatapath\fB.mgmt\fR.  This socket 
+can be used to perform local OpenFlow monitoring and administration with
+tools such as \fBovs\-ofctl\fR.  
+
+This option may be used to override the default listener.  The \fImethod\fR
 must be given as one of the passive OpenFlow connection methods listed
 below.  This option may be specified multiple times to listen to
-multiple connection methods.
+multiple connection methods.  If a single \fImethod\fR of \fBnone\fR is
+used, no listeners will be created.
 
 .RS
 .TP

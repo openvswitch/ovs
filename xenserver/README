@@ -48,6 +48,12 @@ files are:
 
         vswitch-aware replacement for Citrix script of the same name.
 
+    usr_share_vswitch_scripts_refresh-xs-network-uuids
+
+        Script to refresh bridge.<bridge>.xs-network-uuids keys, which
+        can get out-of-sync following a pool join.  Running this script
+        is an alternative to rebooting the host.
+
     root_vswitch_scripts_sysconfig.template
 
         Template for vswitch's /etc/sysconfig/vswitch configuration

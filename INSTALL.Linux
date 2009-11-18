@@ -27,8 +27,11 @@ you will need the following software:
       connections from an Open vSwitch to an OpenFlow controller.  To
       enable, configure with --enable-ssl=yes.
 
-To compile the kernel module (which is required for operation), you
-must also install the following:
+To compile the kernel module, you must also install the following.  If
+you cannot build or install the kernel module, you may use the
+userspace-only implementation, at a cost in performance.  The
+userspace implementation may also lack some features.  Refer to
+INSTALL.userspace for more information.
 
     - A supported Linux kernel version.  Please refer to README for a
       list of supported versions.
@@ -58,7 +61,7 @@ If you are working from a Git tree or snapshot (instead of from a
 distribution tarball), or if you modify the Open vSwitch build system,
 you will also need the following software:
 
-    - Autoconf version 2.60 or later.
+    - Autoconf version 2.63 or later.
 
     - Automake version 1.10 or later.
 
@@ -92,7 +95,12 @@ Building and Installing Open vSwitch for Linux
 Once you have installed all the prerequisites listed above in the Base
 Prerequisites section, follow the procedure below to build.
 
-1. In the top source directory, configure the package by running the
+1. If you pulled the sources directly from an Open vSwitch Git tree, 
+   run boot.sh in the top source directory:
+
+      % ./boot.sh
+
+2. In the top source directory, configure the package by running the
    configure script.  You can usually invoke configure without any
    arguments:
 
@@ -128,16 +136,16 @@ Prerequisites section, follow the procedure below to build.
    additional environment variables.  For a full list, invoke
    configure with the --help option.
 
-2. Run make in the top source directory: 
+3. Run make in the top source directory: 
 
       % make
 
-3. Become root by running "su" or another program.
+4. Become root by running "su" or another program.
 
-4. Run "make install" to install the executables and manpages into the
+5. Run "make install" to install the executables and manpages into the
    running system, by default under /usr/local.
 
-5. If you built kernel modules, you may load them with "insmod", e.g.:
+6. If you built kernel modules, you may load them with "insmod", e.g.:
 
       % insmod datapath/linux-2.6/openvswitch_mod.ko
 
@@ -156,14 +164,12 @@ respectively.
 
 At runtime, you may make ovs-vswitchd reload its configuration file
 and update its configuration accordingly by sending it a SIGHUP
-signal.  The ovs-appctl utility can also be used to do this with a
-command such as:
+signal.  The ovs-appctl utility can also be used to do this:
 
-    % ovs-appctl -t <pid> -e vswitchd/reload
+    % ovs-appctl vswitchd/reload
 
-where <pid> is ovs-vswitchd's process ID.  In the latter case,
-ovs-appctl will not exit until the reload and reconfiguration is
-complete.
+In the latter case, ovs-appctl will wait for ovs-vswitchd to finish
+reloading before it exits.
 
 Bug Reporting
 -------------

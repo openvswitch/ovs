@@ -29,10 +29,8 @@ replaced by a single \fB%\fR.  The \fB%\fR character may not otherwise
 appear in \fIcommand\fR.
 .IP
 The commands that are substituted into \fIcommand\fR are those that
-can be listed by passing \fB-e help\fR to \fBovs\-appctl\fR with
-\fBovs\-vswitchd\fR as target.  The command that is substituted may
-include white space-separated arguments, so \fIcommand\fR should include
-shell quotes around \fB%s\fR.
+can be listed by passing \fBhelp\fR to \fBovs\-appctl\fR with
+\fBovs\-vswitchd\fR as target.
 .IP
 \fIcommand\fR must not redirect \fBovs\-appctl\fR's standard output or
 standard error streams, because \fBovs\-brcompatd\fR expects to read
