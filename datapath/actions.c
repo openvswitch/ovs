@@ -37,7 +37,7 @@ make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
 			nskb->ip_summed = skb->ip_summed;
 			nskb->csum = skb->csum;
 #endif
-#if defined(CONFIG_XEN) && LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
 			/* These fields are copied in skb_clone but not in
 			 * skb_copy or related functions.  We need to manually
 			 * copy them over here. */

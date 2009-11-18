@@ -144,6 +144,13 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
                   [OVS_DEFINE([HAVE_CSUM_UNFOLD])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_cow],
                   [OVS_DEFINE([HAVE_SKB_COW])])
+  # Check for the proto_data_valid member in struct sk_buff.  The [^@]
+  # is necessary because some versions of this header remove the
+  # member but retain the kerneldoc comment that describes it (which
+  # starts with @).  The brackets must be doubled because of m4
+  # quoting rules.
+  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [[[^@]]proto_data_valid],
+                  [OVS_DEFINE([HAVE_PROTO_DATA_VALID])])
   OVS_CHECK_LOG2_H
   OVS_CHECK_VETH
   if cmp -s datapath/linux-2.6/kcompat.h.new \
