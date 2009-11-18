@@ -16,7 +16,6 @@ struct sk_buff;
 struct odp_flow_key;
 union odp_action;
 
-struct sk_buff *make_writable(struct sk_buff *, gfp_t gfp);
 int dp_xmit_skb(struct sk_buff *);
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		    struct odp_flow_key *key,
