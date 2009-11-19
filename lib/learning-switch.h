@@ -22,7 +22,9 @@
 struct ofpbuf;
 struct rconn;
 
-struct lswitch *lswitch_create(struct rconn *, bool learn_macs, int max_idle);
+struct lswitch *lswitch_create(struct rconn *, bool learn_macs,
+			       bool exact_flows, int max_idle,
+			       bool action_normal);
 void lswitch_run(struct lswitch *, struct rconn *);
 void lswitch_wait(struct lswitch *);
 void lswitch_destroy(struct lswitch *);

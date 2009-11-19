@@ -57,6 +57,8 @@ struct lswitch {
     uint32_t capabilities;
     time_t last_features_request;
     struct mac_learning *ml;    /* NULL to act as hub instead of switch. */
+    bool exact_flows;           /* Use exact-match flows? */
+    bool action_normal;         /* Use OFPP_NORMAL? */
 
     /* Number of outgoing queued packets on the rconn. */
     struct rconn_packet_counter *queued;
@@ -105,7 +107,8 @@ static packet_handler_func process_stats_reply;
  *
  * 'rconn' is used to send out an OpenFlow features request. */
 struct lswitch *
-lswitch_create(struct rconn *rconn, bool learn_macs, int max_idle)
+lswitch_create(struct rconn *rconn, bool learn_macs,
+	       bool exact_flows, int max_idle, bool action_normal)
 {
     struct lswitch *sw;
     size_t i;
@@ -115,6 +118,8 @@ lswitch_create(struct rconn *rconn, bool learn_macs, int max_idle)
     sw->datapath_id = 0;
     sw->last_features_request = time_now() - 1;
     sw->ml = learn_macs ? mac_learning_create() : NULL;
+    sw->action_normal = action_normal;
+    sw->exact_flows = exact_flows;
     sw->queued = rconn_packet_counter_create();
     sw->next_query = LLONG_MIN;
     sw->last_query = LLONG_MIN;
@@ -430,10 +435,34 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
         /* Don't send out packets on their input ports. */
         goto drop_it;
     } else if (sw->max_idle >= 0 && (!sw->ml || out_port != OFPP_FLOOD)) {
+        struct ofpbuf *buffer;
+        struct ofp_flow_mod *ofm;
+        uint32_t wildcards;
+
+        /* Check if we need to wildcard the flows. */
+        if (!sw->exact_flows) {
+            /* We can not wildcard all fields.
+             * We need in_port to detect moves.
+             * We need both SA and DA to do learning. */
+            wildcards = (OFPFW_DL_TYPE | OFPFW_NW_SRC_MASK | OFPFW_NW_DST_MASK
+                         | OFPFW_NW_PROTO | OFPFW_TP_SRC | OFPFW_TP_DST);
+        } else {
+            /* Exact match */
+            wildcards = 0;
+        }
+
+        /* Check if we need to use "NORMAL" action. */
+        if (sw->action_normal && out_port != OFPP_FLOOD) {
+            out_port = OFPP_NORMAL;
+        }
+
         /* The output port is known, or we always flood everything, so add a
          * new flow. */
-        queue_tx(sw, rconn, make_add_simple_flow(&flow, ntohl(opi->buffer_id),
-                                                 out_port, sw->max_idle));
+        buffer = make_add_simple_flow(&flow, ntohl(opi->buffer_id),
+                                      out_port, sw->max_idle);
+        ofm = buffer->data;
+        ofm->match.wildcards = htonl(wildcards);
+        queue_tx(sw, rconn, buffer);
 
         /* If the switch didn't buffer the packet, we need to send a copy. */
         if (ntohl(opi->buffer_id) == UINT32_MAX) {
@@ -441,9 +470,15 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
                      make_unbuffered_packet_out(&pkt, in_port, out_port));
         }
     } else {
+        struct ofpbuf *b;
+
+        /* Check if we need to use "NORMAL" action. */
+        if (sw->action_normal && out_port != OFPP_FLOOD) {
+            out_port = OFPP_NORMAL;
+        }
+
         /* We don't know that MAC, or we don't set up flows.  Send along the
          * packet without setting up a flow. */
-        struct ofpbuf *b;
         if (ntohl(opi->buffer_id) == UINT32_MAX) {
             b = make_unbuffered_packet_out(&pkt, in_port, out_port);
         } else {

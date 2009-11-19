@@ -55,6 +55,12 @@ static bool learn_macs = true;
 /* Set up flows?  (If not, every packet is processed at the controller.) */
 static bool set_up_flows = true;
 
+/* -N, --normal: Use "NORMAL" action instead of explicit port? */
+static bool action_normal = false;
+
+/* -w, --wildcard: Set up exact match or wildcard flow entries? */
+static bool exact_flows = true;
+
 /* --max-idle: Maximum idle time, in seconds, before flows expire. */
 static int max_idle = 60;
 
@@ -201,8 +207,9 @@ static void
 new_switch(struct switch_ *sw, struct vconn *vconn, const char *name)
 {
     sw->rconn = rconn_new_from_vconn(name, vconn);
-    sw->lswitch = lswitch_create(sw->rconn, learn_macs,
-                                 set_up_flows ? max_idle : -1);
+    sw->lswitch = lswitch_create(sw->rconn, learn_macs, exact_flows,
+                                 set_up_flows ? max_idle : -1,
+                                 action_normal);
 }
 
 static int
@@ -239,6 +246,8 @@ parse_options(int argc, char *argv[])
     static struct option long_options[] = {
         {"hub",         no_argument, 0, 'H'},
         {"noflow",      no_argument, 0, 'n'},
+        {"normal",      no_argument, 0, 'N'},
+        {"wildcard",    no_argument, 0, 'w'},
         {"max-idle",    required_argument, 0, OPT_MAX_IDLE},
         {"mute",        no_argument, 0, OPT_MUTE},
         {"help",        no_argument, 0, 'h'},
@@ -273,6 +282,14 @@ parse_options(int argc, char *argv[])
 
         case OPT_MUTE:
             mute = true;
+            break;
+
+        case 'N':
+            action_normal = true;
+            break;
+
+        case 'w':
+            exact_flows = false;
             break;
 
         case OPT_MAX_IDLE:
@@ -329,6 +346,8 @@ usage(void)
            "  -H, --hub               act as hub instead of learning switch\n"
            "  -n, --noflow            pass traffic, but don't add flows\n"
            "  --max-idle=SECS         max idle time for new flows\n"
+           "  -N, --normal            use OFPAT_NORMAL action\n"
+           "  -w, --wildcard          use wildcards, not exact-match rules\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
     exit(EXIT_SUCCESS);
