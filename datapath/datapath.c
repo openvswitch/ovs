@@ -574,7 +574,7 @@ static int dp_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 #error
 #endif
 
-#if defined(CONFIG_XEN) && LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
 /* This code is copied verbatim from net/dev/core.c in Xen's
  * linux-2.6.18-92.1.10.el5.xs5.0.0.394.644.  We can't call those functions
  * directly because they aren't exported. */
