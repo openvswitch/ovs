@@ -222,7 +222,7 @@ AC_DEFUN([OVS_CHECK_CC_OPTION],
      AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,)], [ovs_cv_name[]=yes], [ovs_cv_name[]=no])
      CFLAGS="$ovs_save_CFLAGS"])
   if test $ovs_cv_name = yes; then
-    m4_if([$2], [], [;], [$2])
+    m4_if([$2], [], [:], [$2])
   else
     m4_if([$3], [], [:], [$3])
   fi
