@@ -16,6 +16,7 @@ AM_CPPFLAGS += -I $(top_srcdir)/include
 AM_CPPFLAGS += -I $(top_srcdir)/lib
 
 AM_CFLAGS = -Wstrict-prototypes
+AM_CFLAGS += $(WARNING_FLAGS)
 
 if NDEBUG
 AM_CPPFLAGS += -DNDEBUG

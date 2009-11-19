@@ -230,8 +230,9 @@ AC_DEFUN([OVS_CHECK_CC_OPTION],
 
 dnl OVS_ENABLE_OPTION([OPTION])
 dnl Check whether the given C compiler OPTION is accepted.
-dnl If so, add it to CFLAGS.
+dnl If so, add it to WARNING_FLAGS.
 dnl Example: OVS_ENABLE_OPTION([-Wdeclaration-after-statement])
 AC_DEFUN([OVS_ENABLE_OPTION], 
-  [OVS_CHECK_CC_OPTION([$1], [CFLAGS="$CFLAGS $1"])])
+  [OVS_CHECK_CC_OPTION([$1], [WARNING_FLAGS="$WARNING_FLAGS $1"])
+   AC_SUBST([WARNING_FLAGS])])
 dnl ----------------------------------------------------------------------
