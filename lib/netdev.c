@@ -377,11 +377,27 @@ netdev_get_features(struct netdev *netdev,
                     uint32_t *supported, uint32_t *peer)
 {
     uint32_t dummy[4];
-    return netdev->class->get_features(netdev,
-                                       current ? current : &dummy[0],
-                                       advertised ? advertised : &dummy[1],
-                                       supported ? supported : &dummy[2],
-                                       peer ? peer : &dummy[3]);
+    int error;
+
+    if (!current) {
+        current = &dummy[0];
+    }
+    if (!advertised) {
+        advertised = &dummy[1];
+    }
+    if (!supported) {
+        supported = &dummy[2];
+    }
+    if (!peer) {
+        peer = &dummy[3];
+    }
+
+    error = netdev->class->get_features(netdev, current, advertised, supported,
+                                        peer);
+    if (error) {
+        *current = *advertised = *supported = *peer = 0;
+    }
+    return error;
 }
 
 /* Set the features advertised by 'netdev' to 'advertise'.  Returns 0 if

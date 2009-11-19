@@ -720,8 +720,7 @@ netdev_linux_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
 /* Stores the features supported by 'netdev' into each of '*current',
  * '*advertised', '*supported', and '*peer' that are non-null.  Each value is a
  * bitmap of "enum ofp_port_features" bits, in host byte order.  Returns 0 if
- * successful, otherwise a positive errno value.  On failure, all of the
- * passed-in values are set to 0. */
+ * successful, otherwise a positive errno value. */
 static int
 netdev_linux_get_features(struct netdev *netdev,
                           uint32_t *current, uint32_t *advertised,
