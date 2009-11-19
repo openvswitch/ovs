@@ -54,8 +54,11 @@ to update system scripts to follow these steps.
 
 4. Start ovs-vswitchd and ovs-brcompatd, e.g.:
 
-      % ovs-vswitchd -P -D -vANY:console:EMER /etc/ovs-vswitchd.conf
-      % ovs-brcompatd -P -D -vANY:console:EMER /etc/ovs-vswitchd.conf
+      % ovs-vswitchd --pidfile --detach -vANY:console:EMER \
+                /etc/ovs-vswitchd.conf
+
+      % ovs-brcompatd --pidfile --detach -vANY:console:EMER \
+                /etc/ovs-vswitchd.conf
 
 5. Now you should be able to manage the Open vSwitch using brctl and
    related tools.  For example, you can create an Open vSwitch bridge,
