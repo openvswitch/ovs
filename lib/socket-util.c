@@ -292,8 +292,9 @@ guess_netmask(uint32_t ip)
 }
 
 /* Opens a non-blocking TCP socket and connects to 'target', which should be a
- * string in the format "<host>[:<port>]", where <host> is required and <port>
- * is optional, with 'default_port' assumed if <port> is omitted.
+ * string in the format "<host>[:<port>]".  <host> is required.  If
+ * 'default_port' is nonzero then <port> is optional and defaults to
+ * 'default_port'.
  *
  * On success, returns 0 (indicating connection complete) or EAGAIN (indicating
  * connection in progress), in which case the new file descriptor is stored
@@ -335,6 +336,10 @@ tcp_open_active(const char *target_, uint16_t default_port,
     }
     if (port_string && atoi(port_string)) {
         sin.sin_port = htons(atoi(port_string));
+    } else if (!default_port) {
+        VLOG_ERR("%s: port number must be specified", target_);
+        error = EAFNOSUPPORT;
+        goto exit;
     }
 
     /* Create non-blocking socket. */
@@ -376,10 +381,10 @@ exit:
 }
 
 /* Opens a non-blocking TCP socket, binds to 'target', and listens for incoming
- * connections.  'target' should be a string in the format "[<port>][:<ip>]",
- * where both <port> and <ip> are optional.  If <port> is omitted, it defaults
- * to 'default_port'; if <ip> is omitted it defaults to the wildcard IP
- * address.
+ * connections.  'target' should be a string in the format "[<port>][:<ip>]".
+ * <port> may be omitted if 'default_port' is nonzero, in which case it
+ * defaults to 'default_port'.  If <ip> is omitted it defaults to the wildcard
+ * IP address.
  *
  * The socket will have SO_REUSEADDR turned on.
  *
@@ -406,6 +411,10 @@ tcp_open_passive(const char *target_, uint16_t default_port)
     port_string = strsep(&string_ptr, ":");
     if (port_string && atoi(port_string)) {
         sin.sin_port = htons(atoi(port_string));
+    } else if (!default_port) {
+        VLOG_ERR("%s: port number must be specified", target_);
+        error = EAFNOSUPPORT;
+        goto exit;
     }
 
     /* Parse optional bind IP. */
