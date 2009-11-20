@@ -31,16 +31,16 @@ ovsdb_column_create(const char *name, const char *comment,
                     bool mutable, bool persistent,
                     const struct ovsdb_type *type)
 {
-    struct ovsdb_column *ts;
+    struct ovsdb_column *column;
 
-    ts = xzalloc(sizeof *ts);
-    ts->name = xstrdup(name);
-    ts->comment = comment ? xstrdup(comment) : NULL;
-    ts->mutable = mutable;
-    ts->persistent = persistent;
-    ts->type = *type;
+    column = xzalloc(sizeof *column);
+    column->name = xstrdup(name);
+    column->comment = comment ? xstrdup(comment) : NULL;
+    column->mutable = mutable;
+    column->persistent = persistent;
+    column->type = *type;
 
-    return ts;
+    return column;
 }
 
 void
