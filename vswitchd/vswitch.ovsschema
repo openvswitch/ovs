@@ -160,6 +160,6 @@
             "certificate": {
                 "comment": "Name of a PEM file containing a certificate, signed by the certificate authority (CA) used by the controller and manager, that certifies the switch's private key, identifying a trustworthy switch.",
                 "type": "string"},
-            "ca-cert": {
+            "ca_cert": {
                 "comment": "Name of a PEM file containing the CA certificate used to verify that the switch is connected to a trustworthy controller.",
                 "type": "string"}}}}}

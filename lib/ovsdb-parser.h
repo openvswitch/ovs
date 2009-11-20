@@ -71,4 +71,6 @@ struct ovsdb_error *ovsdb_parser_get_error(const struct ovsdb_parser *);
 struct ovsdb_error *ovsdb_parser_finish(struct ovsdb_parser *)
     WARN_UNUSED_RESULT;
 
+bool ovsdb_parser_is_id(const char *string);
+
 #endif /* ovsdb-parser.h */

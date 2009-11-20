@@ -107,6 +107,8 @@ ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
         if (node->name[0] == '_') {
             error = ovsdb_syntax_error(json, NULL, "names beginning with "
                                        "\"_\" are reserved");
+        } else if (!ovsdb_parser_is_id(node->name)) {
+            error = ovsdb_syntax_error(json, NULL, "name must be a valid id");
         } else {
             error = ovsdb_table_schema_from_json(node->data, node->name,
                                                  &table);

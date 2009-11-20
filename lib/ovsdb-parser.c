@@ -41,8 +41,8 @@ ovsdb_parser_init(struct ovsdb_parser *parser, const struct json *json,
     }
 }
 
-static bool
-is_id(const char *string)
+bool
+ovsdb_parser_is_id(const char *string)
 {
     unsigned char c;
 
@@ -83,7 +83,7 @@ ovsdb_parser_member(struct ovsdb_parser *parser, const char *name,
     if ((value->type >= 0 && value->type < JSON_N_TYPES
          && types & (1u << value->type))
         || (types & OP_ID && value->type == JSON_STRING
-            && is_id(value->u.string)))
+            && ovsdb_parser_is_id(value->u.string)))
     {
         svec_add(&parser->used, name);
         return value;
