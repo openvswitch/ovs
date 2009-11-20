@@ -125,6 +125,19 @@ nodist_lib_libopenvswitch_a_SOURCES = \
 	lib/dirs.c
 CLEANFILES += $(nodist_lib_libopenvswitch_a_SOURCES)
 
+noinst_LIBRARIES += lib/libsflow.a
+lib_libsflow_a_SOURCES = \
+	lib/sflow_api.h \
+	lib/sflow.h \
+	lib/sflow_agent.c \
+	lib/sflow_sampler.c \
+	lib/sflow_poller.c \
+	lib/sflow_receiver.c
+lib_libsflow_a_CFLAGS = $(AM_CFLAGS)
+if HAVE_WNO_UNUSED
+lib_libsflow_a_CFLAGS += -Wno-unused
+endif
+
 if HAVE_NETLINK
 lib_libopenvswitch_a_SOURCES += \
 	lib/netlink-protocol.h \

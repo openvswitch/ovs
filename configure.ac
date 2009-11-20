@@ -75,6 +75,7 @@ OVS_ENABLE_OPTION([-Wold-style-definition])
 OVS_ENABLE_OPTION([-Wmissing-prototypes])
 OVS_ENABLE_OPTION([-Wmissing-field-initializers])
 OVS_ENABLE_OPTION([-Wno-override-init])
+OVS_CONDITIONAL_CC_OPTION([-Wno-unused], [HAVE_WNO_UNUSED])
 
 AC_ARG_VAR(KARCH, [Kernel Architecture String])
 AC_SUBST(KARCH)
