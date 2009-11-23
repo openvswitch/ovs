@@ -366,6 +366,22 @@ svec_join(const struct svec *svec,
     return ds_cstr(&ds);
 }
 
+/* Breaks 's' into tokens at any character in 'delimiters', and appends each
+ * token to 'svec'.  Empty tokens are not added. */
+void
+svec_split(struct svec *svec, const char *s_, const char *delimiters)
+{
+    char *s = xstrdup(s_);
+    char *save_ptr = NULL;
+    char *token;
+
+    for (token = strtok_r(s, delimiters, &save_ptr); token != NULL;
+         token = strtok_r(NULL, delimiters, &save_ptr)) {
+        svec_add(svec, token);
+    }
+    free(s);
+}
+
 const char *
 svec_back(const struct svec *svec)
 {
