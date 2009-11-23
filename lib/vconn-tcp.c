@@ -75,7 +75,7 @@ tcp_open(const char *name, char *suffix, struct vconn **vconnp)
     struct sockaddr_in sin;
     int fd, error;
 
-    error = tcp_open_active(suffix, OFP_TCP_PORT, &sin, &fd);
+    error = inet_open_active(SOCK_STREAM, suffix, OFP_TCP_PORT, &sin, &fd);
     if (fd >= 0) {
         return new_tcp_vconn(name, fd, error, &sin, vconnp);
     } else {
@@ -104,7 +104,7 @@ ptcp_open(const char *name UNUSED, char *suffix, struct pvconn **pvconnp)
 {
     int fd;
 
-    fd = tcp_open_passive(suffix, OFP_TCP_PORT);
+    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_TCP_PORT);
     if (fd < 0) {
         return -fd;
     } else {

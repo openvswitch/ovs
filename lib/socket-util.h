@@ -34,9 +34,9 @@ int get_unix_name_len(socklen_t sun_len);
 uint32_t guess_netmask(uint32_t ip);
 int get_null_fd(void);
 
-int tcp_open_active(const char *target, uint16_t default_port,
+int inet_open_active(int style, const char *target, uint16_t default_port,
                     struct sockaddr_in *sinp, int *fdp);
-int tcp_open_passive(const char *target, uint16_t default_port);
+int inet_open_passive(int style, const char *target, uint16_t default_port);
 
 int read_fully(int fd, void *, size_t, size_t *bytes_read);
 int write_fully(int fd, const void *, size_t, size_t *bytes_written);
