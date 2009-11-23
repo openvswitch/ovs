@@ -90,6 +90,7 @@ int netdev_enumerate(struct svec *);
 
 const char *netdev_get_name(const struct netdev *);
 int netdev_get_mtu(const struct netdev *, int *mtup);
+int netdev_get_ifindex(const struct netdev *);
 
 int netdev_recv(struct netdev *, struct ofpbuf *);
 void netdev_recv_wait(struct netdev *);

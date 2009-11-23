@@ -366,6 +366,21 @@ netdev_get_mtu(const struct netdev *netdev, int *mtup)
     return error;
 }
 
+/* Returns the ifindex of 'netdev', if successful, as a positive number.  On
+ * failure, returns a negative errno value.
+ *
+ * The desired semantics of the ifindex value are a combination of those
+ * specified by POSIX for if_nametoindex() and by SNMP for ifIndex.  An ifindex
+ * value should be unique within a host and remain stable at least until
+ * reboot.  SNMP says an ifindex "ranges between 1 and the value of ifNumber"
+ * but many systems do not follow this rule anyhow.
+ */
+int
+netdev_get_ifindex(const struct netdev *netdev)
+{
+    return netdev->class->get_ifindex(netdev);
+}
+
 /* Stores the features supported by 'netdev' into each of '*current',
  * '*advertised', '*supported', and '*peer' that are non-null.  Each value is a
  * bitmap of "enum ofp_port_features" bits, in host byte order.  Returns 0 if

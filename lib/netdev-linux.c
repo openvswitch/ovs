@@ -548,6 +548,17 @@ netdev_linux_get_mtu(const struct netdev *netdev_, int *mtup)
     return 0;
 }
 
+/* Returns the ifindex of 'netdev', if successful, as a positive number.
+ * On failure, returns a negative errno value. */
+static int
+netdev_linux_get_ifindex(const struct netdev *netdev)
+{
+    int ifindex, error;
+
+    error = get_ifindex(netdev, &ifindex);
+    return error ? -error : ifindex;
+}
+
 static int
 netdev_linux_get_carrier(const struct netdev *netdev_, bool *carrier)
 {
@@ -1388,6 +1399,7 @@ const struct netdev_class netdev_linux_class = {
     netdev_linux_set_etheraddr,
     netdev_linux_get_etheraddr,
     netdev_linux_get_mtu,
+    netdev_linux_get_ifindex,
     netdev_linux_get_carrier,
     netdev_linux_get_stats,
 
@@ -1432,6 +1444,7 @@ const struct netdev_class netdev_tap_class = {
     netdev_linux_set_etheraddr,
     netdev_linux_get_etheraddr,
     netdev_linux_get_mtu,
+    netdev_linux_get_ifindex,
     netdev_linux_get_carrier,
     netdev_linux_get_stats,
 

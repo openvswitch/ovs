@@ -164,6 +164,16 @@ struct netdev_class {
      * bytes for Ethernet devices.*/
     int (*get_mtu)(const struct netdev *, int *mtup);
 
+    /* Returns the ifindex of 'netdev', if successful, as a positive number.
+     * On failure, returns a negative errno value.
+     *
+     * The desired semantics of the ifindex value are a combination of those
+     * specified by POSIX for if_nametoindex() and by SNMP for ifIndex.  An
+     * ifindex value should be unique within a host and remain stable at least
+     * until reboot.  SNMP says an ifindex "ranges between 1 and the value of
+     * ifNumber" but many systems do not follow this rule anyhow. */
+    int (*get_ifindex)(const struct netdev *);
+
     /* Sets 'carrier' to true if carrier is active (link light is on) on
      * 'netdev'. */
     int (*get_carrier)(const struct netdev *netdev, bool *carrier);
