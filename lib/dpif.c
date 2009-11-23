@@ -169,11 +169,33 @@ dpif_open(const char *name, struct dpif **dpifp)
 /* Tries to create and open a new datapath with the given 'name'.  Will fail if
  * a datapath named 'name' already exists.  Returns 0 if successful, otherwise
  * a positive errno value.  On success stores a pointer to the datapath in
- * '*dpifp', otherwise a null pointer.*/
+ * '*dpifp', otherwise a null pointer. */
 int
 dpif_create(const char *name, struct dpif **dpifp)
 {
     return do_open(name, true, dpifp);
+}
+
+/* Tries to open a datapath with the given 'name', creating it if it does not
+ * exist.  Returns 0 if successful, otherwise a positive errno value.  On
+ * success stores a pointer to the datapath in '*dpifp', otherwise a null
+ * pointer. */
+int
+dpif_create_and_open(const char *name, struct dpif **dpifp)
+{
+    int error;
+
+    error = dpif_create(name, dpifp);
+    if (error == EEXIST || error == EBUSY) {
+        error = dpif_open(name, dpifp);
+        if (error) {
+            VLOG_WARN("datapath %s already exists but cannot be opened: %s",
+                      name, strerror(error));
+        }
+    } else if (error) {
+        VLOG_WARN("failed to create datapath %s: %s", name, strerror(error));
+    }
+    return error;
 }
 
 /* Closes and frees the connection to 'dpif'.  Does not destroy the datapath

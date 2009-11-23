@@ -968,21 +968,12 @@ bridge_create(const char *name)
     assert(!bridge_lookup(name));
     br = xcalloc(1, sizeof *br);
 
-    error = dpif_create(name, &br->dpif);
-    if (error == EEXIST || error == EBUSY) {
-        error = dpif_open(name, &br->dpif);
-        if (error) {
-            VLOG_ERR("datapath %s already exists but cannot be opened: %s",
-                     name, strerror(error));
-            free(br);
-            return NULL;
-        }
-        dpif_flow_flush(br->dpif);
-    } else if (error) {
-        VLOG_ERR("failed to create datapath %s: %s", name, strerror(error));
+    error = dpif_create_and_open(name, &br->dpif);
+    if (error) {
         free(br);
         return NULL;
     }
+    dpif_flow_flush(br->dpif);
 
     error = ofproto_create(name, &bridge_ofhooks, br, &br->ofproto);
     if (error) {

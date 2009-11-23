@@ -37,6 +37,7 @@ int dp_enumerate(struct svec *);
 
 int dpif_open(const char *name, struct dpif **);
 int dpif_create(const char *name, struct dpif **);
+int dpif_create_and_open(const char *name, struct dpif **);
 void dpif_close(struct dpif *);
 
 const char *dpif_name(const struct dpif *);
