@@ -111,56 +111,10 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static int
 open_collector(char *dst)
 {
-    char *save_ptr = NULL;
-    const char *host_name;
-    const char *port_string;
-    struct sockaddr_in sin;
-    int retval;
-    int fd;
+    int error, fd;
 
-    /* Glibc 2.7 has a bug in strtok_r when compiling with optimization that
-     * can cause segfaults here:
-     * http://sources.redhat.com/bugzilla/show_bug.cgi?id=5614.
-     * Using "::" instead of the obvious ":" works around it. */
-    host_name = strtok_r(dst, ":", &save_ptr);
-    port_string = strtok_r(NULL, ":", &save_ptr);
-    if (!host_name) {
-        ovs_error(0, "%s: bad peer name format", dst);
-        return -EAFNOSUPPORT;
-    }
-    if (!port_string) {
-        ovs_error(0, "%s: bad port format", dst);
-        return -EAFNOSUPPORT;
-    }
-
-    memset(&sin, 0, sizeof sin);
-    sin.sin_family = AF_INET;
-    if (lookup_ip(host_name, &sin.sin_addr)) {
-        return -ENOENT;
-    }
-    sin.sin_port = htons(atoi(port_string));
-
-    fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) {
-        VLOG_ERR("%s: socket: %s", dst, strerror(errno));
-        return -errno;
-    }
-
-    retval = set_nonblocking(fd);
-    if (retval) {
-        close(fd);
-        return -retval;
-    }
-
-    retval = connect(fd, (struct sockaddr *) &sin, sizeof sin);
-    if (retval < 0) {
-        int error = errno;
-        VLOG_ERR("%s: connect: %s", dst, strerror(error));
-        close(fd);
-        return -error;
-    }
-
-    return fd;
+    error = inet_open_active(SOCK_DGRAM, dst, 0, NULL, &fd);
+    return fd >= 0 ? fd : -error;
 }
 
 void
