@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "cfg.h"
+#include "collectors.h"
 #include "flow.h"
 #include "netflow.h"
 #include "ofpbuf.h"
@@ -95,8 +96,7 @@ struct netflow {
     uint8_t engine_type;          /* Value of engine_type to use. */
     uint8_t engine_id;            /* Value of engine_id to use. */
     long long int boot_time;      /* Time when netflow_create() was called. */
-    int *fds;                     /* Sockets for NetFlow collectors. */
-    size_t n_fds;                 /* Number of Netflow collectors. */
+    struct collectors *collectors; /* NetFlow collectors. */
     bool add_id_to_iface;         /* Put the 7 least signficiant bits of 
                                    * 'engine_id' into the most signficant 
                                    * bits of the interface fields. */
@@ -105,17 +105,6 @@ struct netflow {
     long long int active_timeout; /* Timeout for flows that are still active. */
     long long int reconfig_time;  /* When we reconfigured the timeouts. */
 };
-
-static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-static int
-open_collector(char *dst)
-{
-    int error, fd;
-
-    error = inet_open_active(SOCK_DGRAM, dst, 0, NULL, &fd);
-    return fd >= 0 ? fd : -error;
-}
 
 void
 netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
@@ -201,70 +190,25 @@ netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
 void
 netflow_run(struct netflow *nf)
 {
-    size_t i;
-
-    if (!nf->packet.size) {
-        return;
+    if (nf->packet.size) {
+        collectors_send(nf->collectors, nf->packet.data, nf->packet.size);
+        nf->packet.size = 0;
     }
-
-    for (i = 0; i < nf->n_fds; i++) {
-        if (send(nf->fds[i], nf->packet.data, nf->packet.size, 0) == -1) {
-            VLOG_WARN_RL(&rl, "netflow message send failed: %s",
-                         strerror(errno));
-        }
-    }
-    nf->packet.size = 0;
-}
-
-static void
-clear_collectors(struct netflow *nf)
-{
-    size_t i;
-
-    for (i = 0; i < nf->n_fds; i++) {
-        close(nf->fds[i]);
-    }
-    free(nf->fds);
-    nf->fds = NULL;
-    nf->n_fds = 0;
 }
 
 int
 netflow_set_options(struct netflow *nf,
                     const struct netflow_options *nf_options)
 {
-    struct svec collectors;
     int error = 0;
-    size_t i;
     long long int old_timeout;
 
     nf->engine_type = nf_options->engine_type;
     nf->engine_id = nf_options->engine_id;
     nf->add_id_to_iface = nf_options->add_id_to_iface;
 
-    clear_collectors(nf);
-
-    svec_clone(&collectors, &nf_options->collectors);
-    svec_sort_unique(&collectors);
-
-    nf->fds = xmalloc(sizeof *nf->fds * collectors.n);
-    for (i = 0; i < collectors.n; i++) {
-        const char *name = collectors.names[i];
-        char *tmpname = xstrdup(name);
-        int fd = open_collector(tmpname);
-        free(tmpname);
-        if (fd >= 0) {
-            nf->fds[nf->n_fds++] = fd;
-        } else {
-            VLOG_WARN("couldn't open connection to collector (%s), "
-                      "ignoring %s\n", strerror(-fd), name);
-            if (!error) {
-                error = -fd;
-            }
-        }
-    }
-
-    svec_destroy(&collectors);
+    collectors_destroy(nf->collectors);
+    collectors_create(&nf_options->collectors, 0, &nf->collectors);
 
     old_timeout = nf->active_timeout;
     if (nf_options->active_timeout != -1) {
@@ -287,8 +231,7 @@ netflow_create(void)
     nf->engine_type = 0;
     nf->engine_id = 0;
     nf->boot_time = time_msec();
-    nf->fds = NULL;
-    nf->n_fds = 0;
+    nf->collectors = NULL;
     nf->add_id_to_iface = false;
     nf->netflow_cnt = 0;
     ofpbuf_init(&nf->packet, 1500);
@@ -300,7 +243,7 @@ netflow_destroy(struct netflow *nf)
 {
     if (nf) {
         ofpbuf_uninit(&nf->packet);
-        clear_collectors(nf);
+        collectors_destroy(nf->collectors);
         free(nf);
     }
 }
