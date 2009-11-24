@@ -17,6 +17,7 @@ vswitchd_ovs_vswitchd_SOURCES = \
 	vswitchd/proc-net-compat.h \
 	vswitchd/ovs-vswitchd.c \
 	vswitchd/ovs-vswitchd.h \
+	vswitchd/vswitch-idl.h \
 	vswitchd/xenserver.c \
 	vswitchd/xenserver.h
 vswitchd_ovs_vswitchd_LDADD = \
@@ -36,3 +37,11 @@ EXTRA_DIST += \
 	vswitchd/ovs-vswitchd.conf.5.in \
 	vswitchd/ovs-vswitchd.8.in \
 	vswitchd/ovs-brcompatd.8.in
+
+EXTRA_DIST += vswitchd/vswitch.ovsidl
+BUILT_SOURCES += vswitchd/vswitch-idl.h
+DISTCLEANFILES += \
+	vswitchd/vswitch.ovsidl \
+	vswitchd/vswitch-idl.h
+vswitchd/vswitch-idl.h: vswitchd/vswitch.ovsidl ovsdb/ovsdb-idlc
+	ovsdb/ovsdb-idlc c-idl-header $(srcdir)/vswitchd/vswitch.ovsidl > $@

@@ -1,0 +1,286 @@
+#! @PYTHON@
+
+import getopt
+import re
+import sha
+import sys
+
+sys.path.insert(0, "@abs_top_srcdir@/ovsdb")
+import simplejson as json
+
+argv0 = sys.argv[0]
+
+class Error(Exception):
+    def __init__(self, msg):
+        Exception.__init__(self)
+        self.msg = msg
+
+def getMember(json, name, validTypes, description, default=None):
+    if name in json:
+        member = json[name]
+        if type(member) not in validTypes:
+            raise Error("%s: type mismatch for '%s' member"
+                        % (description, name))
+        return member
+    return default
+
+def mustGetMember(json, name, expectedType, description):
+    member = getMember(json, name, expectedType, description)
+    if member == None:
+        raise Error("%s: missing '%s' member" % (description, name))
+    return member
+
+class DbSchema:
+    def __init__(self, name, comment, tables):
+        self.name = name
+        self.comment = comment
+        self.tables = tables
+
+    @staticmethod
+    def fromJson(json):
+        name = mustGetMember(json, 'name', [unicode], 'database')
+        comment = getMember(json, 'comment', [unicode], 'database')
+        tablesJson = mustGetMember(json, 'tables', [dict], 'database')
+        tables = {}
+        for name, json in tablesJson.iteritems():
+            tables[name] = TableSchema.fromJson(json, "%s table" % name)
+        return DbSchema(name, comment, tables)
+
+    def toJson(self):
+        d = {"name": self.name,
+             "tables": {}}
+        for name, table in self.tables.iteritems():
+            d["tables"][name] = table.toJson()
+        if self.comment != None:
+            d["comment"] = self.comment
+        return d
+
+class TableSchema:
+    def __init__(self, comment, columns):
+        self.comment = comment
+        self.columns = columns
+
+    @staticmethod
+    def fromJson(json, description):
+        comment = getMember(json, 'comment', [unicode], description)
+        columnsJson = mustGetMember(json, 'columns', [dict], description)
+        columns = {}
+        for name, json in columnsJson.iteritems():
+            columns[name] = ColumnSchema.fromJson(
+                json, "column %s in %s" % (name, description))
+        return TableSchema(comment, columns)
+
+    def toJson(self):
+        d = {"columns": {}}
+        for name, column in self.columns.iteritems():
+            d["columns"][name] = column.toJson()
+        if self.comment != None:
+            d["comment"] = self.comment
+        return d
+
+class ColumnSchema:
+    def __init__(self, comment, type, persistent):
+        self.comment = comment
+        self.type = type
+        self.persistent = persistent
+
+    @staticmethod
+    def fromJson(json, description):
+        comment = getMember(json, 'comment', [unicode], description)
+        type = Type.fromJson(mustGetMember(json, 'type', [dict, unicode],
+                                           description),
+                             'type of %s' % description)
+        ephemeral = getMember(json, 'ephemeral', [True,False], description)
+        persistent = ephemeral != True
+        return ColumnSchema(comment, type, persistent)
+
+    def toJson(self):
+        d = {"type": self.type.toJson()}
+        if self.persistent == False:
+            d["ephemeral"] = True
+        if self.comment != None:
+            d["comment"] = self.comment
+        return d
+
+class Type:
+    def __init__(self, key, keyRefTable=None, value=None, valueRefTable=None,
+                 min=1, max=1):
+        self.key = key
+        self.keyRefTable = keyRefTable
+        self.value = value
+        self.valueRefTable = valueRefTable
+        self.min = min
+        self.max = max
+    
+    @staticmethod
+    def fromJson(json, description):
+        if type(json) == unicode:
+            return Type(json)
+        else:
+            key = mustGetMember(json, 'key', [unicode], description)
+            keyRefTable = getMember(json, 'keyRefTable', [unicode], description)
+            value = getMember(json, 'value', [unicode], description)
+            valueRefTable = getMember(json, 'valueRefTable', [unicode], description)
+            min = getMember(json, 'min', [int], description, 1)
+            max = getMember(json, 'max', [int, unicode], description, 1)
+            return Type(key, keyRefTable, value, valueRefTable, min, max)
+
+    def toJson(self):
+        if self.value == None and self.min == 1 and self.max == 1:
+            return self.key
+        else:
+            d = {"key": self.key}
+            if self.value != None:
+                d["value"] = self.value
+            if self.min != 1:
+                d["min"] = self.min
+            if self.max != 1:
+                d["max"] = self.max
+            return d
+
+def parseSchema(filename):
+    file = open(filename, "r")
+    s = ""
+    for line in file:
+        if not line.startswith('//'):
+            s += line
+    return DbSchema.fromJson(json.loads(s))
+
+def cBaseType(prefix, type, refTable=None):
+    if type == 'uuid' and refTable:
+        return "struct %s%s *" % (prefix, refTable.lower())
+    else:
+        return {'integer': 'int64_t ',
+                'real': 'double ',
+                'uuid': 'struct uuid ',
+                'boolean': 'bool ',
+                'string': 'char *'}[type]
+
+def printCIDLHeader(schema):
+    prefix = 'ovsrec_'
+    print '''\
+/* Generated automatically -- do not modify!    -*- buffer-read-only: t -*- */
+
+#ifndef %(prefix)sIDL_HEADER
+#define %(prefix)sIDL_HEADER 1
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include "uuid.h"''' % {'prefix': prefix.upper()}
+    for tableName, table in schema.tables.iteritems():
+        print
+        if table.comment != None:
+            print "/* %s table (%s). */" % (tableName, table.comment)
+        else:
+            print "/* %s table. */" % (tableName)
+        print "struct %s%s {" % (prefix, tableName.lower())
+        print "\t/* Columns automatically included in every table. */"
+        print "\tstruct uuid uuid_;"
+        print "\tstruct uuid version_;"
+        for columnName, column in table.columns.iteritems():
+            print "\n\t/* %s column. */" % columnName
+            type = column.type
+            if type.min == 1 and type.max == 1:
+                singleton = True
+                pointer = ''
+            else:
+                singleton = False
+                pointer = '*'
+            if type.value:
+                print "\tkey_%s%s%s;" % (cBaseType(prefix, type.key, type.keyRefTable), pointer, columnName)
+                print "\tvalue_%s%s%s;" % (cBaseType(prefix, type.value, type.valueRefTable), pointer, columnName)
+            else:
+                print "\t%s%s%s;" % (cBaseType(prefix, type.key, type.keyRefTable), pointer, columnName)
+            if not singleton:
+                print "\tsize_t n_%s;" % columnName
+        print "};"
+    print
+    print "#endif /* %(prefix)sIDL_HEADER */" % {'prefix': prefix.upper()}
+
+def ovsdb_escape(string):
+    def escape(match):
+        c = match.group(0)
+        if c == '\0':
+            raise Error("strings may not contain null bytes")
+        elif c == '\\':
+            return '\\\\'
+        elif c == '\n':
+            return '\\n'
+        elif c == '\r':
+            return '\\r'
+        elif c == '\t':
+            return '\\t'
+        elif c == '\b':
+            return '\\b'
+        elif c == '\a':
+            return '\\a'
+        else:
+            return '\\x%02x' % ord(c)
+    return re.sub(r'["\\\000-\037]', escape, string)
+
+def printOVSDBSchema(schema):
+    json.dump(schema.toJson(), sys.stdout, sort_keys=True, indent=2)
+
+def usage():
+    print """\
+%(argv0)s: ovsdb schema compiler
+usage: %(argv0)s [OPTIONS] ACTION SCHEMA
+where SCHEMA is the ovsdb schema to read (in JSON format).
+
+One of the following actions must specified:
+  validate                    validate schema without taking any other action
+  c-idl-header                print C header file for IDL
+  c-idl-source                print C source file for IDL implementation
+  ovsdb-schema                print ovsdb parseable schema
+
+The following options are also available:
+  -h, --help                  display this help message
+  -V, --version               display version information\
+""" % {'argv0': argv0}
+    sys.exit(0)
+
+if __name__ == "__main__":
+    try:
+        try:
+            options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
+                                              ['help',
+                                               'version'])
+        except getopt.GetoptError, geo:
+            sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
+            sys.exit(1)
+            
+        optKeys = [key for key, value in options]
+        if '-h' in optKeys or '--help' in optKeys:
+            usage()
+        elif '-V' in optKeys or '--version' in optKeys:
+            print "ovsdb-idlc (Open vSwitch) @VERSION@"
+            sys.exit(0)
+
+        if len(args) != 2:
+            sys.stderr.write("%s: exactly two non-option arguments are "
+                             "required (use --help for help)\n" % argv0)
+            sys.exit(1)
+
+        action, inputFile = args
+        schema = parseSchema(inputFile)
+        if action == 'validate':
+            pass
+        elif action == 'ovsdb-schema':
+            printOVSDBSchema(schema)
+        elif action == 'c-idl-header':
+            printCIDLHeader(schema)
+        elif action == 'c-idl-source':
+            printCIDLSource(schema)
+        else:
+            sys.stderr.write(
+                "%s: unknown action '%s' (use --help for help)\n" %
+                (argv0, action))
+            sys.exit(1)
+    except Error, e:
+        sys.stderr.write("%s: %s\n" % (argv0, e.msg))
+        sys.exit(1)
+
+# Local variables:
+# mode: python
+# End:

@@ -24,6 +24,7 @@ else
 AM_LDFLAGS = -export-dynamic
 endif
 
+BUILT_SOURCES =
 CLEANFILES =
 DISTCLEANFILES =
 EXTRA_DIST = INSTALL.bridge \
@@ -62,6 +63,7 @@ SUFFIXES = .in
                 -e 's,[@]localstatedir[@],$(localstatedir),g' \
                 -e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
                 -e 's,[@]sysconfdir[@],$(sysconfdir),g' \
+                -e 's,[@]abs_top_srcdir[@],$(abs_top_srcdir),g' \
             > $@.tmp
 	@if head -n 1 $@.tmp | grep -q '#!'; then \
 	    echo chmod +x $@.tmp; \

@@ -52,3 +52,33 @@ ovsdb_ovsdb_server_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(FAULT_LIBS)
 man_MANS += ovsdb/ovsdb-server.1
 DISTCLEANFILES += ovsdb/ovsdb-server.1
 EXTRA_DIST += ovsdb/ovsdb-server.1.in
+
+# ovsdb-idlc
+EXTRA_DIST += \
+	ovsdb/simplejson/__init__.py \
+	ovsdb/simplejson/_speedups.c				\
+	ovsdb/simplejson/decoder.py				\
+	ovsdb/simplejson/encoder.py				\
+	ovsdb/simplejson/scanner.py				\
+	ovsdb/simplejson/tests/__init__.py			\
+	ovsdb/simplejson/tests/test_check_circular.py		\
+	ovsdb/simplejson/tests/test_decode.py			\
+	ovsdb/simplejson/tests/test_default.py			\
+	ovsdb/simplejson/tests/test_dump.py			\
+	ovsdb/simplejson/tests/test_encode_basestring_ascii.py	\
+	ovsdb/simplejson/tests/test_fail.py			\
+	ovsdb/simplejson/tests/test_float.py			\
+	ovsdb/simplejson/tests/test_indent.py			\
+	ovsdb/simplejson/tests/test_pass1.py			\
+	ovsdb/simplejson/tests/test_pass2.py			\
+	ovsdb/simplejson/tests/test_pass3.py			\
+	ovsdb/simplejson/tests/test_recursion.py		\
+	ovsdb/simplejson/tests/test_scanstring.py		\
+	ovsdb/simplejson/tests/test_separators.py		\
+	ovsdb/simplejson/tests/test_unicode.py			\
+	ovsdb/simplejson/tool.py
+noinst_SCRIPTS += ovsdb/ovsdb-idlc
+EXTRA_DIST += \
+	ovsdb/ovsdb-idlc.in \
+	ovsdb/ovsdb-idlc.1
+DISTCLEANFILES += ovsdb/ovsdb-idlc

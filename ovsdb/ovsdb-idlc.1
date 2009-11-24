@@ -1,0 +1,74 @@
+.\" -*- nroff -*-
+.TH ovsdb\-idlc 1 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovsdb\-idlc
+.
+.SH NAME
+ovsdb\-idlc \- Open vSwitch IDL (Interface Definition Language) compiler
+.
+.SH SYNOPSIS
+\fBovsdb\-idlc \fBvalidate\fI schema\fR
+.br
+\fBovsdb\-idlc \fBovsdb\-schema\fI schema\fR
+.br
+\fBovsdb\-idlc \fBc\-idl\-header\fI schema\fR
+.br
+\fBovsdb\-idlc \fBc\-idl\-source\fI schema\fR
+.br
+\fBovsdb\-idlc --help\fR
+.br
+\fBovsdb\-idlc --version\fR
+.
+.SH DESCRIPTION
+The \fBovsdb\-idlc\fR program is a command-line tool for translating
+Open vSwitch database interface definition language (IDL) schemas into
+other formats.  It is used while building Open vSwitch, not at
+installation or configuration time.  Thus, it is not normally
+installed as part of Open vSwitch.
+.
+.PP
+The \fIschema\fR files used as \fBovsdb\-idlc\fR input have the same
+format as the OVSDB schemas, specified in the OVSDB specification,
+with a few additions:
+.
+.IP "\fB//\fR comments"
+Lines that begin with \fB//\fR (two forward slashes) are ignored and
+thus can be used for comments.
+.
+.IP "\fB""\fBkeyRefTable\fR"" member of <type>"
+A <type> whose \fBkey\fR is \fB"uuid"\fR may have an additional member
+named \fB"keyRefTable"\fR, whose value is a table name.  This
+expresses the constraint that keys of the given <type> are UUIDs that
+reference rows in the named table.  This allows the IDL to supply a
+structure pointer in place of a raw UUID in its marshalled version of
+the given type.
+.
+.IP "\fB""valueRefTable""\fR member of <type>"
+Analogous to \fB"keyRefTable"\fR in meaning and effect, except that it
+applies to the \fB"value"\fR member of the <type>.
+.SS "Commands"
+.
+.IP "\fBvalidate\fI schema\fR"
+Reads \fIschema\fR and checks its format, without producing any output.
+.
+.IP "\fBovsdb\-schema\fI schema\fR"
+Reads \fIschema\fR and prints it on standard output with the parts
+that are not part of the OVSDB schema specification stripped out.
+.
+.IP "\fBc\-idl\-header\fI schema\fR"
+Reads \fIschema\fR and prints on standard output a C header file that
+defines a structure for each table defined by the schema.
+.
+.IP "\fBc\-idl\-source\fI schema\fR"
+Reads \fIschema\fR and prints on standard output a C source file that
+implements C bindings for the database defined by the schema.
+.
+.SS "Options"
+.so lib/common.man
+.
+.SH "BUGS"
+\fBovsdb\-idlc\fR is more lenient about the format of OVSDB schemas
+than other OVSDB tools, so the \fBovsdb\-schema\fR command may output
+schemas that other programs refuse to read.
+.
+.SH "SEE ALSO"
+The OVSDB specification.
