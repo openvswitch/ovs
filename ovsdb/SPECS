@@ -64,8 +64,8 @@ is represented by <database-schema>, as described below.
         "columns": {<id>: <column-schema>, ...}   required
 
     The "comment" optionally provides information about this table for
-    a human reader.  The value of "tables" is a JSON object whose
-    names are table names and whose values are <column-schema>s.
+    a human reader.  The value of "columns" is a JSON object whose
+    names are column names and whose values are <column-schema>s.
 
     Every table has the following columns whose definitions are not
     included in the schema:
@@ -199,7 +199,7 @@ array corresponds to the same element of the "params" array.  The
       individual operations.  Some operations do not produce any
       results, in which case the object will have no members.
 
-    - A JSON object that contains a "error" member indicates that the
+    - A JSON object that contains an "error" member indicates that the
       operation completed with an error.  The value of the "error"
       member is a short string, specified in this document, that
       broadly indicates the class of the error.  Besides the ones
@@ -595,7 +595,7 @@ Semantics:
     values.
 
     The new row receives a new, randomly generated UUID, which is
-    returned as the "_uuid" member of the result.  If "uuid-name"
+    returned as the "uuid" member of the result.  If "uuid-name"
     is supplied, then the UUID is made available under that name
     to later operations within the same transaction.
 
@@ -654,9 +654,9 @@ Semantics:
     value of each column specified in "row" to the value for that
     column specified in "row".
 
-    The "_uuid" and "_version" columns of a table may not be updated.
-    Columns designated read-only in the schema also may not be
-    updated.
+    The "_uuid" and "_version" columns of a table may not be directly
+    updated with this operation.  Columns designated read-only in the 
+    schema also may not be updated.
 
     The "count" member of the result specifies the number of rows
     that matched.
