@@ -8,7 +8,7 @@
 {"name": "ovs_vswitchd_db",
  "comment": "Configuration for one Open vSwitch daemon.",
  "tables": {
-   "OpenVSwitch": {
+   "Open_vSwitch": {
      "comment": "Configuration for an Open vSwitch daemon.",
      "columns": {
        "bridges": {
@@ -25,7 +25,7 @@
          "comment": "SSL used globally by the daemon.",
          "type": {"key": "uuid", "keyRefTable": "SSL", "min": 0, "max": 1}}}},
    "Bridge": {
-     "comment": "Configuration for a bridge within an OpenVSwitch.",
+     "comment": "Configuration for a bridge within an Open_vSwitch.",
      "columns": {
        "name": {
          "comment": "Bridge identifier.  Should be alphanumeric and no more than about 8 bytes long.  Must be unique among the names of ports, interfaces, and bridges on a host.",
@@ -44,9 +44,9 @@
          "type": {"key": "uuid", "keyRefTable": "Mirror", "min": 0, "max": "unlimited"}},
        "netflow": {
          "comment": "NetFlow configuration.",
-         "type": {"key": "uuid", "keyRefTable": "Netflow", "min": 0, "max": "unlimited"}},
+         "type": {"key": "uuid", "keyRefTable": "NetFlow", "min": 0, "max": "unlimited"}},
        "controller": {
-         "comment": "OpenFlow controller.  If unset, defaults to that specified by the parent OpenVSwitch.",
+         "comment": "OpenFlow controller.  If unset, defaults to that specified by the parent Open_vSwitch.",
          "type": {"key": "uuid", "keyRefTable": "Controller", "min": 0, "max": 1}}}},
    "Port": {
      "comment": "A port within a Bridge.  May contain a single Interface or multiple (bonded) Interfaces.",
@@ -100,23 +100,23 @@
          "comment": "VLANs on which packets are selected for mirroring.",
          "type": {"key": "integer", "min": 0, "max": 4096}},
        "output_port": {
-         "comment": "Output port for selected packets.  Mutually exclusive with output_vlan.",
+         "comment": "Output port for selected packets.  Mutually exclusive with output_port.",
          "type": {"key": "uuid", "keyRefTable": "Port", "min": 0, "max": 1}},
        "output_vlan": {
          "comment": "Output VLAN for selected packets.  Mutually exclusive with output_vlan.",
          "type": {"key": "integer", "min": 0, "max": 1}}}},
-   "Netflow": {
-     "comment": "A Netflow target.",
+   "NetFlow": {
+     "comment": "A NetFlow target.",
      "columns": {
        "target": {
-         "comment": "Netflow target in the form \"IP:PORT\".",
+         "comment": "NetFlow target in the form \"IP:PORT\".",
          "type": "string"},
        "engine_type": {
-         "comment": "Engine type to use in NetFlow messages.  Defaults to datapath ID if not specified.",
-         "type": "integer"},
+         "comment": "Engine type to use in NetFlow messages.  Defaults to datapath index if not specified.",
+         "type": "integer", "min":0, "max":1},
        "engine_id": {
-         "comment": "Engine ID to use in NetFlow messages.  Defaults to datapath ID if not specified.",
-         "type": "integer"},
+         "comment": "Engine ID to use in NetFlow messages.  Defaults to datapath index if not specified.",
+         "type": "integer", "min":0, "max":1},
        "add_id_to_interface": {
          "comment": "Place least-significant 7 bits of engine ID into most significant bits of ingress and egress interface fields of NetFlow records?",
          "type": "boolean"}}},
@@ -135,23 +135,23 @@
        "fail_mode": {
          "comment": "Either \"standalone\" or \"secure\", or empty to use the implementation's default.",
          "type": {"key": "string", "min": 0, "max": 1}},
-       "discovery_accept_regex": {
-         "comment": "If \"target\" is \"discovery\", a POSIX extended regular expression against which the discovered controller location is validated.  If not specified, the default is implementation-specific.",
+       "discover_accept_regex": {
+         "comment": "If \"target\" is \"discover\", a POSIX extended regular expression against which the discovered controller location is validated.  If not specified, the default is implementation-specific.",
          "type": {"key": "string", "min": 0, "max": 1}},
-       "discovery_update_resolv_conf": {
-         "comment": "If \"target\" is \"discovery\", whether to update /etc/resolv.conf when the controller is discovered.  If not specified, the default is implementation-specific.",
+       "discover_update_resolv_conf": {
+         "comment": "If \"target\" is \"discover\", whether to update /etc/resolv.conf when the controller is discovered.  If not specified, the default is implementation-specific.",
          "type": {"key": "boolean", "min": 0, "max": 1}},
        "connection_mode": {
          "comment": "Either \"in-band\" or \"out-of-band\".  If not specified, the default is implementation-specific.",
          "type": {"key": "string", "min": 0, "max": 1}},
        "local_ip": {
-         "comment": "If \"target\" is not \"discovery\", the IP address to configure on the local port.",
+         "comment": "If \"target\" is not \"discover\", the IP address to configure on the local port.",
          "type": {"key": "string", "min": 0, "max": 1}},
        "local_netmask": {
-         "comment": "If \"target\" is not \"discovery\", the IP netmask to configure on the local port.",
+         "comment": "If \"target\" is not \"discover\", the IP netmask to configure on the local port.",
          "type": {"key": "string", "min": 0, "max": 1}},
        "local_gateway": {
-         "comment": "If \"target\" is not \"discovery\", the IP gateway to configure on the local port.",
+         "comment": "If \"target\" is not \"discover\", the IP gateway to configure on the local port.",
          "type": {"key": "string", "min": 0, "max": 1}},
        "controller_rate_limit": {
          "comment": "The maximum rate at which packets will be forwarded to the OpenFlow controller, in packets per second.  If not specified, the default is implementation-specific.",
@@ -160,7 +160,7 @@
          "comment": "The maximum number of unused packet credits that the bridge will allow to accumulate, in packets.  If not specified, the default is implementation-specific.",
          "type": {"key": "integer", "min": 0, "max": 1}}}},
    "SSL": {
-     "comment": "SSL configuration for an OpenVSwitch.",
+     "comment": "SSL configuration for an Open_vSwitch.",
      "columns": {
        "private_key": {
          "comment": "Name of a PEM file containing the private key used as the switch's identity for SSL connections to the controller.",
