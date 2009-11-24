@@ -25,6 +25,20 @@
  * fields after F tend to be wildcarded as well.  If this assumption is
  * violated, then the classifier will still classify flows correctly, but its
  * performance will suffer.
+ *
+ * The classifier uses a collection of CLS_N_FIELDS hash tables for wildcarded
+ * flows.  Each of these tables contains the flows that wildcard a given field
+ * and do not wildcard any of the fields that precede F in the ordering.  The
+ * key for each hash table is the value of the fields preceding F that are not
+ * wildcarded.  All the flows that fall within a table and have the same key
+ * are kept as a linked list ordered from highest to lowest priority.
+ *
+ * The classifier also maintains a separate hash table of exact-match flows.
+ *
+ * To search the classifier we first search the table of exact-match flows,
+ * since exact-match flows always have highest priority.  If there is a match,
+ * we're done.  Otherwise, we search each of the CLS_N_FIELDS hash tables in
+ * turn, looking for the highest-priority match, and return it (if any).
  */
 
 #include "flow.h"
