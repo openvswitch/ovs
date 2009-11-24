@@ -2,7 +2,6 @@
 
 import getopt
 import re
-import sha
 import sys
 
 sys.path.insert(0, "@abs_top_srcdir@/ovsdb")
