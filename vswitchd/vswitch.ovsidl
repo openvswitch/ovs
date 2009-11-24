@@ -100,10 +100,10 @@
          "comment": "VLANs on which packets are selected for mirroring.",
          "type": {"key": "integer", "min": 0, "max": 4096}},
        "output_port": {
-         "comment": "Output port for selected packets.  Mutually exclusive with output_port.",
+         "comment": "Output port for selected packets.  Mutually exclusive with output_vlan.",
          "type": {"key": "uuid", "keyRefTable": "Port", "min": 0, "max": 1}},
        "output_vlan": {
-         "comment": "Output VLAN for selected packets.  Mutually exclusive with output_vlan.",
+         "comment": "Output VLAN for selected packets.  Mutually exclusive with output_port.",
          "type": {"key": "integer", "min": 0, "max": 1}}}},
    "NetFlow": {
      "comment": "A NetFlow target.",
