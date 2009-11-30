@@ -43,6 +43,13 @@
 #     processes.
 # VSWITCHD_PRIORITY=-10
 
+# VSWITCHD_MLOCKALL: Whether to pass ovs-vswitchd the --mlockall option.
+#     This option should be set to "yes" or "no".  The default is "yes".
+#     Enabling this option can avoid networking interruptions due to
+#     system memory pressure in extraordinary situations, such as multiple
+#     concurrent VM import operations.
+# VSWITCHD_MLOCKALL=yes
+
 # VSWITCHD_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
 # VSWITCHD_LOGFILE=/var/log/ovs-vswitchd.log
 

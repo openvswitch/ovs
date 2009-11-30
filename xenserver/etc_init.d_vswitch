@@ -34,6 +34,7 @@ VSWITCHD_CONF="${VSWITCHD_CONF:-/etc/ovs-vswitchd.conf}"
 VSWITCHD_PIDFILE="${VSWITCHD_PIDFILE:-/var/run/ovs-vswitchd.pid}"
 VSWITCHD_RUN_DIR="${VSWITCHD_RUN_DIR:-/var/xen/vswitch}"
 VSWITCHD_PRIORITY="${VSWITCHD_PRIORITY:--10}"
+VSWITCHD_MLOCKALL="${VSWITCHD_MLOCKALL:-yes}"
 VSWITCHD_LOGFILE="${VSWITCHD_LOGFILE:-/var/log/ovs-vswitchd.log}"
 VSWITCHD_FILE_LOGLEVEL="${VSWITCHD_FILE_LOGLEVEL:-INFO}"
 VSWITCHD_SYSLOG_LOGLEVEL="${VSWITCHD_SYSLOG_LOGLEVEL:-ERR}"
@@ -159,12 +160,15 @@ function start_vswitchd {
     if [ "$ENABLE_FAKE_PROC_NET" = "y" ]; then
         fake_proc_net_opt="--fake-proc-net"
     fi
+    if [ "$VSWITCHD_MLOCKALL" != "no" ]; then
+        mlockall_opt="--mlockall"
+    fi
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovs-vswitchd ($strace_opt$valgrind_opt)" true
-        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
+        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $mlockall_opt "$VSWITCHD_CONF") &
     else
-        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
+        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $mlockall_opt "$VSWITCHD_CONF"
     fi
 }
 
