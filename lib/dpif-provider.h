@@ -42,7 +42,7 @@ static inline void dpif_assert_class(const struct dpif *dpif,
 }
 
 /* Datapath interface class structure, to be defined by each implementation of
- * a datapath interface
+ * a datapath interface.
  *
  * These functions return 0 if successful or a positive errno value on failure,
  * except where otherwise noted.
@@ -52,7 +52,7 @@ static inline void dpif_assert_class(const struct dpif *dpif,
  * EWOULDBLOCK or EINPROGRESS.  We may relax this requirement in the future if
  * and when we encounter performance problems. */
 struct dpif_class {
-    /* Prefix for names of dpifs in this class, e.g. "udatapath:".
+    /* Prefix for names of dpifs in this class, e.g. "netdev:".
      *
      * One dpif class may have the empty string "" as its prefix, in which case
      * that dpif class is associated with dpif names that don't match any other
