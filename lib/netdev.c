@@ -45,6 +45,9 @@ static const struct netdev_class *netdev_classes[] = {
 };
 static int n_netdev_classes = ARRAY_SIZE(netdev_classes);
 
+/* All created network devices. */
+static struct shash netdev_obj_shash = SHASH_INITIALIZER(&netdev_obj_shash);
+
 /* All open network devices. */
 static struct list netdev_list = LIST_INITIALIZER(&netdev_list);
 
@@ -59,7 +62,8 @@ static int restore_flags(struct netdev *netdev);
  * otherwise a positive errno value.
  *
  * Calling this function is optional.  If not called explicitly, it will
- * automatically be called upon the first attempt to open a network device. */
+ * automatically be called upon the first attempt to open or create a 
+ * network device. */
 int
 netdev_initialize(void)
 {
@@ -78,7 +82,7 @@ netdev_initialize(void)
                     netdev_classes[j++] = class;
                 } else {
                     VLOG_ERR("failed to initialize %s network device "
-                             "class: %s", class->name, strerror(retval));
+                             "class: %s", class->type, strerror(retval));
                     if (!status) {
                         status = retval;
                     }
@@ -124,6 +128,92 @@ netdev_wait(void)
     }
 }
 
+/* Attempts to create a network device object of 'type' with 'name'.  'type' 
+ * corresponds to the 'type' field used in the netdev_class * structure.  
+ * Arguments for creation are provided in 'args', which may be empty or NULL 
+ * if none are needed. */
+int
+netdev_create(const char *name, const char *type, const struct shash *args)
+{
+    struct shash empty_args = SHASH_INITIALIZER(&empty_args);
+    int i;
+
+    netdev_initialize();
+
+    if (!args) {
+        args = &empty_args;
+    }
+
+    if (shash_find(&netdev_obj_shash, name)) {
+        VLOG_WARN("attempted to create a netdev object with bound name: %s",
+                name);
+        return EEXIST;
+    }
+
+    for (i = 0; i < n_netdev_classes; i++) {
+        const struct netdev_class *class = netdev_classes[i];
+        if (!strcmp(type, class->type)) {
+            return class->create(name, type, args, true);
+        }
+    }
+
+    VLOG_WARN("could not create netdev object of unknown type: %s", type);
+
+    return EINVAL;
+}
+
+/* Destroys netdev object 'name'.  Netdev objects maintain a reference count
+ * which is incremented on netdev_open() and decremented on netdev_close().  
+ * If 'name' has a non-zero reference count, it will not destroy the object 
+ * and return EBUSY. */
+int
+netdev_destroy(const char *name)
+{
+    struct shash_node *node;
+    struct netdev_obj *netdev_obj;
+
+    node = shash_find(&netdev_obj_shash, name);
+    if (!node) {
+        return ENODEV;
+    }
+
+    netdev_obj = node->data;
+    if (netdev_obj->ref_cnt != 0) {
+        VLOG_WARN("attempt to destroy open netdev object (%d): %s", 
+                netdev_obj->ref_cnt, name);
+        return EBUSY;
+    }
+
+    shash_delete(&netdev_obj_shash, node);
+    netdev_obj->class->destroy(netdev_obj);
+
+    return 0;
+}
+
+/* Reconfigures the device object 'name' with 'args'.  'args' may be empty 
+ * or NULL if none are needed. */
+int
+netdev_reconfigure(const char *name, const struct shash *args)
+{
+    struct shash empty_args = SHASH_INITIALIZER(&empty_args);
+    struct netdev_obj *netdev_obj;
+
+    if (!args) {
+        args = &empty_args;
+    }
+
+    netdev_obj = shash_find_data(&netdev_obj_shash, name);
+    if (!netdev_obj) {
+        return ENODEV;
+    }
+
+    if (netdev_obj->class->reconfigure) {
+        return netdev_obj->class->reconfigure(netdev_obj, args);
+    }
+
+    return 0;
+}
+
 /* Opens the network device named 'name' (e.g. "eth0") and returns zero if
  * successful, otherwise a positive errno value.  On success, sets '*netdevp'
  * to the new network device, otherwise to null.
@@ -133,37 +223,43 @@ netdev_wait(void)
  * the 'enum netdev_pseudo_ethertype' values to receive frames in one of those
  * categories. */
 int
-netdev_open(const char *name_, int ethertype, struct netdev **netdevp)
+netdev_open(const char *name, int ethertype, struct netdev **netdevp)
 {
-    char *name = xstrdup(name_);
-    char *prefix, *suffix, *colon;
+    struct netdev_obj *netdev_obj;
     struct netdev *netdev = NULL;
     int error;
     int i;
 
     netdev_initialize();
-    colon = strchr(name, ':');
-    if (colon) {
-        *colon = '\0';
-        prefix = name;
-        suffix = colon + 1;
-    } else {
-        prefix = "";
-        suffix = name;
-    }
 
-    for (i = 0; i < n_netdev_classes; i++) {
-        const struct netdev_class *class = netdev_classes[i];
-        if (!strcmp(prefix, class->prefix)) {
-            error = class->open(name_, suffix, ethertype, &netdev);
-            goto exit;
+    netdev_obj = shash_find_data(&netdev_obj_shash, name);
+    if (netdev_obj) {
+        error = netdev_obj->class->open(name, ethertype, &netdev);
+    } else {
+        /* Default to "system". */
+        error = EAFNOSUPPORT;
+        for (i = 0; i < n_netdev_classes; i++) {
+            const struct netdev_class *class = netdev_classes[i];
+            if (!strcmp(class->type, "system")) {
+                struct shash empty_args = SHASH_INITIALIZER(&empty_args);
+
+                /* Dynamically create the netdev object, but indicate
+                 * that it should be destroyed when the the last user
+                 * closes its handle. */
+                error = class->create(name, "system", &empty_args, false);
+                if (!error) {
+                    error = class->open(name, ethertype, &netdev);
+                    netdev_obj = shash_find_data(&netdev_obj_shash, name);
+                }
+                break;
+            }
         }
     }
-    error = EAFNOSUPPORT;
+    if (!error) {
+        netdev_obj->ref_cnt++;
+    }
 
-exit:
     *netdevp = error ? NULL : netdev;
-    free(name);
     return error;
 }
 
@@ -172,8 +268,23 @@ void
 netdev_close(struct netdev *netdev)
 {
     if (netdev) {
-        char *name;
+        struct netdev_obj *netdev_obj;
+        char *name = netdev->name;
         int error;
+
+        netdev_obj = shash_find_data(&netdev_obj_shash, name);
+        assert(netdev_obj);
+        if (netdev_obj->ref_cnt > 0) {
+            netdev_obj->ref_cnt--;
+        } else {
+            VLOG_WARN("netdev %s closed too many times", name);
+        }
+
+        /* If the reference count for the netdev object is zero, and it
+         * was dynamically created by netdev_open(), destroy it. */
+        if (!netdev_obj->ref_cnt && !netdev_obj->created) {
+            netdev_destroy(name);
+        }
 
         /* Restore flags that we changed, if any. */
         fatal_signal_block();
@@ -182,11 +293,10 @@ netdev_close(struct netdev *netdev)
         fatal_signal_unblock();
         if (error) {
             VLOG_WARN("failed to restore network device flags on %s: %s",
-                      netdev->name, strerror(error));
+                      name, strerror(error));
         }
 
         /* Free. */
-        name = netdev->name;
         netdev->class->close(netdev);
         free(name);
     }
@@ -231,7 +341,7 @@ netdev_enumerate(struct svec *svec)
             int retval = class->enumerate(svec);
             if (retval) {
                 VLOG_WARN("failed to enumerate %s network devices: %s",
-                          class->name, strerror(retval));
+                          class->type, strerror(retval));
                 if (!error) {
                     error = retval;
                 }
@@ -708,6 +818,24 @@ exit:
     return netdev;
 }
 
+/* Initializes 'netdev_obj' as a netdev object named 'name' of the 
+ * specified 'class'.
+ *
+ * This function adds 'netdev_obj' to a netdev-owned shash, so it is
+ * very important that 'netdev_obj' only be freed after calling
+ * netdev_destroy().  */
+void
+netdev_obj_init(struct netdev_obj *netdev_obj, const char *name,
+                const struct netdev_class *class, bool created)
+{
+    assert(!shash_find(&netdev_obj_shash, name));
+
+    netdev_obj->class = class;
+    netdev_obj->ref_cnt = 0;
+    netdev_obj->created = created;
+    shash_add(&netdev_obj_shash, name, netdev_obj);
+}
+
 /* Initializes 'netdev' as a netdev named 'name' of the specified 'class'.
  *
  * This function adds 'netdev' to a netdev-owned linked list, so it is very
@@ -721,6 +849,14 @@ netdev_init(struct netdev *netdev, const char *name,
     netdev->save_flags = 0;
     netdev->changed_flags = 0;
     list_push_back(&netdev_list, &netdev->node);
+}
+
+/* Returns the class type of 'netdev'.  
+ *
+ * The caller must not free the returned value. */
+const char *netdev_get_type(const struct netdev *netdev)
+{
+    return netdev->class->type;
 }
 
 /* Initializes 'notifier' as a netdev notifier for 'netdev', for which

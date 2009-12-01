@@ -67,6 +67,14 @@
 #define ADVERTISED_Asym_Pause           (1 << 14)
 #endif
 
+/* Provider-specific netdev object.  Netdev objects are devices that are
+ * created by the netdev library through a netdev_create() call. */
+struct netdev_obj_linux {
+    struct netdev_obj netdev_obj;
+
+    int tap_fd;                 /* File descriptor for TAP device. */
+};
+
 struct netdev_linux {
     struct netdev netdev;
 
@@ -142,6 +150,13 @@ static int set_etheraddr(const char *netdev_name, int hwaddr_family,
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
 
+static struct netdev_obj_linux *
+netdev_obj_linux_cast(const struct netdev_obj *netdev_obj)
+{
+    netdev_obj_assert_class(netdev_obj, &netdev_linux_class);
+    return CONTAINER_OF(netdev_obj, struct netdev_obj_linux, netdev_obj);
+}
+
 static struct netdev_linux *
 netdev_linux_cast(const struct netdev *netdev)
 {
@@ -194,9 +209,77 @@ netdev_linux_cache_cb(const struct rtnetlink_change *change,
     }
 }
 
+/* Creates the netdev object of 'type' with 'name'. */
 static int
-netdev_linux_open(const char *name, char *suffix, int ethertype,
-                  struct netdev **netdevp)
+netdev_linux_create(const char *name, const char *type, 
+                    const struct shash *args, bool created)
+{
+    struct netdev_obj_linux *netdev_obj;
+    static const char tap_dev[] = "/dev/net/tun";
+    struct ifreq ifr;
+    int error;
+
+    if (!shash_is_empty(args)) {
+        VLOG_WARN("arguments for %s devices should be empty", type);
+    }
+
+    /* Create the name binding in the netdev library for this object. */
+    netdev_obj = xcalloc(1, sizeof *netdev_obj);
+    netdev_obj_init(&netdev_obj->netdev_obj, name, &netdev_linux_class,
+                    created);
+    netdev_obj->tap_fd = -1;
+
+    if (strcmp(type, "tap")) {
+        return 0;
+    }
+
+    /* Open tap device. */
+    netdev_obj->tap_fd = open(tap_dev, O_RDWR);
+    if (netdev_obj->tap_fd < 0) {
+        error = errno;
+        VLOG_WARN("opening \"%s\" failed: %s", tap_dev, strerror(error));
+        goto error;
+    }
+
+    /* Create tap device. */
+    ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
+    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+    if (ioctl(netdev_obj->tap_fd, TUNSETIFF, &ifr) == -1) {
+        VLOG_WARN("%s: creating tap device failed: %s", name,
+                  strerror(errno));
+        error = errno;
+        goto error;
+    }
+
+    /* Make non-blocking. */
+    error = set_nonblocking(netdev_obj->tap_fd);
+    if (error) {
+        goto error;
+    }
+
+    return 0;
+
+error:
+    netdev_destroy(name);
+    return error;
+}
+
+/* Destroys the netdev object 'netdev_obj_'. */
+static void
+netdev_linux_destroy(struct netdev_obj *netdev_obj_)
+{
+    struct netdev_obj_linux *netdev_obj = netdev_obj_linux_cast(netdev_obj_);
+
+    if (netdev_obj->tap_fd >= 0) {
+        close(netdev_obj->tap_fd);
+    }
+    free(netdev_obj);
+
+    return;
+}
+
+static int
+netdev_linux_open(const char *name, int ethertype, struct netdev **netdevp)
 {
     struct netdev_linux *netdev;
     enum netdev_flags flags;
@@ -204,10 +287,10 @@ netdev_linux_open(const char *name, char *suffix, int ethertype,
 
     /* Allocate network device. */
     netdev = xcalloc(1, sizeof *netdev);
-    netdev_init(&netdev->netdev, suffix, &netdev_linux_class);
+    netdev_init(&netdev->netdev, name, &netdev_linux_class);
     netdev->netdev_fd = -1;
     netdev->tap_fd = -1;
-    netdev->cache = shash_find_data(&cache_map, suffix);
+    netdev->cache = shash_find_data(&cache_map, name);
     if (!netdev->cache) {
         if (shash_is_empty(&cache_map)) {
             int error = rtnetlink_notifier_register(
@@ -218,14 +301,14 @@ netdev_linux_open(const char *name, char *suffix, int ethertype,
             }
         }
         netdev->cache = xmalloc(sizeof *netdev->cache);
-        netdev->cache->shash_node = shash_add(&cache_map, suffix,
+        netdev->cache->shash_node = shash_add(&cache_map, name,
                                               netdev->cache);
         netdev->cache->valid = 0;
         netdev->cache->ref_cnt = 0;
     }
     netdev->cache->ref_cnt++;
 
-    if (!strncmp(name, "tap:", 4)) {
+    if (!strcmp(netdev_get_type(&netdev->netdev), "tap")) {
         static const char tap_dev[] = "/dev/net/tun";
         struct ifreq ifr;
 
@@ -239,9 +322,9 @@ netdev_linux_open(const char *name, char *suffix, int ethertype,
 
         /* Create tap device. */
         ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-        strncpy(ifr.ifr_name, suffix, sizeof ifr.ifr_name);
+        strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
         if (ioctl(netdev->tap_fd, TUNSETIFF, &ifr) == -1) {
-            VLOG_WARN("%s: creating tap device failed: %s", suffix,
+            VLOG_WARN("%s: creating tap device failed: %s", name,
                       strerror(errno));
             error = errno;
             goto error;
@@ -296,7 +379,7 @@ netdev_linux_open(const char *name, char *suffix, int ethertype,
         if (bind(netdev->netdev_fd,
                  (struct sockaddr *) &sll, sizeof sll) < 0) {
             error = errno;
-            VLOG_ERR("bind to %s failed: %s", suffix, strerror(error));
+            VLOG_ERR("bind to %s failed: %s", name, strerror(error));
             goto error;
         }
 
@@ -1377,12 +1460,15 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
 }
 
 const struct netdev_class netdev_linux_class = {
-    "",                         /* prefix */
-    "linux",                    /* name */
+    "system",                   /* type */
 
     netdev_linux_init,
     netdev_linux_run,
     netdev_linux_wait,
+
+    netdev_linux_create,
+    netdev_linux_destroy,
+    NULL,                       /* reconfigure */
 
     netdev_linux_open,
     netdev_linux_close,
@@ -1422,12 +1508,15 @@ const struct netdev_class netdev_linux_class = {
 };
 
 const struct netdev_class netdev_tap_class = {
-    "tap",                      /* prefix */
-    "tap",                      /* name */
+    "tap",                      /* type */
 
     netdev_linux_init,
     NULL,                       /* run */
     NULL,                       /* wait */
+
+    netdev_linux_create,
+    netdev_linux_destroy,
+    NULL,                       /* reconfigure */
 
     netdev_linux_open,
     netdev_linux_close,

@@ -50,6 +50,7 @@
 #include "port-array.h"
 #include "proc-net-compat.h"
 #include "process.h"
+#include "shash.h"
 #include "socket-util.h"
 #include "stp.h"
 #include "svec.h"
@@ -369,6 +370,70 @@ bridge_configure_ssl(void)
 }
 #endif
 
+/* Attempt to create the network device 'iface_name' through the netdev
+ * library. */
+static int
+set_up_iface(const char *iface_name, bool create) 
+{
+    const char *type;
+    const char *arg;
+    struct svec arg_svec;
+    struct shash args;
+    int error;
+    size_t i;
+
+    /* If a type is not explicitly declared, then assume it's an existing
+     * "system" device. */
+    type = cfg_get_string(0, "iface.%s.type", iface_name);
+    if (!type || !strcmp(type, "system")) {
+        return 0;
+    }
+
+    svec_init(&arg_svec);
+    cfg_get_subsections(&arg_svec, "iface.%s.args", iface_name);
+
+    shash_init(&args);
+    SVEC_FOR_EACH (i, arg, &arg_svec) {
+        const char *value;
+
+        value = cfg_get_string(0, "iface.%s.args.%s", iface_name, arg);
+        if (value) {
+            shash_add(&args, arg, xstrdup(value));
+        }
+    }
+
+    if (create) {
+        error = netdev_create(iface_name, type, &args);
+    } else {
+        /* xxx Check to make sure that the type hasn't changed. */
+        error = netdev_reconfigure(iface_name, &args);
+    }
+
+    svec_destroy(&arg_svec);
+    shash_destroy(&args);
+
+    return error;
+}
+
+static int
+create_iface(const char *iface_name)
+{
+    return set_up_iface(iface_name, true);
+}
+
+static int
+reconfigure_iface(const char *iface_name)
+{
+    return set_up_iface(iface_name, false);
+}
+
+static void
+destroy_iface(const char *iface_name)
+{
+    netdev_destroy(iface_name);
+}
+
+
 /* iterate_and_prune_ifaces() callback function that opens the network device
  * for 'iface', if it is not already open, and retrieves the interface's MAC
  * address and carrier status. */
@@ -524,6 +589,7 @@ bridge_reconfigure(void)
                              p->devname, dpif_name(br->dpif),
                              strerror(retval));
                 }
+                destroy_iface(p->devname);
             }
         }
         svec_destroy(&want_ifaces);
@@ -544,10 +610,24 @@ bridge_reconfigure(void)
         bridge_get_all_ifaces(br, &want_ifaces);
         svec_diff(&want_ifaces, &cur_ifaces, &add_ifaces, NULL, NULL);
 
+        for (i = 0; i < cur_ifaces.n; i++) {
+            const char *if_name = cur_ifaces.names[i];
+            reconfigure_iface(if_name);
+        }
+
         for (i = 0; i < add_ifaces.n; i++) {
             const char *if_name = add_ifaces.names[i];
             bool internal;
             int error;
+
+            /* Attempt to create the network interface in case it
+             * doesn't exist yet. */
+            error = create_iface(if_name);
+            if (error) {
+                VLOG_WARN("could not create iface %s: %s\n", if_name,
+                        strerror(error));
+                continue;
+            }
 
             /* Add to datapath. */
             internal = iface_is_internal(br, if_name);

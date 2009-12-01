@@ -30,6 +30,7 @@
 struct ofpbuf;
 struct in_addr;
 struct in6_addr;
+struct shash;
 struct svec;
 
 enum netdev_flags {
@@ -80,6 +81,11 @@ struct netdev;
 int netdev_initialize(void);
 void netdev_run(void);
 void netdev_wait(void);
+
+int netdev_create(const char *name, const char *type, 
+                  const struct shash *args);
+int netdev_destroy(const char *name);
+int netdev_reconfigure(const char *name, const struct shash *args);
 
 int netdev_open(const char *name, int ethertype, struct netdev **);
 void netdev_close(struct netdev *);

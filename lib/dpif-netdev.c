@@ -373,9 +373,13 @@ do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
     if (!internal) {
         error = netdev_open(devname, NETDEV_ETH_TYPE_ANY, &netdev);
     } else {
-        char *tapname = xasprintf("tap:%s", devname);
-        error = netdev_open(tapname, NETDEV_ETH_TYPE_ANY, &netdev);
-        free(tapname);
+        error = netdev_create(devname, "tap", NULL);
+        if (!error) {
+            error = netdev_open(devname, NETDEV_ETH_TYPE_ANY, &netdev);
+            if (error) {
+                netdev_destroy(devname);
+            }
+        }
     }
     if (error) {
         return error;
@@ -468,6 +472,7 @@ static int
 do_del_port(struct dp_netdev *dp, uint16_t port_no)
 {
     struct dp_netdev_port *port;
+    char *name;
     int error;
 
     error = get_port_by_number(dp, port_no, &port);
@@ -480,7 +485,12 @@ do_del_port(struct dp_netdev *dp, uint16_t port_no)
     dp->n_ports--;
     dp->serial++;
 
+    name = xstrdup(netdev_get_name(port->netdev));
     netdev_close(port->netdev);
+    if (port->internal) {
+        netdev_destroy(name);
+    }
+    free(name);
     free(port);
 
     return 0;
