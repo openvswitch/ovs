@@ -43,8 +43,8 @@ static struct timeval now;
 /* Time at which to die with SIGALRM (if not TIME_MIN). */
 static time_t deadline = TIME_MIN;
 
-static void setup_timer(void);
-static void setup_signal(int flags);
+static void set_up_timer(void);
+static void set_up_signal(int flags);
 static void sigalrm_handler(int);
 static void refresh_if_ticked(void);
 static time_t time_add(time_t, time_t);
@@ -67,12 +67,12 @@ time_init(void)
     gettimeofday(&now, NULL);
     tick = false;
 
-    setup_signal(SA_RESTART);
-    setup_timer();
+    set_up_signal(SA_RESTART);
+    set_up_timer();
 }
 
 static void
-setup_signal(int flags)
+set_up_signal(int flags)
 {
     struct sigaction sa;
 
@@ -100,7 +100,7 @@ setup_signal(int flags)
 void
 time_disable_restart(void)
 {
-    setup_signal(0);
+    set_up_signal(0);
 }
 
 /* Add SA_RESTART to the flags for SIGALRM, so that any system call that
@@ -109,11 +109,11 @@ time_disable_restart(void)
 void
 time_enable_restart(void)
 {
-    setup_signal(SA_RESTART);
+    set_up_signal(SA_RESTART);
 }
 
 static void
-setup_timer(void)
+set_up_timer(void)
 {
     struct itimerval itimer;
 
@@ -133,7 +133,7 @@ setup_timer(void)
 void
 time_postfork(void)
 {
-    setup_timer();
+    set_up_timer();
 }
 
 /* Forces a refresh of the current time from the kernel.  It is not usually

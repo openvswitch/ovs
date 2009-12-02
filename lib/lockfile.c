@@ -61,8 +61,8 @@ lockfile_name(const char *file_name)
 {
     const char *slash = strrchr(file_name, '/');
     return (slash
-            ? xasprintf("%.*s/.%s.~lock~", slash - file_name, file_name,
-                        slash + 1)
+            ? xasprintf("%.*s/.%s.~lock~",
+                        (int) (slash - file_name), file_name, slash + 1)
             : xasprintf(".%s.~lock~", file_name));
 }
 

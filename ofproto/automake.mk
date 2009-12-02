@@ -7,6 +7,8 @@
 
 noinst_LIBRARIES += ofproto/libofproto.a
 ofproto_libofproto_a_SOURCES = \
+	ofproto/collectors.c \
+	ofproto/collectors.h \
 	ofproto/discovery.c \
 	ofproto/discovery.h \
 	ofproto/executer.c \

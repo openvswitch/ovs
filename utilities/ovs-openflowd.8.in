@@ -298,11 +298,16 @@ time is 8 seconds.
 
 .TP
 \fB-l\fR, \fB--listen=\fImethod\fR
-Configures the switch to additionally listen for incoming OpenFlow
-connections for switch management with \fBovs\-ofctl\fR.  The \fImethod\fR
+By default, the switch listens for OpenFlow management connections on a
+Unix domain socket named \fB@RUNDIR@/\fIdatapath\fB.mgmt\fR.  This socket 
+can be used to perform local OpenFlow monitoring and administration with
+tools such as \fBovs\-ofctl\fR.  
+
+This option may be used to override the default listener.  The \fImethod\fR
 must be given as one of the passive OpenFlow connection methods listed
 below.  This option may be specified multiple times to listen to
-multiple connection methods.
+multiple connection methods.  If a single \fImethod\fR of \fBnone\fR is
+used, no listeners will be created.
 
 .RS
 .TP
@@ -410,6 +415,22 @@ directory (see below).  Other directories are not searched.
 Sets the directory searched for remote command execution to
 \fBdirectory\fR.  The default directory is
 \fB@pkgdatadir@/commands\fR.
+
+.SS "Datapath Options"
+.
+.IP "\fB\-\-ports=\fIport\fR[\fB,\fIport\fR...]"
+Ordinarily, \fBovs\-openflowd\fR expects the administrator to create
+the specified \fIdatapath\fR and add ports to it externally with a
+utility such as \fBovs\-dpctl\fR.  However, the userspace switch
+datapath is implemented inside \fBovs\-openflowd\fR itself and does
+not (currently) have any external interface for \fBovs\-dpctl\fR to
+access.  As a stopgap measure, this option specifies one or more ports
+to add to the datapath at \fBovs\-openflowd\fR startup time.  Multiple
+ports may be specified as a comma-separated list or by specifying
+\fB\-\-ports\fR multiple times.
+.IP
+See \fBINSTALL.userspace\fR for more information about userspace
+switching.
 
 .SS "Daemon Options"
 .so lib/daemon.man

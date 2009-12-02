@@ -105,16 +105,13 @@ function remove_modules {
 
 function reload_vswitchd {
     if [ -f "$VSWITCHD_PIDFILE" ]; then
-        "$appctl" \
-            --target=ovs-vswitchd.$(cat "$VSWITCHD_PIDFILE").ctl \
-            --execute=vswitchd/reload
+        "$appctl" --target=/var/run/ovs-vswitchd.`cat $VSWITCHD_PIDFILE`.ctl vswitchd/reload
     fi
 }
 
 function reload_brcompatd {
     if [ -f "$BRCOMPATD_PIDFILE" ]; then
-        "$appctl" \
-            --target=ovs-brcompatd.$(cat "$BRCOMPATD_PIDFILE").ctl --reopen
+        "$appctl" --target=/var/run/ovs-brcompatd.`cat $BRCOMPATD_PIDFILE`.ctl vlog/reopen
     fi
 }
 
@@ -197,7 +194,7 @@ function start_brcompatd {
         valgrind_opt="valgrind --log-file=$BRCOMPATD_VALGRIND_LOG $BRCOMPATD_VALGRIND_OPT"
         daemonize="n"
     fi
-    appctl_cmd="$appctl -t /var/run/ovs-vswitchd.\`cat $VSWITCHD_PIDFILE\`.ctl -e '%s'"
+    appctl_cmd="$appctl --target=/var/run/ovs-vswitchd.\`cat $VSWITCHD_PIDFILE\`.ctl %s"
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovs-brcompatd ($strace_opt$valgrind_opt)" true
@@ -271,7 +268,8 @@ function start {
             '--del-match=port.*' \
             '--del-match=bonding.*' \
             '--del-match=iface.*' \
-            '--del-match=vlan.*'
+            '--del-match=vlan.*.trunks=*' \
+            '--del-match=vlan.*.tag=*'
     fi
 
     start_vswitchd

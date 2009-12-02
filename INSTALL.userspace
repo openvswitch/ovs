@@ -1,0 +1,63 @@
+              Using Open vSwitch without kernel support
+              =========================================
+
+Open vSwitch can operate, at a cost in performance, entirely in
+userspace, without assistance from a kernel module.  This file
+explains how to install Open vSwitch in such a mode.
+
+The userspace-only mode of Open vSwitch is considered experimental.
+It has not been thoroughly tested.
+
+This version of Open vSwitch should be built manually with "configure"
+and "make".  Debian packaging for Open vSwitch is also included, but
+it has not been recently tested, and so Debian packages are not a
+recommended way to use this version of Open vSwitch.
+
+Building and Installing
+-----------------------
+
+The requirements and procedure for building, installing, and
+configuring Open vSwitch are the same as those given in INSTALL.Linux.
+You may omit configuring, building, and installing the kernel module,
+and the related requirements.
+
+On Linux, the userspace switch additionally requires the kernel
+TUN/TAP driver to be available, either built into the kernel or loaded
+as a module.  If you are not sure, check for a directory named
+/sys/class/misc/tun.  If it does not exist, then attempt to load the
+module with "modprobe tun".
+
+The tun device must also exist as /dev/net/tun.  If it does not exist,
+then create /dev/net (if necessary) with "mkdir /dev/net", then create
+/dev/net/tun with "mknod /dev/net/tun c 10 200".
+
+Using the Userspace Datapath with ovs-vswitchd
+----------------------------------------------
+
+To use ovs-vswitchd in userspace mode, give the bridge a name that
+begins with "netdev:" in the configuration file.  For example:
+
+    bridge.netdev:br0.port=eth0
+    bridge.netdev:br0.port=eth1
+    bridge.netdev:br0.port=eth2
+
+ovs-vswitchd will create a TAP device as the bridge's local interface,
+named the same as the bridge minus the "netdev:" prefix, as well as
+for each configured internal interface.
+
+Using the Userspace Datapath with ovs-openflowd
+-----------------------------------------------
+
+To use ovs-openflowd in userspace mode, specify a datapath name that
+begins with "netdev:", and specify --ports with the names of the ports
+that should be included in the datapath as argument.  For example:
+
+    ovs-openflowd netdev:br0 --ports=eth0,eth1,eth2
+
+ovs-openflowd will create a TAP device as the bridge's local
+interface, named the same as the bridge minus the "netdev:" prefix.
+
+Bug Reporting
+-------------
+
+Please report problems to bugs@openvswitch.org.

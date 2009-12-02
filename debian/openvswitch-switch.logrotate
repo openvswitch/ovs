@@ -6,6 +6,6 @@
         missingok
         rotate 30
         postrotate
-                ovs-appctl --target /var/run/ovs-openflowd.pid --reopen
+                ovs-appctl --target=ovs-openflowd vlog/reopen
         endscript
 }

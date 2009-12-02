@@ -5,6 +5,17 @@
 
 #include <linux/version.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+/* In version 2.6.24 the return type of skb_headroom() changed from 'int' to
+ * 'unsigned int'.  We use skb_headroom() as one arm of a min(a,b) invocation
+ * in make_writable() in actions.c, so we need the correct type. */
+#define skb_headroom rpl_skb_headroom
+static inline unsigned int rpl_skb_headroom(const struct sk_buff *skb)
+{
+ 	return skb->data - skb->head;
+}
+#endif
+
 #ifndef HAVE_SKB_COPY_FROM_LINEAR_DATA_OFFSET
 static inline void skb_copy_from_linear_data_offset(const struct sk_buff *skb,
                                                     const int offset, void *to,

@@ -170,7 +170,7 @@ unixctl_command_reply(struct unixctl_conn *conn,
  * A program that (optionally) daemonizes itself should call this function
  * *after* daemonization, so that the socket name contains the pid of the
  * daemon instead of the pid of the program that exited.  (Otherwise,
- * "ovs-appctl --target <program>.pid" will fail.)
+ * "ovs-appctl --target=<program>" will fail.)
  *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
  * sets '*serverp' to the new unixctl_server, otherwise to NULL. */

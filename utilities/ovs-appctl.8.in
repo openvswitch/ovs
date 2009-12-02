@@ -4,58 +4,65 @@
 .  ns
 .  IP "\\$1"
 ..
-.TH ovs\-appctl 8 "April 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-appctl 8 "November 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-appctl
 
 .SH NAME
 ovs\-appctl \- utility for configuring running Open vSwitch daemons
 
 .SH SYNOPSIS
-\fBovs\-appctl\fR [\fB-h\fR | \fB--help\fR] [\fItarget\fR...] [\fIaction\fR...]
-.sp 1
-The available \fItarget\fR options are:
+\fBovs\-appctl\fR [\fB--target=\fItarget\fR | \fB-t\fR \fItarget\fR]
+\fIcommand \fR[\fIarg\fR...]
 .br
-[\fB-t\fR \fIsocket\fR | \fB--target=\fIsocket\fR]
-.sp 1
-The available \fIaction\fR options are:
+\fBovs\-appctl\fR --help
 .br
-[\fB-l\fR | \fB--list\fR] [\fB-s\fR
-\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]] |
-\fB--set=\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]]
-[\fB-r\fR | \fB--reopen\fR]
-[\fB-e\fR | \fB--execute=\fIcommand\fR]
-
+\fBovs\-appctl\fR --version
 .SH DESCRIPTION
-The \fBovs\-appctl\fR program connects to one or more running
-Open vSwitch daemons (such as \fBovs\-vswitchd\fR(8)), as specified by the
-user, and sends them commands to query or modify their behavior.
-Its primary purpose is currently to adjust daemons' logging levels.
+Open vSwitch daemons accept certain commands at runtime to control
+their behavior and query their settings.  Every daemon accepts the
+commands for querying and adjusting its logging settings documented
+under \fBLOGGING COMMANDS\fR below, and \fBovs\-vswitchd\fR in
+particular accepts a number of additional commands documented in
+\fBovs\-vswitchd\fR(8).
 
-\fBovs\-appctl\fR applies one or more actions to each of one or more
-target processes.  Targets may be specified using:
+The \fBovs\-appctl\fR program provides a simple way to invoke these
+commands.  The command to be sent is specified on \fBovs\-appctl\fR's
+command line as non-option arguments.  \fBovs\-appctl\fR sends the
+command and prints the daemon's response on standard output.
 
-.IP "\fB-t \fIsocket\fR"
-.IQ "\fB--target=\fIsocket\fR"
-The specified \fIsocket\fR must be the name of a Unix domain socket
-for a \fBovs\-appctl\fR-controllable process.  If \fIsocket\fR does not
-begin with \fB/\fR, it is treated as relative to \fB@RUNDIR@\fR.
+In normal use only a single option is accepted:
 
-Each Open vSwitch daemon by default creates a socket named
-\fB@RUNDIR@/\fIprogram\fB.\fIpid\fB.ctl\fR, where \fIprogram\fR is
-the program's name (such as \fBovs\-vswitchd\fR) and \fIpid\fR is the
-daemon's PID.
-
-.PP
-The available actions are:
-
-.IP "\fB-l\fR"
-.IQ "\fB--list\fR"
-Print the list of known logging modules and their current levels to
-stdout.
-
-.IP "\fB-s\fR \fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]"
-.IQ "\fB--set=\fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]"
-
+.IP "\fB\-t \fItarget\fR"
+.IQ "\fB\-\-target=\fItarget\fR"
+Tells \fBovs\-appctl\fR which daemon to contact.
+.IP
+If \fItarget\fR begins with \fB/\fR it must name a Unix domain socket
+on which an Open vSwitch daemon is listening for control channel
+connections.  By default, each daemon listens on a Unix domain socket
+named \fB@RUNDIR@/\fIprogram\fB.\fIpid\fB.ctl\fR, where \fIprogram\fR
+is the program's name and \fIpid\fR is its process ID.  For example,
+if \fBovs-vswitchd\fR has PID 123, it would listen on
+\fB@RUNDIR@/ovs-vswitchd.123.ctl\fR.
+.IP
+Otherwise, \fBovs\-appctl\fR looks for a pidfile, that is, a file
+whose contents are the process ID of a running process as a decimal
+number, named \fB@RUNDIR@/\fItarget\fB.pid\fR.  (The \fB\-\-pidfile\fR
+option makes an Open vSwitch daemon create a pidfile.)
+\fBovs\-appctl\fR reads the pidfile, then looks for a Unix socket
+named \fB@RUNDIR@/\fItarget\fB.\fIpid\fB.ctl\fR, where \fIpid\fR is
+replaced by the process ID read from the pidfile, and uses that file
+as if it had been specified directly as the target.
+.IP
+The default target is \fBovs\-vswitchd\fR.
+.
+.SH LOGGING COMMANDS
+Every Open vSwitch daemon supports the following commands for
+examining and adjusting log levels.
+.
+.IP "\fBvlog/list\fR"
+Lists the known logging modules and their current levels.
+.
+.IP "\fBvlog/set\fR \fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]"
 Sets the logging level for \fImodule\fR in \fIfacility\fR to
 \fIlevel\fR.  The \fImodule\fR may be any valid module name (as
 displayed by the \fB--list\fR option) or the special name \fBANY\fR to
@@ -67,10 +74,8 @@ logging levels for both facilities.  If it is omitted,
 \fBemer\fR, \fBerr\fR, \fBwarn\fR, \fBinfo\fR, or \fBdbg\fR, designating the
 minimum severity of a message for it to be logged.  If it is omitted,
 \fIlevel\fR defaults to \fBdbg\fR.
-
-.IP "\fB-s PATTERN:\fIfacility\fB:\fIpattern\fR"
-.IQ "\fB--set=PATTERN:\fIfacility\fB:\fIpattern\fR"
-
+.
+.IP "\fBvlog/set PATTERN:\fIfacility\fB:\fIpattern\fR"
 Sets the log pattern for \fIfacility\fR to \fIpattern\fR.  Each time a
 message is logged to \fIfacility\fR, \fIpattern\fR determines the
 message's formatting.  Most characters in \fIpattern\fR are copied
@@ -140,27 +145,29 @@ width.  (A field wider than \fIwidth\fR is not truncated to fit.)
 The default pattern for console output is \fB%d{%b %d
 %H:%M:%S}|%05N|%c|%p|%m\fR; for syslog output, \fB%05N|%c|%p|%m\fR.
 
-.IP \fB-r\fR
-.IQ \fB--reopen\fR
-Causes the target application to close and reopen its log file.  (This
+.IP "\fBvlog/reopen\fR"
+Causes the daemon to close and reopen its log file.  (This
 is useful after rotating log files, to cause a new log file to be
 used.)
 
 This has no effect if the target application was not invoked with the
 \fB--log-file\fR option.
 
-.IP "\fB-e \fIcommand\fR"
-.IQ "\fB--execute=\fIcommand\fR"
-Passes the specified \fIcommand\fR literally to the target application
-and prints its response to stdout, if successful, or to stderr if an
-error occurs.  Use \fB-e help\fR to print a list of available commands.
-
 .SH OPTIONS
 
 .so lib/common.man
 
+.SH BUGS
+
+The protocol used to speak to Open vSwitch daemons does not contain a
+quoting mechanism, so command arguments should not generally contain
+white space.
+
 .SH "SEE ALSO"
 
+\fBovs\-appctl\fR can control the following daemons:
+.BR ovs\-vswitchd (8),
+.BR ovs\-openflowd (8),
 .BR ovs\-controller (8),
-.BR ovs\-dpctl (8),
-.BR ovs\-openflowd (8)
+.BR ovs\-brcompatd (8),
+.BR ovs\-discover (8).

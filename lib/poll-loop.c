@@ -18,6 +18,7 @@
 #include "poll-loop.h"
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <poll.h>
 #include <stdlib.h>
 #include <string.h>
@@ -122,7 +123,7 @@ log_wakeup(const struct backtrace *backtrace, const char *format, ...)
 
         ds_put_char(&ds, ':');
         for (i = 0; i < backtrace->n_frames; i++) {
-            ds_put_format(&ds, " 0x%x", backtrace->frames[i]);
+            ds_put_format(&ds, " 0x%"PRIxPTR, backtrace->frames[i]);
         }
     }
     VLOG_DBG("%s", ds_cstr(&ds));

@@ -80,7 +80,7 @@ OVS_ENABLE_OPTION([-Wno-override-init])
 
 AC_ARG_VAR(KARCH, [Kernel Architecture String])
 AC_SUBST(KARCH)
-OVS_CHECK_LINUX(l26, 2.6, KSRC26, L26_ENABLED)
+OVS_CHECK_LINUX26
 
 AC_CONFIG_FILES([Makefile 
 datapath/Makefile 

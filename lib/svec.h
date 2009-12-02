@@ -53,6 +53,7 @@ void svec_swap(struct svec *a, struct svec *b);
 void svec_print(const struct svec *svec, const char *title);
 void svec_parse_words(struct svec *svec, const char *words);
 bool svec_equal(const struct svec *, const struct svec *);
+void svec_split(struct svec *, const char *s, const char *delimiters);
 char *svec_join(const struct svec *,
                 const char *delimiter, const char *terminator);
 const char *svec_back(const struct svec *);

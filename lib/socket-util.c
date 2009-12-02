@@ -291,10 +291,12 @@ guess_netmask(uint32_t ip)
             : htonl(0));                          /* ??? */
 }
 
-/* Opens a non-blocking TCP socket and connects to 'target', which should be a
- * string in the format "<host>[:<port>]".  <host> is required.  If
- * 'default_port' is nonzero then <port> is optional and defaults to
- * 'default_port'.
+/* Opens a non-blocking IPv4 socket of the specified 'style' and connects to
+ * 'target', which should be a string in the format "<host>[:<port>]".  <host>
+ * is required.  If 'default_port' is nonzero then <port> is optional and
+ * defaults to 'default_port'.
+ *
+ * 'style' should be SOCK_STREAM (for TCP) or SOCK_DGRAM (for UDP).
  *
  * On success, returns 0 (indicating connection complete) or EAGAIN (indicating
  * connection in progress), in which case the new file descriptor is stored
@@ -304,8 +306,8 @@ guess_netmask(uint32_t ip)
  * If 'sinp' is non-null, then on success the target address is stored into
  * '*sinp'. */
 int
-tcp_open_active(const char *target_, uint16_t default_port,
-                struct sockaddr_in *sinp, int *fdp)
+inet_open_active(int style, const char *target_, uint16_t default_port,
+                 struct sockaddr_in *sinp, int *fdp)
 {
     char *target = xstrdup(target_);
     char *save_ptr = NULL;
@@ -343,7 +345,7 @@ tcp_open_active(const char *target_, uint16_t default_port,
     }
 
     /* Create non-blocking socket. */
-    fd = socket(AF_INET, SOCK_STREAM, 0);
+    fd = socket(AF_INET, style, 0);
     if (fd < 0) {
         VLOG_ERR("%s: socket: %s", target_, strerror(errno));
         error = errno;
@@ -380,18 +382,20 @@ exit:
     return error;
 }
 
-/* Opens a non-blocking TCP socket, binds to 'target', and listens for incoming
- * connections.  'target' should be a string in the format "[<port>][:<ip>]".
- * <port> may be omitted if 'default_port' is nonzero, in which case it
- * defaults to 'default_port'.  If <ip> is omitted it defaults to the wildcard
- * IP address.
+/* Opens a non-blocking IPv4 socket of the specified 'style', binds to
+ * 'target', and listens for incoming connections.  'target' should be a string
+ * in the format "[<port>][:<ip>]".  <port> may be omitted if 'default_port' is
+ * nonzero, in which case it defaults to 'default_port'.  If <ip> is omitted it
+ * defaults to the wildcard IP address.
  *
- * The socket will have SO_REUSEADDR turned on.
+ * 'style' should be SOCK_STREAM (for TCP) or SOCK_DGRAM (for UDP).
+ *
+ * For TCP, the socket will have SO_REUSEADDR turned on.
  *
  * On success, returns a non-negative file descriptor.  On failure, returns a
  * negative errno value. */
 int
-tcp_open_passive(const char *target_, uint16_t default_port)
+inet_open_passive(int style, const char *target_, uint16_t default_port)
 {
     char *target = xstrdup(target_);
     char *string_ptr = target;
@@ -427,7 +431,7 @@ tcp_open_passive(const char *target_, uint16_t default_port)
     }
 
     /* Create non-blocking socket, set SO_REUSEADDR. */
-    fd = socket(AF_INET, SOCK_STREAM, 0);
+    fd = socket(AF_INET, style, 0);
     if (fd < 0) {
         error = errno;
         VLOG_ERR("%s: socket: %s", target_, strerror(error));
@@ -437,7 +441,8 @@ tcp_open_passive(const char *target_, uint16_t default_port)
     if (error) {
         goto exit_close;
     }
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) < 0) {
+    if (style == SOCK_STREAM
+        && setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) < 0) {
         error = errno;
         VLOG_ERR("%s: setsockopt(SO_REUSEADDR): %s", target_, strerror(error));
         goto exit_close;

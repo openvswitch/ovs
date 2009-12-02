@@ -700,7 +700,7 @@ recv_ofmp_extended_data(uint32_t xid, const struct ofmp_header *ofmph,
          * OpenFlow message. */
         new_oh = ofpbuf_at(&ext_data_buffer, 0, 65536);
         if (!new_oh) {
-            VLOG_WARN_RL(&rl, "received short embedded message: %d\n",
+            VLOG_WARN_RL(&rl, "received short embedded message: %zu\n",
                     ext_data_buffer.size);
             return -EINVAL;
         }

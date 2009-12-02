@@ -22,6 +22,26 @@
 #include <assert.h>
 #include "netdev.h"
 #include "list.h"
+#include "shash.h"
+
+/* A network device object that was created through the netdev_create()
+ * call.
+ *
+ * This structure should be treated as opaque by network device
+ * implementations. */
+struct netdev_obj {
+    const struct netdev_class *class;
+    int ref_cnt;
+    bool created;                    /* Was netdev_create() called? */
+};
+
+void netdev_obj_init(struct netdev_obj *, const char *name,
+                     const struct netdev_class *, bool created);
+static inline void netdev_obj_assert_class(const struct netdev_obj *netdev_obj,
+                                           const struct netdev_class *class)
+{
+    assert(netdev_obj->class == class);
+}
 
 /* A network device (e.g. an Ethernet device).
  *
@@ -30,6 +50,7 @@
 struct netdev {
     const struct netdev_class *class;
     char *name;                      /* e.g. "eth0" */
+
     enum netdev_flags save_flags;    /* Initial device flags. */
     enum netdev_flags changed_flags; /* Flags that we changed. */
     struct list node;                /* Element in global list. */
@@ -42,6 +63,7 @@ static inline void netdev_assert_class(const struct netdev *netdev,
 {
     assert(netdev->class == class);
 }
+const char *netdev_get_type(const struct netdev *netdev);
 
 /* A network device notifier.
  *
@@ -62,15 +84,13 @@ void netdev_notifier_init(struct netdev_notifier *, struct netdev *,
  * These functions return 0 if successful or a positive errno value on failure,
  * except where otherwise noted. */
 struct netdev_class {
-    /* Prefix for names of netdevs in this class, e.g. "ndunix:".
+    /* Type of netdevs in this class, e.g. "system", "tap", "gre", etc.
      *
-     * One netdev class may have the empty string "" as its prefix, in which
-     * case that netdev class is associated with netdev names that do not
-     * contain a colon. */
-    const char *prefix;
-
-    /* Class name, for use in error messages. */
-    const char *name;
+     * One of the providers should supply a "system" type, since this is
+     * the type assumed when a device name was not bound through the 
+     * netdev_create() call.  The "system" type corresponds to an 
+     * existing network device on the system. */
+    const char *type;
 
     /* Called only once, at program startup.  Returning an error from this
      * function will prevent any network device in this class from being
@@ -88,19 +108,45 @@ struct netdev_class {
      * to be called.  May be null if nothing is needed here. */
     void (*wait)(void);
 
+    /* Attempts to create a network device object of 'type' with 'name'.  
+     * 'type' corresponds to the 'type' field used in the netdev_class
+     * structure.  
+     *
+     * The 'created' flag indicates that the user called netdev_create()
+     * and thus will eventually call netdev_destroy().  If the flag is 
+     * false, then the object was dynamically created based on a call to 
+     * netdev_open() without first calling netdev_create() and will be
+     * automatically destroyed when no more netdevs have 'name' open.  A 
+     * provider implementation should pass this flag to netdev_obj_init(). */
+    int (*create)(const char *name, const char *type, 
+                  const struct shash *args, bool created);
+
+    /* Destroys 'netdev_obj'.  
+     *
+     * Netdev objects maintain a reference count that is incremented on 
+     * netdev_open() and decremented on netdev_close().  If 'netdev_obj' 
+     * has a non-zero reference count, then this function will not be 
+     * called. */
+    void (*destroy)(struct netdev_obj *netdev_obj);
+
+    /* Reconfigures the device object 'netdev_obj' with 'args'. 
+     *
+     * If this netdev class does not support reconfiguring a netdev
+     * object, this may be a null pointer.
+     */
+    int (*reconfigure)(struct netdev_obj *netdev_obj, 
+                       const struct shash *args);
+
     /* Attempts to open a network device.  On success, sets '*netdevp' to the
-     * new network device.  'name' is the full network device name provided by
+     * new network device.  'name' is the network device name provided by
      * the user.  This name is useful for error messages but must not be
      * modified.
-     *
-     * 'suffix' is a copy of 'name' following the netdev's 'prefix'.
      *
      * 'ethertype' may be a 16-bit Ethernet protocol value in host byte order
      * to capture frames of that type received on the device.  It may also be
      * one of the 'enum netdev_pseudo_ethertype' values to receive frames in
      * one of those categories. */
-    int (*open)(const char *name, char *suffix, int ethertype,
-                struct netdev **netdevp);
+    int (*open)(const char *name, int ethertype, struct netdev **netdevp);
 
     /* Closes 'netdev'. */
     void (*close)(struct netdev *netdev);
@@ -163,6 +209,16 @@ struct netdev_class {
      * bytes, not including the hardware header; thus, this is typically 1500
      * bytes for Ethernet devices.*/
     int (*get_mtu)(const struct netdev *, int *mtup);
+
+    /* Returns the ifindex of 'netdev', if successful, as a positive number.
+     * On failure, returns a negative errno value.
+     *
+     * The desired semantics of the ifindex value are a combination of those
+     * specified by POSIX for if_nametoindex() and by SNMP for ifIndex.  An
+     * ifindex value should be unique within a host and remain stable at least
+     * until reboot.  SNMP says an ifindex "ranges between 1 and the value of
+     * ifNumber" but many systems do not follow this rule anyhow. */
+    int (*get_ifindex)(const struct netdev *);
 
     /* Sets 'carrier' to true if carrier is active (link light is on) on
      * 'netdev'. */

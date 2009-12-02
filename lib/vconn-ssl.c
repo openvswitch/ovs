@@ -288,7 +288,7 @@ ssl_open(const char *name, char *suffix, struct vconn **vconnp)
         return error;
     }
 
-    error = tcp_open_active(suffix, OFP_SSL_PORT, &sin, &fd);
+    error = inet_open_active(SOCK_STREAM, suffix, OFP_SSL_PORT, &sin, &fd);
     if (fd >= 0) {
         int state = error ? STATE_TCP_CONNECTING : STATE_SSL_CONNECTING;
         return new_ssl_vconn(name, fd, CLIENT, state, &sin, vconnp);
@@ -776,7 +776,7 @@ pssl_open(const char *name, char *suffix, struct pvconn **pvconnp)
         return retval;
     }
 
-    fd = tcp_open_passive(suffix, OFP_SSL_PORT);
+    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_SSL_PORT);
     if (fd < 0) {
         return -fd;
     }

@@ -74,7 +74,7 @@ tcp_open(const char *name, char *suffix, struct stream **streamp)
     struct sockaddr_in sin;
     int fd, error;
 
-    error = tcp_open_active(suffix, 0, &sin, &fd);
+    error = inet_open_active(SOCK_STREAM, suffix, 0, &sin, &fd);
     if (fd >= 0) {
         return new_tcp_stream(name, fd, error, &sin, streamp);
     } else {
@@ -103,7 +103,7 @@ ptcp_open(const char *name UNUSED, char *suffix, struct pstream **pstreamp)
 {
     int fd;
 
-    fd = tcp_open_passive(suffix, 0);
+    fd = inet_open_passive(SOCK_STREAM, suffix, 0);
     if (fd < 0) {
         return -fd;
     } else {

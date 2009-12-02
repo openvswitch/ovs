@@ -49,8 +49,6 @@ void flow_deferred_free_acts(struct sw_flow_actions *);
 int flow_extract(struct sk_buff *, u16 in_port, struct odp_flow_key *);
 void flow_used(struct sw_flow *, struct sk_buff *);
 
-void print_flow(const struct odp_flow_key *);
-
 int flow_init(void);
 void flow_exit(void);
 

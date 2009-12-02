@@ -111,8 +111,9 @@ format_odp_actions(struct ds *ds, const union odp_action *actions,
 void
 format_odp_flow_stats(struct ds *ds, const struct odp_flow_stats *s)
 {
-    ds_put_format(ds, "packets:%"PRIu64", bytes:%"PRIu64", used:",
-                  s->n_packets, s->n_bytes);
+    ds_put_format(ds, "packets:%llu, bytes:%llu, used:",
+                  (unsigned long long int) s->n_packets,
+                  (unsigned long long int) s->n_bytes);
     if (s->used_sec) {
         long long int used = s->used_sec * 1000 + s->used_nsec / 1000000;
         ds_put_format(ds, "%.3fs", (time_msec() - used) / 1000.0);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2009 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef LEARNING_SWITCH_H
-#define LEARNING_SWITCH_H 1
+#ifndef COLLECTORS_H
+#define COLLECTORS_H 1
 
-#include <stdbool.h>
+#include <stdint.h>
+#include "svec.h"
 
-struct ofpbuf;
-struct rconn;
+struct collectors;
 
-struct lswitch *lswitch_create(struct rconn *, bool learn_macs,
-			       bool exact_flows, int max_idle,
-			       bool action_normal);
-void lswitch_run(struct lswitch *, struct rconn *);
-void lswitch_wait(struct lswitch *);
-void lswitch_destroy(struct lswitch *);
-void lswitch_process_packet(struct lswitch *, struct rconn *,
-                            const struct ofpbuf *);
+int collectors_create(const struct svec *targets, uint16_t default_port,
+                      struct collectors **);
+void collectors_destroy(struct collectors *);
 
+void collectors_send(const struct collectors *, const void *, size_t);
 
-#endif /* learning-switch.h */
+#endif /* collectors.h */

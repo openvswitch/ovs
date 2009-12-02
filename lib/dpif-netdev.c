@@ -373,9 +373,13 @@ do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
     if (!internal) {
         error = netdev_open(devname, NETDEV_ETH_TYPE_ANY, &netdev);
     } else {
-        char *tapname = xasprintf("tap:%s", devname);
-        error = netdev_open(tapname, NETDEV_ETH_TYPE_ANY, &netdev);
-        free(tapname);
+        error = netdev_create(devname, "tap", NULL);
+        if (!error) {
+            error = netdev_open(devname, NETDEV_ETH_TYPE_ANY, &netdev);
+            if (error) {
+                netdev_destroy(devname);
+            }
+        }
     }
     if (error) {
         return error;
@@ -468,6 +472,7 @@ static int
 do_del_port(struct dp_netdev *dp, uint16_t port_no)
 {
     struct dp_netdev_port *port;
+    char *name;
     int error;
 
     error = get_port_by_number(dp, port_no, &port);
@@ -480,7 +485,12 @@ do_del_port(struct dp_netdev *dp, uint16_t port_no)
     dp->n_ports--;
     dp->serial++;
 
+    name = xstrdup(netdev_get_name(port->netdev));
     netdev_close(port->netdev);
+    if (port->internal) {
+        netdev_destroy(name);
+    }
+    free(name);
     free(port);
 
     return 0;
@@ -665,7 +675,7 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp, const flow_t *key)
 }
 
 static void
-answer_flow_query(const struct dp_netdev_flow *flow,
+answer_flow_query(struct dp_netdev_flow *flow, uint32_t query_flags,
                   struct odp_flow *odp_flow)
 {
     if (flow) {
@@ -683,6 +693,11 @@ answer_flow_query(const struct dp_netdev_flow *flow,
                    n * sizeof *odp_flow->actions);
             odp_flow->n_actions = flow->n_actions;
         }
+
+        if (query_flags & ODPFF_ZERO_TCP_FLAGS) {
+            flow->tcp_ctl = 0;
+        }
+
     } else {
         odp_flow->stats.error = ENOENT;
     }
@@ -696,7 +711,8 @@ dpif_netdev_flow_get(const struct dpif *dpif, struct odp_flow flows[], int n)
 
     for (i = 0; i < n; i++) {
         struct odp_flow *odp_flow = &flows[i];
-        answer_flow_query(dp_netdev_lookup_flow(dp, &odp_flow->key), odp_flow);
+        answer_flow_query(dp_netdev_lookup_flow(dp, &odp_flow->key),
+                          odp_flow->flags, odp_flow);
     }
     return 0;
 }
@@ -852,7 +868,7 @@ dpif_netdev_flow_del(struct dpif *dpif, struct odp_flow *odp_flow)
 
     flow = dp_netdev_lookup_flow(dp, &odp_flow->key);
     if (flow) {
-        answer_flow_query(flow, odp_flow);
+        answer_flow_query(flow, 0, odp_flow);
         dp_netdev_free_flow(dp, flow);
         return 0;
     } else {
@@ -872,7 +888,7 @@ dpif_netdev_flow_list(const struct dpif *dpif, struct odp_flow flows[], int n)
         if (i >= n) {
             break;
         }
-        answer_flow_query(flow, &flows[i++]);
+        answer_flow_query(flow, 0, &flows[i++]);
     }
     return hmap_count(&dp->flow_table);
 }

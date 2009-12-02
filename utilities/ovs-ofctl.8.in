@@ -352,6 +352,18 @@ Sets the source Ethernet address to \fImac\fR.
 
 .IP \fBmod_dl_dst\fB:\fImac\fR
 Sets the destination Ethernet address to \fImac\fR.
+
+.IP \fBmod_nw_src\fB:\fIip\fR
+Sets the IPv4 source address to \fIip\fR.
+
+.IP \fBmod_nw_dst\fB:\fIip\fR
+Sets the IPv4 destination address to \fIip\fR.
+
+.IP \fBmod_tp_src\fB:\fIport\fR
+Sets the TCP or UDP source port to \fIport\fR.
+
+.IP \fBmod_tp_dst\fB:\fIport\fR
+Sets the TCP or UDP destination port to \fIport\fR.
 .RE
 
 .IP

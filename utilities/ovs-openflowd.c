@@ -64,6 +64,7 @@ struct ofsettings {
     /* Datapath. */
     uint64_t datapath_id;       /* Datapath ID. */
     const char *dp_name;        /* Name of local datapath. */
+    struct svec ports;          /* Set of ports to add to datapath (if any). */
 
     /* Description strings. */
     const char *mfr_desc;       /* Manufacturer. */
@@ -114,6 +115,7 @@ main(int argc, char *argv[])
     struct ofproto *ofproto;
     struct ofsettings s;
     int error;
+    struct netflow_options nf_options;
 
     set_program_name(argv[0]);
     register_fault_handlers();
@@ -133,6 +135,26 @@ main(int argc, char *argv[])
 
     VLOG_INFO("Open vSwitch version %s", VERSION BUILDNR);
     VLOG_INFO("OpenFlow protocol version 0x%02x", OFP_VERSION);
+
+    /* Create the datapath and add ports to it, if requested by the user. */
+    if (s.ports.n) {
+        struct dpif *dpif;
+        const char *port;
+        size_t i;
+
+        error = dpif_create_and_open(s.dp_name, &dpif);
+        if (error) {
+            ovs_fatal(error, "could not create datapath");
+        }
+
+        SVEC_FOR_EACH (i, port, &s.ports) {
+            error = dpif_port_add(dpif, port, 0, NULL);
+            if (error) {
+                ovs_fatal(error, "failed to add %s as a port", port);
+            }
+        }
+        dpif_close(dpif);
+    }
 
     /* Start OpenFlow processing. */
     error = ofproto_create(s.dp_name, NULL, NULL, &ofproto);
@@ -155,6 +177,12 @@ main(int argc, char *argv[])
         ofproto_set_mgmt_id(ofproto, s.mgmt_id);
     }
     ofproto_set_desc(ofproto, s.mfr_desc, s.hw_desc, s.sw_desc, s.serial_desc);
+    if (!s.listeners.n) {
+        svec_add_nocopy(&s.listeners, xasprintf("punix:%s/%s.mgmt",
+                                              ovs_rundir, s.dp_name));
+    } else if (s.listeners.n == 1 && !strcmp(s.listeners.names[0], "none")) {
+        svec_clear(&s.listeners);
+    }
     error = ofproto_set_listeners(ofproto, &s.listeners);
     if (error) {
         ovs_fatal(error, "failed to configure management connections");
@@ -164,7 +192,9 @@ main(int argc, char *argv[])
         ovs_fatal(error,
                   "failed to configure controller snooping connections");
     }
-    error = ofproto_set_netflow(ofproto, &s.netflow, 0, 0, false);
+    memset(&nf_options, 0, sizeof nf_options);
+    nf_options.collectors = s.netflow;
+    error = ofproto_set_netflow(ofproto, &nf_options);
     if (error) {
         ovs_fatal(error, "failed to configure NetFlow collectors");
     }
@@ -237,6 +267,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         OPT_COMMAND_DIR,
         OPT_NETFLOW,
         OPT_MGMT_ID,
+        OPT_PORTS,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS
     };
@@ -266,6 +297,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         {"command-dir", required_argument, 0, OPT_COMMAND_DIR},
         {"netflow",     required_argument, 0, OPT_NETFLOW},
         {"mgmt-id",     required_argument, 0, OPT_MGMT_ID},
+        {"ports",       required_argument, 0, OPT_PORTS},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -302,6 +334,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->command_dir = NULL;
     svec_init(&s->netflow);
     s->mgmt_id = 0;
+    svec_init(&s->ports);
     for (;;) {
         int c;
 
@@ -451,6 +484,10 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
         case OPT_SNOOP:
             svec_add(&s->snoops, optarg);
+            break;
+
+        case OPT_PORTS:
+            svec_split(&s->ports, optarg, ",");
             break;
 
         case 'h':

@@ -351,7 +351,7 @@ struct ofp_action_vlan_pcp {
     uint8_t vlan_pcp;               /* VLAN priority. */
     uint8_t pad[3];
 };
-OFP_ASSERT(sizeof(struct ofp_action_vlan_vid) == 8);
+OFP_ASSERT(sizeof(struct ofp_action_vlan_pcp) == 8);
 
 /* Action structure for OFPAT_SET_DL_SRC/DST. */
 struct ofp_action_dl_addr {

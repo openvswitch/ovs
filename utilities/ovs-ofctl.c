@@ -556,6 +556,22 @@ str_to_action(char *str, struct ofpbuf *b)
             put_dl_addr_action(b, OFPAT_SET_DL_SRC, arg);
         } else if (!strcasecmp(act, "mod_dl_dst")) {
             put_dl_addr_action(b, OFPAT_SET_DL_DST, arg);
+        } else if (!strcasecmp(act, "mod_nw_src")) {
+            struct ofp_action_nw_addr *na;
+            na = put_action(b, sizeof *na, OFPAT_SET_NW_SRC);
+            str_to_ip(arg, &na->nw_addr);
+        } else if (!strcasecmp(act, "mod_nw_dst")) {
+            struct ofp_action_nw_addr *na;
+            na = put_action(b, sizeof *na, OFPAT_SET_NW_DST);
+            str_to_ip(arg, &na->nw_addr);
+        } else if (!strcasecmp(act, "mod_tp_src")) {
+            struct ofp_action_tp_port *ta;
+            ta = put_action(b, sizeof *ta, OFPAT_SET_TP_SRC);
+            ta->tp_port = htons(str_to_u32(arg));
+        } else if (!strcasecmp(act, "mod_tp_dst")) {
+            struct ofp_action_tp_port *ta;
+            ta = put_action(b, sizeof *ta, OFPAT_SET_TP_DST);
+            ta->tp_port = htons(str_to_u32(arg));
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "drop")) {
@@ -1094,7 +1110,7 @@ do_ping(int argc, char *argv[])
             printf("Reply:\n");
             ofp_print(stdout, reply, reply->size, 2);
         }
-        printf("%d bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
+        printf("%zu bytes from %s: xid=%08"PRIx32" time=%.1f ms\n",
                reply->size - sizeof *rpy_hdr, argv[1], rpy_hdr->xid,
                    (1000*(double)(end.tv_sec - start.tv_sec))
                    + (.001*(end.tv_usec - start.tv_usec)));
