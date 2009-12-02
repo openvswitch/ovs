@@ -25,8 +25,10 @@
 
 #include "command-line.h"
 #include "json.h"
+#include "jsonrpc.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
+#include "ovsdb-idl.h"
 #include "ovsdb-types.h"
 #include "ovsdb/column.h"
 #include "ovsdb/condition.h"
@@ -39,7 +41,9 @@
 #include "ovsdb/transaction.h"
 #include "ovsdb/trigger.h"
 #include "poll-loop.h"
+#include "stream.h"
 #include "svec.h"
+#include "tests/idltest.h"
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
@@ -64,6 +68,7 @@ static void
 parse_options(int argc, char *argv[])
 {
     static struct option long_options[] = {
+        {"timeout", required_argument, 0, 't'},
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         {0, 0, 0, 0},
@@ -71,12 +76,25 @@ parse_options(int argc, char *argv[])
     char *short_options = long_options_to_short_options(long_options);
 
     for (;;) {
-        int c = getopt_long(argc, argv, short_options, long_options, NULL);
+        unsigned long int timeout;
+        int c;
+
+        c = getopt_long(argc, argv, short_options, long_options, NULL);
         if (c == -1) {
             break;
         }
 
         switch (c) {
+        case 't':
+            timeout = strtoul(optarg, NULL, 10);
+            if (timeout <= 0) {
+                ovs_fatal(0, "value %s on -t or --timeout is not at least 1",
+                          optarg);
+            } else {
+                time_alarm(timeout);
+            }
+            break;
+
         case 'h':
             usage();
 
@@ -144,10 +162,16 @@ usage(void)
            "    executes each TRANSACTION on an initially empty database\n"
            "    the specified SCHEMA.   A TRANSACTION of the form\n"
            "    [\"advance\", NUMBER] advances NUMBER milliseconds in\n"
-           "    simulated time, for causing triggers to time out.\n",
+           "    simulated time, for causing triggers to time out.\n"
+           "  idl SERVER [TRANSACTION...]\n"
+           "    connect to SERVER and dump the contents of the database\n"
+           "    as seen initially by the IDL implementation and after\n"
+           "    executing each TRANSACTION.  (Each TRANSACTION must modify\n"
+           "    the database or this command will hang.)\n",
            program_name, program_name);
     vlog_usage();
     printf("\nOther options:\n"
+           "  -t, --timeout=SECS          give up after SECS seconds\n"
            "  -h, --help                  display this help message\n");
     exit(EXIT_SUCCESS);
 }
@@ -1207,6 +1231,215 @@ do_transact(int argc, char *argv[])
     ovsdb_destroy(do_transact_db); /* Also destroys 'schema'. */
 }
 
+static int
+compare_selflink(const void *a_, const void *b_)
+{
+    const struct idltest_selflink *const *ap = a_;
+    const struct idltest_selflink *const *bp = b_;
+    const struct idltest_selflink *a = *ap;
+    const struct idltest_selflink *b = *bp;
+
+
+    return a->i < b->i ? -1 : a->i > b->i;
+}
+
+static void
+print_idl(struct ovsdb_idl *idl, int step)
+{
+    const struct idltest_simple *s;
+    const struct idltest_selflink *sl;
+    int n = 0;
+
+    IDLTEST_SIMPLE_FOR_EACH (s, idl) {
+        size_t i;
+
+        printf("%03d: i=%"PRId64" r=%g b=%s s=%s u="UUID_FMT" ia=[",
+               step, s->i, s->r, s->b ? "true" : "false",
+               s->s, UUID_ARGS(&s->u));
+        for (i = 0; i < s->n_ia; i++) {
+            printf("%s%"PRId64, i ? " " : "", s->ia[i]);
+        }
+        printf("] ra=[");
+        for (i = 0; i < s->n_ra; i++) {
+            printf("%s%g", i ? " " : "", s->ra[i]);
+        }
+        printf("] ba=[");
+        for (i = 0; i < s->n_ba; i++) {
+            printf("%s%s", i ? " " : "", s->ba[i] ? "true" : "false");
+        }
+        printf("] sa=[");
+        for (i = 0; i < s->n_sa; i++) {
+            printf("%s%s", i ? " " : "", s->sa[i]);
+        }
+        printf("] ua=[");
+        for (i = 0; i < s->n_ua; i++) {
+            printf("%s"UUID_FMT, i ? " " : "", UUID_ARGS(&s->ua[i]));
+        }
+        printf("] uuid="UUID_FMT"\n", UUID_ARGS(&s->header_.uuid));
+        n++;
+    }
+    IDLTEST_SELFLINK_FOR_EACH (sl, idl) {
+        struct idltest_selflink **links;
+        size_t i;
+
+        printf("%03d: i=%"PRId64" k=", step, sl->i);
+        if (sl->k) {
+            printf("%"PRId64, sl->k->i);
+        }
+        printf(" ka=[");
+        links = xmemdup(sl->ka, sl->n_ka * sizeof *sl->ka);
+        qsort(links, sl->n_ka, sizeof *links, compare_selflink);
+        for (i = 0; i < sl->n_ka; i++) {
+            printf("%s%"PRId64, i ? " " : "", links[i]->i);
+        }
+        free(links);
+        printf("] uuid="UUID_FMT"\n", UUID_ARGS(&sl->header_.uuid));
+        n++;
+    }
+    if (!n) {
+        printf("%03d: empty\n", step);
+    }
+}
+
+static unsigned int
+print_updated_idl(struct ovsdb_idl *idl, struct jsonrpc *rpc,
+                  int step, unsigned int seqno)
+{
+    for (;;) {
+        unsigned int new_seqno;
+
+        if (rpc) {
+            jsonrpc_run(rpc);
+        }
+        ovsdb_idl_run(idl);
+        new_seqno = ovsdb_idl_get_seqno(idl);
+        if (new_seqno != seqno) {
+            print_idl(idl, step);
+            return new_seqno;
+        }
+
+        if (rpc) {
+            jsonrpc_wait(rpc);
+        }
+        ovsdb_idl_wait(idl);
+        poll_block();
+    }
+}
+
+static void
+parse_uuids(const struct json *json, struct ovsdb_symbol_table *symtab,
+            size_t *n)
+{
+    struct uuid uuid;
+
+    if (json->type == JSON_STRING && uuid_from_string(&uuid, json->u.string)) {
+        char *name = xasprintf("#%d#", *n);
+        ovsdb_symbol_table_put(symtab, name, &uuid);
+        free(name);
+        *n += 1;
+    } else if (json->type == JSON_ARRAY) {
+        size_t i;
+
+        for (i = 0; i < json->u.array.n; i++) {
+            parse_uuids(json->u.array.elems[i], symtab, n);
+        }
+    } else if (json->type == JSON_OBJECT) {
+        const struct shash_node *node;
+
+        SHASH_FOR_EACH (node, json_object(json)) {
+            parse_uuids(node->data, symtab, n);
+        }
+    }
+}
+
+static void
+substitute_uuids(struct json *json, const struct ovsdb_symbol_table *symtab)
+{
+    if (json->type == JSON_STRING) {
+        const struct uuid *uuid;
+
+        uuid = ovsdb_symbol_table_get(symtab, json->u.string);
+        if (uuid) {
+            free(json->u.string);
+            json->u.string = xasprintf(UUID_FMT, UUID_ARGS(uuid));
+        }
+    } else if (json->type == JSON_ARRAY) {
+        size_t i;
+
+        for (i = 0; i < json->u.array.n; i++) {
+            substitute_uuids(json->u.array.elems[i], symtab);
+        }
+    } else if (json->type == JSON_OBJECT) {
+        const struct shash_node *node;
+
+        SHASH_FOR_EACH (node, json_object(json)) {
+            substitute_uuids(node->data, symtab);
+        }
+    }
+}
+
+static void
+do_idl(int argc, char *argv[])
+{
+    struct jsonrpc *rpc;
+    struct ovsdb_idl *idl;
+    unsigned int seqno = 0;
+    struct ovsdb_symbol_table *symtab;
+    size_t n_uuids = 0;
+    int step = 0;
+    int error;
+    int i;
+
+    idl = ovsdb_idl_create(argv[1], &idltest_idl_class);
+    if (argc > 2) {
+        struct stream *stream;
+
+        error = stream_open_block(argv[1], &stream);
+        if (error) {
+            ovs_fatal(error, "failed to connect to \"%s\"", argv[1]);
+        }
+        rpc = jsonrpc_open(stream);
+    } else {
+        rpc = NULL;
+    }
+
+    symtab = ovsdb_symbol_table_create();
+    for (i = 2; i < argc; i++) {
+        struct jsonrpc_msg *request, *reply;
+        int error;
+
+        seqno = print_updated_idl(idl, rpc, step++, seqno);
+
+        if (!strcmp(argv[i], "reconnect")) {
+            printf("%03d: reconnect\n", step++);
+            ovsdb_idl_force_reconnect(idl);
+        } else {
+            struct json *json = parse_json(argv[i]);
+            substitute_uuids(json, symtab);
+            request = jsonrpc_create_request("transact", json, NULL);
+            error = jsonrpc_transact_block(rpc, request, &reply);
+            if (error) {
+                ovs_fatal(error, "jsonrpc transaction failed");
+            }
+            printf("%03d: ", step++);
+            if (reply->result) {
+                parse_uuids(reply->result, symtab, &n_uuids);
+            }
+            json_destroy(reply->id);
+            reply->id = NULL;
+            print_and_free_json(jsonrpc_msg_to_json(reply));
+        }
+    }
+    ovsdb_symbol_table_destroy(symtab);
+
+    if (rpc) {
+        jsonrpc_close(rpc);
+    }
+    print_updated_idl(idl, NULL, step++, seqno);
+    ovsdb_idl_destroy(idl);
+    printf("%03d: done\n", step);
+}
+
 static struct command all_commands[] = {
     { "log-io", 2, INT_MAX, do_log_io },
     { "parse-atomic-type", 1, 1, do_parse_atomic_type },
@@ -1225,6 +1458,7 @@ static struct command all_commands[] = {
     { "transact", 1, INT_MAX, do_transact },
     { "execute", 2, INT_MAX, do_execute },
     { "trigger", 2, INT_MAX, do_trigger },
+    { "idl", 1, INT_MAX, do_idl },
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };

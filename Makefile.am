@@ -41,16 +41,18 @@ dist_man_MANS =
 dist_pkgdata_SCRIPTS =
 dist_sbin_SCRIPTS =
 man_MANS =
+noinst_DATA =
 noinst_HEADERS =
 noinst_LIBRARIES =
 noinst_PROGRAMS =
 noinst_SCRIPTS =
+SUFFIXES =
 
 EXTRA_DIST += soexpand.pl
 
 ro_c = echo '/* -*- mode: c; buffer-read-only: t -*- */'
 
-SUFFIXES = .in
+SUFFIXES += .in
 .in:
 	$(PERL) $(srcdir)/soexpand.pl -I$(srcdir) < $< | \
 	    sed \

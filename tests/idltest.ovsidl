@@ -1,0 +1,29 @@
+//
+// This is an ovsdb-idl schema.  The OVSDB IDL compiler, ovsdb-idlc,
+// can translate it into an OVSDB schema (which simply entails
+// deleting some members from the schema) or C headers or source for
+// use with the IDL at runtime.
+//
+
+{"name": "idltest",
+ "idlPrefix": "idltest_",
+ "idlHeader": "\"tests/idltest.h\"",
+ "tables": {
+   "simple": {
+     "columns": {
+       "i": {"type": "integer"},
+       "r": {"type": "real"},
+       "b": {"type": "boolean"},
+       "s": {"type": "string"},
+       "u": {"type": "uuid"},
+       "ia": {"type": {"key": "integer", "min": 0, "max": "unlimited"}},
+       "ra": {"type": {"key": "real", "min": 0, "max": "unlimited"}},
+       "ba": {"type": {"key": "boolean", "min": 0, "max": "unlimited"}},
+       "sa": {"type": {"key": "string", "min": 0, "max": "unlimited"}},
+       "ua": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}}}},
+   "selfLink": {
+     "columns": {
+       "i": {"type": "integer"},
+       "k": {"type": {"key": "uuid", "keyRefTable": "selfLink"}},
+       "ka": {"type": {"key": "uuid", "keyRefTable": "selfLink",
+                       "min": 0, "max": "unlimited"}}}}}}

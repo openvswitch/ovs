@@ -81,6 +81,9 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/ovsdb-data.h \
 	lib/ovsdb-error.c \
 	lib/ovsdb-error.h \
+	lib/ovsdb-idl-provider.h \
+	lib/ovsdb-idl.c \
+	lib/ovsdb-idl.h \
 	lib/ovsdb-parser.c \
 	lib/ovsdb-parser.h \
 	lib/ovsdb-types.c \

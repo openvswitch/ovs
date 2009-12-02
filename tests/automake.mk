@@ -31,6 +31,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-file.at \
 	tests/ovsdb-server.at \
 	tests/ovsdb-monitor.at \
+	tests/ovsdb-idl.at \
 	tests/stp.at \
 	tests/ovs-vsctl.at \
 	tests/lcov-post.at
@@ -106,9 +107,12 @@ tests_test_lockfile_SOURCES = tests/test-lockfile.c
 tests_test_lockfile_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-ovsdb
-tests_test_ovsdb_SOURCES = tests/test-ovsdb.c
+tests_test_ovsdb_SOURCES = tests/test-ovsdb.c tests/idltest.c tests/idltest.h
 tests_test_ovsdb_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a
-EXTRA_DIST += tests/uuidfilt.pl
+EXTRA_DIST += tests/uuidfilt.pl tests/idltest.ovsidl
+BUILT_SOURCES += tests/idltest.c tests/idltest.h
+noinst_DATA += tests/idltest.ovsschema
+DISTCLEANFILES += tests/idltest.ovsschema
 
 noinst_PROGRAMS += tests/test-reconnect
 tests_test_reconnect_SOURCES = tests/test-reconnect.c

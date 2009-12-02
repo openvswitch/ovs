@@ -7,6 +7,8 @@
 
 {"name": "ovs_vswitchd_db",
  "comment": "Configuration for one Open vSwitch daemon.",
+ "idlPrefix": "ovsrec_",
+ "idlHeader": "\"vswitchd/vswitch-idl.h\"",
  "tables": {
    "Open_vSwitch": {
      "comment": "Configuration for an Open vSwitch daemon.",
