@@ -67,7 +67,8 @@ struct jsonrpc_msg {
 };
 
 struct jsonrpc_msg *jsonrpc_create_request(const char *method,
-                                           struct json *params);
+                                           struct json *params,
+                                           struct json **idp);
 struct jsonrpc_msg *jsonrpc_create_notify(const char *method,
                                           struct json *params);
 struct jsonrpc_msg *jsonrpc_create_reply(struct json *result,

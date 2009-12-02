@@ -330,7 +330,7 @@ ovsdb_jsonrpc_session_run(struct ovsdb_jsonrpc_session *s)
             struct jsonrpc_msg *request;
 
             params = json_array_create_empty();
-            request = jsonrpc_create_request("echo", params);
+            request = jsonrpc_create_request("echo", params, NULL);
             json_destroy(request->id);
             request->id = json_string_create("echo");
             jsonrpc_send(s->rpc, request);

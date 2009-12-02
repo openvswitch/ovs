@@ -250,7 +250,7 @@ do_request(int argc UNUSED, char *argv[])
 
     method = argv[2];
     params = parse_json(argv[3]);
-    msg = jsonrpc_create_request(method, params);
+    msg = jsonrpc_create_request(method, params, NULL);
     string = jsonrpc_msg_is_valid(msg);
     if (string) {
         ovs_fatal(0, "not a valid JSON-RPC request: %s", string);

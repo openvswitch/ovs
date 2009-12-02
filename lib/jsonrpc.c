@@ -402,10 +402,14 @@ jsonrpc_create_id(void)
 }
 
 struct jsonrpc_msg *
-jsonrpc_create_request(const char *method, struct json *params)
+jsonrpc_create_request(const char *method, struct json *params,
+                       struct json **idp)
 {
-    return jsonrpc_create(JSONRPC_REQUEST, method, params, NULL, NULL,
-                           jsonrpc_create_id());
+    struct json *id = jsonrpc_create_id();
+    if (idp) {
+        *idp = json_clone(id);
+    }
+    return jsonrpc_create(JSONRPC_REQUEST, method, params, NULL, NULL, id);
 }
 
 struct jsonrpc_msg *
@@ -722,7 +726,7 @@ jsonrpc_session_run(struct jsonrpc_session *s)
             struct jsonrpc_msg *request;
 
             params = json_array_create_empty();
-            request = jsonrpc_create_request("echo", params);
+            request = jsonrpc_create_request("echo", params, NULL);
             json_destroy(request->id);
             request->id = json_string_create("echo");
             jsonrpc_send(s->rpc, request);

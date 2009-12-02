@@ -236,7 +236,8 @@ fetch_schema_from_rpc(struct jsonrpc *rpc)
     struct ovsdb_schema *schema;
     int error;
 
-    request = jsonrpc_create_request("get_schema", json_array_create_empty());
+    request = jsonrpc_create_request("get_schema", json_array_create_empty(),
+                                     NULL);
     error = jsonrpc_transact_block(rpc, request, &reply);
     if (error) {
         ovs_fatal(error, "transaction failed");
@@ -629,7 +630,7 @@ do_transact(int argc UNUSED, char *argv[])
     transaction = parse_json(argv[2]);
 
     rpc = open_jsonrpc(argv[1]);
-    request = jsonrpc_create_request("transact", transaction);
+    request = jsonrpc_create_request("transact", transaction, NULL);
     error = jsonrpc_transact_block(rpc, request, &reply);
     if (error) {
         ovs_fatal(error, "transaction failed");
@@ -795,7 +796,7 @@ do_monitor(int argc, char *argv[])
     json_object_put(monitor_requests, argv[2], monitor_request);
 
     monitor = json_array_create_2(json_null_create(), monitor_requests);
-    request = jsonrpc_create_request("monitor", monitor);
+    request = jsonrpc_create_request("monitor", monitor, NULL);
     request_id = json_clone(request->id);
     jsonrpc_send(rpc, request);
     for (;;) {
