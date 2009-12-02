@@ -57,7 +57,7 @@
 #include "unixctl.h"
 #include "vconn.h"
 #include "vconn-ssl.h"
-#include "vswitch-idl.h"
+#include "vswitchd/vswitch-idl.h"
 #include "xenserver.h"
 #include "xtoxll.h"
 
