@@ -266,19 +266,22 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     struct ovsdb_row *row = NULL;
     const struct json *uuid_name;
     struct ovsdb_error *error;
+    struct uuid row_uuid;
 
     table = parse_table(x, parser, "table");
     uuid_name = ovsdb_parser_member(parser, "uuid-name", OP_ID | OP_OPTIONAL);
     error = ovsdb_parser_get_error(parser);
+
+    uuid_generate(&row_uuid);
+    if (uuid_name) {
+        ovsdb_symbol_table_put(x->symtab, json_string(uuid_name), &row_uuid);
+    }
+
     if (!error) {
         error = parse_row(parser, "row", table, x->symtab, &row, NULL);
     }
     if (!error) {
-        uuid_generate(ovsdb_row_get_uuid_rw(row));
-        if (uuid_name) {
-            ovsdb_symbol_table_put(x->symtab, json_string(uuid_name),
-                                   ovsdb_row_get_uuid(row));
-        }
+        *ovsdb_row_get_uuid_rw(row) = row_uuid;
         ovsdb_txn_row_insert(x->txn, row);
         json_object_put(result, "uuid",
                         ovsdb_datum_to_json(&row->fields[OVSDB_COL_UUID],

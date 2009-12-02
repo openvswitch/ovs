@@ -497,12 +497,15 @@ Notation for the Wire Protocol
     A 2-element JSON array that represents the UUID of a row inserted
     in a previous "insert" operation within the same transaction.  The
     first element of the array must be the string "named-uuid" and the
-    second element must be the string specified on a previous "insert"
-    operation's "uuid-name".  For example, if a previous "insert"
+    second element must be the string specified on this "insert"
+    operation's "uuid-name" or on a preceding "insert" within the same
+    transaction.  For example, if this or a previous "insert"
     operation specified a "uuid-name" of "myrow", the following
     <named-uuid> represents the UUID created by that operation:
 
         ["named-uuid", "myrow"]
+
+    A <named-uuid> may be used anywhere a <uuid> is valid.
 
 <condition>
 
@@ -595,9 +598,9 @@ Semantics:
     values.
 
     The new row receives a new, randomly generated UUID, which is
-    returned as the "uuid" member of the result.  If "uuid-name"
-    is supplied, then the UUID is made available under that name
-    to later operations within the same transaction.
+    returned as the "uuid" member of the result.  If "uuid-name" is
+    supplied, then the UUID is made available under that name to this
+    operation and later operations within the same transaction.
 
 select
 ......
