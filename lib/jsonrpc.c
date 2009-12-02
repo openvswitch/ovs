@@ -27,7 +27,9 @@
 #include "ofpbuf.h"
 #include "poll-loop.h"
 #include "queue.h"
+#include "reconnect.h"
 #include "stream.h"
+#include "timeval.h"
 
 #define THIS_MODULE VLM_jsonrpc
 #include "vlog.h"
@@ -613,4 +615,186 @@ jsonrpc_msg_to_json(struct jsonrpc_msg *m)
     free(m);
 
     return json;
+}
+
+/* A JSON-RPC session with reconnection. */
+
+struct jsonrpc_session {
+    struct reconnect *reconnect;
+    struct jsonrpc *rpc;
+    struct stream *stream;
+    unsigned int seqno;
+};
+
+struct jsonrpc_session *
+jsonrpc_session_open(const char *name)
+{
+    struct jsonrpc_session *s;
+
+    s = xmalloc(sizeof *s);
+    s->reconnect = reconnect_create(time_msec());
+    reconnect_set_name(s->reconnect, name);
+    reconnect_enable(s->reconnect, time_msec());
+    s->rpc = NULL;
+    s->stream = NULL;
+    s->seqno = 0;
+
+    return s;
+}
+
+void
+jsonrpc_session_close(struct jsonrpc_session *s)
+{
+    if (s) {
+        jsonrpc_close(s->rpc);
+        reconnect_destroy(s->reconnect);
+        free(s);
+    }
+}
+
+static void
+jsonrpc_session_disconnect(struct jsonrpc_session *s)
+{
+    reconnect_disconnected(s->reconnect, time_msec(), 0);
+    if (s->rpc) {
+        jsonrpc_error(s->rpc, EOF);
+        jsonrpc_close(s->rpc);
+        s->rpc = NULL;
+        s->seqno++;
+    } else if (s->stream) {
+        stream_close(s->stream);
+        s->stream = NULL;
+        s->seqno++;
+    }
+}
+
+static void
+jsonrpc_session_connect(struct jsonrpc_session *s)
+{
+    int error;
+
+    jsonrpc_session_disconnect(s);
+    error = stream_open(reconnect_get_name(s->reconnect), &s->stream);
+    if (error) {
+        reconnect_connect_failed(s->reconnect, time_msec(), error);
+    } else {
+        reconnect_connecting(s->reconnect, time_msec());
+    }
+    s->seqno++;
+}
+
+void
+jsonrpc_session_run(struct jsonrpc_session *s)
+{
+    if (s->rpc) {
+        int error;
+
+        jsonrpc_run(s->rpc);
+        error = jsonrpc_get_status(s->rpc);
+        if (error) {
+            jsonrpc_session_disconnect(s);
+        }
+    } else if (s->stream) {
+        int error = stream_connect(s->stream);
+        if (!error) {
+            reconnect_connected(s->reconnect, time_msec());
+            s->rpc = jsonrpc_open(s->stream);
+            s->stream = NULL;
+        } else if (error != EAGAIN) {
+            reconnect_connect_failed(s->reconnect, time_msec(), error);
+            stream_close(s->stream);
+            s->stream = NULL;
+        }
+    }
+
+    switch (reconnect_run(s->reconnect, time_msec())) {
+    case RECONNECT_CONNECT:
+        jsonrpc_session_connect(s);
+        break;
+
+    case RECONNECT_DISCONNECT:
+        jsonrpc_session_disconnect(s);
+        break;
+
+    case RECONNECT_PROBE:
+        if (s->rpc) {
+            struct json *params;
+            struct jsonrpc_msg *request;
+
+            params = json_array_create_empty();
+            request = jsonrpc_create_request("echo", params);
+            json_destroy(request->id);
+            request->id = json_string_create("echo");
+            jsonrpc_send(s->rpc, request);
+        }
+        break;
+    }
+}
+
+void
+jsonrpc_session_wait(struct jsonrpc_session *s)
+{
+    if (s->rpc) {
+        jsonrpc_wait(s->rpc);
+    } else if (s->stream) {
+        stream_connect_wait(s->stream);
+    }
+    reconnect_wait(s->reconnect, time_msec());
+}
+
+size_t
+jsonrpc_session_get_backlog(const struct jsonrpc_session *s)
+{
+    return s->rpc ? jsonrpc_get_backlog(s->rpc) : 0;
+}
+
+const char *
+jsonrpc_session_get_name(const struct jsonrpc_session *s)
+{
+    return reconnect_get_name(s->reconnect);
+}
+
+int
+jsonrpc_session_send(struct jsonrpc_session *s, struct jsonrpc_msg *msg)
+{
+    return s->rpc ? jsonrpc_send(s->rpc, msg) : ENOTCONN;
+}
+
+struct jsonrpc_msg *
+jsonrpc_session_recv(struct jsonrpc_session *s)
+{
+    struct jsonrpc_msg *msg = NULL;
+    if (s->rpc) {
+        jsonrpc_recv(s->rpc, &msg);
+        if (msg) {
+            reconnect_received(s->reconnect, time_msec());
+        }
+    }
+    return msg;
+}
+
+void
+jsonrpc_session_recv_wait(struct jsonrpc_session *s)
+{
+    if (s->rpc) {
+        jsonrpc_recv_wait(s->rpc);
+    }
+}
+
+bool
+jsonrpc_session_is_connected(const struct jsonrpc_session *s)
+{
+    return s->rpc != NULL;
+}
+
+unsigned int
+jsonrpc_session_get_seqno(const struct jsonrpc_session *s)
+{
+    return s->seqno;
+}
+
+void
+jsonrpc_session_force_reconnect(struct jsonrpc_session *s)
+{
+    reconnect_force_reconnect(s->reconnect, time_msec());
 }

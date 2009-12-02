@@ -81,5 +81,24 @@ void jsonrpc_msg_destroy(struct jsonrpc_msg *);
 
 char *jsonrpc_msg_from_json(struct json *, struct jsonrpc_msg **);
 struct json *jsonrpc_msg_to_json(struct jsonrpc_msg *);
+
+/* A JSON-RPC session with reconnection. */
+
+struct jsonrpc_session *jsonrpc_session_open(const char *name);
+void jsonrpc_session_close(struct jsonrpc_session *);
+
+void jsonrpc_session_run(struct jsonrpc_session *);
+void jsonrpc_session_wait(struct jsonrpc_session *);
+
+size_t jsonrpc_session_get_backlog(const struct jsonrpc_session *);
+const char *jsonrpc_session_get_name(const struct jsonrpc_session *);
+
+int jsonrpc_session_send(struct jsonrpc_session *, struct jsonrpc_msg *);
+struct jsonrpc_msg *jsonrpc_session_recv(struct jsonrpc_session *);
+void jsonrpc_session_recv_wait(struct jsonrpc_session *);
+
+bool jsonrpc_session_is_connected(const struct jsonrpc_session *);
+unsigned int jsonrpc_session_get_seqno(const struct jsonrpc_session *);
+void jsonrpc_session_force_reconnect(struct jsonrpc_session *);
 
 #endif /* jsonrpc.h */
