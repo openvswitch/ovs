@@ -52,7 +52,6 @@
 #include "process.h"
 #include "shash.h"
 #include "socket-util.h"
-#include "stp.h"
 #include "svec.h"
 #include "timeval.h"
 #include "util.h"
@@ -140,10 +139,6 @@ struct port {
     mirror_mask_t src_mirrors;  /* Mirrors triggered when packet received. */
     mirror_mask_t dst_mirrors;  /* Mirrors triggered when packet sent. */
     bool is_mirror_output_port; /* Does port mirroring send frames here? */
-
-    /* Spanning tree info. */
-    enum stp_state stp_state;   /* Always STP_FORWARDING if STP not in use. */
-    tag_type stp_state_tag;     /* Tag for STP state change. */
 };
 
 #define DP_MAX_PORTS 255
@@ -182,10 +177,6 @@ struct bridge {
 
     /* Port mirroring. */
     struct mirror *mirrors[MAX_MIRRORS];
-
-    /* Spanning tree. */
-    struct stp *stp;
-    long long int stp_last_tick;
 };
 
 /* List of all bridges. */
@@ -238,11 +229,6 @@ static void mirror_destroy(struct mirror *);
 static void mirror_reconfigure(struct bridge *);
 static void mirror_reconfigure_one(struct mirror *);
 static bool vlan_is_mirrored(const struct mirror *, int vlan);
-
-static void brstp_reconfigure(struct bridge *);
-static void brstp_adjust_timers(struct bridge *);
-static void brstp_run(struct bridge *);
-static void brstp_wait(struct bridge *);
 
 static void iface_create(struct port *, const char *name);
 static void iface_destroy(struct iface *);
@@ -738,7 +724,6 @@ bridge_reconfigure(void)
         }
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
-        brstp_reconfigure(br);
         iterate_and_prune_ifaces(br, set_iface_properties, NULL);
     }
 }
@@ -978,7 +963,6 @@ bridge_wait(void)
 
         mac_learning_wait(br->ml);
         bond_wait(br);
-        brstp_wait(br);
     }
 }
 
@@ -1170,7 +1154,6 @@ bridge_run_one(struct bridge *br)
 
     mac_learning_run(br->ml, ofproto_get_revalidate_set(br->ofproto));
     bond_run(br);
-    brstp_run(br);
 
     error = ofproto_run2(br->ofproto, br->flush);
     br->flush = false;
@@ -1426,8 +1409,6 @@ bridge_reconfigure_controller(struct bridge *br)
         }
         ofproto_set_rate_limit(br->ofproto, rate_limit, burst_limit);
 
-        ofproto_set_stp(br->ofproto, cfg_get_bool(0, "%s.stp", pfx));
-
         if (cfg_has("%s.commands.acl", pfx)) {
             struct svec command_acls;
             char *command_acl;
@@ -1463,7 +1444,6 @@ bridge_reconfigure_controller(struct bridge *br)
         ofproto_set_max_backoff(br->ofproto, 1);
         ofproto_set_probe_interval(br->ofproto, 5);
         ofproto_set_failure(br->ofproto, false);
-        ofproto_set_stp(br->ofproto, false);
     }
     free(pfx);
 
@@ -1759,18 +1739,6 @@ set_dst(struct dst *p, const flow_t *flow,
         const struct port *in_port, const struct port *out_port,
         tag_type *tags)
 {
-    /* STP handling.
-     *
-     * XXX This uses too many tags: any broadcast flow will get one tag per
-     * destination port, and thus a broadcast on a switch of any size is likely
-     * to have all tag bits set.  We should figure out a way to be smarter.
-     *
-     * This is OK when STP is disabled, because stp_state_tag is 0 then. */
-    *tags |= out_port->stp_state_tag;
-    if (!(out_port->stp_state & (STP_DISABLED | STP_FORWARDING))) {
-        return false;
-    }
-
     p->vlan = (out_port->vlan >= 0 ? OFP_VLAN_NONE
               : in_port->vlan >= 0 ? in_port->vlan
               : ntohs(flow->dl_vlan));
@@ -1863,7 +1831,6 @@ compose_dsts(const struct bridge *br, const flow_t *flow, uint16_t vlan,
     struct dst *dst = dsts;
     size_t i;
 
-    *tags |= in_port->stp_state_tag;
     if (out_port == FLOOD_PORT) {
         /* XXX use ODP_FLOOD if no vlans or bonding. */
         /* XXX even better, define each VLAN as a datapath port group */
@@ -2092,13 +2059,6 @@ process_flow(struct bridge *br, const flow_t *flow,
         goto done;
     }
 
-    /* Drop frames for ports that STP wants entirely killed (both for
-     * forwarding and for learning).  Later, after we do learning, we'll drop
-     * the frames that STP wants to do learning but not forwarding on. */
-    if (in_port->stp_state & (STP_LISTENING | STP_BLOCKING)) {
-        goto done;
-    }
-
     /* Drop frames for reserved multicast addresses. */
     if (eth_addr_is_reserved(flow->dl_dst)) {
         goto done;
@@ -2157,9 +2117,8 @@ process_flow(struct bridge *br, const flow_t *flow,
         return false;
     }
 
-    /* Don't send packets out their input ports.  Don't forward frames that STP
-     * wants us to discard. */
-    if (in_port == out_port || in_port->stp_state == STP_LEARNING) {
+    /* Don't send packets out their input ports. */
+    if (in_port == out_port) {
         out_port = NULL;
     }
 
@@ -2213,14 +2172,6 @@ bridge_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
                         uint16_t *nf_output_iface, void *br_)
 {
     struct bridge *br = br_;
-
-#if 0
-    if (flow->dl_type == htons(OFP_DL_TYPE_NOT_ETH_TYPE)
-        && eth_addr_equals(flow->dl_dst, stp_eth_addr)) {
-        brstp_receive(br, flow, payload);
-        return true;
-    }
-#endif
 
     COVERAGE_INC(bridge_process_flow);
     return process_flow(br, flow, packet, actions, tags, nf_output_iface);
@@ -2979,8 +2930,6 @@ port_create(struct bridge *br, const char *name)
     port->trunks = NULL;
     port->name = xstrdup(name);
     port->active_iface = -1;
-    port->stp_state = STP_DISABLED;
-    port->stp_state_tag = 0;
 
     if (br->n_ports >= br->allocated_ports) {
         br->ports = x2nrealloc(br->ports, &br->allocated_ports,
@@ -3784,213 +3733,4 @@ exit:
     svec_destroy(&src_ports);
     svec_destroy(&dst_ports);
     free(pfx);
-}
-
-/* Spanning tree protocol. */
-
-static void brstp_update_port_state(struct port *);
-
-static void
-brstp_send_bpdu(struct ofpbuf *pkt, int port_no, void *br_)
-{
-    struct bridge *br = br_;
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-    struct iface *iface = iface_from_dp_ifidx(br, port_no);
-    if (!iface) {
-        VLOG_WARN_RL(&rl, "%s: cannot send BPDU on unknown port %d",
-                     br->name, port_no);
-    } else {
-        struct eth_header *eth = pkt->l2;
-
-        netdev_get_etheraddr(iface->netdev, eth->eth_src);
-        if (eth_addr_is_zero(eth->eth_src)) {
-            VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d "
-                         "with unknown MAC", br->name, port_no);
-        } else {
-            union ofp_action action;
-            flow_t flow;
-
-            memset(&action, 0, sizeof action);
-            action.type = htons(OFPAT_OUTPUT);
-            action.output.len = htons(sizeof action);
-            action.output.port = htons(port_no);
-
-            flow_extract(pkt, ODPP_NONE, &flow);
-            ofproto_send_packet(br->ofproto, &flow, &action, 1, pkt);
-        }
-    }
-    ofpbuf_delete(pkt);
-}
-
-static void
-brstp_reconfigure(struct bridge *br)
-{
-    size_t i;
-
-    if (!cfg_get_bool(0, "stp.%s.enabled", br->name)) {
-        if (br->stp) {
-            stp_destroy(br->stp);
-            br->stp = NULL;
-
-            bridge_flush(br);
-        }
-    } else {
-        uint64_t bridge_address, bridge_id;
-        int bridge_priority;
-
-        bridge_address = cfg_get_mac(0, "stp.%s.address", br->name);
-        if (!bridge_address) {
-            if (br->stp) {
-                bridge_address = (stp_get_bridge_id(br->stp)
-                                  & ((UINT64_C(1) << 48) - 1));
-            } else {
-                uint8_t mac[ETH_ADDR_LEN];
-                eth_addr_random(mac);
-                bridge_address = eth_addr_to_uint64(mac);
-            }
-        }
-
-        if (cfg_is_valid(CFG_INT | CFG_REQUIRED, "stp.%s.priority",
-                         br->name)) {
-            bridge_priority = cfg_get_int(0, "stp.%s.priority", br->name);
-        } else {
-            bridge_priority = STP_DEFAULT_BRIDGE_PRIORITY;
-        }
-
-        bridge_id = bridge_address | ((uint64_t) bridge_priority << 48);
-        if (!br->stp) {
-            br->stp = stp_create(br->name, bridge_id, brstp_send_bpdu, br);
-            br->stp_last_tick = time_msec();
-            bridge_flush(br);
-        } else {
-            if (bridge_id != stp_get_bridge_id(br->stp)) {
-                stp_set_bridge_id(br->stp, bridge_id);
-                bridge_flush(br);
-            }
-        }
-
-        for (i = 0; i < br->n_ports; i++) {
-            struct port *p = br->ports[i];
-            int dp_ifidx;
-            struct stp_port *sp;
-            int path_cost, priority;
-            bool enable;
-
-            if (!p->n_ifaces) {
-                continue;
-            }
-            dp_ifidx = p->ifaces[0]->dp_ifidx;
-            if (dp_ifidx < 0 || dp_ifidx >= STP_MAX_PORTS) {
-                continue;
-            }
-
-            sp = stp_get_port(br->stp, dp_ifidx);
-            enable = (!cfg_is_valid(CFG_BOOL | CFG_REQUIRED,
-                                    "stp.%s.port.%s.enabled",
-                                    br->name, p->name)
-                      || cfg_get_bool(0, "stp.%s.port.%s.enabled",
-                                      br->name, p->name));
-            if (p->is_mirror_output_port) {
-                enable = false;
-            }
-            if (enable != (stp_port_get_state(sp) != STP_DISABLED)) {
-                bridge_flush(br); /* Might not be necessary. */
-                if (enable) {
-                    stp_port_enable(sp);
-                } else {
-                    stp_port_disable(sp);
-                }
-            }
-
-            path_cost = cfg_get_int(0, "stp.%s.port.%s.path-cost",
-                                    br->name, p->name);
-            stp_port_set_path_cost(sp, path_cost ? path_cost : 19 /* XXX */);
-
-            priority = (cfg_is_valid(CFG_INT | CFG_REQUIRED,
-                                     "stp.%s.port.%s.priority",
-                                     br->name, p->name)
-                        ? cfg_get_int(0, "stp.%s.port.%s.priority",
-                                      br->name, p->name)
-                        : STP_DEFAULT_PORT_PRIORITY);
-            stp_port_set_priority(sp, priority);
-        }
-
-        brstp_adjust_timers(br);
-    }
-    for (i = 0; i < br->n_ports; i++) {
-        brstp_update_port_state(br->ports[i]);
-    }
-}
-
-static void
-brstp_update_port_state(struct port *p)
-{
-    struct bridge *br = p->bridge;
-    enum stp_state state;
-
-    /* Figure out new state. */
-    state = STP_DISABLED;
-    if (br->stp && p->n_ifaces > 0) {
-        int dp_ifidx = p->ifaces[0]->dp_ifidx;
-        if (dp_ifidx >= 0 && dp_ifidx < STP_MAX_PORTS) {
-            state = stp_port_get_state(stp_get_port(br->stp, dp_ifidx));
-        }
-    }
-
-    /* Update state. */
-    if (p->stp_state != state) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
-        VLOG_INFO_RL(&rl, "port %s: STP state changed from %s to %s",
-                     p->name, stp_state_name(p->stp_state),
-                     stp_state_name(state));
-        if (p->stp_state == STP_DISABLED) {
-            bridge_flush(br);
-        } else {
-            ofproto_revalidate(p->bridge->ofproto, p->stp_state_tag);
-        }
-        p->stp_state = state;
-        p->stp_state_tag = (p->stp_state == STP_DISABLED ? 0
-                            : tag_create_random());
-    }
-}
-
-static void
-brstp_adjust_timers(struct bridge *br)
-{
-    int hello_time = cfg_get_int(0, "stp.%s.hello-time", br->name);
-    int max_age = cfg_get_int(0, "stp.%s.max-age", br->name);
-    int forward_delay = cfg_get_int(0, "stp.%s.forward-delay", br->name);
-
-    stp_set_hello_time(br->stp, hello_time ? hello_time : 2000);
-    stp_set_max_age(br->stp, max_age ? max_age : 20000);
-    stp_set_forward_delay(br->stp, forward_delay ? forward_delay : 15000);
-}
-
-static void
-brstp_run(struct bridge *br)
-{
-    if (br->stp) {
-        long long int now = time_msec();
-        long long int elapsed = now - br->stp_last_tick;
-        struct stp_port *sp;
-
-        if (elapsed > 0) {
-            stp_tick(br->stp, MIN(INT_MAX, elapsed));
-            br->stp_last_tick = now;
-        }
-        while (stp_get_changed_port(br->stp, &sp)) {
-            struct port *p = port_from_dp_ifidx(br, stp_port_no(sp));
-            if (p) {
-                brstp_update_port_state(p);
-            }
-        }
-    }
-}
-
-static void
-brstp_wait(struct bridge *br)
-{
-    if (br->stp) {
-        poll_timer_wait(1000);
-    }
 }
