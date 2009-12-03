@@ -19,7 +19,7 @@ m4_define([OVSDB_CHECK_IDL],
    AT_KEYWORDS([ovsdb server idl positive $5])
    OVS_CHECK_LCOV([ovsdb-tool create db $abs_builddir/idltest.ovsschema], 
                   [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/server-pid --listen=punix:socket --unixctl=$PWD/unixctl db])
+   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/server-pid --listen=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
    m4_if([$2], [], [],
      [OVS_CHECK_LCOV([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat server-pid`])])
    AT_CHECK([test-ovsdb -vjsonrpc -t10 idl unix:socket $3], 
