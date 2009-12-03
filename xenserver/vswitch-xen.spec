@@ -322,10 +322,16 @@ fi
 /usr/share/vswitch/scripts/XSFeatureVSwitch.pyo
 /usr/sbin/ovs-brcompatd
 /usr/sbin/ovs-vswitchd
+/usr/sbin/ovsdb-server
 /usr/bin/ovs-appctl
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-ofctl
 /usr/bin/ovs-vsctl
+/usr/bin/ovsdb-client
+/usr/bin/ovsdb-tool
+/usr/share/man/man1/ovsdb-client.1.gz
+/usr/share/man/man1/ovsdb-server.1.gz
+/usr/share/man/man1/ovsdb-tool.1.gz
 /usr/share/man/man8/ovs-appctl.8.gz
 /usr/share/man/man8/ovs-brcompatd.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
