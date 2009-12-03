@@ -159,6 +159,17 @@ def cBaseType(prefix, type, refTable=None):
                 'boolean': 'bool ',
                 'string': 'char *'}[type]
 
+def typeIsOptionalPointer(type):
+    return (type.min == 0 and type.max == 1 and not type.value
+            and (type.key == 'string'
+                 or (type.key == 'uuid' and type.keyRefTable)))
+
+def cDeclComment(type):
+    if type.min == 1 and type.max == 1 and type.key == "string":
+        return "\t/* Always nonnull. */"
+    else:
+        return ""
+
 def printCIDLHeader(schema):
     prefix = schema.idlPrefix
     print '''\
@@ -174,10 +185,7 @@ def printCIDLHeader(schema):
 #include "uuid.h"''' % {'prefix': prefix.upper()}
     for tableName, table in schema.tables.iteritems():
         print
-        if table.comment != None:
-            print "/* %s table (%s). */" % (tableName, table.comment)
-        else:
-            print "/* %s table. */" % (tableName)
+        print "/* %s table. */" % tableName
         structName = "%s%s" % (prefix, tableName.lower())
         print "struct %s {" % structName
         print "\tstruct ovsdb_idl_row header_;"
@@ -189,15 +197,18 @@ def printCIDLHeader(schema):
                 pointer = ''
             else:
                 singleton = False
-                pointer = '*'
+                if typeIsOptionalPointer(type):
+                    pointer = ''
+                else:
+                    pointer = '*'
             if type.value:
-                print "\tkey_%s%s%s;" % (cBaseType(prefix, type.key, type.keyRefTable), pointer, columnName)
-                print "\tvalue_%s%s%s;" % (cBaseType(prefix, type.value, type.valueRefTable), pointer, columnName)
+                print "\t%s%skey_%s;" % (cBaseType(prefix, type.key, type.keyRefTable), pointer, columnName)
+                print "\t%s%svalue_%s;" % (cBaseType(prefix, type.value, type.valueRefTable), pointer, columnName)
             else:
-                print "\t%s%s%s;" % (cBaseType(prefix, type.key, type.keyRefTable), pointer, columnName)
-            if not singleton:
+                print "\t%s%s%s;%s" % (cBaseType(prefix, type.key, type.keyRefTable), pointer, columnName, cDeclComment(type))
+            if not singleton and not typeIsOptionalPointer(type):
                 print "\tsize_t n_%s;" % columnName
-        print '''
+        print '''\
 };
 
 const struct %(s)s *%(s)s_first(const struct ovsdb_idl *);
@@ -230,6 +241,18 @@ def printCIDLSource(schema):
     printEnum(["%sTABLE_%s" % (prefix.upper(), tableName.upper()) for tableName in schema.tables] + ["%sN_TABLES" % prefix.upper()])
     print "\nstatic struct ovsdb_idl_table_class %stable_classes[%sN_TABLES];" % (prefix, prefix.upper())
 
+    # Cast functions.
+    for tableName, table in schema.tables.iteritems():
+        structName = "%s%s" % (prefix, tableName.lower())
+        print '''
+static struct %(s)s *
+%(s)s_cast(struct ovsdb_idl_row *row)
+{
+    return row ? CONTAINER_OF(row, struct %(s)s, header_) : NULL;
+}\
+''' % {'s': structName}
+
+
     for tableName, table in schema.tables.iteritems():
         structName = "%s%s" % (prefix, tableName.lower())
         print ""
@@ -244,11 +267,11 @@ def printCIDLSource(schema):
                   + ["%s_N_COLUMNS" % structName.upper()])
 
         # Parse function.
-        print '''
+        print '''\
 static void
 %s_parse(struct ovsdb_idl_row *row_)
 {
-    struct %s *row = (struct %s *) row_;
+    struct %s *row = %s_cast(row_);
     const struct ovsdb_datum *datum;
     size_t i UNUSED;
 
@@ -268,19 +291,27 @@ static void
                 keyVar = "row->%s" % columnName
                 valueVar = None
 
-            if type.min == 1 and type.max == 1:
+            if (type.min == 1 and type.max == 1) or typeIsOptionalPointer(type):
                 print "    if (datum->n >= 1) {"
                 if not refKey:
                     print "        %s = datum->keys[0].%s;" % (keyVar, type.key)
                 else:
-                    print "        %s = (struct %s%s *) ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[0].uuid);" % (keyVar, prefix, type.keyRefTable.lower(), prefix, prefix.upper(), type.keyRefTable.upper())
+                    print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[0].uuid));" % (keyVar, prefix, type.keyRefTable.lower(), prefix, prefix.upper(), type.keyRefTable.upper())
 
                 if valueVar:
                     if refValue:
                         print "        %s = datum->values[0].%s;" % (valueVar, type.value)
                     else:
-                        print "        %s = (struct %s%s *) ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[0].uuid);" % (valueVar, prefix, type.valueRefTable.lower(), prefix, prefix.upper(), type.valueRefTable.upper())
+                        print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[0].uuid));" % (valueVar, prefix, type.valueRefTable.lower(), prefix, prefix.upper(), type.valueRefTable.upper())
+                if (not typeIsOptionalPointer(type) and
+                    (type.key == "string" or type.value == "string")):
+                    print "    } else {"
+                    if type.key == "string":
+                        print "        %s = \"\";" % keyVar
+                    if type.value == "string":
+                        print "        %s = \"\";" % valueVar
                 print "    }"
+
             else:
                 if type.max != 'unlimited':
                     nMax = "MIN(%d, datum->n)" % type.max
@@ -289,13 +320,13 @@ static void
                 print "    for (i = 0; i < %s; i++) {" % nMax
                 refs = []
                 if refKey:
-                    print "        struct %s%s *keyRow = (struct %s%s *) ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[i].uuid);" % (prefix, type.keyRefTable.lower(), prefix, type.keyRefTable.lower(), prefix, prefix.upper(), type.keyRefTable.upper())
+                    print "        struct %s%s *keyRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[i].uuid));" % (prefix, type.keyRefTable.lower(), prefix, type.keyRefTable.lower(), prefix, prefix.upper(), type.keyRefTable.upper())
                     keySrc = "keyRow"
                     refs.append('keyRow')
                 else:
                     keySrc = "datum->keys[i].%s" % type.key
                 if refValue:
-                    print "        struct %s%s *valueRow = (struct %s%s *) ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[i].uuid);" % (prefix, type.valueRefTable.lower(), prefix, type.valueRefTable.lower(), prefix, prefix.upper(), type.valueRefTable.upper())
+                    print "        struct %s%s *valueRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[i].uuid));" % (prefix, type.valueRefTable.lower(), prefix, type.valueRefTable.lower(), prefix, prefix.upper(), type.valueRefTable.upper())
                     valueSrc = "valueRow"
                     refs.append('valueRow')
                 elif valueVar:
@@ -308,11 +339,11 @@ static void
                 print "%sif (!row->n_%s) {" % (indent, columnName)
                 print "%s    %s = xmalloc(%s * sizeof *%s);" % (indent, keyVar, nMax, keyVar)
                 if valueVar:
-                    print "%s    %s = xmalloc(%s * sizeof %%s);" % (indent, valueVar, nMax, valueVar)
+                    print "%s    %s = xmalloc(%s * sizeof %s);" % (indent, valueVar, nMax, valueVar)
                 print "%s}" % indent
                 print "%s%s[row->n_%s] = %s;" % (indent, keyVar, columnName, keySrc)
                 if valueVar:
-                    print "%s[row->n_%s] = %s;" % (indent, valueVar, columnName, valueSrc)
+                    print "%s%s[row->n_%s] = %s;" % (indent, valueVar, columnName, valueSrc)
                 print "%srow->n_%s++;" % (indent, columnName)
                 if refs:
                     print "        }"
@@ -323,13 +354,13 @@ static void
         nArrays = 0
         for columnName, column in table.columns.iteritems():
             type = column.type
-            if type.min != 1 or type.max != 1:
+            if (type.min != 1 or type.max != 1) and not typeIsOptionalPointer(type):
                 if not nArrays:
                     print '''
 static void
 %s_unparse(struct ovsdb_idl_row *row_)
 {
-    struct %s *row = (struct %s *) row_;
+    struct %s *row = %s_cast(row_);
 ''' % (structName, structName, structName)
                 if type.value:
                     keyVar = "row->key_%s" % columnName
@@ -350,14 +381,16 @@ static void
 
         # First, next functions.
         print '''
-const struct %(s)s *%(s)s_first(const struct ovsdb_idl *idl)
+const struct %(s)s *
+%(s)s_first(const struct ovsdb_idl *idl)
 {
-    return (const struct %(s)s *) ovsdb_idl_first_row(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]);
+    return %(s)s_cast(ovsdb_idl_first_row(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]));
 }
 
-const struct %(s)s *%(s)s_next(const struct %(s)s *row)
+const struct %(s)s *
+%(s)s_next(const struct %(s)s *row)
 {
-    return (const struct %(s)s *) ovsdb_idl_next_row(&row->header_);
+    return %(s)s_cast(ovsdb_idl_next_row(&row->header_));
 }''' % {'s': structName, 'p': prefix, 'P': prefix.upper(), 'T': tableName.upper()}
 
         # Table columns.
