@@ -29,6 +29,7 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 [\fB--format=\fIformat\fR]
 [\fB--wide\fR]
 [\fB--no-heading\fR]
+.so lib/daemon-syn.man
 .so lib/vlog-syn.man
 .so lib/common-syn.man
 .
@@ -88,6 +89,10 @@ Print deleted rows.
 .IP "\fBmodify\fR"
 Print old and new values of modified rows.
 .RE
+.IP
+If \fB--detach\fR is used with \fBmonitor\fR, then \fBovsdb\-client\fR
+detaches after it has successfully received and printed the initial
+contents of \fItable\fR.
 .SH OPTIONS
 .SS "Output Formatting Options"
 Much of the output from \fBovsdb\-client\fR is in the form of tables.
@@ -115,6 +120,12 @@ characters.  Specifying this option prevents line truncation.
 This option suppresses the heading row that otherwise appears in the
 first row of table output.
 .
+.SS "Daemon Options"
+The daemon options apply only to the \fBmonitor\fR command.  With any
+other command, they have no effect.
+.so lib/daemon.man
+.SS "Logging Options"
+.so lib/vlog.man
 .SS "Logging Options"
 .so lib/vlog.man
 .SS "Other Options"

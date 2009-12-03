@@ -27,6 +27,7 @@
 #include "command-line.h"
 #include "column.h"
 #include "compiler.h"
+#include "daemon.h"
 #include "dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
@@ -80,6 +81,7 @@ parse_options(int argc, char *argv[])
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
+        DAEMON_LONG_OPTIONS,
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -121,6 +123,8 @@ parse_options(int argc, char *argv[])
             vlog_set_verbosity(optarg);
             break;
 
+        DAEMON_OPTION_HANDLERS
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -160,6 +164,7 @@ usage(void)
            "                              (\"table\", \"html\", or \"csv\"\n"
            "  --wide                      don't limit TTY lines to 79 bytes\n"
            "  --no-headings               omit table heading row\n");
+    daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"
            "  -h, --help                  display this help message\n"
@@ -814,6 +819,8 @@ do_monitor(int argc, char *argv[])
         } else if (msg->type == JSONRPC_REPLY
                    && json_equal(msg->id, request_id)) {
             monitor_print(msg->result, table, &columns, true);
+            fflush(stdout);
+            daemonize();
         } else if (msg->type == JSONRPC_NOTIFY
                    && !strcmp(msg->method, "update")) {
             struct json *params = msg->params;
@@ -822,6 +829,7 @@ do_monitor(int argc, char *argv[])
                 && params->u.array.elems[0]->type == JSON_NULL) {
                 monitor_print(params->u.array.elems[1],
                               table, &columns, false);
+                fflush(stdout);
             }
         }
     }
