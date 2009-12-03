@@ -562,7 +562,9 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         const struct ovsrec_bridge *br_cfg = node->data;
         if (!shash_find_data(&old_br, br_name)) {
             br = bridge_create(br_name);
-            br->cfg = br_cfg;
+            if (br) {
+                br->cfg = br_cfg;
+            }
         }
     }
     shash_destroy(&old_br);
