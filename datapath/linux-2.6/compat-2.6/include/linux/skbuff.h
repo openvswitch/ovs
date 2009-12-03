@@ -76,6 +76,29 @@ static inline int skb_cow_head(struct sk_buff *skb, unsigned int headroom)
 }
 #endif  /* !HAVE_SKB_COW */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+static inline int skb_clone_writable(struct sk_buff *skb, int len)
+{
+	return false;
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
+static inline struct dst_entry *skb_dst(const struct sk_buff *skb)
+{
+	return (struct dst_entry *)skb->dst;
+}
+
+static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
+{
+	skb->dst = dst;
+}
+
+static inline struct rtable *skb_rtable(const struct sk_buff *skb)
+{
+	return (struct rtable *)skb->dst;
+}
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
 /* Emulate Linux 2.6.17 and later behavior, in which kfree_skb silently ignores 
@@ -101,6 +124,7 @@ static inline void kfree_skb_maybe_null(struct sk_buff *skb)
 #ifdef HAVE_MAC_RAW
 #define mac_header mac.raw
 #define network_header nh.raw
+#define transport_header h.raw
 #endif
 
 #ifndef HAVE_SKBUFF_HEADER_HELPERS
