@@ -89,23 +89,15 @@ ovsdb_jsonrpc_server_create(struct ovsdb *db)
     return server;
 }
 
-int
-ovsdb_jsonrpc_server_listen(struct ovsdb_jsonrpc_server *svr, const char *name)
+void
+ovsdb_jsonrpc_server_listen(struct ovsdb_jsonrpc_server *svr,
+                            struct pstream *pstream)
 {
-    struct pstream *pstream;
-    int error;
-
-    error = pstream_open(name, &pstream);
-    if (error) {
-        return error;
-    }
-
     if (svr->n_listeners >= svr->allocated_listeners) {
         svr->listeners = x2nrealloc(svr->listeners, &svr->allocated_listeners,
                                     sizeof *svr->listeners);
     }
     svr->listeners[svr->n_listeners++] = pstream;
-    return 0;
 }
 
 void

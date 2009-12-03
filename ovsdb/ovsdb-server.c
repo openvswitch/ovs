@@ -60,6 +60,7 @@ main(int argc, char *argv[])
     struct unixctl_server *unixctl;
     struct ovsdb_jsonrpc_server *jsonrpc;
     struct svec active, passive;
+    struct pstream **listeners;
     struct ovsdb_error *error;
     struct ovsdb *db;
     const char *name;
@@ -77,6 +78,18 @@ main(int argc, char *argv[])
     process_init();
 
     parse_options(argc, argv, &file_name, &active, &passive, &unixctl_path);
+
+    /* Open all the passive sockets before detaching, to avoid race with
+     * processes that start up later. */
+    listeners = xmalloc(passive.n * sizeof *listeners);
+    for (i = 0; i < passive.n; i++) {
+        int error;
+
+        error = pstream_open(passive.names[i], &listeners[i]);
+        if (error) {
+            ovs_fatal(error, "failed to listen on \"%s\"", passive.names[i]);
+        }
+    }
 
     if (get_detach() && is_chdir_enabled()) {
         /* We need to skip chdir("/") in daemonize() and do it later, because
@@ -101,11 +114,8 @@ main(int argc, char *argv[])
     SVEC_FOR_EACH (i, name, &active) {
         ovsdb_jsonrpc_server_connect(jsonrpc, name);
     }
-    SVEC_FOR_EACH (i, name, &passive) {
-        retval = ovsdb_jsonrpc_server_listen(jsonrpc, name);
-        if (retval) {
-            ovs_fatal(retval, "failed to listen on %s", name);
-        }
+    for (i = 0; i < passive.n; i++) {
+        ovsdb_jsonrpc_server_listen(jsonrpc, listeners[i]);
     }
     svec_destroy(&active);
     svec_destroy(&passive);
