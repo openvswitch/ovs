@@ -19,10 +19,11 @@
 #include <stddef.h>
 #include "list.h"
 
+struct ovsrec_open_vswitch;
 struct svec;
 
-void bridge_init(void);
-void bridge_reconfigure(void);
+void bridge_init(const struct ovsrec_open_vswitch *);
+void bridge_reconfigure(const struct ovsrec_open_vswitch *);
 int bridge_run(void);
 void bridge_wait(void);
 bool bridge_exists(const char *);

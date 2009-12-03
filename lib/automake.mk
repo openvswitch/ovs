@@ -235,7 +235,6 @@ COVERAGE_FILES = \
 	ofproto/ofproto.c \
 	ofproto/pktbuf.c \
 	vswitchd/bridge.c \
-	vswitchd/mgmt.c \
 	vswitchd/ovs-brcompatd.c
 lib/coverage-counters.c: $(COVERAGE_FILES) lib/coverage-scan.pl
 	(cd $(srcdir) && $(PERL) lib/coverage-scan.pl $(COVERAGE_FILES)) > $@.tmp

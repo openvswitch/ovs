@@ -24,50 +24,50 @@
 #include <string.h>
 
 #include "bridge.h"
-#include "cfg.h"
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
 #include "dpif.h"
 #include "fault.h"
 #include "leak-checker.h"
-#include "mgmt.h"
 #include "netdev.h"
-#include "ovs-vswitchd.h"
+#include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "proc-net-compat.h"
 #include "process.h"
 #include "signals.h"
+#include "stream.h"
 #include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
 #include "vconn-ssl.h"
 #include "vconn.h"
+#include "vswitchd/vswitch-idl.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_vswitchd
 
-static void parse_options(int argc, char *argv[]);
+static const char *parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
-static unixctl_cb_func reload;
-
-static bool need_reconfigure;
-static struct unixctl_conn **conns;
-static size_t n_conns;
 
 int
 main(int argc, char *argv[])
 {
     struct unixctl_server *unixctl;
     struct signal *sighup;
+    struct ovsdb_idl *idl;
+    const char *remote;
+    bool need_reconfigure;
+    bool inited;
+    unsigned int idl_seqno;
     int retval;
 
     set_program_name(argv[0]);
     register_fault_handlers();
     time_init();
     vlog_init();
-    parse_options(argc, argv);
+    remote = parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
     sighup = signal_register(SIGHUP);
     process_init();
@@ -79,39 +79,47 @@ main(int argc, char *argv[])
     if (retval) {
         ovs_fatal(retval, "could not listen for control connections");
     }
-    unixctl_command_register("vswitchd/reload", reload, NULL);
 
-    retval = cfg_read();
-    if (retval) {
-        ovs_fatal(retval, "could not read config file");
-    }
-    mgmt_init();
-    bridge_init();
-    mgmt_reconfigure();
+    idl = ovsdb_idl_create(remote, &ovsrec_idl_class);
+    idl_seqno = ovsdb_idl_get_seqno(idl);
 
     need_reconfigure = false;
+    inited = false;
     for (;;) {
-        if (need_reconfigure || signal_poll(sighup)) {
-            need_reconfigure = false;
+        if (signal_poll(sighup)) {
             vlog_reopen_log_file();
-            reconfigure();
         }
-        if (mgmt_run()) {
+        if (inited && bridge_run()) {
             need_reconfigure = true;
         }
-        if (bridge_run()) {
+        ovsdb_idl_run(idl);
+        if (idl_seqno != ovsdb_idl_get_seqno(idl)) {
+            idl_seqno = ovsdb_idl_get_seqno(idl);
             need_reconfigure = true;
+        }
+        if (need_reconfigure) {
+            const struct ovsrec_open_vswitch *cfg;
+
+            need_reconfigure = false;
+            cfg = ovsrec_open_vswitch_first(idl);
+            if (cfg) {
+                if (inited) {
+                    bridge_reconfigure(cfg);
+                } else {
+                    bridge_init(cfg);
+                    inited = true;
+                }
+            }
         }
         unixctl_server_run(unixctl);
         dp_run();
         netdev_run();
 
-        if (need_reconfigure) {
-            poll_immediate_wake();
-        }
         signal_wait(sighup);
-        mgmt_wait();
-        bridge_wait();
+        if (inited) {
+            bridge_wait();
+        }
+        ovsdb_idl_wait(idl);
         unixctl_server_wait(unixctl);
         dp_wait();
         netdev_wait();
@@ -121,32 +129,7 @@ main(int argc, char *argv[])
     return 0;
 }
 
-static void
-reload(struct unixctl_conn *conn, const char *args UNUSED, void *aux UNUSED)
-{
-    need_reconfigure = true;
-    conns = xrealloc(conns, sizeof *conns * (n_conns + 1));
-    conns[n_conns++] = conn;
-}
-
-void
-reconfigure(void)
-{
-    size_t i;
-
-    cfg_read();
-    bridge_reconfigure();
-    mgmt_reconfigure();
-
-    for (i = 0; i < n_conns; i++) {
-        unixctl_command_reply(conns[i], 202, NULL);
-    }
-    free(conns);
-    conns = NULL;
-    n_conns = 0;
-}
-
-static void
+static const char *
 parse_options(int argc, char *argv[])
 {
     enum {
@@ -169,7 +152,6 @@ parse_options(int argc, char *argv[])
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
-    const char *config_file;
     int error;
 
     for (;;) {
@@ -221,26 +203,21 @@ parse_options(int argc, char *argv[])
     argv += optind;
 
     if (argc != 1) {
-        ovs_fatal(0, "config file is only non-option argument; "
+        ovs_fatal(0, "database socket is only non-option argument; "
                 "use --help for usage");
     }
 
-    cfg_init();
-    config_file = argv[0];
-    error = cfg_set_file(config_file);
-    if (error) {
-       ovs_fatal(error, "failed to add configuration file \"%s\"", 
-                config_file);
-    }
+    return argv[0];
 }
 
 static void
 usage(void)
 {
     printf("%s: Open vSwitch daemon\n"
-           "usage: %s [OPTIONS] CONFIG\n"
-           "CONFIG is a configuration file in ovs-vswitchd.conf(5) format.\n",
+           "usage: %s [OPTIONS] DATABASE\n"
+           "where DATABASE is a socket on which ovsdb-server is listening.\n",
            program_name, program_name);
+    stream_usage("DATABASE", true, false);
     daemon_usage();
     vlog_usage();
     printf("\nLegacy compatibility options:\n"

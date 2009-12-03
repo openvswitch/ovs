@@ -1,6 +1,5 @@
 bin_PROGRAMS += \
 	utilities/ovs-appctl \
-	utilities/ovs-cfg-mod \
 	utilities/ovs-controller \
 	utilities/ovs-discover \
 	utilities/ovs-dpctl \
@@ -15,7 +14,6 @@ dist_sbin_SCRIPTS += utilities/ovs-monitor
 
 EXTRA_DIST += \
 	utilities/ovs-appctl.8.in \
-	utilities/ovs-cfg-mod.8.in \
 	utilities/ovs-controller.8.in \
 	utilities/ovs-discover.8.in \
 	utilities/ovs-dpctl.8.in \
@@ -30,7 +28,6 @@ EXTRA_DIST += \
 	utilities/ovs-vsctl.in
 DISTCLEANFILES += \
 	utilities/ovs-appctl.8 \
-	utilities/ovs-cfg-mod.8 \
 	utilities/ovs-controller.8 \
 	utilities/ovs-discover.8 \
 	utilities/ovs-dpctl.8 \
@@ -46,7 +43,6 @@ DISTCLEANFILES += \
 
 man_MANS += \
 	utilities/ovs-appctl.8 \
-	utilities/ovs-cfg-mod.8 \
 	utilities/ovs-controller.8 \
 	utilities/ovs-discover.8 \
 	utilities/ovs-dpctl.8 \
@@ -58,9 +54,6 @@ man_MANS += \
 
 utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
 utilities_ovs_appctl_LDADD = lib/libopenvswitch.a
-
-utilities_ovs_cfg_mod_SOURCES = utilities/ovs-cfg-mod.c
-utilities_ovs_cfg_mod_LDADD = lib/libopenvswitch.a
 
 utilities_ovs_controller_SOURCES = utilities/ovs-controller.c
 utilities_ovs_controller_LDADD = lib/libopenvswitch.a $(FAULT_LIBS) $(SSL_LIBS)

@@ -34,7 +34,8 @@ EXTRA_DIST = INSTALL.bridge \
 	INSTALL.OpenFlow \
 	INSTALL.SSL \
 	INSTALL.XenServer \
-	README-gcov
+	README-gcov \
+	++WARNING++
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =

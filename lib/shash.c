@@ -76,6 +76,17 @@ shash_add(struct shash *sh, const char *name, const void *data)
     return node;
 }
 
+bool
+shash_add_once(struct shash *sh, const char *name, const void *data)
+{
+    if (!shash_find(sh, name)) {
+        shash_add(sh, name, data);
+        return true;
+    } else {
+        return false;
+    }
+}
+
 void
 shash_delete(struct shash *sh, struct shash_node *node)
 {

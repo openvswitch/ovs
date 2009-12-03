@@ -345,14 +345,9 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
         switch (c) {
         case OPT_DATAPATH_ID:
-            if (strlen(optarg) != 12
-                || strspn(optarg, "0123456789abcdefABCDEF") != 12) {
+            if (!dpid_from_string(optarg, &s->datapath_id)) {
                 ovs_fatal(0, "argument to --datapath-id must be "
-                          "exactly 12 hex digits");
-            }
-            s->datapath_id = strtoll(optarg, NULL, 16);
-            if (!s->datapath_id) {
-                ovs_fatal(0, "argument to --datapath-id must be nonzero");
+                          "exactly 12 hex digits and may not be all-zero");
             }
             break;
 

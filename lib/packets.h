@@ -26,6 +26,8 @@
 
 struct ofpbuf;
 
+bool dpid_from_string(const char *s, uint64_t *dpidp);
+
 #define ETH_ADDR_LEN           6
 
 static const uint8_t eth_addr_broadcast[ETH_ADDR_LEN] UNUSED
@@ -100,6 +102,8 @@ static inline bool eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
             && ea[4] == 0x00
             && (ea[5] & 0xf0) == 0x00);
 }
+
+bool eth_addr_from_string(const char *, uint8_t ea[ETH_ADDR_LEN]);
 
 void compose_benign_packet(struct ofpbuf *, const char *tag,
                            uint16_t snap_type,

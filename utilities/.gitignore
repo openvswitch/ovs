@@ -3,8 +3,6 @@
 /nlmon
 /ovs-appctl
 /ovs-appctl.8
-/ovs-cfg-mod
-/ovs-cfg-mod.8
 /ovs-controller
 /ovs-controller.8
 /ovs-discover

@@ -17,7 +17,29 @@
 #include <config.h>
 #include "packets.h"
 #include <netinet/in.h>
+#include <stdlib.h>
 #include "ofpbuf.h"
+
+bool
+dpid_from_string(const char *s, uint64_t *dpidp)
+{
+    *dpidp = (strlen(s) == 12 && strspn(s, "0123456789abcdefABCDEF") == 12
+              ? strtoll(s, NULL, 16)
+              : 0);
+    return *dpidp != 0;
+}
+
+bool
+eth_addr_from_string(const char *s, uint8_t ea[ETH_ADDR_LEN])
+{
+    if (sscanf(s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))
+        == ETH_ADDR_SCAN_COUNT) {
+        return true;
+    } else {
+        memset(ea, 0, ETH_ADDR_LEN);
+        return false;
+    }
+}
 
 /* Fills 'b' with an 802.2 SNAP packet with Ethernet source address 'eth_src',
  * the Nicira OUI as SNAP organization and 'snap_type' as SNAP type.  The text

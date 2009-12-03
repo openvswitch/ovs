@@ -1,0 +1,5 @@
+This version of Open vSwitch is in the middle of a transition from
+using the ovs-vswitchd.conf configuration file to database-based
+configuration.  Many features are known to be broken, so please do not
+use this version of Open vSwitch if you expect it to be working
+stably.

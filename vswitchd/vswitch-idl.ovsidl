@@ -46,7 +46,7 @@
          "type": {"key": "uuid", "keyRefTable": "Mirror", "min": 0, "max": "unlimited"}},
        "netflow": {
          "comment": "NetFlow configuration.",
-         "type": {"key": "uuid", "keyRefTable": "NetFlow", "min": 0, "max": "unlimited"}},
+         "type": {"key": "uuid", "keyRefTable": "NetFlow", "min": 0, "max": 1}},
        "controller": {
          "comment": "OpenFlow controller.  If unset, defaults to that specified by the parent Open_vSwitch.",
          "type": {"key": "uuid", "keyRefTable": "Controller", "min": 0, "max": 1}}}},
@@ -65,18 +65,30 @@
        "tag": {
          "comment": "This port's implicitly tagged VLAN.  Should be empty if this is a trunk port.",
          "type": {"key": "integer", "min": 0, "max": 1}},
-       "updelay": {
+       "mac": {
+         "comment": "The MAC address to use for this port for the purpose of choosing the bridge's MAC address.  This column does not necessarily reflect the port's actual MAC address, nor will setting it change the port's actual MAC address.  Exactly 12 hex digits in the form XX:XX:XX:XX:XX:XX.",
+         "type": {"key": "string", "min": 0, "max": 1}},
+       "bond_updelay": {
          "comment": "For a bonded port, the number of milliseconds for which carrier must stay up on an interface before the interface is considered to be up.  Ignored for non-bonded ports.",
          "type": "integer"},
-       "downdelay": {
+       "bond_downdelay": {
          "comment": "For a bonded port, the number of milliseconds for which carrier must stay down on an interface before the interface is considered to be down.  Ignored for non-bonded ports.",
-         "type": "integer"}}},
+         "type": "integer"},
+       "bond_fake_iface": {
+         "comment": "For a bonded port, whether to create a fake interface with the name of the port.  Use only for compatibility with legacy software that requires this.",
+         "type": "boolean"}}},
    "Interface": {
      "comment": "An interface within a Port.",
      "columns": {
        "name": {
          "comment": "Interface name.  Should be alphanumeric and no more than about 8 bytes long.  May be the same as the port name, for non-bonded ports.  Must otherwise be unique among the names of ports, interfaces, and bridges on a host.",
          "type": "string"},
+       "type": {
+         "comment": "The interface type.  Normal network devices, e.g. eth0, have type \"system\" or \"\" (which are synonyms).  Internal ports have type \"internal\".  TUN/TAP devices have type \"tap\".",
+         "type": "string"},
+       "options": {
+         "comment": "Configuration options whose interpretation varies based on \"type\".",
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "internal": {
          "comment": "An \"internal\" port is one that is implemented in software as a logical device.",
          "type": "boolean"},
@@ -85,7 +97,10 @@
          "type": "integer"},
        "ingress_policing_burst": {
          "comment": "Maximum burst size for data received on this interface, in kb.  The default burst size if set to 0 is 10 kb.",
-         "type": "integer"}}},
+         "type": "integer"},
+       "mac": {
+         "comment": "Ethernet address to set for this interface.  If unset then the default MAC address is used.  May not be supported on all interfaces.  Exactly 12 hex digits in the form XX:XX:XX:XX:XX:XX.",
+         "type": {"key": "string", "min": 0, "max": 1}}}},
    "Mirror": {
      "comment": "A port mirror within a Bridge.",
      "columns": {
@@ -110,9 +125,9 @@
    "NetFlow": {
      "comment": "A NetFlow target.",
      "columns": {
-       "target": {
-         "comment": "NetFlow target in the form \"IP:PORT\".",
-         "type": "string"},
+       "targets": {
+         "comment": "NetFlow targets in the form \"IP:PORT\".",
+         "type": {"key": "string", "min": 1, "max": "unlimited"}},
        "engine_type": {
          "comment": "Engine type to use in NetFlow messages.  Defaults to datapath index if not specified.",
          "type": "integer", "min":0, "max":1},
@@ -121,12 +136,15 @@
          "type": "integer", "min":0, "max":1},
        "add_id_to_interface": {
          "comment": "Place least-significant 7 bits of engine ID into most significant bits of ingress and egress interface fields of NetFlow records?",
-         "type": "boolean"}}},
+         "type": "boolean"},
+       "active_timeout": {
+         "comment": "Active timeout interval, in seconds.  A value of 0 requests the default timeout; a negative value disables active timeouts.",
+         "type": "integer"}}},
    "Controller": {
      "comment": "An OpenFlow controller.",
      "columns": {
        "target": {
-         "comment": "Connection method for controller, e.g. \"ssl:...\", \"tcp:...\".  The special string \"discover\" enables controller discovery.",
+         "comment": "Connection method for controller, e.g. \"ssl:...\", \"tcp:...\".  The special string \"discover\" enables controller discovery.  The special string \"none\" disables the controller.",
          "type": "string"},
        "max_backoff": {
          "comment": "Maximum number of milliseconds to wait between connection attempts.  Default is implementation-specific.",
@@ -172,4 +190,7 @@
          "type": "string"},
        "ca_cert": {
          "comment": "Name of a PEM file containing the CA certificate used to verify that the switch is connected to a trustworthy controller.",
-         "type": "string"}}}}}
+         "type": "string"},
+       "bootstrap_ca_cert": {
+         "comment": "If set to true, then Open vSwitch will attempt to obtain the CA certificate from the controller on its first SSL connection and save it to the named PEM file. If it is successful, it will immediately drop the connection and reconnect, and from then on all SSL connections must be authenticated by a certificate signed by the CA certificate thus obtained.  This option exposes the SSL connection to a man-in-the-middle attack obtaining the initial CA certificate, but it may be useful for bootstrapping.",
+         "type": "boolean"}}}}}

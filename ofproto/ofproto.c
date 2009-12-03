@@ -536,7 +536,7 @@ int
 ofproto_set_netflow(struct ofproto *ofproto,
                     const struct netflow_options *nf_options)
 {
-    if (nf_options->collectors.n) {
+    if (nf_options && nf_options->collectors.n) {
         if (!ofproto->netflow) {
             ofproto->netflow = netflow_create();
         }
