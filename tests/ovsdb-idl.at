@@ -140,127 +140,143 @@ OVSDB_CHECK_IDL([simple idl, initially populated],
 OVSDB_CHECK_IDL([self-linking idl, consistent ops],
   [],
   [['[{"op": "insert",
-       "table": "selfLink",
+       "table": "link1",
        "row": {"i": 0, "k": ["named-uuid", "self"]},
        "uuid-name": "self"}]' \
     '[{"op": "insert",
-       "table": "selfLink",
+       "table": "link1",
        "row": {"i": 1},
        "uuid-name": "row1"},
       {"op": "insert",
-       "table": "selfLink",
+       "table": "link1",
        "row": {"i": 2, "k": ["named-uuid", "row1"]},
        "uuid-name": "row2"},
       {"op": "update",
-       "table": "selfLink",
+       "table": "link1",
        "where": [["i", "==", 1]],
        "row": {"k": ["named-uuid", "row2"]}}]' \
     '[{"op": "update",
-       "table": "selfLink",
+       "table": "link1",
        "where": [["i", "==", 1]],
        "row": {"k": ["uuid", "#1#"]}}]' \
     '[{"op": "update",
-       "table": "selfLink",
+       "table": "link1",
        "where": [],
        "row": {"k": ["uuid", "#0#"]}}]']],
   [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}
-002: i=0 k=0 ka=[] uuid=<0>
+002: i=0 k=0 ka=[] l2= uuid=<0>
 003: {"error":null,"result":[{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]},{"count":1}]}
-004: i=0 k=0 ka=[] uuid=<0>
-004: i=1 k=2 ka=[] uuid=<1>
-004: i=2 k=1 ka=[] uuid=<2>
+004: i=0 k=0 ka=[] l2= uuid=<0>
+004: i=1 k=2 ka=[] l2= uuid=<1>
+004: i=2 k=1 ka=[] l2= uuid=<2>
 005: {"error":null,"result":[{"count":1}]}
-006: i=0 k=0 ka=[] uuid=<0>
-006: i=1 k=1 ka=[] uuid=<1>
-006: i=2 k=1 ka=[] uuid=<2>
+006: i=0 k=0 ka=[] l2= uuid=<0>
+006: i=1 k=1 ka=[] l2= uuid=<1>
+006: i=2 k=1 ka=[] l2= uuid=<2>
 007: {"error":null,"result":[{"count":3}]}
-008: i=0 k=0 ka=[] uuid=<0>
-008: i=1 k=0 ka=[] uuid=<1>
-008: i=2 k=0 ka=[] uuid=<2>
+008: i=0 k=0 ka=[] l2= uuid=<0>
+008: i=1 k=0 ka=[] l2= uuid=<1>
+008: i=2 k=0 ka=[] l2= uuid=<2>
 009: done
 ]])
 
 OVSDB_CHECK_IDL([self-linking idl, inconsistent ops],
   [],
   [['[{"op": "insert",
-       "table": "selfLink",
+       "table": "link1",
        "row": {"i": 0, "k": ["uuid", "cf197cc5-c8c9-42f5-82d5-c71a9f2cb96b"]}}]' \
      '[{"op": "update",
-       "table": "selfLink",
+       "table": "link1",
        "where": [],
        "row": {"k": ["uuid", "#0#"]}}]' \
      '[{"op": "update",
-       "table": "selfLink",
+       "table": "link1",
        "where": [],
        "row": {"k": ["uuid", "c2fca39a-e69a-42a4-9c56-5eca85839ce9"]}}]' \
      '[{"op": "insert",
-       "table": "selfLink",
+       "table": "link1",
        "row": {"i": 1, "k": ["uuid", "52d752a3-b062-4668-9446-d2e0d4a14703"]}}]' \
      '[{"op": "update",
-       "table": "selfLink",
+       "table": "link1",
        "where": [],
        "row": {"k": ["uuid", "#1#"]}}]' \
 ]],
   [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}
-002: i=0 k= ka=[] uuid=<0>
+002: i=0 k= ka=[] l2= uuid=<0>
 003: {"error":null,"result":[{"count":1}]}
-004: i=0 k=0 ka=[] uuid=<0>
+004: i=0 k=0 ka=[] l2= uuid=<0>
 005: {"error":null,"result":[{"count":1}]}
-006: i=0 k= ka=[] uuid=<0>
+006: i=0 k= ka=[] l2= uuid=<0>
 007: {"error":null,"result":[{"uuid":["uuid","<1>"]}]}
-008: i=0 k= ka=[] uuid=<0>
-008: i=1 k= ka=[] uuid=<1>
+008: i=0 k= ka=[] l2= uuid=<0>
+008: i=1 k= ka=[] l2= uuid=<1>
 009: {"error":null,"result":[{"count":2}]}
-010: i=0 k=1 ka=[] uuid=<0>
-010: i=1 k=1 ka=[] uuid=<1>
+010: i=0 k=1 ka=[] l2= uuid=<0>
+010: i=1 k=1 ka=[] l2= uuid=<1>
 011: done
 ]])
 
 OVSDB_CHECK_IDL([self-linking idl, sets],
   [],
   [['[{"op": "insert",
-       "table": "selfLink",
+       "table": "link1",
        "row": {"i": 0, "ka": ["set", [["named-uuid", "i0"]]]},
        "uuid-name": "i0"},
       {"op": "insert",
-       "table": "selfLink",
+       "table": "link1",
        "row": {"i": 1, "ka": ["set", [["named-uuid", "i1"]]]},
        "uuid-name": "i1"},
       {"op": "insert",
-       "table": "selfLink",
+       "table": "link1",
        "row": {"i": 2, "ka": ["set", [["named-uuid", "i2"]]]},
        "uuid-name": "i2"},
       {"op": "insert",
-       "table": "selfLink",
+       "table": "link1",
        "row": {"i": 3, "ka": ["set", [["named-uuid", "i3"]]]},
        "uuid-name": "i3"}]' \
     '[{"op": "update",
-       "table": "selfLink",
+       "table": "link1",
        "where": [],
        "row": {"ka": ["set", [["uuid", "#0#"], ["uuid", "#1#"], ["uuid", "#2#"], ["uuid", "#3#"]]]}}]' \
     '[{"op": "update",
-       "table": "selfLink",
+       "table": "link1",
        "where": [],
        "row": {"ka": ["set", [["uuid", "#0#"], ["uuid", "88702e78-845b-4a6e-ad08-cf68922ae84a"], ["uuid", "#2#"], ["uuid", "1ac2b12e-b767-4805-a55d-43976e40c465"]]]}}]']],
   [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]},{"uuid":["uuid","<3>"]}]}
-002: i=0 k= ka=[0] uuid=<0>
-002: i=1 k= ka=[1] uuid=<1>
-002: i=2 k= ka=[2] uuid=<2>
-002: i=3 k= ka=[3] uuid=<3>
+002: i=0 k= ka=[0] l2= uuid=<0>
+002: i=1 k= ka=[1] l2= uuid=<1>
+002: i=2 k= ka=[2] l2= uuid=<2>
+002: i=3 k= ka=[3] l2= uuid=<3>
 003: {"error":null,"result":[{"count":4}]}
-004: i=0 k= ka=[0 1 2 3] uuid=<0>
-004: i=1 k= ka=[0 1 2 3] uuid=<1>
-004: i=2 k= ka=[0 1 2 3] uuid=<2>
-004: i=3 k= ka=[0 1 2 3] uuid=<3>
+004: i=0 k= ka=[0 1 2 3] l2= uuid=<0>
+004: i=1 k= ka=[0 1 2 3] l2= uuid=<1>
+004: i=2 k= ka=[0 1 2 3] l2= uuid=<2>
+004: i=3 k= ka=[0 1 2 3] l2= uuid=<3>
 005: {"error":null,"result":[{"count":4}]}
-006: i=0 k= ka=[0 2] uuid=<0>
-006: i=1 k= ka=[0 2] uuid=<1>
-006: i=2 k= ka=[0 2] uuid=<2>
-006: i=3 k= ka=[0 2] uuid=<3>
+006: i=0 k= ka=[0 2] l2= uuid=<0>
+006: i=1 k= ka=[0 2] l2= uuid=<1>
+006: i=2 k= ka=[0 2] l2= uuid=<2>
+006: i=3 k= ka=[0 2] l2= uuid=<3>
 007: done
 ]])
 
-# XXX self-linking idl, maps
+
+OVSDB_CHECK_IDL([external-linking idl, consistent ops],
+  [],
+  [['[{"op": "insert",
+       "table": "link2",
+       "row": {"i": 0},
+       "uuid-name": "row0"},
+      {"op": "insert",
+       "table": "link1",
+       "row": {"i": 1, "l2": ["set", [["named-uuid", "row0"]]]},
+       "uuid-name": "row1"}]']],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
+002: i=0 l1= uuid=<0>
+002: i=1 k= ka=[] l2=0 uuid=<1>
+003: done
+]])

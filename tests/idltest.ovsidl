@@ -21,9 +21,16 @@
        "ba": {"type": {"key": "boolean", "min": 0, "max": "unlimited"}},
        "sa": {"type": {"key": "string", "min": 0, "max": "unlimited"}},
        "ua": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}}}},
-   "selfLink": {
+   "link1": {
      "columns": {
        "i": {"type": "integer"},
-       "k": {"type": {"key": "uuid", "keyRefTable": "selfLink"}},
-       "ka": {"type": {"key": "uuid", "keyRefTable": "selfLink",
-                       "min": 0, "max": "unlimited"}}}}}}
+       "k": {"type": {"key": "uuid", "keyRefTable": "link1"}},
+       "ka": {"type": {"key": "uuid", "keyRefTable": "link1",
+                       "min": 0, "max": "unlimited"}},
+       "l2": {"type": {"key": "uuid", "keyRefTable": "link2",
+                       "min": 0, "max": 1}}}},
+   "link2": {
+     "columns": {
+       "i": {"type": "integer"},
+       "l1": {"type": {"key": "uuid", "keyRefTable": "link1",
+                       "min": 0, "max": 1}}}}}}

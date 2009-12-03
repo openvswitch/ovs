@@ -1232,13 +1232,12 @@ do_transact(int argc, char *argv[])
 }
 
 static int
-compare_selflink(const void *a_, const void *b_)
+compare_link1(const void *a_, const void *b_)
 {
-    const struct idltest_selflink *const *ap = a_;
-    const struct idltest_selflink *const *bp = b_;
-    const struct idltest_selflink *a = *ap;
-    const struct idltest_selflink *b = *bp;
-
+    const struct idltest_link1 *const *ap = a_;
+    const struct idltest_link1 *const *bp = b_;
+    const struct idltest_link1 *a = *ap;
+    const struct idltest_link1 *b = *bp;
 
     return a->i < b->i ? -1 : a->i > b->i;
 }
@@ -1247,7 +1246,8 @@ static void
 print_idl(struct ovsdb_idl *idl, int step)
 {
     const struct idltest_simple *s;
-    const struct idltest_selflink *sl;
+    const struct idltest_link1 *l1;
+    const struct idltest_link2 *l2;
     int n = 0;
 
     IDLTEST_SIMPLE_FOR_EACH (s, idl) {
@@ -1278,22 +1278,34 @@ print_idl(struct ovsdb_idl *idl, int step)
         printf("] uuid="UUID_FMT"\n", UUID_ARGS(&s->header_.uuid));
         n++;
     }
-    IDLTEST_SELFLINK_FOR_EACH (sl, idl) {
-        struct idltest_selflink **links;
+    IDLTEST_LINK1_FOR_EACH (l1, idl) {
+        struct idltest_link1 **links;
         size_t i;
 
-        printf("%03d: i=%"PRId64" k=", step, sl->i);
-        if (sl->k) {
-            printf("%"PRId64, sl->k->i);
+        printf("%03d: i=%"PRId64" k=", step, l1->i);
+        if (l1->k) {
+            printf("%"PRId64, l1->k->i);
         }
         printf(" ka=[");
-        links = xmemdup(sl->ka, sl->n_ka * sizeof *sl->ka);
-        qsort(links, sl->n_ka, sizeof *links, compare_selflink);
-        for (i = 0; i < sl->n_ka; i++) {
+        links = xmemdup(l1->ka, l1->n_ka * sizeof *l1->ka);
+        qsort(links, l1->n_ka, sizeof *links, compare_link1);
+        for (i = 0; i < l1->n_ka; i++) {
             printf("%s%"PRId64, i ? " " : "", links[i]->i);
         }
         free(links);
-        printf("] uuid="UUID_FMT"\n", UUID_ARGS(&sl->header_.uuid));
+        printf("] l2=");
+        if (l1->l2) {
+            printf("%"PRId64, l1->l2->i);
+        }
+        printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l1->header_.uuid));
+        n++;
+    }
+    IDLTEST_LINK2_FOR_EACH (l2, idl) {
+        printf("%03d: i=%"PRId64" l1=", step, l2->i);
+        if (l2->l1) {
+            printf("%"PRId64, l2->l1->i);
+        }
+        printf(" uuid="UUID_FMT"\n", UUID_ARGS(&l2->header_.uuid));
         n++;
     }
     if (!n) {

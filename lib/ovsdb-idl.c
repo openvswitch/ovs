@@ -634,13 +634,14 @@ ovsdb_idl_get_row_arc(struct ovsdb_idl_row *src,
                       const struct uuid *dst_uuid)
 {
     struct ovsdb_idl *idl = src->table->idl;
+    struct ovsdb_idl_table *dst_table;
     struct ovsdb_idl_arc *arc;
     struct ovsdb_idl_row *dst;
 
-    dst = ovsdb_idl_get_row(src->table, dst_uuid);
+    /* XXX it's slow to have to look up dst_table this way every time */
+    dst_table = shash_find_data(&idl->tables, dst_table_class->name);
+    dst = ovsdb_idl_get_row(dst_table, dst_uuid);
     if (!dst) {
-        struct ovsdb_idl_table *dst_table;
-        dst_table = shash_find_data(&idl->tables, dst_table_class->name);
         dst = ovsdb_idl_row_create(dst_table, dst_uuid);
     }
 
