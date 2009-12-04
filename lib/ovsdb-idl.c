@@ -57,8 +57,10 @@ struct ovsdb_idl_arc {
 };
 
 struct ovsdb_idl {
+    const struct ovsdb_idl_class *class;
     struct jsonrpc_session *session;
-    struct shash tables;
+    struct shash table_by_name;
+    struct ovsdb_idl_table *tables;
     struct json *monitor_request_id;
     unsigned int last_monitor_request_seqno;
     unsigned int change_seqno;
@@ -94,16 +96,17 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class)
     size_t i;
 
     idl = xzalloc(sizeof *idl);
+    idl->class = class;
     idl->session = jsonrpc_session_open(remote);
-    shash_init(&idl->tables);
+    shash_init(&idl->table_by_name);
+    idl->tables = xmalloc(class->n_tables * sizeof *idl->tables);
     for (i = 0; i < class->n_tables; i++) {
         const struct ovsdb_idl_table_class *tc = &class->tables[i];
-        struct ovsdb_idl_table *table;
+        struct ovsdb_idl_table *table = &idl->tables[i];
         size_t j;
 
-        table = xmalloc(sizeof *table);
-        assert(!shash_find(&idl->tables, tc->name));
-        shash_add(&idl->tables, tc->name, table);
+        assert(!shash_find(&idl->table_by_name, tc->name));
+        shash_add(&idl->table_by_name, tc->name, table);
         table->class = tc;
         shash_init(&table->columns);
         for (j = 0; j < tc->n_columns; j++) {
@@ -124,18 +127,18 @@ void
 ovsdb_idl_destroy(struct ovsdb_idl *idl)
 {
     if (idl) {
-        struct shash_node *node;
+        size_t i;
 
         ovsdb_idl_clear(idl);
         jsonrpc_session_close(idl->session);
 
-        SHASH_FOR_EACH (node, &idl->tables) {
-            struct ovsdb_idl_table *table = node->data;
-
+        for (i = 0; i < idl->class->n_tables; i++) {
+            struct ovsdb_idl_table *table = &idl->tables[i];
             shash_destroy(&table->columns);
             hmap_destroy(&table->rows);
         }
-        shash_destroy(&idl->tables);
+        shash_destroy(&idl->table_by_name);
+        free(idl->tables);
         json_destroy(idl->monitor_request_id);
         free(idl);
     }
@@ -144,11 +147,11 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
 static void
 ovsdb_idl_clear(struct ovsdb_idl *idl)
 {
-    struct shash_node *node;
     bool changed = false;
+    size_t i;
 
-    SHASH_FOR_EACH (node, &idl->tables) {
-        struct ovsdb_idl_table *table = node->data;
+    for (i = 0; i < idl->class->n_tables; i++) {
+        struct ovsdb_idl_table *table = &idl->tables[i];
         struct ovsdb_idl_row *row, *next_row;
 
         if (hmap_is_empty(&table->rows)) {
@@ -259,12 +262,12 @@ static void
 ovsdb_idl_send_monitor_request(struct ovsdb_idl *idl)
 {
     struct json *monitor_requests;
-    const struct shash_node *node;
     struct jsonrpc_msg *msg;
+    size_t i;
 
     monitor_requests = json_object_create();
-    SHASH_FOR_EACH (node, &idl->tables) {
-        const struct ovsdb_idl_table *table = node->data;
+    for (i = 0; i < idl->class->n_tables; i++) {
+        const struct ovsdb_idl_table *table = &idl->tables[i];
         const struct ovsdb_idl_table_class *tc = table->class;
         struct json *monitor_request, *columns;
         size_t i;
@@ -319,7 +322,7 @@ ovsdb_idl_parse_update__(struct ovsdb_idl *idl,
         const struct shash_node *table_node;
         struct ovsdb_idl_table *table;
 
-        table = shash_find_data(&idl->tables, tables_node->name);
+        table = shash_find_data(&idl->table_by_name, tables_node->name);
         if (!table) {
             return ovsdb_syntax_error(
                 table_updates, NULL,
@@ -628,6 +631,13 @@ may_add_arc(const struct ovsdb_idl_row *src, const struct ovsdb_idl_row *dst)
     return arc->src != src;
 }
 
+static struct ovsdb_idl_table *
+ovsdb_table_from_class(const struct ovsdb_idl *idl,
+                       const struct ovsdb_idl_table_class *table_class)
+{
+    return &idl->tables[table_class - idl->class->tables];
+}
+
 struct ovsdb_idl_row *
 ovsdb_idl_get_row_arc(struct ovsdb_idl_row *src,
                       struct ovsdb_idl_table_class *dst_table_class,
@@ -638,8 +648,7 @@ ovsdb_idl_get_row_arc(struct ovsdb_idl_row *src,
     struct ovsdb_idl_arc *arc;
     struct ovsdb_idl_row *dst;
 
-    /* XXX it's slow to have to look up dst_table this way every time */
-    dst_table = shash_find_data(&idl->tables, dst_table_class->name);
+    dst_table = ovsdb_table_from_class(idl, dst_table_class);
     dst = ovsdb_idl_get_row(dst_table, dst_uuid);
     if (!dst) {
         dst = ovsdb_idl_row_create(dst_table, dst_uuid);
@@ -677,9 +686,7 @@ struct ovsdb_idl_row *
 ovsdb_idl_first_row(const struct ovsdb_idl *idl,
                     const struct ovsdb_idl_table_class *table_class)
 {
-    struct ovsdb_idl_table *table;
-
-    table = shash_find_data(&idl->tables, table_class->name);
+    struct ovsdb_idl_table *table = ovsdb_table_from_class(idl, table_class);
     return next_real_row(table, hmap_first(&table->rows));
 }
 
