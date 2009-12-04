@@ -158,7 +158,7 @@ def do_cfg_save(cfg, file):
             file.write("%s=%s\n" % (key, value))
 
 def cfg_reload():
-    target = VSWITCHD_TARGET
+    target = vswitchd_target
     if not target.startswith('/'):
         pid = read_first_line_of_file('%s/%s.pid' % ('@RUNDIR@', target))
         target = '%s/%s.%s.ctl' % ('@RUNDIR@', target, pid)
