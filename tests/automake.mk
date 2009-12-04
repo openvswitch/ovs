@@ -114,6 +114,7 @@ BUILT_SOURCES += tests/idltest.c tests/idltest.h
 noinst_DATA += tests/idltest.ovsschema
 DISTCLEANFILES += tests/idltest.ovsschema
 tests/idltest.c tests/idltest.h tests/idltest.ovsschema: ovsdb/ovsdb-idlc.in
+EXTRA_DIST += tests/idltest.c tests/idltest.h tests/idltest.ovsschema
 
 noinst_PROGRAMS += tests/test-reconnect
 tests_test_reconnect_SOURCES = tests/test-reconnect.c

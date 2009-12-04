@@ -236,8 +236,7 @@ AC_DEFUN([OVS_CHECK_PCRE],
 
 dnl Checks for Python 2.x, x >= 4.
 AC_DEFUN([OVS_CHECK_PYTHON],
-  [AC_ARG_VAR([PYTHON], [path to Python 2.x])
-   AC_CACHE_CHECK(
+  [AC_CACHE_CHECK(
      [for Python 2.x for x >= 4],
      [ovs_cv_python],
      [if test -n "$PYTHON"; then
@@ -260,4 +259,7 @@ else:
           done
         done
       fi])
-   PYTHON=$ovs_cv_python])
+   AM_MISSING_PROG([PYTHON], [python])
+   if test $ovs_cv_python != no; then
+     PYTHON=$ovs_cv_python
+   fi])

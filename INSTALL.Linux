@@ -67,6 +67,8 @@ you will also need the following software:
 
     - pkg-config.  We test with version 0.22.
 
+    - Python 2.x, for x >= 4.
+
 Installation Requirements
 -------------------------
 

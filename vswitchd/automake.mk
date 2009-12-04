@@ -40,3 +40,4 @@ noinst_DATA += vswitchd/vswitch-idl.ovsschema
 DISTCLEANFILES += vswitchd/vswitch-idl.ovsschema
 vswitchd/vswitch-idl.c vswitchd/vswitch-idl.h vswitchd/vswitch-idl.ovsschema: \
 	ovsdb/ovsdb-idlc.in
+EXTRA_DIST += vswitchd/vswitch-idl.c vswitchd/vswitch-idl.h vswitchd/vswitch-idl.ovsschema
