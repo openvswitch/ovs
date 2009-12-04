@@ -100,7 +100,10 @@
          "type": "integer"},
        "mac": {
          "comment": "Ethernet address to set for this interface.  If unset then the default MAC address is used.  May not be supported on all interfaces.  Exactly 12 hex digits in the form XX:XX:XX:XX:XX:XX.",
-         "type": {"key": "string", "min": 0, "max": 1}}}},
+         "type": {"key": "string", "min": 0, "max": 1}},
+       "id": {
+         "comment": "Foreign key for use by NOX.  (This might end up being absorbed into a more general-purpose \"foreign-keys\" column.)",
+         "type": {"key": "uuid", "min": 0, "max": 1}}}},
    "Mirror": {
      "comment": "A port mirror within a Bridge.",
      "columns": {
