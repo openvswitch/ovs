@@ -99,6 +99,9 @@ struct json_parser {
     /* Lexical analysis. */
     enum json_lex_state lex_state;
     struct ds buffer;           /* Buffer for accumulating token text. */
+    int line_number;
+    int column_number;
+    int byte_number;
 
     /* Parsing. */
     enum json_parse_state parse_state;
@@ -869,9 +872,17 @@ exit:
 }
 
 static bool
-json_lex_input(struct json_parser *p, int c)
+json_lex_input(struct json_parser *p, unsigned char c)
 {
     struct json_token token;
+
+    p->byte_number++;
+    if (c == '\n') {
+        p->column_number = 0;
+        p->line_number++;
+    } else {
+        p->column_number++;
+    }
 
     switch (p->lex_state) {
     case JSON_LEX_START:
@@ -1340,11 +1351,17 @@ static void
 json_error(struct json_parser *p, const char *format, ...)
 {
     if (!p->error) {
+        struct ds msg;
         va_list args;
 
+        ds_init(&msg);
+        ds_put_format(&msg, "line %d, column %d, byte %d: ",
+                      p->line_number, p->column_number, p->byte_number);
         va_start(args, format);
-        p->error = xvasprintf(format, args);
+        ds_put_format_valist(&msg, format, args);
         va_end(args);
+
+        p->error = ds_steal_cstr(&msg);
 
         p->done = true;
     }

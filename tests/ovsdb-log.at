@@ -266,7 +266,7 @@ OVS_CHECK_LCOV(
 file: read: [0]
 file: read: [1]
 file: read: [2]
-file: read failed: syntax error: file: 5 bytes starting at offset 228 are not valid JSON (syntax error at beginning of input)
+file: read failed: syntax error: file: 5 bytes starting at offset 228 are not valid JSON (line 1, column 0, byte 5: syntax error at beginning of input)
 file: write:["replacement data"] successful
 ]], [ignore])
 OVS_CHECK_LCOV(
