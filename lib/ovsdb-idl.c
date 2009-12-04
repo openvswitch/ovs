@@ -497,6 +497,7 @@ ovsdb_idl_row_clear_fields(struct ovsdb_idl_row *row)
         for (i = 0; i < class->n_columns; i++) {
             ovsdb_datum_destroy(&row->fields[i], &class->columns[i].type);
         }
+        free(row->fields);
         row->fields = NULL;
     }
 }
