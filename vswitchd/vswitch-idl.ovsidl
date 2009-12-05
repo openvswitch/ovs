@@ -84,7 +84,7 @@
          "comment": "Interface name.  Should be alphanumeric and no more than about 8 bytes long.  May be the same as the port name, for non-bonded ports.  Must otherwise be unique among the names of ports, interfaces, and bridges on a host.",
          "type": "string"},
        "type": {
-         "comment": "The interface type.  Normal network devices, e.g. eth0, have type \"system\" or \"\" (which are synonyms).  Internal ports have type \"internal\".  TUN/TAP devices have type \"tap\".",
+         "comment": "The interface type.  Normal network devices, e.g.  eth0, have type \"system\" or \"\" (which are synonyms).  Internal ports have type \"internal\".  TUN/TAP devices have type \"tap\".  GRE devices have type \"gre\".",
          "type": "string"},
        "options": {
          "comment": "Configuration options whose interpretation varies based on \"type\".",
