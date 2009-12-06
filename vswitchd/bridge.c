@@ -247,7 +247,8 @@ static bool vlan_is_mirrored(const struct mirror *m UNUSED, int vlan UNUSED)
 }
 #endif
 
-static struct iface *iface_create(struct port *, const char *name);
+static struct iface *iface_create(struct port *port, 
+                                  const struct ovsrec_interface *if_cfg);
 static void iface_destroy(struct iface *);
 static struct iface *iface_lookup(const struct bridge *, const char *name);
 static struct iface *iface_from_dp_ifidx(const struct bridge *,
@@ -422,21 +423,9 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, bool create)
 }
 
 static int
-create_iface(const struct ovsrec_interface *iface_cfg)
-{
-    return set_up_iface(iface_cfg, true);
-}
-
-static int
 reconfigure_iface(const struct ovsrec_interface *iface_cfg)
 {
     return set_up_iface(iface_cfg, false);
-}
-
-static void
-destroy_iface(const char *iface_name)
-{
-    netdev_destroy(iface_name);
 }
 
 
@@ -602,7 +591,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                              p->devname, dpif_name(br->dpif),
                              strerror(retval));
                 }
-                destroy_iface(p->devname);
             }
         }
         shash_destroy(&want_ifaces);
@@ -642,17 +630,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                 bool internal;
                 int error;
 
-                /* Attempt to create the network interface in case it
-                 * doesn't exist yet. */
-                error = iface ? create_iface(iface->cfg) : 0;
-                if (error) {
-                    VLOG_WARN("could not create iface %s: %s\n", if_name,
-                              strerror(error));
-                    continue;
-                }
-
                 /* Add to datapath. */
-                internal = !iface || iface_is_internal(br, if_name);
+                internal = iface_is_internal(br, if_name);
                 error = dpif_port_add(br->dpif, if_name,
                                       internal ? ODP_PORT_INTERNAL : 0, NULL);
                 if (error == EFBIG) {
@@ -3002,12 +2981,11 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     }
     SHASH_FOR_EACH (node, &new_ifaces) {
         const struct ovsrec_interface *if_cfg = node->data;
-        const char *if_name = node->name;
         struct iface *iface;
 
-        iface = shash_find_data(&old_ifaces, if_name);
+        iface = shash_find_data(&old_ifaces, if_cfg->name);
         if (!iface) {
-            iface = iface_create(port, if_name);
+            iface = iface_create(port, if_cfg);
         }
         iface->cfg = if_cfg;
     }
@@ -3290,9 +3268,11 @@ port_update_vlan_compat(struct port *port)
 /* Interface functions. */
 
 static struct iface *
-iface_create(struct port *port, const char *name)
+iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
 {
     struct iface *iface;
+    char *name = if_cfg->name;
+    int error;
 
     iface = xzalloc(sizeof *iface);
     iface->port = port;
@@ -3310,6 +3290,14 @@ iface_create(struct port *port, const char *name)
     port->ifaces[port->n_ifaces++] = iface;
     if (port->n_ifaces > 1) {
         port->bridge->has_bonded_ports = true;
+    }
+
+    /* Attempt to create the network interface in case it
+     * doesn't exist yet. */
+    error = set_up_iface(if_cfg, true);
+    if (error) {
+        VLOG_WARN("could not create iface %s: %s\n", iface->name,
+                strerror(error));
     }
 
     VLOG_DBG("attached network device %s to port %s", iface->name, port->name);
@@ -3336,14 +3324,16 @@ iface_destroy(struct iface *iface)
         del->port_ifidx = iface->port_ifidx;
 
         netdev_close(iface->netdev);
-        free(iface->name);
-        free(iface);
 
         if (del_active) {
             ofproto_revalidate(port->bridge->ofproto, port->active_iface_tag);
             bond_choose_active_iface(port);
             bond_send_learning_packets(port);
         }
+
+        netdev_destroy(iface->name);
+        free(iface->name);
+        free(iface);
 
         bridge_flush(port->bridge);
     }

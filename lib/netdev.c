@@ -42,6 +42,7 @@
 static const struct netdev_class *netdev_classes[] = {
     &netdev_linux_class,
     &netdev_tap_class,
+    &netdev_gre_class,
 };
 static int n_netdev_classes = ARRAY_SIZE(netdev_classes);
 
@@ -179,9 +180,11 @@ netdev_destroy(const char *name)
 
     netdev_obj = node->data;
     if (netdev_obj->ref_cnt != 0) {
-        VLOG_WARN("attempt to destroy open netdev object (%d): %s", 
+        VLOG_WARN("attempt to destroy netdev object with %d open handles: %s", 
                 netdev_obj->ref_cnt, name);
+#if 0  /* Temp hack */
         return EBUSY;
+#endif
     }
 
     shash_delete(&netdev_obj_shash, node);
@@ -273,7 +276,11 @@ netdev_close(struct netdev *netdev)
         int error;
 
         netdev_obj = shash_find_data(&netdev_obj_shash, name);
+#if 0
         assert(netdev_obj);
+#else
+        if (netdev_obj) {
+#endif
         if (netdev_obj->ref_cnt > 0) {
             netdev_obj->ref_cnt--;
         } else {
@@ -285,6 +292,9 @@ netdev_close(struct netdev *netdev)
         if (!netdev_obj->ref_cnt && !netdev_obj->created) {
             netdev_destroy(name);
         }
+#if 1
+        }
+#endif
 
         /* Restore flags that we changed, if any. */
         fatal_signal_block();
@@ -833,7 +843,24 @@ netdev_obj_init(struct netdev_obj *netdev_obj, const char *name,
     netdev_obj->class = class;
     netdev_obj->ref_cnt = 0;
     netdev_obj->created = created;
+    netdev_obj->name = xstrdup(name);
     shash_add(&netdev_obj_shash, name, netdev_obj);
+}
+
+/* Returns the class type of 'netdev_obj'.
+ *
+ * The caller must not free the returned value. */
+const char *netdev_obj_get_type(const struct netdev_obj *netdev_obj)
+{
+    return netdev_obj->class->type;
+}
+
+/* Returns the name of 'netdev_obj'.
+ *
+ * The caller must not free the returned value. */
+const char *netdev_obj_get_name(const struct netdev_obj *netdev_obj)
+{
+    return netdev_obj->name;
 }
 
 /* Initializes 'netdev' as a netdev named 'name' of the specified 'class'.

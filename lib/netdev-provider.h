@@ -32,6 +32,7 @@
 struct netdev_obj {
     const struct netdev_class *class;
     int ref_cnt;
+    char *name;
     bool created;                    /* Was netdev_create() called? */
 };
 
@@ -42,6 +43,8 @@ static inline void netdev_obj_assert_class(const struct netdev_obj *netdev_obj,
 {
     assert(netdev_obj->class == class);
 }
+const char *netdev_obj_get_type(const struct netdev_obj *netdev_obj);
+const char *netdev_obj_get_name(const struct netdev_obj *netdev_obj);
 
 /* A network device (e.g. an Ethernet device).
  *
@@ -349,5 +352,6 @@ struct netdev_class {
 
 extern const struct netdev_class netdev_linux_class;
 extern const struct netdev_class netdev_tap_class;
+extern const struct netdev_class netdev_gre_class;
 
 #endif /* netdev.h */
