@@ -305,6 +305,9 @@ fi
 /etc/profile.d/vswitch.sh
 /lib/modules/%{xen_version}/kernel/net/vswitch/openvswitch_mod.ko
 /lib/modules/%{xen_version}/kernel/net/vswitch/brcompat_mod.ko
+%if %(echo '%{xen_version}'|awk -F"." '{if ($3>=18) print 1; else print 0;}')
+/lib/modules/%{xen_version}/kernel/net/vswitch/ip_gre_mod.ko
+%endif
 /usr/share/vswitch/scripts/dump-vif-details
 /usr/share/vswitch/scripts/refresh-xs-network-uuids
 /usr/share/vswitch/scripts/interface-reconfigure

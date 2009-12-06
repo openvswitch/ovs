@@ -261,6 +261,18 @@ case "$1" in
             exit 1
         fi
 
+        echo -n "Loading ip_gre_mod: "
+        if grep -q '^ip_gre$' /proc/modules; then
+            modprobe -r ip_gre
+        fi
+        if grep -q '^ip_gre_mod$' /proc/modules; then
+            echo "already loaded, nothing to do."
+        elif modprobe ip_gre_mod; then
+            echo "success."
+        else
+            echo "could not find module."
+        fi
+
         for netdev in $NETDEVS; do
             check_op "Removing IP address from $netdev" ifconfig $netdev 0.0.0.0
         done
@@ -386,6 +398,10 @@ case "$1" in
 	echo "$NAME."
 
         check_op "Deleting datapath" ovs-dpctl del-dp of0
+        echo -n "Unloading ip_gre module: "
+        if modprobe -r ip_gre_mod; then
+            echo "success."
+        fi
         check_op "Unloading kernel module" modprobe -r openvswitch_mod
 	;;
     force-stop)

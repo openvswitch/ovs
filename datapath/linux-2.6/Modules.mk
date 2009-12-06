@@ -47,3 +47,26 @@ dist_modules += veth
 build_modules += $(if $(BUILD_VETH),veth)
 veth_sources = linux-2.6/compat-2.6/veth.c
 veth_headers = 
+
+dist_modules += ip_gre
+build_modules += $(if $(BUILD_GRE),ip_gre)
+ip_gre_sources = \
+	linux-2.6/compat-2.6/ip_gre.c \
+	linux-2.6/compat-2.6/net_namespace-ip_gre.c
+ip_gre_headers = \
+	linux-2.6/compat-2.6/compat26.h \
+	linux-2.6/compat-2.6/include/linux/if.h \
+	linux-2.6/compat-2.6/include/linux/in.h \
+	linux-2.6/compat-2.6/include/linux/inetdevice.h \
+	linux-2.6/compat-2.6/include/linux/if_ether.h \
+	linux-2.6/compat-2.6/include/linux/ip.h \
+	linux-2.6/compat-2.6/include/linux/ipv6.h \
+	linux-2.6/compat-2.6/include/linux/netdevice.h \
+	linux-2.6/compat-2.6/include/linux/skbuff.h \
+	linux-2.6/compat-2.6/include/linux/tcp.h \
+	linux-2.6/compat-2.6/include/linux/types.h \
+	linux-2.6/compat-2.6/include/net/dst.h \
+	linux-2.6/compat-2.6/include/net/ipip.h \
+	linux-2.6/compat-2.6/include/net/netns/generic.h \
+	linux-2.6/compat-2.6/include/net/net_namespace.h \
+	linux-2.6/compat-2.6/include/net/route.h

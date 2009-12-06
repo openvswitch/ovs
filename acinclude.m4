@@ -111,6 +111,16 @@ AC_DEFUN([OVS_CHECK_VETH], [
   fi
 ])
 
+AC_DEFUN([OVS_CHECK_GRE], [
+  AC_MSG_CHECKING([whether to build gre module])
+  if test "$sublevel" -ge 18; then
+    AC_MSG_RESULT([yes])
+    AC_SUBST([BUILD_GRE], 1)
+  else
+    AC_MSG_RESULT([no])
+  fi
+])
+
 AC_DEFUN([OVS_CHECK_LOG2_H], [
   AC_MSG_CHECKING([for $KSRC26/include/linux/log2.h])
   if test -e $KSRC26/include/linux/log2.h; then
@@ -153,6 +163,7 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
                   [OVS_DEFINE([HAVE_PROTO_DATA_VALID])])
   OVS_CHECK_LOG2_H
   OVS_CHECK_VETH
+  OVS_CHECK_GRE
   if cmp -s datapath/linux-2.6/kcompat.h.new \
             datapath/linux-2.6/kcompat.h >/dev/null 2>&1; then
     rm datapath/linux-2.6/kcompat.h.new
