@@ -261,6 +261,9 @@ function start {
     # ovs-vswitchd needs a few per bridge
     ulimit -n 4096
 
+    # Allow GRE traffic.
+    iptables -I INPUT -p gre -j ACCEPT
+
     if [ ! -e "$VSWITCHD_CONF" ]; then
         warning "$VSWITCHD_CONF does not exist"
         action "Creating empty $VSWITCHD_CONF" touch "$VSWITCHD_CONF"

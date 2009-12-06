@@ -1103,13 +1103,13 @@ main(int argc, char *argv[])
          *   2) We periodically check all ports associated with bridges
          *      to see if they no longer exist.
          */
-        if (prune_timeout) {
+        /*if (prune_timeout) {
             rtnl_recv_update();
             prune_ports();
 
             nl_sock_wait(rtnl_sock, POLLIN);
             poll_timer_wait(prune_timeout);
-        }
+        }*/
 
         nl_sock_wait(brc_sock, POLLIN);
         unixctl_server_wait(unixctl);
