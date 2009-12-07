@@ -10,7 +10,8 @@ values.  Additional notation is presented later.
 
 <string>
 
-    A JSON string.
+    A JSON string.  Any Unicode string is allowed, as specified by RFC
+    4627.  Implementations may disallowed null bytes.
 
 <id>
 
@@ -133,8 +134,21 @@ is represented by <database-schema>, as described below.
 Wire Protocol
 -------------
 
-The database wire protocol is implemented in JSON-RPC 1.0.  It
-consists of the following JSON-RPC methods:
+The database wire protocol is implemented in JSON-RPC 1.0.  We
+encourage use of JSON-RPC over stream connections instead of JSON-RPC
+over HTTP, for these reasons:
+
+    * JSON-RPC is a peer-to-peer protocol, but HTTP is a client-server
+      protocol, which is a poor match.  Thus, JSON-RPC over HTTP
+      requires the client to periodically poll the server to receive
+      server requests.
+
+    * HTTP is more complicated than stream connections and doesn't
+      provide any corresponding advantage.
+
+    * The JSON-RPC specification for HTTP transport is incomplete.
+
+The database wire protocol consists of the following JSON-RPC methods:
 
 get_schema
 ..........
