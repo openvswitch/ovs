@@ -20,6 +20,8 @@
 #include "flow.h"
 #include "svec.h"
 
+static const int NF_ACTIVE_TIMEOUT_DEFAULT = 600;
+
 struct ofexpired;
 
 struct netflow_options {

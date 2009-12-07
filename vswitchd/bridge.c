@@ -714,7 +714,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             if (!opts.active_timeout) {
                 opts.active_timeout = -1;
             } else if (opts.active_timeout < 0) {
-                opts.active_timeout = 0;
+                VLOG_WARN("bridge %s: active timeout interval set to negative "
+                          "value, using default instead (%d seconds)", br->name,
+                          NF_ACTIVE_TIMEOUT_DEFAULT);
+                opts.active_timeout = -1;
             }
 
             opts.add_id_to_iface = nf_cfg->add_id_to_interface;
