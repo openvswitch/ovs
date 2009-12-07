@@ -219,13 +219,13 @@ ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
         error1 = unwrap_json(json, "named-uuid", JSON_STRING, &value);
         if (!error1) {
             const char *name = json_string(value);
-            const struct uuid *named_uuid;
+            const struct ovsdb_symbol *symbol;
 
             ovsdb_error_destroy(error0);
 
-            named_uuid = ovsdb_symbol_table_get(symtab, name);
-            if (named_uuid) {
-                *uuid = *named_uuid;
+            symbol = ovsdb_symbol_table_get(symtab, name);
+            if (symbol) {
+                *uuid = symbol->uuid;
                 return NULL;
             } else {
                 return ovsdb_syntax_error(json, NULL,
@@ -728,7 +728,8 @@ ovsdb_symbol_table_destroy(struct ovsdb_symbol_table *symtab)
         struct shash_node *node, *next;
 
         SHASH_FOR_EACH_SAFE (node, next, &symtab->sh) {
-            free(node->data);
+            struct ovsdb_symbol *symbol = node->data;
+            free(symbol);
             shash_delete(&symtab->sh, node);
         }
         shash_destroy(&symtab->sh);
@@ -736,7 +737,7 @@ ovsdb_symbol_table_destroy(struct ovsdb_symbol_table *symtab)
     }
 }
 
-const struct uuid *
+struct ovsdb_symbol *
 ovsdb_symbol_table_get(const struct ovsdb_symbol_table *symtab,
                        const char *name)
 {
@@ -745,12 +746,13 @@ ovsdb_symbol_table_get(const struct ovsdb_symbol_table *symtab,
 
 void
 ovsdb_symbol_table_put(struct ovsdb_symbol_table *symtab, const char *name,
-                       const struct uuid *uuid)
+                       const struct uuid *uuid, bool used)
 {
-    struct uuid *entry = shash_find_data(&symtab->sh, name);
-    if (!entry) {
-        shash_add(&symtab->sh, name, xmemdup(uuid, sizeof *uuid));
-    } else {
-        *entry = *uuid;
-    }
+    struct ovsdb_symbol *symbol;
+
+    assert(!ovsdb_symbol_table_get(symtab, name));
+    symbol = xmalloc(sizeof *symbol);
+    symbol->uuid = *uuid;
+    symbol->used = used;
+    shash_add(&symtab->sh, name, symbol);
 }

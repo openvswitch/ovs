@@ -118,11 +118,16 @@ ovsdb_datum_conforms_to_type(const struct ovsdb_datum *datum,
 /* A table mapping from names to data items.  Currently the data items are
  * always UUIDs; perhaps this will be expanded in the future. */
 
+struct ovsdb_symbol {
+    struct uuid uuid;           /* The UUID that the symbol represents. */
+    bool used;                  /* Already used as row UUID? */
+};
+
 struct ovsdb_symbol_table *ovsdb_symbol_table_create(void);
 void ovsdb_symbol_table_destroy(struct ovsdb_symbol_table *);
-const struct uuid *ovsdb_symbol_table_get(const struct ovsdb_symbol_table *,
-                                          const char *name);
+struct ovsdb_symbol *ovsdb_symbol_table_get(const struct ovsdb_symbol_table *,
+                                            const char *name);
 void ovsdb_symbol_table_put(struct ovsdb_symbol_table *, const char *name,
-                            const struct uuid *);
+                            const struct uuid *, bool used);
 
 #endif /* ovsdb-data.h */

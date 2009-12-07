@@ -1346,7 +1346,8 @@ parse_uuids(const struct json *json, struct ovsdb_symbol_table *symtab,
 
     if (json->type == JSON_STRING && uuid_from_string(&uuid, json->u.string)) {
         char *name = xasprintf("#%d#", *n);
-        ovsdb_symbol_table_put(symtab, name, &uuid);
+        fprintf(stderr, "%s = "UUID_FMT"\n", name, UUID_ARGS(&uuid));
+        ovsdb_symbol_table_put(symtab, name, &uuid, false);
         free(name);
         *n += 1;
     } else if (json->type == JSON_ARRAY) {
@@ -1368,12 +1369,12 @@ static void
 substitute_uuids(struct json *json, const struct ovsdb_symbol_table *symtab)
 {
     if (json->type == JSON_STRING) {
-        const struct uuid *uuid;
+        const struct ovsdb_symbol *symbol;
 
-        uuid = ovsdb_symbol_table_get(symtab, json->u.string);
-        if (uuid) {
+        symbol = ovsdb_symbol_table_get(symtab, json->u.string);
+        if (symbol) {
             free(json->u.string);
-            json->u.string = xasprintf(UUID_FMT, UUID_ARGS(uuid));
+            json->u.string = xasprintf(UUID_FMT, UUID_ARGS(&symbol->uuid));
         }
     } else if (json->type == JSON_ARRAY) {
         size_t i;

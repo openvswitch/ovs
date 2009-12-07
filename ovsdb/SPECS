@@ -599,7 +599,7 @@ Request object members:
     "op": "insert"          required
     "table": <table>        required
     "row": <row>            required
-    "uuid-name": <string>   optional
+    "uuid-name": <id>       optional
 
 Result object members:
 
@@ -611,10 +611,31 @@ Semantics:
     for all the columns in "table", those columns receive default
     values.
 
-    The new row receives a new, randomly generated UUID, which is
-    returned as the "uuid" member of the result.  If "uuid-name" is
-    supplied, then the UUID is made available under that name to this
-    operation and later operations within the same transaction.
+    If "uuid-name" is not supplied, the new row receives a new,
+    randomly generated UUID.
+
+    If "uuid-name" is supplied, then it is an error if <id> has
+    previously appeared as the "uuid-name" in an "insert" operation.
+
+    If "uuid-name" is supplied and its <id> previously appeared as the
+    "uuid-name" in a "declare" operation, then the new row receives
+    the UUID associated with that "uuid-name".
+
+    If "uuid-name" is supplied and its <id> has not previously
+    appeared as the "uuid-name" in a "declare" operation, then the new
+    row also receives a new, randomly generated UUID.  This UUID is
+    also made available under that name to this operation and later
+    operations within the same transaction.
+
+    The UUID for the new row is returned as the "uuid" member of the
+    result.
+
+Errors:
+
+    "error": "duplicate uuid-name"
+
+        The same "uuid-name" appeared on an earlier "insert" operation
+        within this transaction.
 
 select
 ......
@@ -797,3 +818,37 @@ Errors:
     "error": "aborted"
 
         This operation always fails with this error.
+
+declare
+.......
+
+Request object members:
+
+    "op": "declare"                    required
+    "uuid-name": <id>                  required
+
+Result object members:
+
+    none
+
+Semantics:
+
+    Predeclares a UUID named <id> that may be referenced in later
+    operations as ["named-uuid", <id>] or (at most once) in an
+    "insert" operation as "uuid-name".
+
+    It is an error if <id> has appeared as the "uuid-name" in a prior
+    "insert" or "declare" operation within this transaction.
+
+    The generated UUID is returned as the "uuid" member of the result.
+
+Result object members:
+
+    "uuid": <uuid>
+
+Errors:
+
+    "error": "duplicate uuid-name"
+
+        The same "uuid-name" appeared on an earlier "insert" or
+        "declare" operation within this transaction.
