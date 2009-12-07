@@ -104,6 +104,9 @@ function remove_modules {
     if lsmod | grep -q "openvswitch_mod"; then
         action "Removing openvswitch module" rmmod openvswitch_mod.ko
     fi
+    if lsmod | grep -q "ip_gre_mod"; then
+        action "Removing ip_gre module" rmmod ip_gre_mod.ko
+    fi
 }
 
 function reload_vswitchd {
