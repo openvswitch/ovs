@@ -1232,14 +1232,21 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
                       br->name, name);
         }
     }
+
+    /* If we have a controller, then we need a local port.  Complain if the
+     * user didn't specify one.
+     *
+     * XXX perhaps we should synthesize a port ourselves in this case. */
     if (bridge_get_controller(ovs_cfg, br)) {
         char local_name[IF_NAMESIZE];
         int error;
 
         error = dpif_port_get_name(br->dpif, ODPP_LOCAL,
                                    local_name, sizeof local_name);
-        if (!error) {
-            shash_add_once(&new_ports, local_name, NULL);
+        if (!error && !shash_find(&new_ports, local_name)) {
+            VLOG_WARN("bridge %s: controller specified but no local port "
+                      "(port named %s) defined",
+                      br->name, local_name);
         }
     }
 
