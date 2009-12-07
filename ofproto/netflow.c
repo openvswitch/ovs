@@ -210,7 +210,7 @@ netflow_set_options(struct netflow *nf,
     collectors_create(&nf_options->collectors, 0, &nf->collectors);
 
     old_timeout = nf->active_timeout;
-    if (nf_options->active_timeout < 0) {
+    if (nf_options->active_timeout > 0) {
         nf->active_timeout = nf_options->active_timeout;
     } else {
         nf->active_timeout = ACTIVE_TIMEOUT_DEFAULT;
