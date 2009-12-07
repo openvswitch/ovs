@@ -44,8 +44,6 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_ovsdb_server
 
-static const struct jsonrpc_server_cbs ovsdb_jsonrpc_cbs;
-
 static unixctl_cb_func ovsdb_server_exit;
 
 static void parse_options(int argc, char *argv[], char **file_namep,
