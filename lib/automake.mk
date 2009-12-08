@@ -135,14 +135,14 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/timeval.c \
 	lib/timeval.h \
 	lib/type-props.h \
-	lib/uuid.c \
-	lib/uuid.h \
-	lib/unixctl.c \
-	lib/unixctl.h \
 	lib/unicode.c \
 	lib/unicode.h \
+	lib/unixctl.c \
+	lib/unixctl.h \
 	lib/util.c \
 	lib/util.h \
+	lib/uuid.c \
+	lib/uuid.h \
 	lib/valgrind.h \
 	lib/vconn-provider.h \
 	lib/vconn-ssl.h \
