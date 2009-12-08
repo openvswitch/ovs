@@ -79,5 +79,10 @@ bitmap_set(unsigned long *bitmap, size_t offset, bool value)
 void bitmap_set_multiple(unsigned long *, size_t start, size_t count,
                          bool value);
 bool bitmap_equal(const unsigned long *, const unsigned long *, size_t n);
+size_t bitmap_scan(const unsigned long int *, size_t start, size_t end);
+
+#define BITMAP_FOR_EACH_1(IDX, SIZE, BITMAP) \
+    for ((IDX) = bitmap_scan(BITMAP, 0, SIZE); (IDX) < (SIZE); \
+         (IDX) = bitmap_scan(BITMAP, (IDX) + 1, SIZE))
 
 #endif /* bitmap.h */
