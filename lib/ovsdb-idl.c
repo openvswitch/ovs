@@ -212,6 +212,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
 {
     int i;
 
+    assert(!idl->txn);
     jsonrpc_session_run(idl->session);
     for (i = 0; jsonrpc_session_is_connected(idl->session) && i < 50; i++) {
         struct jsonrpc_msg *msg, *reply;
@@ -889,6 +890,11 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
 
     HMAP_FOR_EACH_SAFE (row, next, struct ovsdb_idl_row, txn_node,
                         &txn->txn_rows) {
+        if (row->old && row->written) {
+            (row->table->class->unparse)(row);
+            ovsdb_idl_row_clear_arcs(row, false);
+            (row->table->class->parse)(row);
+        }
         ovsdb_idl_row_clear_new(row);
 
         free(row->prereqs);

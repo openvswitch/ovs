@@ -159,13 +159,18 @@ def cBaseType(prefix, type, refTable=None):
                 'boolean': 'bool ',
                 'string': 'char *'}[type]
 
-def cCopyType(dst, src, type, refTable=None):
+def cCopyType(indent, dstVar, dst, src, type, refTable=None):
+    args = {'indent': indent,
+            'dstVar': dstVar,
+            'dst': dst,
+            'src': src}
     if type == 'uuid' and refTable:
-        return "%s = %s->header_.uuid;" % (dst, src)
+        return ("%(indent)s%(dstVar)s = %(src)s;\n" +
+                "%(indent)s%(dst)s = %(src)s->header_.uuid;") % args
     elif type == 'string':
-        return "%s = xstrdup(%s);" % (dst, src)
+        return "%(indent)s%(dstVar)s = %(dst)s = xstrdup(%(src)s);" % args
     else:
-        return "%s = %s;" % (dst, src)
+        return "%(dstVar)s = %(dst)s = %(src)s;" % args
 
 def typeIsOptionalPointer(type):
     return (type.min == 0 and type.max == 1 and not type.value
@@ -495,10 +500,10 @@ void
                 print
                 print "    datum.n = 1;"
                 print "    datum.keys = xmalloc(sizeof *datum.keys);"
-                print "    %s" % cCopyType("datum.keys[0].%s" % type.key, keyVar, type.key, type.keyRefTable)
+                print cCopyType("    ", "row->%s" % keyVar, "datum.keys[0].%s" % type.key, keyVar, type.key, type.keyRefTable)
                 if type.value:
                     print "    datum.values = xmalloc(sizeof *datum.values);"
-                    print "    %s" % cCopyType("datum.values[0].%s" % type.value, valueVar, type.value, type.valueRefTable)
+                    print cCopyType("    ", "row->%s" % valueVar, "datum.values[0].%s" % type.value, valueVar, type.value, type.valueRefTable)
                 else:
                     print "    datum.values = NULL;"
             elif typeIsOptionalPointer(type):
@@ -506,15 +511,22 @@ void
                 print "    if (%s) {" % keyVar
                 print "        datum.n = 1;"
                 print "        datum.keys = xmalloc(sizeof *datum.keys);"
-                print "        %s" % cCopyType("datum.keys[0].%s" % type.key, keyVar, type.key, type.keyRefTable)
+                print cCopyType("        ", "row->%s" % keyVar, "datum.keys[0].%s" % type.key, keyVar, type.key, type.keyRefTable)
                 print "    } else {"
                 print "        datum.n = 0;"
                 print "        datum.keys = NULL;"
+                print "        row->%s = NULL;" % keyVar
                 print "    }"
                 print "    datum.values = NULL;"
             else:
                 print "    size_t i;"
                 print
+                print "    free(row->%s);" % keyVar
+                print "    row->%s = %s ? xmalloc(%s * sizeof *row->%s) : NULL;" % (keyVar, nVar, nVar, keyVar)
+                print "    row->%s = %s;" % (nVar, nVar)
+                if type.value:
+                    print "    free(row->%s);" % valueVar
+                    print "    row->%s = xmalloc(%s * sizeof *row->%s);" % (valueVar, nVar, valueVar)
                 print "    datum.n = %s;" % nVar
                 print "    datum.keys = xmalloc(%s * sizeof *datum.keys);" % nVar
                 if type.value:
@@ -522,9 +534,9 @@ void
                 else:
                     print "    datum.values = NULL;"
                 print "    for (i = 0; i < %s; i++) {" % nVar
-                print "        %s" % cCopyType("datum.keys[i].%s" % type.key, "%s[i]" % keyVar, type.key, type.keyRefTable)
+                print cCopyType("        ", "row->%s[i]" % keyVar, "datum.keys[i].%s" % type.key, "%s[i]" % keyVar, type.key, type.keyRefTable)
                 if type.value:
-                    print "        %s" % cCopyType("datum.values[i].%s" % type.value, "%s[i]" % valueVar, type.value, type.valueRefTable)
+                    print cCopyType("        ", "row->%s[i]" % valueVar, "datum.values[i].%s" % type.value, "%s[i]" % valueVar, type.value, type.valueRefTable)
                 print "    }"
             print "    ovsdb_idl_txn_write(&row->header_, &%(s)s_columns[%(S)s_COL_%(C)s], &datum);" \
                 % {'s': structName,

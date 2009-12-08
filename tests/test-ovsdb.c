@@ -1476,13 +1476,8 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
         }
     }
 
-    for (;;) {
+    while ((status = ovsdb_idl_txn_commit(txn)) == TXN_INCOMPLETE) {
         ovsdb_idl_run(idl);
-        status = ovsdb_idl_txn_commit(txn);
-        if (status != TXN_INCOMPLETE) {
-            break;
-        }
-
         ovsdb_idl_wait(idl);
         poll_block();
     }
