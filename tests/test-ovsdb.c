@@ -1391,6 +1391,106 @@ substitute_uuids(struct json *json, const struct ovsdb_symbol_table *symtab)
     }
 }
 
+static const struct idltest_simple *
+idltest_find_simple(struct ovsdb_idl *idl, int i)
+{
+    const struct idltest_simple *s;
+
+    IDLTEST_SIMPLE_FOR_EACH (s, idl) {
+        if (s->i == i) {
+            return s;
+        }
+    }
+    return NULL;
+}
+
+static void
+idl_set(struct ovsdb_idl *idl, char *commands, int step)
+{
+    char *cmd, *save_ptr1 = NULL;
+    struct ovsdb_idl_txn *txn;
+    enum ovsdb_idl_txn_status status;
+
+    txn = ovsdb_idl_txn_create(idl);
+    for (cmd = strtok_r(commands, ",", &save_ptr1); cmd;
+         cmd = strtok_r(NULL, ",", &save_ptr1)) {
+        char *save_ptr2 = NULL;
+        char *name, *arg1, *arg2, *arg3;
+
+        name = strtok_r(cmd, " ", &save_ptr2);
+        arg1 = strtok_r(NULL, " ", &save_ptr2);
+        arg2 = strtok_r(NULL, " ", &save_ptr2);
+        arg3 = strtok_r(NULL, " ", &save_ptr2);
+
+        if (!strcmp(name, "set")) {
+            const struct idltest_simple *s;
+
+            if (!arg3) {
+                ovs_fatal(0, "\"set\" command requires 3 arguments");
+            }
+
+            s = idltest_find_simple(idl, atoi(arg1));
+            if (!s) {
+                ovs_fatal(0, "\"set\" command asks for nonexistent "
+                          "i=%d", atoi(arg1));
+            }
+
+            if (!strcmp(arg2, "b")) {
+                idltest_simple_set_b(s, atoi(arg3));
+            } else if (!strcmp(arg2, "s")) {
+                idltest_simple_set_s(s, arg3);
+            } else if (!strcmp(arg2, "u")) {
+                struct uuid uuid;
+                uuid_from_string(&uuid, arg3);
+                idltest_simple_set_u(s, uuid);
+            } else if (!strcmp(arg2, "r")) {
+                idltest_simple_set_r(s, atof(arg3));
+            } else {
+                ovs_fatal(0, "\"set\" command asks for unknown column %s",
+                          arg2);
+            }
+        } else if (!strcmp(name, "insert")) {
+            struct idltest_simple *s;
+
+            if (!arg1 || arg2) {
+                ovs_fatal(0, "\"set\" command requires 1 argument");
+            }
+
+            s = idltest_simple_insert(txn);
+            idltest_simple_set_i(s, atoi(arg1));
+        } else if (!strcmp(name, "delete")) {
+            const struct idltest_simple *s;
+
+            if (!arg1 || arg2) {
+                ovs_fatal(0, "\"set\" command requires 1 argument");
+            }
+
+            s = idltest_find_simple(idl, atoi(arg1));
+            if (!s) {
+                ovs_fatal(0, "\"set\" command asks for nonexistent "
+                          "i=%d", atoi(arg1));
+            }
+            idltest_simple_delete(s);
+        } else {
+            ovs_fatal(0, "unknown command %s", name);
+        }
+    }
+
+    for (;;) {
+        ovsdb_idl_run(idl);
+        status = ovsdb_idl_txn_commit(txn);
+        if (status != TXN_INCOMPLETE) {
+            break;
+        }
+
+        ovsdb_idl_wait(idl);
+        poll_block();
+    }
+    printf("%03d: commit, status=%s\n",
+           step, ovsdb_idl_txn_status_to_string(status));
+    ovsdb_idl_txn_destroy(txn);
+}
+
 static void
 do_idl(int argc, char *argv[])
 {
@@ -1426,6 +1526,8 @@ do_idl(int argc, char *argv[])
         if (!strcmp(argv[i], "reconnect")) {
             printf("%03d: reconnect\n", step++);
             ovsdb_idl_force_reconnect(idl);
+        } else if (argv[i][0] != '[') {
+            idl_set(idl, argv[i], step++);
         } else {
             struct json *json = parse_json(argv[i]);
             substitute_uuids(json, symtab);

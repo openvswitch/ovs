@@ -18,9 +18,11 @@
 #include "ovsdb-idl.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <limits.h>
 #include <stdlib.h>
 
+#include "bitmap.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb-data.h"
@@ -64,6 +66,18 @@ struct ovsdb_idl {
     struct json *monitor_request_id;
     unsigned int last_monitor_request_seqno;
     unsigned int change_seqno;
+
+    /* Transaction support. */
+    struct ovsdb_idl_txn *txn;
+    struct hmap outstanding_txns;
+};
+
+struct ovsdb_idl_txn {
+    struct hmap_node hmap_node;
+    struct json *request_id;
+    struct ovsdb_idl *idl;
+    struct hmap txn_rows;
+    enum ovsdb_idl_txn_status status;
 };
 
 static struct vlog_rate_limit syntax_rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -83,11 +97,18 @@ static void ovsdb_idl_delete_row(struct ovsdb_idl_row *);
 static void ovsdb_idl_modify_row(struct ovsdb_idl_row *, const struct json *);
 
 static bool ovsdb_idl_row_is_orphan(const struct ovsdb_idl_row *);
+static struct ovsdb_idl_row *ovsdb_idl_row_create__(
+    const struct ovsdb_idl_table_class *);
 static struct ovsdb_idl_row *ovsdb_idl_row_create(struct ovsdb_idl_table *,
                                                   const struct uuid *);
 static void ovsdb_idl_row_destroy(struct ovsdb_idl_row *);
 
-static void ovsdb_idl_row_clear_fields(struct ovsdb_idl_row *);
+static void ovsdb_idl_row_clear_old(struct ovsdb_idl_row *);
+static void ovsdb_idl_row_clear_new(struct ovsdb_idl_row *);
+
+static void ovsdb_idl_txn_abort_all(struct ovsdb_idl *);
+static bool ovsdb_idl_txn_process_reply(struct ovsdb_idl *,
+                                        const struct jsonrpc_msg *msg);
 
 struct ovsdb_idl *
 ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class)
@@ -119,6 +140,7 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class)
         table->idl = idl;
     }
     idl->last_monitor_request_seqno = UINT_MAX;
+    hmap_init(&idl->outstanding_txns);
 
     return idl;
 }
@@ -129,6 +151,7 @@ ovsdb_idl_destroy(struct ovsdb_idl *idl)
     if (idl) {
         size_t i;
 
+        assert(!idl->txn);
         ovsdb_idl_clear(idl);
         jsonrpc_session_close(idl->session);
 
@@ -165,7 +188,7 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
 
             if (!ovsdb_idl_row_is_orphan(row)) {
                 (row->table->class->unparse)(row);
-                ovsdb_idl_row_clear_fields(row);
+                ovsdb_idl_row_clear_old(row);
             }
             hmap_remove(&table->rows, &row->hmap_node);
             LIST_FOR_EACH_SAFE (arc, next_arc, struct ovsdb_idl_arc, src_node,
@@ -197,6 +220,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
         seqno = jsonrpc_session_get_seqno(idl->session);
         if (idl->last_monitor_request_seqno != seqno) {
             idl->last_monitor_request_seqno = seqno;
+            ovsdb_idl_txn_abort_all(idl);
             ovsdb_idl_send_monitor_request(idl);
             break;
         }
@@ -226,6 +250,10 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
                    && msg->id && msg->id->type == JSON_STRING
                    && !strcmp(msg->id->u.string, "echo")) {
             /* It's a reply to our echo request.  Ignore it. */
+        } else if ((msg->type == JSONRPC_ERROR
+                    || msg->type == JSONRPC_REPLY)
+                   && ovsdb_idl_txn_process_reply(idl, msg)) {
+            /* ovsdb_idl_txn_process_reply() did everything needful. */
         } else {
             VLOG_WARN("%s: received unexpected %s message",
                       jsonrpc_session_get_name(idl->session),
@@ -467,7 +495,7 @@ ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
 
         error = ovsdb_datum_from_json(&datum, &column->type, node->data, NULL);
         if (!error) {
-            ovsdb_datum_swap(&row->fields[column - table->class->columns],
+            ovsdb_datum_swap(&row->old[column - table->class->columns],
                              &datum);
             ovsdb_datum_destroy(&datum, &column->type);
         } else {
@@ -484,21 +512,41 @@ ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
 static bool
 ovsdb_idl_row_is_orphan(const struct ovsdb_idl_row *row)
 {
-    return !row->fields;
+    return !row->old;
 }
 
 static void
-ovsdb_idl_row_clear_fields(struct ovsdb_idl_row *row)
+ovsdb_idl_row_clear_old(struct ovsdb_idl_row *row)
 {
+    assert(row->old == row->new);
     if (!ovsdb_idl_row_is_orphan(row)) {
         const struct ovsdb_idl_table_class *class = row->table->class;
         size_t i;
 
         for (i = 0; i < class->n_columns; i++) {
-            ovsdb_datum_destroy(&row->fields[i], &class->columns[i].type);
+            ovsdb_datum_destroy(&row->old[i], &class->columns[i].type);
         }
-        free(row->fields);
-        row->fields = NULL;
+        free(row->old);
+        row->old = row->new = NULL;
+    }
+}
+
+static void
+ovsdb_idl_row_clear_new(struct ovsdb_idl_row *row)
+{
+    if (row->old != row->new) {
+        if (row->new) {
+            const struct ovsdb_idl_table_class *class = row->table->class;
+            size_t i;
+
+            BITMAP_FOR_EACH_1 (i, class->n_columns, row->written) {
+                ovsdb_datum_destroy(&row->new[i], &class->columns[i].type);
+            }
+            free(row->new);
+            free(row->written);
+            row->written = NULL;
+        }
+        row->new = row->old;
     }
 }
 
@@ -548,15 +596,23 @@ ovsdb_idl_row_reparse_backrefs(struct ovsdb_idl_row *row, bool destroy_dsts)
 }
 
 static struct ovsdb_idl_row *
-ovsdb_idl_row_create(struct ovsdb_idl_table *table, const struct uuid *uuid)
+ovsdb_idl_row_create__(const struct ovsdb_idl_table_class *class)
 {
-    struct ovsdb_idl_row *row = xmalloc(table->class->allocation_size);
-    hmap_insert(&table->rows, &row->hmap_node, uuid_hash(uuid));
-    row->uuid = *uuid;
+    struct ovsdb_idl_row *row = xmalloc(class->allocation_size);
+    memset(row, 0, sizeof *row);
     list_init(&row->src_arcs);
     list_init(&row->dst_arcs);
+    hmap_node_nullify(&row->txn_node);
+    return row;
+}
+
+static struct ovsdb_idl_row *
+ovsdb_idl_row_create(struct ovsdb_idl_table *table, const struct uuid *uuid)
+{
+    struct ovsdb_idl_row *row = ovsdb_idl_row_create__(table->class);
+    hmap_insert(&table->rows, &row->hmap_node, uuid_hash(uuid));
+    row->uuid = *uuid;
     row->table = table;
-    row->fields = NULL;
     return row;
 }
 
@@ -564,7 +620,7 @@ static void
 ovsdb_idl_row_destroy(struct ovsdb_idl_row *row)
 {
     if (row) {
-        ovsdb_idl_row_clear_fields(row);
+        ovsdb_idl_row_clear_old(row);
         hmap_remove(&row->table->rows, &row->hmap_node);
         free(row);
     }
@@ -576,10 +632,10 @@ ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct json *row_json)
     const struct ovsdb_idl_table_class *class = row->table->class;
     size_t i;
 
-    assert(!row->fields);
-    row->fields = xmalloc(class->n_columns * sizeof *row->fields);
+    assert(!row->old && !row->new);
+    row->old = row->new = xmalloc(class->n_columns * sizeof *row->old);
     for (i = 0; i < class->n_columns; i++) {
-        ovsdb_datum_init_default(&row->fields[i], &class->columns[i].type);
+        ovsdb_datum_init_default(&row->old[i], &class->columns[i].type);
     }
     ovsdb_idl_row_update(row, row_json);
     (class->parse)(row);
@@ -592,7 +648,7 @@ ovsdb_idl_delete_row(struct ovsdb_idl_row *row)
 {
     (row->table->class->unparse)(row);
     ovsdb_idl_row_clear_arcs(row, true);
-    ovsdb_idl_row_clear_fields(row);
+    ovsdb_idl_row_clear_old(row);
     if (list_is_empty(&row->dst_arcs)) {
         ovsdb_idl_row_destroy(row);
     } else {
@@ -633,8 +689,8 @@ may_add_arc(const struct ovsdb_idl_row *src, const struct ovsdb_idl_row *dst)
 }
 
 static struct ovsdb_idl_table *
-ovsdb_table_from_class(const struct ovsdb_idl *idl,
-                       const struct ovsdb_idl_table_class *table_class)
+ovsdb_idl_table_from_class(const struct ovsdb_idl *idl,
+                           const struct ovsdb_idl_table_class *table_class)
 {
     return &idl->tables[table_class - idl->class->tables];
 }
@@ -649,7 +705,7 @@ ovsdb_idl_get_row_arc(struct ovsdb_idl_row *src,
     struct ovsdb_idl_arc *arc;
     struct ovsdb_idl_row *dst;
 
-    dst_table = ovsdb_table_from_class(idl, dst_table_class);
+    dst_table = ovsdb_idl_table_from_class(idl, dst_table_class);
     dst = ovsdb_idl_get_row(dst_table, dst_uuid);
     if (!dst) {
         dst = ovsdb_idl_row_create(dst_table, dst_uuid);
@@ -687,7 +743,8 @@ struct ovsdb_idl_row *
 ovsdb_idl_first_row(const struct ovsdb_idl *idl,
                     const struct ovsdb_idl_table_class *table_class)
 {
-    struct ovsdb_idl_table *table = ovsdb_table_from_class(idl, table_class);
+    struct ovsdb_idl_table *table
+        = ovsdb_idl_table_from_class(idl, table_class);
     return next_real_row(table, hmap_first(&table->rows));
 }
 
@@ -697,4 +754,468 @@ ovsdb_idl_next_row(const struct ovsdb_idl_row *row)
     struct ovsdb_idl_table *table = row->table;
 
     return next_real_row(table, hmap_next(&table->rows, &row->hmap_node));
+}
+
+/* Transactions. */
+
+static void ovsdb_idl_txn_complete(struct ovsdb_idl_txn *txn,
+                                   enum ovsdb_idl_txn_status);
+
+const char *
+ovsdb_idl_txn_status_to_string(enum ovsdb_idl_txn_status status)
+{
+    switch (status) {
+    case TXN_INCOMPLETE:
+        return "incomplete";
+    case TXN_ABORTED:
+        return "aborted";
+    case TXN_SUCCESS:
+        return "success";
+    case TXN_TRY_AGAIN:
+        return "try again";
+    case TXN_ERROR:
+        return "error";
+    }
+    return "<unknown>";
+}
+
+struct ovsdb_idl_txn *
+ovsdb_idl_txn_create(struct ovsdb_idl *idl)
+{
+    struct ovsdb_idl_txn *txn;
+
+    assert(!idl->txn);
+    idl->txn = txn = xmalloc(sizeof *txn);
+    txn->idl = idl;
+    txn->status = TXN_INCOMPLETE;
+    hmap_init(&txn->txn_rows);
+    return txn;
+}
+
+void
+ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
+{
+    ovsdb_idl_txn_abort(txn);
+    free(txn);
+}
+
+static struct json *
+where_uuid_equals(const struct uuid *uuid)
+{
+    return
+        json_array_create_1(
+            json_array_create_3(
+                json_string_create("_uuid"),
+                json_string_create("=="),
+                json_array_create_2(
+                    json_string_create("uuid"),
+                    json_string_create_nocopy(
+                        xasprintf(UUID_FMT, UUID_ARGS(uuid))))));
+}
+
+static char *
+uuid_name_from_uuid(const struct uuid *uuid)
+{
+    char *name;
+    char *p;
+
+    name = xasprintf("row"UUID_FMT, UUID_ARGS(uuid));
+    for (p = name; *p != '\0'; p++) {
+        if (*p == '-') {
+            *p = '_';
+        }
+    }
+
+    return name;
+}
+
+static const struct ovsdb_idl_row *
+ovsdb_idl_txn_get_row(const struct ovsdb_idl_txn *txn, const struct uuid *uuid)
+{
+    const struct ovsdb_idl_row *row;
+
+    HMAP_FOR_EACH_WITH_HASH (row, struct ovsdb_idl_row, txn_node,
+                             uuid_hash(uuid), &txn->txn_rows) {
+        if (uuid_equals(&row->uuid, uuid)) {
+            return row;
+        }
+    }
+    return NULL;
+}
+
+/* XXX there must be a cleaner way to do this */
+static struct json *
+substitute_uuids(struct json *json, const struct ovsdb_idl_txn *txn)
+{
+    if (json->type == JSON_ARRAY) {
+        struct uuid uuid;
+        size_t i;
+
+        if (json->u.array.n == 2
+            && json->u.array.elems[0]->type == JSON_STRING
+            && json->u.array.elems[1]->type == JSON_STRING
+            && !strcmp(json->u.array.elems[0]->u.string, "uuid")
+            && uuid_from_string(&uuid, json->u.array.elems[1]->u.string)) {
+            const struct ovsdb_idl_row *row;
+
+            row = ovsdb_idl_txn_get_row(txn, &uuid);
+            if (row && !row->old && row->new) {
+                json_destroy(json);
+
+                return json_array_create_2(
+                    json_string_create("named-uuid"),
+                    json_string_create_nocopy(uuid_name_from_uuid(&uuid)));
+            }
+        }
+
+        for (i = 0; i < json->u.array.n; i++) {
+            json->u.array.elems[i] = substitute_uuids(json->u.array.elems[i],
+                                                      txn);
+        }
+    } else if (json->type == JSON_OBJECT) {
+        struct shash_node *node;
+
+        SHASH_FOR_EACH (node, json_object(json)) {
+            node->data = substitute_uuids(node->data, txn);
+        }
+    }
+    return json;
+}
+
+static void
+ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
+{
+    struct ovsdb_idl_row *row, *next;
+
+    HMAP_FOR_EACH_SAFE (row, next, struct ovsdb_idl_row, txn_node,
+                        &txn->txn_rows) {
+        ovsdb_idl_row_clear_new(row);
+
+        free(row->prereqs);
+        row->prereqs = NULL;
+
+        free(row->written);
+        row->written = NULL;
+
+        hmap_remove(&txn->txn_rows, &row->txn_node);
+        hmap_node_nullify(&row->txn_node);
+    }
+    hmap_destroy(&txn->txn_rows);
+    hmap_init(&txn->txn_rows);
+}
+
+enum ovsdb_idl_txn_status
+ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
+{
+    struct ovsdb_idl_row *row;
+    struct json *operations;
+    bool any_updates;
+    enum ovsdb_idl_txn_status status;
+
+    if (txn != txn->idl->txn) {
+        return txn->status;
+    }
+
+    operations = json_array_create_empty();
+
+    /* Add prerequisites and declarations of new rows. */
+    HMAP_FOR_EACH (row, struct ovsdb_idl_row, txn_node, &txn->txn_rows) {
+        /* XXX check that deleted rows exist even if no prereqs? */
+        if (row->prereqs) {
+            const struct ovsdb_idl_table_class *class = row->table->class;
+            size_t n_columns = class->n_columns;
+            struct json *op, *columns, *row_json;
+            size_t idx;
+
+            op = json_object_create();
+            json_array_add(operations, op);
+            json_object_put_string(op, "op", "wait");
+            json_object_put_string(op, "table", class->name);
+            json_object_put(op, "timeout", json_integer_create(0));
+            json_object_put(op, "where", where_uuid_equals(&row->uuid));
+            json_object_put_string(op, "until", "==");
+            columns = json_array_create_empty();
+            json_object_put(op, "columns", columns);
+            row_json = json_object_create();
+            json_object_put(op, "rows", json_array_create_1(row_json));
+
+            BITMAP_FOR_EACH_1 (idx, n_columns, row->prereqs) {
+                const struct ovsdb_idl_column *column = &class->columns[idx];
+                json_array_add(columns, json_string_create(column->name));
+                json_object_put(row_json, column->name,
+                                ovsdb_datum_to_json(&row->old[idx],
+                                                    &column->type));
+            }
+        }
+        if (row->new && !row->old) {
+            struct json *op;
+
+            op = json_object_create();
+            json_array_add(operations, op);
+            json_object_put_string(op, "op", "declare");
+            json_object_put(op, "uuid-name",
+                            json_string_create_nocopy(
+                                uuid_name_from_uuid(&row->uuid)));
+        }
+    }
+
+    /* Add updates. */
+    any_updates = false;
+    HMAP_FOR_EACH (row, struct ovsdb_idl_row, txn_node, &txn->txn_rows) {
+        const struct ovsdb_idl_table_class *class = row->table->class;
+        size_t n_columns = class->n_columns;
+        struct json *row_json;
+        size_t idx;
+
+        if (row->old == row->new) {
+            continue;
+        } else if (!row->new) {
+            struct json *op = json_object_create();
+            json_object_put_string(op, "op", "delete");
+            json_object_put_string(op, "table", class->name);
+            json_object_put(op, "where", where_uuid_equals(&row->uuid));
+            json_array_add(operations, op);
+        } else {
+            row_json = NULL;
+            BITMAP_FOR_EACH_1 (idx, n_columns, row->written) {
+                const struct ovsdb_idl_column *column = &class->columns[idx];
+
+                if (row->old
+                    && ovsdb_datum_equals(&row->old[idx], &row->new[idx],
+                                          &column->type)) {
+                    continue;
+                }
+                if (!row_json) {
+                    struct json *op = json_object_create();
+                    json_array_add(operations, op);
+                    json_object_put_string(op, "op",
+                                           row->old ? "update" : "insert");
+                    json_object_put_string(op, "table", class->name);
+                    if (row->old) {
+                        json_object_put(op, "where",
+                                        where_uuid_equals(&row->uuid));
+                    } else {
+                        json_object_put(op, "uuid-name",
+                                        json_string_create_nocopy(
+                                            uuid_name_from_uuid(&row->uuid)));
+                    }
+                    row_json = json_object_create();
+                    json_object_put(op, "row", row_json);
+                    any_updates = true;
+                }
+                json_object_put(row_json, column->name,
+                                substitute_uuids(
+                                    ovsdb_datum_to_json(&row->new[idx],
+                                                        &column->type),
+                                    txn));
+            }
+        }
+    }
+
+    status = (!any_updates ? TXN_SUCCESS
+              : jsonrpc_session_send(
+                  txn->idl->session,
+                  jsonrpc_create_request(
+                      "transact", operations, &txn->request_id))
+              ? TXN_TRY_AGAIN
+              : TXN_INCOMPLETE);
+
+    hmap_insert(&txn->idl->outstanding_txns, &txn->hmap_node,
+                json_hash(txn->request_id, 0));
+    txn->idl->txn = NULL;
+
+    ovsdb_idl_txn_disassemble(txn);
+    if (status != TXN_INCOMPLETE) {
+        ovsdb_idl_txn_complete(txn, status);
+    }
+    return txn->status;
+}
+
+void
+ovsdb_idl_txn_abort(struct ovsdb_idl_txn *txn)
+{
+    ovsdb_idl_txn_disassemble(txn);
+    if (txn->status == TXN_INCOMPLETE) {
+        txn->status = TXN_ABORTED;
+    }
+}
+
+static void
+ovsdb_idl_txn_complete(struct ovsdb_idl_txn *txn,
+                       enum ovsdb_idl_txn_status status)
+{
+    txn->status = status;
+    hmap_remove(&txn->idl->outstanding_txns, &txn->hmap_node);
+}
+
+void
+ovsdb_idl_txn_write(struct ovsdb_idl_row *row,
+                    const struct ovsdb_idl_column *column,
+                    struct ovsdb_datum *datum)
+{
+    const struct ovsdb_idl_table_class *class = row->table->class;
+    size_t column_idx = column - class->columns;
+
+    assert(row->new);
+    if (hmap_node_is_null(&row->txn_node)) {
+        hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,
+                    uuid_hash(&row->uuid));
+    }
+    if (row->old == row->new) {
+        row->new = xmalloc(class->n_columns * sizeof *row->new);
+    }
+    if (!row->written) {
+        row->written = bitmap_allocate(class->n_columns);
+    }
+    if (bitmap_is_set(row->written, column_idx)) {
+        ovsdb_datum_destroy(&row->new[column_idx], &column->type);
+    } else {
+        bitmap_set1(row->written, column_idx);
+    }
+    row->new[column_idx] = *datum;
+}
+
+void
+ovsdb_idl_txn_verify(const struct ovsdb_idl_row *row_,
+                     const struct ovsdb_idl_column *column)
+{
+    struct ovsdb_idl_row *row = (struct ovsdb_idl_row *) row_;
+    const struct ovsdb_idl_table_class *class = row->table->class;
+    size_t column_idx = column - class->columns;
+
+    assert(row->new);
+    if (!row->old
+        || (row->written && bitmap_is_set(row->written, column_idx))) {
+        return;
+    }
+
+    if (hmap_node_is_null(&row->txn_node)) {
+        hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,
+                    uuid_hash(&row->uuid));
+    }
+    if (!row->prereqs) {
+        row->prereqs = bitmap_allocate(class->n_columns);
+    }
+    bitmap_set1(row->prereqs, column_idx);
+}
+
+void
+ovsdb_idl_txn_delete(struct ovsdb_idl_row *row)
+{
+    assert(row->new);
+    if (!row->old) {
+        ovsdb_idl_row_clear_new(row);
+        assert(!row->prereqs);
+        hmap_remove(&row->table->idl->txn->txn_rows, &row->txn_node);
+        free(row);
+    }
+    if (hmap_node_is_null(&row->txn_node)) {
+        hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,
+                    uuid_hash(&row->uuid));
+    }
+    if (row->new == row->old) {
+        row->new = NULL;
+    } else {
+        ovsdb_idl_row_clear_new(row);
+    }
+}
+
+struct ovsdb_idl_row *
+ovsdb_idl_txn_insert(struct ovsdb_idl_txn *txn,
+                     const struct ovsdb_idl_table_class *class)
+{
+    struct ovsdb_idl_row *row = ovsdb_idl_row_create__(class);
+    uuid_generate(&row->uuid);
+    row->table = ovsdb_idl_table_from_class(txn->idl, class);
+    row->new = xmalloc(class->n_columns * sizeof *row->new);
+    row->written = bitmap_allocate(class->n_columns);
+    hmap_insert(&txn->txn_rows, &row->txn_node, uuid_hash(&row->uuid));
+    return row;
+}
+
+static void
+ovsdb_idl_txn_abort_all(struct ovsdb_idl *idl)
+{
+    struct ovsdb_idl_txn *txn;
+
+    HMAP_FOR_EACH (txn, struct ovsdb_idl_txn, hmap_node,
+                   &idl->outstanding_txns) {
+        ovsdb_idl_txn_complete(txn, TXN_TRY_AGAIN);
+    }
+}
+
+static struct ovsdb_idl_txn *
+ovsdb_idl_txn_find(struct ovsdb_idl *idl, const struct json *id)
+{
+    struct ovsdb_idl_txn *txn;
+
+    HMAP_FOR_EACH_WITH_HASH (txn, struct ovsdb_idl_txn, hmap_node,
+                             json_hash(id, 0), &idl->outstanding_txns) {
+        if (json_equal(id, txn->request_id)) {
+            return txn;
+        }
+    }
+    return NULL;
+}
+
+static bool
+ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
+                            const struct jsonrpc_msg *msg)
+{
+    struct ovsdb_idl_txn *txn;
+    enum ovsdb_idl_txn_status status;
+
+    txn = ovsdb_idl_txn_find(idl, msg->id);
+    if (!txn) {
+        return false;
+    }
+
+    if (msg->type == JSONRPC_ERROR) {
+        status = TXN_ERROR;
+    } else if (msg->result->type != JSON_ARRAY) {
+        VLOG_WARN_RL(&syntax_rl, "reply to \"transact\" is not JSON array");
+        status = TXN_ERROR;
+    } else {
+        int hard_errors = 0;
+        int soft_errors = 0;
+        size_t i;
+
+        for (i = 0; i < msg->result->u.array.n; i++) {
+            struct json *json = msg->result->u.array.elems[i];
+
+            if (json->type == JSON_NULL) {
+                /* This isn't an error in itself but indicates that some prior
+                 * operation failed, so make sure that we know about it. */
+                soft_errors++;
+            } else if (json->type == JSON_OBJECT) {
+                struct json *error;
+
+                error = shash_find_data(json_object(json), "error");
+                if (error) {
+                    if (error->type == JSON_STRING) {
+                        if (!strcmp(error->u.string, "timed out")) {
+                            soft_errors++;
+                        } else {
+                            hard_errors++;
+                        }
+                    } else {
+                        hard_errors++;
+                        VLOG_WARN_RL(&syntax_rl,
+                                     "\"error\" in reply is not JSON string");
+                    }
+                }
+            } else {
+                hard_errors++;
+                VLOG_WARN_RL(&syntax_rl,
+                             "operation reply is not JSON null or object");
+            }
+        }
+
+        status = (hard_errors ? TXN_ERROR
+                  : soft_errors ? TXN_TRY_AGAIN
+                  : TXN_SUCCESS);
+    }
+
+    ovsdb_idl_txn_complete(txn, status);
+    return true;
 }

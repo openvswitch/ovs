@@ -29,7 +29,13 @@ struct ovsdb_idl_row {
     struct list src_arcs;       /* Forward arcs (ovsdb_idl_arc.src_node). */
     struct list dst_arcs;       /* Backward arcs (ovsdb_idl_arc.dst_node). */
     struct ovsdb_idl_table *table; /* Containing table. */
-    struct ovsdb_datum *fields;    /* Row data, or null if orphaned. */
+    struct ovsdb_datum *old;    /* Committed data (null if orphaned). */
+
+    /* Transactional data. */
+    struct ovsdb_datum *new;    /* Modified data (null to delete row). */
+    unsigned long int *prereqs; /* Bitmap of columns to verify in "old". */
+    unsigned long int *written; /* Bitmap of columns from "new" to write. */
+    struct hmap_node txn_node;  /* Node in ovsdb_idl_txn's list. */
 };
 
 struct ovsdb_idl_column {
@@ -67,5 +73,15 @@ struct ovsdb_idl_row *ovsdb_idl_first_row(
     const struct ovsdb_idl *, const struct ovsdb_idl_table_class *);
 
 struct ovsdb_idl_row *ovsdb_idl_next_row(const struct ovsdb_idl_row *);
+
+void ovsdb_idl_txn_write(struct ovsdb_idl_row *,
+                         const struct ovsdb_idl_column *,
+                         struct ovsdb_datum *);
+void ovsdb_idl_txn_verify(const struct ovsdb_idl_row *,
+                          const struct ovsdb_idl_column *);
+void ovsdb_idl_txn_delete(struct ovsdb_idl_row *);
+struct ovsdb_idl_row *ovsdb_idl_txn_insert(
+    struct ovsdb_idl_txn *,
+    const struct ovsdb_idl_table_class *);
 
 #endif /* ovsdb-idl-provider.h */

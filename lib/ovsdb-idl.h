@@ -28,4 +28,21 @@ void ovsdb_idl_wait(struct ovsdb_idl *);
 unsigned int ovsdb_idl_get_seqno(const struct ovsdb_idl *);
 void ovsdb_idl_force_reconnect(struct ovsdb_idl *);
 
+enum ovsdb_idl_txn_status {
+    TXN_INCOMPLETE,             /* Commit in progress, please wait. */
+    TXN_ABORTED,                /* ovsdb_idl_txn_abort() called. */
+    TXN_SUCCESS,                /* Commit successful. */
+    TXN_TRY_AGAIN,              /* Commit failed because a "verify" operation
+                                 * reported an inconsistency, due to a network
+                                 * problem, or other transient failure. */
+    TXN_ERROR                   /* Commit failed due to a hard error. */
+};
+
+const char *ovsdb_idl_txn_status_to_string(enum ovsdb_idl_txn_status);
+
+struct ovsdb_idl_txn *ovsdb_idl_txn_create(struct ovsdb_idl *);
+void ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *);
+enum ovsdb_idl_txn_status ovsdb_idl_txn_commit(struct ovsdb_idl_txn *);
+void ovsdb_idl_txn_abort(struct ovsdb_idl_txn *);
+
 #endif /* ovsdb-idl.h */
