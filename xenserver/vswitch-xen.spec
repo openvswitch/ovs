@@ -67,6 +67,8 @@ install -d -m 755 $RPM_BUILD_ROOT/etc/xapi.d/plugins
 install -m 755 xenserver/etc_xapi.d_plugins_vswitch-cfg-update \
          $RPM_BUILD_ROOT/etc/xapi.d/plugins/vswitch-cfg-update
 install -d -m 755 $RPM_BUILD_ROOT/usr/share/vswitch/scripts
+install -m 644 vswitchd/vswitch-idl.ovsschema \
+         $RPM_BUILD_ROOT/usr/share/vswitch/vswitch-idl.ovsschema
 install -m 755 xenserver/opt_xensource_libexec_interface-reconfigure \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/interface-reconfigure
 install -m 755 xenserver/etc_xensource_scripts_vif \
@@ -186,8 +188,9 @@ net.ipv4.conf.all.arp_filter = 1
 EOF
 fi
 
-# Ensure ovs-vswitchd.conf exists
-touch /etc/ovs-vswitchd.conf
+# Create ovs-vswitchd config database
+ovsdb-tool create /etc/ovs-vswitchd.conf.db \
+        /usr/share/vswitch/vswitch-idl.ovsschema
 
 # Create default or update existing /etc/sysconfig/vswitch.
 SYSCONFIG=/etc/sysconfig/vswitch
@@ -284,7 +287,7 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     done
 
     # Remove all configuration files
-    rm -f /etc/ovs-vswitchd.conf
+    rm -f /etc/ovs-vswitchd.conf.db
     rm -f /etc/sysconfig/vswitch
     rm -f /etc/ovs-vswitchd.cacert
     rm -f /var/lib/openvswitch/dbcache
@@ -323,6 +326,7 @@ fi
 # include them.
 /usr/share/vswitch/scripts/XSFeatureVSwitch.pyc
 /usr/share/vswitch/scripts/XSFeatureVSwitch.pyo
+/usr/share/vswitch/vswitch-idl.ovsschema
 /usr/sbin/ovs-brcompatd
 /usr/sbin/ovs-vswitchd
 /usr/sbin/ovsdb-server

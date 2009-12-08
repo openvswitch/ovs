@@ -28,8 +28,25 @@ test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 : ${ENABLE_FAKE_PROC_NET:=y}
 : ${FORCE_COREFILES:=y}
 
+# Config variables specific to ovsdb-server
+: ${OVSDB_SERVER_LISTEN:=punix:/var/run/ovsdb-server}
+: ${OVSDB_SERVER_CONNECT:=}
+: ${OVSDB_SERVER_DB:=/etc/ovs-vswitchd.conf.db}
+: ${OVSDB_SERVER_PIDFILE:=/var/run/ovsdb-server.pid}
+: ${OVSDB_SERVER_RUN_DIR:=/var/xen/vswitch}
+: ${OVSDB_SERVER_PRIORITY:=-10}
+: ${OVSDB_SERVER_LOGFILE:=/var/log/ovsdb-server.log}
+: ${OVSDB_SERVER_FILE_LOGLEVEL:=INFO}
+: ${OVSDB_SERVER_SYSLOG_LOGLEVEL:=ERR}
+: ${OVSDB_SERVER_MEMLEAK_LOGFILE:=}
+: ${OVSDB_SERVER_STRACE_LOG:=}
+: ${OVSDB_SERVER_STRACE_OPT:=}
+: ${OVSDB_SERVER_VALGRIND_LOG:=}
+: ${OVSDB_SERVER_VALGRIND_OPT:=}
+
 # Config variables specific to ovs-vswitchd
-: ${VSWITCHD_CONF:=/etc/ovs-vswitchd.conf}
+: ${VSWITCHD_OVSDB_SERVER:=unix:/var/run/ovsdb-server}
+: ${VSWITCHD_OVSDB_SCHEMA:=/usr/share/vswitch/vswitch-idl.ovsschema}
 : ${VSWITCHD_PIDFILE:=/var/run/ovs-vswitchd.pid}
 : ${VSWITCHD_RUN_DIR:=/var/xen/vswitch}
 : ${VSWITCHD_PRIORITY:=-10}
@@ -56,6 +73,8 @@ test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 : ${BRCOMPATD_VALGRIND_OPT:=}
 
 # Full paths to executables & modules
+ovsdb_server="/usr/sbin/ovsdb-server"
+ovsdb_tool="/usr/bin/ovsdb-tool"
 vswitchd="/usr/sbin/ovs-vswitchd"
 brcompatd="/usr/sbin/ovs-brcompatd"
 dpctl="/usr/bin/ovs-dpctl"
@@ -121,6 +140,56 @@ function reload_brcompatd {
     fi
 }
 
+function start_ovsdb_server {
+    local syslog_opt="-vANY:SYSLOG:${OVSDB_SERVER_SYSLOG_LOGLEVEL}"
+    local logfile_file_opt=""
+    local logfile_level_opt=""
+    if [ ! -d "$OVSDB_SERVER_RUN_DIR" ]; then
+        mkdir -p "$OVSDB_SERVER_RUN_DIR"
+    fi
+    cd "$OVSDB_SERVER_RUN_DIR"
+    local listen_method=""
+    if [ -n "$OVSDB_SERVER_LISTEN" ]; then
+        listen_method="--listen=$OVSDB_SERVER_LISTEN"
+    fi
+    local connect_method=""
+    if [ -n "$OVSDB_SERVER_CONNECT" ]; then
+        connect_method="--connect=$OVSDB_SERVER_CONNECT"
+    fi
+    if [ -n "$OVSDB_SERVER_FILE_LOGLEVEL" ]; then
+        logfile_level_opt="-vANY:FILE:${OVSDB_SERVER_FILE_LOGLEVEL}"
+        logfile_file_opt="--log-file=$OVSDB_SERVER_LOGFILE"
+    fi
+    local leak_opt=""
+    if [ -n "$OVSDB_SERVER_MEMLEAK_LOGFILE" ]; then
+        leak_opt="--check-leaks=$OVSDB_SERVER_MEMLEAK_LOGFILE"
+        if [ -e "$OVSDB_SERVER_MEMLEAK_LOGFILE" ]; then
+            mv "$OVSDB_SERVER_MEMLEAK_LOGFILE" "$OVSDB_SERVER_MEMLEAK_LOGFILE.prev"
+        fi
+    fi
+    local strace_opt=""
+    local daemonize="y"
+    if [ -n "$OVSDB_SERVER_STRACE_LOG" ] && [ -n "$OVSDB_SERVER_VALGRIND_LOG" ]; then
+        printf "Can not start with both VALGRIND and STRACE\n"
+        exit 1
+    fi
+    if [ -n "$OVSDB_SERVER_STRACE_LOG" ]; then
+        strace_opt="strace -o $OVSDB_SERVER_STRACE_LOG $OVSDB_SERVER_STRACE_OPT"
+        daemonize="n"
+    fi
+    if [ -n "$OVSDB_SERVER_VALGRIND_LOG" ]; then
+        valgrind_opt="valgrind --log-file=$OVSDB_SERVER_VALGRIND_LOG $OVSDB_SERVER_VALGRIND_OPT"
+        daemonize="n"
+    fi
+    if [ "$daemonize" != "y" ]; then
+        # Start in background and force a "success" message
+        action "Starting ovsdb_server ($strace_opt$valgrind_opt)" true
+        (nice -n "$OVSDB_SERVER_PRIORITY" $strace_opt $valgrind_opt "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $connect_method $listen_method) &
+    else
+        action "Starting ovsdb-server" nice -n "$OVSDB_SERVER_PRIORITY" "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $connect_method $listen_method
+    fi
+}
+
 function start_vswitchd {
     local syslog_opt="-vANY:SYSLOG:${VSWITCHD_SYSLOG_LOGLEVEL}"
     local logfile_file_opt=""
@@ -161,9 +230,9 @@ function start_vswitchd {
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovs-vswitchd ($strace_opt$valgrind_opt)" true
-        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
+        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER") &
     else
-        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
+        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER"
     fi
 }
 
@@ -204,9 +273,17 @@ function start_brcompatd {
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovs-brcompatd ($strace_opt$valgrind_opt)" true
-        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd"--no-chdir --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF") &
+        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd"--no-chdir --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER") &
     else
-        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --no-chdir --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE --detach -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_CONF"
+        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --no-chdir --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE --detach -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER"
+    fi
+}
+
+function stop_ovsdb_server {
+    if [ -f "$OVSDB_SERVER_PIDFILE" ]; then
+        local pid=$(cat "$OVSDB_SERVER_PIDFILE")
+        action "Killing ovsdb-server ($pid)" kill -TERM $pid
+        rm -f "$OVSDB_SERVER_PIDFILE"
     fi
 }
 
@@ -267,29 +344,32 @@ function start {
     # Allow GRE traffic.
     iptables -I INPUT -p gre -j ACCEPT
 
-    if [ ! -e "$VSWITCHD_CONF" ]; then
-        warning "$VSWITCHD_CONF does not exist"
-        action "Creating empty $VSWITCHD_CONF" touch "$VSWITCHD_CONF"
-    elif [ ! -e /var/run/vswitch.booted ]; then
-        touch /var/run/vswitch.booted
-        /usr/bin/ovs-cfg-mod '-vANY:console:emer' -F "$VSWITCHD_CONF" \
-            '--del-match=bridge.*' \
-            '--del-match=port.*' \
-            '--del-match=bonding.*' \
-            '--del-match=iface.*' \
-            '--del-match=vlan.*.trunks=*' \
-            '--del-match=vlan.*.tag=*'
+    if [ ! -e "$OVSDB_SERVER_DB" ]; then
+        warning "$OVSDB_SERVER_DB does not exist"
+        action "Creating empty $OVSDB_SERVER_DB" $ovsdb_tool create "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
+        action "Creating initial table in $OVSDB_SERVER_DB" $ovsdb_tool transact "$OVSDB_SERVER_DB" '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]'
+    #elif [ ! -e /var/run/vswitch.booted ]; then
+        #touch /var/run/vswitch.booted
+        #/usr/bin/ovs-cfg-mod '-vANY:console:emer' -F "$VSWITCHD_CONF" \
+            #'--del-match=bridge.*' \
+            #'--del-match=port.*' \
+            #'--del-match=bonding.*' \
+            #'--del-match=iface.*' \
+            #'--del-match=vlan.*.trunks=*' \
+            #'--del-match=vlan.*.tag=*'
     fi
 
+    start_ovsdb_server
     start_vswitchd
     start_brcompatd
-    reload_vswitchd  # ensures ovs-vswitchd has fully read config file.
+    reload_vswitchd  # ensures ovs-vswitchd has fully read config.
     touch /var/lock/subsys/vswitch
 }
 
 function stop {
     stop_brcompatd
     stop_vswitchd
+    stop_ovsdb_server
     rm -f /var/lock/subsys/vswitch
 }
 
