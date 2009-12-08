@@ -93,7 +93,7 @@ class ColumnSchema:
         type = Type.fromJson(mustGetMember(json, 'type', [dict, unicode],
                                            description),
                              'type of %s' % description)
-        ephemeral = getMember(json, 'ephemeral', [True,False], description)
+        ephemeral = getMember(json, 'ephemeral', [bool], description)
         persistent = ephemeral != True
         return ColumnSchema(comment, type, persistent)
 
