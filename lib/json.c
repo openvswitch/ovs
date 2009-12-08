@@ -223,6 +223,14 @@ json_array_create(struct json **elements, size_t n)
 }
 
 struct json *
+json_array_create_1(struct json *elem0)
+{
+    struct json **elems = xmalloc(sizeof *elems);
+    elems[0] = elem0;
+    return json_array_create(elems, 1);
+}
+
+struct json *
 json_array_create_2(struct json *elem0, struct json *elem1)
 {
     struct json **elems = xmalloc(2 * sizeof *elems);

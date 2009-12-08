@@ -76,6 +76,7 @@ struct json *json_array_create_empty(void);
 void json_array_add(struct json *, struct json *element);
 void json_array_trim(struct json *);
 struct json *json_array_create(struct json **, size_t n);
+struct json *json_array_create_1(struct json *);
 struct json *json_array_create_2(struct json *, struct json *);
 struct json *json_array_create_3(struct json *, struct json *, struct json *);
 
