@@ -297,10 +297,8 @@ netdev_close(struct netdev *netdev)
 #endif
 
         /* Restore flags that we changed, if any. */
-        fatal_signal_block();
         error = restore_flags(netdev);
         list_remove(&netdev->node);
-        fatal_signal_unblock();
         if (error) {
             VLOG_WARN("failed to restore network device flags on %s: %s",
                       name, strerror(error));

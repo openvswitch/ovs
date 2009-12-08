@@ -122,7 +122,6 @@ main(int argc, char *argv[])
 
     signal(SIGPIPE, SIG_IGN);
     for (;;) {
-        fatal_signal_block();
         for (i = 0; i < n_ifaces; i++) {
             struct iface *iface = &ifaces[i];
             dhclient_run(iface->dhcp);
@@ -195,7 +194,6 @@ main(int argc, char *argv[])
             dhclient_wait(iface->dhcp);
         }
         unixctl_server_wait(unixctl);
-        fatal_signal_unblock();
         poll_block();
     }
 

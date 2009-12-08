@@ -70,7 +70,6 @@ main(int argc, char *argv[])
     fatal_signal_add_hook(release, cli, true);
 
     for (;;) {
-        fatal_signal_block();
         dhclient_run(cli);
         if (dhclient_changed(cli)) {
             dhclient_configure_netdev(cli);
@@ -79,7 +78,6 @@ main(int argc, char *argv[])
             }
         }
         dhclient_wait(cli);
-        fatal_signal_unblock();
         poll_block();
     }
 }

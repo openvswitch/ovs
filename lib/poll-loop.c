@@ -25,6 +25,7 @@
 #include "backtrace.h"
 #include "coverage.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "list.h"
 #include "timeval.h"
 
@@ -147,6 +148,10 @@ poll_block(void)
     int n_pollfds;
     int retval;
 
+    /* Register fatal signal events before actually doing any real work for
+     * poll_block. */
+    fatal_signal_wait();
+
     assert(!running_cb);
     if (max_pollfds < n_waiters) {
         max_pollfds = n_waiters;
@@ -207,6 +212,9 @@ poll_block(void)
 
     timeout = -1;
     timeout_backtrace.n_frames = 0;
+
+    /* Handle any pending signals before doing anything else. */
+    fatal_signal_run();
 }
 
 /* Registers 'function' to be called with argument 'aux' by poll_block() when

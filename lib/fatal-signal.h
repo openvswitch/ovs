@@ -21,9 +21,9 @@
 
 /* Basic interface. */
 void fatal_signal_add_hook(void (*)(void *aux), void *aux, bool run_at_exit);
-void fatal_signal_block(void);
-void fatal_signal_unblock(void);
 void fatal_signal_fork(void);
+void fatal_signal_run(void);
+void fatal_signal_wait(void);
 
 /* Convenience functions for unlinking files upon termination.
  *
