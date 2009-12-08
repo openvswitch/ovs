@@ -15,6 +15,7 @@
 .*.cmd
 .*.swp
 .deps
+.dirstamp
 .libs
 .tmp_versions
 /Makefile

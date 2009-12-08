@@ -1,4 +1,5 @@
 /Makefile
 /Makefile.in
 /dhparams.c
+/dirs.c
 /coverage-counters.c

@@ -5,3 +5,6 @@
 /ovs-vswitchd
 /ovs-vswitchd.8
 /ovs-vswitchd.conf.5
+/vswitch-idl.c
+/vswitch-idl.h
+/vswitch-idl.ovsschema

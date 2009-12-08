@@ -3,6 +3,8 @@
 /nlmon
 /ovs-appctl
 /ovs-appctl.8
+/ovs-cfg-mod
+/ovs-cfg-mod.8
 /ovs-controller
 /ovs-controller.8
 /ovs-discover
@@ -19,4 +21,6 @@
 /ovs-pki
 /ovs-pki-cgi
 /ovs-pki.8
+/ovs-vsctl
+/ovs-vsctl.8
 /ovs-wdt
