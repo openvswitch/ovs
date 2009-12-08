@@ -33,6 +33,24 @@ static inline size_t hmap_node_hash(const struct hmap_node *node)
     return node->hash;
 }
 
+#define HMAP_NODE_NULL ((struct hmap_node *) 1)
+
+/* Returns true if 'node' has been set to null by hmap_node_nullify() and has
+ * not been un-nullified by being inserted into an hmap. */
+static inline bool
+hmap_node_is_null(const struct hmap_node *node)
+{
+    return node->next == HMAP_NODE_NULL;
+}
+
+/* Marks 'node' with a distinctive value that can be tested with
+ * hmap_node_is_null().  */
+static inline void
+hmap_node_nullify(struct hmap_node *node)
+{
+    node->next = HMAP_NODE_NULL;
+}
+
 /* A hash map. */
 struct hmap {
     struct hmap_node **buckets;
