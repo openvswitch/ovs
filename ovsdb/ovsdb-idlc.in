@@ -183,7 +183,15 @@ def cDeclComment(type):
     else:
         return ""
 
-def cMembers(prefix, columnName, column):
+def constify(cType, const):
+    if (const
+        and cType.endswith('*') and not cType.endswith('**')
+        and (cType.startswith('struct uuid') or cType.startswith('char'))):
+        return 'const %s' % cType
+    else:
+        return cType
+
+def cMembers(prefix, columnName, column, const):
     type = column.type
     if type.min == 1 and type.max == 1:
         singleton = True
@@ -197,16 +205,15 @@ def cMembers(prefix, columnName, column):
 
     if type.value:
         key = {'name': "key_%s" % columnName,
-               'type': cBaseType(prefix, type.key, type.keyRefTable) + pointer,
+               'type': constify(cBaseType(prefix, type.key, type.keyRefTable) + pointer, const),
                'comment': ''}
         value = {'name': "value_%s" % columnName,
-                 'type': (cBaseType(prefix, type.value, type.valueRefTable)
-                          + pointer),
+                 'type': constify(cBaseType(prefix, type.value, type.valueRefTable) + pointer, const),
                  'comment': ''}
         members = [key, value]
     else:
         m = {'name': columnName,
-             'type': cBaseType(prefix, type.key, type.keyRefTable) + pointer,
+             'type': constify(cBaseType(prefix, type.key, type.keyRefTable) + pointer, const),
              'comment': cDeclComment(type)}
         members = [m]
 
@@ -237,7 +244,7 @@ def printCIDLHeader(schema):
         print "\tstruct ovsdb_idl_row header_;"
         for columnName, column in table.columns.iteritems():
             print "\n\t/* %s column. */" % columnName
-            for member in cMembers(prefix, columnName, column):
+            for member in cMembers(prefix, columnName, column, False):
                 print "\t%(type)s%(name)s;%(comment)s" % member
         print '''\
 };
@@ -258,7 +265,7 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
 
             print 'void %(s)s_set_%(c)s(const struct %(s)s *,' % {'s': structName, 'c': columnName},
             args = ['%(type)s%(name)s' % member for member
-                    in cMembers(prefix, columnName, column)]
+                    in cMembers(prefix, columnName, column, True)]
             print '%s);' % ', '.join(args)
 
     print "\nextern struct ovsdb_idl_class %sidl_class;" % prefix
@@ -479,7 +486,7 @@ void
         for columnName, column in table.columns.iteritems():
             type = column.type
             print '\nvoid'
-            members = cMembers(prefix, columnName, column)
+            members = cMembers(prefix, columnName, column, True)
             keyVar = members[0]['name']
             nVar = None
             valueVar = None
