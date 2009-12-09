@@ -1,20 +1,36 @@
+dnl OVS_VSCTL_SETUP
+dnl
+dnl Creates an empty database in the current directory and then starts
+dnl an ovsdb-server on it for ovs-vsctl to connect to.
+m4_define([OVS_VSCTL_SETUP],
+  [OVS_CHECK_LCOV(
+     [ovsdb-tool create db $abs_builddir/../vswitchd/vswitch-idl.ovsschema], 
+     [0], [stdout], [ignore])
+   OVS_CHECK_LCOV(
+     [[ovsdb-tool transact db \
+        '[{"op": "insert",
+           "table": "Open_vSwitch",
+           "row": {}}]']],
+     [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --listen=punix:socket --unixctl=$PWD/unixctl db >/dev/null 2>&1], [0], [ignore], [ignore])])
+
+dnl OVS_VSCTL_CLEANUP
+dnl
+dnl Kills off the database server.
+m4_define([OVS_VSCTL_CLEANUP], [test ! -e pid || kill `cat pid`])
+
 dnl RUN_OVS_VSCTL(COMMAND, ...)
 dnl
-dnl Executes each ovs-vsctl COMMAND on a file named "conf" in the
-dnl current directory.  Creates "conf" if it does not already exist.
+dnl Executes each ovs-vsctl COMMAND.
 m4_define([RUN_OVS_VSCTL],
-  [: >> conf
-m4_foreach([command], [$@], [ovs-vsctl --no-reload --config=conf command
+  [m4_foreach([command], [$@], [ovs-vsctl -vreconnect:ANY:emer --db=unix:socket command
 ])])
 
 dnl RUN_OVS_VSCTL_TOGETHER(COMMAND, ...)
 dnl
-dnl Executes each ovs-vsctl COMMAND on a file named "conf" in the
-dnl current directory, in a single run of ovs-vsctl.  Creates "conf" if it
-dnl does not already exist.
+dnl Executes each ovs-vsctl COMMAND in a single run of ovs-vsctl.
 m4_define([RUN_OVS_VSCTL_TOGETHER],
-  [: >> conf
-   ovs-vsctl --no-reload --config=conf m4_join([ -- ], $@)])
+  [ovs-vsctl -vreconnect:ANY:emer --db=unix:socket m4_join([ -- ], $@)])
 
 dnl CHECK_BRIDGES([BRIDGE, PARENT, VLAN], ...)
 dnl
@@ -23,43 +39,49 @@ dnl which must be in alphabetical order.  Also checks that each BRIDGE has the
 dnl specified PARENT and is on the given VLAN.
 m4_define([_CHECK_BRIDGE],
   [AT_CHECK([RUN_OVS_VSCTL([br-to-parent $1])], [0], [$2
-])
+], [], [OVS_VSCTL_CLEANUP])
 
    # Check br-to-vlan, without --oneline.
    AT_CHECK([RUN_OVS_VSCTL([br-to-vlan $1])], [0], [$3
-])
+], [], [OVS_VSCTL_CLEANUP])
    # Check br-to-vlan, with --oneline.
    # (This particular test is interesting with --oneline because it returns
    # an integer instead of a string and that can cause type mismatches inside
    # python if not done carefully.)
    AT_CHECK([RUN_OVS_VSCTL([--oneline br-to-vlan $1])], [0], [$3
-])
+], [], [OVS_VSCTL_CLEANUP])
 
    # Check multiple queries in a single run.
    AT_CHECK([RUN_OVS_VSCTL_TOGETHER([br-to-parent $1], [br-to-vlan $1])], [0],
 [$2
 $3
-])])
+], [], [OVS_VSCTL_CLEANUP])])
 m4_define([CHECK_BRIDGES],
   [dnl Check that the bridges appear on list-br, without --oneline.
    AT_CHECK(
      [RUN_OVS_VSCTL([list-br])],
      [0],
      [m4_foreach([brinfo], [$@], [m4_car(brinfo)
-])])
+])],
+     [],
+     [OVS_VSCTL_CLEANUP])
 
    dnl Check that the bridges appear on list-br, with --oneline.
    AT_CHECK(
      [RUN_OVS_VSCTL([--oneline list-br])],
      [0],
      [m4_join([\n], m4_foreach([brinfo], [$@], [m4_car(brinfo),]))
-])
+],
+     [],
+     [OVS_VSCTL_CLEANUP])
 
    dnl Check that each bridge exists according to br-exists and that
    dnl a bridge that should not exist does not.
    m4_foreach([brinfo], [$@], 
-              [AT_CHECK([RUN_OVS_VSCTL([br-exists m4_car(brinfo)])])])
-   AT_CHECK([RUN_OVS_VSCTL([br-exists nonexistent])], [2])
+              [AT_CHECK([RUN_OVS_VSCTL([br-exists m4_car(brinfo)])], [0], [],
+                        [], [OVS_VSCTL_CLEANUP])])
+   AT_CHECK([RUN_OVS_VSCTL([br-exists nonexistent])], [2], [], [],
+            [OVS_VSCTL_CLEANUP])
 
    dnl Check that each bridge has the expected parent and VLAN.
    m4_map([_CHECK_BRIDGE], [$@])])
@@ -76,20 +98,26 @@ m4_define([CHECK_PORTS],
      [RUN_OVS_VSCTL([list-ports $1])],
      [0],
      [m4_foreach([port], m4_cdr($@), [port
-])])
+])],
+     [],
+     [OVS_VSCTL_CLEANUP])
 
    dnl Check ports with --oneline.
    AT_CHECK(
      [RUN_OVS_VSCTL([--oneline list-ports $1])],
      [0],
      [m4_join([\n], m4_shift($@))
-])
-   AT_CHECK([RUN_OVS_VSCTL([port-to-br $1])], [1], [], [ovs-vsctl: no port named $1
-])
+],
+     [],
+     [OVS_VSCTL_CLEANUP])
+   AT_CHECK([RUN_OVS_VSCTL([port-to-br $1])], [1], [],
+            [ovs-vsctl: no port named $1
+],
+            [OVS_VSCTL_CLEANUP])
    m4_foreach(
      [port], m4_cdr($@), 
      [AT_CHECK([RUN_OVS_VSCTL([[port-to-br] port])], [0], [$1
-])])])
+], [], [OVS_VSCTL_CLEANUP])])])
 
 dnl CHECK_IFACES(BRIDGE, IFACE[, IFACE...])
 dnl
@@ -103,157 +131,145 @@ m4_define([CHECK_IFACES],
      [0],
      [m4_foreach([iface], m4_cdr($@), [iface
 ])])
-   AT_CHECK([RUN_OVS_VSCTL([iface-to-br $1])], [1], [], [ovs-vsctl: no interface named $1
-])
+   AT_CHECK([RUN_OVS_VSCTL([iface-to-br $1])], [1], [],
+            [ovs-vsctl: no interface named $1
+],
+            [OVS_VSCTL_CLEANUP])
    m4_foreach(
      [iface], m4_cdr($@), 
      [AT_CHECK([RUN_OVS_VSCTL([[iface-to-br] iface])], [0], [$1
-])])])
+],
+               [], [OVS_VSCTL_CLEANUP])])])
 
 dnl ----------------------------------------------------------------------
 AT_BANNER([ovs-vsctl unit tests -- real bridges])
 
 AT_SETUP([add-br a])
 AT_KEYWORDS([ovs-vsctl])
-AT_CHECK([RUN_OVS_VSCTL([add-br a])])
-AT_CHECK([cat conf], [0], [dnl
-bridge.a.port=a
-])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL([add-br a])], [0], [], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a])
 CHECK_IFACES([a])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([add-br a, add-br a])
 AT_KEYWORDS([ovs-vsctl])
-AT_CHECK([RUN_OVS_VSCTL([add-br a])])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL([add-br a])], [0], [], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([add-br a])], [1], [],
   [ovs-vsctl: cannot create a bridge named a because a bridge named a already exists
-])
+], [OVS_VSCTL_CLEANUP])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([add-br a, add-br b])
 AT_KEYWORDS([ovs-vsctl])
-AT_CHECK([RUN_OVS_VSCTL([add-br a], [add-br b])])
-AT_CHECK([cat conf], [0], [dnl
-bridge.a.port=a
-bridge.b.port=b
-])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL([add-br a], [add-br b])], [0], [], [],
+         [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0], [b, b, 0])
 CHECK_PORTS([a])
 CHECK_IFACES([a])
 CHECK_PORTS([b])
 CHECK_IFACES([b])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([add-br a, add-br b, del-br a])
 AT_KEYWORDS([ovs-vsctl])
-AT_CHECK([RUN_OVS_VSCTL([add-br a], [add-br b], [del-br a])])
-AT_CHECK([cat conf], [0], [dnl
-bridge.b.port=b
-])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL([add-br a], [add-br b], [del-br a])], [0], [], [],
+         [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([b, b, 0])
 CHECK_PORTS([b])
 CHECK_IFACES([b])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([add-br a, add-port a a1, add-port a a2])
 AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
    [add-br a], 
    [add-port a a1],
-   [add-port a a2])])
-AT_CHECK([cat conf], [0],
-  [bridge.a.port=a
-bridge.a.port=a1
-bridge.a.port=a2
-])
+   [add-port a a2])], [0], [], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a], [a1], [a2])
 CHECK_IFACES([a], [a1], [a2])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([add-br a, add-port a a1, add-port a a1])
 AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
    [add-br a], 
-   [add-port a a1])])
-AT_CHECK([cat conf], [0],
-  [bridge.a.port=a
-bridge.a.port=a1
-])
+   [add-port a a1])], [0], [], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([add-port a a1])], [1], [],
   [ovs-vsctl: cannot create a port named a1 because a port named a1 already exists on bridge a
-])
+], [OVS_VSCTL_CLEANUP])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([add-br a b, add-port a a1, add-port b b1, del-br a])
 AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
    [add-br a], 
    [add-br b], 
    [add-port a a1],
    [add-port b b1],
-   [del-br a])])
-AT_CHECK([cat conf], [0],
-  [bridge.b.port=b
-bridge.b.port=b1
-])
+   [del-br a])], [0], [], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([b, b, 0])
 CHECK_PORTS([b], [b1])
 CHECK_IFACES([b], [b1])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([add-br a, add-bond a bond0 a1 a2 a3])
 AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
    [add-br a], 
-   [add-bond a bond0 a1 a2 a3])])
-AT_CHECK([cat conf], [0], [dnl
-bonding.bond0.slave=a1
-bonding.bond0.slave=a2
-bonding.bond0.slave=a3
-bridge.a.port=a
-bridge.a.port=bond0
-])
+   [add-bond a bond0 a1 a2 a3])], [0], [], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a], [bond0])
 CHECK_IFACES([a], [a1], [a2], [a3])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([add-br a b, add-port a a1, add-port b b1, del-port a a1])
 AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
   [add-br a], 
   [add-br b], 
   [add-port a a1],
   [add-port b b1],
-  [del-port a a1])])
-AT_CHECK([cat conf], [0], [dnl
-bridge.a.port=a
-bridge.b.port=b
-bridge.b.port=b1
-])
+  [del-port a a1])], [0], [], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0], [b, b, 0])
 CHECK_PORTS([a])
 CHECK_IFACES([a])
 CHECK_PORTS([b], [b1])
 CHECK_IFACES([b], [b1])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([add-br a, add-bond a bond0 a1 a2 a3, del-port bond0])
 AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [add-br a], 
   [add-bond a bond0 a1 a2 a3],
-  [del-port bond0])])
-AT_CHECK([cat conf], [0], [dnl
-bridge.a.port=a
-])
+  [del-port bond0])], [0], [], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
+m4_define([ovs_vsctl_disabled_tests], [
 dnl ----------------------------------------------------------------------
 AT_BANNER([ovs-vsctl unit tests -- fake bridges])
 
@@ -270,6 +286,7 @@ vlan.xapi1.tag=9
 
 AT_SETUP([simple fake bridge])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
+OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
   [add-br xenbr0],
   [add-port xenbr0 eth0],
@@ -281,10 +298,12 @@ CHECK_PORTS([xenbr0], [eth0])
 CHECK_IFACES([xenbr0], [eth0])
 CHECK_PORTS([xapi1], [eth0.9])
 CHECK_IFACES([xapi1], [eth0.9])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([simple fake bridge + del-br fake bridge])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
+OVS_VSCTL_SETUP
 AT_DATA([conf], [SIMPLE_FAKE_CONF])
 AT_CHECK([RUN_OVS_VSCTL([del-br xapi1])])
 AT_CHECK([cat conf], [0], [dnl
@@ -294,14 +313,17 @@ bridge.xenbr0.port=xenbr0
 CHECK_BRIDGES([xenbr0, xenbr0, 0])
 CHECK_PORTS([xenbr0], [eth0])
 CHECK_IFACES([xenbr0], [eth0])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([simple fake bridge + del-br real bridge])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
+OVS_VSCTL_SETUP
 AT_DATA([conf], [SIMPLE_FAKE_CONF])
 AT_CHECK([RUN_OVS_VSCTL([del-br xenbr0])])
 AT_CHECK([cat conf], [0], [])
 CHECK_BRIDGES
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 m4_define([BOND_FAKE_CONF], [dnl
@@ -319,6 +341,7 @@ vlan.xapi2.tag=11
 
 AT_SETUP([fake bridge on bond])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
+OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
   [add-br xapi1],
   [add-bond xapi1 bond0 eth0 eth1],
@@ -330,16 +353,19 @@ CHECK_PORTS([xapi1], [bond0])
 CHECK_IFACES([xapi1], [eth0], [eth1])
 CHECK_PORTS([xapi2], [bond0.11])
 CHECK_IFACES([xapi2], [bond0.11])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([fake bridge on bond + del-br fake bridge])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
+OVS_VSCTL_SETUP
 AT_DATA([conf], [BOND_FAKE_CONF])
 AT_CHECK([RUN_OVS_VSCTL([--oneline del-br xapi2])], [0], [
 ])
 CHECK_BRIDGES([xapi1, xapi1, 0])
 CHECK_PORTS([xapi1], [bond0])
 CHECK_IFACES([xapi1], [eth0], [eth1])
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([fake bridge on bond + del-br real bridge])
@@ -347,4 +373,6 @@ AT_KEYWORDS([ovs-vsctl fake-bridge])
 AT_DATA([conf], [BOND_FAKE_CONF])
 AT_CHECK([RUN_OVS_VSCTL([del-br xapi1])])
 CHECK_BRIDGES
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
+])

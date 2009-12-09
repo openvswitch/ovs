@@ -6,6 +6,7 @@ bin_PROGRAMS += \
 	utilities/ovs-kill \
 	utilities/ovs-ofctl \
 	utilities/ovs-openflowd \
+	utilities/ovs-vsctl \
 	utilities/ovs-wdt
 noinst_PROGRAMS += utilities/nlmon
 bin_SCRIPTS += utilities/ovs-pki utilities/ovs-vsctl
@@ -24,8 +25,7 @@ EXTRA_DIST += \
 	utilities/ovs-pki-cgi.in \
 	utilities/ovs-pki.8.in \
 	utilities/ovs-pki.in \
-	utilities/ovs-vsctl.8.in \
-	utilities/ovs-vsctl.in
+	utilities/ovs-vsctl.8.in
 DISTCLEANFILES += \
 	utilities/ovs-appctl.8 \
 	utilities/ovs-controller.8 \
@@ -38,7 +38,6 @@ DISTCLEANFILES += \
 	utilities/ovs-pki \
 	utilities/ovs-pki-cgi \
 	utilities/ovs-pki.8 \
-	utilities/ovs-vsctl \
 	utilities/ovs-vsctl.8
 
 man_MANS += \
@@ -76,6 +75,9 @@ utilities_ovs_openflowd_LDADD = \
 	lib/libopenvswitch.a \
 	$(FAULT_LIBS) \
 	$(SSL_LIBS)
+
+utilities_ovs_vsctl_SOURCES = utilities/ovs-vsctl.c vswitchd/vswitch-idl.c
+utilities_ovs_vsctl_LDADD = lib/libopenvswitch.a $(FAULT_LIBS)
 
 utilities_ovs_wdt_SOURCES = utilities/ovs-wdt.c
 

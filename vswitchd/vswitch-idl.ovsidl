@@ -76,6 +76,9 @@
          "type": "integer"},
        "bond_fake_iface": {
          "comment": "For a bonded port, whether to create a fake interface with the name of the port.  Use only for compatibility with legacy software that requires this.",
+         "type": "boolean"},
+       "fake_bridge": {
+         "comment": "Does this port represent a sub-bridge for its tagged VLAN within the Bridge?  See ovs-vsctl(8) for more information.",
          "type": "boolean"}}},
    "Interface": {
      "comment": "An interface within a Port.",
@@ -106,7 +109,8 @@
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "ofport": {
          "comment": "OpenFlow port number for this interface.  This is populated when the port number becomes known.  Before it is populated its value will be missing.  If the interface cannot be added then this is indicated by a value of -1.",
-         "type": {"key": "integer", "min": 0, "max": 1}}}},
+         "type": {"key": "integer", "min": 0, "max": 1},
+         "ephemeral": true}}},
    "Mirror": {
      "comment": "A port mirror within a Bridge.",
      "columns": {
