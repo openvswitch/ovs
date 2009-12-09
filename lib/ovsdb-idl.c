@@ -599,7 +599,7 @@ ovsdb_idl_row_reparse_backrefs(struct ovsdb_idl_row *row, bool destroy_dsts)
 static struct ovsdb_idl_row *
 ovsdb_idl_row_create__(const struct ovsdb_idl_table_class *class)
 {
-    struct ovsdb_idl_row *row = xmalloc(class->allocation_size);
+    struct ovsdb_idl_row *row = xzalloc(class->allocation_size);
     memset(row, 0, sizeof *row);
     list_init(&row->src_arcs);
     list_init(&row->dst_arcs);
@@ -916,7 +916,6 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     struct ovsdb_idl_row *row;
     struct json *operations;
     bool any_updates;
-    enum ovsdb_idl_txn_status status;
 
     if (txn != txn->idl->txn) {
         return txn->status;
@@ -1018,22 +1017,20 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         }
     }
 
-    status = (!any_updates ? TXN_SUCCESS
-              : jsonrpc_session_send(
-                  txn->idl->session,
-                  jsonrpc_create_request(
-                      "transact", operations, &txn->request_id))
-              ? TXN_TRY_AGAIN
-              : TXN_INCOMPLETE);
-
-    hmap_insert(&txn->idl->outstanding_txns, &txn->hmap_node,
-                json_hash(txn->request_id, 0));
-    txn->idl->txn = NULL;
-
-    ovsdb_idl_txn_disassemble(txn);
-    if (status != TXN_INCOMPLETE) {
-        ovsdb_idl_txn_complete(txn, status);
+    if (!any_updates) {
+        txn->status = TXN_SUCCESS;
+    } else if (!jsonrpc_session_send(
+                   txn->idl->session,
+                   jsonrpc_create_request(
+                       "transact", operations, &txn->request_id))) {
+        hmap_insert(&txn->idl->outstanding_txns, &txn->hmap_node,
+                    json_hash(txn->request_id, 0));
+    } else {
+        txn->status = TXN_INCOMPLETE;
     }
+
+    txn->idl->txn = NULL;
+    ovsdb_idl_txn_disassemble(txn);
     return txn->status;
 }
 
