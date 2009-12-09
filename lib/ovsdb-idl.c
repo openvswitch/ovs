@@ -28,6 +28,7 @@
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "ovsdb-idl-provider.h"
+#include "poll-loop.h"
 #include "shash.h"
 #include "util.h"
 
@@ -798,6 +799,14 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
 {
     ovsdb_idl_txn_abort(txn);
     free(txn);
+}
+
+void
+ovsdb_idl_txn_wait(const struct ovsdb_idl_txn *txn)
+{
+    if (txn->status != TXN_INCOMPLETE) {
+        poll_immediate_wake();
+    }
 }
 
 static struct json *

@@ -954,6 +954,7 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
     while ((status = ovsdb_idl_txn_commit(txn)) == TXN_INCOMPLETE) {
         ovsdb_idl_run(idl);
         ovsdb_idl_wait(idl);
+        ovsdb_idl_txn_wait(txn);
         poll_block();
     }
     ovsdb_idl_txn_destroy(txn);

@@ -1479,6 +1479,7 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
     while ((status = ovsdb_idl_txn_commit(txn)) == TXN_INCOMPLETE) {
         ovsdb_idl_run(idl);
         ovsdb_idl_wait(idl);
+        ovsdb_idl_txn_wait(txn);
         poll_block();
     }
     printf("%03d: commit, status=%s\n",

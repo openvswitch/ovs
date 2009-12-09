@@ -42,6 +42,7 @@ const char *ovsdb_idl_txn_status_to_string(enum ovsdb_idl_txn_status);
 
 struct ovsdb_idl_txn *ovsdb_idl_txn_create(struct ovsdb_idl *);
 void ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *);
+void ovsdb_idl_txn_wait(const struct ovsdb_idl_txn *);
 enum ovsdb_idl_txn_status ovsdb_idl_txn_commit(struct ovsdb_idl_txn *);
 void ovsdb_idl_txn_abort(struct ovsdb_idl_txn *);
 
