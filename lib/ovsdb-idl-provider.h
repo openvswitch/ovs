@@ -84,4 +84,6 @@ struct ovsdb_idl_row *ovsdb_idl_txn_insert(
     struct ovsdb_idl_txn *,
     const struct ovsdb_idl_table_class *);
 
+struct ovsdb_idl_txn *ovsdb_idl_txn_get(const struct ovsdb_idl_row *);
+
 #endif /* ovsdb-idl-provider.h */

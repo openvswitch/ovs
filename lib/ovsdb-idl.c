@@ -1222,3 +1222,11 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
     ovsdb_idl_txn_complete(txn, status);
     return true;
 }
+
+struct ovsdb_idl_txn *
+ovsdb_idl_txn_get(const struct ovsdb_idl_row *row)
+{
+    struct ovsdb_idl_txn *txn = row->table->idl->txn;
+    assert(txn != NULL);
+    return txn;
+}
