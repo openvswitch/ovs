@@ -15,20 +15,20 @@ ovs\-vsctl \- utility for querying and configuring \fBovs\-vswitchd\fR
 [\fB\-\-\fR \fIcommand \fR[\fIargs\fR\&...]]
 .
 .SH DESCRIPTION
-The \fBovs\-vsctl\fR program configures \fBovs\-vswitchd\fR(8), mainly
-by providing a high\-level interface to editing its configuration file
-\fBovs\-vswitchd.conf\fR(5).  This program is mainly intended for use
-when \fBovs\-vswitchd\fR is running, but it can also be used when
-\fBovs\-vswitchd\fR is not running.  In the latter case configuration
-changes will only take effect when \fBovs\-vswitchd\fR is started.
+The \fBovs\-vsctl\fR program configures \fBovs\-vswitchd\fR(8) by
+providing a high\-level interface to editing its configuration
+database.  This program is mainly intended for use when
+\fBovs\-vswitchd\fR is running.  If it is used when
+\fBovs\-vswitchd\fR is not running, then \fB\-\-no\-wait\fR should be
+specified and configuration changes will only take effect when
+\fBovs\-vswitchd\fR is started.
 .PP
-By default, each time \fBovs\-vsctl\fR runs, it examines and,
-depending on the requested command or commands, possibly applies
-changes to an
-\fBovs\-vswitchd.conf\fR file.  Then, if it applied any changes and if
-\fBovs\-vswitchd\fR is running, it tells \fBovs\-vswitchd\fR to reload
-the modified configuration file and waits for the reload to complete
-before exiting.
+By default, each time \fBovs\-vsctl\fR runs, it connects to an
+\fBovsdb\-server\fR process that maintains an Open vSwitch
+configuration database.  Using this connection, it queries and
+possibly applies changes to the database, depending on the supplied
+commands.  Then, if it applied any changes, it waits until
+\fBovs\-vswitchd\fR has finished reconfiguring itself before it exits.
 .
 .SS "Linux VLAN Bridging Compatibility"
 The \fBovs\-vsctl\fR program supports the model of a bridge
@@ -54,52 +54,42 @@ they are members.
 The following options affect the general outline of \fBovs\-vsctl\fR's
 activities:
 .
-.IP "\fB\-c \fIfile\fR"
-.IQ "\fB\-\-config=\fIfile\fR"
-Sets the configuration file that \fBovs\-vsctl\fR reads and possibly
-modifies.  The default is \fB@localstatedir@/ovs\-vswitchd.conf\fR.
+.IP "\fB\-\-db=\fIserver\fR"
+Sets \fIserver\fR as the database server that \fBovs\-vsctl\fR
+contacts to query or modify configuration.  The default is
+\fBunix:@RUNDIR@/ovsdb\-server\fR.  \fIserver\fR must take one of the
+following forms:
+.RS
+.IP "\fBtcp:\fIip\fB:\fIport\fR"
+Connect to the given TCP \fIport\fR on \fIip\fR.
+.IP "\fBunix:\fIfile\fR"
+Connect to the Unix domain server socket named \fIfile\fR.
+.RE
+.IP "\fB\-\-no\-wait\fR"
+Prevents \fBovs\-vsctl\fR from waiting for \fBovs\-vswitchd\fR to
+reconfigure itself according to the the modified database.  This
+option should be used if \fBovs\-vswitchd\fR is not running;
+otherwise, \fBovs-vsctl\fR will not exit until \fBovs-vswitchd\fR
+starts.
 .IP
-If \fIfile\fR is specified as \fB\-\fR, then \fBovs\-vsctl\fR reads
-the configuration file from standard input and, for commands that
-modify the configuration, writes the new one to standard output.  This
-is useful for testing but it should not be used in production because
-it bypasses the Open vSwitch configuration file locking protocol.
-.
-.IP "\fB\-t \fItarget\fR"
-.IQ "\fB\-\-target=\fItarget\fR"
-Configures how \fBovs\-vsctl\fR contacts \fBovs\-vswitchd\fR to
-instruct it to reload its configuration file.
-.IP
-If \fItarget\fR begins with \fB/\fR it must name a Unix domain socket
-on which \fBovs\-vswitchd\fR is listening for control channel
-connections.  By default, \fBovs\-vswitchd\fR listens on a Unix domain
-socket named \fB@RUNDIR@/ovs\-vswitchd.\fIpid\fB.ctl\fR, where
-\fIpid\fR is \fBovs\-vswitchd\fR's process ID.
-.IP
-Otherwise, \fBovs\-appctl\fR looks for a pidfile, that is, a file
-whose contents are the process ID of a running process as a decimal
-number, named \fB@RUNDIR@/\fItarget\fB.pid\fR.  (The \fB\-\-pidfile\fR
-option makes an Open vSwitch daemon create a pidfile.)
-\fBovs\-appctl\fR reads the pidfile, then looks for a Unix socket
-named \fB@RUNDIR@/\fItarget\fB.\fIpid\fB.ctl\fR, where \fIpid\fR is
-replaced by the process ID read from \fItarget\fR, and uses that file
-as if it had been specified directly as the target.
-.IP
-The default target is \fBovs\-vswitchd\fR.
-.IP "\fB\-\-no\-reload\fR"
-Prevents \fBovs\-vsctl\fR from telling \fBovs\-vswitchd\fR to reload
-its configuration file.
+This option has no effect if the commands specified do not change the
+database.
 .
 .IP "\fB\-\-no\-syslog\fR"
 By default, \fBovs\-vsctl\fR logs its arguments and the details of any
 changes that it makes to the system log.  This option disables this
 logging.
+.IP
+This option is equivalent to \fB\-\-verbose=vvsctl:syslog:warn\fR.
+.
 .IP "\fB\-\-oneline\fR"
 Modifies the output format so that the output for each command is printed
 on a single line.  New-line characters that would otherwise separate
 lines are printed as \fB\\n\fR, and any instances of \fB\\\fR that
 would otherwise appear in the output are doubled.
 Prints a blank line for each command that has no output.
+.
+.so lib/vlog.man
 .
 .SH COMMANDS
 The commands implemented by \fBovs\-vsctl\fR are described in the
@@ -203,5 +193,5 @@ The \fIbridge\fR argument to \fBbr\-exists\fR specified the name of a
 bridge that does not exist.
 .SH "SEE ALSO"
 .
-.BR ovs\-vswitchd.conf (5),
+.BR ovsdb\-server (1),
 .BR ovs\-vswitchd (8).
