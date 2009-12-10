@@ -129,18 +129,6 @@ function remove_modules {
     fi
 }
 
-function reload_vswitchd {
-    if [ -f "$VSWITCHD_PIDFILE" ]; then
-        "$appctl" --target=/var/run/ovs-vswitchd.`cat $VSWITCHD_PIDFILE`.ctl vswitchd/reload
-    fi
-}
-
-function reload_brcompatd {
-    if [ -f "$BRCOMPATD_PIDFILE" ]; then
-        "$appctl" --target=/var/run/ovs-brcompatd.`cat $BRCOMPATD_PIDFILE`.ctl vlog/reopen
-    fi
-}
-
 function start_ovsdb_server {
     local syslog_opt="-vANY:SYSLOG:${OVSDB_SERVER_SYSLOG_LOGLEVEL}"
     local logfile_file_opt=""
@@ -315,8 +303,6 @@ WARNING!!!
 
 Restarting vswitch on a live server is not guaranteed to work.  It is
 provided as a convenience for those situations in which it does work.
-If you just want to reload the configuration file, use "reload"
-instead of restart.
 
 EOF
     read -s -r -n 1 -p "Countinue with restart (y/N): " response
@@ -347,8 +333,12 @@ function start {
 
     if [ ! -e "$OVSDB_SERVER_DB" ]; then
         warning "$OVSDB_SERVER_DB does not exist"
-        action "Creating empty $OVSDB_SERVER_DB" $ovsdb_tool create "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
-        action "Creating initial table in $OVSDB_SERVER_DB" $ovsdb_tool transact "$OVSDB_SERVER_DB" '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]'
+
+        action "Creating empty database $OVSDB_SERVER_DB" true
+        $ovsdb_tool create "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
+
+        action "Creating initial table in $OVSDB_SERVER_DB" true
+        $ovsdb_tool transact "$OVSDB_SERVER_DB" '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]'
     fi
 
     start_ovsdb_server
@@ -361,7 +351,6 @@ function start {
 
     start_vswitchd
     start_brcompatd
-    reload_vswitchd  # ensures ovs-vswitchd has fully read config.
     touch /var/lock/subsys/vswitch
 }
 
@@ -389,10 +378,6 @@ case "$1" in
     restart)
         restart
         ;;
-    reload)
-        reload_vswitchd
-        reload_brcompatd
-        ;;
     strace-vswitchd)
         shift
         strace -p $(cat "$VSWITCHD_PIDFILE") "$@"
@@ -412,7 +397,7 @@ case "$1" in
         /usr/sbin/ovs-brcompatd -V
         ;;
     help)
-        printf "vswitch [start|stop|restart|reload|unload|status|version]\n"
+        printf "vswitch [start|stop|restart|unload|status|version]\n"
         ;;
     *)
         printf "Unknown command: $1\n"
