@@ -75,10 +75,6 @@ static void usage(void) NO_RETURN;
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 60);
 
-/* Maximum number of milliseconds to wait for the config file to be
- * unlocked.  If set to zero, no waiting will occur. */
-static int lock_timeout = 500;
-
 /* Maximum number of milliseconds to wait before pruning port entries that 
  * no longer exist.  If set to zero, ports are never pruned. */
 static int prune_timeout = 5000;
@@ -1305,7 +1301,6 @@ static const char *
 parse_options(int argc, char *argv[])
 {
     enum {
-        OPT_LOCK_TIMEOUT = UCHAR_MAX + 1,
         OPT_PRUNE_TIMEOUT,
         OPT_APPCTL_COMMAND,
         VLOG_OPTION_ENUMS,
@@ -1314,7 +1309,6 @@ parse_options(int argc, char *argv[])
     static struct option long_options[] = {
         {"help",             no_argument, 0, 'h'},
         {"version",          no_argument, 0, 'V'},
-        {"lock-timeout",     required_argument, 0, OPT_LOCK_TIMEOUT},
         {"prune-timeout",    required_argument, 0, OPT_PRUNE_TIMEOUT},
         {"appctl-command",   required_argument, 0, OPT_APPCTL_COMMAND},
         DAEMON_LONG_OPTIONS,
@@ -1341,10 +1335,6 @@ parse_options(int argc, char *argv[])
         case 'V':
             OVS_PRINT_VERSION(0, 0);
             exit(EXIT_SUCCESS);
-
-        case OPT_LOCK_TIMEOUT:
-            lock_timeout = atoi(optarg);
-            break;
 
         case OPT_PRUNE_TIMEOUT:
             prune_timeout = atoi(optarg) * 1000;
@@ -1390,7 +1380,6 @@ usage(void)
     printf("\nConfiguration options:\n"
            "  --appctl-command=COMMAND  shell command to run ovs-appctl\n"
            "  --prune-timeout=SECS    wait at most SECS before pruning ports\n"
-           "  --lock-timeout=MSECS    wait at most MSECS for CONFIG to unlock\n"
           );
     daemon_usage();
     vlog_usage();
