@@ -893,6 +893,8 @@ add_port(const struct ovsrec_open_vswitch *ovs,
     port = ovsrec_port_insert(txn_from_openvswitch(ovs));
     ovsrec_port_set_name(port, port_name);
     ovsrec_port_set_interfaces(port, ifaces, n_ifaces);
+    free(ifaces);
+
     if (bridge->vlan) {
         int64_t tag = bridge->vlan;
         ovsrec_port_set_tag(port, &tag, 1);
