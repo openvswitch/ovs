@@ -514,7 +514,7 @@ static struct vsctl_port *
 find_port(struct vsctl_info *info, const char *name, bool must_exist)
 {
     struct vsctl_port *port = shash_find_data(&info->ports, name);
-    if (!strcmp(name, port->bridge->name)) {
+    if (port && !strcmp(name, port->bridge->name)) {
         port = NULL;
     }
     if (must_exist && !port) {
@@ -527,7 +527,7 @@ static struct vsctl_iface *
 find_iface(struct vsctl_info *info, const char *name, bool must_exist)
 {
     struct vsctl_iface *iface = shash_find_data(&info->ifaces, name);
-    if (!strcmp(name, iface->port->bridge->name)) {
+    if (iface && !strcmp(name, iface->port->bridge->name)) {
         iface = NULL;
     }
     if (must_exist && !iface) {
@@ -690,22 +690,26 @@ del_port(struct vsctl_info *info, struct vsctl_port *port)
 static void
 cmd_del_br(struct vsctl_context *ctx)
 {
-    struct shash_node *node;
-    struct vsctl_info info;
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
     struct vsctl_bridge *bridge;
+    struct vsctl_info info;
 
     get_info(ctx->ovs, &info);
-    bridge = find_bridge(&info, ctx->argv[1], true);
-    SHASH_FOR_EACH (node, &info.ports) {
-        struct vsctl_port *port = node->data;
-        if (port->bridge == bridge
-            || !strcmp(port->port_cfg->name, bridge->name)) {
-            del_port(&info, port);
+    bridge = find_bridge(&info, ctx->argv[1], must_exist);
+    if (bridge) {
+        struct shash_node *node;
+
+        SHASH_FOR_EACH (node, &info.ports) {
+            struct vsctl_port *port = node->data;
+            if (port->bridge == bridge
+                || !strcmp(port->port_cfg->name, bridge->name)) {
+                del_port(&info, port);
+            }
         }
-    }
-    if (bridge->br_cfg) {
-        ovsrec_bridge_delete(bridge->br_cfg);
-        ovs_delete_bridge(ctx->ovs, bridge->br_cfg);
+        if (bridge->br_cfg) {
+            ovsrec_bridge_delete(bridge->br_cfg);
+            ovs_delete_bridge(ctx->ovs, bridge->br_cfg);
+        }
     }
     free_info(&info);
 }
@@ -954,25 +958,30 @@ cmd_add_bond(struct vsctl_context *ctx)
 static void
 cmd_del_port(struct vsctl_context *ctx)
 {
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
     struct vsctl_info info;
 
     get_info(ctx->ovs, &info);
     if (ctx->argc == 2) {
-        struct vsctl_port *port = find_port(&info, ctx->argv[1], true);
-        del_port(&info, port);
+        struct vsctl_port *port = find_port(&info, ctx->argv[1], must_exist);
+        if (port) {
+            del_port(&info, port);
+        }
     } else if (ctx->argc == 3) {
         struct vsctl_bridge *bridge = find_bridge(&info, ctx->argv[1], true);
-        struct vsctl_port *port = find_port(&info, ctx->argv[2], true);
+        struct vsctl_port *port = find_port(&info, ctx->argv[2], must_exist);
 
-        if (port->bridge == bridge) {
-            del_port(&info, port);
-        } else if (port->bridge->parent == bridge) {
-            ovs_fatal(0, "bridge %s does not have a port %s (although its "
-                      "parent bridge %s does)",
-                      ctx->argv[1], ctx->argv[2], bridge->parent->name);
-        } else {
-            ovs_fatal(0, "bridge %s does not have a port %s",
-                      ctx->argv[1], ctx->argv[2]);
+        if (port) {
+            if (port->bridge == bridge) {
+                del_port(&info, port);
+            } else if (port->bridge->parent == bridge) {
+                ovs_fatal(0, "bridge %s does not have a port %s (although its "
+                          "parent bridge %s does)",
+                          ctx->argv[1], ctx->argv[2], bridge->parent->name);
+            } else {
+                ovs_fatal(0, "bridge %s does not have a port %s",
+                          ctx->argv[1], ctx->argv[2]);
+            }
         }
     }
     free_info(&info);
@@ -1242,7 +1251,7 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
     static const struct vsctl_command all_commands[] = {
         /* Bridge commands. */
         {"add-br", 1, 3, cmd_add_br, ""},
-        {"del-br", 1, 1, cmd_del_br, ""},
+        {"del-br", 1, 1, cmd_del_br, "--if-exists"},
         {"list-br", 0, 0, cmd_list_br, ""},
         {"br-exists", 1, 1, cmd_br_exists, ""},
         {"br-to-vlan", 1, 1, cmd_br_to_vlan, ""},
@@ -1254,7 +1263,7 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
         {"list-ports", 1, 1, cmd_list_ports, ""},
         {"add-port", 2, 2, cmd_add_port, ""},
         {"add-bond", 4, INT_MAX, cmd_add_bond, ""},
-        {"del-port", 1, 2, cmd_del_port, ""},
+        {"del-port", 1, 2, cmd_del_port, "--if-exists"},
         {"port-to-br", 1, 1, cmd_port_to_br, ""},
         {"port-set-external-id", 2, 3, cmd_port_set_external_id, ""},
         {"port-get-external-id", 1, 2, cmd_port_get_external_id, ""},

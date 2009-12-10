@@ -11,7 +11,7 @@
 ovs\-vsctl \- utility for querying and configuring \fBovs\-vswitchd\fR
 .
 .SH SYNOPSIS
-\fBovs\-vsctl\fR [\fIoptions\fR] \fIcommand \fR[\fIargs\fR\&...]
+\fBovs\-vsctl\fR [\fIoptions\fR] [\fB\-\-\fR] \fIcommand \fR[\fIargs\fR\&...]
 [\fB\-\-\fR \fIcommand \fR[\fIargs\fR\&...]]
 .
 .SH DESCRIPTION
@@ -29,6 +29,10 @@ configuration database.  Using this connection, it queries and
 possibly applies changes to the database, depending on the supplied
 commands.  Then, if it applied any changes, it waits until
 \fBovs\-vswitchd\fR has finished reconfiguring itself before it exits.
+.PP
+\fBovs\-vsctl\fR can perform any number of commands in a single run,
+implemented as a single atomic transaction against the database.
+Commands are separated on the command line by \fB\-\-\fR arguments.
 .
 .SS "Linux VLAN Bridging Compatibility"
 The \fBovs\-vsctl\fR program supports the model of a bridge
@@ -51,8 +55,11 @@ they are members.
 .
 .SH OPTIONS
 .
-The following options affect the general outline of \fBovs\-vsctl\fR's
-activities:
+The following options affect the behavior \fBovs\-vsctl\fR as a whole.
+Some individual commands also accept their own options, which are
+given just before the command name.  If the first command on the
+command line has options, then those options must be separated from
+the global options by \fB\-\-\fR.
 .
 .IP "\fB\-\-db=\fIserver\fR"
 Sets \fIserver\fR as the database server that \fBovs\-vsctl\fR
@@ -109,10 +116,14 @@ itself be a fake bridge.  The new fake bridge will be on 802.1Q VLAN
 \fIvlan\fR, which must be an integer between 1 and 4095.  Initially
 \fIbridge\fR will have no ports (other than \fIbridge\fR itself).
 .
-.IP "\fBdel\-br \fIbridge\fR"
+.IP "[\fB\-\-if\-exists\fR] \fBdel\-br \fIbridge\fR"
 Deletes \fIbridge\fR and all of its ports.  If \fIbridge\fR is a real
 bridge, this command also deletes any fake bridges that were created
 with \fIbridge\fR as parent, including all of their ports.
+.IP
+Without \fB\-\-if\-exists\fR, attempting to delete a bridge that does
+not exist is an error.  With \fB\-\-if\-exists\fR, attempting to
+delete a bridge that does not exist has no effect.
 .
 .IP "\fBlist\-br\fR"
 Lists all existing real and fake bridges on standard output, one per
@@ -168,10 +179,14 @@ Creates on \fIbridge\fR a new port named \fIport\fR that bonds
 together the network devices given as each \fIiface\fR.  At least two
 interfaces must be named.
 .
-.IP "\fBdel\-port \fR[\fIbridge\fR] \fIport\fR"
+.IP "[\fB\-\-if\-exists\fR] \fBdel\-port \fR[\fIbridge\fR] \fIport\fR"
 Deletes \fIport\fR.  If \fIbridge\fR is omitted, \fIport\fR is removed
 from whatever bridge contains it; if \fIbridge\fR is specified, it
 must be the real or fake bridge that contains \fIport\fR.
+.IP
+Without \fB\-\-if\-exists\fR, attempting to delete a port that does
+not exist is an error.  With \fB\-\-if\-exists\fR, attempting to
+delete a port that does not exist has no effect.
 .
 .IP "\fBport\-to\-br \fIport\fR"
 Prints the name of the bridge that contains \fIport\fR on standard
@@ -240,6 +255,15 @@ Create a new bridge named br0 and add port eth0 to it:
 Alternatively, perform both operations in a single atomic transaction:
 .IP 
 .B "ovs-vsctl add\-br br0 \-\- add\-port br0 eth0"
+.PP
+Delete bridge \fBbr0\fR, reporting an error if it does not exist:
+.IP
+.B "ovs\-vsctl del\-br br0"
+.PP
+Delete bridge \fBbr0\fR if it exists (the \fB\-\-\fR is required to
+separate \fBdel\-br\fR's options from the global options):
+.IP
+.B "ovs\-vsctl \-\- \-\-if\-exists del\-br br0"
 .
 .SH "EXIT STATUS"
 .IP "0"
