@@ -402,10 +402,12 @@ case "$1" in
         strace -p $(cat "$BRCOMPATD_PIDFILE") "$@"
         ;;
     status)
+        status -p ovsdb-server.pid ovsdb-server
         status -p ovs-vswitchd.pid ovs-vswitchd
         status -p ovs-brcompatd.pid ovs-brcompatd
         ;;
     version)
+        /usr/sbin/ovsdb-server -V
         /usr/sbin/ovs-vswitchd -V
         /usr/sbin/ovs-brcompatd -V
         ;;
