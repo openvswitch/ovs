@@ -21,7 +21,6 @@
 
 # Keep other-config/ keys in sync with device.ml:vif_udev_keys
 
-cfg_mod="/usr/bin/ovs-cfg-mod"
 vsctl="/usr/bin/ovs-vsctl"
 dump_vif_details="/usr/share/vswitch/scripts/dump-vif-details"
 service="/sbin/service"
@@ -81,13 +80,6 @@ add_to_bridge()
     fi
     logger -t scripts-vif "Adding ${vif} to ${bridge} with address ${address}"
 
-    local VLAN_ID=$($vsctl br-to-vlan $bridge)
-    local vid=
-    if [ "$VLAN_ID" -ne 0 ] ; then
-	bridge=$($vsctl br-to-parent $bridge)
-	vid="--add=vlan.${vif}.tag=${VLAN_ID}"
-    fi
-
     ${IP} link set "${vif}" down                        || logger -t scripts-vif "Failed to ip link set ${vif} down"
     ${IP} link set "${vif}" arp off                     || logger -t scripts-vif "Failed to ip link set ${vif} arp off"
     ${IP} link set "${vif}" multicast off               || logger -t scripts-vif "Failed to ip link set ${vif} multicast off"
@@ -99,14 +91,7 @@ add_to_bridge()
 	    logger -t scripts-vif "Failed to retrieve vif details for vswitch"
     fi
 
-    $cfg_mod -F /etc/ovs-vswitchd.conf \
-        --del-match="bridge.*.port=$vif" \
-        --del-match="vlan.$vif.trunks=*" \
-        --del-match="vlan.$vif.tag=*" \
-        --del-match="port.$vif.[!0-9]*" \
-        --add="bridge.$bridge.port=$vif" \
-        $vid $vif_details -c 
-    $service vswitch reload
+    $vsctl add-port $bridge $vif $vif_details
 
     ${IP} link set "${vif}" up                          || logger -t scripts-vif "Failed to ip link set ${vif} up"
 }

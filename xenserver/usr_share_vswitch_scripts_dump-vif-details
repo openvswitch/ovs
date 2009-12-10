@@ -25,7 +25,6 @@ def get_vif_ref(domid, devid):
 
 # Query XAPI for the information we need using the vif's opaque reference
 def dump_vif_info(domid, devid, vif_ref):
-	vif_info = []
 	session = XenAPI.xapi_local()
 	session.xenapi.login_with_password("root", "")
 	try: 
@@ -34,11 +33,14 @@ def dump_vif_info(domid, devid, vif_ref):
 		vm_uuid = session.xenapi.VM.get_uuid(vif_rec["VM"])
 
 		# Data to allow vNetManager to associate VIFs with xapi data
-		add_port = '--add=port.vif%s.%s' % (domid, devid)
-		vif_info.append('%s.net-uuid=%s' % (add_port, net_rec["uuid"]))
-		vif_info.append('%s.vif-mac=%s' % (add_port, vif_rec["MAC"]))
-		vif_info.append('%s.vif-uuid=%s' % (add_port, vif_rec["uuid"]))
-		vif_info.append('%s.vm-uuid=%s' % (add_port, vm_uuid))
+		vif_info = []
+		vif_info.append(('xs-network-uuid', net_rec["uuid"]))
+		vif_info.append(('xs-vif-mac', vif_rec["MAC"]))
+		vif_info.append(('xs-vif-uuid', vif_rec["uuid"]))
+		vif_info.append(('xs-vm-uuid', vm_uuid))
+		for key, value in vif_info:
+			print("-- iface-set-external-id vif%s.%s %s %s"
+			      % (domid, devid, key, value))
 
 		# vNetManager needs to know the network UUID(s) associated with
 		# each datapath.  Normally interface-reconfigure adds them, but
@@ -51,13 +53,13 @@ def dump_vif_info(domid, devid, vif_ref):
 		# ovs-vswitchd connection to vNetManager and setting this
 		# configuration variable, but vNetManager can tolerate that.
 		if not net_rec['PIFs']:
-			key = 'bridge.%s.xs-network-uuids' % net_rec['bridge']
+			bridge = net_rec['bridge']
+			key = "xs-network-uuids"
 			value = net_rec['uuid']
-			vif_info.append('--del-match=%s=*' % key)
-			vif_info.append('--add=%s=%s' % (key, value))
+			print("-- bridge-set-external-id %s %s %s"
+			      % (bridge, key, value))
 	finally:
 		session.xenapi.session.logout()
-	print ' '.join(vif_info)
 	
 if __name__ == '__main__':
 	if len(sys.argv) != 3:
