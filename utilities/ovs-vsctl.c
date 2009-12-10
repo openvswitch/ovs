@@ -121,11 +121,13 @@ parse_options(int argc, char *argv[])
     enum {
         OPT_DB = UCHAR_MAX + 1,
         OPT_ONELINE,
-        OPT_NO_SYSLOG
+        OPT_NO_SYSLOG,
+        OPT_NO_WAIT
     };
     static struct option long_options[] = {
         {"db", required_argument, 0, OPT_DB},
         {"no-syslog", no_argument, 0, OPT_NO_SYSLOG},
+        {"no-wait", no_argument, 0, OPT_NO_WAIT},
         {"oneline", no_argument, 0, OPT_ONELINE},
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
@@ -152,6 +154,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_NO_SYSLOG:
             vlog_set_levels(VLM_vsctl, VLF_SYSLOG, VLL_WARN);
+            break;
+
+        case OPT_NO_WAIT:
+            /* XXX not yet implemented */
             break;
 
         case 'h':
