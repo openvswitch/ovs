@@ -501,30 +501,36 @@ check_conflicts(struct vsctl_info *info, const char *name,
 }
 
 static struct vsctl_bridge *
-find_bridge(struct vsctl_info *info, const char *name)
+find_bridge(struct vsctl_info *info, const char *name, bool must_exist)
 {
     struct vsctl_bridge *br = shash_find_data(&info->bridges, name);
-    if (!br) {
+    if (must_exist && !br) {
         ovs_fatal(0, "no bridge named %s", name);
     }
     return br;
 }
 
 static struct vsctl_port *
-find_port(struct vsctl_info *info, const char *name)
+find_port(struct vsctl_info *info, const char *name, bool must_exist)
 {
     struct vsctl_port *port = shash_find_data(&info->ports, name);
-    if (!port || !strcmp(name, port->bridge->name)) {
+    if (!strcmp(name, port->bridge->name)) {
+        port = NULL;
+    }
+    if (must_exist && !port) {
         ovs_fatal(0, "no port named %s", name);
     }
     return port;
 }
 
 static struct vsctl_iface *
-find_iface(struct vsctl_info *info, const char *name)
+find_iface(struct vsctl_info *info, const char *name, bool must_exist)
 {
     struct vsctl_iface *iface = shash_find_data(&info->ifaces, name);
-    if (!iface || !strcmp(name, iface->port->bridge->name)) {
+    if (!strcmp(name, iface->port->bridge->name)) {
+        iface = NULL;
+    }
+    if (must_exist && !iface) {
         ovs_fatal(0, "no interface named %s", name);
     }
     return iface;
@@ -636,7 +642,7 @@ cmd_add_br(struct vsctl_context *ctx)
             ovs_fatal(0, "%s: vlan must be between 1 and 4095", ctx->argv[0]);
         }
 
-        parent = shash_find_data(&info.bridges, parent_name);
+        parent = find_bridge(&info, parent_name, false);
         if (parent && parent->vlan) {
             ovs_fatal(0, "cannot create brdige with fake bridge as parent");
         }
@@ -689,7 +695,7 @@ cmd_del_br(struct vsctl_context *ctx)
     struct vsctl_bridge *bridge;
 
     get_info(ctx->ovs, &info);
-    bridge = find_bridge(&info, ctx->argv[1]);
+    bridge = find_bridge(&info, ctx->argv[1], true);
     SHASH_FOR_EACH (node, &info.ports) {
         struct vsctl_port *port = node->data;
         if (port->bridge == bridge
@@ -742,7 +748,7 @@ cmd_br_exists(struct vsctl_context *ctx)
     struct vsctl_info info;
 
     get_info(ctx->ovs, &info);
-    if (!shash_find_data(&info.bridges, ctx->argv[1])) {
+    if (!find_bridge(&info, ctx->argv[1], false)) {
         exit(2);
     }
     free_info(&info);
@@ -796,7 +802,7 @@ cmd_br_set_external_id(struct vsctl_context *ctx)
     size_t n;
 
     get_info(ctx->ovs, &info);
-    bridge = find_bridge(&info, ctx->argv[1]);
+    bridge = find_bridge(&info, ctx->argv[1], true);
     if (bridge->br_cfg) {
         set_external_id(bridge->br_cfg->key_external_ids,
                         bridge->br_cfg->value_external_ids,
@@ -851,7 +857,7 @@ cmd_br_get_external_id(struct vsctl_context *ctx)
     struct vsctl_bridge *bridge;
 
     get_info(ctx->ovs, &info);
-    bridge = find_bridge(&info, ctx->argv[1]);
+    bridge = find_bridge(&info, ctx->argv[1], true);
     if (bridge->br_cfg) {
         get_external_id(bridge->br_cfg->key_external_ids,
                         bridge->br_cfg->value_external_ids,
@@ -878,7 +884,7 @@ cmd_list_ports(struct vsctl_context *ctx)
     struct svec ports;
 
     get_info(ctx->ovs, &info);
-    br = find_bridge(&info, ctx->argv[1]);
+    br = find_bridge(&info, ctx->argv[1], true);
 
     svec_init(&ports);
     SHASH_FOR_EACH (node, &info.ports) {
@@ -909,7 +915,7 @@ add_port(const struct ovsrec_open_vswitch *ovs,
     check_conflicts(&info, port_name,
                     xasprintf("cannot create a port named %s", port_name));
     /* XXX need to check for conflicts on interfaces too */
-    bridge = find_bridge(&info, br_name);
+    bridge = find_bridge(&info, br_name, true);
 
     ifaces = xmalloc(n_ifaces * sizeof *ifaces);
     for (i = 0; i < n_ifaces; i++) {
@@ -952,11 +958,11 @@ cmd_del_port(struct vsctl_context *ctx)
 
     get_info(ctx->ovs, &info);
     if (ctx->argc == 2) {
-        struct vsctl_port *port = find_port(&info, ctx->argv[1]);
+        struct vsctl_port *port = find_port(&info, ctx->argv[1], true);
         del_port(&info, port);
     } else if (ctx->argc == 3) {
-        struct vsctl_bridge *bridge = find_bridge(&info, ctx->argv[1]);
-        struct vsctl_port *port = find_port(&info, ctx->argv[2]);
+        struct vsctl_bridge *bridge = find_bridge(&info, ctx->argv[1], true);
+        struct vsctl_port *port = find_port(&info, ctx->argv[2], true);
 
         if (port->bridge == bridge) {
             del_port(&info, port);
@@ -979,7 +985,7 @@ cmd_port_to_br(struct vsctl_context *ctx)
     struct vsctl_info info;
 
     get_info(ctx->ovs, &info);
-    port = find_port(&info, ctx->argv[1]);
+    port = find_port(&info, ctx->argv[1], true);
     ds_put_format(&ctx->output, "%s\n", port->bridge->name);
     free_info(&info);
 }
@@ -993,7 +999,7 @@ cmd_port_set_external_id(struct vsctl_context *ctx)
     size_t n;
 
     get_info(ctx->ovs, &info);
-    port = find_port(&info, ctx->argv[1]);
+    port = find_port(&info, ctx->argv[1], true);
     set_external_id(port->port_cfg->key_external_ids,
                     port->port_cfg->value_external_ids,
                     port->port_cfg->n_external_ids,
@@ -1013,7 +1019,7 @@ cmd_port_get_external_id(struct vsctl_context *ctx)
     struct vsctl_port *port;
 
     get_info(ctx->ovs, &info);
-    port = find_port(&info, ctx->argv[1]);
+    port = find_port(&info, ctx->argv[1], true);
     get_external_id(port->port_cfg->key_external_ids,
                     port->port_cfg->value_external_ids,
                     port->port_cfg->n_external_ids,
@@ -1028,7 +1034,7 @@ cmd_br_to_vlan(struct vsctl_context *ctx)
     struct vsctl_info info;
 
     get_info(ctx->ovs, &info);
-    bridge = find_bridge(&info, ctx->argv[1]);
+    bridge = find_bridge(&info, ctx->argv[1], true);
     ds_put_format(&ctx->output, "%d\n", bridge->vlan);
     free_info(&info);
 }
@@ -1040,7 +1046,7 @@ cmd_br_to_parent(struct vsctl_context *ctx)
     struct vsctl_info info;
 
     get_info(ctx->ovs, &info);
-    bridge = find_bridge(&info, ctx->argv[1]);
+    bridge = find_bridge(&info, ctx->argv[1], true);
     if (bridge->parent) {
         bridge = bridge->parent;
     }
@@ -1057,7 +1063,7 @@ cmd_list_ifaces(struct vsctl_context *ctx)
     struct svec ifaces;
 
     get_info(ctx->ovs, &info);
-    br = find_bridge(&info, ctx->argv[1]);
+    br = find_bridge(&info, ctx->argv[1], true);
 
     svec_init(&ifaces);
     SHASH_FOR_EACH (node, &info.ifaces) {
@@ -1081,7 +1087,7 @@ cmd_iface_to_br(struct vsctl_context *ctx)
     struct vsctl_info info;
 
     get_info(ctx->ovs, &info);
-    iface = find_iface(&info, ctx->argv[1]);
+    iface = find_iface(&info, ctx->argv[1], true);
     ds_put_format(&ctx->output, "%s\n", iface->port->bridge->name);
     free_info(&info);
 }
@@ -1095,7 +1101,7 @@ cmd_iface_set_external_id(struct vsctl_context *ctx)
     size_t n;
 
     get_info(ctx->ovs, &info);
-    iface = find_iface(&info, ctx->argv[1]);
+    iface = find_iface(&info, ctx->argv[1], true);
     set_external_id(iface->iface_cfg->key_external_ids,
                     iface->iface_cfg->value_external_ids,
                     iface->iface_cfg->n_external_ids,
@@ -1115,7 +1121,7 @@ cmd_iface_get_external_id(struct vsctl_context *ctx)
     struct vsctl_iface *iface;
 
     get_info(ctx->ovs, &info);
-    iface = find_iface(&info, ctx->argv[1]);
+    iface = find_iface(&info, ctx->argv[1], true);
     get_external_id(iface->iface_cfg->key_external_ids,
                     iface->iface_cfg->value_external_ids,
                     iface->iface_cfg->n_external_ids,
