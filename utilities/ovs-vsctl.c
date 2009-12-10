@@ -270,6 +270,14 @@ default_db(void)
     return def;
 }
 
+struct vsctl_context {
+    int argc;
+    char **argv;
+    const struct ovsrec_open_vswitch *ovs;
+    struct ds output;
+    struct shash options;
+};
+
 struct vsctl_bridge {
     struct ovsrec_bridge *br_cfg;
     char *name;
@@ -587,38 +595,37 @@ ovs_delete_bridge(const struct ovsrec_open_vswitch *ovs,
 }
 
 static void
-cmd_add_br(int argc, char *argv[], const struct ovsrec_open_vswitch *ovs,
-           struct ds *output UNUSED)
+cmd_add_br(struct vsctl_context *ctx)
 {
-    const char *br_name = argv[1];
+    const char *br_name = ctx->argv[1];
     struct vsctl_info info;
 
-    get_info(ovs, &info);
+    get_info(ctx->ovs, &info);
     check_conflicts(&info, br_name,
                     xasprintf("cannot create a bridge named %s", br_name));
 
-    if (argc == 2) {
+    if (ctx->argc == 2) {
         struct ovsrec_bridge *br;
         struct ovsrec_port *port;
         struct ovsrec_interface *iface;
 
-        iface = ovsrec_interface_insert(txn_from_openvswitch(ovs));
+        iface = ovsrec_interface_insert(txn_from_openvswitch(ctx->ovs));
         ovsrec_interface_set_name(iface, br_name);
 
-        port = ovsrec_port_insert(txn_from_openvswitch(ovs));
+        port = ovsrec_port_insert(txn_from_openvswitch(ctx->ovs));
         ovsrec_port_set_name(port, br_name);
         ovsrec_port_set_interfaces(port, &iface, 1);
 
-        br = ovsrec_bridge_insert(txn_from_openvswitch(ovs));
+        br = ovsrec_bridge_insert(txn_from_openvswitch(ctx->ovs));
         ovsrec_bridge_set_name(br, br_name);
         ovsrec_bridge_set_ports(br, &port, 1);
 
-        ovs_insert_bridge(ovs, br);
-    } else if (argc == 3) {
-        ovs_fatal(0, "'%s' comamnd takes exactly 1 or 3 arguments", argv[0]);
-    } else if (argc == 4) {
-        const char *parent_name = argv[2];
-        int vlan = atoi(argv[3]);
+        ovs_insert_bridge(ctx->ovs, br);
+    } else if (ctx->argc == 3) {
+        ovs_fatal(0, "'%s' comamnd takes exactly 1 or 3 arguments", ctx->argv[0]);
+    } else if (ctx->argc == 4) {
+        const char *parent_name = ctx->argv[2];
+        int vlan = atoi(ctx->argv[3]);
         struct ovsrec_bridge *br;
         struct vsctl_bridge *parent;
         struct ovsrec_port *port;
@@ -626,7 +633,7 @@ cmd_add_br(int argc, char *argv[], const struct ovsrec_open_vswitch *ovs,
         int64_t tag = vlan;
 
         if (vlan < 1 || vlan > 4095) {
-            ovs_fatal(0, "%s: vlan must be between 1 and 4095", argv[0]);
+            ovs_fatal(0, "%s: vlan must be between 1 and 4095", ctx->argv[0]);
         }
 
         parent = shash_find_data(&info.bridges, parent_name);
@@ -638,11 +645,11 @@ cmd_add_br(int argc, char *argv[], const struct ovsrec_open_vswitch *ovs,
         }
         br = parent->br_cfg;
 
-        iface = ovsrec_interface_insert(txn_from_openvswitch(ovs));
+        iface = ovsrec_interface_insert(txn_from_openvswitch(ctx->ovs));
         ovsrec_interface_set_name(iface, br_name);
         ovsrec_interface_set_type(iface, "internal");
 
-        port = ovsrec_port_insert(txn_from_openvswitch(ovs));
+        port = ovsrec_port_insert(txn_from_openvswitch(ctx->ovs));
         ovsrec_port_set_name(port, br_name);
         ovsrec_port_set_interfaces(port, &iface, 1);
         ovsrec_port_set_fake_bridge(port, true);
@@ -675,15 +682,14 @@ del_port(struct vsctl_info *info, struct vsctl_port *port)
 }
 
 static void
-cmd_del_br(int argc UNUSED, char *argv[],
-           const struct ovsrec_open_vswitch *ovs, struct ds *output UNUSED)
+cmd_del_br(struct vsctl_context *ctx)
 {
     struct shash_node *node;
     struct vsctl_info info;
     struct vsctl_bridge *bridge;
 
-    get_info(ovs, &info);
-    bridge = find_bridge(&info, argv[1]);
+    get_info(ctx->ovs, &info);
+    bridge = find_bridge(&info, ctx->argv[1]);
     SHASH_FOR_EACH (node, &info.ports) {
         struct vsctl_port *port = node->data;
         if (port->bridge == bridge
@@ -693,7 +699,7 @@ cmd_del_br(int argc UNUSED, char *argv[],
     }
     if (bridge->br_cfg) {
         ovsrec_bridge_delete(bridge->br_cfg);
-        ovs_delete_bridge(ovs, bridge->br_cfg);
+        ovs_delete_bridge(ctx->ovs, bridge->br_cfg);
     }
     free_info(&info);
 }
@@ -711,34 +717,32 @@ output_sorted(struct svec *svec, struct ds *output)
 }
 
 static void
-cmd_list_br(int argc UNUSED, char *argv[] UNUSED,
-            const struct ovsrec_open_vswitch *ovs, struct ds *output)
+cmd_list_br(struct vsctl_context *ctx)
 {
     struct shash_node *node;
     struct vsctl_info info;
     struct svec bridges;
 
-    get_info(ovs, &info);
+    get_info(ctx->ovs, &info);
 
     svec_init(&bridges);
     SHASH_FOR_EACH (node, &info.bridges) {
         struct vsctl_bridge *br = node->data;
         svec_add(&bridges, br->name);
     }
-    output_sorted(&bridges, output);
+    output_sorted(&bridges, &ctx->output);
     svec_destroy(&bridges);
 
     free_info(&info);
 }
 
 static void
-cmd_br_exists(int argc UNUSED, char *argv[],
-              const struct ovsrec_open_vswitch *ovs, struct ds *output UNUSED)
+cmd_br_exists(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
 
-    get_info(ovs, &info);
-    if (!shash_find_data(&info.bridges, argv[1])) {
+    get_info(ctx->ovs, &info);
+    if (!shash_find_data(&info.bridges, ctx->argv[1])) {
         exit(2);
     }
     free_info(&info);
@@ -784,31 +788,29 @@ set_external_id(char **old_keys, char **old_values, size_t old_n,
 }
 
 static void
-cmd_br_set_external_id(int argc, char *argv[],
-                       const struct ovsrec_open_vswitch *ovs,
-                       struct ds *output UNUSED)
+cmd_br_set_external_id(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
     struct vsctl_bridge *bridge;
     char **keys, **values;
     size_t n;
 
-    get_info(ovs, &info);
-    bridge = find_bridge(&info, argv[1]);
+    get_info(ctx->ovs, &info);
+    bridge = find_bridge(&info, ctx->argv[1]);
     if (bridge->br_cfg) {
         set_external_id(bridge->br_cfg->key_external_ids,
                         bridge->br_cfg->value_external_ids,
                         bridge->br_cfg->n_external_ids,
-                        argv[2], argc >= 4 ? argv[3] : NULL,
+                        ctx->argv[2], ctx->argc >= 4 ? ctx->argv[3] : NULL,
                         &keys, &values, &n);
         ovsrec_bridge_set_external_ids(bridge->br_cfg, keys, values, n);
     } else {
-        char *key = xasprintf("fake-bridge-%s", argv[2]);
-        struct vsctl_port *port = shash_find_data(&info.ports, argv[1]);
+        char *key = xasprintf("fake-bridge-%s", ctx->argv[2]);
+        struct vsctl_port *port = shash_find_data(&info.ports, ctx->argv[1]);
         set_external_id(port->port_cfg->key_external_ids,
                         port->port_cfg->value_external_ids,
                         port->port_cfg->n_external_ids,
-                        key, argc >= 4 ? argv[3] : NULL,
+                        key, ctx->argc >= 4 ? ctx->argv[3] : NULL,
                         &keys, &values, &n);
         ovsrec_port_set_external_ids(port->port_cfg, keys, values, n);
         free(key);
@@ -843,42 +845,40 @@ get_external_id(char **keys, char **values, size_t n,
 }
 
 static void
-cmd_br_get_external_id(int argc, char *argv[],
-                       const struct ovsrec_open_vswitch *ovs,
-                       struct ds *output)
+cmd_br_get_external_id(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
     struct vsctl_bridge *bridge;
 
-    get_info(ovs, &info);
-    bridge = find_bridge(&info, argv[1]);
+    get_info(ctx->ovs, &info);
+    bridge = find_bridge(&info, ctx->argv[1]);
     if (bridge->br_cfg) {
         get_external_id(bridge->br_cfg->key_external_ids,
                         bridge->br_cfg->value_external_ids,
                         bridge->br_cfg->n_external_ids,
-                        "", argc >= 3 ? argv[2] : NULL, output);
+                        "", ctx->argc >= 3 ? ctx->argv[2] : NULL,
+                        &ctx->output);
     } else {
-        struct vsctl_port *port = shash_find_data(&info.ports, argv[1]);
+        struct vsctl_port *port = shash_find_data(&info.ports, ctx->argv[1]);
         get_external_id(port->port_cfg->key_external_ids,
                         port->port_cfg->value_external_ids,
                         port->port_cfg->n_external_ids,
-                        "fake-bridge-", argc >= 3 ? argv[2] : NULL, output);
+                        "fake-bridge-", ctx->argc >= 3 ? ctx->argv[2] : NULL, &ctx->output);
     }
     free_info(&info);
 }
 
 
 static void
-cmd_list_ports(int argc UNUSED, char *argv[],
-               const struct ovsrec_open_vswitch *ovs, struct ds *output)
+cmd_list_ports(struct vsctl_context *ctx)
 {
     struct vsctl_bridge *br;
     struct shash_node *node;
     struct vsctl_info info;
     struct svec ports;
 
-    get_info(ovs, &info);
-    br = find_bridge(&info, argv[1]);
+    get_info(ctx->ovs, &info);
+    br = find_bridge(&info, ctx->argv[1]);
 
     svec_init(&ports);
     SHASH_FOR_EACH (node, &info.ports) {
@@ -888,7 +888,7 @@ cmd_list_ports(int argc UNUSED, char *argv[],
             svec_add(&ports, port->port_cfg->name);
         }
     }
-    output_sorted(&ports, output);
+    output_sorted(&ports, &ctx->output);
     svec_destroy(&ports);
 
     free_info(&info);
@@ -934,76 +934,70 @@ add_port(const struct ovsrec_open_vswitch *ovs,
 }
 
 static void
-cmd_add_port(int argc UNUSED, char *argv[],
-             const struct ovsrec_open_vswitch *ovs, struct ds *output UNUSED)
+cmd_add_port(struct vsctl_context *ctx)
 {
-    add_port(ovs, argv[1], argv[2], &argv[2], 1);
+    add_port(ctx->ovs, ctx->argv[1], ctx->argv[2], &ctx->argv[2], 1);
 }
 
 static void
-cmd_add_bond(int argc, char *argv[],
-             const struct ovsrec_open_vswitch *ovs, struct ds *output UNUSED)
+cmd_add_bond(struct vsctl_context *ctx)
 {
-    add_port(ovs, argv[1], argv[2], &argv[3], argc - 3);
+    add_port(ctx->ovs, ctx->argv[1], ctx->argv[2], &ctx->argv[3], ctx->argc - 3);
 }
 
 static void
-cmd_del_port(int argc, char *argv[],
-             const struct ovsrec_open_vswitch *ovs, struct ds *output UNUSED)
+cmd_del_port(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
 
-    get_info(ovs, &info);
-    if (argc == 2) {
-        struct vsctl_port *port = find_port(&info, argv[1]);
+    get_info(ctx->ovs, &info);
+    if (ctx->argc == 2) {
+        struct vsctl_port *port = find_port(&info, ctx->argv[1]);
         del_port(&info, port);
-    } else if (argc == 3) {
-        struct vsctl_bridge *bridge = find_bridge(&info, argv[1]);
-        struct vsctl_port *port = find_port(&info, argv[2]);
+    } else if (ctx->argc == 3) {
+        struct vsctl_bridge *bridge = find_bridge(&info, ctx->argv[1]);
+        struct vsctl_port *port = find_port(&info, ctx->argv[2]);
 
         if (port->bridge == bridge) {
             del_port(&info, port);
         } else if (port->bridge->parent == bridge) {
             ovs_fatal(0, "bridge %s does not have a port %s (although its "
                       "parent bridge %s does)",
-                      argv[1], argv[2], bridge->parent->name);
+                      ctx->argv[1], ctx->argv[2], bridge->parent->name);
         } else {
             ovs_fatal(0, "bridge %s does not have a port %s",
-                      argv[1], argv[2]);
+                      ctx->argv[1], ctx->argv[2]);
         }
     }
     free_info(&info);
 }
 
 static void
-cmd_port_to_br(int argc UNUSED, char *argv[],
-               const struct ovsrec_open_vswitch *ovs, struct ds *output)
+cmd_port_to_br(struct vsctl_context *ctx)
 {
     struct vsctl_port *port;
     struct vsctl_info info;
 
-    get_info(ovs, &info);
-    port = find_port(&info, argv[1]);
-    ds_put_format(output, "%s\n", port->bridge->name);
+    get_info(ctx->ovs, &info);
+    port = find_port(&info, ctx->argv[1]);
+    ds_put_format(&ctx->output, "%s\n", port->bridge->name);
     free_info(&info);
 }
 
 static void
-cmd_port_set_external_id(int argc, char *argv[],
-                         const struct ovsrec_open_vswitch *ovs,
-                         struct ds *output UNUSED)
+cmd_port_set_external_id(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
     struct vsctl_port *port;
     char **keys, **values;
     size_t n;
 
-    get_info(ovs, &info);
-    port = find_port(&info, argv[1]);
+    get_info(ctx->ovs, &info);
+    port = find_port(&info, ctx->argv[1]);
     set_external_id(port->port_cfg->key_external_ids,
                     port->port_cfg->value_external_ids,
                     port->port_cfg->n_external_ids,
-                    argv[2], argc >= 4 ? argv[3] : NULL,
+                    ctx->argv[2], ctx->argc >= 4 ? ctx->argv[3] : NULL,
                     &keys, &values, &n);
     ovsrec_port_set_external_ids(port->port_cfg, keys, values, n);
     free(keys);
@@ -1013,62 +1007,57 @@ cmd_port_set_external_id(int argc, char *argv[],
 }
 
 static void
-cmd_port_get_external_id(int argc, char *argv[],
-                         const struct ovsrec_open_vswitch *ovs,
-                         struct ds *output)
+cmd_port_get_external_id(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
     struct vsctl_port *port;
 
-    get_info(ovs, &info);
-    port = find_port(&info, argv[1]);
+    get_info(ctx->ovs, &info);
+    port = find_port(&info, ctx->argv[1]);
     get_external_id(port->port_cfg->key_external_ids,
                     port->port_cfg->value_external_ids,
                     port->port_cfg->n_external_ids,
-                    "",  argc >= 3 ? argv[2] : NULL, output);
+                    "",  ctx->argc >= 3 ? ctx->argv[2] : NULL, &ctx->output);
     free_info(&info);
 }
 
 static void
-cmd_br_to_vlan(int argc UNUSED, char *argv[],
-               const struct ovsrec_open_vswitch *ovs, struct ds *output)
+cmd_br_to_vlan(struct vsctl_context *ctx)
 {
     struct vsctl_bridge *bridge;
     struct vsctl_info info;
 
-    get_info(ovs, &info);
-    bridge = find_bridge(&info, argv[1]);
-    ds_put_format(output, "%d\n", bridge->vlan);
+    get_info(ctx->ovs, &info);
+    bridge = find_bridge(&info, ctx->argv[1]);
+    ds_put_format(&ctx->output, "%d\n", bridge->vlan);
     free_info(&info);
 }
 
 static void
-cmd_br_to_parent(int argc UNUSED, char *argv[],
-                 const struct ovsrec_open_vswitch *ovs, struct ds *output)
+cmd_br_to_parent(struct vsctl_context *ctx)
 {
     struct vsctl_bridge *bridge;
     struct vsctl_info info;
 
-    get_info(ovs, &info);
-    bridge = find_bridge(&info, argv[1]);
+    get_info(ctx->ovs, &info);
+    bridge = find_bridge(&info, ctx->argv[1]);
     if (bridge->parent) {
         bridge = bridge->parent;
     }
-    ds_put_format(output, "%s\n", bridge->name);
+    ds_put_format(&ctx->output, "%s\n", bridge->name);
     free_info(&info);
 }
 
 static void
-cmd_list_ifaces(int argc UNUSED, char *argv[],
-                const struct ovsrec_open_vswitch *ovs, struct ds *output)
+cmd_list_ifaces(struct vsctl_context *ctx)
 {
     struct vsctl_bridge *br;
     struct shash_node *node;
     struct vsctl_info info;
     struct svec ifaces;
 
-    get_info(ovs, &info);
-    br = find_bridge(&info, argv[1]);
+    get_info(ctx->ovs, &info);
+    br = find_bridge(&info, ctx->argv[1]);
 
     svec_init(&ifaces);
     SHASH_FOR_EACH (node, &info.ifaces) {
@@ -1079,41 +1068,38 @@ cmd_list_ifaces(int argc UNUSED, char *argv[],
             svec_add(&ifaces, iface->iface_cfg->name);
         }
     }
-    output_sorted(&ifaces, output);
+    output_sorted(&ifaces, &ctx->output);
     svec_destroy(&ifaces);
 
     free_info(&info);
 }
 
 static void
-cmd_iface_to_br(int argc UNUSED, char *argv[],
-                const struct ovsrec_open_vswitch *ovs, struct ds *output)
+cmd_iface_to_br(struct vsctl_context *ctx)
 {
     struct vsctl_iface *iface;
     struct vsctl_info info;
 
-    get_info(ovs, &info);
-    iface = find_iface(&info, argv[1]);
-    ds_put_format(output, "%s\n", iface->port->bridge->name);
+    get_info(ctx->ovs, &info);
+    iface = find_iface(&info, ctx->argv[1]);
+    ds_put_format(&ctx->output, "%s\n", iface->port->bridge->name);
     free_info(&info);
 }
 
 static void
-cmd_iface_set_external_id(int argc, char *argv[],
-                         const struct ovsrec_open_vswitch *ovs,
-                         struct ds *output UNUSED)
+cmd_iface_set_external_id(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
     struct vsctl_iface *iface;
     char **keys, **values;
     size_t n;
 
-    get_info(ovs, &info);
-    iface = find_iface(&info, argv[1]);
+    get_info(ctx->ovs, &info);
+    iface = find_iface(&info, ctx->argv[1]);
     set_external_id(iface->iface_cfg->key_external_ids,
                     iface->iface_cfg->value_external_ids,
                     iface->iface_cfg->n_external_ids,
-                    argv[2], argc >= 4 ? argv[3] : NULL,
+                    ctx->argv[2], ctx->argc >= 4 ? ctx->argv[3] : NULL,
                     &keys, &values, &n);
     ovsrec_interface_set_external_ids(iface->iface_cfg, keys, values, n);
     free(keys);
@@ -1123,31 +1109,28 @@ cmd_iface_set_external_id(int argc, char *argv[],
 }
 
 static void
-cmd_iface_get_external_id(int argc, char *argv[],
-                          const struct ovsrec_open_vswitch *ovs,
-                          struct ds *output)
+cmd_iface_get_external_id(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
     struct vsctl_iface *iface;
 
-    get_info(ovs, &info);
-    iface = find_iface(&info, argv[1]);
+    get_info(ctx->ovs, &info);
+    iface = find_iface(&info, ctx->argv[1]);
     get_external_id(iface->iface_cfg->key_external_ids,
                     iface->iface_cfg->value_external_ids,
                     iface->iface_cfg->n_external_ids,
-                    "",  argc >= 3 ? argv[2] : NULL, output);
+                    "",  ctx->argc >= 3 ? ctx->argv[2] : NULL, &ctx->output);
     free_info(&info);
 }
 
-typedef void vsctl_handler_func(int argc, char *argv[],
-                                const struct ovsrec_open_vswitch *,
-                                struct ds *output);
+typedef void vsctl_handler_func(struct vsctl_context *);
 
 struct vsctl_command {
     const char *name;
     int min_args;
     int max_args;
     vsctl_handler_func *handler;
+    const char *options;
 };
 
 static void run_vsctl_command(int argc, char *argv[],
@@ -1248,41 +1231,66 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
 }
 
 static vsctl_handler_func *
-get_vsctl_handler(int argc, char *argv[])
+get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
 {
     static const struct vsctl_command all_commands[] = {
         /* Bridge commands. */
-        {"add-br", 1, 3, cmd_add_br},
-        {"del-br", 1, 1, cmd_del_br},
-        {"list-br", 0, 0, cmd_list_br},
-        {"br-exists", 1, 1, cmd_br_exists},
-        {"br-to-vlan", 1, 1, cmd_br_to_vlan},
-        {"br-to-parent", 1, 1, cmd_br_to_parent},
-        {"br-set-external-id", 2, 3, cmd_br_set_external_id},
-        {"br-get-external-id", 1, 2, cmd_br_get_external_id},
+        {"add-br", 1, 3, cmd_add_br, ""},
+        {"del-br", 1, 1, cmd_del_br, ""},
+        {"list-br", 0, 0, cmd_list_br, ""},
+        {"br-exists", 1, 1, cmd_br_exists, ""},
+        {"br-to-vlan", 1, 1, cmd_br_to_vlan, ""},
+        {"br-to-parent", 1, 1, cmd_br_to_parent, ""},
+        {"br-set-external-id", 2, 3, cmd_br_set_external_id, ""},
+        {"br-get-external-id", 1, 2, cmd_br_get_external_id, ""},
 
         /* Port commands. */
-        {"list-ports", 1, 1, cmd_list_ports},
-        {"add-port", 2, 2, cmd_add_port},
-        {"add-bond", 4, INT_MAX, cmd_add_bond},
-        {"del-port", 1, 2, cmd_del_port},
-        {"port-to-br", 1, 1, cmd_port_to_br},
-        {"port-set-external-id", 2, 3, cmd_port_set_external_id},
-        {"port-get-external-id", 1, 2, cmd_port_get_external_id},
+        {"list-ports", 1, 1, cmd_list_ports, ""},
+        {"add-port", 2, 2, cmd_add_port, ""},
+        {"add-bond", 4, INT_MAX, cmd_add_bond, ""},
+        {"del-port", 1, 2, cmd_del_port, ""},
+        {"port-to-br", 1, 1, cmd_port_to_br, ""},
+        {"port-set-external-id", 2, 3, cmd_port_set_external_id, ""},
+        {"port-get-external-id", 1, 2, cmd_port_get_external_id, ""},
 
         /* Interface commands. */
-        {"list-ifaces", 1, 1, cmd_list_ifaces},
-        {"iface-to-br", 1, 1, cmd_iface_to_br},
-        {"iface-set-external-id", 2, 3, cmd_iface_set_external_id},
-        {"iface-get-external-id", 1, 2, cmd_iface_get_external_id},
+        {"list-ifaces", 1, 1, cmd_list_ifaces, ""},
+        {"iface-to-br", 1, 1, cmd_iface_to_br, ""},
+        {"iface-set-external-id", 2, 3, cmd_iface_set_external_id, ""},
+        {"iface-get-external-id", 1, 2, cmd_iface_get_external_id, ""},
     };
 
     const struct vsctl_command *p;
+    int i;
 
-    assert(argc > 0);
+    shash_init(&ctx->options);
+    for (i = 0; i < argc; i++) {
+        if (argv[i][0] != '-') {
+            break;
+        }
+        if (!shash_add_once(&ctx->options, argv[i], NULL)) {
+            ovs_fatal(0, "'%s' option specified multiple times", argv[i]);
+        }
+    }
+    if (i == argc) {
+        ovs_fatal(0, "missing command name");
+    }
+
     for (p = all_commands; p < &all_commands[ARRAY_SIZE(all_commands)]; p++) {
-        if (!strcmp(p->name, argv[0])) {
-            int n_arg = argc - 1;
+        if (!strcmp(p->name, argv[i])) {
+            struct shash_node *node;
+            int n_arg;
+
+            SHASH_FOR_EACH (node, &ctx->options) {
+                const char *s = strstr(p->options, node->name);
+                int end = s ? s[strlen(node->name)] : EOF;
+                if (end != ',' && end != ' ' && end != '\0') {
+                    ovs_fatal(0, "'%s' command has no '%s' option",
+                              argv[i], node->name);
+                }
+            }
+
+            n_arg = argc - i - 1;
             if (n_arg < p->min_args) {
                 ovs_fatal(0, "'%s' command requires at least %d arguments",
                           p->name, p->min_args);
@@ -1290,6 +1298,8 @@ get_vsctl_handler(int argc, char *argv[])
                 ovs_fatal(0, "'%s' command takes at most %d arguments",
                           p->name, p->max_args);
             } else {
+                ctx->argc = n_arg + 1;
+                ctx->argv = &argv[i];
                 return p->handler;
             }
         }
@@ -1301,12 +1311,23 @@ get_vsctl_handler(int argc, char *argv[])
 static void
 check_vsctl_command(int argc, char *argv[])
 {
-    get_vsctl_handler(argc, argv);
+    struct vsctl_context ctx;
+
+    get_vsctl_handler(argc, argv, &ctx);
+    shash_destroy(&ctx.options);
 }
 
 static void
 run_vsctl_command(int argc, char *argv[],
                   const struct ovsrec_open_vswitch *ovs, struct ds *output)
 {
-    get_vsctl_handler(argc, argv)(argc, argv, ovs, output);
+    vsctl_handler_func *function;
+    struct vsctl_context ctx;
+
+    function = get_vsctl_handler(argc, argv, &ctx);
+    ctx.ovs = ovs;
+    ds_init(&ctx.output);
+    function(&ctx);
+    *output = ctx.output;
+    shash_destroy(&ctx.options);
 }
