@@ -188,9 +188,16 @@ net.ipv4.conf.all.arp_filter = 1
 EOF
 fi
 
-# Create ovs-vswitchd config database
-ovsdb-tool create /etc/ovs-vswitchd.conf.db \
-        /usr/share/vswitch/vswitch-idl.ovsschema
+if test ! -e /etc/ovs-vswitchd.conf.db; then
+    # Create ovs-vswitchd config database
+    ovsdb-tool create /etc/ovs-vswitchd.conf.db \
+            /usr/share/vswitch/vswitch-idl.ovsschema
+
+    # Create initial table in config database
+    ovsdb-tool transact /etc/ovs-vswitchd.conf.db \
+            '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]' \
+            > /dev/null
+fi
 
 # Create default or update existing /etc/sysconfig/vswitch.
 SYSCONFIG=/etc/sysconfig/vswitch
