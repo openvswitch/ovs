@@ -23,7 +23,9 @@ vswitchd_ovs_vswitchd_LDADD = \
 	$(SSL_LIBS)
 
 vswitchd_ovs_brcompatd_SOURCES = \
-	vswitchd/ovs-brcompatd.c
+	vswitchd/ovs-brcompatd.c \
+	vswitchd/vswitch-idl.c \
+	vswitchd/vswitch-idl.h
 
 vswitchd_ovs_brcompatd_LDADD = \
 	lib/libopenvswitch.a \
