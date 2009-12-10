@@ -131,6 +131,25 @@ decimal integer.  If \fIbridge\fR is a real bridge, prints 0.
 If \fIbridge\fR is a fake bridge, prints the name of its parent
 bridge.  If \fIbridge\fR is a real bridge, print \fIbridge\fR.
 .
+.IP "\fBbr\-set\-external\-id \fIbridge key\fR [\fIvalue\fR]"
+Sets or clears an ``external ID'' value on \fIbridge\fR.  These values
+are intended to identify entities external to Open vSwitch with which
+\fIbridge\fR is associated, e.g. the bridge's identifier in a
+virtualization management platform.  The Open vSwitch database schema
+specifies well-known \fIkey\fR values, but \fIkey\fR and \fIvalue\fR
+are otherwise arbitrary strings.
+.IP
+If \fIvalue\fR is specified, then \fIkey\fR is set to \fIvalue\fR for
+\fIbridge\fR, overwriting any previous value.  If \fIvalue\fR is
+omitted, then \fIkey\fR is removed from \fIbridge\fR's set of external
+IDs (if it was present).
+.
+.IP "\fBbr\-get\-external\-id \fIbridge\fR [\fIkey\fR]"
+Queries the external IDs on \fIbridge\fR.  If \fIkey\fR is specified,
+the output is the value for that \fIkey\fR or the empty string if
+\fIkey\fR is unset.  If \fIkey\fR is omitted, the output is
+\fIkey\fB=\fIvalue\fR, one per line, for each key-value pair.
+.
 .SS "Port Commands"
 .
 These commands examine and manipulate Open vSwitch ports.  These
@@ -158,6 +177,25 @@ must be the real or fake bridge that contains \fIport\fR.
 Prints the name of the bridge that contains \fIport\fR on standard
 output.
 .
+.IP "\fBport\-set\-external\-id \fIport key\fR [\fIvalue\fR]"
+Sets or clears an ``external ID'' value on \fIport\fR.  These value
+are intended to identify entities external to Open vSwitch with which
+\fIport\fR is associated, e.g. the port's identifier in a
+virtualization management platform.  The Open vSwitch database schema
+specifies well-known \fIkey\fR values, but \fIkey\fR and \fIvalue\fR
+are otherwise arbitrary strings.
+.IP
+If \fIvalue\fR is specified, then \fIkey\fR is set to \fIvalue\fR for
+\fIport\fR, overwriting any previous value.  If \fIvalue\fR is
+omitted, then \fIkey\fR is removed from \fIport\fR's set of external
+IDs (if it was present).
+.
+.IP "\fBbr\-get\-external\-id \fIport\fR [\fIkey\fR]"
+Queries the external IDs on \fIport\fR.  If \fIkey\fR is specified,
+the output is the value for that \fIkey\fR or the empty string if
+\fIkey\fR is unset.  If \fIkey\fR is omitted, the output is
+\fIkey\fB=\fIvalue\fR, one per line, for each key-value pair.
+.
 .SS "Interface Commands"
 .
 These commands examine the interfaces attached to an Open vSwitch
@@ -172,6 +210,26 @@ list.
 .IP "\fBiface\-to\-br \fIiface\fR"
 Prints the name of the bridge that contains \fIiface\fR on standard
 output.
+.
+.IP "\fBiface\-set\-external\-id \fIiface key\fR [\fIvalue\fR]"
+Sets or clears an ``external ID'' value on \fIiface\fR.  These value
+are intended to identify entities external to Open vSwitch with which
+\fIiface\fR is associated, e.g. the interface's identifier in a
+virtualization management platform.  The Open vSwitch database schema
+specifies well-known \fIkey\fR values, but \fIkey\fR and \fIvalue\fR
+are otherwise arbitrary strings.
+.IP
+If \fIvalue\fR is specified, then \fIkey\fR is set to \fIvalue\fR for
+\fIiface\fR, overwriting any previous value.  If \fIvalue\fR is
+omitted, then \fIkey\fR is removed from \fIiface\fR's set of external
+IDs (if it was present).
+.
+.IP "\fBbr\-get\-external\-id \fIiface\fR [\fIkey\fR]"
+Queries the external IDs on \fIiface\fR.  If \fIkey\fR is specified,
+the output is the value for that \fIkey\fR or the empty string if
+\fIkey\fR is unset.  If \fIkey\fR is omitted, the output is
+\fIkey\fB=\fIvalue\fR, one per line, for each key-value pair.
+.
 .SH "EXAMPLES"
 Create a new bridge named br0 and add port eth0 to it:
 .IP

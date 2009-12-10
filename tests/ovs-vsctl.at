@@ -271,6 +271,62 @@ CHECK_PORTS([a])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
+AT_SETUP([external IDs])
+AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+  [--oneline add-br a], 
+  [add-port a a1],
+  [add-bond a bond0 a2 a3],
+  [br-set-external-id a key0 value0],
+  [port-set-external-id a1 key1 value1],
+  [iface-set-external-id a2 key2 value2],
+  [iface-set-external-id a2 key3 value3],
+  [iface-set-external-id a3 key4 value4],
+  [br-get-external-id a],
+  [br-get-external-id a key0],
+  [br-get-external-id a key1],
+  [br-set-external-id a key0 othervalue],
+  [br-get-external-id a],
+  [br-set-external-id a key0],
+  [br-get-external-id a],
+  [port-get-external-id a1],
+  [iface-get-external-id a2],
+  [iface-get-external-id a3])], [0], [
+
+
+
+
+
+
+
+key0=value0
+value0
+
+
+key0=othervalue
+
+
+key1=value1
+key2=value2\nkey3=value3
+key4=value4
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+  [--oneline br-get-external-id a],
+  [port-get-external-id a1],
+  [iface-get-external-id a2],
+  [iface-get-external-id a3])], [0],
+[
+key1=value1
+key2=value2\nkey3=value3
+key4=value4
+], [], [OVS_VSCTL_CLEANUP])
+CHECK_BRIDGES([a, a, 0])
+CHECK_PORTS([a], [a1], [bond0])
+CHECK_IFACES([a], [a1], [a2], [a3])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
 dnl ----------------------------------------------------------------------
 AT_BANNER([ovs-vsctl unit tests -- fake bridges])
 
@@ -312,6 +368,31 @@ OVS_VSCTL_SETUP
 OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF
 AT_CHECK([RUN_OVS_VSCTL([del-br xenbr0])], [0], [], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([simple fake bridge + external IDs])
+AT_KEYWORDS([ovs-vsctl fake-bridge])
+OVS_VSCTL_SETUP
+OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+  [--oneline br-set-external-id xenbr0 key0 value0],
+  [br-set-external-id xapi1 key1 value1],
+  [br-get-external-id xenbr0],
+  [br-get-external-id xenbr0 key0],
+  [br-get-external-id xapi1],
+  [br-get-external-id xapi1 key1])], [0], [
+
+key0=value0
+value0
+key1=value1
+value1
+], [], [OVS_VSCTL_CLEANUP])
+CHECK_BRIDGES([xapi1, xenbr0, 9], [xenbr0, xenbr0, 0])
+CHECK_PORTS([xenbr0], [eth0])
+CHECK_IFACES([xenbr0], [eth0])
+CHECK_PORTS([xapi1], [eth0.9])
+CHECK_IFACES([xapi1], [eth0.9])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 

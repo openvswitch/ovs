@@ -49,7 +49,10 @@
          "type": {"key": "uuid", "keyRefTable": "NetFlow", "min": 0, "max": 1}},
        "controller": {
          "comment": "OpenFlow controller.  If unset, defaults to that specified by the parent Open_vSwitch.",
-         "type": {"key": "uuid", "keyRefTable": "Controller", "min": 0, "max": 1}}}},
+         "type": {"key": "uuid", "keyRefTable": "Controller", "min": 0, "max": 1}},
+       "external_ids": {
+         "comment": "Key-value pairs that identify this bridge's role in external systems.  The currently defined key-value pairs are: \"xs-network-uuid\", a space-delimited set of the Citrix XenServer network UUIDs with which this bridge is associated.",
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}}}},
    "Port": {
      "comment": "A port within a Bridge.  May contain a single Interface or multiple (bonded) Interfaces.",
      "columns": {
@@ -79,7 +82,10 @@
          "type": "boolean"},
        "fake_bridge": {
          "comment": "Does this port represent a sub-bridge for its tagged VLAN within the Bridge?  See ovs-vsctl(8) for more information.",
-         "type": "boolean"}}},
+         "type": "boolean"},
+       "external_ids": {
+         "comment": "Key-value pairs that identify this port's role in external systems.  No key-value pairs native to Port are currently defined.  For fake bridges (see the \"fake-bridge\" column), external IDs for the fake bridge are defined here by prefixing their keys with \"fake-bridge\", e.g. \"fake-bridge-xs-network-uuids\".",
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}}}},
    "Interface": {
      "comment": "An interface within a Port.",
      "columns": {
@@ -105,7 +111,7 @@
          "comment": "Ethernet address to set for this interface.  If unset then the default MAC address is used.  May not be supported on all interfaces.  Exactly 12 hex digits in the form XX:XX:XX:XX:XX:XX.",
          "type": {"key": "string", "min": 0, "max": 1}},
        "external_ids": {
-         "comment": "Key-value pairs that identify this interface's role in external systems.  The only currently defined key is \"xs-vif-uuid\", whose value is the UUID of the Citrix XenServer VIF associated with this interface.",
+         "comment": "Key-value pairs that identify this interface's role in external systems.  The currently defined key-value pairs are: \"xs-vif-uuid\", the UUID of the Citrix XenServer VIF associated with this interface; \"xs-network-uuid\", the UUID of the Citrix XenServer network to which this interface is attached; \"xs-vif-vm-uuid\", the UUID of the Citrix XenServer VM to which this interface belongs; \"xs-vif-mac\", the value of the \"MAC\" field in the Citrix XenServer VIF record for this interface.",
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "ofport": {
          "comment": "OpenFlow port number for this interface.  This is populated when the port number becomes known.  Before it is populated its value will be missing.  If the interface cannot be added then this is indicated by a value of -1.",
