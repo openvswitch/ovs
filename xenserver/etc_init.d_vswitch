@@ -80,6 +80,7 @@ brcompatd="/usr/sbin/ovs-brcompatd"
 dpctl="/usr/bin/ovs-dpctl"
 appctl="/usr/bin/ovs-appctl"
 ofctl="/usr/bin/ovs-ofctl"
+vsctl="/usr/bin/ovs-vsctl"
 
 
 if [ "$ENABLE_FAKE_PROC_NET" = "y" ]; then
@@ -348,18 +349,16 @@ function start {
         warning "$OVSDB_SERVER_DB does not exist"
         action "Creating empty $OVSDB_SERVER_DB" $ovsdb_tool create "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
         action "Creating initial table in $OVSDB_SERVER_DB" $ovsdb_tool transact "$OVSDB_SERVER_DB" '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]'
-    #elif [ ! -e /var/run/vswitch.booted ]; then
-        #touch /var/run/vswitch.booted
-        #/usr/bin/ovs-cfg-mod '-vANY:console:emer' -F "$VSWITCHD_CONF" \
-            #'--del-match=bridge.*' \
-            #'--del-match=port.*' \
-            #'--del-match=bonding.*' \
-            #'--del-match=iface.*' \
-            #'--del-match=vlan.*.trunks=*' \
-            #'--del-match=vlan.*.tag=*'
     fi
 
     start_ovsdb_server
+    if [ ! -e /var/run/vswitch.booted ]; then
+        touch /var/run/vswitch.booted
+        for bridge in $($vsctl list-br); do
+            $vsctl --no-wait del-br $bridge
+        done
+    fi
+
     start_vswitchd
     start_brcompatd
     reload_vswitchd  # ensures ovs-vswitchd has fully read config.
