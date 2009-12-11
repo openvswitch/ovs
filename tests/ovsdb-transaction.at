@@ -382,3 +382,29 @@ print:
 2: i=2, j=3],
   [transaction])
 
+OVSDB_CHECK_POSITIVE([deletes are aborted cleanly],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["delete", "1"]' \
+    '["abort"]' \
+    '["print"]' \
+    '["delete", "1"]' \
+    '["abort"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+commit:
+print:
+1: i=2, j=3
+delete 1:
+abort:
+print:
+1: i=2, j=3
+delete 1:
+abort:
+print:
+1: i=2, j=3],
+  [transaction])
+

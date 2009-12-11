@@ -82,6 +82,9 @@ ovsdb_txn_destroy(struct ovsdb_txn *txn, void (*cb)(struct ovsdb_txn_row *))
                             struct ovsdb_txn_row, hmap_node,
                             &txn_table->txn_rows)
         {
+            if (txn_row->old) {
+                txn_row->old->txn_row = NULL;
+            }
             if (txn_row->new) {
                 txn_row->new->txn_row = NULL;
             }
