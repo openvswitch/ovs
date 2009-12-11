@@ -45,6 +45,7 @@ static const char *db;
 /* --oneline: Write each command's output as a single line? */
 static bool oneline;
 
+static void vsctl_fatal(const char *, ...) PRINTF_FORMAT(1, 2) NO_RETURN;
 static char *default_db(void);
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
@@ -90,7 +91,7 @@ main(int argc, char *argv[])
         }
     }
     if (!n_commands) {
-        ovs_fatal(0, "missing command name (use --help for help)");
+        vsctl_fatal("missing command name (use --help for help)");
     }
 
     /* Now execut the commands. */
@@ -104,7 +105,7 @@ main(int argc, char *argv[])
         new_seqno = ovsdb_idl_get_seqno(idl);
         if (new_seqno != seqno) {
             if (++trials > 5) {
-                ovs_fatal(0, "too many database inconsistency failures");
+                vsctl_fatal("too many database inconsistency failures");
             }
             do_vsctl(argc - optind, argv + optind, idl);
             seqno = new_seqno;
@@ -113,6 +114,21 @@ main(int argc, char *argv[])
         ovsdb_idl_wait(idl);
         poll_block();
     }
+}
+
+static void
+vsctl_fatal(const char *format, ...)
+{
+    char *message;
+    va_list args;
+
+    va_start(args, format);
+    message = xvasprintf(format, args);
+    va_end(args);
+
+    vlog_set_levels(VLM_vsctl, VLF_CONSOLE, VLL_EMER);
+    VLOG_ERR("%s", message);
+    ovs_fatal(0, "%s", message);
 }
 
 static void
@@ -488,19 +504,20 @@ check_conflicts(struct vsctl_info *info, const char *name,
     struct vsctl_port *port;
 
     if (shash_find(&info->bridges, name)) {
-        ovs_fatal(0, "%s because a bridge named %s already exists", msg, name);
+        vsctl_fatal("%s because a bridge named %s already exists",
+                    msg, name);
     }
 
     port = shash_find_data(&info->ports, name);
     if (port) {
-        ovs_fatal(0, "%s because a port named %s already exists on bridge %s",
-                  msg, name, port->bridge->name);
+        vsctl_fatal("%s because a port named %s already exists on "
+                    "bridge %s", msg, name, port->bridge->name);
     }
 
     iface = shash_find_data(&info->ifaces, name);
     if (iface) {
-        ovs_fatal(0, "%s because an interface named %s already exists "
-                  "on bridge %s", msg, name, iface->port->bridge->name);
+        vsctl_fatal("%s because an interface named %s already exists "
+                    "on bridge %s", msg, name, iface->port->bridge->name);
     }
 
     free(msg);
@@ -511,7 +528,7 @@ find_bridge(struct vsctl_info *info, const char *name, bool must_exist)
 {
     struct vsctl_bridge *br = shash_find_data(&info->bridges, name);
     if (must_exist && !br) {
-        ovs_fatal(0, "no bridge named %s", name);
+        vsctl_fatal("no bridge named %s", name);
     }
     return br;
 }
@@ -524,7 +541,7 @@ find_port(struct vsctl_info *info, const char *name, bool must_exist)
         port = NULL;
     }
     if (must_exist && !port) {
-        ovs_fatal(0, "no port named %s", name);
+        vsctl_fatal("no port named %s", name);
     }
     return port;
 }
@@ -537,7 +554,7 @@ find_iface(struct vsctl_info *info, const char *name, bool must_exist)
         iface = NULL;
     }
     if (must_exist && !iface) {
-        ovs_fatal(0, "no interface named %s", name);
+        vsctl_fatal("no interface named %s", name);
     }
     return iface;
 }
@@ -634,7 +651,8 @@ cmd_add_br(struct vsctl_context *ctx)
 
         ovs_insert_bridge(ctx->ovs, br);
     } else if (ctx->argc == 3) {
-        ovs_fatal(0, "'%s' comamnd takes exactly 1 or 3 arguments", ctx->argv[0]);
+        vsctl_fatal("'%s' command takes exactly 1 or 3 arguments",
+                    ctx->argv[0]);
     } else if (ctx->argc == 4) {
         const char *parent_name = ctx->argv[2];
         int vlan = atoi(ctx->argv[3]);
@@ -645,15 +663,15 @@ cmd_add_br(struct vsctl_context *ctx)
         int64_t tag = vlan;
 
         if (vlan < 1 || vlan > 4095) {
-            ovs_fatal(0, "%s: vlan must be between 1 and 4095", ctx->argv[0]);
+            vsctl_fatal("%s: vlan must be between 1 and 4095", ctx->argv[0]);
         }
 
         parent = find_bridge(&info, parent_name, false);
         if (parent && parent->vlan) {
-            ovs_fatal(0, "cannot create brdige with fake bridge as parent");
+            vsctl_fatal("cannot create brdige with fake bridge as parent");
         }
         if (!parent) {
-            ovs_fatal(0, "parent bridge %s does not exist", parent_name);
+            vsctl_fatal("parent bridge %s does not exist", parent_name);
         }
         br = parent->br_cfg;
 
@@ -981,12 +999,12 @@ cmd_del_port(struct vsctl_context *ctx)
             if (port->bridge == bridge) {
                 del_port(&info, port);
             } else if (port->bridge->parent == bridge) {
-                ovs_fatal(0, "bridge %s does not have a port %s (although its "
-                          "parent bridge %s does)",
-                          ctx->argv[1], ctx->argv[2], bridge->parent->name);
+                vsctl_fatal("bridge %s does not have a port %s (although its "
+                            "parent bridge %s does)",
+                            ctx->argv[1], ctx->argv[2], bridge->parent->name);
             } else {
-                ovs_fatal(0, "bridge %s does not have a port %s",
-                          ctx->argv[1], ctx->argv[2]);
+                vsctl_fatal("bridge %s does not have a port %s",
+                            ctx->argv[1], ctx->argv[2]);
             }
         }
     }
@@ -1172,8 +1190,8 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
     if (!ovs) {
         /* XXX it would be more user-friendly to create a record ourselves
          * (while verifying that the table is empty before doing so). */
-        ovs_fatal(0, "%s: database does not contain any Open vSwitch "
-                  "configuration", db);
+        vsctl_fatal("%s: database does not contain any Open vSwitch "
+                    "configuration", db);
     }
 
     txn = ovsdb_idl_txn_create(idl);
@@ -1204,7 +1222,7 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
 
     case TXN_ABORTED:
         /* Should not happen--we never call ovsdb_idl_txn_abort(). */
-        ovs_fatal(0, "transaction aborted");
+        vsctl_fatal("transaction aborted");
 
     case TXN_SUCCESS:
         break;
@@ -1216,7 +1234,7 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
         return;
 
     case TXN_ERROR:
-        ovs_fatal(0, "transaction error");
+        vsctl_fatal("transaction error");
 
     default:
         NOT_REACHED();
@@ -1290,11 +1308,11 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
             break;
         }
         if (!shash_add_once(&ctx->options, argv[i], NULL)) {
-            ovs_fatal(0, "'%s' option specified multiple times", argv[i]);
+            vsctl_fatal("'%s' option specified multiple times", argv[i]);
         }
     }
     if (i == argc) {
-        ovs_fatal(0, "missing command name");
+        vsctl_fatal("missing command name");
     }
 
     for (p = all_commands; p < &all_commands[ARRAY_SIZE(all_commands)]; p++) {
@@ -1306,18 +1324,18 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
                 const char *s = strstr(p->options, node->name);
                 int end = s ? s[strlen(node->name)] : EOF;
                 if (end != ',' && end != ' ' && end != '\0') {
-                    ovs_fatal(0, "'%s' command has no '%s' option",
-                              argv[i], node->name);
+                    vsctl_fatal("'%s' command has no '%s' option",
+                                argv[i], node->name);
                 }
             }
 
             n_arg = argc - i - 1;
             if (n_arg < p->min_args) {
-                ovs_fatal(0, "'%s' command requires at least %d arguments",
-                          p->name, p->min_args);
+                vsctl_fatal("'%s' command requires at least %d arguments",
+                            p->name, p->min_args);
             } else if (n_arg > p->max_args) {
-                ovs_fatal(0, "'%s' command takes at most %d arguments",
-                          p->name, p->max_args);
+                vsctl_fatal("'%s' command takes at most %d arguments",
+                            p->name, p->max_args);
             } else {
                 ctx->argc = n_arg + 1;
                 ctx->argv = &argv[i];
@@ -1326,7 +1344,7 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
         }
     }
 
-    ovs_fatal(0, "unknown command '%s'; use --help for help", argv[0]);
+    vsctl_fatal("unknown command '%s'; use --help for help", argv[i]);
 }
 
 static void
