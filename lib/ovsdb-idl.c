@@ -977,9 +977,6 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     any_updates = false;
     HMAP_FOR_EACH (row, struct ovsdb_idl_row, txn_node, &txn->txn_rows) {
         const struct ovsdb_idl_table_class *class = row->table->class;
-        size_t n_columns = class->n_columns;
-        struct json *row_json;
-        size_t idx;
 
         if (row->old == row->new) {
             continue;
@@ -989,39 +986,44 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
             json_object_put_string(op, "table", class->name);
             json_object_put(op, "where", where_uuid_equals(&row->uuid));
             json_array_add(operations, op);
+            any_updates = true;
         } else {
-            row_json = NULL;
-            BITMAP_FOR_EACH_1 (idx, n_columns, row->written) {
+            struct json *row_json;
+            struct json *op;
+            size_t idx;
+
+            op = json_object_create();
+            json_object_put_string(op, "op", row->old ? "update" : "insert");
+            json_object_put_string(op, "table", class->name);
+            if (row->old) {
+                json_object_put(op, "where", where_uuid_equals(&row->uuid));
+            } else {
+                json_object_put(op, "uuid-name",
+                                json_string_create_nocopy(
+                                    uuid_name_from_uuid(&row->uuid)));
+            }
+            row_json = json_object_create();
+            json_object_put(op, "row", row_json);
+
+            BITMAP_FOR_EACH_1 (idx, class->n_columns, row->written) {
                 const struct ovsdb_idl_column *column = &class->columns[idx];
 
-                if (row->old
-                    && ovsdb_datum_equals(&row->old[idx], &row->new[idx],
-                                          &column->type)) {
-                    continue;
+                if (!row->old || !ovsdb_datum_equals(&row->old[idx],
+                                                     &row->new[idx],
+                                                     &column->type)) {
+                    json_object_put(row_json, column->name,
+                                    substitute_uuids(
+                                        ovsdb_datum_to_json(&row->new[idx],
+                                                            &column->type),
+                                        txn));
                 }
-                if (!row_json) {
-                    struct json *op = json_object_create();
-                    json_array_add(operations, op);
-                    json_object_put_string(op, "op",
-                                           row->old ? "update" : "insert");
-                    json_object_put_string(op, "table", class->name);
-                    if (row->old) {
-                        json_object_put(op, "where",
-                                        where_uuid_equals(&row->uuid));
-                    } else {
-                        json_object_put(op, "uuid-name",
-                                        json_string_create_nocopy(
-                                            uuid_name_from_uuid(&row->uuid)));
-                    }
-                    row_json = json_object_create();
-                    json_object_put(op, "row", row_json);
-                    any_updates = true;
-                }
-                json_object_put(row_json, column->name,
-                                substitute_uuids(
-                                    ovsdb_datum_to_json(&row->new[idx],
-                                                        &column->type),
-                                    txn));
+            }
+
+            if (!row->old || !shash_is_empty(json_object(row_json))) {
+                json_array_add(operations, op);
+                any_updates = true;
+            } else {
+                json_destroy(op);
             }
         }
     }
