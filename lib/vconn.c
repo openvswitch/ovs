@@ -1269,6 +1269,17 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
 {
     int error;
 
+    if (!len) {
+        VLOG_DBG_RL(&bad_ofmsg_rl, "action has invalid length 0");
+        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+    }
+
+    if (len % ACTION_ALIGNMENT) {
+        VLOG_DBG_RL(&bad_ofmsg_rl, "action length %u is not a multiple of %d",
+                    len, ACTION_ALIGNMENT);
+        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+    }
+
     switch (ntohs(a->type)) {
     case OFPAT_OUTPUT:
         error = check_action_port(ntohs(a->output.port), max_ports);
@@ -1302,17 +1313,6 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
         VLOG_WARN_RL(&bad_ofmsg_rl, "unknown action type %"PRIu16, a->type);
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
     }
-
-    if (!len) {
-        VLOG_DBG_RL(&bad_ofmsg_rl, "action has invalid length 0");
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-    }
-    if (len % ACTION_ALIGNMENT) {
-        VLOG_DBG_RL(&bad_ofmsg_rl, "action length %u is not a multiple of %d",
-                    len, ACTION_ALIGNMENT);
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-    }
-    return 0;
 }
 
 int
