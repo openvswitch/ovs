@@ -336,12 +336,10 @@ function start {
 
         action "Creating empty database $OVSDB_SERVER_DB" true
         $ovsdb_tool create "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
-
-        action "Creating initial table in $OVSDB_SERVER_DB" true
-        $ovsdb_tool transact "$OVSDB_SERVER_DB" '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]'
     fi
 
     start_ovsdb_server
+    $vsctl --no-wait init
     if [ ! -e /var/run/vswitch.booted ]; then
         touch /var/run/vswitch.booted
         for bridge in $($vsctl list-br); do

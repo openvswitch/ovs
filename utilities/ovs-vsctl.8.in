@@ -101,6 +101,16 @@ Prints a blank line for each command that has no output.
 .SH COMMANDS
 The commands implemented by \fBovs\-vsctl\fR are described in the
 sections below.
+.SS "Open vSwitch Commands"
+These commands work with an Open vSwitch as a whole.
+.
+.IP "\fBinit\fR"
+Initializes the Open vSwitch database, if it is empty.  If the
+database has already been initialized, this command has no effect.
+.IP
+Any successful \fBovs\-vsctl\fR command automatically initializes the
+Open vSwitch database if it is empty.  This command is provided to
+initialize the database without executing any other command.
 .
 .SS "Bridge Commands"
 These commands examine and manipulate Open vSwitch bridges.

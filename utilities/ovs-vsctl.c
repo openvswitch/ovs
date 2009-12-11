@@ -94,7 +94,7 @@ main(int argc, char *argv[])
         vsctl_fatal("missing command name (use --help for help)");
     }
 
-    /* Now execut the commands. */
+    /* Now execute the commands. */
     idl = ovsdb_idl_create(db, &ovsrec_idl_class);
     seqno = ovsdb_idl_get_seqno(idl);
     trials = 0;
@@ -621,6 +621,11 @@ ovs_delete_bridge(const struct ovsrec_open_vswitch *ovs,
     }
     ovsrec_open_vswitch_set_bridges(ovs, bridges, n);
     free(bridges);
+}
+
+static void
+cmd_init(struct vsctl_context *ctx UNUSED)
+{
 }
 
 static void
@@ -1186,15 +1191,14 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
     int n_output;
     int i, start;
 
+    txn = ovsdb_idl_txn_create(idl);
+
     ovs = ovsrec_open_vswitch_first(idl);
     if (!ovs) {
-        /* XXX it would be more user-friendly to create a record ourselves
-         * (while verifying that the table is empty before doing so). */
-        vsctl_fatal("%s: database does not contain any Open vSwitch "
-                    "configuration", db);
+        /* XXX add verification that table is empty */
+        ovs = ovsrec_open_vswitch_insert(txn);
     }
 
-    txn = ovsdb_idl_txn_create(idl);
     output = xmalloc(argc * sizeof *output);
     n_output = 0;
     for (start = i = 0; i <= argc; i++) {
@@ -1273,6 +1277,9 @@ static vsctl_handler_func *
 get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
 {
     static const struct vsctl_command all_commands[] = {
+        /* Open vSwitch commands. */
+        {"init", 0, 0, cmd_init, ""},
+
         /* Bridge commands. */
         {"add-br", 1, 3, cmd_add_br, ""},
         {"del-br", 1, 1, cmd_del_br, "--if-exists"},
