@@ -190,11 +190,11 @@ fi
 
 if test ! -e /etc/ovs-vswitchd.conf.db; then
     # Create ovs-vswitchd config database
-    ovsdb-tool create /etc/ovs-vswitchd.conf.db \
-            /usr/share/vswitch/vswitch-idl.ovsschema
+    ovsdb-tool -vANY:console:emer create /etc/ovs-vswitchd.conf.db \
+            /usr/share/vswitch/vswitch-idl.ovsschema \
 
     # Create initial table in config database
-    ovsdb-tool transact /etc/ovs-vswitchd.conf.db \
+    ovsdb-tool -vANY:console:emer transact /etc/ovs-vswitchd.conf.db \
             '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]' \
             > /dev/null
 fi

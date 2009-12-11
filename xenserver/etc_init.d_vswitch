@@ -335,7 +335,7 @@ function start {
         warning "$OVSDB_SERVER_DB does not exist"
 
         action "Creating empty database $OVSDB_SERVER_DB" true
-        $ovsdb_tool create "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
+        $ovsdb_tool -vANY:console:emer create "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
     fi
 
     start_ovsdb_server
