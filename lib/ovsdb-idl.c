@@ -1141,11 +1141,8 @@ ovsdb_idl_txn_delete(struct ovsdb_idl_row *row)
         hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,
                     uuid_hash(&row->uuid));
     }
-    if (row->new == row->old) {
-        row->new = NULL;
-    } else {
-        ovsdb_idl_row_clear_new(row);
-    }
+    ovsdb_idl_row_clear_new(row);
+    row->new = NULL;
 }
 
 struct ovsdb_idl_row *
