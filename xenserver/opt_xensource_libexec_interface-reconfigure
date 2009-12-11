@@ -1375,6 +1375,9 @@ def configure_datapath(pif):
         if len(offload):
             run_command(['/sbin/ethtool', '-K', dev] + offload)
 
+    # XXX It seems like the following should not be necessary...
+    cfgmod_argv += ['--', '--if-exists', 'del-br', bridge]
+                    
     if pif_is_vlan(pif):
         datapath = pif_datapath(pif)
         vlan = db.get_pif_record(pif)['VLAN']
