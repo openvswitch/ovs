@@ -79,6 +79,7 @@ struct ovsdb_idl_txn {
     struct ovsdb_idl *idl;
     struct hmap txn_rows;
     enum ovsdb_idl_txn_status status;
+    bool dry_run;
 };
 
 static struct vlog_rate_limit syntax_rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -791,7 +792,14 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
     txn->idl = idl;
     txn->status = TXN_INCOMPLETE;
     hmap_init(&txn->txn_rows);
+    txn->dry_run = false;
     return txn;
+}
+
+void
+ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *txn)
+{
+    txn->dry_run = true;
 }
 
 void
@@ -1028,6 +1036,12 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         }
     }
 
+    if (txn->dry_run) {
+        struct json *op = json_object_create();
+        json_object_put_string(op, "op", "abort");
+        json_array_add(operations, op);
+    }
+
     if (!any_updates) {
         txn->status = TXN_SUCCESS;
     } else if (!jsonrpc_session_send(
@@ -1209,7 +1223,7 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
                     if (error->type == JSON_STRING) {
                         if (!strcmp(error->u.string, "timed out")) {
                             soft_errors++;
-                        } else {
+                        } else if (strcmp(error->u.string, "aborted")) {
                             hard_errors++;
                         }
                     } else {

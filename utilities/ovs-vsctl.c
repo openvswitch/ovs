@@ -45,6 +45,9 @@ static const char *db;
 /* --oneline: Write each command's output as a single line? */
 static bool oneline;
 
+/* --dry-run: Do not commit any changes. */
+static bool dry_run;
+
 static void vsctl_fatal(const char *, ...) PRINTF_FORMAT(1, 2) NO_RETURN;
 static char *default_db(void);
 static void usage(void) NO_RETURN;
@@ -138,12 +141,14 @@ parse_options(int argc, char *argv[])
         OPT_DB = UCHAR_MAX + 1,
         OPT_ONELINE,
         OPT_NO_SYSLOG,
-        OPT_NO_WAIT
+        OPT_NO_WAIT,
+        OPT_DRY_RUN
     };
     static struct option long_options[] = {
         {"db", required_argument, 0, OPT_DB},
         {"no-syslog", no_argument, 0, OPT_NO_SYSLOG},
         {"no-wait", no_argument, 0, OPT_NO_WAIT},
+        {"dry-run", no_argument, 0, OPT_DRY_RUN},
         {"oneline", no_argument, 0, OPT_ONELINE},
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
@@ -174,6 +179,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_NO_WAIT:
             /* XXX not yet implemented */
+            break;
+
+        case OPT_DRY_RUN:
+            dry_run = true;
             break;
 
         case 'h':
@@ -1192,6 +1201,9 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
     int i, start;
 
     txn = ovsdb_idl_txn_create(idl);
+    if (dry_run) {
+        ovsdb_idl_txn_set_dry_run(txn);
+    }
 
     ovs = ovsrec_open_vswitch_first(idl);
     if (!ovs) {

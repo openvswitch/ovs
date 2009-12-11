@@ -96,6 +96,9 @@ lines are printed as \fB\\n\fR, and any instances of \fB\\\fR that
 would otherwise appear in the output are doubled.
 Prints a blank line for each command that has no output.
 .
+.IP "\fB\-\-dry\-run\fR"
+Prevents \fBovs\-vsctl\fR from actually modifying the database.
+.
 .so lib/vlog.man
 .
 .SH COMMANDS
