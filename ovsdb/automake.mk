@@ -82,7 +82,7 @@ EXTRA_DIST += \
 	ovsdb/ovsdb-idlc.in \
 	ovsdb/ovsdb-idlc.1
 DISTCLEANFILES += ovsdb/ovsdb-idlc
-SUFFIXES += .ovsidl
+SUFFIXES += .ovsidl .txt
 .ovsidl.c:
 	$(PYTHON) $(srcdir)/ovsdb/ovsdb-idlc.in c-idl-source $< > $@.tmp
 	mv $@.tmp $@
@@ -91,4 +91,7 @@ SUFFIXES += .ovsidl
 	mv $@.tmp $@
 .ovsidl.ovsschema:
 	$(PYTHON) $(srcdir)/ovsdb/ovsdb-idlc.in ovsdb-schema $< > $@.tmp
+	mv $@.tmp $@
+.ovsidl.txt:
+	$(PYTHON) $(srcdir)/ovsdb/ovsdb-idlc.in doc $< | fmt -s > $@.tmp
 	mv $@.tmp $@

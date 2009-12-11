@@ -43,8 +43,9 @@ class DbSchema:
         comment = getMember(json, 'comment', [unicode], 'database')
         tablesJson = mustGetMember(json, 'tables', [dict], 'database')
         tables = {}
-        for name, tableJson in tablesJson.iteritems():
-            tables[name] = TableSchema.fromJson(tableJson, "%s table" % name)
+        for tableName, tableJson in tablesJson.iteritems():
+            tables[tableName] = TableSchema.fromJson(tableJson,
+                                                     "%s table" % tableName)
         idlPrefix = mustGetMember(json, 'idlPrefix', [unicode], 'database')
         idlHeader = mustGetMember(json, 'idlHeader', [unicode], 'database')
         return DbSchema(name, comment, tables, idlPrefix, idlHeader)
@@ -140,6 +141,47 @@ class Type:
             if self.max != 1:
                 d["max"] = self.max
             return d
+
+    def isScalar(self):
+        return self.min == 1 and self.max == 1 and not self.value
+
+    def isOptional(self):
+        return self.min == 0 and self.max == 1
+
+    def toEnglish(self):
+        keyName = atomicTypeToEnglish(self.key, self.keyRefTable)
+        if self.value:
+            valueName = atomicTypeToEnglish(self.value, self.valueRefTable)
+
+        if self.isScalar():
+            return atomicTypeToEnglish(self.key, self.keyRefTable)
+        elif self.isOptional():
+            if self.value:
+                return "optional %s-%s pair" % (keyName, valueName)
+            else:
+                return "optional %s" % keyName
+        else:
+            if self.max == "unlimited":
+                if self.min:
+                    quantity = "%d or more " % self.min
+                else:
+                    quantity = ""
+            elif self.min:
+                quantity = "%d to %d " % (self.min, self.max)
+            else:
+                quantity = "up to %d " % self.max
+
+            if self.value:
+                return "map of %s%s-%s pairs" % (quantity, keyName, valueName)
+            else:
+                return "set of %s%s" % (quantity, keyName)
+                
+
+def atomicTypeToEnglish(base, refTable):
+    if base == 'uuid' and refTable:
+        return refTable
+    else:
+        return base
 
 def parseSchema(filename):
     file = open(filename, "r")
@@ -612,6 +654,25 @@ def ovsdb_escape(string):
 def printOVSDBSchema(schema):
     json.dump(schema.toJson(), sys.stdout, sort_keys=True, indent=2)
 
+def printDoc(schema):
+    print schema.name
+    if schema.comment:
+        print schema.comment
+
+    for tableName, table in schema.tables.iteritems():
+        title = "%s table" % tableName
+        print
+        print title
+        print '-' * len(title)
+        if table.comment:
+            print table.comment
+
+        for columnName, column in table.columns.iteritems():
+            print
+            print "%s (%s)" % (columnName, column.type.toEnglish())
+            if column.comment:
+                print "\t%s" % column.comment
+
 def usage():
     print """\
 %(argv0)s: ovsdb schema compiler
@@ -623,6 +684,7 @@ One of the following actions must specified:
   c-idl-header                print C header file for IDL
   c-idl-source                print C source file for IDL implementation
   ovsdb-schema                print ovsdb parseable schema
+  doc                         print schema documentation
 
 The following options are also available:
   -h, --help                  display this help message
@@ -662,6 +724,8 @@ if __name__ == "__main__":
             printCIDLHeader(schema)
         elif action == 'c-idl-source':
             printCIDLSource(schema)
+        elif action == 'doc':
+            printDoc(schema)
         else:
             sys.stderr.write(
                 "%s: unknown action '%s' (use --help for help)\n" %

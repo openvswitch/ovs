@@ -38,9 +38,15 @@ EXTRA_DIST += \
 EXTRA_DIST += vswitchd/vswitch-idl.ovsidl
 BUILT_SOURCES += vswitchd/vswitch-idl.c vswitchd/vswitch-idl.h
 DISTCLEANFILES += vswitchd/vswitch-idl.c vswitchd/vswitch-idl.h
-noinst_DATA += vswitchd/vswitch-idl.ovsschema
-DISTCLEANFILES += vswitchd/vswitch-idl.ovsschema
-vswitchd/vswitch-idl.c vswitchd/vswitch-idl.h vswitchd/vswitch-idl.ovsschema: \
+noinst_DATA += vswitchd/vswitch-idl.ovsschema vswitchd/vswitch-idl.txt
+DISTCLEANFILES += vswitchd/vswitch-idl.ovsschema vswitchd/vswitch-idl.txt
+vswitchd/vswitch-idl.c vswitchd/vswitch-idl.h \
+vswitchd/vswitch-idl.ovsschema vswitchd/vswitch-idl.txt: \
 	ovsdb/ovsdb-idlc.in
 vswitchd/vswitch-idl.c: vswitchd/vswitch-idl.h
-EXTRA_DIST += vswitchd/vswitch-idl.c vswitchd/vswitch-idl.h vswitchd/vswitch-idl.ovsschema
+EXTRA_DIST += \
+	vswitchd/vswitch-idl.c \
+	vswitchd/vswitch-idl.h \
+	vswitchd/vswitch-idl.ovsschema \
+	vswitchd/vswitch-idl.txt
+
