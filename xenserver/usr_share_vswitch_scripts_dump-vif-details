@@ -56,7 +56,7 @@ def dump_vif_info(domid, devid, vif_ref):
 			bridge = net_rec['bridge']
 			key = "xs-network-uuids"
 			value = net_rec['uuid']
-			print("-- bridge-set-external-id %s %s %s"
+			print("-- br-set-external-id %s %s %s"
 			      % (bridge, key, value))
 	finally:
 		session.xenapi.session.logout()
