@@ -54,6 +54,9 @@ static int output_width;
 /* --no-headings: Whether table output should include headings. */
 static int output_headings = true;
 
+/* --pretty: Flags to pass to json_to_string(). */
+static int json_flags = JSSF_SORT;
+
 static const struct command all_commands[];
 
 static void usage(void) NO_RETURN;
@@ -78,6 +81,7 @@ parse_options(int argc, char *argv[])
         {"wide", no_argument, &output_width, INT_MAX},
         {"format", required_argument, 0, 'f'},
 	    {"no-headings", no_argument, &output_headings, 0},
+        {"pretty", no_argument, &json_flags, JSSF_PRETTY | JSSF_SORT},
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
@@ -163,7 +167,8 @@ usage(void)
            "  -f, --format=FORMAT         set output formatting to FORMAT\n"
            "                              (\"table\", \"html\", or \"csv\"\n"
            "  --wide                      don't limit TTY lines to 79 bytes\n"
-           "  --no-headings               omit table heading row\n");
+           "  --no-headings               omit table heading row\n"
+           "  --pretty                    pretty-print JSON in output");
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"
@@ -214,7 +219,7 @@ open_jsonrpc(const char *server)
 static void
 print_json(struct json *json)
 {
-    char *string = json_to_string(json, JSSF_SORT);
+    char *string = json_to_string(json, json_flags);
     fputs(string, stdout);
     free(string);
 }
@@ -642,7 +647,7 @@ do_transact(int argc UNUSED, char *argv[])
     }
     if (reply->error) {
         ovs_fatal(error, "transaction returned error: %s",
-                  json_to_string(reply->error, JSSF_SORT));
+                  json_to_string(reply->error, json_flags));
     }
     print_json(reply->result);
     putchar('\n');

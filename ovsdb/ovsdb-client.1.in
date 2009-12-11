@@ -120,6 +120,15 @@ characters.  Specifying this option prevents line truncation.
 This option suppresses the heading row that otherwise appears in the
 first row of table output.
 .
+.IP "\fB--pretty\fR"
+By default, JSON in output is printed as compactly as possible.  This
+option causes JSON in output to be printed in a more readable
+fashion.  Members of objects and elements of arrays are printed one
+per line, with indentation.
+.IP
+This option does not affect JSON in tables, which is always printed
+compactly.
+.
 .SS "Daemon Options"
 The daemon options apply only to the \fBmonitor\fR command.  With any
 other command, they have no effect.
