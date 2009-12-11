@@ -23,7 +23,8 @@ import sys
 argv0 = sys.argv[0]
 
 BRCTL = "/usr/lib/vswitch/xs-original/brctl"
-VSWITCHD_CONF = "/etc/ovs-vswitchd.conf"
+VSCTL = "/usr/bin/ovs-vsctl"
+OVSDB_SERVER = "unix:/var/run/ovsdb-server"
 
 # Execute the real brctl program, passing the same arguments that were passed
 # to us.
@@ -32,77 +33,29 @@ def delegate():
     # execl should never return.  We only arrive here if brctl failed to exec.
     sys.exit(1)
 
-# Read the ovs-vswitchd.conf file named 'filename' and return its contents as a
-# dictionary that maps from string keys to lists of string values.  (Even
-# singleton values are represented as lists.)
-def cfg_read(filename):
-    try:
-        f = open(filename)
-    except IOError, e:
-        sys.stderr.write("%s: could not open %s (%s)\n"
-                         % (argv0, filename, e.strerror))
-        sys.exit(1)
+def call_vsctl(cmd, arg=""):
+    database = '--db=' + OVSDB_SERVER
+    command = [VSCTL, database, cmd]
+    if (arg):
+        command.append(arg)
+    return subprocess.Popen(command, stdout=subprocess.PIPE).communicate()[0].split()
 
-    cfg = {}
-    rx = re.compile('([-._@$:+a-zA-Z0-9]+)(?:[ \t\r\n\v]*)=(?:[ \t\r\n\v]*)(.*)$')
-    for line in f:
-        line = line.strip()
-        if len(line) == 0 or line[0] == '#':
-            continue
+# Returns a list of all the bridges 
+def get_bridges():
+    return call_vsctl('list-br')
 
-        match = rx.match(line)
-        if match == None:
-            continue
+# Returns a list of all ports on 'bridge' 
+def get_bridge_ports(bridge):
+    return call_vsctl('list-ports', bridge)
 
-        key, value = match.groups()
-        if key not in cfg:
-            cfg[key] = []
-        cfg[key].append(value)
-    return cfg
+# Returns a list of all interfaces on 'bridge' 
+def get_bridge_ifaces(bridge):
+    return call_vsctl('list-ifaces', bridge)
 
-# Returns a set of the immediate subsections of 'section' within 'cfg'.  For
-# example, if 'section' is "bridge" and keys bridge.a, bridge.b, bridge.b.c,
-# and bridge.c.x.y.z exist, returns set(['a', 'b', 'c']).
-def cfg_get_subsections(cfg, section):
-    subsections = set()
-    for key in cfg:
-        if key.startswith(section + "."):
-            dot = key.find(".", len(section) + 1)
-            if dot == -1:
-                dot = len(key)
-            subsections.add(key[len(section) + 1:dot])
-    return subsections
-
-# Returns True if 'cfg' contains a key whose single value is 'true'.  Otherwise
-# returns False.
-def cfg_get_bool(cfg, name):
-    return name in cfg and cfg[name] == ['true']
-
-# If 'cfg' has a port named 'port' configured with an implicit VLAN, returns
-# that VLAN number.  Otherwise, returns 0.
-def get_port_vlan(cfg, port):
-    try:
-        return int(cfg["vlan.%s.tag" % port][0])
-    except (ValueError, KeyError):
-        return 0
-
-# Returns all the ports within 'bridge' in 'cfg'.  If 'vlan' is nonnegative,
-# the ports returned are only those configured with implicit VLAN 'vlan'.
-def get_bridge_ports(cfg, bridge, vlan):
-    ports = []
-    for port in cfg["bridge.%s.port" % bridge]:
-        if vlan < 0 or get_port_vlan(cfg, port) == vlan:
-            ports.append(port)
-    return ports
-
-# Returns all the interfaces within 'bridge' in 'cfg'.  If 'vlan' is
-# nonnegative, the interfaces returned are only those whose ports are
-# configured with implicit VLAN 'vlan'.
-def get_bridge_ifaces(cfg, bridge, vlan):
-    ifaces = []
-    for port in get_bridge_ports(cfg, bridge, vlan):
-        ifaces.extend(cfg.get("bonding.%s.slave" % port, [port]))
-    return ifaces
+# Returns the parent of 'bridge'.  If 'bridge' does not have a parent,
+# 'bridge' is returned.
+def get_bridge_parent(bridge):
+    return call_vsctl('br-to-parent', bridge)
 
 # Returns the first line of the file named 'name', with the trailing new-line
 # (if any) stripped off.
@@ -126,29 +79,22 @@ def get_bridge_id(netdev):
 
 def cmd_show():
     print "bridge name\tbridge id\t\tSTP enabled\tinterfaces"
-    cfg = cfg_read(VSWITCHD_CONF)
 
     # Find all the bridges.
-    real_bridges = [(br, br, 0) for br in cfg_get_subsections(cfg, "bridge")]
-    fake_bridges = []
-    for linux_bridge, ovs_bridge, vlan in real_bridges:
-        for iface in get_bridge_ifaces(cfg, ovs_bridge, -1):
-            if cfg_get_bool(cfg, "iface.%s.fake-bridge" % iface):
-                fake_bridges.append((iface, ovs_bridge,
-                                     get_port_vlan(cfg, iface)))
-    bridges = real_bridges + fake_bridges
+    bridges = get_bridges()
 
     # Find all the interfaces on each bridge.
-    for linux_bridge, ovs_bridge, vlan in bridges:
-        bridge_ports = get_bridge_ports(cfg, ovs_bridge, vlan)
-        if linux_bridge in bridge_ports:
-            bridge_ports.remove(linux_bridge)
+    for bridge in bridges:
+        bridge_ports = get_bridge_ports(bridge)
+        parent = get_bridge_parent(bridge)
+        if parent in bridge_ports:
+            bridge_ports.remove(parent)
         bridge_ports.sort()
-        bridge_id = get_bridge_id(linux_bridge)
+        bridge_id = get_bridge_id(bridge)
         first_port = ""
         if bridge_ports:
             first_port = bridge_ports[0]
-        print "%s\t\t%s\t%s\t\t%s" % (linux_bridge, bridge_id, "no", first_port)
+        print "%s\t\t%s\t%s\t\t%s" % (bridge, bridge_id, "no", first_port)
         for port in bridge_ports[1:]:
             print "\t\t\t\t\t\t\t%s" % port
 
