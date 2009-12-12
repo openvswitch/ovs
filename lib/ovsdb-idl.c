@@ -805,6 +805,9 @@ ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *txn)
 void
 ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
 {
+    if (txn->status == TXN_INCOMPLETE) {
+        hmap_remove(&txn->idl->outstanding_txns, &txn->hmap_node);
+    }
     ovsdb_idl_txn_abort(txn);
     free(txn);
 }
