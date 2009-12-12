@@ -517,12 +517,15 @@ iterate_and_prune_ifaces(struct bridge *br,
 void
 bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 {
+    struct ovsdb_idl_txn *txn;
     struct shash old_br, new_br;
     struct shash_node *node;
     struct bridge *br, *next;
     size_t i;
 
     COVERAGE_INC(bridge_reconfigure);
+
+    txn = ovsdb_idl_txn_create(ovs_cfg->header_.table->idl);
 
     /* Collect old and new bridges. */
     shash_init(&old_br);
@@ -652,6 +655,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         uint64_t dpid;
         struct iface *local_iface;
         struct iface *hw_addr_iface;
+        char *dpid_string;
 
         bridge_fetch_dp_ifaces(br);
         iterate_and_prune_ifaces(br, init_iface_netdev, NULL);
@@ -673,6 +677,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
         dpid = bridge_pick_datapath_id(br, ea, hw_addr_iface);
         ofproto_set_datapath_id(br->ofproto, dpid);
+
+        dpid_string = xasprintf("%012"PRIx64, dpid);
+        ovsrec_bridge_set_datapath_id(br->cfg, dpid_string);
+        free(dpid_string);
 
         /* Set NetFlow configuration on this bridge. */
         if (br->cfg->netflow) {
@@ -745,19 +753,37 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         iterate_and_prune_ifaces(br, set_iface_properties, NULL);
     }
+
+    ovsdb_idl_txn_commit(txn);
+    ovsdb_idl_txn_destroy(txn); /* XXX */
+}
+
+static const char *
+bridge_get_other_config(const struct ovsrec_bridge *br_cfg, const char *key)
+{
+    size_t i;
+
+    for (i = 0; i < br_cfg->n_other_config; i++) {
+        if (!strcmp(br_cfg->key_other_config[i], key)) {
+            return br_cfg->value_other_config[i];
+        }
+    }
+    return NULL;
 }
 
 static void
 bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
                           struct iface **hw_addr_iface)
 {
+    const char *hwaddr;
     size_t i, j;
     int error;
 
     *hw_addr_iface = NULL;
 
     /* Did the user request a particular MAC? */
-    if (br->cfg->hwaddr && eth_addr_from_string(br->cfg->hwaddr, ea)) {
+    hwaddr = bridge_get_other_config(br->cfg, "hwaddr");
+    if (hwaddr && eth_addr_from_string(hwaddr, ea)) {
         if (eth_addr_is_multicast(ea)) {
             VLOG_ERR("bridge %s: cannot set MAC address to multicast "
                      "address "ETH_ADDR_FMT, br->name, ETH_ADDR_ARGS(ea));
@@ -872,10 +898,11 @@ bridge_pick_datapath_id(struct bridge *br,
      * stable from one run to the next, so that policy set on a datapath
      * "sticks".
      */
+    const char *datapath_id;
     uint64_t dpid;
 
-    if (br->cfg->datapath_id
-        && dpid_from_string(br->cfg->datapath_id, &dpid)) {
+    datapath_id = bridge_get_other_config(br->cfg, "datapath-id");
+    if (datapath_id && dpid_from_string(datapath_id, &dpid)) {
         return dpid;
     }
 
@@ -1513,6 +1540,13 @@ bridge_fetch_dp_ifaces(struct bridge *br)
             } else {
                 port_array_set(&br->ifaces, p->port, iface);
                 iface->dp_ifidx = p->port;
+            }
+
+            if (iface->cfg) {
+                int64_t ofport = (iface->dp_ifidx >= 0
+                                  ? odp_port_to_ofp_port(iface->dp_ifidx)
+                                  : -1);
+                ovsrec_interface_set_ofport(iface->cfg, &ofport, 1);
             }
         }
     }

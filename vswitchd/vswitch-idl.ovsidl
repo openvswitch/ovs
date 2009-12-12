@@ -33,11 +33,9 @@
          "comment": "Bridge identifier.  Should be alphanumeric and no more than about 8 bytes long.  Must be unique among the names of ports, interfaces, and bridges on a host.",
          "type": "string"},
        "datapath_id": {
-         "comment": "OpenFlow datapath ID.  Exactly 12 hex digits.",
-         "type": {"key": "string", "min": 0, "max": 1}},
-       "hwaddr": {
-         "comment": "Ethernet address to use for bridge.  Exactly 12 hex digits in the form XX:XX:XX:XX:XX:XX.",
-         "type": {"key": "string", "min": 0, "max": 1}},
+         "comment": "Reports the OpenFlow datapath ID in use.  Exactly 12 hex digits.",
+         "type": {"key": "string", "min": 0, "max": 1},
+         "ephemeral": true},
        "ports": {
          "comment": "Ports included in the bridge.",
          "type": {"key": "uuid", "keyRefTable": "Port", "min": 0, "max": "unlimited"}},
@@ -50,6 +48,9 @@
        "controller": {
          "comment": "OpenFlow controller.  If unset, defaults to that specified by the parent Open_vSwitch.",
          "type": {"key": "uuid", "keyRefTable": "Controller", "min": 0, "max": 1}},
+       "other_config": {
+         "comment": "Key-value pairs for configuring rarely used bridge features.  The currently defined key-value pairs are: \"datapath-id\", exactly 12 hex digits to set the OpenFlow datapath ID to a specific value; \"hwaddr\", exactly 12 hex digits in the form \"XX:XX:XX:XX:XX:XX\" to set the hardware address of the local port and influence the datapath ID.",
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "external_ids": {
          "comment": "Key-value pairs that identify this bridge's role in external systems.  The currently defined key-value pairs are: \"xs-network-uuid\", a space-delimited set of the Citrix XenServer network UUIDs with which this bridge is associated.",
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}}}},
@@ -83,6 +84,9 @@
        "fake_bridge": {
          "comment": "Does this port represent a sub-bridge for its tagged VLAN within the Bridge?  See ovs-vsctl(8) for more information.",
          "type": "boolean"},
+       "other_config": {
+         "comment": "Key-value pairs for configuring rarely used port features.  The currently defined key-value pairs are: \"hwaddr\", exactly 12 hex digits in the form \"XX:XX:XX:XX:XX:XX\".",
+         "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "external_ids": {
          "comment": "Key-value pairs that identify this port's role in external systems.  No key-value pairs native to Port are currently defined.  For fake bridges (see the \"fake-bridge\" column), external IDs for the fake bridge are defined here by prefixing their keys with \"fake-bridge\", e.g. \"fake-bridge-xs-network-uuids\".",
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}}}},
