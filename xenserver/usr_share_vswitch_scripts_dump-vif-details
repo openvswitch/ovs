@@ -54,10 +54,14 @@ def dump_vif_info(domid, devid, vif_ref):
 		# configuration variable, but vNetManager can tolerate that.
 		if not net_rec['PIFs']:
 			bridge = net_rec['bridge']
-			key = "xs-network-uuids"
-			value = net_rec['uuid']
+
+			xs_network_uuid = net_rec['uuid']
 			print("-- br-set-external-id %s %s %s"
-			      % (bridge, key, value))
+			      % (bridge, "xs-network-uuids", xs_network_uuid))
+
+			xs_network_name = net_rec['name_label']
+			print("-- br-set-external-id %s %s %s"
+			      % (bridge, "xs-network-names", xs_network_name))
 	finally:
 		session.xenapi.session.logout()
 	
