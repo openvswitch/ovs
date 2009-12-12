@@ -791,7 +791,7 @@ do_query_distinct(int argc UNUSED, char *argv[])
 
     /* Parse column set. */
     json = parse_json(argv[4]);
-    ovsdb_column_set_from_json(json, table, &columns);
+    check_ovsdb_error(ovsdb_column_set_from_json(json, table, &columns));
     json_destroy(json);
 
     /* Parse rows, add to table. */

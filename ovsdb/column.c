@@ -143,6 +143,7 @@ ovsdb_column_set_from_json(const struct json *json,
 
         return NULL;
     } else {
+        struct ovsdb_error *error = NULL;
         size_t i;
 
         if (json->type != JSON_ARRAY) {
@@ -152,26 +153,34 @@ ovsdb_column_set_from_json(const struct json *json,
         /* XXX this is O(n**2) */
         for (i = 0; i < json->u.array.n; i++) {
             struct ovsdb_column *column;
+            const char *s;
 
             if (json->u.array.elems[i]->type != JSON_STRING) {
                 goto error;
             }
 
-            column = shash_find_data(&table->schema->columns,
-                                     json->u.array.elems[i]->u.string);
-            if (ovsdb_column_set_contains(set, column->index)) {
+            s = json->u.array.elems[i]->u.string;
+            column = shash_find_data(&table->schema->columns, s);
+            if (!column) {
+                error = ovsdb_syntax_error(json, NULL, "%s is not a valid "
+                                           "column name", s);
+                goto error;
+            } else if (ovsdb_column_set_contains(set, column->index)) {
                 goto error;
             }
             ovsdb_column_set_add(set, column);
         }
-
         return NULL;
-    }
 
-error:
-    ovsdb_column_set_destroy(set);
-    return ovsdb_syntax_error(json, NULL,
-                              "array of distinct column names expected");
+    error:
+        ovsdb_column_set_destroy(set);
+        ovsdb_column_set_init(set);
+        if (!error) {
+            error = ovsdb_syntax_error(json, NULL, "array of distinct column "
+                                       "names expected");
+        }
+        return error;
+    }
 }
 
 struct json *

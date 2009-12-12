@@ -533,3 +533,11 @@ query 25: a-a-a
 query 26: ababa
 query 27: a-a-a],
   [query])
+
+OVSDB_CHECK_NEGATIVE([parse colunn set containing bad name],
+  [[query-distinct \
+    '{"columns": {"i": {"type": "integer"}}}' \
+    '[{"i": 0}]' \
+    '[[]]' \
+    '["i", "bad"]']],
+  [bad is not a valid column name])
