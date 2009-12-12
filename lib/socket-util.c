@@ -249,6 +249,7 @@ make_unix_socket(int style, bool nonblock, bool passcred UNUSED,
         make_sockaddr_un(connect_path, &un, &un_len);
         if (connect(fd, (struct sockaddr*) &un, un_len)
             && errno != EINPROGRESS) {
+            printf("connect failed with %s\n", strerror(errno));
             goto error;
         }
     }
@@ -265,10 +266,10 @@ make_unix_socket(int style, bool nonblock, bool passcred UNUSED,
     return fd;
 
 error:
+    error = errno == EAGAIN ? EPROTO : errno;
     if (bind_path) {
         fatal_signal_remove_file_to_unlink(bind_path);
     }
-    error = errno;
     close(fd);
     return -error;
 }
