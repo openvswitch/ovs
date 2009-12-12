@@ -90,12 +90,6 @@ punix_open(const char *name UNUSED, char *suffix, struct pvconn **pvconnp)
         return errno;
     }
 
-    error = set_nonblocking(fd);
-    if (error) {
-        close(fd);
-        return error;
-    }
-
     if (listen(fd, 10) < 0) {
         error = errno;
         VLOG_ERR("%s: listen: %s", name, strerror(error));
