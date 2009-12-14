@@ -38,14 +38,6 @@ static inline bool eth_addr_is_broadcast(const uint8_t ea[6])
     return (ea[0] & ea[1] & ea[2] & ea[3] & ea[4] & ea[5]) == 0xff;
 }
 
-/* Returns true if 'ea' is an Ethernet address used for virtual interfaces
- * under XenServer.  Generally the actual Ethernet address is FE:FF:FF:FF:FF:FF
- * but it can be FE:FE:FE:FE:FE:FE in some cases. */
-static inline bool eth_addr_is_vif(const uint8_t ea[6])
-{
-    return ea[0] == 0xfe && (ea[1] & ea[2] & ea[3] & ea[4] & ea[5]) >= 0xfe;
-}
-
 static inline bool eth_addr_is_multicast(const uint8_t ea[6])
 {
     return ea[0] & 1;

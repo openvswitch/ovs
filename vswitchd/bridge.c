@@ -794,9 +794,8 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
         }
     }
 
-    /* Otherwise choose the minimum MAC address among all of the interfaces.
-     * (Xen uses FE:FF:FF:FF:FF:FF for virtual interfaces so this will get the
-     * MAC of the physical interface in such an environment.) */
+    /* Otherwise choose the minimum non-local MAC address among all of the
+     * interfaces. */
     memset(ea, 0xff, sizeof ea);
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
@@ -837,11 +836,8 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
             }
 
             /* The local port doesn't count (since we're trying to choose its
-             * MAC address anyway).  Other internal ports don't count because
-             * we really want a physical MAC if we can get it, and internal
-             * ports typically have randomly generated MACs. */
-            if (iface->dp_ifidx == ODPP_LOCAL
-                || !strcmp(iface->cfg->type, "internal")) {
+             * MAC address anyway). */
+            if (iface->dp_ifidx == ODPP_LOCAL) {
                 continue;
             }
 
@@ -857,6 +853,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
 
         /* Compare against our current choice. */
         if (!eth_addr_is_multicast(iface_ea) &&
+            !eth_addr_is_local(iface_ea) &&
             !eth_addr_is_reserved(iface_ea) &&
             !eth_addr_is_zero(iface_ea) &&
             memcmp(iface_ea, ea, ETH_ADDR_LEN) < 0)
@@ -865,7 +862,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
             *hw_addr_iface = iface;
         }
     }
-    if (eth_addr_is_multicast(ea) || eth_addr_is_vif(ea)) {
+    if (eth_addr_is_multicast(ea)) {
         memcpy(ea, br->default_ea, ETH_ADDR_LEN);
         *hw_addr_iface = NULL;
         VLOG_WARN("bridge %s: using default bridge Ethernet "
