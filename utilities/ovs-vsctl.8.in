@@ -101,9 +101,11 @@ Prevents \fBovs\-vsctl\fR from actually modifying the database.
 .
 .IP "\fB-t \fIsecs\fR"
 .IQ "\fB--timeout=\fIsecs\fR"
-Limits runtime to approximately \fIsecs\fR seconds.  If the timeout
-expires, \fBovs\-vsctl\fR will exit with a \fBSIGALRM\fR signal.
-(This would normally happen only if the database cannot be contacted.)
+Limits runtime to approximately \fIsecs\fR seconds.  A value of 
+zero will cause \fBovs\-vsctl\fR to wait forever.  If the timeout expires, 
+\fBovs\-vsctl\fR will exit with a \fBSIGALRM\fR signal.  If this option is
+not used, \fBovs\-vsctl\fR uses a timeout of five seconds.
+(A timeout would normally happen only if the database cannot be contacted.)
 .
 .so lib/vlog.man
 .

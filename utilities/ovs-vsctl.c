@@ -48,6 +48,9 @@ static bool oneline;
 /* --dry-run: Do not commit any changes. */
 static bool dry_run;
 
+/* --timeout: Time to wait for a connection to 'db'. */
+static int timeout = 5;
+
 static void vsctl_fatal(const char *, ...) PRINTF_FORMAT(1, 2) NO_RETURN;
 static char *default_db(void);
 static void usage(void) NO_RETURN;
@@ -73,6 +76,10 @@ main(int argc, char *argv[])
     vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_WARN);
     vlog_set_levels(VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
     parse_options(argc, argv);
+
+    if (timeout) {
+        time_alarm(timeout);
+    }
 
     /* Log our arguments.  This is often valuable for debugging systems. */
     ds_init(&args);
@@ -197,11 +204,9 @@ parse_options(int argc, char *argv[])
 
         case 't':
             timeout = strtoul(optarg, NULL, 10);
-            if (timeout <= 0) {
-                ovs_fatal(0, "value %s on -t or --timeout is not at least 1",
+            if (timeout < 0) {
+                ovs_fatal(0, "value %s on -t or --timeout is invalid",
                           optarg);
-            } else {
-                time_alarm(timeout);
             }
             break;
 
