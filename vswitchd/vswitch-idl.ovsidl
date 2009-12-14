@@ -52,7 +52,7 @@
          "comment": "Key-value pairs for configuring rarely used bridge features.  The currently defined key-value pairs are: \"datapath-id\", exactly 12 hex digits to set the OpenFlow datapath ID to a specific value; \"hwaddr\", exactly 12 hex digits in the form \"XX:XX:XX:XX:XX:XX\" to set the hardware address of the local port and influence the datapath ID.",
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
        "external_ids": {
-         "comment": "Key-value pairs that identify this bridge's role in external systems.  The currently defined key-value pairs are: \"xs-network-uuid\", a space-delimited set of the Citrix XenServer network UUIDs with which this bridge is associated.",
+         "comment": "Key-value pairs that identify this bridge's role in external systems.  The currently defined key-value pairs are: \"xs-network-uuids\", a space-delimited set of the Citrix XenServer network UUIDs with which this bridge is associated; \"xs-network-names\", a semicolon-delimited set of Citrix XenServer network names with which this bridge is associated.",
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}}}},
    "Port": {
      "comment": "A port within a Bridge.  May contain a single Interface or multiple (bonded) Interfaces.",

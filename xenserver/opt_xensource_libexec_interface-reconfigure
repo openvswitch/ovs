@@ -1459,7 +1459,7 @@ def action_up(pif):
             xs_network_uuids += [nwrec['uuid']]
         cfgmod_argv += ['# configure xs-network-uuids']
         cfgmod_argv += ['--', 'br-set-external-id', bridge,
-                        'xs-network-uuids', ' '.join(xs_network_uuids)]
+                        'xs-network-uuids', ';'.join(xs_network_uuids)]
 
         if ipdev != bridge:
             cfgmod_argv += ["# deconfigure ipdev %s" % ipdev]
