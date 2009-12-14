@@ -150,16 +150,19 @@ parse_options(int argc, char *argv[])
         {"no-wait", no_argument, 0, OPT_NO_WAIT},
         {"dry-run", no_argument, 0, OPT_DRY_RUN},
         {"oneline", no_argument, 0, OPT_ONELINE},
+        {"timeout", required_argument, 0, 't'},
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
         {0, 0, 0, 0},
     };
 
+
     for (;;) {
+        unsigned long int timeout;
         int c;
 
-        c = getopt_long(argc, argv, "+v::hV", long_options, NULL);
+        c = getopt_long(argc, argv, "+v::hVt:", long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -191,6 +194,16 @@ parse_options(int argc, char *argv[])
         case 'V':
             OVS_PRINT_VERSION(0, 0);
             exit(EXIT_SUCCESS);
+
+        case 't':
+            timeout = strtoul(optarg, NULL, 10);
+            if (timeout <= 0) {
+                ovs_fatal(0, "value %s on -t or --timeout is not at least 1",
+                          optarg);
+            } else {
+                time_alarm(timeout);
+            }
+            break;
 
         case 'v':
             vlog_set_verbosity(optarg);
