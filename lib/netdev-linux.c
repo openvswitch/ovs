@@ -1710,14 +1710,14 @@ netdev_linux_arp_lookup(const struct netdev *netdev,
                         uint32_t ip, uint8_t mac[ETH_ADDR_LEN])
 {
     struct arpreq r;
-    struct sockaddr_in *pa;
+    struct sockaddr_in sin;
     int retval;
 
     memset(&r, 0, sizeof r);
-    pa = (struct sockaddr_in *) &r.arp_pa;
-    pa->sin_family = AF_INET;
-    pa->sin_addr.s_addr = ip;
-    pa->sin_port = 0;
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = ip;
+    sin.sin_port = 0;
+    memcpy(&r.arp_pa, &sin, sizeof sin);
     r.arp_ha.sa_family = ARPHRD_ETHER;
     r.arp_flags = 0;
     strncpy(r.arp_dev, netdev->name, sizeof r.arp_dev);
