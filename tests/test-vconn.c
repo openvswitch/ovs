@@ -224,7 +224,7 @@ test_send_hello(const char *type, const void *out, size_t out_size,
     fd = fpv_accept(&fpv);
     fpv_destroy(&fpv);
 
-    write(fd, out, out_size);
+    assert(write(fd, out, out_size) == out_size);
 
     assert(!set_nonblocking(fd));
 

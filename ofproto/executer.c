@@ -434,7 +434,7 @@ executer_rconn_closing(struct executer *e, struct rconn *rconn)
 static void
 sigchld_handler(int signr UNUSED)
 {
-    write(signal_fds[1], "", 1);
+    ignore(write(signal_fds[1], "", 1));
 }
 
 int

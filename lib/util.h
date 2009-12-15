@@ -127,6 +127,8 @@ int hexit_value(int c);
 
 char *dir_name(const char *file_name);
 
+void ignore(bool x UNUSED);
+
 #ifdef  __cplusplus
 }
 #endif

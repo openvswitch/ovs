@@ -337,7 +337,7 @@ ovsdb_log_write(struct ovsdb_log *file, struct json *json)
 
         /* Remove any partially written data, ignoring errors since there is
          * nothing further we can do. */
-        ftruncate(fileno(file->stream), file->offset);
+        ignore(ftruncate(fileno(file->stream), file->offset));
 
         goto error;
     }

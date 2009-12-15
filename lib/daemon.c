@@ -232,11 +232,11 @@ daemonize(void)
             /* Child process. */
             close(fds[0]);
             make_pidfile();
-            write(fds[1], &c, 1);
+            ignore(write(fds[1], &c, 1));
             close(fds[1]);
             setsid();
             if (chdir_) {
-                chdir("/");
+                ignore(chdir("/"));
             }
             time_postfork();
             lockfile_postfork();

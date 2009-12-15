@@ -383,3 +383,9 @@ dir_name(const char *file_name)
         return xmemdup0(file_name, len);
     }
 }
+
+/* Pass a value to this function if it is marked with
+ * __attribute__((warn_unused_result)) and you genuinely want to ignore 
+ * its return value.  (Note that every scalar type can be implicitly 
+ * converted to bool.) */
+void ignore(bool x UNUSED) { }

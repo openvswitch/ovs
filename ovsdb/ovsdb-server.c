@@ -126,7 +126,7 @@ main(int argc, char *argv[])
     unixctl_command_register("exit", ovsdb_server_exit, &exiting);
 
     if (do_chdir) {
-        chdir("/");
+        ignore(chdir("/"));
     }
 
     exiting = false;

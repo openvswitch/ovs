@@ -289,7 +289,7 @@ process_exited(struct process *p)
         return true;
     } else {
         char buf[_POSIX_PIPE_BUF];
-        read(fds[0], buf, sizeof buf);
+        ignore(read(fds[0], buf, sizeof buf));
         return false;
     }
 }
@@ -617,7 +617,7 @@ sigchld_handler(int signr UNUSED)
             }
         }
     }
-    write(fds[1], "", 1);
+    ignore(write(fds[1], "", 1));
 }
 
 static bool
