@@ -29,7 +29,7 @@ Description: Open vSwitch common components
 Package: openvswitch-switch
 Architecture: any
 Suggests: openvswitch-datapath-module
-Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (= ${binary:Version}), dhcp3-client, module-init-tools, dmidecode, procps, debianutils
+Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (= ${binary:Version}), module-init-tools, procps
 Description: Open vSwitch switch implementations
  openvswitch-switch provides the userspace components and utilities for
  the Open vSwitch kernel-based switch.  

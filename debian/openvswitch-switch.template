@@ -4,147 +4,14 @@
 # uncomment them.  Afterward, the switch will come up
 # automatically at boot time.  It can be started immediately with
 #       /etc/init.d/openvswitch-switch start
-# Alternatively, use the ovs-switch-setup program (from the
-# openvswitch-switch-config package) to do everything automatically.
 
-# NETDEVS: Which network devices should the OpenFlow switch include?
-#
-# List the network devices that should become part of the OpenFlow
-# switch, separated by spaces.  At least two devices must be selected
-# for this machine to be a useful switch.  Unselecting all network
-# devices will disable the OpenFlow switch entirely.
-# 
-# The network devices that you select should not be configured with IP
-# or IPv6 addresses, even if the switch contacts the controller over
-# one of the selected network devices.  This is because a running
-# Open vSwitch switch takes over network devices at a low level: they
-# become part of the switch and cannot be used for other purposes.
-#NETDEVS=""
+# OVSDB_SERVER_OPTS: Additional options to pass to ovsdb-server,
+# e.g. "--fail=open"
+OVSDB_SERVER_OPTS=
 
-# MODE: The OpenFlow switch has three modes that determine how it
-# reaches the controller:
-#
-# * in-band with discovery: A single network is used for OpenFlow
-#   traffic and other data traffic; that is, the switch contacts the
-#   controller over one of the network devices selected as OpenFlow
-#   switch ports.  The switch automatically determines the location of
-#   the controller using a DHCP request with an OpenFlow-specific
-#   vendor option.  This is the most common case.
-# 
-# * in-band: As above, but the location of the controller is manually
-#   configured.
-# 
-# * out-of-band: OpenFlow traffic uses a network separate from the
-#   data traffic that it controls.  If this is the case, the control
-#   network must already be configured on a network device other than
-#   one of those selected as an Open vSwitch switch port in the previous
-#   question.
-#
-# Set MODE to 'discovery', 'in-band', or 'out-of-band' for these
-# respective cases.
-MODE=discovery
-
-# SWITCH_IP: In 'in-band' mode, the switch's IP address may be
-# configured statically or dynamically:
-# 
-# * For static configuration, specify the switch's IP address as a
-#   string.  In this case you may also set SWITCH_NETMASK and
-#   SWITCH_GATEWAY appropriately (see below).
-# 
-# * For dynamic configuration with DHCP (the most common case),
-#   specify "dhcp".  Configuration with DHCP will only work reliably
-#   if the network topology allows the switch to contact the DHCP
-#   server before it connects to the OpenFlow controller.
-#
-# This setting has no effect unless MODE is set to 'in-band'.
-SWITCH_IP=dhcp
-
-# SWITCH_NETMASK: IP netmask to use in 'in-band' mode when the switch
-# IP address is not 'dhcp'.
-#SWITCH_NETMASK=255.255.255.0
-
-# SWITCH_GATEWAY: IP gateway to use in 'in-band' mode when the switch
-# IP address is not 'dhcp'.
-#SWITCH_GATEWAY=192.168.1.1
-
-# CONTROLLER: Location of controller.
-# One of the following formats:
-#  tcp:IP[:PORT]         via TCP to PORT (default: 6633) at IP
-#  ssl:IP[:PORT]         via SSL to PORT (default: 6633) at IP
-# The default below assumes that the controller is running locally.
-# This setting has no effect when MODE is set to 'discovery'.
-#CONTROLLER="tcp:127.0.0.1"
-
-# PRIVKEY: Name of file containing switch's private key.
-# Required if SSL enabled.
-#PRIVKEY=/etc/openvswitch-switch/of0-privkey.pem
-
-# CERT: Name of file containing certificate for private key.
-# Required if SSL enabled.
-#CERT=/etc/openvswitch-switch/of0-cert.pem
-
-# CACERT: Name of file containing controller CA certificate.
-# Required if SSL enabled.
-#CACERT=/etc/openvswitch-switch/cacert.pem
-
-# CACERT_MODE: Two modes are available:
-#
-# * secure: The controller CA certificate named in CACERT above must exist.
-#   (You must copy it manually from the PKI server or another trusted source.)
-#
-# * bootstrap: If the controller CA certificate named in CACERT above does
-#   not exist, the switch will obtain it from the controller the first time
-#   it connects and save a copy to the file named in CACERT.  This is insecure,
-#   in the same way that initial connections with ssh are insecure, but
-#   it is convenient.
-# 
-# Set CACERT_MODE to 'secure' or 'bootstrap' for these respective cases.
-#CACERT_MODE=secure
-
-# MGMT_VCONNS: List of vconns (space-separated) on which ovs-openflowd
-# should listen for management connections from ovs-ofctl, etc.
-# openvswitch-switchui by default connects to
-# unix:/var/run/ovs-openflowd.mgmt, so do not disable this if you want to
-# use openvswitch-switchui.
-MGMT_VCONNS="punix:/var/run/ovs-openflowd.mgmt"
-
-# COMMANDS: Access control list for the commands that can be executed
-# remotely over the OpenFlow protocol, as a comma-separated list of
-# shell glob patterns.  Negative patterns (beginning with !) act as a
-# blacklist.  To be executable, a command name must match one positive
-# pattern and not match any negative patterns.
-#COMMANDS="reboot,update"
-
-# DISCONNECTED_MODE: Switch behavior when attempts to connect to the
-# controller repeatedly fail, either 'switch', to act as an L2 switch
-# in this case, or 'drop', to drop all packets (except those necessary
-# to connect to the controller).  If unset, the default is 'drop'.
-#DISCONNECTED_MODE=switch
-
-# STP: Enable or disabled 802.1D-1998 Spanning Tree Protocol.  Set to
-# 'yes' to enable STP, 'no' to disable it.  If unset, ovs-openflowd's
-# current default is 'no' (but this may change in the future).
-#STP=no
-
-# RATE_LIMIT: Maximum number of received frames, that do not match any
-# existing switch flow, to forward up to the controller per second.
-# The valid range is 100 and up.  If unset, this rate will not be
-# limited.
-#RATE_LIMIT=1000
-
-# INACTIVITY_PROBE: The maximum number of seconds of inactivity on the
-# controller connection before ovs-openflowd sends an inactivity probe
-# message to the controller.  The valid range is 5 and up.  If unset,
-# ovs-openflowd defaults to 5 seconds.
-#INACTIVITY_PROBE=5
-
-# MAX_BACKOFF: The maximum time that ovs-openflowd will wait between
-# attempts to connect to the controller.  The valid range is 1 and up.
-# If unset, ovs-openflowd defaults to 8 seconds.
-#MAX_BACKOFF=8
-
-# DAEMON_OPTS: Additional options to pass to ovs-openflowd, e.g. "--fail=open"
-DAEMON_OPTS=""
+# OVS_VSWITCHD_OPTS: Additional options to pass to ovs-openflowd,
+# e.g. "--fail=open"
+OVS_VSWITCHD_OPTS=
 
 # CORE_LIMIT: Maximum size for core dumps.
 #
@@ -152,14 +19,3 @@ DAEMON_OPTS=""
 # will disable core dumps.  Setting it to "unlimited" will dump all
 # core files regardless of size.
 #CORE_LIMIT=unlimited
-
-# DATAPATH_ID: Identifier for this switch.
-#
-# By default, the switch checks if the DMI System UUID contains a Nicira 
-# mac address to use as a datapath ID.  If not, then the switch generates 
-# a new, random datapath ID every time it starts up.  By setting this
-# value, the supplied datapath ID will always be used.
-#
-# Set DATAPATH_ID to a MAC address in the form XX:XX:XX:XX:XX:XX where each
-# X is a hexadecimal digit (0-9 or a-f).
-#DATAPATH_ID=XX:XX:XX:XX:XX:XX 

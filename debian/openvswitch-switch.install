@@ -1,7 +1,8 @@
-_debian/utilities/ovs-openflowd usr/sbin
-_debian/utilities/ovs-dpctl usr/sbin
+_debian/ovsdb/ovsdb-server usr/bin
 _debian/utilities/ovs-discover usr/sbin
+_debian/utilities/ovs-dpctl usr/sbin
 _debian/utilities/ovs-kill usr/sbin
-_debian/utilities/ovs-ofctl usr/sbin
-debian/openvswitch/usr/share/openvswitch/commands/* usr/share/openvswitch/commands
+_debian/utilities/ovs-vsctl usr/sbin
+_debian/vswitchd/ovs-vswitchd usr/sbin
 debian/commands/* usr/share/openvswitch/commands
+debian/openvswitch/usr/share/openvswitch/commands/* usr/share/openvswitch/commands

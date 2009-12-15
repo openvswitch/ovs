@@ -1,2 +1,5 @@
+_debian/ovsdb/ovsdb-client.1
+_debian/ovsdb/ovsdb-tool.1
 _debian/utilities/ovs-appctl.8
+_debian/utilities/ovs-ofctl.8
 _debian/utilities/ovs-pki.8

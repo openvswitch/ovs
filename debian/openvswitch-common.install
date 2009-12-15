@@ -1,3 +1,7 @@
+_debian/ovsdb/ovsdb-client usr/bin
+_debian/ovsdb/ovsdb-tool usr/bin
 _debian/utilities/ovs-appctl usr/sbin
+_debian/utilities/ovs-ofctl usr/sbin
 _debian/utilities/ovs-parse-leaks usr/bin
 _debian/utilities/ovs-pki usr/sbin
+_debian/vswitchd/vswitch-idl.ovsschema usr/share/openvswitch

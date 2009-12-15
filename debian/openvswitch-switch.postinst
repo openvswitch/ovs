@@ -33,6 +33,30 @@ case "$1" in
                 fi
             done
 	fi
+
+        if /etc/init.d/openvswitch-switch status >/dev/null 2>&1; then
+            running=true
+            /etc/init.d/openvswitch-switch stop
+        else
+            running=false
+        fi
+
+        if test ! -e /etc/openvswitch-switch/conf; then
+            # Create configuration database.
+            ovsdb-tool -vANY:console:emer \
+                create /etc/openvswitch-switch/conf \
+                /usr/share/openvswitch/vswitch-idl.ovsschema
+
+            # Initialize configuration database.
+            ovsdb-tool -vANY:console:emer \
+                transact /etc/openvswitch-switch/conf \
+                '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]' \
+                > /dev/null
+        fi
+
+        if $running; then
+            /etc/init.d/openvswitch-switch start
+        fi
         ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

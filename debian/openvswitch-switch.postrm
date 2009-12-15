@@ -21,7 +21,10 @@ set -e
 
 case "$1" in
     purge)
+        rm -f /etc/openvswitch-switch/conf
+        rm -f /etc/openvswitch-switch/.conf.~lock~
 	rm -f /etc/default/openvswitch-switch
+        rm -f /var/log/openvswitch/*
 	;;
 
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
