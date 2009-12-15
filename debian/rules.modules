@@ -1,0 +1,41 @@
+#! /usr/bin/make -f
+
+PACKAGE=openvswitch-datapath-module
+MA_DIR ?= /usr/share/modass
+-include $(MA_DIR)/include/generic.make
+-include $(MA_DIR)/include/common-rules.make
+
+DATAPATH_CONFIGURE_OPTS =
+
+# Official build number.  Leave set to 0 if not an official build.
+BUILD_NUMBER = 0
+
+kdist_clean:
+	dh_testdir	
+	dh_testroot
+	dh_clean
+	rm -rf openvswitch
+
+.PHONY: kdist_config
+kdist_config: prep-deb-files
+
+.PHONY: binary-modules
+binary-modules: DSTDIR = $(CURDIR)/debian/$(PKGNAME)/lib/modules/$(KVERS)
+binary-modules: prep-deb-files
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	tar xzf openvswitch.tar.gz
+	cd openvswitch && ./configure --with-l26=$(KSRC) $(DATAPATH_CONFIGURE_OPTS) --with-build-number=$(BUILD_NUMBER)
+	cd openvswitch && $(MAKE) -C datapath/linux-2.6
+	install -d -m755 $(DSTDIR)
+	install -m644 openvswitch/datapath/linux-2.6/*_mod.ko $(DSTDIR)/
+	dh_installdocs
+	dh_installchangelogs
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb --destdir=$(DEB_DESTDIR)
+
