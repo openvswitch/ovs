@@ -225,9 +225,11 @@ parse_options(int argc, char *argv[], char **file_namep,
     argc -= optind;
     argv += optind;
 
-    if (argc != 1) {
+    if (argc > 1) {
         ovs_fatal(0, "database file is only non-option argument; "
                 "use --help for usage");
+    } else if (argc < 1) {
+        ovs_fatal(0, "missing database file argument; use --help for usage");
     }
 
     *file_namep = argv[0];
