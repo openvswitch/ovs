@@ -7,7 +7,7 @@ Standards-Version: 3.7.3
 
 Package: openvswitch-datapath-source
 Architecture: all
-Depends: module-assistant, bzip2, debhelper (>= 5.0.37)
+Depends: module-assistant, bzip2, debhelper (>= 5.0.37), ${misc:Depends}
 Suggests: openvswitch-switch
 Description: Source code for Open vSwitch datapath Linux module
  This package provides the Open vSwitch datapath module source code
@@ -19,7 +19,7 @@ Description: Source code for Open vSwitch datapath Linux module
 
 Package: openvswitch-common
 Architecture: any
-Depends: ${shlibs:Depends}, openssl
+Depends: ${shlibs:Depends}, openssl, ${misc:Depends}
 Description: Open vSwitch common components
  openvswitch-common provides components required by both openvswitch-switch
  and openvswitch-controller.
@@ -83,7 +83,7 @@ Description: Open vSwitch public key infrastructure (HTTP server support)
 
 Package: openvswitch-controller
 Architecture: any
-Depends: ${shlibs:Depends}, openvswitch-common (= ${binary:Version}), openvswitch-pki (= ${binary:Version})
+Depends: ${shlibs:Depends}, openvswitch-common (= ${binary:Version}), openvswitch-pki (= ${binary:Version}), ${misc:Depends}
 Description: Open vSwitch controller implementation
  The Open vSwitch controller enables OpenFlow switches that connect to it
  to act as MAC-learning Ethernet switches.
@@ -92,14 +92,14 @@ Description: Open vSwitch controller implementation
 
 Package: corekeeper
 Architecture: all
-Depends: tmpreaper
+Depends: tmpreaper, ${misc:Depends}
 Description: Core file centralizer and reaper
  The corekeeper package configures the system to dump all core files to
  /var/log/core.  It also deletes core files older than 7 days.
 
 Package: openvswitch-dbg
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Debug symbols for Open vSwitch packages
  This package contains the debug symbols for all the other openvswitch-*
  packages.  Install it to debug one of them or to examine a core dump
@@ -129,7 +129,7 @@ Depends:
  openvswitch-switch (= ${binary:Version}), 
  openvswitch-switchui (= ${binary:Version}), 
  openvswitch-datapath-module (= ${binary:Version}),
- corekeeper, openvswitch-monitor, openvswitch-wdt
+ corekeeper, openvswitch-monitor, openvswitch-wdt, ${misc:Depends}
 Description: Metapackage for installing a Nicira Open vSwitch switch
  Installing this package will install everything needed for a Nicira
  Portwell-based Open vSwitch switch, including monitoring and the switch UI.
