@@ -11,4 +11,8 @@ typedef __u32 __bitwise __wsum;
 
 #endif /* linux kernel < 2.6.20 */
 
+#ifndef HAVE_BOOL_TYPE
+typedef _Bool bool;
+#endif /* !HAVE_BOOL_TYPE */
+
 #endif

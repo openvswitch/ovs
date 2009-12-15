@@ -139,6 +139,8 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   rm -f datapath/linux-2.6/kcompat.h.new
   mkdir -p datapath/linux-2.6
   : > datapath/linux-2.6/kcompat.h.new
+  OVS_GREP_IFELSE([$KSRC26/include/linux/types.h], [bool],
+                  [OVS_DEFINE([HAVE_BOOL_TYPE])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_transport_header],
                   [OVS_DEFINE([HAVE_SKBUFF_HEADER_HELPERS])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [raw],
@@ -154,6 +156,10 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
                   [OVS_DEFINE([HAVE_CSUM_UNFOLD])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_cow],
                   [OVS_DEFINE([HAVE_SKB_COW])])
+  OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [nla_get_be16],
+                  [OVS_DEFINE([HAVE_NLA_GET_BE16])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/in.h], [ipv4_is_multicast],
+                  [OVS_DEFINE([HAVE_IPV4_IS_MULTICAST])])
   # Check for the proto_data_valid member in struct sk_buff.  The [^@]
   # is necessary because some versions of this header remove the
   # member but retain the kerneldoc comment that describes it (which
