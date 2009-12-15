@@ -98,6 +98,7 @@ Description: Core file centralizer and reaper
  /var/log/core.  It also deletes core files older than 7 days.
 
 Package: openvswitch-dbg
+Section: debug
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Debug symbols for Open vSwitch packages
