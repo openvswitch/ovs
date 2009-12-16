@@ -158,6 +158,14 @@ JSON_CHECK_POSITIVE(
   [scientific notation],
   [[[1e3, 1E3, 2.5E2, 1e+3, 125e-3, 3.125e-2, 3125e-05, 1.525878906e-5]]],
   [[[1000,1000,250,1000,0.125,0.03125,0.03125,1.525878906e-05]]])
+# It seems likely that the following test will fail on some system that
+# rounds slightly differently in arithmetic or in printf, but I'd like
+# to keep it this way until we run into such a system.
+JSON_CHECK_POSITIVE(
+  [+/- DBL_MAX],
+  [[[1.7976931348623157e+308, -1.7976931348623157e+308]]],
+  [[[1.79769313486232e+308,-1.79769313486232e+308]]])
+
 JSON_CHECK_POSITIVE(
   [negative reals], 
   [[[-0, -1.0, -2.0, -3.0, -3.5, -8.1250]]],

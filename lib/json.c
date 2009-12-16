@@ -606,6 +606,7 @@ json_lex_number(struct json_parser *p)
 {
     const char *cp = ds_cstr(&p->buffer);
     unsigned long long int significand = 0;
+    struct json_token token;
     int sig_digits = 0;
     bool imprecise = false;
     bool negative = false;
@@ -730,7 +731,6 @@ json_lex_number(struct json_parser *p)
             && significand <= (negative
                                ? (unsigned long long int) LLONG_MAX + 1
                                : LLONG_MAX)) {
-            struct json_token token;
             token.type = T_INTEGER;
             token.u.integer = negative ? -significand : significand;
             json_parser_input(p, &token);
@@ -738,19 +738,16 @@ json_lex_number(struct json_parser *p)
         }
     }
 
-    if (pow10 + sig_digits <= DBL_MAX_10_EXP) {
-        struct json_token token;
-        token.type = T_REAL;
-        token.u.real = significand * pow(10.0, pow10);
-        if (token.u.real <= DBL_MAX) {
-            if (negative && token.u.real) {
-                token.u.real = -token.u.real;
-            }
-            json_parser_input(p, &token);
-            return;
-        }
+    token.type = T_REAL;
+    if (!str_to_double(ds_cstr(&p->buffer), &token.u.real)) {
+        json_error(p, "number outside valid range");
+        return;
     }
-    json_error(p, "number outside valid range");
+    /* Suppress negative zero. */
+    if (token.u.real == 0) {
+        token.u.real = 0;
+    }
+    json_parser_input(p, &token);
 }
 
 static bool
