@@ -56,6 +56,7 @@ void ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
 int ds_get_line(struct ds *, FILE *);
 
 char *ds_cstr(struct ds *);
+const char *ds_cstr_ro(const struct ds *);
 char *ds_steal_cstr(struct ds *);
 void ds_destroy(struct ds *);
 

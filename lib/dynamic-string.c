@@ -219,6 +219,12 @@ ds_cstr(struct ds *ds)
     return ds->string;
 }
 
+const char *
+ds_cstr_ro(const struct ds *ds)
+{
+    return ds_cstr((struct ds *) ds);
+}
+
 /* Returns a null-terminated string representing the current contents of 'ds',
  * which the caller is expected to free with free(), then clears the contents
  * of 'ds'. */
