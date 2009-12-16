@@ -39,4 +39,7 @@ typedef bool ovsdb_txn_row_cb_func(const struct ovsdb_row *old,
 void ovsdb_txn_for_each_change(const struct ovsdb_txn *,
                                ovsdb_txn_row_cb_func *, void *aux);
 
+void ovsdb_txn_add_comment(struct ovsdb_txn *, const char *);
+const char *ovsdb_txn_get_comment(const struct ovsdb_txn *);
+
 #endif /* ovsdb/transaction.h */

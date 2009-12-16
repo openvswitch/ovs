@@ -57,6 +57,7 @@ static ovsdb_operation_executor ovsdb_execute_wait;
 static ovsdb_operation_executor ovsdb_execute_commit;
 static ovsdb_operation_executor ovsdb_execute_abort;
 static ovsdb_operation_executor ovsdb_execute_declare;
+static ovsdb_operation_executor ovsdb_execute_comment;
 
 static ovsdb_operation_executor *
 lookup_executor(const char *name)
@@ -76,6 +77,7 @@ lookup_executor(const char *name)
         { "commit", ovsdb_execute_commit },
         { "abort", ovsdb_execute_abort },
         { "declare", ovsdb_execute_declare },
+        { "comment", ovsdb_execute_comment },
     };
 
     size_t i;
@@ -683,5 +685,20 @@ ovsdb_execute_declare(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     ovsdb_symbol_table_put(x->symtab, json_string(uuid_name), &uuid, false);
     json_object_put(result, "uuid", json_string_create_nocopy(
                         xasprintf(UUID_FMT, UUID_ARGS(&uuid))));
+    return NULL;
+}
+
+static struct ovsdb_error *
+ovsdb_execute_comment(struct ovsdb_execution *x, struct ovsdb_parser *parser,
+                      struct json *result UNUSED)
+{
+    const struct json *comment;
+
+    comment = ovsdb_parser_member(parser, "comment", OP_STRING);
+    if (!comment) {
+        return NULL;
+    }
+    ovsdb_txn_add_comment(x->txn, json_string(comment));
+
     return NULL;
 }

@@ -28,3 +28,21 @@ cat stdout >> output
    AT_CLEANUP])
 
 EXECUTION_EXAMPLES
+
+AT_SETUP([transaction comments])
+AT_KEYWORDS([ovsdb file positive])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+touch .db.~lock~
+OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [], [ignore])
+OVS_CHECK_LCOV([[ovsdb-tool transact db '
+    [{"op": "insert",
+      "table": "ordinals",
+      "row": {"name": "five", "number": 5}},
+     {"op": "comment",
+      "comment": "add row for 5"}]']], [0], [stdout], [ignore])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+ [[[{"uuid":["uuid","<0>"]},{}]
+]])
+AT_CHECK([grep -q "add row for 5" db])
+AT_CLEANUP

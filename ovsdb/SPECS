@@ -972,3 +972,22 @@ Errors:
 
         The same "uuid-name" appeared on an earlier "insert" or
         "declare" operation within this transaction.
+
+comment
+.......
+
+
+Request object members:
+
+    "op": "comment"                    required
+    "comment": <string>                required
+
+Result object members:
+
+    none
+
+Semantics:
+
+    Provides information to a database administrator on the purpose of
+    a transaction.  The OVSDB server, for example, adds comments in
+    transactions that modify the database to the database journal.

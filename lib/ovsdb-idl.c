@@ -23,6 +23,7 @@
 #include <stdlib.h>
 
 #include "bitmap.h"
+#include "dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb-data.h"
@@ -80,6 +81,7 @@ struct ovsdb_idl_txn {
     struct hmap txn_rows;
     enum ovsdb_idl_txn_status status;
     bool dry_run;
+    struct ds comment;
 };
 
 static struct vlog_rate_limit syntax_rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -793,7 +795,17 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
     txn->status = TXN_INCOMPLETE;
     hmap_init(&txn->txn_rows);
     txn->dry_run = false;
+    ds_init(&txn->comment);
     return txn;
+}
+
+void
+ovsdb_idl_txn_add_comment(struct ovsdb_idl_txn *txn, const char *s)
+{
+    if (txn->comment.length) {
+        ds_put_char(&txn->comment, '\n');
+    }
+    ds_put_cstr(&txn->comment, s);
 }
 
 void
@@ -809,6 +821,7 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
         hmap_remove(&txn->idl->outstanding_txns, &txn->hmap_node);
     }
     ovsdb_idl_txn_abort(txn);
+    ds_destroy(&txn->comment);
     free(txn);
 }
 
@@ -1037,6 +1050,13 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                 json_destroy(op);
             }
         }
+    }
+
+    if (txn->comment.length) {
+        struct json *op = json_object_create();
+        json_object_put_string(op, "op", "comment");
+        json_object_put_string(op, "comment", ds_cstr(&txn->comment));
+        json_array_add(operations, op);
     }
 
     if (txn->dry_run) {

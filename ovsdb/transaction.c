@@ -19,6 +19,7 @@
 
 #include <assert.h>
 
+#include "dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "json.h"
@@ -31,6 +32,7 @@
 struct ovsdb_txn {
     struct ovsdb *db;
     struct hmap txn_tables;     /* Contains "struct ovsdb_txn_table"s. */
+    struct ds comment;
 };
 
 /* A table modified by a transaction. */
@@ -65,6 +67,7 @@ ovsdb_txn_create(struct ovsdb *db)
     struct ovsdb_txn *txn = xmalloc(sizeof *txn);
     txn->db = db;
     hmap_init(&txn->txn_tables);
+    ds_init(&txn->comment);
     return txn;
 }
 
@@ -96,6 +99,7 @@ ovsdb_txn_destroy(struct ovsdb_txn *txn, void (*cb)(struct ovsdb_txn_row *))
         free(txn_table);
     }
     hmap_destroy(&txn->txn_tables);
+    ds_destroy(&txn->comment);
     free(txn);
 }
 
@@ -283,4 +287,19 @@ ovsdb_txn_row_delete(struct ovsdb_txn *txn, const struct ovsdb_row *row_)
         }
         ovsdb_row_destroy(row);
     }
+}
+
+void
+ovsdb_txn_add_comment(struct ovsdb_txn *txn, const char *s)
+{
+    if (txn->comment.length) {
+        ds_put_char(&txn->comment, '\n');
+    }
+    ds_put_cstr(&txn->comment, s);
+}
+
+const char *
+ovsdb_txn_get_comment(const struct ovsdb_txn *txn)
+{
+    return txn->comment.length ? ds_cstr_ro(&txn->comment) : NULL;
 }

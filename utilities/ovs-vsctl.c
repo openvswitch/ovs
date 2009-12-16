@@ -1214,7 +1214,7 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
     struct ovsdb_idl_txn *txn;
     const struct ovsrec_open_vswitch *ovs;
     enum ovsdb_idl_txn_status status;
-    struct ds *output;
+    struct ds comment, *output;
     int n_output;
     int i, start;
 
@@ -1222,6 +1222,14 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
     if (dry_run) {
         ovsdb_idl_txn_set_dry_run(txn);
     }
+
+    ds_init(&comment);
+    ds_put_cstr(&comment, "ovs-vsctl:");
+    for (i = 0; i < argc; i++) {
+        ds_put_format(&comment, " %s", argv[i]);
+    }
+    ovsdb_idl_txn_add_comment(txn, ds_cstr(&comment));
+    ds_destroy(&comment);
 
     ovs = ovsrec_open_vswitch_first(idl);
     if (!ovs) {

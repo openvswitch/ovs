@@ -27,6 +27,7 @@
 #include "ovsdb-error.h"
 #include "row.h"
 #include "table.h"
+#include "timeval.h"
 #include "transaction.h"
 #include "uuid.h"
 #include "util.h"
@@ -185,6 +186,11 @@ ovsdb_file_txn_from_json(struct ovsdb *db, const struct json *json,
 
         table = shash_find_data(&db->tables, table_name);
         if (!table) {
+            if (!strcmp(table_name, "_date")
+                || !strcmp(table_name, "_comment")) {
+                continue;
+            }
+
             error = ovsdb_syntax_error(json, "unknown table",
                                        "No table named %s.", table_name);
             goto error;
@@ -299,6 +305,7 @@ ovsdb_file_replica_commit(struct ovsdb_replica *r_,
     struct ovsdb_file_replica *r = ovsdb_file_replica_cast(r_);
     struct ovsdb_file_replica_aux aux;
     struct ovsdb_error *error;
+    const char *comment;
 
     aux.json = NULL;
     aux.table_json = NULL;
@@ -309,6 +316,13 @@ ovsdb_file_replica_commit(struct ovsdb_replica *r_,
         /* Nothing to commit. */
         return NULL;
     }
+
+    comment = ovsdb_txn_get_comment(txn);
+    if (comment) {
+        json_object_put_string(aux.json, "_comment", comment);
+    }
+
+    json_object_put(aux.json, "_date", json_integer_create(time_now()));
 
     error = ovsdb_log_write(r->log, aux.json);
     json_destroy(aux.json);
