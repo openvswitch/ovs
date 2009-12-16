@@ -953,7 +953,7 @@ Request object members:
 
 Result object members:
 
-    none
+    "uuid": <uuid>
 
 Semantics:
 
@@ -965,10 +965,6 @@ Semantics:
     "insert" or "declare" operation within this transaction.
 
     The generated UUID is returned as the "uuid" member of the result.
-
-Result object members:
-
-    "uuid": <uuid>
 
 Errors:
 
