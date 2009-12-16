@@ -52,7 +52,6 @@ ovsdb_function_to_string(enum ovsdb_function function)
     return NULL;
 }
 
-
 static WARN_UNUSED_RESULT struct ovsdb_error *
 ovsdb_clause_from_json(const struct ovsdb_table_schema *ts,
                        const struct json *json,

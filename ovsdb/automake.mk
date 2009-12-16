@@ -12,6 +12,8 @@ ovsdb_libovsdb_a_SOURCES = \
 	ovsdb/jsonrpc-server.h \
 	ovsdb/log.c \
 	ovsdb/log.h \
+	ovsdb/mutation.c \
+	ovsdb/mutation.h \
 	ovsdb/ovsdb-server.c \
 	ovsdb/ovsdb.c \
 	ovsdb/ovsdb.h \

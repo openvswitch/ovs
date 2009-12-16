@@ -84,6 +84,8 @@ void ovsdb_datum_clone(struct ovsdb_datum *, const struct ovsdb_datum *,
                        const struct ovsdb_type *);
 void ovsdb_datum_destroy(struct ovsdb_datum *, const struct ovsdb_type *);
 void ovsdb_datum_swap(struct ovsdb_datum *, struct ovsdb_datum *);
+struct ovsdb_error *ovsdb_datum_sort(struct ovsdb_datum *,
+                                     const struct ovsdb_type *);
 
 struct ovsdb_error *ovsdb_datum_from_json(struct ovsdb_datum *,
                                           const struct ovsdb_type *,
@@ -107,6 +109,14 @@ bool ovsdb_datum_includes_all(const struct ovsdb_datum *,
 bool ovsdb_datum_excludes_all(const struct ovsdb_datum *,
                               const struct ovsdb_datum *,
                               const struct ovsdb_type *);
+
+void ovsdb_datum_union(struct ovsdb_datum *,
+                       const struct ovsdb_datum *,
+                       const struct ovsdb_type *);
+void ovsdb_datum_subtract(struct ovsdb_datum *a,
+                          const struct ovsdb_type *a_type,
+                          const struct ovsdb_datum *b,
+                          const struct ovsdb_type *b_type);
 
 static inline bool
 ovsdb_datum_conforms_to_type(const struct ovsdb_datum *datum,

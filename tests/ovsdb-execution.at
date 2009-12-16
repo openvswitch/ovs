@@ -104,6 +104,30 @@ OVSDB_CHECK_EXECUTION([insert rows, update rows by value],
 [{"rows":[{"_uuid":["uuid","<0>"],"_version":["uuid","<2>"],"name":"nought","number":0},{"_uuid":["uuid","<1>"],"_version":["uuid","<3>"],"name":"one","number":1}]}]
 ]])
 
+OVSDB_CHECK_EXECUTION([insert rows, mutate rows],
+  [ORDINAL_SCHEMA],
+  [[[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"},
+       "uuid-name": "first"}]]],
+   [[[{"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"},
+       "uuid-name": "first"}]]],
+   [[[{"op": "mutate",
+       "table": "ordinals",
+       "where": [["name", "==", "zero"]],
+       "mutations": [["number", "+=", 2]]}]]],
+   [[[{"op": "select",
+       "table": "ordinals",
+       "where": [],
+       "sort": ["number"]}]]]],
+  [[[{"uuid":["uuid","<0>"]}]
+[{"uuid":["uuid","<1>"]}]
+[{"count":1}]
+[{"rows":[{"_uuid":["uuid","<1>"],"_version":["uuid","<2>"],"name":"one","number":1},{"_uuid":["uuid","<0>"],"_version":["uuid","<3>"],"name":"zero","number":2}]}]
+]])
+
 OVSDB_CHECK_EXECUTION([insert rows, delete by named-uuid],
   [ORDINAL_SCHEMA],
   [[[[{"op": "insert",

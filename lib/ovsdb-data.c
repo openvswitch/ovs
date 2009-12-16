@@ -18,6 +18,7 @@
 #include "ovsdb-data.h"
 
 #include <assert.h>
+#include <limits.h>
 
 #include "hash.h"
 #include "ovsdb-error.h"
@@ -433,7 +434,7 @@ ovsdb_datum_sort_swap_cb(size_t a, size_t b, void *cbdata_)
     }
 }
 
-static struct ovsdb_error *
+struct ovsdb_error *
 ovsdb_datum_sort(struct ovsdb_datum *datum, const struct ovsdb_type *type)
 {
     if (datum->n < 2) {
@@ -654,27 +655,33 @@ ovsdb_datum_compare_3way(const struct ovsdb_datum *a,
                                        a->n));
 }
 
-static bool
-ovsdb_datum_contains(const struct ovsdb_datum *a, int i,
-                     const struct ovsdb_datum *b,
-                     const struct ovsdb_type *type)
+/* If atom 'i' in 'a' is also in 'b', returns its index in 'b', otherwise
+ * UINT_MAX.  'type' must be the type of 'a' and 'b', except that
+ * type->value_type may be set to OVSDB_TYPE_VOID to compare keys but not
+ * values. */
+static unsigned int
+ovsdb_datum_find(const struct ovsdb_datum *a, int i,
+                 const struct ovsdb_datum *b,
+                 const struct ovsdb_type *type)
 {
     int low = 0;
     int high = b->n;
     while (low < high) {
         int j = (low + high) / 2;
-        int cmp = ovsdb_atom_compare_3way(&a->keys[i], &b->keys[j], type->key_type);
+        int cmp = ovsdb_atom_compare_3way(&a->keys[i], &b->keys[j],
+                                          type->key_type);
         if (cmp < 0) {
             high = j;
         } else if (cmp > 0) {
             low = j + 1;
         } else {
-            return (type->value_type == OVSDB_TYPE_VOID
-                    || ovsdb_atom_equals(&a->values[i], &b->values[j],
-                                         type->value_type));
+            bool eq_value = (type->value_type == OVSDB_TYPE_VOID
+                             || ovsdb_atom_equals(&a->values[i], &b->values[j],
+                                                  type->value_type));
+            return eq_value ? j : UINT_MAX;
         }
     }
-    return false;
+    return UINT_MAX;
 }
 
 /* Returns true if every element in 'a' is also in 'b', false otherwise. */
@@ -686,7 +693,7 @@ ovsdb_datum_includes_all(const struct ovsdb_datum *a,
     size_t i;
 
     for (i = 0; i < a->n; i++) {
-        if (!ovsdb_datum_contains(a, i, b, type)) {
+        if (ovsdb_datum_find(a, i, b, type) == UINT_MAX) {
             return false;
         }
     }
@@ -702,11 +709,94 @@ ovsdb_datum_excludes_all(const struct ovsdb_datum *a,
     size_t i;
 
     for (i = 0; i < a->n; i++) {
-        if (ovsdb_datum_contains(a, i, b, type)) {
+        if (ovsdb_datum_find(a, i, b, type) != UINT_MAX) {
             return false;
         }
     }
     return true;
+}
+
+static void
+ovsdb_datum_reallocate(struct ovsdb_datum *a, const struct ovsdb_type *type,
+                       unsigned int capacity)
+{
+    a->keys = xrealloc(a->keys, capacity * sizeof *a->keys);
+    if (type->value_type != OVSDB_TYPE_VOID) {
+        a->values = xrealloc(a->values, capacity * sizeof *a->values);
+    }
+}
+
+static void
+ovsdb_datum_remove(struct ovsdb_datum *a, size_t i,
+                   const struct ovsdb_type *type)
+{
+    ovsdb_atom_destroy(&a->keys[i], type->key_type);
+    a->keys[i] = a->keys[a->n - 1];
+    if (type->value_type != OVSDB_TYPE_VOID) {
+        ovsdb_atom_destroy(&a->values[i], type->value_type);
+        a->values[i] = a->values[a->n - 1];
+    }
+    a->n--;
+}
+
+void
+ovsdb_datum_union(struct ovsdb_datum *a,
+                  const struct ovsdb_datum *b, const struct ovsdb_type *type)
+{
+    struct ovsdb_type type_without_value;
+    unsigned int n;
+    size_t i;
+
+    type_without_value = *type;
+    type_without_value.value_type = OVSDB_TYPE_VOID;
+    n = a->n;
+    for (i = 0; i < b->n; i++) {
+        if (ovsdb_datum_find(b, i, a, &type_without_value) == UINT_MAX) {
+            if (n == a->n) {
+                ovsdb_datum_reallocate(a, type, a->n + (b->n - i));
+            }
+            ovsdb_atom_clone(&a->keys[n], &b->keys[i], type->key_type);
+            if (type->value_type != OVSDB_TYPE_VOID) {
+                ovsdb_atom_clone(&a->values[n], &b->values[i],
+                                 type->value_type);
+            }
+            n++;
+        }
+    }
+    if (n != a->n) {
+        struct ovsdb_error *error;
+        a->n = n;
+        error = ovsdb_datum_sort(a, type);
+        assert(!error);
+    }
+}
+
+void
+ovsdb_datum_subtract(struct ovsdb_datum *a, const struct ovsdb_type *a_type,
+                     const struct ovsdb_datum *b,
+                     const struct ovsdb_type *b_type)
+{
+    bool changed = false;
+    size_t i;
+
+    assert(a_type->key_type == b_type->key_type);
+    assert(a_type->value_type == b_type->value_type
+           || b_type->value_type == OVSDB_TYPE_VOID);
+
+    /* XXX The big-O of this could easily be improved. */
+    for (i = 0; i < a->n; ) {
+        unsigned int idx = ovsdb_datum_find(a, i, b, b_type);
+        if (idx != UINT_MAX) {
+            changed = true;
+            ovsdb_datum_remove(a, i, a_type);
+        } else {
+            i++;
+        }
+    }
+    if (changed) {
+        struct ovsdb_error *error = ovsdb_datum_sort(a, a_type);
+        assert(!error);
+    }
 }
 
 struct ovsdb_symbol_table {

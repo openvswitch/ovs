@@ -586,6 +586,79 @@ Notation for the Wire Protocol
 
     One of "<", "<=", "==", "!=", ">=", ">", "includes", "excludes".
 
+<mutation>
+
+    A 3-element JSON array of the form [<column>, <mutator>, <value>]
+    that represents a change to a column value.
+
+    Except as otherwise specified below, <value> must have the same
+    type as <column>.
+
+    The meaning depends on the type of <column>:
+
+        integer
+        real
+
+            <mutator> must be "+=", "-=", "*=", "/=" or (integer only)
+            "%=".  The value of <column> is changed to the sum,
+            difference, product, quotient, or remainder, respectively,
+            of <column> and <value>.
+
+        boolean
+        string
+        uuid
+
+            No valid <mutator>s are currently defined for these types.
+
+        set
+
+            Any <mutator> valid for the set's element type may be
+            applied to the set, in which case the mutation is applied
+            to each member of the set individually.  <value> must be a
+            scalar value of the same type as the set's element type.
+
+            If <mutator> is "insert", then each of the values in the
+            set in <value> is added to <column> if it is not already
+            present.  The required type of <value> is slightly
+            relaxed, in that it may have fewer than the minimum number
+            of elements specified by the column's type.
+
+            If <mutator> is "delete", then each of the values in the
+            set in <value> is removed from <column> if it is present
+            there.  The required type is slightly relaxed in that
+            <value> may have more or less than the maximum number of
+            elements specified by the column's type.
+
+        map
+
+            <mutator> must be "insert" or "delete".
+
+            If <mutator> is "insert", then each of the key-value pairs
+            in the map in <value> is added to <column> if its key is
+            not already present.  The required type of <value> is
+            slightly relaxed, in that it may have fewer than the
+            minimum number of elements specified by the column's type.
+
+            If <mutator> is "delete", then <value> may have the same
+            type as <column> (a map type) or it may be a set whose
+            element type is the same as <column>'s key type:
+
+                - If <value> is a map, the mutation deletes each
+                  key-value pair in <column> whose key and value equal
+                  one of the key-value pairs in <value>.
+
+                - If <value> is a set, the mutation deletes each
+                  key-value pair in <column> whose key equals one of
+                  the values in <value>.
+
+            For "delete", <value> may have any number of elements,
+            regardless of restrictions on the number of elements in
+            <column>.
+
+<mutator>
+
+    One of "+=", "-=", "*=", "/=", "%=", "insert", "delete".
+
 Operations
 ----------
 
@@ -698,6 +771,57 @@ Semantics:
 
     The "count" member of the result specifies the number of rows
     that matched.
+
+mutate
+......
+
+Request object members:
+
+    "op": "mutate"                required
+    "table": <table>              required
+    "where": [<condition>*]       required
+    "mutations": [<mutation>*]    required
+
+Result object members:
+
+    "count": <integer>
+
+Semantics:
+
+    Mutates rows in a table.
+
+    Searches "table" for rows that match all the conditions specified
+    in "where".  For each matching row, mutates its columns as
+    specified by each <mutation> in "mutations", in the order
+    specified.
+
+    The "_uuid" and "_version" columns of a table may not be directly
+    modified with this operation.  Columns designated read-only in the
+    schema also may not be updated.
+
+    The "count" member of the result specifies the number of rows
+    that matched.
+
+Errors:
+
+    "error": "domain error"
+
+        The result of the mutation is not mathematically defined,
+        e.g. division by zero.
+
+    "error": "range error"
+
+        The result of the mutation is not representable within the
+        database's format, e.g. an integer result outside the range
+        INT64_MIN...INT64_MAX or a real result outside the range
+        -DBL_MAX...DBL_MAX.
+
+    "error": "constraint violation"
+
+        The mutation caused the column's value to violate a
+        constraint, e.g. it caused a column to have more or fewer
+        values than are allowed or an arithmetic operation caused a
+        set or map to have duplicate elements.
 
 delete
 ......

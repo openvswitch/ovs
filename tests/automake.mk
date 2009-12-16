@@ -24,6 +24,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-table.at \
 	tests/ovsdb-row.at \
 	tests/ovsdb-condition.at \
+	tests/ovsdb-mutation.at \
 	tests/ovsdb-query.at \
 	tests/ovsdb-transaction.at \
 	tests/ovsdb-execution.at \

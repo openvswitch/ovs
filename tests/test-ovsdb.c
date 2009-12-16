@@ -34,6 +34,7 @@
 #include "ovsdb/condition.h"
 #include "ovsdb/file.h"
 #include "ovsdb/log.h"
+#include "ovsdb/mutation.h"
 #include "ovsdb/ovsdb.h"
 #include "ovsdb/query.h"
 #include "ovsdb/row.h"
@@ -141,6 +142,10 @@ usage(void)
            "    parse each CONDITION on TABLE, and re-serialize\n"
            "  evaluate-conditions TABLE [CONDITION,...] [ROW,...]\n"
            "    test CONDITIONS on TABLE against each ROW, print results\n"
+           "  parse-mutations TABLE MUTATION...\n"
+           "    parse each MUTATION on TABLE, and re-serialize\n"
+           "  execute-mutations TABLE [MUTATION,...] [ROW,...]\n"
+           "    execute MUTATIONS on TABLE on each ROW, print results\n"
            "  query TABLE [ROW,...] [CONDITION,...]\n"
            "    add each ROW to TABLE, then query and print the rows that\n"
            "    satisfy each CONDITION.\n"
@@ -206,6 +211,15 @@ print_and_free_json(struct json *json)
 {
     char *string = json_to_string(json, JSSF_SORT);
     json_destroy(json);
+    puts(string);
+    free(string);
+}
+
+static void
+print_and_free_ovsdb_error(struct ovsdb_error *error)
+{
+    char *string = ovsdb_error_to_string(error);
+    ovsdb_error_destroy(error);
     puts(string);
     free(string);
 }
@@ -650,6 +664,135 @@ do_evaluate_conditions(int argc UNUSED, char *argv[])
 
     for (i = 0; i < n_conditions; i++) {
         ovsdb_condition_destroy(&conditions[i]);
+    }
+    for (i = 0; i < n_rows; i++) {
+        ovsdb_row_destroy(rows[i]);
+    }
+    ovsdb_table_destroy(table); /* Also destroys 'ts'. */
+}
+
+static void
+do_parse_mutations(int argc, char *argv[])
+{
+    struct ovsdb_table_schema *ts;
+    struct json *json;
+    int exit_code = 0;
+    int i;
+
+    json = unbox_json(parse_json(argv[1]));
+    check_ovsdb_error(ovsdb_table_schema_from_json(json, "mytable", &ts));
+    json_destroy(json);
+
+    for (i = 2; i < argc; i++) {
+        struct ovsdb_mutation_set set;
+        struct ovsdb_error *error;
+
+        json = parse_json(argv[i]);
+        error = ovsdb_mutation_set_from_json(ts, json, NULL, &set);
+        if (!error) {
+            print_and_free_json(ovsdb_mutation_set_to_json(&set));
+        } else {
+            char *s = ovsdb_error_to_string(error);
+            ovs_error(0, "%s", s);
+            free(s);
+            ovsdb_error_destroy(error);
+            exit_code = 1;
+        }
+        json_destroy(json);
+
+        ovsdb_mutation_set_destroy(&set);
+    }
+    ovsdb_table_schema_destroy(ts);
+
+    exit(exit_code);
+}
+
+static void
+do_execute_mutations(int argc UNUSED, char *argv[])
+{
+    struct ovsdb_table_schema *ts;
+    struct ovsdb_table *table;
+    struct ovsdb_mutation_set *sets;
+    size_t n_sets;
+    struct ovsdb_row **rows;
+    size_t n_rows;
+    struct json *json;
+    size_t i, j;
+
+    /* Parse table schema, create table. */
+    json = unbox_json(parse_json(argv[1]));
+    check_ovsdb_error(ovsdb_table_schema_from_json(json, "mytable", &ts));
+    json_destroy(json);
+
+    table = ovsdb_table_create(ts);
+
+    /* Parse mutations. */
+    json = parse_json(argv[2]);
+    if (json->type != JSON_ARRAY) {
+        ovs_fatal(0, "MUTATION argument is not JSON array");
+    }
+    n_sets = json->u.array.n;
+    sets = xmalloc(n_sets * sizeof *sets);
+    for (i = 0; i < n_sets; i++) {
+        check_ovsdb_error(ovsdb_mutation_set_from_json(ts,
+                                                       json->u.array.elems[i],
+                                                       NULL, &sets[i]));
+    }
+    json_destroy(json);
+
+    /* Parse rows. */
+    json = parse_json(argv[3]);
+    if (json->type != JSON_ARRAY) {
+        ovs_fatal(0, "ROW argument is not JSON array");
+    }
+    n_rows = json->u.array.n;
+    rows = xmalloc(n_rows * sizeof *rows);
+    for (i = 0; i < n_rows; i++) {
+        rows[i] = ovsdb_row_create(table);
+        check_ovsdb_error(ovsdb_row_from_json(rows[i], json->u.array.elems[i],
+                                              NULL, NULL));
+    }
+    json_destroy(json);
+
+    for (i = 0; i < n_sets; i++) {
+        printf("mutation %2d:\n", i);
+        for (j = 0; j < n_rows; j++) {
+            struct ovsdb_error *error;
+            struct ovsdb_row *row;
+
+            row = ovsdb_row_clone(rows[j]);
+            error = ovsdb_mutation_set_execute(row, &sets[i]);
+
+            printf("row %zu: ", j);
+            if (error) {
+                print_and_free_ovsdb_error(error);
+            } else {
+                struct ovsdb_column_set columns;
+                struct shash_node *node;
+
+                ovsdb_column_set_init(&columns);
+                SHASH_FOR_EACH (node, &ts->columns) {
+                    struct ovsdb_column *c = node->data;
+                    if (!ovsdb_datum_equals(&row->fields[c->index],
+                                            &rows[j]->fields[c->index],
+                                            &c->type)) {
+                        ovsdb_column_set_add(&columns, c);
+                    }
+                }
+                if (columns.n_columns) {
+                    print_and_free_json(ovsdb_row_to_json(row, &columns));
+                } else {
+                    printf("no change\n");
+                }
+                ovsdb_column_set_destroy(&columns);
+            }
+            ovsdb_row_destroy(row);
+        }
+        printf("\n");
+    }
+
+    for (i = 0; i < n_sets; i++) {
+        ovsdb_mutation_set_destroy(&sets[i]);
     }
     for (i = 0; i < n_rows; i++) {
         ovsdb_row_destroy(rows[i]);
@@ -1564,6 +1707,8 @@ static struct command all_commands[] = {
     { "compare-rows", 2, INT_MAX, do_compare_rows },
     { "parse-conditions", 2, INT_MAX, do_parse_conditions },
     { "evaluate-conditions", 3, 3, do_evaluate_conditions },
+    { "parse-mutations", 2, INT_MAX, do_parse_mutations },
+    { "execute-mutations", 3, 3, do_execute_mutations },
     { "query", 3, 3, do_query },
     { "query-distinct", 4, 4, do_query_distinct },
     { "transact", 1, INT_MAX, do_transact },

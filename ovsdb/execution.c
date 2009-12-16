@@ -22,6 +22,7 @@
 #include "condition.h"
 #include "file.h"
 #include "json.h"
+#include "mutation.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
@@ -50,6 +51,7 @@ typedef struct ovsdb_error *ovsdb_operation_executor(struct ovsdb_execution *,
 static ovsdb_operation_executor ovsdb_execute_insert;
 static ovsdb_operation_executor ovsdb_execute_select;
 static ovsdb_operation_executor ovsdb_execute_update;
+static ovsdb_operation_executor ovsdb_execute_mutate;
 static ovsdb_operation_executor ovsdb_execute_delete;
 static ovsdb_operation_executor ovsdb_execute_wait;
 static ovsdb_operation_executor ovsdb_execute_commit;
@@ -68,6 +70,7 @@ lookup_executor(const char *name)
         { "insert", ovsdb_execute_insert },
         { "select", ovsdb_execute_select },
         { "update", ovsdb_execute_update },
+        { "mutate", ovsdb_execute_mutate },
         { "delete", ovsdb_execute_delete },
         { "wait", ovsdb_execute_wait },
         { "commit", ovsdb_execute_commit },
@@ -409,6 +412,64 @@ ovsdb_execute_update(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 
     ovsdb_row_destroy(row);
     ovsdb_column_set_destroy(&columns);
+    ovsdb_condition_destroy(&condition);
+
+    return error;
+}
+
+struct mutate_row_cbdata {
+    size_t n_matches;
+    struct ovsdb_txn *txn;
+    const struct ovsdb_mutation_set *mutations;
+};
+
+static bool
+mutate_row_cb(const struct ovsdb_row *row, void *mr_)
+{
+    struct mutate_row_cbdata *mr = mr_;
+
+    mr->n_matches++;
+    ovsdb_mutation_set_execute(ovsdb_txn_row_modify(mr->txn, row),
+                               mr->mutations);
+
+    return true;
+}
+
+struct ovsdb_error *
+ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
+                     struct json *result)
+{
+    struct ovsdb_table *table;
+    const struct json *where;
+    const struct json *mutations_json;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_mutation_set mutations = OVSDB_MUTATION_SET_INITIALIZER;
+    struct ovsdb_row *row = NULL;
+    struct mutate_row_cbdata mr;
+    struct ovsdb_error *error;
+
+    table = parse_table(x, parser, "table");
+    where = ovsdb_parser_member(parser, "where", OP_ARRAY);
+    mutations_json = ovsdb_parser_member(parser, "mutations", OP_ARRAY);
+    error = ovsdb_parser_get_error(parser);
+    if (!error) {
+        error = ovsdb_mutation_set_from_json(table->schema, mutations_json,
+                                             x->symtab, &mutations);
+    }
+    if (!error) {
+        error = ovsdb_condition_from_json(table->schema, where, x->symtab,
+                                          &condition);
+    }
+    if (!error) {
+        mr.n_matches = 0;
+        mr.txn = x->txn;
+        mr.mutations = &mutations;
+        ovsdb_query(table, &condition, mutate_row_cb, &mr);
+        json_object_put(result, "count", json_integer_create(mr.n_matches));
+    }
+
+    ovsdb_row_destroy(row);
+    ovsdb_mutation_set_destroy(&mutations);
     ovsdb_condition_destroy(&condition);
 
     return error;
