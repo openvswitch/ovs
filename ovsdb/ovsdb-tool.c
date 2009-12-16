@@ -103,7 +103,8 @@ usage(void)
            "  compact DB [DST]   compact DB in-place (or to DST)\n"
            "  extract-schema DB  print DB's schema on stdout\n"
            "  query DB TRNS      execute read-only transaction on DB\n"
-           "  transact DB TRNS   execute read/write transaction on DB\n",
+           "  transact DB TRNS   execute read/write transaction on DB\n"
+           "  show-log DB        prints information about DB's log entries\n",
            program_name, program_name);
     vlog_usage();
     printf("\nOther options:\n"
@@ -191,6 +192,45 @@ do_transact(int argc UNUSED, char *argv[])
 }
 
 static void
+do_show_log(int argc UNUSED, char *argv[])
+{
+    const char *db_file_name = argv[1];
+    struct ovsdb_log *log;
+    unsigned int i;
+
+    check_ovsdb_error(ovsdb_log_open(db_file_name, O_RDONLY, &log));
+    for (i = 0; ; i++) {
+        struct json *json;
+
+        check_ovsdb_error(ovsdb_log_read(log, &json));
+        if (!json) {
+            break;
+        }
+
+        printf("record %u:", i);
+        if (json->type == JSON_OBJECT) {
+            struct json *date, *comment;
+
+            date = shash_find_data(json_object(json), "_date");
+            if (date && date->type == JSON_INTEGER) {
+                time_t t = json_integer(date);
+                char s[128];
+
+                strftime(s, sizeof s, "%Y-%m-%d %H:%M:%S", localtime(&t));
+                printf(" %s", s);
+            }
+
+            comment = shash_find_data(json_object(json), "_comment");
+            if (comment && comment->type == JSON_STRING) {
+                printf(" \"%s\"", json_string(comment));
+            }
+        }
+        json_destroy(json);
+        putchar('\n');
+    }
+}
+
+static void
 do_help(int argc UNUSED, char *argv[] UNUSED)
 {
     usage();
@@ -200,6 +240,7 @@ static const struct command all_commands[] = {
     { "create", 2, 2, do_create },
     { "query", 2, 2, do_query },
     { "transact", 2, 2, do_transact },
+    { "show-log", 1, 1, do_show_log },
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };

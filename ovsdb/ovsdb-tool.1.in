@@ -18,6 +18,8 @@ ovsdb\-tool \- Open vSwitch database management utility
 .br
 \fBovsdb\-tool \fR[\fIoptions\fR] \fBtransact\fI db transaction\fR
 .br
+\fBovsdb\-tool \fR[\fIoptions\fR] \fBshow\-log\fI db\fR
+.br
 \fBovsdb\-tool help\fR
 .so lib/vlog-syn.man
 .so lib/common-syn.man
@@ -50,7 +52,7 @@ safely run concurrently with other database activity, including
 may specify database modifications, but these will have no effect on
 \fIdb\fR.
 .
-.IQ "\fBtransact\fI db transaction\fR"
+.IP "\fBtransact\fI db transaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, prints the results,
 and commits any changes to \fIdb\fR.  The \fItransaction\fR must be a
 JSON array in the format of the \fBparams\fR array for the JSON-RPC
@@ -61,6 +63,11 @@ command will fail if the database is opened for writing by any other
 process, including \fBovsdb-server\fR(1).  Use \fBovsdb\-client\fR(1),
 instead, to write to a database that is served by
 \fBovsdb-server\fR(1).
+.
+.IP "\fBshow-log\fI db\fR"
+Prints a summary of the records in \fBdb\fR's log, including the time
+and date at which each database change occurred and any associated
+comment.  This may be useful for debugging.
 .
 .SH OPTIONS
 .SS "Logging Options"
