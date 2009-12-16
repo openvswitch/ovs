@@ -246,8 +246,6 @@ case "$1" in
             --pidfile /var/run/ovsdb-server.pid \
             --exec $ovsdb_server
 	echo "ovsdb-server."
-
-        unload_modules
 	;;
     force-stop)
 	echo -n "Forcefully stopping ovs-vswitchd: "
@@ -265,8 +263,9 @@ case "$1" in
         else
             echo " ERROR."
         fi
-
-        unload_modules
+	;;
+    unload)
+	unload_modules
 	;;
     reload)
         ;;
@@ -292,7 +291,7 @@ case "$1" in
         ;;
     *)
 	N=/etc/init.d/$NAME
-	echo "Usage: $N {start|stop|restart|force-reload|status|force-stop}" >&2
+	echo "Usage: $N {start|stop|restart|force-reload|status|force-stop|unload}" >&2
 	exit 1
 	;;
 esac
