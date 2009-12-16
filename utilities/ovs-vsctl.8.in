@@ -4,6 +4,13 @@
 .  ns
 .  IP "\\$1"
 ..
+.de ST
+.  PP
+.  RS -0.15in
+.  I "\\$1"
+.  RE
+.  PP
+..
 .TH ovs\-vsctl 8 "November 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-vsctl
 .
@@ -265,6 +272,73 @@ Queries the external IDs on \fIiface\fR.  If \fIkey\fR is specified,
 the output is the value for that \fIkey\fR or the empty string if
 \fIkey\fR is unset.  If \fIkey\fR is omitted, the output is
 \fIkey\fB=\fIvalue\fR, one per line, for each key-value pair.
+.
+.SS "OpenFlow Controller Connectivity"
+.
+\fBovs\-vswitchd\fR can perform all configured bridging and switching
+locally, or it can be configured to connect a given bridge to an
+external OpenFlow controller, such as NOX.  
+.
+If a \fIbridge\fR argument is given, the settings apply only to the
+specified bridge.  Otherwise, they apply to the Open vSwitch instance,
+and its configuration applies to any bridge that has not been explicitly
+configured through a \fIbridge\fR argument.
+.
+.IP "\fBget\-controller\fR [\fIbridge\fR]"
+Prints the configured controller target.
+.
+.IP "\fBdel\-controller\fR [\fIbridge\fR]"
+Deletes the configured controller target.
+.
+.IP "\fBset\-controller\fR [\fIbridge\fR] \fItarget\fR"
+Sets the configured controller target.  The \fItarget\fR may use any of
+the following forms:
+.
+.RS
+.TP
+\fBssl:\fIip\fR[\fB:\fIport\fR]
+The specified SSL \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
+SSL must be configured when this form is used (see \fBSSL
+Configuration\fR, below).
+.
+.TP
+\fBtcp:\fIip\fR[\fB:\fIport\fR]
+The specified TCP \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
+.TP
+\fBunix:\fIfile\fR
+The Unix domain server socket named \fIfile\fR.
+.RE
+.ST "Controller Failure Settings"
+.
+When a controller is configured, it is, ordinarily, responsible for
+setting up all flows on the switch.  Thus, if the connection to
+the controller fails, no new network connections can be set up.  If
+the connection to the controller stays down long enough, no packets
+can pass through the switch at all.
+.ST
+If the value is \fBstandalone\fR, or if neither of these settings
+is set, \fBovs\-vswitchd\fR will take over
+responsibility for setting up
+flows when no message has been received from the controller for three
+times the inactivity probe interval (xxx needs to be exposed).  In this mode,
+\fBovs\-vswitchd\fR causes the datapath to act like an ordinary
+MAC-learning switch.  \fBovs\-vswitchd\fR will continue to retry connecting
+to the controller in the background and, when the connection succeeds,
+it discontinues its standalone behavior.
+.ST
+If this option is set to \fBsecure\fR, \fBovs\-vswitchd\fR will not
+set up flows on its own when the controller connection fails.
+.
+.IP "\fBget\-fail\-mode\fR [\fIbridge\fR]"
+Prints the configured failure mode.
+.
+.IP "\fBdel\-fail\-mode\fR [\fIbridge\fR]"
+Deletes the configured failure mode.
+.
+.IP "\fBset\-fail\-mode\fR [\fIbridge\fR] \fBstandalone\fR|\fBsecure\fR"
+Sets the configured failure mode.
 .
 .SH "EXAMPLES"
 Create a new bridge named br0 and add port eth0 to it:
