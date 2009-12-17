@@ -73,12 +73,14 @@ main(int argc, char *argv[])
     process_init();
 
     die_if_already_running();
-    daemonize();
+    daemonize_start();
 
     retval = unixctl_server_create(NULL, &unixctl);
     if (retval) {
         ovs_fatal(retval, "could not listen for control connections");
     }
+
+    daemonize_complete();
 
     idl = ovsdb_idl_create(remote, &ovsrec_idl_class);
     idl_seqno = ovsdb_idl_get_seqno(idl);

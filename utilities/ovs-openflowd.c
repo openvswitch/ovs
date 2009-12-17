@@ -125,7 +125,7 @@ main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
 
     die_if_already_running();
-    daemonize();
+    daemonize_start();
 
     /* Start listening for ovs-appctl requests. */
     error = unixctl_server_create(NULL, &unixctl);
@@ -217,6 +217,8 @@ main(int argc, char *argv[])
             ovs_fatal(error, "failed to configure controller");
         }
     }
+
+    daemonize_complete();
 
     while (ofproto_is_alive(ofproto)) {
         error = ofproto_run(ofproto);

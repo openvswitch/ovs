@@ -127,12 +127,14 @@ main(int argc, char *argv[])
     }
 
     die_if_already_running();
-    daemonize();
+    daemonize_start();
 
     retval = unixctl_server_create(NULL, &unixctl);
     if (retval) {
         ovs_fatal(retval, "Could not listen for unixctl connections");
     }
+
+    daemonize_complete();
 
     while (n_switches > 0 || n_listeners > 0) {
         int iteration;

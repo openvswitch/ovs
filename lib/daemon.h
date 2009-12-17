@@ -59,6 +59,8 @@ bool is_chdir_enabled(void);
 void set_detach(void);
 bool get_detach(void);
 void daemonize(void);
+void daemonize_start(void);
+void daemonize_complete(void);
 void die_if_already_running(void);
 void ignore_existing_pidfile(void);
 void daemon_usage(void);

@@ -58,12 +58,10 @@ main(int argc, char *argv[])
     struct unixctl_server *unixctl;
     struct ovsdb_jsonrpc_server *jsonrpc;
     struct svec active, passive;
-    struct pstream **listeners;
     struct ovsdb_error *error;
     struct ovsdb *db;
     const char *name;
     char *file_name;
-    bool do_chdir;
     bool exiting;
     int retval;
     size_t i;
@@ -77,31 +75,8 @@ main(int argc, char *argv[])
 
     parse_options(argc, argv, &file_name, &active, &passive, &unixctl_path);
 
-    /* Open all the passive sockets before detaching, to avoid race with
-     * processes that start up later. */
-    listeners = xmalloc(passive.n * sizeof *listeners);
-    for (i = 0; i < passive.n; i++) {
-        int error;
-
-        error = pstream_open(passive.names[i], &listeners[i]);
-        if (error) {
-            ovs_fatal(error, "failed to listen on \"%s\"", passive.names[i]);
-        }
-    }
-
-    if (get_detach() && is_chdir_enabled()) {
-        /* We need to skip chdir("/") in daemonize() and do it later, because
-         * we need to open the database and possible set up up Unix domain
-         * sockets in the current working directory after we daemonize.  We
-         * can't open the database before we daemonize because file locks
-         * aren't inherited by child processes.  */
-        do_chdir = true;
-        set_no_chdir();
-    } else {
-        do_chdir = false;
-    }
     die_if_already_running();
-    daemonize();
+    daemonize_start();
 
     error = ovsdb_file_open(file_name, false, &db);
     if (error) {
@@ -113,7 +88,14 @@ main(int argc, char *argv[])
         ovsdb_jsonrpc_server_connect(jsonrpc, name);
     }
     for (i = 0; i < passive.n; i++) {
-        ovsdb_jsonrpc_server_listen(jsonrpc, listeners[i]);
+        struct pstream *pstream;
+        int error;
+
+        error = pstream_open(passive.names[i], &pstream);
+        if (error) {
+            ovs_fatal(error, "failed to listen on \"%s\"", passive.names[i]);
+        }
+        ovsdb_jsonrpc_server_listen(jsonrpc, pstream);
     }
     svec_destroy(&active);
     svec_destroy(&passive);
@@ -123,11 +105,9 @@ main(int argc, char *argv[])
         ovs_fatal(retval, "could not listen for control connections");
     }
 
-    unixctl_command_register("exit", ovsdb_server_exit, &exiting);
+    daemonize_complete();
 
-    if (do_chdir) {
-        ignore(chdir("/"));
-    }
+    unixctl_command_register("exit", ovsdb_server_exit, &exiting);
 
     exiting = false;
     while (!exiting) {

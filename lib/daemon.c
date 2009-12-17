@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include "fatal-signal.h"
 #include "dirs.h"
@@ -39,8 +40,11 @@ static char *pidfile;
 /* Create pidfile even if one already exists and is locked? */
 static bool overwrite_pidfile;
 
-/* Should we chdir to "/". */
+/* Should we chdir to "/"? */
 static bool chdir_ = true;
+
+/* File descriptors used by daemonize_start() and daemonize_complete(). */
+static int daemonize_fds[2];
 
 /* Returns the file name that would be used for a pidfile if 'name' were
  * provided to set_pidfile().  The caller must free the returned string. */
@@ -211,44 +215,79 @@ make_pidfile(void)
 void
 daemonize(void)
 {
+    daemonize_start();
+    daemonize_complete();
+}
+
+/* If daemonization is configured, then starts daemonization, by forking and
+ * returning in the child process.  The parent process hangs around until the
+ * child lets it know either that it completed startup successfully (by calling
+ * daemon_complete()) or that it failed to start up (by exiting with a nonzero
+ * exit code). */
+void
+daemonize_start(void)
+{
     if (detach) {
-        char c = 0;
-        int fds[2];
-        if (pipe(fds) < 0) {
+        pid_t pid;
+
+        if (pipe(daemonize_fds) < 0) {
             ovs_fatal(errno, "pipe failed");
         }
 
-        switch (fork()) {
-        default:
-            /* Parent process: wait for child to create pidfile, then exit. */
-            close(fds[1]);
+        pid = fork();
+        if (pid > 0) {
+            /* Running in parent process. */
+            char c;
+
+            close(daemonize_fds[1]);
             fatal_signal_fork();
-            if (read(fds[0], &c, 1) != 1) {
+            if (read(daemonize_fds[0], &c, 1) != 1) {
+                int retval;
+                int status;
+
+                do {
+                    retval = waitpid(pid, &status, 0);
+                } while (retval == -1 && errno == EINTR);
+
+                if (retval == pid
+                    && WIFEXITED(status)
+                    && WEXITSTATUS(status)) {
+                    /* Child exited with an error.  Convey the same error to
+                     * our parent process as a courtesy. */
+                    exit(WEXITSTATUS(status));
+                }
+
                 ovs_fatal(errno, "daemon child failed to signal startup");
             }
             exit(0);
-
-        case 0:
-            /* Child process. */
-            close(fds[0]);
+        } else if (!pid) {
+            /* Running in child process. */
+            close(daemonize_fds[0]);
             make_pidfile();
-            ignore(write(fds[1], &c, 1));
-            close(fds[1]);
-            setsid();
-            if (chdir_) {
-                ignore(chdir("/"));
-            }
             time_postfork();
             lockfile_postfork();
-            break;
-
-        case -1:
-            /* Error. */
+        } else {
             ovs_fatal(errno, "could not fork");
-            break;
         }
     } else {
         make_pidfile();
+    }
+}
+
+/* If daemonization is configured, then this function notifies the parent
+ * process that the child process has completed startup successfully. */
+void
+daemonize_complete(void)
+{
+    if (detach) {
+        char c = 0;
+
+        ignore(write(daemonize_fds[1], &c, 1));
+        close(daemonize_fds[1]);
+        setsid();
+        if (chdir_) {
+            ignore(chdir("/"));
+        }
     }
 }
 
