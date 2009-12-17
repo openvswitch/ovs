@@ -244,9 +244,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
         }
 
         reply = NULL;
-        if (msg->type == JSONRPC_REQUEST && !strcmp(msg->method, "echo")) {
-            reply = jsonrpc_create_reply(json_clone(msg->params), msg->id);
-        } else if (msg->type == JSONRPC_NOTIFY
+        if (msg->type == JSONRPC_NOTIFY
                    && !strcmp(msg->method, "update")
                    && msg->params->type == JSON_ARRAY
                    && msg->params->u.array.n == 2

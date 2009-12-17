@@ -630,6 +630,9 @@ struct jsonrpc_session {
     unsigned int seqno;
 };
 
+/* Creates and returns a jsonrpc_session that connects and reconnects, with
+ * back-off, to 'name', which should be a string acceptable to
+ * stream_open(). */
 struct jsonrpc_session *
 jsonrpc_session_open(const char *name)
 {
@@ -640,6 +643,25 @@ jsonrpc_session_open(const char *name)
     reconnect_set_name(s->reconnect, name);
     reconnect_enable(s->reconnect, time_msec());
     s->rpc = NULL;
+    s->stream = NULL;
+    s->seqno = 0;
+
+    return s;
+}
+
+/* Creates and returns a jsonrpc_session that is initially connected to
+ * 'jsonrpc'.  If the connection is dropped, it will not be reconnected. */
+struct jsonrpc_session *
+jsonrpc_session_open_unreliably(struct jsonrpc *jsonrpc)
+{
+    struct jsonrpc_session *s;
+
+    s = xmalloc(sizeof *s);
+    s->reconnect = reconnect_create(time_msec());
+    reconnect_set_name(s->reconnect, jsonrpc_get_name(jsonrpc));
+    reconnect_set_max_tries(s->reconnect, 0);
+    reconnect_connected(s->reconnect, time_msec());
+    s->rpc = jsonrpc;
     s->stream = NULL;
     s->seqno = 0;
 
@@ -767,14 +789,28 @@ jsonrpc_session_send(struct jsonrpc_session *s, struct jsonrpc_msg *msg)
 struct jsonrpc_msg *
 jsonrpc_session_recv(struct jsonrpc_session *s)
 {
-    struct jsonrpc_msg *msg = NULL;
     if (s->rpc) {
+        struct jsonrpc_msg *msg;
         jsonrpc_recv(s->rpc, &msg);
         if (msg) {
             reconnect_received(s->reconnect, time_msec());
+            if (msg->type == JSONRPC_REQUEST && !strcmp(msg->method, "echo")) {
+                /* Echo request.  Send reply. */
+                struct jsonrpc_msg *reply;
+
+                reply = jsonrpc_create_reply(json_clone(msg->params), msg->id);
+                jsonrpc_session_send(s, reply);
+            } else if (msg->type == JSONRPC_REPLY
+                && msg->id && msg->id->type == JSON_STRING
+                && !strcmp(msg->id->u.string, "echo")) {
+                /* It's a reply to our echo request.  Suppress it. */
+            } else {
+                return msg;
+            }
+            jsonrpc_msg_destroy(msg);
         }
     }
-    return msg;
+    return NULL;
 }
 
 void
@@ -783,6 +819,12 @@ jsonrpc_session_recv_wait(struct jsonrpc_session *s)
     if (s->rpc) {
         jsonrpc_recv_wait(s->rpc);
     }
+}
+
+bool
+jsonrpc_session_is_alive(const struct jsonrpc_session *s)
+{
+    return s->rpc || s->stream || reconnect_get_max_tries(s->reconnect);
 }
 
 bool
