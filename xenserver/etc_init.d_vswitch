@@ -316,10 +316,10 @@ case "$1" in
         strace -p $(cat "$BRCOMPATD_PIDFILE") "$@"
         ;;
     status)
-        status -p ovs-vswitchd.pid ovs-vswitchd
+        status -p "$VSWITCHD_PIDFILE" ovs-vswitchd
         rc=$?
         if [ $rc -eq 0 ] && [ "$ENABLE_BRCOMPAT" = "y" ] ; then
-            status -p ovs-brcompatd.pid ovs-brcompatd
+            status -p "$BRCOMPATD_PIDFILE" ovs-brcompatd
             rc=$?
         fi
         exit $rc
