@@ -4,7 +4,15 @@ dnl Creates an empty database in the current directory and then starts
 dnl an ovsdb-server on it for ovs-vsctl to connect to.
 m4_define([OVS_VSCTL_SETUP],
   [OVS_CHECK_LCOV(
-     [ovsdb-tool create db $abs_builddir/../vswitchd/vswitch-idl.ovsschema], 
+     [SCHEMA=$abs_top_builddir/vswitchd/vswitch-idl.ovsschema
+      if test ! -e $SCHEMA; then
+        SCHEMA=$abs_top_srcdir/vswitchd/vswitch-idl.ovsschema
+          if test ! -e $SCHEMA; then
+            echo 'Failed to find vswitch-idl.ovsschema'
+            exit 1
+          fi
+      fi
+      ovsdb-tool create db $SCHEMA],
      [0], [stdout], [ignore])
    OVS_CHECK_LCOV(
      [[ovsdb-tool transact db \
