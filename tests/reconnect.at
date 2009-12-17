@@ -1037,3 +1037,83 @@ timeout
 ])
 AT_CLEANUP
 
+######################################################################
+AT_SETUP([max-tries of 1 honored])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [set-max-tries 1
+enable
+
+# Connection succeeds.
+run
+connected
+
+# Send inactivity probe.
+timeout
+run
+
+# Idle timeout kills connection.
+timeout
+run
+disconnected
+])
+OVS_CHECK_LCOV([test-reconnect < input], [0], 
+  [### t=1000 ###
+set-max-tries 1
+  1 tries left
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+  0 tries left
+
+# Connection succeeds.
+run
+  should connect
+connected
+  in ACTIVE for 0 ms (0 ms backoff)
+  1 successful connections out of 1 attempts, seqno 1
+  connected (0 ms), total 0 ms connected
+
+# Send inactivity probe.
+timeout
+  advance 5000 ms
+
+### t=6000 ###
+  in ACTIVE for 5000 ms (0 ms backoff)
+  connected (5000 ms), total 5000 ms connected
+run
+  should send probe
+  in IDLE for 0 ms (0 ms backoff)
+
+# Idle timeout kills connection.
+timeout
+  advance 5000 ms
+
+### t=11000 ###
+  in IDLE for 5000 ms (0 ms backoff)
+  connected (10000 ms), total 10000 ms connected
+run
+  should disconnect
+disconnected
+  in VOID for 0 ms (1000 ms backoff)
+  1 successful connections out of 1 attempts, seqno 2
+  not connected (0 ms), total 10000 ms connected
+])
+AT_CLEANUP
+
+######################################################################
+AT_SETUP([max-tries of 0 honored])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [set-max-tries 0
+enable
+run
+timeout
+])
+OVS_CHECK_LCOV([test-reconnect < input], [0], 
+  [### t=1000 ###
+set-max-tries 0
+  0 tries left
+enable
+run
+timeout
+  no timeout
+])
+AT_CLEANUP

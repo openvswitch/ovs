@@ -57,6 +57,7 @@ struct reconnect {
     int backoff;
     long long int last_received;
     long long int last_connected;
+    unsigned int max_tries;
 
     /* These values are simply for statistics reporting, not otherwise used
      * directly by anything internal. */
@@ -69,6 +70,7 @@ struct reconnect {
 static void reconnect_transition__(struct reconnect *, long long int now,
                                    enum state state);
 static long long int reconnect_deadline__(const struct reconnect *);
+static bool reconnect_may_retry(struct reconnect *);
 
 static const char *
 reconnect_state_name__(enum state state)
@@ -99,6 +101,7 @@ reconnect_create(long long int now)
     fsm->backoff = 0;
     fsm->last_received = now;
     fsm->last_connected = now;
+    fsm->max_tries = UINT_MAX;
     fsm->creation_time = now;
 
     return fsm;
@@ -160,6 +163,26 @@ reconnect_get_probe_interval(const struct reconnect *fsm)
     return fsm->probe_interval;
 }
 
+/* Limits the maximum number of times that 'fsm' will ask the client to try to
+ * reconnect to 'max_tries'.  UINT_MAX (the default) means an unlimited number
+ * of tries.
+ *
+ * After the number of tries has expired, the 'fsm' will disable itself
+ * instead of backing off and retrying. */
+void
+reconnect_set_max_tries(struct reconnect *fsm, unsigned int max_tries)
+{
+    fsm->max_tries = max_tries;
+}
+
+/* Returns the current remaining number of connection attempts, UINT_MAX if
+ * the number is unlimited.  */
+unsigned int
+reconnect_get_max_tries(struct reconnect *fsm)
+{
+    return fsm->max_tries;
+}
+
 /* Configures the backoff parameters for 'fsm'.  'min_backoff' is the minimum
  * number of milliseconds, and 'max_backoff' is the maximum, between connection
  * attempts.
@@ -213,7 +236,7 @@ reconnect_is_enabled(const struct reconnect *fsm)
 void
 reconnect_enable(struct reconnect *fsm, long long int now)
 {
-    if (fsm->state == S_VOID) {
+    if (fsm->state == S_VOID && reconnect_may_retry(fsm)) {
         reconnect_transition__(fsm, now, S_BACKOFF);
         fsm->backoff = 0;
     }
@@ -250,7 +273,7 @@ reconnect_force_reconnect(struct reconnect *fsm, long long int now)
 void
 reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
 {
-    if (fsm->state != S_BACKOFF) {
+    if (!(fsm->state & (S_BACKOFF | S_VOID))) {
         /* Report what happened. */
         if (fsm->state & (S_ACTIVE | S_IDLE)) {
             if (error > 0) {
@@ -285,7 +308,9 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
             VLOG_INFO("%s: waiting %.3g seconds before reconnect\n",
                       fsm->name, fsm->backoff / 1000.0);
         }
-        reconnect_transition__(fsm, now, S_BACKOFF);
+
+        reconnect_transition__(fsm, now,
+                               reconnect_may_retry(fsm) ? S_BACKOFF : S_VOID);
     }
 }
 
@@ -520,4 +545,14 @@ reconnect_get_stats(const struct reconnect *fsm, long long int now,
     stats->n_successful_connections = fsm->n_successful_connections;
     stats->state = reconnect_state_name__(fsm->state);
     stats->state_elapsed = now - fsm->state_entered;
+}
+
+static bool
+reconnect_may_retry(struct reconnect *fsm)
+{
+    bool may_retry = fsm->max_tries > 0;
+    if (may_retry && fsm->max_tries != UINT_MAX) {
+        fsm->max_tries--;
+    }
+    return may_retry;
 }

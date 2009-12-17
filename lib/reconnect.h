@@ -42,6 +42,9 @@ int reconnect_get_min_backoff(const struct reconnect *);
 int reconnect_get_max_backoff(const struct reconnect *);
 int reconnect_get_probe_interval(const struct reconnect *);
 
+void reconnect_set_max_tries(struct reconnect *, unsigned int max_tries);
+unsigned int reconnect_get_max_tries(struct reconnect *);
+
 void reconnect_set_backoff(struct reconnect *,
                            int min_backoff, int max_backoff);
 void reconnect_set_probe_interval(struct reconnect *, int probe_interval);

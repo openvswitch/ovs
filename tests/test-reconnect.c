@@ -40,6 +40,7 @@ int
 main(void)
 {
     struct reconnect_stats prev;
+    unsigned int old_max_tries;
     int old_time;
     char line[128];
 
@@ -49,6 +50,7 @@ main(void)
     reconnect_get_stats(reconnect, now, &prev);
     printf("### t=%d ###\n", now);
     old_time = now;
+    old_max_tries = reconnect_get_max_tries(reconnect);
     while (fgets(line, sizeof line, stdin)) {
         struct reconnect_stats cur;
         struct svec args;
@@ -74,6 +76,10 @@ main(void)
         reconnect_get_stats(reconnect, now, &cur);
         diff_stats(&prev, &cur);
         prev = cur;
+        if (reconnect_get_max_tries(reconnect) != old_max_tries) {
+            old_max_tries = reconnect_get_max_tries(reconnect);
+            printf("  %u tries left\n", old_max_tries);
+        }
     }
 
     return 0;
@@ -191,6 +197,12 @@ do_timeout(int argc UNUSED, char *argv[] UNUSED)
 }
 
 static void
+do_set_max_tries(int argc UNUSED, char *argv[])
+{
+    reconnect_set_max_tries(reconnect, atoi(argv[1]));
+}
+
+static void
 diff_stats(const struct reconnect_stats *old,
            const struct reconnect_stats *new)
 {
@@ -235,6 +247,7 @@ static const struct command commands[] = {
     { "run", 0, 1, do_run },
     { "advance", 1, 1, do_advance },
     { "timeout", 0, 0, do_timeout },
+    { "set-max-tries", 1, 1, do_set_max_tries },
     { NULL, 0, 0, NULL },
 };
 
