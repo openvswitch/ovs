@@ -72,7 +72,6 @@ struct ovsdb_jsonrpc_server {
 
     struct list sessions;       /* List of "struct ovsdb_jsonrpc_session"s. */
     unsigned int n_sessions, max_sessions;
-    unsigned int max_triggers;
 
     struct pstream **listeners;
     size_t n_listeners, allocated_listeners;
@@ -84,7 +83,6 @@ ovsdb_jsonrpc_server_create(struct ovsdb *db)
     struct ovsdb_jsonrpc_server *server = xzalloc(sizeof *server);
     server->db = db;
     server->max_sessions = 64;
-    server->max_triggers = 64;
     list_init(&server->sessions);
     return server;
 }
