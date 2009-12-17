@@ -386,7 +386,7 @@ add_bridge(struct vsctl_info *b,
     br->name = xstrdup(name);
     br->parent = parent;
     br->vlan = vlan;
-    br->ctrl = br_cfg->controller;
+    br->ctrl = parent ? parent->br_cfg->controller : br_cfg->controller;
     shash_add(&b->bridges, br->name, br);
     return br;
 }
