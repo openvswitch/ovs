@@ -25,7 +25,13 @@
          "type": {"key": "uuid", "keyRefTable": "Controller", "min": 0, "max": 1}},
        "ssl": {
          "comment": "SSL used globally by the daemon.",
-         "type": {"key": "uuid", "keyRefTable": "SSL", "min": 0, "max": 1}}}},
+         "type": {"key": "uuid", "keyRefTable": "SSL", "min": 0, "max": 1}},
+       "next_cfg": {
+         "comment": "Sequence number for client to increment when it modifies the configuration and wishes to wait for Open vSwitch to finish applying the changes.",
+         "type": "integer"},
+       "cur_cfg": {
+         "comment": "Sequence number that Open vSwitch sets to the current value of 'next_cfg' after it finishing applying a set of configuration changes.",
+         "type": "integer"}}},
    "Bridge": {
      "comment": "Configuration for a bridge within an Open_vSwitch.",
      "columns": {

@@ -19,6 +19,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stdlib.h>
 
@@ -82,6 +83,13 @@ struct ovsdb_idl_txn {
     enum ovsdb_idl_txn_status status;
     bool dry_run;
     struct ds comment;
+
+    /* Increments. */
+    char *inc_table;
+    char *inc_column;
+    struct json *inc_where;
+    unsigned int inc_index;
+    int64_t inc_new_value;
 };
 
 static struct vlog_rate_limit syntax_rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -770,6 +778,8 @@ const char *
 ovsdb_idl_txn_status_to_string(enum ovsdb_idl_txn_status status)
 {
     switch (status) {
+    case TXN_UNCHANGED:
+        return "unchanged";
     case TXN_INCOMPLETE:
         return "incomplete";
     case TXN_ABORTED:
@@ -796,6 +806,9 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
     hmap_init(&txn->txn_rows);
     txn->dry_run = false;
     ds_init(&txn->comment);
+    txn->inc_table = NULL;
+    txn->inc_column = NULL;
+    txn->inc_where = NULL;
     return txn;
 }
 
@@ -815,6 +828,16 @@ ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *txn)
 }
 
 void
+ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn, const char *table,
+                        const char *column, const struct json *where)
+{
+    assert(!txn->inc_table);
+    txn->inc_table = xstrdup(table);
+    txn->inc_column = xstrdup(column);
+    txn->inc_where = where ? json_clone(where) : json_array_create_empty();
+}
+
+void
 ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
 {
     if (txn->status == TXN_INCOMPLETE) {
@@ -822,6 +845,9 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
     }
     ovsdb_idl_txn_abort(txn);
     ds_destroy(&txn->comment);
+    free(txn->inc_table);
+    free(txn->inc_column);
+    json_destroy(txn->inc_where);
     free(txn);
 }
 
@@ -1052,6 +1078,36 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         }
     }
 
+    /* Add increment. */
+    if (txn->inc_table && any_updates) {
+        struct json *op;
+
+        txn->inc_index = operations->u.array.n;
+
+        op = json_object_create();
+        json_object_put_string(op, "op", "mutate");
+        json_object_put_string(op, "table", txn->inc_table);
+        json_object_put(op, "where",
+                        substitute_uuids(json_clone(txn->inc_where), txn));
+        json_object_put(op, "mutations",
+                        json_array_create_1(
+                            json_array_create_3(
+                                json_string_create(txn->inc_column),
+                                json_string_create("+="),
+                                json_integer_create(1))));
+        json_array_add(operations, op);
+
+        op = json_object_create();
+        json_object_put_string(op, "op", "select");
+        json_object_put_string(op, "table", txn->inc_table);
+        json_object_put(op, "where",
+                        substitute_uuids(json_clone(txn->inc_where), txn));
+        json_object_put(op, "columns",
+                        json_array_create_1(json_string_create(
+                                                txn->inc_column)));
+        json_array_add(operations, op);
+    }
+
     if (txn->comment.length) {
         struct json *op = json_object_create();
         json_object_put_string(op, "op", "comment");
@@ -1066,7 +1122,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     }
 
     if (!any_updates) {
-        txn->status = TXN_SUCCESS;
+        txn->status = TXN_UNCHANGED;
     } else if (!jsonrpc_session_send(
                    txn->idl->session,
                    jsonrpc_create_request(
@@ -1080,6 +1136,13 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     txn->idl->txn = NULL;
     ovsdb_idl_txn_disassemble(txn);
     return txn->status;
+}
+
+int64_t
+ovsdb_idl_txn_get_increment_new_value(const struct ovsdb_idl_txn *txn)
+{
+    assert(txn->status == TXN_SUCCESS);
+    return txn->inc_new_value;
 }
 
 void
@@ -1207,6 +1270,75 @@ ovsdb_idl_txn_find(struct ovsdb_idl *idl, const struct json *id)
 }
 
 static bool
+check_json_type(const struct json *json, enum json_type type, const char *name)
+{
+    if (!json) {
+        VLOG_WARN_RL(&syntax_rl, "%s is missing", name);
+        return false;
+    } else if (json->type != type) {
+        VLOG_WARN_RL(&syntax_rl, "%s is %s instead of %s",
+                     name, json_type_to_string(json->type),
+                     json_type_to_string(type));
+        return false;
+    } else {
+        return true;
+    }
+}
+
+static bool
+ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
+                                const struct json_array *results)
+{
+    struct json *count, *rows, *row, *column;
+    struct shash *mutate, *select;
+
+    if (txn->inc_index + 2 > results->n) {
+        VLOG_WARN_RL(&syntax_rl, "reply does not contain enough operations "
+                     "for increment (has %u, needs %u)",
+                     results->n, txn->inc_index + 2);
+        return false;
+    }
+
+    /* We know that this is a JSON objects because the loop in
+     * ovsdb_idl_txn_process_reply() checked. */
+    mutate = json_object(results->elems[txn->inc_index]);
+    count = shash_find_data(mutate, "count");
+    if (!check_json_type(count, JSON_INTEGER, "\"mutate\" reply \"count\"")) {
+        return false;
+    }
+    if (count->u.integer != 1) {
+        VLOG_WARN_RL(&syntax_rl,
+                     "\"mutate\" reply \"count\" is %"PRId64" instead of 1",
+                     count->u.integer);
+        return false;
+    }
+
+    select = json_object(results->elems[txn->inc_index + 1]);
+    rows = shash_find_data(select, "rows");
+    if (!check_json_type(rows, JSON_ARRAY, "\"select\" reply \"rows\"")) {
+        return false;
+    }
+    if (rows->u.array.n != 1) {
+        VLOG_WARN_RL(&syntax_rl, "\"select\" reply \"rows\" has %u elements "
+                     "instead of 1",
+                     rows->u.array.n);
+        return false;
+    }
+    row = rows->u.array.elems[0];
+    if (!check_json_type(row, JSON_OBJECT, "\"select\" reply row")) {
+        return false;
+    }
+    column = shash_find_data(json_object(row), txn->inc_column);
+    if (!check_json_type(column, JSON_INTEGER,
+                         "\"select\" reply inc column")) {
+        return false;
+    }
+    txn->inc_new_value = column->u.integer;
+    return true;
+}
+
+
+static bool
 ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
                             const struct jsonrpc_msg *msg)
 {
@@ -1257,6 +1389,14 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
                 VLOG_WARN_RL(&syntax_rl,
                              "operation reply is not JSON null or object");
             }
+        }
+
+        if (txn->inc_table
+            && !soft_errors
+            && !hard_errors
+            && !ovsdb_idl_txn_process_inc_reply(txn,
+                                                json_array(msg->result))) {
+            hard_errors++;
         }
 
         status = (hard_errors ? TXN_ERROR

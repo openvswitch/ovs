@@ -16,6 +16,9 @@
 #ifndef OVSDB_IDL_H
 #define OVSDB_IDL_H 1
 
+#include <stdint.h>
+
+struct json;
 struct ovsdb_idl_class;
 
 struct ovsdb_idl *ovsdb_idl_create(const char *remote,
@@ -29,6 +32,7 @@ unsigned int ovsdb_idl_get_seqno(const struct ovsdb_idl *);
 void ovsdb_idl_force_reconnect(struct ovsdb_idl *);
 
 enum ovsdb_idl_txn_status {
+    TXN_UNCHANGED,              /* Transaction didn't include any changes. */
     TXN_INCOMPLETE,             /* Commit in progress, please wait. */
     TXN_ABORTED,                /* ovsdb_idl_txn_abort() called. */
     TXN_SUCCESS,                /* Commit successful. */
@@ -43,9 +47,12 @@ const char *ovsdb_idl_txn_status_to_string(enum ovsdb_idl_txn_status);
 struct ovsdb_idl_txn *ovsdb_idl_txn_create(struct ovsdb_idl *);
 void ovsdb_idl_txn_add_comment(struct ovsdb_idl_txn *, const char *);
 void ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *);
+void ovsdb_idl_txn_increment(struct ovsdb_idl_txn *, const char *table,
+                             const char *column, const struct json *where);
 void ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *);
 void ovsdb_idl_txn_wait(const struct ovsdb_idl_txn *);
 enum ovsdb_idl_txn_status ovsdb_idl_txn_commit(struct ovsdb_idl_txn *);
+int64_t ovsdb_idl_txn_get_increment_new_value(const struct ovsdb_idl_txn *);
 void ovsdb_idl_txn_abort(struct ovsdb_idl_txn *);
 
 #endif /* ovsdb-idl.h */

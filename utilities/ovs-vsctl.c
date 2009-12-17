@@ -29,6 +29,7 @@
 #include "compiler.h"
 #include "dirs.h"
 #include "dynamic-string.h"
+#include "json.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "svec.h"
@@ -47,6 +48,9 @@ static bool oneline;
 
 /* --dry-run: Do not commit any changes. */
 static bool dry_run;
+
+/* --no-wait: Wait for ovs-vswitchd to reload its configuration? */
+static bool wait_for_reload = true;
 
 /* --timeout: Time to wait for a connection to 'db'. */
 static int timeout = 5;
@@ -188,7 +192,7 @@ parse_options(int argc, char *argv[])
             break;
 
         case OPT_NO_WAIT:
-            /* XXX not yet implemented */
+            wait_for_reload = false;
             break;
 
         case OPT_DRY_RUN:
@@ -1208,6 +1212,20 @@ static void run_vsctl_command(int argc, char *argv[],
                               const struct ovsrec_open_vswitch *ovs,
                               struct ds *output);
 
+static struct json *
+where_uuid_equals(const struct uuid *uuid)
+{
+    return
+        json_array_create_1(
+            json_array_create_3(
+                json_string_create("_uuid"),
+                json_string_create("=="),
+                json_array_create_2(
+                    json_string_create("uuid"),
+                    json_string_create_nocopy(
+                        xasprintf(UUID_FMT, UUID_ARGS(uuid))))));
+}
+
 static void
 do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
 {
@@ -1215,6 +1233,7 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
     const struct ovsrec_open_vswitch *ovs;
     enum ovsdb_idl_txn_status status;
     struct ds comment, *output;
+    int64_t next_cfg;
     int n_output;
     int i, start;
 
@@ -1237,6 +1256,13 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
         ovs = ovsrec_open_vswitch_insert(txn);
     }
 
+    if (wait_for_reload) {
+        struct json *where = where_uuid_equals(&ovs->header_.uuid);
+        ovsdb_idl_txn_increment(txn, "Open_vSwitch", "next_cfg",
+                                where);
+        json_destroy(where);
+    }
+
     output = xmalloc(argc * sizeof *output);
     n_output = 0;
     for (start = i = 0; i <= argc; i++) {
@@ -1256,6 +1282,9 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
         ovsdb_idl_txn_wait(txn);
         poll_block();
     }
+    if (wait_for_reload && status == TXN_SUCCESS) {
+        next_cfg = ovsdb_idl_txn_get_increment_new_value(txn);
+    }
     ovsdb_idl_txn_destroy(txn);
 
     switch (status) {
@@ -1266,6 +1295,7 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
         /* Should not happen--we never call ovsdb_idl_txn_abort(). */
         vsctl_fatal("transaction aborted");
 
+    case TXN_UNCHANGED:
     case TXN_SUCCESS:
         break;
 
@@ -1308,6 +1338,23 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
             fputs(ds_cstr(ds), stdout);
         }
     }
+
+    if (wait_for_reload && status != TXN_UNCHANGED) {
+        for (;;) {
+            const struct ovsrec_open_vswitch *ovs;
+
+            ovsdb_idl_run(idl);
+            OVSREC_OPEN_VSWITCH_FOR_EACH (ovs, idl) {
+                if (ovs->cur_cfg >= next_cfg) {
+                    goto done;
+                }
+            }
+            ovsdb_idl_wait(idl);
+            poll_block();
+        }
+    done: ;
+    }
+
     exit(EXIT_SUCCESS);
 }
 

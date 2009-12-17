@@ -1553,6 +1553,7 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
     char *cmd, *save_ptr1 = NULL;
     struct ovsdb_idl_txn *txn;
     enum ovsdb_idl_txn_status status;
+    bool increment = false;
 
     txn = ovsdb_idl_txn_create(idl);
     for (cmd = strtok_r(commands, ",", &save_ptr1); cmd;
@@ -1614,6 +1615,12 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
                           "i=%d", atoi(arg1));
             }
             idltest_simple_delete(s);
+        } else if (!strcmp(name, "increment")) {
+            if (!arg2 || arg3) {
+                ovs_fatal(0, "\"set\" command requires 2 arguments");
+            }
+            ovsdb_idl_txn_increment(txn, arg1, arg2, NULL);
+            increment = true;
         } else {
             ovs_fatal(0, "unknown command %s", name);
         }
@@ -1625,8 +1632,13 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
         ovsdb_idl_txn_wait(txn);
         poll_block();
     }
-    printf("%03d: commit, status=%s\n",
+    printf("%03d: commit, status=%s",
            step, ovsdb_idl_txn_status_to_string(status));
+    if (increment) {
+        printf(", increment=%"PRId64,
+               ovsdb_idl_txn_get_increment_new_value(txn));
+    }
+    putchar('\n');
     ovsdb_idl_txn_destroy(txn);
 }
 

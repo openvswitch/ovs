@@ -754,6 +754,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         iterate_and_prune_ifaces(br, set_iface_properties, NULL);
     }
 
+    ovsrec_open_vswitch_set_cur_cfg(ovs_cfg, ovs_cfg->next_cfg);
+
     ovsdb_idl_txn_commit(txn);
     ovsdb_idl_txn_destroy(txn); /* XXX */
 }

@@ -167,6 +167,17 @@ OVSDB_CHECK_IDL([simple idl, writing via IDL],
 005: done
 ]])
 
+OVSDB_CHECK_IDL([simple idl, increment operation],
+  [['[{"op": "insert",
+       "table": "simple",
+       "row": {}}]']],
+  [['set 0 r 2.0, increment simple i']],
+  [[000: i=0 r=0 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+001: commit, status=success, increment=1
+002: i=1 r=2 b=false s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+003: done
+]])
+
 OVSDB_CHECK_IDL([self-linking idl, consistent ops],
   [],
   [['[{"op": "insert",

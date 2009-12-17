@@ -1257,7 +1257,6 @@ def datapath_modify_config(commands):
                      + [c for c in commands if not c.startswith('#')])
     if not rc:
         raise Error("Failed to modify vswitch configuration")
-    run_command(['/bin/sleep', '5']) # XXX
     return True
 
 #
