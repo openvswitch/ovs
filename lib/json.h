@@ -111,6 +111,7 @@ void json_parser_abort(struct json_parser *);
 
 struct json *json_from_string(const char *string);
 struct json *json_from_file(const char *file_name);
+struct json *json_from_stream(FILE *stream);
 
 /* Serializing JSON. */
 

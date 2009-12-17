@@ -67,23 +67,17 @@ refill(FILE *file, void *buffer, size_t buffer_size, size_t *n, size_t *used)
 }
 
 static bool
-parse_multiple(const char *input_file)
+parse_multiple(FILE *stream)
 {
     struct json_parser *parser;
     char buffer[BUFSIZ];
     size_t n, used;
-    FILE *file;
     bool ok;
-
-    file = fopen(input_file, "r");
-    if (!file) {
-        ovs_fatal(errno, "Cannot open \"%s\"", input_file);
-    }
 
     parser = NULL;
     n = used = 0;
     ok = true;
-    while (used < n || refill(file, buffer, sizeof buffer, &n, &used)) {
+    while (used < n || refill(stream, buffer, sizeof buffer, &n, &used)) {
         if (!parser && isspace((unsigned char) buffer[used])) {
             /* Skip white space. */
             used++;
@@ -113,6 +107,7 @@ int
 main(int argc, char *argv[])
 {
     const char *input_file;
+    FILE *stream;
     bool ok;
 
     set_program_name(argv[0]);
@@ -146,14 +141,15 @@ main(int argc, char *argv[])
     }
 
     input_file = argv[optind];
-    if (!strcmp(input_file, "-")) {
-        input_file = "/dev/stdin";
+    stream = !strcmp(input_file, "-") ? stdin : fopen(input_file, "r");
+    if (!stream) {
+        ovs_fatal(errno, "Cannot open \"%s\"", input_file);
     }
 
     if (multiple) {
-        ok = parse_multiple(input_file);
+        ok = parse_multiple(stream);
     } else {
-        ok = print_and_free_json(json_from_file(input_file));
+        ok = print_and_free_json(json_from_stream(stream));
     }
 
     return !ok;

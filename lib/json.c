@@ -1002,18 +1002,34 @@ json_from_string(const char *string)
 struct json *
 json_from_file(const char *file_name)
 {
-    struct json_parser *p;
     struct json *json;
     FILE *stream;
 
-    /* Open file. */
     stream = fopen(file_name, "r");
     if (!stream) {
         return json_string_create_nocopy(
             xasprintf("error opening \"%s\": %s", file_name, strerror(errno)));
     }
+    json = json_from_stream(stream);
+    fclose(stream);
 
-    /* Read and parse file. */
+    return json;
+}
+
+/* Parses the contents of 'stream' as a JSON object or array, and returns a
+ * newly allocated 'struct json'.  The caller must free the returned structure
+ * with json_destroy() when it is no longer needed.
+ *
+ * The file must be encoded in UTF-8.
+ *
+ * See json_from_string() for return value semantics.
+ */
+struct json *
+json_from_stream(FILE *stream)
+{
+    struct json_parser *p;
+    struct json *json;
+
     p = json_parser_create(JSPF_TRAILER);
     for (;;) {
         char buffer[BUFSIZ];
@@ -1026,13 +1042,11 @@ json_from_file(const char *file_name)
     }
     json = json_parser_finish(p);
 
-    /* Close file and check for I/O errors. */
     if (ferror(stream)) {
         json_destroy(json);
         json = json_string_create_nocopy(
-            xasprintf("error reading \"%s\": %s", file_name, strerror(errno)));
+            xasprintf("error reading JSON stream: %s", strerror(errno)));
     }
-    fclose(stream);
 
     return json;
 }
