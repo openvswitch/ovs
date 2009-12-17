@@ -314,8 +314,8 @@ case "$1" in
         strace -p $(cat "$BRCOMPATD_PIDFILE") "$@"
         ;;
     status)
-        status -p ovs-vswitchd.pid ovs-vswitchd
-        status -p ovs-brcompatd.pid ovs-brcompatd
+        status -p "$VSWITCHD_PIDFILE" ovs-vswitchd
+        status -p "$BRCOMPATD_PIDFILE" ovs-brcompatd
         ;;
     version)
         /usr/sbin/ovs-vswitchd -V
