@@ -723,7 +723,7 @@ cmd_add_br(struct vsctl_context *ctx)
 
         parent = find_bridge(&info, parent_name, false);
         if (parent && parent->vlan) {
-            vsctl_fatal("cannot create brdige with fake bridge as parent");
+            vsctl_fatal("cannot create bridge with fake bridge as parent");
         }
         if (!parent) {
             vsctl_fatal("parent bridge %s does not exist", parent_name);
