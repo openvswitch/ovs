@@ -301,14 +301,22 @@ usage(void)
            "print the controller for BRIDGE\n"
            "  del-controller [BRIDGE]     "
            "delete the controller for BRIDGE\n"
-           "  set-controller [BRIDGE] TARGET "
+           "  set-controller [BRIDGE] TARGET  "
            "set the controller for BRIDGE to TARGET\n"
            "  get-fail-mode [BRIDGE]     "
            "print the fail-mode for BRIDGE\n"
            "  del-fail-mode [BRIDGE]     "
            "delete the fail-mode for BRIDGE\n"
-           "  set-fail-mode [BRIDGE] MODE "
+           "  set-fail-mode [BRIDGE] MODE  "
            "set the fail-mode for BRIDGE to MODE\n"
+        );
+    printf("\nSSL commands:\n"
+           "  get-ssl              "
+           "print the SSL configuration\n"
+           "  del-ssl              "
+           "delete the SSL configuration\n"
+           "  set-ssl PRIV-KEY CERT CA-CERT  "
+           "set the SSL configuration\n"
         );
     printf("\nOptions:\n"
            "  --db=DATABASE               "
@@ -1397,6 +1405,51 @@ cmd_set_fail_mode(struct vsctl_context *ctx)
 
     free_info(&info);
 }
+
+static void
+cmd_get_ssl(struct vsctl_context *ctx)
+{
+    struct ovsrec_ssl *ssl = ctx->ovs->ssl;
+
+    if (ssl) {
+        ds_put_format(&ctx->output, "Private key: %s\n", ssl->private_key);
+        ds_put_format(&ctx->output, "Certificate: %s\n", ssl->certificate);
+        ds_put_format(&ctx->output, "CA Certificate: %s\n", ssl->ca_cert);
+        ds_put_format(&ctx->output, "Bootstrap: %s\n",
+                ssl->bootstrap_ca_cert ? "true" : "false");
+    }
+}
+
+static void
+cmd_del_ssl(struct vsctl_context *ctx)
+{
+    struct ovsrec_ssl *ssl = ctx->ovs->ssl;
+
+    if (ssl) {
+        ovsrec_ssl_delete(ssl);
+        ovsrec_open_vswitch_set_ssl(ctx->ovs, NULL);
+    }
+}
+
+static void
+cmd_set_ssl(struct vsctl_context *ctx)
+{
+    bool bootstrap = shash_find(&ctx->options, "--bootstrap");
+    struct ovsrec_ssl *ssl = ctx->ovs->ssl;
+
+    if (ssl) {
+        ovsrec_ssl_delete(ssl);
+    }
+    ssl = ovsrec_ssl_insert(txn_from_openvswitch(ctx->ovs));
+
+    ovsrec_ssl_set_private_key(ssl, ctx->argv[1]);
+    ovsrec_ssl_set_certificate(ssl, ctx->argv[2]);
+    ovsrec_ssl_set_ca_cert(ssl, ctx->argv[3]);
+
+    ovsrec_ssl_set_bootstrap_ca_cert(ssl, bootstrap);
+
+    ovsrec_open_vswitch_set_ssl(ctx->ovs, ssl);
+}
 
 typedef void vsctl_handler_func(struct vsctl_context *);
 
@@ -1597,6 +1650,11 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
         {"get-fail-mode", 0, 1, cmd_get_fail_mode, ""},
         {"del-fail-mode", 0, 1, cmd_del_fail_mode, ""},
         {"set-fail-mode", 1, 2, cmd_set_fail_mode, ""},
+
+        /* SSL commands. */
+        {"get-ssl", 0, 0, cmd_get_ssl, ""},
+        {"del-ssl", 0, 0, cmd_del_ssl, ""},
+        {"set-ssl", 3, 3, cmd_set_ssl, "--bootstrap"},
     };
 
     const struct vsctl_command *p;
