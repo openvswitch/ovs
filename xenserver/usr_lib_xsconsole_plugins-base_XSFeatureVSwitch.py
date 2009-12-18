@@ -13,8 +13,7 @@ import os
 import socket
 import subprocess
 
-cfg_mod="/usr/bin/ovs-cfg-mod"
-vswitchd_cfg_filename="/etc/ovs-vswitchd.conf"
+vsctl="/usr/bin/ovs-vsctl"
 
 if __name__ == "__main__":
     raise Exception("This script is a plugin for xsconsole and cannot run independently")
@@ -78,10 +77,9 @@ class VSwitchService:
 class VSwitchConfig:
 
     @staticmethod
-    def Get(key):
+    def Get(action):
         try:
-            output = ShellPipe([cfg_mod, "-vANY:console:emer", "-F", 
-                    vswitchd_cfg_filename, "-q", key]).Stdout()
+            output = ShellPipe([vsctl, "-vANY:console:emer", action]).Stdout()
         except StandardError, e:
             XSLogError("config retrieval error: " + str(e))
             return "<unknown>"
@@ -285,7 +283,7 @@ class XSFeatureVSwitch:
         if dbController == "":
             dbController = Lang("<None>")
         inPane.AddStatusField(Lang("Controller (config)", 20), dbController)
-        controller = VSwitchConfig.Get("mgmt.controller")
+        controller = VSwitchConfig.Get("get-controller")
         if controller == "":
             controller = Lang("<None>")
         elif controller[0:4] == "ssl:":
