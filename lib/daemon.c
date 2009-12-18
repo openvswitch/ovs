@@ -25,6 +25,7 @@
 #include "fatal-signal.h"
 #include "dirs.h"
 #include "lockfile.h"
+#include "socket-util.h"
 #include "timeval.h"
 #include "util.h"
 
@@ -280,9 +281,14 @@ void
 daemonize_complete(void)
 {
     if (detach) {
-        char c = 0;
+        size_t bytes_written;
+        int error;
 
-        ignore(write(daemonize_fds[1], &c, 1));
+        error = write_fully(daemonize_fds[1], "", 1, &bytes_written);
+        if (error) {
+            ovs_fatal(error, "could not write to pipe");
+        }
+
         close(daemonize_fds[1]);
         setsid();
         if (chdir_) {
