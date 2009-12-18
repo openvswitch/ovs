@@ -85,6 +85,10 @@ install-arch: build-arch
 	$(MAKE) -C _debian DESTDIR=$(CURDIR)/debian/openvswitch install
 	cp debian/openvswitch-switch-config.overrides debian/openvswitch-switch-config/usr/share/lintian/overrides/openvswitch-switch-config
 	cp debian/openvswitch-switch.template debian/openvswitch-switch/usr/share/openvswitch/switch/default.template
+	@# If we are working from a "make dist" tarball then make sure that
+	@# the ovsschema file is available in the build directory.
+	test -e _debian/vswitchd/vswitch-idl.ovsschema || \
+		cp vswitchd/vswitch-idl.ovsschema _debian/vswitchd/vswitch-idl.ovsschema
 	dh_install -s
 	env TERMINFO=debian/openvswitch-switchui/usr/share/terminfo tic -x extras/ezio/ezio3.ti
 
