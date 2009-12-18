@@ -1183,7 +1183,7 @@ main(int argc, char *argv[])
     for (;;) {
         const struct ovsrec_open_vswitch *ovs;
         struct ovsdb_idl_txn *txn;
-        int status;
+        enum ovsdb_idl_txn_status status;
         unsigned int new_idl_seqno;
 
         ovsdb_idl_run(idl);
@@ -1249,6 +1249,7 @@ main(int argc, char *argv[])
             ovs_fatal(0, "transaction aborted");
         
         case TXN_SUCCESS:
+        case TXN_UNCHANGED:
             break;
         
         case TXN_TRY_AGAIN:
