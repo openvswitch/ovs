@@ -583,6 +583,16 @@ find_bridge(struct vsctl_info *info, const char *name, bool must_exist)
     return br;
 }
 
+static struct vsctl_bridge *
+find_real_bridge(struct vsctl_info *info, const char *name, bool must_exist)
+{
+    struct vsctl_bridge *br = find_bridge(info, name, must_exist);
+    if (br && br->parent) {
+        vsctl_fatal("%s is a fake bridge", name);
+    }
+    return br;
+}
+
 static struct vsctl_port *
 find_port(struct vsctl_info *info, const char *name, bool must_exist)
 {
@@ -1258,7 +1268,7 @@ cmd_del_controller(struct vsctl_context *ctx)
             ovsrec_open_vswitch_set_controller(ctx->ovs, NULL);
         }
     } else {
-        struct vsctl_bridge *br = find_bridge(&info, ctx->argv[1], true);
+        struct vsctl_bridge *br = find_real_bridge(&info, ctx->argv[1], true);
 
         if (br->ctrl) {
             ovsrec_controller_delete(br->ctrl);
@@ -1287,7 +1297,7 @@ cmd_set_controller(struct vsctl_context *ctx)
         ovsrec_open_vswitch_set_controller(ctx->ovs, ctrl);
     } else {
         /* Set the controller for a particular bridge. */
-        struct vsctl_bridge *br = find_bridge(&info, ctx->argv[1], true);
+        struct vsctl_bridge *br = find_real_bridge(&info, ctx->argv[1], true);
 
         if (br->ctrl) {
             ovsrec_controller_delete(br->ctrl);
@@ -1346,7 +1356,7 @@ cmd_del_fail_mode(struct vsctl_context *ctx)
             ovsrec_controller_set_fail_mode(info.ctrl, NULL);
         }
     } else {
-        struct vsctl_bridge *br = find_bridge(&info, ctx->argv[1], true);
+        struct vsctl_bridge *br = find_real_bridge(&info, ctx->argv[1], true);
 
         if (br->ctrl && br->ctrl->fail_mode) {
             ovsrec_controller_set_fail_mode(br->ctrl, NULL);
@@ -1377,7 +1387,7 @@ cmd_set_fail_mode(struct vsctl_context *ctx)
         }
         ovsrec_controller_set_fail_mode(info.ctrl, fail_mode);
     } else {
-        struct vsctl_bridge *br = find_bridge(&info, ctx->argv[1], true);
+        struct vsctl_bridge *br = find_real_bridge(&info, ctx->argv[1], true);
 
         if (!br->ctrl) {
             vsctl_fatal("no controller declared for %s", br->name);
