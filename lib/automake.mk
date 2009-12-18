@@ -16,8 +16,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/bitmap.h \
 	lib/byteq.c \
 	lib/byteq.h \
-	lib/cfg.c \
-	lib/cfg.h \
 	lib/classifier.c \
 	lib/classifier.h \
 	lib/command-line.c \
