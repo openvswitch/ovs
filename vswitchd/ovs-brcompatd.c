@@ -1144,7 +1144,6 @@ main(int argc, char *argv[])
     struct unixctl_server *unixctl;
     const char *remote;
     struct ovsdb_idl *idl;
-    unsigned int idl_seqno;
     int retval;
 
     set_program_name(argv[0]);
@@ -1178,38 +1177,27 @@ main(int argc, char *argv[])
     }
 
     idl = ovsdb_idl_create(remote, &ovsrec_idl_class);
-    idl_seqno = ovsdb_idl_get_seqno(idl);
 
     for (;;) {
         const struct ovsrec_open_vswitch *ovs;
         struct ovsdb_idl_txn *txn;
         enum ovsdb_idl_txn_status status;
-        unsigned int new_idl_seqno;
 
         ovsdb_idl_run(idl);
-
-        /* xxx Complete hack to get around bad ovs! */
-        new_idl_seqno = ovsdb_idl_get_seqno(idl);
-        if (new_idl_seqno == idl_seqno) {
-            ovsdb_idl_wait(idl);
-            poll_block();
-            printf("xxx trying again...\n");
-            idl_seqno = new_idl_seqno;
-            continue;
-        }
-
-        ovs = ovsrec_open_vswitch_first(idl);
-        if (!ovs) {
-            /* XXX it would be more user-friendly to create a record ourselves
-             * (while verifying that the table is empty before doing so). */
-            ovs_fatal(0, "%s: database does not contain any Open vSwitch "
-                      "configuration", remote);
-        }
 
         txn = ovsdb_idl_txn_create(idl);
 
         unixctl_server_run(unixctl);
-        brc_recv_update(ovs);
+        ovs = ovsrec_open_vswitch_first(idl);
+        if (ovs) {
+            brc_recv_update(ovs);
+        } else if (ovsdb_idl_get_seqno(idl)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "%s: database does not contain any Open vSwitch "
+                         "configuration", remote);
+        } else {
+            /* Haven't yet received initial database contents. */
+        }
         netdev_run();
 
 #if 0
