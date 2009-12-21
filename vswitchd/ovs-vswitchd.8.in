@@ -21,10 +21,7 @@ on the local machine.
 The mandatory \fIdatabase\fR argument specifies the
 \fBovsdb\-server\fR from which \fBovs\-vswitchd\fR's configuration
 should be retrieved.  It takes one of the following forms:
-.IP "\fBtcp:\fIip\fB:\fIport\fR"
-Connect to the given TCP \fIport\fR on \fIip\fR.
-.IP "\fBunix:\fIfile\fR"
-Connect to the Unix domain server socket named \fIfile\fR.
+.so ovsdb/remote-active.man
 .PP
 \fBovs\-vswitchd\fR retrieves its configuration from \fIdatabase\fR at
 startup.  It sets up Open vSwitch datapaths and then operates
@@ -82,6 +79,8 @@ actually in use.  It requires the \fBbrcompat_mod.ko\fR kernel module
 to be loaded.
 .
 .so lib/daemon.man
+.so lib/ssl.man
+.so lib/ssl-bootstrap.man
 .so lib/vlog.man
 .so lib/common.man
 .so lib/leak-checker.man

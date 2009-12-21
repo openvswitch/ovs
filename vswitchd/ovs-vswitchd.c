@@ -138,7 +138,8 @@ parse_options(int argc, char *argv[])
         OPT_PEER_CA_CERT = UCHAR_MAX + 1,
         OPT_FAKE_PROC_NET,
         VLOG_OPTION_ENUMS,
-        LEAK_CHECKER_OPTION_ENUMS
+        LEAK_CHECKER_OPTION_ENUMS,
+        OPT_BOOTSTRAP_CA_CERT
     };
     static struct option long_options[] = {
         {"help",        no_argument, 0, 'h'},
@@ -150,6 +151,7 @@ parse_options(int argc, char *argv[])
 #ifdef HAVE_OPENSSL
         STREAM_SSL_LONG_OPTIONS
         {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
+        {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
 #endif
         {0, 0, 0, 0},
     };
@@ -190,6 +192,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_PEER_CA_CERT:
             stream_ssl_set_peer_ca_cert_file(optarg);
+            break;
+
+        case OPT_BOOTSTRAP_CA_CERT:
+            stream_ssl_set_ca_cert_file(optarg, true);
             break;
 #endif
 
