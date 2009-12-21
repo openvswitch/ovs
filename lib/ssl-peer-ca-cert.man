@@ -1,0 +1,12 @@
+.IP "\fB--peer-ca-cert=\fIpeer-cacert.pem\fR"
+Specifies a PEM file that contains one or more additional certificates
+to send to SSL peers.  \fIpeer-cacert.pem\fR should be the CA
+certificate used to sign the \fB\*(PN\fR own certificate (the
+certificate specified on \fB-c\fR or \fB--certificate\fR).
+.IP
+This option is not useful in normal operation, because the SSL peer
+must already have the CA certificate for the peer to have any
+confidence in \fB\*(PN\fR's identity.  However, this option allows a
+newly installed switch to obtain the peer CA certificate on first boot
+using, e.g., the \fB\-\-bootstrap-ca-cert\fR option to
+\fBovs\-openflowd\fR(8).

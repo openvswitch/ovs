@@ -114,6 +114,7 @@ zero will cause \fBovs\-vsctl\fR to wait forever.  If the timeout expires,
 not used, \fBovs\-vsctl\fR uses a timeout of five seconds.
 (A timeout would normally happen only if the database cannot be contacted.)
 .
+.so lib/ssl.man
 .so lib/vlog.man
 .
 .SH COMMANDS
@@ -296,20 +297,9 @@ the following forms:
 .
 .RS
 .TP
-\fBssl:\fIip\fR[\fB:\fIport\fR]
-The specified SSL \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-SSL must be configured when this form is used (see \fBSSL
-Configuration\fR, below).
-.
-.TP
-\fBtcp:\fIip\fR[\fB:\fIport\fR]
-The specified TCP \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-.TP
-\fBunix:\fIfile\fR
-The Unix domain server socket named \fIfile\fR.
+.so lib/vconn-active.man
 .RE
+.
 .ST "Controller Failure Settings"
 .
 When a controller is configured, it is, ordinarily, responsible for

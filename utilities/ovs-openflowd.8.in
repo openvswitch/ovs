@@ -21,23 +21,9 @@ to relay.  It takes one of the following forms:
 .PP
 The optional \fIcontroller\fR argument specifies how to connect to
 the OpenFlow controller.  It takes one of the following forms:
-
-.RS
-.IP "\fBssl:\fIip\fR[\fB:\fIport\fR]"
-The specified SSL \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-The \fB--private-key\fR, \fB--certificate\fR, and \fB--ca-cert\fR
-options are mandatory when this form is used.
-
-.IP "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
-The specified TCP \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-
-.TP
-\fBunix:\fIfile\fR
-The Unix domain server socket named \fIfile\fR.
-.RE
-
+.
+.so lib/vconn-active.man
+.
 .PP
 If \fIcontroller\fR is omitted, \fBovs\-openflowd\fR attempts to discover the
 location of the controller automatically (see below).
@@ -310,25 +296,7 @@ multiple connection methods.  If a single \fImethod\fR of \fBnone\fR is
 used, no listeners will be created.
 
 .RS
-.TP
-\fBpssl:\fR[\fIport\fR][\fB:\fIip\fR]
-Listens for SSL connections on \fIport\fR (default: 6633).  The
-\fB--private-key\fR, \fB--certificate\fR, and \fB--ca-cert\fR options
-are mandatory when this form is used.
-By default, \fB\*(PN\fR listens for connections to any local IP
-address, but \fIip\fR may be specified to listen only for connections
-to the given \fIip\fR.
-
-.TP
-\fBptcp:\fR[\fIport\fR][\fB:\fIip\fR]
-Listens for TCP connections on \fIport\fR (default: 6633).
-By default, \fB\*(PN\fR listens for connections to any local IP
-address, but \fIip\fR may be specified to listen only for connections
-to the given \fIip\fR.
-
-.TP
-\fBpunix:\fIfile\fR
-Listens for connections on Unix domain server socket named \fIfile\fR.
+.so lib/vconn-passive.man
 .RE
 
 .TP
@@ -407,43 +375,8 @@ switching.
 .SS "Daemon Options"
 .so lib/daemon.man
 
-.SS "Public Key Infrastructure Options"
-
-.TP
-\fB-p\fR, \fB--private-key=\fIprivkey.pem\fR
-Specifies a PEM file containing the private key used as the switch's
-identity for SSL connections to the controller.
-
-.TP
-\fB-c\fR, \fB--certificate=\fIcert.pem\fR
-Specifies a PEM file containing a certificate, signed by the
-controller's certificate authority (CA), that certifies the switch's
-private key to identify a trustworthy switch.
-
-.TP
-\fB-C\fR, \fB--ca-cert=\fIcacert.pem\fR
-Specifies a PEM file containing the CA certificate used to verify that
-the switch is connected to a trustworthy controller.
-
-.TP
-\fB--bootstrap-ca-cert=\fIcacert.pem\fR
-When \fIcacert.pem\fR exists, this option has the same effect as
-\fB-C\fR or \fB--ca-cert\fR.  If it does not exist, then \fBovs\-openflowd\fR
-will attempt to obtain the CA certificate from the controller on its
-first SSL connection and save it to the named PEM file.  If it is
-successful, it will immediately drop the connection and reconnect, and
-from then on all SSL connections must be authenticated by a
-certificate signed by the CA certificate thus obtained.
-
-\fBThis option exposes the SSL connection to a man-in-the-middle
-attack obtaining the initial CA certificate\fR, but it may be useful
-for bootstrapping.
-
-This option is only useful if the controller sends its CA certificate
-as part of the SSL certificate chain.  The SSL protocol does not
-require the controller to send the CA certificate, but
-\fBcontroller\fR(8) can be configured to do so with the
-\fB--peer-ca-cert\fR option.
+.so lib/ssl.man
+.so lib/ssl-bootstrap.man
 
 .SS "Logging Options"
 .so lib/vlog.man

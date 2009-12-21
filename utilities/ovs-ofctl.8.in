@@ -26,24 +26,12 @@ connecting to an OpenFlow switch.  The following connection methods
 are supported:
 
 .RS
-.IP "\fBssl:\fIip\fR[\fB:\fIport\fR]"
-The specified SSL \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-The \fB--private-key\fR, \fB--certificate\fR, and \fB--ca-cert\fR
-options are mandatory when this form is used.
-
-.IP "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
-The specified TCP \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-
-.TP
-\fBunix:\fIfile\fR
-The Unix domain server socket named \fIfile\fR.  
-
+.so lib/vconn-active.man
+.
 .IP "\fIfile\fR"
 This is short for \fBunix:\fIfile\fR, as long as \fIfile\fR does not
 contain a colon.
-
+.
 .IP \fIdp\fR
 This is short for \fBunix:@RUNDIR@/\fIdp\fB.mgmt\fR, as long as
 \fIdp\fR does not contain a colon.
@@ -442,28 +430,7 @@ described in \fBFlow Syntax\fR, above.
 \fB--strict\fR
 Uses strict matching when running flow modification commands.
 
-.TP
-\fB-t\fR, \fB--timeout=\fIsecs\fR
-Limits \fBovs\-ofctl\fR runtime to approximately \fIsecs\fR seconds.  If
-the timeout expires, \fBovs\-ofctl\fR will exit with a \fBSIGALRM\fR
-signal.
-
-.TP
-\fB-p\fR, \fB--private-key=\fIprivkey.pem\fR
-Specifies a PEM file containing the private key used as the
-identity for SSL connections to a switch.
-
-.TP
-\fB-c\fR, \fB--certificate=\fIcert.pem\fR
-Specifies a PEM file containing a certificate, signed by the
-controller's certificate authority (CA), that certifies the
-private key to identify a trustworthy controller.
-
-.TP
-\fB-C\fR, \fB--ca-cert=\fIcacert.pem\fR
-Specifies a PEM file containing the CA certificate used to verify that
-a switch is trustworthy.
-
+.so lib/ssl.man
 .so lib/vlog.man
 .so lib/common.man
 

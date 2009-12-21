@@ -1,0 +1,22 @@
+.IP "\fB\-\-bootstrap\-ca\-cert=\fIcacert.pem\fR"
+When \fIcacert.pem\fR exists, this option has the same effect as
+\fB\-C\fR or \fB\-\-ca\-cert\fR.  If it does not exist, then
+\fB\*(PN\fR will attempt to obtain the CA certificate from the
+SSL peer on its first SSL connection and save it to the named PEM
+file.  If it is successful, it will immediately drop the connection
+and reconnect, and from then on all SSL connections must be
+authenticated by a certificate signed by the CA certificate thus
+obtained.
+.IP
+\fBThis option exposes the SSL connection to a man-in-the-middle
+attack obtaining the initial CA certificate\fR, but it may be useful
+for bootstrapping.
+.IP
+This option is only useful if the SSL peer sends its CA certificate as
+part of the SSL certificate chain.  The SSL protocol does not require
+the controller to send the CA certificate, but
+\fBovs\-controller\fR(8) can be configured to do so with the
+\fB\-\-peer\-ca\-cert\fR option.
+.IP
+This option is mutually exclusive with \fB-C\fR and
+\fB\-\-ca\-cert\fR.

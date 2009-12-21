@@ -192,6 +192,11 @@ EXTRA_DIST += \
 	lib/daemon-syn.man \
 	lib/dpif.man \
 	lib/leak-checker.man \
+	lib/ssl-bootstrap.man \
+	lib/ssl-peer-ca-cert.man \
+	lib/ssl.man \
+	lib/vconn-active.man \
+	lib/vconn-passive.man \
 	lib/vlog-unixctl.man \
 	lib/vlog-syn.man \
 	lib/vlog.man
