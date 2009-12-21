@@ -17,12 +17,9 @@
 #ifndef STREAM_H
 #define STREAM_H 1
 
-#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#include "flow.h"
 
 struct pstream;
 struct stream;

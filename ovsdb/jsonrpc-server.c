@@ -17,6 +17,7 @@
 
 #include "jsonrpc-server.h"
 
+#include <assert.h>
 #include <errno.h>
 
 #include "column.h"

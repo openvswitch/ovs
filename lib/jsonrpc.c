@@ -18,6 +18,7 @@
 
 #include "jsonrpc.h"
 
+#include <assert.h>
 #include <errno.h>
 
 #include "byteq.h"
