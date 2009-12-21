@@ -15,12 +15,9 @@ the \fBbrctl\fR program) to add or remove datapaths and the interfaces
 that attach to them.  
 .PP
 The mandatory \fIdatabase\fR argument specifies the
-\fBovsdb\-server\fR from which \fBovs\-vswitchd\fR's configuration
-is retrieved.  It takes one of the following forms:
-.IP "\fBtcp:\fIip\fB:\fIport\fR"
-Connect to the given TCP \fIport\fR on \fIip\fR.
-.IP "\fBunix:\fIfile\fR"
-Connect to the Unix domain server socket named \fIfile\fR.
+\fBovsdb\-server\fR from which \fBovs\-vswitchd\fR's configuration is
+retrieved.  It should take the form \fBunix:\fIfile\fR, to connect to
+the Unix domain server socket named \fIfile\fR.
 .PP
 .SH OPTIONS
 .IP "\fB--appctl-command=\fIcommand\fR"

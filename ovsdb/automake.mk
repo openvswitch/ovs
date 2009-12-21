@@ -27,6 +27,9 @@ ovsdb_libovsdb_a_SOURCES = \
 	ovsdb/trigger.h \
 	ovsdb/transaction.c \
 	ovsdb/transaction.h
+EXTRA_DIST += \
+	ovsdb/remote-active.man \
+	ovsdb/remote-passive.man
 
 # ovsdb-tool
 bin_PROGRAMS += ovsdb/ovsdb-tool
@@ -40,7 +43,7 @@ EXTRA_DIST += ovsdb/ovsdb-tool.1.in
 # ovsdb-client
 bin_PROGRAMS += ovsdb/ovsdb-client
 ovsdb_ovsdb_client_SOURCES = ovsdb/ovsdb-client.c
-ovsdb_ovsdb_client_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a
+ovsdb_ovsdb_client_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
 # ovsdb-client.1
 man_MANS += ovsdb/ovsdb-client.1
 DISTCLEANFILES += ovsdb/ovsdb-client.1
@@ -49,7 +52,11 @@ EXTRA_DIST += ovsdb/ovsdb-client.1.in
 # ovsdb-server
 sbin_PROGRAMS += ovsdb/ovsdb-server
 ovsdb_ovsdb_server_SOURCES = ovsdb/ovsdb-server.c
-ovsdb_ovsdb_server_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(FAULT_LIBS)
+ovsdb_ovsdb_server_LDADD = \
+	ovsdb/libovsdb.a \
+	lib/libopenvswitch.a \
+	$(FAULT_LIBS) \
+	$(SSL_LIBS)
 # ovsdb-server.1
 man_MANS += ovsdb/ovsdb-server.1
 DISTCLEANFILES += ovsdb/ovsdb-server.1

@@ -1,0 +1,11 @@
+.IP "\fBssl:\fIip\fB:\fIport\fR"
+The specified SSL \fIport\fR on the host at the given \fIip\fR, which
+must be expressed as an IP address (not a DNS name).  The
+\fB\-\-private\-key\fR, \fB\-\-certificate\fR, and \fB\-\-ca\-cert\fR
+options are mandatory when this form is used.
+.
+.IP "\fBtcp:\fIip\fB:\fIport\fR"
+Connect to the given TCP \fIport\fR on \fIip\fR.
+.
+.IP "\fBunix:\fIfile\fR"
+Connect to the Unix domain server socket named \fIfile\fR.

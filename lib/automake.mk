@@ -122,6 +122,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/stream-fd.c \
 	lib/stream-fd.h \
 	lib/stream-provider.h \
+	lib/stream-ssl.h \
 	lib/stream-tcp.c \
 	lib/stream-unix.c \
 	lib/stream.c \
@@ -168,6 +169,7 @@ endif
 
 if HAVE_OPENSSL
 lib_libopenvswitch_a_SOURCES += \
+	lib/stream-ssl.c \
 	lib/vconn-ssl.c 
 nodist_lib_libopenvswitch_a_SOURCES += lib/dhparams.c
 lib/dhparams.c: lib/dh1024.pem lib/dh2048.pem lib/dh4096.pem
@@ -193,8 +195,10 @@ EXTRA_DIST += \
 	lib/dpif.man \
 	lib/leak-checker.man \
 	lib/ssl-bootstrap.man \
+	lib/ssl-bootstrap-syn.man \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl.man \
+	lib/ssl-syn.man \
 	lib/vconn-active.man \
 	lib/vconn-passive.man \
 	lib/vlog-unixctl.man \

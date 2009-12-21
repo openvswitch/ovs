@@ -29,37 +29,15 @@ Adds \fIremote\fR as a connection method used by \fBovsdb\-server\fR.
 \fIremote\fR must take one of the following forms:
 .
 .RS
-.IP "\fBptcp:\fIport\fR[\fB:\fIip\fR]"
-Listens for JSON-RPC connections on the given TCP \fIport\fR.  By
-default, \fB\*(PN\fR listens for connections to any local IP address,
-but \fIip\fR may be specified to listen only for connections to the
-given \fIip\fR.
-.
-.IP "\fBpunix:\fIfile\fR"
-Listens for JSON-RPC connections on the Unix domain server socket
-named \fIfile\fR.
-.
-.IP "\fBtcp:\fIip\fB:\fIport\fR"
-Initiates a JSON-RPC connection to the given TCP \fIport\fR on
-\fIip\fR and reconnects as necessary.
-.
-.IP "\fBunix:\fIfile\fR"
-Initiates a JSON-RPC connection to the Unix domain server socket named
-\fIfile\fR as reconnects as necessary.
-.
-.IP "\fBdb:\fItable\fB,\fIcolumn\fR"
-Reads additional connection methods from \fIcolumn\fR in all of the
-rows in \fItable\fR within the \fBovsdb\-server\fR database.  The
-\fIcolumn\fR must have type string or set of strings.  The connection
-methods in the column must have one of the forms described above.  As
-the contents of \fIcolumn\fR changes, \fBovsdb\-server\fR also adds
-and drops connection methods accordingly.
+.so ovsdb/remote-passive.man
+.so ovsdb/remote-active.man
 .RE
 .
 .SS "Daemon Options"
 .so lib/daemon.man
 .SS "Logging Options"
 .so lib/vlog.man
+.so lib/ssl.man
 .SS "Other Options"
 .so lib/common.man
 .SH "RUNTIME MANAGEMENT COMMANDS"

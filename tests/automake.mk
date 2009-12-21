@@ -97,7 +97,7 @@ tests_test_json_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-jsonrpc
 tests_test_jsonrpc_SOURCES = tests/test-jsonrpc.c
-tests_test_jsonrpc_LDADD = lib/libopenvswitch.a
+tests_test_jsonrpc_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 noinst_PROGRAMS += tests/test-list
 tests_test_list_SOURCES = tests/test-list.c

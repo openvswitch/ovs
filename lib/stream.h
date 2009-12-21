@@ -27,7 +27,7 @@
 struct pstream;
 struct stream;
 
-void stream_usage(const char *name, bool active, bool passive);
+void stream_usage(const char *name, bool active, bool passive, bool bootstrap);
 
 /* Bidirectional byte streams. */
 int stream_open(const char *name, struct stream **);

@@ -34,6 +34,7 @@
 #include "ovsdb.h"
 #include "ovsdb-error.h"
 #include "stream.h"
+#include "stream-ssl.h"
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
@@ -77,6 +78,9 @@ main(int argc, char *argv[])
 static void
 parse_options(int argc, char *argv[])
 {
+    enum {
+        OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1
+    };
     static struct option long_options[] = {
         {"wide", no_argument, &output_width, INT_MAX},
         {"format", required_argument, 0, 'f'},
@@ -86,6 +90,10 @@ parse_options(int argc, char *argv[])
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
         DAEMON_LONG_OPTIONS,
+#ifdef HAVE_OPENSSL
+        {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
+        STREAM_SSL_LONG_OPTIONS
+#endif
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -129,6 +137,14 @@ parse_options(int argc, char *argv[])
 
         DAEMON_OPTION_HANDLERS
 
+#ifdef HAVE_OPENSSL
+        STREAM_SSL_OPTION_HANDLERS
+
+        case OPT_BOOTSTRAP_CA_CERT:
+            stream_ssl_set_ca_cert_file(optarg, true);
+            break;
+#endif
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -162,7 +178,7 @@ usage(void)
            "    monitor contents of (COLUMNs in) TABLE on SERVER\n"
            "    Valid SELECTs are: initial, insert, delete, modify\n",
            program_name, program_name);
-    stream_usage("SERVER", true, true);
+    stream_usage("SERVER", true, true, true);
     printf("\nOutput formatting options:\n"
            "  -f, --format=FORMAT         set output formatting to FORMAT\n"
            "                              (\"table\", \"html\", or \"csv\"\n"

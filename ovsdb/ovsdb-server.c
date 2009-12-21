@@ -38,6 +38,7 @@
 #include "poll-loop.h"
 #include "process.h"
 #include "row.h"
+#include "stream-ssl.h"
 #include "stream.h"
 #include "svec.h"
 #include "table.h"
@@ -204,6 +205,7 @@ parse_options(int argc, char *argv[], char **file_namep,
         OPT_DUMMY = UCHAR_MAX + 1,
         OPT_REMOTE,
         OPT_UNIXCTL,
+        OPT_BOOTSTRAP_CA_CERT,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS
     };
@@ -215,6 +217,10 @@ parse_options(int argc, char *argv[], char **file_namep,
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
+#ifdef HAVE_OPENSSL
+        {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
+        STREAM_SSL_LONG_OPTIONS
+#endif
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -248,6 +254,15 @@ parse_options(int argc, char *argv[], char **file_namep,
         DAEMON_OPTION_HANDLERS
         LEAK_CHECKER_OPTION_HANDLERS
 
+#ifdef HAVE_OPENSSL
+        STREAM_SSL_OPTION_HANDLERS
+
+        case OPT_BOOTSTRAP_CA_CERT:
+            stream_ssl_set_ca_cert_file(optarg, true);
+            break;
+#endif
+
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -279,7 +294,7 @@ usage(void)
            program_name, program_name);
     printf("\nJSON-RPC options (may be specified any number of times):\n"
            "  --remote=REMOTE         connect or listen to REMOTE\n");
-    stream_usage("JSON-RPC", true, true);
+    stream_usage("JSON-RPC", true, true, true);
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"

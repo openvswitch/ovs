@@ -74,11 +74,9 @@ contacts to query or modify configuration.  The default is
 \fBunix:@RUNDIR@/ovsdb\-server\fR.  \fIserver\fR must take one of the
 following forms:
 .RS
-.IP "\fBtcp:\fIip\fB:\fIport\fR"
-Connect to the given TCP \fIport\fR on \fIip\fR.
-.IP "\fBunix:\fIfile\fR"
-Connect to the Unix domain server socket named \fIfile\fR.
+.so ovsdb/remote-active.man
 .RE
+.
 .IP "\fB\-\-no\-wait\fR"
 Prevents \fBovs\-vsctl\fR from waiting for \fBovs\-vswitchd\fR to
 reconfigure itself according to the the modified database.  This

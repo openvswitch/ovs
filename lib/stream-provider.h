@@ -181,5 +181,9 @@ extern struct stream_class tcp_stream_class;
 extern struct pstream_class ptcp_pstream_class;
 extern struct stream_class unix_stream_class;
 extern struct pstream_class punix_pstream_class;
+#ifdef HAVE_OPENSSL
+extern struct stream_class ssl_stream_class;
+extern struct pstream_class pssl_pstream_class;
+#endif
 
 #endif /* stream-provider.h */

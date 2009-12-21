@@ -28,6 +28,7 @@
 #include "daemon.h"
 #include "json.h"
 #include "poll-loop.h"
+#include "stream-ssl.h"
 #include "stream.h"
 #include "timeval.h"
 #include "util.h"
@@ -52,10 +53,17 @@ main(int argc, char *argv[])
 static void
 parse_options(int argc, char *argv[])
 {
+    enum {
+        OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1
+    };
     static struct option long_options[] = {
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         DAEMON_LONG_OPTIONS,
+#ifdef HAVE_OPENSSL
+        {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
+        STREAM_SSL_LONG_OPTIONS
+#endif
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -76,6 +84,14 @@ parse_options(int argc, char *argv[])
 
         DAEMON_OPTION_HANDLERS
 
+#ifdef HAVE_OPENSSL
+        STREAM_SSL_OPTION_HANDLERS
+
+        case OPT_BOOTSTRAP_CA_CERT:
+            stream_ssl_set_ca_cert_file(optarg, true);
+            break;
+#endif
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -95,7 +111,7 @@ usage(void)
            "  request REMOTE METHOD PARAMS   send request, print reply\n"
            "  notify REMOTE METHOD PARAMS  send notification and exit\n",
            program_name, program_name);
-    stream_usage("JSON-RPC", true, true);
+    stream_usage("JSON-RPC", true, true, true);
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"

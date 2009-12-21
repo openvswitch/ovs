@@ -31,6 +31,8 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 [\fB--no-heading\fR]
 .so lib/daemon-syn.man
 .so lib/vlog-syn.man
+.so lib/ssl-syn.man
+.so lib/ssl-bootstrap-syn.man
 .so lib/common-syn.man
 .
 .SH DESCRIPTION
@@ -38,18 +40,10 @@ The \fBovsdb\-client\fR program is a command-line client for
 interacting with a running \fBovsdb\-server\fR process.  For each
 command, the \fIserver\fR to connect to must be specified in one of
 the following forms:
-.IP "\fBtcp:\fIip\fB:\fIport\fR"
-Connect to the given TCP \fIport\fR on \fIip\fR.
-.IP "\fBunix:\fIfile\fR"
-Connect to the Unix domain server socket named \fIfile\fR.
-.IP "\fBptcp:\fIport\fR[\fB:\fIip\fR]"
-Listen on the given TCP \fIport\fR for a connection.  By default,
-\fB\*(PN\fR listens for connections to any local IP address, but
-\fIip\fR may be specified to listen only for connections to the given
-\fIip\fR.
-.IP "\fBpunix:\fIfile\fR"
-Listen on the Unix domain server socket named \fIfile\fR for a
-connection.
+.RS
+.so ovsdb/remote-active.man
+.so ovsdb/remote-passive.man
+.RE
 .
 .SS "Commands"
 The following commands are implemented:
@@ -135,8 +129,8 @@ other command, they have no effect.
 .so lib/daemon.man
 .SS "Logging Options"
 .so lib/vlog.man
-.SS "Logging Options"
-.so lib/vlog.man
+.so lib/ssl.man
+.so lib/ssl-bootstrap.man
 .SS "Other Options"
 .so lib/common.man
 .SH "SEE ALSO"

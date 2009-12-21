@@ -95,7 +95,8 @@ check_stream_classes(void)
 /* Prints information on active (if 'active') and passive (if 'passive')
  * connection methods supported by the stream. */
 void
-stream_usage(const char *name, bool active, bool passive)
+stream_usage(const char *name, bool active, bool passive,
+             bool bootstrap UNUSED)
 {
     /* Really this should be implemented via callbacks into the stream
      * providers, but that seems too heavy-weight to bother with at the
@@ -106,6 +107,10 @@ stream_usage(const char *name, bool active, bool passive)
         printf("Active %s connection methods:\n", name);
         printf("  tcp:IP:PORT             "
                "PORT at remote IP\n");
+#ifdef HAVE_OPENSSL
+        printf("  ssl:IP:PORT             "
+               "SSL PORT at remote IP\n");
+#endif
         printf("  unix:FILE               "
                "Unix domain socket named FILE\n");
     }
@@ -114,9 +119,24 @@ stream_usage(const char *name, bool active, bool passive)
         printf("Passive %s connection methods:\n", name);
         printf("  ptcp:PORT[:IP]          "
                "listen to TCP PORT on IP\n");
+#ifdef HAVE_OPENSSL
+        printf("  pssl:PORT[:IP]          "
+               "listen for SSL on PORT on IP\n");
+#endif
         printf("  punix:FILE              "
                "listen on Unix domain socket FILE\n");
     }
+
+#ifdef HAVE_OPENSSL
+    printf("PKI configuration (required to use SSL):\n"
+           "  -p, --private-key=FILE  file with private key\n"
+           "  -c, --certificate=FILE  file with certificate for private key\n"
+           "  -C, --ca-cert=FILE      file with peer CA certificate\n");
+    if (bootstrap) {
+        printf("  --bootstrap-ca-cert=FILE  file with peer CA certificate "
+               "to read or create\n");
+    }
+#endif
 }
 
 /* Attempts to connect a stream to a remote peer.  'name' is a connection name

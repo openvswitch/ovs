@@ -219,7 +219,7 @@ usage(void)
            "usage: %s [OPTIONS] DATABASE\n"
            "where DATABASE is a socket on which ovsdb-server is listening.\n",
            program_name, program_name);
-    stream_usage("DATABASE", true, false);
+    stream_usage("DATABASE", true, false, true);
     daemon_usage();
     vlog_usage();
     printf("\nLegacy compatibility options:\n"
