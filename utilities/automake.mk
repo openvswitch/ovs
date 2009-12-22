@@ -55,29 +55,28 @@ utilities_ovs_appctl_SOURCES = utilities/ovs-appctl.c
 utilities_ovs_appctl_LDADD = lib/libopenvswitch.a
 
 utilities_ovs_controller_SOURCES = utilities/ovs-controller.c
-utilities_ovs_controller_LDADD = lib/libopenvswitch.a $(FAULT_LIBS) $(SSL_LIBS)
+utilities_ovs_controller_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 utilities_ovs_discover_SOURCES = utilities/ovs-discover.c
 utilities_ovs_discover_LDADD = lib/libopenvswitch.a
 
 utilities_ovs_dpctl_SOURCES = utilities/ovs-dpctl.c
-utilities_ovs_dpctl_LDADD = lib/libopenvswitch.a $(FAULT_LIBS)
+utilities_ovs_dpctl_LDADD = lib/libopenvswitch.a
 
 utilities_ovs_kill_SOURCES = utilities/ovs-kill.c
 utilities_ovs_kill_LDADD = lib/libopenvswitch.a
 
 utilities_ovs_ofctl_SOURCES = utilities/ovs-ofctl.c
-utilities_ovs_ofctl_LDADD = lib/libopenvswitch.a $(FAULT_LIBS) $(SSL_LIBS)
+utilities_ovs_ofctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 utilities_ovs_openflowd_SOURCES = utilities/ovs-openflowd.c
 utilities_ovs_openflowd_LDADD = \
 	ofproto/libofproto.a \
 	lib/libopenvswitch.a \
-	$(FAULT_LIBS) \
 	$(SSL_LIBS)
 
 utilities_ovs_vsctl_SOURCES = utilities/ovs-vsctl.c vswitchd/vswitch-idl.c
-utilities_ovs_vsctl_LDADD = lib/libopenvswitch.a $(FAULT_LIBS)
+utilities_ovs_vsctl_LDADD = lib/libopenvswitch.a
 
 utilities_ovs_wdt_SOURCES = utilities/ovs-wdt.c
 

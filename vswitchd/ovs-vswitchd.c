@@ -28,7 +28,6 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "dpif.h"
-#include "fault.h"
 #include "leak-checker.h"
 #include "netdev.h"
 #include "ovsdb-idl.h"
@@ -64,7 +63,6 @@ main(int argc, char *argv[])
     int retval;
 
     set_program_name(argv[0]);
-    register_fault_handlers();
     time_init();
     vlog_init();
     remote = parse_options(argc, argv);

@@ -23,7 +23,6 @@
 #include "command-line.h"
 #include "dhcp.h"
 #include "fatal-signal.h"
-#include "fault.h"
 #include "poll-loop.h"
 #include "util.h"
 #include "vlog.h"
@@ -51,7 +50,6 @@ main(int argc, char *argv[])
     int error;
 
     set_program_name(argv[0]);
-    register_fault_handlers();
     vlog_init();
     parse_options(argc, argv);
 

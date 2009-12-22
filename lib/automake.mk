@@ -43,8 +43,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/dynamic-string.h \
 	lib/fatal-signal.c \
 	lib/fatal-signal.h \
-	lib/fault.c \
-	lib/fault.h \
 	lib/flow.c \
 	lib/flow.h \
 	lib/hash.c \

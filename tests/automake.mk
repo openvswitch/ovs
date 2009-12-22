@@ -135,7 +135,7 @@ tests_test_type_props_SOURCES = tests/test-type-props.c
 
 noinst_PROGRAMS += tests/test-dhcp-client
 tests_test_dhcp_client_SOURCES = tests/test-dhcp-client.c
-tests_test_dhcp_client_LDADD = lib/libopenvswitch.a $(FAULT_LIBS)
+tests_test_dhcp_client_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-stp
 tests_test_stp_SOURCES = tests/test-stp.c

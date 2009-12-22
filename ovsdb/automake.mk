@@ -52,11 +52,7 @@ EXTRA_DIST += ovsdb/ovsdb-client.1.in
 # ovsdb-server
 sbin_PROGRAMS += ovsdb/ovsdb-server
 ovsdb_ovsdb_server_SOURCES = ovsdb/ovsdb-server.c
-ovsdb_ovsdb_server_LDADD = \
-	ovsdb/libovsdb.a \
-	lib/libopenvswitch.a \
-	$(FAULT_LIBS) \
-	$(SSL_LIBS)
+ovsdb_ovsdb_server_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
 # ovsdb-server.1
 man_MANS += ovsdb/ovsdb-server.1
 DISTCLEANFILES += ovsdb/ovsdb-server.1

@@ -39,7 +39,6 @@
 #include "dirs.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
-#include "fault.h"
 #include "leak-checker.h"
 #include "netdev.h"
 #include "netlink.h"
@@ -1147,7 +1146,6 @@ main(int argc, char *argv[])
     int retval;
 
     set_program_name(argv[0]);
-    register_fault_handlers();
     time_init();
     vlog_init();
     vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_WARN);

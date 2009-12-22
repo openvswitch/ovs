@@ -25,7 +25,6 @@
 #include "column.h"
 #include "command-line.h"
 #include "daemon.h"
-#include "fault.h"
 #include "file.h"
 #include "json.h"
 #include "jsonrpc.h"
@@ -73,7 +72,6 @@ main(int argc, char *argv[])
     int retval;
 
     set_program_name(argv[0]);
-    register_fault_handlers();
     time_init();
     vlog_init();
     signal(SIGPIPE, SIG_IGN);

@@ -26,7 +26,6 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
-#include "fault.h"
 #include "learning-switch.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -84,7 +83,6 @@ main(int argc, char *argv[])
     int i;
 
     set_program_name(argv[0]);
-    register_fault_handlers();
     time_init();
     vlog_init();
     parse_options(argc, argv);

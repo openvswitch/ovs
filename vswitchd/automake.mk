@@ -19,7 +19,6 @@ vswitchd_ovs_vswitchd_SOURCES = \
 vswitchd_ovs_vswitchd_LDADD = \
 	ofproto/libofproto.a \
 	lib/libopenvswitch.a \
-	$(FAULT_LIBS) \
 	$(SSL_LIBS)
 
 vswitchd_ovs_brcompatd_SOURCES = \
@@ -27,9 +26,7 @@ vswitchd_ovs_brcompatd_SOURCES = \
 	vswitchd/vswitch-idl.c \
 	vswitchd/vswitch-idl.h
 
-vswitchd_ovs_brcompatd_LDADD = \
-	lib/libopenvswitch.a \
-	$(FAULT_LIBS) 
+vswitchd_ovs_brcompatd_LDADD = lib/libopenvswitch.a
 
 EXTRA_DIST += \
 	vswitchd/ovs-vswitchd.8.in \

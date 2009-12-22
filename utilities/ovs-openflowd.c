@@ -29,7 +29,6 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
-#include "fault.h"
 #include "leak-checker.h"
 #include "list.h"
 #include "netdev.h"
@@ -114,7 +113,6 @@ main(int argc, char *argv[])
     struct netflow_options nf_options;
 
     set_program_name(argv[0]);
-    register_fault_handlers();
     time_init();
     vlog_init();
     parse_options(argc, argv, &s);

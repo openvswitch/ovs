@@ -98,11 +98,6 @@ AC_DEFUN([OVS_CHECK_OPENSSL],
       AC_DEFINE([HAVE_OPENSSL], [1], [Define to 1 if OpenSSL is installed.])
    fi])
 
-dnl Checks for libraries needed by lib/fault.c.
-AC_DEFUN([OVS_CHECK_FAULT_LIBS],
-  [AC_CHECK_LIB([dl], [dladdr], [FAULT_LIBS=-ldl])
-   AC_SUBST([FAULT_LIBS])])
-
 dnl Checks for libraries needed by lib/socket-util.c.
 AC_DEFUN([OVS_CHECK_SOCKET_LIBS],
   [AC_CHECK_LIB([socket], [connect])
