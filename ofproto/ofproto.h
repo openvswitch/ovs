@@ -65,8 +65,6 @@ int ofproto_set_netflow(struct ofproto *,
 void ofproto_set_failure(struct ofproto *, bool fail_open);
 void ofproto_set_rate_limit(struct ofproto *, int rate_limit, int burst_limit);
 int ofproto_set_stp(struct ofproto *, bool enable_stp);
-int ofproto_set_remote_execution(struct ofproto *, const char *command_acl,
-                                 const char *command_dir);
 
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);

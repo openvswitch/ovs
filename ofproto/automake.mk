@@ -11,8 +11,6 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/collectors.h \
 	ofproto/discovery.c \
 	ofproto/discovery.h \
-	ofproto/executer.c \
-	ofproto/executer.h \
 	ofproto/fail-open.c \
 	ofproto/fail-open.h \
 	ofproto/in-band.c \
@@ -27,5 +25,3 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/pinsched.h \
 	ofproto/status.c \
 	ofproto/status.h
-
-include ofproto/commands/automake.mk

@@ -94,10 +94,6 @@ struct ofsettings {
     /* Spanning tree protocol. */
     bool enable_stp;
 
-    /* Remote command execution. */
-    char *command_acl;          /* Command white/blacklist, as shell globs. */
-    char *command_dir;          /* Directory that contains commands. */
-
     /* Management. */
     uint64_t mgmt_id;           /* Management ID. */
 
@@ -206,11 +202,6 @@ main(int argc, char *argv[])
     if (error) {
         ovs_fatal(error, "failed to configure STP");
     }
-    error = ofproto_set_remote_execution(ofproto, s.command_acl,
-                                         s.command_dir);
-    if (error) {
-        ovs_fatal(error, "failed to configure remote command execution");
-    }
     if (!s.discovery) {
         error = ofproto_set_controller(ofproto, s.controller_name);
         if (error) {
@@ -265,8 +256,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         OPT_NO_STP,
         OPT_OUT_OF_BAND,
         OPT_IN_BAND,
-        OPT_COMMAND_ACL,
-        OPT_COMMAND_DIR,
         OPT_NETFLOW,
         OPT_MGMT_ID,
         OPT_PORTS,
@@ -295,8 +284,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         {"no-stp",      no_argument, 0, OPT_NO_STP},
         {"out-of-band", no_argument, 0, OPT_OUT_OF_BAND},
         {"in-band",     no_argument, 0, OPT_IN_BAND},
-        {"command-acl", required_argument, 0, OPT_COMMAND_ACL},
-        {"command-dir", required_argument, 0, OPT_COMMAND_DIR},
         {"netflow",     required_argument, 0, OPT_NETFLOW},
         {"mgmt-id",     required_argument, 0, OPT_MGMT_ID},
         {"ports",       required_argument, 0, OPT_PORTS},
@@ -332,8 +319,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->accept_controller_re = NULL;
     s->enable_stp = false;
     s->in_band = true;
-    s->command_acl = "";
-    s->command_dir = NULL;
     svec_init(&s->netflow);
     s->mgmt_id = 0;
     svec_init(&s->ports);
@@ -447,16 +432,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
         case OPT_IN_BAND:
             s->in_band = true;
-            break;
-
-        case OPT_COMMAND_ACL:
-            s->command_acl = (s->command_acl[0]
-                              ? xasprintf("%s,%s", s->command_acl, optarg)
-                              : optarg);
-            break;
-
-        case OPT_COMMAND_DIR:
-            s->command_dir = optarg;
             break;
 
         case OPT_NETFLOW:
@@ -584,10 +559,7 @@ usage(void)
            "  --netflow=HOST:PORT     configure NetFlow output target\n"
            "\nRate-limiting of \"packet-in\" messages to the controller:\n"
            "  --rate-limit[=PACKETS]  max rate, in packets/s (default: 1000)\n"
-           "  --burst-limit=BURST     limit on packet credit for idle time\n"
-           "\nRemote command execution options:\n"
-           "  --command-acl=[!]GLOB[,[!]GLOB...] set allowed/denied commands\n"
-           "  --command-dir=DIR       set command dir (default: %s/commands)\n",
+           "  --burst-limit=BURST     limit on packet credit for idle time\n",
            ovs_pkgdatadir);
     daemon_usage();
     vlog_usage();

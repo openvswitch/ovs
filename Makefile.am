@@ -39,7 +39,6 @@ EXTRA_DIST = INSTALL.bridge \
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =
-dist_commands_DATA =
 dist_man_MANS =
 dist_pkgdata_SCRIPTS =
 dist_sbin_SCRIPTS =

@@ -1,3 +1,0 @@
-#! /bin/sh
-ovs-kill --force --signal=USR1 ovs-switchui.pid
-reboot

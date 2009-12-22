@@ -1456,8 +1456,6 @@ bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
         rate_limit = c->controller_rate_limit ? *c->controller_rate_limit : 0;
         burst_limit = c->controller_burst_limit ? *c->controller_burst_limit : 0;
         ofproto_set_rate_limit(br->ofproto, rate_limit, burst_limit);
-
-        ofproto_set_remote_execution(br->ofproto, NULL, NULL); /* XXX */
     } else {
         union ofp_action action;
         flow_t flow;

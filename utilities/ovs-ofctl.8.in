@@ -164,15 +164,6 @@ flow expirations.
 This command may be useful for debugging switch or controller
 implementations.
 
-.TP
-\fBexecute \fIswitch command \fR[\fIarg\fR...]
-Sends a request to \fIswitch\fR to execute \fIcommand\fR along with
-each \fIarg\fR, if any, then waits for the command to complete and
-reports its completion status on \fBstderr\fR and its output, if any,
-on \fBstdout\fR.  The set of available commands and their argument is
-switch-dependent.  (This command uses a Nicira extension to OpenFlow
-that may not be available on all switches.)
-
 .SS "OpenFlow Switch and Controller Commands"
 
 The following commands, like those in the previous section, may be

@@ -27,7 +27,6 @@
 #include "discovery.h"
 #include "dpif.h"
 #include "dynamic-string.h"
-#include "executer.h"
 #include "fail-open.h"
 #include "in-band.h"
 #include "mac-learning.h"
@@ -207,7 +206,6 @@ struct ofproto {
     struct discovery *discovery;
     struct fail_open *fail_open;
     struct pinsched *miss_sched, *action_sched;
-    struct executer *executer;
     struct netflow *netflow;
 
     /* Flow table. */
@@ -314,7 +312,6 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     p->discovery = NULL;
     p->fail_open = NULL;
     p->miss_sched = p->action_sched = NULL;
-    p->executer = NULL;
     p->netflow = NULL;
 
     /* Initialize flow table. */
@@ -603,24 +600,6 @@ ofproto_set_stp(struct ofproto *ofproto UNUSED, bool enable_stp)
     }
 }
 
-int
-ofproto_set_remote_execution(struct ofproto *ofproto, const char *command_acl,
-                             const char *command_dir)
-{
-    if (command_acl) {
-        if (!ofproto->executer) {
-            return executer_create(command_acl, command_dir,
-                                   &ofproto->executer);
-        } else {
-            executer_set_acl(ofproto->executer, command_acl, command_dir);
-        }
-    } else {
-        executer_destroy(ofproto->executer);
-        ofproto->executer = NULL;
-    }
-    return 0;
-}
-
 uint64_t
 ofproto_get_datapath_id(const struct ofproto *ofproto)
 {
@@ -716,7 +695,6 @@ ofproto_destroy(struct ofproto *p)
     fail_open_destroy(p->fail_open);
     pinsched_destroy(p->miss_sched);
     pinsched_destroy(p->action_sched);
-    executer_destroy(p->executer);
     netflow_destroy(p->netflow);
 
     switch_status_unregister(p->ss_cat);
@@ -812,9 +790,6 @@ ofproto_run1(struct ofproto *p)
     }
     pinsched_run(p->miss_sched, send_packet_in_miss, p);
     pinsched_run(p->action_sched, send_packet_in_action, p);
-    if (p->executer) {
-        executer_run(p->executer);
-    }
 
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, struct ofconn, node,
                         &p->all_conns) {
@@ -923,9 +898,6 @@ ofproto_wait(struct ofproto *p)
     }
     pinsched_wait(p->miss_sched);
     pinsched_wait(p->action_sched);
-    if (p->executer) {
-        executer_wait(p->executer);
-    }
     if (!tag_set_is_empty(&p->revalidate_set)) {
         poll_immediate_wake();
     }
@@ -1330,10 +1302,6 @@ ofconn_create(struct ofproto *p, struct rconn *rconn)
 static void
 ofconn_destroy(struct ofconn *ofconn, struct ofproto *p)
 {
-    if (p->executer) {
-        executer_rconn_closing(p->executer, ofconn->rconn);
-    }
-
     list_remove(&ofconn->node);
     rconn_destroy(ofconn->rconn);
     rconn_packet_counter_destroy(ofconn->packet_in_counter);
@@ -3029,12 +2997,6 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
 
     case NXT_ACT_GET_CONFIG:
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE); /* XXX */
-
-    case NXT_COMMAND_REQUEST:
-        if (p->executer) {
-            return executer_handle_request(p->executer, ofconn->rconn, msg);
-        }
-        break;
 
     case NXT_MGMT:
         return handle_ofmp(p, ofconn, msg);

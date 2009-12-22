@@ -2079,7 +2079,7 @@ save_config(const struct svec *settings)
     }
 
     svec_init(&argv);
-    svec_add(&argv, "/usr/share/openvswitch/commands/reconfigure");
+    svec_add(&argv, "/usr/share/openvswitch-switchui/reconfigure");
     svec_append(&argv, settings);
     svec_terminate(&argv);
     ok = run_and_report_failure(argv.names, "Save failed");

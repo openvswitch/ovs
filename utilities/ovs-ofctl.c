@@ -164,7 +164,6 @@ usage(void)
            "  mod-flows SWITCH FLOW       modify actions of matching FLOWs\n"
            "  del-flows SWITCH [FLOW]     delete matching FLOWs\n"
            "  monitor SWITCH MISSLEN EXP  print packets received from SWITCH\n"
-           "  execute SWITCH CMD [ARG...] execute CMD with ARGS on SWITCH\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe VCONN                 probe whether VCONN is up\n"
            "  ping VCONN [N]              latency of N-byte echos\n"
@@ -1164,71 +1163,6 @@ do_benchmark(int argc UNUSED, char *argv[])
 }
 
 static void
-do_execute(int argc, char *argv[])
-{
-    struct vconn *vconn;
-    struct ofpbuf *request;
-    struct nicira_header *nicira;
-    struct nx_command_reply *ncr;
-    uint32_t xid;
-    int i;
-
-    nicira = make_openflow(sizeof *nicira, OFPT_VENDOR, &request);
-    xid = nicira->header.xid;
-    nicira->vendor = htonl(NX_VENDOR_ID);
-    nicira->subtype = htonl(NXT_COMMAND_REQUEST);
-    ofpbuf_put(request, argv[2], strlen(argv[2]));
-    for (i = 3; i < argc; i++) {
-        ofpbuf_put_zeros(request, 1);
-        ofpbuf_put(request, argv[i], strlen(argv[i]));
-    }
-    update_openflow_length(request);
-
-    open_vconn(argv[1], &vconn);
-    run(vconn_send_block(vconn, request), "send");
-
-    for (;;) {
-        struct ofpbuf *reply;
-        uint32_t status;
-
-        run(vconn_recv_xid(vconn, xid, &reply), "recv_xid");
-        if (reply->size < sizeof *ncr) {
-            ovs_fatal(0, "reply is too short (%zu bytes < %zu bytes)",
-                      reply->size, sizeof *ncr);
-        }
-        ncr = reply->data;
-        if (ncr->nxh.header.type != OFPT_VENDOR
-            || ncr->nxh.vendor != htonl(NX_VENDOR_ID)
-            || ncr->nxh.subtype != htonl(NXT_COMMAND_REPLY)) {
-            ovs_fatal(0, "reply is invalid");
-        }
-
-        status = ntohl(ncr->status);
-        if (status & NXT_STATUS_STARTED) {
-            /* Wait for a second reply. */
-            continue;
-        } else if (status & NXT_STATUS_EXITED) {
-            fprintf(stderr, "process terminated normally with exit code %d",
-                    status & NXT_STATUS_EXITSTATUS);
-        } else if (status & NXT_STATUS_SIGNALED) {
-            fprintf(stderr, "process terminated by signal %d",
-                    status & NXT_STATUS_TERMSIG);
-        } else if (status & NXT_STATUS_ERROR) {
-            fprintf(stderr, "error executing command");
-        } else {
-            fprintf(stderr, "process terminated for unknown reason");
-        }
-        if (status & NXT_STATUS_COREDUMP) {
-            fprintf(stderr, " (core dumped)");
-        }
-        putc('\n', stderr);
-
-        fwrite(ncr + 1, reply->size - sizeof *ncr, 1, stdout);
-        break;
-    }
-}
-
-static void
 do_help(int argc UNUSED, char *argv[] UNUSED)
 {
     usage();
@@ -1251,7 +1185,6 @@ static const struct command all_commands[] = {
     { "probe", 1, 1, do_probe },
     { "ping", 1, 2, do_ping },
     { "benchmark", 3, 3, do_benchmark },
-    { "execute", 2, INT_MAX, do_execute },
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };

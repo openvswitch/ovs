@@ -1,7 +1,5 @@
 EXTRA_DIST += \
 	debian/changelog \
-	debian/commands/reconfigure \
-	debian/commands/update \
 	debian/compat \
 	debian/control \
 	debian/control.modules.in \
@@ -60,5 +58,6 @@ EXTRA_DIST += \
 	debian/ovs-switch-setup.8 \
 	debian/po/POTFILES.in \
 	debian/po/templates.pot \
+	debian/reconfigure \
 	debian/rules \
 	debian/rules.modules
