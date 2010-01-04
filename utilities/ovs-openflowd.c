@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -559,8 +559,7 @@ usage(void)
            "  --netflow=HOST:PORT     configure NetFlow output target\n"
            "\nRate-limiting of \"packet-in\" messages to the controller:\n"
            "  --rate-limit[=PACKETS]  max rate, in packets/s (default: 1000)\n"
-           "  --burst-limit=BURST     limit on packet credit for idle time\n",
-           ovs_pkgdatadir);
+           "  --burst-limit=BURST     limit on packet credit for idle time\n");
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"
