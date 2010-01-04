@@ -161,6 +161,8 @@ query_db_remotes(const char *name_, const struct ovsdb *db,
             shash_add_once(remotes, datum->keys[i].string, NULL);
         }
     }
+
+    free(name);
 }
 
 static void
