@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -175,7 +175,7 @@ struct ofconn {
 };
 
 static struct ofconn *ofconn_create(struct ofproto *, struct rconn *);
-static void ofconn_destroy(struct ofconn *, struct ofproto *);
+static void ofconn_destroy(struct ofconn *);
 static void ofconn_run(struct ofconn *, struct ofproto *);
 static void ofconn_wait(struct ofconn *);
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
@@ -679,7 +679,7 @@ ofproto_destroy(struct ofproto *p)
 
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, struct ofconn, node,
                         &p->all_conns) {
-        ofconn_destroy(ofconn, p);
+        ofconn_destroy(ofconn);
     }
 
     dpif_close(p->dpif);
@@ -1300,7 +1300,7 @@ ofconn_create(struct ofproto *p, struct rconn *rconn)
 }
 
 static void
-ofconn_destroy(struct ofconn *ofconn, struct ofproto *p)
+ofconn_destroy(struct ofconn *ofconn)
 {
     list_remove(&ofconn->node);
     rconn_destroy(ofconn->rconn);
@@ -1334,7 +1334,7 @@ ofconn_run(struct ofconn *ofconn, struct ofproto *p)
     }
 
     if (ofconn != p->controller && !rconn_is_alive(ofconn->rconn)) {
-        ofconn_destroy(ofconn, p);
+        ofconn_destroy(ofconn);
     }
 }
 
