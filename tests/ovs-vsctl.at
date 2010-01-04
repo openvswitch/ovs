@@ -20,7 +20,7 @@ m4_define([OVS_VSCTL_SETUP],
            "table": "Open_vSwitch",
            "row": {}}]']],
      [0], [ignore], [ignore])
-   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --listen=punix:socket --unixctl=$PWD/unixctl db >/dev/null 2>&1], [0], [ignore], [ignore])])
+   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db >/dev/null 2>&1], [0], [ignore], [ignore])])
 
 dnl OVS_VSCTL_CLEANUP
 dnl

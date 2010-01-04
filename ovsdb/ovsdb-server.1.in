@@ -8,18 +8,15 @@ ovsdb\-server \- Open vSwitch database server
 .SH SYNOPSIS
 \fBovsdb\-server\fR
 \fIdatabase\fR
-[\fB--connect \fIremote\fR]\&...
-[\fB--listen \fIlocal\fR]\&...
+[\fB--remote=\fIremote\fR]\&...
 .so lib/daemon-syn.man
 .so lib/vlog-syn.man
 .so lib/common-syn.man
 .
 .SH DESCRIPTION
 The \fBovsdb\-server\fR program provides RPC interfaces to an Open
-vSwitch database (OVSDB).  It can listen for JSON-RPC connections from
-TCP/IP or Unix domain socket clients (with \fB\-\-listen\fR), connect to
-remote JSON-RPC TCP/IP or Unix domain socket clients (with
-\fB\-\-connect\fR).
+vSwitch database (OVSDB).  It supports JSON-RPC client connections
+over active or passive TCP/IP or Unix domain sockets.
 .PP
 The name of the OVSDB file must be specified on the command line as
 \fIdatabase\fR, which must already have been created and initialized
@@ -27,9 +24,9 @@ using, for example, \fBovsdb\-tool create\fR.
 .
 .SH OPTIONS
 .
-.IP "\fB\-\-listen=\fIlocal\fR"
-Makes \fBovsdb\-server\fR listen for JSON-RPC connections on
-\fIlocal\fR, which must take one of the following forms:
+.IP "\fB\-\-remote=\fIremote\fR"
+Adds \fIremote\fR as a connection method used by \fBovsdb\-server\fR.
+\fIremote\fR must take one of the following forms:
 .
 .RS
 .IP "\fBptcp:\fIport\fR[\fB:\fIip\fR]"
@@ -37,21 +34,26 @@ Listens for JSON-RPC connections on the given TCP \fIport\fR.  By
 default, \fB\*(PN\fR listens for connections to any local IP address,
 but \fIip\fR may be specified to listen only for connections to the
 given \fIip\fR.
+.
 .IP "\fBpunix:\fIfile\fR"
 Listens for JSON-RPC connections on the Unix domain server socket
 named \fIfile\fR.
-.RE
 .
-.IP "\fB\-\-connect=\fIremote\fR"
-Makes \fBovsdb\-server\fR initiate a JSON-RPC connection to
-\fIremote\fR, which must take one of the forms listed below.  The
-server will reconnect to \fIremote\fR as necessary.
-.
-.RS
 .IP "\fBtcp:\fIip\fB:\fIport\fR"
-Connects to the given TCP \fIport\fR on \fIip\fR.
+Initiates a JSON-RPC connection to the given TCP \fIport\fR on
+\fIip\fR and reconnects as necessary.
+.
 .IP "\fBunix:\fIfile\fR"
-Connects to the Unix domain server socket named \fIfile\fR.
+Initiates a JSON-RPC connection to the Unix domain server socket named
+\fIfile\fR as reconnects as necessary.
+.
+.IP "\fBdb:\fItable\fB,\fIcolumn\fR"
+Reads additional connection methods from \fIcolumn\fR in all of the
+rows in \fItable\fR within the \fBovsdb\-server\fR database.  The
+\fIcolumn\fR must have type string or set of strings.  The connection
+methods in the column must have one of the forms described above.  As
+the contents of \fIcolumn\fR changes, \fBovsdb\-server\fR also adds
+and drops connection methods accordingly.
 .RE
 .
 .SS "Daemon Options"

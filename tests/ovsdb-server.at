@@ -20,7 +20,7 @@ m4_define([OVSDB_CHECK_EXECUTION],
    AT_DATA([schema], [$2
 ])
    OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --listen=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
    m4_foreach([txn], [$3], 
      [OVS_CHECK_LCOV([ovsdb-client transact unix:socket 'txn'], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`])
@@ -32,3 +32,36 @@ cat stdout >> output
    AT_CLEANUP])
 
 EXECUTION_EXAMPLES
+
+AT_SETUP([--remote=db: implementation])
+AT_KEYWORDS([ovsdb server positive])
+AT_DATA([schema],
+  [[{"name": "mydb",
+     "tables": {
+       "Manager": {
+         "columns": {
+           "manager": {"type": "string"}}}}}
+]])
+OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [ignore], [ignore])
+OVS_CHECK_LCOV(
+  [[ovsdb-tool transact db \
+     '[{"op": "insert",
+        "table": "Manager",
+        "row": {"manager": "punix:socket"}}]']], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=db:Manager,manager --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+OVS_CHECK_LCOV(
+  [[ovsdb-client transact unix:socket \
+     '[{"op": "select",
+        "table": "Manager",
+        "where": [],
+        "columns": ["manager"]}]']], 
+  [0], [stdout], [ignore], [test ! -e pid || kill `cat pid`])
+AT_CHECK(
+  [perl $srcdir/uuidfilt.pl stdout], 
+  [0], 
+  [[[{"rows":[{"manager":"punix:socket"}]}]
+]], 
+  [ignore], 
+  [test ! -e pid || kill `cat pid`])
+test ! -e pid || kill `cat pid`
+AT_CLEANUP

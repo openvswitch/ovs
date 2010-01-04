@@ -206,7 +206,7 @@ case "$1" in
         set -- "$@" --verbose=ANY:console:emer --verbose=ANY:syslog:err
         set -- "$@" --log-file
         set -- "$@" --detach --pidfile
-        set -- "$@" --listen punix:/var/run/ovsdb-server
+        set -- "$@" --remote punix:/var/run/ovsdb-server
         set -- "$@" /etc/openvswitch-switch/conf
         set -- "$@" $OVSDB_SERVER_OPTS
 	echo -n "Starting ovsdb-server: "

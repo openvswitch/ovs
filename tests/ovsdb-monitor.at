@@ -23,7 +23,7 @@ m4_define([OVSDB_CHECK_MONITOR],
    OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [stdout], [ignore])
    m4_foreach([txn], [$3],
      [OVS_CHECK_LCOV([ovsdb-tool transact db 'txn'], [0], [ignore], [ignore])])
-   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/server-pid --listen=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/server-pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
    AT_CHECK([ovsdb-client --detach --pidfile=$PWD/client-pid monitor --format=csv unix:socket $4 > output], 
             [0], [ignore], [ignore], [kill `cat server-pid`])
    m4_foreach([txn], [$5],

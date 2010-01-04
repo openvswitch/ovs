@@ -25,13 +25,9 @@
 #     See the manpage for "core".
 # COREFILE_PATTERN="/var/log/%e-%t"
 
-# OVSDB_SERVER_LISTEN: Method to have ovsdb-server listen for a JSON-RPC
-#     connection.
-# OVSDB_SERVER_LISTEN=punix:/var/run/ovsdb-server
-
-# OVSDB_SERVER_CONNECT: Method to have ovsdb-server initiate a JSON-RPC
-#     connection to a remote server.
-# OVSDB_SERVER_CONNECT=
+# OVSDB_SERVER_REMOTES: Space-separated list of methods on which to have
+#     ovsdb-server listen or connect for a JSON-RPC connection.
+# OVSDB_SERVER_REMOTES="punix:/var/run/ovsdb-server db:Open_vSwitch,managers"
 
 # OVSDB_SERVER_DB: File for which ovsdb-server uses for storage.
 # OVSDB_SERVER_DB=/etc/ovs-vswitchd.conf.db

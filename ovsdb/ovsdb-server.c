@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <signal.h>
 #include <unistd.h>
 
+#include "column.h"
 #include "command-line.h"
 #include "daemon.h"
 #include "fault.h"
@@ -31,11 +32,15 @@
 #include "jsonrpc-server.h"
 #include "leak-checker.h"
 #include "list.h"
+#include "ovsdb-data.h"
+#include "ovsdb-types.h"
 #include "ovsdb-error.h"
 #include "poll-loop.h"
 #include "process.h"
+#include "row.h"
 #include "stream.h"
 #include "svec.h"
+#include "table.h"
 #include "timeval.h"
 #include "trigger.h"
 #include "util.h"
@@ -47,9 +52,11 @@
 static unixctl_cb_func ovsdb_server_exit;
 
 static void parse_options(int argc, char *argv[], char **file_namep,
-                          struct svec *active, struct svec *passive,
-                          char **unixctl_pathp);
+                          struct shash *remotes, char **unixctl_pathp);
 static void usage(void) NO_RETURN;
+
+static void set_remotes(struct ovsdb_jsonrpc_server *jsonrpc,
+                        const struct ovsdb *db, struct shash *remotes);
 
 int
 main(int argc, char *argv[])
@@ -57,14 +64,12 @@ main(int argc, char *argv[])
     char *unixctl_path = NULL;
     struct unixctl_server *unixctl;
     struct ovsdb_jsonrpc_server *jsonrpc;
-    struct svec active, passive;
+    struct shash remotes;
     struct ovsdb_error *error;
     struct ovsdb *db;
-    const char *name;
     char *file_name;
     bool exiting;
     int retval;
-    size_t i;
 
     set_program_name(argv[0]);
     register_fault_handlers();
@@ -73,7 +78,7 @@ main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
     process_init();
 
-    parse_options(argc, argv, &file_name, &active, &passive, &unixctl_path);
+    parse_options(argc, argv, &file_name, &remotes, &unixctl_path);
 
     die_if_already_running();
     daemonize_start();
@@ -84,21 +89,7 @@ main(int argc, char *argv[])
     }
 
     jsonrpc = ovsdb_jsonrpc_server_create(db);
-    SVEC_FOR_EACH (i, name, &active) {
-        ovsdb_jsonrpc_server_connect(jsonrpc, name);
-    }
-    for (i = 0; i < passive.n; i++) {
-        struct pstream *pstream;
-        int error;
-
-        error = pstream_open(passive.names[i], &pstream);
-        if (error) {
-            ovs_fatal(error, "failed to listen on \"%s\"", passive.names[i]);
-        }
-        ovsdb_jsonrpc_server_listen(jsonrpc, pstream);
-    }
-    svec_destroy(&active);
-    svec_destroy(&passive);
+    set_remotes(jsonrpc, db, &remotes);
 
     retval = unixctl_server_create(unixctl_path, &unixctl);
     if (retval) {
@@ -111,6 +102,7 @@ main(int argc, char *argv[])
 
     exiting = false;
     while (!exiting) {
+        set_remotes(jsonrpc, db, &remotes);
         ovsdb_jsonrpc_server_run(jsonrpc);
         unixctl_server_run(unixctl);
         ovsdb_trigger_run(db, time_msec());
@@ -125,6 +117,75 @@ main(int argc, char *argv[])
 }
 
 static void
+query_db_remotes(const char *name_, const struct ovsdb *db,
+                 struct shash *remotes)
+{
+    char *name, *db_prefix, *table_name, *column_name;
+    const struct ovsdb_column *column;
+    const struct ovsdb_table *table;
+    const struct ovsdb_row *row;
+    char *save_ptr = NULL;
+
+    name = xstrdup(name_);
+    db_prefix = strtok_r(name, ":", &save_ptr);
+    table_name = strtok_r(NULL, ",", &save_ptr);
+    column_name = strtok_r(NULL, ",", &save_ptr);
+    if (!table_name || !column_name) {
+        ovs_fatal(0, "remote \"%s\": invalid syntax", name_);
+    }
+
+    table = ovsdb_get_table(db, table_name);
+    if (!table) {
+        ovs_fatal(0, "remote \"%s\": no table named %s", name_, table_name);
+    }
+
+    column = ovsdb_table_schema_get_column(table->schema, column_name);
+    if (!column) {
+        ovs_fatal(0, "remote \"%s\": table \"%s\" has no column \"%s\"",
+                  name_, table_name, column_name);
+    }
+
+    if (column->type.key_type != OVSDB_TYPE_STRING
+        || column->type.value_type != OVSDB_TYPE_VOID) {
+        ovs_fatal(0, "remote \"%s\": type of table \"%s\" column \"%s\" is "
+                  "not string or set of strings",
+                  name_, table_name, column_name);
+    }
+
+    HMAP_FOR_EACH (row, struct ovsdb_row, hmap_node, &table->rows) {
+        const struct ovsdb_datum *datum;
+        size_t i;
+
+        datum = &row->fields[column->index];
+        for (i = 0; i < datum->n; i++) {
+            shash_add_once(remotes, datum->keys[i].string, NULL);
+        }
+    }
+}
+
+static void
+set_remotes(struct ovsdb_jsonrpc_server *jsonrpc,
+            const struct ovsdb *db, struct shash *remotes)
+{
+    struct shash resolved_remotes;
+    struct shash_node *node;
+
+    shash_init(&resolved_remotes);
+    SHASH_FOR_EACH (node, remotes) {
+        const char *name = node->name;
+
+        if (!strncmp(name, "db:", 3)) {
+            query_db_remotes(name, db, &resolved_remotes);
+        } else {
+            shash_add_once(&resolved_remotes, name, NULL);
+        }
+    }
+    ovsdb_jsonrpc_server_set_remotes(jsonrpc, &resolved_remotes);
+    shash_destroy(&resolved_remotes);
+}
+
+
+static void
 ovsdb_server_exit(struct unixctl_conn *conn, const char *args UNUSED,
                   void *exiting_)
 {
@@ -135,20 +196,17 @@ ovsdb_server_exit(struct unixctl_conn *conn, const char *args UNUSED,
 
 static void
 parse_options(int argc, char *argv[], char **file_namep,
-              struct svec *active, struct svec *passive,
-              char **unixctl_pathp)
+              struct shash *remotes, char **unixctl_pathp)
 {
     enum {
         OPT_DUMMY = UCHAR_MAX + 1,
-        OPT_CONNECT,
-        OPT_LISTEN,
+        OPT_REMOTE,
         OPT_UNIXCTL,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS
     };
     static struct option long_options[] = {
-        {"connect",     required_argument, 0, OPT_CONNECT},
-        {"listen",      required_argument, 0, OPT_LISTEN},
+        {"remote",      required_argument, 0, OPT_REMOTE},
         {"unixctl",     required_argument, 0, OPT_UNIXCTL},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
@@ -159,8 +217,7 @@ parse_options(int argc, char *argv[], char **file_namep,
     };
     char *short_options = long_options_to_short_options(long_options);
 
-    svec_init(active);
-    svec_init(passive);
+    shash_init(remotes);
     for (;;) {
         int c;
 
@@ -170,12 +227,8 @@ parse_options(int argc, char *argv[], char **file_namep,
         }
 
         switch (c) {
-        case OPT_CONNECT:
-            svec_add(active, optarg);
-            break;
-
-        case OPT_LISTEN:
-            svec_add(passive, optarg);
+        case OPT_REMOTE:
+            shash_add_once(remotes, optarg, NULL);
             break;
 
         case OPT_UNIXCTL:
@@ -223,8 +276,7 @@ usage(void)
            "where DATABASE is a database file in ovsdb format.\n",
            program_name, program_name);
     printf("\nJSON-RPC options (may be specified any number of times):\n"
-           "  --connect=REMOTE        make active connection to REMOTE\n"
-           "  --listen=LOCAL          passively listen on LOCAL\n");
+           "  --remote=REMOTE         connect or listen to REMOTE\n");
     stream_usage("JSON-RPC", true, true);
     daemon_usage();
     vlog_usage();

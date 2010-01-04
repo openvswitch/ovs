@@ -23,6 +23,9 @@
        "controller": {
          "comment": "Default Controller used by bridges.",
          "type": {"key": "uuid", "keyRefTable": "Controller", "min": 0, "max": 1}},
+       "managers": {
+         "comment": "Remote database clients to which the Open vSwitch's database server should connect or to which it should listen.",
+         "type": {"key": "string", "min": 0, "max": "unlimited"}},
        "ssl": {
          "comment": "SSL used globally by the daemon.",
          "type": {"key": "uuid", "keyRefTable": "SSL", "min": 0, "max": 1}},
