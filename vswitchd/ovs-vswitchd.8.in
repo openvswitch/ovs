@@ -48,6 +48,9 @@ Port mirroring, with optional VLAN tagging.
 NetFlow v5 flow logging.
 .
 .IP \(bu
+sFlow monitoring.
+.
+.IP \(bu
 Connectivity to an external OpenFlow controller, such as NOX.
 .
 .PP

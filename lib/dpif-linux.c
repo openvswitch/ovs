@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -196,6 +196,7 @@ dpif_linux_delete(struct dpif *dpif_)
 static int
 dpif_linux_get_stats(const struct dpif *dpif_, struct odp_stats *stats)
 {
+    memset(stats, 0, sizeof *stats);
     return do_ioctl(dpif_, ODP_DP_STATS, stats);
 }
 
@@ -396,6 +397,19 @@ dpif_linux_recv_set_mask(struct dpif *dpif_, int listen_mask)
 }
 
 static int
+dpif_linux_get_sflow_probability(const struct dpif *dpif_,
+                                 uint32_t *probability)
+{
+    return do_ioctl(dpif_, ODP_GET_SFLOW_PROBABILITY, probability);
+}
+
+static int
+dpif_linux_set_sflow_probability(struct dpif *dpif_, uint32_t probability)
+{
+    return do_ioctl(dpif_, ODP_SET_SFLOW_PROBABILITY, &probability);
+}
+
+static int
 dpif_linux_recv(struct dpif *dpif_, struct ofpbuf **bufp)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
@@ -475,6 +489,8 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_execute,
     dpif_linux_recv_get_mask,
     dpif_linux_recv_set_mask,
+    dpif_linux_get_sflow_probability,
+    dpif_linux_set_sflow_probability,
     dpif_linux_recv,
     dpif_linux_recv_wait,
 };

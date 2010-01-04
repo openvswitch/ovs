@@ -1333,6 +1333,8 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_execute,
     dpif_netdev_recv_get_mask,
     dpif_netdev_recv_set_mask,
+    NULL,                       /* get_sflow_probability */
+    NULL,                       /* set_sflow_probability */
     dpif_netdev_recv,
     dpif_netdev_recv_wait,
 };

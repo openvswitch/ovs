@@ -28,4 +28,6 @@ void collectors_destroy(struct collectors *);
 
 void collectors_send(const struct collectors *, const void *, size_t);
 
+int collectors_count(const struct collectors *);
+
 #endif /* collectors.h */

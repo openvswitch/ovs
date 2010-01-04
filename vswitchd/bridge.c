@@ -61,6 +61,7 @@
 #include "vconn-ssl.h"
 #include "xenserver.h"
 #include "xtoxll.h"
+#include "sflow_api.h"
 
 #define THIS_MODULE VLM_bridge
 #include "vlog.h"
@@ -210,6 +211,7 @@ static uint64_t bridge_pick_datapath_id(struct bridge *,
                                         const uint8_t bridge_ea[ETH_ADDR_LEN],
                                         struct iface *hw_addr_iface);
 static struct iface *bridge_get_local_iface(struct bridge *);
+static const char *bridge_get_controller(const struct bridge *br);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 
 static void bridge_unixctl_fdb_show(struct unixctl_conn *, const char *args);
@@ -527,6 +529,7 @@ bridge_reconfigure(void)
     struct svec old_br, new_br;
     struct bridge *br, *next;
     size_t i;
+    int sflow_bridge_number;
 
     COVERAGE_INC(bridge_reconfigure);
 
@@ -646,6 +649,7 @@ bridge_reconfigure(void)
         svec_destroy(&want_ifaces);
         svec_destroy(&add_ifaces);
     }
+    sflow_bridge_number = 0;
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         uint8_t ea[8];
         uint64_t dpid;
@@ -715,6 +719,42 @@ bridge_reconfigure(void)
                     br->name);
         }
         svec_destroy(&nf_options.collectors);
+
+        if (cfg_has("sflow.%s.host", br->name)) {
+            struct ofproto_sflow_options oso;
+
+            svec_init(&oso.targets);
+            cfg_get_all_keys(&oso.targets, "sflow.%s.host", br->name);
+
+            oso.sampling_rate = SFL_DEFAULT_SAMPLING_RATE;
+            if (cfg_has("sflow.%s.sampling", br->name)) {
+                oso.sampling_rate = cfg_get_int(0, "sflow.%s.sampling",
+                                                br->name);
+            }
+
+            oso.polling_interval = SFL_DEFAULT_POLLING_INTERVAL;
+            if (cfg_has("sflow.%s.polling", br->name)) {
+                oso.polling_interval = cfg_get_int(0, "sflow.%s.polling",
+                                                   br->name);
+            }
+
+            oso.header_len = SFL_DEFAULT_HEADER_SIZE;
+            if (cfg_has("sflow.%s.header", br->name)) {
+                oso.header_len = cfg_get_int(0, "sflow.%s.header", br->name);
+            }
+
+            oso.sub_id = sflow_bridge_number++;
+            oso.agent_device = (char *) cfg_get_string(0, "sflow.%s.agent",
+                                                       br->name);
+            oso.control_ip = (char *) cfg_get_string(0,
+                                                     "bridge.%s.controller.ip",
+                                                     br->name);
+            ofproto_set_sflow(br->ofproto, &oso);
+
+            svec_destroy(&oso.targets);
+        } else {
+            ofproto_set_sflow(br->ofproto, NULL);
+        }
 
         /* Update the controller and related settings.  It would be more
          * straightforward to call this from bridge_reconfigure_one(), but we

@@ -79,7 +79,7 @@ struct dp_bucket {
 	struct sw_flow *flows[];
 };
 
-#define DP_N_QUEUES 2
+#define DP_N_QUEUES 3
 #define DP_MAX_QUEUE_LEN 100
 
 struct dp_stats_percpu {
@@ -87,6 +87,7 @@ struct dp_stats_percpu {
 	u64 n_hit;
 	u64 n_missed;
 	u64 n_lost;
+	u64 sflow_pool;		/* Packets that could have been sampled. */
 };
 
 struct dp_port_group {
@@ -95,10 +96,29 @@ struct dp_port_group {
 	u16 ports[];
 };
 
+/**
+ * struct datapath - datapath for flow-based packet switching
+ * @mutex: Mutual exclusion for ioctls.
+ * @dp_idx: Datapath number (index into the dps[] array in datapath.c).
+ * @ifobj: &struct kobject representing the datapath.
+ * @drop_frags: Drop all IP fragments if nonzero.
+ * @queues: %DP_N_QUEUES sets of queued packets for userspace to handle.
+ * @waitqueue: Waitqueue, for waiting for new packets in @queues.
+ * @n_flows: Number of flows currently in flow table.
+ * @table: Current flow table (RCU protected).
+ * @groups: Port groups, used by ODPAT_OUTPUT_GROUP action (RCU protected).
+ * @n_ports: Number of ports currently in @ports.
+ * @ports: Map from port number to &struct net_bridge_port.  %ODPP_LOCAL port
+ * always exists, other ports may be %NULL.
+ * @port_list: List of all ports in @ports in arbitrary order.
+ * @stats_percpu: Per-CPU datapath statistics.
+ * @sflow_probability: Probability of sampling a packet to the %ODPL_SFLOW
+ * queue, where 0 means never sample, UINT_MAX means always sample, and
+ * other values are intermediate probabilities.
+ */
 struct datapath {
 	struct mutex mutex;
 	int dp_idx;
-
 	struct kobject ifobj;
 
 	int drop_frags;
@@ -117,10 +137,13 @@ struct datapath {
 	/* Switch ports. */
 	unsigned int n_ports;
 	struct net_bridge_port *ports[DP_MAX_PORTS];
-	struct list_head port_list; /* All ports, including local_port. */
+	struct list_head port_list;
 
 	/* Stats. */
 	struct dp_stats_percpu *stats_percpu;
+
+	/* sFlow Sampling */
+	unsigned int sflow_probability;
 };
 
 struct net_bridge_port {

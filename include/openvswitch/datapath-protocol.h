@@ -77,6 +77,9 @@
 
 #define ODP_EXECUTE             _IOR('O', 18, struct odp_execute)
 
+#define ODP_SET_SFLOW_PROBABILITY _IOR('O', 20, int)
+#define ODP_GET_SFLOW_PROBABILITY _IOW('O', 21, int)
+
 struct odp_stats {
     /* Flows. */
     __u32 n_flows;              /* Number of flows in flow table. */
@@ -98,6 +101,7 @@ struct odp_stats {
     /* Queues. */
     __u16 max_miss_queue;       /* Max length of ODPL_MISS queue. */
     __u16 max_action_queue;     /* Max length of ODPL_ACTION queue. */
+    __u16 max_sflow_queue;      /* Max length of ODPL_SFLOW queue. */
 };
 
 /* Logical ports. */
@@ -109,7 +113,9 @@ struct odp_stats {
 #define ODPL_MISS       (1 << _ODPL_MISS_NR)
 #define _ODPL_ACTION_NR 1       /* Packet output to ODPP_CONTROLLER. */
 #define ODPL_ACTION     (1 << _ODPL_ACTION_NR)
-#define ODPL_ALL        (ODPL_MISS | ODPL_ACTION)
+#define _ODPL_SFLOW_NR  2       /* sFlow samples. */
+#define ODPL_SFLOW      (1 << _ODPL_SFLOW_NR)
+#define ODPL_ALL        (ODPL_MISS | ODPL_ACTION | ODPL_SFLOW)
 
 /* Format of messages read from datapath fd. */
 struct odp_msg {
@@ -118,7 +124,23 @@ struct odp_msg {
     __u16 port;                 /* Port on which frame was received. */
     __u16 reserved;
     __u32 arg;                  /* Argument value specified in action. */
-    /* Followed by packet data. */
+
+    /*
+     * Followed by:
+     *
+     * ODPL_MISS, ODPL_ACTION: packet data.
+     *
+     * ODPL_SFLOW: "struct odp_sflow_sample_header", followed by
+     *   an array of "union odp_action"s, followed by packet data.
+     */
+};
+
+/* Header added to sFlow sampled packet. */
+struct odp_sflow_sample_header {
+    __u64 sample_pool;          /* Number of potentially sampled packets. */
+    __u32 n_actions;            /* Number of following "union odp_action"s. */
+    __u32 reserved;             /* Pad up to 64-bit boundary. */
+    /* Followed by n_action "union odp_action"s. */
 };
 
 #define ODP_PORT_INTERNAL (1 << 0) /* This port is simulated. */

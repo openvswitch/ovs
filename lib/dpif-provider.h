@@ -278,6 +278,23 @@ struct dpif_class {
      * corresponding type when it calls the recv member function. */
     int (*recv_set_mask)(struct dpif *dpif, int listen_mask);
 
+    /* Retrieves 'dpif''s sFlow sampling probability into '*probability'.
+     * Return value is 0 or a positive errno value.  EOPNOTSUPP indicates that
+     * the datapath does not support sFlow, as does a null pointer.
+     *
+     * A probability of 0 means sample no packets, UINT32_MAX means sample
+     * every packet, and other values are intermediate probabilities. */
+    int (*get_sflow_probability)(const struct dpif *dpif,
+                                 uint32_t *probability);
+
+    /* Sets 'dpif''s sFlow sampling probability to 'probability'.  Return value
+     * is 0 or a positive errno value.  EOPNOTSUPP indicates that the datapath
+     * does not support sFlow, as does a null pointer.
+     *
+     * A probability of 0 means sample no packets, UINT32_MAX means sample
+     * every packet, and other values are intermediate probabilities. */
+    int (*set_sflow_probability)(struct dpif *dpif, uint32_t probability);
+
     /* Attempts to receive a message from 'dpif'.  If successful, stores the
      * message into '*packetp'.  The message, if one is received, must begin
      * with 'struct odp_msg' as a header.  Only messages of the types selected
