@@ -353,7 +353,7 @@ since the switch will attempt to send them out the input port.
 Disabling learning for the VLAN will cause the switch to correctly
 send the packet out all ports configured for that VLAN.  If Open
 vSwitch is being used as an intermediate switch learning can be disabled
-by setting the key \fBvlan.\fIbrname\fB.learning-disable=\fIvid\fR
+by setting the key \fBvlan.\fIbrname\fB.disable-learning=\fIvid\fR
 to the mirrored VLAN.
 .ST "Example"
 The following \fBovs\-vswitchd\fR configuration copies all frames received
