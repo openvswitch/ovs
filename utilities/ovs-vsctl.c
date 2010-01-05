@@ -153,7 +153,8 @@ parse_options(int argc, char *argv[])
         OPT_ONELINE,
         OPT_NO_SYSLOG,
         OPT_NO_WAIT,
-        OPT_DRY_RUN
+        OPT_DRY_RUN,
+        VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"db", required_argument, 0, OPT_DB},
@@ -162,9 +163,9 @@ parse_options(int argc, char *argv[])
         {"dry-run", no_argument, 0, OPT_DRY_RUN},
         {"oneline", no_argument, 0, OPT_ONELINE},
         {"timeout", required_argument, 0, 't'},
-        {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
+        VLOG_LONG_OPTIONS,
         {0, 0, 0, 0},
     };
 
@@ -214,9 +215,7 @@ parse_options(int argc, char *argv[])
             }
             break;
 
-        case 'v':
-            vlog_set_verbosity(optarg);
-            break;
+        VLOG_OPTION_HANDLERS
 
         case '?':
             exit(EXIT_FAILURE);
