@@ -508,5 +508,7 @@ executer_set_acl(struct executer *e, const char *acl, const char *dir)
     free(e->command_acl);
     e->command_acl = xstrdup(acl);
     free(e->command_dir);
-    e->command_dir = xstrdup(dir);
+    e->command_dir = (dir
+                      ? xstrdup(dir)
+                      : xasprintf("%s/commands", ovs_pkgdatadir));
 }
