@@ -123,14 +123,15 @@ static void
 parse_options(int argc, char *argv[], struct settings *s)
 {
     enum {
-        OPT_STRICT = UCHAR_MAX + 1
+        OPT_STRICT = UCHAR_MAX + 1,
+        VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
         {"timeout", required_argument, 0, 't'},
-        {"verbose", optional_argument, 0, 'v'},
         {"strict", no_argument, 0, OPT_STRICT},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
+        VLOG_LONG_OPTIONS,
         VCONN_SSL_LONG_OPTIONS
         {0, 0, 0, 0},
     };
@@ -166,14 +167,11 @@ parse_options(int argc, char *argv[], struct settings *s)
             OVS_PRINT_VERSION(OFP_VERSION, OFP_VERSION);
             exit(EXIT_SUCCESS);
 
-        case 'v':
-            vlog_set_verbosity(optarg);
-            break;
-
         case OPT_STRICT:
             s->strict = true;
             break;
 
+        VLOG_OPTION_HANDLERS
         VCONN_SSL_OPTION_HANDLERS
 
         case '?':
