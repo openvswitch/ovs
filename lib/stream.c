@@ -476,6 +476,7 @@ stream_init(struct stream *stream, struct stream_class *class,
                     : SCS_DISCONNECTED);
     stream->error = connect_status;
     stream->name = xstrdup(name);
+    assert(stream->state != SCS_CONNECTING || class->connect);
 }
 
 void

@@ -1444,6 +1444,7 @@ vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
     vconn->local_ip = 0;
     vconn->local_port = 0;
     vconn->name = xstrdup(name);
+    assert(vconn->state != VCS_CONNECTING || class->connect);
 }
 
 void
