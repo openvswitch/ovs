@@ -52,12 +52,12 @@
 #include "sha1.h"
 #include "shash.h"
 #include "socket-util.h"
+#include "stream-ssl.h"
 #include "svec.h"
 #include "timeval.h"
 #include "util.h"
 #include "unixctl.h"
 #include "vconn.h"
-#include "vconn-ssl.h"
 #include "vswitchd/vswitch-idl.h"
 #include "xenserver.h"
 #include "xtoxll.h"
@@ -366,11 +366,11 @@ bridge_configure_ssl(const struct ovsrec_ssl *ssl)
     }
 
     if (config_string_change(ssl->private_key, &private_key_file)) {
-        vconn_ssl_set_private_key_file(private_key_file);
+        stream_ssl_set_private_key_file(private_key_file);
     }
 
     if (config_string_change(ssl->certificate, &certificate_file)) {
-        vconn_ssl_set_certificate_file(certificate_file);
+        stream_ssl_set_certificate_file(certificate_file);
     }
 
     /* We assume that even if the filename hasn't changed, if the CA cert 
@@ -380,7 +380,7 @@ bridge_configure_ssl(const struct ovsrec_ssl *ssl)
      * restarted.  We may want to address this in vconn's SSL library. */
     if (config_string_change(ssl->ca_cert, &cacert_file)
         || (cacert_file && stat(cacert_file, &s) && errno == ENOENT)) {
-        vconn_ssl_set_ca_cert_file(cacert_file, ssl->bootstrap_ca_cert);
+        stream_ssl_set_ca_cert_file(cacert_file, ssl->bootstrap_ca_cert);
     }
 }
 #endif

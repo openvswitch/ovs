@@ -44,9 +44,9 @@
 #include "packets.h"
 #include "random.h"
 #include "socket-util.h"
+#include "stream-ssl.h"
 #include "timeval.h"
 #include "util.h"
-#include "vconn-ssl.h"
 #include "vconn.h"
 
 #include "vlog.h"
@@ -91,7 +91,7 @@ parse_options(int argc, char *argv[])
         {"strict", no_argument, 0, OPT_STRICT},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
-        VCONN_SSL_LONG_OPTIONS
+        STREAM_SSL_LONG_OPTIONS
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -131,7 +131,7 @@ parse_options(int argc, char *argv[])
             strict = true;
             break;
 
-        VCONN_SSL_OPTION_HANDLERS
+        STREAM_SSL_OPTION_HANDLERS
 
         case '?':
             exit(EXIT_FAILURE);

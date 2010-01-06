@@ -48,12 +48,12 @@
 #include "shash.h"
 #include "status.h"
 #include "stp.h"
+#include "stream-ssl.h"
 #include "svec.h"
 #include "tag.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "vconn.h"
-#include "vconn-ssl.h"
 #include "xtoxll.h"
 
 #define THIS_MODULE VLM_ofproto

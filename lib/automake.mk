@@ -144,11 +144,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/uuid.h \
 	lib/valgrind.h \
 	lib/vconn-provider.h \
-	lib/vconn-ssl.h \
 	lib/vconn-stream.c \
-	lib/vconn-stream.h \
-	lib/vconn-tcp.c \
-	lib/vconn-unix.c \
 	lib/vconn.c \
 	lib/vconn.h \
 	lib/vlog-modules.def \
@@ -168,9 +164,7 @@ lib_libopenvswitch_a_SOURCES += \
 endif
 
 if HAVE_OPENSSL
-lib_libopenvswitch_a_SOURCES += \
-	lib/stream-ssl.c \
-	lib/vconn-ssl.c 
+lib_libopenvswitch_a_SOURCES += lib/stream-ssl.c
 nodist_lib_libopenvswitch_a_SOURCES += lib/dhparams.c
 lib/dhparams.c: lib/dh1024.pem lib/dh2048.pem lib/dh4096.pem
 	(echo '#include "lib/dhparams.h"' &&				\

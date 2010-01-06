@@ -32,10 +32,10 @@
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "rconn.h"
+#include "stream-ssl.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
-#include "vconn-ssl.h"
 #include "vconn.h"
 
 #include "vlog.h"
@@ -257,7 +257,7 @@ parse_options(int argc, char *argv[])
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
-        VCONN_SSL_LONG_OPTIONS
+        STREAM_SSL_LONG_OPTIONS
         {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
 #endif
         {0, 0, 0, 0},
@@ -317,10 +317,10 @@ parse_options(int argc, char *argv[])
         DAEMON_OPTION_HANDLERS
 
 #ifdef HAVE_OPENSSL
-        VCONN_SSL_OPTION_HANDLERS
+        STREAM_SSL_OPTION_HANDLERS
 
         case OPT_PEER_CA_CERT:
-            vconn_ssl_set_peer_ca_cert_file(optarg);
+            stream_ssl_set_peer_ca_cert_file(optarg);
             break;
 #endif
 

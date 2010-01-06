@@ -39,11 +39,11 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"
+#include "stream-ssl.h"
 #include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
-#include "vconn-ssl.h"
 #include "vconn.h"
 
 #include "vlog.h"
@@ -294,7 +294,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
-        VCONN_SSL_LONG_OPTIONS
+        STREAM_SSL_LONG_OPTIONS
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
 #endif
         {0, 0, 0, 0},
@@ -476,10 +476,10 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         LEAK_CHECKER_OPTION_HANDLERS
 
 #ifdef HAVE_OPENSSL
-        VCONN_SSL_OPTION_HANDLERS
+        STREAM_SSL_OPTION_HANDLERS
 
         case OPT_BOOTSTRAP_CA_CERT:
-            vconn_ssl_set_ca_cert_file(optarg, true);
+            stream_ssl_set_ca_cert_file(optarg, true);
             break;
 #endif
 
@@ -506,7 +506,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     /* Set accept_controller_regex. */
     if (!s->accept_controller_re) {
         s->accept_controller_re
-            = vconn_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*";
+            = stream_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*";
     }
 
     /* Mode of operation. */
