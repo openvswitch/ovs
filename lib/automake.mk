@@ -1,4 +1,4 @@
-# Copyright (C) 2009 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -96,6 +96,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/socket-util.h \
 	lib/stp.c \
 	lib/stp.h \
+	lib/string.h \
 	lib/svec.c \
 	lib/svec.h \
 	lib/tag.c \
