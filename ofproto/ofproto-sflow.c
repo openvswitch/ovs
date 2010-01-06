@@ -427,6 +427,14 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     }
 }
 
+static int
+ofproto_sflow_odp_port_to_ifindex(const struct ofproto_sflow *os,
+                                  uint16_t odp_port)
+{
+    struct ofproto_sflow_port *osp = port_array_get(&os->ports, odp_port);
+    return osp ? SFL_DS_INDEX(osp->dsi) : 0;
+}
+
 void
 ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
 {
@@ -475,7 +483,7 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
 
     /* Build a flow sample */
     memset(&fs, 0, sizeof fs);
-    fs.input = msg->port == ODPP_LOCAL ? 0x3fffffff : msg->port;
+    fs.input = ofproto_sflow_odp_port_to_ifindex(os, msg->port);
     fs.output = 0;              /* Filled in correctly below. */
     fs.sample_pool = hdr->sample_pool;
 
@@ -505,7 +513,7 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
 
         switch (a->type) {
         case ODPAT_OUTPUT:
-            fs.output = a->output.port;
+            fs.output = ofproto_sflow_odp_port_to_ifindex(os, a->output.port);
             n_outputs++;
             break;
 
