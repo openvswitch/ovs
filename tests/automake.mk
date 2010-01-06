@@ -66,6 +66,9 @@ noinst_PROGRAMS += tests/test-sha1
 tests_test_sha1_SOURCES = tests/test-sha1.c
 tests_test_sha1_LDADD = lib/libopenvswitch.a
 
+noinst_PROGRAMS += tests/test-strtok_r
+tests_test_strtok_r_SOURCES = tests/test-strtok_r.c
+
 noinst_PROGRAMS += tests/test-type-props
 tests_test_type_props_SOURCES = tests/test-type-props.c
 
