@@ -91,6 +91,8 @@ struct vconn_class tcp_vconn_class = {
     NULL,                       /* connect */
     NULL,                       /* recv */
     NULL,                       /* send */
+    NULL,                       /* run */
+    NULL,                       /* run_wait */
     NULL,                       /* wait */
 };
 

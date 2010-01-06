@@ -143,6 +143,7 @@ test_refuse_connection(const char *type, int expected_error)
     fpv_create(type, &fpv);
     assert(!vconn_open(fpv.vconn_name, OFP_VERSION, &vconn));
     fpv_close(&fpv);
+    vconn_run(vconn);
     assert(vconn_connect(vconn) == expected_error);
     vconn_close(vconn);
     fpv_destroy(&fpv);
@@ -159,6 +160,7 @@ test_accept_then_close(const char *type, int expected_error)
 
     fpv_create(type, &fpv);
     assert(!vconn_open(fpv.vconn_name, OFP_VERSION, &vconn));
+    vconn_run(vconn);
     close(fpv_accept(&fpv));
     fpv_close(&fpv);
     assert(vconn_connect(vconn) == expected_error);
@@ -178,6 +180,7 @@ test_read_hello(const char *type, int expected_error)
 
     fpv_create(type, &fpv);
     assert(!vconn_open(fpv.vconn_name, OFP_VERSION, &vconn));
+    vconn_run(vconn);
     fd = fpv_accept(&fpv);
     fpv_destroy(&fpv);
     assert(!set_nonblocking(fd));
@@ -195,7 +198,9 @@ test_read_hello(const char *type, int expected_error)
            assert(errno == EAGAIN);
        }
 
+       vconn_run(vconn);
        assert(vconn_connect(vconn) == EAGAIN);
+       vconn_run_wait(vconn);
        vconn_connect_wait(vconn);
        poll_fd_wait(fd, POLLIN);
        poll_block();
@@ -221,6 +226,7 @@ test_send_hello(const char *type, const void *out, size_t out_size,
 
     fpv_create(type, &fpv);
     assert(!vconn_open(fpv.vconn_name, OFP_VERSION, &vconn));
+    vconn_run(vconn);
     fd = fpv_accept(&fpv);
     fpv_destroy(&fpv);
 
@@ -243,6 +249,7 @@ test_send_hello(const char *type, const void *out, size_t out_size,
            }
        }
 
+       vconn_run(vconn);
        if (!connected) {
            int error = vconn_connect(vconn);
            if (error == expect_connect_error) {
@@ -262,6 +269,7 @@ test_send_hello(const char *type, const void *out, size_t out_size,
            break;
        }
 
+       vconn_run_wait(vconn);
        if (!connected) {
            vconn_connect_wait(vconn);
        }

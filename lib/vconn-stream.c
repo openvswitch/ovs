@@ -44,7 +44,6 @@ struct stream_vconn
     int fd;
     struct ofpbuf *rxbuf;
     struct ofpbuf *txbuf;
-    struct poll_waiter *tx_waiter;
     char *unlink_path;
 };
 
@@ -74,7 +73,6 @@ new_stream_vconn(const char *name, int fd, int connect_status,
     vconn_init(&s->vconn, &stream_vconn_class, connect_status, name);
     s->fd = fd;
     s->txbuf = NULL;
-    s->tx_waiter = NULL;
     s->rxbuf = NULL;
     s->unlink_path = unlink_path;
     *vconnp = &s->vconn;
@@ -92,7 +90,6 @@ static void
 stream_close(struct vconn *vconn)
 {
     struct stream_vconn *s = stream_vconn_cast(vconn);
-    poll_cancel(s->tx_waiter);
     stream_clear_txbuf(s);
     ofpbuf_delete(s->rxbuf);
     close(s->fd);
@@ -170,29 +167,6 @@ stream_clear_txbuf(struct stream_vconn *s)
 {
     ofpbuf_delete(s->txbuf);
     s->txbuf = NULL;
-    s->tx_waiter = NULL;
-}
-
-static void
-stream_do_tx(int fd UNUSED, short int revents UNUSED, void *vconn_)
-{
-    struct vconn *vconn = vconn_;
-    struct stream_vconn *s = stream_vconn_cast(vconn);
-    ssize_t n = write(s->fd, s->txbuf->data, s->txbuf->size);
-    if (n < 0) {
-        if (errno != EAGAIN) {
-            VLOG_ERR_RL(&rl, "send: %s", strerror(errno));
-            stream_clear_txbuf(s);
-            return;
-        }
-    } else if (n > 0) {
-        ofpbuf_pull(s->txbuf, n);
-        if (!s->txbuf->size) {
-            stream_clear_txbuf(s);
-            return;
-        }
-    }
-    s->tx_waiter = poll_fd_callback(s->fd, POLLOUT, stream_do_tx, vconn);
 }
 
 static int
@@ -215,10 +189,45 @@ stream_send(struct vconn *vconn, struct ofpbuf *buffer)
         if (retval > 0) {
             ofpbuf_pull(buffer, retval);
         }
-        s->tx_waiter = poll_fd_callback(s->fd, POLLOUT, stream_do_tx, vconn);
         return 0;
     } else {
         return errno;
+    }
+}
+
+static void
+stream_run(struct vconn *vconn)
+{
+    struct stream_vconn *s = stream_vconn_cast(vconn);
+    ssize_t n;
+
+    if (!s->txbuf) {
+        return;
+    }
+
+    n = write(s->fd, s->txbuf->data, s->txbuf->size);
+    if (n < 0) {
+        if (errno != EAGAIN) {
+            VLOG_ERR_RL(&rl, "send: %s", strerror(errno));
+            stream_clear_txbuf(s);
+            return;
+        }
+    } else if (n > 0) {
+        ofpbuf_pull(s->txbuf, n);
+        if (!s->txbuf->size) {
+            stream_clear_txbuf(s);
+            return;
+        }
+    }
+}
+
+static void
+stream_run_wait(struct vconn *vconn)
+{
+    struct stream_vconn *s = stream_vconn_cast(vconn);
+
+    if (s->txbuf) {
+        poll_fd_wait(s->fd, POLLOUT);
     }
 }
 
@@ -235,7 +244,9 @@ stream_wait(struct vconn *vconn, enum vconn_wait_type wait)
         if (!s->txbuf) {
             poll_fd_wait(s->fd, POLLOUT);
         } else {
-            /* Nothing to do: need to drain txbuf first. */
+            /* Nothing to do: need to drain txbuf first.  stream_run_wait()
+             * will arrange to wake up when there room to send data, so there's
+             * no point in calling poll_fd_wait() redundantly here. */
         }
         break;
 
@@ -255,6 +266,8 @@ static struct vconn_class stream_vconn_class = {
     stream_connect,             /* connect */
     stream_recv,                /* recv */
     stream_send,                /* send */
+    stream_run,                 /* run */
+    stream_run_wait,            /* run_wait */
     stream_wait,                /* wait */
 };
 

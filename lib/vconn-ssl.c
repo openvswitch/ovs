@@ -67,7 +67,6 @@ struct ssl_vconn
     SSL *ssl;
     struct ofpbuf *rxbuf;
     struct ofpbuf *txbuf;
-    struct poll_waiter *tx_waiter;
 
     /* rx_want and tx_want record the result of the last call to SSL_read()
      * and SSL_write(), respectively:
@@ -157,7 +156,6 @@ static void ssl_close(struct vconn *);
 static void ssl_clear_txbuf(struct ssl_vconn *);
 static int interpret_ssl_error(const char *function, int ret, int error,
                                int *want);
-static void ssl_tx_poll_callback(int fd, short int revents, void *vconn_);
 static DH *tmp_dh_callback(SSL *ssl, int is_export UNUSED, int keylength);
 static void log_ca_cert(const char *file_name, X509 *cert);
 
@@ -257,7 +255,6 @@ new_ssl_vconn(const char *name, int fd, enum session_type type,
     sslv->ssl = ssl;
     sslv->rxbuf = NULL;
     sslv->txbuf = NULL;
-    sslv->tx_waiter = NULL;
     sslv->rx_want = sslv->tx_want = SSL_NOTHING;
     *vconnp = &sslv->vconn;
     return 0;
@@ -441,7 +438,6 @@ static void
 ssl_close(struct vconn *vconn)
 {
     struct ssl_vconn *sslv = ssl_vconn_cast(vconn);
-    poll_cancel(sslv->tx_waiter);
     ssl_clear_txbuf(sslv);
     ofpbuf_delete(sslv->rxbuf);
     SSL_free(sslv->ssl);
@@ -565,10 +561,6 @@ again:
     ret = SSL_read(sslv->ssl, ofpbuf_tail(rx), want_bytes);
     if (old_state != SSL_get_state(sslv->ssl)) {
         sslv->tx_want = SSL_NOTHING;
-        if (sslv->tx_waiter) {
-            poll_cancel(sslv->tx_waiter);
-            ssl_tx_poll_callback(sslv->fd, POLLIN, vconn);
-        }
     }
     sslv->rx_want = SSL_NOTHING;
 
@@ -605,16 +597,6 @@ ssl_clear_txbuf(struct ssl_vconn *sslv)
 {
     ofpbuf_delete(sslv->txbuf);
     sslv->txbuf = NULL;
-    sslv->tx_waiter = NULL;
-}
-
-static void
-ssl_register_tx_waiter(struct vconn *vconn)
-{
-    struct ssl_vconn *sslv = ssl_vconn_cast(vconn);
-    sslv->tx_waiter = poll_fd_callback(sslv->fd,
-                                       want_to_poll_events(sslv->tx_want),
-                                       ssl_tx_poll_callback, vconn);
 }
 
 static int
@@ -647,19 +629,6 @@ ssl_do_tx(struct vconn *vconn)
     }
 }
 
-static void
-ssl_tx_poll_callback(int fd UNUSED, short int revents UNUSED, void *vconn_)
-{
-    struct vconn *vconn = vconn_;
-    struct ssl_vconn *sslv = ssl_vconn_cast(vconn);
-    int error = ssl_do_tx(vconn);
-    if (error != EAGAIN) {
-        ssl_clear_txbuf(sslv);
-    } else {
-        ssl_register_tx_waiter(vconn);
-    }
-}
-
 static int
 ssl_send(struct vconn *vconn, struct ofpbuf *buffer)
 {
@@ -678,12 +647,31 @@ ssl_send(struct vconn *vconn, struct ofpbuf *buffer)
             return 0;
         case EAGAIN:
             leak_checker_claim(buffer);
-            ssl_register_tx_waiter(vconn);
             return 0;
         default:
             sslv->txbuf = NULL;
             return error;
         }
+    }
+}
+
+static void
+ssl_run(struct vconn *vconn)
+{
+    struct ssl_vconn *sslv = ssl_vconn_cast(vconn);
+
+    if (sslv->txbuf && ssl_do_tx(vconn) != EAGAIN) {
+        ssl_clear_txbuf(sslv);
+    }
+}
+
+static void
+ssl_run_wait(struct vconn *vconn)
+{
+    struct ssl_vconn *sslv = ssl_vconn_cast(vconn);
+
+    if (sslv->tx_want != SSL_NOTHING) {
+        poll_fd_wait(sslv->fd, want_to_poll_events(sslv->tx_want));
     }
 }
 
@@ -728,7 +716,8 @@ ssl_wait(struct vconn *vconn, enum vconn_wait_type wait)
             /* We have room in our tx queue. */
             poll_immediate_wake();
         } else {
-            /* The call to ssl_tx_poll_callback() will wake us up. */
+            /* vconn_run_wait() will do the right thing; don't bother with
+             * redundancy. */
         }
         break;
 
@@ -744,6 +733,8 @@ struct vconn_class ssl_vconn_class = {
     ssl_connect,                /* connect */
     ssl_recv,                   /* recv */
     ssl_send,                   /* send */
+    ssl_run,                    /* run */
+    ssl_run_wait,               /* run_wait */
     ssl_wait,                   /* wait */
 };
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,7 +90,8 @@ check_vconn_classes(void)
         struct vconn_class *class = vconn_classes[i];
         assert(class->name != NULL);
         assert(class->open != NULL);
-        if (class->close || class->recv || class->send || class->wait) {
+        if (class->close || class->recv || class->send
+            || class->run || class->run_wait || class->wait) {
             assert(class->close != NULL);
             assert(class->recv != NULL);
             assert(class->send != NULL);
@@ -208,6 +209,26 @@ vconn_open(const char *name, int min_version, struct vconn **vconnp)
     return EAFNOSUPPORT;
 }
 
+/* Allows 'vconn' to perform maintenance activities, such as flushing output
+ * buffers. */
+void
+vconn_run(struct vconn *vconn)
+{
+    if (vconn->class->run) {
+        (vconn->class->run)(vconn);
+    }
+}
+
+/* Arranges for the poll loop to wake up when 'vconn' needs to perform
+ * maintenance activities. */
+void
+vconn_run_wait(struct vconn *vconn)
+{
+    if (vconn->class->run_wait) {
+        (vconn->class->run_wait)(vconn);
+    }
+}
+
 int
 vconn_open_block(const char *name, int min_version, struct vconn **vconnp)
 {
@@ -216,6 +237,8 @@ vconn_open_block(const char *name, int min_version, struct vconn **vconnp)
 
     error = vconn_open(name, min_version, &vconn);
     while (error == EAGAIN) {
+        vconn_run(vconn);
+        vconn_run_wait(vconn);
         vconn_connect_wait(vconn);
         poll_block();
         error = vconn_connect(vconn);
@@ -547,6 +570,8 @@ vconn_send_block(struct vconn *vconn, struct ofpbuf *msg)
 {
     int retval;
     while ((retval = vconn_send(vconn, msg)) == EAGAIN) {
+        vconn_run(vconn);
+        vconn_run_wait(vconn);
         vconn_send_wait(vconn);
         poll_block();
     }
@@ -559,6 +584,8 @@ vconn_recv_block(struct vconn *vconn, struct ofpbuf **msgp)
 {
     int retval;
     while ((retval = vconn_recv(vconn, msgp)) == EAGAIN) {
+        vconn_run(vconn);
+        vconn_run_wait(vconn);
         vconn_recv_wait(vconn);
         poll_block();
     }

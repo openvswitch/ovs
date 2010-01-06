@@ -459,6 +459,15 @@ void
 rconn_run(struct rconn *rc)
 {
     int old_state;
+    size_t i;
+
+    if (rc->vconn) {
+        vconn_run(rc->vconn);
+    }
+    for (i = 0; i < rc->n_monitors; i++) {
+        vconn_run(rc->monitors[i]);
+    }
+
     do {
         old_state = rc->state;
         switch (rc->state) {
@@ -476,7 +485,17 @@ rconn_run(struct rconn *rc)
 void
 rconn_run_wait(struct rconn *rc)
 {
-    unsigned int timeo = timeout(rc);
+    unsigned int timeo;
+    size_t i;
+
+    if (rc->vconn) {
+        vconn_run_wait(rc->vconn);
+    }
+    for (i = 0; i < rc->n_monitors; i++) {
+        vconn_run_wait(rc->monitors[i]);
+    }
+
+    timeo = timeout(rc);
     if (timeo != UINT_MAX) {
         unsigned int expires = sat_add(rc->state_entered, timeo);
         unsigned int remaining = sat_sub(expires, time_now());
