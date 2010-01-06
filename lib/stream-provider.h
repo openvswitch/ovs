@@ -109,6 +109,18 @@ struct stream_class {
      * accepted for transmission, it should return -EAGAIN immediately. */
     ssize_t (*send)(struct stream *stream, const void *buffer, size_t n);
 
+    /* Allows 'stream' to perform maintenance activities, such as flushing
+     * output buffers.
+     *
+     * May be null if 'stream' doesn't have anything to do here. */
+    void (*run)(struct stream *stream);
+
+    /* Arranges for the poll loop to wake up when 'stream' needs to perform
+     * maintenance activities.
+     *
+     * May be null if 'stream' doesn't have anything to do here. */
+    void (*run_wait)(struct stream *stream);
+
     /* Arranges for the poll loop to wake up when 'stream' is ready to take an
      * action of the given 'type'. */
     void (*wait)(struct stream *stream, enum stream_wait_type type);

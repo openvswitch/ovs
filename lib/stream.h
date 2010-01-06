@@ -42,6 +42,9 @@ int stream_connect(struct stream *);
 int stream_recv(struct stream *, void *buffer, size_t n);
 int stream_send(struct stream *, const void *buffer, size_t n);
 
+void stream_run(struct stream *);
+void stream_run_wait(struct stream *);
+
 enum stream_wait_type {
     STREAM_CONNECT,
     STREAM_RECV,

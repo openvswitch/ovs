@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,8 @@ check_stream_classes(void)
         struct stream_class *class = stream_classes[i];
         assert(class->name != NULL);
         assert(class->open != NULL);
-        if (class->close || class->recv || class->send || class->wait) {
+        if (class->close || class->recv || class->send || class->run
+            || class->run_wait || class->wait) {
             assert(class->close != NULL);
             assert(class->recv != NULL);
             assert(class->send != NULL);
@@ -166,6 +167,8 @@ stream_open_block(const char *name, struct stream **streamp)
 
     error = stream_open(name, &stream);
     while (error == EAGAIN) {
+        stream_run(stream);
+        stream_run_wait(stream);
         stream_connect_wait(stream);
         poll_block();
         error = stream_connect(stream);
@@ -312,6 +315,28 @@ stream_send(struct stream *stream, const void *buffer, size_t n)
             : (stream->class->send)(stream, buffer, n));
 }
 
+/* Allows 'stream' to perform maintenance activities, such as flushing
+ * output buffers. */
+void
+stream_run(struct stream *stream)
+{
+    if (stream->class->run) {
+        (stream->class->run)(stream);
+    }
+}
+
+/* Arranges for the poll loop to wake up when 'stream' needs to perform
+ * maintenance activities. */
+void
+stream_run_wait(struct stream *stream)
+{
+    if (stream->class->run_wait) {
+        (stream->class->run_wait)(stream);
+    }
+}
+
+/* Arranges for the poll loop to wake up when 'stream' is ready to take an
+ * action of the given 'type'. */
 void
 stream_wait(struct stream *stream, enum stream_wait_type wait)
 {

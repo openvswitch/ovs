@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,6 +88,7 @@ jsonrpc_run(struct jsonrpc *rpc)
         return;
     }
 
+    stream_run(rpc->stream);
     while (!queue_is_empty(&rpc->output)) {
         struct ofpbuf *buf = rpc->output.head;
         int retval;
@@ -113,8 +114,11 @@ jsonrpc_run(struct jsonrpc *rpc)
 void
 jsonrpc_wait(struct jsonrpc *rpc)
 {
-    if (!rpc->status && !queue_is_empty(&rpc->output)) {
-        stream_send_wait(rpc->stream);
+    if (!rpc->status) {
+        stream_run_wait(rpc->stream);
+        if (!queue_is_empty(&rpc->output)) {
+            stream_send_wait(rpc->stream);
+        }
     }
 }
 
@@ -721,7 +725,10 @@ jsonrpc_session_run(struct jsonrpc_session *s)
             jsonrpc_session_disconnect(s);
         }
     } else if (s->stream) {
-        int error = stream_connect(s->stream);
+        int error;
+
+        stream_run(s->stream);
+        error = stream_connect(s->stream);
         if (!error) {
             reconnect_connected(s->reconnect, time_msec());
             s->rpc = jsonrpc_open(s->stream);
@@ -763,6 +770,7 @@ jsonrpc_session_wait(struct jsonrpc_session *s)
     if (s->rpc) {
         jsonrpc_wait(s->rpc);
     } else if (s->stream) {
+        stream_run_wait(s->stream);
         stream_connect_wait(s->stream);
     }
     reconnect_wait(s->reconnect, time_msec());

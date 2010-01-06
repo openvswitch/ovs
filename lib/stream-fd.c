@@ -139,6 +139,8 @@ static struct stream_class stream_fd_class = {
     fd_connect,                 /* connect */
     fd_recv,                    /* recv */
     fd_send,                    /* send */
+    NULL,                       /* run */
+    NULL,                       /* run_wait */
     fd_wait,                    /* wait */
 };
 
