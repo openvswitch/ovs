@@ -4,7 +4,7 @@
 /atlocal
 /idltest.c
 /idltest.h
-/idltest.ovsschema
+/idltest.ovsidl
 /test-aes128
 /test-classifier
 /test-csum

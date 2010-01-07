@@ -32,18 +32,15 @@ EXTRA_DIST += \
 	vswitchd/ovs-vswitchd.8.in \
 	vswitchd/ovs-brcompatd.8.in
 
-EXTRA_DIST += vswitchd/vswitch-idl.ovsidl
-BUILT_SOURCES += vswitchd/vswitch-idl.c vswitchd/vswitch-idl.h
-DISTCLEANFILES += vswitchd/vswitch-idl.c vswitchd/vswitch-idl.h
-noinst_DATA += vswitchd/vswitch-idl.ovsschema vswitchd/vswitch-idl.txt
-DISTCLEANFILES += vswitchd/vswitch-idl.ovsschema vswitchd/vswitch-idl.txt
-vswitchd/vswitch-idl.c vswitchd/vswitch-idl.h \
-vswitchd/vswitch-idl.ovsschema vswitchd/vswitch-idl.txt: \
-	ovsdb/ovsdb-idlc.in
-vswitchd/vswitch-idl.c: vswitchd/vswitch-idl.h
-EXTRA_DIST += \
+
+# vswitch schema and IDL
+OVSIDL_BUILT += \
 	vswitchd/vswitch-idl.c \
 	vswitchd/vswitch-idl.h \
-	vswitchd/vswitch-idl.ovsschema \
-	vswitchd/vswitch-idl.txt
-
+	vswitchd/vswitch-idl.ovsidl
+VSWITCH_IDL_FILES = vswitchd/vswitch.ovsschema vswitchd/vswitch-idl.ann
+noinst_DATA += vswitchd/vswitch-idl.txt
+EXTRA_DIST += $(VSWITCH_IDL_FILES) vswitchd/vswitch-idl.txt
+vswitchd/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
+	$(OVSDB_IDLC) -C $(srcdir) annotate $(VSWITCH_IDL_FILES) > $@.tmp
+	mv $@.tmp $@

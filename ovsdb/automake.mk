@@ -88,15 +88,26 @@ EXTRA_DIST += \
 	ovsdb/ovsdb-idlc.1
 DISTCLEANFILES += ovsdb/ovsdb-idlc
 SUFFIXES += .ovsidl .txt
+OVSDB_IDLC = $(PYTHON) $(srcdir)/ovsdb/ovsdb-idlc.in
 .ovsidl.c:
-	$(PYTHON) $(srcdir)/ovsdb/ovsdb-idlc.in c-idl-source $< > $@.tmp
+	$(OVSDB_IDLC) c-idl-source $< > $@.tmp
 	mv $@.tmp $@
 .ovsidl.h:
-	$(PYTHON) $(srcdir)/ovsdb/ovsdb-idlc.in c-idl-header $< > $@.tmp
-	mv $@.tmp $@
-.ovsidl.ovsschema:
-	$(PYTHON) $(srcdir)/ovsdb/ovsdb-idlc.in ovsdb-schema $< > $@.tmp
+	$(OVSDB_IDLC) c-idl-header $< > $@.tmp
 	mv $@.tmp $@
 .ovsidl.txt:
-	$(PYTHON) $(srcdir)/ovsdb/ovsdb-idlc.in doc $< | fmt -s > $@.tmp
+	$(OVSDB_IDLC) doc $< | fmt -s > $@.tmp
 	mv $@.tmp $@
+
+EXTRA_DIST += $(OVSIDL_BUILT)
+BUILT_SOURCES += $(OVSIDL_BUILT)
+
+# This must be done late: macros in targets are expanded when the
+# target line is read, so if this file were to be included before some
+# other file that added to OVSIDL_BUILT, then those files wouldn't get
+# the dependency.
+#
+# However, current versions of Automake seem to output all variable
+# assignments before any targets, so it doesn't seem to be a problem,
+# at least for now.
+$(OVSIDL_BUILT): ovsdb/ovsdb-idlc.in

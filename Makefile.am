@@ -48,6 +48,7 @@ noinst_HEADERS =
 noinst_LIBRARIES =
 noinst_PROGRAMS =
 noinst_SCRIPTS =
+OVSIDL_BUILT =
 SUFFIXES =
 
 EXTRA_DIST += soexpand.pl

@@ -1,34 +1,24 @@
-//
-// This is an ovsdb-idl schema.  The OVSDB IDL compiler, ovsdb-idlc,
-// can translate it into an OVSDB schema (which simply entails
-// deleting some members from the schema) or C headers or source for
-// use with the IDL at runtime.
-//
-
 {"name": "ovs_vswitchd_db",
  "comment": "Configuration for one Open vSwitch daemon.",
- "idlPrefix": "ovsrec_",
- "idlHeader": "\"vswitchd/vswitch-idl.h\"",
  "tables": {
    "Open_vSwitch": {
      "comment": "Configuration for an Open vSwitch daemon.",
      "columns": {
        "bridges": {
          "comment": "Set of bridges managed by the daemon.",
-         "type": {"key": "uuid", "keyRefTable": "Bridge",
-                  "min": 0, "max": "unlimited"}},
+         "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
        "management_id": {
          "comment": "Exactly 12 hex digits that identify the daemon.",
          "type": "string"},
        "controller": {
          "comment": "Default Controller used by bridges.",
-         "type": {"key": "uuid", "keyRefTable": "Controller", "min": 0, "max": 1}},
+         "type": {"key": "uuid", "min": 0, "max": 1}},
        "managers": {
          "comment": "Remote database clients to which the Open vSwitch's database server should connect or to which it should listen.",
          "type": {"key": "string", "min": 0, "max": "unlimited"}},
        "ssl": {
          "comment": "SSL used globally by the daemon.",
-         "type": {"key": "uuid", "keyRefTable": "SSL", "min": 0, "max": 1}},
+         "type": {"key": "uuid", "min": 0, "max": 1}},
        "next_cfg": {
          "comment": "Sequence number for client to increment when it modifies the configuration and wishes to wait for Open vSwitch to finish applying the changes.",
          "type": "integer"},
@@ -47,16 +37,16 @@
          "ephemeral": true},
        "ports": {
          "comment": "Ports included in the bridge.",
-         "type": {"key": "uuid", "keyRefTable": "Port", "min": 0, "max": "unlimited"}},
+         "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
        "mirrors": {
          "comment": "Port mirroring configuration.",
-         "type": {"key": "uuid", "keyRefTable": "Mirror", "min": 0, "max": "unlimited"}},
+         "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
        "netflow": {
          "comment": "NetFlow configuration.",
-         "type": {"key": "uuid", "keyRefTable": "NetFlow", "min": 0, "max": 1}},
+         "type": {"key": "uuid", "min": 0, "max": 1}},
        "controller": {
          "comment": "OpenFlow controller.  If unset, defaults to that specified by the parent Open_vSwitch.",
-         "type": {"key": "uuid", "keyRefTable": "Controller", "min": 0, "max": 1}},
+         "type": {"key": "uuid", "min": 0, "max": 1}},
        "other_config": {
          "comment": "Key-value pairs for configuring rarely used bridge features.  The currently defined key-value pairs are: \"datapath-id\", exactly 12 hex digits to set the OpenFlow datapath ID to a specific value; \"hwaddr\", exactly 12 hex digits in the form \"XX:XX:XX:XX:XX:XX\" to set the hardware address of the local port and influence the datapath ID.",
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
@@ -75,7 +65,7 @@
          "type": "string"},
        "interfaces": {
          "comment": "The Port's Interfaces.  If there is more than one, this is a bonded Port.",
-         "type": {"key": "uuid", "keyRefTable": "Interface", "min": 1, "max": "unlimited"}},
+         "type": {"key": "uuid", "min": 1, "max": "unlimited"}},
        "trunks": {
          "comment": "The 802.1Q VLAN(s) that this port trunks.  Should be empty if this port trunks all VLAN(s) or if this is not a trunk port.",
          "type": {"key": "integer", "min": 0, "max": 4096}},
@@ -139,16 +129,16 @@
          "type": "string"},
        "select_src_port": {
          "comment": "Ports on which arriving packets are selected for mirroring.",
-         "type": {"key": "uuid", "keyRefTable": "Port", "min": 0, "max": "unlimited"}},
+         "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
        "select_dst_port": {
          "comment": "Ports on which departing packets are selected for mirroring.",
-         "type": {"key": "uuid", "keyRefTable": "Port", "min": 0, "max": "unlimited"}},
+         "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
        "select_vlan": {
          "comment": "VLANs on which packets are selected for mirroring.",
          "type": {"key": "integer", "min": 0, "max": 4096}},
        "output_port": {
          "comment": "Output port for selected packets.  Mutually exclusive with output_vlan.",
-         "type": {"key": "uuid", "keyRefTable": "Port", "min": 0, "max": 1}},
+         "type": {"key": "uuid", "min": 0, "max": 1}},
        "output_vlan": {
          "comment": "Output VLAN for selected packets.  Mutually exclusive with output_port.",
          "type": {"key": "integer", "min": 0, "max": 1}}}},

@@ -7,5 +7,5 @@
 /ovs-vswitchd.conf.5
 /vswitch-idl.c
 /vswitch-idl.h
-/vswitch-idl.ovsschema
+/vswitch-idl.ovsidl
 /vswitch-idl.txt

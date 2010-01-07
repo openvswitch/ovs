@@ -6,13 +6,11 @@
 ovsdb\-idlc \- Open vSwitch IDL (Interface Definition Language) compiler
 .
 .SH SYNOPSIS
-\fBovsdb\-idlc \fBvalidate\fI schema\fR
+\fBovsdb\-idlc \fBannotate\fI schema annotations\fR 
 .br
-\fBovsdb\-idlc \fBovsdb\-schema\fI schema\fR
+\fBovsdb\-idlc \fBc\-idl\-header\fI idl\fR
 .br
-\fBovsdb\-idlc \fBc\-idl\-header\fI schema\fR
-.br
-\fBovsdb\-idlc \fBc\-idl\-source\fI schema\fR
+\fBovsdb\-idlc \fBc\-idl\-source\fI idl\fR
 .br
 \fBovsdb\-idlc --help\fR
 .br
@@ -26,13 +24,9 @@ installation or configuration time.  Thus, it is not normally
 installed as part of Open vSwitch.
 .
 .PP
-The \fIschema\fR files used as \fBovsdb\-idlc\fR input have the same
-format as the OVSDB schemas, specified in the OVSDB specification,
-with a few additions:
-.
-.IP "\fB//\fR comments"
-Lines that begin with \fB//\fR (two forward slashes) are ignored and
-thus can be used for comments.
+The \fIidl\fR files used as input for most \fBovsdb\-idlc\fR commands
+have the same format as the OVSDB schemas, specified in the OVSDB
+specification, with a few additions:
 .
 .IP "\fB""\fBidlPrefix\fR"" member of <database-schema>"
 This member, which is required, specifies a string that is prefixed to
@@ -57,29 +51,34 @@ the given type.
 Analogous to \fB"keyRefTable"\fR in meaning and effect, except that it
 applies to the \fB"value"\fR member of the <type>.
 .SS "Commands"
+.IP "\fBannotate\fI schema annotations\fR"
+Reads \fIschema\fR, which should be a file in JSON format (ordinarily
+an OVSDB schema file), then reads and executes the Python syntax
+fragment in \fIannotations\fR.  The Python syntax fragment is passed
+the JSON object as a local variable named \fBs\fR.  It may modify this
+data in any way.  After the Python code returns, the object as
+modified is re-serialized as JSON on standard output.
 .
-.IP "\fBvalidate\fI schema\fR"
-Reads \fIschema\fR and checks its format, without producing any output.
-.
-.IP "\fBovsdb\-schema\fI schema\fR"
-Reads \fIschema\fR and prints it on standard output with the parts
-that are not part of the OVSDB schema specification stripped out.
-.
-.IP "\fBc\-idl\-header\fI schema\fR"
-Reads \fIschema\fR and prints on standard output a C header file that
+.IP "\fBc\-idl\-header\fI idl\fR"
+Reads \fIidl\fR and prints on standard output a C header file that
 defines a structure for each table defined by the schema.
 .
-.IP "\fBc\-idl\-source\fI schema\fR"
-Reads \fIschema\fR and prints on standard output a C source file that
+.IP "\fBc\-idl\-source\fI idl\fR"
+Reads \fIidl\fR and prints on standard output a C source file that
 implements C bindings for the database defined by the schema.
+.
+.IP "\fBdoc\fI idl\fR"
+Reads \fIidl\fR and prints on standard output a text file that
+documents the schema.  The output may have very long lines, so it
+makes sense to pipe it through, e.g. \fBfmt \-s\fR.
 .
 .SS "Options"
 .so lib/common.man
 .
 .SH "BUGS"
 \fBovsdb\-idlc\fR is more lenient about the format of OVSDB schemas
-than other OVSDB tools, so the \fBovsdb\-schema\fR command may output
-schemas that other programs refuse to read.
+than other OVSDB tools.  It may successfully parse schemas that, e.g.,
+\fBovsdb\-tool\fR rejects.
 .
 .SH "SEE ALSO"
 The OVSDB specification.

@@ -11,7 +11,7 @@ m4_define([OVSDB_INIT],
             exit 1
           fi
       fi
-      ovsdb-tool create $1 $SCHEMA],
+      ovsdb-tool create $1 $abs_top_srcdir/vswitchd/vswitch.ovsschema],
      [0], [stdout], [ignore])
    OVS_CHECK_LCOV(
      [[ovsdb-tool transact $1 \

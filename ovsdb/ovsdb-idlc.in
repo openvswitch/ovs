@@ -1,6 +1,7 @@
 #! @PYTHON@
 
 import getopt
+import os
 import re
 import sys
 
@@ -184,12 +185,12 @@ def atomicTypeToEnglish(base, refTable):
         return base
 
 def parseSchema(filename):
-    file = open(filename, "r")
-    s = ""
-    for line in file:
-        if not line.startswith('//'):
-            s += line
-    return DbSchema.fromJson(json.loads(s))
+    return DbSchema.fromJson(json.load(open(filename, "r")))
+
+def annotateSchema(schemaFile, annotationFile):
+    schemaJson = json.load(open(schemaFile, "r"))
+    execfile(annotationFile, globals(), {"s": schemaJson})
+    json.dump(schemaJson, sys.stdout)
 
 def cBaseType(prefix, type, refTable=None):
     if type == 'uuid' and refTable:
@@ -265,7 +266,8 @@ def cMembers(prefix, columnName, column, const):
                         'comment': ''})
     return members
 
-def printCIDLHeader(schema):
+def printCIDLHeader(schemaFile):
+    schema = parseSchema(schemaFile)
     prefix = schema.idlPrefix
     print '''\
 /* Generated automatically -- do not modify!    -*- buffer-read-only: t -*- */
@@ -323,7 +325,8 @@ def printEnum(members):
     print "    %s" % members[-1]
     print "};"
 
-def printCIDLSource(schema):
+def printCIDLSource(schemaFile):
+    schema = parseSchema(schemaFile)
     prefix = schema.idlPrefix
     print '''\
 /* Generated automatically -- do not modify!    -*- buffer-read-only: t -*- */
@@ -651,10 +654,8 @@ def ovsdb_escape(string):
             return '\\x%02x' % ord(c)
     return re.sub(r'["\\\000-\037]', escape, string)
 
-def printOVSDBSchema(schema):
-    json.dump(schema.toJson(), sys.stdout, sort_keys=True, indent=2)
-
-def printDoc(schema):
+def printDoc(schemaFile):
+    schema = parseSchema(schemaFile)
     print schema.name
     if schema.comment:
         print schema.comment
@@ -676,15 +677,13 @@ def printDoc(schema):
 def usage():
     print """\
 %(argv0)s: ovsdb schema compiler
-usage: %(argv0)s [OPTIONS] ACTION SCHEMA
-where SCHEMA is the ovsdb schema to read (in JSON format).
+usage: %(argv0)s [OPTIONS] COMMAND ARG...
 
-One of the following actions must specified:
-  validate                    validate schema without taking any other action
-  c-idl-header                print C header file for IDL
-  c-idl-source                print C source file for IDL implementation
-  ovsdb-schema                print ovsdb parseable schema
-  doc                         print schema documentation
+The following commands are supported:
+  annotate SCHEMA ANNOTATIONS print SCHEMA combined with ANNOTATIONS
+  c-idl-header IDL            print C header file for IDL
+  c-idl-source IDL            print C source file for IDL implementation
+  doc IDL                     print schema documentation
 
 The following options are also available:
   -h, --help                  display this help message
@@ -695,42 +694,49 @@ The following options are also available:
 if __name__ == "__main__":
     try:
         try:
-            options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
-                                              ['help',
+            options, args = getopt.gnu_getopt(sys.argv[1:], 'C:hV',
+                                              ['directory',
+                                               'help',
                                                'version'])
         except getopt.GetoptError, geo:
             sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
             sys.exit(1)
             
+        for key, value in options:
+            if key in ['-h', '--help']:
+                usage()
+            elif key in ['-V', '--version']:
+                print "ovsdb-idlc (Open vSwitch) @VERSION@"
+            elif key in ['-C', '--directory']:
+                os.chdir(value)
+            else:
+                sys.exit(0)
+            
         optKeys = [key for key, value in options]
-        if '-h' in optKeys or '--help' in optKeys:
-            usage()
-        elif '-V' in optKeys or '--version' in optKeys:
-            print "ovsdb-idlc (Open vSwitch) @VERSION@"
-            sys.exit(0)
 
-        if len(args) != 2:
-            sys.stderr.write("%s: exactly two non-option arguments are "
-                             "required (use --help for help)\n" % argv0)
+        if not args:
+            sys.stderr.write("%s: missing command argument "
+                             "(use --help for help)\n" % argv0)
             sys.exit(1)
 
-        action, inputFile = args
-        schema = parseSchema(inputFile)
-        if action == 'validate':
-            pass
-        elif action == 'ovsdb-schema':
-            printOVSDBSchema(schema)
-        elif action == 'c-idl-header':
-            printCIDLHeader(schema)
-        elif action == 'c-idl-source':
-            printCIDLSource(schema)
-        elif action == 'doc':
-            printDoc(schema)
-        else:
-            sys.stderr.write(
-                "%s: unknown action '%s' (use --help for help)\n" %
-                (argv0, action))
+        commands = {"annotate": (annotateSchema, 2),
+                    "c-idl-header": (printCIDLHeader, 1),
+                    "c-idl-source": (printCIDLSource, 1),
+                    "doc": (printDoc, 1)}
+
+        if not args[0] in commands:
+            sys.stderr.write("%s: unknown command \"%s\" "
+                             "(use --help for help)\n" % (argv0, args[0]))
             sys.exit(1)
+
+        func, n_args = commands[args[0]]
+        if len(args) - 1 != n_args:
+            sys.stderr.write("%s: \"%s\" requires %d arguments but %d "
+                             "provided\n"
+                             % (argv0, args[0], n_args, len(args) - 1))
+            sys.exit(1)
+
+        func(*args[1:])
     except Error, e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))
         sys.exit(1)
