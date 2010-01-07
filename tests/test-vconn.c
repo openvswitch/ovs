@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@
 #include <unistd.h>
 #include "poll-loop.h"
 #include "socket-util.h"
+#include "stream.h"
+#include "stream-ssl.h"
 #include "timeval.h"
 #include "util.h"
 #include "vlog.h"
@@ -34,8 +36,30 @@ struct fake_pvconn {
     const char *type;
     char *pvconn_name;
     char *vconn_name;
-    int fd;
+    struct pstream *pstream;
 };
+
+static void
+check(int a, int b, const char *as, const char *file, int line)
+{
+    if (a != b) {
+        ovs_fatal(0, "%s:%d: %s is %d but should be %d", file, line, as, a, b);
+    }
+}
+
+
+#define CHECK(A, B) check(A, B, #A, __FILE__, __LINE__)
+
+static void
+check_errno(int a, int b, const char *as, const char *file, int line)
+{
+    if (a != b) {
+        ovs_fatal(0, "%s:%d: %s is %d (%s) but should be %d (%s)",
+                  file, line, as, a, strerror(abs(a)), b, strerror(abs(b)));
+    }
+}
+
+#define CHECK_ERRNO(A, B) check_errno(A, B, #A, __FILE__, __LINE__)
 
 static void
 fpv_create(const char *type, struct fake_pvconn *fpv)
@@ -44,84 +68,50 @@ fpv_create(const char *type, struct fake_pvconn *fpv)
     if (!strcmp(type, "unix")) {
         static int unix_count = 0;
         char *bind_path;
-        int fd;
 
         bind_path = xasprintf("fake-pvconn.%d", unix_count++);
-        fd = make_unix_socket(SOCK_STREAM, false, false, bind_path, NULL);
-        if (fd < 0) {
-            ovs_fatal(-fd, "%s: could not bind to Unix domain socket",
-                      bind_path);
-        }
-
         fpv->pvconn_name = xasprintf("punix:%s", bind_path);
         fpv->vconn_name = xasprintf("unix:%s", bind_path);
-        fpv->fd = fd;
+        CHECK_ERRNO(pstream_open(fpv->pvconn_name, &fpv->pstream), 0);
         free(bind_path);
-    } else if (!strcmp(type, "tcp")) {
-        struct sockaddr_in sin;
-        socklen_t sin_len;
-        int fd;
+    } else if (!strcmp(type, "tcp") || !strcmp(type, "ssl")) {
+        char *s, *method, *port, *save_ptr = NULL;
+        char *open_name;
 
-        /* Create TCP socket. */
-        fd = socket(PF_INET, SOCK_STREAM, 0);
-        if (fd < 0) {
-            ovs_fatal(errno, "failed to create TCP socket");
-        }
+        open_name = xasprintf("p%s:0:127.0.0.1", type);
+        CHECK_ERRNO(pstream_open(open_name, &fpv->pstream), 0);
 
-        /* Bind TCP socket to localhost on any available port. */
-        sin.sin_family = AF_INET;
-        sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        sin.sin_port = htons(0);
-        if (bind(fd, (struct sockaddr *) &sin, sizeof sin) < 0) {
-            ovs_fatal(errno, "failed to bind TCP socket");
-        }
-
-        /* Retrieve socket's port number. */
-        sin_len = sizeof sin;
-        if (getsockname(fd, (struct sockaddr *)&sin, &sin_len) < 0) {
-            ovs_fatal(errno, "failed to read TCP socket name");
-        }
-        if (sin_len != sizeof sin || sin.sin_family != AF_INET) {
-            ovs_fatal(errno, "bad TCP socket name");
-        }
+        /* Extract bound port number from pstream name. */
+        s = xstrdup(pstream_get_name(fpv->pstream));
+        method = strtok_r(s, ":", &save_ptr);
+        port = strtok_r(NULL, ":", &save_ptr);
 
         /* Save info. */
-        fpv->pvconn_name = xasprintf("ptcp:%"PRIu16":127.0.0.1",
-                                    ntohs(sin.sin_port));
-        fpv->vconn_name = xasprintf("tcp:127.0.0.1:%"PRIu16,
-                                    ntohs(sin.sin_port));
-        fpv->fd = fd;
+        fpv->pvconn_name = xstrdup(pstream_get_name(fpv->pstream));
+        fpv->vconn_name = xasprintf("%s:127.0.0.1:%s", type, port);
+
+        free(open_name);
+        free(s);
     } else {
         abort();
     }
-
-    /* Listen. */
-    if (listen(fpv->fd, 0) < 0) {
-        ovs_fatal(errno, "%s: listen failed", fpv->vconn_name);
-    }
 }
 
-static int
+static struct stream *
 fpv_accept(struct fake_pvconn *fpv)
 {
-    int fd;
+    struct stream *stream;
 
-    fd = accept(fpv->fd, NULL, NULL);
-    if (fd < 0) {
-        ovs_fatal(errno, "%s: accept failed", fpv->pvconn_name);
-    }
-    return fd;
+    CHECK_ERRNO(pstream_accept_block(fpv->pstream, &stream), 0);
+
+    return stream;
 }
 
 static void
 fpv_close(struct fake_pvconn *fpv)
 {
-    if (fpv->fd >= 0) {
-        if (close(fpv->fd) < 0) {
-            ovs_fatal(errno, "failed to close %s fake pvconn", fpv->type);
-        }
-        fpv->fd = -1;
-    }
+    pstream_close(fpv->pstream);
+    fpv->pstream = NULL;
 }
 
 static void
@@ -141,10 +131,10 @@ test_refuse_connection(const char *type, int expected_error)
     struct vconn *vconn;
 
     fpv_create(type, &fpv);
-    assert(!vconn_open(fpv.vconn_name, OFP_VERSION, &vconn));
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP_VERSION, &vconn), 0);
     fpv_close(&fpv);
     vconn_run(vconn);
-    assert(vconn_connect(vconn) == expected_error);
+    CHECK_ERRNO(vconn_connect(vconn), expected_error);
     vconn_close(vconn);
     fpv_destroy(&fpv);
 }
@@ -159,11 +149,11 @@ test_accept_then_close(const char *type, int expected_error)
     struct vconn *vconn;
 
     fpv_create(type, &fpv);
-    assert(!vconn_open(fpv.vconn_name, OFP_VERSION, &vconn));
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP_VERSION, &vconn), 0);
     vconn_run(vconn);
-    close(fpv_accept(&fpv));
+    stream_close(fpv_accept(&fpv));
     fpv_close(&fpv);
-    assert(vconn_connect(vconn) == expected_error);
+    CHECK_ERRNO(vconn_connect(vconn), expected_error);
     vconn_close(vconn);
     fpv_destroy(&fpv);
 }
@@ -176,37 +166,36 @@ test_read_hello(const char *type, int expected_error)
 {
     struct fake_pvconn fpv;
     struct vconn *vconn;
-    int fd;
+    struct stream *stream;
 
     fpv_create(type, &fpv);
-    assert(!vconn_open(fpv.vconn_name, OFP_VERSION, &vconn));
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP_VERSION, &vconn), 0);
     vconn_run(vconn);
-    fd = fpv_accept(&fpv);
+    stream = fpv_accept(&fpv);
     fpv_destroy(&fpv);
-    assert(!set_nonblocking(fd));
     for (;;) {
        struct ofp_header hello;
        int retval;
 
-       retval = read(fd, &hello, sizeof hello);
+       retval = stream_recv(stream, &hello, sizeof hello);
        if (retval == sizeof hello) {
-           assert(hello.version == OFP_VERSION);
-           assert(hello.type == OFPT_HELLO);
-           assert(hello.length == htons(sizeof hello));
+           CHECK(hello.version, OFP_VERSION);
+           CHECK(hello.type, OFPT_HELLO);
+           CHECK(hello.length, htons(sizeof hello));
            break;
        } else {
-           assert(errno == EAGAIN);
+           CHECK_ERRNO(retval, -EAGAIN);
        }
 
        vconn_run(vconn);
-       assert(vconn_connect(vconn) == EAGAIN);
+       CHECK_ERRNO(vconn_connect(vconn), EAGAIN);
        vconn_run_wait(vconn);
        vconn_connect_wait(vconn);
-       poll_fd_wait(fd, POLLIN);
+       stream_recv_wait(stream);
        poll_block();
     }
-    close(fd);
-    assert(vconn_connect(vconn) == expected_error);
+    stream_close(stream);
+    CHECK_ERRNO(vconn_connect(vconn), expected_error);
     vconn_close(vconn);
 }
 
@@ -222,30 +211,46 @@ test_send_hello(const char *type, const void *out, size_t out_size,
     struct vconn *vconn;
     bool read_hello, connected;
     struct ofpbuf *msg;
-    int fd;
+    struct stream *stream;
+    size_t n_sent;
 
     fpv_create(type, &fpv);
-    assert(!vconn_open(fpv.vconn_name, OFP_VERSION, &vconn));
+    CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP_VERSION, &vconn), 0);
     vconn_run(vconn);
-    fd = fpv_accept(&fpv);
+    stream = fpv_accept(&fpv);
     fpv_destroy(&fpv);
 
-    assert(write(fd, out, out_size) == out_size);
+    n_sent = 0;
+    while (n_sent < out_size) {
+        int retval;
 
-    assert(!set_nonblocking(fd));
+        retval = stream_send(stream, (char *) out + n_sent, out_size - n_sent);
+        if (retval > 0) {
+            n_sent += retval;
+        } else if (retval == -EAGAIN) {
+            stream_run(stream);
+            vconn_run(vconn);
+            stream_recv_wait(stream);
+            vconn_connect_wait(vconn);
+            vconn_run_wait(vconn);
+            poll_block();
+        } else {
+            ovs_fatal(0, "stream_send returned unexpected value %d", retval);
+        }
+    }
 
     read_hello = connected = false;
     for (;;) {
        if (!read_hello) {
            struct ofp_header hello;
-           int retval = read(fd, &hello, sizeof hello);
+           int retval = stream_recv(stream, &hello, sizeof hello);
            if (retval == sizeof hello) {
-               assert(hello.version == OFP_VERSION);
-               assert(hello.type == OFPT_HELLO);
-               assert(hello.length == htons(sizeof hello));
+               CHECK(hello.version, OFP_VERSION);
+               CHECK(hello.type, OFPT_HELLO);
+               CHECK(hello.length, htons(sizeof hello));
                read_hello = true;
            } else {
-               assert(errno == EAGAIN);
+               CHECK_ERRNO(retval, -EAGAIN);
            }
        }
 
@@ -256,12 +261,12 @@ test_send_hello(const char *type, const void *out, size_t out_size,
                if (!error) {
                    connected = true;
                } else {
-                   close(fd);
+                   stream_close(stream);
                    vconn_close(vconn);
                    return;
                }
            } else {
-               assert(error == EAGAIN);
+               CHECK_ERRNO(error, EAGAIN);
            }
        }
 
@@ -274,12 +279,12 @@ test_send_hello(const char *type, const void *out, size_t out_size,
            vconn_connect_wait(vconn);
        }
        if (!read_hello) {
-           poll_fd_wait(fd, POLLIN);
+           stream_recv_wait(stream);
        }
        poll_block();
     }
-    close(fd);
-    assert(vconn_recv(vconn, &msg) == EOF);
+    stream_close(stream);
+    CHECK_ERRNO(vconn_recv(vconn, &msg), EOF);
     vconn_close(vconn);
 }
 
@@ -360,33 +365,41 @@ main(int argc UNUSED, char *argv[])
     time_init();
     vlog_init();
     signal(SIGPIPE, SIG_IGN);
-    vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_EMER);
 
     time_alarm(10);
 
     test_refuse_connection("unix", EPIPE);
-    test_refuse_connection("tcp", ECONNRESET);
-
     test_accept_then_close("unix", EPIPE);
-    test_accept_then_close("tcp", ECONNRESET);
-
     test_read_hello("unix", ECONNRESET);
-    test_read_hello("tcp", ECONNRESET);
-
     test_send_plain_hello("unix");
-    test_send_plain_hello("tcp");
-
     test_send_long_hello("unix");
-    test_send_long_hello("tcp");
-
     test_send_echo_hello("unix");
-    test_send_echo_hello("tcp");
-
     test_send_short_hello("unix");
-    test_send_short_hello("tcp");
-
     test_send_invalid_version_hello("unix");
+
+    test_accept_then_close("tcp", ECONNRESET);
+    test_refuse_connection("tcp", ECONNRESET);
+    test_read_hello("tcp", ECONNRESET);
+    test_send_plain_hello("tcp");
+    test_send_long_hello("tcp");
+    test_send_echo_hello("tcp");
+    test_send_short_hello("tcp");
     test_send_invalid_version_hello("tcp");
+
+#ifdef HAVE_OPENSSL
+    stream_ssl_set_private_key_file("testpki-privkey.pem");
+    stream_ssl_set_certificate_file("testpki-cert.pem");
+    stream_ssl_set_ca_cert_file("testpki-cacert.pem", false);
+
+    test_accept_then_close("ssl", EPROTO);
+    test_refuse_connection("ssl", ECONNRESET);
+    test_read_hello("ssl", ECONNRESET);
+    test_send_plain_hello("ssl");
+    test_send_long_hello("ssl");
+    test_send_echo_hello("ssl");
+    test_send_short_hello("ssl");
+    test_send_invalid_version_hello("ssl");
+#endif  /* HAVE_OPENSSL */
 
     return 0;
 }
