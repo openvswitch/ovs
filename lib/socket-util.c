@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -385,9 +385,15 @@ exit:
 
 /* Opens a non-blocking IPv4 socket of the specified 'style', binds to
  * 'target', and listens for incoming connections.  'target' should be a string
- * in the format "[<port>][:<ip>]".  <port> may be omitted if 'default_port' is
- * nonzero, in which case it defaults to 'default_port'.  If <ip> is omitted it
- * defaults to the wildcard IP address.
+ * in the format "[<port>][:<ip>]":
+ *
+ *      - If 'default_port' is -1, then <port> is required.  Otherwise, if
+ *        <port> is omitted, then 'default_port' is used instead.
+ *
+ *      - If <port> (or 'default_port', if used) is 0, then no port is bound
+ *        and the TCP/IP stack will select a port.
+ *
+ *      - If <ip> is omitted then the IP address is wildcarded.
  *
  * 'style' should be SOCK_STREAM (for TCP) or SOCK_DGRAM (for UDP).
  *
@@ -396,14 +402,14 @@ exit:
  * On success, returns a non-negative file descriptor.  On failure, returns a
  * negative errno value. */
 int
-inet_open_passive(int style, const char *target_, uint16_t default_port)
+inet_open_passive(int style, const char *target_, int default_port)
 {
     char *target = xstrdup(target_);
     char *string_ptr = target;
     struct sockaddr_in sin;
     const char *host_name;
     const char *port_string;
-    int fd, error;
+    int fd, error, port;
     unsigned int yes  = 1;
 
     /* Address defaults. */
@@ -414,9 +420,9 @@ inet_open_passive(int style, const char *target_, uint16_t default_port)
 
     /* Parse optional port number. */
     port_string = strsep(&string_ptr, ":");
-    if (port_string && atoi(port_string)) {
-        sin.sin_port = htons(atoi(port_string));
-    } else if (!default_port) {
+    if (port_string && str_to_int(port_string, 10, &port)) {
+        sin.sin_port = htons(port);
+    } else if (default_port < 0) {
         VLOG_ERR("%s: port number must be specified", target_);
         error = EAFNOSUPPORT;
         goto exit;
