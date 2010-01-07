@@ -549,7 +549,8 @@ ssl_recv(struct stream *stream, void *buffer, size_t n)
         if (error == SSL_ERROR_ZERO_RETURN) {
             return 0;
         } else {
-            return interpret_ssl_error("SSL_read", ret, error, &sslv->rx_want);
+            return -interpret_ssl_error("SSL_read", ret, error,
+                                        &sslv->rx_want);
         }
     }
 }
@@ -597,7 +598,7 @@ ssl_send(struct stream *stream, const void *buffer, size_t n)
     struct ssl_stream *sslv = ssl_stream_cast(stream);
 
     if (sslv->txbuf) {
-        return EAGAIN;
+        return -EAGAIN;
     } else {
         int error;
 
@@ -606,13 +607,13 @@ ssl_send(struct stream *stream, const void *buffer, size_t n)
         switch (error) {
         case 0:
             ssl_clear_txbuf(sslv);
-            return 0;
+            return n;
         case EAGAIN:
             leak_checker_claim(buffer);
-            return 0;
+            return n;
         default:
             sslv->txbuf = NULL;
-            return error;
+            return -error;
         }
     }
 }
