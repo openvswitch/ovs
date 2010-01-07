@@ -48,11 +48,17 @@ enum stream_state {
 static struct stream_class *stream_classes[] = {
     &tcp_stream_class,
     &unix_stream_class,
+#ifdef HAVE_OPENSSL
+    &ssl_stream_class,
+#endif
 };
 
 static struct pstream_class *pstream_classes[] = {
     &ptcp_pstream_class,
     &punix_pstream_class,
+#ifdef HAVE_OPENSSL
+    &pssl_pstream_class,
+#endif
 };
 
 /* Check the validity of the stream class structures. */

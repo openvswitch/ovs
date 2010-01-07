@@ -109,7 +109,7 @@ tests_test_lockfile_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-ovsdb
 tests_test_ovsdb_SOURCES = tests/test-ovsdb.c tests/idltest.c tests/idltest.h
-tests_test_ovsdb_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a
+tests_test_ovsdb_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
 EXTRA_DIST += tests/uuidfilt.pl tests/idltest.ovsidl
 BUILT_SOURCES += tests/idltest.c tests/idltest.h
 noinst_DATA += tests/idltest.ovsschema

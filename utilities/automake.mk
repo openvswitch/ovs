@@ -76,7 +76,7 @@ utilities_ovs_openflowd_LDADD = \
 	$(SSL_LIBS)
 
 utilities_ovs_vsctl_SOURCES = utilities/ovs-vsctl.c vswitchd/vswitch-idl.c
-utilities_ovs_vsctl_LDADD = lib/libopenvswitch.a
+utilities_ovs_vsctl_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 
 utilities_ovs_wdt_SOURCES = utilities/ovs-wdt.c
 
