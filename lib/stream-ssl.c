@@ -437,6 +437,14 @@ ssl_close(struct stream *stream)
 {
     struct ssl_stream *sslv = ssl_stream_cast(stream);
     ssl_clear_txbuf(sslv);
+
+    /* Attempt clean shutdown of the SSL connection.  This will work most of
+     * the time, as long as the kernel send buffer has some free space and the
+     * SSL connection isn't renegotiating, etc.  That has to be good enough,
+     * since we don't have any way to continue the close operation in the
+     * background. */
+    SSL_shutdown(sslv->ssl);
+
     SSL_free(sslv->ssl);
     close(sslv->fd);
     free(sslv);
