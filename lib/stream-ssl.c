@@ -710,9 +710,11 @@ pssl_pstream_cast(struct pstream *pstream)
 }
 
 static int
-pssl_open(const char *name, char *suffix, struct pstream **pstreamp)
+pssl_open(const char *name UNUSED, char *suffix, struct pstream **pstreamp)
 {
     struct pssl_pstream *pssl;
+    struct sockaddr_in sin;
+    char bound_name[128];
     int retval;
     int fd;
 
@@ -725,9 +727,11 @@ pssl_open(const char *name, char *suffix, struct pstream **pstreamp)
     if (fd < 0) {
         return -fd;
     }
+    sprintf(bound_name, "pssl:%"PRIu16":"IP_FMT,
+            ntohs(sin.sin_port), IP_ARGS(&sin.sin_addr.s_addr));
 
     pssl = xmalloc(sizeof *pssl);
-    pstream_init(&pssl->pstream, &pssl_pstream_class, name);
+    pstream_init(&pssl->pstream, &pssl_pstream_class, bound_name);
     pssl->fd = fd;
     *pstreamp = &pssl->pstream;
     return 0;

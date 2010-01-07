@@ -103,14 +103,18 @@ static int ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
 static int
 ptcp_open(const char *name UNUSED, char *suffix, struct pstream **pstreamp)
 {
+    struct sockaddr_in sin;
+    char bound_name[128];
     int fd;
 
-    fd = inet_open_passive(SOCK_STREAM, suffix, -1, NULL);
+    fd = inet_open_passive(SOCK_STREAM, suffix, -1, &sin);
     if (fd < 0) {
         return -fd;
-    } else {
-        return new_fd_pstream("ptcp", fd, ptcp_accept, NULL, pstreamp);
     }
+
+    sprintf(bound_name, "ptcp:%"PRIu16":"IP_FMT,
+            ntohs(sin.sin_port), IP_ARGS(&sin.sin_addr.s_addr));
+    return new_fd_pstream(bound_name, fd, ptcp_accept, NULL, pstreamp);
 }
 
 static int
