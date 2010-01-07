@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -721,7 +721,7 @@ pssl_open(const char *name, char *suffix, struct pstream **pstreamp)
         return retval;
     }
 
-    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_SSL_PORT);
+    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_SSL_PORT, NULL);
     if (fd < 0) {
         return -fd;
     }

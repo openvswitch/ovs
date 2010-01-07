@@ -400,9 +400,13 @@ exit:
  * For TCP, the socket will have SO_REUSEADDR turned on.
  *
  * On success, returns a non-negative file descriptor.  On failure, returns a
- * negative errno value. */
+ * negative errno value.
+ *
+ * If 'sinp' is non-null, then on success the bound address is stored into
+ * '*sinp'. */
 int
-inet_open_passive(int style, const char *target_, int default_port)
+inet_open_passive(int style, const char *target_, int default_port,
+                  struct sockaddr_in *sinp)
 {
     char *target = xstrdup(target_);
     char *string_ptr = target;
@@ -468,6 +472,21 @@ inet_open_passive(int style, const char *target_, int default_port)
         VLOG_ERR("%s: listen: %s", target_, strerror(error));
         goto exit_close;
     }
+
+    if (sinp) {
+        socklen_t sin_len = sizeof sin;
+        if (getsockname(fd, (struct sockaddr *) &sin, &sin_len) < 0){
+            error = errno;
+            VLOG_ERR("%s: getsockname: %s", target_, strerror(error));
+            goto exit_close;
+        }
+        if (sin.sin_family != AF_INET || sin_len != sizeof sin) {
+            VLOG_ERR("%s: getsockname: invalid socket name", target_);
+            goto exit_close;
+        }
+        *sinp = sin;
+    }
+
     error = 0;
     goto exit;
 

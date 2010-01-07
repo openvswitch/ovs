@@ -36,7 +36,8 @@ int get_null_fd(void);
 
 int inet_open_active(int style, const char *target, uint16_t default_port,
                     struct sockaddr_in *sinp, int *fdp);
-int inet_open_passive(int style, const char *target, int default_port);
+int inet_open_passive(int style, const char *target, int default_port,
+                      struct sockaddr_in *sinp);
 
 int read_fully(int fd, void *, size_t, size_t *bytes_read);
 int write_fully(int fd, const void *, size_t, size_t *bytes_written);

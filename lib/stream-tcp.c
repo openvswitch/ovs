@@ -105,7 +105,7 @@ ptcp_open(const char *name UNUSED, char *suffix, struct pstream **pstreamp)
 {
     int fd;
 
-    fd = inet_open_passive(SOCK_STREAM, suffix, -1);
+    fd = inet_open_passive(SOCK_STREAM, suffix, -1, NULL);
     if (fd < 0) {
         return -fd;
     } else {
