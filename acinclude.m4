@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009 Nicira Networks.
+# Copyright (c) 2008, 2009, 2010 Nicira Networks.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,7 +42,14 @@ AC_DEFUN([OVS_CHECK_LINUX26], [
     AC_MSG_CHECKING([for Linux 2.6 source directory])
     KSRC26=$KBUILD26
     if test ! -e $KSRC26/include/linux/kernel.h; then
-      KSRC26=`(cd $KBUILD26 && pwd -P) | sed 's,-[[^-]]*$,-common,'`
+      case `echo "$KBUILD26" | sed 's,/*$,,'` in # (
+        */build)
+          KSRC26=`echo "$KBUILD26" | sed 's,/build/*$,/source,'`
+          ;; # (
+        *)
+          KSRC26=`(cd $KBUILD26 && pwd -P) | sed 's,-[[^-]]*$,-common,'`
+          ;;
+      esac
       if test ! -e $KSRC26/include/linux/kernel.h; then
         AC_MSG_ERROR([cannot find source directory])
       fi
