@@ -686,7 +686,6 @@ jsonrpc_session_close(struct jsonrpc_session *s)
 static void
 jsonrpc_session_disconnect(struct jsonrpc_session *s)
 {
-    reconnect_disconnected(s->reconnect, time_msec(), 0);
     if (s->rpc) {
         jsonrpc_error(s->rpc, EOF);
         jsonrpc_close(s->rpc);
@@ -723,6 +722,7 @@ jsonrpc_session_run(struct jsonrpc_session *s)
         jsonrpc_run(s->rpc);
         error = jsonrpc_get_status(s->rpc);
         if (error) {
+            reconnect_disconnected(s->reconnect, time_msec(), 0);
             jsonrpc_session_disconnect(s);
         }
     } else if (s->stream) {
@@ -747,6 +747,7 @@ jsonrpc_session_run(struct jsonrpc_session *s)
         break;
 
     case RECONNECT_DISCONNECT:
+        reconnect_disconnected(s->reconnect, time_msec(), 0);
         jsonrpc_session_disconnect(s);
         break;
 
