@@ -81,17 +81,16 @@ AC_DEFUN([OVS_CHECK_OPENSSL],
      [ssl=false])
 
    if test "$ssl" = true; then
-   dnl Make sure that pkg-config is installed.
-   m4_pattern_forbid([PKG_CHECK_MODULES])
-   PKG_CHECK_MODULES([SSL], [libssl], 
-     [HAVE_OPENSSL=yes],
-     [HAVE_OPENSSL=no
-      AC_MSG_WARN([Cannot find libssl:
+       dnl Make sure that pkg-config is installed.
+       m4_pattern_forbid([PKG_CHECK_MODULES])
+       PKG_CHECK_MODULES([SSL], [libssl], 
+         [HAVE_OPENSSL=yes],
+         [HAVE_OPENSSL=no
+          AC_MSG_WARN([Cannot find libssl:
 
-   $SSL_PKG_ERRORS
+$SSL_PKG_ERRORS
 
-   OpenFlow connections over SSL will not be supported.])])
-
+OpenFlow connections over SSL will not be supported.])])
    else
        HAVE_OPENSSL=no
    fi
