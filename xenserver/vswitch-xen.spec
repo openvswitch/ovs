@@ -1,6 +1,6 @@
 # Spec file for vswitch and related programs.
 
-# Copyright (C) 2009 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -105,8 +105,6 @@ rm \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-openflowd.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-pki.8
 rm -f $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/net/vswitch/veth_mod.ko
-rm -r \
-    $RPM_BUILD_ROOT/usr/share/openvswitch/commands
 
 install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
 
