@@ -92,6 +92,8 @@ AC_DEFUN([OVS_CHECK_OPENSSL],
 
    OpenFlow connections over SSL will not be supported.])])
 
+   else
+       HAVE_OPENSSL=no
    fi
    AC_SUBST([HAVE_OPENSSL])
    AM_CONDITIONAL([HAVE_OPENSSL], [test "$HAVE_OPENSSL" = yes])

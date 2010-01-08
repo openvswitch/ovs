@@ -65,11 +65,13 @@ check_errno(int a, int b, const char *as, const char *file, int line)
 static void
 fpv_create(const char *type, struct fake_pvconn *fpv)
 {
+#ifdef HAVE_OPENSSL
     if (!strcmp(type, "ssl")) {
         stream_ssl_set_private_key_file("testpki-privkey.pem");
         stream_ssl_set_certificate_file("testpki-cert.pem");
         stream_ssl_set_ca_cert_file("testpki-cacert.pem", false);
     }
+#endif
 
     fpv->type = type;
     if (!strcmp(type, "unix")) {
