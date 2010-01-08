@@ -8,6 +8,7 @@ TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/lcov-pre.at \
 	tests/library.at \
+	tests/vconn.at \
 	tests/dir_name.at \
 	tests/aes128.at \
 	tests/uuid.at \

@@ -1,3 +1,4 @@
 # -*- shell-script -*-
 PERL='@PERL@'
 LCOV='@LCOV@'
+HAVE_OPENSSL='@HAVE_OPENSSL@'

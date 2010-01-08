@@ -1,6 +1,6 @@
 AT_INIT
 
-AT_COPYRIGHT([Copyright (c) 2009 Nicira Networks.
+AT_COPYRIGHT([Copyright (c) 2009, 2010 Nicira Networks.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ m4_define([OVS_WAIT_UNTIL],
 
 m4_include([tests/lcov-pre.at])
 m4_include([tests/library.at])
+m4_include([tests/vconn.at])
 m4_include([tests/dir_name.at])
 m4_include([tests/aes128.at])
 m4_include([tests/uuid.at])

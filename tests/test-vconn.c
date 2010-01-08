@@ -21,6 +21,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "command-line.h"
 #include "poll-loop.h"
 #include "socket-util.h"
 #include "stream.h"
@@ -64,6 +65,12 @@ check_errno(int a, int b, const char *as, const char *file, int line)
 static void
 fpv_create(const char *type, struct fake_pvconn *fpv)
 {
+    if (!strcmp(type, "ssl")) {
+        stream_ssl_set_private_key_file("testpki-privkey.pem");
+        stream_ssl_set_certificate_file("testpki-cert.pem");
+        stream_ssl_set_ca_cert_file("testpki-cacert.pem", false);
+    }
+
     fpv->type = type;
     if (!strcmp(type, "unix")) {
         static int unix_count = 0;
@@ -125,10 +132,14 @@ fpv_destroy(struct fake_pvconn *fpv)
 /* Connects to a fake_pvconn with vconn_open(), then closes the listener and
  * verifies that vconn_connect() reports 'expected_error'. */
 static void
-test_refuse_connection(const char *type, int expected_error)
+test_refuse_connection(int argc UNUSED, char *argv[])
 {
+    const char *type = argv[1];
+    int expected_error;
     struct fake_pvconn fpv;
     struct vconn *vconn;
+
+    expected_error = !strcmp(type, "unix") ? EPIPE : ECONNRESET;
 
     fpv_create(type, &fpv);
     CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP_VERSION, &vconn), 0);
@@ -143,10 +154,16 @@ test_refuse_connection(const char *type, int expected_error)
  * closes it immediately, and verifies that vconn_connect() reports
  * 'expected_error'. */
 static void
-test_accept_then_close(const char *type, int expected_error)
+test_accept_then_close(int argc UNUSED, char *argv[])
 {
+    const char *type = argv[1];
+    int expected_error;
     struct fake_pvconn fpv;
     struct vconn *vconn;
+
+    expected_error = (!strcmp(type, "unix") ? EPIPE
+                      : !strcmp(type, "tcp") ? ECONNRESET
+                      : EPROTO);
 
     fpv_create(type, &fpv);
     CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP_VERSION, &vconn), 0);
@@ -162,8 +179,9 @@ test_accept_then_close(const char *type, int expected_error)
  * reads the hello message from it, then closes the connection and verifies
  * that vconn_connect() reports 'expected_error'. */
 static void
-test_read_hello(const char *type, int expected_error)
+test_read_hello(int argc UNUSED, char *argv[])
 {
+    const char *type = argv[1];
     struct fake_pvconn fpv;
     struct vconn *vconn;
     struct stream *stream;
@@ -195,7 +213,7 @@ test_read_hello(const char *type, int expected_error)
        poll_block();
     }
     stream_close(stream);
-    CHECK_ERRNO(vconn_connect(vconn), expected_error);
+    CHECK_ERRNO(vconn_connect(vconn), ECONNRESET);
     vconn_close(vconn);
 }
 
@@ -290,8 +308,9 @@ test_send_hello(const char *type, const void *out, size_t out_size,
 
 /* Try connecting and sending a normal hello, which should succeed. */
 static void
-test_send_plain_hello(const char *type)
+test_send_plain_hello(int argc UNUSED, char *argv[])
 {
+    const char *type = argv[1];
     struct ofp_header hello;
 
     hello.version = OFP_VERSION;
@@ -305,8 +324,9 @@ test_send_plain_hello(const char *type)
  * the specification says that implementations must accept and ignore extra
  * data). */
 static void
-test_send_long_hello(const char *type)
+test_send_long_hello(int argc UNUSED, char *argv[])
 {
+    const char *type = argv[1];
     struct ofp_header hello;
     char buffer[sizeof hello * 2];
 
@@ -322,8 +342,9 @@ test_send_long_hello(const char *type)
 /* Try connecting and sending an echo request instead of a hello, which should
  * fail with EPROTO. */
 static void
-test_send_echo_hello(const char *type)
+test_send_echo_hello(int argc UNUSED, char *argv[])
 {
+    const char *type = argv[1];
     struct ofp_header echo;
 
     echo.version = OFP_VERSION;
@@ -336,8 +357,9 @@ test_send_echo_hello(const char *type)
 /* Try connecting and sending a hello packet that has its length field as 0,
  * which should fail with EPROTO. */
 static void
-test_send_short_hello(const char *type)
+test_send_short_hello(int argc UNUSED, char *argv[])
 {
+    const char *type = argv[1];
     struct ofp_header hello;
 
     memset(&hello, 0, sizeof hello);
@@ -347,8 +369,9 @@ test_send_short_hello(const char *type)
 /* Try connecting and sending a hello packet that has a bad version, which
  * should fail with EPROTO. */
 static void
-test_send_invalid_version_hello(const char *type)
+test_send_invalid_version_hello(int argc UNUSED, char *argv[])
 {
+    const char *type = argv[1];
     struct ofp_header hello;
 
     hello.version = OFP_VERSION - 1;
@@ -358,48 +381,31 @@ test_send_invalid_version_hello(const char *type)
     test_send_hello(type, &hello, sizeof hello, EPROTO);
 }
 
+static const struct command commands[] = {
+    {"refuse-connection", 1, 1, test_refuse_connection},
+    {"accept-then-close", 1, 1, test_accept_then_close},
+    {"read-hello", 1, 1, test_read_hello},
+    {"send-plain-hello", 1, 1, test_send_plain_hello},
+    {"send-long-hello", 1, 1, test_send_long_hello},
+    {"send-echo-hello", 1, 1, test_send_echo_hello},
+    {"send-short-hello", 1, 1, test_send_short_hello},
+    {"send-invalid-version-hello", 1, 1, test_send_invalid_version_hello},
+    {NULL, 0, 0, NULL},
+};
+
 int
-main(int argc UNUSED, char *argv[])
+main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
     time_init();
     vlog_init();
+    vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_EMER);
+    vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_DBG);
     signal(SIGPIPE, SIG_IGN);
 
     time_alarm(10);
 
-    test_refuse_connection("unix", EPIPE);
-    test_accept_then_close("unix", EPIPE);
-    test_read_hello("unix", ECONNRESET);
-    test_send_plain_hello("unix");
-    test_send_long_hello("unix");
-    test_send_echo_hello("unix");
-    test_send_short_hello("unix");
-    test_send_invalid_version_hello("unix");
-
-    test_accept_then_close("tcp", ECONNRESET);
-    test_refuse_connection("tcp", ECONNRESET);
-    test_read_hello("tcp", ECONNRESET);
-    test_send_plain_hello("tcp");
-    test_send_long_hello("tcp");
-    test_send_echo_hello("tcp");
-    test_send_short_hello("tcp");
-    test_send_invalid_version_hello("tcp");
-
-#ifdef HAVE_OPENSSL
-    stream_ssl_set_private_key_file("testpki-privkey.pem");
-    stream_ssl_set_certificate_file("testpki-cert.pem");
-    stream_ssl_set_ca_cert_file("testpki-cacert.pem", false);
-
-    test_accept_then_close("ssl", EPROTO);
-    test_refuse_connection("ssl", ECONNRESET);
-    test_read_hello("ssl", ECONNRESET);
-    test_send_plain_hello("ssl");
-    test_send_long_hello("ssl");
-    test_send_echo_hello("ssl");
-    test_send_short_hello("ssl");
-    test_send_invalid_version_hello("ssl");
-#endif  /* HAVE_OPENSSL */
+    run_command(argc - 1, argv + 1, commands);
 
     return 0;
 }

@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009 Nicira Networks.
+# Copyright (c) 2008, 2009, 2010 Nicira Networks.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -93,6 +93,7 @@ AC_DEFUN([OVS_CHECK_OPENSSL],
    OpenFlow connections over SSL will not be supported.])])
 
    fi
+   AC_SUBST([HAVE_OPENSSL])
    AM_CONDITIONAL([HAVE_OPENSSL], [test "$HAVE_OPENSSL" = yes])
    if test "$HAVE_OPENSSL" = yes; then
       AC_DEFINE([HAVE_OPENSSL], [1], [Define to 1 if OpenSSL is installed.])
