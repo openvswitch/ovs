@@ -148,4 +148,9 @@ tests_test_uuid_LDADD = lib/libopenvswitch.a
 noinst_PROGRAMS += tests/test-vconn
 tests_test_vconn_SOURCES = tests/test-vconn.c
 tests_test_vconn_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
+EXTRA_DIST += \
+	tests/testpki-cacert.pem \
+	tests/testpki-cert.pem \
+	tests/testpki-privkey.pem \
+	tests/testpki-req.pem
 
