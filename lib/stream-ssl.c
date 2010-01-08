@@ -732,7 +732,7 @@ pssl_open(const char *name UNUSED, char *suffix, struct pstream **pstreamp)
         return retval;
     }
 
-    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_SSL_PORT, NULL);
+    fd = inet_open_passive(SOCK_STREAM, suffix, OFP_SSL_PORT, &sin);
     if (fd < 0) {
         return -fd;
     }
