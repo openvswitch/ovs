@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -82,12 +82,27 @@ struct dp_bucket {
 #define DP_N_QUEUES 3
 #define DP_MAX_QUEUE_LEN 100
 
+/**
+ * struct dp_stats_percpu - per-cpu packet processing statistics for a given
+ * datapath.
+ * @n_frags: Number of IP fragments processed by datapath.
+ * @n_hit: Number of received packets for which a matching flow was found in
+ * the flow table.
+ * @n_miss: Number of received packets that had no matching flow in the flow
+ * table.  The sum of @n_hit and @n_miss is the number of packets that have
+ * been received by the datapath.
+ * @n_lost: Number of received packets that had no matching flow in the flow
+ * table that could not be sent to userspace (normally due to an overflow in
+ * one of the datapath's queues).
+ * @sflow_pool: Number of packets that were candidates for sFlow sampling,
+ * regardless of whether they were actually chosen and sent down to userspace.
+ */
 struct dp_stats_percpu {
 	u64 n_frags;
 	u64 n_hit;
 	u64 n_missed;
 	u64 n_lost;
-	u64 sflow_pool;		/* Packets that could have been sampled. */
+	u64 sflow_pool;
 };
 
 struct dp_port_group {
