@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * This file is offered under your choice of two licenses: Apache 2.0 or GNU
  * GPL 2.0 or later.  The permission statements for each of these licenses is
@@ -77,8 +77,8 @@
 
 #define ODP_EXECUTE             _IOR('O', 18, struct odp_execute)
 
-#define ODP_SET_SFLOW_PROBABILITY _IOR('O', 20, int)
-#define ODP_GET_SFLOW_PROBABILITY _IOW('O', 21, int)
+#define ODP_SET_SFLOW_PROBABILITY _IOR('O', 19, int)
+#define ODP_GET_SFLOW_PROBABILITY _IOW('O', 20, int)
 
 struct odp_stats {
     /* Flows. */
