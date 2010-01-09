@@ -6,7 +6,7 @@ What is Open vSwitch?
 Open vSwitch is a multilayer software switch licensed under the open
 source Apache 2 license.  Our goal is to implement a production
 quality switch platform that supports standard management interfaces
-(e.g. NetFlow, sFlow, RSPAN, ERSPAN, IOS-like CLI), and opens the
+(e.g. NetFlow, sFlow(R), RSPAN, ERSPAN, IOS-like CLI), and opens the
 forwarding functions to programmatic extension and control.
 
 Open vSwitch is well suited to function as a virtual switch in VM

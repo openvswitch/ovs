@@ -460,7 +460,7 @@ netflow.mybr.host=nflow.example.com:9995
 .fi
 .RE
 .SS "sFlow Monitoring"
-sFlow is a protocol for monitoring switches.  A bridge may be
+sFlow(R) is a protocol for monitoring switches.  A bridge may be
 configured to send sFlow records to sFlow collectors by defining the
 key \fBsflow.\fIbridge\fB.host\fR for each collector in the form
 \fIip\fR[\fB:\fIport\fR].  Records from \fIbridge\fR will be sent to
