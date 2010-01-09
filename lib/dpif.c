@@ -845,9 +845,9 @@ dpif_recv_set_mask(struct dpif *dpif, int listen_mask)
     return error;
 }
 
-/* Retrieve the sFlow sampling probability.  A probability of 0 means sample no
- * packets, UINT32_MAX means sample every packet, and other values are
- * intermediate probabilities.
+/* Retrieve the sFlow sampling probability.  '*probability' is expressed as the
+ * number of packets out of UINT_MAX to sample, e.g. probability/UINT_MAX is
+ * the probability of sampling a given packet.
  *
  * Returns 0 if successful, otherwise a positive errno value.  EOPNOTSUPP
  * indicates that 'dpif' does not support sFlow sampling. */
@@ -864,9 +864,9 @@ dpif_get_sflow_probability(const struct dpif *dpif, uint32_t *probability)
     return error;
 }
 
-/* Set the sFlow sampling probability.  A probability of 0 means sample no
- * packets, UINT32_MAX means sample every packet, and other values are
- * intermediate probabilities.
+/* Set the sFlow sampling probability.  'probability' is expressed as the
+ * number of packets out of UINT_MAX to sample, e.g. probability/UINT_MAX is
+ * the probability of sampling a given packet.
  *
  * Returns 0 if successful, otherwise a positive errno value.  EOPNOTSUPP
  * indicates that 'dpif' does not support sFlow sampling. */

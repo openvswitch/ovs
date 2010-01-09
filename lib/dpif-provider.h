@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -282,8 +282,9 @@ struct dpif_class {
      * Return value is 0 or a positive errno value.  EOPNOTSUPP indicates that
      * the datapath does not support sFlow, as does a null pointer.
      *
-     * A probability of 0 means sample no packets, UINT32_MAX means sample
-     * every packet, and other values are intermediate probabilities. */
+     * '*probability' is expressed as the number of packets out of UINT_MAX to
+     * sample, e.g. probability/UINT_MAX is the probability of sampling a given
+     * packet. */
     int (*get_sflow_probability)(const struct dpif *dpif,
                                  uint32_t *probability);
 
@@ -291,8 +292,9 @@ struct dpif_class {
      * is 0 or a positive errno value.  EOPNOTSUPP indicates that the datapath
      * does not support sFlow, as does a null pointer.
      *
-     * A probability of 0 means sample no packets, UINT32_MAX means sample
-     * every packet, and other values are intermediate probabilities. */
+     * 'probability' is expressed as the number of packets out of UINT_MAX to
+     * sample, e.g. probability/UINT_MAX is the probability of sampling a given
+     * packet. */
     int (*set_sflow_probability)(struct dpif *dpif, uint32_t probability);
 
     /* Attempts to receive a message from 'dpif'.  If successful, stores the

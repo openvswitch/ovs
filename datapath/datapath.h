@@ -127,9 +127,9 @@ struct dp_port_group {
  * always exists, other ports may be %NULL.
  * @port_list: List of all ports in @ports in arbitrary order.
  * @stats_percpu: Per-CPU datapath statistics.
- * @sflow_probability: Probability of sampling a packet to the %ODPL_SFLOW
- * queue, where 0 means never sample, UINT_MAX means always sample, and
- * other values are intermediate probabilities.
+ * @sflow_probability: Number of packets out of UINT_MAX to sample to the
+ * %ODPL_SFLOW queue, e.g. (@sflow_probability/UINT_MAX) is the probability of
+ * sampling a given packet.
  */
 struct datapath {
 	struct mutex mutex;
