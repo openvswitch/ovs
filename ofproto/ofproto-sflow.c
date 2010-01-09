@@ -535,7 +535,11 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
             break;
         }
     }
-    if (n_outputs > 1 || !fs.output) {
+    if (!n_outputs) {
+        /* This value indicates that the packet was dropped for an unknown
+         * reason. */
+        fs.output = 0x40000000 | 256;
+    } else if (n_outputs > 1 || !fs.output) {
         /* Setting the high bit means "multiple output ports". */
         fs.output = 0x80000000 | n_outputs;
     }
