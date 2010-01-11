@@ -41,19 +41,6 @@ case "$1" in
             running=false
         fi
 
-        if test ! -e /etc/openvswitch-switch/conf; then
-            # Create configuration database.
-            ovsdb-tool -vANY:console:emer \
-                create /etc/openvswitch-switch/conf \
-                /usr/share/openvswitch/vswitch-idl.ovsschema
-
-            # Initialize configuration database.
-            ovsdb-tool -vANY:console:emer \
-                transact /etc/openvswitch-switch/conf \
-                '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]' \
-                > /dev/null
-        fi
-
         if $running; then
             /etc/init.d/openvswitch-switch start
         fi

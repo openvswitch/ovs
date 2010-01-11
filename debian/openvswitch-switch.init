@@ -201,6 +201,14 @@ case "$1" in
             check_op "Setting core limit to $CORE_LIMIT" ulimit -c "$CORE_LIMIT"
         fi
 
+        # Create an empty configuration database if it doesn't exist.
+        if test ! -e /etc/openvswitch-switch/conf; then
+            # Create configuration database.
+            ovsdb-tool -vANY:console:emer \
+                create /etc/openvswitch-switch/conf \
+                /usr/share/openvswitch/vswitch-idl.ovsschema
+        fi
+
         # Start ovsdb-server.
         set --
         set -- "$@" --verbose=ANY:console:emer --verbose=ANY:syslog:err
@@ -217,6 +225,8 @@ case "$1" in
         else
             echo " ERROR."
         fi
+
+        ovs-vsctl --no-wait init
 
         # Start ovs-vswitchd.
         set --
