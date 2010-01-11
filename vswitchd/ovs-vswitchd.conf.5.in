@@ -470,7 +470,7 @@ used.
 .PP
 By default, 1 out of every 400 packets is sent to the configured sFlow
 collector.  To override this, set \fBsflow.\fIbridge\fB.sampling\fR to
-the number of switched packets out of which 1, on average, will be
+the number of switched packets out of which one, on average, will be
 sent to the sFlow collector, e.g. a value of 1 sends every packet to
 the collector, a value of 2 sends 50% of the packets to the collector,
 and so on.
