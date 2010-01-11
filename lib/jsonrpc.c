@@ -278,12 +278,14 @@ jsonrpc_send_block(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
         return error;
     }
 
-    while (!queue_is_empty(&rpc->output) && !rpc->status) {
+    for (;;) {
         jsonrpc_run(rpc);
+        if (queue_is_empty(&rpc->output) || rpc->status) {
+            return rpc->status;
+        }
         jsonrpc_wait(rpc);
         poll_block();
     }
-    return rpc->status;
 }
 
 int
