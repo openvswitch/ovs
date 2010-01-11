@@ -137,8 +137,8 @@ function start_ovsdb_server {
     fi
     cd "$OVSDB_SERVER_RUN_DIR"
     local remotes=
-    for remote in "$OVSDB_SERVER_REMOTES"; do
-        remotes="$remotes --remote=$OVSDB_SERVER_REMOTES"
+    for remote in $OVSDB_SERVER_REMOTES; do
+        remotes="$remotes --remote=$remote"
     done
     if [ -n "$OVSDB_SERVER_FILE_LOGLEVEL" ]; then
         logfile_level_opt="-vANY:FILE:${OVSDB_SERVER_FILE_LOGLEVEL}"
