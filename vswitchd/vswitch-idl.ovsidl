@@ -115,9 +115,6 @@
        "options": {
          "comment": "Configuration options whose interpretation varies based on \"type\".",
          "type": {"key": "string", "value": "string", "min": 0, "max": "unlimited"}},
-       "internal": {
-         "comment": "An \"internal\" port is one that is implemented in software as a logical device.",
-         "type": "boolean"},
        "ingress_policing_rate": {
          "comment": "Maximum rate for data received on this interface, in kbps.  Set to 0 to disable policing.",
          "type": "integer"},
