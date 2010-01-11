@@ -55,6 +55,12 @@ struct ofproto_sflow {
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static bool
+nullable_string_is_equal(const char *a, const char *b)
+{
+    return a ? b && !strcmp(a, b) : !b;
+}
+
+static bool
 ofproto_sflow_options_equal(const struct ofproto_sflow_options *a,
                             const struct ofproto_sflow_options *b)
 {
@@ -63,14 +69,15 @@ ofproto_sflow_options_equal(const struct ofproto_sflow_options *a,
             && a->polling_interval == b->polling_interval
             && a->header_len == b->header_len
             && a->sub_id == b->sub_id
-            && !strcmp(a->agent_device, b->agent_device)
-            && !strcmp(a->control_ip, b->control_ip));
+            && nullable_string_is_equal(a->agent_device, b->agent_device)
+            && nullable_string_is_equal(a->control_ip, b->control_ip));
 }
 
 static struct ofproto_sflow_options *
 ofproto_sflow_options_clone(const struct ofproto_sflow_options *old)
 {
     struct ofproto_sflow_options *new = xmemdup(old, sizeof *old);
+    svec_clone(&new->targets, &old->targets);
     new->agent_device = old->agent_device ? xstrdup(old->agent_device) : NULL;
     new->control_ip = old->control_ip ? xstrdup(old->control_ip) : NULL;
     return new;
@@ -80,6 +87,7 @@ static void
 ofproto_sflow_options_destroy(struct ofproto_sflow_options *options)
 {
     if (options) {
+        svec_destroy(&options->targets);
         free(options->agent_device);
         free(options->control_ip);
         free(options);
