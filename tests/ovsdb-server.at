@@ -1,4 +1,4 @@
-AT_BANNER([OVSDB -- ovsdb-server transactions])
+AT_BANNER([OVSDB -- ovsdb-server transactions (Unix sockets)])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
@@ -32,7 +32,7 @@ cat stdout >> output
    AT_CLEANUP])
 
 EXECUTION_EXAMPLES
-
+
 AT_SETUP([--remote=db: implementation])
 AT_KEYWORDS([ovsdb server positive])
 AT_DATA([schema],
@@ -65,3 +65,42 @@ AT_CHECK(
   [test ! -e pid || kill `cat pid`])
 test ! -e pid || kill `cat pid`
 AT_CLEANUP
+
+AT_BANNER([OVSDB -- ovsdb-server transactions (SSL sockets)])
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates a database with the given SCHEMA, starts an ovsdb-server on
+# that database, and runs each of the TRANSACTIONS (which should be a
+# quoted list of quoted strings) against it with ovsdb-client one at a
+# time.
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb server positive ssl $5])
+   AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+   AT_SKIP_IF([test "x$RANDOM" = x])
+   AT_DATA([schema], [$2
+])
+   SSL_PORT=`expr 32767 + \( $RANDOM % 32767 \)`
+   PKIDIR=$abs_top_srcdir/tests
+   OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --private-key=$PKIDIR/testpki-privkey2.pem --certificate=$PKIDIR/testpki-cert2.pem --ca-cert=$PKIDIR/testpki-cacert.pem --remote=pssl:$SSL_PORT:127.0.0.1 --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+   m4_foreach([txn], [$3], 
+     [OVS_CHECK_LCOV([ovsdb-client --private-key=$PKIDIR/testpki-privkey.pem --certificate=$PKIDIR/testpki-cert.pem --ca-cert=$PKIDIR/testpki-cacert.pem transact ssl:127.0.0.1:$SSL_PORT 'txn'], [0], [stdout], [ignore],
+     [test ! -e pid || kill `cat pid`])
+cat stdout >> output
+])
+   AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$4], [ignore],
+            [test ! -e pid || kill `cat pid`])
+   test ! -e pid || kill `cat pid`
+   AT_CLEANUP])
+
+EXECUTION_EXAMPLES

@@ -152,6 +152,8 @@ tests_test_vconn_LDADD = lib/libopenvswitch.a $(SSL_LIBS)
 EXTRA_DIST += \
 	tests/testpki-cacert.pem \
 	tests/testpki-cert.pem \
+	tests/testpki-cert2.pem \
 	tests/testpki-privkey.pem \
-	tests/testpki-req.pem
-
+	tests/testpki-privkey2.pem \
+	tests/testpki-req.pem \
+	tests/testpki-req2.pem
