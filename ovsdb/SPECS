@@ -634,8 +634,8 @@ Notation for the Wire Protocol
             <mutator> must be "insert" or "delete".
 
             If <mutator> is "insert", then each of the key-value pairs
-            in the map in <value> is added to <column> if its key is
-            not already present.  The required type of <value> is
+            in the map in <value> is added to <column> only if its key
+            is not already present.  The required type of <value> is
             slightly relaxed, in that it may have fewer than the
             minimum number of elements specified by the column's type.
 
