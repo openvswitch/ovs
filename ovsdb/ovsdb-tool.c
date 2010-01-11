@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,9 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_ovsdb_tool
 
+/* -m, --more: Verbosity level for "show-log" command output. */
+static int show_log_verbosity;
+
 static const struct command all_commands[];
 
 static void usage(void) NO_RETURN;
@@ -57,6 +60,7 @@ static void
 parse_options(int argc, char *argv[])
 {
     static struct option long_options[] = {
+        {"more", no_argument, 0, 'm'},
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
@@ -73,6 +77,10 @@ parse_options(int argc, char *argv[])
         }
 
         switch (c) {
+        case 'm':
+            show_log_verbosity++;
+            break;
+
         case 'h':
             usage();
 
@@ -108,6 +116,7 @@ usage(void)
            program_name, program_name);
     vlog_usage();
     printf("\nOther options:\n"
+           "  -m, --more                  increase show-log verbosity\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
@@ -192,13 +201,94 @@ do_transact(int argc UNUSED, char *argv[])
 }
 
 static void
+print_db_changes(struct shash *tables, struct shash *names)
+{
+    struct shash_node *n1;
+
+    SHASH_FOR_EACH (n1, tables) {
+        const char *table = n1->name;
+        struct json *rows = n1->data;
+        struct shash_node *n2;
+
+        if (n1->name[0] == '_' || rows->type != JSON_OBJECT) {
+            continue;
+        }
+
+        SHASH_FOR_EACH (n2, json_object(rows)) {
+            const char *row_uuid = n2->name;
+            struct json *columns = n2->data;
+            struct shash_node *n3;
+            char *old_name, *new_name;
+            bool free_new_name = false;
+
+            old_name = new_name = shash_find_data(names, row_uuid);
+            if (columns->type == JSON_OBJECT) {
+                struct json *new_name_json;
+
+                new_name_json = shash_find_data(json_object(columns), "name");
+                if (new_name_json) {
+                    new_name = json_to_string(new_name_json, JSSF_SORT);
+                    free_new_name = true;
+                }
+            }
+
+            printf("\ttable %s", table);
+
+            if (!old_name) {
+                if (new_name) {
+                    printf(" insert row %s:\n", new_name);
+                } else {
+                    printf(" insert row %.8s:\n", row_uuid);
+                }
+            } else {
+                printf(" row %s:\n", old_name);
+            }
+
+            if (columns->type == JSON_OBJECT) {
+                if (show_log_verbosity > 1) {
+                    SHASH_FOR_EACH (n3, json_object(columns)) {
+                        const char *column = n3->name;
+                        struct json *value = n3->data;
+                        char *value_string;
+
+                        value_string = json_to_string(value, JSSF_SORT);
+                        printf("\t\t%s=%s\n", column, value_string);
+                        free(value_string);
+                    }
+                }
+                if (!old_name
+                    || (new_name != old_name && strcmp(old_name, new_name))) {
+                    if (old_name) {
+                        shash_delete(names, shash_find(names, row_uuid));
+                        free(old_name);
+                    }
+                    shash_add(names, row_uuid, (new_name
+                                                ? xstrdup(new_name)
+                                                : xmemdup0(row_uuid, 8)));
+                }
+            } else if (columns->type == JSON_NULL) {
+                printf("\t\tdelete row\n");
+                shash_delete(names, shash_find(names, row_uuid));
+                free(old_name);
+            }
+
+            if (free_new_name) {
+                free(new_name);
+            }
+        }
+    }
+}
+
+static void
 do_show_log(int argc UNUSED, char *argv[])
 {
     const char *db_file_name = argv[1];
+    struct shash names;
     struct ovsdb_log *log;
     unsigned int i;
 
     check_ovsdb_error(ovsdb_log_open(db_file_name, O_RDONLY, &log));
+    shash_init(&names);
     for (i = 0; ; i++) {
         struct json *json;
 
@@ -224,10 +314,17 @@ do_show_log(int argc UNUSED, char *argv[])
             if (comment && comment->type == JSON_STRING) {
                 printf(" \"%s\"", json_string(comment));
             }
+
+            if (i > 0 && show_log_verbosity > 0) {
+                putchar('\n');
+                print_db_changes(json_object(json), &names);
+            }
         }
         json_destroy(json);
         putchar('\n');
     }
+
+    /* XXX free 'names'. */
 }
 
 static void
