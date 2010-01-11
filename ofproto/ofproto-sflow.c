@@ -421,7 +421,7 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     sfl_receiver_set_sFlowRcvrOwner(receiver, "OpenVSwitch sFlow");
     sfl_receiver_set_sFlowRcvrTimeout(receiver, 0xffffffff);
 
-    /* Add a single sampler to represent the whole switch (special <ifIndex>:0
+    /* Add a single sampler to represent the datapath (special <ifIndex>:0
      * datasource).  The alternative is to model a physical switch more closely
      * and instantiate a separate sampler object for each interface, but then
      * unicasts would have to be offered to two samplers, and
@@ -553,6 +553,9 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
             break;
         }
     }
+
+    /* Set output port, as defined by http://www.sflow.org/sflow_version_5.txt
+       (search for "Input/output port information"). */
     if (!n_outputs) {
         /* This value indicates that the packet was dropped for an unknown
          * reason. */
