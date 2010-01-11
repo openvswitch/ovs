@@ -117,30 +117,50 @@ struct odp_stats {
 #define ODPL_SFLOW      (1 << _ODPL_SFLOW_NR)
 #define ODPL_ALL        (ODPL_MISS | ODPL_ACTION | ODPL_SFLOW)
 
-/* Format of messages read from datapath fd. */
+/**
+ * struct odp_msg - format of messages read from datapath fd.
+ * @type: One of the %_ODPL_* constants.
+ * @length: Total length of message, including this header.
+ * @port: Port that received the packet embedded in this message.
+ * @reserved: Not currently used.  Should be set to 0.
+ * @arg: Argument value whose meaning depends on @type.
+ *
+ * For @type == %_ODPL_MISS_NR, the header is followed by packet data.  The
+ * @arg member is unused and set to 0.
+ *
+ * For @type == %_ODPL_ACTION_NR, the header is followed by packet data.  The
+ * @arg member is copied from the &struct odp_action_controller that caused
+ * the &struct odp_msg to be composed.
+ *
+ * For @type == %_ODPL_SFLOW_NR, the header is followed by &struct
+ * odp_sflow_sample_header, then by an array of &union odp_action (the number
+ * of which is specified in &struct odp_sflow_sample_header), then by packet
+ * data.
+ */
 struct odp_msg {
-    __u32 type;                 /* _ODPL_MISS_NR or _ODPL_ACTION_NR. */
-    __u32 length;               /* Message length, including header. */
-    __u16 port;                 /* Port on which frame was received. */
+    __u32 type;
+    __u32 length;
+    __u16 port;
     __u16 reserved;
-    __u32 arg;                  /* Argument value specified in action. */
-
-    /*
-     * Followed by:
-     *
-     * ODPL_MISS, ODPL_ACTION: packet data.
-     *
-     * ODPL_SFLOW: "struct odp_sflow_sample_header", followed by
-     *   an array of "union odp_action"s, followed by packet data.
-     */
+    __u32 arg;
 };
 
-/* Header added to sFlow sampled packet. */
+/**
+ * struct odp_sflow_sample_header - header added to sFlow sampled packet.
+ * @sample_pool: Number of packets that were candidates for sFlow sampling,
+ * regardless of whether they were actually chosen and sent down to userspace.
+ * @n_actions: Number of "union odp_action"s immediately following this header.
+ * @reserved: Pads the structure up to a 64-bit boundary.  Should be set to
+ * zero.
+ *
+ * This header follows &struct odp_msg when that structure's @type is
+ * %_ODPL_SFLOW_NR, and it is itself followed by an array of &union odp_action
+ * (the number of which is specified in @n_actions) and then by packet data.
+ */
 struct odp_sflow_sample_header {
-    __u64 sample_pool;          /* Number of potentially sampled packets. */
-    __u32 n_actions;            /* Number of following "union odp_action"s. */
-    __u32 reserved;             /* Pad up to 64-bit boundary. */
-    /* Followed by n_action "union odp_action"s. */
+    __u64 sample_pool;
+    __u32 n_actions;
+    __u32 reserved;
 };
 
 #define ODP_PORT_INTERNAL (1 << 0) /* This port is simulated. */
