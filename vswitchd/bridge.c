@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3427,7 +3427,7 @@ iface_is_internal(const struct bridge *br, const char *if_name)
     }
 
     port = port_lookup(br, if_name);
-    if (port->n_ifaces > 1 && port->cfg->bond_fake_iface) {
+    if (port && port->n_ifaces > 1 && port->cfg->bond_fake_iface) {
         return true;
     }
     return false;
