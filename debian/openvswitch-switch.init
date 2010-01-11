@@ -35,7 +35,7 @@ unset OVS_VSWITCHD_OPTS
 unset CORE_LIMIT
 default=/etc/default/openvswitch-switch
 if [ -f $default ] ; then
-	. $default
+    . $default
 fi
 
 set -e
@@ -217,9 +217,9 @@ case "$1" in
         set -- "$@" --remote punix:/var/run/ovsdb-server
         set -- "$@" /etc/openvswitch-switch/conf
         set -- "$@" $OVSDB_SERVER_OPTS
-	echo -n "Starting ovsdb-server: "
-	start-stop-daemon --start --quiet --pidfile /var/run/ovsdb-server.pid \
-	    --exec $ovsdb_server -- "$@"
+        echo -n "Starting ovsdb-server: "
+        start-stop-daemon --start --quiet --pidfile /var/run/ovsdb-server.pid \
+            --exec $ovsdb_server -- "$@"
         if running ovsdb-server; then
             echo "ovsdb-server."
         else
@@ -235,30 +235,30 @@ case "$1" in
         set -- "$@" --detach --pidfile
         set -- "$@" unix:/var/run/ovsdb-server
         set -- "$@" $OVS_VSWITCHD_OPTS
-	echo -n "Starting ovs-vswitchd: "
-	start-stop-daemon --start --quiet --pidfile /var/run/ovs-vswitchd.pid \
-	    --exec $ovs_vswitchd -- "$@"
+        echo -n "Starting ovs-vswitchd: "
+        start-stop-daemon --start --quiet --pidfile /var/run/ovs-vswitchd.pid \
+            --exec $ovs_vswitchd -- "$@"
         if running ovs-vswitchd; then
             echo "ovs-vswitchd."
         else
             echo " ERROR."
         fi
-	;;
+        ;;
     stop)
-	echo -n "Stopping ovs-vswitchd: "
-	start-stop-daemon --stop --quiet --oknodo \
+        echo -n "Stopping ovs-vswitchd: "
+        start-stop-daemon --stop --quiet --oknodo \
             --pidfile /var/run/ovs-vswitchd.pid \
             --exec $ovs_vswitchd
-	echo "ovs-vswitchd."
+        echo "ovs-vswitchd."
 
-	echo -n "Stopping ovsdb-server: "
-	start-stop-daemon --stop --quiet --oknodo \
+        echo -n "Stopping ovsdb-server: "
+        start-stop-daemon --stop --quiet --oknodo \
             --pidfile /var/run/ovsdb-server.pid \
             --exec $ovsdb_server
-	echo "ovsdb-server."
-	;;
+        echo "ovsdb-server."
+        ;;
     force-stop)
-	echo -n "Forcefully stopping ovs-vswitchd: "
+        echo -n "Forcefully stopping ovs-vswitchd: "
         force_stop ovs-vswitchd
         if ! running ovs-vswitchd; then
             echo "ovs-vswitchd."
@@ -266,28 +266,28 @@ case "$1" in
             echo " ERROR."
         fi
 
-	echo -n "Forcefully stopping ovsdb-server: "
+        echo -n "Forcefully stopping ovsdb-server: "
         force_stop ovsdb-server
         if ! running ovsdb-server; then
             echo "ovsdb-server."
         else
             echo " ERROR."
         fi
-	;;
+        ;;
     unload)
-	unload_modules
-	;;
+        unload_modules
+        ;;
     reload)
         ;;
     force-reload)
         # Nothing to do, since ovs-vswitchd automatically reloads
         # whenever its configuration changes, and ovsdb-server doesn't
         # have anything to reload.
-	;;
+        ;;
     restart)
         $0 stop || true
         $0 start
-	;;
+        ;;
     status)
         for daemon in ovs-vswitchd ovsdb-server; do
             echo -n "$daemon is "
@@ -300,10 +300,10 @@ case "$1" in
         done
         ;;
     *)
-	N=/etc/init.d/$NAME
-	echo "Usage: $N {start|stop|restart|force-reload|status|force-stop|unload}" >&2
-	exit 1
-	;;
+        N=/etc/init.d/$NAME
+        echo "Usage: $N {start|stop|restart|force-reload|status|force-stop|unload}" >&2
+        exit 1
+        ;;
 esac
 
 exit 0
