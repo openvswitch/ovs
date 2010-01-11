@@ -298,7 +298,6 @@ dpif_set_drop_frags(struct dpif *dpif, bool drop_frags)
     return error;
 }
 
-
 /* Attempts to add 'devname' as a port on 'dpif', given the combination of
  * ODP_PORT_* flags in 'flags'.  If successful, returns 0 and sets '*port_nop'
  * to the new port's port number (if 'port_nop' is non-null).  On failure,
