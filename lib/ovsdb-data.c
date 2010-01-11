@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,6 +58,35 @@ ovsdb_atom_init_default(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
     case OVSDB_TYPE_UUID:
         uuid_zero(&atom->uuid);
         break;
+
+    case OVSDB_N_TYPES:
+    default:
+        NOT_REACHED();
+    }
+}
+
+bool
+ovsdb_atom_is_default(const union ovsdb_atom *atom,
+                      enum ovsdb_atomic_type type)
+{
+    switch (type) {
+    case OVSDB_TYPE_VOID:
+        NOT_REACHED();
+
+    case OVSDB_TYPE_INTEGER:
+        return atom->integer == 0;
+
+    case OVSDB_TYPE_REAL:
+        return atom->real == 0.0;
+
+    case OVSDB_TYPE_BOOLEAN:
+        return atom->boolean == false;
+
+    case OVSDB_TYPE_STRING:
+        return atom->string[0] == '\0';
+
+    case OVSDB_TYPE_UUID:
+        return uuid_is_zero(&atom->uuid);
 
     case OVSDB_N_TYPES:
     default:
@@ -349,6 +378,28 @@ ovsdb_datum_init_default(struct ovsdb_datum *datum,
     datum->n = type->n_min;
     datum->keys = alloc_default_atoms(type->key_type, datum->n);
     datum->values = alloc_default_atoms(type->value_type, datum->n);
+}
+
+bool
+ovsdb_datum_is_default(const struct ovsdb_datum *datum,
+                       const struct ovsdb_type *type)
+{
+    size_t i;
+
+    if (datum->n != type->n_min) {
+        return false;
+    }
+    for (i = 0; i < datum->n; i++) {
+        if (!ovsdb_atom_is_default(&datum->keys[i], type->key_type)) {
+            return false;
+        }
+        if (type->value_type != OVSDB_TYPE_VOID
+            && !ovsdb_atom_is_default(&datum->values[i], type->value_type)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 static union ovsdb_atom *

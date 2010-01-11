@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,6 +105,14 @@ void
 uuid_zero(struct uuid *uuid)
 {
     uuid->parts[0] = uuid->parts[1] = uuid->parts[2] = uuid->parts[3] = 0;
+}
+
+/* Returns true if 'uuid' is all zero, otherwise false. */
+bool
+uuid_is_zero(const struct uuid *uuid)
+{
+    return (!uuid->parts[0] && !uuid->parts[1]
+            && !uuid->parts[2] && !uuid->parts[3]);
 }
 
 /* Compares 'a' and 'b'.  Returns a negative value if 'a < b', zero if 'a ==

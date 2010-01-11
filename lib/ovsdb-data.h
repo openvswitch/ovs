@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ union ovsdb_atom {
 };
 
 void ovsdb_atom_init_default(union ovsdb_atom *, enum ovsdb_atomic_type);
+bool ovsdb_atom_is_default(const union ovsdb_atom *, enum ovsdb_atomic_type);
 void ovsdb_atom_clone(union ovsdb_atom *, const union ovsdb_atom *,
                       enum ovsdb_atomic_type);
 void ovsdb_atom_swap(union ovsdb_atom *, union ovsdb_atom *);
@@ -80,6 +81,8 @@ struct ovsdb_datum {
 };
 
 void ovsdb_datum_init_default(struct ovsdb_datum *, const struct ovsdb_type *);
+bool ovsdb_datum_is_default(const struct ovsdb_datum *,
+                            const struct ovsdb_type *);
 void ovsdb_datum_clone(struct ovsdb_datum *, const struct ovsdb_datum *,
                        const struct ovsdb_type *);
 void ovsdb_datum_destroy(struct ovsdb_datum *, const struct ovsdb_type *);

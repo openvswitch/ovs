@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -261,8 +261,10 @@ ovsdb_file_replica_change_cb(const struct ovsdb_row *old,
             unsigned int idx = column->index;
 
             if (idx != OVSDB_COL_UUID && column->persistent
-                && (!old || !ovsdb_datum_equals(&old->fields[idx],
-                                                &new->fields[idx], type)))
+                && (old
+                    ? !ovsdb_datum_equals(&old->fields[idx], &new->fields[idx],
+                                          type)
+                    : !ovsdb_datum_is_default(&new->fields[idx], type)))
             {
                 if (!row) {
                     row = json_object_create();

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,6 +74,7 @@ uuid_equals(const struct uuid *a, const struct uuid *b)
 void uuid_init(void);
 void uuid_generate(struct uuid *);
 void uuid_zero(struct uuid *);
+bool uuid_is_zero(const struct uuid *);
 int uuid_compare_3way(const struct uuid *, const struct uuid *);
 bool uuid_from_string(struct uuid *, const char *);
 
