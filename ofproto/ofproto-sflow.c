@@ -519,7 +519,7 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     /* Add extended switch element. */
     memset(&switchElem, 0, sizeof(switchElem));
     switchElem.tag = SFLFLOW_EX_SWITCH;
-    switchElem.flowType.sw.src_vlan = flow.dl_vlan;
+    switchElem.flowType.sw.src_vlan = ntohs(flow.dl_vlan);
     switchElem.flowType.sw.src_priority = -1; /* XXX */
     switchElem.flowType.sw.dst_vlan = -1;     /* Filled in correctly below. */
     switchElem.flowType.sw.dst_priority = switchElem.flowType.sw.src_priority;
@@ -542,7 +542,7 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
             break;
 
         case ODPAT_SET_VLAN_VID:
-            switchElem.flowType.sw.dst_vlan = a->vlan_vid.vlan_vid;
+            switchElem.flowType.sw.dst_vlan = ntohs(a->vlan_vid.vlan_vid);
             break;
 
         case ODPAT_SET_VLAN_PCP:
