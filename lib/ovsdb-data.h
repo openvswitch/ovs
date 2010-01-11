@@ -73,7 +73,21 @@ struct ovsdb_error *ovsdb_atom_from_json(union ovsdb_atom *,
 struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
 
-/* One value of an OVSDB type (given by struct ovsdb_type). */
+/* An instance of an OVSDB type (given by struct ovsdb_type).
+ *
+ * 'n' is constrained by the ovsdb_type's 'n_min' and 'n_max'.
+ *
+ * If 'n' is nonzero, then 'keys' points to an array of 'n' atoms of the type
+ * specified by the ovsdb_type's 'key_type'.  (Otherwise, 'keys' should be
+ * null.)
+ *
+ * If 'n' is nonzero and the ovsdb_type's 'value_type' is not OVSDB_TYPE_VOID,
+ * then 'values' points to an array of 'n' atoms of the type specified by the
+ * 'value_type'.  (Otherwise, 'values' should be null.)
+ *
+ * Thus, for 'n' > 0, 'keys' will always be nonnull and 'values' will be
+ * nonnull only for "map" types.
+ */
 struct ovsdb_datum {
     unsigned int n;             /* Number of 'keys' and 'values'. */
     union ovsdb_atom *keys;     /* Each of the ovsdb_type's 'key_type'. */

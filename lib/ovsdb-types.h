@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,13 +42,22 @@ struct ovsdb_error *ovsdb_atomic_type_from_json(enum ovsdb_atomic_type *,
 const char *ovsdb_atomic_type_to_string(enum ovsdb_atomic_type);
 struct json *ovsdb_atomic_type_to_json(enum ovsdb_atomic_type);
 
-/* An OVSDB type.  One of:
+/* An OVSDB type.
  *
- *      - An atomic type.
+ * Several rules constrain the valid types.  See ovsdb_type_is_valid() (in
+ * ovsdb-types.c) for details.
  *
- *      - A set of atomic types.
+ * If 'value_type' is OVSDB_TYPE_VOID, 'n_min' is 1, and 'n_max' is 1, then the
+ * type is a single atomic 'key_type'.
  *
- *      - A map from one atomic type to another.
+ * If 'value_type' is OVSDB_TYPE_VOID and 'n_min' or 'n_max' (or both) has a
+ * value other than 1, then the type is a set of 'key_type'.  If 'n_min' is 0
+ * and 'n_max' is 1, then the type can also be considered an optional
+ * 'key_type'.
+ *
+ * If 'value_type' is not OVSDB_TYPE_VOID, then the type is a map from
+ * 'key_type' to 'value_type'.  If 'n_min' is 0 and 'n_max' is 1, then the type
+ * can also be considered an optional pair of 'key_type' and 'value_type'.
  */
 struct ovsdb_type {
     enum ovsdb_atomic_type key_type;
