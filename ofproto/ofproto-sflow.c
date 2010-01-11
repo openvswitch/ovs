@@ -148,12 +148,14 @@ sflow_agent_get_counters(void *os_, SFLPoller *poller,
     counters->ifIndex = SFL_DS_INDEX(poller->dsi);
     counters->ifType = 6;
     if (!netdev_get_features(osp->netdev, &current, NULL, NULL, NULL)) {
+      /* The values of ifDirection come from MAU MIB (RFC 2668): 0 = unknown,
+         1 = full-duplex, 2 = half-duplex, 3 = in, 4=out */
         counters->ifSpeed = netdev_features_to_bps(current);
         counters->ifDirection = (netdev_features_is_full_duplex(current)
                                  ? 1 : 2);
     } else {
         counters->ifSpeed = 100000000;
-        counters->ifDirection = 1;
+        counters->ifDirection = 0;
     }
     if (!netdev_get_flags(osp->netdev, &flags) && flags & NETDEV_UP) {
         bool carrier;
