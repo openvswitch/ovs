@@ -482,6 +482,15 @@ sFlow collectors, by default every 30 seconds.  To override this, set
 By default, \fBovs\-vswitchd\fR sends the first 128 bytes of sampled
 packets to sFlow collectors.  To override this, set
 \fBsflow.\fIbridge\fB.header\fR to a size in bytes.
+.PP
+The sFlow module must be able to report an ``agent address'' to sFlow
+collectors, which should be an IP address for the Open vSwitch that is
+persistent and reachable over the network, if possible.  If a
+local IP is configured as \fBbridge.\fIbridge\fB.controller.ip\fR,
+then that IP address is used by default.  To override this default,
+set \fBsflow.\fIbridge\fB.agent\fR to the name of a network device, in
+which case the IP address set on that device is used.  If no IP
+address can be determined either way, sFlow is disabled.
 .SS "Remote Management"
 A \fBovs\-vswitchd\fR instance may be remotely managed by a controller that
 supports the OpenFlow Management Protocol, such as NOX.  This
