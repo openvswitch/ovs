@@ -418,7 +418,7 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
                    sflow_agent_send_packet_cb);
 
     receiver = sfl_agent_addReceiver(os->sflow_agent);
-    sfl_receiver_set_sFlowRcvrOwner(receiver, "OpenVSwitch sFlow");
+    sfl_receiver_set_sFlowRcvrOwner(receiver, "Open vSwitch sFlow");
     sfl_receiver_set_sFlowRcvrTimeout(receiver, 0xffffffff);
 
     /* Add a single sampler to represent the datapath (special <ifIndex>:0
