@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,14 +74,37 @@
 #define ADVERTISED_Asym_Pause           (1 << 14)
 #endif
 
-struct tap_state {
-    int tap_fd;                 /* File descriptor for TAP device. */
+static struct rtnetlink_notifier netdev_linux_cache_notifier;
+static struct shash cache_map = SHASH_INITIALIZER(&cache_map);
+
+enum {
+    VALID_IFINDEX = 1 << 0,
+    VALID_ETHERADDR = 1 << 1,
+    VALID_IN4 = 1 << 2,
+    VALID_IN6 = 1 << 3,
+    VALID_MTU = 1 << 4,
+    VALID_CARRIER = 1 << 5,
+    VALID_IS_INTERNAL = 1 << 6
 };
 
-/* Provider-specific netdev object.  Netdev objects are devices that are
- * created by the netdev library through a netdev_create() call. */
-struct netdev_obj_linux {
-    struct netdev_obj netdev_obj;
+struct tap_state {
+    int fd;
+};
+
+struct netdev_dev_linux {
+    struct netdev_dev netdev_dev;
+
+    struct shash_node *shash_node;
+    unsigned int cache_valid;
+
+    int ifindex;
+    uint8_t etheraddr[ETH_ADDR_LEN];
+    struct in_addr address, netmask;
+    struct in6_addr in6;
+    int mtu;
+    int carrier;
+    bool is_internal;
+
     union {
         struct tap_state tap;
     } state;
@@ -95,37 +118,7 @@ struct netdev_linux {
     int netdev_fd;              /* Network device. */
     int tap_fd;                 /* TAP character device, if any, otherwise the
                                  * network device. */
-
-    struct netdev_linux_cache *cache;
 };
-
-enum {
-    VALID_IFINDEX = 1 << 0,
-    VALID_ETHERADDR = 1 << 1,
-    VALID_IN4 = 1 << 2,
-    VALID_IN6 = 1 << 3,
-    VALID_MTU = 1 << 4,
-    VALID_CARRIER = 1 << 5,
-    VALID_IS_INTERNAL = 1 << 6
-};
-
-/* Cached network device information. */
-struct netdev_linux_cache {
-    struct shash_node *shash_node;
-    unsigned int valid;
-    int ref_cnt;
-
-    int ifindex;
-    uint8_t etheraddr[ETH_ADDR_LEN];
-    struct in_addr address, netmask;
-    struct in6_addr in6;
-    int mtu;
-    int carrier;
-    bool is_internal;
-};
-
-static struct shash cache_map = SHASH_INITIALIZER(&cache_map);
-static struct rtnetlink_notifier netdev_linux_cache_notifier;
 
 /* An AF_INET socket (used for ioctl operations). */
 static int af_inet_sock = -1;
@@ -162,10 +155,10 @@ static struct rtnetlink_notifier netdev_linux_poll_notifier;
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
-static int netdev_linux_do_ethtool(struct netdev *, struct ethtool_cmd *,
+static int netdev_linux_do_ethtool(const struct netdev *, struct ethtool_cmd *,
                                    int cmd, const char *cmd_name);
-static int netdev_linux_do_ioctl(const struct netdev *, struct ifreq *,
-                                 int cmd, const char *cmd_name);
+static int netdev_linux_do_ioctl(const char *name, struct ifreq *, int cmd,
+                                 const char *cmd_name);
 static int netdev_linux_get_ipv4(const struct netdev *, struct in_addr *,
                                  int cmd, const char *cmd_name);
 static int get_flags(const struct netdev *, int *flagsp);
@@ -181,20 +174,21 @@ static int set_etheraddr(const char *netdev_name, int hwaddr_family,
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
 
-static struct netdev_obj_linux *
-netdev_obj_linux_cast(const struct netdev_obj *netdev_obj)
+static struct netdev_dev_linux *
+netdev_dev_linux_cast(const struct netdev_dev *netdev_dev)
 {
-    /* xxx Gross hack!  Until we get the class 'type' issue resolved. */
-#if 0
-    netdev_obj_assert_class(netdev_obj, &netdev_linux_class);
-#endif
-    return CONTAINER_OF(netdev_obj, struct netdev_obj_linux, netdev_obj);
+    const char *type = netdev_dev_get_type(netdev_dev);
+    assert(!strcmp(type, "system") || !strcmp(type, "tap")
+            || !strcmp(type, "gre"));
+    return CONTAINER_OF(netdev_dev, struct netdev_dev_linux, netdev_dev);
 }
 
 static struct netdev_linux *
 netdev_linux_cast(const struct netdev *netdev)
 {
-    netdev_assert_class(netdev, &netdev_linux_class);
+    const char *type = netdev_get_type(netdev);
+    assert(!strcmp(type, "system") || !strcmp(type, "tap")
+            || !strcmp(type, "gre"));
     return CONTAINER_OF(netdev, struct netdev_linux, netdev);
 }
 
@@ -228,17 +222,17 @@ static void
 netdev_linux_cache_cb(const struct rtnetlink_change *change,
                       void *aux UNUSED)
 {
-    struct netdev_linux_cache *cache;
+    struct netdev_dev_linux *dev;
     if (change) {
-        cache = shash_find_data(&cache_map, change->ifname);
-        if (cache) {
-            cache->valid = 0;
+        dev = shash_find_data(&cache_map, change->ifname);
+        if (dev) {
+            dev->cache_valid = 0;
         }
     } else {
         struct shash_node *node;
         SHASH_FOR_EACH (node, &cache_map) {
-            cache = node->data;
-            cache->valid = 0;
+            dev = node->data;
+            dev->cache_valid = 0;
         }
     }
 }
@@ -461,6 +455,84 @@ error:
     return error;
 }
 
+/* Creates the netdev device of 'type' with 'name'. */
+static int
+netdev_linux_create_system(const char *name, const char *type UNUSED,
+                    const struct shash *args, struct netdev_dev **netdev_devp)
+{
+    struct netdev_dev_linux *netdev_dev;
+    int error;
+
+    if (!shash_is_empty(args)) {
+        VLOG_WARN("%s: arguments for system devices should be empty", name);
+    }
+
+    if (shash_is_empty(&cache_map)) {
+        error = rtnetlink_notifier_register(&netdev_linux_cache_notifier,
+                                            netdev_linux_cache_cb, NULL);
+        if (error) {
+            return error;
+        }
+    }
+
+    netdev_dev = xzalloc(sizeof *netdev_dev);
+    netdev_dev->shash_node = shash_add(&cache_map, name, &netdev_dev);
+
+    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_linux_class);
+    *netdev_devp = &netdev_dev->netdev_dev;
+    return 0;
+}
+
+static int
+netdev_linux_create_tap(const char *name, const char *type UNUSED,
+                    const struct shash *args, struct netdev_dev **netdev_devp)
+{
+    struct netdev_dev_linux *netdev_dev;
+    struct tap_state *state;
+    static const char tap_dev[] = "/dev/net/tun";
+    struct ifreq ifr;
+    int error;
+
+    if (!shash_is_empty(args)) {
+        VLOG_WARN("%s: arguments for TAP devices should be empty", name);
+    }
+
+    netdev_dev = xzalloc(sizeof *netdev_dev);
+    state = &netdev_dev->state.tap;
+
+    /* Open tap device. */
+    state->fd = open(tap_dev, O_RDWR);
+    if (state->fd < 0) {
+        error = errno;
+        VLOG_WARN("opening \"%s\" failed: %s", tap_dev, strerror(error));
+        goto error;
+    }
+
+    /* Create tap device. */
+    ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
+    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+    if (ioctl(state->fd, TUNSETIFF, &ifr) == -1) {
+        VLOG_WARN("%s: creating tap device failed: %s", name,
+                  strerror(errno));
+        error = errno;
+        goto error;
+    }
+
+    /* Make non-blocking. */
+    error = set_nonblocking(state->fd);
+    if (error) {
+        goto error;
+    }
+
+    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_tap_class);
+    *netdev_devp = &netdev_dev->netdev_dev;
+    return 0;
+
+error:
+    free(netdev_dev);
+    return error;
+}
+
 static int
 if_up(const char *name)
 {
@@ -478,88 +550,14 @@ if_up(const char *name)
     return 0;
 }
 
-/* Creates the netdev object of 'type' with 'name'. */
-static int
-netdev_linux_create_system(const char *name, const char *type UNUSED,
-                    const struct shash *args, bool created)
-{
-    struct netdev_obj_linux *netdev_obj;
-
-    if (!shash_is_empty(args)) {
-        VLOG_WARN("arguments for system devices should be empty");
-    }
-
-    netdev_obj = xcalloc(1, sizeof *netdev_obj);
-    netdev_obj_init(&netdev_obj->netdev_obj, name, &netdev_linux_class,
-                    created);
-
-    return 0;
-}
-
-static int
-netdev_linux_create_tap(const char *name, const char *type UNUSED,
-                    const struct shash *args, bool created)
-{
-    struct netdev_obj_linux *netdev_obj;
-    struct tap_state *state;
-    static const char tap_dev[] = "/dev/net/tun";
-    struct ifreq ifr;
-    int error;
-
-    if (!shash_is_empty(args)) {
-        VLOG_WARN("arguments for TAP devices should be empty");
-    }
-
-    netdev_obj = xcalloc(1, sizeof *netdev_obj);
-    netdev_obj_init(&netdev_obj->netdev_obj, name, &netdev_tap_class, created);
-
-    state = &netdev_obj->state.tap;
-
-    /* Open tap device. */
-    state->tap_fd = open(tap_dev, O_RDWR);
-    if (state->tap_fd < 0) {
-        error = errno;
-        VLOG_WARN("opening \"%s\" failed: %s", tap_dev, strerror(error));
-        goto error;
-    }
-
-    /* Create tap device. */
-    ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
-    if (ioctl(state->tap_fd, TUNSETIFF, &ifr) == -1) {
-        VLOG_WARN("%s: creating tap device failed: %s", name,
-                  strerror(errno));
-        error = errno;
-        goto error;
-    }
-
-    /* Make non-blocking. */
-    error = set_nonblocking(state->tap_fd);
-    if (error) {
-        goto error;
-    }
-
-    error = if_up(name);
-    if (error) {
-        goto error;
-    }
-
-    return 0;
-
-error:
-    netdev_destroy(name);
-    return error;
-}
-
 static int
 netdev_linux_create_gre(const char *name, const char *type UNUSED,
-                    const struct shash *args, bool created)
+                    const struct shash *args, struct netdev_dev **netdev_devp)
 {
-    struct netdev_obj_linux *netdev_obj;
+    struct netdev_dev_linux *netdev_dev;
     int error;
 
-    netdev_obj = xcalloc(1, sizeof *netdev_obj);
-    netdev_obj_init(&netdev_obj->netdev_obj, name, &netdev_gre_class, created);
+    netdev_dev = xzalloc(sizeof *netdev_dev);
 
     error = setup_gre(name, args, true);
     if (error) {
@@ -571,19 +569,20 @@ netdev_linux_create_gre(const char *name, const char *type UNUSED,
         goto error;
     }
 
+    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_gre_class);
+    *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
 
 error:
-    netdev_destroy(name);
+    free(netdev_dev);
     return error;
 }
 
 static int
-netdev_linux_reconfigure_gre(struct netdev_obj *netdev_obj_,
+netdev_linux_reconfigure_gre(struct netdev_dev *netdev_dev_,
                              const struct shash *args)
 {
-    struct netdev_obj_linux *netdev_obj = netdev_obj_linux_cast(netdev_obj_);
-    const char *name = netdev_obj_get_name(&netdev_obj->netdev_obj);
+    const char *name = netdev_dev_get_name(netdev_dev_);
 
     return setup_gre(name, args, false);
 }
@@ -591,12 +590,12 @@ netdev_linux_reconfigure_gre(struct netdev_obj *netdev_obj_,
 /* The arguments are marked as unused to prevent warnings on platforms where
  * the Netlink interface isn't supported. */
 static int
-destroy_gre_netlink(struct netdev_obj_linux *netdev_obj UNUSED)
+destroy_gre_netlink(struct netdev_dev_linux *netdev_dev UNUSED)
 {
 #ifdef GRE_IOCTL_ONLY
     return EOPNOTSUPP;
 #else
-    const char *name = netdev_obj_get_name(&netdev_obj->netdev_obj);
+    const char *name = netdev_dev_get_name(&netdev_dev->netdev_dev);
     int error;
     struct ofpbuf request, *reply;
     struct ifinfomsg ifinfomsg;
@@ -630,9 +629,9 @@ error:
 }
 
 static int
-destroy_gre_ioctl(struct netdev_obj_linux *netdev_obj)
+destroy_gre_ioctl(struct netdev_dev_linux *netdev_dev)
 {
-    const char *name = netdev_obj_get_name(&netdev_obj->netdev_obj);
+    const char *name = netdev_dev_get_name(&netdev_dev->netdev_dev);
     struct ip_tunnel_parm p;
     struct ifreq ifr;
 
@@ -651,35 +650,44 @@ destroy_gre_ioctl(struct netdev_obj_linux *netdev_obj)
 }
 
 static void
-destroy_tap(struct netdev_obj_linux *netdev_obj)
+destroy_tap(struct netdev_dev_linux *netdev_dev)
 {
-    struct tap_state *state = &netdev_obj->state.tap;
-    if (state->tap_fd >= 0) {
-        close(state->tap_fd);
+    struct tap_state *state = &netdev_dev->state.tap;
+
+    if (state->fd >= 0) {
+        close(state->fd);
     }
 }
 
-/* Destroys the netdev object 'netdev_obj_'. */
+/* Destroys the netdev device 'netdev_dev_'. */
 static void
-netdev_linux_destroy(struct netdev_obj *netdev_obj_)
+netdev_linux_destroy(struct netdev_dev *netdev_dev_)
 {
-    struct netdev_obj_linux *netdev_obj = netdev_obj_linux_cast(netdev_obj_);
-    const char *type = netdev_obj_get_type(netdev_obj_);
+    struct netdev_dev_linux *netdev_dev = netdev_dev_linux_cast(netdev_dev_);
+    const char *type = netdev_dev_get_type(netdev_dev_);
 
-    if (!strcmp(type, "tap")) {
-        destroy_tap(netdev_obj);
+    if (!strcmp(type, "system")) {
+        shash_delete(&cache_map, netdev_dev->shash_node);
+
+        if (shash_is_empty(&cache_map)) {
+            rtnetlink_notifier_unregister(&netdev_linux_cache_notifier);
+        }
+    } else if (!strcmp(type, "tap")) {
+        destroy_tap(netdev_dev);
     } else if (!strcmp(type, "gre")) {
         if (gre_descriptors.use_ioctl) {
-            destroy_gre_ioctl(netdev_obj);
+            destroy_gre_ioctl(netdev_dev);
         } else {
-            destroy_gre_netlink(netdev_obj);
+            destroy_gre_netlink(netdev_dev);
         }
     }
-    free(netdev_obj);
+
+    free(netdev_dev_);
 }
 
 static int
-netdev_linux_open(const char *name, int ethertype, struct netdev **netdevp)
+netdev_linux_open(struct netdev_dev *netdev_dev, int ethertype,
+                  struct netdev **netdevp)
 {
     struct netdev_linux *netdev;
     enum netdev_flags flags;
@@ -687,28 +695,11 @@ netdev_linux_open(const char *name, int ethertype, struct netdev **netdevp)
 
     /* Allocate network device. */
     netdev = xzalloc(sizeof *netdev);
-    netdev_init(&netdev->netdev, name, &netdev_linux_class);
+    netdev_init(&netdev->netdev, netdev_dev);
     netdev->netdev_fd = -1;
     netdev->tap_fd = -1;
-    netdev->cache = shash_find_data(&cache_map, name);
-    if (!netdev->cache) {
-        if (shash_is_empty(&cache_map)) {
-            int error = rtnetlink_notifier_register(
-                &netdev_linux_cache_notifier, netdev_linux_cache_cb, NULL);
-            if (error) {
-                netdev_close(&netdev->netdev);
-                return error;
-            }
-        }
-        netdev->cache = xmalloc(sizeof *netdev->cache);
-        netdev->cache->shash_node = shash_add(&cache_map, name,
-                                              netdev->cache);
-        netdev->cache->valid = 0;
-        netdev->cache->ref_cnt = 0;
-    }
-    netdev->cache->ref_cnt++;
 
-    if (!strcmp(netdev_get_type(&netdev->netdev), "tap")) {
+    if (!strcmp(netdev_dev_get_type(netdev_dev), "tap")) {
         static const char tap_dev[] = "/dev/net/tun";
         struct ifreq ifr;
 
@@ -722,9 +713,11 @@ netdev_linux_open(const char *name, int ethertype, struct netdev **netdevp)
 
         /* Create tap device. */
         ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-        strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+        strncpy(ifr.ifr_name, netdev_dev_get_name(netdev_dev),
+                sizeof ifr.ifr_name);
         if (ioctl(netdev->tap_fd, TUNSETIFF, &ifr) == -1) {
-            VLOG_WARN("%s: creating tap device failed: %s", name,
+            VLOG_WARN("%s: creating tap device failed: %s",
+                      netdev_dev_get_name(netdev_dev),
                       strerror(errno));
             error = errno;
             goto error;
@@ -779,7 +772,8 @@ netdev_linux_open(const char *name, int ethertype, struct netdev **netdevp)
         if (bind(netdev->netdev_fd,
                  (struct sockaddr *) &sll, sizeof sll) < 0) {
             error = errno;
-            VLOG_ERR("bind to %s failed: %s", name, strerror(error));
+            VLOG_ERR("bind to %s failed: %s", netdev_dev_get_name(netdev_dev),
+                     strerror(error));
             goto error;
         }
 
@@ -797,7 +791,7 @@ netdev_linux_open(const char *name, int ethertype, struct netdev **netdevp)
     return 0;
 
 error:
-    netdev_close(&netdev->netdev);
+    netdev_uninit(&netdev->netdev, true);
     return error;
 }
 
@@ -807,14 +801,6 @@ netdev_linux_close(struct netdev *netdev_)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-    if (netdev->cache && !--netdev->cache->ref_cnt) {
-        shash_delete(&cache_map, netdev->cache->shash_node);
-        free(netdev->cache);
-
-        if (shash_is_empty(&cache_map)) {
-            rtnetlink_notifier_unregister(&netdev_linux_cache_notifier);
-        }
-    }
     if (netdev->netdev_fd >= 0) {
         close(netdev->netdev_fd);
     }
@@ -890,7 +876,7 @@ netdev_linux_drain(struct netdev *netdev_)
         return 0;
     } else if (netdev->tap_fd != netdev->netdev_fd) {
         struct ifreq ifr;
-        int error = netdev_linux_do_ioctl(netdev_, &ifr,
+        int error = netdev_linux_do_ioctl(netdev_get_name(netdev_), &ifr,
                                           SIOCGIFTXQLEN, "SIOCGIFTXQLEN");
         if (error) {
             return error;
@@ -974,15 +960,16 @@ static int
 netdev_linux_set_etheraddr(struct netdev *netdev_,
                            const uint8_t mac[ETH_ADDR_LEN])
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
     int error;
 
-    if (!(netdev->cache->valid & VALID_ETHERADDR)
-        || !eth_addr_equals(netdev->cache->etheraddr, mac)) {
+    if (!(netdev_dev->cache_valid & VALID_ETHERADDR)
+        || !eth_addr_equals(netdev_dev->etheraddr, mac)) {
         error = set_etheraddr(netdev_get_name(netdev_), ARPHRD_ETHER, mac);
         if (!error) {
-            netdev->cache->valid |= VALID_ETHERADDR;
-            memcpy(netdev->cache->etheraddr, mac, ETH_ADDR_LEN);
+            netdev_dev->cache_valid |= VALID_ETHERADDR;
+            memcpy(netdev_dev->etheraddr, mac, ETH_ADDR_LEN);
         }
     } else {
         error = 0;
@@ -996,16 +983,17 @@ static int
 netdev_linux_get_etheraddr(const struct netdev *netdev_,
                            uint8_t mac[ETH_ADDR_LEN])
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    if (!(netdev->cache->valid & VALID_ETHERADDR)) {
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    if (!(netdev_dev->cache_valid & VALID_ETHERADDR)) {
         int error = get_etheraddr(netdev_get_name(netdev_),
-                                  netdev->cache->etheraddr);
+                                  netdev_dev->etheraddr);
         if (error) {
             return error;
         }
-        netdev->cache->valid |= VALID_ETHERADDR;
+        netdev_dev->cache_valid |= VALID_ETHERADDR;
     }
-    memcpy(mac, netdev->cache->etheraddr, ETH_ADDR_LEN);
+    memcpy(mac, netdev_dev->etheraddr, ETH_ADDR_LEN);
     return 0;
 }
 
@@ -1015,19 +1003,21 @@ netdev_linux_get_etheraddr(const struct netdev *netdev_,
 static int
 netdev_linux_get_mtu(const struct netdev *netdev_, int *mtup)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    if (!(netdev->cache->valid & VALID_MTU)) {
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    if (!(netdev_dev->cache_valid & VALID_MTU)) {
         struct ifreq ifr;
         int error;
 
-        error = netdev_linux_do_ioctl(netdev_, &ifr, SIOCGIFMTU, "SIOCGIFMTU");
+        error = netdev_linux_do_ioctl(netdev_get_name(netdev_), &ifr,
+                                      SIOCGIFMTU, "SIOCGIFMTU");
         if (error) {
             return error;
         }
-        netdev->cache->mtu = ifr.ifr_mtu;
-        netdev->cache->valid |= VALID_MTU;
+        netdev_dev->mtu = ifr.ifr_mtu;
+        netdev_dev->cache_valid |= VALID_MTU;
     }
-    *mtup = netdev->cache->mtu;
+    *mtup = netdev_dev->mtu;
     return 0;
 }
 
@@ -1045,16 +1035,18 @@ netdev_linux_get_ifindex(const struct netdev *netdev)
 static int
 netdev_linux_get_carrier(const struct netdev *netdev_, bool *carrier)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
     int error = 0;
     char *fn = NULL;
     int fd = -1;
 
-    if (!(netdev->cache->valid & VALID_CARRIER)) {
+    if (!(netdev_dev->cache_valid & VALID_CARRIER)) {
         char line[8];
         int retval;
 
-        fn = xasprintf("/sys/class/net/%s/carrier", netdev_get_name(netdev_));
+        fn = xasprintf("/sys/class/net/%s/carrier",
+                       netdev_get_name(netdev_));
         fd = open(fn, O_RDONLY);
         if (fd < 0) {
             error = errno;
@@ -1084,10 +1076,10 @@ netdev_linux_get_carrier(const struct netdev *netdev_, bool *carrier)
                          fn, line[0]);
             goto exit;
         }
-        netdev->cache->carrier = line[0] != '0';
-        netdev->cache->valid |= VALID_CARRIER;
+        netdev_dev->carrier = line[0] != '0';
+        netdev_dev->cache_valid |= VALID_CARRIER;
     }
-    *carrier = netdev->cache->carrier;
+    *carrier = netdev_dev->carrier;
     error = 0;
 
 exit:
@@ -1131,9 +1123,11 @@ check_for_working_netlink_stats(void)
  * XXX All of the members of struct netdev_stats are 64 bits wide, but on
  * 32-bit architectures the Linux network stats are only 32 bits. */
 static int
-netdev_linux_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
+netdev_linux_get_stats(const struct netdev *netdev_,
+                       struct netdev_stats *stats)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
     static int use_netlink_stats = -1;
     int error;
     struct netdev_stats raw_stats;
@@ -1141,28 +1135,29 @@ netdev_linux_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
 
     COVERAGE_INC(netdev_get_stats);
 
-    if (!(netdev->cache->valid & VALID_IS_INTERNAL)) {
-        netdev->cache->is_internal = (netdev->tap_fd != -1);
+    if (!(netdev_dev->cache_valid & VALID_IS_INTERNAL)) {
+        netdev_dev->is_internal = !strcmp(netdev_get_type(netdev_),
+                                                "tap");
 
-        if (!netdev->cache->is_internal) {
+        if (!netdev_dev->is_internal) {
             struct ethtool_drvinfo drvinfo;
 
             memset(&drvinfo, 0, sizeof drvinfo);
-            error = netdev_linux_do_ethtool(&netdev->netdev,
+            error = netdev_linux_do_ethtool(netdev_,
                                             (struct ethtool_cmd *)&drvinfo,
                                             ETHTOOL_GDRVINFO,
                                             "ETHTOOL_GDRVINFO");
 
             if (!error) {
-                netdev->cache->is_internal = !strcmp(drvinfo.driver,
-                                                     "openvswitch");
+                netdev_dev->is_internal = !strcmp(drvinfo.driver,
+                                                        "openvswitch");
             }
         }
 
-        netdev->cache->valid |= VALID_IS_INTERNAL;
+        netdev_dev->cache_valid |= VALID_IS_INTERNAL;
     }
 
-    if (netdev->cache->is_internal) {
+    if (netdev_dev->is_internal) {
         collect_stats = &raw_stats;
     }
 
@@ -1172,19 +1167,19 @@ netdev_linux_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
     if (use_netlink_stats) {
         int ifindex;
 
-        error = get_ifindex(&netdev->netdev, &ifindex);
+        error = get_ifindex(netdev_, &ifindex);
         if (!error) {
             error = get_stats_via_netlink(ifindex, collect_stats);
         }
     } else {
-        error = get_stats_via_proc(netdev->netdev.name, collect_stats);
+        error = get_stats_via_proc(netdev_get_name(netdev_), collect_stats);
     }
 
     /* If this port is an internal port then the transmit and receive stats
      * will appear to be swapped relative to the other ports since we are the
      * one sending the data, not a remote computer.  For consistency, we swap
      * them back here. */
-    if (netdev->cache->is_internal) {
+    if (netdev_dev->is_internal) {
         stats->rx_packets = raw_stats.tx_packets;
         stats->tx_packets = raw_stats.rx_packets;
         stats->rx_bytes = raw_stats.tx_bytes;
@@ -1504,26 +1499,28 @@ static int
 netdev_linux_get_in4(const struct netdev *netdev_,
                      struct in_addr *address, struct in_addr *netmask)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    if (!(netdev->cache->valid & VALID_IN4)) {
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+
+    if (!(netdev_dev->cache_valid & VALID_IN4)) {
         int error;
 
-        error = netdev_linux_get_ipv4(netdev_, &netdev->cache->address,
+        error = netdev_linux_get_ipv4(netdev_, &netdev_dev->address,
                                       SIOCGIFADDR, "SIOCGIFADDR");
         if (error) {
             return error;
         }
 
-        error = netdev_linux_get_ipv4(netdev_, &netdev->cache->netmask,
+        error = netdev_linux_get_ipv4(netdev_, &netdev_dev->netmask,
                                       SIOCGIFNETMASK, "SIOCGIFNETMASK");
         if (error) {
             return error;
         }
 
-        netdev->cache->valid |= VALID_IN4;
+        netdev_dev->cache_valid |= VALID_IN4;
     }
-    *address = netdev->cache->address;
-    *netmask = netdev->cache->netmask;
+    *address = netdev_dev->address;
+    *netmask = netdev_dev->netmask;
     return address->s_addr == INADDR_ANY ? EADDRNOTAVAIL : 0;
 }
 
@@ -1531,14 +1528,15 @@ static int
 netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
                      struct in_addr netmask)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
     int error;
 
     error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", address);
     if (!error) {
-        netdev->cache->valid |= VALID_IN4;
-        netdev->cache->address = address;
-        netdev->cache->netmask = netmask;
+        netdev_dev->cache_valid |= VALID_IN4;
+        netdev_dev->address = address;
+        netdev_dev->netmask = netmask;
         if (address.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
                                 "SIOCSIFNETMASK", netmask);
@@ -1568,12 +1566,13 @@ parse_if_inet6_line(const char *line,
 static int
 netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    if (!(netdev->cache->valid & VALID_IN6)) {
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
+    if (!(netdev_dev->cache_valid & VALID_IN6)) {
         FILE *file;
         char line[128];
 
-        netdev->cache->in6 = in6addr_any;
+        netdev_dev->in6 = in6addr_any;
 
         file = fopen("/proc/net/if_inet6", "r");
         if (file != NULL) {
@@ -1584,15 +1583,15 @@ netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
                 if (parse_if_inet6_line(line, &in6, ifname)
                     && !strcmp(name, ifname))
                 {
-                    netdev->cache->in6 = in6;
+                    netdev_dev->in6 = in6;
                     break;
                 }
             }
             fclose(file);
         }
-        netdev->cache->valid |= VALID_IN6;
+        netdev_dev->cache_valid |= VALID_IN6;
     }
-    *in6 = netdev->cache->in6;
+    *in6 = netdev_dev->in6;
     return 0;
 }
 
@@ -1614,9 +1613,11 @@ do_set_addr(struct netdev *netdev,
             int ioctl_nr, const char *ioctl_name, struct in_addr addr)
 {
     struct ifreq ifr;
-    strncpy(ifr.ifr_name, netdev->name, sizeof ifr.ifr_name);
+    strncpy(ifr.ifr_name, netdev_get_name(netdev), sizeof ifr.ifr_name);
     make_in4_sockaddr(&ifr.ifr_addr, addr);
-    return netdev_linux_do_ioctl(netdev, &ifr, ioctl_nr, ioctl_name);
+
+    return netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr, ioctl_nr,
+                                 ioctl_name);
 }
 
 /* Adds 'router' as a default IP gateway. */
@@ -1720,14 +1721,14 @@ netdev_linux_arp_lookup(const struct netdev *netdev,
     memcpy(&r.arp_pa, &sin, sizeof sin);
     r.arp_ha.sa_family = ARPHRD_ETHER;
     r.arp_flags = 0;
-    strncpy(r.arp_dev, netdev->name, sizeof r.arp_dev);
+    strncpy(r.arp_dev, netdev_get_name(netdev), sizeof r.arp_dev);
     COVERAGE_INC(netdev_arp_lookup);
     retval = ioctl(af_inet_sock, SIOCGARP, &r) < 0 ? errno : 0;
     if (!retval) {
         memcpy(mac, r.arp_ha.sa_data, ETH_ADDR_LEN);
     } else if (retval != ENXIO) {
         VLOG_WARN_RL(&rl, "%s: could not look up ARP entry for "IP_FMT": %s",
-                     netdev->name, IP_ARGS(&ip), strerror(retval));
+                     netdev_get_name(netdev), IP_ARGS(&ip), strerror(retval));
     }
     return retval;
 }
@@ -1860,7 +1861,7 @@ netdev_linux_poll_remove(struct netdev_notifier *notifier_)
 }
 
 const struct netdev_class netdev_linux_class = {
-    "system",                   /* type */
+    "system",
 
     netdev_linux_init,
     netdev_linux_run,
@@ -1908,11 +1909,11 @@ const struct netdev_class netdev_linux_class = {
 };
 
 const struct netdev_class netdev_tap_class = {
-    "tap",                      /* type */
+    "tap",
 
     netdev_linux_init,
-    NULL,                       /* run */
-    NULL,                       /* wait */
+    netdev_linux_run,
+    netdev_linux_wait,
 
     netdev_linux_create_tap,
     netdev_linux_destroy,
@@ -1921,7 +1922,7 @@ const struct netdev_class netdev_tap_class = {
     netdev_linux_open,
     netdev_linux_close,
 
-    netdev_linux_enumerate,
+    NULL,                       /* enumerate */
 
     netdev_linux_recv,
     netdev_linux_recv_wait,
@@ -1956,11 +1957,11 @@ const struct netdev_class netdev_tap_class = {
 };
 
 const struct netdev_class netdev_gre_class = {
-    "gre",                      /* type */
+    "gre",
 
     netdev_linux_init,
-    NULL,                       /* run */
-    NULL,                       /* wait */
+    netdev_linux_run,
+    netdev_linux_wait,
 
     netdev_linux_create_gre,
     netdev_linux_destroy,
@@ -1969,7 +1970,7 @@ const struct netdev_class netdev_gre_class = {
     netdev_linux_open,
     netdev_linux_close,
 
-    netdev_linux_enumerate,
+    NULL,                       /* enumerate */
 
     netdev_linux_recv,
     netdev_linux_recv_wait,
@@ -2150,7 +2151,8 @@ get_flags(const struct netdev *netdev, int *flags)
     struct ifreq ifr;
     int error;
 
-    error = netdev_linux_do_ioctl(netdev, &ifr, SIOCGIFFLAGS, "SIOCGIFFLAGS");
+    error = netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr, SIOCGIFFLAGS,
+                                  "SIOCGIFFLAGS");
     *flags = ifr.ifr_flags;
     return error;
 }
@@ -2161,7 +2163,8 @@ set_flags(struct netdev *netdev, int flags)
     struct ifreq ifr;
 
     ifr.ifr_flags = flags;
-    return netdev_linux_do_ioctl(netdev, &ifr, SIOCSIFFLAGS, "SIOCSIFFLAGS");
+    return netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr, SIOCSIFFLAGS,
+                                 "SIOCSIFFLAGS");
 }
 
 static int
@@ -2182,17 +2185,18 @@ do_get_ifindex(const char *netdev_name)
 static int
 get_ifindex(const struct netdev *netdev_, int *ifindexp)
 {
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    struct netdev_dev_linux *netdev_dev =
+                                netdev_dev_linux_cast(netdev_get_dev(netdev_));
     *ifindexp = 0;
-    if (!(netdev->cache->valid & VALID_IFINDEX)) {
+    if (!(netdev_dev->cache_valid & VALID_IFINDEX)) {
         int ifindex = do_get_ifindex(netdev_get_name(netdev_));
         if (ifindex < 0) {
             return -ifindex;
         }
-        netdev->cache->valid |= VALID_IFINDEX;
-        netdev->cache->ifindex = ifindex;
+        netdev_dev->cache_valid |= VALID_IFINDEX;
+        netdev_dev->ifindex = ifindex;
     }
-    *ifindexp = netdev->cache->ifindex;
+    *ifindexp = netdev_dev->ifindex;
     return 0;
 }
 
@@ -2239,13 +2243,13 @@ set_etheraddr(const char *netdev_name, int hwaddr_family,
 }
 
 static int
-netdev_linux_do_ethtool(struct netdev *netdev, struct ethtool_cmd *ecmd,
+netdev_linux_do_ethtool(const struct netdev *netdev, struct ethtool_cmd *ecmd,
                         int cmd, const char *cmd_name)
 {
     struct ifreq ifr;
 
     memset(&ifr, 0, sizeof ifr);
-    strncpy(ifr.ifr_name, netdev->name, sizeof ifr.ifr_name);
+    strncpy(ifr.ifr_name, netdev_get_name(netdev), sizeof ifr.ifr_name);
     ifr.ifr_data = (caddr_t) ecmd;
 
     ecmd->cmd = cmd;
@@ -2255,7 +2259,7 @@ netdev_linux_do_ethtool(struct netdev *netdev, struct ethtool_cmd *ecmd,
     } else {
         if (errno != EOPNOTSUPP) {
             VLOG_WARN_RL(&rl, "ethtool command %s on network device %s "
-                         "failed: %s", cmd_name, netdev->name,
+                         "failed: %s", cmd_name, netdev_get_name(netdev),
                          strerror(errno));
         } else {
             /* The device doesn't support this operation.  That's pretty
@@ -2266,13 +2270,13 @@ netdev_linux_do_ethtool(struct netdev *netdev, struct ethtool_cmd *ecmd,
 }
 
 static int
-netdev_linux_do_ioctl(const struct netdev *netdev, struct ifreq *ifr,
-                      int cmd, const char *cmd_name)
+netdev_linux_do_ioctl(const char *name, struct ifreq *ifr, int cmd,
+                      const char *cmd_name)
 {
-    strncpy(ifr->ifr_name, netdev_get_name(netdev), sizeof ifr->ifr_name);
+    strncpy(ifr->ifr_name, name, sizeof ifr->ifr_name);
     if (ioctl(af_inet_sock, cmd, ifr) == -1) {
-        VLOG_DBG_RL(&rl, "%s: ioctl(%s) failed: %s",
-                    netdev_get_name(netdev), cmd_name, strerror(errno));
+        VLOG_DBG_RL(&rl, "%s: ioctl(%s) failed: %s", name, cmd_name,
+                     strerror(errno));
         return errno;
     }
     return 0;
@@ -2286,7 +2290,7 @@ netdev_linux_get_ipv4(const struct netdev *netdev, struct in_addr *ip,
     int error;
 
     ifr.ifr_addr.sa_family = AF_INET;
-    error = netdev_linux_do_ioctl(netdev, &ifr, cmd, cmd_name);
+    error = netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr, cmd, cmd_name);
     if (!error) {
         const struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
         *ip = sin->sin_addr;

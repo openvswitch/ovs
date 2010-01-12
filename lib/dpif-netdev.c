@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -237,7 +237,7 @@ create_dp_netdev(const char *name, int dp_idx, struct dpif **dpifp)
     error = do_add_port(dp, name, ODP_PORT_INTERNAL, ODPP_LOCAL);
     if (error) {
         dp_netdev_free(dp);
-        return error;
+        return ENODEV;
     }
 
     *dpifp = create_dpif_netdev(dp);
@@ -363,6 +363,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
 {
     bool internal = (flags & ODP_PORT_INTERNAL) != 0;
     struct dp_netdev_port *port;
+    struct netdev_options netdev_options;
     struct netdev *netdev;
     int mtu;
     int error;
@@ -370,17 +371,17 @@ do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
     /* XXX reject devices already in some dp_netdev. */
 
     /* Open and validate network device. */
-    if (!internal) {
-        error = netdev_open(devname, NETDEV_ETH_TYPE_ANY, &netdev);
+    memset(&netdev_options, 0, sizeof netdev_options);
+    netdev_options.name = devname;
+    netdev_options.ethertype = NETDEV_ETH_TYPE_ANY;
+    netdev_options.may_create = true;
+    if (internal) {
+        netdev_options.type = "tap";
     } else {
-        error = netdev_create(devname, "tap", NULL);
-        if (!error) {
-            error = netdev_open(devname, NETDEV_ETH_TYPE_ANY, &netdev);
-            if (error) {
-                netdev_destroy(devname);
-            }
-        }
+        netdev_options.may_open = true;
     }
+
+    error = netdev_open(&netdev_options, &netdev);
     if (error) {
         return error;
     }
@@ -487,9 +488,7 @@ do_del_port(struct dp_netdev *dp, uint16_t port_no)
 
     name = xstrdup(netdev_get_name(port->netdev));
     netdev_close(port->netdev);
-    if (port->internal) {
-        netdev_destroy(name);
-    }
+
     free(name);
     free(port);
 

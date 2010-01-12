@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,12 +151,19 @@ dhclient_create(const char *netdev_name,
                 void *aux, struct dhclient **cli_)
 {
     struct dhclient *cli;
+    struct netdev_options netdev_options;
     struct netdev *netdev;
     int error;
 
     *cli_ = NULL;
 
-    error = netdev_open(netdev_name, ETH_TYPE_IP, &netdev);
+    memset(&netdev_options, 0, sizeof netdev_options);
+    netdev_options.name = netdev_name;
+    netdev_options.ethertype = ETH_TYPE_IP;
+    netdev_options.may_create = true;
+    netdev_options.may_open = true;
+
+    error = netdev_open(&netdev_options, &netdev);
     /* XXX install socket filter to catch only DHCP packets. */
     if (error) {
         VLOG_ERR("could not open %s network device: %s",

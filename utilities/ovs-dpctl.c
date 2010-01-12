@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,7 +166,7 @@ static int if_up(const char *netdev_name)
     struct netdev *netdev;
     int retval;
 
-    retval = netdev_open(netdev_name, NETDEV_ETH_TYPE_NONE, &netdev);
+    retval = netdev_open_default(netdev_name, &netdev);
     if (!retval) {
         retval = netdev_turn_flags_on(netdev, NETDEV_UP, true);
         netdev_close(netdev);

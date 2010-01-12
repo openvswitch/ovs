@@ -345,13 +345,6 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     p->ss_cat = switch_status_register(p->switch_status, "remote",
                                        rconn_status_cb, p->controller->rconn);
 
-    /* Almost done... */
-    error = init_ports(p);
-    if (error) {
-        ofproto_destroy(p);
-        return error;
-    }
-
     /* Pick final datapath ID. */
     p->datapath_id = pick_datapath_id(p);
     VLOG_INFO("using datapath ID %012"PRIx64, p->datapath_id);
@@ -743,6 +736,10 @@ ofproto_run1(struct ofproto *p)
     int error;
     int i;
 
+    if (shash_is_empty(&p->port_by_name)) {
+        init_ports(p);
+    }
+
     for (i = 0; i < 50; i++) {
         struct ofpbuf *buf;
         int error;
@@ -1069,13 +1066,19 @@ refresh_port_groups(struct ofproto *p)
 static struct ofport *
 make_ofport(const struct odp_port *odp_port)
 {
+    struct netdev_options netdev_options;
     enum netdev_flags flags;
     struct ofport *ofport;
     struct netdev *netdev;
     bool carrier;
     int error;
 
-    error = netdev_open(odp_port->devname, NETDEV_ETH_TYPE_NONE, &netdev);
+    memset(&netdev_options, 0, sizeof netdev_options);
+    netdev_options.name = odp_port->devname;
+    netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
+    netdev_options.may_open = true;
+
+    error = netdev_open(&netdev_options, &netdev);
     if (error) {
         VLOG_WARN_RL(&rl, "ignoring port %s (%"PRIu16") because netdev %s "
                      "cannot be opened (%s)",

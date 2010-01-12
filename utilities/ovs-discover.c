@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -213,7 +213,7 @@ iface_init(struct iface *iface, const char *netdev_name)
          * persists past program termination. */
         struct netdev *netdev;
 
-        retval = netdev_open(iface->name, NETDEV_ETH_TYPE_NONE, &netdev);
+        retval = netdev_open_default(iface->name, &netdev);
         if (retval) {
             ovs_error(retval, "Could not open %s device", iface->name);
             return false;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,53 +20,56 @@
 /* Generic interface to network devices. */
 
 #include <assert.h>
+
 #include "netdev.h"
 #include "list.h"
 #include "shash.h"
-
-/* A network device object that was created through the netdev_create()
- * call.
- *
- * This structure should be treated as opaque by network device
- * implementations. */
-struct netdev_obj {
-    const struct netdev_class *class;
-    int ref_cnt;
-    char *name;
-    bool created;                    /* Was netdev_create() called? */
-};
-
-void netdev_obj_init(struct netdev_obj *, const char *name,
-                     const struct netdev_class *, bool created);
-static inline void netdev_obj_assert_class(const struct netdev_obj *netdev_obj,
-                                           const struct netdev_class *class)
-{
-    assert(netdev_obj->class == class);
-}
-const char *netdev_obj_get_type(const struct netdev_obj *netdev_obj);
-const char *netdev_obj_get_name(const struct netdev_obj *netdev_obj);
 
 /* A network device (e.g. an Ethernet device).
  *
  * This structure should be treated as opaque by network device
  * implementations. */
+struct netdev_dev {
+    char *name;                         /* Name of network device. */
+    const struct netdev_class *class;   /* Functions to control this device. */
+    int ref_cnt;                        /* Times this devices was opened. */
+    struct shash_node *node;            /* Pointer to element in global map. */
+    uint32_t args_hash;                 /* Hash of arguments for the device. */
+};
+
+void netdev_dev_init(struct netdev_dev *, const char *name,
+                     const struct netdev_class *);
+void netdev_dev_uninit(struct netdev_dev *, bool destroy);
+const char *netdev_dev_get_type(const struct netdev_dev *);
+const char *netdev_dev_get_name(const struct netdev_dev *);
+
+static inline void netdev_dev_assert_class(const struct netdev_dev *netdev_dev,
+                                           const struct netdev_class *class)
+{
+    assert(netdev_dev->class == class);
+}
+
+/* A instance of an open network device.
+ *
+ * This structure should be treated as opaque by network device
+ * implementations. */
 struct netdev {
-    const struct netdev_class *class;
-    char *name;                      /* e.g. "eth0" */
+    struct netdev_dev *netdev_dev;   /* Parent netdev_dev. */
+    struct list node;                /* Element in global list. */
 
     enum netdev_flags save_flags;    /* Initial device flags. */
     enum netdev_flags changed_flags; /* Flags that we changed. */
-    struct list node;                /* Element in global list. */
 };
 
-void netdev_init(struct netdev *, const char *name,
-                 const struct netdev_class *);
+void netdev_init(struct netdev *, struct netdev_dev *);
+void netdev_uninit(struct netdev *, bool close);
+struct netdev_dev *netdev_get_dev(const struct netdev *);
+
 static inline void netdev_assert_class(const struct netdev *netdev,
                                        const struct netdev_class *class)
 {
-    assert(netdev->class == class);
+    netdev_dev_assert_class(netdev_get_dev(netdev), class);
 }
-const char *netdev_get_type(const struct netdev *netdev);
 
 /* A network device notifier.
  *
@@ -90,9 +93,9 @@ struct netdev_class {
     /* Type of netdevs in this class, e.g. "system", "tap", "gre", etc.
      *
      * One of the providers should supply a "system" type, since this is
-     * the type assumed when a device name was not bound through the 
-     * netdev_create() call.  The "system" type corresponds to an 
-     * existing network device on the system. */
+     * the type assumed if no type is specified when opening a netdev.
+     * The "system" type corresponds to an existing network device on
+     * the system. */
     const char *type;
 
     /* Called only once, at program startup.  Returning an error from this
@@ -111,45 +114,36 @@ struct netdev_class {
      * to be called.  May be null if nothing is needed here. */
     void (*wait)(void);
 
-    /* Attempts to create a network device object of 'type' with 'name'.  
+    /* Attempts to create a network device of 'type' with 'name'.
      * 'type' corresponds to the 'type' field used in the netdev_class
-     * structure.  
-     *
-     * The 'created' flag indicates that the user called netdev_create()
-     * and thus will eventually call netdev_destroy().  If the flag is 
-     * false, then the object was dynamically created based on a call to 
-     * netdev_open() without first calling netdev_create() and will be
-     * automatically destroyed when no more netdevs have 'name' open.  A 
-     * provider implementation should pass this flag to netdev_obj_init(). */
-    int (*create)(const char *name, const char *type, 
-                  const struct shash *args, bool created);
+     * structure. On success sets 'netdev_devp' to the newly created device. */
+    int (*create)(const char *name, const char *type, const struct shash *args,
+                  struct netdev_dev **netdev_devp);
 
-    /* Destroys 'netdev_obj'.  
+    /* Destroys 'netdev_dev'.
      *
-     * Netdev objects maintain a reference count that is incremented on 
-     * netdev_open() and decremented on netdev_close().  If 'netdev_obj' 
-     * has a non-zero reference count, then this function will not be 
+     * Netdev devices maintain a reference count that is incremented on
+     * netdev_open() and decremented on netdev_close().  If 'netdev_dev'
+     * has a non-zero reference count, then this function will not be
      * called. */
-    void (*destroy)(struct netdev_obj *netdev_obj);
+    void (*destroy)(struct netdev_dev *netdev_dev);
 
-    /* Reconfigures the device object 'netdev_obj' with 'args'. 
+    /* Reconfigures the device 'netdev_dev' with 'args'.
      *
      * If this netdev class does not support reconfiguring a netdev
-     * object, this may be a null pointer.
+     * device, this may be a null pointer.
      */
-    int (*reconfigure)(struct netdev_obj *netdev_obj, 
-                       const struct shash *args);
+    int (*reconfigure)(struct netdev_dev *netdev_dev, const struct shash *args);
 
-    /* Attempts to open a network device.  On success, sets '*netdevp' to the
-     * new network device.  'name' is the network device name provided by
-     * the user.  This name is useful for error messages but must not be
-     * modified.
+    /* Attempts to open a network device.  On success, sets 'netdevp'
+     * to the new network device.
      *
      * 'ethertype' may be a 16-bit Ethernet protocol value in host byte order
      * to capture frames of that type received on the device.  It may also be
      * one of the 'enum netdev_pseudo_ethertype' values to receive frames in
      * one of those categories. */
-    int (*open)(const char *name, int ethertype, struct netdev **netdevp);
+    int (*open)(struct netdev_dev *netdev_dev, int ethertype,
+                struct netdev **netdevp);
 
     /* Closes 'netdev'. */
     void (*close)(struct netdev *netdev);
@@ -211,7 +205,7 @@ struct netdev_class {
      * The MTU is the maximum size of transmitted (and received) packets, in
      * bytes, not including the hardware header; thus, this is typically 1500
      * bytes for Ethernet devices.*/
-    int (*get_mtu)(const struct netdev *, int *mtup);
+    int (*get_mtu)(const struct netdev *netdev, int *mtup);
 
     /* Returns the ifindex of 'netdev', if successful, as a positive number.
      * On failure, returns a negative errno value.
@@ -221,7 +215,7 @@ struct netdev_class {
      * ifindex value should be unique within a host and remain stable at least
      * until reboot.  SNMP says an ifindex "ranges between 1 and the value of
      * ifNumber" but many systems do not follow this rule anyhow. */
-    int (*get_ifindex)(const struct netdev *);
+    int (*get_ifindex)(const struct netdev *netdev);
 
     /* Sets 'carrier' to true if carrier is active (link light is on) on
      * 'netdev'. */
@@ -232,7 +226,7 @@ struct netdev_class {
      * A network device that supports some statistics but not others, it should
      * set the values of the unsupported statistics to all-1-bits
      * (UINT64_MAX). */
-    int (*get_stats)(const struct netdev *netdev, struct netdev_stats *stats);
+    int (*get_stats)(const struct netdev *netdev, struct netdev_stats *);
 
     /* Stores the features supported by 'netdev' into each of '*current',
      * '*advertised', '*supported', and '*peer'.  Each value is a bitmap of
@@ -246,14 +240,14 @@ struct netdev_class {
      *
      * This function may be set to null for a network device that does not
      * support configuring advertisements. */
-    int (*set_advertisements)(struct netdev *, uint32_t advertise);
+    int (*set_advertisements)(struct netdev *netdev, uint32_t advertise);
 
     /* If 'netdev' is a VLAN network device (e.g. one created with vconfig(8)),
      * sets '*vlan_vid' to the VLAN VID associated with that device and returns
      * 0.
      *
-     * Returns ENOENT if 'netdev_name' is the name of a network device that is
-     * not a VLAN device.
+     * Returns ENOENT if 'netdev' is a network device that is not a
+     * VLAN device.
      *
      * This function should be set to null if it doesn't make any sense for
      * your network device (it probably doesn't). */
@@ -286,7 +280,8 @@ struct netdev_class {
      *
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
-    int (*set_in4)(struct netdev *, struct in_addr addr, struct in_addr mask);
+    int (*set_in4)(struct netdev *netdev, struct in_addr addr,
+                   struct in_addr mask);
 
     /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address.
      *
@@ -325,12 +320,12 @@ struct netdev_class {
      *
      * This function may be set to null if it would always return EOPNOTSUPP
      * anyhow. */
-    int (*arp_lookup)(const struct netdev *, uint32_t ip, uint8_t mac[6]);
+    int (*arp_lookup)(const struct netdev *netdev, uint32_t ip, uint8_t mac[6]);
 
-    /* Retrieves the current set of flags on 'netdev' into '*old_flags'.  Then,
-     * turns off the flags that are set to 1 in 'off' and turns on the flags
-     * that are set to 1 in 'on'.  (No bit will be set to 1 in both 'off' and
-     * 'on'; that is, off & on == 0.)
+    /* Retrieves the current set of flags on 'netdev' into '*old_flags'.
+     * Then, turns off the flags that are set to 1 in 'off' and turns on the
+     * flags that are set to 1 in 'on'.  (No bit will be set to 1 in both 'off'
+     * and 'on'; that is, off & on == 0.)
      *
      * This function may be invoked from a signal handler.  Therefore, it
      * should not do anything that is not signal-safe (such as logging). */
@@ -343,7 +338,7 @@ struct netdev_class {
      * will have its 'netdev', 'cb', and 'aux' members set to the values of the
      * corresponding parameters. */
     int (*poll_add)(struct netdev *netdev,
-                    void (*cb)(struct netdev_notifier *), void *aux,
+                    void (*cb)(struct netdev_notifier *notifier), void *aux,
                     struct netdev_notifier **notifierp);
 
     /* Cancels poll notification for 'notifier'. */

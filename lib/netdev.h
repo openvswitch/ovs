@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,18 +76,24 @@ struct netdev_stats {
     uint64_t tx_window_errors;
 };
 
+struct netdev_options {
+    const char *name;
+    const char *type;
+    const struct shash *args;
+    int ethertype;
+    bool may_create;
+    bool may_open;
+};
+
 struct netdev;
 
 int netdev_initialize(void);
 void netdev_run(void);
 void netdev_wait(void);
 
-int netdev_create(const char *name, const char *type, 
-                  const struct shash *args);
-int netdev_destroy(const char *name);
-int netdev_reconfigure(const char *name, const struct shash *args);
-
-int netdev_open(const char *name, int ethertype, struct netdev **);
+int netdev_open(struct netdev_options *, struct netdev **);
+int netdev_open_default(const char *name, struct netdev **);
+int netdev_reconfigure(struct netdev *, const struct shash *args);
 void netdev_close(struct netdev *);
 
 bool netdev_exists(const char *name);
@@ -95,6 +101,7 @@ bool netdev_exists(const char *name);
 int netdev_enumerate(struct svec *);
 
 const char *netdev_get_name(const struct netdev *);
+const char *netdev_get_type(const struct netdev *);
 int netdev_get_mtu(const struct netdev *, int *mtup);
 int netdev_get_ifindex(const struct netdev *);
 

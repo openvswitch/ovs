@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -755,7 +755,7 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
         struct mac *mac = &local_macs[n_local_macs];
         struct netdev *netdev;
 
-        error = netdev_open(iface_name, NETDEV_ETH_TYPE_NONE, &netdev);
+        error = netdev_open_default(iface_name, &netdev);
         if (netdev) {
             if (!netdev_get_etheraddr(netdev, mac->addr)) {
                 n_local_macs++;

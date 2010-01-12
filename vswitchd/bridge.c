@@ -388,18 +388,13 @@ bridge_configure_ssl(const struct ovsrec_ssl *ssl)
 /* Attempt to create the network device 'iface_name' through the netdev
  * library. */
 static int
-set_up_iface(const struct ovsrec_interface *iface_cfg, bool create) 
+set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
+             bool create)
 {
     struct shash_node *node;
     struct shash options;
-    int error;
+    int error = 0;
     size_t i;
-
-    /* If a type is not explicitly declared, then assume it's an existing
-     * "system" device. */
-    if (iface_cfg->type[0] == '\0' || !strcmp(iface_cfg->type, "system")) {
-        return 0;
-    }
 
     shash_init(&options);
     for (i = 0; i < iface_cfg->n_options; i++) {
@@ -408,10 +403,35 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, bool create)
     }
 
     if (create) {
-        error = netdev_create(iface_cfg->name, iface_cfg->type, &options);
-    } else {
-        /* xxx Check to make sure that the type hasn't changed. */
-        error = netdev_reconfigure(iface_cfg->name, &options);
+        struct netdev_options netdev_options;
+
+        memset(&netdev_options, 0, sizeof netdev_options);
+        netdev_options.name = iface_cfg->name;
+        netdev_options.type = iface_cfg->type;
+        netdev_options.args = &options;
+        netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
+        netdev_options.may_create = true;
+        if (iface_is_internal(iface->port->bridge, iface_cfg->name)) {
+            netdev_options.may_open = true;
+        }
+
+        error = netdev_open(&netdev_options, &iface->netdev);
+
+        if (iface->netdev) {
+            netdev_get_carrier(iface->netdev, &iface->enabled);
+        }
+    } else if (iface->netdev) {
+        const char *netdev_type = netdev_get_type(iface->netdev);
+        const char *iface_type = iface_cfg->type && strlen(iface_cfg->type)
+                                  ? iface_cfg->type : NULL;
+
+        if (!iface_type || !strcmp(netdev_type, iface_type)) {
+            error = netdev_reconfigure(iface->netdev, &options);
+        } else {
+            VLOG_WARN("%s: attempting change device type from %s to %s",
+                      iface_cfg->name, netdev_type, iface_type);
+            error = EINVAL;
+        }
     }
 
     SHASH_FOR_EACH (node, &options) {
@@ -423,30 +443,25 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, bool create)
 }
 
 static int
-reconfigure_iface(const struct ovsrec_interface *iface_cfg)
+reconfigure_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface)
 {
-    return set_up_iface(iface_cfg, false);
+    return set_up_iface(iface_cfg, iface, false);
 }
 
-
-/* iterate_and_prune_ifaces() callback function that opens the network device
- * for 'iface', if it is not already open, and retrieves the interface's MAC
- * address and carrier status. */
 static bool
-init_iface_netdev(struct bridge *br UNUSED, struct iface *iface,
-                  void *aux UNUSED)
+check_iface_netdev(struct bridge *br UNUSED, struct iface *iface,
+                   void *aux UNUSED)
 {
-    if (iface->netdev) {
-        return true;
-    } else if (!netdev_open(iface->name, NETDEV_ETH_TYPE_NONE,
-                            &iface->netdev)) {
-        netdev_get_carrier(iface->netdev, &iface->enabled);
-        return true;
-    } else {
-        /* If the network device can't be opened, then we're not going to try
-         * to do anything with this interface. */
-        return false;
+    if (!iface->netdev) {
+        int error = set_up_iface(iface->cfg, iface, true);
+        if (error) {
+            VLOG_WARN("could not open netdev on %s, dropping: %s", iface->name,
+                                                               strerror(error));
+            return false;
+        }
     }
+
+    return true;
 }
 
 static bool
@@ -626,7 +641,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             if (shash_find(&cur_ifaces, if_name)) {
                 /* Already exists, just reconfigure it. */
                 if (iface) {
-                    reconfigure_iface(iface->cfg);
+                    reconfigure_iface(iface->cfg, iface);
                 }
             } else {
                 /* Need to add to datapath. */
@@ -658,8 +673,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         char *dpid_string;
 
         bridge_fetch_dp_ifaces(br);
-        iterate_and_prune_ifaces(br, init_iface_netdev, NULL);
 
+        iterate_and_prune_ifaces(br, check_iface_netdev, NULL);
         iterate_and_prune_ifaces(br, check_iface_dp_ifidx, NULL);
 
         /* Pick local port hardware address, datapath ID. */
@@ -1062,7 +1077,6 @@ bridge_unixctl_fdb_show(struct unixctl_conn *conn,
 }
 
 /* Bridge reconfiguration functions. */
-
 static struct bridge *
 bridge_create(const char *name)
 {
@@ -3024,8 +3038,9 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
         iface = shash_find_data(&old_ifaces, if_cfg->name);
         if (!iface) {
             iface = iface_create(port, if_cfg);
+        } else {
+            iface->cfg = if_cfg;
         }
-        iface->cfg = if_cfg;
     }
 
     /* Get VLAN tag. */
@@ -3252,7 +3267,7 @@ port_update_bond_compat(struct port *port)
     if (port->bond_fake_iface) {
         struct netdev *bond_netdev;
 
-        if (!netdev_open(port->name, NETDEV_ETH_TYPE_NONE, &bond_netdev)) {
+        if (!netdev_open_default(port->name, &bond_netdev)) {
             if (bond.up) {
                 netdev_turn_flags_on(bond_netdev, NETDEV_UP, true);
             } else {
@@ -3320,6 +3335,7 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     iface->tag = tag_create_random();
     iface->delay_expires = LLONG_MAX;
     iface->netdev = NULL;
+    iface->cfg = if_cfg;
 
     if (port->n_ifaces >= port->allocated_ifaces) {
         port->ifaces = x2nrealloc(port->ifaces, &port->allocated_ifaces,
@@ -3332,10 +3348,12 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
 
     /* Attempt to create the network interface in case it
      * doesn't exist yet. */
-    error = set_up_iface(if_cfg, true);
-    if (error) {
-        VLOG_WARN("could not create iface %s: %s\n", iface->name,
-                strerror(error));
+    if (!iface_is_internal(port->bridge, iface->name)) {
+        error = set_up_iface(if_cfg, iface, true);
+        if (error) {
+            VLOG_WARN("could not create iface %s: %s", iface->name,
+                    strerror(error));
+        }
     }
 
     VLOG_DBG("attached network device %s to port %s", iface->name, port->name);
@@ -3369,7 +3387,6 @@ iface_destroy(struct iface *iface)
             bond_send_learning_packets(port);
         }
 
-        netdev_destroy(iface->name);
         free(iface->name);
         free(iface);
 
