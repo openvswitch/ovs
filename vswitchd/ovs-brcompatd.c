@@ -1018,10 +1018,9 @@ error:
     return;
 }
 
-#if 0
 /* Check for interface configuration changes announced through RTNL. */
 static void
-rtnl_recv_update(void)
+rtnl_recv_update(const struct ovsrec_open_vswitch *ovs)
 {
     struct ofpbuf *buf;
 
@@ -1063,27 +1062,21 @@ rtnl_recv_update(void)
                 return;
             }
 
-            if (cfg_lock(NULL, lock_timeout)) {
-                /* Couldn't lock config file. */
-                /* xxx this should try again and print error msg. */
-                ofpbuf_delete(buf);
-                return;
-            }
-
             if (!netdev_exists(port_name)) {
                 /* Network device is really gone. */
-                struct svec ports;
+                struct ovsrec_bridge *br = find_bridge(ovs, br_name);
 
                 VLOG_INFO("network device %s destroyed, "
                           "removing from bridge %s", port_name, br_name);
 
-                svec_init(&ports);
-                cfg_get_all_keys(&ports, "bridge.%s.port", br_name);
-                svec_sort(&ports);
-                if (svec_contains(&ports, port_name)) {
-                    del_port(br_name, port_name);
+                if (!br) {
+                    VLOG_WARN("no bridge named %s from which to remove %s", 
+                            br_name, port_name);
+                    ofpbuf_delete(buf);
+                    return;
                 }
-                svec_destroy(&ports);
+
+                del_port(br, port_name);
             } else {
                 /* A network device by that name exists even though the kernel
                  * told us it had disappeared.  Probably, what happened was
@@ -1130,12 +1123,10 @@ rtnl_recv_update(void)
                           "a device by that name exists (XS Tools 5.0.0?)",
                           port_name);
             }
-            cfg_unlock();
         }
         ofpbuf_delete(buf);
     }
 }
-#endif
 
 int
 main(int argc, char *argv[])
@@ -1200,10 +1191,9 @@ main(int argc, char *argv[])
         }
         netdev_run();
 
-#if 0
         /* If 'prune_timeout' is non-zero, we actively prune from the
-         * config file any 'bridge.<br_name>.port' entries that are no 
-         * longer valid.  We use two methods: 
+         * configuration of port entries that are no longer valid.  We 
+         * use two methods: 
          *
          *   1) The kernel explicitly notifies us of removed ports
          *      through the RTNL messages.
@@ -1211,14 +1201,15 @@ main(int argc, char *argv[])
          *   2) We periodically check all ports associated with bridges
          *      to see if they no longer exist.
          */
-        if (prune_timeout) {
-            rtnl_recv_update();
+        if (ovs && prune_timeout) {
+            rtnl_recv_update(ovs);
+#if 0
             prune_ports();
+#endif
 
             nl_sock_wait(rtnl_sock, POLLIN);
             poll_timer_wait(prune_timeout);
         }
-#endif
 
         while ((status = ovsdb_idl_txn_commit(txn)) == TXN_INCOMPLETE) {
             ovsdb_idl_run(idl);
