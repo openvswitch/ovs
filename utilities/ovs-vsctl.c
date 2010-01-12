@@ -1345,7 +1345,7 @@ cmd_get_fail_mode(struct vsctl_context *ctx)
     }
 
     if (fail_mode && strlen(fail_mode)) {
-        ds_put_format(&ctx->output, "%s\n", info.ctrl->fail_mode);
+        ds_put_format(&ctx->output, "%s\n", fail_mode);
     }
 
     free_info(&info);
