@@ -112,12 +112,7 @@ struct netdev_dev_linux {
 
 struct netdev_linux {
     struct netdev netdev;
-
-    /* File descriptors.  For ordinary network devices, the two fds below are
-     * the same; for tap devices, they differ. */
-    int netdev_fd;              /* Network device. */
-    int tap_fd;                 /* TAP character device, if any, otherwise the
-                                 * network device. */
+    int fd;
 };
 
 /* An AF_INET socket (used for ioctl operations). */
@@ -594,6 +589,12 @@ netdev_linux_create_system(const char *name, const char *type UNUSED,
     return 0;
 }
 
+/* For most types of netdevs we open the device for each call of
+ * netdev_open().  However, this is not the case with tap devices,
+ * since it is only possible to open the device once.  In this
+ * situation we share a single file descriptor, and consequently
+ * buffers, across all readers.  Therefore once data is read it will
+ * be unavailable to other reads for tap devices. */
 static int
 netdev_linux_create_tap(const char *name, const char *type UNUSED,
                     const struct shash *args, struct netdev_dev **netdev_devp)
@@ -801,56 +802,27 @@ netdev_linux_destroy(struct netdev_dev *netdev_dev_)
 }
 
 static int
-netdev_linux_open(struct netdev_dev *netdev_dev, int ethertype,
+netdev_linux_open(struct netdev_dev *netdev_dev_, int ethertype,
                   struct netdev **netdevp)
 {
+    struct netdev_dev_linux *netdev_dev = netdev_dev_linux_cast(netdev_dev_);
     struct netdev_linux *netdev;
     enum netdev_flags flags;
     int error;
 
     /* Allocate network device. */
     netdev = xzalloc(sizeof *netdev);
-    netdev_init(&netdev->netdev, netdev_dev);
-    netdev->netdev_fd = -1;
-    netdev->tap_fd = -1;
-
-    if (!strcmp(netdev_dev_get_type(netdev_dev), "tap")) {
-        static const char tap_dev[] = "/dev/net/tun";
-        struct ifreq ifr;
-
-        /* Open tap device. */
-        netdev->tap_fd = open(tap_dev, O_RDWR);
-        if (netdev->tap_fd < 0) {
-            error = errno;
-            VLOG_WARN("opening \"%s\" failed: %s", tap_dev, strerror(error));
-            goto error;
-        }
-
-        /* Create tap device. */
-        ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-        strncpy(ifr.ifr_name, netdev_dev_get_name(netdev_dev),
-                sizeof ifr.ifr_name);
-        if (ioctl(netdev->tap_fd, TUNSETIFF, &ifr) == -1) {
-            VLOG_WARN("%s: creating tap device failed: %s",
-                      netdev_dev_get_name(netdev_dev),
-                      strerror(errno));
-            error = errno;
-            goto error;
-        }
-
-        /* Make non-blocking. */
-        error = set_nonblocking(netdev->tap_fd);
-        if (error) {
-            goto error;
-        }
-    }
+    netdev_init(&netdev->netdev, netdev_dev_);
 
     error = netdev_get_flags(&netdev->netdev, &flags);
     if (error == ENODEV) {
         goto error;
     }
 
-    if (netdev->tap_fd >= 0 || ethertype != NETDEV_ETH_TYPE_NONE) {
+    if (!strcmp(netdev_dev_get_type(netdev_dev_), "tap")) {
+        netdev->fd = netdev_dev->state.tap.fd;
+
+    } else if (ethertype != NETDEV_ETH_TYPE_NONE) {
         struct sockaddr_ll sll;
         int protocol;
         int ifindex;
@@ -859,17 +831,14 @@ netdev_linux_open(struct netdev_dev *netdev_dev, int ethertype,
         protocol = (ethertype == NETDEV_ETH_TYPE_ANY ? ETH_P_ALL
                     : ethertype == NETDEV_ETH_TYPE_802_2 ? ETH_P_802_2
                     : ethertype);
-        netdev->netdev_fd = socket(PF_PACKET, SOCK_RAW, htons(protocol));
-        if (netdev->netdev_fd < 0) {
+        netdev->fd = socket(PF_PACKET, SOCK_RAW, htons(protocol));
+        if (netdev->fd < 0) {
             error = errno;
             goto error;
         }
-        if (netdev->tap_fd < 0) {
-            netdev->tap_fd = netdev->netdev_fd;
-        }
 
         /* Set non-blocking mode. */
-        error = set_nonblocking(netdev->netdev_fd);
+        error = set_nonblocking(netdev->fd);
         if (error) {
             goto error;
         }
@@ -884,10 +853,10 @@ netdev_linux_open(struct netdev_dev *netdev_dev, int ethertype,
         memset(&sll, 0, sizeof sll);
         sll.sll_family = AF_PACKET;
         sll.sll_ifindex = ifindex;
-        if (bind(netdev->netdev_fd,
+        if (bind(netdev->fd,
                  (struct sockaddr *) &sll, sizeof sll) < 0) {
             error = errno;
-            VLOG_ERR("bind to %s failed: %s", netdev_dev_get_name(netdev_dev),
+            VLOG_ERR("bind to %s failed: %s", netdev_dev_get_name(netdev_dev_),
                      strerror(error));
             goto error;
         }
@@ -896,7 +865,7 @@ netdev_linux_open(struct netdev_dev *netdev_dev, int ethertype,
          * packets of the requested type on all system interfaces.  We do not
          * want to receive that data, but there is no way to avoid it.  So we
          * must now drain out the receive queue. */
-        error = drain_rcvbuf(netdev->netdev_fd);
+        error = drain_rcvbuf(netdev->fd);
         if (error) {
             goto error;
         }
@@ -916,11 +885,8 @@ netdev_linux_close(struct netdev *netdev_)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-    if (netdev->netdev_fd >= 0) {
-        close(netdev->netdev_fd);
-    }
-    if (netdev->tap_fd >= 0 && netdev->netdev_fd != netdev->tap_fd) {
-        close(netdev->tap_fd);
+    if (netdev->fd >= 0 && strcmp(netdev_get_type(netdev_), "tap")) {
+        close(netdev->fd);
     }
     free(netdev);
 }
@@ -952,13 +918,13 @@ netdev_linux_recv(struct netdev *netdev_, void *data, size_t size)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-    if (netdev->tap_fd < 0) {
+    if (netdev->fd < 0) {
         /* Device was opened with NETDEV_ETH_TYPE_NONE. */
         return -EAGAIN;
     }
 
     for (;;) {
-        ssize_t retval = read(netdev->tap_fd, data, size);
+        ssize_t retval = read(netdev->fd, data, size);
         if (retval >= 0) {
             return retval;
         } else if (errno != EINTR) {
@@ -977,8 +943,8 @@ static void
 netdev_linux_recv_wait(struct netdev *netdev_)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    if (netdev->tap_fd >= 0) {
-        poll_fd_wait(netdev->tap_fd, POLLIN);
+    if (netdev->fd >= 0) {
+        poll_fd_wait(netdev->fd, POLLIN);
     }
 }
 
@@ -987,19 +953,19 @@ static int
 netdev_linux_drain(struct netdev *netdev_)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    if (netdev->tap_fd < 0 && netdev->netdev_fd < 0) {
+    if (netdev->fd < 0) {
         return 0;
-    } else if (netdev->tap_fd != netdev->netdev_fd) {
+    } else if (!strcmp(netdev_get_type(netdev_), "tap")) {
         struct ifreq ifr;
         int error = netdev_linux_do_ioctl(netdev_get_name(netdev_), &ifr,
                                           SIOCGIFTXQLEN, "SIOCGIFTXQLEN");
         if (error) {
             return error;
         }
-        drain_fd(netdev->tap_fd, ifr.ifr_qlen);
+        drain_fd(netdev->fd, ifr.ifr_qlen);
         return 0;
     } else {
-        return drain_rcvbuf(netdev->netdev_fd);
+        return drain_rcvbuf(netdev->fd);
     }
 }
 
@@ -1019,12 +985,12 @@ netdev_linux_send(struct netdev *netdev_, const void *data, size_t size)
 
     /* XXX should support sending even if 'ethertype' was NETDEV_ETH_TYPE_NONE.
      */
-    if (netdev->tap_fd < 0) {
+    if (netdev->fd < 0) {
         return EPIPE;
     }
 
     for (;;) {
-        ssize_t retval = write(netdev->tap_fd, data, size);
+        ssize_t retval = write(netdev->fd, data, size);
         if (retval < 0) {
             /* The Linux AF_PACKET implementation never blocks waiting for room
              * for packets, instead returning ENOBUFS.  Translate this into
@@ -1059,10 +1025,10 @@ static void
 netdev_linux_send_wait(struct netdev *netdev_)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    if (netdev->tap_fd < 0 && netdev->netdev_fd < 0) {
+    if (netdev->fd < 0) {
         /* Nothing to do. */
-    } else if (netdev->tap_fd == netdev->netdev_fd) {
-        poll_fd_wait(netdev->tap_fd, POLLOUT);
+    } else if (strcmp(netdev_get_type(netdev_), "tap")) {
+        poll_fd_wait(netdev->fd, POLLOUT);
     } else {
         /* TAP device always accepts packets.*/
         poll_immediate_wake();
