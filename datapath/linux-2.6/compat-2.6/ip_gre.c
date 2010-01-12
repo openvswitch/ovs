@@ -24,6 +24,7 @@
  */
 
 #include <linux/capability.h>
+#include <linux/ethtool.h>
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/kernel.h>
@@ -1299,6 +1300,18 @@ static int ipgre_close(struct net_device *dev)
 
 #endif
 
+static void ethtool_getinfo(struct net_device *dev,
+			    struct ethtool_drvinfo *info)
+{
+	strcpy(info->driver, "ip_gre");
+	strcpy(info->version, "Open vSwitch "VERSION BUILDNR);
+	strcpy(info->bus_info, dev->type == ARPHRD_ETHER ? "gretap" : "gre");
+}
+
+static struct ethtool_ops ethtool_ops = {
+	.get_drvinfo = ethtool_getinfo,
+};
+
 #ifdef HAVE_NET_DEVICE_OPS
 static const struct net_device_ops ipgre_netdev_ops = {
 	.ndo_init		= ipgre_tunnel_init,
@@ -1341,6 +1354,8 @@ static void ipgre_tunnel_setup(struct net_device *dev)
 	dev->addr_len		= 4;
 	dev->features		|= NETIF_F_NETNS_LOCAL;
 	dev->priv_flags         &= ~IFF_XMIT_DST_RELEASE;
+
+	SET_ETHTOOL_OPS(dev, &ethtool_ops);
 }
 
 static int ipgre_tunnel_init(struct net_device *dev)
@@ -1547,6 +1562,8 @@ static void ipgre_tap_setup(struct net_device *dev)
 
 	dev->iflink		= 0;
 	dev->features		|= NETIF_F_NETNS_LOCAL;
+
+	SET_ETHTOOL_OPS(dev, &ethtool_ops);
 }
 
 #ifndef GRE_IOCTL_ONLY

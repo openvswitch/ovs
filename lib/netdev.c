@@ -57,7 +57,7 @@ static struct list netdev_list = LIST_INITIALIZER(&netdev_list);
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
-static void restore_all_flags(void *aux);
+static void close_all_netdevs(void *aux UNUSED);
 static int restore_flags(struct netdev *netdev);
 
 /* Attempts to initialize the netdev module.  Returns 0 if successful,
@@ -73,7 +73,7 @@ netdev_initialize(void)
     if (status < 0) {
         int i, j;
 
-        fatal_signal_add_hook(restore_all_flags, NULL, true);
+        fatal_signal_add_hook(close_all_netdevs, NULL, true);
 
         status = 0;
         for (i = j = 0; i < n_netdev_classes; i++) {
@@ -1098,13 +1098,13 @@ restore_flags(struct netdev *netdev)
     return 0;
 }
 
-/* Retores all the flags on all network devices that we modified.  Called from
- * a signal handler, so it does not attempt to report error conditions. */
+/* Close all netdevs on shutdown so they can do any needed cleanup such as
+ * destroying devices, restoring flags, etc. */
 static void
-restore_all_flags(void *aux UNUSED)
+close_all_netdevs(void *aux UNUSED)
 {
-    struct netdev *netdev;
-    LIST_FOR_EACH (netdev, struct netdev, node, &netdev_list) {
-        restore_flags(netdev);
+    struct netdev *netdev, *next;
+    LIST_FOR_EACH_SAFE(netdev, next, struct netdev, node, &netdev_list) {
+        netdev_close(netdev);
     }
 }
