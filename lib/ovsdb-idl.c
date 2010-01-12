@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks.
+/* Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1121,6 +1121,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
 
     if (!any_updates) {
         txn->status = TXN_UNCHANGED;
+        json_destroy(operations);
     } else if (!jsonrpc_session_send(
                    txn->idl->session,
                    jsonrpc_create_request(
