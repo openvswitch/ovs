@@ -233,7 +233,7 @@ function start_brcompatd {
         logfile_file_opt="--log-file=$BRCOMPATD_LOGFILE"
     fi
     local leak_opt=""
-    if [ -n "$BRCOMPATD_MEMLEAK_LOG" ]; then
+    if [ -n "$BRCOMPATD_MEMLEAK_LOGFILE" ]; then
         leak_opt="--check-leaks=$BRCOMPATD_MEMLEAK_LOGFILE"
         if [ -e "$BRCOMPATD_MEMLEAK_LOGFILE" ]; then
             mv "$BRCOMPATD_MEMLEAK_LOGFILE" "$BRCOMPATD_MEMLEAK_LOGFILE.prev"
