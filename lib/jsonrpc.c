@@ -172,6 +172,7 @@ jsonrpc_log_msg(const struct jsonrpc *rpc, const char *title,
     }
 }
 
+/* Always takes ownership of 'msg', regardless of success. */
 int
 jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
 {
@@ -268,6 +269,7 @@ jsonrpc_recv_wait(struct jsonrpc *rpc)
     }
 }
 
+/* Always takes ownership of 'msg', regardless of success. */
 int
 jsonrpc_send_block(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
 {
@@ -304,6 +306,7 @@ jsonrpc_recv_block(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
     }
 }
 
+/* Always takes ownership of 'request', regardless of success. */
 int
 jsonrpc_transact_block(struct jsonrpc *rpc, struct jsonrpc_msg *request,
                        struct jsonrpc_msg **replyp)
@@ -792,10 +795,16 @@ jsonrpc_session_get_name(const struct jsonrpc_session *s)
     return reconnect_get_name(s->reconnect);
 }
 
+/* Always takes ownership of 'msg', regardless of success. */
 int
 jsonrpc_session_send(struct jsonrpc_session *s, struct jsonrpc_msg *msg)
 {
-    return s->rpc ? jsonrpc_send(s->rpc, msg) : ENOTCONN;
+    if (s->rpc) {
+        return jsonrpc_send(s->rpc, msg);
+    } else {
+        jsonrpc_msg_destroy(msg);
+        return ENOTCONN;
+    }
 }
 
 struct jsonrpc_msg *
