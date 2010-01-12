@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,10 +28,11 @@
 #define STATES                                  \
     STATE(VOID, 1 << 0)                         \
     STATE(BACKOFF, 1 << 1)                      \
-    STATE(CONNECTING, 1 << 2)                   \
-    STATE(ACTIVE, 1 << 3)                       \
-    STATE(IDLE, 1 << 4)                         \
-    STATE(RECONNECT, 1 << 5)
+    STATE(START_CONNECT, 1 << 2)                \
+    STATE(CONNECT_IN_PROGRESS, 1 << 3)          \
+    STATE(ACTIVE, 1 << 4)                       \
+    STATE(IDLE, 1 << 5)                         \
+    STATE(RECONNECT, 1 << 6)
 enum state {
 #define STATE(NAME, VALUE) S_##NAME = VALUE,
     STATES
@@ -259,7 +260,8 @@ reconnect_disable(struct reconnect *fsm, long long int now)
 void
 reconnect_force_reconnect(struct reconnect *fsm, long long int now)
 {
-    if (fsm->state & (S_CONNECTING | S_ACTIVE | S_IDLE)) {
+    if (fsm->state & (S_START_CONNECT | S_CONNECT_IN_PROGRESS
+                      | S_ACTIVE | S_IDLE)) {
         reconnect_transition__(fsm, now, S_RECONNECT);
     }
 }
@@ -321,9 +323,9 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
 void
 reconnect_connecting(struct reconnect *fsm, long long int now)
 {
-    if (fsm->state != S_CONNECTING) {
+    if (fsm->state != S_CONNECT_IN_PROGRESS) {
         VLOG_INFO("%s: connecting...", fsm->name);
-        reconnect_transition__(fsm, now, S_CONNECTING);
+        reconnect_transition__(fsm, now, S_CONNECT_IN_PROGRESS);
     }
 }
 
@@ -371,7 +373,7 @@ static void
 reconnect_transition__(struct reconnect *fsm, long long int now,
                        enum state state)
 {
-    if (fsm->state == S_CONNECTING) {
+    if (fsm->state == S_CONNECT_IN_PROGRESS) {
         fsm->n_attempted_connections++;
         if (state == S_ACTIVE) {
             fsm->n_successful_connections++;
@@ -400,7 +402,8 @@ reconnect_deadline__(const struct reconnect *fsm)
     case S_BACKOFF:
         return fsm->state_entered + fsm->backoff;
 
-    case S_CONNECTING:
+    case S_START_CONNECT:
+    case S_CONNECT_IN_PROGRESS:
         return fsm->state_entered + MAX(1000, fsm->backoff);
 
     case S_ACTIVE:
@@ -457,7 +460,8 @@ reconnect_run(struct reconnect *fsm, long long int now)
         case S_BACKOFF:
             return RECONNECT_CONNECT;
 
-        case S_CONNECTING:
+        case S_START_CONNECT:
+        case S_CONNECT_IN_PROGRESS:
             return RECONNECT_DISCONNECT;
 
         case S_ACTIVE:
@@ -478,7 +482,7 @@ reconnect_run(struct reconnect *fsm, long long int now)
 
         NOT_REACHED();
     } else {
-        return fsm->state == S_CONNECTING ? RECONNECT_CONNECT : 0;
+        return fsm->state == S_START_CONNECT ? RECONNECT_CONNECT : 0;
     }
 }
 
