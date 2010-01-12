@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -282,6 +282,7 @@ daemonize_complete(void)
 {
     if (detach) {
         size_t bytes_written;
+        int null_fd;
         int error;
 
         error = write_fully(daemonize_fds[1], "", 1, &bytes_written);
@@ -293,6 +294,16 @@ daemonize_complete(void)
         setsid();
         if (chdir_) {
             ignore(chdir("/"));
+        }
+
+        /* Close stdin, stdout, stderr.  Otherwise if we're started from
+         * e.g. an SSH session then we tend to hold that session open
+         * artificially. */
+        null_fd = get_null_fd();
+        if (null_fd >= 0) {
+            dup2(null_fd, STDIN_FILENO);
+            dup2(null_fd, STDOUT_FILENO);
+            dup2(null_fd, STDERR_FILENO);
         }
     }
 }
