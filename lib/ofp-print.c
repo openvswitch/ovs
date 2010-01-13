@@ -927,6 +927,7 @@ ofp_desc_stats_reply(struct ds *string, const void *body,
     ds_put_format(string, "Hardware: %s\n", ods->hw_desc);
     ds_put_format(string, "Software: %s\n", ods->sw_desc);
     ds_put_format(string, "Serial Num: %s\n", ods->serial_num);
+    ds_put_format(string, "DP Description: %s\n", ods->dp_desc);
 }
 
 static void

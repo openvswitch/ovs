@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -725,8 +725,10 @@ struct ofp_desc_stats {
     char hw_desc[DESC_STR_LEN];        /* Hardware description. */
     char sw_desc[DESC_STR_LEN];        /* Software description. */
     char serial_num[SERIAL_NUM_LEN];   /* Serial number. */
+    char dp_desc[DESC_STR_LEN];        /* Human readable description of
+                                          the datapath. */
 };
-OFP_ASSERT(sizeof(struct ofp_desc_stats) == 800);
+OFP_ASSERT(sizeof(struct ofp_desc_stats) == 1056);
 
 /* Body for ofp_stats_request of type OFPST_FLOW. */
 struct ofp_flow_stats_request {
