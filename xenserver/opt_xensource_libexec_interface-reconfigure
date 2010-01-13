@@ -1214,7 +1214,9 @@ def datapath_configure_bond(pif,slaves):
     pifrec = db.get_pif_record(pif)
     interface = pif_netdev_name(pif)
 
-    argv = ['--', 'add-bond', bridge, interface] + slaves
+    argv = ['--', 'add-bond', bridge, interface]
+    for slave in slaves:
+        argv += [pif_netdev_name(slave)]
 
     # XXX need ovs-vsctl support
     #if pifrec['MAC'] != "":
