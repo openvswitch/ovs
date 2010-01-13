@@ -886,6 +886,7 @@ make_flow_mod(uint16_t command, const flow_t *flow, size_t actions_len)
     ofm->header.version = OFP_VERSION;
     ofm->header.type = OFPT_FLOW_MOD;
     ofm->header.length = htons(size);
+    ofm->cookie = 0;
     ofm->match.wildcards = htonl(0);
     ofm->match.in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
                                : flow->in_port);

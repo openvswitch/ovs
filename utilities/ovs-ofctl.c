@@ -48,6 +48,7 @@
 #include "timeval.h"
 #include "util.h"
 #include "vconn.h"
+#include "xtoxll.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_ofctl
@@ -686,7 +687,8 @@ parse_field(const char *name, const struct field **f_out)
 static void
 str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
             uint8_t *table_idx, uint16_t *out_port, uint16_t *priority, 
-            uint16_t *idle_timeout, uint16_t *hard_timeout)
+            uint16_t *idle_timeout, uint16_t *hard_timeout, 
+            uint64_t *cookie)
 {
     char *save_ptr = NULL;
     char *name;
@@ -706,6 +708,9 @@ str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
     }
     if (hard_timeout) {
         *hard_timeout = OFP_FLOW_PERMANENT;
+    }
+    if (cookie) {
+        *cookie = 0;
     }
     if (actions) {
         char *act_str = strstr(string, "action");
@@ -755,6 +760,8 @@ str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
                 *idle_timeout = atoi(value);
             } else if (hard_timeout && !strcmp(name, "hard_timeout")) {
                 *hard_timeout = atoi(value);
+            } else if (cookie && !strcmp(name, "cookie")) {
+                *cookie = atoi(value);
             } else if (parse_field(name, &f)) {
                 void *data = (char *) match + f->offset;
                 if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
@@ -793,7 +800,7 @@ do_dump_flows(int argc, char *argv[])
 
     req = alloc_stats_request(sizeof *req, OFPST_FLOW, &request);
     str_to_flow(argc > 2 ? argv[2] : "", &req->match, NULL,
-                &req->table_id, &out_port, NULL, NULL, NULL);
+                &req->table_id, &out_port, NULL, NULL, NULL, NULL);
     memset(&req->pad, 0, sizeof req->pad);
     req->out_port = htons(out_port);
 
@@ -809,7 +816,7 @@ do_dump_aggregate(int argc, char *argv[])
 
     req = alloc_stats_request(sizeof *req, OFPST_AGGREGATE, &request);
     str_to_flow(argc > 2 ? argv[2] : "", &req->match, NULL,
-                &req->table_id, &out_port, NULL, NULL, NULL);
+                &req->table_id, &out_port, NULL, NULL, NULL, NULL);
     memset(&req->pad, 0, sizeof req->pad);
     req->out_port = htons(out_port);
 
@@ -823,21 +830,23 @@ do_add_flow(int argc OVS_UNUSED, char *argv[])
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
     uint16_t priority, idle_timeout, hard_timeout;
+    uint64_t cookie;
     struct ofp_match match;
 
     /* Parse and send.  str_to_flow() will expand and reallocate the data in
      * 'buffer', so we can't keep pointers to across the str_to_flow() call. */
     make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argv[2], &match, buffer,
-                NULL, NULL, &priority, &idle_timeout, &hard_timeout);
+                NULL, NULL, &priority, &idle_timeout, &hard_timeout,
+                &cookie);
     ofm = buffer->data;
     ofm->match = match;
     ofm->command = htons(OFPFC_ADD);
+    ofm->cookie = htonll(cookie);
     ofm->idle_timeout = htons(idle_timeout);
     ofm->hard_timeout = htons(hard_timeout);
     ofm->buffer_id = htonl(UINT32_MAX);
     ofm->priority = htons(priority);
-    ofm->reserved = htonl(0);
 
     open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, buffer);
@@ -861,6 +870,7 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
         struct ofpbuf *buffer;
         struct ofp_flow_mod *ofm;
         uint16_t priority, idle_timeout, hard_timeout;
+        uint64_t cookie;
         struct ofp_match match;
 
         char *comment;
@@ -881,15 +891,16 @@ do_add_flows(int argc OVS_UNUSED, char *argv[])
          * call. */
         make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
         str_to_flow(line, &match, buffer,
-                    NULL, NULL, &priority, &idle_timeout, &hard_timeout);
+                    NULL, NULL, &priority, &idle_timeout, &hard_timeout,
+                    &cookie);
         ofm = buffer->data;
         ofm->match = match;
         ofm->command = htons(OFPFC_ADD);
+        ofm->cookie = htonll(cookie);
         ofm->idle_timeout = htons(idle_timeout);
         ofm->hard_timeout = htons(hard_timeout);
         ofm->buffer_id = htonl(UINT32_MAX);
         ofm->priority = htons(priority);
-        ofm->reserved = htonl(0);
 
         send_openflow_buffer(vconn, buffer);
     }
@@ -901,6 +912,7 @@ static void
 do_mod_flows(int argc OVS_UNUSED, char *argv[])
 {
     uint16_t priority, idle_timeout, hard_timeout;
+    uint64_t cookie;
     struct vconn *vconn;
     struct ofpbuf *buffer;
     struct ofp_flow_mod *ofm;
@@ -910,7 +922,8 @@ do_mod_flows(int argc OVS_UNUSED, char *argv[])
      * 'buffer', so we can't keep pointers to across the str_to_flow() call. */
     make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argv[2], &match, buffer,
-                NULL, NULL, &priority, &idle_timeout, &hard_timeout);
+                NULL, NULL, &priority, &idle_timeout, &hard_timeout,
+                &cookie);
     ofm = buffer->data;
     ofm->match = match;
     if (strict) {
@@ -920,9 +933,9 @@ do_mod_flows(int argc OVS_UNUSED, char *argv[])
     }
     ofm->idle_timeout = htons(idle_timeout);
     ofm->hard_timeout = htons(hard_timeout);
+    ofm->cookie = htonll(cookie);
     ofm->buffer_id = htonl(UINT32_MAX);
     ofm->priority = htons(priority);
-    ofm->reserved = htonl(0);
 
     open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, buffer);
@@ -940,7 +953,7 @@ static void do_del_flows(int argc, char *argv[])
     /* Parse and send. */
     ofm = make_openflow(sizeof *ofm, OFPT_FLOW_MOD, &buffer);
     str_to_flow(argc > 2 ? argv[2] : "", &ofm->match, NULL, NULL, 
-                &out_port, &priority, NULL, NULL);
+                &out_port, &priority, NULL, NULL, NULL);
     if (strict) {
         ofm->command = htons(OFPFC_DELETE_STRICT);
     } else {
@@ -951,7 +964,6 @@ static void do_del_flows(int argc, char *argv[])
     ofm->buffer_id = htonl(UINT32_MAX);
     ofm->out_port = htons(out_port);
     ofm->priority = htons(priority);
-    ofm->reserved = htonl(0);
 
     open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, buffer);
