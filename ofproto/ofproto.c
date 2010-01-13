@@ -87,6 +87,8 @@ static int xlate_actions(const union ofp_action *in, size_t n_in,
 struct rule {
     struct cls_rule cr;
 
+    uint64_t flow_cookie;       /* Controller-issued identifier. 
+                                   (Kept in network-byte order.) */
     uint16_t idle_timeout;      /* In seconds from time of last use. */
     uint16_t hard_timeout;      /* In seconds from time of creation. */
     bool send_flow_removed;     /* Send a flow removed message? */
@@ -148,7 +150,7 @@ rule_is_hidden(const struct rule *rule)
 static struct rule *rule_create(struct ofproto *, struct rule *super,
                                 const union ofp_action *, size_t n_actions,
                                 uint16_t idle_timeout, uint16_t hard_timeout,
-                                bool send_flow_removed);
+                                uint64_t flow_cookie, bool send_flow_removed);
 static void rule_free(struct rule *);
 static void rule_destroy(struct ofproto *, struct rule *);
 static struct rule *rule_from_cls_rule(const struct cls_rule *);
@@ -1002,7 +1004,7 @@ ofproto_add_flow(struct ofproto *p,
     struct rule *rule;
     rule = rule_create(p, NULL, actions, n_actions,
                        idle_timeout >= 0 ? idle_timeout : 5 /* XXX */, 
-                       0, false);
+                       0, 0, false);
     cls_rule_from_flow(&rule->cr, flow, wildcards, priority);
     rule_insert(p, rule, NULL, 0);
 }
@@ -1397,11 +1399,12 @@ static struct rule *
 rule_create(struct ofproto *ofproto, struct rule *super,
             const union ofp_action *actions, size_t n_actions,
             uint16_t idle_timeout, uint16_t hard_timeout,
-            bool send_flow_removed)
+            uint64_t flow_cookie, bool send_flow_removed)
 {
     struct rule *rule = xcalloc(1, sizeof *rule);
     rule->idle_timeout = idle_timeout;
     rule->hard_timeout = hard_timeout;
+    rule->flow_cookie = flow_cookie;
     rule->used = rule->created = time_msec();
     rule->send_flow_removed = send_flow_removed;
     rule->super = super;
@@ -1564,7 +1567,7 @@ rule_create_subrule(struct ofproto *ofproto, struct rule *rule,
 {
     struct rule *subrule = rule_create(ofproto, rule, NULL, 0,
                                        rule->idle_timeout, rule->hard_timeout,
-                                       false);
+                                       0, false);
     COVERAGE_INC(ofproto_subrule_create);
     cls_rule_from_flow(&subrule->cr, flow, 0,
                        (rule->cr.priority <= UINT16_MAX ? UINT16_MAX
@@ -2558,10 +2561,11 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     ofs->pad = 0;
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofs->match);
     ofs->duration = htonl((time_msec() - rule->created) / 1000);
+    ofs->cookie = rule->flow_cookie;
     ofs->priority = htons(rule->cr.priority);
     ofs->idle_timeout = htons(rule->idle_timeout);
     ofs->hard_timeout = htons(rule->hard_timeout);
-    ofs->pad2 = 0;
+    memset(ofs->pad2, 0, sizeof ofs->pad2);
     ofs->packet_count = htonll(packet_count);
     ofs->byte_count = htonll(byte_count);
     memcpy(ofs->actions, rule->actions, act_len);
@@ -2812,7 +2816,7 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
 
     rule = rule_create(p, NULL, (const union ofp_action *) ofm->actions,
                        n_actions, ntohs(ofm->idle_timeout),
-                       ntohs(ofm->hard_timeout),
+                       ntohs(ofm->hard_timeout),  ofm->cookie,
                        ofm->flags & htons(OFPFF_SEND_FLOW_REM));
     cls_rule_from_match(&rule->cr, &ofm->match, ntohs(ofm->priority));
 
@@ -2852,6 +2856,7 @@ modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
         free(rule->actions);
         rule->actions = xmemdup(ofm->actions, actions_len);
         rule->n_actions = n_actions;
+        rule->flow_cookie = ofm->cookie;
 
         if (rule->cr.wc.wildcards) {
             COVERAGE_INC(ofproto_mod_wc_flow);
@@ -3297,6 +3302,7 @@ compose_flow_removed(const struct rule *rule, long long int now, uint8_t reason)
 
     ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofr->match);
+    ofr->cookie = rule->flow_cookie;
     ofr->priority = htons(rule->cr.priority);
     ofr->reason = reason;
     ofr->duration = htonl((now - rule->created - last_used) / 1000);

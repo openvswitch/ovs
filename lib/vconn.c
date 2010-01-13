@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -859,6 +859,7 @@ make_flow_mod(uint16_t command, const flow_t *flow, size_t actions_len)
     ofm->header.version = OFP_VERSION;
     ofm->header.type = OFPT_FLOW_MOD;
     ofm->header.length = htons(size);
+    ofm->cookie = 0;
     ofm->match.wildcards = htonl(0);
     ofm->match.in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
                                : flow->in_port);
