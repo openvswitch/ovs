@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -842,7 +842,14 @@ do_monitor(int argc, char *argv[])
                    && json_equal(msg->id, request_id)) {
             monitor_print(msg->result, table, &columns, true);
             fflush(stdout);
-            daemonize();
+            if (get_detach()) {
+                /* daemonize() closes the standard file descriptors.  We output
+                 * to stdout, so we need to save and restore STDOUT_FILENO. */
+                int fd = dup(STDOUT_FILENO);
+                daemonize();
+                dup2(fd, STDOUT_FILENO);
+                close(fd);
+            }
         } else if (msg->type == JSONRPC_NOTIFY
                    && !strcmp(msg->method, "update")) {
             struct json *params = msg->params;
