@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +71,7 @@ struct ofsettings {
     const char *hw_desc;        /* Hardware. */
     const char *sw_desc;        /* Software version. */
     const char *serial_desc;    /* Serial number. */
+    const char *dp_desc;        /* Serial number. */
 
     /* Related vconns and network devices. */
     const char *controller_name; /* Controller (if not discovery mode). */
@@ -176,7 +177,8 @@ main(int argc, char *argv[])
     if (s.mgmt_id) {
         ofproto_set_mgmt_id(ofproto, s.mgmt_id);
     }
-    ofproto_set_desc(ofproto, s.mfr_desc, s.hw_desc, s.sw_desc, s.serial_desc);
+    ofproto_set_desc(ofproto, s.mfr_desc, s.hw_desc, s.sw_desc,
+                     s.serial_desc, s.dp_desc);
     if (!s.listeners.n) {
         svec_add_nocopy(&s.listeners, xasprintf("punix:%s/%s.mgmt",
                                               ovs_rundir, s.dp_name));
@@ -248,6 +250,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         OPT_HARDWARE,
         OPT_SOFTWARE,
         OPT_SERIAL,
+        OPT_DP_DESC,
         OPT_ACCEPT_VCONN,
         OPT_NO_RESOLV_CONF,
         OPT_BR_NAME,
@@ -277,6 +280,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         {"hardware", required_argument, 0, OPT_HARDWARE},
         {"software", required_argument, 0, OPT_SOFTWARE},
         {"serial", required_argument, 0, OPT_SERIAL},
+        {"dp_desc", required_argument, 0, OPT_DP_DESC},
         {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
         {"no-resolv-conf", no_argument, 0, OPT_NO_RESOLV_CONF},
         {"config",      required_argument, 0, 'F'},
@@ -318,6 +322,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->hw_desc = NULL;
     s->sw_desc = NULL;
     s->serial_desc = NULL;
+    s->dp_desc = NULL;
     svec_init(&s->listeners);
     svec_init(&s->snoops);
     s->fail_mode = FAIL_OPEN;
@@ -370,6 +375,10 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
         case OPT_SERIAL:
             s->serial_desc = optarg;
+            break;
+
+        case OPT_DP_DESC:
+            s->dp_desc = optarg;
             break;
 
         case OPT_ACCEPT_VCONN:
@@ -568,6 +577,7 @@ usage(void)
            "  --hardware=HW           Identify hardware as HW\n"
            "  --software=SW           Identify software as SW\n"
            "  --serial=SERIAL         Identify serial number as SERIAL\n"
+           "  --dp_desc=DP_DESC       Identify dp description as DP_DESC\n"
            "\nController discovery options:\n"
            "  --accept-vconn=REGEX    accept matching discovered controllers\n"
            "  --no-resolv-conf        do not update /etc/resolv.conf\n"

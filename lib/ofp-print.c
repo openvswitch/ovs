@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -927,6 +927,7 @@ ofp_desc_stats_reply(struct ds *string, const void *body, size_t len UNUSED,
     ds_put_format(string, "Hardware: %s\n", ods->hw_desc);
     ds_put_format(string, "Software: %s\n", ods->sw_desc);
     ds_put_format(string, "Serial Num: %s\n", ods->serial_num);
+    ds_put_format(string, "DP Description: %s\n", ods->dp_desc);
 }
 
 static void

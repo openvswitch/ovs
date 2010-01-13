@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -194,6 +194,7 @@ struct ofproto {
     char *hardware;             /* Hardware. */
     char *software;             /* Software version. */
     char *serial;               /* Serial number. */
+    char *dp_desc;              /* Datapath description. */
 
     /* Datapath. */
     struct dpif *dpif;
@@ -303,6 +304,7 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     p->hardware = xstrdup("Reference Implementation");
     p->software = xstrdup(VERSION BUILDNR);
     p->serial = xstrdup("None");
+    p->dp_desc = xstrdup("None");
 
     /* Initialize datapath. */
     p->dpif = dpif;
@@ -403,7 +405,8 @@ ofproto_set_max_backoff(struct ofproto *p, int max_backoff)
 void
 ofproto_set_desc(struct ofproto *p,
                  const char *manufacturer, const char *hardware,
-                 const char *software, const char *serial)
+                 const char *software, const char *serial,
+                 const char *dp_desc)
 {
     if (manufacturer) {
         free(p->manufacturer);
@@ -420,6 +423,10 @@ ofproto_set_desc(struct ofproto *p,
     if (serial) {
         free(p->serial);
         p->serial = xstrdup(serial);
+    }
+    if (dp_desc) {
+        free(p->dp_desc);
+        p->dp_desc = xstrdup(dp_desc);
     }
 }
 
@@ -2378,6 +2385,7 @@ handle_desc_stats_request(struct ofproto *p, struct ofconn *ofconn,
     strncpy(ods->hw_desc, p->hardware, sizeof ods->hw_desc);
     strncpy(ods->sw_desc, p->software, sizeof ods->sw_desc);
     strncpy(ods->serial_num, p->serial, sizeof ods->serial_num);
+    strncpy(ods->dp_desc, p->dp_desc, sizeof ods->dp_desc);
     queue_tx(msg, ofconn, ofconn->reply_counter);
 
     return 0;
