@@ -978,6 +978,14 @@ brc_recv_update(const struct ovsrec_open_vswitch *ovs)
         goto error;
     }
 
+    /* Just drop the request on the floor if a valid configuration
+     * doesn't exist.  We don't immediately do this check, because we
+     * want to drain pending netlink messages. */
+    if (!ovs) {
+        VLOG_WARN_RL(&rl, "could not find valid configuration to update");
+        goto error;
+    }
+
     switch (genlmsghdr->cmd) {
     case BRC_GENL_C_DP_ADD:
         handle_bridge_cmd(ovs, buffer, true);
@@ -1180,14 +1188,12 @@ main(int argc, char *argv[])
 
         unixctl_server_run(unixctl);
         ovs = ovsrec_open_vswitch_first(idl);
-        if (ovs) {
-            brc_recv_update(ovs);
-        } else if (ovsdb_idl_get_seqno(idl)) {
+        brc_recv_update(ovs);
+
+        if (!ovs && ovsdb_idl_get_seqno(idl)) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_WARN_RL(&rl, "%s: database does not contain any Open vSwitch "
                          "configuration", remote);
-        } else {
-            /* Haven't yet received initial database contents. */
         }
         netdev_run();
 
