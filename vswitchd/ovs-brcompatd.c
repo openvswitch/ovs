@@ -1190,7 +1190,7 @@ main(int argc, char *argv[])
         ovs = ovsrec_open_vswitch_first(idl);
         brc_recv_update(ovs);
 
-        if (!ovs && ovsdb_idl_get_seqno(idl)) {
+        if (!ovs && ovsdb_idl_has_ever_connected(idl)) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_WARN_RL(&rl, "%s: database does not contain any Open vSwitch "
                          "configuration", remote);

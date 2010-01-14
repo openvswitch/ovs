@@ -291,6 +291,12 @@ ovsdb_idl_get_seqno(const struct ovsdb_idl *idl)
     return idl->change_seqno;
 }
 
+bool
+ovsdb_idl_has_ever_connected(const struct ovsdb_idl *idl)
+{
+    return ovsdb_idl_get_seqno(idl) != 0;
+}
+
 void
 ovsdb_idl_force_reconnect(struct ovsdb_idl *idl)
 {
