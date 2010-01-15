@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,9 +55,16 @@ do_test(void)
         /* Wait up to 1 second.  Using select() to do the timeout avoids
          * interfering with the interval timer. */
         struct timeval timeout;
+        int retval;
+
         timeout.tv_sec = 1;
         timeout.tv_usec = 0;
-        assert(select(0, NULL, NULL, NULL, &timeout) == -1 && errno == EINTR);
+        retval = select(0, NULL, NULL, NULL, &timeout);
+        if (retval != -1) {
+            ovs_fatal(0, "select returned %d", retval);
+        } else if (errno != EINTR) {
+            ovs_fatal(errno, "select reported unexpected error");
+        }
 
         if (gettimeofday_in_msec() - start_gtod >= TIME_UPDATE_INTERVAL) {
             assert(time_msec() - start_time_msec >= TIME_UPDATE_INTERVAL);
