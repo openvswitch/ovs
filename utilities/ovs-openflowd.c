@@ -124,7 +124,7 @@ main(int argc, char *argv[])
     /* Start listening for ovs-appctl requests. */
     error = unixctl_server_create(NULL, &unixctl);
     if (error) {
-        ovs_fatal(error, "Could not listen for unixctl connections");
+        exit(EXIT_FAILURE);
     }
 
     VLOG_INFO("Open vSwitch version %s", VERSION BUILDNR);

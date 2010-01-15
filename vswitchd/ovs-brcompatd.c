@@ -1159,7 +1159,7 @@ main(int argc, char *argv[])
 
     retval = unixctl_server_create(NULL, &unixctl);
     if (retval) {
-        ovs_fatal(retval, "could not listen for vlog connections");
+        exit(EXIT_FAILURE);
     }
 
     if (brc_open(&brc_sock)) {

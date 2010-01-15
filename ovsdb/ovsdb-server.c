@@ -92,7 +92,7 @@ main(int argc, char *argv[])
 
     retval = unixctl_server_create(unixctl_path, &unixctl);
     if (retval) {
-        ovs_fatal(retval, "could not listen for control connections");
+        exit(EXIT_FAILURE);
     }
 
     daemonize_complete();

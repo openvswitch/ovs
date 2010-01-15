@@ -115,7 +115,7 @@ main(int argc, char *argv[])
 
     retval = unixctl_server_create(NULL, &unixctl);
     if (retval) {
-        ovs_fatal(retval, "Could not listen for unixctl connections");
+        exit(EXIT_FAILURE);
     }
 
     die_if_already_running();
