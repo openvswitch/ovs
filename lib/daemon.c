@@ -44,8 +44,8 @@ static bool overwrite_pidfile;
 /* Should we chdir to "/"? */
 static bool chdir_ = true;
 
-/* File descriptors used by daemonize_start() and daemonize_complete(). */
-static int daemonize_fds[2];
+/* File descriptor used by daemonize_start() and daemonize_complete(). */
+static int daemonize_fd = -1;
 
 /* Returns the file name that would be used for a pidfile if 'name' were
  * provided to set_pidfile().  The caller must free the returned string. */
@@ -220,6 +220,85 @@ daemonize(void)
     daemonize_complete();
 }
 
+static pid_t
+fork_and_wait_for_startup(int *fdp)
+{
+    int fds[2];
+    pid_t pid;
+
+    if (pipe(fds) < 0) {
+        ovs_fatal(errno, "pipe failed");
+    }
+
+    pid = fork();
+    if (pid > 0) {
+        /* Running in parent process. */
+        char c;
+
+        close(fds[1]);
+        fatal_signal_fork();
+        if (read(fds[0], &c, 1) != 1) {
+            int retval;
+            int status;
+
+            do {
+                retval = waitpid(pid, &status, 0);
+            } while (retval == -1 && errno == EINTR);
+
+            if (retval == pid
+                && WIFEXITED(status)
+                && WEXITSTATUS(status)) {
+                /* Child exited with an error.  Convey the same error to
+                 * our parent process as a courtesy. */
+                exit(WEXITSTATUS(status));
+            }
+
+            ovs_fatal(errno, "fork child failed to signal startup");
+        }
+        close(fds[0]);
+        *fdp = -1;
+    } else if (!pid) {
+        /* Running in child process. */
+        close(fds[0]);
+        time_postfork();
+        lockfile_postfork();
+        *fdp = fds[1];
+    } else {
+        ovs_fatal(errno, "could not fork");
+    }
+
+    return pid;
+}
+
+static void
+fork_notify_startup(int fd)
+{
+    if (fd != -1) {
+        size_t bytes_written;
+        int error;
+
+        error = write_fully(fd, "", 1, &bytes_written);
+        if (error) {
+            ovs_fatal(error, "could not write to pipe");
+        }
+
+        close(fd);
+    }
+}
+
+/* Close stdin, stdout, stderr.  If we're started from e.g. an SSH session,
+ * then this keeps us from holding that session open artificially. */
+static void
+close_standard_fds(void)
+{
+    int null_fd = get_null_fd();
+    if (null_fd >= 0) {
+        dup2(null_fd, STDIN_FILENO);
+        dup2(null_fd, STDOUT_FILENO);
+        dup2(null_fd, STDERR_FILENO);
+    }
+}
+
 /* If daemonization is configured, then starts daemonization, by forking and
  * returning in the child process.  The parent process hangs around until the
  * child lets it know either that it completed startup successfully (by calling
@@ -228,51 +307,17 @@ daemonize(void)
 void
 daemonize_start(void)
 {
+    daemonize_fd = -1;
+
     if (detach) {
-        pid_t pid;
-
-        if (pipe(daemonize_fds) < 0) {
-            ovs_fatal(errno, "pipe failed");
-        }
-
-        pid = fork();
-        if (pid > 0) {
+        if (fork_and_wait_for_startup(&daemonize_fd) > 0) {
             /* Running in parent process. */
-            char c;
-
-            close(daemonize_fds[1]);
-            fatal_signal_fork();
-            if (read(daemonize_fds[0], &c, 1) != 1) {
-                int retval;
-                int status;
-
-                do {
-                    retval = waitpid(pid, &status, 0);
-                } while (retval == -1 && errno == EINTR);
-
-                if (retval == pid
-                    && WIFEXITED(status)
-                    && WEXITSTATUS(status)) {
-                    /* Child exited with an error.  Convey the same error to
-                     * our parent process as a courtesy. */
-                    exit(WEXITSTATUS(status));
-                }
-
-                ovs_fatal(errno, "daemon child failed to signal startup");
-            }
             exit(0);
-        } else if (!pid) {
-            /* Running in child process. */
-            close(daemonize_fds[0]);
-            make_pidfile();
-            time_postfork();
-            lockfile_postfork();
-        } else {
-            ovs_fatal(errno, "could not fork");
         }
-    } else {
-        make_pidfile();
+        /* Running in daemon process. */
     }
+
+    make_pidfile();
 }
 
 /* If daemonization is configured, then this function notifies the parent
@@ -280,31 +325,14 @@ daemonize_start(void)
 void
 daemonize_complete(void)
 {
+    fork_notify_startup(daemonize_fd);
+
     if (detach) {
-        size_t bytes_written;
-        int null_fd;
-        int error;
-
-        error = write_fully(daemonize_fds[1], "", 1, &bytes_written);
-        if (error) {
-            ovs_fatal(error, "could not write to pipe");
-        }
-
-        close(daemonize_fds[1]);
         setsid();
         if (chdir_) {
             ignore(chdir("/"));
         }
-
-        /* Close stdin, stdout, stderr.  Otherwise if we're started from
-         * e.g. an SSH session then we tend to hold that session open
-         * artificially. */
-        null_fd = get_null_fd();
-        if (null_fd >= 0) {
-            dup2(null_fd, STDIN_FILENO);
-            dup2(null_fd, STDOUT_FILENO);
-            dup2(null_fd, STDERR_FILENO);
-        }
+        close_standard_fds();
     }
 }
 
