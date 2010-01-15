@@ -102,7 +102,7 @@ main(int argc, char *argv[])
         struct iface *iface = &ifaces[i];
         dhclient_init(iface->dhcp, 0);
     }
-    fatal_signal_add_hook(release_ifaces, NULL, true);
+    fatal_signal_add_hook(release_ifaces, NULL, NULL, true);
 
     retval = regcomp(&accept_controller_regex, accept_controller_re,
                      REG_NOSUB | REG_EXTENDED);

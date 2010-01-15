@@ -70,10 +70,11 @@ int
 netdev_initialize(void)
 {
     static int status = -1;
+
     if (status < 0) {
         int i, j;
 
-        fatal_signal_add_hook(close_all_netdevs, NULL, true);
+        fatal_signal_add_hook(close_all_netdevs, NULL, NULL, true);
 
         status = 0;
         for (i = j = 0; i < n_netdev_classes; i++) {

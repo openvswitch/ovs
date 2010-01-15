@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ main(int argc, char *argv[])
         ovs_fatal(error, "dhclient_create failed");
     }
     dhclient_init(cli, request_ip.s_addr);
-    fatal_signal_add_hook(release, cli, true);
+    fatal_signal_add_hook(release, NULL, cli, true);
 
     for (;;) {
         dhclient_run(cli);

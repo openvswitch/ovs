@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks, Inc.
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -263,7 +263,7 @@ tty_set_raw_mode(int fd, speed_t speed)
             return errno;
         }
         s->tios = tios;
-        fatal_signal_add_hook(restore_termios, s, true);
+        fatal_signal_add_hook(restore_termios, NULL, s, true);
 
         tios.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP
                           | INLCR | IGNCR | ICRNL | IXON);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks, Inc.
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -165,7 +165,7 @@ main(int argc, char *argv[])
     daemonize();
 
     initialize_terminal();
-    fatal_signal_add_hook(restore_terminal, NULL, true);
+    fatal_signal_add_hook(restore_terminal, NULL, NULL, true);
 
     msg = NULL;
     countdown = 0;
