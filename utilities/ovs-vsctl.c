@@ -171,7 +171,6 @@ parse_options(int argc, char *argv[])
 
 
     for (;;) {
-        unsigned long int timeout;
         int c;
 
         c = getopt_long(argc, argv, "+v::hVt:", long_options, NULL);
