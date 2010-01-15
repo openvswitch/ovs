@@ -1255,7 +1255,7 @@ def datapath_modify_config(commands):
         for c in commands:
             log("  %s" % c)
 
-    rc = run_command(['/usr/bin/ovs-vsctl']
+    rc = run_command(['/usr/bin/ovs-vsctl'] + ['--timeout=20']
                      + [c for c in commands if not c.startswith('#')])
     if not rc:
         raise Error("Failed to modify vswitch configuration")
