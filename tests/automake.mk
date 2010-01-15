@@ -9,6 +9,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-macros.at \
 	tests/lcov-pre.at \
 	tests/library.at \
+	tests/daemon.at \
 	tests/vconn.at \
 	tests/dir_name.at \
 	tests/aes128.at \

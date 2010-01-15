@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,13 +26,15 @@ enum {
     OPT_NO_CHDIR,
     OPT_OVERWRITE_PIDFILE,
     OPT_PIDFILE,
+    OPT_MONITOR
 };
 
 #define DAEMON_LONG_OPTIONS                                          \
         {"detach",            no_argument, 0, OPT_DETACH},           \
         {"no-chdir",          no_argument, 0, OPT_NO_CHDIR},         \
         {"pidfile",           optional_argument, 0, OPT_PIDFILE},    \
-        {"overwrite-pidfile", no_argument, 0, OPT_OVERWRITE_PIDFILE}
+        {"overwrite-pidfile", no_argument, 0, OPT_OVERWRITE_PIDFILE},\
+        {"monitor",           no_argument, 0, OPT_MONITOR}
 
 #define DAEMON_OPTION_HANDLERS                  \
         case OPT_DETACH:                        \
@@ -49,6 +51,10 @@ enum {
                                                 \
         case OPT_OVERWRITE_PIDFILE:             \
             ignore_existing_pidfile();          \
+            break;                              \
+                                                \
+        case OPT_MONITOR:                       \
+            daemon_set_monitor();               \
             break;
 
 char *make_pidfile_name(const char *name);
@@ -58,6 +64,7 @@ void set_no_chdir(void);
 bool is_chdir_enabled(void);
 void set_detach(void);
 bool get_detach(void);
+void daemon_set_monitor(void);
 void daemonize(void);
 void daemonize_start(void);
 void daemonize_complete(void);

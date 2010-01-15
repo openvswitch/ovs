@@ -25,6 +25,7 @@
 #include "fatal-signal.h"
 #include "dirs.h"
 #include "lockfile.h"
+#include "process.h"
 #include "socket-util.h"
 #include "timeval.h"
 #include "util.h"
@@ -46,6 +47,10 @@ static bool chdir_ = true;
 
 /* File descriptor used by daemonize_start() and daemonize_complete(). */
 static int daemonize_fd = -1;
+
+/* --monitor: Should a supervisory process monitor the daemon and restart it if
+ * it dies due to an error signal? */
+static bool monitor;
 
 /* Returns the file name that would be used for a pidfile if 'name' were
  * provided to set_pidfile().  The caller must free the returned string. */
@@ -115,6 +120,14 @@ bool
 get_detach(void)
 {
     return detach;
+}
+
+/* Sets up a following call to daemonize() to fork a supervisory process to
+ * monitor the daemon and restart it if it dies due to an error signal.  */
+void
+daemon_set_monitor(void)
+{
+    monitor = true;
 }
 
 /* If a pidfile has been configured and that pidfile already exists and is
@@ -286,6 +299,69 @@ fork_notify_startup(int fd)
     }
 }
 
+static bool
+should_restart(int status)
+{
+    if (WIFSIGNALED(status)) {
+        static const int error_signals[] = {
+            SIGABRT, SIGALRM, SIGBUS, SIGFPE, SIGILL, SIGPIPE, SIGSEGV,
+            SIGXCPU, SIGXFSZ
+        };
+
+        size_t i;
+
+        for (i = 0; i < ARRAY_SIZE(error_signals); i++) {
+            if (error_signals[i] == WTERMSIG(status)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void
+monitor_daemon(pid_t daemon_pid)
+{
+    /* XXX Should limit the rate at which we restart the daemon. */
+    /* XXX Should log daemon's stderr output at startup time. */
+    const char *saved_program_name;
+
+    saved_program_name = program_name;
+    program_name = xasprintf("monitor(%s)", program_name);
+    for (;;) {
+        int retval;
+        int status;
+
+        do {
+            retval = waitpid(daemon_pid, &status, 0);
+        } while (retval == -1 && errno == EINTR);
+
+        if (retval == -1) {
+            ovs_fatal(errno, "waitpid failed");
+        } else if (retval == daemon_pid) {
+            char *status_msg = process_status_msg(status);
+            if (should_restart(status)) {
+                VLOG_ERR("%s daemon died unexpectedly (%s), restarting",
+                         saved_program_name, status_msg);
+                free(status_msg);
+
+                daemon_pid = fork_and_wait_for_startup(&daemonize_fd);
+                if (!daemon_pid) {
+                    break;
+                }
+            } else {
+                VLOG_INFO("%s daemon exited normally (%s), exiting",
+                          saved_program_name, status_msg);
+                exit(0);
+            }
+        }
+    }
+
+    /* Running in new daemon process. */
+    free((char *) program_name);
+    program_name = saved_program_name;
+}
+
 /* Close stdin, stdout, stderr.  If we're started from e.g. an SSH session,
  * then this keeps us from holding that session open artificially. */
 static void
@@ -313,6 +389,20 @@ daemonize_start(void)
         if (fork_and_wait_for_startup(&daemonize_fd) > 0) {
             /* Running in parent process. */
             exit(0);
+        }
+        /* Running in daemon or monitor process. */
+    }
+
+    if (monitor) {
+        int saved_daemonize_fd = daemonize_fd;
+        pid_t daemon_pid;
+
+        daemon_pid = fork_and_wait_for_startup(&daemonize_fd);
+        if (daemon_pid > 0) {
+            /* Running in monitor process. */
+            fork_notify_startup(saved_daemonize_fd);
+            close_standard_fds();
+            monitor_daemon(daemon_pid);
         }
         /* Running in daemon process. */
     }
