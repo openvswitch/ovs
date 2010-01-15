@@ -32,7 +32,7 @@ m4_define([OVSDB_CHECK_MONITOR],
    OVS_CHECK_LCOV([ovsdb-client transact unix:socket '[[]]'], [0],
                   [ignore], [ignore], [kill `cat server-pid client-pid`])
    AT_CHECK([ovs-appctl -t $PWD/unixctl -e exit], [0], [ignore], [ignore])
-   OVS_WAIT_UNTIL([test ! -e server-pid && test ! -e client-pid && exit 0])
+   OVS_WAIT_UNTIL([test ! -e server-pid && test ! -e client-pid])
    AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$6], [ignore])
    AT_CLEANUP])
 

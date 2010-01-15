@@ -18,7 +18,7 @@ AT_TESTED([ovs-vswitchd])
 AT_TESTED([ovs-vsctl])
 AT_TESTED([perl])
 
-m4_define([OVS_WAIT_UNTIL],
+m4_define([OVS_WAIT],
   [AT_CHECK(
     [# First try a quick sleep, so that the test completes very quickly
      # in the normal case.  POSIX doesn't require fractional times to
@@ -30,7 +30,10 @@ m4_define([OVS_WAIT_UNTIL],
        sleep 1
        $1
      done
-     exit 1], [0], [ignore], [ignore])])
+     exit 1], [0], [ignore], [ignore], [$2])])
+
+m4_define([OVS_WAIT_UNTIL], [OVS_WAIT([if $1; then exit 0; fi], [$2])])
+m4_define([OVS_WAIT_WHILE], [OVS_WAIT([if $1; then :; else exit 0; fi], [$2])])
 
 m4_include([tests/ovsdb-macros.at])
 m4_include([tests/lcov-pre.at])
