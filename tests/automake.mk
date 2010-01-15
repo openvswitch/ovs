@@ -6,6 +6,7 @@ EXTRA_DIST += \
 	$(srcdir)/tests/testsuite
 TESTSUITE_AT = \
 	tests/testsuite.at \
+	tests/ovsdb-macros.at \
 	tests/lcov-pre.at \
 	tests/library.at \
 	tests/vconn.at \

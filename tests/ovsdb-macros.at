@@ -1,0 +1,21 @@
+dnl OVSDB_INIT([$1])
+dnl
+dnl Creates an empty database named $1.
+m4_define([OVSDB_INIT],
+  [OVS_CHECK_LCOV(
+     [SCHEMA=$abs_top_builddir/vswitchd/vswitch-idl.ovsschema
+      if test ! -e $SCHEMA; then
+        SCHEMA=$abs_top_srcdir/vswitchd/vswitch-idl.ovsschema
+          if test ! -e $SCHEMA; then
+            echo 'Failed to find vswitch-idl.ovsschema'
+            exit 1
+          fi
+      fi
+      ovsdb-tool create $1 $SCHEMA],
+     [0], [stdout], [ignore])
+   OVS_CHECK_LCOV(
+     [[ovsdb-tool transact $1 \
+        '[{"op": "insert",
+           "table": "Open_vSwitch",
+           "row": {}}]']],
+     [0], [ignore], [ignore])])

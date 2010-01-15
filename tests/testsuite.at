@@ -32,7 +32,9 @@ m4_define([OVS_WAIT_UNTIL],
      done
      exit 1], [0], [ignore], [ignore])])
 
+m4_include([tests/ovsdb-macros.at])
 m4_include([tests/lcov-pre.at])
+
 m4_include([tests/library.at])
 m4_include([tests/vconn.at])
 m4_include([tests/dir_name.at])
@@ -46,4 +48,5 @@ m4_include([tests/reconnect.at])
 m4_include([tests/ovsdb.at])
 m4_include([tests/stp.at])
 m4_include([tests/ovs-vsctl.at])
+
 m4_include([tests/lcov-post.at])
