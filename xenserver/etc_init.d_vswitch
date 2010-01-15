@@ -26,6 +26,7 @@ test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 # General config variables in /etc/sysconfig/vswitch
 : ${ENABLE_BRCOMPAT:=y}
 : ${ENABLE_FAKE_PROC_NET:=y}
+: ${ENABLE_MONITOR:=y}
 : ${FORCE_COREFILES:=y}
 
 # Config variables specific to ovsdb-server
@@ -81,12 +82,17 @@ appctl="/usr/bin/ovs-appctl"
 ofctl="/usr/bin/ovs-ofctl"
 vsctl="/usr/bin/ovs-vsctl"
 
-
 if [ "$ENABLE_FAKE_PROC_NET" = "y" ]; then
     if [ "$ENABLE_BRCOMPAT" != "y" ]; then
         warning "FAKE_PROC_NET required BRCOMPAT which was disabled.  Force enabling."
         ENABLE_BRCOMPAT="y"
     fi
+fi
+
+if test "$ENABLE_MONITOR" = "y"; then
+    monitor_opt="--monitor"
+else
+    monitor_opt=
 fi
 
 function dp_list {
@@ -168,9 +174,9 @@ function start_ovsdb_server {
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovsdb_server ($strace_opt$valgrind_opt)" true
-        (nice -n "$OVSDB_SERVER_PRIORITY" $strace_opt $valgrind_opt "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $remotes) &
+        (nice -n "$OVSDB_SERVER_PRIORITY" $strace_opt $valgrind_opt "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach $monitor_opt --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $remotes) &
     else
-        action "Starting ovsdb-server" nice -n "$OVSDB_SERVER_PRIORITY" "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $remotes
+        action "Starting ovsdb-server" nice -n "$OVSDB_SERVER_PRIORITY" "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach $monitor_opt --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $remotes
     fi
 }
 
@@ -214,9 +220,9 @@ function start_vswitchd {
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovs-vswitchd ($strace_opt$valgrind_opt)" true
-        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER") &
+        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach $monitor_opt --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER") &
     else
-        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER"
+        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach $monitor_opt --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER"
     fi
 }
 
@@ -259,7 +265,7 @@ function start_brcompatd {
         action "Starting ovs-brcompatd ($strace_opt$valgrind_opt)" true
         (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd"--no-chdir --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER") &
     else
-        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --no-chdir --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE --detach -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER"
+        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --no-chdir --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE --detach $monitor_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER"
     fi
 }
 

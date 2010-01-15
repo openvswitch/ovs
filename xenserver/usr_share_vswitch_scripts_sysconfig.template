@@ -1,6 +1,6 @@
 ### Configuration options for vswitch
 
-# Copyright (C) 2009 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -16,6 +16,10 @@
 #    ovs-vswitchd were being implemented using existing Linux mechanisms.
 #    This is useful in some cases when replacing existing solutions.
 # ENABLE_FAKE_PROC_NET=y
+
+# ENABLE_MONITOR: If 'y' then monitor daemon processes and restart them
+#    if they die due to an error signal.
+# ENABLE_MONITOR=y
 
 # FORCE_COREFILES: If 'y' then core files will be enabled.
 # FORCE_COREFILES=y

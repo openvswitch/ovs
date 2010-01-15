@@ -19,3 +19,7 @@ OVS_VSWITCHD_OPTS=
 # will disable core dumps.  Setting it to "unlimited" will dump all
 # core files regardless of size.
 #CORE_LIMIT=unlimited
+
+# ENABLE_MONITOR: If 'y' then monitor daemon processes and restart them
+#    if they die due to an error signal.
+# ENABLE_MONITOR=y
