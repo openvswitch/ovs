@@ -821,7 +821,6 @@ netdev_linux_open(struct netdev_dev *netdev_dev_, int ethertype,
 
     if (!strcmp(netdev_dev_get_type(netdev_dev_), "tap")) {
         netdev->fd = netdev_dev->state.tap.fd;
-
     } else if (ethertype != NETDEV_ETH_TYPE_NONE) {
         struct sockaddr_ll sll;
         int protocol;
@@ -869,6 +868,8 @@ netdev_linux_open(struct netdev_dev *netdev_dev_, int ethertype,
         if (error) {
             goto error;
         }
+    } else {
+        netdev->fd = -1;
     }
 
     *netdevp = &netdev->netdev;
