@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -200,22 +200,21 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
                                   NULL);
     if (server->fd < 0) {
         error = -server->fd;
-        fprintf(stderr, "Could not initialize control socket %s (%s)\n",
-                server->path, strerror(error));
+        ovs_error(error, "could not initialize control socket %s",
+                  server->path);
         goto error;
     }
 
     if (chmod(server->path, S_IRUSR | S_IWUSR) < 0) {
         error = errno;
-        fprintf(stderr, "Failed to chmod control socket %s (%s)\n",
-                server->path, strerror(error));
+        ovs_error(error, "failed to chmod control socket %s", server->path);
         goto error;
     }
 
     if (listen(server->fd, 10) < 0) {
         error = errno;
-        fprintf(stderr, "Failed to listen on control socket %s (%s)\n",
-                server->path, strerror(error));
+        ovs_error(error, "Failed to listen on control socket %s",
+                  server->path);
         goto error;
     }
 
