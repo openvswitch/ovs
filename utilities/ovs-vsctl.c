@@ -1001,7 +1001,7 @@ cmd_list_ports(struct vsctl_context *ctx)
 
 static void
 add_port(const struct ovsrec_open_vswitch *ovs,
-         const char *br_name, const char *port_name,
+         const char *br_name, const char *port_name, bool fake_iface,
          char *iface_names[], int n_ifaces)
 {
     struct vsctl_info info;
@@ -1025,6 +1025,7 @@ add_port(const struct ovsrec_open_vswitch *ovs,
     port = ovsrec_port_insert(txn_from_openvswitch(ovs));
     ovsrec_port_set_name(port, port_name);
     ovsrec_port_set_interfaces(port, ifaces, n_ifaces);
+    ovsrec_port_set_bond_fake_iface(port, fake_iface);
     free(ifaces);
 
     if (bridge->vlan) {
@@ -1041,13 +1042,16 @@ add_port(const struct ovsrec_open_vswitch *ovs,
 static void
 cmd_add_port(struct vsctl_context *ctx)
 {
-    add_port(ctx->ovs, ctx->argv[1], ctx->argv[2], &ctx->argv[2], 1);
+    add_port(ctx->ovs, ctx->argv[1], ctx->argv[2], false, &ctx->argv[2], 1);
 }
 
 static void
 cmd_add_bond(struct vsctl_context *ctx)
 {
-    add_port(ctx->ovs, ctx->argv[1], ctx->argv[2], &ctx->argv[3], ctx->argc - 3);
+    bool fake_iface = shash_find(&ctx->options, "--fake-iface");
+
+    add_port(ctx->ovs, ctx->argv[1], ctx->argv[2], fake_iface,
+             &ctx->argv[3], ctx->argc - 3);
 }
 
 static void
@@ -1629,7 +1633,7 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
         /* Port commands. */
         {"list-ports", 1, 1, cmd_list_ports, ""},
         {"add-port", 2, 2, cmd_add_port, ""},
-        {"add-bond", 4, INT_MAX, cmd_add_bond, ""},
+        {"add-bond", 4, INT_MAX, cmd_add_bond, "--fake-iface"},
         {"del-port", 1, 2, cmd_del_port, "--if-exists"},
         {"port-to-br", 1, 1, cmd_port_to_br, ""},
         {"port-set-external-id", 2, 3, cmd_port_set_external_id, ""},

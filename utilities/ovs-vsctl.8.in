@@ -201,10 +201,14 @@ line.  The local port \fIbridge\fR is not included in the list.
 Creates on \fIbridge\fR a new port named \fIport\fR from the network
 device of the same name.
 .
-.IP "\fBadd\-bond \fIbridge port iface\fR\&..."
+.IP "[\fB\-\-fake\-iface\fR] \fBadd\-bond \fIbridge port iface\fR\&..."
 Creates on \fIbridge\fR a new port named \fIport\fR that bonds
 together the network devices given as each \fIiface\fR.  At least two
 interfaces must be named.
+.IP
+With \fB\-\-fake\-iface\fR, a fake interface with the name \fIport\fR is
+created.  This should only be used for compatibility with legacy
+software that requires it.
 .
 .IP "[\fB\-\-if\-exists\fR] \fBdel\-port \fR[\fIbridge\fR] \fIport\fR"
 Deletes \fIport\fR.  If \fIbridge\fR is omitted, \fIport\fR is removed
