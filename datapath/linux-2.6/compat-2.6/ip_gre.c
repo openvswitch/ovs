@@ -815,6 +815,9 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 	if (skb_dst(skb))
 		skb_dst(skb)->ops->update_pmtu(skb_dst(skb), mtu);
 
+	/* XXX: Temporarily allow fragmentation since DF doesn't
+	 * do the right thing with bridging. */
+/*
 	if (skb->protocol == htons(ETH_P_IP)) {
 		df |= (old_iph->frag_off&htons(IP_DF));
 
@@ -845,7 +848,7 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 		}
 	}
 #endif
-
+*/
 	if (tunnel->err_count > 0) {
 		if (time_before(jiffies,
 				tunnel->err_time + IPTUNNEL_ERR_TIMEO)) {
@@ -1007,6 +1010,10 @@ static int ipgre_tunnel_bind_dev(struct net_device *dev)
 
 	if (mtu < 68)
 		mtu = 68;
+
+	/* XXX: Set MTU to the maximum possible value.  If we are bridged to a
+	* device with a larger MTU then packets will be dropped. */
+	mtu = 65482;
 
 	return mtu;
 }
