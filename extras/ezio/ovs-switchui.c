@@ -2478,7 +2478,7 @@ choose_netdevs(struct svec *choices)
             continue;
         }
 
-        retval = netdev_open(name, NETDEV_ETH_TYPE_NONE, &netdev);
+        retval = netdev_open_default(name, &netdev);
         if (!retval) {
             bool exclude = netdev_get_in4(netdev, NULL, NULL) == 0;
             netdev_close(netdev);
