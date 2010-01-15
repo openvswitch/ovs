@@ -266,10 +266,12 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
                    && ovsdb_idl_txn_process_reply(idl, msg)) {
             /* ovsdb_idl_txn_process_reply() did everything needful. */
         } else {
-            VLOG_WARN("%s: received unexpected %s message",
-                      jsonrpc_session_get_name(idl->session),
-                      jsonrpc_msg_type_to_string(msg->type));
-            jsonrpc_session_force_reconnect(idl->session);
+            /* This can happen if ovsdb_idl_txn_destroy() is called to destroy
+             * a transaction before we receive the reply, so keep the log level
+             * low. */
+            VLOG_DBG("%s: received unexpected %s message",
+                     jsonrpc_session_get_name(idl->session),
+                     jsonrpc_msg_type_to_string(msg->type));
         }
         if (reply) {
             jsonrpc_session_send(idl->session, reply);
