@@ -812,6 +812,7 @@ netdev_linux_open(struct netdev_dev *netdev_dev_, int ethertype,
 
     /* Allocate network device. */
     netdev = xzalloc(sizeof *netdev);
+    netdev->fd = -1;
     netdev_init(&netdev->netdev, netdev_dev_);
 
     error = netdev_get_flags(&netdev->netdev, &flags);
@@ -868,8 +869,6 @@ netdev_linux_open(struct netdev_dev *netdev_dev_, int ethertype,
         if (error) {
             goto error;
         }
-    } else {
-        netdev->fd = -1;
     }
 
     *netdevp = &netdev->netdev;
@@ -886,7 +885,7 @@ netdev_linux_close(struct netdev *netdev_)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
-    if (netdev->fd >= 0 && strcmp(netdev_get_type(netdev_), "tap")) {
+    if (netdev->fd > 0 && strcmp(netdev_get_type(netdev_), "tap")) {
         close(netdev->fd);
     }
     free(netdev);
