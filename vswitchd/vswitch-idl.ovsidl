@@ -118,7 +118,7 @@
          "comment": "Maximum rate for data received on this interface, in kbps.  Set to 0 to disable policing.",
          "type": "integer"},
        "ingress_policing_burst": {
-         "comment": "Maximum burst size for data received on this interface, in kb.  The default burst size if set to 0 is 10 kb.",
+         "comment": "Maximum burst size for data received on this interface, in kb.  The default burst size if set to 0 is 1000 kb.",
          "type": "integer"},
        "mac": {
          "comment": "Ethernet address to set for this interface.  If unset then the default MAC address is used.  May not be supported on all interfaces.  Exactly 12 hex digits in the form XX:XX:XX:XX:XX:XX.",

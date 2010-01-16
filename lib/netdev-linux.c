@@ -1543,8 +1543,8 @@ netdev_linux_set_policing(struct netdev *netdev,
     COVERAGE_INC(netdev_set_policing);
     if (kbits_rate) {
         if (!kbits_burst) {
-            /* Default to 10 kilobits if not specified. */
-            kbits_burst = 10;
+            /* Default to 1000 kilobits if not specified. */
+            kbits_burst = 1000;
         }
 
         /* xxx This should be more careful about only adding if it
