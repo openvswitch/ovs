@@ -582,7 +582,7 @@ netdev_linux_create_system(const char *name, const char *type UNUSED,
     }
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
-    netdev_dev->shash_node = shash_add(&cache_map, name, &netdev_dev);
+    netdev_dev->shash_node = shash_add(&cache_map, name, netdev_dev);
 
     netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_linux_class);
     *netdev_devp = &netdev_dev->netdev_dev;
