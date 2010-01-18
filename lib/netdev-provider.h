@@ -25,6 +25,11 @@
 #include "list.h"
 #include "shash.h"
 
+struct arg {
+    char *key;
+    char *value;
+};
+
 /* A network device (e.g. an Ethernet device).
  *
  * This structure should be treated as opaque by network device
@@ -34,7 +39,8 @@ struct netdev_dev {
     const struct netdev_class *class;   /* Functions to control this device. */
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
-    uint32_t args_hash;                 /* Hash of arguments for the device. */
+    struct arg *args;                   /* Argument list from last config. */
+    int n_args;                         /* Number of arguments in 'args'. */
 };
 
 void netdev_dev_init(struct netdev_dev *, const char *name,

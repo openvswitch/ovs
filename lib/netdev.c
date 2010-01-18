@@ -59,6 +59,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 static void close_all_netdevs(void *aux UNUSED);
 static int restore_flags(struct netdev *netdev);
+void update_device_args(struct netdev_dev *, const struct shash *args);
 
 /* Attempts to initialize the netdev module.  Returns 0 if successful,
  * otherwise a positive errno value.
@@ -131,6 +132,75 @@ netdev_wait(void)
     }
 }
 
+/* Compares 'args' to those used to those used by 'dev'.  Returns true
+ * if the arguments are the same, false otherwise.  Does not update the
+ * values stored in 'dev'. */
+static bool
+compare_device_args(const struct netdev_dev *dev, const struct shash *args)
+{
+    const struct shash_node **new_args;
+    bool result = true;
+    int i;
+
+    if (shash_count(args) != dev->n_args) {
+        return false;
+    }
+
+    new_args = shash_sort(args);
+    for (i = 0; i < dev->n_args; i++) {
+        if (strcmp(dev->args[i].key, new_args[i]->name) || 
+            strcmp(dev->args[i].value, new_args[i]->data)) {
+            result = false;
+            goto finish;
+        }
+    }
+
+finish:
+    free(new_args);
+    return result;
+}
+
+static int
+compare_args(const void *a_, const void *b_)
+{
+    const struct arg *a = a_;
+    const struct arg *b = b_;
+    return strcmp(a->key, b->key);
+}
+
+void
+update_device_args(struct netdev_dev *dev, const struct shash *args)
+{
+    struct shash_node *node;
+    int i;
+
+    if (dev->n_args) {
+        for (i = 0; i < dev->n_args; i++) {
+            free(dev->args[i].key);
+            free(dev->args[i].value);
+        }
+
+        free(dev->args);
+        dev->n_args = 0;
+    }
+
+    if (!args || shash_is_empty(args)) {
+        return;
+    }
+
+    dev->n_args = shash_count(args);
+    dev->args = xmalloc(dev->n_args * sizeof *dev->args);
+
+    i = 0;
+    SHASH_FOR_EACH(node, args) {
+        dev->args[i].key = xstrdup(node->name);
+        dev->args[i].value = xstrdup(node->data);
+        i++;
+    }
+
+    qsort(dev->args, dev->n_args, sizeof *dev->args, compare_args);
+}
+
 static int
 create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
 {
@@ -159,22 +229,6 @@ create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
     VLOG_WARN("could not create netdev %s of unknown type %s", options->name,
                                                                 options->type);
     return EINVAL;
-}
-
-static uint32_t
-shash_hash(const struct shash *shash)
-{
-    int hash = 0;
-    struct shash_node *node;
-    uint32_t entry_hash;
-
-    SHASH_FOR_EACH(node, shash) {
-        entry_hash = hash_string(node->name, 0);
-        entry_hash ^= hash_string(node->data, 10);
-        hash ^= hash_int(entry_hash, 0);
-    }
-
-    return hash;
 }
 
 /* Opens the network device named 'name' (e.g. "eth0") and returns zero if
@@ -218,21 +272,18 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
         if (error) {
             return error;
         }
-
-        netdev_dev->args_hash = shash_hash(options->args);
+        update_device_args(netdev_dev, options->args);
 
     } else if (options->may_open) {
-        if (!shash_is_empty(options->args)) {
-            uint32_t args_hash = shash_hash(options->args);
+        if (!shash_is_empty(options->args) &&
+            !compare_device_args(netdev_dev, options->args)) {
 
-            if (args_hash != netdev_dev->args_hash) {
-                VLOG_WARN("attempted to open already created netdev with "
-                          "different arguments: %s", options->name);
-                return EINVAL;
-            }
+            VLOG_WARN("%s: attempted to open already created netdev with "
+                      "different arguments", options->name);
+            return EINVAL;
         }
     } else {
-        VLOG_WARN("attempted to create a netdev device with bound name: %s",
+        VLOG_WARN("%s: attempted to create a netdev device with bound name",
                   options->name);
         return EEXIST;
     }
@@ -278,12 +329,13 @@ netdev_reconfigure(struct netdev *netdev, const struct shash *args)
     }
 
     if (netdev_dev->class->reconfigure) {
-        uint32_t args_hash = shash_hash(args);
-
-        if (netdev_dev->args_hash != args_hash) {
-            netdev_dev->args_hash = args_hash;
+        if (!compare_device_args(netdev_dev, args)) {
+            update_device_args(netdev_dev, args);
             return netdev_dev->class->reconfigure(netdev_dev, args);
         }
+    } else if (!shash_is_empty(args)) {
+        VLOG_WARN("%s: arguments provided to device that does not have a "
+                  "reconfigure function", netdev_get_name(netdev));
     }
 
     return 0;
@@ -843,8 +895,8 @@ netdev_dev_init(struct netdev_dev *netdev_dev, const char *name,
 {
     assert(!shash_find(&netdev_dev_shash, name));
 
+    memset(netdev_dev, 0, sizeof *netdev_dev);
     netdev_dev->class = class;
-    netdev_dev->ref_cnt = 0;
     netdev_dev->name = xstrdup(name);
     netdev_dev->node = shash_add(&netdev_dev_shash, name, netdev_dev);
 }
@@ -864,6 +916,7 @@ netdev_dev_uninit(struct netdev_dev *netdev_dev, bool destroy)
     assert(!netdev_dev->ref_cnt);
 
     shash_delete(&netdev_dev_shash, netdev_dev->node);
+    update_device_args(netdev_dev, NULL);
 
     if (destroy) {
         netdev_dev->class->destroy(netdev_dev);
@@ -923,9 +976,8 @@ netdev_dev_get_devices(const struct netdev_class *class,
 void
 netdev_init(struct netdev *netdev, struct netdev_dev *netdev_dev)
 {
+    memset(netdev, 0, sizeof *netdev);
     netdev->netdev_dev = netdev_dev;
-    netdev->save_flags = 0;
-    netdev->changed_flags = 0;
     list_push_back(&netdev_list, &netdev->node);
 }
 
