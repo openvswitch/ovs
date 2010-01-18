@@ -75,7 +75,7 @@
 #endif
 
 static struct rtnetlink_notifier netdev_linux_cache_notifier;
-static struct shash cache_map = SHASH_INITIALIZER(&cache_map);
+static int cache_notifier_refcount;
 
 enum {
     VALID_IFINDEX = 1 << 0,
@@ -220,16 +220,22 @@ netdev_linux_cache_cb(const struct rtnetlink_change *change,
 {
     struct netdev_dev_linux *dev;
     if (change) {
-        dev = shash_find_data(&cache_map, change->ifname);
-        if (dev) {
+        struct netdev_dev *base_dev = netdev_dev_from_name(change->ifname);
+        if (base_dev) {
+            dev = netdev_dev_linux_cast(base_dev);
             dev->cache_valid = 0;
         }
     } else {
+        struct shash device_shash;
         struct shash_node *node;
-        SHASH_FOR_EACH (node, &cache_map) {
+
+        shash_init(&device_shash);
+        netdev_dev_get_devices(&netdev_linux_class, &device_shash);
+        SHASH_FOR_EACH (node, &device_shash) {
             dev = node->data;
             dev->cache_valid = 0;
         }
+        shash_destroy(&device_shash);
     }
 }
 
@@ -573,18 +579,18 @@ netdev_linux_create_system(const char *name, const char *type UNUSED,
         VLOG_WARN("%s: arguments for system devices should be empty", name);
     }
 
-    if (shash_is_empty(&cache_map)) {
+    if (!cache_notifier_refcount) {
         error = rtnetlink_notifier_register(&netdev_linux_cache_notifier,
                                             netdev_linux_cache_cb, NULL);
         if (error) {
             return error;
         }
     }
+    cache_notifier_refcount++;
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
-    netdev_dev->shash_node = shash_add(&cache_map, name, netdev_dev);
-
     netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_linux_class);
+
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
 }
@@ -787,9 +793,9 @@ netdev_linux_destroy(struct netdev_dev *netdev_dev_)
     const char *type = netdev_dev_get_type(netdev_dev_);
 
     if (!strcmp(type, "system")) {
-        shash_delete(&cache_map, netdev_dev->shash_node);
+        cache_notifier_refcount--;
 
-        if (shash_is_empty(&cache_map)) {
+        if (!cache_notifier_refcount) {
             rtnetlink_notifier_unregister(&netdev_linux_cache_notifier);
         }
     } else if (!strcmp(type, "tap")) {

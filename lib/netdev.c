@@ -889,6 +889,33 @@ netdev_dev_get_name(const struct netdev_dev *netdev_dev)
     return netdev_dev->name;
 }
 
+/* Returns the netdev_dev with 'name' or NULL if there is none.
+ *
+ * The caller must not free the returned value. */
+struct netdev_dev *
+netdev_dev_from_name(const char *name)
+{
+    return shash_find_data(&netdev_dev_shash, name);
+}
+
+/* Fills 'device_list' with devices that match 'class'.
+ *
+ * The caller is responsible for initializing and destroying 'device_list'
+ * but the contained netdev_devs must not be freed. */
+void
+netdev_dev_get_devices(const struct netdev_class *class,
+                       struct shash *device_list)
+{
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, &netdev_dev_shash) {
+        struct netdev_dev *dev = node->data;
+
+        if (dev->class == class) {
+            shash_add(device_list, node->name, node->data);
+        }
+    }
+}
+
 /* Initializes 'netdev' as a instance of the netdev_dev.
  *
  * This function adds 'netdev' to a netdev-owned linked list, so it is very
