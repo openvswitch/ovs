@@ -3522,7 +3522,7 @@ mirror_reconfigure(struct bridge *br)
         }
     }
 
-    /* Update learning disabled vlans (for RSPAN). */
+    /* Update flooded vlans (for RSPAN). */
     rspan_vlans = NULL;
     if (br->cfg->n_flood_vlans) {
         rspan_vlans = bitmap_allocate(4096);
@@ -3539,7 +3539,7 @@ mirror_reconfigure(struct bridge *br)
             }
         }
     }
-    if (mac_learning_set_disabled_vlans(br->ml, rspan_vlans)) {
+    if (mac_learning_set_flood_vlans(br->ml, rspan_vlans)) {
         bridge_flush(br);
     }
 }

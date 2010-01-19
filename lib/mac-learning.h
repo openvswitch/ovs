@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,14 +51,14 @@ struct mac_learning {
                                    front, most recently used at the back. */
     struct list table[MAC_HASH_SIZE]; /* Hash table. */
     struct mac_entry entries[MAC_MAX]; /* All entries. */
-    uint32_t secret;            /* Secret for  */
-    unsigned long *non_learning_vlans; /* Bitmap of learning disabled VLANs. */
+    uint32_t secret;            /* Secret for randomizing hash table. */
+    unsigned long *flood_vlans; /* Bitmap of learning disabled VLANs. */
 };
 
 struct mac_learning *mac_learning_create(void);
 void mac_learning_destroy(struct mac_learning *);
-bool mac_learning_set_disabled_vlans(struct mac_learning *,
-                                     unsigned long *bitmap);
+bool mac_learning_set_flood_vlans(struct mac_learning *,
+                                  unsigned long *bitmap);
 tag_type mac_learning_learn(struct mac_learning *,
                             const uint8_t src[ETH_ADDR_LEN], uint16_t vlan,
                             uint16_t src_port);

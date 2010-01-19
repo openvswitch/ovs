@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,7 +130,7 @@ mac_learning_create(void)
         list_push_front(&ml->free, &s->lru_node);
     }
     ml->secret = random_uint32();
-    ml->non_learning_vlans = NULL;
+    ml->flood_vlans = NULL;
     return ml;
 }
 
@@ -139,24 +139,24 @@ void
 mac_learning_destroy(struct mac_learning *ml)
 {
     if (ml) {
-        bitmap_free(ml->non_learning_vlans);
+        bitmap_free(ml->flood_vlans);
     }
     free(ml);
 }
 
-/* Provides a bitmap of VLANs which have learning disabled.  It takes
- * ownership of the bitmap.  Returns true if the set has changed from
- * the previous value. */
+/* Provides a bitmap of VLANs which have learning disabled, that is, VLANs on
+ * which all packets are flooded.  It takes ownership of the bitmap.  Returns
+ * true if the set has changed from the previous value. */
 bool
-mac_learning_set_disabled_vlans(struct mac_learning *ml, unsigned long *bitmap)
+mac_learning_set_flood_vlans(struct mac_learning *ml, unsigned long *bitmap)
 {
     bool ret = (bitmap == NULL
-        ? ml->non_learning_vlans != NULL
-        : (ml->non_learning_vlans == NULL
-          || !bitmap_equal(bitmap, ml->non_learning_vlans, 4096)));
+                ? ml->flood_vlans != NULL
+                : (ml->flood_vlans == NULL
+                   || !bitmap_equal(bitmap, ml->flood_vlans, 4096)));
 
-    bitmap_free(ml->non_learning_vlans);
-    ml->non_learning_vlans = bitmap;
+    bitmap_free(ml->flood_vlans);
+    ml->flood_vlans = bitmap;
 
     return ret;
 }
@@ -164,8 +164,7 @@ mac_learning_set_disabled_vlans(struct mac_learning *ml, unsigned long *bitmap)
 static bool
 is_learning_vlan(const struct mac_learning *ml, uint16_t vlan)
 {
-    return !(ml->non_learning_vlans
-            && bitmap_is_set(ml->non_learning_vlans, vlan));
+    return !(ml->flood_vlans && bitmap_is_set(ml->flood_vlans, vlan));
 }
 
 /* Attempts to make 'ml' learn from the fact that a frame from 'src_mac' was
