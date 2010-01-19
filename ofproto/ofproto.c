@@ -2553,6 +2553,9 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     struct ofp_flow_stats *ofs;
     uint64_t packet_count, byte_count;
     size_t act_len, len;
+    long long int tdiff = time_msec() - rule->created;
+    uint32_t sec = tdiff / 1000;
+    uint32_t msec = tdiff - (sec * 1000);
 
     if (rule_is_hidden(rule) || !rule_has_out_port(rule, cbdata->out_port)) {
         return;
@@ -2568,7 +2571,8 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     ofs->table_id = rule->cr.wc.wildcards ? TABLEID_CLASSIFIER : TABLEID_HASH;
     ofs->pad = 0;
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofs->match);
-    ofs->duration = htonl((time_msec() - rule->created) / 1000);
+    ofs->duration_sec = htonl(sec);
+    ofs->duration_nsec = htonl(msec * 1000000);
     ofs->cookie = rule->flow_cookie;
     ofs->priority = htons(rule->cr.priority);
     ofs->idle_timeout = htons(rule->idle_timeout);
@@ -3263,13 +3267,17 @@ compose_flow_removed(const struct rule *rule, long long int now, uint8_t reason)
 {
     struct ofp_flow_removed *ofr;
     struct ofpbuf *buf;
+    long long int tdiff = time_msec() - rule->created;
+    uint32_t sec = tdiff / 1000;
+    uint32_t msec = tdiff - (sec * 1000);
 
     ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofr->match);
     ofr->cookie = rule->flow_cookie;
     ofr->priority = htons(rule->cr.priority);
     ofr->reason = reason;
-    ofr->duration = htonl((now - rule->created) / 1000);
+    ofr->duration_sec = htonl(sec);
+    ofr->duration_nsec = htonl(msec * 1000000);
     ofr->idle_timeout = htons(rule->idle_timeout);
     ofr->packet_count = htonll(rule->packet_count);
     ofr->byte_count = htonll(rule->byte_count);
