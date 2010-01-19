@@ -105,8 +105,8 @@ struct mirror {
     char *name;
 
     /* Selection criteria. */
-    struct svec src_ports;
-    struct svec dst_ports;
+    struct shash src_ports;     /* Name is port name; data is always NULL. */
+    struct shash dst_ports;     /* Name is port name; data is always NULL. */
     int *vlans;
     size_t n_vlans;
 
@@ -234,18 +234,11 @@ static void port_update_bond_compat(struct port *);
 static void port_update_vlan_compat(struct port *);
 static void port_update_bonding(struct port *);
 
-#if 0
-static void mirror_create(struct bridge *, const char *name);
+static struct mirror *mirror_create(struct bridge *, const char *name);
 static void mirror_destroy(struct mirror *);
 static void mirror_reconfigure(struct bridge *);
-static void mirror_reconfigure_one(struct mirror *);
+static void mirror_reconfigure_one(struct mirror *, struct ovsrec_mirror *);
 static bool vlan_is_mirrored(const struct mirror *, int vlan);
-#else
-static bool vlan_is_mirrored(const struct mirror *m UNUSED, int vlan UNUSED)
-{
-    return false;
-}
-#endif
 
 static struct iface *iface_create(struct port *port, 
                                   const struct ovsrec_interface *if_cfg);
@@ -1386,9 +1379,7 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
     svec_destroy(&old_snoops);
 #endif
 
-#if 0
     mirror_reconfigure(br);
-#endif
 }
 
 static void
@@ -3116,18 +3107,17 @@ port_destroy(struct port *port)
     if (port) {
         struct bridge *br = port->bridge;
         struct port *del;
+        int i;
 
         proc_net_compat_update_vlan(port->name, NULL, 0);
         proc_net_compat_update_bond(port->name, NULL);
 
-#if 0
         for (i = 0; i < MAX_MIRRORS; i++) {
             struct mirror *m = br->mirrors[i];
             if (m && m->out_port == port) {
                 mirror_destroy(m);
             }
         }
-#endif
 
         while (port->n_ifaces > 0) {
             iface_destroy(port->ifaces[port->n_ifaces - 1]);
@@ -3476,50 +3466,50 @@ iface_set_mac(struct iface *iface)
 
 /* Port mirroring. */
 
-#if 0
 static void
-mirror_reconfigure(struct bridge *br UNUSED)
+mirror_reconfigure(struct bridge *br)
 {
-    struct svec old_mirrors, new_mirrors;
-    size_t i, n_rspan_vlans;
+    struct shash old_mirrors, new_mirrors;
+    struct shash_node *node;
     unsigned long *rspan_vlans;
+    int i;
 
-    /* Collect old and new mirrors. */
-    svec_init(&old_mirrors);
-    svec_init(&new_mirrors);
-    cfg_get_subsections(&new_mirrors, "mirror.%s", br->name);
+    /* Collect old mirrors. */
+    shash_init(&old_mirrors);
     for (i = 0; i < MAX_MIRRORS; i++) {
         if (br->mirrors[i]) {
-            svec_add(&old_mirrors, br->mirrors[i]->name);
+            shash_add(&old_mirrors, br->mirrors[i]->name, br->mirrors[i]);
+        }
+    }
+
+    /* Collect new mirrors. */
+    shash_init(&new_mirrors);
+    for (i = 0; i < br->cfg->n_mirrors; i++) {
+        struct ovsrec_mirror *cfg = br->cfg->mirrors[i];
+        if (!shash_add_once(&new_mirrors, cfg->name, cfg)) {
+            VLOG_WARN("bridge %s: %s specified twice as mirror",
+                      br->name, cfg->name);
         }
     }
 
     /* Get rid of deleted mirrors and add new mirrors. */
-    svec_sort(&old_mirrors);
-    assert(svec_is_unique(&old_mirrors));
-    svec_sort(&new_mirrors);
-    assert(svec_is_unique(&new_mirrors));
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        struct mirror *m = br->mirrors[i];
-        if (m && !svec_contains(&new_mirrors, m->name)) {
-            mirror_destroy(m);
+    SHASH_FOR_EACH (node, &old_mirrors) {
+        if (!shash_find(&new_mirrors, node->name)) {
+            mirror_destroy(node->data);
         }
     }
-    for (i = 0; i < new_mirrors.n; i++) {
-        const char *name = new_mirrors.names[i];
-        if (!svec_contains(&old_mirrors, name)) {
-            mirror_create(br, name);
+    SHASH_FOR_EACH (node, &new_mirrors) {
+        struct mirror *mirror = shash_find_data(&old_mirrors, node->name);
+        if (!mirror) {
+            mirror = mirror_create(br, node->name);
+            if (!mirror) {
+                break;
+            }
         }
+        mirror_reconfigure_one(mirror, node->data);
     }
-    svec_destroy(&old_mirrors);
-    svec_destroy(&new_mirrors);
-
-    /* Reconfigure all mirrors. */
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        if (br->mirrors[i]) {
-            mirror_reconfigure_one(br->mirrors[i]);
-        }
-    }
+    shash_destroy(&old_mirrors);
+    shash_destroy(&new_mirrors);
 
     /* Update port reserved status. */
     for (i = 0; i < br->n_ports; i++) {
@@ -3534,20 +3524,18 @@ mirror_reconfigure(struct bridge *br UNUSED)
 
     /* Update learning disabled vlans (for RSPAN). */
     rspan_vlans = NULL;
-    n_rspan_vlans = cfg_count("vlan.%s.disable-learning", br->name);
-    if (n_rspan_vlans) {
+    if (br->cfg->n_flood_vlans) {
         rspan_vlans = bitmap_allocate(4096);
 
-        for (i = 0; i < n_rspan_vlans; i++) {
-            int vlan = cfg_get_vlan(i, "vlan.%s.disable-learning", br->name);
-            if (vlan >= 0) {
+        for (i = 0; i < br->cfg->n_flood_vlans; i++) {
+            int64_t vlan = br->cfg->flood_vlans[i];
+            if (vlan >= 0 && vlan < 4096) {
                 bitmap_set1(rspan_vlans, vlan);
-                VLOG_INFO("bridge %s: disabling learning on vlan %d\n",
+                VLOG_INFO("bridge %s: disabling learning on vlan %"PRId64,
                           br->name, vlan);
             } else {
-                VLOG_ERR("bridge %s: invalid value '%s' for learning disabled "
-                         "VLAN", br->name,
-                       cfg_get_string(i, "vlan.%s.disable-learning", br->name));
+                VLOG_ERR("bridge %s: invalid value %"PRId64 "for flood VLAN",
+                         br->name, vlan);
             }
         }
     }
@@ -3556,7 +3544,7 @@ mirror_reconfigure(struct bridge *br UNUSED)
     }
 }
 
-static void
+static struct mirror *
 mirror_create(struct bridge *br, const char *name)
 {
     struct mirror *m;
@@ -3566,7 +3554,7 @@ mirror_create(struct bridge *br, const char *name)
         if (i >= MAX_MIRRORS) {
             VLOG_WARN("bridge %s: maximum of %d port mirrors reached, "
                       "cannot create %s", br->name, MAX_MIRRORS, name);
-            return;
+            return NULL;
         }
         if (!br->mirrors[i]) {
             break;
@@ -3580,12 +3568,14 @@ mirror_create(struct bridge *br, const char *name)
     m->bridge = br;
     m->idx = i;
     m->name = xstrdup(name);
-    svec_init(&m->src_ports);
-    svec_init(&m->dst_ports);
+    shash_init(&m->src_ports);
+    shash_init(&m->dst_ports);
     m->vlans = NULL;
     m->n_vlans = 0;
     m->out_vlan = -1;
     m->out_port = NULL;
+
+    return m;
 }
 
 static void
@@ -3600,8 +3590,8 @@ mirror_destroy(struct mirror *m)
             br->ports[i]->dst_mirrors &= ~(MIRROR_MASK_C(1) << m->idx);
         }
 
-        svec_destroy(&m->src_ports);
-        svec_destroy(&m->dst_ports);
+        shash_destroy(&m->src_ports);
+        shash_destroy(&m->dst_ports);
         free(m->vlans);
 
         m->bridge->mirrors[m->idx] = NULL;
@@ -3612,45 +3602,36 @@ mirror_destroy(struct mirror *m)
 }
 
 static void
-prune_ports(struct mirror *m, struct svec *ports)
+mirror_collect_ports(struct mirror *m, struct ovsrec_port **ports, int n_ports,
+                     struct shash *names)
 {
-    struct svec tmp;
     size_t i;
 
-    svec_sort_unique(ports);
-
-    svec_init(&tmp);
-    for (i = 0; i < ports->n; i++) {
-        const char *name = ports->names[i];
+    for (i = 0; i < n_ports; i++) {
+        const char *name = ports[i]->name;
         if (port_lookup(m->bridge, name)) {
-            svec_add(&tmp, name);
+            shash_add_once(names, name, NULL);
         } else {
-            VLOG_WARN("mirror.%s.%s: cannot match on nonexistent port %s",
-                      m->bridge->name, m->name, name);
+            VLOG_WARN("bridge %s: mirror %s cannot match on nonexistent "
+                      "port %s", m->bridge->name, m->name, name);
         }
     }
-    svec_swap(ports, &tmp);
-    svec_destroy(&tmp);
 }
 
 static size_t
-prune_vlans(struct mirror *m, struct svec *vlan_strings, int **vlans)
+mirror_collect_vlans(struct mirror *m, const struct ovsrec_mirror *cfg,
+                     int **vlans)
 {
-    size_t n_vlans, i;
+    size_t n_vlans;
+    size_t i;
 
-    /* This isn't perfect: it won't combine "0" and "00", and the textual sort
-     * order won't give us numeric sort order.  But that's good enough for what
-     * we need right now. */
-    svec_sort_unique(vlan_strings);
-
-    *vlans = xmalloc(sizeof *vlans * vlan_strings->n);
+    *vlans = xmalloc(sizeof *vlans * cfg->n_select_vlan);
     n_vlans = 0;
-    for (i = 0; i < vlan_strings->n; i++) {
-        const char *name = vlan_strings->names[i];
-        int vlan;
-        if (!str_to_int(name, 10, &vlan) || vlan < 0 || vlan > 4095) {
-            VLOG_WARN("mirror.%s.%s.select.vlan: ignoring invalid VLAN %s",
-                      m->bridge->name, m->name, name);
+    for (i = 0; i < cfg->n_select_vlan; i++) {
+        int64_t vlan = cfg->select_vlan[i];
+        if (vlan < 0 || vlan > 4095) {
+            VLOG_WARN("bridge %s: mirror %s selects invalid VLAN %"PRId64,
+                      m->bridge->name, m->name, vlan);
         } else {
             (*vlans)[n_vlans++] = vlan;
         }
@@ -3685,13 +3666,10 @@ port_trunks_any_mirrored_vlan(const struct mirror *m, const struct port *p)
 }
 
 static void
-mirror_reconfigure_one(struct mirror *m UNUSED)
+mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
 {
-    char *pfx = xasprintf("mirror.%s.%s", m->bridge->name, m->name);
-    struct svec src_ports, dst_ports, ports;
-    struct svec vlan_strings;
+    struct shash src_ports, dst_ports;
     mirror_mask_t mirror_bit;
-    const char *out_port_name;
     struct port *out_port;
     int out_vlan;
     size_t n_vlans;
@@ -3699,74 +3677,71 @@ mirror_reconfigure_one(struct mirror *m UNUSED)
     size_t i;
     bool mirror_all_ports;
     bool any_ports_specified;
+    bool any_vlans_specified;
 
     /* Get output port. */
-    out_port_name = cfg_get_key(0, "mirror.%s.%s.output.port",
-                                m->bridge->name, m->name);
-    if (out_port_name) {
-        out_port = port_lookup(m->bridge, out_port_name);
+    if (cfg->output_port) {
+        out_port = port_lookup(m->bridge, cfg->output_port->name);
         if (!out_port) {
-            VLOG_ERR("%s.output.port: bridge %s does not have a port "
-                      "named %s", pfx, m->bridge->name, out_port_name);
+            VLOG_ERR("bridge %s: mirror %s outputs to port not on bridge",
+                     m->bridge->name, m->name);
             mirror_destroy(m);
-            free(pfx);
             return;
         }
         out_vlan = -1;
 
-        if (cfg_has("%s.output.vlan", pfx)) {
-            VLOG_ERR("%s.output.port and %s.output.vlan both specified; "
-                     "ignoring %s.output.vlan", pfx, pfx, pfx);
+        if (cfg->output_vlan) {
+            VLOG_ERR("bridge %s: mirror %s specifies both output port and "
+                     "output vlan; ignoring output vlan",
+                     m->bridge->name, m->name);
         }
-    } else if (cfg_has("%s.output.vlan", pfx)) {
+    } else if (cfg->output_vlan) {
         out_port = NULL;
-        out_vlan = cfg_get_vlan(0, "%s.output.vlan", pfx);
+        out_vlan = *cfg->output_vlan;
     } else {
-        VLOG_ERR("%s: neither %s.output.port nor %s.output.vlan specified, "
-                 "but exactly one is required; disabling port mirror %s",
-                 pfx, pfx, pfx, pfx);
+        VLOG_ERR("bridge %s: mirror %s does not specify output; ignoring",
+                 m->bridge->name, m->name);
         mirror_destroy(m);
-        free(pfx);
         return;
     }
 
     /* Get all the ports, and drop duplicates and ports that don't exist. */
-    svec_init(&src_ports);
-    svec_init(&dst_ports);
-    svec_init(&ports);
-    cfg_get_all_keys(&src_ports, "%s.select.src-port", pfx);
-    cfg_get_all_keys(&dst_ports, "%s.select.dst-port", pfx);
-    cfg_get_all_keys(&ports, "%s.select.port", pfx);
-    any_ports_specified = src_ports.n || dst_ports.n || ports.n;
-    svec_append(&src_ports, &ports);
-    svec_append(&dst_ports, &ports);
-    svec_destroy(&ports);
-    prune_ports(m, &src_ports);
-    prune_ports(m, &dst_ports);
-    if (any_ports_specified && !src_ports.n && !dst_ports.n) {
-        VLOG_ERR("%s: none of the specified ports exist; "
-                 "disabling port mirror %s", pfx, pfx);
+    shash_init(&src_ports);
+    shash_init(&dst_ports);
+    mirror_collect_ports(m, cfg->select_src_port, cfg->n_select_src_port,
+                         &src_ports);
+    mirror_collect_ports(m, cfg->select_dst_port, cfg->n_select_dst_port,
+                         &dst_ports);
+    any_ports_specified = cfg->n_select_dst_port || cfg->n_select_dst_port;
+    if (any_ports_specified
+        && shash_is_empty(&src_ports) && shash_is_empty(&dst_ports)) {
+        VLOG_ERR("bridge %s: disabling mirror %s since none of the specified "
+                 "selection ports exists", m->bridge->name, m->name);
         mirror_destroy(m);
         goto exit;
     }
 
     /* Get all the vlans, and drop duplicate and invalid vlans. */
-    svec_init(&vlan_strings);
-    cfg_get_all_keys(&vlan_strings, "%s.select.vlan", pfx);
-    n_vlans = prune_vlans(m, &vlan_strings, &vlans);
-    svec_destroy(&vlan_strings);
+    n_vlans = mirror_collect_vlans(m, cfg, &vlans);
+    any_vlans_specified = cfg->n_select_vlan > 0;
+    if (any_vlans_specified && !n_vlans) {
+        VLOG_ERR("bridge %s: disabling mirror %s since none of the specified "
+                 "VLANs exists", m->bridge->name, m->name);
+        mirror_destroy(m);
+        goto exit;
+    }
 
     /* Update mirror data. */
-    if (!svec_equal(&m->src_ports, &src_ports)
-        || !svec_equal(&m->dst_ports, &dst_ports)
+    if (!shash_equal_keys(&m->src_ports, &src_ports)
+        || !shash_equal_keys(&m->dst_ports, &dst_ports)
         || m->n_vlans != n_vlans
         || memcmp(m->vlans, vlans, sizeof *vlans * n_vlans)
         || m->out_port != out_port
         || m->out_vlan != out_vlan) {
         bridge_flush(m->bridge);
     }
-    svec_swap(&m->src_ports, &src_ports);
-    svec_swap(&m->dst_ports, &dst_ports);
+    shash_swap(&m->src_ports, &src_ports);
+    shash_swap(&m->dst_ports, &dst_ports);
     free(m->vlans);
     m->vlans = vlans;
     m->n_vlans = n_vlans;
@@ -3774,7 +3749,7 @@ mirror_reconfigure_one(struct mirror *m UNUSED)
     m->out_vlan = out_vlan;
 
     /* If no selection criteria have been given, mirror for all ports. */
-    mirror_all_ports = (!m->src_ports.n) && (!m->dst_ports.n) && (!m->n_vlans);
+    mirror_all_ports = !any_ports_specified && !any_vlans_specified;
 
     /* Update ports. */
     mirror_bit = MIRROR_MASK_C(1) << m->idx;
@@ -3782,7 +3757,7 @@ mirror_reconfigure_one(struct mirror *m UNUSED)
         struct port *port = m->bridge->ports[i];
 
         if (mirror_all_ports
-            || svec_contains(&m->src_ports, port->name)
+            || shash_find(&m->src_ports, port->name)
             || (m->n_vlans
                 && (!port->vlan
                     ? port_trunks_any_mirrored_vlan(m, port)
@@ -3792,7 +3767,7 @@ mirror_reconfigure_one(struct mirror *m UNUSED)
             port->src_mirrors &= ~mirror_bit;
         }
 
-        if (mirror_all_ports || svec_contains(&m->dst_ports, port->name)) {
+        if (mirror_all_ports || shash_find(&m->dst_ports, port->name)) {
             port->dst_mirrors |= mirror_bit;
         } else {
             port->dst_mirrors &= ~mirror_bit;
@@ -3801,8 +3776,6 @@ mirror_reconfigure_one(struct mirror *m UNUSED)
 
     /* Clean up. */
 exit:
-    svec_destroy(&src_ports);
-    svec_destroy(&dst_ports);
-    free(pfx);
+    shash_destroy(&src_ports);
+    shash_destroy(&dst_ports);
 }
-#endif

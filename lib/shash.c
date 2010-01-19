@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,12 @@ shash_destroy(struct shash *sh)
         shash_clear(sh);
         hmap_destroy(&sh->map);
     }
+}
+
+void
+shash_swap(struct shash *a, struct shash *b)
+{
+    hmap_swap(&a->map, &b->map);
 }
 
 void
@@ -167,4 +173,22 @@ shash_sort(const struct shash *sh)
 
         return nodes;
     }
+}
+
+/* Returns true if 'a' and 'b' contain the same keys (regardless of their
+ * values), false otherwise. */
+bool
+shash_equal_keys(const struct shash *a, const struct shash *b)
+{
+    struct shash_node *node;
+
+    if (hmap_count(&a->map) != hmap_count(&b->map)) {
+        return false;
+    }
+    SHASH_FOR_EACH (node, a) {
+        if (!shash_find(b, node->name)) {
+            return false;
+        }
+    }
+    return true;
 }
