@@ -583,9 +583,11 @@ struct ofp_flow_removed {
     uint8_t reason;           /* One of OFPRR_*. */
     uint8_t pad[1];           /* Align to 32-bits. */
 
-    uint32_t duration;        /* Time flow was alive in seconds. */
+    uint32_t duration_sec;    /* Time flow was alive in seconds. */
+    uint32_t duration_nsec;   /* Time flow was alive in nanoseconds beyond 
+                                 duration_sec. */
     uint16_t idle_timeout;    /* Idle timeout from original flow mod. */
-    uint8_t pad2[6];          /* Align to 64-bits. */
+    uint8_t pad2[2];          /* Align to 64-bits. */
     uint64_t packet_count;    
     uint64_t byte_count;
 };
@@ -752,18 +754,20 @@ struct ofp_flow_stats {
     uint8_t table_id;         /* ID of table flow came from. */
     uint8_t pad;
     struct ofp_match match;   /* Description of fields. */
-    uint32_t duration;        /* Time flow has been alive in seconds. */
+    uint32_t duration_sec;    /* Time flow has been alive in seconds. */
+    uint32_t duration_nsec;   /* Time flow has been alive in nanoseconds
+                                 beyond duration_sec. */
     uint16_t priority;        /* Priority of the entry. Only meaningful
                                  when this is not an exact-match entry. */
     uint16_t idle_timeout;    /* Number of seconds idle before expiration. */
     uint16_t hard_timeout;    /* Number of seconds before expiration. */
-    uint8_t pad2[2];          /* Align to 64 bits. */
+    uint8_t pad2[6];          /* Align to 64 bits. */
     uint64_t cookie;          /* Opaque controller-issued identifier. */
     uint64_t packet_count;    /* Number of packets in flow. */
     uint64_t byte_count;      /* Number of bytes in flow. */
     struct ofp_action_header actions[0]; /* Actions. */
 };
-OFP_ASSERT(sizeof(struct ofp_flow_stats) == 80);
+OFP_ASSERT(sizeof(struct ofp_flow_stats) == 88);
 
 /* Body for ofp_stats_request of type OFPST_AGGREGATE. */
 struct ofp_aggregate_stats_request {
