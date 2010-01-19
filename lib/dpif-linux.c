@@ -571,13 +571,14 @@ make_openvswitch_device(int minor, char **fnp)
     struct stat s;
     char fn[128];
 
+    *fnp = NULL;
+
     major = get_openvswitch_major();
     if (major < 0) {
         return -major;
     }
     dev = makedev(major, minor);
 
-    *fnp = NULL;
     sprintf(fn, "%s/dp%d", dirname, minor);
     if (!stat(fn, &s)) {
         if (!S_ISCHR(s.st_mode)) {
