@@ -67,6 +67,7 @@ static void parse_options(int argc, char *argv[]);
 int
 main(int argc, char *argv[])
 {
+    proctitle_init(argc, argv);
     set_program_name(argv[0]);
     time_init();
     vlog_init();

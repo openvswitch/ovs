@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "command-line.h"
 #include "daemon.h"
 #include "util.h"
 
@@ -83,6 +84,7 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
+    proctitle_init(argc, argv);
     set_program_name(argv[0]);
     time_init();
 

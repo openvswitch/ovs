@@ -22,6 +22,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include "command-line.h"
 #include "fatal-signal.h"
 #include "dirs.h"
 #include "lockfile.h"
@@ -325,12 +326,18 @@ monitor_daemon(pid_t daemon_pid)
     /* XXX Should limit the rate at which we restart the daemon. */
     /* XXX Should log daemon's stderr output at startup time. */
     const char *saved_program_name;
+    char *status_msg;
 
     saved_program_name = program_name;
     program_name = xasprintf("monitor(%s)", program_name);
+    status_msg = xstrdup("healthy");
     for (;;) {
         int retval;
         int status;
+
+        proctitle_set("%s: monitoring pid %lu (%s)",
+                      saved_program_name, (unsigned long int) daemon_pid,
+                      status_msg);
 
         do {
             retval = waitpid(daemon_pid, &status, 0);
@@ -339,25 +346,27 @@ monitor_daemon(pid_t daemon_pid)
         if (retval == -1) {
             ovs_fatal(errno, "waitpid failed");
         } else if (retval == daemon_pid) {
-            char *status_msg = process_status_msg(status);
-            if (should_restart(status)) {
-                VLOG_ERR("%s daemon died unexpectedly (%s), restarting",
-                         saved_program_name, status_msg);
-                free(status_msg);
+            char *s = process_status_msg(status);
+            free(status_msg);
+            status_msg = xasprintf("pid %lu died, %s",
+                                   (unsigned long int) daemon_pid, s);
+            free(s);
 
+            if (should_restart(status)) {
+                VLOG_ERR("%s, restarting", status_msg);
                 daemon_pid = fork_and_wait_for_startup(&daemonize_fd);
                 if (!daemon_pid) {
                     break;
                 }
             } else {
-                VLOG_INFO("%s daemon exited normally (%s), exiting",
-                          saved_program_name, status_msg);
+                VLOG_INFO("%s, exiting", status_msg);
                 exit(0);
             }
         }
     }
 
     /* Running in new daemon process. */
+    proctitle_restore();
     free((char *) program_name);
     program_name = saved_program_name;
 }

@@ -112,6 +112,7 @@ main(int argc, char *argv[])
     int error;
     struct netflow_options nf_options;
 
+    proctitle_init(argc, argv);
     set_program_name(argv[0]);
     time_init();
     vlog_init();

@@ -71,6 +71,7 @@ main(int argc, char *argv[])
     bool exiting;
     int retval;
 
+    proctitle_init(argc, argv);
     set_program_name(argv[0]);
     time_init();
     vlog_init();

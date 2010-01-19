@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 #include <limits.h>
 #include <stdlib.h>
 #include "util.h"
-#include "vlog.h"
 
 /* Given the GNU-style long options in 'options', returns a string that may be
  * passed to getopt() with the corresponding short options.  The caller is
@@ -87,3 +86,111 @@ run_command(int argc, char *argv[], const struct command commands[])
 
     ovs_fatal(0, "unknown command '%s'; use --help for help", argv[0]);
 }
+
+/* Process title. */
+
+#ifdef __linux__
+static char *argv_start;       /* Start of command-line arguments in memory. */
+static size_t argv_size;       /* Number of bytes of command-line arguments. */
+static char *saved_proctitle;  /* Saved command-line arguments. */
+
+/* Prepares the process so that proctitle_set() can later succeed.
+ *
+ * This modifies the argv[] array so that it no longer points into the memory
+ * that it originally does.  Later, proctitle_set() might overwrite that
+ * memory.  That means that this function should be called before anything else
+ * that accesses the process's argv[] array.  Ideally, it should be called
+ * before anything else, period, at the very beginning of program
+ * execution.  */
+void
+proctitle_init(int argc, char **argv)
+{
+    int i;
+
+    if (!argc || !argv[0]) {
+        /* This situation should never occur, but... */
+        return;
+    }
+
+    /* Specialized version of first loop iteration below. */
+    argv_start = argv[0];
+    argv_size = strlen(argv[0]) + 1;
+    argv[0] = xstrdup(argv[0]);
+
+    for (i = 1; i < argc; i++) {
+        size_t size = strlen(argv[i]) + 1;
+
+        /* Add (argv[i], strlen(argv[i])+1) to (argv_start, argv_size). */
+        if (argv[i] + size == argv_start) {
+            /* Arguments grow downward in memory. */
+            argv_start -= size;
+            argv_size += size;
+        } else if (argv[i] == argv_start + argv_size) {
+            /* Arguments grow upward in memory. */
+            argv_size += size;
+        } else {
+            /* Arguments not contiguous.  (Is this really Linux?) */
+        }
+
+        /* Copy out the old argument so we can reuse the space. */
+        argv[i] = xstrdup(argv[i]);
+    }
+}
+
+/* Changes the name of the process, as shown by "ps", to 'format', which is
+ * formatted as if by printf(). */
+void
+proctitle_set(const char *format, ...)
+{
+    va_list args;
+    int n;
+
+    if (!argv_start || argv_size < 8) {
+        return;
+    }
+
+    if (!saved_proctitle) {
+        saved_proctitle = xmemdup(argv_start, argv_size);
+    }
+
+    va_start(args, format);
+    n = vsnprintf(argv_start, argv_size, format, args);
+    if (n >= argv_size) {
+        /* The name is too long, so add an ellipsis at the end. */
+        strcpy(&argv_start[argv_size - 4], "...");
+    } else {
+        /* Fill the extra space with null bytes, so that trailing bytes don't
+         * show up in the command line. */
+        memset(&argv_start[n], '\0', argv_size - n);
+    }
+    va_end(args);
+}
+
+/* Restores the process's original command line, as seen by "ps". */
+void
+proctitle_restore(void)
+{
+    if (saved_proctitle) {
+        memcpy(argv_start, saved_proctitle, argv_size);
+        free(saved_proctitle);
+        saved_proctitle = NULL;
+    }
+}
+#else  /* !__linux__ */
+/* Stubs that don't do anything on non-Linux systems. */
+
+void
+proctitle_init(int argc UNUSED, char **argv UNUSED)
+{
+}
+
+void
+proctitle_set(const char *format UNUSED, ...)
+{
+}
+
+void
+proctitle_restore(void)
+{
+}
+#endif  /* !__linux__ */

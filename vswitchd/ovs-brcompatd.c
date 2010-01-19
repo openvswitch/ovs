@@ -1144,6 +1144,7 @@ main(int argc, char *argv[])
     struct ovsdb_idl *idl;
     int retval;
 
+    proctitle_init(argc, argv);
     set_program_name(argv[0]);
     time_init();
     vlog_init();

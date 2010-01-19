@@ -144,6 +144,7 @@ main(int argc, char *argv[])
     long long int last_key_time = 0;
     int repeat_count = 0;
 
+    proctitle_init(argc, argv);
     set_program_name(argv[0]);
     time_init();
     vlog_init();

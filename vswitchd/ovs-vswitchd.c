@@ -62,6 +62,7 @@ main(int argc, char *argv[])
     unsigned int idl_seqno;
     int retval;
 
+    proctitle_init(argc, argv);
     set_program_name(argv[0]);
     time_init();
     vlog_init();
