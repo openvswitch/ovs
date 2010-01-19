@@ -481,7 +481,7 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     /* Get actions. */
     n_actions = hdr->n_actions;
     if (n_actions > 65536 / sizeof *actions) {
-        VLOG_WARN_RL(&rl, "too many actions in sFlow packet (%"PRIu32" > %zu)",
+        VLOG_WARN_RL(&rl, "too many actions in sFlow packet (%zu > %zu)",
                      65536 / sizeof *actions, n_actions);
         return;
     }
