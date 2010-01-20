@@ -1064,6 +1064,14 @@ static void print_port_stat(struct ds *string, const char *leader,
 }
 
 static void
+ofp_port_stats_request(struct ds *string, const void *body_,
+                       size_t len OVS_UNUSED, int verbosity OVS_UNUSED)
+{
+    const struct ofp_port_stats_request *psr = body_;
+    ds_put_format(string, "port_no=%"PRIu16, ntohs(psr->port_no));
+}
+
+static void
 ofp_port_stats_reply(struct ds *string, const void *body, size_t len,
                      int verbosity)
 {
@@ -1187,7 +1195,9 @@ print_stats(struct ds *string, int type, const void *body, size_t body_len,
         {
             OFPST_PORT,
             "port",
-            { 0, 0, NULL, },
+            { sizeof(struct ofp_port_stats_request), 
+              sizeof(struct ofp_port_stats_request), 
+              ofp_port_stats_request },
             { 0, SIZE_MAX, ofp_port_stats_reply },
         },
         {

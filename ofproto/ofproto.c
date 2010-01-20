@@ -2458,39 +2458,62 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
     return 0;
 }
 
+static void
+append_port_stat(struct ofport *port, uint16_t port_no, struct ofconn *ofconn, 
+                 struct ofpbuf *msg)
+{
+    struct netdev_stats stats;
+    struct ofp_port_stats *ops;
+
+    /* Intentionally ignore return value, since errors will set 
+     * 'stats' to all-1s, which is correct for OpenFlow, and 
+     * netdev_get_stats() will log errors. */
+    netdev_get_stats(port->netdev, &stats);
+
+    ops = append_stats_reply(sizeof *ops, ofconn, &msg);
+    ops->port_no = htons(odp_port_to_ofp_port(port_no));
+    memset(ops->pad, 0, sizeof ops->pad);
+    ops->rx_packets = htonll(stats.rx_packets);
+    ops->tx_packets = htonll(stats.tx_packets);
+    ops->rx_bytes = htonll(stats.rx_bytes);
+    ops->tx_bytes = htonll(stats.tx_bytes);
+    ops->rx_dropped = htonll(stats.rx_dropped);
+    ops->tx_dropped = htonll(stats.tx_dropped);
+    ops->rx_errors = htonll(stats.rx_errors);
+    ops->tx_errors = htonll(stats.tx_errors);
+    ops->rx_frame_err = htonll(stats.rx_frame_errors);
+    ops->rx_over_err = htonll(stats.rx_over_errors);
+    ops->rx_crc_err = htonll(stats.rx_crc_errors);
+    ops->collisions = htonll(stats.collisions);
+}
+
 static int
 handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
-                          struct ofp_stats_request *request)
+                          struct ofp_stats_request *osr,
+                          size_t arg_size)
 {
+    struct ofp_port_stats_request *psr;
     struct ofp_port_stats *ops;
     struct ofpbuf *msg;
     struct ofport *port;
     unsigned int port_no;
 
-    msg = start_stats_reply(request, sizeof *ops * 16);
-    PORT_ARRAY_FOR_EACH (port, &p->ports, port_no) {
-        struct netdev_stats stats;
+    if (arg_size != sizeof *psr) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    psr = (struct ofp_port_stats_request *) osr->body;
 
-        /* Intentionally ignore return value, since errors will set 'stats' to
-         * all-1s, which is correct for OpenFlow, and netdev_get_stats() will
-         * log errors. */
-        netdev_get_stats(port->netdev, &stats);
-
-        ops = append_stats_reply(sizeof *ops, ofconn, &msg);
-        ops->port_no = htons(odp_port_to_ofp_port(port_no));
-        memset(ops->pad, 0, sizeof ops->pad);
-        ops->rx_packets = htonll(stats.rx_packets);
-        ops->tx_packets = htonll(stats.tx_packets);
-        ops->rx_bytes = htonll(stats.rx_bytes);
-        ops->tx_bytes = htonll(stats.tx_bytes);
-        ops->rx_dropped = htonll(stats.rx_dropped);
-        ops->tx_dropped = htonll(stats.tx_dropped);
-        ops->rx_errors = htonll(stats.rx_errors);
-        ops->tx_errors = htonll(stats.tx_errors);
-        ops->rx_frame_err = htonll(stats.rx_frame_errors);
-        ops->rx_over_err = htonll(stats.rx_over_errors);
-        ops->rx_crc_err = htonll(stats.rx_crc_errors);
-        ops->collisions = htonll(stats.collisions);
+    msg = start_stats_reply(osr, sizeof *ops * 16);
+    if (psr->port_no != htons(OFPP_NONE)) {
+        port = port_array_get(&p->ports, 
+                ofp_port_to_odp_port(ntohs(psr->port_no)));
+        if (port) {
+            append_port_stat(port, ntohs(psr->port_no), ofconn, msg);
+        }
+    } else {
+        PORT_ARRAY_FOR_EACH (port, &p->ports, port_no) {
+            append_port_stat(port, port_no, ofconn, msg);
+        }
     }
 
     queue_tx(msg, ofconn, ofconn->reply_counter);
@@ -2763,7 +2786,7 @@ handle_stats_request(struct ofproto *p, struct ofconn *ofconn,
         return handle_table_stats_request(p, ofconn, osr);
 
     case OFPST_PORT:
-        return handle_port_stats_request(p, ofconn, osr);
+        return handle_port_stats_request(p, ofconn, osr, arg_size);
 
     case OFPST_VENDOR:
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);

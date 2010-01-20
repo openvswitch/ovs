@@ -153,7 +153,7 @@ usage(void)
            "  dump-desc SWITCH            print switch description\n"
            "  dump-tables SWITCH          print table stats\n"
            "  mod-port SWITCH IFACE ACT   modify port behavior\n"
-           "  dump-ports SWITCH           print port statistics\n"
+           "  dump-ports SWITCH [PORT]    print port statistics\n"
            "  dump-flows SWITCH           print all flow entries\n"
            "  dump-flows SWITCH FLOW      print matching FLOWs\n"
            "  dump-aggregate SWITCH       print aggregate flow statistics\n"
@@ -467,6 +467,48 @@ str_to_ip(const char *str_, uint32_t *ip)
 
     free(str);
     return n_wild;
+}
+
+static uint16_t
+str_to_port_no(const char *vconn_name, const char *str)
+{
+    struct ofpbuf *request, *reply;
+    struct ofp_switch_features *osf;
+    struct vconn *vconn;
+    int n_ports;
+    int port_idx;
+    unsigned int port_no;
+    
+
+    /* Check if the argument is a port index.  Otherwise, treat it as
+     * the port name. */
+    if (str_to_uint(str, 10, &port_no)) {
+        return port_no;
+    }
+
+    /* Send a "Features Request" to resolve the name into a number. */
+    make_openflow(sizeof(struct ofp_header), OFPT_FEATURES_REQUEST, &request);
+    open_vconn(vconn_name, &vconn);
+    run(vconn_transact(vconn, request, &reply), "talking to %s", vconn_name);
+
+    osf = reply->data;
+    n_ports = (reply->size - sizeof *osf) / sizeof *osf->ports;
+
+    for (port_idx = 0; port_idx < n_ports; port_idx++) {
+        /* Check argument as an interface name */
+        if (!strncmp((char *)osf->ports[port_idx].name, str,
+                    sizeof osf->ports[0].name)) {
+            break;
+        }
+    }
+    if (port_idx == n_ports) {
+        ovs_fatal(0, "couldn't find monitored port: %s", str);
+    }
+
+    ofpbuf_delete(reply);
+    vconn_close(vconn);
+
+    return port_idx;
 }
 
 static void *
@@ -995,9 +1037,16 @@ do_monitor(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_dump_ports(int argc OVS_UNUSED, char *argv[])
+do_dump_ports(int argc, char *argv[])
 {
-    dump_trivial_stats_transaction(argv[1], OFPST_PORT);
+    struct ofp_port_stats_request *req;
+    struct ofpbuf *request;
+    uint16_t port;
+
+    req = alloc_stats_request(sizeof *req, OFPST_PORT, &request);
+    port = argc > 2 ? str_to_port_no(argv[1], argv[2]) : OFPP_NONE;
+    req->port_no = htons(port);
+    dump_stats_transaction(argv[1], request);
 }
 
 static void
@@ -1205,7 +1254,7 @@ static const struct command all_commands[] = {
     { "add-flows", 2, 2, do_add_flows },
     { "mod-flows", 2, 2, do_mod_flows },
     { "del-flows", 1, 2, do_del_flows },
-    { "dump-ports", 1, 1, do_dump_ports },
+    { "dump-ports", 1, 2, do_dump_ports },
     { "mod-port", 3, 3, do_mod_port },
     { "probe", 1, 1, do_probe },
     { "ping", 1, 2, do_ping },
