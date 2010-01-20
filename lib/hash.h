@@ -83,8 +83,11 @@ static inline uint32_t hash_boolean(bool x, uint32_t basis)
 
 static inline uint32_t hash_double(double x, uint32_t basis)
 {
-    BUILD_ASSERT_DECL(sizeof x == 8);
-    return hash_2words((const uint32_t *) &x, basis);
+    uint32_t value[2];
+    BUILD_ASSERT_DECL(sizeof x == sizeof value);
+
+    memcpy(value, &x, sizeof value);
+    return hash_2words(value, basis);
 }
 
 static inline uint32_t hash_pointer(const void *p, uint32_t basis)
