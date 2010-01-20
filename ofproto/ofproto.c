@@ -1860,8 +1860,7 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
     osf->n_buffers = htonl(pktbuf_capacity());
     osf->n_tables = 2;
     osf->capabilities = htonl(OFPC_FLOW_STATS | OFPC_TABLE_STATS |
-                              OFPC_PORT_STATS | OFPC_MULTI_PHY_TX |
-                              OFPC_ARP_MATCH_IP);
+                              OFPC_PORT_STATS | OFPC_ARP_MATCH_IP);
     osf->actions = htonl((1u << OFPAT_OUTPUT) |
                          (1u << OFPAT_SET_VLAN_VID) |
                          (1u << OFPAT_SET_VLAN_PCP) |
