@@ -1,6 +1,6 @@
 /*
  * Distributed under the terms of the GNU GPL version 2.
- * Copyright (c) 2007, 2008, 2009 Nicira Networks.
+ * Copyright (c) 2007, 2008, 2009, 2010 Nicira Networks.
  *
  * Significant portions of this file may be copied from parts of the Linux
  * kernel, by Linus Torvalds and others.
@@ -369,13 +369,13 @@ output_control(struct datapath *dp, struct sk_buff *skb, u32 arg, gfp_t gfp)
 /* Send a copy of this packet up to the sFlow agent, along with extra
  * information about what happened to it. */
 static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
-			 const union odp_action *a, int n_actions, gfp_t gfp)
+			 const union odp_action *a, int n_actions,
+			 gfp_t gfp, struct net_bridge_port *nbp)
 {
 	struct odp_sflow_sample_header *hdr;
 	unsigned int actlen = n_actions * sizeof(union odp_action);
 	unsigned int hdrlen = sizeof(struct odp_sflow_sample_header);
 	struct sk_buff *nskb;
-	int i;
 
 	nskb = skb_copy_expand(skb, actlen + hdrlen, 0, gfp);
 	if (!nskb)
@@ -384,12 +384,7 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 	memcpy(__skb_push(nskb, actlen), a, actlen);
 	hdr = (struct odp_sflow_sample_header*)__skb_push(nskb, hdrlen);
 	hdr->n_actions = n_actions;
-	hdr->sample_pool = 0;
-	for_each_possible_cpu (i) {
-		const struct dp_stats_percpu *stats;
-		stats = per_cpu_ptr(dp->stats_percpu, i);
-		hdr->sample_pool += stats->sflow_pool;
-	}
+	hdr->sample_pool = atomic_read(&nbp->sflow_pool);
 	dp_output_control(dp, nskb, _ODPL_SFLOW_NR, 0);
 }
 
@@ -407,15 +402,13 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 	int err;
 
 	if (dp->sflow_probability) {
-		/* Increment sample pool. */
-		int cpu = get_cpu();
-		per_cpu_ptr(dp->stats_percpu, cpu)->sflow_pool++;
-		put_cpu();
-
-		/* Sample packet. */
-		if (dp->sflow_probability == UINT_MAX ||
-		    net_random() < dp->sflow_probability)
-			sflow_sample(dp, skb, a, n_actions, gfp);
+		struct net_bridge_port *p = skb->dev->br_port;
+		if (p) {
+			atomic_inc(&p->sflow_pool);
+			if (dp->sflow_probability == UINT_MAX ||
+			    net_random() < dp->sflow_probability)
+				sflow_sample(dp, skb, a, n_actions, gfp, p);
+		}
 	}
 
 	for (; n_actions > 0; a++, n_actions--) {

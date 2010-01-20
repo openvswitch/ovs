@@ -296,6 +296,17 @@ ofproto_sflow_add_poller(struct ofproto_sflow *os,
     sfl_poller_set_bridgePort(poller, odp_port);
 }
 
+static void
+ofproto_sflow_add_sampler(struct ofproto_sflow *os,
+			  struct ofproto_sflow_port *osp,
+			  u_int32_t sampling_rate, u_int32_t header_len)
+{
+    SFLSampler *sampler = sfl_agent_addSampler(os->sflow_agent, &osp->dsi);
+    sfl_sampler_set_sFlowFsPacketSamplingRate(sampler, sampling_rate);
+    sfl_sampler_set_sFlowFsMaximumHeaderSize(sampler, header_len);
+    sfl_sampler_set_sFlowFsReceiver(sampler, RECEIVER_INDEX);
+}
+
 void
 ofproto_sflow_add_port(struct ofproto_sflow *os, uint16_t odp_port,
                        const char *netdev_name)
@@ -338,6 +349,7 @@ ofproto_sflow_del_port(struct ofproto_sflow *os, uint16_t odp_port)
     if (osp) {
         if (os->sflow_agent) {
             sfl_agent_removePoller(os->sflow_agent, &osp->dsi);
+            sfl_agent_removeSampler(os->sflow_agent, &osp->dsi);
         }
         netdev_close(osp->netdev);
         free(osp);
@@ -350,9 +362,7 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
                           const struct ofproto_sflow_options *options)
 {
     struct ofproto_sflow_port *osp;
-    SFLDataSource_instance dsi;
     bool options_changed;
-    SFLSampler *sampler;
     SFLReceiver *receiver;
     unsigned int odp_port;
     SFLAddress agentIP;
@@ -421,27 +431,14 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     sfl_receiver_set_sFlowRcvrOwner(receiver, "Open vSwitch sFlow");
     sfl_receiver_set_sFlowRcvrTimeout(receiver, 0xffffffff);
 
-    /* Add a single sampler to represent the datapath (special <ifIndex>:0
-     * datasource).  The alternative is to model a physical switch more closely
-     * and instantiate a separate sampler object for each interface, but then
-     * unicasts would have to be offered to two samplers, and
-     * broadcasts/multicasts would have to be offered to all of them.  Doing it
-     * this way with a single <ifindex>:0 sampler is much more efficient for a
-     * virtual switch, and is allowed by the sFlow standard.
-     */
-    SFL_DS_SET(dsi, 0, 0, 0);
-    sampler = sfl_agent_addSampler(os->sflow_agent, &dsi);
-    sfl_sampler_set_sFlowFsReceiver(sampler, RECEIVER_INDEX);
-    sfl_sampler_set_sFlowFsPacketSamplingRate(sampler, options->sampling_rate);
-    sfl_sampler_set_sFlowFsMaximumHeaderSize(sampler, options->header_len);
-
     /* Set the sampling_rate down in the datapath. */
     dpif_set_sflow_probability(os->dpif,
                                MAX(1, UINT32_MAX / options->sampling_rate));
 
-    /* Add the currently known ports. */
+    /* Add samplers and pollers for the currently known ports. */
     PORT_ARRAY_FOR_EACH (osp, &os->ports, odp_port) {
-        ofproto_sflow_add_poller(os, osp, odp_port);
+        ofproto_sflow_add_sampler(os, osp,
+                                  options->sampling_rate, options->header_len);
     }
 }
 
@@ -460,7 +457,7 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     SFLFlow_sample_element hdrElem;
     SFLSampled_header *header;
     SFLFlow_sample_element switchElem;
-    SFLSampler *sampler = os->sflow_agent->samplers;
+    SFLSampler *sampler;
     const struct odp_sflow_sample_header *hdr;
     const union odp_action *actions;
     struct ofpbuf payload;
@@ -504,6 +501,16 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     fs.input = ofproto_sflow_odp_port_to_ifindex(os, msg->port);
     fs.output = 0;              /* Filled in correctly below. */
     fs.sample_pool = hdr->sample_pool;
+
+    /* We are going to give it to the sampler that represents this input port.
+     * By implementing "ingress-only" sampling like this we ensure that we
+     * never have to offer the same sample to more than one sampler. */
+    sampler = sfl_agent_getSamplerByIfIndex(os->sflow_agent, fs.input);
+    if (!sampler) {
+        VLOG_WARN_RL(&rl, "no sampler for input ifIndex (%"PRIu32")",
+                     fs.input);
+        return;
+    }
 
     /* Sampled header. */
     memset(&hdrElem, 0, sizeof hdrElem);

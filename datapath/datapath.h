@@ -94,15 +94,12 @@ struct dp_bucket {
  * @n_lost: Number of received packets that had no matching flow in the flow
  * table that could not be sent to userspace (normally due to an overflow in
  * one of the datapath's queues).
- * @sflow_pool: Number of packets that were candidates for sFlow sampling,
- * regardless of whether they were actually chosen and sent down to userspace.
  */
 struct dp_stats_percpu {
 	u64 n_frags;
 	u64 n_hit;
 	u64 n_missed;
 	u64 n_lost;
-	u64 sflow_pool;
 };
 
 struct dp_port_group {
@@ -115,7 +112,7 @@ struct dp_port_group {
  * struct datapath - datapath for flow-based packet switching
  * @mutex: Mutual exclusion for ioctls.
  * @dp_idx: Datapath number (index into the dps[] array in datapath.c).
- * @ifobj: &struct kobject representing the datapath.
+ * @ifobj: Represents /sys/class/net/<devname>/brif.
  * @drop_frags: Drop all IP fragments if nonzero.
  * @queues: %DP_N_QUEUES sets of queued packets for userspace to handle.
  * @waitqueue: Waitqueue, for waiting for new packets in @queues.
@@ -161,13 +158,28 @@ struct datapath {
 	unsigned int sflow_probability;
 };
 
+/**
+ * struct net_bridge_port - one port within a datapath
+ * @port_no: Index into @dp's @ports array.
+ * @dp: Datapath to which this port belongs.
+ * @dev: The network device attached to this port.  The @br_port member in @dev
+ * points back to this &struct net_bridge_port.
+ * @kobj: Represents /sys/class/net/<devname>/brport.
+ * @linkname: The name of the link from /sys/class/net/<datapath>/brif to this
+ * &struct net_bridge_port.  (We keep this around so that we can delete it
+ * if @dev gets renamed.)  Set to the null string when no link exists.
+ * @node: Element in @dp's @port_list.
+ * @sflow_pool: Number of packets that were candidates for sFlow sampling,
+ * regardless of whether they were actually chosen and sent down to userspace.
+ */
 struct net_bridge_port {
 	u16 port_no;
 	struct datapath	*dp;
 	struct net_device *dev;
 	struct kobject kobj;
 	char linkname[IFNAMSIZ];
-	struct list_head node;   /* Element in datapath.ports. */
+	struct list_head node;
+	atomic_t sflow_pool;
 };
 
 extern struct notifier_block dp_device_notifier;

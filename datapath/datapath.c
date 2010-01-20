@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2008, 2009 Nicira Networks.
+ * Copyright (c) 2007, 2008, 2009, 2010 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -349,6 +349,7 @@ static int new_nbp(struct datapath *dp, struct net_device *dev, int port_no)
 	p->port_no = port_no;
 	p->dp = dp;
 	p->dev = dev;
+	atomic_set(&p->sflow_pool, 0);
 	if (!is_dp_dev(dev))
 		rcu_assign_pointer(dev->br_port, p);
 	else {

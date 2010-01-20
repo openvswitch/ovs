@@ -150,17 +150,14 @@ struct odp_msg {
  * @sample_pool: Number of packets that were candidates for sFlow sampling,
  * regardless of whether they were actually chosen and sent down to userspace.
  * @n_actions: Number of "union odp_action"s immediately following this header.
- * @reserved: Pads the structure up to a 64-bit boundary.  Should be set to
- * zero.
  *
  * This header follows &struct odp_msg when that structure's @type is
  * %_ODPL_SFLOW_NR, and it is itself followed by an array of &union odp_action
  * (the number of which is specified in @n_actions) and then by packet data.
  */
 struct odp_sflow_sample_header {
-    __u64 sample_pool;
+    __u32 sample_pool;
     __u32 n_actions;
-    __u32 reserved;
 };
 
 #define ODP_PORT_INTERNAL (1 << 0) /* This port is simulated. */
