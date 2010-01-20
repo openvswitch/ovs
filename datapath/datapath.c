@@ -621,9 +621,7 @@ int vswitch_skb_checksum_setup(struct sk_buff *skb)
 out:
 	return -EPROTO;
 }
-#else
-int vswitch_skb_checksum_setup(struct sk_buff *skb) { return 0; }
-#endif /* CONFIG_XEN && linux == 2.6.18 */
+#endif /* CONFIG_XEN && HAVE_PROTO_DATA_VALID */
 
 /* Append each packet in 'skb' list to 'queue'.  There will be only one packet
  * unless we broke up a GSO packet. */

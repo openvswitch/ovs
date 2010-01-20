@@ -159,15 +159,13 @@ static inline const char *dp_name(const struct datapath *dp)
 	return dp->ports[ODPP_LOCAL]->dev->name;
 }
 
-#ifdef CONFIG_XEN
-int skb_checksum_setup(struct sk_buff *skb);
+#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
+int vswitch_skb_checksum_setup(struct sk_buff *skb);
 #else
-static inline int skb_checksum_setup(struct sk_buff *skb)
+static inline int vswitch_skb_checksum_setup(struct sk_buff *skb)
 {
 	return 0;
 }
 #endif
-
-int vswitch_skb_checksum_setup(struct sk_buff *skb);
 
 #endif /* datapath.h */
