@@ -1488,7 +1488,7 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
     const struct ovsrec_open_vswitch *ovs;
     enum ovsdb_idl_txn_status status;
     struct ds comment, *output;
-    int64_t next_cfg;
+    int64_t next_cfg = 0;
     int n_output;
     int i, start;
 
