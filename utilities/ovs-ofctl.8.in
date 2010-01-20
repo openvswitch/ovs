@@ -67,9 +67,11 @@ Prints to the console statistics for each of the flow tables used by
 \fIswitch\fR.
 
 .TP
-\fBdump-ports \fIswitch\fR
-Prints to the console statistics for each of the network devices
-associated with \fIswitch\fR.
+\fBdump-ports \fIswitch\fR [\fInetdev\fR]
+Prints to the console statistics for network devices associated with 
+\fIswitch\fR.  If \fInetdev\fR is specified, only the statistics
+associated with that device will be printed.  \fInetdev\fR can be an
+OpenFlow assigned port number or device name, e.g. \fBeth0\fR.
 
 .TP
 \fBmod-port \fIswitch\fR \fInetdev\fR \fIaction\fR
