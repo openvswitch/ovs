@@ -618,7 +618,6 @@ static struct ovsdb_idl_row *
 ovsdb_idl_row_create__(const struct ovsdb_idl_table_class *class)
 {
     struct ovsdb_idl_row *row = xzalloc(class->allocation_size);
-    memset(row, 0, sizeof *row);
     list_init(&row->src_arcs);
     list_init(&row->dst_arcs);
     hmap_node_nullify(&row->txn_node);
