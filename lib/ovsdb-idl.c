@@ -1229,6 +1229,7 @@ ovsdb_idl_txn_delete(struct ovsdb_idl_row *row)
         assert(!row->prereqs);
         hmap_remove(&row->table->idl->txn->txn_rows, &row->txn_node);
         free(row);
+        return;
     }
     if (hmap_node_is_null(&row->txn_node)) {
         hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,
