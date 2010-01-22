@@ -21,6 +21,10 @@
 #include <stdlib.h>
 #include "util.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /* A hash map node, to be embedded inside the data structure being mapped. */
 struct hmap_node {
     size_t hash;                /* Hash value. */
@@ -63,8 +67,9 @@ static inline void hmap_insert(struct hmap *, struct hmap_node *, size_t hash);
 static inline void hmap_remove(struct hmap *, struct hmap_node *);
 static inline void hmap_moved(struct hmap *,
                               struct hmap_node *, struct hmap_node *);
-static inline void hmap_replace(struct hmap *, const struct hmap_node *old,
-                                struct hmap_node *new);
+static inline void hmap_replace(struct hmap *,
+                                const struct hmap_node *old_node,
+                                struct hmap_node *new_node);
 
 /* Search. */
 #define HMAP_FOR_EACH_WITH_HASH(NODE, STRUCT, MEMBER, HASH, HMAP)       \
@@ -173,23 +178,23 @@ hmap_moved(struct hmap *hmap,
     *bucket = node;
 }
 
-/* Puts 'new' in the position in 'hmap' currently occupied by 'old'.  The 'new'
- * node must hash to the same value as 'old'.  The client is responsible for
- * ensuring that the replacement does not violate any client-imposed
- * invariants (e.g. uniqueness of keys within a map).
+/* Puts 'new_node' in the position in 'hmap' currently occupied by 'old_node'.
+ * The 'new_node' must hash to the same value as 'old_node'.  The client is
+ * responsible for ensuring that the replacement does not violate any
+ * client-imposed invariants (e.g. uniqueness of keys within a map).
  *
- * Afterward, 'old' is not part of 'hmap', and the client is responsible for
- * freeing it (if this is desirable). */
+ * Afterward, 'old_node' is not part of 'hmap', and the client is responsible
+ * for freeing it (if this is desirable). */
 static inline void
 hmap_replace(struct hmap *hmap,
-             const struct hmap_node *old, struct hmap_node *new)
+             const struct hmap_node *old_node, struct hmap_node *new_node)
 {
-    struct hmap_node **bucket = &hmap->buckets[old->hash & hmap->mask];
-    while (*bucket != old) {
+    struct hmap_node **bucket = &hmap->buckets[old_node->hash & hmap->mask];
+    while (*bucket != old_node) {
         bucket = &(*bucket)->next;
     }
-    *bucket = new;
-    new->hash = old->hash;
+    *bucket = new_node;
+    new_node->hash = old_node->hash;
 }
 
 static inline struct hmap_node *
@@ -258,5 +263,9 @@ hmap_next(const struct hmap *hmap, const struct hmap_node *node)
             ? node->next
             : hmap_next__(hmap, (node->hash & hmap->mask) + 1));
 }
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* hmap.h */
