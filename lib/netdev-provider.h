@@ -24,13 +24,17 @@
 #include "list.h"
 #include "shash.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /* A network device object that was created through the netdev_create()
  * call.
  *
  * This structure should be treated as opaque by network device
  * implementations. */
 struct netdev_obj {
-    const struct netdev_class *class;
+    const struct netdev_class *netdev_class;
     int ref_cnt;
     bool created;                    /* Was netdev_create() called? */
 };
@@ -38,9 +42,9 @@ struct netdev_obj {
 void netdev_obj_init(struct netdev_obj *, const char *name,
                      const struct netdev_class *, bool created);
 static inline void netdev_obj_assert_class(const struct netdev_obj *netdev_obj,
-                                           const struct netdev_class *class)
+                                           const struct netdev_class *class_)
 {
-    assert(netdev_obj->class == class);
+    assert(netdev_obj->netdev_class == class_);
 }
 
 /* A network device (e.g. an Ethernet device).
@@ -48,7 +52,7 @@ static inline void netdev_obj_assert_class(const struct netdev_obj *netdev_obj,
  * This structure should be treated as opaque by network device
  * implementations. */
 struct netdev {
-    const struct netdev_class *class;
+    const struct netdev_class *netdev_class;
     char *name;                      /* e.g. "eth0" */
 
     enum netdev_flags save_flags;    /* Initial device flags. */
@@ -59,9 +63,9 @@ struct netdev {
 void netdev_init(struct netdev *, const char *name,
                  const struct netdev_class *);
 static inline void netdev_assert_class(const struct netdev *netdev,
-                                       const struct netdev_class *class)
+                                       const struct netdev_class *netdev_class)
 {
-    assert(netdev->class == class);
+    assert(netdev->netdev_class == netdev_class);
 }
 const char *netdev_get_type(const struct netdev *netdev);
 
@@ -349,5 +353,9 @@ struct netdev_class {
 
 extern const struct netdev_class netdev_linux_class;
 extern const struct netdev_class netdev_tap_class;
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* netdev.h */
