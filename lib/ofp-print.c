@@ -696,6 +696,8 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
         } else {
             print_wild(&f, "nw_proto=", w & OFPFW_NW_PROTO, verbosity,
                        "%u", om->nw_proto);
+            print_wild(&f, "nw_tos=", w & OFPFW_NW_TOS, verbosity,
+                       "%u", om->nw_tos);
         }
     }
     if (om->nw_proto == IP_TYPE_ICMP) {

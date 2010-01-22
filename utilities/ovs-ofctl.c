@@ -700,6 +700,7 @@ parse_field(const char *name, const struct field **f_out)
         { "nw_dst", OFPFW_NW_DST_MASK, F_IP,
           F_OFS(nw_dst), OFPFW_NW_DST_SHIFT },
         { "nw_proto", OFPFW_NW_PROTO, F_U8, F_OFS(nw_proto), 0 },
+        { "nw_tos", OFPFW_NW_TOS, F_U8, F_OFS(nw_tos), 0 },
         { "tp_src", OFPFW_TP_SRC, F_U16, F_OFS(tp_src), 0 },
         { "tp_dst", OFPFW_TP_DST, F_U16, F_OFS(tp_dst), 0 },
         { "icmp_type", OFPFW_ICMP_TYPE, F_U16, F_OFS(icmp_type), 0 },

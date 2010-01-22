@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * This file is offered under your choice of two licenses: Apache 2.0 or GNU
  * GPL 2.0 or later.  The permission statements for each of these licenses is
@@ -163,6 +163,8 @@ struct odp_flow_key {
     __u8   nw_proto;             /* IP protocol or lower 8 bits of 
                                     ARP opcode. */
     __u8   dl_vlan_pcp;          /* Input VLAN priority. */
+    __u8   nw_tos;               /* IP ToS (DSCP field, 6 bits). */
+    __u8   reserved[3];          /* Align to 32-bits...must be zeroed. */
 };
 
 /* Flags for ODP_FLOW. */

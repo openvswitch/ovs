@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -664,6 +664,7 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp, const flow_t *key)
 {
     struct dp_netdev_flow *flow;
 
+    assert(!key->reserved[0] && !key->reserved[1] && !key->reserved[2]);
     HMAP_FOR_EACH_WITH_HASH (flow, struct dp_netdev_flow, node,
                              flow_hash(key, 0), &dp->flow_table) {
         if (flow_equal(&flow->key, key)) {
@@ -806,6 +807,7 @@ add_flow(struct dpif *dpif, struct odp_flow *odp_flow)
 
     flow = xcalloc(1, sizeof *flow);
     flow->key = odp_flow->key;
+    memset(flow->key.reserved, 0, sizeof flow->key.reserved);
 
     error = set_flow_actions(flow, odp_flow);
     if (error) {

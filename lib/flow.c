@@ -151,6 +151,7 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, flow_t *flow)
             if (nh) {
                 flow->nw_src = nh->ip_src;
                 flow->nw_dst = nh->ip_dst;
+                flow->nw_tos = nh->ip_tos & 0xfc;
                 flow->nw_proto = nh->ip_proto;
                 packet->l4 = b.data;
                 if (!IP_IS_FRAGMENT(nh->ip_frag_off)) {
@@ -251,6 +252,7 @@ flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
     match->dl_type = flow->dl_type;
     match->nw_src = flow->nw_src;
     match->nw_dst = flow->nw_dst;
+    match->nw_tos = flow->nw_tos;
     match->nw_proto = flow->nw_proto;
     match->tp_src = flow->tp_src;
     match->tp_dst = flow->tp_dst;
@@ -276,7 +278,9 @@ flow_from_match(flow_t *flow, uint32_t *wildcards,
     flow->tp_dst = match->tp_dst;
     memcpy(flow->dl_src, match->dl_src, ETH_ADDR_LEN);
     memcpy(flow->dl_dst, match->dl_dst, ETH_ADDR_LEN);
+    flow->nw_tos = match->nw_tos;
     flow->nw_proto = match->nw_proto;
+    memset(flow->reserved, 0, sizeof flow->reserved);
 }
 
 char *
@@ -291,11 +295,11 @@ void
 flow_format(struct ds *ds, const flow_t *flow)
 {
     ds_put_format(ds, "in_port%04x:vlan%d:pcp%d mac"ETH_ADDR_FMT
-                  "->"ETH_ADDR_FMT" type%04x proto%"PRId8" ip"IP_FMT
-                  "->"IP_FMT" port%d->%d",
+                  "->"ETH_ADDR_FMT" type%04x proto%"PRId8" tos%"PRIu8
+                  " ip"IP_FMT"->"IP_FMT" port%d->%d",
                   flow->in_port, ntohs(flow->dl_vlan), flow->dl_vlan_pcp,
                   ETH_ADDR_ARGS(flow->dl_src), ETH_ADDR_ARGS(flow->dl_dst),
-                  ntohs(flow->dl_type), flow->nw_proto,
+                  ntohs(flow->dl_type), flow->nw_proto, flow->nw_tos,
                   IP_ARGS(&flow->nw_src), IP_ARGS(&flow->nw_dst),
                   ntohs(flow->tp_src), ntohs(flow->tp_dst));
 }

@@ -1,4 +1,4 @@
-.TH ovs\-ofctl 8 "June 2009" "Open vSwitch" "Open vSwitch Manual"
+.TH ovs\-ofctl 8 "January 2010" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-ofctl
 
 .SH NAME
@@ -255,6 +255,11 @@ Matches IPv4 destination address \fIip\fR.
 .IP \fBnw_proto=\fIproto\fR
 Matches IP protocol type \fIproto\fR, which is specified as a decimal 
 number between 0 and 255, inclusive (e.g. 6 to match TCP packets).
+
+.IP \fBnw_tos=\fItos\fR
+Matches IP ToS/DSCP field \fItos\fR, which is specified as a decimal 
+number between 0 and 255, inclusive.  Note that the two lower reserved
+bits are ignored for matching purposes.
 
 .IP \fBtp_src=\fIport\fR
 Matches UDP or TCP source port \fIport\fR, which is specified as a decimal 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,6 +57,7 @@ void
 cls_rule_from_flow(struct cls_rule *rule, const flow_t *flow,
                    uint32_t wildcards, unsigned int priority)
 {
+    assert(!flow->reserved[0] && !flow->reserved[1] && !flow->reserved[2]);
     rule->flow = *flow;
     flow_wildcards_init(&rule->wc, wildcards);
     rule->priority = priority;
