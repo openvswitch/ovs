@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2008, 2009 Nicira Networks.
+ * Copyright (c) 2007, 2008, 2009, 2010 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -625,6 +625,62 @@ out:
 int vswitch_skb_checksum_setup(struct sk_buff *skb) { return 0; }
 #endif /* CONFIG_XEN && linux == 2.6.18 */
 
+ /* Types of checksums that we can receive (these all refer to L4 checksums):
+ * 1. CHECKSUM_NONE: Device that did not compute checksum, contains full
+ *	(though not verified) checksum in packet but not in skb->csum.  Packets
+ *	from the bridge local port will also have this type.
+ * 2. CHECKSUM_COMPLETE (CHECKSUM_HW): Good device that computes checksums,
+ *	also the GRE module.  This is the same as CHECKSUM_NONE, except it has
+ *	a valid skb->csum.  Importantly, both contain a full checksum (not
+ *	verified) in the packet itself.  The only difference is that if the
+ *	packet gets to L4 processing on this machine (not in DomU) we won't
+ *	have to recompute the checksum to verify.  Most hardware devices do not
+ *	produce packets with this type, even if they support receive checksum
+ *	offloading (they produce type #5).
+ * 3. CHECKSUM_PARTIAL (CHECKSUM_HW): Packet without full checksum and needs to
+ *	be computed if it is sent off box.  Unfortunately on earlier kernels,
+ *	this case is impossible to distinguish from #2, despite having opposite
+ *	meanings.  Xen adds an extra field on earlier kernels (see #4) in order
+ *	to distinguish the different states.  The only real user of this type
+ *	with bridging is Xen (on later kernels).
+ * 4. CHECKSUM_UNNECESSARY (with proto_csum_blank true): This packet was
+ *	generated locally by a Xen DomU and has a partial checksum.  If it is
+ *	handled on this machine (Dom0 or DomU), then the checksum will not be
+ *	computed.  If it goes off box, the checksum in the packet needs to
+ *	completed.  Calling skb_checksum_setup converts this to CHECKSUM_HW
+ *	(CHECKSUM_PARTIAL) so that the checksum can be completed.  In later
+ *	kernels, this combination is replaced with CHECKSUM_PARTIAL.
+ * 5. CHECKSUM_UNNECESSARY (with proto_csum_blank false): Packet with a correct
+ *	full checksum or using a protocol without a checksum.  skb->csum is
+ *	undefined.  This is common from devices with receive checksum
+ *	offloading.  This is somewhat similar to CHECKSUM_NONE, except that
+ *	nobody will try to verify the checksum with CHECKSUM_UNNECESSARY.
+ *
+ * Note that on earlier kernels, CHECKSUM_COMPLETE and CHECKSUM_PARTIAL are
+ * both defined as CHECKSUM_HW.  Normally the meaning of CHECKSUM_HW is clear
+ * based on whether it is on the transmit or receive path.  After the datapath
+ * it will be intepreted as CHECKSUM_PARTIAL.  If the packet already has a
+ * checksum, we will panic.  Since we can receive packets with checksums, we
+ * assume that all CHECKSUM_HW packets have checksums and map them to
+ * CHECKSUM_NONE, which has a similar meaning (the it is only different if the
+ * packet is processed by the local IP stack, in which case it will need to
+ * be reverified).  If we receive a packet with CHECKSUM_HW that really means
+ * CHECKSUM_PARTIAL, it will be sent with the wrong checksum.  However, there
+ * shouldn't be any devices that do this with bridging.
+ *
+ * The bridge has similar behavior and this function closely resembles
+ * skb_forward_csum().  It is slightly different because we are only concerned
+ * with bridging and not other types of forwarding and can get away with
+ * slightly more optimal behavior.*/
+void
+forward_ip_summed(struct sk_buff *skb)
+{
+#ifdef CHECKSUM_HW
+	if (skb->ip_summed == CHECKSUM_HW)
+		skb->ip_summed = CHECKSUM_NONE;
+#endif
+}
+
 /* Append each packet in 'skb' list to 'queue'.  There will be only one packet
  * unless we broke up a GSO packet. */
 static int
@@ -721,6 +777,8 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 	err = -ENOBUFS;
 	if (skb_queue_len(queue) >= DP_MAX_QUEUE_LEN)
 		goto err_kfree_skb;
+
+	forward_ip_summed(skb);
 
 	/* Break apart GSO packets into their component pieces.  Otherwise
 	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */

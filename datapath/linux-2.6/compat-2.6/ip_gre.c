@@ -679,13 +679,6 @@ static int ipgre_rcv(struct sk_buff *skb)
 		skb_reset_network_header(skb);
 		ipgre_ecn_decapsulate(iph, skb);
 
-#ifdef CHECKSUM_HW
-		/* XXX: Temporary workaround to avoid a panic when doing
-		 * bridging due to multiple meanings of CHECKSUM_HW. */
-		if (skb->ip_summed == CHECKSUM_HW)
-			skb->ip_summed = CHECKSUM_NONE;
-#endif
-
 		netif_rx(skb);
 		read_unlock(&ipgre_lock);
 		return(0);

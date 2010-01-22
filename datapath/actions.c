@@ -302,6 +302,7 @@ int dp_xmit_skb(struct sk_buff *skb)
 		return -E2BIG;
 	}
 
+	forward_ip_summed(skb);
 	dev_queue_xmit(skb);
 
 	return len;
