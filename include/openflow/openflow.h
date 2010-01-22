@@ -318,7 +318,7 @@ enum ofp_action_type {
     OFPAT_SET_DL_DST,       /* Ethernet destination address. */
     OFPAT_SET_NW_SRC,       /* IP source address. */
     OFPAT_SET_NW_DST,       /* IP destination address. */
-    OFPAT_SET_NW_TOS,       /* IP ToS/DSCP field (6 bits). */
+    OFPAT_SET_NW_TOS,       /* IP ToS (DSCP field, 6 bits). */
     OFPAT_SET_TP_SRC,       /* TCP/UDP source port. */
     OFPAT_SET_TP_DST,       /* TCP/UDP destination port. */
     OFPAT_VENDOR = 0xffff
@@ -380,7 +380,7 @@ OFP_ASSERT(sizeof(struct ofp_action_nw_addr) == 8);
 struct ofp_action_nw_tos {
     uint16_t type;                  /* OFPAT_SET_TW_TOS. */
     uint16_t len;                   /* Length is 8. */
-    uint8_t nw_tos;                 /* IP ToS/DSCP (6 bits). */
+    uint8_t nw_tos;                 /* IP TOS (DSCP field, 6 bits). */
     uint8_t pad[3];
 };
 OFP_ASSERT(sizeof(struct ofp_action_nw_tos) == 8);
@@ -477,9 +477,10 @@ enum ofp_flow_wildcards {
     OFPFW_NW_DST_ALL = 32 << OFPFW_NW_DST_SHIFT,
 
     OFPFW_DL_VLAN_PCP = 1 << 20, /* VLAN priority. */
+    OFPFW_NW_TOS = 1 << 21, /* IP ToS (DSCP field, 6 bits). */
 
     /* Wildcard all fields. */
-    OFPFW_ALL = ((1 << 21) - 1)
+    OFPFW_ALL = ((1 << 22) - 1)
 };
 
 /* The wildcards for ICMP type and code fields use the transport source 
@@ -513,9 +514,10 @@ struct ofp_match {
     uint8_t dl_vlan_pcp;       /* Input VLAN priority. */
     uint8_t pad1[1];           /* Align to 64-bits. */
     uint16_t dl_type;          /* Ethernet frame type. */
+    uint8_t nw_tos;            /* IP ToS (DSCP field, 6 bits). */
     uint8_t nw_proto;          /* IP protocol or lower 8 bits of 
                                   ARP opcode. */
-    uint8_t pad2[3];           /* Align to 64-bits. */
+    uint8_t pad2[2];           /* Align to 64-bits. */
     uint32_t nw_src;           /* IP source address. */
     uint32_t nw_dst;           /* IP destination address. */
     uint16_t tp_src;           /* TCP/UDP source port. */

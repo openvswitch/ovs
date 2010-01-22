@@ -202,6 +202,8 @@ struct odp_flow_key {
     __u8   nw_proto;             /* IP protocol or lower 8 bits of 
                                     ARP opcode. */
     __u8   dl_vlan_pcp;          /* Input VLAN priority. */
+    __u8   nw_tos;               /* IP ToS (DSCP field, 6 bits). */
+    __u8   reserved[3];          /* Align to 32-bits...must be zeroed. */
 };
 
 /* Flags for ODP_FLOW. */

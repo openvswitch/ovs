@@ -1,6 +1,6 @@
 /*
  * Distributed under the terms of the GNU GPL version 2.
- * Copyright (c) 2007, 2008, 2009 Nicira Networks.
+ * Copyright (c) 2007, 2008, 2009, 2010 Nicira Networks.
  *
  * Significant portions of this file may be copied from parts of the Linux
  * kernel, by Linus Torvalds and others.
@@ -244,6 +244,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 		int th_ofs = nh_ofs + nh->ihl * 4;
 		key->nw_src = nh->saddr;
 		key->nw_dst = nh->daddr;
+		key->nw_tos = nh->tos & 0xfc;
 		key->nw_proto = nh->protocol;
 		skb_set_transport_header(skb, th_ofs);
 

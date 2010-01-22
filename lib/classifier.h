@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,6 +67,7 @@
     CLS_FIELD(OFPFW_NW_SRC_MASK, nw_src,      NW_SRC)       \
     CLS_FIELD(OFPFW_NW_DST_MASK, nw_dst,      NW_DST)       \
     CLS_FIELD(OFPFW_NW_PROTO,    nw_proto,    NW_PROTO)     \
+    CLS_FIELD(OFPFW_NW_TOS,      nw_tos,      NW_TOS)       \
     CLS_FIELD(OFPFW_TP_SRC,      tp_src,      TP_SRC)       \
     CLS_FIELD(OFPFW_TP_DST,      tp_dst,      TP_DST)
 
