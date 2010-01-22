@@ -152,19 +152,19 @@ jsonrpc_log_msg(const struct jsonrpc *rpc, const char *title,
         }
         if (msg->params) {
             ds_put_cstr(&s, ", params=");
-            ds_put_and_free_cstr(&s, json_to_string(msg->params, 0));
+            json_to_ds(msg->params, 0, &s);
         }
         if (msg->result) {
             ds_put_cstr(&s, ", result=");
-            ds_put_and_free_cstr(&s, json_to_string(msg->result, 0));
+            json_to_ds(msg->result, 0, &s);
         }
         if (msg->error) {
             ds_put_cstr(&s, ", error=");
-            ds_put_and_free_cstr(&s, json_to_string(msg->error, 0));
+            json_to_ds(msg->error, 0, &s);
         }
         if (msg->id) {
             ds_put_cstr(&s, ", id=");
-            ds_put_and_free_cstr(&s, json_to_string(msg->id, 0));
+            json_to_ds(msg->id, 0, &s);
         }
         VLOG_DBG("%s: %s %s%s", rpc->name, title,
                  jsonrpc_msg_type_to_string(msg->type), ds_cstr(&s));

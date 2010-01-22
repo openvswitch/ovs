@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,8 @@
  */
 
 #include "shash.h"
+
+struct ds;
 
 /* Type of a JSON value. */
 enum json_type {
@@ -120,6 +122,7 @@ enum {
     JSSF_SORT = 1 << 1          /* Object members in sorted order, if true. */
 };
 char *json_to_string(const struct json *, int flags);
+void json_to_ds(const struct json *, int flags, struct ds *);
 
 /* JSON string formatting operations. */
 

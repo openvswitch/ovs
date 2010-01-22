@@ -1428,17 +1428,17 @@ json_error(struct json_parser *p, const char *format, ...)
 #define SPACES_PER_LEVEL 2
 
 struct json_serializer {
-    struct ds ds;
+    struct ds *ds;
     int depth;
     int flags;
 };
 
-static void json_to_ds(const struct json *, struct json_serializer *);
-static void json_object_to_ds(const struct shash *object,
-                              struct json_serializer *);
-static void json_array_to_ds(const struct json_array *,
-                             struct json_serializer *);
-static void json_string_to_ds(const char *string, struct ds *);
+static void json_serialize(const struct json *, struct json_serializer *);
+static void json_serialize_object(const struct shash *object,
+                                  struct json_serializer *);
+static void json_serialize_array(const struct json_array *,
+                                 struct json_serializer *);
+static void json_serialize_string(const char *, struct ds *);
 
 /* Converts 'json' to a string in JSON format, encoded in UTF-8, and returns
  * that string.  The caller is responsible for freeing the returned string,
@@ -1457,18 +1457,29 @@ static void json_string_to_ds(const char *string, struct ds *);
 char *
 json_to_string(const struct json *json, int flags)
 {
+    struct ds ds;
+
+    ds_init(&ds);
+    json_to_ds(json, flags, &ds);
+    return ds_steal_cstr(&ds);
+}
+
+/* Same as json_to_string(), but the output is appended to 'ds'. */
+void
+json_to_ds(const struct json *json, int flags, struct ds *ds)
+{
     struct json_serializer s;
-    ds_init(&s.ds);
+
+    s.ds = ds;
     s.depth = 0;
     s.flags = flags;
-    json_to_ds(json, &s);
-    return ds_steal_cstr(&s.ds);
+    json_serialize(json, &s);
 }
 
 static void
-json_to_ds(const struct json *json, struct json_serializer *s)
+json_serialize(const struct json *json, struct json_serializer *s)
 {
-    struct ds *ds = &s->ds;
+    struct ds *ds = s->ds;
 
     switch (json->type) {
     case JSON_NULL:
@@ -1484,11 +1495,11 @@ json_to_ds(const struct json *json, struct json_serializer *s)
         break;
 
     case JSON_OBJECT:
-        json_object_to_ds(json->u.object, s);
+        json_serialize_object(json->u.object, s);
         break;
 
     case JSON_ARRAY:
-        json_array_to_ds(&json->u.array, s);
+        json_serialize_array(&json->u.array, s);
         break;
 
     case JSON_INTEGER:
@@ -1500,7 +1511,7 @@ json_to_ds(const struct json *json, struct json_serializer *s)
         break;
 
     case JSON_STRING:
-        json_string_to_ds(json->u.string, ds);
+        json_serialize_string(json->u.string, ds);
         break;
 
     case JSON_N_TYPES:
@@ -1513,34 +1524,34 @@ static void
 indent_line(struct json_serializer *s)
 {
     if (s->flags & JSSF_PRETTY) {
-        ds_put_char(&s->ds, '\n');
-        ds_put_char_multiple(&s->ds, ' ', SPACES_PER_LEVEL * s->depth);
+        ds_put_char(s->ds, '\n');
+        ds_put_char_multiple(s->ds, ' ', SPACES_PER_LEVEL * s->depth);
     }
 }
 
 static void
-json_object_member_to_ds(size_t i, const struct shash_node *node,
-                         struct json_serializer *s)
+json_serialize_object_member(size_t i, const struct shash_node *node,
+                             struct json_serializer *s)
 {
-    struct ds *ds = &s->ds;
+    struct ds *ds = s->ds;
 
     if (i) {
         ds_put_char(ds, ',');
         indent_line(s);
     }
 
-    json_string_to_ds(node->name, ds);
+    json_serialize_string(node->name, ds);
     ds_put_char(ds, ':');
     if (s->flags & JSSF_PRETTY) {
         ds_put_char(ds, ' ');
     }
-    json_to_ds(node->data, s);
+    json_serialize(node->data, s);
 }
 
 static void
-json_object_to_ds(const struct shash *object, struct json_serializer *s)
+json_serialize_object(const struct shash *object, struct json_serializer *s)
 {
-    struct ds *ds = &s->ds;
+    struct ds *ds = s->ds;
 
     ds_put_char(ds, '{');
 
@@ -1554,7 +1565,7 @@ json_object_to_ds(const struct shash *object, struct json_serializer *s)
         nodes = shash_sort(object);
         n = shash_count(object);
         for (i = 0; i < n; i++) {
-            json_object_member_to_ds(i, nodes[i], s);
+            json_serialize_object_member(i, nodes[i], s);
         }
         free(nodes);
     } else {
@@ -1563,7 +1574,7 @@ json_object_to_ds(const struct shash *object, struct json_serializer *s)
 
         i = 0;
         SHASH_FOR_EACH (node, object) {
-            json_object_member_to_ds(i++, node, s);
+            json_serialize_object_member(i++, node, s);
         }
     }
 
@@ -1572,9 +1583,9 @@ json_object_to_ds(const struct shash *object, struct json_serializer *s)
 }
 
 static void
-json_array_to_ds(const struct json_array *array, struct json_serializer *s)
+json_serialize_array(const struct json_array *array, struct json_serializer *s)
 {
-    struct ds *ds = &s->ds;
+    struct ds *ds = s->ds;
     size_t i;
 
     ds_put_char(ds, '[');
@@ -1588,7 +1599,7 @@ json_array_to_ds(const struct json_array *array, struct json_serializer *s)
                 ds_put_char(ds, ',');
                 indent_line(s);
             }
-            json_to_ds(array->elems[i], s);
+            json_serialize(array->elems[i], s);
         }
     }
 
@@ -1597,7 +1608,7 @@ json_array_to_ds(const struct json_array *array, struct json_serializer *s)
 }
 
 static void
-json_string_to_ds(const char *string, struct ds *ds)
+json_serialize_string(const char *string, struct ds *ds)
 {
     uint8_t c;
 
