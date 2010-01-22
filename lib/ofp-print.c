@@ -933,11 +933,16 @@ ofp_desc_stats_reply(struct ds *string, const void *body, size_t len UNUSED,
 {
     const struct ofp_desc_stats *ods = body;
 
-    ds_put_format(string, "Manufacturer: %s\n", ods->mfr_desc);
-    ds_put_format(string, "Hardware: %s\n", ods->hw_desc);
-    ds_put_format(string, "Software: %s\n", ods->sw_desc);
-    ds_put_format(string, "Serial Num: %s\n", ods->serial_num);
-    ds_put_format(string, "DP Description: %s\n", ods->dp_desc);
+    ds_put_format(string, "Manufacturer: %.*s\n", 
+            (int) sizeof ods->mfr_desc, ods->mfr_desc);
+    ds_put_format(string, "Hardware: %.*s\n",
+            (int) sizeof ods->hw_desc, ods->hw_desc);
+    ds_put_format(string, "Software: %.*s\n",
+            (int) sizeof ods->sw_desc, ods->sw_desc);
+    ds_put_format(string, "Serial Num: %.*s\n",
+            (int) sizeof ods->serial_num, ods->serial_num);
+    ds_put_format(string, "DP Description: %.*s\n",
+            (int) sizeof ods->dp_desc, ods->dp_desc);
 }
 
 static void
