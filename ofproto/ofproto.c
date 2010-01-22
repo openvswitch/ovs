@@ -745,6 +745,12 @@ ofproto_destroy(struct ofproto *p)
 
     mac_learning_destroy(p->ml);
 
+    free(p->manufacturer);
+    free(p->hardware);
+    free(p->software);
+    free(p->serial);
+    free(p->dp_desc);
+
     free(p);
 }
 
