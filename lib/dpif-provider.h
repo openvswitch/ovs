@@ -23,11 +23,15 @@
 #include <assert.h>
 #include "dpif.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /* Open vSwitch datapath interface.
  *
  * This structure should be treated as opaque by dpif implementations. */
 struct dpif {
-    const struct dpif_class *class;
+    const struct dpif_class *dpif_class;
     char *name;
     uint8_t netflow_engine_type;
     uint8_t netflow_engine_id;
@@ -36,9 +40,9 @@ struct dpif {
 void dpif_init(struct dpif *, const struct dpif_class *, const char *name,
                uint8_t netflow_engine_type, uint8_t netflow_engine_id);
 static inline void dpif_assert_class(const struct dpif *dpif,
-                                     const struct dpif_class *class)
+                                     const struct dpif_class *dpif_class)
 {
-    assert(dpif->class == class);
+    assert(dpif->dpif_class == dpif_class);
 }
 
 /* Datapath interface class structure, to be defined by each implementation of
@@ -117,7 +121,7 @@ struct dpif_class {
      *
      * If successful, 'dpif' will not be used again except as an argument for
      * the 'close' member function. */
-    int (*delete)(struct dpif *dpif);
+    int (*destroy)(struct dpif *dpif);
 
     /* Retrieves statistics for 'dpif' into 'stats'. */
     int (*get_stats)(const struct dpif *dpif, struct odp_stats *stats);
@@ -294,5 +298,9 @@ struct dpif_class {
 
 extern const struct dpif_class dpif_linux_class;
 extern const struct dpif_class dpif_netdev_class;
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* dpif-provider.h */
