@@ -32,9 +32,14 @@ are supported:
 This is short for \fBunix:\fIfile\fR, as long as \fIfile\fR does not
 contain a colon.
 .
-.IP \fIdp\fR
-This is short for \fBunix:@RUNDIR@/\fIdp\fB.mgmt\fR, as long as
-\fIdp\fR does not contain a colon.
+.IP \fIbridge\fR
+This is short for \fBunix:@RUNDIR@/\fIbridge\fB.mgmt\fR, as long as
+\fIbridge\fR does not contain a colon.
+.
+.IP [\fItype\fB@\fR]\fIdp\fR
+Attempts to look up the bridge associated with \fIdp\fR and open as
+above.  If \fItype\fR is given, it specifies the datapath provider of
+\fIdp\fR, otherwise the default provider \fBsystem\fR is assumed.
 .RE
 
 .TP

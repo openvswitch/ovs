@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ dpif_linux_enumerate(struct svec *all_dps)
         int retval;
 
         sprintf(devname, "dp%d", i);
-        retval = dpif_open(devname, &dpif);
+        retval = dpif_open(devname, "system", &dpif);
         if (!retval) {
             svec_add(all_dps, devname);
             dpif_close(dpif);
@@ -107,7 +107,7 @@ dpif_linux_enumerate(struct svec *all_dps)
 }
 
 static int
-dpif_linux_open(const char *name UNUSED, char *suffix, bool create,
+dpif_linux_open(const char *name, const char *type UNUSED, bool create,
                 struct dpif **dpifp)
 {
     int minor;
@@ -116,11 +116,11 @@ dpif_linux_open(const char *name UNUSED, char *suffix, bool create,
             && isdigit((unsigned char)name[2]) ? atoi(name + 2) : -1;
     if (create) {
         if (minor >= 0) {
-            return create_minor(suffix, minor, dpifp);
+            return create_minor(name, minor, dpifp);
         } else {
             /* Scan for unused minor number. */
             for (minor = 0; minor < ODP_MAX; minor++) {
-                int error = create_minor(suffix, minor, dpifp);
+                int error = create_minor(name, minor, dpifp);
                 if (error != EBUSY) {
                     return error;
                 }
@@ -135,7 +135,7 @@ dpif_linux_open(const char *name UNUSED, char *suffix, bool create,
         int error;
 
         if (minor < 0) {
-            error = lookup_minor(suffix, &minor);
+            error = lookup_minor(name, &minor);
             if (error) {
                 return error;
             }
@@ -446,8 +446,7 @@ dpif_linux_recv_wait(struct dpif *dpif_)
 }
 
 const struct dpif_class dpif_linux_class = {
-    "",                         /* This is the default class. */
-    "linux",
+    "system",
     NULL,
     NULL,
     dpif_linux_enumerate,

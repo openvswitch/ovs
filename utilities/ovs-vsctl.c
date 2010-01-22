@@ -1394,6 +1394,7 @@ struct vsctl_column {
 
 static const struct vsctl_column bridge_columns[] = {
     {&ovsrec_bridge_col_datapath_id, VSCF_READONLY, NULL},
+    {&ovsrec_bridge_col_datapath_type, VSCF_READONLY, NULL},
     {&ovsrec_bridge_col_name, VSCF_READONLY, NULL},
     {&ovsrec_bridge_col_mirrors, VSCF_READONLY, NULL},
     {&ovsrec_bridge_col_other_config, 0, NULL},

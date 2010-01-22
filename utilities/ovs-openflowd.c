@@ -137,7 +137,7 @@ main(int argc, char *argv[])
         const char *port;
         size_t i;
 
-        error = dpif_create_and_open(s.dp_name, &dpif);
+        error = dpif_create_and_open(s.dp_name, NULL, &dpif);
         if (error) {
             ovs_fatal(error, "could not create datapath");
         }
@@ -152,7 +152,7 @@ main(int argc, char *argv[])
     }
 
     /* Start OpenFlow processing. */
-    error = ofproto_create(s.dp_name, NULL, NULL, &ofproto);
+    error = ofproto_create(s.dp_name, NULL, NULL, NULL, &ofproto);
     if (error) {
         ovs_fatal(error, "could not initialize openflow switch");
     }

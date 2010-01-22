@@ -193,7 +193,7 @@ static struct list all_bridges = LIST_INITIALIZER(&all_bridges);
 /* Maximum number of datapaths. */
 enum { DP_MAX = 256 };
 
-static struct bridge *bridge_create(const char *name);
+static struct bridge *bridge_create(const struct ovsrec_bridge *br_cfg);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
 static unixctl_cb_func bridge_unixctl_dump_flows;
@@ -285,7 +285,7 @@ void
 bridge_init(const struct ovsrec_open_vswitch *cfg)
 {
     struct svec bridge_names;
-    struct svec dpif_names;
+    struct svec dpif_names, dpif_types;
     size_t i;
 
     unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
@@ -297,31 +297,37 @@ bridge_init(const struct ovsrec_open_vswitch *cfg)
     svec_sort(&bridge_names);
 
     svec_init(&dpif_names);
-    dp_enumerate(&dpif_names);
-    for (i = 0; i < dpif_names.n; i++) {
-        const char *dpif_name = dpif_names.names[i];
+    svec_init(&dpif_types);
+    dp_enumerate_types(&dpif_types);
+    for (i = 0; i < dpif_types.n; i++) {
         struct dpif *dpif;
         int retval;
+        size_t j;
 
-        retval = dpif_open(dpif_name, &dpif);
-        if (!retval) {
-            struct svec all_names;
-            size_t j;
+        dp_enumerate_names(dpif_types.names[i], &dpif_names);
 
-            svec_init(&all_names);
-            dpif_get_all_names(dpif, &all_names);
-            for (j = 0; j < all_names.n; j++) {
-                if (svec_contains(&bridge_names, all_names.names[j])) {
-                    goto found;
+        for (j = 0; j < dpif_names.n; j++) {
+            retval = dpif_open(dpif_names.names[j], dpif_types.names[i], &dpif);
+            if (!retval) {
+                struct svec all_names;
+                size_t k;
+
+                svec_init(&all_names);
+                dpif_get_all_names(dpif, &all_names);
+                for (k = 0; k < all_names.n; k++) {
+                    if (svec_contains(&bridge_names, all_names.names[k])) {
+                        goto found;
+                    }
                 }
+                dpif_delete(dpif);
+            found:
+                svec_destroy(&all_names);
+                dpif_close(dpif);
             }
-            dpif_delete(dpif);
-        found:
-            svec_destroy(&all_names);
-            dpif_close(dpif);
         }
     }
     svec_destroy(&dpif_names);
+    svec_destroy(&dpif_types);
 
     unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
                              NULL);
@@ -560,11 +566,16 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     SHASH_FOR_EACH (node, &new_br) {
         const char *br_name = node->name;
         const struct ovsrec_bridge *br_cfg = node->data;
-        if (!shash_find_data(&old_br, br_name)) {
-            br = bridge_create(br_name);
-            if (br) {
-                br->cfg = br_cfg;
+        br = shash_find_data(&old_br, br_name);
+        if (br) {
+            /* If the bridge datapath type has changed, we need to tear it
+             * down and recreate. */
+            if (strcmp(br->cfg->datapath_type, br_cfg->datapath_type)) {
+                bridge_destroy(br);
+                bridge_create(br_cfg);
             }
+        } else {
+            bridge_create(br_cfg);
         }
     }
     shash_destroy(&old_br);
@@ -1071,31 +1082,35 @@ bridge_unixctl_fdb_show(struct unixctl_conn *conn,
 
 /* Bridge reconfiguration functions. */
 static struct bridge *
-bridge_create(const char *name)
+bridge_create(const struct ovsrec_bridge *br_cfg)
 {
     struct bridge *br;
     int error;
 
-    assert(!bridge_lookup(name));
+    assert(!bridge_lookup(br_cfg->name));
     br = xzalloc(sizeof *br);
 
-    error = dpif_create_and_open(name, &br->dpif);
+    error = dpif_create_and_open(br_cfg->name, br_cfg->datapath_type,
+                                 &br->dpif);
     if (error) {
         free(br);
         return NULL;
     }
     dpif_flow_flush(br->dpif);
 
-    error = ofproto_create(name, &bridge_ofhooks, br, &br->ofproto);
+    error = ofproto_create(br_cfg->name, br_cfg->datapath_type, &bridge_ofhooks,
+                           br, &br->ofproto);
     if (error) {
-        VLOG_ERR("failed to create switch %s: %s", name, strerror(error));
+        VLOG_ERR("failed to create switch %s: %s", br_cfg->name,
+                 strerror(error));
         dpif_delete(br->dpif);
         dpif_close(br->dpif);
         free(br);
         return NULL;
     }
 
-    br->name = xstrdup(name);
+    br->name = xstrdup(br_cfg->name);
+    br->cfg = br_cfg;
     br->ml = mac_learning_create();
     br->sent_config_request = false;
     eth_addr_random(br->default_ea);

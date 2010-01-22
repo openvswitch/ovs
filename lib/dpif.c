@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,57 +95,86 @@ dp_wait(void)
     }
 }
 
-/* Clears 'all_dps' and enumerates the names of all known created datapaths, 
- * where possible, into it.  The caller must first initialize 'all_dps'.
- * Returns 0 if successful, otherwise a positive errno value.
+
+/* Clears 'types' and enumerates the types of all known datapath providers,
+ * into it.  The caller must first initialize the svec. */
+void
+dp_enumerate_types(struct svec *types)
+{
+    int i;
+
+    svec_clear(types);
+
+    for (i = 0; i < N_DPIF_CLASSES; i++) {
+        svec_add(types, dpif_classes[i]->type);
+    }
+}
+
+/* Clears 'names' and enumerates the names of all known created datapaths with
+ * the given 'type'.  The caller must first initialize the svec. Returns 0 if
+ * successful, otherwise a positive errno value.
  *
  * Some kinds of datapaths might not be practically enumerable.  This is not
  * considered an error. */
 int
-dp_enumerate(struct svec *all_dps)
+dp_enumerate_names(const char *type, struct svec *names)
 {
-    int error;
     int i;
 
-    svec_clear(all_dps);
-    error = 0;
+    svec_clear(names);
+
     for (i = 0; i < N_DPIF_CLASSES; i++) {
         const struct dpif_class *class = dpif_classes[i];
-        int retval = class->enumerate ? class->enumerate(all_dps) : 0;
-        if (retval) {
-            VLOG_WARN("failed to enumerate %s datapaths: %s",
-                      class->name, strerror(retval));
-            if (!error) {
-                error = retval;
+
+        if (!strcmp(type, class->type)) {
+            int error = class->enumerate ? class->enumerate(names) : 0;
+
+            if (error) {
+                VLOG_WARN("failed to enumerate %s datapaths: %s",
+                          class->type, strerror(error));
             }
+
+            return error;
         }
     }
-    return error;
+
+    return EAFNOSUPPORT;
+}
+
+/* Parses 'datapath name', which is of the form type@name into its
+ * component pieces.  'name' and 'type' must be freed by the caller. */
+void
+dp_parse_name(const char *datapath_name_, char **name, char **type)
+{
+    char *datapath_name = xstrdup(datapath_name_);
+    char *separator;
+
+    separator = strchr(datapath_name, '@');
+    if (separator) {
+        *separator = '\0';
+        *type = datapath_name;
+        *name = xstrdup(separator + 1);
+    } else {
+        *name = datapath_name;
+        *type = NULL;
+    }
 }
 
 static int
-do_open(const char *name_, bool create, struct dpif **dpifp)
+do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
 {
-    char *name = xstrdup(name_);
-    char *prefix, *suffix, *colon;
     struct dpif *dpif = NULL;
     int error;
     int i;
 
-    colon = strchr(name, ':');
-    if (colon) {
-        *colon = '\0';
-        prefix = name;
-        suffix = colon + 1;
-    } else {
-        prefix = "";
-        suffix = name;
+    if (!type || *type == '\0') {
+        type = "system";
     }
 
     for (i = 0; i < N_DPIF_CLASSES; i++) {
         const struct dpif_class *class = dpif_classes[i];
-        if (!strcmp(prefix, class->prefix)) {
-            error = class->open(name_, suffix, create, &dpif);
+        if (!strcmp(type, class->type)) {
+            error = class->open(name, type, create, &dpif);
             goto exit;
         }
     }
@@ -156,38 +185,41 @@ exit:
     return error;
 }
 
-/* Tries to open an existing datapath named 'name'.  Will fail if no datapath
- * named 'name' exists.  Returns 0 if successful, otherwise a positive errno
- * value.  On success stores a pointer to the datapath in '*dpifp', otherwise a
- * null pointer. */
+/* Tries to open an existing datapath named 'name' and type 'type'.  Will fail
+ * if no datapath with 'name' and 'type' exists.  'type' may be either NULL or
+ * the empty string to specify the default system type.  Returns 0 if
+ * successful, otherwise a positive errno value.  On success stores a pointer
+ * to the datapath in '*dpifp', otherwise a null pointer. */
 int
-dpif_open(const char *name, struct dpif **dpifp)
+dpif_open(const char *name, const char *type, struct dpif **dpifp)
 {
-    return do_open(name, false, dpifp);
+    return do_open(name, type, false, dpifp);
 }
 
-/* Tries to create and open a new datapath with the given 'name'.  Will fail if
- * a datapath named 'name' already exists.  Returns 0 if successful, otherwise
- * a positive errno value.  On success stores a pointer to the datapath in
- * '*dpifp', otherwise a null pointer. */
+/* Tries to create and open a new datapath with the given 'name' and 'type'.
+ * 'type' may be either NULL or the empty string to specify the default system
+ * type.  Will fail if a datapath with 'name' and 'type' already exists.
+ * Returns 0 if successful, otherwise a positive errno value.  On success
+ * stores a pointer to the datapath in '*dpifp', otherwise a null pointer. */
 int
-dpif_create(const char *name, struct dpif **dpifp)
+dpif_create(const char *name, const char *type, struct dpif **dpifp)
 {
-    return do_open(name, true, dpifp);
+    return do_open(name, type, true, dpifp);
 }
 
-/* Tries to open a datapath with the given 'name', creating it if it does not
- * exist.  Returns 0 if successful, otherwise a positive errno value.  On
- * success stores a pointer to the datapath in '*dpifp', otherwise a null
- * pointer. */
+/* Tries to open a datapath with the given 'name' and 'type', creating it if it
+ * does not exist.  'type' may be either NULL or the empty string to specify
+ * the default system type.  Returns 0 if successful, otherwise a positive
+ * errno value. On success stores a pointer to the datapath in '*dpifp',
+ * otherwise a null pointer. */
 int
-dpif_create_and_open(const char *name, struct dpif **dpifp)
+dpif_create_and_open(const char *name, const char *type, struct dpif **dpifp)
 {
     int error;
 
-    error = dpif_create(name, dpifp);
+    error = dpif_create(name, type, dpifp);
     if (error == EEXIST || error == EBUSY) {
-        error = dpif_open(name, dpifp);
+        error = dpif_open(name, type, dpifp);
         if (error) {
             VLOG_WARN("datapath %s already exists but cannot be opened: %s",
                       name, strerror(error));
@@ -204,17 +236,28 @@ void
 dpif_close(struct dpif *dpif)
 {
     if (dpif) {
-        char *name = dpif->name;
+        char *base_name = dpif->base_name;
+        char *full_name = dpif->full_name;
         dpif->class->close(dpif);
-        free(name);
+        free(base_name);
+        free(full_name);
     }
 }
 
-/* Returns the name of datapath 'dpif' (for use in log messages). */
+/* Returns the name of datapath 'dpif' prefixed with the type
+ * (for use in log messages). */
 const char *
 dpif_name(const struct dpif *dpif)
 {
-    return dpif->name;
+    return dpif->full_name;
+}
+
+/* Returns the name of datapath 'dpif' without the type
+ * (for use in device names). */
+const char *
+dpif_base_name(const struct dpif *dpif)
+{
+    return dpif->base_name;
 }
 
 /* Enumerates all names that may be used to open 'dpif' into 'all_names'.  The
@@ -238,7 +281,7 @@ dpif_get_all_names(const struct dpif *dpif, struct svec *all_names)
         }
         return error;
     } else {
-        svec_add(all_names, dpif_name(dpif));
+        svec_add(all_names, dpif_base_name(dpif));
         return 0;
     }
 }
@@ -927,7 +970,8 @@ dpif_init(struct dpif *dpif, const struct dpif_class *class, const char *name,
           uint8_t netflow_engine_type, uint8_t netflow_engine_id)
 {
     dpif->class = class;
-    dpif->name = xstrdup(name);
+    dpif->base_name = xstrdup(name);
+    dpif->full_name = xasprintf("%s@%s", class->type, name);
     dpif->netflow_engine_type = netflow_engine_type;
     dpif->netflow_engine_id = netflow_engine_id;
 }

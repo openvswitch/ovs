@@ -257,7 +257,8 @@ static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
 
 int
-ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
+ofproto_create(const char *datapath, const char *datapath_type,
+               const struct ofhooks *ofhooks, void *aux,
                struct ofproto **ofprotop)
 {
     struct odp_stats stats;
@@ -268,7 +269,7 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     *ofprotop = NULL;
 
     /* Connect to datapath and start listening for messages. */
-    error = dpif_open(datapath, &dpif);
+    error = dpif_open(datapath, datapath_type, &dpif);
     if (error) {
         VLOG_ERR("failed to open datapath %s: %s", datapath, strerror(error));
         return error;

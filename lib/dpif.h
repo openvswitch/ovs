@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,10 +18,6 @@
 #ifndef DPIF_H
 #define DPIF_H 1
 
-/* Operations for the datapath running in the local kernel.  The interface can
- * generalize to multiple types of local datapaths, but the implementation only
- * supports the openflow kernel module. */
-
 #include "openvswitch/datapath-protocol.h"
 #include <stdbool.h>
 #include <stddef.h>
@@ -33,14 +29,17 @@ struct svec;
 
 void dp_run(void);
 void dp_wait(void);
-int dp_enumerate(struct svec *);
+void dp_enumerate_types(struct svec *types);
+int dp_enumerate_names(const char *type, struct svec *names);
+void dp_parse_name(const char *datapath_name, char **name, char **type);
 
-int dpif_open(const char *name, struct dpif **);
-int dpif_create(const char *name, struct dpif **);
-int dpif_create_and_open(const char *name, struct dpif **);
+int dpif_open(const char *name, const char *type, struct dpif **);
+int dpif_create(const char *name, const char *type, struct dpif **);
+int dpif_create_and_open(const char *name, const char *type, struct dpif **);
 void dpif_close(struct dpif *);
 
 const char *dpif_name(const struct dpif *);
+const char *dpif_base_name(const struct dpif *);
 int dpif_get_all_names(const struct dpif *, struct svec *);
 
 int dpif_delete(struct dpif *);

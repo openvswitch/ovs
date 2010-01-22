@@ -205,24 +205,35 @@ static void run(int retval, const char *message, ...)
 /* Generic commands. */
 
 static void
+open_vconn_socket(const char *name, struct vconn **vconnp)
+{
+    char *vconn_name = xasprintf("unix:%s", name);
+    VLOG_INFO("connecting to %s", vconn_name);
+    run(vconn_open_block(vconn_name, OFP_VERSION, vconnp),
+        "connecting to %s", vconn_name);
+    free(vconn_name);
+}
+
+static void
 open_vconn(const char *name, struct vconn **vconnp)
 {
     struct dpif *dpif;
     struct stat s;
+    char *bridge_path, *datapath_name, *datapath_type;
+
+    bridge_path = xasprintf("%s/%s.mgmt", ovs_rundir, name);
+    dp_parse_name(name, &datapath_name, &datapath_type);
 
     if (strstr(name, ":")) {
         run(vconn_open_block(name, OFP_VERSION, vconnp),
             "connecting to %s", name);
     } else if (!stat(name, &s) && S_ISSOCK(s.st_mode)) {
-        char *vconn_name = xasprintf("unix:%s", name);
-        VLOG_INFO("connecting to %s", vconn_name);
-        run(vconn_open_block(vconn_name, OFP_VERSION, vconnp),
-            "connecting to %s", vconn_name);
-        free(vconn_name);
-    } else if (!dpif_open(name, &dpif)) {
+        open_vconn_socket(name, vconnp);
+    } else if (!stat(bridge_path, &s) && S_ISSOCK(s.st_mode)) {
+        open_vconn_socket(bridge_path, vconnp);
+    } else if (!dpif_open(datapath_name, datapath_type, &dpif)) {
         char dpif_name[IF_NAMESIZE + 1];
         char *socket_name;
-        char *vconn_name;
 
         run(dpif_port_get_name(dpif, ODPP_LOCAL, dpif_name, sizeof dpif_name),
             "obtaining name of %s", dpif_name);
@@ -240,15 +251,15 @@ open_vconn(const char *name, struct vconn **vconnp)
                       name, socket_name);
         }
 
-        vconn_name = xasprintf("unix:%s", socket_name);
-        VLOG_INFO("connecting to %s", vconn_name);
-        run(vconn_open_block(vconn_name, OFP_VERSION, vconnp),
-            "connecting to %s", vconn_name);
+        open_vconn_socket(socket_name, vconnp);
         free(socket_name);
-        free(vconn_name);
     } else {
         ovs_fatal(0, "%s is not a valid connection method", name);
     }
+
+    free(datapath_name);
+    free(datapath_type);
+    free(bridge_path);
 }
 
 static void *

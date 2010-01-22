@@ -196,7 +196,7 @@ create_dpif_netdev(struct dp_netdev *dp)
 
     dp->open_cnt++;
 
-    dpname = xasprintf("netdev:dp%d", dp->dp_idx);
+    dpname = xasprintf("dp%d", dp->dp_idx);
     dpif = xmalloc(sizeof *dpif);
     dpif_init(&dpif->dpif, &dpif_netdev_class, dpname, dp->dp_idx, dp->dp_idx);
     dpif->dp = dp;
@@ -245,20 +245,20 @@ create_dp_netdev(const char *name, int dp_idx, struct dpif **dpifp)
 }
 
 static int
-dpif_netdev_open(const char *name UNUSED, char *suffix, bool create,
+dpif_netdev_open(const char *name, const char *type UNUSED, bool create,
                  struct dpif **dpifp)
 {
     if (create) {
-        if (find_dp_netdev(suffix)) {
+        if (find_dp_netdev(name)) {
             return EEXIST;
         } else {
-            int dp_idx = name_to_dp_idx(suffix);
+            int dp_idx = name_to_dp_idx(name);
             if (dp_idx >= 0) {
-                return create_dp_netdev(suffix, dp_idx, dpifp);
+                return create_dp_netdev(name, dp_idx, dpifp);
             } else {
                 /* Scan for unused dp_idx number. */
                 for (dp_idx = 0; dp_idx < N_DP_NETDEVS; dp_idx++) {
-                    int error = create_dp_netdev(suffix, dp_idx, dpifp);
+                    int error = create_dp_netdev(name, dp_idx, dpifp);
                     if (error != EBUSY) {
                         return error;
                     }
@@ -269,7 +269,7 @@ dpif_netdev_open(const char *name UNUSED, char *suffix, bool create,
             }
         }
     } else {
-        struct dp_netdev *dp = find_dp_netdev(suffix);
+        struct dp_netdev *dp = find_dp_netdev(name);
         if (dp) {
             *dpifp = create_dpif_netdev(dp);
             return 0;
@@ -1303,7 +1303,6 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 }
 
 const struct dpif_class dpif_netdev_class = {
-    "netdev",
     "netdev",
     dp_netdev_run,
     dp_netdev_wait,

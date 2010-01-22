@@ -31,6 +31,9 @@
        "name": {
          "comment": "Bridge identifier.  Should be alphanumeric and no more than about 8 bytes long.  Must be unique among the names of ports, interfaces, and bridges on a host.",
          "type": "string"},
+       "datapath_type": {
+         "comment": "Name of datapath provider.  The kernel datapath has type \"system\".  The userspace datapath has type \"netdev\".",
+         "type": "string"},
        "datapath_id": {
          "comment": "Reports the OpenFlow datapath ID in use.  Exactly 12 hex digits.",
          "type": {"key": "string", "min": 0, "max": 1},
