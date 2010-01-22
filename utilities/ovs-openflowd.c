@@ -62,7 +62,8 @@ struct ofsettings {
 
     /* Datapath. */
     uint64_t datapath_id;       /* Datapath ID. */
-    const char *dp_name;        /* Name of local datapath. */
+    char *dp_name;              /* Name of local datapath. */
+    char *dp_type;              /* Type of local datapath. */
     struct svec ports;          /* Set of ports to add to datapath (if any). */
 
     /* Description strings. */
@@ -110,6 +111,7 @@ main(int argc, char *argv[])
     struct ofproto *ofproto;
     struct ofsettings s;
     int error;
+    struct dpif *dpif;
     struct netflow_options nf_options;
 
     proctitle_init(argc, argv);
@@ -131,28 +133,32 @@ main(int argc, char *argv[])
     VLOG_INFO("Open vSwitch version %s", VERSION BUILDNR);
     VLOG_INFO("OpenFlow protocol version 0x%02x", OFP_VERSION);
 
-    /* Create the datapath and add ports to it, if requested by the user. */
+    error = dpif_create_and_open(s.dp_name, s.dp_type, &dpif);
+    if (error) {
+        ovs_fatal(error, "could not create datapath");
+    }
+
+    /* Add ports to the datapath if requested by the user. */
     if (s.ports.n) {
-        struct dpif *dpif;
         const char *port;
         size_t i;
-
-        error = dpif_create_and_open(s.dp_name, NULL, &dpif);
-        if (error) {
-            ovs_fatal(error, "could not create datapath");
-        }
+        struct netdev *netdev;
 
         SVEC_FOR_EACH (i, port, &s.ports) {
+            error = netdev_open_default(port, &netdev);
+            if (error) {
+                ovs_fatal(error, "failed to open %s as a device", port);
+            }
+
             error = dpif_port_add(dpif, port, 0, NULL);
             if (error) {
                 ovs_fatal(error, "failed to add %s as a port", port);
             }
         }
-        dpif_close(dpif);
     }
 
     /* Start OpenFlow processing. */
-    error = ofproto_create(s.dp_name, NULL, NULL, NULL, &ofproto);
+    error = ofproto_create(s.dp_name, s.dp_type, NULL, NULL, &ofproto);
     if (error) {
         ovs_fatal(error, "could not initialize openflow switch");
     }
@@ -225,6 +231,8 @@ main(int argc, char *argv[])
         netdev_wait();
         poll_block();
     }
+
+    dpif_close(dpif);
 
     return 0;
 }
@@ -499,7 +507,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     }
 
     /* Local and remote vconns. */
-    s->dp_name = argv[0];
+    dp_parse_name(argv[0], &s->dp_name, &s->dp_type);
+
     s->controller_name = argc > 1 ? xstrdup(argv[1]) : NULL;
 
     /* Set accept_controller_regex. */
