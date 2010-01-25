@@ -575,9 +575,10 @@ static int dp_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 #endif
 
 #if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
-/* This code is copied verbatim from net/dev/core.c in Xen's
- * linux-2.6.18-92.1.10.el5.xs5.0.0.394.644.  We can't call those functions
- * directly because they aren't exported. */
+/* This code is based on a skb_checksum_setup from net/dev/core.c from a
+ * combination of Lenny's 2.6.26 Xen kernel and Xen's
+ * linux-2.6.18-92.1.10.el5.xs5.0.0.394.644.  We can't call this function
+ * directly because it isn't exported in all versions. */
 static int skb_pull_up_to(struct sk_buff *skb, void *ptr)
 {
 	if (ptr < (void *)skb->tail)
@@ -592,34 +593,57 @@ static int skb_pull_up_to(struct sk_buff *skb, void *ptr)
 
 int vswitch_skb_checksum_setup(struct sk_buff *skb)
 {
-	if (skb->proto_csum_blank) {
-		if (skb->protocol != htons(ETH_P_IP))
-			goto out;
-		if (!skb_pull_up_to(skb, skb->nh.iph + 1))
-			goto out;
-		skb->h.raw = (unsigned char *)skb->nh.iph + 4*skb->nh.iph->ihl;
-		switch (skb->nh.iph->protocol) {
-		case IPPROTO_TCP:
-			skb->csum = offsetof(struct tcphdr, check);
-			break;
-		case IPPROTO_UDP:
-			skb->csum = offsetof(struct udphdr, check);
-			break;
-		default:
-			if (net_ratelimit())
-				printk(KERN_ERR "Attempting to checksum a non-"
-				       "TCP/UDP packet, dropping a protocol"
-				       " %d packet", skb->nh.iph->protocol);
-			goto out;
-		}
-		if (!skb_pull_up_to(skb, skb->h.raw + skb->csum + 2))
-			goto out;
-		skb->ip_summed = CHECKSUM_HW;
-		skb->proto_csum_blank = 0;
+	struct iphdr *iph;
+	unsigned char *th;
+	int err = -EPROTO;
+	__u16 csum_start, csum_offset;
+
+	if (!skb->proto_csum_blank)
+		return 0;
+
+	if (skb->protocol != htons(ETH_P_IP))
+		goto out;
+
+	if (!skb_pull_up_to(skb, skb_network_header(skb) + 1))
+		goto out;
+
+	iph = ip_hdr(skb);
+	th = skb_network_header(skb) + 4 * iph->ihl;
+
+	csum_start = th - skb->head;
+	switch (iph->protocol) {
+	case IPPROTO_TCP:
+		csum_offset = offsetof(struct tcphdr, check);
+		break;
+	case IPPROTO_UDP:
+		csum_offset = offsetof(struct udphdr, check);
+		break;
+	default:
+		if (net_ratelimit())
+			printk(KERN_ERR "Attempting to checksum a non-"
+			       "TCP/UDP packet, dropping a protocol"
+			       " %d packet", iph->protocol);
+		goto out;
 	}
-	return 0;
+
+	if (!skb_pull_up_to(skb, th + csum_offset + 2))
+		goto out;
+
+	skb->ip_summed = CHECKSUM_PARTIAL;
+	skb->proto_csum_blank = 0;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+	skb->csum_start = csum_start;
+	skb->csum_offset = csum_offset;
+#else
+	skb_set_transport_header(skb, csum_start - skb_headroom(skb));
+	skb->csum = csum_offset;
+#endif
+
+	err = 0;
+
 out:
-	return -EPROTO;
+	return err;
 }
 #else
 int vswitch_skb_checksum_setup(struct sk_buff *skb) { return 0; }
