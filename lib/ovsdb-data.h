@@ -20,6 +20,7 @@
 #include "compiler.h"
 #include "ovsdb-types.h"
 
+struct ds;
 struct ovsdb_symbol_table;
 
 /* One value of an atomic type (given by enum ovs_atomic_type). */
@@ -72,6 +73,11 @@ struct ovsdb_error *ovsdb_atom_from_json(union ovsdb_atom *,
     WARN_UNUSED_RESULT;
 struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
+
+void ovsdb_atom_from_string(union ovsdb_atom *, enum ovsdb_atomic_type,
+                            const char *);
+void ovsdb_atom_to_string(const union ovsdb_atom *, enum ovsdb_atomic_type,
+                          struct ds *);
 
 /* An instance of an OVSDB type (given by struct ovsdb_type).
  *
@@ -122,6 +128,12 @@ struct ovsdb_error *ovsdb_datum_from_json(struct ovsdb_datum *,
 struct json *ovsdb_datum_to_json(const struct ovsdb_datum *,
                                  const struct ovsdb_type *);
 
+void ovsdb_datum_from_string(struct ovsdb_datum *,
+                             const struct ovsdb_type *, const char *);
+void ovsdb_datum_to_string(const struct ovsdb_datum *,
+                           const struct ovsdb_type *, struct ds *);
+
+/* Comparison. */
 uint32_t ovsdb_datum_hash(const struct ovsdb_datum *,
                           const struct ovsdb_type *, uint32_t basis);
 int ovsdb_datum_compare_3way(const struct ovsdb_datum *,
@@ -187,5 +199,12 @@ struct ovsdb_symbol *ovsdb_symbol_table_get(const struct ovsdb_symbol_table *,
                                             const char *name);
 void ovsdb_symbol_table_put(struct ovsdb_symbol_table *, const char *name,
                             const struct uuid *, bool used);
+
+/* Tokenization
+ *
+ * Used by ovsdb_atom_from_string() and ovsdb_datum_from_string(). */
+
+const char *ovsdb_token_parse(const char *, char **outp);
+bool ovsdb_token_is_delim(unsigned char);
 
 #endif /* ovsdb-data.h */

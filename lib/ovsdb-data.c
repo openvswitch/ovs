@@ -18,8 +18,12 @@
 #include "ovsdb-data.h"
 
 #include <assert.h>
+#include <ctype.h>
+#include <float.h>
+#include <inttypes.h>
 #include <limits.h>
 
+#include "dynamic-string.h"
 #include "hash.h"
 #include "ovsdb-error.h"
 #include "json.h"
@@ -351,6 +355,155 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
         NOT_REACHED();
     }
 }
+
+/* Initializes 'atom' to a value of the given 'type' parsed from 's', which
+ * takes one of the following forms:
+ *
+ *      - OVSDB_TYPE_INTEGER: A decimal integer optionally preceded by a sign.
+ *
+ *      - OVSDB_TYPE_REAL: A floating-point number in the format accepted by
+ *        strtod().
+ *
+ *      - OVSDB_TYPE_BOOLEAN: "true", "yes", "on", "1" for true, or "false",
+ *        "no", "off", or "0" for false.
+ *
+ *      - OVSDB_TYPE_STRING: A JSON string if it begins with a quote, otherwise
+ *        an arbitrary string.
+ *
+ *      - OVSDB_TYPE_UUID: A UUID in RFC 4122 format.
+ */
+void
+ovsdb_atom_from_string(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
+                       const char *s)
+{
+    switch (type) {
+    case OVSDB_TYPE_VOID:
+        NOT_REACHED();
+
+    case OVSDB_TYPE_INTEGER: {
+        long long int integer;
+        if (!str_to_llong(s, 10, &integer)) {
+            ovs_fatal(0, "%s is not a valid integer", s);
+        }
+        atom->integer = integer;
+    }
+        break;
+
+    case OVSDB_TYPE_REAL:
+        if (!str_to_double(s, &atom->real)) {
+            ovs_fatal(0, "%s is not a valid real number", s);
+        }
+        break;
+
+    case OVSDB_TYPE_BOOLEAN:
+        if (!strcmp(s, "true") || !strcmp(s, "yes") || !strcmp(s, "on")
+            || !strcmp(s, "1")) {
+            atom->boolean = true;
+        } else if (!strcmp(s, "false") || !strcmp(s, "no") || !strcmp(s, "off")
+                   || !strcmp(s, "0")) {
+            atom->boolean = false;
+        } else {
+            ovs_fatal(0, "%s is not a valid boolean "
+                      "(use \"true\" or \"false\")", s);
+        }
+        break;
+
+    case OVSDB_TYPE_STRING:
+        if (*s == '\0') {
+            ovs_fatal(0, "use \"\" to represent the empty string");
+        } else if (*s == '"') {
+            size_t s_len = strlen(s);
+
+            if (s_len < 2 || s[s_len - 1] != '"') {
+                ovs_fatal(0, "%s: missing quote at end of quoted string", s);
+            } else if (!json_string_unescape(s + 1, s_len - 2,
+                                             &atom->string)) {
+                ovs_fatal(0, "%s: %s", s, atom->string);
+            }
+        } else {
+            atom->string = xstrdup(s);
+        }
+        break;
+
+    case OVSDB_TYPE_UUID:
+        if (!uuid_from_string(&atom->uuid, s)) {
+            ovs_fatal(0, "%s is not a valid UUID", s);
+        }
+        break;
+
+    case OVSDB_N_TYPES:
+    default:
+        NOT_REACHED();
+    }
+}
+
+static bool
+string_needs_quotes(const char *s)
+{
+    const char *p = s;
+    unsigned char c;
+
+    c = *p++;
+    if (!isalpha(c) && c != '_') {
+        return true;
+    }
+
+    while ((c = *p++) != '\0') {
+        if (!isalpha(c) && c != '_' && c != '-' && c != '.') {
+            return true;
+        }
+    }
+
+    if (!strcmp(s, "true") || !strcmp(s, "false")) {
+        return true;
+    }
+
+    return false;
+}
+
+/* Appends 'atom' (which has the given 'type') to 'out', in a format acceptable
+ * to ovsdb_atom_from_string().  */
+void
+ovsdb_atom_to_string(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
+                     struct ds *out)
+{
+    switch (type) {
+    case OVSDB_TYPE_VOID:
+        NOT_REACHED();
+
+    case OVSDB_TYPE_INTEGER:
+        ds_put_format(out, "%"PRId64, atom->integer);
+        break;
+
+    case OVSDB_TYPE_REAL:
+        ds_put_format(out, "%.*g", DBL_DIG, atom->real);
+        break;
+
+    case OVSDB_TYPE_BOOLEAN:
+        ds_put_cstr(out, atom->boolean ? "true" : "false");
+        break;
+
+    case OVSDB_TYPE_STRING:
+        if (string_needs_quotes(atom->string)) {
+            struct json json;
+
+            json.type = JSON_STRING;
+            json.u.string = atom->string;
+            json_to_ds(&json, 0, out);
+        } else {
+            ds_put_cstr(out, atom->string);
+        }
+        break;
+
+    case OVSDB_TYPE_UUID:
+        ds_put_format(out, UUID_FMT, UUID_ARGS(&atom->uuid));
+        break;
+
+    case OVSDB_N_TYPES:
+    default:
+        NOT_REACHED();
+    }
+}
 
 static union ovsdb_atom *
 alloc_default_atoms(enum ovsdb_atomic_type type, size_t n)
@@ -640,6 +793,159 @@ ovsdb_datum_to_json(const struct ovsdb_datum *datum,
         }
 
         return wrap_json("map", json_array_create(elems, datum->n));
+    }
+}
+
+static const char *
+skip_spaces(const char *p)
+{
+    return p + strspn(p, " ");
+}
+
+static const char *
+parse_key_value(const char *s, const struct ovsdb_type *type,
+                union ovsdb_atom *key, union ovsdb_atom *value)
+{
+    char *key_string;
+    const char *p;
+
+    /* Parse key. */
+    p = ovsdb_token_parse(s, &key_string);
+    ovsdb_atom_from_string(key, type->key_type, key_string);
+    free(key_string);
+
+    /* Parse value. */
+    if (type->value_type != OVSDB_TYPE_VOID) {
+        char *value_string;
+
+        if (*p != '=') {
+            ovs_fatal(0, "%s: syntax error at \"%c\" expecting \"=\"",
+                      s, *p);
+        }
+        p = ovsdb_token_parse(p + 1, &value_string);
+        ovsdb_atom_from_string(value, type->value_type, value_string);
+        free(value_string);
+    }
+    return p;
+}
+
+static void
+free_key_value(const struct ovsdb_type *type,
+               union ovsdb_atom *key, union ovsdb_atom *value)
+{
+    ovsdb_atom_destroy(key, type->key_type);
+    if (type->value_type != OVSDB_TYPE_VOID) {
+        ovsdb_atom_destroy(value, type->value_type);
+    }
+}
+
+/* Initializes 'datum' as a datum of the given 'type', parsing its contents
+ * from 's'.  The format of 's' is a series of space or comma separated atoms
+ * or, for a map, '='-delimited pairs of atoms.  Each atom must in a format
+ * acceptable to ovsdb_atom_from_string().  Optionally, a set may be enclosed
+ * in "[]" or a map in "{}"; for an empty set or map these punctuators are
+ * required. */
+void
+ovsdb_datum_from_string(struct ovsdb_datum *datum,
+                        const struct ovsdb_type *type, const char *s)
+{
+    bool is_map = ovsdb_type_is_map(type);
+    const char *p;
+    int end_delim;
+
+    ovsdb_datum_init_empty(datum);
+
+    /* Swallow a leading delimiter if there is one. */
+    p = skip_spaces(s);
+    if (*p == (is_map ? '{' : '[')) {
+        end_delim = is_map ? '}' : ']';
+        p = skip_spaces(p + 1);
+    } else if (!*p) {
+        if (is_map) {
+            ovs_fatal(0, "use \"{}\" to specify the empty map");
+        } else {
+            ovs_fatal(0, "use \"[]\" to specify the empty set");
+        }
+    } else {
+        end_delim = 0;
+    }
+
+    while (*p && *p != end_delim) {
+        union ovsdb_atom key, value;
+
+        if (ovsdb_token_is_delim(*p)) {
+            ovs_fatal(0, "%s: unexpected \"%c\" parsing %s",
+                      s, *p, ovsdb_type_to_english(type));
+        }
+
+        /* Add to datum. */
+        p = parse_key_value(p, type, &key, &value);
+        ovsdb_datum_add_unsafe(datum, &key, &value, type);
+        free_key_value(type, &key, &value);
+
+        /* Skip optional white space and comma. */
+        p = skip_spaces(p);
+        if (*p == ',') {
+            p = skip_spaces(p + 1);
+        }
+    }
+
+    if (*p != end_delim) {
+        ovs_fatal(0, "%s: missing \"%c\" at end of data", s, end_delim);
+    }
+    if (end_delim) {
+        p = skip_spaces(p + 1);
+        if (*p) {
+            ovs_fatal(0, "%s: trailing garbage after \"%c\"", s, end_delim);
+        }
+    }
+
+    if (datum->n < type->n_min) {
+        ovs_fatal(0, "%s: %u %s were specified but at least %u are required",
+                  s, datum->n,
+                  type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
+                  type->n_min);
+    } else if (datum->n > type->n_max) {
+        ovs_fatal(0, "%s: %u %s were specified but at most %u are allowed",
+                  s, datum->n,
+                  type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
+                  type->n_max);
+    }
+
+    if (ovsdb_datum_sort(datum, type)) {
+        if (ovsdb_type_is_map(type)) {
+            ovs_fatal(0, "%s: map contains duplicate key", s);
+        } else {
+            ovs_fatal(0, "%s: set contains duplicate value", s);
+        }
+    }
+}
+
+/* Appends to 'out' the 'datum' (with the given 'type') in a format acceptable
+ * to ovsdb_datum_from_string(). */
+void
+ovsdb_datum_to_string(const struct ovsdb_datum *datum,
+                      const struct ovsdb_type *type, struct ds *out)
+{
+    bool is_map = ovsdb_type_is_map(type);
+    size_t i;
+
+    if (type->n_max > 1 || !datum->n) {
+        ds_put_char(out, is_map ? '{' : '[');
+    }
+    for (i = 0; i < datum->n; i++) {
+        if (i > 0) {
+            ds_put_cstr(out, ", ");
+        }
+
+        ovsdb_atom_to_string(&datum->keys[i], type->key_type, out);
+        if (is_map) {
+            ds_put_char(out, '=');
+            ovsdb_atom_to_string(&datum->values[i], type->value_type, out);
+        }
+    }
+    if (type->n_max > 1 || !datum->n) {
+        ds_put_char(out, is_map ? '}' : ']');
     }
 }
 
@@ -971,4 +1277,60 @@ ovsdb_symbol_table_put(struct ovsdb_symbol_table *symtab, const char *name,
     symbol->uuid = *uuid;
     symbol->used = used;
     shash_add(&symtab->sh, name, symbol);
+}
+
+/* Extracts a token from the beginning of 's' and returns a pointer just after
+ * the token.  Stores the token itself into '*outp', which the caller is
+ * responsible for freeing (with free()).
+ *
+ * If 's[0]' is a delimiter, the returned token is the empty string.
+ *
+ * A token extends from 's' to the first delimiter, as defined by
+ * ovsdb_token_is_delim(), or until the end of the string.  A delimiter can be
+ * escaped with a backslash, in which case the backslash does not appear in the
+ * output.  Double quotes also cause delimiters to be ignored, but the double
+ * quotes are retained in the output.  (Backslashes inside double quotes are
+ * not removed, either.)
+ */
+const char *
+ovsdb_token_parse(const char *s, char **outp)
+{
+    const char *p;
+    struct ds out;
+    bool in_quotes;
+
+    ds_init(&out);
+    in_quotes = false;
+    for (p = s; *p != '\0'; ) {
+        int c = *p++;
+        if (c == '\\') {
+            if (in_quotes) {
+                ds_put_char(&out, '\\');
+            }
+            if (!*p) {
+                ovs_fatal(0, "%s: backslash at end of argument", s);
+            }
+            ds_put_char(&out, *p++);
+        } else if (!in_quotes && ovsdb_token_is_delim(c)) {
+            p--;
+            break;
+        } else {
+            ds_put_char(&out, c);
+            if (c == '"') {
+                in_quotes = !in_quotes;
+            }
+        }
+    }
+    if (in_quotes) {
+        ovs_fatal(0, "%s: quoted string extends past end of argument", s);
+    }
+    *outp = ds_cstr(&out);
+    return p;
+}
+
+/* Returns true if 'c' delimits tokens, or if 'c' is 0, and false otherwise. */
+bool
+ovsdb_token_is_delim(unsigned char c)
+{
+    return strchr(":=, []{}", c) != NULL;
 }
