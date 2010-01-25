@@ -386,6 +386,117 @@ require the controller to send the CA certificate, but
 \fBcontroller\fR(8) can be configured to do so with the
 \fB--peer-ca-cert\fR option.
 .
+.SS "Database Commands"
+.
+These commands query and modify the contents of \fBovsdb\fR tables.
+They are a slight abstraction of the \fBovsdb\fR interface and as such
+they operate at a lower level than other \fBovs\-vsctl\fR commands.
+.PP
+.ST "Identifying Tables, Records, and Columns"
+.PP
+Each of these commands has a \fItable\fR parameter to identify a table
+within the database.  Many of them also take a \fIrecord\fR parameter
+that identifies a particular record within a table.  The \fIrecord\fR
+parameter may be the UUID for a record, and many tables offer
+additional ways to identify records.  Some commands also take
+\fIcolumn\fR parameters that identify a particular field within the
+records in a table.
+.PP
+The following tables are currently defined:
+.IP "\fBOpen_vSwitch\fR"
+Global configuration for an \fBovs\-vswitchd\fR.  This table contains
+exactly one record, identified by specifying \fB.\fR as the record
+name.
+.IP "\fBBridge\fR"
+Configuration for a bridge within an Open vSwitch.  Records may be
+identified by bridge name.
+.IP "\fBPort\fR"
+A bridge port.  Records may be identified by port name.
+.IP "\fBInterface\fR"
+A network device attached to a port.  Records may be identified by
+name.
+.IP "\fBController\fR"
+Configuration for an OpenFlow controller.  A controller attached to a
+particular bridge may be identified by the bridge's name.  The default
+controller controller for an Open vSwitch may be identified by
+specifying \fB.\fR as the record name.
+.IP "\fBMirror\fR"
+A port mirroring configuration attached to a bridge.  Records may be
+identified by mirror name.
+.IP "\fBNetFlow\fR"
+A NetFlow configuration attached to a bridge.  Records may be
+identified by bridge name.
+.PP
+Names of tables, records, and columns are not case-sensitive, and
+\fB--\fR and \fB_\fR are treated interchangeably.  Unique
+abbreviations are acceptable, e.g. \fBnet\fR or \fRn\fR is sufficient
+to identify the \fBNetFlow\fR table.
+.
+.ST "Database Values"
+Each column in the database accepts a fixed type of data.  The
+currently defined basic types, and their representations, are:
+.IP "integer"
+A decimal integer in the range \-2**63 to 2**63\-1, inclusive.
+.IP "real"
+A floating-point number.
+.IP "Boolean"
+True or false, written \fBtrue\fR or \fBfalse\fR, respectively.
+.IP "string"
+An arbitrary Unicode string, except that null bytes are not allowed.
+Quotes are optional for most strings that begin with an English letter
+or underscore and consist only of letters, underscores, hyphens, and
+periods.  However, \fBtrue\fR and \fBfalse\fR and strings that match
+the syntax of UUIDs (see below) must be enclosed in double quotes to
+distinguish them from other basic types.  When double quotes are used,
+the syntax is that of strings in JSON, e.g. backslashes may be used to
+escape special characters.  The empty string must be represented as a
+pair of double quotes (\fB""\fR).
+.IP "UUID"
+A universally unique identifier in the style of RFC 4122,
+e.g. \fBf81d4fae-7dec-11d0-a765-00a0c91e6bf6\fR.
+.PP
+Multiple values in a single column may be separated by spaces or a
+single comma.  When multiple values are present, duplicates are not
+allowed, and order is not important.  Conversely, some database
+columns can have an empty set of values, represented as \fB[]\fR, and
+square brackets may optionally enclose other non-empty sets or single
+values as well.
+.PP
+A few database columns are ``maps'' of key-value pairs, where the key
+and the value are each some fixed database type.  These are specified
+in the form \fIkey\fB=\fIvalue\fR, where \fIkey\fR and \fIvalue\fR
+follow the syntax for the column's key type and value type,
+respectively.  When multiple pairs are present (separated by spaces or
+a comma), duplicate keys are not allowed, and again the order is not
+important.  Duplicate values are allowed.  An empty map is represented
+as \fB{}\fR, and curly braces may be optionally enclose non-empty maps
+as well.
+.
+.ST "Database Command Syntax"
+.
+.IP "\fBlist \fItable \fR[\fIrecord\fR]..."
+List the values of all columns of each specified \fIrecord\fR.  If no
+records are specified, lists all the records in \fItable\fR.
+.
+.IP "\fBget \fItable record column\fR[\fB:\fIkey\fR]..."
+Prints the value of each specified \fIcolumn\fR in the given
+\fIrecord\fR in \fItable\fR.  For map columns, a \fIkey\fR may
+optionally be specified, in which case the value associated with
+\fIkey\fR in the column is printed, instead of the entire map.
+.
+.IP "\fBset \fItable record column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
+Sets the value of each specified \fIcolumn\fR in the given
+\fIrecord\fR in \fItable\fR to \fIvalue\fR.  For map columns, a
+\fIkey\fR may optionally be specified, in which case the value
+associated with \fIkey\fR in that column is changed (or added, if none
+exists), instead of the entire map.
+.
+.IP "\fBadd \fItable record column \fR[\fIkey\fB=\fR]\fIvalue\fR..."
+Adds the specified value or key-value pair to \fIcolumn\fR in
+\fIrecord\fR in \fItable\fR.  If \fIcolumn\fR is a map, then \fIkey\fR
+is required, otherwise it is prohibited.  If \fIkey\fR already exists
+in a map column, then the current \fIvalue\fR is not replaced (use the
+\fBset\fR command to replace an existing value).
 .SH "EXAMPLES"
 Create a new bridge named br0 and add port eth0 to it:
 .IP

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,12 @@
 #include <config.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
+#include <float.h>
 #include <getopt.h>
 #include <inttypes.h>
+#include <regex.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -30,6 +33,7 @@
 #include "dirs.h"
 #include "dynamic-string.h"
 #include "json.h"
+#include "ovsdb-data.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "svec.h"
@@ -346,6 +350,7 @@ default_db(void)
 struct vsctl_context {
     int argc;
     char **argv;
+    struct ovsdb_idl *idl;
     const struct ovsrec_open_vswitch *ovs;
     struct ds output;
     struct shash options;
@@ -1453,6 +1458,723 @@ cmd_set_ssl(struct vsctl_context *ctx)
     ovsrec_open_vswitch_set_ssl(ctx->ovs, ssl);
 }
 
+/* Parameter commands. */
+
+/* POSIX extended regular expression for an 8-bit unsigned decimal integer. */
+#define OCTET_RE "([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])"
+
+/* POSIX extended regular expression for an IP address. */
+#define IP_RE "("OCTET_RE"\\."OCTET_RE"\\."OCTET_RE"\\."OCTET_RE")"
+
+/* POSIX extended regular expression for a netmask. */
+#define NETMASK_RE                              \
+        "255.255.255."NETMASK_END_RE"|"         \
+        "255.255."NETMASK_END_RE".0|"           \
+        "255."NETMASK_END_RE".0.0|"             \
+        NETMASK_END_RE".0.0.0"
+#define NETMASK_END_RE "(255|254|252|248|240|224|192|128|0)"
+
+/* POSIX extended regular expression for an Ethernet address. */
+#define XX_RE "[0-9a-fA-F][0-9a-fA-F]"
+#define MAC_RE XX_RE":"XX_RE":"XX_RE":"XX_RE":"XX_RE":"XX_RE
+
+/* POSIX extended regular expression for a TCP or UDP port number. */
+#define PORT_RE                                 \
+    "([0-9]|"                                   \
+    "[1-9][0-9]|"                               \
+    "[1-9][0-9][0-9]|"                          \
+    "[1-9][0-9][0-9][0-9]|"                     \
+    "[1-5][0-9][0-9][0-9][0-9]|"                \
+    "6[1-4][0-9][0-9][0-9]|"                    \
+    "65[1-4][0-9][0-9]|"                        \
+    "655[1-2][0-9]|"                            \
+    "6553[1-5])"
+
+enum {
+    VSCF_READONLY = 1 << 0,
+    VSCF_HIDDEN = 1 << 1
+};
+
+struct vsctl_column {
+    struct ovsdb_idl_column *idl;
+    int flags;
+    const char *constraint;
+};
+
+static const struct vsctl_column bridge_columns[] = {
+    {&ovsrec_bridge_col_datapath_id, VSCF_READONLY, NULL},
+    {&ovsrec_bridge_col_name, VSCF_READONLY, NULL},
+    {&ovsrec_bridge_col_mirrors, VSCF_READONLY, NULL},
+    {&ovsrec_bridge_col_other_config, 0, NULL},
+    {&ovsrec_bridge_col_controller, VSCF_READONLY, NULL},
+    {&ovsrec_bridge_col_netflow, VSCF_READONLY, NULL},
+    {&ovsrec_bridge_col_external_ids, 0, NULL},
+    {&ovsrec_bridge_col_ports, VSCF_READONLY, NULL},
+    {NULL, 0, NULL},
+};
+
+static const struct vsctl_column controller_columns[] = {
+    {&ovsrec_controller_col_connection_mode, 0, "in-band|out-of-band"},
+    {&ovsrec_controller_col_controller_burst_limit, 0, "[25,]"},
+    {&ovsrec_controller_col_controller_rate_limit, 0, "[100,]"},
+    {&ovsrec_controller_col_discover_accept_regex, 0, NULL},
+    {&ovsrec_controller_col_discover_update_resolv_conf, 0, NULL},
+    {&ovsrec_controller_col_fail_mode, 0, "standalone|secure"},
+    {&ovsrec_controller_col_inactivity_probe, 0, "[5000,]"},
+    {&ovsrec_controller_col_local_gateway, 0, IP_RE},
+    {&ovsrec_controller_col_local_ip, 0, IP_RE},
+    {&ovsrec_controller_col_local_netmask, 0, NETMASK_RE},
+    {&ovsrec_controller_col_max_backoff, 0, "[1000,]"},
+    {&ovsrec_controller_col_target, 0, NULL},
+    {NULL, 0, NULL},
+};
+
+static const struct vsctl_column interface_columns[] = {
+    {&ovsrec_interface_col_external_ids, 0, NULL},
+    {&ovsrec_interface_col_ingress_policing_burst, 0, "[10,]"},
+    {&ovsrec_interface_col_ingress_policing_rate, 0, "[100,]"},
+    {&ovsrec_interface_col_mac, 0, MAC_RE},
+    {&ovsrec_interface_col_name, VSCF_READONLY, NULL},
+    {&ovsrec_interface_col_ofport, VSCF_READONLY, NULL},
+    {&ovsrec_interface_col_options, 0, NULL},
+    {&ovsrec_interface_col_type, VSCF_READONLY, NULL},
+    {NULL, 0, NULL},
+};
+
+static const struct vsctl_column mirror_columns[] = {
+    {&ovsrec_mirror_col_name, VSCF_READONLY, NULL},
+    {&ovsrec_mirror_col_output_port, 0, "Port"},
+    {&ovsrec_mirror_col_output_vlan, 0, "[1,4095]"},
+    {&ovsrec_mirror_col_select_dst_port, 0, "Port"},
+    {&ovsrec_mirror_col_select_src_port, 0, "Port"},
+    {&ovsrec_mirror_col_select_vlan, 0, "[1,4095]"},
+    {NULL, 0, NULL},
+};
+
+static const struct vsctl_column netflow_columns[] = {
+    {&ovsrec_netflow_col_active_timeout, 0, "[-1,]"},
+    {&ovsrec_netflow_col_add_id_to_interface, 0, NULL},
+    {&ovsrec_netflow_col_targets, 0, IP_RE":"PORT_RE},
+    {&ovsrec_netflow_col_engine_type, 0, "[0,255]"},
+    {&ovsrec_netflow_col_engine_id, 0, "[0,255]"},
+    {NULL, 0, NULL},
+};
+
+static const struct vsctl_column open_vswitch_columns[] = {
+    {&ovsrec_open_vswitch_col_bridges, VSCF_READONLY, NULL},
+    {&ovsrec_open_vswitch_col_controller, VSCF_READONLY, NULL},
+    {&ovsrec_open_vswitch_col_cur_cfg, VSCF_HIDDEN, NULL},
+    {&ovsrec_open_vswitch_col_management_id, 0, "[0-9a-fA-F]{12}"},
+    {&ovsrec_open_vswitch_col_managers, 0, "p?(ssl|tcp|unix):.*"},
+    {&ovsrec_open_vswitch_col_next_cfg, VSCF_HIDDEN, NULL},
+    {&ovsrec_open_vswitch_col_ssl, VSCF_READONLY, NULL},
+    {NULL, 0, NULL},
+};
+
+static const struct vsctl_column port_columns[] = {
+    {&ovsrec_port_col_bond_downdelay, 0, "[0,]"},
+    {&ovsrec_port_col_bond_fake_iface, VSCF_READONLY, NULL},
+    {&ovsrec_port_col_external_ids, 0, NULL},
+    {&ovsrec_port_col_fake_bridge, VSCF_READONLY, NULL},
+    {&ovsrec_port_col_interfaces, VSCF_READONLY, NULL},
+    {&ovsrec_port_col_mac, 0, MAC_RE},
+    {&ovsrec_port_col_name, VSCF_READONLY, NULL},
+    {&ovsrec_port_col_other_config, 0, NULL},
+    {&ovsrec_port_col_tag, 0, "[0,4095]"},
+    {&ovsrec_port_col_trunks, 0, "[0,4095]"},
+    {NULL, 0, NULL},
+};
+
+static const struct vsctl_column ssl_columns[] = {
+    {&ovsrec_ssl_col_bootstrap_ca_cert, 0, NULL},
+    {&ovsrec_ssl_col_ca_cert, 0, NULL},
+    {&ovsrec_ssl_col_certificate, 0, NULL},
+    {&ovsrec_ssl_col_private_key, 0, NULL},
+    {NULL, 0, NULL},
+};
+
+struct vsctl_row_id {
+    const struct ovsdb_idl_table_class *table;
+    const struct ovsdb_idl_column *name_column;
+    const struct ovsdb_idl_column *uuid_column;
+};
+
+struct vsctl_table_class {
+    struct ovsdb_idl_table_class *class;
+    const struct vsctl_column *columns;
+    struct vsctl_row_id row_ids[2];
+};
+
+static const struct vsctl_table_class tables[] = {
+    {&ovsrec_table_bridge, bridge_columns,
+     {{&ovsrec_table_bridge, &ovsrec_bridge_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&ovsrec_table_controller, controller_columns,
+     {{&ovsrec_table_bridge,
+       &ovsrec_bridge_col_name,
+       &ovsrec_bridge_col_controller},
+      {&ovsrec_table_open_vswitch,
+       NULL,
+       &ovsrec_open_vswitch_col_controller}}},
+
+    {&ovsrec_table_interface, interface_columns,
+     {{&ovsrec_table_interface, &ovsrec_interface_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&ovsrec_table_mirror, mirror_columns,
+     {{&ovsrec_table_mirror, &ovsrec_mirror_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&ovsrec_table_netflow, netflow_columns,
+     {{&ovsrec_table_bridge,
+       &ovsrec_bridge_col_name,
+       &ovsrec_bridge_col_netflow},
+      {NULL, NULL, NULL}}},
+
+    {&ovsrec_table_open_vswitch, open_vswitch_columns,
+     {{&ovsrec_table_open_vswitch, NULL, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&ovsrec_table_port, port_columns,
+     {{&ovsrec_table_port, &ovsrec_port_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&ovsrec_table_ssl, ssl_columns,
+     {{&ovsrec_table_open_vswitch, NULL, &ovsrec_open_vswitch_col_ssl}}},
+
+    {NULL, NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
+};
+
+static int
+to_lower_and_underscores(unsigned c)
+{
+    return c == '-' ? '_' : tolower(c);
+}
+
+static unsigned int
+score_partial_match(const char *name, const char *s)
+{
+    int score;
+
+    for (score = 0; ; score++, name++, s++) {
+        if (to_lower_and_underscores(*name) != to_lower_and_underscores(*s)) {
+            break;
+        } else if (*name == '\0') {
+            return UINT_MAX;
+        }
+    }
+    return *s == '\0' ? score : 0;
+}
+
+static const struct vsctl_table_class *
+get_table(const char *table_name)
+{
+    const struct vsctl_table_class *table;
+    const struct vsctl_table_class *best_match = NULL;
+    unsigned int best_score = 0;
+
+    for (table = tables; table->class; table++) {
+        unsigned int score = score_partial_match(table->class->name,
+                                                 table_name);
+        if (score > best_score) {
+            best_match = table;
+            best_score = score;
+        } else if (score == best_score) {
+            best_match = NULL;
+        }
+    }
+    if (best_match) {
+        return best_match;
+    } else if (best_score) {
+        ovs_fatal(0, "multiple table names match \"%s\"", table_name);
+    } else {
+        ovs_fatal(0, "unknown table \"%s\"", table_name);
+    }
+}
+
+static const struct ovsdb_idl_row *
+get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
+              const struct vsctl_row_id *id, const char *record_id)
+{
+    const struct ovsdb_idl_row *referrer, *final;
+
+    if (!id->table) {
+        return NULL;
+    }
+
+    if (!id->name_column) {
+        if (strcmp(record_id, ".")) {
+            return NULL;
+        }
+        referrer = ovsdb_idl_first_row(ctx->idl, id->table);
+        if (!referrer || ovsdb_idl_next_row(referrer)) {
+            return NULL;
+        }
+    } else {
+        const struct ovsdb_idl_row *row;
+        unsigned int best_score = 0;
+
+        /* It might make sense to relax this assertion. */
+        assert(id->name_column->type.key_type == OVSDB_TYPE_STRING);
+
+        referrer = NULL;
+        for (row = ovsdb_idl_first_row(ctx->idl, id->table);
+             row != NULL && best_score != UINT_MAX;
+             row = ovsdb_idl_next_row(row))
+        {
+            struct ovsdb_datum name;
+
+            ovsdb_idl_txn_read(row, id->name_column, &name);
+            if (name.n == 1) {
+                unsigned int score = score_partial_match(name.keys[0].string,
+                                                         record_id);
+                if (score > best_score) {
+                    referrer = row;
+                    best_score = score;
+                } else if (score == best_score) {
+                    referrer = NULL;
+                }
+            }
+            ovsdb_datum_destroy(&name, &id->name_column->type);
+        }
+    }
+    if (!referrer) {
+        return NULL;
+    }
+
+    if (id->uuid_column) {
+        struct ovsdb_datum uuid;
+
+        assert(id->uuid_column->type.key_type == OVSDB_TYPE_UUID);
+        assert(id->uuid_column->type.value_type == OVSDB_TYPE_VOID);
+
+        ovsdb_idl_txn_read(referrer, id->uuid_column, &uuid);
+        if (uuid.n == 1) {
+            final = ovsdb_idl_get_row_for_uuid(ctx->idl, table->class,
+                                               &uuid.keys[0].uuid);
+        }
+        ovsdb_datum_destroy(&uuid, &id->uuid_column->type);
+    } else {
+        final = referrer;
+    }
+
+    return final;
+}
+
+static const struct ovsdb_idl_row *
+get_row(struct vsctl_context *ctx,
+        const struct vsctl_table_class *table, const char *record_id)
+{
+    const struct ovsdb_idl_row *row;
+    struct uuid uuid;
+
+    if (uuid_from_string(&uuid, record_id)) {
+        row = ovsdb_idl_get_row_for_uuid(ctx->idl, table->class, &uuid);
+    } else {
+        int i;
+
+        for (i = 0; i < ARRAY_SIZE(table->row_ids); i++) {
+            row = get_row_by_id(ctx, table, &table->row_ids[i], record_id);
+            if (row) {
+                break;
+            }
+        }
+    }
+    if (!row) {
+        ovs_fatal(0, "no row \"%s\" in table %s",
+                  record_id, table->class->name);
+    }
+    return row;
+}
+
+static const struct vsctl_column *
+get_column(const struct vsctl_table_class *table, const char *column_name)
+{
+    const struct vsctl_column *column;
+    const struct vsctl_column *best_match = NULL;
+    unsigned int best_score = 0;
+
+    for (column = table->columns; column->idl; column++) {
+        if (!(column->flags & VSCF_HIDDEN)) {
+            unsigned int score = score_partial_match(column->idl->name,
+                                                     column_name);
+            if (score > best_score) {
+                best_match = column;
+                best_score = score;
+            } else if (score == best_score) {
+                best_match = NULL;
+            }
+        }
+    }
+    if (best_match) {
+        return best_match;
+    } else if (best_score) {
+        ovs_fatal(0, "%s has more than one column whose name matches \"%s\"",
+                  table->class->name, column_name);
+    } else {
+        ovs_fatal(0, "%s does not have a column \"%s\"",
+                  table->class->name, column_name);
+    }
+}
+
+static void
+check_trailer(const char *s, const char *p)
+{
+    if (*p != '\0') {
+        ovs_fatal(0, "%s: trailing garbage in argument at offset %td",
+                  s, p - s);
+    }
+}
+
+static void
+parse_column_key_value(const char *arg, const struct vsctl_table_class *table,
+                       const struct vsctl_column **columnp,
+                       char **keyp, char **valuep)
+{
+    const char *p = arg;
+
+    assert(columnp || keyp);
+
+    /* Parse column name. */
+    if (columnp) {
+        char *column_name;
+
+        p = ovsdb_token_parse(arg, &column_name);
+        if (column_name[0] == '\0') {
+            ovs_fatal(0, "%s: missing column name", arg);
+        }
+        *columnp = get_column(table, column_name);
+        free(column_name);
+    }
+
+    /* Parse key string. */
+    if (*p == ':' || !columnp) {
+        if (columnp) {
+            p++;
+        } else if (!keyp) {
+            ovs_fatal(0, "%s: key not accepted here", arg);
+        }
+        p = ovsdb_token_parse(p, keyp);
+    } else if (keyp) {
+        *keyp = NULL;
+    }
+
+    /* Parse value string. */
+    if (*p == '=') {
+        if (!valuep) {
+            ovs_fatal(0, "%s: value not accepted here", arg);
+        }
+        *valuep = xstrdup(p + 1);
+        return;
+    } else {
+        if (valuep) {
+            *valuep = NULL;
+        }
+        check_trailer(arg, p);
+    }
+}
+
+static void
+cmd_get(struct vsctl_context *ctx)
+{
+    const char *table_name = ctx->argv[1];
+    const char *record_id = ctx->argv[2];
+    const struct vsctl_table_class *table;
+    const struct ovsdb_idl_row *row;
+    struct ds *out = &ctx->output;
+    int i;
+
+    table = get_table(table_name);
+    row = get_row(ctx, table, record_id);
+    for (i = 3; i < ctx->argc; i++) {
+        const struct vsctl_column *column;
+        struct ovsdb_datum datum;
+        char *key_string;
+
+        parse_column_key_value(ctx->argv[i], table,
+                               &column, &key_string, NULL);
+
+        ovsdb_idl_txn_read(row, column->idl, &datum);
+        if (key_string) {
+            union ovsdb_atom key;
+            unsigned int idx;
+
+            if (column->idl->type.value_type == OVSDB_TYPE_VOID) {
+                ovs_fatal(0, "cannot specify key to get for non-map column %s",
+                          column->idl->name);
+            }
+
+            ovsdb_atom_from_string(&key, column->idl->type.key_type,
+                                   key_string);
+
+            idx = ovsdb_datum_find_key(&datum, &key,
+                                       column->idl->type.key_type);
+            if (idx == UINT_MAX) {
+                ovs_fatal(0, "no key %s in %s record \"%s\" column %s",
+                          key_string, table_name, record_id,
+                          column->idl->name);
+
+            }
+            ovsdb_atom_to_string(&datum.values[idx],
+                                 column->idl->type.value_type, out);
+
+            ovsdb_atom_destroy(&key, column->idl->type.key_type);
+        } else {
+            ovsdb_datum_to_string(&datum, &column->idl->type, out);
+        }
+        ds_put_char(out, '\n');
+        ovsdb_datum_destroy(&datum, &column->idl->type);
+
+        free(key_string);
+    }
+}
+
+static void
+list_record(const struct vsctl_table_class *table, const struct ovsdb_idl_row *row,
+            struct ds *out)
+{
+    const struct vsctl_column *column;
+
+    ds_put_format(out, "%-20s: "UUID_FMT"\n", "_uuid", UUID_ARGS(&row->uuid));
+    for (column = table->columns; column->idl; column++) {
+        struct ovsdb_datum datum;
+
+        if (column->flags & VSCF_HIDDEN) {
+            continue;
+        }
+
+        ovsdb_idl_txn_read(row, column->idl, &datum);
+
+        ds_put_format(out, "%-20s (%s): ", column->idl->name,
+                      column->flags & VSCF_READONLY ? "RO" : "RW");
+        ovsdb_datum_to_string(&datum, &column->idl->type, out);
+        ds_put_char(out, '\n');
+
+        ovsdb_datum_destroy(&datum, &column->idl->type);
+    }
+}
+
+static void
+cmd_list(struct vsctl_context *ctx)
+{
+    const char *table_name = ctx->argv[1];
+    const struct vsctl_table_class *table;
+    struct ds *out = &ctx->output;
+    int i;
+
+    table = get_table(table_name);
+    if (ctx->argc > 2) {
+        for (i = 2; i < ctx->argc; i++) {
+            if (i > 2) {
+                ds_put_char(out, '\n');
+            }
+            list_record(table, get_row(ctx, table, ctx->argv[i]), out);
+        }
+    } else {
+        const struct ovsdb_idl_row *row;
+        bool first;
+
+        for (row = ovsdb_idl_first_row(ctx->idl, table->class), first = true;
+             row != NULL;
+             row = ovsdb_idl_next_row(row), first = false) {
+            if (!first) {
+                ds_put_char(out, '\n');
+            }
+            list_record(table, row, out);
+        }
+    }
+}
+
+static void
+check_string_constraint(const struct ovsdb_datum *datum,
+                        const char *constraint)
+{
+    unsigned int i;
+    char *regex;
+    regex_t re;
+    int retval;
+
+    regex = xasprintf("^%s$", constraint);
+    retval = regcomp(&re, regex, REG_NOSUB | REG_EXTENDED);
+    if (retval) {
+        size_t length = regerror(retval, &re, NULL, 0);
+        char *buffer = xmalloc(length);
+        regerror(retval, &re, buffer, length);
+        ovs_fatal(0, "internal error compiling regular expression %s: %s",
+                  regex, buffer);
+    }
+
+    for (i = 0; i < datum->n; i++) {
+        const char *key = datum->keys[i].string;
+        if (regexec(&re, key, 0, NULL, 0)) {
+            ovs_fatal(0, "%s is not valid (it does not match %s)", key, regex);
+        }
+    }
+    free(regex);
+    regfree(&re);
+}
+
+static void
+check_integer_constraint(const struct ovsdb_datum *datum,
+                         const char *constraint)
+{
+    int64_t min, max;
+    unsigned int i;
+    int n = -1;
+
+    sscanf(constraint, "[%"SCNd64",%"SCNd64"]%n", &min, &max, &n);
+    if (n == -1) {
+        sscanf(constraint, "[%"SCNd64",]%n", &min, &n);
+        if (n == -1) {
+            sscanf(constraint, "[,%"SCNd64"]%n", &max, &n);
+            if (n == -1) {
+                VLOG_DBG("internal error: bad integer contraint \"%s\"",
+                         constraint);
+                return;
+            } else {
+                min = INT64_MIN;
+            }
+        } else {
+            max = INT64_MAX;
+        }
+    }
+
+    for (i = 0; i < datum->n; i++) {
+        int64_t value = datum->keys[i].integer;
+        if (value < min || value > max) {
+            if (max == INT64_MAX) {
+                ovs_fatal(0, "%"PRId64" is less than the minimum "
+                          "allowed value %"PRId64, value, min);
+            } else if (min == INT64_MIN) {
+                ovs_fatal(0, "%"PRId64" is greater than the maximum "
+                          "allowed value %"PRId64, value, max);
+            } else {
+                ovs_fatal(0, "%"PRId64" is outside the valid range %"PRId64" "
+                          "to %"PRId64" (inclusive)", value, min, max);
+            }
+        }
+    }
+}
+
+static void
+check_constraint(const struct ovsdb_datum *datum,
+                 const struct ovsdb_type *type, const char *constraint)
+{
+    if (constraint && datum->n) {
+        if (type->key_type == OVSDB_TYPE_STRING) {
+            check_string_constraint(datum, constraint);
+        } else if (type->key_type == OVSDB_TYPE_INTEGER) {
+            check_integer_constraint(datum, constraint);
+        }
+    }
+}
+
+static void
+cmd_set(struct vsctl_context *ctx)
+{
+    const char *table_name = ctx->argv[1];
+    const char *record_id = ctx->argv[2];
+    const struct vsctl_table_class *table;
+    const struct ovsdb_idl_row *row;
+    struct ds *out = &ctx->output;
+    int i;
+
+    table = get_table(table_name);
+    row = get_row(ctx, table, record_id);
+    for (i = 3; i < ctx->argc; i++) {
+        const struct vsctl_column *column;
+        char *key_string, *value_string;
+
+        parse_column_key_value(ctx->argv[i], table,
+                               &column, &key_string, &value_string);
+        if (column->flags & VSCF_READONLY) {
+            ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
+                      ctx->argv[i], column->idl->name, table_name);
+        }
+        if (!value_string) {
+            ovs_fatal(0, "%s: missing value", ctx->argv[i]);
+        }
+
+        if (key_string) {
+            union ovsdb_atom key, value;
+            struct ovsdb_datum old, new;
+
+            if (column->idl->type.value_type == OVSDB_TYPE_VOID) {
+                ovs_fatal(0, "cannot specify key to set for non-map column %s",
+                          column->idl->name);
+            }
+
+            ovsdb_atom_from_string(&key, column->idl->type.key_type,
+                                   key_string);
+            ovsdb_atom_from_string(&value, column->idl->type.value_type,
+                                   value_string);
+
+            ovsdb_datum_init_empty(&new);
+            ovsdb_datum_add_unsafe(&new, &key, &value, &column->idl->type);
+
+            ovsdb_idl_txn_read(row, column->idl, &old);
+            ovsdb_datum_union(&old, &new, &column->idl->type, true);
+            ovsdb_idl_txn_write(row, column->idl, &old);
+
+            ovsdb_datum_destroy(&new, &column->idl->type);
+        } else {
+            struct ovsdb_datum datum;
+
+            ovsdb_datum_from_string(&datum, &column->idl->type, value_string);
+            check_constraint(&datum, &column->idl->type, column->constraint);
+            ovsdb_idl_txn_write(row, column->idl, &datum);
+        }
+        ds_put_char(out, '\n');
+
+        free(key_string);
+    }
+}
+
+static void
+cmd_add(struct vsctl_context *ctx)
+{
+    const char *table_name = ctx->argv[1];
+    const char *record_id = ctx->argv[2];
+    const char *column_name = ctx->argv[3];
+    const struct vsctl_table_class *table;
+    const struct vsctl_column *column;
+    const struct ovsdb_idl_row *row;
+    const struct ovsdb_type *type;
+    struct ovsdb_datum old;
+    int i;
+
+    table = get_table(table_name);
+    row = get_row(ctx, table, record_id);
+    column = get_column(table, column_name);
+    type = &column->idl->type;
+    ovsdb_idl_txn_read(row, column->idl, &old);
+    for (i = 4; i < ctx->argc; i++) {
+        struct ovsdb_type add_type;
+        struct ovsdb_datum add;
+
+        if (column->flags & VSCF_READONLY) {
+            ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
+                      ctx->argv[i], column->idl->name, table_name);
+        }
+
+        add_type = *type;
+        add_type.n_min = 1;
+        add_type.n_max = UINT_MAX;
+        ovsdb_datum_from_string(&add, &add_type, ctx->argv[i]);
+        ovsdb_datum_union(&old, &add, type, false);
+        ovsdb_datum_destroy(&add, type);
+    }
+    if (old.n > type->n_max) {
+        ovs_fatal(0, "\"add\" operation would put %u %s in column %s of "
+                  "table %s but at most %u are allowed",
+                  old.n,
+                  type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
+                  column->idl->name, table_name, type->n_max);
+    }
+    ovsdb_idl_txn_write(row, column->idl, &old);
+}
+
 typedef void vsctl_handler_func(struct vsctl_context *);
 
 struct vsctl_command {
@@ -1464,8 +2186,8 @@ struct vsctl_command {
 };
 
 static void run_vsctl_command(int argc, char *argv[],
-                              const struct ovsrec_open_vswitch *ovs,
-                              struct ds *output);
+                              const struct ovsrec_open_vswitch *,
+                              struct ovsdb_idl *, struct ds *output);
 
 static struct json *
 where_uuid_equals(const struct uuid *uuid)
@@ -1513,8 +2235,7 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
 
     if (wait_for_reload) {
         struct json *where = where_uuid_equals(&ovs->header_.uuid);
-        ovsdb_idl_txn_increment(txn, "Open_vSwitch", "next_cfg",
-                                where);
+        ovsdb_idl_txn_increment(txn, "Open_vSwitch", "next_cfg", where);
         json_destroy(where);
     }
 
@@ -1524,7 +2245,7 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
         if (i == argc || !strcmp(argv[i], "--")) {
             if (i > start) {
                 ds_init(&output[n_output]);
-                run_vsctl_command(i - start, &argv[start], ovs,
+                run_vsctl_command(i - start, &argv[start], ovs, idl,
                                   &output[n_output++]);
             }
             start = i + 1;
@@ -1657,6 +2378,17 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
         {"get-ssl", 0, 0, cmd_get_ssl, ""},
         {"del-ssl", 0, 0, cmd_del_ssl, ""},
         {"set-ssl", 3, 3, cmd_set_ssl, "--bootstrap"},
+
+        /* Parameter commands. */
+        {"get", 3, INT_MAX, cmd_get, ""},
+        {"list", 1, INT_MAX, cmd_list, ""},
+        {"set", 3, INT_MAX, cmd_set, ""},
+        {"add", 4, INT_MAX, cmd_add, ""},
+#if 0
+        /* XXX Not yet implemented. */
+        {"remove", 4, INT_MAX, cmd_remove, ""},
+        {"clear", 3, INT_MAX, cmd_clear, ""},
+#endif
     };
 
     const struct vsctl_command *p;
@@ -1718,13 +2450,15 @@ check_vsctl_command(int argc, char *argv[])
 
 static void
 run_vsctl_command(int argc, char *argv[],
-                  const struct ovsrec_open_vswitch *ovs, struct ds *output)
+                  const struct ovsrec_open_vswitch *ovs,
+                  struct ovsdb_idl *idl, struct ds *output)
 {
     vsctl_handler_func *function;
     struct vsctl_context ctx;
 
     function = get_vsctl_handler(argc, argv, &ctx);
     ctx.ovs = ovs;
+    ctx.idl = idl;
     ds_init(&ctx.output);
     function(&ctx);
     *output = ctx.output;
