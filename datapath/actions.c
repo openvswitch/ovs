@@ -1,6 +1,6 @@
 /*
  * Distributed under the terms of the GNU GPL version 2.
- * Copyright (c) 2007, 2008, 2009 Nicira Networks.
+ * Copyright (c) 2007, 2008, 2009, 2010 Nicira Networks.
  *
  * Significant portions of this file may be copied from parts of the Linux
  * kernel, by Linus Torvalds and others.
@@ -276,7 +276,7 @@ set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
 		u16 old = *f;
 		u16 new = a->tp_port;
 		update_csum((u16*)(skb_transport_header(skb) + check_ofs), 
-				skb, old, new, 1);
+				skb, old, new, 0);
 		*f = new;
 	}
 	return skb;
