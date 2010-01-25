@@ -459,6 +459,38 @@ netflow.mybr.host=nflow.example.com:9995
 
 .fi
 .RE
+.SS "sFlow Monitoring"
+sFlow(R) is a protocol for monitoring switches.  A bridge may be
+configured to send sFlow records to sFlow collectors by defining the
+key \fBsflow.\fIbridge\fB.host\fR for each collector in the form
+\fIip\fR[\fB:\fIport\fR].  Records from \fIbridge\fR will be sent to
+each \fIip\fR on UDP \fIport\fR.  The \fIip\fR must be specified
+numerically, not as a DNS name.  If \Iport\fR is omitted, port 6343 is
+used.
+.PP
+By default, 1 out of every 400 packets is sent to the configured sFlow
+collector.  To override this, set \fBsflow.\fIbridge\fB.sampling\fR to
+the number of switched packets out of which one, on average, will be
+sent to the sFlow collector, e.g. a value of 1 sends every packet to
+the collector, a value of 2 sends 50% of the packets to the collector,
+and so on.
+.PP
+\fBovs\-vswitchd\fR also occasionally sends switch port statistics to
+sFlow collectors, by default every 30 seconds.  To override this, set
+\fBsflow.\fIbridge\fB.polling\fR to a duration in seconds.
+.PP
+By default, \fBovs\-vswitchd\fR sends the first 128 bytes of sampled
+packets to sFlow collectors.  To override this, set
+\fBsflow.\fIbridge\fB.header\fR to a size in bytes.
+.PP
+The sFlow module must be able to report an ``agent address'' to sFlow
+collectors, which should be an IP address for the Open vSwitch that is
+persistent and reachable over the network, if possible.  If a
+local IP is configured as \fBbridge.\fIbridge\fB.controller.ip\fR,
+then that IP address is used by default.  To override this default,
+set \fBsflow.\fIbridge\fB.agent\fR to the name of a network device, in
+which case the IP address set on that device is used.  If no IP
+address can be determined either way, sFlow is disabled.
 .SS "Remote Management"
 A \fBovs\-vswitchd\fR instance may be remotely managed by a controller that
 supports the OpenFlow Management Protocol, such as NOX.  This
@@ -514,7 +546,7 @@ switch will perform all configured bridging and switching locally.
 .TP
 \fBdiscover\fR
 Use controller discovery to find the local OpenFlow controller.
-Refer to \fB\ovs\-openflowd\fR(8) for information on how to configure a DHCP
+Refer to \fBovs\-openflowd\fR(8) for information on how to configure a DHCP
 server to support controller discovery.  The following additional
 options control the discovery process:
 .

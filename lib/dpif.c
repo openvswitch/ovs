@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -845,6 +845,41 @@ dpif_recv_set_mask(struct dpif *dpif, int listen_mask)
     return error;
 }
 
+/* Retrieve the sFlow sampling probability.  '*probability' is expressed as the
+ * number of packets out of UINT_MAX to sample, e.g. probability/UINT_MAX is
+ * the probability of sampling a given packet.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  EOPNOTSUPP
+ * indicates that 'dpif' does not support sFlow sampling. */
+int
+dpif_get_sflow_probability(const struct dpif *dpif, uint32_t *probability)
+{
+    int error = (dpif->dpif_class->get_sflow_probability
+                 ? dpif->dpif_class->get_sflow_probability(dpif, probability)
+                 : EOPNOTSUPP);
+    if (error) {
+        *probability = 0;
+    }
+    log_operation(dpif, "get_sflow_probability", error);
+    return error;
+}
+
+/* Set the sFlow sampling probability.  'probability' is expressed as the
+ * number of packets out of UINT_MAX to sample, e.g. probability/UINT_MAX is
+ * the probability of sampling a given packet.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  EOPNOTSUPP
+ * indicates that 'dpif' does not support sFlow sampling. */
+int
+dpif_set_sflow_probability(struct dpif *dpif, uint32_t probability)
+{
+    int error = (dpif->dpif_class->set_sflow_probability
+                 ? dpif->dpif_class->set_sflow_probability(dpif, probability)
+                 : EOPNOTSUPP);
+    log_operation(dpif, "set_sflow_probability", error);
+    return error;
+}
+
 /* Attempts to receive a message from 'dpif'.  If successful, stores the
  * message into '*packetp'.  The message, if one is received, will begin with
  * 'struct odp_msg' as a header.  Only messages of the types selected with
@@ -868,6 +903,7 @@ dpif_recv(struct dpif *dpif, struct ofpbuf **packetp)
                         "%zu on port %"PRIu16": %s", dpif_name(dpif),
                         (msg->type == _ODPL_MISS_NR ? "miss"
                          : msg->type == _ODPL_ACTION_NR ? "action"
+                         : msg->type == _ODPL_SFLOW_NR ? "sFlow"
                          : "<unknown>"),
                         payload_len, msg->port, s);
             free(s);
@@ -894,7 +930,7 @@ dpif_recv_purge(struct dpif *dpif)
         return error;
     }
 
-    for (i = 0; i < stats.max_miss_queue + stats.max_action_queue; i++) {
+    for (i = 0; i < stats.max_miss_queue + stats.max_action_queue + stats.max_sflow_queue; i++) {
         struct ofpbuf *buf;
         error = dpif_recv(dpif, &buf);
         if (error) {

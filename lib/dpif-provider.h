@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -281,6 +281,25 @@ struct dpif_class {
      * 'listen_mask' indicates the 'dpif' will receive messages of the
      * corresponding type when it calls the recv member function. */
     int (*recv_set_mask)(struct dpif *dpif, int listen_mask);
+
+    /* Retrieves 'dpif''s sFlow sampling probability into '*probability'.
+     * Return value is 0 or a positive errno value.  EOPNOTSUPP indicates that
+     * the datapath does not support sFlow, as does a null pointer.
+     *
+     * '*probability' is expressed as the number of packets out of UINT_MAX to
+     * sample, e.g. probability/UINT_MAX is the probability of sampling a given
+     * packet. */
+    int (*get_sflow_probability)(const struct dpif *dpif,
+                                 uint32_t *probability);
+
+    /* Sets 'dpif''s sFlow sampling probability to 'probability'.  Return value
+     * is 0 or a positive errno value.  EOPNOTSUPP indicates that the datapath
+     * does not support sFlow, as does a null pointer.
+     *
+     * 'probability' is expressed as the number of packets out of UINT_MAX to
+     * sample, e.g. probability/UINT_MAX is the probability of sampling a given
+     * packet. */
+    int (*set_sflow_probability)(struct dpif *dpif, uint32_t probability);
 
     /* Attempts to receive a message from 'dpif'.  If successful, stores the
      * message into '*packetp'.  The message, if one is received, must begin

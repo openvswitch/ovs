@@ -31,6 +31,7 @@
 #include "list.h"
 #include "netdev-provider.h"
 #include "ofpbuf.h"
+#include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "shash.h"
@@ -523,6 +524,35 @@ netdev_get_features(struct netdev *netdev,
         *current = *advertised = *supported = *peer = 0;
     }
     return error;
+}
+
+/* Returns the maximum speed of a network connection that has the "enum
+ * ofp_port_features" bits in 'features', in bits per second.  If no bits that
+ * indicate a speed are set in 'features', assumes 100Mbps. */
+uint64_t
+netdev_features_to_bps(uint32_t features)
+{
+    enum {
+        F_10000MB = OFPPF_10GB_FD,
+        F_1000MB = OFPPF_1GB_HD | OFPPF_1GB_FD,
+        F_100MB = OFPPF_100MB_HD | OFPPF_100MB_FD,
+        F_10MB = OFPPF_10MB_HD | OFPPF_10MB_FD
+    };
+
+    return (  features & F_10000MB  ? UINT64_C(10000000000)
+            : features & F_1000MB   ? UINT64_C(1000000000)
+            : features & F_100MB    ? UINT64_C(100000000)
+            : features & F_10MB     ? UINT64_C(10000000)
+                                    : UINT64_C(100000000));
+}
+
+/* Returns true if any of the "enum ofp_port_features" bits that indicate a
+ * full-duplex link are set in 'features', otherwise false. */
+bool
+netdev_features_is_full_duplex(uint32_t features)
+{
+    return (features & (OFPPF_10MB_FD | OFPPF_100MB_FD | OFPPF_1GB_FD
+                        | OFPPF_10GB_FD)) != 0;
 }
 
 /* Set the features advertised by 'netdev' to 'advertise'.  Returns 0 if
