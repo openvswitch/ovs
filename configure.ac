@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2009 Nicira Networks
+# Copyright (c) 2008, 2009, 2010 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -87,5 +87,8 @@ datapath/linux-2.6/Kbuild
 datapath/linux-2.6/Makefile
 datapath/linux-2.6/Makefile.main
 tests/atlocal])
+
+dnl This makes sure that include/openflow gets created in the build directory.
+AC_CONFIG_COMMANDS([include/openflow/openflow.h.stamp])
 
 AC_OUTPUT

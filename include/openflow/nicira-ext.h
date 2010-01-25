@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ struct nicira_header {
     uint32_t vendor;            /* NX_VENDOR_ID. */
     uint32_t subtype;           /* One of NXT_* above. */
 };
-OFP_ASSERT(sizeof(struct nicira_header) == sizeof(struct ofp_vendor_header) + 4);
+OFP_ASSERT(sizeof(struct nicira_header) == 16);
 
 
 enum nx_action_subtype {

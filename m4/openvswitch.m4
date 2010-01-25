@@ -256,7 +256,12 @@ else:
           done
         done
       fi])
+   AC_SUBST([HAVE_PYTHON])
    AM_MISSING_PROG([PYTHON], [python])
    if test $ovs_cv_python != no; then
      PYTHON=$ovs_cv_python
-   fi])
+     HAVE_PYTHON=yes
+   else
+     HAVE_PYTHON=no
+   fi
+   AM_CONDITIONAL([HAVE_PYTHON], [test "$HAVE_PYTHON" = yes])])

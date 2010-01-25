@@ -1,0 +1,267 @@
+#! /usr/bin/python
+
+import sys
+import re
+
+macros = {}
+
+anyWarnings = False
+
+types = {}
+types['char'] = {"size": 1, "alignment": 1}
+types['uint8_t'] = {"size": 1, "alignment": 1}
+types['uint16_t'] = {"size": 2, "alignment": 2}
+types['uint32_t'] = {"size": 4, "alignment": 4}
+types['uint64_t'] = {"size": 8, "alignment": 8}
+
+token = None
+line = ""
+idRe = "[a-zA-Z_][a-zA-Z_0-9]*"
+tokenRe = "#?" + idRe + "|[0-9]+|."
+inComment = False
+inDirective = False
+def getToken():
+    global token
+    global line
+    global inComment
+    global inDirective
+    while True:
+        line = line.lstrip()
+        if line != "":
+            if line.startswith("/*"):
+                inComment = True
+                line = line[2:]
+            elif inComment:
+                commentEnd = line.find("*/")
+                if commentEnd < 0:
+                    line = ""
+                else:
+                    inComment = False
+                    line = line[commentEnd + 2:]
+            else:
+                match = re.match(tokenRe, line)
+                token = match.group(0)
+                line = line[len(token):]
+                if token.startswith('#'):
+                    inDirective = True
+                elif token in macros and not inDirective:
+                    line = macros[token] + line
+                    continue
+                return True
+        elif inDirective:
+            token = "$"
+            inDirective = False
+            return True
+        else:
+            global lineNumber
+            line = inputFile.readline()
+            lineNumber += 1
+            while line.endswith("\\\n"):
+                line = line[:-2] + inputFile.readline()
+                lineNumber += 1
+            if line == "":
+                if token == None:
+                    fatal("unexpected end of input")
+                token = None
+                return False
+    
+def fatal(msg):
+    sys.stderr.write("%s:%d: error at \"%s\": %s\n" % (fileName, lineNumber, token, msg))
+    sys.exit(1)
+    
+def warn(msg):
+    global anyWarnings
+    anyWarnings = True
+    sys.stderr.write("%s:%d: warning: %s\n" % (fileName, lineNumber, msg))
+
+def skipDirective():
+    getToken()
+    while token != '$':
+        getToken()
+
+def isId(s):
+    return re.match(idRe + "$", s) != None
+
+def forceId():
+    if not isId(token):
+        fatal("identifier expected")
+
+def forceInteger():
+    if not re.match('[0-9]+$', token):
+        fatal("integer expected")
+
+def match(t):
+    if token == t:
+        getToken()
+        return True
+    else:
+        return False
+
+def forceMatch(t):
+    if not match(t):
+        fatal("%s expected" % t)
+
+def parseTaggedName():
+    assert token in ('struct', 'union')
+    name = token
+    getToken()
+    forceId()
+    name = "%s %s" % (name, token)
+    getToken()
+    return name
+
+def parseTypeName():
+    if token in ('struct', 'union'):
+        name = parseTaggedName()
+    elif isId(token):
+        name = token
+        getToken()
+    else:
+        fatal("type name expected")
+
+    if name in types:
+        return name
+    else:
+        fatal("unknown type \"%s\"" % name)
+
+def parseStruct():
+    isStruct = token == 'struct'
+    structName = parseTaggedName()
+    if token == ";":
+        return
+
+    ofs = size = 0
+    alignment = 4               # ARM has minimum 32-bit alignment
+    forceMatch('{')
+    while not match('}'):
+        typeName = parseTypeName()
+        typeSize = types[typeName]['size']
+        typeAlignment = types[typeName]['alignment']
+
+        forceId()
+        memberName = token
+        getToken()
+
+        if match('['):
+            if token == ']':
+                count = 0
+            else:
+                forceInteger()
+                count = int(token)
+                getToken()
+            forceMatch(']')
+        else:
+            count = 1
+
+        nBytes = typeSize * count
+        if isStruct:
+            if ofs % typeAlignment:
+                shortage = typeAlignment - (ofs % typeAlignment)
+                warn("%s member %s is %d bytes short of %d-byte alignment"
+                     % (structName, memberName, shortage, typeAlignment))
+                size += shortage
+                ofs += shortage
+            size += nBytes
+            ofs += nBytes
+        else:
+            if nBytes > size:
+                size = nBytes
+        if typeAlignment > alignment:
+            alignment = typeAlignment
+
+        forceMatch(';')
+    if size % alignment:
+        shortage = alignment - (size % alignment)
+        if (structName == "struct ofp_packet_in" and
+            shortage == 2 and
+            memberName == 'data' and
+            count == 0):
+            # This is intentional
+            pass
+        else:
+            warn("%s needs %d bytes of tail padding" % (structName, shortage))
+        size += shortage
+    types[structName] = {"size": size, "alignment": alignment}
+
+def checkStructs():
+    if len(sys.argv) < 2:
+        sys.stderr.write("at least one non-option argument required; "
+                         "use --help for help")
+        sys.exit(1)
+
+    if '--help' in sys.argv:
+        argv0 = sys.argv[0]
+        slash = argv0.rfind('/')
+        if slash:
+            argv0 = argv0[slash + 1:]
+        print '''\
+%(argv0)s, for checking struct and struct member alignment
+usage: %(argv0)s HEADER [HEADER]...
+
+This program reads the header files specified on the command line and
+verifies that all struct members are aligned on natural boundaries
+without any need for the compiler to add additional padding.  It also
+verifies that each struct's size is a multiple of 32 bits (because
+some ABIs for ARM require all structs to be a multiple of 32 bits), or
+64 bits if the struct has any 64-bit members, again without the
+compiler adding additional padding.  Finally, it checks struct size
+assertions using OFP_ASSERT.
+
+Header files are read in the order specified.  #include directives are
+not processed, so specify them in dependency order.
+
+This program is specialized for reading include/openflow/openflow.h
+and include/openflow/nicira-ext.h.  It will not work on arbitrary
+header files without extensions.''' % {"argv0": argv0}
+        sys.exit(0)
+
+    global fileName
+    for fileName in sys.argv[1:]:
+        global inputFile
+        global lineNumber
+        inputFile = open(fileName)
+        lineNumber = 0
+        while getToken():
+            if token in ("#ifdef", "#ifndef", "#include",
+                         "#endif", "#elif", "#else"):
+                skipDirective()
+            elif token == "#define":
+                getToken()
+                name = token
+                if line.startswith('('):
+                    skipDirective()
+                else:
+                    definition = ""
+                    getToken()
+                    while token != '$':
+                        definition += token
+                        getToken()
+                    macros[name] = definition
+            elif token == "enum":
+                while token != ';':
+                    getToken()
+            elif token in ('struct', 'union'):
+                parseStruct()
+            elif match('OFP_ASSERT') or match('BOOST_STATIC_ASSERT'):
+                forceMatch('(')
+                forceMatch('sizeof')
+                forceMatch('(')
+                typeName = parseTypeName()
+                forceMatch(')')
+                forceMatch('=')
+                forceMatch('=')
+                forceInteger()
+                size = int(token)
+                getToken()
+                forceMatch(')')
+                if types[typeName]['size'] != size:
+                    warn("%s is %d bytes long but declared as %d" % (
+                            typeName, types[typeName]['size'], size))
+            else:
+                fatal("parse error")
+        inputFile.close()
+    if anyWarnings:
+        sys.exit(1)
+
+if __name__ == '__main__':
+    checkStructs()

@@ -39,6 +39,7 @@ m4_include([tests/ovsdb-macros.at])
 m4_include([tests/lcov-pre.at])
 
 m4_include([tests/library.at])
+m4_include([tests/check-structs.at])
 m4_include([tests/daemon.at])
 m4_include([tests/vconn.at])
 m4_include([tests/dir_name.at])
