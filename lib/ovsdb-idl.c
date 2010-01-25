@@ -115,6 +115,8 @@ static struct ovsdb_idl_row *ovsdb_idl_row_create(struct ovsdb_idl_table *,
                                                   const struct uuid *);
 static void ovsdb_idl_row_destroy(struct ovsdb_idl_row *);
 
+static void ovsdb_idl_row_parse(struct ovsdb_idl_row *);
+static void ovsdb_idl_row_unparse(struct ovsdb_idl_row *);
 static void ovsdb_idl_row_clear_old(struct ovsdb_idl_row *);
 static void ovsdb_idl_row_clear_new(struct ovsdb_idl_row *);
 
@@ -199,7 +201,7 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
             struct ovsdb_idl_arc *arc, *next_arc;
 
             if (!ovsdb_idl_row_is_orphan(row)) {
-                (row->table->class->unparse)(row);
+                ovsdb_idl_row_unparse(row);
                 ovsdb_idl_row_clear_old(row);
             }
             hmap_remove(&table->rows, &row->hmap_node);
@@ -535,6 +537,30 @@ ovsdb_idl_row_is_orphan(const struct ovsdb_idl_row *row)
 }
 
 static void
+ovsdb_idl_row_parse(struct ovsdb_idl_row *row)
+{
+    const struct ovsdb_idl_table_class *class = row->table->class;
+    size_t i;
+
+    for (i = 0; i < class->n_columns; i++) {
+        const struct ovsdb_idl_column *c = &class->columns[i];
+        (c->parse)(row, &row->old[i]);
+    }
+}
+
+static void
+ovsdb_idl_row_unparse(struct ovsdb_idl_row *row)
+{
+    const struct ovsdb_idl_table_class *class = row->table->class;
+    size_t i;
+
+    for (i = 0; i < class->n_columns; i++) {
+        const struct ovsdb_idl_column *c = &class->columns[i];
+        (c->unparse)(row);
+    }
+}
+
+static void
 ovsdb_idl_row_clear_old(struct ovsdb_idl_row *row)
 {
     assert(row->old == row->new);
@@ -597,9 +623,10 @@ ovsdb_idl_row_reparse_backrefs(struct ovsdb_idl_row *row, bool destroy_dsts)
 
     /* This is trickier than it looks.  ovsdb_idl_row_clear_arcs() will destroy
      * 'arc', so we need to use the "safe" variant of list traversal.  However,
-     * calling ref->table->class->parse will add an arc equivalent to 'arc' to
-     * row->arcs.  That could be a problem for traversal, but it adds it at the
-     * beginning of the list to prevent us from stumbling upon it again.
+     * calling an ovsdb_idl_column's 'parse' function will add an arc
+     * equivalent to 'arc' to row->arcs.  That could be a problem for
+     * traversal, but it adds it at the beginning of the list to prevent us
+     * from stumbling upon it again.
      *
      * (If duplicate arcs were possible then we would need to make sure that
      * 'next' didn't also point into 'arc''s destination, but we forbid
@@ -608,9 +635,9 @@ ovsdb_idl_row_reparse_backrefs(struct ovsdb_idl_row *row, bool destroy_dsts)
                         &row->dst_arcs) {
         struct ovsdb_idl_row *ref = arc->src;
 
-        (ref->table->class->unparse)(ref);
+        ovsdb_idl_row_unparse(ref);
         ovsdb_idl_row_clear_arcs(ref, destroy_dsts);
-        (ref->table->class->parse)(ref);
+        ovsdb_idl_row_parse(ref);
     }
 }
 
@@ -656,7 +683,7 @@ ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct json *row_json)
         ovsdb_datum_init_default(&row->old[i], &class->columns[i].type);
     }
     ovsdb_idl_row_update(row, row_json);
-    (class->parse)(row);
+    ovsdb_idl_row_parse(row);
 
     ovsdb_idl_row_reparse_backrefs(row, false);
 }
@@ -664,7 +691,7 @@ ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct json *row_json)
 static void
 ovsdb_idl_delete_row(struct ovsdb_idl_row *row)
 {
-    (row->table->class->unparse)(row);
+    ovsdb_idl_row_unparse(row);
     ovsdb_idl_row_clear_arcs(row, true);
     ovsdb_idl_row_clear_old(row);
     if (list_is_empty(&row->dst_arcs)) {
@@ -677,10 +704,10 @@ ovsdb_idl_delete_row(struct ovsdb_idl_row *row)
 static void
 ovsdb_idl_modify_row(struct ovsdb_idl_row *row, const struct json *row_json)
 {
-    (row->table->class->unparse)(row);
+    ovsdb_idl_row_unparse(row);
     ovsdb_idl_row_clear_arcs(row, true);
     ovsdb_idl_row_update(row, row_json);
-    (row->table->class->parse)(row);
+    ovsdb_idl_row_parse(row);
 }
 
 static bool
@@ -697,7 +724,7 @@ may_add_arc(const struct ovsdb_idl_row *src, const struct ovsdb_idl_row *dst)
      *
      * We only need to test whether the first arc in dst->dst_arcs originates
      * at 'src', since we add all of the arcs from a given source in a clump
-     * (in a single call to a row's ->parse function) and new arcs are always
+     * (in a single call to ovsdb_idl_row_parse()) and new arcs are always
      * added at the front of the dst_arcs list. */
     if (list_is_empty(&dst->dst_arcs)) {
         return true;
@@ -725,22 +752,44 @@ ovsdb_idl_get_row_arc(struct ovsdb_idl_row *src,
 
     dst_table = ovsdb_idl_table_from_class(idl, dst_table_class);
     dst = ovsdb_idl_get_row(dst_table, dst_uuid);
-    if (!dst) {
-        dst = ovsdb_idl_row_create(dst_table, dst_uuid);
-    }
+    if (idl->txn) {
+        /* We're being called from ovsdb_idl_txn_write().  We must not update
+         * any arcs, because the transaction will be backed out at commit or
+         * abort time and we don't want our graph screwed up.
+         *
+         * Just return the destination row, if there is one and it has not been
+         * deleted. */
+        if (dst && (hmap_node_is_null(&dst->txn_node) || dst->new)) {
+            return dst;
+        }
+        return NULL;
+    } else {
+        /* We're being called from some other context.  Update the graph. */
+        if (!dst) {
+            dst = ovsdb_idl_row_create(dst_table, dst_uuid);
+        }
 
-    /* Add a new arc, if it wouldn't be a self-arc or a duplicate arc. */
-    if (may_add_arc(src, dst)) {
-        /* The arc *must* be added at the front of the dst_arcs list.  See
-         * ovsdb_idl_row_reparse_backrefs() for details. */
-        arc = xmalloc(sizeof *arc);
-        list_push_front(&src->src_arcs, &arc->src_node);
-        list_push_front(&dst->dst_arcs, &arc->dst_node);
-        arc->src = src;
-        arc->dst = dst;
-    }
+        /* Add a new arc, if it wouldn't be a self-arc or a duplicate arc. */
+        if (may_add_arc(src, dst)) {
+            /* The arc *must* be added at the front of the dst_arcs list.  See
+             * ovsdb_idl_row_reparse_backrefs() for details. */
+            arc = xmalloc(sizeof *arc);
+            list_push_front(&src->src_arcs, &arc->src_node);
+            list_push_front(&dst->dst_arcs, &arc->dst_node);
+            arc->src = src;
+            arc->dst = dst;
+        }
 
-    return !ovsdb_idl_row_is_orphan(dst) ? dst : NULL;
+        return !ovsdb_idl_row_is_orphan(dst) ? dst : NULL;
+    }
+}
+
+const struct ovsdb_idl_row *
+ovsdb_idl_get_row_for_uuid(const struct ovsdb_idl *idl,
+                           const struct ovsdb_idl_table_class *tc,
+                           const struct uuid *uuid)
+{
+    return ovsdb_idl_get_row(ovsdb_idl_table_from_class(idl, tc), uuid);
 }
 
 static struct ovsdb_idl_row *
@@ -757,7 +806,7 @@ next_real_row(struct ovsdb_idl_table *table, struct hmap_node *node)
     return NULL;
 }
 
-struct ovsdb_idl_row *
+const struct ovsdb_idl_row *
 ovsdb_idl_first_row(const struct ovsdb_idl *idl,
                     const struct ovsdb_idl_table_class *table_class)
 {
@@ -766,7 +815,7 @@ ovsdb_idl_first_row(const struct ovsdb_idl *idl,
     return next_real_row(table, hmap_first(&table->rows));
 }
 
-struct ovsdb_idl_row *
+const struct ovsdb_idl_row *
 ovsdb_idl_next_row(const struct ovsdb_idl_row *row)
 {
     struct ovsdb_idl_table *table = row->table;
@@ -952,12 +1001,22 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
 {
     struct ovsdb_idl_row *row, *next;
 
+    /* This must happen early.  Otherwise, ovsdb_idl_row_parse() will call an
+     * ovsdb_idl_column's 'parse' function, which will call
+     * ovsdb_idl_get_row_arc(), which will seen that the IDL is in a
+     * transaction and fail to update the graph.  */
+    txn->idl->txn = NULL;
+
     HMAP_FOR_EACH_SAFE (row, next, struct ovsdb_idl_row, txn_node,
                         &txn->txn_rows) {
-        if (row->old && row->written) {
-            (row->table->class->unparse)(row);
-            ovsdb_idl_row_clear_arcs(row, false);
-            (row->table->class->parse)(row);
+        if (row->old) {
+            if (row->written) {
+                ovsdb_idl_row_unparse(row);
+                ovsdb_idl_row_clear_arcs(row, false);
+                ovsdb_idl_row_parse(row);
+            }
+        } else {
+            hmap_remove(&row->table->rows, &row->hmap_node);
         }
         ovsdb_idl_row_clear_new(row);
 
@@ -1063,9 +1122,10 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
             BITMAP_FOR_EACH_1 (idx, class->n_columns, row->written) {
                 const struct ovsdb_idl_column *column = &class->columns[idx];
 
-                if (!row->old || !ovsdb_datum_equals(&row->old[idx],
-                                                     &row->new[idx],
-                                                     &column->type)) {
+                if (row->old
+                    ? !ovsdb_datum_equals(&row->old[idx], &row->new[idx],
+                                          &column->type)
+                    : !ovsdb_datum_is_default(&row->new[idx], &column->type)) {
                     json_object_put(row_json, column->name,
                                     substitute_uuids(
                                         ovsdb_datum_to_json(&row->new[idx],
@@ -1139,7 +1199,6 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         txn->status = TXN_INCOMPLETE;
     }
 
-    txn->idl->txn = NULL;
     ovsdb_idl_txn_disassemble(txn);
     return txn->status;
 }
@@ -1169,14 +1228,33 @@ ovsdb_idl_txn_complete(struct ovsdb_idl_txn *txn,
 }
 
 void
-ovsdb_idl_txn_write(struct ovsdb_idl_row *row,
-                    const struct ovsdb_idl_column *column,
-                    struct ovsdb_datum *datum)
+ovsdb_idl_txn_read(const struct ovsdb_idl_row *row,
+                   const struct ovsdb_idl_column *column,
+                   struct ovsdb_datum *datum)
 {
     const struct ovsdb_idl_table_class *class = row->table->class;
     size_t column_idx = column - class->columns;
 
-    assert(row->new);
+    assert(row->new != NULL);
+    if (row->written && bitmap_is_set(row->written, column_idx)) {
+        ovsdb_datum_clone(datum, &row->new[column_idx], &column->type);
+    } else if (row->old) {
+        ovsdb_datum_clone(datum, &row->old[column_idx], &column->type);
+    } else {
+        ovsdb_datum_init_default(datum, &column->type);
+    }
+}
+
+void
+ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
+                    const struct ovsdb_idl_column *column,
+                    struct ovsdb_datum *datum)
+{
+    struct ovsdb_idl_row *row = (struct ovsdb_idl_row *) row_;
+    const struct ovsdb_idl_table_class *class = row->table->class;
+    size_t column_idx = column - class->columns;
+
+    assert(row->new != NULL);
     if (hmap_node_is_null(&row->txn_node)) {
         hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,
                     uuid_hash(&row->uuid));
@@ -1193,6 +1271,8 @@ ovsdb_idl_txn_write(struct ovsdb_idl_row *row,
         bitmap_set1(row->written, column_idx);
     }
     row->new[column_idx] = *datum;
+    (column->unparse)(row);
+    (column->parse)(row, &row->new[column_idx]);
 }
 
 void
@@ -1203,7 +1283,7 @@ ovsdb_idl_txn_verify(const struct ovsdb_idl_row *row_,
     const struct ovsdb_idl_table_class *class = row->table->class;
     size_t column_idx = column - class->columns;
 
-    assert(row->new);
+    assert(row->new != NULL);
     if (!row->old
         || (row->written && bitmap_is_set(row->written, column_idx))) {
         return;
@@ -1222,10 +1302,11 @@ ovsdb_idl_txn_verify(const struct ovsdb_idl_row *row_,
 void
 ovsdb_idl_txn_delete(struct ovsdb_idl_row *row)
 {
-    assert(row->new);
+    assert(row->new != NULL);
     if (!row->old) {
         ovsdb_idl_row_clear_new(row);
         assert(!row->prereqs);
+        hmap_remove(&row->table->rows, &row->hmap_node);
         hmap_remove(&row->table->idl->txn->txn_rows, &row->txn_node);
         free(row);
         return;
@@ -1247,6 +1328,7 @@ ovsdb_idl_txn_insert(struct ovsdb_idl_txn *txn,
     row->table = ovsdb_idl_table_from_class(txn->idl, class);
     row->new = xmalloc(class->n_columns * sizeof *row->new);
     row->written = bitmap_allocate(class->n_columns);
+    hmap_insert(&row->table->rows, &row->hmap_node, uuid_hash(&row->uuid));
     hmap_insert(&txn->txn_rows, &row->txn_node, uuid_hash(&row->uuid));
     return row;
 }

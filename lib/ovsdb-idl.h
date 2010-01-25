@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks.
+/* Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,11 @@
 #include <stdint.h>
 
 struct json;
+struct ovsdb_datum;
 struct ovsdb_idl_class;
+struct ovsdb_idl_column;
+struct ovsdb_idl_table_class;
+struct uuid;
 
 struct ovsdb_idl *ovsdb_idl_create(const char *remote,
                                    const struct ovsdb_idl_class *);
@@ -32,6 +36,13 @@ void ovsdb_idl_wait(struct ovsdb_idl *);
 unsigned int ovsdb_idl_get_seqno(const struct ovsdb_idl *);
 bool ovsdb_idl_has_ever_connected(const struct ovsdb_idl *);
 void ovsdb_idl_force_reconnect(struct ovsdb_idl *);
+
+const struct ovsdb_idl_row *ovsdb_idl_get_row_for_uuid(
+    const struct ovsdb_idl *, const struct ovsdb_idl_table_class *,
+    const struct uuid *);
+const struct ovsdb_idl_row *ovsdb_idl_first_row(
+    const struct ovsdb_idl *, const struct ovsdb_idl_table_class *);
+const struct ovsdb_idl_row *ovsdb_idl_next_row(const struct ovsdb_idl_row *);
 
 enum ovsdb_idl_txn_status {
     TXN_UNCHANGED,              /* Transaction didn't include any changes. */
@@ -56,5 +67,12 @@ void ovsdb_idl_txn_wait(const struct ovsdb_idl_txn *);
 enum ovsdb_idl_txn_status ovsdb_idl_txn_commit(struct ovsdb_idl_txn *);
 int64_t ovsdb_idl_txn_get_increment_new_value(const struct ovsdb_idl_txn *);
 void ovsdb_idl_txn_abort(struct ovsdb_idl_txn *);
+
+void ovsdb_idl_txn_read(const struct ovsdb_idl_row *,
+                        const struct ovsdb_idl_column *,
+                        struct ovsdb_datum *);
+void ovsdb_idl_txn_write(const struct ovsdb_idl_row *,
+                         const struct ovsdb_idl_column *,
+                         struct ovsdb_datum *);
 
 #endif /* ovsdb-idl.h */

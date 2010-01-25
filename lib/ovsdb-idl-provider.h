@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks.
+/* Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,8 @@ struct ovsdb_idl_row {
 struct ovsdb_idl_column {
     char *name;
     struct ovsdb_type type;
+    void (*parse)(struct ovsdb_idl_row *, const struct ovsdb_datum *);
+    void (*unparse)(struct ovsdb_idl_row *);
 };
 
 struct ovsdb_idl_table_class {
@@ -48,8 +50,6 @@ struct ovsdb_idl_table_class {
     const struct ovsdb_idl_column *columns;
     size_t n_columns;
     size_t allocation_size;
-    void (*parse)(struct ovsdb_idl_row *);
-    void (*unparse)(struct ovsdb_idl_row *);
 };
 
 struct ovsdb_idl_table {
@@ -69,14 +69,6 @@ struct ovsdb_idl_row *ovsdb_idl_get_row_arc(
     struct ovsdb_idl_table_class *dst_table,
     const struct uuid *dst_uuid);
 
-struct ovsdb_idl_row *ovsdb_idl_first_row(
-    const struct ovsdb_idl *, const struct ovsdb_idl_table_class *);
-
-struct ovsdb_idl_row *ovsdb_idl_next_row(const struct ovsdb_idl_row *);
-
-void ovsdb_idl_txn_write(struct ovsdb_idl_row *,
-                         const struct ovsdb_idl_column *,
-                         struct ovsdb_datum *);
 void ovsdb_idl_txn_verify(const struct ovsdb_idl_row *,
                           const struct ovsdb_idl_column *);
 void ovsdb_idl_txn_delete(struct ovsdb_idl_row *);
