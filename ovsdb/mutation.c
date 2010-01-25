@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -416,7 +416,7 @@ ovsdb_mutation_set_execute(struct ovsdb_row *row,
             break;
 
         case OVSDB_M_INSERT:
-            ovsdb_datum_union(dst, arg, dst_type);
+            ovsdb_datum_union(dst, arg, dst_type, false);
             error = ovsdb_datum_conforms_to_type(dst, dst_type) ? 0 : ME_COUNT;
             break;
 

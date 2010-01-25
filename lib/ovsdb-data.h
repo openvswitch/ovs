@@ -75,18 +75,23 @@ struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
 
 /* An instance of an OVSDB type (given by struct ovsdb_type).
  *
- * 'n' is constrained by the ovsdb_type's 'n_min' and 'n_max'.
+ * - The 'keys' must be unique and in sorted order.  Most functions that modify
+ *   an ovsdb_datum maintain these invariants.  Functions that don't maintain
+ *   the invariants have names that end in "_unsafe".  Use ovsdb_datum_sort()
+ *   to check and restore these invariants.
  *
- * If 'n' is nonzero, then 'keys' points to an array of 'n' atoms of the type
- * specified by the ovsdb_type's 'key_type'.  (Otherwise, 'keys' should be
- * null.)
+ * - 'n' is constrained by the ovsdb_type's 'n_min' and 'n_max'.
  *
- * If 'n' is nonzero and the ovsdb_type's 'value_type' is not OVSDB_TYPE_VOID,
- * then 'values' points to an array of 'n' atoms of the type specified by the
- * 'value_type'.  (Otherwise, 'values' should be null.)
+ *   If 'n' is nonzero, then 'keys' points to an array of 'n' atoms of the type
+ *   specified by the ovsdb_type's 'key_type'.  (Otherwise, 'keys' should be
+ *   null.)
  *
- * Thus, for 'n' > 0, 'keys' will always be nonnull and 'values' will be
- * nonnull only for "map" types.
+ *   If 'n' is nonzero and the ovsdb_type's 'value_type' is not
+ *   OVSDB_TYPE_VOID, then 'values' points to an array of 'n' atoms of the type
+ *   specified by the 'value_type'.  (Otherwise, 'values' should be null.)
+ *
+ *   Thus, for 'n' > 0, 'keys' will always be nonnull and 'values' will be
+ *   nonnull only for "map" types.
  */
 struct ovsdb_datum {
     unsigned int n;             /* Number of 'keys' and 'values'. */
@@ -94,6 +99,8 @@ struct ovsdb_datum {
     union ovsdb_atom *values;   /* Each of the ovsdb_type's 'value_type'. */
 };
 
+/* Basics. */
+void ovsdb_datum_init_empty(struct ovsdb_datum *);
 void ovsdb_datum_init_default(struct ovsdb_datum *, const struct ovsdb_type *);
 bool ovsdb_datum_is_default(const struct ovsdb_datum *,
                             const struct ovsdb_type *);
@@ -101,9 +108,12 @@ void ovsdb_datum_clone(struct ovsdb_datum *, const struct ovsdb_datum *,
                        const struct ovsdb_type *);
 void ovsdb_datum_destroy(struct ovsdb_datum *, const struct ovsdb_type *);
 void ovsdb_datum_swap(struct ovsdb_datum *, struct ovsdb_datum *);
+
+/* Checking and maintaining invariants. */
 struct ovsdb_error *ovsdb_datum_sort(struct ovsdb_datum *,
                                      const struct ovsdb_type *);
 
+/* Type conversion. */
 struct ovsdb_error *ovsdb_datum_from_json(struct ovsdb_datum *,
                                           const struct ovsdb_type *,
                                           const struct json *,
@@ -120,21 +130,42 @@ int ovsdb_datum_compare_3way(const struct ovsdb_datum *,
 bool ovsdb_datum_equals(const struct ovsdb_datum *,
                         const struct ovsdb_datum *,
                         const struct ovsdb_type *);
+
+/* Search. */
+unsigned int ovsdb_datum_find_key(const struct ovsdb_datum *,
+                                  const union ovsdb_atom *key,
+                                  enum ovsdb_atomic_type key_type);
+unsigned int ovsdb_datum_find_key_value(const struct ovsdb_datum *,
+                                        const union ovsdb_atom *key,
+                                        enum ovsdb_atomic_type key_type,
+                                        const union ovsdb_atom *value,
+                                        enum ovsdb_atomic_type value_type);
+
+/* Set operations. */
 bool ovsdb_datum_includes_all(const struct ovsdb_datum *,
                               const struct ovsdb_datum *,
                               const struct ovsdb_type *);
 bool ovsdb_datum_excludes_all(const struct ovsdb_datum *,
                               const struct ovsdb_datum *,
                               const struct ovsdb_type *);
-
 void ovsdb_datum_union(struct ovsdb_datum *,
                        const struct ovsdb_datum *,
-                       const struct ovsdb_type *);
+                       const struct ovsdb_type *,
+                       bool replace);
 void ovsdb_datum_subtract(struct ovsdb_datum *a,
                           const struct ovsdb_type *a_type,
                           const struct ovsdb_datum *b,
                           const struct ovsdb_type *b_type);
 
+/* Raw operations that may not maintain the invariants. */
+void ovsdb_datum_remove_unsafe(struct ovsdb_datum *, size_t idx,
+                               const struct ovsdb_type *);
+void ovsdb_datum_add_unsafe(struct ovsdb_datum *,
+                            const union ovsdb_atom *key,
+                            const union ovsdb_atom *value,
+                            const struct ovsdb_type *);
+
+/* Type checking. */
 static inline bool
 ovsdb_datum_conforms_to_type(const struct ovsdb_datum *datum,
                              const struct ovsdb_type *type)

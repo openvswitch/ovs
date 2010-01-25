@@ -372,6 +372,14 @@ alloc_default_atoms(enum ovsdb_atomic_type type, size_t n)
 }
 
 void
+ovsdb_datum_init_empty(struct ovsdb_datum *datum)
+{
+    datum->n = 0;
+    datum->keys = NULL;
+    datum->values = NULL;
+}
+
+void
 ovsdb_datum_init_default(struct ovsdb_datum *datum,
                          const struct ovsdb_type *type)
 {
@@ -661,9 +669,9 @@ ovsdb_datum_hash(const struct ovsdb_datum *datum,
 
 static int
 atom_arrays_compare_3way(const union ovsdb_atom *a,
-                  const union ovsdb_atom *b,
-                  enum ovsdb_atomic_type type,
-                  size_t n)
+                         const union ovsdb_atom *b,
+                         enum ovsdb_atomic_type type,
+                         size_t n)
 {
     unsigned int i;
 
@@ -706,6 +714,52 @@ ovsdb_datum_compare_3way(const struct ovsdb_datum *a,
                                        a->n));
 }
 
+/* If 'key' is one of the keys in 'datum', returns its index within 'datum',
+ * otherwise UINT_MAX.  'key_type' must be the type of the atoms stored in the
+ * 'keys' array in 'datum'.
+ */
+unsigned int
+ovsdb_datum_find_key(const struct ovsdb_datum *datum,
+                     const union ovsdb_atom *key,
+                     enum ovsdb_atomic_type key_type)
+{
+    unsigned int low = 0;
+    unsigned int high = datum->n;
+    while (low < high) {
+        unsigned int idx = (low + high) / 2;
+        int cmp = ovsdb_atom_compare_3way(key, &datum->keys[idx], key_type);
+        if (cmp < 0) {
+            high = idx;
+        } else if (cmp > 0) {
+            low = idx + 1;
+        } else {
+            return idx;
+        }
+    }
+    return UINT_MAX;
+}
+
+/* If 'key' and 'value' is one of the key-value pairs in 'datum', returns its
+ * index within 'datum', otherwise UINT_MAX.  'key_type' must be the type of
+ * the atoms stored in the 'keys' array in 'datum'.  'value_type' may be the
+ * type of the 'values' atoms or OVSDB_TYPE_VOID to compare only keys.
+ */
+unsigned int
+ovsdb_datum_find_key_value(const struct ovsdb_datum *datum,
+                           const union ovsdb_atom *key,
+                           enum ovsdb_atomic_type key_type,
+                           const union ovsdb_atom *value,
+                           enum ovsdb_atomic_type value_type)
+{
+    unsigned int idx = ovsdb_datum_find_key(datum, key, key_type);
+    if (idx != UINT_MAX
+        && value_type != OVSDB_TYPE_VOID
+        && !ovsdb_atom_equals(&datum->values[idx], value, value_type)) {
+        idx = UINT_MAX;
+    }
+    return idx;
+}
+
 /* If atom 'i' in 'a' is also in 'b', returns its index in 'b', otherwise
  * UINT_MAX.  'type' must be the type of 'a' and 'b', except that
  * type->value_type may be set to OVSDB_TYPE_VOID to compare keys but not
@@ -715,24 +769,10 @@ ovsdb_datum_find(const struct ovsdb_datum *a, int i,
                  const struct ovsdb_datum *b,
                  const struct ovsdb_type *type)
 {
-    int low = 0;
-    int high = b->n;
-    while (low < high) {
-        int j = (low + high) / 2;
-        int cmp = ovsdb_atom_compare_3way(&a->keys[i], &b->keys[j],
-                                          type->key_type);
-        if (cmp < 0) {
-            high = j;
-        } else if (cmp > 0) {
-            low = j + 1;
-        } else {
-            bool eq_value = (type->value_type == OVSDB_TYPE_VOID
-                             || ovsdb_atom_equals(&a->values[i], &b->values[j],
-                                                  type->value_type));
-            return eq_value ? j : UINT_MAX;
-        }
-    }
-    return UINT_MAX;
+    return ovsdb_datum_find_key_value(b,
+                                      &a->keys[i], type->key_type,
+                                      a->values ? &a->values[i] : NULL,
+                                      type->value_type);
 }
 
 /* Returns true if every element in 'a' is also in 'b', false otherwise. */
@@ -777,41 +817,76 @@ ovsdb_datum_reallocate(struct ovsdb_datum *a, const struct ovsdb_type *type,
     }
 }
 
-static void
-ovsdb_datum_remove(struct ovsdb_datum *a, size_t i,
-                   const struct ovsdb_type *type)
+/* Removes the element with index 'idx' from 'datum', which has type 'type'.
+ * If 'idx' is not the last element in 'datum', then the removed element is
+ * replaced by the (former) last element.
+ *
+ * This function does not maintain ovsdb_datum invariants.  Use
+ * ovsdb_datum_sort() to check and restore these invariants. */
+void
+ovsdb_datum_remove_unsafe(struct ovsdb_datum *datum, size_t idx,
+                          const struct ovsdb_type *type)
 {
-    ovsdb_atom_destroy(&a->keys[i], type->key_type);
-    a->keys[i] = a->keys[a->n - 1];
+    ovsdb_atom_destroy(&datum->keys[idx], type->key_type);
+    datum->keys[idx] = datum->keys[datum->n - 1];
     if (type->value_type != OVSDB_TYPE_VOID) {
-        ovsdb_atom_destroy(&a->values[i], type->value_type);
-        a->values[i] = a->values[a->n - 1];
+        ovsdb_atom_destroy(&datum->values[idx], type->value_type);
+        datum->values[idx] = datum->values[datum->n - 1];
     }
-    a->n--;
+    datum->n--;
+}
+
+/* Adds the element with the given 'key' and 'value' to 'datum', which must
+ * have the specified 'type'.
+ *
+ * This function always allocates memory, so it is not an efficient way to add
+ * a number of elements to a datum.
+ *
+ * This function does not maintain ovsdb_datum invariants.  Use
+ * ovsdb_datum_sort() to check and restore these invariants.  (But a datum with
+ * 0 or 1 elements cannot violate the invariants anyhow.) */
+void
+ovsdb_datum_add_unsafe(struct ovsdb_datum *datum,
+                       const union ovsdb_atom *key,
+                       const union ovsdb_atom *value,
+                       const struct ovsdb_type *type)
+{
+    size_t idx = datum->n++;
+    datum->keys = xrealloc(datum->keys, datum->n * sizeof *datum->keys);
+    ovsdb_atom_clone(&datum->keys[idx], key, type->key_type);
+    if (type->value_type != OVSDB_TYPE_VOID) {
+        datum->values = xrealloc(datum->values,
+                                 datum->n * sizeof *datum->values);
+        ovsdb_atom_clone(&datum->values[idx], value, type->value_type);
+    }
 }
 
 void
-ovsdb_datum_union(struct ovsdb_datum *a,
-                  const struct ovsdb_datum *b, const struct ovsdb_type *type)
+ovsdb_datum_union(struct ovsdb_datum *a, const struct ovsdb_datum *b,
+                  const struct ovsdb_type *type, bool replace)
 {
-    struct ovsdb_type type_without_value;
     unsigned int n;
-    size_t i;
+    size_t bi;
 
-    type_without_value = *type;
-    type_without_value.value_type = OVSDB_TYPE_VOID;
     n = a->n;
-    for (i = 0; i < b->n; i++) {
-        if (ovsdb_datum_find(b, i, a, &type_without_value) == UINT_MAX) {
+    for (bi = 0; bi < b->n; bi++) {
+        unsigned int ai;
+
+        ai = ovsdb_datum_find_key(a, &b->keys[bi], type->key_type);
+        if (ai == UINT_MAX) {
             if (n == a->n) {
-                ovsdb_datum_reallocate(a, type, a->n + (b->n - i));
+                ovsdb_datum_reallocate(a, type, a->n + (b->n - bi));
             }
-            ovsdb_atom_clone(&a->keys[n], &b->keys[i], type->key_type);
+            ovsdb_atom_clone(&a->keys[n], &b->keys[bi], type->key_type);
             if (type->value_type != OVSDB_TYPE_VOID) {
-                ovsdb_atom_clone(&a->values[n], &b->values[i],
+                ovsdb_atom_clone(&a->values[n], &b->values[bi],
                                  type->value_type);
             }
             n++;
+        } else if (replace && type->value_type != OVSDB_TYPE_VOID) {
+            ovsdb_atom_destroy(&a->values[ai], type->value_type);
+            ovsdb_atom_clone(&a->values[ai], &b->values[bi],
+                             type->value_type);
         }
     }
     if (n != a->n) {
@@ -839,7 +914,7 @@ ovsdb_datum_subtract(struct ovsdb_datum *a, const struct ovsdb_type *a_type,
         unsigned int idx = ovsdb_datum_find(a, i, b, b_type);
         if (idx != UINT_MAX) {
             changed = true;
-            ovsdb_datum_remove(a, i, a_type);
+            ovsdb_datum_remove_unsafe(a, i, a_type);
         } else {
             i++;
         }
