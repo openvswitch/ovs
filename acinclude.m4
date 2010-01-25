@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009 Nicira Networks.
+# Copyright (c) 2008, 2009, 2010 Nicira Networks.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -191,6 +191,7 @@ AC_DEFUN([OVS_CHECK_STRTOK_R],
                            char *token1, *token2;
                            token1 = strtok_r(string, ":", &save_ptr);
                            token2 = strtok_r(NULL, ":", &save_ptr);
+                           freopen ("/dev/null", "w", stdout);
                            printf ("%s %s\n", token1, token2);
                            return 0;
                           ]])],
