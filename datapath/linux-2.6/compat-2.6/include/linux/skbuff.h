@@ -113,9 +113,7 @@ static inline void kfree_skb_maybe_null(struct sk_buff *skb)
 
 
 #ifndef CHECKSUM_PARTIAL
-/* Note that CHECKSUM_PARTIAL is not implemented, but this allows us to at
- * least test against it: see update_csum() in forward.c. */
-#define CHECKSUM_PARTIAL 3
+#define CHECKSUM_PARTIAL CHECKSUM_HW
 #endif
 #ifndef CHECKSUM_COMPLETE
 #define CHECKSUM_COMPLETE CHECKSUM_HW

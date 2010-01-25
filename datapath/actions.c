@@ -213,10 +213,43 @@ static void update_csum(__sum16 *sum, struct sk_buff *skb,
 			__be32 from, __be32 to, int pseudohdr)
 {
 	__be32 diff[] = { ~from, to };
-	if (skb->ip_summed != CHECKSUM_PARTIAL) {
+
+/* On older kernels, CHECKSUM_PARTIAL and CHECKSUM_COMPLETE are both defined
+ * as CHECKSUM_HW.  However, we can make some inferences so that we can update
+ * the checksums appropriately. */
+	enum {
+		CSUM_PARTIAL,	/* Partial checksum, skb->csum undefined. */
+		CSUM_PACKET,	/* In-packet checksum, skb->csum undefined. */
+		CSUM_COMPLETE,	/* In-packet checksum, skb->csum valid. */
+	} csum_type;
+
+	csum_type = CSUM_PACKET;
+#ifndef CHECKSUM_HW
+	/* Newer kernel, just map between kernel types and ours. */
+	if (skb->ip_summed == CHECKSUM_PARTIAL)
+		csum_type = CSUM_PARTIAL;
+	else if (skb->ip_summed == CHECKSUM_COMPLETE)
+		csum_type = CSUM_COMPLETE;
+#else
+	/* In theory this could be either CHECKSUM_PARTIAL or CHECKSUM_COMPLETE.
+	 * However, we should only get CHECKSUM_PARTIAL packets from Xen, which
+	 * uses some special fields to represent this (see below).  Since we
+	 * can only make one type work, pick the one that actually happens in
+	 * practice. */
+	if (skb->ip_summed == CHECKSUM_HW)
+		csum_type = CSUM_COMPLETE;
+#endif
+#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
+	/* Xen has a special way of representing CHECKSUM_PARTIAL on older
+	 * kernels. */
+	if (skb->proto_csum_blank)
+		csum_type = CSUM_PARTIAL;
+#endif
+
+	if (csum_type != CSUM_PARTIAL) {
 		*sum = csum_fold(csum_partial((char *)diff, sizeof(diff),
 				~csum_unfold(*sum)));
-		if (skb->ip_summed == CHECKSUM_COMPLETE && pseudohdr)
+		if (csum_type == CSUM_COMPLETE && pseudohdr)
 			skb->csum = ~csum_partial((char *)diff, sizeof(diff),
 						~skb->csum);
 	} else if (pseudohdr)
