@@ -659,7 +659,7 @@ def printDoc(schema):
     if schema.comment:
         print schema.comment
 
-    for tableName, table in schema.tables.iteritems():
+    for tableName, table in sorted(schema.tables.iteritems()):
         title = "%s table" % tableName
         print
         print title
@@ -667,7 +667,7 @@ def printDoc(schema):
         if table.comment:
             print table.comment
 
-        for columnName, column in table.columns.iteritems():
+        for columnName, column in sorted(table.columns.iteritems()):
             print
             print "%s (%s)" % (columnName, column.type.toEnglish())
             if column.comment:
