@@ -113,9 +113,9 @@ is represented by <database-schema>, as described below.
     If "min" or "max" is not specified, each defaults to 1.  If "max"
     is specified as "unlimited", then there is no specified maximum
     number of elements, although the implementation will enforce some
-    limit.  After considering defaults, "min" must be at least 0,
-    "max" must be at least 1, and "max" must be greater than or equal
-    to "min".
+    limit.  After considering defaults, "min" must be exactly 0 or
+    exactly 1, "max" must be at least 1, and "max" must be greater
+    than or equal to "min".
 
     If "min" and "max" are both 1 and "value" is not specified, the
     type is the scalar type specified by "key".

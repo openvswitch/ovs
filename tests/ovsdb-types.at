@@ -50,9 +50,9 @@ OVSDB_CHECK_POSITIVE([set of 0 to 3 strings],
 OVSDB_CHECK_POSITIVE([set of 0 or more integers],
   [[parse-type '{"key": "integer", "min": 0, "max": "unlimited"}']],
   [[{"key":"integer","max":"unlimited","min":0}]])
-OVSDB_CHECK_POSITIVE([set of 10 or more reals],
-  [[parse-type '{"key": "real", "min": 10, "max": "unlimited"}']],
-  [[{"key":"real","max":"unlimited","min":10}]])
+OVSDB_CHECK_POSITIVE([set of 1 or more reals],
+  [[parse-type '{"key": "real", "min": 1, "max": "unlimited"}']],
+  [[{"key":"real","max":"unlimited"}]])
 
 OVSDB_CHECK_NEGATIVE([set max cannot be less than min],
   [[parse-type '{"key": "real", "min": 5, "max": 3}' ]],
@@ -63,6 +63,9 @@ OVSDB_CHECK_NEGATIVE([set max cannot be negative],
 OVSDB_CHECK_NEGATIVE([set min cannot be negative],
   [[parse-type '{"key": "real", "min": -1}' ]],
   [bad min or max value])
+OVSDB_CHECK_NEGATIVE([set min cannot be greater than one],
+  [[parse-type '{"key": "real", "min": 10, "max": "unlimited"}']],
+  [ovsdb type fails constraint checks])
 
 AT_BANNER([OVSDB -- map types])
 
@@ -72,18 +75,18 @@ OVSDB_CHECK_POSITIVE([map of 1 integer to boolean],
 OVSDB_CHECK_POSITIVE([map of 1 boolean to integer, explicit min and max],
  [[parse-type '{"key": "boolean", "value": "integer", "min": 1, "max": 1}' ]],
  [[{"key":"boolean","value":"integer"}]])
-OVSDB_CHECK_POSITIVE([map of 2 to 5 uuid to real],
- [[parse-type '{"key": "uuid", "value": "real", "min": 2, "max": 5}' ]],
- [[{"key":"uuid","max":5,"min":2,"value":"real"}]])
+OVSDB_CHECK_POSITIVE([map of 1 to 5 uuid to real],
+ [[parse-type '{"key": "uuid", "value": "real", "min": 1, "max": 5}' ]],
+ [[{"key":"uuid","max":5,"value":"real"}]])
 OVSDB_CHECK_POSITIVE([map of 0 to 10 string to uuid],
  [[parse-type '{"key": "string", "value": "uuid", "min": 0, "max": 10}' ]],
  [[{"key":"string","max":10,"min":0,"value":"uuid"}]])
-OVSDB_CHECK_POSITIVE([map of 10 to 20 real to string],
- [[parse-type '{"key": "real", "value": "string", "min": 10, "max": 20}' ]],
- [[{"key":"real","max":20,"min":10,"value":"string"}]])
-OVSDB_CHECK_POSITIVE([map of 20 or more string to real],
- [[parse-type '{"key": "string", "value": "real", "min": 20, "max": "unlimited"}' ]],
- [[{"key":"string","max":"unlimited","min":20,"value":"real"}]])
+OVSDB_CHECK_POSITIVE([map of 1 to 20 real to string],
+ [[parse-type '{"key": "real", "value": "string", "min": 1, "max": 20}' ]],
+ [[{"key":"real","max":20,"value":"string"}]])
+OVSDB_CHECK_POSITIVE([map of 0 or more string to real],
+ [[parse-type '{"key": "string", "value": "real", "min": 0, "max": "unlimited"}' ]],
+ [[{"key":"string","max":"unlimited","min":0,"value":"real"}]])
 
 OVSDB_CHECK_NEGATIVE([map key type is required],
  [[parse-type '{"value": "integer"}' ]],

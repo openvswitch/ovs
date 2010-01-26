@@ -230,8 +230,8 @@ OVSDB_CHECK_POSITIVE([map of 1 boolean to integer],
    '["map", [[true, 1]]]']],
  [[["map",[[true,1]]]]])
 
-OVSDB_CHECK_POSITIVE([map of 5 uuid to real],
-  [[parse-data '{"key": "uuid", "value": "real", "min": 5, "max": 5}' \
+OVSDB_CHECK_POSITIVE([map of 1 uuid to real],
+  [[parse-data '{"key": "uuid", "value": "real", "min": 1, "max": 5}' \
     '["map", [[["uuid", "cad8542b-6ee1-486b-971b-7dcbf6e14979"], 1.0],
 	      [["uuid", "6b94b968-2702-4f64-9457-314a34d69b8c"], 2.0],
 	      [["uuid", "d2c4a168-24de-47eb-a8a3-c1abfc814979"], 3.0],
@@ -240,7 +240,7 @@ OVSDB_CHECK_POSITIVE([map of 5 uuid to real],
   [[["map",[[["uuid","1c92b8ca-d5e4-4628-a85d-1dc2d099a99a"],5],[["uuid","25bfa475-d072-4f60-8be1-00f48643e9cb"],4],[["uuid","6b94b968-2702-4f64-9457-314a34d69b8c"],2],[["uuid","cad8542b-6ee1-486b-971b-7dcbf6e14979"],1],[["uuid","d2c4a168-24de-47eb-a8a3-c1abfc814979"],3]]]]])
 
 OVSDB_CHECK_POSITIVE([map of 10 string to string],
-  [[parse-data '{"key": "string", "value": "string", "min": 10, "max": 10}' \
+  [[parse-data '{"key": "string", "value": "string", "min": 1, "max": 10}' \
     '["map", [["2 gills", "1 chopin"],
 	      ["2 chopins", "1 pint"],
 	      ["2 pints", "1 quart"],

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,6 +75,7 @@ ovsdb_type_is_valid(const struct ovsdb_type *type)
     return (type->key_type != OVSDB_TYPE_VOID
             && ovsdb_atomic_type_is_valid(type->key_type)
             && ovsdb_atomic_type_is_valid(type->value_type)
+            && type->n_min <= 1
             && type->n_min <= type->n_max
             && (type->value_type == OVSDB_TYPE_VOID
                 || ovsdb_atomic_type_is_valid_key(type->key_type)));
