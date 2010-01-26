@@ -51,7 +51,7 @@ import random
 
 management_pif = None
 
-dbcache_file = "/var/lib/openvswitch/dbcache"
+dbcache_file = "/var/xapi/network.dbcache"
 
 #
 # Logging.

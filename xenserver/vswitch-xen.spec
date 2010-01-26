@@ -154,7 +154,7 @@ EOF
     fi
 fi
 
-if test ! -e /var/lib/openvswitch/dbcache; then
+if test ! -e /var/xapi/network.dbcache; then
     if test "$1" = 1; then
         printf "Creating xapi database cache...  "
     else
@@ -299,7 +299,7 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     rm -f /etc/ovs-vswitchd.conf
     rm -f /etc/sysconfig/vswitch
     rm -f /etc/ovs-vswitchd.cacert
-    rm -f /var/lib/openvswitch/dbcache
+    rm -f /var/xapi/network.dbcache
 
     # Configure system to use bridge
     echo bridge > /etc/xensource/network.conf
