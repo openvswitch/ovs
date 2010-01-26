@@ -2929,12 +2929,6 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
     case NXT_STATUS_REQUEST:
         return switch_status_handle_request(p->switch_status, ofconn->rconn,
                                             msg);
-
-    case NXT_ACT_SET_CONFIG:
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE); /* XXX */
-
-    case NXT_ACT_GET_CONFIG:
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE); /* XXX */
     }
 
     return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);

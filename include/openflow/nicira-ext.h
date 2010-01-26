@@ -37,12 +37,11 @@ enum nicira_type {
      * pairs in the form "key=value\n". */
     NXT_STATUS_REPLY,
 
-    /* Configure an action.  Most actions do not require configuration
-     * beyond that supplied in the actual action call. */
-    NXT_ACT_SET_CONFIG,
+    /* No longer used. */
+    NXT_ACT_SET_CONFIG__OBSOLETE,
 
-    /* Get configuration of action. */
-    NXT_ACT_GET_CONFIG,
+    /* No longer used. */
+    NXT_ACT_GET_CONFIG__OBSOLETE,
 
     /* No longer used. */
     NXT_COMMAND_REQUEST__OBSOLETE,
