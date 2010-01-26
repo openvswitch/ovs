@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -750,130 +750,169 @@ json_lex_number(struct json_parser *p)
     json_parser_input(p, &token);
 }
 
-static bool
-json_lex_4hex(struct json_parser *p, const char *cp, int *valuep)
+static const char *
+json_lex_4hex(const char *cp, const char *end, int *valuep)
 {
     int value, i;
+
+    if (cp + 4 > end) {
+        return "quoted string ends within \\u escape";
+    }
 
     value = 0;
     for (i = 0; i < 4; i++) {
         unsigned char c = *cp++;
         if (!isxdigit(c)) {
-            json_error(p, "malformed \\u escape");
-            return false;
+            return "malformed \\u escape";
         }
         value = (value << 4) | hexit_value(c);
     }
     if (!value) {
-        json_error(p, "null bytes not supported in quoted strings");
-        return false;
+        return "null bytes not supported in quoted strings";
     }
     *valuep = value;
-    return true;
+    return NULL;
 }
 
 static const char *
-json_lex_unicode(struct json_parser *p, const char *cp, struct ds *s)
+json_lex_unicode(const char *cp, const char *end, struct ds *out)
 {
+    const char *error;
     int c0, c1;
 
-    if (!json_lex_4hex(p, cp, &c0)) {
+    error = json_lex_4hex(cp, end, &c0);
+    if (error) {
+        ds_clear(out);
+        ds_put_cstr(out, error);
         return NULL;
     }
     cp += 4;
     if (!uc_is_leading_surrogate(c0)) {
-        ds_put_utf8(s, c0);
+        ds_put_utf8(out, c0);
         return cp;
     }
 
-    if (*cp++ != '\\' || *cp++ != 'u') {
-        json_error(p, "malformed escaped surrogate pair");
+    if (cp + 2 > end || *cp++ != '\\' || *cp++ != 'u') {
+        ds_clear(out);
+        ds_put_cstr(out, "malformed escaped surrogate pair");
         return NULL;
     }
 
-    if (!json_lex_4hex(p, cp, &c1)) {
+    error = json_lex_4hex(cp, end, &c1);
+    if (error) {
+        ds_clear(out);
+        ds_put_cstr(out, error);
         return NULL;
     }
     cp += 4;
     if (!uc_is_trailing_surrogate(c1)) {
-        json_error(p, "second half of escaped surrogate pair is not "
-                   "trailing surrogate");
+        ds_clear(out);
+        ds_put_cstr(out, "second half of escaped surrogate pair is not "
+                    "trailing surrogate");
         return NULL;
     }
 
-    ds_put_utf8(s, utf16_decode_surrogate_pair(c0, c1));
+    ds_put_utf8(out, utf16_decode_surrogate_pair(c0, c1));
     return cp;
 }
 
-static void
-json_lex_string(struct json_parser *p)
+bool
+json_string_unescape(const char *in, size_t in_len, char **outp)
 {
-    struct json_token token;
-    const char *cp;
-    struct ds s;
+    const char *end = in + in_len;
+    bool ok = false;
+    struct ds out;
 
-    cp = ds_cstr(&p->buffer);
-    if (!strchr(cp, '\\')) {
-        token.type = T_STRING;
-        token.u.string = cp;
-        json_parser_input(p, &token);
-        return;
+    ds_init(&out);
+    ds_reserve(&out, in_len);
+    if (in_len > 0 && in[in_len - 1] == '\\') {
+        ds_put_cstr(&out, "quoted string may not end with backslash");
+        goto exit;
     }
-
-    ds_init(&s);
-    ds_reserve(&s, strlen(cp));
-    while (*cp != '\0') {
-        if (*cp != '\\') {
-            ds_put_char(&s, *cp++);
+    while (in < end) {
+        if (*in == '"') {
+            ds_clear(&out);
+            ds_put_cstr(&out, "quoted string may not include unescape \"");
+            goto exit;
+        }
+        if (*in != '\\') {
+            ds_put_char(&out, *in++);
             continue;
         }
 
-        cp++;
-        switch (*cp++) {
+        in++;
+        switch (*in++) {
         case '"': case '\\': case '/':
-            ds_put_char(&s, cp[-1]);
+            ds_put_char(&out, in[-1]);
             break;
 
         case 'b':
-            ds_put_char(&s, '\b');
+            ds_put_char(&out, '\b');
             break;
 
         case 'f':
-            ds_put_char(&s, '\f');
+            ds_put_char(&out, '\f');
             break;
 
         case 'n':
-            ds_put_char(&s, '\n');
+            ds_put_char(&out, '\n');
             break;
 
         case 'r':
-            ds_put_char(&s, '\r');
+            ds_put_char(&out, '\r');
             break;
 
         case 't':
-            ds_put_char(&s, '\t');
+            ds_put_char(&out, '\t');
             break;
 
         case 'u':
-            cp = json_lex_unicode(p, cp, &s);
-            if (!cp) {
+            in = json_lex_unicode(in, end, &out);
+            if (!in) {
                 goto exit;
             }
             break;
 
         default:
-            json_error(p, "bad escape \\%c", cp[-1]);
+            ds_clear(&out);
+            ds_put_format(&out, "bad escape \\%c", in[-1]);
             goto exit;
         }
     }
-
-    token.type = T_STRING;
-    token.u.string = ds_cstr(&s);
-    json_parser_input(p, &token);
+    ok = true;
 
 exit:
-    ds_destroy(&s);
-    return;
+    *outp = ds_cstr(&out);
+    return ok;
+}
+
+static void
+json_parser_input_string(struct json_parser *p, const char *s)
+{
+    struct json_token token;
+
+    token.type = T_STRING;
+    token.u.string = s;
+    json_parser_input(p, &token);
+}
+
+static void
+json_lex_string(struct json_parser *p)
+{
+    const char *raw = ds_cstr(&p->buffer);
+    if (!strchr(raw, '\\')) {
+        json_parser_input_string(p, raw);
+    } else {
+        char *cooked;
+
+        if (json_string_unescape(raw, strlen(raw), &cooked)) {
+            json_parser_input_string(p, cooked);
+        } else {
+            json_error(p, "%s", cooked);
+        }
+
+        free(cooked);
+    }
 }
 
 static bool

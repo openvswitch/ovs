@@ -60,8 +60,11 @@ JSON_CHECK_NEGATIVE([formfeed in quoted string],
 JSON_CHECK_NEGATIVE([bad escape in quoted string],
                     [[["\x12"]]],
                     [error: bad escape \x])
-JSON_CHECK_NEGATIVE([\u must be followed by 4 hex digits],
+JSON_CHECK_NEGATIVE([\u must be followed by 4 hex digits (1)],
                     [[["\u1x"]]],
+                    [error: quoted string ends within \u escape])
+JSON_CHECK_NEGATIVE([\u must be followed by 4 hex digits (2)],
+                    [[["\u1xyz"]]],
                     [error: malformed \u escape])
 JSON_CHECK_NEGATIVE([isolated leading surrogate not allowed],
                     [[["\ud834xxx"]]],

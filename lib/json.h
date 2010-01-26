@@ -120,5 +120,9 @@ enum {
     JSSF_SORT = 1 << 1          /* Object members in sorted order, if true. */
 };
 char *json_to_string(const struct json *, int flags);
+
+/* JSON string formatting operations. */
+
+bool json_string_unescape(const char *in, size_t in_len, char **outp);
 
 #endif /* json.h */
