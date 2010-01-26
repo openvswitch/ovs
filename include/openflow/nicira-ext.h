@@ -39,23 +39,11 @@ enum nicira_type {
 
     /* No longer used. */
     NXT_ACT_SET_CONFIG__OBSOLETE,
-
-    /* No longer used. */
     NXT_ACT_GET_CONFIG__OBSOLETE,
-
-    /* No longer used. */
     NXT_COMMAND_REQUEST__OBSOLETE,
-
-    /* No longer used. */
     NXT_COMMAND_REPLY__OBSOLETE,
-
-    /* No longer used. */
     NXT_FLOW_END_CONFIG__OBSOLETE,
-
-    /* No longer used. */
     NXT_FLOW_END__OBSOLETE,
-
-    /* No longer used. */
     NXT_MGMT__OBSOLETE,
 };
 
