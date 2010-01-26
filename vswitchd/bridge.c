@@ -1262,7 +1262,6 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
     struct svec listeners, old_listeners;
     struct svec snoops, old_snoops;
     struct shash_node *node;
-    uint64_t mgmt_id;
     size_t i;
 
     /* Collect old ports. */
@@ -1297,9 +1296,6 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
                       br->name, local_name);
         }
     }
-
-    dpid_from_string(ovs_cfg->management_id, &mgmt_id);
-    ofproto_set_mgmt_id(br->ofproto, mgmt_id);
 
     /* Get rid of deleted ports and add new ports. */
     SHASH_FOR_EACH (node, &old_ports) {

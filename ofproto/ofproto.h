@@ -48,7 +48,6 @@ bool ofproto_is_alive(const struct ofproto *);
 
 /* Configuration. */
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
-void ofproto_set_mgmt_id(struct ofproto *, uint64_t mgmt_id);
 void ofproto_set_probe_interval(struct ofproto *, int probe_interval);
 void ofproto_set_max_backoff(struct ofproto *, int max_backoff);
 void ofproto_set_desc(struct ofproto *,
@@ -69,7 +68,6 @@ int ofproto_set_stp(struct ofproto *, bool enable_stp);
 
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
-uint64_t ofproto_get_mgmt_id(const struct ofproto *);
 int ofproto_get_probe_interval(const struct ofproto *);
 int ofproto_get_max_backoff(const struct ofproto *);
 bool ofproto_get_in_band(const struct ofproto *);

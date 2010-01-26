@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,7 +130,7 @@ static void
 config_status_cb(struct status_reply *sr, void *ofproto_)
 {
     const struct ofproto *ofproto = ofproto_;
-    uint64_t datapath_id, mgmt_id;
+    uint64_t datapath_id;
     struct svec listeners;
     int probe_interval, max_backoff;
     size_t i;
@@ -138,11 +138,6 @@ config_status_cb(struct status_reply *sr, void *ofproto_)
     datapath_id = ofproto_get_datapath_id(ofproto);
     if (datapath_id) {
         status_reply_put(sr, "datapath-id=%"PRIx64, datapath_id);
-    }
-
-    mgmt_id = ofproto_get_mgmt_id(ofproto);
-    if (mgmt_id) {
-        status_reply_put(sr, "mgmt-id=%"PRIx64, mgmt_id);
     }
 
     svec_init(&listeners);

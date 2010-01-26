@@ -1560,7 +1560,6 @@ static const struct vsctl_column open_vswitch_columns[] = {
     {&ovsrec_open_vswitch_col_bridges, VSCF_READONLY, NULL},
     {&ovsrec_open_vswitch_col_controller, VSCF_READONLY, NULL},
     {&ovsrec_open_vswitch_col_cur_cfg, VSCF_HIDDEN, NULL},
-    {&ovsrec_open_vswitch_col_management_id, 0, "[0-9a-fA-F]{12}"},
     {&ovsrec_open_vswitch_col_managers, 0, "p?(ssl|tcp|unix):.*"},
     {&ovsrec_open_vswitch_col_next_cfg, VSCF_HIDDEN, NULL},
     {&ovsrec_open_vswitch_col_ssl, VSCF_READONLY, NULL},

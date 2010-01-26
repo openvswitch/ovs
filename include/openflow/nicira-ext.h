@@ -56,8 +56,8 @@ enum nicira_type {
     /* No longer used. */
     NXT_FLOW_END__OBSOLETE,
 
-    /* Management protocol.  See "openflow-mgmt.h". */
-    NXT_MGMT,
+    /* No longer used. */
+    NXT_MGMT__OBSOLETE,
 };
 
 struct nicira_header {

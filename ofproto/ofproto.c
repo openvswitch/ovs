@@ -37,7 +37,6 @@
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
-#include "openflow/openflow-mgmt.h"
 #include "openvswitch/datapath-protocol.h"
 #include "packets.h"
 #include "pinsched.h"
@@ -185,7 +184,6 @@ struct ofproto {
     /* Settings. */
     uint64_t datapath_id;       /* Datapath ID. */
     uint64_t fallback_dpid;     /* Datapath ID if no better choice found. */
-    uint64_t mgmt_id;           /* Management channel identifier. */
     char *manufacturer;         /* Manufacturer. */
     char *hardware;             /* Hardware. */
     char *software;             /* Software version. */
@@ -363,12 +361,6 @@ ofproto_set_datapath_id(struct ofproto *p, uint64_t datapath_id)
         VLOG_INFO("datapath ID changed to %012"PRIx64, p->datapath_id);
         rconn_reconnect(p->controller->rconn);
     }
-}
-
-void
-ofproto_set_mgmt_id(struct ofproto *p, uint64_t mgmt_id)
-{
-    p->mgmt_id = mgmt_id;
 }
 
 void
@@ -598,12 +590,6 @@ uint64_t
 ofproto_get_datapath_id(const struct ofproto *ofproto)
 {
     return ofproto->datapath_id;
-}
-
-uint64_t
-ofproto_get_mgmt_id(const struct ofproto *ofproto)
-{
-    return ofproto->mgmt_id;
 }
 
 int
@@ -2922,58 +2908,6 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
     }
 }
 
-static void
-send_capability_reply(struct ofproto *p, struct ofconn *ofconn, uint32_t xid)
-{
-    struct ofmp_capability_reply *ocr;
-    struct ofpbuf *b;
-    char capabilities[] = "com.nicira.mgmt.manager=false\n";
-
-    ocr = make_openflow_xid(sizeof(*ocr), OFPT_VENDOR, xid, &b);
-    ocr->header.header.vendor = htonl(NX_VENDOR_ID);
-    ocr->header.header.subtype = htonl(NXT_MGMT);
-    ocr->header.type = htons(OFMPT_CAPABILITY_REPLY);
-
-    ocr->format = htonl(OFMPCOF_SIMPLE);
-    ocr->mgmt_id = htonll(p->mgmt_id);
-
-    ofpbuf_put(b, capabilities, strlen(capabilities));
-
-    queue_tx(b, ofconn, ofconn->reply_counter);
-}
-
-static int
-handle_ofmp(struct ofproto *p, struct ofconn *ofconn, 
-            struct ofmp_header *ofmph)
-{
-    size_t msg_len = ntohs(ofmph->header.header.length);
-    if (msg_len < sizeof(*ofmph)) {
-        VLOG_WARN_RL(&rl, "dropping short managment message: %zu\n", msg_len);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
-    }
-
-    if (ofmph->type == htons(OFMPT_CAPABILITY_REQUEST)) {
-        struct ofmp_capability_request *ofmpcr;
-
-        if (msg_len < sizeof(struct ofmp_capability_request)) {
-            VLOG_WARN_RL(&rl, "dropping short capability request: %zu\n",
-                    msg_len);
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
-        }
-
-        ofmpcr = (struct ofmp_capability_request *)ofmph;
-        if (ofmpcr->format != htonl(OFMPCAF_SIMPLE)) {
-            /* xxx Find a better type than bad subtype */
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
-        }
-
-        send_capability_reply(p, ofconn, ofmph->header.header.xid);
-        return 0;
-    } else {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
-    }
-}
-
 static int
 handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
 {
@@ -3001,9 +2935,6 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
 
     case NXT_ACT_GET_CONFIG:
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE); /* XXX */
-
-    case NXT_MGMT:
-        return handle_ofmp(p, ofconn, msg);
     }
 
     return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);

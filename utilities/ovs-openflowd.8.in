@@ -205,14 +205,6 @@ Ethernet address of the datapath's local port (which is typically
 randomly generated).
 
 .TP
-\fB--mgmt-id=\fImgmtid\fR
-Sets \fImgmtid\fR, which must consist of exactly 12 hexadecimal
-digits, as the switch's management ID.
-
-If this option is omitted, the management ID defaults to 0, signaling
-to the controller that management is supported but not configured.
-
-.TP
 \fB--fail=\fR[\fBopen\fR|\fBclosed\fR]
 The controller is, ordinarily, responsible for setting up all flows on
 the OpenFlow switch.  Thus, if the connection to the controller fails,

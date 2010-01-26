@@ -7,9 +7,6 @@
        "bridges": {
          "comment": "Set of bridges managed by the daemon.",
          "type": {"key": "uuid", "min": 0, "max": "unlimited"}},
-       "management_id": {
-         "comment": "Exactly 12 hex digits that identify the daemon.",
-         "type": "string"},
        "controller": {
          "comment": "Default Controller used by bridges.",
          "type": {"key": "uuid", "min": 0, "max": 1}},

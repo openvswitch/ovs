@@ -94,9 +94,6 @@ struct ofsettings {
     /* Spanning tree protocol. */
     bool enable_stp;
 
-    /* Management. */
-    uint64_t mgmt_id;           /* Management ID. */
-
     /* NetFlow. */
     struct svec netflow;        /* NetFlow targets. */
 };
@@ -173,9 +170,6 @@ main(int argc, char *argv[])
     }
     if (s.datapath_id) {
         ofproto_set_datapath_id(ofproto, s.datapath_id);
-    }
-    if (s.mgmt_id) {
-        ofproto_set_mgmt_id(ofproto, s.mgmt_id);
     }
     ofproto_set_desc(ofproto, s.mfr_desc, s.hw_desc, s.sw_desc, s.serial_desc);
     if (!s.listeners.n) {
@@ -292,7 +286,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         {"out-of-band", no_argument, 0, OPT_OUT_OF_BAND},
         {"in-band",     no_argument, 0, OPT_IN_BAND},
         {"netflow",     required_argument, 0, OPT_NETFLOW},
-        {"mgmt-id",     required_argument, 0, OPT_MGMT_ID},
         {"ports",       required_argument, 0, OPT_PORTS},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
@@ -327,7 +320,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->enable_stp = false;
     s->in_band = true;
     svec_init(&s->netflow);
-    s->mgmt_id = 0;
     svec_init(&s->ports);
     for (;;) {
         int c;
@@ -445,18 +437,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             svec_add(&s->netflow, optarg);
             break;
 
-        case OPT_MGMT_ID:
-            if (strlen(optarg) != 12
-                || strspn(optarg, "0123456789abcdefABCDEF") != 12) {
-                ovs_fatal(0, "argument to --mgmt-id must be "
-                          "exactly 12 hex digits");
-            }
-            s->mgmt_id = strtoll(optarg, NULL, 16);
-            if (!s->mgmt_id) {
-                ovs_fatal(0, "argument to --mgmt-id must be nonzero");
-            }
-            break;
-
         case 'l':
             svec_add(&s->listeners, optarg);
             break;
@@ -541,8 +521,6 @@ usage(void)
     vconn_usage(true, true, true);
     printf("\nOpenFlow options:\n"
            "  -d, --datapath-id=ID    Use ID as the OpenFlow switch ID\n"
-           "                          (ID must consist of 12 hex digits)\n"
-           "  --mgmt-id=ID            Use ID as the management ID\n"
            "                          (ID must consist of 12 hex digits)\n"
            "  --manufacturer=MFR      Identify manufacturer as MFR\n"
            "  --hardware=HW           Identify hardware as HW\n"
