@@ -209,7 +209,7 @@ case "$1" in
             # Create configuration database.
             ovsdb-tool -vANY:console:emer \
                 create /etc/openvswitch-switch/conf \
-                /usr/share/openvswitch/vswitch-idl.ovsschema
+                /usr/share/openvswitch/vswitch.ovsschema
         fi
 
         if test "$ENABLE_MONITOR" = y; then

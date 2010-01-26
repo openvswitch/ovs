@@ -67,8 +67,8 @@ install -d -m 755 $RPM_BUILD_ROOT/etc/xapi.d/plugins
 install -m 755 xenserver/etc_xapi.d_plugins_vswitch-cfg-update \
          $RPM_BUILD_ROOT/etc/xapi.d/plugins/vswitch-cfg-update
 install -d -m 755 $RPM_BUILD_ROOT/usr/share/vswitch/scripts
-install -m 644 vswitchd/vswitch-idl.ovsschema \
-         $RPM_BUILD_ROOT/usr/share/vswitch/vswitch-idl.ovsschema
+install -m 644 vswitchd/vswitch.ovsschema \
+         $RPM_BUILD_ROOT/usr/share/vswitch/vswitch.ovsschema
 install -m 755 xenserver/opt_xensource_libexec_interface-reconfigure \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/interface-reconfigure
 install -m 755 xenserver/etc_xensource_scripts_vif \
@@ -189,7 +189,7 @@ fi
 if test ! -e /etc/ovs-vswitchd.conf.db; then
     # Create ovs-vswitchd config database
     ovsdb-tool -vANY:console:emer create /etc/ovs-vswitchd.conf.db \
-            /usr/share/vswitch/vswitch-idl.ovsschema \
+            /usr/share/vswitch/vswitch.ovsschema \
 
     # Create initial table in config database
     ovsdb-tool -vANY:console:emer transact /etc/ovs-vswitchd.conf.db \
@@ -331,7 +331,7 @@ fi
 # include them.
 /usr/share/vswitch/scripts/XSFeatureVSwitch.pyc
 /usr/share/vswitch/scripts/XSFeatureVSwitch.pyo
-/usr/share/vswitch/vswitch-idl.ovsschema
+/usr/share/vswitch/vswitch.ovsschema
 /usr/sbin/ovs-brcompatd
 /usr/sbin/ovs-vswitchd
 /usr/sbin/ovsdb-server

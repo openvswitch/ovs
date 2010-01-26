@@ -4,4 +4,4 @@ _debian/utilities/ovs-appctl usr/sbin
 _debian/utilities/ovs-ofctl usr/sbin
 _debian/utilities/ovs-parse-leaks usr/bin
 _debian/utilities/ovs-pki usr/sbin
-vswitchd/vswitch-idl.ovsschema usr/share/openvswitch
+vswitchd/vswitch.ovsschema usr/share/openvswitch

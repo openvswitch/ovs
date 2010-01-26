@@ -103,7 +103,7 @@
 
 # VSWITCHD_OVSDB_SCHEMA: Schema file to use for generating a new OVSDB
 #     ovs-vswitchd database.
-# VSWITCHD_OVSDB_SCHEMA=/usr/share/vswitch/vswitch-idl.ovsschema
+# VSWITCHD_OVSDB_SCHEMA=/usr/share/vswitch/vswitch.ovsschema
 
 # VSWITCHD_PIDFILE: File in which to store the pid of the running
 #     ovs-vswitchd.

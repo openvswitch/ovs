@@ -46,7 +46,7 @@ test -e /etc/sysconfig/vswitch && . /etc/sysconfig/vswitch
 
 # Config variables specific to ovs-vswitchd
 : ${VSWITCHD_OVSDB_SERVER:=unix:/var/run/ovsdb-server}
-: ${VSWITCHD_OVSDB_SCHEMA:=/usr/share/vswitch/vswitch-idl.ovsschema}
+: ${VSWITCHD_OVSDB_SCHEMA:=/usr/share/vswitch/vswitch.ovsschema}
 : ${VSWITCHD_PIDFILE:=/var/run/ovs-vswitchd.pid}
 : ${VSWITCHD_RUN_DIR:=/var/xen/vswitch}
 : ${VSWITCHD_PRIORITY:=-10}
