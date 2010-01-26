@@ -1506,6 +1506,7 @@ static const struct vsctl_column bridge_columns[] = {
     {&ovsrec_bridge_col_name, VSCF_READONLY, NULL},
     {&ovsrec_bridge_col_mirrors, VSCF_READONLY, NULL},
     {&ovsrec_bridge_col_other_config, 0, NULL},
+    {&ovsrec_bridge_col_flood_vlans, 0, "[1,4095]"},
     {&ovsrec_bridge_col_controller, VSCF_READONLY, NULL},
     {&ovsrec_bridge_col_netflow, VSCF_READONLY, NULL},
     {&ovsrec_bridge_col_external_ids, 0, NULL},
@@ -1572,6 +1573,7 @@ static const struct vsctl_column open_vswitch_columns[] = {
 };
 
 static const struct vsctl_column port_columns[] = {
+    {&ovsrec_port_col_bond_updelay, 0, "[0,]"},
     {&ovsrec_port_col_bond_downdelay, 0, "[0,]"},
     {&ovsrec_port_col_bond_fake_iface, VSCF_READONLY, NULL},
     {&ovsrec_port_col_external_ids, 0, NULL},
