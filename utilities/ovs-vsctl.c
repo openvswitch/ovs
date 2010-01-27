@@ -236,104 +236,77 @@ parse_options(int argc, char *argv[])
 static void
 usage(void)
 {
-    printf("%s: ovs-vswitchd management utility\n"
-           "usage: %s [OPTIONS] COMMAND [ARG...]\n",
-           program_name, program_name);
-    printf("\nBridge commands:\n"
-           "  add-br BRIDGE               "
-           "create a new bridge named BRIDGE\n"
-           "  add-br BRIDGE PARENT VLAN   "
-           "create new fake bridge BRIDGE in PARENT on VLAN\n"
-           "  del-br BRIDGE               "
-           "delete BRIDGE and all of its ports\n"
-           "  list-br                     "
-           "print the names of all the bridges\n"
-           "  br-exists BRIDGE            "
-           "test whether BRIDGE exists\n"
-           "  br-to-vlan BRIDGE           "
-           "print the VLAN which BRIDGE is on\n"
-           "  br-to-parent BRIDGE         "
-           "print the parent of BRIDGE\n"
-           "  br-set-external-id BRIDGE KEY VALUE"
-           "  set KEY on BRIDGE to VALUE\n"
-           "  br-set-external-id BRIDGE KEY"
-           "  unset KEY on BRIDGE\n"
-           "  br-get-external-id BRIDGE KEY"
-           "  print value of KEY on BRIDGE\n"
-           "  br-get-external-id BRIDGE"
-           "  list key-value pairs on BRIDGE\n"
-        );
-    printf("\nPort commands:\n"
-           "  list-ports BRIDGE           "
-           "print the names of all the ports on BRIDGE\n"
-           "  add-port BRIDGE PORT        "
-           "add network device PORT to BRIDGE\n"
-           "  add-bond BRIDGE PORT IFACE...  "
-           "add new bonded port PORT in BRIDGE from IFACES\n"
-           "  del-port [BRIDGE] PORT      "
-           "delete PORT (which may be bonded) from BRIDGE\n"
-           "  port-to-br PORT             "
-           "print name of bridge that contains PORT\n"
-           "  port-set-external-id PORT KEY VALUE"
-           "  set KEY on PORT to VALUE\n"
-           "  port-set-external-id PORT KEY"
-           "  unset KEY on PORT\n"
-           "  port-get-external-id PORT KEY"
-           "  print value of KEY on PORT\n"
-           "  port-get-external-id PORT"
-           "  list key-value pairs on PORT\n"
-           "A bond is considered to be a single port.\n"
-        );
-    printf("\nInterface commands (a bond consists of multiple interfaces):\n"
-           "  list-ifaces BRIDGE          "
-           "print the names of all the interfaces on BRIDGE\n"
-           "  iface-to-br IFACE           "
-           "print name of bridge that contains IFACE\n"
-           "  iface-set-external-id IFACE KEY VALUE"
-           "  set KEY on IFACE to VALUE\n"
-           "  iface-set-external-id IFACE KEY"
-           "  unset KEY on IFACE\n"
-           "  iface-get-external-id IFACE KEY"
-           "  print value of KEY on IFACE\n"
-           "  iface-get-external-id IFACE"
-           "  list key-value pairs on IFACE\n"
-        );
-    printf("\nController commands:\n"
-           "  get-controller [BRIDGE]     "
-           "print the controller for BRIDGE\n"
-           "  del-controller [BRIDGE]     "
-           "delete the controller for BRIDGE\n"
-           "  set-controller [BRIDGE] TARGET  "
-           "set the controller for BRIDGE to TARGET\n"
-           "  get-fail-mode [BRIDGE]     "
-           "print the fail-mode for BRIDGE\n"
-           "  del-fail-mode [BRIDGE]     "
-           "delete the fail-mode for BRIDGE\n"
-           "  set-fail-mode [BRIDGE] MODE  "
-           "set the fail-mode for BRIDGE to MODE\n"
-        );
-    printf("\nSSL commands:\n"
-           "  get-ssl              "
-           "print the SSL configuration\n"
-           "  del-ssl              "
-           "delete the SSL configuration\n"
-           "  set-ssl PRIV-KEY CERT CA-CERT  "
-           "set the SSL configuration\n"
-        );
-    printf("\nOptions:\n"
-           "  --db=DATABASE               "
-           "connect to DATABASE\n"
-           "                              "
-           "(default: %s)\n"
-           "  --oneline                   "
-           "print exactly one line of output per command\n",
-           default_db());
+    printf("\
+%s: ovs-vswitchd management utility\n\
+usage: %s [OPTIONS] COMMAND [ARG...]\n\
+\n\
+Bridge commands:\n\
+  add-br BRIDGE               create a new bridge named BRIDGE\n\
+  add-br BRIDGE PARENT VLAN   create new fake BRIDGE in PARENT on VLAN\n\
+  del-br BRIDGE               delete BRIDGE and all of its ports\n\
+  list-br                     print the names of all the bridges\n\
+  br-exists BRIDGE            test whether BRIDGE exists\n\
+  br-to-vlan BRIDGE           print the VLAN which BRIDGE is on\n\
+  br-to-parent BRIDGE         print the parent of BRIDGE\n\
+  br-set-external-id BRIDGE KEY VALUE  set KEY on BRIDGE to VALUE\n\
+  br-set-external-id BRIDGE KEY  unset KEY on BRIDGE\n\
+  br-get-external-id BRIDGE KEY  print value of KEY on BRIDGE\n\
+  br-get-external-id BRIDGE  list key-value pairs on BRIDGE\n\
+\n\
+Port commands:\n\
+  list-ports BRIDGE           print the names of all the ports on BRIDGE\n\
+  add-port BRIDGE PORT        add network device PORT to BRIDGE\n\
+  add-bond BRIDGE PORT IFACE...  add bonded port PORT in BRIDGE from IFACES\n\
+  del-port [BRIDGE] PORT      delete PORT (which may be bonded) from BRIDGE\n\
+  port-to-br PORT             print name of bridge that contains PORT\n\
+  port-set-external-id PORT KEY VALUE  set KEY on PORT to VALUE\n\
+  port-set-external-id PORT KEY  unset KEY on PORT\n\
+  port-get-external-id PORT KEY  print value of KEY on PORT\n\
+  port-get-external-id PORT  list key-value pairs on PORT\n\
+A bond is considered to be a single port.\n\
+\n\
+Interface commands (a bond consists of multiple interfaces):\n\
+  list-ifaces BRIDGE          print the names of all interfaces on BRIDGE\n\
+  iface-to-br IFACE           print name of bridge that contains IFACE\n\
+  iface-set-external-id IFACE KEY VALUE  set KEY on IFACE to VALUE\n\
+  iface-set-external-id IFACE KEY  unset KEY on IFACE\n\
+  iface-get-external-id IFACE KEY  print value of KEY on IFACE\n\
+  iface-get-external-id IFACE list key-value pairs on IFACE\n\
+\n\
+Controller commands:\n\
+  get-controller [BRIDGE]     print the controller for BRIDGE\n\
+  del-controller [BRIDGE]     delete the controller for BRIDGE\n\
+  set-controller [BRIDGE] TARGET  set the controller for BRIDGE to TARGET\n\
+  get-fail-mode [BRIDGE]      print the fail-mode for BRIDGE\n\
+  del-fail-mode [BRIDGE]      delete the fail-mode for BRIDGE\n\
+  set-fail-mode [BRIDGE] MODE set the fail-mode for BRIDGE to MODE\n\
+\n\
+SSL commands:\n\
+  get-ssl                     print the SSL configuration\n\
+  del-ssl                     delete the SSL configuration\n\
+  set-ssl PRIV-KEY CERT CA-CERT  set the SSL configuration\n\
+\n\
+Database commands:\n\
+  list TBL [REC]              list RECord (or all records) in TBL\n\
+  get TBL REC COL[:KEY]       print values of COLumns in RECORD in TBL\n\
+  set TBL REC COL[:KEY]=VALUE set COLumn values in RECord in TBL\n\
+  add TBL REC COL [KEY=]VALUE add (KEY=)VALUE to COLumn in RECord in TBL\n\
+  remove TBL REC COL [KEY=]VALUE  remove (KEY=)VALUE from COLumn\n\
+  clear TBL REC COL           clear values from COLumn in RECord in TBL\n\
+  create TBL COL[:KEY]=VALUE  create and initialize new record\n\
+  destroy TBL REC             delete REC from TBL\n\
+Potentially unsafe database commands require --force option.\n\
+\n\
+Options:\n\
+  --db=DATABASE               connect to DATABASE\n\
+                              (default: %s)\n\
+  --oneline                   print exactly one line of output per command\n",
+           program_name, program_name, default_db());
     vlog_usage();
-    printf("\nOther options:\n"
-           "  -h, --help                  "
-           "display this help message\n"
-           "  -V, --version               "
-           "display version information\n");
+    printf("\n\
+Other options:\n\
+  -h, --help                  display this help message\n\
+  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
 }
 
