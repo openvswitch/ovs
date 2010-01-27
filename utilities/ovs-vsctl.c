@@ -1745,6 +1745,7 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
         return NULL;
     }
 
+    final = NULL;
     if (id->uuid_column) {
         struct ovsdb_datum uuid;
 
