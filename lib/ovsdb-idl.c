@@ -799,7 +799,7 @@ next_real_row(struct ovsdb_idl_table *table, struct hmap_node *node)
         struct ovsdb_idl_row *row;
 
         row = CONTAINER_OF(node, struct ovsdb_idl_row, hmap_node);
-        if (!ovsdb_idl_row_is_orphan(row)) {
+        if (row->new || !ovsdb_idl_row_is_orphan(row)) {
             return row;
         }
     }
