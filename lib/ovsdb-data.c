@@ -396,6 +396,11 @@ ovsdb_atom_from_string(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
         if (!str_to_double(s, &atom->real)) {
             return xasprintf("\"%s\" is not a valid real number", s);
         }
+        /* Our JSON input routines map negative zero to zero, so do that here
+         * too for consistency. */
+        if (atom->real == 0.0) {
+            atom->real = 0.0;
+        }
         break;
 
     case OVSDB_TYPE_BOOLEAN:
