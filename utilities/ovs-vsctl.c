@@ -2227,6 +2227,89 @@ cmd_add(struct vsctl_context *ctx)
     }
     ovsdb_idl_txn_write(row, column->idl, &old);
 }
+
+static void
+cmd_remove(struct vsctl_context *ctx)
+{
+    const char *table_name = ctx->argv[1];
+    const char *record_id = ctx->argv[2];
+    const char *column_name = ctx->argv[3];
+    const struct vsctl_table_class *table;
+    const struct vsctl_column *column;
+    const struct ovsdb_idl_row *row;
+    const struct ovsdb_type *type;
+    struct ovsdb_datum old;
+    int i;
+
+    table = get_table(table_name);
+    row = get_row(ctx, table, record_id);
+    die_if_error(get_column(table, column_name, &column));
+    type = &column->idl->type;
+    ovsdb_idl_txn_read(row, column->idl, &old);
+    for (i = 4; i < ctx->argc; i++) {
+        struct ovsdb_type rm_type;
+        struct ovsdb_datum rm;
+        char *error;
+
+        if (column->flags & VSCF_READONLY) {
+            ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
+                      ctx->argv[i], column->idl->name, table_name);
+        }
+
+        rm_type = *type;
+        rm_type.n_min = 1;
+        rm_type.n_max = UINT_MAX;
+        error = ovsdb_datum_from_string(&rm, &rm_type, ctx->argv[i]);
+        if (error && ovsdb_type_is_map(&rm_type)) {
+            free(error);
+            rm_type.value_type = OVSDB_TYPE_VOID;
+            die_if_error(ovsdb_datum_from_string(&rm, &rm_type, ctx->argv[i]));
+        }
+        ovsdb_datum_subtract(&old, type, &rm, &rm_type);
+        ovsdb_datum_destroy(&rm, &rm_type);
+    }
+    if (old.n < type->n_min) {
+        ovs_fatal(0, "\"remove\" operation would put %u %s in column %s of "
+                  "table %s but at least %u are required",
+                  old.n,
+                  type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
+                  column->idl->name, table_name, type->n_min);
+    }
+    ovsdb_idl_txn_write(row, column->idl, &old);
+}
+
+static void
+cmd_clear(struct vsctl_context *ctx)
+{
+    const char *table_name = ctx->argv[1];
+    const char *record_id = ctx->argv[2];
+    const struct vsctl_table_class *table;
+    const struct ovsdb_idl_row *row;
+    int i;
+
+    table = get_table(table_name);
+    row = get_row(ctx, table, record_id);
+    for (i = 3; i < ctx->argc; i++) {
+        const struct vsctl_column *column;
+        const struct ovsdb_type *type;
+        struct ovsdb_datum datum;
+
+        die_if_error(get_column(table, ctx->argv[i], &column));
+
+        type = &column->idl->type;
+        if (column->flags & VSCF_READONLY) {
+            ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
+                      ctx->argv[i], column->idl->name, table_name);
+        } else if (type->n_min > 0) {
+            ovs_fatal(0, "\"clear\" operation cannot be applied to column %s "
+                      "of table %s, which is not allowed to be empty",
+                      column->idl->name, table_name);
+        }
+
+        ovsdb_datum_init_empty(&datum);
+        ovsdb_idl_txn_write(row, column->idl, &datum);
+    }
+}
 
 typedef void vsctl_handler_func(struct vsctl_context *);
 
@@ -2437,11 +2520,8 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
         {"list", 1, INT_MAX, cmd_list, ""},
         {"set", 3, INT_MAX, cmd_set, ""},
         {"add", 4, INT_MAX, cmd_add, ""},
-#if 0
-        /* XXX Not yet implemented. */
         {"remove", 4, INT_MAX, cmd_remove, ""},
         {"clear", 3, INT_MAX, cmd_clear, ""},
-#endif
     };
 
     const struct vsctl_command *p;
