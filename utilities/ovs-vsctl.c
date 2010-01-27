@@ -2121,6 +2121,7 @@ check_constraint(const struct ovsdb_datum *datum,
 static void
 cmd_set(struct vsctl_context *ctx)
 {
+    bool force = shash_find(&ctx->options, "--force");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const struct vsctl_table_class *table;
@@ -2138,7 +2139,7 @@ cmd_set(struct vsctl_context *ctx)
         error = parse_column_key_value(ctx->argv[i], table,
                                        &column, &key_string, &value_string);
         die_if_error(error);
-        if (column->flags & VSCF_READONLY) {
+        if (column->flags & VSCF_READONLY && !force) {
             ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
                       ctx->argv[i], column->idl->name, table_name);
         }
@@ -2175,7 +2176,10 @@ cmd_set(struct vsctl_context *ctx)
 
             die_if_error(ovsdb_datum_from_string(&datum, &column->idl->type,
                                                  value_string));
-            check_constraint(&datum, &column->idl->type, column->constraint);
+            if (!force) {
+                check_constraint(&datum, &column->idl->type,
+                                 column->constraint);
+            }
             ovsdb_idl_txn_write(row, column->idl, &datum);
         }
         ds_put_char(out, '\n');
@@ -2187,6 +2191,7 @@ cmd_set(struct vsctl_context *ctx)
 static void
 cmd_add(struct vsctl_context *ctx)
 {
+    bool force = shash_find(&ctx->options, "--force");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const char *column_name = ctx->argv[3];
@@ -2206,7 +2211,7 @@ cmd_add(struct vsctl_context *ctx)
         struct ovsdb_type add_type;
         struct ovsdb_datum add;
 
-        if (column->flags & VSCF_READONLY) {
+        if (column->flags & VSCF_READONLY && !force) {
             ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
                       ctx->argv[i], column->idl->name, table_name);
         }
@@ -2231,6 +2236,7 @@ cmd_add(struct vsctl_context *ctx)
 static void
 cmd_remove(struct vsctl_context *ctx)
 {
+    bool force = shash_find(&ctx->options, "--force");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const char *column_name = ctx->argv[3];
@@ -2251,7 +2257,7 @@ cmd_remove(struct vsctl_context *ctx)
         struct ovsdb_datum rm;
         char *error;
 
-        if (column->flags & VSCF_READONLY) {
+        if (column->flags & VSCF_READONLY && !force) {
             ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
                       ctx->argv[i], column->idl->name, table_name);
         }
@@ -2281,6 +2287,7 @@ cmd_remove(struct vsctl_context *ctx)
 static void
 cmd_clear(struct vsctl_context *ctx)
 {
+    bool force = shash_find(&ctx->options, "--force");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const struct vsctl_table_class *table;
@@ -2297,7 +2304,7 @@ cmd_clear(struct vsctl_context *ctx)
         die_if_error(get_column(table, ctx->argv[i], &column));
 
         type = &column->idl->type;
-        if (column->flags & VSCF_READONLY) {
+        if (column->flags & VSCF_READONLY && !force) {
             ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
                       ctx->argv[i], column->idl->name, table_name);
         } else if (type->n_min > 0) {
@@ -2518,10 +2525,11 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
         /* Parameter commands. */
         {"get", 3, INT_MAX, cmd_get, ""},
         {"list", 1, INT_MAX, cmd_list, ""},
-        {"set", 3, INT_MAX, cmd_set, ""},
-        {"add", 4, INT_MAX, cmd_add, ""},
-        {"remove", 4, INT_MAX, cmd_remove, ""},
-        {"clear", 3, INT_MAX, cmd_clear, ""},
+        {"set", 3, INT_MAX, cmd_set, "--force"},
+        {"add", 4, INT_MAX, cmd_add, "--force"},
+        {"remove", 4, INT_MAX, cmd_remove, "--force"},
+        {"clear", 3, INT_MAX, cmd_clear, "--force"},
+        {"create", 1, INT_MAX, cmd_create, "--force"},
     };
 
     const struct vsctl_command *p;

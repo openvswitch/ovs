@@ -472,6 +472,13 @@ as \fB{}\fR, and curly braces may be optionally enclose non-empty maps
 as well.
 .
 .ST "Database Command Syntax"
+.PP
+By default, database commands refuse to make some kinds of
+modifications that could violate database structuring constraints.  If
+you are sure that you know what you are doing, use \fB\-\-force\fR to
+override this safety measure.  Constraints that are enforced by the
+database server itself, instead of by \fBovs\-vsctl\fR, cannot be
+overridden this way.
 .
 .IP "\fBlist \fItable \fR[\fIrecord\fR]..."
 List the values of all columns of each specified \fIrecord\fR.  If no
@@ -483,23 +490,23 @@ Prints the value of each specified \fIcolumn\fR in the given
 optionally be specified, in which case the value associated with
 \fIkey\fR in the column is printed, instead of the entire map.
 .
-.IP "\fBset \fItable record column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
+.IP "[\fB\-\-force\fR] \fBset \fItable record column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
 Sets the value of each specified \fIcolumn\fR in the given
 \fIrecord\fR in \fItable\fR to \fIvalue\fR.  For map columns, a
 \fIkey\fR may optionally be specified, in which case the value
 associated with \fIkey\fR in that column is changed (or added, if none
 exists), instead of the entire map.
 .
-.IP "\fBadd \fItable record column \fR[\fIkey\fB=\fR]\fIvalue\fR..."
+.IP "[\fB\-\-force\fR] \fBadd \fItable record column \fR[\fIkey\fB=\fR]\fIvalue\fR..."
 Adds the specified value or key-value pair to \fIcolumn\fR in
 \fIrecord\fR in \fItable\fR.  If \fIcolumn\fR is a map, then \fIkey\fR
 is required, otherwise it is prohibited.  If \fIkey\fR already exists
 in a map column, then the current \fIvalue\fR is not replaced (use the
 \fBset\fR command to replace an existing value).
 .
-.IP "\fBremove \fItable record column \fR\fIvalue\fR..."
-.IQ "\fBremove \fItable record column \fR\fIkey\fR..."
-.IQ "\fBremove \fItable record column \fR\fIkey\fB=\fR\fIvalue\fR..."
+.IP "[\fB\-\-force\fR] \fBremove \fItable record column \fR\fIvalue\fR..."
+.IQ "[\fB\-\-force\fR] \fBremove \fItable record column \fR\fIkey\fR..."
+.IQ "[\fB\-\-force\fR] \fBremove \fItable record column \fR\fIkey\fB=\fR\fIvalue\fR..."
 Removes the specified values or key-value pairs from \fIcolumn\fR in
 \fIrecord\fR in \fItable\fR.  The first form applies to columns that
 are not maps: each specified \fIvalue\fR is removed from the column.
@@ -511,7 +518,7 @@ pair is removed only if both key and value match.
 It is not an error if the column does not contain the specified key or
 value or pair.
 .
-.IP "\fBclear \fItable record column\fR..."
+.IP "\fB[\fB\-\-force\fR] \fBclear\fR \fItable record column\fR..."
 Sets each \fIcolumn\fR in \fIrecord\fR in \fItable\fR to the empty set
 or empty map, as appropriate.  This command applies only to columns
 that are allowed to be empty.
