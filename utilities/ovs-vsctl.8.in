@@ -523,6 +523,12 @@ Sets each \fIcolumn\fR in \fIrecord\fR in \fItable\fR to the empty set
 or empty map, as appropriate.  This command applies only to columns
 that are allowed to be empty.
 .
+.IP "\fB\-\-force create \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
+Creates a new record in \fItable\fR and sets the initial values of
+each \fIcolumn\fR.  Columns not explicitly set will receive their
+default values.
+.IP
+This command requires the \fB\-\-force\fR option.
 .SH "EXAMPLES"
 Create a new bridge named br0 and add port eth0 to it:
 .IP

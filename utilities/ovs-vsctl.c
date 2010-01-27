@@ -1855,7 +1855,7 @@ parse_column_key_value(const char *arg, const struct vsctl_table_class *table,
     if (columnp) {
         char *column_name;
 
-        error = ovsdb_token_parse(&arg, &column_name);
+        error = ovsdb_token_parse(&p, &column_name);
         if (error) {
             goto error;
         }
@@ -2119,6 +2119,65 @@ check_constraint(const struct ovsdb_datum *datum,
 }
 
 static void
+set_column(const struct vsctl_table_class *table,
+           const struct ovsdb_idl_row *row,
+           const char *arg, bool force)
+{
+    const struct vsctl_column *column;
+    char *key_string, *value_string;
+    char *error;
+
+    error = parse_column_key_value(arg, table, &column, &key_string,
+                                   &value_string);
+    die_if_error(error);
+    if (column->flags & VSCF_READONLY && !force) {
+        ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
+                  arg, column->idl->name, table->class->name);
+    }
+    if (!value_string) {
+        ovs_fatal(0, "%s: missing value", arg);
+    }
+
+    if (key_string) {
+        union ovsdb_atom key, value;
+        struct ovsdb_datum old, new;
+
+        if (column->idl->type.value_type == OVSDB_TYPE_VOID) {
+            ovs_fatal(0, "cannot specify key to set for non-map column %s",
+                      column->idl->name);
+        }
+
+        die_if_error(ovsdb_atom_from_string(&key,
+                                            column->idl->type.key_type,
+                                            key_string));
+        die_if_error(ovsdb_atom_from_string(&value,
+                                            column->idl->type.value_type,
+                                            value_string));
+
+        ovsdb_datum_init_empty(&new);
+        ovsdb_datum_add_unsafe(&new, &key, &value, &column->idl->type);
+
+        ovsdb_idl_txn_read(row, column->idl, &old);
+        ovsdb_datum_union(&old, &new, &column->idl->type, true);
+        ovsdb_idl_txn_write(row, column->idl, &old);
+
+        ovsdb_datum_destroy(&new, &column->idl->type);
+    } else {
+        struct ovsdb_datum datum;
+
+        die_if_error(ovsdb_datum_from_string(&datum, &column->idl->type,
+                                             value_string));
+        if (!force) {
+            check_constraint(&datum, &column->idl->type,
+                             column->constraint);
+        }
+        ovsdb_idl_txn_write(row, column->idl, &datum);
+    }
+
+    free(key_string);
+}
+
+static void
 cmd_set(struct vsctl_context *ctx)
 {
     bool force = shash_find(&ctx->options, "--force");
@@ -2126,65 +2185,12 @@ cmd_set(struct vsctl_context *ctx)
     const char *record_id = ctx->argv[2];
     const struct vsctl_table_class *table;
     const struct ovsdb_idl_row *row;
-    struct ds *out = &ctx->output;
     int i;
 
     table = get_table(table_name);
     row = get_row(ctx, table, record_id);
     for (i = 3; i < ctx->argc; i++) {
-        const struct vsctl_column *column;
-        char *key_string, *value_string;
-        char *error;
-
-        error = parse_column_key_value(ctx->argv[i], table,
-                                       &column, &key_string, &value_string);
-        die_if_error(error);
-        if (column->flags & VSCF_READONLY && !force) {
-            ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
-                      ctx->argv[i], column->idl->name, table_name);
-        }
-        if (!value_string) {
-            ovs_fatal(0, "%s: missing value", ctx->argv[i]);
-        }
-
-        if (key_string) {
-            union ovsdb_atom key, value;
-            struct ovsdb_datum old, new;
-
-            if (column->idl->type.value_type == OVSDB_TYPE_VOID) {
-                ovs_fatal(0, "cannot specify key to set for non-map column %s",
-                          column->idl->name);
-            }
-
-            die_if_error(ovsdb_atom_from_string(&key,
-                                                column->idl->type.key_type,
-                                                key_string));
-            die_if_error(ovsdb_atom_from_string(&value,
-                                                column->idl->type.value_type,
-                                                value_string));
-
-            ovsdb_datum_init_empty(&new);
-            ovsdb_datum_add_unsafe(&new, &key, &value, &column->idl->type);
-
-            ovsdb_idl_txn_read(row, column->idl, &old);
-            ovsdb_datum_union(&old, &new, &column->idl->type, true);
-            ovsdb_idl_txn_write(row, column->idl, &old);
-
-            ovsdb_datum_destroy(&new, &column->idl->type);
-        } else {
-            struct ovsdb_datum datum;
-
-            die_if_error(ovsdb_datum_from_string(&datum, &column->idl->type,
-                                                 value_string));
-            if (!force) {
-                check_constraint(&datum, &column->idl->type,
-                                 column->constraint);
-            }
-            ovsdb_idl_txn_write(row, column->idl, &datum);
-        }
-        ds_put_char(out, '\n');
-
-        free(key_string);
+        set_column(table, row, ctx->argv[i], force);
     }
 }
 
@@ -2315,6 +2321,26 @@ cmd_clear(struct vsctl_context *ctx)
 
         ovsdb_datum_init_empty(&datum);
         ovsdb_idl_txn_write(row, column->idl, &datum);
+    }
+}
+
+static void
+cmd_create(struct vsctl_context *ctx)
+{
+    bool force = shash_find(&ctx->options, "--force");
+    const char *table_name = ctx->argv[1];
+    const struct vsctl_table_class *table;
+    const struct ovsdb_idl_row *row;
+    int i;
+
+    if (!force) {
+        ovs_fatal(0, "\"create\" requires --force");
+    }
+
+    table = get_table(table_name);
+    row = ovsdb_idl_txn_insert(txn_from_openvswitch(ctx->ovs), table->class);
+    for (i = 2; i < ctx->argc; i++) {
+        set_column(table, row, ctx->argv[i], force);
     }
 }
 
@@ -2529,7 +2555,7 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
         {"add", 4, INT_MAX, cmd_add, "--force"},
         {"remove", 4, INT_MAX, cmd_remove, "--force"},
         {"clear", 3, INT_MAX, cmd_clear, "--force"},
-        {"create", 1, INT_MAX, cmd_create, "--force"},
+        {"create", 2, INT_MAX, cmd_create, "--force"},
     };
 
     const struct vsctl_command *p;
