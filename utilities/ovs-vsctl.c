@@ -1648,6 +1648,14 @@ static const struct vsctl_table_class tables[] = {
     {NULL, NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
 };
 
+static void
+die_if_error(char *error)
+{
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+}
+
 static int
 to_lower_and_underscores(unsigned c)
 {
@@ -1794,8 +1802,9 @@ get_row(struct vsctl_context *ctx,
     return row;
 }
 
-static const struct vsctl_column *
-get_column(const struct vsctl_table_class *table, const char *column_name)
+static char *
+get_column(const struct vsctl_table_class *table, const char *column_name,
+           const struct vsctl_column **columnp)
 {
     const struct vsctl_column *column;
     const struct vsctl_column *best_match = NULL;
@@ -1813,44 +1822,52 @@ get_column(const struct vsctl_table_class *table, const char *column_name)
             }
         }
     }
+
+    *columnp = best_match;
     if (best_match) {
-        return best_match;
+        return NULL;
     } else if (best_score) {
-        ovs_fatal(0, "%s has more than one column whose name matches \"%s\"",
-                  table->class->name, column_name);
+        return xasprintf("%s contains more than one column whose name "
+                         "matches \"%s\"", table->class->name, column_name);
     } else {
-        ovs_fatal(0, "%s does not have a column \"%s\"",
-                  table->class->name, column_name);
+        return xasprintf("%s does not contain a column whose name matches "
+                         "\"%s\"", table->class->name, column_name);
     }
 }
 
-static void
-check_trailer(const char *s, const char *p)
-{
-    if (*p != '\0') {
-        ovs_fatal(0, "%s: trailing garbage in argument at offset %td",
-                  s, p - s);
-    }
-}
-
-static void
+static char * WARN_UNUSED_RESULT
 parse_column_key_value(const char *arg, const struct vsctl_table_class *table,
                        const struct vsctl_column **columnp,
                        char **keyp, char **valuep)
 {
     const char *p = arg;
+    char *error;
 
     assert(columnp || keyp);
+    if (keyp) {
+        *keyp = NULL;
+    }
+    if (valuep) {
+        *valuep = NULL;
+    }
 
     /* Parse column name. */
     if (columnp) {
         char *column_name;
 
-        p = ovsdb_token_parse(arg, &column_name);
-        if (column_name[0] == '\0') {
-            ovs_fatal(0, "%s: missing column name", arg);
+        error = ovsdb_token_parse(&arg, &column_name);
+        if (error) {
+            goto error;
         }
-        *columnp = get_column(table, column_name);
+        if (column_name[0] == '\0') {
+            free(column_name);
+            error = xasprintf("%s: missing column name", arg);
+            goto error;
+        }
+        error = get_column(table, column_name, columnp);
+        if (error) {
+            goto error;
+        }
         free(column_name);
     }
 
@@ -1859,9 +1876,13 @@ parse_column_key_value(const char *arg, const struct vsctl_table_class *table,
         if (columnp) {
             p++;
         } else if (!keyp) {
-            ovs_fatal(0, "%s: key not accepted here", arg);
+            error = xasprintf("%s: key not accepted here", arg);
+            goto error;
         }
-        p = ovsdb_token_parse(p, keyp);
+        error = ovsdb_token_parse(&p, keyp);
+        if (error) {
+            goto error;
+        }
     } else if (keyp) {
         *keyp = NULL;
     }
@@ -1869,16 +1890,35 @@ parse_column_key_value(const char *arg, const struct vsctl_table_class *table,
     /* Parse value string. */
     if (*p == '=') {
         if (!valuep) {
-            ovs_fatal(0, "%s: value not accepted here", arg);
+            error = xasprintf("%s: value not accepted here", arg);
+            goto error;
         }
         *valuep = xstrdup(p + 1);
-        return;
     } else {
         if (valuep) {
             *valuep = NULL;
         }
-        check_trailer(arg, p);
+        if (*p != '\0') {
+            error = xasprintf("%s: trailing garbage in argument at offset %td",
+                              arg, p - arg);
+            goto error;
+        }
     }
+    return NULL;
+
+error:
+    if (columnp) {
+        *columnp = NULL;
+    }
+    if (keyp) {
+        free(*keyp);
+        *keyp = NULL;
+    }
+    if (valuep) {
+        free(*valuep);
+        *valuep = NULL;
+    }
+    return error;
 }
 
 static void
@@ -1898,8 +1938,8 @@ cmd_get(struct vsctl_context *ctx)
         struct ovsdb_datum datum;
         char *key_string;
 
-        parse_column_key_value(ctx->argv[i], table,
-                               &column, &key_string, NULL);
+        die_if_error(parse_column_key_value(ctx->argv[i], table,
+                                            &column, &key_string, NULL));
 
         ovsdb_idl_txn_read(row, column->idl, &datum);
         if (key_string) {
@@ -1911,8 +1951,9 @@ cmd_get(struct vsctl_context *ctx)
                           column->idl->name);
             }
 
-            ovsdb_atom_from_string(&key, column->idl->type.key_type,
-                                   key_string);
+            die_if_error(ovsdb_atom_from_string(&key,
+                                                column->idl->type.key_type,
+                                                key_string));
 
             idx = ovsdb_datum_find_key(&datum, &key,
                                        column->idl->type.key_type);
@@ -1937,8 +1978,8 @@ cmd_get(struct vsctl_context *ctx)
 }
 
 static void
-list_record(const struct vsctl_table_class *table, const struct ovsdb_idl_row *row,
-            struct ds *out)
+list_record(const struct vsctl_table_class *table,
+            const struct ovsdb_idl_row *row, struct ds *out)
 {
     const struct vsctl_column *column;
 
@@ -2092,9 +2133,11 @@ cmd_set(struct vsctl_context *ctx)
     for (i = 3; i < ctx->argc; i++) {
         const struct vsctl_column *column;
         char *key_string, *value_string;
+        char *error;
 
-        parse_column_key_value(ctx->argv[i], table,
-                               &column, &key_string, &value_string);
+        error = parse_column_key_value(ctx->argv[i], table,
+                                       &column, &key_string, &value_string);
+        die_if_error(error);
         if (column->flags & VSCF_READONLY) {
             ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
                       ctx->argv[i], column->idl->name, table_name);
@@ -2112,10 +2155,12 @@ cmd_set(struct vsctl_context *ctx)
                           column->idl->name);
             }
 
-            ovsdb_atom_from_string(&key, column->idl->type.key_type,
-                                   key_string);
-            ovsdb_atom_from_string(&value, column->idl->type.value_type,
-                                   value_string);
+            die_if_error(ovsdb_atom_from_string(&key,
+                                                column->idl->type.key_type,
+                                                key_string));
+            die_if_error(ovsdb_atom_from_string(&value,
+                                                column->idl->type.value_type,
+                                                value_string));
 
             ovsdb_datum_init_empty(&new);
             ovsdb_datum_add_unsafe(&new, &key, &value, &column->idl->type);
@@ -2128,7 +2173,8 @@ cmd_set(struct vsctl_context *ctx)
         } else {
             struct ovsdb_datum datum;
 
-            ovsdb_datum_from_string(&datum, &column->idl->type, value_string);
+            die_if_error(ovsdb_datum_from_string(&datum, &column->idl->type,
+                                                 value_string));
             check_constraint(&datum, &column->idl->type, column->constraint);
             ovsdb_idl_txn_write(row, column->idl, &datum);
         }
@@ -2153,7 +2199,7 @@ cmd_add(struct vsctl_context *ctx)
 
     table = get_table(table_name);
     row = get_row(ctx, table, record_id);
-    column = get_column(table, column_name);
+    die_if_error(get_column(table, column_name, &column));
     type = &column->idl->type;
     ovsdb_idl_txn_read(row, column->idl, &old);
     for (i = 4; i < ctx->argc; i++) {
@@ -2168,7 +2214,7 @@ cmd_add(struct vsctl_context *ctx)
         add_type = *type;
         add_type.n_min = 1;
         add_type.n_max = UINT_MAX;
-        ovsdb_datum_from_string(&add, &add_type, ctx->argv[i]);
+        die_if_error(ovsdb_datum_from_string(&add, &add_type, ctx->argv[i]));
         ovsdb_datum_union(&old, &add, type, false);
         ovsdb_datum_destroy(&add, type);
     }

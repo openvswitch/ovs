@@ -371,8 +371,11 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
  *        an arbitrary string.
  *
  *      - OVSDB_TYPE_UUID: A UUID in RFC 4122 format.
+ *
+ * Returns a null pointer if successful, otherwise an error message describing
+ * the problem.  The caller is responsible for freeing the error.
  */
-void
+char *
 ovsdb_atom_from_string(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                        const char *s)
 {
@@ -383,7 +386,7 @@ ovsdb_atom_from_string(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
     case OVSDB_TYPE_INTEGER: {
         long long int integer;
         if (!str_to_llong(s, 10, &integer)) {
-            ovs_fatal(0, "%s is not a valid integer", s);
+            return xasprintf("\"%s\" is not a valid integer", s);
         }
         atom->integer = integer;
     }
@@ -391,7 +394,7 @@ ovsdb_atom_from_string(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
 
     case OVSDB_TYPE_REAL:
         if (!str_to_double(s, &atom->real)) {
-            ovs_fatal(0, "%s is not a valid real number", s);
+            return xasprintf("\"%s\" is not a valid real number", s);
         }
         break;
 
@@ -403,22 +406,26 @@ ovsdb_atom_from_string(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                    || !strcmp(s, "0")) {
             atom->boolean = false;
         } else {
-            ovs_fatal(0, "%s is not a valid boolean "
-                      "(use \"true\" or \"false\")", s);
+            return xasprintf("\"%s\" is not a valid boolean "
+                             "(use \"true\" or \"false\")", s);
         }
         break;
 
     case OVSDB_TYPE_STRING:
         if (*s == '\0') {
-            ovs_fatal(0, "use \"\" to represent the empty string");
+            return xstrdup("An empty string is not valid as input; "
+                           "use \"\" to represent the empty string");
         } else if (*s == '"') {
             size_t s_len = strlen(s);
 
             if (s_len < 2 || s[s_len - 1] != '"') {
-                ovs_fatal(0, "%s: missing quote at end of quoted string", s);
+                return xasprintf("%s: missing quote at end of "
+                                 "quoted string", s);
             } else if (!json_string_unescape(s + 1, s_len - 2,
                                              &atom->string)) {
-                ovs_fatal(0, "%s: %s", s, atom->string);
+                char *error = xasprintf("%s: %s", s, atom->string);
+                free(atom->string);
+                return error;
             }
         } else {
             atom->string = xstrdup(s);
@@ -427,7 +434,7 @@ ovsdb_atom_from_string(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
 
     case OVSDB_TYPE_UUID:
         if (!uuid_from_string(&atom->uuid, s)) {
-            ovs_fatal(0, "%s is not a valid UUID", s);
+            return xasprintf("\"%s\" is not a valid UUID", s);
         }
         break;
 
@@ -435,6 +442,8 @@ ovsdb_atom_from_string(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
     default:
         NOT_REACHED();
     }
+
+    return NULL;
 }
 
 static bool
@@ -802,31 +811,42 @@ skip_spaces(const char *p)
     return p + strspn(p, " ");
 }
 
-static const char *
-parse_key_value(const char *s, const struct ovsdb_type *type,
+static char *
+parse_atom_token(const char **s, enum ovsdb_atomic_type type,
+                 union ovsdb_atom *atom)
+{
+    char *token, *error;
+
+    error = ovsdb_token_parse(s, &token);
+    if (!error) {
+        error = ovsdb_atom_from_string(atom, type, token);
+        free(token);
+    }
+    return error;
+}
+
+
+static char *
+parse_key_value(const char **s, const struct ovsdb_type *type,
                 union ovsdb_atom *key, union ovsdb_atom *value)
 {
-    char *key_string;
-    const char *p;
+    const char *start = *s;
+    char *error;
 
-    /* Parse key. */
-    p = ovsdb_token_parse(s, &key_string);
-    ovsdb_atom_from_string(key, type->key_type, key_string);
-    free(key_string);
-
-    /* Parse value. */
-    if (type->value_type != OVSDB_TYPE_VOID) {
-        char *value_string;
-
-        if (*p != '=') {
-            ovs_fatal(0, "%s: syntax error at \"%c\" expecting \"=\"",
-                      s, *p);
+    error = parse_atom_token(s, type->key_type, key);
+    if (!error && type->value_type != OVSDB_TYPE_VOID) {
+        if (**s == '=') {
+            (*s)++;
+            error = parse_atom_token(s, type->value_type, value);
+        } else {
+            error = xasprintf("%s: syntax error at \"%c\" expecting \"=\"",
+                              start, **s);
         }
-        p = ovsdb_token_parse(p + 1, &value_string);
-        ovsdb_atom_from_string(value, type->value_type, value_string);
-        free(value_string);
+        if (error) {
+            ovsdb_atom_destroy(key, type->key_type);
+        }
     }
-    return p;
+    return error;
 }
 
 static void
@@ -845,13 +865,15 @@ free_key_value(const struct ovsdb_type *type,
  * acceptable to ovsdb_atom_from_string().  Optionally, a set may be enclosed
  * in "[]" or a map in "{}"; for an empty set or map these punctuators are
  * required. */
-void
+char *
 ovsdb_datum_from_string(struct ovsdb_datum *datum,
                         const struct ovsdb_type *type, const char *s)
 {
     bool is_map = ovsdb_type_is_map(type);
+    struct ovsdb_error *dberror;
     const char *p;
     int end_delim;
+    char *error;
 
     ovsdb_datum_init_empty(datum);
 
@@ -862,9 +884,9 @@ ovsdb_datum_from_string(struct ovsdb_datum *datum,
         p = skip_spaces(p + 1);
     } else if (!*p) {
         if (is_map) {
-            ovs_fatal(0, "use \"{}\" to specify the empty map");
+            return xstrdup("use \"{}\" to specify the empty map");
         } else {
-            ovs_fatal(0, "use \"[]\" to specify the empty set");
+            return xstrdup("use \"[]\" to specify the empty set");
         }
     } else {
         end_delim = 0;
@@ -874,12 +896,16 @@ ovsdb_datum_from_string(struct ovsdb_datum *datum,
         union ovsdb_atom key, value;
 
         if (ovsdb_token_is_delim(*p)) {
-            ovs_fatal(0, "%s: unexpected \"%c\" parsing %s",
-                      s, *p, ovsdb_type_to_english(type));
+            error = xasprintf("%s: unexpected \"%c\" parsing %s",
+                              s, *p, ovsdb_type_to_english(type));
+            goto error;
         }
 
         /* Add to datum. */
-        p = parse_key_value(p, type, &key, &value);
+        error = parse_key_value(&p, type, &key, &value);
+        if (error) {
+            goto error;
+        }
         ovsdb_datum_add_unsafe(datum, &key, &value, type);
         free_key_value(type, &key, &value);
 
@@ -891,34 +917,47 @@ ovsdb_datum_from_string(struct ovsdb_datum *datum,
     }
 
     if (*p != end_delim) {
-        ovs_fatal(0, "%s: missing \"%c\" at end of data", s, end_delim);
+        error = xasprintf("%s: missing \"%c\" at end of data", s, end_delim);
+        goto error;
     }
     if (end_delim) {
         p = skip_spaces(p + 1);
         if (*p) {
-            ovs_fatal(0, "%s: trailing garbage after \"%c\"", s, end_delim);
+            error = xasprintf("%s: trailing garbage after \"%c\"",
+                              s, end_delim);
+            goto error;
         }
     }
 
     if (datum->n < type->n_min) {
-        ovs_fatal(0, "%s: %u %s were specified but at least %u are required",
-                  s, datum->n,
-                  type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
-                  type->n_min);
+        error = xasprintf("%s: %u %s specified but the minimum number is %u",
+                          s, datum->n, is_map ? "pair(s)" : "value(s)",
+                          type->n_min);
+        goto error;
     } else if (datum->n > type->n_max) {
-        ovs_fatal(0, "%s: %u %s were specified but at most %u are allowed",
-                  s, datum->n,
-                  type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
-                  type->n_max);
+        error = xasprintf("%s: %u %s specified but the maximum number is %u",
+                          s, datum->n, is_map ? "pair(s)" : "value(s)",
+            type->n_max);
+        goto error;
     }
 
-    if (ovsdb_datum_sort(datum, type)) {
+    dberror = ovsdb_datum_sort(datum, type);
+    if (dberror) {
+        ovsdb_error_destroy(dberror);
         if (ovsdb_type_is_map(type)) {
-            ovs_fatal(0, "%s: map contains duplicate key", s);
+            error = xasprintf("%s: map contains duplicate key", s);
         } else {
-            ovs_fatal(0, "%s: set contains duplicate value", s);
+            error = xasprintf("%s: set contains duplicate value", s);
         }
+        goto error;
     }
+
+    return NULL;
+
+error:
+    ovsdb_datum_destroy(datum, type);
+    ovsdb_datum_init_empty(datum);
+    return error;
 }
 
 /* Appends to 'out' the 'datum' (with the given 'type') in a format acceptable
@@ -1292,23 +1331,25 @@ ovsdb_symbol_table_put(struct ovsdb_symbol_table *symtab, const char *name,
  * quotes are retained in the output.  (Backslashes inside double quotes are
  * not removed, either.)
  */
-const char *
-ovsdb_token_parse(const char *s, char **outp)
+char *
+ovsdb_token_parse(const char **s, char **outp)
 {
     const char *p;
     struct ds out;
     bool in_quotes;
+    char *error;
 
     ds_init(&out);
     in_quotes = false;
-    for (p = s; *p != '\0'; ) {
+    for (p = *s; *p != '\0'; ) {
         int c = *p++;
         if (c == '\\') {
             if (in_quotes) {
                 ds_put_char(&out, '\\');
             }
             if (!*p) {
-                ovs_fatal(0, "%s: backslash at end of argument", s);
+                error = xasprintf("%s: backslash at end of argument", *s);
+                goto error;
             }
             ds_put_char(&out, *p++);
         } else if (!in_quotes && ovsdb_token_is_delim(c)) {
@@ -1322,10 +1363,18 @@ ovsdb_token_parse(const char *s, char **outp)
         }
     }
     if (in_quotes) {
-        ovs_fatal(0, "%s: quoted string extends past end of argument", s);
+        error = xasprintf("%s: quoted string extends past end of argument",
+                          *s);
+        goto error;
     }
     *outp = ds_cstr(&out);
-    return p;
+    *s = p;
+    return NULL;
+
+error:
+    ds_destroy(&out);
+    *outp = NULL;
+    return error;
 }
 
 /* Returns true if 'c' delimits tokens, or if 'c' is 0, and false otherwise. */

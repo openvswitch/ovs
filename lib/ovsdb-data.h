@@ -74,8 +74,9 @@ struct ovsdb_error *ovsdb_atom_from_json(union ovsdb_atom *,
 struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
 
-void ovsdb_atom_from_string(union ovsdb_atom *, enum ovsdb_atomic_type,
-                            const char *);
+char *ovsdb_atom_from_string(union ovsdb_atom *, enum ovsdb_atomic_type,
+                             const char *)
+    WARN_UNUSED_RESULT;
 void ovsdb_atom_to_string(const union ovsdb_atom *, enum ovsdb_atomic_type,
                           struct ds *);
 
@@ -128,8 +129,9 @@ struct ovsdb_error *ovsdb_datum_from_json(struct ovsdb_datum *,
 struct json *ovsdb_datum_to_json(const struct ovsdb_datum *,
                                  const struct ovsdb_type *);
 
-void ovsdb_datum_from_string(struct ovsdb_datum *,
-                             const struct ovsdb_type *, const char *);
+char *ovsdb_datum_from_string(struct ovsdb_datum *,
+                             const struct ovsdb_type *, const char *)
+    WARN_UNUSED_RESULT;
 void ovsdb_datum_to_string(const struct ovsdb_datum *,
                            const struct ovsdb_type *, struct ds *);
 
@@ -204,7 +206,7 @@ void ovsdb_symbol_table_put(struct ovsdb_symbol_table *, const char *name,
  *
  * Used by ovsdb_atom_from_string() and ovsdb_datum_from_string(). */
 
-const char *ovsdb_token_parse(const char *, char **outp);
+char *ovsdb_token_parse(const char **, char **outp) WARN_UNUSED_RESULT;
 bool ovsdb_token_is_delim(unsigned char);
 
 #endif /* ovsdb-data.h */
