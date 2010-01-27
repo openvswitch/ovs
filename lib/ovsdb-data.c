@@ -813,7 +813,10 @@ ovsdb_datum_to_json(const struct ovsdb_datum *datum,
 static const char *
 skip_spaces(const char *p)
 {
-    return p + strspn(p, " ");
+    while (isspace((unsigned char) *p)) {
+        p++;
+    }
+    return p;
 }
 
 static char *
