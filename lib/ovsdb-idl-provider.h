@@ -71,10 +71,6 @@ struct ovsdb_idl_row *ovsdb_idl_get_row_arc(
 
 void ovsdb_idl_txn_verify(const struct ovsdb_idl_row *,
                           const struct ovsdb_idl_column *);
-void ovsdb_idl_txn_delete(struct ovsdb_idl_row *);
-struct ovsdb_idl_row *ovsdb_idl_txn_insert(
-    struct ovsdb_idl_txn *,
-    const struct ovsdb_idl_table_class *);
 
 struct ovsdb_idl_txn *ovsdb_idl_txn_get(const struct ovsdb_idl_row *);
 

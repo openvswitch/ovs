@@ -74,5 +74,8 @@ void ovsdb_idl_txn_read(const struct ovsdb_idl_row *,
 void ovsdb_idl_txn_write(const struct ovsdb_idl_row *,
                          const struct ovsdb_idl_column *,
                          struct ovsdb_datum *);
+void ovsdb_idl_txn_delete(const struct ovsdb_idl_row *);
+const struct ovsdb_idl_row *ovsdb_idl_txn_insert(
+    struct ovsdb_idl_txn *, const struct ovsdb_idl_table_class *);
 
 #endif /* ovsdb-idl.h */

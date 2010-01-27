@@ -1300,8 +1300,10 @@ ovsdb_idl_txn_verify(const struct ovsdb_idl_row *row_,
 }
 
 void
-ovsdb_idl_txn_delete(struct ovsdb_idl_row *row)
+ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
 {
+    struct ovsdb_idl_row *row = (struct ovsdb_idl_row *) row_;
+
     assert(row->new != NULL);
     if (!row->old) {
         ovsdb_idl_row_clear_new(row);
@@ -1319,7 +1321,7 @@ ovsdb_idl_txn_delete(struct ovsdb_idl_row *row)
     row->new = NULL;
 }
 
-struct ovsdb_idl_row *
+const struct ovsdb_idl_row *
 ovsdb_idl_txn_insert(struct ovsdb_idl_txn *txn,
                      const struct ovsdb_idl_table_class *class)
 {

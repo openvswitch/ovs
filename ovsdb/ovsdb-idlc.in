@@ -524,9 +524,8 @@ const struct %(s)s *
 
         print '''
 void
-%(s)s_delete(const struct %(s)s *row_)
+%(s)s_delete(const struct %(s)s *row)
 {
-    struct %(s)s *row = (struct %(s)s *) row_;
     ovsdb_idl_txn_delete(&row->header_);
 }
 
