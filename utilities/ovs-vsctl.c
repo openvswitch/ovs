@@ -1795,6 +1795,14 @@ get_row(struct vsctl_context *ctx,
             }
         }
     }
+    return row;
+}
+
+static const struct ovsdb_idl_row *
+must_get_row(struct vsctl_context *ctx,
+             const struct vsctl_table_class *table, const char *record_id)
+{
+    const struct ovsdb_idl_row *row = get_row(ctx, table, record_id);
     if (!row) {
         ovs_fatal(0, "no row \"%s\" in table %s",
                   record_id, table->class->name);
@@ -1932,7 +1940,7 @@ cmd_get(struct vsctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    row = get_row(ctx, table, record_id);
+    row = must_get_row(ctx, table, record_id);
     for (i = 3; i < ctx->argc; i++) {
         const struct vsctl_column *column;
         struct ovsdb_datum datum;
@@ -2017,7 +2025,7 @@ cmd_list(struct vsctl_context *ctx)
             if (i > 2) {
                 ds_put_char(out, '\n');
             }
-            list_record(table, get_row(ctx, table, ctx->argv[i]), out);
+            list_record(table, must_get_row(ctx, table, ctx->argv[i]), out);
         }
     } else {
         const struct ovsdb_idl_row *row;
@@ -2188,7 +2196,7 @@ cmd_set(struct vsctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    row = get_row(ctx, table, record_id);
+    row = must_get_row(ctx, table, record_id);
     for (i = 3; i < ctx->argc; i++) {
         set_column(table, row, ctx->argv[i], force);
     }
@@ -2209,7 +2217,7 @@ cmd_add(struct vsctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    row = get_row(ctx, table, record_id);
+    row = must_get_row(ctx, table, record_id);
     die_if_error(get_column(table, column_name, &column));
     type = &column->idl->type;
     ovsdb_idl_txn_read(row, column->idl, &old);
@@ -2254,7 +2262,7 @@ cmd_remove(struct vsctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    row = get_row(ctx, table, record_id);
+    row = must_get_row(ctx, table, record_id);
     die_if_error(get_column(table, column_name, &column));
     type = &column->idl->type;
     ovsdb_idl_txn_read(row, column->idl, &old);
@@ -2301,7 +2309,7 @@ cmd_clear(struct vsctl_context *ctx)
     int i;
 
     table = get_table(table_name);
-    row = get_row(ctx, table, record_id);
+    row = must_get_row(ctx, table, record_id);
     for (i = 3; i < ctx->argc; i++) {
         const struct vsctl_column *column;
         const struct ovsdb_type *type;
@@ -2341,6 +2349,30 @@ cmd_create(struct vsctl_context *ctx)
     row = ovsdb_idl_txn_insert(txn_from_openvswitch(ctx->ovs), table->class);
     for (i = 2; i < ctx->argc; i++) {
         set_column(table, row, ctx->argv[i], force);
+    }
+}
+
+static void
+cmd_destroy(struct vsctl_context *ctx)
+{
+    bool force = shash_find(&ctx->options, "--force");
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
+    const char *table_name = ctx->argv[1];
+    const struct vsctl_table_class *table;
+    int i;
+
+    if (!force) {
+        ovs_fatal(0, "\"destroy\" requires --force");
+    }
+
+    table = get_table(table_name);
+    for (i = 1; i < ctx->argc; i++) {
+        const struct ovsdb_idl_row *row;
+
+        row = (must_exist ? must_get_row : get_row)(ctx, table, ctx->argv[i]);
+        if (row) {
+            ovsdb_idl_txn_delete(row);
+        }
     }
 }
 
@@ -2556,6 +2588,7 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
         {"remove", 4, INT_MAX, cmd_remove, "--force"},
         {"clear", 3, INT_MAX, cmd_clear, "--force"},
         {"create", 2, INT_MAX, cmd_create, "--force"},
+        {"destroy", 1, INT_MAX, cmd_destroy, "--force,--if-exists"},
     };
 
     const struct vsctl_command *p;

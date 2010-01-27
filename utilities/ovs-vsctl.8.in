@@ -529,6 +529,12 @@ each \fIcolumn\fR.  Columns not explicitly set will receive their
 default values.
 .IP
 This command requires the \fB\-\-force\fR option.
+.
+.IP "\fB\-\-force \fR[\fB\-\-if\-exists\fR] \fBdestroy \fItable record\fR..."
+Deletes each specified \fIrecord\fR from \fItable\fR.  Unless
+\fB\-\-if\-exists\fR is specified, each \fIrecord\fRs must exist.
+.IP
+This command requires the \fB\-\-force\fR option.
 .SH "EXAMPLES"
 Create a new bridge named br0 and add port eth0 to it:
 .IP
