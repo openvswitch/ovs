@@ -1659,11 +1659,14 @@ score_partial_match(const char *name, const char *s)
 {
     int score;
 
+    if (!strcmp(name, s)) {
+        return UINT_MAX;
+    }
     for (score = 0; ; score++, name++, s++) {
         if (to_lower_and_underscores(*name) != to_lower_and_underscores(*s)) {
             break;
         } else if (*name == '\0') {
-            return UINT_MAX;
+            return UINT_MAX - 1;
         }
     }
     return *s == '\0' ? score : 0;
