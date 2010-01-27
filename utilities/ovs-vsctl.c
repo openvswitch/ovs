@@ -1942,7 +1942,8 @@ list_record(const struct vsctl_table_class *table, const struct ovsdb_idl_row *r
 {
     const struct vsctl_column *column;
 
-    ds_put_format(out, "%-20s: "UUID_FMT"\n", "_uuid", UUID_ARGS(&row->uuid));
+    ds_put_format(out, "%-20s (RO): "UUID_FMT"\n", "_uuid",
+                  UUID_ARGS(&row->uuid));
     for (column = table->columns; column->idl; column++) {
         struct ovsdb_datum datum;
 
