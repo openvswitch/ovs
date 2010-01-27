@@ -699,10 +699,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
             dpif_get_netflow_ids(br->dpif, &opts.engine_type, &opts.engine_id);
             if (nf_cfg->engine_type) {
-                opts.engine_type = nf_cfg->engine_type;
+                opts.engine_type = *nf_cfg->engine_type;
             }
             if (nf_cfg->engine_id) {
-                opts.engine_id = nf_cfg->engine_id;
+                opts.engine_id = *nf_cfg->engine_id;
             }
 
             opts.active_timeout = nf_cfg->active_timeout;
