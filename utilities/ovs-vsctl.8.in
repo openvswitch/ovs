@@ -298,7 +298,6 @@ Sets the configured controller target.  The \fItarget\fR may use any of
 the following forms:
 .
 .RS
-.TP
 .so lib/vconn-active.man
 .RE
 .
@@ -309,7 +308,7 @@ setting up all flows on the switch.  Thus, if the connection to
 the controller fails, no new network connections can be set up.  If
 the connection to the controller stays down long enough, no packets
 can pass through the switch at all.
-.ST
+.PP
 If the value is \fBstandalone\fR, or if neither of these settings
 is set, \fBovs\-vswitchd\fR will take over
 responsibility for setting up
@@ -319,7 +318,7 @@ times the inactivity probe interval (xxx needs to be exposed).  In this mode,
 MAC-learning switch.  \fBovs\-vswitchd\fR will continue to retry connecting
 to the controller in the background and, when the connection succeeds,
 it discontinues its standalone behavior.
-.ST
+.PP
 If this option is set to \fBsecure\fR, \fBovs\-vswitchd\fR will not
 set up flows on its own when the controller connection fails.
 .
