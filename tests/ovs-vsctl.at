@@ -286,10 +286,10 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [add-port a a1],
   [add-bond a bond0 a2 a3],
   [br-set-external-id a key0 value0],
-  [port-set-external-id a1 key1 value1],
-  [iface-set-external-id a2 key2 value2],
-  [iface-set-external-id a2 key3 value3],
-  [iface-set-external-id a3 key4 value4],
+  [set port a1 external-ids:key1=value1],
+  [set interface a2 external-ids:key2=value2],
+  [set interface a2 external-ids:key3=value3],
+  [set interface a3 external-ids:key4=value4],
   [br-get-external-id a],
   [br-get-external-id a key0],
   [br-get-external-id a key1],
@@ -297,9 +297,9 @@ AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [br-get-external-id a],
   [br-set-external-id a key0],
   [br-get-external-id a],
-  [port-get-external-id a1],
-  [iface-get-external-id a2],
-  [iface-get-external-id a3])], [0], [
+  [get port a1 external-ids],
+  [get interface a2 external-ids],
+  [get interface a3 external-ids])], [0], [
 
 
 
@@ -314,19 +314,19 @@ value0
 key0=othervalue
 
 
-key1=value1
-key2=value2\nkey3=value3
-key4=value4
+{"key1"="value1"}
+{"key2"="value2", "key3"="value3"}
+{"key4"="value4"}
 ], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [br-get-external-id a],
-  [port-get-external-id a1],
-  [iface-get-external-id a2],
-  [iface-get-external-id a3])], [0],
+  [get port a1 external-ids],
+  [get interface a2 external-ids],
+  [get interface a3 external-ids])], [0],
 [
-key1=value1
-key2=value2\nkey3=value3
-key4=value4
+{"key1"="value1"}
+{"key2"="value2", "key3"="value3"}
+{"key4"="value4"}
 ], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a], [a1], [bond0])

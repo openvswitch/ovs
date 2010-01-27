@@ -4,7 +4,7 @@
 # needed by the controller.  This is called by the "vif" script,
 # which is run when virtual interfaces are added and removed.
 
-# Copyright (C) 2009 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -39,7 +39,7 @@ def dump_vif_info(domid, devid, vif_ref):
 		vif_info.append(('xs-vif-uuid', vif_rec["uuid"]))
 		vif_info.append(('xs-vm-uuid', vm_uuid))
 		for key, value in vif_info:
-			print("-- iface-set-external-id vif%s.%s %s %s"
+			print("-- set interface vif%s.%s external-ids:\"%s\"=\"%s\""
 			      % (domid, devid, key, value))
 
 		# vNetManager needs to know the network UUID(s) associated with

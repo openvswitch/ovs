@@ -259,19 +259,11 @@ Port commands:\n\
   add-bond BRIDGE PORT IFACE...  add bonded port PORT in BRIDGE from IFACES\n\
   del-port [BRIDGE] PORT      delete PORT (which may be bonded) from BRIDGE\n\
   port-to-br PORT             print name of bridge that contains PORT\n\
-  port-set-external-id PORT KEY VALUE  set KEY on PORT to VALUE\n\
-  port-set-external-id PORT KEY  unset KEY on PORT\n\
-  port-get-external-id PORT KEY  print value of KEY on PORT\n\
-  port-get-external-id PORT  list key-value pairs on PORT\n\
 A bond is considered to be a single port.\n\
 \n\
 Interface commands (a bond consists of multiple interfaces):\n\
   list-ifaces BRIDGE          print the names of all interfaces on BRIDGE\n\
   iface-to-br IFACE           print name of bridge that contains IFACE\n\
-  iface-set-external-id IFACE KEY VALUE  set KEY on IFACE to VALUE\n\
-  iface-set-external-id IFACE KEY  unset KEY on IFACE\n\
-  iface-get-external-id IFACE KEY  print value of KEY on IFACE\n\
-  iface-get-external-id IFACE list key-value pairs on IFACE\n\
 \n\
 Controller commands:\n\
   get-controller [BRIDGE]     print the controller for BRIDGE\n\
@@ -1077,43 +1069,6 @@ cmd_port_to_br(struct vsctl_context *ctx)
 }
 
 static void
-cmd_port_set_external_id(struct vsctl_context *ctx)
-{
-    struct vsctl_info info;
-    struct vsctl_port *port;
-    char **keys, **values;
-    size_t n;
-
-    get_info(ctx->ovs, &info);
-    port = find_port(&info, ctx->argv[1], true);
-    set_external_id(port->port_cfg->key_external_ids,
-                    port->port_cfg->value_external_ids,
-                    port->port_cfg->n_external_ids,
-                    ctx->argv[2], ctx->argc >= 4 ? ctx->argv[3] : NULL,
-                    &keys, &values, &n);
-    ovsrec_port_set_external_ids(port->port_cfg, keys, values, n);
-    free(keys);
-    free(values);
-
-    free_info(&info);
-}
-
-static void
-cmd_port_get_external_id(struct vsctl_context *ctx)
-{
-    struct vsctl_info info;
-    struct vsctl_port *port;
-
-    get_info(ctx->ovs, &info);
-    port = find_port(&info, ctx->argv[1], true);
-    get_external_id(port->port_cfg->key_external_ids,
-                    port->port_cfg->value_external_ids,
-                    port->port_cfg->n_external_ids,
-                    "",  ctx->argc >= 3 ? ctx->argv[2] : NULL, &ctx->output);
-    free_info(&info);
-}
-
-static void
 cmd_br_to_vlan(struct vsctl_context *ctx)
 {
     struct vsctl_bridge *bridge;
@@ -1175,43 +1130,6 @@ cmd_iface_to_br(struct vsctl_context *ctx)
     get_info(ctx->ovs, &info);
     iface = find_iface(&info, ctx->argv[1], true);
     ds_put_format(&ctx->output, "%s\n", iface->port->bridge->name);
-    free_info(&info);
-}
-
-static void
-cmd_iface_set_external_id(struct vsctl_context *ctx)
-{
-    struct vsctl_info info;
-    struct vsctl_iface *iface;
-    char **keys, **values;
-    size_t n;
-
-    get_info(ctx->ovs, &info);
-    iface = find_iface(&info, ctx->argv[1], true);
-    set_external_id(iface->iface_cfg->key_external_ids,
-                    iface->iface_cfg->value_external_ids,
-                    iface->iface_cfg->n_external_ids,
-                    ctx->argv[2], ctx->argc >= 4 ? ctx->argv[3] : NULL,
-                    &keys, &values, &n);
-    ovsrec_interface_set_external_ids(iface->iface_cfg, keys, values, n);
-    free(keys);
-    free(values);
-
-    free_info(&info);
-}
-
-static void
-cmd_iface_get_external_id(struct vsctl_context *ctx)
-{
-    struct vsctl_info info;
-    struct vsctl_iface *iface;
-
-    get_info(ctx->ovs, &info);
-    iface = find_iface(&info, ctx->argv[1], true);
-    get_external_id(iface->iface_cfg->key_external_ids,
-                    iface->iface_cfg->value_external_ids,
-                    iface->iface_cfg->n_external_ids,
-                    "",  ctx->argc >= 3 ? ctx->argv[2] : NULL, &ctx->output);
     free_info(&info);
 }
 
@@ -2531,14 +2449,10 @@ get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
         {"add-bond", 4, INT_MAX, cmd_add_bond, "--fake-iface"},
         {"del-port", 1, 2, cmd_del_port, "--if-exists"},
         {"port-to-br", 1, 1, cmd_port_to_br, ""},
-        {"port-set-external-id", 2, 3, cmd_port_set_external_id, ""},
-        {"port-get-external-id", 1, 2, cmd_port_get_external_id, ""},
 
         /* Interface commands. */
         {"list-ifaces", 1, 1, cmd_list_ifaces, ""},
         {"iface-to-br", 1, 1, cmd_iface_to_br, ""},
-        {"iface-set-external-id", 2, 3, cmd_iface_set_external_id, ""},
-        {"iface-get-external-id", 1, 2, cmd_iface_get_external_id, ""},
 
         /* Controller commands. */
         {"get-controller", 0, 1, cmd_get_controller, ""},
