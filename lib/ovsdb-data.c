@@ -843,8 +843,10 @@ parse_key_value(const char **s, const struct ovsdb_type *type,
 
     error = parse_atom_token(s, type->key_type, key);
     if (!error && type->value_type != OVSDB_TYPE_VOID) {
+        *s = skip_spaces(*s);
         if (**s == '=') {
             (*s)++;
+            *s = skip_spaces(*s);
             error = parse_atom_token(s, type->value_type, value);
         } else {
             error = xasprintf("%s: syntax error at \"%c\" expecting \"=\"",
