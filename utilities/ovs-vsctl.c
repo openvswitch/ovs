@@ -54,6 +54,7 @@ struct vsctl_command_syntax {
     int min_args;
     int max_args;
     vsctl_handler_func *run;
+    vsctl_handler_func *postprocess;
     const char *options;
 };
 
@@ -2457,6 +2458,15 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     if (wait_for_reload && status == TXN_SUCCESS) {
         next_cfg = ovsdb_idl_txn_get_increment_new_value(txn);
     }
+    for (c = commands; c < &commands[n_commands]; c++) {
+        if (c->syntax->postprocess) {
+            struct vsctl_context ctx;
+
+            vsctl_context_init(&ctx, c, idl, txn, ovs);
+            (c->syntax->postprocess)(&ctx);
+            vsctl_context_done(&ctx, c);
+        }
+    }
     ovsdb_idl_txn_destroy(txn);
 
     switch (status) {
@@ -2532,52 +2542,52 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
 
 static const struct vsctl_command_syntax all_commands[] = {
     /* Open vSwitch commands. */
-    {"init", 0, 0, cmd_init, ""},
+    {"init", 0, 0, cmd_init, NULL, ""},
 
     /* Bridge commands. */
-    {"add-br", 1, 3, cmd_add_br, ""},
-    {"del-br", 1, 1, cmd_del_br, "--if-exists"},
-    {"list-br", 0, 0, cmd_list_br, ""},
-    {"br-exists", 1, 1, cmd_br_exists, ""},
-    {"br-to-vlan", 1, 1, cmd_br_to_vlan, ""},
-    {"br-to-parent", 1, 1, cmd_br_to_parent, ""},
-    {"br-set-external-id", 2, 3, cmd_br_set_external_id, ""},
-    {"br-get-external-id", 1, 2, cmd_br_get_external_id, ""},
+    {"add-br", 1, 3, cmd_add_br, NULL, ""},
+    {"del-br", 1, 1, cmd_del_br, NULL, "--if-exists"},
+    {"list-br", 0, 0, cmd_list_br, NULL, ""},
+    {"br-exists", 1, 1, cmd_br_exists, NULL, ""},
+    {"br-to-vlan", 1, 1, cmd_br_to_vlan, NULL, ""},
+    {"br-to-parent", 1, 1, cmd_br_to_parent, NULL, ""},
+    {"br-set-external-id", 2, 3, cmd_br_set_external_id, NULL, ""},
+    {"br-get-external-id", 1, 2, cmd_br_get_external_id, NULL, ""},
 
     /* Port commands. */
-    {"list-ports", 1, 1, cmd_list_ports, ""},
-    {"add-port", 2, 2, cmd_add_port, ""},
-    {"add-bond", 4, INT_MAX, cmd_add_bond, "--fake-iface"},
-    {"del-port", 1, 2, cmd_del_port, "--if-exists"},
-    {"port-to-br", 1, 1, cmd_port_to_br, ""},
+    {"list-ports", 1, 1, cmd_list_ports, NULL, ""},
+    {"add-port", 2, 2, cmd_add_port, NULL, ""},
+    {"add-bond", 4, INT_MAX, cmd_add_bond, NULL, "--fake-iface"},
+    {"del-port", 1, 2, cmd_del_port, NULL, "--if-exists"},
+    {"port-to-br", 1, 1, cmd_port_to_br, NULL, ""},
 
     /* Interface commands. */
-    {"list-ifaces", 1, 1, cmd_list_ifaces, ""},
-    {"iface-to-br", 1, 1, cmd_iface_to_br, ""},
+    {"list-ifaces", 1, 1, cmd_list_ifaces, NULL, ""},
+    {"iface-to-br", 1, 1, cmd_iface_to_br, NULL, ""},
 
     /* Controller commands. */
-    {"get-controller", 0, 1, cmd_get_controller, ""},
-    {"del-controller", 0, 1, cmd_del_controller, ""},
-    {"set-controller", 1, 2, cmd_set_controller, ""},
-    {"get-fail-mode", 0, 1, cmd_get_fail_mode, ""},
-    {"del-fail-mode", 0, 1, cmd_del_fail_mode, ""},
-    {"set-fail-mode", 1, 2, cmd_set_fail_mode, ""},
+    {"get-controller", 0, 1, cmd_get_controller, NULL, ""},
+    {"del-controller", 0, 1, cmd_del_controller, NULL, ""},
+    {"set-controller", 1, 2, cmd_set_controller, NULL, ""},
+    {"get-fail-mode", 0, 1, cmd_get_fail_mode, NULL, ""},
+    {"del-fail-mode", 0, 1, cmd_del_fail_mode, NULL, ""},
+    {"set-fail-mode", 1, 2, cmd_set_fail_mode, NULL, ""},
 
     /* SSL commands. */
-    {"get-ssl", 0, 0, cmd_get_ssl, ""},
-    {"del-ssl", 0, 0, cmd_del_ssl, ""},
-    {"set-ssl", 3, 3, cmd_set_ssl, "--bootstrap"},
+    {"get-ssl", 0, 0, cmd_get_ssl, NULL, ""},
+    {"del-ssl", 0, 0, cmd_del_ssl, NULL, ""},
+    {"set-ssl", 3, 3, cmd_set_ssl, NULL, "--bootstrap"},
 
     /* Parameter commands. */
-    {"get", 3, INT_MAX, cmd_get, ""},
-    {"list", 1, INT_MAX, cmd_list, ""},
-    {"set", 3, INT_MAX, cmd_set, "--force"},
-    {"add", 4, INT_MAX, cmd_add, "--force"},
-    {"remove", 4, INT_MAX, cmd_remove, "--force"},
-    {"clear", 3, INT_MAX, cmd_clear, "--force"},
-    {"create", 2, INT_MAX, cmd_create, "--force"},
-    {"destroy", 1, INT_MAX, cmd_destroy, "--force,--if-exists"},
+    {"get", 3, INT_MAX, cmd_get, NULL, ""},
+    {"list", 1, INT_MAX, cmd_list, NULL, ""},
+    {"set", 3, INT_MAX, cmd_set, NULL, "--force"},
+    {"add", 4, INT_MAX, cmd_add, NULL, "--force"},
+    {"remove", 4, INT_MAX, cmd_remove, NULL, "--force"},
+    {"clear", 3, INT_MAX, cmd_clear, NULL, "--force"},
+    {"create", 2, INT_MAX, cmd_create, NULL, "--force"},
+    {"destroy", 1, INT_MAX, cmd_destroy, NULL, "--force,--if-exists"},
 
-    {NULL, 0, 0, NULL, NULL},
+    {NULL, 0, 0, NULL, NULL, NULL},
 };
 
