@@ -455,6 +455,9 @@ overridden this way.
 .IP "\fBlist \fItable \fR[\fIrecord\fR]..."
 List the values of all columns of each specified \fIrecord\fR.  If no
 records are specified, lists all the records in \fItable\fR.
+.IP
+The UUIDs shown for rows created in the same \fBovs\-vsctl\fR
+invocation will be wrong.
 .
 .IP "\fBget \fItable record column\fR[\fB:\fIkey\fR]..."
 Prints the value of each specified \fIcolumn\fR in the given
@@ -498,7 +501,7 @@ that are allowed to be empty.
 .IP "\fB\-\-force create \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
 Creates a new record in \fItable\fR and sets the initial values of
 each \fIcolumn\fR.  Columns not explicitly set will receive their
-default values.
+default values.  Outputs the UUID of the new row.
 .IP
 This command requires the \fB\-\-force\fR option.
 .

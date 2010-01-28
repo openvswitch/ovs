@@ -2348,6 +2348,30 @@ cmd_create(struct vsctl_context *ctx)
     ds_put_format(&ctx->output, UUID_FMT, UUID_ARGS(&row->uuid));
 }
 
+/* This function may be used as the 'postprocess' function for commands that
+ * insert new rows into the database.  It expects that the command's 'run'
+ * function prints the UUID reported by ovsdb_idl_txn_insert() as the command's
+ * sole output.  It replaces that output by the row's permanent UUID assigned
+ * by the database server and appends a new-line.
+ *
+ * Currently we use this only for "create", because the higher-level commands
+ * are supposed to be independent of the actual structure of the vswitch
+ * configuration. */
+static void
+post_create(struct vsctl_context *ctx)
+{
+    const struct uuid *real;
+    struct uuid dummy;
+
+    uuid_from_string(&dummy, ds_cstr(&ctx->output));
+    real = ovsdb_idl_txn_get_insert_uuid(ctx->txn, &dummy);
+    if (real) {
+        ds_clear(&ctx->output);
+        ds_put_format(&ctx->output, UUID_FMT, UUID_ARGS(real));
+    }
+    ds_put_char(&ctx->output, '\n');
+}
+
 static void
 cmd_destroy(struct vsctl_context *ctx)
 {
@@ -2585,7 +2609,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"add", 4, INT_MAX, cmd_add, NULL, "--force"},
     {"remove", 4, INT_MAX, cmd_remove, NULL, "--force"},
     {"clear", 3, INT_MAX, cmd_clear, NULL, "--force"},
-    {"create", 2, INT_MAX, cmd_create, NULL, "--force"},
+    {"create", 2, INT_MAX, cmd_create, post_create, "--force"},
     {"destroy", 1, INT_MAX, cmd_destroy, NULL, "--force,--if-exists"},
 
     {NULL, 0, 0, NULL, NULL, NULL},
