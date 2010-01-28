@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -240,6 +240,15 @@ void
 ds_destroy(struct ds *ds)
 {
     free(ds->string);
+}
+
+/* Swaps the content of 'a' and 'b'. */
+void
+ds_swap(struct ds *a, struct ds *b)
+{
+    struct ds temp = *a;
+    *a = *b;
+    *b = temp;
 }
 
 /* Writes the 'size' bytes in 'buf' to 'string' as hex bytes arranged 16 per

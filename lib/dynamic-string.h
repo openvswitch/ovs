@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,6 +59,7 @@ char *ds_cstr(struct ds *);
 const char *ds_cstr_ro(const struct ds *);
 char *ds_steal_cstr(struct ds *);
 void ds_destroy(struct ds *);
+void ds_swap(struct ds *, struct ds *);
 
 int ds_last(const struct ds *);
 void ds_chomp(struct ds *, int c);
