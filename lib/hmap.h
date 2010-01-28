@@ -53,7 +53,7 @@ hmap_node_nullify(struct hmap_node *node)
 
 /* A hash map. */
 struct hmap {
-    struct hmap_node **buckets;
+    struct hmap_node **buckets; /* Must point to 'one' iff 'mask' == 0. */
     struct hmap_node *one;
     size_t mask;
     size_t n;
@@ -66,6 +66,7 @@ struct hmap {
 void hmap_init(struct hmap *);
 void hmap_destroy(struct hmap *);
 void hmap_swap(struct hmap *a, struct hmap *b);
+void hmap_moved(struct hmap *);
 static inline size_t hmap_count(const struct hmap *);
 static inline bool hmap_is_empty(const struct hmap *);
 

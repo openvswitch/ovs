@@ -47,6 +47,12 @@ shash_swap(struct shash *a, struct shash *b)
 }
 
 void
+shash_moved(struct shash *sh)
+{
+    hmap_moved(&sh->map);
+}
+
+void
 shash_clear(struct shash *sh)
 {
     struct shash_node *node, *next;

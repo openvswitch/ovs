@@ -48,11 +48,17 @@ hmap_swap(struct hmap *a, struct hmap *b)
     struct hmap tmp = *a;
     *a = *b;
     *b = tmp;
-    if (a->buckets == &b->one) {
-        a->buckets = &a->one;
-    }
-    if (b->buckets == &a->one) {
-        b->buckets = &b->one;
+    hmap_moved(a);
+    hmap_moved(b);
+}
+
+/* Adjusts 'hmap' to compensate for having moved position in memory (e.g. due
+ * to realloc()). */
+void
+hmap_moved(struct hmap *hmap)
+{
+    if (!hmap->mask) {
+        hmap->buckets = &hmap->one;
     }
 }
 
