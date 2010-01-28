@@ -71,7 +71,7 @@ struct ofsettings {
     const char *hw_desc;        /* Hardware. */
     const char *sw_desc;        /* Software version. */
     const char *serial_desc;    /* Serial number. */
-    const char *dp_desc;        /* Serial number. */
+    const char *dp_desc;        /* Datapath description. */
 
     /* Related vconns and network devices. */
     const char *controller_name; /* Controller (if not discovery mode). */
