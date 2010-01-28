@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,8 +79,7 @@ static inline void hmap_insert_fast(struct hmap *,
                                     struct hmap_node *, size_t hash);
 static inline void hmap_insert(struct hmap *, struct hmap_node *, size_t hash);
 static inline void hmap_remove(struct hmap *, struct hmap_node *);
-static inline void hmap_moved(struct hmap *,
-                              struct hmap_node *, struct hmap_node *);
+void hmap_node_moved(struct hmap *, struct hmap_node *, struct hmap_node *);
 static inline void hmap_replace(struct hmap *, const struct hmap_node *old,
                                 struct hmap_node *new);
 
@@ -205,19 +204,6 @@ hmap_remove(struct hmap *hmap, struct hmap_node *node)
     }
     *bucket = node->next;
     hmap->n--;
-}
-
-/* Adjusts 'hmap' to compensate for 'old_node' having moved position in memory
- * to 'node' (e.g. due to realloc()). */
-static inline void
-hmap_moved(struct hmap *hmap,
-           struct hmap_node *old_node, struct hmap_node *node)
-{
-    struct hmap_node **bucket = &hmap->buckets[node->hash & hmap->mask];
-    while (*bucket != old_node) {
-        bucket = &(*bucket)->next;
-    }
-    *bucket = node;
 }
 
 /* Puts 'new' in the position in 'hmap' currently occupied by 'old'.  The 'new'

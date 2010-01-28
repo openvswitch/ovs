@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,3 +143,17 @@ hmap_reserve(struct hmap *hmap, size_t n)
         resize(hmap, new_mask);
     }
 }
+
+/* Adjusts 'hmap' to compensate for 'old_node' having moved position in memory
+ * to 'node' (e.g. due to realloc()). */
+void
+hmap_node_moved(struct hmap *hmap,
+                struct hmap_node *old_node, struct hmap_node *node)
+{
+    struct hmap_node **bucket = &hmap->buckets[node->hash & hmap->mask];
+    while (*bucket != old_node) {
+        bucket = &(*bucket)->next;
+    }
+    *bucket = node;
+}
+

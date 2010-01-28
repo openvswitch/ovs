@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,8 @@ cls_rule_moved(struct classifier *cls, struct cls_rule *old,
         if (new->wc.wildcards) {
             list_moved(&new->node.list);
         } else {
-            hmap_moved(&cls->exact_table, &old->node.hmap, &new->node.hmap);
+            hmap_node_moved(&cls->exact_table,
+                            &old->node.hmap, &new->node.hmap);
         }
     }
 }
