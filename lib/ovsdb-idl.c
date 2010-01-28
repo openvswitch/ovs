@@ -90,6 +90,16 @@ struct ovsdb_idl_txn {
     struct json *inc_where;
     unsigned int inc_index;
     int64_t inc_new_value;
+
+    /* Inserted rows. */
+    struct hmap inserted_rows;
+};
+
+struct ovsdb_idl_txn_insert {
+    struct hmap_node hmap_node; /* In struct ovsdb_idl_txn's inserted_rows. */
+    struct uuid dummy;          /* Dummy UUID used locally. */
+    int op_index;               /* Index into transaction's operation array. */
+    struct uuid real;           /* Real UUID used by database server. */
 };
 
 static struct vlog_rate_limit syntax_rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -863,6 +873,7 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
     txn->inc_table = NULL;
     txn->inc_column = NULL;
     txn->inc_where = NULL;
+    hmap_init(&txn->inserted_rows);
     return txn;
 }
 
@@ -894,6 +905,8 @@ ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn, const char *table,
 void
 ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
 {
+    struct ovsdb_idl_txn_insert *insert, *next;
+
     if (txn->status == TXN_INCOMPLETE) {
         hmap_remove(&txn->idl->outstanding_txns, &txn->hmap_node);
     }
@@ -902,6 +915,10 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
     free(txn->inc_table);
     free(txn->inc_column);
     json_destroy(txn->inc_where);
+    HMAP_FOR_EACH_SAFE (insert, next, struct ovsdb_idl_txn_insert, hmap_node,
+                        &txn->inserted_rows) {
+        free(insert);
+    }
     free(txn);
 }
 
@@ -1112,9 +1129,18 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
             if (row->old) {
                 json_object_put(op, "where", where_uuid_equals(&row->uuid));
             } else {
+                struct ovsdb_idl_txn_insert *insert;
+
                 json_object_put(op, "uuid-name",
                                 json_string_create_nocopy(
                                     uuid_name_from_uuid(&row->uuid)));
+
+                insert = xmalloc(sizeof *insert);
+                insert->dummy = row->uuid;
+                insert->op_index = operations->u.array.n;
+                uuid_zero(&insert->real);
+                hmap_insert(&txn->inserted_rows, &insert->hmap_node,
+                            uuid_hash(&insert->dummy));
             }
             row_json = json_object_create();
             json_object_put(op, "row", row_json);
@@ -1217,6 +1243,31 @@ ovsdb_idl_txn_abort(struct ovsdb_idl_txn *txn)
     if (txn->status == TXN_INCOMPLETE) {
         txn->status = TXN_ABORTED;
     }
+}
+
+/* For transaction 'txn' that completed successfully, finds and returns the
+ * permanent UUID that the database assigned to a newly inserted row, given the
+ * 'uuid' that ovsdb_idl_txn_insert() assigned locally to that row.
+ *
+ * Returns NULL if 'uuid' is not a UUID assigned by ovsdb_idl_txn_insert() or
+ * if it was assigned by that function and then deleted by
+ * ovsdb_idl_txn_delete() within the same transaction.  (Rows that are inserted
+ * and then deleted within a single transaction are never sent to the database
+ * server, so it never assigns them a permanent UUID.) */
+const struct uuid *
+ovsdb_idl_txn_get_insert_uuid(const struct ovsdb_idl_txn *txn,
+                              const struct uuid *uuid)
+{
+    const struct ovsdb_idl_txn_insert *insert;
+
+    assert(txn->status == TXN_SUCCESS || txn->status == TXN_UNCHANGED);
+    HMAP_FOR_EACH_IN_BUCKET (insert, struct ovsdb_idl_txn_insert, hmap_node,
+                             uuid_hash(uuid), &txn->inserted_rows) {
+        if (uuid_equals(uuid, &insert->dummy)) {
+            return &insert->real;
+        }
+    }
+    return NULL;
 }
 
 static void
@@ -1390,7 +1441,7 @@ ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
         return false;
     }
 
-    /* We know that this is a JSON objects because the loop in
+    /* We know that this is a JSON object because the loop in
      * ovsdb_idl_txn_process_reply() checked. */
     mutate = json_object(results->elems[txn->inc_index]);
     count = shash_find_data(mutate, "count");
@@ -1428,6 +1479,43 @@ ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
     return true;
 }
 
+static bool
+ovsdb_idl_txn_process_insert_reply(struct ovsdb_idl_txn_insert *insert,
+                                   const struct json_array *results)
+{
+    struct ovsdb_error *error;
+    struct json *json_uuid;
+    union ovsdb_atom uuid;
+    struct shash *reply;
+
+    if (insert->op_index >= results->n) {
+        VLOG_WARN_RL(&syntax_rl, "reply does not contain enough operations "
+                     "for insert (has %u, needs %u)",
+                     results->n, insert->op_index);
+        return false;
+    }
+
+    /* We know that this is a JSON object because the loop in
+     * ovsdb_idl_txn_process_reply() checked. */
+    reply = json_object(results->elems[insert->op_index]);
+    json_uuid = shash_find_data(reply, "uuid");
+    if (!check_json_type(json_uuid, JSON_ARRAY, "\"insert\" reply \"uuid\"")) {
+        return false;
+    }
+
+    error = ovsdb_atom_from_json(&uuid, OVSDB_TYPE_UUID, json_uuid, NULL);
+    if (error) {
+        char *s = ovsdb_error_to_string(error);
+        VLOG_WARN_RL(&syntax_rl, "\"insert\" reply \"uuid\" is not a JSON "
+                     "UUID: %s", s);
+        free(s);
+        return false;
+    }
+
+    insert->real = uuid.uuid;
+
+    return true;
+}
 
 static bool
 ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
@@ -1447,21 +1535,22 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
         VLOG_WARN_RL(&syntax_rl, "reply to \"transact\" is not JSON array");
         status = TXN_ERROR;
     } else {
+        struct json_array *ops = &msg->result->u.array;
         int hard_errors = 0;
         int soft_errors = 0;
         size_t i;
 
-        for (i = 0; i < msg->result->u.array.n; i++) {
-            struct json *json = msg->result->u.array.elems[i];
+        for (i = 0; i < ops->n; i++) {
+            struct json *op = ops->elems[i];
 
-            if (json->type == JSON_NULL) {
+            if (op->type == JSON_NULL) {
                 /* This isn't an error in itself but indicates that some prior
                  * operation failed, so make sure that we know about it. */
                 soft_errors++;
-            } else if (json->type == JSON_OBJECT) {
+            } else if (op->type == JSON_OBJECT) {
                 struct json *error;
 
-                error = shash_find_data(json_object(json), "error");
+                error = shash_find_data(json_object(op), "error");
                 if (error) {
                     if (error->type == JSON_STRING) {
                         if (!strcmp(error->u.string, "timed out")) {
@@ -1482,12 +1571,19 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
             }
         }
 
-        if (txn->inc_table
-            && !soft_errors
-            && !hard_errors
-            && !ovsdb_idl_txn_process_inc_reply(txn,
-                                                json_array(msg->result))) {
-            hard_errors++;
+        if (!soft_errors && !hard_errors) {
+            struct ovsdb_idl_txn_insert *insert;
+
+            if (txn->inc_table && !ovsdb_idl_txn_process_inc_reply(txn, ops)) {
+                hard_errors++;
+            }
+
+            HMAP_FOR_EACH (insert, struct ovsdb_idl_txn_insert, hmap_node,
+                           &txn->inserted_rows) {
+                if (!ovsdb_idl_txn_process_insert_reply(insert, ops)) {
+                    hard_errors++;
+                }
+            }
         }
 
         status = (hard_errors ? TXN_ERROR

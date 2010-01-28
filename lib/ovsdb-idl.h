@@ -65,8 +65,11 @@ void ovsdb_idl_txn_increment(struct ovsdb_idl_txn *, const char *table,
 void ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *);
 void ovsdb_idl_txn_wait(const struct ovsdb_idl_txn *);
 enum ovsdb_idl_txn_status ovsdb_idl_txn_commit(struct ovsdb_idl_txn *);
-int64_t ovsdb_idl_txn_get_increment_new_value(const struct ovsdb_idl_txn *);
 void ovsdb_idl_txn_abort(struct ovsdb_idl_txn *);
+
+int64_t ovsdb_idl_txn_get_increment_new_value(const struct ovsdb_idl_txn *);
+const struct uuid *ovsdb_idl_txn_get_insert_uuid(const struct ovsdb_idl_txn *,
+                                                 const struct uuid *);
 
 void ovsdb_idl_txn_read(const struct ovsdb_idl_row *,
                         const struct ovsdb_idl_column *,
