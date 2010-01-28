@@ -1496,15 +1496,15 @@ struct vsctl_column {
 };
 
 static const struct vsctl_column bridge_columns[] = {
+    {&ovsrec_bridge_col_controller, VSCF_READONLY, NULL},
     {&ovsrec_bridge_col_datapath_id, VSCF_READONLY, NULL},
     {&ovsrec_bridge_col_datapath_type, VSCF_READONLY, NULL},
-    {&ovsrec_bridge_col_name, VSCF_READONLY, NULL},
-    {&ovsrec_bridge_col_mirrors, VSCF_READONLY, NULL},
-    {&ovsrec_bridge_col_other_config, 0, NULL},
-    {&ovsrec_bridge_col_flood_vlans, 0, "[1,4095]"},
-    {&ovsrec_bridge_col_controller, VSCF_READONLY, NULL},
-    {&ovsrec_bridge_col_netflow, VSCF_READONLY, NULL},
     {&ovsrec_bridge_col_external_ids, 0, NULL},
+    {&ovsrec_bridge_col_flood_vlans, 0, "[1,4095]"},
+    {&ovsrec_bridge_col_mirrors, VSCF_READONLY, NULL},
+    {&ovsrec_bridge_col_name, VSCF_READONLY, NULL},
+    {&ovsrec_bridge_col_netflow, VSCF_READONLY, NULL},
+    {&ovsrec_bridge_col_other_config, 0, NULL},
     {&ovsrec_bridge_col_ports, VSCF_READONLY, NULL},
     {NULL, 0, NULL},
 };
@@ -1550,9 +1550,9 @@ static const struct vsctl_column mirror_columns[] = {
 static const struct vsctl_column netflow_columns[] = {
     {&ovsrec_netflow_col_active_timeout, 0, "[-1,]"},
     {&ovsrec_netflow_col_add_id_to_interface, 0, NULL},
-    {&ovsrec_netflow_col_targets, 0, IP_RE":"PORT_RE},
-    {&ovsrec_netflow_col_engine_type, 0, "[0,255]"},
     {&ovsrec_netflow_col_engine_id, 0, "[0,255]"},
+    {&ovsrec_netflow_col_engine_type, 0, "[0,255]"},
+    {&ovsrec_netflow_col_targets, 0, IP_RE":"PORT_RE},
     {NULL, 0, NULL},
 };
 
@@ -1568,9 +1568,9 @@ static const struct vsctl_column open_vswitch_columns[] = {
 };
 
 static const struct vsctl_column port_columns[] = {
-    {&ovsrec_port_col_bond_updelay, 0, "[0,]"},
     {&ovsrec_port_col_bond_downdelay, 0, "[0,]"},
     {&ovsrec_port_col_bond_fake_iface, VSCF_READONLY, NULL},
+    {&ovsrec_port_col_bond_updelay, 0, "[0,]"},
     {&ovsrec_port_col_external_ids, 0, NULL},
     {&ovsrec_port_col_fake_bridge, VSCF_READONLY, NULL},
     {&ovsrec_port_col_interfaces, VSCF_READONLY, NULL},
