@@ -36,6 +36,7 @@
 #include "ovsdb-data.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
+#include "process.h"
 #include "svec.h"
 #include "vswitchd/vswitch-idl.h"
 #include "timeval.h"
@@ -43,6 +44,29 @@
 
 #include "vlog.h"
 #define THIS_MODULE VLM_vsctl
+
+struct vsctl_context;
+
+typedef void vsctl_handler_func(struct vsctl_context *);
+
+struct vsctl_command_syntax {
+    const char *name;
+    int min_args;
+    int max_args;
+    vsctl_handler_func *run;
+    const char *options;
+};
+
+struct vsctl_command {
+    /* Data that remains constant after initialization. */
+    const struct vsctl_command_syntax *syntax;
+    int argc;
+    char **argv;
+    struct shash options;
+
+    /* Data modified by commands. */
+    struct ds output;
+};
 
 /* --db: The database server to contact. */
 static const char *db;
@@ -59,23 +83,30 @@ static bool wait_for_reload = true;
 /* --timeout: Time to wait for a connection to 'db'. */
 static int timeout = 5;
 
+/* All supported commands. */
+static const struct vsctl_command_syntax all_commands[];
+
 static void vsctl_fatal(const char *, ...) PRINTF_FORMAT(1, 2) NO_RETURN;
 static char *default_db(void);
 static void usage(void) NO_RETURN;
 static void parse_options(int argc, char *argv[]);
 
-static void check_vsctl_command(int argc, char *argv[]);
-static void do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl);
+static struct vsctl_command *parse_commands(int argc, char *argv[],
+                                            size_t *n_commandsp);
+static void parse_command(int argc, char *argv[], struct vsctl_command *);
+static void do_vsctl(const char *args,
+                     struct vsctl_command *, size_t n_commands,
+                     struct ovsdb_idl *);
 
 int
 main(int argc, char *argv[])
 {
     struct ovsdb_idl *idl;
     unsigned int seqno;
-    struct ds args;
-    int start, n_commands;
+    struct vsctl_command *commands;
+    size_t n_commands;
+    char *args;
     int trials;
-    int i;
 
     set_program_name(argv[0]);
     signal(SIGPIPE, SIG_IGN);
@@ -83,34 +114,20 @@ main(int argc, char *argv[])
     vlog_init();
     vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_WARN);
     vlog_set_levels(VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
+
+    /* Log our arguments.  This is often valuable for debugging systems. */
+    args = process_escape_args(argv);
+    VLOG_INFO("Called as %s", args);
+
+    /* Parse command line. */
     parse_options(argc, argv);
+    commands = parse_commands(argc - optind, argv + optind, &n_commands);
 
     if (timeout) {
         time_alarm(timeout);
     }
 
-    /* Log our arguments.  This is often valuable for debugging systems. */
-    ds_init(&args);
-    for (i = 1; i < argc; i++) {
-        ds_put_format(&args, " %s", argv[i]);
-    }
-    VLOG_INFO("Called as%s", ds_cstr(&args));
-    ds_destroy(&args);
-
     /* Do basic command syntax checking. */
-    n_commands = 0;
-    for (start = i = optind; i <= argc; i++) {
-        if (i == argc || !strcmp(argv[i], "--")) {
-            if (i > start) {
-                check_vsctl_command(i - start, &argv[start]);
-                n_commands++;
-            }
-            start = i + 1;
-        }
-    }
-    if (!n_commands) {
-        vsctl_fatal("missing command name (use --help for help)");
-    }
 
     /* Now execute the commands. */
     idl = ovsdb_idl_create(db, &ovsrec_idl_class);
@@ -125,28 +142,13 @@ main(int argc, char *argv[])
             if (++trials > 5) {
                 vsctl_fatal("too many database inconsistency failures");
             }
-            do_vsctl(argc - optind, argv + optind, idl);
+            do_vsctl(args, commands, n_commands, idl);
             seqno = new_seqno;
         }
 
         ovsdb_idl_wait(idl);
         poll_block();
     }
-}
-
-static void
-vsctl_fatal(const char *format, ...)
-{
-    char *message;
-    va_list args;
-
-    va_start(args, format);
-    message = xvasprintf(format, args);
-    va_end(args);
-
-    vlog_set_levels(VLM_vsctl, VLF_CONSOLE, VLL_EMER);
-    VLOG_ERR("%s", message);
-    ovs_fatal(0, "%s", message);
 }
 
 static void
@@ -233,6 +235,108 @@ parse_options(int argc, char *argv[])
     }
 }
 
+static struct vsctl_command *
+parse_commands(int argc, char *argv[], size_t *n_commandsp)
+{
+    struct vsctl_command *commands;
+    size_t n_commands, allocated_commands;
+    int i, start;
+
+    commands = NULL;
+    n_commands = allocated_commands = 0;
+
+    for (start = i = 0; i <= argc; i++) {
+        if (i == argc || !strcmp(argv[i], "--")) {
+            if (i > start) {
+                if (n_commands >= allocated_commands) {
+                    struct vsctl_command *c;
+
+                    commands = x2nrealloc(commands, &allocated_commands,
+                                          sizeof *commands);
+                    for (c = commands; c < &commands[n_commands]; c++) {
+                        shash_moved(&c->options);
+                    }
+                }
+                parse_command(i - start, &argv[start],
+                              &commands[n_commands++]);
+            }
+            start = i + 1;
+        }
+    }
+    if (!n_commands) {
+        vsctl_fatal("missing command name (use --help for help)");
+    }
+    *n_commandsp = n_commands;
+    return commands;
+}
+
+static void
+parse_command(int argc, char *argv[], struct vsctl_command *command)
+{
+    const struct vsctl_command_syntax *p;
+    int i;
+
+    shash_init(&command->options);
+    for (i = 0; i < argc; i++) {
+        if (argv[i][0] != '-') {
+            break;
+        }
+        if (!shash_add_once(&command->options, argv[i], NULL)) {
+            vsctl_fatal("'%s' option specified multiple times", argv[i]);
+        }
+    }
+    if (i == argc) {
+        vsctl_fatal("missing command name");
+    }
+
+    for (p = all_commands; p->name; p++) {
+        if (!strcmp(p->name, argv[i])) {
+            struct shash_node *node;
+            int n_arg;
+
+            SHASH_FOR_EACH (node, &command->options) {
+                const char *s = strstr(p->options, node->name);
+                int end = s ? s[strlen(node->name)] : EOF;
+                if (end != ',' && end != ' ' && end != '\0') {
+                    vsctl_fatal("'%s' command has no '%s' option",
+                                argv[i], node->name);
+                }
+            }
+
+            n_arg = argc - i - 1;
+            if (n_arg < p->min_args) {
+                vsctl_fatal("'%s' command requires at least %d arguments",
+                            p->name, p->min_args);
+            } else if (n_arg > p->max_args) {
+                vsctl_fatal("'%s' command takes at most %d arguments",
+                            p->name, p->max_args);
+            } else {
+                command->syntax = p;
+                command->argc = n_arg + 1;
+                command->argv = &argv[i];
+                return;
+            }
+        }
+    }
+
+    vsctl_fatal("unknown command '%s'; use --help for help", argv[i]);
+}
+
+static void
+vsctl_fatal(const char *format, ...)
+{
+    char *message;
+    va_list args;
+
+    va_start(args, format);
+    message = xvasprintf(format, args);
+    va_end(args);
+
+    vlog_set_levels(VLM_vsctl, VLF_CONSOLE, VLL_EMER);
+    VLOG_ERR("%s", message);
+    ovs_fatal(0, "%s", message);
+}
+
 static void
 usage(void)
 {
@@ -313,12 +417,16 @@ default_db(void)
 }
 
 struct vsctl_context {
+    /* Read-only. */
     int argc;
     char **argv;
-    struct ovsdb_idl *idl;
-    const struct ovsrec_open_vswitch *ovs;
-    struct ds output;
     struct shash options;
+
+    /* Modifiable state. */
+    struct ds output;
+    struct ovsdb_idl *idl;
+    struct ovsdb_idl_txn *txn;
+    const struct ovsrec_open_vswitch *ovs;
 };
 
 struct vsctl_bridge {
@@ -345,12 +453,6 @@ struct vsctl_info {
     struct shash ifaces;
     struct ovsrec_controller *ctrl;
 };
-
-static struct ovsdb_idl_txn *
-txn_from_openvswitch(const struct ovsrec_open_vswitch *ovs)
-{
-    return ovsdb_idl_txn_get(&ovs->header_);
-}
 
 static struct vsctl_bridge *
 add_bridge(struct vsctl_info *b,
@@ -679,14 +781,14 @@ cmd_add_br(struct vsctl_context *ctx)
         struct ovsrec_port *port;
         struct ovsrec_interface *iface;
 
-        iface = ovsrec_interface_insert(txn_from_openvswitch(ctx->ovs));
+        iface = ovsrec_interface_insert(ctx->txn);
         ovsrec_interface_set_name(iface, br_name);
 
-        port = ovsrec_port_insert(txn_from_openvswitch(ctx->ovs));
+        port = ovsrec_port_insert(ctx->txn);
         ovsrec_port_set_name(port, br_name);
         ovsrec_port_set_interfaces(port, &iface, 1);
 
-        br = ovsrec_bridge_insert(txn_from_openvswitch(ctx->ovs));
+        br = ovsrec_bridge_insert(ctx->txn);
         ovsrec_bridge_set_name(br, br_name);
         ovsrec_bridge_set_ports(br, &port, 1);
 
@@ -716,11 +818,11 @@ cmd_add_br(struct vsctl_context *ctx)
         }
         br = parent->br_cfg;
 
-        iface = ovsrec_interface_insert(txn_from_openvswitch(ctx->ovs));
+        iface = ovsrec_interface_insert(ctx->txn);
         ovsrec_interface_set_name(iface, br_name);
         ovsrec_interface_set_type(iface, "internal");
 
-        port = ovsrec_port_insert(txn_from_openvswitch(ctx->ovs));
+        port = ovsrec_port_insert(ctx->txn);
         ovsrec_port_set_name(port, br_name);
         ovsrec_port_set_interfaces(port, &iface, 1);
         ovsrec_port_set_fake_bridge(port, true);
@@ -970,7 +1072,7 @@ cmd_list_ports(struct vsctl_context *ctx)
 }
 
 static void
-add_port(const struct ovsrec_open_vswitch *ovs,
+add_port(struct vsctl_context *ctx,
          const char *br_name, const char *port_name, bool fake_iface,
          char *iface_names[], int n_ifaces)
 {
@@ -980,7 +1082,7 @@ add_port(const struct ovsrec_open_vswitch *ovs,
     struct ovsrec_port *port;
     size_t i;
 
-    get_info(ovs, &info);
+    get_info(ctx->ovs, &info);
     check_conflicts(&info, port_name,
                     xasprintf("cannot create a port named %s", port_name));
     /* XXX need to check for conflicts on interfaces too */
@@ -988,11 +1090,11 @@ add_port(const struct ovsrec_open_vswitch *ovs,
 
     ifaces = xmalloc(n_ifaces * sizeof *ifaces);
     for (i = 0; i < n_ifaces; i++) {
-        ifaces[i] = ovsrec_interface_insert(txn_from_openvswitch(ovs));
+        ifaces[i] = ovsrec_interface_insert(ctx->txn);
         ovsrec_interface_set_name(ifaces[i], iface_names[i]);
     }
 
-    port = ovsrec_port_insert(txn_from_openvswitch(ovs));
+    port = ovsrec_port_insert(ctx->txn);
     ovsrec_port_set_name(port, port_name);
     ovsrec_port_set_interfaces(port, ifaces, n_ifaces);
     ovsrec_port_set_bond_fake_iface(port, fake_iface);
@@ -1012,7 +1114,7 @@ add_port(const struct ovsrec_open_vswitch *ovs,
 static void
 cmd_add_port(struct vsctl_context *ctx)
 {
-    add_port(ctx->ovs, ctx->argv[1], ctx->argv[2], false, &ctx->argv[2], 1);
+    add_port(ctx, ctx->argv[1], ctx->argv[2], false, &ctx->argv[2], 1);
 }
 
 static void
@@ -1020,7 +1122,7 @@ cmd_add_bond(struct vsctl_context *ctx)
 {
     bool fake_iface = shash_find(&ctx->options, "--fake-iface");
 
-    add_port(ctx->ovs, ctx->argv[1], ctx->argv[2], fake_iface,
+    add_port(ctx, ctx->argv[1], ctx->argv[2], fake_iface,
              &ctx->argv[3], ctx->argc - 3);
 }
 
@@ -1198,7 +1300,7 @@ cmd_set_controller(struct vsctl_context *ctx)
         if (info.ctrl) {
             ovsrec_controller_delete(info.ctrl);
         }
-        ctrl = ovsrec_controller_insert(txn_from_openvswitch(ctx->ovs));
+        ctrl = ovsrec_controller_insert(ctx->txn);
         ovsrec_controller_set_target(ctrl, ctx->argv[1]);
         ovsrec_open_vswitch_set_controller(ctx->ovs, ctrl);
     } else {
@@ -1208,7 +1310,7 @@ cmd_set_controller(struct vsctl_context *ctx)
         if (br->ctrl) {
             ovsrec_controller_delete(br->ctrl);
         }
-        ctrl = ovsrec_controller_insert(txn_from_openvswitch(ctx->ovs));
+        ctrl = ovsrec_controller_insert(ctx->txn);
         ovsrec_controller_set_target(ctrl, ctx->argv[2]);
         ovsrec_bridge_set_controller(br->br_cfg, ctrl);
     }
@@ -1338,7 +1440,7 @@ cmd_set_ssl(struct vsctl_context *ctx)
     if (ssl) {
         ovsrec_ssl_delete(ssl);
     }
-    ssl = ovsrec_ssl_insert(txn_from_openvswitch(ctx->ovs));
+    ssl = ovsrec_ssl_insert(ctx->txn);
 
     ovsrec_ssl_set_private_key(ssl, ctx->argv[1]);
     ovsrec_ssl_set_certificate(ssl, ctx->argv[2]);
@@ -2238,10 +2340,11 @@ cmd_create(struct vsctl_context *ctx)
     }
 
     table = get_table(table_name);
-    row = ovsdb_idl_txn_insert(txn_from_openvswitch(ctx->ovs), table->class);
+    row = ovsdb_idl_txn_insert(ctx->txn, table->class);
     for (i = 2; i < ctx->argc; i++) {
         set_column(table, row, ctx->argv[i], force);
     }
+    ds_put_format(&ctx->output, UUID_FMT, UUID_ARGS(&row->uuid));
 }
 
 static void
@@ -2258,7 +2361,7 @@ cmd_destroy(struct vsctl_context *ctx)
     }
 
     table = get_table(table_name);
-    for (i = 1; i < ctx->argc; i++) {
+    for (i = 2; i < ctx->argc; i++) {
         const struct ovsdb_idl_row *row;
 
         row = (must_exist ? must_get_row : get_row)(ctx, table, ctx->argv[i]);
@@ -2268,20 +2371,6 @@ cmd_destroy(struct vsctl_context *ctx)
     }
 }
 
-typedef void vsctl_handler_func(struct vsctl_context *);
-
-struct vsctl_command {
-    const char *name;
-    int min_args;
-    int max_args;
-    vsctl_handler_func *handler;
-    const char *options;
-};
-
-static void run_vsctl_command(int argc, char *argv[],
-                              const struct ovsrec_open_vswitch *,
-                              struct ovsdb_idl *, struct ds *output);
-
 static struct json *
 where_uuid_equals(const struct uuid *uuid)
 {
@@ -2297,28 +2386,46 @@ where_uuid_equals(const struct uuid *uuid)
 }
 
 static void
-do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
+vsctl_context_init(struct vsctl_context *ctx, struct vsctl_command *command,
+                   struct ovsdb_idl *idl, struct ovsdb_idl_txn *txn,
+                   const struct ovsrec_open_vswitch *ovs)
+{
+    ctx->argc = command->argc;
+    ctx->argv = command->argv;
+    ctx->options = command->options;
+
+    ds_swap(&ctx->output, &command->output);
+    ctx->idl = idl;
+    ctx->txn = txn;
+    ctx->ovs = ovs;
+
+}
+
+static void
+vsctl_context_done(struct vsctl_context *ctx, struct vsctl_command *command)
+{
+    ds_swap(&ctx->output, &command->output);
+}
+
+static void
+do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
+         struct ovsdb_idl *idl)
 {
     struct ovsdb_idl_txn *txn;
     const struct ovsrec_open_vswitch *ovs;
     enum ovsdb_idl_txn_status status;
-    struct ds comment, *output;
+    struct vsctl_command *c;
     int64_t next_cfg = 0;
-    int n_output;
-    int i, start;
+    char *comment;
 
     txn = ovsdb_idl_txn_create(idl);
     if (dry_run) {
         ovsdb_idl_txn_set_dry_run(txn);
     }
 
-    ds_init(&comment);
-    ds_put_cstr(&comment, "ovs-vsctl:");
-    for (i = 0; i < argc; i++) {
-        ds_put_format(&comment, " %s", argv[i]);
-    }
-    ovsdb_idl_txn_add_comment(txn, ds_cstr(&comment));
-    ds_destroy(&comment);
+    comment = xasprintf("ovs-vsctl: %s", args);
+    ovsdb_idl_txn_add_comment(txn, comment);
+    free(comment);
 
     ovs = ovsrec_open_vswitch_first(idl);
     if (!ovs) {
@@ -2332,17 +2439,13 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
         json_destroy(where);
     }
 
-    output = xmalloc(argc * sizeof *output);
-    n_output = 0;
-    for (start = i = 0; i <= argc; i++) {
-        if (i == argc || !strcmp(argv[i], "--")) {
-            if (i > start) {
-                ds_init(&output[n_output]);
-                run_vsctl_command(i - start, &argv[start], ovs, idl,
-                                  &output[n_output++]);
-            }
-            start = i + 1;
-        }
+    for (c = commands; c < &commands[n_commands]; c++) {
+        struct vsctl_context ctx;
+
+        ds_init(&c->output);
+        vsctl_context_init(&ctx, c, idl, txn, ovs);
+        (c->syntax->run)(&ctx);
+        vsctl_context_done(&ctx, c);
     }
 
     while ((status = ovsdb_idl_txn_commit(txn)) == TXN_INCOMPLETE) {
@@ -2369,8 +2472,8 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
         break;
 
     case TXN_TRY_AGAIN:
-        for (i = 0; i < n_output; i++) {
-            ds_destroy(&output[i]);
+        for (c = commands; c < &commands[n_commands]; c++) {
+            ds_destroy(&c->output);
         }
         return;
 
@@ -2381,8 +2484,8 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
         NOT_REACHED();
     }
 
-    for (i = 0; i < n_output; i++) {
-        struct ds *ds = &output[i];
+    for (c = commands; c < &commands[n_commands]; c++) {
+        struct ds *ds = &c->output;
         if (oneline) {
             size_t j;
 
@@ -2427,128 +2530,54 @@ do_vsctl(int argc, char *argv[], struct ovsdb_idl *idl)
     exit(EXIT_SUCCESS);
 }
 
-static vsctl_handler_func *
-get_vsctl_handler(int argc, char *argv[], struct vsctl_context *ctx)
-{
-    static const struct vsctl_command all_commands[] = {
-        /* Open vSwitch commands. */
-        {"init", 0, 0, cmd_init, ""},
+static const struct vsctl_command_syntax all_commands[] = {
+    /* Open vSwitch commands. */
+    {"init", 0, 0, cmd_init, ""},
 
-        /* Bridge commands. */
-        {"add-br", 1, 3, cmd_add_br, ""},
-        {"del-br", 1, 1, cmd_del_br, "--if-exists"},
-        {"list-br", 0, 0, cmd_list_br, ""},
-        {"br-exists", 1, 1, cmd_br_exists, ""},
-        {"br-to-vlan", 1, 1, cmd_br_to_vlan, ""},
-        {"br-to-parent", 1, 1, cmd_br_to_parent, ""},
-        {"br-set-external-id", 2, 3, cmd_br_set_external_id, ""},
-        {"br-get-external-id", 1, 2, cmd_br_get_external_id, ""},
+    /* Bridge commands. */
+    {"add-br", 1, 3, cmd_add_br, ""},
+    {"del-br", 1, 1, cmd_del_br, "--if-exists"},
+    {"list-br", 0, 0, cmd_list_br, ""},
+    {"br-exists", 1, 1, cmd_br_exists, ""},
+    {"br-to-vlan", 1, 1, cmd_br_to_vlan, ""},
+    {"br-to-parent", 1, 1, cmd_br_to_parent, ""},
+    {"br-set-external-id", 2, 3, cmd_br_set_external_id, ""},
+    {"br-get-external-id", 1, 2, cmd_br_get_external_id, ""},
 
-        /* Port commands. */
-        {"list-ports", 1, 1, cmd_list_ports, ""},
-        {"add-port", 2, 2, cmd_add_port, ""},
-        {"add-bond", 4, INT_MAX, cmd_add_bond, "--fake-iface"},
-        {"del-port", 1, 2, cmd_del_port, "--if-exists"},
-        {"port-to-br", 1, 1, cmd_port_to_br, ""},
+    /* Port commands. */
+    {"list-ports", 1, 1, cmd_list_ports, ""},
+    {"add-port", 2, 2, cmd_add_port, ""},
+    {"add-bond", 4, INT_MAX, cmd_add_bond, "--fake-iface"},
+    {"del-port", 1, 2, cmd_del_port, "--if-exists"},
+    {"port-to-br", 1, 1, cmd_port_to_br, ""},
 
-        /* Interface commands. */
-        {"list-ifaces", 1, 1, cmd_list_ifaces, ""},
-        {"iface-to-br", 1, 1, cmd_iface_to_br, ""},
+    /* Interface commands. */
+    {"list-ifaces", 1, 1, cmd_list_ifaces, ""},
+    {"iface-to-br", 1, 1, cmd_iface_to_br, ""},
 
-        /* Controller commands. */
-        {"get-controller", 0, 1, cmd_get_controller, ""},
-        {"del-controller", 0, 1, cmd_del_controller, ""},
-        {"set-controller", 1, 2, cmd_set_controller, ""},
-        {"get-fail-mode", 0, 1, cmd_get_fail_mode, ""},
-        {"del-fail-mode", 0, 1, cmd_del_fail_mode, ""},
-        {"set-fail-mode", 1, 2, cmd_set_fail_mode, ""},
+    /* Controller commands. */
+    {"get-controller", 0, 1, cmd_get_controller, ""},
+    {"del-controller", 0, 1, cmd_del_controller, ""},
+    {"set-controller", 1, 2, cmd_set_controller, ""},
+    {"get-fail-mode", 0, 1, cmd_get_fail_mode, ""},
+    {"del-fail-mode", 0, 1, cmd_del_fail_mode, ""},
+    {"set-fail-mode", 1, 2, cmd_set_fail_mode, ""},
 
-        /* SSL commands. */
-        {"get-ssl", 0, 0, cmd_get_ssl, ""},
-        {"del-ssl", 0, 0, cmd_del_ssl, ""},
-        {"set-ssl", 3, 3, cmd_set_ssl, "--bootstrap"},
+    /* SSL commands. */
+    {"get-ssl", 0, 0, cmd_get_ssl, ""},
+    {"del-ssl", 0, 0, cmd_del_ssl, ""},
+    {"set-ssl", 3, 3, cmd_set_ssl, "--bootstrap"},
 
-        /* Parameter commands. */
-        {"get", 3, INT_MAX, cmd_get, ""},
-        {"list", 1, INT_MAX, cmd_list, ""},
-        {"set", 3, INT_MAX, cmd_set, "--force"},
-        {"add", 4, INT_MAX, cmd_add, "--force"},
-        {"remove", 4, INT_MAX, cmd_remove, "--force"},
-        {"clear", 3, INT_MAX, cmd_clear, "--force"},
-        {"create", 2, INT_MAX, cmd_create, "--force"},
-        {"destroy", 1, INT_MAX, cmd_destroy, "--force,--if-exists"},
-    };
+    /* Parameter commands. */
+    {"get", 3, INT_MAX, cmd_get, ""},
+    {"list", 1, INT_MAX, cmd_list, ""},
+    {"set", 3, INT_MAX, cmd_set, "--force"},
+    {"add", 4, INT_MAX, cmd_add, "--force"},
+    {"remove", 4, INT_MAX, cmd_remove, "--force"},
+    {"clear", 3, INT_MAX, cmd_clear, "--force"},
+    {"create", 2, INT_MAX, cmd_create, "--force"},
+    {"destroy", 1, INT_MAX, cmd_destroy, "--force,--if-exists"},
 
-    const struct vsctl_command *p;
-    int i;
+    {NULL, 0, 0, NULL, NULL},
+};
 
-    shash_init(&ctx->options);
-    for (i = 0; i < argc; i++) {
-        if (argv[i][0] != '-') {
-            break;
-        }
-        if (!shash_add_once(&ctx->options, argv[i], NULL)) {
-            vsctl_fatal("'%s' option specified multiple times", argv[i]);
-        }
-    }
-    if (i == argc) {
-        vsctl_fatal("missing command name");
-    }
-
-    for (p = all_commands; p < &all_commands[ARRAY_SIZE(all_commands)]; p++) {
-        if (!strcmp(p->name, argv[i])) {
-            struct shash_node *node;
-            int n_arg;
-
-            SHASH_FOR_EACH (node, &ctx->options) {
-                const char *s = strstr(p->options, node->name);
-                int end = s ? s[strlen(node->name)] : EOF;
-                if (end != ',' && end != ' ' && end != '\0') {
-                    vsctl_fatal("'%s' command has no '%s' option",
-                                argv[i], node->name);
-                }
-            }
-
-            n_arg = argc - i - 1;
-            if (n_arg < p->min_args) {
-                vsctl_fatal("'%s' command requires at least %d arguments",
-                            p->name, p->min_args);
-            } else if (n_arg > p->max_args) {
-                vsctl_fatal("'%s' command takes at most %d arguments",
-                            p->name, p->max_args);
-            } else {
-                ctx->argc = n_arg + 1;
-                ctx->argv = &argv[i];
-                return p->handler;
-            }
-        }
-    }
-
-    vsctl_fatal("unknown command '%s'; use --help for help", argv[i]);
-}
-
-static void
-check_vsctl_command(int argc, char *argv[])
-{
-    struct vsctl_context ctx;
-
-    get_vsctl_handler(argc, argv, &ctx);
-    shash_destroy(&ctx.options);
-}
-
-static void
-run_vsctl_command(int argc, char *argv[],
-                  const struct ovsrec_open_vswitch *ovs,
-                  struct ovsdb_idl *idl, struct ds *output)
-{
-    vsctl_handler_func *function;
-    struct vsctl_context ctx;
-
-    function = get_vsctl_handler(argc, argv, &ctx);
-    ctx.ovs = ovs;
-    ctx.idl = idl;
-    ds_init(&ctx.output);
-    function(&ctx);
-    *output = ctx.output;
-    shash_destroy(&ctx.options);
-}
