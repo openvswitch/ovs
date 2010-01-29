@@ -24,6 +24,7 @@
 #include <stdlib.h>
 
 #include "command-line.h"
+#include "dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb-data.h"
@@ -125,11 +126,15 @@ usage(void)
            "  parse-type JSON\n"
            "    parse JSON as OVSDB type, and re-serialize\n"
            "  parse-atoms TYPE ATOM...\n"
-           "    parse ATOMs as atoms of given TYPE, and re-serialize\n"
+           "    parse JSON ATOMs as atoms of TYPE, and re-serialize\n"
+           "  parse-atom-strings TYPE ATOM...\n"
+           "    parse string ATOMs as atoms of given TYPE, and re-serialize\n"
            "  sort-atoms TYPE ATOM...\n"
-           "    print ATOMs in sorted order, and re-serialize\n"
+           "    print JSON ATOMs in sorted order\n"
            "  parse-data TYPE DATUM...\n"
-           "    parse DATUMs as data of given TYPE, and re-serialize\n"
+           "    parse JSON DATUMs as data of given TYPE, and re-serialize\n"
+           "  parse-data-strings TYPE DATUM...\n"
+           "    parse string DATUMs as data of given TYPE, and re-serialize\n"
            "  parse-column NAME OBJECT\n"
            "    parse column NAME with info OBJECT, and re-serialize\n"
            "  parse-table NAME OBJECT\n"
@@ -229,6 +234,14 @@ check_ovsdb_error(struct ovsdb_error *error)
 {
     if (error) {
         ovs_fatal(0, "%s", ovsdb_error_to_string(error));
+    }
+}
+
+static void
+die_if_error(char *error)
+{
+    if (error) {
+        ovs_fatal(0, "%s", error);
     }
 }
 
@@ -353,6 +366,32 @@ do_parse_atoms(int argc, char *argv[])
 }
 
 static void
+do_parse_atom_strings(int argc, char *argv[])
+{
+    enum ovsdb_atomic_type type;
+    struct json *json;
+    int i;
+
+    json = unbox_json(parse_json(argv[1]));
+    check_ovsdb_error(ovsdb_atomic_type_from_json(&type, json));
+    json_destroy(json);
+
+    for (i = 2; i < argc; i++) {
+        union ovsdb_atom atom;
+        struct ds out;
+
+        die_if_error(ovsdb_atom_from_string(&atom, type, argv[i]));
+
+        ds_init(&out);
+        ovsdb_atom_to_string(&atom, type, &out);
+        puts(ds_cstr(&out));
+        ds_destroy(&out);
+
+        ovsdb_atom_destroy(&atom, type);
+    }
+}
+
+static void
 do_parse_data(int argc, char *argv[])
 {
     struct ovsdb_type type;
@@ -371,6 +410,32 @@ do_parse_data(int argc, char *argv[])
         json_destroy(json);
 
         print_and_free_json(ovsdb_datum_to_json(&datum, &type));
+
+        ovsdb_datum_destroy(&datum, &type);
+    }
+}
+
+static void
+do_parse_data_strings(int argc, char *argv[])
+{
+    struct ovsdb_type type;
+    struct json *json;
+    int i;
+
+    json = unbox_json(parse_json(argv[1]));
+    check_ovsdb_error(ovsdb_type_from_json(&type, json));
+    json_destroy(json);
+
+    for (i = 2; i < argc; i++) {
+        struct ovsdb_datum datum;
+        struct ds out;
+
+        die_if_error(ovsdb_datum_from_string(&datum, &type, argv[i]));
+
+        ds_init(&out);
+        ovsdb_datum_to_string(&datum, &type, &out);
+        puts(ds_cstr(&out));
+        ds_destroy(&out);
 
         ovsdb_datum_destroy(&datum, &type);
     }
@@ -1711,7 +1776,9 @@ static struct command all_commands[] = {
     { "parse-atomic-type", 1, 1, do_parse_atomic_type },
     { "parse-type", 1, 1, do_parse_type },
     { "parse-atoms", 2, INT_MAX, do_parse_atoms },
+    { "parse-atom-strings", 2, INT_MAX, do_parse_atom_strings },
     { "parse-data", 2, INT_MAX, do_parse_data },
+    { "parse-data-strings", 2, INT_MAX, do_parse_data_strings },
     { "sort-atoms", 2, 2, do_sort_atoms },
     { "parse-column", 2, 2, do_parse_column },
     { "parse-table", 2, 2, do_parse_table },

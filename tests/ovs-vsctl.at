@@ -444,3 +444,183 @@ AT_CHECK([RUN_OVS_VSCTL([del-br xapi1])])
 CHECK_BRIDGES
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
+
+dnl ----------------------------------------------------------------------
+AT_BANNER([ovs-vsctl unit tests -- database commands])
+
+AT_SETUP([database commands -- positive checks])
+AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL([--force create b name=br0])], 
+  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+cp stdout out1
+AT_CHECK([RUN_OVS_VSCTL([list b])], 
+  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+cp stdout out2
+AT_CHECK([perl $srcdir/uuidfilt.pl out1 out2], [0], 
+  [[<0>
+_uuid                (RO): <0>
+controller           (RO): []
+datapath_id          (RO): []
+datapath_type        (RO): ""
+external_ids         (RW): {}
+flood_vlans          (RW): []
+mirrors              (RO): []
+name                 (RO): "br0"
+netflow              (RO): []
+other_config         (RW): {}
+ports                (RO): []
+]], [ignore], [test ! -e pid || kill `cat pid`])
+AT_CHECK(
+  [RUN_OVS_VSCTL(
+    [set bridge br0 \
+      'other_config:datapath_id="0123456789ab"' \
+      'other_config:hwaddr="00:11:22:33:44:55"' \
+      'external-ids={"xs-network-uuids"="9c45f225-a7cf-439d-976d-83db6271fda1"}' -- \
+     add bridge br0 external_ids '"xs-network-names"="local; remote; cloud"'])], 
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL_ONELINE([get bridge br0 other_config external-ids])], 
+  [0], [{datapath_id="0123456789ab", hwaddr="00:11:22:33:44:55"}\n{xs-network-names="local; remote; cloud", xs-network-uuids="9c45f225-a7cf-439d-976d-83db6271fda1"}
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([get bridge br0 other_config:hwaddr -- --if-exists get bridge br0 other-config:nonexistent])], 
+  [0], ["00:11:22:33:44:55"
+
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([remove br br0 other_config hwaddr 'datapath_id=""' -- get br br0 other_config])], 
+  [0], [{datapath_id="0123456789ab"}
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([remove br br0 other_config 'datapath_id="0123456789ab"' -- get br br0 other_config])], 
+  [0], [{}
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([clear br br0 external-ids -- get br br0 external_ids])], 
+  [0], [{}
+], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--force destroy b br0])], 
+  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([list b])], 
+  [0], [], [], [OVS_VSCTL_CLEANUP])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([database commands -- negative checks])
+AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL([--force create b name=br0])], 
+  [0], [ignore], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add-br br1])], 
+  [0], [ignore], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([set-controller br1 tcp:127.0.0.1])], 
+  [0], [ignore], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--force create n targets='"1.2.3.4:567"'])], 
+  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+cp stdout netflow-uuid
+AT_CHECK([RUN_OVS_VSCTL([list n `cat netflow-uuid`])],
+  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([perl $srcdir/uuidfilt.pl netflow-uuid stdout], [0], 
+  [[<0>
+_uuid                (RO): <0>
+active_timeout       (RW): 0
+add_id_to_interface  (RW): false
+engine_id            (RW): []
+engine_type          (RW): []
+targets              (RW): ["1.2.3.4:567"]
+]], [ignore], [test ! -e pid || kill `cat pid`])
+AT_CHECK([RUN_OVS_VSCTL([list interx x])], 
+  [1], [], [ovs-vsctl: unknown table "interx"
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([list b x])], 
+  [1], [], [ovs-vsctl: no row "x" in table Bridge
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([list b br])], 
+  [1], [], [ovs-vsctl: multiple rows in Bridge match "br"
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([get b br0 d])], 
+  [1], [], [ovs-vsctl: Bridge contains more than one column whose name matches "d"
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([get b br0 x])], 
+  [1], [], [ovs-vsctl: Bridge does not contain a column whose name matches "x"
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([get b br0 :y=z])], 
+  [1], [], [ovs-vsctl: :y=z: missing column name
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id:y=z])], 
+  [1], [], [ovs-vsctl: datapath_id:y=z: value not accepted here
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id::])], 
+  [1], [], [ovs-vsctl: datapath_id::: trailing garbage ":" in argument
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id:x])], 
+  [1], [], [ovs-vsctl: cannot specify key to get for non-map column datapath_id
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([get b br0 external_ids:x])], 
+  [1], [], [ovs-vsctl: no key "x" in Bridge record "br0" column external_ids
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([set b br0 flood_vlans=-1])], 
+  [1], [], [ovs-vsctl: -1 is outside the valid range 1 to 4095 (inclusive)
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([set b br0 flood_vlans=4096])], 
+  [1], [], [ovs-vsctl: 4096 is outside the valid range 1 to 4095 (inclusive)
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([set b br0 datapath_id=4096])], 
+  [1], [], [ovs-vsctl: datapath_id=4096: cannot modify read-only column datapath_id in table Bridge
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([set c br1 'connection-mode=xyz'])], 
+  [1], [], [ovs-vsctl: xyz is not valid (it does not match ^in-band|out-of-band$)
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([set c br1 connection-mode:x=y])], 
+  [1], [], [ovs-vsctl: cannot specify key to set for non-map column connection_mode
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add b br1 datapath_id x=y])], 
+  [1], [], [ovs-vsctl: cannot modify read-only column datapath_id in table Bridge
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--force add b br1 datapath_id x y])], 
+  [1], [], [ovs-vsctl: "add" operation would put 2 values in column datapath_id of table Bridge but the maximum number is 1
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([remove b br1 datapath_id x=y])], 
+  [1], [], [ovs-vsctl: cannot modify read-only column datapath_id in table Bridge
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([remove n `cat netflow-uuid` targets '"1.2.3.4:567"'])], 
+  [1], [], [ovs-vsctl: "remove" operation would put 0 values in column targets of table NetFlow but the minimun number is 1
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([clear bri br0 netflow])], 
+  [1], [], [ovs-vsctl: cannot modify read-only column netflow in table Bridge
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([clear n `cat netflow-uuid` targets])], 
+  [1], [], [ovs-vsctl: "clear" operation cannot be applied to column targets of table NetFlow, which is not allowed to be empty
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([create b name=br2])], 
+  [1], [], [ovs-vsctl: "create" requires --force
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([destroy b br0])], 
+  [1], [], [ovs-vsctl: "destroy" requires --force
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--force destroy b br2])], 
+  [1], [], [ovs-vsctl: no row "br2" in table Bridge
+], [OVS_VSCTL_CLEANUP])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
+dnl This test really shows a bug -- "create" followed by "list" in
+dnl the same execution shows the wrong UUID on the "list" command.
+dnl The bug is documented in ovs-vsctl.8.
+AT_SETUP([created row UUID is wrong in same execution])
+AT_KEYWORDS([ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL([--force create Bridge name=br0 -- list b])], 
+  [0], [stdout], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], 
+  [[<0>
+_uuid                (RO): <1>
+controller           (RO): []
+datapath_id          (RO): []
+datapath_type        (RO): ""
+external_ids         (RW): {}
+flood_vlans          (RW): []
+mirrors              (RO): []
+name                 (RO): "br0"
+netflow              (RO): []
+other_config         (RW): {}
+ports                (RO): []
+]], [ignore], [test ! -e pid || kill `cat pid`])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
