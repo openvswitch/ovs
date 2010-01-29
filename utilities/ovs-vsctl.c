@@ -1746,6 +1746,10 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
             }
             ovsdb_datum_destroy(&name, &id->name_column->type);
         }
+        if (best_score && !referrer) {
+            ovs_fatal(0, "multiple rows in %s match \"%s\"",
+                      table->class->name, record_id);
+        }
     }
     if (!referrer) {
         return NULL;
@@ -1902,8 +1906,8 @@ parse_column_key_value(const char *arg, const struct vsctl_table_class *table,
             *valuep = NULL;
         }
         if (*p != '\0') {
-            error = xasprintf("%s: trailing garbage in argument at offset %td",
-                              arg, p - arg);
+            error = xasprintf("%s: trailing garbage \"%s\" in argument",
+                              arg, p);
             goto error;
         }
     }
@@ -2214,16 +2218,16 @@ cmd_add(struct vsctl_context *ctx)
     table = get_table(table_name);
     row = must_get_row(ctx, table, record_id);
     die_if_error(get_column(table, column_name, &column));
+    if (column->flags & VSCF_READONLY && !force) {
+        ovs_fatal(0, "cannot modify read-only column %s in table %s",
+                   column->idl->name, table->class->name);
+    }
+
     type = &column->idl->type;
     ovsdb_idl_txn_read(row, column->idl, &old);
     for (i = 4; i < ctx->argc; i++) {
         struct ovsdb_type add_type;
         struct ovsdb_datum add;
-
-        if (column->flags & VSCF_READONLY && !force) {
-            ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
-                      ctx->argv[i], column->idl->name, table_name);
-        }
 
         add_type = *type;
         add_type.n_min = 1;
@@ -2234,10 +2238,10 @@ cmd_add(struct vsctl_context *ctx)
     }
     if (old.n > type->n_max) {
         ovs_fatal(0, "\"add\" operation would put %u %s in column %s of "
-                  "table %s but at most %u are allowed",
+                  "table %s but the maximum number is %u",
                   old.n,
                   type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
-                  column->idl->name, table_name, type->n_max);
+                  column->idl->name, table->class->name, type->n_max);
     }
     ovsdb_idl_txn_write(row, column->idl, &old);
 }
@@ -2259,17 +2263,17 @@ cmd_remove(struct vsctl_context *ctx)
     table = get_table(table_name);
     row = must_get_row(ctx, table, record_id);
     die_if_error(get_column(table, column_name, &column));
+    if (column->flags & VSCF_READONLY && !force) {
+        ovs_fatal(0, "cannot modify read-only column %s in table %s",
+                   column->idl->name, table->class->name);
+    }
+
     type = &column->idl->type;
     ovsdb_idl_txn_read(row, column->idl, &old);
     for (i = 4; i < ctx->argc; i++) {
         struct ovsdb_type rm_type;
         struct ovsdb_datum rm;
         char *error;
-
-        if (column->flags & VSCF_READONLY && !force) {
-            ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
-                      ctx->argv[i], column->idl->name, table_name);
-        }
 
         rm_type = *type;
         rm_type.n_min = 1;
@@ -2285,10 +2289,10 @@ cmd_remove(struct vsctl_context *ctx)
     }
     if (old.n < type->n_min) {
         ovs_fatal(0, "\"remove\" operation would put %u %s in column %s of "
-                  "table %s but at least %u are required",
+                  "table %s but the minimun number is %u",
                   old.n,
                   type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
-                  column->idl->name, table_name, type->n_min);
+                  column->idl->name, table->class->name, type->n_min);
     }
     ovsdb_idl_txn_write(row, column->idl, &old);
 }
@@ -2314,12 +2318,12 @@ cmd_clear(struct vsctl_context *ctx)
 
         type = &column->idl->type;
         if (column->flags & VSCF_READONLY && !force) {
-            ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
-                      ctx->argv[i], column->idl->name, table_name);
+            ovs_fatal(0, "cannot modify read-only column %s in table %s",
+                      column->idl->name, table->class->name);
         } else if (type->n_min > 0) {
             ovs_fatal(0, "\"clear\" operation cannot be applied to column %s "
                       "of table %s, which is not allowed to be empty",
-                      column->idl->name, table_name);
+                      column->idl->name, table->class->name);
         }
 
         ovsdb_datum_init_empty(&datum);
