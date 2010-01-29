@@ -235,6 +235,7 @@ netdev_open(const char *name, int ethertype, struct netdev **netdevp)
 
     netdev_obj = shash_find_data(&netdev_obj_shash, name);
     if (netdev_obj) {
+        netdev_obj->ref_cnt++;
         error = netdev_obj->netdev_class->open(name, ethertype, &netdev);
     } else {
         /* Default to "system". */
@@ -249,15 +250,13 @@ netdev_open(const char *name, int ethertype, struct netdev **netdevp)
                  * closes its handle. */
                 error = class->create(name, "system", &empty_args, false);
                 if (!error) {
-                    error = class->open(name, ethertype, &netdev);
                     netdev_obj = shash_find_data(&netdev_obj_shash, name);
+                    netdev_obj->ref_cnt++;
+                    error = class->open(name, ethertype, &netdev);
                 }
                 break;
             }
         }
-    }
-    if (!error) {
-        netdev_obj->ref_cnt++;
     }
 
     *netdevp = error ? NULL : netdev;
