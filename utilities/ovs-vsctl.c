@@ -1931,6 +1931,7 @@ error:
 static void
 cmd_get(struct vsctl_context *ctx)
 {
+    bool if_exists = shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const struct vsctl_table_class *table;
@@ -1965,14 +1966,15 @@ cmd_get(struct vsctl_context *ctx)
             idx = ovsdb_datum_find_key(&datum, &key,
                                        column->idl->type.key_type);
             if (idx == UINT_MAX) {
-                ovs_fatal(0, "no key %s in %s record \"%s\" column %s",
-                          key_string, table_name, record_id,
-                          column->idl->name);
-
+                if (!if_exists) {
+                    ovs_fatal(0, "no key \"%s\" in %s record \"%s\" column %s",
+                              key_string, table->class->name, record_id,
+                              column->idl->name);
+                }
+            } else {
+                ovsdb_atom_to_string(&datum.values[idx],
+                                     column->idl->type.value_type, out);
             }
-            ovsdb_atom_to_string(&datum.values[idx],
-                                 column->idl->type.value_type, out);
-
             ovsdb_atom_destroy(&key, column->idl->type.key_type);
         } else {
             ovsdb_datum_to_string(&datum, &column->idl->type, out);
@@ -2607,7 +2609,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"set-ssl", 3, 3, cmd_set_ssl, NULL, "--bootstrap"},
 
     /* Parameter commands. */
-    {"get", 3, INT_MAX, cmd_get, NULL, ""},
+    {"get", 3, INT_MAX, cmd_get, NULL, "--if-exists"},
     {"list", 1, INT_MAX, cmd_list, NULL, ""},
     {"set", 3, INT_MAX, cmd_set, NULL, "--force"},
     {"add", 4, INT_MAX, cmd_add, NULL, "--force"},

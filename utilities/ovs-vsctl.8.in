@@ -459,11 +459,16 @@ records are specified, lists all the records in \fItable\fR.
 The UUIDs shown for rows created in the same \fBovs\-vsctl\fR
 invocation will be wrong.
 .
-.IP "\fBget \fItable record column\fR[\fB:\fIkey\fR]..."
+.IP "[\fB\-\-if\-exists\fR] \fBget \fItable record column\fR[\fB:\fIkey\fR]..."
 Prints the value of each specified \fIcolumn\fR in the given
 \fIrecord\fR in \fItable\fR.  For map columns, a \fIkey\fR may
 optionally be specified, in which case the value associated with
 \fIkey\fR in the column is printed, instead of the entire map.
+.IP
+For a map column, without \fB\-\-if\-exists\fR it is an error if
+\fIkey\fR does not exist; with it, a blank line is printed.  If
+\fIcolumn\fR is not a map column or if \fIkey\fR is not specified,
+\fB\-\-if\-exists\fR has no effect.
 .
 .IP "[\fB\-\-force\fR] \fBset \fItable record column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
 Sets the value of each specified \fIcolumn\fR in the given
