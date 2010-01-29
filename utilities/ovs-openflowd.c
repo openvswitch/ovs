@@ -240,10 +240,10 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 {
     enum {
         OPT_DATAPATH_ID = UCHAR_MAX + 1,
-        OPT_MANUFACTURER,
-        OPT_HARDWARE,
-        OPT_SOFTWARE,
-        OPT_SERIAL,
+        OPT_MFR_DESC,
+        OPT_HW_DESC,
+        OPT_SW_DESC,
+        OPT_SERIAL_DESC,
         OPT_DP_DESC,
         OPT_ACCEPT_VCONN,
         OPT_NO_RESOLV_CONF,
@@ -268,11 +268,11 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     };
     static struct option long_options[] = {
         {"datapath-id", required_argument, 0, OPT_DATAPATH_ID},
-        {"manufacturer", required_argument, 0, OPT_MANUFACTURER},
-        {"hardware", required_argument, 0, OPT_HARDWARE},
-        {"software", required_argument, 0, OPT_SOFTWARE},
-        {"serial", required_argument, 0, OPT_SERIAL},
-        {"dp_desc", required_argument, 0, OPT_DP_DESC},
+        {"mfr-desc", required_argument, 0, OPT_MFR_DESC},
+        {"hw-desc", required_argument, 0, OPT_HW_DESC},
+        {"sw-desc", required_argument, 0, OPT_SW_DESC},
+        {"serial-desc", required_argument, 0, OPT_SERIAL_DESC},
+        {"dp-desc", required_argument, 0, OPT_DP_DESC},
         {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
         {"no-resolv-conf", no_argument, 0, OPT_NO_RESOLV_CONF},
         {"config",      required_argument, 0, 'F'},
@@ -342,19 +342,19 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             }
             break;
 
-        case OPT_MANUFACTURER:
+        case OPT_MFR_DESC:
             s->mfr_desc = optarg;
             break;
 
-        case OPT_HARDWARE:
+        case OPT_HW_DESC:
             s->hw_desc = optarg;
             break;
 
-        case OPT_SOFTWARE:
+        case OPT_SW_DESC:
             s->sw_desc = optarg;
             break;
 
-        case OPT_SERIAL:
+        case OPT_SERIAL_DESC:
             s->serial_desc = optarg;
             break;
 
@@ -531,11 +531,11 @@ usage(void)
     printf("\nOpenFlow options:\n"
            "  -d, --datapath-id=ID    Use ID as the OpenFlow switch ID\n"
            "                          (ID must consist of 16 hex digits)\n"
-           "  --manufacturer=MFR      Identify manufacturer as MFR\n"
-           "  --hardware=HW           Identify hardware as HW\n"
-           "  --software=SW           Identify software as SW\n"
-           "  --serial=SERIAL         Identify serial number as SERIAL\n"
-           "  --dp_desc=DP_DESC       Identify dp description as DP_DESC\n"
+           "  --mfr-desc=MFR          Identify manufacturer as MFR\n"
+           "  --hw-desc=HW            Identify hardware as HW\n"
+           "  --sw-desc=SW            Identify software as SW\n"
+           "  --serial-desc=SERIAL    Identify serial number as SERIAL\n"
+           "  --dp-desc=DP_DESC       Identify dp description as DP_DESC\n"
            "\nController discovery options:\n"
            "  --accept-vconn=REGEX    accept matching discovered controllers\n"
            "  --no-resolv-conf        do not update /etc/resolv.conf\n"

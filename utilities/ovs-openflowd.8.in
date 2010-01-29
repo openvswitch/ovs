@@ -155,6 +155,53 @@ the local port network device, and start the DHCP client afterward.
 .RE
 
 .SH OPTIONS
+.SS "OpenFlow Options"
+.TP
+\fB--datapath-id=\fIdpid\fR
+Sets \fIdpid\fR, which must consist of exactly 16 hexadecimal digits,
+as the datapath ID that the switch will use to identify itself to the
+OpenFlow controller.
+
+If this option is omitted, the default datapath ID is taken from the
+Ethernet address of the datapath's local port (which is typically
+randomly generated) in the lower 48 bits and zeros in the upper 16.
+
+.TP
+\fB--mgmt-id=\fImgmtid\fR
+Sets \fImgmtid\fR, which must consist of exactly 12 hexadecimal
+digits, as the switch's management ID.
+
+If this option is omitted, the management ID defaults to 0, signaling
+to the controller that management is supported but not configured.
+
+.TP
+\fB--mfr-desc=\fIdesc\fR
+Set the description of the switch's manufacturer to \fIdesc\fR, which
+may contain up to 255 ASCII characters.
+
+.TP
+\fB--hw-desc=\fIdesc\fR
+Set the description of the switch's hardware revision to \fIdesc\fR, which
+may contain up to 255 ASCII characters.
+
+.TP
+\fB--sw-desc=\fIdesc\fR
+Set the description of the switch's software revision to \fIdesc\fR, which
+may contain up to 255 ASCII characters.
+
+.TP
+\fB--serial-desc=\fIdesc\fR
+Set the description of the switch's serial number to \fIdesc\fR, which
+may contain up to 31 ASCII characters.
+
+.TP
+\fB--dp-desc=\fIdesc\fR
+Set the description of the datapath to \fIdesc\fR, which may contain up to
+255 ASCII characters.  Note that this field is intended for debugging
+purposes and is not guaranteed to be unique and should not be used as
+the primary identifier of the datapath.
+
+
 .SS "Controller Discovery Options"
 .TP
 \fB--accept-vconn=\fIregex\fR
