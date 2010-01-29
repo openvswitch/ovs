@@ -5,8 +5,8 @@ This document describes how to build and install Open vSwitch on a
 Citrix XenServer host.  If you want to install Open vSwitch on a
 generic Linux host, see INSTALL.Linux instead.
 
-These instructions have been tested with XenServer versions 5.5.0 and
-5.5.900.
+These instructions have been tested with XenServer versions 5.5.0,
+5.5.0-24648p (Update 1), 5.5.0-25727p (Update 2), and 5.5.900.
 
 Building Open vSwitch for XenServer
 -----------------------------------
