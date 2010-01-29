@@ -299,11 +299,11 @@ ofproto_create(const char *datapath, const char *datapath_type,
     p = xzalloc(sizeof *p);
     p->fallback_dpid = pick_fallback_dpid();
     p->datapath_id = p->fallback_dpid;
-    p->manufacturer = xstrdup("Nicira Networks, Inc.");
-    p->hardware = xstrdup("Reference Implementation");
-    p->software = xstrdup(VERSION BUILDNR);
-    p->serial = xstrdup("None");
-    p->dp_desc = xstrdup("None");
+    p->manufacturer = xstrdup(DEFAULT_MFR_DESC);
+    p->hardware = xstrdup(DEFAULT_HW_DESC);
+    p->software = xstrdup(DEFAULT_SW_DESC);
+    p->serial = xstrdup(DEFAULT_SERIAL_DESC);
+    p->dp_desc = xstrdup(DEFAULT_DP_DESC);
 
     /* Initialize datapath. */
     p->dpif = dpif;

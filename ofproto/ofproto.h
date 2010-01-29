@@ -51,6 +51,12 @@ struct ofproto_sflow_options {
     char *control_ip;
 };
 
+#define DEFAULT_MFR_DESC "Nicira Networks, Inc."
+#define DEFAULT_HW_DESC "Open vSwitch"
+#define DEFAULT_SW_DESC VERSION BUILDNR
+#define DEFAULT_SERIAL_DESC "None"
+#define DEFAULT_DP_DESC "None"
+
 int ofproto_create(const char *datapath, const char *datapath_type,
                    const struct ofhooks *, void *aux,
                    struct ofproto **ofprotop);
