@@ -187,10 +187,10 @@ struct ofproto {
     /* Settings. */
     uint64_t datapath_id;       /* Datapath ID. */
     uint64_t fallback_dpid;     /* Datapath ID if no better choice found. */
-    char *manufacturer;         /* Manufacturer. */
-    char *hardware;             /* Hardware. */
-    char *software;             /* Software version. */
-    char *serial;               /* Serial number. */
+    char *mfr_desc;             /* Manufacturer. */
+    char *hw_desc;              /* Hardware. */
+    char *sw_desc;              /* Software version. */
+    char *serial_desc;          /* Serial number. */
     char *dp_desc;              /* Datapath description. */
 
     /* Datapath. */
@@ -299,10 +299,10 @@ ofproto_create(const char *datapath, const char *datapath_type,
     p = xzalloc(sizeof *p);
     p->fallback_dpid = pick_fallback_dpid();
     p->datapath_id = p->fallback_dpid;
-    p->manufacturer = xstrdup(DEFAULT_MFR_DESC);
-    p->hardware = xstrdup(DEFAULT_HW_DESC);
-    p->software = xstrdup(DEFAULT_SW_DESC);
-    p->serial = xstrdup(DEFAULT_SERIAL_DESC);
+    p->mfr_desc = xstrdup(DEFAULT_MFR_DESC);
+    p->hw_desc = xstrdup(DEFAULT_HW_DESC);
+    p->sw_desc = xstrdup(DEFAULT_SW_DESC);
+    p->serial_desc = xstrdup(DEFAULT_SERIAL_DESC);
     p->dp_desc = xstrdup(DEFAULT_DP_DESC);
 
     /* Initialize datapath. */
@@ -390,27 +390,50 @@ ofproto_set_max_backoff(struct ofproto *p, int max_backoff)
 
 void
 ofproto_set_desc(struct ofproto *p,
-                 const char *manufacturer, const char *hardware,
-                 const char *software, const char *serial,
+                 const char *mfr_desc, const char *hw_desc,
+                 const char *sw_desc, const char *serial_desc,
                  const char *dp_desc)
 {
-    if (manufacturer) {
-        free(p->manufacturer);
-        p->manufacturer = xstrdup(manufacturer);
+    struct ofp_desc_stats *ods;
+
+    if (mfr_desc) {
+        if (strlen(mfr_desc) >= sizeof ods->mfr_desc) {
+            VLOG_WARN("truncating mfr_desc, must be less than %zu characters",
+                    sizeof ods->mfr_desc);
+        }
+        free(p->mfr_desc);
+        p->mfr_desc = xstrdup(mfr_desc);
     }
-    if (hardware) {
-        free(p->hardware);
-        p->hardware = xstrdup(hardware);
+    if (hw_desc) {
+        if (strlen(hw_desc) >= sizeof ods->hw_desc) {
+            VLOG_WARN("truncating hw_desc, must be less than %zu characters",
+                    sizeof ods->hw_desc);
+        }
+        free(p->hw_desc);
+        p->hw_desc = xstrdup(hw_desc);
     }
-    if (software) {
-        free(p->software);
-        p->software = xstrdup(software);
+    if (sw_desc) {
+        if (strlen(sw_desc) >= sizeof ods->sw_desc) {
+            VLOG_WARN("truncating sw_desc, must be less than %zu characters",
+                    sizeof ods->sw_desc);
+        }
+        free(p->sw_desc);
+        p->sw_desc = xstrdup(sw_desc);
     }
-    if (serial) {
-        free(p->serial);
-        p->serial = xstrdup(serial);
+    if (serial_desc) {
+        if (strlen(serial_desc) >= sizeof ods->serial_num) {
+            VLOG_WARN("truncating serial_desc, must be less than %zu "
+                    "characters",
+                    sizeof ods->serial_num);
+        }
+        free(p->serial_desc);
+        p->serial_desc = xstrdup(serial_desc);
     }
     if (dp_desc) {
+        if (strlen(dp_desc) >= sizeof ods->dp_desc) {
+            VLOG_WARN("truncating dp_desc, must be less than %zu characters",
+                    sizeof ods->dp_desc);
+        }
         free(p->dp_desc);
         p->dp_desc = xstrdup(dp_desc);
     }
@@ -731,10 +754,10 @@ ofproto_destroy(struct ofproto *p)
 
     mac_learning_destroy(p->ml);
 
-    free(p->manufacturer);
-    free(p->hardware);
-    free(p->software);
-    free(p->serial);
+    free(p->mfr_desc);
+    free(p->hw_desc);
+    free(p->sw_desc);
+    free(p->serial_desc);
     free(p->dp_desc);
 
     free(p);
@@ -2397,11 +2420,12 @@ handle_desc_stats_request(struct ofproto *p, struct ofconn *ofconn,
 
     msg = start_stats_reply(request, sizeof *ods);
     ods = append_stats_reply(sizeof *ods, ofconn, &msg);
-    strncpy(ods->mfr_desc, p->manufacturer, sizeof ods->mfr_desc);
-    strncpy(ods->hw_desc, p->hardware, sizeof ods->hw_desc);
-    strncpy(ods->sw_desc, p->software, sizeof ods->sw_desc);
-    strncpy(ods->serial_num, p->serial, sizeof ods->serial_num);
-    strncpy(ods->dp_desc, p->dp_desc, sizeof ods->dp_desc);
+    memset(ods, 0, sizeof *ods);
+    ovs_strlcpy(ods->mfr_desc, p->mfr_desc, sizeof ods->mfr_desc);
+    ovs_strlcpy(ods->hw_desc, p->hw_desc, sizeof ods->hw_desc);
+    ovs_strlcpy(ods->sw_desc, p->sw_desc, sizeof ods->sw_desc);
+    ovs_strlcpy(ods->serial_num, p->serial_desc, sizeof ods->serial_num);
+    ovs_strlcpy(ods->dp_desc, p->dp_desc, sizeof ods->dp_desc);
     queue_tx(msg, ofconn, ofconn->reply_counter);
 
     return 0;

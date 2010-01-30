@@ -72,8 +72,8 @@ void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
 void ofproto_set_probe_interval(struct ofproto *, int probe_interval);
 void ofproto_set_max_backoff(struct ofproto *, int max_backoff);
 void ofproto_set_desc(struct ofproto *,
-                      const char *manufacturer, const char *hardware,
-                      const char *software, const char *serial,
+                      const char *mfr_desc, const char *hw_desc,
+                      const char *sw_desc, const char *serial_desc,
                       const char *dp_desc);
 int ofproto_set_in_band(struct ofproto *, bool in_band);
 int ofproto_set_discovery(struct ofproto *, bool discovery,
