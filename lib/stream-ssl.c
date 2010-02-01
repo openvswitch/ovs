@@ -1074,6 +1074,7 @@ stream_ssl_set_ca_cert_file(const char *file_name, bool bootstrap)
             }
             X509_free(certs[i]);
         }
+        free(certs);
 
         /* Set up CAs for OpenSSL to trust in verifying the peer's
          * certificate. */
