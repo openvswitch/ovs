@@ -44,7 +44,10 @@ static inline bool eth_addr_is_multicast(const uint8_t ea[6])
 }
 static inline bool eth_addr_is_local(const uint8_t ea[6]) 
 {
-    return ea[0] & 2;
+    /* Local if it is either a locally administered address or a Nicira random
+     * address. */
+    return !!(ea[0] & 2)
+       || (ea[0] == 0x00 && ea[1] == 0x23 && ea[2] == 0x20 && !!(ea[3] & 0x80));
 }
 static inline bool eth_addr_is_zero(const uint8_t ea[6]) 
 {
@@ -82,6 +85,18 @@ static inline void eth_addr_random(uint8_t ea[ETH_ADDR_LEN])
 {
     random_bytes(ea, ETH_ADDR_LEN);
     eth_addr_mark_random(ea);
+}
+static inline void eth_addr_nicira_random(uint8_t ea[ETH_ADDR_LEN])
+{
+    eth_addr_random(ea);
+
+    /* Set the OUI to the Nicira one. */
+    ea[0] = 0x00;
+    ea[1] = 0x23;
+    ea[2] = 0x20;
+
+    /* Set the top bit to indicate random Nicira address. */
+    ea[3] |= 0x80;
 }
 /* Returns true if 'ea' is a reserved multicast address, that a bridge must
  * never forward, false otherwise. */

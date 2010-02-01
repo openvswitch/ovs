@@ -1157,7 +1157,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
     br->cfg = br_cfg;
     br->ml = mac_learning_create();
     br->sent_config_request = false;
-    eth_addr_random(br->default_ea);
+    eth_addr_nicira_random(br->default_ea);
 
     port_array_init(&br->ifaces);
 

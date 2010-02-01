@@ -99,7 +99,7 @@ send_bogus_packet_in(struct fail_open *fo)
 
     /* Compose ofp_packet_in. */
     ofpbuf_init(&b, 128);
-    eth_addr_random(mac);
+    eth_addr_nicira_random(mac);
     compose_benign_packet(&b, "Open vSwitch Controller Probe", 0xa033, mac);
     opi = make_packet_in(pktbuf_get_null(), OFPP_LOCAL, OFPR_NO_MATCH, &b, 64);
     ofpbuf_uninit(&b);

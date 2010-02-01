@@ -3458,10 +3458,7 @@ static uint64_t
 pick_fallback_dpid(void)
 {
     uint8_t ea[ETH_ADDR_LEN];
-    eth_addr_random(ea);
-    ea[0] = 0x00;               /* Set Nicira OUI. */
-    ea[1] = 0x23;
-    ea[2] = 0x20;
+    eth_addr_nicira_random(ea);
     return eth_addr_to_uint64(ea);
 }
 
