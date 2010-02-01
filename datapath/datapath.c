@@ -419,6 +419,7 @@ got_port_no:
 	if (err)
 		goto out_put;
 
+	set_dp_devs_mtu(dp, dev);
 	dp_sysfs_add_if(dp->ports[port_no]);
 
 	err = __put_user(port_no, &port.port);
@@ -1317,6 +1318,29 @@ int dp_min_mtu(const struct datapath *dp)
 	}
 
 	return mtu ? mtu : ETH_DATA_LEN;
+}
+
+/* Sets the MTU of all datapath devices to the minimum of the ports. 'dev'
+ * is the device whose MTU may have changed.  Must be called with RTNL lock
+ * and dp_mutex. */
+void set_dp_devs_mtu(const struct datapath *dp, struct net_device *dev)
+{
+	struct net_bridge_port *p;
+	int mtu;
+
+	ASSERT_RTNL();
+
+	if (is_dp_dev(dev))
+		return;
+
+	mtu = dp_min_mtu(dp);
+
+	list_for_each_entry_rcu (p, &dp->port_list, node) {
+		struct net_device *br_dev = p->dev;
+
+		if (is_dp_dev(br_dev))
+			dev_set_mtu(br_dev, mtu);
+	}
 }
 
 static int
