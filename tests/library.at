@@ -2,35 +2,35 @@ AT_BANNER([library unit tests])
 
 AT_SETUP([test flow extractor])
 AT_CHECK([$PERL `which flowgen.pl` >/dev/null 3>flows 4>pcap])
-OVS_CHECK_LCOV([test-flows <flows 3<pcap], [0], [checked 247 packets, 0 errors
+AT_CHECK([test-flows <flows 3<pcap], [0], [checked 247 packets, 0 errors
 ])
 AT_CLEANUP
 
 AT_SETUP([test TCP/IP checksumming])
-OVS_CHECK_LCOV([test-csum], [0], [ignore])
+AT_CHECK([test-csum], [0], [ignore])
 AT_CLEANUP
 
 AT_SETUP([test flow classifier])
 AT_KEYWORDS([slow])
-OVS_CHECK_LCOV([test-classifier], [0], [ignore])
+AT_CHECK([test-classifier], [0], [ignore])
 AT_CLEANUP
 
 AT_SETUP([test hash functions])
-OVS_CHECK_LCOV([test-hash], [0], [ignore])
+AT_CHECK([test-hash], [0], [ignore])
 AT_CLEANUP
 
 AT_SETUP([test hash map])
-OVS_CHECK_LCOV([test-hmap], [0], [ignore])
+AT_CHECK([test-hmap], [0], [ignore])
 AT_CLEANUP
 
 AT_SETUP([test linked lists])
-OVS_CHECK_LCOV([test-list], [0], [ignore])
+AT_CHECK([test-list], [0], [ignore])
 AT_CLEANUP
 
 AT_SETUP([test SHA-1])
-OVS_CHECK_LCOV([test-sha1], [0], [ignore])
+AT_CHECK([test-sha1], [0], [ignore])
 AT_CLEANUP
 
 AT_SETUP([test type properties])
-OVS_CHECK_LCOV([test-type-props], [0], [ignore])
+AT_CHECK([test-type-props], [0], [ignore])
 AT_CLEANUP

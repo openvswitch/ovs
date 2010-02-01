@@ -2,12 +2,12 @@ AT_BANNER([timeval unit tests])
 
 AT_SETUP([check that time advances])
 AT_KEYWORDS([timeval])
-OVS_CHECK_LCOV([test-timeval plain], [0])
+AT_CHECK([test-timeval plain], [0])
 AT_CLEANUP
 
 AT_SETUP([check that time advances after daemonize()])
 AT_KEYWORDS([timeval])
-OVS_CHECK_LCOV([test-timeval daemon], [0])
+AT_CHECK([test-timeval daemon], [0])
 AT_CHECK(
   [# First try a quick sleep, so that the test completes very quickly
    # in the normal case.  POSIX doesn't require fractional times to

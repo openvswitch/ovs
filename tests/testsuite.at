@@ -36,7 +36,6 @@ m4_define([OVS_WAIT_UNTIL], [OVS_WAIT([if $1; then exit 0; fi], [$2])])
 m4_define([OVS_WAIT_WHILE], [OVS_WAIT([if $1; then :; else exit 0; fi], [$2])])
 
 m4_include([tests/ovsdb-macros.at])
-m4_include([tests/lcov-pre.at])
 
 m4_include([tests/library.at])
 m4_include([tests/check-structs.at])
@@ -53,5 +52,3 @@ m4_include([tests/reconnect.at])
 m4_include([tests/ovsdb.at])
 m4_include([tests/stp.at])
 m4_include([tests/ovs-vsctl.at])
-
-m4_include([tests/lcov-post.at])

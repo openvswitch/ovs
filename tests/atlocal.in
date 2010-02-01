@@ -1,6 +1,5 @@
 # -*- shell-script -*-
 HAVE_OPENSSL='@HAVE_OPENSSL@'
 HAVE_PYTHON='@HAVE_PYTHON@'
-LCOV='@LCOV@'
 PERL='@PERL@'
 PYTHON='@PYTHON@'

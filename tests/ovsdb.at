@@ -11,7 +11,7 @@ m4_define([OVSDB_CHECK_POSITIVE],
    m4_if([$5], [], [], 
          [AT_XFAIL_IF([m4_version_prereq([$5], [false], [true])])])
    AT_KEYWORDS([ovsdb positive $4])
-   OVS_CHECK_LCOV([test-ovsdb $2], [0], [$3
+   AT_CHECK([test-ovsdb $2], [0], [$3
 ], [])
    AT_CLEANUP])
 
@@ -23,7 +23,7 @@ m4_define([OVSDB_CHECK_POSITIVE],
 m4_define([OVSDB_CHECK_NEGATIVE], 
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb negative $4])
-   OVS_CHECK_LCOV([test-ovsdb $2], [1], [], [stderr])
+   AT_CHECK([test-ovsdb $2], [1], [], [stderr])
    m4_assert(m4_len([$3]))
    AT_CHECK(
      [if grep -F -e "AS_ESCAPE([$3])" stderr

@@ -8,7 +8,7 @@ AT_BANNER([OVSDB -- triggers])
 m4_define([OVSDB_CHECK_TRIGGER], 
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb execute execution trigger positive $4])
-   OVS_CHECK_LCOV([test-ovsdb trigger $2], [0], [stdout], [])
+   AT_CHECK([test-ovsdb trigger $2], [0], [stdout], [])
    AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [$3])
    AT_CLEANUP])
 

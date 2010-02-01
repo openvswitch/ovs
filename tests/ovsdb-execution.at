@@ -23,7 +23,7 @@ m4_define([ORDINAL_SCHEMA],
 m4_define([OVSDB_CHECK_EXECUTION], 
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb execute execution positive $5])
-   OVS_CHECK_LCOV([test-ovsdb execute '$2' m4_foreach([txn], [$3], [ 'txn'])],
+   AT_CHECK([test-ovsdb execute '$2' m4_foreach([txn], [$3], [ 'txn'])],
      [0], [stdout], [])
    AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [$4])
    AT_CLEANUP])

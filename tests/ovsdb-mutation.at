@@ -36,7 +36,7 @@ OVSDB_CHECK_POSITIVE([mutations on scalars],
 
 AT_SETUP([disallowed mutations on scalars])
 AT_KEYWORDS([ovsdb negative mutation])
-OVS_CHECK_LCOV([[test-ovsdb parse-mutations \
+AT_CHECK([[test-ovsdb parse-mutations \
     '{"columns":
         {"i": {"type": "integer"},
          "r": {"type": "real"},

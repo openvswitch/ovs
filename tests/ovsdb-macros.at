@@ -2,10 +2,10 @@ dnl OVSDB_INIT([$1])
 dnl
 dnl Creates an empty database named $1.
 m4_define([OVSDB_INIT],
-  [OVS_CHECK_LCOV(
+  [AT_CHECK(
      [ovsdb-tool create $1 $abs_top_srcdir/vswitchd/vswitch.ovsschema],
      [0], [stdout], [ignore])
-   OVS_CHECK_LCOV(
+   AT_CHECK(
      [[ovsdb-tool transact $1 \
         '[{"op": "insert",
            "table": "Open_vSwitch",

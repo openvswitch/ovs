@@ -19,9 +19,9 @@ m4_define([OVSDB_CHECK_EXECUTION],
    AT_DATA([schema], [$2
 ])
    touch .db.~lock~
-   OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
    m4_foreach([txn], [$3], 
-     [OVS_CHECK_LCOV([ovsdb-tool transact db 'txn'], [0], [stdout], [ignore])
+     [AT_CHECK([ovsdb-tool transact db 'txn'], [0], [stdout], [ignore])
 cat stdout >> output
 ])
    AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$4])
@@ -34,8 +34,8 @@ AT_KEYWORDS([ovsdb file positive])
 AT_DATA([schema], [ORDINAL_SCHEMA
 ])
 touch .db.~lock~
-OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [], [ignore])
-OVS_CHECK_LCOV([[ovsdb-tool transact db '
+AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
+AT_CHECK([[ovsdb-tool transact db '
     [{"op": "insert",
       "table": "ordinals",
       "row": {"name": "five", "number": 5}},

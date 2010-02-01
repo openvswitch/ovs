@@ -7,7 +7,6 @@ EXTRA_DIST += \
 TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/ovsdb-macros.at \
-	tests/lcov-pre.at \
 	tests/library.at \
 	tests/check-structs.at \
 	tests/daemon.at \
@@ -38,14 +37,64 @@ TESTSUITE_AT = \
 	tests/ovsdb-monitor.at \
 	tests/ovsdb-idl.at \
 	tests/stp.at \
-	tests/ovs-vsctl.at \
-	tests/lcov-post.at
+	tests/ovs-vsctl.at
 TESTSUITE = $(srcdir)/tests/testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal $(TESTSUITE)
 
-check-local: tests/atconfig tests/atlocal $(TESTSUITE)
-	$(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH='utilities:vswitchd:ovsdb:tests' $(TESTSUITEFLAGS)
+AUTOTEST_PATH = utilities:vswitchd:ovsdb:tests
 
+check-local: tests/atconfig tests/atlocal $(TESTSUITE)
+	$(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH) $(TESTSUITEFLAGS)
+
+# lcov support
+
+lcov_wrappers = \
+	tests/lcov/ovs-appctl \
+	tests/lcov/ovs-vsctl \
+	tests/lcov/ovsdb-client \
+	tests/lcov/ovsdb-server \
+	tests/lcov/ovsdb-tool \
+	tests/lcov/test-aes128 \
+	tests/lcov/test-classifier \
+	tests/lcov/test-csum \
+	tests/lcov/test-dhcp-client \
+	tests/lcov/test-dir_name \
+	tests/lcov/test-flows \
+	tests/lcov/test-hash \
+	tests/lcov/test-hmap \
+	tests/lcov/test-json \
+	tests/lcov/test-jsonrpc \
+	tests/lcov/test-list \
+	tests/lcov/test-lockfile \
+	tests/lcov/test-ovsdb \
+	tests/lcov/test-reconnect \
+	tests/lcov/test-sha1 \
+	tests/lcov/test-stp \
+	tests/lcov/test-timeval \
+	tests/lcov/test-type-props \
+	tests/lcov/test-uuid \
+	tests/lcov/test-vconn
+
+$(lcov_wrappers): tests/lcov-wrapper.in
+	@test -d tests/lcov || mkdir tests/lcov
+	sed -e 's,[@]abs_top_builddir[@],$(abs_top_builddir),' \
+	    -e 's,[@]wrap_program[@],$@,' \
+		$(top_srcdir)/tests/lcov-wrapper.in > $@.tmp
+	chmod +x $@.tmp
+	mv $@.tmp $@
+CLEANFILES += $(lcov_wrappers)
+EXTRA_DIST += tests/lcov-wrapper.in
+
+LCOV = lcov -b $(abs_top_builddir) -d $(abs_top_builddir) -q
+check-lcov: all tests/atconfig tests/atlocal $(TESTSUITE) $(lcov_wrappers)
+	rm -fr tests/coverage.html tests/coverage.info
+	$(LCOV) -c -i -o - > tests/coverage.info
+	$(SHELL) '$(TESTSUITE)' -C tests CHECK_LCOV=true AUTOTEST_PATH='tests/lcov:$(AUTOTEST_PATH)' $(TESTSUITEFLAGS); \
+		rc=$$?; \
+		echo "Producing coverage.html..."; \
+		cd tests && genhtml -q -o coverage.html coverage.info; \
+		exit $$rc
+
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean
 

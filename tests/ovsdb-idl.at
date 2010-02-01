@@ -17,11 +17,11 @@ AT_BANNER([OVSDB -- interface description language (IDL)])
 m4_define([OVSDB_CHECK_IDL], 
   [AT_SETUP([$1])
    AT_KEYWORDS([ovsdb server idl positive $5])
-   OVS_CHECK_LCOV([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --pidfile=$PWD/server-pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
    m4_if([$2], [], [],
-     [OVS_CHECK_LCOV([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat server-pid`])])
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat server-pid`])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $3], 
             [0], [stdout], [ignore], [kill `cat server-pid`])
    AT_CHECK([sort stdout | perl $srcdir/uuidfilt.pl], [0], [$4], [],

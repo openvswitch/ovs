@@ -3,7 +3,7 @@ m4_define([JSON_CHECK_POSITIVE],
    AT_KEYWORDS([json positive])
    AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
    AT_CAPTURE_FILE([input])
-   OVS_CHECK_LCOV([test-json $4 input], [0], [stdout], [])
+   AT_CHECK([test-json $4 input], [0], [stdout], [])
    AT_CHECK([cat stdout], [0], [$3
 ])
    AT_CLEANUP])
@@ -13,7 +13,7 @@ m4_define([JSON_CHECK_NEGATIVE],
    AT_KEYWORDS([json negative])
    AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
    AT_CAPTURE_FILE([input])
-   OVS_CHECK_LCOV([test-json $4 input], [1], [stdout], [])
+   AT_CHECK([test-json $4 input], [1], [stdout], [])
    AT_CHECK([[sed 's/^error: [^:]*:/error:/' < stdout]], [0], [$3
 ])
    AT_CLEANUP])

@@ -3,7 +3,7 @@ AT_BANNER([test dir_name function])
 m4_define([CHECK_DIR_NAME],
   [AT_SETUP([dir_name("$1") returns "$2"])
    AT_KEYWORDS([dir_name])
-   OVS_CHECK_LCOV([test-dir_name "AS_ESCAPE($1)"], [0], [$2
+   AT_CHECK([test-dir_name "AS_ESCAPE($1)"], [0], [$2
 ])
    AT_CLEANUP])
 

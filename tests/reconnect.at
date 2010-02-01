@@ -6,7 +6,7 @@ AT_KEYWORDS([reconnect])
 AT_DATA([input], [run
 timeout
 ])
-OVS_CHECK_LCOV([test-reconnect < input], [0], 
+AT_CHECK([test-reconnect < input], [0], 
   [### t=1000 ###
 run
 timeout
@@ -32,7 +32,7 @@ timeout
 run
 disconnected
 ])
-OVS_CHECK_LCOV([test-reconnect < input], [0], 
+AT_CHECK([test-reconnect < input], [0], 
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -95,7 +95,7 @@ timeout
 run
 disconnected
 ])
-OVS_CHECK_LCOV([test-reconnect < input], [0], 
+AT_CHECK([test-reconnect < input], [0], 
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -208,7 +208,7 @@ timeout
 run
 connect-failed
 ])
-OVS_CHECK_LCOV([test-reconnect < input], [0], 
+AT_CHECK([test-reconnect < input], [0], 
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -552,7 +552,7 @@ run
 timeout
 run
 ])
-OVS_CHECK_LCOV([test-reconnect < input], [0], 
+AT_CHECK([test-reconnect < input], [0], 
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -695,7 +695,7 @@ run
 timeout
 run
 ])
-OVS_CHECK_LCOV([test-reconnect < input], [0], 
+AT_CHECK([test-reconnect < input], [0], 
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -859,7 +859,7 @@ run
 timeout
 run
 ])
-OVS_CHECK_LCOV([test-reconnect < input], [0], 
+AT_CHECK([test-reconnect < input], [0], 
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -992,7 +992,7 @@ connect-failed ECONNREFUSED
 run
 timeout
 ])
-OVS_CHECK_LCOV([test-reconnect < input], [0], 
+AT_CHECK([test-reconnect < input], [0], 
   [### t=1000 ###
 enable
   in BACKOFF for 0 ms (0 ms backoff)
@@ -1048,7 +1048,7 @@ timeout
 run
 disconnected
 ])
-OVS_CHECK_LCOV([test-reconnect < input], [0], 
+AT_CHECK([test-reconnect < input], [0], 
   [### t=1000 ###
 set-max-tries 1
   1 tries left
@@ -1099,7 +1099,7 @@ enable
 run
 timeout
 ])
-OVS_CHECK_LCOV([test-reconnect < input], [0], 
+AT_CHECK([test-reconnect < input], [0], 
   [### t=1000 ###
 set-max-tries 0
   0 tries left

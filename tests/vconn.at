@@ -14,7 +14,7 @@ m4_define([TEST_VCONN_CLASS],
       m4_if([$1], [ssl], [
         AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
         AT_CHECK([cp $abs_top_srcdir/tests/testpki*.pem .])])
-      OVS_CHECK_LCOV([test-vconn testname $1], [0], [], [ignore])
+      AT_CHECK([test-vconn testname $1], [0], [], [ignore])
       AT_CLEANUP])])
 
 TEST_VCONN_CLASS([unix])

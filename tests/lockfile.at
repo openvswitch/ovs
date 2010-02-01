@@ -3,7 +3,7 @@ AT_BANNER([lockfile unit tests])
 m4_define([CHECK_LOCKFILE],
   [AT_SETUP([m4_translit([$1], [_], [ ])])
    AT_KEYWORDS([lockfile])
-   OVS_CHECK_LCOV([test-lockfile $1], [0], [$1: success (m4_if(
+   AT_CHECK([test-lockfile $1], [0], [$1: success (m4_if(
      [$2], [1], [$2 child], [$2 children]))
 ])
    AT_CLEANUP])

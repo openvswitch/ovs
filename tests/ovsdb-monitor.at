@@ -20,17 +20,17 @@ m4_define([OVSDB_CHECK_MONITOR],
    AT_KEYWORDS([ovsdb server monitor positive $7])
    AT_DATA([schema], [$2
 ])
-   OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
    m4_foreach([txn], [$3],
-     [OVS_CHECK_LCOV([ovsdb-tool transact db 'txn'], [0], [ignore], [ignore])])
+     [AT_CHECK([ovsdb-tool transact db 'txn'], [0], [ignore], [ignore])])
    AT_CHECK([ovsdb-server --detach --pidfile=$PWD/server-pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
    AT_CHECK([ovsdb-client --detach --pidfile=$PWD/client-pid monitor --format=csv unix:socket $4 > output], 
             [0], [ignore], [ignore], [kill `cat server-pid`])
    m4_foreach([txn], [$5],
-     [OVS_CHECK_LCOV([ovsdb-client transact unix:socket 'txn'], [0],
+     [AT_CHECK([ovsdb-client transact unix:socket 'txn'], [0],
                      [ignore], [ignore], [kill `cat server-pid client-pid`])])
-   OVS_CHECK_LCOV([ovsdb-client transact unix:socket '[[]]'], [0],
-                  [ignore], [ignore], [kill `cat server-pid client-pid`])
+   AT_CHECK([ovsdb-client transact unix:socket '[[]]'], [0],
+            [ignore], [ignore], [kill `cat server-pid client-pid`])
    AT_CHECK([ovs-appctl -t $PWD/unixctl -e exit], [0], [ignore], [ignore])
    OVS_WAIT_UNTIL([test ! -e server-pid && test ! -e client-pid])
    AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$6], [ignore])

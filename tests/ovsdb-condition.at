@@ -74,7 +74,7 @@ OVSDB_CHECK_POSITIVE([conditions on scalars],
 
 AT_SETUP([disallowed conditions on scalars])
 AT_KEYWORDS([ovsdb negative condition])
-OVS_CHECK_LCOV([[test-ovsdb parse-conditions \
+AT_CHECK([[test-ovsdb parse-conditions \
     '{"columns":
         {"i": {"type": "integer"},
          "r": {"type": "real"},

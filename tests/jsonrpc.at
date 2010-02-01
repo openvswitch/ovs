@@ -28,7 +28,7 @@ AT_CHECK([test -s pid])
 # When a daemon dies it deletes its pidfile, so make a copy.
 AT_CHECK([cp pid pid2])
 AT_CHECK([kill -0 `cat pid2`])
-OVS_CHECK_LCOV([[test-jsonrpc notify unix:socket shutdown '[]']], [0], [], 
+AT_CHECK([[test-jsonrpc notify unix:socket shutdown '[]']], [0], [], 
   [ignore], [kill `cat pid2`])
 AT_CHECK(
   [pid=`cat pid2`

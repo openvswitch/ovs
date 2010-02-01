@@ -19,10 +19,10 @@ m4_define([OVSDB_CHECK_EXECUTION],
    AT_KEYWORDS([ovsdb server positive $5])
    AT_DATA([schema], [$2
 ])
-   OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
    m4_foreach([txn], [$3], 
-     [OVS_CHECK_LCOV([ovsdb-client transact unix:socket 'txn'], [0], [stdout], [ignore],
+     [AT_CHECK([ovsdb-client transact unix:socket 'txn'], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`])
 cat stdout >> output
 ])
@@ -42,14 +42,14 @@ AT_DATA([schema],
          "columns": {
            "manager": {"type": "string"}}}}}
 ]])
-OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [ignore], [ignore])
-OVS_CHECK_LCOV(
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+AT_CHECK(
   [[ovsdb-tool transact db \
      '[{"op": "insert",
         "table": "Manager",
         "row": {"manager": "punix:socket"}}]']], [0], [ignore], [ignore])
 AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=db:Manager,manager --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
-OVS_CHECK_LCOV(
+AT_CHECK(
   [[ovsdb-client transact unix:socket \
      '[{"op": "select",
         "table": "Manager",
@@ -91,10 +91,10 @@ m4_define([OVSDB_CHECK_EXECUTION],
 ])
    SSL_PORT=`expr 32767 + \( $RANDOM % 32767 \)`
    PKIDIR=$abs_top_srcdir/tests
-   OVS_CHECK_LCOV([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --private-key=$PKIDIR/testpki-privkey2.pem --certificate=$PKIDIR/testpki-cert2.pem --ca-cert=$PKIDIR/testpki-cacert.pem --remote=pssl:$SSL_PORT:127.0.0.1 --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
    m4_foreach([txn], [$3], 
-     [OVS_CHECK_LCOV([ovsdb-client --private-key=$PKIDIR/testpki-privkey.pem --certificate=$PKIDIR/testpki-cert.pem --ca-cert=$PKIDIR/testpki-cacert.pem transact ssl:127.0.0.1:$SSL_PORT 'txn'], [0], [stdout], [ignore],
+     [AT_CHECK([ovsdb-client --private-key=$PKIDIR/testpki-privkey.pem --certificate=$PKIDIR/testpki-cert.pem --ca-cert=$PKIDIR/testpki-cacert.pem transact ssl:127.0.0.1:$SSL_PORT 'txn'], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`])
 cat stdout >> output
 ])
