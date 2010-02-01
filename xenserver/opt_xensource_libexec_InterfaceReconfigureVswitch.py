@@ -342,6 +342,7 @@ class DatapathVswitch(Datapath):
         extra_ports = []
 
         pifrec = db().get_pif_record(self._pif)
+        dprec = db().get_pif_record(self._dp)
 
         ipdev = self._ipdev
         bridge = pif_bridge_name(self._dp)
@@ -369,9 +370,9 @@ class DatapathVswitch(Datapath):
         cfgmod_argv += ["# reconfigure ipdev %s" % ipdev]
         cfgmod_argv += ['--add=bridge.%s.port=%s' % (bridge, ipdev)]
         if bridge == ipdev:
-            cfgmod_argv += ['--add=bridge.%s.mac=%s' % (bridge, pifrec['MAC'])]
+            cfgmod_argv += ['--add=bridge.%s.mac=%s' % (bridge, dprec['MAC'])]
         else:
-            cfgmod_argv += ['--add=iface.%s.mac=%s' % (ipdev, pifrec['MAC'])]
+            cfgmod_argv += ['--add=iface.%s.mac=%s' % (ipdev, dprec['MAC'])]
             
         if pif_is_vlan(self._pif):
             cfgmod_argv += ['--add=vlan.%s.tag=%s' % (ipdev, pifrec['VLAN'])]
