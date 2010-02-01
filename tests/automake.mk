@@ -95,6 +95,54 @@ check-lcov: all tests/atconfig tests/atlocal $(TESTSUITE) $(lcov_wrappers)
 		cd tests && genhtml -q -o coverage.html coverage.info; \
 		exit $$rc
 
+# valgrind support
+
+valgrind_wrappers = \
+	tests/valgrind/ovs-appctl \
+	tests/valgrind/ovs-vsctl \
+	tests/valgrind/ovsdb-client \
+	tests/valgrind/ovsdb-server \
+	tests/valgrind/ovsdb-tool \
+	tests/valgrind/test-aes128 \
+	tests/valgrind/test-classifier \
+	tests/valgrind/test-csum \
+	tests/valgrind/test-dhcp-client \
+	tests/valgrind/test-dir_name \
+	tests/valgrind/test-flows \
+	tests/valgrind/test-hash \
+	tests/valgrind/test-hmap \
+	tests/valgrind/test-json \
+	tests/valgrind/test-jsonrpc \
+	tests/valgrind/test-list \
+	tests/valgrind/test-lockfile \
+	tests/valgrind/test-ovsdb \
+	tests/valgrind/test-reconnect \
+	tests/valgrind/test-sha1 \
+	tests/valgrind/test-stp \
+	tests/valgrind/test-timeval \
+	tests/valgrind/test-type-props \
+	tests/valgrind/test-uuid \
+	tests/valgrind/test-vconn
+
+$(valgrind_wrappers): tests/valgrind-wrapper.in
+	@test -d tests/valgrind || mkdir tests/valgrind
+	sed -e 's,[@]wrap_program[@],$@,' \
+		$(top_srcdir)/tests/valgrind-wrapper.in > $@.tmp
+	chmod +x $@.tmp
+	mv $@.tmp $@
+CLEANFILES += $(valgrind_wrappers)
+EXTRA_DIST += tests/valgrind-wrapper.in
+
+VALGRIND = valgrind --log-file=valgrind.%p --leak-check=full \
+	--suppressions=$(abs_top_srcdir)/tests/openssl.supp --num-callers=20
+EXTRA_DIST += tests/openssl.supp
+check-valgrind: all tests/atconfig tests/atlocal $(TESTSUITE) $(valgrind_wrappers)
+	$(SHELL) '$(TESTSUITE)' -C tests CHECK_VALGRIND=true VALGRIND='$(VALGRIND)' AUTOTEST_PATH='tests/valgrind:$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS)
+	@echo
+	@echo '----------------------------------------------------------------------'
+	@echo 'Valgrind output can be found in tests/testsuite.dir/*/valgrind.*'
+	@echo '----------------------------------------------------------------------'
+
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean
 

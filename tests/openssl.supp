@@ -1,0 +1,13 @@
+# suppress OpenSSL errors from valgrind
+
+{
+   BN_mod_inverse
+   Memcheck:Cond
+   fun:BN_mod_inverse
+}
+
+{
+   BN_div
+   Memcheck:Cond
+   fun:BN_div
+}
