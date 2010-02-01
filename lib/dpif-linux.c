@@ -98,7 +98,7 @@ dpif_linux_enumerate(struct svec *all_dps)
         retval = dpif_open(devname, "system", &dpif);
         if (!retval) {
             svec_add(all_dps, devname);
-            dpif_close(dpif);
+            dpif_uninit(dpif, true);
         } else if (retval != ENODEV && !error) {
             error = retval;
         }
@@ -157,7 +157,7 @@ dpif_linux_open(const char *name, const char *type UNUSED, bool create,
                 VLOG_WARN("%s: probe returned unexpected error: %s",
                           dpif_name(*dpifp), strerror(error));
             }
-            dpif_close(*dpifp);
+            dpif_uninit(*dpifp, true);
             return error;
         }
 
@@ -668,11 +668,11 @@ static int
 finish_open(struct dpif *dpif_, const char *local_ifname)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    dpif->local_ifname = strdup(local_ifname);
+    dpif->local_ifname = xstrdup(local_ifname);
     dpif->local_ifindex = if_nametoindex(local_ifname);
     if (!dpif->local_ifindex) {
         int error = errno;
-        dpif_close(dpif_);
+        dpif_uninit(dpif_, true);
         VLOG_WARN("could not get ifindex of %s device: %s",
                   local_ifname, strerror(errno));
         return error;
@@ -689,7 +689,7 @@ create_minor(const char *name, int minor, struct dpif **dpifp)
         if (!error) {
             error = finish_open(*dpifp, name);
         } else {
-            dpif_close(*dpifp);
+            dpif_uninit(*dpifp, true);
         }
     }
     return error;

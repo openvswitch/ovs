@@ -26,10 +26,15 @@
 struct dpif;
 struct ofpbuf;
 struct svec;
+struct dpif_class;
 
 void dp_run(void);
 void dp_wait(void);
+
+int dp_register_provider(const struct dpif_class *);
+int dp_unregister_provider(const char *type);
 void dp_enumerate_types(struct svec *types);
+
 int dp_enumerate_names(const char *type, struct svec *names);
 void dp_parse_name(const char *datapath_name, char **name, char **type);
 
