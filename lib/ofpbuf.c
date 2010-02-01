@@ -36,7 +36,7 @@ ofpbuf_use(struct ofpbuf *b, void *base, size_t allocated)
     b->size = 0;
     b->l2 = b->l3 = b->l4 = b->l7 = NULL;
     b->next = NULL;
-    b->private = NULL;
+    b->private_p = NULL;
 }
 
 /* Initializes 'b' as an empty ofpbuf with an initial capacity of 'size'
