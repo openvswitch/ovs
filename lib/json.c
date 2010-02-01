@@ -1213,6 +1213,7 @@ json_parser_push(struct json_parser *p,
         p->parse_state = new_state;
         return node;
     } else {
+        json_destroy(new_json);
         json_error(p, "input exceeds maximum nesting depth %d",
                    JSON_MAX_HEIGHT);
         return NULL;
