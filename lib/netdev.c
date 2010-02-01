@@ -40,12 +40,13 @@
 #define THIS_MODULE VLM_netdev
 #include "vlog.h"
 
-static const struct netdev_class *netdev_classes[] = {
+static const struct netdev_class *base_netdev_classes[] = {
     &netdev_linux_class,
     &netdev_tap_class,
     &netdev_gre_class,
 };
-static int n_netdev_classes = ARRAY_SIZE(netdev_classes);
+
+static struct shash netdev_classes = SHASH_INITIALIZER(&netdev_classes);
 
 /* All created network devices. */
 static struct shash netdev_dev_shash = SHASH_INITIALIZER(&netdev_dev_shash);
@@ -61,43 +62,21 @@ static void close_all_netdevs(void *aux UNUSED);
 static int restore_flags(struct netdev *netdev);
 void update_device_args(struct netdev_dev *, const struct shash *args);
 
-/* Attempts to initialize the netdev module.  Returns 0 if successful,
- * otherwise a positive errno value.
- *
- * Calling this function is optional.  If not called explicitly, it will
- * automatically be called upon the first attempt to open or create a 
- * network device. */
-int
+static void
 netdev_initialize(void)
 {
     static int status = -1;
 
     if (status < 0) {
-        int i, j;
+        int i;
 
         fatal_signal_add_hook(close_all_netdevs, NULL, NULL, true);
 
         status = 0;
-        for (i = j = 0; i < n_netdev_classes; i++) {
-            const struct netdev_class *class = netdev_classes[i];
-            if (class->init) {
-                int retval = class->init();
-                if (!retval) {
-                    netdev_classes[j++] = class;
-                } else {
-                    VLOG_ERR("failed to initialize %s network device "
-                             "class: %s", class->type, strerror(retval));
-                    if (!status) {
-                        status = retval;
-                    }
-                }
-            } else {
-                netdev_classes[j++] = class;
-            }
+        for (i = 0; i < ARRAY_SIZE(base_netdev_classes); i++) {
+            netdev_register_provider(base_netdev_classes[i]);
         }
-        n_netdev_classes = j;
     }
-    return status;
 }
 
 /* Performs periodic work needed by all the various kinds of netdevs.
@@ -107,9 +86,9 @@ netdev_initialize(void)
 void
 netdev_run(void)
 {
-    int i;
-    for (i = 0; i < n_netdev_classes; i++) {
-        const struct netdev_class *class = netdev_classes[i];
+    struct shash_node *node;
+    SHASH_FOR_EACH(node, &netdev_classes) {
+        const struct netdev_class *class = node->data;
         if (class->run) {
             class->run();
         }
@@ -123,12 +102,88 @@ netdev_run(void)
 void
 netdev_wait(void)
 {
-    int i;
-    for (i = 0; i < n_netdev_classes; i++) {
-        const struct netdev_class *class = netdev_classes[i];
+    struct shash_node *node;
+    SHASH_FOR_EACH(node, &netdev_classes) {
+        const struct netdev_class *class = node->data;
         if (class->wait) {
             class->wait();
         }
+    }
+}
+
+/* Initializes and registers a new netdev provider.  After successful
+ * registration, new netdevs of that type can be opened using netdev_open(). */
+int
+netdev_register_provider(const struct netdev_class *new_class)
+{
+    struct netdev_class *new_provider;
+
+    if (shash_find(&netdev_classes, new_class->type)) {
+        VLOG_WARN("attempted to register duplicate netdev provider: %s",
+                   new_class->type);
+        return EEXIST;
+    }
+
+    if (new_class->init) {
+        int error = new_class->init();
+        if (error) {
+            VLOG_ERR("failed to initialize %s network device class: %s",
+                     new_class->type, strerror(error));
+            return error;
+        }
+    }
+
+    new_provider = xmalloc(sizeof *new_provider);
+    memcpy(new_provider, new_class, sizeof *new_provider);
+
+    shash_add(&netdev_classes, new_class->type, new_provider);
+
+    return 0;
+}
+
+/* Unregisters a netdev provider.  'type' must have been previously
+ * registered and not currently be in use by any netdevs.  After unregistration
+ * new netdevs of that type cannot be opened using netdev_open(). */
+int
+netdev_unregister_provider(const char *type)
+{
+    struct shash_node *del_node, *netdev_dev_node;
+
+    del_node = shash_find(&netdev_classes, type);
+    if (!del_node) {
+        VLOG_WARN("attempted to unregister a netdev provider that is not "
+                  "registered: %s", type);
+        return EAFNOSUPPORT;
+    }
+
+    SHASH_FOR_EACH(netdev_dev_node, &netdev_dev_shash) {
+        struct netdev_dev *netdev_dev = netdev_dev_node->data;
+        if (!strcmp(netdev_dev->class->type, type)) {
+            VLOG_WARN("attempted to unregister in use netdev provider: %s",
+                      type);
+            return EBUSY;
+        }
+    }
+
+    shash_delete(&netdev_classes, del_node);
+    free(del_node->data);
+
+    return 0;
+}
+
+/* Clears 'types' and enumerates the types of all currently registered netdev
+ * providers into it.  The caller must first initialize the svec. */
+void
+netdev_enumerate_types(struct svec *types)
+{
+    struct shash_node *node;
+
+    netdev_initialize();
+    svec_clear(types);
+
+    SHASH_FOR_EACH(node, &netdev_classes) {
+        const struct netdev_class *netdev_class = node->data;
+        svec_add(types, netdev_class->type);
     }
 }
 
@@ -204,7 +259,7 @@ update_device_args(struct netdev_dev *dev, const struct shash *args)
 static int
 create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
 {
-    int i;
+    struct netdev_class *netdev_class;
 
     if (!options->may_create) {
         VLOG_WARN("attempted to create a device that may not be created: %s",
@@ -217,18 +272,15 @@ create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
         options->type = "system";
     }
 
-    for (i = 0; i < n_netdev_classes; i++) {
-        const struct netdev_class *class = netdev_classes[i];
-
-        if (!strcmp(options->type, class->type)) {
-            return class->create(options->name, options->type, options->args,
-                                 netdev_devp);
-        }
+    netdev_class = shash_find_data(&netdev_classes, options->type);
+    if (!netdev_class) {
+        VLOG_WARN("could not create netdev %s of unknown type %s",
+                  options->name, options->type);
+        return EAFNOSUPPORT;
     }
 
-    VLOG_WARN("could not create netdev %s of unknown type %s", options->name,
-                                                                options->type);
-    return EINVAL;
+    return netdev_class->create(options->name, options->type, options->args,
+                                netdev_devp);
 }
 
 /* Opens the network device named 'name' (e.g. "eth0") and returns zero if
@@ -380,31 +432,30 @@ netdev_exists(const char *name)
     }
 }
 
-/* Initializes 'svec' with a list of the names of all known network devices. */
+/*  Clears 'svec' and enumerates the names of all known network devices. */
 int
 netdev_enumerate(struct svec *svec)
 {
-    int error;
-    int i;
-
-    svec_init(svec);
+    struct shash_node *node;
+    int error = 0;
 
     netdev_initialize();
+    svec_clear(svec);
 
-    error = 0;
-    for (i = 0; i < n_netdev_classes; i++) {
-        const struct netdev_class *class = netdev_classes[i];
-        if (class->enumerate) {
-            int retval = class->enumerate(svec);
+    SHASH_FOR_EACH(node, &netdev_classes) {
+        const struct netdev_class *netdev_class = node->data;
+        if (netdev_class->enumerate) {
+            int retval = netdev_class->enumerate(svec);
             if (retval) {
                 VLOG_WARN("failed to enumerate %s network devices: %s",
-                          class->type, strerror(retval));
+                          netdev_class->type, strerror(retval));
                 if (!error) {
                     error = retval;
                 }
             }
         }
     }
+
     return error;
 }
 
@@ -861,7 +912,7 @@ struct netdev *
 netdev_find_dev_by_in4(const struct in_addr *in4)
 {
     struct netdev *netdev;
-    struct svec dev_list;
+    struct svec dev_list = SVEC_EMPTY_INITIALIZER;
     size_t i;
 
     netdev_enumerate(&dev_list);

@@ -107,12 +107,12 @@ struct netdev_class {
      * the system. */
     const char *type;
 
-    /* Called only once, at program startup.  Returning an error from this
-     * function will prevent any network device in this class from being
-     * opened.
+    /* Called when the netdev provider is registered, typically at program
+     * startup.  Returning an error from this function will prevent any network
+     * device in this class from being opened.
      *
      * This function may be set to null if a network device class needs no
-     * initialization at program startup. */
+     * initialization at registration time. */
     int (*init)(void);
 
     /* Performs periodic work needed by netdevs of this class.  May be null if

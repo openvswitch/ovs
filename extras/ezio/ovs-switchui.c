@@ -2458,7 +2458,7 @@ abbreviate_netdevs(const struct svec *netdevs, struct ds *abbrev)
 static void
 choose_netdevs(struct svec *choices)
 {
-    struct svec netdevs;
+    struct svec netdevs = SVEC_EMPTY_INITIALIZER;
     struct menu menu;
     size_t i;
 

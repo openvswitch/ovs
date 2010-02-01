@@ -86,10 +86,14 @@ struct netdev_options {
 };
 
 struct netdev;
+struct netdev_class;
 
-int netdev_initialize(void);
 void netdev_run(void);
 void netdev_wait(void);
+
+int netdev_register_provider(const struct netdev_class *);
+int netdev_unregister_provider(const char *type);
+void netdev_enumerate_types(struct svec *types);
 
 int netdev_open(struct netdev_options *, struct netdev **);
 int netdev_open_default(const char *name, struct netdev **);
