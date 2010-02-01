@@ -20,6 +20,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -95,7 +96,7 @@ main(int argc, char *argv[])
     } else if (!strcmp(argv[1], "daemon")) {
         /* Test that time still advances even in a daemon.  This is an
          * interesting test because fork() cancels the interval timer. */
-        char cwd[1024];
+        char cwd[1024], *pidfile;
         FILE *success;
 
         assert(getcwd(cwd, sizeof cwd) == cwd);
@@ -104,7 +105,9 @@ main(int argc, char *argv[])
 
         /* Daemonize, with a pidfile in the current directory. */
         set_detach();
-        set_pidfile(xasprintf("%s/test-timeval.pid", cwd));
+        pidfile = xasprintf("%s/test-timeval.pid", cwd);
+        set_pidfile(pidfile);
+        free(pidfile);
         set_no_chdir();
         daemonize();
 

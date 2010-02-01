@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -301,6 +301,7 @@ simulate(struct test_case *tc, int granularity)
                     struct bpdu *bpdu = &b->rxq[b->rxq_tail % RXQ_SIZE];
                     stp_received_bpdu(stp_get_port(b->stp, bpdu->port_no),
                                       bpdu->data, bpdu->size);
+                    free(bpdu->data);
                     any = true;
                 }
             }
@@ -357,6 +358,7 @@ get_token(void)
         pos++;
     }
     if (*pos == '\0') {
+        free(token);
         token = NULL;
         return false;
     }
@@ -644,6 +646,19 @@ main(int argc, char *argv[])
             err("trailing garbage on line");
         }
     }
+    free(token);
+
+    for (i = 0; i < tc->n_lans; i++) {
+        struct lan *lan = tc->lans[i];
+        free((char *) lan->name);
+        free(lan);
+    }
+    for (i = 0; i < tc->n_bridges; i++) {
+        struct bridge *bridge = tc->bridges[i];
+        stp_destroy(bridge->stp);
+        free(bridge);
+    }
+    free(tc);
 
     return 0;
 }

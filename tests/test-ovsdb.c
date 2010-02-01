@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -233,7 +233,9 @@ static void
 check_ovsdb_error(struct ovsdb_error *error)
 {
     if (error) {
-        ovs_fatal(0, "%s", ovsdb_error_to_string(error));
+        char *s = ovsdb_error_to_string(error);
+        ovsdb_error_destroy(error);
+        ovs_fatal(0, "%s", s);
     }
 }
 
@@ -309,6 +311,7 @@ do_log_io(int argc, char *argv[])
             char *s = ovsdb_error_to_string(error);
             printf("%s: %s failed: %s\n", name, command, s);
             free(s);
+            ovsdb_error_destroy(error);
         } else {
             printf("%s: %s successful\n", name, command);
         }
@@ -490,6 +493,7 @@ do_sort_atoms(int argc UNUSED, char *argv[])
         ovsdb_atom_destroy(&atoms[i], type);
     }
     print_and_free_json(json_array_create(json_atoms, n_atoms));
+    free(atoms);
 }
 
 static void
@@ -626,6 +630,10 @@ do_compare_rows(int argc, char *argv[])
             }
         }
     }
+    for (i = 0; i < n_rows; i++) {
+        ovsdb_row_destroy(rows[i]);
+        free(names[i]);
+    }
     free(rows);
     free(names);
 
@@ -730,9 +738,11 @@ do_evaluate_conditions(int argc UNUSED, char *argv[])
     for (i = 0; i < n_conditions; i++) {
         ovsdb_condition_destroy(&conditions[i]);
     }
+    free(conditions);
     for (i = 0; i < n_rows; i++) {
         ovsdb_row_destroy(rows[i]);
     }
+    free(rows);
     ovsdb_table_destroy(table); /* Also destroys 'ts'. */
 }
 
@@ -859,9 +869,11 @@ do_execute_mutations(int argc UNUSED, char *argv[])
     for (i = 0; i < n_sets; i++) {
         ovsdb_mutation_set_destroy(&sets[i]);
     }
+    free(sets);
     for (i = 0; i < n_rows; i++) {
         ovsdb_row_destroy(rows[i]);
     }
+    free(rows);
     ovsdb_table_destroy(table); /* Also destroys 'ts'. */
 }
 
@@ -1123,6 +1135,7 @@ do_execute(int argc UNUSED, char *argv[])
         result = ovsdb_execute(db, params, 0, NULL);
         s = json_to_string(result, JSSF_SORT);
         printf("%s\n", s);
+        free(s);
         json_destroy(params);
         json_destroy(result);
     }
@@ -1144,6 +1157,7 @@ do_trigger_dump(struct test_trigger *t, long long int now, const char *title)
     result = ovsdb_trigger_steal_result(&t->trigger);
     s = json_to_string(result, JSSF_SORT);
     printf("t=%lld: trigger %d (%s): %s\n", now, t->number, title, s);
+    free(s);
     json_destroy(result);
     ovsdb_trigger_destroy(&t->trigger);
     free(t);

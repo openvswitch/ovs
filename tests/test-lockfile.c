@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,10 +100,15 @@ do_fork(void)
 static void
 run_lock_blocks_other_process(void)
 {
-    struct lockfile *lockfile;
+    /* Making this static prevents a memory leak warning from valgrind for the
+     * parent process, which cannot easily unlock (and free) 'lockfile' because
+     * it can only do so after the child has exited, and it's the caller of
+     * this function that does the wait() call. */
+    static struct lockfile *lockfile;
 
     assert(lockfile_lock("file", 0, &lockfile) == 0);
     if (do_fork() == CHILD) {
+        lockfile_unlock(lockfile);
         assert(lockfile_lock("file", 0, &lockfile) == EAGAIN);
         exit(11);
     }
@@ -144,6 +149,7 @@ run_lock_timeout_gets_the_lock(void)
     assert(lockfile_lock("file", 0, &lockfile) == 0);
 
     if (do_fork() == CHILD) {
+        lockfile_unlock(lockfile);
         assert(lockfile_lock("file", TIME_UPDATE_INTERVAL * 3,
                              &lockfile) == 0);
         exit(11);
@@ -164,6 +170,7 @@ run_lock_timeout_runs_out(void)
     assert(lockfile_lock("file", 0, &lockfile) == 0);
 
     if (do_fork() == CHILD) {
+        lockfile_unlock(lockfile);
         assert(lockfile_lock("file", TIME_UPDATE_INTERVAL,
                              &lockfile) == ETIMEDOUT);
         exit(11);

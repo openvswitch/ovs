@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,6 +151,8 @@ main(int argc, char *argv[])
     } else {
         ok = print_and_free_json(json_from_stream(stream));
     }
+
+    fclose(stream);
 
     return !ok;
 }

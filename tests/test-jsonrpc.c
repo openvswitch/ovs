@@ -251,8 +251,9 @@ do_listen(int argc UNUSED, char *argv[])
         }
         poll_block();
     }
+    free(rpcs);
+    pstream_close(pstream);
 }
-
 
 static void
 do_request(int argc UNUSED, char *argv[])
