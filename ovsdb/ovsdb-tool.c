@@ -161,6 +161,7 @@ do_create(int argc UNUSED, char *argv[])
     /* Read schema from file and convert to JSON. */
     check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &schema));
     json = ovsdb_schema_to_json(schema);
+    ovsdb_schema_destroy(schema);
 
     /* Create database file. */
     check_ovsdb_error(ovsdb_log_open(db_file_name, O_RDWR | O_CREAT | O_EXCL,
