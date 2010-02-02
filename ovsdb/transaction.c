@@ -284,6 +284,7 @@ ovsdb_txn_row_delete(struct ovsdb_txn *txn, const struct ovsdb_row *row_)
         } else {
             txn_table = ovsdb_txn_get_txn_table(txn, table);
             hmap_remove(&txn_table->txn_rows, &txn_row->hmap_node);
+            free(txn_row);
         }
         ovsdb_row_destroy(row);
     }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -161,9 +161,11 @@ ovsdb_execute(struct ovsdb *db, const struct json *params,
             && timeout_msec) {
             ovsdb_txn_abort(x.txn);
             *timeout_msec = x.timeout_msec;
-            ovsdb_error_destroy(error);
+
+            json_destroy(result);
             json_destroy(results);
-            return NULL;
+            results = NULL;
+            goto exit;
         }
 
         /* Add result to array. */
@@ -186,6 +188,7 @@ ovsdb_execute(struct ovsdb *db, const struct json *params,
         json_array_add(results, json_null_create());
     }
 
+exit:
     ovsdb_error_destroy(error);
     ovsdb_symbol_table_destroy(x.symtab);
 

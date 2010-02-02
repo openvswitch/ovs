@@ -252,9 +252,11 @@ ovsdb_jsonrpc_session_create(struct ovsdb_jsonrpc_remote *remote,
 static void
 ovsdb_jsonrpc_session_close(struct ovsdb_jsonrpc_session *s)
 {
+    ovsdb_jsonrpc_monitor_remove_all(s);
     jsonrpc_session_close(s->js);
     list_remove(&s->node);
     s->remote->server->n_sessions--;
+    free(s);
 }
 
 static int
@@ -339,6 +341,7 @@ execute_transaction(struct ovsdb_jsonrpc_session *s,
     ovsdb_jsonrpc_trigger_create(s, request->id, request->params);
     request->id = NULL;
     request->params = NULL;
+    jsonrpc_msg_destroy(request);
     return NULL;
 }
 
