@@ -1,5 +1,10 @@
 AT_BANNER([OVSDB -- ovsdb-server transactions (Unix sockets)])
 
+m4_define([OVSDB_SERVER_SHUTDOWN], 
+  [cp pid savepid
+   AT_CHECK([ovs-appctl -t $PWD/unixctl -e exit], [0], [ignore], [ignore])
+   OVS_WAIT_WHILE([kill -0 `cat savepid`], [kill `cat savepid`])])
+
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
 # Creates a database with the given SCHEMA, starts an ovsdb-server on
@@ -28,7 +33,7 @@ cat stdout >> output
 ])
    AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$4], [ignore],
             [test ! -e pid || kill `cat pid`])
-   test ! -e pid || kill `cat pid`
+   OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
 EXECUTION_EXAMPLES
@@ -63,7 +68,7 @@ AT_CHECK(
 ]], 
   [ignore], 
   [test ! -e pid || kill `cat pid`])
-test ! -e pid || kill `cat pid`
+OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
 AT_BANNER([OVSDB -- ovsdb-server transactions (SSL sockets)])
@@ -100,7 +105,7 @@ cat stdout >> output
 ])
    AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$4], [ignore],
             [test ! -e pid || kill `cat pid`])
-   test ! -e pid || kill `cat pid`
+   OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
 EXECUTION_EXAMPLES

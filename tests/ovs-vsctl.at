@@ -9,7 +9,7 @@ m4_define([OVS_VSCTL_SETUP],
 dnl OVS_VSCTL_CLEANUP
 dnl
 dnl Kills off the database server.
-m4_define([OVS_VSCTL_CLEANUP], [test ! -e pid || kill `cat pid`])
+m4_define([OVS_VSCTL_CLEANUP], [OVSDB_SERVER_SHUTDOWN])
 
 dnl RUN_OVS_VSCTL(COMMAND, ...)
 dnl
