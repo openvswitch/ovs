@@ -2581,7 +2581,10 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         } else {
             fputs(ds_cstr(ds), stdout);
         }
+        ds_destroy(&c->output);
+        shash_destroy(&c->options);
     }
+    free(commands);
 
     if (wait_for_reload && status != TXN_UNCHANGED) {
         for (;;) {
@@ -2598,6 +2601,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         }
     done: ;
     }
+    ovsdb_idl_destroy(idl);
 
     exit(EXIT_SUCCESS);
 }
