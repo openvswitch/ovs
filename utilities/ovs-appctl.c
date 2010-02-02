@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,6 +70,10 @@ main(int argc, char *argv[])
         exit(2);
     }
     fputs(reply, stdout);
+
+    unixctl_client_destroy(client);
+    free(reply);
+    ds_destroy(&request);
 
     return 0;
 }
