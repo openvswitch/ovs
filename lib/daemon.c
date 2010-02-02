@@ -364,6 +364,7 @@ monitor_daemon(pid_t daemon_pid)
             }
         }
     }
+    free(status_msg);
 
     /* Running in new daemon process. */
     proctitle_restore();
