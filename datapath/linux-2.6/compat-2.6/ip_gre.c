@@ -696,6 +696,9 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 {
 	struct ip_tunnel *tunnel = netdev_priv(dev);
 	struct net_device_stats *stats;
+#ifdef HAVE_NETDEV_QUEUE_STATS
+	struct netdev_queue *txq = netdev_get_tx_queue(dev, 0);
+#endif
 	struct iphdr  *old_iph = ip_hdr(skb);
 	struct iphdr  *tiph;
 	u8     tos;
@@ -709,7 +712,7 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 	int    mtu;
 
 #ifdef HAVE_NETDEV_STATS
-	stats = &tunnel->dev->stats;
+	stats = &dev->stats;
 #else
 	stats = &tunnel->stat;
 #endif
@@ -860,7 +863,11 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 		struct sk_buff *new_skb = skb_realloc_headroom(skb, max_headroom);
 		if (!new_skb) {
 			ip_rt_put(rt);
+#ifdef HAVE_NETDEV_QUEUE_STATS
+			txq->tx_dropped++;
+#else
 			stats->tx_dropped++;
+#endif
 			dev_kfree_skb(skb);
 			return NETDEV_TX_OK;
 		}
