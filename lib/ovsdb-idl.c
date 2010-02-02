@@ -212,9 +212,7 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
 
             if (!ovsdb_idl_row_is_orphan(row)) {
                 ovsdb_idl_row_unparse(row);
-                ovsdb_idl_row_clear_old(row);
             }
-            hmap_remove(&table->rows, &row->hmap_node);
             LIST_FOR_EACH_SAFE (arc, next_arc, struct ovsdb_idl_arc, src_node,
                                 &row->src_arcs) {
                 free(arc);
@@ -222,7 +220,7 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
             /* No need to do anything with dst_arcs: some node has those arcs
              * as forward arcs and will destroy them itself. */
 
-            free(row);
+            ovsdb_idl_row_destroy(row);
         }
     }
 
@@ -627,7 +625,7 @@ ovsdb_idl_row_clear_arcs(struct ovsdb_idl_row *row, bool destroy_dsts)
 
 /* Force nodes that reference 'row' to reparse. */
 static void
-ovsdb_idl_row_reparse_backrefs(struct ovsdb_idl_row *row, bool destroy_dsts)
+ovsdb_idl_row_reparse_backrefs(struct ovsdb_idl_row *row)
 {
     struct ovsdb_idl_arc *arc, *next;
 
@@ -646,7 +644,7 @@ ovsdb_idl_row_reparse_backrefs(struct ovsdb_idl_row *row, bool destroy_dsts)
         struct ovsdb_idl_row *ref = arc->src;
 
         ovsdb_idl_row_unparse(ref);
-        ovsdb_idl_row_clear_arcs(ref, destroy_dsts);
+        ovsdb_idl_row_clear_arcs(ref, false);
         ovsdb_idl_row_parse(ref);
     }
 }
@@ -695,7 +693,7 @@ ovsdb_idl_insert_row(struct ovsdb_idl_row *row, const struct json *row_json)
     ovsdb_idl_row_update(row, row_json);
     ovsdb_idl_row_parse(row);
 
-    ovsdb_idl_row_reparse_backrefs(row, false);
+    ovsdb_idl_row_reparse_backrefs(row);
 }
 
 static void
@@ -707,7 +705,7 @@ ovsdb_idl_delete_row(struct ovsdb_idl_row *row)
     if (list_is_empty(&row->dst_arcs)) {
         ovsdb_idl_row_destroy(row);
     } else {
-        ovsdb_idl_row_reparse_backrefs(row, true);
+        ovsdb_idl_row_reparse_backrefs(row);
     }
 }
 
@@ -865,15 +863,19 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
 
     assert(!idl->txn);
     idl->txn = txn = xmalloc(sizeof *txn);
+    txn->request_id = NULL;
     txn->idl = idl;
-    txn->status = TXN_INCOMPLETE;
     hmap_init(&txn->txn_rows);
+    txn->status = TXN_INCOMPLETE;
     txn->dry_run = false;
     ds_init(&txn->comment);
+
     txn->inc_table = NULL;
     txn->inc_column = NULL;
     txn->inc_where = NULL;
+
     hmap_init(&txn->inserted_rows);
+
     return txn;
 }
 
@@ -907,6 +909,7 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
 {
     struct ovsdb_idl_txn_insert *insert, *next;
 
+    json_destroy(txn->request_id);
     if (txn->status == TXN_INCOMPLETE) {
         hmap_remove(&txn->idl->outstanding_txns, &txn->hmap_node);
     }
@@ -919,6 +922,7 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
                         &txn->inserted_rows) {
         free(insert);
     }
+    hmap_destroy(&txn->inserted_rows);
     free(txn);
 }
 
@@ -1033,7 +1037,7 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
                 ovsdb_idl_row_parse(row);
             }
         } else {
-            hmap_remove(&row->table->rows, &row->hmap_node);
+            ovsdb_idl_row_unparse(row);
         }
         ovsdb_idl_row_clear_new(row);
 
@@ -1045,6 +1049,10 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
 
         hmap_remove(&txn->txn_rows, &row->txn_node);
         hmap_node_nullify(&row->txn_node);
+        if (!row->old) {
+            hmap_remove(&row->table->rows, &row->hmap_node);
+            free(row);
+        }
     }
     hmap_destroy(&txn->txn_rows);
     hmap_init(&txn->txn_rows);
@@ -1357,6 +1365,7 @@ ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
 
     assert(row->new != NULL);
     if (!row->old) {
+        ovsdb_idl_row_unparse(row);
         ovsdb_idl_row_clear_new(row);
         assert(!row->prereqs);
         hmap_remove(&row->table->rows, &row->hmap_node);
