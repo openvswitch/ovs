@@ -46,7 +46,7 @@ AT_CHECK(
 file: read: [1]
 ]], [ignore])
 AT_CHECK(
-  [test-ovsdb log-io file 'O_CREAT|O_RDWR|O_EXCL' read], [1], 
+  [test-ovsdb -vlockfile:console:emer log-io file 'O_CREAT|O_RDWR|O_EXCL' read], [1], 
   [], [test-ovsdb: I/O error: create: file failed (File exists)
 ])
 AT_CHECK([test -f .file.~lock~])
