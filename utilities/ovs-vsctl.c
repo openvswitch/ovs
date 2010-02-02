@@ -90,6 +90,13 @@ static int timeout = 5;
 /* All supported commands. */
 static const struct vsctl_command_syntax all_commands[];
 
+/* The IDL we're using and the current transaction, if any.
+ * This is for use by vsctl_exit() only, to allow it to clean up.
+ * Other code should use its context arguments. */
+static struct ovsdb_idl *the_idl;
+static struct ovsdb_idl_txn *the_idl_txn;
+
+static void vsctl_exit(int status) NO_RETURN;
 static void vsctl_fatal(const char *, ...) PRINTF_FORMAT(1, 2) NO_RETURN;
 static char *default_db(void);
 static void usage(void) NO_RETURN;
@@ -134,7 +141,7 @@ main(int argc, char *argv[])
     /* Do basic command syntax checking. */
 
     /* Now execute the commands. */
-    idl = ovsdb_idl_create(db, &ovsrec_idl_class);
+    idl = the_idl = ovsdb_idl_create(db, &ovsrec_idl_class);
     seqno = ovsdb_idl_get_seqno(idl);
     trials = 0;
     for (;;) {
@@ -339,7 +346,24 @@ vsctl_fatal(const char *format, ...)
     vlog_set_levels(VLM_vsctl, VLF_CONSOLE, VLL_EMER);
     VLOG_ERR("%s", message);
     ovs_error(0, "%s", message);
-    exit(EXIT_FAILURE);
+    vsctl_exit(EXIT_FAILURE);
+}
+
+/* Frees the current transaction and the underlying IDL and then calls
+ * exit(status).
+ *
+ * Freeing the transaction and the IDL is not strictly necessary, but it makes
+ * for a clean memory leak report from valgrind in the normal case.  That makes
+ * it easier to notice real memory leaks. */
+static void
+vsctl_exit(int status)
+{
+    if (the_idl_txn) {
+        ovsdb_idl_txn_abort(the_idl_txn);
+        ovsdb_idl_txn_destroy(the_idl_txn);
+    }
+    ovsdb_idl_destroy(the_idl);
+    exit(status);
 }
 
 static void
@@ -925,7 +949,7 @@ cmd_br_exists(struct vsctl_context *ctx)
 
     get_info(ctx->ovs, &info);
     if (!find_bridge(&info, ctx->argv[1], false)) {
-        exit(2);
+        vsctl_exit(2);
     }
     free_info(&info);
 }
@@ -2452,7 +2476,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     int64_t next_cfg = 0;
     char *comment;
 
-    txn = ovsdb_idl_txn_create(idl);
+    txn = the_idl_txn = ovsdb_idl_txn_create(idl);
     if (dry_run) {
         ovsdb_idl_txn_set_dry_run(txn);
     }
@@ -2501,6 +2525,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         }
     }
     ovsdb_idl_txn_destroy(txn);
+    the_idl_txn = NULL;
 
     switch (status) {
     case TXN_INCOMPLETE:
