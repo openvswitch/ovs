@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ struct ovsdb;
 struct shash;
 
 struct ovsdb_jsonrpc_server *ovsdb_jsonrpc_server_create(struct ovsdb *);
+void ovsdb_jsonrpc_server_destroy(struct ovsdb_jsonrpc_server *);
 
 void ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *,
                                       const struct shash *);

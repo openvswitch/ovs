@@ -100,6 +100,18 @@ ovsdb_jsonrpc_server_create(struct ovsdb *db)
     return server;
 }
 
+void
+ovsdb_jsonrpc_server_destroy(struct ovsdb_jsonrpc_server *svr)
+{
+    struct shash_node *node, *next;
+
+    SHASH_FOR_EACH_SAFE (node, next, &svr->remotes) {
+        ovsdb_jsonrpc_server_del_remote(node);
+    }
+    shash_destroy(&svr->remotes);
+    free(svr);
+}
+
 /* Sets 'svr''s current set of remotes to the names in 'new_remotes'.  The data
  * values in 'new_remotes' are ignored.
  *

@@ -112,6 +112,10 @@ main(int argc, char *argv[])
         ovsdb_trigger_wait(db, time_msec());
         poll_block();
     }
+    ovsdb_jsonrpc_server_destroy(jsonrpc);
+    ovsdb_destroy(db);
+    shash_destroy(&remotes);
+    unixctl_server_destroy(unixctl);
 
     return 0;
 }
