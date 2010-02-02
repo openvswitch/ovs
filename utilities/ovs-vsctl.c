@@ -45,6 +45,9 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_vsctl
 
+/* vsctl_fatal() also logs the error, so it is preferred in this file. */
+#define ovs_fatal please_use_vsctl_fatal_instead_of_ovs_fatal
+
 struct vsctl_context;
 
 typedef void vsctl_handler_func(struct vsctl_context *);
@@ -216,8 +219,8 @@ parse_options(int argc, char *argv[])
         case 't':
             timeout = strtoul(optarg, NULL, 10);
             if (timeout < 0) {
-                ovs_fatal(0, "value %s on -t or --timeout is invalid",
-                          optarg);
+                vsctl_fatal("value %s on -t or --timeout is invalid",
+                            optarg);
             }
             break;
 
@@ -335,7 +338,8 @@ vsctl_fatal(const char *format, ...)
 
     vlog_set_levels(VLM_vsctl, VLF_CONSOLE, VLL_EMER);
     VLOG_ERR("%s", message);
-    ovs_fatal(0, "%s", message);
+    ovs_error(0, "%s", message);
+    exit(EXIT_FAILURE);
 }
 
 static void
@@ -1646,7 +1650,7 @@ static void
 die_if_error(char *error)
 {
     if (error) {
-        ovs_fatal(0, "%s", error);
+        vsctl_fatal("%s", error);
     }
 }
 
@@ -1694,9 +1698,9 @@ get_table(const char *table_name)
     if (best_match) {
         return best_match;
     } else if (best_score) {
-        ovs_fatal(0, "multiple table names match \"%s\"", table_name);
+        vsctl_fatal("multiple table names match \"%s\"", table_name);
     } else {
-        ovs_fatal(0, "unknown table \"%s\"", table_name);
+        vsctl_fatal("unknown table \"%s\"", table_name);
     }
 }
 
@@ -1746,8 +1750,8 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
             ovsdb_datum_destroy(&name, &id->name_column->type);
         }
         if (best_score && !referrer) {
-            ovs_fatal(0, "multiple rows in %s match \"%s\"",
-                      table->class->name, record_id);
+            vsctl_fatal("multiple rows in %s match \"%s\"",
+                        table->class->name, record_id);
         }
     }
     if (!referrer) {
@@ -1802,8 +1806,8 @@ must_get_row(struct vsctl_context *ctx,
 {
     const struct ovsdb_idl_row *row = get_row(ctx, table, record_id);
     if (!row) {
-        ovs_fatal(0, "no row \"%s\" in table %s",
-                  record_id, table->class->name);
+        vsctl_fatal("no row \"%s\" in table %s",
+                    record_id, table->class->name);
     }
     return row;
 }
@@ -1954,8 +1958,8 @@ cmd_get(struct vsctl_context *ctx)
             unsigned int idx;
 
             if (column->idl->type.value_type == OVSDB_TYPE_VOID) {
-                ovs_fatal(0, "cannot specify key to get for non-map column %s",
-                          column->idl->name);
+                vsctl_fatal("cannot specify key to get for non-map column %s",
+                            column->idl->name);
             }
 
             die_if_error(ovsdb_atom_from_string(&key,
@@ -1966,9 +1970,9 @@ cmd_get(struct vsctl_context *ctx)
                                        column->idl->type.key_type);
             if (idx == UINT_MAX) {
                 if (!if_exists) {
-                    ovs_fatal(0, "no key \"%s\" in %s record \"%s\" column %s",
-                              key_string, table->class->name, record_id,
-                              column->idl->name);
+                    vsctl_fatal("no key \"%s\" in %s record \"%s\" column %s",
+                                key_string, table->class->name, record_id,
+                                column->idl->name);
                 }
             } else {
                 ovsdb_atom_to_string(&datum.values[idx],
@@ -2057,14 +2061,14 @@ check_string_constraint(const struct ovsdb_datum *datum,
         size_t length = regerror(retval, &re, NULL, 0);
         char *buffer = xmalloc(length);
         regerror(retval, &re, buffer, length);
-        ovs_fatal(0, "internal error compiling regular expression %s: %s",
-                  regex, buffer);
+        vsctl_fatal("internal error compiling regular expression %s: %s",
+                    regex, buffer);
     }
 
     for (i = 0; i < datum->n; i++) {
         const char *key = datum->keys[i].string;
         if (regexec(&re, key, 0, NULL, 0)) {
-            ovs_fatal(0, "%s is not valid (it does not match %s)", key, regex);
+            vsctl_fatal("%s is not valid (it does not match %s)", key, regex);
         }
     }
     free(regex);
@@ -2100,14 +2104,14 @@ check_integer_constraint(const struct ovsdb_datum *datum,
         int64_t value = datum->keys[i].integer;
         if (value < min || value > max) {
             if (max == INT64_MAX) {
-                ovs_fatal(0, "%"PRId64" is less than the minimum "
-                          "allowed value %"PRId64, value, min);
+                vsctl_fatal("%"PRId64" is less than the minimum "
+                            "allowed value %"PRId64, value, min);
             } else if (min == INT64_MIN) {
-                ovs_fatal(0, "%"PRId64" is greater than the maximum "
-                          "allowed value %"PRId64, value, max);
+                vsctl_fatal("%"PRId64" is greater than the maximum "
+                            "allowed value %"PRId64, value, max);
             } else {
-                ovs_fatal(0, "%"PRId64" is outside the valid range %"PRId64" "
-                          "to %"PRId64" (inclusive)", value, min, max);
+                vsctl_fatal("%"PRId64" is outside the valid range %"PRId64" "
+                            "to %"PRId64" (inclusive)", value, min, max);
             }
         }
     }
@@ -2139,11 +2143,11 @@ set_column(const struct vsctl_table_class *table,
                                    &value_string);
     die_if_error(error);
     if (column->flags & VSCF_READONLY && !force) {
-        ovs_fatal(0, "%s: cannot modify read-only column %s in table %s",
-                  arg, column->idl->name, table->class->name);
+        vsctl_fatal("%s: cannot modify read-only column %s in table %s",
+                    arg, column->idl->name, table->class->name);
     }
     if (!value_string) {
-        ovs_fatal(0, "%s: missing value", arg);
+        vsctl_fatal("%s: missing value", arg);
     }
 
     if (key_string) {
@@ -2151,8 +2155,8 @@ set_column(const struct vsctl_table_class *table,
         struct ovsdb_datum old, new;
 
         if (column->idl->type.value_type == OVSDB_TYPE_VOID) {
-            ovs_fatal(0, "cannot specify key to set for non-map column %s",
-                      column->idl->name);
+            vsctl_fatal("cannot specify key to set for non-map column %s",
+                        column->idl->name);
         }
 
         die_if_error(ovsdb_atom_from_string(&key,
@@ -2220,8 +2224,8 @@ cmd_add(struct vsctl_context *ctx)
     row = must_get_row(ctx, table, record_id);
     die_if_error(get_column(table, column_name, &column));
     if (column->flags & VSCF_READONLY && !force) {
-        ovs_fatal(0, "cannot modify read-only column %s in table %s",
-                   column->idl->name, table->class->name);
+        vsctl_fatal("cannot modify read-only column %s in table %s",
+                    column->idl->name, table->class->name);
     }
 
     type = &column->idl->type;
@@ -2238,11 +2242,11 @@ cmd_add(struct vsctl_context *ctx)
         ovsdb_datum_destroy(&add, type);
     }
     if (old.n > type->n_max) {
-        ovs_fatal(0, "\"add\" operation would put %u %s in column %s of "
-                  "table %s but the maximum number is %u",
-                  old.n,
-                  type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
-                  column->idl->name, table->class->name, type->n_max);
+        vsctl_fatal("\"add\" operation would put %u %s in column %s of "
+                    "table %s but the maximum number is %u",
+                    old.n,
+                    type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
+                    column->idl->name, table->class->name, type->n_max);
     }
     ovsdb_idl_txn_write(row, column->idl, &old);
 }
@@ -2265,8 +2269,8 @@ cmd_remove(struct vsctl_context *ctx)
     row = must_get_row(ctx, table, record_id);
     die_if_error(get_column(table, column_name, &column));
     if (column->flags & VSCF_READONLY && !force) {
-        ovs_fatal(0, "cannot modify read-only column %s in table %s",
-                   column->idl->name, table->class->name);
+        vsctl_fatal("cannot modify read-only column %s in table %s",
+                    column->idl->name, table->class->name);
     }
 
     type = &column->idl->type;
@@ -2289,11 +2293,11 @@ cmd_remove(struct vsctl_context *ctx)
         ovsdb_datum_destroy(&rm, &rm_type);
     }
     if (old.n < type->n_min) {
-        ovs_fatal(0, "\"remove\" operation would put %u %s in column %s of "
-                  "table %s but the minimun number is %u",
-                  old.n,
-                  type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
-                  column->idl->name, table->class->name, type->n_min);
+        vsctl_fatal("\"remove\" operation would put %u %s in column %s of "
+                    "table %s but the minimun number is %u",
+                    old.n,
+                    type->value_type == OVSDB_TYPE_VOID ? "values" : "pairs",
+                    column->idl->name, table->class->name, type->n_min);
     }
     ovsdb_idl_txn_write(row, column->idl, &old);
 }
@@ -2319,12 +2323,12 @@ cmd_clear(struct vsctl_context *ctx)
 
         type = &column->idl->type;
         if (column->flags & VSCF_READONLY && !force) {
-            ovs_fatal(0, "cannot modify read-only column %s in table %s",
-                      column->idl->name, table->class->name);
+            vsctl_fatal("cannot modify read-only column %s in table %s",
+                        column->idl->name, table->class->name);
         } else if (type->n_min > 0) {
-            ovs_fatal(0, "\"clear\" operation cannot be applied to column %s "
-                      "of table %s, which is not allowed to be empty",
-                      column->idl->name, table->class->name);
+            vsctl_fatal("\"clear\" operation cannot be applied to column %s "
+                        "of table %s, which is not allowed to be empty",
+                        column->idl->name, table->class->name);
         }
 
         ovsdb_datum_init_empty(&datum);
@@ -2342,7 +2346,7 @@ cmd_create(struct vsctl_context *ctx)
     int i;
 
     if (!force) {
-        ovs_fatal(0, "\"create\" requires --force");
+        vsctl_fatal("\"create\" requires --force");
     }
 
     table = get_table(table_name);
@@ -2387,7 +2391,7 @@ cmd_destroy(struct vsctl_context *ctx)
     int i;
 
     if (!force) {
-        ovs_fatal(0, "\"destroy\" requires --force");
+        vsctl_fatal("\"destroy\" requires --force");
     }
 
     table = get_table(table_name);
