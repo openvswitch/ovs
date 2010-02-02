@@ -833,6 +833,7 @@ do_monitor(int argc, char *argv[])
 
         error = jsonrpc_recv_block(rpc, &msg);
         if (error) {
+            ovsdb_schema_destroy(schema);
             ovs_fatal(error, "%s: receive failed", argv[1]);
         }
 
@@ -862,6 +863,7 @@ do_monitor(int argc, char *argv[])
                 fflush(stdout);
             }
         }
+        jsonrpc_msg_destroy(msg);
     }
 }
 
