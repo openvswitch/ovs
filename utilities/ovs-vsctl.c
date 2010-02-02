@@ -1899,10 +1899,10 @@ parse_column_key_value(const char *arg, const struct vsctl_table_class *table,
             goto error;
         }
         error = get_column(table, column_name, columnp);
+        free(column_name);
         if (error) {
             goto error;
         }
-        free(column_name);
     }
 
     /* Parse key string. */
@@ -2193,6 +2193,9 @@ set_column(const struct vsctl_table_class *table,
         ovsdb_datum_init_empty(&new);
         ovsdb_datum_add_unsafe(&new, &key, &value, &column->idl->type);
 
+        ovsdb_atom_destroy(&key, column->idl->type.key_type);
+        ovsdb_atom_destroy(&value, column->idl->type.value_type);
+
         ovsdb_idl_txn_read(row, column->idl, &old);
         ovsdb_datum_union(&old, &new, &column->idl->type, true);
         ovsdb_idl_txn_write(row, column->idl, &old);
@@ -2211,6 +2214,7 @@ set_column(const struct vsctl_table_class *table,
     }
 
     free(key_string);
+    free(value_string);
 }
 
 static void
