@@ -1465,17 +1465,8 @@ static void ipgre_destroy_tunnels(struct ipgre_net *ign, struct list_head *head)
 
 static int ipgre_init_net(struct net *net)
 {
+	struct ipgre_net *ign = net_generic(net, ipgre_net_id);
 	int err;
-	struct ipgre_net *ign;
-
-	err = -ENOMEM;
-	ign = kzalloc(sizeof(struct ipgre_net), GFP_KERNEL);
-	if (ign == NULL)
-		goto err_alloc;
-
-	err = net_assign_generic(net, ipgre_net_id, ign);
-	if (err < 0)
-		goto err_assign;
 
 	ign->fb_tunnel_dev = alloc_netdev(sizeof(struct ip_tunnel), GRE_IOCTL_DEVICE,
 					   ipgre_tunnel_setup);
@@ -1502,10 +1493,6 @@ static int ipgre_init_net(struct net *net)
 err_reg_dev:
 	free_netdev(ign->fb_tunnel_dev);
 err_alloc_dev:
-	/* nothing */
-err_assign:
-	kfree(ign);
-err_alloc:
 	return err;
 }
 
@@ -1519,12 +1506,13 @@ static void ipgre_exit_net(struct net *net)
 	ipgre_destroy_tunnels(ign, &list);
 	unregister_netdevice_many(&list);
 	rtnl_unlock();
-	kfree(ign);
 }
 
 static struct pernet_operations ipgre_net_ops = {
 	.init = ipgre_init_net,
 	.exit = ipgre_exit_net,
+	.id   = &ipgre_net_id,
+	.size = sizeof(struct ipgre_net),
 };
 
 static int ipgre_tap_init(struct net_device *dev)
@@ -1866,7 +1854,7 @@ static int __init ipgre_init(void)
 		return -EAGAIN;
 	}
 
-	err = register_pernet_gen_device(&ipgre_net_id, &ipgre_net_ops);
+	err = register_pernet_device(&ipgre_net_ops);
 	if (err < 0)
 		goto gen_device_failed;
 
@@ -1887,7 +1875,7 @@ out:
 tap_ops_failed:
 	rtnl_link_unregister(&ipgre_link_ops);
 rtnl_link_failed:
-	unregister_pernet_gen_device(ipgre_net_id, &ipgre_net_ops);
+	unregister_pernet_device(&ipgre_net_ops);
 #endif
 gen_device_failed:
 	inet_del_protocol(&ipgre_protocol, IPPROTO_GRE);
@@ -1901,7 +1889,7 @@ static void __exit ipgre_fini(void)
 	rtnl_link_unregister(&ipgre_tap_ops);
 	rtnl_link_unregister(&ipgre_link_ops);
 #endif
-	unregister_pernet_gen_device(ipgre_net_id, &ipgre_net_ops);
+	unregister_pernet_device(&ipgre_net_ops);
 	if (inet_del_protocol(&ipgre_protocol, IPPROTO_GRE) < 0)
 		printk(KERN_INFO "ipgre close: can't remove protocol\n");
 }
