@@ -1661,8 +1661,13 @@ static void ipgre_netlink_parms(struct nlattr *data[],
 		parms->iph.frag_off = htons(IP_DF);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)
+static int ipgre_newlink(struct net *src_net, struct net_device *dev, struct nlattr *tb[],
+			 struct nlattr *data[])
+#else
 static int ipgre_newlink(struct net_device *dev, struct nlattr *tb[],
 			 struct nlattr *data[])
+#endif
 {
 	struct ip_tunnel *nt;
 	struct net *net = dev_net(dev);
