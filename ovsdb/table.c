@@ -192,13 +192,12 @@ ovsdb_table_destroy(struct ovsdb_table *table)
     }
 }
 
-static const struct ovsdb_row *
-ovsdb_table_get_row__(const struct ovsdb_table *table, const struct uuid *uuid,
-                      size_t hash)
+const struct ovsdb_row *
+ovsdb_table_get_row(const struct ovsdb_table *table, const struct uuid *uuid)
 {
     struct ovsdb_row *row;
 
-    HMAP_FOR_EACH_WITH_HASH (row, struct ovsdb_row, hmap_node, hash,
+    HMAP_FOR_EACH_WITH_HASH (row, struct ovsdb_row, hmap_node, uuid_hash(uuid),
                              &table->rows) {
         if (uuid_equals(ovsdb_row_get_uuid(row), uuid)) {
             return row;
@@ -208,22 +207,14 @@ ovsdb_table_get_row__(const struct ovsdb_table *table, const struct uuid *uuid,
     return NULL;
 }
 
-const struct ovsdb_row *
-ovsdb_table_get_row(const struct ovsdb_table *table, const struct uuid *uuid)
-{
-    return ovsdb_table_get_row__(table, uuid, uuid_hash(uuid));
-}
-
 /* This is probably not the function you want.  Use ovsdb_txn_row_modify()
  * instead. */
 bool
 ovsdb_table_put_row(struct ovsdb_table *table, struct ovsdb_row *row)
 {
     const struct uuid *uuid = ovsdb_row_get_uuid(row);
-    size_t hash = uuid_hash(uuid);
-
-    if (!ovsdb_table_get_row__(table, uuid, hash)) {
-        hmap_insert(&table->rows, &row->hmap_node, hash);
+    if (!ovsdb_table_get_row(table, uuid)) {
+        hmap_insert(&table->rows, &row->hmap_node, uuid_hash(uuid));
         return true;
     } else {
         return false;
