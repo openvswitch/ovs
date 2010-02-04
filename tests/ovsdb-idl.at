@@ -207,7 +207,7 @@ OVSDB_CHECK_IDL([self-linking idl, consistent ops],
   [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}
 002: i=0 k=0 ka=[] l2= uuid=<0>
-003: {"error":null,"result":[{"uuid":"<1>"},{"uuid":"<2>"},{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]}]}
+003: {"error":null,"result":[{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]},{"uuid":["uuid","<1>"]},{"uuid":["uuid","<2>"]}]}
 004: i=0 k=0 ka=[] l2= uuid=<0>
 004: i=1 k=2 ka=[] l2= uuid=<1>
 004: i=2 k=1 ka=[] l2= uuid=<2>

@@ -686,8 +686,11 @@ ovsdb_execute_declare(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 
     uuid_generate(&uuid);
     ovsdb_symbol_table_put(x->symtab, json_string(uuid_name), &uuid, false);
-    json_object_put(result, "uuid", json_string_create_nocopy(
-                        xasprintf(UUID_FMT, UUID_ARGS(&uuid))));
+    json_object_put(result, "uuid",
+                    json_array_create_2(
+                        json_string_create("uuid"),
+                        json_string_create_nocopy(
+                            xasprintf(UUID_FMT, UUID_ARGS(&uuid)))));
     return NULL;
 }
 
