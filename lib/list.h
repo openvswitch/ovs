@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,10 @@
 #include "util.h"
 
 /* Doubly linked list head or element. */
-struct list
-  {
+struct list {
     struct list *prev;     /* Previous list element. */
     struct list *next;     /* Next list element. */
-  };
+};
 
 #define LIST_INITIALIZER(LIST) { LIST, LIST }
 
