@@ -19,6 +19,10 @@
 
 #include "hmap.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct shash_node {
     struct hmap_node node;
     char *name;
@@ -47,5 +51,9 @@ void shash_delete(struct shash *, struct shash_node *);
 struct shash_node *shash_find(const struct shash *, const char *);
 void *shash_find_data(const struct shash *, const char *);
 struct shash_node *shash_first(const struct shash *);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* shash.h */

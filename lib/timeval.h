@@ -21,6 +21,10 @@
 #include "type-props.h"
 #include "util.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct pollfd;
 struct timeval;
 
@@ -48,5 +52,9 @@ long long int time_msec(void);
 void time_timeval(struct timeval *);
 void time_alarm(unsigned int secs);
 int time_poll(struct pollfd *, int n_pollfds, int timeout);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* timeval.h */
