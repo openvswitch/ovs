@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ const struct ovsdb_column *ovsdb_table_schema_get_column(
 
 struct ovsdb_table {
     struct ovsdb_table_schema *schema;
+    struct ovsdb_txn_table *txn_table; /* Only if table is in a transaction. */
     struct hmap rows;           /* Contains "struct ovsdb_row"s. */
 };
 

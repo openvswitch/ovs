@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include "hash.h"
 #include "hmap.h"
 #include "json.h"
+#include "list.h"
 #include "ovsdb-error.h"
 #include "ovsdb.h"
 #include "row.h"
@@ -31,13 +32,13 @@
 
 struct ovsdb_txn {
     struct ovsdb *db;
-    struct hmap txn_tables;     /* Contains "struct ovsdb_txn_table"s. */
+    struct list txn_tables;     /* Contains "struct ovsdb_txn_table"s. */
     struct ds comment;
 };
 
 /* A table modified by a transaction. */
 struct ovsdb_txn_table {
-    struct hmap_node hmap_node; /* Element in ovsdb_txn's txn_tables hmap. */
+    struct list node;           /* Element in ovsdb_txn's txn_tables list. */
     struct ovsdb_table *table;
     struct hmap txn_rows;       /* Contains "struct ovsdb_txn_row"s. */
 };
@@ -66,7 +67,7 @@ ovsdb_txn_create(struct ovsdb *db)
 {
     struct ovsdb_txn *txn = xmalloc(sizeof *txn);
     txn->db = db;
-    hmap_init(&txn->txn_tables);
+    list_init(&txn->txn_tables);
     ds_init(&txn->comment);
     return txn;
 }
@@ -76,9 +77,8 @@ ovsdb_txn_destroy(struct ovsdb_txn *txn, void (*cb)(struct ovsdb_txn_row *))
 {
     struct ovsdb_txn_table *txn_table, *next_txn_table;
 
-    HMAP_FOR_EACH_SAFE (txn_table, next_txn_table,
-                        struct ovsdb_txn_table, hmap_node, &txn->txn_tables)
-    {
+    LIST_FOR_EACH_SAFE (txn_table, next_txn_table,
+                        struct ovsdb_txn_table, node, &txn->txn_tables) {
         struct ovsdb_txn_row *txn_row, *next_txn_row;
 
         HMAP_FOR_EACH_SAFE (txn_row, next_txn_row,
@@ -95,10 +95,10 @@ ovsdb_txn_destroy(struct ovsdb_txn *txn, void (*cb)(struct ovsdb_txn_row *))
             free(txn_row);
         }
 
+        txn_table->table->txn_table = NULL;
         hmap_destroy(&txn_table->txn_rows);
         free(txn_table);
     }
-    hmap_destroy(&txn->txn_tables);
     ds_destroy(&txn->comment);
     free(txn);
 }
@@ -161,7 +161,7 @@ ovsdb_txn_for_each_change(const struct ovsdb_txn *txn,
     struct ovsdb_txn_table *t;
     struct ovsdb_txn_row *r;
 
-    HMAP_FOR_EACH (t, struct ovsdb_txn_table, hmap_node, &txn->txn_tables) {
+    LIST_FOR_EACH (t, struct ovsdb_txn_table, node, &txn->txn_tables) {
         HMAP_FOR_EACH (r, struct ovsdb_txn_row, hmap_node, &t->txn_rows) {
             if (!cb(r->old, r->new, aux)) {
                 break;
@@ -171,56 +171,33 @@ ovsdb_txn_for_each_change(const struct ovsdb_txn *txn,
 }
 
 static struct ovsdb_txn_table *
-ovsdb_txn_get_txn_table__(struct ovsdb_txn *txn,
-                          const struct ovsdb_table *table,
-                          uint32_t hash)
+ovsdb_txn_create_txn_table(struct ovsdb_txn *txn, struct ovsdb_table *table)
 {
-    struct ovsdb_txn_table *txn_table;
+    if (!table->txn_table) {
+        struct ovsdb_txn_table *txn_table;
 
-    HMAP_FOR_EACH_IN_BUCKET (txn_table, struct ovsdb_txn_table, hmap_node,
-                             hash, &txn->txn_tables) {
-        if (txn_table->table == table) {
-            return txn_table;
-        }
-    }
-
-    return NULL;
-}
-
-static struct ovsdb_txn_table *
-ovsdb_txn_get_txn_table(struct ovsdb_txn *txn, const struct ovsdb_table *table)
-{
-    return ovsdb_txn_get_txn_table__(txn, table, hash_pointer(table, 0));
-}
-
-static struct ovsdb_txn_table *
-ovsdb_txn_create_txn_table(struct ovsdb_txn *txn,
-                           struct ovsdb_table *table)
-{
-    uint32_t hash = hash_pointer(table, 0);
-    struct ovsdb_txn_table *txn_table;
-
-    txn_table = ovsdb_txn_get_txn_table__(txn, table, hash);
-    if (!txn_table) {
-        txn_table = xmalloc(sizeof *txn_table);
+        table->txn_table = txn_table = xmalloc(sizeof *table->txn_table);
         txn_table->table = table;
         hmap_init(&txn_table->txn_rows);
-        hmap_insert(&txn->txn_tables, &txn_table->hmap_node, hash);
+        list_push_back(&txn->txn_tables, &txn_table->node);
     }
-    return txn_table;
+    return table->txn_table;
 }
 
 static struct ovsdb_txn_row *
-ovsdb_txn_row_create(struct ovsdb_txn_table *txn_table,
+ovsdb_txn_row_create(struct ovsdb_txn *txn, struct ovsdb_table *table,
                      const struct ovsdb_row *old, struct ovsdb_row *new)
 {
-    uint32_t hash = ovsdb_row_hash(old ? old : new);
+    struct ovsdb_txn_table *txn_table;
     struct ovsdb_txn_row *txn_row;
 
     txn_row = xmalloc(sizeof *txn_row);
     txn_row->old = (struct ovsdb_row *) old;
     txn_row->new = new;
-    hmap_insert(&txn_table->txn_rows, &txn_row->hmap_node, hash);
+
+    txn_table = ovsdb_txn_create_txn_table(txn, table);
+    hmap_insert(&txn_table->txn_rows, &txn_row->hmap_node,
+                ovsdb_row_hash(old ? old : new));
 
     return txn_row;
 }
@@ -235,13 +212,11 @@ ovsdb_txn_row_modify(struct ovsdb_txn *txn, const struct ovsdb_row *ro_row_)
         return ro_row;
     } else {
         struct ovsdb_table *table = ro_row->table;
-        struct ovsdb_txn_table *txn_table;
         struct ovsdb_row *rw_row;
 
-        txn_table = ovsdb_txn_create_txn_table(txn, table);
         rw_row = ovsdb_row_clone(ro_row);
         uuid_generate(ovsdb_row_get_version_rw(rw_row));
-        rw_row->txn_row = ovsdb_txn_row_create(txn_table, ro_row, rw_row);
+        rw_row->txn_row = ovsdb_txn_row_create(txn, table, ro_row, rw_row);
         hmap_replace(&table->rows, &ro_row->hmap_node, &rw_row->hmap_node);
 
         return rw_row;
@@ -253,12 +228,10 @@ ovsdb_txn_row_insert(struct ovsdb_txn *txn, struct ovsdb_row *row)
 {
     uint32_t hash = ovsdb_row_hash(row);
     struct ovsdb_table *table = row->table;
-    struct ovsdb_txn_table *txn_table;
 
     uuid_generate(ovsdb_row_get_version_rw(row));
 
-    txn_table = ovsdb_txn_create_txn_table(txn, table);
-    row->txn_row = ovsdb_txn_row_create(txn_table, NULL, row);
+    row->txn_row = ovsdb_txn_row_create(txn, table, NULL, row);
     hmap_insert(&table->rows, &row->hmap_node, hash);
 }
 
@@ -270,20 +243,17 @@ ovsdb_txn_row_delete(struct ovsdb_txn *txn, const struct ovsdb_row *row_)
     struct ovsdb_row *row = (struct ovsdb_row *) row_;
     struct ovsdb_table *table = row->table;
     struct ovsdb_txn_row *txn_row = row->txn_row;
-    struct ovsdb_txn_table *txn_table;
 
     hmap_remove(&table->rows, &row->hmap_node);
 
     if (!txn_row) {
-        txn_table = ovsdb_txn_create_txn_table(txn, table);
-        row->txn_row = ovsdb_txn_row_create(txn_table, row, NULL);
+        row->txn_row = ovsdb_txn_row_create(txn, table, row, NULL);
     } else {
         assert(txn_row->new == row);
         if (txn_row->old) {
             txn_row->new = NULL;
         } else {
-            txn_table = ovsdb_txn_get_txn_table(txn, table);
-            hmap_remove(&txn_table->txn_rows, &txn_row->hmap_node);
+            hmap_remove(&table->txn_table->txn_rows, &txn_row->hmap_node);
             free(txn_row);
         }
         ovsdb_row_destroy(row);

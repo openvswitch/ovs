@@ -169,6 +169,7 @@ ovsdb_table_create(struct ovsdb_table_schema *ts)
 
     table = xmalloc(sizeof *table);
     table->schema = ts;
+    table->txn_table = NULL;
     hmap_init(&table->rows);
 
     return table;
