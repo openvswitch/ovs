@@ -61,6 +61,7 @@
 #include "vswitchd/vswitch-idl.h"
 #include "xenserver.h"
 #include "xtoxll.h"
+#include "sflow_api.h"
 
 #define THIS_MODULE VLM_bridge
 #include "vlog.h"
@@ -536,6 +537,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     struct shash_node *node;
     struct bridge *br, *next;
     size_t i;
+    int sflow_bridge_number;
 
     COVERAGE_INC(bridge_reconfigure);
 
@@ -669,6 +671,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         shash_destroy(&cur_ifaces);
         shash_destroy(&want_ifaces);
     }
+    sflow_bridge_number = 0;
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         uint8_t ea[8];
         uint64_t dpid;
@@ -748,6 +751,45 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             }
         } else {
             ofproto_set_netflow(br->ofproto, NULL);
+        }
+
+        /* Set sFlow configuration on this bridge. */
+        if (br->cfg->sflow) {
+            struct ovsrec_sflow *sflow_cfg = br->cfg->sflow;
+            struct ofproto_sflow_options oso;
+
+            memset(&oso, 0, sizeof oso);
+
+            oso.targets.n = sflow_cfg->n_targets;
+            oso.targets.names = sflow_cfg->targets;
+
+            oso.sampling_rate = SFL_DEFAULT_SAMPLING_RATE;
+            if (sflow_cfg->sampling) {
+                oso.sampling_rate = *sflow_cfg->sampling;
+            }
+
+            oso.polling_interval = SFL_DEFAULT_POLLING_INTERVAL;
+            if (sflow_cfg->polling) {
+                oso.polling_interval = *sflow_cfg->polling;
+            }
+
+            oso.header_len = SFL_DEFAULT_HEADER_SIZE;
+            if (sflow_cfg->header) {
+                oso.header_len = *sflow_cfg->header;
+            }
+
+            oso.sub_id = sflow_bridge_number++;
+            oso.agent_device = sflow_cfg->agent;
+
+#if 0       /* xxx foo */
+            ctrl = bridge_get_controller(ovs_cfg, br);
+            oso.control_ip = ctrl ? ctrl->local_ip : NULL;
+#endif
+            ofproto_set_sflow(br->ofproto, &oso);
+
+            svec_destroy(&oso.targets);
+        } else {
+            ofproto_set_sflow(br->ofproto, NULL);
         }
 
         /* Update the controller and related settings.  It would be more

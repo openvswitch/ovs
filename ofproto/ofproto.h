@@ -29,11 +29,26 @@ struct ofhooks;
 struct ofproto;
 struct svec;
 
+enum {
+    DP_GROUP_FLOOD = 0,
+    DP_GROUP_ALL = 1
+};
+
 struct ofexpired {
     flow_t flow;
     uint64_t packet_count;      /* Packets from subrules. */
     uint64_t byte_count;        /* Bytes from subrules. */
     long long int used;         /* Last-used time (0 if never used). */
+};
+
+struct ofproto_sflow_options {
+    struct svec targets;
+    uint32_t sampling_rate;
+    uint32_t polling_interval;
+    uint32_t header_len;
+    uint32_t sub_id;
+    char *agent_device;
+    char *control_ip;
 };
 
 int ofproto_create(const char *datapath, const char *datapath_type,
@@ -62,6 +77,7 @@ int ofproto_set_listeners(struct ofproto *, const struct svec *listeners);
 int ofproto_set_snoops(struct ofproto *, const struct svec *snoops);
 int ofproto_set_netflow(struct ofproto *,
                         const struct netflow_options *nf_options);
+void ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
 void ofproto_set_failure(struct ofproto *, bool fail_open);
 void ofproto_set_rate_limit(struct ofproto *, int rate_limit, int burst_limit);
 int ofproto_set_stp(struct ofproto *, bool enable_stp);

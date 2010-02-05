@@ -349,6 +349,7 @@ static int new_nbp(struct datapath *dp, struct net_device *dev, int port_no)
 	p->port_no = port_no;
 	p->dp = dp;
 	p->dev = dev;
+	atomic_set(&p->sflow_pool, 0);
 	if (!is_dp_dev(dev))
 		rcu_assign_pointer(dev->br_port, p);
 	else {
@@ -646,9 +647,7 @@ int vswitch_skb_checksum_setup(struct sk_buff *skb)
 out:
 	return err;
 }
-#else
-int vswitch_skb_checksum_setup(struct sk_buff *skb) { return 0; }
-#endif /* CONFIG_XEN && linux == 2.6.18 */
+#endif /* CONFIG_XEN && HAVE_PROTO_DATA_VALID */
 
  /* Types of checksums that we can receive (these all refer to L4 checksums):
  * 1. CHECKSUM_NONE: Device that did not compute checksum, contains full
@@ -796,8 +795,7 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 	int err;
 
 	WARN_ON_ONCE(skb_shared(skb));
-	BUG_ON(queue_no != _ODPL_MISS_NR && queue_no != _ODPL_ACTION_NR);
-
+	BUG_ON(queue_no != _ODPL_MISS_NR && queue_no != _ODPL_ACTION_NR && queue_no != _ODPL_SFLOW_NR);
 	queue = &dp->queues[queue_no];
 	err = -ENOBUFS;
 	if (skb_queue_len(queue) >= DP_MAX_QUEUE_LEN)
@@ -1499,6 +1497,7 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 	int dp_idx = iminor(f->f_dentry->d_inode);
 	struct datapath *dp;
 	int drop_frags, listeners, port_no;
+	unsigned int sflow_probability;
 	int err;
 
 	/* Handle commands with special locking requirements up front. */
@@ -1560,6 +1559,16 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 			break;
 		err = 0;
 		set_listen_mask(f, listeners);
+		break;
+
+	case ODP_GET_SFLOW_PROBABILITY:
+		err = put_user(dp->sflow_probability, (unsigned int __user *)argp);
+		break;
+
+	case ODP_SET_SFLOW_PROBABILITY:
+		err = get_user(sflow_probability, (unsigned int __user *)argp);
+		if (!err)
+			dp->sflow_probability = sflow_probability;
 		break;
 
 	case ODP_PORT_QUERY:

@@ -319,7 +319,8 @@ dpif_close(struct dpif *dpif)
     if (dpif) {
         struct registered_dpif_class *registered_class;
 
-        registered_class = shash_find_data(&dpif_classes, dpif->class->type);
+        registered_class = shash_find_data(&dpif_classes, 
+                dpif->dpif_class->type);
         assert(registered_class);
         assert(registered_class->refcount);
 
@@ -356,8 +357,8 @@ dpif_base_name(const struct dpif *dpif)
 int
 dpif_get_all_names(const struct dpif *dpif, struct svec *all_names)
 {
-    if (dpif->class->get_all_names) {
-        int error = dpif->class->get_all_names(dpif, all_names);
+    if (dpif->dpif_class->get_all_names) {
+        int error = dpif->dpif_class->get_all_names(dpif, all_names);
         if (error) {
             VLOG_WARN_RL(&error_rl,
                          "failed to retrieve names for datpath %s: %s",
@@ -380,7 +381,7 @@ dpif_delete(struct dpif *dpif)
 
     COVERAGE_INC(dpif_destroy);
 
-    error = dpif->class->delete(dpif);
+    error = dpif->dpif_class->destroy(dpif);
     log_operation(dpif, "delete", error);
     return error;
 }
@@ -390,7 +391,7 @@ dpif_delete(struct dpif *dpif)
 int
 dpif_get_dp_stats(const struct dpif *dpif, struct odp_stats *stats)
 {
-    int error = dpif->class->get_stats(dpif, stats);
+    int error = dpif->dpif_class->get_stats(dpif, stats);
     if (error) {
         memset(stats, 0, sizeof *stats);
     }
@@ -406,7 +407,7 @@ dpif_get_dp_stats(const struct dpif *dpif, struct odp_stats *stats)
 int
 dpif_get_drop_frags(const struct dpif *dpif, bool *drop_frags)
 {
-    int error = dpif->class->get_drop_frags(dpif, drop_frags);
+    int error = dpif->dpif_class->get_drop_frags(dpif, drop_frags);
     if (error) {
         *drop_frags = false;
     }
@@ -420,7 +421,7 @@ dpif_get_drop_frags(const struct dpif *dpif, bool *drop_frags)
 int
 dpif_set_drop_frags(struct dpif *dpif, bool drop_frags)
 {
-    int error = dpif->class->set_drop_frags(dpif, drop_frags);
+    int error = dpif->dpif_class->set_drop_frags(dpif, drop_frags);
     log_operation(dpif, "set_drop_frags", error);
     return error;
 }
@@ -439,7 +440,7 @@ dpif_port_add(struct dpif *dpif, const char *devname, uint16_t flags,
 
     COVERAGE_INC(dpif_port_add);
 
-    error = dpif->class->port_add(dpif, devname, flags, &port_no);
+    error = dpif->dpif_class->port_add(dpif, devname, flags, &port_no);
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: added %s as port %"PRIu16,
                     dpif_name(dpif), devname, port_no);
@@ -463,7 +464,7 @@ dpif_port_del(struct dpif *dpif, uint16_t port_no)
 
     COVERAGE_INC(dpif_port_del);
 
-    error = dpif->class->port_del(dpif, port_no);
+    error = dpif->dpif_class->port_del(dpif, port_no);
     log_operation(dpif, "port_del", error);
     return error;
 }
@@ -475,7 +476,7 @@ int
 dpif_port_query_by_number(const struct dpif *dpif, uint16_t port_no,
                           struct odp_port *port)
 {
-    int error = dpif->class->port_query_by_number(dpif, port_no, port);
+    int error = dpif->dpif_class->port_query_by_number(dpif, port_no, port);
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: port %"PRIu16" is device %s",
                     dpif_name(dpif), port_no, port->devname);
@@ -494,7 +495,7 @@ int
 dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
                         struct odp_port *port)
 {
-    int error = dpif->class->port_query_by_name(dpif, devname, port);
+    int error = dpif->dpif_class->port_query_by_name(dpif, devname, port);
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: device %s is on port %"PRIu16,
                     dpif_name(dpif), devname, port->port);
@@ -559,7 +560,7 @@ dpif_port_list(const struct dpif *dpif,
         }
 
         ports = xcalloc(stats.n_ports, sizeof *ports);
-        retval = dpif->class->port_list(dpif, ports, stats.n_ports);
+        retval = dpif->dpif_class->port_list(dpif, ports, stats.n_ports);
         if (retval < 0) {
             /* Hard error. */
             error = -retval;
@@ -607,7 +608,7 @@ exit:
 int
 dpif_port_poll(const struct dpif *dpif, char **devnamep)
 {
-    int error = dpif->class->port_poll(dpif, devnamep);
+    int error = dpif->dpif_class->port_poll(dpif, devnamep);
     if (error) {
         *devnamep = NULL;
     }
@@ -619,7 +620,7 @@ dpif_port_poll(const struct dpif *dpif, char **devnamep)
 void
 dpif_port_poll_wait(const struct dpif *dpif)
 {
-    dpif->class->port_poll_wait(dpif);
+    dpif->dpif_class->port_poll_wait(dpif);
 }
 
 /* Retrieves a list of the port numbers in port group 'group' in 'dpif'.
@@ -640,8 +641,8 @@ dpif_port_group_get(const struct dpif *dpif, uint16_t group,
     *ports = NULL;
     *n_ports = 0;
     for (;;) {
-        int retval = dpif->class->port_group_get(dpif, group,
-                                                 *ports, *n_ports);
+        int retval = dpif->dpif_class->port_group_get(dpif, group,
+                                                      *ports, *n_ports);
         if (retval < 0) {
             /* Hard error. */
             error = -retval;
@@ -679,7 +680,7 @@ dpif_port_group_set(struct dpif *dpif, uint16_t group,
 
     COVERAGE_INC(dpif_port_group_set);
 
-    error = dpif->class->port_group_set(dpif, group, ports, n_ports);
+    error = dpif->dpif_class->port_group_set(dpif, group, ports, n_ports);
     log_operation(dpif, "port_group_set", error);
     return error;
 }
@@ -693,7 +694,7 @@ dpif_flow_flush(struct dpif *dpif)
 
     COVERAGE_INC(dpif_flow_flush);
 
-    error = dpif->class->flow_flush(dpif);
+    error = dpif->dpif_class->flow_flush(dpif);
     log_operation(dpif, "flow_flush", error);
     return error;
 }
@@ -719,7 +720,7 @@ dpif_flow_get(const struct dpif *dpif, struct odp_flow *flow)
     COVERAGE_INC(dpif_flow_get);
 
     check_rw_odp_flow(flow);
-    error = dpif->class->flow_get(dpif, flow, 1);
+    error = dpif->dpif_class->flow_get(dpif, flow, 1);
     if (!error) {
         error = flow->stats.error;
     }
@@ -769,7 +770,7 @@ dpif_flow_get_multiple(const struct dpif *dpif,
         check_rw_odp_flow(&flows[i]);
     }
 
-    error = dpif->class->flow_get(dpif, flows, n);
+    error = dpif->dpif_class->flow_get(dpif, flows, n);
     log_operation(dpif, "flow_get_multiple", error);
     return error;
 }
@@ -797,7 +798,7 @@ dpif_flow_put(struct dpif *dpif, struct odp_flow_put *put)
 
     COVERAGE_INC(dpif_flow_put);
 
-    error = dpif->class->flow_put(dpif, put);
+    error = dpif->dpif_class->flow_put(dpif, put);
     if (should_log_flow_message(error)) {
         log_flow_put(dpif, error, put);
     }
@@ -819,7 +820,7 @@ dpif_flow_del(struct dpif *dpif, struct odp_flow *flow)
     check_rw_odp_flow(flow);
     memset(&flow->stats, 0, sizeof flow->stats);
 
-    error = dpif->class->flow_del(dpif, flow);
+    error = dpif->dpif_class->flow_del(dpif, flow);
     if (should_log_flow_message(error)) {
         log_flow_operation(dpif, "delete flow", error, flow);
     }
@@ -848,7 +849,7 @@ dpif_flow_list(const struct dpif *dpif, struct odp_flow flows[], size_t n,
             flows[i].n_actions = 0;
         }
     }
-    retval = dpif->class->flow_list(dpif, flows, n);
+    retval = dpif->dpif_class->flow_list(dpif, flows, n);
     if (retval < 0) {
         *n_out = 0;
         VLOG_WARN_RL(&error_rl, "%s: flow list failed (%s)",
@@ -925,7 +926,8 @@ dpif_execute(struct dpif *dpif, uint16_t in_port,
 
     COVERAGE_INC(dpif_execute);
     if (n_actions > 0) {
-        error = dpif->class->execute(dpif, in_port, actions, n_actions, buf);
+        error = dpif->dpif_class->execute(dpif, in_port, actions,
+                                          n_actions, buf);
     } else {
         error = 0;
     }
@@ -952,7 +954,7 @@ dpif_execute(struct dpif *dpif, uint16_t in_port,
 int
 dpif_recv_get_mask(const struct dpif *dpif, int *listen_mask)
 {
-    int error = dpif->class->recv_get_mask(dpif, listen_mask);
+    int error = dpif->dpif_class->recv_get_mask(dpif, listen_mask);
     if (error) {
         *listen_mask = 0;
     }
@@ -966,8 +968,43 @@ dpif_recv_get_mask(const struct dpif *dpif, int *listen_mask)
 int
 dpif_recv_set_mask(struct dpif *dpif, int listen_mask)
 {
-    int error = dpif->class->recv_set_mask(dpif, listen_mask);
+    int error = dpif->dpif_class->recv_set_mask(dpif, listen_mask);
     log_operation(dpif, "recv_set_mask", error);
+    return error;
+}
+
+/* Retrieve the sFlow sampling probability.  '*probability' is expressed as the
+ * number of packets out of UINT_MAX to sample, e.g. probability/UINT_MAX is
+ * the probability of sampling a given packet.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  EOPNOTSUPP
+ * indicates that 'dpif' does not support sFlow sampling. */
+int
+dpif_get_sflow_probability(const struct dpif *dpif, uint32_t *probability)
+{
+    int error = (dpif->dpif_class->get_sflow_probability
+                 ? dpif->dpif_class->get_sflow_probability(dpif, probability)
+                 : EOPNOTSUPP);
+    if (error) {
+        *probability = 0;
+    }
+    log_operation(dpif, "get_sflow_probability", error);
+    return error;
+}
+
+/* Set the sFlow sampling probability.  'probability' is expressed as the
+ * number of packets out of UINT_MAX to sample, e.g. probability/UINT_MAX is
+ * the probability of sampling a given packet.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  EOPNOTSUPP
+ * indicates that 'dpif' does not support sFlow sampling. */
+int
+dpif_set_sflow_probability(struct dpif *dpif, uint32_t probability)
+{
+    int error = (dpif->dpif_class->set_sflow_probability
+                 ? dpif->dpif_class->set_sflow_probability(dpif, probability)
+                 : EOPNOTSUPP);
+    log_operation(dpif, "set_sflow_probability", error);
     return error;
 }
 
@@ -982,7 +1019,7 @@ dpif_recv_set_mask(struct dpif *dpif, int listen_mask)
 int
 dpif_recv(struct dpif *dpif, struct ofpbuf **packetp)
 {
-    int error = dpif->class->recv(dpif, packetp);
+    int error = dpif->dpif_class->recv(dpif, packetp);
     if (!error) {
         if (VLOG_IS_DBG_ENABLED()) {
             struct ofpbuf *buf = *packetp;
@@ -994,6 +1031,7 @@ dpif_recv(struct dpif *dpif, struct ofpbuf **packetp)
                         "%zu on port %"PRIu16": %s", dpif_name(dpif),
                         (msg->type == _ODPL_MISS_NR ? "miss"
                          : msg->type == _ODPL_ACTION_NR ? "action"
+                         : msg->type == _ODPL_SFLOW_NR ? "sFlow"
                          : "<unknown>"),
                         payload_len, msg->port, s);
             free(s);
@@ -1020,7 +1058,7 @@ dpif_recv_purge(struct dpif *dpif)
         return error;
     }
 
-    for (i = 0; i < stats.max_miss_queue + stats.max_action_queue; i++) {
+    for (i = 0; i < stats.max_miss_queue + stats.max_action_queue + stats.max_sflow_queue; i++) {
         struct ofpbuf *buf;
         error = dpif_recv(dpif, &buf);
         if (error) {
@@ -1036,7 +1074,7 @@ dpif_recv_purge(struct dpif *dpif)
 void
 dpif_recv_wait(struct dpif *dpif)
 {
-    dpif->class->recv_wait(dpif);
+    dpif->dpif_class->recv_wait(dpif);
 }
 
 /* Obtains the NetFlow engine type and engine ID for 'dpif' into '*engine_type'
@@ -1050,12 +1088,13 @@ dpif_get_netflow_ids(const struct dpif *dpif,
 }
 
 void
-dpif_init(struct dpif *dpif, const struct dpif_class *class, const char *name,
+dpif_init(struct dpif *dpif, const struct dpif_class *dpif_class,
+          const char *name,
           uint8_t netflow_engine_type, uint8_t netflow_engine_id)
 {
-    dpif->class = class;
+    dpif->dpif_class = dpif_class;
     dpif->base_name = xstrdup(name);
-    dpif->full_name = xasprintf("%s@%s", class->type, name);
+    dpif->full_name = xasprintf("%s@%s", dpif_class->type, name);
     dpif->netflow_engine_type = netflow_engine_type;
     dpif->netflow_engine_id = netflow_engine_id;
 }
@@ -1073,7 +1112,7 @@ dpif_uninit(struct dpif *dpif, bool close)
     char *full_name = dpif->full_name;
 
     if (close) {
-        dpif->class->close(dpif);
+        dpif->dpif_class->close(dpif);
     }
 
     free(base_name);

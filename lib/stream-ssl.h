@@ -25,7 +25,12 @@ void stream_ssl_set_certificate_file(const char *file_name);
 void stream_ssl_set_ca_cert_file(const char *file_name, bool bootstrap);
 void stream_ssl_set_peer_ca_cert_file(const char *file_name);
 
-#define STREAM_SSL_LONG_OPTIONS                     \
+/* Define the long options for SSL support.
+ *
+ * Note that the definition includes a final comma, and therefore a comma 
+ * must not be supplied when using the definition.  This is done so that 
+ * compilation succeeds whether or not HAVE_OPENSSL is defined. */
+#define STREAM_SSL_LONG_OPTIONS                      \
         {"private-key", required_argument, 0, 'p'}, \
         {"certificate", required_argument, 0, 'c'}, \
         {"ca-cert",     required_argument, 0, 'C'},

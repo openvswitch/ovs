@@ -238,6 +238,9 @@ noinst_PROGRAMS += tests/test-timeval
 tests_test_timeval_SOURCES = tests/test-timeval.c
 tests_test_timeval_LDADD = lib/libopenvswitch.a
 
+noinst_PROGRAMS += tests/test-strtok_r
+tests_test_strtok_r_SOURCES = tests/test-strtok_r.c
+
 noinst_PROGRAMS += tests/test-type-props
 tests_test_type_props_SOURCES = tests/test-type-props.c
 

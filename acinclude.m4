@@ -215,6 +215,7 @@ AC_DEFUN([OVS_CHECK_STRTOK_R],
                            char *token1, *token2;
                            token1 = strtok_r(string, ":", &save_ptr);
                            token2 = strtok_r(NULL, ":", &save_ptr);
+                           freopen ("/dev/null", "w", stdout);
                            printf ("%s %s\n", token1, token2);
                            return 0;
                           ]])],
@@ -259,4 +260,14 @@ dnl Example: OVS_ENABLE_OPTION([-Wdeclaration-after-statement])
 AC_DEFUN([OVS_ENABLE_OPTION], 
   [OVS_CHECK_CC_OPTION([$1], [WARNING_FLAGS="$WARNING_FLAGS $1"])
    AC_SUBST([WARNING_FLAGS])])
+
+dnl OVS_CONDITIONAL_CC_OPTION([OPTION], [CONDITIONAL])
+dnl Check whether the given C compiler OPTION is accepted.
+dnl If so, enable the given Automake CONDITIONAL.
+
+dnl Example: OVS_CONDITIONAL_CC_OPTION([-Wno-unused], [HAVE_WNO_UNUSED])
+AC_DEFUN([OVS_CONDITIONAL_CC_OPTION],
+  [OVS_CHECK_CC_OPTION(
+    [$1], [ovs_have_cc_option=yes], [ovs_have_cc_option=no])
+   AM_CONDITIONAL([$2], [test $ovs_have_cc_option = yes])])
 dnl ----------------------------------------------------------------------

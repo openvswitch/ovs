@@ -386,9 +386,9 @@ case "$1" in
         strace -p $(cat "$BRCOMPATD_PIDFILE") "$@"
         ;;
     status)
-        status -p ovsdb-server.pid ovsdb-server
-        status -p ovs-vswitchd.pid ovs-vswitchd
-        status -p ovs-brcompatd.pid ovs-brcompatd
+        status -p "$OVSDB_SERVER_PIDFILE" ovsdb-server
+        status -p "$VSWITCHD_PIDFILE" ovs-vswitchd
+        status -p "$BRCOMPATD_PIDFILE" ovs-brcompatd
         ;;
     version)
         /usr/sbin/ovsdb-server -V

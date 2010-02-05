@@ -23,11 +23,15 @@
 #include <assert.h>
 #include "dpif.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /* Open vSwitch datapath interface.
  *
  * This structure should be treated as opaque by dpif implementations. */
 struct dpif {
-    const struct dpif_class *class;
+    const struct dpif_class *dpif_class;
     char *base_name;
     char *full_name;
     uint8_t netflow_engine_type;
@@ -39,9 +43,9 @@ void dpif_init(struct dpif *, const struct dpif_class *, const char *name,
 void dpif_uninit(struct dpif *dpif, bool close);
 
 static inline void dpif_assert_class(const struct dpif *dpif,
-                                     const struct dpif_class *class)
+                                     const struct dpif_class *dpif_class)
 {
-    assert(dpif->class == class);
+    assert(dpif->dpif_class == dpif_class);
 }
 
 /* Datapath interface class structure, to be defined by each implementation of
@@ -114,7 +118,7 @@ struct dpif_class {
      *
      * If successful, 'dpif' will not be used again except as an argument for
      * the 'close' member function. */
-    int (*delete)(struct dpif *dpif);
+    int (*destroy)(struct dpif *dpif);
 
     /* Retrieves statistics for 'dpif' into 'stats'. */
     int (*get_stats)(const struct dpif *dpif, struct odp_stats *stats);
@@ -275,6 +279,25 @@ struct dpif_class {
      * corresponding type when it calls the recv member function. */
     int (*recv_set_mask)(struct dpif *dpif, int listen_mask);
 
+    /* Retrieves 'dpif''s sFlow sampling probability into '*probability'.
+     * Return value is 0 or a positive errno value.  EOPNOTSUPP indicates that
+     * the datapath does not support sFlow, as does a null pointer.
+     *
+     * '*probability' is expressed as the number of packets out of UINT_MAX to
+     * sample, e.g. probability/UINT_MAX is the probability of sampling a given
+     * packet. */
+    int (*get_sflow_probability)(const struct dpif *dpif,
+                                 uint32_t *probability);
+
+    /* Sets 'dpif''s sFlow sampling probability to 'probability'.  Return value
+     * is 0 or a positive errno value.  EOPNOTSUPP indicates that the datapath
+     * does not support sFlow, as does a null pointer.
+     *
+     * 'probability' is expressed as the number of packets out of UINT_MAX to
+     * sample, e.g. probability/UINT_MAX is the probability of sampling a given
+     * packet. */
+    int (*set_sflow_probability)(struct dpif *dpif, uint32_t probability);
+
     /* Attempts to receive a message from 'dpif'.  If successful, stores the
      * message into '*packetp'.  The message, if one is received, must begin
      * with 'struct odp_msg' as a header.  Only messages of the types selected
@@ -291,5 +314,9 @@ struct dpif_class {
 
 extern const struct dpif_class dpif_linux_class;
 extern const struct dpif_class dpif_netdev_class;
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* dpif-provider.h */

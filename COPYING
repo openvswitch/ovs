@@ -46,3 +46,7 @@ The files under ovsdb/simplejson are covered by the following license:
     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
+
+Files lib/sflow*.[ch] are licensed under the terms of the InMon sFlow
+licence that is available at:
+        http://www.inmon.com/technology/sflowlicense.txt

@@ -25,6 +25,10 @@
 #include "list.h"
 #include "shash.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct arg {
     char *key;
     char *value;
@@ -36,7 +40,8 @@ struct arg {
  * implementations. */
 struct netdev_dev {
     char *name;                         /* Name of network device. */
-    const struct netdev_class *class;   /* Functions to control this device. */
+    const struct netdev_class *netdev_class; /* Functions to control 
+                                                this device. */
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
     struct arg *args;                   /* Argument list from last config. */
@@ -53,9 +58,9 @@ void netdev_dev_get_devices(const struct netdev_class *,
                             struct shash *device_list);
 
 static inline void netdev_dev_assert_class(const struct netdev_dev *netdev_dev,
-                                           const struct netdev_class *class)
+                                           const struct netdev_class *class_)
 {
-    assert(netdev_dev->class == class);
+    assert(netdev_dev->netdev_class == class_);
 }
 
 /* A instance of an open network device.
@@ -75,9 +80,9 @@ void netdev_uninit(struct netdev *, bool close);
 struct netdev_dev *netdev_get_dev(const struct netdev *);
 
 static inline void netdev_assert_class(const struct netdev *netdev,
-                                       const struct netdev_class *class)
+                                       const struct netdev_class *netdev_class)
 {
-    netdev_dev_assert_class(netdev_get_dev(netdev), class);
+    netdev_dev_assert_class(netdev_get_dev(netdev), netdev_class);
 }
 
 /* A network device notifier.
@@ -357,5 +362,9 @@ struct netdev_class {
 extern const struct netdev_class netdev_linux_class;
 extern const struct netdev_class netdev_tap_class;
 extern const struct netdev_class netdev_gre_class;
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* netdev.h */

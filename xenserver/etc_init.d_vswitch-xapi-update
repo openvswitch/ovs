@@ -27,7 +27,7 @@ function do_host_call {
 
 function start {
     if [ ! -f /etc/xensource-inventory ]; then
-        printf "vxwitch-xapi-update ERROR: XenSource inventory not present in /etc/xensource-inventory\n"
+        printf "vswitch-xapi-update ERROR: XenSource inventory not present in /etc/xensource-inventory\n"
         exit 1
     fi
     source /etc/xensource-inventory

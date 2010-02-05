@@ -63,11 +63,15 @@ main(int argc, char *argv[])
 static void
 parse_options(int argc, char *argv[])
 {
+    enum {
+        OPT_DUMMY = UCHAR_MAX + 1,
+        VLOG_OPTION_ENUMS
+    };
     static struct option long_options[] = {
         {"timeout", required_argument, 0, 't'},
-        {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
+        VLOG_LONG_OPTIONS,
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
@@ -99,9 +103,7 @@ parse_options(int argc, char *argv[])
             OVS_PRINT_VERSION(0, 0);
             exit(EXIT_SUCCESS);
 
-        case 'v':
-            vlog_set_verbosity(optarg);
-            break;
+        VLOG_OPTION_HANDLERS
 
         case '?':
             exit(EXIT_FAILURE);

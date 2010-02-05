@@ -34,6 +34,7 @@
 #include "netflow.h"
 #include "odp-util.h"
 #include "ofp-print.h"
+#include "ofproto-sflow.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
@@ -58,10 +59,7 @@
 #define THIS_MODULE VLM_ofproto
 #include "vlog.h"
 
-enum {
-    DP_GROUP_FLOOD = 0,
-    DP_GROUP_ALL = 1
-};
+#include "sflow_api.h"
 
 enum {
     TABLEID_HASH = 0,
@@ -205,6 +203,7 @@ struct ofproto {
     struct fail_open *fail_open;
     struct pinsched *miss_sched, *action_sched;
     struct netflow *netflow;
+    struct ofproto_sflow *sflow;
 
     /* Flow table. */
     struct classifier cls;
@@ -249,7 +248,8 @@ static void handle_odp_msg(struct ofproto *, struct ofpbuf *);
 static void handle_openflow(struct ofconn *, struct ofproto *,
                             struct ofpbuf *);
 
-static void refresh_port_group(struct ofproto *, unsigned int group);
+static void refresh_port_groups(struct ofproto *);
+
 static void update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
@@ -279,7 +279,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
         dpif_close(dpif);
         return error;
     }
-    error = dpif_recv_set_mask(dpif, ODPL_MISS | ODPL_ACTION);
+    error = dpif_recv_set_mask(dpif, ODPL_MISS | ODPL_ACTION | ODPL_SFLOW);
     if (error) {
         VLOG_ERR("failed to listen on datapath %s: %s",
                  datapath, strerror(error));
@@ -312,6 +312,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
     p->fail_open = NULL;
     p->miss_sched = p->action_sched = NULL;
     p->netflow = NULL;
+    p->sflow = NULL;
 
     /* Initialize flow table. */
     classifier_init(&p->cls);
@@ -532,6 +533,30 @@ ofproto_set_netflow(struct ofproto *ofproto,
 }
 
 void
+ofproto_set_sflow(struct ofproto *ofproto,
+                  const struct ofproto_sflow_options *oso)
+{
+    struct ofproto_sflow *os = ofproto->sflow;
+    if (oso) {
+        if (!os) {
+            struct ofport *ofport;
+            unsigned int odp_port;
+
+            os = ofproto->sflow = ofproto_sflow_create(ofproto->dpif);
+            refresh_port_groups(ofproto);
+            PORT_ARRAY_FOR_EACH (ofport, &ofproto->ports, odp_port) {
+                ofproto_sflow_add_port(os, odp_port,
+                                       netdev_get_name(ofport->netdev));
+            }
+        }
+        ofproto_sflow_set_options(os, oso);
+    } else {
+        ofproto_sflow_destroy(os);
+        ofproto->sflow = NULL;
+    }
+}
+
+void
 ofproto_set_failure(struct ofproto *ofproto, bool fail_open)
 {
     if (fail_open) {
@@ -676,6 +701,7 @@ ofproto_destroy(struct ofproto *p)
     pinsched_destroy(p->miss_sched);
     pinsched_destroy(p->action_sched);
     netflow_destroy(p->netflow);
+    ofproto_sflow_destroy(p->sflow);
 
     switch_status_unregister(p->ss_cat);
 
@@ -829,6 +855,9 @@ ofproto_run1(struct ofproto *p)
     if (p->netflow) {
         netflow_run(p->netflow);
     }
+    if (p->sflow) {
+        ofproto_sflow_run(p->sflow);
+    }
 
     return 0;
 }
@@ -882,6 +911,9 @@ ofproto_wait(struct ofproto *p)
     }
     pinsched_wait(p->miss_sched);
     pinsched_wait(p->action_sched);
+    if (p->sflow) {
+        ofproto_sflow_wait(p->sflow);
+    }
     if (!tag_set_is_empty(&p->revalidate_set)) {
         poll_immediate_wake();
     }
@@ -1022,7 +1054,7 @@ reinit_ports(struct ofproto *p)
     svec_destroy(&devnames);
 }
 
-static void
+static size_t
 refresh_port_group(struct ofproto *p, unsigned int group)
 {
     uint16_t *ports;
@@ -1041,13 +1073,18 @@ refresh_port_group(struct ofproto *p, unsigned int group)
     }
     dpif_port_group_set(p->dpif, group, ports, n_ports);
     free(ports);
+
+    return n_ports;
 }
 
 static void
 refresh_port_groups(struct ofproto *p)
 {
-    refresh_port_group(p, DP_GROUP_FLOOD);
-    refresh_port_group(p, DP_GROUP_ALL);
+    size_t n_flood = refresh_port_group(p, DP_GROUP_FLOOD);
+    size_t n_all = refresh_port_group(p, DP_GROUP_ALL);
+    if (p->sflow) {
+        ofproto_sflow_set_group_sizes(p->sflow, n_flood, n_all);
+    }
 }
 
 static struct ofport *
@@ -1152,19 +1189,29 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
 static void
 ofport_install(struct ofproto *p, struct ofport *ofport)
 {
+    uint16_t odp_port = ofp_port_to_odp_port(ofport->opp.port_no);
+    const char *netdev_name = (const char *) ofport->opp.name;
+
     netdev_monitor_add(p->netdev_monitor, ofport->netdev);
-    port_array_set(&p->ports, ofp_port_to_odp_port(ofport->opp.port_no),
-                   ofport);
-    shash_add(&p->port_by_name, (char *) ofport->opp.name, ofport);
+    port_array_set(&p->ports, odp_port, ofport);
+    shash_add(&p->port_by_name, netdev_name, ofport);
+    if (p->sflow) {
+        ofproto_sflow_add_port(p->sflow, odp_port, netdev_name);
+    }
 }
 
 static void
 ofport_remove(struct ofproto *p, struct ofport *ofport)
 {
+    uint16_t odp_port = ofp_port_to_odp_port(ofport->opp.port_no);
+
     netdev_monitor_remove(p->netdev_monitor, ofport->netdev);
-    port_array_set(&p->ports, ofp_port_to_odp_port(ofport->opp.port_no), NULL);
+    port_array_set(&p->ports, odp_port, NULL);
     shash_delete(&p->port_by_name,
                  shash_find(&p->port_by_name, (char *) ofport->opp.name));
+    if (p->sflow) {
+        ofproto_sflow_del_port(p->sflow, odp_port);
+    }
 }
 
 static void
@@ -2249,7 +2296,7 @@ update_port_config(struct ofproto *p, struct ofport *port,
 #undef REVALIDATE_BITS
     if (mask & OFPPC_NO_FLOOD) {
         port->opp.config ^= OFPPC_NO_FLOOD;
-        refresh_port_group(p, DP_GROUP_FLOOD);
+        refresh_port_groups(p);
     }
     if (mask & OFPPC_NO_PACKET_IN) {
         port->opp.config ^= OFPPC_NO_PACKET_IN;
@@ -2999,21 +3046,13 @@ handle_openflow(struct ofconn *ofconn, struct ofproto *p,
 }
 
 static void
-handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
+handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
 {
     struct odp_msg *msg = packet->data;
     uint16_t in_port = odp_port_to_ofp_port(msg->port);
     struct rule *rule;
     struct ofpbuf payload;
     flow_t flow;
-
-    /* Handle controller actions. */
-    if (msg->type == _ODPL_ACTION_NR) {
-        COVERAGE_INC(ofproto_ctlr_action);
-        pinsched_send(p->action_sched, in_port, packet,
-                      send_packet_in_action, p);
-        return;
-    }
 
     payload.data = msg + 1;
     payload.size = msg->length - sizeof *msg;
@@ -3082,6 +3121,36 @@ handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
         pinsched_send(p->miss_sched, in_port, packet, send_packet_in_miss, p);
     } else {
         ofpbuf_delete(packet);
+    }
+}
+
+static void
+handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
+{
+    struct odp_msg *msg = packet->data;
+
+    switch (msg->type) {
+    case _ODPL_ACTION_NR:
+        COVERAGE_INC(ofproto_ctlr_action);
+        pinsched_send(p->action_sched, odp_port_to_ofp_port(msg->port), packet,
+                      send_packet_in_action, p);
+        break;
+
+    case _ODPL_SFLOW_NR:
+        if (p->sflow) {
+            ofproto_sflow_received(p->sflow, msg);
+        }
+        ofpbuf_delete(packet);
+        break;
+
+    case _ODPL_MISS_NR:
+        handle_odp_miss_msg(p, packet);
+        break;
+
+    default:
+        VLOG_WARN_RL(&rl, "received ODP message of unexpected type %"PRIu32,
+                     msg->type);
+        break;
     }
 }
 

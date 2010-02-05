@@ -34,3 +34,7 @@ AT_CLEANUP
 AT_SETUP([test type properties])
 AT_CHECK([test-type-props], [0], [ignore])
 AT_CLEANUP
+
+AT_SETUP([test strtok_r bug fix])
+AT_CHECK([test-strtok_r], [0], [ignore])
+AT_CLEANUP

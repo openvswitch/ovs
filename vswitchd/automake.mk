@@ -18,6 +18,7 @@ vswitchd_ovs_vswitchd_SOURCES = \
 	vswitchd/xenserver.h
 vswitchd_ovs_vswitchd_LDADD = \
 	ofproto/libofproto.a \
+	lib/libsflow.a \
 	lib/libopenvswitch.a \
 	$(SSL_LIBS)
 

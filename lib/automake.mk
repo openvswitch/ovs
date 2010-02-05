@@ -1,4 +1,4 @@
-# Copyright (C) 2009 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -125,6 +125,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/stream-unix.c \
 	lib/stream.c \
 	lib/stream.h \
+	lib/string.h \
 	lib/svec.c \
 	lib/svec.h \
 	lib/tag.c \
@@ -153,6 +154,19 @@ nodist_lib_libopenvswitch_a_SOURCES = \
 	lib/coverage-counters.c \
 	lib/dirs.c
 CLEANFILES += $(nodist_lib_libopenvswitch_a_SOURCES)
+
+noinst_LIBRARIES += lib/libsflow.a
+lib_libsflow_a_SOURCES = \
+	lib/sflow_api.h \
+	lib/sflow.h \
+	lib/sflow_agent.c \
+	lib/sflow_sampler.c \
+	lib/sflow_poller.c \
+	lib/sflow_receiver.c
+lib_libsflow_a_CFLAGS = $(AM_CFLAGS)
+if HAVE_WNO_UNUSED
+lib_libsflow_a_CFLAGS += -Wno-unused
+endif
 
 if HAVE_NETLINK
 lib_libopenvswitch_a_SOURCES += \

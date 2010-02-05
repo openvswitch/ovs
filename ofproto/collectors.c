@@ -121,3 +121,9 @@ collectors_send(const struct collectors *c, const void *payload, size_t n)
         }
     }
 }
+
+int
+collectors_count(const struct collectors *c)
+{
+    return c->n_fds;
+}

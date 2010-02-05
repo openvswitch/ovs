@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -10,6 +10,7 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
+#include <linux/preempt.h>
 #include <linux/rcupdate.h>
 #include <linux/skbuff.h>
 #include <linux/workqueue.h>
@@ -62,9 +63,13 @@ int dp_dev_recv(struct net_device *netdev, struct sk_buff *skb)
 	else
 		netif_rx_ni(skb);
 	netdev->last_rx = jiffies;
+
+	preempt_disable();
 	lb_stats = per_cpu_ptr(dp_dev->lstats, smp_processor_id());
 	lb_stats->rx_packets++;
 	lb_stats->rx_bytes += len;
+	preempt_enable();
+
 	return len;
 }
 

@@ -123,6 +123,8 @@ int netdev_get_carrier(const struct netdev *, bool *carrier);
 int netdev_get_features(struct netdev *,
                         uint32_t *current, uint32_t *advertised,
                         uint32_t *supported, uint32_t *peer);
+uint64_t netdev_features_to_bps(uint32_t features);
+bool netdev_features_is_full_duplex(uint32_t features);
 int netdev_set_advertisements(struct netdev *, uint32_t advertise);
 
 int netdev_get_in4(const struct netdev *, struct in_addr *address,

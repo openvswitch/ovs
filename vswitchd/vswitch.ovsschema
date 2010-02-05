@@ -44,6 +44,9 @@
        "netflow": {
          "comment": "NetFlow configuration.",
          "type": {"key": "uuid", "min": 0, "max": 1}},
+       "sflow": {
+         "comment": "sFlow configuration.",
+         "type": {"key": "uuid", "min": 0, "max": 1}},
        "controller": {
          "comment": "OpenFlow controller.  If unset, defaults to that specified by the parent Open_vSwitch.",
          "type": {"key": "uuid", "min": 0, "max": 1}},
@@ -160,6 +163,24 @@
        "active_timeout": {
          "comment": "Active timeout interval, in seconds.  A value of 0 requests the default timeout; a negative value disables active timeouts.",
          "type": "integer"}}},
+   "sFlow": {
+     "comment": "A sFlow target.",
+     "columns": {
+       "targets": {
+         "comment": "sFlow targets in the form \"IP:PORT\".",
+         "type": {"key": "string", "min": 1, "max": "unlimited"}},
+       "sampling": {
+         "comment": "Rate at which packets should be sampled and sent to the collector.  If not specified, defaults to 400, which means one out of 400, on average, will be sent to the collector.",
+         "type": {"key": "integer", "min": 0, "max": 1}},
+       "polling": {
+         "comment": "Polling rate in seconds to send port statistics to the collector.  If not specified, defaults to 30 seconds.",
+         "type": {"key": "integer", "min": 0, "max": 1}},
+       "header": {
+         "comment": "Number of bytes of a sampled packet to send to the collector.  If not specified, defaults is 128 bytes.",
+         "type": {"key": "integer", "min": 0, "max": 1}},
+       "agent": {
+         "comment": "IP address to report as \"agent address\" to collectors.  If not specified, defaults to collector's \"local_ip\" value.  If neither is specified, sFlow is disabled.",
+         "type": {"key": "string", "min": 0, "max": 1}}}},
    "Controller": {
      "comment": "An OpenFlow controller.",
      "columns": {

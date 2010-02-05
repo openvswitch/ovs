@@ -71,6 +71,12 @@ install -m 644 vswitchd/vswitch.ovsschema \
          $RPM_BUILD_ROOT/usr/share/vswitch/vswitch.ovsschema
 install -m 755 xenserver/opt_xensource_libexec_interface-reconfigure \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/interface-reconfigure
+install -m 755 xenserver/opt_xensource_libexec_InterfaceReconfigure.py \
+             $RPM_BUILD_ROOT/usr/share/vswitch/scripts/InterfaceReconfigure.py
+install -m 755 xenserver/opt_xensource_libexec_InterfaceReconfigureBridge.py \
+             $RPM_BUILD_ROOT/usr/share/vswitch/scripts/InterfaceReconfigureBridge.py
+install -m 755 xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
+             $RPM_BUILD_ROOT/usr/share/vswitch/scripts/InterfaceReconfigureVswitch.py
 install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/vif
 install -m 755 xenserver/usr_share_vswitch_scripts_dump-vif-details \
@@ -157,7 +163,7 @@ EOF
     fi
 fi
 
-if test ! -e /var/lib/openvswitch/dbcache; then
+if test ! -e /var/xapi/network.dbcache; then
     if test "$1" = 1; then
         printf "Creating xapi database cache...  "
     else
@@ -226,13 +232,16 @@ mkdir -p /usr/lib/vswitch/xs-original \
     || printf "Could not create script backup directory.\n"
 for f in \
     /opt/xensource/libexec/interface-reconfigure \
+    /opt/xensource/libexec/InterfaceReconfigure.py \
+    /opt/xensource/libexec/InterfaceReconfigureBridge.py \
+    /opt/xensource/libexec/InterfaceReconfigureVswitch.py \
     /etc/xensource/scripts/vif \
     /usr/sbin/xen-bugtool \
     /usr/sbin/brctl
 do
     s=$(basename "$f")
     t=$(readlink "$f")
-    if [ "$t" != "/usr/share/vswitch/scripts/$s" ]; then
+    if [ -f "$f" ] && [ "$t" != "/usr/share/vswitch/scripts/$s" ]; then
         mv "$f" /usr/lib/vswitch/xs-original/ \
             || printf "Could not save original XenServer $s script\n"
         ln -s "/usr/share/vswitch/scripts/$s" "$f" \
@@ -255,6 +264,9 @@ for s in vswitch vswitch-xapi-update; do
     chkconfig --add $s || printf "Could not add $s init script."
     chkconfig $s on || printf "Could not enable $s init script."
 done
+
+# Configure system to use vswitch
+echo vswitch > /etc/xensource/network.conf
 
 if [ "$1" = "1" ]; then    # $1 = 2 for upgrade
     printf "\nYou MUST reboot the server NOW to complete the change to the\n"
@@ -304,7 +316,10 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     rm -f /etc/ovs-vswitchd.conf.db
     rm -f /etc/sysconfig/vswitch
     rm -f /etc/ovs-vswitchd.cacert
-    rm -f /var/lib/openvswitch/dbcache
+    rm -f /var/xapi/network.dbcache
+
+    # Configure system to use bridge
+    echo bridge > /etc/xensource/network.conf
 
     printf "\nYou MUST reboot the server now to complete the change to\n"
     printf "standard Xen networking.  Attempts to modify networking on the\n"
@@ -328,6 +343,15 @@ fi
 /usr/share/vswitch/scripts/dump-vif-details
 /usr/share/vswitch/scripts/refresh-xs-network-uuids
 /usr/share/vswitch/scripts/interface-reconfigure
+/usr/share/vswitch/scripts/InterfaceReconfigure.py
+/usr/share/vswitch/scripts/InterfaceReconfigure.pyc
+/usr/share/vswitch/scripts/InterfaceReconfigure.pyo
+/usr/share/vswitch/scripts/InterfaceReconfigureBridge.py
+/usr/share/vswitch/scripts/InterfaceReconfigureBridge.pyc
+/usr/share/vswitch/scripts/InterfaceReconfigureBridge.pyo
+/usr/share/vswitch/scripts/InterfaceReconfigureVswitch.py
+/usr/share/vswitch/scripts/InterfaceReconfigureVswitch.pyc
+/usr/share/vswitch/scripts/InterfaceReconfigureVswitch.pyo
 /usr/share/vswitch/scripts/vif
 /usr/share/vswitch/scripts/xen-bugtool
 /usr/share/vswitch/scripts/XSFeatureVSwitch.py
