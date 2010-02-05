@@ -2479,6 +2479,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     struct vsctl_command *c;
     int64_t next_cfg = 0;
     char *comment;
+    char *error;
 
     txn = the_idl_txn = ovsdb_idl_txn_create(idl);
     if (dry_run) {
@@ -2528,6 +2529,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
             vsctl_context_done(&ctx, c);
         }
     }
+    error = xstrdup(ovsdb_idl_txn_get_error(txn));
     ovsdb_idl_txn_destroy(txn);
     the_idl_txn = NULL;
 
@@ -2547,14 +2549,16 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         for (c = commands; c < &commands[n_commands]; c++) {
             ds_destroy(&c->output);
         }
+        free(error);
         return;
 
     case TXN_ERROR:
-        vsctl_fatal("transaction error");
+        vsctl_fatal("transaction error: %s", error);
 
     default:
         NOT_REACHED();
     }
+    free(error);
 
     for (c = commands; c < &commands[n_commands]; c++) {
         struct ds *ds = &c->output;

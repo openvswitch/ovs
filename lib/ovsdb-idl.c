@@ -81,6 +81,7 @@ struct ovsdb_idl_txn {
     struct ovsdb_idl *idl;
     struct hmap txn_rows;
     enum ovsdb_idl_txn_status status;
+    char *error;
     bool dry_run;
     struct ds comment;
 
@@ -867,6 +868,7 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
     txn->idl = idl;
     hmap_init(&txn->txn_rows);
     txn->status = TXN_INCOMPLETE;
+    txn->error = NULL;
     txn->dry_run = false;
     ds_init(&txn->comment);
 
@@ -915,6 +917,7 @@ ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *txn)
     }
     ovsdb_idl_txn_abort(txn);
     ds_destroy(&txn->comment);
+    free(txn->error);
     free(txn->inc_table);
     free(txn->inc_column);
     json_destroy(txn->inc_where);
@@ -1253,6 +1256,27 @@ ovsdb_idl_txn_abort(struct ovsdb_idl_txn *txn)
     }
 }
 
+const char *
+ovsdb_idl_txn_get_error(const struct ovsdb_idl_txn *txn)
+{
+    if (txn->status != TXN_ERROR) {
+        return ovsdb_idl_txn_status_to_string(txn->status);
+    } else if (txn->error) {
+        return txn->error;
+    } else {
+        return "no error details available";
+    }
+}
+
+static void
+ovsdb_idl_txn_set_error_json(struct ovsdb_idl_txn *txn,
+                             const struct json *json)
+{
+    if (txn->error == NULL) {
+        txn->error = json_to_string(json, JSSF_SORT);
+    }
+}
+
 /* For transaction 'txn' that completed successfully, finds and returns the
  * permanent UUID that the database assigned to a newly inserted row, given the
  * 'uuid' that ovsdb_idl_txn_insert() assigned locally to that row.
@@ -1566,15 +1590,18 @@ ovsdb_idl_txn_process_reply(struct ovsdb_idl *idl,
                             soft_errors++;
                         } else if (strcmp(error->u.string, "aborted")) {
                             hard_errors++;
+                            ovsdb_idl_txn_set_error_json(txn, op);
                         }
                     } else {
                         hard_errors++;
+                        ovsdb_idl_txn_set_error_json(txn, op);
                         VLOG_WARN_RL(&syntax_rl,
                                      "\"error\" in reply is not JSON string");
                     }
                 }
             } else {
                 hard_errors++;
+                ovsdb_idl_txn_set_error_json(txn, op);
                 VLOG_WARN_RL(&syntax_rl,
                              "operation reply is not JSON null or object");
             }
