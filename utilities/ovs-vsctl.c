@@ -897,7 +897,7 @@ cmd_del_br(struct vsctl_context *ctx)
 
         SHASH_FOR_EACH (node, &info.ports) {
             struct vsctl_port *port = node->data;
-            if (port->bridge == bridge
+            if (port->bridge == bridge || port->bridge->parent == bridge
                 || !strcmp(port->port_cfg->name, bridge->name)) {
                 del_port(&info, port);
             }
