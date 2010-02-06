@@ -71,11 +71,11 @@ install -m 644 vswitchd/vswitch.ovsschema \
          $RPM_BUILD_ROOT/usr/share/vswitch/vswitch.ovsschema
 install -m 755 xenserver/opt_xensource_libexec_interface-reconfigure \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/interface-reconfigure
-install -m 755 xenserver/opt_xensource_libexec_InterfaceReconfigure.py \
+install -m 644 xenserver/opt_xensource_libexec_InterfaceReconfigure.py \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/InterfaceReconfigure.py
-install -m 755 xenserver/opt_xensource_libexec_InterfaceReconfigureBridge.py \
+install -m 644 xenserver/opt_xensource_libexec_InterfaceReconfigureBridge.py \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/InterfaceReconfigureBridge.py
-install -m 755 xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
+install -m 644 xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/InterfaceReconfigureVswitch.py
 install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/vif
