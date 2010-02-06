@@ -147,7 +147,7 @@ static int ipgre_tunnel_bind_dev(struct net_device *dev);
 
 #define HASH_SIZE  16
 
-static int ipgre_net_id;
+static int ipgre_net_id __read_mostly;
 struct ipgre_net {
 	struct ip_tunnel *tunnels[4][HASH_SIZE];
 
@@ -178,8 +178,13 @@ struct ipgre_net {
 #define tunnels_r	tunnels[2]
 #define tunnels_l	tunnels[1]
 #define tunnels_wc	tunnels[0]
+/*
+ * Locking : hash tables are protected by RCU and a spinlock
+ */
+static DEFINE_SPINLOCK(ipgre_lock);
 
-static DEFINE_RWLOCK(ipgre_lock);
+#define for_each_ip_tunnel_rcu(start) \
+	for (t = rcu_dereference(start); t; t = rcu_dereference(t->next))
 
 /* Given src, dst and key, find appropriate for input tunnel. */
 
@@ -197,7 +202,7 @@ static struct ip_tunnel * ipgre_tunnel_lookup(struct net_device *dev,
 		       ARPHRD_ETHER : ARPHRD_IPGRE;
 	int score, cand_score = 4;
 
-	for (t = ign->tunnels_r_l[h0^h1]; t; t = t->next) {
+	for_each_ip_tunnel_rcu(ign->tunnels_r_l[h0 ^ h1]) {
 		if (local != t->parms.iph.saddr ||
 		    remote != t->parms.iph.daddr ||
 		    key != t->parms.i_key ||
@@ -222,7 +227,7 @@ static struct ip_tunnel * ipgre_tunnel_lookup(struct net_device *dev,
 		}
 	}
 
-	for (t = ign->tunnels_r[h0^h1]; t; t = t->next) {
+	for_each_ip_tunnel_rcu(ign->tunnels_r[h0 ^ h1]) {
 		if (remote != t->parms.iph.daddr ||
 		    key != t->parms.i_key ||
 		    !(t->dev->flags & IFF_UP))
@@ -246,7 +251,7 @@ static struct ip_tunnel * ipgre_tunnel_lookup(struct net_device *dev,
 		}
 	}
 
-	for (t = ign->tunnels_l[h1]; t; t = t->next) {
+	for_each_ip_tunnel_rcu(ign->tunnels_l[h1]) {
 		if ((local != t->parms.iph.saddr &&
 		     (local != t->parms.iph.daddr ||
 		      !ipv4_is_multicast(local))) ||
@@ -272,7 +277,7 @@ static struct ip_tunnel * ipgre_tunnel_lookup(struct net_device *dev,
 		}
 	}
 
-	for (t = ign->tunnels_wc[h1]; t; t = t->next) {
+	for_each_ip_tunnel_rcu(ign->tunnels_wc[h1]) {
 		if (t->parms.i_key != key ||
 		    !(t->dev->flags & IFF_UP))
 			continue;
@@ -298,8 +303,9 @@ static struct ip_tunnel * ipgre_tunnel_lookup(struct net_device *dev,
 	if (cand != NULL)
 		return cand;
 
-	if (ign->fb_tunnel_dev->flags & IFF_UP)
-		return netdev_priv(ign->fb_tunnel_dev);
+	dev = ign->fb_tunnel_dev;
+	if (dev->flags & IFF_UP)
+		return netdev_priv(dev);
 
 	return NULL;
 }
@@ -333,10 +339,10 @@ static void ipgre_tunnel_link(struct ipgre_net *ign, struct ip_tunnel *t)
 {
 	struct ip_tunnel **tp = ipgre_bucket(ign, t);
 
+	spin_lock_bh(&ipgre_lock);
 	t->next = *tp;
-	write_lock_bh(&ipgre_lock);
-	*tp = t;
-	write_unlock_bh(&ipgre_lock);
+	rcu_assign_pointer(*tp, t);
+	spin_unlock_bh(&ipgre_lock);
 }
 
 static void ipgre_tunnel_unlink(struct ipgre_net *ign, struct ip_tunnel *t)
@@ -345,9 +351,9 @@ static void ipgre_tunnel_unlink(struct ipgre_net *ign, struct ip_tunnel *t)
 
 	for (tp = ipgre_bucket(ign, t); *tp; tp = &(*tp)->next) {
 		if (t == *tp) {
-			write_lock_bh(&ipgre_lock);
+			spin_lock_bh(&ipgre_lock);
 			*tp = t->next;
-			write_unlock_bh(&ipgre_lock);
+			spin_unlock_bh(&ipgre_lock);
 			break;
 		}
 	}
@@ -504,7 +510,7 @@ static void ipgre_err(struct sk_buff *skb, u32 info)
 		break;
 	}
 
-	read_lock(&ipgre_lock);
+	rcu_read_lock();
 	t = ipgre_tunnel_lookup(skb->dev, iph->daddr, iph->saddr,
 				flags & GRE_KEY ?
 				*(((__be32 *)p) + (grehlen / 4) - 1) : 0,
@@ -522,7 +528,7 @@ static void ipgre_err(struct sk_buff *skb, u32 info)
 		t->err_count = 1;
 	t->err_time = jiffies;
 out:
-	read_unlock(&ipgre_lock);
+	rcu_read_unlock();
 	return;
 }
 
@@ -601,7 +607,7 @@ static int ipgre_rcv(struct sk_buff *skb)
 
 	gre_proto = *(__be16 *)(h + 2);
 
-	read_lock(&ipgre_lock);
+	rcu_read_lock();
 	if ((tunnel = ipgre_tunnel_lookup(skb->dev,
 					  iph->saddr, iph->daddr, key,
 					  gre_proto))) {
@@ -680,13 +686,13 @@ static int ipgre_rcv(struct sk_buff *skb)
 		ipgre_ecn_decapsulate(iph, skb);
 
 		netif_rx(skb);
-		read_unlock(&ipgre_lock);
+		rcu_read_unlock();
 		return(0);
 	}
 	icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
 
 drop:
-	read_unlock(&ipgre_lock);
+	rcu_read_unlock();
 drop_nolock:
 	kfree_skb(skb);
 	return(0);
@@ -696,6 +702,9 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 {
 	struct ip_tunnel *tunnel = netdev_priv(dev);
 	struct net_device_stats *stats;
+#ifdef HAVE_NETDEV_QUEUE_STATS
+	struct netdev_queue *txq = netdev_get_tx_queue(dev, 0);
+#endif
 	struct iphdr  *old_iph = ip_hdr(skb);
 	struct iphdr  *tiph;
 	u8     tos;
@@ -709,7 +718,7 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 	int    mtu;
 
 #ifdef HAVE_NETDEV_STATS
-	stats = &tunnel->dev->stats;
+	stats = &dev->stats;
 #else
 	stats = &tunnel->stat;
 #endif
@@ -860,7 +869,11 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 		struct sk_buff *new_skb = skb_realloc_headroom(skb, max_headroom);
 		if (!new_skb) {
 			ip_rt_put(rt);
+#ifdef HAVE_NETDEV_QUEUE_STATS
+			txq->tx_dropped++;
+#else
 			stats->tx_dropped++;
+#endif
 			dev_kfree_skb(skb);
 			return NETDEV_TX_OK;
 		}
@@ -1433,33 +1446,27 @@ static const struct net_protocol ipgre_protocol = {
 #endif
 };
 
-static void ipgre_destroy_tunnels(struct ipgre_net *ign)
+static void ipgre_destroy_tunnels(struct ipgre_net *ign, struct list_head *head)
 {
 	int prio;
 
 	for (prio = 0; prio < 4; prio++) {
 		int h;
 		for (h = 0; h < HASH_SIZE; h++) {
-			struct ip_tunnel *t;
-			while ((t = ign->tunnels[prio][h]) != NULL)
-				unregister_netdevice(t->dev);
+			struct ip_tunnel *t = ign->tunnels[prio][h];
+
+			while (t != NULL) {
+				unregister_netdevice_queue(t->dev, head);
+				t = t->next;
+			}
 		}
 	}
 }
 
 static int ipgre_init_net(struct net *net)
 {
+	struct ipgre_net *ign = net_generic(net, ipgre_net_id);
 	int err;
-	struct ipgre_net *ign;
-
-	err = -ENOMEM;
-	ign = kzalloc(sizeof(struct ipgre_net), GFP_KERNEL);
-	if (ign == NULL)
-		goto err_alloc;
-
-	err = net_assign_generic(net, ipgre_net_id, ign);
-	if (err < 0)
-		goto err_assign;
 
 	ign->fb_tunnel_dev = alloc_netdev(sizeof(struct ip_tunnel), GRE_IOCTL_DEVICE,
 					   ipgre_tunnel_setup);
@@ -1486,27 +1493,26 @@ static int ipgre_init_net(struct net *net)
 err_reg_dev:
 	free_netdev(ign->fb_tunnel_dev);
 err_alloc_dev:
-	/* nothing */
-err_assign:
-	kfree(ign);
-err_alloc:
 	return err;
 }
 
 static void ipgre_exit_net(struct net *net)
 {
 	struct ipgre_net *ign;
+	LIST_HEAD(list);
 
 	ign = net_generic(net, ipgre_net_id);
 	rtnl_lock();
-	ipgre_destroy_tunnels(ign);
+	ipgre_destroy_tunnels(ign, &list);
+	unregister_netdevice_many(&list);
 	rtnl_unlock();
-	kfree(ign);
 }
 
 static struct pernet_operations ipgre_net_ops = {
 	.init = ipgre_init_net,
 	.exit = ipgre_exit_net,
+	.id   = &ipgre_net_id,
+	.size = sizeof(struct ipgre_net),
 };
 
 static int ipgre_tap_init(struct net_device *dev)
@@ -1643,8 +1649,13 @@ static void ipgre_netlink_parms(struct nlattr *data[],
 		parms->iph.frag_off = htons(IP_DF);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)
+static int ipgre_newlink(struct net *src_net, struct net_device *dev, struct nlattr *tb[],
+			 struct nlattr *data[])
+#else
 static int ipgre_newlink(struct net_device *dev, struct nlattr *tb[],
 			 struct nlattr *data[])
+#endif
 {
 	struct ip_tunnel *nt;
 	struct net *net = dev_net(dev);
@@ -1843,7 +1854,7 @@ static int __init ipgre_init(void)
 		return -EAGAIN;
 	}
 
-	err = register_pernet_gen_device(&ipgre_net_id, &ipgre_net_ops);
+	err = register_pernet_device(&ipgre_net_ops);
 	if (err < 0)
 		goto gen_device_failed;
 
@@ -1864,7 +1875,7 @@ out:
 tap_ops_failed:
 	rtnl_link_unregister(&ipgre_link_ops);
 rtnl_link_failed:
-	unregister_pernet_gen_device(ipgre_net_id, &ipgre_net_ops);
+	unregister_pernet_device(&ipgre_net_ops);
 #endif
 gen_device_failed:
 	inet_del_protocol(&ipgre_protocol, IPPROTO_GRE);
@@ -1878,7 +1889,7 @@ static void __exit ipgre_fini(void)
 	rtnl_link_unregister(&ipgre_tap_ops);
 	rtnl_link_unregister(&ipgre_link_ops);
 #endif
-	unregister_pernet_gen_device(ipgre_net_id, &ipgre_net_ops);
+	unregister_pernet_device(&ipgre_net_ops);
 	if (inet_del_protocol(&ipgre_protocol, IPPROTO_GRE) < 0)
 		printk(KERN_INFO "ipgre close: can't remove protocol\n");
 }

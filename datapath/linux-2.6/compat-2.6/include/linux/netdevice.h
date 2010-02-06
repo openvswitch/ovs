@@ -63,6 +63,14 @@ typedef int netdev_tx_t;
 #define for_each_netdev(net,d) list_for_each_entry(d, &dev_base_head, dev_list)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+#define net_xmit_eval(e)       ((e) == NET_XMIT_CN? 0 : (e))
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+extern void unregister_netdevice_queue(struct net_device *dev,
+					struct list_head *head);
+extern void unregister_netdevice_many(struct list_head *head);
+#endif
 
 #endif

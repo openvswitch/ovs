@@ -3,6 +3,10 @@
 
 #include <linux/version.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31)
+#define HAVE_NETDEV_QUEUE_STATS
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
 
 #include <linux/if_tunnel.h>
@@ -48,43 +52,31 @@ struct ip_tunnel_prl_entry
 	spinlock_t			lock;
 };
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
+#ifdef HAVE_NETDEV_QUEUE_STATS
+#define UPDATE_TX_STATS()						\
+	txq->tx_bytes += pkt_len;					\
+	txq->tx_packets++;
+#else
+#define UPDATE_TX_STATS()						\
+	stats->tx_bytes += pkt_len;					\
+	stats->tx_packets++;
+#endif
+
 #define IPTUNNEL_XMIT() do {						\
 	int err;							\
 	int pkt_len = skb->len - skb_transport_offset(skb);		\
 									\
 	skb->ip_summed = CHECKSUM_NONE;					\
-	iph->tot_len = htons(skb->len);                                 \
-	ip_select_ident(iph, &rt->u.dst, NULL);				\
-	ip_send_check(iph);                                             \
-									\
-	err = NF_HOOK(PF_INET, NF_IP_LOCAL_OUT, skb, NULL, rt->u.dst.dev, dst_output);\
-	if (err == NET_XMIT_SUCCESS || err == NET_XMIT_CN) {            \
-		stats->tx_bytes += pkt_len;				\
-		stats->tx_packets++;					\
-	} else {							\
-		stats->tx_errors++;					\
-		stats->tx_aborted_errors++;				\
-	}								\
-} while (0)
-#else
-#define IPTUNNEL_XMIT() do {						\
-	int err;							\
-	int pkt_len = skb->len;						\
-									\
-	skb->ip_summed = CHECKSUM_NONE;					\
 	ip_select_ident(iph, &rt->u.dst, NULL);				\
 									\
 	err = ip_local_out(skb);					\
-	if (net_xmit_eval(err) == 0) {					\
-		stats->tx_bytes += pkt_len;				\
-		stats->tx_packets++;					\
+	if (likely(net_xmit_eval(err) == 0)) {				\
+		UPDATE_TX_STATS();					\
 	} else {							\
 		stats->tx_errors++;					\
 		stats->tx_aborted_errors++;				\
 	}								\
 } while (0)
-#endif
 
 #else
 #include_next <net/ipip.h>
