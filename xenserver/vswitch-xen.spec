@@ -344,26 +344,13 @@ fi
 /usr/share/vswitch/scripts/refresh-xs-network-uuids
 /usr/share/vswitch/scripts/interface-reconfigure
 /usr/share/vswitch/scripts/InterfaceReconfigure.py
-/usr/share/vswitch/scripts/InterfaceReconfigure.pyc
-/usr/share/vswitch/scripts/InterfaceReconfigure.pyo
 /usr/share/vswitch/scripts/InterfaceReconfigureBridge.py
-/usr/share/vswitch/scripts/InterfaceReconfigureBridge.pyc
-/usr/share/vswitch/scripts/InterfaceReconfigureBridge.pyo
 /usr/share/vswitch/scripts/InterfaceReconfigureVswitch.py
-/usr/share/vswitch/scripts/InterfaceReconfigureVswitch.pyc
-/usr/share/vswitch/scripts/InterfaceReconfigureVswitch.pyo
 /usr/share/vswitch/scripts/vif
 /usr/share/vswitch/scripts/xen-bugtool
 /usr/share/vswitch/scripts/XSFeatureVSwitch.py
 /usr/share/vswitch/scripts/brctl
 /usr/share/vswitch/scripts/sysconfig.template
-# Following two files are generated automatically by rpm.  We don't
-# really need them and they won't be used on the XenServer, but there
-# isn't an obvious place to get rid of them since they are generated
-# after the install script runs.  Since they are small, we just
-# include them.
-/usr/share/vswitch/scripts/XSFeatureVSwitch.pyc
-/usr/share/vswitch/scripts/XSFeatureVSwitch.pyo
 /usr/share/vswitch/vswitch.ovsschema
 /usr/sbin/ovs-brcompatd
 /usr/sbin/ovs-vswitchd
@@ -384,3 +371,5 @@ fi
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
 /var/lib/openvswitch
+%exclude /usr/share/vswitch/scripts/*.pyc
+%exclude /usr/share/vswitch/scripts/*.pyo
