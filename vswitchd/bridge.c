@@ -199,6 +199,9 @@ static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
 static unixctl_cb_func bridge_unixctl_dump_flows;
 static int bridge_run_one(struct bridge *);
+static const struct ovsrec_controller *bridge_get_controller(
+                      const struct ovsrec_open_vswitch *ovs_cfg,
+                      const struct bridge *br);
 static void bridge_reconfigure_one(const struct ovsrec_open_vswitch *,
                                    struct bridge *);
 static void bridge_reconfigure_controller(const struct ovsrec_open_vswitch *,
@@ -755,7 +758,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
         /* Set sFlow configuration on this bridge. */
         if (br->cfg->sflow) {
-            struct ovsrec_sflow *sflow_cfg = br->cfg->sflow;
+            const struct ovsrec_sflow *sflow_cfg = br->cfg->sflow;
+            const struct ovsrec_controller *ctrl;
             struct ofproto_sflow_options oso;
 
             memset(&oso, 0, sizeof oso);
@@ -781,10 +785,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             oso.sub_id = sflow_bridge_number++;
             oso.agent_device = sflow_cfg->agent;
 
-#if 0       /* xxx foo */
             ctrl = bridge_get_controller(ovs_cfg, br);
             oso.control_ip = ctrl ? ctrl->local_ip : NULL;
-#endif
             ofproto_set_sflow(br->ofproto, &oso);
 
             svec_destroy(&oso.targets);
