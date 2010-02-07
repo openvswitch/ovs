@@ -161,10 +161,9 @@ def datapath_deconfigure_ipdev(interface):
     return ['--', '--if-exists', 'del-port', interface]
 
 def datapath_modify_config(commands):
-    if debug_mode():
-        log("modifying configuration:")
-        for c in commands:
-            log("  %s" % c)
+    #log("modifying configuration:")
+    #for c in commands:
+    #    log("  %s" % c)
             
     rc = run_command(['/usr/bin/ovs-vsctl'] + ['--timeout=20']
                      + [c for c in commands if not c.startswith('#')])
@@ -176,7 +175,7 @@ def datapath_modify_config(commands):
 # Toplevel Datapath Configuration.
 #
 
-def configure_datapath(pif):
+def configure_datapath(pif, parent=None, vlan=None):
     """Bring up the datapath configuration for PIF.
 
     Should be careful not to glitch existing users of the datapath, e.g. other VLANs etc.
@@ -265,13 +264,18 @@ def configure_datapath(pif):
         vsctl_argv += ['# deconfigure physical port %s' % dev]
         vsctl_argv += datapath_deconfigure_physical(dev)
 
+    if parent and datapath:
+        vsctl_argv += ['--', 'add-br', bridge, parent, vlan]
+    else:
+        vsctl_argv += ['--', 'add-br', bridge]
+
     if len(physical_devices) > 1:
         vsctl_argv += ['# deconfigure bond %s' % pif_netdev_name(pif)]
         vsctl_argv += datapath_deconfigure_bond(pif_netdev_name(pif))
         vsctl_argv += ['# configure bond %s' % pif_netdev_name(pif)]
         vsctl_argv += datapath_configure_bond(pif, physical_devices)
         extra_up_ports += [pif_netdev_name(pif)]
-     else:
+    else:
         iface = pif_netdev_name(physical_devices[0])
         vsctl_argv += ['# add physical device %s' % iface]
         vsctl_argv += ['--', 'add-port', bridge, iface]
@@ -329,15 +333,13 @@ class DatapathVswitch(Datapath):
 
         ipdev = self._ipdev
         bridge = pif_bridge_name(self._dp)
-        c,e = configure_datapath(self._dp)
+        if pif_is_vlan(self._pif):
+            datapath = pif_datapath(self._pif)
+            c,e = configure_datapath(self._dp, datapath, pifrec['VLAN'])
+        else:
+            c,e = configure_datapath(self._dp)
         vsctl_argv += c
         extra_ports += e
-
-        if pif_is_vlan(pif):
-            datapath = pif_datapath(pif)
-            vsctl_argv += ['--', 'add-br', bridge, datapath, pifrec['VLAN']]
-        else:
-            vsctl_argv += ['--', 'add-br', bridge]
 
         xs_network_uuids = []
         for nwpif in db().get_pifs_by_device(db().get_pif_record(self._pif)['device']):
@@ -356,10 +358,11 @@ class DatapathVswitch(Datapath):
         vsctl_argv += ['--', 'br-set-external-id', bridge,
                 'xs-network-uuids', ';'.join(xs_network_uuids)]
 
-        vsctl_argv += ["# deconfigure ipdev %s" % ipdev]
-        vsctl_argv += datapath_deconfigure_ipdev(ipdev)
-        vsctl_argv += ["# reconfigure ipdev %s" % ipdev]
-        vsctl_argv += ['--', 'add-port', bridge, ipdev]
+        if ipdev != bridge:
+            vsctl_argv += ["# deconfigure ipdev %s" % ipdev]
+            vsctl_argv += datapath_deconfigure_ipdev(ipdev)
+            vsctl_argv += ["# reconfigure ipdev %s" % ipdev]
+            vsctl_argv += ['--', 'add-port', bridge, ipdev]
 
         # XXX Needs support in ovs-vsctl
         #if bridge == ipdev:

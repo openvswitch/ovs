@@ -332,6 +332,7 @@ class DatabaseCache(object):
         defs = [ (a, b.strip("'")) for (a,b) in defs ]
 
         return dict(defs)
+
     def __pif_on_host(self,pif):
         return self.__pifs.has_key(pif)
 

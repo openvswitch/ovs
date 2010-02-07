@@ -117,7 +117,13 @@ remove_from_bridge()
 
 NETWORK_MODE=$(cat /etc/xensource/network.conf)
 ACTION=$1
-TYPE=$2
+
+# Older versions of XenServer do not pass in the type as an argument
+if [[ $# -lt 2 ]]; then
+    TYPE=vif
+else
+    TYPE=$2
+fi
 
 case $NETWORK_MODE in
     bridge|vswitch) ;;
