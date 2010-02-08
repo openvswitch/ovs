@@ -670,7 +670,7 @@ out:
  * 4. CHECKSUM_UNNECESSARY (with proto_csum_blank true): This packet was
  *	generated locally by a Xen DomU and has a partial checksum.  If it is
  *	handled on this machine (Dom0 or DomU), then the checksum will not be
- *	computed.  If it goes off box, the checksum in the packet needs to
+ *	computed.  If it goes off box, the checksum in the packet needs to be
  *	completed.  Calling skb_checksum_setup converts this to CHECKSUM_HW
  *	(CHECKSUM_PARTIAL) so that the checksum can be completed.  In later
  *	kernels, this combination is replaced with CHECKSUM_PARTIAL.

@@ -188,7 +188,7 @@ dpif_linux_get_all_names(const struct dpif *dpif_, struct svec *all_names)
 }
 
 static int
-dpif_linux_delete(struct dpif *dpif_)
+dpif_linux_destroy(struct dpif *dpif_)
 {
     return do_ioctl(dpif_, ODP_DP_DESTROY, NULL);
 }
@@ -467,7 +467,7 @@ const struct dpif_class dpif_linux_class = {
     dpif_linux_open,
     dpif_linux_close,
     dpif_linux_get_all_names,
-    dpif_linux_delete,
+    dpif_linux_destroy,
     dpif_linux_get_stats,
     dpif_linux_get_drop_frags,
     dpif_linux_set_drop_frags,

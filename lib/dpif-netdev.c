@@ -64,7 +64,7 @@ struct dp_netdev {
     struct list node;
     int dp_idx;
     int open_cnt;
-    bool deleted;
+    bool destroyed;
 
     bool drop_frags;            /* Drop all IP fragments, if true. */
     struct ovs_queue queues[N_QUEUES]; /* Messages queued for dpif_recv(). */
@@ -307,17 +307,17 @@ dpif_netdev_close(struct dpif *dpif)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     assert(dp->open_cnt > 0);
-    if (--dp->open_cnt == 0 && dp->deleted) {
+    if (--dp->open_cnt == 0 && dp->destroyed) {
         dp_netdev_free(dp);
     }
     free(dpif);
 }
 
 static int
-dpif_netdev_delete(struct dpif *dpif)
+dpif_netdev_destroy(struct dpif *dpif)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    dp->deleted = true;
+    dp->destroyed = true;
     return 0;
 }
 
@@ -1310,7 +1310,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_open,
     dpif_netdev_close,
     NULL,                       /* get_all_names */
-    dpif_netdev_delete,
+    dpif_netdev_destroy,
     dpif_netdev_get_stats,
     dpif_netdev_get_drop_frags,
     dpif_netdev_set_drop_frags,

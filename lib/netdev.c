@@ -89,9 +89,9 @@ netdev_run(void)
 {
     struct shash_node *node;
     SHASH_FOR_EACH(node, &netdev_classes) {
-        const struct netdev_class *class = node->data;
-        if (class->run) {
-            class->run();
+        const struct netdev_class *netdev_class = node->data;
+        if (netdev_class->run) {
+            netdev_class->run();
         }
     }
 }
@@ -105,9 +105,9 @@ netdev_wait(void)
 {
     struct shash_node *node;
     SHASH_FOR_EACH(node, &netdev_classes) {
-        const struct netdev_class *class = node->data;
-        if (class->wait) {
-            class->wait();
+        const struct netdev_class *netdev_class = node->data;
+        if (netdev_class->wait) {
+            netdev_class->wait();
         }
     }
 }
@@ -975,12 +975,12 @@ exit:
  * the refcount drops to zero.  */
 void
 netdev_dev_init(struct netdev_dev *netdev_dev, const char *name,
-                const struct netdev_class *class_)
+                const struct netdev_class *netdev_class)
 {
     assert(!shash_find(&netdev_dev_shash, name));
 
     memset(netdev_dev, 0, sizeof *netdev_dev);
-    netdev_dev->netdev_class = class_;
+    netdev_dev->netdev_class = netdev_class;
     netdev_dev->name = xstrdup(name);
     netdev_dev->node = shash_add(&netdev_dev_shash, name, netdev_dev);
 }
@@ -1035,19 +1035,19 @@ netdev_dev_from_name(const char *name)
     return shash_find_data(&netdev_dev_shash, name);
 }
 
-/* Fills 'device_list' with devices that match 'class'.
+/* Fills 'device_list' with devices that match 'netdev_class'.
  *
  * The caller is responsible for initializing and destroying 'device_list'
  * but the contained netdev_devs must not be freed. */
 void
-netdev_dev_get_devices(const struct netdev_class *class_,
+netdev_dev_get_devices(const struct netdev_class *netdev_class,
                        struct shash *device_list)
 {
     struct shash_node *node;
     SHASH_FOR_EACH (node, &netdev_dev_shash) {
         struct netdev_dev *dev = node->data;
 
-        if (dev->netdev_class == class_) {
+        if (dev->netdev_class == netdev_class) {
             shash_add(device_list, node->name, node->data);
         }
     }
