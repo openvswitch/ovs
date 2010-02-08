@@ -1113,7 +1113,7 @@ do_show_data_rates(void *rates_)
                                rates->xid, &b);
         rq->type = htons(OFPST_PORT);
         rq->flags = htons(0);
-        psr = ofbuf_put_uninit(b, sizeof *psr);
+        psr = ofpbuf_put_uninit(b, sizeof *psr);
         memset(psr, 0, sizeof *psr);
         psr->port_no = htons(OFPP_NONE);
         update_openflow_length(b);
