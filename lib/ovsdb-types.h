@@ -67,6 +67,11 @@ struct ovsdb_base_type {
             unsigned int minLen; /* minLength or 0. */
             unsigned int maxLen; /* maxLength or UINT_MAX. */
         } string;
+
+        struct ovsdb_uuid_constraints {
+            char *refTableName; /* Name of referenced table, or NULL. */
+            struct ovsdb_table *refTable; /* Referenced table, if available. */
+        } uuid;
     } u;
 };
 
@@ -79,7 +84,8 @@ struct ovsdb_base_type {
 #define OVSDB_BASE_STRING_INIT  { .type = OVSDB_TYPE_STRING,        \
                                   .u.string = { NULL, NULL, NULL,   \
                                                 0, UINT_MAX } }
-#define OVSDB_BASE_UUID_INIT    { .type = OVSDB_TYPE_UUID }
+#define OVSDB_BASE_UUID_INIT    { .type = OVSDB_TYPE_UUID,      \
+                                  .u.uuid = { NULL, NULL } }
 
 void ovsdb_base_type_init(struct ovsdb_base_type *, enum ovsdb_atomic_type);
 void ovsdb_base_type_clone(struct ovsdb_base_type *,

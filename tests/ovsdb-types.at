@@ -70,6 +70,13 @@ OVSDB_CHECK_NEGATIVE([maxLength must not be negative],
   [[parse-base-type '{"type": "string", "maxLength": -1}']],
   [maxLength out of valid range 0 to 4294967295])
 
+OVSDB_CHECK_POSITIVE([uuid refTable], 
+  [[parse-base-type '{"type": "uuid", "refTable": "myTable"}' ]],
+  [{"refTable":"myTable","type":"uuid"}])
+OVSDB_CHECK_NEGATIVE([uuid refTable must be valid id], 
+  [[parse-base-type '{"type": "uuid", "refTable": "a-b-c"}' ]],
+  [Type mismatch for member 'refTable'])
+
 OVSDB_CHECK_NEGATIVE([void is not a valid base-type],
   [[parse-base-type '["void"]' ]], ["void" is not an atomic-type])
 OVSDB_CHECK_NEGATIVE(["type" member must be present],

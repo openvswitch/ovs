@@ -444,13 +444,6 @@ as \fB{}\fR, and curly braces may be optionally enclose non-empty maps
 as well.
 .
 .ST "Database Command Syntax"
-.PP
-By default, database commands refuse to make some kinds of
-modifications that could violate database structuring constraints.  If
-you are sure that you know what you are doing, use \fB\-\-force\fR to
-override this safety measure.  Constraints that are enforced by the
-database server itself, instead of by \fBovs\-vsctl\fR, cannot be
-overridden this way.
 .
 .IP "\fBlist \fItable \fR[\fIrecord\fR]..."
 List the values of all columns of each specified \fIrecord\fR.  If no
@@ -503,18 +496,14 @@ Sets each \fIcolumn\fR in \fIrecord\fR in \fItable\fR to the empty set
 or empty map, as appropriate.  This command applies only to columns
 that are allowed to be empty.
 .
-.IP "\fB\-\-force create \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
+.IP "create \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
 Creates a new record in \fItable\fR and sets the initial values of
 each \fIcolumn\fR.  Columns not explicitly set will receive their
 default values.  Outputs the UUID of the new row.
-.IP
-This command requires the \fB\-\-force\fR option.
 .
-.IP "\fB\-\-force \fR[\fB\-\-if\-exists\fR] \fBdestroy \fItable record\fR..."
+.IP "\fR[\fB\-\-if\-exists\fR] \fBdestroy \fItable record\fR..."
 Deletes each specified \fIrecord\fR from \fItable\fR.  Unless
 \fB\-\-if\-exists\fR is specified, each \fIrecord\fRs must exist.
-.IP
-This command requires the \fB\-\-force\fR option.
 .SH "EXAMPLES"
 Create a new bridge named br0 and add port eth0 to it:
 .IP

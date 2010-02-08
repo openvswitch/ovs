@@ -159,6 +159,8 @@ usage(void)
            "  query-distinct TABLE [ROW,...] [CONDITION,...] COLUMNS\n"
            "    add each ROW to TABLE, then query and print the rows that\n"
            "    satisfy each CONDITION and have distinct COLUMNS.\n"
+           "  parse-schema JSON\n"
+           "    parse JSON as an OVSDB schema, and re-serialize\n"
            "  transact COMMAND\n"
            "    execute each specified transactional COMMAND:\n"
            "      commit\n"
@@ -1139,6 +1141,19 @@ do_query_distinct(int argc UNUSED, char *argv[])
 }
 
 static void
+do_parse_schema(int argc UNUSED, char *argv[])
+{
+    struct ovsdb_schema *schema;
+    struct json *json;
+
+    json = parse_json(argv[1]);
+    check_ovsdb_error(ovsdb_schema_from_json(json, &schema));
+    json_destroy(json);
+    print_and_free_json(ovsdb_schema_to_json(schema));
+    ovsdb_schema_destroy(schema);
+}
+
+static void
 do_execute(int argc UNUSED, char *argv[])
 {
     struct ovsdb_schema *schema;
@@ -1773,20 +1788,28 @@ do_idl(int argc, char *argv[])
         rpc = NULL;
     }
 
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
     symtab = ovsdb_symbol_table_create();
     for (i = 2; i < argc; i++) {
+        char *arg = argv[i];
         struct jsonrpc_msg *request, *reply;
         int error;
 
-        seqno = print_updated_idl(idl, rpc, step++, seqno);
+        if (*arg == '+') {
+            /* The previous transaction didn't change anything. */
+            arg++;
+        } else {
+            seqno = print_updated_idl(idl, rpc, step++, seqno);
+        }
 
-        if (!strcmp(argv[i], "reconnect")) {
+        if (!strcmp(arg, "reconnect")) {
             printf("%03d: reconnect\n", step++);
             ovsdb_idl_force_reconnect(idl);
-        } else if (argv[i][0] != '[') {
-            idl_set(idl, argv[i], step++);
+        } else if (arg[0] != '[') {
+            idl_set(idl, arg, step++);
         } else {
-            struct json *json = parse_json(argv[i]);
+            struct json *json = parse_json(arg);
             substitute_uuids(json, symtab);
             request = jsonrpc_create_request("transact", json, NULL);
             error = jsonrpc_transact_block(rpc, request, &reply);
@@ -1833,6 +1856,7 @@ static struct command all_commands[] = {
     { "query", 3, 3, do_query },
     { "query-distinct", 4, 4, do_query_distinct },
     { "transact", 1, INT_MAX, do_transact },
+    { "parse-schema", 1, 1, do_parse_schema },
     { "execute", 2, INT_MAX, do_execute },
     { "trigger", 2, INT_MAX, do_trigger },
     { "idl", 1, INT_MAX, do_idl },

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,13 @@ struct ovsdb_row {
     struct ovsdb_table *table;  /* Table to which this belongs. */
     struct hmap_node hmap_node; /* Element in ovsdb_table's 'rows' hmap. */
     struct ovsdb_txn_row *txn_row; /* Transaction that row is in, if any. */
+
+    /* Number of refs to this row from other rows, in this table or other
+     * tables, through 'uuid' columns that have a 'refTable' constraint
+     * pointing to this table.  A row with nonzero 'n_refs' cannot be deleted.
+     * Updated and checked only at transaction commit. */
+    size_t n_refs;
+
     struct ovsdb_datum fields[];
 };
 

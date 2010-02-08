@@ -619,7 +619,10 @@ check_string_constraints(const char *s,
 
 /* Checks whether 'atom' meets the constraints (if any) defined in 'base'.
  * (base->type must specify 'atom''s type.)  Returns a null pointer if the
- * constraints are met, otherwise an error that explains the violation. */
+ * constraints are met, otherwise an error that explains the violation.
+ *
+ * Checking UUID constraints is deferred to transaction commit time, so this
+ * function does nothing for UUID constraints. */
 struct ovsdb_error *
 ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
                              const struct ovsdb_base_type *base)

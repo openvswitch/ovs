@@ -209,8 +209,14 @@ is represented by <database-schema>, as described below.
         minLength.  String length is measured in characters (not bytes
         or UTF-16 code units).
 
-    The contraints on <base-type> are "immediate", enforced
-    immediately by each operation.
+    If "type" is "uuid", then "refTable", if present, must be the name
+    of a table within this database.  If "refTable" is set, the
+    allowed UUIDs are limited to UUIDs for rows in the named table.
+
+    "refTable" constraints are "deferred" constraints: they are
+    enforced only at transaction commit time (see the "transact"
+    request below).  The other contraints on <base-type> are
+    "immediate", enforced immediately by each operation.
 
 <atomic-type>
 
@@ -309,9 +315,19 @@ In general, "result" contains some number of successful results,
 possibly followed by an error, in turn followed by enough JSON null
 values to match the number of elements in "params".  There is one
 exception: if all of the operations succeed, but the results cannot be
-committed (e.g. due to I/O errors), then "result" will have one more
-element than "params", with the additional element describing the
-error.
+committed, then "result" will have one more element than "params",
+with the additional element an <error>.  The possible "error" strings
+include at least the following:
+
+    "error": "referential integrity violation"
+
+        When the commit was attempted, a column's value referenced the
+        UUID for a row that did not exist in the table named by the
+        column's <base-type> key or value "refTable".  (This can be
+        caused by inserting a row that references a nonexistent row,
+        by deleting a row that is still referenced by another row, by
+        specifying the UUID for a row in the wrong table, and other
+        ways.)
 
 If "params" contains one or more "wait" operations, then the
 transaction may take an arbitrary amount of time to complete.  The

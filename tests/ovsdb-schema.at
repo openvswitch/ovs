@@ -1,0 +1,47 @@
+AT_BANNER([OVSDB -- schemas])
+
+OVSDB_CHECK_POSITIVE([schema with valid refTables],
+  [[parse-schema \
+      '{"name": "mydb",
+        "tables": {
+          "a": {
+            "columns": {
+              "map": {
+                "type": {
+                  "key": {
+                    "type": "uuid",
+                    "refTable": "b"},
+                  "value": {
+                    "type": "uuid",
+                    "refTable": "a"}}}}},
+          "b": {
+            "columns": {
+              "aRef": {
+                "type": {
+                  "key": {
+                    "type": "uuid",
+                    "refTable": "a"}}}}}}}']],
+  [[{"name":"mydb","tables":{"a":{"columns":{"map":{"type":{"key":{"refTable":"b","type":"uuid"},"value":{"refTable":"a","type":"uuid"}}}}},"b":{"columns":{"aRef":{"type":{"key":{"refTable":"a","type":"uuid"}}}}}}}]])
+     
+OVSDB_CHECK_NEGATIVE([schema with invalid refTables],
+  [[parse-schema \
+      '{"name": "mydb",
+        "tables": {
+          "a": {
+            "columns": {
+              "map": {
+                "type": {
+                  "key": {
+                    "type": "uuid",
+                    "refTable": "c"},
+                  "value": {
+                    "type": "uuid",
+                    "refTable": "a"}}}}},
+          "b": {
+            "columns": {
+              "aRef": {
+                "type": {
+                  "key": {
+                    "type": "uuid",
+                    "refTable": "a"}}}}}}}']],
+  [[test-ovsdb: syntax error: column map key refers to undefined table c]])

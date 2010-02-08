@@ -2113,15 +2113,10 @@ cmd_clear(struct vsctl_context *ctx)
 static void
 cmd_create(struct vsctl_context *ctx)
 {
-    bool force = shash_find(&ctx->options, "--force");
     const char *table_name = ctx->argv[1];
     const struct vsctl_table_class *table;
     const struct ovsdb_idl_row *row;
     int i;
-
-    if (!force) {
-        vsctl_fatal("\"create\" requires --force");
-    }
 
     table = get_table(table_name);
     row = ovsdb_idl_txn_insert(ctx->txn, table->class);
@@ -2158,15 +2153,10 @@ post_create(struct vsctl_context *ctx)
 static void
 cmd_destroy(struct vsctl_context *ctx)
 {
-    bool force = shash_find(&ctx->options, "--force");
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const struct vsctl_table_class *table;
     int i;
-
-    if (!force) {
-        vsctl_fatal("\"destroy\" requires --force");
-    }
 
     table = get_table(table_name);
     for (i = 2; i < ctx->argc; i++) {
@@ -2397,12 +2387,12 @@ static const struct vsctl_command_syntax all_commands[] = {
     /* Parameter commands. */
     {"get", 3, INT_MAX, cmd_get, NULL, "--if-exists"},
     {"list", 1, INT_MAX, cmd_list, NULL, ""},
-    {"create", 2, INT_MAX, cmd_create, post_create, "--force"},
-    {"destroy", 1, INT_MAX, cmd_destroy, NULL, "--force,--if-exists"},
     {"set", 3, INT_MAX, cmd_set, NULL, ""},
     {"add", 4, INT_MAX, cmd_add, NULL, ""},
     {"remove", 4, INT_MAX, cmd_remove, NULL, ""},
     {"clear", 3, INT_MAX, cmd_clear, NULL, ""},
+    {"create", 2, INT_MAX, cmd_create, post_create, ""},
+    {"destroy", 1, INT_MAX, cmd_destroy, NULL, "--if-exists"},
 
     {NULL, 0, 0, NULL, NULL, NULL},
 };

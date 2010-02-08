@@ -7,7 +7,3 @@
 
 s["idlPrefix"] = "idltest_"
 s["idlHeader"] = "\"tests/idltest.h\""
-s["tables"]["link1"]["columns"]["k"]["type"]["keyRefTable"] = "link1"
-s["tables"]["link1"]["columns"]["ka"]["type"]["keyRefTable"] = "link1"
-s["tables"]["link1"]["columns"]["l2"]["type"]["keyRefTable"] = "link2"
-s["tables"]["link2"]["columns"]["l1"]["type"]["keyRefTable"] = "link1"

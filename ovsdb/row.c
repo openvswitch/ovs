@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ allocate_row(const struct ovsdb_table *table)
     struct ovsdb_row *row = xmalloc(row_size);
     row->table = (struct ovsdb_table *) table;
     row->txn_row = NULL;
+    row->n_refs = 0;
     return row;
 }
 

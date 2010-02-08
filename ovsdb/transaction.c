@@ -131,11 +131,168 @@ ovsdb_txn_row_commit(struct ovsdb_txn_row *txn_row)
     ovsdb_row_destroy(txn_row->old);
 }
 
+static struct ovsdb_txn_row *
+find_txn_row(const struct ovsdb_table *table, const struct uuid *uuid)
+{
+    struct ovsdb_txn_row *txn_row;
+
+    if (!table->txn_table) {
+        return NULL;
+    }
+
+    HMAP_FOR_EACH_WITH_HASH (txn_row, struct ovsdb_txn_row, hmap_node,
+                             uuid_hash(uuid), &table->txn_table->txn_rows) {
+        const struct ovsdb_row *row;
+
+        row = txn_row->old ? txn_row->old : txn_row->new;
+        if (uuid_equals(uuid, ovsdb_row_get_uuid(row))) {
+            return txn_row;
+        }
+    }
+
+    return NULL;
+}
+
+static void
+ovsdb_txn_adjust_atom_refs(const union ovsdb_atom *atoms, unsigned int n,
+                           const struct ovsdb_table *table,
+                           int delta, struct ovsdb_error **errorp)
+{
+    unsigned int i;
+
+    for (i = 0; i < n; i++) {
+        const struct uuid *uuid = &atoms[i].uuid;
+        struct ovsdb_txn_row *txn_row = find_txn_row(table, uuid);
+        if (txn_row) {
+            if (txn_row->old) {
+                txn_row->old->n_refs += delta;
+            }
+            if (txn_row->new) {
+                txn_row->new->n_refs += delta;
+            }
+        } else {
+            const struct ovsdb_row *row_ = ovsdb_table_get_row(table, uuid);
+            if (row_) {
+                struct ovsdb_row *row = (struct ovsdb_row *) row_;
+                row->n_refs += delta;
+            } else if (errorp) {
+                if (!*errorp) {
+                    *errorp = ovsdb_error("referential integrity violation",
+                                          "reference to nonexistent row "
+                                          UUID_FMT, UUID_ARGS(uuid));
+                }
+            } else {
+                NOT_REACHED();
+            }
+        }
+    }
+}
+
+static void
+ovsdb_txn_adjust_row_refs(const struct ovsdb_row *r,
+                          const struct ovsdb_column *column, int delta,
+                          struct ovsdb_error **errorp)
+{
+    const struct ovsdb_datum *field = &r->fields[column->index];
+    const struct ovsdb_type *type = &column->type;
+
+    if (type->key.type == OVSDB_TYPE_UUID && type->key.u.uuid.refTable) {
+        ovsdb_txn_adjust_atom_refs(field->keys, field->n,
+                                   type->key.u.uuid.refTable, delta, errorp);
+    }
+    if (type->value.type == OVSDB_TYPE_UUID && type->value.u.uuid.refTable) {
+        ovsdb_txn_adjust_atom_refs(field->values, field->n,
+                                   type->value.u.uuid.refTable, delta, errorp);
+    }
+}
+
+static struct ovsdb_error * WARN_UNUSED_RESULT
+ovsdb_txn_adjust_ref_counts__(struct ovsdb_txn *txn, int delta)
+{
+    struct ovsdb_txn_table *t;
+    struct ovsdb_error *error;
+
+    error = NULL;
+    LIST_FOR_EACH (t, struct ovsdb_txn_table, node, &txn->txn_tables) {
+        struct ovsdb_table *table = t->table;
+        struct ovsdb_txn_row *r;
+
+        HMAP_FOR_EACH (r, struct ovsdb_txn_row, hmap_node, &t->txn_rows) {
+            struct shash_node *node;
+
+            SHASH_FOR_EACH (node, &table->schema->columns) {
+                const struct ovsdb_column *column = node->data;
+
+                if (r->old) {
+                    ovsdb_txn_adjust_row_refs(r->old, column, -delta, NULL);
+                }
+                if (r->new) {
+                    ovsdb_txn_adjust_row_refs(r->new, column, delta, &error);
+                }
+            }
+        }
+    }
+    return error;
+}
+
+static void
+ovsdb_txn_rollback_counts(struct ovsdb_txn *txn)
+{
+    ovsdb_error_destroy(ovsdb_txn_adjust_ref_counts__(txn, -1));
+}
+
+static struct ovsdb_error * WARN_UNUSED_RESULT
+ovsdb_txn_commit_ref_counts(struct ovsdb_txn *txn)
+{
+    struct ovsdb_error *error = ovsdb_txn_adjust_ref_counts__(txn, 1);
+    if (error) {
+        ovsdb_txn_rollback_counts(txn);
+    }
+    return error;
+}
+
+static struct ovsdb_error * WARN_UNUSED_RESULT
+update_ref_counts(struct ovsdb_txn *txn)
+{
+    struct ovsdb_error *error;
+    struct ovsdb_txn_table *t;
+
+    error = ovsdb_txn_commit_ref_counts(txn);
+    if (error) {
+        return error;
+    }
+
+    LIST_FOR_EACH (t, struct ovsdb_txn_table, node, &txn->txn_tables) {
+        struct ovsdb_txn_row *r;
+
+        HMAP_FOR_EACH (r, struct ovsdb_txn_row, hmap_node, &t->txn_rows) {
+            if (!r->new && r->old->n_refs) {
+                error = ovsdb_error("referential integrity violation",
+                                    "cannot delete %s row "UUID_FMT" because "
+                                    "of %zu remaining reference(s)",
+                                    t->table->schema->name,
+                                    UUID_ARGS(ovsdb_row_get_uuid(r->old)),
+                                    r->old->n_refs);
+                ovsdb_txn_rollback_counts(txn);
+                return error;
+            }
+        }
+    }
+
+    return NULL;
+}
+
 struct ovsdb_error *
 ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
 {
     struct ovsdb_replica *replica;
     struct ovsdb_error *error;
+
+    error = update_ref_counts(txn);
+    if (error) {
+        ovsdb_txn_abort(txn);
+        return error;
+    }
 
     LIST_FOR_EACH (replica, struct ovsdb_replica, node, &txn->db->replicas) {
         error = (replica->class->commit)(replica, txn, durable);
@@ -215,6 +372,7 @@ ovsdb_txn_row_modify(struct ovsdb_txn *txn, const struct ovsdb_row *ro_row_)
         struct ovsdb_row *rw_row;
 
         rw_row = ovsdb_row_clone(ro_row);
+        rw_row->n_refs = ro_row->n_refs;
         uuid_generate(ovsdb_row_get_version_rw(rw_row));
         rw_row->txn_row = ovsdb_txn_row_create(txn, table, ro_row, rw_row);
         hmap_replace(&table->rows, &ro_row->hmap_node, &rw_row->hmap_node);

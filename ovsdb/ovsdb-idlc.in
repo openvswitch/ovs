@@ -203,6 +203,9 @@ class BaseType:
                 stmts.append('%s.u.string.minLen = %d;' % (var, self.minLength))            
             if self.maxLength != None:
                 stmts.append('%s.u.string.maxLen = %d;' % (var, self.maxLength))
+        elif self.type == 'uuid':
+            if self.refTable != None:
+                stmts.append('%s.u.uuid.refTableName = "%s";' % (var, escapeCString(self.refTable)))
         return '\n'.join([indent + stmt for stmt in stmts])
 
 class Type:
@@ -219,17 +222,11 @@ class Type:
         else:
             keyJson = mustGetMember(json, 'key', [dict, unicode], description)
             key = BaseType.fromJson(keyJson, 'key in %s' % description)
-            keyRefTable = getMember(json, 'keyRefTable', [unicode], description)
-            if keyRefTable:
-                key.refTable = keyRefTable
 
             valueJson = getMember(json, 'value', [dict, unicode], description)
             if valueJson:
                 value = BaseType.fromJson(valueJson,
                                           'value in %s' % description)
-                valueRefTable = getMember(json, 'valueRefTable', [unicode], description)
-                if valueRefTable:
-                    value.refTable = valueRefTable
             else:
                 value = None
 

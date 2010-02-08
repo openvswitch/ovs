@@ -17,9 +17,11 @@
 
 #include "ovsdb.h"
 
+#include "column.h"
 #include "json.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
+#include "ovsdb-types.h"
 #include "table.h"
 #include "transaction.h"
 
@@ -79,6 +81,23 @@ ovsdb_schema_from_file(const char *file_name, struct ovsdb_schema **schemap)
     return NULL;
 }
 
+static struct ovsdb_error * WARN_UNUSED_RESULT
+ovsdb_schema_check_ref_table(const struct ovsdb_column *column,
+                             const struct shash *tables,
+                             const struct ovsdb_base_type *base,
+                             const char *base_name)
+{
+    if (base->type == OVSDB_TYPE_UUID && base->u.uuid.refTableName
+        && !shash_find(tables, base->u.uuid.refTableName)) {
+        return ovsdb_syntax_error(NULL, NULL,
+                                  "column %s %s refers to undefined table %s",
+                                  column->name, base_name,
+                                  base->u.uuid.refTableName);
+    } else {
+        return NULL;
+    }
+}
+
 struct ovsdb_error *
 ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
 {
@@ -120,6 +139,29 @@ ovsdb_schema_from_json(struct json *json, struct ovsdb_schema **schemap)
 
         shash_add(&schema->tables, table->name, table);
     }
+
+    /* Validate that all refTables refer to the names of tables that exist. */
+    SHASH_FOR_EACH (node, &schema->tables) {
+        struct ovsdb_table_schema *table = node->data;
+        struct shash_node *node2;
+
+        SHASH_FOR_EACH (node2, &table->columns) {
+            struct ovsdb_column *column = node2->data;
+
+            error = ovsdb_schema_check_ref_table(column, &schema->tables,
+                                                 &column->type.key, "key");
+            if (!error) {
+                error = ovsdb_schema_check_ref_table(column, &schema->tables,
+                                                     &column->type.value,
+                                                     "value");
+            }
+            if (error) {
+                ovsdb_schema_destroy(schema);
+                return error;
+            }
+        }
+    }
+
     *schemap = schema;
     return 0;
 }
@@ -148,6 +190,18 @@ ovsdb_schema_to_json(const struct ovsdb_schema *schema)
     return json;
 }
 
+static void
+ovsdb_set_ref_table(const struct shash *tables,
+                    struct ovsdb_base_type *base)
+{
+    if (base->type == OVSDB_TYPE_UUID && base->u.uuid.refTableName) {
+        struct ovsdb_table *table;
+
+        table = shash_find_data(tables, base->u.uuid.refTableName);
+        base->u.uuid.refTable = table;
+    }
+}
+
 struct ovsdb *
 ovsdb_create(struct ovsdb_schema *schema)
 {
@@ -164,6 +218,19 @@ ovsdb_create(struct ovsdb_schema *schema)
     SHASH_FOR_EACH (node, &schema->tables) {
         struct ovsdb_table_schema *ts = node->data;
         shash_add(&db->tables, node->name, ovsdb_table_create(ts));
+    }
+
+    /* Set all the refTables. */
+    SHASH_FOR_EACH (node, &schema->tables) {
+        struct ovsdb_table_schema *table = node->data;
+        struct shash_node *node2;
+
+        SHASH_FOR_EACH (node2, &table->columns) {
+            struct ovsdb_column *column = node2->data;
+
+            ovsdb_set_ref_table(&db->tables, &column->type.key);
+            ovsdb_set_ref_table(&db->tables, &column->type.value);
+        }
     }
 
     return db;

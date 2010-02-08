@@ -142,6 +142,8 @@ ovsdb_base_type_init(struct ovsdb_base_type *base, enum ovsdb_atomic_type type)
         break;
 
     case OVSDB_TYPE_UUID:
+        base->u.uuid.refTableName = NULL;
+        base->u.uuid.refTable = NULL;
         break;
 
     case OVSDB_N_TYPES:
@@ -172,6 +174,9 @@ ovsdb_base_type_clone(struct ovsdb_base_type *dst,
         break;
 
     case OVSDB_TYPE_UUID:
+        if (dst->u.uuid.refTableName) {
+            dst->u.uuid.refTableName = xstrdup(dst->u.uuid.refTableName);
+        }
         break;
 
     case OVSDB_N_TYPES:
@@ -200,6 +205,7 @@ ovsdb_base_type_destroy(struct ovsdb_base_type *base)
             break;
 
         case OVSDB_TYPE_UUID:
+            free(base->u.uuid.refTableName);
             break;
 
         case OVSDB_N_TYPES:
@@ -263,7 +269,7 @@ ovsdb_base_type_has_constraints(const struct ovsdb_base_type *base)
                 || base->u.string.maxLen != UINT_MAX);
 
     case OVSDB_TYPE_UUID:
-        return false;
+        return base->u.uuid.refTableName != NULL;
 
     case OVSDB_N_TYPES:
         NOT_REACHED();
@@ -411,6 +417,17 @@ ovsdb_base_type_from_json(struct ovsdb_base_type *base,
             error = ovsdb_syntax_error(json, NULL,
                                        "minLength exceeds maxLength");
         }
+    } else if (base->type == OVSDB_TYPE_UUID) {
+        const struct json *refTable;
+
+        refTable = ovsdb_parser_member(&parser, "refTable",
+                                       OP_ID | OP_OPTIONAL);
+        if (refTable) {
+            base->u.uuid.refTableName = xstrdup(refTable->u.string);
+            /* We can't set base->u.uuid.refTable here because we don't have
+             * enough context (we might not even be running in ovsdb-server).
+             * ovsdb_create() will set refTable later. */
+        }
     }
 
     if (error) {
@@ -485,6 +502,10 @@ ovsdb_base_type_to_json(const struct ovsdb_base_type *base)
         break;
 
     case OVSDB_TYPE_UUID:
+        if (base->u.uuid.refTableName) {
+            json_object_put_string(json, "refTable",
+                                   base->u.uuid.refTableName);
+        }
         break;
 
     case OVSDB_N_TYPES:
