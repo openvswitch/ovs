@@ -43,13 +43,13 @@ static int device_init_net(struct net *net)
 
 static void device_exit_net(struct net *net)
 {
+	if (dev_ops->exit)
+		dev_ops->exit(net);
+
 	if (dev_ops->id && dev_ops->size) {
 		int id = *dev_ops->id;
 		kfree(rpl_net_generic(net, id));
 	}
-
-	if (dev_ops->exit)
-		return dev_ops->exit(net);
 }
 
 int rpl_register_pernet_device(struct extended_pernet_operations *ops)
