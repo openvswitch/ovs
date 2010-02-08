@@ -26,14 +26,6 @@
 #include "row.h"
 #include "table.h"
 
-enum mutate_error {
-    ME_OK,
-    ME_DOM,
-    ME_RANGE,
-    ME_COUNT,
-    ME_DUP
-};
-
 struct ovsdb_error *
 ovsdb_mutator_from_string(const char *name, enum ovsdb_mutator *mutator)
 {
@@ -103,12 +95,12 @@ ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
                                   "No column %s in table %s.",
                                   column_name, ts->name);
     }
-    m->type = m->column->type;
+    ovsdb_type_clone(&m->type, &m->column->type);
 
     mutator_name = json_string(array->elems[1]);
     error = ovsdb_mutator_from_string(mutator_name, &m->mutator);
     if (error) {
-        return error;
+        goto exit;
     }
 
     /* Type-check and relax restrictions on 'type' if appropriate.  */
@@ -119,15 +111,17 @@ ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
     case OVSDB_M_DIV:
     case OVSDB_M_MOD:
         if ((!ovsdb_type_is_scalar(&m->type) && !ovsdb_type_is_set(&m->type))
-            || (m->type.key_type != OVSDB_TYPE_INTEGER
-                && m->type.key_type != OVSDB_TYPE_REAL)
+            || (m->type.key.type != OVSDB_TYPE_INTEGER
+                && m->type.key.type != OVSDB_TYPE_REAL)
             || (m->mutator == OVSDB_M_MOD
-                && m->type.key_type == OVSDB_TYPE_REAL)) {
+                && m->type.key.type == OVSDB_TYPE_REAL)) {
             return type_mismatch(m, json);
         }
+        ovsdb_base_type_clear_constraints(&m->type.key);
         m->type.n_min = m->type.n_max = 1;
-        return ovsdb_datum_from_json(&m->arg, &m->type, array->elems[2],
-                                     symtab);
+        error = ovsdb_datum_from_json(&m->arg, &m->type, array->elems[2],
+                                      symtab);
+        break;
 
     case OVSDB_M_INSERT:
     case OVSDB_M_DELETE:
@@ -143,20 +137,28 @@ ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
         if (error && ovsdb_type_is_map(&m->type)
             && m->mutator == OVSDB_M_DELETE) {
             ovsdb_error_destroy(error);
-            m->type.value_type = OVSDB_TYPE_VOID;
+            m->type.value.type = OVSDB_TYPE_VOID;
             error = ovsdb_datum_from_json(&m->arg, &m->type, array->elems[2],
                                           symtab);
         }
-        return error;
+        break;
+
+    default:
+        NOT_REACHED();
     }
 
-    NOT_REACHED();
+exit:
+    if (error) {
+        ovsdb_type_destroy(&m->type);
+    }
+    return error;
 }
 
 static void
 ovsdb_mutation_free(struct ovsdb_mutation *m)
 {
     ovsdb_datum_destroy(&m->arg, &m->type);
+    ovsdb_type_destroy(&m->type);
 }
 
 struct ovsdb_error *
@@ -218,7 +220,174 @@ ovsdb_mutation_set_destroy(struct ovsdb_mutation_set *set)
     }
     free(set->mutations);
 }
+
+enum ovsdb_mutation_scalar_error {
+    ME_OK,
+    ME_DOM,
+    ME_RANGE
+};
 
+struct ovsdb_scalar_mutation {
+    int (*mutate_integer)(int64_t *x, int64_t y);
+    int (*mutate_real)(double *x, double y);
+    enum ovsdb_mutator mutator;
+};
+
+static const struct ovsdb_scalar_mutation add_mutation;
+static const struct ovsdb_scalar_mutation sub_mutation;
+static const struct ovsdb_scalar_mutation mul_mutation;
+static const struct ovsdb_scalar_mutation div_mutation;
+static const struct ovsdb_scalar_mutation mod_mutation;
+
+static struct ovsdb_error *
+ovsdb_mutation_scalar_error(enum ovsdb_mutation_scalar_error error,
+                            enum ovsdb_mutator mutator)
+{
+    switch (error) {
+    case ME_OK:
+        return OVSDB_BUG("unexpected success");
+
+    case ME_DOM:
+        return ovsdb_error("domain error", "Division by zero.");
+
+    case ME_RANGE:
+        return ovsdb_error("range error",
+                           "Result of \"%s\" operation is out of range.",
+                           ovsdb_mutator_to_string(mutator));
+
+    default:
+        return OVSDB_BUG("unexpected error");
+    }
+}
+
+static int
+check_real_range(double x)
+{
+    return x >= -DBL_MAX && x <= DBL_MAX ? 0 : ME_RANGE;
+}
+
+static struct ovsdb_error *
+mutate_scalar(const struct ovsdb_type *dst_type, struct ovsdb_datum *dst,
+              const union ovsdb_atom *arg,
+              const struct ovsdb_scalar_mutation *mutation)
+{
+    const struct ovsdb_base_type *base = &dst_type->key;
+    struct ovsdb_error *error;
+    unsigned int i;
+
+    if (base->type == OVSDB_TYPE_INTEGER) {
+        int64_t y = arg->integer;
+        for (i = 0; i < dst->n; i++) {
+            enum ovsdb_mutation_scalar_error me;
+
+            me = (mutation->mutate_integer)(&dst->keys[i].integer, y);
+            if (me != ME_OK) {
+                return ovsdb_mutation_scalar_error(me, mutation->mutator);
+            }
+        }
+    } else if (base->type == OVSDB_TYPE_REAL) {
+        double y = arg->real;
+        for (i = 0; i < dst->n; i++) {
+            double *x = &dst->keys[i].real;
+            enum ovsdb_mutation_scalar_error me;
+
+            me = (mutation->mutate_real)(x, y);
+            if (me == ME_OK) {
+                me = check_real_range(*x);
+            }
+            if (me != ME_OK) {
+                return ovsdb_mutation_scalar_error(me, mutation->mutator);
+            }
+        }
+    } else {
+        NOT_REACHED();
+    }
+
+    for (i = 0; i < dst->n; i++) {
+        error = ovsdb_atom_check_constraints(&dst->keys[i], base);
+        if (error) {
+            return error;
+        }
+    }
+
+    error = ovsdb_datum_sort(dst, dst_type);
+    if (error) {
+        ovsdb_error_destroy(error);
+        return ovsdb_error("constraint violation",
+                           "Result of \"%s\" operation contains duplicates.",
+                           ovsdb_mutator_to_string(mutation->mutator));
+    }
+    return NULL;
+}
+
+static struct ovsdb_error *
+ovsdb_mutation_check_count(struct ovsdb_datum *dst,
+                           const struct ovsdb_type *dst_type)
+{
+    if (!ovsdb_datum_conforms_to_type(dst, dst_type)) {
+        char *s = ovsdb_type_to_english(dst_type);
+        struct ovsdb_error *e = ovsdb_error(
+            "constaint violation",
+            "Attempted to store %u elements in %s.", dst->n, s);
+        free(s);
+        return e;
+    }
+    return NULL;
+}
+
+struct ovsdb_error *
+ovsdb_mutation_set_execute(struct ovsdb_row *row,
+                           const struct ovsdb_mutation_set *set)
+{
+    size_t i;
+
+    for (i = 0; i < set->n_mutations; i++) {
+        const struct ovsdb_mutation *m = &set->mutations[i];
+        struct ovsdb_datum *dst = &row->fields[m->column->index];
+        const struct ovsdb_type *dst_type = &m->column->type;
+        const struct ovsdb_datum *arg = &set->mutations[i].arg;
+        const struct ovsdb_type *arg_type = &m->type;
+        struct ovsdb_error *error;
+
+        switch (m->mutator) {
+        case OVSDB_M_ADD:
+            error = mutate_scalar(dst_type, dst, &arg->keys[0], &add_mutation);
+            break;
+
+        case OVSDB_M_SUB:
+            error = mutate_scalar(dst_type, dst, &arg->keys[0], &sub_mutation);
+            break;
+
+        case OVSDB_M_MUL:
+            error = mutate_scalar(dst_type, dst, &arg->keys[0], &mul_mutation);
+            break;
+
+        case OVSDB_M_DIV:
+            error = mutate_scalar(dst_type, dst, &arg->keys[0], &div_mutation);
+            break;
+
+        case OVSDB_M_MOD:
+            error = mutate_scalar(dst_type, dst, &arg->keys[0], &mod_mutation);
+            break;
+
+        case OVSDB_M_INSERT:
+            ovsdb_datum_union(dst, arg, dst_type, false);
+            error = ovsdb_mutation_check_count(dst, dst_type);
+            break;
+
+        case OVSDB_M_DELETE:
+            ovsdb_datum_subtract(dst, dst_type, arg, arg_type);
+            error = ovsdb_mutation_check_count(dst, dst_type);
+            break;
+        }
+        if (error) {
+            return error;
+        }
+    }
+
+    return NULL;
+}
+
 static int
 add_int(int64_t *x, int64_t y)
 {
@@ -297,12 +466,6 @@ mod_int(int64_t *x, int64_t y)
 }
 
 static int
-check_real_range(double x)
-{
-    return x >= -DBL_MAX && x <= DBL_MAX ? 0 : ME_RANGE;
-}
-
-static int
 add_double(double *x, double y)
 {
     *x += y;
@@ -334,129 +497,22 @@ div_double(double *x, double y)
     }
 }
 
-static int
-mutate_scalar(const struct ovsdb_type *dst_type, struct ovsdb_datum *dst,
-              const union ovsdb_atom *arg,
-              int (*mutate_integer)(int64_t *x, int64_t y),
-              int (*mutate_real)(double *x, double y))
-{
-    struct ovsdb_error *error;
-    unsigned int i;
+static const struct ovsdb_scalar_mutation add_mutation = {
+    add_int, add_double, OVSDB_M_ADD
+};
 
-    if (dst_type->key_type == OVSDB_TYPE_INTEGER) {
-        int64_t y = arg->integer;
-        for (i = 0; i < dst->n; i++) {
-            int error = mutate_integer(&dst->keys[i].integer, y);
-            if (error) {
-                return error;
-            }
-        }
-    } else if (dst_type->key_type == OVSDB_TYPE_REAL) {
-        double y = arg->real;
-        for (i = 0; i < dst->n; i++) {
-            double *x = &dst->keys[i].real;
-            int error = mutate_real(x, y);
-            if (!error) {
-                error = check_real_range(*x);
-            }
-            if (error) {
-                return error;
-            }
-        }
-    } else {
-        NOT_REACHED();
-    }
+static const struct ovsdb_scalar_mutation sub_mutation = {
+    sub_int, sub_double, OVSDB_M_SUB
+};
 
-    error = ovsdb_datum_sort(dst, dst_type);
-    if (error) {
-        ovsdb_error_destroy(error);
-        return ME_DUP;
-    }
-    return 0;
-}
+static const struct ovsdb_scalar_mutation mul_mutation = {
+    mul_int, mul_double, OVSDB_M_MUL
+};
 
-struct ovsdb_error *
-ovsdb_mutation_set_execute(struct ovsdb_row *row,
-                           const struct ovsdb_mutation_set *set)
-{
-    size_t i;
+static const struct ovsdb_scalar_mutation div_mutation = {
+    div_int, div_double, OVSDB_M_DIV
+};
 
-    for (i = 0; i < set->n_mutations; i++) {
-        const struct ovsdb_mutation *m = &set->mutations[i];
-        struct ovsdb_datum *dst = &row->fields[m->column->index];
-        const struct ovsdb_type *dst_type = &m->column->type;
-        const struct ovsdb_datum *arg = &set->mutations[i].arg;
-        const struct ovsdb_type *arg_type = &m->type;
-        int error;
-
-        switch (m->mutator) {
-        case OVSDB_M_ADD:
-            error = mutate_scalar(dst_type, dst, &arg->keys[0],
-                                  add_int, add_double);
-            break;
-
-        case OVSDB_M_SUB:
-            error = mutate_scalar(dst_type, dst, &arg->keys[0],
-                                  sub_int, sub_double);
-            break;
-
-        case OVSDB_M_MUL:
-            error = mutate_scalar(dst_type, dst, &arg->keys[0],
-                                  mul_int, mul_double);
-            break;
-
-        case OVSDB_M_DIV:
-            error = mutate_scalar(dst_type, dst, &arg->keys[0],
-                                  div_int, div_double);
-            break;
-
-        case OVSDB_M_MOD:
-            error = mutate_scalar(dst_type, dst, &arg->keys[0],
-                                  mod_int, NULL);
-            break;
-
-        case OVSDB_M_INSERT:
-            ovsdb_datum_union(dst, arg, dst_type, false);
-            error = ovsdb_datum_conforms_to_type(dst, dst_type) ? 0 : ME_COUNT;
-            break;
-
-        case OVSDB_M_DELETE:
-            ovsdb_datum_subtract(dst, dst_type, arg, arg_type);
-            error = ovsdb_datum_conforms_to_type(dst, dst_type) ? 0 : ME_COUNT;
-            break;
-        }
-
-        switch (error) {
-        case 0:
-            break;
-
-        case ME_DOM:
-            return ovsdb_error("domain error", "Division by zero.");
-
-        case ME_RANGE:
-            return ovsdb_error("range error",
-                               "Result of \"%s\" operation is out of range.",
-                               ovsdb_mutator_to_string(m->mutator));
-
-        case ME_DUP:
-            return ovsdb_error("constraint violation",
-                               "Result of \"%s\" operation contains "
-                               "duplicates.",
-                               ovsdb_mutator_to_string(m->mutator));
-
-        case ME_COUNT: {
-            char *s = ovsdb_type_to_english(dst_type);
-            struct ovsdb_error *e = ovsdb_error(
-                "constaint violation",
-                "Attempted to store %u elements in %s.", dst->n, s);
-            free(s);
-            return e;
-        }
-
-        default:
-            return OVSDB_BUG("unexpected errno");
-        }
-    }
-
-    return NULL;
-}
+static const struct ovsdb_scalar_mutation mod_mutation = {
+    mod_int, NULL, OVSDB_M_MOD
+};

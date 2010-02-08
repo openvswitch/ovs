@@ -70,6 +70,7 @@ main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
     sighup = signal_register(SIGHUP);
     process_init();
+    ovsrec_init();
 
     die_if_already_running();
     daemonize_start();

@@ -11,7 +11,7 @@ values.  Additional notation is presented later.
 <string>
 
     A JSON string.  Any Unicode string is allowed, as specified by RFC
-    4627.  Implementations may disallowed null bytes.
+    4627.  Implementations may disallow null bytes.
 
 <id>
 
@@ -36,6 +36,42 @@ values.  Additional notation is presented later.
 <value>
 
     Any JSON value.
+
+<error>
+
+    A JSON object with the following members:
+
+        "error": <string>                       required
+        "details": <string>                     optional
+
+    The value of the "error" member is a short string, specified in
+    this document, that broadly indicates the class of the error.
+    Most "error" strings are specific to contexts described elsewhere
+    in this document, but the following "error" strings may appear in
+    any context where an <error> is permitted:
+
+    "error": "resources exhausted"
+
+        The operation requires more resources (memory, disk, CPU,
+        etc.) than are currently available to the database server.
+
+    "error": "I/O error"
+
+        Problems accessing the disk, network, or other required
+        resources prevented the operation from completing.
+
+    Database implementations may use "error" strings not specified
+    in this document to indicate errors that do not fit into any of
+    the specified categories.
+
+    Optionally, an <error> may include a "details" member, whose value
+    is a string that describes the error in more detail for the
+    benefit of a human user or administrator.  This document does not
+    specify the format or content of the "details" string.
+
+    An <error> may also have other members that describe the error in
+    more detail.  This document does not specify the names or values
+    of these members.
 
 Schema Format
 -------------
@@ -105,8 +141,8 @@ is represented by <database-schema>, as described below.
     object that describes the type of a database column, with the
     following members:
 
-        "key": <atomic-type>               required
-        "value": <atomic-type>             optional
+        "key": <base-type>                 required
+        "value": <base-type>               optional
         "min": <integer>                   optional
         "max": <integer> or "unlimited"    optional
 
@@ -125,6 +161,56 @@ is represented by <database-schema>, as described below.
 
     If "value" is specified, the type is a map from type "key" to type
     "value".
+
+<base-type>
+
+    The type of a key or value in a database column.  Either an
+    <atomic-type> or a JSON object with the following members:
+
+        "type": <atomic-type>              required
+        "minInteger": <integer>            optional, integers only
+        "maxInteger": <integer>            optional, integers only
+        "minReal": <real>                  optional, reals only
+        "maxReal": <real>                  optional, reals only 
+        "reMatch": <string>                optional, strings only
+        "reComment": <string>              optional, strings only
+        "minLength": <integer>             optional, strings only
+        "maxLength": <integer>             optional, strings only
+        "refTable": <id>                   optional, uuids only
+
+    An <atomic-type> by itself is equivalent to a JSON object with a
+    single member "type" whose value is the <atomic-type>.
+
+    If "type" is "integer", then "minInteger" or "maxInteger" or both
+    may also be specified, restricting the valid integer range.  If
+    both are specified, then the maxInteger must be greater than or
+    equal to minInteger.
+
+    If "type" is "real", then "minReal" or "maxReal" or both may also
+    be specified, restricting the valid real range.  If both are
+    specified, then the maxReal must be greater than or equal to
+    minReal.
+
+    If "type" is "string", then:
+
+        "reMatch" may be a JavaScript (Perl 5-like) regular expression
+        that restricts the allowed values.  The regular expression
+        must match the entire string value, that is, it is treated as
+        if it begins with ^ and ends with $, regardless of whether it
+        really does.
+
+        If "reMatch" is specified, then "reComment" may be a string
+        that describes the allowed values, phrased so that it fits
+        into a sentence such as "This value must be...".
+
+        "minLength" and "maxLength" or both may be specified,
+        restricting the valid length of value strings.  If both are
+        specified, then maxLength must be greater than or equal to
+        minLength.  String length is measured in characters (not bytes
+        or UTF-16 code units).
+
+    The contraints on <base-type> are "immediate", enforced
+    immediately by each operation.
 
 <atomic-type>
 
@@ -213,37 +299,8 @@ array corresponds to the same element of the "params" array.  The
       individual operations.  Some operations do not produce any
       results, in which case the object will have no members.
 
-    - A JSON object that contains an "error" member indicates that the
-      operation completed with an error.  The value of the "error"
-      member is a short string, specified in this document, that
-      broadly indicates the class of the error.  Besides the ones
-      listed for a specific operation, any operation may result in one
-      the following "error"s:
-
-      "error": "resources exhausted"
-
-          The operation or the transaction requires more resources
-          (memory, disk, CPU, etc.) than are currently available to
-          the database server.
-
-      "error": "syntax error"
-
-          The operation is not specified correctly: a required request
-          object member is missing, an unknown or unsupported request
-          object member is present, the operation attempts to act on a
-          table that does not exist, the operation modifies a
-          read-only table column, etc.
-
-      Database implementations may use "error" strings not specified
-      in this document to indicate errors that do not fit into any of
-      the specified categories.
-
-      Optionally, the object may include a "details" member, whose
-      value is a string that describes the error in more detail for
-      the benefit of a human user or administrator.  The object may
-      also have other members that describe the error in more detail.
-      This document does not specify the names or values of these
-      members.
+    - An <error>, which indicates that the operation completed with an
+      error.
 
     - A JSON null value indicates that the operation was not attempted
       because a prior operation failed.
@@ -604,6 +661,8 @@ Notation for the Wire Protocol
             difference, product, quotient, or remainder, respectively,
             of <column> and <value>.
 
+            Constraints on <column> are ignored when parsing <value>.
+
         boolean
         string
         uuid
@@ -615,7 +674,8 @@ Notation for the Wire Protocol
             Any <mutator> valid for the set's element type may be
             applied to the set, in which case the mutation is applied
             to each member of the set individually.  <value> must be a
-            scalar value of the same type as the set's element type.
+            scalar value of the same type as the set's element type,
+            except that contraints are ignored.
 
             If <mutator> is "insert", then each of the values in the
             set in <value> is added to <column> if it is not already
@@ -680,9 +740,22 @@ Result object members:
 
 Semantics:
 
-    Inserts "row" into "table".  If "row" does not specify values
-    for all the columns in "table", those columns receive default
-    values.
+    Inserts "row" into "table".
+
+    If "row" does not specify values for all the columns in "table",
+    those columns receive default values.  The default value for a
+    column depends on its type.  The default for a column whose <type>
+    specifies a "min" of 0 is an empty set or empty map.  Otherwise,
+    the default is a single value or a single key-value pair, whose
+    value(s) depend on its <atomic-type>:
+
+        - "integer" or "real": 0
+
+        - "boolean": false
+
+        - "string": "" (the empty string)
+
+        - "uuid": 00000000-0000-0000-0000-000000000000
 
     If "uuid-name" is not supplied, the new row receives a new,
     randomly generated UUID.
@@ -709,6 +782,13 @@ Errors:
 
         The same "uuid-name" appeared on an earlier "insert" operation
         within this transaction.
+
+    "error": "constraint violation"
+
+        One of the values in "row" does not satisfy the immediate
+        constraints for its column's <base-type>.  This error will
+        occur for columns that are not explicitly set by "row" if the
+        default value does not satisfy the column's constraints.
 
 select
 ......
@@ -772,6 +852,12 @@ Semantics:
     The "count" member of the result specifies the number of rows
     that matched.
 
+Errors:
+
+    "error": "constraint violation"
+
+        One of the values in "row" does not satisfy the immediate
+        constraints for its column's <base-type>.
 mutate
 ......
 
@@ -820,8 +906,9 @@ Errors:
 
         The mutation caused the column's value to violate a
         constraint, e.g. it caused a column to have more or fewer
-        values than are allowed or an arithmetic operation caused a
-        set or map to have duplicate elements.
+        values than are allowed, an arithmetic operation caused a set
+        or map to have duplicate elements, or it violated a constraint
+        specified by a column's <base-type>.
 
 delete
 ......

@@ -1154,6 +1154,7 @@ main(int argc, char *argv[])
     remote = parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
     process_init();
+    ovsrec_init();
 
     die_if_already_running();
     daemonize_start();

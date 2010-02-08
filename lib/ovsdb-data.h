@@ -67,18 +67,22 @@ static inline bool ovsdb_atom_equals(const union ovsdb_atom *a,
 }
 
 struct ovsdb_error *ovsdb_atom_from_json(union ovsdb_atom *,
-                                         enum ovsdb_atomic_type,
+                                         const struct ovsdb_base_type *,
                                          const struct json *,
                                          const struct ovsdb_symbol_table *)
     WARN_UNUSED_RESULT;
 struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
 
-char *ovsdb_atom_from_string(union ovsdb_atom *, enum ovsdb_atomic_type,
-                             const char *)
+char *ovsdb_atom_from_string(union ovsdb_atom *,
+                             const struct ovsdb_base_type *, const char *)
     WARN_UNUSED_RESULT;
 void ovsdb_atom_to_string(const union ovsdb_atom *, enum ovsdb_atomic_type,
                           struct ds *);
+
+struct ovsdb_error *ovsdb_atom_check_constraints(
+    const union ovsdb_atom *, const struct ovsdb_base_type *)
+    WARN_UNUSED_RESULT;
 
 /* An instance of an OVSDB type (given by struct ovsdb_type).
  *
@@ -119,6 +123,9 @@ void ovsdb_datum_swap(struct ovsdb_datum *, struct ovsdb_datum *);
 /* Checking and maintaining invariants. */
 struct ovsdb_error *ovsdb_datum_sort(struct ovsdb_datum *,
                                      const struct ovsdb_type *);
+struct ovsdb_error *ovsdb_datum_check_constraints(
+    const struct ovsdb_datum *, const struct ovsdb_type *)
+    WARN_UNUSED_RESULT;
 
 /* Type conversion. */
 struct ovsdb_error *ovsdb_datum_from_json(struct ovsdb_datum *,

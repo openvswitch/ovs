@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 #define UNICODE_H 1
 
 #include <stdbool.h>
+#include <stddef.h>
+#include "compiler.h"
 
 /* Returns true if 'c' is a Unicode code point, otherwise false. */
 static inline bool
@@ -49,5 +51,8 @@ uc_is_surrogate(int c)
 }
 
 int utf16_decode_surrogate_pair(int leading, int trailing);
+
+size_t utf8_length(const char *);
+char *utf8_validate(const char *, size_t *lengthp) WARN_UNUSED_RESULT;
 
 #endif /* unicode.h */

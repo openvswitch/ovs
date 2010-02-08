@@ -123,6 +123,8 @@ usage(void)
            "    open FILE with FLAGS, run COMMANDs\n"
            "  parse-atomic-type TYPE\n"
            "    parse TYPE as OVSDB atomic type, and re-serialize\n"
+           "  parse-base-type TYPE\n"
+           "    parse TYPE as OVSDB base type, and re-serialize\n"
            "  parse-type JSON\n"
            "    parse JSON as OVSDB type, and re-serialize\n"
            "  parse-atoms TYPE ATOM...\n"
@@ -333,6 +335,19 @@ do_parse_atomic_type(int argc UNUSED, char *argv[])
 }
 
 static void
+do_parse_base_type(int argc UNUSED, char *argv[])
+{
+    struct ovsdb_base_type base;
+    struct json *json;
+
+    json = unbox_json(parse_json(argv[1]));
+    check_ovsdb_error(ovsdb_base_type_from_json(&base, json));
+    json_destroy(json);
+    print_and_free_json(ovsdb_base_type_to_json(&base));
+    ovsdb_base_type_destroy(&base);
+}
+
+static void
 do_parse_type(int argc UNUSED, char *argv[])
 {
     struct ovsdb_type type;
@@ -342,56 +357,63 @@ do_parse_type(int argc UNUSED, char *argv[])
     check_ovsdb_error(ovsdb_type_from_json(&type, json));
     json_destroy(json);
     print_and_free_json(ovsdb_type_to_json(&type));
+    ovsdb_type_destroy(&type);
 }
 
 static void
 do_parse_atoms(int argc, char *argv[])
 {
-    enum ovsdb_atomic_type type;
+    struct ovsdb_base_type base;
     struct json *json;
     int i;
 
     json = unbox_json(parse_json(argv[1]));
-    check_ovsdb_error(ovsdb_atomic_type_from_json(&type, json));
+    check_ovsdb_error(ovsdb_base_type_from_json(&base, json));
     json_destroy(json);
 
     for (i = 2; i < argc; i++) {
+        struct ovsdb_error *error;
         union ovsdb_atom atom;
 
         json = unbox_json(parse_json(argv[i]));
-        check_ovsdb_error(ovsdb_atom_from_json(&atom, type, json, NULL));
+        error = ovsdb_atom_from_json(&atom, &base, json, NULL);
         json_destroy(json);
 
-        print_and_free_json(ovsdb_atom_to_json(&atom, type));
-
-        ovsdb_atom_destroy(&atom, type);
+        if (error) {
+            print_and_free_ovsdb_error(error);
+        } else {
+            print_and_free_json(ovsdb_atom_to_json(&atom, base.type));
+            ovsdb_atom_destroy(&atom, base.type);
+        }
     }
+    ovsdb_base_type_destroy(&base);
 }
 
 static void
 do_parse_atom_strings(int argc, char *argv[])
 {
-    enum ovsdb_atomic_type type;
+    struct ovsdb_base_type base;
     struct json *json;
     int i;
 
     json = unbox_json(parse_json(argv[1]));
-    check_ovsdb_error(ovsdb_atomic_type_from_json(&type, json));
+    check_ovsdb_error(ovsdb_base_type_from_json(&base, json));
     json_destroy(json);
 
     for (i = 2; i < argc; i++) {
         union ovsdb_atom atom;
         struct ds out;
 
-        die_if_error(ovsdb_atom_from_string(&atom, type, argv[i]));
+        die_if_error(ovsdb_atom_from_string(&atom, &base, argv[i]));
 
         ds_init(&out);
-        ovsdb_atom_to_string(&atom, type, &out);
+        ovsdb_atom_to_string(&atom, base.type, &out);
         puts(ds_cstr(&out));
         ds_destroy(&out);
 
-        ovsdb_atom_destroy(&atom, type);
+        ovsdb_atom_destroy(&atom, base.type);
     }
+    ovsdb_base_type_destroy(&base);
 }
 
 static void
@@ -416,6 +438,7 @@ do_parse_data(int argc, char *argv[])
 
         ovsdb_datum_destroy(&datum, &type);
     }
+    ovsdb_type_destroy(&type);
 }
 
 static void
@@ -442,6 +465,7 @@ do_parse_data_strings(int argc, char *argv[])
 
         ovsdb_datum_destroy(&datum, &type);
     }
+    ovsdb_type_destroy(&type);
 }
 
 static enum ovsdb_atomic_type compare_atoms_atomic_type;
@@ -458,14 +482,14 @@ compare_atoms(const void *a_, const void *b_)
 static void
 do_sort_atoms(int argc UNUSED, char *argv[])
 {
-    enum ovsdb_atomic_type type;
+    struct ovsdb_base_type base;
     union ovsdb_atom *atoms;
     struct json *json, **json_atoms;
     size_t n_atoms;
     int i;
 
     json = unbox_json(parse_json(argv[1]));
-    check_ovsdb_error(ovsdb_atomic_type_from_json(&type, json));
+    check_ovsdb_error(ovsdb_base_type_from_json(&base, json));
     json_destroy(json);
 
     json = unbox_json(parse_json(argv[2]));
@@ -477,23 +501,24 @@ do_sort_atoms(int argc UNUSED, char *argv[])
     n_atoms = json->u.array.n;
     atoms = xmalloc(n_atoms * sizeof *atoms);
     for (i = 0; i < n_atoms; i++) {
-        check_ovsdb_error(ovsdb_atom_from_json(&atoms[i], type,
+        check_ovsdb_error(ovsdb_atom_from_json(&atoms[i], &base,
                                                json->u.array.elems[i], NULL));
     }
     json_destroy(json);
 
     /* Sort atoms. */
-    compare_atoms_atomic_type = type;
+    compare_atoms_atomic_type = base.type;
     qsort(atoms, n_atoms, sizeof *atoms, compare_atoms);
 
     /* Convert internal representation back to JSON. */
     json_atoms = xmalloc(n_atoms * sizeof *json_atoms);
     for (i = 0; i < n_atoms; i++) {
-        json_atoms[i] = ovsdb_atom_to_json(&atoms[i], type);
-        ovsdb_atom_destroy(&atoms[i], type);
+        json_atoms[i] = ovsdb_atom_to_json(&atoms[i], base.type);
+        ovsdb_atom_destroy(&atoms[i], base.type);
     }
     print_and_free_json(json_array_create(json_atoms, n_atoms));
     free(atoms);
+    ovsdb_base_type_destroy(&base);
 }
 
 static void
@@ -1733,6 +1758,8 @@ do_idl(int argc, char *argv[])
     int error;
     int i;
 
+    idltest_init();
+
     idl = ovsdb_idl_create(argv[1], &idltest_idl_class);
     if (argc > 2) {
         struct stream *stream;
@@ -1788,6 +1815,7 @@ do_idl(int argc, char *argv[])
 static struct command all_commands[] = {
     { "log-io", 2, INT_MAX, do_log_io },
     { "parse-atomic-type", 1, 1, do_parse_atomic_type },
+    { "parse-base-type", 1, 1, do_parse_base_type },
     { "parse-type", 1, 1, do_parse_type },
     { "parse-atoms", 2, INT_MAX, do_parse_atoms },
     { "parse-atom-strings", 2, INT_MAX, do_parse_atom_strings },

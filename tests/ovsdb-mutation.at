@@ -282,6 +282,45 @@ row 5: domain error: Division by zero.
 row 6: domain error: Division by zero.
 ], [mutation])
 
+OVSDB_CHECK_POSITIVE([executing mutations on integers with constraints],
+  [[execute-mutations \
+    '{"columns": {"i": {"type": {"key": {"type": "integer",
+                                         "minInteger": 0,
+                                         "maxInteger": 2}}}}}' \
+    '[[["i", "+=", 1]],
+      [["i", "-=", 2]],
+      [["i", "*=", 3]],
+      [["i", "/=", 4]],
+      [["i", "%=", 2]]]' \
+    '[{"i": 0},
+      {"i": 1},
+      {"i": 2}']]],
+  [mutation  0:
+row 0: {"i":1}
+row 1: {"i":2}
+row 2: constraint violation: 3 is not in the valid range 0 to 2 (inclusive)
+
+mutation  1:
+row 0: constraint violation: -2 is not in the valid range 0 to 2 (inclusive)
+row 1: constraint violation: -1 is not in the valid range 0 to 2 (inclusive)
+row 2: {"i":0}
+
+mutation  2:
+row 0: no change
+row 1: constraint violation: 3 is not in the valid range 0 to 2 (inclusive)
+row 2: constraint violation: 6 is not in the valid range 0 to 2 (inclusive)
+
+mutation  3:
+row 0: no change
+row 1: {"i":0}
+row 2: {"i":0}
+
+mutation  4:
+row 0: no change
+row 1: no change
+row 2: {"i":0}
+], [mutation])
+
 OVSDB_CHECK_POSITIVE([executing mutations on reals],
   [[execute-mutations \
     '{"columns": {"r": {"type": "real"}}}' \
@@ -356,9 +395,45 @@ row 1: domain error: Division by zero.
 row 2: domain error: Division by zero.
 ], [mutation])
 
+OVSDB_CHECK_POSITIVE([executing mutations on reals with constraints],
+  [[execute-mutations \
+    '{"columns": {"r": {"type": {"key": {"type": "real",
+                                         "minReal": -2.5,
+                                         "maxReal": 1.75}}}}}' \
+    '[[["r", "+=", 0.5]],
+      [["r", "-=", 1.5]],
+      [["r", "*=", 2.5]],
+      [["r", "/=", 4]]]' \
+    '[{"r": 0},
+      {"r": -2.5},
+      {"r": 1.25}']]],
+  [mutation  0:
+row 0: {"r":0.5}
+row 1: {"r":-2}
+row 2: {"r":1.75}
+
+mutation  1:
+row 0: {"r":-1.5}
+row 1: constraint violation: -4 is not in the valid range -2.5 to 1.75 (inclusive)
+row 2: {"r":-0.25}
+
+mutation  2:
+row 0: no change
+row 1: constraint violation: -6.25 is not in the valid range -2.5 to 1.75 (inclusive)
+row 2: constraint violation: 3.125 is not in the valid range -2.5 to 1.75 (inclusive)
+
+mutation  3:
+row 0: no change
+row 1: {"r":-0.625}
+row 2: {"r":0.3125}
+], [mutation])
+
 OVSDB_CHECK_POSITIVE([executing mutations on integer sets],
   [[execute-mutations \
-    '{"columns": {"i": {"type": {"key": "integer", "min": 0, "max": "unlimited"}}}}' \
+    '{"columns": {"i": {"type": {"key": {"type": "integer", 
+                                         "maxInteger": 5},
+                                 "min": 0, 
+                                 "max": "unlimited"}}}}' \
     '[[["i", "+=", 1]],
       [["i", "-=", 2]],
       [["i", "*=", 3]],
@@ -388,7 +463,7 @@ mutation  2:
 row 0: no change
 row 1: no change
 row 2: {"i":["set",[0,3]]}
-row 3: {"i":["set",[0,3,6]]}
+row 3: constraint violation: 6 is greater than maximum allowed value 5
 
 mutation  3:
 row 0: no change
@@ -429,7 +504,9 @@ row 3: {"i":["set",[0,1]]}
 
 OVSDB_CHECK_POSITIVE([executing mutations on real sets],
   [[execute-mutations \
-    '{"columns": {"r": {"type": {"key": "real", "min": 0, "max": "unlimited"}}}}' \
+    '{"columns": {"r": {"type": {"key": {"type": "real",
+                                         "maxReal": 6},
+                                 "min": 0, "max": "unlimited"}}}}' \
     '[[["r", "+=", 0.5]],
       [["r", "-=", 1.5]],
       [["r", "*=", 2.5]],
@@ -459,7 +536,7 @@ mutation  2:
 row 0: no change
 row 1: {"r":["set",[1.25]]}
 row 2: {"r":["set",[1.25,3.75]]}
-row 3: {"r":["set",[1.25,3.75,6.25]]}
+row 3: constraint violation: 6.25 is greater than maximum allowed value 6
 
 mutation  3:
 row 0: no change
@@ -647,7 +724,6 @@ row 1: no change
 row 2: no change
 row 3: {"u":["set",[]]}
 ]], [mutation])
-
 
 OVSDB_CHECK_POSITIVE([executing mutations on integer maps],
   [[execute-mutations \

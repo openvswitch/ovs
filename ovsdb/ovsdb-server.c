@@ -149,8 +149,8 @@ query_db_remotes(const char *name_, const struct ovsdb *db,
                   name_, table_name, column_name);
     }
 
-    if (column->type.key_type != OVSDB_TYPE_STRING
-        || column->type.value_type != OVSDB_TYPE_VOID) {
+    if (column->type.key.type != OVSDB_TYPE_STRING
+        || column->type.value.type != OVSDB_TYPE_VOID) {
         ovs_fatal(0, "remote \"%s\": type of table \"%s\" column \"%s\" is "
                   "not string or set of strings",
                   name_, table_name, column_name);

@@ -459,17 +459,18 @@ AT_CHECK([RUN_OVS_VSCTL([list b])],
 cp stdout out2
 AT_CHECK([perl $srcdir/uuidfilt.pl out1 out2], [0], 
   [[<0>
-_uuid                (RO): <0>
-controller           (RO): []
-datapath_id          (RO): []
-datapath_type        (RO): ""
-external_ids         (RW): {}
-flood_vlans          (RW): []
-mirrors              (RO): []
-name                 (RO): "br0"
-netflow              (RO): []
-other_config         (RW): {}
-ports                (RO): []
+_uuid               : <0>
+controller          : []
+datapath_id         : []
+datapath_type       : ""
+external_ids        : {}
+flood_vlans         : []
+mirrors             : []
+name                : "br0"
+netflow             : []
+other_config        : {}
+ports               : []
+sflow               : []
 ]], [ignore], [test ! -e pid || kill `cat pid`])
 AT_CHECK(
   [RUN_OVS_VSCTL(
@@ -518,12 +519,12 @@ AT_CHECK([RUN_OVS_VSCTL([list n `cat netflow-uuid`])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([perl $srcdir/uuidfilt.pl netflow-uuid stdout], [0], 
   [[<0>
-_uuid                (RO): <0>
-active_timeout       (RW): 0
-add_id_to_interface  (RW): false
-engine_id            (RW): []
-engine_type          (RW): []
-targets              (RW): ["1.2.3.4:567"]
+_uuid               : <0>
+active_timeout      : 0
+add_id_to_interface : false
+engine_id           : []
+engine_type         : []
+targets             : ["1.2.3.4:567"]
 ]], [ignore], [test ! -e pid || kill `cat pid`])
 AT_CHECK([RUN_OVS_VSCTL([list interx x])], 
   [1], [], [ovs-vsctl: unknown table "interx"
@@ -556,34 +557,22 @@ AT_CHECK([RUN_OVS_VSCTL([get b br0 external_ids:x])],
   [1], [], [ovs-vsctl: no key "x" in Bridge record "br0" column external_ids
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([set b br0 flood_vlans=-1])], 
-  [1], [], [ovs-vsctl: -1 is outside the valid range 1 to 4095 (inclusive)
+  [1], [], [ovs-vsctl: constraint violation: -1 is not in the valid range 0 to 4095 (inclusive)
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([set b br0 flood_vlans=4096])], 
-  [1], [], [ovs-vsctl: 4096 is outside the valid range 1 to 4095 (inclusive)
-], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([set b br0 datapath_id=4096])], 
-  [1], [], [ovs-vsctl: datapath_id=4096: cannot modify read-only column datapath_id in table Bridge
+  [1], [], [ovs-vsctl: constraint violation: 4096 is not in the valid range 0 to 4095 (inclusive)
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([set c br1 'connection-mode=xyz'])], 
-  [1], [], [ovs-vsctl: xyz is not valid (it does not match ^in-band|out-of-band$)
+  [1], [], [ovs-vsctl: constraint violation: "xyz" is not a either "in-band" or "out-of-band"
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([set c br1 connection-mode:x=y])], 
   [1], [], [ovs-vsctl: cannot specify key to set for non-map column connection_mode
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([add b br1 datapath_id x=y])], 
-  [1], [], [ovs-vsctl: cannot modify read-only column datapath_id in table Bridge
-], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([--force add b br1 datapath_id x y])], 
+AT_CHECK([RUN_OVS_VSCTL([add b br1 datapath_id x y])], 
   [1], [], [ovs-vsctl: "add" operation would put 2 values in column datapath_id of table Bridge but the maximum number is 1
-], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([remove b br1 datapath_id x=y])], 
-  [1], [], [ovs-vsctl: cannot modify read-only column datapath_id in table Bridge
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([remove n `cat netflow-uuid` targets '"1.2.3.4:567"'])], 
   [1], [], [ovs-vsctl: "remove" operation would put 0 values in column targets of table NetFlow but the minimun number is 1
-], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([clear bri br0 netflow])], 
-  [1], [], [ovs-vsctl: cannot modify read-only column netflow in table Bridge
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([clear n `cat netflow-uuid` targets])], 
   [1], [], [ovs-vsctl: "clear" operation cannot be applied to column targets of table NetFlow, which is not allowed to be empty
@@ -610,17 +599,18 @@ AT_CHECK([RUN_OVS_VSCTL([--force create Bridge name=br0 -- list b])],
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], 
   [[<0>
-_uuid                (RO): <1>
-controller           (RO): []
-datapath_id          (RO): []
-datapath_type        (RO): ""
-external_ids         (RW): {}
-flood_vlans          (RW): []
-mirrors              (RO): []
-name                 (RO): "br0"
-netflow              (RO): []
-other_config         (RW): {}
-ports                (RO): []
+_uuid               : <1>
+controller          : []
+datapath_id         : []
+datapath_type       : ""
+external_ids        : {}
+flood_vlans         : []
+mirrors             : []
+name                : "br0"
+netflow             : []
+other_config        : {}
+ports               : []
+sflow               : []
 ]], [ignore], [test ! -e pid || kill `cat pid`])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP

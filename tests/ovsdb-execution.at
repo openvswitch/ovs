@@ -8,6 +8,14 @@ m4_define([ORDINAL_SCHEMA],
            "number": {"type": "integer"},
            "name": {"type": "string"}}}}}]])
 
+m4_define([CONSTRAINT_SCHEMA],
+  [[{"name": "constraints",
+     "tables": {
+       "constrained": {
+         "columns": {
+           "positive": {"type": {"key": {"type": "integer",
+                                         "minInteger": 1}}}}}}}]])
+
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
 # Runs "test-ovsdb execute" with the given SCHEMA and each of the
@@ -352,6 +360,22 @@ OVSDB_CHECK_EXECUTION([inequality wait with missing row],
        "rows": [{"name": "one", "number": 1}]}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{}]
 ]])
-])
+
+OVSDB_CHECK_EXECUTION([insert and update constraints],
+  [CONSTRAINT_SCHEMA],
+  [[[[{"op": "insert",
+       "table": "constrained",
+       "row": {}}]]],
+   [[[{"op": "insert",
+       "table": "constrained",
+       "row": {"positive": -1}}]]],
+   [[[{"op": "update",
+       "table": "constrained",
+       "where": [],
+       "row": {"positive": -2}}]]]],
+  [[[{"details":"0 is less than minimum allowed value 1","error":"constraint violation"}]
+[{"details":"-1 is less than minimum allowed value 1","error":"constraint violation"}]
+[{"details":"-2 is less than minimum allowed value 1","error":"constraint violation"}]
+]])])
 
 EXECUTION_EXAMPLES

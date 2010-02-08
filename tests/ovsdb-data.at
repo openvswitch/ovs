@@ -1,4 +1,4 @@
-AT_BANNER([OVSDB -- atoms])
+AT_BANNER([OVSDB -- atoms without constraints])
 
 OVSDB_CHECK_POSITIVE([integer atom from JSON], 
   [[parse-atoms '["integer"]' \
@@ -152,29 +152,39 @@ OVSDB_CHECK_POSITIVE([uuid atom sorting],
     ["uuid", "00001000-0000-0000-0000-000000000000"]]']],
   [[[["uuid","00000000-0000-0000-0000-000000000000"],["uuid","00000000-0000-0000-0000-000000000001"],["uuid","00000000-0000-0000-0000-000000000010"],["uuid","00000000-0000-0000-0000-000000000100"],["uuid","00000000-0000-0000-0000-000000001000"],["uuid","00000000-0000-0000-0000-000000010000"],["uuid","00000000-0000-0000-0000-000000100000"],["uuid","00000000-0000-0000-0000-000001000000"],["uuid","00000000-0000-0000-0000-000010000000"],["uuid","00000000-0000-0000-0000-000100000000"],["uuid","00000000-0000-0000-0000-001000000000"],["uuid","00000000-0000-0000-0000-010000000000"],["uuid","00000000-0000-0000-0000-100000000000"],["uuid","00000000-0000-0000-0001-000000000000"],["uuid","00000000-0000-0000-0010-000000000000"],["uuid","00000000-0000-0000-0100-000000000000"],["uuid","00000000-0000-0000-1000-000000000000"],["uuid","00000000-0000-0001-0000-000000000000"],["uuid","00000000-0000-0010-0000-000000000000"],["uuid","00000000-0000-0100-0000-000000000000"],["uuid","00000000-0000-1000-0000-000000000000"],["uuid","00000000-0001-0000-0000-000000000000"],["uuid","00000000-0010-0000-0000-000000000000"],["uuid","00000000-0100-0000-0000-000000000000"],["uuid","00000000-1000-0000-0000-000000000000"],["uuid","00000001-0000-0000-0000-000000000000"],["uuid","00000010-0000-0000-0000-000000000000"],["uuid","00000100-0000-0000-0000-000000000000"],["uuid","00001000-0000-0000-0000-000000000000"],["uuid","00010000-0000-0000-0000-000000000000"],["uuid","00100000-0000-0000-0000-000000000000"],["uuid","01000000-0000-0000-0000-000000000000"],["uuid","10000000-0000-0000-0000-000000000000"]]]])
 
-OVSDB_CHECK_NEGATIVE([real not acceptable integer JSON atom],
+OVSDB_CHECK_POSITIVE([real not acceptable integer JSON atom],
   [[parse-atoms '["integer"]' '[0.5]' ]],
-  [expected integer])
+  [syntax "0.5": syntax error: expected integer])
+
+dnl <C0> is not allowed anywhere in a UTF-8 string.
+dnl <ED A0 80> is a surrogate and not allowed in UTF-8.
+OVSDB_CHECK_POSITIVE([no invalid UTF-8 sequences in strings],
+  [parse-atoms '[["string"]]' \
+     '@<:@"m4_esyscmd([printf "\xc0"])"@:>@' \
+     '@<:@"m4_esyscmd([printf "\xed\xa0\x80"])"@:>@' \
+],
+  [constraint violation: "m4_esyscmd([printf "\xc0"])" is not a valid UTF-8 string: invalid UTF-8 sequence 0xc0
+constraint violation: "m4_esyscmd([printf "\xed\xa0\x80"])" is not a valid UTF-8 string: invalid UTF-8 sequence 0xed 0xa0])
 
 OVSDB_CHECK_NEGATIVE([real not acceptable integer string atom],
   [[parse-atom-strings '["integer"]' '0.5' ]],
   ["0.5" is not a valid integer])
 
-OVSDB_CHECK_NEGATIVE([string "true" not acceptable boolean JSON atom],
+OVSDB_CHECK_POSITIVE([string "true" not acceptable boolean JSON atom],
   [[parse-atoms '["boolean"]' '["true"]' ]],
-  [expected boolean])
+  [syntax ""true"": syntax error: expected boolean])
 
 OVSDB_CHECK_NEGATIVE([string "true" not acceptable boolean string atom],
   [[parse-atom-strings '["boolean"]' '"true"' ]],
   [""true"" is not a valid boolean (use "true" or "false")])
 
-OVSDB_CHECK_NEGATIVE([integer not acceptable string JSON atom],
+OVSDB_CHECK_POSITIVE([integer not acceptable string JSON atom],
   [[parse-atoms '["string"]' '[1]']],
-  [expected string])
+  [syntax "1": syntax error: expected string])
 
-OVSDB_CHECK_NEGATIVE([uuid atom must be expressed as JSON array],
+OVSDB_CHECK_POSITIVE([uuid atom must be expressed as JSON array],
   [[parse-atoms '["uuid"]' '["550e8400-e29b-41d4-a716-446655440000"]']],
-  [[expected ["uuid", <string>]]])
+  [[syntax ""550e8400-e29b-41d4-a716-446655440000"": syntax error: expected ["uuid", <string>]]])
 
 OVSDB_CHECK_NEGATIVE([empty string atom must be quoted],
   [[parse-atom-strings '["string"]' '']],
@@ -187,6 +197,143 @@ OVSDB_CHECK_NEGATIVE([quotes must be balanced],
 OVSDB_CHECK_NEGATIVE([uuids must be valid],
   [parse-atom-strings '[["uuid"]]' '1234-5678'],
   ["1234-5678" is not a valid UUID])
+
+AT_BANNER([OVSDB -- atoms with constraints])
+
+OVSDB_CHECK_POSITIVE([integers >= 5], 
+  [[parse-atoms '[{"type": "integer", "minInteger": 5}]' \
+    '[0]' \
+    '[4]' \
+    '[5]' \
+    '[6]' \
+    '[12345]']], 
+  [constraint violation: 0 is less than minimum allowed value 5
+constraint violation: 4 is less than minimum allowed value 5
+5
+6
+12345])
+
+OVSDB_CHECK_POSITIVE([integers <= -1], 
+  [[parse-atoms '[{"type": "integer", "maxInteger": -1}]' \
+    '[0]' \
+    '[-1]' \
+    '[-2]' \
+    '[-123]']], 
+  [constraint violation: 0 is greater than maximum allowed value -1
+-1
+-2
+-123])
+
+OVSDB_CHECK_POSITIVE([integers in range -10 to 10], 
+  [[parse-atoms '[{"type": "integer", "minInteger": -10, "maxInteger": 10}]' \
+    '[-20]' \
+    '[-11]' \
+    '[-10]' \
+    '[-9]' \
+    '[1]' \
+    '[9]' \
+    '[10]' \
+    '[11]' \
+    '[123576]']], 
+  [constraint violation: -20 is not in the valid range -10 to 10 (inclusive)
+constraint violation: -11 is not in the valid range -10 to 10 (inclusive)
+-10
+-9
+1
+9
+10
+constraint violation: 11 is not in the valid range -10 to 10 (inclusive)
+constraint violation: 123576 is not in the valid range -10 to 10 (inclusive)])
+
+OVSDB_CHECK_POSITIVE([reals >= 5], 
+  [[parse-atoms '[{"type": "real", "minReal": 5}]' \
+    '[0]' \
+    '[4]' \
+    '[5]' \
+    '[6]' \
+    '[12345]']], 
+  [constraint violation: 0 is less than minimum allowed value 5
+constraint violation: 4 is less than minimum allowed value 5
+5
+6
+12345])
+
+OVSDB_CHECK_POSITIVE([reals <= -1], 
+  [[parse-atoms '[{"type": "real", "maxReal": -1}]' \
+    '[0]' \
+    '[-1]' \
+    '[-2]' \
+    '[-123]']], 
+  [constraint violation: 0 is greater than maximum allowed value -1
+-1
+-2
+-123])
+
+OVSDB_CHECK_POSITIVE([reals in range -10 to 10], 
+  [[parse-atoms '[{"type": "real", "minReal": -10, "maxReal": 10}]' \
+    '[-20]' \
+    '[-11]' \
+    '[-10]' \
+    '[-9]' \
+    '[1]' \
+    '[9]' \
+    '[10]' \
+    '[11]' \
+    '[123576]']], 
+  [constraint violation: -20 is not in the valid range -10 to 10 (inclusive)
+constraint violation: -11 is not in the valid range -10 to 10 (inclusive)
+-10
+-9
+1
+9
+10
+constraint violation: 11 is not in the valid range -10 to 10 (inclusive)
+constraint violation: 123576 is not in the valid range -10 to 10 (inclusive)])
+
+OVSDB_CHECK_POSITIVE([strings matching /(a(b)?)c?/],
+  [[parse-atoms '{"type": "string", "reMatch": "(a(b)?)?c?"}' \
+    '[""]' \
+    '["a"]' \
+    '["ab"]' \
+    '["abc"]' \
+    '["ac"]' \
+    '["b"]' \
+    '["bc"]' \
+    '["c"]']],
+  [[""
+"a"
+"ab"
+"abc"
+"ac"
+constraint violation: "b" does not match regular expression /(a(b)?)?c?/
+constraint violation: "bc" does not match regular expression /(a(b)?)?c?/
+"c"]])
+
+OVSDB_CHECK_POSITIVE([strings at least 2 characters long],
+  [[parse-atoms '{"type": "string", "minLength": 2}' \
+    '[""]' \
+    '["a"]' \
+    '["ab"]' \
+    '["abc"]' \
+    '["\ud834\udd1e"]']],
+  [[constraint violation: "" length 0 is less than minimum allowed length 2
+constraint violation: "a" length 1 is less than minimum allowed length 2
+"ab"
+"abc"
+constraint violation: "𝄞" length 1 is less than minimum allowed length 2]])
+
+OVSDB_CHECK_POSITIVE([strings no more than 2 characters long],
+  [[parse-atoms '{"type": "string", "maxLength": 2}' \
+    '[""]' \
+    '["a"]' \
+    '["ab"]' \
+    '["abc"]' \
+    '["\ud834\udd1e"]']],
+  [[""
+"a"
+"ab"
+constraint violation: "abc" length 3 is greater than maximum allowed length 2
+"𝄞"]])
 
 AT_BANNER([OSVDB -- simple data])
 
@@ -237,7 +384,7 @@ OVSDB_CHECK_POSITIVE([string string datum],
 ""
 "true"
 "\"\\/\b\f\n\r\t"])
-
+
 AT_BANNER([OVSDB -- set data])
 
 OVSDB_CHECK_POSITIVE([JSON optional boolean],
@@ -375,7 +522,7 @@ OVSDB_CHECK_NEGATIVE([duplicate uuid not allowed in string set],
      355ad037-f1da-40aa-b47c-ff9c7e8c6a38,
      7ef21525-0088-4a28-a418-5518413e43ea']],
   [set contains duplicate value])
-
+
 AT_BANNER([OVSDB -- map data])
 
 OVSDB_CHECK_POSITIVE([JSON map of 1 integer to boolean],

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ ovsdb_column_create(const char *name, const char *comment,
     column->comment = comment ? xstrdup(comment) : NULL;
     column->mutable = mutable;
     column->persistent = persistent;
-    column->type = *type;
+    ovsdb_type_clone(&column->type, type);
 
     return column;
 }
@@ -46,6 +46,7 @@ ovsdb_column_create(const char *name, const char *comment,
 void
 ovsdb_column_destroy(struct ovsdb_column *column)
 {
+    ovsdb_type_destroy(&column->type);
     free(column->name);
     free(column->comment);
     free(column);
@@ -85,6 +86,9 @@ ovsdb_column_from_json(const struct json *json, const char *name,
                                    comment ? json_string(comment) : NULL,
                                    mutable ? json_boolean(mutable) : true,
                                    persistent, &type);
+
+    ovsdb_type_destroy(&type);
+
     return NULL;
 }
 
@@ -152,7 +156,7 @@ ovsdb_column_set_from_json(const struct json *json,
 
         /* XXX this is O(n**2) */
         for (i = 0; i < json->u.array.n; i++) {
-            struct ovsdb_column *column;
+            const struct ovsdb_column *column;
             const char *s;
 
             if (json->u.array.elems[i]->type != JSON_STRING) {

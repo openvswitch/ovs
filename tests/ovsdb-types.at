@@ -13,6 +13,68 @@ OVSDB_CHECK_POSITIVE([uuid],
 OVSDB_CHECK_NEGATIVE([void is not a valid atomic-type],
   [[parse-atomic-type '["void"]' ]], ["void" is not an atomic-type])
 
+AT_BANNER([OVSDB -- base types])
+
+OVSDB_CHECK_POSITIVE([integer >= 5], 
+  [[parse-base-type '{"type": "integer", "minInteger": 5}' ]],
+  [{"minInteger":5,"type":"integer"}])
+OVSDB_CHECK_POSITIVE([integer <= 7], 
+  [[parse-base-type '{"type": "integer", "maxInteger": 7}' ]],
+  [{"maxInteger":7,"type":"integer"}])
+OVSDB_CHECK_POSITIVE([integer between -5 and 10], 
+  [[parse-base-type '{"type": "integer", "minInteger": -5, "maxInteger": 10}']],
+  [{"maxInteger":10,"minInteger":-5,"type":"integer"}])
+OVSDB_CHECK_NEGATIVE([integer max may not be less than min],
+  [[parse-base-type '{"type": "integer", "minInteger": 5, "maxInteger": 3}']],
+  [minInteger exceeds maxInteger])
+
+OVSDB_CHECK_POSITIVE([real >= -1.5], 
+  [[parse-base-type '{"type": "real", "minReal": -1.5}']],
+  [{"minReal":-1.5,"type":"real"}])
+OVSDB_CHECK_POSITIVE([real <= 1e5], 
+  [[parse-base-type '{"type": "real", "maxReal": 1e5}']],
+  [{"maxReal":100000,"type":"real"}])
+OVSDB_CHECK_POSITIVE([real between -2.5 and 3.75], 
+  [[parse-base-type '{"type": "real", "minReal": -2.5, "maxReal": 3.75}']],
+  [{"maxReal":3.75,"minReal":-2.5,"type":"real"}])
+OVSDB_CHECK_NEGATIVE([real max may not be less than min], 
+  [[parse-base-type '{"type": "real", "minReal": 555, "maxReal": 444}']],
+  [minReal exceeds maxReal])
+
+OVSDB_CHECK_POSITIVE([boolean], 
+  [[parse-base-type '[{"type": "boolean"}]' ]], ["boolean"])
+
+OVSDB_CHECK_POSITIVE([string reMatch], 
+  [[parse-base-type '{"type": "string", "reMatch": "\\d{3}-\\d{3}-\\d{4}"}']],
+  [{"reMatch":"\\d{3}-\\d{3}-\\d{4}","type":"string"}])
+OVSDB_CHECK_POSITIVE([string reMatch + reComment], 
+  [[parse-base-type '{"type": "string", "reMatch": "\\d{3}-\\d{3}-\\d{4}", "reComment": "US-style telephone number"}']],
+  [{"reComment":"US-style telephone number","reMatch":"\\d{3}-\\d{3}-\\d{4}","type":"string"}])
+OVSDB_CHECK_NEGATIVE([reMatch must be a valid JavaScript regexp],
+  [[parse-base-type '{"type": "string", "reMatch": "ab@:>@cd"}']],
+  [[test-ovsdb: invalid regular expression: "ab@:>@cd" is not a valid regular expression: @:>@ is an invalid data character in JavaScript compatibility mode]])
+
+OVSDB_CHECK_POSITIVE([string minLength], 
+  [[parse-base-type '{"type": "string", "minLength": 1}']],
+  [{"minLength":1,"type":"string"}])
+OVSDB_CHECK_POSITIVE([string maxLength], 
+  [[parse-base-type '{"type": "string", "maxLength": 5}']],
+  [{"maxLength":5,"type":"string"}])
+OVSDB_CHECK_POSITIVE([string minLength and maxLength], 
+  [[parse-base-type '{"type": "string", "minLength": 1, "maxLength": 5}']],
+  [{"maxLength":5,"minLength":1,"type":"string"}])
+OVSDB_CHECK_NEGATIVE([maxLength must not be less than minLength], 
+  [[parse-base-type '{"type": "string", "minLength": 5, "maxLength": 3}']],
+  [minLength exceeds maxLength])
+OVSDB_CHECK_NEGATIVE([maxLength must not be negative], 
+  [[parse-base-type '{"type": "string", "maxLength": -1}']],
+  [maxLength out of valid range 0 to 4294967295])
+
+OVSDB_CHECK_NEGATIVE([void is not a valid base-type],
+  [[parse-base-type '["void"]' ]], ["void" is not an atomic-type])
+OVSDB_CHECK_NEGATIVE(["type" member must be present],
+  [[parse-base-type '{}']], [Parsing ovsdb type failed: Required 'type' member is missing.])
+
 AT_BANNER([OVSDB -- simple types])
 
 OVSDB_CHECK_POSITIVE([simple integer], 

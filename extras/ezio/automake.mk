@@ -1,4 +1,4 @@
-# Copyright (C) 2008, 2009 Nicira Networks, Inc.
+# Copyright (C) 2008, 2009, 2010 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -8,7 +8,7 @@
 EXTRA_DIST += extras/ezio/ezio3.ti
 
 if HAVE_CURSES
-if HAVE_PCRE
+if HAVE_PCRE_PARTIAL
 install-data-hook:
 	@echo tic -x $(srcdir)/extras/ezio/ezio3.ti
 	@if ! tic -x $(srcdir)/extras/ezio/ezio3.ti; then			      \
@@ -48,5 +48,5 @@ extras_ezio_ovs_switchui_LDADD = \
 	$(PCRE_LIBS) \
 	$(SSL_LIBS) \
 	-lm
-endif # HAVE_PCRE
+endif # HAVE_PCRE_PARTIAL
 endif # HAVE_CURSES

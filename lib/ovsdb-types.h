@@ -16,6 +16,8 @@
 #ifndef OVSDB_TYPES_H
 #define OVSDB_TYPES_H 1
 
+#include <float.h>
+#include <pcre.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include "compiler.h"
@@ -35,12 +37,67 @@ enum ovsdb_atomic_type {
 };
 
 static inline bool ovsdb_atomic_type_is_valid(enum ovsdb_atomic_type);
-static inline bool ovsdb_atomic_type_is_valid_key(enum ovsdb_atomic_type);
 bool ovsdb_atomic_type_from_string(const char *, enum ovsdb_atomic_type *);
 struct ovsdb_error *ovsdb_atomic_type_from_json(enum ovsdb_atomic_type *,
                                                 const struct json *);
 const char *ovsdb_atomic_type_to_string(enum ovsdb_atomic_type);
 struct json *ovsdb_atomic_type_to_json(enum ovsdb_atomic_type);
+
+/* An atomic type plus optional constraints. */
+
+struct ovsdb_base_type {
+    enum ovsdb_atomic_type type;
+    union {
+        struct ovsdb_integer_constraints {
+            int64_t min;        /* minInteger or INT64_MIN. */
+            int64_t max;        /* maxInteger or INT64_MAX. */
+        } integer;
+
+        struct ovsdb_real_constraints {
+            double min;         /* minReal or -DBL_MAX. */
+            double max;         /* minReal or DBL_MAX. */
+        } real;
+
+        /* No constraints for Boolean types. */
+
+        struct ovsdb_string_constraints {
+            pcre *re;           /* Compiled regular expression. */
+            char *reMatch;      /* reMatch or NULL. */
+            char *reComment;    /* reComment or NULL. */
+            unsigned int minLen; /* minLength or 0. */
+            unsigned int maxLen; /* maxLength or UINT_MAX. */
+        } string;
+    } u;
+};
+
+#define OVSDB_BASE_VOID_INIT    { .type = OVSDB_TYPE_VOID }
+#define OVSDB_BASE_INTEGER_INIT { .type = OVSDB_TYPE_INTEGER,           \
+                                  .u.integer = { INT64_MIN, INT64_MAX } }
+#define OVSDB_BASE_REAL_INIT    { .type = OVSDB_TYPE_REAL,          \
+                                  .u.real = { -DBL_MAX, DBL_MAX } }
+#define OVSDB_BASE_BOOLEAN_INIT { .type = OVSDB_TYPE_BOOLEAN }
+#define OVSDB_BASE_STRING_INIT  { .type = OVSDB_TYPE_STRING,        \
+                                  .u.string = { NULL, NULL, NULL,   \
+                                                0, UINT_MAX } }
+#define OVSDB_BASE_UUID_INIT    { .type = OVSDB_TYPE_UUID }
+
+void ovsdb_base_type_init(struct ovsdb_base_type *, enum ovsdb_atomic_type);
+void ovsdb_base_type_clone(struct ovsdb_base_type *,
+                           const struct ovsdb_base_type *);
+void ovsdb_base_type_destroy(struct ovsdb_base_type *);
+
+bool ovsdb_base_type_is_valid(const struct ovsdb_base_type *);
+bool ovsdb_base_type_has_constraints(const struct ovsdb_base_type *);
+void ovsdb_base_type_clear_constraints(struct ovsdb_base_type *);
+struct ovsdb_error *ovsdb_base_type_set_regex(struct ovsdb_base_type *,
+                                              const char *reMatch,
+                                              const char *reComment)
+    WARN_UNUSED_RESULT;
+
+struct ovsdb_error *ovsdb_base_type_from_json(struct ovsdb_base_type *,
+                                              const struct json *)
+    WARN_UNUSED_RESULT;
+struct json *ovsdb_base_type_to_json(const struct ovsdb_base_type *);
 
 /* An OVSDB type.
  *
@@ -60,20 +117,22 @@ struct json *ovsdb_atomic_type_to_json(enum ovsdb_atomic_type);
  * can also be considered an optional pair of 'key_type' and 'value_type'.
  */
 struct ovsdb_type {
-    enum ovsdb_atomic_type key_type;
-    enum ovsdb_atomic_type value_type;
+    struct ovsdb_base_type key;
+    struct ovsdb_base_type value;
     unsigned int n_min;
     unsigned int n_max;         /* UINT_MAX stands in for "unlimited". */
 };
 
-#define OVSDB_TYPE_SCALAR_INITIALIZER(KEY_TYPE) \
-        { KEY_TYPE, OVSDB_TYPE_VOID, 1, 1 }
+#define OVSDB_TYPE_SCALAR_INITIALIZER(KEY) { KEY, OVSDB_BASE_VOID_INIT, 1, 1 }
 
 extern const struct ovsdb_type ovsdb_type_integer;
 extern const struct ovsdb_type ovsdb_type_real;
 extern const struct ovsdb_type ovsdb_type_boolean;
 extern const struct ovsdb_type ovsdb_type_string;
 extern const struct ovsdb_type ovsdb_type_uuid;
+
+void ovsdb_type_clone(struct ovsdb_type *, const struct ovsdb_type *);
+void ovsdb_type_destroy(struct ovsdb_type *);
 
 bool ovsdb_type_is_valid(const struct ovsdb_type *);
 
@@ -98,16 +157,9 @@ ovsdb_atomic_type_is_valid(enum ovsdb_atomic_type atomic_type)
     return atomic_type >= 0 && atomic_type < OVSDB_N_TYPES;
 }
 
-static inline bool
-ovsdb_atomic_type_is_valid_key(enum ovsdb_atomic_type atomic_type)
-{
-    /* XXX should we disallow reals or booleans as keys? */
-    return ovsdb_atomic_type_is_valid(atomic_type);
-}
-
 static inline bool ovsdb_type_is_scalar(const struct ovsdb_type *type)
 {
-    return (type->value_type == OVSDB_TYPE_VOID
+    return (type->value.type == OVSDB_TYPE_VOID
             && type->n_min == 1 && type->n_max == 1);
 }
 
@@ -123,13 +175,13 @@ static inline bool ovsdb_type_is_composite(const struct ovsdb_type *type)
 
 static inline bool ovsdb_type_is_set(const struct ovsdb_type *type)
 {
-    return (type->value_type == OVSDB_TYPE_VOID
+    return (type->value.type == OVSDB_TYPE_VOID
             && (type->n_min != 1 || type->n_max != 1));
 }
 
 static inline bool ovsdb_type_is_map(const struct ovsdb_type *type)
 {
-    return type->value_type != OVSDB_TYPE_VOID;
+    return type->value.type != OVSDB_TYPE_VOID;
 }
 
 #endif /* ovsdb-types.h */

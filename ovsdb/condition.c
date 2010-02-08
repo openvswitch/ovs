@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,8 +97,8 @@ ovsdb_clause_from_json(const struct ovsdb_table_schema *ts,
          * n_max == 1?  (They would always be "false" if the value was
          * missing.) */
         if (!ovsdb_type_is_scalar(&type)
-            || (type.key_type != OVSDB_TYPE_INTEGER
-                && type.key_type != OVSDB_TYPE_REAL)) {
+            || (type.key.type != OVSDB_TYPE_INTEGER
+                && type.key.type != OVSDB_TYPE_REAL)) {
             char *s = ovsdb_type_to_english(&type);
             error = ovsdb_syntax_error(
                 json, NULL, "Type mismatch: \"%s\" operator may not be "
@@ -231,7 +231,7 @@ ovsdb_condition_evaluate(const struct ovsdb_row *row,
 
         if (ovsdb_type_is_scalar(type)) {
             int cmp = ovsdb_atom_compare_3way(&field->keys[0], &arg->keys[0],
-                                              type->key_type);
+                                              type->key.type);
             switch (c->function) {
             case OVSDB_F_LT:
                 return cmp < 0;

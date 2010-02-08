@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,7 +144,7 @@ ovsdb_table_schema_to_json(const struct ovsdb_table_schema *ts)
     columns = json_object_create();
 
     SHASH_FOR_EACH (node, &ts->columns) {
-        struct ovsdb_column *column = node->data;
+        const struct ovsdb_column *column = node->data;
         if (node->name[0] != '_') {
             json_object_put(columns, column->name,
                             ovsdb_column_to_json(column));

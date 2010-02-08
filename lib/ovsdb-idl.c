@@ -1338,6 +1338,7 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row_,
     size_t column_idx = column - class->columns;
 
     assert(row->new != NULL);
+    assert(column_idx < class->n_columns);
     if (hmap_node_is_null(&row->txn_node)) {
         hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,
                     uuid_hash(&row->uuid));
@@ -1516,6 +1517,7 @@ static bool
 ovsdb_idl_txn_process_insert_reply(struct ovsdb_idl_txn_insert *insert,
                                    const struct json_array *results)
 {
+    static const struct ovsdb_base_type uuid_type = OVSDB_BASE_UUID_INIT;
     struct ovsdb_error *error;
     struct json *json_uuid;
     union ovsdb_atom uuid;
@@ -1536,7 +1538,7 @@ ovsdb_idl_txn_process_insert_reply(struct ovsdb_idl_txn_insert *insert,
         return false;
     }
 
-    error = ovsdb_atom_from_json(&uuid, OVSDB_TYPE_UUID, json_uuid, NULL);
+    error = ovsdb_atom_from_json(&uuid, &uuid_type, json_uuid, NULL);
     if (error) {
         char *s = ovsdb_error_to_string(error);
         VLOG_WARN_RL(&syntax_rl, "\"insert\" reply \"uuid\" is not a JSON "

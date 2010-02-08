@@ -626,7 +626,7 @@ do_list_columns(int argc UNUSED, char *argv[])
             struct shash_node *column_node;
 
             SHASH_FOR_EACH (column_node, &ts->columns) {
-                struct ovsdb_column *column = column_node->data;
+                const struct ovsdb_column *column = column_node->data;
                 struct json *type = ovsdb_type_to_json(&column->type);
 
                 table_add_row(&t);

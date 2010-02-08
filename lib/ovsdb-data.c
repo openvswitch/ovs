@@ -29,6 +29,7 @@
 #include "json.h"
 #include "shash.h"
 #include "sort.h"
+#include "unicode.h"
 
 static struct json *
 wrap_json(const char *name, struct json *wrapped)
@@ -272,10 +273,10 @@ ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
     return error0;
 }
 
-struct ovsdb_error *
-ovsdb_atom_from_json(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
-                     const struct json *json,
-                     const struct ovsdb_symbol_table *symtab)
+static struct ovsdb_error * WARN_UNUSED_RESULT
+ovsdb_atom_from_json__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
+                       const struct json *json,
+                       const struct ovsdb_symbol_table *symtab)
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
@@ -327,6 +328,26 @@ ovsdb_atom_from_json(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                               ovsdb_atomic_type_to_string(type));
 }
 
+struct ovsdb_error *
+ovsdb_atom_from_json(union ovsdb_atom *atom,
+                     const struct ovsdb_base_type *base,
+                     const struct json *json,
+                     const struct ovsdb_symbol_table *symtab)
+{
+    struct ovsdb_error *error;
+
+    error = ovsdb_atom_from_json__(atom, base->type, json, symtab);
+    if (error) {
+        return error;
+    }
+
+    error = ovsdb_atom_check_constraints(atom, base);
+    if (error) {
+        ovsdb_atom_destroy(atom, base->type);
+    }
+    return error;
+}
+
 struct json *
 ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
@@ -356,28 +377,9 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
     }
 }
 
-/* Initializes 'atom' to a value of the given 'type' parsed from 's', which
- * takes one of the following forms:
- *
- *      - OVSDB_TYPE_INTEGER: A decimal integer optionally preceded by a sign.
- *
- *      - OVSDB_TYPE_REAL: A floating-point number in the format accepted by
- *        strtod().
- *
- *      - OVSDB_TYPE_BOOLEAN: "true", "yes", "on", "1" for true, or "false",
- *        "no", "off", or "0" for false.
- *
- *      - OVSDB_TYPE_STRING: A JSON string if it begins with a quote, otherwise
- *        an arbitrary string.
- *
- *      - OVSDB_TYPE_UUID: A UUID in RFC 4122 format.
- *
- * Returns a null pointer if successful, otherwise an error message describing
- * the problem.  The caller is responsible for freeing the error.
- */
-char *
-ovsdb_atom_from_string(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
-                       const char *s)
+static char *
+ovsdb_atom_from_string__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
+                         const char *s)
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
@@ -451,6 +453,45 @@ ovsdb_atom_from_string(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
     return NULL;
 }
 
+/* Initializes 'atom' to a value of type 'base' parsed from 's', which takes
+ * one of the following forms:
+ *
+ *      - OVSDB_TYPE_INTEGER: A decimal integer optionally preceded by a sign.
+ *
+ *      - OVSDB_TYPE_REAL: A floating-point number in the format accepted by
+ *        strtod().
+ *
+ *      - OVSDB_TYPE_BOOLEAN: "true", "yes", "on", "1" for true, or "false",
+ *        "no", "off", or "0" for false.
+ *
+ *      - OVSDB_TYPE_STRING: A JSON string if it begins with a quote, otherwise
+ *        an arbitrary string.
+ *
+ *      - OVSDB_TYPE_UUID: A UUID in RFC 4122 format.
+ *
+ * Returns a null pointer if successful, otherwise an error message describing
+ * the problem.  The caller is responsible for freeing the error.
+ */
+char *
+ovsdb_atom_from_string(union ovsdb_atom *atom,
+                       const struct ovsdb_base_type *base, const char *s)
+{
+    struct ovsdb_error *error;
+    char *msg;
+
+    msg = ovsdb_atom_from_string__(atom, base->type, s);
+    if (msg) {
+        return msg;
+    }
+
+    error = ovsdb_atom_check_constraints(atom, base);
+    if (error) {
+        msg = ovsdb_error_to_string(error);
+        ovsdb_error_destroy(error);
+    }
+    return msg;
+}
+
 static bool
 string_needs_quotes(const char *s)
 {
@@ -518,6 +559,141 @@ ovsdb_atom_to_string(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
         NOT_REACHED();
     }
 }
+
+static struct ovsdb_error *
+check_string_constraints(const char *s,
+                         const struct ovsdb_string_constraints *c)
+{
+    size_t n_chars;
+    char *msg;
+
+    msg = utf8_validate(s, &n_chars);
+    if (msg) {
+        struct ovsdb_error *error;
+
+        error = ovsdb_error("constraint violation",
+                            "\"%s\" is not a valid UTF-8 string: %s",
+                            s, msg);
+        free(msg);
+        return error;
+    }
+
+    if (n_chars < c->minLen) {
+        return ovsdb_error(
+            "constraint violation",
+            "\"%s\" length %zu is less than minimum allowed "
+            "length %u", s, n_chars, c->minLen);
+    } else if (n_chars > c->maxLen) {
+        return ovsdb_error(
+            "constraint violation",
+            "\"%s\" length %zu is greater than maximum allowed "
+            "length %u", s, n_chars, c->maxLen);
+    }
+
+#if HAVE_PCRE
+    if (c->re) {
+        int retval;
+
+        retval = pcre_exec(c->re, NULL, s, strlen(s), 0,
+                           PCRE_ANCHORED | PCRE_NO_UTF8_CHECK, NULL, 0);
+        if (retval == PCRE_ERROR_NOMATCH) {
+            if (c->reComment) {
+                return ovsdb_error("constraint violation",
+                                   "\"%s\" is not a %s", s, c->reComment);
+            } else {
+                return ovsdb_error("constraint violation",
+                                   "\"%s\" does not match regular expression "
+                                   "/%s/", s, c->reMatch);
+            }
+        } else if (retval < 0) {
+            /* PCRE doesn't have a function to translate an error code to a
+             * description.  Bizarre.  See pcreapi(3) for error details. */
+            return ovsdb_error("internal error", "PCRE returned error %d",
+                               retval);
+        }
+    }
+#endif  /* HAVE_PCRE */
+
+    return NULL;
+}
+
+/* Checks whether 'atom' meets the constraints (if any) defined in 'base'.
+ * (base->type must specify 'atom''s type.)  Returns a null pointer if the
+ * constraints are met, otherwise an error that explains the violation. */
+struct ovsdb_error *
+ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
+                             const struct ovsdb_base_type *base)
+{
+    switch (base->type) {
+    case OVSDB_TYPE_VOID:
+        NOT_REACHED();
+
+    case OVSDB_TYPE_INTEGER:
+        if (atom->integer >= base->u.integer.min
+            && atom->integer <= base->u.integer.max) {
+            return NULL;
+        } else if (base->u.integer.min != INT64_MIN) {
+            if (base->u.integer.max != INT64_MAX) {
+                return ovsdb_error("constraint violation",
+                                   "%"PRId64" is not in the valid range "
+                                   "%"PRId64" to %"PRId64" (inclusive)",
+                                   atom->integer,
+                                   base->u.integer.min, base->u.integer.max);
+            } else {
+                return ovsdb_error("constraint violation",
+                                   "%"PRId64" is less than minimum allowed "
+                                   "value %"PRId64,
+                                   atom->integer, base->u.integer.min);
+            }
+        } else {
+            return ovsdb_error("constraint violation",
+                               "%"PRId64" is greater than maximum allowed "
+                               "value %"PRId64,
+                               atom->integer, base->u.integer.max);
+        }
+        NOT_REACHED();
+
+    case OVSDB_TYPE_REAL:
+        if (atom->real >= base->u.real.min && atom->real <= base->u.real.max) {
+            return NULL;
+        } else if (base->u.real.min != -DBL_MAX) {
+            if (base->u.real.max != DBL_MAX) {
+                return ovsdb_error("constraint violation",
+                                   "%.*g is not in the valid range "
+                                   "%.*g to %.*g (inclusive)",
+                                   DBL_DIG, atom->real,
+                                   DBL_DIG, base->u.real.min,
+                                   DBL_DIG, base->u.real.max);
+            } else {
+                return ovsdb_error("constraint violation",
+                                   "%.*g is less than minimum allowed "
+                                   "value %.*g",
+                                   DBL_DIG, atom->real,
+                                   DBL_DIG, base->u.real.min);
+            }
+        } else {
+            return ovsdb_error("constraint violation",
+                               "%.*g is greater than maximum allowed "
+                               "value %.*g",
+                               DBL_DIG, atom->real,
+                               DBL_DIG, base->u.real.max);
+        }
+        NOT_REACHED();
+
+    case OVSDB_TYPE_BOOLEAN:
+        return NULL;
+
+    case OVSDB_TYPE_STRING:
+        return check_string_constraints(atom->string, &base->u.string);
+
+    case OVSDB_TYPE_UUID:
+        return NULL;
+
+    case OVSDB_N_TYPES:
+    default:
+        NOT_REACHED();
+    }
+}
 
 static union ovsdb_atom *
 alloc_default_atoms(enum ovsdb_atomic_type type, size_t n)
@@ -551,8 +727,8 @@ ovsdb_datum_init_default(struct ovsdb_datum *datum,
                          const struct ovsdb_type *type)
 {
     datum->n = type->n_min;
-    datum->keys = alloc_default_atoms(type->key_type, datum->n);
-    datum->values = alloc_default_atoms(type->value_type, datum->n);
+    datum->keys = alloc_default_atoms(type->key.type, datum->n);
+    datum->values = alloc_default_atoms(type->value.type, datum->n);
 }
 
 bool
@@ -565,11 +741,11 @@ ovsdb_datum_is_default(const struct ovsdb_datum *datum,
         return false;
     }
     for (i = 0; i < datum->n; i++) {
-        if (!ovsdb_atom_is_default(&datum->keys[i], type->key_type)) {
+        if (!ovsdb_atom_is_default(&datum->keys[i], type->key.type)) {
             return false;
         }
-        if (type->value_type != OVSDB_TYPE_VOID
-            && !ovsdb_atom_is_default(&datum->values[i], type->value_type)) {
+        if (type->value.type != OVSDB_TYPE_VOID
+            && !ovsdb_atom_is_default(&datum->values[i], type->value.type)) {
             return false;
         }
     }
@@ -602,8 +778,8 @@ ovsdb_datum_clone(struct ovsdb_datum *new, const struct ovsdb_datum *old,
 {
     unsigned int n = old->n;
     new->n = n;
-    new->keys = clone_atoms(old->keys, type->key_type, n);
-    new->values = clone_atoms(old->values, type->value_type, n);
+    new->keys = clone_atoms(old->keys, type->key.type, n);
+    new->values = clone_atoms(old->values, type->value.type, n);
 }
 
 static void
@@ -622,8 +798,8 @@ free_data(enum ovsdb_atomic_type type,
 void
 ovsdb_datum_destroy(struct ovsdb_datum *datum, const struct ovsdb_type *type)
 {
-    free_data(type->key_type, datum->keys, datum->n);
-    free_data(type->value_type, datum->values, datum->n);
+    free_data(type->key.type, datum->keys, datum->n);
+    free_data(type->value.type, datum->values, datum->n);
 }
 
 void
@@ -646,7 +822,7 @@ ovsdb_datum_sort_compare_cb(size_t a, size_t b, void *cbdata_)
 
     return ovsdb_atom_compare_3way(&cbdata->datum->keys[a],
                                    &cbdata->datum->keys[b],
-                                   cbdata->type->key_type);
+                                   cbdata->type->key.type);
 }
 
 static void
@@ -655,7 +831,7 @@ ovsdb_datum_sort_swap_cb(size_t a, size_t b, void *cbdata_)
     struct ovsdb_datum_sort_cbdata *cbdata = cbdata_;
 
     ovsdb_atom_swap(&cbdata->datum->keys[a], &cbdata->datum->keys[b]);
-    if (cbdata->type->value_type != OVSDB_TYPE_VOID) {
+    if (cbdata->type->value.type != OVSDB_TYPE_VOID) {
         ovsdb_atom_swap(&cbdata->datum->values[a], &cbdata->datum->values[b]);
     }
 }
@@ -676,7 +852,7 @@ ovsdb_datum_sort(struct ovsdb_datum *datum, const struct ovsdb_type *type)
 
         for (i = 0; i < datum->n - 1; i++) {
             if (ovsdb_atom_equals(&datum->keys[i], &datum->keys[i + 1],
-                                  type->key_type)) {
+                                  type->key.type)) {
                 if (ovsdb_type_is_map(type)) {
                     return ovsdb_error(NULL, "map contains duplicate key");
                 } else {
@@ -687,6 +863,40 @@ ovsdb_datum_sort(struct ovsdb_datum *datum, const struct ovsdb_type *type)
 
         return NULL;
     }
+}
+
+/* Checks that each of the atoms in 'datum' conforms to the constraints
+ * specified by its 'type'.  Returns an error if a constraint is violated,
+ * otherwise a null pointer.
+ *
+ * This function is not commonly useful because the most ordinary way to obtain
+ * a datum is ultimately via ovsdb_atom_from_string() or
+ * ovsdb_atom_from_json(), which check constraints themselves. */
+struct ovsdb_error *
+ovsdb_datum_check_constraints(const struct ovsdb_datum *datum,
+                              const struct ovsdb_type *type)
+{
+    struct ovsdb_error *error;
+    unsigned int i;
+
+    for (i = 0; i < datum->n; i++) {
+        error = ovsdb_atom_check_constraints(&datum->keys[i], &type->key);
+        if (error) {
+            return error;
+        }
+    }
+
+    if (type->value.type != OVSDB_TYPE_VOID) {
+        for (i = 0; i < datum->n; i++) {
+            error = ovsdb_atom_check_constraints(&datum->values[i],
+                                                 &type->value);
+            if (error) {
+                return error;
+            }
+        }
+    }
+
+    return NULL;
 }
 
 struct ovsdb_error *
@@ -702,7 +912,7 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
         datum->keys = xmalloc(sizeof *datum->keys);
         datum->values = NULL;
 
-        error = ovsdb_atom_from_json(&datum->keys[0], type->key_type,
+        error = ovsdb_atom_from_json(&datum->keys[0], &type->key,
                                      json, symtab);
         if (error) {
             free(datum->keys);
@@ -746,7 +956,7 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
                 }
             }
 
-            error = ovsdb_atom_from_json(&datum->keys[i], type->key_type,
+            error = ovsdb_atom_from_json(&datum->keys[i], &type->key,
                                          key, symtab);
             if (error) {
                 goto error;
@@ -754,9 +964,9 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
 
             if (is_map) {
                 error = ovsdb_atom_from_json(&datum->values[i],
-                                             type->value_type, value, symtab);
+                                             &type->value, value, symtab);
                 if (error) {
-                    ovsdb_atom_destroy(&datum->keys[i], type->key_type);
+                    ovsdb_atom_destroy(&datum->keys[i], type->key.type);
                     goto error;
                 }
             }
@@ -784,14 +994,14 @@ ovsdb_datum_to_json(const struct ovsdb_datum *datum,
     /* These tests somewhat tolerate a 'datum' that does not exactly match
      * 'type', in particular a datum with 'n' not in the allowed range. */
     if (datum->n == 1 && ovsdb_type_is_scalar(type)) {
-        return ovsdb_atom_to_json(&datum->keys[0], type->key_type);
-    } else if (type->value_type == OVSDB_TYPE_VOID) {
+        return ovsdb_atom_to_json(&datum->keys[0], type->key.type);
+    } else if (type->value.type == OVSDB_TYPE_VOID) {
         struct json **elems;
         size_t i;
 
         elems = xmalloc(datum->n * sizeof *elems);
         for (i = 0; i < datum->n; i++) {
-            elems[i] = ovsdb_atom_to_json(&datum->keys[i], type->key_type);
+            elems[i] = ovsdb_atom_to_json(&datum->keys[i], type->key.type);
         }
 
         return wrap_json("set", json_array_create(elems, datum->n));
@@ -802,8 +1012,8 @@ ovsdb_datum_to_json(const struct ovsdb_datum *datum,
         elems = xmalloc(datum->n * sizeof *elems);
         for (i = 0; i < datum->n; i++) {
             elems[i] = json_array_create_2(
-                ovsdb_atom_to_json(&datum->keys[i], type->key_type),
-                ovsdb_atom_to_json(&datum->values[i], type->value_type));
+                ovsdb_atom_to_json(&datum->keys[i], type->key.type),
+                ovsdb_atom_to_json(&datum->values[i], type->value.type));
         }
 
         return wrap_json("map", json_array_create(elems, datum->n));
@@ -820,19 +1030,18 @@ skip_spaces(const char *p)
 }
 
 static char *
-parse_atom_token(const char **s, enum ovsdb_atomic_type type,
+parse_atom_token(const char **s, const struct ovsdb_base_type *base,
                  union ovsdb_atom *atom)
 {
     char *token, *error;
 
     error = ovsdb_token_parse(s, &token);
     if (!error) {
-        error = ovsdb_atom_from_string(atom, type, token);
+        error = ovsdb_atom_from_string(atom, base, token);
         free(token);
     }
     return error;
 }
-
 
 static char *
 parse_key_value(const char **s, const struct ovsdb_type *type,
@@ -841,19 +1050,19 @@ parse_key_value(const char **s, const struct ovsdb_type *type,
     const char *start = *s;
     char *error;
 
-    error = parse_atom_token(s, type->key_type, key);
-    if (!error && type->value_type != OVSDB_TYPE_VOID) {
+    error = parse_atom_token(s, &type->key, key);
+    if (!error && type->value.type != OVSDB_TYPE_VOID) {
         *s = skip_spaces(*s);
         if (**s == '=') {
             (*s)++;
             *s = skip_spaces(*s);
-            error = parse_atom_token(s, type->value_type, value);
+            error = parse_atom_token(s, &type->value, value);
         } else {
             error = xasprintf("%s: syntax error at \"%c\" expecting \"=\"",
                               start, **s);
         }
         if (error) {
-            ovsdb_atom_destroy(key, type->key_type);
+            ovsdb_atom_destroy(key, type->key.type);
         }
     }
     return error;
@@ -863,9 +1072,9 @@ static void
 free_key_value(const struct ovsdb_type *type,
                union ovsdb_atom *key, union ovsdb_atom *value)
 {
-    ovsdb_atom_destroy(key, type->key_type);
-    if (type->value_type != OVSDB_TYPE_VOID) {
-        ovsdb_atom_destroy(value, type->value_type);
+    ovsdb_atom_destroy(key, type->key.type);
+    if (type->value.type != OVSDB_TYPE_VOID) {
+        ovsdb_atom_destroy(value, type->value.type);
     }
 }
 
@@ -987,10 +1196,10 @@ ovsdb_datum_to_string(const struct ovsdb_datum *datum,
             ds_put_cstr(out, ", ");
         }
 
-        ovsdb_atom_to_string(&datum->keys[i], type->key_type, out);
+        ovsdb_atom_to_string(&datum->keys[i], type->key.type, out);
         if (is_map) {
             ds_put_char(out, '=');
-            ovsdb_atom_to_string(&datum->values[i], type->value_type, out);
+            ovsdb_atom_to_string(&datum->values[i], type->value.type, out);
         }
     }
     if (type->n_max > 1 || !datum->n) {
@@ -1016,9 +1225,9 @@ uint32_t
 ovsdb_datum_hash(const struct ovsdb_datum *datum,
                  const struct ovsdb_type *type, uint32_t basis)
 {
-    basis = hash_atoms(type->key_type, datum->keys, datum->n, basis);
-    basis ^= (type->key_type << 24) | (type->value_type << 16) | datum->n;
-    basis = hash_atoms(type->value_type, datum->values, datum->n, basis);
+    basis = hash_atoms(type->key.type, datum->keys, datum->n, basis);
+    basis ^= (type->key.type << 24) | (type->value.type << 16) | datum->n;
+    basis = hash_atoms(type->value.type, datum->values, datum->n, basis);
     return basis;
 }
 
@@ -1059,18 +1268,18 @@ ovsdb_datum_compare_3way(const struct ovsdb_datum *a,
         return a->n < b->n ? -1 : 1;
     }
 
-    cmp = atom_arrays_compare_3way(a->keys, b->keys, type->key_type, a->n);
+    cmp = atom_arrays_compare_3way(a->keys, b->keys, type->key.type, a->n);
     if (cmp) {
         return cmp;
     }
 
-    return (type->value_type == OVSDB_TYPE_VOID ? 0
-            : atom_arrays_compare_3way(a->values, b->values, type->value_type,
+    return (type->value.type == OVSDB_TYPE_VOID ? 0
+            : atom_arrays_compare_3way(a->values, b->values, type->value.type,
                                        a->n));
 }
 
 /* If 'key' is one of the keys in 'datum', returns its index within 'datum',
- * otherwise UINT_MAX.  'key_type' must be the type of the atoms stored in the
+ * otherwise UINT_MAX.  'key.type' must be the type of the atoms stored in the
  * 'keys' array in 'datum'.
  */
 unsigned int
@@ -1095,7 +1304,7 @@ ovsdb_datum_find_key(const struct ovsdb_datum *datum,
 }
 
 /* If 'key' and 'value' is one of the key-value pairs in 'datum', returns its
- * index within 'datum', otherwise UINT_MAX.  'key_type' must be the type of
+ * index within 'datum', otherwise UINT_MAX.  'key.type' must be the type of
  * the atoms stored in the 'keys' array in 'datum'.  'value_type' may be the
  * type of the 'values' atoms or OVSDB_TYPE_VOID to compare only keys.
  */
@@ -1117,7 +1326,7 @@ ovsdb_datum_find_key_value(const struct ovsdb_datum *datum,
 
 /* If atom 'i' in 'a' is also in 'b', returns its index in 'b', otherwise
  * UINT_MAX.  'type' must be the type of 'a' and 'b', except that
- * type->value_type may be set to OVSDB_TYPE_VOID to compare keys but not
+ * type->value.type may be set to OVSDB_TYPE_VOID to compare keys but not
  * values. */
 static unsigned int
 ovsdb_datum_find(const struct ovsdb_datum *a, int i,
@@ -1125,9 +1334,9 @@ ovsdb_datum_find(const struct ovsdb_datum *a, int i,
                  const struct ovsdb_type *type)
 {
     return ovsdb_datum_find_key_value(b,
-                                      &a->keys[i], type->key_type,
+                                      &a->keys[i], type->key.type,
                                       a->values ? &a->values[i] : NULL,
-                                      type->value_type);
+                                      type->value.type);
 }
 
 /* Returns true if every element in 'a' is also in 'b', false otherwise. */
@@ -1167,7 +1376,7 @@ ovsdb_datum_reallocate(struct ovsdb_datum *a, const struct ovsdb_type *type,
                        unsigned int capacity)
 {
     a->keys = xrealloc(a->keys, capacity * sizeof *a->keys);
-    if (type->value_type != OVSDB_TYPE_VOID) {
+    if (type->value.type != OVSDB_TYPE_VOID) {
         a->values = xrealloc(a->values, capacity * sizeof *a->values);
     }
 }
@@ -1182,10 +1391,10 @@ void
 ovsdb_datum_remove_unsafe(struct ovsdb_datum *datum, size_t idx,
                           const struct ovsdb_type *type)
 {
-    ovsdb_atom_destroy(&datum->keys[idx], type->key_type);
+    ovsdb_atom_destroy(&datum->keys[idx], type->key.type);
     datum->keys[idx] = datum->keys[datum->n - 1];
-    if (type->value_type != OVSDB_TYPE_VOID) {
-        ovsdb_atom_destroy(&datum->values[idx], type->value_type);
+    if (type->value.type != OVSDB_TYPE_VOID) {
+        ovsdb_atom_destroy(&datum->values[idx], type->value.type);
         datum->values[idx] = datum->values[datum->n - 1];
     }
     datum->n--;
@@ -1208,11 +1417,11 @@ ovsdb_datum_add_unsafe(struct ovsdb_datum *datum,
 {
     size_t idx = datum->n++;
     datum->keys = xrealloc(datum->keys, datum->n * sizeof *datum->keys);
-    ovsdb_atom_clone(&datum->keys[idx], key, type->key_type);
-    if (type->value_type != OVSDB_TYPE_VOID) {
+    ovsdb_atom_clone(&datum->keys[idx], key, type->key.type);
+    if (type->value.type != OVSDB_TYPE_VOID) {
         datum->values = xrealloc(datum->values,
                                  datum->n * sizeof *datum->values);
-        ovsdb_atom_clone(&datum->values[idx], value, type->value_type);
+        ovsdb_atom_clone(&datum->values[idx], value, type->value.type);
     }
 }
 
@@ -1227,21 +1436,21 @@ ovsdb_datum_union(struct ovsdb_datum *a, const struct ovsdb_datum *b,
     for (bi = 0; bi < b->n; bi++) {
         unsigned int ai;
 
-        ai = ovsdb_datum_find_key(a, &b->keys[bi], type->key_type);
+        ai = ovsdb_datum_find_key(a, &b->keys[bi], type->key.type);
         if (ai == UINT_MAX) {
             if (n == a->n) {
                 ovsdb_datum_reallocate(a, type, a->n + (b->n - bi));
             }
-            ovsdb_atom_clone(&a->keys[n], &b->keys[bi], type->key_type);
-            if (type->value_type != OVSDB_TYPE_VOID) {
+            ovsdb_atom_clone(&a->keys[n], &b->keys[bi], type->key.type);
+            if (type->value.type != OVSDB_TYPE_VOID) {
                 ovsdb_atom_clone(&a->values[n], &b->values[bi],
-                                 type->value_type);
+                                 type->value.type);
             }
             n++;
-        } else if (replace && type->value_type != OVSDB_TYPE_VOID) {
-            ovsdb_atom_destroy(&a->values[ai], type->value_type);
+        } else if (replace && type->value.type != OVSDB_TYPE_VOID) {
+            ovsdb_atom_destroy(&a->values[ai], type->value.type);
             ovsdb_atom_clone(&a->values[ai], &b->values[bi],
-                             type->value_type);
+                             type->value.type);
         }
     }
     if (n != a->n) {
@@ -1260,9 +1469,9 @@ ovsdb_datum_subtract(struct ovsdb_datum *a, const struct ovsdb_type *a_type,
     bool changed = false;
     size_t i;
 
-    assert(a_type->key_type == b_type->key_type);
-    assert(a_type->value_type == b_type->value_type
-           || b_type->value_type == OVSDB_TYPE_VOID);
+    assert(a_type->key.type == b_type->key.type);
+    assert(a_type->value.type == b_type->value.type
+           || b_type->value.type == OVSDB_TYPE_VOID);
 
     /* XXX The big-O of this could easily be improved. */
     for (i = 0; i < a->n; ) {

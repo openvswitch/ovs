@@ -34,7 +34,7 @@ EXTRA_DIST += \
 # ovsdb-tool
 bin_PROGRAMS += ovsdb/ovsdb-tool
 ovsdb_ovsdb_tool_SOURCES = ovsdb/ovsdb-tool.c
-ovsdb_ovsdb_tool_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a
+ovsdb_ovsdb_tool_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(PCRE_LIBS)
 # ovsdb-tool.1
 man_MANS += ovsdb/ovsdb-tool.1
 DISTCLEANFILES += ovsdb/ovsdb-tool.1
@@ -43,7 +43,7 @@ EXTRA_DIST += ovsdb/ovsdb-tool.1.in
 # ovsdb-client
 bin_PROGRAMS += ovsdb/ovsdb-client
 ovsdb_ovsdb_client_SOURCES = ovsdb/ovsdb-client.c
-ovsdb_ovsdb_client_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
+ovsdb_ovsdb_client_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS) $(PCRE_LIBS)
 # ovsdb-client.1
 man_MANS += ovsdb/ovsdb-client.1
 DISTCLEANFILES += ovsdb/ovsdb-client.1
@@ -52,7 +52,7 @@ EXTRA_DIST += ovsdb/ovsdb-client.1.in
 # ovsdb-server
 sbin_PROGRAMS += ovsdb/ovsdb-server
 ovsdb_ovsdb_server_SOURCES = ovsdb/ovsdb-server.c
-ovsdb_ovsdb_server_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
+ovsdb_ovsdb_server_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS) $(PCRE_LIBS)
 # ovsdb-server.1
 man_MANS += ovsdb/ovsdb-server.1
 DISTCLEANFILES += ovsdb/ovsdb-server.1

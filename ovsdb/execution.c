@@ -307,12 +307,36 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
         error = parse_row(parser, "row", table, x->symtab, &row, NULL);
     }
     if (!error) {
+        /* Check constraints for columns not included in "row", in case the
+         * default values do not satisfy the constraints.  We could check only
+         * the columns that have their default values by supplying an
+         * ovsdb_column_set to parse_row() above, but I suspect that this is
+         * cheaper.  */
+        const struct shash_node *node;
+
+        SHASH_FOR_EACH (node, &table->schema->columns) {
+            const struct ovsdb_column *column = node->data;
+            const struct ovsdb_datum *datum = &row->fields[column->index];
+
+            /* If there are 0 keys or pairs, there's nothing to check.
+             * If there is 1, it might be a default value.
+             * If there are more, it can't be a default value, so the value has
+             * already been checked. */
+            if (datum->n == 1) {
+                error = ovsdb_datum_check_constraints(datum, &column->type);
+                if (error) {
+                    ovsdb_row_destroy(row);
+                    break;
+                }
+            }
+        }
+    }
+    if (!error) {
         *ovsdb_row_get_uuid_rw(row) = row_uuid;
         ovsdb_txn_row_insert(x->txn, row);
         json_object_put(result, "uuid",
                         ovsdb_datum_to_json(&row->fields[OVSDB_COL_UUID],
                                             &ovsdb_type_uuid));
-        row = NULL;
     }
     return error;
 }
