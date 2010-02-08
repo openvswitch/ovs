@@ -134,7 +134,9 @@ ovsdb_base_type_init(struct ovsdb_base_type *base, enum ovsdb_atomic_type type)
         break;
 
     case OVSDB_TYPE_STRING:
+#ifdef HAVE_PCRE
         base->u.string.re = NULL;
+#endif
         base->u.string.reMatch = NULL;
         base->u.string.reComment = NULL;
         base->u.string.minLen = 0;
@@ -168,10 +170,20 @@ ovsdb_base_type_clone(struct ovsdb_base_type *dst,
         break;
 
     case OVSDB_TYPE_STRING:
+#if HAVE_PCRE
         if (dst->u.string.re) {
             pcre_refcount(dst->u.string.re, 1);
         }
+#else
+        if (dst->u.string.reMatch) {
+            dst->u.string.reMatch = xstrdup(dst->u.string.reMatch);
+        }
+        if (dst->u.string.reComment) {
+            dst->u.string.reComment = xstrdup(dst->u.string.reComment);
+        }
+#endif
         break;
+
 
     case OVSDB_TYPE_UUID:
         if (dst->u.uuid.refTableName) {
@@ -197,11 +209,16 @@ ovsdb_base_type_destroy(struct ovsdb_base_type *base)
             break;
 
         case OVSDB_TYPE_STRING:
+#ifdef HAVE_PCRE
             if (base->u.string.re && !pcre_refcount(base->u.string.re, -1)) {
                 pcre_free(base->u.string.re);
                 free(base->u.string.reMatch);
                 free(base->u.string.reComment);
             }
+#else
+            free(base->u.string.reMatch);
+            free(base->u.string.reComment);
+#endif
             break;
 
         case OVSDB_TYPE_UUID:
@@ -291,6 +308,7 @@ struct ovsdb_error *
 ovsdb_base_type_set_regex(struct ovsdb_base_type *base,
                           const char *reMatch, const char *reComment)
 {
+#ifdef HAVE_PCRE
     const char *errorString;
     const char *pattern;
     int errorOffset;
@@ -300,6 +318,10 @@ ovsdb_base_type_set_regex(struct ovsdb_base_type *base,
     if (pattern[0] == '\0' || strchr(pattern, '\0')[-1] != '$') {
         pattern = xasprintf("%s$", pattern);
     }
+
+#ifndef PCRE_JAVASCRIPT_COMPAT  /* Added in PCRE 7.7. */
+#define PCRE_JAVASCRIPT_COMPAT 0
+#endif
     base->u.string.re = pcre_compile(pattern, (PCRE_ANCHORED | PCRE_UTF8
                                                | PCRE_JAVASCRIPT_COMPAT),
                                      &errorString, &errorOffset, NULL);
@@ -311,9 +333,10 @@ ovsdb_base_type_set_regex(struct ovsdb_base_type *base,
                                   "\"%s\" is not a valid regular "
                                   "expression: %s", reMatch, errorString);
     }
+    pcre_refcount(base->u.string.re, 1);
+#endif
 
     /* Save regular expression. */
-    pcre_refcount(base->u.string.re, 1);
     base->u.string.reMatch = xstrdup(reMatch);
     base->u.string.reComment = reComment ? xstrdup(reComment) : NULL;
     return NULL;

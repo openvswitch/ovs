@@ -224,16 +224,22 @@ dnl which is libpcre 7.2 or later.
 AC_DEFUN([OVS_CHECK_PCRE],
   [dnl Make sure that pkg-config is installed.
    m4_pattern_forbid([PKG_CHECK_MODULES])
-   HAVE_PCRE=no
-   HAVE_PCRE_PARTIAL=no
-   PKG_CHECK_MODULES([PCRE], [libpcre >= 6.6], 
-     [HAVE_PCRE=yes
-      PKG_CHECK_EXISTS([libpcre >= 7.2], [HAVE_PCRE_PARTIAL=yes])])
+   PKG_CHECK_MODULES([PCRE],
+                     [libpcre >= 6.6], 
+                     [HAVE_PCRE=yes
+                      PKG_CHECK_EXISTS([libpcre >= 7.2], 
+                                       [HAVE_PCRE_PARTIAL=yes],
+                                       [HAVE_PCRE_PARTIAL=no])],
+                     [HAVE_PCRE=no
+                      HAVE_PCRE_PARTIAL=no])
    AM_CONDITIONAL([HAVE_PCRE], [test "$HAVE_PCRE" = yes])
    AM_CONDITIONAL([HAVE_PCRE_PARTIAL], [test "$HAVE_PCRE_PARTIAL" = yes])
    if test "$HAVE_PCRE" = yes; then
       AC_DEFINE([HAVE_PCRE], [1], [Define to 1 if libpcre is installed.])
-   fi])
+   fi
+   AC_SUBST([HAVE_PCRE])
+   AC_SUBST([HAVE_PCRE_PARTIAL])
+])
 
 dnl Checks for Python 2.x, x >= 4.
 AC_DEFUN([OVS_CHECK_PYTHON],

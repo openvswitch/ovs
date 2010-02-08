@@ -17,11 +17,14 @@
 #define OVSDB_TYPES_H 1
 
 #include <float.h>
-#include <pcre.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include "compiler.h"
 #include "uuid.h"
+
+#ifdef HAVE_PCRE
+#include <pcre.h>
+#endif
 
 struct json;
 
@@ -61,7 +64,9 @@ struct ovsdb_base_type {
         /* No constraints for Boolean types. */
 
         struct ovsdb_string_constraints {
+#ifdef HAVE_PCRE
             pcre *re;           /* Compiled regular expression. */
+#endif
             char *reMatch;      /* reMatch or NULL. */
             char *reComment;    /* reComment or NULL. */
             unsigned int minLen; /* minLength or 0. */
@@ -81,9 +86,15 @@ struct ovsdb_base_type {
 #define OVSDB_BASE_REAL_INIT    { .type = OVSDB_TYPE_REAL,          \
                                   .u.real = { -DBL_MAX, DBL_MAX } }
 #define OVSDB_BASE_BOOLEAN_INIT { .type = OVSDB_TYPE_BOOLEAN }
+#ifdef HAVE_PCRE
 #define OVSDB_BASE_STRING_INIT  { .type = OVSDB_TYPE_STRING,        \
                                   .u.string = { NULL, NULL, NULL,   \
                                                 0, UINT_MAX } }
+#else
+#define OVSDB_BASE_STRING_INIT  { .type = OVSDB_TYPE_STRING,    \
+                                  .u.string = { NULL, NULL,     \
+                                                0, UINT_MAX } }
+#endif
 #define OVSDB_BASE_UUID_INIT    { .type = OVSDB_TYPE_UUID,      \
                                   .u.uuid = { NULL, NULL } }
 

@@ -50,9 +50,24 @@ OVSDB_CHECK_POSITIVE([string reMatch],
 OVSDB_CHECK_POSITIVE([string reMatch + reComment], 
   [[parse-base-type '{"type": "string", "reMatch": "\\d{3}-\\d{3}-\\d{4}", "reComment": "US-style telephone number"}']],
   [{"reComment":"US-style telephone number","reMatch":"\\d{3}-\\d{3}-\\d{4}","type":"string"}])
-OVSDB_CHECK_NEGATIVE([reMatch must be a valid JavaScript regexp],
-  [[parse-base-type '{"type": "string", "reMatch": "ab@:>@cd"}']],
-  [[test-ovsdb: invalid regular expression: "ab@:>@cd" is not a valid regular expression: @:>@ is an invalid data character in JavaScript compatibility mode]])
+
+AT_SETUP([reMatch must be a valid regexp])
+AT_KEYWORDS([ovsdb negative])
+if test "$HAVE_PCRE" = yes; then
+   AT_CHECK(
+     [[test-ovsdb parse-base-type \
+                  '{"type": "string", "reMatch": "x{2,1}"}']],
+     [1], [],
+     [[test-ovsdb: invalid regular expression: "x{2,1}" is not a valid regular expression: numbers out of order in {} quantifier
+]])
+else
+   AT_CHECK(
+     [[test-ovsdb parse-base-type \
+                  '{"type": "string", "reMatch": "x{2,1}"}']],
+     [0], [[{"reMatch":"x{2,1}","type":"string"}
+]], [])
+fi
+AT_CLEANUP
 
 OVSDB_CHECK_POSITIVE([string minLength], 
   [[parse-base-type '{"type": "string", "minLength": 1}']],

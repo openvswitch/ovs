@@ -88,7 +88,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/packets.h \
 	lib/pcap.c \
 	lib/pcap.h \
-	lib/pcre.h \
 	lib/poll-loop.c \
 	lib/poll-loop.h \
 	lib/port-array.c \

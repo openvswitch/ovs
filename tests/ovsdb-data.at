@@ -290,8 +290,17 @@ constraint violation: -11 is not in the valid range -10 to 10 (inclusive)
 constraint violation: 11 is not in the valid range -10 to 10 (inclusive)
 constraint violation: 123576 is not in the valid range -10 to 10 (inclusive)])
 
-OVSDB_CHECK_POSITIVE([strings matching /(a(b)?)c?/],
-  [[parse-atoms '{"type": "string", "reMatch": "(a(b)?)?c?"}' \
+AT_SETUP([strings matching /(a(b)?)c?/])
+AT_KEYWORDS([ovsdb positive])
+if test "$HAVE_PCRE" = yes; then
+   b_out='constraint violation: "b" does not match regular expression /(a(b)?)?c?/'
+   bc_out='constraint violation: "bc" does not match regular expression /(a(b)?)?c?/'
+else
+   b_out='"b"'
+   bc_out='"bc"'
+fi
+AT_CHECK_UNQUOTED(
+  [[test-ovsdb parse-atoms '{"type": "string", "reMatch": "(a(b)?)?c?"}' \
     '[""]' \
     '["a"]' \
     '["ab"]' \
@@ -300,14 +309,17 @@ OVSDB_CHECK_POSITIVE([strings matching /(a(b)?)c?/],
     '["b"]' \
     '["bc"]' \
     '["c"]']],
+  [0],
   [[""
 "a"
 "ab"
 "abc"
 "ac"
-constraint violation: "b" does not match regular expression /(a(b)?)?c?/
-constraint violation: "bc" does not match regular expression /(a(b)?)?c?/
-"c"]])
+$b_out
+$bc_out
+"c"
+]])
+AT_CLEANUP
 
 OVSDB_CHECK_POSITIVE([strings at least 2 characters long],
   [[parse-atoms '{"type": "string", "minLength": 2}' \
