@@ -69,7 +69,7 @@ static inline bool ovsdb_atom_equals(const union ovsdb_atom *a,
 struct ovsdb_error *ovsdb_atom_from_json(union ovsdb_atom *,
                                          const struct ovsdb_base_type *,
                                          const struct json *,
-                                         const struct ovsdb_symbol_table *)
+                                         struct ovsdb_symbol_table *)
     WARN_UNUSED_RESULT;
 struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
@@ -131,7 +131,7 @@ struct ovsdb_error *ovsdb_datum_check_constraints(
 struct ovsdb_error *ovsdb_datum_from_json(struct ovsdb_datum *,
                                           const struct ovsdb_type *,
                                           const struct json *,
-                                          const struct ovsdb_symbol_table *)
+                                          struct ovsdb_symbol_table *)
     WARN_UNUSED_RESULT;
 struct json *ovsdb_datum_to_json(const struct ovsdb_datum *,
                                  const struct ovsdb_type *);
@@ -206,8 +206,11 @@ struct ovsdb_symbol_table *ovsdb_symbol_table_create(void);
 void ovsdb_symbol_table_destroy(struct ovsdb_symbol_table *);
 struct ovsdb_symbol *ovsdb_symbol_table_get(const struct ovsdb_symbol_table *,
                                             const char *name);
-void ovsdb_symbol_table_put(struct ovsdb_symbol_table *, const char *name,
-                            const struct uuid *, bool used);
+struct ovsdb_symbol *ovsdb_symbol_table_put(struct ovsdb_symbol_table *,
+                                            const char *name,
+                                            const struct uuid *, bool used);
+struct ovsdb_symbol *ovsdb_symbol_table_insert(struct ovsdb_symbol_table *,
+                                               const char *name);
 
 /* Tokenization
  *

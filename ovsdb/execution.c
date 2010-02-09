@@ -56,7 +56,6 @@ static ovsdb_operation_executor ovsdb_execute_delete;
 static ovsdb_operation_executor ovsdb_execute_wait;
 static ovsdb_operation_executor ovsdb_execute_commit;
 static ovsdb_operation_executor ovsdb_execute_abort;
-static ovsdb_operation_executor ovsdb_execute_declare;
 static ovsdb_operation_executor ovsdb_execute_comment;
 
 static ovsdb_operation_executor *
@@ -76,7 +75,6 @@ lookup_executor(const char *name)
         { "wait", ovsdb_execute_wait },
         { "commit", ovsdb_execute_commit },
         { "abort", ovsdb_execute_abort },
-        { "declare", ovsdb_execute_declare },
         { "comment", ovsdb_execute_comment },
     };
 
@@ -240,7 +238,7 @@ parse_table(struct ovsdb_execution *x,
 static WARN_UNUSED_RESULT struct ovsdb_error *
 parse_row(struct ovsdb_parser *parser, const char *member,
           const struct ovsdb_table *table,
-          const struct ovsdb_symbol_table *symtab,
+          struct ovsdb_symbol_table *symtab,
           struct ovsdb_row **rowp, struct ovsdb_column_set *columns)
 {
     struct ovsdb_error *error;
@@ -285,20 +283,14 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     if (uuid_name) {
         struct ovsdb_symbol *symbol;
 
-        symbol = ovsdb_symbol_table_get(x->symtab, json_string(uuid_name));
-        if (symbol) {
-            if (symbol->used) {
-                return ovsdb_syntax_error(uuid_name, "duplicate uuid-name",
-                                          "This \"uuid-name\" appeared on an "
-                                          "earlier \"insert\" operation.");
-            }
-            row_uuid = symbol->uuid;
-            symbol->used = true;
-        } else {
-            uuid_generate(&row_uuid);
-            ovsdb_symbol_table_put(x->symtab, json_string(uuid_name),
-                                   &row_uuid, true);
+        symbol = ovsdb_symbol_table_insert(x->symtab, json_string(uuid_name));
+        if (symbol->used) {
+            return ovsdb_syntax_error(uuid_name, "duplicate uuid-name",
+                                      "This \"uuid-name\" appeared on an "
+                                      "earlier \"insert\" operation.");
         }
+        row_uuid = symbol->uuid;
+        symbol->used = true;
     } else {
         uuid_generate(&row_uuid);
     }
@@ -687,35 +679,6 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     ovsdb_condition_destroy(&condition);
 
     return error;
-}
-
-static struct ovsdb_error *
-ovsdb_execute_declare(struct ovsdb_execution *x, struct ovsdb_parser *parser,
-                      struct json *result)
-{
-    const struct json *uuid_name;
-    struct uuid uuid;
-
-    uuid_name = ovsdb_parser_member(parser, "uuid-name", OP_ID);
-    if (!uuid_name) {
-        return NULL;
-    }
-
-    if (ovsdb_symbol_table_get(x->symtab, json_string(uuid_name))) {
-        return ovsdb_syntax_error(uuid_name, "duplicate uuid-name",
-                                  "This \"uuid-name\" appeared on an "
-                                  "earlier \"declare\" or \"insert\" "
-                                  "operation.");
-    }
-
-    uuid_generate(&uuid);
-    ovsdb_symbol_table_put(x->symtab, json_string(uuid_name), &uuid, false);
-    json_object_put(result, "uuid",
-                    json_array_create_2(
-                        json_string_create("uuid"),
-                        json_string_create_nocopy(
-                            xasprintf(UUID_FMT, UUID_ARGS(&uuid)))));
-    return NULL;
 }
 
 static struct ovsdb_error *

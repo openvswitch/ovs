@@ -160,7 +160,7 @@ ovsdb_row_update_columns(struct ovsdb_row *dst,
 
 struct ovsdb_error *
 ovsdb_row_from_json(struct ovsdb_row *row, const struct json *json,
-                    const struct ovsdb_symbol_table *symtab,
+                    struct ovsdb_symbol_table *symtab,
                     struct ovsdb_column_set *included)
 {
     struct ovsdb_table_schema *schema = row->table->schema;

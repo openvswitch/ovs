@@ -443,11 +443,7 @@ OVSDB_CHECK_EXECUTION([referential integrity -- simple],
 
 OVSDB_CHECK_EXECUTION([referential integrity -- mutual references],
   [CONSTRAINT_SCHEMA],
-  [[[[{"op": "declare",
-       "uuid-name": "row1"},
-      {"op": "declare",
-       "uuid-name": "row2"},
-      {"op": "insert",
+  [[[[{"op": "insert",
        "table": "a",
        "row": {"a": 0,
                "a2b": ["set", [["named-uuid", "row2"]]],
@@ -481,7 +477,7 @@ OVSDB_CHECK_EXECUTION([referential integrity -- mutual references],
       {"op": "delete",
        "table": "b",
        "where": [["b", "==", 1]]}]]]],
-  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]
+  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]
 [{"uuid":["uuid","<2>"]},{"details":"reference to nonexistent row <3>","error":"referential integrity violation"}]
 [{"count":1},{"details":"cannot delete a row <0> because of 1 remaining reference(s)","error":"referential integrity violation"}]
 [{"count":1},{"details":"cannot delete b row <1> because of 1 remaining reference(s)","error":"referential integrity violation"}]

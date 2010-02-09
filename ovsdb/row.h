@@ -57,7 +57,7 @@ void ovsdb_row_update_columns(struct ovsdb_row *, const struct ovsdb_row *,
 
 struct ovsdb_error *ovsdb_row_from_json(struct ovsdb_row *,
                                         const struct json *,
-                                        const struct ovsdb_symbol_table *,
+                                        struct ovsdb_symbol_table *,
                                         struct ovsdb_column_set *included)
     WARN_UNUSED_RESULT;
 struct json *ovsdb_row_to_json(const struct ovsdb_row *,

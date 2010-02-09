@@ -72,7 +72,7 @@ type_mismatch(const struct ovsdb_mutation *m, const struct json *json)
 static WARN_UNUSED_RESULT struct ovsdb_error *
 ovsdb_mutation_from_json(const struct ovsdb_table_schema *ts,
                          const struct json *json,
-                         const struct ovsdb_symbol_table *symtab,
+                         struct ovsdb_symbol_table *symtab,
                          struct ovsdb_mutation *m)
 {
     const struct json_array *array;
@@ -164,7 +164,7 @@ ovsdb_mutation_free(struct ovsdb_mutation *m)
 struct ovsdb_error *
 ovsdb_mutation_set_from_json(const struct ovsdb_table_schema *ts,
                              const struct json *json,
-                             const struct ovsdb_symbol_table *symtab,
+                             struct ovsdb_symbol_table *symtab,
                              struct ovsdb_mutation_set *set)
 {
     const struct json_array *array = json_array(json);

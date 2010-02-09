@@ -229,14 +229,9 @@ parse_json_pair(const struct json *json,
     return NULL;
 }
 
-static struct ovsdb_error *
+static struct ovsdb_error * WARN_UNUSED_RESULT
 ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
-                      const struct ovsdb_symbol_table *symtab)
-    WARN_UNUSED_RESULT;
-
-static struct ovsdb_error *
-ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
-                      const struct ovsdb_symbol_table *symtab)
+                      struct ovsdb_symbol_table *symtab)
 {
     struct ovsdb_error *error0;
     const struct json *value;
@@ -254,18 +249,10 @@ ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
         error1 = unwrap_json(json, "named-uuid", JSON_STRING, &value);
         if (!error1) {
             const char *name = json_string(value);
-            const struct ovsdb_symbol *symbol;
 
             ovsdb_error_destroy(error0);
-
-            symbol = ovsdb_symbol_table_get(symtab, name);
-            if (symbol) {
-                *uuid = symbol->uuid;
-                return NULL;
-            } else {
-                return ovsdb_syntax_error(json, NULL,
-                                          "unknown named-uuid \"%s\"", name);
-            }
+            *uuid = ovsdb_symbol_table_insert(symtab, name)->uuid;
+            return NULL;
         }
         ovsdb_error_destroy(error1);
     }
@@ -276,7 +263,7 @@ ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
 static struct ovsdb_error * WARN_UNUSED_RESULT
 ovsdb_atom_from_json__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                        const struct json *json,
-                       const struct ovsdb_symbol_table *symtab)
+                       struct ovsdb_symbol_table *symtab)
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
@@ -332,7 +319,7 @@ struct ovsdb_error *
 ovsdb_atom_from_json(union ovsdb_atom *atom,
                      const struct ovsdb_base_type *base,
                      const struct json *json,
-                     const struct ovsdb_symbol_table *symtab)
+                     struct ovsdb_symbol_table *symtab)
 {
     struct ovsdb_error *error;
 
@@ -906,7 +893,7 @@ struct ovsdb_error *
 ovsdb_datum_from_json(struct ovsdb_datum *datum,
                       const struct ovsdb_type *type,
                       const struct json *json,
-                      const struct ovsdb_symbol_table *symtab)
+                      struct ovsdb_symbol_table *symtab)
 {
     struct ovsdb_error *error;
 
@@ -1527,7 +1514,7 @@ ovsdb_symbol_table_get(const struct ovsdb_symbol_table *symtab,
     return shash_find_data(&symtab->sh, name);
 }
 
-void
+struct ovsdb_symbol *
 ovsdb_symbol_table_put(struct ovsdb_symbol_table *symtab, const char *name,
                        const struct uuid *uuid, bool used)
 {
@@ -1538,6 +1525,23 @@ ovsdb_symbol_table_put(struct ovsdb_symbol_table *symtab, const char *name,
     symbol->uuid = *uuid;
     symbol->used = used;
     shash_add(&symtab->sh, name, symbol);
+    return symbol;
+}
+
+struct ovsdb_symbol *
+ovsdb_symbol_table_insert(struct ovsdb_symbol_table *symtab,
+                          const char *name)
+{
+    struct ovsdb_symbol *symbol;
+
+    symbol = ovsdb_symbol_table_get(symtab, name);
+    if (!symbol) {
+        struct uuid uuid;
+
+        uuid_generate(&uuid);
+        symbol = ovsdb_symbol_table_put(symtab, name, &uuid, false);
+    }
+    return symbol;
 }
 
 /* Extracts a token from the beginning of 's' and returns a pointer just after

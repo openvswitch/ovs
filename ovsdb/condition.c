@@ -55,7 +55,7 @@ ovsdb_function_to_string(enum ovsdb_function function)
 static WARN_UNUSED_RESULT struct ovsdb_error *
 ovsdb_clause_from_json(const struct ovsdb_table_schema *ts,
                        const struct json *json,
-                       const struct ovsdb_symbol_table *symtab,
+                       struct ovsdb_symbol_table *symtab,
                        struct ovsdb_clause *clause)
 {
     const struct json_array *array;
@@ -167,7 +167,7 @@ compare_clauses_3way(const void *a_, const void *b_)
 struct ovsdb_error *
 ovsdb_condition_from_json(const struct ovsdb_table_schema *ts,
                           const struct json *json,
-                          const struct ovsdb_symbol_table *symtab,
+                          struct ovsdb_symbol_table *symtab,
                           struct ovsdb_condition *cnd)
 {
     const struct json_array *array = json_array(json);

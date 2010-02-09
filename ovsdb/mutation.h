@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ struct ovsdb_mutation_set {
 
 struct ovsdb_error *ovsdb_mutation_set_from_json(
     const struct ovsdb_table_schema *,
-    const struct json *, const struct ovsdb_symbol_table *,
+    const struct json *, struct ovsdb_symbol_table *,
     struct ovsdb_mutation_set *) WARN_UNUSED_RESULT;
 struct json *ovsdb_mutation_set_to_json(const struct ovsdb_mutation_set *);
 void ovsdb_mutation_set_destroy(struct ovsdb_mutation_set *);

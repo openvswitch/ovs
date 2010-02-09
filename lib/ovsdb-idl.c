@@ -1103,16 +1103,6 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
                                                     &column->type));
             }
         }
-        if (row->new && !row->old) {
-            struct json *op;
-
-            op = json_object_create();
-            json_array_add(operations, op);
-            json_object_put_string(op, "op", "declare");
-            json_object_put(op, "uuid-name",
-                            json_string_create_nocopy(
-                                uuid_name_from_uuid(&row->uuid)));
-        }
     }
 
     /* Add updates. */

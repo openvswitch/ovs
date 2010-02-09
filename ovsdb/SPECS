@@ -582,13 +582,13 @@ Notation for the Wire Protocol
 <named-uuid>
 
     A 2-element JSON array that represents the UUID of a row inserted
-    in a previous "insert" operation within the same transaction.  The
-    first element of the array must be the string "named-uuid" and the
-    second element must be the string specified on this "insert"
-    operation's "uuid-name" or on a preceding "insert" within the same
-    transaction.  For example, if this or a previous "insert"
-    operation specified a "uuid-name" of "myrow", the following
-    <named-uuid> represents the UUID created by that operation:
+    in an "insert" operation within the same transaction.  The first
+    element of the array must be the string "named-uuid" and the
+    second element should be the string specified as the "uuid-name"
+    for an "insert" operation within the same transaction.  For
+    example, if an "insert" operation within this transaction
+    specifies a "uuid-name" of "myrow", the following <named-uuid>
+    represents the UUID created by that operation:
 
         ["named-uuid", "myrow"]
 
@@ -773,21 +773,11 @@ Semantics:
 
         - "uuid": 00000000-0000-0000-0000-000000000000
 
-    If "uuid-name" is not supplied, the new row receives a new,
-    randomly generated UUID.
+    The new row receives a new, randomly generated UUID.
 
-    If "uuid-name" is supplied, then it is an error if <id> has
-    previously appeared as the "uuid-name" in an "insert" operation.
-
-    If "uuid-name" is supplied and its <id> previously appeared as the
-    "uuid-name" in a "declare" operation, then the new row receives
-    the UUID associated with that "uuid-name".
-
-    If "uuid-name" is supplied and its <id> has not previously
-    appeared as the "uuid-name" in a "declare" operation, then the new
-    row also receives a new, randomly generated UUID.  This UUID is
-    also made available under that name to this operation and later
-    operations within the same transaction.
+    If "uuid-name" is supplied, then it is an error if <id> is not
+    unique among the "uuid-name"s supplied on all the "insert"
+    operations within this transaction.
 
     The UUID for the new row is returned as the "uuid" member of the
     result.
@@ -796,7 +786,7 @@ Errors:
 
     "error": "duplicate uuid-name"
 
-        The same "uuid-name" appeared on an earlier "insert" operation
+        The same "uuid-name" appears on another "insert" operation
         within this transaction.
 
     "error": "constraint violation"
@@ -1045,36 +1035,6 @@ Errors:
     "error": "aborted"
 
         This operation always fails with this error.
-
-declare
-.......
-
-Request object members:
-
-    "op": "declare"                    required
-    "uuid-name": <id>                  required
-
-Result object members:
-
-    "uuid": <uuid>
-
-Semantics:
-
-    Predeclares a UUID named <id> that may be referenced in later
-    operations as ["named-uuid", <id>] or (at most once) in an
-    "insert" operation as "uuid-name".
-
-    It is an error if <id> has appeared as the "uuid-name" in a prior
-    "insert" or "declare" operation within this transaction.
-
-    The generated UUID is returned as the "uuid" member of the result.
-
-Errors:
-
-    "error": "duplicate uuid-name"
-
-        The same "uuid-name" appeared on an earlier "insert" or
-        "declare" operation within this transaction.
 
 comment
 .......
