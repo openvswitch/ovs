@@ -317,6 +317,17 @@ parse_command(int argc, char *argv[], struct vsctl_command *command)
                 vsctl_fatal("'%s' command requires at least %d arguments",
                             p->name, p->min_args);
             } else if (n_arg > p->max_args) {
+                int j;
+
+                for (j = i + 1; j < argc; j++) {
+                    if (argv[j][0] == '-') {
+                        vsctl_fatal("'%s' command takes at most %d arguments "
+                                    "(note that options must precede command "
+                                    "names and follow a \"--\" argument)",
+                                    p->name, p->max_args);
+                    }
+                }
+
                 vsctl_fatal("'%s' command takes at most %d arguments",
                             p->name, p->max_args);
             } else {
