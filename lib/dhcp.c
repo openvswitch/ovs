@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -674,7 +674,7 @@ dhcp_parse(struct dhcp_msg *msg, const struct ofpbuf *b_)
     msg->giaddr = dhcp->giaddr;
     memcpy(msg->chaddr, dhcp->chaddr, ETH_ADDR_LEN);
 
-    cookie = ofpbuf_try_pull(&b, sizeof cookie);
+    cookie = ofpbuf_try_pull(&b, sizeof *cookie);
     if (cookie) {
         if (ntohl(*cookie) == DHCP_OPTS_COOKIE) {
             uint8_t overload;
