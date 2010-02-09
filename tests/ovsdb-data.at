@@ -350,7 +350,7 @@ constraint violation: "abc" length 3 is greater than maximum allowed length 2
 AT_BANNER([OSVDB -- simple data])
 
 OVSDB_CHECK_POSITIVE([integer JSON datum],
-  [[parse-data '["integer"]' '[0]' '[1]' '[-1]']],
+  [[parse-data '["integer"]' '[0]' '["set",[1]]' '[-1]']],
   [0
 1
 -1])
@@ -363,7 +363,7 @@ OVSDB_CHECK_POSITIVE([integer string datum],
 1])
 
 OVSDB_CHECK_POSITIVE([real JSON datum], 
-  [[parse-data '["real"]' '[0]' '[1.0]' '[-1.25]']],
+  [[parse-data '["real"]' '[0]' '["set",[1.0]]' '[-1.25]']],
   [0
 1
 -1.25])
@@ -375,7 +375,7 @@ OVSDB_CHECK_POSITIVE([real string datum],
 -1.25])
 
 OVSDB_CHECK_POSITIVE([boolean JSON datum],
-  [[parse-data '["boolean"]' '[true]' '[false]' ]],
+  [[parse-data '["boolean"]' '["set", [true]]' '[false]' ]],
   [true
 false])
 
@@ -385,7 +385,7 @@ OVSDB_CHECK_POSITIVE([boolean string datum],
 false])
 
 OVSDB_CHECK_POSITIVE([string JSON datum],
-  [[parse-data '["string"]' '[""]' '["true"]' '["\"\\\/\b\f\n\r\t"]']],
+  [[parse-data '["string"]' '["set",[""]]' '["true"]' '["\"\\\/\b\f\n\r\t"]']],
   [""
 "true"
 "\"\\/\b\f\n\r\t"])
@@ -401,11 +401,11 @@ AT_BANNER([OVSDB -- set data])
 
 OVSDB_CHECK_POSITIVE([JSON optional boolean],
   [[parse-data '{"key": "boolean", "min": 0}' \
-    '["set", [true]]' \
+    '[true]' \
     '["set", [false]]' \
     '["set", []]']], 
-  [[["set",[true]]
-["set",[false]]
+  [[true
+false
 ["set",[]]]],
   [set])
 
@@ -422,12 +422,14 @@ false
 OVSDB_CHECK_POSITIVE([JSON set of 0 or more integers],
   [[parse-data '{"key": "integer", "min": 0, "max": "unlimited"}' \
     '["set", [0]]' \
+    '[1]' \
     '["set", [0, 1]]' \
     '["set", [0, 1, 2]]' \
     '["set", [0, 1, 2, 3, 4, 5]]' \
     '["set", [0, 1, 2, 3, 4, 5, 6, 7, 8]]' \
     '["set", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]']],
-  [[["set",[0]]
+  [[0
+1
 ["set",[0,1]]
 ["set",[0,1,2]]
 ["set",[0,1,2,3,4,5]]
@@ -452,10 +454,12 @@ OVSDB_CHECK_POSITIVE([string set of 0 or more integers],
 OVSDB_CHECK_POSITIVE([JSON set of 1 to 3 uuids],
   [[parse-data '{"key": "uuid", "min": 1, "max": 3}' \
     '["set", [["uuid", "550e8400-e29b-41d4-a716-446655440000"]]]' \
+    '["uuid", "b5078be0-7664-4299-b836-8bcc03ef941f"]' \
     '["set", [["uuid", "c5051240-30ff-43ed-b4b9-93cf3f050813"],
               ["uuid", "90558331-09af-4d2f-a572-509cad2e9088"],
               ["uuid", "550e8400-e29b-41d4-a716-446655440000"]]]']],
-  [[["set",[["uuid","550e8400-e29b-41d4-a716-446655440000"]]]
+  [[["uuid","550e8400-e29b-41d4-a716-446655440000"]
+["uuid","b5078be0-7664-4299-b836-8bcc03ef941f"]
 ["set",[["uuid","550e8400-e29b-41d4-a716-446655440000"],["uuid","90558331-09af-4d2f-a572-509cad2e9088"],["uuid","c5051240-30ff-43ed-b4b9-93cf3f050813"]]]]])
 
 OVSDB_CHECK_POSITIVE([string set of 1 to 3 uuids],
@@ -470,11 +474,13 @@ OVSDB_CHECK_POSITIVE([string set of 1 to 3 uuids],
 OVSDB_CHECK_POSITIVE([JSON set of 0 to 3 strings],
   [[parse-data '{"key": "string", "min": 0, "max": 3}' \
     '["set", []]' \
+    '["a longer string"]' \
     '["set", ["a relatively long string"]]' \
     '["set", ["short string", "a relatively long string"]]' \
     '["set", ["zzz", "short string", "a relatively long string"]]']],
   [[["set",[]]
-["set",["a relatively long string"]]
+"a longer string"
+"a relatively long string"
 ["set",["a relatively long string","short string"]]
 ["set",["a relatively long string","short string","zzz"]]]])
 

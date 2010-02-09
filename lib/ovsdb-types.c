@@ -566,7 +566,8 @@ ovsdb_type_is_valid(const struct ovsdb_type *type)
             && ovsdb_base_type_is_valid(&type->key)
             && ovsdb_base_type_is_valid(&type->value)
             && type->n_min <= 1
-            && type->n_min <= type->n_max);
+            && type->n_min <= type->n_max
+            && type->n_max >= 1);
 }
 
 static struct ovsdb_error *

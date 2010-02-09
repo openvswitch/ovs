@@ -143,11 +143,11 @@ OVSDB_CHECK_POSITIVE([mutations on sets],
 [["r","/=",4]]
 [["r","insert",["set",[1,2]]]]
 [["r","delete",["set",[1,2,3]]]]
-[["b","insert",["set",[true]]]]
-[["b","delete",["set",[false]]]]
-[["s","insert",["set",["a"]]]]
+[["b","insert",true]]
+[["b","delete",false]]
+[["s","insert","a"]]
 [["s","delete",["set",["a","b"]]]]
-[["u","insert",["set",[["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]]]]
+[["u","insert",["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]]
 [["u","delete",["set",[["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"],["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]]]]]],
   [mutation])
 
@@ -449,13 +449,13 @@ OVSDB_CHECK_POSITIVE([executing mutations on integer sets],
       {"i": ["set", [0, 1, 2]]}']]],
   [[mutation  0:
 row 0: no change
-row 1: {"i":["set",[1]]}
+row 1: {"i":1}
 row 2: {"i":["set",[1,2]]}
 row 3: {"i":["set",[1,2,3]]}
 
 mutation  1:
 row 0: no change
-row 1: {"i":["set",[-2]]}
+row 1: {"i":-2}
 row 2: {"i":["set",[-2,-1]]}
 row 3: {"i":["set",[-2,-1,0]]}
 
@@ -478,7 +478,7 @@ row 2: no change
 row 3: constraint violation: Result of "%=" operation contains duplicates.
 
 mutation  5:
-row 0: {"i":["set",[1]]}
+row 0: {"i":1}
 row 1: {"i":["set",[0,1]]}
 row 2: no change
 row 3: no change
@@ -492,7 +492,7 @@ row 3: {"i":["set",[0,1,2,3]]}
 mutation  7:
 row 0: no change
 row 1: no change
-row 2: {"i":["set",[0]]}
+row 2: {"i":0}
 row 3: {"i":["set",[0,2]]}
 
 mutation  8:
@@ -512,52 +512,52 @@ OVSDB_CHECK_POSITIVE([executing mutations on real sets],
       [["r", "*=", 2.5]],
       [["r", "/=", 4]],
       [["r", "*=", 0]],
-      [["r", "insert", ["set", [1.5]]]],
-      [["r", "insert", ["set", [3]]]],
+      [["r", "insert", 1.5]],
+      [["r", "insert", 3]],
       [["r", "delete", ["set", [1.5, 3.5]]]],
       [["r", "delete", ["set", [0.5, 1.5, 2.5]]]]]' \
     '[{"r": ["set", []]},
-      {"r": ["set", [0.5]]},
+      {"r": 0.5},
       {"r": ["set", [0.5, 1.5]]},
       {"r": ["set", [0.5, 1.5, 2.5]]}']]],
   [[mutation  0:
 row 0: no change
-row 1: {"r":["set",[1]]}
+row 1: {"r":1}
 row 2: {"r":["set",[1,2]]}
 row 3: {"r":["set",[1,2,3]]}
 
 mutation  1:
 row 0: no change
-row 1: {"r":["set",[-1]]}
+row 1: {"r":-1}
 row 2: {"r":["set",[-1,0]]}
 row 3: {"r":["set",[-1,0,1]]}
 
 mutation  2:
 row 0: no change
-row 1: {"r":["set",[1.25]]}
+row 1: {"r":1.25}
 row 2: {"r":["set",[1.25,3.75]]}
 row 3: constraint violation: 6.25 is greater than maximum allowed value 6
 
 mutation  3:
 row 0: no change
-row 1: {"r":["set",[0.125]]}
+row 1: {"r":0.125}
 row 2: {"r":["set",[0.125,0.375]]}
 row 3: {"r":["set",[0.125,0.375,0.625]]}
 
 mutation  4:
 row 0: no change
-row 1: {"r":["set",[0]]}
+row 1: {"r":0}
 row 2: constraint violation: Result of "*=" operation contains duplicates.
 row 3: constraint violation: Result of "*=" operation contains duplicates.
 
 mutation  5:
-row 0: {"r":["set",[1.5]]}
+row 0: {"r":1.5}
 row 1: {"r":["set",[0.5,1.5]]}
 row 2: no change
 row 3: no change
 
 mutation  6:
-row 0: {"r":["set",[3]]}
+row 0: {"r":3}
 row 1: {"r":["set",[0.5,3]]}
 row 2: {"r":["set",[0.5,1.5,3]]}
 row 3: {"r":["set",[0.5,1.5,2.5,3]]}
@@ -565,7 +565,7 @@ row 3: {"r":["set",[0.5,1.5,2.5,3]]}
 mutation  7:
 row 0: no change
 row 1: no change
-row 2: {"r":["set",[0.5]]}
+row 2: {"r":0.5}
 row 3: {"r":["set",[0.5,2.5]]}
 
 mutation  8:
@@ -589,13 +589,13 @@ OVSDB_CHECK_POSITIVE([executing mutations on boolean sets],
       {"b": ["set", [true]]},
       {"b": ["set", [false, true]]}']]],
   [[mutation  0:
-row 0: {"b":["set",[false]]}
+row 0: {"b":false}
 row 1: no change
 row 2: {"b":["set",[false,true]]}
 row 3: no change
 
 mutation  1:
-row 0: {"b":["set",[true]]}
+row 0: {"b":true}
 row 1: {"b":["set",[false,true]]}
 row 2: no change
 row 3: no change
@@ -610,13 +610,13 @@ mutation  3:
 row 0: no change
 row 1: {"b":["set",[]]}
 row 2: no change
-row 3: {"b":["set",[true]]}
+row 3: {"b":true}
 
 mutation  4:
 row 0: no change
 row 1: no change
 row 2: {"b":["set",[]]}
-row 3: {"b":["set",[false]]}
+row 3: {"b":false}
 
 mutation  5:
 row 0: no change
@@ -639,13 +639,13 @@ OVSDB_CHECK_POSITIVE([executing mutations on string sets],
       {"s": ["set", ["a", "b"]]},
       {"s": ["set", ["a", "b", "c", "d"]]}']]],
   [[mutation  0:
-row 0: {"s":["set",["a"]]}
+row 0: {"s":"a"}
 row 1: no change
 row 2: no change
 row 3: no change
 
 mutation  1:
-row 0: {"s":["set",["b"]]}
+row 0: {"s":"b"}
 row 1: {"s":["set",["a","b"]]}
 row 2: no change
 row 3: no change
@@ -659,13 +659,13 @@ row 3: no change
 mutation  3:
 row 0: no change
 row 1: {"s":["set",[]]}
-row 2: {"s":["set",["b"]]}
+row 2: {"s":"b"}
 row 3: {"s":["set",["b","c","d"]]}
 
 mutation  4:
 row 0: no change
 row 1: no change
-row 2: {"s":["set",["a"]]}
+row 2: {"s":"a"}
 row 3: {"s":["set",["a","c","d"]]}
 
 mutation  5:
@@ -689,19 +689,19 @@ OVSDB_CHECK_POSITIVE([executing mutations on uuid sets],
       {"u": ["set", [["uuid", "a60fe7ff-317b-4568-9106-892b37445313"]]]},
       {"u": ["set", [["uuid", "2607d30e-e652-4927-9fec-8bbf1b60c7e9"]]]}']]],
   [[mutation  0:
-row 0: {"u":["set",[["uuid","ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]}
+row 0: {"u":["uuid","ddd9e79d-7782-414c-8b22-1046c60b6ec2"]}
 row 1: no change
 row 2: {"u":["set",[["uuid","a60fe7ff-317b-4568-9106-892b37445313"],["uuid","ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]}
 row 3: {"u":["set",[["uuid","2607d30e-e652-4927-9fec-8bbf1b60c7e9"],["uuid","ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]}
 
 mutation  1:
-row 0: {"u":["set",[["uuid","a60fe7ff-317b-4568-9106-892b37445313"]]]}
+row 0: {"u":["uuid","a60fe7ff-317b-4568-9106-892b37445313"]}
 row 1: {"u":["set",[["uuid","a60fe7ff-317b-4568-9106-892b37445313"],["uuid","ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]}
 row 2: no change
 row 3: {"u":["set",[["uuid","2607d30e-e652-4927-9fec-8bbf1b60c7e9"],["uuid","a60fe7ff-317b-4568-9106-892b37445313"]]]}
 
 mutation  2:
-row 0: {"u":["set",[["uuid","2607d30e-e652-4927-9fec-8bbf1b60c7e9"]]]}
+row 0: {"u":["uuid","2607d30e-e652-4927-9fec-8bbf1b60c7e9"]}
 row 1: {"u":["set",[["uuid","2607d30e-e652-4927-9fec-8bbf1b60c7e9"],["uuid","ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]}
 row 2: {"u":["set",[["uuid","2607d30e-e652-4927-9fec-8bbf1b60c7e9"],["uuid","a60fe7ff-317b-4568-9106-892b37445313"]]]}
 row 3: no change

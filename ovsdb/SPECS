@@ -547,7 +547,8 @@ Notation for the Wire Protocol
 
 <set>
 
-    A 2-element JSON array that represents a database set value.  The
+    Either an <atom>, representing a set with exactly one element, or
+    a 2-element JSON array that represents a database set value.  The
     first element of the array must be the string "set" and the second
     element must be an array of zero or more <atom>s giving the values
     in the set.  All of the <atom>s must have the same type.

@@ -897,25 +897,16 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
 {
     struct ovsdb_error *error;
 
-    if (ovsdb_type_is_scalar(type)) {
-        datum->n = 1;
-        datum->keys = xmalloc(sizeof *datum->keys);
-        datum->values = NULL;
-
-        error = ovsdb_atom_from_json(&datum->keys[0], &type->key,
-                                     json, symtab);
-        if (error) {
-            free(datum->keys);
-        }
-        return error;
-    } else {
+    if (ovsdb_type_is_map(type)
+        || (json->type == JSON_ARRAY
+            && json->u.array.n > 0
+            && json->u.array.elems[0]->type == JSON_STRING
+            && !strcmp(json->u.array.elems[0]->u.string, "set"))) {
         bool is_map = ovsdb_type_is_map(type);
         const char *class = is_map ? "map" : "set";
         const struct json *inner;
         unsigned int i;
         size_t n;
-
-        assert(is_map || ovsdb_type_is_set(type));
 
         error = unwrap_json(json, class, JSON_ARRAY, &inner);
         if (error) {
@@ -974,6 +965,17 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
     error:
         ovsdb_datum_destroy(datum, type);
         return error;
+    } else {
+        datum->n = 1;
+        datum->keys = xmalloc(sizeof *datum->keys);
+        datum->values = NULL;
+
+        error = ovsdb_atom_from_json(&datum->keys[0], &type->key,
+                                     json, symtab);
+        if (error) {
+            free(datum->keys);
+        }
+        return error;
     }
 }
 
@@ -983,7 +985,7 @@ ovsdb_datum_to_json(const struct ovsdb_datum *datum,
 {
     /* These tests somewhat tolerate a 'datum' that does not exactly match
      * 'type', in particular a datum with 'n' not in the allowed range. */
-    if (datum->n == 1 && ovsdb_type_is_scalar(type)) {
+    if (datum->n == 1 && !ovsdb_type_is_map(type)) {
         return ovsdb_atom_to_json(&datum->keys[0], type->key.type);
     } else if (type->value.type == OVSDB_TYPE_VOID) {
         struct json **elems;

@@ -84,7 +84,7 @@ OVSDB_CHECK_POSITIVE([row with set of 1 to 2 elements],
   [[parse-rows \
     '{"columns": {"myset": {"type": {"key": "integer", "min": 1, "max": 2}}}}' \
     '{}']],
-  [{RESERVED_COLUMNS,["myset":["set",[0]]]}
+  [{RESERVED_COLUMNS,["myset":0]}
 <none>])
 
 OVSDB_CHECK_POSITIVE([row with map of 1 to 2 elements],
@@ -108,10 +108,10 @@ OVSDB_CHECK_POSITIVE([row with several columns],
          "snoops": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}}}}' \
     '{"vswitch": ["uuid", "1a5c7280-0d4c-4e34-9ec7-c772339f7774"],
       "name": "br0",
-      "datapath_id": ["set", ["000ae4256bb0"]],
+      "datapath_id": "000ae4256bb0",
       "hwaddr": "00:0a:e4:25:6b:b0"}' \
     '{}']],
- [{RESERVED_COLUMNS,["controller":["set",[]],"datapath_id":["set",["000ae4256bb0"]],"hwaddr":"00:0a:e4:25:6b:b0","listeners":["set",[]],"mirrors":["set",[]],"name":"br0","netflows":["set",[]],"snoops":["set",[]],"vswitch":["uuid","1a5c7280-0d4c-4e34-9ec7-c772339f7774"]]}
+ [{RESERVED_COLUMNS,["controller":["set",[]],"datapath_id":"000ae4256bb0","hwaddr":"00:0a:e4:25:6b:b0","listeners":["set",[]],"mirrors":["set",[]],"name":"br0","netflows":["set",[]],"snoops":["set",[]],"vswitch":["uuid","1a5c7280-0d4c-4e34-9ec7-c772339f7774"]]}
 datapath_id, hwaddr, name, vswitch
 {RESERVED_COLUMNS,["controller":["set",[]],"datapath_id":["set",[]],"hwaddr":"","listeners":["set",[]],"mirrors":["set",[]],"name":"","netflows":["set",[]],"snoops":["set",[]],"vswitch":["uuid","00000000-0000-0000-0000-000000000000"]]}
 <none>], [], [2.64])
