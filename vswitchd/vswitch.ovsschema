@@ -1,4 +1,4 @@
-{"name": "ovs_vswitchd_db",
+{"name": "Open_vSwitch",
  "comment": "Configuration for one Open vSwitch daemon.",
  "tables": {
    "Open_vSwitch": {

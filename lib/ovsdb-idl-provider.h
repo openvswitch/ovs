@@ -60,6 +60,7 @@ struct ovsdb_idl_table {
 };
 
 struct ovsdb_idl_class {
+    const char *database;       /* <db-name> for this database. */
     const struct ovsdb_idl_table_class *tables;
     size_t n_tables;
 };

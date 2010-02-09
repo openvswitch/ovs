@@ -734,7 +734,8 @@ static void\n%s_columns_init(void)
 
     # IDL class.
     print "\nstruct ovsdb_idl_class %sidl_class = {" % prefix
-    print "    %stable_classes, ARRAY_SIZE(%stable_classes)" % (prefix, prefix)
+    print "    \"%s\", %stable_classes, ARRAY_SIZE(%stable_classes)" % (
+        schema.name, prefix, prefix)
     print "};"
 
     # global init function

@@ -88,10 +88,11 @@ is represented by <database-schema>, as described below.
         "comment": <string>                     optional
         "tables": {<id>: <table-schema>, ...}   required
 
-    The "name" identifies the database as a whole.  The "comment"
-    optionally provides more information about the database.  The
-    value of "tables" is a JSON object whose names are table names and
-    whose values are <table-schema>s.
+    The "name" identifies the database as a whole.  It must be
+    provided to most JSON-RPC requests to identify the database being
+    operated on.  The "comment" optionally provides more information
+    about the database.  The value of "tables" is a JSON object whose
+    names are table names and whose values are <table-schema>s.
 
 <table-schema>
 
@@ -242,13 +243,32 @@ over HTTP, for these reasons:
 
 The database wire protocol consists of the following JSON-RPC methods:
 
+list_dbs
+........
+
+Request object members:
+
+    "method": "list_dbs"              required
+    "params": []                      required
+    "id": any JSON value except null  required
+
+Response object members:
+
+    "result": [<db-name>, ...]
+    "error": null
+    "id": same "id" as request
+
+This operation retrieves an array whose elements are <db-name>s
+that name the databases that can be accessed over this JSON-RPC
+connection.
+
 get_schema
 ..........
 
 Request object members:
 
     "method": "get_schema"            required
-    "params": []                      required
+    "params": [<db-name>]             required
     "id": any JSON value except null  required
 
 Response object members:
@@ -257,17 +277,17 @@ Response object members:
     "error": null
     "id": same "id" as request
 
-This operation retrieves a <database-schema> that describes the
-hosted database.
+This operation retrieves a <database-schema> that describes hosted
+database <db-name>.
 
 transact
 ........
 
 Request object members:
 
-    "method": "transact"              required
-    "params": [<operation>*]          required
-    "id": any JSON value except null  required
+    "method": "transact"                  required
+    "params": [<db-name>, <operation>*]   required
+    "id": any JSON value except null      required
 
 Response object members:
 
@@ -275,9 +295,11 @@ Response object members:
     "error": null
     "id": same "id" as request
 
-The "params" array for this method consists of zero or more JSON
-objects, each of which represents a single database operation.  The
-"Operations" section below describes the valid operations.
+The "params" array for this method consists of a <db-name> that
+identifies the database to which the transaction applies, followed by
+zero or more JSON objects, each of which represents a single database
+operation.  The "Operations" section below describes the valid
+operations.
 
 The value of "id" must be unique among all in-flight transactions
 within the current JSON-RPC session.  Otherwise, the server may return
@@ -373,9 +395,9 @@ monitor
 
 Request object members:
 
-    "method": "monitor"                        required
-    "params": [<value>, <monitor-requests>]    required
-    "id": any JSON value except null           required
+    "method": "monitor"                                   required
+    "params": [<db-name>, <value>, <monitor-requests>]    required
+    "id": any JSON value except null                      required
 
 <monitor-requests> is an object that maps from a table name to a
 <monitor-request>.
@@ -399,13 +421,13 @@ Response object members:
     "id": same "id" as request
 
 This JSON-RPC request enables a client to replicate tables or subsets
-of tables.  Each <monitor-request> specifies a table to be replicated.
-The JSON-RPC response to the "monitor" includes the initial contents
-of each table.  Afterward, when changes to those tables are committed,
-the changes are automatically sent to the client using the "update"
-monitor notification.  This monitoring persists until the JSON-RPC
-session terminates or until the client sends a "monitor_cancel"
-JSON-RPC request.
+of tables within database <db-name>.  Each <monitor-request> specifies
+a table to be replicated.  The JSON-RPC response to the "monitor"
+includes the initial contents of each table.  Afterward, when changes
+to those tables are committed, the changes are automatically sent to
+the client using the "update" monitor notification.  This monitoring
+persists until the JSON-RPC session terminates or until the client
+sends a "monitor_cancel" JSON-RPC request.
 
 Each <monitor-request> describes how to monitor a table:
 
@@ -520,6 +542,12 @@ there or vice versa.
 
 Notation for the Wire Protocol
 ------------------------------
+
+<db-name>
+
+    An <id> that names a database.  The valid <db-name>s can be
+    obtained using a "list-db" request.  The <db-name> is taken from
+    the "name" member of <database-schema>.
 
 <table>
 

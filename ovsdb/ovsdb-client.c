@@ -167,17 +167,19 @@ usage(void)
     printf("%s: Open vSwitch database JSON-RPC client\n"
            "usage: %s [OPTIONS] COMMAND [ARG...]\n"
            "\nValid commands are:\n"
-           "\n  get-schema SERVER\n"
-           "    retrieve schema from SERVER\n"
-           "\n  list-tables SERVER\n"
-           "    list SERVER's tables\n"
-           "\n  list-columns SERVER [TABLE]\n"
-           "    list columns in TABLE (or all tables) on SERVER\n"
+           "\n  list-dbs SERVER\n"
+           "    list databases available on SERVER\n"
+           "\n  get-schema SERVER DATABASE\n"
+           "    retrieve schema for DATABASE from SERVER\n"
+           "\n  list-tables SERVER DATABSE\n"
+           "    list tables for DATABSAE on SERVER\n"
+           "\n  list-columns SERVER DATABASE [TABLE]\n"
+           "    list columns in TABLE (or all tables) in DATABASE on SERVER\n"
            "\n  transact SERVER TRANSACTION\n"
            "    run TRANSACTION (a JSON array of operations) on SERVER\n"
            "    and print the results as JSON on stdout\n"
-           "\n  monitor SERVER TABLE [COLUMN,...] [SELECT,...]\n"
-           "    monitor contents of (COLUMNs in) TABLE on SERVER\n"
+           "\n  monitor SERVER DATABASE TABLE [COLUMN,...] [SELECT,...]\n"
+           "    monitor contents of (COLUMNs in) TABLE in DATABASE on SERVER\n"
            "    Valid SELECTs are: initial, insert, delete, modify\n",
            program_name, program_name);
     stream_usage("SERVER", true, true, true);
@@ -258,13 +260,15 @@ check_ovsdb_error(struct ovsdb_error *error)
 }
 
 static struct ovsdb_schema *
-fetch_schema_from_rpc(struct jsonrpc *rpc)
+fetch_schema_from_rpc(struct jsonrpc *rpc, const char *database)
 {
     struct jsonrpc_msg *request, *reply;
     struct ovsdb_schema *schema;
     int error;
 
-    request = jsonrpc_create_request("get_schema", json_array_create_empty(),
+    request = jsonrpc_create_request("get_schema",
+                                     json_array_create_1(
+                                         json_string_create(database)),
                                      NULL);
     error = jsonrpc_transact_block(rpc, request, &reply);
     if (error) {
@@ -277,13 +281,13 @@ fetch_schema_from_rpc(struct jsonrpc *rpc)
 }
 
 static struct ovsdb_schema *
-fetch_schema(const char *server)
+fetch_schema(const char *server, const char *database)
 {
     struct ovsdb_schema *schema;
     struct jsonrpc *rpc;
 
     rpc = open_jsonrpc(server);
-    schema = fetch_schema_from_rpc(rpc);
+    schema = fetch_schema_from_rpc(rpc, database);
     jsonrpc_close(rpc);
 
     return schema;
@@ -572,9 +576,40 @@ table_print(const struct table *table)
 }
 
 static void
+do_list_dbs(int argc UNUSED, char *argv[])
+{
+    struct jsonrpc_msg *request, *reply;
+    struct jsonrpc *rpc;
+    int error;
+    size_t i;
+
+    rpc = open_jsonrpc(argv[1]);
+    request = jsonrpc_create_request("list_dbs", json_array_create_empty(),
+                                     NULL);
+    error = jsonrpc_transact_block(rpc, request, &reply);
+    if (error) {
+        ovs_fatal(error, "transaction failed");
+    }
+
+    if (reply->result->type != JSON_ARRAY) {
+        ovs_fatal(0, "list_dbs response is not array");
+    }
+
+    for (i = 0; i < reply->result->u.array.n; i++) {
+        const struct json *name = reply->result->u.array.elems[i];
+
+        if (name->type != JSON_STRING) {
+            ovs_fatal(0, "list_dbs response %zu is not string", i);
+        }
+        puts(name->u.string);
+    }
+    jsonrpc_msg_destroy(reply);
+}
+
+static void
 do_get_schema(int argc UNUSED, char *argv[])
 {
-    struct ovsdb_schema *schema = fetch_schema(argv[1]);
+    struct ovsdb_schema *schema = fetch_schema(argv[1], argv[2]);
     print_and_free_json(ovsdb_schema_to_json(schema));
     ovsdb_schema_destroy(schema);
 }
@@ -586,7 +621,7 @@ do_list_tables(int argc UNUSED, char *argv[])
     struct shash_node *node;
     struct table t;
 
-    schema = fetch_schema(argv[1]);
+    schema = fetch_schema(argv[1], argv[2]);
     table_init(&t);
     table_add_column(&t, "Table");
     table_add_column(&t, "Comment");
@@ -606,12 +641,12 @@ do_list_tables(int argc UNUSED, char *argv[])
 static void
 do_list_columns(int argc UNUSED, char *argv[])
 {
-    const char *table_name = argv[2];
+    const char *table_name = argv[3];
     struct ovsdb_schema *schema;
     struct shash_node *table_node;
     struct table t;
 
-    schema = fetch_schema(argv[1]);
+    schema = fetch_schema(argv[1], argv[2]);
     table_init(&t);
     if (!table_name) {
         table_add_column(&t, "Table");
@@ -759,6 +794,9 @@ monitor_print(struct json *table_updates,
 static void
 do_monitor(int argc, char *argv[])
 {
+    const char *server = argv[1];
+    const char *database = argv[2];
+    const char *table_name = argv[3];
     struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
     struct ovsdb_table_schema *table;
     struct ovsdb_schema *schema;
@@ -767,25 +805,27 @@ do_monitor(int argc, char *argv[])
     struct json *select, *monitor, *monitor_request, *monitor_requests,
         *request_id;
 
-    rpc = open_jsonrpc(argv[1]);
+    rpc = open_jsonrpc(server);
 
-    schema = fetch_schema_from_rpc(rpc);
-    table = shash_find_data(&schema->tables, argv[2]);
+    schema = fetch_schema_from_rpc(rpc, database);
+    table = shash_find_data(&schema->tables, table_name);
     if (!table) {
-        ovs_fatal(0, "%s: no table named \"%s\"", argv[1], argv[2]);
+        ovs_fatal(0, "%s: %s does not have a table named \"%s\"",
+                  server, database, table_name);
     }
 
-    if (argc >= 4 && *argv[3] != '\0') {
+    if (argc >= 5 && *argv[4] != '\0') {
         char *save_ptr = NULL;
         char *token;
 
-        for (token = strtok_r(argv[3], ",", &save_ptr); token != NULL;
+        for (token = strtok_r(argv[4], ",", &save_ptr); token != NULL;
              token = strtok_r(NULL, ",", &save_ptr)) {
             const struct ovsdb_column *column;
             column = ovsdb_table_schema_get_column(table, token);
             if (!column) {
-                ovs_fatal(0, "%s: table \"%s\" does not have a "
-                          "column named \"%s\"", argv[1], argv[2], token);
+                ovs_fatal(0, "%s: table \"%s\" in %s does not have a "
+                          "column named \"%s\"",
+                          server, table_name, database, token);
             }
             ovsdb_column_set_add(&columns, column);
         }
@@ -800,12 +840,12 @@ do_monitor(int argc, char *argv[])
         }
     }
 
-    if (argc >= 5 && *argv[4] != '\0') {
+    if (argc >= 6 && *argv[5] != '\0') {
         char *save_ptr = NULL;
         char *token;
 
         select = json_object_create();
-        for (token = strtok_r(argv[4], ",", &save_ptr); token != NULL;
+        for (token = strtok_r(argv[5], ",", &save_ptr); token != NULL;
              token = strtok_r(NULL, ",", &save_ptr)) {
             json_object_put(select, token, json_boolean_create(true));
         }
@@ -821,9 +861,10 @@ do_monitor(int argc, char *argv[])
     }
 
     monitor_requests = json_object_create();
-    json_object_put(monitor_requests, argv[2], monitor_request);
+    json_object_put(monitor_requests, table_name, monitor_request);
 
-    monitor = json_array_create_2(json_null_create(), monitor_requests);
+    monitor = json_array_create_3(json_string_create(database),
+                                  json_null_create(), monitor_requests);
     request = jsonrpc_create_request("monitor", monitor, NULL);
     request_id = json_clone(request->id);
     jsonrpc_send(rpc, request);
@@ -834,7 +875,7 @@ do_monitor(int argc, char *argv[])
         error = jsonrpc_recv_block(rpc, &msg);
         if (error) {
             ovsdb_schema_destroy(schema);
-            ovs_fatal(error, "%s: receive failed", argv[1]);
+            ovs_fatal(error, "%s: receive failed", server);
         }
 
         if (msg->type == JSONRPC_REQUEST && !strcmp(msg->method, "echo")) {
@@ -874,11 +915,12 @@ do_help(int argc UNUSED, char *argv[] UNUSED)
 }
 
 static const struct command all_commands[] = {
-    { "get-schema", 1, 1, do_get_schema },
-    { "list-tables", 1, 1, do_list_tables },
-    { "list-columns", 1, 2, do_list_columns },
+    { "list-dbs", 1, 1, do_list_dbs },
+    { "get-schema", 2, 2, do_get_schema },
+    { "list-tables", 2, 2, do_list_tables },
+    { "list-columns", 2, 3, do_list_columns },
     { "transact", 2, 2, do_transact },
-    { "monitor", 2, 4, do_monitor },
+    { "monitor", 3, 5, do_monitor },
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };

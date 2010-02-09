@@ -14,7 +14,8 @@ m4_define([OVSDB_CHECK_TRIGGER],
 
 OVSDB_CHECK_TRIGGER([trigger fires immediately],
   ['ORDINAL_SCHEMA' [\
-    '[{"op": "insert",
+    '["ordinals",
+      {"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "insert",
@@ -36,7 +37,8 @@ OVSDB_CHECK_TRIGGER([trigger fires immediately],
 
 OVSDB_CHECK_TRIGGER([trigger times out],
   ['ORDINAL_SCHEMA' [\
-    '[{"op": "insert",
+    '["ordinals",
+      {"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "insert",
@@ -58,14 +60,16 @@ t=10: trigger 0 (delayed): [{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"de
 
 OVSDB_CHECK_TRIGGER([trigger fires after delay],
   ['ORDINAL_SCHEMA' [\
-    '[{"op": "insert",
+    '["ordinals",
+      {"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "insert",
        "table": "ordinals",
        "row": {"number": 1, "name": "one"}}]' \
     '["advance", 5]' \
-    '[{"op": "wait",
+    '["ordinals",
+      {"op": "wait",
        "timeout": 10,
        "table": "ordinals",
        "where": [],
@@ -75,7 +79,8 @@ OVSDB_CHECK_TRIGGER([trigger fires after delay],
                 {"name": "one", "number": 1},
                 {"name": "two", "number": 2}]}]' \
     '["advance", 5]' \
-    '[{"op": "insert",
+    '["ordinals",
+      {"op": "insert",
        "table": "ordinals",
        "row": {"number": 2, "name": "two"}}]']],
   [[t=0: trigger 0 (immediate): [{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]
@@ -86,14 +91,16 @@ t=10: trigger 1 (delayed): [{}]
 
 OVSDB_CHECK_TRIGGER([delayed trigger modifies database],
   ['ORDINAL_SCHEMA' [\
-    '[{"op": "insert",
+    '["ordinals",
+      {"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "insert",
        "table": "ordinals",
        "row": {"number": 1, "name": "one"}}]' \
     '["advance", 5]' \
-    '[{"op": "wait",
+    '["ordinals",
+      {"op": "wait",
        "timeout": 10,
        "table": "ordinals",
        "where": [],
@@ -106,11 +113,13 @@ OVSDB_CHECK_TRIGGER([delayed trigger modifies database],
        "table": "ordinals",
        "where": [["number", "<", 2]]}]' \
     '["advance", 5]' \
-    '[{"op": "insert",
+    '["ordinals",
+      {"op": "insert",
        "table": "ordinals",
        "row": {"number": 2, "name": "two"}}]' \
     '["advance", 5]' \
-    '[{"op": "select",
+    '["ordinals",
+      {"op": "select",
        "table": "ordinals",
        "where": []}]']],
   [[t=0: trigger 0 (immediate): [{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]
@@ -122,14 +131,16 @@ t=15: trigger 3 (immediate): [{"rows":[{"_uuid":["uuid","<2>"],"_version":["uuid
 
 OVSDB_CHECK_TRIGGER([one delayed trigger wakes up another],
   ['ORDINAL_SCHEMA' [\
-    '[{"op": "insert",
+    '["ordinals",
+      {"op": "insert",
        "table": "ordinals",
        "row": {"number": 0, "name": "zero"}},
       {"op": "insert",
        "table": "ordinals",
        "row": {"number": 1, "name": "one"}}]' \
     '["advance", 5]' \
-    '[{"op": "wait",
+    '["ordinals",
+      {"op": "wait",
        "timeout": 10,
        "table": "ordinals",
        "where": [],
@@ -142,7 +153,8 @@ OVSDB_CHECK_TRIGGER([one delayed trigger wakes up another],
       {"op": "insert",
        "table": "ordinals",
        "row": {"number": 3, "name": "three"}}]' \
-    '[{"op": "wait",
+    '["ordinals",
+      {"op": "wait",
        "timeout": 10,
        "table": "ordinals",
        "where": [],
@@ -155,11 +167,13 @@ OVSDB_CHECK_TRIGGER([one delayed trigger wakes up another],
        "table": "ordinals",
        "where": [["number", "<", 2]]}]' \
     '["advance", 5]' \
-    '[{"op": "insert",
+    '["ordinals",
+      {"op": "insert",
        "table": "ordinals",
        "row": {"number": 2, "name": "two"}}]' \
     '["advance", 5]' \
-    '[{"op": "select",
+    '["ordinals",
+      {"op": "select",
        "table": "ordinals",
        "where": []}]']],
   [[t=0: trigger 0 (immediate): [{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]

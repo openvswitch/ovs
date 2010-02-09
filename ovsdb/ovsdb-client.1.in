@@ -12,15 +12,17 @@
 ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .
 .SH SYNOPSIS
-\fBovsdb\-client \fR[\fIoptions\fR] \fBget-schema\fI server\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-dbs\fI server\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBlist-tables\fI server\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBget-schema\fI server database\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBlist-columns\fI server \fR[\fItable\fR]
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlist-tables\fI server database\fR
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlist-columns\fI server database \fR[\fItable\fR]
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBtransact\fI server transaction\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI server table\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI server database table\fR
 [\fIcolumn\fR[\fB,\fIcolumn\fR]...]
 [\fIselect\fR[\fB,\fIselect\fR]...]
 .br
@@ -47,32 +49,37 @@ the following forms:
 .
 .SS "Commands"
 The following commands are implemented:
-.IP "\fBget-schema\fI server\fR"
-Connects to \fIserver\fR, retrieves the database schema, and prints it
-in JSON format.
+.IP "\fBlist-dbs\fI server\fR"
+Connects to \fIserver\fR, retrieves the list of known databases, and
+prints them one per line.  These database names are the ones that may
+be used for \fIdatabase\fR in the following commands.
 .
-.IP "\fBlist-tables\fI server\fR"
-Connects to \fIserver\fR, retrieves the database schema, and prints
-a table listing the names and comments (if any) on each table within
-the database.
+.IP "\fBget-schema\fI server database\fR"
+Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
+prints it in JSON format.
 .
-.IP "\fBlist-columns\fI server \fR[\fItable\fR]"
-Connects to \fIserver\fR, retrieves the database schema, and prints
-a table listing the names, type, and comment (if any) on each column.  If
-\fItable\fR is specified, only columns in that table are listed;
-otherwise, the tables include columns in all tables.
+.IP "\fBlist-tables\fI server database\fR"
+Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
+prints a table listing the names and comments (if any) on each table
+within the database.
+.
+.IP "\fBlist-columns\fI server database \fR[\fItable\fR]"
+Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
+prints a table listing the names, type, and comment (if any) on each
+column.  If \fItable\fR is specified, only columns in that table are
+listed; otherwise, the tables include columns in all tables.
 .
 .IP "\fBtransact\fI server transaction\fR"
 Connects to \fIserver\fR, sends it the specified \fItransaction\fR,
 which must be a JSON array containing one or more valid OVSDB
 operations, and prints the received reply on stdout.
 .
-.IP "\fBmonitor\fI server table\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...] [\fIselect\fR[\fB,\fIselect\fR]...]"
-Connects to \fIserver\fR and monitors the contents of \fItable\fR.  By
-default, the initial contents of \fItable\fR are printed, followed by
-each change as it occurs.  If at least one \fIcolumn\fR is specified,
-only those columns are monitored.  If at least one \fIselect\fR is
-specified, they are interpreted as follows:
+.IP "\fBmonitor\fI server database table\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...] [\fIselect\fR[\fB,\fIselect\fR]...]"
+Connects to \fIserver\fR and monitors the contents of \fItable\fR in
+\fIdatabase\fR.  By default, the initial contents of \fItable\fR are
+printed, followed by each change as it occurs.  If at least one
+\fIcolumn\fR is specified, only those columns are monitored.  If at
+least one \fIselect\fR is specified, they are interpreted as follows:
 .RS
 .IP "\fBinitial\fR"
 Print the initial contents of the specified columns.

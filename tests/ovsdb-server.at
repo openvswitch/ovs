@@ -38,6 +38,23 @@ cat stdout >> output
 
 EXECUTION_EXAMPLES
 
+AT_SETUP([database multiplexing implementation])
+AT_KEYWORDS([ovsdb server positive])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --unixctl=$PWD/unixctl --remote=punix:socket db], [0], [ignore], [ignore])
+AT_CHECK(
+  [[ovsdb-client list-dbs unix:socket]], 
+  [0], [ordinals
+], [ignore], [test ! -e pid || kill `cat pid`])
+AT_CHECK(
+  [[ovsdb-client get-schema unix:socket nonexistent]], 
+  [1], [], [[ovsdb-client: syntax "{"syntax":"[\"nonexistent\"]","details":"get_schema request specifies unknown database nonexistent","error":"unknown database"}": syntax error: Parsing database schema failed: Required 'name' member is missing.
+]], [test ! -e pid || kill `cat pid`])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
 AT_SETUP([--remote=db: implementation])
 AT_KEYWORDS([ovsdb server positive])
 AT_DATA([schema],
@@ -50,13 +67,15 @@ AT_DATA([schema],
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 AT_CHECK(
   [[ovsdb-tool transact db \
-     '[{"op": "insert",
+     '["mydb",
+       {"op": "insert",
         "table": "Manager",
         "row": {"manager": "punix:socket"}}]']], [0], [ignore], [ignore])
 AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=db:Manager,manager --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
 AT_CHECK(
   [[ovsdb-client transact unix:socket \
-     '[{"op": "select",
+     '["mydb",
+       {"op": "select",
         "table": "Manager",
         "where": [],
         "columns": ["manager"]}]']], 

@@ -342,7 +342,9 @@ ovsdb_idl_send_monitor_request(struct ovsdb_idl *idl)
 
     json_destroy(idl->monitor_request_id);
     msg = jsonrpc_create_request(
-        "monitor", json_array_create_2(json_null_create(), monitor_requests),
+        "monitor",
+        json_array_create_3(json_string_create(idl->class->database),
+                            json_null_create(), monitor_requests),
         &idl->monitor_request_id);
     jsonrpc_session_send(idl->session, msg);
 }
@@ -1072,7 +1074,8 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         return txn->status;
     }
 
-    operations = json_array_create_empty();
+    operations = json_array_create_1(
+        json_string_create(txn->idl->class->database));
 
     /* Add prerequisites and declarations of new rows. */
     HMAP_FOR_EACH (row, struct ovsdb_idl_row, txn_node, &txn->txn_rows) {
@@ -1138,7 +1141,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
 
                 insert = xmalloc(sizeof *insert);
                 insert->dummy = row->uuid;
-                insert->op_index = operations->u.array.n;
+                insert->op_index = operations->u.array.n - 1;
                 uuid_zero(&insert->real);
                 hmap_insert(&txn->inserted_rows, &insert->hmap_node,
                             uuid_hash(&insert->dummy));
@@ -1174,7 +1177,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     if (txn->inc_table && any_updates) {
         struct json *op;
 
-        txn->inc_index = operations->u.array.n;
+        txn->inc_index = operations->u.array.n - 1;
 
         op = json_object_create();
         json_object_put_string(op, "op", "mutate");

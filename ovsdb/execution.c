@@ -99,10 +99,19 @@ ovsdb_execute(struct ovsdb *db, const struct json *params,
     size_t n_operations;
     size_t i;
 
-    if (params->type != JSON_ARRAY) {
+    if (params->type != JSON_ARRAY
+        || !params->u.array.n
+        || params->u.array.elems[0]->type != JSON_STRING
+        || strcmp(params->u.array.elems[0]->u.string, db->schema->name)) {
         struct ovsdb_error *error;
 
-        error = ovsdb_syntax_error(params, NULL, "array expected");
+        if (params->type != JSON_ARRAY) {
+            error = ovsdb_syntax_error(params, NULL, "array expected");
+        } else {
+            error = ovsdb_syntax_error(params, NULL, "database name expected "
+                                       "as first parameter");
+        }
+
         results = ovsdb_error_to_json(error);
         ovsdb_error_destroy(error);
         return results;
@@ -117,9 +126,9 @@ ovsdb_execute(struct ovsdb *db, const struct json *params,
     results = NULL;
 
     results = json_array_create_empty();
-    n_operations = params->u.array.n;
+    n_operations = params->u.array.n - 1;
     error = NULL;
-    for (i = 0; i < n_operations; i++) {
+    for (i = 1; i <= n_operations; i++) {
         struct json *operation = params->u.array.elems[i];
         struct ovsdb_error *parse_error;
         struct ovsdb_parser parser;

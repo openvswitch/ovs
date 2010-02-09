@@ -346,6 +346,48 @@ ovsdb_jsonrpc_session_close_all(struct ovsdb_jsonrpc_remote *remote)
     }
 }
 
+static const char *
+get_db_name(const struct ovsdb_jsonrpc_session *s)
+{
+    return s->remote->server->db->schema->name;
+}
+
+static struct jsonrpc_msg *
+ovsdb_jsonrpc_check_db_name(const struct ovsdb_jsonrpc_session *s,
+                            const struct jsonrpc_msg *request)
+{
+    struct json_array *params;
+    const char *want_db_name;
+    const char *have_db_name;
+    struct ovsdb_error *error;
+    struct jsonrpc_msg *reply;
+
+    params = json_array(request->params);
+    if (!params->n || params->elems[0]->type != JSON_STRING) {
+        error = ovsdb_syntax_error(
+            request->params, NULL,
+            "%s request params must begin with <db-name>", request->method);
+        goto error;
+    }
+
+    want_db_name = params->elems[0]->u.string;
+    have_db_name = get_db_name(s);
+    if (strcmp(want_db_name, have_db_name)) {
+        error = ovsdb_syntax_error(
+            request->params, "unknown database",
+            "%s request specifies unknown database %s",
+            request->method, want_db_name);
+        goto error;
+    }
+
+    return NULL;
+
+error:
+    reply = jsonrpc_create_reply(ovsdb_error_to_json(error), request->id);
+    ovsdb_error_destroy(error);
+    return reply;
+}
+
 static struct jsonrpc_msg *
 execute_transaction(struct ovsdb_jsonrpc_session *s,
                     struct jsonrpc_msg *request)
@@ -364,16 +406,30 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
     struct jsonrpc_msg *reply;
 
     if (!strcmp(request->method, "transact")) {
-        reply = execute_transaction(s, request);
+        reply = ovsdb_jsonrpc_check_db_name(s, request);
+        if (!reply) {
+            reply = execute_transaction(s, request);
+        }
     } else if (!strcmp(request->method, "monitor")) {
-        reply = jsonrpc_create_reply(
-            ovsdb_jsonrpc_monitor_create(s, request->params), request->id);
+        reply = ovsdb_jsonrpc_check_db_name(s, request);
+        if (!reply) {
+            reply = jsonrpc_create_reply(
+                ovsdb_jsonrpc_monitor_create(s, request->params), request->id);
+        }
     } else if (!strcmp(request->method, "monitor_cancel")) {
         reply = ovsdb_jsonrpc_monitor_cancel(s, json_array(request->params),
                                              request->id);
     } else if (!strcmp(request->method, "get_schema")) {
+        reply = ovsdb_jsonrpc_check_db_name(s, request);
+        if (!reply) {
+            reply = jsonrpc_create_reply(
+                ovsdb_schema_to_json(s->remote->server->db->schema),
+                request->id);
+        }
+    } else if (!strcmp(request->method, "list_dbs")) {
         reply = jsonrpc_create_reply(
-            ovsdb_schema_to_json(s->remote->server->db->schema), request->id);
+            json_array_create_1(json_string_create(get_db_name(s))),
+            request->id);
     } else if (!strcmp(request->method, "echo")) {
         reply = jsonrpc_create_reply(json_clone(request->params), request->id);
     } else {
@@ -589,12 +645,12 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s,
     struct shash_node *node;
     struct json *json;
 
-    if (json_array(params)->n != 2) {
+    if (json_array(params)->n != 3) {
         error = ovsdb_syntax_error(params, NULL, "invalid parameters");
         goto error;
     }
-    monitor_id = params->u.array.elems[0];
-    monitor_requests = params->u.array.elems[1];
+    monitor_id = params->u.array.elems[1];
+    monitor_requests = params->u.array.elems[2];
     if (monitor_requests->type != JSON_OBJECT) {
         error = ovsdb_syntax_error(monitor_requests, NULL,
                                    "monitor-requests must be object");
