@@ -132,16 +132,25 @@ initialize the database without executing any other command.
 .SS "Bridge Commands"
 These commands examine and manipulate Open vSwitch bridges.
 .
-.IP "\fBadd\-br \fIbridge\fR"
+.IP "[\fB\-\-may\-exist\fR] \fBadd\-br \fIbridge\fR"
 Creates a new bridge named \fIbridge\fR.  Initially the bridge will
 have no ports (other than \fIbridge\fR itself).
+.IP
+Without \fB\-\-may\-exist\fR, attempting to create a bridge that
+exists is an error.  With \fB\-\-may\-exist\fR, \fIbridge\fR may
+already exist (but it must be a real bridge, not a VLAN bridge).
 .
-.IP "\fBadd\-br \fIbridge parent vlan\fR"
+.IP "[\fB\-\-may\-exist\fR] \fBadd\-br \fIbridge parent vlan\fR"
 Creates a ``fake bridge'' named \fIbridge\fR within the existing Open
 vSwitch bridge \fIparent\fR, which must already exist and must not
 itself be a fake bridge.  The new fake bridge will be on 802.1Q VLAN
 \fIvlan\fR, which must be an integer between 1 and 4095.  Initially
 \fIbridge\fR will have no ports (other than \fIbridge\fR itself).
+.IP
+Without \fB\-\-may\-exist\fR, attempting to create a bridge that
+exists is an error.  With \fB\-\-may\-exist\fR, \fIbridge\fR may
+already exist (but it must have the specified \fIvlan\fR and
+\fIparent\fR).
 .
 .IP "[\fB\-\-if\-exists\fR] \fBdel\-br \fIbridge\fR"
 Deletes \fIbridge\fR and all of its ports.  If \fIbridge\fR is a real

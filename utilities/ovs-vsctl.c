@@ -807,17 +807,65 @@ cmd_init(struct vsctl_context *ctx UNUSED)
 static void
 cmd_add_br(struct vsctl_context *ctx)
 {
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != 0;
     const char *br_name = ctx->argv[1];
+    const char *parent_name = ctx->argc > 2 ? ctx->argv[2] : NULL;
+    int vlan = ctx->argc > 3 ? atoi(ctx->argv[3]) : 0;
     struct vsctl_info info;
 
+    br_name = ctx->argv[1];
+    if (ctx->argc == 2) {
+        parent_name = NULL;
+        vlan = 0;
+    } else if (ctx->argc == 4) {
+        parent_name = ctx->argv[2];
+        vlan = atoi(ctx->argv[3]);
+        if (vlan < 1 || vlan > 4095) {
+            vsctl_fatal("%s: vlan must be between 1 and 4095", ctx->argv[0]);
+        }
+    } else {
+        vsctl_fatal("'%s' command takes exactly 1 or 3 arguments",
+                    ctx->argv[0]);
+    }
+
     get_info(ctx->ovs, &info);
+    if (may_exist) {
+        struct vsctl_bridge *br;
+
+        br = find_bridge(&info, br_name, false);
+        if (br) {
+            if (!parent_name) {
+                if (br->parent) {
+                    vsctl_fatal("\"--may-exist add-br %s\" but %s is "
+                                "a VLAN bridge for VLAN %d",
+                                br_name, br_name, br->vlan);
+                }
+            } else {
+                if (!br->parent) {
+                    vsctl_fatal("\"--may-exist add-br %s %s %d\" but %s "
+                                "is not a VLAN bridge",
+                                br_name, parent_name, vlan, br_name);
+                } else if (strcmp(br->parent->name, parent_name)) {
+                    vsctl_fatal("\"--may-exist add-br %s %s %d\" but %s "
+                                "has the wrong parent %s",
+                                br_name, parent_name, vlan,
+                                br_name, br->parent->name);
+                } else if (br->vlan != vlan) {
+                    vsctl_fatal("\"--may-exist add-br %s %s %d\" but %s "
+                                "is a VLAN bridge for the wrong VLAN %d",
+                                br_name, parent_name, vlan, br_name, br->vlan);
+                }
+            }
+            return;
+        }
+    }
     check_conflicts(&info, br_name,
                     xasprintf("cannot create a bridge named %s", br_name));
 
-    if (ctx->argc == 2) {
-        struct ovsrec_bridge *br;
+    if (!parent_name) {
         struct ovsrec_port *port;
         struct ovsrec_interface *iface;
+        struct ovsrec_bridge *br;
 
         iface = ovsrec_interface_insert(ctx->txn);
         ovsrec_interface_set_name(iface, br_name);
@@ -831,21 +879,12 @@ cmd_add_br(struct vsctl_context *ctx)
         ovsrec_bridge_set_ports(br, &port, 1);
 
         ovs_insert_bridge(ctx->ovs, br);
-    } else if (ctx->argc == 3) {
-        vsctl_fatal("'%s' command takes exactly 1 or 3 arguments",
-                    ctx->argv[0]);
-    } else if (ctx->argc == 4) {
-        const char *parent_name = ctx->argv[2];
-        int vlan = atoi(ctx->argv[3]);
-        struct ovsrec_bridge *br;
+    } else {
         struct vsctl_bridge *parent;
         struct ovsrec_port *port;
         struct ovsrec_interface *iface;
+        struct ovsrec_bridge *br;
         int64_t tag = vlan;
-
-        if (vlan < 1 || vlan > 4095) {
-            vsctl_fatal("%s: vlan must be between 1 and 4095", ctx->argv[0]);
-        }
 
         parent = find_bridge(&info, parent_name, false);
         if (parent && parent->vlan) {
@@ -867,8 +906,6 @@ cmd_add_br(struct vsctl_context *ctx)
         ovsrec_port_set_tag(port, &tag, 1);
 
         bridge_insert_port(br, port);
-    } else {
-        NOT_REACHED();
     }
 
     free_info(&info);
@@ -2362,7 +2399,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"init", 0, 0, cmd_init, NULL, ""},
 
     /* Bridge commands. */
-    {"add-br", 1, 3, cmd_add_br, NULL, ""},
+    {"add-br", 1, 3, cmd_add_br, NULL, "--may-exist"},
     {"del-br", 1, 1, cmd_del_br, NULL, "--if-exists"},
     {"list-br", 0, 0, cmd_list_br, NULL, ""},
     {"br-exists", 1, 1, cmd_br_exists, NULL, ""},

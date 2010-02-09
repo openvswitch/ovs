@@ -167,6 +167,10 @@ AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL([add-br a], [add-br b])], [0], [], [],
          [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br a b 9])], [1], [],
+  [ovs-vsctl: "--may-exist add-br a b 9" but a is not a VLAN bridge
+],
+  [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0], [b, b, 0])
 CHECK_PORTS([a])
 CHECK_IFACES([a])
@@ -341,8 +345,10 @@ m4_define([OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF],
   [AT_CHECK(
      [RUN_OVS_VSCTL(
         [add-br xenbr0],
+        [--may-exist add-br xenbr0],
         [add-port xenbr0 eth0],
         [add-br xapi1 xenbr0 9],
+        [--may-exist add-br xapi1 xenbr0 9],
         [add-port xapi1 eth0.9])],
      [0], [], [], [OVS_VSCTL_CLEANUP])])
 
@@ -350,6 +356,15 @@ AT_SETUP([simple fake bridge])
 AT_KEYWORDS([ovs-vsctl fake-bridge])
 OVS_VSCTL_SETUP
 OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1])], [1], [],
+  [ovs-vsctl: "--may-exist add-br xapi1" but xapi1 is a VLAN bridge for VLAN 9
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1 xxx 9])], [1], [],
+  [ovs-vsctl: "--may-exist add-br xapi1 xxx 9" but xapi1 has the wrong parent xenbr0
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-br xapi1 xenbr0 10])], [1], [],
+  [ovs-vsctl: "--may-exist add-br xapi1 xenbr0 10" but xapi1 is a VLAN bridge for the wrong VLAN 9
+], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([xapi1, xenbr0, 9], [xenbr0, xenbr0, 0])
 CHECK_PORTS([xenbr0], [eth0])
 CHECK_IFACES([xenbr0], [eth0])
