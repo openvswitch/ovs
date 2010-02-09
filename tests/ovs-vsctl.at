@@ -244,6 +244,12 @@ OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
    [add-br a], 
    [add-bond a bond0 a1 a2 a3])], [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-bond a bond0 a3 a1 a2])], [0], [], [],
+  [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-bond a bond0 a2 a1])], [1], [], 
+  [ovs-vsctl: "--may-exist add-bond a bond0 a2 a1" but bond0 actually has interface(s) a1, a2, a3
+],
+  [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a], [bond0])
 CHECK_IFACES([a], [a1], [a2], [a3])
@@ -257,8 +263,14 @@ AT_CHECK([RUN_OVS_VSCTL(
   [add-br a], 
   [add-br b], 
   [add-port a a1],
-  [add-port b b1],
+  [--may-exist add-port b b1],
   [del-port a a1])], [0], [], [], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-port b b1])], [0], [], [],
+  [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([--may-exist add-port a b1])], [1], [], 
+  [ovs-vsctl: "--may-exist add-port a b1" but b1 is actually attached to bridge b
+],
+  [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0], [b, b, 0])
 CHECK_PORTS([a])
 CHECK_IFACES([a])
@@ -347,6 +359,7 @@ m4_define([OVS_VSCTL_SETUP_SIMPLE_FAKE_CONF],
         [add-br xenbr0],
         [--may-exist add-br xenbr0],
         [add-port xenbr0 eth0],
+        [--may-exist add-port xenbr0 eth0],
         [add-br xapi1 xenbr0 9],
         [--may-exist add-br xapi1 xenbr0 9],
         [add-port xapi1 eth0.9])],

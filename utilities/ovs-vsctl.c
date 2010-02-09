@@ -492,6 +492,30 @@ struct vsctl_info {
     struct ovsrec_controller *ctrl;
 };
 
+static char *
+vsctl_context_to_string(const struct vsctl_context *ctx)
+{
+    const struct shash_node *node;
+    struct svec words;
+    char *s;
+    int i;
+
+    svec_init(&words);
+    SHASH_FOR_EACH (node, &ctx->options) {
+        svec_add(&words, node->name);
+    }
+    for (i = 0; i < ctx->argc; i++) {
+        svec_add(&words, ctx->argv[i]);
+    }
+    svec_terminate(&words);
+
+    s = process_escape_args(words.names);
+
+    svec_destroy(&words);
+
+    return s;
+}
+
 static struct vsctl_bridge *
 add_bridge(struct vsctl_info *b,
            struct ovsrec_bridge *br_cfg, const char *name,
@@ -1148,7 +1172,8 @@ cmd_list_ports(struct vsctl_context *ctx)
 
 static void
 add_port(struct vsctl_context *ctx,
-         const char *br_name, const char *port_name, bool fake_iface,
+         const char *br_name, const char *port_name,
+         bool may_exist, bool fake_iface,
          char *iface_names[], int n_ifaces)
 {
     struct vsctl_info info;
@@ -1158,9 +1183,53 @@ add_port(struct vsctl_context *ctx,
     size_t i;
 
     get_info(ctx->ovs, &info);
+    if (may_exist) {
+        struct vsctl_port *port;
+
+        port = find_port(&info, port_name, false);
+        if (port) {
+            struct svec want_names, have_names;
+            size_t i;
+
+            svec_init(&want_names);
+            for (i = 0; i < n_ifaces; i++) {
+                svec_add(&want_names, iface_names[i]);
+            }
+            svec_sort(&want_names);
+
+            svec_init(&have_names);
+            for (i = 0; i < port->port_cfg->n_interfaces; i++) {
+                svec_add(&have_names, port->port_cfg->interfaces[i]->name);
+            }
+            svec_sort(&have_names);
+
+            if (strcmp(port->bridge->name, br_name)) {
+                char *command = vsctl_context_to_string(ctx);
+                vsctl_fatal("\"%s\" but %s is actually attached to bridge %s",
+                            command, port_name, port->bridge->name);
+            }
+
+            if (!svec_equal(&want_names, &have_names)) {
+                char *have_names_string = svec_join(&have_names, ", ", "");
+                char *command = vsctl_context_to_string(ctx);
+
+                vsctl_fatal("\"%s\" but %s actually has interface(s) %s",
+                            command, port_name, have_names_string);
+            }
+
+            svec_destroy(&want_names);
+            svec_destroy(&have_names);
+
+            return;
+        }
+    }
     check_conflicts(&info, port_name,
                     xasprintf("cannot create a port named %s", port_name));
-    /* XXX need to check for conflicts on interfaces too */
+    for (i = 0; i < n_ifaces; i++) {
+        check_conflicts(&info, iface_names[i],
+                        xasprintf("cannot create an interface named %s",
+                                  iface_names[i]));
+    }
     bridge = find_bridge(&info, br_name, true);
 
     ifaces = xmalloc(n_ifaces * sizeof *ifaces);
@@ -1189,15 +1258,19 @@ add_port(struct vsctl_context *ctx,
 static void
 cmd_add_port(struct vsctl_context *ctx)
 {
-    add_port(ctx, ctx->argv[1], ctx->argv[2], false, &ctx->argv[2], 1);
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != 0;
+
+    add_port(ctx, ctx->argv[1], ctx->argv[2], may_exist, false,
+             &ctx->argv[2], 1);
 }
 
 static void
 cmd_add_bond(struct vsctl_context *ctx)
 {
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != 0;
     bool fake_iface = shash_find(&ctx->options, "--fake-iface");
 
-    add_port(ctx, ctx->argv[1], ctx->argv[2], fake_iface,
+    add_port(ctx, ctx->argv[1], ctx->argv[2], may_exist, fake_iface,
              &ctx->argv[3], ctx->argc - 3);
 }
 
@@ -2410,8 +2483,8 @@ static const struct vsctl_command_syntax all_commands[] = {
 
     /* Port commands. */
     {"list-ports", 1, 1, cmd_list_ports, NULL, ""},
-    {"add-port", 2, 2, cmd_add_port, NULL, ""},
-    {"add-bond", 4, INT_MAX, cmd_add_bond, NULL, "--fake-iface"},
+    {"add-port", 2, 2, cmd_add_port, NULL, "--may-exist"},
+    {"add-bond", 4, INT_MAX, cmd_add_bond, NULL, "--may-exist,--fake-iface"},
     {"del-port", 1, 2, cmd_del_port, NULL, "--if-exists"},
     {"port-to-br", 1, 1, cmd_port_to_br, NULL, ""},
 

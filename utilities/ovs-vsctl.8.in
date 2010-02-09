@@ -216,9 +216,13 @@ commands treat a bonded port as a single entity.
 Lists all of the ports within \fIbridge\fR on standard output, one per
 line.  The local port \fIbridge\fR is not included in the list.
 .
-.IP "\fBadd\-port \fIbridge port\fR"
+.IP "[\fB\-\-may\-exist\fR] \fBadd\-port \fIbridge port\fR"
 Creates on \fIbridge\fR a new port named \fIport\fR from the network
 device of the same name.
+.IP
+Without \fB\-\-may\-exist\fR, attempting to create a port that exists
+is an error.  With \fB\-\-may\-exist\fR, \fIport\fR may already exist
+(but it must be on \fIbridge\fR and not be a bonded port).
 .
 .IP "[\fB\-\-fake\-iface\fR] \fBadd\-bond \fIbridge port iface\fR\&..."
 Creates on \fIbridge\fR a new port named \fIport\fR that bonds
@@ -228,6 +232,11 @@ interfaces must be named.
 With \fB\-\-fake\-iface\fR, a fake interface with the name \fIport\fR is
 created.  This should only be used for compatibility with legacy
 software that requires it.
+.IP
+Without \fB\-\-may\-exist\fR, attempting to create a port that exists
+is an error.  With \fB\-\-may\-exist\fR, \fIport\fR may already exist
+(but it must be on \fIbridge\fR and bond together exactly the
+specified interface).
 .
 .IP "[\fB\-\-if\-exists\fR] \fBdel\-port \fR[\fIbridge\fR] \fIport\fR"
 Deletes \fIport\fR.  If \fIbridge\fR is omitted, \fIport\fR is removed
