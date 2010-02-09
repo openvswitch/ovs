@@ -1,5 +1,5 @@
 # Copyright (c) 2008,2009 Citrix Systems, Inc.
-# Copyright (c) 2009 Nicira Networks.
+# Copyright (c) 2009,2010 Nicira Networks.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published
@@ -265,9 +265,9 @@ def configure_datapath(pif, parent=None, vlan=None):
         vsctl_argv += datapath_deconfigure_physical(dev)
 
     if parent and datapath:
-        vsctl_argv += ['--', 'add-br', bridge, parent, vlan]
+        vsctl_argv += ['--', '--may-exist', 'add-br', bridge, parent, vlan]
     else:
-        vsctl_argv += ['--', 'add-br', bridge]
+        vsctl_argv += ['--', '--may-exist', 'add-br', bridge]
 
     if len(physical_devices) > 1:
         vsctl_argv += ['# deconfigure bond %s' % pif_netdev_name(pif)]
@@ -278,7 +278,7 @@ def configure_datapath(pif, parent=None, vlan=None):
     else:
         iface = pif_netdev_name(physical_devices[0])
         vsctl_argv += ['# add physical device %s' % iface]
-        vsctl_argv += ['--', 'add-port', bridge, iface]
+        vsctl_argv += ['--', '--may-exist', 'add-port', bridge, iface]
 
     return vsctl_argv,extra_up_ports
 
