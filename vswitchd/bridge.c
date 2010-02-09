@@ -3680,7 +3680,7 @@ mirror_collect_vlans(struct mirror *m, const struct ovsrec_mirror *cfg,
     size_t n_vlans;
     size_t i;
 
-    *vlans = xmalloc(sizeof *vlans * cfg->n_select_vlan);
+    *vlans = xmalloc(sizeof **vlans * cfg->n_select_vlan);
     n_vlans = 0;
     for (i = 0; i < cfg->n_select_vlan; i++) {
         int64_t vlan = cfg->select_vlan[i];
