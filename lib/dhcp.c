@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -497,7 +497,7 @@ dhcp_option_equals(const struct dhcp_option *a, const struct dhcp_option *b)
 {
     return ((a->data != NULL) == (b->data != NULL)
             && a->n == b->n
-            && !memcmp(a->data, b->data, a->n));
+            && (!a->data || !memcmp(a->data, b->data, a->n)));
 }
 
 /* Replaces 'ds' by a string representation of 'msg'.  If 'multiline' is
