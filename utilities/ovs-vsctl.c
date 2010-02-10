@@ -832,10 +832,9 @@ static void
 cmd_add_br(struct vsctl_context *ctx)
 {
     bool may_exist = shash_find(&ctx->options, "--may-exist") != 0;
-    const char *br_name = ctx->argv[1];
-    const char *parent_name = ctx->argc > 2 ? ctx->argv[2] : NULL;
-    int vlan = ctx->argc > 3 ? atoi(ctx->argv[3]) : 0;
+    const char *br_name, *parent_name;
     struct vsctl_info info;
+    int vlan;
 
     br_name = ctx->argv[1];
     if (ctx->argc == 2) {
