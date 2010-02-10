@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -183,14 +183,12 @@ static struct ovsdb_error *
 parse_body(struct ovsdb_log *file, off_t offset, unsigned long int length,
            uint8_t sha1[SHA1_DIGEST_SIZE], struct json **jsonp)
 {
-    unsigned long int bytes_left;
     struct json_parser *parser;
     struct sha1_ctx ctx;
 
     sha1_init(&ctx);
     parser = json_parser_create(JSPF_TRAILER);
 
-    bytes_left = length;
     while (length > 0) {
         char input[BUFSIZ];
         int chunk;
