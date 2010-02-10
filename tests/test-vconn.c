@@ -84,7 +84,7 @@ fpv_create(const char *type, struct fake_pvconn *fpv)
         CHECK_ERRNO(pstream_open(fpv->pvconn_name, &fpv->pstream), 0);
         free(bind_path);
     } else if (!strcmp(type, "tcp") || !strcmp(type, "ssl")) {
-        char *s, *method, *port, *save_ptr = NULL;
+        char *s, *port, *save_ptr = NULL;
         char *open_name;
 
         open_name = xasprintf("p%s:0:127.0.0.1", type);
@@ -92,7 +92,7 @@ fpv_create(const char *type, struct fake_pvconn *fpv)
 
         /* Extract bound port number from pstream name. */
         s = xstrdup(pstream_get_name(fpv->pstream));
-        method = strtok_r(s, ":", &save_ptr);
+        strtok_r(s, ":", &save_ptr);
         port = strtok_r(NULL, ":", &save_ptr);
 
         /* Save info. */

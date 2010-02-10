@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -532,8 +532,8 @@ test_rule_replacement(void)
 
     for (wc_fields = 0; wc_fields < (1u << CLS_N_FIELDS); wc_fields++) {
         struct classifier cls;
-        struct test_rule *rule1, *tcls_rule1;
-        struct test_rule *rule2, *tcls_rule2;
+        struct test_rule *rule1;
+        struct test_rule *rule2;
         struct tcls tcls;
 
         rule1 = make_rule(wc_fields, OFP_DEFAULT_PRIORITY, UINT_MAX);
@@ -543,14 +543,14 @@ test_rule_replacement(void)
 
         classifier_init(&cls);
         tcls_init(&tcls);
-        tcls_rule1 = tcls_insert(&tcls, rule1);
+        tcls_insert(&tcls, rule1);
         assert(!classifier_insert(&cls, &rule1->cls_rule));
         check_tables(&cls, 1, 1, 1);
         compare_classifiers(&cls, &tcls);
         tcls_destroy(&tcls);
 
         tcls_init(&tcls);
-        tcls_rule2 = tcls_insert(&tcls, rule2);
+        tcls_insert(&tcls, rule2);
         assert(test_rule_from_cls_rule(
                    classifier_insert(&cls, &rule2->cls_rule)) == rule1);
         free(rule1);
