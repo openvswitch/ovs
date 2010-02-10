@@ -124,14 +124,14 @@ static void
 query_db_remotes(const char *name_, const struct ovsdb *db,
                  struct shash *remotes)
 {
-    char *name, *db_prefix, *table_name, *column_name;
+    char *name, *table_name, *column_name;
     const struct ovsdb_column *column;
     const struct ovsdb_table *table;
     const struct ovsdb_row *row;
     char *save_ptr = NULL;
 
     name = xstrdup(name_);
-    db_prefix = strtok_r(name, ":", &save_ptr);
+    strtok_r(name, ":", &save_ptr); /* "db:" */
     table_name = strtok_r(NULL, ",", &save_ptr);
     column_name = strtok_r(NULL, ",", &save_ptr);
     if (!table_name || !column_name) {
