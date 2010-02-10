@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -415,15 +415,13 @@ stream_open(struct stream *s)
 static void
 stream_read(struct stream *s)
 {
-    int error = 0;
-
     if (s->fds[0] < 0) {
         return;
     }
 
-    error = 0;
     for (;;) {
         char buffer[512];
+        int error;
         size_t n;
 
         error = read_fully(s->fds[0], buffer, sizeof buffer, &n);
