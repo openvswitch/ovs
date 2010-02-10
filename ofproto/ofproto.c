@@ -2795,11 +2795,13 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
                        ntohs(ofm->hard_timeout));
     cls_rule_from_match(&rule->cr, &ofm->match, ntohs(ofm->priority));
 
-    packet = NULL;
     error = 0;
     if (ofm->buffer_id != htonl(UINT32_MAX)) {
         error = pktbuf_retrieve(ofconn->pktbuf, ntohl(ofm->buffer_id),
                                 &packet, &in_port);
+    } else {
+        packet = NULL;
+        in_port = -1;
     }
 
     rule_insert(p, rule, packet, in_port);
