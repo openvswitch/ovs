@@ -1225,7 +1225,6 @@ main(int argc, char *argv[])
             ovsdb_idl_txn_wait(txn);
             poll_block();
         }
-        ovsdb_idl_txn_destroy(txn);
             
         switch (status) {
         case TXN_INCOMPLETE:
@@ -1241,16 +1240,19 @@ main(int argc, char *argv[])
         
         case TXN_TRY_AGAIN:
             /* xxx Handle this better! */
-            printf("xxx We need to try again!\n");
+            VLOG_ERR("OVSDB transaction needs retry");
             break;
 
         case TXN_ERROR:
-            /* xxx Is this what we want to do? */
-            ovs_fatal(0, "transaction error");
-                
+            /* xxx Handle this better! */
+            VLOG_ERR("OVSDB transaction failed: %s",
+                     ovsdb_idl_txn_get_error(txn));
+            break;
+
         default:
             NOT_REACHED();
         }
+        ovsdb_idl_txn_destroy(txn);
 
         nl_sock_wait(brc_sock, POLLIN);
         ovsdb_idl_wait(idl);
