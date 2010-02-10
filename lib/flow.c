@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -283,13 +283,14 @@ flow_from_match(flow_t *flow, uint32_t *wildcards,
 {
     if (wildcards) {
         *wildcards = ntohl(match->wildcards);
-    }
-    /* The datapath supports matching on an ARP's opcode and IP addresses, 
-     * but OpenFlow does not.  In case the controller hasn't, we need to 
-     * set the appropriate wildcard bits so that we're externally 
-     * OpenFlow-compliant. */
-    if (match->dl_type == htons(ETH_TYPE_ARP)) {
-        *wildcards |= (OFPFW_NW_PROTO | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL);
+
+        /* The datapath supports matching on an ARP's opcode and IP addresses,
+         * but OpenFlow does not.  In case the controller hasn't, we need to
+         * set the appropriate wildcard bits so that we're externally
+         * OpenFlow-compliant. */
+        if (match->dl_type == htons(ETH_TYPE_ARP)) {
+            *wildcards |= OFPFW_NW_PROTO | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL;
+        }
     }
 
     flow->nw_src = match->nw_src;
