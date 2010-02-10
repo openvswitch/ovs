@@ -50,9 +50,6 @@ static enum {
     FMT_CSV                     /* Comma-separated lines. */
 } output_format;
 
-/* --wide: For --format=table, the maximum output width. */
-static int output_width;
-
 /* --no-headings: Whether table output should include headings. */
 static int output_headings = true;
 
@@ -84,7 +81,6 @@ parse_options(int argc, char *argv[])
         OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1
     };
     static struct option long_options[] = {
-        {"wide", no_argument, &output_width, INT_MAX},
         {"format", required_argument, 0, 'f'},
 	    {"no-headings", no_argument, &output_headings, 0},
         {"pretty", no_argument, &json_flags, JSSF_PRETTY | JSSF_SORT},
@@ -100,7 +96,6 @@ parse_options(int argc, char *argv[])
     };
     char *short_options = long_options_to_short_options(long_options);
 
-    output_width = isatty(fileno(stdout)) ? 79 : INT_MAX;
     for (;;) {
         int c;
 
@@ -120,10 +115,6 @@ parse_options(int argc, char *argv[])
             } else {
                 ovs_fatal(0, "unknown output format \"%s\"", optarg);
             }
-            break;
-
-        case 'w':
-            output_width = INT_MAX;
             break;
 
         case 'h':
@@ -186,7 +177,6 @@ usage(void)
     printf("\nOutput formatting options:\n"
            "  -f, --format=FORMAT         set output formatting to FORMAT\n"
            "                              (\"table\", \"html\", or \"csv\"\n"
-           "  --wide                      don't limit TTY lines to 79 bytes\n"
            "  --no-headings               omit table heading row\n"
            "  --pretty                    pretty-print JSON in output");
     daemon_usage();
@@ -404,9 +394,8 @@ table_add_cell(struct table *table, const char *format, ...)
 }
 
 static void
-table_print_table_line__(struct ds *line, size_t max_width)
+table_print_table_line__(struct ds *line)
 {
-    ds_truncate(line, max_width);
     puts(ds_cstr(line));
     ds_clear(line);
 }
@@ -425,7 +414,7 @@ table_print_table__(const struct table *table)
             }
             ds_put_format(&line, "%-*s", column->width, column->heading);
         }
-        table_print_table_line__(&line, output_width);
+        table_print_table_line__(&line);
 
         for (x = 0; x < table->n_columns; x++) {
             const struct column *column = &table->columns[x];
@@ -438,7 +427,7 @@ table_print_table__(const struct table *table)
                 ds_put_char(&line, '-');
             }
         }
-        table_print_table_line__(&line, output_width);
+        table_print_table_line__(&line);
     }
 
     for (y = 0; y < table->n_rows; y++) {
@@ -449,7 +438,7 @@ table_print_table__(const struct table *table)
             }
             ds_put_format(&line, "%-*s", table->columns[x].width, cell);
         }
-        table_print_table_line__(&line, output_width);
+        table_print_table_line__(&line);
     }
 
     ds_destroy(&line);

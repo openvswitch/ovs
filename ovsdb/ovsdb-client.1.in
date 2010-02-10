@@ -29,7 +29,6 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 \fBovsdb\-client help\fR
 .IP "Output formatting options:"
 [\fB--format=\fIformat\fR]
-[\fB--wide\fR]
 [\fB--no-heading\fR]
 .so lib/daemon-syn.man
 .so lib/vlog-syn.man
@@ -111,11 +110,6 @@ HTML tables.
 .IP "\fBcvs\fR"
 Comma-separated values as defined in RFC 4180.
 .RE
-.
-.IP "\fB--wide\fR"
-In \fBtable\fR output (the default), when standard output is a
-terminal device, by default lines are truncated at a width of 79
-characters.  Specifying this option prevents line truncation.
 .
 .IP "\fB--no-heading\fR"
 This option suppresses the heading row that otherwise appears in the
