@@ -3083,7 +3083,7 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 
         iface = shash_find_data(&old_ifaces, if_cfg->name);
         if (!iface) {
-            iface = iface_create(port, if_cfg);
+            iface_create(port, if_cfg);
         } else {
             iface->cfg = if_cfg;
         }
