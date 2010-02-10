@@ -379,6 +379,9 @@ ovsdb_mutation_set_execute(struct ovsdb_row *row,
             ovsdb_datum_subtract(dst, dst_type, arg, arg_type);
             error = ovsdb_mutation_check_count(dst, dst_type);
             break;
+
+        default:
+            NOT_REACHED();
         }
         if (error) {
             return error;
