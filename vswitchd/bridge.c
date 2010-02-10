@@ -1472,7 +1472,7 @@ bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
             local_iface = bridge_get_local_iface(br);
             if (local_iface && c->local_ip && inet_aton(c->local_ip, &ip)) {
                 struct netdev *netdev = local_iface->netdev;
-                struct in_addr ip, mask, gateway;
+                struct in_addr mask, gateway;
 
                 if (!c->local_netmask || !inet_aton(c->local_netmask, &mask)) {
                     mask.s_addr = 0;
