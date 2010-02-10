@@ -756,7 +756,7 @@ handle_fdb_query_cmd(const struct ovsrec_open_vswitch *ovs,
         struct netdev *netdev;
 
         error = netdev_open_default(iface_name, &netdev);
-        if (netdev) {
+        if (!error) {
             if (!netdev_get_etheraddr(netdev, mac->addr)) {
                 n_local_macs++;
             }
