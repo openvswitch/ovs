@@ -31,6 +31,7 @@ ovsdb_column_create(const char *name, const char *comment,
                     bool mutable, bool persistent,
                     const struct ovsdb_type *type)
 {
+    /* Doesn't set the new column's 'index': the caller must do that. */
     struct ovsdb_column *column;
 
     column = xzalloc(sizeof *column);
@@ -41,6 +42,15 @@ ovsdb_column_create(const char *name, const char *comment,
     ovsdb_type_clone(&column->type, type);
 
     return column;
+}
+
+struct ovsdb_column *
+ovsdb_column_clone(const struct ovsdb_column *old)
+{
+    /* Doesn't copy the column's 'index': the caller must do that. */
+    return ovsdb_column_create(old->name, old->comment,
+                               old->mutable, old->persistent,
+                               &old->type);
 }
 
 void

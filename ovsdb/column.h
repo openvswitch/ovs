@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ enum {
 struct ovsdb_column *ovsdb_column_create(
     const char *name, const char *comment, bool mutable, bool persistent,
     const struct ovsdb_type *);
+struct ovsdb_column *ovsdb_column_clone(const struct ovsdb_column *);
 void ovsdb_column_destroy(struct ovsdb_column *);
 
 struct ovsdb_error *ovsdb_column_from_json(const struct json *,

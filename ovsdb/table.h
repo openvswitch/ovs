@@ -35,6 +35,8 @@ struct ovsdb_table_schema {
 struct ovsdb_table_schema *ovsdb_table_schema_create(const char *name,
                                                      const char *comment,
                                                      bool mutable);
+struct ovsdb_table_schema *ovsdb_table_schema_clone(
+    const struct ovsdb_table_schema *);
 void ovsdb_table_schema_destroy(struct ovsdb_table_schema *);
 
 struct ovsdb_error *ovsdb_table_schema_from_json(const struct json *,

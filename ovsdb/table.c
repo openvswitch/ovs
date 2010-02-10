@@ -61,6 +61,26 @@ ovsdb_table_schema_create(const char *name, const char *comment, bool mutable)
     return ts;
 }
 
+struct ovsdb_table_schema *
+ovsdb_table_schema_clone(const struct ovsdb_table_schema *old)
+{
+    struct ovsdb_table_schema *new;
+    struct shash_node *node;
+
+    new = ovsdb_table_schema_create(old->name, old->comment, old->mutable);
+    SHASH_FOR_EACH (node, &old->columns) {
+        const struct ovsdb_column *column = node->data;
+
+        if (column->name[0] == '_') {
+            /* Added automatically by ovsdb_table_schema_create(). */
+            continue;
+        }
+
+        add_column(new, ovsdb_column_clone(column));
+    }
+    return new;
+}
+
 void
 ovsdb_table_schema_destroy(struct ovsdb_table_schema *ts)
 {

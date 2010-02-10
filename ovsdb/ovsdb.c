@@ -38,6 +38,22 @@ ovsdb_schema_create(const char *name, const char *comment)
     return schema;
 }
 
+struct ovsdb_schema *
+ovsdb_schema_clone(const struct ovsdb_schema *old)
+{
+    struct ovsdb_schema *new;
+    struct shash_node *node;
+
+    new = ovsdb_schema_create(old->name, old->comment);
+    SHASH_FOR_EACH (node, &old->tables) {
+        const struct ovsdb_table_schema *ts = node->data;
+
+        shash_add(&new->tables, node->name, ovsdb_table_schema_clone(ts));
+    }
+    return new;
+}
+
+
 void
 ovsdb_schema_destroy(struct ovsdb_schema *schema)
 {
