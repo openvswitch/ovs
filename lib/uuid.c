@@ -141,6 +141,22 @@ uuid_compare_3way(const struct uuid *a, const struct uuid *b)
 bool
 uuid_from_string(struct uuid *uuid, const char *s)
 {
+    if (!uuid_from_string_prefix(uuid, s)) {
+        return false;
+    } else if (s[UUID_LEN] != '\0') {
+        uuid_zero(uuid);
+        return false;
+    } else {
+        return true;
+    }
+}
+
+/* Same as uuid_from_string() but s[UUID_LEN] is not required to be a null byte
+ * to succeed; that is, 's' need only begin with UUID syntax, not consist
+ * entirely of it. */
+bool
+uuid_from_string_prefix(struct uuid *uuid, const char *s)
+{
     static const char template[] = "00000000-1111-1111-2222-222233333333";
     const char *t;
 
@@ -152,10 +168,10 @@ uuid_from_string(struct uuid *uuid, const char *s)
                 goto error;
             }
             *part = (*part << 4) + hexit_value(*s);
-        } else if (*t != *s) {
-            goto error;
         } else if (*t == 0) {
             return true;
+        } else if (*t != *s) {
+            goto error;
         }
     }
 
