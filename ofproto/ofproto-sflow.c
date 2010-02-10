@@ -367,7 +367,6 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     unsigned int odp_port;
     SFLAddress agentIP;
     time_t now;
-    int error;
 
     if (!options->targets.n || !options->sampling_rate) {
         /* No point in doing any work if there are no targets or nothing to
@@ -385,8 +384,8 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     if (options_changed
         || collectors_count(os->collectors) < options->targets.n) {
         collectors_destroy(os->collectors);
-        error = collectors_create(&options->targets,
-                                  SFL_DEFAULT_COLLECTOR_PORT, &os->collectors);
+        collectors_create(&options->targets, SFL_DEFAULT_COLLECTOR_PORT,
+                          &os->collectors);
         if (os->collectors == NULL) {
             VLOG_WARN_RL(&rl, "no collectors could be initialized, "
                          "sFlow disabled");
