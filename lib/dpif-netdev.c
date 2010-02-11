@@ -1179,8 +1179,8 @@ dp_netdev_set_nw_tos(struct ofpbuf *packet, flow_t *key,
         struct ip_header *nh = packet->l3;
         uint8_t *field = &nh->ip_tos;
 
-        /* We only set the lower 6 bits. */
-        uint8_t new = (a->nw_tos & 0x3f) | (nh->ip_tos & 0xc0);
+        /* Set the DSCP bits and preserve the ECN bits. */
+        uint8_t new = (a->nw_tos & IP_DSCP_MASK) | (nh->ip_tos & IP_ECN_MASK);
 
         nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
                 htons((uint16_t)a->nw_tos));

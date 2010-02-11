@@ -15,6 +15,7 @@
 #include <linux/udp.h>
 #include <linux/in6.h>
 #include <linux/if_vlan.h>
+#include <net/inet_ecn.h>
 #include <net/ip.h>
 #include <net/checksum.h>
 #include "datapath.h"
@@ -298,10 +299,10 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 		struct iphdr *nh = ip_hdr(skb);
 		u8 *f = &nh->tos;
 		u8 old = *f;
+		u8 new;
 
-		/* We only set the lower 6 bits. */
-		u8 new = (a->nw_tos & 0x3f) | (nh->tos & 0xc0);
-
+		/* Set the DSCP bits and preserve the ECN bits. */
+		new = (a->nw_tos & ~INET_ECN_MASK) | (nh->tos & INET_ECN_MASK);
 		update_csum(&nh->check, skb, htons((uint16_t)old),
 				htons((uint16_t)new), 0);
 		*f = new;

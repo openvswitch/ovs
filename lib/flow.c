@@ -151,7 +151,7 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, flow_t *flow)
             if (nh) {
                 flow->nw_src = nh->ip_src;
                 flow->nw_dst = nh->ip_dst;
-                flow->nw_tos = nh->ip_tos & 0xfc;
+                flow->nw_tos = nh->ip_tos & IP_DSCP_MASK;
                 flow->nw_proto = nh->ip_proto;
                 packet->l4 = b.data;
                 if (!IP_IS_FRAGMENT(nh->ip_frag_off)) {
