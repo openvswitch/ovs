@@ -21,6 +21,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /* Generic interface to network devices.
  *
  * Currently, there is a single implementation of this interface that supports
@@ -154,5 +158,9 @@ int netdev_monitor_add(struct netdev_monitor *, struct netdev *);
 void netdev_monitor_remove(struct netdev_monitor *, struct netdev *);
 int netdev_monitor_poll(struct netdev_monitor *, char **devnamep);
 void netdev_monitor_poll_wait(const struct netdev_monitor *);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* netdev.h */

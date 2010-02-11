@@ -91,7 +91,7 @@ release(void *cli_)
 }
 
 static void
-modify_dhcp_request(struct dhcp_msg *msg, void *aux UNUSED)
+modify_dhcp_request(struct dhcp_msg *msg, void *aux OVS_UNUSED)
 {
     if (vendor_class) {
         dhcp_msg_put_string(msg, DHCP_CODE_VENDOR_CLASS, vendor_class);

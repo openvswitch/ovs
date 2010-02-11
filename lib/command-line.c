@@ -180,12 +180,12 @@ proctitle_restore(void)
 /* Stubs that don't do anything on non-Linux systems. */
 
 void
-proctitle_init(int argc UNUSED, char **argv UNUSED)
+proctitle_init(int argc OVS_UNUSED, char **argv OVS_UNUSED)
 {
 }
 
 void
-proctitle_set(const char *format UNUSED, ...)
+proctitle_set(const char *format OVS_UNUSED, ...)
 {
 }
 

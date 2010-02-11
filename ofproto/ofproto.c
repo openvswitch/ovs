@@ -600,7 +600,7 @@ ofproto_set_rate_limit(struct ofproto *ofproto,
 }
 
 int
-ofproto_set_stp(struct ofproto *ofproto UNUSED, bool enable_stp)
+ofproto_set_stp(struct ofproto *ofproto OVS_UNUSED, bool enable_stp)
 {
     /* XXX */
     if (enable_stp) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -385,7 +385,8 @@ vlog_set_verbosity(const char *arg)
 }
 
 static void
-vlog_unixctl_set(struct unixctl_conn *conn, const char *args, void *aux UNUSED)
+vlog_unixctl_set(struct unixctl_conn *conn,
+                 const char *args, void *aux OVS_UNUSED)
 {
     char *msg = vlog_set_levels_from_string(args);
     unixctl_command_reply(conn, msg ? 501 : 202, msg);
@@ -394,7 +395,7 @@ vlog_unixctl_set(struct unixctl_conn *conn, const char *args, void *aux UNUSED)
 
 static void
 vlog_unixctl_list(struct unixctl_conn *conn,
-                  const char *args UNUSED, void *aux UNUSED)
+                  const char *args OVS_UNUSED, void *aux OVS_UNUSED)
 {
     char *msg = vlog_get_levels();
     unixctl_command_reply(conn, 200, msg);
@@ -403,7 +404,7 @@ vlog_unixctl_list(struct unixctl_conn *conn,
 
 static void
 vlog_unixctl_reopen(struct unixctl_conn *conn,
-                    const char *args UNUSED, void *aux UNUSED)
+                    const char *args OVS_UNUSED, void *aux OVS_UNUSED)
 {
     if (log_file_name) {
         int error = vlog_reopen_log_file();

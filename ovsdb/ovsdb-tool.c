@@ -150,7 +150,7 @@ check_ovsdb_error(struct ovsdb_error *error)
 }
 
 static void
-do_create(int argc UNUSED, char *argv[])
+do_create(int argc OVS_UNUSED, char *argv[])
 {
     const char *db_file_name = argv[1];
     const char *schema_file_name = argv[2];
@@ -190,13 +190,13 @@ transact(bool read_only, const char *db_file_name, const char *transaction)
 }
 
 static void
-do_query(int argc UNUSED, char *argv[])
+do_query(int argc OVS_UNUSED, char *argv[])
 {
     transact(true, argv[1], argv[2]);
 }
 
 static void
-do_transact(int argc UNUSED, char *argv[])
+do_transact(int argc OVS_UNUSED, char *argv[])
 {
     transact(false, argv[1], argv[2]);
 }
@@ -281,7 +281,7 @@ print_db_changes(struct shash *tables, struct shash *names)
 }
 
 static void
-do_show_log(int argc UNUSED, char *argv[])
+do_show_log(int argc OVS_UNUSED, char *argv[])
 {
     const char *db_file_name = argv[1];
     struct shash names;
@@ -329,7 +329,7 @@ do_show_log(int argc UNUSED, char *argv[])
 }
 
 static void
-do_help(int argc UNUSED, char *argv[] UNUSED)
+do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
 }

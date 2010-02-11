@@ -775,7 +775,7 @@ dhclient_run_REBINDING(struct dhclient *cli)
 }
 
 static void
-dhclient_run_RELEASED(struct dhclient *cli UNUSED)
+dhclient_run_RELEASED(struct dhclient *cli OVS_UNUSED)
 {
     /* Nothing to do. */
 }

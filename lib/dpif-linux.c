@@ -107,7 +107,7 @@ dpif_linux_enumerate(struct svec *all_dps)
 }
 
 static int
-dpif_linux_open(const char *name, const char *type UNUSED, bool create,
+dpif_linux_open(const char *name, const char *type OVS_UNUSED, bool create,
                 struct dpif **dpifp)
 {
     int minor;

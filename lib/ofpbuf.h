@@ -19,6 +19,10 @@
 
 #include <stddef.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /* Buffer for holding arbitrary data.  An ofpbuf is automatically reallocated
  * as necessary if it grows too large for the available memory. */
 struct ofpbuf {
@@ -34,7 +38,7 @@ struct ofpbuf {
     void *l7;                   /* Application data. */
 
     struct ofpbuf *next;        /* Next in a list of ofpbufs. */
-    void *private;              /* Private pointer for use by owner. */
+    void *private_p;            /* Private pointer for use by owner. */
 };
 
 void ofpbuf_use(struct ofpbuf *, void *, size_t);
@@ -69,5 +73,9 @@ void ofpbuf_trim(struct ofpbuf *);
 void ofpbuf_clear(struct ofpbuf *);
 void *ofpbuf_pull(struct ofpbuf *, size_t);
 void *ofpbuf_try_pull(struct ofpbuf *, size_t);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* ofpbuf.h */

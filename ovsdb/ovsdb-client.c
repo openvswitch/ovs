@@ -576,7 +576,7 @@ table_print(const struct table *table)
 }
 
 static void
-do_list_dbs(int argc UNUSED, char *argv[])
+do_list_dbs(int argc OVS_UNUSED, char *argv[])
 {
     struct jsonrpc_msg *request, *reply;
     struct jsonrpc *rpc;
@@ -607,7 +607,7 @@ do_list_dbs(int argc UNUSED, char *argv[])
 }
 
 static void
-do_get_schema(int argc UNUSED, char *argv[])
+do_get_schema(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_schema *schema = fetch_schema(argv[1], argv[2]);
     print_and_free_json(ovsdb_schema_to_json(schema));
@@ -615,7 +615,7 @@ do_get_schema(int argc UNUSED, char *argv[])
 }
 
 static void
-do_list_tables(int argc UNUSED, char *argv[])
+do_list_tables(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_schema *schema;
     struct shash_node *node;
@@ -639,7 +639,7 @@ do_list_tables(int argc UNUSED, char *argv[])
 }
 
 static void
-do_list_columns(int argc UNUSED, char *argv[])
+do_list_columns(int argc OVS_UNUSED, char *argv[])
 {
     const char *table_name = argv[3];
     struct ovsdb_schema *schema;
@@ -683,7 +683,7 @@ do_list_columns(int argc UNUSED, char *argv[])
 }
 
 static void
-do_transact(int argc UNUSED, char *argv[])
+do_transact(int argc OVS_UNUSED, char *argv[])
 {
     struct jsonrpc_msg *request, *reply;
     struct json *transaction;
@@ -909,7 +909,7 @@ do_monitor(int argc, char *argv[])
 }
 
 static void
-do_help(int argc UNUSED, char *argv[] UNUSED)
+do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
 }

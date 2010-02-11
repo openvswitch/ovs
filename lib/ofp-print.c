@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ static void ofp_print_port_name(struct ds *string, uint16_t port);
  *
  * This starts and kills a tcpdump subprocess so it's quite expensive. */
 char *
-ofp_packet_to_string(const void *data, size_t len, size_t total_len UNUSED)
+ofp_packet_to_string(const void *data, size_t len, size_t total_len OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct ofpbuf buf;
@@ -535,7 +535,7 @@ ofp_print_phy_port(struct ds *string, const struct ofp_phy_port *port)
  * 'string' at the given 'verbosity' level. */
 static void
 ofp_print_switch_features(struct ds *string, const void *oh, size_t len,
-                          int verbosity UNUSED)
+                          int verbosity OVS_UNUSED)
 {
     const struct ofp_switch_features *osf = oh;
     struct ofp_phy_port *port_list;
@@ -565,8 +565,8 @@ ofp_print_switch_features(struct ds *string, const void *oh, size_t len,
 /* Pretty-print the struct ofp_switch_config of 'len' bytes at 'oh' to 'string'
  * at the given 'verbosity' level. */
 static void
-ofp_print_switch_config(struct ds *string, const void *oh, size_t len UNUSED,
-                        int verbosity UNUSED)
+ofp_print_switch_config(struct ds *string, const void *oh,
+                        size_t len OVS_UNUSED, int verbosity OVS_UNUSED)
 {
     const struct ofp_switch_config *osc = oh;
     uint16_t flags;
@@ -739,8 +739,8 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
 /* Pretty-print the OFPT_FLOW_EXPIRED packet of 'len' bytes at 'oh' to 'string'
  * at the given 'verbosity' level. */
 static void
-ofp_print_flow_expired(struct ds *string, const void *oh, size_t len UNUSED, 
-                       int verbosity)
+ofp_print_flow_expired(struct ds *string, const void *oh,
+                       size_t len OVS_UNUSED, int verbosity)
 {
     const struct ofp_flow_expired *ofe = oh;
 
@@ -765,8 +765,8 @@ ofp_print_flow_expired(struct ds *string, const void *oh, size_t len UNUSED,
 }
 
 static void
-ofp_print_port_mod(struct ds *string, const void *oh, size_t len UNUSED,
-                   int verbosity UNUSED)
+ofp_print_port_mod(struct ds *string, const void *oh, size_t len OVS_UNUSED,
+                   int verbosity OVS_UNUSED)
 {
     const struct ofp_port_mod *opm = oh;
 
@@ -852,7 +852,7 @@ lookup_error_code(int type, int code)
  * at the given 'verbosity' level. */
 static void
 ofp_print_error_msg(struct ds *string, const void *oh, size_t len, 
-                       int verbosity UNUSED)
+                       int verbosity OVS_UNUSED)
 {
     const struct ofp_error_msg *oem = oh;
     int type = ntohs(oem->type);
@@ -883,8 +883,8 @@ ofp_print_error_msg(struct ds *string, const void *oh, size_t len,
 /* Pretty-print the OFPT_PORT_STATUS packet of 'len' bytes at 'oh' to 'string'
  * at the given 'verbosity' level. */
 static void
-ofp_print_port_status(struct ds *string, const void *oh, size_t len UNUSED,
-                      int verbosity UNUSED)
+ofp_print_port_status(struct ds *string, const void *oh, size_t len OVS_UNUSED,
+                      int verbosity OVS_UNUSED)
 {
     const struct ofp_port_status *ops = oh;
 
@@ -900,8 +900,8 @@ ofp_print_port_status(struct ds *string, const void *oh, size_t len UNUSED,
 }
 
 static void
-ofp_desc_stats_reply(struct ds *string, const void *body, size_t len UNUSED,
-                     int verbosity UNUSED)
+ofp_desc_stats_reply(struct ds *string, const void *body,
+                     size_t len OVS_UNUSED, int verbosity OVS_UNUSED)
 {
     const struct ofp_desc_stats *ods = body;
 
@@ -912,8 +912,8 @@ ofp_desc_stats_reply(struct ds *string, const void *body, size_t len UNUSED,
 }
 
 static void
-ofp_flow_stats_request(struct ds *string, const void *oh, size_t len UNUSED,
-                      int verbosity) 
+ofp_flow_stats_request(struct ds *string, const void *oh,
+                       size_t len OVS_UNUSED, int verbosity)
 {
     const struct ofp_flow_stats_request *fsr = oh;
 
@@ -990,7 +990,7 @@ ofp_flow_stats_reply(struct ds *string, const void *body_, size_t len,
 
 static void
 ofp_aggregate_stats_request(struct ds *string, const void *oh,
-                            size_t len UNUSED, int verbosity)
+                            size_t len OVS_UNUSED, int verbosity)
 {
     const struct ofp_aggregate_stats_request *asr = oh;
 
@@ -1005,7 +1005,7 @@ ofp_aggregate_stats_request(struct ds *string, const void *oh,
 
 static void
 ofp_aggregate_stats_reply(struct ds *string, const void *body_,
-                          size_t len UNUSED, int verbosity UNUSED)
+                          size_t len OVS_UNUSED, int verbosity OVS_UNUSED)
 {
     const struct ofp_aggregate_stats_reply *asr = body_;
 
@@ -1092,7 +1092,7 @@ ofp_table_stats_reply(struct ds *string, const void *body, size_t len,
 
 static void
 vendor_stat(struct ds *string, const void *body, size_t len,
-            int verbosity UNUSED)
+            int verbosity OVS_UNUSED)
 {
     ds_put_format(string, " vendor=%08"PRIx32, ntohl(*(uint32_t *) body));
     ds_put_format(string, " %zu bytes additional data",

@@ -234,13 +234,13 @@ fatal_signal_unlink_file_now(const char *file)
 }
 
 static void
-unlink_files(void *aux UNUSED)
+unlink_files(void *aux OVS_UNUSED)
 {
     do_unlink_files(); 
 }
 
 static void
-cancel_files(void *aux UNUSED)
+cancel_files(void *aux OVS_UNUSED)
 {
     shash_clear(&files);
     added_hook = false;

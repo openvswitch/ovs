@@ -102,7 +102,7 @@ check_stream_classes(void)
  * connection methods supported by the stream. */
 void
 stream_usage(const char *name, bool active, bool passive,
-             bool bootstrap UNUSED)
+             bool bootstrap OVS_UNUSED)
 {
     /* Really this should be implemented via callbacks into the stream
      * providers, but that seems too heavy-weight to bother with at the

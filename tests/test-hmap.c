@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -157,7 +157,7 @@ good_hash(int value)
 }
 
 static size_t
-constant_hash(int value UNUSED)
+constant_hash(int value OVS_UNUSED)
 {
     return 123;
 }

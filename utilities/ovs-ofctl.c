@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -339,7 +339,7 @@ dump_trivial_stats_transaction(const char *vconn_name, uint8_t stats_type)
 }
 
 static void
-do_show(int argc UNUSED, char *argv[])
+do_show(int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_transaction(argv[1], OFPT_FEATURES_REQUEST);
     dump_trivial_transaction(argv[1], OFPT_GET_CONFIG_REQUEST);
@@ -378,13 +378,13 @@ do_status(int argc, char *argv[])
 }
 
 static void
-do_dump_desc(int argc UNUSED, char *argv[])
+do_dump_desc(int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_DESC);
 }
 
 static void
-do_dump_tables(int argc UNUSED, char *argv[])
+do_dump_tables(int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_TABLE);
 }
@@ -812,7 +812,7 @@ do_dump_aggregate(int argc, char *argv[])
 }
 
 static void
-do_add_flow(int argc UNUSED, char *argv[])
+do_add_flow(int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
     struct ofpbuf *buffer;
@@ -840,7 +840,7 @@ do_add_flow(int argc UNUSED, char *argv[])
 }
 
 static void
-do_add_flows(int argc UNUSED, char *argv[])
+do_add_flows(int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
     FILE *file;
@@ -893,7 +893,7 @@ do_add_flows(int argc UNUSED, char *argv[])
 }
 
 static void
-do_mod_flows(int argc UNUSED, char *argv[])
+do_mod_flows(int argc OVS_UNUSED, char *argv[])
 {
     uint16_t priority, idle_timeout, hard_timeout;
     struct vconn *vconn;
@@ -954,7 +954,7 @@ static void do_del_flows(int argc, char *argv[])
 }
 
 static void
-do_monitor(int argc UNUSED, char *argv[])
+do_monitor(int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
 
@@ -979,13 +979,13 @@ do_monitor(int argc UNUSED, char *argv[])
 }
 
 static void
-do_dump_ports(int argc UNUSED, char *argv[])
+do_dump_ports(int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_PORT);
 }
 
 static void
-do_probe(int argc UNUSED, char *argv[])
+do_probe(int argc OVS_UNUSED, char *argv[])
 {
     struct ofpbuf *request;
     struct vconn *vconn;
@@ -1002,7 +1002,7 @@ do_probe(int argc UNUSED, char *argv[])
 }
 
 static void
-do_mod_port(int argc UNUSED, char *argv[])
+do_mod_port(int argc OVS_UNUSED, char *argv[])
 {
     struct ofpbuf *request, *reply;
     struct ofp_switch_features *osf;
@@ -1129,7 +1129,7 @@ do_ping(int argc, char *argv[])
 }
 
 static void
-do_benchmark(int argc UNUSED, char *argv[])
+do_benchmark(int argc OVS_UNUSED, char *argv[])
 {
     size_t max_payload = 65535 - sizeof(struct ofp_header);
     struct timeval start, end;
@@ -1172,7 +1172,7 @@ do_benchmark(int argc UNUSED, char *argv[])
 }
 
 static void
-do_help(int argc UNUSED, char *argv[] UNUSED)
+do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
 }

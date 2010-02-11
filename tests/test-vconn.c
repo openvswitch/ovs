@@ -134,7 +134,7 @@ fpv_destroy(struct fake_pvconn *fpv)
 /* Connects to a fake_pvconn with vconn_open(), then closes the listener and
  * verifies that vconn_connect() reports 'expected_error'. */
 static void
-test_refuse_connection(int argc UNUSED, char *argv[])
+test_refuse_connection(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
     int expected_error;
@@ -156,7 +156,7 @@ test_refuse_connection(int argc UNUSED, char *argv[])
  * closes it immediately, and verifies that vconn_connect() reports
  * 'expected_error'. */
 static void
-test_accept_then_close(int argc UNUSED, char *argv[])
+test_accept_then_close(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
     int expected_error;
@@ -181,7 +181,7 @@ test_accept_then_close(int argc UNUSED, char *argv[])
  * reads the hello message from it, then closes the connection and verifies
  * that vconn_connect() reports 'expected_error'. */
 static void
-test_read_hello(int argc UNUSED, char *argv[])
+test_read_hello(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
     struct fake_pvconn fpv;
@@ -310,7 +310,7 @@ test_send_hello(const char *type, const void *out, size_t out_size,
 
 /* Try connecting and sending a normal hello, which should succeed. */
 static void
-test_send_plain_hello(int argc UNUSED, char *argv[])
+test_send_plain_hello(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
     struct ofp_header hello;
@@ -326,7 +326,7 @@ test_send_plain_hello(int argc UNUSED, char *argv[])
  * the specification says that implementations must accept and ignore extra
  * data). */
 static void
-test_send_long_hello(int argc UNUSED, char *argv[])
+test_send_long_hello(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
     struct ofp_header hello;
@@ -344,7 +344,7 @@ test_send_long_hello(int argc UNUSED, char *argv[])
 /* Try connecting and sending an echo request instead of a hello, which should
  * fail with EPROTO. */
 static void
-test_send_echo_hello(int argc UNUSED, char *argv[])
+test_send_echo_hello(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
     struct ofp_header echo;
@@ -359,7 +359,7 @@ test_send_echo_hello(int argc UNUSED, char *argv[])
 /* Try connecting and sending a hello packet that has its length field as 0,
  * which should fail with EPROTO. */
 static void
-test_send_short_hello(int argc UNUSED, char *argv[])
+test_send_short_hello(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
     struct ofp_header hello;
@@ -371,7 +371,7 @@ test_send_short_hello(int argc UNUSED, char *argv[])
 /* Try connecting and sending a hello packet that has a bad version, which
  * should fail with EPROTO. */
 static void
-test_send_invalid_version_hello(int argc UNUSED, char *argv[])
+test_send_invalid_version_hello(int argc OVS_UNUSED, char *argv[])
 {
     const char *type = argv[1];
     struct ofp_header hello;
@@ -396,7 +396,7 @@ static const struct command commands[] = {
 };
 
 int
-main(int argc, char *argv[])
+main(int argc OVS_UNUSED, char *argv[])
 {
     set_program_name(argv[0]);
     time_init();

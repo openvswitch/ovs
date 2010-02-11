@@ -245,7 +245,7 @@ create_dp_netdev(const char *name, int dp_idx, struct dpif **dpifp)
 }
 
 static int
-dpif_netdev_open(const char *name, const char *type UNUSED, bool create,
+dpif_netdev_open(const char *name, const char *type OVS_UNUSED, bool create,
                  struct dpif **dpifp)
 {
     if (create) {
@@ -582,7 +582,7 @@ dpif_netdev_port_list(const struct dpif *dpif, struct odp_port *ports, int n)
 }
 
 static int
-dpif_netdev_port_poll(const struct dpif *dpif_, char **devnamep UNUSED)
+dpif_netdev_port_poll(const struct dpif *dpif_, char **devnamep OVS_UNUSED)
 {
     struct dpif_netdev *dpif = dpif_netdev_cast(dpif_);
     if (dpif->dp_serial != dpif->dp->serial) {

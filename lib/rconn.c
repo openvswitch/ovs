@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -313,13 +313,13 @@ rconn_destroy(struct rconn *rc)
 }
 
 static unsigned int
-timeout_VOID(const struct rconn *rc UNUSED)
+timeout_VOID(const struct rconn *rc OVS_UNUSED)
 {
     return UINT_MAX;
 }
 
 static void
-run_VOID(struct rconn *rc UNUSED)
+run_VOID(struct rconn *rc OVS_UNUSED)
 {
     /* Nothing to do. */
 }
@@ -566,7 +566,7 @@ rconn_send(struct rconn *rc, struct ofpbuf *b,
     if (rconn_is_connected(rc)) {
         COVERAGE_INC(rconn_queued);
         copy_to_monitor(rc, b);
-        b->private = counter;
+        b->private_p = counter;
         if (counter) {
             rconn_packet_counter_inc(counter);
         }
@@ -864,7 +864,7 @@ try_send(struct rconn *rc)
 {
     int retval = 0;
     struct ofpbuf *next = rc->txq.head->next;
-    struct rconn_packet_counter *counter = rc->txq.head->private;
+    struct rconn_packet_counter *counter = rc->txq.head->private_p;
     retval = vconn_send(rc->vconn, rc->txq.head);
     if (retval) {
         if (retval != EAGAIN) {
@@ -933,7 +933,7 @@ flush_queue(struct rconn *rc)
     }
     while (rc->txq.n > 0) {
         struct ofpbuf *b = queue_pop_head(&rc->txq);
-        struct rconn_packet_counter *counter = b->private;
+        struct rconn_packet_counter *counter = b->private_p;
         if (counter) {
             rconn_packet_counter_dec(counter);
         }

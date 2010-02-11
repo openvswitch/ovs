@@ -216,7 +216,7 @@ netdev_linux_wait(void)
 
 static void
 netdev_linux_cache_cb(const struct rtnetlink_change *change,
-                      void *aux UNUSED)
+                      void *aux OVS_UNUSED)
 {
     struct netdev_dev_linux *dev;
     if (change) {
@@ -242,8 +242,8 @@ netdev_linux_cache_cb(const struct rtnetlink_change *change,
 /* The arguments are marked as unused to prevent warnings on platforms where
  * the Netlink interface isn't supported. */
 static int
-setup_gre_netlink(const char *name UNUSED, struct gre_config *config UNUSED,
-                  bool create UNUSED)
+setup_gre_netlink(const char *name OVS_UNUSED,
+                  struct gre_config *config OVS_UNUSED, bool create OVS_UNUSED)
 {
 #ifdef GRE_IOCTL_ONLY
     return EOPNOTSUPP;
@@ -397,7 +397,7 @@ setup_gre_ioctl(const char *name, struct gre_config *config, bool create)
 /* The arguments are marked as unused to prevent warnings on platforms where
  * the Netlink interface isn't supported. */
 static bool
-check_gre_device_netlink(const char *name UNUSED)
+check_gre_device_netlink(const char *name OVS_UNUSED)
 {
 #ifdef GRE_IOCTL_ONLY
     return false;
@@ -569,7 +569,7 @@ error:
 
 /* Creates the netdev device of 'type' with 'name'. */
 static int
-netdev_linux_create_system(const char *name, const char *type UNUSED,
+netdev_linux_create_system(const char *name, const char *type OVS_UNUSED,
                     const struct shash *args, struct netdev_dev **netdev_devp)
 {
     struct netdev_dev_linux *netdev_dev;
@@ -602,7 +602,7 @@ netdev_linux_create_system(const char *name, const char *type UNUSED,
  * buffers, across all readers.  Therefore once data is read it will
  * be unavailable to other reads for tap devices. */
 static int
-netdev_linux_create_tap(const char *name, const char *type UNUSED,
+netdev_linux_create_tap(const char *name, const char *type OVS_UNUSED,
                     const struct shash *args, struct netdev_dev **netdev_devp)
 {
     struct netdev_dev_linux *netdev_dev;
@@ -669,7 +669,7 @@ if_up(const char *name)
 }
 
 static int
-netdev_linux_create_gre(const char *name, const char *type UNUSED,
+netdev_linux_create_gre(const char *name, const char *type OVS_UNUSED,
                     const struct shash *args, struct netdev_dev **netdev_devp)
 {
     struct netdev_dev_linux *netdev_dev;
@@ -708,7 +708,7 @@ netdev_linux_reconfigure_gre(struct netdev_dev *netdev_dev_,
 /* The arguments are marked as unused to prevent warnings on platforms where
  * the Netlink interface isn't supported. */
 static int
-destroy_gre_netlink(const char *name UNUSED)
+destroy_gre_netlink(const char *name OVS_UNUSED)
 {
 #ifdef GRE_IOCTL_ONLY
     return EOPNOTSUPP;
@@ -1707,7 +1707,7 @@ do_set_addr(struct netdev *netdev,
 
 /* Adds 'router' as a default IP gateway. */
 static int
-netdev_linux_add_router(struct netdev *netdev UNUSED, struct in_addr router)
+netdev_linux_add_router(struct netdev *netdev OVS_UNUSED, struct in_addr router)
 {
     struct in_addr any = { INADDR_ANY };
     struct rtentry rt;
@@ -1874,7 +1874,7 @@ poll_notify(struct list *list)
 
 static void
 netdev_linux_poll_cb(const struct rtnetlink_change *change,
-                     void *aux UNUSED)
+                     void *aux OVS_UNUSED)
 {
     if (change) {
         struct list *list = shash_find_data(&netdev_linux_notifiers,

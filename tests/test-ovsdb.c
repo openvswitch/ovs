@@ -325,7 +325,7 @@ do_log_io(int argc, char *argv[])
 }
 
 static void
-do_parse_atomic_type(int argc UNUSED, char *argv[])
+do_parse_atomic_type(int argc OVS_UNUSED, char *argv[])
 {
     enum ovsdb_atomic_type type;
     struct json *json;
@@ -337,7 +337,7 @@ do_parse_atomic_type(int argc UNUSED, char *argv[])
 }
 
 static void
-do_parse_base_type(int argc UNUSED, char *argv[])
+do_parse_base_type(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_base_type base;
     struct json *json;
@@ -350,7 +350,7 @@ do_parse_base_type(int argc UNUSED, char *argv[])
 }
 
 static void
-do_parse_type(int argc UNUSED, char *argv[])
+do_parse_type(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_type type;
     struct json *json;
@@ -482,7 +482,7 @@ compare_atoms(const void *a_, const void *b_)
 }
 
 static void
-do_sort_atoms(int argc UNUSED, char *argv[])
+do_sort_atoms(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_base_type base;
     union ovsdb_atom *atoms;
@@ -524,7 +524,7 @@ do_sort_atoms(int argc UNUSED, char *argv[])
 }
 
 static void
-do_parse_column(int argc UNUSED, char *argv[])
+do_parse_column(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_column *column;
     struct json *json;
@@ -537,7 +537,7 @@ do_parse_column(int argc UNUSED, char *argv[])
 }
 
 static void
-do_parse_table(int argc UNUSED, char *argv[])
+do_parse_table(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_table_schema *ts;
     struct json *json;
@@ -705,7 +705,7 @@ do_parse_conditions(int argc, char *argv[])
 }
 
 static void
-do_evaluate_conditions(int argc UNUSED, char *argv[])
+do_evaluate_conditions(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_table_schema *ts;
     struct ovsdb_table *table;
@@ -810,7 +810,7 @@ do_parse_mutations(int argc, char *argv[])
 }
 
 static void
-do_execute_mutations(int argc UNUSED, char *argv[])
+do_execute_mutations(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_table_schema *ts;
     struct ovsdb_table *table;
@@ -926,7 +926,7 @@ do_query_cb(const struct ovsdb_row *row, void *cbdata_)
 }
 
 static void
-do_query(int argc UNUSED, char *argv[])
+do_query(int argc OVS_UNUSED, char *argv[])
 {
     struct do_query_cbdata cbdata;
     struct ovsdb_table_schema *ts;
@@ -1016,7 +1016,7 @@ struct do_query_distinct_row {
 };
 
 static void
-do_query_distinct(int argc UNUSED, char *argv[])
+do_query_distinct(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_column_set columns;
     struct ovsdb_table_schema *ts;
@@ -1141,7 +1141,7 @@ do_query_distinct(int argc UNUSED, char *argv[])
 }
 
 static void
-do_parse_schema(int argc UNUSED, char *argv[])
+do_parse_schema(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_schema *schema;
     struct json *json;
@@ -1154,7 +1154,7 @@ do_parse_schema(int argc UNUSED, char *argv[])
 }
 
 static void
-do_execute(int argc UNUSED, char *argv[])
+do_execute(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_schema *schema;
     struct json *json;
@@ -1204,7 +1204,7 @@ do_trigger_dump(struct test_trigger *t, long long int now, const char *title)
 }
 
 static void
-do_trigger(int argc UNUSED, char *argv[])
+do_trigger(int argc OVS_UNUSED, char *argv[])
 {
     struct ovsdb_schema *schema;
     struct list completions;
@@ -1259,7 +1259,7 @@ do_trigger(int argc UNUSED, char *argv[])
 }
 
 static void
-do_help(int argc UNUSED, char *argv[] UNUSED)
+do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
 }
@@ -1271,14 +1271,14 @@ static struct ovsdb_txn *do_transact_txn;
 static struct ovsdb_table *do_transact_table;
 
 static void
-do_transact_commit(int argc UNUSED, char *argv[] UNUSED)
+do_transact_commit(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     ovsdb_txn_commit(do_transact_txn, false);
     do_transact_txn = NULL;
 }
 
 static void
-do_transact_abort(int argc UNUSED, char *argv[] UNUSED)
+do_transact_abort(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     ovsdb_txn_abort(do_transact_txn);
     do_transact_txn = NULL;
@@ -1338,7 +1338,7 @@ do_transact_set_i_j(struct ovsdb_row *row,
 }
 
 static void
-do_transact_insert(int argc UNUSED, char *argv[] UNUSED)
+do_transact_insert(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     struct ovsdb_row *row;
     struct uuid *uuid;
@@ -1360,14 +1360,14 @@ do_transact_insert(int argc UNUSED, char *argv[] UNUSED)
 }
 
 static void
-do_transact_delete(int argc UNUSED, char *argv[] UNUSED)
+do_transact_delete(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     const struct ovsdb_row *row = do_transact_find_row(argv[1]);
     ovsdb_txn_row_delete(do_transact_txn, row);
 }
 
 static void
-do_transact_modify(int argc UNUSED, char *argv[] UNUSED)
+do_transact_modify(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     const struct ovsdb_row *row_ro;
     struct ovsdb_row *row_rw;
@@ -1387,7 +1387,7 @@ compare_rows_by_uuid(const void *a_, const void *b_)
 }
 
 static void
-do_transact_print(int argc UNUSED, char *argv[] UNUSED)
+do_transact_print(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     const struct ovsdb_row **rows;
     const struct ovsdb_row *row;

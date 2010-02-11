@@ -77,8 +77,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
 static struct shash commands = SHASH_INITIALIZER(&commands);
 
 static void
-unixctl_help(struct unixctl_conn *conn, const char *args UNUSED,
-             void *aux UNUSED)
+unixctl_help(struct unixctl_conn *conn, const char *args OVS_UNUSED,
+             void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct shash_node *node;

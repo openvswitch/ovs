@@ -330,6 +330,7 @@ class DatapathVswitch(Datapath):
         extra_ports = []
 
         pifrec = db().get_pif_record(self._pif)
+        dprec = db().get_pif_record(self._dp)
 
         ipdev = self._ipdev
         bridge = pif_bridge_name(self._dp)
@@ -366,9 +367,9 @@ class DatapathVswitch(Datapath):
 
         # XXX Needs support in ovs-vsctl
         #if bridge == ipdev:
-        #    vsctl_argv += ['--add=bridge.%s.mac=%s' % (bridge, pifrec['MAC'])]
+        #    vsctl_argv += ['--add=bridge.%s.mac=%s' % (bridge, dprec['MAC'])]
         #else:
-        #    vsctl_argv += ['--add=iface.%s.mac=%s' % (ipdev, pifrec['MAC'])]
+        #    vsctl_argv += ['--add=iface.%s.mac=%s' % (ipdev, dprec['MAC'])]
 
         self._vsctl_argv = vsctl_argv
         self._extra_ports = extra_ports

@@ -55,7 +55,7 @@ static struct list all_processes = LIST_INITIALIZER(&all_processes);
 static bool sigchld_is_blocked(void);
 static void block_sigchld(sigset_t *);
 static void unblock_sigchld(const sigset_t *);
-static void sigchld_handler(int signr UNUSED);
+static void sigchld_handler(int signr OVS_UNUSED);
 static bool is_member(int x, const int *array, size_t);
 
 /* Initializes the process subsystem (if it is not already initialized).  Calls
@@ -585,7 +585,7 @@ process_run_capture(char **argv, char **stdout_log, char **stderr_log,
 }
 
 static void
-sigchld_handler(int signr UNUSED)
+sigchld_handler(int signr OVS_UNUSED)
 {
     struct process *p;
 

@@ -175,7 +175,7 @@ handle_rpc(struct jsonrpc *rpc, struct jsonrpc_msg *msg, bool *done)
 }
 
 static void
-do_listen(int argc UNUSED, char *argv[])
+do_listen(int argc OVS_UNUSED, char *argv[])
 {
     struct pstream *pstream;
     struct jsonrpc **rpcs;
@@ -256,7 +256,7 @@ do_listen(int argc UNUSED, char *argv[])
 }
 
 static void
-do_request(int argc UNUSED, char *argv[])
+do_request(int argc OVS_UNUSED, char *argv[])
 {
     struct jsonrpc_msg *msg;
     struct jsonrpc *rpc;
@@ -295,7 +295,7 @@ do_request(int argc UNUSED, char *argv[])
 }
 
 static void
-do_notify(int argc UNUSED, char *argv[])
+do_notify(int argc OVS_UNUSED, char *argv[])
 {
     struct jsonrpc_msg *msg;
     struct jsonrpc *rpc;
@@ -327,7 +327,7 @@ do_notify(int argc UNUSED, char *argv[])
 }
 
 static void
-do_help(int argc UNUSED, char *argv[] UNUSED)
+do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
 }

@@ -915,7 +915,8 @@ ovsdb_jsonrpc_monitor_init_aux(struct ovsdb_jsonrpc_monitor_aux *aux,
 
 static struct ovsdb_error *
 ovsdb_jsonrpc_monitor_commit(struct ovsdb_replica *replica,
-                             const struct ovsdb_txn *txn, bool durable UNUSED)
+                             const struct ovsdb_txn *txn,
+                             bool durable OVS_UNUSED)
 {
     struct ovsdb_jsonrpc_monitor *m = ovsdb_jsonrpc_monitor_cast(replica);
     struct ovsdb_jsonrpc_monitor_aux aux;

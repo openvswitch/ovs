@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,7 +100,7 @@ queue_pop_head(struct ovs_queue *q)
 
 /* Checks the internal integrity of 'q'.  For use in debugging. */
 static void
-check_queue(struct ovs_queue *q UNUSED)
+check_queue(struct ovs_queue *q OVS_UNUSED)
 {
 #if 0
     struct ofpbuf *iter;

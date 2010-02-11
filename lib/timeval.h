@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,10 @@
 #include <time.h>
 #include "type-props.h"
 #include "util.h"
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
 
 struct pollfd;
 struct timeval;
@@ -52,5 +56,9 @@ void time_alarm(unsigned int secs);
 int time_poll(struct pollfd *, int n_pollfds, int timeout);
 
 long long int timeval_to_msec(const struct timeval *);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* timeval.h */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,19 +24,19 @@
 
 #ifndef HAVE_MALLOC_HOOKS
 void
-leak_checker_start(const char *file_name UNUSED)
+leak_checker_start(const char *file_name OVS_UNUSED)
 {
     VLOG_WARN("not enabling leak checker because the libc in use does not "
               "have the required hooks");
 }
 
 void
-leak_checker_set_limit(off_t max_size UNUSED)
+leak_checker_set_limit(off_t max_size OVS_UNUSED)
 {
 }
 
 void
-leak_checker_claim(const void *p UNUSED)
+leak_checker_claim(const void *p OVS_UNUSED)
 {
 }
 
@@ -180,7 +180,7 @@ reset_hooks(void)
 }
 
 static void *
-hook_malloc(size_t size, const void *caller UNUSED)
+hook_malloc(size_t size, const void *caller OVS_UNUSED)
 {
     void *p;
 
@@ -209,7 +209,7 @@ leak_checker_claim(const void *p)
 }
 
 static void
-hook_free(void *p, const void *caller UNUSED)
+hook_free(void *p, const void *caller OVS_UNUSED)
 {
     if (!p) {
         return;
@@ -225,7 +225,7 @@ hook_free(void *p, const void *caller UNUSED)
 }
 
 static void *
-hook_realloc(void *p, size_t size, const void *caller UNUSED)
+hook_realloc(void *p, size_t size, const void *caller OVS_UNUSED)
 {
     void *q;
 

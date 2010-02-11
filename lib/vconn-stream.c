@@ -72,7 +72,7 @@ vconn_stream_new(struct stream *stream, int connect_status)
  *
  * Returns 0 if successful, otherwise a positive errno value. */
 static int
-vconn_stream_open(const char *name_, char *suffix UNUSED,
+vconn_stream_open(const char *name_, char *suffix OVS_UNUSED,
                   struct vconn **vconnp)
 {
     struct stream *stream;
@@ -298,7 +298,7 @@ pvconn_pstream_cast(struct pvconn *pvconn)
  * Returns 0 if successful, otherwise a positive errno value.  (The current
  * implementation never fails.) */
 static int
-pvconn_pstream_listen(const char *name_, char *suffix UNUSED,
+pvconn_pstream_listen(const char *name_, char *suffix OVS_UNUSED,
                       struct pvconn **pvconnp)
 {
     struct pvconn_pstream *ps;

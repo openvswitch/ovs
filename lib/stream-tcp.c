@@ -101,7 +101,7 @@ static int ptcp_accept(int fd, const struct sockaddr *sa, size_t sa_len,
                        struct stream **streamp);
 
 static int
-ptcp_open(const char *name UNUSED, char *suffix, struct pstream **pstreamp)
+ptcp_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp)
 {
     struct sockaddr_in sin;
     char bound_name[128];

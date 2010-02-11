@@ -192,7 +192,7 @@ set_remotes(struct ovsdb_jsonrpc_server *jsonrpc,
 
 
 static void
-ovsdb_server_exit(struct unixctl_conn *conn, const char *args UNUSED,
+ovsdb_server_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
                   void *exiting_)
 {
     bool *exiting = exiting_;

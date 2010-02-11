@@ -374,7 +374,9 @@ tty_fork_child(int master_fd, char *argv[])
 }
 
 int
-tty_set_window_size(int fd UNUSED, int rows UNUSED, int columns UNUSED)
+tty_set_window_size(int fd OVS_UNUSED,
+                    int rows OVS_UNUSED,
+                    int columns OVS_UNUSED)
 {
 #ifdef TIOCGWINSZ
     struct winsize win;

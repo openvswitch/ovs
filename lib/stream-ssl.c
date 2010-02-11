@@ -155,7 +155,7 @@ static void ssl_close(struct stream *);
 static void ssl_clear_txbuf(struct ssl_stream *);
 static int interpret_ssl_error(const char *function, int ret, int error,
                                int *want);
-static DH *tmp_dh_callback(SSL *ssl, int is_export UNUSED, int keylength);
+static DH *tmp_dh_callback(SSL *ssl, int is_export OVS_UNUSED, int keylength);
 static void log_ca_cert(const char *file_name, X509 *cert);
 
 static short int
@@ -719,7 +719,7 @@ pssl_pstream_cast(struct pstream *pstream)
 }
 
 static int
-pssl_open(const char *name UNUSED, char *suffix, struct pstream **pstreamp)
+pssl_open(const char *name OVS_UNUSED, char *suffix, struct pstream **pstreamp)
 {
     struct pssl_pstream *pssl;
     struct sockaddr_in sin;
@@ -855,7 +855,7 @@ do_ssl_init(void)
 }
 
 static DH *
-tmp_dh_callback(SSL *ssl UNUSED, int is_export UNUSED, int keylength)
+tmp_dh_callback(SSL *ssl OVS_UNUSED, int is_export OVS_UNUSED, int keylength)
 {
     struct dh {
         int keylength;

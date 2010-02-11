@@ -59,7 +59,7 @@ static struct list netdev_list = LIST_INITIALIZER(&netdev_list);
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
-static void close_all_netdevs(void *aux UNUSED);
+static void close_all_netdevs(void *aux OVS_UNUSED);
 static int restore_flags(struct netdev *netdev);
 void update_device_args(struct netdev_dev *, const struct shash *args);
 
@@ -1265,7 +1265,7 @@ restore_flags(struct netdev *netdev)
 /* Close all netdevs on shutdown so they can do any needed cleanup such as
  * destroying devices, restoring flags, etc. */
 static void
-close_all_netdevs(void *aux UNUSED)
+close_all_netdevs(void *aux OVS_UNUSED)
 {
     struct netdev *netdev, *next;
     LIST_FOR_EACH_SAFE(netdev, next, struct netdev, node, &netdev_list) {

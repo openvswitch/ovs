@@ -824,7 +824,7 @@ ovs_delete_bridge(const struct ovsrec_open_vswitch *ovs,
 }
 
 static void
-cmd_init(struct vsctl_context *ctx UNUSED)
+cmd_init(struct vsctl_context *ctx OVS_UNUSED)
 {
 }
 

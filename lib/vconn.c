@@ -120,7 +120,7 @@ check_vconn_classes(void)
  * connection methods supported by the vconn.  If 'bootstrap' is true, also
  * advertises options to bootstrap the CA certificate. */
 void
-vconn_usage(bool active, bool passive, bool bootstrap UNUSED)
+vconn_usage(bool active, bool passive, bool bootstrap OVS_UNUSED)
 {
     /* Really this should be implemented via callbacks into the vconn
      * providers, but that seems too heavy-weight to bother with at the

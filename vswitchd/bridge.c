@@ -452,8 +452,8 @@ reconfigure_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface)
 }
 
 static bool
-check_iface_netdev(struct bridge *br UNUSED, struct iface *iface,
-                   void *aux UNUSED)
+check_iface_netdev(struct bridge *br OVS_UNUSED, struct iface *iface,
+                   void *aux OVS_UNUSED)
 {
     if (!iface->netdev) {
         int error = set_up_iface(iface->cfg, iface, true);
@@ -468,7 +468,8 @@ check_iface_netdev(struct bridge *br UNUSED, struct iface *iface,
 }
 
 static bool
-check_iface_dp_ifidx(struct bridge *br, struct iface *iface, void *aux UNUSED)
+check_iface_dp_ifidx(struct bridge *br, struct iface *iface,
+                     void *aux OVS_UNUSED)
 {
     if (iface->dp_ifidx >= 0) {
         VLOG_DBG("%s has interface %s on port %d",
@@ -483,8 +484,8 @@ check_iface_dp_ifidx(struct bridge *br, struct iface *iface, void *aux UNUSED)
 }
 
 static bool
-set_iface_properties(struct bridge *br UNUSED, struct iface *iface,
-                   void *aux UNUSED)
+set_iface_properties(struct bridge *br OVS_UNUSED, struct iface *iface,
+                     void *aux OVS_UNUSED)
 {
     /* Set policing attributes. */
     netdev_set_policing(iface->netdev,
@@ -1099,7 +1100,7 @@ bridge_get_local_iface(struct bridge *br)
 /* Bridge unixctl user interface functions. */
 static void
 bridge_unixctl_fdb_show(struct unixctl_conn *conn,
-                        const char *args, void *aux UNUSED)
+                        const char *args, void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct bridge *br;
@@ -1227,7 +1228,7 @@ bridge_get_datapathid(const char *name)
  * stack, including those normally hidden. */
 static void
 bridge_unixctl_dump_flows(struct unixctl_conn *conn,
-                          const char *args, void *aux UNUSED)
+                          const char *args, void *aux OVS_UNUSED)
 {
     struct bridge *br;
     struct ds results;
@@ -1994,7 +1995,7 @@ compose_dsts(const struct bridge *br, const flow_t *flow, uint16_t vlan,
     return dst - dsts;
 }
 
-static void UNUSED
+static void OVS_UNUSED
 print_dsts(const struct dst *dsts, size_t n)
 {
     for (; n--; dsts++) {
@@ -2709,7 +2710,7 @@ bond_send_learning_packets(struct port *port)
 
 static void
 bond_unixctl_list(struct unixctl_conn *conn,
-                  const char *args UNUSED, void *aux UNUSED)
+                  const char *args OVS_UNUSED, void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct bridge *br;
@@ -2760,7 +2761,7 @@ bond_find(const char *name)
 
 static void
 bond_unixctl_show(struct unixctl_conn *conn,
-                  const char *args, void *aux UNUSED)
+                  const char *args, void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct port *port;
@@ -2826,7 +2827,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
 
 static void
 bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
-                     void *aux UNUSED)
+                     void *aux OVS_UNUSED)
 {
     char *args = (char *) args_;
     char *save_ptr = NULL;
@@ -2883,7 +2884,7 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
 
 static void
 bond_unixctl_set_active_slave(struct unixctl_conn *conn, const char *args_,
-                              void *aux UNUSED)
+                              void *aux OVS_UNUSED)
 {
     char *args = (char *) args_;
     char *save_ptr = NULL;
@@ -2964,21 +2965,21 @@ enable_slave(struct unixctl_conn *conn, const char *args_, bool enable)
 
 static void
 bond_unixctl_enable_slave(struct unixctl_conn *conn, const char *args,
-                          void *aux UNUSED)
+                          void *aux OVS_UNUSED)
 {
     enable_slave(conn, args, true);
 }
 
 static void
 bond_unixctl_disable_slave(struct unixctl_conn *conn, const char *args,
-                           void *aux UNUSED)
+                           void *aux OVS_UNUSED)
 {
     enable_slave(conn, args, false);
 }
 
 static void
 bond_unixctl_hash(struct unixctl_conn *conn, const char *args,
-                  void *aux UNUSED)
+                  void *aux OVS_UNUSED)
 {
 	uint8_t mac[ETH_ADDR_LEN];
 	uint8_t hash;

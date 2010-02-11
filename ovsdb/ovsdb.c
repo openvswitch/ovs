@@ -287,7 +287,7 @@ ovsdb_add_replica(struct ovsdb *db, struct ovsdb_replica *r)
 }
 
 void
-ovsdb_remove_replica(struct ovsdb *db UNUSED, struct ovsdb_replica *r)
+ovsdb_remove_replica(struct ovsdb *db OVS_UNUSED, struct ovsdb_replica *r)
 {
     list_remove(&r->node);
     (r->class->destroy)(r);

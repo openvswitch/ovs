@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,19 +86,19 @@ main(void)
 }
 
 static void
-do_enable(int argc UNUSED, char *argv[] UNUSED)
+do_enable(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     reconnect_enable(reconnect, now);
 }
 
 static void
-do_disable(int argc UNUSED, char *argv[] UNUSED)
+do_disable(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     reconnect_disable(reconnect, now);
 }
 
 static void
-do_force_reconnect(int argc UNUSED, char *argv[] UNUSED)
+do_force_reconnect(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     reconnect_force_reconnect(reconnect, now);
 }
@@ -118,31 +118,31 @@ error_from_string(const char *s)
 }
 
 static void
-do_disconnected(int argc UNUSED, char *argv[])
+do_disconnected(int argc OVS_UNUSED, char *argv[])
 {
     reconnect_disconnected(reconnect, now, error_from_string(argv[1]));
 }
 
 static void
-do_connecting(int argc UNUSED, char *argv[] UNUSED)
+do_connecting(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     reconnect_connecting(reconnect, now);
 }
 
 static void
-do_connect_failed(int argc UNUSED, char *argv[])
+do_connect_failed(int argc OVS_UNUSED, char *argv[])
 {
     reconnect_connect_failed(reconnect, now, error_from_string(argv[1]));
 }
 
 static void
-do_connected(int argc UNUSED, char *argv[] UNUSED)
+do_connected(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     reconnect_connected(reconnect, now);
 }
 
 static void
-do_received(int argc UNUSED, char *argv[] UNUSED)
+do_received(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     reconnect_received(reconnect, now);
 }
@@ -179,13 +179,13 @@ do_run(int argc, char *argv[])
 }
 
 static void
-do_advance(int argc UNUSED, char *argv[])
+do_advance(int argc OVS_UNUSED, char *argv[])
 {
     now += atoi(argv[1]);
 }
 
 static void
-do_timeout(int argc UNUSED, char *argv[] UNUSED)
+do_timeout(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     int timeout = reconnect_timeout(reconnect, now);
     if (timeout >= 0) {
@@ -197,7 +197,7 @@ do_timeout(int argc UNUSED, char *argv[] UNUSED)
 }
 
 static void
-do_set_max_tries(int argc UNUSED, char *argv[])
+do_set_max_tries(int argc OVS_UNUSED, char *argv[])
 {
     reconnect_set_max_tries(reconnect, atoi(argv[1]));
 }

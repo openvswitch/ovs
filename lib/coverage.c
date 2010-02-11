@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@
 static unsigned int epoch;
 
 static void
-coverage_unixctl_log(struct unixctl_conn *conn, const char *args UNUSED,
-                     void *aux UNUSED)
+coverage_unixctl_log(struct unixctl_conn *conn, const char *args OVS_UNUSED,
+                     void *aux OVS_UNUSED)
 {
     coverage_log(VLL_WARN, false);
     unixctl_command_reply(conn, 200, NULL);
@@ -109,7 +109,7 @@ coverage_hit(uint32_t hash)
     unsigned int word_mask = 1u << (bit_index % BITS_PER_WORD);
 
     if (hit[word_index] & word_mask) {
-        return true;
+ return true;
     } else {
         hit[word_index] |= word_mask;
         return false;

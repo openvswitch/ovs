@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -388,4 +388,4 @@ dir_name(const char *file_name)
  * __attribute__((warn_unused_result)) and you genuinely want to ignore 
  * its return value.  (Note that every scalar type can be implicitly 
  * converted to bool.) */
-void ignore(bool x UNUSED) { }
+void ignore(bool x OVS_UNUSED) { }

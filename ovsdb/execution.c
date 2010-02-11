@@ -204,7 +204,7 @@ exit:
 
 struct ovsdb_error *
 ovsdb_execute_commit(struct ovsdb_execution *x, struct ovsdb_parser *parser,
-                     struct json *result UNUSED)
+                     struct json *result OVS_UNUSED)
 {
     const struct json *durable;
 
@@ -216,9 +216,9 @@ ovsdb_execute_commit(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 }
 
 static struct ovsdb_error *
-ovsdb_execute_abort(struct ovsdb_execution *x UNUSED,
-                    struct ovsdb_parser *parser UNUSED,
-                    struct json *result UNUSED)
+ovsdb_execute_abort(struct ovsdb_execution *x OVS_UNUSED,
+                    struct ovsdb_parser *parser OVS_UNUSED,
+                    struct json *result OVS_UNUSED)
 {
     return ovsdb_error("aborted", "aborted by request");
 }
@@ -579,7 +579,7 @@ ovsdb_execute_wait_query_cb(const struct ovsdb_row *row, void *aux_)
 
 static struct ovsdb_error *
 ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
-                   struct json *result UNUSED)
+                   struct json *result OVS_UNUSED)
 {
     struct ovsdb_table *table;
     const struct json *timeout, *where, *columns_json, *until, *rows;
@@ -692,7 +692,7 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 
 static struct ovsdb_error *
 ovsdb_execute_comment(struct ovsdb_execution *x, struct ovsdb_parser *parser,
-                      struct json *result UNUSED)
+                      struct json *result OVS_UNUSED)
 {
     const struct json *comment;
 

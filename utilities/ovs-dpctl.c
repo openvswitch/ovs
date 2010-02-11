@@ -196,7 +196,7 @@ parsed_dpif_open(const char *arg_, bool create, struct dpif **dpifp)
 }
 
 static void
-do_add_dp(int argc UNUSED, char *argv[])
+do_add_dp(int argc OVS_UNUSED, char *argv[])
 {
     struct dpif *dpif;
     run(parsed_dpif_open(argv[1], true, &dpif), "add_dp");
@@ -207,7 +207,7 @@ do_add_dp(int argc UNUSED, char *argv[])
 }
 
 static void
-do_del_dp(int argc UNUSED, char *argv[])
+do_del_dp(int argc OVS_UNUSED, char *argv[])
 {
     struct dpif *dpif;
     run(parsed_dpif_open(argv[1], false, &dpif), "opening datapath");
@@ -231,7 +231,7 @@ query_ports(struct dpif *dpif, struct odp_port **ports, size_t *n_ports)
 }
 
 static void
-do_add_if(int argc UNUSED, char *argv[])
+do_add_if(int argc OVS_UNUSED, char *argv[])
 {
     bool failure = false;
     struct dpif *dpif;
@@ -309,7 +309,7 @@ get_port_number(struct dpif *dpif, const char *name, uint16_t *port)
 }
 
 static void
-do_del_if(int argc UNUSED, char *argv[])
+do_del_if(int argc OVS_UNUSED, char *argv[])
 {
     bool failure = false;
     struct dpif *dpif;
@@ -418,7 +418,7 @@ do_show(int argc, char *argv[])
 }
 
 static void
-do_dump_dps(int argc UNUSED, char *argv[] UNUSED)
+do_dump_dps(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     struct svec dpif_names, dpif_types;
     unsigned int i;
@@ -454,7 +454,7 @@ do_dump_dps(int argc UNUSED, char *argv[] UNUSED)
 }
 
 static void
-do_dump_flows(int argc UNUSED, char *argv[])
+do_dump_flows(int argc OVS_UNUSED, char *argv[])
 {
     struct odp_flow *flows;
     struct dpif *dpif;
@@ -484,7 +484,7 @@ do_dump_flows(int argc UNUSED, char *argv[])
 }
 
 static void
-do_del_flows(int argc UNUSED, char *argv[])
+do_del_flows(int argc OVS_UNUSED, char *argv[])
 {
     struct dpif *dpif;
 
@@ -494,7 +494,7 @@ do_del_flows(int argc UNUSED, char *argv[])
 }
 
 static void
-do_dump_groups(int argc UNUSED, char *argv[])
+do_dump_groups(int argc OVS_UNUSED, char *argv[])
 {
     struct odp_stats stats;
     struct dpif *dpif;
@@ -521,7 +521,7 @@ do_dump_groups(int argc UNUSED, char *argv[])
 }
 
 static void
-do_help(int argc UNUSED, char *argv[] UNUSED)
+do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
 }

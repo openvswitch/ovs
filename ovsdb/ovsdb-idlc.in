@@ -444,7 +444,7 @@ def printCIDLSource(schemaFile):
 
 static bool inited;
 
-static void UNUSED
+static void OVS_UNUSED
 do_set_regex(struct ovsdb_base_type *base, const char *reMatch,
              const char *reComment)
 {
@@ -585,7 +585,7 @@ static void
             else:
                 print '''
 static void
-%(s)s_unparse_%(c)s(struct ovsdb_idl_row *row UNUSED)
+%(s)s_unparse_%(c)s(struct ovsdb_idl_row *row OVS_UNUSED)
 {
     /* Nothing to do. */
 }''' % {'s': structName, 'c': columnName}

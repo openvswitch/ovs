@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks, Inc.
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@
 #define DEFAULT_INTERVAL  1
 #define DEFAULT_TIMEOUT   30
 
-int fd = -1;
+static int fd = -1;
 
 /* The WDT is automatically enabled when /dev/watchdog is opened.  If we
  * do not send the magic value to the device first before exiting, the 
@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
         {"help", no_argument, NULL, 'h'},
         {"verbose", no_argument, NULL, 'v'},
         {"version", no_argument, NULL, 'V'},
-        {0, 0, 0, 0}
+        {NULL, 0, NULL, 0}
     };
 
     setup_signal();
