@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks, Inc.
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ terminal_run(struct terminal *term, struct ezio *ezio, int input_fd)
 }
 
 void
-terminal_wait(struct terminal *term UNUSED, int input_fd)
+terminal_wait(struct terminal *term OVS_UNUSED, int input_fd)
 {
     poll_fd_wait(input_fd, POLLIN);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -372,14 +372,14 @@ dump_trivial_stats_transaction(const char *vconn_name, uint8_t stats_type)
 }
 
 static void
-do_show(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
+do_show(const struct settings *s OVS_UNUSED, int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_transaction(argv[1], OFPT_FEATURES_REQUEST);
     dump_trivial_transaction(argv[1], OFPT_GET_CONFIG_REQUEST);
 }
 
 static void
-do_status(const struct settings *s UNUSED, int argc, char *argv[])
+do_status(const struct settings *s OVS_UNUSED, int argc, char *argv[])
 {
     struct nicira_header *request, *reply;
     struct vconn *vconn;
@@ -411,13 +411,15 @@ do_status(const struct settings *s UNUSED, int argc, char *argv[])
 }
 
 static void
-do_dump_desc(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
+do_dump_desc(const struct settings *s OVS_UNUSED,
+             int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_DESC);
 }
 
 static void
-do_dump_tables(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
+do_dump_tables(const struct settings *s OVS_UNUSED,
+               int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_TABLE);
 }
@@ -813,7 +815,7 @@ str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
 }
 
 static void
-do_dump_flows(const struct settings *s UNUSED, int argc, char *argv[])
+do_dump_flows(const struct settings *s OVS_UNUSED, int argc, char *argv[])
 {
     struct ofp_flow_stats_request *req;
     uint16_t out_port;
@@ -829,7 +831,7 @@ do_dump_flows(const struct settings *s UNUSED, int argc, char *argv[])
 }
 
 static void
-do_dump_aggregate(const struct settings *s UNUSED, int argc, char *argv[])
+do_dump_aggregate(const struct settings *s OVS_UNUSED, int argc, char *argv[])
 {
     struct ofp_aggregate_stats_request *req;
     struct ofpbuf *request;
@@ -845,7 +847,8 @@ do_dump_aggregate(const struct settings *s UNUSED, int argc, char *argv[])
 }
 
 static void
-do_add_flow(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
+do_add_flow(const struct settings *s OVS_UNUSED, int argc OVS_UNUSED,
+            char *argv[])
 {
     struct vconn *vconn;
     struct ofpbuf *buffer;
@@ -873,7 +876,8 @@ do_add_flow(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
 }
 
 static void
-do_add_flows(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
+do_add_flows(const struct settings *s OVS_UNUSED, int argc OVS_UNUSED,
+             char *argv[])
 {
     struct vconn *vconn;
     FILE *file;
@@ -926,7 +930,7 @@ do_add_flows(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
 }
 
 static void
-do_mod_flows(const struct settings *s, int argc UNUSED, char *argv[])
+do_mod_flows(const struct settings *s, int argc OVS_UNUSED, char *argv[])
 {
     uint16_t priority, idle_timeout, hard_timeout;
     struct vconn *vconn;
@@ -987,7 +991,8 @@ static void do_del_flows(const struct settings *s, int argc, char *argv[])
 }
 
 static void
-do_monitor(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
+do_monitor(const struct settings *s OVS_UNUSED,
+           int argc OVS_UNUSED, char *argv[])
 {
     struct vconn *vconn;
 
@@ -1012,13 +1017,15 @@ do_monitor(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
 }
 
 static void
-do_dump_ports(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
+do_dump_ports(const struct settings *s OVS_UNUSED,
+              int argc OVS_UNUSED, char *argv[])
 {
     dump_trivial_stats_transaction(argv[1], OFPST_PORT);
 }
 
 static void
-do_probe(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
+do_probe(const struct settings *s OVS_UNUSED,
+         int argc OVS_UNUSED, char *argv[])
 {
     struct ofpbuf *request;
     struct vconn *vconn;
@@ -1035,7 +1042,8 @@ do_probe(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
 }
 
 static void
-do_mod_port(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
+do_mod_port(const struct settings *s OVS_UNUSED,
+            int argc OVS_UNUSED, char *argv[])
 {
     struct ofpbuf *request, *reply;
     struct ofp_switch_features *osf;
@@ -1115,7 +1123,7 @@ do_mod_port(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
 }
 
 static void
-do_ping(const struct settings *s UNUSED, int argc, char *argv[])
+do_ping(const struct settings *s OVS_UNUSED, int argc, char *argv[])
 {
     size_t max_payload = 65535 - sizeof(struct ofp_header);
     unsigned int payload;
@@ -1162,7 +1170,8 @@ do_ping(const struct settings *s UNUSED, int argc, char *argv[])
 }
 
 static void
-do_benchmark(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
+do_benchmark(const struct settings *s OVS_UNUSED,
+             int argc OVS_UNUSED, char *argv[])
 {
     size_t max_payload = 65535 - sizeof(struct ofp_header);
     struct timeval start, end;
@@ -1205,7 +1214,7 @@ do_benchmark(const struct settings *s UNUSED, int argc UNUSED, char *argv[])
 }
 
 static void
-do_execute(const struct settings *s UNUSED, int argc, char *argv[])
+do_execute(const struct settings *s OVS_UNUSED, int argc, char *argv[])
 {
     struct vconn *vconn;
     struct ofpbuf *request;
@@ -1270,7 +1279,8 @@ do_execute(const struct settings *s UNUSED, int argc, char *argv[])
 }
 
 static void
-do_help(const struct settings *s UNUSED, int argc UNUSED, char *argv[] UNUSED)
+do_help(const struct settings *s OVS_UNUSED,
+        int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     usage();
 }

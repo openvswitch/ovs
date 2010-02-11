@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -158,7 +158,7 @@ static void ssl_clear_txbuf(struct ssl_vconn *);
 static int interpret_ssl_error(const char *function, int ret, int error,
                                int *want);
 static void ssl_tx_poll_callback(int fd, short int revents, void *vconn_);
-static DH *tmp_dh_callback(SSL *ssl, int is_export UNUSED, int keylength);
+static DH *tmp_dh_callback(SSL *ssl, int is_export OVS_UNUSED, int keylength);
 static void log_ca_cert(const char *file_name, X509 *cert);
 
 static short int
@@ -648,7 +648,8 @@ ssl_do_tx(struct vconn *vconn)
 }
 
 static void
-ssl_tx_poll_callback(int fd UNUSED, short int revents UNUSED, void *vconn_)
+ssl_tx_poll_callback(int fd OVS_UNUSED, short int revents OVS_UNUSED,
+                     void *vconn_)
 {
     struct vconn *vconn = vconn_;
     struct ssl_vconn *sslv = ssl_vconn_cast(vconn);
@@ -897,7 +898,7 @@ do_ssl_init(void)
 }
 
 static DH *
-tmp_dh_callback(SSL *ssl UNUSED, int is_export UNUSED, int keylength)
+tmp_dh_callback(SSL *ssl OVS_UNUSED, int is_export OVS_UNUSED, int keylength)
 {
     struct dh {
         int keylength;

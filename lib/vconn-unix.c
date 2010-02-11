@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ static int punix_accept(int fd, const struct sockaddr *sa, size_t sa_len,
                         struct vconn **vconnp);
 
 static int
-punix_open(const char *name UNUSED, char *suffix, struct pvconn **pvconnp)
+punix_open(const char *name OVS_UNUSED, char *suffix, struct pvconn **pvconnp)
 {
     int fd, error;
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -440,8 +440,8 @@ destroy_iface(const char *iface_name)
  * for 'iface', if it is not already open, and retrieves the interface's MAC
  * address and carrier status. */
 static bool
-init_iface_netdev(struct bridge *br UNUSED, struct iface *iface,
-                  void *aux UNUSED)
+init_iface_netdev(struct bridge *br OVS_UNUSED, struct iface *iface,
+                  void *aux OVS_UNUSED)
 {
     if (iface->netdev) {
         return true;
@@ -457,7 +457,8 @@ init_iface_netdev(struct bridge *br UNUSED, struct iface *iface,
 }
 
 static bool
-check_iface_dp_ifidx(struct bridge *br, struct iface *iface, void *aux UNUSED)
+check_iface_dp_ifidx(struct bridge *br, struct iface *iface,
+                     void *aux OVS_UNUSED)
 {
     if (iface->dp_ifidx >= 0) {
         VLOG_DBG("%s has interface %s on port %d",
@@ -472,8 +473,8 @@ check_iface_dp_ifidx(struct bridge *br, struct iface *iface, void *aux UNUSED)
 }
 
 static bool
-set_iface_properties(struct bridge *br UNUSED, struct iface *iface,
-                   void *aux UNUSED)
+set_iface_properties(struct bridge *br OVS_UNUSED, struct iface *iface,
+                     void *aux OVS_UNUSED)
 {
     int rate, burst;
 
@@ -1968,7 +1969,7 @@ compose_dsts(const struct bridge *br, const flow_t *flow, uint16_t vlan,
     return dst - dsts;
 }
 
-static void UNUSED
+static void OVS_UNUSED
 print_dsts(const struct dst *dsts, size_t n)
 {
     for (; n--; dsts++) {
@@ -2698,7 +2699,7 @@ bond_send_learning_packets(struct port *port)
 /* Bonding unixctl user interface functions. */
 
 static void
-bond_unixctl_list(struct unixctl_conn *conn, const char *args UNUSED)
+bond_unixctl_list(struct unixctl_conn *conn, const char *args OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct bridge *br;

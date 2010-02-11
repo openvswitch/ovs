@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks, Inc.
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -995,7 +995,7 @@ initialize_terminal(void)
 }
 
 static void
-restore_terminal(void *aux UNUSED)
+restore_terminal(void *aux OVS_UNUSED)
 {
     endwin();
 }
@@ -1444,7 +1444,7 @@ init_reboot_notifier(void)
 }
 
 static void
-sigusr1_handler(int signr UNUSED)
+sigusr1_handler(int signr OVS_UNUSED)
 {
     sigusr1_triggered = true;
 }
@@ -1874,7 +1874,7 @@ yesno(const char *title, bool def)
 }
 
 static void
-cmd_show_version(const struct dict *dict UNUSED)
+cmd_show_version(const struct dict *dict OVS_UNUSED)
 {
     show_string(VERSION BUILDNR);
 }
@@ -1895,7 +1895,7 @@ cmd_browse_status(const struct dict *dict)
 }
 
 static void
-cmd_shell(const struct dict *dict UNUSED)
+cmd_shell(const struct dict *dict OVS_UNUSED)
 {
     const char *home;
 
@@ -1919,7 +1919,7 @@ cmd_shell(const struct dict *dict UNUSED)
 }
 
 static void
-cmd_show_motto(const struct dict *dict UNUSED)
+cmd_show_motto(const struct dict *dict OVS_UNUSED)
 {
     show_string("\"Just Add Ice\"");
 }
@@ -2547,7 +2547,7 @@ disconnected_string(int value)
 }
 
 static void
-cmd_configure(const struct dict *dict UNUSED)
+cmd_configure(const struct dict *dict OVS_UNUSED)
 {
     bool debug_mode = dict_get_bool(dict, "debug", false);
     struct dict config_dict;
@@ -2889,7 +2889,7 @@ cmd_configure(const struct dict *dict UNUSED)
 }
 
 static void
-cmd_set_up_pki(const struct dict *dict UNUSED)
+cmd_set_up_pki(const struct dict *dict OVS_UNUSED)
 {
     static const char def_privkey_file[]
         = "/etc/openflow-switch/of0-privkey.pem";

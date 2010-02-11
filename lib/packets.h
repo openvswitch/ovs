@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ struct ofpbuf;
 
 #define ETH_ADDR_LEN           6
 
-static const uint8_t eth_addr_broadcast[ETH_ADDR_LEN] UNUSED
+static const uint8_t eth_addr_broadcast[ETH_ADDR_LEN] OVS_UNUSED
     = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
 static inline bool eth_addr_is_broadcast(const uint8_t ea[6])

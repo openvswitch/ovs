@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ static bool exit_without_bind;
 static bool exit_after_bind;
 
 static bool iface_init(struct iface *, const char *netdev_name);
-static void release_ifaces(void *aux UNUSED);
+static void release_ifaces(void *aux OVS_UNUSED);
 
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
@@ -239,7 +239,7 @@ iface_init(struct iface *iface, const char *netdev_name)
 }
 
 static void
-release_ifaces(void *aux UNUSED)
+release_ifaces(void *aux OVS_UNUSED)
 {
     int i;
 
@@ -253,13 +253,13 @@ release_ifaces(void *aux UNUSED)
 }
 
 static void
-modify_dhcp_request(struct dhcp_msg *msg, void *aux UNUSED)
+modify_dhcp_request(struct dhcp_msg *msg, void *aux OVS_UNUSED)
 {
     dhcp_msg_put_string(msg, DHCP_CODE_VENDOR_CLASS, "OpenFlow");
 }
 
 static bool
-validate_dhcp_offer(const struct dhcp_msg *msg, void *aux UNUSED)
+validate_dhcp_offer(const struct dhcp_msg *msg, void *aux OVS_UNUSED)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 60);
     char *vconn_name;

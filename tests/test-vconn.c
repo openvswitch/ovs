@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -346,7 +346,7 @@ test_send_invalid_version_hello(const char *type)
 }
 
 int
-main(int argc UNUSED, char *argv[])
+main(int argc OVS_UNUSED, char *argv[])
 {
     set_program_name(argv[0]);
     time_init();

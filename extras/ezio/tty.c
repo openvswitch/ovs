@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks, Inc.
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -374,7 +374,9 @@ tty_fork_child(int master_fd, char *argv[])
 }
 
 int
-tty_set_window_size(int fd UNUSED, int rows UNUSED, int columns UNUSED)
+tty_set_window_size(int fd OVS_UNUSED,
+                    int rows OVS_UNUSED,
+                    int columns OVS_UNUSED)
 {
 #ifdef TIOCGWINSZ
     struct winsize win;

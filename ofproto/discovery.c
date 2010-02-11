@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -244,7 +244,7 @@ discovery_wait(struct discovery *d)
 }
 
 static void
-modify_dhcp_request(struct dhcp_msg *msg, void *aux UNUSED)
+modify_dhcp_request(struct dhcp_msg *msg, void *aux OVS_UNUSED)
 {
     dhcp_msg_put_string(msg, DHCP_CODE_VENDOR_CLASS, "OpenFlow");
 }

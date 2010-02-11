@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -549,7 +549,7 @@ send_error_msg(uint32_t xid, uint16_t type, uint16_t code,
 }
 
 static int
-recv_echo_request(uint32_t xid UNUSED, const void *msg)
+recv_echo_request(uint32_t xid OVS_UNUSED, const void *msg)
 {
     const struct ofp_header *rq = msg;
     send_openflow_buffer(make_echo_reply(rq));
@@ -557,14 +557,14 @@ recv_echo_request(uint32_t xid UNUSED, const void *msg)
 }
 
 static int
-recv_features_request(uint32_t xid, const void *msg UNUSED)
+recv_features_request(uint32_t xid, const void *msg OVS_UNUSED)
 {
     send_features_reply(xid);
     return 0;
 }
 
 static int
-recv_set_config(uint32_t xid UNUSED, const void *msg UNUSED)
+recv_set_config(uint32_t xid OVS_UNUSED, const void *msg OVS_UNUSED)
 {
     /* Nothing to configure! */
     return 0;
@@ -593,8 +593,8 @@ recv_ofmp_capability_request(uint32_t xid, const struct ofmp_header *ofmph,
 }
 
 static int
-recv_ofmp_resources_request(uint32_t xid, const void *msg UNUSED, 
-        size_t len UNUSED)
+recv_ofmp_resources_request(uint32_t xid, const void *msg OVS_UNUSED, 
+        size_t len OVS_UNUSED)
 {
     send_resources_update(xid, true);
     return 0;

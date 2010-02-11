@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -174,7 +174,7 @@ stream_clear_txbuf(struct stream_vconn *s)
 }
 
 static void
-stream_do_tx(int fd UNUSED, short int revents UNUSED, void *vconn_)
+stream_do_tx(int fd OVS_UNUSED, short int revents OVS_UNUSED, void *vconn_)
 {
     struct vconn *vconn = vconn_;
     struct stream_vconn *s = stream_vconn_cast(vconn);

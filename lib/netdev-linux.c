@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -192,7 +192,7 @@ netdev_linux_wait(void)
 
 static void
 netdev_linux_cache_cb(const struct rtnetlink_change *change,
-                      void *aux UNUSED)
+                      void *aux OVS_UNUSED)
 {
     struct netdev_linux_cache *cache;
     if (change) {
@@ -1221,7 +1221,7 @@ do_set_addr(struct netdev *netdev,
 
 /* Adds 'router' as a default IP gateway. */
 static int
-netdev_linux_add_router(struct netdev *netdev UNUSED, struct in_addr router)
+netdev_linux_add_router(struct netdev *netdev OVS_UNUSED, struct in_addr router)
 {
     struct in_addr any = { INADDR_ANY };
     struct rtentry rt;
@@ -1388,7 +1388,7 @@ poll_notify(struct list *list)
 
 static void
 netdev_linux_poll_cb(const struct rtnetlink_change *change,
-                     void *aux UNUSED)
+                     void *aux OVS_UNUSED)
 {
     if (change) {
         struct list *list = shash_find_data(&netdev_linux_notifiers,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -517,7 +517,8 @@ process_port_status(struct lswitch *sw, struct rconn *rconn, void *ops_)
 }
 
 static void
-process_phy_port(struct lswitch *sw, struct rconn *rconn UNUSED, void *opp_)
+process_phy_port(struct lswitch *sw, struct rconn *rconn OVS_UNUSED,
+                 void *opp_)
 {
     const struct ofp_phy_port *opp = opp_;
     uint16_t port_no = ntohs(opp->port_no);

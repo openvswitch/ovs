@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1054,7 +1054,7 @@ restore_flags(struct netdev *netdev)
 /* Retores all the flags on all network devices that we modified.  Called from
  * a signal handler, so it does not attempt to report error conditions. */
 static void
-restore_all_flags(void *aux UNUSED)
+restore_all_flags(void *aux OVS_UNUSED)
 {
     struct netdev *netdev;
     LIST_FOR_EACH (netdev, struct netdev, node, &netdev_list) {

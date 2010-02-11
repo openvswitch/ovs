@@ -96,14 +96,16 @@ ofproto_sflow_options_destroy(struct ofproto_sflow_options *options)
 
 /* sFlow library callback to allocate memory. */
 static void *
-sflow_agent_alloc_cb(void *magic UNUSED, SFLAgent *agent UNUSED, size_t bytes)
+sflow_agent_alloc_cb(void *magic OVS_UNUSED, SFLAgent *agent OVS_UNUSED,
+                     size_t bytes)
 {
     return calloc(1, bytes);
 }
 
 /* sFlow library callback to free memory. */
 static int
-sflow_agent_free_cb(void *magic UNUSED, SFLAgent *agent UNUSED, void *obj)
+sflow_agent_free_cb(void *magic OVS_UNUSED, SFLAgent *agent OVS_UNUSED,
+                    void *obj)
 {
     free(obj);
     return 0;
@@ -111,15 +113,16 @@ sflow_agent_free_cb(void *magic UNUSED, SFLAgent *agent UNUSED, void *obj)
 
 /* sFlow library callback to report error. */
 static void
-sflow_agent_error_cb(void *magic UNUSED, SFLAgent *agent UNUSED, char *msg)
+sflow_agent_error_cb(void *magic OVS_UNUSED, SFLAgent *agent OVS_UNUSED,
+                     char *msg)
 {
     VLOG_WARN("sFlow agent error: %s", msg);
 }
 
 /* sFlow library callback to send datagram. */
 static void
-sflow_agent_send_packet_cb(void *os_, SFLAgent *agent UNUSED,
-                           SFLReceiver *receiver UNUSED, u_char *pkt,
+sflow_agent_send_packet_cb(void *os_, SFLAgent *agent OVS_UNUSED,
+                           SFLReceiver *receiver OVS_UNUSED, u_char *pkt,
                            uint32_t pktLen)
 {
     struct ofproto_sflow *os = os_;
