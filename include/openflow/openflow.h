@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,12 +36,6 @@
 #include <boost/static_assert.hpp>
 #define OFP_ASSERT BOOST_STATIC_ASSERT
 #endif /* __cplusplus */
-
-#ifndef SWIG
-#define OFP_PACKED __attribute__((packed))
-#else
-#define OFP_PACKED              /* SWIG doesn't understand __attribute. */
-#endif
 
 /* The most significant bit being set in the version field indicates an
  * experimental OpenFlow version.  
