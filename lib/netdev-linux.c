@@ -1223,9 +1223,7 @@ netdev_linux_get_stats(const struct netdev *netdev_,
     COVERAGE_INC(netdev_get_stats);
 
     if (!(netdev_dev->cache_valid & VALID_IS_INTERNAL)) {
-        netdev_dev->is_internal = !strcmp(netdev_get_type(netdev_),
-                                                "tap");
-
+        netdev_dev->is_internal = !strcmp(netdev_get_type(netdev_), "tap");
         if (!netdev_dev->is_internal) {
             struct ethtool_drvinfo drvinfo;
 
@@ -1266,7 +1264,7 @@ netdev_linux_get_stats(const struct netdev *netdev_,
      * will appear to be swapped relative to the other ports since we are the
      * one sending the data, not a remote computer.  For consistency, we swap
      * them back here. */
-    if (netdev_dev->is_internal) {
+    if (!error && netdev_dev->is_internal) {
         stats->rx_packets = raw_stats.tx_packets;
         stats->tx_packets = raw_stats.rx_packets;
         stats->rx_bytes = raw_stats.tx_bytes;
