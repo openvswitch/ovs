@@ -422,7 +422,7 @@ got_port_no:
 
 	dp_sysfs_add_if(dp->ports[port_no]);
 
-	err = __put_user(port_no, &port.port);
+	err = __put_user(port_no, &portp->port);
 
 out_put:
 	dev_put(dev);
