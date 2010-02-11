@@ -35,6 +35,21 @@
 #define THIS_MODULE VLM_ovsdb_file
 #include "vlog.h"
 
+/* A transaction being converted to JSON for writing to a file. */
+struct ovsdb_file_txn {
+    struct json *json;          /* JSON for the whole transaction. */
+    struct json *table_json;    /* JSON for 'table''s transaction. */
+    struct ovsdb_table *table;  /* Table described in 'table_json'.  */
+};
+
+static void ovsdb_file_txn_init(struct ovsdb_file_txn *);
+static void ovsdb_file_txn_add_row(struct ovsdb_file_txn *,
+                                   const struct ovsdb_row *old,
+                                   const struct ovsdb_row *new);
+static struct ovsdb_error *ovsdb_file_txn_commit(struct json *,
+                                                 const char *comment,
+                                                 bool durable,
+                                                 struct ovsdb_log *);
 static struct ovsdb_error *ovsdb_file_txn_from_json(struct ovsdb *,
                                                     const struct json *,
                                                     struct ovsdb_txn **);
@@ -237,18 +252,61 @@ ovsdb_file_replica_cast(struct ovsdb_replica *replica)
     return CONTAINER_OF(replica, struct ovsdb_file_replica, replica);
 }
 
-struct ovsdb_file_replica_aux {
-    struct json *json;          /* JSON for the whole transaction. */
-    struct json *table_json;    /* JSON for 'table''s transaction. */
-    struct ovsdb_table *table;  /* Table described in 'table_json'.  */
-};
-
 static bool
 ovsdb_file_replica_change_cb(const struct ovsdb_row *old,
                              const struct ovsdb_row *new,
-                             void *aux_)
+                             void *ftxn_)
 {
-    struct ovsdb_file_replica_aux *aux = aux_;
+    struct ovsdb_file_txn *ftxn = ftxn_;
+    ovsdb_file_txn_add_row(ftxn, old, new);
+    return true;
+}
+
+static struct ovsdb_error *
+ovsdb_file_replica_commit(struct ovsdb_replica *r_,
+                          const struct ovsdb_txn *txn, bool durable)
+{
+    struct ovsdb_file_replica *r = ovsdb_file_replica_cast(r_);
+    struct ovsdb_file_txn ftxn;
+
+    ovsdb_file_txn_init(&ftxn);
+    ovsdb_txn_for_each_change(txn, ovsdb_file_replica_change_cb, &ftxn);
+    if (!ftxn.json) {
+        /* Nothing to commit. */
+        return NULL;
+    }
+
+    return ovsdb_file_txn_commit(ftxn.json, ovsdb_txn_get_comment(txn),
+                                 durable, r->log);
+}
+
+static void
+ovsdb_file_replica_destroy(struct ovsdb_replica *r_)
+{
+    struct ovsdb_file_replica *r = ovsdb_file_replica_cast(r_);
+
+    ovsdb_log_close(r->log);
+    free(r);
+}
+
+static const struct ovsdb_replica_class ovsdb_file_replica_class = {
+    ovsdb_file_replica_commit,
+    ovsdb_file_replica_destroy
+};
+
+static void
+ovsdb_file_txn_init(struct ovsdb_file_txn *ftxn)
+{
+    ftxn->json = NULL;
+    ftxn->table_json = NULL;
+    ftxn->table = NULL;
+}
+
+static void
+ovsdb_file_txn_add_row(struct ovsdb_file_txn *ftxn,
+                       const struct ovsdb_row *old,
+                       const struct ovsdb_row *new)
+{
     struct json *row;
 
     if (!new) {
@@ -281,61 +339,47 @@ ovsdb_file_replica_change_cb(const struct ovsdb_row *old,
         struct ovsdb_table *table = new ? new->table : old->table;
         char uuid[UUID_LEN + 1];
 
-        if (table != aux->table) {
+        if (table != ftxn->table) {
             /* Create JSON object for transaction overall. */
-            if (!aux->json) {
-                aux->json = json_object_create();
+            if (!ftxn->json) {
+                ftxn->json = json_object_create();
             }
 
             /* Create JSON object for transaction on this table. */
-            aux->table_json = json_object_create();
-            aux->table = table;
-            json_object_put(aux->json, table->schema->name, aux->table_json);
+            ftxn->table_json = json_object_create();
+            ftxn->table = table;
+            json_object_put(ftxn->json, table->schema->name, ftxn->table_json);
         }
 
         /* Add row to transaction for this table. */
         snprintf(uuid, sizeof uuid,
                  UUID_FMT, UUID_ARGS(ovsdb_row_get_uuid(new ? new : old)));
-        json_object_put(aux->table_json, uuid, row);
+        json_object_put(ftxn->table_json, uuid, row);
     }
-
-    return true;
 }
 
 static struct ovsdb_error *
-ovsdb_file_replica_commit(struct ovsdb_replica *r_,
-                          const struct ovsdb_txn *txn, bool durable)
+ovsdb_file_txn_commit(struct json *json, const char *comment,
+                      bool durable, struct ovsdb_log *log)
 {
-    struct ovsdb_file_replica *r = ovsdb_file_replica_cast(r_);
-    struct ovsdb_file_replica_aux aux;
     struct ovsdb_error *error;
-    const char *comment;
 
-    aux.json = NULL;
-    aux.table_json = NULL;
-    aux.table = NULL;
-    ovsdb_txn_for_each_change(txn, ovsdb_file_replica_change_cb, &aux);
-
-    if (!aux.json) {
-        /* Nothing to commit. */
-        return NULL;
+    if (!json) {
+        json = json_object_create();
     }
-
-    comment = ovsdb_txn_get_comment(txn);
     if (comment) {
-        json_object_put_string(aux.json, "_comment", comment);
+        json_object_put_string(json, "_comment", comment);
     }
+    json_object_put(json, "_date", json_integer_create(time_now()));
 
-    json_object_put(aux.json, "_date", json_integer_create(time_now()));
-
-    error = ovsdb_log_write(r->log, aux.json);
-    json_destroy(aux.json);
+    error = ovsdb_log_write(log, json);
+    json_destroy(json);
     if (error) {
         return ovsdb_wrap_error(error, "writing transaction failed");
     }
 
     if (durable) {
-        error = ovsdb_log_commit(r->log);
+        error = ovsdb_log_commit(log);
         if (error) {
             return ovsdb_wrap_error(error, "committing transaction failed");
         }
@@ -343,17 +387,3 @@ ovsdb_file_replica_commit(struct ovsdb_replica *r_,
 
     return NULL;
 }
-
-static void
-ovsdb_file_replica_destroy(struct ovsdb_replica *r_)
-{
-    struct ovsdb_file_replica *r = ovsdb_file_replica_cast(r_);
-
-    ovsdb_log_close(r->log);
-    free(r);
-}
-
-static const struct ovsdb_replica_class ovsdb_file_replica_class = {
-    ovsdb_file_replica_commit,
-    ovsdb_file_replica_destroy
-};
