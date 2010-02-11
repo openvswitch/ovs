@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,8 +76,6 @@ extern const char *program_name;
 #endif
 
 #define NOT_REACHED() abort()
-#define NOT_IMPLEMENTED() abort()
-#define NOT_TESTED() ((void) 0) /* XXX should print a message. */
 
 /* Given POINTER, the address of the given MEMBER in a STRUCT object, returns
    the STRUCT object. */
