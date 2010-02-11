@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
 
@@ -73,6 +74,18 @@ cls_rule_from_match(struct cls_rule *rule, const struct ofp_match *match,
     flow_wildcards_init(&rule->wc, wildcards);
     rule->priority = rule->wc.wildcards ? priority : UINT16_MAX;
     rule->table_idx = table_idx_from_wildcards(rule->wc.wildcards);
+}
+
+/* Converts 'rule' to a string and returns the string.  The caller must free
+ * the string (with free()). */
+char *
+cls_rule_to_string(const struct cls_rule *rule)
+{
+    struct ds s = DS_EMPTY_INITIALIZER;
+    ds_put_format(&s, "wildcards=%x priority=%u ",
+                  rule->wc.wildcards, rule->priority);
+    flow_format(&s, &rule->flow);
+    return ds_cstr(&s);
 }
 
 /* Prints cls_rule 'rule', for debugging.

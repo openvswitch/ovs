@@ -123,6 +123,7 @@ void cls_rule_from_flow(struct cls_rule *, const flow_t *, uint32_t wildcards,
                         unsigned int priority);
 void cls_rule_from_match(struct cls_rule *, const struct ofp_match *,
                          unsigned int priority);
+char *cls_rule_to_string(const struct cls_rule *);
 void cls_rule_print(const struct cls_rule *);
 void cls_rule_moved(struct classifier *,
                     struct cls_rule *old, struct cls_rule *new);
