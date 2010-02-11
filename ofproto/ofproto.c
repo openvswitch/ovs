@@ -759,6 +759,8 @@ ofproto_destroy(struct ofproto *p)
 
     mac_learning_destroy(p->ml);
 
+    port_array_destroy(&p->ports);
+
     free(p);
 }
 
