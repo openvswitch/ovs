@@ -23,7 +23,5 @@
 #define STRFTIME_FORMAT(FMT) __attribute__((__format__(__strftime__, FMT, 0)))
 #define MALLOC_LIKE __attribute__((__malloc__))
 #define ALWAYS_INLINE __attribute__((always_inline))
-#define likely(x) __builtin_expect((x),1)
-#define unlikely(x) __builtin_expect((x),0)
 
 #endif /* compiler.h */
