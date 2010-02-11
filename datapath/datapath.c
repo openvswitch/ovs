@@ -81,7 +81,7 @@ struct datapath *get_dp(int dp_idx)
 }
 EXPORT_SYMBOL_GPL(get_dp);
 
-struct datapath *get_dp_locked(int dp_idx)
+static struct datapath *get_dp_locked(int dp_idx)
 {
 	struct datapath *dp;
 
@@ -176,7 +176,7 @@ static void release_dp(struct kobject *kobj)
 	kfree(dp);
 }
 
-struct kobj_type dp_ktype = {
+static struct kobj_type dp_ktype = {
 	.release = release_dp
 };
 
@@ -325,7 +325,7 @@ static void release_nbp(struct kobject *kobj)
 	kfree(p);
 }
 
-struct kobj_type brport_ktype = {
+static struct kobj_type brport_ktype = {
 #ifdef CONFIG_SYSFS
 	.sysfs_ops = &brport_sysfs_ops,
 #endif

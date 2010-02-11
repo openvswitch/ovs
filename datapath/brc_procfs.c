@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -12,6 +12,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <net/genetlink.h>
+#include "brc_procfs.h"
 #include "openvswitch/brcompat-netlink.h"
 
 /* This code implements a Generic Netlink command BRC_GENL_C_SET_PROC that can
@@ -49,7 +50,7 @@ static struct file_operations brc_fops = {
 static struct proc_dir_entry *proc_vlan_dir;
 static struct proc_dir_entry *proc_bonding_dir;
 
-struct proc_dir_entry *brc_lookup_entry(struct proc_dir_entry *de, const char *name)
+static struct proc_dir_entry *brc_lookup_entry(struct proc_dir_entry *de, const char *name)
 {
 	int namelen = strlen(name);
 	for (de = de->subdir; de; de = de->next) {
