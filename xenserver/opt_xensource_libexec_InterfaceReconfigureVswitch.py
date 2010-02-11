@@ -122,7 +122,7 @@ def datapath_deconfigure_physical(netdev):
 
 def datapath_configure_bond(pif,slaves):
     bridge = pif_bridge_name(pif)
-    pifrec = db.get_pif_record(pif)
+    pifrec = db().get_pif_record(pif)
     interface = pif_netdev_name(pif)
 
     argv = ['--', '--fake-iface', 'add-bond', bridge, interface]
