@@ -76,6 +76,7 @@ struct rconn {
     time_t last_connected;
     unsigned int packets_sent;
     unsigned int seqno;
+    int last_error;
 
     /* In S_ACTIVE and S_IDLE, probably_admitted reports whether we believe
      * that the peer has made a (positive) admission control decision on our
@@ -343,7 +344,7 @@ reconnect(struct rconn *rc)
     } else {
         VLOG_WARN("%s: connection failed (%s)", rc->name, strerror(retval));
         rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
-        disconnect(rc, 0);
+        disconnect(rc, retval);
     }
     return retval;
 }
@@ -383,7 +384,7 @@ run_CONNECTING(struct rconn *rc)
     } else if (timed_out(rc)) {
         VLOG_INFO("%s: connection timed out", rc->name);
         rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
-        disconnect(rc, 0);
+        disconnect(rc, ETIMEDOUT);
     }
 }
 
@@ -448,7 +449,7 @@ run_IDLE(struct rconn *rc)
         VLOG_ERR("%s: no response to inactivity probe after %u "
                  "seconds, disconnecting",
                  rc->name, elapsed_in_this_state(rc));
-        disconnect(rc, 0);
+        disconnect(rc, ETIMEDOUT);
     } else {
         do_tx_work(rc);
     }
@@ -792,6 +793,22 @@ rconn_get_connection_seqno(const struct rconn *rc)
 {
     return rc->seqno;
 }
+
+/* Returns a value that explains why 'rc' last disconnected:
+ *
+ *   - 0 means that the last disconnection was caused by a call to
+ *     rconn_disconnect(), or that 'rc' is new and has not yet completed its
+ *     initial connection or connection attempt.
+ *
+ *   - EOF means that the connection was closed in the normal way by the peer.
+ *
+ *   - A positive integer is an errno value that represents the error.
+ */
+int
+rconn_get_last_error(const struct rconn *rc)
+{
+    return rc->last_error;
+}
 
 struct rconn_packet_counter *
 rconn_packet_counter_create(void)
@@ -883,10 +900,20 @@ report_error(struct rconn *rc, int error)
     }
 }
 
-/* Disconnects 'rc'. */
+/* Disconnects 'rc' and records 'error' as the error that caused 'rc''s last
+ * disconnection:
+ *
+ *   - 0 means that this disconnection is due to a request by 'rc''s client,
+ *     not due to any kind of network error.
+ *
+ *   - EOF means that the connection was closed in the normal way by the peer.
+ *
+ *   - A positive integer is an errno value that represents the error.
+ */
 static void
-disconnect(struct rconn *rc, int error OVS_UNUSED)
+disconnect(struct rconn *rc, int error)
 {
+    rc->last_error = error;
     if (rc->reliable) {
         time_t now = time_now();
 
