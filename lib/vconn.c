@@ -1255,10 +1255,7 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
     switch (ntohs(a->type)) {
     case OFPAT_OUTPUT:
         error = check_action_port(ntohs(a->output.port), max_ports);
-        if (error) {
-            return error;
-        }
-        return check_action_exact_len(a, len, 8);
+        return error ? error : check_action_exact_len(a, len, 8);
 
     case OFPAT_SET_VLAN_VID:
     case OFPAT_SET_VLAN_PCP:
@@ -1274,29 +1271,15 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
         return check_action_exact_len(a, len, 16);
 
     case OFPAT_VENDOR:
-        if (a->vendor.vendor == htonl(NX_VENDOR_ID)) {
-            return check_nicira_action(a, len);
-        } else {
-            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR);
-        }
-        break;
+        return (a->vendor.vendor == htonl(NX_VENDOR_ID)
+                ? check_nicira_action(a, len)
+                : ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR));
 
     default:
         VLOG_WARN_RL(&bad_ofmsg_rl, "unknown action type %"PRIu16,
                 ntohs(a->type));
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
     }
-
-    if (!len) {
-        VLOG_DBG_RL(&bad_ofmsg_rl, "action has invalid length 0");
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-    }
-    if (len % ACTION_ALIGNMENT) {
-        VLOG_DBG_RL(&bad_ofmsg_rl, "action length %u is not a multiple of %d",
-                    len, ACTION_ALIGNMENT);
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-    }
-    return 0;
 }
 
 int
@@ -1316,7 +1299,15 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
                         "action requires %u slots but only %u remain",
                         n_slots, slots_left);
             return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+        } else if (!len) {
+            VLOG_DBG_RL(&bad_ofmsg_rl, "action has invalid length 0");
+            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+        } else if (len % ACTION_ALIGNMENT) {
+            VLOG_DBG_RL(&bad_ofmsg_rl, "action length %u is not a multiple "
+                        "of %d", len, ACTION_ALIGNMENT);
+            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
         }
+
         error = check_action(a, len, max_ports);
         if (error) {
             return error;
