@@ -136,6 +136,7 @@ static void state_transition(struct rconn *, enum state);
 static void set_vconn_name(struct rconn *, const char *name);
 static int try_send(struct rconn *);
 static int reconnect(struct rconn *);
+static void report_error(struct rconn *, int error);
 static void disconnect(struct rconn *, int error);
 static void flush_queue(struct rconn *);
 static void question_connectivity(struct rconn *);
@@ -272,6 +273,7 @@ void
 rconn_reconnect(struct rconn *rc)
 {
     if (rc->state & (S_ACTIVE | S_IDLE)) {
+        VLOG_INFO("%s: disconnecting", rc->name);
         disconnect(rc, 0);
     }
 }
@@ -511,6 +513,7 @@ rconn_recv(struct rconn *rc)
             }
             return buffer;
         } else if (error != EAGAIN) {
+            report_error(rc, error);
             disconnect(rc, error);
         }
     }
@@ -849,6 +852,7 @@ try_send(struct rconn *rc)
     retval = vconn_send(rc->vconn, rc->txq.head);
     if (retval) {
         if (retval != EAGAIN) {
+            report_error(rc, retval);
             disconnect(rc, retval);
         }
         return retval;
@@ -862,26 +866,31 @@ try_send(struct rconn *rc)
     return 0;
 }
 
-/* Disconnects 'rc'.  'error' is used only for logging purposes.  If it is
- * nonzero, then it should be EOF to indicate the connection was closed by the
- * peer in a normal fashion or a positive errno value. */
+/* Reports that 'error' caused 'rc' to disconnect.  'error' may be a positive
+ * errno value, or it may be EOF to indicate that the connection was closed
+ * normally. */
 static void
-disconnect(struct rconn *rc, int error)
+report_error(struct rconn *rc, int error)
+{
+    if (error == EOF) {
+        /* If 'rc' isn't reliable, then we don't really expect this connection
+         * to last forever anyway (probably it's a connection that we received
+         * via accept()), so use DBG level to avoid cluttering the logs. */
+        enum vlog_level level = rc->reliable ? VLL_INFO : VLL_DBG;
+        VLOG(level, "%s: connection closed by peer", rc->name);
+    } else {
+        VLOG_WARN("%s: connection dropped (%s)", rc->name, strerror(error));
+    }
+}
+
+/* Disconnects 'rc'. */
+static void
+disconnect(struct rconn *rc, int error OVS_UNUSED)
 {
     if (rc->reliable) {
         time_t now = time_now();
 
         if (rc->state & (S_CONNECTING | S_ACTIVE | S_IDLE)) {
-            if (error > 0) {
-                VLOG_WARN("%s: connection dropped (%s)",
-                          rc->name, strerror(error));
-            } else if (error == EOF) {
-                if (rc->reliable) {
-                    VLOG_INFO("%s: connection closed by peer", rc->name);
-                }
-            } else {
-                VLOG_INFO("%s: connection dropped", rc->name);
-            }
             vconn_close(rc->vconn);
             rc->vconn = NULL;
             flush_queue(rc);
