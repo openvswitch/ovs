@@ -74,6 +74,8 @@ void ofpbuf_clear(struct ofpbuf *);
 void *ofpbuf_pull(struct ofpbuf *, size_t);
 void *ofpbuf_try_pull(struct ofpbuf *, size_t);
 
+char *ofpbuf_to_string(const struct ofpbuf *, size_t maxbytes);
+
 #ifdef  __cplusplus
 }
 #endif

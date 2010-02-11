@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include "dynamic-string.h"
 #include "util.h"
 
 /* Initializes 'b' as an empty ofpbuf that contains the 'allocated' bytes of
@@ -285,4 +286,19 @@ void *
 ofpbuf_try_pull(struct ofpbuf *b, size_t size) 
 {
     return b->size >= size ? ofpbuf_pull(b, size) : NULL;
+}
+
+/* Returns a string that describes some of 'b''s metadata plus a hex dump of up
+ * to 'maxbytes' from the start of the buffer. */
+char *
+ofpbuf_to_string(const struct ofpbuf *b, size_t maxbytes)
+{
+    struct ds s;
+
+    ds_init(&s);
+    ds_put_format(&s, "size=%zu, allocated=%zu, head=%zu, tail=%zu\n",
+                  b->size, b->allocated,
+                  ofpbuf_headroom(b), ofpbuf_tailroom(b));
+    ds_put_hex_dump(&s, b->data, MIN(b->size, maxbytes), 0, false);
+    return ds_cstr(&s);
 }
