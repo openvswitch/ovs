@@ -107,6 +107,7 @@ struct odp_stats {
 /* Logical ports. */
 #define ODPP_LOCAL      ((__u16)0)
 #define ODPP_NONE       ((__u16)-1)
+#define ODPP_NORMAL     ((__u16)-2)
 
 /* Listening channels. */
 #define _ODPL_MISS_NR   0       /* Packet missed in flow table. */
