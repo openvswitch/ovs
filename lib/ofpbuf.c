@@ -103,7 +103,7 @@ ofpbuf_delete(struct ofpbuf *b)
  * commonly, the data in a ofpbuf is at its beginning, and thus the ofpbuf's
  * headroom is 0.) */
 size_t
-ofpbuf_headroom(struct ofpbuf *b) 
+ofpbuf_headroom(const struct ofpbuf *b)
 {
     return (char*)b->data - (char*)b->base;
 }
@@ -111,7 +111,7 @@ ofpbuf_headroom(struct ofpbuf *b)
 /* Returns the number of bytes that may be appended to the tail end of ofpbuf
  * 'b' before the ofpbuf must be reallocated. */
 size_t
-ofpbuf_tailroom(struct ofpbuf *b) 
+ofpbuf_tailroom(const struct ofpbuf *b)
 {
     return (char*)ofpbuf_end(b) - (char*)ofpbuf_tail(b);
 }
