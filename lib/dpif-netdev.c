@@ -752,7 +752,7 @@ dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
 
 		case ODPAT_SET_VLAN_PCP:
             *mutates = true;
-			if (a->vlan_pcp.vlan_pcp & ~VLAN_PCP_MASK) {
+			if (a->vlan_pcp.vlan_pcp & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT)) {
 				return EINVAL;
             }
 			break;
