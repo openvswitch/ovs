@@ -42,4 +42,6 @@ int inet_open_passive(int style, const char *target, int default_port,
 int read_fully(int fd, void *, size_t, size_t *bytes_read);
 int write_fully(int fd, const void *, size_t, size_t *bytes_written);
 
+int fsync_parent_dir(const char *file_name);
+
 #endif /* socket-util.h */

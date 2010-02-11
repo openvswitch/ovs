@@ -29,6 +29,7 @@
 #include "ovsdb.h"
 #include "ovsdb-error.h"
 #include "sha1.h"
+#include "socket-util.h"
 #include "transaction.h"
 #include "util.h"
 
@@ -106,17 +107,7 @@ ovsdb_log_open(const char *name, enum ovsdb_log_open_mode open_mode,
     if (!fstat(fd, &s) && s.st_size == 0) {
         /* It's (probably) a new file so fsync() its parent directory to ensure
          * that its directory entry is committed to disk. */
-        char *dir = dir_name(name);
-        int dirfd = open(dir, O_RDONLY);
-        if (dirfd >= 0) {
-            if (fsync(dirfd) && errno != EINVAL) {
-                VLOG_ERR("%s: fsync failed (%s)", dir, strerror(errno));
-            }
-            close(dirfd);
-        } else {
-            VLOG_ERR("%s: open failed (%s)", dir, strerror(errno));
-        }
-        free(dir);
+        fsync_parent_dir(name);
     }
 
     stream = fdopen(fd, open_mode == OVSDB_LOG_READ_ONLY ? "rb" : "w+b");

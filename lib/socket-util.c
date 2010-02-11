@@ -557,3 +557,34 @@ write_fully(int fd, const void *p_, size_t size, size_t *bytes_written)
     }
     return 0;
 }
+
+/* Given file name 'file_name', fsyncs the directory in which it is contained.
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+fsync_parent_dir(const char *file_name)
+{
+    int error = 0;
+    char *dir;
+    int fd;
+
+    dir = dir_name(file_name);
+    fd = open(dir, O_RDONLY);
+    if (fd >= 0) {
+        if (fsync(fd)) {
+            if (errno == EINVAL || errno == EROFS) {
+                /* This directory does not support synchronization.  Not
+                 * really an error. */
+            } else {
+                error = errno;
+                VLOG_ERR("%s: fsync failed (%s)", dir, strerror(error));
+            }
+        }
+        close(fd);
+    } else {
+        error = errno;
+        VLOG_ERR("%s: open failed (%s)", dir, strerror(error));
+    }
+    free(dir);
+
+    return error;
+}
