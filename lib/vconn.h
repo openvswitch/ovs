@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ struct vconn;
 void vconn_usage(bool active, bool passive, bool bootstrap);
 
 /* Active vconns: virtual connections to OpenFlow devices. */
+int vconn_verify_name(const char *name);
 int vconn_open(const char *name, int min_version, struct vconn **);
 void vconn_close(struct vconn *);
 const char *vconn_get_name(const struct vconn *);
@@ -63,6 +64,7 @@ void vconn_recv_wait(struct vconn *);
 void vconn_send_wait(struct vconn *);
 
 /* Passive vconns: virtual listeners for incoming OpenFlow connections. */
+int pvconn_verify_name(const char *name);
 int pvconn_open(const char *name, struct pvconn **);
 const char *pvconn_get_name(const struct pvconn *);
 void pvconn_close(struct pvconn *);
