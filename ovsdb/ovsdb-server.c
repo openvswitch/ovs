@@ -52,7 +52,8 @@
 static unixctl_cb_func ovsdb_server_exit;
 
 static void parse_options(int argc, char *argv[], char **file_namep,
-                          struct shash *remotes, char **unixctl_pathp);
+                          struct shash *remotes, char **unixctl_pathp,
+                          char **run_command);
 static void usage(void) NO_RETURN;
 
 static void set_remotes(struct ovsdb_jsonrpc_server *jsonrpc,
@@ -62,11 +63,13 @@ int
 main(int argc, char *argv[])
 {
     char *unixctl_path = NULL;
+    char *run_command = NULL;
     struct unixctl_server *unixctl;
     struct ovsdb_jsonrpc_server *jsonrpc;
     struct shash remotes;
     struct ovsdb_error *error;
     struct ovsdb *db;
+    struct process *run_process;
     char *file_name;
     bool exiting;
     int retval;
@@ -78,7 +81,8 @@ main(int argc, char *argv[])
     signal(SIGPIPE, SIG_IGN);
     process_init();
 
-    parse_options(argc, argv, &file_name, &remotes, &unixctl_path);
+    parse_options(argc, argv, &file_name, &remotes, &unixctl_path,
+                  &run_command);
 
     die_if_already_running();
     daemonize_start();
@@ -96,6 +100,22 @@ main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
+    if (run_command) {
+        char *run_argv[4];
+
+        run_argv[0] = "/bin/sh";
+        run_argv[1] = "-c";
+        run_argv[2] = run_command;
+        run_argv[3] = NULL;
+
+        retval = process_start(run_argv, NULL, 0, NULL, 0, &run_process);
+        if (retval) {
+            ovs_fatal(retval, "%s: process failed to start", run_command);
+        }
+    } else {
+        run_process = NULL;
+    }
+
     daemonize_complete();
 
     unixctl_command_register("exit", ovsdb_server_exit, &exiting);
@@ -106,16 +126,30 @@ main(int argc, char *argv[])
         ovsdb_jsonrpc_server_run(jsonrpc);
         unixctl_server_run(unixctl);
         ovsdb_trigger_run(db, time_msec());
+        if (run_process && process_exited(run_process)) {
+            exiting = true;
+        }
 
         ovsdb_jsonrpc_server_wait(jsonrpc);
         unixctl_server_wait(unixctl);
         ovsdb_trigger_wait(db, time_msec());
+        if (run_process) {
+            process_wait(run_process);
+        }
         poll_block();
     }
     ovsdb_jsonrpc_server_destroy(jsonrpc);
     ovsdb_destroy(db);
     shash_destroy(&remotes);
     unixctl_server_destroy(unixctl);
+
+    if (run_process && process_exited(run_process)) {
+        int status = process_status(run_process);
+        if (status) {
+            ovs_fatal(0, "%s: child exited, %s",
+                      run_command, process_status_msg(status));
+        }
+    }
 
     return 0;
 }
@@ -202,12 +236,14 @@ ovsdb_server_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
 
 static void
 parse_options(int argc, char *argv[], char **file_namep,
-              struct shash *remotes, char **unixctl_pathp)
+              struct shash *remotes, char **unixctl_pathp,
+              char **run_command)
 {
     enum {
         OPT_DUMMY = UCHAR_MAX + 1,
         OPT_REMOTE,
         OPT_UNIXCTL,
+        OPT_RUN,
         OPT_BOOTSTRAP_CA_CERT,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS
@@ -215,6 +251,7 @@ parse_options(int argc, char *argv[], char **file_namep,
     static struct option long_options[] = {
         {"remote",      required_argument, 0, OPT_REMOTE},
         {"unixctl",     required_argument, 0, OPT_UNIXCTL},
+        {"run",         required_argument, 0, OPT_RUN},
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
         DAEMON_LONG_OPTIONS,
@@ -244,6 +281,10 @@ parse_options(int argc, char *argv[], char **file_namep,
 
         case OPT_UNIXCTL:
             *unixctl_pathp = optarg;
+            break;
+
+        case OPT_RUN:
+            *run_command = optarg;
             break;
 
         case 'h':
@@ -301,6 +342,7 @@ usage(void)
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"
+           "  --run COMMAND           run COMMAND as subprocess then exit\n"
            "  -h, --help              display this help message\n"
            "  -V, --version           display version information\n");
     leak_checker_usage();
