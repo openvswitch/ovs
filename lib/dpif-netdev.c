@@ -1273,8 +1273,9 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             break;
 
 		case ODPAT_SET_VLAN_PCP:
-			dp_netdev_modify_vlan_tci(packet, key, a->vlan_pcp.vlan_pcp << 13,
-                                      VLAN_PCP_MASK);
+			dp_netdev_modify_vlan_tci(
+                packet, key, a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT,
+                VLAN_PCP_MASK);
             break;
 
 		case ODPAT_STRIP_VLAN:
