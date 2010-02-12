@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,23 @@
 
 #include <stdbool.h>
 #include "compiler.h"
+#include "log.h"
 
 struct ovsdb;
+struct ovsdb_schema;
 
 struct ovsdb_error *ovsdb_file_open(const char *file_name, bool read_only,
                                     struct ovsdb **)
+    WARN_UNUSED_RESULT;
+
+struct ovsdb_error *ovsdb_file_open_as_schema(const char *file_name,
+                                              const struct ovsdb_schema *,
+                                              struct ovsdb **)
+    WARN_UNUSED_RESULT;
+
+struct ovsdb_error *ovsdb_file_save_copy(const char *file_name, int locking,
+                                         const char *comment,
+                                         const struct ovsdb *)
     WARN_UNUSED_RESULT;
 
 #endif /* ovsdb/file.h */

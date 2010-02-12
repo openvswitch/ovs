@@ -25,10 +25,12 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "file.h"
+#include "lockfile.h"
 #include "log.h"
 #include "json.h"
 #include "ovsdb.h"
 #include "ovsdb-error.h"
+#include "socket-util.h"
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
@@ -109,6 +111,7 @@ usage(void)
            "usage: %s [OPTIONS] COMMAND [ARG...]\n"
            "  create DB SCHEMA   create DB with the given SCHEMA\n"
            "  compact DB [DST]   compact DB in-place (or to DST)\n"
+           "  convert DB SCHEMA [DST]   convert DB to SCHEMA (to DST)\n"
            "  extract-schema DB  print DB's schema on stdout\n"
            "  query DB TRNS      execute read-only transaction on DB\n"
            "  transact DB TRNS   execute read/write transaction on DB\n"
@@ -171,6 +174,72 @@ do_create(int argc OVS_UNUSED, char *argv[])
     ovsdb_log_close(log);
 
     json_destroy(json);
+}
+
+static void
+compact_or_convert(const char *src_name, const char *dst_name,
+                   const struct ovsdb_schema *new_schema,
+                   const char *comment)
+{
+    struct lockfile *src_lock;
+    struct lockfile *dst_lock;
+    bool in_place = dst_name == NULL;
+    struct ovsdb *db;
+    int retval;
+
+    /* Get (temporary) destination. */
+    if (in_place) {
+        dst_name = xasprintf("%s.tmp", src_name);
+    }
+
+    /* Lock source and (temporary) destination. */
+    retval = lockfile_lock(src_name, INT_MAX, &src_lock);
+    if (retval) {
+        ovs_fatal(retval, "%s: failed to lock lockfile", src_name);
+    }
+
+    retval = lockfile_lock(dst_name, INT_MAX, &dst_lock);
+    if (retval) {
+        ovs_fatal(retval, "%s: failed to lock lockfile", dst_name);
+    }
+
+    /* Save a copy. */
+    check_ovsdb_error(new_schema
+                      ? ovsdb_file_open_as_schema(src_name, new_schema, &db)
+                      : ovsdb_file_open(src_name, true, &db));
+    check_ovsdb_error(ovsdb_file_save_copy(dst_name, false, comment, db));
+    ovsdb_destroy(db);
+
+    /* Replace source. */
+    if (in_place) {
+        if (rename(dst_name, src_name)) {
+            ovs_fatal(errno, "failed to rename \"%s\" to \"%s\"",
+                      dst_name, src_name);
+        }
+        fsync_parent_dir(dst_name);
+    } else {
+        lockfile_unlock(src_lock);
+    }
+
+    lockfile_unlock(dst_lock);
+}
+
+static void
+do_compact(int argc OVS_UNUSED, char *argv[])
+{
+    compact_or_convert(argv[1], argv[2], NULL, "compacted by ovsdb-tool");
+}
+
+static void
+do_convert(int argc OVS_UNUSED, char *argv[])
+{
+    const char *schema_file_name = argv[2];
+    struct ovsdb_schema *new_schema;
+
+    check_ovsdb_error(ovsdb_schema_from_file(schema_file_name, &new_schema));
+    compact_or_convert(argv[1], argv[3], new_schema,
+                       "converted by ovsdb-tool");
+    ovsdb_schema_destroy(new_schema);
 }
 
 static void
@@ -337,6 +406,8 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
 static const struct command all_commands[] = {
     { "create", 2, 2, do_create },
+    { "compact", 1, 2, do_compact },
+    { "convert", 2, 3, do_convert },
     { "query", 2, 2, do_query },
     { "transact", 2, 2, do_transact },
     { "show-log", 1, 1, do_show_log },

@@ -40,6 +40,29 @@ existing \fIdb\fR.
 \fIschema\fR must contain an OVSDB schema in JSON format.  Refer to
 the OVSDB specification for details.
 .
+.IP "\fBcompact\fI db \fR[\fItarget\fR]"
+Reads \fIdb\fR and writes a compacted version.  If \fItarget\fR is
+specified, the compacted version is written as a new file named
+\fItarget\fR, which must not already exist.  If \fItarget\fR is
+omitted, then the compacted version of the database replaces \fIdb\fR
+in-place.
+.
+.IP "\fBconvert\fI db schema \fR[\fItarget\fR]"
+Reads \fIdb\fR, translating it into to the schema specified in
+\fIschema\fR, and writes out the new interpretation.  If \fItarget\fR
+is specified, the translated version is written as a new file named
+\fItarget\fR, which must not already exist.  If \fItarget\fR is
+omitted, then the translated version of the database replaces \fIdb\fR
+in-place.
+.IP
+This command can do simple ``upgrades'' and ``downgrades'' on a
+database's schema.  The data in \fIdb\fR must be valid when
+interpreted under \fIschema\fR, with only one exception: data in
+\fIdb\fR for tables and columns that do not exist in \fIschema\fR are
+ignored.  Columns that exist in \fIschema\fR but not in \fIdb\fR are
+set to their default values.  All of \fIschema\fR's constraints apply
+in full.
+.
 .IP "\fBquery\fI db transaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, and prints the
 results.  The \fItransaction\fR must be a JSON array in the format of

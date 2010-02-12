@@ -50,13 +50,57 @@ static struct ovsdb_error *ovsdb_file_txn_commit(struct json *,
                                                  const char *comment,
                                                  bool durable,
                                                  struct ovsdb_log *);
+
+static struct ovsdb_error *ovsdb_file_open__(const char *file_name,
+                                             const struct ovsdb_schema *,
+                                             bool read_only, struct ovsdb **);
 static struct ovsdb_error *ovsdb_file_txn_from_json(struct ovsdb *,
                                                     const struct json *,
+                                                    bool converting,
                                                     struct ovsdb_txn **);
 static void ovsdb_file_replica_create(struct ovsdb *, struct ovsdb_log *);
 
+/* Opens database 'file_name' and stores a pointer to the new database in
+ * '*dbp'.  If 'read_only' is false, then the database will be locked and
+ * changes to the database will be written to disk.  If 'read_only' is true,
+ * the database will not be locked and changes to the database will persist
+ * only as long as the "struct ovsdb".
+ *
+ * On success, returns NULL.  On failure, returns an ovsdb_error (which the
+ * caller must destroy) and sets '*dbp' to NULL. */
 struct ovsdb_error *
 ovsdb_file_open(const char *file_name, bool read_only, struct ovsdb **dbp)
+{
+    return ovsdb_file_open__(file_name, NULL, read_only, dbp);
+}
+
+/* Opens database 'file_name' with an alternate schema.  The specified 'schema'
+ * is used to interpret the data in 'file_name', ignoring the schema actually
+ * stored in the file.  Data in the file for tables or columns that do not
+ * exist in 'schema' are ignored, but the ovsdb file format must otherwise be
+ * observed, including column constraints.
+ *
+ * This function can be useful for upgrading or downgrading databases to
+ * "almost-compatible" formats.
+ *
+ * The database will not be locked.  Changes to the database will persist only
+ * as long as the "struct ovsdb".
+ *
+ * On success, stores a pointer to the new database in '*dbp' and returns a
+ * null pointer.  On failure, returns an ovsdb_error (which the caller must
+ * destroy) and sets '*dbp' to NULL. */
+struct ovsdb_error *
+ovsdb_file_open_as_schema(const char *file_name,
+                          const struct ovsdb_schema *schema,
+                          struct ovsdb **dbp)
+{
+    return ovsdb_file_open__(file_name, schema, true, dbp);
+}
+
+static struct ovsdb_error *
+ovsdb_file_open__(const char *file_name,
+                  const struct ovsdb_schema *alternate_schema,
+                  bool read_only, struct ovsdb **dbp)
 {
     enum ovsdb_log_open_mode open_mode;
     struct ovsdb_schema *schema;
@@ -79,12 +123,16 @@ ovsdb_file_open(const char *file_name, bool read_only, struct ovsdb **dbp)
                               file_name);
     }
 
-    error = ovsdb_schema_from_json(json, &schema);
-    if (error) {
-        json_destroy(json);
-        return ovsdb_wrap_error(error,
-                                "failed to parse \"%s\" as ovsdb schema",
-                                file_name);
+    if (alternate_schema) {
+        schema = ovsdb_schema_clone(alternate_schema);
+    } else {
+        error = ovsdb_schema_from_json(json, &schema);
+        if (error) {
+            json_destroy(json);
+            return ovsdb_wrap_error(error,
+                                    "failed to parse \"%s\" as ovsdb schema",
+                                    file_name);
+        }
     }
     json_destroy(json);
 
@@ -92,7 +140,8 @@ ovsdb_file_open(const char *file_name, bool read_only, struct ovsdb **dbp)
     while ((error = ovsdb_log_read(log, &json)) == NULL && json) {
         struct ovsdb_txn *txn;
 
-        error = ovsdb_file_txn_from_json(db, json, &txn);
+        error = ovsdb_file_txn_from_json(db, json, alternate_schema != NULL,
+                                         &txn);
         json_destroy(json);
         if (error) {
             break;
@@ -119,7 +168,46 @@ ovsdb_file_open(const char *file_name, bool read_only, struct ovsdb **dbp)
 }
 
 static struct ovsdb_error *
+ovsdb_file_update_row_from_json(struct ovsdb_row *row, bool converting,
+                                const struct json *json)
+{
+    struct ovsdb_table_schema *schema = row->table->schema;
+    struct ovsdb_error *error;
+    struct shash_node *node;
+
+    if (json->type != JSON_OBJECT) {
+        return ovsdb_syntax_error(json, NULL, "row must be JSON object");
+    }
+
+    SHASH_FOR_EACH (node, json_object(json)) {
+        const char *column_name = node->name;
+        const struct ovsdb_column *column;
+        struct ovsdb_datum datum;
+
+        column = ovsdb_table_schema_get_column(schema, column_name);
+        if (!column) {
+            if (converting) {
+                continue;
+            }
+            return ovsdb_syntax_error(json, "unknown column",
+                                      "No column %s in table %s.",
+                                      column_name, schema->name);
+        }
+
+        error = ovsdb_datum_from_json(&datum, &column->type, node->data, NULL);
+        if (error) {
+            return error;
+        }
+        ovsdb_datum_swap(&row->fields[column->index], &datum);
+        ovsdb_datum_destroy(&datum, &column->type);
+    }
+
+    return NULL;
+}
+
+static struct ovsdb_error *
 ovsdb_file_txn_row_from_json(struct ovsdb_txn *txn, struct ovsdb_table *table,
+                             bool converting,
                              const struct uuid *row_uuid, struct json *json)
 {
     const struct ovsdb_row *row = ovsdb_table_get_row(table, row_uuid);
@@ -132,15 +220,15 @@ ovsdb_file_txn_row_from_json(struct ovsdb_txn *txn, struct ovsdb_table *table,
         ovsdb_txn_row_delete(txn, row);
         return NULL;
     } else if (row) {
-        return ovsdb_row_from_json(ovsdb_txn_row_modify(txn, row),
-                                   json, NULL, NULL);
+        return ovsdb_file_update_row_from_json(ovsdb_txn_row_modify(txn, row),
+                                               converting, json);
     } else {
         struct ovsdb_error *error;
         struct ovsdb_row *new;
 
         new = ovsdb_row_create(table);
         *ovsdb_row_get_uuid_rw(new) = *row_uuid;
-        error = ovsdb_row_from_json(new, json, NULL, NULL);
+        error = ovsdb_file_update_row_from_json(new, converting, json);
         if (error) {
             ovsdb_row_destroy(new);
         }
@@ -153,7 +241,8 @@ ovsdb_file_txn_row_from_json(struct ovsdb_txn *txn, struct ovsdb_table *table,
 
 static struct ovsdb_error *
 ovsdb_file_txn_table_from_json(struct ovsdb_txn *txn,
-                               struct ovsdb_table *table, struct json *json)
+                               struct ovsdb_table *table,
+                               bool converting, struct json *json)
 {
     struct shash_node *node;
 
@@ -172,8 +261,8 @@ ovsdb_file_txn_table_from_json(struct ovsdb_txn *txn,
                                       uuid_string);
         }
 
-        error = ovsdb_file_txn_row_from_json(txn, table, &row_uuid,
-                                             txn_row_json);
+        error = ovsdb_file_txn_row_from_json(txn, table, converting,
+                                             &row_uuid, txn_row_json);
         if (error) {
             return error;
         }
@@ -184,7 +273,7 @@ ovsdb_file_txn_table_from_json(struct ovsdb_txn *txn,
 
 static struct ovsdb_error *
 ovsdb_file_txn_from_json(struct ovsdb *db, const struct json *json,
-                         struct ovsdb_txn **txnp)
+                         bool converting, struct ovsdb_txn **txnp)
 {
     struct ovsdb_error *error;
     struct shash_node *node;
@@ -204,7 +293,8 @@ ovsdb_file_txn_from_json(struct ovsdb *db, const struct json *json,
         table = shash_find_data(&db->tables, table_name);
         if (!table) {
             if (!strcmp(table_name, "_date")
-                || !strcmp(table_name, "_comment")) {
+                || !strcmp(table_name, "_comment")
+                || converting) {
                 continue;
             }
 
@@ -213,7 +303,8 @@ ovsdb_file_txn_from_json(struct ovsdb *db, const struct json *json,
             goto error;
         }
 
-        error = ovsdb_file_txn_table_from_json(txn, table, txn_table_json);
+        error = ovsdb_file_txn_table_from_json(txn, table, converting,
+                                               txn_table_json);
         if (error) {
             goto error;
         }
@@ -223,6 +314,54 @@ ovsdb_file_txn_from_json(struct ovsdb *db, const struct json *json,
 
 error:
     ovsdb_txn_abort(txn);
+    return error;
+}
+
+/* Saves a snapshot of 'db''s current contents as 'file_name'.  If 'comment' is
+ * nonnull, then it is added along with the data contents and can be viewed
+ * with "ovsdb-tool show-log".
+ *
+ * 'locking' is passed along to ovsdb_log_open() untouched. */
+struct ovsdb_error *
+ovsdb_file_save_copy(const char *file_name, int locking,
+                     const char *comment, const struct ovsdb *db)
+{
+    const struct shash_node *node;
+    struct ovsdb_file_txn ftxn;
+    struct ovsdb_error *error;
+    struct ovsdb_log *log;
+    struct json *json;
+
+    error = ovsdb_log_open(file_name, OVSDB_LOG_CREATE, locking, &log);
+    if (error) {
+        return error;
+    }
+
+    /* Write schema. */
+    json = ovsdb_schema_to_json(db->schema);
+    error = ovsdb_log_write(log, json);
+    json_destroy(json);
+    if (error) {
+        goto exit;
+    }
+
+    /* Write data. */
+    ovsdb_file_txn_init(&ftxn);
+    SHASH_FOR_EACH (node, &db->tables) {
+        const struct ovsdb_table *table = node->data;
+        const struct ovsdb_row *row;
+
+        HMAP_FOR_EACH (row, struct ovsdb_row, hmap_node, &table->rows) {
+            ovsdb_file_txn_add_row(&ftxn, NULL, row);
+        }
+    }
+    error = ovsdb_file_txn_commit(ftxn.json, comment, true, log);
+
+exit:
+    ovsdb_log_close(log);
+    if (error) {
+        remove(file_name);
+    }
     return error;
 }
 

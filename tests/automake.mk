@@ -33,7 +33,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-transaction.at \
 	tests/ovsdb-execution.at \
 	tests/ovsdb-trigger.at \
-	tests/ovsdb-file.at \
+	tests/ovsdb-tool.at \
 	tests/ovsdb-server.at \
 	tests/ovsdb-monitor.at \
 	tests/ovsdb-idl.at \
