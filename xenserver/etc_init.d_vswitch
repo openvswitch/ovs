@@ -337,6 +337,9 @@ function start {
 
         action "Creating empty database $OVSDB_SERVER_DB" true
         $ovsdb_tool -vANY:console:emer create "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
+    else
+        # Upgrade or downgrade schema and compact database.
+        $ovsdb_tool -vANY:console:emer convert "$OVSDB_SERVER_DB" "$VSWITCHD_OVSDB_SCHEMA"
     fi
 
     start_ovsdb_server
