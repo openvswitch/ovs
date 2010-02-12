@@ -463,13 +463,14 @@ table_print_table__(const struct table *table)
 }
 
 static void
-table_print_html_cell__(const char *element, const char *content)
+table_escape_html_text__(const char *s, size_t n)
 {
-    const char *p;
+    size_t i;
 
-    printf("    <%s>", element);
-    for (p = content; *p != '\0'; p++) {
-        switch (*p) {
+    for (i = 0; i < n; i++) {
+        char c = s[i];
+
+        switch (c) {
         case '&':
             fputs("&amp;", stdout);
             break;
@@ -479,9 +480,31 @@ table_print_html_cell__(const char *element, const char *content)
         case '>':
             fputs("&gt;", stdout);
             break;
-        default:
-            putchar(*p);
+        case '"':
+            fputs("&quot;", stdout);
             break;
+        default:
+            putchar(c);
+            break;
+        }
+    }
+}
+
+static void
+table_print_html_cell__(const char *element, const char *content)
+{
+    const char *p;
+
+    printf("    <%s>", element);
+    for (p = content; *p; ) {
+        struct uuid uuid;
+
+        if (uuid_from_string_prefix(&uuid, p)) {
+            printf("<a href=\"#%.*s\">%.*s</a>", UUID_LEN, p, 8, p);
+            p += UUID_LEN;
+        } else {
+            table_escape_html_text__(p, 1);
+            p++;
         }
     }
     printf("</%s>\n", element);
@@ -492,7 +515,7 @@ table_print_html__(const struct table *table)
 {
     size_t x, y;
 
-    fputs("<table>\n", stdout);
+    fputs("<table border=1>\n", stdout);
 
     if (output_headings) {
         fputs("  <tr>\n", stdout);
@@ -506,7 +529,17 @@ table_print_html__(const struct table *table)
     for (y = 0; y < table->n_rows; y++) {
         fputs("  <tr>\n", stdout);
         for (x = 0; x < table->n_columns; x++) {
-            table_print_html_cell__("td", *table_cell__(table, y, x));
+            const char *content = *table_cell__(table, y, x);
+
+            if (!strcmp(table->columns[x].heading, "_uuid")) {
+                fputs("    <td><a name=\"", stdout);
+                table_escape_html_text__(content, strlen(content));
+                fputs("\">", stdout);
+                table_escape_html_text__(content, 8);
+                fputs("</a></td>\n", stdout);
+            } else {
+                table_print_html_cell__("td", content);
+            }
         }
         fputs("  </tr>\n", stdout);
     }
