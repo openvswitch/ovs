@@ -434,8 +434,13 @@ table_print_table_line__(struct ds *line)
 static void
 table_print_table__(const struct table *table)
 {
+    static int n = 0;
     struct ds line = DS_EMPTY_INITIALIZER;
     size_t x, y;
+
+    if (n++ > 0) {
+        putchar('\n');
+    }
 
     if (output_headings) {
         for (x = 0; x < table->n_columns; x++) {
@@ -590,7 +595,12 @@ table_print_csv_cell__(const char *content)
 static void
 table_print_csv__(const struct table *table)
 {
+    static int n = 0;
     size_t x, y;
+
+    if (n++ > 0) {
+        putchar('\n');
+    }
 
     if (table->caption) {
         puts(table->caption);

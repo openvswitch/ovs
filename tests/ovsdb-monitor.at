@@ -61,6 +61,7 @@ OVSDB_CHECK_MONITOR([monitor insert into populated table],
        "row": {"number": 0, "name": "zero"}}]]]],
   [[row,action,name,number,_version
 <0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+
 row,action,name,number,_version
 <2>,insert,"""zero""",0,"[""uuid"",""<3>""]"
 ]])
@@ -78,6 +79,7 @@ OVSDB_CHECK_MONITOR([monitor delete],
        "where": [["number", "==", 10]]}]]]],
   [[row,action,name,number,_version
 <0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+
 row,action,name,number,_version
 <0>,delete,"""ten""",10,"[""uuid"",""<1>""]"
 ]])
@@ -96,6 +98,7 @@ OVSDB_CHECK_MONITOR([monitor row update],
        "row": {"name": "five plus five"}}]]]],
   [[row,action,name,number,_version
 <0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+
 row,action,name,number,_version
 <0>,old,"""ten""",,"[""uuid"",""<1>""]"
 ,new,"""five plus five""",10,"[""uuid"",""<2>""]"
@@ -119,6 +122,7 @@ OVSDB_CHECK_MONITOR([monitor no-op row updates],
        "row": {"number": 9, "name": "nine"}}]]]],
   [[row,action,name,number,_version
 <0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+
 row,action,name,number,_version
 <2>,insert,"""nine""",9,"[""uuid"",""<3>""]"
 ]])
@@ -141,6 +145,7 @@ OVSDB_CHECK_MONITOR([monitor insert-and-update transaction],
        "row": {"name": "three squared"}}]]]],
   [[row,action,name,number,_version
 <0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+
 row,action,name,number,_version
 <2>,insert,"""three squared""",9,"[""uuid"",""<3>""]"
 ]])
@@ -170,6 +175,7 @@ OVSDB_CHECK_MONITOR([monitor insert-update-and-delete transaction],
        "row": {"number": 7, "name": "seven"}}]]]],
   [[row,action,name,number,_version
 <0>,initial,"""ten""",10,"[""uuid"",""<1>""]"
+
 row,action,name,number,_version
 <2>,insert,"""seven""",7,"[""uuid"",""<3>""]"
 ]])
