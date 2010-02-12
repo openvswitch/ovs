@@ -19,7 +19,6 @@
 
 #define NO_RETURN __attribute__((__noreturn__))
 #define OVS_UNUSED __attribute__((__unused__))
-#define PACKED __attribute__((__packed__))
 #define PRINTF_FORMAT(FMT, ARG1) __attribute__((__format__(printf, FMT, ARG1)))
 #define STRFTIME_FORMAT(FMT) __attribute__((__format__(__strftime__, FMT, 0)))
 #define MALLOC_LIKE __attribute__((__malloc__))

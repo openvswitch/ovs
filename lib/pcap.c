@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,14 +34,16 @@ struct pcap_hdr {
     uint32_t sigfigs;        /* accuracy of timestamps */
     uint32_t snaplen;        /* max length of captured packets */
     uint32_t network;        /* data link type */
-} PACKED;
+};
+BUILD_ASSERT_DECL(sizeof(struct pcap_hdr) == 24);
 
 struct pcaprec_hdr {
     uint32_t ts_sec;         /* timestamp seconds */
     uint32_t ts_usec;        /* timestamp microseconds */
     uint32_t incl_len;       /* number of octets of packet saved in file */
     uint32_t orig_len;       /* actual length of packet */
-} PACKED;
+};
+BUILD_ASSERT_DECL(sizeof(struct pcaprec_hdr) == 16);
 
 FILE *
 pcap_open(const char *file_name, const char *mode)
