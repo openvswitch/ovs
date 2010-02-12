@@ -51,6 +51,22 @@ m4_define([OVSDB_CHECK_EXECUTION],
    AT_CLEANUP])
 
 m4_define([EXECUTION_EXAMPLES], [
+dnl At one point the "commit" code ignored new rows with all-default values,
+dnl so this checks for that problem.
+OVSDB_CHECK_EXECUTION([insert default row, query table],
+  [ORDINAL_SCHEMA], 
+  [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {}}]]],
+   [[["ordinals",
+      {"op": "select",
+       "table": "ordinals",
+       "where": []}]]]],
+  [[[{"uuid":["uuid","<0>"]}]
+[{"rows":[{"_uuid":["uuid","<0>"],"_version":["uuid","<1>"],"name":"","number":0}]}]
+]])
+
 OVSDB_CHECK_EXECUTION([insert row, query table],
   [ORDINAL_SCHEMA], 
   [[[["ordinals",

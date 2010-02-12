@@ -254,7 +254,7 @@ ovsdb_file_replica_change_cb(const struct ovsdb_row *old,
     } else {
         struct shash_node *node;
 
-        row = NULL;
+        row = old ? NULL : json_object_create();
         SHASH_FOR_EACH (node, &new->table->schema->columns) {
             const struct ovsdb_column *column = node->data;
             const struct ovsdb_type *type = &column->type;
