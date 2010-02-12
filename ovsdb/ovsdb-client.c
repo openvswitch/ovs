@@ -33,6 +33,7 @@
 #include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb.h"
+#include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "stream.h"
 #include "stream-ssl.h"
@@ -55,6 +56,12 @@ static int output_headings = true;
 
 /* --pretty: Flags to pass to json_to_string(). */
 static int json_flags = JSSF_SORT;
+
+/* --data: Format of data in output tables. */
+static enum {
+    DF_STRING,                  /* String format. */
+    DF_JSON,                    /* JSON. */
+} data_format;
 
 static const struct command all_commands[];
 
@@ -82,7 +89,8 @@ parse_options(int argc, char *argv[])
     };
     static struct option long_options[] = {
         {"format", required_argument, 0, 'f'},
-	    {"no-headings", no_argument, &output_headings, 0},
+        {"data", required_argument, 0, 'd'},
+        {"no-headings", no_argument, &output_headings, 0},
         {"pretty", no_argument, &json_flags, JSSF_PRETTY | JSSF_SORT},
         {"verbose", optional_argument, 0, 'v'},
         {"help", no_argument, 0, 'h'},
@@ -114,6 +122,16 @@ parse_options(int argc, char *argv[])
                 output_format = FMT_CSV;
             } else {
                 ovs_fatal(0, "unknown output format \"%s\"", optarg);
+            }
+            break;
+
+        case 'd':
+            if (!strcmp(optarg, "string")) {
+                data_format = DF_STRING;
+            } else if (!strcmp(optarg, "json")) {
+                data_format = DF_JSON;
+            } else {
+                ovs_fatal(0, "unknown data format \"%s\"", optarg);
             }
             break;
 
@@ -697,6 +715,30 @@ do_transact(int argc OVS_UNUSED, char *argv[])
     jsonrpc_close(rpc);
 }
 
+static char *
+format_data(const struct json *json, const struct ovsdb_type *type)
+{
+    if (data_format == DF_JSON) {
+        return json_to_string(json, JSSF_SORT);
+    } else if (data_format == DF_STRING) {
+        struct ovsdb_datum datum;
+        struct ovsdb_error *error;
+        struct ds s;
+
+        error = ovsdb_datum_from_json(&datum, type, json, NULL);
+        if (error) {
+            return json_to_string(json, JSSF_SORT);
+        }
+
+        ds_init(&s);
+        ovsdb_datum_to_string(&datum, type, &s);
+        ovsdb_datum_destroy(&datum, type);
+        return ds_steal_cstr(&s);
+    } else {
+        NOT_REACHED();
+    }
+}
+
 static void
 monitor_print_row(struct json *row, const char *type, const char *uuid,
                   const struct ovsdb_column_set *columns, struct table *t)
@@ -718,7 +760,7 @@ monitor_print_row(struct json *row, const char *type, const char *uuid,
         const struct ovsdb_column *column = columns->columns[i];
         struct json *value = shash_find_data(json_object(row), column->name);
         if (value) {
-            table_add_cell_nocopy(t, json_to_string(value, JSSF_SORT));
+            table_add_cell_nocopy(t, format_data(value, &column->type));
         } else {
             table_add_cell(t, "");
         }

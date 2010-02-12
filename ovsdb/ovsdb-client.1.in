@@ -100,7 +100,7 @@ The following options controlling output formatting:
 .
 .IP "\fB-f \fIformat\fR"
 .IQ "\fB--format=\fIformat\fR"
-Sets the basic type of output formatting.  The following types of
+Sets the type of table formatting.  The following types of
 \fIformat\fR are available:
 .RS
 .IP "\fBtable\fR (default)"
@@ -109,6 +109,17 @@ Text-based tables with aligned columns.
 HTML tables.
 .IP "\fBcvs\fR"
 Comma-separated values as defined in RFC 4180.
+.RE
+.
+.IP "\fB-d \fIformat\fR"
+.IP "\fB--data=\fIformat\fR"
+Sets the formatting for cells within output tables.  The following
+types of \fIformat\fR are available:
+.RS
+.IP "\fBstring\fR (default)"
+The simple format described in \fBovs-vsctl\fR(8).
+.IP "\fBjson\fR"
+JSON.
 .RE
 .
 .IP "\fB--no-heading\fR"
