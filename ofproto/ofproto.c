@@ -2801,7 +2801,7 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
                                 &packet, &in_port);
     } else {
         packet = NULL;
-        in_port = -1;
+        in_port = UINT16_MAX;
     }
 
     rule_insert(p, rule, packet, in_port);
