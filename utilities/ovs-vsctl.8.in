@@ -18,12 +18,12 @@
 ovs\-vsctl \- utility for querying and configuring \fBovs\-vswitchd\fR
 .
 .SH SYNOPSIS
-\fBovs\-vsctl\fR [\fIoptions\fR] [\fB\-\-\fR] \fIcommand \fR[\fIargs\fR\&...]
-[\fB\-\-\fR \fIcommand \fR[\fIargs\fR\&...]]
+\fBovs\-vsctl\fR [\fIoptions\fR] \fB\-\-\fR [\fIoptions\fR] \fIcommand
+\fR[\fIargs\fR] [\fB\-\-\fR [\fIoptions\fR] \fIcommand \fR[\fIargs\fR]]...
 .
 .SH DESCRIPTION
 The \fBovs\-vsctl\fR program configures \fBovs\-vswitchd\fR(8) by
-providing a high\-level interface to editing its configuration
+providing a high\-level interface to its configuration
 database.  This program is mainly intended for use when
 \fBovs\-vswitchd\fR is running.  If it is used when
 \fBovs\-vswitchd\fR is not running, then \fB\-\-no\-wait\fR should be
@@ -39,7 +39,16 @@ commands.  Then, if it applied any changes, it waits until
 .PP
 \fBovs\-vsctl\fR can perform any number of commands in a single run,
 implemented as a single atomic transaction against the database.
-Commands are separated on the command line by \fB\-\-\fR arguments.
+.PP
+The \fBovs\-vsctl\fR command line begins with global options (see
+\fBOPTIONS\fR below for details).  The global options are followed by
+one or more commands.  Each command should begin with \fB\-\-\fR by
+itself as a command-line argument, to separate it from the global
+options and following commands.  (If the first command does not have
+any options, then the first \fB\-\-\fR may be omitted.)  The command
+itself starts with command-specific options, if any, followed by the
+command name and any arguments.  See \fBEXAMPLES\fR below for syntax
+examples.
 .
 .SS "Linux VLAN Bridging Compatibility"
 The \fBovs\-vsctl\fR program supports the model of a bridge
