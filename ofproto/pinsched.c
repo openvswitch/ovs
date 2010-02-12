@@ -16,6 +16,8 @@
 
 #include <config.h>
 #include "pinsched.h"
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdint.h>
 #include <stdlib.h>

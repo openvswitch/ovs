@@ -22,8 +22,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
-#include <net/if.h>
 #include <netinet/in.h>
+#include <net/if.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
