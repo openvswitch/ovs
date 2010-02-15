@@ -35,6 +35,7 @@
 #include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
+#include "sort.h"
 #include "stream.h"
 #include "stream-ssl.h"
 #include "table.h"
@@ -180,8 +181,8 @@ usage(void)
            "    list databases available on SERVER\n"
            "\n  get-schema SERVER DATABASE\n"
            "    retrieve schema for DATABASE from SERVER\n"
-           "\n  list-tables SERVER DATABSE\n"
-           "    list tables for DATABSAE on SERVER\n"
+           "\n  list-tables SERVER DATABASE\n"
+           "    list tables for DATABASE on SERVER\n"
            "\n  list-columns SERVER DATABASE [TABLE]\n"
            "    list columns in TABLE (or all tables) in DATABASE on SERVER\n"
            "\n  transact SERVER TRANSACTION\n"
@@ -189,7 +190,9 @@ usage(void)
            "    and print the results as JSON on stdout\n"
            "\n  monitor SERVER DATABASE TABLE [COLUMN,...] [SELECT,...]\n"
            "    monitor contents of (COLUMNs in) TABLE in DATABASE on SERVER\n"
-           "    Valid SELECTs are: initial, insert, delete, modify\n",
+           "    Valid SELECTs are: initial, insert, delete, modify\n"
+           "\n  dump SERVER DATABASE\n"
+           "    dump contents of DATABASE on SERVER to stdout\n",
            program_name, program_name);
     stream_usage("SERVER", true, true, true);
     printf("\nOutput formatting options:\n"
@@ -312,6 +315,7 @@ struct table {
     size_t n_columns, allocated_columns;
     size_t n_rows, allocated_rows;
     size_t current_column;
+    char *caption;
 };
 
 static void
@@ -334,6 +338,15 @@ table_destroy(struct table *table)
         free(table->cells[i]);
     }
     free(table->cells);
+
+    free(table->caption);
+}
+
+static void
+table_set_caption(struct table *table, char *caption)
+{
+    free(table->caption);
+    table->caption = caption;
 }
 
 static void
@@ -517,6 +530,10 @@ table_print_html__(const struct table *table)
 
     fputs("<table border=1>\n", stdout);
 
+    if (table->caption) {
+        table_print_html_cell__("caption", table->caption);
+    }
+
     if (output_headings) {
         fputs("  <tr>\n", stdout);
         for (x = 0; x < table->n_columns; x++) {
@@ -574,6 +591,10 @@ static void
 table_print_csv__(const struct table *table)
 {
     size_t x, y;
+
+    if (table->caption) {
+        puts(table->caption);
+    }
 
     if (output_headings) {
         for (x = 0; x < table->n_columns; x++) {
@@ -749,7 +770,7 @@ do_transact(int argc OVS_UNUSED, char *argv[])
 }
 
 static char *
-format_data(const struct json *json, const struct ovsdb_type *type)
+format_json(const struct json *json, const struct ovsdb_type *type)
 {
     if (data_format == DF_JSON) {
         return json_to_string(json, JSSF_SORT);
@@ -793,7 +814,7 @@ monitor_print_row(struct json *row, const char *type, const char *uuid,
         const struct ovsdb_column *column = columns->columns[i];
         struct json *value = shash_find_data(json_object(row), column->name);
         if (value) {
-            table_add_cell_nocopy(t, format_data(value, &column->type));
+            table_add_cell_nocopy(t, format_json(value, &column->type));
         } else {
             table_add_cell(t, "");
         }
@@ -972,6 +993,241 @@ do_monitor(int argc, char *argv[])
     }
 }
 
+struct dump_table_aux {
+    struct ovsdb_datum **data;
+    const struct ovsdb_column **columns;
+    size_t n_columns;
+};
+
+static int
+compare_data(size_t a_y, size_t b_y, size_t x,
+             const struct dump_table_aux *aux)
+{
+    return ovsdb_datum_compare_3way(&aux->data[a_y][x],
+                                    &aux->data[b_y][x],
+                                    &aux->columns[x]->type);
+}
+
+static int
+compare_rows(size_t a_y, size_t b_y, void *aux_)
+{
+    struct dump_table_aux *aux = aux_;
+    size_t x;
+
+    /* Skip UUID columns on the first pass, since their values tend to be
+     * random and make our results less reproducible. */
+    for (x = 0; x < aux->n_columns; x++) {
+        if (aux->columns[x]->type.key.type != OVSDB_TYPE_UUID) {
+            int cmp = compare_data(a_y, b_y, x, aux);
+            if (cmp) {
+                return cmp;
+            }
+        }
+    }
+
+    /* Use UUID columns as tie-breakers. */
+    for (x = 0; x < aux->n_columns; x++) {
+        if (aux->columns[x]->type.key.type == OVSDB_TYPE_UUID) {
+            int cmp = compare_data(a_y, b_y, x, aux);
+            if (cmp) {
+                return cmp;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static void
+swap_rows(size_t a_y, size_t b_y, void *aux_)
+{
+    struct dump_table_aux *aux = aux_;
+    struct ovsdb_datum *tmp = aux->data[a_y];
+    aux->data[a_y] = aux->data[b_y];
+    aux->data[b_y] = tmp;
+}
+
+static char *
+format_data(const struct ovsdb_datum *datum, const struct ovsdb_type *type)
+{
+    if (data_format == DF_JSON) {
+        struct json *json = ovsdb_datum_to_json(datum, type);
+        char *s = json_to_string(json, JSSF_SORT);
+        json_destroy(json);
+        return s;
+    } else if (data_format == DF_STRING) {
+        struct ds s;
+
+        ds_init(&s);
+        ovsdb_datum_to_string(datum, type, &s);
+        return ds_steal_cstr(&s);
+    } else {
+        NOT_REACHED();
+    }
+}
+
+static int
+compare_columns(const void *a_, const void *b_)
+{
+    const struct ovsdb_column *const *ap = a_;
+    const struct ovsdb_column *const *bp = b_;
+    const struct ovsdb_column *a = *ap;
+    const struct ovsdb_column *b = *bp;
+
+    return strcmp(a->name, b->name);
+}
+
+static void
+dump_table(const struct ovsdb_table_schema *ts, struct json_array *rows)
+{
+    const struct ovsdb_column **columns;
+    size_t n_columns;
+
+    struct ovsdb_datum **data;
+
+    struct dump_table_aux aux;
+    struct shash_node *node;
+    struct table t;
+    size_t x, y;
+
+    /* Sort columns by name, for reproducibility. */
+    columns = xmalloc(shash_count(&ts->columns) * sizeof *columns);
+    n_columns = 0;
+    SHASH_FOR_EACH (node, &ts->columns) {
+        struct ovsdb_column *column = node->data;
+        if (strcmp(column->name, "_version")) {
+            columns[n_columns++] = column;
+        }
+    }
+    qsort(columns, n_columns, sizeof *columns, compare_columns);
+
+    /* Extract data from table. */
+    data = xmalloc(rows->n * sizeof *data);
+    for (y = 0; y < rows->n; y++) {
+        struct shash *row;
+
+        if (rows->elems[y]->type != JSON_OBJECT) {
+            ovs_fatal(0,  "row %zu in table %s response is not a JSON object: "
+                      "%s", y, ts->name, json_to_string(rows->elems[y], 0));
+        }
+        row = json_object(rows->elems[y]);
+
+        data[y] = xmalloc(n_columns * sizeof **data);
+        for (x = 0; x < n_columns; x++) {
+            const struct json *json = shash_find_data(row, columns[x]->name);
+            if (!json) {
+                ovs_fatal(0, "row %zu in table %s response lacks %s column",
+                          y, ts->name, columns[x]->name);
+            }
+
+            check_ovsdb_error(ovsdb_datum_from_json(&data[y][x],
+                                                    &columns[x]->type,
+                                                    json, NULL));
+        }
+    }
+
+    /* Sort rows by column values, for reproducibility. */
+    aux.data = data;
+    aux.columns = columns;
+    aux.n_columns = n_columns;
+    sort(rows->n, compare_rows, swap_rows, &aux);
+
+    /* Add column headings. */
+    table_init(&t);
+    table_set_caption(&t, xasprintf("%s table", ts->name));
+    for (x = 0; x < n_columns; x++) {
+        table_add_column(&t, "%s", columns[x]->name);
+    }
+
+    /* Print rows. */
+    for (y = 0; y < rows->n; y++) {
+        table_add_row(&t);
+        for (x = 0; x < n_columns; x++) {
+            table_add_cell_nocopy(&t, format_data(&data[y][x],
+                                                  &columns[x]->type));
+        }
+    }
+    table_print(&t);
+    table_destroy(&t);
+}
+
+static void
+do_dump(int argc OVS_UNUSED, char *argv[])
+{
+    const char *server = argv[1];
+    const char *database = argv[2];
+
+    struct jsonrpc_msg *request, *reply;
+    struct ovsdb_schema *schema;
+    struct json *transaction;
+    struct jsonrpc *rpc;
+    int error;
+
+    const struct shash_node **tables;
+    size_t n_tables;
+
+    size_t i;
+
+    rpc = open_jsonrpc(server);
+
+    schema = fetch_schema_from_rpc(rpc, database);
+    tables = shash_sort(&schema->tables);
+    n_tables = shash_count(&schema->tables);
+
+    /* Construct transaction to retrieve entire database. */
+    transaction = json_array_create_1(json_string_create(database));
+    for (i = 0; i < n_tables; i++) {
+        const struct ovsdb_table_schema *ts = tables[i]->data;
+        struct json *op, *columns;
+        struct shash_node *node;
+
+        columns = json_array_create_empty();
+        SHASH_FOR_EACH (node, &ts->columns) {
+            const struct ovsdb_column *column = node->data;
+
+            if (strcmp(column->name, "_version")) {
+                json_array_add(columns, json_string_create(column->name));
+            }
+        }
+
+        op = json_object_create();
+        json_object_put_string(op, "op", "select");
+        json_object_put_string(op, "table", tables[i]->name);
+        json_object_put(op, "where", json_array_create_empty());
+        json_object_put(op, "columns", columns);
+        json_array_add(transaction, op);
+    }
+
+    /* Send request, get reply. */
+    request = jsonrpc_create_request("transact", transaction, NULL);
+    error = jsonrpc_transact_block(rpc, request, &reply);
+    if (error) {
+        ovs_fatal(error, "transaction failed");
+    }
+
+    /* Print database contents. */
+    if (reply->result->type != JSON_ARRAY
+        || reply->result->u.array.n != n_tables) {
+        ovs_fatal(0, "reply is not array of %zu elements: %s",
+                  n_tables, json_to_string(reply->result, 0));
+    }
+    for (i = 0; i < n_tables; i++) {
+        const struct ovsdb_table_schema *ts = tables[i]->data;
+        const struct json *op_result = reply->result->u.array.elems[i];
+        struct json *rows;
+
+        if (op_result->type != JSON_OBJECT
+            || !(rows = shash_find_data(json_object(op_result), "rows"))
+            || rows->type != JSON_ARRAY) {
+            ovs_fatal(0, "%s table reply is not an object with a \"rows\" "
+                      "member array: %s",
+                      ts->name, json_to_string(op_result, 0));
+        }
+
+        dump_table(ts, &rows->u.array);
+    }
+}
+
 static void
 do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
@@ -985,6 +1241,7 @@ static const struct command all_commands[] = {
     { "list-columns", 2, 3, do_list_columns },
     { "transact", 2, 2, do_transact },
     { "monitor", 3, 5, do_monitor },
+    { "dump", 2, 2, do_dump },
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
 };

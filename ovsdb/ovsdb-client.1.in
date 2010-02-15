@@ -22,6 +22,8 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBtransact\fI server transaction\fR
 .br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBdump\fI server database\fR
+.br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI server database table\fR
 [\fIcolumn\fR[\fB,\fIcolumn\fR]...]
 [\fIselect\fR[\fB,\fIselect\fR]...]
@@ -72,6 +74,10 @@ listed; otherwise, the tables include columns in all tables.
 Connects to \fIserver\fR, sends it the specified \fItransaction\fR,
 which must be a JSON array containing one or more valid OVSDB
 operations, and prints the received reply on stdout.
+.
+.IP "\fBdump\fI server database\fR"
+Connects to \fIserver\fR, retrieves all of the data in \fIdatabase\fR,
+and prints it on stdout as a series of tables.
 .
 .IP "\fBmonitor\fI server database table\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...] [\fIselect\fR[\fB,\fIselect\fR]...]"
 Connects to \fIserver\fR and monitors the contents of \fItable\fR in
