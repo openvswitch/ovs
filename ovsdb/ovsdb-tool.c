@@ -164,8 +164,8 @@ do_create(int argc OVS_UNUSED, char *argv[])
     ovsdb_schema_destroy(schema);
 
     /* Create database file. */
-    check_ovsdb_error(ovsdb_log_open(db_file_name, O_RDWR | O_CREAT | O_EXCL,
-                                     &log));
+    check_ovsdb_error(ovsdb_log_open(db_file_name, OVSDB_LOG_CREATE,
+                                     -1, &log));
     check_ovsdb_error(ovsdb_log_write(log, json));
     check_ovsdb_error(ovsdb_log_commit(log));
     ovsdb_log_close(log);
@@ -288,7 +288,8 @@ do_show_log(int argc OVS_UNUSED, char *argv[])
     struct ovsdb_log *log;
     unsigned int i;
 
-    check_ovsdb_error(ovsdb_log_open(db_file_name, O_RDONLY, &log));
+    check_ovsdb_error(ovsdb_log_open(db_file_name, OVSDB_LOG_READ_ONLY,
+                                     -1, &log));
     shash_init(&names);
     for (i = 0; ; i++) {
         struct json *json;

@@ -257,34 +257,24 @@ static void
 do_log_io(int argc, char *argv[])
 {
     const char *name = argv[1];
-    char *mode = argv[2];
+    char *mode_string = argv[2];
 
     struct ovsdb_error *error;
+    enum ovsdb_log_open_mode mode;
     struct ovsdb_log *log;
-    char *save_ptr = NULL;
-    const char *token;
-    int flags;
     int i;
 
-    for (flags = 0, token = strtok_r(mode, " |", &save_ptr); token != NULL;
-         token = strtok_r(NULL, " |", &save_ptr))
-    {
-        if (!strcmp(token, "O_RDONLY")) {
-            flags |= O_RDONLY;
-        } else if (!strcmp(token, "O_RDWR")) {
-            flags |= O_RDWR;
-        } else if (!strcmp(token, "O_TRUNC")) {
-            flags |= O_TRUNC;
-        } else if (!strcmp(token, "O_CREAT")) {
-            flags |= O_CREAT;
-        } else if (!strcmp(token, "O_EXCL")) {
-            flags |= O_EXCL;
-        } else if (!strcmp(token, "O_TRUNC")) {
-            flags |= O_TRUNC;
-        }
+    if (!strcmp(mode_string, "read-only")) {
+        mode = OVSDB_LOG_READ_ONLY;
+    } else if (!strcmp(mode_string, "read/write")) {
+        mode = OVSDB_LOG_READ_WRITE;
+    } else if (!strcmp(mode_string, "create")) {
+        mode = OVSDB_LOG_CREATE;
+    } else {
+        ovs_fatal(0, "unknown log-io open mode \"%s\"", mode_string);
     }
 
-    check_ovsdb_error(ovsdb_log_open(name, flags, &log));
+    check_ovsdb_error(ovsdb_log_open(name, mode, -1, &log));
     printf("%s: open successful\n", name);
 
     for (i = 3; i < argc; i++) {

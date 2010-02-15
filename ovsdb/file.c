@@ -43,13 +43,15 @@ static void ovsdb_file_replica_create(struct ovsdb *, struct ovsdb_log *);
 struct ovsdb_error *
 ovsdb_file_open(const char *file_name, bool read_only, struct ovsdb **dbp)
 {
+    enum ovsdb_log_open_mode open_mode;
     struct ovsdb_schema *schema;
     struct ovsdb_error *error;
     struct ovsdb_log *log;
     struct json *json;
     struct ovsdb *db;
 
-    error = ovsdb_log_open(file_name, read_only ? O_RDONLY : O_RDWR, &log);
+    open_mode = read_only ? OVSDB_LOG_READ_ONLY : OVSDB_LOG_READ_WRITE;
+    error = ovsdb_log_open(file_name, open_mode, -1, &log);
     if (error) {
         return error;
     }

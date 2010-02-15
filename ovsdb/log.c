@@ -50,21 +50,33 @@ struct ovsdb_log {
     enum ovsdb_log_mode mode;
 };
 
+/* Attempts to open 'name' with the specified 'open_mode'.  On success, stores
+ * the new log into '*filep' and returns NULL; otherwise returns NULL and
+ * stores NULL into '*filep'.
+ *
+ * Whether the file will be locked using lockfile_lock() depends on 'locking':
+ * use true to lock it, false not to lock it, or -1 to lock it only if
+ * 'open_mode' is a mode that allows writing.
+ */
 struct ovsdb_error *
-ovsdb_log_open(const char *name, int flags, struct ovsdb_log **filep)
+ovsdb_log_open(const char *name, enum ovsdb_log_open_mode open_mode,
+               int locking, struct ovsdb_log **filep)
 {
     struct lockfile *lockfile;
     struct ovsdb_error *error;
     struct ovsdb_log *file;
     struct stat s;
     FILE *stream;
-    int accmode;
+    int flags;
     int fd;
 
     *filep = NULL;
 
-    accmode = flags & O_ACCMODE;
-    if (accmode == O_RDWR || accmode == O_WRONLY) {
+    assert(locking == -1 || locking == false || locking == true);
+    if (locking < 0) {
+        locking = open_mode != OVSDB_LOG_READ_ONLY;
+    }
+    if (locking) {
         int retval = lockfile_lock(name, 0, &lockfile);
         if (retval) {
             error = ovsdb_io_error(retval, "%s: failed to lock lockfile",
@@ -75,9 +87,18 @@ ovsdb_log_open(const char *name, int flags, struct ovsdb_log **filep)
         lockfile = NULL;
     }
 
+    if (open_mode == OVSDB_LOG_READ_ONLY) {
+        flags = O_RDONLY;
+    } else if (open_mode == OVSDB_LOG_READ_WRITE) {
+        flags = O_RDWR;
+    } else if (open_mode == OVSDB_LOG_CREATE) {
+        flags = O_RDWR | O_CREAT | O_EXCL;
+    } else {
+        NOT_REACHED();
+    }
     fd = open(name, flags, 0666);
     if (fd < 0) {
-        const char *op = flags & O_CREAT && flags & O_EXCL ? "create" : "open";
+        const char *op = open_mode == OVSDB_LOG_CREATE ? "create" : "open";
         error = ovsdb_io_error(errno, "%s: %s failed", op, name);
         goto error_unlock;
     }
@@ -98,9 +119,7 @@ ovsdb_log_open(const char *name, int flags, struct ovsdb_log **filep)
         free(dir);
     }
 
-    stream = fdopen(fd, (accmode == O_RDONLY ? "rb"
-                         : accmode == O_WRONLY ? "wb"
-                         : "w+b"));
+    stream = fdopen(fd, open_mode == OVSDB_LOG_READ_ONLY ? "rb" : "w+b");
     if (!stream) {
         error = ovsdb_io_error(errno, "%s: fdopen failed", name);
         goto error_close;

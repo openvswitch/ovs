@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,16 @@
 struct json;
 struct ovsdb_log;
 
-struct ovsdb_error *ovsdb_log_open(const char *name, int flags,
-                                   struct ovsdb_log **) WARN_UNUSED_RESULT;
+/* Access mode for opening an OVSDB log. */
+enum ovsdb_log_open_mode {
+    OVSDB_LOG_READ_ONLY,        /* Open existing file, read-only. */
+    OVSDB_LOG_READ_WRITE,       /* Open existing file, read/write. */
+    OVSDB_LOG_CREATE            /* Create new file, read/write. */
+};
+
+struct ovsdb_error *ovsdb_log_open(const char *name, enum ovsdb_log_open_mode,
+                                   int locking, struct ovsdb_log **)
+    WARN_UNUSED_RESULT;
 void ovsdb_log_close(struct ovsdb_log *);
 
 struct ovsdb_error *ovsdb_log_read(struct ovsdb_log *, struct json **)
