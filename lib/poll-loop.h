@@ -34,6 +34,10 @@
 
 #include <poll.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct poll_waiter;
 
 /* Schedule events to wake up the following poll_block(). */
@@ -51,5 +55,9 @@ struct poll_waiter *poll_fd_callback(int fd, short int events,
 
 /* Cancel a file descriptor callback or event. */
 void poll_cancel(struct poll_waiter *);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* poll-loop.h */
