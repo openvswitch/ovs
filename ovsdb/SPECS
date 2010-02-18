@@ -33,7 +33,7 @@ values.  Additional notation is presented later.
     A JSON number with an integer value, within a certain range
     (currently -2**63...+2**63-1).
 
-<value>
+<json-value>
 
     Any JSON value.
 
@@ -395,9 +395,9 @@ monitor
 
 Request object members:
 
-    "method": "monitor"                                   required
-    "params": [<db-name>, <value>, <monitor-requests>]    required
-    "id": any JSON value except null                      required
+    "method": "monitor"                                       required
+    "params": [<db-name>, <json-value>, <monitor-requests>]   required
+    "id": any JSON value except null                          required
 
 <monitor-requests> is an object that maps from a table name to a
 <monitor-request>.
@@ -461,11 +461,11 @@ update
 Notification object members:
 
     "method": "update"
-    "params": [<value>, <table-updates>]
+    "params": [<json-value>, <table-updates>]
     "id": null
 
-The <value> in "params" is the same as the value passed as the <value>
-in "params" for the "monitor" request.
+The <json-value> in "params" is the same as the value passed as the
+<json-value> in "params" for the "monitor" request.
 
 <table-updates> is an object that maps from a table name to a
 <table-update>.
@@ -504,7 +504,7 @@ monitor_cancel
 Request object members:
 
     "method": "monitor_cancel"                              required
-    "params": [<value>]                                     required
+    "params": [<json-value>]                                required
     "id": any JSON value except null                        required
 
 Response object members:
@@ -513,10 +513,10 @@ Response object members:
     "error": null
     "id": the request "id" member
 
-Cancels the ongoing table monitor request, identified by the <value>
-in "params" matching the <value> in "params" for an ongoing "monitor"
-request.  No more "update" messages will be sent for this table
-monitor.
+Cancels the ongoing table monitor request, identified by the
+<json-value> in "params" matching the <json-value> in "params" for an
+ongoing "monitor" request.  No more "update" messages will be sent for
+this table monitor.
 
 echo
 ....
@@ -525,7 +525,7 @@ Request object members:
 
     "method": "echo"                                required
     "params": JSON array with any contents          required
-    "id": <value>                                   required
+    "id": <json-value>                              required
 
 Response object members:
 
