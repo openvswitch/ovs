@@ -124,7 +124,11 @@
    fatal route to network, even if it were you who configured
    fatal static route: you are innocent. :-)
 
-
+   XXX: Forcing the DF flag on was done only when setting up tunnels via the
+	ioctl interface and not Netlink.  Since it prevents some operations
+	and isn't very transparent I removed it.  It seems nobody really
+	cared about it anyways.
+        Moral: don't create loops.
 
    3. Really, ipv4/ipip.c, ipv4/ip_gre.c and ipv6/sit.c contain
    practically identical code. It would be good to glue them
@@ -1100,9 +1104,6 @@ ipgre_tunnel_ioctl (struct net_device *dev, struct ifreq *ifr, int cmd)
 
 		add_tunnel = (cmd == SIOCADDTUNNEL || cmd == SIOCADDGRETAP);
 		gretap = (cmd == SIOCADDGRETAP || cmd == SIOCCHGGRETAP);
-
-		if (p.iph.ttl)
-			p.iph.frag_off |= htons(IP_DF);
 
 		if (!(p.i_flags&GRE_KEY))
 			p.i_key = 0;

@@ -316,7 +316,7 @@ setup_gre_netlink(const char *name OVS_UNUSED,
     nl_msg_put_u32(&request, IFLA_GRE_LOCAL, config->local_ip);
     nl_msg_put_u32(&request, IFLA_GRE_REMOTE, config->remote_ip);
     nl_msg_put_u8(&request, IFLA_GRE_PMTUDISC, pmtudisc);
-    nl_msg_put_u8(&request, IFLA_GRE_TTL, 0);
+    nl_msg_put_u8(&request, IFLA_GRE_TTL, IPDEFTTL);
     nl_msg_put_u8(&request, IFLA_GRE_TOS, 0);
 
     info_data_hdr->nla_len = (char *)ofpbuf_tail(&request)
@@ -356,6 +356,7 @@ setup_gre_ioctl(const char *name, struct gre_config *config, bool create)
     p.iph.protocol = IPPROTO_GRE;
     p.iph.saddr = config->local_ip;
     p.iph.daddr = config->remote_ip;
+    p.iph.ttl = IPDEFTTL;
 
     if (config->have_in_key) {
         p.i_flags |= GRE_KEY;
