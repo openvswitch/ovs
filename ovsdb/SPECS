@@ -37,6 +37,10 @@ values.  Additional notation is presented later.
 
     Any JSON value.
 
+<nonnull-json-value>
+
+    Any JSON value except null.
+
 <error>
 
     A JSON object with the following members:
@@ -250,7 +254,7 @@ Request object members:
 
     "method": "list_dbs"              required
     "params": []                      required
-    "id": any JSON value except null  required
+    "id": <nonnull-json-value>        required
 
 Response object members:
 
@@ -269,7 +273,7 @@ Request object members:
 
     "method": "get_schema"            required
     "params": [<db-name>]             required
-    "id": any JSON value except null  required
+    "id": <nonnull-json-value>        required
 
 Response object members:
 
@@ -287,7 +291,7 @@ Request object members:
 
     "method": "transact"                  required
     "params": [<db-name>, <operation>*]   required
-    "id": any JSON value except null      required
+    "id": <nonnull-json-value>            required
 
 Response object members:
 
@@ -397,7 +401,7 @@ Request object members:
 
     "method": "monitor"                                       required
     "params": [<db-name>, <json-value>, <monitor-requests>]   required
-    "id": any JSON value except null                          required
+    "id": <nonnull-json-value>                                required
 
 <monitor-requests> is an object that maps from a table name to a
 <monitor-request>.
@@ -505,7 +509,7 @@ Request object members:
 
     "method": "monitor_cancel"                              required
     "params": [<json-value>]                                required
-    "id": any JSON value except null                        required
+    "id": <nonnull-json-value>                              required
 
 Response object members:
 
