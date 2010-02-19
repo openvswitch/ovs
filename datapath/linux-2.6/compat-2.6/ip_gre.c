@@ -446,6 +446,14 @@ static void ipgre_tunnel_uninit(struct net_device *dev)
 	dev_put(dev);
 }
 
+static unsigned int tunnel_hard_header_len(struct net_device *dev)
+{
+#ifdef HAVE_NETDEV_NEEDED_HEADROOM
+	return dev->hard_header_len;
+#else
+	return (dev->type == ARPHRD_ETHER) ? ETH_HLEN : 0;
+#endif
+}
 
 static void ipgre_err(struct sk_buff *skb, u32 info)
 {
@@ -839,11 +847,8 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 
 	df = tiph->frag_off;
 	if (df)
-#ifdef HAVE_NETDEV_NEEDED_HEADROOM
-		mtu = dst_mtu(&rt->u.dst) - dev->hard_header_len - tunnel->hlen;
-#else
-		mtu = dst_mtu(&rt->u.dst) - tunnel->hlen;
-#endif
+		mtu = dst_mtu(&rt->u.dst) - tunnel_hard_header_len(dev)
+			- tunnel->hlen;
 	else
 		mtu = skb_dst(skb) ? dst_mtu(skb_dst(skb)) : dev->mtu;
 
@@ -1042,11 +1047,10 @@ static int ipgre_tunnel_bind_dev(struct net_device *dev)
 	}
 #ifdef HAVE_NETDEV_NEEDED_HEADROOM
 	dev->needed_headroom = hlen + addend;
-	mtu -= dev->hard_header_len + addend;
 #else
 	dev->hard_header_len = hlen + addend;
-	mtu -= addend;
 #endif
+	mtu -= tunnel_hard_header_len(dev) + addend;
 	tunnel->hlen = addend;
 
 	if (mtu < 68)
@@ -1204,11 +1208,7 @@ static int ipgre_tunnel_change_mtu(struct net_device *dev, int new_mtu)
 {
 	struct ip_tunnel *tunnel = netdev_priv(dev);
 	if (new_mtu < 68 ||
-#ifdef HAVE_NETDEV_NEEDED_HEADROOM
-	new_mtu > 0xFFF8 - dev->hard_header_len - tunnel->hlen)
-#else
-	new_mtu > 0xFFF8 - tunnel->hlen)
-#endif
+	    new_mtu > 0xFFF8 - tunnel_hard_header_len(dev) - tunnel->hlen)
 		return -EINVAL;
 	dev->mtu = new_mtu;
 	return 0;
