@@ -358,6 +358,7 @@ static int new_nbp(struct datapath *dp, struct net_device *dev, int port_no)
 		 * in dp_frame_hook().  In turn dp_frame_hook() can reject them
 		 * back to network stack, but that's a waste of time. */
 	}
+	dev_disable_lro(dev);
 	rcu_assign_pointer(dp->ports[port_no], p);
 	list_add_rcu(&p->node, &dp->port_list);
 	dp->n_ports++;
@@ -505,6 +506,11 @@ out:
 static void
 do_port_input(struct net_bridge_port *p, struct sk_buff *skb) 
 {
+	/* LRO isn't suitable for bridging.  We turn it off but make sure
+	 * that it wasn't reactivated. */
+	if (skb_warn_if_lro(skb))
+		return;
+
 	/* Make our own copy of the packet.  Otherwise we will mangle the
 	 * packet for anyone who came before us (e.g. tcpdump via AF_PACKET).
 	 * (No one comes after us, since we tell handle_bridge() that we took

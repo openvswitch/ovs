@@ -1,6 +1,8 @@
 openvswitch_sources += \
+	linux-2.6/compat-2.6/dev-openvswitch.c \
 	linux-2.6/compat-2.6/genetlink-openvswitch.c \
-	linux-2.6/compat-2.6/random32.c
+	linux-2.6/compat-2.6/random32.c \
+	linux-2.6/compat-2.6/skbuff-openvswitch.c
 openvswitch_headers += \
 	linux-2.6/compat-2.6/compat26.h \
 	linux-2.6/compat-2.6/include/asm-generic/bug.h \

@@ -73,4 +73,8 @@ extern void unregister_netdevice_queue(struct net_device *dev,
 extern void unregister_netdevice_many(struct list_head *head);
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+extern void dev_disable_lro(struct net_device *dev);
+#endif
+
 #endif
