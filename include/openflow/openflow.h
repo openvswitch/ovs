@@ -141,10 +141,10 @@ struct ofp_hello {
 
 enum ofp_config_flags {
     /* Handling of IP fragments. */
-    OFPC_FRAG_NORMAL   = 0 << 1,  /* No special handling for fragments. */
-    OFPC_FRAG_DROP     = 1 << 1,  /* Drop fragments. */
-    OFPC_FRAG_REASM    = 2 << 1,  /* Reassemble (only if OFPC_IP_REASM set). */
-    OFPC_FRAG_MASK     = 3 << 1
+    OFPC_FRAG_NORMAL   = 0,  /* No special handling for fragments. */
+    OFPC_FRAG_DROP     = 1,  /* Drop fragments. */
+    OFPC_FRAG_REASM    = 2,  /* Reassemble (only if OFPC_IP_REASM set). */
+    OFPC_FRAG_MASK     = 3
 };
 
 /* Switch configuration. */
