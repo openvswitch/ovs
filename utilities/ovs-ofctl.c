@@ -643,7 +643,7 @@ str_to_action(char *str, struct ofpbuf *b)
 
             /* Unless a numeric argument is specified, we send the whole
              * packet to the controller. */
-            if (arg && (strspn(act, "0123456789") == strlen(act))) {
+            if (arg && (strspn(arg, "0123456789") == strlen(arg))) {
                oao->max_len = htons(str_to_u32(arg));
             } else {
                 oao->max_len = htons(UINT16_MAX);
