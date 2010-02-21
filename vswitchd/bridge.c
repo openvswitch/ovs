@@ -417,7 +417,12 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
 
         memset(&netdev_options, 0, sizeof netdev_options);
         netdev_options.name = iface_cfg->name;
-        netdev_options.type = iface_cfg->type;
+        if (!strcmp(iface_cfg->type, "internal")) {
+            /* An "internal" config type maps to a netdev "system" type. */
+            netdev_options.type = "system";
+        } else {
+            netdev_options.type = iface_cfg->type;
+        }
         netdev_options.args = &options;
         netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
         netdev_options.may_create = true;
@@ -434,6 +439,11 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
         const char *netdev_type = netdev_get_type(iface->netdev);
         const char *iface_type = iface_cfg->type && strlen(iface_cfg->type)
                                   ? iface_cfg->type : NULL;
+
+        /* An "internal" config type maps to a netdev "system" type. */
+        if (iface_type && !strcmp(iface_type, "internal")) {
+            iface_type = "system";
+        }
 
         if (!iface_type || !strcmp(netdev_type, iface_type)) {
             error = netdev_reconfigure(iface->netdev, &options);
