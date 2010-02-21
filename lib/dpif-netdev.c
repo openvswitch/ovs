@@ -1080,6 +1080,15 @@ dp_netdev_wait(void)
     }
 }
 
+
+/* Modify the TCI field of 'packet'.  If a VLAN tag is not present, one
+ * is added with the TCI field set to 'tci'.  If a VLAN tag is present, 
+ * then 'mask' bits are cleared before 'tci' is logically OR'd into the
+ * TCI field.
+ *
+ * Note that the function does not ensure that 'tci' does not affect
+ * bits outside of 'mask'.
+ */
 static void
 dp_netdev_modify_vlan_tci(struct ofpbuf *packet, flow_t *key,
                           uint16_t tci, uint16_t mask)
@@ -1087,7 +1096,7 @@ dp_netdev_modify_vlan_tci(struct ofpbuf *packet, flow_t *key,
     struct vlan_eth_header *veh;
 
     if (key->dl_vlan != htons(ODP_VLAN_NONE)) {
-        /* Modify 'mask' bits, but maintain other TCI bits. */
+        /* Clear 'mask' bits, but maintain other TCI bits. */
         veh = packet->l2;
         veh->veth_tci &= ~htons(mask);
         veh->veth_tci |= htons(tci);
