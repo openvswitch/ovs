@@ -43,15 +43,10 @@ def netdev_up(netdev, mtu=None):
 def pif_bridge_name(pif):
     """Return the bridge name of a pif.
 
-    PIF must not be a VLAN and must be a bridged PIF."""
+    PIF must be a bridged PIF."""
 
     pifrec = db().get_pif_record(pif)
-
-    if pif_is_vlan(pif):
-        raise Error("PIF %(uuid)s cannot be a bridge, VLAN is %(VLAN)s" % pifrec)
-
     nwrec = db().get_network_record(pifrec['network'])
-
     if nwrec['bridge']:
         return nwrec['bridge']
     else:
