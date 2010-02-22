@@ -260,7 +260,7 @@ def configure_datapath(pif):
     vsctl_argv += set_br_external_ids(pif)
     return vsctl_argv,extra_up_ports
 
-def deconfigure_datapath(pif):
+def deconfigure_bridge(pif):
     vsctl_argv = []
 
     bridge = pif_bridge_name(pif)
@@ -400,6 +400,9 @@ class DatapathVswitch(Datapath):
         vsctl_argv += datapath_deconfigure_ipdev(ipdev)
 
         if pif_is_vlan(self._pif):
+            # Delete the VLAN bridge.
+            vsctl_argv += deconfigure_bridge(self._pif)
+
             # If the VLAN's slave is attached, leave datapath setup.
             slave = pif_get_vlan_slave(self._pif)
             if db().get_pif_record(slave)['currently_attached']:
@@ -423,6 +426,6 @@ class DatapathVswitch(Datapath):
                 dp = None
 
         if dp:
-            vsctl_argv += deconfigure_datapath(dp)
+            vsctl_argv += deconfigure_bridge(dp)
 
         datapath_modify_config(vsctl_argv)
