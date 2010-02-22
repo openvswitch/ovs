@@ -171,9 +171,12 @@ def configure_datapath(pif):
     vsctl_argv = []
     extra_up_ports = []
 
+    assert not pif_is_vlan(pif)
     bridge = pif_bridge_name(pif)
 
     physical_devices = datapath_get_physical_pifs(pif)
+
+    vsctl_argv += ['## configuring datapath %s' % bridge]
 
     # Determine additional devices to deconfigure.
     #
@@ -258,6 +261,8 @@ def configure_datapath(pif):
         vsctl_argv += ['--', '--may-exist', 'add-port', bridge, iface]
 
     vsctl_argv += set_br_external_ids(pif)
+    vsctl_argv += ['## done configuring datapath %s' % bridge]
+
     return vsctl_argv,extra_up_ports
 
 def deconfigure_bridge(pif):
