@@ -265,20 +265,7 @@ def deconfigure_datapath(pif):
 
     bridge = pif_bridge_name(pif)
 
-    physical_devices = datapath_get_physical_pifs(pif)
-
-    log("deconfigure_datapath: bridge           - %s" % bridge)
-    log("deconfigure_datapath: physical devices - %s" % [pif_netdev_name(p) for p in physical_devices])
-
-    for p in physical_devices:
-        dev = pif_netdev_name(p)
-        vsctl_argv += ['# deconfigure physical port %s' % dev]
-        vsctl_argv += datapath_deconfigure_physical(dev)
-        netdev_down(dev)
-
-    if len(physical_devices) > 1:
-        vsctl_argv += ['# deconfigure bond %s' % pif_netdev_name(pif)]
-        vsctl_argv += datapath_deconfigure_bond(pif_netdev_name(pif))
+    log("deconfigure_bridge: bridge           - %s" % bridge)
 
     vsctl_argv += ['# deconfigure bridge %s' % bridge]
     vsctl_argv += ['--', '--if-exists', 'del-br', bridge]
