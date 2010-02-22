@@ -89,8 +89,9 @@ def pif_currently_in_use(pif):
 
 def pif_datapath(pif):
     """Return the datapath PIF associated with PIF.
-For a non-VLAN PIF, the datapath name is the bridge name.
-For a VLAN PIF, the datapath name is the bridge name for the PIF's VLAN slave.
+A non-VLAN PIF is its own datapath PIF, except that a bridgeless PIF has
+no datapath PIF at all.
+A VLAN PIF's datapath PIF is its VLAN slave's datapath PIF.
 """
     if pif_is_vlan(pif):
         return pif_datapath(pif_get_vlan_slave(pif))
