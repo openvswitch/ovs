@@ -1589,6 +1589,7 @@ static void ipgre_tap_setup(struct net_device *dev)
 
 	dev->iflink		= 0;
 	dev->features		|= NETIF_F_NETNS_LOCAL;
+	dev->tx_queue_len	= 0;
 
 	SET_ETHTOOL_OPS(dev, &ethtool_ops);
 }
