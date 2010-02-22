@@ -155,12 +155,12 @@ def datapath_modify_config(commands):
 # Toplevel Datapath Configuration.
 #
 
-def configure_datapath(pif, parent=None, vlan=None):
-    """Bring up the datapath configuration for PIF.
-
-    Should be careful not to glitch existing users of the datapath, e.g. other VLANs etc.
-
-    Should take care of tearing down other PIFs which encompass common physical devices.
+def configure_datapath(pif):
+    """Bring up the configuration for 'pif', which must not be a VLAN PIF, by:
+    - Tearing down other PIFs that use the same physical devices as 'pif'.
+    - Ensuring that 'pif' itself is set up.
+    - *Not* tearing down any PIFs that are stacked on top of 'pif' (i.e. VLANs
+      on top of 'pif'.
 
     Returns a tuple containing
     - A list containing the necessary vsctl command line arguments
@@ -244,10 +244,7 @@ def configure_datapath(pif, parent=None, vlan=None):
         vsctl_argv += ['# deconfigure physical port %s' % dev]
         vsctl_argv += datapath_deconfigure_physical(dev)
 
-    if parent and datapath:
-        vsctl_argv += ['--', '--may-exist', 'add-br', bridge, parent, vlan]
-    else:
-        vsctl_argv += ['--', '--may-exist', 'add-br', bridge]
+    vsctl_argv += ['--', '--may-exist', 'add-br', bridge]
 
     if len(physical_devices) > 1:
         vsctl_argv += ['# deconfigure bond %s' % pif_netdev_name(pif)]
@@ -313,15 +310,20 @@ class DatapathVswitch(Datapath):
         dprec = db().get_pif_record(self._dp)
 
         ipdev = self._ipdev
-        bridge = pif_bridge_name(self._dp)
-        if pif_is_vlan(self._pif):
-            datapath = pif_datapath(self._pif)
-            c,e = configure_datapath(self._dp, datapath, pifrec['VLAN'])
-        else:
-            c,e = configure_datapath(self._dp)
+        c,e = configure_datapath(self._dp)
+        bridge = pif_bridge_name(self._pif)
         vsctl_argv += c
         extra_ports += e
 
+        if pif_is_vlan(self._pif):
+            # XXX this is only needed on XS5.5, because XAPI misguidedly
+            # creates the fake bridge (via bridge ioctl) before it calls us.
+            vsctl_argv += ['--', '--if-exists', 'del-br', bridge]
+
+            # configure_datapath() set up the underlying datapath bridge.
+            # Stack a VLAN bridge on top of it.
+            vsctl_argv += ['--', '--may-exist', 'add-br',
+                           bridge, pif_bridge_name(self._dp), pifrec['VLAN']]
         xs_network_uuids = []
         for nwpif in db().get_pifs_by_device(db().get_pif_record(self._pif)['device']):
             rec = db().get_pif_record(nwpif)
