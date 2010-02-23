@@ -16,6 +16,15 @@ import os
 from xml.dom.minidom import getDOMImplementation
 from xml.dom.minidom import parse as parseXML
 
+the_root_prefix = ""
+def root_prefix():
+    """Returns a string to prefix to all file name references, which
+    is useful for testing."""
+    return the_root_prefix
+def set_root_prefix(prefix):
+    global the_root_prefix
+    the_root_prefix = prefix
+
 #
 # Logging.
 #
@@ -38,7 +47,7 @@ class Error(Exception):
 
 def run_command(command):
     log("Running command: " + ' '.join(command))
-    rc = os.spawnl(os.P_WAIT, command[0], *command)
+    rc = os.spawnl(os.P_WAIT, root_prefix() + command[0], *command)
     if rc != 0:
         log("Command failed %d: " % rc + ' '.join(command))
         return False
@@ -323,7 +332,7 @@ def db_init_from_xenapi(session):
     
 class DatabaseCache(object):
     def __read_xensource_inventory(self):
-        filename = "/etc/xensource-inventory"
+        filename = root_prefix() + "/etc/xensource-inventory"
         f = open(filename, "r")
         lines = [x.strip("\n") for x in f.readlines()]
         f.close()
@@ -440,7 +449,7 @@ class DatabaseCache(object):
         else:
             log("Loading xapi database cache from %s" % cache_file)
 
-            xml = parseXML(cache_file)
+            xml = parseXML(root_prefix() + cache_file)
 
             self.__pifs = {}
             self.__bonds = {}
@@ -625,7 +634,7 @@ def pif_ipdev_name(pif):
 #
 
 def netdev_exists(netdev):
-    return os.path.exists("/sys/class/net/" + netdev)
+    return os.path.exists(root_prefix() + "/sys/class/net/" + netdev)
 
 def pif_netdev_name(pif):
     """Get the netdev name for a PIF."""
@@ -806,7 +815,7 @@ def DatapathFactory(pif):
     # XXX Need a datapath object for bridgeless PIFs
 
     try:
-        network_conf = open("/etc/xensource/network.conf", 'r')
+        network_conf = open(root_prefix() + "/etc/xensource/network.conf", 'r')
         network_backend = network_conf.readline().strip()
         network_conf.close()                
     except Exception, e:
