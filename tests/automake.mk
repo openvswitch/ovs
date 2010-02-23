@@ -38,7 +38,8 @@ TESTSUITE_AT = \
 	tests/ovsdb-monitor.at \
 	tests/ovsdb-idl.at \
 	tests/stp.at \
-	tests/ovs-vsctl.at
+	tests/ovs-vsctl.at \
+	tests/interface-reconfigure.at
 TESTSUITE = $(srcdir)/tests/testsuite
 DISTCLEANFILES += tests/atconfig tests/atlocal $(TESTSUITE)
 
