@@ -257,6 +257,7 @@ def configure_datapath(pif):
         vsctl_argv += ['# add physical device %s' % iface]
         vsctl_argv += ['--', '--may-exist', 'add-port', bridge, iface]
 
+    vsctl_argv += set_br_external_ids(pif)
     return vsctl_argv,extra_up_ports
 
 def deconfigure_datapath(pif):
@@ -282,6 +283,26 @@ def deconfigure_datapath(pif):
     vsctl_argv += ['# deconfigure bridge %s' % bridge]
     vsctl_argv += ['--', '--if-exists', 'del-br', bridge]
 
+    return vsctl_argv
+
+def set_br_external_ids(pif):
+    xs_network_uuids = []
+    for nwpif in db().get_pifs_by_device(db().get_pif_record(pif)['device']):
+        rec = db().get_pif_record(nwpif)
+
+        # When state is read from dbcache PIF.currently_attached
+        # is always assumed to be false... Err on the side of
+        # listing even detached networks for the time being.
+        #if nwpif != pif and not rec['currently_attached']:
+        #    log("Network PIF %s not currently attached (%s)" % (rec['uuid'],pifrec['uuid']))
+        #    continue
+        nwrec = db().get_network_record(rec['network'])
+        xs_network_uuids += [nwrec['uuid']]
+
+    vsctl_argv = []
+    vsctl_argv += ['# configure xs-network-uuids']
+    vsctl_argv += ['--', 'br-set-external-id', pif_bridge_name(pif),
+            'xs-network-uuids', ';'.join(xs_network_uuids)]
     return vsctl_argv
 
 #
@@ -324,22 +345,8 @@ class DatapathVswitch(Datapath):
             # Stack a VLAN bridge on top of it.
             vsctl_argv += ['--', '--may-exist', 'add-br',
                            bridge, pif_bridge_name(self._dp), pifrec['VLAN']]
-        xs_network_uuids = []
-        for nwpif in db().get_pifs_by_device(db().get_pif_record(self._pif)['device']):
-            rec = db().get_pif_record(nwpif)
 
-            # When state is read from dbcache PIF.currently_attached
-            # is always assumed to be false... Err on the side of
-            # listing even detached networks for the time being.
-            #if nwpif != pif and not rec['currently_attached']:
-            #    log("Network PIF %s not currently attached (%s)" % (rec['uuid'],pifrec['uuid']))
-            #    continue
-            nwrec = db().get_network_record(rec['network'])
-            xs_network_uuids += [nwrec['uuid']]
-
-        vsctl_argv += ['# configure xs-network-uuids']
-        vsctl_argv += ['--', 'br-set-external-id', bridge,
-                'xs-network-uuids', ';'.join(xs_network_uuids)]
+            vsctl_argv += set_br_external_ids(self._pif)
 
         if ipdev != bridge:
             vsctl_argv += ["# deconfigure ipdev %s" % ipdev]
