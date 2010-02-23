@@ -34,6 +34,7 @@
     --pif-uuid          The UUID of a PIF.
     --force             An interface name.
     --root-prefix=DIR   Use DIR as alternate root directory (for testing).
+    --no-syslog         Write log messages to stderr instead of system log.
 """
 
 # Notes:
@@ -582,6 +583,7 @@ def main(argv=None):
                         "management",
                         "mac=", "device=", "mode=", "ip=", "netmask=", "gateway=",
                         "root-prefix=",
+                        "no-syslog",
                         "help" ]
             arglist, args = getopt.gnu_getopt(argv[1:], shortops, longops)
         except getopt.GetoptError, msg:
@@ -604,12 +606,15 @@ def main(argv=None):
                 force_rewrite_config[o[2:]] = a
             elif o == "--root-prefix":
                 set_root_prefix(a)
+            elif o == "--no-syslog":
+                set_log_destination("stderr")
             elif o == "-h" or o == "--help":
                 print __doc__ % {'command-name': os.path.basename(argv[0])}
                 return 0
 
-        syslog.openlog(os.path.basename(argv[0]))
-        log("Called as " + str.join(" ", argv))
+        if get_log_destination() == "syslog":
+            syslog.openlog(os.path.basename(argv[0]))
+            log("Called as " + str.join(" ", argv))
 
         if len(args) < 1:
             raise Usage("Required option <action> not present")

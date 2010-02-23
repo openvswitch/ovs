@@ -10,6 +10,7 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
 #
+import sys
 import syslog
 import os
 
@@ -25,12 +26,25 @@ def set_root_prefix(prefix):
     global the_root_prefix
     the_root_prefix = prefix
 
+log_destination = "syslog"
+def get_log_destination():
+    """Returns the current log destination.
+    'syslog' means "log to syslog".
+    'stderr' means "log to stderr"."""
+    return log_destination
+def set_log_destination(dest):
+    global log_destination
+    log_destination = dest
+
 #
 # Logging.
 #
 
 def log(s):
-    syslog.syslog(s)
+    if get_log_destination() == 'syslog':
+        syslog.syslog(s)
+    else:
+        print >>sys.stderr, s
 
 #
 # Exceptions.
