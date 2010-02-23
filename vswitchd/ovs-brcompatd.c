@@ -479,6 +479,8 @@ del_port(const struct ovsrec_bridge *br, const char *port_name)
         }
         ovsrec_bridge_set_ports(br, ports, n);
         free(ports);
+
+        ovsrec_port_delete(port_rec);
     }
 }
 
