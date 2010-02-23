@@ -1277,31 +1277,50 @@ static void
 cmd_del_port(struct vsctl_context *ctx)
 {
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
+    bool with_iface = shash_find(&ctx->options, "--with-iface") != NULL;
+    struct vsctl_port *port;
     struct vsctl_info info;
 
     get_info(ctx->ovs, &info);
-    if (ctx->argc == 2) {
-        struct vsctl_port *port = find_port(&info, ctx->argv[1], must_exist);
-        if (port) {
-            del_port(&info, port);
-        }
-    } else if (ctx->argc == 3) {
-        struct vsctl_bridge *bridge = find_bridge(&info, ctx->argv[1], true);
-        struct vsctl_port *port = find_port(&info, ctx->argv[2], must_exist);
+    if (!with_iface) {
+        port = find_port(&info, ctx->argv[ctx->argc - 1], must_exist);
+    } else {
+        const char *target = ctx->argv[ctx->argc - 1];
+        struct vsctl_iface *iface;
 
-        if (port) {
-            if (port->bridge == bridge) {
-                del_port(&info, port);
-            } else if (port->bridge->parent == bridge) {
-                vsctl_fatal("bridge %s does not have a port %s (although its "
-                            "parent bridge %s does)",
-                            ctx->argv[1], ctx->argv[2], bridge->parent->name);
-            } else {
-                vsctl_fatal("bridge %s does not have a port %s",
-                            ctx->argv[1], ctx->argv[2]);
+        port = find_port(&info, target, false);
+        if (!port) {
+            iface = find_iface(&info, target, false);
+            if (iface) {
+                port = iface->port;
             }
         }
+        if (must_exist && !port) {
+            vsctl_fatal("no port or interface named %s", target);
+        }
     }
+
+    if (port) {
+        if (ctx->argc == 3) {
+            struct vsctl_bridge *bridge;
+
+            bridge = find_bridge(&info, ctx->argv[1], true);
+            if (port->bridge != bridge) {
+                if (port->bridge->parent == bridge) {
+                    vsctl_fatal("bridge %s does not have a port %s (although "
+                                "its parent bridge %s does)",
+                                ctx->argv[1], ctx->argv[2],
+                                bridge->parent->name);
+                } else {
+                    vsctl_fatal("bridge %s does not have a port %s",
+                                ctx->argv[1], ctx->argv[2]);
+                }
+            }
+        }
+
+        del_port(&info, port);
+    }
+
     free_info(&info);
 }
 
@@ -2484,7 +2503,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"list-ports", 1, 1, cmd_list_ports, NULL, ""},
     {"add-port", 2, 2, cmd_add_port, NULL, "--may-exist"},
     {"add-bond", 4, INT_MAX, cmd_add_bond, NULL, "--may-exist,--fake-iface"},
-    {"del-port", 1, 2, cmd_del_port, NULL, "--if-exists"},
+    {"del-port", 1, 2, cmd_del_port, NULL, "--if-exists,--with-iface"},
     {"port-to-br", 1, 1, cmd_port_to_br, NULL, ""},
 
     /* Interface commands. */

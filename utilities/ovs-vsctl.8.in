@@ -256,6 +256,17 @@ Without \fB\-\-if\-exists\fR, attempting to delete a port that does
 not exist is an error.  With \fB\-\-if\-exists\fR, attempting to
 delete a port that does not exist has no effect.
 .
+.IP "[\fB\-\-if\-exists\fR] \fB\-\-with\-iface del\-port \fR[\fIbridge\fR] \fIiface\fR"
+Deletes the port named \fIiface\fR or that has an interface named
+\fIiface\fR.  If \fIbridge\fR is omitted, the port is removed from
+whatever bridge contains it; if \fIbridge\fR is specified, it must be
+the real or fake bridge that contains the port.
+.IP
+Without \fB\-\-if\-exists\fR, attempting to delete the port for an
+interface that does not exist is an error.  With \fB\-\-if\-exists\fR,
+attempting to delete the port for an interface that does not exist has
+no effect.
+.
 .IP "\fBport\-to\-br \fIport\fR"
 Prints the name of the bridge that contains \fIport\fR on standard
 output.

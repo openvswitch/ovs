@@ -119,7 +119,7 @@ A VLAN PIF cannot be a datapath PIF.
         return [pif]
 
 def datapath_deconfigure_physical(netdev):
-    return ['--', '--if-exists', 'del-port', netdev]
+    return ['--', '--with-iface', '--if-exists', 'del-port', netdev]
 
 def datapath_configure_bond(pif,slaves):
     bridge = pif_bridge_name(pif)
@@ -156,10 +156,10 @@ def datapath_configure_bond(pif,slaves):
     return argv
 
 def datapath_deconfigure_bond(netdev):
-    return ['--', '--if-exists', 'del-port', netdev]
+    return ['--', '--with-iface', '--if-exists', 'del-port', netdev]
 
 def datapath_deconfigure_ipdev(interface):
-    return ['--', '--if-exists', 'del-port', interface]
+    return ['--', '--with-iface', '--if-exists', 'del-port', interface]
 
 def datapath_modify_config(commands):
     #log("modifying configuration:")
