@@ -103,9 +103,7 @@
                   "min": 0, "max": 1}},
        "mac": {
          "comment": "The MAC address to use for this port for the purpose of choosing the bridge's MAC address.  This column does not necessarily reflect the port's actual MAC address, nor will setting it change the port's actual MAC address.",
-         "type": {"key": {"type": "string",
-                          "reMatch": "[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}",
-                          "reComment": "an Ethernet address in the form XX:XX:XX:XX:XX:XX, where each X is a hex digit"},
+         "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},
        "bond_updelay": {
          "comment": "For a bonded port, the number of milliseconds for which carrier must stay up on an interface before the interface is considered to be up.  Ignored for non-bonded ports.",
@@ -147,9 +145,7 @@
                           "minInteger": 0}}},
        "mac": {
          "comment": "Ethernet address to set for this interface.  If unset then the default MAC address is used.  May not be supported on all interfaces.",
-         "type": {"key": {"type": "string",
-                          "reMatch": "[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}",
-                          "reComment": "an Ethernet address in the form XX:XX:XX:XX:XX:XX, where each X is a hex digit"},
+         "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},
        "external_ids": {
          "comment": "Key-value pairs that identify this interface's role in external systems.  The currently defined key-value pairs are: \"xs-vif-uuid\", the UUID of the Citrix XenServer VIF associated with this interface; \"xs-network-uuid\", the UUID of the Citrix XenServer network to which this interface is attached; \"xs-vif-vm-uuid\", the UUID of the Citrix XenServer VM to which this interface belongs; \"xs-vif-mac\", the value of the \"MAC\" field in the Citrix XenServer VIF record for this interface.",
@@ -194,9 +190,7 @@
      "columns": {
        "targets": {
          "comment": "NetFlow targets in the form \"IP:PORT\".",
-         "type": {"key": {"type": "string",
-                          "reMatch": "([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])(\\.[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){3}:[0-9]{1,5}",
-                          "reComment": "an IP address followed by a UDP port number, separated by \":\""},
+         "type": {"key": {"type": "string"},
                   "min": 1, "max": "unlimited"}},
        "engine_type": {
          "comment": "Engine type to use in NetFlow messages.  Defaults to datapath index if not specified.",
@@ -251,9 +245,7 @@
          "type": {"key": "integer", "min": 0, "max": 1}},
        "fail_mode": {
          "comment": "Either \"standalone\" or \"secure\", or empty to use the implementation's default.",
-         "type": {"key": {"type": "string",
-                          "reMatch": "standalone|secure",
-                          "reComment": "either \"standalone\" or \"secure\""},
+         "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},
        "discover_accept_regex": {
          "comment": "If \"target\" is \"discover\", a POSIX extended regular expression against which the discovered controller location is validated.  If not specified, the default is implementation-specific.",
@@ -263,27 +255,19 @@
          "type": {"key": "boolean", "min": 0, "max": 1}},
        "connection_mode": {
          "comment": "Either \"in-band\" or \"out-of-band\".  If not specified, the default is implementation-specific.",
-         "type": {"key": {"type": "string",
-                          "reMatch": "in-band|out-of-band",
-                          "reComment": "either \"in-band\" or \"out-of-band\""},
+         "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},
        "local_ip": {
          "comment": "If \"target\" is not \"discover\", the IP address to configure on the local port.",
-         "type": {"key": {"type": "string",
-                          "reMatch": "([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])(\\.[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){3}",
-                          "reComment": "an IP address"},
+         "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},
        "local_netmask": {
          "comment": "If \"target\" is not \"discover\", the IP netmask to configure on the local port.",
-         "type": {"key": {"type": "string", 
-                          "reMatch": "255\\.255\\.255\\.(255|254|252|248|240|224|192|128|0)|255\\.255\\.(255|254|252|248|240|224|192|128|0)\\.0|255\\.(255|254|252|248|240|224|192|128|0)\\.0\\.0|(255|254|252|248|240|224|192|128|0)\\.0\\.0\\.0",
-                          "reComment": "a netmask"},
+         "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},
        "local_gateway": {
          "comment": "If \"target\" is not \"discover\", the IP gateway to configure on the local port.",
-         "type": {"key": {"type": "string",
-                          "reMatch": "([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])(\\.[0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){3}",
-                          "reComment": "an IP address"},
+         "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},
        "controller_rate_limit": {
          "comment": "The maximum rate at which packets will be forwarded to the OpenFlow controller, in packets per second.  If not specified, the default is implementation-specific.",

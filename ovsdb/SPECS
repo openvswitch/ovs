@@ -177,8 +177,6 @@ is represented by <database-schema>, as described below.
         "maxInteger": <integer>            optional, integers only
         "minReal": <real>                  optional, reals only
         "maxReal": <real>                  optional, reals only 
-        "reMatch": <string>                optional, strings only
-        "reComment": <string>              optional, strings only
         "minLength": <integer>             optional, strings only
         "maxLength": <integer>             optional, strings only
         "refTable": <id>                   optional, uuids only
@@ -196,23 +194,11 @@ is represented by <database-schema>, as described below.
     specified, then the maxReal must be greater than or equal to
     minReal.
 
-    If "type" is "string", then:
-
-        "reMatch" may be a JavaScript (Perl 5-like) regular expression
-        that restricts the allowed values.  The regular expression
-        must match the entire string value, that is, it is treated as
-        if it begins with ^ and ends with $, regardless of whether it
-        really does.
-
-        If "reMatch" is specified, then "reComment" may be a string
-        that describes the allowed values, phrased so that it fits
-        into a sentence such as "This value must be...".
-
-        "minLength" and "maxLength" or both may be specified,
-        restricting the valid length of value strings.  If both are
-        specified, then maxLength must be greater than or equal to
-        minLength.  String length is measured in characters (not bytes
-        or UTF-16 code units).
+    If "type" is "string", then "minLength" and "maxLength" or both
+    may be specified, restricting the valid length of value strings.
+    If both are specified, then maxLength must be greater than or
+    equal to minLength.  String length is measured in characters (not
+    bytes or UTF-16 code units).
 
     If "type" is "uuid", then "refTable", if present, must be the name
     of a table within this database.  If "refTable" is set, the

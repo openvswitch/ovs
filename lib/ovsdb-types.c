@@ -134,11 +134,6 @@ ovsdb_base_type_init(struct ovsdb_base_type *base, enum ovsdb_atomic_type type)
         break;
 
     case OVSDB_TYPE_STRING:
-#ifdef HAVE_PCRE
-        base->u.string.re = NULL;
-#endif
-        base->u.string.reMatch = NULL;
-        base->u.string.reComment = NULL;
         base->u.string.minLen = 0;
         base->u.string.maxLen = UINT_MAX;
         break;
@@ -170,20 +165,7 @@ ovsdb_base_type_clone(struct ovsdb_base_type *dst,
         break;
 
     case OVSDB_TYPE_STRING:
-#if HAVE_PCRE
-        if (dst->u.string.re) {
-            pcre_refcount(dst->u.string.re, 1);
-        }
-#else
-        if (dst->u.string.reMatch) {
-            dst->u.string.reMatch = xstrdup(dst->u.string.reMatch);
-        }
-        if (dst->u.string.reComment) {
-            dst->u.string.reComment = xstrdup(dst->u.string.reComment);
-        }
-#endif
         break;
-
 
     case OVSDB_TYPE_UUID:
         if (dst->u.uuid.refTableName) {
@@ -209,16 +191,6 @@ ovsdb_base_type_destroy(struct ovsdb_base_type *base)
             break;
 
         case OVSDB_TYPE_STRING:
-#ifdef HAVE_PCRE
-            if (base->u.string.re && !pcre_refcount(base->u.string.re, -1)) {
-                pcre_free(base->u.string.re);
-                free(base->u.string.reMatch);
-                free(base->u.string.reComment);
-            }
-#else
-            free(base->u.string.reMatch);
-            free(base->u.string.reComment);
-#endif
             break;
 
         case OVSDB_TYPE_UUID:
@@ -281,9 +253,7 @@ ovsdb_base_type_has_constraints(const struct ovsdb_base_type *base)
         return false;
 
     case OVSDB_TYPE_STRING:
-        return (base->u.string.reMatch != NULL
-                || base->u.string.minLen != 0
-                || base->u.string.maxLen != UINT_MAX);
+        return base->u.string.minLen != 0 || base->u.string.maxLen != UINT_MAX;
 
     case OVSDB_TYPE_UUID:
         return base->u.uuid.refTableName != NULL;
@@ -302,44 +272,6 @@ ovsdb_base_type_clear_constraints(struct ovsdb_base_type *base)
     enum ovsdb_atomic_type type = base->type;
     ovsdb_base_type_destroy(base);
     ovsdb_base_type_init(base, type);
-}
-
-struct ovsdb_error *
-ovsdb_base_type_set_regex(struct ovsdb_base_type *base,
-                          const char *reMatch, const char *reComment)
-{
-#ifdef HAVE_PCRE
-    const char *errorString;
-    const char *pattern;
-    int errorOffset;
-
-    /* Compile pattern, anchoring it at both ends. */
-    pattern = reMatch;
-    if (pattern[0] == '\0' || strchr(pattern, '\0')[-1] != '$') {
-        pattern = xasprintf("%s$", pattern);
-    }
-
-#ifndef PCRE_JAVASCRIPT_COMPAT  /* Added in PCRE 7.7. */
-#define PCRE_JAVASCRIPT_COMPAT 0
-#endif
-    base->u.string.re = pcre_compile(pattern, (PCRE_ANCHORED | PCRE_UTF8
-                                               | PCRE_JAVASCRIPT_COMPAT),
-                                     &errorString, &errorOffset, NULL);
-    if (pattern != reMatch) {
-        free((char *) pattern);
-    }
-    if (!base->u.string.re) {
-        return ovsdb_syntax_error(NULL, "invalid regular expression",
-                                  "\"%s\" is not a valid regular "
-                                  "expression: %s", reMatch, errorString);
-    }
-    pcre_refcount(base->u.string.re, 1);
-#endif
-
-    /* Save regular expression. */
-    base->u.string.reMatch = xstrdup(reMatch);
-    base->u.string.reComment = reComment ? xstrdup(reComment) : NULL;
-    return NULL;
 }
 
 static struct ovsdb_error *
@@ -414,20 +346,6 @@ ovsdb_base_type_from_json(struct ovsdb_base_type *base,
             error = ovsdb_syntax_error(json, NULL, "minReal exceeds maxReal");
         }
     } else if (base->type == OVSDB_TYPE_STRING) {
-        const struct json *reMatch;
-
-        reMatch = ovsdb_parser_member(&parser, "reMatch",
-                                      OP_STRING | OP_OPTIONAL);
-        if (reMatch) {
-            const struct json *reComment;
-
-            reComment = ovsdb_parser_member(&parser, "reComment",
-                                            OP_STRING | OP_OPTIONAL);
-            error = ovsdb_base_type_set_regex(
-                base, json_string(reMatch),
-                reComment ? json_string(reComment) : NULL);
-        }
-
         if (!error) {
             error = parse_optional_uint(&parser, "minLength",
                                         &base->u.string.minLen);
@@ -507,13 +425,6 @@ ovsdb_base_type_to_json(const struct ovsdb_base_type *base)
         break;
 
     case OVSDB_TYPE_STRING:
-        if (base->u.string.reMatch) {
-            json_object_put_string(json, "reMatch", base->u.string.reMatch);
-            if (base->u.string.reComment) {
-                json_object_put_string(json, "reComment",
-                                       base->u.string.reComment);
-            }
-        }
         if (base->u.string.minLen != 0) {
             json_object_put(json, "minLength",
                             json_integer_create(base->u.string.minLen));

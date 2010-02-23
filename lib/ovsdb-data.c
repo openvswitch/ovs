@@ -577,30 +577,6 @@ check_string_constraints(const char *s,
             "length %u", s, n_chars, c->maxLen);
     }
 
-#if HAVE_PCRE
-    if (c->re) {
-        int retval;
-
-        retval = pcre_exec(c->re, NULL, s, strlen(s), 0,
-                           PCRE_ANCHORED | PCRE_NO_UTF8_CHECK, NULL, 0);
-        if (retval == PCRE_ERROR_NOMATCH) {
-            if (c->reComment) {
-                return ovsdb_error("constraint violation",
-                                   "\"%s\" is not a %s", s, c->reComment);
-            } else {
-                return ovsdb_error("constraint violation",
-                                   "\"%s\" does not match regular expression "
-                                   "/%s/", s, c->reMatch);
-            }
-        } else if (retval < 0) {
-            /* PCRE doesn't have a function to translate an error code to a
-             * description.  Bizarre.  See pcreapi(3) for error details. */
-            return ovsdb_error("internal error", "PCRE returned error %d",
-                               retval);
-        }
-    }
-#endif  /* HAVE_PCRE */
-
     return NULL;
 }
 

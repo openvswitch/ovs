@@ -590,14 +590,6 @@ AT_CHECK([RUN_OVS_VSCTL([set b br0 flood_vlans=-1])],
 AT_CHECK([RUN_OVS_VSCTL([set b br0 flood_vlans=4096])], 
   [1], [], [ovs-vsctl: constraint violation: 4096 is not in the valid range 0 to 4095 (inclusive)
 ], [OVS_VSCTL_CLEANUP])
-if test "$HAVE_PCRE" = yes; then
-    AT_CHECK([RUN_OVS_VSCTL([set c br1 'connection-mode=xyz'])], 
-      [1], [], [ovs-vsctl: constraint violation: "xyz" is not a either "in-band" or "out-of-band"
-], [OVS_VSCTL_CLEANUP])
-else
-    AT_CHECK([RUN_OVS_VSCTL([set c br1 'connection-mode=xyz'])], 
-      [0], [], [], [OVS_VSCTL_CLEANUP])
-fi
 AT_CHECK([RUN_OVS_VSCTL([set c br1 connection-mode:x=y])], 
   [1], [], [ovs-vsctl: cannot specify key to set for non-map column connection_mode
 ], [OVS_VSCTL_CLEANUP])

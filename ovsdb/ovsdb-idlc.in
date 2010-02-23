@@ -109,8 +109,10 @@ def escapeCString(src):
     return dst
 
 class BaseType:
-    def __init__(self, type, refTable=None, minInteger=None, maxInteger=None,
-                 minReal=None, maxReal=None, reMatch=None, reComment=None,
+    def __init__(self, type,
+                 refTable=None,
+                 minInteger=None, maxInteger=None,
+                 minReal=None, maxReal=None,
                  minLength=None, maxLength=None):
         self.type = type
         self.refTable = refTable
@@ -118,8 +120,6 @@ class BaseType:
         self.maxInteger = maxInteger
         self.minReal = minReal
         self.maxReal = maxReal
-        self.reMatch = reMatch
-        self.reComment = reComment
         self.minLength = minLength
         self.maxLength = maxLength
 
@@ -134,11 +134,9 @@ class BaseType:
             maxInteger = getMember(json, 'maxInteger', [int, long], description)
             minReal = getMember(json, 'minReal', [int, long, float], description)
             maxReal = getMember(json, 'maxReal', [int, long, float], description)
-            reMatch = getMember(json, 'reMatch', [unicode], description)
-            reComment = getMember(json, 'reComment', [unicode], description)
             minLength = getMember(json, 'minLength', [int], description)
             maxLength = getMember(json, 'minLength', [int], description)
-            return BaseType(atomicType, refTable, minInteger, maxInteger, minReal, maxReal, reMatch, reComment, minLength, maxLength)
+            return BaseType(atomicType, refTable, minInteger, maxInteger, minReal, maxReal, minLength, maxLength)
 
     def toEnglish(self):
         if self.type == 'uuid' and self.refTable:
@@ -192,13 +190,6 @@ class BaseType:
             if self.maxReal != None:
                 stmts.append('%s.u.real.max = %d;' % (var, self.maxReal))
         elif self.type == 'string':
-            if self.reMatch != None:
-                if self.reComment != None:
-                    reComment = '"%s"' % escapeCString(self.reComment)
-                else:
-                    reComment = NULL
-                stmts.append('do_set_regex(&%s, "%s", %s);' % (
-                        var, escapeCString(self.reMatch), reComment))
             if self.minLength != None:
                 stmts.append('%s.u.string.minLen = %d;' % (var, self.minLength))            
             if self.maxLength != None:
@@ -443,21 +434,7 @@ def printCIDLSource(schemaFile):
 #include "ovsdb-error.h"
 
 static bool inited;
-
-static void OVS_UNUSED
-do_set_regex(struct ovsdb_base_type *base, const char *reMatch,
-             const char *reComment)
-{
-    struct ovsdb_error *error;
-
-    error = ovsdb_base_type_set_regex(base, reMatch, reComment);
-    if (error) {
-        char *s = ovsdb_error_to_string(error);
-        ovs_error(0, "%%s", s);
-        free(s);
-        ovsdb_error_destroy(error);
-    }
-}''' % schema.idlHeader
+''' % schema.idlHeader
 
     # Cast functions.
     for tableName, table in sorted(schema.tables.iteritems()):

@@ -22,10 +22,6 @@
 #include "compiler.h"
 #include "uuid.h"
 
-#ifdef HAVE_PCRE
-#include <pcre.h>
-#endif
-
 struct json;
 
 /* An atomic type: one that OVSDB regards as a single unit of data. */
@@ -64,11 +60,6 @@ struct ovsdb_base_type {
         /* No constraints for Boolean types. */
 
         struct ovsdb_string_constraints {
-#ifdef HAVE_PCRE
-            pcre *re;           /* Compiled regular expression. */
-#endif
-            char *reMatch;      /* reMatch or NULL. */
-            char *reComment;    /* reComment or NULL. */
             unsigned int minLen; /* minLength or 0. */
             unsigned int maxLen; /* maxLength or UINT_MAX. */
         } string;
@@ -86,15 +77,8 @@ struct ovsdb_base_type {
 #define OVSDB_BASE_REAL_INIT    { .type = OVSDB_TYPE_REAL,          \
                                   .u.real = { -DBL_MAX, DBL_MAX } }
 #define OVSDB_BASE_BOOLEAN_INIT { .type = OVSDB_TYPE_BOOLEAN }
-#ifdef HAVE_PCRE
-#define OVSDB_BASE_STRING_INIT  { .type = OVSDB_TYPE_STRING,        \
-                                  .u.string = { NULL, NULL, NULL,   \
-                                                0, UINT_MAX } }
-#else
 #define OVSDB_BASE_STRING_INIT  { .type = OVSDB_TYPE_STRING,    \
-                                  .u.string = { NULL, NULL,     \
-                                                0, UINT_MAX } }
-#endif
+                                  .u.string = { 0, UINT_MAX } }
 #define OVSDB_BASE_UUID_INIT    { .type = OVSDB_TYPE_UUID,      \
                                   .u.uuid = { NULL, NULL } }
 
@@ -106,10 +90,6 @@ void ovsdb_base_type_destroy(struct ovsdb_base_type *);
 bool ovsdb_base_type_is_valid(const struct ovsdb_base_type *);
 bool ovsdb_base_type_has_constraints(const struct ovsdb_base_type *);
 void ovsdb_base_type_clear_constraints(struct ovsdb_base_type *);
-struct ovsdb_error *ovsdb_base_type_set_regex(struct ovsdb_base_type *,
-                                              const char *reMatch,
-                                              const char *reComment)
-    WARN_UNUSED_RESULT;
 
 struct ovsdb_error *ovsdb_base_type_from_json(struct ovsdb_base_type *,
                                               const struct json *)
