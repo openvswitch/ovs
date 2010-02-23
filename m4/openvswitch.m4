@@ -216,28 +216,16 @@ AC_DEFUN([OVS_CHECK_LINUX_VT_H],
 
 dnl Checks for libpcre.
 dnl
-dnl ovsdb wants any reasonable version of libpcre (6.6 is what
-dnl XenServer 5.5 has).
-dnl
 dnl ezio-term wants libpcre that supports the PCRE_PARTIAL feature,
 dnl which is libpcre 7.2 or later.
 AC_DEFUN([OVS_CHECK_PCRE],
   [dnl Make sure that pkg-config is installed.
    m4_pattern_forbid([PKG_CHECK_MODULES])
    PKG_CHECK_MODULES([PCRE],
-                     [libpcre >= 6.6], 
-                     [HAVE_PCRE=yes
-                      PKG_CHECK_EXISTS([libpcre >= 7.2], 
-                                       [HAVE_PCRE_PARTIAL=yes],
-                                       [HAVE_PCRE_PARTIAL=no])],
-                     [HAVE_PCRE=no
-                      HAVE_PCRE_PARTIAL=no])
-   AM_CONDITIONAL([HAVE_PCRE], [test "$HAVE_PCRE" = yes])
+                     [libpcre >= 7.2], 
+                     [HAVE_PCRE_PARTIAL=yes],
+                     [HAVE_PCRE_PARTIAL=no])
    AM_CONDITIONAL([HAVE_PCRE_PARTIAL], [test "$HAVE_PCRE_PARTIAL" = yes])
-   if test "$HAVE_PCRE" = yes; then
-      AC_DEFINE([HAVE_PCRE], [1], [Define to 1 if libpcre is installed.])
-   fi
-   AC_SUBST([HAVE_PCRE])
    AC_SUBST([HAVE_PCRE_PARTIAL])
 ])
 

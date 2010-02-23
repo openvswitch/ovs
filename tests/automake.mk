@@ -216,7 +216,7 @@ tests_test_ovsdb_SOURCES = \
 	tests/idltest.c \
 	tests/idltest.h
 EXTRA_DIST += tests/uuidfilt.pl
-tests_test_ovsdb_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS) $(PCRE_LIBS)
+tests_test_ovsdb_LDADD = ovsdb/libovsdb.a lib/libopenvswitch.a $(SSL_LIBS)
 
 # idltest schema and IDL
 OVSIDL_BUILT +=	tests/idltest.c tests/idltest.h tests/idltest.ovsidl

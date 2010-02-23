@@ -27,10 +27,6 @@ you will need the following software:
       connections from an Open vSwitch to an OpenFlow controller.  To
       enable, configure with --enable-ssl=yes.
 
-    - libpcre, the Perl Compatible Regular Expression library, is
-      optional but recommended.  Without it, OVSDB will not be able to
-      validate regular-expression based contraints.
-
 To compile the kernel module, you must also install the following.  If
 you cannot build or install the kernel module, you may use the
 userspace-only implementation, at a cost in performance.  The
@@ -82,9 +78,6 @@ following software:
     - libc compatible with the libc used for build.
 
     - libssl compatible with the libssl used for build, if OpenSSL was
-      used for the build.
-
-    - libpcre compatible with the libpcre used for build, if PCRE was
       used for the build.
 
     - The Linux kernel version configured as part of the build.
