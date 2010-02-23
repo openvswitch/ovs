@@ -97,7 +97,7 @@ add_to_bridge()
 			logger -t scripts-vif "Failed to retrieve vif details for vswitch"
 		fi
 
-		$vsctl add-port $bridge $dev $vif_details
+		$vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details
 	    ;;
     esac
 	    
