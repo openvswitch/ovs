@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,6 +75,8 @@ struct fail_open {
     long long int next_bogus_packet_in;
     struct rconn_packet_counter *bogus_packet_counter;
 };
+
+static void fail_open_recover(struct fail_open *);
 
 /* Returns true if 'fo' should be in fail-open mode, otherwise false. */
 static inline bool
@@ -155,7 +157,15 @@ fail_open_run(struct fail_open *fo)
 void
 fail_open_maybe_recover(struct fail_open *fo)
 {
-    if (fail_open_is_active(fo) && rconn_is_admitted(fo->controller)) {
+    if (rconn_is_admitted(fo->controller)) {
+        fail_open_recover(fo);
+    }
+}
+
+static void
+fail_open_recover(struct fail_open *fo)
+{
+    if (fail_open_is_active(fo)) {
         flow_t flow;
 
         VLOG_WARN("No longer in fail-open mode");
@@ -235,6 +245,7 @@ void
 fail_open_destroy(struct fail_open *fo)
 {
     if (fo) {
+        fail_open_recover(fo);
         /* We don't own fo->controller. */
         switch_status_unregister(fo->ss_cat);
         rconn_packet_counter_destroy(fo->bogus_packet_counter);

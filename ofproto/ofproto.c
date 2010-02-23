@@ -679,6 +679,9 @@ ofproto_destroy(struct ofproto *p)
         return;
     }
 
+    /* Destroy fail-open early, because it touches the classifier. */
+    ofproto_set_failure(p, false);
+
     ofproto_flush_flows(p);
     classifier_destroy(&p->cls);
 
@@ -697,7 +700,6 @@ ofproto_destroy(struct ofproto *p)
     switch_status_destroy(p->switch_status);
     in_band_destroy(p->in_band);
     discovery_destroy(p->discovery);
-    fail_open_destroy(p->fail_open);
     pinsched_destroy(p->miss_sched);
     pinsched_destroy(p->action_sched);
     netflow_destroy(p->netflow);
