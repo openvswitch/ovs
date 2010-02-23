@@ -509,6 +509,9 @@ del_bridge(const struct ovsrec_open_vswitch *ovs, const char *br_name)
     ovsrec_open_vswitch_set_bridges(ovs, bridges, n);
     free(bridges);
 
+    /* Delete the bridge itself. */
+    ovsrec_bridge_delete(br);
+
     VLOG_INFO("delbr %s: success", br_name);
 
     return 0;
