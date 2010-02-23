@@ -638,6 +638,34 @@ def pif_netdev_name(pif):
         return pifrec['device']
 
 #
+# Bridges
+#
+
+def pif_is_bridged(pif):
+    pifrec = db().get_pif_record(pif)
+    nwrec = db().get_network_record(pifrec['network'])
+
+    if nwrec['bridge']:
+        # TODO: sanity check that nwrec['bridgeless'] != 'true'
+        return True
+    else:
+        # TODO: sanity check that nwrec['bridgeless'] == 'true'
+        return False
+
+def pif_bridge_name(pif):
+    """Return the bridge name of a pif.
+
+    PIF must be a bridged PIF."""
+    pifrec = db().get_pif_record(pif)
+
+    nwrec = db().get_network_record(pifrec['network'])
+
+    if nwrec['bridge']:
+        return nwrec['bridge']
+    else:
+        raise Error("PIF %(uuid)s does not have a bridge name" % pifrec)
+
+#
 # Bonded PIFs
 #
 def pif_is_bond(pif):
