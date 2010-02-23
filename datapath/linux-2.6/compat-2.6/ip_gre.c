@@ -467,6 +467,9 @@ static void ipgre_err(struct sk_buff *skb, u32 info)
 	struct ip_tunnel *t;
 	__be16 flags;
 
+	if (skb_headlen(skb) < grehlen)
+		return;
+
 	flags = p[0];
 	if (flags&(GRE_CSUM|GRE_KEY|GRE_SEQ|GRE_ROUTING|GRE_VERSION)) {
 		if (flags&(GRE_VERSION|GRE_ROUTING))
@@ -536,8 +539,16 @@ static inline void ipgre_ecn_decapsulate(struct iphdr *iph, struct sk_buff *skb)
 {
 	if (INET_ECN_is_ce(iph->tos)) {
 		if (skb->protocol == htons(ETH_P_IP)) {
+			if (unlikely(!pskb_may_pull(skb, skb_network_header(skb)
+			    + sizeof(struct iphdr) - skb->data)))
+				return;
+
 			IP_ECN_set_ce(ip_hdr(skb));
 		} else if (skb->protocol == htons(ETH_P_IPV6)) {
+			if (unlikely(!pskb_may_pull(skb, skb_network_header(skb)
+			    + sizeof(struct ipv6hdr) - skb->data)))
+				return;
+
 			IP6_ECN_set_ce(ipv6_hdr(skb));
 		}
 	}
@@ -683,6 +694,8 @@ static int ipgre_rcv(struct sk_buff *skb)
 		nf_reset(skb);
 
 		skb_reset_network_header(skb);
+
+		/* Invalidates pointers. */
 		ipgre_ecn_decapsulate(iph, skb);
 
 		netif_rx(skb);
@@ -716,12 +729,25 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 	int    gre_hlen;
 	__be32 dst;
 	int    mtu;
+	u8   original_protocol;
 
 #ifdef HAVE_NETDEV_STATS
 	stats = &dev->stats;
 #else
 	stats = &tunnel->stat;
 #endif
+
+	/* Validate the protocol headers before we try to use them. */
+	original_protocol = skb->protocol;
+	if (skb->protocol == htons(ETH_P_IP)) {
+		if (unlikely(!pskb_may_pull(skb, skb_network_header(skb)
+		    + sizeof(struct iphdr) - skb->data)))
+			skb->protocol = 0;
+	} else if (skb->protocol == htons(ETH_P_IPV6)) {
+		if (unlikely(!pskb_may_pull(skb, skb_network_header(skb)
+		    + sizeof(struct ipv6hdr) - skb->data)))
+			skb->protocol = 0;
+	}
 
 	if (dev->type == ARPHRD_ETHER)
 		IPCB(skb)->flags = 0;
@@ -916,6 +942,8 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 		else
 			iph->ttl = dst_metric(&rt->u.dst, RTAX_HOPLIMIT);
 	}
+
+	skb->protocol = original_protocol;
 
 	((__be16 *)(iph + 1))[0] = tunnel->parms.o_flags;
 	((__be16 *)(iph + 1))[1] = (dev->type == ARPHRD_ETHER) ?
