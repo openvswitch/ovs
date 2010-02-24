@@ -220,11 +220,12 @@ Matches IEEE 802.1q Priority Code Point (PCP) \fIpriority\fR, which is
 specified as a value between 0 and 7, inclusive.  A higher value
 indicates a higher frame priority level.
 .
-.IP \fBdl_src=\fImac\fR
-Matches Ethernet source address \fImac\fR, which is specified as 6 pairs 
-of hexadecimal digits delimited by colons (e.g. \fB00:0A:E4:25:6B:B0\fR).
-.IP \fBdl_dst=\fImac\fR
-Matches Ethernet destination address \fImac\fR.
+.IP \fBdl_src=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
+.IQ \fBdl_dst=\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fB:\fIxx\fR
+Matches an Ethernet source (or destination) address specified as 6
+pairs of hexadecimal digits delimited by colons
+(e.g. \fB00:0A:E4:25:6B:B0\fR).
+.
 .IP \fBdl_type=\fIethertype\fR
 Matches Ethernet protocol type \fIethertype\fR, which is specified as an
 integer between 0 and 65535, inclusive, either in decimal or as a 
@@ -232,37 +233,65 @@ hexadecimal number prefixed by \fB0x\fR (e.g. \fB0x0806\fR to match ARP
 packets).
 .
 .IP \fBnw_src=\fIip\fR[\fB/\fInetmask\fR]
-Matches IPv4 source address \fIip\fR, which may be specified as an
-IP address or host name (e.g. \fB192.168.1.1\fR or
-\fBwww.example.com\fR).  The optional \fInetmask\fR allows restricting a
-match to an IPv4 address prefix.  The netmask may be specified as a dotted 
-quad (e.g. \fB192.168.1.0/255.255.255.0\fR) or as a CIDR block 
+.IQ \fBnw_dst=\fIip\fR[\fB/\fInetmask\fR]
+When \fBdl_type\fR is 0x0800 (possibly via shorthand, e.g. \fBip\fR
+or \fBtcp\fR), matches IPv4 source (or destination) address \fIip\fR,
+which may be specified as an IP address or host name
+(e.g. \fB192.168.1.1\fR or \fBwww.example.com\fR).  The optional
+\fInetmask\fR allows restricting a match to an IPv4 address prefix.
+The netmask may be specified as a dotted quad
+(e.g. \fB192.168.1.0/255.255.255.0\fR) or as a CIDR block
 (e.g. \fB192.168.1.0/24\fR).
+.IP
+When \fBdl_type=0x0806\fR or \fBarp\fR is specified, matches the
+\fBar_spa\fR or \fBar_tpa\fR field, respectively, in ARP packets for
+IPv4 and Ethernet.
+.IP
+When \fBdl_type\fR is wildcarded or set to a value other than 0x0800
+or 0x0806, the values of \fBnw_src\fR and \fBnw_dst\fR are silently
+ignored.
 .
-.IP \fBnw_dst=\fIip\fR[\fB/\fInetmask\fR]
-Matches IPv4 destination address \fIip\fR.
 .IP \fBnw_proto=\fIproto\fR
+When \fBip\fR or \fBdl_type=0x0800\fR is specified, matches IP
+protocol type \fIproto\fR, which is specified as a decimal number
+between 0 and 255, inclusive (e.g. 6 to match TCP packets).
+.IP
+When \fBarp\fR or \fBdl_type=0x0806\fR is specified, matches the lower
+8 bits of the ARP opcode.  ARP opcodes greater than 255 are treated as
+0.
+.IP
+When \fBdl_type\fR is wildcarded or set to a value other than 0x0800
+or 0x0806, the value of \fBnw_proto\fR is silently ignored.
 .
-Matches IP protocol type \fIproto\fR, which is specified as a decimal 
-number between 0 and 255, inclusive (e.g. 6 to match TCP packets).
 .IP \fBnw_tos=\fItos\fR
 Matches IP ToS/DSCP field \fItos\fR, which is specified as a decimal 
 number between 0 and 255, inclusive.  Note that the two lower reserved
 bits are ignored for matching purposes.
+.IP
+The value of \fBnw_proto\fR is silently ignored unless
+\fBdl_type=0x0800\fR, \fBip\fR, \fBicmp\fR, \fBtcp\fR, or \fBudp\fR is
+also specified.
 .
 .IP \fBtp_src=\fIport\fR
-Matches UDP or TCP source port \fIport\fR, which is specified as a decimal 
-number between 0 and 65535, inclusive (e.g. 80 to match packets originating 
+.IQ \fBtp_dst=\fIport\fR
+When \fBdl_type\fR and \fBnw_proto\fR specify TCP or UDP, \fBtp_src\fR
+and \fBtp_dst\fR match the UDP or TCP source or destination port
+\fIport\fR, respectively. which is specified as a decimal number
+between 0 and 65535, inclusive (e.g. 80 to match packets originating
 from a HTTP server).
+.IP
+When \fBdl_type\fR and \fBnw_proto\fR take other values, the values of
+these settings are silently ignored.
 .
-.IP \fBtp_dst=\fIport\fR
-Matches UDP or TCP destination port \fIport\fR.
 .IP \fBicmp_type=\fItype\fR
+.IQ \fBicmp_code=\fIcode\fR
+When \fBdl_type\fR and \fBnw_proto\fR specify ICMP, \fItype\fR matches
+the ICMP type and \fIcode\fR matches the ICMP code.  Each is specified
+as a decimal number between 0 and 255, inclusive.
+.IP
+When \fBdl_type\fR and \fBnw_proto\fR take other values, the values of
+these settings are silently ignored.
 .
-Matches ICMP message with \fItype\fR, which is specified as a decimal 
-number between 0 and 255, inclusive.
-.IP \fBicmp_code=\fIcode\fR
-Matches ICMP messages with \fIcode\fR.
 .PP
 The following shorthand notations are also available:
 .
