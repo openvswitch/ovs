@@ -6,10 +6,10 @@
 ..
 .TH ovs\-appctl 8 "November 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-appctl
-
+.
 .SH NAME
 ovs\-appctl \- utility for configuring running Open vSwitch daemons
-
+.
 .SH SYNOPSIS
 \fBovs\-appctl\fR [\fB--target=\fItarget\fR | \fB-t\fR \fItarget\fR]
 \fIcommand \fR[\fIarg\fR...]
@@ -24,14 +24,13 @@ commands for querying and adjusting its logging settings documented
 under \fBLOGGING COMMANDS\fR below, and \fBovs\-vswitchd\fR in
 particular accepts a number of additional commands documented in
 \fBovs\-vswitchd\fR(8).
-
+.PP
 The \fBovs\-appctl\fR program provides a simple way to invoke these
 commands.  The command to be sent is specified on \fBovs\-appctl\fR's
 command line as non-option arguments.  \fBovs\-appctl\fR sends the
 command and prints the daemon's response on standard output.
-
+.PP
 In normal use only a single option is accepted:
-
 .IP "\fB\-t \fItarget\fR"
 .IQ "\fB\-\-target=\fItarget\fR"
 Tells \fBovs\-appctl\fR which daemon to contact.
@@ -81,90 +80,90 @@ message is logged to \fIfacility\fR, \fIpattern\fR determines the
 message's formatting.  Most characters in \fIpattern\fR are copied
 literally to the log, but special escapes beginning with \fB%\fR are
 expanded as follows:
-
+.
 .RS
 .IP \fB%A\fR
 The name of the application logging the message, e.g. \fBovs-vswitchd\fR.
-
+.
 .IP \fB%c\fR
 The name of the module (as shown by \fBovs\-appctl --list\fR) logging
 the message.
-
+.
 .IP \fB%d\fR
 The current date and time in ISO 8601 format (YYYY-MM-DD HH:MM:SS).
-
+.
 .IP \fB%d{\fIformat\fB}\fR
 The current date and time in the specified \fIformat\fR, which takes
 the same format as the \fItemplate\fR argument to \fBstrftime\fR(3).
-
+.
 .IP \fB%m\fR
 The message being logged.
-
+.
 .IP \fB%N\fR
 A serial number for this message within this run of the program, as a
 decimal number.  The first message a program logs has serial number 1,
 the second one has serial number 2, and so on.
-
+.
 .IP \fB%n\fR
 A new-line.
-
+.
 .IP \fB%p\fR
 The level at which the message is logged, e.g. \fBDBG\fR.
-
+.
 .IP \fB%P\fR
 The program's process ID (pid), as a decimal number.
-
+.
 .IP \fB%r\fR
 The number of milliseconds elapsed from the start of the application
 to the time the message was logged.
-
+.
 .IP \fB%%\fR
 A literal \fB%\fR.
 .RE
-
+.
 .IP
 A few options may appear between the \fB%\fR and the format specifier
 character, in this order:
-
+.
 .RS
 .IP \fB-\fR
 Left justify the escape's expansion within its field width.  Right
 justification is the default.
-
+.
 .IP \fB0\fR
 Pad the field to the field width with \fB0\fRs.  Padding with spaces
 is the default.
-
+.
 .IP \fIwidth\fR
 A number specifies the minimum field width.  If the escape expands to
 fewer characters than \fIwidth\fR then it is padded to fill the field
 width.  (A field wider than \fIwidth\fR is not truncated to fit.)
 .RE
-
+.
 .IP
 The default pattern for console output is \fB%d{%b %d
 %H:%M:%S}|%05N|%c|%p|%m\fR; for syslog output, \fB%05N|%c|%p|%m\fR.
-
+.
 .IP "\fBvlog/reopen\fR"
 Causes the daemon to close and reopen its log file.  (This
 is useful after rotating log files, to cause a new log file to be
 used.)
-
+.IP
 This has no effect if the target application was not invoked with the
 \fB--log-file\fR option.
-
+.
 .SH OPTIONS
-
+.
 .so lib/common.man
-
+.
 .SH BUGS
-
+.
 The protocol used to speak to Open vSwitch daemons does not contain a
 quoting mechanism, so command arguments should not generally contain
 white space.
-
+.
 .SH "SEE ALSO"
-
+.
 \fBovs\-appctl\fR can control the following daemons:
 .BR ovs\-vswitchd (8),
 .BR ovs\-openflowd (8),
