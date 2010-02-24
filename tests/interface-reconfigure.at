@@ -648,7 +648,7 @@ configure_datapath: extra bonds - []
 Applying changes to /etc/sysconfig/network-scripts/route-xenbr2 configuration
 Applying changes to /etc/sysconfig/network configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xenbr2 configuration
-/sbin/ifconfig eth2 up
+/sbin/ifconfig eth2 up mtu 1500
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port eth2
     --may-exist add-br xenbr2
@@ -669,6 +669,7 @@ ONBOOT=no
 TYPE=Ethernet
 BOOTPROTO=dhcp
 PERSISTENT_DHCLIENT=yes
+MTU=1500
 ])
 
 # Simulate interface-reconfigure creating xenbr2, so that we can tell
@@ -707,7 +708,7 @@ configure_datapath: extra ports - []
 configure_datapath: extra bonds - []
 Applying changes to /etc/sysconfig/network-scripts/route-xapi3 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi3 configuration
-/sbin/ifconfig eth3 up
+/sbin/ifconfig eth3 up mtu 1500
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port eth3
     --may-exist add-br xenbr3
@@ -729,6 +730,7 @@ DEVICE=xapi3
 ONBOOT=no
 TYPE=Ethernet
 BOOTPROTO=none
+MTU=1500
 ])
 
 # Simulate interface-reconfigure creating xapi3, so that we can tell
@@ -781,8 +783,8 @@ netdev: down: device xenbr0 does not exist, ignoring
 netdev: down: device xenbr1 does not exist, ignoring
 Applying changes to /etc/sysconfig/network-scripts/route-xapi1 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi1 configuration
-/sbin/ifconfig eth0 up
-/sbin/ifconfig eth1 up
+/sbin/ifconfig eth0 up mtu 1500
+/sbin/ifconfig eth1 up mtu 1500
 /usr/bin/ovs-vsctl --timeout=20
     --if-exists del-br xenbr0
     --if-exists del-br xenbr1
@@ -807,6 +809,7 @@ DEVICE=xapi1
 ONBOOT=no
 TYPE=Ethernet
 BOOTPROTO=none
+MTU=1500
 ])
 
 # Simulate interface-reconfigure creating xapi1, so that we can tell
@@ -856,8 +859,8 @@ netdev: down: device xenbr0 does not exist, ignoring
 netdev: down: device xenbr1 does not exist, ignoring
 Applying changes to /etc/sysconfig/network-scripts/route-xapi2 configuration
 Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi2 configuration
-/sbin/ifconfig eth0 up
-/sbin/ifconfig eth1 up
+/sbin/ifconfig eth0 up mtu 1500
+/sbin/ifconfig eth1 up mtu 1500
 /usr/bin/ovs-vsctl --timeout=20
     --if-exists del-br xenbr0
     --if-exists del-br xenbr1
@@ -885,6 +888,7 @@ DEVICE=xapi2
 ONBOOT=no
 TYPE=Ethernet
 BOOTPROTO=none
+MTU=1500
 ])
 
 # Simulate interface-reconfigure creating xapi2, so that we can tell
