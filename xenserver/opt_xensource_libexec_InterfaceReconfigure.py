@@ -402,6 +402,10 @@ class DatabaseCache(object):
                 if f == "PIFs":
                     # drop PIFs on other hosts
                     self.__networks[n][f] = [p for p in rec[f] if self.__pif_on_host(p)]
+                elif f == "MTU" and f not in rec:
+                    # XenServer 5.5 network records did not have an
+                    # MTU field, so allow this to be missing.
+                    pass
                 else:
                     self.__networks[n][f] = rec[f]
             self.__networks[n]['other_config'] = {}
