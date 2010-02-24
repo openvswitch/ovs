@@ -76,6 +76,7 @@ struct rconn {
     time_t last_connected;
     unsigned int packets_sent;
     unsigned int seqno;
+    int last_error;
 
     /* In S_ACTIVE and S_IDLE, probably_admitted reports whether we believe
      * that the peer has made a (positive) admission control decision on our
@@ -136,6 +137,7 @@ static void state_transition(struct rconn *, enum state);
 static void set_vconn_name(struct rconn *, const char *name);
 static int try_send(struct rconn *);
 static int reconnect(struct rconn *);
+static void report_error(struct rconn *, int error);
 static void disconnect(struct rconn *, int error);
 static void flush_queue(struct rconn *);
 static void question_connectivity(struct rconn *);
@@ -272,6 +274,7 @@ void
 rconn_reconnect(struct rconn *rc)
 {
     if (rc->state & (S_ACTIVE | S_IDLE)) {
+        VLOG_INFO("%s: disconnecting", rc->name);
         disconnect(rc, 0);
     }
 }
@@ -341,7 +344,7 @@ reconnect(struct rconn *rc)
     } else {
         VLOG_WARN("%s: connection failed (%s)", rc->name, strerror(retval));
         rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
-        disconnect(rc, 0);
+        disconnect(rc, retval);
     }
     return retval;
 }
@@ -381,7 +384,7 @@ run_CONNECTING(struct rconn *rc)
     } else if (timed_out(rc)) {
         VLOG_INFO("%s: connection timed out", rc->name);
         rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
-        disconnect(rc, 0);
+        disconnect(rc, ETIMEDOUT);
     }
 }
 
@@ -446,7 +449,7 @@ run_IDLE(struct rconn *rc)
         VLOG_ERR("%s: no response to inactivity probe after %u "
                  "seconds, disconnecting",
                  rc->name, elapsed_in_this_state(rc));
-        disconnect(rc, 0);
+        disconnect(rc, ETIMEDOUT);
     } else {
         do_tx_work(rc);
     }
@@ -530,6 +533,7 @@ rconn_recv(struct rconn *rc)
             }
             return buffer;
         } else if (error != EAGAIN) {
+            report_error(rc, error);
             disconnect(rc, error);
         }
     }
@@ -808,6 +812,22 @@ rconn_get_connection_seqno(const struct rconn *rc)
 {
     return rc->seqno;
 }
+
+/* Returns a value that explains why 'rc' last disconnected:
+ *
+ *   - 0 means that the last disconnection was caused by a call to
+ *     rconn_disconnect(), or that 'rc' is new and has not yet completed its
+ *     initial connection or connection attempt.
+ *
+ *   - EOF means that the connection was closed in the normal way by the peer.
+ *
+ *   - A positive integer is an errno value that represents the error.
+ */
+int
+rconn_get_last_error(const struct rconn *rc)
+{
+    return rc->last_error;
+}
 
 struct rconn_packet_counter *
 rconn_packet_counter_create(void)
@@ -868,6 +888,7 @@ try_send(struct rconn *rc)
     retval = vconn_send(rc->vconn, rc->txq.head);
     if (retval) {
         if (retval != EAGAIN) {
+            report_error(rc, retval);
             disconnect(rc, retval);
         }
         return retval;
@@ -881,26 +902,41 @@ try_send(struct rconn *rc)
     return 0;
 }
 
-/* Disconnects 'rc'.  'error' is used only for logging purposes.  If it is
- * nonzero, then it should be EOF to indicate the connection was closed by the
- * peer in a normal fashion or a positive errno value. */
+/* Reports that 'error' caused 'rc' to disconnect.  'error' may be a positive
+ * errno value, or it may be EOF to indicate that the connection was closed
+ * normally. */
+static void
+report_error(struct rconn *rc, int error)
+{
+    if (error == EOF) {
+        /* If 'rc' isn't reliable, then we don't really expect this connection
+         * to last forever anyway (probably it's a connection that we received
+         * via accept()), so use DBG level to avoid cluttering the logs. */
+        enum vlog_level level = rc->reliable ? VLL_INFO : VLL_DBG;
+        VLOG(level, "%s: connection closed by peer", rc->name);
+    } else {
+        VLOG_WARN("%s: connection dropped (%s)", rc->name, strerror(error));
+    }
+}
+
+/* Disconnects 'rc' and records 'error' as the error that caused 'rc''s last
+ * disconnection:
+ *
+ *   - 0 means that this disconnection is due to a request by 'rc''s client,
+ *     not due to any kind of network error.
+ *
+ *   - EOF means that the connection was closed in the normal way by the peer.
+ *
+ *   - A positive integer is an errno value that represents the error.
+ */
 static void
 disconnect(struct rconn *rc, int error)
 {
+    rc->last_error = error;
     if (rc->reliable) {
         time_t now = time_now();
 
         if (rc->state & (S_CONNECTING | S_ACTIVE | S_IDLE)) {
-            if (error > 0) {
-                VLOG_WARN("%s: connection dropped (%s)",
-                          rc->name, strerror(error));
-            } else if (error == EOF) {
-                if (rc->reliable) {
-                    VLOG_INFO("%s: connection closed by peer", rc->name);
-                }
-            } else {
-                VLOG_INFO("%s: connection dropped", rc->name);
-            }
             vconn_close(rc->vconn);
             rc->vconn = NULL;
             flush_queue(rc);

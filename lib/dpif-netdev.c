@@ -22,8 +22,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
-#include <net/if.h>
 #include <netinet/in.h>
+#include <net/if.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -751,7 +751,7 @@ dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
 
 		case ODPAT_SET_VLAN_PCP:
             *mutates = true;
-			if (a->vlan_pcp.vlan_pcp & ~VLAN_PCP_MASK) {
+			if (a->vlan_pcp.vlan_pcp & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT)) {
 				return EINVAL;
             }
 			break;
@@ -1290,8 +1290,9 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             break;
 
 		case ODPAT_SET_VLAN_PCP:
-			dp_netdev_modify_vlan_tci(packet, key, a->vlan_pcp.vlan_pcp << 13,
-                                      VLAN_PCP_MASK);
+			dp_netdev_modify_vlan_tci(
+                packet, key, a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT,
+                VLAN_PCP_MASK);
             break;
 
 		case ODPAT_STRIP_VLAN:

@@ -93,7 +93,7 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		mask = VLAN_VID_MASK;
 		key->dl_vlan = htons(tci & mask);
 	} else {
-		tci = a->vlan_pcp.vlan_pcp << 13;
+		tci = a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT;
 		mask = VLAN_PCP_MASK;
 	}
 

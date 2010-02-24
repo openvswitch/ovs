@@ -24,6 +24,10 @@
 #include "netflow.h"
 #include "tag.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct odp_actions;
 struct ofhooks;
 struct ofproto;
@@ -126,5 +130,9 @@ struct ofhooks {
 };
 void ofproto_revalidate(struct ofproto *, tag_type);
 struct tag_set *ofproto_get_revalidate_set(struct ofproto *);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* ofproto.h */

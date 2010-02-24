@@ -164,6 +164,42 @@ vconn_usage(bool active, bool passive, bool bootstrap OVS_UNUSED)
 #endif
 }
 
+/* Given 'name', a connection name in the form "TYPE:ARGS", stores the class
+ * named "TYPE" into '*classp' and returns 0.  Returns EAFNOSUPPORT and stores
+ * a null pointer into '*classp' if 'name' is in the wrong form or if no such
+ * class exists. */
+static int
+vconn_lookup_class(const char *name, struct vconn_class **classp)
+{
+    size_t prefix_len;
+
+    prefix_len = strcspn(name, ":");
+    if (name[prefix_len] != '\0') {
+        size_t i;
+
+        for (i = 0; i < ARRAY_SIZE(vconn_classes); i++) {
+            struct vconn_class *class = vconn_classes[i];
+            if (strlen(class->name) == prefix_len
+                && !memcmp(class->name, name, prefix_len)) {
+                *classp = class;
+                return 0;
+            }
+        }
+    }
+
+    *classp = NULL;
+    return EAFNOSUPPORT;
+}
+
+/* Returns 0 if 'name' is a connection name in the form "TYPE:ARGS" and TYPE is
+ * a supported connection type, otherwise EAFNOSUPPORT.  */
+int
+vconn_verify_name(const char *name)
+{
+    struct vconn_class *class;
+    return vconn_lookup_class(name, &class);
+}
+
 /* Attempts to connect to an OpenFlow device.  'name' is a connection name in
  * the form "TYPE:ARGS", where TYPE is an active vconn class's name and ARGS
  * are vconn class-specific.
@@ -178,35 +214,37 @@ vconn_usage(bool active, bool passive, bool bootstrap OVS_UNUSED)
 int
 vconn_open(const char *name, int min_version, struct vconn **vconnp)
 {
-    size_t prefix_len;
-    size_t i;
+    struct vconn_class *class;
+    struct vconn *vconn;
+    char *suffix_copy;
+    int error;
 
     COVERAGE_INC(vconn_open);
     check_vconn_classes();
 
+    /* Look up the class. */
+    error = vconn_lookup_class(name, &class);
+    if (!class) {
+        goto error;
+    }
+
+    /* Call class's "open" function. */
+    suffix_copy = xstrdup(strchr(name, ':') + 1);
+    error = class->open(name, suffix_copy, &vconn);
+    free(suffix_copy);
+    if (error) {
+        goto error;
+    }
+
+    /* Success. */
+    assert(vconn->state != VCS_CONNECTING || vconn->class->connect);
+    vconn->min_version = min_version;
+    *vconnp = vconn;
+    return 0;
+
+error:
     *vconnp = NULL;
-    prefix_len = strcspn(name, ":");
-    if (prefix_len == strlen(name)) {
-        return EAFNOSUPPORT;
-    }
-    for (i = 0; i < ARRAY_SIZE(vconn_classes); i++) {
-        struct vconn_class *class = vconn_classes[i];
-        if (strlen(class->name) == prefix_len
-            && !memcmp(class->name, name, prefix_len)) {
-            struct vconn *vconn;
-            char *suffix_copy = xstrdup(name + prefix_len + 1);
-            int retval = class->open(name, suffix_copy, &vconn);
-            free(suffix_copy);
-            if (!retval) {
-                assert(vconn->state != VCS_CONNECTING
-                       || vconn->class->connect);
-                vconn->min_version = min_version;
-                *vconnp = vconn;
-            }
-            return retval;
-        }
-    }
-    return EAFNOSUPPORT;
+    return error;
 }
 
 /* Allows 'vconn' to perform maintenance activities, such as flushing output
@@ -691,6 +729,42 @@ vconn_send_wait(struct vconn *vconn)
     vconn_wait(vconn, WAIT_SEND);
 }
 
+/* Given 'name', a connection name in the form "TYPE:ARGS", stores the class
+ * named "TYPE" into '*classp' and returns 0.  Returns EAFNOSUPPORT and stores
+ * a null pointer into '*classp' if 'name' is in the wrong form or if no such
+ * class exists. */
+static int
+pvconn_lookup_class(const char *name, struct pvconn_class **classp)
+{
+    size_t prefix_len;
+
+    prefix_len = strcspn(name, ":");
+    if (name[prefix_len] != '\0') {
+        size_t i;
+
+        for (i = 0; i < ARRAY_SIZE(pvconn_classes); i++) {
+            struct pvconn_class *class = pvconn_classes[i];
+            if (strlen(class->name) == prefix_len
+                && !memcmp(class->name, name, prefix_len)) {
+                *classp = class;
+                return 0;
+            }
+        }
+    }
+
+    *classp = NULL;
+    return EAFNOSUPPORT;
+}
+
+/* Returns 0 if 'name' is a connection name in the form "TYPE:ARGS" and TYPE is
+ * a supported connection type, otherwise EAFNOSUPPORT.  */
+int
+pvconn_verify_name(const char *name)
+{
+    struct pvconn_class *class;
+    return pvconn_lookup_class(name, &class);
+}
+
 /* Attempts to start listening for OpenFlow connections.  'name' is a
  * connection name in the form "TYPE:ARGS", where TYPE is an passive vconn
  * class's name and ARGS are vconn class-specific.
@@ -701,30 +775,34 @@ vconn_send_wait(struct vconn *vconn)
 int
 pvconn_open(const char *name, struct pvconn **pvconnp)
 {
-    size_t prefix_len;
-    size_t i;
+    struct pvconn_class *class;
+    struct pvconn *pvconn;
+    char *suffix_copy;
+    int error;
 
     check_vconn_classes();
 
+    /* Look up the class. */
+    error = pvconn_lookup_class(name, &class);
+    if (!class) {
+        goto error;
+    }
+
+    /* Call class's "open" function. */
+    suffix_copy = xstrdup(strchr(name, ':') + 1);
+    error = class->listen(name, suffix_copy, &pvconn);
+    free(suffix_copy);
+    if (error) {
+        goto error;
+    }
+
+    /* Success. */
+    *pvconnp = pvconn;
+    return 0;
+
+error:
     *pvconnp = NULL;
-    prefix_len = strcspn(name, ":");
-    if (prefix_len == strlen(name)) {
-        return EAFNOSUPPORT;
-    }
-    for (i = 0; i < ARRAY_SIZE(pvconn_classes); i++) {
-        struct pvconn_class *class = pvconn_classes[i];
-        if (strlen(class->name) == prefix_len
-            && !memcmp(class->name, name, prefix_len)) {
-            char *suffix_copy = xstrdup(name + prefix_len + 1);
-            int retval = class->listen(name, suffix_copy, pvconnp);
-            free(suffix_copy);
-            if (retval) {
-                *pvconnp = NULL;
-            }
-            return retval;
-        }
-    }
-    return EAFNOSUPPORT;
+    return error;
 }
 
 /* Returns the name that was used to open 'pvconn'.  The caller must not
@@ -1285,10 +1363,7 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
     switch (ntohs(a->type)) {
     case OFPAT_OUTPUT:
         error = check_action_port(ntohs(a->output.port), max_ports);
-        if (error) {
-            return error;
-        }
-        return check_action_exact_len(a, len, 8);
+        return error ? error : check_action_exact_len(a, len, 8);
 
     case OFPAT_SET_VLAN_VID:
     case OFPAT_SET_VLAN_PCP:
@@ -1305,29 +1380,15 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
         return check_action_exact_len(a, len, 16);
 
     case OFPAT_VENDOR:
-        if (a->vendor.vendor == htonl(NX_VENDOR_ID)) {
-            return check_nicira_action(a, len);
-        } else {
-            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR);
-        }
-        break;
+        return (a->vendor.vendor == htonl(NX_VENDOR_ID)
+                ? check_nicira_action(a, len)
+                : ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR));
 
     default:
         VLOG_WARN_RL(&bad_ofmsg_rl, "unknown action type %"PRIu16,
                 ntohs(a->type));
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_TYPE);
     }
-
-    if (!len) {
-        VLOG_DBG_RL(&bad_ofmsg_rl, "action has invalid length 0");
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-    }
-    if (len % ACTION_ALIGNMENT) {
-        VLOG_DBG_RL(&bad_ofmsg_rl, "action length %u is not a multiple of %d",
-                    len, ACTION_ALIGNMENT);
-        return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
-    }
-    return 0;
 }
 
 int
@@ -1347,7 +1408,15 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
                         "action requires %u slots but only %u remain",
                         n_slots, slots_left);
             return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+        } else if (!len) {
+            VLOG_DBG_RL(&bad_ofmsg_rl, "action has invalid length 0");
+            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
+        } else if (len % ACTION_ALIGNMENT) {
+            VLOG_DBG_RL(&bad_ofmsg_rl, "action length %u is not a multiple "
+                        "of %d", len, ACTION_ALIGNMENT);
+            return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_LEN);
         }
+
         error = check_action(a, len, max_ports);
         if (error) {
             return error;

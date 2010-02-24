@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@
 
 #include <config.h>
 #include "pinsched.h"
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include "ofpbuf.h"
 #include "openflow/openflow.h"

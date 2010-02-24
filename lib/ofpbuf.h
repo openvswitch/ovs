@@ -64,8 +64,8 @@ void ofpbuf_reserve(struct ofpbuf *, size_t);
 void *ofpbuf_push_uninit(struct ofpbuf *b, size_t);
 void *ofpbuf_push(struct ofpbuf *b, const void *, size_t);
 
-size_t ofpbuf_headroom(struct ofpbuf *);
-size_t ofpbuf_tailroom(struct ofpbuf *);
+size_t ofpbuf_headroom(const struct ofpbuf *);
+size_t ofpbuf_tailroom(const struct ofpbuf *);
 void ofpbuf_prealloc_headroom(struct ofpbuf *, size_t);
 void ofpbuf_prealloc_tailroom(struct ofpbuf *, size_t);
 void ofpbuf_trim(struct ofpbuf *);
@@ -73,6 +73,8 @@ void ofpbuf_trim(struct ofpbuf *);
 void ofpbuf_clear(struct ofpbuf *);
 void *ofpbuf_pull(struct ofpbuf *, size_t);
 void *ofpbuf_try_pull(struct ofpbuf *, size_t);
+
+char *ofpbuf_to_string(const struct ofpbuf *, size_t maxbytes);
 
 #ifdef  __cplusplus
 }

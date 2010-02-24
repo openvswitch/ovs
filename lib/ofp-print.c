@@ -16,10 +16,10 @@
 
 #include <config.h>
 #include "ofp-print.h"
-#include "xtoxll.h"
 
 #include <errno.h>
 #include <inttypes.h>
+#include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/wait.h>
 #include <stdarg.h>
@@ -35,6 +35,7 @@
 #include "packets.h"
 #include "pcap.h"
 #include "util.h"
+#include "xtoxll.h"
 
 static void ofp_print_port_name(struct ds *string, uint16_t port);
 

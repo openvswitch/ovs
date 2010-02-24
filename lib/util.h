@@ -76,8 +76,6 @@ extern const char *program_name;
 #endif
 
 #define NOT_REACHED() abort()
-#define NOT_IMPLEMENTED() abort()
-#define NOT_TESTED() ((void) 0) /* XXX should print a message. */
 
 /* Given POINTER, the address of the given MEMBER in a STRUCT object, returns
    the STRUCT object. */

@@ -16,14 +16,17 @@ void sfl_sampler_init(SFLSampler *sampler, SFLAgent *agent, SFLDataSource_instan
     SFLDataSource_instance dsi = *pdsi;
 
     /* preserve the *nxt pointer too, in case we are resetting this poller and it is
-       already part of the agent's linked list (thanks to Matt Woodly for pointing this out) */
+       already part of the agent's linked list (thanks to Matt Woodly for pointing this out,
+       and to Andy Kitchingman for pointing out that it applies to the hash_nxt ptr too) */
     SFLSampler *nxtPtr = sampler->nxt;
+    SFLSampler *hashPtr = sampler->hash_nxt;
   
     /* clear everything */
     memset(sampler, 0, sizeof(*sampler));
   
-    /* restore the linked list ptr */
+    /* restore the linked list and hash-table ptr */
     sampler->nxt = nxtPtr;
+    sampler->hash_nxt = hashPtr;
   
     /* now copy in the parameters */
     sampler->agent = agent;

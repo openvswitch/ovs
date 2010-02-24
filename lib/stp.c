@@ -18,6 +18,8 @@
  * applies to all modifications. */
 
 #include "stp.h"
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <assert.h>
 #include <inttypes.h>

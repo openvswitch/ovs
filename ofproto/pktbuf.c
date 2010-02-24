@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -151,9 +151,9 @@ pktbuf_get_null(void)
  * datapath port number on which the packet was received in '*in_port'.  The
  * caller becomes responsible for freeing the buffer.  However, if 'id'
  * identifies a "null" packet buffer (created with pktbuf_get_null()), stores
- * NULL in '*bufferp' and -1 in '*in_port'.
+ * NULL in '*bufferp' and UINT16_max in '*in_port'.
  *
- * On failure, stores NULL in in '*bufferp' and -1 in '*in_port'. */
+ * On failure, stores NULL in in '*bufferp' and UINT16_MAX in '*in_port'. */
 int
 pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
                 uint16_t *in_port)
@@ -194,7 +194,7 @@ pktbuf_retrieve(struct pktbuf *pb, uint32_t id, struct ofpbuf **bufferp,
         error = 0;
     }
     *bufferp = NULL;
-    *in_port = -1;
+    *in_port = UINT16_MAX;
     return error;
 }
 

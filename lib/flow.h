@@ -16,6 +16,7 @@
 #ifndef FLOW_H
 #define FLOW_H 1
 
+#include <sys/types.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdint.h>

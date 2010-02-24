@@ -37,12 +37,6 @@
 #define OFP_ASSERT BOOST_STATIC_ASSERT
 #endif /* __cplusplus */
 
-#ifndef SWIG
-#define OFP_PACKED __attribute__((packed))
-#else
-#define OFP_PACKED              /* SWIG doesn't understand __attribute. */
-#endif
-
 /* Version number:
  * Non-experimental versions released: 0x01
  * Experimental versions released: 0x81 -- 0x99

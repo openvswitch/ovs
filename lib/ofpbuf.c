@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
+#include "dynamic-string.h"
 #include "util.h"
 
 /* Initializes 'b' as an empty ofpbuf that contains the 'allocated' bytes of
@@ -103,7 +104,7 @@ ofpbuf_delete(struct ofpbuf *b)
  * commonly, the data in a ofpbuf is at its beginning, and thus the ofpbuf's
  * headroom is 0.) */
 size_t
-ofpbuf_headroom(struct ofpbuf *b) 
+ofpbuf_headroom(const struct ofpbuf *b)
 {
     return (char*)b->data - (char*)b->base;
 }
@@ -111,7 +112,7 @@ ofpbuf_headroom(struct ofpbuf *b)
 /* Returns the number of bytes that may be appended to the tail end of ofpbuf
  * 'b' before the ofpbuf must be reallocated. */
 size_t
-ofpbuf_tailroom(struct ofpbuf *b) 
+ofpbuf_tailroom(const struct ofpbuf *b)
 {
     return (char*)ofpbuf_end(b) - (char*)ofpbuf_tail(b);
 }
@@ -285,4 +286,19 @@ void *
 ofpbuf_try_pull(struct ofpbuf *b, size_t size) 
 {
     return b->size >= size ? ofpbuf_pull(b, size) : NULL;
+}
+
+/* Returns a string that describes some of 'b''s metadata plus a hex dump of up
+ * to 'maxbytes' from the start of the buffer. */
+char *
+ofpbuf_to_string(const struct ofpbuf *b, size_t maxbytes)
+{
+    struct ds s;
+
+    ds_init(&s);
+    ds_put_format(&s, "size=%zu, allocated=%zu, head=%zu, tail=%zu\n",
+                  b->size, b->allocated,
+                  ofpbuf_headroom(b), ofpbuf_tailroom(b));
+    ds_put_hex_dump(&s, b->data, MIN(b->size, maxbytes), 0, false);
+    return ds_cstr(&s);
 }

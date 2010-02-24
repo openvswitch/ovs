@@ -23,6 +23,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct dpif;
 struct ofpbuf;
 struct svec;
@@ -96,5 +100,9 @@ void dpif_recv_wait(struct dpif *);
 
 void dpif_get_netflow_ids(const struct dpif *,
                           uint8_t *engine_type, uint8_t *engine_id);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* dpif.h */

@@ -760,6 +760,8 @@ ofproto_destroy(struct ofproto *p)
     free(p->serial_desc);
     free(p->dp_desc);
 
+    port_array_destroy(&p->ports);
+
     free(p);
 }
 
