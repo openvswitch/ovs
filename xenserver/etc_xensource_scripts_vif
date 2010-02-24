@@ -61,7 +61,8 @@ handle_mtu()
 {
     local mtu=$(xenstore-read "${PRIVATE}/MTU" 2>/dev/null)
     if [ $? -eq 0 -a -n "${mtu}" ]; then
-	echo "${mtu}" > /sys/class/net/${dev}/mtu
+	logger -t scripts-vif "Setting ${dev} MTU ${mtu}"
+	${IP} link set "${dev}" mtu ${mtu} || logger -t scripts-vif "Failed to ip link set ${dev} mtu ${mtu}. Error code $?"
     fi
 }
 

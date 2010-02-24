@@ -267,6 +267,8 @@ def _configure_physical_interface(pif):
 
     pifrec = db().get_pif_record(pif)
 
+    log("Configuring physical interface %s" % pifrec['device'])
+
     f = open_pif_ifcfg(pif)
 
     f.write("TYPE=Ethernet\n")
@@ -278,7 +280,7 @@ def _configure_physical_interface(pif):
     if len(offload):
         f.write("ETHTOOL_OFFLOAD_OPTS=\"%s\"\n" % str.join(" ", offload))
 
-    mtu = mtu_setting(pifrec['other_config'])
+    mtu = mtu_setting(pifrec['network'], "PIF", pifrec['other_config'])
     if mtu:
         f.write("MTU=%s\n" % mtu)
 
@@ -336,7 +338,7 @@ def _configure_bond_interface(pif):
     if len(offload):
         f.write("ETHTOOL_OFFLOAD_OPTS=\"%s\"\n" % str.join(" ", offload))
 
-    mtu = mtu_setting(pifrec['other_config'])
+    mtu = mtu_setting(pifrec['network'], "VLAN-PIF", pifrec['other_config'])
     if mtu:
         f.write("MTU=%s\n" % mtu)
 
@@ -386,7 +388,7 @@ def _configure_vlan_interface(pif):
     if len(offload):
         f.write("ETHTOOL_OFFLOAD_OPTS=\"%s\"\n" % str.join(" ", offload))
 
-    mtu = mtu_setting(pifrec['other_config'])
+    mtu = mtu_setting(pifrec['network'], "Bond-PIF", pifrec['other_config'])
     if mtu:
         f.write("MTU=%s\n" % mtu)
 

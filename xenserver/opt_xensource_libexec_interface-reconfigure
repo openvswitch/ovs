@@ -286,7 +286,8 @@ def ipdev_configure_network(pif, dp):
     """
 
     pifrec = db().get_pif_record(pif)
-    nwrec = db().get_network_record(pifrec['network'])
+    nw = pifrec['network']
+    nwrec = db().get_network_record(nw)
 
     ipdev = pif_ipdev_name(pif)
 
@@ -321,11 +322,12 @@ def ipdev_configure_network(pif, dp):
         if len(offload):
             f.write("ETHTOOL_OFFLOAD_OPTS=\"%s\"\n" % str.join(" ", offload))
 
-        mtu = mtu_setting(nwrec['other_config'])
-        if mtu:
-            f.write("MTU=%s\n" % mtu)
-
         ipdev_configure_static_routes(ipdev, nwrec['other_config'], f)
+
+    mtu = mtu_setting(nw, "Network", nwrec['other_config'])
+    if mtu:
+        f.write("MTU=%s\n" % mtu)
+
 
     if pifrec.has_key('DNS') and pifrec['DNS'] != "":
         ServerList = pifrec['DNS'].split(",")

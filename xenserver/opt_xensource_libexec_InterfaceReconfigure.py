@@ -318,6 +318,7 @@ _NETWORK_OTHERCONFIG_ATTRS = [ 'mtu', 'static-routes' ] + _ETHTOOL_OTHERCONFIG_A
 
 _NETWORK_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),
                    'bridge': (_str_to_xml,_str_from_xml),
+                   'MTU': (_str_to_xml,_str_from_xml),
                    'PIFs': (lambda x, p, t, v: _strlist_to_xml(x, p, 'PIFs', 'PIF', v),
                             lambda n: _strlist_from_xml(n, 'PIFs', 'PIF')),
                    'other_config': (lambda x, p, t, v: _otherconfig_to_xml(x, p, v, _NETWORK_OTHERCONFIG_ATTRS),
@@ -619,13 +620,33 @@ def ethtool_settings(oc):
                 log("Invalid value for ethtool-%s = %s. Must be on|true|off|false." % (opt, val))
     return settings,offload
 
-def mtu_setting(oc):
+# By default the MTU is taken from the Network.MTU setting for VIF,
+# PIF and Bridge. However it is possible to override this by using
+# {VIF,PIF,Network}.other-config:mtu.
+#
+# type parameter is a string describing the object that the oc parameter
+# is from. e.g. "PIF", "Network" 
+def mtu_setting(nw, type, oc):
+    mtu = None
+
+    nwrec = db().get_network_record(nw)
+    if nwrec.has_key('MTU'):
+        mtu = nwrec['MTU']
+    else:
+        mtu = "1500"
+        
     if oc.has_key('mtu'):
+        log("Override Network.MTU setting on bridge %s from %s.MTU is %s" % \
+            (nwrec['bridge'], type, mtu))
+        mtu = oc['mtu']
+
+    if mtu is not None:
         try:
-            int(oc['mtu'])      # Check that the value is an integer
-            return oc['mtu']
+            int(mtu)      # Check that the value is an integer
+            return mtu
         except ValueError, x:
-            log("Invalid value for mtu = %s" % oc['mtu'])
+            log("Invalid value for mtu = %s" % mtu)
+
     return None
 
 #

@@ -366,11 +366,12 @@ class DatapathVswitch(Datapath):
         physical_devices = datapath_get_physical_pifs(self._dp)
         
         for p in physical_devices:
-            oc = db().get_pif_record(p)['other_config']
+            prec = db().get_pif_record(p)
+            oc = prec['other_config']
 
             dev = pif_netdev_name(p)
 
-            mtu = mtu_setting(oc)
+            mtu = mtu_setting(prec['network'], "PIF", oc)
 
             netdev_up(dev, mtu)
 
