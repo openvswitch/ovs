@@ -111,13 +111,15 @@ collectors_destroy(struct collectors *c)
 void
 collectors_send(const struct collectors *c, const void *payload, size_t n)
 {
-    size_t i;
+    if (c) {
+        size_t i;
 
-    for (i = 0; i < c->n_fds; i++) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        if (send(c->fds[i], payload, n, 0) == -1) {
-            VLOG_WARN_RL(&rl, "sending to collector failed: %s",
-                         strerror(errno));
+        for (i = 0; i < c->n_fds; i++) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            if (send(c->fds[i], payload, n, 0) == -1) {
+                VLOG_WARN_RL(&rl, "sending to collector failed: %s",
+                             strerror(errno));
+            }
         }
     }
 }
@@ -125,5 +127,5 @@ collectors_send(const struct collectors *c, const void *payload, size_t n)
 int
 collectors_count(const struct collectors *c)
 {
-    return c->n_fds;
+    return c ? c->n_fds : 0;
 }
