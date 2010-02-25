@@ -684,6 +684,8 @@ action_down: xenbr2
 /sbin/ifdown xenbr2
 deconfigure ipdev xenbr2 on xenbr2
 deconfigure_bridge: bridge           - xenbr2
+action_down: bring down physical devices - [u'eth2']
+/sbin/ifconfig eth2 down
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port xenbr2
     --if-exists del-br xenbr2
@@ -747,6 +749,8 @@ deconfigure ipdev xapi3 on xenbr3
 deconfigure_bridge: bridge           - xapi3
 action_down: no more masters, bring down slave xenbr3
 deconfigure_bridge: bridge           - xenbr3
+action_down: bring down physical devices - [u'eth3']
+/sbin/ifconfig eth3 down
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port xapi3
     --if-exists del-br xapi3
@@ -824,6 +828,9 @@ action_down: xapi1
 /sbin/ifdown xapi1
 deconfigure ipdev xapi1 on xapi1
 deconfigure_bridge: bridge           - xapi1
+action_down: bring down physical devices - [u'eth0', u'eth1']
+/sbin/ifconfig eth0 down
+/sbin/ifconfig eth1 down
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port xapi1
     --if-exists del-br xapi1
@@ -905,6 +912,9 @@ deconfigure ipdev xapi2 on xapi1
 deconfigure_bridge: bridge           - xapi2
 action_down: no more masters, bring down slave xapi1
 deconfigure_bridge: bridge           - xapi1
+action_down: bring down physical devices - [u'eth0', u'eth1']
+/sbin/ifconfig eth0 down
+/sbin/ifconfig eth1 down
 /usr/bin/ovs-vsctl --timeout=20
     --with-iface --if-exists del-port xapi2
     --if-exists del-br xapi2

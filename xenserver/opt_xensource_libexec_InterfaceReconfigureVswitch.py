@@ -434,4 +434,11 @@ class DatapathVswitch(Datapath):
         if dp:
             vsctl_argv += deconfigure_bridge(dp)
 
+            physical_devices = [pif_netdev_name(p) for p in datapath_get_physical_pifs(dp)]
+
+            log("action_down: bring down physical devices - %s" % physical_devices)
+        
+            for p in physical_devices:
+                netdev_down(p)
+
         datapath_modify_config(vsctl_argv)
