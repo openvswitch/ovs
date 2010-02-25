@@ -198,7 +198,80 @@ OVSDB_CHECK_NEGATIVE([uuids must be valid],
   [parse-atom-strings '[["uuid"]]' '1234-5678'],
   ["1234-5678" is not a valid UUID])
 
-AT_BANNER([OVSDB -- atoms with constraints])
+AT_BANNER([OVSDB -- atoms with enum constraints])
+
+OVSDB_CHECK_POSITIVE([integer atom enum], 
+  [[parse-atoms '[{"type": "integer", "enum": ["set", [1, 6, 8, 10]]}]' \
+    '[0]' \
+    '[1]' \
+    '[2]' \
+    '[3]' \
+    '[6]' \
+    '[7]' \
+    '[8]' \
+    '[9]' \
+    '[10]' \
+    '[11]']], 
+  [[constraint violation: 0 is not one of the allowed values ([1, 6, 8, 10])
+1
+constraint violation: 2 is not one of the allowed values ([1, 6, 8, 10])
+constraint violation: 3 is not one of the allowed values ([1, 6, 8, 10])
+6
+constraint violation: 7 is not one of the allowed values ([1, 6, 8, 10])
+8
+constraint violation: 9 is not one of the allowed values ([1, 6, 8, 10])
+10
+constraint violation: 11 is not one of the allowed values ([1, 6, 8, 10])]])
+
+OVSDB_CHECK_POSITIVE([real atom enum], 
+  [[parse-atoms '[{"type": "real", "enum": ["set", [-1.5, 1.5]]}]' \
+    '[-2]' \
+    '[-1]' \
+    '[-1.5]' \
+    '[0]' \
+    '[1]' \
+    '[1.5]' \
+    '[2]']], 
+  [[constraint violation: -2 is not one of the allowed values ([-1.5, 1.5])
+constraint violation: -1 is not one of the allowed values ([-1.5, 1.5])
+-1.5
+constraint violation: 0 is not one of the allowed values ([-1.5, 1.5])
+constraint violation: 1 is not one of the allowed values ([-1.5, 1.5])
+1.5
+constraint violation: 2 is not one of the allowed values ([-1.5, 1.5])]])
+
+OVSDB_CHECK_POSITIVE([boolean atom enum], 
+  [[parse-atoms '[{"type": "boolean", "enum": false}]' \
+    '[false]' \
+    '[true]']], 
+  [[false
+constraint violation: true is not one of the allowed values ([false])]])
+
+OVSDB_CHECK_POSITIVE([string atom enum], 
+  [[parse-atoms '[{"type": "string", "enum": ["set", ["abc", "def"]]}]' \
+    '[""]' \
+    '["ab"]' \
+    '["abc"]' \
+    '["def"]' \
+    '["defg"]' \
+    '["DEF"]']], 
+  [[constraint violation: "" is not one of the allowed values ([abc, def])
+constraint violation: ab is not one of the allowed values ([abc, def])
+"abc"
+"def"
+constraint violation: defg is not one of the allowed values ([abc, def])
+constraint violation: DEF is not one of the allowed values ([abc, def])]])
+
+OVSDB_CHECK_POSITIVE([uuid atom enum], 
+  [[parse-atoms '[{"type": "uuid", "enum": ["set", [["uuid", "6d53a6dd-2da7-4924-9927-97f613812382"], ["uuid", "52cbc842-137a-4db5-804f-9f34106a0ba3"]]]}]' \
+    '["uuid", "6d53a6dd-2da7-4924-9927-97f613812382"]' \
+    '["uuid", "52cbc842-137a-4db5-804f-9f34106a0ba3"]' \
+    '["uuid", "dab2a6b2-6094-4f43-a7ef-4c0f0608f176"]']], 
+  [[["uuid","6d53a6dd-2da7-4924-9927-97f613812382"]
+["uuid","52cbc842-137a-4db5-804f-9f34106a0ba3"]
+constraint violation: dab2a6b2-6094-4f43-a7ef-4c0f0608f176 is not one of the allowed values ([52cbc842-137a-4db5-804f-9f34106a0ba3, 6d53a6dd-2da7-4924-9927-97f613812382])]])
+
+AT_BANNER([OVSDB -- atoms with other constraints])
 
 OVSDB_CHECK_POSITIVE([integers >= 5], 
   [[parse-atoms '[{"type": "integer", "minInteger": 5}]' \

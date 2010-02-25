@@ -590,6 +590,25 @@ struct ovsdb_error *
 ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
                              const struct ovsdb_base_type *base)
 {
+    if (base->enum_
+        && ovsdb_datum_find_key(base->enum_, atom, base->type) == UINT_MAX) {
+        struct ovsdb_error *error;
+        struct ds actual = DS_EMPTY_INITIALIZER;
+        struct ds valid = DS_EMPTY_INITIALIZER;
+
+        ovsdb_atom_to_string(atom, base->type, &actual);
+        ovsdb_datum_to_string(base->enum_,
+                              ovsdb_base_type_get_enum_type(base->type),
+                              &valid);
+        error = ovsdb_error("constraint violation",
+                            "%s is not one of the allowed values (%s)",
+                            ds_cstr(&actual), ds_cstr(&valid));
+        ds_destroy(&actual);
+        ds_destroy(&valid);
+
+        return error;
+    }
+
     switch (base->type) {
     case OVSDB_TYPE_VOID:
         NOT_REACHED();
@@ -777,7 +796,7 @@ ovsdb_datum_swap(struct ovsdb_datum *a, struct ovsdb_datum *b)
 }
 
 struct ovsdb_datum_sort_cbdata {
-    const struct ovsdb_type *type;
+    enum ovsdb_atomic_type key_type;
     struct ovsdb_datum *datum;
 };
 
@@ -788,7 +807,7 @@ ovsdb_datum_sort_compare_cb(size_t a, size_t b, void *cbdata_)
 
     return ovsdb_atom_compare_3way(&cbdata->datum->keys[a],
                                    &cbdata->datum->keys[b],
-                                   cbdata->type->key.type);
+                                   cbdata->key_type);
 }
 
 static void
@@ -797,13 +816,13 @@ ovsdb_datum_sort_swap_cb(size_t a, size_t b, void *cbdata_)
     struct ovsdb_datum_sort_cbdata *cbdata = cbdata_;
 
     ovsdb_atom_swap(&cbdata->datum->keys[a], &cbdata->datum->keys[b]);
-    if (cbdata->type->value.type != OVSDB_TYPE_VOID) {
+    if (cbdata->datum->values) {
         ovsdb_atom_swap(&cbdata->datum->values[a], &cbdata->datum->values[b]);
     }
 }
 
 struct ovsdb_error *
-ovsdb_datum_sort(struct ovsdb_datum *datum, const struct ovsdb_type *type)
+ovsdb_datum_sort(struct ovsdb_datum *datum, enum ovsdb_atomic_type key_type)
 {
     if (datum->n < 2) {
         return NULL;
@@ -811,15 +830,15 @@ ovsdb_datum_sort(struct ovsdb_datum *datum, const struct ovsdb_type *type)
         struct ovsdb_datum_sort_cbdata cbdata;
         size_t i;
 
-        cbdata.type = type;
+        cbdata.key_type = key_type;
         cbdata.datum = datum;
         sort(datum->n, ovsdb_datum_sort_compare_cb, ovsdb_datum_sort_swap_cb,
              &cbdata);
 
         for (i = 0; i < datum->n - 1; i++) {
             if (ovsdb_atom_equals(&datum->keys[i], &datum->keys[i + 1],
-                                  type->key.type)) {
-                if (ovsdb_type_is_map(type)) {
+                                  key_type)) {
+                if (datum->values) {
                     return ovsdb_error(NULL, "map contains duplicate key");
                 } else {
                     return ovsdb_error(NULL, "set contains duplicate");
@@ -828,6 +847,16 @@ ovsdb_datum_sort(struct ovsdb_datum *datum, const struct ovsdb_type *type)
         }
 
         return NULL;
+    }
+}
+
+void
+ovsdb_datum_sort_assert(struct ovsdb_datum *datum,
+                        enum ovsdb_atomic_type key_type)
+{
+    struct ovsdb_error *error = ovsdb_datum_sort(datum, key_type);
+    if (error) {
+        NOT_REACHED();
     }
 }
 
@@ -931,7 +960,7 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
             datum->n++;
         }
 
-        error = ovsdb_datum_sort(datum, type);
+        error = ovsdb_datum_sort(datum, type->key.type);
         if (error) {
             goto error;
         }
@@ -1128,7 +1157,7 @@ ovsdb_datum_from_string(struct ovsdb_datum *datum,
         goto error;
     }
 
-    dberror = ovsdb_datum_sort(datum, type);
+    dberror = ovsdb_datum_sort(datum, type->key.type);
     if (dberror) {
         ovsdb_error_destroy(dberror);
         if (ovsdb_type_is_map(type)) {
@@ -1424,7 +1453,7 @@ ovsdb_datum_union(struct ovsdb_datum *a, const struct ovsdb_datum *b,
     if (n != a->n) {
         struct ovsdb_error *error;
         a->n = n;
-        error = ovsdb_datum_sort(a, type);
+        error = ovsdb_datum_sort(a, type->key.type);
         assert(!error);
     }
 }
@@ -1452,8 +1481,7 @@ ovsdb_datum_subtract(struct ovsdb_datum *a, const struct ovsdb_type *a_type,
         }
     }
     if (changed) {
-        struct ovsdb_error *error = ovsdb_datum_sort(a, a_type);
-        assert(!error);
+        ovsdb_datum_sort_assert(a, a_type->key.type);
     }
 }
 

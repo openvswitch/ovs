@@ -49,6 +49,8 @@ enum ovsdb_parser_types {
     OP_INTEGER = 1 << JSON_INTEGER,       /* 123. */
     OP_NONINTEGER = 1 << JSON_REAL,       /* 123.456. */
     OP_STRING = 1 << JSON_STRING,         /* "..." */
+    OP_ANY = (OP_NULL | OP_FALSE | OP_TRUE | OP_OBJECT | OP_ARRAY
+              | OP_INTEGER | OP_NONINTEGER | OP_STRING),
 
     OP_BOOLEAN = OP_FALSE | OP_TRUE,
     OP_NUMBER = OP_INTEGER | OP_NONINTEGER,

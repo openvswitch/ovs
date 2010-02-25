@@ -15,6 +15,9 @@ OVSDB_CHECK_NEGATIVE([void is not a valid atomic-type],
 
 AT_BANNER([OVSDB -- base types])
 
+OVSDB_CHECK_POSITIVE([integer enum],
+  [[parse-base-type '{"type": "integer", "enum": ["set", [-1, 4, 5]]}' ]],
+  [[{"enum":["set",[-1,4,5]],"type":"integer"}]])
 OVSDB_CHECK_POSITIVE([integer >= 5], 
   [[parse-base-type '{"type": "integer", "minInteger": 5}' ]],
   [{"minInteger":5,"type":"integer"}])
@@ -28,6 +31,9 @@ OVSDB_CHECK_NEGATIVE([integer max may not be less than min],
   [[parse-base-type '{"type": "integer", "minInteger": 5, "maxInteger": 3}']],
   [minInteger exceeds maxInteger])
 
+OVSDB_CHECK_POSITIVE([real enum],
+  [[parse-base-type '{"type": "real", "enum": ["set", [1.5, 0, 2.75]]}' ]],
+  [[{"enum":["set",[0,1.5,2.75]],"type":"real"}]])
 OVSDB_CHECK_POSITIVE([real >= -1.5], 
   [[parse-base-type '{"type": "real", "minReal": -1.5}']],
   [{"minReal":-1.5,"type":"real"}])
@@ -43,7 +49,13 @@ OVSDB_CHECK_NEGATIVE([real max may not be less than min],
 
 OVSDB_CHECK_POSITIVE([boolean], 
   [[parse-base-type '[{"type": "boolean"}]' ]], ["boolean"])
+OVSDB_CHECK_POSITIVE([boolean enum],
+  [[parse-base-type '{"type": "boolean", "enum": true}' ]],
+  [[{"enum":true,"type":"boolean"}]])
 
+OVSDB_CHECK_POSITIVE([string enum], 
+  [[parse-base-type '{"type": "string", "enum": ["set", ["def", "abc"]]}']],
+  [[{"enum":["set",["abc","def"]],"type":"string"}]])
 OVSDB_CHECK_POSITIVE([string minLength], 
   [[parse-base-type '{"type": "string", "minLength": 1}']],
   [{"minLength":1,"type":"string"}])
@@ -60,6 +72,9 @@ OVSDB_CHECK_NEGATIVE([maxLength must not be negative],
   [[parse-base-type '{"type": "string", "maxLength": -1}']],
   [maxLength out of valid range 0 to 4294967295])
 
+OVSDB_CHECK_POSITIVE([uuid enum], 
+  [[parse-base-type '{"type": "uuid", "enum": ["uuid", "36bf19c0-ad9d-4232-bb85-b3d73dfe2123"]}' ]],
+  [[{"enum":["uuid","36bf19c0-ad9d-4232-bb85-b3d73dfe2123"],"type":"uuid"}]])
 OVSDB_CHECK_POSITIVE([uuid refTable], 
   [[parse-base-type '{"type": "uuid", "refTable": "myTable"}' ]],
   [{"refTable":"myTable","type":"uuid"}])

@@ -46,6 +46,11 @@ struct json *ovsdb_atomic_type_to_json(enum ovsdb_atomic_type);
 
 struct ovsdb_base_type {
     enum ovsdb_atomic_type type;
+
+    /* If nonnull, a datum with keys of type 'type' that expresses all the
+     * valid values for this base_type. */
+    struct ovsdb_datum *enum_;
+
     union {
         struct ovsdb_integer_constraints {
             int64_t min;        /* minInteger or INT64_MIN. */
@@ -90,6 +95,7 @@ void ovsdb_base_type_destroy(struct ovsdb_base_type *);
 bool ovsdb_base_type_is_valid(const struct ovsdb_base_type *);
 bool ovsdb_base_type_has_constraints(const struct ovsdb_base_type *);
 void ovsdb_base_type_clear_constraints(struct ovsdb_base_type *);
+const struct ovsdb_type *ovsdb_base_type_get_enum_type(enum ovsdb_atomic_type);
 
 struct ovsdb_error *ovsdb_base_type_from_json(struct ovsdb_base_type *,
                                               const struct json *)

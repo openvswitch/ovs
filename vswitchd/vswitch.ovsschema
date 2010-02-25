@@ -245,7 +245,8 @@
          "type": {"key": "integer", "min": 0, "max": 1}},
        "fail_mode": {
          "comment": "Either \"standalone\" or \"secure\", or empty to use the implementation's default.",
-         "type": {"key": {"type": "string"},
+         "type": {"key": {"type": "string",
+                          "enum": ["set", ["standalone", "secure"]]},
                   "min": 0, "max": 1}},
        "discover_accept_regex": {
          "comment": "If \"target\" is \"discover\", a POSIX extended regular expression against which the discovered controller location is validated.  If not specified, the default is implementation-specific.",
@@ -255,7 +256,8 @@
          "type": {"key": "boolean", "min": 0, "max": 1}},
        "connection_mode": {
          "comment": "Either \"in-band\" or \"out-of-band\".  If not specified, the default is implementation-specific.",
-         "type": {"key": {"type": "string"},
+         "type": {"key": {"type": "string",
+                  "enum": ["set", ["in-band", "out-of-band"]]},
                   "min": 0, "max": 1}},
        "local_ip": {
          "comment": "If \"target\" is not \"discover\", the IP address to configure on the local port.",

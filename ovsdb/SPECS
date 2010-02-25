@@ -173,6 +173,7 @@ is represented by <database-schema>, as described below.
     <atomic-type> or a JSON object with the following members:
 
         "type": <atomic-type>              required
+        "enum": <value>                    optional
         "minInteger": <integer>            optional, integers only
         "maxInteger": <integer>            optional, integers only
         "minReal": <real>                  optional, reals only
@@ -183,6 +184,13 @@ is represented by <database-schema>, as described below.
 
     An <atomic-type> by itself is equivalent to a JSON object with a
     single member "type" whose value is the <atomic-type>.
+
+    "enum" may be specified as a <value> whose type is a set of one
+    or more values specified for the member "type".  If "enum" is
+    specified, then the valid values of the <base-type> are limited to
+    those in the <value>.
+
+    "enum" is mutually exclusive with the following constraints.
 
     If "type" is "integer", then "minInteger" or "maxInteger" or both
     may also be specified, restricting the valid integer range.  If

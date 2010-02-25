@@ -18,7 +18,7 @@ class Error(Exception):
 def getMember(json, name, validTypes, description, default=None):
     if name in json:
         member = json[name]
-        if type(member) not in validTypes:
+        if len(validTypes) and type(member) not in validTypes:
             raise Error("%s: type mismatch for '%s' member"
                         % (description, name))
         return member
@@ -108,13 +108,89 @@ def escapeCString(src):
             dst += c
     return dst
 
+class UUID:
+    x = "[0-9a-fA-f]"
+    uuidRE = re.compile("^(%s{8})-(%s{4})-(%s{4})-(%s{4})-(%s{4})(%s{8})$"
+                        % (x, x, x, x, x, x))
+
+    def __init__(self, value):
+        self.value = value
+
+    @staticmethod
+    def fromString(s):
+        if not uuidRE.match(s):
+            raise Error("%s is not a valid UUID" % s)
+        return UUID(s)
+
+    @staticmethod
+    def fromJson(json):
+        if UUID.isValidJson(json):
+            return UUID(json[1])
+        else:
+            raise Error("%s is not valid JSON for a UUID" % json)
+
+    @staticmethod
+    def isValidJson(json):
+        return len(json) == 2 and json[0] == "uuid" and uuidRE.match(json[1])
+            
+    def toJson(self):
+        return ["uuid", self.value]
+
+    def cInitUUID(self, var):
+        m = re.match(self.value)
+        return ["%s.parts[0] = 0x%s;" % (var, m.group(1)),
+                "%s.parts[1] = 0x%s%s;" % (var, m.group(2), m.group(3)),
+                "%s.parts[2] = 0x%s%s;" % (var, m.group(4), m.group(5)),
+                "%s.parts[3] = 0x%s;" % (var, m.group(6))]
+
+class Atom:
+    def __init__(self, type, value):
+        self.type = type
+        self.value = value
+
+    @staticmethod
+    def fromJson(type_, json):
+        if ((type_ == 'integer' and type(json) in [int, long])
+            or (type_ == 'real' and type(json) in [int, long, float])
+            or (type_ == 'boolean' and json in [True, False])
+            or (type_ == 'string' and type(json) in [str, unicode])):
+            return Atom(type_, json)
+        elif type_ == 'uuid':
+            return UUID.fromJson(json)
+        else:
+            raise Error("%s is not valid JSON for type %s" % (json, type_))
+
+    def toJson(self):
+        if self.type == 'uuid':
+            return self.value.toString()
+        else:
+            return self.value
+
+    def cInitAtom(self, var):
+        if self.type == 'integer':
+            return ['%s.integer = %d;' % (var, self.value)]
+        elif self.type == 'real':
+            return ['%s.real = %.15g;' % (var, self.value)]
+        elif self.type == 'boolean':
+            if self.value:
+                return ['%s.boolean = true;']
+            else:
+                return ['%s.boolean = false;']
+        elif self.type == 'string':
+            return ['%s.string = xstrdup("%s");'
+                    % (var, escapeCString(self.value))]
+        elif self.type == 'uuid':
+            return self.value.cInitUUID(var)        
+
 class BaseType:
     def __init__(self, type,
+                 enum=None,
                  refTable=None,
                  minInteger=None, maxInteger=None,
                  minReal=None, maxReal=None,
                  minLength=None, maxLength=None):
         self.type = type
+        self.enum = enum
         self.refTable = refTable
         self.minInteger = minInteger
         self.maxInteger = maxInteger
@@ -129,6 +205,10 @@ class BaseType:
             return BaseType(json)
         else:
             atomicType = mustGetMember(json, 'type', [unicode], description)
+            enum = getMember(json, 'enum', [], description)
+            if enum:
+                enumType = Type(atomicType, None, 0, 'unlimited')
+                enum = Datum.fromJson(enumType, enum)
             refTable = getMember(json, 'refTable', [unicode], description)
             minInteger = getMember(json, 'minInteger', [int, long], description)
             maxInteger = getMember(json, 'maxInteger', [int, long], description)
@@ -136,7 +216,7 @@ class BaseType:
             maxReal = getMember(json, 'maxReal', [int, long, float], description)
             minLength = getMember(json, 'minLength', [int], description)
             maxLength = getMember(json, 'minLength', [int], description)
-            return BaseType(atomicType, refTable, minInteger, maxInteger, minReal, maxReal, minLength, maxLength)
+            return BaseType(atomicType, enum, refTable, minInteger, maxInteger, minReal, maxReal, minLength, maxLength)
 
     def toEnglish(self):
         if self.type == 'uuid' and self.refTable:
@@ -179,6 +259,10 @@ class BaseType:
         stmts = []
         stmts.append('ovsdb_base_type_init(&%s, OVSDB_TYPE_%s);' % (
                 var, self.type.upper()),)
+        if self.enum:
+            stmts.append("%s.enum_ = xmalloc(sizeof *%s.enum_);"
+                         % (var, var))
+            stmts += self.enum.cInitDatum("%s.enum_" % var)
         if self.type == 'integer':
             if self.minInteger != None:
                 stmts.append('%s.u.integer.min = %d;' % (var, self.minInteger))
@@ -283,6 +367,58 @@ class Type:
             max = self.max
         initMax = "%s%s.n_max = %s;" % (indent, var, max)
         return "\n".join((initKey, initValue, initMin, initMax))
+
+class Datum:
+    def __init__(self, type, values):
+        self.type = type
+        self.values = values
+
+    @staticmethod
+    def fromJson(type_, json):
+        if not type_.value:
+            if len(json) == 2 and json[0] == "set":
+                values = []
+                for atomJson in json[1]:
+                    values += [Atom.fromJson(type_.key, atomJson)]
+            else:
+                values = [Atom.fromJson(type_.key, json)]
+        else:
+            if len(json) != 2 or json[0] != "map":
+                raise Error("%s is not valid JSON for a map" % json)
+            values = []
+            for pairJson in json[1]:
+                values += [(Atom.fromJson(type_.key, pairJson[0]),
+                            Atom.fromJson(type_.value, pairJson[1]))]
+        return Datum(type_, values)
+
+    def cInitDatum(self, var):
+        if len(self.values) == 0:
+            return ["ovsdb_datum_init_empty(%s);" % var]
+
+        s = ["%s->n = %d;" % (var, len(self.values))]
+        s += ["%s->keys = xmalloc(%d * sizeof *%s->keys);"
+              % (var, len(self.values), var)]
+
+        for i in range(len(self.values)):
+            key = self.values[i]
+            if self.type.value:
+                key = key[0]
+            s += key.cInitAtom("%s->keys[%d]" % (var, i))
+        
+        if self.type.value:
+            s += ["%s->values = xmalloc(%d * sizeof *%s->values);"
+                  % (var, len(self.values), var)]
+            for i in range(len(self.values)):
+                value = self.values[i][1]
+                s += key.cInitAtom("%s->values[%d]" % (var, i))
+        else:
+            s += ["%s->values = NULL;" % var]
+
+        if len(self.values) > 1:
+            s += ["ovsdb_datum_sort_assert(%s, OVSDB_TYPE_%s);"
+                  % (var, self.type.key.upper())]
+
+        return s
 
 def parseSchema(filename):
     return DbSchema.fromJson(json.load(open(filename, "r")))

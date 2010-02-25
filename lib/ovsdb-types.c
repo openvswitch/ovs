@@ -22,6 +22,7 @@
 
 #include "dynamic-string.h"
 #include "json.h"
+#include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 
@@ -115,6 +116,7 @@ void
 ovsdb_base_type_init(struct ovsdb_base_type *base, enum ovsdb_atomic_type type)
 {
     base->type = type;
+    base->enum_ = NULL;
 
     switch (base->type) {
     case OVSDB_TYPE_VOID:
@@ -151,11 +153,36 @@ ovsdb_base_type_init(struct ovsdb_base_type *base, enum ovsdb_atomic_type type)
     }
 }
 
+/* Returns the type of the 'enum_' member for an ovsdb_base_type whose 'type'
+ * is 'atomic_type'. */
+const struct ovsdb_type *
+ovsdb_base_type_get_enum_type(enum ovsdb_atomic_type atomic_type)
+{
+    static struct ovsdb_type *types[OVSDB_N_TYPES];
+
+    if (!types[atomic_type]) {
+        struct ovsdb_type *type;
+
+        types[atomic_type] = type = xmalloc(sizeof *type);
+        ovsdb_base_type_init(&type->key, atomic_type);
+        ovsdb_base_type_init(&type->value, OVSDB_TYPE_VOID);
+        type->n_min = 1;
+        type->n_max = UINT_MAX;
+    }
+    return types[atomic_type];
+}
+
 void
 ovsdb_base_type_clone(struct ovsdb_base_type *dst,
                       const struct ovsdb_base_type *src)
 {
     *dst = *src;
+
+    if (src->enum_) {
+        dst->enum_ = xmalloc(sizeof *dst->enum_);
+        ovsdb_datum_clone(dst->enum_, src->enum_,
+                          ovsdb_base_type_get_enum_type(dst->type));
+    }
 
     switch (dst->type) {
     case OVSDB_TYPE_VOID:
@@ -183,6 +210,12 @@ void
 ovsdb_base_type_destroy(struct ovsdb_base_type *base)
 {
     if (base) {
+        if (base->enum_) {
+            ovsdb_datum_destroy(base->enum_,
+                                ovsdb_base_type_get_enum_type(base->type));
+            free(base->enum_);
+        }
+
         switch (base->type) {
         case OVSDB_TYPE_VOID:
         case OVSDB_TYPE_INTEGER:
@@ -237,6 +270,10 @@ ovsdb_base_type_is_valid(const struct ovsdb_base_type *base)
 bool
 ovsdb_base_type_has_constraints(const struct ovsdb_base_type *base)
 {
+    if (base->enum_) {
+        return true;
+    }
+
     switch (base->type) {
     case OVSDB_TYPE_VOID:
         NOT_REACHED();
@@ -298,7 +335,7 @@ ovsdb_base_type_from_json(struct ovsdb_base_type *base,
 {
     struct ovsdb_parser parser;
     struct ovsdb_error *error;
-    const struct json *type;
+    const struct json *type, *enum_;
 
     if (json->type == JSON_STRING) {
         error = ovsdb_atomic_type_from_json(&base->type, json);
@@ -322,7 +359,18 @@ ovsdb_base_type_from_json(struct ovsdb_base_type *base,
     }
 
     ovsdb_base_type_init(base, base->type);
-    if (base->type == OVSDB_TYPE_INTEGER) {
+
+    enum_ = ovsdb_parser_member(&parser, "enum", OP_ANY | OP_OPTIONAL);
+    if (enum_) {
+        base->enum_ = xmalloc(sizeof *base->enum_);
+        error = ovsdb_datum_from_json(
+            base->enum_, ovsdb_base_type_get_enum_type(base->type),
+            enum_, NULL);
+        if (error) {
+            free(base->enum_);
+            base->enum_ = NULL;
+        }
+    } else if (base->type == OVSDB_TYPE_INTEGER) {
         const struct json *min, *max;
 
         min = ovsdb_parser_member(&parser, "minInteger",
@@ -395,6 +443,14 @@ ovsdb_base_type_to_json(const struct ovsdb_base_type *base)
     json = json_object_create();
     json_object_put_string(json, "type",
                            ovsdb_atomic_type_to_string(base->type));
+
+    if (base->enum_) {
+        const struct ovsdb_type *type;
+
+        type = ovsdb_base_type_get_enum_type(base->type);
+        json_object_put(json, "enum", ovsdb_datum_to_json(base->enum_, type));
+    }
+
     switch (base->type) {
     case OVSDB_TYPE_VOID:
         NOT_REACHED();
@@ -528,7 +584,7 @@ ovsdb_type_to_english(const struct ovsdb_type *type)
 struct ovsdb_error *
 ovsdb_type_from_json(struct ovsdb_type *type, const struct json *json)
 {
-    type->value.type = OVSDB_TYPE_VOID;
+    ovsdb_base_type_init(&type->value, OVSDB_TYPE_VOID);
     type->n_min = 1;
     type->n_max = 1;
 

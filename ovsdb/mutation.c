@@ -310,7 +310,7 @@ mutate_scalar(const struct ovsdb_type *dst_type, struct ovsdb_datum *dst,
         }
     }
 
-    error = ovsdb_datum_sort(dst, dst_type);
+    error = ovsdb_datum_sort(dst, dst_type->key.type);
     if (error) {
         ovsdb_error_destroy(error);
         return ovsdb_error("constraint violation",

@@ -122,7 +122,12 @@ void ovsdb_datum_swap(struct ovsdb_datum *, struct ovsdb_datum *);
 
 /* Checking and maintaining invariants. */
 struct ovsdb_error *ovsdb_datum_sort(struct ovsdb_datum *,
-                                     const struct ovsdb_type *);
+                                     enum ovsdb_atomic_type key_type)
+    WARN_UNUSED_RESULT;
+
+void ovsdb_datum_sort_assert(struct ovsdb_datum *,
+                             enum ovsdb_atomic_type key_type);
+
 struct ovsdb_error *ovsdb_datum_check_constraints(
     const struct ovsdb_datum *, const struct ovsdb_type *)
     WARN_UNUSED_RESULT;
