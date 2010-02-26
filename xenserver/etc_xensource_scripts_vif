@@ -24,7 +24,6 @@ BRCTL="/usr/sbin/brctl"
 IP="/sbin/ip"
 
 vsctl="/usr/bin/ovs-vsctl"
-dump_vif_details="/usr/share/vswitch/scripts/dump-vif-details"
 
 handle_promiscuous()
 {

@@ -22,7 +22,6 @@ EXTRA_DIST += \
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
 	xenserver/usr_sbin_brctl \
 	xenserver/usr_sbin_xen-bugtool \
-	xenserver/usr_share_vswitch_scripts_dump-vif-details \
 	xenserver/usr_share_vswitch_scripts_refresh-xs-network-uuids \
 	xenserver/usr_share_vswitch_scripts_sysconfig.template \
 	xenserver/vswitch-xen.spec
