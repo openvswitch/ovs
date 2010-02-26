@@ -1,9 +1,5 @@
 AT_BANNER([OVSDB -- rows])
 
-# Autoconf 2.63 has a bug that causes the double-quotes below to be
-# lost, so that the following tests fail, so we mark them as XFAIL for
-# Autoconf < 2.64.
-
 m4_define([RESERVED_COLUMNS], [["_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"]]])
 
 OVSDB_CHECK_POSITIVE([row with one string column],
@@ -20,7 +16,7 @@ name
 {RESERVED_COLUMNS,"name":"longer string with spaces"}
 name
 {RESERVED_COLUMNS,"name":""}
-<none>], [], [2.64])
+<none>], [])
 
 OVSDB_CHECK_POSITIVE([row with one integer column],
   [[parse-rows \
@@ -36,7 +32,7 @@ count
 {RESERVED_COLUMNS,"count":20000000000}
 count
 {RESERVED_COLUMNS,"count":0}
-<none>], [], [2.64])
+<none>], [])
 
 OVSDB_CHECK_POSITIVE([row with one real column],
   [[parse-rows \
@@ -52,7 +48,7 @@ cost
 {RESERVED_COLUMNS,"cost":123000}
 cost
 {RESERVED_COLUMNS,"cost":0}
-<none>], [], [2.64])
+<none>], [])
 
 OVSDB_CHECK_POSITIVE([row with one boolean column],
   [[parse-rows \
@@ -65,7 +61,7 @@ feasible
 {RESERVED_COLUMNS,"feasible":false}
 feasible
 {RESERVED_COLUMNS,"feasible":false}
-<none>], [], [2.64])
+<none>], [])
 
 OVSDB_CHECK_POSITIVE([row with one uuid column],
   [[parse-rows \
@@ -78,7 +74,7 @@ ref
 {RESERVED_COLUMNS,"ref":[["uuid","33583cc5-d2f4-43de-b1ca-8aac14071b51"]]}
 ref
 {RESERVED_COLUMNS,"ref":[["uuid","00000000-0000-0000-0000-000000000000"]]}
-<none>], [], [2.64])
+<none>], [])
 
 OVSDB_CHECK_POSITIVE([row with set of 1 to 2 elements],
   [[parse-rows \
@@ -92,7 +88,7 @@ OVSDB_CHECK_POSITIVE([row with map of 1 to 2 elements],
     '{"columns": {"mymap": {"type": {"key": "integer", "value": "uuid", "min": 1, "max": 2}}}}' \
     '{}']],
   [{RESERVED_COLUMNS,["mymap":["map",[[0,["uuid","00000000-0000-0000-0000-000000000000"]]]]]}
-<none>], [], [2.64])
+<none>], [])
 
 OVSDB_CHECK_POSITIVE([row with several columns],
   [[parse-rows \
@@ -114,7 +110,7 @@ OVSDB_CHECK_POSITIVE([row with several columns],
  [{RESERVED_COLUMNS,["controller":["set",[]],"datapath_id":"000ae4256bb0","hwaddr":"00:0a:e4:25:6b:b0","listeners":["set",[]],"mirrors":["set",[]],"name":"br0","netflows":["set",[]],"snoops":["set",[]],"vswitch":["uuid","1a5c7280-0d4c-4e34-9ec7-c772339f7774"]]}
 datapath_id, hwaddr, name, vswitch
 {RESERVED_COLUMNS,["controller":["set",[]],"datapath_id":["set",[]],"hwaddr":"","listeners":["set",[]],"mirrors":["set",[]],"name":"","netflows":["set",[]],"snoops":["set",[]],"vswitch":["uuid","00000000-0000-0000-0000-000000000000"]]}
-<none>], [], [2.64])
+<none>], [])
 
 OVSDB_CHECK_POSITIVE([row hashing (scalars)],
   [[compare-rows \

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-AC_PREREQ(2.63)
+AC_PREREQ(2.64)
 AC_INIT(openvswitch, 0.99.2, ovs-bugs@openvswitch.org)
 NX_BUILDNR
 AC_CONFIG_SRCDIR([datapath/datapath.c])
