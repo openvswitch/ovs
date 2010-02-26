@@ -66,6 +66,43 @@ handle_mtu()
     fi
 }
 
+set_vif_external_id()
+{
+    local key=$1
+    local value=$2
+
+    logger -t scripts-vif "vif${DOMID}.${DEVID} external-ids:\"${key}\"=\"${value}\""
+
+    echo "-- set interface vif${DOMID}.${DEVID} external-ids:\"${key}\"=\"${value}\""
+}
+
+handle_vswitch_vif_details()
+{
+    local vif_details=
+    local net_uuid=$(xenstore-read "${PRIVATE}/network-uuid" 2>/dev/null)
+    if [ -n "${net_uuid}" ] ; then
+	set_vif_external_id "xs-network-uuid" "${net_uuid}"
+    fi
+
+    local address=$(xenstore-read "/local/domain/$DOMID/device/vif/$DEVID/mac" 2>/dev/null)
+    if [ -n "${address}" ] ; then
+	set_vif_external_id "xs-vif-mac" "${address}"
+    fi
+
+    local vif_uuid=$(xenstore-read "${PRIVATE}/vif-uuid" 2>/dev/null)
+    if [ -n "${vif_uuid}" ] ; then
+	set_vif_external_id "xs-vif-uuid" "${vif_uuid}"
+    fi
+
+    local vm=$(xenstore-read "/local/domain/$DOMID/vm" 2>/dev/null)
+    if [ $? -eq 0 -a -n "${vm}" ] ; then
+	local vm_uuid=$(xenstore-read "$vm/uuid" 2>/dev/null)
+    fi
+    if [ -n "${vm_uuid}" ] ; then
+	set_vif_external_id "xs-vm-uuid" "${vm_uuid}"
+    fi
+}
+
 add_to_bridge()
 {
     local address=$(xenstore-read "${PRIVATE}/bridge-MAC")
@@ -92,12 +129,11 @@ add_to_bridge()
 	    ${BRCTL} addif "${bridge}" "${dev}"                 || logger -t scripts-vif "Failed to brctl addif ${bridge} ${dev}"
 	    ;;
 	vswitch)
-		local vif_details=$($dump_vif_details $DOMID $DEVID)
-		if [ $? -ne 0 -o -z "${vif_details}" ]; then
-			logger -t scripts-vif "Failed to retrieve vif details for vswitch"
-		fi
+	    if [ "$TYPE" = "vif" ] ; then
+		local vif_details=$(handle_vswitch_vif_details)
+	    fi
 
-		$vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details
+	    $vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details
 	    ;;
     esac
 	    
@@ -111,7 +147,7 @@ remove_from_bridge()
 	    # Nothing to do
 	    ;;
 	vswitch)
-        $vsctl del-port $bridge $dev
+	    $vsctl del-port $bridge $dev
 	    ;;
     esac
 }
