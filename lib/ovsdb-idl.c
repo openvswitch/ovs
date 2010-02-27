@@ -1226,7 +1226,7 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
         hmap_insert(&txn->idl->outstanding_txns, &txn->hmap_node,
                     json_hash(txn->request_id, 0));
     } else {
-        txn->status = TXN_INCOMPLETE;
+        txn->status = TXN_TRY_AGAIN;
     }
 
     ovsdb_idl_txn_disassemble(txn);
