@@ -182,6 +182,23 @@ struct net_bridge_port {
 	atomic_t sflow_pool;
 };
 
+enum csum_type {
+	CSUM_NONE = 0,
+	CSUM_UNNECESSARY = 1,
+	CSUM_COMPLETE = 2,
+	CSUM_PARTIAL = 3,
+};
+
+/**
+ * struct ovs_skb_cb - OVS data in skb CB
+ * @ip_summed: Consistently stores L4 checksumming status across different
+ * kernel versions.
+ */
+struct ovs_skb_cb {
+	enum csum_type	ip_summed;
+};
+#define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
+
 extern struct notifier_block dp_device_notifier;
 extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 

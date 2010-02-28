@@ -71,6 +71,7 @@ static DEFINE_MUTEX(dp_mutex);
 #define MAINT_SLEEP_MSECS 1000
 
 static int new_nbp(struct datapath *, struct net_device *, int port_no);
+static void compute_ip_summed(struct sk_buff *skb);
 
 /* Must be called with rcu_read_lock or dp_mutex. */
 struct datapath *get_dp(int dp_idx)
@@ -529,6 +530,8 @@ void dp_process_received_packet(struct sk_buff *skb, struct net_bridge_port *p)
 
 	WARN_ON_ONCE(skb_shared(skb));
 
+	compute_ip_summed(skb);
+
 	/* BHs are off so we don't have to use get_cpu()/put_cpu() here. */
 	stats = percpu_ptr(dp->stats_percpu, smp_processor_id());
 
@@ -606,7 +609,7 @@ int vswitch_skb_checksum_setup(struct sk_buff *skb)
 	if (skb->protocol != htons(ETH_P_IP))
 		goto out;
 
-	if (!skb_pull_up_to(skb, skb_network_header(skb) + 1))
+	if (!skb_pull_up_to(skb, skb_network_header(skb) + sizeof(struct iphdr)))
 		goto out;
 
 	iph = ip_hdr(skb);
@@ -696,11 +699,33 @@ out:
  * skb_forward_csum().  It is slightly different because we are only concerned
  * with bridging and not other types of forwarding and can get away with
  * slightly more optimal behavior.*/
+static void
+compute_ip_summed(struct sk_buff *skb)
+{
+	OVS_CB(skb)->ip_summed = skb->ip_summed;
+
+#ifdef CHECKSUM_HW
+	/* In theory this could be either CHECKSUM_PARTIAL or CHECKSUM_COMPLETE.
+	 * However, we should only get CHECKSUM_PARTIAL packets from Xen, which
+	 * uses some special fields to represent this (see below).  Since we
+	 * can only make one type work, pick the one that actually happens in
+	 * practice. */
+	if (skb->ip_summed == CHECKSUM_HW)
+		OVS_CB(skb)->ip_summed = CSUM_COMPLETE;
+#endif
+#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
+	/* Xen has a special way of representing CHECKSUM_PARTIAL on older
+	 * kernels. */
+	if (skb->proto_csum_blank)
+		OVS_CB(skb)->ip_summed = CSUM_PARTIAL;
+#endif
+}
+
 void
 forward_ip_summed(struct sk_buff *skb)
 {
 #ifdef CHECKSUM_HW
-	if (skb->ip_summed == CHECKSUM_HW)
+	if (OVS_CB(skb)->ip_summed == CSUM_COMPLETE)
 		skb->ip_summed = CHECKSUM_NONE;
 #endif
 }
