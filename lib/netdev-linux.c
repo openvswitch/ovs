@@ -128,6 +128,7 @@ struct gre_config {
     bool have_out_key;
     bool in_csum;
     bool out_csum;
+    bool pmtud;
 };
 
 static struct {
@@ -257,7 +258,6 @@ setup_gre_netlink(const char *name OVS_UNUSED,
     struct nlattr *info_data_hdr;
     uint16_t iflags = 0;
     uint16_t oflags = 0;
-    uint8_t pmtudisc = 0;
 
     VLOG_DBG("%s: attempting to create gre device using netlink", name);
 
@@ -316,7 +316,7 @@ setup_gre_netlink(const char *name OVS_UNUSED,
     nl_msg_put_u16(&request, IFLA_GRE_OFLAGS, oflags);
     nl_msg_put_u32(&request, IFLA_GRE_LOCAL, config->local_ip);
     nl_msg_put_u32(&request, IFLA_GRE_REMOTE, config->remote_ip);
-    nl_msg_put_u8(&request, IFLA_GRE_PMTUDISC, pmtudisc);
+    nl_msg_put_u8(&request, IFLA_GRE_PMTUDISC, config->pmtud);
     nl_msg_put_u8(&request, IFLA_GRE_TTL, IPDEFTTL);
     nl_msg_put_u8(&request, IFLA_GRE_TOS, config->tos);
 
@@ -374,6 +374,10 @@ setup_gre_ioctl(const char *name, struct gre_config *config, bool create)
     }
     if (config->out_csum) {
         p.o_flags |= GRE_CSUM;
+    }
+
+    if (config->pmtud) {
+        p.iph.frag_off = htons(IP_DONT_FRAGMENT);
     }
 
     strncpy(ifr.ifr_name, create ? GRE_IOCTL_DEVICE : name, IFNAMSIZ);
@@ -489,6 +493,7 @@ setup_gre(const char *name, const struct shash *args, bool create)
     memset(&config, 0, sizeof config);
     config.in_csum = true;
     config.out_csum = true;
+    config.pmtud = true;
 
     SHASH_FOR_EACH (node, args) {
         if (!strcmp(node->name, "remote_ip")) {
@@ -520,6 +525,10 @@ setup_gre(const char *name, const struct shash *args, bool create)
             if (!strcmp(node->data, "false")) {
                 config.in_csum = false;
                 config.out_csum = false;
+            }
+        } else if (!strcmp(node->name, "pmtud")) {
+            if (!strcmp(node->data, "false")) {
+                config.pmtud = false;
             }
         } else {
             VLOG_WARN("unknown gre argument '%s'", node->name);

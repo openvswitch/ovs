@@ -1,4 +1,4 @@
-/* ip_gre driver port to Linux 2.6.18 and greater */
+/* ip_gre driver port to Linux 2.6.18 and greater plus enhancements */
 
 #include <linux/version.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
@@ -35,6 +35,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/if_arp.h>
+#include <linux/if_vlan.h>
 #include <linux/mroute.h>
 #include <linux/init.h>
 #include <linux/in6.h>
@@ -49,6 +50,7 @@
 #include <net/icmp.h>
 #include <net/protocol.h>
 #include <net/ipip.h>
+#include <net/ipv6.h>
 #include <net/arp.h>
 #include <net/checksum.h>
 #include <net/dsfield.h>
@@ -58,7 +60,6 @@
 #include <net/netns/generic.h>
 
 #ifdef CONFIG_IPV6
-#include <net/ipv6.h>
 #include <net/ip6_fib.h>
 #include <net/ip6_route.h>
 #endif
@@ -148,8 +149,24 @@ static int ipgre_tunnel_init(struct net_device *dev);
 static void ipgre_tunnel_setup(struct net_device *dev);
 static void ipgre_tap_setup(struct net_device *dev);
 static int ipgre_tunnel_bind_dev(struct net_device *dev);
+static bool send_frag_needed(struct sk_buff *skb, struct net_device *dev,
+			     unsigned int mtu);
 
 #define HASH_SIZE  16
+
+/* The absolute minimum fragment size.  Note that there are many other
+ * definitions of the minimum MTU. */
+#define IP_MIN_MTU 68
+
+static inline __be16 *gre_flags(void *header_start)
+{
+	return header_start;
+}
+
+static inline __be16 *gre_protocol(void *header_start)
+{
+	return header_start + 2;
+}
 
 static int ipgre_net_id __read_mostly;
 struct ipgre_net {
@@ -455,6 +472,80 @@ static unsigned int tunnel_hard_header_len(struct net_device *dev)
 #endif
 }
 
+static void icmp_err_frag(struct sk_buff *skb, struct ip_tunnel *t,
+			  __be16 encap_proto)
+{
+	int mtu = ntohs(icmp_hdr(skb)->un.frag.mtu);
+	int header_len = t->hlen + tunnel_hard_header_len(t->dev);
+	unsigned int orig_mac_header = skb_mac_header(skb) - skb->data;
+	unsigned int orig_nw_header = skb_network_header(skb) - skb->data;
+
+	/* Add the size of the IP header since this is the smallest
+	 * packet size the we might do something with and we might as
+	 * well fail early if we don't have it.  Plus it allows us to
+	 * safely look at the VLAN header if there is one.  The final
+	 * size is checked before use. */
+	if (!pskb_may_pull(skb, header_len + sizeof(struct iphdr)))
+		return;
+
+	if (t->dev->type == ARPHRD_ETHER) {
+		skb_set_mac_header(skb, t->hlen);
+		encap_proto = eth_hdr(skb)->h_proto;
+
+		if (encap_proto == htons(ETH_P_8021Q)) {
+			header_len += VLAN_HLEN;
+			encap_proto =
+				   vlan_eth_hdr(skb)->h_vlan_encapsulated_proto;
+		}
+	}
+
+	skb_set_network_header(skb, header_len);
+	skb->protocol = encap_proto;
+	mtu -= header_len;
+
+	if (skb->protocol == htons(ETH_P_IP)) {
+		if (mtu < IP_MIN_MTU) {
+			if (ntohs(ip_hdr(skb)->tot_len) >= IP_MIN_MTU)
+				mtu = IP_MIN_MTU;
+			else
+				goto out;
+		}
+
+		header_len += sizeof(struct iphdr);
+	} else if (skb->protocol == htons(ETH_P_IPV6)) {
+		if (mtu < IPV6_MIN_MTU) {
+			unsigned int packet_length;
+
+			if (!pskb_may_pull(skb, header_len +
+						sizeof(struct ipv6hdr)))
+				goto out;
+
+			packet_length = sizeof(struct ipv6hdr) +
+					      ntohs(ipv6_hdr(skb)->payload_len);
+
+			if (packet_length >= IPV6_MIN_MTU
+			    || ntohs(ipv6_hdr(skb)->payload_len) == 0)
+				mtu = IPV6_MIN_MTU;
+			else
+				goto out;
+		}
+
+		header_len += sizeof(struct ipv6hdr);
+	} else
+		goto out;
+
+	if (pskb_may_pull(skb, header_len)) {
+		__pskb_pull(skb, t->hlen);
+		send_frag_needed(skb, t->dev, mtu);
+		skb_push(skb, t->hlen);
+	}
+
+out:
+	skb_set_mac_header(skb, orig_mac_header);
+	skb_set_network_header(skb, orig_nw_header);
+	skb->protocol = htons(ETH_P_IP);
+}
+
 static void ipgre_err(struct sk_buff *skb, u32 info)
 {
 
@@ -472,17 +563,24 @@ static void ipgre_err(struct sk_buff *skb, u32 info)
  */
 
 	struct iphdr *iph = (struct iphdr *)skb->data;
-	__be16	     *p = (__be16*)(skb->data+(iph->ihl<<2));
-	int grehlen = (iph->ihl<<2) + 4;
+	__be16 *p;
+	int grehlen = (iph->ihl << 2) + 4;
 	const int type = icmp_hdr(skb)->type;
 	const int code = icmp_hdr(skb)->code;
 	struct ip_tunnel *t;
 	__be16 flags;
+	__be16 gre_proto;
 
-	if (skb_headlen(skb) < grehlen)
+	WARN_ON_ONCE(skb_shared(skb));
+
+	if (!pskb_may_pull(skb, grehlen))
 		return;
 
-	flags = p[0];
+	iph = (struct iphdr *)skb->data;
+	p = (__be16 *)(skb->data + (iph->ihl << 2));
+	flags = *gre_flags(p);
+	gre_proto = *gre_protocol(p);
+
 	if (flags&(GRE_CSUM|GRE_KEY|GRE_SEQ|GRE_ROUTING|GRE_VERSION)) {
 		if (flags&(GRE_VERSION|GRE_ROUTING))
 			return;
@@ -494,8 +592,10 @@ static void ipgre_err(struct sk_buff *skb, u32 info)
 	}
 
 	/* If only 8 bytes returned, keyed message will be dropped here */
-	if (skb_headlen(skb) < grehlen)
+	if (!pskb_may_pull(skb, grehlen))
 		return;
+
+	iph = (struct iphdr *)skb->data;
 
 	switch (type) {
 	default:
@@ -505,12 +605,13 @@ static void ipgre_err(struct sk_buff *skb, u32 info)
 	case ICMP_DEST_UNREACH:
 		switch (code) {
 		case ICMP_SR_FAILED:
-		case ICMP_PORT_UNREACH:
 			/* Impossible event. */
+		case ICMP_PORT_UNREACH:
 			return;
 		case ICMP_FRAG_NEEDED:
-			/* Soft state for pmtu is maintained by IP core. */
-			return;
+			/* Soft state for pmtu is maintained by IP core but we
+			 * also want to relay the message back. */
+			break;
 		default:
 			/* All others are translated to HOST_UNREACH.
 			   rfc2003 contains "deep thoughts" about NET_UNREACH,
@@ -528,14 +629,21 @@ static void ipgre_err(struct sk_buff *skb, u32 info)
 	rcu_read_lock();
 	t = ipgre_tunnel_lookup(skb->dev, iph->daddr, iph->saddr,
 				flags & GRE_KEY ?
-				*(((__be32 *)p) + (grehlen / 4) - 1) : 0,
-				p[1]);
+				*(((__be32 *)skb->data) + (grehlen / 4) - 1)
+				: 0, gre_proto);
+
 	if (t == NULL || t->parms.iph.daddr == 0 ||
 	    ipv4_is_multicast(t->parms.iph.daddr))
 		goto out;
 
 	if (t->parms.iph.ttl == 0 && type == ICMP_TIME_EXCEEDED)
 		goto out;
+
+	if (code == ICMP_FRAG_NEEDED) {
+		/* Invalidates pointers. */
+		icmp_err_frag(skb, t, gre_proto);
+		goto out;
+	}
 
 	if (time_before(jiffies, t->err_time + IPTUNNEL_ERR_TIMEO))
 		t->err_count++;
@@ -550,18 +658,31 @@ out:
 static inline void ipgre_ecn_decapsulate(struct iphdr *iph, struct sk_buff *skb)
 {
 	if (INET_ECN_is_ce(iph->tos)) {
-		if (skb->protocol == htons(ETH_P_IP)) {
-			if (unlikely(!pskb_may_pull(skb, skb_network_header(skb)
-			    + sizeof(struct iphdr) - skb->data)))
+		__be16 protocol = skb->protocol;
+		unsigned int nw_header = skb_network_header(skb) - skb->data;
+
+		if (skb->dev->type == ARPHRD_ETHER
+		    && skb->protocol == htons(ETH_P_8021Q)) {
+			if (unlikely(!pskb_may_pull(skb, VLAN_ETH_HLEN)))
 				return;
 
-			IP_ECN_set_ce(ip_hdr(skb));
-		} else if (skb->protocol == htons(ETH_P_IPV6)) {
-			if (unlikely(!pskb_may_pull(skb, skb_network_header(skb)
-			    + sizeof(struct ipv6hdr) - skb->data)))
+			protocol = vlan_eth_hdr(skb)->h_vlan_encapsulated_proto;
+			nw_header += VLAN_HLEN;
+		}
+
+		if (protocol == htons(ETH_P_IP)) {
+			if (unlikely(!pskb_may_pull(skb, nw_header
+			    + sizeof(struct iphdr))))
 				return;
 
-			IP6_ECN_set_ce(ipv6_hdr(skb));
+			IP_ECN_set_ce((struct iphdr *)(nw_header + skb->data));
+		} else if (protocol == htons(ETH_P_IPV6)) {
+			if (unlikely(!pskb_may_pull(skb, nw_header
+			    + sizeof(struct ipv6hdr))))
+				return;
+
+			IP6_ECN_set_ce((struct ipv6hdr *)(nw_header
+							  + skb->data));
 		}
 	}
 }
@@ -595,7 +716,7 @@ static int ipgre_rcv(struct sk_buff *skb)
 
 	iph = ip_hdr(skb);
 	h = skb->data;
-	flags = *(__be16*)h;
+	flags = *gre_flags(h);
 
 	if (flags&(GRE_CSUM|GRE_KEY|GRE_ROUTING|GRE_SEQ|GRE_VERSION)) {
 		/* - Version must be 0.
@@ -628,7 +749,7 @@ static int ipgre_rcv(struct sk_buff *skb)
 		}
 	}
 
-	gre_proto = *(__be16 *)(h + 2);
+	gre_proto = *gre_protocol(h);
 
 	rcu_read_lock();
 	if ((tunnel = ipgre_tunnel_lookup(skb->dev,
@@ -723,6 +844,270 @@ drop_nolock:
 	return(0);
 }
 
+static bool check_ipv4_address(__be32 addr)
+{
+	if (ipv4_is_multicast(addr) || ipv4_is_lbcast(addr)
+	    || ipv4_is_loopback(addr) || ipv4_is_zeronet(addr))
+		return false;
+
+	return true;
+}
+
+static bool ipv4_should_icmp(struct sk_buff *skb)
+{
+	struct iphdr *old_iph = ip_hdr(skb);
+
+	/* Don't respond to L2 broadcast. */
+	if (is_multicast_ether_addr(eth_hdr(skb)->h_dest))
+		return false;
+
+	/* Don't respond to L3 broadcast or invalid addresses. */
+	if (!check_ipv4_address(old_iph->daddr) ||
+	    !check_ipv4_address(old_iph->saddr))
+		return false;
+
+	/* Only respond to the first fragment. */
+	if (old_iph->frag_off & htons(IP_OFFSET))
+		return false;
+
+	/* Don't respond to ICMP error messages. */
+	if (old_iph->protocol == IPPROTO_ICMP) {
+		u8 icmp_type, *icmp_typep;
+
+		icmp_typep = skb_header_pointer(skb, (u8 *)old_iph +
+						(old_iph->ihl << 2) +
+						offsetof(struct icmphdr, type) -
+						skb->data, sizeof(icmp_type),
+						&icmp_type);
+
+		if (!icmp_typep)
+			return false;
+
+		if (*icmp_typep > NR_ICMP_TYPES
+			|| (*icmp_typep <= ICMP_PARAMETERPROB
+				&& *icmp_typep != ICMP_ECHOREPLY
+				&& *icmp_typep != ICMP_ECHO))
+			return false;
+	}
+
+	return true;
+}
+
+static void ipv4_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
+			    unsigned int mtu, unsigned int payload_length)
+{
+	struct iphdr *iph, *old_iph = ip_hdr(skb);
+	struct icmphdr *icmph;
+	u8 *payload;
+
+	iph = (struct iphdr *)skb_put(nskb, sizeof(struct iphdr));
+	icmph = (struct icmphdr *)skb_put(nskb, sizeof(struct icmphdr));
+	payload = skb_put(nskb, payload_length);
+
+	/* IP */
+	iph->version		=	4;
+	iph->ihl		=	sizeof(struct iphdr) >> 2;
+	iph->tos		=	(old_iph->tos & IPTOS_TOS_MASK) |
+					IPTOS_PREC_INTERNETCONTROL;
+	iph->tot_len		=	htons(sizeof(struct iphdr)
+					      + sizeof(struct icmphdr)
+					      + payload_length);
+	get_random_bytes(&iph->id, sizeof iph->id);
+	iph->frag_off		=	0;
+	iph->ttl		=	IPDEFTTL;
+	iph->protocol		=	IPPROTO_ICMP;
+	iph->daddr		=	old_iph->saddr;
+	iph->saddr		=	old_iph->daddr;
+
+	ip_send_check(iph);
+
+	/* ICMP */
+	icmph->type		=	ICMP_DEST_UNREACH;
+	icmph->code		=	ICMP_FRAG_NEEDED;
+	icmph->un.gateway	=	htonl(mtu);
+	icmph->checksum		=	0;
+
+	nskb->csum = csum_partial((u8 *)icmph, sizeof *icmph, 0);
+	nskb->csum = skb_copy_and_csum_bits(skb, (u8 *)old_iph - skb->data,
+					    payload, payload_length,
+					    nskb->csum);
+	icmph->checksum = csum_fold(nskb->csum);
+}
+
+static bool ipv6_should_icmp(struct sk_buff *skb)
+{
+	struct ipv6hdr *old_ipv6h = ipv6_hdr(skb);
+	int addr_type;
+	int payload_off = (u8 *)(old_ipv6h + 1) - skb->data;
+	u8 nexthdr = ipv6_hdr(skb)->nexthdr;
+
+	/* Check source address is valid. */
+	addr_type = ipv6_addr_type(&old_ipv6h->saddr);
+	if (addr_type & IPV6_ADDR_MULTICAST || addr_type == IPV6_ADDR_ANY)
+		return false;
+
+	/* Don't reply to unspecified addresses. */
+	if (ipv6_addr_type(&old_ipv6h->daddr) == IPV6_ADDR_ANY)
+		return false;
+
+	/* Don't respond to ICMP error messages. */
+	payload_off = ipv6_skip_exthdr(skb, payload_off, &nexthdr);
+	if (payload_off < 0)
+		return false;
+
+	if (nexthdr == NEXTHDR_ICMP) {
+		u8 icmp_type, *icmp_typep;
+
+		icmp_typep = skb_header_pointer(skb, payload_off +
+						offsetof(struct icmp6hdr,
+							icmp6_type),
+						sizeof(icmp_type), &icmp_type);
+
+		if (!icmp_typep || !(*icmp_typep & ICMPV6_INFOMSG_MASK))
+			return false;
+	}
+
+	return true;
+}
+
+static void ipv6_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
+			    unsigned int mtu, unsigned int payload_length)
+{
+	struct ipv6hdr *ipv6h, *old_ipv6h = ipv6_hdr(skb);
+	struct icmp6hdr *icmp6h;
+	u8 *payload;
+
+	ipv6h = (struct ipv6hdr *)skb_put(nskb, sizeof(struct ipv6hdr));
+	icmp6h = (struct icmp6hdr *)skb_put(nskb, sizeof(struct icmp6hdr));
+	payload = skb_put(nskb, payload_length);
+
+	/* IPv6 */
+	ipv6h->version		=	6;
+	ipv6h->priority		=	0;
+	memset(&ipv6h->flow_lbl, 0, sizeof ipv6h->flow_lbl);
+	ipv6h->payload_len	=	htons(sizeof(struct icmp6hdr)
+					      + payload_length);
+	ipv6h->nexthdr		=	NEXTHDR_ICMP;
+	ipv6h->hop_limit	=	IPV6_DEFAULT_HOPLIMIT;
+	ipv6_addr_copy(&ipv6h->daddr, &old_ipv6h->saddr);
+	ipv6_addr_copy(&ipv6h->saddr, &old_ipv6h->daddr);
+
+	/* ICMPv6 */
+	icmp6h->icmp6_type	=	ICMPV6_PKT_TOOBIG;
+	icmp6h->icmp6_code	=	0;
+	icmp6h->icmp6_cksum	=	0;
+	icmp6h->icmp6_mtu	=	htonl(mtu);
+
+	nskb->csum = csum_partial((u8 *)icmp6h, sizeof *icmp6h, 0);
+	nskb->csum = skb_copy_and_csum_bits(skb, (u8 *)old_ipv6h - skb->data,
+					    payload, payload_length,
+					    nskb->csum);
+	icmp6h->icmp6_cksum = csum_ipv6_magic(&ipv6h->saddr, &ipv6h->daddr,
+						sizeof(struct icmp6hdr)
+						+ payload_length,
+						ipv6h->nexthdr, nskb->csum);
+}
+
+static bool send_frag_needed(struct sk_buff *skb, struct net_device *dev,
+			     unsigned int mtu)
+{
+	unsigned int eth_hdr_len = ETH_HLEN;
+	unsigned int total_length, header_length, payload_length;
+	struct ethhdr *eh, *old_eh = eth_hdr(skb);
+	struct sk_buff *nskb;
+	struct net_device_stats *stats;
+
+	/* Normal IP stack. */
+	if (!dev->br_port) {
+		if (skb->protocol == htons(ETH_P_IP)) {
+			icmp_send(skb, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED,
+				  htonl(mtu));
+			return true;
+		} else {
+#ifdef CONFIG_IPV6
+			icmpv6_send(skb, ICMPV6_PKT_TOOBIG, 0, mtu, dev);
+			return true;
+#else
+			return false;
+#endif
+		}
+	}
+
+	/* Sanity check */
+	if (skb->protocol == htons(ETH_P_IP)) {
+		if (mtu < IP_MIN_MTU)
+			return false;
+
+		if (!ipv4_should_icmp(skb))
+			return true;
+	} else {
+		if (mtu < IPV6_MIN_MTU)
+			return false;
+
+		/* In theory we should do PMTUD on IPv6 multicast messages but
+		 * we don't have an address to send from so just fragment. */
+		if (ipv6_addr_type(&ipv6_hdr(skb)->daddr) & IPV6_ADDR_MULTICAST)
+			return false;
+
+		if (!ipv6_should_icmp(skb))
+			return true;
+	}
+
+	/* Allocate */
+	if (old_eh->h_proto == htons(ETH_P_8021Q))
+		eth_hdr_len = VLAN_ETH_HLEN;
+
+	payload_length = skb->len - eth_hdr_len;
+	if (skb->protocol == htons(ETH_P_IP)) {
+		header_length = sizeof(struct iphdr) + sizeof(struct icmphdr);
+		total_length = min_t(unsigned int, header_length +
+						   payload_length, 576);
+	} else {
+		header_length = sizeof(struct ipv6hdr) +
+				sizeof(struct icmp6hdr);
+		total_length = min_t(unsigned int, header_length +
+						  payload_length, IPV6_MIN_MTU);
+	}
+	total_length = min(total_length, dev->mtu);
+	payload_length = total_length - header_length;
+
+	nskb = netdev_alloc_skb_ip_align(dev, eth_hdr_len + header_length
+					      + payload_length);
+	if (!nskb)
+		return false;
+
+	/* Ethernet / VLAN */
+	eh = (struct ethhdr *)skb_put(nskb, eth_hdr_len);
+	memcpy(eh->h_dest, old_eh->h_source, ETH_ALEN);
+	memcpy(eh->h_source, dev->dev_addr, ETH_ALEN);
+	eh->h_proto = old_eh->h_proto;
+	if (old_eh->h_proto == htons(ETH_P_8021Q)) {
+		struct vlan_ethhdr *vh = (struct vlan_ethhdr *)eh;
+
+		vh->h_vlan_TCI = vlan_eth_hdr(skb)->h_vlan_TCI;
+		vh->h_vlan_encapsulated_proto = skb->protocol;
+	}
+	nskb->protocol = eth_type_trans(nskb, dev);
+
+	/* Protocol */
+	if (skb->protocol == htons(ETH_P_IP))
+		ipv4_build_icmp(skb, nskb, mtu, payload_length);
+	else
+		ipv6_build_icmp(skb, nskb, mtu, payload_length);
+
+	/* Send */
+#ifdef HAVE_NETDEV_STATS
+	stats = &dev->stats;
+#else
+	stats = &((struct ip_tunnel *)netdev_priv(dev))->stat;
+#endif
+	stats->rx_packets++;
+	stats->rx_bytes += nskb->len;
+
+	netif_rx(nskb);
+	return true;
+}
+
 static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct ip_tunnel *tunnel = netdev_priv(dev);
@@ -730,7 +1115,8 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 #ifdef HAVE_NETDEV_QUEUE_STATS
 	struct netdev_queue *txq = netdev_get_tx_queue(dev, 0);
 #endif
-	struct iphdr  *old_iph = ip_hdr(skb);
+	struct iphdr  *old_iph;
+	struct ipv6hdr *old_ipv6h;
 	struct iphdr  *tiph;
 	u8     tos;
 	__be16 df;
@@ -741,7 +1127,8 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 	int    gre_hlen;
 	__be32 dst;
 	int    mtu;
-	u8   original_protocol;
+	__be16 original_protocol;
+	bool is_vlan = false;
 
 #ifdef HAVE_NETDEV_STATS
 	stats = &dev->stats;
@@ -749,8 +1136,23 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 	stats = &tunnel->stat;
 #endif
 
+	WARN_ON_ONCE(skb_shared(skb));
+
 	/* Validate the protocol headers before we try to use them. */
 	original_protocol = skb->protocol;
+
+	if (dev->type == ARPHRD_ETHER && skb->protocol == htons(ETH_P_8021Q)) {
+		if (unlikely(!pskb_may_pull(skb, VLAN_ETH_HLEN)))
+			goto tx_error;
+
+		skb->protocol = vlan_eth_hdr(skb)->h_vlan_encapsulated_proto;
+		skb_set_network_header(skb, VLAN_ETH_HLEN);
+		is_vlan = true;
+	}
+
+	old_iph = ip_hdr(skb);
+	old_ipv6h = ipv6_hdr(skb);
+
 	if (skb->protocol == htons(ETH_P_IP)) {
 		if (unlikely(!pskb_may_pull(skb, skb_network_header(skb)
 		    + sizeof(struct iphdr) - skb->data)))
@@ -848,28 +1250,35 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 	df = tiph->frag_off;
 	if (df)
 		mtu = dst_mtu(&rt->u.dst) - tunnel_hard_header_len(dev)
+			- (is_vlan ? VLAN_HLEN : 0)
 			- tunnel->hlen;
 	else
 		mtu = skb_dst(skb) ? dst_mtu(skb_dst(skb)) : dev->mtu;
 
+	if (skb->protocol == htons(ETH_P_IP))
+		mtu = max(mtu, IP_MIN_MTU);
+	if (skb->protocol == htons(ETH_P_IPV6))
+		mtu = max(mtu, IPV6_MIN_MTU);
+
 	if (skb_dst(skb))
 		skb_dst(skb)->ops->update_pmtu(skb_dst(skb), mtu);
 
-	/* XXX: Temporarily allow fragmentation since DF doesn't
-	 * do the right thing with bridging. */
-/*
 	if (skb->protocol == htons(ETH_P_IP)) {
 		df |= (old_iph->frag_off&htons(IP_DF));
 
 		if ((old_iph->frag_off&htons(IP_DF)) &&
 		    mtu < ntohs(old_iph->tot_len)) {
-			icmp_send(skb, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED, htonl(mtu));
-			ip_rt_put(rt);
-			goto tx_error;
+			if (send_frag_needed(skb, dev, mtu)) {
+				ip_rt_put(rt);
+				goto tx_error;
+			}
 		}
-	}
+	} else if (skb->protocol == htons(ETH_P_IPV6)) {
+		unsigned int packet_length = skb->len
+					     - tunnel_hard_header_len(dev)
+					     - (is_vlan ? VLAN_HLEN : 0);
+
 #ifdef CONFIG_IPV6
-	else if (skb->protocol == htons(ETH_P_IPV6)) {
 		struct rt6_info *rt6 = (struct rt6_info *)skb_dst(skb);
 
 		if (rt6 && mtu < dst_mtu(skb_dst(skb)) && mtu >= IPV6_MIN_MTU) {
@@ -880,15 +1289,20 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 				skb_dst(skb)->metrics[RTAX_MTU-1] = mtu;
 			}
 		}
+#endif
 
-		if (mtu >= IPV6_MIN_MTU && mtu < skb->len - tunnel->hlen + gre_hlen) {
-			icmpv6_send(skb, ICMPV6_PKT_TOOBIG, 0, mtu, dev);
-			ip_rt_put(rt);
-			goto tx_error;
+		/* IPv6 requires PMTUD if the packet is above the minimum MTU.*/
+		if (packet_length > IPV6_MIN_MTU)
+			df = htons(IP_DF);
+
+		if (mtu < packet_length - tunnel->hlen + gre_hlen) {
+			if (send_frag_needed(skb, dev, mtu)) {
+				ip_rt_put(rt);
+				goto tx_error;
+			}
 		}
 	}
-#endif
-*/
+
 	if (tunnel->err_count > 0) {
 		if (time_before(jiffies,
 				tunnel->err_time + IPTUNNEL_ERR_TIMEO)) {
@@ -901,7 +1315,7 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 
 	max_headroom = LL_RESERVED_SPACE(tdev) + gre_hlen;
 
-	if (skb_headroom(skb) < max_headroom || skb_shared(skb)||
+	if (skb_headroom(skb) < max_headroom ||
 	    (skb_cloned(skb) && !skb_clone_writable(skb, 0))) {
 		struct sk_buff *new_skb = skb_realloc_headroom(skb, max_headroom);
 		if (!new_skb) {
@@ -926,12 +1340,13 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 	skb_reset_network_header(skb);
 	memset(&(IPCB(skb)->opt), 0, sizeof(IPCB(skb)->opt));
 	IPCB(skb)->flags &= ~(IPSKB_XFRM_TUNNEL_SIZE | IPSKB_XFRM_TRANSFORMED |
-			      IPSKB_REROUTED);
+			      IPSKB_REROUTED);;
+
 	skb_dst_drop(skb);
 	skb_dst_set(skb, &rt->u.dst);
 
 	/*
-	 *	Push down and install the IPIP header.
+	 *	Push down and install the GRE header.
 	 */
 
 	iph 			=	ip_hdr(skb);
@@ -943,22 +1358,23 @@ static netdev_tx_t ipgre_tunnel_xmit(struct sk_buff *skb, struct net_device *dev
 	iph->daddr		=	rt->rt_dst;
 	iph->saddr		=	rt->rt_src;
 
+	/* Allow our local IP stack to fragment the outer packet even if the
+	 * DF bit is set.  If we got this far there is nothing more that we
+	 * can do with the inner packet. */
+	skb->local_df = 1;
+
 	if ((iph->ttl = tiph->ttl) == 0) {
 		if (skb->protocol == htons(ETH_P_IP))
 			iph->ttl = old_iph->ttl;
-#ifdef CONFIG_IPV6
 		else if (skb->protocol == htons(ETH_P_IPV6))
 			iph->ttl = ((struct ipv6hdr *)old_iph)->hop_limit;
-#endif
 		else
 			iph->ttl = dst_metric(&rt->u.dst, RTAX_HOPLIMIT);
 	}
 
-	skb->protocol = original_protocol;
-
-	((__be16 *)(iph + 1))[0] = tunnel->parms.o_flags;
-	((__be16 *)(iph + 1))[1] = (dev->type == ARPHRD_ETHER) ?
-				   htons(ETH_P_TEB) : skb->protocol;
+	*gre_flags(iph + 1) = tunnel->parms.o_flags;
+	*gre_protocol(iph + 1) = (dev->type == ARPHRD_ETHER) ?
+				   htons(ETH_P_TEB) : original_protocol;
 
 	if (tunnel->parms.o_flags&(GRE_KEY|GRE_CSUM|GRE_SEQ)) {
 		__be32 *ptr = (__be32*)(((u8*)iph) + tunnel->hlen - 4);
@@ -1053,12 +1469,14 @@ static int ipgre_tunnel_bind_dev(struct net_device *dev)
 	mtu -= tunnel_hard_header_len(dev) + addend;
 	tunnel->hlen = addend;
 
-	if (mtu < 68)
-		mtu = 68;
+	if (mtu < IP_MIN_MTU)
+		mtu = IP_MIN_MTU;
 
-	/* XXX: Set MTU to the maximum possible value.  If we are bridged to a
-	* device with a larger MTU then packets will be dropped. */
-	mtu = 65482;
+	/* If we could be connected to a bridge set the normal Ethernet MTU
+	 * since all devices on the bridge are required to have the same MTU.
+	 * Even though this isn't our optimal MTU we can handle it. */
+	if (dev->type == ARPHRD_ETHER)
+		mtu = ETH_DATA_LEN;
 
 	return mtu;
 }
@@ -1207,7 +1625,7 @@ static struct net_device_stats *ipgre_tunnel_get_stats(struct net_device *dev)
 static int ipgre_tunnel_change_mtu(struct net_device *dev, int new_mtu)
 {
 	struct ip_tunnel *tunnel = netdev_priv(dev);
-	if (new_mtu < 68 ||
+	if (new_mtu < IP_MIN_MTU ||
 	    new_mtu > 0xFFF8 - tunnel_hard_header_len(dev) - tunnel->hlen)
 		return -EINVAL;
 	dev->mtu = new_mtu;
@@ -1346,7 +1764,7 @@ static void ethtool_getinfo(struct net_device *dev,
 }
 
 static struct ethtool_ops ethtool_ops = {
-	.get_drvinfo = ethtool_getinfo,
+	.get_drvinfo		= ethtool_getinfo,
 };
 
 #ifdef HAVE_NET_DEVICE_OPS
@@ -1879,7 +2297,8 @@ static int __init ipgre_init(void)
 {
 	int err;
 
-	printk(KERN_INFO "GRE over IPv4 tunneling driver\n");
+	printk(KERN_INFO "Open vSwitch GRE over IPv4, built "__DATE__" "
+			 __TIME__"\n");
 
 	if (inet_add_protocol(&ipgre_protocol, IPPROTO_GRE) < 0) {
 		printk(KERN_INFO "ipgre init: can't add protocol\n");
@@ -1888,7 +2307,7 @@ static int __init ipgre_init(void)
 
 	err = register_pernet_device(&ipgre_net_ops);
 	if (err < 0)
-		goto gen_device_failed;
+		goto pernet_device_failed;
 
 #ifndef GRE_IOCTL_ONLY
 	err = rtnl_link_register(&ipgre_link_ops);
@@ -1909,7 +2328,7 @@ tap_ops_failed:
 rtnl_link_failed:
 	unregister_pernet_device(&ipgre_net_ops);
 #endif
-gen_device_failed:
+pernet_device_failed:
 	inet_del_protocol(&ipgre_protocol, IPPROTO_GRE);
 	goto out;
 
