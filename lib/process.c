@@ -103,7 +103,7 @@ process_escape_args(char **argv)
         if (argp != argv) {
             ds_put_char(&ds, ' ');
         }
-        if (arg[strcspn(arg, " \t\r\n\v\\")]) {
+        if (arg[strcspn(arg, " \t\r\n\v\\\'\"")]) {
             ds_put_char(&ds, '"');
             for (p = arg; *p; p++) {
                 if (*p == '\\' || *p == '\"') {
