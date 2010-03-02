@@ -498,8 +498,6 @@ del_bridge(const struct ovsrec_open_vswitch *ovs, const char *br_name)
 
     del_port(br, br_name);
 
-    ovsrec_bridge_delete(br);
-
     bridges = xmalloc(sizeof *ovs->bridges * ovs->n_bridges);
     for (i = n = 0; i < ovs->n_bridges; i++) {
         if (ovs->bridges[i] != br) {
