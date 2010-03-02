@@ -832,7 +832,7 @@ json_string_unescape(const char *in, size_t in_len, char **outp)
     while (in < end) {
         if (*in == '"') {
             ds_clear(&out);
-            ds_put_cstr(&out, "quoted string may not include unescape \"");
+            ds_put_cstr(&out, "quoted string may not include unescaped \"");
             goto exit;
         }
         if (*in != '\\') {
