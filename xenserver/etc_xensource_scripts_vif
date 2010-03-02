@@ -172,7 +172,10 @@ remove_from_bridge()
 	    # Nothing to do
 	    ;;
 	vswitch)
-	    $vsctl del-port $dev
+            # If ovs-brcompatd is running, it might already have deleted the
+            # port.  Use --if-exists to suppress the error that would otherwise
+            # arise in that case.
+	    $vsctl -- --if-exists del-port $dev
 	    ;;
     esac
 }
