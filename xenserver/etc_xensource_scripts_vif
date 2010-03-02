@@ -103,6 +103,32 @@ handle_vswitch_vif_details()
     fi
 }
 
+xs550_set_internal_network_uuid()
+{
+    . /etc/xensource-inventory
+    if test "$PRODUCT_VERSION" = "5.5.0" || test "${BUILD_NUMBER%p}" -le 26131
+    then
+        # vNetManager needs to know the network UUID(s) associated with each
+        # datapath.  Normally interface-reconfigure adds them, but XAPI does
+        # not use interface-reconfigure for internal networks. Instead, XAPI
+        # calls the addbr ioctl internally, so we have to do it here instead
+        # for internal networks.  This is only acceptable because xapi is lazy
+        # about creating internal networks: it only creates one just before it
+        # adds the first vif to it.  There may still be a brief delay between
+        # the initial ovs-vswitchd connection to vNetManager and setting this
+        # configuration variable, but vNetManager can tolerate that.
+        local bridge=$1
+        local net_uuid=$(xenstore-read "${PRIVATE}/network-uuid" 2>/dev/null)
+        if [ -n "${net_uuid}" ] ; then
+            logger -t scripts-vif "${bridge} xs-network-uuids ${net_uuid}"
+            echo "-- br-set-external-id \"$bridge\" xs-network-uuids \"${net_uuid}\""
+        fi
+    else
+        # XAPI after 5.5.0 sets the network external ids itself, via ovs-vsctl.
+        :
+    fi
+}
+
 add_to_bridge()
 {
     local address=$(xenstore-read "${PRIVATE}/bridge-MAC")
@@ -133,7 +159,7 @@ add_to_bridge()
 		local vif_details=$(handle_vswitch_vif_details)
 	    fi
 
-	    $vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details
+	    $vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details $(xs550_set_internal_network_uuid)
 	    ;;
     esac
 	    
