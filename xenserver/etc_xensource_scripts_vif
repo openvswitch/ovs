@@ -120,7 +120,7 @@ xs550_set_internal_network_uuid()
         local net_uuid=$(xenstore-read "${PRIVATE}/network-uuid" 2>/dev/null)
         if [ -n "${net_uuid}" ] ; then
             logger -t scripts-vif "${bridge} xs-network-uuids ${net_uuid}"
-            echo "-- br-set-external-id \"$bridge\" xs-network-uuids \"${net_uuid}\""
+            echo "-- br-set-external-id $bridge xs-network-uuids ${net_uuid}"
         fi
     else
         # XAPI after 5.5.0 sets the network external ids itself, via ovs-vsctl.
@@ -158,7 +158,7 @@ add_to_bridge()
 		local vif_details=$(handle_vswitch_vif_details)
 	    fi
 
-	    $vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details $(xs550_set_internal_network_uuid)
+	    $vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details $(xs550_set_internal_network_uuid $bridge)
 	    ;;
     esac
 	    
@@ -172,7 +172,7 @@ remove_from_bridge()
 	    # Nothing to do
 	    ;;
 	vswitch)
-	    $vsctl del-port $bridge $dev
+	    $vsctl del-port $dev
 	    ;;
     esac
 }
