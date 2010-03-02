@@ -12,6 +12,7 @@
 # GNU Lesser General Public License for more details.
 #
 from InterfaceReconfigure import *
+import re
 
 #
 # Bare Network Devices -- network devices without IP configuration
@@ -100,6 +101,30 @@ A VLAN PIF cannot be a datapath PIF.
 def datapath_deconfigure_physical(netdev):
     return ['--', '--with-iface', '--if-exists', 'del-port', netdev]
 
+def vsctl_escape(s):
+    if s.isalnum():
+        return s
+
+    def escape(match):
+        c = match.group(0)
+        if c == '\0':
+            raise Error("strings may not contain null bytes")
+        elif c == '\\':
+            return r'\\'
+        elif c == '\n':
+            return r'\n'
+        elif c == '\r':
+            return r'\r'
+        elif c == '\t':
+            return r'\t'
+        elif c == '\b':
+            return r'\b'
+        elif c == '\a':
+            return r'\a'
+        else:
+            return r'\x%02x' % ord(c)
+    return '"' + re.sub(r'["\\\000-\037]', escape, s) + '"'
+
 def datapath_configure_bond(pif,slaves):
     bridge = pif_bridge_name(pif)
     pifrec = db().get_pif_record(pif)
@@ -108,10 +133,6 @@ def datapath_configure_bond(pif,slaves):
     argv = ['--', '--fake-iface', 'add-bond', bridge, interface]
     for slave in slaves:
         argv += [pif_netdev_name(slave)]
-
-    # XXX need ovs-vsctl support
-    #if pifrec['MAC'] != "":
-    #    argv += ['--add=port.%s.mac=%s' % (interface, pifrec['MAC'])]
 
     # Bonding options.
     bond_options = {
@@ -128,10 +149,26 @@ def datapath_configure_bond(pif,slaves):
                            key.startswith("bond-"), oc.items())
     overrides = map(lambda (key,val): (key[5:], val), overrides)
     bond_options.update(overrides)
+
+    argv += ['--', 'set', 'Port', interface]
+    if pifrec['MAC'] != "":
+        argv += ['MAC=%s' % vsctl_escape(pifrec['MAC'])]
     for (name,val) in bond_options.items():
-        # XXX need ovs-vsctl support for bond options
-        #argv += ["--add=bonding.%s.%s=%s" % (interface, name, val)]
-        pass
+        if name in ['updelay', 'downdelay']:
+            # updelay and downdelay have dedicated schema columns.
+            # The value must be a nonnegative integer.
+            try:
+                value = int(val)
+                if value < 0:
+                    raise ValueError
+
+                argv += ['bond_%s=%d' % (name, value)]
+            except ValueError:
+                log("bridge %s has invalid %s '%s'" % (bridge, name, value))
+        else:
+            # Pass other bond options into other_config.
+            argv += ["other-config:%s=%s" % (vsctl_escape("bond-%s" % name),
+                                             vsctl_escape(val))]
     return argv
 
 def datapath_deconfigure_bond(netdev):
@@ -278,8 +315,12 @@ def deconfigure_bridge(pif):
     return vsctl_argv
 
 def set_br_external_ids(pif):
+    pifrec = db().get_pif_record(pif)
+    dp = pif_datapath(pif)
+    dprec = db().get_pif_record(dp)
+
     xs_network_uuids = []
-    for nwpif in db().get_pifs_by_device(db().get_pif_record(pif)['device']):
+    for nwpif in db().get_pifs_by_device(pifrec['device']):
         rec = db().get_pif_record(nwpif)
 
         # When state is read from dbcache PIF.currently_attached
@@ -295,6 +336,11 @@ def set_br_external_ids(pif):
     vsctl_argv += ['# configure xs-network-uuids']
     vsctl_argv += ['--', 'br-set-external-id', pif_bridge_name(pif),
             'xs-network-uuids', ';'.join(xs_network_uuids)]
+
+    vsctl_argv += ['# configure MAC']
+    vsctl_argv += ['--', 'set', 'Interface', pif_ipdev_name(pif),
+                   'MAC=%s' % vsctl_escape(dprec['MAC'])]
+
     return vsctl_argv
 
 #
@@ -345,12 +391,6 @@ class DatapathVswitch(Datapath):
             vsctl_argv += datapath_deconfigure_ipdev(ipdev)
             vsctl_argv += ["# reconfigure ipdev %s" % ipdev]
             vsctl_argv += ['--', 'add-port', bridge, ipdev]
-
-        # XXX Needs support in ovs-vsctl
-        #if bridge == ipdev:
-        #    vsctl_argv += ['--add=bridge.%s.mac=%s' % (bridge, dprec['MAC'])]
-        #else:
-        #    vsctl_argv += ['--add=iface.%s.mac=%s' % (ipdev, dprec['MAC'])]
 
         self._vsctl_argv = vsctl_argv
         self._extra_ports = extra_ports
