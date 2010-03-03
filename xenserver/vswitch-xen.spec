@@ -19,6 +19,7 @@ Name: vswitch
 Summary: Virtual switch
 Group: System Environment/Daemons
 URL: http://www.openvswitch.org/
+Vendor: Nicira Networks, Inc.
 Version: %{vswitch_version}
 
 # The entire source code is ASL 2.0 except datapath/ which is GPLv2
