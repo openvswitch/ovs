@@ -545,6 +545,26 @@ static bool
 ovsdb_idl_row_is_orphan(const struct ovsdb_idl_row *row)
 {
     return !row->old;
+/* Returns true if 'row' is conceptually part of the database as modified by
+ * the current transaction (if any), false otherwise.
+ *
+ * This function will return true if 'row' is not an orphan (see the comment on
+ * ovsdb_idl_row_is_orphan()) and:
+ *
+ *   - 'row' exists in the database and has not been deleted within the
+ *     current transaction (if any).
+ *
+ *   - 'row' was inserted within the current transaction and has not been
+ *     deleted.  (In the latter case you should not have passed 'row' in at
+ *     all, because ovsdb_idl_txn_delete() freed it.)
+ *
+ * This function will return false if 'row' is an orphan or if 'row' was
+ * deleted within the current transaction.
+ */
+static bool
+ovsdb_idl_row_exists(const struct ovsdb_idl_row *row)
+{
+    return row->new != NULL;
 }
 
 static void
@@ -810,7 +830,7 @@ next_real_row(struct ovsdb_idl_table *table, struct hmap_node *node)
         struct ovsdb_idl_row *row;
 
         row = CONTAINER_OF(node, struct ovsdb_idl_row, hmap_node);
-        if (row->new || !ovsdb_idl_row_is_orphan(row)) {
+        if (ovsdb_idl_row_exists(row)) {
             return row;
         }
     }
