@@ -33,15 +33,24 @@ EXTRA_DIST += \
 	vswitchd/ovs-vswitchd.8.in \
 	vswitchd/ovs-brcompatd.8.in
 
-
 # vswitch schema and IDL
 OVSIDL_BUILT += \
 	vswitchd/vswitch-idl.c \
 	vswitchd/vswitch-idl.h \
 	vswitchd/vswitch-idl.ovsidl
 VSWITCH_IDL_FILES = vswitchd/vswitch.ovsschema vswitchd/vswitch-idl.ann
-noinst_DATA += vswitchd/vswitch-idl.txt
-EXTRA_DIST += $(VSWITCH_IDL_FILES) vswitchd/vswitch-idl.txt
+EXTRA_DIST += $(VSWITCH_IDL_FILES)
 vswitchd/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
 	$(OVSDB_IDLC) -C $(srcdir) annotate $(VSWITCH_IDL_FILES) > $@.tmp
+	mv $@.tmp $@
+
+# vswitch schema documentation
+EXTRA_DIST += vswitchd/vswitch.xml
+dist_man_MANS += vswitchd/ovs-vswitchd.conf.db.5
+vswitchd/ovs-vswitchd.conf.db.5: \
+	ovsdb/ovsdb-doc.in vswitchd/vswitch.xml vswitchd/vswitch.ovsschema
+	$(OVSDB_DOC) \
+		--title="ovs-vswitchd.conf.db" \
+		$(srcdir)/vswitchd/vswitch.ovsschema \
+		$(srcdir)/vswitchd/vswitch.xml > $@.tmp
 	mv $@.tmp $@

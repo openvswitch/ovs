@@ -9,7 +9,6 @@
 .  RS -0.15in
 .  I "\\$1"
 .  RE
-.  PP
 ..
 .TH ovs\-vsctl 8 "November 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-vsctl
@@ -312,7 +311,7 @@ the following forms:
 .RE
 .
 .ST "Controller Failure Settings"
-.
+.PP
 When a controller is configured, it is, ordinarily, responsible for
 setting up all flows on the switch.  Thus, if the connection to
 the controller fails, no new network connections can be set up.  If
@@ -376,6 +375,7 @@ Sets the SSL configuration.  The \fB\-\-bootstrap\fR option is described
 below.
 .
 .ST "CA Certificate Bootstrap"
+.PP
 Ordinarily, all of the files named in the SSL configuration must exist
 when \fBovs\-vswitchd\fR starts.  However, if the \fB\-\-bootstrap\fR 
 option is given, then \fBovs\-vswitchd\fR will attempt to obtain the
@@ -442,6 +442,7 @@ abbreviations are acceptable, e.g. \fBnet\fR or \fRn\fR is sufficient
 to identify the \fBNetFlow\fR table.
 .
 .ST "Database Values"
+.PP
 Each column in the database accepts a fixed type of data.  The
 currently defined basic types, and their representations, are:
 .IP "integer"
@@ -482,7 +483,6 @@ as \fB{}\fR, and curly braces may be optionally enclose non-empty maps
 as well.
 .
 .ST "Database Command Syntax"
-.
 .IP "\fBlist \fItable \fR[\fIrecord\fR]..."
 List the values of all columns of each specified \fIrecord\fR.  If no
 records are specified, lists all the records in \fItable\fR.

@@ -82,21 +82,18 @@ EXTRA_DIST += \
 	ovsdb/simplejson/tests/test_separators.py		\
 	ovsdb/simplejson/tests/test_unicode.py			\
 	ovsdb/simplejson/tool.py
-noinst_SCRIPTS += ovsdb/ovsdb-idlc
+noinst_SCRIPTS += ovsdb/ovsdb-idlc 
 EXTRA_DIST += \
 	ovsdb/ovsdb-idlc.in \
 	ovsdb/ovsdb-idlc.1
 DISTCLEANFILES += ovsdb/ovsdb-idlc
-SUFFIXES += .ovsidl .txt
+SUFFIXES += .ovsidl
 OVSDB_IDLC = $(PYTHON) $(srcdir)/ovsdb/ovsdb-idlc.in
 .ovsidl.c:
 	$(OVSDB_IDLC) c-idl-source $< > $@.tmp
 	mv $@.tmp $@
 .ovsidl.h:
 	$(OVSDB_IDLC) c-idl-header $< > $@.tmp
-	mv $@.tmp $@
-.ovsidl.txt:
-	$(OVSDB_IDLC) doc $< | fmt -s > $@.tmp
 	mv $@.tmp $@
 
 EXTRA_DIST += $(OVSIDL_BUILT)
@@ -111,3 +108,9 @@ BUILT_SOURCES += $(OVSIDL_BUILT)
 # assignments before any targets, so it doesn't seem to be a problem,
 # at least for now.
 $(OVSIDL_BUILT): ovsdb/ovsdb-idlc.in
+
+# ovsdb-doc
+EXTRA_DIST += ovsdb/ovsdb-doc.in
+noinst_SCRIPTS += ovsdb/ovsdb-doc
+DISTCLEANFILES += ovsdb/ovsdb-doc
+OVSDB_DOC = $(PYTHON) $(srcdir)/ovsdb/ovsdb-doc.in
