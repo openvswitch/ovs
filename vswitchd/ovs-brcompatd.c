@@ -734,7 +734,7 @@ handle_port_cmd(struct ovsdb_idl *idl,
                     del_port(br, port_name);
                 }
                 error = commit_txn(txn, true);
-                VLOG_INFO_RL("%s %s %s: %s",
+                VLOG_INFO_RL(&rl, "%s %s %s: %s",
                              cmd_name, br_name, port_name, strerror(error));
             } while (error == EAGAIN);
         }
