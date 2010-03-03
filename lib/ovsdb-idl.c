@@ -1681,3 +1681,10 @@ ovsdb_idl_txn_get(const struct ovsdb_idl_row *row)
     assert(txn != NULL);
     return txn;
 }
+
+struct ovsdb_idl *
+ovsdb_idl_txn_get_idl (struct ovsdb_idl_txn *txn)
+{
+    return txn->idl;
+}
+

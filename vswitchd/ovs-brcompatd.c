@@ -39,6 +39,7 @@
 #include "dirs.h"
 #include "dynamic-string.h"
 #include "fatal-signal.h"
+#include "json.h"
 #include "leak-checker.h"
 #include "netdev.h"
 #include "netlink.h"
@@ -371,12 +372,97 @@ ovs_insert_bridge(const struct ovsrec_open_vswitch *ovs,
     free(bridges);
 }   
 
+static struct json *
+where_uuid_equals(const struct uuid *uuid)
+{
+    return
+        json_array_create_1(
+            json_array_create_3(
+                json_string_create("_uuid"),
+                json_string_create("=="),
+                json_array_create_2(
+                    json_string_create("uuid"),
+                    json_string_create_nocopy(
+                        xasprintf(UUID_FMT, UUID_ARGS(uuid))))));
+}
+
+/* Commits 'txn'.  If 'wait_for_reload' is true, also waits for Open vSwitch to
+   reload the configuration before returning.
+
+   Returns EAGAIN if the caller should try the operation again, 0 on success,
+   otherwise a positive errno value. */
 static int
-add_bridge(const struct ovsrec_open_vswitch *ovs, const char *br_name)
+commit_txn(struct ovsdb_idl_txn *txn, bool wait_for_reload)
+{
+    struct ovsdb_idl *idl = ovsdb_idl_txn_get_idl (txn);
+    enum ovsdb_idl_txn_status status;
+    int64_t next_cfg = 0;
+
+    if (wait_for_reload) {
+        const struct ovsrec_open_vswitch *ovs = ovsrec_open_vswitch_first(idl);
+        struct json *where = where_uuid_equals(&ovs->header_.uuid);
+        ovsdb_idl_txn_increment(txn, "Open_vSwitch", "next_cfg", where);
+        json_destroy(where);
+    }
+    status = ovsdb_idl_txn_commit_block(txn);
+    if (wait_for_reload && status == TXN_SUCCESS) {
+        next_cfg = ovsdb_idl_txn_get_increment_new_value(txn);
+    }
+    ovsdb_idl_txn_destroy(txn);
+
+    switch (status) {
+    case TXN_INCOMPLETE:
+        NOT_REACHED();
+
+    case TXN_ABORTED:
+        VLOG_ERR_RL(&rl, "OVSDB transaction unexpectedly aborted");
+        return ECONNABORTED;
+
+    case TXN_UNCHANGED:
+        return 0;
+
+    case TXN_SUCCESS:
+        if (wait_for_reload) {
+            for (;;) {
+                /* We can't use 'ovs' any longer because ovsdb_idl_run() can
+                 * destroy it. */
+                const struct ovsrec_open_vswitch *ovs2;
+
+                ovsdb_idl_run(idl);
+                OVSREC_OPEN_VSWITCH_FOR_EACH (ovs2, idl) {
+                    if (ovs2->cur_cfg >= next_cfg) {
+                        goto done;
+                    }
+                }
+                ovsdb_idl_wait(idl);
+                poll_block();
+            }
+        done: ;
+        }
+        return 0;
+
+    case TXN_TRY_AGAIN:
+        VLOG_ERR_RL(&rl, "OVSDB transaction needs retry");
+        return EAGAIN;
+
+    case TXN_ERROR:
+        VLOG_ERR_RL(&rl, "OVSDB transaction failed: %s",
+                    ovsdb_idl_txn_get_error(txn));
+        return EBUSY;
+
+    default:
+        NOT_REACHED();
+    }
+}
+
+static int
+add_bridge(struct ovsdb_idl *idl, const struct ovsrec_open_vswitch *ovs,
+           const char *br_name)
 {
     struct ovsrec_bridge *br;
     struct ovsrec_port *port;
     struct ovsrec_interface *iface;
+    struct ovsdb_idl_txn *txn;
 
     if (find_bridge(ovs, br_name)) {
         VLOG_WARN("addbr %s: bridge %s exists", br_name, br_name);
@@ -403,6 +489,8 @@ add_bridge(const struct ovsrec_open_vswitch *ovs, const char *br_name)
         return EEXIST;
     }
 
+    txn = ovsdb_idl_txn_create(idl);
+
     iface = ovsrec_interface_insert(txn_from_openvswitch(ovs));
     ovsrec_interface_set_name(iface, br_name);
 
@@ -416,9 +504,7 @@ add_bridge(const struct ovsrec_open_vswitch *ovs, const char *br_name)
     
     ovs_insert_bridge(ovs, br);
 
-    VLOG_INFO("addbr %s: success", br_name);
-
-    return 0;
+    return commit_txn(txn, true);
 }
 
 static void
@@ -484,17 +570,21 @@ del_port(const struct ovsrec_bridge *br, const char *port_name)
     }
 }
 
-static int 
-del_bridge(const struct ovsrec_open_vswitch *ovs, const char *br_name)
+static int
+del_bridge(struct ovsdb_idl *idl,
+           const struct ovsrec_open_vswitch *ovs, const char *br_name)
 {
     struct ovsrec_bridge *br = find_bridge(ovs, br_name);
     struct ovsrec_bridge **bridges;
+    struct ovsdb_idl_txn *txn;
     size_t i, n;
 
     if (!br) {
         VLOG_WARN("delbr %s: no bridge named %s", br_name, br_name);
         return ENXIO;
     }
+
+    txn = ovsdb_idl_txn_create(idl);
 
     del_port(br, br_name);
 
@@ -510,9 +600,7 @@ del_bridge(const struct ovsrec_open_vswitch *ovs, const char *br_name)
     /* Delete the bridge itself. */
     ovsrec_bridge_delete(br);
 
-    VLOG_INFO("delbr %s: success", br_name);
-
-    return 0;
+    return commit_txn(txn, true);
 }
 
 static int
@@ -587,7 +675,8 @@ send_simple_reply(uint32_t seq, int error)
 }
 
 static int
-handle_bridge_cmd(const struct ovsrec_open_vswitch *ovs, 
+handle_bridge_cmd(struct ovsdb_idl *idl,
+                  const struct ovsrec_open_vswitch *ovs, 
                   struct ofpbuf *buffer, bool add)
 {
     const char *br_name;
@@ -596,7 +685,14 @@ handle_bridge_cmd(const struct ovsrec_open_vswitch *ovs,
 
     error = parse_command(buffer, &seq, &br_name, NULL, NULL, NULL);
     if (!error) {
-        error = add ? add_bridge(ovs, br_name) : del_bridge(ovs, br_name);
+        int retval;
+
+        do {
+            retval = (add ? add_bridge : del_bridge)(idl, ovs, br_name);
+            VLOG_INFO_RL(&rl, "%sbr %s: %s",
+                         add ? "add" : "del", br_name, strerror(retval));
+        } while (retval == EAGAIN);
+
         send_simple_reply(seq, error);
     }
     return error;
@@ -608,7 +704,8 @@ static const struct nl_policy brc_port_policy[] = {
 };
 
 static int
-handle_port_cmd(const struct ovsrec_open_vswitch *ovs,
+handle_port_cmd(struct ovsdb_idl *idl,
+                const struct ovsrec_open_vswitch *ovs,
                 struct ofpbuf *buffer, bool add)
 {
     const char *cmd_name = add ? "add-if" : "del-if";
@@ -629,12 +726,17 @@ handle_port_cmd(const struct ovsrec_open_vswitch *ovs,
                       cmd_name, br_name, port_name, port_name);
             error = EINVAL;
         } else {
-            if (add) {
-                add_port(ovs, br, port_name);
-            } else {
-                del_port(br, port_name);
-            }
-            VLOG_INFO("%s %s %s: success", cmd_name, br_name, port_name);
+            do {
+                struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);
+                if (add) {
+                    add_port(ovs, br, port_name);
+                } else {
+                    del_port(br, port_name);
+                }
+                error = commit_txn(txn, true);
+                VLOG_INFO_RL("%s %s %s: %s",
+                             cmd_name, br_name, port_name, strerror(error));
+            } while (error == EAGAIN);
         }
         send_simple_reply(seq, error);
     }
@@ -947,12 +1049,12 @@ handle_get_ports_cmd(const struct ovsrec_open_vswitch *ovs,
 }
 
 static void
-brc_recv_update(const struct ovsrec_open_vswitch *ovs)
+brc_recv_update(struct ovsdb_idl *idl)
 {
     int retval;
     struct ofpbuf *buffer;
     struct genlmsghdr *genlmsghdr;
-
+    const struct ovsrec_open_vswitch *ovs;
 
     buffer = NULL;
     do {
@@ -981,9 +1083,11 @@ brc_recv_update(const struct ovsrec_open_vswitch *ovs)
         goto error;
     }
 
-    /* Just drop the request on the floor if a valid configuration
-     * doesn't exist.  We don't immediately do this check, because we
-     * want to drain pending netlink messages. */
+    /* Get the Open vSwitch configuration.  Just drop the request on the floor
+     * if a valid configuration doesn't exist.  (We could check this earlier,
+     * but we want to drain pending Netlink messages even when there is no Open
+     * vSwitch configuration.) */
+    ovs = ovsrec_open_vswitch_first(idl);
     if (!ovs) {
         VLOG_WARN_RL(&rl, "could not find valid configuration to update");
         goto error;
@@ -991,19 +1095,19 @@ brc_recv_update(const struct ovsrec_open_vswitch *ovs)
 
     switch (genlmsghdr->cmd) {
     case BRC_GENL_C_DP_ADD:
-        handle_bridge_cmd(ovs, buffer, true);
+        handle_bridge_cmd(idl, ovs, buffer, true);
         break;
 
     case BRC_GENL_C_DP_DEL:
-        handle_bridge_cmd(ovs, buffer, false);
+        handle_bridge_cmd(idl, ovs, buffer, false);
         break;
 
     case BRC_GENL_C_PORT_ADD:
-        handle_port_cmd(ovs, buffer, true);
+        handle_port_cmd(idl, ovs, buffer, true);
         break;
 
     case BRC_GENL_C_PORT_DEL:
-        handle_port_cmd(ovs, buffer, false);
+        handle_port_cmd(idl, ovs, buffer, false);
         break;
 
     case BRC_GENL_C_FDB_QUERY:
@@ -1020,7 +1124,7 @@ brc_recv_update(const struct ovsrec_open_vswitch *ovs)
 
     default:
         VLOG_WARN_RL(&rl, "received unknown brc netlink command: %d\n",
-                genlmsghdr->cmd);
+                     genlmsghdr->cmd);
         break;
     }
 
@@ -1031,7 +1135,8 @@ error:
 
 /* Check for interface configuration changes announced through RTNL. */
 static void
-rtnl_recv_update(const struct ovsrec_open_vswitch *ovs)
+rtnl_recv_update(struct ovsdb_idl *idl,
+                 const struct ovsrec_open_vswitch *ovs)
 {
     struct ofpbuf *buf;
 
@@ -1075,11 +1180,13 @@ rtnl_recv_update(const struct ovsrec_open_vswitch *ovs)
 
             if (!netdev_exists(port_name)) {
                 /* Network device is really gone. */
-                struct ovsrec_bridge *br = find_bridge(ovs, br_name);
+                struct ovsdb_idl_txn *txn;
+                struct ovsrec_bridge *br;
 
                 VLOG_INFO("network device %s destroyed, "
                           "removing from bridge %s", port_name, br_name);
 
+                br = find_bridge(ovs, br_name);
                 if (!br) {
                     VLOG_WARN("no bridge named %s from which to remove %s", 
                             br_name, port_name);
@@ -1087,7 +1194,9 @@ rtnl_recv_update(const struct ovsrec_open_vswitch *ovs)
                     return;
                 }
 
+                txn = ovsdb_idl_txn_create(idl);
                 del_port(br, port_name);
+                commit_txn(txn, false);
             } else {
                 /* A network device by that name exists even though the kernel
                  * told us it had disappeared.  Probably, what happened was
@@ -1184,17 +1293,13 @@ main(int argc, char *argv[])
 
     for (;;) {
         const struct ovsrec_open_vswitch *ovs;
-        struct ovsdb_idl_txn *txn;
-        enum ovsdb_idl_txn_status status;
 
         ovsdb_idl_run(idl);
 
-        txn = ovsdb_idl_txn_create(idl);
-
         unixctl_server_run(unixctl);
-        ovs = ovsrec_open_vswitch_first(idl);
-        brc_recv_update(ovs);
+        brc_recv_update(idl);
 
+        ovs = ovsrec_open_vswitch_first(idl);
         if (!ovs && ovsdb_idl_has_ever_connected(idl)) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_WARN_RL(&rl, "%s: database does not contain any Open vSwitch "
@@ -1213,7 +1318,7 @@ main(int argc, char *argv[])
          *      to see if they no longer exist.
          */
         if (ovs && prune_timeout) {
-            rtnl_recv_update(ovs);
+            rtnl_recv_update(idl, ovs);
 #if 0
             prune_ports();
 #endif
@@ -1222,35 +1327,6 @@ main(int argc, char *argv[])
             poll_timer_wait(prune_timeout);
         }
 
-        status = ovsdb_idl_txn_commit_block(txn);
-            
-        switch (status) {
-        case TXN_INCOMPLETE:
-            NOT_REACHED();
-        
-        case TXN_ABORTED:
-            /* Should not happen--we never call ovsdb_idl_txn_abort(). */
-            ovs_fatal(0, "transaction aborted");
-        
-        case TXN_SUCCESS:
-        case TXN_UNCHANGED:
-            break;
-        
-        case TXN_TRY_AGAIN:
-            /* xxx Handle this better! */
-            VLOG_ERR("OVSDB transaction needs retry");
-            break;
-
-        case TXN_ERROR:
-            /* xxx Handle this better! */
-            VLOG_ERR("OVSDB transaction failed: %s",
-                     ovsdb_idl_txn_get_error(txn));
-            break;
-
-        default:
-            NOT_REACHED();
-        }
-        ovsdb_idl_txn_destroy(txn);
 
         nl_sock_wait(brc_sock, POLLIN);
         ovsdb_idl_wait(idl);
