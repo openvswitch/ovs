@@ -485,8 +485,10 @@ static struct sk_buff *brc_send_command(struct sk_buff *request, struct nlattr *
 
 	/* Wait for reply. */
 	error = -ETIMEDOUT;
-	if (!wait_for_completion_timeout(&brc_done, BRC_TIMEOUT))
+	if (!wait_for_completion_timeout(&brc_done, BRC_TIMEOUT)) {
+		printk(KERN_WARNING "brcompat: timed out waiting for userspace\n");
 		goto error;
+    }
 
 	/* Grab reply. */
 	spin_lock_irqsave(&brc_lock, flags);
