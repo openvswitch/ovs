@@ -541,10 +541,21 @@ ovsdb_idl_row_update(struct ovsdb_idl_row *row, const struct json *row_json)
     }
 }
 
+/* When a row A refers to row B through a column with a "refTable" constraint,
+ * but row B does not exist, row B is called an "orphan row".  Orphan rows
+ * should not persist, because the database enforces referential integrity, but
+ * they can appear transiently as changes from the database are received (the
+ * database doesn't try to topologically sort them and circular references mean
+ * it isn't always possible anyhow).
+ *
+ * This function returns true if 'row' is an orphan row, otherwise false.
+ */
 static bool
 ovsdb_idl_row_is_orphan(const struct ovsdb_idl_row *row)
 {
-    return !row->old;
+    return !row->old && !row->new;
+}
+
 /* Returns true if 'row' is conceptually part of the database as modified by
  * the current transaction (if any), false otherwise.
  *
