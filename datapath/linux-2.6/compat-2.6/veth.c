@@ -437,22 +437,18 @@ static ssize_t veth_store_veth_pairs(struct class *cls, const char *buffer,
 {
 	int c = *buffer++;
 	int retval;
-	printk("1\n");
 	if (c == '+') {
 		char devname[IFNAMSIZ + 1] = "";
 		char peername[IFNAMSIZ + 1] = "";
 		char *comma = strchr(buffer, ',');
-		printk("2\n");
 		if (!comma)
 			goto err_no_cmd;
 		strncat(devname, buffer,
 			min_t(int, sizeof devname, comma - buffer));
 		strncat(peername, comma + 1,
 			min_t(int, sizeof peername, strcspn(comma + 1, "\n")));
-		printk("3 '%s' '%s'\n", devname, peername);
 		if (!dev_valid_name(devname) || !dev_valid_name(peername))
 			goto err_no_cmd;
-		printk("4\n");
 		rtnl_lock();
 		retval = veth_newlink(devname, peername);
 		rtnl_unlock();
