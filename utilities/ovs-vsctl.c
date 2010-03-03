@@ -2386,12 +2386,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         vsctl_context_done(&ctx, c);
     }
 
-    while ((status = ovsdb_idl_txn_commit(txn)) == TXN_INCOMPLETE) {
-        ovsdb_idl_run(idl);
-        ovsdb_idl_wait(idl);
-        ovsdb_idl_txn_wait(txn);
-        poll_block();
-    }
+    status = ovsdb_idl_txn_commit_block(txn);
     if (wait_for_reload && status == TXN_SUCCESS) {
         next_cfg = ovsdb_idl_txn_get_increment_new_value(txn);
     }

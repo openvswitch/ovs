@@ -1222,12 +1222,7 @@ main(int argc, char *argv[])
             poll_timer_wait(prune_timeout);
         }
 
-        while ((status = ovsdb_idl_txn_commit(txn)) == TXN_INCOMPLETE) {
-            ovsdb_idl_run(idl);
-            ovsdb_idl_wait(idl);
-            ovsdb_idl_txn_wait(txn);
-            poll_block();
-        }
+        status = ovsdb_idl_txn_commit_block(txn);
             
         switch (status) {
         case TXN_INCOMPLETE:

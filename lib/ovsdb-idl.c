@@ -1264,6 +1264,23 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     return txn->status;
 }
 
+/* Attempts to commit 'txn', blocking until the commit either succeeds or
+ * fails.  Returns the final commit status, which may be any TXN_* value other
+ * than TXN_INCOMPLETE. */
+enum ovsdb_idl_txn_status
+ovsdb_idl_txn_commit_block(struct ovsdb_idl_txn *txn)
+{
+    enum ovsdb_idl_txn_status status;
+
+    while ((status = ovsdb_idl_txn_commit(txn)) == TXN_INCOMPLETE) {
+        ovsdb_idl_run(txn->idl);
+        ovsdb_idl_wait(txn->idl);
+        ovsdb_idl_txn_wait(txn);
+        poll_block();
+    }
+    return status;
+}
+
 int64_t
 ovsdb_idl_txn_get_increment_new_value(const struct ovsdb_idl_txn *txn)
 {
