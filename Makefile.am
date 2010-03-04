@@ -1,4 +1,4 @@
-# Copyright (C) 2007, 2008, 2009 Nicira Networks, Inc.
+# Copyright (C) 2007, 2008, 2009, 2010 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -40,6 +40,7 @@ bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =
 dist_man_MANS =
+dist_pkgdata_DATA =
 dist_pkgdata_SCRIPTS =
 dist_sbin_SCRIPTS =
 man_MANS =

@@ -287,29 +287,30 @@ cacert.pem:
       OpenFlow controller by verifying a signature against this CA
       certificate.
 
-Once you have these files, configure ovs-vswitchd to use them by
-adding the following keys to your ovs-vswitchd.conf file:
+Once you have these files, configure ovs-vswitchd to use them using
+the ovs-vsctl "set-ssl" command, e.g.:
 
-    ssl.private-key=/etc/vswitch/sc-privkey.pem
-    ssl.certificate=/etc/vswitch/sc-cert.pem
-    ssl.ca-cert=/etc/vswitch/cacert.pem
+    ovs-vsctl set-ssl /etc/vswitch/sc-privkey.pem /etc/vswitch/sc-cert.pem /etc/vswitch/cacert.pem
 
 Substitute the correct file names, of course, if they differ from the
-ones used above.
+ones used above.  You should use absolute file names (ones that begin
+with "/"), because ovs-vswitchd's current directory is unrelated to
+the one from which you run ovs-vsctl.
 
 If you are using self-signed certificates (see "SSL Concepts for
 OpenFlow") and you did not copy controllerca/cacert.pem from the PKI
-machine to the Open vSwitch, then also add the following key:
+machine to the Open vSwitch, then add the --bootstrap option, e.g.:
 
-    ssl.bootstrap-ca-cert=true
+    ovs-vsctl -- --bootstrap set-ssl /etc/vswitch/sc-privkey.pem /etc/vswitch/sc-cert.pem /etc/vswitch/cacert.pem
 
 After you have added all of these configuration keys, you may specify
-"ssl:" connection methods elsewhere in ovs-vswitchd.conf, e.g.:
-
-    mgmt.controller=ssl:192.168.0.1
-
+"ssl:" connection methods elsewhere in the configuration database.
 "tcp:" connection methods are still allowed even after SSL has been
 configured, so for security you should use only "ssl:" connections.
+
+Unlike most Open vSwitch settings, the SSL settings are read only
+once, at ovs-vswitchd startup time.  For changes to take effect,
+ovs-vswitchd must be killed and restarted.
 
 Reporting Bugs
 --------------

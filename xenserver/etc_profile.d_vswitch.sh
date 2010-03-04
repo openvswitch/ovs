@@ -1,4 +1,4 @@
-# Copyright (C) 2009 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -6,10 +6,6 @@
 # without warranty of any kind.
 
 alias vswitch='service vswitch'
-
-function watchconf {
-    watch cat /etc/ovs-vswitchd.conf
-}
 
 function watchdp {
 	watch ovs-dpctl show "$@"

@@ -1,15 +1,16 @@
             Using Open vSwitch as a Simple OpenFlow Switch
             ==============================================
 
-Open vSwitch uses OpenFlow as its preferred method of remote flow table
-configuration.  This is the simplest method of using it with an OpenFlow
-controller.  All that is required is to follow the instructions in
-INSTALL.Linux and add the bridge.<name>.controller set of parameters to the 
-ovs-vswitchd(8) configuration file as described in ovs-vswitchd.conf(5).  
-We recommend using OpenFlow in this manner.  However, it is also possible to 
-use Open vSwitch as a simple OpenFlow switch like that provided by the 
-OpenFlow reference implementation [1].  The remainder of this file describes 
-how to user it in that manner.
+Open vSwitch uses OpenFlow as its preferred method of remote flow
+table configuration.  This is the simplest method of using it with an
+OpenFlow controller.  The ovs-vsctl "set-controller" command will set
+the controller for one or more bridges.  We recommend using OpenFlow
+in this manner.
+
+However, it is also possible to use Open vSwitch as a simple OpenFlow
+switch like that provided by the OpenFlow reference implementation
+[1].  The remainder of this file describes how to use it in that
+manner.
 
 What is OpenFlow?
 -----------------

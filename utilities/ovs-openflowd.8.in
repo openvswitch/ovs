@@ -429,5 +429,4 @@ switching.
 .BR ovs\-discover (8),
 .BR ovs\-dpctl (8),
 .BR ovs\-ofctl (8),
-.BR ovs\-pki (8),
-.BR ovs\-vswitchd.conf (5)
+.BR ovs\-pki (8)
