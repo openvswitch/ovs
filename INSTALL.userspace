@@ -34,28 +34,30 @@ then create /dev/net (if necessary) with "mkdir /dev/net", then create
 Using the Userspace Datapath with ovs-vswitchd
 ----------------------------------------------
 
-To use ovs-vswitchd in userspace mode, give the bridge a name that
-begins with "netdev:" in the configuration file.  For example:
+To use ovs-vswitchd in userspace mode, create a bridge with datapath_type
+"netdev" in the configuration database.  For example:
 
-    bridge.netdev:br0.port=eth0
-    bridge.netdev:br0.port=eth1
-    bridge.netdev:br0.port=eth2
+    ovs-vsctl add-br br0
+    ovs-vsctl set bridge br0 datapath_type=netdev
+    ovs-vsctl add-port br0 eth0
+    ovs-vsctl add-port br0 eth1
+    ovs-vsctl add-port br0 eth2
 
 ovs-vswitchd will create a TAP device as the bridge's local interface,
-named the same as the bridge minus the "netdev:" prefix, as well as
-for each configured internal interface.
+named the same as the bridge, as well as for each configured internal
+interface.
 
 Using the Userspace Datapath with ovs-openflowd
 -----------------------------------------------
 
 To use ovs-openflowd in userspace mode, specify a datapath name that
-begins with "netdev:", and specify --ports with the names of the ports
+begins with "netdev@", and specify --ports with the names of the ports
 that should be included in the datapath as argument.  For example:
 
-    ovs-openflowd netdev:br0 --ports=eth0,eth1,eth2
+    ovs-openflowd netdev@br0 --ports=eth0,eth1,eth2
 
 ovs-openflowd will create a TAP device as the bridge's local
-interface, named the same as the bridge minus the "netdev:" prefix.
+interface, named the same as the bridge minus the "netdev@" prefix.
 
 Bug Reporting
 -------------
