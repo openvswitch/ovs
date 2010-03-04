@@ -808,8 +808,8 @@ ofproto_run1(struct ofproto *p)
                 /* Someone destroyed the datapath behind our back.  The caller
                  * better destroy us and give up, because we're just going to
                  * spin from here on out. */
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-                VLOG_ERR_RL(&rl, "%s: datapath was destroyed externally",
+                static struct vlog_rate_limit rl2 = VLOG_RATE_LIMIT_INIT(1, 5);
+                VLOG_ERR_RL(&rl2, "%s: datapath was destroyed externally",
                             dpif_name(p->dpif));
                 return ENODEV;
             }
