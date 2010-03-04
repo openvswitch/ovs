@@ -123,6 +123,7 @@ struct gre_config {
     uint32_t remote_ip;
     uint32_t in_key;
     uint32_t out_key;
+    uint8_t tos;
     bool have_in_key;
     bool have_out_key;
     bool in_csum;
@@ -317,7 +318,7 @@ setup_gre_netlink(const char *name OVS_UNUSED,
     nl_msg_put_u32(&request, IFLA_GRE_REMOTE, config->remote_ip);
     nl_msg_put_u8(&request, IFLA_GRE_PMTUDISC, pmtudisc);
     nl_msg_put_u8(&request, IFLA_GRE_TTL, IPDEFTTL);
-    nl_msg_put_u8(&request, IFLA_GRE_TOS, 0);
+    nl_msg_put_u8(&request, IFLA_GRE_TOS, config->tos);
 
     info_data_hdr->nla_len = (char *)ofpbuf_tail(&request)
                                 - (char *)info_data_hdr;
@@ -357,6 +358,7 @@ setup_gre_ioctl(const char *name, struct gre_config *config, bool create)
     p.iph.saddr = config->local_ip;
     p.iph.daddr = config->remote_ip;
     p.iph.ttl = IPDEFTTL;
+    p.iph.tos = config->tos;
 
     if (config->have_in_key) {
         p.i_flags |= GRE_KEY;
@@ -512,6 +514,8 @@ setup_gre(const char *name, const struct shash *args, bool create)
         } else if (!strcmp(node->name, "out_key")) {
             config.have_out_key = true;
             config.out_key = htonl(atoi(node->data));
+        } else if (!strcmp(node->name, "tos")) {
+            config.tos = atoi(node->data);
         } else if (!strcmp(node->name, "csum")) {
             if (!strcmp(node->data, "false")) {
                 config.in_csum = false;
