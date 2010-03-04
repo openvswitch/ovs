@@ -183,10 +183,10 @@ struct net_bridge_port {
 };
 
 enum csum_type {
-	CSUM_NONE = 0,
-	CSUM_UNNECESSARY = 1,
-	CSUM_COMPLETE = 2,
-	CSUM_PARTIAL = 3,
+	OVS_CSUM_NONE = 0,
+	OVS_CSUM_UNNECESSARY = 1,
+	OVS_CSUM_COMPLETE = 2,
+	OVS_CSUM_PARTIAL = 3,
 };
 
 /**
@@ -236,6 +236,7 @@ static inline int vswitch_skb_checksum_setup(struct sk_buff *skb)
 }
 #endif
 
+void compute_ip_summed(struct sk_buff *skb, bool xmit);
 void forward_ip_summed(struct sk_buff *skb);
 
 #endif /* datapath.h */

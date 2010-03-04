@@ -71,7 +71,6 @@ static DEFINE_MUTEX(dp_mutex);
 #define MAINT_SLEEP_MSECS 1000
 
 static int new_nbp(struct datapath *, struct net_device *, int port_no);
-static void compute_ip_summed(struct sk_buff *skb);
 
 /* Must be called with rcu_read_lock or dp_mutex. */
 struct datapath *get_dp(int dp_idx)
@@ -530,7 +529,7 @@ void dp_process_received_packet(struct sk_buff *skb, struct net_bridge_port *p)
 
 	WARN_ON_ONCE(skb_shared(skb));
 
-	compute_ip_summed(skb);
+	compute_ip_summed(skb, false);
 
 	/* BHs are off so we don't have to use get_cpu()/put_cpu() here. */
 	stats = percpu_ptr(dp->stats_percpu, smp_processor_id());
@@ -699,25 +698,57 @@ out:
  * skb_forward_csum().  It is slightly different because we are only concerned
  * with bridging and not other types of forwarding and can get away with
  * slightly more optimal behavior.*/
-static void
-compute_ip_summed(struct sk_buff *skb)
+void
+compute_ip_summed(struct sk_buff *skb, bool xmit)
 {
-	OVS_CB(skb)->ip_summed = skb->ip_summed;
-
+	/* For our convenience these defines change repeatedly between kernel
+	 * versions, so we can't just copy them over... */
+	switch (skb->ip_summed) {
+	case CHECKSUM_NONE:
+		OVS_CB(skb)->ip_summed = OVS_CSUM_NONE;
+		break;
+	case CHECKSUM_UNNECESSARY:
+		OVS_CB(skb)->ip_summed = OVS_CSUM_UNNECESSARY;
+		break;
 #ifdef CHECKSUM_HW
 	/* In theory this could be either CHECKSUM_PARTIAL or CHECKSUM_COMPLETE.
 	 * However, we should only get CHECKSUM_PARTIAL packets from Xen, which
 	 * uses some special fields to represent this (see below).  Since we
 	 * can only make one type work, pick the one that actually happens in
-	 * practice. */
-	if (skb->ip_summed == CHECKSUM_HW)
-		OVS_CB(skb)->ip_summed = CSUM_COMPLETE;
+	 * practice.
+	 *
+	 * The one exception to this is if we are on the transmit path
+	 * (basically after skb_checksum_setup() has been run) the type has
+	 * already been converted, so we should stay with that. */
+	case CHECKSUM_HW:
+		if (!xmit)
+			OVS_CB(skb)->ip_summed = OVS_CSUM_COMPLETE;
+		else
+			OVS_CB(skb)->ip_summed = OVS_CSUM_PARTIAL;
+
+		break;
+#else
+	case CHECKSUM_COMPLETE:
+		OVS_CB(skb)->ip_summed = OVS_CSUM_COMPLETE;
+		break;
+	case CHECKSUM_PARTIAL:
+		OVS_CB(skb)->ip_summed = OVS_CSUM_PARTIAL;
+		break;
 #endif
+	default:
+		printk(KERN_ERR "openvswitch: unknown checksum type %d\n",
+		       skb->ip_summed);
+		/* None seems the safest... */
+		OVS_CB(skb)->ip_summed = OVS_CSUM_NONE;
+	}	
+
 #if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
 	/* Xen has a special way of representing CHECKSUM_PARTIAL on older
-	 * kernels. */
+	 * kernels. It should not be set on the transmit path though. */
 	if (skb->proto_csum_blank)
-		OVS_CB(skb)->ip_summed = CSUM_PARTIAL;
+		OVS_CB(skb)->ip_summed = OVS_CSUM_PARTIAL;
+
+	WARN_ON_ONCE(skb->proto_csum_blank && xmit);
 #endif
 }
 
@@ -725,7 +756,7 @@ void
 forward_ip_summed(struct sk_buff *skb)
 {
 #ifdef CHECKSUM_HW
-	if (OVS_CB(skb)->ip_summed == CSUM_COMPLETE)
+	if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE)
 		skb->ip_summed = CHECKSUM_NONE;
 #endif
 }
