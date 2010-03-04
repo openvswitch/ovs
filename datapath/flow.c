@@ -7,6 +7,7 @@
  */
 
 #include "flow.h"
+#include "datapath.h"
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/if_ether.h>
@@ -231,7 +232,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 		struct vlan_hdr *vh = (struct vlan_hdr*)(skb->data + nh_ofs);
 		key->dl_type = vh->h_vlan_encapsulated_proto;
 		key->dl_vlan = vh->h_vlan_TCI & htons(VLAN_VID_MASK);
-		key->dl_vlan_pcp = (ntohs(vh->h_vlan_TCI) & 0xe000) >> 13;
+		key->dl_vlan_pcp = (ntohs(vh->h_vlan_TCI) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
 		nh_ofs += sizeof(struct vlan_hdr);
 	}
 	memcpy(key->dl_src, eth->h_source, ETH_ALEN);
@@ -244,7 +245,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 		int th_ofs = nh_ofs + nh->ihl * 4;
 		key->nw_src = nh->saddr;
 		key->nw_dst = nh->daddr;
-		key->nw_tos = nh->tos & 0xfc;
+		key->nw_tos = nh->tos & ~INET_ECN_MASK;
 		key->nw_proto = nh->protocol;
 		skb_set_transport_header(skb, th_ofs);
 
@@ -295,7 +296,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 
 		arp = (struct arp_eth_header *)skb_network_header(skb);
 
-		if (arp->ar_hrd == htons(1)
+		if (arp->ar_hrd == htons(ARPHRD_ETHER)
 				&& arp->ar_pro == htons(ETH_P_IP)
 				&& arp->ar_hln == ETH_ALEN
 				&& arp->ar_pln == 4) {
