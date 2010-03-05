@@ -2559,6 +2559,9 @@ struct flow_stats_cbdata {
     struct ofpbuf *msg;
 };
 
+/* Obtains statistic counters for 'rule' within 'p' and stores them into
+ * '*packet_countp' and '*byte_countp'.  If 'rule' is a wildcarded rule, the
+ * returned statistic include statistics for all of 'rule''s subrules. */
 static void
 query_stats(struct ofproto *p, struct rule *rule,
             uint64_t *packet_countp, uint64_t *byte_countp)
@@ -2568,9 +2571,19 @@ query_stats(struct ofproto *p, struct rule *rule,
     struct odp_flow *odp_flows;
     size_t n_odp_flows;
 
+    /* Start from historical data for 'rule' itself that are no longer tracked
+     * by the datapath.  This counts, for example, subrules that have
+     * expired. */
     packet_count = rule->packet_count;
     byte_count = rule->byte_count;
 
+    /* Prepare to ask the datapath for statistics on 'rule', or if it is
+     * wildcarded then on all of its subrules.
+     *
+     * Also, add any statistics that are not tracked by the datapath for each
+     * subrule.  This includes, for example, statistics for packets that were
+     * executed "by hand" by ofproto via dpif_execute() but must be accounted
+     * to a flow. */
     n_odp_flows = rule->cr.wc.wildcards ? list_size(&rule->list) : 1;
     odp_flows = xzalloc(n_odp_flows * sizeof *odp_flows);
     if (rule->cr.wc.wildcards) {
@@ -2584,8 +2597,7 @@ query_stats(struct ofproto *p, struct rule *rule,
         odp_flows[0].key = rule->cr.flow;
     }
 
-    packet_count = rule->packet_count;
-    byte_count = rule->byte_count;
+    /* Fetch up-to-date statistics from the datapath and add them in. */ */
     if (!dpif_flow_get_multiple(p->dpif, odp_flows, n_odp_flows)) {
         size_t i;
         for (i = 0; i < n_odp_flows; i++) {
@@ -2596,6 +2608,7 @@ query_stats(struct ofproto *p, struct rule *rule,
     }
     free(odp_flows);
 
+    /* Return the stats to the caller. */
     *packet_countp = packet_count;
     *byte_countp = byte_count;
 }
