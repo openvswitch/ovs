@@ -22,6 +22,10 @@
 #include <stdbool.h>
 #include <time.h>
 #include "util.h"
+ 
+#ifdef  __cplusplus
+extern "C" {
+#endif
 
 /* Logging importance levels. */
 #define VLOG_LEVELS                             \
@@ -187,6 +191,10 @@ void vlog_usage(void);
         }                                                           \
     } while (0)
 extern enum vlog_level min_vlog_levels[VLM_N_MODULES];
+ 
+#ifdef  __cplusplus
+}
+#endif
 
 
 #endif /* vlog.h */

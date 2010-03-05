@@ -16,6 +16,10 @@
 
 #ifndef UNIXCTL_H
 #define UNIXCTL_H 1
+ 
+#ifdef  __cplusplus
+extern "C" {
+#endif
 
 /* Server for Unix domain socket control connection. */
 struct unixctl_server;
@@ -40,5 +44,9 @@ void unixctl_command_register(const char *name,
                                          const char *args));
 void unixctl_command_reply(struct unixctl_conn *, int code,
                            const char *body);
+ 
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* unixctl.h */
