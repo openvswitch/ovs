@@ -29,6 +29,18 @@
       <column name="ssl">
         SSL used globally by the daemon.
       </column>
+
+      <column name="external_ids">
+        Key-value pairs that identify this Open vSwitch's role in
+        external systems.  The currently defined key-value pairs are:
+        <dl>
+          <dt><code>system-uuid</code></dt>
+          <dd>A universally unique identifier for the Open vSwitch's
+            physical host.  The form of the identifier depends on the
+            type of the host.  On a Citrix XenServer, this is the host
+            UUID displayed by, e.g., <code>xe host-list</code>.</dd>
+        </dl>
+      </column>
     </group>
 
     <group title="Status">
