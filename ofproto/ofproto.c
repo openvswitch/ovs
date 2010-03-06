@@ -2597,7 +2597,7 @@ query_stats(struct ofproto *p, struct rule *rule,
         odp_flows[0].key = rule->cr.flow;
     }
 
-    /* Fetch up-to-date statistics from the datapath and add them in. */ */
+    /* Fetch up-to-date statistics from the datapath and add them in. */
     if (!dpif_flow_get_multiple(p->dpif, odp_flows, n_odp_flows)) {
         size_t i;
         for (i = 0; i < n_odp_flows; i++) {
