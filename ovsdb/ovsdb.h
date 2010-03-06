@@ -29,12 +29,10 @@ struct uuid;
 /* Database schema. */
 struct ovsdb_schema {
     char *name;
-    char *comment;
     struct shash tables;        /* Contains "struct ovsdb_table_schema *"s. */
 };
 
-struct ovsdb_schema *ovsdb_schema_create(const char *name,
-                                         const char *comment);
+struct ovsdb_schema *ovsdb_schema_create(const char *name);
 struct ovsdb_schema *ovsdb_schema_clone(const struct ovsdb_schema *);
 void ovsdb_schema_destroy(struct ovsdb_schema *);
 

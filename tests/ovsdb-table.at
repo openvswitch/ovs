@@ -10,12 +10,6 @@ OVSDB_CHECK_POSITIVE([immutable table with one column],
       "mutable": false}']],
   [[{"columns":{"name":{"type":"string"}},"mutable":false}]])
 
-OVSDB_CHECK_POSITIVE([table with comment],
-  [[parse-table mytable \
-    '{"columns": {"name": {"type": "string"}},
-      "comment": "description of table"}']],
-  [[{"columns":{"name":{"type":"string"}},"comment":"description of table"}]])
-
 OVSDB_CHECK_NEGATIVE([column names may not begin with _],
   [[parse-table mytable \
     '{"columns": {"_column": {"type": "integer"}}}']],

@@ -695,15 +695,11 @@ do_list_tables(int argc OVS_UNUSED, char *argv[])
     schema = fetch_schema(argv[1], argv[2]);
     table_init(&t);
     table_add_column(&t, "Table");
-    table_add_column(&t, "Comment");
     SHASH_FOR_EACH (node, &schema->tables) {
         struct ovsdb_table_schema *ts = node->data;
 
         table_add_row(&t);
         table_add_cell(&t, ts->name);
-        if (ts->comment) {
-            table_add_cell(&t, ts->comment);
-        }
     }
     ovsdb_schema_destroy(schema);
     table_print(&t);
@@ -724,7 +720,6 @@ do_list_columns(int argc OVS_UNUSED, char *argv[])
     }
     table_add_column(&t, "Column");
     table_add_column(&t, "Type");
-    table_add_column(&t, "Comment");
     SHASH_FOR_EACH (table_node, &schema->tables) {
         struct ovsdb_table_schema *ts = table_node->data;
 
@@ -741,9 +736,6 @@ do_list_columns(int argc OVS_UNUSED, char *argv[])
                 }
                 table_add_cell(&t, column->name);
                 table_add_cell_nocopy(&t, json_to_string(type, JSSF_SORT));
-                if (column->comment) {
-                    table_add_cell(&t, column->comment);
-                }
 
                 json_destroy(type);
             }

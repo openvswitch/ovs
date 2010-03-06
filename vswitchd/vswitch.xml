@@ -16,10 +16,9 @@
       </column>
 
       <column name="controller">
-        Default <ref table="Controller"/> used by bridges.  If a
-        <ref table="Bridge"/> record has a <ref table="Bridge"
-        column="controller"/> column, then this
-        <ref table="Controller"/> is used instead.
+        Default <ref table="Controller"/> used by bridges.  May be
+        overridden on a per-bridge basis by the <ref table="Bridge"
+        column="controller"/> column in <ref table="Bridge"/>.
       </column>
 
       <column name="managers">
@@ -42,7 +41,7 @@
 
       <column name="cur_cfg">
         Sequence number that Open vSwitch sets to the current value of
-        <ref column="next_cfg"/> after it finishing applying a set of
+        <ref column="next_cfg"/> after it finishes applying a set of
         configuration changes.
       </column>
     </group>
@@ -100,7 +99,7 @@
       </column>
 
       <column name="datapath_id">
-        Reports the OpenFlow datapath ID in use.  Exactly 12 hex digits.
+        Reports the OpenFlow datapath ID in use.  Exactly 16 hex digits.
       </column>
     </group>
 
@@ -129,11 +128,11 @@
         features.  The currently defined key-value pairs are:
         <dl>
           <dt><code>datapath-id</code></dt>
-          <dd>Exactly 12 hex
+          <dd>Exactly 16 hex
             digits to set the OpenFlow datapath ID to a specific
             value.</dd>
           <dt><code>hwaddr</code></dt>
-          <dd>Exactly 12 hex digits in the form
+          <dd>An Ethernet address in the form
             <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
             to set the hardware address of the local port and influence the
             datapath ID.</dd>
@@ -145,7 +144,7 @@
   <table name="Port" table="Port or bond configuration.">
     <p>A port within a <ref table="Bridge"/>.</p>
     <p>Most commonly, a port has exactly one ``interface,'' pointed to by its
-      <ref column="interface"/> column.  Such a port logically
+      <ref column="interfaces"/> column.  Such a port logically
       corresponds to a port on a physical Ethernet switch.  A port
       with more than one interface is a ``bonded port'' (see
       <ref group="Bonding Configuration"/>).</p>
@@ -227,12 +226,12 @@
       <column name="bond_downdelay">
         For a bonded port, the number of milliseconds for which carrier must
         stay down on an interface before the interface is considered to be
-        down.  Specify <code>0</code> to enable the interface immediately.
+        down.  Specify <code>0</code> to disable the interface immediately.
       </column>
 
       <column name="bond_fake_iface">
-        For a bonded port, whether to create a fake interface with the name of
-        the port.  Use only for compatibility with legacy software that
+        For a bonded port, whether to create a fake internal interface with the
+        name of the port.  Use only for compatibility with legacy software that
         requires this.
       </column>
     </group>
@@ -254,7 +253,8 @@
         Key-value pairs that identify this port's role in external systems.  No
         key-value pairs native to <ref table="Port"/> are currently defined.
         For fake bridges (see the <ref column="fake_bridge"/> column), external
-        IDs for the fake bridge are defined here by prefixing their keys
+        IDs for the fake bridge are defined here by prefixing a
+        <ref table="Bridge"/> <ref table="Bridge" column="external_ids"/> key
         with <code>fake-bridge-</code>,
         e.g. <code>fake-bridge-xs-network-uuids</code>.
       </column>
@@ -264,7 +264,7 @@
         currently defined key-value pairs are:
         <dl>
           <dt><code>hwaddr</code></dt>
-          <dd>Exactly 12 hex digits in the form
+          <dd>An Ethernet address in the form
             <code><var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var></code>.</dd>
         </dl>
       </column>
@@ -293,7 +293,7 @@
             whose name is first in alphabetical order).  Internal ports and
             bridge ports that are used as port mirroring destinations (see the
             <ref table="Mirror"/> table) are ignored.</li>
-          <li>For other internal interface, the default MAC is randomly
+          <li>For other internal interfaces, the default MAC is randomly
             generated.</li>
           <li>External interfaces typically have a MAC address associated with
             their hardware.</li>
@@ -310,10 +310,10 @@
         <p>Open vSwitch populates this column when the port number becomes
           known.  If the interface is successfully added,
           <ref column="ofport"/> will be set to a number between 1 and 65535
-          (generally either in the range 1 to <code>0xff00</code>, exclusive,
-          or <code>0xfffe</code>, the port number for the OpenFlow ``local
-          port'').  If the interface cannot be added then Open vSwitch sets
-          this column to <code>-1</code>.</p>
+          (generally either in the range 1 to 65280, exclusive, or 65534, the
+          port number for the OpenFlow ``local port'').  If the interface
+          cannot be added then Open vSwitch sets this column
+          to -1.</p>
       </column>
     </group>
 
@@ -328,7 +328,7 @@
             vSwitch is running.  The empty string is a synonym for
             <code>system</code>.</dd>
           <dt><code>internal</code></dt>
-          <dd>A simulated network devices that sent and receive traffic.  An
+          <dd>A simulated network device that sends and receives traffic.  An
             internal interface whose <ref column="name"/> is the same as its
             bridge's <ref table="Open_vSwitch" column="name"/> is called the
             ``local interface.''  It does not make sense to bond an internal
@@ -376,13 +376,13 @@
         <dl>
           <dt><code>xs-vif-uuid</code></dt>
           <dd>UUID of the Citrix XenServer VIF associated with this
-            interface</dd>
+            interface.</dd>
           <dt><code>xs-network-uuid</code></dt>
           <dd>UUID of the Citrix XenServer network to which this interface is
-            attached</dd>
+            attached.</dd>
           <dt><code>xs-vif-vm-uuid</code></dt>
           <dd>UUID of the Citrix XenServer VM to which this interface
-            belongs</dd>
+            belongs.</dd>
           <dt><code>xs-vif-mac</code></dt>
           <dd>The value of the "MAC" field in the Citrix XenServer VIF record
             for this interface.</dd>

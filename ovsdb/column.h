@@ -27,7 +27,6 @@ struct ovsdb_column {
     unsigned int index;
     char *name;
 
-    char *comment;
     bool mutable;
     bool persistent;
     struct ovsdb_type type;
@@ -45,7 +44,7 @@ enum {
 };
 
 struct ovsdb_column *ovsdb_column_create(
-    const char *name, const char *comment, bool mutable, bool persistent,
+    const char *name, bool mutable, bool persistent,
     const struct ovsdb_type *);
 struct ovsdb_column *ovsdb_column_clone(const struct ovsdb_column *);
 void ovsdb_column_destroy(struct ovsdb_column *);

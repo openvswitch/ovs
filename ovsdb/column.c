@@ -27,7 +27,7 @@
 #include "util.h"
 
 struct ovsdb_column *
-ovsdb_column_create(const char *name, const char *comment,
+ovsdb_column_create(const char *name,
                     bool mutable, bool persistent,
                     const struct ovsdb_type *type)
 {
@@ -36,7 +36,6 @@ ovsdb_column_create(const char *name, const char *comment,
 
     column = xzalloc(sizeof *column);
     column->name = xstrdup(name);
-    column->comment = comment ? xstrdup(comment) : NULL;
     column->mutable = mutable;
     column->persistent = persistent;
     ovsdb_type_clone(&column->type, type);
@@ -48,7 +47,7 @@ struct ovsdb_column *
 ovsdb_column_clone(const struct ovsdb_column *old)
 {
     /* Doesn't copy the column's 'index': the caller must do that. */
-    return ovsdb_column_create(old->name, old->comment,
+    return ovsdb_column_create(old->name,
                                old->mutable, old->persistent,
                                &old->type);
 }
@@ -58,7 +57,6 @@ ovsdb_column_destroy(struct ovsdb_column *column)
 {
     ovsdb_type_destroy(&column->type);
     free(column->name);
-    free(column->comment);
     free(column);
 }
 
@@ -66,7 +64,7 @@ struct ovsdb_error *
 ovsdb_column_from_json(const struct json *json, const char *name,
                        struct ovsdb_column **columnp)
 {
-    const struct json *comment, *mutable, *ephemeral, *type_json;
+    const struct json *mutable, *ephemeral, *type_json;
     struct ovsdb_error *error;
     struct ovsdb_type type;
     struct ovsdb_parser parser;
@@ -75,7 +73,6 @@ ovsdb_column_from_json(const struct json *json, const char *name,
     *columnp = NULL;
 
     ovsdb_parser_init(&parser, json, "schema for column %s", name);
-    comment = ovsdb_parser_member(&parser, "comment", OP_STRING | OP_OPTIONAL);
     mutable = ovsdb_parser_member(&parser, "mutable",
                                 OP_TRUE | OP_FALSE | OP_OPTIONAL);
     ephemeral = ovsdb_parser_member(&parser, "ephemeral",
@@ -93,7 +90,6 @@ ovsdb_column_from_json(const struct json *json, const char *name,
 
     persistent = ephemeral ? !json_boolean(ephemeral) : true;
     *columnp = ovsdb_column_create(name,
-                                   comment ? json_string(comment) : NULL,
                                    mutable ? json_boolean(mutable) : true,
                                    persistent, &type);
 
@@ -106,9 +102,6 @@ struct json *
 ovsdb_column_to_json(const struct ovsdb_column *column)
 {
     struct json *json = json_object_create();
-    if (column->comment) {
-        json_object_put_string(json, "comment", column->comment);
-    }
     if (!column->mutable) {
         json_object_put(json, "mutable", json_boolean_create(false));
     }

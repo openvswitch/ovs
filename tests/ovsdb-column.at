@@ -11,8 +11,3 @@ OVSDB_CHECK_POSITIVE([immutable column],
 OVSDB_CHECK_POSITIVE([ephemeral column],
   [[parse-column mycol '{"type": "uuid", "ephemeral": true}']],
   [[{"ephemeral":true,"type":"uuid"}]])
-
-OVSDB_CHECK_POSITIVE([column with comment],
-  [[parse-column mycol '{"type": "boolean",
-                         "comment": "extra information about this column"}']],
-  [[{"comment":"extra information about this column","type":"boolean"}]])

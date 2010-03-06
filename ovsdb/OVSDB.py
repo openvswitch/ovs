@@ -21,25 +21,23 @@ def mustGetMember(json, name, expectedType, description):
     return member
 
 class DbSchema:
-    def __init__(self, name, comment, tables):
+    def __init__(self, name, tables):
         self.name = name
-        self.comment = comment
         self.tables = tables
 
     @staticmethod
     def fromJson(json):
         name = mustGetMember(json, 'name', [unicode], 'database')
-        comment = getMember(json, 'comment', [unicode], 'database')
         tablesJson = mustGetMember(json, 'tables', [dict], 'database')
         tables = {}
         for tableName, tableJson in tablesJson.iteritems():
             tables[tableName] = TableSchema.fromJson(tableJson,
                                                      "%s table" % tableName)
-        return DbSchema(name, comment, tables)
+        return DbSchema(name, tables)
 
 class IdlSchema(DbSchema):
-    def __init__(self, name, comment, tables, idlPrefix, idlHeader):
-        DbSchema.__init__(self, name, comment, tables)
+    def __init__(self, name, tables, idlPrefix, idlHeader):
+        DbSchema.__init__(self, name, tables)
         self.idlPrefix = idlPrefix
         self.idlHeader = idlHeader
 
@@ -48,39 +46,34 @@ class IdlSchema(DbSchema):
         schema = DbSchema.fromJson(json)
         idlPrefix = mustGetMember(json, 'idlPrefix', [unicode], 'database')
         idlHeader = mustGetMember(json, 'idlHeader', [unicode], 'database')
-        return IdlSchema(schema.name, schema.comment, schema.tables,
-                         idlPrefix, idlHeader)
+        return IdlSchema(schema.name, schema.tables, idlPrefix, idlHeader)
 
 class TableSchema:
-    def __init__(self, comment, columns):
-        self.comment = comment
+    def __init__(self, columns):
         self.columns = columns
 
     @staticmethod
     def fromJson(json, description):
-        comment = getMember(json, 'comment', [unicode], description)
         columnsJson = mustGetMember(json, 'columns', [dict], description)
         columns = {}
         for name, json in columnsJson.iteritems():
             columns[name] = ColumnSchema.fromJson(
                 json, "column %s in %s" % (name, description))
-        return TableSchema(comment, columns)
+        return TableSchema(columns)
 
 class ColumnSchema:
-    def __init__(self, comment, type, persistent):
-        self.comment = comment
+    def __init__(self, type, persistent):
         self.type = type
         self.persistent = persistent
 
     @staticmethod
     def fromJson(json, description):
-        comment = getMember(json, 'comment', [unicode], description)
         type = Type.fromJson(mustGetMember(json, 'type', [dict, unicode],
                                            description),
                              'type of %s' % description)
         ephemeral = getMember(json, 'ephemeral', [bool], description)
         persistent = ephemeral != True
-        return ColumnSchema(comment, type, persistent)
+        return ColumnSchema(type, persistent)
 
 def escapeCString(src):
     dst = ""

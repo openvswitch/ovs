@@ -27,13 +27,11 @@ struct uuid;
 /* Schema for a database table. */
 struct ovsdb_table_schema {
     char *name;
-    char *comment;
     bool mutable;
     struct shash columns;       /* Contains "struct ovsdb_column *"s. */
 };
 
 struct ovsdb_table_schema *ovsdb_table_schema_create(const char *name,
-                                                     const char *comment,
                                                      bool mutable);
 struct ovsdb_table_schema *ovsdb_table_schema_clone(
     const struct ovsdb_table_schema *);

@@ -89,25 +89,21 @@ is represented by <database-schema>, as described below.
     A JSON object with the following members:
 
         "name": <id>                            required
-        "comment": <string>                     optional
         "tables": {<id>: <table-schema>, ...}   required
 
     The "name" identifies the database as a whole.  It must be
     provided to most JSON-RPC requests to identify the database being
-    operated on.  The "comment" optionally provides more information
-    about the database.  The value of "tables" is a JSON object whose
-    names are table names and whose values are <table-schema>s.
+    operated on.  The value of "tables" is a JSON object whose names
+    are table names and whose values are <table-schema>s.
 
 <table-schema>
 
     A JSON object with the following members:
 
-        "comment": <string>                       optional
         "columns": {<id>: <column-schema>, ...}   required
 
-    The "comment" optionally provides information about this table for
-    a human reader.  The value of "columns" is a JSON object whose
-    names are column names and whose values are <column-schema>s.
+    The value of "columns" is a JSON object whose names are column
+    names and whose values are <column-schema>s.
 
     Every table has the following columns whose definitions are not
     included in the schema:
@@ -130,15 +126,13 @@ is represented by <database-schema>, as described below.
 
     A JSON object with the following members:
 
-        "comment": <string>                       optional
         "type": <type>                            required
         "ephemeral": <boolean>                    optional
 
-    The "comment" optionally provides information about this column
-    for a human reader.  The "type" specifies the type of data stored
-    in this column.  If "ephemeral" is specified as true, then this
-    column's values are not guaranteed to be durable; they may be lost
-    when the database restarts.
+    The "type" specifies the type of data stored in this column.  If
+    "ephemeral" is specified as true, then this column's values are
+    not guaranteed to be durable; they may be lost when the database
+    restarts.
 
 <type>
 

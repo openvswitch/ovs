@@ -231,10 +231,7 @@ static struct %(s)s *
     for tableName, table in sorted(schema.tables.iteritems()):
         structName = "%s%s" % (prefix, tableName.lower())
         print ""
-        if table.comment != None:
-            print "/* %s table (%s). */" % (tableName, table.comment)
-        else:
-            print "/* %s table. */" % (tableName)
+        print "/* %s table. */" % (tableName)
 
         # Parse functions.
         for columnName, column in sorted(table.columns.iteritems()):

@@ -35,26 +35,21 @@ add_column(struct ovsdb_table_schema *ts, struct ovsdb_column *column)
 }
 
 struct ovsdb_table_schema *
-ovsdb_table_schema_create(const char *name, const char *comment, bool mutable)
+ovsdb_table_schema_create(const char *name, bool mutable)
 {
     struct ovsdb_column *uuid, *version;
     struct ovsdb_table_schema *ts;
 
     ts = xzalloc(sizeof *ts);
     ts->name = xstrdup(name);
-    ts->comment = comment ? xstrdup(comment) : NULL;
     ts->mutable = mutable;
     shash_init(&ts->columns);
 
-    uuid = ovsdb_column_create(
-        "_uuid", "Unique identifier for this row.",
-        false, true, &ovsdb_type_uuid);
+    uuid = ovsdb_column_create("_uuid", false, true, &ovsdb_type_uuid);
     add_column(ts, uuid);
     assert(uuid->index == OVSDB_COL_UUID);
 
-    version = ovsdb_column_create(
-        "_version", "Unique identifier for this version of this row.",
-        false, false, &ovsdb_type_uuid);
+    version = ovsdb_column_create("_version", false, false, &ovsdb_type_uuid);
     add_column(ts, version);
     assert(version->index == OVSDB_COL_VERSION);
 
@@ -67,7 +62,7 @@ ovsdb_table_schema_clone(const struct ovsdb_table_schema *old)
     struct ovsdb_table_schema *new;
     struct shash_node *node;
 
-    new = ovsdb_table_schema_create(old->name, old->comment, old->mutable);
+    new = ovsdb_table_schema_create(old->name, old->mutable);
     SHASH_FOR_EACH (node, &old->columns) {
         const struct ovsdb_column *column = node->data;
 
@@ -90,7 +85,6 @@ ovsdb_table_schema_destroy(struct ovsdb_table_schema *ts)
         ovsdb_column_destroy(node->data);
     }
     shash_destroy(&ts->columns);
-    free(ts->comment);
     free(ts->name);
     free(ts);
 }
@@ -100,7 +94,7 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
                              struct ovsdb_table_schema **tsp)
 {
     struct ovsdb_table_schema *ts;
-    const struct json *comment, *columns, *mutable;
+    const struct json *columns, *mutable;
     struct shash_node *node;
     struct ovsdb_parser parser;
     struct ovsdb_error *error;
@@ -108,7 +102,6 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
     *tsp = NULL;
 
     ovsdb_parser_init(&parser, json, "table schema for table %s", name);
-    comment = ovsdb_parser_member(&parser, "comment", OP_STRING | OP_OPTIONAL);
     columns = ovsdb_parser_member(&parser, "columns", OP_OBJECT);
     mutable = ovsdb_parser_member(&parser, "mutable",
                                   OP_TRUE | OP_FALSE | OP_OPTIONAL);
@@ -123,7 +116,6 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
     }
 
     ts = ovsdb_table_schema_create(name,
-                                   comment ? json_string(comment) : NULL,
                                    mutable ? json_boolean(mutable) : true);
     SHASH_FOR_EACH (node, json_object(columns)) {
         struct ovsdb_column *column;
@@ -154,9 +146,6 @@ ovsdb_table_schema_to_json(const struct ovsdb_table_schema *ts)
     struct shash_node *node;
 
     json = json_object_create();
-    if (ts->comment) {
-        json_object_put_string(json, "comment", ts->comment);
-    }
     if (!ts->mutable) {
         json_object_put(json, "mutable", json_boolean_create(false));
     }

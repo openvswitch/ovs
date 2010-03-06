@@ -61,12 +61,12 @@ prints it in JSON format.
 .
 .IP "\fBlist-tables\fI server database\fR"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
-prints a table listing the names and comments (if any) on each table
+prints a table listing the name of each table
 within the database.
 .
 .IP "\fBlist-columns\fI server database \fR[\fItable\fR]"
 Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
-prints a table listing the names, type, and comment (if any) on each
+prints a table listing the name and type of each
 column.  If \fItable\fR is specified, only columns in that table are
 listed; otherwise, the tables include columns in all tables.
 .
