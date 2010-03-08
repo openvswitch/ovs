@@ -362,6 +362,7 @@ fi
 /usr/share/man/man1/ovsdb-client.1.gz
 /usr/share/man/man1/ovsdb-server.1.gz
 /usr/share/man/man1/ovsdb-tool.1.gz
+/usr/share/man/man5/ovs-vswitchd.conf.db.5.gz
 /usr/share/man/man8/ovs-appctl.8.gz
 /usr/share/man/man8/ovs-brcompatd.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
