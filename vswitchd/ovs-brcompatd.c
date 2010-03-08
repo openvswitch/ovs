@@ -535,41 +535,98 @@ add_port(const struct ovsrec_open_vswitch *ovs,
     free(ports);
 }
 
+/* Deletes 'port' from 'br'.
+ *
+ * After calling this function, 'port' must not be referenced again. */
 static void
-del_port(const struct ovsrec_bridge *br, const char *port_name)
+del_port(const struct ovsrec_bridge *br, const struct ovsrec_port *port)
 {
-    size_t i, j;
-    struct ovsrec_port *port_rec = NULL;
+    struct ovsrec_port **ports;
+    size_t i, n;
+
+    /* Remove 'port' from the bridge's list of ports. */
+    ports = xmalloc(sizeof *br->ports * br->n_ports);
+    for (i = n = 0; i < br->n_ports; i++) {
+        if (br->ports[i] != port) {
+            ports[n++] = br->ports[i];
+        }
+    }
+    ovsrec_bridge_set_ports(br, ports, n);
+    free(ports);
+
+    /* Delete all of the port's interfaces. */
+    for (i = 0; i < port->n_interfaces; i++) {
+        ovsrec_interface_delete(port->interfaces[i]);
+    }
+
+    /* Delete the port itself. */
+    ovsrec_port_delete(port);
+}
+
+/* Delete 'iface' from 'port' (which must be within 'br').  If 'iface' was
+ * 'port''s only interface, delete 'port' from 'br' also.
+ *
+ * After calling this function, 'iface' must not be referenced again. */
+static void
+del_interface(const struct ovsrec_bridge *br,
+              const struct ovsrec_port *port,
+              const struct ovsrec_interface *iface)
+{
+    if (port->n_interfaces == 1) {
+        del_port(br, port);
+    } else {
+        struct ovsrec_interface **ifaces;
+        size_t i, n;
+
+        ifaces = xmalloc(sizeof *port->interfaces * port->n_interfaces);
+        for (i = n = 0; i < port->n_interfaces; i++) {
+            if (port->interfaces[i] != iface) {
+                ifaces[n++] = port->interfaces[i];
+            }
+        }
+        ovsrec_port_set_interfaces(port, ifaces, n);
+        free(ifaces);
+        ovsrec_interface_delete(iface);
+    }
+}
+
+/* Find and return a port within 'br' named 'port_name'. */
+static const struct ovsrec_port *
+find_port(const struct ovsrec_bridge *br, const char *port_name)
+{
+    size_t i;
 
     for (i = 0; i < br->n_ports; i++) {
         struct ovsrec_port *port = br->ports[i];
         if (!strcmp(port_name, port->name)) {
-            port_rec = port;
+            return port;
         }
+    }
+    return NULL;
+}
+
+/* Find and return an interface within 'br' named 'iface_name'. */
+static const struct ovsrec_interface *
+find_interface(const struct ovsrec_bridge *br, const char *iface_name,
+               struct ovsrec_port **portp)
+{
+    size_t i;
+
+    for (i = 0; i < br->n_ports; i++) {
+        struct ovsrec_port *port = br->ports[i];
+        size_t j;
+
         for (j = 0; j < port->n_interfaces; j++) {
             struct ovsrec_interface *iface = port->interfaces[j];
-            if (!strcmp(port_name, iface->name)) {
-                ovsrec_interface_delete(iface);
+            if (!strcmp(iface->name, iface_name)) {
+                *portp = port;
+                return iface;
             }
         }
     }
 
-    /* xxx Probably can move this into the "for" loop. */
-    if (port_rec) {
-        struct ovsrec_port **ports;
-        size_t n;
-
-        ports = xmalloc(sizeof *br->ports * br->n_ports);
-        for (i = n = 0; i < br->n_ports; i++) {
-            if (br->ports[i] != port_rec) {
-                ports[n++] = br->ports[i];
-            }
-        }
-        ovsrec_bridge_set_ports(br, ports, n);
-        free(ports);
-
-        ovsrec_port_delete(port_rec);
-    }
+    *portp = NULL;
+    return NULL;
 }
 
 static int
@@ -590,8 +647,25 @@ del_bridge(struct ovsdb_idl *idl,
 
     ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: delbr %s", br_name);
 
-    del_port(br, br_name);
+    /* Delete everything that the bridge points to, then delete the bridge
+     * itself. */
+    while (br->n_ports > 0) {
+        del_port(br, br->ports[0]);
+    }
+    for (i = 0; i < br->n_mirrors; i++) {
+        ovsrec_mirror_delete(br->mirrors[i]);
+    }
+    if (br->netflow) {
+        ovsrec_netflow_delete(br->netflow);
+    }
+    if (br->sflow) {
+        ovsrec_sflow_delete(br->sflow);
+    }
+    if (br->controller) {
+        ovsrec_controller_delete(br->controller);
+    }
 
+    /* Remove 'br' from the vswitch's list of bridges. */
     bridges = xmalloc(sizeof *ovs->bridges * ovs->n_bridges);
     for (i = n = 0; i < ovs->n_bridges; i++) {
         if (ovs->bridges[i] != br) {
@@ -738,9 +812,13 @@ handle_port_cmd(struct ovsdb_idl *idl,
                                               port_name);
                     add_port(ovs, br, port_name);
                 } else {
-                    ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: del-if %s",
-                                              port_name);
-                    del_port(br, port_name);
+                    const struct ovsrec_port *port = find_port(br, port_name);
+                    if (port) {
+                        ovsdb_idl_txn_add_comment(txn,
+                                                  "ovs-brcompatd: del-if %s",
+                                                  port_name);
+                        del_port(br, port_name);
+                    }
                 }
 
                 error = commit_txn(txn, true);
@@ -1191,6 +1269,8 @@ rtnl_recv_update(struct ovsdb_idl *idl,
             if (!netdev_exists(port_name)) {
                 /* Network device is really gone. */
                 struct ovsdb_idl_txn *txn;
+                const struct ovsrec_interface *iface;
+                struct ovsrec_port *port;
                 struct ovsrec_bridge *br;
 
                 VLOG_INFO("network device %s destroyed, "
@@ -1205,11 +1285,15 @@ rtnl_recv_update(struct ovsdb_idl *idl,
                 }
 
                 txn = ovsdb_idl_txn_create(idl);
-                ovsdb_idl_txn_add_comment(txn,
-                                          "ovs-brcompatd: destroy port %s",
-                                          port_name);
 
-                del_port(br, port_name);
+                iface = find_interface(br, port_name, &port);
+                if (iface) {
+                    del_interface(br, port, iface);
+                    ovsdb_idl_txn_add_comment(txn,
+                                              "ovs-brcompatd: destroy port %s",
+                                              port_name);
+                }
+
                 commit_txn(txn, false);
             } else {
                 /* A network device by that name exists even though the kernel
