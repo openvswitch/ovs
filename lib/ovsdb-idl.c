@@ -914,13 +914,22 @@ ovsdb_idl_txn_create(struct ovsdb_idl *idl)
     return txn;
 }
 
+/* Appends 's', which is treated as a printf()-type format string, to the
+ * comments that will be passed to the OVSDB server when 'txn' is committed.
+ * (The comment will be committed to the OVSDB log, which "ovsdb-tool
+ * show-log" can print in a relatively human-readable form.) */
 void
-ovsdb_idl_txn_add_comment(struct ovsdb_idl_txn *txn, const char *s)
+ovsdb_idl_txn_add_comment(struct ovsdb_idl_txn *txn, const char *s, ...)
 {
+    va_list args;
+
     if (txn->comment.length) {
         ds_put_char(&txn->comment, '\n');
     }
-    ds_put_cstr(&txn->comment, s);
+
+    va_start(args, s);
+    ds_put_format_valist(&txn->comment, s, args);
+    va_end(args);
 }
 
 void

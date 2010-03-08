@@ -463,7 +463,6 @@ add_bridge(struct ovsdb_idl *idl, const struct ovsrec_open_vswitch *ovs,
     struct ovsrec_port *port;
     struct ovsrec_interface *iface;
     struct ovsdb_idl_txn *txn;
-    char *comment;
 
     if (find_bridge(ovs, br_name)) {
         VLOG_WARN("addbr %s: bridge %s exists", br_name, br_name);
@@ -492,9 +491,7 @@ add_bridge(struct ovsdb_idl *idl, const struct ovsrec_open_vswitch *ovs,
 
     txn = ovsdb_idl_txn_create(idl);
 
-    comment = xasprintf("ovs-brcompatd: addbr %s", br_name);
-    ovsdb_idl_txn_add_comment(txn, comment);
-    free(comment);
+    ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: addbr %s", br_name);
 
     iface = ovsrec_interface_insert(txn_from_openvswitch(ovs));
     ovsrec_interface_set_name(iface, br_name);
@@ -582,7 +579,6 @@ del_bridge(struct ovsdb_idl *idl,
     struct ovsrec_bridge *br = find_bridge(ovs, br_name);
     struct ovsrec_bridge **bridges;
     struct ovsdb_idl_txn *txn;
-    char *comment;
     size_t i, n;
 
     if (!br) {
@@ -592,9 +588,7 @@ del_bridge(struct ovsdb_idl *idl,
 
     txn = ovsdb_idl_txn_create(idl);
 
-    comment = xasprintf("ovs-brcompatd: delbr %s", br_name);
-    ovsdb_idl_txn_add_comment(txn, comment);
-    free(comment);
+    ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: delbr %s", br_name);
 
     del_port(br, br_name);
 
@@ -738,18 +732,16 @@ handle_port_cmd(struct ovsdb_idl *idl,
         } else {
             do {
                 struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);
-                char *comment;
 
                 if (add) {
-                    comment = xasprintf("ovs-brcompatd: add-if %s", port_name);
+                    ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: add-if %s",
+                                              port_name);
                     add_port(ovs, br, port_name);
                 } else {
-                    comment = xasprintf("ovs-brcompatd: del-if %s", port_name);
+                    ovsdb_idl_txn_add_comment(txn, "ovs-brcompatd: del-if %s",
+                                              port_name);
                     del_port(br, port_name);
                 }
-
-                ovsdb_idl_txn_add_comment(txn, comment);
-                free(comment);
 
                 error = commit_txn(txn, true);
                 VLOG_INFO_RL(&rl, "%s %s %s: %s",
@@ -1200,7 +1192,6 @@ rtnl_recv_update(struct ovsdb_idl *idl,
                 /* Network device is really gone. */
                 struct ovsdb_idl_txn *txn;
                 struct ovsrec_bridge *br;
-                char *comment;
 
                 VLOG_INFO("network device %s destroyed, "
                           "removing from bridge %s", port_name, br_name);
@@ -1214,11 +1205,9 @@ rtnl_recv_update(struct ovsdb_idl *idl,
                 }
 
                 txn = ovsdb_idl_txn_create(idl);
-
-                comment = xasprintf("ovs-brcompatd: destroy port %s",
-                        port_name);
-                ovsdb_idl_txn_add_comment(txn, comment);
-                free(comment);
+                ovsdb_idl_txn_add_comment(txn,
+                                          "ovs-brcompatd: destroy port %s",
+                                          port_name);
 
                 del_port(br, port_name);
                 commit_txn(txn, false);

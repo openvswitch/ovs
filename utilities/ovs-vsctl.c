@@ -2353,7 +2353,6 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     enum ovsdb_idl_txn_status status;
     struct vsctl_command *c;
     int64_t next_cfg = 0;
-    char *comment;
     char *error;
 
     txn = the_idl_txn = ovsdb_idl_txn_create(idl);
@@ -2361,9 +2360,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         ovsdb_idl_txn_set_dry_run(txn);
     }
 
-    comment = xasprintf("ovs-vsctl: %s", args);
-    ovsdb_idl_txn_add_comment(txn, comment);
-    free(comment);
+    ovsdb_idl_txn_add_comment(txn, "ovs-vsctl: %s", args);
 
     ovs = ovsrec_open_vswitch_first(idl);
     if (!ovs) {
