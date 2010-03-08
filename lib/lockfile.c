@@ -1,4 +1,4 @@
- /* Copyright (c) 2008, 2009 Nicira Networks
+ /* Copyright (c) 2008, 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,6 +84,7 @@ lockfile_lock(const char *file, int timeout, struct lockfile **lockfilep)
      * because the Open vSwitch code that currently uses lock files does so in
      * stylized ways such that any number of readers may access a file while it
      * is being written. */
+    long long int warn_elapsed = 1000;
     long long int start, elapsed;
     char *lock_name;
     int error;
@@ -98,6 +99,11 @@ lockfile_lock(const char *file, int timeout, struct lockfile **lockfilep)
         error = lockfile_try_lock(lock_name, timeout > 0, lockfilep);
         time_refresh();
         elapsed = time_msec() - start;
+        if (elapsed > warn_elapsed) {
+            warn_elapsed *= 2;
+            VLOG_WARN("%s: waiting for lock file, %lld ms elapsed",
+                      lock_name, elapsed);
+        }
     } while (error == EINTR && (timeout == INT_MAX || elapsed < timeout));
 
     if (!error) {
