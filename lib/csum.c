@@ -76,7 +76,10 @@ csum_continue(uint32_t partial, const void *data_, size_t n)
 uint16_t
 csum_finish(uint32_t partial)
 {
-    return ~((partial & 0xffff) + (partial >> 16));
+    while (partial >> 16) {
+        partial = (partial & 0xffff) + (partial >> 16);
+    }
+    return ~partial;
 }
 
 /* Returns the new checksum for a packet in which the checksum field previously
@@ -93,8 +96,7 @@ recalc_csum16(uint16_t old_csum, uint16_t old_u16, uint16_t new_u16)
     uint16_t m_complement = ~old_u16;
     uint16_t m_prime = new_u16;
     uint32_t sum = hc_complement + m_complement + m_prime;
-    uint16_t hc_prime_complement = sum + (sum >> 16);
-    return ~hc_prime_complement;
+    return csum_finish(sum);
 }
 
 /* Returns the new checksum for a packet in which the checksum field previously
