@@ -187,17 +187,18 @@ compact_or_convert(const char *src_name, const char *dst_name,
     struct ovsdb *db;
     int retval;
 
-    /* Get (temporary) destination. */
+    /* Lock the source, if we will be replacing it. */
+    if (in_place) {
+        retval = lockfile_lock(src_name, INT_MAX, &src_lock);
+        if (retval) {
+            ovs_fatal(retval, "%s: failed to lock lockfile", src_name);
+        }
+    }
+
+    /* Get (temporary) destination and lock it. */
     if (in_place) {
         dst_name = xasprintf("%s.tmp", src_name);
     }
-
-    /* Lock source and (temporary) destination. */
-    retval = lockfile_lock(src_name, INT_MAX, &src_lock);
-    if (retval) {
-        ovs_fatal(retval, "%s: failed to lock lockfile", src_name);
-    }
-
     retval = lockfile_lock(dst_name, INT_MAX, &dst_lock);
     if (retval) {
         ovs_fatal(retval, "%s: failed to lock lockfile", dst_name);
@@ -217,7 +218,6 @@ compact_or_convert(const char *src_name, const char *dst_name,
                       dst_name, src_name);
         }
         fsync_parent_dir(dst_name);
-    } else {
         lockfile_unlock(src_lock);
     }
 
