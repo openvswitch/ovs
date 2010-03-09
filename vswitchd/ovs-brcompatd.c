@@ -817,7 +817,7 @@ handle_port_cmd(struct ovsdb_idl *idl,
                         ovsdb_idl_txn_add_comment(txn,
                                                   "ovs-brcompatd: del-if %s",
                                                   port_name);
-                        del_port(br, port_name);
+                        del_port(br, port);
                     }
                 }
 
