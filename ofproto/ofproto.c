@@ -3335,7 +3335,7 @@ compose_flow_removed(const struct rule *rule, long long int now, uint8_t reason)
 {
     struct ofp_flow_removed *ofr;
     struct ofpbuf *buf;
-    long long int tdiff = time_msec() - rule->created;
+    long long int tdiff = now - rule->created;
     uint32_t sec = tdiff / 1000;
     uint32_t msec = tdiff - (sec * 1000);
 
