@@ -1000,10 +1000,10 @@ ofp_flow_stats_reply(struct ds *string, const void *body_, size_t len,
             break;
         }
 
-        ds_put_format(string, "  cookie=%"PRIu64"s, ", ntohll(fs->cookie));
+        ds_put_format(string, "  cookie=%"PRIu64", ", ntohll(fs->cookie));
         ds_put_format(string, "duration_sec=%"PRIu32"s, ", 
                     ntohl(fs->duration_sec));
-        ds_put_format(string, "duration_nsec=%"PRIu32"s, ", 
+        ds_put_format(string, "duration_nsec=%"PRIu32"ns, ", 
                     ntohl(fs->duration_nsec));
         ds_put_format(string, "table_id=%"PRIu8", ", fs->table_id);
         ds_put_format(string, "priority=%"PRIu16", ", 
