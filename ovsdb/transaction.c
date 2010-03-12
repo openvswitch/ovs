@@ -343,14 +343,22 @@ ovsdb_txn_create_txn_table(struct ovsdb_txn *txn, struct ovsdb_table *table)
 
 static struct ovsdb_txn_row *
 ovsdb_txn_row_create(struct ovsdb_txn *txn, struct ovsdb_table *table,
-                     const struct ovsdb_row *old, struct ovsdb_row *new)
+                     const struct ovsdb_row *old_, struct ovsdb_row *new)
 {
+    struct ovsdb_row *old = (struct ovsdb_row *) old_;
     struct ovsdb_txn_table *txn_table;
     struct ovsdb_txn_row *txn_row;
 
     txn_row = xmalloc(sizeof *txn_row);
-    txn_row->old = (struct ovsdb_row *) old;
+    txn_row->old = old;
     txn_row->new = new;
+
+    if (old) {
+        old->txn_row = txn_row;
+    }
+    if (new) {
+        new->txn_row = txn_row;
+    }
 
     txn_table = ovsdb_txn_create_txn_table(txn, table);
     hmap_insert(&txn_table->txn_rows, &txn_row->hmap_node,
@@ -374,7 +382,7 @@ ovsdb_txn_row_modify(struct ovsdb_txn *txn, const struct ovsdb_row *ro_row_)
         rw_row = ovsdb_row_clone(ro_row);
         rw_row->n_refs = ro_row->n_refs;
         uuid_generate(ovsdb_row_get_version_rw(rw_row));
-        rw_row->txn_row = ovsdb_txn_row_create(txn, table, ro_row, rw_row);
+        ovsdb_txn_row_create(txn, table, ro_row, rw_row);
         hmap_replace(&table->rows, &ro_row->hmap_node, &rw_row->hmap_node);
 
         return rw_row;
@@ -389,7 +397,7 @@ ovsdb_txn_row_insert(struct ovsdb_txn *txn, struct ovsdb_row *row)
 
     uuid_generate(ovsdb_row_get_version_rw(row));
 
-    row->txn_row = ovsdb_txn_row_create(txn, table, NULL, row);
+    ovsdb_txn_row_create(txn, table, NULL, row);
     hmap_insert(&table->rows, &row->hmap_node, hash);
 }
 
@@ -405,7 +413,7 @@ ovsdb_txn_row_delete(struct ovsdb_txn *txn, const struct ovsdb_row *row_)
     hmap_remove(&table->rows, &row->hmap_node);
 
     if (!txn_row) {
-        row->txn_row = ovsdb_txn_row_create(txn, table, row, NULL);
+        ovsdb_txn_row_create(txn, table, row, NULL);
     } else {
         assert(txn_row->new == row);
         if (txn_row->old) {
