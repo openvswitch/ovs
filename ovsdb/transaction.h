@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ void ovsdb_txn_row_delete(struct ovsdb_txn *, const struct ovsdb_row *);
 
 typedef bool ovsdb_txn_row_cb_func(const struct ovsdb_row *old,
                                    const struct ovsdb_row *new,
+                                   const unsigned long int *changed,
                                    void *aux);
 void ovsdb_txn_for_each_change(const struct ovsdb_txn *,
                                ovsdb_txn_row_cb_func *, void *aux);

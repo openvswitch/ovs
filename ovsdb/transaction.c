@@ -19,6 +19,7 @@
 
 #include <assert.h>
 
+#include "bitmap.h"
 #include "dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
@@ -68,6 +69,8 @@ struct ovsdb_txn_row {
 
     /* Used by for_each_txn_row(). */
     unsigned int serial;        /* Serial number of in-progress commit. */
+
+    unsigned long changed[];    /* Bits set to 1 for columns that changed. */
 };
 
 static void ovsdb_txn_row_prefree(struct ovsdb_txn_row *);
@@ -98,7 +101,7 @@ ovsdb_txn_free(struct ovsdb_txn *txn)
     free(txn);
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error *
 ovsdb_txn_row_abort(struct ovsdb_txn *txn OVS_UNUSED,
                     struct ovsdb_txn_row *txn_row)
 {
@@ -253,7 +256,7 @@ update_ref_counts(struct ovsdb_txn *txn)
     return for_each_txn_row(txn, check_ref_count);
 }
 
-static struct ovsdb_error * WARN_UNUSED_RESULT
+static struct ovsdb_error *
 ovsdb_txn_row_commit(struct ovsdb_txn *txn OVS_UNUSED,
                      struct ovsdb_txn_row *txn_row)
 {
@@ -267,18 +270,67 @@ ovsdb_txn_row_commit(struct ovsdb_txn *txn OVS_UNUSED,
     return NULL;
 }
 
+static struct ovsdb_error * WARN_UNUSED_RESULT
+determine_changes(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
+{
+    struct ovsdb_table *table;
+
+    table = (txn_row->old ? txn_row->old : txn_row->new)->table;
+    if (txn_row->old && txn_row->new) {
+        struct shash_node *node;
+        bool changed = false;
+
+        SHASH_FOR_EACH (node, &table->schema->columns) {
+            const struct ovsdb_column *column = node->data;
+            const struct ovsdb_type *type = &column->type;
+            unsigned int idx = column->index;
+
+            if (!ovsdb_datum_equals(&txn_row->old->fields[idx],
+                                    &txn_row->new->fields[idx],
+                                    type)) {
+                bitmap_set1(txn_row->changed, idx);
+                changed = true;
+            }
+        }
+
+        if (!changed) {
+            /* Nothing actually changed in this row, so drop it. */
+            ovsdb_txn_row_abort(txn, txn_row);
+        }
+    } else {
+        bitmap_set_multiple(txn_row->changed, 0,
+                            shash_count(&table->schema->columns), 1);
+    }
+
+    return NULL;
+}
+
 struct ovsdb_error *
 ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
 {
     struct ovsdb_replica *replica;
     struct ovsdb_error *error;
 
+    /* Figure out what actually changed, and abort early if the transaction
+     * was really a no-op. */
+    error = for_each_txn_row(txn, determine_changes);
+    if (error) {
+        ovsdb_error_destroy(error);
+        return OVSDB_BUG("can't happen");
+    }
+    if (list_is_empty(&txn->txn_tables)) {
+        ovsdb_txn_abort(txn);
+        return NULL;
+    }
+
+    /* Update reference counts and check referential integrity. */
     error = update_ref_counts(txn);
     if (error) {
         ovsdb_txn_abort(txn);
         return error;
     }
 
+    /* Send the commit to each replica. */
     LIST_FOR_EACH (replica, struct ovsdb_replica, node, &txn->db->replicas) {
         error = (replica->class->commit)(replica, txn, durable);
         if (error) {
@@ -308,7 +360,7 @@ ovsdb_txn_for_each_change(const struct ovsdb_txn *txn,
 
     LIST_FOR_EACH (t, struct ovsdb_txn_table, node, &txn->txn_tables) {
         HMAP_FOR_EACH (r, struct ovsdb_txn_row, hmap_node, &t->txn_rows) {
-            if (!cb(r->old, r->new, aux)) {
+            if (!cb(r->old, r->new, r->changed, aux)) {
                 break;
             }
         }
@@ -335,11 +387,13 @@ ovsdb_txn_row_create(struct ovsdb_txn *txn, struct ovsdb_table *table,
                      const struct ovsdb_row *old_, struct ovsdb_row *new)
 {
     struct ovsdb_row *old = (struct ovsdb_row *) old_;
+    size_t n_columns = shash_count(&table->schema->columns);
     struct ovsdb_txn_table *txn_table;
     struct ovsdb_txn_row *txn_row;
 
-    txn_row = xmalloc(sizeof *txn_row);
-    txn_row->old = old;
+    txn_row = xzalloc(offsetof(struct ovsdb_txn_row, changed)
+                      + bitmap_n_bytes(n_columns));
+    txn_row->old = (struct ovsdb_row *) old;
     txn_row->new = new;
     txn_row->n_refs = old ? old->n_refs : 0;
     txn_row->serial = serial - 1;

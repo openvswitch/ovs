@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <fcntl.h>
 
+#include "bitmap.h"
 #include "column.h"
 #include "log.h"
 #include "json.h"
@@ -45,7 +46,8 @@ struct ovsdb_file_txn {
 static void ovsdb_file_txn_init(struct ovsdb_file_txn *);
 static void ovsdb_file_txn_add_row(struct ovsdb_file_txn *,
                                    const struct ovsdb_row *old,
-                                   const struct ovsdb_row *new);
+                                   const struct ovsdb_row *new,
+                                   const unsigned long int *changed);
 static struct ovsdb_error *ovsdb_file_txn_commit(struct json *,
                                                  const char *comment,
                                                  bool durable,
@@ -352,7 +354,7 @@ ovsdb_file_save_copy(const char *file_name, int locking,
         const struct ovsdb_row *row;
 
         HMAP_FOR_EACH (row, struct ovsdb_row, hmap_node, &table->rows) {
-            ovsdb_file_txn_add_row(&ftxn, NULL, row);
+            ovsdb_file_txn_add_row(&ftxn, NULL, row, NULL);
         }
     }
     error = ovsdb_file_txn_commit(ftxn.json, comment, true, log);
@@ -394,10 +396,11 @@ ovsdb_file_replica_cast(struct ovsdb_replica *replica)
 static bool
 ovsdb_file_replica_change_cb(const struct ovsdb_row *old,
                              const struct ovsdb_row *new,
+                             const unsigned long int *changed,
                              void *ftxn_)
 {
     struct ovsdb_file_txn *ftxn = ftxn_;
-    ovsdb_file_txn_add_row(ftxn, old, new);
+    ovsdb_file_txn_add_row(ftxn, old, new, changed);
     return true;
 }
 
@@ -444,7 +447,8 @@ ovsdb_file_txn_init(struct ovsdb_file_txn *ftxn)
 static void
 ovsdb_file_txn_add_row(struct ovsdb_file_txn *ftxn,
                        const struct ovsdb_row *old,
-                       const struct ovsdb_row *new)
+                       const struct ovsdb_row *new,
+                       const unsigned long int *changed)
 {
     struct json *row;
 
@@ -461,8 +465,7 @@ ovsdb_file_txn_add_row(struct ovsdb_file_txn *ftxn,
 
             if (idx != OVSDB_COL_UUID && column->persistent
                 && (old
-                    ? !ovsdb_datum_equals(&old->fields[idx], &new->fields[idx],
-                                          type)
+                    ? bitmap_is_set(changed, idx)
                     : !ovsdb_datum_is_default(&new->fields[idx], type)))
             {
                 if (!row) {

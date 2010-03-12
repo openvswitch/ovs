@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <errno.h>
 
+#include "bitmap.h"
 #include "column.h"
 #include "json.h"
 #include "jsonrpc.h"
@@ -804,6 +805,7 @@ struct ovsdb_jsonrpc_monitor_aux {
 static bool
 ovsdb_jsonrpc_monitor_change_cb(const struct ovsdb_row *old,
                                 const struct ovsdb_row *new,
+                                const unsigned long int *changed,
                                 void *aux_)
 {
     struct ovsdb_jsonrpc_monitor_aux *aux = aux_;
@@ -841,14 +843,13 @@ ovsdb_jsonrpc_monitor_change_cb(const struct ovsdb_row *old,
     for (i = 0; i < aux->mt->columns.n_columns; i++) {
         const struct ovsdb_column *column = aux->mt->columns.columns[i];
         unsigned int idx = column->index;
-        bool changed = false;
+        bool column_changed = false;
 
         if (type == OJMS_MODIFY) {
-            changed = !ovsdb_datum_equals(&old->fields[idx],
-                                          &new->fields[idx], &column->type);
-            n_changed += changed;
+            column_changed = bitmap_is_set(changed, idx);
+            n_changed += column_changed;
         }
-        if (changed || type == OJMS_DELETE) {
+        if (column_changed || type == OJMS_DELETE) {
             if (!old_json) {
                 old_json = json_object_create();
             }
@@ -951,7 +952,7 @@ ovsdb_jsonrpc_monitor_get_initial(const struct ovsdb_jsonrpc_monitor *m)
 
             HMAP_FOR_EACH (row, struct ovsdb_row, hmap_node,
                            &mt->table->rows) {
-                ovsdb_jsonrpc_monitor_change_cb(NULL, row, &aux);
+                ovsdb_jsonrpc_monitor_change_cb(NULL, row, NULL, &aux);
             }
         }
     }
