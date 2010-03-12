@@ -1530,7 +1530,6 @@ static void
 bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
                               struct bridge *br)
 {
-    char *pfx = xasprintf("bridge.%s.controller", br->name);
     const struct ovsrec_controller *c;
 
     c = bridge_get_controller(ovs_cfg, br);
@@ -1624,7 +1623,6 @@ bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
         ofproto_set_probe_interval(br->ofproto, 5);
         ofproto_set_failure(br->ofproto, false);
     }
-    free(pfx);
 
     ofproto_set_controller(br->ofproto, br->controller);
 }
