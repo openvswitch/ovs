@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,10 @@
 #include "dynamic-string.h"
 #include "json.h"
 #include "util.h"
+#include "vlog.h"
+
+#define THIS_MODULE VLM_ovsdb_error
+#include "vlog.h"
 
 struct ovsdb_error {
     const char *tag;            /* String for "error" member. */
@@ -219,3 +223,19 @@ ovsdb_error_get_tag(const struct ovsdb_error *error)
 {
     return error->tag;
 }
+
+/* If 'error' is nonnull, logs it as an error and frees it.  To be used in
+ * situations where an error should never occur, but an 'ovsdb_error *' gets
+ * passed back anyhow. */
+void
+ovsdb_error_assert(struct ovsdb_error *error)
+{
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        char *s = ovsdb_error_to_string(error);
+        VLOG_ERR_RL(&rl, "unexpected ovsdb error: %s", s);
+        free(s);
+        ovsdb_error_destroy(error);
+    }
+}
+

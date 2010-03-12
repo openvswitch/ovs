@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,5 +49,7 @@ char *ovsdb_error_to_string(const struct ovsdb_error *);
 struct json *ovsdb_error_to_json(const struct ovsdb_error *);
 
 const char *ovsdb_error_get_tag(const struct ovsdb_error *);
+
+void ovsdb_error_assert(struct ovsdb_error *);
 
 #endif /* ovsdb-error.h */
