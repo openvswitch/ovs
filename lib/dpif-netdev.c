@@ -1145,19 +1145,21 @@ dp_netdev_strip_vlan(struct ofpbuf *packet, flow_t *key)
 }
 
 static void
-dp_netdev_set_dl_src(struct ofpbuf *packet,
+dp_netdev_set_dl_src(struct ofpbuf *packet, flow_t *key,
                      const uint8_t dl_addr[ETH_ADDR_LEN])
 {
     struct eth_header *eh = packet->l2;
     memcpy(eh->eth_src, dl_addr, sizeof eh->eth_src);
+    memcpy(key->dl_src, dl_addr, sizeof key->dl_src);
 }
 
 static void
-dp_netdev_set_dl_dst(struct ofpbuf *packet,
+dp_netdev_set_dl_dst(struct ofpbuf *packet, flow_t *key,
                      const uint8_t dl_addr[ETH_ADDR_LEN])
 {
     struct eth_header *eh = packet->l2;
     memcpy(eh->eth_dst, dl_addr, sizeof eh->eth_dst);
+    memcpy(key->dl_dst, dl_addr, sizeof key->dl_dst);
 }
 
 static void
@@ -1183,6 +1185,12 @@ dp_netdev_set_nw_addr(struct ofpbuf *packet, flow_t *key,
         }
         nh->ip_csum = recalc_csum32(nh->ip_csum, *field, a->nw_addr);
         *field = a->nw_addr;
+
+        if (a->type == ODPAT_SET_NW_SRC) {
+            key->nw_src = a->type;
+        } else {
+            key->nw_dst = a->type;
+        }
     }
 }
 
@@ -1200,6 +1208,7 @@ dp_netdev_set_nw_tos(struct ofpbuf *packet, flow_t *key,
         nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
                 htons((uint16_t)a->nw_tos));
         *field = new;
+        key->nw_tos = a->nw_tos;
     }
 }
 
@@ -1219,6 +1228,14 @@ dp_netdev_set_tp_port(struct ofpbuf *packet, flow_t *key,
             field = a->type == ODPAT_SET_TP_SRC ? &uh->udp_src : &uh->udp_dst;
             uh->udp_csum = recalc_csum16(uh->udp_csum, *field, a->tp_port);
             *field = a->tp_port;
+        } else {
+            return;
+        }
+
+        if (a->type == ODPAT_SET_TP_SRC) {
+            key->tp_src = a->tp_port;
+        } else {
+            key->tp_dst = a->tp_port;
         }
     }
 }
@@ -1315,11 +1332,11 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 			break;
 
 		case ODPAT_SET_DL_SRC:
-            dp_netdev_set_dl_src(packet, a->dl_addr.dl_addr);
+            dp_netdev_set_dl_src(packet, key, a->dl_addr.dl_addr);
 			break;
 
 		case ODPAT_SET_DL_DST:
-            dp_netdev_set_dl_dst(packet, a->dl_addr.dl_addr);
+            dp_netdev_set_dl_dst(packet, key, a->dl_addr.dl_addr);
 			break;
 
 		case ODPAT_SET_NW_SRC:

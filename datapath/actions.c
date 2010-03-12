@@ -94,10 +94,11 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 	if (a->type == ODPAT_SET_VLAN_VID) {
 		tci = ntohs(a->vlan_vid.vlan_vid);
 		mask = VLAN_VID_MASK;
-		key->dl_vlan = htons(tci & mask);
+		key->dl_vlan = a->vlan_vid.vlan_vid;
 	} else {
 		tci = a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT;
 		mask = VLAN_PCP_MASK;
+		key->dl_vlan_pcp = a->vlan_pcp.vlan_pcp;
 	}
 
 	skb = make_writable(skb, VLAN_HLEN, gfp);
@@ -216,14 +217,20 @@ static struct sk_buff *strip_vlan(struct sk_buff *skb,
 }
 
 static struct sk_buff *set_dl_addr(struct sk_buff *skb,
+				   struct odp_flow_key *key,
 				   const struct odp_action_dl_addr *a,
 				   gfp_t gfp)
 {
 	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		struct ethhdr *eh = eth_hdr(skb);
-		memcpy(a->type == ODPAT_SET_DL_SRC ? eh->h_source : eh->h_dest,
-		       a->dl_addr, ETH_ALEN);
+		if (a->type == ODPAT_SET_DL_SRC) {
+			memcpy(eh->h_source, a->dl_addr, ETH_ALEN);
+			memcpy(key->dl_src, a->dl_addr, ETH_ALEN);
+		} else {
+			memcpy(eh->h_dest, a->dl_addr, ETH_ALEN);
+			memcpy(key->dl_dst, a->dl_addr, ETH_ALEN);
+		}
 	}
 	return skb;
 }
@@ -272,6 +279,11 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 		}
 		update_csum(&nh->check, skb, old, new, 0);
 		*f = new;
+
+		if (a->type == ODPAT_SET_NW_SRC)
+			key->nw_src = a->nw_addr;
+		else
+			key->nw_dst = a->nw_addr;
 	}
 	return skb;
 }
@@ -296,6 +308,7 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 		update_csum(&nh->check, skb, htons((uint16_t)old),
 				htons((uint16_t)new), 0);
 		*f = new;
+		key->nw_tos = a->nw_tos;
 	}
 	return skb;
 }
@@ -326,6 +339,10 @@ set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
 		update_csum((u16*)(skb_transport_header(skb) + check_ofs), 
 				skb, old, new, 0);
 		*f = new;
+		if (a->type == ODPAT_SET_TP_SRC)
+			key->tp_src = a->tp_port;
+		else
+			key->tp_dst = a->tp_port;
 	}
 	return skb;
 }
@@ -498,7 +515,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 		case ODPAT_SET_DL_SRC:
 		case ODPAT_SET_DL_DST:
-			skb = set_dl_addr(skb, &a->dl_addr, gfp);
+			skb = set_dl_addr(skb, key, &a->dl_addr, gfp);
 			break;
 
 		case ODPAT_SET_NW_SRC:
