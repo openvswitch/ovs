@@ -129,9 +129,6 @@
           <dt><code>xs-network-uuids</code></dt>
           <dd>Space-delimited set of the Citrix XenServer network UUIDs with
             which this bridge is associated.</dd>
-          <dt><code>xs-network-names</code></dt>
-          <dd>Semicolon-delimited set of Citrix XenServer network names with
-            which this bridge is associated.</dd>
         </dl>
       </column>
 
