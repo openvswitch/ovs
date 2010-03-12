@@ -25,6 +25,16 @@ IP="/sbin/ip"
 
 vsctl="/usr/bin/ovs-vsctl"
 
+# XAPI before build 29381 (approximately) did not provide some of the
+# data in XenStore that we rely on.
+. /etc/xensource-inventory
+if test "$PRODUCT_VERSION" = "5.5.0" || test "${BUILD_NUMBER%p}" -le 26131
+then
+    xs550=true
+else
+    xs550=false
+fi
+
 handle_promiscuous()
 {
     local arg=$(xenstore-read "${PRIVATE}/other-config/promiscuous" 2>/dev/null)
@@ -77,8 +87,27 @@ set_vif_external_id()
 
 handle_vswitch_vif_details()
 {
+    local vm=$(xenstore-read "/local/domain/$DOMID/vm" 2>/dev/null)
+    if [ $? -eq 0 -a -n "${vm}" ] ; then
+	local vm_uuid=$(xenstore-read "$vm/uuid" 2>/dev/null)
+    fi
+    if [ -n "${vm_uuid}" ] ; then
+	set_vif_external_id "xs-vm-uuid" "${vm_uuid}"
+    fi
+
+    local vif_uuid=$(xenstore-read "${PRIVATE}/vif-uuid" 2>/dev/null)
+    if $xs550 && [ -z "${vif_uuid}" ] && [ -n "${vm_uuid}" ]; then
+        vif_uuid=$(xe vif-list --minimal vm-uuid="${vm_uuid}" device=$DEVID)
+    fi
+    if [ -n "${vif_uuid}" ] ; then
+	set_vif_external_id "xs-vif-uuid" "${vif_uuid}"
+    fi
+
     local vif_details=
     local net_uuid=$(xenstore-read "${PRIVATE}/network-uuid" 2>/dev/null)
+    if $xs550 && [ -z "${net_uuid}" ] && [ -n "${vif_uuid}" ]; then
+        net_uuid=$(xe vif-param-get uuid="${vif_uuid}" param-name=network-uuid)
+    fi
     if [ -n "${net_uuid}" ] ; then
 	set_vif_external_id "xs-network-uuid" "${net_uuid}"
     fi
@@ -87,26 +116,11 @@ handle_vswitch_vif_details()
     if [ -n "${address}" ] ; then
 	set_vif_external_id "xs-vif-mac" "${address}"
     fi
-
-    local vif_uuid=$(xenstore-read "${PRIVATE}/vif-uuid" 2>/dev/null)
-    if [ -n "${vif_uuid}" ] ; then
-	set_vif_external_id "xs-vif-uuid" "${vif_uuid}"
-    fi
-
-    local vm=$(xenstore-read "/local/domain/$DOMID/vm" 2>/dev/null)
-    if [ $? -eq 0 -a -n "${vm}" ] ; then
-	local vm_uuid=$(xenstore-read "$vm/uuid" 2>/dev/null)
-    fi
-    if [ -n "${vm_uuid}" ] ; then
-	set_vif_external_id "xs-vm-uuid" "${vm_uuid}"
-    fi
 }
 
 xs550_set_internal_network_uuid()
 {
-    . /etc/xensource-inventory
-    if test "$PRODUCT_VERSION" = "5.5.0" || test "${BUILD_NUMBER%p}" -le 26131
-    then
+    if $xs550; then
         # vNetManager needs to know the network UUID(s) associated with each
         # datapath.  Normally interface-reconfigure adds them, but XAPI does
         # not use interface-reconfigure for internal networks. Instead, XAPI
@@ -122,9 +136,6 @@ xs550_set_internal_network_uuid()
             logger -t scripts-vif "${bridge} xs-network-uuids ${net_uuid}"
             echo "-- br-set-external-id $bridge xs-network-uuids ${net_uuid}"
         fi
-    else
-        # XAPI after 5.5.0 sets the network external ids itself, via ovs-vsctl.
-        :
     fi
 }
 
