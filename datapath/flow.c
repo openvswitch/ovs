@@ -25,6 +25,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/icmp.h>
+#include <net/inet_ecn.h>
 #include <net/ip.h>
 
 #include "compat.h"

@@ -292,7 +292,7 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 		u8 new;
 
 		/* Set the DSCP bits and preserve the ECN bits. */
-		new = (a->nw_tos & ~INET_ECN_MASK) | (nh->tos & INET_ECN_MASK);
+		new = a->nw_tos | (nh->tos & INET_ECN_MASK);
 		update_csum(&nh->check, skb, htons((uint16_t)old),
 				htons((uint16_t)new), 0);
 		*f = new;

@@ -41,6 +41,7 @@
 #include <linux/rculist.h>
 #include <linux/workqueue.h>
 #include <linux/dmi.h>
+#include <net/inet_ecn.h>
 #include <net/llc.h>
 
 #include "openvswitch/datapath-protocol.h"
@@ -927,6 +928,11 @@ static int validate_actions(const struct sw_flow_actions *actions)
 		case ODPAT_SET_VLAN_PCP:
 			if (a->vlan_pcp.vlan_pcp
 			    & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT))
+				return -EINVAL;
+			break;
+
+		case ODPAT_SET_NW_TOS:
+			if (a->nw_tos.nw_tos & INET_ECN_MASK)
 				return -EINVAL;
 			break;
 

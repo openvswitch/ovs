@@ -720,58 +720,64 @@ static int
 dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
                              bool *mutates)
 {
-	unsigned int i;
+    unsigned int i;
 
     *mutates = false;
-	for (i = 0; i < n_actions; i++) {
-		const union odp_action *a = &actions[i];
-		switch (a->type) {
-		case ODPAT_OUTPUT:
-			if (a->output.port >= MAX_PORTS) {
-				return EINVAL;
+    for (i = 0; i < n_actions; i++) {
+        const union odp_action *a = &actions[i];
+        switch (a->type) {
+        case ODPAT_OUTPUT:
+            if (a->output.port >= MAX_PORTS) {
+                return EINVAL;
             }
-			break;
+            break;
 
-		case ODPAT_OUTPUT_GROUP:
+        case ODPAT_OUTPUT_GROUP:
             *mutates = true;
-			if (a->output_group.group >= N_GROUPS) {
-				return EINVAL;
+            if (a->output_group.group >= N_GROUPS) {
+                return EINVAL;
             }
-			break;
+            break;
 
         case ODPAT_CONTROLLER:
             break;
 
-		case ODPAT_SET_VLAN_VID:
+        case ODPAT_SET_VLAN_VID:
             *mutates = true;
-			if (a->vlan_vid.vlan_vid & htons(~VLAN_VID_MASK)) {
-				return EINVAL;
+            if (a->vlan_vid.vlan_vid & htons(~VLAN_VID_MASK)) {
+                return EINVAL;
             }
-			break;
+            break;
 
-		case ODPAT_SET_VLAN_PCP:
+        case ODPAT_SET_VLAN_PCP:
             *mutates = true;
-			if (a->vlan_pcp.vlan_pcp & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT)) {
-				return EINVAL;
+            if (a->vlan_pcp.vlan_pcp & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT)) {
+                return EINVAL;
             }
-			break;
+            break;
+
+        case ODPAT_SET_NW_TOS:
+            *mutates = true;
+            if (a->nw_tos.nw_tos & IP_ECN_MASK) {
+                return EINVAL;
+            }
+            break;
 
         case ODPAT_STRIP_VLAN:
         case ODPAT_SET_DL_SRC:
         case ODPAT_SET_DL_DST:
         case ODPAT_SET_NW_SRC:
         case ODPAT_SET_NW_DST:
-        case ODPAT_SET_NW_TOS:
         case ODPAT_SET_TP_SRC:
         case ODPAT_SET_TP_DST:
             *mutates = true;
             break;
 
-		default:
+        default:
             return EOPNOTSUPP;
-		}
-	}
-	return 0;
+        }
+    }
+    return 0;
 }
 
 static int
@@ -1189,7 +1195,7 @@ dp_netdev_set_nw_tos(struct ofpbuf *packet, flow_t *key,
         uint8_t *field = &nh->ip_tos;
 
         /* Set the DSCP bits and preserve the ECN bits. */
-        uint8_t new = (a->nw_tos & IP_DSCP_MASK) | (nh->ip_tos & IP_ECN_MASK);
+        uint8_t new = a->nw_tos | (nh->ip_tos & IP_ECN_MASK);
 
         nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
                 htons((uint16_t)a->nw_tos));
