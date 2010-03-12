@@ -383,21 +383,29 @@
 
     <group title="Other Features">
       <column name="external_ids">
-        Key-value pairs that identify this interface's role in external
-        systems.  The currently defined key-value pairs are:
+        <p>Key-value pairs that identify this interface's role in external
+          systems.  All of the currently defined key-value pairs specifically
+          apply to an interface that represents a virtual Ethernet interface
+          connected to a virtual machine.  These key-value pairs should not be
+          present for other types of interfaces.  Keys whose names end
+          in <code>-uuid</code> have values that uniquely identify the entity
+          in question.  For a Citrix XenServer hypervisor, these values are
+          UUIDs in RFC 4122 format.  Other hypervisors may use other
+          formats.</p>
+        <p>The currently defined key-value pairs are:</p>
         <dl>
-          <dt><code>xs-vif-uuid</code></dt>
-          <dd>UUID of the Citrix XenServer VIF associated with this
-            interface.</dd>
-          <dt><code>xs-network-uuid</code></dt>
-          <dd>UUID of the Citrix XenServer network to which this interface is
-            attached.</dd>
-          <dt><code>xs-vif-vm-uuid</code></dt>
-          <dd>UUID of the Citrix XenServer VM to which this interface
-            belongs.</dd>
-          <dt><code>xs-vif-mac</code></dt>
-          <dd>The value of the "MAC" field in the Citrix XenServer VIF record
-            for this interface.</dd>
+          <dt><code>vif-uuid</code></dt>
+          <dd>The virtual interface associated with this interface.</dd>
+          <dt><code>network-uuid</code></dt>
+          <dd>The virtual network to which this interface is attached.</dd>
+          <dt><code>vm-uuid</code></dt>
+          <dd>The VM to which this interface belongs.</dd>
+          <dt><code>vif-mac</code></dt>
+          <dd>The MAC address programmed into the "virtual hardware" for this
+              interface, in the
+              form <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
+              For Citrix XenServer, this is the value of the <code>MAC</code>
+              field in the VIF record for this interface.</dd>
         </dl>
       </column>
     </group>
