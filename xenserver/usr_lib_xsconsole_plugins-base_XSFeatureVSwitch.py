@@ -79,7 +79,8 @@ class VSwitchConfig:
     @staticmethod
     def Get(action):
         try:
-            output = ShellPipe([vsctl, "-vANY:console:emer", action]).Stdout()
+            arg = [vsctl, "-vANY:console:emer"] + action.split()
+            output = ShellPipe(arg).Stdout()
         except StandardError, e:
             XSLogError("config retrieval error: " + str(e))
             return "<unknown>"
@@ -283,11 +284,13 @@ class XSFeatureVSwitch:
         if dbController == "":
             dbController = Lang("<None>")
         inPane.AddStatusField(Lang("Controller (config)", 20), dbController)
-        controller = VSwitchConfig.Get("get-controller")
+        controller = VSwitchConfig.Get("get Open_vSwitch . managers")
+        controller = controller.strip('[]"')
+
         if controller == "":
             controller = Lang("<None>")
         elif controller[0:4] == "ssl:":
-            controller = controller[4:]
+            controller = controller.split(':')[1]
         inPane.AddStatusField(Lang("Controller (in-use)", 20), controller)
 
         inPane.NewLine()
