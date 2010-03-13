@@ -49,23 +49,6 @@ def update(session, args):
         controller = pool["other_config"]["vSwitchController"]
     except KeyError, e:
         controller = ""
-    if controller == "do-not-update":
-        return "XAPI key set to do-not-update"
-    if controller.startswith("for-bridges|"):
-        l = controller.split("|")[1:]
-        for netctrl in l:
-            xapiNet = session.xenapi.network
-            n, t = netctrl.split("=")
-            blist = xapiNet.get_by_name_label(n)
-            if len(blist) == 0:
-                # If there is no bridge for the network, just keep
-                # going so we bring up as much as possible.
-                continue
-            elif len(blist) > 1:
-                raise XenAPIPlugin.Failure("TOO_MANY_MATCHING_NETWORKS", [n,blist])
-            b = xapiNet.get_bridge(blist[0])
-            setBrControllerCfg(b, t)
-        return "Completed setting controllers on specific bridges"
     currentController = vswitchCurrentController()
     if controller == "" and currentController != "":
         delete_cacert()
@@ -90,69 +73,6 @@ def vswitchCurrentController():
 def removeControllerCfg():
     vswitchCfgMod(["--", "del-controller",
                    "--", "del-ssl"])
-
-def setBrControllerCfg(br, target):
-    # Terrible hack... When this is run at boot the required bridges
-    # may not be present.  So, we fork a process for each bridge that
-    # needs to be set which sits around in the background and updates
-    # it when it becomes available, finally timing out after a long
-    # interval if it never becomes available.
-    #
-    # The right way to do this is to hook the bridge creation somehow
-    # but I don't believe this is possible in XenServer 5.5 without
-    # either listening to XAPI events or writing it in C code in
-    # brcompatd.
-    import time
-    import syslog
-    import resource
-
-    p = os.fork()
-    if p != 0:
-        return
-
-    os.setsid()
-    p = os.fork()
-    if p != 0:
-        sys.exit(0)
-
-    os.chdir("/")
-    os.umask(0)
-    maxfd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
-    if maxfd == resource.RLIM_INFINITY:
-        maxfd = 1024
-    for fd in range(0, maxfd):
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-    os.open("/dev/null", os.O_RDWR)
-    os.dup2(0, 1)
-    os.dup2(0, 2)
-
-    syslog.openlog("vswitch-cfg-update", syslog.LOG_PID)
-    syslog.syslog(syslog.LOG_INFO,
-                  "Started background process waiting on bridge %s" % (br,))
-
-    count = 0
-    error = None
-    sleep_time = 10
-    while count < 60:
-        count += 1
-        try:
-            vswitchCfgMod(["--", "del-controller", br,
-                           "--", "set-controller", br, target,
-                           "--", "set-fail-mode", br, "secure"])
-        except XenAPIPlugin.Failure, e:
-            error = e
-            syslog.syslog(syslog.LOG_INFO,
-                          "Attempt to set br %s controller failed" % (br,))
-            time.sleep(sleep_time)
-            continue
-        syslog.syslog(syslog.LOG_INFO,
-                      "Successfully set br %s controller to %s" % (br, repr(target)))
-        return
-    syslog.syslog(syslog.LOG_ERR,
-                  "Giving up on setting br %s controller" % (br,))
 
 def setControllerCfg(controller):
     vswitchCfgMod(["--", "del-controller",
