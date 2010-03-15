@@ -307,9 +307,9 @@ pvconn_pstream_listen(const char *name_, char *suffix OVS_UNUSED,
     int error;
 
     if (!strncmp(name_, "ptcp:", 5) && count_fields(name_) < 2) {
-        name = xasprintf("%s:%d", name_, OFP_TCP_PORT);
+        name = xasprintf("%s%d", name_, OFP_TCP_PORT);
     } else if (!strncmp(name_, "pssl:", 5) && count_fields(name_) < 2) {
-        name = xasprintf("%s:%d", name_, OFP_SSL_PORT);
+        name = xasprintf("%s%d", name_, OFP_SSL_PORT);
     } else {
         name = xstrdup(name_);
     }
