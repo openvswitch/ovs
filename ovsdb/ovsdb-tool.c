@@ -337,8 +337,13 @@ print_db_changes(struct shash *tables, struct shash *names)
                                                 : xmemdup0(row_uuid, 8)));
                 }
             } else if (columns->type == JSON_NULL) {
+                struct shash_node *node;
+
                 printf("\t\tdelete row\n");
-                shash_delete(names, shash_find(names, row_uuid));
+                node = shash_find(names, row_uuid);
+                if (node) {
+                    shash_delete(names, node);
+                }
                 free(old_name);
             }
 
