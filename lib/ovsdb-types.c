@@ -412,10 +412,30 @@ ovsdb_base_type_from_json(struct ovsdb_base_type *base,
         refTable = ovsdb_parser_member(&parser, "refTable",
                                        OP_ID | OP_OPTIONAL);
         if (refTable) {
+            const struct json *refType;
+
             base->u.uuid.refTableName = xstrdup(refTable->u.string);
+
             /* We can't set base->u.uuid.refTable here because we don't have
              * enough context (we might not even be running in ovsdb-server).
              * ovsdb_create() will set refTable later. */
+
+            refType = ovsdb_parser_member(&parser, "refType",
+                                          OP_ID | OP_OPTIONAL);
+            if (refType) {
+                const char *refType_s = json_string(refType);
+                if (!strcmp(refType_s, "strong")) {
+                    base->u.uuid.refType = OVSDB_REF_STRONG;
+                } else if (!strcmp(refType_s, "weak")) {
+                    base->u.uuid.refType = OVSDB_REF_WEAK;
+                } else {
+                    error = ovsdb_syntax_error(json, NULL, "refType must be "
+                                               "\"strong\" or \"weak\" (not "
+                                               "\"%s\")", refType_s);
+                }
+            } else {
+                base->u.uuid.refType = OVSDB_REF_STRONG;
+            }
         }
     }
 
@@ -495,6 +515,9 @@ ovsdb_base_type_to_json(const struct ovsdb_base_type *base)
         if (base->u.uuid.refTableName) {
             json_object_put_string(json, "refTable",
                                    base->u.uuid.refTableName);
+            if (base->u.uuid.refType == OVSDB_REF_WEAK) {
+                json_object_put_string(json, "refType", "weak");
+            }
         }
         break;
 

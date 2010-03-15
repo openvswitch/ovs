@@ -122,11 +122,14 @@
          "type": "string"},
        "select_src_port": {
          "type": {"key": {"type": "uuid",
-                          "refTable": "Port"},
+                          "refTable": "Port",
+                          "refType": "weak"},
                    "min": 0, "max": "unlimited"}},
        "select_dst_port": {
          "type": {"key": {"type": "uuid",
-                          "refTable": "Port"}, "min": 0, "max": "unlimited"}},
+                          "refTable": "Port",
+                          "refType": "weak"},
+                   "min": 0, "max": "unlimited"}},
        "select_vlan": {
          "type": {"key": {"type": "integer",
                           "minInteger": 0,
@@ -134,7 +137,9 @@
                   "min": 0, "max": 4096}},
        "output_port": {
          "type": {"key": {"type": "uuid",
-                          "refTable": "Port"}, "min": 0, "max": 1}},
+                          "refTable": "Port",
+                          "refType": "weak"},
+                  "min": 0, "max": 1}},
        "output_vlan": {
          "type": {"key": {"type": "integer",
                           "minInteger": 1,

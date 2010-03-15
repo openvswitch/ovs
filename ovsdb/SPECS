@@ -175,6 +175,7 @@ is represented by <database-schema>, as described below.
         "minLength": <integer>             optional, strings only
         "maxLength": <integer>             optional, strings only
         "refTable": <id>                   optional, uuids only
+        "refType": "strong" or "weak"      optional, only with "refTable"
 
     An <atomic-type> by itself is equivalent to a JSON object with a
     single member "type" whose value is the <atomic-type>.
@@ -203,8 +204,17 @@ is represented by <database-schema>, as described below.
     bytes or UTF-16 code units).
 
     If "type" is "uuid", then "refTable", if present, must be the name
-    of a table within this database.  If "refTable" is set, the
-    allowed UUIDs are limited to UUIDs for rows in the named table.
+    of a table within this database.  If "refTable" is specified, then
+    "refType" may also be specified.  If "refTable" is set, the effect
+    depends on "refType":
+
+        - If "refType" is "strong" or if "refType" is omitted, the
+          allowed UUIDs are limited to UUIDs for rows in the named
+          table.
+
+        - If "refType" is "weak", then any UUIDs are allowed, but
+          UUIDs that do not correspond to rows in the named table will
+          be automatically deleted.
 
     "refTable" constraints are "deferred" constraints: they are
     enforced only at transaction commit time (see the "transact"
@@ -337,11 +347,20 @@ include at least the following:
 
         When the commit was attempted, a column's value referenced the
         UUID for a row that did not exist in the table named by the
-        column's <base-type> key or value "refTable".  (This can be
-        caused by inserting a row that references a nonexistent row,
-        by deleting a row that is still referenced by another row, by
-        specifying the UUID for a row in the wrong table, and other
-        ways.)
+        column's <base-type> key or value "refTable" that has a
+        "refType" of "strong".  (This can be caused by inserting a row
+        that references a nonexistent row, by deleting a row that is
+        still referenced by another row, by specifying the UUID for a
+        row in the wrong table, and other ways.)
+
+    "error": "constraint violation"
+
+        A column with a <base-type> key or value "refTable" whose
+        "refType" is "weak" became empty due to deletion(s) caused
+        because the rows that it referenced were deleted (or never
+        existed, if the column's row was inserted within the
+        transaction), and this column is not allowed to be empty
+        because its <type> has a "min" of 1.
 
 If "params" contains one or more "wait" operations, then the
 transaction may take an arbitrary amount of time to complete.  The

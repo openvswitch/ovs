@@ -44,6 +44,11 @@ struct json *ovsdb_atomic_type_to_json(enum ovsdb_atomic_type);
 
 /* An atomic type plus optional constraints. */
 
+enum ovsdb_ref_type {
+    OVSDB_REF_STRONG,           /* Target must exist. */
+    OVSDB_REF_WEAK              /* Delete reference if target disappears. */
+};
+
 struct ovsdb_base_type {
     enum ovsdb_atomic_type type;
 
@@ -72,6 +77,7 @@ struct ovsdb_base_type {
         struct ovsdb_uuid_constraints {
             char *refTableName; /* Name of referenced table, or NULL. */
             struct ovsdb_table *refTable; /* Referenced table, if available. */
+            enum ovsdb_ref_type refType;  /* Reference type. */
         } uuid;
     } u;
 };
@@ -85,7 +91,7 @@ struct ovsdb_base_type {
 #define OVSDB_BASE_STRING_INIT  { .type = OVSDB_TYPE_STRING,    \
                                   .u.string = { 0, UINT_MAX } }
 #define OVSDB_BASE_UUID_INIT    { .type = OVSDB_TYPE_UUID,      \
-                                  .u.uuid = { NULL, NULL } }
+                                  .u.uuid = { NULL, NULL, 0 } }
 
 void ovsdb_base_type_init(struct ovsdb_base_type *, enum ovsdb_atomic_type);
 void ovsdb_base_type_clone(struct ovsdb_base_type *,
@@ -101,6 +107,11 @@ struct ovsdb_error *ovsdb_base_type_from_json(struct ovsdb_base_type *,
                                               const struct json *)
     WARN_UNUSED_RESULT;
 struct json *ovsdb_base_type_to_json(const struct ovsdb_base_type *);
+
+static inline bool ovsdb_base_type_is_ref(const struct ovsdb_base_type *);
+static inline bool ovsdb_base_type_is_strong_ref(
+    const struct ovsdb_base_type *);
+static inline bool ovsdb_base_type_is_weak_ref(const struct ovsdb_base_type *);
 
 /* An OVSDB type.
  *
@@ -158,6 +169,26 @@ static inline bool
 ovsdb_atomic_type_is_valid(enum ovsdb_atomic_type atomic_type)
 {
     return atomic_type >= 0 && atomic_type < OVSDB_N_TYPES;
+}
+
+static inline bool
+ovsdb_base_type_is_ref(const struct ovsdb_base_type *base)
+{
+    return base->type == OVSDB_TYPE_UUID && base->u.uuid.refTable;
+}
+
+static inline bool
+ovsdb_base_type_is_strong_ref(const struct ovsdb_base_type *base)
+{
+    return (ovsdb_base_type_is_ref(base)
+            && base->u.uuid.refType == OVSDB_REF_STRONG);
+}
+
+static inline bool
+ovsdb_base_type_is_weak_ref(const struct ovsdb_base_type *base)
+{
+    return (ovsdb_base_type_is_ref(base)
+            && base->u.uuid.refType == OVSDB_REF_WEAK);
 }
 
 static inline bool ovsdb_type_is_scalar(const struct ovsdb_type *type)

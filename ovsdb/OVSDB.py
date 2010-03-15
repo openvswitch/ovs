@@ -196,13 +196,14 @@ class Atom:
 class BaseType:
     def __init__(self, type,
                  enum=None,
-                 refTable=None,
+                 refTable=None, refType="strong",
                  minInteger=None, maxInteger=None,
                  minReal=None, maxReal=None,
                  minLength=None, maxLength=None):
         self.type = type
         self.enum = enum
         self.refTable = refTable
+        self.refType = refType
         self.minInteger = minInteger
         self.maxInteger = maxInteger
         self.minReal = minReal
@@ -221,17 +222,23 @@ class BaseType:
                 enumType = Type(atomicType, None, 0, 'unlimited')
                 enum = Datum.fromJson(enumType, enum)
             refTable = getMember(json, 'refTable', [unicode], description)
+            refType = getMember(json, 'refType', [unicode], description)
+            if refType == None:
+                refType = "strong"
             minInteger = getMember(json, 'minInteger', [int, long], description)
             maxInteger = getMember(json, 'maxInteger', [int, long], description)
             minReal = getMember(json, 'minReal', [int, long, float], description)
             maxReal = getMember(json, 'maxReal', [int, long, float], description)
             minLength = getMember(json, 'minLength', [int], description)
             maxLength = getMember(json, 'minLength', [int], description)
-            return BaseType(atomicType, enum, refTable, minInteger, maxInteger, minReal, maxReal, minLength, maxLength)
+            return BaseType(atomicType, enum, refTable, refType, minInteger, maxInteger, minReal, maxReal, minLength, maxLength)
 
     def toEnglish(self, escapeLiteral=returnUnchanged):
         if self.type == 'uuid' and self.refTable:
-            return escapeLiteral(self.refTable)
+            s = escapeLiteral(self.refTable)
+            if self.refType == 'weak':
+                s = "weak reference to " + s
+            return s
         else:
             return self.type
 

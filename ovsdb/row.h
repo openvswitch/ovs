@@ -20,20 +20,42 @@
 #include <stdint.h>
 #include "column.h"
 #include "hmap.h"
+#include "list.h"
 #include "ovsdb-data.h"
 
 struct ovsdb_column_set;
 
+/* A weak reference.
+ *
+ * When a column in row A contains a weak reference to UUID of a row B this
+ * constitutes a weak reference from A (the source) to B (the destination).
+ *
+ * Rows A and B may be in the same table or different tables.
+ *
+ * Weak references from a row to itself are allowed, but no "struct
+ * ovsdb_weak_ref" structures are created for them.
+ */
+struct ovsdb_weak_ref {
+    struct list src_node;       /* In src->src_refs list. */
+    struct list dst_node;       /* In destination row's dst_refs list. */
+    struct ovsdb_row *src;      /* Source row. */
+};
+
 /* A row in a database table. */
 struct ovsdb_row {
-    struct ovsdb_table *table;  /* Table to which this belongs. */
-    struct hmap_node hmap_node; /* Element in ovsdb_table's 'rows' hmap. */
+    struct ovsdb_table *table;     /* Table to which this belongs. */
+    struct hmap_node hmap_node;    /* Element in ovsdb_table's 'rows' hmap. */
     struct ovsdb_txn_row *txn_row; /* Transaction that row is in, if any. */
 
-    /* Number of refs to this row from other rows, in this table or other
-     * tables, through 'uuid' columns that have a 'refTable' constraint
-     * pointing to this table.  A row with nonzero 'n_refs' cannot be deleted.
-     * Updated and checked only at transaction commit. */
+    /* Weak references. */
+    struct list src_refs;       /* Weak references from this row. */
+    struct list dst_refs;       /* Weak references to this row. */
+
+    /* Number of strong refs to this row from other rows, in this table or
+     * other tables, through 'uuid' columns that have a 'refTable' constraint
+     * pointing to this table and a 'refType' of "strong".  A row with nonzero
+     * 'n_refs' cannot be deleted.  Updated and checked only at transaction
+     * commit. */
     size_t n_refs;
 
     struct ovsdb_datum fields[];

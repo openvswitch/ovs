@@ -35,6 +35,8 @@ allocate_row(const struct ovsdb_table *table)
     struct ovsdb_row *row = xmalloc(row_size);
     row->table = (struct ovsdb_table *) table;
     row->txn_row = NULL;
+    list_init(&row->src_refs);
+    list_init(&row->dst_refs);
     row->n_refs = 0;
     return row;
 }
@@ -77,7 +79,22 @@ ovsdb_row_destroy(struct ovsdb_row *row)
 {
     if (row) {
         const struct ovsdb_table *table = row->table;
+        struct ovsdb_weak_ref *weak, *next;
         const struct shash_node *node;
+
+        LIST_FOR_EACH_SAFE (weak, next, struct ovsdb_weak_ref, dst_node,
+                            &row->dst_refs) {
+            list_remove(&weak->src_node);
+            list_remove(&weak->dst_node);
+            free(weak);
+        }
+
+        LIST_FOR_EACH_SAFE (weak, next, struct ovsdb_weak_ref, src_node,
+                            &row->src_refs) {
+            list_remove(&weak->src_node);
+            list_remove(&weak->dst_node);
+            free(weak);
+        }
 
         SHASH_FOR_EACH (node, &table->schema->columns) {
             const struct ovsdb_column *column = node->data;
