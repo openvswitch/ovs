@@ -120,6 +120,9 @@
      "columns": {
        "name": {
          "type": "string"},
+       "select_all": {
+         "type": "boolean"
+       },
        "select_src_port": {
          "type": {"key": {"type": "uuid",
                           "refTable": "Port",

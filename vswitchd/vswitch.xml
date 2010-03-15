@@ -420,14 +420,17 @@
     </column>
 
     <group title="Selecting Packets for Mirroring">
+      <column name="select_all">
+        If true, every packet arriving or departing on any port is
+        selected for mirroring.
+      </column>
+
       <column name="select_dst_port">
         Ports on which departing packets are selected for mirroring.
       </column>
 
       <column name="select_src_port">
-        Ports on which arriving packets are selected for mirroring.  If this
-        column and <ref column="select_dst_port"/> are both empty, then all
-        packets on all ports are selected for mirroring.
+        Ports on which arriving packets are selected for mirroring.
       </column>
 
       <column name="select_vlan">

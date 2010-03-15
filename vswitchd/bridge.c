@@ -3817,9 +3817,6 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
     size_t n_vlans;
     int *vlans;
     size_t i;
-    bool mirror_all_ports;
-    bool any_ports_specified;
-    bool any_vlans_specified;
 
     /* Get output port. */
     if (cfg->output_port) {
@@ -3847,30 +3844,25 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
         return;
     }
 
-    /* Get all the ports, and drop duplicates and ports that don't exist. */
     shash_init(&src_ports);
     shash_init(&dst_ports);
-    mirror_collect_ports(m, cfg->select_src_port, cfg->n_select_src_port,
-                         &src_ports);
-    mirror_collect_ports(m, cfg->select_dst_port, cfg->n_select_dst_port,
-                         &dst_ports);
-    any_ports_specified = cfg->n_select_dst_port || cfg->n_select_dst_port;
-    if (any_ports_specified
-        && shash_is_empty(&src_ports) && shash_is_empty(&dst_ports)) {
-        VLOG_ERR("bridge %s: disabling mirror %s since none of the specified "
-                 "selection ports exists", m->bridge->name, m->name);
-        mirror_destroy(m);
-        goto exit;
-    }
+    if (cfg->select_all) {
+        for (i = 0; i < m->bridge->n_ports; i++) {
+            const char *name = m->bridge->ports[i]->name;
+            shash_add_once(&src_ports, name, NULL);
+            shash_add_once(&dst_ports, name, NULL);
+        }
+        vlans = NULL;
+        n_vlans = 0;
+    } else {
+        /* Get ports, and drop duplicates and ports that don't exist. */
+        mirror_collect_ports(m, cfg->select_src_port, cfg->n_select_src_port,
+                             &src_ports);
+        mirror_collect_ports(m, cfg->select_dst_port, cfg->n_select_dst_port,
+                             &dst_ports);
 
-    /* Get all the vlans, and drop duplicate and invalid vlans. */
-    n_vlans = mirror_collect_vlans(m, cfg, &vlans);
-    any_vlans_specified = cfg->n_select_vlan > 0;
-    if (any_vlans_specified && !n_vlans) {
-        VLOG_ERR("bridge %s: disabling mirror %s since none of the specified "
-                 "VLANs exists", m->bridge->name, m->name);
-        mirror_destroy(m);
-        goto exit;
+        /* Get all the vlans, and drop duplicate and invalid vlans. */
+        n_vlans = mirror_collect_vlans(m, cfg, &vlans);
     }
 
     /* Update mirror data. */
@@ -3890,16 +3882,12 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
     m->out_port = out_port;
     m->out_vlan = out_vlan;
 
-    /* If no selection criteria have been given, mirror for all ports. */
-    mirror_all_ports = !any_ports_specified && !any_vlans_specified;
-
     /* Update ports. */
     mirror_bit = MIRROR_MASK_C(1) << m->idx;
     for (i = 0; i < m->bridge->n_ports; i++) {
         struct port *port = m->bridge->ports[i];
 
-        if (mirror_all_ports
-            || shash_find(&m->src_ports, port->name)
+        if (shash_find(&m->src_ports, port->name)
             || (m->n_vlans
                 && (!port->vlan
                     ? port_trunks_any_mirrored_vlan(m, port)
@@ -3909,7 +3897,7 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
             port->src_mirrors &= ~mirror_bit;
         }
 
-        if (mirror_all_ports || shash_find(&m->dst_ports, port->name)) {
+        if (shash_find(&m->dst_ports, port->name)) {
             port->dst_mirrors |= mirror_bit;
         } else {
             port->dst_mirrors &= ~mirror_bit;
@@ -3917,7 +3905,6 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
     }
 
     /* Clean up. */
-exit:
     shash_destroy(&src_ports);
     shash_destroy(&dst_ports);
 }
