@@ -21,7 +21,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "coverage.h"
+
+#define THIS_MODULE VLM_util
+#include "vlog.h"
 
 const char *program_name;
 
@@ -358,6 +362,37 @@ hexit_value(int c)
     NOT_REACHED();
 }
 
+/* Returns the current working directory as a malloc()'d string, or a null
+ * pointer if the current working directory cannot be determined. */
+char *
+get_cwd(void)
+{
+    long int path_max;
+    size_t size;
+
+    /* Get maximum path length or at least a reasonable estimate. */
+    path_max = pathconf(".", _PC_PATH_MAX);
+    size = (path_max < 0 ? 1024
+            : path_max > 10240 ? 10240
+            : path_max);
+
+    /* Get current working directory. */
+    for (;;) {
+        char *buf = xmalloc(size);
+        if (getcwd(buf, size)) {
+            return xrealloc(buf, strlen(buf) + 1);
+        } else {
+            int error = errno;
+            free(buf);
+            if (error != ERANGE) {
+                VLOG_WARN("getcwd failed (%s)", strerror(error));
+                return NULL;
+            }
+            size *= 2;
+        }
+    }
+}
+
 /* Returns the directory name portion of 'file_name' as a malloc()'d string,
  * similar to the POSIX dirname() function but thread-safe. */
 char *
@@ -383,6 +418,33 @@ dir_name(const char *file_name)
         return xmemdup0(file_name, len);
     }
 }
+
+/* If 'file_name' starts with '/', returns a copy of 'file_name'.  Otherwise,
+ * returns an absolute path to 'file_name' considering it relative to 'dir',
+ * which itself must be absolute.  'dir' may be null or the empty string, in
+ * which case the current working directory is used.
+ *
+ * Returns a null pointer if 'dir' is null and getcwd() fails. */
+char *
+abs_file_name(const char *dir, const char *file_name)
+{
+    if (file_name[0] == '/') {
+        return xstrdup(file_name);
+    } else if (dir && dir[0]) {
+        char *separator = dir[strlen(dir) - 1] == '/' ? "" : "/";
+        return xasprintf("%s%s%s", dir, separator, file_name);
+    } else {
+        char *cwd = get_cwd();
+        if (cwd) {
+            char *abs_name = xasprintf("%s/%s", cwd, file_name);
+            free(cwd);
+            return abs_name;
+        } else {
+            return NULL;
+        }
+    }
+}
+
 
 /* Pass a value to this function if it is marked with
  * __attribute__((warn_unused_result)) and you genuinely want to ignore 

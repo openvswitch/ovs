@@ -58,9 +58,9 @@ static bool monitor;
 char *
 make_pidfile_name(const char *name) 
 {
-    return (!name ? xasprintf("%s/%s.pid", ovs_rundir, program_name)
-            : *name == '/' ? xstrdup(name)
-            : xasprintf("%s/%s", ovs_rundir, name));
+    return (!name
+            ? xasprintf("%s/%s.pid", ovs_rundir, program_name)
+            : abs_file_name(ovs_rundir, name));
 }
 
 /* Sets up a following call to daemonize() to create a pidfile named 'name'.

@@ -186,11 +186,7 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
     list_init(&server->conns);
 
     if (path) {
-        if (path[0] == '/') {
-            server->path = xstrdup(path);
-        } else {
-            server->path = xasprintf("%s/%s", ovs_rundir, path);
-        }
+        server->path = abs_file_name(ovs_rundir, path);
     } else {
         server->path = xasprintf("%s/%s.%ld.ctl", ovs_rundir,
                                  program_name, (long int) getpid());
@@ -461,11 +457,7 @@ unixctl_client_create(const char *path, struct unixctl_client **clientp)
 
     /* Determine location. */
     client = xmalloc(sizeof *client);
-    if (path[0] == '/') {
-        client->connect_path = xstrdup(path);
-    } else {
-        client->connect_path = xasprintf("%s/%s", ovs_rundir, path);
-    }
+    client->connect_path = abs_file_name(ovs_rundir, path);
     client->bind_path = xasprintf("/tmp/vlog.%ld.%d",
                                   (long int) getpid(), counter++);
 

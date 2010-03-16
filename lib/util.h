@@ -123,7 +123,9 @@ bool str_to_double(const char *, double *);
 
 int hexit_value(int c);
 
+char *get_cwd(void);
 char *dir_name(const char *file_name);
+char *abs_file_name(const char *dir, const char *file_name);
 
 void ignore(bool x OVS_UNUSED);
 
