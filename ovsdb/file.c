@@ -60,7 +60,7 @@ static struct ovsdb_error *ovsdb_file_txn_from_json(struct ovsdb *,
                                                     const struct json *,
                                                     bool converting,
                                                     struct ovsdb_txn **);
-static void ovsdb_file_replica_create(struct ovsdb *, struct ovsdb_log *);
+static void ovsdb_file_create(struct ovsdb *, struct ovsdb_log *);
 
 /* Opens database 'file_name' and stores a pointer to the new database in
  * '*dbp'.  If 'read_only' is false, then the database will be locked and
@@ -161,7 +161,7 @@ ovsdb_file_open__(const char *file_name,
     }
 
     if (!read_only) {
-        ovsdb_file_replica_create(db, log);
+        ovsdb_file_create(db, log);
     } else {
         ovsdb_log_close(log);
     }
@@ -370,35 +370,34 @@ exit:
 
 /* Replica implementation. */
 
-struct ovsdb_file_replica {
+struct ovsdb_file {
     struct ovsdb_replica replica;
     struct ovsdb_log *log;
 };
 
-static const struct ovsdb_replica_class ovsdb_file_replica_class;
+static const struct ovsdb_replica_class ovsdb_file_class;
 
 static void
-ovsdb_file_replica_create(struct ovsdb *db, struct ovsdb_log *log)
+ovsdb_file_create(struct ovsdb *db, struct ovsdb_log *log)
 {
-    struct ovsdb_file_replica *r = xmalloc(sizeof *r);
-    ovsdb_replica_init(&r->replica, &ovsdb_file_replica_class);
-    r->log = log;
-    ovsdb_add_replica(db, &r->replica);
-
+    struct ovsdb_file *file = xmalloc(sizeof *file);
+    ovsdb_replica_init(&file->replica, &ovsdb_file_class);
+    file->log = log;
+    ovsdb_add_replica(db, &file->replica);
 }
 
-static struct ovsdb_file_replica *
-ovsdb_file_replica_cast(struct ovsdb_replica *replica)
+static struct ovsdb_file *
+ovsdb_file_cast(struct ovsdb_replica *replica)
 {
-    assert(replica->class == &ovsdb_file_replica_class);
-    return CONTAINER_OF(replica, struct ovsdb_file_replica, replica);
+    assert(replica->class == &ovsdb_file_class);
+    return CONTAINER_OF(replica, struct ovsdb_file, replica);
 }
 
 static bool
-ovsdb_file_replica_change_cb(const struct ovsdb_row *old,
-                             const struct ovsdb_row *new,
-                             const unsigned long int *changed,
-                             void *ftxn_)
+ovsdb_file_change_cb(const struct ovsdb_row *old,
+                     const struct ovsdb_row *new,
+                     const unsigned long int *changed,
+                     void *ftxn_)
 {
     struct ovsdb_file_txn *ftxn = ftxn_;
     ovsdb_file_txn_add_row(ftxn, old, new, changed);
@@ -406,35 +405,35 @@ ovsdb_file_replica_change_cb(const struct ovsdb_row *old,
 }
 
 static struct ovsdb_error *
-ovsdb_file_replica_commit(struct ovsdb_replica *r_,
-                          const struct ovsdb_txn *txn, bool durable)
+ovsdb_file_commit(struct ovsdb_replica *replica,
+                  const struct ovsdb_txn *txn, bool durable)
 {
-    struct ovsdb_file_replica *r = ovsdb_file_replica_cast(r_);
+    struct ovsdb_file *file = ovsdb_file_cast(replica);
     struct ovsdb_file_txn ftxn;
 
     ovsdb_file_txn_init(&ftxn);
-    ovsdb_txn_for_each_change(txn, ovsdb_file_replica_change_cb, &ftxn);
+    ovsdb_txn_for_each_change(txn, ovsdb_file_change_cb, &ftxn);
     if (!ftxn.json) {
         /* Nothing to commit. */
         return NULL;
     }
 
     return ovsdb_file_txn_commit(ftxn.json, ovsdb_txn_get_comment(txn),
-                                 durable, r->log);
+                                 durable, file->log);
 }
 
 static void
-ovsdb_file_replica_destroy(struct ovsdb_replica *r_)
+ovsdb_file_destroy(struct ovsdb_replica *replica)
 {
-    struct ovsdb_file_replica *r = ovsdb_file_replica_cast(r_);
+    struct ovsdb_file *file = ovsdb_file_cast(replica);
 
-    ovsdb_log_close(r->log);
-    free(r);
+    ovsdb_log_close(file->log);
+    free(file);
 }
 
-static const struct ovsdb_replica_class ovsdb_file_replica_class = {
-    ovsdb_file_replica_commit,
-    ovsdb_file_replica_destroy
+static const struct ovsdb_replica_class ovsdb_file_class = {
+    ovsdb_file_commit,
+    ovsdb_file_destroy
 };
 
 static void
