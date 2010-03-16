@@ -111,6 +111,7 @@ ovsdb_file_open__(const char *file_name,
     struct json *json;
     struct ovsdb *db;
 
+    *dbp = NULL;
     open_mode = read_only ? OVSDB_LOG_READ_ONLY : OVSDB_LOG_READ_WRITE;
     error = ovsdb_log_open(file_name, open_mode, -1, &log);
     if (error) {
