@@ -137,7 +137,7 @@ ovsdb_execute(struct ovsdb *db, const struct json *params,
 
         /* Parse and execute operation. */
         ovsdb_parser_init(&parser, operation,
-                          "ovsdb operation %zu of %zu", i + 1, n_operations);
+                          "ovsdb operation %zu of %zu", i, n_operations);
         op = ovsdb_parser_member(&parser, "op", OP_ID);
         result = json_object_create();
         if (op) {
