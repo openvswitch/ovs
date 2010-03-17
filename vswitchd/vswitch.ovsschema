@@ -22,7 +22,8 @@
        "next_cfg": {
          "type": "integer"},
        "cur_cfg": {
-         "type": "integer"}}},
+         "type": "integer"}},
+     "maxRows": 1},
    "Bridge": {
      "columns": {
        "name": {
