@@ -182,6 +182,23 @@ struct net_bridge_port {
 	atomic_t sflow_pool;
 };
 
+enum csum_type {
+	OVS_CSUM_NONE = 0,
+	OVS_CSUM_UNNECESSARY = 1,
+	OVS_CSUM_COMPLETE = 2,
+	OVS_CSUM_PARTIAL = 3,
+};
+
+/**
+ * struct ovs_skb_cb - OVS data in skb CB
+ * @ip_summed: Consistently stores L4 checksumming status across different
+ * kernel versions.
+ */
+struct ovs_skb_cb {
+	enum csum_type	ip_summed;
+};
+#define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
+
 extern struct notifier_block dp_device_notifier;
 extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 
@@ -201,6 +218,7 @@ void dp_process_received_packet(struct sk_buff *, struct net_bridge_port *);
 int dp_del_port(struct net_bridge_port *);
 int dp_output_control(struct datapath *, struct sk_buff *, int, u32 arg);
 int dp_min_mtu(const struct datapath *dp);
+void set_dp_devs_mtu(const struct datapath *dp, struct net_device *dev);
 
 struct datapath *get_dp(int dp_idx);
 
@@ -217,5 +235,8 @@ static inline int vswitch_skb_checksum_setup(struct sk_buff *skb)
 	return 0;
 }
 #endif
+
+void compute_ip_summed(struct sk_buff *skb, bool xmit);
+void forward_ip_summed(struct sk_buff *skb);
 
 #endif /* datapath.h */

@@ -144,6 +144,7 @@ main(int argc, char *argv[])
     long long int last_key_time = 0;
     int repeat_count = 0;
 
+    proctitle_init(argc, argv);
     set_program_name(argv[0]);
     time_init();
     vlog_init();
@@ -165,7 +166,7 @@ main(int argc, char *argv[])
     daemonize();
 
     initialize_terminal();
-    fatal_signal_add_hook(restore_terminal, NULL, true);
+    fatal_signal_add_hook(restore_terminal, NULL, NULL, true);
 
     msg = NULL;
     countdown = 0;
@@ -1104,6 +1105,7 @@ do_show_data_rates(void *rates_)
     }
     if (!rates->xid) {
         struct ofp_stats_request *rq;
+        struct ofp_port_stats_request *psr;
         struct ofpbuf *b;
 
         rates->xid = random_uint32();
@@ -1111,6 +1113,10 @@ do_show_data_rates(void *rates_)
                                rates->xid, &b);
         rq->type = htons(OFPST_PORT);
         rq->flags = htons(0);
+        psr = ofpbuf_put_uninit(b, sizeof *psr);
+        memset(psr, 0, sizeof *psr);
+        psr->port_no = htons(OFPP_NONE);
+        update_openflow_length(b);
         rconn_send_with_limit(rates->rconn, b, counter, 10);
     }
 
@@ -1247,7 +1253,7 @@ allocate_message(struct message **msgp)
 {
     if (!*msgp) {
         /* Allocate and initialize message. */
-        *msgp = xcalloc(1, sizeof **msgp);
+        *msgp = xzalloc(sizeof **msgp);
         (*msgp)->index = n_messages;
 
         /* Add to list of messages. */
@@ -2079,7 +2085,7 @@ save_config(const struct svec *settings)
     }
 
     svec_init(&argv);
-    svec_add(&argv, "/usr/share/openvswitch/commands/reconfigure");
+    svec_add(&argv, "/usr/share/openvswitch-switchui/reconfigure");
     svec_append(&argv, settings);
     svec_terminate(&argv);
     ok = run_and_report_failure(argv.names, "Save failed");
@@ -2457,7 +2463,7 @@ abbreviate_netdevs(const struct svec *netdevs, struct ds *abbrev)
 static void
 choose_netdevs(struct svec *choices)
 {
-    struct svec netdevs;
+    struct svec netdevs = SVEC_EMPTY_INITIALIZER;
     struct menu menu;
     size_t i;
 
@@ -2478,7 +2484,7 @@ choose_netdevs(struct svec *choices)
             continue;
         }
 
-        retval = netdev_open(name, NETDEV_ETH_TYPE_NONE, &netdev);
+        retval = netdev_open_default(name, &netdev);
         if (!retval) {
             bool exclude = netdev_get_in4(netdev, NULL, NULL) == 0;
             netdev_close(netdev);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,13 +44,20 @@ struct shash {
 
 void shash_init(struct shash *);
 void shash_destroy(struct shash *);
+void shash_swap(struct shash *, struct shash *);
+void shash_moved(struct shash *);
 void shash_clear(struct shash *);
 bool shash_is_empty(const struct shash *);
-struct shash_node *shash_add(struct shash *, const char *, void *);
+size_t shash_count(const struct shash *);
+struct shash_node *shash_add(struct shash *, const char *, const void *);
+bool shash_add_once(struct shash *, const char *, const void *);
 void shash_delete(struct shash *, struct shash_node *);
 struct shash_node *shash_find(const struct shash *, const char *);
 void *shash_find_data(const struct shash *, const char *);
+void *shash_find_and_delete(struct shash *, const char *);
 struct shash_node *shash_first(const struct shash *);
+const struct shash_node **shash_sort(const struct shash *);
+bool shash_equal_keys(const struct shash *, const struct shash *);
 
 #ifdef  __cplusplus
 }

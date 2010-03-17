@@ -1,0 +1,167 @@
+AT_BANNER([OVSDB -- atomic types])
+
+OVSDB_CHECK_POSITIVE([integer], 
+  [[parse-atomic-type '["integer"]' ]], ["integer"])
+OVSDB_CHECK_POSITIVE([real], 
+  [[parse-atomic-type '["real"]' ]], ["real"])
+OVSDB_CHECK_POSITIVE([boolean], 
+  [[parse-atomic-type '["boolean"]' ]], ["boolean"])
+OVSDB_CHECK_POSITIVE([string], 
+  [[parse-atomic-type '["string"]' ]], ["string"])
+OVSDB_CHECK_POSITIVE([uuid], 
+  [[parse-atomic-type '["uuid"]' ]], ["uuid"])
+OVSDB_CHECK_NEGATIVE([void is not a valid atomic-type],
+  [[parse-atomic-type '["void"]' ]], ["void" is not an atomic-type])
+
+AT_BANNER([OVSDB -- base types])
+
+OVSDB_CHECK_POSITIVE([integer enum],
+  [[parse-base-type '{"type": "integer", "enum": ["set", [-1, 4, 5]]}' ]],
+  [[{"enum":["set",[-1,4,5]],"type":"integer"}]])
+OVSDB_CHECK_POSITIVE([integer >= 5], 
+  [[parse-base-type '{"type": "integer", "minInteger": 5}' ]],
+  [{"minInteger":5,"type":"integer"}])
+OVSDB_CHECK_POSITIVE([integer <= 7], 
+  [[parse-base-type '{"type": "integer", "maxInteger": 7}' ]],
+  [{"maxInteger":7,"type":"integer"}])
+OVSDB_CHECK_POSITIVE([integer between -5 and 10], 
+  [[parse-base-type '{"type": "integer", "minInteger": -5, "maxInteger": 10}']],
+  [{"maxInteger":10,"minInteger":-5,"type":"integer"}])
+OVSDB_CHECK_NEGATIVE([integer max may not be less than min],
+  [[parse-base-type '{"type": "integer", "minInteger": 5, "maxInteger": 3}']],
+  [minInteger exceeds maxInteger])
+
+OVSDB_CHECK_POSITIVE([real enum],
+  [[parse-base-type '{"type": "real", "enum": ["set", [1.5, 0, 2.75]]}' ]],
+  [[{"enum":["set",[0,1.5,2.75]],"type":"real"}]])
+OVSDB_CHECK_POSITIVE([real >= -1.5], 
+  [[parse-base-type '{"type": "real", "minReal": -1.5}']],
+  [{"minReal":-1.5,"type":"real"}])
+OVSDB_CHECK_POSITIVE([real <= 1e5], 
+  [[parse-base-type '{"type": "real", "maxReal": 1e5}']],
+  [{"maxReal":100000,"type":"real"}])
+OVSDB_CHECK_POSITIVE([real between -2.5 and 3.75], 
+  [[parse-base-type '{"type": "real", "minReal": -2.5, "maxReal": 3.75}']],
+  [{"maxReal":3.75,"minReal":-2.5,"type":"real"}])
+OVSDB_CHECK_NEGATIVE([real max may not be less than min], 
+  [[parse-base-type '{"type": "real", "minReal": 555, "maxReal": 444}']],
+  [minReal exceeds maxReal])
+
+OVSDB_CHECK_POSITIVE([boolean], 
+  [[parse-base-type '[{"type": "boolean"}]' ]], ["boolean"])
+OVSDB_CHECK_POSITIVE([boolean enum],
+  [[parse-base-type '{"type": "boolean", "enum": true}' ]],
+  [[{"enum":true,"type":"boolean"}]])
+
+OVSDB_CHECK_POSITIVE([string enum], 
+  [[parse-base-type '{"type": "string", "enum": ["set", ["def", "abc"]]}']],
+  [[{"enum":["set",["abc","def"]],"type":"string"}]])
+OVSDB_CHECK_POSITIVE([string minLength], 
+  [[parse-base-type '{"type": "string", "minLength": 1}']],
+  [{"minLength":1,"type":"string"}])
+OVSDB_CHECK_POSITIVE([string maxLength], 
+  [[parse-base-type '{"type": "string", "maxLength": 5}']],
+  [{"maxLength":5,"type":"string"}])
+OVSDB_CHECK_POSITIVE([string minLength and maxLength], 
+  [[parse-base-type '{"type": "string", "minLength": 1, "maxLength": 5}']],
+  [{"maxLength":5,"minLength":1,"type":"string"}])
+OVSDB_CHECK_NEGATIVE([maxLength must not be less than minLength], 
+  [[parse-base-type '{"type": "string", "minLength": 5, "maxLength": 3}']],
+  [minLength exceeds maxLength])
+OVSDB_CHECK_NEGATIVE([maxLength must not be negative], 
+  [[parse-base-type '{"type": "string", "maxLength": -1}']],
+  [maxLength out of valid range 0 to 4294967295])
+
+OVSDB_CHECK_POSITIVE([uuid enum], 
+  [[parse-base-type '{"type": "uuid", "enum": ["uuid", "36bf19c0-ad9d-4232-bb85-b3d73dfe2123"]}' ]],
+  [[{"enum":["uuid","36bf19c0-ad9d-4232-bb85-b3d73dfe2123"],"type":"uuid"}]])
+OVSDB_CHECK_POSITIVE([uuid refTable], 
+  [[parse-base-type '{"type": "uuid", "refTable": "myTable"}' ]],
+  [{"refTable":"myTable","type":"uuid"}])
+OVSDB_CHECK_NEGATIVE([uuid refTable must be valid id], 
+  [[parse-base-type '{"type": "uuid", "refTable": "a-b-c"}' ]],
+  [Type mismatch for member 'refTable'])
+
+OVSDB_CHECK_NEGATIVE([void is not a valid base-type],
+  [[parse-base-type '["void"]' ]], ["void" is not an atomic-type])
+OVSDB_CHECK_NEGATIVE(["type" member must be present],
+  [[parse-base-type '{}']], [Parsing ovsdb type failed: Required 'type' member is missing.])
+
+AT_BANNER([OVSDB -- simple types])
+
+OVSDB_CHECK_POSITIVE([simple integer], 
+  [[parse-type '["integer"]' ]], ["integer"])
+OVSDB_CHECK_POSITIVE([simple real], 
+  [[parse-type '["real"]' ]], ["real"])
+OVSDB_CHECK_POSITIVE([simple boolean], 
+  [[parse-type '["boolean"]' ]], ["boolean"])
+OVSDB_CHECK_POSITIVE([simple string], 
+  [[parse-type '["string"]' ]], ["string"])
+OVSDB_CHECK_POSITIVE([simple uuid], 
+  [[parse-type '["uuid"]' ]], ["uuid"])
+OVSDB_CHECK_POSITIVE([integer in object],
+  [[parse-type '{"key": "integer"}' ]], ["integer"])
+OVSDB_CHECK_POSITIVE([real in object with explicit min and max],
+  [[parse-type '{"key": "real", "min": 1, "max": 1}' ]], ["real"])
+
+OVSDB_CHECK_NEGATIVE([key type is required],
+  [[parse-type '{}' ]], [Required 'key' member is missing.])
+OVSDB_CHECK_NEGATIVE([void is not a valid type],
+  [[parse-type '["void"]' ]], ["void" is not an atomic-type])
+
+AT_BANNER([OVSDB -- set types])
+
+OVSDB_CHECK_POSITIVE([optional boolean],
+  [[parse-type '{"key": "boolean", "min": 0}' ]], 
+  [[{"key":"boolean","min":0}]],
+  [set])
+OVSDB_CHECK_POSITIVE([set of 1 to 3 uuids],
+  [[parse-type '{"key": "uuid", "min": 1, "max": 3}' ]], 
+  [[{"key":"uuid","max":3}]])
+OVSDB_CHECK_POSITIVE([set of 0 to 3 strings],
+  [[parse-type '{"key": "string", "min": 0, "max": 3}' ]], 
+  [[{"key":"string","max":3,"min":0}]])
+OVSDB_CHECK_POSITIVE([set of 0 or more integers],
+  [[parse-type '{"key": "integer", "min": 0, "max": "unlimited"}']],
+  [[{"key":"integer","max":"unlimited","min":0}]])
+OVSDB_CHECK_POSITIVE([set of 1 or more reals],
+  [[parse-type '{"key": "real", "min": 1, "max": "unlimited"}']],
+  [[{"key":"real","max":"unlimited"}]])
+
+OVSDB_CHECK_NEGATIVE([set max cannot be less than min],
+  [[parse-type '{"key": "real", "min": 5, "max": 3}' ]],
+  [ovsdb type fails constraint checks])
+OVSDB_CHECK_NEGATIVE([set max cannot be negative],
+  [[parse-type '{"key": "real", "max": -1}' ]],
+  [bad min or max value])
+OVSDB_CHECK_NEGATIVE([set min cannot be negative],
+  [[parse-type '{"key": "real", "min": -1}' ]],
+  [bad min or max value])
+OVSDB_CHECK_NEGATIVE([set min cannot be greater than one],
+  [[parse-type '{"key": "real", "min": 10, "max": "unlimited"}']],
+  [ovsdb type fails constraint checks])
+
+AT_BANNER([OVSDB -- map types])
+
+OVSDB_CHECK_POSITIVE([map of 1 integer to boolean],
+ [[parse-type '{"key": "integer", "value": "boolean"}' ]],
+ [[{"key":"integer","value":"boolean"}]])
+OVSDB_CHECK_POSITIVE([map of 1 boolean to integer, explicit min and max],
+ [[parse-type '{"key": "boolean", "value": "integer", "min": 1, "max": 1}' ]],
+ [[{"key":"boolean","value":"integer"}]])
+OVSDB_CHECK_POSITIVE([map of 1 to 5 uuid to real],
+ [[parse-type '{"key": "uuid", "value": "real", "min": 1, "max": 5}' ]],
+ [[{"key":"uuid","max":5,"value":"real"}]])
+OVSDB_CHECK_POSITIVE([map of 0 to 10 string to uuid],
+ [[parse-type '{"key": "string", "value": "uuid", "min": 0, "max": 10}' ]],
+ [[{"key":"string","max":10,"min":0,"value":"uuid"}]])
+OVSDB_CHECK_POSITIVE([map of 1 to 20 real to string],
+ [[parse-type '{"key": "real", "value": "string", "min": 1, "max": 20}' ]],
+ [[{"key":"real","max":20,"value":"string"}]])
+OVSDB_CHECK_POSITIVE([map of 0 or more string to real],
+ [[parse-type '{"key": "string", "value": "real", "min": 0, "max": "unlimited"}' ]],
+ [[{"key":"string","max":"unlimited","min":0,"value":"real"}]])
+
+OVSDB_CHECK_NEGATIVE([map key type is required],
+ [[parse-type '{"value": "integer"}' ]],
+ [Required 'key' member is missing.])

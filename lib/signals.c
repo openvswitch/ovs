@@ -98,7 +98,7 @@ bool
 signal_poll(struct signal *s)
 {
     char buf[_POSIX_PIPE_BUF];
-    read(fds[0], buf, sizeof buf);
+    ignore(read(fds[0], buf, sizeof buf));
     if (signaled[s->signr]) {
         signaled[s->signr] = 0;
         return true;
@@ -122,7 +122,7 @@ static void
 signal_handler(int signr)
 {
     if (signr >= 1 && signr < N_SIGNALS) {
-        write(fds[1], "", 1);
+        ignore(write(fds[1], "", 1));
         signaled[signr] = true;
     }
 }

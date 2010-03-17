@@ -151,12 +151,19 @@ dhclient_create(const char *netdev_name,
                 void *aux, struct dhclient **cli_)
 {
     struct dhclient *cli;
+    struct netdev_options netdev_options;
     struct netdev *netdev;
     int error;
 
     *cli_ = NULL;
 
-    error = netdev_open(netdev_name, ETH_TYPE_IP, &netdev);
+    memset(&netdev_options, 0, sizeof netdev_options);
+    netdev_options.name = netdev_name;
+    netdev_options.ethertype = ETH_TYPE_IP;
+    netdev_options.may_create = true;
+    netdev_options.may_open = true;
+
+    error = netdev_open(&netdev_options, &netdev);
     /* XXX install socket filter to catch only DHCP packets. */
     if (error) {
         VLOG_ERR("could not open %s network device: %s",
@@ -172,7 +179,7 @@ dhclient_create(const char *netdev_name,
         return error;
     }
 
-    cli = xcalloc(1, sizeof *cli);
+    cli = xzalloc(sizeof *cli);
     cli->modify_request = modify_request;
     cli->validate_offer = validate_offer;
     cli->aux = aux;

@@ -23,9 +23,17 @@
 BRCTL="/usr/sbin/brctl"
 IP="/sbin/ip"
 
-cfg_mod="/usr/bin/ovs-cfg-mod"
 vsctl="/usr/bin/ovs-vsctl"
-service="/sbin/service"
+
+# XAPI before build 29381 (approximately) did not provide some of the
+# data in XenStore that we rely on.
+. /etc/xensource-inventory
+if test "$PRODUCT_VERSION" = "5.5.0" || test "${BUILD_NUMBER%p}" -le 26131
+then
+    xs550=true
+else
+    xs550=false
+fi
 
 handle_promiscuous()
 {
@@ -62,36 +70,73 @@ handle_mtu()
 {
     local mtu=$(xenstore-read "${PRIVATE}/MTU" 2>/dev/null)
     if [ $? -eq 0 -a -n "${mtu}" ]; then
-	echo "${mtu}" > /sys/class/net/${dev}/mtu
+	logger -t scripts-vif "Setting ${dev} MTU ${mtu}"
+	${IP} link set "${dev}" mtu ${mtu} || logger -t scripts-vif "Failed to ip link set ${dev} mtu ${mtu}. Error code $?"
     fi
+}
+
+set_vif_external_id()
+{
+    local key=$1
+    local value=$2
+
+    logger -t scripts-vif "vif${DOMID}.${DEVID} external-ids:\"${key}\"=\"${value}\""
+
+    echo "-- set interface vif${DOMID}.${DEVID} external-ids:\"${key}\"=\"${value}\""
 }
 
 handle_vswitch_vif_details()
 {
-    local vif_details=
-    local net_uuid=$(xenstore-read "${PRIVATE}/network-uuid" 2>/dev/null)
-    if [ -n "${net_uuid}" ] ; then
-	vif_details="$vif_details --add=port.${dev}.net-uuid=${net_uuid}"
-    fi
-
-    local address=$(xenstore-read "/local/domain/$DOMID/device/vif/$DEVID/mac" 2>/dev/null)
-    if [ -n "${address}" ] ; then
-	vif_details="$vif_details --add=port.${dev}.vif-mac=${address}"
-    fi
-
-    local vif_uuid=$(xenstore-read "${PRIVATE}/vif-uuid" 2>/dev/null)
-    if [ -n "${vif_uuid}" ] ; then
-	vif_details="$vif_details --add=port.${dev}.vif-uuid=${vif_uuid}"
-    fi
-
     local vm=$(xenstore-read "/local/domain/$DOMID/vm" 2>/dev/null)
     if [ $? -eq 0 -a -n "${vm}" ] ; then
 	local vm_uuid=$(xenstore-read "$vm/uuid" 2>/dev/null)
     fi
     if [ -n "${vm_uuid}" ] ; then
-	vif_details="$vif_details --add=port.${dev}.vm-uuid=${vm_uuid}"
+	set_vif_external_id "vm-uuid" "${vm_uuid}"
     fi
-    echo ${vif_details}
+
+    local vif_uuid=$(xenstore-read "${PRIVATE}/vif-uuid" 2>/dev/null)
+    if $xs550 && [ -z "${vif_uuid}" ] && [ -n "${vm_uuid}" ]; then
+        vif_uuid=$(xe vif-list --minimal vm-uuid="${vm_uuid}" device=$DEVID)
+    fi
+    if [ -n "${vif_uuid}" ] ; then
+	set_vif_external_id "vif-uuid" "${vif_uuid}"
+    fi
+
+    local vif_details=
+    local net_uuid=$(xenstore-read "${PRIVATE}/network-uuid" 2>/dev/null)
+    if $xs550 && [ -z "${net_uuid}" ] && [ -n "${vif_uuid}" ]; then
+        net_uuid=$(xe vif-param-get uuid="${vif_uuid}" param-name=network-uuid)
+    fi
+    if [ -n "${net_uuid}" ] ; then
+	set_vif_external_id "network-uuid" "${net_uuid}"
+    fi
+
+    local address=$(xenstore-read "/local/domain/$DOMID/device/vif/$DEVID/mac" 2>/dev/null)
+    if [ -n "${address}" ] ; then
+	set_vif_external_id "vif-mac" "${address}"
+    fi
+}
+
+xs550_set_internal_network_uuid()
+{
+    if $xs550; then
+        # vNetManager needs to know the network UUID(s) associated with each
+        # datapath.  Normally interface-reconfigure adds them, but XAPI does
+        # not use interface-reconfigure for internal networks. Instead, XAPI
+        # calls the addbr ioctl internally, so we have to do it here instead
+        # for internal networks.  This is only acceptable because xapi is lazy
+        # about creating internal networks: it only creates one just before it
+        # adds the first vif to it.  There may still be a brief delay between
+        # the initial ovs-vswitchd connection to vNetManager and setting this
+        # configuration variable, but vNetManager can tolerate that.
+        local bridge=$1
+        local net_uuid=$(xenstore-read "${PRIVATE}/network-uuid" 2>/dev/null)
+        if [ -n "${net_uuid}" ] ; then
+            logger -t scripts-vif "${bridge} xs-network-uuids ${net_uuid}"
+            echo "-- br-set-external-id $bridge xs-network-uuids ${net_uuid}"
+        fi
+    fi
 }
 
 add_to_bridge()
@@ -120,25 +165,11 @@ add_to_bridge()
 	    ${BRCTL} addif "${bridge}" "${dev}"                 || logger -t scripts-vif "Failed to brctl addif ${bridge} ${dev}"
 	    ;;
 	vswitch)
-	    local VLAN_ID=$($vsctl br-to-vlan $bridge)
-	    local vid=
-	    if [ "$VLAN_ID" -ne 0 ] ; then
-		bridge=$($vsctl br-to-parent $bridge)
-		vid="--add=vlan.${dev}.tag=${VLAN_ID}"
-	    fi
-
 	    if [ "$TYPE" = "vif" ] ; then
 		local vif_details=$(handle_vswitch_vif_details)
 	    fi
 
-	    $cfg_mod -F /etc/ovs-vswitchd.conf \
-		--del-match="bridge.*.port=${dev}" \
-		--del-match="vlan.${dev}.trunks=*" \
-		--del-match="vlan.${dev}.tag=*" \
-		--del-match="port.${dev}.[!0-9]*" \
-		--add="bridge.$bridge.port=${dev}" \
-		$vid $vif_details -c 
-	    $service vswitch reload
+	    $vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details $(xs550_set_internal_network_uuid $bridge)
 	    ;;
     esac
 	    
@@ -152,12 +183,10 @@ remove_from_bridge()
 	    # Nothing to do
 	    ;;
 	vswitch)
-	    $cfg_mod -vANY:console:emer -F /etc/ovs-vswitchd.conf \
-		--del-match="bridge.*.port=${dev}" \
-		--del-match="vlan.${dev}.trunks=*" \
-		--del-match="vlan.${dev}.tag=*" \
-		--del-match="port.${dev}.[!0-9]*" -c
-	    $service vswitch reload
+            # If ovs-brcompatd is running, it might already have deleted the
+            # port.  Use --if-exists to suppress the error that would otherwise
+            # arise in that case.
+	    $vsctl -- --if-exists del-port $dev
 	    ;;
     esac
 }

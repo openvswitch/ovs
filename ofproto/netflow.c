@@ -20,7 +20,6 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include "cfg.h"
 #include "collectors.h"
 #include "flow.h"
 #include "netflow.h"
@@ -37,8 +36,6 @@
 #include "vlog.h"
 
 #define NETFLOW_V5_VERSION 5
-
-static const int ACTIVE_TIMEOUT_DEFAULT = 600;
 
 /* Every NetFlow v5 message contains the header that follows.  This is
  * followed by up to thirty records that describe a terminating flow.
@@ -211,10 +208,10 @@ netflow_set_options(struct netflow *nf,
     collectors_create(&nf_options->collectors, 0, &nf->collectors);
 
     old_timeout = nf->active_timeout;
-    if (nf_options->active_timeout != -1) {
+    if (nf_options->active_timeout >= 0) {
         nf->active_timeout = nf_options->active_timeout;
     } else {
-        nf->active_timeout = ACTIVE_TIMEOUT_DEFAULT;
+        nf->active_timeout = NF_ACTIVE_TIMEOUT_DEFAULT;
     }
     nf->active_timeout *= 1000;
     if (old_timeout != nf->active_timeout) {

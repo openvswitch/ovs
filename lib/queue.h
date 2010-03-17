@@ -17,6 +17,8 @@
 #ifndef QUEUE_H
 #define QUEUE_H 1
 
+#include <stdbool.h>
+
 /* Packet queue. */
 struct ovs_queue {
     int n;                      /* Number of queued packets. */
@@ -30,5 +32,10 @@ void queue_clear(struct ovs_queue *);
 void queue_advance_head(struct ovs_queue *, struct ofpbuf *next);
 void queue_push_tail(struct ovs_queue *, struct ofpbuf *);
 struct ofpbuf *queue_pop_head(struct ovs_queue *);
+
+static inline bool queue_is_empty(const struct ovs_queue *q)
+{
+    return q->n == 0;
+}
 
 #endif /* queue.h */

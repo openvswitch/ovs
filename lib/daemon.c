@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,14 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
+#include "command-line.h"
 #include "fatal-signal.h"
 #include "dirs.h"
+#include "lockfile.h"
+#include "process.h"
+#include "socket-util.h"
 #include "timeval.h"
 #include "util.h"
 
@@ -38,8 +43,15 @@ static char *pidfile;
 /* Create pidfile even if one already exists and is locked? */
 static bool overwrite_pidfile;
 
-/* Should we chdir to "/". */
+/* Should we chdir to "/"? */
 static bool chdir_ = true;
+
+/* File descriptor used by daemonize_start() and daemonize_complete(). */
+static int daemonize_fd = -1;
+
+/* --monitor: Should a supervisory process monitor the daemon and restart it if
+ * it dies due to an error signal? */
+static bool monitor;
 
 /* Returns the file name that would be used for a pidfile if 'name' were
  * provided to set_pidfile().  The caller must free the returned string. */
@@ -80,6 +92,13 @@ set_no_chdir(void)
     chdir_ = false;
 }
 
+/* Will we chdir to "/" as part of daemonizing? */
+bool
+is_chdir_enabled(void)
+{
+    return chdir_;
+}
+
 /* Normally, die_if_already_running() will terminate the program with a message
  * if a locked pidfile already exists.  If this function is called,
  * die_if_already_running() will merely log a warning. */
@@ -95,6 +114,21 @@ void
 set_detach(void)
 {
     detach = true;
+}
+
+/* Will daemonize() really detach? */
+bool
+get_detach(void)
+{
+    return detach;
+}
+
+/* Sets up a following call to daemonize() to fork a supervisory process to
+ * monitor the daemon and restart it if it dies due to an error signal.  */
+void
+daemon_set_monitor(void)
+{
+    monitor = true;
 }
 
 /* If a pidfile has been configured and that pidfile already exists and is
@@ -196,43 +230,209 @@ make_pidfile(void)
 void
 daemonize(void)
 {
-    if (detach) {
-        char c = 0;
-        int fds[2];
-        if (pipe(fds) < 0) {
-            ovs_fatal(errno, "pipe failed");
-        }
+    daemonize_start();
+    daemonize_complete();
+}
 
-        switch (fork()) {
-        default:
-            /* Parent process: wait for child to create pidfile, then exit. */
-            close(fds[1]);
-            fatal_signal_fork();
-            if (read(fds[0], &c, 1) != 1) {
-                ovs_fatal(errno, "daemon child failed to signal startup");
+static pid_t
+fork_and_wait_for_startup(int *fdp)
+{
+    int fds[2];
+    pid_t pid;
+
+    if (pipe(fds) < 0) {
+        ovs_fatal(errno, "pipe failed");
+    }
+
+    pid = fork();
+    if (pid > 0) {
+        /* Running in parent process. */
+        char c;
+
+        close(fds[1]);
+        fatal_signal_fork();
+        if (read(fds[0], &c, 1) != 1) {
+            int retval;
+            int status;
+
+            do {
+                retval = waitpid(pid, &status, 0);
+            } while (retval == -1 && errno == EINTR);
+
+            if (retval == pid
+                && WIFEXITED(status)
+                && WEXITSTATUS(status)) {
+                /* Child exited with an error.  Convey the same error to
+                 * our parent process as a courtesy. */
+                exit(WEXITSTATUS(status));
             }
-            exit(0);
 
-        case 0:
-            /* Child process. */
-            close(fds[0]);
-            make_pidfile();
-            write(fds[1], &c, 1);
-            close(fds[1]);
-            setsid();
-            if (chdir_) {
-                chdir("/");
-            }
-            time_postfork();
-            break;
-
-        case -1:
-            /* Error. */
-            ovs_fatal(errno, "could not fork");
-            break;
+            ovs_fatal(errno, "fork child failed to signal startup");
         }
+        close(fds[0]);
+        *fdp = -1;
+    } else if (!pid) {
+        /* Running in child process. */
+        close(fds[0]);
+        time_postfork();
+        lockfile_postfork();
+        *fdp = fds[1];
     } else {
-        make_pidfile();
+        ovs_fatal(errno, "could not fork");
+    }
+
+    return pid;
+}
+
+static void
+fork_notify_startup(int fd)
+{
+    if (fd != -1) {
+        size_t bytes_written;
+        int error;
+
+        error = write_fully(fd, "", 1, &bytes_written);
+        if (error) {
+            ovs_fatal(error, "could not write to pipe");
+        }
+
+        close(fd);
+    }
+}
+
+static bool
+should_restart(int status)
+{
+    if (WIFSIGNALED(status)) {
+        static const int error_signals[] = {
+            SIGABRT, SIGALRM, SIGBUS, SIGFPE, SIGILL, SIGPIPE, SIGSEGV,
+            SIGXCPU, SIGXFSZ
+        };
+
+        size_t i;
+
+        for (i = 0; i < ARRAY_SIZE(error_signals); i++) {
+            if (error_signals[i] == WTERMSIG(status)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void
+monitor_daemon(pid_t daemon_pid)
+{
+    /* XXX Should limit the rate at which we restart the daemon. */
+    /* XXX Should log daemon's stderr output at startup time. */
+    const char *saved_program_name;
+    char *status_msg;
+
+    saved_program_name = program_name;
+    program_name = xasprintf("monitor(%s)", program_name);
+    status_msg = xstrdup("healthy");
+    for (;;) {
+        int retval;
+        int status;
+
+        proctitle_set("%s: monitoring pid %lu (%s)",
+                      saved_program_name, (unsigned long int) daemon_pid,
+                      status_msg);
+
+        do {
+            retval = waitpid(daemon_pid, &status, 0);
+        } while (retval == -1 && errno == EINTR);
+
+        if (retval == -1) {
+            ovs_fatal(errno, "waitpid failed");
+        } else if (retval == daemon_pid) {
+            char *s = process_status_msg(status);
+            free(status_msg);
+            status_msg = xasprintf("pid %lu died, %s",
+                                   (unsigned long int) daemon_pid, s);
+            free(s);
+
+            if (should_restart(status)) {
+                VLOG_ERR("%s, restarting", status_msg);
+                daemon_pid = fork_and_wait_for_startup(&daemonize_fd);
+                if (!daemon_pid) {
+                    break;
+                }
+            } else {
+                VLOG_INFO("%s, exiting", status_msg);
+                exit(0);
+            }
+        }
+    }
+    free(status_msg);
+
+    /* Running in new daemon process. */
+    proctitle_restore();
+    free((char *) program_name);
+    program_name = saved_program_name;
+}
+
+/* Close stdin, stdout, stderr.  If we're started from e.g. an SSH session,
+ * then this keeps us from holding that session open artificially. */
+static void
+close_standard_fds(void)
+{
+    int null_fd = get_null_fd();
+    if (null_fd >= 0) {
+        dup2(null_fd, STDIN_FILENO);
+        dup2(null_fd, STDOUT_FILENO);
+        dup2(null_fd, STDERR_FILENO);
+    }
+}
+
+/* If daemonization is configured, then starts daemonization, by forking and
+ * returning in the child process.  The parent process hangs around until the
+ * child lets it know either that it completed startup successfully (by calling
+ * daemon_complete()) or that it failed to start up (by exiting with a nonzero
+ * exit code). */
+void
+daemonize_start(void)
+{
+    daemonize_fd = -1;
+
+    if (detach) {
+        if (fork_and_wait_for_startup(&daemonize_fd) > 0) {
+            /* Running in parent process. */
+            exit(0);
+        }
+        /* Running in daemon or monitor process. */
+    }
+
+    if (monitor) {
+        int saved_daemonize_fd = daemonize_fd;
+        pid_t daemon_pid;
+
+        daemon_pid = fork_and_wait_for_startup(&daemonize_fd);
+        if (daemon_pid > 0) {
+            /* Running in monitor process. */
+            fork_notify_startup(saved_daemonize_fd);
+            close_standard_fds();
+            monitor_daemon(daemon_pid);
+        }
+        /* Running in daemon process. */
+    }
+
+    make_pidfile();
+}
+
+/* If daemonization is configured, then this function notifies the parent
+ * process that the child process has completed startup successfully. */
+void
+daemonize_complete(void)
+{
+    fork_notify_startup(daemonize_fd);
+
+    if (detach) {
+        setsid();
+        if (chdir_) {
+            ignore(chdir("/"));
+        }
+        close_standard_fds();
     }
 }
 

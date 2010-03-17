@@ -4,6 +4,12 @@
 .  ns
 .  IP "\\$1"
 ..
+.de ST
+.  PP
+.  RS -0.15in
+.  I "\\$1"
+.  RE
+..
 .TH ovs\-vsctl 8 "November 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-vsctl
 .
@@ -11,24 +17,37 @@
 ovs\-vsctl \- utility for querying and configuring \fBovs\-vswitchd\fR
 .
 .SH SYNOPSIS
-\fBovs\-vsctl\fR [\fIoptions\fR] \fIcommand \fR[\fIargs\fR\&...]
-[\fB\-\-\fR \fIcommand \fR[\fIargs\fR\&...]]
+\fBovs\-vsctl\fR [\fIoptions\fR] \fB\-\-\fR [\fIoptions\fR] \fIcommand
+\fR[\fIargs\fR] [\fB\-\-\fR [\fIoptions\fR] \fIcommand \fR[\fIargs\fR]]...
 .
 .SH DESCRIPTION
-The \fBovs\-vsctl\fR program configures \fBovs\-vswitchd\fR(8), mainly
-by providing a high\-level interface to editing its configuration file
-\fBovs\-vswitchd.conf\fR(5).  This program is mainly intended for use
-when \fBovs\-vswitchd\fR is running, but it can also be used when
-\fBovs\-vswitchd\fR is not running.  In the latter case configuration
-changes will only take effect when \fBovs\-vswitchd\fR is started.
+The \fBovs\-vsctl\fR program configures \fBovs\-vswitchd\fR(8) by
+providing a high\-level interface to its configuration
+database.  This program is mainly intended for use when
+\fBovs\-vswitchd\fR is running.  If it is used when
+\fBovs\-vswitchd\fR is not running, then \fB\-\-no\-wait\fR should be
+specified and configuration changes will only take effect when
+\fBovs\-vswitchd\fR is started.
 .PP
-By default, each time \fBovs\-vsctl\fR runs, it examines and,
-depending on the requested command or commands, possibly applies
-changes to an
-\fBovs\-vswitchd.conf\fR file.  Then, if it applied any changes and if
-\fBovs\-vswitchd\fR is running, it tells \fBovs\-vswitchd\fR to reload
-the modified configuration file and waits for the reload to complete
-before exiting.
+By default, each time \fBovs\-vsctl\fR runs, it connects to an
+\fBovsdb\-server\fR process that maintains an Open vSwitch
+configuration database.  Using this connection, it queries and
+possibly applies changes to the database, depending on the supplied
+commands.  Then, if it applied any changes, it waits until
+\fBovs\-vswitchd\fR has finished reconfiguring itself before it exits.
+.PP
+\fBovs\-vsctl\fR can perform any number of commands in a single run,
+implemented as a single atomic transaction against the database.
+.PP
+The \fBovs\-vsctl\fR command line begins with global options (see
+\fBOPTIONS\fR below for details).  The global options are followed by
+one or more commands.  Each command should begin with \fB\-\-\fR by
+itself as a command-line argument, to separate it from the global
+options and following commands.  (If the first command does not have
+any options, then the first \fB\-\-\fR may be omitted.)  The command
+itself starts with command-specific options, if any, followed by the
+command name and any arguments.  See \fBEXAMPLES\fR below for syntax
+examples.
 .
 .SS "Linux VLAN Bridging Compatibility"
 The \fBovs\-vsctl\fR program supports the model of a bridge
@@ -51,49 +70,38 @@ they are members.
 .
 .SH OPTIONS
 .
-The following options affect the general outline of \fBovs\-vsctl\fR's
-activities:
+The following options affect the behavior \fBovs\-vsctl\fR as a whole.
+Some individual commands also accept their own options, which are
+given just before the command name.  If the first command on the
+command line has options, then those options must be separated from
+the global options by \fB\-\-\fR.
 .
-.IP "\fB\-c \fIfile\fR"
-.IQ "\fB\-\-config=\fIfile\fR"
-Sets the configuration file that \fBovs\-vsctl\fR reads and possibly
-modifies.  The default is \fB@localstatedir@/ovs\-vswitchd.conf\fR.
-.IP
-If \fIfile\fR is specified as \fB\-\fR, then \fBovs\-vsctl\fR reads
-the configuration file from standard input and, for commands that
-modify the configuration, writes the new one to standard output.  This
-is useful for testing but it should not be used in production because
-it bypasses the Open vSwitch configuration file locking protocol.
+.IP "\fB\-\-db=\fIserver\fR"
+Sets \fIserver\fR as the database server that \fBovs\-vsctl\fR
+contacts to query or modify configuration.  The default is
+\fBunix:@RUNDIR@/ovsdb\-server\fR.  \fIserver\fR must take one of the
+following forms:
+.RS
+.so ovsdb/remote-active.man
+.RE
 .
-.IP "\fB\-t \fItarget\fR"
-.IQ "\fB\-\-target=\fItarget\fR"
-Configures how \fBovs\-vsctl\fR contacts \fBovs\-vswitchd\fR to
-instruct it to reload its configuration file.
+.IP "\fB\-\-no\-wait\fR"
+Prevents \fBovs\-vsctl\fR from waiting for \fBovs\-vswitchd\fR to
+reconfigure itself according to the the modified database.  This
+option should be used if \fBovs\-vswitchd\fR is not running;
+otherwise, \fBovs-vsctl\fR will not exit until \fBovs-vswitchd\fR
+starts.
 .IP
-If \fItarget\fR begins with \fB/\fR it must name a Unix domain socket
-on which \fBovs\-vswitchd\fR is listening for control channel
-connections.  By default, \fBovs\-vswitchd\fR listens on a Unix domain
-socket named \fB@RUNDIR@/ovs\-vswitchd.\fIpid\fB.ctl\fR, where
-\fIpid\fR is \fBovs\-vswitchd\fR's process ID.
-.IP
-Otherwise, \fBovs\-appctl\fR looks for a pidfile, that is, a file
-whose contents are the process ID of a running process as a decimal
-number, named \fB@RUNDIR@/\fItarget\fB.pid\fR.  (The \fB\-\-pidfile\fR
-option makes an Open vSwitch daemon create a pidfile.)
-\fBovs\-appctl\fR reads the pidfile, then looks for a Unix socket
-named \fB@RUNDIR@/\fItarget\fB.\fIpid\fB.ctl\fR, where \fIpid\fR is
-replaced by the process ID read from \fItarget\fR, and uses that file
-as if it had been specified directly as the target.
-.IP
-The default target is \fBovs\-vswitchd\fR.
-.IP "\fB\-\-no\-reload\fR"
-Prevents \fBovs\-vsctl\fR from telling \fBovs\-vswitchd\fR to reload
-its configuration file.
+This option has no effect if the commands specified do not change the
+database.
 .
 .IP "\fB\-\-no\-syslog\fR"
 By default, \fBovs\-vsctl\fR logs its arguments and the details of any
 changes that it makes to the system log.  This option disables this
 logging.
+.IP
+This option is equivalent to \fB\-\-verbose=vvsctl:syslog:warn\fR.
+.
 .IP "\fB\-\-oneline\fR"
 Modifies the output format so that the output for each command is printed
 on a single line.  New-line characters that would otherwise separate
@@ -101,28 +109,65 @@ lines are printed as \fB\\n\fR, and any instances of \fB\\\fR that
 would otherwise appear in the output are doubled.
 Prints a blank line for each command that has no output.
 .
+.IP "\fB\-\-dry\-run\fR"
+Prevents \fBovs\-vsctl\fR from actually modifying the database.
+.
+.IP "\fB-t \fIsecs\fR"
+.IQ "\fB--timeout=\fIsecs\fR"
+Limits runtime to approximately \fIsecs\fR seconds.  A value of 
+zero will cause \fBovs\-vsctl\fR to wait forever.  If the timeout expires, 
+\fBovs\-vsctl\fR will exit with a \fBSIGALRM\fR signal.  If this option is
+not used, \fBovs\-vsctl\fR uses a timeout of five seconds.
+(A timeout would normally happen only if the database cannot be contacted.)
+.
+.so lib/ssl.man
+.so lib/vlog.man
+.
 .SH COMMANDS
 The commands implemented by \fBovs\-vsctl\fR are described in the
 sections below.
+.SS "Open vSwitch Commands"
+These commands work with an Open vSwitch as a whole.
+.
+.IP "\fBinit\fR"
+Initializes the Open vSwitch database, if it is empty.  If the
+database has already been initialized, this command has no effect.
+.IP
+Any successful \fBovs\-vsctl\fR command automatically initializes the
+Open vSwitch database if it is empty.  This command is provided to
+initialize the database without executing any other command.
 .
 .SS "Bridge Commands"
 These commands examine and manipulate Open vSwitch bridges.
 .
-.IP "\fBadd\-br \fIbridge\fR"
+.IP "[\fB\-\-may\-exist\fR] \fBadd\-br \fIbridge\fR"
 Creates a new bridge named \fIbridge\fR.  Initially the bridge will
 have no ports (other than \fIbridge\fR itself).
+.IP
+Without \fB\-\-may\-exist\fR, attempting to create a bridge that
+exists is an error.  With \fB\-\-may\-exist\fR, \fIbridge\fR may
+already exist (but it must be a real bridge, not a VLAN bridge).
 .
-.IP "\fBadd\-br \fIbridge parent vlan\fR"
+.IP "[\fB\-\-may\-exist\fR] \fBadd\-br \fIbridge parent vlan\fR"
 Creates a ``fake bridge'' named \fIbridge\fR within the existing Open
 vSwitch bridge \fIparent\fR, which must already exist and must not
 itself be a fake bridge.  The new fake bridge will be on 802.1Q VLAN
 \fIvlan\fR, which must be an integer between 1 and 4095.  Initially
 \fIbridge\fR will have no ports (other than \fIbridge\fR itself).
+.IP
+Without \fB\-\-may\-exist\fR, attempting to create a bridge that
+exists is an error.  With \fB\-\-may\-exist\fR, \fIbridge\fR may
+already exist (but it must have the specified \fIvlan\fR and
+\fIparent\fR).
 .
-.IP "\fBdel\-br \fIbridge\fR"
+.IP "[\fB\-\-if\-exists\fR] \fBdel\-br \fIbridge\fR"
 Deletes \fIbridge\fR and all of its ports.  If \fIbridge\fR is a real
 bridge, this command also deletes any fake bridges that were created
 with \fIbridge\fR as parent, including all of their ports.
+.IP
+Without \fB\-\-if\-exists\fR, attempting to delete a bridge that does
+not exist is an error.  With \fB\-\-if\-exists\fR, attempting to
+delete a bridge that does not exist has no effect.
 .
 .IP "\fBlist\-br\fR"
 Lists all existing real and fake bridges on standard output, one per
@@ -141,6 +186,35 @@ decimal integer.  If \fIbridge\fR is a real bridge, prints 0.
 If \fIbridge\fR is a fake bridge, prints the name of its parent
 bridge.  If \fIbridge\fR is a real bridge, print \fIbridge\fR.
 .
+.IP "\fBbr\-set\-external\-id \fIbridge key\fR [\fIvalue\fR]"
+Sets or clears an ``external ID'' value on \fIbridge\fR.  These values
+are intended to identify entities external to Open vSwitch with which
+\fIbridge\fR is associated, e.g. the bridge's identifier in a
+virtualization management platform.  The Open vSwitch database schema
+specifies well-known \fIkey\fR values, but \fIkey\fR and \fIvalue\fR
+are otherwise arbitrary strings.
+.IP
+If \fIvalue\fR is specified, then \fIkey\fR is set to \fIvalue\fR for
+\fIbridge\fR, overwriting any previous value.  If \fIvalue\fR is
+omitted, then \fIkey\fR is removed from \fIbridge\fR's set of external
+IDs (if it was present).
+.IP
+For real bridges, the effect of this command is similar to that of a
+\fBset\fR or \fBremove\fR command in the \fBexternal\-ids\fR column of
+the \fBBridge\fR table.  For fake bridges, it actually modifies keys
+with names prefixed by \fBfake\-bridge\-\fR in the \fBPort\fR table.
+.
+.IP "\fBbr\-get\-external\-id \fIbridge\fR [\fIkey\fR]"
+Queries the external IDs on \fIbridge\fR.  If \fIkey\fR is specified,
+the output is the value for that \fIkey\fR or the empty string if
+\fIkey\fR is unset.  If \fIkey\fR is omitted, the output is
+\fIkey\fB=\fIvalue\fR, one per line, for each key-value pair.
+.IP
+For real bridges, the effect of this command is similar to that of a
+\fBget\fR command in the \fBexternal\-ids\fR column of the
+\fBBridge\fR table.  For fake bridges, it queries keys with names
+prefixed by \fBfake\-bridge\-\fR in the \fBPort\fR table.
+.
 .SS "Port Commands"
 .
 These commands examine and manipulate Open vSwitch ports.  These
@@ -150,19 +224,47 @@ commands treat a bonded port as a single entity.
 Lists all of the ports within \fIbridge\fR on standard output, one per
 line.  The local port \fIbridge\fR is not included in the list.
 .
-.IP "\fBadd\-port \fIbridge port\fR"
+.IP "[\fB\-\-may\-exist\fR] \fBadd\-port \fIbridge port\fR"
 Creates on \fIbridge\fR a new port named \fIport\fR from the network
 device of the same name.
+.IP
+Without \fB\-\-may\-exist\fR, attempting to create a port that exists
+is an error.  With \fB\-\-may\-exist\fR, \fIport\fR may already exist
+(but it must be on \fIbridge\fR and not be a bonded port).
 .
-.IP "\fBadd\-bond \fIbridge port iface\fR\&..."
+.IP "[\fB\-\-fake\-iface\fR] \fBadd\-bond \fIbridge port iface\fR\&..."
 Creates on \fIbridge\fR a new port named \fIport\fR that bonds
 together the network devices given as each \fIiface\fR.  At least two
 interfaces must be named.
+.IP
+With \fB\-\-fake\-iface\fR, a fake interface with the name \fIport\fR is
+created.  This should only be used for compatibility with legacy
+software that requires it.
+.IP
+Without \fB\-\-may\-exist\fR, attempting to create a port that exists
+is an error.  With \fB\-\-may\-exist\fR, \fIport\fR may already exist
+(but it must be on \fIbridge\fR and bond together exactly the
+specified interface).
 .
-.IP "\fBdel\-port \fR[\fIbridge\fR] \fIport\fR"
+.IP "[\fB\-\-if\-exists\fR] \fBdel\-port \fR[\fIbridge\fR] \fIport\fR"
 Deletes \fIport\fR.  If \fIbridge\fR is omitted, \fIport\fR is removed
 from whatever bridge contains it; if \fIbridge\fR is specified, it
 must be the real or fake bridge that contains \fIport\fR.
+.IP
+Without \fB\-\-if\-exists\fR, attempting to delete a port that does
+not exist is an error.  With \fB\-\-if\-exists\fR, attempting to
+delete a port that does not exist has no effect.
+.
+.IP "[\fB\-\-if\-exists\fR] \fB\-\-with\-iface del\-port \fR[\fIbridge\fR] \fIiface\fR"
+Deletes the port named \fIiface\fR or that has an interface named
+\fIiface\fR.  If \fIbridge\fR is omitted, the port is removed from
+whatever bridge contains it; if \fIbridge\fR is specified, it must be
+the real or fake bridge that contains the port.
+.IP
+Without \fB\-\-if\-exists\fR, attempting to delete the port for an
+interface that does not exist is an error.  With \fB\-\-if\-exists\fR,
+attempting to delete the port for an interface that does not exist has
+no effect.
 .
 .IP "\fBport\-to\-br \fIport\fR"
 Prints the name of the bridge that contains \fIport\fR on standard
@@ -182,6 +284,264 @@ list.
 .IP "\fBiface\-to\-br \fIiface\fR"
 Prints the name of the bridge that contains \fIiface\fR on standard
 output.
+.
+.SS "OpenFlow Controller Connectivity"
+.
+\fBovs\-vswitchd\fR can perform all configured bridging and switching
+locally, or it can be configured to connect a given bridge to an
+external OpenFlow controller, such as NOX.  
+.
+If a \fIbridge\fR argument is given, the settings apply only to the
+specified bridge.  Otherwise, they apply to the Open vSwitch instance,
+and its configuration applies to any bridge that has not been explicitly
+configured through a \fIbridge\fR argument.
+.
+.IP "\fBget\-controller\fR [\fIbridge\fR]"
+Prints the configured controller target.
+.
+.IP "\fBdel\-controller\fR [\fIbridge\fR]"
+Deletes the configured controller target.
+.
+.IP "\fBset\-controller\fR [\fIbridge\fR] \fItarget\fR"
+Sets the configured controller target.  The \fItarget\fR may use any of
+the following forms:
+.
+.RS
+.so lib/vconn-active.man
+.RE
+.
+.ST "Controller Failure Settings"
+.PP
+When a controller is configured, it is, ordinarily, responsible for
+setting up all flows on the switch.  Thus, if the connection to
+the controller fails, no new network connections can be set up.  If
+the connection to the controller stays down long enough, no packets
+can pass through the switch at all.
+.PP
+If the value is \fBstandalone\fR, or if neither of these settings
+is set, \fBovs\-vswitchd\fR will take over
+responsibility for setting up
+flows when no message has been received from the controller for three
+times the inactivity probe interval (xxx needs to be exposed).  In this mode,
+\fBovs\-vswitchd\fR causes the datapath to act like an ordinary
+MAC-learning switch.  \fBovs\-vswitchd\fR will continue to retry connecting
+to the controller in the background and, when the connection succeeds,
+it discontinues its standalone behavior.
+.PP
+If this option is set to \fBsecure\fR, \fBovs\-vswitchd\fR will not
+set up flows on its own when the controller connection fails.
+.
+.IP "\fBget\-fail\-mode\fR [\fIbridge\fR]"
+Prints the configured failure mode.
+.
+.IP "\fBdel\-fail\-mode\fR [\fIbridge\fR]"
+Deletes the configured failure mode.
+.
+.IP "\fBset\-fail\-mode\fR [\fIbridge\fR] \fBstandalone\fR|\fBsecure\fR"
+Sets the configured failure mode.
+.
+.SS "SSL Configuration"
+When \fBovs\-vswitchd\fR is configured to connect over SSL for management or
+controller connectivity, the following parameters are required:
+.TP
+\fBprivate-key\fR
+Specifies a PEM file containing the private key used as the virtual
+switch's identity for SSL connections to the controller.
+.TP
+\fBcertificate\fR
+Specifies a PEM file containing a certificate, signed by the
+certificate authority (CA) used by the controller and manager, that
+certifies the virtual switch's private key, identifying a trustworthy
+switch.
+.TP
+\fBca-cert\fR
+Specifies a PEM file containing the CA certificate used to verify that
+the virtual switch is connected to a trustworthy controller.
+.PP
+These files are read only once, at \fBovs\-vswitchd\fR startup time.  If
+their contents change, \fBovs\-vswitchd\fR must be killed and restarted.
+.PP
+These SSL settings apply to all SSL connections made by the virtual
+switch.
+.
+.IP "\fBget\-ssl\fR"
+Prints the SSL configuration.
+.
+.IP "\fBdel\-ssl\fR"
+Deletes the current SSL configuration.
+.
+.IP "[\fB\-\-bootstrap\fR] \fBset\-ssl\fR \fIprivate-key\fR \fIcertificate\fR \fIca-cert\fR"
+Sets the SSL configuration.  The \fB\-\-bootstrap\fR option is described 
+below.
+.
+.ST "CA Certificate Bootstrap"
+.PP
+Ordinarily, all of the files named in the SSL configuration must exist
+when \fBovs\-vswitchd\fR starts.  However, if the \fB\-\-bootstrap\fR 
+option is given, then \fBovs\-vswitchd\fR will attempt to obtain the
+CA certificate from the controller on its first SSL connection and
+save it to the named PEM file.  If it is successful, it will
+immediately drop the connection and reconnect, and from then on all
+SSL connections must be authenticated by a certificate signed by the
+CA certificate thus obtained.
+.PP
+\fBThis option exposes the SSL connection to a man-in-the-middle
+attack obtaining the initial CA certificate\fR, but it may be useful
+for bootstrapping.
+.PP
+This option is only useful if the controller sends its CA certificate
+as part of the SSL certificate chain.  The SSL protocol does not
+require the controller to send the CA certificate, but
+\fBcontroller\fR(8) can be configured to do so with the
+\fB--peer-ca-cert\fR option.
+.
+.SS "Database Commands"
+.
+These commands query and modify the contents of \fBovsdb\fR tables.
+They are a slight abstraction of the \fBovsdb\fR interface and as such
+they operate at a lower level than other \fBovs\-vsctl\fR commands.
+.PP
+.ST "Identifying Tables, Records, and Columns"
+.PP
+Each of these commands has a \fItable\fR parameter to identify a table
+within the database.  Many of them also take a \fIrecord\fR parameter
+that identifies a particular record within a table.  The \fIrecord\fR
+parameter may be the UUID for a record, and many tables offer
+additional ways to identify records.  Some commands also take
+\fIcolumn\fR parameters that identify a particular field within the
+records in a table.
+.PP
+The following tables are currently defined:
+.IP "\fBOpen_vSwitch\fR"
+Global configuration for an \fBovs\-vswitchd\fR.  This table contains
+exactly one record, identified by specifying \fB.\fR as the record
+name.
+.IP "\fBBridge\fR"
+Configuration for a bridge within an Open vSwitch.  Records may be
+identified by bridge name.
+.IP "\fBPort\fR"
+A bridge port.  Records may be identified by port name.
+.IP "\fBInterface\fR"
+A network device attached to a port.  Records may be identified by
+name.
+.IP "\fBController\fR"
+Configuration for an OpenFlow controller.  A controller attached to a
+particular bridge may be identified by the bridge's name.  The default
+controller controller for an Open vSwitch may be identified by
+specifying \fB.\fR as the record name.
+.IP "\fBMirror\fR"
+A port mirroring configuration attached to a bridge.  Records may be
+identified by mirror name.
+.IP "\fBNetFlow\fR"
+A NetFlow configuration attached to a bridge.  Records may be
+identified by bridge name.
+.PP
+Names of tables, records, and columns are not case-sensitive, and
+\fB--\fR and \fB_\fR are treated interchangeably.  Unique
+abbreviations are acceptable, e.g. \fBnet\fR or \fRn\fR is sufficient
+to identify the \fBNetFlow\fR table.
+.
+.ST "Database Values"
+.PP
+Each column in the database accepts a fixed type of data.  The
+currently defined basic types, and their representations, are:
+.IP "integer"
+A decimal integer in the range \-2**63 to 2**63\-1, inclusive.
+.IP "real"
+A floating-point number.
+.IP "Boolean"
+True or false, written \fBtrue\fR or \fBfalse\fR, respectively.
+.IP "string"
+An arbitrary Unicode string, except that null bytes are not allowed.
+Quotes are optional for most strings that begin with an English letter
+or underscore and consist only of letters, underscores, hyphens, and
+periods.  However, \fBtrue\fR and \fBfalse\fR and strings that match
+the syntax of UUIDs (see below) must be enclosed in double quotes to
+distinguish them from other basic types.  When double quotes are used,
+the syntax is that of strings in JSON, e.g. backslashes may be used to
+escape special characters.  The empty string must be represented as a
+pair of double quotes (\fB""\fR).
+.IP "UUID"
+A universally unique identifier in the style of RFC 4122,
+e.g. \fBf81d4fae-7dec-11d0-a765-00a0c91e6bf6\fR.
+.PP
+Multiple values in a single column may be separated by spaces or a
+single comma.  When multiple values are present, duplicates are not
+allowed, and order is not important.  Conversely, some database
+columns can have an empty set of values, represented as \fB[]\fR, and
+square brackets may optionally enclose other non-empty sets or single
+values as well.
+.PP
+A few database columns are ``maps'' of key-value pairs, where the key
+and the value are each some fixed database type.  These are specified
+in the form \fIkey\fB=\fIvalue\fR, where \fIkey\fR and \fIvalue\fR
+follow the syntax for the column's key type and value type,
+respectively.  When multiple pairs are present (separated by spaces or
+a comma), duplicate keys are not allowed, and again the order is not
+important.  Duplicate values are allowed.  An empty map is represented
+as \fB{}\fR, and curly braces may be optionally enclose non-empty maps
+as well.
+.
+.ST "Database Command Syntax"
+.IP "\fBlist \fItable \fR[\fIrecord\fR]..."
+List the values of all columns of each specified \fIrecord\fR.  If no
+records are specified, lists all the records in \fItable\fR.
+.IP
+The UUIDs shown for rows created in the same \fBovs\-vsctl\fR
+invocation will be wrong.
+.
+.IP "[\fB\-\-if\-exists\fR] \fBget \fItable record column\fR[\fB:\fIkey\fR]..."
+Prints the value of each specified \fIcolumn\fR in the given
+\fIrecord\fR in \fItable\fR.  For map columns, a \fIkey\fR may
+optionally be specified, in which case the value associated with
+\fIkey\fR in the column is printed, instead of the entire map.
+.IP
+For a map column, without \fB\-\-if\-exists\fR it is an error if
+\fIkey\fR does not exist; with it, a blank line is printed.  If
+\fIcolumn\fR is not a map column or if \fIkey\fR is not specified,
+\fB\-\-if\-exists\fR has no effect.
+.
+.IP "\fBset \fItable record column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
+Sets the value of each specified \fIcolumn\fR in the given
+\fIrecord\fR in \fItable\fR to \fIvalue\fR.  For map columns, a
+\fIkey\fR may optionally be specified, in which case the value
+associated with \fIkey\fR in that column is changed (or added, if none
+exists), instead of the entire map.
+.
+.IP "\fBadd \fItable record column \fR[\fIkey\fB=\fR]\fIvalue\fR..."
+Adds the specified value or key-value pair to \fIcolumn\fR in
+\fIrecord\fR in \fItable\fR.  If \fIcolumn\fR is a map, then \fIkey\fR
+is required, otherwise it is prohibited.  If \fIkey\fR already exists
+in a map column, then the current \fIvalue\fR is not replaced (use the
+\fBset\fR command to replace an existing value).
+.
+.IP "\fBremove \fItable record column \fR\fIvalue\fR..."
+.IQ "\fBremove \fItable record column \fR\fIkey\fR..."
+.IQ "\fBremove \fItable record column \fR\fIkey\fB=\fR\fIvalue\fR..."
+Removes the specified values or key-value pairs from \fIcolumn\fR in
+\fIrecord\fR in \fItable\fR.  The first form applies to columns that
+are not maps: each specified \fIvalue\fR is removed from the column.
+The second and third forms apply to map columns: if only a \fIkey\fR
+is specified, then any key-value pair with the given \fIkey\fR is
+removed, regardless of its value; if a \fIvalue\fR is given then a
+pair is removed only if both key and value match.
+.IP
+It is not an error if the column does not contain the specified key or
+value or pair.
+.
+.IP "\fBclear\fR \fItable record column\fR..."
+Sets each \fIcolumn\fR in \fIrecord\fR in \fItable\fR to the empty set
+or empty map, as appropriate.  This command applies only to columns
+that are allowed to be empty.
+.
+.IP "create \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
+Creates a new record in \fItable\fR and sets the initial values of
+each \fIcolumn\fR.  Columns not explicitly set will receive their
+default values.  Outputs the UUID of the new row.
+.
+.IP "\fR[\fB\-\-if\-exists\fR] \fBdestroy \fItable record\fR..."
+Deletes each specified \fIrecord\fR from \fItable\fR.  Unless
+\fB\-\-if\-exists\fR is specified, each \fIrecord\fRs must exist.
 .SH "EXAMPLES"
 Create a new bridge named br0 and add port eth0 to it:
 .IP
@@ -192,6 +552,15 @@ Create a new bridge named br0 and add port eth0 to it:
 Alternatively, perform both operations in a single atomic transaction:
 .IP 
 .B "ovs-vsctl add\-br br0 \-\- add\-port br0 eth0"
+.PP
+Delete bridge \fBbr0\fR, reporting an error if it does not exist:
+.IP
+.B "ovs\-vsctl del\-br br0"
+.PP
+Delete bridge \fBbr0\fR if it exists (the \fB\-\-\fR is required to
+separate \fBdel\-br\fR's options from the global options):
+.IP
+.B "ovs\-vsctl \-\- \-\-if\-exists del\-br br0"
 .
 .SH "EXIT STATUS"
 .IP "0"
@@ -203,5 +572,5 @@ The \fIbridge\fR argument to \fBbr\-exists\fR specified the name of a
 bridge that does not exist.
 .SH "SEE ALSO"
 .
-.BR ovs\-vswitchd.conf (5),
+.BR ovsdb\-server (1),
 .BR ovs\-vswitchd (8).

@@ -61,11 +61,13 @@ If you are working from a Git tree or snapshot (instead of from a
 distribution tarball), or if you modify the Open vSwitch build system,
 you will also need the following software:
 
-    - Autoconf version 2.63 or later.
+    - Autoconf version 2.64 or later.
 
     - Automake version 1.10 or later.
 
     - pkg-config.  We test with version 0.22.
+
+    - Python 2.x, for x >= 4.
 
 Installation Requirements
 -------------------------
@@ -153,23 +155,34 @@ Prerequisites section, follow the procedure below to build.
    To verify that the modules have been loaded, run "/sbin/lsmod" and
    check that openvswitch_mod is listed.
 
-Configuration
-=============
+7. Initialize the configuration database using ovsdb-tool, e.g.:
 
-Open vSwitch is configured primarily through a configuration file,
-whose name is specified on the ovs-vswitchd command line.  Please
-refer to ovs-vswitchd(8) and ovs-vswitchd.conf(5) for information on
-how to start ovs-vswitchd and the syntax of its configuration file,
-respectively.
+      % ovsdb-tool create /etc/ovs-vswitchd.conf.db vswitchd/vswitch.ovsschema
 
-At runtime, you may make ovs-vswitchd reload its configuration file
-and update its configuration accordingly by sending it a SIGHUP
-signal.  The ovs-appctl utility can also be used to do this:
+Startup
+=======
 
-    % ovs-appctl vswitchd/reload
+Before starting ovs-vswitchd itself, you need to start its
+configuration database, ovsdb-server.  Configure it to use the
+database you created during step 7 of installation, above, and to
+listen on a Unix domain socket, e.g.:
 
-In the latter case, ovs-appctl will wait for ovs-vswitchd to finish
-reloading before it exits.
+      % ovsdb-server /etc/ovs-vswitchd.conf.db --remote=punix:/var/run/ovsdb-server
+
+Then start the main Open vSwitch daemon, telling it to connect to the
+same Unix domain socket:
+
+      % ovs-vswitchd unix:/var/run/ovsdb-server
+
+Now you may use ovs-vsctl to set up bridges and other Open vSwitch
+features.  For example, to create a bridge named br0 and add ports
+eth0 and vif1.0 to it:
+
+      % ovs-vsctl add-br br0
+      % ovs-vsctl add-port br0 eth0
+      % ovs-vsctl add-port br0 vif1.0
+
+Please refer to ovs-vsctl(8) for more details.
 
 Bug Reporting
 -------------

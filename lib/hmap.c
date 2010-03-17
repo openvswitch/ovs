@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,11 +48,17 @@ hmap_swap(struct hmap *a, struct hmap *b)
     struct hmap tmp = *a;
     *a = *b;
     *b = tmp;
-    if (a->buckets == &b->one) {
-        a->buckets = &a->one;
-    }
-    if (b->buckets == &a->one) {
-        b->buckets = &b->one;
+    hmap_moved(a);
+    hmap_moved(b);
+}
+
+/* Adjusts 'hmap' to compensate for having moved position in memory (e.g. due
+ * to realloc()). */
+void
+hmap_moved(struct hmap *hmap)
+{
+    if (!hmap->mask) {
+        hmap->buckets = &hmap->one;
     }
 }
 
@@ -143,3 +149,17 @@ hmap_reserve(struct hmap *hmap, size_t n)
         resize(hmap, new_mask);
     }
 }
+
+/* Adjusts 'hmap' to compensate for 'old_node' having moved position in memory
+ * to 'node' (e.g. due to realloc()). */
+void
+hmap_node_moved(struct hmap *hmap,
+                struct hmap_node *old_node, struct hmap_node *node)
+{
+    struct hmap_node **bucket = &hmap->buckets[node->hash & hmap->mask];
+    while (*bucket != old_node) {
+        bucket = &(*bucket)->next;
+    }
+    *bucket = node;
+}
+

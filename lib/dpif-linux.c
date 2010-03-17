@@ -95,10 +95,10 @@ dpif_linux_enumerate(struct svec *all_dps)
         int retval;
 
         sprintf(devname, "dp%d", i);
-        retval = dpif_open(devname, &dpif);
+        retval = dpif_open(devname, "system", &dpif);
         if (!retval) {
             svec_add(all_dps, devname);
-            dpif_close(dpif);
+            dpif_uninit(dpif, true);
         } else if (retval != ENODEV && !error) {
             error = retval;
         }
@@ -107,7 +107,7 @@ dpif_linux_enumerate(struct svec *all_dps)
 }
 
 static int
-dpif_linux_open(const char *name OVS_UNUSED, char *suffix, bool create,
+dpif_linux_open(const char *name, const char *type OVS_UNUSED, bool create,
                 struct dpif **dpifp)
 {
     int minor;
@@ -116,11 +116,11 @@ dpif_linux_open(const char *name OVS_UNUSED, char *suffix, bool create,
             && isdigit((unsigned char)name[2]) ? atoi(name + 2) : -1;
     if (create) {
         if (minor >= 0) {
-            return create_minor(suffix, minor, dpifp);
+            return create_minor(name, minor, dpifp);
         } else {
             /* Scan for unused minor number. */
             for (minor = 0; minor < ODP_MAX; minor++) {
-                int error = create_minor(suffix, minor, dpifp);
+                int error = create_minor(name, minor, dpifp);
                 if (error != EBUSY) {
                     return error;
                 }
@@ -135,7 +135,7 @@ dpif_linux_open(const char *name OVS_UNUSED, char *suffix, bool create,
         int error;
 
         if (minor < 0) {
-            error = lookup_minor(suffix, &minor);
+            error = lookup_minor(name, &minor);
             if (error) {
                 return error;
             }
@@ -157,7 +157,7 @@ dpif_linux_open(const char *name OVS_UNUSED, char *suffix, bool create,
                 VLOG_WARN("%s: probe returned unexpected error: %s",
                           dpif_name(*dpifp), strerror(error));
             }
-            dpif_close(*dpifp);
+            dpif_uninit(*dpifp, true);
             return error;
         }
 
@@ -188,7 +188,7 @@ dpif_linux_get_all_names(const struct dpif *dpif_, struct svec *all_names)
 }
 
 static int
-dpif_linux_delete(struct dpif *dpif_)
+dpif_linux_destroy(struct dpif *dpif_)
 {
     return do_ioctl(dpif_, ODP_DP_DESTROY, NULL);
 }
@@ -460,15 +460,14 @@ dpif_linux_recv_wait(struct dpif *dpif_)
 }
 
 const struct dpif_class dpif_linux_class = {
-    "",                         /* This is the default class. */
-    "linux",
+    "system",
     NULL,
     NULL,
     dpif_linux_enumerate,
     dpif_linux_open,
     dpif_linux_close,
     dpif_linux_get_all_names,
-    dpif_linux_delete,
+    dpif_linux_destroy,
     dpif_linux_get_stats,
     dpif_linux_get_drop_frags,
     dpif_linux_set_drop_frags,
@@ -686,11 +685,11 @@ static int
 finish_open(struct dpif *dpif_, const char *local_ifname)
 {
     struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    dpif->local_ifname = strdup(local_ifname);
+    dpif->local_ifname = xstrdup(local_ifname);
     dpif->local_ifindex = if_nametoindex(local_ifname);
     if (!dpif->local_ifindex) {
         int error = errno;
-        dpif_close(dpif_);
+        dpif_uninit(dpif_, true);
         VLOG_WARN("could not get ifindex of %s device: %s",
                   local_ifname, strerror(errno));
         return error;
@@ -707,7 +706,7 @@ create_minor(const char *name, int minor, struct dpif **dpifp)
         if (!error) {
             error = finish_open(*dpifp, name);
         } else {
-            dpif_close(*dpifp);
+            dpif_uninit(*dpifp, true);
         }
     }
     return error;

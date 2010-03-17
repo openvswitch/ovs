@@ -19,6 +19,7 @@ Name: vswitch
 Summary: Virtual switch
 Group: System Environment/Daemons
 URL: http://www.openvswitch.org/
+Vendor: Nicira Networks, Inc.
 Version: %{vswitch_version}
 
 # The entire source code is ASL 2.0 except datapath/ which is GPLv2
@@ -67,18 +68,18 @@ install -d -m 755 $RPM_BUILD_ROOT/etc/xapi.d/plugins
 install -m 755 xenserver/etc_xapi.d_plugins_vswitch-cfg-update \
          $RPM_BUILD_ROOT/etc/xapi.d/plugins/vswitch-cfg-update
 install -d -m 755 $RPM_BUILD_ROOT/usr/share/vswitch/scripts
+install -m 644 vswitchd/vswitch.ovsschema \
+         $RPM_BUILD_ROOT/usr/share/vswitch/vswitch.ovsschema
 install -m 755 xenserver/opt_xensource_libexec_interface-reconfigure \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/interface-reconfigure
-install -m 755 xenserver/opt_xensource_libexec_InterfaceReconfigure.py \
+install -m 644 xenserver/opt_xensource_libexec_InterfaceReconfigure.py \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/InterfaceReconfigure.py
-install -m 755 xenserver/opt_xensource_libexec_InterfaceReconfigureBridge.py \
+install -m 644 xenserver/opt_xensource_libexec_InterfaceReconfigureBridge.py \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/InterfaceReconfigureBridge.py
-install -m 755 xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
+install -m 644 xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/InterfaceReconfigureVswitch.py
 install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/vif
-install -m 755 xenserver/usr_share_vswitch_scripts_dump-vif-details \
-               $RPM_BUILD_ROOT/usr/share/vswitch/scripts/dump-vif-details
 install -m 755 xenserver/usr_share_vswitch_scripts_refresh-xs-network-uuids \
                $RPM_BUILD_ROOT/usr/share/vswitch/scripts/refresh-xs-network-uuids
 install -m 755 xenserver/usr_sbin_xen-bugtool \
@@ -109,8 +110,6 @@ rm \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-openflowd.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-pki.8
 rm -f $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/net/vswitch/veth_mod.ko
-rm -r \
-    $RPM_BUILD_ROOT/usr/share/openvswitch/commands
 
 install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
 
@@ -132,6 +131,15 @@ b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
 EOF
     then
         printf "\nVerified host scripts from XenServer 5.5.0.\n\n"
+    elif md5sum -c --status <<EOF
+ca141d60061dcfdade73e75abc6529b5  /usr/sbin/brctl
+b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
+51970ad613a3996d5997e18e44db47da  /opt/xensource/libexec/interface-reconfigure
+f6519085c2fc5f7bc4eccc294ed62000  /usr/sbin/xen-bugtool
+EOF
+    then
+        printf "\nVerified host scripts from XenServer 5.5.0-24648p (Update 1)\n"
+        printf "or 5.5.0-25727p (Update 2).\n\n"
     elif md5sum -c --status <<EOF
 ca141d60061dcfdade73e75abc6529b5  /usr/sbin/brctl
 b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
@@ -192,8 +200,16 @@ net.ipv4.conf.all.arp_filter = 1
 EOF
 fi
 
-# Ensure ovs-vswitchd.conf exists
-touch /etc/ovs-vswitchd.conf
+if test ! -e /etc/ovs-vswitchd.conf.db; then
+    # Create ovs-vswitchd config database
+    ovsdb-tool -vANY:console:emer create /etc/ovs-vswitchd.conf.db \
+            /usr/share/vswitch/vswitch.ovsschema \
+
+    # Create initial table in config database
+    ovsdb-tool -vANY:console:emer transact /etc/ovs-vswitchd.conf.db \
+            '[{"op": "insert", "table": "Open_vSwitch", "row": {}}]' \
+            > /dev/null
+fi
 
 # Create default or update existing /etc/sysconfig/vswitch.
 SYSCONFIG=/etc/sysconfig/vswitch
@@ -296,7 +312,7 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     done
 
     # Remove all configuration files
-    rm -f /etc/ovs-vswitchd.conf
+    rm -f /etc/ovs-vswitchd.conf.db
     rm -f /etc/sysconfig/vswitch
     rm -f /etc/ovs-vswitchd.cacert
     rm -f /var/xapi/network.dbcache
@@ -320,7 +336,9 @@ fi
 /etc/profile.d/vswitch.sh
 /lib/modules/%{xen_version}/kernel/net/vswitch/openvswitch_mod.ko
 /lib/modules/%{xen_version}/kernel/net/vswitch/brcompat_mod.ko
-/usr/share/vswitch/scripts/dump-vif-details
+%if %(echo '%{xen_version}'|awk -F"." '{if ($3>=18) print 1; else print 0;}')
+/lib/modules/%{xen_version}/kernel/net/vswitch/ip_gre_mod.ko
+%endif
 /usr/share/vswitch/scripts/refresh-xs-network-uuids
 /usr/share/vswitch/scripts/interface-reconfigure
 /usr/share/vswitch/scripts/InterfaceReconfigure.py
@@ -331,17 +349,22 @@ fi
 /usr/share/vswitch/scripts/XSFeatureVSwitch.py
 /usr/share/vswitch/scripts/brctl
 /usr/share/vswitch/scripts/sysconfig.template
+/usr/share/vswitch/vswitch.ovsschema
 /usr/sbin/ovs-brcompatd
 /usr/sbin/ovs-vswitchd
+/usr/sbin/ovsdb-server
 /usr/bin/ovs-appctl
-/usr/bin/ovs-cfg-mod
 /usr/bin/ovs-dpctl
 /usr/bin/ovs-ofctl
 /usr/bin/ovs-vsctl
-/usr/share/man/man5/ovs-vswitchd.conf.5.gz
+/usr/bin/ovsdb-client
+/usr/bin/ovsdb-tool
+/usr/share/man/man1/ovsdb-client.1.gz
+/usr/share/man/man1/ovsdb-server.1.gz
+/usr/share/man/man1/ovsdb-tool.1.gz
+/usr/share/man/man5/ovs-vswitchd.conf.db.5.gz
 /usr/share/man/man8/ovs-appctl.8.gz
 /usr/share/man/man8/ovs-brcompatd.8.gz
-/usr/share/man/man8/ovs-cfg-mod.8.gz
 /usr/share/man/man8/ovs-dpctl.8.gz
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-vsctl.8.gz

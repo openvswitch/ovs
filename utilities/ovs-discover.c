@@ -75,6 +75,7 @@ main(int argc, char *argv[])
     int retval;
     int i;
 
+    proctitle_init(argc, argv);
     set_program_name(argv[0]);
     time_init();
     vlog_init();
@@ -102,7 +103,7 @@ main(int argc, char *argv[])
         struct iface *iface = &ifaces[i];
         dhclient_init(iface->dhcp, 0);
     }
-    fatal_signal_add_hook(release_ifaces, NULL, true);
+    fatal_signal_add_hook(release_ifaces, NULL, NULL, true);
 
     retval = regcomp(&accept_controller_regex, accept_controller_re,
                      REG_NOSUB | REG_EXTENDED);
@@ -115,14 +116,13 @@ main(int argc, char *argv[])
 
     retval = unixctl_server_create(NULL, &unixctl);
     if (retval) {
-        ovs_fatal(retval, "Could not listen for unixctl connections");
+        exit(EXIT_FAILURE);
     }
 
     die_if_already_running();
 
     signal(SIGPIPE, SIG_IGN);
     for (;;) {
-        fatal_signal_block();
         for (i = 0; i < n_ifaces; i++) {
             struct iface *iface = &ifaces[i];
             dhclient_run(iface->dhcp);
@@ -195,7 +195,6 @@ main(int argc, char *argv[])
             dhclient_wait(iface->dhcp);
         }
         unixctl_server_wait(unixctl);
-        fatal_signal_unblock();
         poll_block();
     }
 
@@ -215,7 +214,7 @@ iface_init(struct iface *iface, const char *netdev_name)
          * persists past program termination. */
         struct netdev *netdev;
 
-        retval = netdev_open(iface->name, NETDEV_ETH_TYPE_NONE, &netdev);
+        retval = netdev_open_default(iface->name, &netdev);
         if (retval) {
             ovs_error(retval, "Could not open %s device", iface->name);
             return false;

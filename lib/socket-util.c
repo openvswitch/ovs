@@ -249,6 +249,7 @@ make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
         make_sockaddr_un(connect_path, &un, &un_len);
         if (connect(fd, (struct sockaddr*) &un, un_len)
             && errno != EINPROGRESS) {
+            printf("connect failed with %s\n", strerror(errno));
             goto error;
         }
     }
@@ -265,10 +266,10 @@ make_unix_socket(int style, bool nonblock, bool passcred OVS_UNUSED,
     return fd;
 
 error:
+    error = errno == EAGAIN ? EPROTO : errno;
     if (bind_path) {
         fatal_signal_remove_file_to_unlink(bind_path);
     }
-    error = errno;
     close(fd);
     return -error;
 }
@@ -384,25 +385,35 @@ exit:
 
 /* Opens a non-blocking IPv4 socket of the specified 'style', binds to
  * 'target', and listens for incoming connections.  'target' should be a string
- * in the format "[<port>][:<ip>]".  <port> may be omitted if 'default_port' is
- * nonzero, in which case it defaults to 'default_port'.  If <ip> is omitted it
- * defaults to the wildcard IP address.
+ * in the format "[<port>][:<ip>]":
+ *
+ *      - If 'default_port' is -1, then <port> is required.  Otherwise, if
+ *        <port> is omitted, then 'default_port' is used instead.
+ *
+ *      - If <port> (or 'default_port', if used) is 0, then no port is bound
+ *        and the TCP/IP stack will select a port.
+ *
+ *      - If <ip> is omitted then the IP address is wildcarded.
  *
  * 'style' should be SOCK_STREAM (for TCP) or SOCK_DGRAM (for UDP).
  *
  * For TCP, the socket will have SO_REUSEADDR turned on.
  *
  * On success, returns a non-negative file descriptor.  On failure, returns a
- * negative errno value. */
+ * negative errno value.
+ *
+ * If 'sinp' is non-null, then on success the bound address is stored into
+ * '*sinp'. */
 int
-inet_open_passive(int style, const char *target_, uint16_t default_port)
+inet_open_passive(int style, const char *target_, int default_port,
+                  struct sockaddr_in *sinp)
 {
     char *target = xstrdup(target_);
     char *string_ptr = target;
     struct sockaddr_in sin;
     const char *host_name;
     const char *port_string;
-    int fd, error;
+    int fd, error, port;
     unsigned int yes  = 1;
 
     /* Address defaults. */
@@ -413,9 +424,9 @@ inet_open_passive(int style, const char *target_, uint16_t default_port)
 
     /* Parse optional port number. */
     port_string = strsep(&string_ptr, ":");
-    if (port_string && atoi(port_string)) {
-        sin.sin_port = htons(atoi(port_string));
-    } else if (!default_port) {
+    if (port_string && str_to_int(port_string, 10, &port)) {
+        sin.sin_port = htons(port);
+    } else if (default_port < 0) {
         VLOG_ERR("%s: port number must be specified", target_);
         error = EAFNOSUPPORT;
         goto exit;
@@ -461,6 +472,21 @@ inet_open_passive(int style, const char *target_, uint16_t default_port)
         VLOG_ERR("%s: listen: %s", target_, strerror(error));
         goto exit_close;
     }
+
+    if (sinp) {
+        socklen_t sin_len = sizeof sin;
+        if (getsockname(fd, (struct sockaddr *) &sin, &sin_len) < 0){
+            error = errno;
+            VLOG_ERR("%s: getsockname: %s", target_, strerror(error));
+            goto exit_close;
+        }
+        if (sin.sin_family != AF_INET || sin_len != sizeof sin) {
+            VLOG_ERR("%s: getsockname: invalid socket name", target_);
+            goto exit_close;
+        }
+        *sinp = sin;
+    }
+
     error = 0;
     goto exit;
 
@@ -530,4 +556,35 @@ write_fully(int fd, const void *p_, size_t size, size_t *bytes_written)
         }
     }
     return 0;
+}
+
+/* Given file name 'file_name', fsyncs the directory in which it is contained.
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+fsync_parent_dir(const char *file_name)
+{
+    int error = 0;
+    char *dir;
+    int fd;
+
+    dir = dir_name(file_name);
+    fd = open(dir, O_RDONLY);
+    if (fd >= 0) {
+        if (fsync(fd)) {
+            if (errno == EINVAL || errno == EROFS) {
+                /* This directory does not support synchronization.  Not
+                 * really an error. */
+            } else {
+                error = errno;
+                VLOG_ERR("%s: fsync failed (%s)", dir, strerror(error));
+            }
+        }
+        close(fd);
+    } else {
+        error = errno;
+        VLOG_ERR("%s: open failed (%s)", dir, strerror(error));
+    }
+    free(dir);
+
+    return error;
 }

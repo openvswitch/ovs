@@ -56,7 +56,7 @@ DODTIME=10              # Time to wait for the daemon to die, in seconds
                         
 # Include defaults if available
 if [ -f /etc/default/$NAME ] ; then
-	. /etc/default/$NAME
+    . /etc/default/$NAME
 fi
 
 set -e
@@ -107,7 +107,7 @@ stop_daemon() {
 
 case "$1" in
   start)
-	log_daemon_msg "Starting $DESC " "$NAME"
+        log_daemon_msg "Starting $DESC " "$NAME"
         # Check if it's running first
         if running ;  then
             log_progress_msg "apparently already running"
@@ -125,7 +125,7 @@ case "$1" in
             # a false positive (use 'status' for that)
             log_end_msg 1
         fi
-	;;
+        ;;
   stop)
         log_daemon_msg "Stopping $DESC" "$NAME"
         if running ; then
@@ -149,7 +149,7 @@ case "$1" in
         start_daemon
         running
         log_end_msg $?
-	;;
+        ;;
   status)
         log_daemon_msg "Checking status of $DESC" "$NAME"
         if running ;  then
@@ -167,10 +167,10 @@ case "$1" in
         log_warning_msg "cannot re-read the config file (use restart)."
         ;;
   *)
-	N=/etc/init.d/$NAME
-	echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
-	exit 1
-	;;
+        N=/etc/init.d/$NAME
+        echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
+        exit 1
+        ;;
 esac
 
 exit 0

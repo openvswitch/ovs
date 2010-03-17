@@ -1,0 +1,1111 @@
+AT_BANNER([reconnect library])
+
+######################################################################
+AT_SETUP([nothing happens if not enabled])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [run
+timeout
+])
+AT_CHECK([test-reconnect < input], [0], 
+  [### t=1000 ###
+run
+timeout
+  no timeout
+])
+AT_CLEANUP
+
+######################################################################
+AT_SETUP([quick connect, idle disconnect])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [enable
+
+# Connection succeeds.
+run
+connected
+
+# Send inactivity probe.
+timeout
+run
+
+# Idle timeout kills connection.
+timeout
+run
+disconnected
+])
+AT_CHECK([test-reconnect < input], [0], 
+  [### t=1000 ###
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+
+# Connection succeeds.
+run
+  should connect
+connected
+  in ACTIVE for 0 ms (0 ms backoff)
+  1 successful connections out of 1 attempts, seqno 1
+  connected (0 ms), total 0 ms connected
+
+# Send inactivity probe.
+timeout
+  advance 5000 ms
+
+### t=6000 ###
+  in ACTIVE for 5000 ms (0 ms backoff)
+  connected (5000 ms), total 5000 ms connected
+run
+  should send probe
+  in IDLE for 0 ms (0 ms backoff)
+
+# Idle timeout kills connection.
+timeout
+  advance 5000 ms
+
+### t=11000 ###
+  in IDLE for 5000 ms (0 ms backoff)
+  connected (10000 ms), total 10000 ms connected
+run
+  should disconnect
+disconnected
+  in BACKOFF for 0 ms (1000 ms backoff)
+  1 successful connections out of 1 attempts, seqno 2
+  not connected (0 ms), total 10000 ms connected
+])
+AT_CLEANUP
+
+######################################################################
+AT_SETUP([slow connect, idle disconnect])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [enable
+
+# Start connecting.
+run
+connecting
+
+# Connect after 500 ms.
+advance 500
+run
+connected
+
+# Send inactivity probe.
+timeout
+run
+
+# Idle timeout kills connection.
+timeout
+run
+disconnected
+])
+AT_CHECK([test-reconnect < input], [0], 
+  [### t=1000 ###
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+
+# Start connecting.
+run
+  should connect
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (0 ms backoff)
+
+# Connect after 500 ms.
+advance 500
+
+### t=1500 ###
+  in CONNECT_IN_PROGRESS for 500 ms (0 ms backoff)
+run
+connected
+  in ACTIVE for 0 ms (0 ms backoff)
+  created 1000, last received 1000, last connected 1500
+  1 successful connections out of 1 attempts, seqno 1
+  connected (0 ms), total 0 ms connected
+
+# Send inactivity probe.
+timeout
+  advance 5000 ms
+
+### t=6500 ###
+  in ACTIVE for 5000 ms (0 ms backoff)
+  connected (5000 ms), total 5000 ms connected
+run
+  should send probe
+  in IDLE for 0 ms (0 ms backoff)
+
+# Idle timeout kills connection.
+timeout
+  advance 5000 ms
+
+### t=11500 ###
+  in IDLE for 5000 ms (0 ms backoff)
+  connected (10000 ms), total 10000 ms connected
+run
+  should disconnect
+disconnected
+  in BACKOFF for 0 ms (1000 ms backoff)
+  1 successful connections out of 1 attempts, seqno 2
+  not connected (0 ms), total 10000 ms connected
+])
+AT_CLEANUP
+
+######################################################################
+AT_SETUP([connect backs off])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [enable
+
+# First connection attempt fails after 1000 ms.
+run
+connecting
+run
+timeout
+run
+connect-failed
+
+# Back off for 1000 ms.
+timeout
+run
+
+# Second connection attempt fails after 1000 ms.
+connecting
+timeout
+run
+connect-failed
+
+# Back off for 2000 ms.
+timeout
+run
+
+# Third connection attempt fails after 2000 ms.
+connecting
+timeout
+run
+connect-failed
+
+# Back off for 4000 ms.
+timeout
+run
+
+# Third connection attempt fails after 4000 ms.
+connecting
+timeout
+run
+connect-failed
+
+# Back off for 8000 ms.
+timeout
+run
+
+# Third connection attempt fails after 8000 ms.
+connecting
+timeout
+run
+connect-failed
+
+# Back off for 8000 ms.
+timeout
+run
+
+# Fourth connection attempt fails after 8000 ms.
+connecting
+timeout
+run
+connect-failed
+])
+AT_CHECK([test-reconnect < input], [0], 
+  [### t=1000 ###
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+
+# First connection attempt fails after 1000 ms.
+run
+  should connect
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (0 ms backoff)
+run
+timeout
+  advance 1000 ms
+
+### t=2000 ###
+  in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (1000 ms backoff)
+  0 successful connections out of 1 attempts, seqno 0
+
+# Back off for 1000 ms.
+timeout
+  advance 1000 ms
+
+### t=3000 ###
+  in BACKOFF for 1000 ms (1000 ms backoff)
+run
+  should connect
+
+# Second connection attempt fails after 1000 ms.
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (1000 ms backoff)
+timeout
+  advance 1000 ms
+
+### t=4000 ###
+  in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (2000 ms backoff)
+  0 successful connections out of 2 attempts, seqno 0
+
+# Back off for 2000 ms.
+timeout
+  advance 2000 ms
+
+### t=6000 ###
+  in BACKOFF for 2000 ms (2000 ms backoff)
+run
+  should connect
+
+# Third connection attempt fails after 2000 ms.
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (2000 ms backoff)
+timeout
+  advance 2000 ms
+
+### t=8000 ###
+  in CONNECT_IN_PROGRESS for 2000 ms (2000 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (4000 ms backoff)
+  0 successful connections out of 3 attempts, seqno 0
+
+# Back off for 4000 ms.
+timeout
+  advance 4000 ms
+
+### t=12000 ###
+  in BACKOFF for 4000 ms (4000 ms backoff)
+run
+  should connect
+
+# Third connection attempt fails after 4000 ms.
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (4000 ms backoff)
+timeout
+  advance 4000 ms
+
+### t=16000 ###
+  in CONNECT_IN_PROGRESS for 4000 ms (4000 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (8000 ms backoff)
+  0 successful connections out of 4 attempts, seqno 0
+
+# Back off for 8000 ms.
+timeout
+  advance 8000 ms
+
+### t=24000 ###
+  in BACKOFF for 8000 ms (8000 ms backoff)
+run
+  should connect
+
+# Third connection attempt fails after 8000 ms.
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (8000 ms backoff)
+timeout
+  advance 8000 ms
+
+### t=32000 ###
+  in CONNECT_IN_PROGRESS for 8000 ms (8000 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (8000 ms backoff)
+  0 successful connections out of 5 attempts, seqno 0
+
+# Back off for 8000 ms.
+timeout
+  advance 8000 ms
+
+### t=40000 ###
+  in BACKOFF for 8000 ms (8000 ms backoff)
+run
+  should connect
+
+# Fourth connection attempt fails after 8000 ms.
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (8000 ms backoff)
+timeout
+  advance 8000 ms
+
+### t=48000 ###
+  in CONNECT_IN_PROGRESS for 8000 ms (8000 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (8000 ms backoff)
+  0 successful connections out of 6 attempts, seqno 0
+])
+AT_CLEANUP
+
+######################################################################
+AT_SETUP([connections with no data preserve backoff])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [enable
+
+# First connect, then idle timeout kills connection.
+run
+connected
+timeout
+run
+timeout
+run
+disconnected
+
+# Back off for 1000 ms.
+timeout
+run
+
+# Second connect, then idle timeout kills connection.
+run
+connected
+timeout
+run
+timeout
+run
+disconnected
+
+# Back off for 2000 ms.
+timeout
+run
+
+# Third connect, then idle timeout kills connection.
+run
+connected
+timeout
+run
+timeout
+run
+disconnected
+
+# Back off for 4000 ms.
+timeout
+], [### t=1000 ###
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+
+# First connect, then idle timeout kills connection.
+run
+  should connect
+connected
+  in ACTIVE for 0 ms (0 ms backoff)
+  1 successful connections out of 1 attempts, seqno 1
+  connected (0 ms), total 0 ms connected
+timeout
+  advance 5000 ms
+
+### t=6000 ###
+  in ACTIVE for 5000 ms (0 ms backoff)
+  connected (5000 ms), total 5000 ms connected
+run
+  should send probe
+  in IDLE for 0 ms (0 ms backoff)
+timeout
+  advance 5000 ms
+
+### t=11000 ###
+  in IDLE for 5000 ms (0 ms backoff)
+  connected (10000 ms), total 10000 ms connected
+run
+  should disconnect
+disconnected
+  in BACKOFF for 0 ms (1000 ms backoff)
+  1 successful connections out of 1 attempts, seqno 2
+  not connected (0 ms), total 10000 ms connected
+
+# Back off for 1000 ms.
+timeout
+  advance 1000 ms
+
+### t=12000 ###
+  in BACKOFF for 1000 ms (1000 ms backoff)
+run
+  should connect
+
+# Second connect, then idle timeout kills connection.
+run
+  should connect
+connected
+  in ACTIVE for 0 ms (1000 ms backoff)
+  created 1000, last received 1000, last connected 12000
+  2 successful connections out of 2 attempts, seqno 3
+  connected (0 ms), total 10000 ms connected
+timeout
+  advance 5000 ms
+
+### t=17000 ###
+  in ACTIVE for 5000 ms (1000 ms backoff)
+  connected (5000 ms), total 15000 ms connected
+run
+  should send probe
+  in IDLE for 0 ms (1000 ms backoff)
+timeout
+  advance 5000 ms
+
+### t=22000 ###
+  in IDLE for 5000 ms (1000 ms backoff)
+  connected (10000 ms), total 20000 ms connected
+run
+  should disconnect
+disconnected
+  in BACKOFF for 0 ms (2000 ms backoff)
+  2 successful connections out of 2 attempts, seqno 4
+  not connected (0 ms), total 20000 ms connected
+
+# Back off for 2000 ms.
+timeout
+  advance 2000 ms
+
+### t=24000 ###
+  in BACKOFF for 2000 ms (2000 ms backoff)
+run
+  should connect
+
+# Third connect, then idle timeout kills connection.
+run
+  should connect
+connected
+  in ACTIVE for 0 ms (2000 ms backoff)
+  created 1000, last received 1000, last connected 24000
+  3 successful connections out of 3 attempts, seqno 5
+  connected (0 ms), total 20000 ms connected
+timeout
+  advance 5000 ms
+
+### t=29000 ###
+  in ACTIVE for 5000 ms (2000 ms backoff)
+  connected (5000 ms), total 25000 ms connected
+run
+  should send probe
+  in IDLE for 0 ms (2000 ms backoff)
+timeout
+  advance 5000 ms
+
+### t=34000 ###
+  in IDLE for 5000 ms (2000 ms backoff)
+  connected (10000 ms), total 30000 ms connected
+run
+  should disconnect
+disconnected
+  in BACKOFF for 0 ms (4000 ms backoff)
+  3 successful connections out of 3 attempts, seqno 6
+  not connected (0 ms), total 30000 ms connected
+
+# Back off for 4000 ms.
+timeout
+  advance 4000 ms
+
+### t=38000 ###
+  in BACKOFF for 4000 ms (4000 ms backoff)
+
+])
+AT_CLEANUP
+
+######################################################################
+AT_SETUP([brief connection preserves backoff])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [enable
+
+# First connection attempt fails after 1000 ms.
+run
+connecting
+run
+timeout
+run
+connect-failed
+
+# Back off for 1000 ms.
+timeout
+run
+
+# Second connection attempt fails after 1000 ms.
+connecting
+timeout
+run
+connect-failed
+
+# Back off for 2000 ms.
+timeout
+run
+
+# Third connection attempt succeeds after 500 ms.
+connecting
+advance 500
+run
+connected
+
+# Connection drops after another 250 ms.
+advance 250
+disconnected
+run
+
+# Back off for 4000 ms.
+timeout
+run
+])
+AT_CHECK([test-reconnect < input], [0], 
+  [### t=1000 ###
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+
+# First connection attempt fails after 1000 ms.
+run
+  should connect
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (0 ms backoff)
+run
+timeout
+  advance 1000 ms
+
+### t=2000 ###
+  in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (1000 ms backoff)
+  0 successful connections out of 1 attempts, seqno 0
+
+# Back off for 1000 ms.
+timeout
+  advance 1000 ms
+
+### t=3000 ###
+  in BACKOFF for 1000 ms (1000 ms backoff)
+run
+  should connect
+
+# Second connection attempt fails after 1000 ms.
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (1000 ms backoff)
+timeout
+  advance 1000 ms
+
+### t=4000 ###
+  in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (2000 ms backoff)
+  0 successful connections out of 2 attempts, seqno 0
+
+# Back off for 2000 ms.
+timeout
+  advance 2000 ms
+
+### t=6000 ###
+  in BACKOFF for 2000 ms (2000 ms backoff)
+run
+  should connect
+
+# Third connection attempt succeeds after 500 ms.
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (2000 ms backoff)
+advance 500
+
+### t=6500 ###
+  in CONNECT_IN_PROGRESS for 500 ms (2000 ms backoff)
+run
+connected
+  in ACTIVE for 0 ms (2000 ms backoff)
+  created 1000, last received 1000, last connected 6500
+  1 successful connections out of 3 attempts, seqno 1
+  connected (0 ms), total 0 ms connected
+
+# Connection drops after another 250 ms.
+advance 250
+
+### t=6750 ###
+  in ACTIVE for 250 ms (2000 ms backoff)
+  connected (250 ms), total 250 ms connected
+disconnected
+  in BACKOFF for 0 ms (4000 ms backoff)
+  1 successful connections out of 3 attempts, seqno 2
+  not connected (0 ms), total 250 ms connected
+run
+
+# Back off for 4000 ms.
+timeout
+  advance 4000 ms
+
+### t=10750 ###
+  in BACKOFF for 4000 ms (4000 ms backoff)
+run
+  should connect
+])
+AT_CLEANUP
+
+######################################################################
+AT_SETUP([brief connection with data preserves backoff])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [enable
+
+# First connection attempt fails after 1000 ms.
+run
+connecting
+run
+timeout
+run
+connect-failed
+
+# Back off for 1000 ms.
+timeout
+run
+
+# Second connection attempt fails after 1000 ms.
+connecting
+timeout
+run
+connect-failed
+
+# Back off for 2000 ms.
+timeout
+run
+
+# Third connection attempt succeeds after 500 ms.
+connecting
+advance 500
+run
+connected
+
+# Connection receives 3 chunks of data spaced 250 ms apart.
+advance 250
+run
+received
+advance 250
+run
+received
+advance 250
+run
+received
+
+# Connection drops.
+disconnected
+run
+
+# Back off for 4000 ms.
+timeout
+run
+])
+AT_CHECK([test-reconnect < input], [0], 
+  [### t=1000 ###
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+
+# First connection attempt fails after 1000 ms.
+run
+  should connect
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (0 ms backoff)
+run
+timeout
+  advance 1000 ms
+
+### t=2000 ###
+  in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (1000 ms backoff)
+  0 successful connections out of 1 attempts, seqno 0
+
+# Back off for 1000 ms.
+timeout
+  advance 1000 ms
+
+### t=3000 ###
+  in BACKOFF for 1000 ms (1000 ms backoff)
+run
+  should connect
+
+# Second connection attempt fails after 1000 ms.
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (1000 ms backoff)
+timeout
+  advance 1000 ms
+
+### t=4000 ###
+  in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (2000 ms backoff)
+  0 successful connections out of 2 attempts, seqno 0
+
+# Back off for 2000 ms.
+timeout
+  advance 2000 ms
+
+### t=6000 ###
+  in BACKOFF for 2000 ms (2000 ms backoff)
+run
+  should connect
+
+# Third connection attempt succeeds after 500 ms.
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (2000 ms backoff)
+advance 500
+
+### t=6500 ###
+  in CONNECT_IN_PROGRESS for 500 ms (2000 ms backoff)
+run
+connected
+  in ACTIVE for 0 ms (2000 ms backoff)
+  created 1000, last received 1000, last connected 6500
+  1 successful connections out of 3 attempts, seqno 1
+  connected (0 ms), total 0 ms connected
+
+# Connection receives 3 chunks of data spaced 250 ms apart.
+advance 250
+
+### t=6750 ###
+  in ACTIVE for 250 ms (2000 ms backoff)
+  connected (250 ms), total 250 ms connected
+run
+received
+  created 1000, last received 6750, last connected 6500
+advance 250
+
+### t=7000 ###
+  in ACTIVE for 500 ms (2000 ms backoff)
+  connected (500 ms), total 500 ms connected
+run
+received
+  created 1000, last received 7000, last connected 6500
+advance 250
+
+### t=7250 ###
+  in ACTIVE for 750 ms (2000 ms backoff)
+  connected (750 ms), total 750 ms connected
+run
+received
+  created 1000, last received 7250, last connected 6500
+
+# Connection drops.
+disconnected
+  in BACKOFF for 0 ms (4000 ms backoff)
+  1 successful connections out of 3 attempts, seqno 2
+  not connected (0 ms), total 750 ms connected
+run
+
+# Back off for 4000 ms.
+timeout
+  advance 4000 ms
+
+### t=11250 ###
+  in BACKOFF for 4000 ms (4000 ms backoff)
+run
+  should connect
+])
+AT_CLEANUP
+
+######################################################################
+AT_SETUP([long connection resets backoff])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [enable
+
+# First connection attempt fails after 1000 ms.
+run
+connecting
+run
+timeout
+run
+connect-failed
+
+# Back off for 1000 ms.
+timeout
+run
+
+# Second connection attempt fails after 1000 ms.
+connecting
+timeout
+run
+connect-failed
+
+# Back off for 2000 ms.
+timeout
+run
+
+# Third connection attempt succeeds after 500 ms.
+connecting
+advance 500
+run
+connected
+
+# Connection receives 3 chunks of data spaced 2000 ms apart.
+advance 2000
+run
+received
+advance 2000
+run
+received
+advance 2000
+run
+received
+
+# Connection drops.
+disconnected
+run
+
+# Back off for 1000 ms.
+timeout
+run
+])
+AT_CHECK([test-reconnect < input], [0], 
+  [### t=1000 ###
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+
+# First connection attempt fails after 1000 ms.
+run
+  should connect
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (0 ms backoff)
+run
+timeout
+  advance 1000 ms
+
+### t=2000 ###
+  in CONNECT_IN_PROGRESS for 1000 ms (0 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (1000 ms backoff)
+  0 successful connections out of 1 attempts, seqno 0
+
+# Back off for 1000 ms.
+timeout
+  advance 1000 ms
+
+### t=3000 ###
+  in BACKOFF for 1000 ms (1000 ms backoff)
+run
+  should connect
+
+# Second connection attempt fails after 1000 ms.
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (1000 ms backoff)
+timeout
+  advance 1000 ms
+
+### t=4000 ###
+  in CONNECT_IN_PROGRESS for 1000 ms (1000 ms backoff)
+run
+  should disconnect
+connect-failed
+  in BACKOFF for 0 ms (2000 ms backoff)
+  0 successful connections out of 2 attempts, seqno 0
+
+# Back off for 2000 ms.
+timeout
+  advance 2000 ms
+
+### t=6000 ###
+  in BACKOFF for 2000 ms (2000 ms backoff)
+run
+  should connect
+
+# Third connection attempt succeeds after 500 ms.
+connecting
+  in CONNECT_IN_PROGRESS for 0 ms (2000 ms backoff)
+advance 500
+
+### t=6500 ###
+  in CONNECT_IN_PROGRESS for 500 ms (2000 ms backoff)
+run
+connected
+  in ACTIVE for 0 ms (2000 ms backoff)
+  created 1000, last received 1000, last connected 6500
+  1 successful connections out of 3 attempts, seqno 1
+  connected (0 ms), total 0 ms connected
+
+# Connection receives 3 chunks of data spaced 2000 ms apart.
+advance 2000
+
+### t=8500 ###
+  in ACTIVE for 2000 ms (2000 ms backoff)
+  connected (2000 ms), total 2000 ms connected
+run
+received
+  created 1000, last received 8500, last connected 6500
+advance 2000
+
+### t=10500 ###
+  in ACTIVE for 4000 ms (2000 ms backoff)
+  connected (4000 ms), total 4000 ms connected
+run
+received
+  created 1000, last received 10500, last connected 6500
+advance 2000
+
+### t=12500 ###
+  in ACTIVE for 6000 ms (2000 ms backoff)
+  connected (6000 ms), total 6000 ms connected
+run
+received
+  created 1000, last received 12500, last connected 6500
+
+# Connection drops.
+disconnected
+  in BACKOFF for 0 ms (1000 ms backoff)
+  1 successful connections out of 3 attempts, seqno 2
+  not connected (0 ms), total 6000 ms connected
+run
+
+# Back off for 1000 ms.
+timeout
+  advance 1000 ms
+
+### t=13500 ###
+  in BACKOFF for 1000 ms (1000 ms backoff)
+run
+  should connect
+])
+AT_CLEANUP
+
+######################################################################
+AT_SETUP([connection attempt fails quickly])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [enable
+
+# Connection fails quickly.
+run
+connect-failed ECONNREFUSED
+
+# Back off for 1000 ms.
+run
+timeout
+
+# Connection fails quickly again.
+run
+connect-failed ECONNREFUSED
+
+# Back off for 2000 ms.
+run
+timeout
+])
+AT_CHECK([test-reconnect < input], [0], 
+  [### t=1000 ###
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+
+# Connection fails quickly.
+run
+  should connect
+connect-failed ECONNREFUSED
+  in BACKOFF for 0 ms (1000 ms backoff)
+  0 successful connections out of 1 attempts, seqno 0
+
+# Back off for 1000 ms.
+run
+timeout
+  advance 1000 ms
+
+### t=2000 ###
+  in BACKOFF for 1000 ms (1000 ms backoff)
+
+# Connection fails quickly again.
+run
+  should connect
+connect-failed ECONNREFUSED
+  in BACKOFF for 0 ms (2000 ms backoff)
+  0 successful connections out of 2 attempts, seqno 0
+
+# Back off for 2000 ms.
+run
+timeout
+  advance 2000 ms
+
+### t=4000 ###
+  in BACKOFF for 2000 ms (2000 ms backoff)
+])
+AT_CLEANUP
+
+######################################################################
+AT_SETUP([max-tries of 1 honored])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [set-max-tries 1
+enable
+
+# Connection succeeds.
+run
+connected
+
+# Send inactivity probe.
+timeout
+run
+
+# Idle timeout kills connection.
+timeout
+run
+disconnected
+])
+AT_CHECK([test-reconnect < input], [0], 
+  [### t=1000 ###
+set-max-tries 1
+  1 tries left
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+  0 tries left
+
+# Connection succeeds.
+run
+  should connect
+connected
+  in ACTIVE for 0 ms (0 ms backoff)
+  1 successful connections out of 1 attempts, seqno 1
+  connected (0 ms), total 0 ms connected
+
+# Send inactivity probe.
+timeout
+  advance 5000 ms
+
+### t=6000 ###
+  in ACTIVE for 5000 ms (0 ms backoff)
+  connected (5000 ms), total 5000 ms connected
+run
+  should send probe
+  in IDLE for 0 ms (0 ms backoff)
+
+# Idle timeout kills connection.
+timeout
+  advance 5000 ms
+
+### t=11000 ###
+  in IDLE for 5000 ms (0 ms backoff)
+  connected (10000 ms), total 10000 ms connected
+run
+  should disconnect
+disconnected
+  in VOID for 0 ms (1000 ms backoff)
+  1 successful connections out of 1 attempts, seqno 2
+  not connected (0 ms), total 10000 ms connected
+])
+AT_CLEANUP
+
+######################################################################
+AT_SETUP([max-tries of 0 honored])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [set-max-tries 0
+enable
+run
+timeout
+])
+AT_CHECK([test-reconnect < input], [0], 
+  [### t=1000 ###
+set-max-tries 0
+  0 tries left
+enable
+run
+timeout
+  no timeout
+])
+AT_CLEANUP

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2009 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,4 +52,21 @@ bitmap_equal(const unsigned long *a, const unsigned long *b, size_t n)
         }
     }
     return true;
+}
+
+/* Scans 'bitmap' from bit offset 'start' to 'end', excluding 'end' itself.
+ * Returns the bit offset of the lowest-numbered bit set to 1, or 'end' if
+ * all of the bits are set to 0. */
+size_t
+bitmap_scan(const unsigned long int *bitmap, size_t start, size_t end)
+{
+    /* XXX slow */
+    size_t i;
+
+    for (i = start; i < end; i++) {
+        if (bitmap_is_set(bitmap, i)) {
+            break;
+        }
+    }
+    return i;
 }

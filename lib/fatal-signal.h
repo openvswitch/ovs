@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,12 @@
 #include <stdbool.h>
 
 /* Basic interface. */
-void fatal_signal_add_hook(void (*)(void *aux), void *aux, bool run_at_exit);
-void fatal_signal_block(void);
-void fatal_signal_unblock(void);
+void fatal_signal_add_hook(void (*hook_cb)(void *aux),
+                           void (*cancel_cb)(void *aux), void *aux,
+                           bool run_at_exit);
 void fatal_signal_fork(void);
+void fatal_signal_run(void);
+void fatal_signal_wait(void);
 
 /* Convenience functions for unlinking files upon termination.
  *

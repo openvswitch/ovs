@@ -40,7 +40,7 @@ struct rtnetlink_change {
  * specific change.  It may be null if the buffer of change information
  * overflowed, in which case the function must assume that every device may
  * have changed.  'aux' is as specified in the call to
- * lxnetdev_notifier_register().  */
+ * rtnetlink_notifier_register().  */
 typedef void rtnetlink_notify_func(const struct rtnetlink_change *, void *aux);
 
 struct rtnetlink_notifier {

@@ -47,6 +47,9 @@ The main components of this distribution are:
     * ovs-vswitchd, a daemon that implements the switch, along with 
       a companion Linux kernel module for flow-based switching.
 
+    * ovsdb-server, a lightweight database server that ovs-vswitchd
+      queries to obtain its configuration.
+
     * ovs-brcompatd, a daemon that allows ovs-vswitchd to act as a
       drop-in replacement for the Linux bridge in many environments, 
       along with a companion Linux kernel module to intercept bridge 

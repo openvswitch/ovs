@@ -31,7 +31,9 @@
 
 #include <config.h>
 #include "sha1.h"
+#include <ctype.h>
 #include <string.h>
+#include "util.h"
 
 /* a bit faster & bigger, if defined */
 #define UNROLL_LOOPS
@@ -279,3 +281,32 @@ sha1_bytes(const void *data, size_t n, uint8_t digest[SHA1_DIGEST_SIZE])
     sha1_update(&ctx, data, n);
     sha1_final(&ctx, digest);
 }
+
+void
+sha1_to_hex(const uint8_t digest[SHA1_DIGEST_SIZE],
+            char hex[SHA1_HEX_DIGEST_LEN + 1])
+{
+    int i;
+
+    for (i = 0; i < SHA1_DIGEST_SIZE; i++) {
+        *hex++ = "0123456789abcdef"[digest[i] >> 4];
+        *hex++ = "0123456789abcdef"[digest[i] & 15];
+    }
+    *hex = '\0';
+}
+
+bool
+sha1_from_hex(uint8_t digest[SHA1_DIGEST_SIZE], const char *hex)
+{
+    int i;
+
+    for (i = 0; i < SHA1_DIGEST_SIZE; i++) {
+        if (!isxdigit(hex[0]) || !isxdigit(hex[1])) {
+            return false;
+        }
+        digest[i] = (hexit_value(hex[0]) << 4) | hexit_value(hex[1]);
+        hex += 2;
+    }
+    return true;
+}
+

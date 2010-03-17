@@ -1,6 +1,6 @@
 #! /usr/bin/perl
 
-# Copyright (c) 2009 Nicira Networks.
+# Copyright (c) 2009, 2010 Nicira Networks.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -60,6 +60,7 @@ sub output {
     $flow{DL_SRC} = "00:02:e3:0f:80:a4";
     $flow{DL_DST} = "00:1a:92:40:ac:05";
     $flow{NW_PROTO} = 0;
+    $flow{NW_TOS} = 0;
     $flow{NW_SRC} = '0.0.0.0';
     $flow{NW_DST} = '0.0.0.0';
     $flow{TP_SRC} = 0;
@@ -78,6 +79,7 @@ sub output {
         $flow{DL_TYPE} = 0x0800; # ETH_TYPE_IP
         $flow{NW_SRC} = '10.0.2.15';
         $flow{NW_DST} = '192.168.1.20';
+        $flow{NW_TOS} = 44;
         if ($attrs{TP_PROTO} eq 'other') {
             $flow{NW_PROTO} = 42;
         } elsif ($attrs{TP_PROTO} eq 'TCP' ||
@@ -124,7 +126,7 @@ sub output {
         if ($attrs{DL_TYPE} eq 'ip') {
             my $ip = pack('CCnnnCCnNN',
                           (4 << 4) | 5,    # version, hdrlen
-                          0,               # type of service
+                          $flow{NW_TOS},   # type of service
                           0,               # total length (filled in later)
                           65432,           # id
                           0,               # frag offset
@@ -203,9 +205,11 @@ sub output {
                      1);        # in_port
     print FLOWS pack_ethaddr($flow{DL_SRC});
     print FLOWS pack_ethaddr($flow{DL_DST});
-    print FLOWS pack('nnCxNNnn',
+    print FLOWS pack('nCxnCCxxNNnn',
                      $flow{DL_VLAN},
+                     0,          # DL_VLAN_PCP
                      $flow{DL_TYPE},
+                     $flow{NW_TOS},
                      $flow{NW_PROTO},
                      inet_aton($flow{NW_SRC}),
                      inet_aton($flow{NW_DST}),

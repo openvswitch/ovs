@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,8 @@ BUILD_ASSERT_DECL(TYPE_IS_SIGNED(time_t));
 #define TIME_UPDATE_INTERVAL 100
 
 void time_init(void);
+void time_disable_restart(void);
+void time_enable_restart(void);
 void time_postfork(void);
 void time_refresh(void);
 time_t time_now(void);
@@ -52,6 +54,8 @@ long long int time_msec(void);
 void time_timeval(struct timeval *);
 void time_alarm(unsigned int secs);
 int time_poll(struct pollfd *, int n_pollfds, int timeout);
+
+long long int timeval_to_msec(const struct timeval *);
 
 #ifdef  __cplusplus
 }

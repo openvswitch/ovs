@@ -1,0 +1,166 @@
+AT_BANNER([OVSDB -- ovsdb-server transactions (Unix sockets)])
+
+m4_define([OVSDB_SERVER_SHUTDOWN], 
+  [cp pid savepid
+   AT_CHECK([ovs-appctl -t $PWD/unixctl -e exit], [0], [ignore], [ignore])
+   OVS_WAIT_WHILE([kill -0 `cat savepid`], [kill `cat savepid`])])
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates a database with the given SCHEMA, starts an ovsdb-server on
+# that database, and runs each of the TRANSACTIONS (which should be a
+# quoted list of quoted strings) against it with ovsdb-client one at a
+# time.
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb server positive unix $5])
+   AT_DATA([schema], [$2
+])
+   AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=punix:socket --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+   m4_foreach([txn], [$3], 
+     [AT_CHECK([ovsdb-client transact unix:socket 'txn'], [0], [stdout], [ignore],
+     [test ! -e pid || kill `cat pid`])
+cat stdout >> output
+])
+   AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$4], [ignore],
+            [test ! -e pid || kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+EXECUTION_EXAMPLES
+
+AT_SETUP([database multiplexing implementation])
+AT_KEYWORDS([ovsdb server positive])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --unixctl=$PWD/unixctl --remote=punix:socket db], [0], [ignore], [ignore])
+AT_CHECK(
+  [[ovsdb-client list-dbs unix:socket]], 
+  [0], [ordinals
+], [ignore], [test ! -e pid || kill `cat pid`])
+AT_CHECK(
+  [[ovsdb-client get-schema unix:socket nonexistent]], 
+  [1], [], [[ovsdb-client: syntax "{"syntax":"[\"nonexistent\"]","details":"get_schema request specifies unknown database nonexistent","error":"unknown database"}": syntax error: Parsing database schema failed: Required 'name' member is missing.
+]], [test ! -e pid || kill `cat pid`])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
+AT_SETUP([--remote=db: implementation])
+AT_KEYWORDS([ovsdb server positive])
+AT_DATA([schema],
+  [[{"name": "mydb",
+     "tables": {
+       "Manager": {
+         "columns": {
+           "manager": {"type": "string"}}}}}
+]])
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+AT_CHECK(
+  [[ovsdb-tool transact db \
+     '["mydb",
+       {"op": "insert",
+        "table": "Manager",
+        "row": {"manager": "punix:socket"}}]']], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --remote=db:Manager,manager --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+AT_CHECK(
+  [[ovsdb-client transact unix:socket \
+     '["mydb",
+       {"op": "select",
+        "table": "Manager",
+        "where": [],
+        "columns": ["manager"]}]']], 
+  [0], [stdout], [ignore], [test ! -e pid || kill `cat pid`])
+AT_CHECK(
+  [perl $srcdir/uuidfilt.pl stdout], 
+  [0], 
+  [[[{"rows":[{"manager":"punix:socket"}]}]
+]], 
+  [ignore], 
+  [test ! -e pid || kill `cat pid`])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
+AT_BANNER([OVSDB -- ovsdb-server transactions (SSL sockets)])
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates a database with the given SCHEMA, starts an ovsdb-server on
+# that database, and runs each of the TRANSACTIONS (which should be a
+# quoted list of quoted strings) against it with ovsdb-client one at a
+# time.
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb server positive ssl $5])
+   AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+   AT_SKIP_IF([test "x$RANDOM" = x])
+   AT_DATA([schema], [$2
+])
+   SSL_PORT=`expr 32767 + \( $RANDOM % 32767 \)`
+   PKIDIR=$abs_top_srcdir/tests
+   AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --private-key=$PKIDIR/testpki-privkey2.pem --certificate=$PKIDIR/testpki-cert2.pem --ca-cert=$PKIDIR/testpki-cacert.pem --remote=pssl:$SSL_PORT:127.0.0.1 --unixctl=$PWD/unixctl db], [0], [ignore], [ignore])
+   m4_foreach([txn], [$3], 
+     [AT_CHECK([ovsdb-client --private-key=$PKIDIR/testpki-privkey.pem --certificate=$PKIDIR/testpki-cert.pem --ca-cert=$PKIDIR/testpki-cacert.pem transact ssl:127.0.0.1:$SSL_PORT 'txn'], [0], [stdout], [ignore],
+     [test ! -e pid || kill `cat pid`])
+cat stdout >> output
+])
+   AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$4], [ignore],
+            [test ! -e pid || kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+EXECUTION_EXAMPLES
+
+AT_BANNER([OVSDB -- transactions on transient ovsdb-server])
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates a database with the given SCHEMA and runs each of the
+# TRANSACTIONS (which should be a quoted list of quoted strings)
+# against it with ovsdb-client one at a time.  Each ovsdb-client
+# is run against a separately started ovsdb-server that executes
+# only that single transaction.  (The idea is that this should
+# help to ferret out any differences between what ovsdb-server has
+# in memory and what actually gets committed to disk.)
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb server positive transient $5])
+   AT_DATA([schema], [$2
+])
+   AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   m4_foreach([txn], [$3], 
+     [AT_DATA([txnfile], [ovsdb-client transact unix:socket 'txn'
+])
+      AT_CHECK([ovsdb-server --remote=punix:socket --unixctl=$PWD/unixctl db --run="sh txnfile"], [0], [stdout], [ignore])
+      cat stdout >> output
+])
+   AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$4], [ignore])
+   AT_CLEANUP])
+
+EXECUTION_EXAMPLES

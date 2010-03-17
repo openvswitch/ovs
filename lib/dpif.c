@@ -33,6 +33,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
+#include "shash.h"
 #include "svec.h"
 #include "util.h"
 #include "valgrind.h"
@@ -40,11 +41,16 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_dpif
 
-static const struct dpif_class *dpif_classes[] = {
+static const struct dpif_class *base_dpif_classes[] = {
     &dpif_linux_class,
     &dpif_netdev_class,
 };
-enum { N_DPIF_CLASSES = ARRAY_SIZE(dpif_classes) };
+
+struct registered_dpif_class {
+    struct dpif_class dpif_class;
+    int refcount;
+};
+static struct shash dpif_classes = SHASH_INITIALIZER(&dpif_classes);
 
 /* Rate limit for individual messages going to or from the datapath, output at
  * DBG level.  This is very high because, if these are enabled, it is because
@@ -63,6 +69,21 @@ static void log_flow_put(struct dpif *, int error,
 static bool should_log_flow_message(int error);
 static void check_rw_odp_flow(struct odp_flow *);
 
+static void
+dp_initialize(void)
+{
+    static int status = -1;
+
+    if (status < 0) {
+        int i;
+
+        status = 0;
+        for (i = 0; i < ARRAY_SIZE(base_dpif_classes); i++) {
+            dp_register_provider(base_dpif_classes[i]);
+        }
+    }
+}
+
 /* Performs periodic work needed by all the various kinds of dpifs.
  *
  * If your program opens any dpifs, it must call both this function and
@@ -70,11 +91,11 @@ static void check_rw_odp_flow(struct odp_flow *);
 void
 dp_run(void)
 {
-    int i;
-    for (i = 0; i < N_DPIF_CLASSES; i++) {
-        const struct dpif_class *class = dpif_classes[i];
-        if (class->run) {
-            class->run();
+    struct shash_node *node;
+    SHASH_FOR_EACH(node, &dpif_classes) {
+        const struct registered_dpif_class *registered_class = node->data;
+        if (registered_class->dpif_class.run) {
+            registered_class->dpif_class.run();
         }
     }
 }
@@ -86,108 +107,200 @@ dp_run(void)
 void
 dp_wait(void)
 {
-    int i;
-    for (i = 0; i < N_DPIF_CLASSES; i++) {
-        const struct dpif_class *class = dpif_classes[i];
-        if (class->wait) {
-            class->wait();
+    struct shash_node *node;
+    SHASH_FOR_EACH(node, &dpif_classes) {
+        const struct registered_dpif_class *registered_class = node->data;
+        if (registered_class->dpif_class.wait) {
+            registered_class->dpif_class.wait();
         }
     }
 }
 
-/* Clears 'all_dps' and enumerates the names of all known created datapaths, 
- * where possible, into it.  The caller must first initialize 'all_dps'.
- * Returns 0 if successful, otherwise a positive errno value.
+/* Registers a new datapath provider.  After successful registration, new
+ * datapaths of that type can be opened using dpif_open(). */
+int
+dp_register_provider(const struct dpif_class *new_class)
+{
+    struct registered_dpif_class *registered_class;
+
+    if (shash_find(&dpif_classes, new_class->type)) {
+        VLOG_WARN("attempted to register duplicate datapath provider: %s",
+                  new_class->type);
+        return EEXIST;
+    }
+
+    registered_class = xmalloc(sizeof *registered_class);
+    memcpy(&registered_class->dpif_class, new_class,
+           sizeof registered_class->dpif_class);
+    registered_class->refcount = 0;
+
+    shash_add(&dpif_classes, new_class->type, registered_class);
+
+    return 0;
+}
+
+/* Unregisters a datapath provider.  'type' must have been previously
+ * registered and not currently be in use by any dpifs.  After unregistration
+ * new datapaths of that type cannot be opened using dpif_open(). */
+int
+dp_unregister_provider(const char *type)
+{
+    struct shash_node *node;
+    struct registered_dpif_class *registered_class;
+
+    node = shash_find(&dpif_classes, type);
+    if (!node) {
+        VLOG_WARN("attempted to unregister a datapath provider that is not "
+                  "registered: %s", type);
+        return EAFNOSUPPORT;
+    }
+
+    registered_class = node->data;
+    if (registered_class->refcount) {
+        VLOG_WARN("attempted to unregister in use datapath provider: %s", type);
+        return EBUSY;
+    }
+
+    shash_delete(&dpif_classes, node);
+    free(registered_class);
+
+    return 0;
+}
+
+/* Clears 'types' and enumerates the types of all currently registered datapath
+ * providers into it.  The caller must first initialize the svec. */
+void
+dp_enumerate_types(struct svec *types)
+{
+    struct shash_node *node;
+
+    dp_initialize();
+    svec_clear(types);
+
+    SHASH_FOR_EACH(node, &dpif_classes) {
+        const struct registered_dpif_class *registered_class = node->data;
+        svec_add(types, registered_class->dpif_class.type);
+    }
+}
+
+/* Clears 'names' and enumerates the names of all known created datapaths with
+ * the given 'type'.  The caller must first initialize the svec. Returns 0 if
+ * successful, otherwise a positive errno value.
  *
  * Some kinds of datapaths might not be practically enumerable.  This is not
  * considered an error. */
 int
-dp_enumerate(struct svec *all_dps)
+dp_enumerate_names(const char *type, struct svec *names)
 {
+    const struct registered_dpif_class *registered_class;
+    const struct dpif_class *dpif_class;
     int error;
-    int i;
 
-    svec_clear(all_dps);
-    error = 0;
-    for (i = 0; i < N_DPIF_CLASSES; i++) {
-        const struct dpif_class *class = dpif_classes[i];
-        int retval = class->enumerate ? class->enumerate(all_dps) : 0;
-        if (retval) {
-            VLOG_WARN("failed to enumerate %s datapaths: %s",
-                      class->name, strerror(retval));
-            if (!error) {
-                error = retval;
-            }
-        }
+    dp_initialize();
+    svec_clear(names);
+
+    registered_class = shash_find_data(&dpif_classes, type);
+    if (!registered_class) {
+        VLOG_WARN("could not enumerate unknown type: %s", type);
+        return EAFNOSUPPORT;
     }
+
+    dpif_class = &registered_class->dpif_class;
+    error = dpif_class->enumerate ? dpif_class->enumerate(names) : 0;
+
+    if (error) {
+        VLOG_WARN("failed to enumerate %s datapaths: %s", dpif_class->type,
+                   strerror(error));
+    }
+
     return error;
 }
 
-static int
-do_open(const char *name_, bool create, struct dpif **dpifp)
+/* Parses 'datapath name', which is of the form type@name into its
+ * component pieces.  'name' and 'type' must be freed by the caller. */
+void
+dp_parse_name(const char *datapath_name_, char **name, char **type)
 {
-    char *name = xstrdup(name_);
-    char *prefix, *suffix, *colon;
+    char *datapath_name = xstrdup(datapath_name_);
+    char *separator;
+
+    separator = strchr(datapath_name, '@');
+    if (separator) {
+        *separator = '\0';
+        *type = datapath_name;
+        *name = xstrdup(separator + 1);
+    } else {
+        *name = datapath_name;
+        *type = NULL;
+    }
+}
+
+static int
+do_open(const char *name, const char *type, bool create, struct dpif **dpifp)
+{
     struct dpif *dpif = NULL;
     int error;
-    int i;
+    struct registered_dpif_class *registered_class;
 
-    colon = strchr(name, ':');
-    if (colon) {
-        *colon = '\0';
-        prefix = name;
-        suffix = colon + 1;
-    } else {
-        prefix = "";
-        suffix = name;
+    dp_initialize();
+
+    if (!type || *type == '\0') {
+        type = "system";
     }
 
-    for (i = 0; i < N_DPIF_CLASSES; i++) {
-        const struct dpif_class *class = dpif_classes[i];
-        if (!strcmp(prefix, class->prefix)) {
-            error = class->open(name_, suffix, create, &dpif);
-            goto exit;
-        }
+    registered_class = shash_find_data(&dpif_classes, type);
+    if (!registered_class) {
+        VLOG_WARN("could not create datapath %s of unknown type %s", name,
+                  type);
+        error = EAFNOSUPPORT;
+        goto exit;
     }
-    error = EAFNOSUPPORT;
+
+    error = registered_class->dpif_class.open(name, type, create, &dpif);
+    if (!error) {
+        registered_class->refcount++;
+    }
 
 exit:
     *dpifp = error ? NULL : dpif;
     return error;
 }
 
-/* Tries to open an existing datapath named 'name'.  Will fail if no datapath
- * named 'name' exists.  Returns 0 if successful, otherwise a positive errno
- * value.  On success stores a pointer to the datapath in '*dpifp', otherwise a
- * null pointer. */
+/* Tries to open an existing datapath named 'name' and type 'type'.  Will fail
+ * if no datapath with 'name' and 'type' exists.  'type' may be either NULL or
+ * the empty string to specify the default system type.  Returns 0 if
+ * successful, otherwise a positive errno value.  On success stores a pointer
+ * to the datapath in '*dpifp', otherwise a null pointer. */
 int
-dpif_open(const char *name, struct dpif **dpifp)
+dpif_open(const char *name, const char *type, struct dpif **dpifp)
 {
-    return do_open(name, false, dpifp);
+    return do_open(name, type, false, dpifp);
 }
 
-/* Tries to create and open a new datapath with the given 'name'.  Will fail if
- * a datapath named 'name' already exists.  Returns 0 if successful, otherwise
- * a positive errno value.  On success stores a pointer to the datapath in
- * '*dpifp', otherwise a null pointer. */
+/* Tries to create and open a new datapath with the given 'name' and 'type'.
+ * 'type' may be either NULL or the empty string to specify the default system
+ * type.  Will fail if a datapath with 'name' and 'type' already exists.
+ * Returns 0 if successful, otherwise a positive errno value.  On success
+ * stores a pointer to the datapath in '*dpifp', otherwise a null pointer. */
 int
-dpif_create(const char *name, struct dpif **dpifp)
+dpif_create(const char *name, const char *type, struct dpif **dpifp)
 {
-    return do_open(name, true, dpifp);
+    return do_open(name, type, true, dpifp);
 }
 
-/* Tries to open a datapath with the given 'name', creating it if it does not
- * exist.  Returns 0 if successful, otherwise a positive errno value.  On
- * success stores a pointer to the datapath in '*dpifp', otherwise a null
- * pointer. */
+/* Tries to open a datapath with the given 'name' and 'type', creating it if it
+ * does not exist.  'type' may be either NULL or the empty string to specify
+ * the default system type.  Returns 0 if successful, otherwise a positive
+ * errno value. On success stores a pointer to the datapath in '*dpifp',
+ * otherwise a null pointer. */
 int
-dpif_create_and_open(const char *name, struct dpif **dpifp)
+dpif_create_and_open(const char *name, const char *type, struct dpif **dpifp)
 {
     int error;
 
-    error = dpif_create(name, dpifp);
+    error = dpif_create(name, type, dpifp);
     if (error == EEXIST || error == EBUSY) {
-        error = dpif_open(name, dpifp);
+        error = dpif_open(name, type, dpifp);
         if (error) {
             VLOG_WARN("datapath %s already exists but cannot be opened: %s",
                       name, strerror(error));
@@ -204,17 +317,32 @@ void
 dpif_close(struct dpif *dpif)
 {
     if (dpif) {
-        char *name = dpif->name;
-        dpif->dpif_class->close(dpif);
-        free(name);
+        struct registered_dpif_class *registered_class;
+
+        registered_class = shash_find_data(&dpif_classes, 
+                dpif->dpif_class->type);
+        assert(registered_class);
+        assert(registered_class->refcount);
+
+        registered_class->refcount--;
+        dpif_uninit(dpif, true);
     }
 }
 
-/* Returns the name of datapath 'dpif' (for use in log messages). */
+/* Returns the name of datapath 'dpif' prefixed with the type
+ * (for use in log messages). */
 const char *
 dpif_name(const struct dpif *dpif)
 {
-    return dpif->name;
+    return dpif->full_name;
+}
+
+/* Returns the name of datapath 'dpif' without the type
+ * (for use in device names). */
+const char *
+dpif_base_name(const struct dpif *dpif)
+{
+    return dpif->base_name;
 }
 
 /* Enumerates all names that may be used to open 'dpif' into 'all_names'.  The
@@ -238,7 +366,7 @@ dpif_get_all_names(const struct dpif *dpif, struct svec *all_names)
         }
         return error;
     } else {
-        svec_add(all_names, dpif_name(dpif));
+        svec_add(all_names, dpif_base_name(dpif));
         return 0;
     }
 }
@@ -965,9 +1093,30 @@ dpif_init(struct dpif *dpif, const struct dpif_class *dpif_class,
           uint8_t netflow_engine_type, uint8_t netflow_engine_id)
 {
     dpif->dpif_class = dpif_class;
-    dpif->name = xstrdup(name);
+    dpif->base_name = xstrdup(name);
+    dpif->full_name = xasprintf("%s@%s", dpif_class->type, name);
     dpif->netflow_engine_type = netflow_engine_type;
     dpif->netflow_engine_id = netflow_engine_id;
+}
+
+/* Undoes the results of initialization.
+ *
+ * Normally this function only needs to be called from dpif_close().
+ * However, it may be called by providers due to an error on opening
+ * that occurs after initialization.  It this case dpif_close() would
+ * never be called. */
+void
+dpif_uninit(struct dpif *dpif, bool close)
+{
+    char *base_name = dpif->base_name;
+    char *full_name = dpif->full_name;
+
+    if (close) {
+        dpif->dpif_class->close(dpif);
+    }
+
+    free(base_name);
+    free(full_name);
 }
 
 static void

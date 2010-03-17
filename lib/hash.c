@@ -52,6 +52,21 @@ hash_words(const uint32_t *p, size_t n, uint32_t basis)
     return c;
 }
 
+/* Returns the hash of the pair of aligned 32-bit words at 'p', starting from
+ * 'basis'. */
+uint32_t
+hash_2words(const uint32_t *p, uint32_t basis)
+{
+    uint32_t a, b, c;
+
+    a = b = c = 0xdeadbeef + (2 << 2) + basis;
+    b += p[1];
+    a += p[0];
+    HASH_FINAL(a, b, c);
+
+    return c;
+}
+
 /* Returns the hash of the 'n' bytes at 'p', starting from 'basis'. */
 uint32_t
 hash_bytes(const void *p_, size_t n, uint32_t basis)

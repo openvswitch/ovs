@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: dev@openvswitch.org\n"
-"POT-Creation-Date: 2009-05-11 13:38-0700\n"
+"POT-Creation-Date: 2009-12-15 09:36-0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -188,8 +188,9 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:6001
 msgid ""
-"Ensure that the OpenFlow DHCP server is properly configured.  See ovs-openflowd(8) "
-"for instructions on how to configure a DHCP server for controller discovery."
+"Ensure that the OpenFlow DHCP server is properly configured.  See ovs-"
+"openflowd(8) for instructions on how to configure a DHCP server for "
+"controller discovery."
 msgstr ""
 
 #. Type: boolean
@@ -293,9 +294,9 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:11001
 msgid ""
-"The controller location must be specifed as \"ssl:IP[:PORT]\" to connect "
-"to the controller over SSL (recommended for security) or \"tcp:IP[:PORT]\" "
-"to connect over cleartext TCP."
+"The controller location must be specifed as \"ssl:IP[:PORT]\" to connect to "
+"the controller over SSL (recommended for security) or \"tcp:IP[:PORT]\" to "
+"connect over cleartext TCP."
 msgstr ""
 
 #. Type: string

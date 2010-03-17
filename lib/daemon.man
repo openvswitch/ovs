@@ -4,21 +4,32 @@ Causes a file (by default, \fB\*(PN.pid\fR) to be created indicating
 the PID of the running process.  If \fIpidfile\fR is not specified, or
 if it does not begin with \fB/\fR, then it is created in
 \fB@RUNDIR@\fR.
-
+.
 .TP
 \fB--overwrite-pidfile\fR
 By default, when \fB--pidfile\fR is specified and the specified pidfile 
 already exists and is locked by a running process, \fB\*(PN\fR refuses 
 to start.  Specify \fB--overwrite-pidfile\fR to cause it to instead 
 overwrite the pidfile.
-
+.IP
 When \fB--pidfile\fR is not specified, this option has no effect.
-
+.
 .TP
 \fB--detach\fR
 Causes \fB\*(PN\fR to detach itself from the foreground session and
 run as a background process.
-
+.
+.TP
+\fB--monitor\fR
+Creates an additional process to monitor the \fB\*(PN\fR daemon.  If
+the daemon dies due to a signal that indicates a programming error
+(e.g. \fBSIGSEGV\fR, \fBSIGABRT\fR), then the monitor process starts a
+new copy of it.  If the daemon die or exits for another reason, the
+monitor process exits.
+.IP
+This option is normally used with \fB--detach\fR, but it also
+functions without it.
+.
 .TP
 \fB--no-chdir\fR
 By default, when \fB--detach\fR is specified, \fB\*(PN\fR 

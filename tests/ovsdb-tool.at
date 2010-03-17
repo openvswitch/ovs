@@ -1,0 +1,266 @@
+AT_BANNER([OVSDB -- ovsdb-tool])
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates a database with the given SCHEMA and runs each of the
+# TRANSACTIONS (which should be a quoted list of quoted strings)
+# against it with ovsdb-tool one at a time.  
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb file positive $5])
+   AT_DATA([schema], [$2
+])
+   touch .db.~lock~
+   AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+   m4_foreach([txn], [$3], 
+     [AT_CHECK([ovsdb-tool transact db 'txn'], [0], [stdout], [ignore])
+cat stdout >> output
+])
+   AT_CHECK([perl $srcdir/uuidfilt.pl output], [0], [$4])
+   AT_CLEANUP])
+
+EXECUTION_EXAMPLES
+
+AT_SETUP([transaction comments])
+AT_KEYWORDS([ovsdb file positive])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
+AT_CHECK([[ovsdb-tool transact db '
+    ["ordinals",
+     {"op": "insert",
+      "table": "ordinals",
+      "row": {"name": "five", "number": 5}},
+     {"op": "comment",
+      "comment": "add row for 5"}]']], [0], [stdout], [ignore])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+ [[[{"uuid":["uuid","<0>"]},{}]
+]])
+AT_CHECK([grep -q "add row for 5" db])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-tool compact])
+AT_KEYWORDS([ovsdb file positive])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
+dnl Do a bunch of random transactions that put crap in the database log.
+AT_CHECK(
+  [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
+      set -- $pair
+      ovsdb-tool transact db '
+        ["ordinals",
+         {"op": "insert",
+          "table": "ordinals",
+          "row": {"name": "'$1'", "number": '$2'}},
+         {"op": "comment",
+          "comment": "add row for '"$pair"'"}]'
+      ovsdb-tool transact db '
+        ["ordinals",
+         {"op": "delete",
+          "table": "ordinals",
+          "where": [["number", "==", '$2']]},
+         {"op": "comment",
+          "comment": "delete row for '"$2"'"}]'
+      ovsdb-tool transact db '
+        ["ordinals",
+         {"op": "insert",
+          "table": "ordinals",
+          "row": {"name": "'$1'", "number": '$2'}},
+         {"op": "comment",
+          "comment": "add back row for '"$pair"'"}]'
+    done]],
+  [0], [stdout], [ignore])
+dnl Check that all the crap is in fact in the database log.
+AT_CHECK([[perl $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/']], [0],
+  [[{"name":"ordinals","tables":{"ordinals":{"columns":{"name":{"type":"string"},"number":{"type":"integer"}}}}}
+{"ordinals":{"<0>":{"name":"zero"}},"_comment":"add row for zero 0","_date":0}
+{"ordinals":{"<0>":null},"_comment":"delete row for 0","_date":0}
+{"ordinals":{"<1>":{"name":"zero"}},"_comment":"add back row for zero 0","_date":0}
+{"ordinals":{"<2>":{"number":1,"name":"one"}},"_comment":"add row for one 1","_date":0}
+{"ordinals":{"<2>":null},"_comment":"delete row for 1","_date":0}
+{"ordinals":{"<3>":{"number":1,"name":"one"}},"_comment":"add back row for one 1","_date":0}
+{"ordinals":{"<4>":{"number":2,"name":"two"}},"_comment":"add row for two 2","_date":0}
+{"ordinals":{"<4>":null},"_comment":"delete row for 2","_date":0}
+{"ordinals":{"<5>":{"number":2,"name":"two"}},"_comment":"add back row for two 2","_date":0}
+{"ordinals":{"<6>":{"number":3,"name":"three"}},"_comment":"add row for three 3","_date":0}
+{"ordinals":{"<6>":null},"_comment":"delete row for 3","_date":0}
+{"ordinals":{"<7>":{"number":3,"name":"three"}},"_comment":"add back row for three 3","_date":0}
+{"ordinals":{"<8>":{"number":4,"name":"four"}},"_comment":"add row for four 4","_date":0}
+{"ordinals":{"<8>":null},"_comment":"delete row for 4","_date":0}
+{"ordinals":{"<9>":{"number":4,"name":"four"}},"_comment":"add back row for four 4","_date":0}
+{"ordinals":{"<10>":{"number":5,"name":"five"}},"_comment":"add row for five 5","_date":0}
+{"ordinals":{"<10>":null},"_comment":"delete row for 5","_date":0}
+{"ordinals":{"<11>":{"number":5,"name":"five"}},"_comment":"add back row for five 5","_date":0}
+]])
+dnl Dump out and check the actual database contents.
+AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+  [0], [stdout], [ignore])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+  [_uuid                                name  number
+------------------------------------ ----- ------
+<0> five  5     @&t@
+<1> four  4     @&t@
+<2> one   1     @&t@
+<3> three 3     @&t@
+<4> two   2     @&t@
+<5> zero  0     @&t@
+])
+dnl Now compact the database in-place.
+touch .db.tmp.~lock~
+AT_CHECK([[ovsdb-tool compact db]], [0], [], [ignore])
+dnl We can't fully re-check the contents of the database log, because the
+dnl order of the records is not predictable, but there should only be 4 lines
+dnl in it now.
+AT_CAPTURE_FILE([db])
+AT_CHECK([wc -l < db], [0], [4
+])
+dnl And check that the dumped data is the same too:
+AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+  [0], [stdout], [ignore])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+  [_uuid                                name  number
+------------------------------------ ----- ------
+<0> five  5     @&t@
+<1> four  4     @&t@
+<2> one   1     @&t@
+<3> three 3     @&t@
+<4> two   2     @&t@
+<5> zero  0     @&t@
+])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-tool convert -- removing a column])
+AT_KEYWORDS([ovsdb file positive])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+AT_DATA([new-schema], 
+  [[{"name": "ordinals",
+     "tables": {
+       "ordinals": {
+         "columns": {
+           "number": {"type": "integer"}}}}}
+]])
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
+dnl Put some data in the database.
+AT_CHECK(
+  [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
+      set -- $pair
+      ovsdb-tool transact db '
+        ["ordinals",
+         {"op": "insert",
+          "table": "ordinals",
+          "row": {"name": "'$1'", "number": '$2'}},
+         {"op": "comment",
+          "comment": "add row for '"$pair"'"}]'
+    done]],
+  [0], [stdout], [ignore])
+dnl Dump out and check the actual database contents.
+AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+  [0], [stdout], [ignore])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+  [_uuid                                name  number
+------------------------------------ ----- ------
+<0> five  5     @&t@
+<1> four  4     @&t@
+<2> one   1     @&t@
+<3> three 3     @&t@
+<4> two   2     @&t@
+<5> zero  0     @&t@
+])
+dnl Now convert the database in-place.
+touch .db.tmp.~lock~
+AT_CHECK([[ovsdb-tool convert db new-schema]], [0], [], [ignore])
+dnl We can't fully re-check the contents of the database log, because the
+dnl order of the records is not predictable, but there should only be 4 lines
+dnl in it now.
+AT_CAPTURE_FILE([db])
+AT_CHECK([wc -l < db], [0], [4
+])
+dnl And check that the dumped data is the same except for the removed column:
+AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+  [0], [stdout], [ignore])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+  [_uuid                                number
+------------------------------------ ------
+<0> 0     @&t@
+<1> 1     @&t@
+<2> 2     @&t@
+<3> 3     @&t@
+<4> 4     @&t@
+<5> 5     @&t@
+])
+AT_CLEANUP
+
+AT_SETUP([ovsdb-tool convert -- adding a column])
+AT_KEYWORDS([ovsdb file positive])
+AT_DATA([schema], 
+  [[{"name": "ordinals",
+     "tables": {
+       "ordinals": {
+         "columns": {
+           "number": {"type": "integer"}}}}}
+]])
+AT_DATA([new-schema], [ORDINAL_SCHEMA
+])
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
+dnl Put some data in the database.
+AT_CHECK(
+  [[for number in 0 1 2 3 4 5; do
+      ovsdb-tool transact db '
+        ["ordinals",
+         {"op": "insert",
+          "table": "ordinals",
+          "row": {"number": '$number'}},
+         {"op": "comment",
+          "comment": "add row for '"$number"'"}]'
+    done]],
+  [0], [stdout], [ignore])
+dnl Dump out and check the actual database contents.
+AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+  [0], [stdout], [ignore])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+  [_uuid                                number
+------------------------------------ ------
+<0> 0     @&t@
+<1> 1     @&t@
+<2> 2     @&t@
+<3> 3     @&t@
+<4> 4     @&t@
+<5> 5     @&t@
+])
+dnl Now convert the database in-place.
+touch .db.tmp.~lock~
+AT_CHECK([[ovsdb-tool convert db new-schema]], [0], [], [ignore])
+dnl We can't fully re-check the contents of the database log, because the
+dnl order of the records is not predictable, but there should only be 4 lines
+dnl in it now.
+AT_CAPTURE_FILE([db])
+AT_CHECK([wc -l < db], [0], [4
+])
+dnl And check that the dumped data is the same except for the added column:
+AT_CHECK([[ovsdb-server --unixctl=$PWD/unixctl --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
+  [0], [stdout], [ignore])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+  [_uuid                                name number
+------------------------------------ ---- ------
+<0> ""   0     @&t@
+<1> ""   1     @&t@
+<2> ""   2     @&t@
+<3> ""   3     @&t@
+<4> ""   4     @&t@
+<5> ""   5     @&t@
+])
+AT_CLEANUP

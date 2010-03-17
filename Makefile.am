@@ -1,4 +1,4 @@
-# Copyright (C) 2007, 2008, 2009 Nicira Networks, Inc.
+# Copyright (C) 2007, 2008, 2009, 2010 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -25,6 +25,7 @@ else
 AM_LDFLAGS = -export-dynamic
 endif
 
+BUILT_SOURCES =
 CLEANFILES =
 DISTCLEANFILES =
 EXTRA_DIST = INSTALL.bridge \
@@ -32,25 +33,29 @@ EXTRA_DIST = INSTALL.bridge \
 	INSTALL.userspace \
 	INSTALL.OpenFlow \
 	INSTALL.SSL \
-	INSTALL.XenServer 
+	INSTALL.XenServer \
+	README-gcov
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =
-dist_commands_DATA =
 dist_man_MANS =
+dist_pkgdata_DATA =
 dist_pkgdata_SCRIPTS =
 dist_sbin_SCRIPTS =
 man_MANS =
+noinst_DATA =
 noinst_HEADERS =
 noinst_LIBRARIES =
 noinst_PROGRAMS =
 noinst_SCRIPTS =
+OVSIDL_BUILT =
+SUFFIXES =
 
 EXTRA_DIST += soexpand.pl
 
 ro_c = echo '/* -*- mode: c; buffer-read-only: t -*- */'
 
-SUFFIXES = .in
+SUFFIXES += .in
 .in:
 	$(PERL) $(srcdir)/soexpand.pl -I$(srcdir) < $< | \
 	    sed \
@@ -63,6 +68,7 @@ SUFFIXES = .in
                 -e 's,[@]localstatedir[@],$(localstatedir),g' \
                 -e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
                 -e 's,[@]sysconfdir[@],$(sysconfdir),g' \
+                -e 's,[@]abs_top_srcdir[@],$(abs_top_srcdir),g' \
             > $@.tmp
 	@if head -n 1 $@.tmp | grep -q '#!'; then \
 	    echo chmod +x $@.tmp; \
@@ -78,5 +84,6 @@ include include/automake.mk
 include third-party/automake.mk
 include debian/automake.mk
 include vswitchd/automake.mk
+include ovsdb/automake.mk
 include xenserver/automake.mk
 include extras/ezio/automake.mk

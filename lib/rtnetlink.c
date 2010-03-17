@@ -76,7 +76,7 @@ rtnetlink_notifier_register(struct rtnetlink_notifier *notifier,
 }
 
 /* Cancels notification on 'notifier', which must have previously been
- * registered with lxnetdev_notifier_register(). */
+ * registered with rtnetlink_notifier_register(). */
 void
 rtnetlink_notifier_unregister(struct rtnetlink_notifier *notifier)
 {

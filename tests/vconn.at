@@ -1,0 +1,22 @@
+m4_define([TEST_VCONN_CLASS],
+  [AT_BANNER([vconn library -- $1 class])
+   m4_foreach(
+     [testname], 
+     [[refuse-connection], 
+      [accept-then-close],
+      [read-hello],
+      [send-plain-hello],
+      [send-long-hello],
+      [send-echo-hello],
+      [send-short-hello],
+      [send-invalid-version-hello]],
+     [AT_SETUP([$1 vconn - m4_bpatsubst(testname, [-], [ ])])
+      m4_if([$1], [ssl], [
+        AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+        AT_CHECK([cp $abs_top_srcdir/tests/testpki*.pem .])])
+      AT_CHECK([test-vconn testname $1], [0], [], [ignore])
+      AT_CLEANUP])])
+
+TEST_VCONN_CLASS([unix])
+TEST_VCONN_CLASS([tcp])
+TEST_VCONN_CLASS([ssl])

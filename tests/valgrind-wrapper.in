@@ -1,0 +1,36 @@
+#! /bin/sh
+
+wrap_program=`basename '@wrap_program@'`
+
+# Strip the first directory from $PATH that contains $wrap_program,
+# so that below we run the real $wrap_program, not ourselves.
+not_found=true
+new_path=
+first=true
+save_IFS=$IFS
+IFS=:
+for dir in $PATH; do
+    IFS=$save_IFS
+    if $not_found && test -x "$dir/$wrap_program"; then
+        not_found=false
+    else
+        if $first; then
+            first=false
+            new_path=$dir
+        else
+            new_path=$new_path:$dir
+        fi
+    fi
+done
+IFS=$save_IFS
+if $not_found; then
+    echo "$0: error: cannot find $wrap_program in \$PATH" >&2
+    exit 1
+fi
+PATH=$new_path
+export PATH
+
+: ${VALGRIND:=valgrind -q --log-file=valgrind.%p --leak-check=full}
+exec $VALGRIND $wrap_program "$@"
+echo "$0: failed to execute $VALGRIND $wrap_program" "$@" >&2
+exit 1

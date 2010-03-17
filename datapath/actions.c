@@ -15,6 +15,7 @@
 #include <linux/udp.h>
 #include <linux/in6.h>
 #include <linux/if_vlan.h>
+#include <net/inet_ecn.h>
 #include <net/ip.h>
 #include <net/checksum.h>
 #include "datapath.h"
@@ -64,10 +65,13 @@ vlan_pull_tag(struct sk_buff *skb)
 	struct vlan_ethhdr *vh = vlan_eth_hdr(skb);
 	struct ethhdr *eh;
 
-
 	/* Verify we were given a vlan packet */
 	if (vh->h_vlan_proto != htons(ETH_P_8021Q))
 		return skb;
+
+	if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE)
+		skb->csum = csum_sub(skb->csum, csum_partial(skb->data
+					+ ETH_HLEN, VLAN_HLEN, 0));
 
 	memmove(skb->data + VLAN_HLEN, skb->data, 2 * VLAN_ETH_ALEN);
 
@@ -90,10 +94,11 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 	if (a->type == ODPAT_SET_VLAN_VID) {
 		tci = ntohs(a->vlan_vid.vlan_vid);
 		mask = VLAN_VID_MASK;
-		key->dl_vlan = htons(tci & mask);
+		key->dl_vlan = a->vlan_vid.vlan_vid;
 	} else {
 		tci = a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT;
 		mask = VLAN_PCP_MASK;
+		key->dl_vlan_pcp = a->vlan_pcp.vlan_pcp;
 	}
 
 	skb = make_writable(skb, VLAN_HLEN, gfp);
@@ -103,7 +108,16 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 	if (skb->protocol == htons(ETH_P_8021Q)) {
 		/* Modify vlan id, but maintain other TCI values */
 		struct vlan_ethhdr *vh = vlan_eth_hdr(skb);
+		__be16 old_tci = vh->h_vlan_TCI;
+
 		vh->h_vlan_TCI = htons((ntohs(vh->h_vlan_TCI) & ~mask) | tci);
+
+		if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE) {
+			__be16 diff[] = { ~old_tci, vh->h_vlan_TCI };
+
+			skb->csum = ~csum_partial((char *)diff, sizeof(diff),
+						~skb->csum);
+		}
 	} else {
 		/* Add vlan header */
 
@@ -143,6 +157,9 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 
 				segs->next = NULL;
 
+				/* GSO can change the checksum type so update.*/
+				compute_ip_summed(segs, true);
+
 				segs = __vlan_put_tag(segs, tci);
 				err = -ENOMEM;
 				if (segs) {
@@ -166,6 +183,7 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 			} while (segs->next);
 
 			skb = segs;
+			compute_ip_summed(skb, true);
 		}
 
 		/* The hardware-accelerated version of vlan_put_tag() works
@@ -176,6 +194,12 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		skb = __vlan_put_tag(skb, tci);
 		if (!skb)
 			return ERR_PTR(-ENOMEM);
+
+		/* GSO doesn't fix up the hardware computed checksum so this
+		 * will only be hit in the non-GSO case. */
+		if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE)
+			skb->csum = csum_add(skb->csum, csum_partial(skb->data
+						+ ETH_HLEN, VLAN_HLEN, 0));
 	}
 
 	return skb;
@@ -193,14 +217,20 @@ static struct sk_buff *strip_vlan(struct sk_buff *skb,
 }
 
 static struct sk_buff *set_dl_addr(struct sk_buff *skb,
+				   struct odp_flow_key *key,
 				   const struct odp_action_dl_addr *a,
 				   gfp_t gfp)
 {
 	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		struct ethhdr *eh = eth_hdr(skb);
-		memcpy(a->type == ODPAT_SET_DL_SRC ? eh->h_source : eh->h_dest,
-		       a->dl_addr, ETH_ALEN);
+		if (a->type == ODPAT_SET_DL_SRC) {
+			memcpy(eh->h_source, a->dl_addr, ETH_ALEN);
+			memcpy(key->dl_src, a->dl_addr, ETH_ALEN);
+		} else {
+			memcpy(eh->h_dest, a->dl_addr, ETH_ALEN);
+			memcpy(key->dl_dst, a->dl_addr, ETH_ALEN);
+		}
 	}
 	return skb;
 }
@@ -213,10 +243,11 @@ static void update_csum(__sum16 *sum, struct sk_buff *skb,
 			__be32 from, __be32 to, int pseudohdr)
 {
 	__be32 diff[] = { ~from, to };
-	if (skb->ip_summed != CHECKSUM_PARTIAL) {
+
+	if (OVS_CB(skb)->ip_summed != OVS_CSUM_PARTIAL) {
 		*sum = csum_fold(csum_partial((char *)diff, sizeof(diff),
 				~csum_unfold(*sum)));
-		if (skb->ip_summed == CHECKSUM_COMPLETE && pseudohdr)
+		if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE && pseudohdr)
 			skb->csum = ~csum_partial((char *)diff, sizeof(diff),
 						~skb->csum);
 	} else if (pseudohdr)
@@ -248,6 +279,36 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 		}
 		update_csum(&nh->check, skb, old, new, 0);
 		*f = new;
+
+		if (a->type == ODPAT_SET_NW_SRC)
+			key->nw_src = a->nw_addr;
+		else
+			key->nw_dst = a->nw_addr;
+	}
+	return skb;
+}
+
+static struct sk_buff *set_nw_tos(struct sk_buff *skb,
+				   struct odp_flow_key *key,
+				   const struct odp_action_nw_tos *a,
+				   gfp_t gfp)
+{
+	if (key->dl_type != htons(ETH_P_IP))
+		return skb;
+
+	skb = make_writable(skb, 0, gfp);
+	if (skb) {
+		struct iphdr *nh = ip_hdr(skb);
+		u8 *f = &nh->tos;
+		u8 old = *f;
+		u8 new;
+
+		/* Set the DSCP bits and preserve the ECN bits. */
+		new = a->nw_tos | (nh->tos & INET_ECN_MASK);
+		update_csum(&nh->check, skb, htons((uint16_t)old),
+				htons((uint16_t)new), 0);
+		*f = new;
+		key->nw_tos = a->nw_tos;
 	}
 	return skb;
 }
@@ -276,8 +337,12 @@ set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
 		u16 old = *f;
 		u16 new = a->tp_port;
 		update_csum((u16*)(skb_transport_header(skb) + check_ofs), 
-				skb, old, new, 1);
+				skb, old, new, 0);
 		*f = new;
+		if (a->type == ODPAT_SET_TP_SRC)
+			key->tp_src = a->tp_port;
+		else
+			key->tp_dst = a->tp_port;
 	}
 	return skb;
 }
@@ -302,6 +367,7 @@ int dp_xmit_skb(struct sk_buff *skb)
 		return -E2BIG;
 	}
 
+	forward_ip_summed(skb);
 	dev_queue_xmit(skb);
 
 	return len;
@@ -449,12 +515,16 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 
 		case ODPAT_SET_DL_SRC:
 		case ODPAT_SET_DL_DST:
-			skb = set_dl_addr(skb, &a->dl_addr, gfp);
+			skb = set_dl_addr(skb, key, &a->dl_addr, gfp);
 			break;
 
 		case ODPAT_SET_NW_SRC:
 		case ODPAT_SET_NW_DST:
 			skb = set_nw_addr(skb, key, &a->nw_addr, gfp);
+			break;
+
+		case ODPAT_SET_NW_TOS:
+			skb = set_nw_tos(skb, key, &a->nw_tos, gfp);
 			break;
 
 		case ODPAT_SET_TP_SRC:

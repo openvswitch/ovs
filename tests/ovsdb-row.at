@@ -1,0 +1,273 @@
+AT_BANNER([OVSDB -- rows])
+
+m4_define([RESERVED_COLUMNS], [["_uuid":["uuid","00000000-0000-0000-0000-000000000000"],"_version":["uuid","00000000-0000-0000-0000-000000000000"]]])
+
+OVSDB_CHECK_POSITIVE([row with one string column],
+  [[parse-rows \
+    '{"columns": {"name": {"type": "string"}}}' \
+    '{"name": "value"}' \
+    '{"name": ""}' \
+    '{"name": "longer string with spaces"}' \
+    '{}']],
+  [{RESERVED_COLUMNS,"name":"value"}
+name
+{RESERVED_COLUMNS,"name":""}
+name
+{RESERVED_COLUMNS,"name":"longer string with spaces"}
+name
+{RESERVED_COLUMNS,"name":""}
+<none>], [])
+
+OVSDB_CHECK_POSITIVE([row with one integer column],
+  [[parse-rows \
+    '{"columns": {"count": {"type": "integer"}}}' \
+    '{"count": 1}' \
+    '{"count": -1}' \
+    '{"count": 2e10}' \
+    '{}']],
+  [{RESERVED_COLUMNS,"count":1}
+count
+{RESERVED_COLUMNS,"count":-1}
+count
+{RESERVED_COLUMNS,"count":20000000000}
+count
+{RESERVED_COLUMNS,"count":0}
+<none>], [])
+
+OVSDB_CHECK_POSITIVE([row with one real column],
+  [[parse-rows \
+    '{"columns": {"cost": {"type": "real"}}}' \
+    '{"cost": 1.0}' \
+    '{"cost": -2.0}' \
+    '{"cost": 123000}' \
+    '{}']],
+  [{RESERVED_COLUMNS,"cost":1}
+cost
+{RESERVED_COLUMNS,"cost":-2}
+cost
+{RESERVED_COLUMNS,"cost":123000}
+cost
+{RESERVED_COLUMNS,"cost":0}
+<none>], [])
+
+OVSDB_CHECK_POSITIVE([row with one boolean column],
+  [[parse-rows \
+    '{"columns": {"feasible": {"type": "boolean"}}}' \
+    '{"feasible": true}' \
+    '{"feasible": false}' \
+    '{}']],
+  [{RESERVED_COLUMNS,"feasible":true}
+feasible
+{RESERVED_COLUMNS,"feasible":false}
+feasible
+{RESERVED_COLUMNS,"feasible":false}
+<none>], [])
+
+OVSDB_CHECK_POSITIVE([row with one uuid column],
+  [[parse-rows \
+    '{"columns": {"ref": {"type": "uuid"}}}' \
+    '{"ref": ["uuid", "f707423d-bf5b-48b5-b6c0-797c900ba4b6"]}' \
+    '{"ref": ["uuid", "33583cc5-d2f4-43de-b1ca-8aac14071b51"]}' \
+    '{}']],
+  [{RESERVED_COLUMNS,"ref":[["uuid","f707423d-bf5b-48b5-b6c0-797c900ba4b6"]]}
+ref
+{RESERVED_COLUMNS,"ref":[["uuid","33583cc5-d2f4-43de-b1ca-8aac14071b51"]]}
+ref
+{RESERVED_COLUMNS,"ref":[["uuid","00000000-0000-0000-0000-000000000000"]]}
+<none>], [])
+
+OVSDB_CHECK_POSITIVE([row with set of 1 to 2 elements],
+  [[parse-rows \
+    '{"columns": {"myset": {"type": {"key": "integer", "min": 1, "max": 2}}}}' \
+    '{}']],
+  [{RESERVED_COLUMNS,["myset":0]}
+<none>])
+
+OVSDB_CHECK_POSITIVE([row with map of 1 to 2 elements],
+  [[parse-rows \
+    '{"columns": {"mymap": {"type": {"key": "integer", "value": "uuid", "min": 1, "max": 2}}}}' \
+    '{}']],
+  [{RESERVED_COLUMNS,["mymap":["map",[[0,["uuid","00000000-0000-0000-0000-000000000000"]]]]]}
+<none>], [])
+
+OVSDB_CHECK_POSITIVE([row with several columns],
+  [[parse-rows \
+    '{"columns":
+        {"vswitch": {"type": "uuid"},
+         "name": {"type": "string"},
+         "datapath_id": {"type": {"key": "string", "min": 0}},
+         "hwaddr": {"type": "string"},
+         "mirrors": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}},
+         "netflows": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}},
+         "controller": {"type": {"key": "uuid", "min": 0}},
+         "listeners": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}},
+         "snoops": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}}}}' \
+    '{"vswitch": ["uuid", "1a5c7280-0d4c-4e34-9ec7-c772339f7774"],
+      "name": "br0",
+      "datapath_id": "000ae4256bb0",
+      "hwaddr": "00:0a:e4:25:6b:b0"}' \
+    '{}']],
+ [{RESERVED_COLUMNS,["controller":["set",[]],"datapath_id":"000ae4256bb0","hwaddr":"00:0a:e4:25:6b:b0","listeners":["set",[]],"mirrors":["set",[]],"name":"br0","netflows":["set",[]],"snoops":["set",[]],"vswitch":["uuid","1a5c7280-0d4c-4e34-9ec7-c772339f7774"]]}
+datapath_id, hwaddr, name, vswitch
+{RESERVED_COLUMNS,["controller":["set",[]],"datapath_id":["set",[]],"hwaddr":"","listeners":["set",[]],"mirrors":["set",[]],"name":"","netflows":["set",[]],"snoops":["set",[]],"vswitch":["uuid","00000000-0000-0000-0000-000000000000"]]}
+<none>], [])
+
+OVSDB_CHECK_POSITIVE([row hashing (scalars)],
+  [[compare-rows \
+    '{"columns":
+        {"i": {"type": "integer"},
+         "r": {"type": "real"},
+         "b": {"type": "boolean"},
+	 "s": {"type": "string"},
+         "u": {"type": "uuid"}}}' \
+     '["null", {}]' \
+     '["i1", {"i": 1}]' \
+     '["i2", {"i": 2}]' \
+     '["i4", {"i": 4}]' \
+     '["i8", {"i": 8}]' \
+     '["i16", {"i": 16}]' \
+     '["i32", {"i": 32}]' \
+     '["i64", {"i": 64}]' \
+     '["i128", {"i": 128}]' \
+     '["i256", {"i": 256}]' \
+     '["null2", {"r": -0}]' \
+     '["r123", {"r": 123}]' \
+     '["r0.0625", {"r": 0.0625}]' \
+     '["r0.125", {"r": 0.125}]' \
+     '["r0.25", {"r": 0.25}]' \
+     '["r0.5", {"r": 0.5}]' \
+     '["r1", {"r": 1}]' \
+     '["r2", {"r": 2}]' \
+     '["r4", {"r": 4}]' \
+     '["r8", {"r": 8}]' \
+     '["r16", {"r": 16}]' \
+     '["r32", {"r": 32}]' \
+     '["null3", {"b": false}]' \
+     '["b1", {"b": true}]' \
+     '["null4", {"s": ""}]' \
+     '["s0", {"s": "a"}]' \
+     '["s1", {"s": "b"}]' \
+     '["s2", {"s": "c"}]' \
+     '["s3", {"s": "d"}]' \
+     '["s4", {"s": "e"}]' \
+     '["s5", {"s": "f"}]' \
+     '["s6", {"s": "g"}]' \
+     '["s7", {"s": "h"}]' \
+     '["s8", {"s": "i"}]' \
+     '["s9", {"s": "j"}]' \
+     '["null5", {"u": ["uuid","00000000-0000-0000-0000-000000000000"]}]' \
+     '["u1", {"u": ["uuid","10000000-0000-0000-0000-000000000000"]}]' \
+     '["u2", {"u": ["uuid","01000000-0000-0000-0000-000000000000"]}]' \
+     '["u3", {"u": ["uuid","00100000-0000-0000-0000-000000000000"]}]' \
+     '["u4", {"u": ["uuid","00010000-0000-0000-0000-000000000000"]}]' \
+     '["u5", {"u": ["uuid","00001000-0000-0000-0000-000000000000"]}]' \
+     '["u6", {"u": ["uuid","00000100-0000-0000-0000-000000000000"]}]' \
+     '["u7", {"u": ["uuid","00000010-0000-0000-0000-000000000000"]}]' \
+     '["u8", {"u": ["uuid","00000001-0000-0000-0000-000000000000"]}]' \
+     '["null6", {"u": ["uuid","00000000-c6db-4d22-970f-b41fabd20c4b"]}]']],
+  [[null == null2
+null == null3
+null == null4
+null == null5
+hash(null) == hash(null6)
+null2 == null3
+null2 == null4
+null2 == null5
+hash(null2) == hash(null6)
+null3 == null4
+null3 == null5
+hash(null3) == hash(null6)
+null4 == null5
+hash(null4) == hash(null6)
+hash(null5) == hash(null6)]])
+
+OVSDB_CHECK_POSITIVE([row hashing (sets)],
+  [[compare-rows \
+    '{"columns":
+        {"i": {"type": {"key": "integer", "min": 0, "max": "unlimited"}},
+         "r": {"type": {"key": "real", "min": 0, "max": "unlimited"}},
+         "b": {"type": {"key": "boolean", "min": 0, "max": "unlimited"}},
+	 "s": {"type": {"key": "string", "min": 0, "max": "unlimited"}},
+         "u": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}}}}' \
+    '["null0", {"i": ["set", []]}]' \
+    '["i0", {"i": ["set", [0]]}]' \
+    '["i01", {"i": ["set", [0, 1]]}]' \
+    '["i012", {"i": ["set", [0, 1, 2]]}]' \
+    '["i021", {"i": ["set", [0, 2, 1]]}]' \
+    '["i201", {"i": ["set", [2, 0, 1]]}]' \
+    '["i102", {"i": ["set", [1, 0, 2]]}]' \
+    '["i120", {"i": ["set", [1, 2, 0]]}]' \
+    '["i210", {"i": ["set", [2, 1, 0]]}]' \
+    '["r0", {"r": ["set", [0]]}]' \
+    '["r01", {"r": ["set", [0, 1]]}]' \
+    '["r012", {"r": ["set", [0, 1, 2]]}]' \
+    '["r201", {"r": ["set", [2, 0, 1]]}]' \
+    '["null1", {"b": ["set", []]}]' \
+    '["b0", {"b": ["set", [false]]}]' \
+    '["b1", {"b": ["set", [true]]}]' \
+    '["b01", {"b": ["set", [false, true]]}]' \
+    '["b10", {"b": ["set", [true, false]]}]' \
+    '["null2", {"s": ["set", []]}]' \
+    '["sa", {"s": ["set", ["a"]]}]' \
+    '["sb", {"s": ["set", ["b"]]}]' \
+    '["sab", {"s": ["set", ["a", "b"]]}]' \
+    '["sba", {"s": ["set", ["b", "a"]]}]']],
+  [[null0 == null1
+null0 == null2
+i012 == i021
+i012 == i201
+i012 == i102
+i012 == i120
+i012 == i210
+i021 == i201
+i021 == i102
+i021 == i120
+i021 == i210
+i201 == i102
+i201 == i120
+i201 == i210
+i102 == i120
+i102 == i210
+i120 == i210
+r012 == r201
+null1 == null2
+b01 == b10
+sab == sba]])
+
+OVSDB_CHECK_POSITIVE([row hashing (maps)],
+  [[compare-rows \
+    '{"columns":
+        {"ii": {"type": {"key": "integer", "value": "integer", 
+                         "min": 0, "max": "unlimited"}},
+         "rr": {"type": {"key": "real", "value": "real",
+                         "min": 0, "max": "unlimited"}},
+         "bb": {"type": {"key": "boolean", "value": "boolean",
+                         "min": 0, "max": "unlimited"}},
+	 "ss": {"type": {"key": "string", "value": "string",
+                         "min": 0, "max": "unlimited"}}}}' \
+    '["null", {}]' \
+    '["ii0", {"ii": ["map", [[0, 0]]]}]' \
+    '["ii1", {"ii": ["map", [[0, 1]]]}]' \
+    '["ii00", {"ii": ["map", [[0, 0], [1, 0]]]}]' \
+    '["ii01", {"ii": ["map", [[0, 0], [1, 1]]]}]' \
+    '["ii10", {"ii": ["map", [[0, 1], [1, 0]]]}]' \
+    '["ii11", {"ii": ["map", [[0, 1], [1, 1]]]}]' \
+    '["rr0", {"rr": ["map", [[0, 0]]]}]' \
+    '["rr0", {"rr": ["map", [[0, 1]]]}]' \
+    '["rr00", {"rr": ["map", [[0, 0], [1, 0]]]}]' \
+    '["rr01", {"rr": ["map", [[0, 0], [1, 1]]]}]' \
+    '["rr10", {"rr": ["map", [[0, 1], [1, 0]]]}]' \
+    '["rr11", {"rr": ["map", [[0, 1], [1, 1]]]}]' \
+    '["bb0", {"bb": ["map", [[false, false]]]}]' \
+    '["bb1", {"bb": ["map", [[false, true]]]}]' \
+    '["bb00", {"bb": ["map", [[false, false], [true, false]]]}]' \
+    '["bb01", {"bb": ["map", [[false, false], [true, true]]]}]' \
+    '["bb10", {"bb": ["map", [[false, true], [true, false]]]}]' \
+    '["bb11", {"bb": ["map", [[false, true], [true, true]]]}]' \
+    '["ss0", {"ss": ["map", [["a", "a"]]]}]' \
+    '["ss1", {"ss": ["map", [["a", "b"]]]}]' \
+    '["ss00", {"ss": ["map", [["a", "a"], ["b", "a"]]]}]' \
+    '["ss01", {"ss": ["map", [["a", "a"], ["b", "b"]]]}]' \
+    '["ss10", {"ss": ["map", [["a", "b"], ["b", "a"]]]}]' \
+    '["ss11", {"ss": ["map", [["a", "b"], ["b", "b"]]]}]'; echo
+]], [[]])

@@ -1,61 +1,57 @@
 .TH ovs\-dpctl 8 "August 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-dpctl
-
+.
 .SH NAME
 ovs\-dpctl \- administer Open vSwitch datapaths
-
+.
 .SH SYNOPSIS
 .B ovs\-dpctl
 [\fIoptions\fR] \fIcommand \fR[\fIswitch\fR] [\fIargs\fR\&...]
-
+.
 .SH DESCRIPTION
-
+.PP
 The \fBovs\-dpctl\fR program can create, modify, and delete Open vSwitch
 datapaths.  A single machine may host up to 256 datapaths (numbered 0
 to 255).
-
+.PP
 A newly created datapath is associated with only one network device, a
 virtual network device sometimes called the datapath's ``local port''.
 A newly created datapath is not, however, associated with any of the
 host's other network devices.  To intercept and process traffic on a
 given network device, use the \fBadd\-if\fR command to explicitly add
 that network device to the datapath.
-
+.PP
 Do not use \fBovs\-dpctl\fR commands to modify datapaths if
 \fBovs\-vswitchd\fR(8) is in use.  Instead, modify the
 \fBovs\-vswitchd\fR configuration file and send \fBSIGHUP\fR to the
 \fBovs\-vswitchd\fR process.
-
 .PP
 Most \fBovs\-dpctl\fR commands that work with datapaths take an argument
 that specifies the name of the datapath, in one of the following
 forms:
-
 .so lib/dpif.man
-
 .PP
 The following commands manage datapaths.
-
+.
 .TP
 \fBadd\-dp \fIdp\fR [\fInetdev\fR...]
-
 Creates datapath \fIdp\fR.  The name of the new datapath's local port
 depends on how \fIdp\fR is specified: if it takes the form
 \fBdp\fIN\fR, the local port will be named \fBdp\fIN\fR; otherwise,
 the local port's name will be \fIdp\fR.
-
+.IP
 This will fail if the host already has 256 datapaths, if a network
 device with the same name as the new datapath's local port already
 exists, or if \fIdp\fR is given in the form \fBdp\fIN\fR
 and a datapath numbered \fIN\fR already exists.
-
+.IP
 If \fInetdev\fRs are specified, \fBovs\-dpctl\fR adds them to the datapath.
-
+.
 .TP
 \fBdel\-dp \fIdp\fR
 Deletes datapath \fIdp\fR.  If \fIdp\fR is associated with any network
 devices, they are automatically removed.
-
+.
 .TP
 \fBadd\-if \fIdp netdev\fR[\fIoption\fR...]...
 Adds each \fInetdev\fR to the set of network devices datapath
@@ -65,52 +61,51 @@ network devices, e.g. \fBeth0\fR.  Once a network device has been added
 to a datapath, the datapath has complete ownership of the network device's
 traffic and the network device appears silent to the rest of the
 system.
-
+.IP
 A \fInetdev\fR may be followed by a comma-separated list of options.
 The following options are currently supported:
-
+.
 .RS
 .IP "\fBinternal\fR"
 Instead of attaching an existing \fInetdev\fR, creates an internal
 port (analogous to the local port) with that name.
 .RE
-
+.
 .TP
 \fBdel\-if \fIdp netdev\fR...
 Removes each \fInetdev\fR from the list of network devices datapath
 \fIdp\fR monitors.
-
+.
 .TP
 \fBdump-dps\fR
 Prints the name of each configured datapath on a separate line.
-
+.
 .TP
 \fBshow \fR[\fIdp\fR...]
 Prints a summary of configured datapaths, including their datapath
 numbers and a list of ports connected to each datapath.  (The local
 port is identified as port 0.)
-
+.IP
 If one or more datapaths are specified, information on only those
 datapaths are displayed.  Otherwise, \fBovs\-dpctl\fR displays information
 about all configured datapaths.
-
+.
 .IP "\fBdump-flows \fIdp\fR"
 Prints to the console all flow entries in datapath \fIdp\fR's
 flow table.
-
+.IP
 This command is primarily useful for debugging Open vSwitch.  The flow
 table entries that it displays are not
 OpenFlow flow entries.  Instead, they are different and considerably
 simpler flows maintained by the Open vSwitch kernel module.
-
 .IP "\fBdel-flows \fIdp\fR"
 Deletes all flow entries from datapath \fIdp\fR's flow table.
-
+.IP
 This command is primarily useful for debugging Open vSwitch.  As
 discussed in \fBdump-flows\fR, these entries are
 not OpenFlow flow entries.  By deleting them, the process that set them
 up may be confused about their disappearance.
-
+.
 .IP "\fBdump-groups \fIdp\fR"
 Prints to the console the sets of port groups maintained by datapath
 \fIdp\fR.  Ordinarily there are at least 2 port groups in a datapath
@@ -118,48 +113,47 @@ that \fBovs\-openflowd\fR or \fBovs\-vswitch\fR is controlling: group
 0 contains
 all ports except those disabled by STP, and group 1 contains all
 ports.  Additional or different groups might be used in the future.
-
+.IP
 This command is primarily useful for debugging Open vSwitch.  OpenFlow
 does not have a concept of port groups.
-
 .SH OPTIONS
 .TP
 \fB-t\fR, \fB--timeout=\fIsecs\fR
 Limits \fBovs\-dpctl\fR runtime to approximately \fIsecs\fR seconds.  If
 the timeout expires, \fBovs\-dpctl\fR will exit with a \fBSIGALRM\fR
 signal.
-
+.
 .so lib/vlog.man
 .so lib/common.man
-
+.
 .SH EXAMPLES
-
+.
 A typical \fBovs\-dpctl\fR command sequence for controlling an
 Open vSwitch kernel module:
-
+.
 .TP
 \fBovs\-dpctl add\-dp dp0\fR
 Creates datapath number 0.
-
+.
 .TP
 \fBovs\-dpctl add\-if dp0 eth0 eth1\fR
 Adds two network devices to the new datapath.
-
+.
 .PP
 At this point one would ordinarily start \fBovs\-openflowd\fR(8) on
 \fBdp0\fR, transforming \fBdp0\fR into an OpenFlow switch.  Then, when
 the switch and the datapath is no longer needed:
-
+.
 .TP
 \fBovs\-dpctl del\-if dp0 eth0 eth1\fR
 Removes network devices from the datapath.
-
+.
 .TP
 \fBovs\-dpctl del\-dp dp0\fR
 Deletes the datapath.
-
+.
 .SH "SEE ALSO"
-
+.
 .BR ovs\-appctl (8),
 .BR ovs\-openflowd (8),
 .BR ovs\-vswitchd (8)

@@ -1,0 +1,13 @@
+.IP "\fBssl:\fIip\fR[\fB:\fIport\fR]"
+The specified SSL \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
+The \fB\-\-private\-key\fR, \fB\-\-certificate\fR, and
+\fB\-\-ca\-cert\fR options are mandatory when this form is used.
+.
+.IP "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
+The specified TCP \fIport\fR (default: 6633) on the host at the given
+\fIip\fR, which must be expressed as an IP address (not a DNS name).
+.
+.TP
+\fBunix:\fIfile\fR
+The Unix domain server socket named \fIfile\fR.

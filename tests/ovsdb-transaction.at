@@ -1,0 +1,410 @@
+AT_BANNER([OVSDB -- transactions])
+
+OVSDB_CHECK_POSITIVE([empty table, empty transaction],
+  [[transact \
+    '["print"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["abort"]' \
+    '["print"]']],
+  [dnl
+print:
+commit:
+print:
+abort:
+print:])
+
+OVSDB_CHECK_POSITIVE([nonempty table, empty transaction],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["print"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["abort"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+print:
+1: i=2, j=3
+2: i=2, j=3
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+abort:
+print:
+1: i=2, j=3
+2: i=2, j=3])
+
+OVSDB_CHECK_POSITIVE([insert, commit],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["insert", "3", "1", "2"]' \
+    '["print"]' \
+    '["commit"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+insert 3 1 2:
+print:
+1: i=2, j=3
+2: i=2, j=3
+3: i=1, j=2
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+3: i=1, j=2],
+  [transaction])
+
+OVSDB_CHECK_POSITIVE([insert, abort],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["insert", "3", "1", "2"]' \
+    '["print"]' \
+    '["abort"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+insert 3 1 2:
+print:
+1: i=2, j=3
+2: i=2, j=3
+3: i=1, j=2
+abort:
+print:
+1: i=2, j=3
+2: i=2, j=3],
+  [transaction])
+
+OVSDB_CHECK_POSITIVE([modify, commit],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["modify", "2", "5", "-1"]' \
+    '["modify", "1", "-1", "4"]' \
+    '["print"]' \
+    '["commit"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+modify 2 5 -1:
+modify 1 -1 4:
+print:
+1: i=2, j=4
+2: i=5, j=3
+commit:
+print:
+1: i=2, j=4
+2: i=5, j=3],
+  [transaction])
+
+OVSDB_CHECK_POSITIVE([modify, abort],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["modify", "2", "5", "-1"]' \
+    '["modify", "1", "-1", "4"]' \
+    '["print"]' \
+    '["abort"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+modify 2 5 -1:
+modify 1 -1 4:
+print:
+1: i=2, j=4
+2: i=5, j=3
+abort:
+print:
+1: i=2, j=3
+2: i=2, j=3],
+  [transaction])
+
+OVSDB_CHECK_POSITIVE([delete, commit],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["delete", "1"]' \
+    '["print"]' \
+    '["commit"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+delete 1:
+print:
+2: i=2, j=3
+commit:
+print:
+2: i=2, j=3],
+  [transaction])
+
+OVSDB_CHECK_POSITIVE([delete, abort],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["delete", "1"]' \
+    '["print"]' \
+    '["abort"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+delete 1:
+print:
+2: i=2, j=3
+abort:
+print:
+1: i=2, j=3
+2: i=2, j=3],
+  [transaction])
+
+OVSDB_CHECK_POSITIVE([modify, delete, commit],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["modify", "1", "5", "6"]' \
+    '["delete", "1"]' \
+    '["print"]' \
+    '["commit"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+modify 1 5 6:
+delete 1:
+print:
+2: i=2, j=3
+commit:
+print:
+2: i=2, j=3],
+  [transaction])
+
+OVSDB_CHECK_POSITIVE([modify, delete, abort],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["modify", "1", "5", "6"]' \
+    '["delete", "1"]' \
+    '["print"]' \
+    '["abort"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+modify 1 5 6:
+delete 1:
+print:
+2: i=2, j=3
+abort:
+print:
+1: i=2, j=3
+2: i=2, j=3],
+  [transaction])
+
+OVSDB_CHECK_POSITIVE([insert, delete, commit],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["insert", "3", "5", "6"]' \
+    '["delete", "1"]' \
+    '["delete", "3"]' \
+    '["print"]' \
+    '["commit"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+insert 3 5 6:
+delete 1:
+delete 3:
+print:
+2: i=2, j=3
+commit:
+print:
+2: i=2, j=3],
+  [transaction])
+
+OVSDB_CHECK_POSITIVE([insert, delete, abort],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["insert", "3", "5", "6"]' \
+    '["delete", "1"]' \
+    '["delete", "3"]' \
+    '["print"]' \
+    '["abort"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+insert 3 5 6:
+delete 1:
+delete 3:
+print:
+2: i=2, j=3
+abort:
+print:
+1: i=2, j=3
+2: i=2, j=3],
+  [transaction])
+
+
+OVSDB_CHECK_POSITIVE([insert, modify, delete, commit],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["insert", "3", "5", "6"]' \
+    '["delete", "1"]' \
+    '["modify", "3", "7", "8"]' \
+    '["delete", "3"]' \
+    '["print"]' \
+    '["commit"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+insert 3 5 6:
+delete 1:
+modify 3 7 8:
+delete 3:
+print:
+2: i=2, j=3
+commit:
+print:
+2: i=2, j=3],
+  [transaction])
+
+OVSDB_CHECK_POSITIVE([insert, modify, delete, abort],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["insert", "2", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["insert", "3", "5", "6"]' \
+    '["delete", "1"]' \
+    '["modify", "3", "7", "8"]' \
+    '["delete", "3"]' \
+    '["print"]' \
+    '["abort"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+insert 2 2 3:
+commit:
+print:
+1: i=2, j=3
+2: i=2, j=3
+insert 3 5 6:
+delete 1:
+modify 3 7 8:
+delete 3:
+print:
+2: i=2, j=3
+abort:
+print:
+1: i=2, j=3
+2: i=2, j=3],
+  [transaction])
+
+OVSDB_CHECK_POSITIVE([deletes are aborted cleanly],
+  [[transact \
+    '["insert", "1", "2", "3"]' \
+    '["commit"]' \
+    '["print"]' \
+    '["delete", "1"]' \
+    '["abort"]' \
+    '["print"]' \
+    '["delete", "1"]' \
+    '["abort"]' \
+    '["print"]']],
+  [dnl
+insert 1 2 3:
+commit:
+print:
+1: i=2, j=3
+delete 1:
+abort:
+print:
+1: i=2, j=3
+delete 1:
+abort:
+print:
+1: i=2, j=3],
+  [transaction])
+

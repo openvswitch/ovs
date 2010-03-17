@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2009 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,11 +47,6 @@ void poll_immediate_wake(void);
 
 /* Wait until an event occurs. */
 void poll_block(void);
-
-/* Autonomous function callbacks. */
-typedef void poll_fd_func(int fd, short int revents, void *aux);
-struct poll_waiter *poll_fd_callback(int fd, short int events,
-                                     poll_fd_func *, void *aux);
 
 /* Cancel a file descriptor callback or event. */
 void poll_cancel(struct poll_waiter *);

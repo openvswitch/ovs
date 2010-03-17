@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,8 @@ struct fail_open {
     struct rconn_packet_counter *bogus_packet_counter;
 };
 
+static void fail_open_recover(struct fail_open *);
+
 /* Returns true if 'fo' should be in fail-open mode, otherwise false. */
 static inline bool
 should_fail_open(const struct fail_open *fo)
@@ -99,7 +101,7 @@ send_bogus_packet_in(struct fail_open *fo)
 
     /* Compose ofp_packet_in. */
     ofpbuf_init(&b, 128);
-    eth_addr_random(mac);
+    eth_addr_nicira_random(mac);
     compose_benign_packet(&b, "Open vSwitch Controller Probe", 0xa033, mac);
     opi = make_packet_in(pktbuf_get_null(), OFPP_LOCAL, OFPR_NO_MATCH, &b, 64);
     ofpbuf_uninit(&b);
@@ -155,7 +157,15 @@ fail_open_run(struct fail_open *fo)
 void
 fail_open_maybe_recover(struct fail_open *fo)
 {
-    if (fail_open_is_active(fo) && rconn_is_admitted(fo->controller)) {
+    if (rconn_is_admitted(fo->controller)) {
+        fail_open_recover(fo);
+    }
+}
+
+static void
+fail_open_recover(struct fail_open *fo)
+{
+    if (fail_open_is_active(fo)) {
         flow_t flow;
 
         VLOG_WARN("No longer in fail-open mode");
@@ -235,6 +245,7 @@ void
 fail_open_destroy(struct fail_open *fo)
 {
     if (fo) {
+        fail_open_recover(fo);
         /* We don't own fo->controller. */
         switch_status_unregister(fo->ss_cat);
         rconn_packet_counter_destroy(fo->bogus_packet_counter);

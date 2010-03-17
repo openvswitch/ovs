@@ -1,0 +1,158 @@
+.\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.\" -*- nroff -*-
+.TH ovsdb\-client 1 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovsdb\-client
+.
+.SH NAME
+ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
+.
+.SH SYNOPSIS
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlist\-dbs\fI server\fR
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBget-schema\fI server database\fR
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlist-tables\fI server database\fR
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlist-columns\fI server database \fR[\fItable\fR]
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBtransact\fI server transaction\fR
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBdump\fI server database\fR
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI server database table\fR
+[\fIcolumn\fR[\fB,\fIcolumn\fR]...]
+[\fIselect\fR[\fB,\fIselect\fR]...]
+.br
+\fBovsdb\-client help\fR
+.IP "Output formatting options:"
+[\fB--format=\fIformat\fR]
+[\fB--no-heading\fR]
+.so lib/daemon-syn.man
+.so lib/vlog-syn.man
+.so lib/ssl-syn.man
+.so lib/ssl-bootstrap-syn.man
+.so lib/common-syn.man
+.
+.SH DESCRIPTION
+The \fBovsdb\-client\fR program is a command-line client for
+interacting with a running \fBovsdb\-server\fR process.  For each
+command, the \fIserver\fR to connect to must be specified in one of
+the following forms:
+.RS
+.so ovsdb/remote-active.man
+.so ovsdb/remote-passive.man
+.RE
+.
+.SS "Commands"
+The following commands are implemented:
+.IP "\fBlist-dbs\fI server\fR"
+Connects to \fIserver\fR, retrieves the list of known databases, and
+prints them one per line.  These database names are the ones that may
+be used for \fIdatabase\fR in the following commands.
+.
+.IP "\fBget-schema\fI server database\fR"
+Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
+prints it in JSON format.
+.
+.IP "\fBlist-tables\fI server database\fR"
+Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
+prints a table listing the name of each table
+within the database.
+.
+.IP "\fBlist-columns\fI server database \fR[\fItable\fR]"
+Connects to \fIserver\fR, retrieves the schema for \fIdatabase\fR, and
+prints a table listing the name and type of each
+column.  If \fItable\fR is specified, only columns in that table are
+listed; otherwise, the tables include columns in all tables.
+.
+.IP "\fBtransact\fI server transaction\fR"
+Connects to \fIserver\fR, sends it the specified \fItransaction\fR,
+which must be a JSON array containing one or more valid OVSDB
+operations, and prints the received reply on stdout.
+.
+.IP "\fBdump\fI server database\fR"
+Connects to \fIserver\fR, retrieves all of the data in \fIdatabase\fR,
+and prints it on stdout as a series of tables.
+.
+.IP "\fBmonitor\fI server database table\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...] [\fIselect\fR[\fB,\fIselect\fR]...]"
+Connects to \fIserver\fR and monitors the contents of \fItable\fR in
+\fIdatabase\fR.  By default, the initial contents of \fItable\fR are
+printed, followed by each change as it occurs.  If at least one
+\fIcolumn\fR is specified, only those columns are monitored.  If at
+least one \fIselect\fR is specified, they are interpreted as follows:
+.RS
+.IP "\fBinitial\fR"
+Print the initial contents of the specified columns.
+.IP "\fBinsert\fR"
+Print newly inserted rows.
+.IP "\fBdelete\fR"
+Print deleted rows.
+.IP "\fBmodify\fR"
+Print old and new values of modified rows.
+.RE
+.IP
+If \fB--detach\fR is used with \fBmonitor\fR, then \fBovsdb\-client\fR
+detaches after it has successfully received and printed the initial
+contents of \fItable\fR.
+.SH OPTIONS
+.SS "Output Formatting Options"
+Much of the output from \fBovsdb\-client\fR is in the form of tables.
+The following options controlling output formatting:
+.
+.IP "\fB-f \fIformat\fR"
+.IQ "\fB--format=\fIformat\fR"
+Sets the type of table formatting.  The following types of
+\fIformat\fR are available:
+.RS
+.IP "\fBtable\fR (default)"
+Text-based tables with aligned columns.
+.IP "\fBhtml\fR"
+HTML tables.
+.IP "\fBcvs\fR"
+Comma-separated values as defined in RFC 4180.
+.RE
+.
+.IP "\fB-d \fIformat\fR"
+.IP "\fB--data=\fIformat\fR"
+Sets the formatting for cells within output tables.  The following
+types of \fIformat\fR are available:
+.RS
+.IP "\fBstring\fR (default)"
+The simple format described in \fBovs-vsctl\fR(8).
+.IP "\fBjson\fR"
+JSON.
+.RE
+.
+.IP "\fB--no-heading\fR"
+This option suppresses the heading row that otherwise appears in the
+first row of table output.
+.
+.IP "\fB--pretty\fR"
+By default, JSON in output is printed as compactly as possible.  This
+option causes JSON in output to be printed in a more readable
+fashion.  Members of objects and elements of arrays are printed one
+per line, with indentation.
+.IP
+This option does not affect JSON in tables, which is always printed
+compactly.
+.
+.SS "Daemon Options"
+The daemon options apply only to the \fBmonitor\fR command.  With any
+other command, they have no effect.
+.so lib/daemon.man
+.SS "Logging Options"
+.so lib/vlog.man
+.so lib/ssl.man
+.so lib/ssl-bootstrap.man
+.SS "Other Options"
+.so lib/common.man
+.SH "SEE ALSO"
+.
+\fBovsdb\-server\fR(1),
+\fBovsdb\-client\fR(1),
+and the OVSDB specification.

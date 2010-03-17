@@ -27,7 +27,6 @@
 #include "discovery.h"
 #include "dpif.h"
 #include "dynamic-string.h"
-#include "executer.h"
 #include "fail-open.h"
 #include "in-band.h"
 #include "mac-learning.h"
@@ -39,7 +38,6 @@
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
-#include "openflow/openflow-mgmt.h"
 #include "openvswitch/datapath-protocol.h"
 #include "packets.h"
 #include "pinsched.h"
@@ -50,12 +48,12 @@
 #include "shash.h"
 #include "status.h"
 #include "stp.h"
+#include "stream-ssl.h"
 #include "svec.h"
 #include "tag.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "vconn.h"
-#include "vconn-ssl.h"
 #include "xtoxll.h"
 
 #define THIS_MODULE VLM_ofproto
@@ -85,8 +83,11 @@ static int xlate_actions(const union ofp_action *in, size_t n_in,
 struct rule {
     struct cls_rule cr;
 
+    uint64_t flow_cookie;       /* Controller-issued identifier. 
+                                   (Kept in network-byte order.) */
     uint16_t idle_timeout;      /* In seconds from time of last use. */
     uint16_t hard_timeout;      /* In seconds from time of creation. */
+    bool send_flow_removed;     /* Send a flow removed message? */
     long long int used;         /* Last-used time (0 if never used). */
     long long int created;      /* Creation time. */
     uint64_t packet_count;      /* Number of packets received. */
@@ -144,7 +145,8 @@ rule_is_hidden(const struct rule *rule)
 
 static struct rule *rule_create(struct ofproto *, struct rule *super,
                                 const union ofp_action *, size_t n_actions,
-                                uint16_t idle_timeout, uint16_t hard_timeout);
+                                uint16_t idle_timeout, uint16_t hard_timeout,
+                                uint64_t flow_cookie, bool send_flow_removed);
 static void rule_free(struct rule *);
 static void rule_destroy(struct ofproto *, struct rule *);
 static struct rule *rule_from_cls_rule(const struct cls_rule *);
@@ -157,12 +159,13 @@ static void rule_install(struct ofproto *, struct rule *,
                          struct rule *displaced_rule);
 static void rule_uninstall(struct ofproto *, struct rule *);
 static void rule_post_uninstall(struct ofproto *, struct rule *);
+static void send_flow_removed(struct ofproto *p, struct rule *rule,
+                              long long int now, uint8_t reason);
 
 struct ofconn {
     struct list node;
     struct rconn *rconn;
     struct pktbuf *pktbuf;
-    bool send_flow_exp;
     int miss_send_len;
 
     struct rconn_packet_counter *packet_in_counter;
@@ -174,7 +177,7 @@ struct ofconn {
 };
 
 static struct ofconn *ofconn_create(struct ofproto *, struct rconn *);
-static void ofconn_destroy(struct ofconn *, struct ofproto *);
+static void ofconn_destroy(struct ofconn *);
 static void ofconn_run(struct ofconn *, struct ofproto *);
 static void ofconn_wait(struct ofconn *);
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
@@ -184,11 +187,11 @@ struct ofproto {
     /* Settings. */
     uint64_t datapath_id;       /* Datapath ID. */
     uint64_t fallback_dpid;     /* Datapath ID if no better choice found. */
-    uint64_t mgmt_id;           /* Management channel identifier. */
-    char *manufacturer;         /* Manufacturer. */
-    char *hardware;             /* Hardware. */
-    char *software;             /* Software version. */
-    char *serial;               /* Serial number. */
+    char *mfr_desc;             /* Manufacturer. */
+    char *hw_desc;              /* Hardware. */
+    char *sw_desc;              /* Software version. */
+    char *serial_desc;          /* Serial number. */
+    char *dp_desc;              /* Datapath description. */
 
     /* Datapath. */
     struct dpif *dpif;
@@ -205,7 +208,6 @@ struct ofproto {
     struct discovery *discovery;
     struct fail_open *fail_open;
     struct pinsched *miss_sched, *action_sched;
-    struct executer *executer;
     struct netflow *netflow;
     struct ofproto_sflow *sflow;
 
@@ -259,7 +261,8 @@ static int init_ports(struct ofproto *);
 static void reinit_ports(struct ofproto *);
 
 int
-ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
+ofproto_create(const char *datapath, const char *datapath_type,
+               const struct ofhooks *ofhooks, void *aux,
                struct ofproto **ofprotop)
 {
     struct odp_stats stats;
@@ -270,7 +273,7 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     *ofprotop = NULL;
 
     /* Connect to datapath and start listening for messages. */
-    error = dpif_open(datapath, &dpif);
+    error = dpif_open(datapath, datapath_type, &dpif);
     if (error) {
         VLOG_ERR("failed to open datapath %s: %s", datapath, strerror(error));
         return error;
@@ -293,13 +296,14 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     dpif_recv_purge(dpif);
 
     /* Initialize settings. */
-    p = xcalloc(1, sizeof *p);
+    p = xzalloc(sizeof *p);
     p->fallback_dpid = pick_fallback_dpid();
     p->datapath_id = p->fallback_dpid;
-    p->manufacturer = xstrdup("Nicira Networks, Inc.");
-    p->hardware = xstrdup("Reference Implementation");
-    p->software = xstrdup(VERSION BUILDNR);
-    p->serial = xstrdup("None");
+    p->mfr_desc = xstrdup(DEFAULT_MFR_DESC);
+    p->hw_desc = xstrdup(DEFAULT_HW_DESC);
+    p->sw_desc = xstrdup(DEFAULT_SW_DESC);
+    p->serial_desc = xstrdup(DEFAULT_SERIAL_DESC);
+    p->dp_desc = xstrdup(DEFAULT_DP_DESC);
 
     /* Initialize datapath. */
     p->dpif = dpif;
@@ -314,7 +318,6 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     p->discovery = NULL;
     p->fail_open = NULL;
     p->miss_sched = p->action_sched = NULL;
-    p->executer = NULL;
     p->netflow = NULL;
     p->sflow = NULL;
 
@@ -349,16 +352,9 @@ ofproto_create(const char *datapath, const struct ofhooks *ofhooks, void *aux,
     p->ss_cat = switch_status_register(p->switch_status, "remote",
                                        rconn_status_cb, p->controller->rconn);
 
-    /* Almost done... */
-    error = init_ports(p);
-    if (error) {
-        ofproto_destroy(p);
-        return error;
-    }
-
     /* Pick final datapath ID. */
     p->datapath_id = pick_datapath_id(p);
-    VLOG_INFO("using datapath ID %012"PRIx64, p->datapath_id);
+    VLOG_INFO("using datapath ID %016"PRIx64, p->datapath_id);
 
     *ofprotop = p;
     return 0;
@@ -370,15 +366,9 @@ ofproto_set_datapath_id(struct ofproto *p, uint64_t datapath_id)
     uint64_t old_dpid = p->datapath_id;
     p->datapath_id = datapath_id ? datapath_id : pick_datapath_id(p);
     if (p->datapath_id != old_dpid) {
-        VLOG_INFO("datapath ID changed to %012"PRIx64, p->datapath_id);
+        VLOG_INFO("datapath ID changed to %016"PRIx64, p->datapath_id);
         rconn_reconnect(p->controller->rconn);
     }
-}
-
-void
-ofproto_set_mgmt_id(struct ofproto *p, uint64_t mgmt_id)
-{
-    p->mgmt_id = mgmt_id;
 }
 
 void
@@ -400,24 +390,52 @@ ofproto_set_max_backoff(struct ofproto *p, int max_backoff)
 
 void
 ofproto_set_desc(struct ofproto *p,
-                 const char *manufacturer, const char *hardware,
-                 const char *software, const char *serial)
+                 const char *mfr_desc, const char *hw_desc,
+                 const char *sw_desc, const char *serial_desc,
+                 const char *dp_desc)
 {
-    if (manufacturer) {
-        free(p->manufacturer);
-        p->manufacturer = xstrdup(manufacturer);
+    struct ofp_desc_stats *ods;
+
+    if (mfr_desc) {
+        if (strlen(mfr_desc) >= sizeof ods->mfr_desc) {
+            VLOG_WARN("truncating mfr_desc, must be less than %zu characters",
+                    sizeof ods->mfr_desc);
+        }
+        free(p->mfr_desc);
+        p->mfr_desc = xstrdup(mfr_desc);
     }
-    if (hardware) {
-        free(p->hardware);
-        p->hardware = xstrdup(hardware);
+    if (hw_desc) {
+        if (strlen(hw_desc) >= sizeof ods->hw_desc) {
+            VLOG_WARN("truncating hw_desc, must be less than %zu characters",
+                    sizeof ods->hw_desc);
+        }
+        free(p->hw_desc);
+        p->hw_desc = xstrdup(hw_desc);
     }
-    if (software) {
-        free(p->software);
-        p->software = xstrdup(software);
+    if (sw_desc) {
+        if (strlen(sw_desc) >= sizeof ods->sw_desc) {
+            VLOG_WARN("truncating sw_desc, must be less than %zu characters",
+                    sizeof ods->sw_desc);
+        }
+        free(p->sw_desc);
+        p->sw_desc = xstrdup(sw_desc);
     }
-    if (serial) {
-        free(p->serial);
-        p->serial = xstrdup(serial);
+    if (serial_desc) {
+        if (strlen(serial_desc) >= sizeof ods->serial_num) {
+            VLOG_WARN("truncating serial_desc, must be less than %zu "
+                    "characters",
+                    sizeof ods->serial_num);
+        }
+        free(p->serial_desc);
+        p->serial_desc = xstrdup(serial_desc);
+    }
+    if (dp_desc) {
+        if (strlen(dp_desc) >= sizeof ods->dp_desc) {
+            VLOG_WARN("truncating dp_desc, must be less than %zu characters",
+                    sizeof ods->dp_desc);
+        }
+        free(p->dp_desc);
+        p->dp_desc = xstrdup(dp_desc);
     }
 }
 
@@ -537,7 +555,7 @@ int
 ofproto_set_netflow(struct ofproto *ofproto,
                     const struct netflow_options *nf_options)
 {
-    if (nf_options->collectors.n) {
+    if (nf_options && nf_options->collectors.n) {
         if (!ofproto->netflow) {
             ofproto->netflow = netflow_create();
         }
@@ -628,34 +646,10 @@ ofproto_set_stp(struct ofproto *ofproto OVS_UNUSED, bool enable_stp)
     }
 }
 
-int
-ofproto_set_remote_execution(struct ofproto *ofproto, const char *command_acl,
-                             const char *command_dir)
-{
-    if (command_acl) {
-        if (!ofproto->executer) {
-            return executer_create(command_acl, command_dir,
-                                   &ofproto->executer);
-        } else {
-            executer_set_acl(ofproto->executer, command_acl, command_dir);
-        }
-    } else {
-        executer_destroy(ofproto->executer);
-        ofproto->executer = NULL;
-    }
-    return 0;
-}
-
 uint64_t
 ofproto_get_datapath_id(const struct ofproto *ofproto)
 {
     return ofproto->datapath_id;
-}
-
-uint64_t
-ofproto_get_mgmt_id(const struct ofproto *ofproto)
-{
-    return ofproto->mgmt_id;
 }
 
 int
@@ -720,12 +714,15 @@ ofproto_destroy(struct ofproto *p)
         return;
     }
 
+    /* Destroy fail-open early, because it touches the classifier. */
+    ofproto_set_failure(p, false);
+
     ofproto_flush_flows(p);
     classifier_destroy(&p->cls);
 
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, struct ofconn, node,
                         &p->all_conns) {
-        ofconn_destroy(ofconn, p);
+        ofconn_destroy(ofconn);
     }
 
     dpif_close(p->dpif);
@@ -738,10 +735,8 @@ ofproto_destroy(struct ofproto *p)
     switch_status_destroy(p->switch_status);
     in_band_destroy(p->in_band);
     discovery_destroy(p->discovery);
-    fail_open_destroy(p->fail_open);
     pinsched_destroy(p->miss_sched);
     pinsched_destroy(p->action_sched);
-    executer_destroy(p->executer);
     netflow_destroy(p->netflow);
     ofproto_sflow_destroy(p->sflow);
 
@@ -758,6 +753,12 @@ ofproto_destroy(struct ofproto *p)
     free(p->snoops);
 
     mac_learning_destroy(p->ml);
+
+    free(p->mfr_desc);
+    free(p->hw_desc);
+    free(p->sw_desc);
+    free(p->serial_desc);
+    free(p->dp_desc);
 
     port_array_destroy(&p->ports);
 
@@ -793,6 +794,10 @@ ofproto_run1(struct ofproto *p)
     int error;
     int i;
 
+    if (shash_is_empty(&p->port_by_name)) {
+        init_ports(p);
+    }
+
     for (i = 0; i < 50; i++) {
         struct ofpbuf *buf;
         int error;
@@ -803,8 +808,8 @@ ofproto_run1(struct ofproto *p)
                 /* Someone destroyed the datapath behind our back.  The caller
                  * better destroy us and give up, because we're just going to
                  * spin from here on out. */
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-                VLOG_ERR_RL(&rl, "%s: datapath was destroyed externally",
+                static struct vlog_rate_limit rl2 = VLOG_RATE_LIMIT_INIT(1, 5);
+                VLOG_ERR_RL(&rl2, "%s: datapath was destroyed externally",
                             dpif_name(p->dpif));
                 return ENODEV;
             }
@@ -840,9 +845,6 @@ ofproto_run1(struct ofproto *p)
     }
     pinsched_run(p->miss_sched, send_packet_in_miss, p);
     pinsched_run(p->action_sched, send_packet_in_action, p);
-    if (p->executer) {
-        executer_run(p->executer);
-    }
 
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, struct ofconn, node,
                         &p->all_conns) {
@@ -954,9 +956,6 @@ ofproto_wait(struct ofproto *p)
     }
     pinsched_wait(p->miss_sched);
     pinsched_wait(p->action_sched);
-    if (p->executer) {
-        executer_wait(p->executer);
-    }
     if (p->sflow) {
         ofproto_sflow_wait(p->sflow);
     }
@@ -1025,7 +1024,8 @@ ofproto_add_flow(struct ofproto *p,
 {
     struct rule *rule;
     rule = rule_create(p, NULL, actions, n_actions,
-                       idle_timeout >= 0 ? idle_timeout : 5 /* XXX */, 0);
+                       idle_timeout >= 0 ? idle_timeout : 5 /* XXX */, 
+                       0, 0, false);
     cls_rule_from_flow(&rule->cr, flow, wildcards, priority);
     rule_insert(p, rule, NULL, 0);
 }
@@ -1136,13 +1136,19 @@ refresh_port_groups(struct ofproto *p)
 static struct ofport *
 make_ofport(const struct odp_port *odp_port)
 {
+    struct netdev_options netdev_options;
     enum netdev_flags flags;
     struct ofport *ofport;
     struct netdev *netdev;
     bool carrier;
     int error;
 
-    error = netdev_open(odp_port->devname, NETDEV_ETH_TYPE_NONE, &netdev);
+    memset(&netdev_options, 0, sizeof netdev_options);
+    netdev_options.name = odp_port->devname;
+    netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
+    netdev_options.may_open = true;
+
+    error = netdev_open(&netdev_options, &netdev);
     if (error) {
         VLOG_WARN_RL(&rl, "ignoring port %s (%"PRIu16") because netdev %s "
                      "cannot be opened (%s)",
@@ -1369,7 +1375,6 @@ ofconn_create(struct ofproto *p, struct rconn *rconn)
     list_push_back(&p->all_conns, &ofconn->node);
     ofconn->rconn = rconn;
     ofconn->pktbuf = NULL;
-    ofconn->send_flow_exp = false;
     ofconn->miss_send_len = 0;
     ofconn->packet_in_counter = rconn_packet_counter_create ();
     ofconn->reply_counter = rconn_packet_counter_create ();
@@ -1377,12 +1382,8 @@ ofconn_create(struct ofproto *p, struct rconn *rconn)
 }
 
 static void
-ofconn_destroy(struct ofconn *ofconn, struct ofproto *p)
+ofconn_destroy(struct ofconn *ofconn)
 {
-    if (p->executer) {
-        executer_rconn_closing(p->executer, ofconn->rconn);
-    }
-
     list_remove(&ofconn->node);
     rconn_destroy(ofconn->rconn);
     rconn_packet_counter_destroy(ofconn->packet_in_counter);
@@ -1415,7 +1416,7 @@ ofconn_run(struct ofconn *ofconn, struct ofproto *p)
     }
 
     if (ofconn != p->controller && !rconn_is_alive(ofconn->rconn)) {
-        ofconn_destroy(ofconn, p);
+        ofconn_destroy(ofconn);
     }
 }
 
@@ -1435,12 +1436,15 @@ ofconn_wait(struct ofconn *ofconn)
 static struct rule *
 rule_create(struct ofproto *ofproto, struct rule *super,
             const union ofp_action *actions, size_t n_actions,
-            uint16_t idle_timeout, uint16_t hard_timeout)
+            uint16_t idle_timeout, uint16_t hard_timeout,
+            uint64_t flow_cookie, bool send_flow_removed)
 {
-    struct rule *rule = xcalloc(1, sizeof *rule);
+    struct rule *rule = xzalloc(sizeof *rule);
     rule->idle_timeout = idle_timeout;
     rule->hard_timeout = hard_timeout;
+    rule->flow_cookie = flow_cookie;
     rule->used = rule->created = time_msec();
+    rule->send_flow_removed = send_flow_removed;
     rule->super = super;
     if (super) {
         list_push_back(&super->list, &rule->list);
@@ -1600,7 +1604,8 @@ rule_create_subrule(struct ofproto *ofproto, struct rule *rule,
                     const flow_t *flow)
 {
     struct rule *subrule = rule_create(ofproto, rule, NULL, 0,
-                                       rule->idle_timeout, rule->hard_timeout);
+                                       rule->idle_timeout, rule->hard_timeout,
+                                       0, false);
     COVERAGE_INC(ofproto_subrule_create);
     cls_rule_from_flow(&subrule->cr, flow, 0,
                        (rule->cr.priority <= UINT16_MAX ? UINT16_MAX
@@ -1886,7 +1891,7 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
     osf->n_buffers = htonl(pktbuf_capacity());
     osf->n_tables = 2;
     osf->capabilities = htonl(OFPC_FLOW_STATS | OFPC_TABLE_STATS |
-                              OFPC_PORT_STATS | OFPC_MULTI_PHY_TX);
+                              OFPC_PORT_STATS | OFPC_ARP_MATCH_IP);
     osf->actions = htonl((1u << OFPAT_OUTPUT) |
                          (1u << OFPAT_SET_VLAN_VID) |
                          (1u << OFPAT_SET_VLAN_PCP) |
@@ -1895,6 +1900,7 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
                          (1u << OFPAT_SET_DL_DST) |
                          (1u << OFPAT_SET_NW_SRC) |
                          (1u << OFPAT_SET_NW_DST) |
+                         (1u << OFPAT_SET_NW_TOS) |
                          (1u << OFPAT_SET_TP_SRC) |
                          (1u << OFPAT_SET_TP_DST));
 
@@ -1918,9 +1924,6 @@ handle_get_config_request(struct ofproto *p, struct ofconn *ofconn,
     /* Figure out flags. */
     dpif_get_drop_frags(p->dpif, &drop_frags);
     flags = drop_frags ? OFPC_FRAG_DROP : OFPC_FRAG_NORMAL;
-    if (ofconn->send_flow_exp) {
-        flags |= OFPC_SEND_FLOW_EXP;
-    }
 
     /* Send reply. */
     osc = make_openflow_xid(sizeof *osc, OFPT_GET_CONFIG_REPLY, oh->xid, &buf);
@@ -1943,8 +1946,6 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
         return error;
     }
     flags = ntohs(osc->flags);
-
-    ofconn->send_flow_exp = (flags & OFPC_SEND_FLOW_EXP) != 0;
 
     if (ofconn == p->controller) {
         switch (flags & OFPC_FRAG_MASK) {
@@ -2214,6 +2215,11 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
             break;
 
+        case OFPAT_SET_NW_TOS:
+            oa = odp_actions_add(ctx->out, ODPAT_SET_NW_TOS);
+            oa->nw_tos.nw_tos = ia->nw_tos.nw_tos;
+            break;
+
         case OFPAT_SET_TP_SRC:
             oa = odp_actions_add(ctx->out, ODPAT_SET_TP_SRC);
             oa->tp_port.tp_port = ia->tp_port.tp_port;
@@ -2417,10 +2423,12 @@ handle_desc_stats_request(struct ofproto *p, struct ofconn *ofconn,
 
     msg = start_stats_reply(request, sizeof *ods);
     ods = append_stats_reply(sizeof *ods, ofconn, &msg);
-    strncpy(ods->mfr_desc, p->manufacturer, sizeof ods->mfr_desc);
-    strncpy(ods->hw_desc, p->hardware, sizeof ods->hw_desc);
-    strncpy(ods->sw_desc, p->software, sizeof ods->sw_desc);
-    strncpy(ods->serial_num, p->serial, sizeof ods->serial_num);
+    memset(ods, 0, sizeof *ods);
+    ovs_strlcpy(ods->mfr_desc, p->mfr_desc, sizeof ods->mfr_desc);
+    ovs_strlcpy(ods->hw_desc, p->hw_desc, sizeof ods->hw_desc);
+    ovs_strlcpy(ods->sw_desc, p->sw_desc, sizeof ods->sw_desc);
+    ovs_strlcpy(ods->serial_num, p->serial_desc, sizeof ods->serial_num);
+    ovs_strlcpy(ods->dp_desc, p->dp_desc, sizeof ods->dp_desc);
     queue_tx(msg, ofconn, ofconn->reply_counter);
 
     return 0;
@@ -2482,39 +2490,62 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
     return 0;
 }
 
+static void
+append_port_stat(struct ofport *port, uint16_t port_no, struct ofconn *ofconn, 
+                 struct ofpbuf *msg)
+{
+    struct netdev_stats stats;
+    struct ofp_port_stats *ops;
+
+    /* Intentionally ignore return value, since errors will set 
+     * 'stats' to all-1s, which is correct for OpenFlow, and 
+     * netdev_get_stats() will log errors. */
+    netdev_get_stats(port->netdev, &stats);
+
+    ops = append_stats_reply(sizeof *ops, ofconn, &msg);
+    ops->port_no = htons(odp_port_to_ofp_port(port_no));
+    memset(ops->pad, 0, sizeof ops->pad);
+    ops->rx_packets = htonll(stats.rx_packets);
+    ops->tx_packets = htonll(stats.tx_packets);
+    ops->rx_bytes = htonll(stats.rx_bytes);
+    ops->tx_bytes = htonll(stats.tx_bytes);
+    ops->rx_dropped = htonll(stats.rx_dropped);
+    ops->tx_dropped = htonll(stats.tx_dropped);
+    ops->rx_errors = htonll(stats.rx_errors);
+    ops->tx_errors = htonll(stats.tx_errors);
+    ops->rx_frame_err = htonll(stats.rx_frame_errors);
+    ops->rx_over_err = htonll(stats.rx_over_errors);
+    ops->rx_crc_err = htonll(stats.rx_crc_errors);
+    ops->collisions = htonll(stats.collisions);
+}
+
 static int
 handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
-                          struct ofp_stats_request *request)
+                          struct ofp_stats_request *osr,
+                          size_t arg_size)
 {
+    struct ofp_port_stats_request *psr;
     struct ofp_port_stats *ops;
     struct ofpbuf *msg;
     struct ofport *port;
     unsigned int port_no;
 
-    msg = start_stats_reply(request, sizeof *ops * 16);
-    PORT_ARRAY_FOR_EACH (port, &p->ports, port_no) {
-        struct netdev_stats stats;
+    if (arg_size != sizeof *psr) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    psr = (struct ofp_port_stats_request *) osr->body;
 
-        /* Intentionally ignore return value, since errors will set 'stats' to
-         * all-1s, which is correct for OpenFlow, and netdev_get_stats() will
-         * log errors. */
-        netdev_get_stats(port->netdev, &stats);
-
-        ops = append_stats_reply(sizeof *ops, ofconn, &msg);
-        ops->port_no = htons(odp_port_to_ofp_port(port_no));
-        memset(ops->pad, 0, sizeof ops->pad);
-        ops->rx_packets = htonll(stats.rx_packets);
-        ops->tx_packets = htonll(stats.tx_packets);
-        ops->rx_bytes = htonll(stats.rx_bytes);
-        ops->tx_bytes = htonll(stats.tx_bytes);
-        ops->rx_dropped = htonll(stats.rx_dropped);
-        ops->tx_dropped = htonll(stats.tx_dropped);
-        ops->rx_errors = htonll(stats.rx_errors);
-        ops->tx_errors = htonll(stats.tx_errors);
-        ops->rx_frame_err = htonll(stats.rx_frame_errors);
-        ops->rx_over_err = htonll(stats.rx_over_errors);
-        ops->rx_crc_err = htonll(stats.rx_crc_errors);
-        ops->collisions = htonll(stats.collisions);
+    msg = start_stats_reply(osr, sizeof *ops * 16);
+    if (psr->port_no != htons(OFPP_NONE)) {
+        port = port_array_get(&p->ports, 
+                ofp_port_to_odp_port(ntohs(psr->port_no)));
+        if (port) {
+            append_port_stat(port, ntohs(psr->port_no), ofconn, msg);
+        }
+    } else {
+        PORT_ARRAY_FOR_EACH (port, &p->ports, port_no) {
+            append_port_stat(port, port_no, ofconn, msg);
+        }
     }
 
     queue_tx(msg, ofconn, ofconn->reply_counter);
@@ -2528,6 +2559,9 @@ struct flow_stats_cbdata {
     struct ofpbuf *msg;
 };
 
+/* Obtains statistic counters for 'rule' within 'p' and stores them into
+ * '*packet_countp' and '*byte_countp'.  If 'rule' is a wildcarded rule, the
+ * returned statistic include statistics for all of 'rule''s subrules. */
 static void
 query_stats(struct ofproto *p, struct rule *rule,
             uint64_t *packet_countp, uint64_t *byte_countp)
@@ -2537,11 +2571,21 @@ query_stats(struct ofproto *p, struct rule *rule,
     struct odp_flow *odp_flows;
     size_t n_odp_flows;
 
+    /* Start from historical data for 'rule' itself that are no longer tracked
+     * by the datapath.  This counts, for example, subrules that have
+     * expired. */
     packet_count = rule->packet_count;
     byte_count = rule->byte_count;
 
+    /* Prepare to ask the datapath for statistics on 'rule', or if it is
+     * wildcarded then on all of its subrules.
+     *
+     * Also, add any statistics that are not tracked by the datapath for each
+     * subrule.  This includes, for example, statistics for packets that were
+     * executed "by hand" by ofproto via dpif_execute() but must be accounted
+     * to a flow. */
     n_odp_flows = rule->cr.wc.wildcards ? list_size(&rule->list) : 1;
-    odp_flows = xcalloc(1, n_odp_flows * sizeof *odp_flows);
+    odp_flows = xzalloc(n_odp_flows * sizeof *odp_flows);
     if (rule->cr.wc.wildcards) {
         size_t i = 0;
         LIST_FOR_EACH (subrule, struct rule, list, &rule->list) {
@@ -2553,8 +2597,7 @@ query_stats(struct ofproto *p, struct rule *rule,
         odp_flows[0].key = rule->cr.flow;
     }
 
-    packet_count = rule->packet_count;
-    byte_count = rule->byte_count;
+    /* Fetch up-to-date statistics from the datapath and add them in. */
     if (!dpif_flow_get_multiple(p->dpif, odp_flows, n_odp_flows)) {
         size_t i;
         for (i = 0; i < n_odp_flows; i++) {
@@ -2565,6 +2608,7 @@ query_stats(struct ofproto *p, struct rule *rule,
     }
     free(odp_flows);
 
+    /* Return the stats to the caller. */
     *packet_countp = packet_count;
     *byte_countp = byte_count;
 }
@@ -2577,6 +2621,9 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     struct ofp_flow_stats *ofs;
     uint64_t packet_count, byte_count;
     size_t act_len, len;
+    long long int tdiff = time_msec() - rule->created;
+    uint32_t sec = tdiff / 1000;
+    uint32_t msec = tdiff - (sec * 1000);
 
     if (rule_is_hidden(rule) || !rule_has_out_port(rule, cbdata->out_port)) {
         return;
@@ -2592,7 +2639,9 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     ofs->table_id = rule->cr.wc.wildcards ? TABLEID_CLASSIFIER : TABLEID_HASH;
     ofs->pad = 0;
     flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofs->match);
-    ofs->duration = htonl((time_msec() - rule->created) / 1000);
+    ofs->duration_sec = htonl(sec);
+    ofs->duration_nsec = htonl(msec * 1000000);
+    ofs->cookie = rule->flow_cookie;
     ofs->priority = htons(rule->cr.priority);
     ofs->idle_timeout = htons(rule->idle_timeout);
     ofs->hard_timeout = htons(rule->hard_timeout);
@@ -2621,7 +2670,7 @@ handle_flow_stats_request(struct ofproto *p, struct ofconn *ofconn,
     struct cls_rule target;
 
     if (arg_size != sizeof *fsr) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     fsr = (struct ofp_flow_stats_request *) osr->body;
 
@@ -2659,7 +2708,7 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
     }
 
     query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
-    flow_to_ovs_match(&rule->cr.flow, rule->cr.wc.wildcards, &match);
+    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &match);
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);
@@ -2729,7 +2778,7 @@ handle_aggregate_stats_request(struct ofproto *p, struct ofconn *ofconn,
     struct ofpbuf *msg;
 
     if (arg_size != sizeof *asr) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     asr = (struct ofp_aggregate_stats_request *) osr->body;
 
@@ -2782,7 +2831,7 @@ handle_stats_request(struct ofproto *p, struct ofconn *ofconn,
         return handle_table_stats_request(p, ofconn, osr);
 
     case OFPST_PORT:
-        return handle_port_stats_request(p, ofconn, osr);
+        return handle_port_stats_request(p, ofconn, osr, arg_size);
 
     case OFPST_VENDOR:
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
@@ -2834,16 +2883,30 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
     uint16_t in_port;
     int error;
 
+    if (ofm->flags & htons(OFPFF_CHECK_OVERLAP)) {
+        flow_t flow;
+        uint32_t wildcards;
+
+        flow_from_match(&flow, &wildcards, &ofm->match);
+        if (classifier_rule_overlaps(&p->cls, &flow, wildcards,
+                                     ntohs(ofm->priority))) {
+            return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP);
+        }
+    }
+
     rule = rule_create(p, NULL, (const union ofp_action *) ofm->actions,
                        n_actions, ntohs(ofm->idle_timeout),
-                       ntohs(ofm->hard_timeout));
+                       ntohs(ofm->hard_timeout),  ofm->cookie,
+                       ofm->flags & htons(OFPFF_SEND_FLOW_REM));
     cls_rule_from_match(&rule->cr, &ofm->match, ntohs(ofm->priority));
 
-    packet = NULL;
     error = 0;
     if (ofm->buffer_id != htonl(UINT32_MAX)) {
         error = pktbuf_retrieve(ofconn->pktbuf, ntohl(ofm->buffer_id),
                                 &packet, &in_port);
+    } else {
+        packet = NULL;
+        in_port = UINT16_MAX;
     }
 
     rule_insert(p, rule, packet, in_port);
@@ -2860,6 +2923,8 @@ modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
     }
 
     if (command == OFPFC_DELETE) {
+        long long int now = time_msec();
+        send_flow_removed(p, rule, now, OFPRR_DELETE);
         rule_remove(p, rule);
     } else {
         size_t actions_len = n_actions * sizeof *rule->actions;
@@ -2873,6 +2938,7 @@ modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
         free(rule->actions);
         rule->actions = xmemdup(ofm->actions, actions_len);
         rule->n_actions = n_actions;
+        rule->flow_cookie = ofm->cookie;
 
         if (rule->cr.wc.wildcards) {
             COVERAGE_INC(ofproto_mod_wc_flow);
@@ -2967,6 +3033,14 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
         return error;
     }
 
+    /* We do not support the emergency flow cache.  It will hopefully
+     * get dropped from OpenFlow in the near future. */
+    if (ofm->flags & htons(OFPFF_EMERG)) {
+        /* There isn't a good fit for an error code, so just state that the
+         * flow table is full. */
+        return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_ALL_TABLES_FULL);
+    }
+
     normalize_match(&ofm->match);
     if (!ofm->match.wildcards) {
         ofm->priority = htons(UINT16_MAX);
@@ -2999,58 +3073,6 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
     }
 }
 
-static void
-send_capability_reply(struct ofproto *p, struct ofconn *ofconn, uint32_t xid)
-{
-    struct ofmp_capability_reply *ocr;
-    struct ofpbuf *b;
-    char capabilities[] = "com.nicira.mgmt.manager=false\n";
-
-    ocr = make_openflow_xid(sizeof(*ocr), OFPT_VENDOR, xid, &b);
-    ocr->header.header.vendor = htonl(NX_VENDOR_ID);
-    ocr->header.header.subtype = htonl(NXT_MGMT);
-    ocr->header.type = htons(OFMPT_CAPABILITY_REPLY);
-
-    ocr->format = htonl(OFMPCOF_SIMPLE);
-    ocr->mgmt_id = htonll(p->mgmt_id);
-
-    ofpbuf_put(b, capabilities, strlen(capabilities));
-
-    queue_tx(b, ofconn, ofconn->reply_counter);
-}
-
-static int
-handle_ofmp(struct ofproto *p, struct ofconn *ofconn, 
-            struct ofmp_header *ofmph)
-{
-    size_t msg_len = ntohs(ofmph->header.header.length);
-    if (msg_len < sizeof(*ofmph)) {
-        VLOG_WARN_RL(&rl, "dropping short managment message: %zu\n", msg_len);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
-    }
-
-    if (ofmph->type == htons(OFMPT_CAPABILITY_REQUEST)) {
-        struct ofmp_capability_request *ofmpcr;
-
-        if (msg_len < sizeof(struct ofmp_capability_request)) {
-            VLOG_WARN_RL(&rl, "dropping short capability request: %zu\n",
-                    msg_len);
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
-        }
-
-        ofmpcr = (struct ofmp_capability_request *)ofmph;
-        if (ofmpcr->format != htonl(OFMPCAF_SIMPLE)) {
-            /* xxx Find a better type than bad subtype */
-            return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
-        }
-
-        send_capability_reply(p, ofconn, ofmph->header.header.xid);
-        return 0;
-    } else {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
-    }
-}
-
 static int
 handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
 {
@@ -3058,13 +3080,13 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
     struct nicira_header *nh;
 
     if (ntohs(ovh->header.length) < sizeof(struct ofp_vendor_header)) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     if (ovh->vendor != htonl(NX_VENDOR_ID)) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
     }
     if (ntohs(ovh->header.length) < sizeof(struct nicira_header)) {
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
     nh = msg;
@@ -3072,24 +3094,22 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
     case NXT_STATUS_REQUEST:
         return switch_status_handle_request(p->switch_status, ofconn->rconn,
                                             msg);
-
-    case NXT_ACT_SET_CONFIG:
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE); /* XXX */
-
-    case NXT_ACT_GET_CONFIG:
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE); /* XXX */
-
-    case NXT_COMMAND_REQUEST:
-        if (p->executer) {
-            return executer_handle_request(p->executer, ofconn->rconn, msg);
-        }
-        break;
-
-    case NXT_MGMT:
-        return handle_ofmp(p, ofconn, msg);
     }
 
     return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
+}
+
+static int
+handle_barrier_request(struct ofconn *ofconn, struct ofp_header *oh)
+{
+    struct ofp_header *ob;
+    struct ofpbuf *buf;
+
+    /* Currently, everything executes synchronously, so we can just
+     * immediately send the barrier reply. */
+    ob = make_openflow_xid(sizeof *ob, OFPT_BARRIER_REPLY, oh->xid, &buf);
+    queue_tx(buf, ofconn, ofconn->reply_counter);
+    return 0;
 }
 
 static void
@@ -3139,6 +3159,10 @@ handle_openflow(struct ofconn *ofconn, struct ofproto *p,
 
     case OFPT_VENDOR:
         error = handle_vendor(p, ofconn, ofp_msg->data);
+        break;
+
+    case OFPT_BARRIER_REQUEST:
+        error = handle_barrier_request(ofconn, oh);
         break;
 
     default:
@@ -3307,50 +3331,26 @@ revalidate_rule(struct ofproto *p, struct rule *rule)
 }
 
 static struct ofpbuf *
-compose_flow_exp(const struct rule *rule, long long int now, uint8_t reason)
+compose_flow_removed(const struct rule *rule, long long int now, uint8_t reason)
 {
-    struct ofp_flow_expired *ofe;
+    struct ofp_flow_removed *ofr;
     struct ofpbuf *buf;
+    long long int tdiff = now - rule->created;
+    uint32_t sec = tdiff / 1000;
+    uint32_t msec = tdiff - (sec * 1000);
 
-    ofe = make_openflow(sizeof *ofe, OFPT_FLOW_EXPIRED, &buf);
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofe->match);
-    ofe->priority = htons(rule->cr.priority);
-    ofe->reason = reason;
-    ofe->duration = htonl((now - rule->created) / 1000);
-    ofe->packet_count = htonll(rule->packet_count);
-    ofe->byte_count = htonll(rule->byte_count);
+    ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
+    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofr->match);
+    ofr->cookie = rule->flow_cookie;
+    ofr->priority = htons(rule->cr.priority);
+    ofr->reason = reason;
+    ofr->duration_sec = htonl(sec);
+    ofr->duration_nsec = htonl(msec * 1000000);
+    ofr->idle_timeout = htons(rule->idle_timeout);
+    ofr->packet_count = htonll(rule->packet_count);
+    ofr->byte_count = htonll(rule->byte_count);
 
     return buf;
-}
-
-static void
-send_flow_exp(struct ofproto *p, struct rule *rule,
-              long long int now, uint8_t reason)
-{
-    struct ofconn *ofconn;
-    struct ofconn *prev;
-    struct ofpbuf *buf = NULL;
-
-    /* We limit the maximum number of queued flow expirations it by accounting
-     * them under the counter for replies.  That works because preventing
-     * OpenFlow requests from being processed also prevents new flows from
-     * being added (and expiring).  (It also prevents processing OpenFlow
-     * requests that would not add new flows, so it is imperfect.) */
-
-    prev = NULL;
-    LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
-        if (ofconn->send_flow_exp && rconn_is_connected(ofconn->rconn)) {
-            if (prev) {
-                queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
-            } else {
-                buf = compose_flow_exp(rule, now, reason);
-            }
-            prev = ofconn;
-        }
-    }
-    if (prev) {
-        queue_tx(buf, prev, prev->reply_counter);
-    }
 }
 
 static void
@@ -3365,6 +3365,36 @@ uninstall_idle_flow(struct ofproto *ofproto, struct rule *rule)
         rule_uninstall(ofproto, rule);
     }
 }
+static void
+send_flow_removed(struct ofproto *p, struct rule *rule,
+                  long long int now, uint8_t reason)
+{
+    struct ofconn *ofconn;
+    struct ofconn *prev;
+    struct ofpbuf *buf = NULL;
+
+    /* We limit the maximum number of queued flow expirations it by accounting
+     * them under the counter for replies.  That works because preventing
+     * OpenFlow requests from being processed also prevents new flows from
+     * being added (and expiring).  (It also prevents processing OpenFlow
+     * requests that would not add new flows, so it is imperfect.) */
+
+    prev = NULL;
+    LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
+        if (rule->send_flow_removed && rconn_is_connected(ofconn->rconn)) {
+            if (prev) {
+                queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
+            } else {
+                buf = compose_flow_removed(rule, now, reason);
+            }
+            prev = ofconn;
+        }
+    }
+    if (prev) {
+        queue_tx(buf, prev, prev->reply_counter);
+    }
+}
+
 
 static void
 expire_rule(struct cls_rule *cls_rule, void *p_)
@@ -3407,9 +3437,9 @@ expire_rule(struct cls_rule *cls_rule, void *p_)
     }
 
     if (!rule_is_hidden(rule)) {
-        send_flow_exp(p, rule, now,
-                      (now >= hard_expire
-                       ? OFPER_HARD_TIMEOUT : OFPER_IDLE_TIMEOUT));
+        send_flow_removed(p, rule, now,
+                          (now >= hard_expire
+                           ? OFPRR_HARD_TIMEOUT : OFPRR_IDLE_TIMEOUT));
     }
     rule_remove(p, rule);
 }
@@ -3569,10 +3599,7 @@ static uint64_t
 pick_fallback_dpid(void)
 {
     uint8_t ea[ETH_ADDR_LEN];
-    eth_addr_random(ea);
-    ea[0] = 0x00;               /* Set Nicira OUI. */
-    ea[1] = 0x23;
-    ea[2] = 0x20;
+    eth_addr_nicira_random(ea);
     return eth_addr_to_uint64(ea);
 }
 

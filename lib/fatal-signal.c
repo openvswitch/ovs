@@ -20,10 +20,13 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "poll-loop.h"
 #include "shash.h"
+#include "socket-util.h"
 #include "util.h"
 
 #define THIS_MODULE VLM_fatal_signal
@@ -37,7 +40,8 @@ static sigset_t fatal_signal_set;
 
 /* Hooks to call upon catching a signal */
 struct hook {
-    void (*func)(void *aux);
+    void (*hook_cb)(void *aux);
+    void (*cancel_cb)(void *aux);
     void *aux;
     bool run_at_exit;
 };
@@ -45,53 +49,29 @@ struct hook {
 static struct hook hooks[MAX_HOOKS];
 static size_t n_hooks;
 
-/* Number of nesting signal blockers. */
-static int block_level = 0;
+static int signal_fds[2];
+static volatile sig_atomic_t stored_sig_nr = SIG_ATOMIC_MAX;
 
-/* Signal mask saved by outermost signal blocker. */
-static sigset_t saved_signal_mask;
-
-/* Disabled by fatal_signal_fork()? */
-static bool disabled;
-
-static void call_sigprocmask(int how, sigset_t* new_set, sigset_t* old_set);
+static void fatal_signal_init(void);
 static void atexit_handler(void);
 static void call_hooks(int sig_nr);
 
-/* Registers 'hook' to be called when a process termination signal is raised.
- * If 'run_at_exit' is true, 'hook' is also called during normal process
- * termination, e.g. when exit() is called or when main() returns.
- *
- * 'func' will be invoked from an asynchronous signal handler, so it must be
- * written appropriately.  For example, it must not call most C library
- * functions, including malloc() or free(). */
-void
-fatal_signal_add_hook(void (*func)(void *aux), void *aux, bool run_at_exit)
-{
-    fatal_signal_block();
-    assert(n_hooks < MAX_HOOKS);
-    hooks[n_hooks].func = func;
-    hooks[n_hooks].aux = aux;
-    hooks[n_hooks].run_at_exit = run_at_exit;
-    n_hooks++;
-    fatal_signal_unblock();
-}
-
-/* Blocks program termination signals until fatal_signal_unblock() is called.
- * May be called multiple times with nesting; if so, fatal_signal_unblock()
- * must be called the same number of times to unblock signals.
- *
- * This is needed while adjusting a data structure that will be accessed by a
- * fatal signal hook, so that the hook is not invoked while the data structure
- * is in an inconsistent state. */
-void
-fatal_signal_block(void)
+static void
+fatal_signal_init(void)
 {
     static bool inited = false;
+
     if (!inited) {
         size_t i;
 
         inited = true;
+
+        if (pipe(signal_fds)) {
+            ovs_fatal(errno, "could not create pipe");
+        }
+        set_nonblocking(signal_fds[0]);
+        set_nonblocking(signal_fds[1]);
+
         sigemptyset(&fatal_signal_set);
         for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {
             int sig_nr = fatal_signals[i];
@@ -108,23 +88,34 @@ fatal_signal_block(void)
         }
         atexit(atexit_handler);
     }
-
-    if (++block_level == 1) {
-        call_sigprocmask(SIG_BLOCK, &fatal_signal_set, &saved_signal_mask);
-    }
 }
 
-/* Unblocks program termination signals blocked by fatal_signal_block() is
- * called.  If multiple calls to fatal_signal_block() are nested,
- * fatal_signal_unblock() must be called the same number of times to unblock
- * signals. */
+/* Registers 'hook_cb' to be called when a process termination signal is
+ * raised.  If 'run_at_exit' is true, 'hook_cb' is also called during normal
+ * process termination, e.g. when exit() is called or when main() returns.
+ *
+ * 'hook_cb' is not called immediately from the signal handler but rather the
+ * next time the poll loop iterates, so it is freed from the usual restrictions
+ * on signal handler functions.
+ *
+ * If the current process forks, fatal_signal_fork() may be called to clear the
+ * parent process's fatal signal hooks, so that 'hook_cb' is only called when
+ * the child terminates, not when the parent does.  When fatal_signal_fork() is
+ * called, it calls the 'cancel_cb' function if it is nonnull, passing 'aux',
+ * to notify that the hook has been canceled.  This allows the hook to free
+ * memory, etc. */
 void
-fatal_signal_unblock(void)
+fatal_signal_add_hook(void (*hook_cb)(void *aux), void (*cancel_cb)(void *aux),
+                      void *aux, bool run_at_exit)
 {
-    assert(block_level > 0);
-    if (--block_level == 0) {
-        call_sigprocmask(SIG_SETMASK, &saved_signal_mask, NULL);
-    }
+    fatal_signal_init();
+
+    assert(n_hooks < MAX_HOOKS);
+    hooks[n_hooks].hook_cb = hook_cb;
+    hooks[n_hooks].cancel_cb = cancel_cb;
+    hooks[n_hooks].aux = aux;
+    hooks[n_hooks].run_at_exit = run_at_exit;
+    n_hooks++;
 }
 
 /* Handles fatal signal number 'sig_nr'.
@@ -139,20 +130,35 @@ fatal_signal_unblock(void)
 void
 fatal_signal_handler(int sig_nr)
 {
-    call_hooks(sig_nr);
+    ignore(write(signal_fds[1], "", 1));
+    stored_sig_nr = sig_nr;
+}
 
-    /* Re-raise the signal with the default handling so that the program
-     * termination status reflects that we were killed by this signal */
-    signal(sig_nr, SIG_DFL);
-    raise(sig_nr);
+void
+fatal_signal_run(void)
+{
+    int sig_nr = stored_sig_nr;
+
+    if (sig_nr != SIG_ATOMIC_MAX) {
+        call_hooks(sig_nr);
+
+        /* Re-raise the signal with the default handling so that the program
+         * termination status reflects that we were killed by this signal */
+        signal(sig_nr, SIG_DFL);
+        raise(sig_nr);
+    }
+}
+
+void
+fatal_signal_wait(void)
+{
+    poll_fd_wait(signal_fds[0], POLLIN);
 }
 
 static void
 atexit_handler(void)
 {
-    if (!disabled) {
-        call_hooks(0);
-    }
+    call_hooks(0);
 }
 
 static void
@@ -167,15 +173,21 @@ call_hooks(int sig_nr)
         for (i = 0; i < n_hooks; i++) {
             struct hook *h = &hooks[i];
             if (sig_nr || h->run_at_exit) {
-                h->func(h->aux);
+                h->hook_cb(h->aux);
             }
         }
     }
 }
 
+/* Files to delete on exit.  (The 'data' member of each node is unused.) */
 static struct shash files = SHASH_INITIALIZER(&files);
 
+/* Has a hook function been registered with fatal_signal_add_hook() (and not
+ * cleared by fatal_signal_fork())? */
+static bool added_hook;
+
 static void unlink_files(void *aux);
+static void cancel_files(void *aux);
 static void do_unlink_files(void);
 
 /* Registers 'file' to be unlinked when the program terminates via exit() or a
@@ -183,17 +195,14 @@ static void do_unlink_files(void);
 void
 fatal_signal_add_file_to_unlink(const char *file)
 {
-    static bool added_hook = false;
     if (!added_hook) {
         added_hook = true;
-        fatal_signal_add_hook(unlink_files, NULL, true);
+        fatal_signal_add_hook(unlink_files, cancel_files, NULL, true);
     }
 
-    fatal_signal_block();
     if (!shash_find(&files, file)) {
         shash_add(&files, file, NULL);
     }
-    fatal_signal_unblock();
 }
 
 /* Unregisters 'file' from being unlinked when the program terminates via
@@ -203,12 +212,10 @@ fatal_signal_remove_file_to_unlink(const char *file)
 {
     struct shash_node *node;
 
-    fatal_signal_block();
     node = shash_find(&files, file);
     if (node) {
         shash_delete(&files, node);
     }
-    fatal_signal_unblock();
 }
 
 /* Like fatal_signal_remove_file_to_unlink(), but also unlinks 'file'.
@@ -232,12 +239,13 @@ unlink_files(void *aux OVS_UNUSED)
     do_unlink_files(); 
 }
 
-/* This is a fatal_signal_add_hook() callback (via unlink_files()).  It will be
- * invoked from an asynchronous signal handler, so it cannot call most C
- * library functions (unlink() is an explicit exception, see
- * http://www.opengroup.org/onlinepubs/009695399/functions/xsh_chap02_04.html).
- * That includes free(), so it doesn't try to free the 'files' data
- * structure. */
+static void
+cancel_files(void *aux OVS_UNUSED)
+{
+    shash_clear(&files);
+    added_hook = false;
+}
+
 static void
 do_unlink_files(void)
 {
@@ -248,30 +256,30 @@ do_unlink_files(void)
     }
 }
 
-/* Disables the fatal signal hook mechanism.  Following a fork, one of the
- * resulting processes can call this function to allow it to terminate without
- * triggering fatal signal processing or removing files.  Fatal signal
- * processing is still enabled in the other process. */
+/* Clears all of the fatal signal hooks without executing them.  If any of the
+ * hooks passed a 'cancel_cb' function to fatal_signal_add_hook(), then those
+ * functions will be called, allowing them to free resources, etc.
+ *
+ * Following a fork, one of the resulting processes can call this function to
+ * allow it to terminate without calling the hooks registered before calling
+ * this function.  New hooks registered after calling this function will take
+ * effect normally. */
 void
 fatal_signal_fork(void)
 {
     size_t i;
 
-    disabled = true;
-
-    for (i = 0; i < ARRAY_SIZE(fatal_signals); i++) {
-        int sig_nr = fatal_signals[i];
-        if (signal(sig_nr, SIG_DFL) == SIG_IGN) {
-            signal(sig_nr, SIG_IGN);
+    for (i = 0; i < n_hooks; i++) {
+        struct hook *h = &hooks[i];
+        if (h->cancel_cb) {
+            h->cancel_cb(h->aux);
         }
     }
-}
-
-static void
-call_sigprocmask(int how, sigset_t* new_set, sigset_t* old_set)
-{
-    int error = sigprocmask(how, new_set, old_set);
-    if (error) {
-        fprintf(stderr, "sigprocmask: %s\n", strerror(errno));
+    n_hooks = 0;
+
+    /* Raise any signals that we have already received with the default
+     * handler. */
+    if (stored_sig_nr != SIG_ATOMIC_MAX) {
+        raise(stored_sig_nr);
     }
 }

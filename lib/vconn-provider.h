@@ -108,6 +108,18 @@ struct vconn_class {
      * accepted for transmission, it should return EAGAIN. */
     int (*send)(struct vconn *vconn, struct ofpbuf *msg);
 
+    /* Allows 'vconn' to perform maintenance activities, such as flushing
+     * output buffers.
+     *
+     * May be null if 'vconn' doesn't have anything to do here. */
+    void (*run)(struct vconn *vconn);
+
+    /* Arranges for the poll loop to wake up when 'vconn' needs to perform
+     * maintenance activities.
+     *
+     * May be null if 'vconn' doesn't have anything to do here. */
+    void (*run_wait)(struct vconn *vconn);
+
     /* Arranges for the poll loop to wake up when 'vconn' is ready to take an
      * action of the given 'type'. */
     void (*wait)(struct vconn *vconn, enum vconn_wait_type type);

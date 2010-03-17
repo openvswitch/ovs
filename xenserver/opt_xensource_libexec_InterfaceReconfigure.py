@@ -10,18 +10,41 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
 #
+import sys
 import syslog
 import os
 
 from xml.dom.minidom import getDOMImplementation
 from xml.dom.minidom import parse as parseXML
 
+the_root_prefix = ""
+def root_prefix():
+    """Returns a string to prefix to all file name references, which
+    is useful for testing."""
+    return the_root_prefix
+def set_root_prefix(prefix):
+    global the_root_prefix
+    the_root_prefix = prefix
+
+log_destination = "syslog"
+def get_log_destination():
+    """Returns the current log destination.
+    'syslog' means "log to syslog".
+    'stderr' means "log to stderr"."""
+    return log_destination
+def set_log_destination(dest):
+    global log_destination
+    log_destination = dest
+
 #
 # Logging.
 #
 
 def log(s):
-    syslog.syslog(s)
+    if get_log_destination() == 'syslog':
+        syslog.syslog(s)
+    else:
+        print >>sys.stderr, s
 
 #
 # Exceptions.
@@ -38,7 +61,7 @@ class Error(Exception):
 
 def run_command(command):
     log("Running command: " + ' '.join(command))
-    rc = os.spawnl(os.P_WAIT, command[0], *command)
+    rc = os.spawnl(os.P_WAIT, root_prefix() + command[0], *command)
     if rc != 0:
         log("Command failed %d: " % rc + ' '.join(command))
         return False
@@ -295,6 +318,7 @@ _NETWORK_OTHERCONFIG_ATTRS = [ 'mtu', 'static-routes' ] + _ETHTOOL_OTHERCONFIG_A
 
 _NETWORK_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),
                    'bridge': (_str_to_xml,_str_from_xml),
+                   'MTU': (_str_to_xml,_str_from_xml),
                    'PIFs': (lambda x, p, t, v: _strlist_to_xml(x, p, 'PIFs', 'PIF', v),
                             lambda n: _strlist_from_xml(n, 'PIFs', 'PIF')),
                    'other_config': (lambda x, p, t, v: _otherconfig_to_xml(x, p, v, _NETWORK_OTHERCONFIG_ATTRS),
@@ -323,7 +347,7 @@ def db_init_from_xenapi(session):
     
 class DatabaseCache(object):
     def __read_xensource_inventory(self):
-        filename = "/etc/xensource-inventory"
+        filename = root_prefix() + "/etc/xensource-inventory"
         f = open(filename, "r")
         lines = [x.strip("\n") for x in f.readlines()]
         f.close()
@@ -332,6 +356,7 @@ class DatabaseCache(object):
         defs = [ (a, b.strip("'")) for (a,b) in defs ]
 
         return dict(defs)
+
     def __pif_on_host(self,pif):
         return self.__pifs.has_key(pif)
 
@@ -377,6 +402,10 @@ class DatabaseCache(object):
                 if f == "PIFs":
                     # drop PIFs on other hosts
                     self.__networks[n][f] = [p for p in rec[f] if self.__pif_on_host(p)]
+                elif f == "MTU" and f not in rec:
+                    # XenServer 5.5 network records did not have an
+                    # MTU field, so allow this to be missing.
+                    pass
                 else:
                     self.__networks[n][f] = rec[f]
             self.__networks[n]['other_config'] = {}
@@ -439,7 +468,7 @@ class DatabaseCache(object):
         else:
             log("Loading xapi database cache from %s" % cache_file)
 
-            xml = parseXML(cache_file)
+            xml = parseXML(root_prefix() + cache_file)
 
             self.__pifs = {}
             self.__bonds = {}
@@ -595,13 +624,33 @@ def ethtool_settings(oc):
                 log("Invalid value for ethtool-%s = %s. Must be on|true|off|false." % (opt, val))
     return settings,offload
 
-def mtu_setting(oc):
+# By default the MTU is taken from the Network.MTU setting for VIF,
+# PIF and Bridge. However it is possible to override this by using
+# {VIF,PIF,Network}.other-config:mtu.
+#
+# type parameter is a string describing the object that the oc parameter
+# is from. e.g. "PIF", "Network" 
+def mtu_setting(nw, type, oc):
+    mtu = None
+
+    nwrec = db().get_network_record(nw)
+    if nwrec.has_key('MTU'):
+        mtu = nwrec['MTU']
+    else:
+        mtu = "1500"
+        
     if oc.has_key('mtu'):
+        log("Override Network.MTU setting on bridge %s from %s.MTU is %s" % \
+            (nwrec['bridge'], type, mtu))
+        mtu = oc['mtu']
+
+    if mtu is not None:
         try:
-            int(oc['mtu'])      # Check that the value is an integer
-            return oc['mtu']
+            int(mtu)      # Check that the value is an integer
+            return mtu
         except ValueError, x:
-            log("Invalid value for mtu = %s" % oc['mtu'])
+            log("Invalid value for mtu = %s" % mtu)
+
     return None
 
 #
@@ -624,7 +673,7 @@ def pif_ipdev_name(pif):
 #
 
 def netdev_exists(netdev):
-    return os.path.exists("/sys/class/net/" + netdev)
+    return os.path.exists(root_prefix() + "/sys/class/net/" + netdev)
 
 def pif_netdev_name(pif):
     """Get the netdev name for a PIF."""
@@ -635,6 +684,34 @@ def pif_netdev_name(pif):
         return "%(device)s.%(VLAN)s" % pifrec
     else:
         return pifrec['device']
+
+#
+# Bridges
+#
+
+def pif_is_bridged(pif):
+    pifrec = db().get_pif_record(pif)
+    nwrec = db().get_network_record(pifrec['network'])
+
+    if nwrec['bridge']:
+        # TODO: sanity check that nwrec['bridgeless'] != 'true'
+        return True
+    else:
+        # TODO: sanity check that nwrec['bridgeless'] == 'true'
+        return False
+
+def pif_bridge_name(pif):
+    """Return the bridge name of a pif.
+
+    PIF must be a bridged PIF."""
+    pifrec = db().get_pif_record(pif)
+
+    nwrec = db().get_network_record(pifrec['network'])
+
+    if nwrec['bridge']:
+        return nwrec['bridge']
+    else:
+        raise Error("PIF %(uuid)s does not have a bridge name" % pifrec)
 
 #
 # Bonded PIFs
@@ -777,7 +854,7 @@ def DatapathFactory(pif):
     # XXX Need a datapath object for bridgeless PIFs
 
     try:
-        network_conf = open("/etc/xensource/network.conf", 'r')
+        network_conf = open(root_prefix() + "/etc/xensource/network.conf", 'r')
         network_backend = network_conf.readline().strip()
         network_conf.close()                
     except Exception, e:

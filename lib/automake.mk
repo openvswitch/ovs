@@ -8,12 +8,14 @@
 noinst_LIBRARIES += lib/libopenvswitch.a
 
 lib_libopenvswitch_a_SOURCES = \
+	lib/aes128.c \
+	lib/aes128.h \
 	lib/backtrace.c \
 	lib/backtrace.h \
 	lib/bitmap.c \
 	lib/bitmap.h \
-	lib/cfg.c \
-	lib/cfg.h \
+	lib/byteq.c \
+	lib/byteq.h \
 	lib/classifier.c \
 	lib/classifier.h \
 	lib/command-line.c \
@@ -41,20 +43,24 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/dynamic-string.h \
 	lib/fatal-signal.c \
 	lib/fatal-signal.h \
-	lib/fault.c \
-	lib/fault.h \
 	lib/flow.c \
 	lib/flow.h \
 	lib/hash.c \
 	lib/hash.h \
 	lib/hmap.c \
 	lib/hmap.h \
+	lib/json.c \
+	lib/json.h \
+	lib/jsonrpc.c \
+	lib/jsonrpc.h \
 	lib/leak-checker.c \
 	lib/leak-checker.h \
 	lib/learning-switch.c \
 	lib/learning-switch.h \
 	lib/list.c \
 	lib/list.h \
+	lib/lockfile.c \
+	lib/lockfile.h \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
 	lib/netdev-linux.c \
@@ -67,6 +73,17 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/ofp-print.h \
 	lib/ofpbuf.c \
 	lib/ofpbuf.h \
+	lib/ovsdb-data.c \
+	lib/ovsdb-data.h \
+	lib/ovsdb-error.c \
+	lib/ovsdb-error.h \
+	lib/ovsdb-idl-provider.h \
+	lib/ovsdb-idl.c \
+	lib/ovsdb-idl.h \
+	lib/ovsdb-parser.c \
+	lib/ovsdb-parser.h \
+	lib/ovsdb-types.c \
+	lib/ovsdb-types.h \
 	lib/packets.c \
 	lib/packets.h \
 	lib/pcap.c \
@@ -83,6 +100,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/random.h \
 	lib/rconn.c \
 	lib/rconn.h \
+	lib/reconnect.c \
+	lib/reconnect.h \
 	lib/rtnetlink.c \
 	lib/rtnetlink.h \
 	lib/sat-math.h \
@@ -94,8 +113,18 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/signals.h \
 	lib/socket-util.c \
 	lib/socket-util.h \
+	lib/sort.c \
+	lib/sort.h \
 	lib/stp.c \
 	lib/stp.h \
+	lib/stream-fd.c \
+	lib/stream-fd.h \
+	lib/stream-provider.h \
+	lib/stream-ssl.h \
+	lib/stream-tcp.c \
+	lib/stream-unix.c \
+	lib/stream.c \
+	lib/stream.h \
 	lib/string.h \
 	lib/svec.c \
 	lib/svec.h \
@@ -104,17 +133,17 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/timeval.c \
 	lib/timeval.h \
 	lib/type-props.h \
+	lib/unicode.c \
+	lib/unicode.h \
 	lib/unixctl.c \
 	lib/unixctl.h \
 	lib/util.c \
 	lib/util.h \
+	lib/uuid.c \
+	lib/uuid.h \
 	lib/valgrind.h \
 	lib/vconn-provider.h \
-	lib/vconn-ssl.h \
 	lib/vconn-stream.c \
-	lib/vconn-stream.h \
-	lib/vconn-tcp.c \
-	lib/vconn-unix.c \
 	lib/vconn.c \
 	lib/vconn.h \
 	lib/vlog-modules.def \
@@ -147,8 +176,7 @@ lib_libopenvswitch_a_SOURCES += \
 endif
 
 if HAVE_OPENSSL
-lib_libopenvswitch_a_SOURCES += \
-	lib/vconn-ssl.c 
+lib_libopenvswitch_a_SOURCES += lib/stream-ssl.c
 nodist_lib_libopenvswitch_a_SOURCES += lib/dhparams.c
 lib/dhparams.c: lib/dh1024.pem lib/dh2048.pem lib/dh4096.pem
 	(echo '#include "lib/dhparams.h"' &&				\
@@ -167,10 +195,20 @@ EXTRA_DIST += \
 
 EXTRA_DIST += \
 	lib/common.man \
+	lib/common-syn.man \
 	lib/daemon.man \
+	lib/daemon-syn.man \
 	lib/dpif.man \
 	lib/leak-checker.man \
+	lib/ssl-bootstrap.man \
+	lib/ssl-bootstrap-syn.man \
+	lib/ssl-peer-ca-cert.man \
+	lib/ssl.man \
+	lib/ssl-syn.man \
+	lib/vconn-active.man \
+	lib/vconn-passive.man \
 	lib/vlog-unixctl.man \
+	lib/vlog-syn.man \
 	lib/vlog.man
 
 
@@ -189,9 +227,9 @@ install-data-local:
 
 # All the source files that have coverage counters.
 COVERAGE_FILES = \
-	lib/cfg.c \
 	lib/dpif.c \
 	lib/flow.c \
+	lib/lockfile.c \
 	lib/hmap.c \
 	lib/mac-learning.c \
 	lib/netdev.c \
@@ -202,6 +240,7 @@ COVERAGE_FILES = \
 	lib/process.c \
 	lib/rconn.c \
 	lib/rtnetlink.c \
+	lib/stream.c \
 	lib/timeval.c \
 	lib/unixctl.c \
 	lib/util.c \
@@ -209,7 +248,6 @@ COVERAGE_FILES = \
 	ofproto/ofproto.c \
 	ofproto/pktbuf.c \
 	vswitchd/bridge.c \
-	vswitchd/mgmt.c \
 	vswitchd/ovs-brcompatd.c
 lib/coverage-counters.c: $(COVERAGE_FILES) lib/coverage-scan.pl
 	(cd $(srcdir) && $(PERL) lib/coverage-scan.pl $(COVERAGE_FILES)) > $@.tmp

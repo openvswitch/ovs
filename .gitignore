@@ -15,6 +15,7 @@
 .*.cmd
 .*.swp
 .deps
+.dirstamp
 .libs
 .tmp_versions
 /Makefile
@@ -22,7 +23,6 @@
 /aclocal.m4
 /autom4te.cache
 /build-arch-stamp
-/build-aux
 /build-indep-stamp
 /compile
 /config.guess

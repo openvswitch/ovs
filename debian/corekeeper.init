@@ -42,7 +42,7 @@ set -e
 
 case "$1" in
   start)
-	log_daemon_msg "Initializing core dump location..."
+        log_daemon_msg "Initializing core dump location..."
         if echo "/var/log/core/core.%e.%t.%p" > /proc/sys/kernel/core_pattern
         then
             log_progress_msg "success"
@@ -52,13 +52,13 @@ case "$1" in
             log_end_msg 1
             exit 1
         fi
-	;;
+        ;;
   stop|restart|force-reload|status|reload)
         exit 0
         ;;
   *)
-	N=/etc/init.d/$NAME
-	echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
-	exit 1
-	;;
+        N=/etc/init.d/$NAME
+        echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
+        exit 1
+        ;;
 esac

@@ -20,8 +20,8 @@ as much of the following information as you can in your report:
           /proc/version) and the distribution and version number of
           your OS (e.g. "Centos 5.0").
 
-        * The contents of the vswitchd configuration file (usually
-          /etc/ovs-vswitchd.conf).
+        * The contents of the vswitchd configuration database (usually
+          /etc/ovs-vswitchd.conf.db).
 
         * The output of "ovs-dpctl show".
 

@@ -64,7 +64,7 @@ struct dp_netdev {
     struct list node;
     int dp_idx;
     int open_cnt;
-    bool deleted;
+    bool destroyed;
 
     bool drop_frags;            /* Drop all IP fragments, if true. */
     struct ovs_queue queues[N_QUEUES]; /* Messages queued for dpif_recv(). */
@@ -196,7 +196,7 @@ create_dpif_netdev(struct dp_netdev *dp)
 
     dp->open_cnt++;
 
-    dpname = xasprintf("netdev:dp%d", dp->dp_idx);
+    dpname = xasprintf("dp%d", dp->dp_idx);
     dpif = xmalloc(sizeof *dpif);
     dpif_init(&dpif->dpif, &dpif_netdev_class, dpname, dp->dp_idx, dp->dp_idx);
     dpif->dp = dp;
@@ -219,7 +219,7 @@ create_dp_netdev(const char *name, int dp_idx, struct dpif **dpifp)
     }
 
     /* Create datapath. */
-    dp_netdevs[dp_idx] = dp = xcalloc(1, sizeof *dp);
+    dp_netdevs[dp_idx] = dp = xzalloc(sizeof *dp);
     list_push_back(&dp_netdev_list, &dp->node);
     dp->dp_idx = dp_idx;
     dp->open_cnt = 0;
@@ -237,7 +237,7 @@ create_dp_netdev(const char *name, int dp_idx, struct dpif **dpifp)
     error = do_add_port(dp, name, ODP_PORT_INTERNAL, ODPP_LOCAL);
     if (error) {
         dp_netdev_free(dp);
-        return error;
+        return ENODEV;
     }
 
     *dpifp = create_dpif_netdev(dp);
@@ -245,20 +245,20 @@ create_dp_netdev(const char *name, int dp_idx, struct dpif **dpifp)
 }
 
 static int
-dpif_netdev_open(const char *name OVS_UNUSED, char *suffix, bool create,
+dpif_netdev_open(const char *name, const char *type OVS_UNUSED, bool create,
                  struct dpif **dpifp)
 {
     if (create) {
-        if (find_dp_netdev(suffix)) {
+        if (find_dp_netdev(name)) {
             return EEXIST;
         } else {
-            int dp_idx = name_to_dp_idx(suffix);
+            int dp_idx = name_to_dp_idx(name);
             if (dp_idx >= 0) {
-                return create_dp_netdev(suffix, dp_idx, dpifp);
+                return create_dp_netdev(name, dp_idx, dpifp);
             } else {
                 /* Scan for unused dp_idx number. */
                 for (dp_idx = 0; dp_idx < N_DP_NETDEVS; dp_idx++) {
-                    int error = create_dp_netdev(suffix, dp_idx, dpifp);
+                    int error = create_dp_netdev(name, dp_idx, dpifp);
                     if (error != EBUSY) {
                         return error;
                     }
@@ -269,7 +269,7 @@ dpif_netdev_open(const char *name OVS_UNUSED, char *suffix, bool create,
             }
         }
     } else {
-        struct dp_netdev *dp = find_dp_netdev(suffix);
+        struct dp_netdev *dp = find_dp_netdev(name);
         if (dp) {
             *dpifp = create_dpif_netdev(dp);
             return 0;
@@ -307,17 +307,17 @@ dpif_netdev_close(struct dpif *dpif)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     assert(dp->open_cnt > 0);
-    if (--dp->open_cnt == 0 && dp->deleted) {
+    if (--dp->open_cnt == 0 && dp->destroyed) {
         dp_netdev_free(dp);
     }
     free(dpif);
 }
 
 static int
-dpif_netdev_delete(struct dpif *dpif)
+dpif_netdev_destroy(struct dpif *dpif)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    dp->deleted = true;
+    dp->destroyed = true;
     return 0;
 }
 
@@ -363,6 +363,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
 {
     bool internal = (flags & ODP_PORT_INTERNAL) != 0;
     struct dp_netdev_port *port;
+    struct netdev_options netdev_options;
     struct netdev *netdev;
     int mtu;
     int error;
@@ -370,17 +371,17 @@ do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
     /* XXX reject devices already in some dp_netdev. */
 
     /* Open and validate network device. */
-    if (!internal) {
-        error = netdev_open(devname, NETDEV_ETH_TYPE_ANY, &netdev);
+    memset(&netdev_options, 0, sizeof netdev_options);
+    netdev_options.name = devname;
+    netdev_options.ethertype = NETDEV_ETH_TYPE_ANY;
+    netdev_options.may_create = true;
+    if (internal) {
+        netdev_options.type = "tap";
     } else {
-        error = netdev_create(devname, "tap", NULL);
-        if (!error) {
-            error = netdev_open(devname, NETDEV_ETH_TYPE_ANY, &netdev);
-            if (error) {
-                netdev_destroy(devname);
-            }
-        }
+        netdev_options.may_open = true;
     }
+
+    error = netdev_open(&netdev_options, &netdev);
     if (error) {
         return error;
     }
@@ -487,9 +488,7 @@ do_del_port(struct dp_netdev *dp, uint16_t port_no)
 
     name = xstrdup(netdev_get_name(port->netdev));
     netdev_close(port->netdev);
-    if (port->internal) {
-        netdev_destroy(name);
-    }
+
     free(name);
     free(port);
 
@@ -664,7 +663,7 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp, const flow_t *key)
 {
     struct dp_netdev_flow *flow;
 
-    assert(key->reserved == 0);
+    assert(!key->reserved[0] && !key->reserved[1] && !key->reserved[2]);
     HMAP_FOR_EACH_WITH_HASH (flow, struct dp_netdev_flow, node,
                              flow_hash(key, 0), &dp->flow_table) {
         if (flow_equal(&flow->key, key)) {
@@ -721,41 +720,48 @@ static int
 dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
                              bool *mutates)
 {
-	unsigned int i;
+    unsigned int i;
 
     *mutates = false;
-	for (i = 0; i < n_actions; i++) {
-		const union odp_action *a = &actions[i];
-		switch (a->type) {
-		case ODPAT_OUTPUT:
-			if (a->output.port >= MAX_PORTS) {
-				return EINVAL;
+    for (i = 0; i < n_actions; i++) {
+        const union odp_action *a = &actions[i];
+        switch (a->type) {
+        case ODPAT_OUTPUT:
+            if (a->output.port >= MAX_PORTS) {
+                return EINVAL;
             }
-			break;
+            break;
 
-		case ODPAT_OUTPUT_GROUP:
+        case ODPAT_OUTPUT_GROUP:
             *mutates = true;
-			if (a->output_group.group >= N_GROUPS) {
-				return EINVAL;
+            if (a->output_group.group >= N_GROUPS) {
+                return EINVAL;
             }
-			break;
+            break;
 
         case ODPAT_CONTROLLER:
             break;
 
-		case ODPAT_SET_VLAN_VID:
+        case ODPAT_SET_VLAN_VID:
             *mutates = true;
-			if (a->vlan_vid.vlan_vid & htons(~VLAN_VID_MASK)) {
-				return EINVAL;
+            if (a->vlan_vid.vlan_vid & htons(~VLAN_VID_MASK)) {
+                return EINVAL;
             }
-			break;
+            break;
 
-		case ODPAT_SET_VLAN_PCP:
+        case ODPAT_SET_VLAN_PCP:
             *mutates = true;
-			if (a->vlan_pcp.vlan_pcp & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT)) {
-				return EINVAL;
+            if (a->vlan_pcp.vlan_pcp & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT)) {
+                return EINVAL;
             }
-			break;
+            break;
+
+        case ODPAT_SET_NW_TOS:
+            *mutates = true;
+            if (a->nw_tos.nw_tos & IP_ECN_MASK) {
+                return EINVAL;
+            }
+            break;
 
         case ODPAT_STRIP_VLAN:
         case ODPAT_SET_DL_SRC:
@@ -767,11 +773,11 @@ dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
             *mutates = true;
             break;
 
-		default:
+        default:
             return EOPNOTSUPP;
-		}
-	}
-	return 0;
+        }
+    }
+    return 0;
 }
 
 static int
@@ -804,9 +810,9 @@ add_flow(struct dpif *dpif, struct odp_flow *odp_flow)
     struct dp_netdev_flow *flow;
     int error;
 
-    flow = xcalloc(1, sizeof *flow);
+    flow = xzalloc(sizeof *flow);
     flow->key = odp_flow->key;
-    flow->key.reserved = 0;
+    memset(flow->key.reserved, 0, sizeof flow->key.reserved);
 
     error = set_flow_actions(flow, odp_flow);
     if (error) {
@@ -1080,6 +1086,15 @@ dp_netdev_wait(void)
     }
 }
 
+
+/* Modify the TCI field of 'packet'.  If a VLAN tag is not present, one
+ * is added with the TCI field set to 'tci'.  If a VLAN tag is present, 
+ * then 'mask' bits are cleared before 'tci' is logically OR'd into the
+ * TCI field.
+ *
+ * Note that the function does not ensure that 'tci' does not affect
+ * bits outside of 'mask'.
+ */
 static void
 dp_netdev_modify_vlan_tci(struct ofpbuf *packet, flow_t *key,
                           uint16_t tci, uint16_t mask)
@@ -1087,7 +1102,7 @@ dp_netdev_modify_vlan_tci(struct ofpbuf *packet, flow_t *key,
     struct vlan_eth_header *veh;
 
     if (key->dl_vlan != htons(ODP_VLAN_NONE)) {
-        /* Modify 'mask' bits, but maintain other TCI bits. */
+        /* Clear 'mask' bits, but maintain other TCI bits. */
         veh = packet->l2;
         veh->veth_tci &= ~htons(mask);
         veh->veth_tci |= htons(tci);
@@ -1130,19 +1145,21 @@ dp_netdev_strip_vlan(struct ofpbuf *packet, flow_t *key)
 }
 
 static void
-dp_netdev_set_dl_src(struct ofpbuf *packet,
+dp_netdev_set_dl_src(struct ofpbuf *packet, flow_t *key,
                      const uint8_t dl_addr[ETH_ADDR_LEN])
 {
     struct eth_header *eh = packet->l2;
     memcpy(eh->eth_src, dl_addr, sizeof eh->eth_src);
+    memcpy(key->dl_src, dl_addr, sizeof key->dl_src);
 }
 
 static void
-dp_netdev_set_dl_dst(struct ofpbuf *packet,
+dp_netdev_set_dl_dst(struct ofpbuf *packet, flow_t *key,
                      const uint8_t dl_addr[ETH_ADDR_LEN])
 {
     struct eth_header *eh = packet->l2;
     memcpy(eh->eth_dst, dl_addr, sizeof eh->eth_dst);
+    memcpy(key->dl_dst, dl_addr, sizeof key->dl_dst);
 }
 
 static void
@@ -1168,6 +1185,30 @@ dp_netdev_set_nw_addr(struct ofpbuf *packet, flow_t *key,
         }
         nh->ip_csum = recalc_csum32(nh->ip_csum, *field, a->nw_addr);
         *field = a->nw_addr;
+
+        if (a->type == ODPAT_SET_NW_SRC) {
+            key->nw_src = a->type;
+        } else {
+            key->nw_dst = a->type;
+        }
+    }
+}
+
+static void
+dp_netdev_set_nw_tos(struct ofpbuf *packet, flow_t *key,
+                     const struct odp_action_nw_tos *a)
+{
+    if (key->dl_type == htons(ETH_TYPE_IP)) {
+        struct ip_header *nh = packet->l3;
+        uint8_t *field = &nh->ip_tos;
+
+        /* Set the DSCP bits and preserve the ECN bits. */
+        uint8_t new = a->nw_tos | (nh->ip_tos & IP_ECN_MASK);
+
+        nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
+                htons((uint16_t)a->nw_tos));
+        *field = new;
+        key->nw_tos = a->nw_tos;
     }
 }
 
@@ -1187,6 +1228,14 @@ dp_netdev_set_tp_port(struct ofpbuf *packet, flow_t *key,
             field = a->type == ODPAT_SET_TP_SRC ? &uh->udp_src : &uh->udp_dst;
             uh->udp_csum = recalc_csum16(uh->udp_csum, *field, a->tp_port);
             *field = a->tp_port;
+        } else {
+            return;
+        }
+
+        if (a->type == ODPAT_SET_TP_SRC) {
+            key->tp_src = a->tp_port;
+        } else {
+            key->tp_dst = a->tp_port;
         }
     }
 }
@@ -1283,16 +1332,20 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 			break;
 
 		case ODPAT_SET_DL_SRC:
-            dp_netdev_set_dl_src(packet, a->dl_addr.dl_addr);
+            dp_netdev_set_dl_src(packet, key, a->dl_addr.dl_addr);
 			break;
 
 		case ODPAT_SET_DL_DST:
-            dp_netdev_set_dl_dst(packet, a->dl_addr.dl_addr);
+            dp_netdev_set_dl_dst(packet, key, a->dl_addr.dl_addr);
 			break;
 
 		case ODPAT_SET_NW_SRC:
 		case ODPAT_SET_NW_DST:
 			dp_netdev_set_nw_addr(packet, key, &a->nw_addr);
+			break;
+
+		case ODPAT_SET_NW_TOS:
+			dp_netdev_set_nw_tos(packet, key, &a->nw_tos);
 			break;
 
 		case ODPAT_SET_TP_SRC:
@@ -1306,14 +1359,13 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
 
 const struct dpif_class dpif_netdev_class = {
     "netdev",
-    "netdev",
     dp_netdev_run,
     dp_netdev_wait,
     NULL,                       /* enumerate */
     dpif_netdev_open,
     dpif_netdev_close,
     NULL,                       /* get_all_names */
-    dpif_netdev_delete,
+    dpif_netdev_destroy,
     dpif_netdev_get_stats,
     dpif_netdev_get_drop_frags,
     dpif_netdev_set_drop_frags,

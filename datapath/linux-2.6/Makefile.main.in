@@ -5,6 +5,7 @@ export top_srcdir = @abs_top_srcdir@
 export KSRC = @KBUILD26@
 export VERSION = @VERSION@
 export BUILD_VETH = @BUILD_VETH@
+export BUILD_GRE = @BUILD_GRE@
 
 include $(srcdir)/../Modules.mk
 include $(srcdir)/Modules.mk

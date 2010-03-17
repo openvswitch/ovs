@@ -36,6 +36,7 @@ void svec_init(struct svec *);
 void svec_clone(struct svec *, const struct svec *);
 void svec_destroy(struct svec *);
 void svec_clear(struct svec *);
+bool svec_is_empty(const struct svec *);
 void svec_add(struct svec *, const char *);
 void svec_add_nocopy(struct svec *, char *);
 void svec_del(struct svec *, const char *);

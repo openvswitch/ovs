@@ -16,9 +16,11 @@
 #ifndef HASH_H
 #define HASH_H 1
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include "util.h"
 
 /* This is the public domain lookup3 hash by Bob Jenkins from
  * http://burtleburtle.net/bob/c/lookup3.c, modified for style. */
@@ -47,6 +49,7 @@
     } while (0)
 
 uint32_t hash_words(const uint32_t *, size_t n_word, uint32_t basis);
+uint32_t hash_2words(const uint32_t *, uint32_t basis);
 uint32_t hash_bytes(const void *, size_t n_bytes, uint32_t basis);
 
 static inline uint32_t hash_string(const char *s, uint32_t basis)
@@ -62,10 +65,42 @@ static inline uint32_t hash_int(uint32_t x, uint32_t basis)
     x ^= x >> 17;
     x -= x << 9;
     x ^= x << 4;
+    x += basis;
     x -= x << 3;
     x ^= x << 10;
     x ^= x >> 15;
-    return x + basis;
+    return x;
+}
+
+/* An attempt at a useful 1-bit hash function.  Has not been analyzed for
+ * quality. */
+static inline uint32_t hash_boolean(bool x, uint32_t basis)
+{
+    enum { P0 = 0xc2b73583 };   /* This is hash_int(1, 0). */
+    enum { P1 = 0xe90f1258 };   /* This is hash_int(2, 0). */
+    return (x ? P0 : P1) ^ HASH_ROT(basis, 1);
+}
+
+static inline uint32_t hash_double(double x, uint32_t basis)
+{
+    uint32_t value[2];
+    BUILD_ASSERT_DECL(sizeof x == sizeof value);
+
+    memcpy(value, &x, sizeof value);
+    return hash_2words(value, basis);
+}
+
+static inline uint32_t hash_pointer(const void *p, uint32_t basis)
+{
+    /* Often pointers are hashed simply by casting to integer type, but that
+     * has pitfalls since the lower bits of a pointer are often all 0 for
+     * alignment reasons.  It's hard to guess where the entropy really is, so
+     * we give up here and just use a high-quality hash function.
+     *
+     * The double cast suppresses a warning on 64-bit systems about casting to
+     * an integer to different size.  That's OK in this case, since most of the
+     * entropy in the pointer is almost certainly in the lower 32 bits. */
+    return hash_int((uint32_t) (uintptr_t) p, basis);
 }
 
 #endif /* hash.h */

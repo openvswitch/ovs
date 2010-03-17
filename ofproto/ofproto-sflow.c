@@ -215,7 +215,7 @@ sflow_choose_agent_address(const char *agent_device, const char *control_ip,
     if (agent_device) {
         struct netdev *netdev;
 
-        if (!netdev_open(agent_device, NETDEV_ETH_TYPE_NONE, &netdev)) {
+        if (!netdev_open_default(agent_device, &netdev)) {
             int error = netdev_get_in4(netdev, &in4, NULL);
             netdev_close(netdev);
             if (!error) {
@@ -322,7 +322,7 @@ ofproto_sflow_add_port(struct ofproto_sflow *os, uint16_t odp_port,
     ofproto_sflow_del_port(os, odp_port);
 
     /* Open network device. */
-    error = netdev_open(netdev_name, NETDEV_ETH_TYPE_NONE, &netdev);
+    error = netdev_open_default(netdev_name, &netdev);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to open network device \"%s\": %s",
                      netdev_name, strerror(error));
@@ -370,7 +370,6 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     unsigned int odp_port;
     SFLAddress agentIP;
     time_t now;
-    int error;
 
     if (!options->targets.n || !options->sampling_rate) {
         /* No point in doing any work if there are no targets or nothing to
@@ -388,8 +387,8 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     if (options_changed
         || collectors_count(os->collectors) < options->targets.n) {
         collectors_destroy(os->collectors);
-        error = collectors_create(&options->targets,
-                                  SFL_DEFAULT_COLLECTOR_PORT, &os->collectors);
+        collectors_create(&options->targets, SFL_DEFAULT_COLLECTOR_PORT,
+                          &os->collectors);
         if (os->collectors == NULL) {
             VLOG_WARN_RL(&rl, "no collectors could be initialized, "
                          "sFlow disabled");

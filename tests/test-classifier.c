@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -240,6 +240,7 @@ static uint32_t nw_dst_values[] = { T_HTONL(0xc0a80002),
                                     T_HTONL(0xc0a04455) };
 static uint16_t in_port_values[] = { T_HTONS(1), T_HTONS(OFPP_LOCAL) };
 static uint16_t dl_vlan_values[] = { T_HTONS(101), T_HTONS(0) };
+static uint8_t dl_vlan_pcp_values[] = { 7, 0 };
 static uint16_t dl_type_values[]
             = { T_HTONS(ETH_TYPE_IP), T_HTONS(ETH_TYPE_ARP) };
 static uint16_t tp_src_values[] = { T_HTONS(49362), T_HTONS(80) };
@@ -249,6 +250,7 @@ static uint8_t dl_src_values[][6] = { { 0x00, 0x02, 0xe3, 0x0f, 0x80, 0xa4 },
 static uint8_t dl_dst_values[][6] = { { 0x4a, 0x27, 0x71, 0xae, 0x64, 0xc1 },
                                       { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } };
 static uint8_t nw_proto_values[] = { IP_TYPE_TCP, IP_TYPE_ICMP };
+static uint8_t nw_tos_values[] = { 49, 0 };
 
 static void *values[CLS_N_FIELDS][2];
 
@@ -260,6 +262,9 @@ init_values(void)
 
     values[CLS_F_IDX_DL_VLAN][0] = &dl_vlan_values[0];
     values[CLS_F_IDX_DL_VLAN][1] = &dl_vlan_values[1];
+
+    values[CLS_F_IDX_DL_VLAN_PCP][0] = &dl_vlan_pcp_values[0];
+    values[CLS_F_IDX_DL_VLAN_PCP][1] = &dl_vlan_pcp_values[1];
 
     values[CLS_F_IDX_DL_SRC][0] = dl_src_values[0];
     values[CLS_F_IDX_DL_SRC][1] = dl_src_values[1];
@@ -279,6 +284,9 @@ init_values(void)
     values[CLS_F_IDX_NW_PROTO][0] = &nw_proto_values[0];
     values[CLS_F_IDX_NW_PROTO][1] = &nw_proto_values[1];
 
+    values[CLS_F_IDX_NW_TOS][0] = &nw_tos_values[0];
+    values[CLS_F_IDX_NW_TOS][1] = &nw_tos_values[1];
+
     values[CLS_F_IDX_TP_SRC][0] = &tp_src_values[0];
     values[CLS_F_IDX_TP_SRC][1] = &tp_src_values[1];
 
@@ -290,23 +298,27 @@ init_values(void)
 #define N_NW_DST_VALUES ARRAY_SIZE(nw_dst_values)
 #define N_IN_PORT_VALUES ARRAY_SIZE(in_port_values)
 #define N_DL_VLAN_VALUES ARRAY_SIZE(dl_vlan_values)
+#define N_DL_VLAN_PCP_VALUES ARRAY_SIZE(dl_vlan_pcp_values)
 #define N_DL_TYPE_VALUES ARRAY_SIZE(dl_type_values)
 #define N_TP_SRC_VALUES ARRAY_SIZE(tp_src_values)
 #define N_TP_DST_VALUES ARRAY_SIZE(tp_dst_values)
 #define N_DL_SRC_VALUES ARRAY_SIZE(dl_src_values)
 #define N_DL_DST_VALUES ARRAY_SIZE(dl_dst_values)
 #define N_NW_PROTO_VALUES ARRAY_SIZE(nw_proto_values)
+#define N_NW_TOS_VALUES ARRAY_SIZE(nw_tos_values)
 
 #define N_FLOW_VALUES (N_NW_SRC_VALUES *        \
                        N_NW_DST_VALUES *        \
                        N_IN_PORT_VALUES *       \
                        N_DL_VLAN_VALUES *       \
+                       N_DL_VLAN_PCP_VALUES *   \
                        N_DL_TYPE_VALUES *       \
                        N_TP_SRC_VALUES *        \
                        N_TP_DST_VALUES *        \
                        N_DL_SRC_VALUES *        \
                        N_DL_DST_VALUES *        \
-                       N_NW_PROTO_VALUES)
+                       N_NW_PROTO_VALUES *      \
+                       N_NW_TOS_VALUES)
 
 static unsigned int
 get_value(unsigned int *x, unsigned n_values)
@@ -350,6 +362,8 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         flow.nw_dst = nw_dst_values[get_value(&x, N_NW_DST_VALUES)];
         flow.in_port = in_port_values[get_value(&x, N_IN_PORT_VALUES)];
         flow.dl_vlan = dl_vlan_values[get_value(&x, N_DL_VLAN_VALUES)];
+        flow.dl_vlan_pcp = dl_vlan_pcp_values[get_value(&x,
+                N_DL_VLAN_PCP_VALUES)];
         flow.dl_type = dl_type_values[get_value(&x, N_DL_TYPE_VALUES)];
         flow.tp_src = tp_src_values[get_value(&x, N_TP_SRC_VALUES)];
         flow.tp_dst = tp_dst_values[get_value(&x, N_TP_DST_VALUES)];
@@ -358,7 +372,8 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         memcpy(flow.dl_dst, dl_dst_values[get_value(&x, N_DL_DST_VALUES)],
                ETH_ADDR_LEN);
         flow.nw_proto = nw_proto_values[get_value(&x, N_NW_PROTO_VALUES)];
-        flow.reserved = 0;
+        flow.nw_tos = nw_tos_values[get_value(&x, N_NW_TOS_VALUES)];
+        memset(flow.reserved, 0, sizeof flow.reserved);
 
         for (include = 1; include <= 3; include++) {
             cr0 = lookup_with_include_bits(cls, &flow, include);
@@ -446,7 +461,7 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
         }
     }
 
-    rule = xcalloc(1, sizeof *rule);
+    rule = xzalloc(sizeof *rule);
     cls_rule_from_flow(&rule->cls_rule, &flow, wildcards,
                        !wildcards ? UINT_MAX : priority);
     return rule;
@@ -532,8 +547,8 @@ test_rule_replacement(void)
 
     for (wc_fields = 0; wc_fields < (1u << CLS_N_FIELDS); wc_fields++) {
         struct classifier cls;
-        struct test_rule *rule1, *tcls_rule1;
-        struct test_rule *rule2, *tcls_rule2;
+        struct test_rule *rule1;
+        struct test_rule *rule2;
         struct tcls tcls;
 
         rule1 = make_rule(wc_fields, OFP_DEFAULT_PRIORITY, UINT_MAX);
@@ -543,14 +558,14 @@ test_rule_replacement(void)
 
         classifier_init(&cls);
         tcls_init(&tcls);
-        tcls_rule1 = tcls_insert(&tcls, rule1);
+        tcls_insert(&tcls, rule1);
         assert(!classifier_insert(&cls, &rule1->cls_rule));
         check_tables(&cls, 1, 1, 1);
         compare_classifiers(&cls, &tcls);
         tcls_destroy(&tcls);
 
         tcls_init(&tcls);
-        tcls_rule2 = tcls_insert(&tcls, rule2);
+        tcls_insert(&tcls, rule2);
         assert(test_rule_from_cls_rule(
                    classifier_insert(&cls, &rule2->cls_rule)) == rule1);
         free(rule1);

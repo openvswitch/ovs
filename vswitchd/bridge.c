@@ -30,7 +30,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "bitmap.h"
-#include "cfg.h"
 #include "coverage.h"
 #include "dirs.h"
 #include "dpif.h"
@@ -50,15 +49,16 @@
 #include "port-array.h"
 #include "proc-net-compat.h"
 #include "process.h"
+#include "sha1.h"
 #include "shash.h"
 #include "socket-util.h"
-#include "stp.h"
+#include "stream-ssl.h"
 #include "svec.h"
 #include "timeval.h"
 #include "util.h"
 #include "unixctl.h"
 #include "vconn.h"
-#include "vconn-ssl.h"
+#include "vswitchd/vswitch-idl.h"
 #include "xenserver.h"
 #include "xtoxll.h"
 #include "sflow_api.h"
@@ -70,8 +70,6 @@ struct dst {
     uint16_t vlan;
     uint16_t dp_ifidx;
 };
-
-extern uint64_t mgmt_id;
 
 struct iface {
     /* These members are always valid. */
@@ -86,6 +84,9 @@ struct iface {
     int dp_ifidx;               /* Index within kernel datapath. */
     struct netdev *netdev;      /* Network device. */
     bool enabled;               /* May be chosen for flows? */
+
+    /* This member is only valid *during* bridge_reconfigure(). */
+    const struct ovsrec_interface *cfg;
 };
 
 #define BOND_MASK 0xff
@@ -105,8 +106,8 @@ struct mirror {
     char *name;
 
     /* Selection criteria. */
-    struct svec src_ports;
-    struct svec dst_ports;
+    struct shash src_ports;     /* Name is port name; data is always NULL. */
+    struct shash dst_ports;     /* Name is port name; data is always NULL. */
     int *vlans;
     size_t n_vlans;
 
@@ -135,15 +136,15 @@ struct port {
     tag_type no_ifaces_tag;     /* Tag for flows when all ifaces disabled. */
     int updelay, downdelay;     /* Delay before iface goes up/down, in ms. */
     bool bond_compat_is_stale;  /* Need to call port_update_bond_compat()? */
+    bool bond_fake_iface;       /* Fake a bond interface for legacy compat? */
 
     /* Port mirroring info. */
     mirror_mask_t src_mirrors;  /* Mirrors triggered when packet received. */
     mirror_mask_t dst_mirrors;  /* Mirrors triggered when packet sent. */
     bool is_mirror_output_port; /* Does port mirroring send frames here? */
 
-    /* Spanning tree info. */
-    enum stp_state stp_state;   /* Always STP_FORWARDING if STP not in use. */
-    tag_type stp_state_tag;     /* Tag for STP state change. */
+    /* This member is only valid *during* bridge_reconfigure(). */
+    const struct ovsrec_port *cfg;
 };
 
 #define DP_MAX_PORTS 255
@@ -161,6 +162,13 @@ struct bridge {
 
     /* OpenFlow switch processing. */
     struct ofproto *ofproto;    /* OpenFlow switch. */
+
+    /* Description strings. */
+    char *mfr_desc;             /* Manufacturer. */
+    char *hw_desc;              /* Hardware. */
+    char *sw_desc;              /* Software version. */
+    char *serial_desc;          /* Serial number. */
+    char *dp_desc;              /* Datapath description. */
 
     /* Kernel datapath information. */
     struct dpif *dpif;          /* Datapath. */
@@ -183,9 +191,8 @@ struct bridge {
     /* Port mirroring. */
     struct mirror *mirrors[MAX_MIRRORS];
 
-    /* Spanning tree. */
-    struct stp *stp;
-    long long int stp_last_tick;
+    /* This member is only valid *during* bridge_reconfigure(). */
+    const struct ovsrec_bridge *cfg;
 };
 
 /* List of all bridges. */
@@ -194,14 +201,19 @@ static struct list all_bridges = LIST_INITIALIZER(&all_bridges);
 /* Maximum number of datapaths. */
 enum { DP_MAX = 256 };
 
-static struct bridge *bridge_create(const char *name);
+static struct bridge *bridge_create(const struct ovsrec_bridge *br_cfg);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
-static void bridge_unixctl_dump_flows(struct unixctl_conn *, const char *);
+static unixctl_cb_func bridge_unixctl_dump_flows;
 static int bridge_run_one(struct bridge *);
-static void bridge_reconfigure_one(struct bridge *);
-static void bridge_reconfigure_controller(struct bridge *);
-static void bridge_get_all_ifaces(const struct bridge *, struct svec *ifaces);
+static const struct ovsrec_controller *bridge_get_controller(
+                      const struct ovsrec_open_vswitch *ovs_cfg,
+                      const struct bridge *br);
+static void bridge_reconfigure_one(const struct ovsrec_open_vswitch *,
+                                   struct bridge *);
+static void bridge_reconfigure_controller(const struct ovsrec_open_vswitch *,
+                                          struct bridge *);
+static void bridge_get_all_ifaces(const struct bridge *, struct shash *ifaces);
 static void bridge_fetch_dp_ifaces(struct bridge *);
 static void bridge_flush(struct bridge *);
 static void bridge_pick_local_hw_addr(struct bridge *,
@@ -211,10 +223,9 @@ static uint64_t bridge_pick_datapath_id(struct bridge *,
                                         const uint8_t bridge_ea[ETH_ADDR_LEN],
                                         struct iface *hw_addr_iface);
 static struct iface *bridge_get_local_iface(struct bridge *);
-static const char *bridge_get_controller(const struct bridge *br);
 static uint64_t dpid_from_hash(const void *, size_t nbytes);
 
-static void bridge_unixctl_fdb_show(struct unixctl_conn *, const char *args);
+static unixctl_cb_func bridge_unixctl_fdb_show;
 
 static void bond_init(void);
 static void bond_run(struct bridge *);
@@ -223,8 +234,8 @@ static void bond_rebalance_port(struct port *);
 static void bond_send_learning_packets(struct port *);
 static void bond_enable_slave(struct iface *iface, bool enable);
 
-static void port_create(struct bridge *, const char *name);
-static void port_reconfigure(struct port *);
+static struct port *port_create(struct bridge *, const char *name);
+static void port_reconfigure(struct port *, const struct ovsrec_port *);
 static void port_destroy(struct port *);
 static struct port *port_lookup(const struct bridge *, const char *name);
 static struct iface *port_lookup_iface(const struct port *, const char *name);
@@ -234,18 +245,14 @@ static void port_update_bond_compat(struct port *);
 static void port_update_vlan_compat(struct port *);
 static void port_update_bonding(struct port *);
 
-static void mirror_create(struct bridge *, const char *name);
+static struct mirror *mirror_create(struct bridge *, const char *name);
 static void mirror_destroy(struct mirror *);
 static void mirror_reconfigure(struct bridge *);
-static void mirror_reconfigure_one(struct mirror *);
+static void mirror_reconfigure_one(struct mirror *, struct ovsrec_mirror *);
 static bool vlan_is_mirrored(const struct mirror *, int vlan);
 
-static void brstp_reconfigure(struct bridge *);
-static void brstp_adjust_timers(struct bridge *);
-static void brstp_run(struct bridge *);
-static void brstp_wait(struct bridge *);
-
-static void iface_create(struct port *, const char *name);
+static struct iface *iface_create(struct port *port, 
+                                  const struct ovsrec_interface *if_cfg);
 static void iface_destroy(struct iface *);
 static struct iface *iface_lookup(const struct bridge *, const char *name);
 static struct iface *iface_from_dp_ifidx(const struct bridge *,
@@ -285,53 +292,65 @@ bridge_get_ifaces(struct svec *svec)
     }
 }
 
-/* The caller must already have called cfg_read(). */
 void
-bridge_init(void)
+bridge_init(const struct ovsrec_open_vswitch *cfg)
 {
-    struct svec dpif_names;
+    struct svec bridge_names;
+    struct svec dpif_names, dpif_types;
     size_t i;
 
-    unixctl_command_register("fdb/show", bridge_unixctl_fdb_show);
+    unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
+
+    svec_init(&bridge_names);
+    for (i = 0; i < cfg->n_bridges; i++) {
+        svec_add(&bridge_names, cfg->bridges[i]->name);
+    }
+    svec_sort(&bridge_names);
 
     svec_init(&dpif_names);
-    dp_enumerate(&dpif_names);
-    for (i = 0; i < dpif_names.n; i++) {
-        const char *dpif_name = dpif_names.names[i];
+    svec_init(&dpif_types);
+    dp_enumerate_types(&dpif_types);
+    for (i = 0; i < dpif_types.n; i++) {
         struct dpif *dpif;
         int retval;
+        size_t j;
 
-        retval = dpif_open(dpif_name, &dpif);
-        if (!retval) {
-            struct svec all_names;
-            size_t j;
+        dp_enumerate_names(dpif_types.names[i], &dpif_names);
 
-            svec_init(&all_names);
-            dpif_get_all_names(dpif, &all_names);
-            for (j = 0; j < all_names.n; j++) {
-                if (cfg_has("bridge.%s.port", all_names.names[j])) {
-                    goto found;
+        for (j = 0; j < dpif_names.n; j++) {
+            retval = dpif_open(dpif_names.names[j], dpif_types.names[i], &dpif);
+            if (!retval) {
+                struct svec all_names;
+                size_t k;
+
+                svec_init(&all_names);
+                dpif_get_all_names(dpif, &all_names);
+                for (k = 0; k < all_names.n; k++) {
+                    if (svec_contains(&bridge_names, all_names.names[k])) {
+                        goto found;
+                    }
                 }
+                dpif_delete(dpif);
+            found:
+                svec_destroy(&all_names);
+                dpif_close(dpif);
             }
-            dpif_delete(dpif);
-        found:
-            svec_destroy(&all_names);
-            dpif_close(dpif);
         }
     }
     svec_destroy(&dpif_names);
+    svec_destroy(&dpif_types);
 
-    unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows);
+    unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
+                             NULL);
 
     bond_init();
-    bridge_reconfigure();
+    bridge_reconfigure(cfg);
 }
 
 #ifdef HAVE_OPENSSL
 static bool
-config_string_change(const char *key, char **valuep)
+config_string_change(const char *value, char **valuep)
 {
-    const char *value = cfg_get_string(0, "%s", key);
     if (value && (!*valuep || strcmp(value, *valuep))) {
         free(*valuep);
         *valuep = xstrdup(value);
@@ -342,7 +361,7 @@ config_string_change(const char *key, char **valuep)
 }
 
 static void
-bridge_configure_ssl(void)
+bridge_configure_ssl(const struct ovsrec_ssl *ssl)
 {
     /* XXX SSL should be configurable on a per-bridge basis.
      * XXX should be possible to de-configure SSL. */
@@ -351,12 +370,17 @@ bridge_configure_ssl(void)
     static char *cacert_file;
     struct stat s;
 
-    if (config_string_change("ssl.private-key", &private_key_file)) {
-        vconn_ssl_set_private_key_file(private_key_file);
+    if (!ssl) {
+        /* XXX We can't un-set SSL settings. */
+        return;
     }
 
-    if (config_string_change("ssl.certificate", &certificate_file)) {
-        vconn_ssl_set_certificate_file(certificate_file);
+    if (config_string_change(ssl->private_key, &private_key_file)) {
+        stream_ssl_set_private_key_file(private_key_file);
+    }
+
+    if (config_string_change(ssl->certificate, &certificate_file)) {
+        stream_ssl_set_certificate_file(certificate_file);
     }
 
     /* We assume that even if the filename hasn't changed, if the CA cert 
@@ -364,10 +388,9 @@ bridge_configure_ssl(void)
      * boot-strapping mode.  This opens a small security hole, because
      * the old certificate will still be trusted until vSwitch is
      * restarted.  We may want to address this in vconn's SSL library. */
-    if (config_string_change("ssl.ca-cert", &cacert_file)
+    if (config_string_change(ssl->ca_cert, &cacert_file)
         || (cacert_file && stat(cacert_file, &s) && errno == ENOENT)) {
-        vconn_ssl_set_ca_cert_file(cacert_file,
-                                   cfg_get_bool(0, "ssl.bootstrap-ca-cert"));
+        stream_ssl_set_ca_cert_file(cacert_file, ssl->bootstrap_ca_cert);
     }
 }
 #endif
@@ -375,85 +398,90 @@ bridge_configure_ssl(void)
 /* Attempt to create the network device 'iface_name' through the netdev
  * library. */
 static int
-set_up_iface(const char *iface_name, bool create) 
+set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
+             bool create)
 {
-    const char *type;
-    const char *arg;
-    struct svec arg_svec;
-    struct shash args;
-    int error;
+    struct shash_node *node;
+    struct shash options;
+    int error = 0;
     size_t i;
 
-    /* If a type is not explicitly declared, then assume it's an existing
-     * "system" device. */
-    type = cfg_get_string(0, "iface.%s.type", iface_name);
-    if (!type || !strcmp(type, "system")) {
-        return 0;
-    }
-
-    svec_init(&arg_svec);
-    cfg_get_subsections(&arg_svec, "iface.%s.args", iface_name);
-
-    shash_init(&args);
-    SVEC_FOR_EACH (i, arg, &arg_svec) {
-        const char *value;
-
-        value = cfg_get_string(0, "iface.%s.args.%s", iface_name, arg);
-        if (value) {
-            shash_add(&args, arg, xstrdup(value));
-        }
+    shash_init(&options);
+    for (i = 0; i < iface_cfg->n_options; i++) {
+        shash_add(&options, iface_cfg->key_options[i],
+                  xstrdup(iface_cfg->value_options[i]));
     }
 
     if (create) {
-        error = netdev_create(iface_name, type, &args);
-    } else {
-        /* xxx Check to make sure that the type hasn't changed. */
-        error = netdev_reconfigure(iface_name, &args);
+        struct netdev_options netdev_options;
+
+        memset(&netdev_options, 0, sizeof netdev_options);
+        netdev_options.name = iface_cfg->name;
+        if (!strcmp(iface_cfg->type, "internal")) {
+            /* An "internal" config type maps to a netdev "system" type. */
+            netdev_options.type = "system";
+        } else {
+            netdev_options.type = iface_cfg->type;
+        }
+        netdev_options.args = &options;
+        netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
+        netdev_options.may_create = true;
+        if (iface_is_internal(iface->port->bridge, iface_cfg->name)) {
+            netdev_options.may_open = true;
+        }
+
+        error = netdev_open(&netdev_options, &iface->netdev);
+
+        if (iface->netdev) {
+            netdev_get_carrier(iface->netdev, &iface->enabled);
+        }
+    } else if (iface->netdev) {
+        const char *netdev_type = netdev_get_type(iface->netdev);
+        const char *iface_type = iface_cfg->type && strlen(iface_cfg->type)
+                                  ? iface_cfg->type : NULL;
+
+        /* An "internal" config type maps to a netdev "system" type. */
+        if (iface_type && !strcmp(iface_type, "internal")) {
+            iface_type = "system";
+        }
+
+        if (!iface_type || !strcmp(netdev_type, iface_type)) {
+            error = netdev_reconfigure(iface->netdev, &options);
+        } else {
+            VLOG_WARN("%s: attempting change device type from %s to %s",
+                      iface_cfg->name, netdev_type, iface_type);
+            error = EINVAL;
+        }
     }
 
-    svec_destroy(&arg_svec);
-    shash_destroy(&args);
+    SHASH_FOR_EACH (node, &options) {
+        free(node->data);
+    }
+    shash_destroy(&options);
 
     return error;
 }
 
 static int
-create_iface(const char *iface_name)
+reconfigure_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface)
 {
-    return set_up_iface(iface_name, true);
+    return set_up_iface(iface_cfg, iface, false);
 }
 
-static int
-reconfigure_iface(const char *iface_name)
-{
-    return set_up_iface(iface_name, false);
-}
-
-static void
-destroy_iface(const char *iface_name)
-{
-    netdev_destroy(iface_name);
-}
-
-
-/* iterate_and_prune_ifaces() callback function that opens the network device
- * for 'iface', if it is not already open, and retrieves the interface's MAC
- * address and carrier status. */
 static bool
-init_iface_netdev(struct bridge *br OVS_UNUSED, struct iface *iface,
-                  void *aux OVS_UNUSED)
+check_iface_netdev(struct bridge *br OVS_UNUSED, struct iface *iface,
+                   void *aux OVS_UNUSED)
 {
-    if (iface->netdev) {
-        return true;
-    } else if (!netdev_open(iface->name, NETDEV_ETH_TYPE_NONE,
-                            &iface->netdev)) {
-        netdev_get_carrier(iface->netdev, &iface->enabled);
-        return true;
-    } else {
-        /* If the network device can't be opened, then we're not going to try
-         * to do anything with this interface. */
-        return false;
+    if (!iface->netdev) {
+        int error = set_up_iface(iface->cfg, iface, true);
+        if (error) {
+            VLOG_WARN("could not open netdev on %s, dropping: %s", iface->name,
+                                                               strerror(error));
+            return false;
+        }
     }
+
+    return true;
 }
 
 static bool
@@ -476,12 +504,10 @@ static bool
 set_iface_properties(struct bridge *br OVS_UNUSED, struct iface *iface,
                      void *aux OVS_UNUSED)
 {
-    int rate, burst;
-
     /* Set policing attributes. */
-    rate = cfg_get_int(0, "port.%s.ingress.policing-rate", iface->name);
-    burst = cfg_get_int(0, "port.%s.ingress.policing-burst", iface->name);
-    netdev_set_policing(iface->netdev, rate, burst);
+    netdev_set_policing(iface->netdev,
+                        iface->cfg->ingress_policing_rate,
+                        iface->cfg->ingress_policing_burst);
 
     /* Set MAC address of internal interfaces other than the local
      * interface. */
@@ -525,50 +551,67 @@ iterate_and_prune_ifaces(struct bridge *br,
 }
 
 void
-bridge_reconfigure(void)
+bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 {
-    struct svec old_br, new_br;
+    struct ovsdb_idl_txn *txn;
+    struct shash old_br, new_br;
+    struct shash_node *node;
     struct bridge *br, *next;
     size_t i;
     int sflow_bridge_number;
 
     COVERAGE_INC(bridge_reconfigure);
 
+    txn = ovsdb_idl_txn_create(ovs_cfg->header_.table->idl);
+
     /* Collect old and new bridges. */
-    svec_init(&old_br);
-    svec_init(&new_br);
+    shash_init(&old_br);
+    shash_init(&new_br);
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
-        svec_add(&old_br, br->name);
+        shash_add(&old_br, br->name, br);
     }
-    cfg_get_subsections(&new_br, "bridge");
+    for (i = 0; i < ovs_cfg->n_bridges; i++) {
+        const struct ovsrec_bridge *br_cfg = ovs_cfg->bridges[i];
+        if (!shash_add_once(&new_br, br_cfg->name, br_cfg)) {
+            VLOG_WARN("more than one bridge named %s", br_cfg->name);
+        }
+    }
 
     /* Get rid of deleted bridges and add new bridges. */
-    svec_sort(&old_br);
-    svec_sort(&new_br);
-    assert(svec_is_unique(&old_br));
-    assert(svec_is_unique(&new_br));
     LIST_FOR_EACH_SAFE (br, next, struct bridge, node, &all_bridges) {
-        if (!svec_contains(&new_br, br->name)) {
+        struct ovsrec_bridge *br_cfg = shash_find_data(&new_br, br->name);
+        if (br_cfg) {
+            br->cfg = br_cfg;
+        } else {
             bridge_destroy(br);
         }
     }
-    for (i = 0; i < new_br.n; i++) {
-        const char *name = new_br.names[i];
-        if (!svec_contains(&old_br, name)) {
-            bridge_create(name);
+    SHASH_FOR_EACH (node, &new_br) {
+        const char *br_name = node->name;
+        const struct ovsrec_bridge *br_cfg = node->data;
+        br = shash_find_data(&old_br, br_name);
+        if (br) {
+            /* If the bridge datapath type has changed, we need to tear it
+             * down and recreate. */
+            if (strcmp(br->cfg->datapath_type, br_cfg->datapath_type)) {
+                bridge_destroy(br);
+                bridge_create(br_cfg);
+            }
+        } else {
+            bridge_create(br_cfg);
         }
     }
-    svec_destroy(&old_br);
-    svec_destroy(&new_br);
+    shash_destroy(&old_br);
+    shash_destroy(&new_br);
 
 #ifdef HAVE_OPENSSL
     /* Configure SSL. */
-    bridge_configure_ssl();
+    bridge_configure_ssl(ovs_cfg->ssl);
 #endif
 
     /* Reconfigure all bridges. */
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
-        bridge_reconfigure_one(br);
+        bridge_reconfigure_one(ovs_cfg, br);
     }
 
     /* Add and delete ports on all datapaths.
@@ -579,13 +622,13 @@ bridge_reconfigure(void)
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         struct odp_port *dpif_ports;
         size_t n_dpif_ports;
-        struct svec want_ifaces;
+        struct shash want_ifaces;
 
         dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
         bridge_get_all_ifaces(br, &want_ifaces);
         for (i = 0; i < n_dpif_ports; i++) {
             const struct odp_port *p = &dpif_ports[i];
-            if (!svec_contains(&want_ifaces, p->devname)
+            if (!shash_find(&want_ifaces, p->devname)
                 && strcmp(p->devname, br->name)) {
                 int retval = dpif_port_del(br->dpif, p->port);
                 if (retval) {
@@ -593,62 +636,61 @@ bridge_reconfigure(void)
                              p->devname, dpif_name(br->dpif),
                              strerror(retval));
                 }
-                destroy_iface(p->devname);
             }
         }
-        svec_destroy(&want_ifaces);
+        shash_destroy(&want_ifaces);
         free(dpif_ports);
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         struct odp_port *dpif_ports;
         size_t n_dpif_ports;
-        struct svec cur_ifaces, want_ifaces, add_ifaces;
+        struct shash cur_ifaces, want_ifaces;
+        struct shash_node *node;
 
+        /* Get the set of interfaces currently in this datapath. */
         dpif_port_list(br->dpif, &dpif_ports, &n_dpif_ports);
-        svec_init(&cur_ifaces);
+        shash_init(&cur_ifaces);
         for (i = 0; i < n_dpif_ports; i++) {
-            svec_add(&cur_ifaces, dpif_ports[i].devname);
+            const char *name = dpif_ports[i].devname;
+            if (!shash_find(&cur_ifaces, name)) {
+                shash_add(&cur_ifaces, name, NULL);
+            }
         }
         free(dpif_ports);
-        svec_sort_unique(&cur_ifaces);
+
+        /* Get the set of interfaces we want on this datapath. */
         bridge_get_all_ifaces(br, &want_ifaces);
-        svec_diff(&want_ifaces, &cur_ifaces, &add_ifaces, NULL, NULL);
 
-        for (i = 0; i < cur_ifaces.n; i++) {
-            const char *if_name = cur_ifaces.names[i];
-            reconfigure_iface(if_name);
-        }
+        SHASH_FOR_EACH (node, &want_ifaces) {
+            const char *if_name = node->name;
+            struct iface *iface = node->data;
 
-        for (i = 0; i < add_ifaces.n; i++) {
-            const char *if_name = add_ifaces.names[i];
-            bool internal;
-            int error;
+            if (shash_find(&cur_ifaces, if_name)) {
+                /* Already exists, just reconfigure it. */
+                if (iface) {
+                    reconfigure_iface(iface->cfg, iface);
+                }
+            } else {
+                /* Need to add to datapath. */
+                bool internal;
+                int error;
 
-            /* Attempt to create the network interface in case it
-             * doesn't exist yet. */
-            error = create_iface(if_name);
-            if (error) {
-                VLOG_WARN("could not create iface %s: %s\n", if_name,
-                        strerror(error));
-                continue;
-            }
-
-            /* Add to datapath. */
-            internal = iface_is_internal(br, if_name);
-            error = dpif_port_add(br->dpif, if_name,
-                                  internal ? ODP_PORT_INTERNAL : 0, NULL);
-            if (error == EFBIG) {
-                VLOG_ERR("ran out of valid port numbers on %s",
-                         dpif_name(br->dpif));
-                break;
-            } else if (error) {
-                VLOG_ERR("failed to add %s interface to %s: %s",
-                         if_name, dpif_name(br->dpif), strerror(error));
+                /* Add to datapath. */
+                internal = iface_is_internal(br, if_name);
+                error = dpif_port_add(br->dpif, if_name,
+                                      internal ? ODP_PORT_INTERNAL : 0, NULL);
+                if (error == EFBIG) {
+                    VLOG_ERR("ran out of valid port numbers on %s",
+                             dpif_name(br->dpif));
+                    break;
+                } else if (error) {
+                    VLOG_ERR("failed to add %s interface to %s: %s",
+                             if_name, dpif_name(br->dpif), strerror(error));
+                }
             }
         }
-        svec_destroy(&cur_ifaces);
-        svec_destroy(&want_ifaces);
-        svec_destroy(&add_ifaces);
+        shash_destroy(&cur_ifaces);
+        shash_destroy(&want_ifaces);
     }
     sflow_bridge_number = 0;
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
@@ -656,11 +698,11 @@ bridge_reconfigure(void)
         uint64_t dpid;
         struct iface *local_iface;
         struct iface *hw_addr_iface;
-        struct netflow_options nf_options;
+        char *dpid_string;
 
         bridge_fetch_dp_ifaces(br);
-        iterate_and_prune_ifaces(br, init_iface_netdev, NULL);
 
+        iterate_and_prune_ifaces(br, check_iface_netdev, NULL);
         iterate_and_prune_ifaces(br, check_iface_dp_ifidx, NULL);
 
         /* Pick local port hardware address, datapath ID. */
@@ -679,77 +721,90 @@ bridge_reconfigure(void)
         dpid = bridge_pick_datapath_id(br, ea, hw_addr_iface);
         ofproto_set_datapath_id(br->ofproto, dpid);
 
+        dpid_string = xasprintf("%012"PRIx64, dpid);
+        ovsrec_bridge_set_datapath_id(br->cfg, dpid_string);
+        free(dpid_string);
+
         /* Set NetFlow configuration on this bridge. */
-        memset(&nf_options, 0, sizeof nf_options);
-        dpif_get_netflow_ids(br->dpif, &nf_options.engine_type,
-                             &nf_options.engine_id);
-        nf_options.active_timeout = -1;
+        if (br->cfg->netflow) {
+            struct ovsrec_netflow *nf_cfg = br->cfg->netflow;
+            struct netflow_options opts;
 
-        if (cfg_has("netflow.%s.engine-type", br->name)) {
-            nf_options.engine_type = cfg_get_int(0, "netflow.%s.engine-type", 
-                    br->name);
-        }
-        if (cfg_has("netflow.%s.engine-id", br->name)) {
-            nf_options.engine_id = cfg_get_int(0, "netflow.%s.engine-id",
-                                               br->name);
-        }
-        if (cfg_has("netflow.%s.active-timeout", br->name)) {
-            nf_options.active_timeout = cfg_get_int(0,
-                                                    "netflow.%s.active-timeout",
-                                                    br->name);
-        }
-        if (cfg_has("netflow.%s.add-id-to-iface", br->name)) {
-            nf_options.add_id_to_iface = cfg_get_bool(0,
-                                                   "netflow.%s.add-id-to-iface",
-                                                    br->name);
-        }
-        if (nf_options.add_id_to_iface && nf_options.engine_id > 0x7f) {
-            VLOG_WARN("bridge %s: netflow port mangling may conflict with "
-                    "another vswitch, choose an engine id less than 128", 
-                    br->name);
-        }
-        if (nf_options.add_id_to_iface && br->n_ports > 508) {
-            VLOG_WARN("bridge %s: netflow port mangling will conflict with "
-                    "another port when more than 508 ports are used", 
-                    br->name);
-        }
-        svec_init(&nf_options.collectors);
-        cfg_get_all_keys(&nf_options.collectors, "netflow.%s.host", br->name);
-        if (ofproto_set_netflow(br->ofproto, &nf_options)) {
-            VLOG_ERR("bridge %s: problem setting netflow collectors", 
-                    br->name);
-        }
-        svec_destroy(&nf_options.collectors);
+            memset(&opts, 0, sizeof opts);
 
-        if (cfg_has("sflow.%s.host", br->name)) {
+            dpif_get_netflow_ids(br->dpif, &opts.engine_type, &opts.engine_id);
+            if (nf_cfg->engine_type) {
+                opts.engine_type = *nf_cfg->engine_type;
+            }
+            if (nf_cfg->engine_id) {
+                opts.engine_id = *nf_cfg->engine_id;
+            }
+
+            opts.active_timeout = nf_cfg->active_timeout;
+            if (!opts.active_timeout) {
+                opts.active_timeout = -1;
+            } else if (opts.active_timeout < 0) {
+                VLOG_WARN("bridge %s: active timeout interval set to negative "
+                          "value, using default instead (%d seconds)", br->name,
+                          NF_ACTIVE_TIMEOUT_DEFAULT);
+                opts.active_timeout = -1;
+            }
+
+            opts.add_id_to_iface = nf_cfg->add_id_to_interface;
+            if (opts.add_id_to_iface) {
+                if (opts.engine_id > 0x7f) {
+                    VLOG_WARN("bridge %s: netflow port mangling may conflict "
+                              "with another vswitch, choose an engine id less "
+                              "than 128", br->name);
+                }
+                if (br->n_ports > 508) {
+                    VLOG_WARN("bridge %s: netflow port mangling will conflict "
+                              "with another port when more than 508 ports are "
+                              "used", br->name);
+                }
+            }
+
+            opts.collectors.n = nf_cfg->n_targets;
+            opts.collectors.names = nf_cfg->targets;
+            if (ofproto_set_netflow(br->ofproto, &opts)) {
+                VLOG_ERR("bridge %s: problem setting netflow collectors", 
+                         br->name);
+            }
+        } else {
+            ofproto_set_netflow(br->ofproto, NULL);
+        }
+
+        /* Set sFlow configuration on this bridge. */
+        if (br->cfg->sflow) {
+            const struct ovsrec_sflow *sflow_cfg = br->cfg->sflow;
+            const struct ovsrec_controller *ctrl;
             struct ofproto_sflow_options oso;
 
-            svec_init(&oso.targets);
-            cfg_get_all_keys(&oso.targets, "sflow.%s.host", br->name);
+            memset(&oso, 0, sizeof oso);
+
+            oso.targets.n = sflow_cfg->n_targets;
+            oso.targets.names = sflow_cfg->targets;
 
             oso.sampling_rate = SFL_DEFAULT_SAMPLING_RATE;
-            if (cfg_has("sflow.%s.sampling", br->name)) {
-                oso.sampling_rate = cfg_get_int(0, "sflow.%s.sampling",
-                                                br->name);
+            if (sflow_cfg->sampling) {
+                oso.sampling_rate = *sflow_cfg->sampling;
             }
 
             oso.polling_interval = SFL_DEFAULT_POLLING_INTERVAL;
-            if (cfg_has("sflow.%s.polling", br->name)) {
-                oso.polling_interval = cfg_get_int(0, "sflow.%s.polling",
-                                                   br->name);
+            if (sflow_cfg->polling) {
+                oso.polling_interval = *sflow_cfg->polling;
             }
 
             oso.header_len = SFL_DEFAULT_HEADER_SIZE;
-            if (cfg_has("sflow.%s.header", br->name)) {
-                oso.header_len = cfg_get_int(0, "sflow.%s.header", br->name);
+            if (sflow_cfg->header) {
+                oso.header_len = *sflow_cfg->header;
             }
 
             oso.sub_id = sflow_bridge_number++;
-            oso.agent_device = (char *) cfg_get_string(0, "sflow.%s.agent",
-                                                       br->name);
-            oso.control_ip = (char *) cfg_get_string(0,
-                                                     "bridge.%s.controller.ip",
-                                                     br->name);
+            oso.agent_device = sflow_cfg->agent;
+
+            ctrl = bridge_get_controller(ovs_cfg, br);
+            oso.control_ip = ctrl ? ctrl->local_ip : NULL;
             ofproto_set_sflow(br->ofproto, &oso);
 
             svec_destroy(&oso.targets);
@@ -766,7 +821,7 @@ bridge_reconfigure(void)
          * yet; when a controller is configured, resetting the datapath ID will
          * immediately disconnect from the controller, so it's better to set
          * the datapath ID before the controller. */
-        bridge_reconfigure_controller(br);
+        bridge_reconfigure_controller(ovs_cfg, br);
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         for (i = 0; i < br->n_ports; i++) {
@@ -777,25 +832,41 @@ bridge_reconfigure(void)
         }
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
-        brstp_reconfigure(br);
         iterate_and_prune_ifaces(br, set_iface_properties, NULL);
     }
+
+    ovsrec_open_vswitch_set_cur_cfg(ovs_cfg, ovs_cfg->next_cfg);
+
+    ovsdb_idl_txn_commit(txn);
+    ovsdb_idl_txn_destroy(txn); /* XXX */
+}
+
+static const char *
+bridge_get_other_config(const struct ovsrec_bridge *br_cfg, const char *key)
+{
+    size_t i;
+
+    for (i = 0; i < br_cfg->n_other_config; i++) {
+        if (!strcmp(br_cfg->key_other_config[i], key)) {
+            return br_cfg->value_other_config[i];
+        }
+    }
+    return NULL;
 }
 
 static void
 bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
                           struct iface **hw_addr_iface)
 {
-    uint64_t requested_ea;
+    const char *hwaddr;
     size_t i, j;
     int error;
 
     *hw_addr_iface = NULL;
 
     /* Did the user request a particular MAC? */
-    requested_ea = cfg_get_mac(0, "bridge.%s.mac", br->name);
-    if (requested_ea) {
-        eth_addr_from_uint64(requested_ea, ea);
+    hwaddr = bridge_get_other_config(br->cfg, "hwaddr");
+    if (hwaddr && eth_addr_from_string(hwaddr, ea)) {
         if (eth_addr_is_multicast(ea)) {
             VLOG_ERR("bridge %s: cannot set MAC address to multicast "
                      "address "ETH_ADDR_FMT, br->name, ETH_ADDR_ARGS(ea));
@@ -806,14 +877,12 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
         }
     }
 
-    /* Otherwise choose the minimum MAC address among all of the interfaces.
-     * (Xen uses FE:FF:FF:FF:FF:FF for virtual interfaces so this will get the
-     * MAC of the physical interface in such an environment.) */
+    /* Otherwise choose the minimum non-local MAC address among all of the
+     * interfaces. */
     memset(ea, 0xff, sizeof ea);
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
         uint8_t iface_ea[ETH_ADDR_LEN];
-        uint64_t iface_ea_u64;
         struct iface *iface;
 
         /* Mirror output ports don't participate. */
@@ -822,11 +891,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
         }
 
         /* Choose the MAC address to represent the port. */
-        iface_ea_u64 = cfg_get_mac(0, "port.%s.mac", port->name);
-        if (iface_ea_u64) {
-            /* User specified explicitly. */
-            eth_addr_from_uint64(iface_ea_u64, iface_ea);
-
+        if (port->cfg->mac && eth_addr_from_string(port->cfg->mac, iface_ea)) {
             /* Find the interface with this Ethernet address (if any) so that
              * we can provide the correct devname to the caller. */
             iface = NULL;
@@ -854,11 +919,8 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
             }
 
             /* The local port doesn't count (since we're trying to choose its
-             * MAC address anyway).  Other internal ports don't count because
-             * we really want a physical MAC if we can get it, and internal
-             * ports typically have randomly generated MACs. */
-            if (iface->dp_ifidx == ODPP_LOCAL
-                || cfg_get_bool(0, "iface.%s.internal", iface->name)) {
+             * MAC address anyway). */
+            if (iface->dp_ifidx == ODPP_LOCAL) {
                 continue;
             }
 
@@ -874,6 +936,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
 
         /* Compare against our current choice. */
         if (!eth_addr_is_multicast(iface_ea) &&
+            !eth_addr_is_local(iface_ea) &&
             !eth_addr_is_reserved(iface_ea) &&
             !eth_addr_is_zero(iface_ea) &&
             memcmp(iface_ea, ea, ETH_ADDR_LEN) < 0)
@@ -882,7 +945,7 @@ bridge_pick_local_hw_addr(struct bridge *br, uint8_t ea[ETH_ADDR_LEN],
             *hw_addr_iface = iface;
         }
     }
-    if (eth_addr_is_multicast(ea) || eth_addr_is_vif(ea)) {
+    if (eth_addr_is_multicast(ea)) {
         memcpy(ea, br->default_ea, ETH_ADDR_LEN);
         *hw_addr_iface = NULL;
         VLOG_WARN("bridge %s: using default bridge Ethernet "
@@ -915,10 +978,11 @@ bridge_pick_datapath_id(struct bridge *br,
      * stable from one run to the next, so that policy set on a datapath
      * "sticks".
      */
+    const char *datapath_id;
     uint64_t dpid;
 
-    dpid = cfg_get_dpid(0, "bridge.%s.datapath-id", br->name);
-    if (dpid) {
+    datapath_id = bridge_get_other_config(br->cfg, "datapath-id");
+    if (datapath_id && dpid_from_string(datapath_id, &dpid)) {
         return dpid;
     }
 
@@ -1017,7 +1081,6 @@ bridge_wait(void)
 
         mac_learning_wait(br->ml);
         bond_wait(br);
-        brstp_wait(br);
     }
 }
 
@@ -1053,7 +1116,8 @@ bridge_get_local_iface(struct bridge *br)
 
 /* Bridge unixctl user interface functions. */
 static void
-bridge_unixctl_fdb_show(struct unixctl_conn *conn, const char *args)
+bridge_unixctl_fdb_show(struct unixctl_conn *conn,
+                        const char *args, void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct bridge *br;
@@ -1079,36 +1143,39 @@ bridge_unixctl_fdb_show(struct unixctl_conn *conn, const char *args)
 }
 
 /* Bridge reconfiguration functions. */
-
 static struct bridge *
-bridge_create(const char *name)
+bridge_create(const struct ovsrec_bridge *br_cfg)
 {
     struct bridge *br;
     int error;
 
-    assert(!bridge_lookup(name));
-    br = xcalloc(1, sizeof *br);
+    assert(!bridge_lookup(br_cfg->name));
+    br = xzalloc(sizeof *br);
 
-    error = dpif_create_and_open(name, &br->dpif);
+    error = dpif_create_and_open(br_cfg->name, br_cfg->datapath_type,
+                                 &br->dpif);
     if (error) {
         free(br);
         return NULL;
     }
     dpif_flow_flush(br->dpif);
 
-    error = ofproto_create(name, &bridge_ofhooks, br, &br->ofproto);
+    error = ofproto_create(br_cfg->name, br_cfg->datapath_type, &bridge_ofhooks,
+                           br, &br->ofproto);
     if (error) {
-        VLOG_ERR("failed to create switch %s: %s", name, strerror(error));
+        VLOG_ERR("failed to create switch %s: %s", br_cfg->name,
+                 strerror(error));
         dpif_delete(br->dpif);
         dpif_close(br->dpif);
         free(br);
         return NULL;
     }
 
-    br->name = xstrdup(name);
+    br->name = xstrdup(br_cfg->name);
+    br->cfg = br_cfg;
     br->ml = mac_learning_create();
     br->sent_config_request = false;
-    eth_addr_random(br->default_ea);
+    eth_addr_nicira_random(br->default_ea);
 
     port_array_init(&br->ifaces);
 
@@ -1177,7 +1244,8 @@ bridge_get_datapathid(const char *name)
 /* Handle requests for a listing of all flows known by the OpenFlow
  * stack, including those normally hidden. */
 static void
-bridge_unixctl_dump_flows(struct unixctl_conn *conn, const char *args)
+bridge_unixctl_dump_flows(struct unixctl_conn *conn,
+                          const char *args, void *aux OVS_UNUSED)
 {
     struct bridge *br;
     struct ds results;
@@ -1207,7 +1275,6 @@ bridge_run_one(struct bridge *br)
 
     mac_learning_run(br->ml, ofproto_get_revalidate_set(br->ofproto));
     bond_run(br);
-    brstp_run(br);
 
     error = ofproto_run2(br->ofproto, br->flush);
     br->flush = false;
@@ -1215,16 +1282,21 @@ bridge_run_one(struct bridge *br)
     return error;
 }
 
-static const char *
-bridge_get_controller(const struct bridge *br)
+static const struct ovsrec_controller *
+bridge_get_controller(const struct ovsrec_open_vswitch *ovs_cfg,
+                      const struct bridge *br)
 {
-    const char *controller;
+    const struct ovsrec_controller *controller;
 
-    controller = cfg_get_string(0, "bridge.%s.controller", br->name);
-    if (!controller) {
-        controller = cfg_get_string(0, "mgmt.controller");
+    controller = (br->cfg->controller ? br->cfg->controller
+                  : ovs_cfg->controller ? ovs_cfg->controller
+                  : NULL);
+
+    if (controller && !strcmp(controller->target, "none")) {
+        return NULL;
     }
-    return controller && controller[0] ? controller : NULL;
+
+    return controller;
 }
 
 static bool
@@ -1244,66 +1316,133 @@ check_duplicate_ifaces(struct bridge *br, struct iface *iface, void *ifaces_)
 }
 
 static void
-bridge_reconfigure_one(struct bridge *br)
+bridge_update_desc(struct bridge *br)
 {
-    struct svec old_ports, new_ports, ifaces;
+#if 0
+    bool changed = false;
+    const char *desc;
+
+    desc = cfg_get_string(0, "bridge.%s.mfr-desc", br->name);
+    if (desc != br->mfr_desc) {
+        free(br->mfr_desc);
+        if (desc) {
+            br->mfr_desc = xstrdup(desc);
+        } else {
+            br->mfr_desc = xstrdup(DEFAULT_MFR_DESC);
+        }
+        changed = true;
+    }
+
+    desc = cfg_get_string(0, "bridge.%s.hw-desc", br->name);
+    if (desc != br->hw_desc) {
+        free(br->hw_desc);
+        if (desc) {
+            br->hw_desc = xstrdup(desc);
+        } else {
+            br->hw_desc = xstrdup(DEFAULT_HW_DESC);
+        }
+        changed = true;
+    }
+
+    desc = cfg_get_string(0, "bridge.%s.sw-desc", br->name);
+    if (desc != br->sw_desc) {
+        free(br->sw_desc);
+        if (desc) {
+            br->sw_desc = xstrdup(desc);
+        } else {
+            br->sw_desc = xstrdup(DEFAULT_SW_DESC);
+        }
+        changed = true;
+    }
+
+    desc = cfg_get_string(0, "bridge.%s.serial-desc", br->name);
+    if (desc != br->serial_desc) {
+        free(br->serial_desc);
+        if (desc) {
+            br->serial_desc = xstrdup(desc);
+        } else {
+            br->serial_desc = xstrdup(DEFAULT_SERIAL_DESC);
+        }
+        changed = true;
+    }
+
+    desc = cfg_get_string(0, "bridge.%s.dp-desc", br->name);
+    if (desc != br->dp_desc) {
+        free(br->dp_desc);
+        if (desc) {
+            br->dp_desc = xstrdup(desc);
+        } else {
+            br->dp_desc = xstrdup(DEFAULT_DP_DESC);
+        }
+        changed = true;
+    }
+
+    if (changed) {
+        ofproto_set_desc(br->ofproto, br->mfr_desc, br->hw_desc,
+                br->sw_desc, br->serial_desc, br->dp_desc);
+    }
+#endif
+}
+
+static void
+bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
+                       struct bridge *br)
+{
+    struct shash old_ports, new_ports;
+    struct svec ifaces;
     struct svec listeners, old_listeners;
     struct svec snoops, old_snoops;
+    struct shash_node *node;
     size_t i;
 
     /* Collect old ports. */
-    svec_init(&old_ports);
+    shash_init(&old_ports);
     for (i = 0; i < br->n_ports; i++) {
-        svec_add(&old_ports, br->ports[i]->name);
+        shash_add(&old_ports, br->ports[i]->name, br->ports[i]);
     }
-    svec_sort(&old_ports);
-    assert(svec_is_unique(&old_ports));
 
     /* Collect new ports. */
-    svec_init(&new_ports);
-    cfg_get_all_keys(&new_ports, "bridge.%s.port", br->name);
-    svec_sort(&new_ports);
-    if (bridge_get_controller(br)) {
+    shash_init(&new_ports);
+    for (i = 0; i < br->cfg->n_ports; i++) {
+        const char *name = br->cfg->ports[i]->name;
+        if (!shash_add_once(&new_ports, name, br->cfg->ports[i])) {
+            VLOG_WARN("bridge %s: %s specified twice as bridge port",
+                      br->name, name);
+        }
+    }
+
+    /* If we have a controller, then we need a local port.  Complain if the
+     * user didn't specify one.
+     *
+     * XXX perhaps we should synthesize a port ourselves in this case. */
+    if (bridge_get_controller(ovs_cfg, br)) {
         char local_name[IF_NAMESIZE];
         int error;
 
         error = dpif_port_get_name(br->dpif, ODPP_LOCAL,
                                    local_name, sizeof local_name);
-        if (!error && !svec_contains(&new_ports, local_name)) {
-            svec_add(&new_ports, local_name);
-            svec_sort(&new_ports);
+        if (!error && !shash_find(&new_ports, local_name)) {
+            VLOG_WARN("bridge %s: controller specified but no local port "
+                      "(port named %s) defined",
+                      br->name, local_name);
         }
     }
-    if (!svec_is_unique(&new_ports)) {
-        VLOG_WARN("bridge %s: %s specified twice as bridge port",
-                  br->name, svec_get_duplicate(&new_ports));
-        svec_unique(&new_ports);
-    }
-
-    ofproto_set_mgmt_id(br->ofproto, mgmt_id);
 
     /* Get rid of deleted ports and add new ports. */
-    for (i = 0; i < br->n_ports; ) {
-        struct port *port = br->ports[i];
-        if (!svec_contains(&new_ports, port->name)) {
-            port_destroy(port);
-        } else {
-            i++;
+    SHASH_FOR_EACH (node, &old_ports) {
+        if (!shash_find(&new_ports, node->name)) {
+            port_destroy(node->data);
         }
     }
-    for (i = 0; i < new_ports.n; i++) {
-        const char *name = new_ports.names[i];
-        if (!svec_contains(&old_ports, name)) {
-            port_create(br, name);
+    SHASH_FOR_EACH (node, &new_ports) {
+        struct port *port = shash_find_data(&old_ports, node->name);
+        if (!port) {
+            port = port_create(br, node->name);
         }
+        port_reconfigure(port, node->data);
     }
-    svec_destroy(&old_ports);
-    svec_destroy(&new_ports);
-
-    /* Reconfigure all ports. */
-    for (i = 0; i < br->n_ports; i++) {
-        port_reconfigure(br->ports[i]);
-    }
+    shash_destroy(&old_ports);
+    shash_destroy(&new_ports);
 
     /* Check and delete duplicate interfaces. */
     svec_init(&ifaces);
@@ -1314,6 +1453,7 @@ bridge_reconfigure_one(struct bridge *br)
      * versa.  (XXX Should we delete all flows if we are switching from one
      * controller to another?) */
 
+#if 0
     /* Configure OpenFlow management listeners. */
     svec_init(&listeners);
     cfg_get_all_strings(&listeners, "bridge.%s.openflow.listeners", br->name);
@@ -1355,56 +1495,80 @@ bridge_reconfigure_one(struct bridge *br)
     }
     svec_destroy(&snoops);
     svec_destroy(&old_snoops);
+#else
+    /* Default listener. */
+    svec_init(&listeners);
+    svec_add_nocopy(&listeners, xasprintf("punix:%s/%s.mgmt",
+                                          ovs_rundir, br->name));
+    svec_init(&old_listeners);
+    ofproto_get_listeners(br->ofproto, &old_listeners);
+    if (!svec_equal(&listeners, &old_listeners)) {
+        ofproto_set_listeners(br->ofproto, &listeners);
+    }
+    svec_destroy(&listeners);
+    svec_destroy(&old_listeners);
+
+    /* Default snoop. */
+    svec_init(&snoops);
+    svec_add_nocopy(&snoops, xasprintf("punix:%s/%s.snoop",
+                                       ovs_rundir, br->name));
+    svec_init(&old_snoops);
+    ofproto_get_snoops(br->ofproto, &old_snoops);
+    if (!svec_equal(&snoops, &old_snoops)) {
+        ofproto_set_snoops(br->ofproto, &snoops);
+    }
+    svec_destroy(&snoops);
+    svec_destroy(&old_snoops);
+#endif
 
     mirror_reconfigure(br);
+
+    bridge_update_desc(br);
 }
 
 static void
-bridge_reconfigure_controller(struct bridge *br)
+bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
+                              struct bridge *br)
 {
-    char *pfx = xasprintf("bridge.%s.controller", br->name);
-    const char *controller;
+    const struct ovsrec_controller *c;
 
-    controller = bridge_get_controller(br);
-    if ((br->controller != NULL) != (controller != NULL)) {
+    c = bridge_get_controller(ovs_cfg, br);
+    if ((br->controller != NULL) != (c != NULL)) {
         ofproto_flush_flows(br->ofproto);
     }
     free(br->controller);
-    br->controller = controller ? xstrdup(controller) : NULL;
+    br->controller = c ? xstrdup(c->target) : NULL;
 
-    if (controller) {
-        const char *fail_mode;
+    if (c) {
         int max_backoff, probe;
         int rate_limit, burst_limit;
 
-        if (!strcmp(controller, "discover")) {
-            bool update_resolv_conf = true;
-
-            if (cfg_has("%s.update-resolv.conf", pfx)) {
-                update_resolv_conf = cfg_get_bool(0, "%s.update-resolv.conf",
-                        pfx);
-            }
+        if (!strcmp(c->target, "discover")) {
             ofproto_set_discovery(br->ofproto, true,
-                                  cfg_get_string(0, "%s.accept-regex", pfx),
-                                  update_resolv_conf);
+                                  c->discover_accept_regex,
+                                  c->discover_update_resolv_conf);
         } else {
             struct iface *local_iface;
+            struct in_addr ip;
             bool in_band;
 
-            in_band = (!cfg_is_valid(CFG_BOOL | CFG_REQUIRED,
-                                     "%s.in-band", pfx)
-                       || cfg_get_bool(0, "%s.in-band", pfx));
+            in_band = (!c->connection_mode
+                       || !strcmp(c->connection_mode, "out-of-band"));
             ofproto_set_discovery(br->ofproto, false, NULL, NULL);
             ofproto_set_in_band(br->ofproto, in_band);
 
             local_iface = bridge_get_local_iface(br);
-            if (local_iface
-                && cfg_is_valid(CFG_IP | CFG_REQUIRED, "%s.ip", pfx)) {
+            if (local_iface && c->local_ip && inet_aton(c->local_ip, &ip)) {
                 struct netdev *netdev = local_iface->netdev;
-                struct in_addr ip, mask, gateway;
-                ip.s_addr = cfg_get_ip(0, "%s.ip", pfx);
-                mask.s_addr = cfg_get_ip(0, "%s.netmask", pfx);
-                gateway.s_addr = cfg_get_ip(0, "%s.gateway", pfx);
+                struct in_addr mask, gateway;
+
+                if (!c->local_netmask || !inet_aton(c->local_netmask, &mask)) {
+                    mask.s_addr = 0;
+                }
+                if (!c->local_gateway
+                    || !inet_aton(c->local_gateway, &gateway)) {
+                    gateway.s_addr = 0;
+                }
 
                 netdev_turn_flags_on(netdev, NETDEV_UP, true);
                 if (!mask.s_addr) {
@@ -1426,62 +1590,20 @@ bridge_reconfigure_controller(struct bridge *br)
             }
         }
 
-        fail_mode = cfg_get_string(0, "%s.fail-mode", pfx);
-        if (!fail_mode) {
-            fail_mode = cfg_get_string(0, "mgmt.fail-mode");
-        }
         ofproto_set_failure(br->ofproto,
-                            (!fail_mode
-                             || !strcmp(fail_mode, "standalone")
-                             || !strcmp(fail_mode, "open")));
+                            (!c->fail_mode
+                             || !strcmp(c->fail_mode, "standalone")
+                             || !strcmp(c->fail_mode, "open")));
 
-        probe = cfg_get_int(0, "%s.inactivity-probe", pfx);
-        if (probe < 5) {
-            probe = cfg_get_int(0, "mgmt.inactivity-probe");
-            if (probe < 5) {
-                probe = 5;
-            }
-        }
+        probe = c->inactivity_probe ? *c->inactivity_probe / 1000 : 5;
         ofproto_set_probe_interval(br->ofproto, probe);
 
-        max_backoff = cfg_get_int(0, "%s.max-backoff", pfx);
-        if (!max_backoff) {
-            max_backoff = cfg_get_int(0, "mgmt.max-backoff");
-            if (!max_backoff) {
-                max_backoff = 8;
-            }
-        }
+        max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8;
         ofproto_set_max_backoff(br->ofproto, max_backoff);
 
-        rate_limit = cfg_get_int(0, "%s.rate-limit", pfx);
-        if (!rate_limit) {
-            rate_limit = cfg_get_int(0, "mgmt.rate-limit");
-        }
-        burst_limit = cfg_get_int(0, "%s.burst-limit", pfx);
-        if (!burst_limit) {
-            burst_limit = cfg_get_int(0, "mgmt.burst-limit");
-        }
+        rate_limit = c->controller_rate_limit ? *c->controller_rate_limit : 0;
+        burst_limit = c->controller_burst_limit ? *c->controller_burst_limit : 0;
         ofproto_set_rate_limit(br->ofproto, rate_limit, burst_limit);
-
-        ofproto_set_stp(br->ofproto, cfg_get_bool(0, "%s.stp", pfx));
-
-        if (cfg_has("%s.commands.acl", pfx)) {
-            struct svec command_acls;
-            char *command_acl;
-
-            svec_init(&command_acls);
-            cfg_get_all_strings(&command_acls, "%s.commands.acl", pfx);
-            command_acl = svec_join(&command_acls, ",", "");
-
-            ofproto_set_remote_execution(br->ofproto, command_acl,
-                                         cfg_get_string(0, "%s.commands.dir",
-                                                        pfx));
-
-            svec_destroy(&command_acls);
-            free(command_acl);
-        } else {
-            ofproto_set_remote_execution(br->ofproto, NULL, NULL);
-        }
     } else {
         union ofp_action action;
         flow_t flow;
@@ -1500,31 +1622,27 @@ bridge_reconfigure_controller(struct bridge *br)
         ofproto_set_max_backoff(br->ofproto, 1);
         ofproto_set_probe_interval(br->ofproto, 5);
         ofproto_set_failure(br->ofproto, false);
-        ofproto_set_stp(br->ofproto, false);
     }
-    free(pfx);
 
     ofproto_set_controller(br->ofproto, br->controller);
 }
 
 static void
-bridge_get_all_ifaces(const struct bridge *br, struct svec *ifaces)
+bridge_get_all_ifaces(const struct bridge *br, struct shash *ifaces)
 {
     size_t i, j;
 
-    svec_init(ifaces);
+    shash_init(ifaces);
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
         for (j = 0; j < port->n_ifaces; j++) {
             struct iface *iface = port->ifaces[j];
-            svec_add(ifaces, iface->name);
+            shash_add_once(ifaces, iface->name, iface);
         }
-        if (port->n_ifaces > 1
-            && cfg_get_bool(0, "bonding.%s.fake-iface", port->name)) {
-            svec_add(ifaces, port->name);
+        if (port->n_ifaces > 1 && port->cfg->bond_fake_iface) {
+            shash_add_once(ifaces, port->name, NULL);
         }
     }
-    svec_sort_unique(ifaces);
 }
 
 /* For robustness, in case the administrator moves around datapath ports behind
@@ -1566,6 +1684,13 @@ bridge_fetch_dp_ifaces(struct bridge *br)
             } else {
                 port_array_set(&br->ifaces, p->port, iface);
                 iface->dp_ifidx = p->port;
+            }
+
+            if (iface->cfg) {
+                int64_t ofport = (iface->dp_ifidx >= 0
+                                  ? odp_port_to_ofp_port(iface->dp_ifidx)
+                                  : -1);
+                ovsrec_interface_set_ofport(iface->cfg, &ofport, 1);
             }
         }
     }
@@ -1796,18 +1921,6 @@ set_dst(struct dst *p, const flow_t *flow,
         const struct port *in_port, const struct port *out_port,
         tag_type *tags)
 {
-    /* STP handling.
-     *
-     * XXX This uses too many tags: any broadcast flow will get one tag per
-     * destination port, and thus a broadcast on a switch of any size is likely
-     * to have all tag bits set.  We should figure out a way to be smarter.
-     *
-     * This is OK when STP is disabled, because stp_state_tag is 0 then. */
-    *tags |= out_port->stp_state_tag;
-    if (!(out_port->stp_state & (STP_DISABLED | STP_FORWARDING))) {
-        return false;
-    }
-
     p->vlan = (out_port->vlan >= 0 ? OFP_VLAN_NONE
               : in_port->vlan >= 0 ? in_port->vlan
               : ntohs(flow->dl_vlan));
@@ -1900,7 +2013,6 @@ compose_dsts(const struct bridge *br, const flow_t *flow, uint16_t vlan,
     struct dst *dst = dsts;
     size_t i;
 
-    *tags |= in_port->stp_state_tag;
     if (out_port == FLOOD_PORT) {
         /* XXX use ODP_FLOOD if no vlans or bonding. */
         /* XXX even better, define each VLAN as a datapath port group */
@@ -2129,13 +2241,6 @@ process_flow(struct bridge *br, const flow_t *flow,
         goto done;
     }
 
-    /* Drop frames for ports that STP wants entirely killed (both for
-     * forwarding and for learning).  Later, after we do learning, we'll drop
-     * the frames that STP wants to do learning but not forwarding on. */
-    if (in_port->stp_state & (STP_LISTENING | STP_BLOCKING)) {
-        goto done;
-    }
-
     /* Drop frames for reserved multicast addresses. */
     if (eth_addr_is_reserved(flow->dl_dst)) {
         goto done;
@@ -2194,9 +2299,8 @@ process_flow(struct bridge *br, const flow_t *flow,
         return false;
     }
 
-    /* Don't send packets out their input ports.  Don't forward frames that STP
-     * wants us to discard. */
-    if (in_port == out_port || in_port->stp_state == STP_LEARNING) {
+    /* Don't send packets out their input ports. */
+    if (in_port == out_port) {
         out_port = NULL;
     }
 
@@ -2250,14 +2354,6 @@ bridge_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
                         uint16_t *nf_output_iface, void *br_)
 {
     struct bridge *br = br_;
-
-#if 0
-    if (flow->dl_type == htons(OFP_DL_TYPE_NOT_ETH_TYPE)
-        && eth_addr_equals(flow->dl_dst, stp_eth_addr)) {
-        brstp_receive(br, flow, payload);
-        return true;
-    }
-#endif
 
     COVERAGE_INC(bridge_process_flow);
     return process_flow(br, flow, packet, actions, tags, nf_output_iface);
@@ -2699,7 +2795,8 @@ bond_send_learning_packets(struct port *port)
 /* Bonding unixctl user interface functions. */
 
 static void
-bond_unixctl_list(struct unixctl_conn *conn, const char *args OVS_UNUSED)
+bond_unixctl_list(struct unixctl_conn *conn,
+                  const char *args OVS_UNUSED, void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct bridge *br;
@@ -2749,7 +2846,8 @@ bond_find(const char *name)
 }
 
 static void
-bond_unixctl_show(struct unixctl_conn *conn, const char *args)
+bond_unixctl_show(struct unixctl_conn *conn,
+                  const char *args, void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     const struct port *port;
@@ -2814,7 +2912,8 @@ bond_unixctl_show(struct unixctl_conn *conn, const char *args)
 }
 
 static void
-bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_)
+bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_,
+                     void *aux OVS_UNUSED)
 {
     char *args = (char *) args_;
     char *save_ptr = NULL;
@@ -2870,7 +2969,8 @@ bond_unixctl_migrate(struct unixctl_conn *conn, const char *args_)
 }
 
 static void
-bond_unixctl_set_active_slave(struct unixctl_conn *conn, const char *args_)
+bond_unixctl_set_active_slave(struct unixctl_conn *conn, const char *args_,
+                              void *aux OVS_UNUSED)
 {
     char *args = (char *) args_;
     char *save_ptr = NULL;
@@ -2950,19 +3050,22 @@ enable_slave(struct unixctl_conn *conn, const char *args_, bool enable)
 }
 
 static void
-bond_unixctl_enable_slave(struct unixctl_conn *conn, const char *args)
+bond_unixctl_enable_slave(struct unixctl_conn *conn, const char *args,
+                          void *aux OVS_UNUSED)
 {
     enable_slave(conn, args, true);
 }
 
 static void
-bond_unixctl_disable_slave(struct unixctl_conn *conn, const char *args)
+bond_unixctl_disable_slave(struct unixctl_conn *conn, const char *args,
+                           void *aux OVS_UNUSED)
 {
     enable_slave(conn, args, false);
 }
 
 static void
-bond_unixctl_hash(struct unixctl_conn *conn, const char *args)
+bond_unixctl_hash(struct unixctl_conn *conn, const char *args,
+                  void *aux OVS_UNUSED)
 {
 	uint8_t mac[ETH_ADDR_LEN];
 	uint8_t hash;
@@ -2983,32 +3086,32 @@ bond_unixctl_hash(struct unixctl_conn *conn, const char *args)
 static void
 bond_init(void)
 {
-    unixctl_command_register("bond/list", bond_unixctl_list);
-    unixctl_command_register("bond/show", bond_unixctl_show);
-    unixctl_command_register("bond/migrate", bond_unixctl_migrate);
+    unixctl_command_register("bond/list", bond_unixctl_list, NULL);
+    unixctl_command_register("bond/show", bond_unixctl_show, NULL);
+    unixctl_command_register("bond/migrate", bond_unixctl_migrate, NULL);
     unixctl_command_register("bond/set-active-slave",
-                             bond_unixctl_set_active_slave);
-    unixctl_command_register("bond/enable-slave", bond_unixctl_enable_slave);
-    unixctl_command_register("bond/disable-slave", bond_unixctl_disable_slave);
-    unixctl_command_register("bond/hash", bond_unixctl_hash);
+                             bond_unixctl_set_active_slave, NULL);
+    unixctl_command_register("bond/enable-slave", bond_unixctl_enable_slave,
+                             NULL);
+    unixctl_command_register("bond/disable-slave", bond_unixctl_disable_slave,
+                             NULL);
+    unixctl_command_register("bond/hash", bond_unixctl_hash, NULL);
 }
 
 /* Port functions. */
 
-static void
+static struct port *
 port_create(struct bridge *br, const char *name)
 {
     struct port *port;
 
-    port = xcalloc(1, sizeof *port);
+    port = xzalloc(sizeof *port);
     port->bridge = br;
     port->port_idx = br->n_ports;
     port->vlan = -1;
     port->trunks = NULL;
     port->name = xstrdup(name);
     port->active_iface = -1;
-    port->stp_state = STP_DISABLED;
-    port->stp_state_tag = 0;
 
     if (br->n_ports >= br->allocated_ports) {
         br->ports = x2nrealloc(br->ports, &br->allocated_ports,
@@ -3018,70 +3121,70 @@ port_create(struct bridge *br, const char *name)
 
     VLOG_INFO("created port %s on bridge %s", port->name, br->name);
     bridge_flush(br);
+
+    return port;
 }
 
 static void
-port_reconfigure(struct port *port)
+port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 {
-    bool bonded = cfg_has_section("bonding.%s", port->name);
-    struct svec old_ifaces, new_ifaces;
+    struct shash old_ifaces, new_ifaces;
+    struct shash_node *node;
     unsigned long *trunks;
     int vlan;
     size_t i;
 
-    /* Collect old and new interfaces. */
-    svec_init(&old_ifaces);
-    svec_init(&new_ifaces);
-    for (i = 0; i < port->n_ifaces; i++) {
-        svec_add(&old_ifaces, port->ifaces[i]->name);
-    }
-    svec_sort(&old_ifaces);
-    if (bonded) {
-        cfg_get_all_keys(&new_ifaces, "bonding.%s.slave", port->name);
-        if (!new_ifaces.n) {
-            VLOG_ERR("port %s: no interfaces specified for bonded port",
-                     port->name);
-        } else if (new_ifaces.n == 1) {
-            VLOG_WARN("port %s: only 1 interface specified for bonded port",
-                      port->name);
-        }
+    port->cfg = cfg;
 
-        port->updelay = cfg_get_int(0, "bonding.%s.updelay", port->name);
-        if (port->updelay < 0) {
-            port->updelay = 0;
+    /* Collect old and new interfaces. */
+    shash_init(&old_ifaces);
+    shash_init(&new_ifaces);
+    for (i = 0; i < port->n_ifaces; i++) {
+        shash_add(&old_ifaces, port->ifaces[i]->name, port->ifaces[i]);
+    }
+    for (i = 0; i < cfg->n_interfaces; i++) {
+        const char *name = cfg->interfaces[i]->name;
+        if (!shash_add_once(&new_ifaces, name, cfg->interfaces[i])) {
+            VLOG_WARN("port %s: %s specified twice as port interface",
+                      port->name, name);
         }
-        port->downdelay = cfg_get_int(0, "bonding.%s.downdelay", port->name);
-        if (port->downdelay < 0) {
-            port->downdelay = 0;
-        }
-    } else {
-        svec_init(&new_ifaces);
-        svec_add(&new_ifaces, port->name);
+    }
+    port->updelay = cfg->bond_updelay;
+    if (port->updelay < 0) {
+        port->updelay = 0;
+    }
+    port->updelay = cfg->bond_downdelay;
+    if (port->downdelay < 0) {
+        port->downdelay = 0;
     }
 
     /* Get rid of deleted interfaces and add new interfaces. */
-    for (i = 0; i < port->n_ifaces; i++) {
-        struct iface *iface = port->ifaces[i];
-        if (!svec_contains(&new_ifaces, iface->name)) {
-            iface_destroy(iface);
-        } else {
-            i++;
+    SHASH_FOR_EACH (node, &old_ifaces) {
+        if (!shash_find(&new_ifaces, node->name)) {
+            iface_destroy(node->data);
         }
     }
-    for (i = 0; i < new_ifaces.n; i++) {
-        const char *name = new_ifaces.names[i];
-        if (!svec_contains(&old_ifaces, name)) {
-            iface_create(port, name);
+    SHASH_FOR_EACH (node, &new_ifaces) {
+        const struct ovsrec_interface *if_cfg = node->data;
+        struct iface *iface;
+
+        iface = shash_find_data(&old_ifaces, if_cfg->name);
+        if (!iface) {
+            iface_create(port, if_cfg);
+        } else {
+            iface->cfg = if_cfg;
         }
     }
 
     /* Get VLAN tag. */
     vlan = -1;
-    if (cfg_has("vlan.%s.tag", port->name)) {
-        if (!bonded) {
-            vlan = cfg_get_vlan(0, "vlan.%s.tag", port->name);
+    if (cfg->tag) {
+        if (port->n_ifaces < 2) {
+            vlan = *cfg->tag;
             if (vlan >= 0 && vlan <= 4095) {
                 VLOG_DBG("port %s: assigning VLAN tag %d", port->name, vlan);
+            } else {
+                vlan = -1;
             }
         } else {
             /* It's possible that bonded, VLAN-tagged ports make sense.  Maybe
@@ -3098,14 +3201,13 @@ port_reconfigure(struct port *port)
     /* Get trunked VLANs. */
     trunks = NULL;
     if (vlan < 0) {
-        size_t n_trunks, n_errors;
+        size_t n_errors;
         size_t i;
 
         trunks = bitmap_allocate(4096);
-        n_trunks = cfg_count("vlan.%s.trunks", port->name);
         n_errors = 0;
-        for (i = 0; i < n_trunks; i++) {
-            int trunk = cfg_get_vlan(i, "vlan.%s.trunks", port->name);
+        for (i = 0; i < cfg->n_trunks; i++) {
+            int trunk = cfg->trunks[i];
             if (trunk >= 0) {
                 bitmap_set1(trunks, trunk);
             } else {
@@ -3114,9 +3216,9 @@ port_reconfigure(struct port *port)
         }
         if (n_errors) {
             VLOG_ERR("port %s: invalid values for %zu trunk VLANs",
-                     port->name, n_trunks);
+                     port->name, cfg->n_trunks);
         }
-        if (n_errors == n_trunks) {
+        if (n_errors == cfg->n_trunks) {
             if (n_errors) {
                 VLOG_ERR("port %s: no valid trunks, trunking all VLANs",
                          port->name);
@@ -3124,9 +3226,9 @@ port_reconfigure(struct port *port)
             bitmap_set_multiple(trunks, 0, 4096, 1);
         }
     } else {
-        if (cfg_has("vlan.%s.trunks", port->name)) {
-            VLOG_ERR("ignoring vlan.%s.trunks in favor of vlan.%s.vlan",
-                     port->name, port->name);
+        if (cfg->n_trunks) {
+            VLOG_ERR("port %s: ignoring trunks in favor of implicit vlan",
+                     port->name);
         }
     }
     if (trunks == NULL
@@ -3137,8 +3239,8 @@ port_reconfigure(struct port *port)
     bitmap_free(port->trunks);
     port->trunks = trunks;
 
-    svec_destroy(&old_ifaces);
-    svec_destroy(&new_ifaces);
+    shash_destroy(&old_ifaces);
+    shash_destroy(&new_ifaces);
 }
 
 static void
@@ -3147,7 +3249,7 @@ port_destroy(struct port *port)
     if (port) {
         struct bridge *br = port->bridge;
         struct port *del;
-        size_t i;
+        int i;
 
         proc_net_compat_update_vlan(port->name, NULL, 0);
         proc_net_compat_update_bond(port->name, NULL);
@@ -3218,6 +3320,7 @@ port_update_bonding(struct port *port)
             free(port->bond_hash);
             port->bond_hash = NULL;
             port->bond_compat_is_stale = true;
+            port->bond_fake_iface = false;
         }
     } else {
         if (!port->bond_hash) {
@@ -3233,6 +3336,7 @@ port_update_bonding(struct port *port)
             bond_choose_active_iface(port);
         }
         port->bond_compat_is_stale = true;
+        port->bond_fake_iface = port->cfg->bond_fake_iface;
     }
 }
 
@@ -3292,10 +3396,10 @@ port_update_bond_compat(struct port *port)
         netdev_get_etheraddr(iface->netdev, slave->mac);
     }
 
-    if (cfg_get_bool(0, "bonding.%s.fake-iface", port->name)) {
+    if (port->bond_fake_iface) {
         struct netdev *bond_netdev;
 
-        if (!netdev_open(port->name, NETDEV_ETH_TYPE_NONE, &bond_netdev)) {
+        if (!netdev_open_default(port->name, &bond_netdev)) {
             if (bond.up) {
                 netdev_turn_flags_on(bond_netdev, NETDEV_UP, true);
             } else {
@@ -3348,12 +3452,14 @@ port_update_vlan_compat(struct port *port)
 
 /* Interface functions. */
 
-static void
-iface_create(struct port *port, const char *name)
+static struct iface *
+iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
 {
     struct iface *iface;
+    char *name = if_cfg->name;
+    int error;
 
-    iface = xcalloc(1, sizeof *iface);
+    iface = xzalloc(sizeof *iface);
     iface->port = port;
     iface->port_ifidx = port->n_ifaces;
     iface->name = xstrdup(name);
@@ -3361,6 +3467,7 @@ iface_create(struct port *port, const char *name)
     iface->tag = tag_create_random();
     iface->delay_expires = LLONG_MAX;
     iface->netdev = NULL;
+    iface->cfg = if_cfg;
 
     if (port->n_ifaces >= port->allocated_ifaces) {
         port->ifaces = x2nrealloc(port->ifaces, &port->allocated_ifaces,
@@ -3371,9 +3478,21 @@ iface_create(struct port *port, const char *name)
         port->bridge->has_bonded_ports = true;
     }
 
+    /* Attempt to create the network interface in case it
+     * doesn't exist yet. */
+    if (!iface_is_internal(port->bridge, iface->name)) {
+        error = set_up_iface(if_cfg, iface, true);
+        if (error) {
+            VLOG_WARN("could not create iface %s: %s", iface->name,
+                    strerror(error));
+        }
+    }
+
     VLOG_DBG("attached network device %s to port %s", iface->name, port->name);
 
     bridge_flush(port->bridge);
+
+    return iface;
 }
 
 static void
@@ -3393,14 +3512,15 @@ iface_destroy(struct iface *iface)
         del->port_ifidx = iface->port_ifidx;
 
         netdev_close(iface->netdev);
-        free(iface->name);
-        free(iface);
 
         if (del_active) {
             ofproto_revalidate(port->bridge->ofproto, port->active_iface_tag);
             bond_choose_active_iface(port);
             bond_send_learning_packets(port);
         }
+
+        free(iface->name);
+        free(iface);
 
         bridge_flush(port->bridge);
     }
@@ -3440,20 +3560,25 @@ iface_from_dp_ifidx(const struct bridge *br, uint16_t dp_ifidx)
  * reason why this function takes a name instead of a struct iface: the fake
  * interfaces created this way do not have a struct iface. */
 static bool
-iface_is_internal(const struct bridge *br, const char *iface)
+iface_is_internal(const struct bridge *br, const char *if_name)
 {
-    if (!strcmp(iface, br->name)
-        || cfg_get_bool(0, "iface.%s.internal", iface)) {
+    /* XXX wastes time */
+    struct iface *iface;
+    struct port *port;
+
+    if (!strcmp(if_name, br->name)) {
         return true;
     }
 
-    if (cfg_get_bool(0, "bonding.%s.fake-iface", iface)) {
-        struct port *port = port_lookup(br, iface);
-        if (port && port->n_ifaces > 1) {
-            return true;
-        }
+    iface = iface_lookup(br, if_name);
+    if (iface && !strcmp(iface->cfg->type, "internal")) {
+        return true;
     }
 
+    port = port_lookup(br, if_name);
+    if (port && port->n_ifaces > 1 && port->cfg->bond_fake_iface) {
+        return true;
+    }
     return false;
 }
 
@@ -3462,11 +3587,9 @@ iface_is_internal(const struct bridge *br, const char *iface)
 static void
 iface_set_mac(struct iface *iface)
 {
-    uint64_t mac = cfg_get_mac(0, "iface.%s.mac", iface->name);
-    if (mac) {
-        static uint8_t ea[ETH_ADDR_LEN];
+    uint8_t ea[ETH_ADDR_LEN];
 
-        eth_addr_from_uint64(mac, ea);
+    if (iface->cfg->mac && eth_addr_from_string(iface->cfg->mac, ea)) {
         if (eth_addr_is_multicast(ea)) {
             VLOG_ERR("interface %s: cannot set MAC to multicast address",
                      iface->name);
@@ -3488,46 +3611,47 @@ iface_set_mac(struct iface *iface)
 static void
 mirror_reconfigure(struct bridge *br)
 {
-    struct svec old_mirrors, new_mirrors;
-    size_t i, n_rspan_vlans;
+    struct shash old_mirrors, new_mirrors;
+    struct shash_node *node;
     unsigned long *rspan_vlans;
+    int i;
 
-    /* Collect old and new mirrors. */
-    svec_init(&old_mirrors);
-    svec_init(&new_mirrors);
-    cfg_get_subsections(&new_mirrors, "mirror.%s", br->name);
+    /* Collect old mirrors. */
+    shash_init(&old_mirrors);
     for (i = 0; i < MAX_MIRRORS; i++) {
         if (br->mirrors[i]) {
-            svec_add(&old_mirrors, br->mirrors[i]->name);
+            shash_add(&old_mirrors, br->mirrors[i]->name, br->mirrors[i]);
+        }
+    }
+
+    /* Collect new mirrors. */
+    shash_init(&new_mirrors);
+    for (i = 0; i < br->cfg->n_mirrors; i++) {
+        struct ovsrec_mirror *cfg = br->cfg->mirrors[i];
+        if (!shash_add_once(&new_mirrors, cfg->name, cfg)) {
+            VLOG_WARN("bridge %s: %s specified twice as mirror",
+                      br->name, cfg->name);
         }
     }
 
     /* Get rid of deleted mirrors and add new mirrors. */
-    svec_sort(&old_mirrors);
-    assert(svec_is_unique(&old_mirrors));
-    svec_sort(&new_mirrors);
-    assert(svec_is_unique(&new_mirrors));
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        struct mirror *m = br->mirrors[i];
-        if (m && !svec_contains(&new_mirrors, m->name)) {
-            mirror_destroy(m);
+    SHASH_FOR_EACH (node, &old_mirrors) {
+        if (!shash_find(&new_mirrors, node->name)) {
+            mirror_destroy(node->data);
         }
     }
-    for (i = 0; i < new_mirrors.n; i++) {
-        const char *name = new_mirrors.names[i];
-        if (!svec_contains(&old_mirrors, name)) {
-            mirror_create(br, name);
+    SHASH_FOR_EACH (node, &new_mirrors) {
+        struct mirror *mirror = shash_find_data(&old_mirrors, node->name);
+        if (!mirror) {
+            mirror = mirror_create(br, node->name);
+            if (!mirror) {
+                break;
+            }
         }
+        mirror_reconfigure_one(mirror, node->data);
     }
-    svec_destroy(&old_mirrors);
-    svec_destroy(&new_mirrors);
-
-    /* Reconfigure all mirrors. */
-    for (i = 0; i < MAX_MIRRORS; i++) {
-        if (br->mirrors[i]) {
-            mirror_reconfigure_one(br->mirrors[i]);
-        }
-    }
+    shash_destroy(&old_mirrors);
+    shash_destroy(&new_mirrors);
 
     /* Update port reserved status. */
     for (i = 0; i < br->n_ports; i++) {
@@ -3540,31 +3664,29 @@ mirror_reconfigure(struct bridge *br)
         }
     }
 
-    /* Update learning disabled vlans (for RSPAN). */
+    /* Update flooded vlans (for RSPAN). */
     rspan_vlans = NULL;
-    n_rspan_vlans = cfg_count("vlan.%s.disable-learning", br->name);
-    if (n_rspan_vlans) {
+    if (br->cfg->n_flood_vlans) {
         rspan_vlans = bitmap_allocate(4096);
 
-        for (i = 0; i < n_rspan_vlans; i++) {
-            int vlan = cfg_get_vlan(i, "vlan.%s.disable-learning", br->name);
-            if (vlan >= 0) {
+        for (i = 0; i < br->cfg->n_flood_vlans; i++) {
+            int64_t vlan = br->cfg->flood_vlans[i];
+            if (vlan >= 0 && vlan < 4096) {
                 bitmap_set1(rspan_vlans, vlan);
-                VLOG_INFO("bridge %s: disabling learning on vlan %d\n",
+                VLOG_INFO("bridge %s: disabling learning on vlan %"PRId64,
                           br->name, vlan);
             } else {
-                VLOG_ERR("bridge %s: invalid value '%s' for learning disabled "
-                         "VLAN", br->name,
-                       cfg_get_string(i, "vlan.%s.disable-learning", br->name));
+                VLOG_ERR("bridge %s: invalid value %"PRId64 "for flood VLAN",
+                         br->name, vlan);
             }
         }
     }
-    if (mac_learning_set_disabled_vlans(br->ml, rspan_vlans)) {
+    if (mac_learning_set_flood_vlans(br->ml, rspan_vlans)) {
         bridge_flush(br);
     }
 }
 
-static void
+static struct mirror *
 mirror_create(struct bridge *br, const char *name)
 {
     struct mirror *m;
@@ -3574,7 +3696,7 @@ mirror_create(struct bridge *br, const char *name)
         if (i >= MAX_MIRRORS) {
             VLOG_WARN("bridge %s: maximum of %d port mirrors reached, "
                       "cannot create %s", br->name, MAX_MIRRORS, name);
-            return;
+            return NULL;
         }
         if (!br->mirrors[i]) {
             break;
@@ -3584,16 +3706,18 @@ mirror_create(struct bridge *br, const char *name)
     VLOG_INFO("created port mirror %s on bridge %s", name, br->name);
     bridge_flush(br);
 
-    br->mirrors[i] = m = xcalloc(1, sizeof *m);
+    br->mirrors[i] = m = xzalloc(sizeof *m);
     m->bridge = br;
     m->idx = i;
     m->name = xstrdup(name);
-    svec_init(&m->src_ports);
-    svec_init(&m->dst_ports);
+    shash_init(&m->src_ports);
+    shash_init(&m->dst_ports);
     m->vlans = NULL;
     m->n_vlans = 0;
     m->out_vlan = -1;
     m->out_port = NULL;
+
+    return m;
 }
 
 static void
@@ -3608,8 +3732,8 @@ mirror_destroy(struct mirror *m)
             br->ports[i]->dst_mirrors &= ~(MIRROR_MASK_C(1) << m->idx);
         }
 
-        svec_destroy(&m->src_ports);
-        svec_destroy(&m->dst_ports);
+        shash_destroy(&m->src_ports);
+        shash_destroy(&m->dst_ports);
         free(m->vlans);
 
         m->bridge->mirrors[m->idx] = NULL;
@@ -3620,45 +3744,36 @@ mirror_destroy(struct mirror *m)
 }
 
 static void
-prune_ports(struct mirror *m, struct svec *ports)
+mirror_collect_ports(struct mirror *m, struct ovsrec_port **ports, int n_ports,
+                     struct shash *names)
 {
-    struct svec tmp;
     size_t i;
 
-    svec_sort_unique(ports);
-
-    svec_init(&tmp);
-    for (i = 0; i < ports->n; i++) {
-        const char *name = ports->names[i];
+    for (i = 0; i < n_ports; i++) {
+        const char *name = ports[i]->name;
         if (port_lookup(m->bridge, name)) {
-            svec_add(&tmp, name);
+            shash_add_once(names, name, NULL);
         } else {
-            VLOG_WARN("mirror.%s.%s: cannot match on nonexistent port %s",
-                      m->bridge->name, m->name, name);
+            VLOG_WARN("bridge %s: mirror %s cannot match on nonexistent "
+                      "port %s", m->bridge->name, m->name, name);
         }
     }
-    svec_swap(ports, &tmp);
-    svec_destroy(&tmp);
 }
 
 static size_t
-prune_vlans(struct mirror *m, struct svec *vlan_strings, int **vlans)
+mirror_collect_vlans(struct mirror *m, const struct ovsrec_mirror *cfg,
+                     int **vlans)
 {
-    size_t n_vlans, i;
+    size_t n_vlans;
+    size_t i;
 
-    /* This isn't perfect: it won't combine "0" and "00", and the textual sort
-     * order won't give us numeric sort order.  But that's good enough for what
-     * we need right now. */
-    svec_sort_unique(vlan_strings);
-
-    *vlans = xmalloc(sizeof *vlans * vlan_strings->n);
+    *vlans = xmalloc(sizeof **vlans * cfg->n_select_vlan);
     n_vlans = 0;
-    for (i = 0; i < vlan_strings->n; i++) {
-        const char *name = vlan_strings->names[i];
-        int vlan;
-        if (!str_to_int(name, 10, &vlan) || vlan < 0 || vlan > 4095) {
-            VLOG_WARN("mirror.%s.%s.select.vlan: ignoring invalid VLAN %s",
-                      m->bridge->name, m->name, name);
+    for (i = 0; i < cfg->n_select_vlan; i++) {
+        int64_t vlan = cfg->select_vlan[i];
+        if (vlan < 0 || vlan > 4095) {
+            VLOG_WARN("bridge %s: mirror %s selects invalid VLAN %"PRId64,
+                      m->bridge->name, m->name, vlan);
         } else {
             (*vlans)[n_vlans++] = vlan;
         }
@@ -3693,104 +3808,86 @@ port_trunks_any_mirrored_vlan(const struct mirror *m, const struct port *p)
 }
 
 static void
-mirror_reconfigure_one(struct mirror *m)
+mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
 {
-    char *pfx = xasprintf("mirror.%s.%s", m->bridge->name, m->name);
-    struct svec src_ports, dst_ports, ports;
-    struct svec vlan_strings;
+    struct shash src_ports, dst_ports;
     mirror_mask_t mirror_bit;
-    const char *out_port_name;
     struct port *out_port;
     int out_vlan;
     size_t n_vlans;
     int *vlans;
     size_t i;
-    bool mirror_all_ports;
-    bool any_ports_specified;
 
     /* Get output port. */
-    out_port_name = cfg_get_key(0, "mirror.%s.%s.output.port",
-                                m->bridge->name, m->name);
-    if (out_port_name) {
-        out_port = port_lookup(m->bridge, out_port_name);
+    if (cfg->output_port) {
+        out_port = port_lookup(m->bridge, cfg->output_port->name);
         if (!out_port) {
-            VLOG_ERR("%s.output.port: bridge %s does not have a port "
-                      "named %s", pfx, m->bridge->name, out_port_name);
+            VLOG_ERR("bridge %s: mirror %s outputs to port not on bridge",
+                     m->bridge->name, m->name);
             mirror_destroy(m);
-            free(pfx);
             return;
         }
         out_vlan = -1;
 
-        if (cfg_has("%s.output.vlan", pfx)) {
-            VLOG_ERR("%s.output.port and %s.output.vlan both specified; "
-                     "ignoring %s.output.vlan", pfx, pfx, pfx);
+        if (cfg->output_vlan) {
+            VLOG_ERR("bridge %s: mirror %s specifies both output port and "
+                     "output vlan; ignoring output vlan",
+                     m->bridge->name, m->name);
         }
-    } else if (cfg_has("%s.output.vlan", pfx)) {
+    } else if (cfg->output_vlan) {
         out_port = NULL;
-        out_vlan = cfg_get_vlan(0, "%s.output.vlan", pfx);
+        out_vlan = *cfg->output_vlan;
     } else {
-        VLOG_ERR("%s: neither %s.output.port nor %s.output.vlan specified, "
-                 "but exactly one is required; disabling port mirror %s",
-                 pfx, pfx, pfx, pfx);
+        VLOG_ERR("bridge %s: mirror %s does not specify output; ignoring",
+                 m->bridge->name, m->name);
         mirror_destroy(m);
-        free(pfx);
         return;
     }
 
-    /* Get all the ports, and drop duplicates and ports that don't exist. */
-    svec_init(&src_ports);
-    svec_init(&dst_ports);
-    svec_init(&ports);
-    cfg_get_all_keys(&src_ports, "%s.select.src-port", pfx);
-    cfg_get_all_keys(&dst_ports, "%s.select.dst-port", pfx);
-    cfg_get_all_keys(&ports, "%s.select.port", pfx);
-    any_ports_specified = src_ports.n || dst_ports.n || ports.n;
-    svec_append(&src_ports, &ports);
-    svec_append(&dst_ports, &ports);
-    svec_destroy(&ports);
-    prune_ports(m, &src_ports);
-    prune_ports(m, &dst_ports);
-    if (any_ports_specified && !src_ports.n && !dst_ports.n) {
-        VLOG_ERR("%s: none of the specified ports exist; "
-                 "disabling port mirror %s", pfx, pfx);
-        mirror_destroy(m);
-        goto exit;
+    shash_init(&src_ports);
+    shash_init(&dst_ports);
+    if (cfg->select_all) {
+        for (i = 0; i < m->bridge->n_ports; i++) {
+            const char *name = m->bridge->ports[i]->name;
+            shash_add_once(&src_ports, name, NULL);
+            shash_add_once(&dst_ports, name, NULL);
+        }
+        vlans = NULL;
+        n_vlans = 0;
+    } else {
+        /* Get ports, and drop duplicates and ports that don't exist. */
+        mirror_collect_ports(m, cfg->select_src_port, cfg->n_select_src_port,
+                             &src_ports);
+        mirror_collect_ports(m, cfg->select_dst_port, cfg->n_select_dst_port,
+                             &dst_ports);
+
+        /* Get all the vlans, and drop duplicate and invalid vlans. */
+        n_vlans = mirror_collect_vlans(m, cfg, &vlans);
     }
 
-    /* Get all the vlans, and drop duplicate and invalid vlans. */
-    svec_init(&vlan_strings);
-    cfg_get_all_keys(&vlan_strings, "%s.select.vlan", pfx);
-    n_vlans = prune_vlans(m, &vlan_strings, &vlans);
-    svec_destroy(&vlan_strings);
-
     /* Update mirror data. */
-    if (!svec_equal(&m->src_ports, &src_ports)
-        || !svec_equal(&m->dst_ports, &dst_ports)
+    if (!shash_equal_keys(&m->src_ports, &src_ports)
+        || !shash_equal_keys(&m->dst_ports, &dst_ports)
         || m->n_vlans != n_vlans
         || memcmp(m->vlans, vlans, sizeof *vlans * n_vlans)
         || m->out_port != out_port
         || m->out_vlan != out_vlan) {
         bridge_flush(m->bridge);
     }
-    svec_swap(&m->src_ports, &src_ports);
-    svec_swap(&m->dst_ports, &dst_ports);
+    shash_swap(&m->src_ports, &src_ports);
+    shash_swap(&m->dst_ports, &dst_ports);
     free(m->vlans);
     m->vlans = vlans;
     m->n_vlans = n_vlans;
     m->out_port = out_port;
     m->out_vlan = out_vlan;
 
-    /* If no selection criteria have been given, mirror for all ports. */
-    mirror_all_ports = (!m->src_ports.n) && (!m->dst_ports.n) && (!m->n_vlans);
-
     /* Update ports. */
     mirror_bit = MIRROR_MASK_C(1) << m->idx;
     for (i = 0; i < m->bridge->n_ports; i++) {
         struct port *port = m->bridge->ports[i];
 
-        if (mirror_all_ports
-            || svec_contains(&m->src_ports, port->name)
+        if (shash_find(&m->src_ports, port->name)
             || (m->n_vlans
                 && (!port->vlan
                     ? port_trunks_any_mirrored_vlan(m, port)
@@ -3800,7 +3897,7 @@ mirror_reconfigure_one(struct mirror *m)
             port->src_mirrors &= ~mirror_bit;
         }
 
-        if (mirror_all_ports || svec_contains(&m->dst_ports, port->name)) {
+        if (shash_find(&m->dst_ports, port->name)) {
             port->dst_mirrors |= mirror_bit;
         } else {
             port->dst_mirrors &= ~mirror_bit;
@@ -3808,217 +3905,6 @@ mirror_reconfigure_one(struct mirror *m)
     }
 
     /* Clean up. */
-exit:
-    svec_destroy(&src_ports);
-    svec_destroy(&dst_ports);
-    free(pfx);
-}
-
-/* Spanning tree protocol. */
-
-static void brstp_update_port_state(struct port *);
-
-static void
-brstp_send_bpdu(struct ofpbuf *pkt, int port_no, void *br_)
-{
-    struct bridge *br = br_;
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-    struct iface *iface = iface_from_dp_ifidx(br, port_no);
-    if (!iface) {
-        VLOG_WARN_RL(&rl, "%s: cannot send BPDU on unknown port %d",
-                     br->name, port_no);
-    } else {
-        struct eth_header *eth = pkt->l2;
-
-        netdev_get_etheraddr(iface->netdev, eth->eth_src);
-        if (eth_addr_is_zero(eth->eth_src)) {
-            VLOG_WARN_RL(&rl, "%s: cannot send BPDU on port %d "
-                         "with unknown MAC", br->name, port_no);
-        } else {
-            union ofp_action action;
-            flow_t flow;
-
-            memset(&action, 0, sizeof action);
-            action.type = htons(OFPAT_OUTPUT);
-            action.output.len = htons(sizeof action);
-            action.output.port = htons(port_no);
-
-            flow_extract(pkt, ODPP_NONE, &flow);
-            ofproto_send_packet(br->ofproto, &flow, &action, 1, pkt);
-        }
-    }
-    ofpbuf_delete(pkt);
-}
-
-static void
-brstp_reconfigure(struct bridge *br)
-{
-    size_t i;
-
-    if (!cfg_get_bool(0, "stp.%s.enabled", br->name)) {
-        if (br->stp) {
-            stp_destroy(br->stp);
-            br->stp = NULL;
-
-            bridge_flush(br);
-        }
-    } else {
-        uint64_t bridge_address, bridge_id;
-        int bridge_priority;
-
-        bridge_address = cfg_get_mac(0, "stp.%s.address", br->name);
-        if (!bridge_address) {
-            if (br->stp) {
-                bridge_address = (stp_get_bridge_id(br->stp)
-                                  & ((UINT64_C(1) << 48) - 1));
-            } else {
-                uint8_t mac[ETH_ADDR_LEN];
-                eth_addr_random(mac);
-                bridge_address = eth_addr_to_uint64(mac);
-            }
-        }
-
-        if (cfg_is_valid(CFG_INT | CFG_REQUIRED, "stp.%s.priority",
-                         br->name)) {
-            bridge_priority = cfg_get_int(0, "stp.%s.priority", br->name);
-        } else {
-            bridge_priority = STP_DEFAULT_BRIDGE_PRIORITY;
-        }
-
-        bridge_id = bridge_address | ((uint64_t) bridge_priority << 48);
-        if (!br->stp) {
-            br->stp = stp_create(br->name, bridge_id, brstp_send_bpdu, br);
-            br->stp_last_tick = time_msec();
-            bridge_flush(br);
-        } else {
-            if (bridge_id != stp_get_bridge_id(br->stp)) {
-                stp_set_bridge_id(br->stp, bridge_id);
-                bridge_flush(br);
-            }
-        }
-
-        for (i = 0; i < br->n_ports; i++) {
-            struct port *p = br->ports[i];
-            int dp_ifidx;
-            struct stp_port *sp;
-            int path_cost, priority;
-            bool enable;
-
-            if (!p->n_ifaces) {
-                continue;
-            }
-            dp_ifidx = p->ifaces[0]->dp_ifidx;
-            if (dp_ifidx < 0 || dp_ifidx >= STP_MAX_PORTS) {
-                continue;
-            }
-
-            sp = stp_get_port(br->stp, dp_ifidx);
-            enable = (!cfg_is_valid(CFG_BOOL | CFG_REQUIRED,
-                                    "stp.%s.port.%s.enabled",
-                                    br->name, p->name)
-                      || cfg_get_bool(0, "stp.%s.port.%s.enabled",
-                                      br->name, p->name));
-            if (p->is_mirror_output_port) {
-                enable = false;
-            }
-            if (enable != (stp_port_get_state(sp) != STP_DISABLED)) {
-                bridge_flush(br); /* Might not be necessary. */
-                if (enable) {
-                    stp_port_enable(sp);
-                } else {
-                    stp_port_disable(sp);
-                }
-            }
-
-            path_cost = cfg_get_int(0, "stp.%s.port.%s.path-cost",
-                                    br->name, p->name);
-            stp_port_set_path_cost(sp, path_cost ? path_cost : 19 /* XXX */);
-
-            priority = (cfg_is_valid(CFG_INT | CFG_REQUIRED,
-                                     "stp.%s.port.%s.priority",
-                                     br->name, p->name)
-                        ? cfg_get_int(0, "stp.%s.port.%s.priority",
-                                      br->name, p->name)
-                        : STP_DEFAULT_PORT_PRIORITY);
-            stp_port_set_priority(sp, priority);
-        }
-
-        brstp_adjust_timers(br);
-    }
-    for (i = 0; i < br->n_ports; i++) {
-        brstp_update_port_state(br->ports[i]);
-    }
-}
-
-static void
-brstp_update_port_state(struct port *p)
-{
-    struct bridge *br = p->bridge;
-    enum stp_state state;
-
-    /* Figure out new state. */
-    state = STP_DISABLED;
-    if (br->stp && p->n_ifaces > 0) {
-        int dp_ifidx = p->ifaces[0]->dp_ifidx;
-        if (dp_ifidx >= 0 && dp_ifidx < STP_MAX_PORTS) {
-            state = stp_port_get_state(stp_get_port(br->stp, dp_ifidx));
-        }
-    }
-
-    /* Update state. */
-    if (p->stp_state != state) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
-        VLOG_INFO_RL(&rl, "port %s: STP state changed from %s to %s",
-                     p->name, stp_state_name(p->stp_state),
-                     stp_state_name(state));
-        if (p->stp_state == STP_DISABLED) {
-            bridge_flush(br);
-        } else {
-            ofproto_revalidate(p->bridge->ofproto, p->stp_state_tag);
-        }
-        p->stp_state = state;
-        p->stp_state_tag = (p->stp_state == STP_DISABLED ? 0
-                            : tag_create_random());
-    }
-}
-
-static void
-brstp_adjust_timers(struct bridge *br)
-{
-    int hello_time = cfg_get_int(0, "stp.%s.hello-time", br->name);
-    int max_age = cfg_get_int(0, "stp.%s.max-age", br->name);
-    int forward_delay = cfg_get_int(0, "stp.%s.forward-delay", br->name);
-
-    stp_set_hello_time(br->stp, hello_time ? hello_time : 2000);
-    stp_set_max_age(br->stp, max_age ? max_age : 20000);
-    stp_set_forward_delay(br->stp, forward_delay ? forward_delay : 15000);
-}
-
-static void
-brstp_run(struct bridge *br)
-{
-    if (br->stp) {
-        long long int now = time_msec();
-        long long int elapsed = now - br->stp_last_tick;
-        struct stp_port *sp;
-
-        if (elapsed > 0) {
-            stp_tick(br->stp, MIN(INT_MAX, elapsed));
-            br->stp_last_tick = now;
-        }
-        while (stp_get_changed_port(br->stp, &sp)) {
-            struct port *p = port_from_dp_ifidx(br, stp_port_no(sp));
-            if (p) {
-                brstp_update_port_state(p);
-            }
-        }
-    }
-}
-
-static void
-brstp_wait(struct bridge *br)
-{
-    if (br->stp) {
-        poll_timer_wait(1000);
-    }
+    shash_destroy(&src_ports);
+    shash_destroy(&dst_ports);
 }

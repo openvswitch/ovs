@@ -90,7 +90,8 @@ check_vconn_classes(void)
         struct vconn_class *class = vconn_classes[i];
         assert(class->name != NULL);
         assert(class->open != NULL);
-        if (class->close || class->recv || class->send || class->wait) {
+        if (class->close || class->recv || class->send
+            || class->run || class->run_wait || class->wait) {
             assert(class->close != NULL);
             assert(class->recv != NULL);
             assert(class->send != NULL);
@@ -246,6 +247,26 @@ error:
     return error;
 }
 
+/* Allows 'vconn' to perform maintenance activities, such as flushing output
+ * buffers. */
+void
+vconn_run(struct vconn *vconn)
+{
+    if (vconn->class->run) {
+        (vconn->class->run)(vconn);
+    }
+}
+
+/* Arranges for the poll loop to wake up when 'vconn' needs to perform
+ * maintenance activities. */
+void
+vconn_run_wait(struct vconn *vconn)
+{
+    if (vconn->class->run_wait) {
+        (vconn->class->run_wait)(vconn);
+    }
+}
+
 int
 vconn_open_block(const char *name, int min_version, struct vconn **vconnp)
 {
@@ -254,6 +275,8 @@ vconn_open_block(const char *name, int min_version, struct vconn **vconnp)
 
     error = vconn_open(name, min_version, &vconn);
     while (error == EAGAIN) {
+        vconn_run(vconn);
+        vconn_run_wait(vconn);
         vconn_connect_wait(vconn);
         poll_block();
         error = vconn_connect(vconn);
@@ -585,6 +608,8 @@ vconn_send_block(struct vconn *vconn, struct ofpbuf *msg)
 {
     int retval;
     while ((retval = vconn_send(vconn, msg)) == EAGAIN) {
+        vconn_run(vconn);
+        vconn_run_wait(vconn);
         vconn_send_wait(vconn);
         poll_block();
     }
@@ -597,6 +622,8 @@ vconn_recv_block(struct vconn *vconn, struct ofpbuf **msgp)
 {
     int retval;
     while ((retval = vconn_recv(vconn, msgp)) == EAGAIN) {
+        vconn_run(vconn);
+        vconn_run_wait(vconn);
         vconn_recv_wait(vconn);
         poll_block();
     }
@@ -937,16 +964,19 @@ make_flow_mod(uint16_t command, const flow_t *flow, size_t actions_len)
     ofm->header.version = OFP_VERSION;
     ofm->header.type = OFPT_FLOW_MOD;
     ofm->header.length = htons(size);
+    ofm->cookie = 0;
     ofm->match.wildcards = htonl(0);
     ofm->match.in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
                                : flow->in_port);
     memcpy(ofm->match.dl_src, flow->dl_src, sizeof ofm->match.dl_src);
     memcpy(ofm->match.dl_dst, flow->dl_dst, sizeof ofm->match.dl_dst);
     ofm->match.dl_vlan = flow->dl_vlan;
+    ofm->match.dl_vlan_pcp = flow->dl_vlan_pcp;
     ofm->match.dl_type = flow->dl_type;
     ofm->match.nw_src = flow->nw_src;
     ofm->match.nw_dst = flow->nw_dst;
     ofm->match.nw_proto = flow->nw_proto;
+    ofm->match.nw_tos = flow->nw_tos;
     ofm->match.tp_src = flow->tp_src;
     ofm->match.tp_dst = flow->tp_dst;
     ofm->command = htons(command);
@@ -1123,7 +1153,7 @@ check_ofp_message(const struct ofp_header *msg, uint8_t type, size_t size)
                      "received %s message of length %zu (expected %zu)",
                      type_name, got_size, size);
         free(type_name);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
     return 0;
@@ -1159,7 +1189,7 @@ check_ofp_message_array(const struct ofp_header *msg, uint8_t type,
                      "(expected at least %zu)",
                      type_name, got_size, min_size);
         free(type_name);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     if ((got_size - min_size) % array_elt_size) {
         char *type_name = ofp_message_type_to_string(type);
@@ -1170,7 +1200,7 @@ check_ofp_message_array(const struct ofp_header *msg, uint8_t type,
                      type_name, got_size, min_size, got_size - min_size,
                      array_elt_size, (got_size - min_size) % array_elt_size);
         free(type_name);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     if (n_array_elts) {
         *n_array_elts = (got_size - min_size) / array_elt_size;
@@ -1200,13 +1230,13 @@ check_ofp_packet_out(const struct ofp_header *oh, struct ofpbuf *data,
         VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out claims %u bytes of actions "
                      "but message has room for only %zu bytes",
                      actions_len, extra);
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     if (actions_len % sizeof(union ofp_action)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out claims %u bytes of actions, "
                      "which is not a multiple of %zu",
                      actions_len, sizeof(union ofp_action));
-        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LENGTH);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
     n_actions = actions_len / sizeof(union ofp_action);
@@ -1340,6 +1370,7 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
     case OFPAT_STRIP_VLAN:
     case OFPAT_SET_NW_SRC:
     case OFPAT_SET_NW_DST:
+    case OFPAT_SET_NW_TOS:
     case OFPAT_SET_TP_SRC:
     case OFPAT_SET_TP_DST:
         return check_action_exact_len(a, len, 8);
@@ -1464,6 +1495,17 @@ normalize_match(struct ofp_match *m)
         if (wc & OFPFW_NW_DST_MASK) {
             m->nw_dst &= flow_nw_bits_to_mask(wc, OFPFW_NW_DST_SHIFT);
         }
+    } else if (m->dl_type == htons(ETH_TYPE_ARP)) {
+        if (wc & OFPFW_NW_PROTO) {
+            m->nw_proto = 0;
+        }
+        if (wc & OFPFW_NW_SRC_MASK) {
+            m->nw_src &= flow_nw_bits_to_mask(wc, OFPFW_NW_SRC_SHIFT);
+        }
+        if (wc & OFPFW_NW_DST_MASK) {
+            m->nw_dst &= flow_nw_bits_to_mask(wc, OFPFW_NW_DST_SHIFT);
+        }
+        m->tp_src = m->tp_dst = 0;
     } else {
         /* Network and transport layer fields will always be extracted as
          * zeros, so we can do an exact-match on those values. */
@@ -1513,6 +1555,7 @@ vconn_init(struct vconn *vconn, struct vconn_class *class, int connect_status,
     vconn->local_ip = 0;
     vconn->local_port = 0;
     vconn->name = xstrdup(name);
+    assert(vconn->state != VCS_CONNECTING || class->connect);
 }
 
 void

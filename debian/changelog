@@ -1,5 +1,5 @@
-openvswitch (0.90.0) unstable; urgency=low
+openvswitch (0.90.6) unstable; urgency=low
 
   * Development version.
 
- -- Open vSwitch developers <dev@openvswitch.org>  Mon, 19 Nov 2007 14:57:52 -0800
+ -- Ben Pfaff <blp@nicira.com>  Tue, 15 Dec 2009 11:00:11 -0800

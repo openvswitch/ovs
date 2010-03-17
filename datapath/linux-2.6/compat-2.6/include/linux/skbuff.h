@@ -76,6 +76,29 @@ static inline int skb_cow_head(struct sk_buff *skb, unsigned int headroom)
 }
 #endif  /* !HAVE_SKB_COW */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+static inline int skb_clone_writable(struct sk_buff *skb, int len)
+{
+	return false;
+}
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
+static inline struct dst_entry *skb_dst(const struct sk_buff *skb)
+{
+	return (struct dst_entry *)skb->dst;
+}
+
+static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
+{
+	skb->dst = dst;
+}
+
+static inline struct rtable *skb_rtable(const struct sk_buff *skb)
+{
+	return (struct rtable *)skb->dst;
+}
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
 /* Emulate Linux 2.6.17 and later behavior, in which kfree_skb silently ignores 
@@ -90,9 +113,7 @@ static inline void kfree_skb_maybe_null(struct sk_buff *skb)
 
 
 #ifndef CHECKSUM_PARTIAL
-/* Note that CHECKSUM_PARTIAL is not implemented, but this allows us to at
- * least test against it: see update_csum() in forward.c. */
-#define CHECKSUM_PARTIAL 3
+#define CHECKSUM_PARTIAL CHECKSUM_HW
 #endif
 #ifndef CHECKSUM_COMPLETE
 #define CHECKSUM_COMPLETE CHECKSUM_HW
@@ -101,6 +122,7 @@ static inline void kfree_skb_maybe_null(struct sk_buff *skb)
 #ifdef HAVE_MAC_RAW
 #define mac_header mac.raw
 #define network_header nh.raw
+#define transport_header h.raw
 #endif
 
 #ifndef HAVE_SKBUFF_HEADER_HELPERS
@@ -123,6 +145,11 @@ static inline void skb_set_transport_header(struct sk_buff *skb,
 static inline unsigned char *skb_network_header(const struct sk_buff *skb)
 {
 	return skb->nh.raw;
+}
+
+static inline void skb_reset_network_header(struct sk_buff *skb)
+{
+	skb->nh.raw = skb->data;
 }
 
 static inline void skb_set_network_header(struct sk_buff *skb, const int offset)
@@ -177,5 +204,42 @@ static inline struct sk_buff *skb_gso_segment(struct sk_buff *skb,
 	return NULL;
 }
 #endif	/* before 2.6.18 */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+
+extern void __skb_warn_lro_forwarding(const struct sk_buff *skb);
+
+#ifndef NETIF_F_LRO
+static inline bool skb_warn_if_lro(const struct sk_buff *skb)
+{
+	return false;
+}
+#else
+static inline bool skb_warn_if_lro(const struct sk_buff *skb)
+{
+	/* LRO sets gso_size but not gso_type, whereas if GSO is really
+	 * wanted then gso_type will be set. */
+	struct skb_shared_info *shinfo = skb_shinfo(skb);
+	if (shinfo->gso_size != 0 && unlikely(shinfo->gso_type == 0)) {
+		__skb_warn_lro_forwarding(skb);
+		return true;
+	}
+	return false;
+}
+#endif /* NETIF_F_LRO */
+#endif /* kernel < 2.6.27 */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+static inline struct sk_buff *netdev_alloc_skb_ip_align(struct net_device *dev,
+							unsigned int length)
+{
+	struct sk_buff *skb = netdev_alloc_skb(dev, length + NET_IP_ALIGN);
+
+	if (NET_IP_ALIGN && skb)
+		skb_reserve(skb, NET_IP_ALIGN);
+	return skb;
+}
+#endif /* kernel < 2.6.33 */
+
 
 #endif

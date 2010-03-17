@@ -2,12 +2,12 @@ Source: openvswitch
 Section: net
 Priority: extra
 Maintainer: Open vSwitch developers <dev@openvswitch.org>
-Build-Depends: debhelper (>= 5), autoconf (>= 2.60), automake1.10, libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl, libncurses5-dev, libpcre3-dev
+Build-Depends: debhelper (>= 5), autoconf (>= 2.64), automake1.10, libssl-dev, pkg-config (>= 0.21), po-debconf, bzip2, openssl, libncurses5-dev, libpcre3-dev
 Standards-Version: 3.7.3
 
 Package: openvswitch-datapath-source
 Architecture: all
-Depends: module-assistant, bzip2, debhelper (>= 5.0.37)
+Depends: module-assistant, bzip2, debhelper (>= 5.0.37), ${misc:Depends}
 Suggests: openvswitch-switch
 Description: Source code for Open vSwitch datapath Linux module
  This package provides the Open vSwitch datapath module source code
@@ -19,7 +19,7 @@ Description: Source code for Open vSwitch datapath Linux module
 
 Package: openvswitch-common
 Architecture: any
-Depends: ${shlibs:Depends}, openssl
+Depends: ${shlibs:Depends}, openssl, ${misc:Depends}
 Description: Open vSwitch common components
  openvswitch-common provides components required by both openvswitch-switch
  and openvswitch-controller.
@@ -29,7 +29,7 @@ Description: Open vSwitch common components
 Package: openvswitch-switch
 Architecture: any
 Suggests: openvswitch-datapath-module
-Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (= ${source:Version}), dhcp3-client, module-init-tools, dmidecode, procps, debianutils
+Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (= ${binary:Version}), module-init-tools, procps
 Description: Open vSwitch switch implementations
  openvswitch-switch provides the userspace components and utilities for
  the Open vSwitch kernel-based switch.  
@@ -38,7 +38,7 @@ Description: Open vSwitch switch implementations
 
 Package: openvswitch-switch-config
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-switch (= ${source:Version}), libwww-perl, libdigest-sha1-perl
+Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-switch (= ${binary:Version}), libwww-perl, libdigest-sha1-perl
 Description: Open vSwitch switch implementations
  openvswitch-switch-config provides a utility for interactively configuring
  the Open vSwitch switch provided in the openvswitch-switch package.
@@ -61,7 +61,7 @@ Description: Monitoring utility for OpenFlow switches
 
 Package: openvswitch-pki
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (= ${source:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (= ${binary:Version})
 Description: Open vSwitch public key infrastructure
  openvswitch-pki provides PKI (public key infrastructure) support for
  Open vSwitch switches and controllers, reducing the risk of
@@ -71,7 +71,7 @@ Description: Open vSwitch public key infrastructure
 
 Package: openvswitch-pki-server
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, openvswitch-pki (= ${source:Version}), apache2
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends}, openvswitch-pki (= ${binary:Version}), apache2
 Description: Open vSwitch public key infrastructure (HTTP server support)
  openvswitch-pki-server provides HTTP access to the Open vSwitch PKI (public
  key infrastructure) maintained on the local machine by the
@@ -83,7 +83,7 @@ Description: Open vSwitch public key infrastructure (HTTP server support)
 
 Package: openvswitch-controller
 Architecture: any
-Depends: ${shlibs:Depends}, openvswitch-common (= ${source:Version}), openvswitch-pki (= ${source:Version})
+Depends: ${shlibs:Depends}, openvswitch-common (= ${binary:Version}), openvswitch-pki (= ${binary:Version}), ${misc:Depends}
 Description: Open vSwitch controller implementation
  The Open vSwitch controller enables OpenFlow switches that connect to it
  to act as MAC-learning Ethernet switches.
@@ -92,14 +92,15 @@ Description: Open vSwitch controller implementation
 
 Package: corekeeper
 Architecture: all
-Depends: tmpreaper
+Depends: tmpreaper, ${misc:Depends}
 Description: Core file centralizer and reaper
  The corekeeper package configures the system to dump all core files to
  /var/log/core.  It also deletes core files older than 7 days.
 
 Package: openvswitch-dbg
+Section: debug
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Debug symbols for Open vSwitch packages
  This package contains the debug symbols for all the other openvswitch-*
  packages.  Install it to debug one of them or to examine a core dump
@@ -125,11 +126,11 @@ Description: Watchdog utility for Open vSwitch switches
 Package: nicira-switch
 Architecture: all
 Depends: 
- openvswitch-common (= ${source:Version}), 
- openvswitch-switch (= ${source:Version}), 
- openvswitch-switchui (= ${source:Version}), 
- openvswitch-datapath-module (= ${source:Version}),
- corekeeper, openvswitch-monitor, openvswitch-wdt
+ openvswitch-common (= ${binary:Version}), 
+ openvswitch-switch (= ${binary:Version}), 
+ openvswitch-switchui (= ${binary:Version}), 
+ openvswitch-datapath-module (= ${binary:Version}),
+ corekeeper, openvswitch-monitor, openvswitch-wdt, ${misc:Depends}
 Description: Metapackage for installing a Nicira Open vSwitch switch
  Installing this package will install everything needed for a Nicira
  Portwell-based Open vSwitch switch, including monitoring and the switch UI.

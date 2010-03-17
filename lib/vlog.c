@@ -385,7 +385,8 @@ vlog_set_verbosity(const char *arg)
 }
 
 static void
-vlog_unixctl_set(struct unixctl_conn *conn, const char *args)
+vlog_unixctl_set(struct unixctl_conn *conn,
+                 const char *args, void *aux OVS_UNUSED)
 {
     char *msg = vlog_set_levels_from_string(args);
     unixctl_command_reply(conn, msg ? 501 : 202, msg);
@@ -393,7 +394,8 @@ vlog_unixctl_set(struct unixctl_conn *conn, const char *args)
 }
 
 static void
-vlog_unixctl_list(struct unixctl_conn *conn, const char *args OVS_UNUSED)
+vlog_unixctl_list(struct unixctl_conn *conn,
+                  const char *args OVS_UNUSED, void *aux OVS_UNUSED)
 {
     char *msg = vlog_get_levels();
     unixctl_command_reply(conn, 200, msg);
@@ -401,7 +403,8 @@ vlog_unixctl_list(struct unixctl_conn *conn, const char *args OVS_UNUSED)
 }
 
 static void
-vlog_unixctl_reopen(struct unixctl_conn *conn, const char *args OVS_UNUSED)
+vlog_unixctl_reopen(struct unixctl_conn *conn,
+                    const char *args OVS_UNUSED, void *aux OVS_UNUSED)
 {
     if (log_file_name) {
         int error = vlog_reopen_log_file();
@@ -435,9 +438,9 @@ vlog_init(void)
         VLOG_ERR("current time is negative: %s (%ld)", s, (long int) now);
     }
 
-    unixctl_command_register("vlog/set", vlog_unixctl_set);
-    unixctl_command_register("vlog/list", vlog_unixctl_list);
-    unixctl_command_register("vlog/reopen", vlog_unixctl_reopen);
+    unixctl_command_register("vlog/set", vlog_unixctl_set, NULL);
+    unixctl_command_register("vlog/list", vlog_unixctl_list, NULL);
+    unixctl_command_register("vlog/reopen", vlog_unixctl_reopen, NULL);
 }
 
 /* Closes the logging subsystem. */

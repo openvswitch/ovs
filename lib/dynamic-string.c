@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +71,31 @@ ds_put_char(struct ds *ds, char c)
     *ds_put_uninit(ds, 1) = c;
 }
 
+/* Appends unicode code point 'uc' to 'ds' in UTF-8 encoding. */
+void
+ds_put_utf8(struct ds *ds, int uc)
+{
+    if (uc <= 0x7f) {
+        ds_put_char(ds, uc);
+    } else if (uc <= 0x7ff) {
+        ds_put_char(ds, 0xc0 | (uc >> 6));
+        ds_put_char(ds, 0x80 | (uc & 0x3f));
+    } else if (uc <= 0xffff) {
+        ds_put_char(ds, 0xe0 | (uc >> 12));
+        ds_put_char(ds, 0x80 | ((uc >> 6) & 0x3f));
+        ds_put_char(ds, 0x80 | (uc & 0x3f));
+    } else if (uc <= 0x10ffff) {
+        ds_put_char(ds, 0xf0 | (uc >> 18));
+        ds_put_char(ds, 0x80 | ((uc >> 12) & 0x3f));
+        ds_put_char(ds, 0x80 | ((uc >> 6) & 0x3f));
+        ds_put_char(ds, 0x80 | (uc & 0x3f));
+    } else {
+        /* Invalid code point.  Insert the Unicode general substitute
+         * REPLACEMENT CHARACTER. */
+        ds_put_utf8(ds, 0xfffd);
+    }
+}
+
 void
 ds_put_char_multiple(struct ds *ds, char c, size_t n)
 {
@@ -88,6 +113,13 @@ ds_put_cstr(struct ds *ds, const char *s)
 {
     size_t s_len = strlen(s);
     memcpy(ds_put_uninit(ds, s_len), s, s_len);
+}
+
+void
+ds_put_and_free_cstr(struct ds *ds, char *s)
+{
+    ds_put_cstr(ds, s);
+    free(s);
 }
 
 void
@@ -187,6 +219,12 @@ ds_cstr(struct ds *ds)
     return ds->string;
 }
 
+const char *
+ds_cstr_ro(const struct ds *ds)
+{
+    return ds_cstr((struct ds *) ds);
+}
+
 /* Returns a null-terminated string representing the current contents of 'ds',
  * which the caller is expected to free with free(), then clears the contents
  * of 'ds'. */
@@ -202,6 +240,15 @@ void
 ds_destroy(struct ds *ds)
 {
     free(ds->string);
+}
+
+/* Swaps the content of 'a' and 'b'. */
+void
+ds_swap(struct ds *a, struct ds *b)
+{
+    struct ds temp = *a;
+    *a = *b;
+    *b = temp;
 }
 
 /* Writes the 'size' bytes in 'buf' to 'string' as hex bytes arranged 16 per

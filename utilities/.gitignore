@@ -21,4 +21,6 @@
 /ovs-pki
 /ovs-pki-cgi
 /ovs-pki.8
+/ovs-vsctl
+/ovs-vsctl.8
 /ovs-wdt

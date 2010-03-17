@@ -12,21 +12,25 @@ ovs\-vswitchd \- Open vSwitch daemon
 .
 .SH SYNOPSIS
 .B ovs\-vswitchd
-\fIconfig\fR
+\fIdatabase\fR
 .
 .SH DESCRIPTION
 A daemon that manages and controls any number of Open vSwitch switches 
 on the local machine.
 .PP
-The mandatory \fIconfig\fR argument specifies a configuration file.
-For a description of \fBovs\-vswitchd\fR configuration syntax, see
-\fBovs\-vswitchd.conf\fR(5).
+The mandatory \fIdatabase\fR argument specifies the
+\fBovsdb\-server\fR from which \fBovs\-vswitchd\fR's configuration
+should be retrieved.  It takes one of the following forms:
+.so ovsdb/remote-active.man
 .PP
-At startup or upon receipt of a \fBSIGHUP\fR signal, \fBovs\-vswitchd\fR
-reads the configuration file.  It sets up Open vSwitch datapaths and then 
-operates switching across each bridge described in its configuration 
-files.  If a logfile was specified on the command line it will also 
-be opened or reopened.
+\fBovs\-vswitchd\fR retrieves its configuration from \fIdatabase\fR at
+startup.  It sets up Open vSwitch datapaths and then operates
+switching across each bridge described in its configuration files.  As
+the database changes, \fBovs\-vswitchd\fR automatically updates its
+configuration to match.
+.PP
+Upon receipt of a SIGHUP signal, \fBovs\-vswitchd\fR reopens its log
+file, if one was specified on the command line.
 .PP
 \fBovs\-vswitchd\fR switches may be configured with any of the following 
 features:
@@ -78,6 +82,8 @@ actually in use.  It requires the \fBbrcompat_mod.ko\fR kernel module
 to be loaded.
 .
 .so lib/daemon.man
+.so lib/ssl.man
+.so lib/ssl-bootstrap.man
 .so lib/vlog.man
 .so lib/common.man
 .so lib/leak-checker.man
@@ -86,16 +92,7 @@ to be loaded.
 \fBovs\-appctl\fR(8) can send commands to a running
 \fBovs\-vswitchd\fR process.  The currently supported commands are
 described below.  The command descriptions assume an understanding of
-how to configure Open vSwitch, as described in
-\fBovs-vswitchd.conf\fR(5).
-.SS "OVS\-VSWITCHD COMMANDS"
-These commands manage the \fBovs-vswitchd\fR process.
-.IP "\fBvswitchd/reload\fR"
-Reloads the \fBovs\-vswitchd\fR configuration file, as if a
-\fBSIGHUP\fR signal were received.  The command completes only after
-reloading is finished, in particular after all datapaths have been
-created and destroyed and ports added and removed as specified by the
-new configuration.
+how to configure Open vSwitch.
 .SS "BRIDGE COMMANDS"
 These commands manage bridges.
 .IP "\fBfdb/show\fR \fIbridge\fR"
@@ -157,6 +154,6 @@ Returns the hash value which would be used for \fImac\fR.
 .so lib/vlog-unixctl.man
 .SH "SEE ALSO"
 .BR ovs\-appctl (8),
-.BR ovs\-vswitchd.conf (5),
 .BR ovs\-brcompatd (8),
+.BR ovsdb\-server (1),
 \fBINSTALL.Linux\fR in the Open vSwitch distribution.

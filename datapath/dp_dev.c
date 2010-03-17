@@ -214,8 +214,8 @@ do_setup(struct net_device *netdev)
 	netdev->dev_addr[1] = 0x23;
 	netdev->dev_addr[2] = 0x20;
 
-	/* Set the top bits to indicate random Nicira address. */
-	netdev->dev_addr[3] |= 0xc0;
+	/* Set the top bit to indicate random Nicira address. */
+	netdev->dev_addr[3] |= 0x80;
 }
 
 /* Create a datapath device associated with 'dp'.  If 'dp_name' is null,

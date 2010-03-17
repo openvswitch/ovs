@@ -1,62 +1,48 @@
 .TH ovs\-openflowd 8 "March 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-openflowd
-
+.
 .SH NAME
 ovs\-openflowd \- OpenFlow switch implementation
-
+.
 .SH SYNOPSIS
 .B ovs\-openflowd
 [\fIoptions\fR] \fIdatapath\fR [\fIcontroller\fR]
-
+.
 .SH DESCRIPTION
 The \fBovs\-openflowd\fR program implements an OpenFlow switch using a
 flow-based datapath.  \fBovs\-openflowd\fR connects to an OpenFlow controller
 over TCP or SSL.
-
+.PP
 The mandatory \fIdatapath\fR argument argument specifies the local datapath
 to relay.  It takes one of the following forms:
-
+.
 .so lib/dpif.man
-
+.
 .PP
 The optional \fIcontroller\fR argument specifies how to connect to
 the OpenFlow controller.  It takes one of the following forms:
-
-.RS
-.IP "\fBssl:\fIip\fR[\fB:\fIport\fR]"
-The specified SSL \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-The \fB--private-key\fR, \fB--certificate\fR, and \fB--ca-cert\fR
-options are mandatory when this form is used.
-
-.IP "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
-The specified TCP \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-
-.TP
-\fBunix:\fIfile\fR
-The Unix domain server socket named \fIfile\fR.
-.RE
-
+.
+.so lib/vconn-active.man
+.
 .PP
 If \fIcontroller\fR is omitted, \fBovs\-openflowd\fR attempts to discover the
 location of the controller automatically (see below).
-
+.
 .SS "Contacting the Controller"
 The OpenFlow switch must be able to contact the OpenFlow controller
 over the network.  It can do so in one of two ways:
-
+.
 .IP out-of-band
 In this configuration, OpenFlow traffic uses a network separate from
 the data traffic that it controls, that is, the switch does not use
 any of the network devices added to the datapath with \fBovs\-dpctl
 add\-if\fR in its communication with the controller.
-
+.IP
 To use \fBovs\-openflowd\fR in a network with out-of-band control, specify
 \fB--out-of-band\fR on the \fBovs\-openflowd\fR command line.  The control
 network must be configured separately, before or after \fBovs\-openflowd\fR
 is started.
-
+.
 .IP in-band
 In this configuration, a single network is used for OpenFlow traffic
 and other data traffic, that is, the switch contacts the controller
@@ -64,19 +50,19 @@ over one of the network devices added to the datapath with \fBovs\-dpctl
 add\-if\fR.  This configuration is often more convenient than
 out-of-band control, because it is not necessary to maintain two
 independent networks.
-
+.IP
 In-band control is the default for \fBovs\-openflowd\fR, so no special
 command-line option is required.
-
+.IP
 With in-band control, the location of the controller can be configured
 manually or discovered automatically:
-
+.
 .RS
 .IP "controller discovery"
 To make \fBovs\-openflowd\fR discover the location of the controller
 automatically, do not specify the location of the controller on the
 \fBovs\-openflowd\fR command line.
-
+.IP
 In this mode, \fBovs\-openflowd\fR will broadcast a DHCP request with vendor
 class identifier \fBOpenFlow\fR across the network devices added to
 the datapath with \fBovs\-dpctl add\-if\fR.  It will accept any valid DHCP
@@ -84,18 +70,18 @@ reply that has the same vendor class identifier and includes a
 vendor-specific option with code 1 whose contents are a string
 specifying the location of the controller in the same format used on
 the \fBovs\-openflowd\fR command line (e.g. \fBssl:192.168.0.1\fR).
-
+.IP
 The DHCP reply may also, optionally, include a vendor-specific option
 with code 2 whose contents are a string specifying the URI to the base
 of the OpenFlow PKI (e.g. \fBhttp://192.168.0.1/openflow/pki\fR).
 This URI is used only for bootstrapping the OpenFlow PKI at initial
 switch setup; \fBovs\-openflowd\fR does not use it at all.
-
+.IP
 The following ISC DHCP server configuration file assigns the IP
 address range 192.168.0.20 through 192.168.0.30 to OpenFlow switches
 that follow the switch protocol and addresses 192.168.0.1 through
 192.168.0.10 to all other DHCP clients:
-
+.IP
 default-lease-time 600;
 .br
 max-lease-time 7200;
@@ -140,7 +126,7 @@ subnet 192.168.0.0 netmask 255.255.255.0 {
 .br
 }
 .br
-
+.
 .IP "manual configuration"
 To configure in-band control manually, specify the location of the
 controller on the \fBovs\-openflowd\fR command line as the \fIcontroller\fR
@@ -151,7 +137,7 @@ bridges to the physical switch ports.  The name of the local port for
 a given \fIdatapath\fR may be seen by running \fBovs\-dpctl show
 \fIdatapath\fR; the local port is listed as port 0 in \fBshow\fR's
 output.
-
+.
 .IP
 Before \fBovs\-openflowd\fR starts, the local port network device is not
 bridged to any physical network, so the next step depends on whether
@@ -160,15 +146,61 @@ switch has a static IP address, you may configure its IP address now
 with a command such as 
 .B ifconfig of0 192.168.1.1
 and then invoke \fBovs\-openflowd\fR.
-
+.IP
 On the other hand, if the switch does not have a static IP address,
 e.g. it obtains its IP address dynamically via DHCP, the DHCP client
 will not be able to contact the DHCP server until the OpenFlow switch
 has started up.  Thus, start \fBovs\-openflowd\fR without configuring
 the local port network device, and start the DHCP client afterward.
 .RE
-
+.
 .SH OPTIONS
+.SS "OpenFlow Options"
+.TP
+\fB--datapath-id=\fIdpid\fR
+Sets \fIdpid\fR, which must consist of exactly 16 hexadecimal digits,
+as the datapath ID that the switch will use to identify itself to the
+OpenFlow controller.
+.IP
+If this option is omitted, the default datapath ID is taken from the
+Ethernet address of the datapath's local port (which is typically
+randomly generated) in the lower 48 bits and zeros in the upper 16.
+.
+.TP
+\fB--mgmt-id=\fImgmtid\fR
+Sets \fImgmtid\fR, which must consist of exactly 12 hexadecimal
+digits, as the switch's management ID.
+.IP
+If this option is omitted, the management ID defaults to 0, signaling
+to the controller that management is supported but not configured.
+.
+.TP
+\fB--mfr-desc=\fIdesc\fR
+Set the description of the switch's manufacturer to \fIdesc\fR, which
+may contain up to 255 ASCII characters.
+.
+.TP
+\fB--hw-desc=\fIdesc\fR
+Set the description of the switch's hardware revision to \fIdesc\fR, which
+may contain up to 255 ASCII characters.
+.
+.TP
+\fB--sw-desc=\fIdesc\fR
+Set the description of the switch's software revision to \fIdesc\fR, which
+may contain up to 255 ASCII characters.
+.
+.TP
+\fB--serial-desc=\fIdesc\fR
+Set the description of the switch's serial number to \fIdesc\fR, which
+may contain up to 31 ASCII characters.
+.
+.TP
+\fB--dp-desc=\fIdesc\fR
+Set the description of the datapath to \fIdesc\fR, which may contain up to
+255 ASCII characters.  Note that this field is intended for debugging
+purposes and is not guaranteed to be unique and should not be used as
+the primary identifier of the datapath.
+.
 .SS "Controller Discovery Options"
 .TP
 \fB--accept-vconn=\fIregex\fR
@@ -177,18 +209,18 @@ the Controller\fR, above, for more information about controller
 discovery), it validates the controller location obtained via DHCP
 with a POSIX extended regular expression.  Only controllers whose
 names match the regular expression will be accepted.
-
+.IP
 The default regular expression is \fBssl:.*\fR (meaning that only SSL
 controller connections will be accepted) when any of the SSL
 configuration options \fB--private-key\fR, \fB--certificate\fR, or
 \fB--ca-cert\fR is specified.  The default is \fB^tcp:.*\fR otherwise
 (meaning that only TCP controller connections will be accepted).
-
+.IP
 The \fIregex\fR is implicitly anchored at the beginning of the
 controller location string, as if it begins with \fB^\fR.
-
+.IP
 When controller discovery is not performed, this option has no effect.
-
+.
 .TP
 \fB--no-resolv-conf\fR
 When \fBovs\-openflowd\fR performs controller discovery (see \fBContacting
@@ -201,31 +233,23 @@ servers ever change, this behavior is essential.  But because it also
 interferes with any administrator or process that manages
 \fB/etc/resolv.conf\fR, when this option is specified, \fBovs\-openflowd\fR
 will not modify \fB/etc/resolv.conf\fR.
-
+.IP
 \fBovs\-openflowd\fR will only modify \fBresolv.conf\fR if the DHCP response
 that it receives specifies one or more DNS servers.
-
+.IP
 When controller discovery is not performed, this option has no effect.
-
+.
 .SS "Networking Options"
 .TP
 \fB--datapath-id=\fIdpid\fR
-Sets \fIdpid\fR, which must consist of exactly 12 hexadecimal digits,
+Sets \fIdpid\fR, which must consist of exactly 16 hexadecimal digits,
 as the datapath ID that the switch will use to identify itself to the
 OpenFlow controller.
-
+.IP
 If this option is omitted, the default datapath ID is taken from the
 Ethernet address of the datapath's local port (which is typically
-randomly generated).
-
-.TP
-\fB--mgmt-id=\fImgmtid\fR
-Sets \fImgmtid\fR, which must consist of exactly 12 hexadecimal
-digits, as the switch's management ID.
-
-If this option is omitted, the management ID defaults to 0, signaling
-to the controller that management is supported but not configured.
-
+randomly generated) in the lower 48 bits and zeros in the upper 16.
+.
 .TP
 \fB--fail=\fR[\fBopen\fR|\fBclosed\fR]
 The controller is, ordinarily, responsible for setting up all flows on
@@ -233,7 +257,7 @@ the OpenFlow switch.  Thus, if the connection to the controller fails,
 no new network connections can be set up.  If the connection to the
 controller stays down long enough, no packets can pass through the
 switch at all.
-
+.IP
 If this option is set to \fBopen\fR (the default), \fBovs\-openflowd\fR will
 take over responsibility for setting up flows in the local datapath
 when no message has been received from the controller for three times
@@ -242,10 +266,10 @@ In this ``fail open'' mode, \fBovs\-openflowd\fR causes the datapath to act
 like an ordinary MAC-learning switch.  \fBovs\-openflowd\fR will continue to
 retry connection to the controller in the background and, when the
 connection succeeds, it discontinues its fail-open behavior.
-
+.IP
 If this option is set to \fBclosed\fR, then \fBovs\-openflowd\fR will not
 set up flows on its own when the controller connection fails.
-
+.
 .TP
 \fB--inactivity-probe=\fIsecs\fR
 When the OpenFlow switch is connected to the controller, the
@@ -255,11 +279,11 @@ controller.  After sending the inactivity probe, if no response is
 received for an additional \fIsecs\fR seconds, the switch
 assumes that the connection has been broken and attempts to reconnect.
 The default and the minimum value are both 5 seconds.
-
+.IP
 When fail-open mode is configured, changing the inactivity probe
 interval also changes the interval before entering fail-open mode (see
 above).
-
+.
 .TP
 \fB--max-idle=\fIsecs\fR|\fBpermanent\fR
 Sets \fIsecs\fR as the number of seconds that a flow set up by the
@@ -267,27 +291,27 @@ OpenFlow switch will remain in the switch's flow table without any
 matching packets being seen.  If \fBpermanent\fR is specified, which
 is not recommended, flows set up by the switch will never
 expire.  The default is 15 seconds.
-
+.IP
 Most flows are set up by the OpenFlow controller, not by the
 switch.  This option affects only the following flows, which the
 OpenFlow switch sets up itself:
-
+.
 .RS
 .IP \(bu
 When \fB--fail=open\fR is specified, flows set up when the
 switch has not been able to contact the controller for the configured
 fail-open delay.
-
+.
 .IP \(bu
 When in-band control is in use, flows set up to bootstrap contacting
 the controller (see \fBContacting the Controller\fR, above, for
 more information about in-band control).
 .RE
-
+.
 .IP
 As a result, when both \fB--fail=closed\fR and \fB--out-of-band\fR are
 specified, this option has no effect.
-
+.
 .TP
 \fB--max-backoff=\fIsecs\fR
 Sets the maximum time between attempts to connect to the controller to
@@ -295,42 +319,24 @@ Sets the maximum time between attempts to connect to the controller to
 connection attempts starts at 1 second and doubles on each failing
 attempt until it reaches the maximum.  The default maximum backoff
 time is 8 seconds.
-
+.
 .TP
 \fB-l\fR, \fB--listen=\fImethod\fR
 By default, the switch listens for OpenFlow management connections on a
 Unix domain socket named \fB@RUNDIR@/\fIdatapath\fB.mgmt\fR.  This socket 
 can be used to perform local OpenFlow monitoring and administration with
 tools such as \fBovs\-ofctl\fR.  
-
+.IP
 This option may be used to override the default listener.  The \fImethod\fR
 must be given as one of the passive OpenFlow connection methods listed
 below.  This option may be specified multiple times to listen to
 multiple connection methods.  If a single \fImethod\fR of \fBnone\fR is
 used, no listeners will be created.
-
+.
 .RS
-.TP
-\fBpssl:\fR[\fIport\fR][\fB:\fIip\fR]
-Listens for SSL connections on \fIport\fR (default: 6633).  The
-\fB--private-key\fR, \fB--certificate\fR, and \fB--ca-cert\fR options
-are mandatory when this form is used.
-By default, \fB\*(PN\fR listens for connections to any local IP
-address, but \fIip\fR may be specified to listen only for connections
-to the given \fIip\fR.
-
-.TP
-\fBptcp:\fR[\fIport\fR][\fB:\fIip\fR]
-Listens for TCP connections on \fIport\fR (default: 6633).
-By default, \fB\*(PN\fR listens for connections to any local IP
-address, but \fIip\fR may be specified to listen only for connections
-to the given \fIip\fR.
-
-.TP
-\fBpunix:\fIfile\fR
-Listens for connections on Unix domain server socket named \fIfile\fR.
+.so lib/vconn-passive.man
 .RE
-
+.
 .TP
 \fB--snoop=\fImethod\fR
 Configures the switch to additionally listen for incoming OpenFlow
@@ -338,45 +344,45 @@ connections for controller connection snooping.  The \fImethod\fR must
 be given as one of the passive OpenFlow connection methods listed
 under the \fB--listen\fR option above.  This option may be specified
 multiple times to listen to multiple connection methods.
-
+.IP
 If \fBovs\-ofctl monitor\fR is used to connect to \fImethod\fR specified on
 \fB--snoop\fR, it will display all the OpenFlow messages traveling
 between the switch and its controller on the primary OpenFlow
 connection.  This can be useful for debugging switch and controller
 problems.
-
+.
 .TP
 \fB--in-band\fR, \fB--out-of-band\fR
 Configures \fBovs\-openflowd\fR to operate in in-band or out-of-band control
 mode (see \fBContacting the Controller\fR above).  When neither option
 is given, the default is in-band control.
-
+.
 .TP
 \fB--netflow=\fIip\fB:\fIport\fR
 Configures the given UDP \fIport\fR on the specified IP \fIip\fR as
 a recipient of NetFlow messages for expired flows.  The \fIip\fR must
 be specified numerically, not as a DNS name.
-
+.IP
 This option may be specified multiple times to configure additional
 NetFlow collectors.
-
+.
 .SS "Rate-Limiting Options"
-
+.
 These options configure how the switch applies a ``token bucket'' to
 limit the rate at which packets in unknown flows are forwarded to an
 OpenFlow controller for flow-setup processing.  This feature prevents
 a single OpenFlow switch from overwhelming a controller.
-
+.
 .TP
 \fB--rate-limit\fR[\fB=\fIrate\fR]
 .
 Limits the maximum rate at which packets will be forwarded to the
 OpenFlow controller to \fIrate\fR packets per second.  If \fIrate\fR
 is not specified then the default of 1,000 packets per second is used.
-
+.IP
 If \fB--rate-limit\fR is not used, then the switch does not limit the
 rate at which packets are forwarded to the controller.
-
+.
 .TP
 \fB--burst-limit=\fIburst\fR
 .
@@ -385,37 +391,9 @@ allow to accumulate during time in which no packets are being
 forwarded to the OpenFlow controller to \fIburst\fR (measured in
 packets).  The default \fIburst\fR is one-quarter of the \fIrate\fR
 specified on \fB--rate-limit\fR.
-
+.
 This option takes effect only when \fB--rate-limit\fR is also specified.
-
-.SS "Remote Command Execution Options"
-
-.TP
-\fB--command-acl=\fR[\fB!\fR]\fIglob\fR[\fB,\fR[\fB!\fR]\fIglob\fR...]
-Configures the commands that remote OpenFlow connections are allowed
-to invoke using (e.g.) \fBovs\-ofctl execute\fR.  The argument is a
-comma-separated sequence of shell glob patterns.  A glob pattern
-specified without a leading \fB!\fR is a ``whitelist'' that specifies
-a set of commands that are that may be invoked, whereas a pattern that
-does begin with \fB!\fR is a ``blacklist'' that specifies commands
-that may not be invoked.  To be permitted, a command name must be
-whitelisted and must not be blacklisted;
-e.g. \fB--command-acl=up*,!upgrade\fR would allow any command whose name
-begins with \fBup\fR except for the command named \fBupgrade\fR.
-Command names that include characters other than upper- and lower-case
-English letters, digits, and the underscore and hyphen characters are
-unconditionally disallowed.
-
-When the whitelist and blacklist permit a command name, \fBovs\-openflowd\fR
-looks for a program with the same name as the command in the commands
-directory (see below).  Other directories are not searched.
-
-.TP
-\fB--command-dir=\fIdirectory\fR
-Sets the directory searched for remote command execution to
-\fBdirectory\fR.  The default directory is
-\fB@pkgdatadir@/commands\fR.
-
+.
 .SS "Datapath Options"
 .
 .IP "\fB\-\-ports=\fIport\fR[\fB,\fIport\fR...]"
@@ -431,60 +409,24 @@ ports may be specified as a comma-separated list or by specifying
 .IP
 See \fBINSTALL.userspace\fR for more information about userspace
 switching.
-
+.
 .SS "Daemon Options"
 .so lib/daemon.man
-
-.SS "Public Key Infrastructure Options"
-
-.TP
-\fB-p\fR, \fB--private-key=\fIprivkey.pem\fR
-Specifies a PEM file containing the private key used as the switch's
-identity for SSL connections to the controller.
-
-.TP
-\fB-c\fR, \fB--certificate=\fIcert.pem\fR
-Specifies a PEM file containing a certificate, signed by the
-controller's certificate authority (CA), that certifies the switch's
-private key to identify a trustworthy switch.
-
-.TP
-\fB-C\fR, \fB--ca-cert=\fIcacert.pem\fR
-Specifies a PEM file containing the CA certificate used to verify that
-the switch is connected to a trustworthy controller.
-
-.TP
-\fB--bootstrap-ca-cert=\fIcacert.pem\fR
-When \fIcacert.pem\fR exists, this option has the same effect as
-\fB-C\fR or \fB--ca-cert\fR.  If it does not exist, then \fBovs\-openflowd\fR
-will attempt to obtain the CA certificate from the controller on its
-first SSL connection and save it to the named PEM file.  If it is
-successful, it will immediately drop the connection and reconnect, and
-from then on all SSL connections must be authenticated by a
-certificate signed by the CA certificate thus obtained.
-
-\fBThis option exposes the SSL connection to a man-in-the-middle
-attack obtaining the initial CA certificate\fR, but it may be useful
-for bootstrapping.
-
-This option is only useful if the controller sends its CA certificate
-as part of the SSL certificate chain.  The SSL protocol does not
-require the controller to send the CA certificate, but
-\fBcontroller\fR(8) can be configured to do so with the
-\fB--peer-ca-cert\fR option.
-
+.
+.so lib/ssl.man
+.so lib/ssl-bootstrap.man
+.
 .SS "Logging Options"
 .so lib/vlog.man
 .SS "Other Options"
 .so lib/common.man
 .so lib/leak-checker.man
-
+.
 .SH "SEE ALSO"
-
+.
 .BR ovs\-appctl (8),
 .BR ovs\-controller (8),
 .BR ovs\-discover (8),
 .BR ovs\-dpctl (8),
 .BR ovs\-ofctl (8),
-.BR ovs\-pki (8),
-.BR ovs\-vswitchd.conf (5)
+.BR ovs\-pki (8)

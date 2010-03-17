@@ -1,0 +1,558 @@
+AT_BANNER([OVSDB -- conditions])
+
+OVSDB_CHECK_POSITIVE([null condition],
+  [[parse-conditions \
+    '{"columns": {"name": {"type": "string"}}}' \
+    '[]']],
+  [[[]]])
+
+OVSDB_CHECK_POSITIVE([conditions on scalars],
+  [[parse-conditions \
+    '{"columns":
+        {"i": {"type": "integer"},
+         "r": {"type": "real"},
+         "b": {"type": "boolean"},
+	 "s": {"type": "string"},
+         "u": {"type": "uuid"}}}' \
+    '[["i", "==", 0]]' \
+    '[["i", "!=", 1]]' \
+    '[["i", "<", 2]]' \
+    '[["i", "<=", 3]]' \
+    '[["i", ">", 4]]' \
+    '[["i", ">=", 5]]' \
+    '[["i", "includes", 6]]' \
+    '[["i", "excludes", 7]]' \
+    '[["r", "==", 0.5]]' \
+    '[["r", "!=", 1.5]]' \
+    '[["r", "<", 2.5]]' \
+    '[["r", "<=", 3.5]]' \
+    '[["r", ">", 4.5]]' \
+    '[["r", ">=", 5.5]]' \
+    '[["r", "includes", 6.5]]' \
+    '[["r", "excludes", 7.5]]' \
+    '[["b", "==", true]]' \
+    '[["b", "!=", false]]' \
+    '[["b", "includes", false]]' \
+    '[["b", "excludes", true]]' \
+    '[["s", "==", "a"]]' \
+    '[["s", "!=", "b"]]' \
+    '[["s", "includes", "c"]]' \
+    '[["s", "excludes", "d"]]' \
+    '[["u", "==", ["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]]]' \
+    '[["u", "!=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]' \
+    '[["u", "includes", ["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]]' \
+    '[["u", "excludes", ["uuid", "62315898-64e0-40b9-b26f-ff74225303e6"]]]']],
+  [[[["i","==",0]]
+[["i","!=",1]]
+[["i","<",2]]
+[["i","<=",3]]
+[["i",">",4]]
+[["i",">=",5]]
+[["i","includes",6]]
+[["i","excludes",7]]
+[["r","==",0.5]]
+[["r","!=",1.5]]
+[["r","<",2.5]]
+[["r","<=",3.5]]
+[["r",">",4.5]]
+[["r",">=",5.5]]
+[["r","includes",6.5]]
+[["r","excludes",7.5]]
+[["b","==",true]]
+[["b","!=",false]]
+[["b","includes",false]]
+[["b","excludes",true]]
+[["s","==","a"]]
+[["s","!=","b"]]
+[["s","includes","c"]]
+[["s","excludes","d"]]
+[["u","==",["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]]
+[["u","!=",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]]
+[["u","includes",["uuid","ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]]
+[["u","excludes",["uuid","62315898-64e0-40b9-b26f-ff74225303e6"]]]]],
+  [condition])
+
+AT_SETUP([disallowed conditions on scalars])
+AT_KEYWORDS([ovsdb negative condition])
+AT_CHECK([[test-ovsdb parse-conditions \
+    '{"columns":
+        {"i": {"type": "integer"},
+         "r": {"type": "real"},
+         "b": {"type": "boolean"},
+	 "s": {"type": "string"},
+         "u": {"type": "uuid"}}}' \
+    '[["b", ">", true]]' \
+    '[["b", ">=", false]]' \
+    '[["b", "<", false]]' \
+    '[["b", "<=", false]]' \
+    '[["s", ">", "a"]]' \
+    '[["s", ">=", "b"]]' \
+    '[["s", "<", "c"]]' \
+    '[["s", "<=", "d"]]' \
+    '[["u", ">", ["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]]]' \
+    '[["u", ">=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]' \
+    '[["u", "<", ["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]]' \
+    '[["u", "<=", ["uuid", "62315898-64e0-40b9-b26f-ff74225303e6"]]]']],
+  [1], [],
+  [[test-ovsdb: syntax "["b",">",true]": syntax error: Type mismatch: ">" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b",">=",false]": syntax error: Type mismatch: ">=" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b","<",false]": syntax error: Type mismatch: "<" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b","<=",false]": syntax error: Type mismatch: "<=" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["s",">","a"]": syntax error: Type mismatch: ">" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s",">=","b"]": syntax error: Type mismatch: ">=" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s","<","c"]": syntax error: Type mismatch: "<" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s","<=","d"]": syntax error: Type mismatch: "<=" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["u",">",["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]": syntax error: Type mismatch: ">" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["u",">=",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]": syntax error: Type mismatch: ">=" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["u","<",["uuid","ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]": syntax error: Type mismatch: "<" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["u","<=",["uuid","62315898-64e0-40b9-b26f-ff74225303e6"]]": syntax error: Type mismatch: "<=" operator may not be applied to column u of type uuid.
+]])
+AT_CLEANUP
+
+OVSDB_CHECK_POSITIVE([conditions on sets],
+  [[parse-conditions \
+    '{"columns":
+        {"i": {"type": {"key": "integer", "min": 0, "max": "unlimited"}},
+         "r": {"type": {"key": "real", "min": 0, "max": "unlimited"}},
+         "b": {"type": {"key": "boolean", "min": 0, "max": "unlimited"}},
+	 "s": {"type": {"key": "string", "min": 0, "max": "unlimited"}},
+         "u": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}}}}' \
+    '[["i", "==", ["set", []]]]' \
+    '[["i", "!=", ["set", [1]]]]' \
+    '[["i", "includes", ["set", [1, 2]]]]' \
+    '[["i", "excludes", ["set", [1, 2, 3]]]]' \
+    '[["r", "==", ["set", []]]]' \
+    '[["r", "!=", ["set", [1.5]]]]' \
+    '[["r", "includes", ["set", [1.5, 2.5]]]]' \
+    '[["r", "excludes", ["set", [1.5, 2.5, 3.5]]]]' \
+    '[["b", "==", ["set", [true]]]]' \
+    '[["b", "!=", ["set", [false]]]]' \
+    '[["b", "includes", ["set", [false]]]]' \
+    '[["b", "excludes", ["set", [true, false]]]]' \
+    '[["s", "==", ["set", ["a"]]]]' \
+    '[["s", "!=", ["set", ["a", "b"]]]]' \
+    '[["s", "includes", ["set", ["c"]]]]' \
+    '[["s", "excludes", ["set", ["c", "d"]]]]' \
+    '[["u", "==", 
+       ["set", [["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]]]]]' \
+    '[["u", "==", 
+       ["set", [["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"],
+                ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]]]' \
+    '[["u", "includes", 
+       ["set", [["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"],
+                ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"],
+                ["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]]]]' \
+    '[["u", "excludes", 
+       ["set", [["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"],
+                ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"],
+                ["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"],
+                ["uuid", "62315898-64e0-40b9-b26f-ff74225303e6"]]]]]' \
+]],
+  [[[["i","==",["set",[]]]]
+[["i","!=",1]]
+[["i","includes",["set",[1,2]]]]
+[["i","excludes",["set",[1,2,3]]]]
+[["r","==",["set",[]]]]
+[["r","!=",1.5]]
+[["r","includes",["set",[1.5,2.5]]]]
+[["r","excludes",["set",[1.5,2.5,3.5]]]]
+[["b","==",true]]
+[["b","!=",false]]
+[["b","includes",false]]
+[["b","excludes",["set",[false,true]]]]
+[["s","==","a"]]
+[["s","!=",["set",["a","b"]]]]
+[["s","includes","c"]]
+[["s","excludes",["set",["c","d"]]]]
+[["u","==",["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]]
+[["u","==",["set",[["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"],["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]]]]
+[["u","includes",["set",[["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"],["uuid","ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"],["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]]]]
+[["u","excludes",["set",[["uuid","62315898-64e0-40b9-b26f-ff74225303e6"],["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"],["uuid","ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"],["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]]]]]],
+  [condition])
+
+OVSDB_CHECK_POSITIVE([condition sorting],
+  [[parse-conditions \
+    '{"columns": {"i": {"type": "integer"}}}' \
+    '[["i", "excludes", 7],
+      ["i", "!=", 8],
+      ["i", "==", 1],
+      ["i", "includes", 2],
+      ["i", "<=", 3],
+      ["i", "<", 4],
+      ["i", ">", 6],
+      ["i", ">=", 5],
+      ["_uuid", "==", ["uuid", "d50e85c6-8ae7-4b16-b69e-4395928bd9be"]]]']],
+  [[[["_uuid","==",["uuid","d50e85c6-8ae7-4b16-b69e-4395928bd9be"]],["i","==",1],["i","includes",2],["i","<=",3],["i","<",4],["i",">=",5],["i",">",6],["i","excludes",7],["i","!=",8]]]])
+
+OVSDB_CHECK_POSITIVE([evaluating null condition],
+  [[evaluate-conditions \
+    '{"columns": {"i": {"type": "integer"}}}' \
+    '[[]]' \
+    '[{"i": 0},
+      {"i": 1},
+      {"i": 2}']]],
+  [condition  0: TTT])
+
+OVSDB_CHECK_POSITIVE([evaluating conditions on integers],
+  [[evaluate-conditions \
+    '{"columns": {"i": {"type": "integer"}}}' \
+    '[[["i", "<", 1]],
+      [["i", "<=", 1]],
+      [["i", "==", 1]],
+      [["i", "!=", 1]],
+      [["i", ">=", 1]],
+      [["i", ">", 1]],
+      [["i", "includes", 1]],
+      [["i", "excludes", 1]]]' \
+    '[{"i": 0},
+      {"i": 1},
+      {"i": 2}']]],
+  [condition  0: T--
+condition  1: TT-
+condition  2: -T-
+condition  3: T-T
+condition  4: -TT
+condition  5: --T
+condition  6: -T-
+condition  7: T-T], [condition])
+
+OVSDB_CHECK_POSITIVE([evaluating conditions on reals],
+  [[evaluate-conditions \
+    '{"columns": {"r": {"type": "real"}}}' \
+    '[[["r", "<", 5.0]],
+      [["r", "<=", 5.0]],
+      [["r", "==", 5.0]],
+      [["r", "!=", 5.0]],
+      [["r", ">=", 5.0]],
+      [["r", ">", 5.0]],
+      [["r", "includes", 5.0]],
+      [["r", "excludes", 5.0]]]' \
+    '[{"r": 0},
+      {"r": 5.0},
+      {"r": 5.1}']]],
+  [condition  0: T--
+condition  1: TT-
+condition  2: -T-
+condition  3: T-T
+condition  4: -TT
+condition  5: --T
+condition  6: -T-
+condition  7: T-T], [condition])
+
+OVSDB_CHECK_POSITIVE([evaluating conditions on booleans],
+  [[evaluate-conditions \
+    '{"columns": {"b": {"type": "boolean"}}}' \
+    '[[["b", "==", true]],
+      [["b", "!=", true]],
+      [["b", "includes", true]],
+      [["b", "excludes", true]],
+      [["b", "==", false]],
+      [["b", "!=", false]],
+      [["b", "includes", false]],
+      [["b", "excludes", false]]]' \
+    '[{"b": true},
+      {"b": false}']]],
+  [condition  0: T-
+condition  1: -T
+condition  2: T-
+condition  3: -T
+condition  4: -T
+condition  5: T-
+condition  6: -T
+condition  7: T-], [condition])
+
+OVSDB_CHECK_POSITIVE([evaluating conditions on strings],
+  [[evaluate-conditions \
+    '{"columns": {"s": {"type": "string"}}}' \
+    '[[["s", "==", ""]],
+      [["s", "!=", ""]],
+      [["s", "includes", ""]],
+      [["s", "excludes", ""]],
+      [["s", "==", "foo"]],
+      [["s", "!=", "foo"]],
+      [["s", "includes", "foo"]],
+      [["s", "excludes", "foo"]]]' \
+    '[{"s": ""},
+      {"s": "foo"},
+      {"s": "xxx"}']]],
+  [condition  0: T--
+condition  1: -TT
+condition  2: T--
+condition  3: -TT
+condition  4: -T-
+condition  5: T-T
+condition  6: -T-
+condition  7: T-T], [condition])
+
+OVSDB_CHECK_POSITIVE([evaluating conditions on UUIDs],
+  [[evaluate-conditions \
+    '{"columns": {"u": {"type": "uuid"}}}' \
+    '[[["u", "==", ["uuid", "8a1dbdb8-416f-4ce9-affa-3332691714b6"]]],
+      [["u", "!=", ["uuid", "8a1dbdb8-416f-4ce9-affa-3332691714b6"]]],
+      [["u", "includes", ["uuid", "8a1dbdb8-416f-4ce9-affa-3332691714b6"]]],
+      [["u", "excludes", ["uuid", "8a1dbdb8-416f-4ce9-affa-3332691714b6"]]],
+      [["u", "==", ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]]],
+      [["u", "!=", ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]]],
+      [["u", "includes", ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]]],
+      [["u", "excludes", ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]]]]' \
+    '[{"u": ["uuid", "8a1dbdb8-416f-4ce9-affa-3332691714b6"]},
+      {"u": ["uuid", "06151f9d-62d6-4f59-8504-e9765107faa9"]},
+      {"u": ["uuid", "00000000-0000-0000-0000-000000000000"]}']]],
+  [condition  0: T--
+condition  1: -TT
+condition  2: T--
+condition  3: -TT
+condition  4: -T-
+condition  5: T-T
+condition  6: -T-
+condition  7: T-T], [condition])
+
+OVSDB_CHECK_POSITIVE([evaluating conditions on sets],
+  [[evaluate-conditions \
+    '{"columns": {"i": {"type": {"key": "integer", "min": 0, "max": "unlimited"}}}}' \
+    '[[["i", "==", ["set", []]]],
+      [["i", "==", ["set", [0]]]],
+      [["i", "==", ["set", [1]]]],
+      [["i", "==", ["set", [0, 1]]]],
+      [["i", "==", ["set", [2]]]],
+      [["i", "==", ["set", [2, 0]]]],
+      [["i", "==", ["set", [2, 1]]]],
+      [["i", "==", ["set", [2, 1, 0]]]],
+      [["i", "!=", ["set", []]]],
+      [["i", "!=", ["set", [0]]]],
+      [["i", "!=", ["set", [1]]]],
+      [["i", "!=", ["set", [0, 1]]]],
+      [["i", "!=", ["set", [2]]]],
+      [["i", "!=", ["set", [2, 0]]]],
+      [["i", "!=", ["set", [2, 1]]]],
+      [["i", "!=", ["set", [2, 1, 0]]]],
+      [["i", "includes", ["set", []]]],
+      [["i", "includes", ["set", [0]]]],
+      [["i", "includes", ["set", [1]]]],
+      [["i", "includes", ["set", [0, 1]]]],
+      [["i", "includes", ["set", [2]]]],
+      [["i", "includes", ["set", [2, 0]]]],
+      [["i", "includes", ["set", [2, 1]]]],
+      [["i", "includes", ["set", [2, 1, 0]]]],
+      [["i", "excludes", ["set", []]]],
+      [["i", "excludes", ["set", [0]]]],
+      [["i", "excludes", ["set", [1]]]],
+      [["i", "excludes", ["set", [0, 1]]]],
+      [["i", "excludes", ["set", [2]]]],
+      [["i", "excludes", ["set", [2, 0]]]],
+      [["i", "excludes", ["set", [2, 1]]]],
+      [["i", "excludes", ["set", [2, 1, 0]]]]]' \
+    '[{"i": ["set", []]},
+      {"i": ["set", [0]]},
+      {"i": ["set", [1]]},
+      {"i": ["set", [0, 1]]},
+      {"i": ["set", [2]]},
+      {"i": ["set", [2, 0]]},
+      {"i": ["set", [2, 1]]},
+      {"i": ["set", [2, 1, 0]]}]']],
+  [dnl
+condition  0: T---- ---
+condition  1: -T--- ---
+condition  2: --T-- ---
+condition  3: ---T- ---
+condition  4: ----T ---
+condition  5: ----- T--
+condition  6: ----- -T-
+condition  7: ----- --T
+condition  8: -TTTT TTT
+condition  9: T-TTT TTT
+condition 10: TT-TT TTT
+condition 11: TTT-T TTT
+condition 12: TTTT- TTT
+condition 13: TTTTT -TT
+condition 14: TTTTT T-T
+condition 15: TTTTT TT-
+condition 16: TTTTT TTT
+condition 17: -T-T- T-T
+condition 18: --TT- -TT
+condition 19: ---T- --T
+condition 20: ----T TTT
+condition 21: ----- T-T
+condition 22: ----- -TT
+condition 23: ----- --T
+condition 24: TTTTT TTT
+condition 25: T-T-T -T-
+condition 26: TT--T T--
+condition 27: T---T ---
+condition 28: TTTT- ---
+condition 29: T-T-- ---
+condition 30: TT--- ---
+condition 31: T---- ---], [condition])
+
+# This is the same as the "set" test except that it adds values,
+# all of which always match.
+OVSDB_CHECK_POSITIVE([evaluating conditions on maps (1)],
+  [[evaluate-conditions \
+    '{"columns": {"i": {"type": {"key": "integer",
+                                 "value": "boolean",
+                                 "min": 0,
+                                 "max": "unlimited"}}}}' \
+    '[[["i", "==", ["map", []]]],
+      [["i", "==", ["map", [[0, true]]]]],
+      [["i", "==", ["map", [[1, false]]]]],
+      [["i", "==", ["map", [[0, true], [1, false]]]]],
+      [["i", "==", ["map", [[2, true]]]]],
+      [["i", "==", ["map", [[2, true], [0, true]]]]],
+      [["i", "==", ["map", [[2, true], [1, false]]]]],
+      [["i", "==", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "!=", ["map", []]]],
+      [["i", "!=", ["map", [[0, true]]]]],
+      [["i", "!=", ["map", [[1, false]]]]],
+      [["i", "!=", ["map", [[0, true], [1, false]]]]],
+      [["i", "!=", ["map", [[2, true]]]]],
+      [["i", "!=", ["map", [[2, true], [0, true]]]]],
+      [["i", "!=", ["map", [[2, true], [1, false]]]]],
+      [["i", "!=", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "includes", ["map", []]]],
+      [["i", "includes", ["map", [[0, true]]]]],
+      [["i", "includes", ["map", [[1, false]]]]],
+      [["i", "includes", ["map", [[0, true], [1, false]]]]],
+      [["i", "includes", ["map", [[2, true]]]]],
+      [["i", "includes", ["map", [[2, true], [0, true]]]]],
+      [["i", "includes", ["map", [[2, true], [1, false]]]]],
+      [["i", "includes", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "excludes", ["map", []]]],
+      [["i", "excludes", ["map", [[0, true]]]]],
+      [["i", "excludes", ["map", [[1, false]]]]],
+      [["i", "excludes", ["map", [[0, true], [1, false]]]]],
+      [["i", "excludes", ["map", [[2, true]]]]],
+      [["i", "excludes", ["map", [[2, true], [0, true]]]]],
+      [["i", "excludes", ["map", [[2, true], [1, false]]]]],
+      [["i", "excludes", ["map", [[2, true], [1, false], [0, true]]]]]]' \
+    '[{"i": ["map", []]},
+      {"i": ["map", [[0, true]]]},
+      {"i": ["map", [[1, false]]]},
+      {"i": ["map", [[0, true], [1, false]]]},
+      {"i": ["map", [[2, true]]]},
+      {"i": ["map", [[2, true], [0, true]]]},
+      {"i": ["map", [[2, true], [1, false]]]},
+      {"i": ["map", [[2, true], [1, false], [0, true]]]}]']],
+  [dnl
+condition  0: T---- ---
+condition  1: -T--- ---
+condition  2: --T-- ---
+condition  3: ---T- ---
+condition  4: ----T ---
+condition  5: ----- T--
+condition  6: ----- -T-
+condition  7: ----- --T
+condition  8: -TTTT TTT
+condition  9: T-TTT TTT
+condition 10: TT-TT TTT
+condition 11: TTT-T TTT
+condition 12: TTTT- TTT
+condition 13: TTTTT -TT
+condition 14: TTTTT T-T
+condition 15: TTTTT TT-
+condition 16: TTTTT TTT
+condition 17: -T-T- T-T
+condition 18: --TT- -TT
+condition 19: ---T- --T
+condition 20: ----T TTT
+condition 21: ----- T-T
+condition 22: ----- -TT
+condition 23: ----- --T
+condition 24: TTTTT TTT
+condition 25: T-T-T -T-
+condition 26: TT--T T--
+condition 27: T---T ---
+condition 28: TTTT- ---
+condition 29: T-T-- ---
+condition 30: TT--- ---
+condition 31: T---- ---], [condition])
+
+# This is the same as the "set" test except that it adds values,
+# and those values don't always match.
+OVSDB_CHECK_POSITIVE([evaluating conditions on maps (2)],
+  [[evaluate-conditions \
+    '{"columns": {"i": {"type": {"key": "integer",
+                                 "value": "boolean",
+                                 "min": 0,
+                                 "max": "unlimited"}}}}' \
+    '[[["i", "==", ["map", []]]],
+      [["i", "==", ["map", [[0, true]]]]],
+      [["i", "==", ["map", [[1, false]]]]],
+      [["i", "==", ["map", [[0, true], [1, false]]]]],
+      [["i", "==", ["map", [[2, true]]]]],
+      [["i", "==", ["map", [[2, true], [0, true]]]]],
+      [["i", "==", ["map", [[2, true], [1, false]]]]],
+      [["i", "==", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "!=", ["map", []]]],
+      [["i", "!=", ["map", [[0, true]]]]],
+      [["i", "!=", ["map", [[1, false]]]]],
+      [["i", "!=", ["map", [[0, true], [1, false]]]]],
+      [["i", "!=", ["map", [[2, true]]]]],
+      [["i", "!=", ["map", [[2, true], [0, true]]]]],
+      [["i", "!=", ["map", [[2, true], [1, false]]]]],
+      [["i", "!=", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "includes", ["map", []]]],
+      [["i", "includes", ["map", [[0, true]]]]],
+      [["i", "includes", ["map", [[1, false]]]]],
+      [["i", "includes", ["map", [[0, true], [1, false]]]]],
+      [["i", "includes", ["map", [[2, true]]]]],
+      [["i", "includes", ["map", [[2, true], [0, true]]]]],
+      [["i", "includes", ["map", [[2, true], [1, false]]]]],
+      [["i", "includes", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "excludes", ["map", []]]],
+      [["i", "excludes", ["map", [[0, true]]]]],
+      [["i", "excludes", ["map", [[1, false]]]]],
+      [["i", "excludes", ["map", [[0, true], [1, false]]]]],
+      [["i", "excludes", ["map", [[2, true]]]]],
+      [["i", "excludes", ["map", [[2, true], [0, true]]]]],
+      [["i", "excludes", ["map", [[2, true], [1, false]]]]],
+      [["i", "excludes", ["map", [[2, true], [1, false], [0, true]]]]]]' \
+    '[{"i": ["map", []]},
+      {"i": ["map", [[0, true]]]},
+      {"i": ["map", [[0, false]]]},
+      {"i": ["map", [[1, false]]]},
+      {"i": ["map", [[1, true]]]},
+
+      {"i": ["map", [[0, true], [1, false]]]},
+      {"i": ["map", [[0, true], [1, true]]]},
+      {"i": ["map", [[2, true]]]},
+      {"i": ["map", [[2, false]]]},
+      {"i": ["map", [[2, true], [0, true]]]},
+
+      {"i": ["map", [[2, false], [0, true]]]},
+      {"i": ["map", [[2, true], [1, false]]]},
+      {"i": ["map", [[2, true], [1, true]]]},
+      {"i": ["map", [[2, true], [1, false], [0, true]]]},
+      {"i": ["map", [[2, true], [1, false], [0, false]]]}]']],
+  [dnl
+condition  0: T---- ----- -----
+condition  1: -T--- ----- -----
+condition  2: ---T- ----- -----
+condition  3: ----- T---- -----
+condition  4: ----- --T-- -----
+condition  5: ----- ----T -----
+condition  6: ----- ----- -T---
+condition  7: ----- ----- ---T-
+condition  8: -TTTT TTTTT TTTTT
+condition  9: T-TTT TTTTT TTTTT
+condition 10: TTT-T TTTTT TTTTT
+condition 11: TTTTT -TTTT TTTTT
+condition 12: TTTTT TT-TT TTTTT
+condition 13: TTTTT TTTT- TTTTT
+condition 14: TTTTT TTTTT T-TTT
+condition 15: TTTTT TTTTT TTT-T
+condition 16: TTTTT TTTTT TTTTT
+condition 17: -T--- TT--T T--T-
+condition 18: ---T- T---- -T-TT
+condition 19: ----- T---- ---T-
+condition 20: ----- --T-T -TTTT
+condition 21: ----- ----T ---T-
+condition 22: ----- ----- -T-TT
+condition 23: ----- ----- ---T-
+condition 24: TTTTT TTTTT TTTTT
+condition 25: T-TTT --TT- -TT-T
+condition 26: TTT-T -TTTT T-T--
+condition 27: T-T-T --TT- --T--
+condition 28: TTTTT TT-T- T----
+condition 29: T-TTT ---T- -----
+condition 30: TTT-T -T-T- T----
+condition 31: T-T-T ---T- -----], [condition])

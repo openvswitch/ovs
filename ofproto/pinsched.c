@@ -230,7 +230,7 @@ pinsched_create(int rate_limit, int burst_limit, struct switch_status *ss)
 {
     struct pinsched *ps;
 
-    ps = xcalloc(1, sizeof *ps);
+    ps = xzalloc(sizeof *ps);
     port_array_init(&ps->queues);
     ps->n_queued = 0;
     ps->last_tx_port = PORT_ARRAY_SIZE;

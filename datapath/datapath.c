@@ -41,6 +41,7 @@
 #include <linux/rculist.h>
 #include <linux/workqueue.h>
 #include <linux/dmi.h>
+#include <net/inet_ecn.h>
 #include <net/llc.h>
 
 #include "openvswitch/datapath-protocol.h"
@@ -358,6 +359,7 @@ static int new_nbp(struct datapath *dp, struct net_device *dev, int port_no)
 		 * in dp_frame_hook().  In turn dp_frame_hook() can reject them
 		 * back to network stack, but that's a waste of time. */
 	}
+	dev_disable_lro(dev);
 	rcu_assign_pointer(dp->ports[port_no], p);
 	list_add_rcu(&p->node, &dp->port_list);
 	dp->n_ports++;
@@ -420,6 +422,7 @@ got_port_no:
 	if (err)
 		goto out_put;
 
+	set_dp_devs_mtu(dp, dev);
 	dp_sysfs_add_if(dp->ports[port_no]);
 
 	err = __put_user(port_no, &portp->port);
@@ -504,6 +507,11 @@ out:
 static void
 do_port_input(struct net_bridge_port *p, struct sk_buff *skb) 
 {
+	/* LRO isn't suitable for bridging.  We turn it off but make sure
+	 * that it wasn't reactivated. */
+	if (skb_warn_if_lro(skb))
+		return;
+
 	/* Make our own copy of the packet.  Otherwise we will mangle the
 	 * packet for anyone who came before us (e.g. tcpdump via AF_PACKET).
 	 * (No one comes after us, since we tell handle_bridge() that we took
@@ -527,6 +535,8 @@ void dp_process_received_packet(struct sk_buff *skb, struct net_bridge_port *p)
 	struct sw_flow *flow;
 
 	WARN_ON_ONCE(skb_shared(skb));
+
+	compute_ip_summed(skb, false);
 
 	/* BHs are off so we don't have to use get_cpu()/put_cpu() here. */
 	stats = percpu_ptr(dp->stats_percpu, smp_processor_id());
@@ -576,9 +586,10 @@ static int dp_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 #endif
 
 #if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
-/* This code is copied verbatim from net/dev/core.c in Xen's
- * linux-2.6.18-92.1.10.el5.xs5.0.0.394.644.  We can't call those functions
- * directly because they aren't exported. */
+/* This code is based on a skb_checksum_setup from net/dev/core.c from a
+ * combination of Lenny's 2.6.26 Xen kernel and Xen's
+ * linux-2.6.18-92.1.10.el5.xs5.0.0.394.644.  We can't call this function
+ * directly because it isn't exported in all versions. */
 static int skb_pull_up_to(struct sk_buff *skb, void *ptr)
 {
 	if (ptr < (void *)skb->tail)
@@ -593,36 +604,169 @@ static int skb_pull_up_to(struct sk_buff *skb, void *ptr)
 
 int vswitch_skb_checksum_setup(struct sk_buff *skb)
 {
-	if (skb->proto_csum_blank) {
-		if (skb->protocol != htons(ETH_P_IP))
-			goto out;
-		if (!skb_pull_up_to(skb, skb->nh.iph + 1))
-			goto out;
-		skb->h.raw = (unsigned char *)skb->nh.iph + 4*skb->nh.iph->ihl;
-		switch (skb->nh.iph->protocol) {
-		case IPPROTO_TCP:
-			skb->csum = offsetof(struct tcphdr, check);
-			break;
-		case IPPROTO_UDP:
-			skb->csum = offsetof(struct udphdr, check);
-			break;
-		default:
-			if (net_ratelimit())
-				printk(KERN_ERR "Attempting to checksum a non-"
-				       "TCP/UDP packet, dropping a protocol"
-				       " %d packet", skb->nh.iph->protocol);
-			goto out;
-		}
-		if (!skb_pull_up_to(skb, skb->h.raw + skb->csum + 2))
-			goto out;
-		skb->ip_summed = CHECKSUM_HW;
-		skb->proto_csum_blank = 0;
+	struct iphdr *iph;
+	unsigned char *th;
+	int err = -EPROTO;
+	__u16 csum_start, csum_offset;
+
+	if (!skb->proto_csum_blank)
+		return 0;
+
+	if (skb->protocol != htons(ETH_P_IP))
+		goto out;
+
+	if (!skb_pull_up_to(skb, skb_network_header(skb) + sizeof(struct iphdr)))
+		goto out;
+
+	iph = ip_hdr(skb);
+	th = skb_network_header(skb) + 4 * iph->ihl;
+
+	csum_start = th - skb->head;
+	switch (iph->protocol) {
+	case IPPROTO_TCP:
+		csum_offset = offsetof(struct tcphdr, check);
+		break;
+	case IPPROTO_UDP:
+		csum_offset = offsetof(struct udphdr, check);
+		break;
+	default:
+		if (net_ratelimit())
+			printk(KERN_ERR "Attempting to checksum a non-"
+			       "TCP/UDP packet, dropping a protocol"
+			       " %d packet", iph->protocol);
+		goto out;
 	}
-	return 0;
+
+	if (!skb_pull_up_to(skb, th + csum_offset + 2))
+		goto out;
+
+	skb->ip_summed = CHECKSUM_PARTIAL;
+	skb->proto_csum_blank = 0;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+	skb->csum_start = csum_start;
+	skb->csum_offset = csum_offset;
+#else
+	skb_set_transport_header(skb, csum_start - skb_headroom(skb));
+	skb->csum = csum_offset;
+#endif
+
+	err = 0;
+
 out:
-	return -EPROTO;
+	return err;
 }
 #endif /* CONFIG_XEN && HAVE_PROTO_DATA_VALID */
+
+ /* Types of checksums that we can receive (these all refer to L4 checksums):
+ * 1. CHECKSUM_NONE: Device that did not compute checksum, contains full
+ *	(though not verified) checksum in packet but not in skb->csum.  Packets
+ *	from the bridge local port will also have this type.
+ * 2. CHECKSUM_COMPLETE (CHECKSUM_HW): Good device that computes checksums,
+ *	also the GRE module.  This is the same as CHECKSUM_NONE, except it has
+ *	a valid skb->csum.  Importantly, both contain a full checksum (not
+ *	verified) in the packet itself.  The only difference is that if the
+ *	packet gets to L4 processing on this machine (not in DomU) we won't
+ *	have to recompute the checksum to verify.  Most hardware devices do not
+ *	produce packets with this type, even if they support receive checksum
+ *	offloading (they produce type #5).
+ * 3. CHECKSUM_PARTIAL (CHECKSUM_HW): Packet without full checksum and needs to
+ *	be computed if it is sent off box.  Unfortunately on earlier kernels,
+ *	this case is impossible to distinguish from #2, despite having opposite
+ *	meanings.  Xen adds an extra field on earlier kernels (see #4) in order
+ *	to distinguish the different states.  The only real user of this type
+ *	with bridging is Xen (on later kernels).
+ * 4. CHECKSUM_UNNECESSARY (with proto_csum_blank true): This packet was
+ *	generated locally by a Xen DomU and has a partial checksum.  If it is
+ *	handled on this machine (Dom0 or DomU), then the checksum will not be
+ *	computed.  If it goes off box, the checksum in the packet needs to be
+ *	completed.  Calling skb_checksum_setup converts this to CHECKSUM_HW
+ *	(CHECKSUM_PARTIAL) so that the checksum can be completed.  In later
+ *	kernels, this combination is replaced with CHECKSUM_PARTIAL.
+ * 5. CHECKSUM_UNNECESSARY (with proto_csum_blank false): Packet with a correct
+ *	full checksum or using a protocol without a checksum.  skb->csum is
+ *	undefined.  This is common from devices with receive checksum
+ *	offloading.  This is somewhat similar to CHECKSUM_NONE, except that
+ *	nobody will try to verify the checksum with CHECKSUM_UNNECESSARY.
+ *
+ * Note that on earlier kernels, CHECKSUM_COMPLETE and CHECKSUM_PARTIAL are
+ * both defined as CHECKSUM_HW.  Normally the meaning of CHECKSUM_HW is clear
+ * based on whether it is on the transmit or receive path.  After the datapath
+ * it will be intepreted as CHECKSUM_PARTIAL.  If the packet already has a
+ * checksum, we will panic.  Since we can receive packets with checksums, we
+ * assume that all CHECKSUM_HW packets have checksums and map them to
+ * CHECKSUM_NONE, which has a similar meaning (the it is only different if the
+ * packet is processed by the local IP stack, in which case it will need to
+ * be reverified).  If we receive a packet with CHECKSUM_HW that really means
+ * CHECKSUM_PARTIAL, it will be sent with the wrong checksum.  However, there
+ * shouldn't be any devices that do this with bridging.
+ *
+ * The bridge has similar behavior and this function closely resembles
+ * skb_forward_csum().  It is slightly different because we are only concerned
+ * with bridging and not other types of forwarding and can get away with
+ * slightly more optimal behavior.*/
+void
+compute_ip_summed(struct sk_buff *skb, bool xmit)
+{
+	/* For our convenience these defines change repeatedly between kernel
+	 * versions, so we can't just copy them over... */
+	switch (skb->ip_summed) {
+	case CHECKSUM_NONE:
+		OVS_CB(skb)->ip_summed = OVS_CSUM_NONE;
+		break;
+	case CHECKSUM_UNNECESSARY:
+		OVS_CB(skb)->ip_summed = OVS_CSUM_UNNECESSARY;
+		break;
+#ifdef CHECKSUM_HW
+	/* In theory this could be either CHECKSUM_PARTIAL or CHECKSUM_COMPLETE.
+	 * However, we should only get CHECKSUM_PARTIAL packets from Xen, which
+	 * uses some special fields to represent this (see below).  Since we
+	 * can only make one type work, pick the one that actually happens in
+	 * practice.
+	 *
+	 * The one exception to this is if we are on the transmit path
+	 * (basically after skb_checksum_setup() has been run) the type has
+	 * already been converted, so we should stay with that. */
+	case CHECKSUM_HW:
+		if (!xmit)
+			OVS_CB(skb)->ip_summed = OVS_CSUM_COMPLETE;
+		else
+			OVS_CB(skb)->ip_summed = OVS_CSUM_PARTIAL;
+
+		break;
+#else
+	case CHECKSUM_COMPLETE:
+		OVS_CB(skb)->ip_summed = OVS_CSUM_COMPLETE;
+		break;
+	case CHECKSUM_PARTIAL:
+		OVS_CB(skb)->ip_summed = OVS_CSUM_PARTIAL;
+		break;
+#endif
+	default:
+		printk(KERN_ERR "openvswitch: unknown checksum type %d\n",
+		       skb->ip_summed);
+		/* None seems the safest... */
+		OVS_CB(skb)->ip_summed = OVS_CSUM_NONE;
+	}	
+
+#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
+	/* Xen has a special way of representing CHECKSUM_PARTIAL on older
+	 * kernels. It should not be set on the transmit path though. */
+	if (skb->proto_csum_blank)
+		OVS_CB(skb)->ip_summed = OVS_CSUM_PARTIAL;
+
+	WARN_ON_ONCE(skb->proto_csum_blank && xmit);
+#endif
+}
+
+void
+forward_ip_summed(struct sk_buff *skb)
+{
+#ifdef CHECKSUM_HW
+	if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE)
+		skb->ip_summed = CHECKSUM_NONE;
+#endif
+}
 
 /* Append each packet in 'skb' list to 'queue'.  There will be only one packet
  * unless we broke up a GSO packet. */
@@ -720,6 +864,8 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 	if (skb_queue_len(queue) >= DP_MAX_QUEUE_LEN)
 		goto err_kfree_skb;
 
+	forward_ip_summed(skb);
+
 	/* Break apart GSO packets into their component pieces.  Otherwise
 	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */
 	if (skb_is_gso(skb)) {
@@ -782,6 +928,11 @@ static int validate_actions(const struct sw_flow_actions *actions)
 		case ODPAT_SET_VLAN_PCP:
 			if (a->vlan_pcp.vlan_pcp
 			    & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT))
+				return -EINVAL;
+			break;
+
+		case ODPAT_SET_NW_TOS:
+			if (a->nw_tos.nw_tos & INET_ECN_MASK)
 				return -EINVAL;
 			break;
 
@@ -857,7 +1008,7 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 	error = -EFAULT;
 	if (copy_from_user(&uf, ufp, sizeof(struct odp_flow_put)))
 		goto error;
-	uf.flow.key.reserved = 0;
+	memset(uf.flow.key.reserved, 0, sizeof uf.flow.key.reserved);
 
 	table = rcu_dereference(dp->table);
 	flow = dp_table_lookup(table, &uf.flow.key);
@@ -1002,7 +1153,7 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	error = -EFAULT;
 	if (copy_from_user(&uf, ufp, sizeof uf))
 		goto error;
-	uf.key.reserved = 0;
+	memset(uf.key.reserved, 0, sizeof uf.key.reserved);
 
 	flow = dp_table_lookup(table, &uf.key);
 	error = -ENOENT;
@@ -1038,7 +1189,7 @@ static int query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 
 		if (__copy_from_user(&uf, ufp, sizeof uf))
 			return -EFAULT;
-		uf.key.reserved = 0;
+		memset(uf.key.reserved, 0, sizeof uf.key.reserved);
 
 		flow = dp_table_lookup(table, &uf.key);
 		if (!flow)
@@ -1233,6 +1384,29 @@ int dp_min_mtu(const struct datapath *dp)
 	}
 
 	return mtu ? mtu : ETH_DATA_LEN;
+}
+
+/* Sets the MTU of all datapath devices to the minimum of the ports. 'dev'
+ * is the device whose MTU may have changed.  Must be called with RTNL lock
+ * and dp_mutex. */
+void set_dp_devs_mtu(const struct datapath *dp, struct net_device *dev)
+{
+	struct net_bridge_port *p;
+	int mtu;
+
+	ASSERT_RTNL();
+
+	if (is_dp_dev(dev))
+		return;
+
+	mtu = dp_min_mtu(dp);
+
+	list_for_each_entry_rcu (p, &dp->port_list, node) {
+		struct net_device *br_dev = p->dev;
+
+		if (is_dp_dev(br_dev))
+			dev_set_mtu(br_dev, mtu);
+	}
 }
 
 static int

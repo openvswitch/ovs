@@ -1,0 +1,17 @@
+.IP "\fBpssl:\fR[\fIport\fR][\fB:\fIip\fR]"
+Listens for OpenFlow SSL connections on \fIport\fR (default: 6633).
+The \fB\-\-private\-key\fR, \fB\-\-certificate\fR, and
+\fB\-\-ca\-cert\fR options are mandatory when this form is used.  By
+default, \fB\*(PN\fR listens for connections to any local IP address,
+but \fIip\fR may be specified to listen only for connections to the
+given \fIip\fR.
+.
+.IP "\fBptcp:\fR[\fIport\fR][\fB:\fIip\fR]"
+Listens for OpenFlow TCP connections on \fIport\fR (default: 6633).
+By default, \fB\*(PN\fR listens for connections to any local IP
+address, but \fIip\fR may be specified to listen only for connections
+to the given \fIip\Ar.
+.
+.IP "\fBpunix:\fIfile\fR"
+Listens for OpenFlow connections on the Unix domain server socket
+named \fIfile\fR.

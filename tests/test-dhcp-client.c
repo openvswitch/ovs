@@ -23,7 +23,6 @@
 #include "command-line.h"
 #include "dhcp.h"
 #include "fatal-signal.h"
-#include "fault.h"
 #include "poll-loop.h"
 #include "util.h"
 #include "vlog.h"
@@ -51,7 +50,6 @@ main(int argc, char *argv[])
     int error;
 
     set_program_name(argv[0]);
-    register_fault_handlers();
     vlog_init();
     parse_options(argc, argv);
 
@@ -67,10 +65,9 @@ main(int argc, char *argv[])
         ovs_fatal(error, "dhclient_create failed");
     }
     dhclient_init(cli, request_ip.s_addr);
-    fatal_signal_add_hook(release, cli, true);
+    fatal_signal_add_hook(release, NULL, cli, true);
 
     for (;;) {
-        fatal_signal_block();
         dhclient_run(cli);
         if (dhclient_changed(cli)) {
             dhclient_configure_netdev(cli);
@@ -79,7 +76,6 @@ main(int argc, char *argv[])
             }
         }
         dhclient_wait(cli);
-        fatal_signal_unblock();
         poll_block();
     }
 }

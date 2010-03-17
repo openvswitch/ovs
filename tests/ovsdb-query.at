@@ -1,0 +1,543 @@
+AT_BANNER([OVSDB -- queries])
+
+OVSDB_CHECK_POSITIVE([queries on scalars],
+  [[query \
+    '{"columns":
+        {"i": {"type": "integer"},
+         "r": {"type": "real"},
+         "b": {"type": "boolean"},
+	 "s": {"type": "string"},
+         "u": {"type": "uuid"}}}' \
+    '[{"i": 0,
+       "r": 0.5,
+       "b": true,
+       "s": "a",
+       "u": ["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]},
+      {"i": 1,
+       "r": 1.5,
+       "b": false,
+       "s": "b",
+       "u": ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]},
+      {"i": 2,
+       "r": 2.5,
+       "b": true,
+       "s": "c",
+       "u": ["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]},
+      {"i": 3,
+       "r": 3.5,
+       "b": false,
+       "s": "d",
+       "u": ["uuid", "62315898-64e0-40b9-b26f-ff74225303e6"]},
+      {"i": 4,
+       "r": 4.5,
+       "b": true,
+       "s": "e",
+       "u": ["uuid", "4a5127e2-0256-4a72-a7dc-6246213967c7"]}]' \
+    '[[],
+      [["i", "==", 0]],
+      [["i", "!=", 1]],
+      [["i", "<", 2]],
+      [["i", "<=", 3]],
+      [["i", ">", 2]],
+      [["i", ">=", 4]],
+      [["i", "includes", 3]],
+      [["i", "excludes", 2]],
+      [["r", "==", 0.5]],
+      [["r", "!=", 1.5]],
+      [["r", "<", 2.5]],
+      [["r", "<=", 3.5]],
+      [["r", ">", 4.5]],
+      [["r", ">=", 5.5]],
+      [["r", "includes", 1]],
+      [["r", "excludes", 3]],
+      [["b", "==", true]],
+      [["b", "!=", true]],
+      [["b", "includes", false]],
+      [["b", "excludes", true]],
+      [["s", "==", "a"]],
+      [["s", "!=", "b"]],
+      [["s", "includes", "c"]],
+      [["s", "excludes", "d"]],
+      [["u", "==", ["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]]],
+      [["u", "!=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]],
+      [["u", "includes",["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]]]']],
+  [dnl
+query  0: 11111
+query  1: 1----
+query  2: 1-111
+query  3: 11---
+query  4: 1111-
+query  5: ---11
+query  6: ----1
+query  7: ---1-
+query  8: 11-11
+query  9: 1----
+query 10: 1-111
+query 11: 11---
+query 12: 1111-
+query 13: -----
+query 14: -----
+query 15: -----
+query 16: 11111
+query 17: 1-1-1
+query 18: -1-1-
+query 19: -1-1-
+query 20: -1-1-
+query 21: 1----
+query 22: 1-111
+query 23: --1--
+query 24: 111-1
+query 25: 1----
+query 26: 1-111
+query 27: --1--],
+  [query])
+
+OVSDB_CHECK_POSITIVE([queries on sets],
+  [[query \
+    '{"columns": {"i": {"type": {"key": "integer", "min": 0, "max": "unlimited"}}}}' \
+    '[{"i": ["set", []]},
+      {"i": ["set", [0]]},
+      {"i": ["set", [1]]},
+      {"i": ["set", [0, 1]]},
+      {"i": ["set", [2]]},
+      {"i": ["set", [2, 0]]},
+      {"i": ["set", [2, 1]]},
+      {"i": ["set", [2, 1, 0]]}]' \
+    '[[],
+      [["i", "==", ["set", []]]],
+      [["i", "==", ["set", [0]]]],
+      [["i", "==", ["set", [1]]]],
+      [["i", "==", ["set", [0, 1]]]],
+      [["i", "==", ["set", [2]]]],
+      [["i", "==", ["set", [2, 0]]]],
+      [["i", "==", ["set", [2, 1]]]],
+      [["i", "==", ["set", [2, 1, 0]]]],
+      [["i", "!=", ["set", []]]],
+      [["i", "!=", ["set", [0]]]],
+      [["i", "!=", ["set", [1]]]],
+      [["i", "!=", ["set", [0, 1]]]],
+      [["i", "!=", ["set", [2]]]],
+      [["i", "!=", ["set", [2, 0]]]],
+      [["i", "!=", ["set", [2, 1]]]],
+      [["i", "!=", ["set", [2, 1, 0]]]],
+      [["i", "includes", ["set", []]]],
+      [["i", "includes", ["set", [0]]]],
+      [["i", "includes", ["set", [1]]]],
+      [["i", "includes", ["set", [0, 1]]]],
+      [["i", "includes", ["set", [2]]]],
+      [["i", "includes", ["set", [2, 0]]]],
+      [["i", "includes", ["set", [2, 1]]]],
+      [["i", "includes", ["set", [2, 1, 0]]]],
+      [["i", "excludes", ["set", []]]],
+      [["i", "excludes", ["set", [0]]]],
+      [["i", "excludes", ["set", [1]]]],
+      [["i", "excludes", ["set", [0, 1]]]],
+      [["i", "excludes", ["set", [2]]]],
+      [["i", "excludes", ["set", [2, 0]]]],
+      [["i", "excludes", ["set", [2, 1]]]],
+      [["i", "excludes", ["set", [2, 1, 0]]]]]']],
+  [dnl
+query  0: 11111 111
+query  1: 1---- ---
+query  2: -1--- ---
+query  3: --1-- ---
+query  4: ---1- ---
+query  5: ----1 ---
+query  6: ----- 1--
+query  7: ----- -1-
+query  8: ----- --1
+query  9: -1111 111
+query 10: 1-111 111
+query 11: 11-11 111
+query 12: 111-1 111
+query 13: 1111- 111
+query 14: 11111 -11
+query 15: 11111 1-1
+query 16: 11111 11-
+query 17: 11111 111
+query 18: -1-1- 1-1
+query 19: --11- -11
+query 20: ---1- --1
+query 21: ----1 111
+query 22: ----- 1-1
+query 23: ----- -11
+query 24: ----- --1
+query 25: 11111 111
+query 26: 1-1-1 -1-
+query 27: 11--1 1--
+query 28: 1---1 ---
+query 29: 1111- ---
+query 30: 1-1-- ---
+query 31: 11--- ---
+query 32: 1---- ---], [query])
+
+# This is the same as the "set" test except that it adds values,
+# all of which always match.
+OVSDB_CHECK_POSITIVE([queries on maps (1)],
+  [[query \
+    '{"columns": {"i": {"type": {"key": "integer",
+                                 "value": "boolean",
+                                 "min": 0,
+                                 "max": "unlimited"}}}}' \
+    '[{"i": ["map", []]},
+      {"i": ["map", [[0, true]]]},
+      {"i": ["map", [[1, false]]]},
+      {"i": ["map", [[0, true], [1, false]]]},
+      {"i": ["map", [[2, true]]]},
+      {"i": ["map", [[2, true], [0, true]]]},
+      {"i": ["map", [[2, true], [1, false]]]},
+      {"i": ["map", [[2, true], [1, false], [0, true]]]}]' \
+    '[[],
+      [["i", "==", ["map", []]]],
+      [["i", "==", ["map", [[0, true]]]]],
+      [["i", "==", ["map", [[1, false]]]]],
+      [["i", "==", ["map", [[0, true], [1, false]]]]],
+      [["i", "==", ["map", [[2, true]]]]],
+      [["i", "==", ["map", [[2, true], [0, true]]]]],
+      [["i", "==", ["map", [[2, true], [1, false]]]]],
+      [["i", "==", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "!=", ["map", []]]],
+      [["i", "!=", ["map", [[0, true]]]]],
+      [["i", "!=", ["map", [[1, false]]]]],
+      [["i", "!=", ["map", [[0, true], [1, false]]]]],
+      [["i", "!=", ["map", [[2, true]]]]],
+      [["i", "!=", ["map", [[2, true], [0, true]]]]],
+      [["i", "!=", ["map", [[2, true], [1, false]]]]],
+      [["i", "!=", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "includes", ["map", []]]],
+      [["i", "includes", ["map", [[0, true]]]]],
+      [["i", "includes", ["map", [[1, false]]]]],
+      [["i", "includes", ["map", [[0, true], [1, false]]]]],
+      [["i", "includes", ["map", [[2, true]]]]],
+      [["i", "includes", ["map", [[2, true], [0, true]]]]],
+      [["i", "includes", ["map", [[2, true], [1, false]]]]],
+      [["i", "includes", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "excludes", ["map", []]]],
+      [["i", "excludes", ["map", [[0, true]]]]],
+      [["i", "excludes", ["map", [[1, false]]]]],
+      [["i", "excludes", ["map", [[0, true], [1, false]]]]],
+      [["i", "excludes", ["map", [[2, true]]]]],
+      [["i", "excludes", ["map", [[2, true], [0, true]]]]],
+      [["i", "excludes", ["map", [[2, true], [1, false]]]]],
+      [["i", "excludes", ["map", [[2, true], [1, false], [0, true]]]]]]']],
+  [dnl
+query  0: 11111 111
+query  1: 1---- ---
+query  2: -1--- ---
+query  3: --1-- ---
+query  4: ---1- ---
+query  5: ----1 ---
+query  6: ----- 1--
+query  7: ----- -1-
+query  8: ----- --1
+query  9: -1111 111
+query 10: 1-111 111
+query 11: 11-11 111
+query 12: 111-1 111
+query 13: 1111- 111
+query 14: 11111 -11
+query 15: 11111 1-1
+query 16: 11111 11-
+query 17: 11111 111
+query 18: -1-1- 1-1
+query 19: --11- -11
+query 20: ---1- --1
+query 21: ----1 111
+query 22: ----- 1-1
+query 23: ----- -11
+query 24: ----- --1
+query 25: 11111 111
+query 26: 1-1-1 -1-
+query 27: 11--1 1--
+query 28: 1---1 ---
+query 29: 1111- ---
+query 30: 1-1-- ---
+query 31: 11--- ---
+query 32: 1---- ---], [query])
+
+# This is the same as the "set" test except that it adds values,
+# and those values don't always match.
+OVSDB_CHECK_POSITIVE([queries on maps (2)],
+  [[query \
+    '{"columns": {"i": {"type": {"key": "integer",
+                                 "value": "boolean",
+                                 "min": 0,
+                                 "max": "unlimited"}}}}' \
+    '[{"i": ["map", []]},
+      {"i": ["map", [[0, true]]]},
+      {"i": ["map", [[0, false]]]},
+      {"i": ["map", [[1, false]]]},
+      {"i": ["map", [[1, true]]]},
+
+      {"i": ["map", [[0, true], [1, false]]]},
+      {"i": ["map", [[0, true], [1, true]]]},
+      {"i": ["map", [[2, true]]]},
+      {"i": ["map", [[2, false]]]},
+      {"i": ["map", [[2, true], [0, true]]]},
+
+      {"i": ["map", [[2, false], [0, true]]]},
+      {"i": ["map", [[2, true], [1, false]]]},
+      {"i": ["map", [[2, true], [1, true]]]},
+      {"i": ["map", [[2, true], [1, false], [0, true]]]},
+      {"i": ["map", [[2, true], [1, false], [0, false]]]}]' \
+    '[[],
+      [["i", "==", ["map", []]]],
+      [["i", "==", ["map", [[0, true]]]]],
+      [["i", "==", ["map", [[1, false]]]]],
+      [["i", "==", ["map", [[0, true], [1, false]]]]],
+      [["i", "==", ["map", [[2, true]]]]],
+      [["i", "==", ["map", [[2, true], [0, true]]]]],
+      [["i", "==", ["map", [[2, true], [1, false]]]]],
+      [["i", "==", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "!=", ["map", []]]],
+      [["i", "!=", ["map", [[0, true]]]]],
+      [["i", "!=", ["map", [[1, false]]]]],
+      [["i", "!=", ["map", [[0, true], [1, false]]]]],
+      [["i", "!=", ["map", [[2, true]]]]],
+      [["i", "!=", ["map", [[2, true], [0, true]]]]],
+      [["i", "!=", ["map", [[2, true], [1, false]]]]],
+      [["i", "!=", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "includes", ["map", []]]],
+      [["i", "includes", ["map", [[0, true]]]]],
+      [["i", "includes", ["map", [[1, false]]]]],
+      [["i", "includes", ["map", [[0, true], [1, false]]]]],
+      [["i", "includes", ["map", [[2, true]]]]],
+      [["i", "includes", ["map", [[2, true], [0, true]]]]],
+      [["i", "includes", ["map", [[2, true], [1, false]]]]],
+      [["i", "includes", ["map", [[2, true], [1, false], [0, true]]]]],
+      [["i", "excludes", ["map", []]]],
+      [["i", "excludes", ["map", [[0, true]]]]],
+      [["i", "excludes", ["map", [[1, false]]]]],
+      [["i", "excludes", ["map", [[0, true], [1, false]]]]],
+      [["i", "excludes", ["map", [[2, true]]]]],
+      [["i", "excludes", ["map", [[2, true], [0, true]]]]],
+      [["i", "excludes", ["map", [[2, true], [1, false]]]]],
+      [["i", "excludes", ["map", [[2, true], [1, false], [0, true]]]]]]']],
+  [dnl
+query  0: 11111 11111 11111
+query  1: 1---- ----- -----
+query  2: -1--- ----- -----
+query  3: ---1- ----- -----
+query  4: ----- 1---- -----
+query  5: ----- --1-- -----
+query  6: ----- ----1 -----
+query  7: ----- ----- -1---
+query  8: ----- ----- ---1-
+query  9: -1111 11111 11111
+query 10: 1-111 11111 11111
+query 11: 111-1 11111 11111
+query 12: 11111 -1111 11111
+query 13: 11111 11-11 11111
+query 14: 11111 1111- 11111
+query 15: 11111 11111 1-111
+query 16: 11111 11111 111-1
+query 17: 11111 11111 11111
+query 18: -1--- 11--1 1--1-
+query 19: ---1- 1---- -1-11
+query 20: ----- 1---- ---1-
+query 21: ----- --1-1 -1111
+query 22: ----- ----1 ---1-
+query 23: ----- ----- -1-11
+query 24: ----- ----- ---1-
+query 25: 11111 11111 11111
+query 26: 1-111 --11- -11-1
+query 27: 111-1 -1111 1-1--
+query 28: 1-1-1 --11- --1--
+query 29: 11111 11-1- 1----
+query 30: 1-111 ---1- -----
+query 31: 111-1 -1-1- 1----
+query 32: 1-1-1 ---1- -----], [query])
+
+OVSDB_CHECK_POSITIVE([UUID-distinct queries on scalars],
+  [[query-distinct \
+    '{"columns":
+        {"i": {"type": "integer"},
+         "r": {"type": "real"},
+         "b": {"type": "boolean"},
+	 "s": {"type": "string"},
+         "u": {"type": "uuid"}}}' \
+    '[{"i": 0,
+       "r": 0.5,
+       "b": true,
+       "s": "a",
+       "u": ["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]},
+      {"i": 1,
+       "r": 1.5,
+       "b": false,
+       "s": "b",
+       "u": ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]},
+      {"i": 2,
+       "r": 2.5,
+       "b": true,
+       "s": "c",
+       "u": ["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]},
+      {"i": 3,
+       "r": 3.5,
+       "b": false,
+       "s": "d",
+       "u": ["uuid", "62315898-64e0-40b9-b26f-ff74225303e6"]},
+      {"i": 4,
+       "r": 4.5,
+       "b": true,
+       "s": "e",
+       "u": ["uuid", "4a5127e2-0256-4a72-a7dc-6246213967c7"]}]' \
+    '[[],
+      [["i", "==", 0]],
+      [["i", "!=", 1]],
+      [["i", "<", 2]],
+      [["i", "<=", 3]],
+      [["i", ">", 2]],
+      [["i", ">=", 4]],
+      [["i", "includes", 3]],
+      [["i", "excludes", 2]],
+      [["r", "==", 0.5]],
+      [["r", "!=", 1.5]],
+      [["r", "<", 2.5]],
+      [["r", "<=", 3.5]],
+      [["r", ">", 4.5]],
+      [["r", ">=", 5.5]],
+      [["r", "includes", 1]],
+      [["r", "excludes", 3]],
+      [["b", "==", true]],
+      [["b", "!=", true]],
+      [["b", "includes", false]],
+      [["b", "excludes", true]],
+      [["s", "==", "a"]],
+      [["s", "!=", "b"]],
+      [["s", "includes", "c"]],
+      [["s", "excludes", "d"]],
+      [["u", "==", ["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]]],
+      [["u", "!=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]],
+      [["u", "includes",["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]]]' \
+    '["_uuid"]']],
+  [dnl
+query  0: abcde
+query  1: a----
+query  2: a-cde
+query  3: ab---
+query  4: abcd-
+query  5: ---de
+query  6: ----e
+query  7: ---d-
+query  8: ab-de
+query  9: a----
+query 10: a-cde
+query 11: ab---
+query 12: abcd-
+query 13: -----
+query 14: -----
+query 15: -----
+query 16: abcde
+query 17: a-c-e
+query 18: -b-d-
+query 19: -b-d-
+query 20: -b-d-
+query 21: a----
+query 22: a-cde
+query 23: --c--
+query 24: abc-e
+query 25: a----
+query 26: a-cde
+query 27: --c--],
+  [query])
+
+OVSDB_CHECK_POSITIVE([Boolean-distinct queries on scalars],
+  [[query-distinct \
+    '{"columns":
+        {"i": {"type": "integer"},
+         "r": {"type": "real"},
+         "b": {"type": "boolean"},
+	 "s": {"type": "string"},
+         "u": {"type": "uuid"}}}' \
+    '[{"i": 0,
+       "r": 0.5,
+       "b": true,
+       "s": "a",
+       "u": ["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]},
+      {"i": 1,
+       "r": 1.5,
+       "b": false,
+       "s": "b",
+       "u": ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]},
+      {"i": 2,
+       "r": 2.5,
+       "b": true,
+       "s": "c",
+       "u": ["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]},
+      {"i": 3,
+       "r": 3.5,
+       "b": false,
+       "s": "d",
+       "u": ["uuid", "62315898-64e0-40b9-b26f-ff74225303e6"]},
+      {"i": 4,
+       "r": 4.5,
+       "b": true,
+       "s": "e",
+       "u": ["uuid", "4a5127e2-0256-4a72-a7dc-6246213967c7"]}]' \
+    '[[],
+      [["i", "==", 0]],
+      [["i", "!=", 1]],
+      [["i", "<", 2]],
+      [["i", "<=", 3]],
+      [["i", ">", 2]],
+      [["i", ">=", 4]],
+      [["i", "includes", 3]],
+      [["i", "excludes", 2]],
+      [["r", "==", 0.5]],
+      [["r", "!=", 1.5]],
+      [["r", "<", 2.5]],
+      [["r", "<=", 3.5]],
+      [["r", ">", 4.5]],
+      [["r", ">=", 5.5]],
+      [["r", "includes", 1]],
+      [["r", "excludes", 3]],
+      [["b", "==", true]],
+      [["b", "!=", true]],
+      [["b", "includes", false]],
+      [["b", "excludes", true]],
+      [["s", "==", "a"]],
+      [["s", "!=", "b"]],
+      [["s", "includes", "c"]],
+      [["s", "excludes", "d"]],
+      [["u", "==", ["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]]],
+      [["u", "!=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]],
+      [["u", "includes",["uuid", "ad0fa355-8b84-4a36-a4b5-b2c1bfd91758"]]]]' \
+    '["b"]']],
+  [dnl
+query  0: ababa
+query  1: a-a-a
+query  2: ababa
+query  3: ababa
+query  4: ababa
+query  5: ababa
+query  6: a-a-a
+query  7: -b-b-
+query  8: ababa
+query  9: a-a-a
+query 10: ababa
+query 11: ababa
+query 12: ababa
+query 13: -----
+query 14: -----
+query 15: -----
+query 16: ababa
+query 17: a-a-a
+query 18: -b-b-
+query 19: -b-b-
+query 20: -b-b-
+query 21: a-a-a
+query 22: ababa
+query 23: a-a-a
+query 24: ababa
+query 25: a-a-a
+query 26: ababa
+query 27: a-a-a],
+  [query])
+
+OVSDB_CHECK_NEGATIVE([parse colunn set containing bad name],
+  [[query-distinct \
+    '{"columns": {"i": {"type": "integer"}}}' \
+    '[{"i": 0}]' \
+    '[[]]' \
+    '["i", "bad"]']],
+  [bad is not a valid column name])

@@ -1,121 +1,59 @@
 .TH ovs\-controller 8 "March 2009" "Open vSwitch" "Open vSwitch Manual"
 .ds PN ovs\-controller
-
+.
 .SH NAME
 ovs\-controller \- simple OpenFlow controller reference implementation
-
+.
 .SH SYNOPSIS
 .B ovs\-controller
 [\fIoptions\fR] \fImethod\fR \fB[\fImethod\fR]\&...
-
+.
 .SH DESCRIPTION
 \fBovs\-controller\fR manages any number of remote switches over OpenFlow
 protocol, causing them to function as L2 MAC-learning switches or hub.
-
+.PP
 \fBovs\-controller\fR controls one or more OpenFlow switches, specified as
 one or more of the following OpenFlow connection methods:
-
-.TP
-\fBpssl:\fR[\fIport\fR][\fB:\fIip\fR]
-Listens for SSL connections from remote OpenFlow switches on
-\fIport\fR (default: 6633).  The \fB--private-key\fR,
-\fB--certificate\fR, and \fB--ca-cert\fR options are mandatory when
-this form is used.
-By default, \fB\*(PN\fR listens for connections to any local IP
-address, but \fIip\fR may be specified to listen only for connections
-to the given \fIip\fR.
-
-.TP
-\fBptcp:\fR[\fIport\fR][\fB:\fIip\fR]
-Listens for TCP connections from remote OpenFlow switches on
-\fIport\fR (default: 6633).
-By default, \fB\*(PN\fR listens for connections to any local IP
-address, but \fIip\fR may be specified to listen only for connections
-to the given \fIip\fR.
-
-.TP
-\fBpunix:\fIfile\fR
-Listens for connections from OpenFlow switches on the Unix domain
-server socket named \fIfile\fR.
-
-.IP "\fBssl:\fIip\fR[\fB:\fIport\fR]"
-The specified SSL \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-The \fB--private-key\fR, \fB--certificate\fR, and \fB--ca-cert\fR
-options are mandatory when this form is used.
-
-.IP "\fBtcp:\fIip\fR[\fB:\fIport\fR]"
-The specified TCP \fIport\fR (default: 6633) on the host at the given
-\fIip\fR, which must be expressed as an IP address (not a DNS name).
-
-.TP
-\fBunix:\fIfile\fR
-The Unix domain server socket named \fIfile\fR.
-
+.
+.RS
+.so lib/vconn-passive.man
+.so lib/vconn-active.man
+.RE
+.
 .SH OPTIONS
-.TP
-\fB-p\fR, \fB--private-key=\fIprivkey.pem\fR
-Specifies a PEM file containing the private key used as the switch's
-identity for SSL connections to the controller.
-
-.TP
-\fB-c\fR, \fB--certificate=\fIcert.pem\fR
-Specifies a PEM file containing a certificate, signed by the
-controller's certificate authority (CA), that certifies the switch's
-private key to identify a trustworthy switch.
-
-.TP
-\fB-C\fR, \fB--ca-cert=\fIswitch-cacert.pem\fR
-Specifies a PEM file containing the CA certificate used to verify that
-the switch is connected to a trustworthy controller.
-
-.TP
-\fB--peer-ca-cert=\fIcontroller-cacert.pem\fR
-Specifies a PEM file that contains one or more additional certificates
-to send to switches.  \fIcontroller-cacert.pem\fR should be the CA
-certificate used to sign the controller's own certificate (the
-certificate specified on \fB-c\fR or \fB--certificate\fR).
-
-This option is not useful in normal operation, because the switch must
-already have the controller CA certificate for it to have any
-confidence in the controller's identity.  However, this option allows
-a newly installed switch to obtain the controller CA certificate on
-first boot using, e.g., the \fB--bootstrap-ca-cert\fR option to
-\fBovs\-openflowd\fR(8).
-
 .IP "\fB-n\fR, \fB--noflow\fR"
 By default, \fBovs\-controller\fR sets up a flow in each OpenFlow switch
 whenever it receives a packet whose destination is known due through
 MAC learning.  This option disables flow setup, so that every packet
 in the network passes through the controller.
-
+.IP
 This option is most useful for debugging.  It reduces switching
 performance, so it should not be used in production.
-
+.
 .TP
 \fB--max-idle=\fIsecs\fR|\fBpermanent\fR
 Sets \fIsecs\fR as the number of seconds that a flow set up by the
 controller will remain in the switch's flow table without any matching
 packets being seen.  If \fBpermanent\fR is specified, which is not
 recommended, flows will never expire.  The default is 60 seconds.
-
+.IP
 This option affects only flows set up by the OpenFlow controller.  In
 some configurations, the switch can set up some flows
 on its own.  To set the idle time for those flows, pass
 \fB--max-idle\fR to \fBovs\-openflowd\fR (on the switch).
-
+.IP
 This option has no effect when \fB-n\fR (or \fB--noflow\fR) is in use
 (because the controller does not set up flows in that case).
-
+.
 .IP "\fB-H\fR, \fB--hub\fR"
 By default, the controller acts as an L2 MAC-learning switch.  This
 option changes its behavior to that of a hub that floods packets on
 all but the incoming port.
-
+.IP
 If \fB-H\fR (or \fB--hub\fR) and \fB-n\fR (or \fB--noflow\fR) are used
 together, then the cumulative effect is that every packet passes
 through the controller and every packet is flooded.
-
+.IP
 This option is most useful for debugging.  It reduces switching
 performance, so it should not be used in production.
 .
@@ -142,20 +80,22 @@ to it by switches.
 .IP
 This option is only for debugging the Open vSwitch implementation of
 ``fail open'' mode.  It must not be used in production.
-
+.
+.so lib/ssl.man
+.so lib/ssl-peer-ca-cert.man
 .so lib/daemon.man
 .so lib/vlog.man
 .so lib/common.man
-
+.
 .SH EXAMPLES
-
+.
 .TP
 To bind locally to port 6633 (the default) and wait for incoming connections from OpenFlow switches:
-
+.PP
 .B % ovs\-controller ptcp:
-
+.
 .SH "SEE ALSO"
-
+.
 .BR ovs\-openflowd (8),
 .BR ovs\-appctl (8),
 .BR ovs\-dpctl (8)

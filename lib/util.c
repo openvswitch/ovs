@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,12 @@ xcalloc(size_t count, size_t size)
         out_of_memory();
     }
     return p;
+}
+
+void *
+xzalloc(size_t size)
+{
+    return xcalloc(1, size);
 }
 
 void *
@@ -162,8 +168,10 @@ ovs_error(int err_no, const char *format, ...)
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
-    if (err_no != 0)
-        fprintf(stderr, " (%s)", strerror(err_no));
+    if (err_no != 0) {
+        fprintf(stderr, " (%s)",
+                err_no == EOF ? "end of file" : strerror(err_no));
+    }
     putc('\n', stderr);
 
     errno = save_errno;
@@ -294,3 +302,90 @@ str_to_ullong(const char *s, int base, unsigned long long *ull)
 {
     return str_to_llong(s, base, (long long *) ull);
 }
+
+/* Converts floating-point string 's' into a double.  If successful, stores
+ * the double in '*d' and returns true; on failure, stores 0 in '*d' and
+ * returns false.
+ *
+ * Underflow (e.g. "1e-9999") is not considered an error, but overflow
+ * (e.g. "1e9999)" is. */
+bool
+str_to_double(const char *s, double *d)
+{
+    int save_errno = errno;
+    char *tail;
+    errno = 0;
+    *d = strtod(s, &tail);
+    if (errno == EINVAL || (errno == ERANGE && *d != 0)
+        || tail == s || *tail != '\0') {
+        errno = save_errno;
+        *d = 0;
+        return false;
+    } else {
+        errno = save_errno;
+        return true;
+    }
+}
+
+/* Returns the value of 'c' as a hexadecimal digit. */
+int
+hexit_value(int c)
+{
+    switch (c) {
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9':
+        return c - '0';
+
+    case 'a': case 'A':
+        return 0xa;
+
+    case 'b': case 'B':
+        return 0xb;
+
+    case 'c': case 'C':
+        return 0xc;
+
+    case 'd': case 'D':
+        return 0xd;
+
+    case 'e': case 'E':
+        return 0xe;
+
+    case 'f': case 'F':
+        return 0xf;
+    }
+
+    NOT_REACHED();
+}
+
+/* Returns the directory name portion of 'file_name' as a malloc()'d string,
+ * similar to the POSIX dirname() function but thread-safe. */
+char *
+dir_name(const char *file_name)
+{
+    size_t len = strlen(file_name);
+    while (len > 0 && file_name[len - 1] == '/') {
+        len--;
+    }
+    while (len > 0 && file_name[len - 1] != '/') {
+        len--;
+    }
+    while (len > 0 && file_name[len - 1] == '/') {
+        len--;
+    }
+    if (!len) {
+        return xstrdup((file_name[0] == '/'
+                        && file_name[1] == '/'
+                        && file_name[2] != '/') ? "//"
+                       : file_name[0] == '/' ? "/"
+                       : ".");
+    } else {
+        return xmemdup0(file_name, len);
+    }
+}
+
+/* Pass a value to this function if it is marked with
+ * __attribute__((warn_unused_result)) and you genuinely want to ignore 
+ * its return value.  (Note that every scalar type can be implicitly 
+ * converted to bool.) */
+void ignore(bool x OVS_UNUSED) { }

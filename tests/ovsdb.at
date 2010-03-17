@@ -1,0 +1,50 @@
+# OVSDB_CHECK_POSITIVE(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ])
+#
+# Runs "test-ovsdb TEST-OVSDB-ARGS" and checks that it exits with
+# status 0 and prints OUTPUT on stdout.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_POSITIVE], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb positive $4])
+   AT_CHECK([test-ovsdb $2], [0], [$3
+], [])
+   AT_CLEANUP])
+
+# OVSDB_CHECK_NEGATIVE(TITLE, TEST-OVSDB-ARGS, OUTPUT, [KEYWORDS], [PREREQ])
+#
+# Runs "test-ovsdb TEST-OVSDB-ARGS" and checks that it exits with
+# status 1 and that its output on stdout contains substring OUTPUT.
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.  
+m4_define([OVSDB_CHECK_NEGATIVE], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb negative $4])
+   AT_CHECK([test-ovsdb $2], [1], [], [stderr])
+   m4_assert(m4_len([$3]))
+   AT_CHECK(
+     [if grep -F -e "AS_ESCAPE([$3])" stderr
+      then
+        :
+      else
+        exit 99
+      fi], 
+            [0], [ignore], [ignore])
+   AT_CLEANUP])
+
+m4_include([tests/ovsdb-log.at])
+m4_include([tests/ovsdb-types.at])
+m4_include([tests/ovsdb-data.at])
+m4_include([tests/ovsdb-column.at])
+m4_include([tests/ovsdb-table.at])
+m4_include([tests/ovsdb-row.at])
+m4_include([tests/ovsdb-schema.at])
+m4_include([tests/ovsdb-condition.at])
+m4_include([tests/ovsdb-mutation.at])
+m4_include([tests/ovsdb-query.at])
+m4_include([tests/ovsdb-transaction.at])
+m4_include([tests/ovsdb-execution.at])
+m4_include([tests/ovsdb-trigger.at])
+m4_include([tests/ovsdb-tool.at])
+m4_include([tests/ovsdb-server.at])
+m4_include([tests/ovsdb-monitor.at])
+m4_include([tests/ovsdb-idl.at])

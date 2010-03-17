@@ -1,0 +1,44 @@
+/* Copyright (c) 2009 Nicira Networks
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef OVSDB_TRIGGER_H
+#define OVSDB_TRIGGER_H 1
+
+#include "list.h"
+
+struct ovsdb;
+
+struct ovsdb_trigger {
+    struct list node;           /* !result: in struct ovsdb "triggers" list;
+                                 * result: in completion list. */
+    struct list *completion;    /* Completion list. */
+    struct json *request;       /* Database request. */
+    struct json *result;        /* Result (null if none yet). */
+    long long int created;      /* Time created. */
+    long long int timeout_msec; /* Max wait duration. */
+};
+
+void ovsdb_trigger_init(struct ovsdb *, struct ovsdb_trigger *,
+                        struct json *request, struct list *completion,
+                        long long int now);
+void ovsdb_trigger_destroy(struct ovsdb_trigger *);
+
+bool ovsdb_trigger_is_complete(const struct ovsdb_trigger *);
+struct json *ovsdb_trigger_steal_result(struct ovsdb_trigger *);
+
+void ovsdb_trigger_run(struct ovsdb *, long long int now);
+void ovsdb_trigger_wait(struct ovsdb *, long long int now);
+
+#endif /* ovsdb/trigger.h */

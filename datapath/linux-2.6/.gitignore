@@ -2,6 +2,9 @@
 /Makefile
 /Makefile.main
 /actions.c
+/brc_procfs.c
+/brc_sysfs_dp.c
+/brc_sysfs_if.c
 /brcompat.c
 /dp_sysfs_dp.c
 /dp_sysfs_if.c
@@ -11,9 +14,11 @@
 /flow.c
 /genetlink-brcompat.c
 /genetlink-openvswitch.c
+/ip_gre.c
 /kcompat.h
 /linux-2.6
 /modules.order
+/net_namespace-ip_gre.c
 /random32.c
 /table.c
 /tmp

@@ -1,0 +1,776 @@
+AT_BANNER([OVSDB -- mutations])
+
+OVSDB_CHECK_POSITIVE([null mutation],
+  [[parse-mutations \
+    '{"columns": {"name": {"type": "string"}}}' \
+    '[]']],
+  [[[]]])
+
+OVSDB_CHECK_POSITIVE([mutations on scalars],
+  [[parse-mutations \
+    '{"columns":
+        {"i": {"type": "integer"},
+         "r": {"type": "real"},
+         "b": {"type": "boolean"},
+	 "s": {"type": "string"},
+         "u": {"type": "uuid"}}}' \
+    '[["i", "+=", 0]]' \
+    '[["i", "-=", 1]]' \
+    '[["i", "*=", 2]]' \
+    '[["i", "/=", 3]]' \
+    '[["i", "%=", 4]]' \
+    '[["r", "+=", 0.5]]' \
+    '[["r", "-=", 1.5]]' \
+    '[["r", "*=", 2.5]]' \
+    '[["r", "/=", 3.5]]']],
+  [[[["i","+=",0]]
+[["i","-=",1]]
+[["i","*=",2]]
+[["i","/=",3]]
+[["i","%=",4]]
+[["r","+=",0.5]]
+[["r","-=",1.5]]
+[["r","*=",2.5]]
+[["r","/=",3.5]]]],
+  [mutation])
+
+AT_SETUP([disallowed mutations on scalars])
+AT_KEYWORDS([ovsdb negative mutation])
+AT_CHECK([[test-ovsdb parse-mutations \
+    '{"columns":
+        {"i": {"type": "integer"},
+         "r": {"type": "real"},
+         "b": {"type": "boolean"},
+	 "s": {"type": "string"},
+         "u": {"type": "uuid"}}}' \
+    '[["i", "xxx", 1]]' \
+    '[["i", "insert", 1]]' \
+    '[["i", "delete", 2]]' \
+    '[["r", "%=", 0.5]]' \
+    '[["r", "insert", 1.5]]' \
+    '[["r", "delete", 2.5]]' \
+    '[["b", "+=", true]]' \
+    '[["b", "-=", false]]' \
+    '[["b", "*=", true]]' \
+    '[["b", "/=", false]]' \
+    '[["b", "%=", true]]' \
+    '[["b", "insert", false]]' \
+    '[["b", "delete", true]]' \
+    '[["s", "+=", "a"]]' \
+    '[["s", "-=", "b"]]' \
+    '[["s", "*=", "c"]]' \
+    '[["s", "/=", "d"]]' \
+    '[["s", "%=", "e"]]' \
+    '[["s", "insert", "f"]]' \
+    '[["s", "delete", "g"]]' \
+    '[["u", "+=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]' \
+    '[["u", "-=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]' \
+    '[["u", "*=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]' \
+    '[["u", "/=", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]' \
+    '[["u", "insert", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]' \
+    '[["u", "delete", ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]']],
+  [1], [],
+  [[test-ovsdb: unknown mutator: No mutator named xxx.
+test-ovsdb: syntax "["i","insert",1]": syntax error: Type mismatch: "insert" operator may not be applied to column i of type integer.
+test-ovsdb: syntax "["i","delete",2]": syntax error: Type mismatch: "delete" operator may not be applied to column i of type integer.
+test-ovsdb: syntax "["r","%=",0.5]": syntax error: Type mismatch: "%=" operator may not be applied to column r of type real.
+test-ovsdb: syntax "["r","insert",1.5]": syntax error: Type mismatch: "insert" operator may not be applied to column r of type real.
+test-ovsdb: syntax "["r","delete",2.5]": syntax error: Type mismatch: "delete" operator may not be applied to column r of type real.
+test-ovsdb: syntax "["b","+=",true]": syntax error: Type mismatch: "+=" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b","-=",false]": syntax error: Type mismatch: "-=" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b","*=",true]": syntax error: Type mismatch: "*=" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b","/=",false]": syntax error: Type mismatch: "/=" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b","%=",true]": syntax error: Type mismatch: "%=" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b","insert",false]": syntax error: Type mismatch: "insert" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["b","delete",true]": syntax error: Type mismatch: "delete" operator may not be applied to column b of type boolean.
+test-ovsdb: syntax "["s","+=","a"]": syntax error: Type mismatch: "+=" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s","-=","b"]": syntax error: Type mismatch: "-=" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s","*=","c"]": syntax error: Type mismatch: "*=" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s","/=","d"]": syntax error: Type mismatch: "/=" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s","%=","e"]": syntax error: Type mismatch: "%=" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s","insert","f"]": syntax error: Type mismatch: "insert" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["s","delete","g"]": syntax error: Type mismatch: "delete" operator may not be applied to column s of type string.
+test-ovsdb: syntax "["u","+=",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]": syntax error: Type mismatch: "+=" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["u","-=",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]": syntax error: Type mismatch: "-=" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["u","*=",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]": syntax error: Type mismatch: "*=" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["u","/=",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]": syntax error: Type mismatch: "/=" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["u","insert",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]": syntax error: Type mismatch: "insert" operator may not be applied to column u of type uuid.
+test-ovsdb: syntax "["u","delete",["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"]]": syntax error: Type mismatch: "delete" operator may not be applied to column u of type uuid.
+]])
+AT_CLEANUP
+
+OVSDB_CHECK_POSITIVE([mutations on sets],
+  [[parse-mutations \
+    '{"columns":
+        {"i": {"type": {"key": "integer", "min": 0, "max": "unlimited"}},
+         "r": {"type": {"key": "real", "min": 0, "max": "unlimited"}},
+         "b": {"type": {"key": "boolean", "min": 0, "max": "unlimited"}},
+	 "s": {"type": {"key": "string", "min": 0, "max": "unlimited"}},
+         "u": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}}}}' \
+    '[["i", "+=", 1]]' \
+    '[["i", "-=", 2]]' \
+    '[["i", "*=", 3]]' \
+    '[["i", "/=", 4]]' \
+    '[["i", "%=", 5]]' \
+    '[["i", "insert", ["set", [1, 2]]]]' \
+    '[["i", "delete", ["set", [1, 2, 3]]]]' \
+    '[["r", "+=", 1]]' \
+    '[["r", "-=", 2]]' \
+    '[["r", "*=", 3]]' \
+    '[["r", "/=", 4]]' \
+    '[["r", "insert", ["set", [1, 2]]]]' \
+    '[["r", "delete", ["set", [1, 2, 3]]]]' \
+    '[["b", "insert", ["set", [true]]]]' \
+    '[["b", "delete", ["set", [false]]]]' \
+    '[["s", "insert", ["set", ["a"]]]]' \
+    '[["s", "delete", ["set", ["a", "b"]]]]' \
+    '[["u", "insert", 
+       ["set", [["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"]]]]]' \
+    '[["u", "delete", 
+       ["set", [["uuid", "b10d28f7-af18-4a67-9e78-2a6394516c59"],
+                ["uuid", "9179ca6d-6d65-400a-b455-3ad92783a099"]]]]]' \
+]],
+  [[[["i","+=",1]]
+[["i","-=",2]]
+[["i","*=",3]]
+[["i","/=",4]]
+[["i","%=",5]]
+[["i","insert",["set",[1,2]]]]
+[["i","delete",["set",[1,2,3]]]]
+[["r","+=",1]]
+[["r","-=",2]]
+[["r","*=",3]]
+[["r","/=",4]]
+[["r","insert",["set",[1,2]]]]
+[["r","delete",["set",[1,2,3]]]]
+[["b","insert",true]]
+[["b","delete",false]]
+[["s","insert","a"]]
+[["s","delete",["set",["a","b"]]]]
+[["u","insert",["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]]
+[["u","delete",["set",[["uuid","9179ca6d-6d65-400a-b455-3ad92783a099"],["uuid","b10d28f7-af18-4a67-9e78-2a6394516c59"]]]]]]],
+  [mutation])
+
+OVSDB_CHECK_POSITIVE([executing null mutation],
+  [[execute-mutations \
+    '{"columns": {"i": {"type": "integer"}}}' \
+    '[[]]' \
+    '[{"i": 0},
+      {"i": 1},
+      {"i": 2}']]],
+  [mutation  0:
+row 0: no change
+row 1: no change
+row 2: no change
+])
+
+OVSDB_CHECK_POSITIVE([executing mutations on integers],
+  [[execute-mutations \
+    '{"columns": {"i": {"type": "integer"}}}' \
+    '[[["i", "+=", 1]],
+      [["i", "-=", 2]],
+      [["i", "*=", 3]],
+      [["i", "/=", 4]],
+      [["i", "%=", 2]]]' \
+    '[{"i": 0},
+      {"i": 1},
+      {"i": 2}']]],
+  [mutation  0:
+row 0: {"i":1}
+row 1: {"i":2}
+row 2: {"i":3}
+
+mutation  1:
+row 0: {"i":-2}
+row 1: {"i":-1}
+row 2: {"i":0}
+
+mutation  2:
+row 0: no change
+row 1: {"i":3}
+row 2: {"i":6}
+
+mutation  3:
+row 0: no change
+row 1: {"i":0}
+row 2: {"i":0}
+
+mutation  4:
+row 0: no change
+row 1: no change
+row 2: {"i":0}
+], [mutation])
+
+OVSDB_CHECK_POSITIVE([integer overflow detection],
+  [[execute-mutations \
+    '{"columns": {"i": {"type": "integer"}}}' \
+    '[[["i", "+=", 9223372036854775807]],
+      [["i", "+=", -9223372036854775808]],
+      [["i", "-=", -9223372036854775808]],
+      [["i", "-=", 9223372036854775807]],
+      [["i", "*=", 3037000500]],
+      [["i", "/=", -1]],
+      [["i", "/=", 0]]]' \
+    '[{"i": 0},
+      {"i": 1},
+      {"i": -1},
+      {"i": 9223372036854775807},
+      {"i": -9223372036854775808},
+      {"i": 3037000500},
+      {"i": -3037000500}']]],
+  [mutation  0:
+row 0: {"i":9223372036854775807}
+row 1: range error: Result of "+=" operation is out of range.
+row 2: {"i":9223372036854775806}
+row 3: range error: Result of "+=" operation is out of range.
+row 4: {"i":-1}
+row 5: range error: Result of "+=" operation is out of range.
+row 6: {"i":9223372033817775307}
+
+mutation  1:
+row 0: {"i":-9223372036854775808}
+row 1: {"i":-9223372036854775807}
+row 2: range error: Result of "+=" operation is out of range.
+row 3: {"i":-1}
+row 4: range error: Result of "+=" operation is out of range.
+row 5: {"i":-9223372033817775308}
+row 6: range error: Result of "+=" operation is out of range.
+
+mutation  2:
+row 0: range error: Result of "-=" operation is out of range.
+row 1: range error: Result of "-=" operation is out of range.
+row 2: {"i":9223372036854775807}
+row 3: range error: Result of "-=" operation is out of range.
+row 4: {"i":0}
+row 5: range error: Result of "-=" operation is out of range.
+row 6: {"i":9223372033817775308}
+
+mutation  3:
+row 0: {"i":-9223372036854775807}
+row 1: {"i":-9223372036854775806}
+row 2: {"i":-9223372036854775808}
+row 3: {"i":0}
+row 4: range error: Result of "-=" operation is out of range.
+row 5: {"i":-9223372033817775307}
+row 6: range error: Result of "-=" operation is out of range.
+
+mutation  4:
+row 0: no change
+row 1: {"i":3037000500}
+row 2: {"i":-3037000500}
+row 3: range error: Result of "*=" operation is out of range.
+row 4: range error: Result of "*=" operation is out of range.
+row 5: range error: Result of "*=" operation is out of range.
+row 6: range error: Result of "*=" operation is out of range.
+
+mutation  5:
+row 0: no change
+row 1: {"i":-1}
+row 2: {"i":1}
+row 3: {"i":-9223372036854775807}
+row 4: range error: Result of "/=" operation is out of range.
+row 5: {"i":-3037000500}
+row 6: {"i":3037000500}
+
+mutation  6:
+row 0: domain error: Division by zero.
+row 1: domain error: Division by zero.
+row 2: domain error: Division by zero.
+row 3: domain error: Division by zero.
+row 4: domain error: Division by zero.
+row 5: domain error: Division by zero.
+row 6: domain error: Division by zero.
+], [mutation])
+
+OVSDB_CHECK_POSITIVE([executing mutations on integers with constraints],
+  [[execute-mutations \
+    '{"columns": {"i": {"type": {"key": {"type": "integer",
+                                         "minInteger": 0,
+                                         "maxInteger": 2}}}}}' \
+    '[[["i", "+=", 1]],
+      [["i", "-=", 2]],
+      [["i", "*=", 3]],
+      [["i", "/=", 4]],
+      [["i", "%=", 2]]]' \
+    '[{"i": 0},
+      {"i": 1},
+      {"i": 2}']]],
+  [mutation  0:
+row 0: {"i":1}
+row 1: {"i":2}
+row 2: constraint violation: 3 is not in the valid range 0 to 2 (inclusive)
+
+mutation  1:
+row 0: constraint violation: -2 is not in the valid range 0 to 2 (inclusive)
+row 1: constraint violation: -1 is not in the valid range 0 to 2 (inclusive)
+row 2: {"i":0}
+
+mutation  2:
+row 0: no change
+row 1: constraint violation: 3 is not in the valid range 0 to 2 (inclusive)
+row 2: constraint violation: 6 is not in the valid range 0 to 2 (inclusive)
+
+mutation  3:
+row 0: no change
+row 1: {"i":0}
+row 2: {"i":0}
+
+mutation  4:
+row 0: no change
+row 1: no change
+row 2: {"i":0}
+], [mutation])
+
+OVSDB_CHECK_POSITIVE([executing mutations on reals],
+  [[execute-mutations \
+    '{"columns": {"r": {"type": "real"}}}' \
+    '[[["r", "+=", 0.5]],
+      [["r", "-=", 1.5]],
+      [["r", "*=", 2.5]],
+      [["r", "/=", 4]]]' \
+    '[{"r": 0},
+      {"r": -2.5},
+      {"r": 1.25}']]],
+  [mutation  0:
+row 0: {"r":0.5}
+row 1: {"r":-2}
+row 2: {"r":1.75}
+
+mutation  1:
+row 0: {"r":-1.5}
+row 1: {"r":-4}
+row 2: {"r":-0.25}
+
+mutation  2:
+row 0: no change
+row 1: {"r":-6.25}
+row 2: {"r":3.125}
+
+mutation  3:
+row 0: no change
+row 1: {"r":-0.625}
+row 2: {"r":0.3125}
+], [mutation])
+
+OVSDB_CHECK_POSITIVE([real overflow detection],
+  [[execute-mutations \
+    '{"columns": {"r": {"type": "real"}}}' \
+    '[[["r", "+=", 1.7976931348623157e+308]],
+      [["r", "-=", 1.7976931348623157e+308]],
+      [["r", "*=", 2]],
+      [["r", "/=", 4]],
+      [["r", "/=", 0.5]],
+      [["r", "/=", 0]]]' \
+    '[{"r": 0},
+      {"r": 1.7976931348623157e+308},
+      {"r": -1.7976931348623157e+308}']]],
+  [mutation  0:
+row 0: {"r":1.79769313486232e+308}
+row 1: range error: Result of "+=" operation is out of range.
+row 2: {"r":0}
+
+mutation  1:
+row 0: {"r":-1.79769313486232e+308}
+row 1: {"r":0}
+row 2: range error: Result of "-=" operation is out of range.
+
+mutation  2:
+row 0: no change
+row 1: range error: Result of "*=" operation is out of range.
+row 2: range error: Result of "*=" operation is out of range.
+
+mutation  3:
+row 0: no change
+row 1: {"r":4.49423283715579e+307}
+row 2: {"r":-4.49423283715579e+307}
+
+mutation  4:
+row 0: no change
+row 1: range error: Result of "/=" operation is out of range.
+row 2: range error: Result of "/=" operation is out of range.
+
+mutation  5:
+row 0: domain error: Division by zero.
+row 1: domain error: Division by zero.
+row 2: domain error: Division by zero.
+], [mutation])
+
+OVSDB_CHECK_POSITIVE([executing mutations on reals with constraints],
+  [[execute-mutations \
+    '{"columns": {"r": {"type": {"key": {"type": "real",
+                                         "minReal": -2.5,
+                                         "maxReal": 1.75}}}}}' \
+    '[[["r", "+=", 0.5]],
+      [["r", "-=", 1.5]],
+      [["r", "*=", 2.5]],
+      [["r", "/=", 4]]]' \
+    '[{"r": 0},
+      {"r": -2.5},
+      {"r": 1.25}']]],
+  [mutation  0:
+row 0: {"r":0.5}
+row 1: {"r":-2}
+row 2: {"r":1.75}
+
+mutation  1:
+row 0: {"r":-1.5}
+row 1: constraint violation: -4 is not in the valid range -2.5 to 1.75 (inclusive)
+row 2: {"r":-0.25}
+
+mutation  2:
+row 0: no change
+row 1: constraint violation: -6.25 is not in the valid range -2.5 to 1.75 (inclusive)
+row 2: constraint violation: 3.125 is not in the valid range -2.5 to 1.75 (inclusive)
+
+mutation  3:
+row 0: no change
+row 1: {"r":-0.625}
+row 2: {"r":0.3125}
+], [mutation])
+
+OVSDB_CHECK_POSITIVE([executing mutations on integer sets],
+  [[execute-mutations \
+    '{"columns": {"i": {"type": {"key": {"type": "integer", 
+                                         "maxInteger": 5},
+                                 "min": 0, 
+                                 "max": "unlimited"}}}}' \
+    '[[["i", "+=", 1]],
+      [["i", "-=", 2]],
+      [["i", "*=", 3]],
+      [["i", "/=", 4]],
+      [["i", "%=", 2]],
+      [["i", "insert", ["set", [1]]]],
+      [["i", "insert", ["set", [2, 3]]]],
+      [["i", "delete", ["set", [1]]]],
+      [["i", "delete", ["set", [2, 3]]]]]' \
+    '[{"i": ["set", []]},
+      {"i": ["set", [0]]},
+      {"i": ["set", [0, 1]]},
+      {"i": ["set", [0, 1, 2]]}']]],
+  [[mutation  0:
+row 0: no change
+row 1: {"i":1}
+row 2: {"i":["set",[1,2]]}
+row 3: {"i":["set",[1,2,3]]}
+
+mutation  1:
+row 0: no change
+row 1: {"i":-2}
+row 2: {"i":["set",[-2,-1]]}
+row 3: {"i":["set",[-2,-1,0]]}
+
+mutation  2:
+row 0: no change
+row 1: no change
+row 2: {"i":["set",[0,3]]}
+row 3: constraint violation: 6 is greater than maximum allowed value 5
+
+mutation  3:
+row 0: no change
+row 1: no change
+row 2: constraint violation: Result of "/=" operation contains duplicates.
+row 3: constraint violation: Result of "/=" operation contains duplicates.
+
+mutation  4:
+row 0: no change
+row 1: no change
+row 2: no change
+row 3: constraint violation: Result of "%=" operation contains duplicates.
+
+mutation  5:
+row 0: {"i":1}
+row 1: {"i":["set",[0,1]]}
+row 2: no change
+row 3: no change
+
+mutation  6:
+row 0: {"i":["set",[2,3]]}
+row 1: {"i":["set",[0,2,3]]}
+row 2: {"i":["set",[0,1,2,3]]}
+row 3: {"i":["set",[0,1,2,3]]}
+
+mutation  7:
+row 0: no change
+row 1: no change
+row 2: {"i":0}
+row 3: {"i":["set",[0,2]]}
+
+mutation  8:
+row 0: no change
+row 1: no change
+row 2: no change
+row 3: {"i":["set",[0,1]]}
+]], [mutation])
+
+OVSDB_CHECK_POSITIVE([executing mutations on real sets],
+  [[execute-mutations \
+    '{"columns": {"r": {"type": {"key": {"type": "real",
+                                         "maxReal": 6},
+                                 "min": 0, "max": "unlimited"}}}}' \
+    '[[["r", "+=", 0.5]],
+      [["r", "-=", 1.5]],
+      [["r", "*=", 2.5]],
+      [["r", "/=", 4]],
+      [["r", "*=", 0]],
+      [["r", "insert", 1.5]],
+      [["r", "insert", 3]],
+      [["r", "delete", ["set", [1.5, 3.5]]]],
+      [["r", "delete", ["set", [0.5, 1.5, 2.5]]]]]' \
+    '[{"r": ["set", []]},
+      {"r": 0.5},
+      {"r": ["set", [0.5, 1.5]]},
+      {"r": ["set", [0.5, 1.5, 2.5]]}']]],
+  [[mutation  0:
+row 0: no change
+row 1: {"r":1}
+row 2: {"r":["set",[1,2]]}
+row 3: {"r":["set",[1,2,3]]}
+
+mutation  1:
+row 0: no change
+row 1: {"r":-1}
+row 2: {"r":["set",[-1,0]]}
+row 3: {"r":["set",[-1,0,1]]}
+
+mutation  2:
+row 0: no change
+row 1: {"r":1.25}
+row 2: {"r":["set",[1.25,3.75]]}
+row 3: constraint violation: 6.25 is greater than maximum allowed value 6
+
+mutation  3:
+row 0: no change
+row 1: {"r":0.125}
+row 2: {"r":["set",[0.125,0.375]]}
+row 3: {"r":["set",[0.125,0.375,0.625]]}
+
+mutation  4:
+row 0: no change
+row 1: {"r":0}
+row 2: constraint violation: Result of "*=" operation contains duplicates.
+row 3: constraint violation: Result of "*=" operation contains duplicates.
+
+mutation  5:
+row 0: {"r":1.5}
+row 1: {"r":["set",[0.5,1.5]]}
+row 2: no change
+row 3: no change
+
+mutation  6:
+row 0: {"r":3}
+row 1: {"r":["set",[0.5,3]]}
+row 2: {"r":["set",[0.5,1.5,3]]}
+row 3: {"r":["set",[0.5,1.5,2.5,3]]}
+
+mutation  7:
+row 0: no change
+row 1: no change
+row 2: {"r":0.5}
+row 3: {"r":["set",[0.5,2.5]]}
+
+mutation  8:
+row 0: no change
+row 1: {"r":["set",[]]}
+row 2: {"r":["set",[]]}
+row 3: {"r":["set",[]]}
+]], [mutation])
+
+OVSDB_CHECK_POSITIVE([executing mutations on boolean sets],
+  [[execute-mutations \
+    '{"columns": {"b": {"type": {"key": "boolean", "min": 0, "max": "unlimited"}}}}' \
+    '[[["b", "insert", ["set", [false]]]],
+      [["b", "insert", ["set", [true]]]],
+      [["b", "insert", ["set", [false, true]]]],
+      [["b", "delete", ["set", [false]]]],
+      [["b", "delete", ["set", [true]]]],
+      [["b", "delete", ["set", [true, false]]]]]' \
+    '[{"b": ["set", []]},
+      {"b": ["set", [false]]},
+      {"b": ["set", [true]]},
+      {"b": ["set", [false, true]]}']]],
+  [[mutation  0:
+row 0: {"b":false}
+row 1: no change
+row 2: {"b":["set",[false,true]]}
+row 3: no change
+
+mutation  1:
+row 0: {"b":true}
+row 1: {"b":["set",[false,true]]}
+row 2: no change
+row 3: no change
+
+mutation  2:
+row 0: {"b":["set",[false,true]]}
+row 1: {"b":["set",[false,true]]}
+row 2: {"b":["set",[false,true]]}
+row 3: no change
+
+mutation  3:
+row 0: no change
+row 1: {"b":["set",[]]}
+row 2: no change
+row 3: {"b":true}
+
+mutation  4:
+row 0: no change
+row 1: no change
+row 2: {"b":["set",[]]}
+row 3: {"b":false}
+
+mutation  5:
+row 0: no change
+row 1: {"b":["set",[]]}
+row 2: {"b":["set",[]]}
+row 3: {"b":["set",[]]}
+]], [mutation])
+
+OVSDB_CHECK_POSITIVE([executing mutations on string sets],
+  [[execute-mutations \
+    '{"columns": {"s": {"type": {"key": "string", "min": 0, "max": "unlimited"}}}}' \
+    '[[["s", "insert", ["set", ["a"]]]],
+      [["s", "insert", ["set", ["b"]]]],
+      [["s", "insert", ["set", ["c", "d"]]]],
+      [["s", "delete", ["set", ["a"]]]],
+      [["s", "delete", ["set", ["b"]]]],
+      [["s", "delete", ["set", ["c", "d"]]]]]' \
+    '[{"s": ["set", []]},
+      {"s": ["set", ["a"]]},
+      {"s": ["set", ["a", "b"]]},
+      {"s": ["set", ["a", "b", "c", "d"]]}']]],
+  [[mutation  0:
+row 0: {"s":"a"}
+row 1: no change
+row 2: no change
+row 3: no change
+
+mutation  1:
+row 0: {"s":"b"}
+row 1: {"s":["set",["a","b"]]}
+row 2: no change
+row 3: no change
+
+mutation  2:
+row 0: {"s":["set",["c","d"]]}
+row 1: {"s":["set",["a","c","d"]]}
+row 2: {"s":["set",["a","b","c","d"]]}
+row 3: no change
+
+mutation  3:
+row 0: no change
+row 1: {"s":["set",[]]}
+row 2: {"s":"b"}
+row 3: {"s":["set",["b","c","d"]]}
+
+mutation  4:
+row 0: no change
+row 1: no change
+row 2: {"s":"a"}
+row 3: {"s":["set",["a","c","d"]]}
+
+mutation  5:
+row 0: no change
+row 1: no change
+row 2: no change
+row 3: {"s":["set",["a","b"]]}
+]], [mutation])
+
+OVSDB_CHECK_POSITIVE([executing mutations on uuid sets],
+  [[execute-mutations \
+    '{"columns": {"u": {"type": {"key": "uuid", "min": 0, "max": "unlimited"}}}}' \
+    '[[["u", "insert", ["set", [["uuid", "ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]]],
+      [["u", "insert", ["set", [["uuid", "a60fe7ff-317b-4568-9106-892b37445313"]]]]],
+      [["u", "insert", ["set", [["uuid", "2607d30e-e652-4927-9fec-8bbf1b60c7e9"]]]]],
+      [["u", "delete", ["set", [["uuid", "ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]]],
+      [["u", "delete", ["set", [["uuid", "a60fe7ff-317b-4568-9106-892b37445313"]]]]],
+      [["u", "delete", ["set", [["uuid", "2607d30e-e652-4927-9fec-8bbf1b60c7e9"]]]]]]' \
+    '[{"u": ["set", []]},
+      {"u": ["set", [["uuid", "ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]},
+      {"u": ["set", [["uuid", "a60fe7ff-317b-4568-9106-892b37445313"]]]},
+      {"u": ["set", [["uuid", "2607d30e-e652-4927-9fec-8bbf1b60c7e9"]]]}']]],
+  [[mutation  0:
+row 0: {"u":["uuid","ddd9e79d-7782-414c-8b22-1046c60b6ec2"]}
+row 1: no change
+row 2: {"u":["set",[["uuid","a60fe7ff-317b-4568-9106-892b37445313"],["uuid","ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]}
+row 3: {"u":["set",[["uuid","2607d30e-e652-4927-9fec-8bbf1b60c7e9"],["uuid","ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]}
+
+mutation  1:
+row 0: {"u":["uuid","a60fe7ff-317b-4568-9106-892b37445313"]}
+row 1: {"u":["set",[["uuid","a60fe7ff-317b-4568-9106-892b37445313"],["uuid","ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]}
+row 2: no change
+row 3: {"u":["set",[["uuid","2607d30e-e652-4927-9fec-8bbf1b60c7e9"],["uuid","a60fe7ff-317b-4568-9106-892b37445313"]]]}
+
+mutation  2:
+row 0: {"u":["uuid","2607d30e-e652-4927-9fec-8bbf1b60c7e9"]}
+row 1: {"u":["set",[["uuid","2607d30e-e652-4927-9fec-8bbf1b60c7e9"],["uuid","ddd9e79d-7782-414c-8b22-1046c60b6ec2"]]]}
+row 2: {"u":["set",[["uuid","2607d30e-e652-4927-9fec-8bbf1b60c7e9"],["uuid","a60fe7ff-317b-4568-9106-892b37445313"]]]}
+row 3: no change
+
+mutation  3:
+row 0: no change
+row 1: {"u":["set",[]]}
+row 2: no change
+row 3: no change
+
+mutation  4:
+row 0: no change
+row 1: no change
+row 2: {"u":["set",[]]}
+row 3: no change
+
+mutation  5:
+row 0: no change
+row 1: no change
+row 2: no change
+row 3: {"u":["set",[]]}
+]], [mutation])
+
+OVSDB_CHECK_POSITIVE([executing mutations on integer maps],
+  [[execute-mutations \
+    '{"columns": {"i": {"type": {"key": "integer", "value": "integer", "min": 0, "max": "unlimited"}}}}' \
+    '[[["i", "insert", ["map", [[1, 2]]]]],
+      [["i", "insert", ["map", [[2, 4], [3, 5]]]]],
+      [["i", "delete", ["map", [[1, 2]]]]],
+      [["i", "delete", ["map", [[2, 3]]]]],
+      [["i", "delete", ["set", [1]]]],
+      [["i", "delete", ["set", [2, 3]]]]]' \
+    '[{"i": ["map", []]},
+      {"i": ["map", [[1, 2]]]},
+      {"i": ["map", [[1, 3], [2, 3]]]},
+      {"i": ["map", [[3, 5]]]}']]],
+  [[mutation  0:
+row 0: {"i":["map",[[1,2]]]}
+row 1: no change
+row 2: no change
+row 3: {"i":["map",[[1,2],[3,5]]]}
+
+mutation  1:
+row 0: {"i":["map",[[2,4],[3,5]]]}
+row 1: {"i":["map",[[1,2],[2,4],[3,5]]]}
+row 2: {"i":["map",[[1,3],[2,3],[3,5]]]}
+row 3: {"i":["map",[[2,4],[3,5]]]}
+
+mutation  2:
+row 0: no change
+row 1: {"i":["map",[]]}
+row 2: no change
+row 3: no change
+
+mutation  3:
+row 0: no change
+row 1: no change
+row 2: {"i":["map",[[1,3]]]}
+row 3: no change
+
+mutation  4:
+row 0: no change
+row 1: {"i":["map",[]]}
+row 2: {"i":["map",[[2,3]]]}
+row 3: no change
+
+mutation  5:
+row 0: no change
+row 1: no change
+row 2: {"i":["map",[[1,3]]]}
+row 3: {"i":["map",[]]}
+]], [mutation])

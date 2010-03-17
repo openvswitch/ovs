@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009 Nicira Networks.
+# Copyright (c) 2008, 2009, 2010 Nicira Networks.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,22 +22,15 @@ AC_DEFUN([OVS_CHECK_COVERAGE],
      [AC_HELP_STRING([--enable-coverage], 
                      [Enable gcov coverage tool.])],
      [case "${enableval}" in
-        (lcov) coverage=true lcov=true ;;
-        (yes) coverage=true lcov=false ;;
-        (no)  coverage=false lcov=false ;;
+        (lcov|yes) coverage=true ;;
+        (no)  coverage=false ;;
         (*) AC_MSG_ERROR([bad value ${enableval} for --enable-coverage]) ;;
       esac],
-     [coverage=false lcov=false])
+     [coverage=false])
    if $coverage; then
      CFLAGS="$CFLAGS -O0 --coverage"
      LDFLAGS="$LDFLAGS --coverage"
-   fi
-   if $lcov; then
-     if lcov --version >/dev/null 2>&1; then :; else
-       AC_MSG_ERROR([--enable-coverage=lcov was specified but lcov is not in \$PATH])
-     fi
-   fi
-   AC_SUBST([LCOV], [$lcov])])
+   fi])
 
 dnl Checks for --enable-ndebug and defines NDEBUG if it is specified.
 AC_DEFUN([OVS_CHECK_NDEBUG],
@@ -81,27 +74,24 @@ AC_DEFUN([OVS_CHECK_OPENSSL],
      [ssl=false])
 
    if test "$ssl" = true; then
-   dnl Make sure that pkg-config is installed.
-   m4_pattern_forbid([PKG_CHECK_MODULES])
-   PKG_CHECK_MODULES([SSL], [libssl], 
-     [HAVE_OPENSSL=yes],
-     [HAVE_OPENSSL=no
-      AC_MSG_WARN([Cannot find libssl:
+       dnl Make sure that pkg-config is installed.
+       m4_pattern_forbid([PKG_CHECK_MODULES])
+       PKG_CHECK_MODULES([SSL], [libssl], 
+         [HAVE_OPENSSL=yes],
+         [HAVE_OPENSSL=no
+          AC_MSG_WARN([Cannot find libssl:
 
-   $SSL_PKG_ERRORS
+$SSL_PKG_ERRORS
 
-   OpenFlow connections over SSL will not be supported.])])
-
+OpenFlow connections over SSL will not be supported.])])
+   else
+       HAVE_OPENSSL=no
    fi
+   AC_SUBST([HAVE_OPENSSL])
    AM_CONDITIONAL([HAVE_OPENSSL], [test "$HAVE_OPENSSL" = yes])
    if test "$HAVE_OPENSSL" = yes; then
       AC_DEFINE([HAVE_OPENSSL], [1], [Define to 1 if OpenSSL is installed.])
    fi])
-
-dnl Checks for libraries needed by lib/fault.c.
-AC_DEFUN([OVS_CHECK_FAULT_LIBS],
-  [AC_CHECK_LIB([dl], [dladdr], [FAULT_LIBS=-ldl])
-   AC_SUBST([FAULT_LIBS])])
 
 dnl Checks for libraries needed by lib/socket-util.c.
 AC_DEFUN([OVS_CHECK_SOCKET_LIBS],
@@ -225,19 +215,23 @@ AC_DEFUN([OVS_CHECK_LINUX_VT_H],
    fi])
 
 dnl Checks for libpcre.
+dnl
+dnl ezio-term wants libpcre that supports the PCRE_PARTIAL feature,
+dnl which is libpcre 7.2 or later.
 AC_DEFUN([OVS_CHECK_PCRE],
   [dnl Make sure that pkg-config is installed.
    m4_pattern_forbid([PKG_CHECK_MODULES])
-   PKG_CHECK_MODULES([PCRE], [libpcre >= 7.2], [HAVE_PCRE=yes], [HAVE_PCRE=no])
-   AM_CONDITIONAL([HAVE_PCRE], [test "$HAVE_PCRE" = yes])
-   if test "$HAVE_PCRE" = yes; then
-      AC_DEFINE([HAVE_PCRE], [1], [Define to 1 if libpcre is installed.])
-   fi])
+   PKG_CHECK_MODULES([PCRE],
+                     [libpcre >= 7.2], 
+                     [HAVE_PCRE_PARTIAL=yes],
+                     [HAVE_PCRE_PARTIAL=no])
+   AM_CONDITIONAL([HAVE_PCRE_PARTIAL], [test "$HAVE_PCRE_PARTIAL" = yes])
+   AC_SUBST([HAVE_PCRE_PARTIAL])
+])
 
 dnl Checks for Python 2.x, x >= 4.
 AC_DEFUN([OVS_CHECK_PYTHON],
-  [AC_ARG_VAR([PYTHON], [path to Python 2.x])
-   AC_CACHE_CHECK(
+  [AC_CACHE_CHECK(
      [for Python 2.x for x >= 4],
      [ovs_cv_python],
      [if test -n "$PYTHON"; then
@@ -260,4 +254,12 @@ else:
           done
         done
       fi])
-   PYTHON=$ovs_cv_python])
+   AC_SUBST([HAVE_PYTHON])
+   AM_MISSING_PROG([PYTHON], [python])
+   if test $ovs_cv_python != no; then
+     PYTHON=$ovs_cv_python
+     HAVE_PYTHON=yes
+   else
+     HAVE_PYTHON=no
+   fi
+   AM_CONDITIONAL([HAVE_PYTHON], [test "$HAVE_PYTHON" = yes])])

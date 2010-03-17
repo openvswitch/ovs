@@ -216,7 +216,7 @@ stp_create(const char *name, stp_identifier bridge_id,
     struct stp *stp;
     struct stp_port *p;
 
-    stp = xcalloc(1, sizeof *stp);
+    stp = xzalloc(sizeof *stp);
     stp->name = xstrdup(name);
     stp->bridge_id = bridge_id;
     if (!(stp->bridge_id >> 48)) {
@@ -258,7 +258,10 @@ stp_create(const char *name, stp_identifier bridge_id,
 void
 stp_destroy(struct stp *stp)
 {
-    free(stp);
+    if (stp) {
+        free(stp->name);
+        free(stp);
+    }
 }
 
 /* Runs 'stp' given that 'ms' milliseconds have passed. */

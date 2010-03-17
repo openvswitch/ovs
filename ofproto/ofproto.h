@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,14 @@ struct ofproto_sflow_options {
     char *control_ip;
 };
 
-int ofproto_create(const char *datapath, const struct ofhooks *, void *aux,
+#define DEFAULT_MFR_DESC "Nicira Networks, Inc."
+#define DEFAULT_HW_DESC "Open vSwitch"
+#define DEFAULT_SW_DESC VERSION BUILDNR
+#define DEFAULT_SERIAL_DESC "None"
+#define DEFAULT_DP_DESC "None"
+
+int ofproto_create(const char *datapath, const char *datapath_type,
+                   const struct ofhooks *, void *aux,
                    struct ofproto **ofprotop);
 void ofproto_destroy(struct ofproto *);
 int ofproto_run(struct ofproto *);
@@ -66,12 +73,12 @@ bool ofproto_is_alive(const struct ofproto *);
 
 /* Configuration. */
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
-void ofproto_set_mgmt_id(struct ofproto *, uint64_t mgmt_id);
 void ofproto_set_probe_interval(struct ofproto *, int probe_interval);
 void ofproto_set_max_backoff(struct ofproto *, int max_backoff);
 void ofproto_set_desc(struct ofproto *,
-                      const char *manufacturer, const char *hardware,
-                      const char *software, const char *serial);
+                      const char *mfr_desc, const char *hw_desc,
+                      const char *sw_desc, const char *serial_desc,
+                      const char *dp_desc);
 int ofproto_set_in_band(struct ofproto *, bool in_band);
 int ofproto_set_discovery(struct ofproto *, bool discovery,
                           const char *accept_controller_re,
@@ -85,12 +92,9 @@ void ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
 void ofproto_set_failure(struct ofproto *, bool fail_open);
 void ofproto_set_rate_limit(struct ofproto *, int rate_limit, int burst_limit);
 int ofproto_set_stp(struct ofproto *, bool enable_stp);
-int ofproto_set_remote_execution(struct ofproto *, const char *command_acl,
-                                 const char *command_dir);
 
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
-uint64_t ofproto_get_mgmt_id(const struct ofproto *);
 int ofproto_get_probe_interval(const struct ofproto *);
 int ofproto_get_max_backoff(const struct ofproto *);
 bool ofproto_get_in_band(const struct ofproto *);

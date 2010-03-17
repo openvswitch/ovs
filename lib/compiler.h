@@ -24,6 +24,7 @@
 #define STRFTIME_FORMAT(FMT) __attribute__((__format__(__strftime__, FMT, 0)))
 #define MALLOC_LIKE __attribute__((__malloc__))
 #define ALWAYS_INLINE __attribute__((always_inline))
+#define WARN_UNUSED_RESULT __attribute__((__warn_unused_result__))
 #else
 #define NO_RETURN
 #define OVS_UNUSED
@@ -31,6 +32,7 @@
 #define STRFTIME_FORMAT(FMT)
 #define MALLOC_LIKE
 #define ALWAYS_INLINE
+#define WARN_UNUSED_RESULT
 #endif
 
 #endif /* compiler.h */

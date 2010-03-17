@@ -1,0 +1,67 @@
+.\" -*- nroff -*-
+.TH ovsdb\-server 1 "November 2009" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovsdb\-server
+.
+.SH NAME
+ovsdb\-server \- Open vSwitch database server
+.
+.SH SYNOPSIS
+\fBovsdb\-server\fR
+\fIdatabase\fR
+[\fB--remote=\fIremote\fR]\&...
+[\fB--run=\fIcommand\fR]
+.so lib/daemon-syn.man
+.so lib/vlog-syn.man
+.so lib/common-syn.man
+.
+.SH DESCRIPTION
+The \fBovsdb\-server\fR program provides RPC interfaces to an Open
+vSwitch database (OVSDB).  It supports JSON-RPC client connections
+over active or passive TCP/IP or Unix domain sockets.
+.PP
+The name of the OVSDB file must be specified on the command line as
+\fIdatabase\fR, which must already have been created and initialized
+using, for example, \fBovsdb\-tool create\fR.
+.
+.SH OPTIONS
+.
+.IP "\fB\-\-remote=\fIremote\fR"
+Adds \fIremote\fR as a connection method used by \fBovsdb\-server\fR.
+\fIremote\fR must take one of the following forms:
+.
+.RS
+.so ovsdb/remote-passive.man
+.so ovsdb/remote-active.man
+.RE
+.
+.IP "\fB\-\-run=\fIcommand\fR]"
+Ordinarily \fBovsdb\-server\fR runs forever, or until it is told to
+exit (see \fBRUNTIME MANAGEMENT COMMANDS\fR below).  With this option,
+\fBovsdb\-server\fR instead starts a shell subprocess running
+\fIcommand\fR.  When the subprocess terminates, \fBovsdb\-server\fR
+also exits gracefully.  If the subprocess exits normally with exit
+code 0, then \fBovsdb\-server\fR exits with exit code 0 also;
+otherwise, it exits with exit code 1.
+.IP
+This option can be useful where a database server is needed only to
+run a single command, e.g.:
+.B "ovsdb-server --remote=punix:socket --run='ovsdb-client dump unix:socket Open_vSwitch'"
+.SS "Daemon Options"
+.so lib/daemon.man
+.SS "Logging Options"
+.so lib/vlog.man
+.so lib/ssl.man
+.SS "Other Options"
+.so lib/common.man
+.SH "RUNTIME MANAGEMENT COMMANDS"
+\fBovs\-appctl\fR(8) can send commands to a running
+\fBovsdb\-server\fR process.  The currently supported commands are
+described below.
+.SS "OVSDB-SERVER COMMANDS"
+These commands are specific to \fBovsdb\-server\fR.
+.IP "\fBexit\fR"
+Causes \fBovsdb\-server\fR to gracefully terminate.
+.so lib/vlog-unixctl.man
+.SH "SEE ALSO"
+.
+.BR ovsdb\-tool (1).

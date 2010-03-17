@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,9 +40,11 @@ void ds_truncate(struct ds *, size_t new_length);
 void ds_reserve(struct ds *, size_t min_length);
 char *ds_put_uninit(struct ds *, size_t n);
 void ds_put_char(struct ds *, char);
+void ds_put_utf8(struct ds *, int uc);
 void ds_put_char_multiple(struct ds *, char, size_t n);
 void ds_put_buffer(struct ds *, const char *, size_t n);
 void ds_put_cstr(struct ds *, const char *);
+void ds_put_and_free_cstr(struct ds *, char *);
 void ds_put_format(struct ds *, const char *, ...) PRINTF_FORMAT(2, 3);
 void ds_put_format_valist(struct ds *, const char *, va_list)
     PRINTF_FORMAT(2, 0);
@@ -54,8 +56,10 @@ void ds_put_hex_dump(struct ds *ds, const void *buf_, size_t size,
 int ds_get_line(struct ds *, FILE *);
 
 char *ds_cstr(struct ds *);
+const char *ds_cstr_ro(const struct ds *);
 char *ds_steal_cstr(struct ds *);
 void ds_destroy(struct ds *);
+void ds_swap(struct ds *, struct ds *);
 
 int ds_last(const struct ds *);
 void ds_chomp(struct ds *, int c);

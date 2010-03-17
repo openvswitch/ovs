@@ -1,5 +1,6 @@
-_debian/utilities/ovs-openflowd.8
+_debian/ovsdb/ovsdb-server.1
 _debian/utilities/ovs-discover.8
 _debian/utilities/ovs-dpctl.8
 _debian/utilities/ovs-kill.8
-_debian/utilities/ovs-ofctl.8
+_debian/utilities/ovs-vsctl.8
+_debian/vswitchd/ovs-vswitchd.8

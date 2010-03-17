@@ -1,0 +1,746 @@
+<database title="Open vSwitch Configuration Database">
+  <p>A database with this schema holds the configuration for one Open
+    vSwitch daemon.  The root of the configuration for the daemon is
+    the <ref table="Open_vSwitch"/> table, which must have exactly one
+    record.  Records in other tables are significant only when they
+    can be reached directly or indirectly from the
+    <ref table="Open_vSwitch"/> table.</p>
+
+  <table name="Open_vSwitch" title="Open vSwitch configuration.">
+    Configuration for an Open vSwitch daemon.  There must be exactly one record
+    in the <ref table="Open_vSwitch"/> table.
+
+    <group title="Configuration">
+      <column name="bridges">
+        Set of bridges managed by the daemon.
+      </column>
+
+      <column name="controller">
+        Default <ref table="Controller"/> used by bridges.  May be
+        overridden on a per-bridge basis by the <ref table="Bridge"
+        column="controller"/> column in <ref table="Bridge"/>.
+      </column>
+
+      <column name="managers">
+        Remote database clients to which the Open vSwitch's database server
+        should connect or to which it should listen.
+      </column>
+
+      <column name="ssl">
+        SSL used globally by the daemon.
+      </column>
+
+      <column name="external_ids">
+        Key-value pairs that identify this Open vSwitch's role in
+        external systems.  The currently defined key-value pairs are:
+        <dl>
+          <dt><code>system-uuid</code></dt>
+          <dd>A universally unique identifier for the Open vSwitch's
+            physical host.  The form of the identifier depends on the
+            type of the host.  On a Citrix XenServer, this is the host
+            UUID displayed by, e.g., <code>xe host-list</code>.</dd>
+        </dl>
+      </column>
+    </group>
+
+    <group title="Status">
+      <column name="next_cfg">
+        Sequence number for client to increment.  When a client modifies
+        any part of the database configuration and wishes to wait for
+        Open vSwitch to finish applying the changes, it may increment
+        this sequence number.
+      </column>
+
+      <column name="cur_cfg">
+        Sequence number that Open vSwitch sets to the current value of
+        <ref column="next_cfg"/> after it finishes applying a set of
+        configuration changes.
+      </column>
+    </group>
+  </table>
+
+  <table name="Bridge">
+    <p>
+      Configuration for a bridge within an
+      <ref table="Open_vSwitch"/>.
+    </p>
+    <p>
+      A <ref table="Bridge"/> record represents an Ethernet switch with one or
+      more ``ports,'' which are the <ref table="Port"/> records pointed to by
+      the <ref table="Bridge"/>'s <ref column="ports"/> column.
+    </p>
+
+    <group title="Core Features">
+      <column name="name">
+        Bridge identifier.  Should be alphanumeric and no more than about 8
+        bytes long.  Must be unique among the names of ports, interfaces, and
+        bridges on a host.
+      </column>
+
+      <column name="ports">
+        Ports included in the bridge.
+      </column>
+
+      <column name="mirrors">
+        Port mirroring configuration.
+      </column>
+
+      <column name="netflow">
+        NetFlow configuration.
+      </column>
+
+      <column name="sflow">
+        sFlow configuration.
+      </column>
+
+      <column name="flood_vlans">
+        VLAN IDs of VLANs on which MAC address learning should be disabled, so
+        that packets are flooded instead of being sent to specific ports that
+        are believed to contain packets' destination MACs.  This should
+        ordinarily be used to disable MAC learning on VLANs used for mirroring
+        (RSPAN VLANs).  It may also be useful for debugging.
+      </column>
+    </group>
+
+    <group title="OpenFlow Configuration">
+      <column name="controller">
+        OpenFlow controller.  If unset, defaults to that specified by
+        <ref column="controller" table="Open_vSwitch"/> in the
+        <ref table="Open_vSwitch"/> table.  If the default is also unset, then
+        no OpenFlow controller will be used.
+      </column>
+
+      <column name="datapath_id">
+        Reports the OpenFlow datapath ID in use.  Exactly 16 hex digits.
+      </column>
+    </group>
+
+    <group title="Other Features">
+      <column name="datapath_type">
+        Name of datapath provider.  The kernel datapath has
+        type <code>system</code>.  The userspace datapath has
+        type <code>netdev</code>.
+      </column>
+
+      <column name="external_ids">
+        Key-value pairs that identify this bridge's role in external systems.
+        The currently defined key-value pairs are:
+        <dl>
+          <dt><code>xs-network-uuids</code></dt>
+          <dd>Space-delimited set of the Citrix XenServer network UUIDs with
+            which this bridge is associated.</dd>
+        </dl>
+      </column>
+
+      <column name="other_config">
+        Key-value pairs for configuring rarely used bridge
+        features.  The currently defined key-value pairs are:
+        <dl>
+          <dt><code>datapath-id</code></dt>
+          <dd>Exactly 16 hex
+            digits to set the OpenFlow datapath ID to a specific
+            value.</dd>
+          <dt><code>hwaddr</code></dt>
+          <dd>An Ethernet address in the form
+            <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>
+            to set the hardware address of the local port and influence the
+            datapath ID.</dd>
+        </dl>
+      </column>
+    </group>
+  </table>
+
+  <table name="Port" table="Port or bond configuration.">
+    <p>A port within a <ref table="Bridge"/>.</p>
+    <p>Most commonly, a port has exactly one ``interface,'' pointed to by its
+      <ref column="interfaces"/> column.  Such a port logically
+      corresponds to a port on a physical Ethernet switch.  A port
+      with more than one interface is a ``bonded port'' (see
+      <ref group="Bonding Configuration"/>).</p>
+    <p>Some properties that one might think as belonging to a port are actually
+      part of the port's <ref table="Interface"/> members.</p>
+
+    <column name="name">
+      Port name.  Should be alphanumeric and no more than about 8
+      bytes long.  May be the same as the interface name, for
+      non-bonded ports.  Must otherwise be unique among the names of
+      ports, interfaces, and bridges on a host.
+    </column>
+
+    <column name="interfaces">
+      The port's interfaces.  If there is more than one, this is a
+      bonded Port.
+    </column>
+
+    <group title="VLAN Configuration">
+      <p>A bridge port must be configured for VLANs in one of two
+        mutually exclusive ways:
+        <ul>
+          <li>A ``trunk port'' has an empty value for
+            <ref column="tag"/> and a possibly non-empty
+            <ref column="trunks"/> value.</li>
+          <li>An ``implicitly tagged VLAN port'' or ``access port''
+            has an nonempty value for <ref column="tag"/> and an empty
+            <ref column="trunks"/> value.</li>
+        </ul>
+        If <ref column="trunks"/> and <ref column="tag"/> are both
+        nonempty, the configuration is ill-formed.
+      </p>
+
+      <column name="tag">
+        <p>If nonempty, this port's implicitly tagged VLAN.  Frames
+          arriving on trunk ports will be forwarded to this port only
+          if they are tagged with the given VLAN.  Frames arriving on
+          other VLAN ports will be forwarded to this port only if they
+          have the same <ref column="tag"/> value.  Frames forwarded
+          to this port will not have an 802.1Q header.</p>
+        <p>When a frame with a 802.1Q header that indicates a nonzero VLAN is
+          received on an implicit VLAN port, it is discarded.</p>
+        <p>Must be empty if this is a trunk port.</p>
+      </column>
+
+      <column name="trunks">
+        <p>The 802.1Q VLAN(s) that this port trunks.  If the column is
+          empty, then the port trunks all VLANs as well as packets that
+          have no VLAN header.  Otherwise, only frames that have an
+          802.1Q header with one of the specified VLANs are accepted.
+          If <code>0</code> is included, then frames without an 802.1Q
+          header are also accepted.</p>
+        <p>Must be empty unless this is a trunk port.</p>
+      </column>
+    </group>
+
+    <group title="Bonding Configuration">
+      <p>A port that has more than one interface is a ``bonded port.''
+        Bonding allows for load balancing and fail-over.  Open vSwitch
+        supports ``source load balancing'' (SLB) bonding, which
+        assigns flows to slaves based on source MAC address, with
+        periodic rebalancing as traffic patterns change.  This form of
+        bonding does not require 802.3ad or other special support from
+        the upstream switch to which the slave devices are
+        connected.</p>
+
+      <p>These columns apply only to bonded ports.  Their values are
+        otherwise ignored.</p>
+
+      <column name="bond_updelay">
+        <p>For a bonded port, the number of milliseconds for which carrier must
+          stay up on an interface before the interface is considered to be up.
+          Specify <code>0</code> to enable the interface immediately.</p>
+        <p>This setting is honored only when at least one bonded interface is
+          already enabled.  When no interfaces are enabled, then the first bond
+          interface to come up is enabled immediately.</p>
+      </column>
+
+      <column name="bond_downdelay">
+        For a bonded port, the number of milliseconds for which carrier must
+        stay down on an interface before the interface is considered to be
+        down.  Specify <code>0</code> to disable the interface immediately.
+      </column>
+
+      <column name="bond_fake_iface">
+        For a bonded port, whether to create a fake internal interface with the
+        name of the port.  Use only for compatibility with legacy software that
+        requires this.
+      </column>
+    </group>
+
+    <group title="Other Features">
+      <column name="mac">
+        The MAC address to use for this port for the purpose of choosing the
+        bridge's MAC address.  This column does not necessarily reflect the
+        port's actual MAC address, nor will setting it change the port's actual
+        MAC address.
+      </column>
+
+      <column name="fake_bridge">
+        Does this port represent a sub-bridge for its tagged VLAN within the
+        Bridge?  See ovs-vsctl(8) for more information.
+      </column>
+
+      <column name="external_ids">
+        Key-value pairs that identify this port's role in external systems.  No
+        key-value pairs native to <ref table="Port"/> are currently defined.
+        For fake bridges (see the <ref column="fake_bridge"/> column), external
+        IDs for the fake bridge are defined here by prefixing a
+        <ref table="Bridge"/> <ref table="Bridge" column="external_ids"/> key
+        with <code>fake-bridge-</code>,
+        e.g. <code>fake-bridge-xs-network-uuids</code>.
+      </column>
+
+      <column name="other_config">
+        Key-value pairs for configuring rarely used port features.  The
+        currently defined key-value pairs are:
+        <dl>
+          <dt><code>hwaddr</code></dt>
+          <dd>An Ethernet address in the form
+            <code><var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var></code>.</dd>
+        </dl>
+      </column>
+    </group>
+  </table>
+
+  <table name="Interface" title="One physical network device in a Port.">
+    An interface within a <ref table="Port"/>.
+
+    <group title="Core Features">
+      <column name="name">
+        Interface name.  Should be alphanumeric and no more than about 8 bytes
+        long.  May be the same as the port name, for non-bonded ports.  Must
+        otherwise be unique among the names of ports, interfaces, and bridges
+        on a host.
+      </column>
+
+      <column name="mac">
+        <p>Ethernet address to set for this interface.  If unset then the
+          default MAC address is used:</p>
+        <ul>
+          <li>For the local interface, the default is the lowest-numbered MAC
+            address among the other bridge ports, either the value of the
+            <ref table="Port" column="mac"/> in its <ref table="Port"/> record,
+            if set, or its actual MAC (for bonded ports, the MAC of its slave
+            whose name is first in alphabetical order).  Internal ports and
+            bridge ports that are used as port mirroring destinations (see the
+            <ref table="Mirror"/> table) are ignored.</li>
+          <li>For other internal interfaces, the default MAC is randomly
+            generated.</li>
+          <li>External interfaces typically have a MAC address associated with
+            their hardware.</li>
+        </ul>
+        <p>Some interfaces may not have a software-controllable MAC
+        address.</p>
+      </column>
+
+      <column name="ofport">
+        <p>OpenFlow port number for this interface.  Unlike most columns, this
+          column's value should be set only by Open vSwitch itself.  Other
+          clients should set this column to an empty set (the default) when
+          creating an <ref table="Interface"/>.</p>
+        <p>Open vSwitch populates this column when the port number becomes
+          known.  If the interface is successfully added,
+          <ref column="ofport"/> will be set to a number between 1 and 65535
+          (generally either in the range 1 to 65280, exclusive, or 65534, the
+          port number for the OpenFlow ``local port'').  If the interface
+          cannot be added then Open vSwitch sets this column
+          to -1.</p>
+      </column>
+    </group>
+
+    <group title="System-Specific Details">
+      <column name="type">
+        The interface type, one of:
+        <dl>
+          <dt><code>system</code></dt>
+          <dd>An ordinary network device, e.g. <code>eth0</code> on Linux.
+            Sometimes referred to as ``external interfaces'' since they are
+            generally connected to hardware external to that on which the Open
+            vSwitch is running.  The empty string is a synonym for
+            <code>system</code>.</dd>
+          <dt><code>internal</code></dt>
+          <dd>A simulated network device that sends and receives traffic.  An
+            internal interface whose <ref column="name"/> is the same as its
+            bridge's <ref table="Open_vSwitch" column="name"/> is called the
+            ``local interface.''  It does not make sense to bond an internal
+            interface, so the terms ``port'' and ``interface'' are often used
+            imprecisely for internal interfaces.</dd>
+          <dt><code>tap</code></dt>
+          <dd>A TUN/TAP device managed by Open vSwitch.</dd>
+          <dt><code>gre</code></dt>
+          <dd>A GRE tunnel device managed by Open vSwitch.</dd>
+        </dl>
+      </column>
+
+      <column name="options">
+        Configuration options whose interpretation varies based on
+        <ref column="type"/>.
+      </column>
+    </group>
+
+    <group title="Ingress Policing">
+      <column name="ingress_policing_burst">
+        <p>Maximum burst size for data received on this interface, in kb.  The
+          default burst size if set to <code>0</code> is 1000 kb.  This value
+          has no effect if <ref column="ingress_policing_rate"/>
+          is <code>0</code>.</p>
+        <p>The burst size should be at least the size of the interface's
+          MTU.</p>
+      </column>
+
+      <column name="ingress_policing_rate">
+        <p>Maximum rate for data received on this interface, in kbps.  Data
+          received faster than this rate is dropped.  Set to <code>0</code> to
+          disable policing.</p>
+        <p>The meaning of ``ingress'' is from Open vSwitch's perspective.  If
+          configured on a physical interface, then it limits the rate at which
+          traffic is allowed into the system from the outside.  If configured
+          on a virtual interface that is connected to a virtual machine, then
+          it limits the rate at which the guest is able to transmit.</p>
+      </column>
+    </group>
+
+    <group title="Other Features">
+      <column name="external_ids">
+        <p>Key-value pairs that identify this interface's role in external
+          systems.  All of the currently defined key-value pairs specifically
+          apply to an interface that represents a virtual Ethernet interface
+          connected to a virtual machine.  These key-value pairs should not be
+          present for other types of interfaces.  Keys whose names end
+          in <code>-uuid</code> have values that uniquely identify the entity
+          in question.  For a Citrix XenServer hypervisor, these values are
+          UUIDs in RFC 4122 format.  Other hypervisors may use other
+          formats.</p>
+        <p>The currently defined key-value pairs are:</p>
+        <dl>
+          <dt><code>vif-uuid</code></dt>
+          <dd>The virtual interface associated with this interface.</dd>
+          <dt><code>network-uuid</code></dt>
+          <dd>The virtual network to which this interface is attached.</dd>
+          <dt><code>vm-uuid</code></dt>
+          <dd>The VM to which this interface belongs.</dd>
+          <dt><code>vif-mac</code></dt>
+          <dd>The MAC address programmed into the "virtual hardware" for this
+              interface, in the
+              form <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
+              For Citrix XenServer, this is the value of the <code>MAC</code>
+              field in the VIF record for this interface.</dd>
+        </dl>
+      </column>
+    </group>
+  </table>
+
+  <table name="Mirror" title="Port mirroring (SPAN/RSPAN).">
+    <p>A port mirror within a <ref table="Bridge"/>.</p>
+    <p>A port mirror configures a bridge to send selected frames to special
+      ``mirrored'' ports, in addition to their normal destinations.  Mirroring
+      traffic may also be referred to as SPAN or RSPAN, depending on the
+      mechanism used for delivery.</p>
+
+    <column name="name">
+      Arbitrary identifier for the <ref table="Mirror"/>.
+    </column>
+
+    <group title="Selecting Packets for Mirroring">
+      <column name="select_all">
+        If true, every packet arriving or departing on any port is
+        selected for mirroring.
+      </column>
+
+      <column name="select_dst_port">
+        Ports on which departing packets are selected for mirroring.
+      </column>
+
+      <column name="select_src_port">
+        Ports on which arriving packets are selected for mirroring.
+      </column>
+
+      <column name="select_vlan">
+        VLANs on which packets are selected for mirroring.  An empty set
+        selects packets on all VLANs.
+      </column>
+    </group>
+
+    <group title="Mirroring Destination Configuration">
+      <column name="output_port">
+        <p>Output port for selected packets, if nonempty.  Mutually exclusive
+          with <ref column="output_vlan"/>.</p>
+        <p>Specifying a port for mirror output reserves that port exclusively
+          for mirroring.  No frames other than those selected for mirroring
+          will be forwarded to the port, and any frames received on the port
+          will be discarded.</p>
+        <p>This type of mirroring is sometimes called SPAN.</p>
+      </column>
+
+      <column name="output_vlan">
+        <p>Output VLAN for selected packets, if nonempty.  Mutually exclusive
+          with <ref column="output_port"/>.</p>
+        <p>The frames will be sent out all ports that trunk
+          <ref column="output_vlan"/>, as well as any ports with implicit VLAN
+          <ref column="output_vlan"/>.  When a mirrored frame is sent out a
+          trunk port, the frame's VLAN tag will be set to
+          <ref column="output_vlan"/>, replacing any existing tag; when it is
+          sent out an implicit VLAN port, the frame will not be tagged.  This
+          type of mirroring is sometimes called RSPAN.</p>
+        <p><em>Please note:</em> Mirroring to a VLAN can disrupt a network that
+          contains unmanaged switches.  Consider an unmanaged physical switch
+          with two ports: port 1, connected to an end host, and port 2,
+          connected to an Open vSwitch configured to mirror received packets
+          into VLAN 123 on port 2.  Suppose that the end host sends a packet on
+          port 1 that the physical switch forwards to port 2.  The Open vSwitch
+          forwards this packet to its destination and then reflects it back on
+          port 2 in VLAN 123.  This reflected packet causes the unmanaged
+          physical switch to replace the MAC learning table entry, which
+          correctly pointed to port 1, with one that incorrectly points to port
+          2.  Afterward, the physical switch will direct packets destined for
+          the end host to the Open vSwitch on port 2, instead of to the end
+          host on port 1, disrupting connectivity.  If mirroring to a VLAN is
+          desired in this scenario, then the physical switch must be replaced
+          by one that learns Ethernet addresses on a per-VLAN basis.  In
+          addition, learning should be disabled on the VLAN containing mirrored
+          traffic. If this is not done then intermediate switches will learn
+          the MAC address of each end host from the mirrored traffic.  If
+          packets being sent to that end host are also mirrored, then they will
+          be dropped since the switch will attempt to send them out the input
+          port. Disabling learning for the VLAN will cause the switch to
+          correctly send the packet out all ports configured for that VLAN.  If
+          Open vSwitch is being used as an intermediate switch, learning can be
+          disabled by adding the mirrored VLAN to <ref column="flood_vlans"/>
+          in the appropriate <ref table="Bridge"/> table or tables.</p>
+      </column>
+    </group>
+  </table>
+
+  <table name="Controller" title="OpenFlow controller configuration.">
+    An OpenFlow controller.
+
+    <group title="Core Features">
+      <column name="target">
+        Connection method for controller.
+        The following connection methods are currently
+        supported:
+        <dl>
+          <dt><code>ssl:<var>ip</var></code>[<code>:<var>port</var></code>]</dt>
+          <dd>
+            <p>The specified SSL <var>port</var> (default: 6633) on the host at
+              the given <var>ip</var>, which must be expressed as an IP address
+              (not a DNS name).  The <ref table="Open_vSwitch" column="ssl"/>
+              column in the <ref table="Open_vSwitch"/> must point to a valid
+              SSL configuration when this form is used.</p>
+            <p>SSL support is an optional feature that is not always built as
+              part of Open vSwitch.</p>
+          </dd>
+          <dt><code>tcp:<var>ip</var></code>[<code>:<var>port</var></code>]</dt>
+          <dd>The specified TCP <var>port</var> (default: 6633) on the host at
+            the given <var>ip</var>, which must be expressed as an IP address
+            (not a DNS name).</dd>
+          <dt><code>discover</code></dt>
+          <dd>Enables controller discovery.</dd>
+          <dt><code>none</code></dt>
+          <dd>Disables the controller.</dd>
+        </dl>
+      </column>
+
+      <column name="connection_mode">
+        Either <code>in-band</code> or <code>out-of-band</code>.  If not
+        specified, the default is implementation-specific.
+      </column>
+    </group>
+
+    <group title="Controller Failure Detection and Handling">
+      <column name="max_backoff">
+        Maximum number of milliseconds to wait between connection attempts.
+        Default is implementation-specific.
+      </column>
+
+      <column name="inactivity_probe">
+        Maximum number of milliseconds of idle time on connection to
+        controller before sending an inactivity probe message.  If Open
+        vSwitch does not communicate with the controller for the specified
+        number of seconds, it will send a probe.  If a response is not
+        received for the same additional amount of time, Open vSwitch
+        assumes the connection has been broken and attempts to reconnect.
+        Default is implementation-specific.
+      </column>
+
+      <column name="fail_mode">
+        <p>When a controller is configured, it is, ordinarily, responsible
+          for setting up all flows on the switch.  Thus, if the connection to
+          the controller fails, no new network connections can be set up.
+          If the connection to the controller stays down long enough,
+          no packets can pass through the switch at all.  This setting
+          determines the switch's response to such a situation.  It may be set
+          to one of the following:
+          <dl>
+            <dt><code>standalone</code></dt>
+            <dd>If no message is received from the controller for three
+              times the inactivity probe interval
+              (see <ref column="inactivity_probe"/>), then Open vSwitch
+              will take over responsibility for setting up flows.  In
+              this mode, Open vSwitch causes the datapath to act like an
+              ordinary MAC-learning switch.  Open vSwitch will continue
+              to retry connecting to the controller in the background
+              and, when the connection succeeds, it will discontinue its
+              standalone behavior.</dd>
+            <dt><code>secure</code></dt>
+            <dd>Open vSwitch will not set up flows on its own when the
+              controller connection fails.  It will continue retry
+              connecting to the controller forever.</dd>
+          </dl>
+        </p>
+        <p>If this value is unset, the default is
+        implementation-specific.</p>
+      </column>
+    </group>
+
+    <group title="OpenFlow Rate Limiting">
+        <column name="controller_burst_limit">
+          In conjunction with <ref column="controller_rate_limit"/>,
+          the maximum number of unused packet credits that the bridge will
+          allow to accumulate, in packets.  If not specified, the default
+          is implementation-specific.
+        </column>
+
+        <column name="controller_rate_limit">
+          <p>The maximum rate at which packets in unknown flows will be
+            forwarded to the OpenFlow controller, in packets per second.  This
+            feature prevents a single bridge from overwhelming the controller.
+            If not specified, the default is implementation-specific.</p>
+          <p>In addition, when a high rate triggers rate-limiting, Open
+            vSwitch queues controller packets for each port and transmits
+            them to the controller at the configured rate.  The number of
+            queued packets is limited by
+            the <ref column="controller_burst_limit"/> value.  The packet
+            queue is shared fairly among the ports on a bridge.</p><p>Open
+            vSwitch maintains two such packet rate-limiters per bridge.
+            One of these applies to packets sent up to the controller
+            because they do not correspond to any flow.  The other applies
+            to packets sent up to the controller by request through flow
+            actions. When both rate-limiters are filled with packets, the
+            actual rate that packets are sent to the controller is up to
+            twice the specified rate.</p>
+        </column>
+    </group>
+
+    <group title="Additional Configuration for Discovery">
+      <column name="discover_accept_regex">
+        If <ref column="target"/> is <code>discover</code>, a POSIX
+        extended regular expression against which the discovered controller
+        location is validated.  The regular expression is implicitly
+        anchored at the beginning of the controller location string, as
+        if it begins with <code>^</code>.  If not specified, the default
+        is implementation-specific.
+      </column>
+
+      <column name="discover_update_resolv_conf">
+        If <ref column="target"/> is <code>discover</code>,
+        whether to update <code>/etc/resolv.conf</code> when the
+        controller is discovered.  If not specified, the default
+        is implementation-specific.  Open vSwitch will only modify
+        <code>/etc/resolv.conf</code> if the DHCP response that it receives
+        specifies one or more DNS servers.
+      </column>
+    </group>
+
+    <group title="Additional Configuration without Discovery">
+      <column name="local_gateway">
+        If <ref column="target"/> is not <code>discover</code>, the IP
+        address of the gateway to configure on the local port.
+      </column>
+
+      <column name="local_ip">
+        If <ref column="target"/> is not <code>discover</code>, the IP
+        address to configure on the local port.
+      </column>
+
+      <column name="local_netmask">
+        If <ref column="target"/> is not <code>discover</code>, the IP
+        netmask to configure on the local port.
+      </column>
+    </group>
+  </table>
+
+  <table name="NetFlow">
+    A NetFlow target.  NetFlow is a protocol that exports a number of
+    details about terminating IP flows, such as the principals involved
+    and duration.
+
+    <column name="targets">
+      NetFlow targets in the form
+      <code><var>ip</var>:<var>port</var></code>.  The <var>ip</var>
+      must be specified numerically, not as a DNS name.
+    </column>
+
+    <column name="engine_id">
+      Engine ID to use in NetFlow messages.  Defaults to datapath index
+      if not specified.
+    </column>
+
+    <column name="engine_type">
+      Engine type to use in NetFlow messages.  Defaults to datapath
+      index if not specified.
+    </column>
+
+    <column name="active_timeout">
+      The interval at which NetFlow records are sent for flows that are
+      still active, in seconds.  A value of <code>0</code> requests the
+      default timeout (currently 600 seconds); a value of <code>-1</code>
+      disables active timeouts.
+    </column>
+
+    <column name="add_id_to_interface">
+      <p>If this column's value is <code>false</code>, the ingress and egress
+        interface fields of NetFlow flow records are derived from OpenFlow port
+        numbers.  When it is <code>true</code>, the 7 most significant bits of
+        these fields will be replaced by the least significant 7 bits of the
+        engine id.  This is useful because many NetFlow collectors do not
+        expect multiple switches to be sending messages from the same host, so
+        they do not store the engine information which could be used to
+        disambiguate the traffic.</p>
+      <p>When this option is enabled, a maximum of 508 ports are supported.</p>
+    </column>
+  </table>
+
+  <table name="SSL">
+    SSL configuration for an Open_vSwitch.
+
+    <column name="private_key">
+      Name of a PEM file containing the private key used as the switch's
+      identity for SSL connections to the controller.
+    </column>
+
+    <column name="certificate">
+      Name of a PEM file containing a certificate, signed by the
+      certificate authority (CA) used by the controller and manager,
+      that certifies the switch's private key, identifying a trustworthy
+      switch.
+    </column>
+
+    <column name="ca_cert">
+      Name of a PEM file containing the CA certificate used to verify
+      that the switch is connected to a trustworthy controller.
+    </column>
+
+    <column name="bootstrap_ca_cert">
+      If set to <code>true</code>, then Open vSwitch will attempt to
+      obtain the CA certificate from the controller on its first SSL
+      connection and save it to the named PEM file. If it is successful,
+      it will immediately drop the connection and reconnect, and from then
+      on all SSL connections must be authenticated by a certificate signed
+      by the CA certificate thus obtained.  <em>This option exposes the
+        SSL connection to a man-in-the-middle attack obtaining the initial
+        CA certificate.</em>  It may still be useful for bootstrapping.
+    </column>
+  </table>
+
+  <table name="sFlow">
+    <p>An sFlow(R) target.  sFlow is a protocol for remote monitoring
+      of switches.</p>
+
+    <column name="agent">
+      IP address to report as ``agent address'' to collectors.  If not
+      specified, defaults to the <ref table="Controller" column="local_ip"/> in
+      the collector's <ref table="Controller"/>.  If neither is specified,
+      sFlow is disabled.
+    </column>
+
+    <column name="header">
+      Number of bytes of a sampled packet to send to the collector.
+      If not specified, the default is 128 bytes.
+    </column>
+
+    <column name="polling">
+      Polling rate in seconds to send port statistics to the collector.
+      If not specified, defaults to 30 seconds.
+    </column>
+
+    <column name="sampling">
+      Rate at which packets should be sampled and sent to the collector.
+      If not specified, defaults to 400, which means one out of 400
+      packets, on average, will be sent to the collector.
+    </column>
+
+    <column name="targets">
+      sFlow targets in the form
+      <code><var>ip</var>:<var>port</var></code>.
+    </column>
+  </table>
+</database>

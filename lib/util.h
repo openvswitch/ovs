@@ -96,6 +96,7 @@ void ovs_print_version(char *date, char *time,
 void out_of_memory(void) NO_RETURN;
 void *xmalloc(size_t) MALLOC_LIKE;
 void *xcalloc(size_t, size_t) MALLOC_LIKE;
+void *xzalloc(size_t) MALLOC_LIKE;
 void *xrealloc(void *, size_t);
 void *xmemdup(const void *, size_t) MALLOC_LIKE;
 char *xmemdup0(const char *, size_t) MALLOC_LIKE;
@@ -117,6 +118,14 @@ bool str_to_llong(const char *, int base, long long *);
 bool str_to_uint(const char *, int base, unsigned int *);
 bool str_to_ulong(const char *, int base, unsigned long *);
 bool str_to_ullong(const char *, int base, unsigned long long *);
+
+bool str_to_double(const char *, double *);
+
+int hexit_value(int c);
+
+char *dir_name(const char *file_name);
+
+void ignore(bool x OVS_UNUSED);
 
 #ifdef  __cplusplus
 }

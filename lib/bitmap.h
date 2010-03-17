@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,11 +35,22 @@ bitmap_bit__(size_t offset)
     return 1UL << (offset % BITMAP_ULONG_BITS);
 }
 
+static inline size_t
+bitmap_n_longs(size_t n_bits)
+{
+    return DIV_ROUND_UP(n_bits, BITMAP_ULONG_BITS);
+}
+
+static inline size_t
+bitmap_n_bytes(size_t n_bits)
+{
+    return bitmap_n_longs(n_bits) * sizeof(unsigned long int);
+}
+
 static inline unsigned long *
 bitmap_allocate(size_t n_bits)
 {
-    size_t n_longs = DIV_ROUND_UP(n_bits, BITMAP_ULONG_BITS);
-    return xcalloc(sizeof(unsigned long int), n_longs);
+    return xzalloc(bitmap_n_bytes(n_bits));
 }
 
 static inline void
@@ -79,5 +90,10 @@ bitmap_set(unsigned long *bitmap, size_t offset, bool value)
 void bitmap_set_multiple(unsigned long *, size_t start, size_t count,
                          bool value);
 bool bitmap_equal(const unsigned long *, const unsigned long *, size_t n);
+size_t bitmap_scan(const unsigned long int *, size_t start, size_t end);
+
+#define BITMAP_FOR_EACH_1(IDX, SIZE, BITMAP) \
+    for ((IDX) = bitmap_scan(BITMAP, 0, SIZE); (IDX) < (SIZE); \
+         (IDX) = bitmap_scan(BITMAP, (IDX) + 1, SIZE))
 
 #endif /* bitmap.h */

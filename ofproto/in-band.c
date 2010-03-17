@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -272,8 +272,8 @@ get_remote_mac(struct in_band *ib)
             || strcmp(netdev_get_name(ib->remote_netdev), next_hop_dev))
         {
             netdev_close(ib->remote_netdev);
-            retval = netdev_open(next_hop_dev, NETDEV_ETH_TYPE_NONE,
-                                 &ib->remote_netdev);
+
+            retval = netdev_open_default(next_hop_dev, &ib->remote_netdev);
             if (retval) {
                 VLOG_WARN_RL(&rl, "cannot open netdev %s (next hop "
                              "to controller "IP_FMT"): %s",
@@ -617,14 +617,14 @@ in_band_create(struct ofproto *ofproto, struct dpif *dpif,
         return error;
     }
 
-    error = netdev_open(local_name, NETDEV_ETH_TYPE_NONE, &local_netdev);
+    error = netdev_open_default(local_name, &local_netdev);
     if (error) {
         VLOG_ERR("failed to initialize in-band control: cannot open "
                  "datapath local port %s (%s)", local_name, strerror(error));
         return error;
     }
 
-    in_band = xcalloc(1, sizeof *in_band);
+    in_band = xzalloc(sizeof *in_band);
     in_band->ofproto = ofproto;
     in_band->controller = controller;
     in_band->ss_cat = switch_status_register(ss, "in-band",

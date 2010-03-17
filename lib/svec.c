@@ -59,6 +59,12 @@ svec_clear(struct svec *svec)
     svec->n = 0;
 }
 
+bool
+svec_is_empty(const struct svec *svec)
+{
+    return svec->n == 0;
+}
+
 void
 svec_add(struct svec *svec, const char *name)
 {

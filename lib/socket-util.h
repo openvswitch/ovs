@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,9 +36,12 @@ int get_null_fd(void);
 
 int inet_open_active(int style, const char *target, uint16_t default_port,
                     struct sockaddr_in *sinp, int *fdp);
-int inet_open_passive(int style, const char *target, uint16_t default_port);
+int inet_open_passive(int style, const char *target, int default_port,
+                      struct sockaddr_in *sinp);
 
 int read_fully(int fd, void *, size_t, size_t *bytes_read);
 int write_fully(int fd, const void *, size_t, size_t *bytes_written);
+
+int fsync_parent_dir(const char *file_name);
 
 #endif /* socket-util.h */

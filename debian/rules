@@ -10,23 +10,6 @@
 # Modified to make a template file for a multi-binary package with separated
 # build-arch and build-indep targets  by Bill Allombert 2001
 
-# Uncomment this to turn on verbose mode.
-#export DH_VERBOSE=1
-
-# This has to be exported to make some magic below work.
-export DH_OPTIONS
-
-# prefix of the target package name
-PACKAGE=openvswitch-datapath-module
-# modifieable for experiments or debugging m-a
-MA_DIR ?= /usr/share/modass
-# load generic variable handling
--include $(MA_DIR)/include/generic.make
-# load default rules
--include $(MA_DIR)/include/common-rules.make
-
-DATAPATH_CONFIGURE_OPTS =
-
 # Official build number.  Leave set to 0 if not an official build.
 BUILD_NUMBER = 0
 
@@ -46,6 +29,7 @@ configure-stamp:
 	dh_testdir
 	test -e configure || ./boot.sh
 	test -d _debian || mkdir _debian
+	echo $$CC
 	cd _debian && ( \
 		test -e Makefile || \
 		../configure --prefix=/usr --localstatedir=/var --enable-ssl \
@@ -78,31 +62,6 @@ clean:
 	dh_clean 
 	debconf-updatepo
 
-kdist_clean:
-	dh_clean
-	rm -rf openvswitch
-
-kdist_config: prep-deb-files
-
-binary-modules: DSTDIR = $(CURDIR)/debian/$(PKGNAME)/lib/modules/$(KVERS)
-binary-modules: prep-deb-files
-	dh_testdir
-	dh_testroot
-	dh_clean -k
-	tar xzf openvswitch.tar.gz
-	cd openvswitch && ./configure --with-l26=$(KSRC) $(DATAPATH_CONFIGURE_OPTS) --with-build-number=$(BUILD_NUMBER)
-	cd openvswitch && $(MAKE) -C datapath/linux-2.6
-	install -d -m755 $(DSTDIR)
-	install -m644 openvswitch/datapath/linux-2.6/*_mod.ko $(DSTDIR)/
-	dh_installdocs
-	dh_installchangelogs
-	dh_compress
-	dh_fixperms
-	dh_installdeb
-	dh_gencontrol
-	dh_md5sums
-	dh_builddeb --destdir=$(DEB_DESTDIR)
-
 install: install-indep install-arch
 install-indep: build-indep
 	dh_testdir
@@ -110,6 +69,10 @@ install-indep: build-indep
 	dh_clean -k -i 
 	dh_installdirs -i
 	dh_install -i
+	sed 's/^BUILD_NUMBER = .*/BUILD_NUMBER = $(BUILD_NUMBER)/' \
+		< debian/rules.modules \
+		> debian/openvswitch-datapath-source/usr/src/modules/openvswitch-datapath/debian/rules
+	chmod 755 debian/openvswitch-datapath-source/usr/src/modules/openvswitch-datapath/debian/rules
 	cd debian/openvswitch-datapath-source/usr/src && tar -c modules | bzip2 -9 > openvswitch-datapath.tar.bz2 && rm -rf modules
 	install -m644 debian/openvswitch-pki-server.apache2 debian/openvswitch-pki-server/etc/apache2/sites-available/openvswitch-pki
 	install -m1777 -d debian/corekeeper/var/log/core

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
-#include "fault.h"
 #include "leak-checker.h"
 #include "list.h"
 #include "netdev.h"
@@ -39,11 +38,11 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"
+#include "stream-ssl.h"
 #include "svec.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
-#include "vconn-ssl.h"
 #include "vconn.h"
 
 #include "vlog.h"
@@ -63,7 +62,8 @@ struct ofsettings {
 
     /* Datapath. */
     uint64_t datapath_id;       /* Datapath ID. */
-    const char *dp_name;        /* Name of local datapath. */
+    char *dp_name;              /* Name of local datapath. */
+    char *dp_type;              /* Type of local datapath. */
     struct svec ports;          /* Set of ports to add to datapath (if any). */
 
     /* Description strings. */
@@ -71,6 +71,7 @@ struct ofsettings {
     const char *hw_desc;        /* Hardware. */
     const char *sw_desc;        /* Software version. */
     const char *serial_desc;    /* Serial number. */
+    const char *dp_desc;        /* Datapath description. */
 
     /* Related vconns and network devices. */
     const char *controller_name; /* Controller (if not discovery mode). */
@@ -94,13 +95,6 @@ struct ofsettings {
     /* Spanning tree protocol. */
     bool enable_stp;
 
-    /* Remote command execution. */
-    char *command_acl;          /* Command white/blacklist, as shell globs. */
-    char *command_dir;          /* Directory that contains commands. */
-
-    /* Management. */
-    uint64_t mgmt_id;           /* Management ID. */
-
     /* NetFlow. */
     struct svec netflow;        /* NetFlow targets. */
 };
@@ -115,49 +109,54 @@ main(int argc, char *argv[])
     struct ofproto *ofproto;
     struct ofsettings s;
     int error;
+    struct dpif *dpif;
     struct netflow_options nf_options;
 
+    proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    register_fault_handlers();
     time_init();
     vlog_init();
     parse_options(argc, argv, &s);
     signal(SIGPIPE, SIG_IGN);
 
     die_if_already_running();
-    daemonize();
+    daemonize_start();
 
     /* Start listening for ovs-appctl requests. */
     error = unixctl_server_create(NULL, &unixctl);
     if (error) {
-        ovs_fatal(error, "Could not listen for unixctl connections");
+        exit(EXIT_FAILURE);
     }
 
     VLOG_INFO("Open vSwitch version %s", VERSION BUILDNR);
     VLOG_INFO("OpenFlow protocol version 0x%02x", OFP_VERSION);
 
-    /* Create the datapath and add ports to it, if requested by the user. */
+    error = dpif_create_and_open(s.dp_name, s.dp_type, &dpif);
+    if (error) {
+        ovs_fatal(error, "could not create datapath");
+    }
+
+    /* Add ports to the datapath if requested by the user. */
     if (s.ports.n) {
-        struct dpif *dpif;
         const char *port;
         size_t i;
-
-        error = dpif_create_and_open(s.dp_name, &dpif);
-        if (error) {
-            ovs_fatal(error, "could not create datapath");
-        }
+        struct netdev *netdev;
 
         SVEC_FOR_EACH (i, port, &s.ports) {
+            error = netdev_open_default(port, &netdev);
+            if (error) {
+                ovs_fatal(error, "failed to open %s as a device", port);
+            }
+
             error = dpif_port_add(dpif, port, 0, NULL);
             if (error) {
                 ovs_fatal(error, "failed to add %s as a port", port);
             }
         }
-        dpif_close(dpif);
     }
 
     /* Start OpenFlow processing. */
-    error = ofproto_create(s.dp_name, NULL, NULL, &ofproto);
+    error = ofproto_create(s.dp_name, s.dp_type, NULL, NULL, &ofproto);
     if (error) {
         ovs_fatal(error, "could not initialize openflow switch");
     }
@@ -173,10 +172,8 @@ main(int argc, char *argv[])
     if (s.datapath_id) {
         ofproto_set_datapath_id(ofproto, s.datapath_id);
     }
-    if (s.mgmt_id) {
-        ofproto_set_mgmt_id(ofproto, s.mgmt_id);
-    }
-    ofproto_set_desc(ofproto, s.mfr_desc, s.hw_desc, s.sw_desc, s.serial_desc);
+    ofproto_set_desc(ofproto, s.mfr_desc, s.hw_desc, s.sw_desc,
+                     s.serial_desc, s.dp_desc);
     if (!s.listeners.n) {
         svec_add_nocopy(&s.listeners, xasprintf("punix:%s/%s.mgmt",
                                               ovs_rundir, s.dp_name));
@@ -206,17 +203,14 @@ main(int argc, char *argv[])
     if (error) {
         ovs_fatal(error, "failed to configure STP");
     }
-    error = ofproto_set_remote_execution(ofproto, s.command_acl,
-                                         s.command_dir);
-    if (error) {
-        ovs_fatal(error, "failed to configure remote command execution");
-    }
     if (!s.discovery) {
         error = ofproto_set_controller(ofproto, s.controller_name);
         if (error) {
             ovs_fatal(error, "failed to configure controller");
         }
     }
+
+    daemonize_complete();
 
     while (ofproto_is_alive(ofproto)) {
         error = ofproto_run(ofproto);
@@ -234,6 +228,8 @@ main(int argc, char *argv[])
         poll_block();
     }
 
+    dpif_close(dpif);
+
     return 0;
 }
 
@@ -244,10 +240,11 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 {
     enum {
         OPT_DATAPATH_ID = UCHAR_MAX + 1,
-        OPT_MANUFACTURER,
-        OPT_HARDWARE,
-        OPT_SOFTWARE,
-        OPT_SERIAL,
+        OPT_MFR_DESC,
+        OPT_HW_DESC,
+        OPT_SW_DESC,
+        OPT_SERIAL_DESC,
+        OPT_DP_DESC,
         OPT_ACCEPT_VCONN,
         OPT_NO_RESOLV_CONF,
         OPT_BR_NAME,
@@ -263,8 +260,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         OPT_NO_STP,
         OPT_OUT_OF_BAND,
         OPT_IN_BAND,
-        OPT_COMMAND_ACL,
-        OPT_COMMAND_DIR,
         OPT_NETFLOW,
         OPT_MGMT_ID,
         OPT_PORTS,
@@ -273,10 +268,11 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     };
     static struct option long_options[] = {
         {"datapath-id", required_argument, 0, OPT_DATAPATH_ID},
-        {"manufacturer", required_argument, 0, OPT_MANUFACTURER},
-        {"hardware", required_argument, 0, OPT_HARDWARE},
-        {"software", required_argument, 0, OPT_SOFTWARE},
-        {"serial", required_argument, 0, OPT_SERIAL},
+        {"mfr-desc", required_argument, 0, OPT_MFR_DESC},
+        {"hw-desc", required_argument, 0, OPT_HW_DESC},
+        {"sw-desc", required_argument, 0, OPT_SW_DESC},
+        {"serial-desc", required_argument, 0, OPT_SERIAL_DESC},
+        {"dp-desc", required_argument, 0, OPT_DP_DESC},
         {"accept-vconn", required_argument, 0, OPT_ACCEPT_VCONN},
         {"no-resolv-conf", no_argument, 0, OPT_NO_RESOLV_CONF},
         {"config",      required_argument, 0, 'F'},
@@ -293,10 +289,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         {"no-stp",      no_argument, 0, OPT_NO_STP},
         {"out-of-band", no_argument, 0, OPT_OUT_OF_BAND},
         {"in-band",     no_argument, 0, OPT_IN_BAND},
-        {"command-acl", required_argument, 0, OPT_COMMAND_ACL},
-        {"command-dir", required_argument, 0, OPT_COMMAND_DIR},
         {"netflow",     required_argument, 0, OPT_NETFLOW},
-        {"mgmt-id",     required_argument, 0, OPT_MGMT_ID},
         {"ports",       required_argument, 0, OPT_PORTS},
         {"verbose",     optional_argument, 0, 'v'},
         {"help",        no_argument, 0, 'h'},
@@ -305,7 +298,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         VLOG_LONG_OPTIONS,
         LEAK_CHECKER_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
-        VCONN_SSL_LONG_OPTIONS
+        STREAM_SSL_LONG_OPTIONS
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
 #endif
         {0, 0, 0, 0},
@@ -318,6 +311,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->hw_desc = NULL;
     s->sw_desc = NULL;
     s->serial_desc = NULL;
+    s->dp_desc = NULL;
     svec_init(&s->listeners);
     svec_init(&s->snoops);
     s->fail_mode = FAIL_OPEN;
@@ -330,10 +324,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->accept_controller_re = NULL;
     s->enable_stp = false;
     s->in_band = true;
-    s->command_acl = "";
-    s->command_dir = NULL;
     svec_init(&s->netflow);
-    s->mgmt_id = 0;
     svec_init(&s->ports);
     for (;;) {
         int c;
@@ -345,31 +336,30 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
 
         switch (c) {
         case OPT_DATAPATH_ID:
-            if (strlen(optarg) != 12
-                || strspn(optarg, "0123456789abcdefABCDEF") != 12) {
+            if (!dpid_from_string(optarg, &s->datapath_id)) {
                 ovs_fatal(0, "argument to --datapath-id must be "
-                          "exactly 12 hex digits");
-            }
-            s->datapath_id = strtoll(optarg, NULL, 16);
-            if (!s->datapath_id) {
-                ovs_fatal(0, "argument to --datapath-id must be nonzero");
+                          "exactly 16 hex digits and may not be all-zero");
             }
             break;
 
-        case OPT_MANUFACTURER:
+        case OPT_MFR_DESC:
             s->mfr_desc = optarg;
             break;
 
-        case OPT_HARDWARE:
+        case OPT_HW_DESC:
             s->hw_desc = optarg;
             break;
 
-        case OPT_SOFTWARE:
+        case OPT_SW_DESC:
             s->sw_desc = optarg;
             break;
 
-        case OPT_SERIAL:
+        case OPT_SERIAL_DESC:
             s->serial_desc = optarg;
+            break;
+
+        case OPT_DP_DESC:
+            s->dp_desc = optarg;
             break;
 
         case OPT_ACCEPT_VCONN:
@@ -452,30 +442,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             s->in_band = true;
             break;
 
-        case OPT_COMMAND_ACL:
-            s->command_acl = (s->command_acl[0]
-                              ? xasprintf("%s,%s", s->command_acl, optarg)
-                              : optarg);
-            break;
-
-        case OPT_COMMAND_DIR:
-            s->command_dir = optarg;
-            break;
-
         case OPT_NETFLOW:
             svec_add(&s->netflow, optarg);
-            break;
-
-        case OPT_MGMT_ID:
-            if (strlen(optarg) != 12
-                || strspn(optarg, "0123456789abcdefABCDEF") != 12) {
-                ovs_fatal(0, "argument to --mgmt-id must be "
-                          "exactly 12 hex digits");
-            }
-            s->mgmt_id = strtoll(optarg, NULL, 16);
-            if (!s->mgmt_id) {
-                ovs_fatal(0, "argument to --mgmt-id must be nonzero");
-            }
             break;
 
         case 'l':
@@ -504,10 +472,10 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         LEAK_CHECKER_OPTION_HANDLERS
 
 #ifdef HAVE_OPENSSL
-        VCONN_SSL_OPTION_HANDLERS
+        STREAM_SSL_OPTION_HANDLERS
 
         case OPT_BOOTSTRAP_CA_CERT:
-            vconn_ssl_set_ca_cert_file(optarg, true);
+            stream_ssl_set_ca_cert_file(optarg, true);
             break;
 #endif
 
@@ -528,13 +496,14 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     }
 
     /* Local and remote vconns. */
-    s->dp_name = argv[0];
+    dp_parse_name(argv[0], &s->dp_name, &s->dp_type);
+
     s->controller_name = argc > 1 ? xstrdup(argv[1]) : NULL;
 
     /* Set accept_controller_regex. */
     if (!s->accept_controller_re) {
         s->accept_controller_re
-            = vconn_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*";
+            = stream_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*";
     }
 
     /* Mode of operation. */
@@ -561,13 +530,12 @@ usage(void)
     vconn_usage(true, true, true);
     printf("\nOpenFlow options:\n"
            "  -d, --datapath-id=ID    Use ID as the OpenFlow switch ID\n"
-           "                          (ID must consist of 12 hex digits)\n"
-           "  --mgmt-id=ID            Use ID as the management ID\n"
-           "                          (ID must consist of 12 hex digits)\n"
-           "  --manufacturer=MFR      Identify manufacturer as MFR\n"
-           "  --hardware=HW           Identify hardware as HW\n"
-           "  --software=SW           Identify software as SW\n"
-           "  --serial=SERIAL         Identify serial number as SERIAL\n"
+           "                          (ID must consist of 16 hex digits)\n"
+           "  --mfr-desc=MFR          Identify manufacturer as MFR\n"
+           "  --hw-desc=HW            Identify hardware as HW\n"
+           "  --sw-desc=SW            Identify software as SW\n"
+           "  --serial-desc=SERIAL    Identify serial number as SERIAL\n"
+           "  --dp-desc=DP_DESC       Identify dp description as DP_DESC\n"
            "\nController discovery options:\n"
            "  --accept-vconn=REGEX    accept matching discovered controllers\n"
            "  --no-resolv-conf        do not update /etc/resolv.conf\n"
@@ -587,11 +555,7 @@ usage(void)
            "  --netflow=HOST:PORT     configure NetFlow output target\n"
            "\nRate-limiting of \"packet-in\" messages to the controller:\n"
            "  --rate-limit[=PACKETS]  max rate, in packets/s (default: 1000)\n"
-           "  --burst-limit=BURST     limit on packet credit for idle time\n"
-           "\nRemote command execution options:\n"
-           "  --command-acl=[!]GLOB[,[!]GLOB...] set allowed/denied commands\n"
-           "  --command-dir=DIR       set command dir (default: %s/commands)\n",
-           ovs_pkgdatadir);
+           "  --burst-limit=BURST     limit on packet credit for idle time\n");
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"

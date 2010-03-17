@@ -1,0 +1,25 @@
+AT_BANNER([test dir_name function])
+
+m4_define([CHECK_DIR_NAME],
+  [AT_SETUP([dir_name("$1") returns "$2"])
+   AT_KEYWORDS([dir_name])
+   AT_CHECK([test-dir_name "AS_ESCAPE($1)"], [0], [$2
+])
+   AT_CLEANUP])
+
+# These are the test cases given in POSIX for dirname().
+CHECK_DIR_NAME([/usr/lib], [/usr])
+CHECK_DIR_NAME([/usr/], [/])
+CHECK_DIR_NAME([usr], [.])
+CHECK_DIR_NAME([/], [/])
+CHECK_DIR_NAME([.], [.])
+CHECK_DIR_NAME([..], [.])
+CHECK_DIR_NAME([//], [//])      # / is also allowed
+CHECK_DIR_NAME([//foo], [//])   # / is also allowed
+CHECK_DIR_NAME([], [.])
+
+# Additional test cases.
+CHECK_DIR_NAME([dir/file], [dir])
+CHECK_DIR_NAME([dir/file/], [dir])
+CHECK_DIR_NAME([dir/file//], [dir])
+CHECK_DIR_NAME([///foo], [/])

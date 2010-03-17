@@ -1,0 +1,187 @@
+AT_BANNER([OVSDB -- triggers])
+
+# This is like OVSDB_CHECK_POSITIVE, except that UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+m4_define([OVSDB_CHECK_TRIGGER], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb execute execution trigger positive $4])
+   AT_CHECK([test-ovsdb trigger $2], [0], [stdout], [])
+   AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0], [$3])
+   AT_CLEANUP])
+
+OVSDB_CHECK_TRIGGER([trigger fires immediately],
+  ['ORDINAL_SCHEMA' [\
+    '["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"}},
+      {"op": "wait",
+       "timeout": 10,
+       "table": "ordinals",
+       "where": [],
+       "columns": ["name", "number"],
+       "until": "==",
+       "rows": [{"name": "zero", "number": 0},
+                {"name": "one", "number": 1}]},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 2, "name": "two"}}]']],
+  [[t=0: trigger 0 (immediate): [{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{},{"uuid":["uuid","<2>"]}]
+]])
+
+OVSDB_CHECK_TRIGGER([trigger times out],
+  ['ORDINAL_SCHEMA' [\
+    '["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"}},
+      {"op": "wait",
+       "timeout": 10,
+       "table": "ordinals",
+       "where": [],
+       "columns": ["name", "number"],
+       "until": "==",
+       "rows": [{"name": "zero", "number": 0},
+                {"name": "one", "number": 1},
+                {"name": "two", "number": 2}]}]' \
+    '["advance", 10]']],
+  [[t=0: new trigger 0
+t=10: trigger 0 (delayed): [{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"wait\" timed out after 10 ms","error":"timed out"}]
+]])
+
+OVSDB_CHECK_TRIGGER([trigger fires after delay],
+  ['ORDINAL_SCHEMA' [\
+    '["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"}}]' \
+    '["advance", 5]' \
+    '["ordinals",
+      {"op": "wait",
+       "timeout": 10,
+       "table": "ordinals",
+       "where": [],
+       "columns": ["name", "number"],
+       "until": "==",
+       "rows": [{"name": "zero", "number": 0},
+                {"name": "one", "number": 1},
+                {"name": "two", "number": 2}]}]' \
+    '["advance", 5]' \
+    '["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 2, "name": "two"}}]']],
+  [[t=0: trigger 0 (immediate): [{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]
+t=5: new trigger 1
+t=10: trigger 2 (immediate): [{"uuid":["uuid","<2>"]}]
+t=10: trigger 1 (delayed): [{}]
+]])
+
+OVSDB_CHECK_TRIGGER([delayed trigger modifies database],
+  ['ORDINAL_SCHEMA' [\
+    '["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"}}]' \
+    '["advance", 5]' \
+    '["ordinals",
+      {"op": "wait",
+       "timeout": 10,
+       "table": "ordinals",
+       "where": [],
+       "columns": ["name", "number"],
+       "until": "==",
+       "rows": [{"name": "zero", "number": 0},
+                {"name": "one", "number": 1},
+                {"name": "two", "number": 2}]},
+      {"op": "delete",
+       "table": "ordinals",
+       "where": [["number", "<", 2]]}]' \
+    '["advance", 5]' \
+    '["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 2, "name": "two"}}]' \
+    '["advance", 5]' \
+    '["ordinals",
+      {"op": "select",
+       "table": "ordinals",
+       "where": []}]']],
+  [[t=0: trigger 0 (immediate): [{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]
+t=5: new trigger 1
+t=10: trigger 2 (immediate): [{"uuid":["uuid","<2>"]}]
+t=10: trigger 1 (delayed): [{},{"count":2}]
+t=15: trigger 3 (immediate): [{"rows":[{"_uuid":["uuid","<2>"],"_version":["uuid","<3>"],"name":"two","number":2}]}]
+]])
+
+OVSDB_CHECK_TRIGGER([one delayed trigger wakes up another],
+  ['ORDINAL_SCHEMA' [\
+    '["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 0, "name": "zero"}},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 1, "name": "one"}}]' \
+    '["advance", 5]' \
+    '["ordinals",
+      {"op": "wait",
+       "timeout": 10,
+       "table": "ordinals",
+       "where": [],
+       "columns": ["name", "number"],
+       "until": "==",
+       "rows": [{"name": "two", "number": 2}]},
+      {"op": "delete",
+       "table": "ordinals",
+       "where": [["number", "==", 2]]},
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 3, "name": "three"}}]' \
+    '["ordinals",
+      {"op": "wait",
+       "timeout": 10,
+       "table": "ordinals",
+       "where": [],
+       "columns": ["name", "number"],
+       "until": "==",
+       "rows": [{"name": "zero", "number": 0},
+                {"name": "one", "number": 1},
+                {"name": "two", "number": 2}]},
+      {"op": "delete",
+       "table": "ordinals",
+       "where": [["number", "<", 2]]}]' \
+    '["advance", 5]' \
+    '["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {"number": 2, "name": "two"}}]' \
+    '["advance", 5]' \
+    '["ordinals",
+      {"op": "select",
+       "table": "ordinals",
+       "where": []}]']],
+  [[t=0: trigger 0 (immediate): [{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]
+t=5: new trigger 1
+t=5: new trigger 2
+t=10: trigger 3 (immediate): [{"uuid":["uuid","<2>"]}]
+t=10: trigger 2 (delayed): [{},{"count":2}]
+t=15: trigger 1 (delayed): [{},{"count":1},{"uuid":["uuid","<3>"]}]
+t=15: trigger 4 (immediate): [{"rows":[{"_uuid":["uuid","<3>"],"_version":["uuid","<4>"],"name":"three","number":3}]}]
+]])
+

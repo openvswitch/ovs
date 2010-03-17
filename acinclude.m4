@@ -42,7 +42,14 @@ AC_DEFUN([OVS_CHECK_LINUX26], [
     AC_MSG_CHECKING([for Linux 2.6 source directory])
     KSRC26=$KBUILD26
     if test ! -e $KSRC26/include/linux/kernel.h; then
-      KSRC26=`(cd $KBUILD26 && pwd -P) | sed 's,-[[^-]]*$,-common,'`
+      case `echo "$KBUILD26" | sed 's,/*$,,'` in # (
+        */build)
+          KSRC26=`echo "$KBUILD26" | sed 's,/build/*$,/source,'`
+          ;; # (
+        *)
+          KSRC26=`(cd $KBUILD26 && pwd -P) | sed 's,-[[^-]]*$,-common,'`
+          ;;
+      esac
       if test ! -e $KSRC26/include/linux/kernel.h; then
         AC_MSG_ERROR([cannot find source directory])
       fi
@@ -111,6 +118,16 @@ AC_DEFUN([OVS_CHECK_VETH], [
   fi
 ])
 
+AC_DEFUN([OVS_CHECK_GRE], [
+  AC_MSG_CHECKING([whether to build gre module])
+  if test "$sublevel" -ge 18; then
+    AC_MSG_RESULT([yes])
+    AC_SUBST([BUILD_GRE], 1)
+  else
+    AC_MSG_RESULT([no])
+  fi
+])
+
 AC_DEFUN([OVS_CHECK_LOG2_H], [
   AC_MSG_CHECKING([for $KSRC26/include/linux/log2.h])
   if test -e $KSRC26/include/linux/log2.h; then
@@ -129,6 +146,8 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   rm -f datapath/linux-2.6/kcompat.h.new
   mkdir -p datapath/linux-2.6
   : > datapath/linux-2.6/kcompat.h.new
+  OVS_GREP_IFELSE([$KSRC26/include/linux/types.h], [bool],
+                  [OVS_DEFINE([HAVE_BOOL_TYPE])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_transport_header],
                   [OVS_DEFINE([HAVE_SKBUFF_HEADER_HELPERS])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [raw],
@@ -144,6 +163,10 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
                   [OVS_DEFINE([HAVE_CSUM_UNFOLD])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_cow],
                   [OVS_DEFINE([HAVE_SKB_COW])])
+  OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [nla_get_be16],
+                  [OVS_DEFINE([HAVE_NLA_GET_BE16])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/in.h], [ipv4_is_multicast],
+                  [OVS_DEFINE([HAVE_IPV4_IS_MULTICAST])])
   # Check for the proto_data_valid member in struct sk_buff.  The [^@]
   # is necessary because some versions of this header remove the
   # member but retain the kerneldoc comment that describes it (which
@@ -153,6 +176,7 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
                   [OVS_DEFINE([HAVE_PROTO_DATA_VALID])])
   OVS_CHECK_LOG2_H
   OVS_CHECK_VETH
+  OVS_CHECK_GRE
   if cmp -s datapath/linux-2.6/kcompat.h.new \
             datapath/linux-2.6/kcompat.h >/dev/null 2>&1; then
     rm datapath/linux-2.6/kcompat.h.new

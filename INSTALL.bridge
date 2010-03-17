@@ -42,23 +42,16 @@ to update system scripts to follow these steps.
    bridge interfaces), to ensure that the Open vSwitch kernel modules
    are loaded before the Linux kernel bridge module.
 
-3. Create an initial version of the configuration file, for example
-   /etc/ovs-vswitchd.conf.  This file may be empty initially or may
-   contain add any valid configuration directives described in
-   ovs-vswitchd.conf(5).  However, it must exist when you start
-   ovs-vswitchd.
+3. Start ovsdb-server, ovs-vswitchd, and ovs-brcompatd, e.g.:
 
-   To create an empty configuration file:
-
-      % touch /etc/ovs-vswitchd.conf
-
-4. Start ovs-vswitchd and ovs-brcompatd, e.g.:
+      % ovsdb-server /etc/ovs-vswitchd.conf.db \
+                --remote=punix:/var/run/ovsdb-server
 
       % ovs-vswitchd --pidfile --detach -vANY:console:EMER \
-                /etc/ovs-vswitchd.conf
+                unix:/var/run/ovsdb-server
 
       % ovs-brcompatd --pidfile --detach -vANY:console:EMER \
-                /etc/ovs-vswitchd.conf
+                unix:/var/run/ovsdb-server
 
 5. Now you should be able to manage the Open vSwitch using brctl and
    related tools.  For example, you can create an Open vSwitch bridge,
@@ -71,11 +64,7 @@ to update system scripts to follow these steps.
       % brctl show
 
    Each of these commands actually uses or modifies the Open vSwitch
-   configuration file, then notifies the ovs-vswitchd daemon of the
-   change.  For example, after executing the commands above starting
-   from an empty configuration file, "cat /etc/ovs-vswitchd.conf"
-   should show that the configuration file now contains the following:
-
-      bridge.br0.port=br0
-      bridge.br0.port=eth0
-      bridge.br0.port=eth1
+   configuration database, then notifies the ovs-vswitchd daemon of
+   the change.  For example, after executing the commands above
+   starting from an empty configuration file, "ovs-vsctl list-ports
+   br0" should show that bridge br0 contains two ports, eth0 and eth1.

@@ -29,7 +29,7 @@
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "status.h"
-#include "vconn-ssl.h"
+#include "stream-ssl.h"
 
 #define THIS_MODULE VLM_discovery
 #include "vlog.h"
@@ -102,7 +102,7 @@ discovery_create(const char *re, bool update_resolv_conf,
     char local_name[IF_NAMESIZE];
     int error;
 
-    d = xcalloc(1, sizeof *d);
+    d = xzalloc(sizeof *d);
 
     /* Controller regular expression. */
     error = discovery_set_accept_controller_re(d, re);
@@ -169,7 +169,7 @@ discovery_set_accept_controller_re(struct discovery *d, const char *re_)
     int error;
     char *re;
 
-    re = (!re_ ? xstrdup(vconn_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*")
+    re = (!re_ ? xstrdup(stream_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*")
           : re_[0] == '^' ? xstrdup(re_) : xasprintf("^%s", re_));
     regex = xmalloc(sizeof *regex);
     error = regcomp(regex, re, REG_NOSUB | REG_EXTENDED);

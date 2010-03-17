@@ -103,7 +103,7 @@ process_escape_args(char **argv)
         if (argp != argv) {
             ds_put_char(&ds, ' ');
         }
-        if (arg[strcspn(arg, " \t\r\n\v\\")]) {
+        if (arg[strcspn(arg, " \t\r\n\v\\\'\"")]) {
             ds_put_char(&ds, '"');
             for (p = arg; *p; p++) {
                 if (*p == '\\' || *p == '\"') {
@@ -161,7 +161,7 @@ process_register(const char *name, pid_t pid)
 
     assert(sigchld_is_blocked());
 
-    p = xcalloc(1, sizeof *p);
+    p = xzalloc(sizeof *p);
     p->pid = pid;
     slash = strrchr(name, '/');
     p->name = xstrdup(slash ? slash + 1 : name);
@@ -201,17 +201,14 @@ process_start(char **argv,
     }
 
     block_sigchld(&oldsigs);
-    fatal_signal_block();
     pid = fork();
     if (pid < 0) {
-        fatal_signal_unblock();
         unblock_sigchld(&oldsigs);
         VLOG_WARN("fork failed: %s", strerror(errno));
         return errno;
     } else if (pid) {
         /* Running in parent process. */
         *pp = process_register(argv[0], pid);
-        fatal_signal_unblock();
         unblock_sigchld(&oldsigs);
         return 0;
     } else {
@@ -220,7 +217,6 @@ process_start(char **argv,
         int fd;
 
         fatal_signal_fork();
-        fatal_signal_unblock();
         unblock_sigchld(&oldsigs);
         for (fd = 0; fd < fd_max; fd++) {
             if (is_member(fd, null_fds, n_null_fds)) {
@@ -289,7 +285,7 @@ process_exited(struct process *p)
         return true;
     } else {
         char buf[_POSIX_PIPE_BUF];
-        read(fds[0], buf, sizeof buf);
+        ignore(read(fds[0], buf, sizeof buf));
         return false;
     }
 }
@@ -419,15 +415,13 @@ stream_open(struct stream *s)
 static void
 stream_read(struct stream *s)
 {
-    int error = 0;
-
     if (s->fds[0] < 0) {
         return;
     }
 
-    error = 0;
     for (;;) {
         char buffer[512];
+        int error;
         size_t n;
 
         error = read_fully(s->fds[0], buffer, sizeof buffer, &n);
@@ -521,12 +515,10 @@ process_run_capture(char **argv, char **stdout_log, char **stderr_log,
     }
 
     block_sigchld(&oldsigs);
-    fatal_signal_block();
     pid = fork();
     if (pid < 0) {
         int error = errno;
 
-        fatal_signal_unblock();
         unblock_sigchld(&oldsigs);
         VLOG_WARN("fork failed: %s", strerror(error));
 
@@ -539,7 +531,6 @@ process_run_capture(char **argv, char **stdout_log, char **stderr_log,
         struct process *p;
 
         p = process_register(argv[0], pid);
-        fatal_signal_unblock();
         unblock_sigchld(&oldsigs);
 
         close(s_stdout.fds[1]);
@@ -575,7 +566,6 @@ process_run_capture(char **argv, char **stdout_log, char **stderr_log,
         int i;
 
         fatal_signal_fork();
-        fatal_signal_unblock();
         unblock_sigchld(&oldsigs);
 
         dup2(get_null_fd(), 0);
@@ -617,7 +607,7 @@ sigchld_handler(int signr OVS_UNUSED)
             }
         }
     }
-    write(fds[1], "", 1);
+    ignore(write(fds[1], "", 1));
 }
 
 static bool

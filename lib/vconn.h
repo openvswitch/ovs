@@ -49,6 +49,9 @@ int vconn_send(struct vconn *, struct ofpbuf *);
 int vconn_recv_xid(struct vconn *, uint32_t xid, struct ofpbuf **);
 int vconn_transact(struct vconn *, struct ofpbuf *, struct ofpbuf **);
 
+void vconn_run(struct vconn *);
+void vconn_run_wait(struct vconn *);
+
 int vconn_open_block(const char *name, int min_version, struct vconn **);
 int vconn_send_block(struct vconn *, struct ofpbuf *);
 int vconn_recv_block(struct vconn *, struct ofpbuf **);

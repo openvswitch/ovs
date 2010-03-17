@@ -1,0 +1,59 @@
+AT_BANNER([UUID unit tests])
+
+m4_define([UUID_REGEX], 
+  [[[0-9a-f]\{8\}-[0-9a-f]\{4\}-4[0-9a-f]\{3\}-[89ab][0-9a-f]\{3\}-[0-9a-f]\{12\}$]])
+
+m4_define([CHECK_UUID],
+  [if expr "$uuid" : 'UUID_REGEX' > /dev/null
+   then
+      :
+   else
+     echo "$uuid: not a random UUID"
+     exit 1
+   fi])
+
+# This test is a strict subset of the larger test down below, but it
+# completes in a realistic amount of time with the "lcov" wrapper.
+AT_SETUP([UUID generation])
+AT_KEYWORDS([UUID])
+AT_CHECK([test-uuid > uuid])
+AT_CHECK([
+  uuid=`cat uuid`
+  CHECK_UUID])
+AT_CLEANUP
+
+# This test is a strict subset of the larger test down below, but it
+# completes in a realistic amount of time with the "lcov" wrapper.
+AT_SETUP([UUID parsing and serialization])
+AT_KEYWORDS([UUID])
+AT_CHECK([test-uuid f47ac10b-58cc-4372-a567-0e02b2c3d479], [0],
+         [f47ac10b-58cc-4372-a567-0e02b2c3d479
+])
+AT_CLEANUP
+
+AT_SETUP([UUID generation, parsing, serialization])
+AT_SKIP_IF([test "$CHECK_LCOV" = true]) # lcov makes this test absurdly slow
+AT_KEYWORDS([UUID])
+AT_CHECK([
+  uuids=
+  for i in m4_for([count], [1], [100], [1], [count ]); do
+     # Generate random UUID and check that it is in the expected format.
+     uuid=`test-uuid`
+     CHECK_UUID
+
+     # Verify that $uuid does not duplicate any UUID generated so far.
+     case $uuids in
+       *$uuid*) 
+         echo "$uuid: generated duplicate UUID"
+         exit 1
+     esac
+     uuids="$uuids $uuid"
+
+     # Verify that test-uuid parses and re-serializes this UUID correctly.
+     serialized=`test-uuid $uuid`
+     if test "$uuid" != "$serialized"; then
+       echo "$uuid: test-uuid serialized this as $serialized"
+       exit 1
+     fi
+   done], [0])
+AT_CLEANUP

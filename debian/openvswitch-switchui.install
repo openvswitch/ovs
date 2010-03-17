@@ -1,2 +1,3 @@
 _debian/extras/ezio/ezio-term usr/sbin
 _debian/extras/ezio/ovs-switchui usr/bin
+debian/reconfigure usr/share/openvswitch-switchui

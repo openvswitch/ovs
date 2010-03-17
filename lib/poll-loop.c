@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include "backtrace.h"
 #include "coverage.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "list.h"
 #include "timeval.h"
 
@@ -37,13 +38,10 @@ struct poll_waiter {
     struct list node;           /* Element in global waiters list. */
     int fd;                     /* File descriptor. */
     short int events;           /* Events to wait for (POLLIN, POLLOUT). */
-    poll_fd_func *function;     /* Callback function, if any, or null. */
-    void *aux;                  /* Argument to callback function. */
     struct backtrace *backtrace; /* Optionally, event that created waiter. */
 
     /* Set only when poll_block() is called. */
-    struct pollfd *pollfd;      /* Pointer to element of the pollfds array
-                                   (null if added from a callback). */
+    struct pollfd *pollfd;      /* Pointer to element of the pollfds array. */
 };
 
 /* All active poll waiters. */
@@ -58,12 +56,6 @@ static int timeout = -1;
 
 /* Backtrace of 'timeout''s registration, if debugging is enabled. */
 static struct backtrace timeout_backtrace;
-
-/* Callback currently running, to allow verifying that poll_cancel() is not
- * being called on a running callback. */
-#ifndef NDEBUG
-static struct poll_waiter *running_cb;
-#endif
 
 static struct poll_waiter *new_waiter(int fd, short int events);
 
@@ -132,22 +124,21 @@ log_wakeup(const struct backtrace *backtrace, const char *format, ...)
 
 /* Blocks until one or more of the events registered with poll_fd_wait()
  * occurs, or until the minimum duration registered with poll_timer_wait()
- * elapses, or not at all if poll_immediate_wake() has been called.
- *
- * Also executes any autonomous subroutines registered with poll_fd_callback(),
- * if their file descriptors have become ready. */
+ * elapses, or not at all if poll_immediate_wake() has been called. */
 void
 poll_block(void)
 {
     static struct pollfd *pollfds;
     static size_t max_pollfds;
 
-    struct poll_waiter *pw;
-    struct list *node;
+    struct poll_waiter *pw, *next;
     int n_pollfds;
     int retval;
 
-    assert(!running_cb);
+    /* Register fatal signal events before actually doing any real work for
+     * poll_block. */
+    fatal_signal_wait();
+
     if (max_pollfds < n_waiters) {
         max_pollfds = n_waiters;
         pollfds = xrealloc(pollfds, max_pollfds * sizeof *pollfds);
@@ -173,76 +164,36 @@ poll_block(void)
         log_wakeup(&timeout_backtrace, "%d-ms timeout", timeout);
     }
 
-    for (node = waiters.next; node != &waiters; ) {
-        pw = CONTAINER_OF(node, struct poll_waiter, node);
-        if (!pw->pollfd || !pw->pollfd->revents) {
-            if (pw->function) {
-                node = node->next;
-                continue;
-            }
-        } else {
-            if (VLOG_IS_DBG_ENABLED()) {
-                log_wakeup(pw->backtrace, "%s%s%s%s%s on fd %d",
-                           pw->pollfd->revents & POLLIN ? "[POLLIN]" : "",
-                           pw->pollfd->revents & POLLOUT ? "[POLLOUT]" : "",
-                           pw->pollfd->revents & POLLERR ? "[POLLERR]" : "",
-                           pw->pollfd->revents & POLLHUP ? "[POLLHUP]" : "",
-                           pw->pollfd->revents & POLLNVAL ? "[POLLNVAL]" : "",
-                           pw->fd);
-            }
-
-            if (pw->function) {
-#ifndef NDEBUG
-                running_cb = pw;
-#endif
-                pw->function(pw->fd, pw->pollfd->revents, pw->aux);
-#ifndef NDEBUG
-                running_cb = NULL;
-#endif
-            }
+    LIST_FOR_EACH_SAFE (pw, next, struct poll_waiter, node, &waiters) {
+        if (pw->pollfd->revents && VLOG_IS_DBG_ENABLED()) {
+            log_wakeup(pw->backtrace, "%s%s%s%s%s on fd %d",
+                       pw->pollfd->revents & POLLIN ? "[POLLIN]" : "",
+                       pw->pollfd->revents & POLLOUT ? "[POLLOUT]" : "",
+                       pw->pollfd->revents & POLLERR ? "[POLLERR]" : "",
+                       pw->pollfd->revents & POLLHUP ? "[POLLHUP]" : "",
+                       pw->pollfd->revents & POLLNVAL ? "[POLLNVAL]" : "",
+                       pw->fd);
         }
-        node = node->next;
         poll_cancel(pw);
     }
 
     timeout = -1;
     timeout_backtrace.n_frames = 0;
+
+    /* Handle any pending signals before doing anything else. */
+    fatal_signal_run();
 }
 
-/* Registers 'function' to be called with argument 'aux' by poll_block() when
- * 'fd' becomes ready for one of the events in 'events', which should be POLLIN
- * or POLLOUT or POLLIN | POLLOUT.
- *
- * The callback registration persists until the event actually occurs.  At that
- * point, it is automatically de-registered.  The callback function must
- * re-register the event by calling poll_fd_callback() again within the
- * callback, if it wants to be called back again later. */
-struct poll_waiter *
-poll_fd_callback(int fd, short int events, poll_fd_func *function, void *aux)
-{
-    struct poll_waiter *pw = new_waiter(fd, events);
-    pw->function = function;
-    pw->aux = aux;
-    return pw;
-}
-
-/* Cancels the file descriptor event registered with poll_fd_wait() or
- * poll_fd_callback().  'pw' must be the struct poll_waiter returned by one of
- * those functions.
+/* Cancels the file descriptor event registered with poll_fd_wait() using 'pw',
+ * the struct poll_waiter returned by that function.
  *
  * An event registered with poll_fd_wait() may be canceled from its time of
  * registration until the next call to poll_block().  At that point, the event
- * is automatically canceled by the system and its poll_waiter is freed.
- *
- * An event registered with poll_fd_callback() may be canceled from its time of
- * registration until its callback is actually called.  At that point, the
- * event is automatically canceled by the system and its poll_waiter is
- * freed. */
+ * is automatically canceled by the system and its poll_waiter is freed. */
 void
 poll_cancel(struct poll_waiter *pw)
 {
     if (pw) {
-        assert(pw != running_cb);
         list_remove(&pw->node);
         free(pw->backtrace);
         free(pw);
@@ -254,7 +205,7 @@ poll_cancel(struct poll_waiter *pw)
 static struct poll_waiter *
 new_waiter(int fd, short int events)
 {
-    struct poll_waiter *waiter = xcalloc(1, sizeof *waiter);
+    struct poll_waiter *waiter = xzalloc(sizeof *waiter);
     assert(fd >= 0);
     waiter->fd = fd;
     waiter->events = events;

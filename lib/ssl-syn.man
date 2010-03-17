@@ -1,0 +1,6 @@
+.IP "Public key infrastructure options:"
+[\fB\-\-private\-key=\fIprivkey.pem\fR]
+.br
+[\fB\-\-certificate=\fIcert.pem\fR]
+.br
+[\fB\-\-ca\-cert=\fIswitch\-cacert.pem\fR]

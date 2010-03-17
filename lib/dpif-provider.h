@@ -32,13 +32,16 @@ extern "C" {
  * This structure should be treated as opaque by dpif implementations. */
 struct dpif {
     const struct dpif_class *dpif_class;
-    char *name;
+    char *base_name;
+    char *full_name;
     uint8_t netflow_engine_type;
     uint8_t netflow_engine_id;
 };
 
 void dpif_init(struct dpif *, const struct dpif_class *, const char *name,
                uint8_t netflow_engine_type, uint8_t netflow_engine_id);
+void dpif_uninit(struct dpif *dpif, bool close);
+
 static inline void dpif_assert_class(const struct dpif *dpif,
                                      const struct dpif_class *dpif_class)
 {
@@ -56,15 +59,11 @@ static inline void dpif_assert_class(const struct dpif *dpif,
  * EWOULDBLOCK or EINPROGRESS.  We may relax this requirement in the future if
  * and when we encounter performance problems. */
 struct dpif_class {
-    /* Prefix for names of dpifs in this class, e.g. "netdev:".
+    /* Type of dpif in this class, e.g. "system", "netdev", etc.
      *
-     * One dpif class may have the empty string "" as its prefix, in which case
-     * that dpif class is associated with dpif names that don't match any other
-     * class name. */
-    const char *prefix;
-
-    /* Class name, for use in error messages. */
-    const char *name;
+     * One of the providers should supply a "system" type, since this is
+     * the type assumed if no type is specified when opening a dpif. */
+    const char *type;
 
     /* Performs periodic work needed by dpifs of this class, if any is
      * necessary. */
@@ -85,16 +84,14 @@ struct dpif_class {
      * case this function may be a null pointer. */
     int (*enumerate)(struct svec *all_dps);
 
-    /* Attempts to open an existing dpif, if 'create' is false, or to open an
-     * existing dpif or create a new one, if 'create' is true.  'name' is the
-     * full dpif name provided by the user, e.g. "udatapath:/var/run/mypath".
-     * This name is useful for error messages but must not be modified.
-     *
-     * 'suffix' is a copy of 'name' following the dpif's 'prefix'.
+    /* Attempts to open an existing dpif called 'name', if 'create' is false,
+     * or to open an existing dpif or create a new one, if 'create' is true.
+     * 'type' corresponds to the 'type' field used in the dpif_class
+     * structure.
      *
      * If successful, stores a pointer to the new dpif in '*dpifp'.  On failure
      * there are no requirements on what is stored in '*dpifp'. */
-    int (*open)(const char *name, char *suffix, bool create,
+    int (*open)(const char *name, const char *type, bool create,
                 struct dpif **dpifp);
 
     /* Closes 'dpif' and frees associated memory. */

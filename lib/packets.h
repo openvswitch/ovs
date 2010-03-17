@@ -26,6 +26,8 @@
 
 struct ofpbuf;
 
+bool dpid_from_string(const char *s, uint64_t *dpidp);
+
 #define ETH_ADDR_LEN           6
 
 static const uint8_t eth_addr_broadcast[ETH_ADDR_LEN] OVS_UNUSED
@@ -36,21 +38,16 @@ static inline bool eth_addr_is_broadcast(const uint8_t ea[6])
     return (ea[0] & ea[1] & ea[2] & ea[3] & ea[4] & ea[5]) == 0xff;
 }
 
-/* Returns true if 'ea' is an Ethernet address used for virtual interfaces
- * under XenServer.  Generally the actual Ethernet address is FE:FF:FF:FF:FF:FF
- * but it can be FE:FE:FE:FE:FE:FE in some cases. */
-static inline bool eth_addr_is_vif(const uint8_t ea[6])
-{
-    return ea[0] == 0xfe && (ea[1] & ea[2] & ea[3] & ea[4] & ea[5]) >= 0xfe;
-}
-
 static inline bool eth_addr_is_multicast(const uint8_t ea[6])
 {
     return ea[0] & 1;
 }
 static inline bool eth_addr_is_local(const uint8_t ea[6]) 
 {
-    return ea[0] & 2;
+    /* Local if it is either a locally administered address or a Nicira random
+     * address. */
+    return !!(ea[0] & 2)
+       || (ea[0] == 0x00 && ea[1] == 0x23 && ea[2] == 0x20 && !!(ea[3] & 0x80));
 }
 static inline bool eth_addr_is_zero(const uint8_t ea[6]) 
 {
@@ -89,6 +86,18 @@ static inline void eth_addr_random(uint8_t ea[ETH_ADDR_LEN])
     random_bytes(ea, ETH_ADDR_LEN);
     eth_addr_mark_random(ea);
 }
+static inline void eth_addr_nicira_random(uint8_t ea[ETH_ADDR_LEN])
+{
+    eth_addr_random(ea);
+
+    /* Set the OUI to the Nicira one. */
+    ea[0] = 0x00;
+    ea[1] = 0x23;
+    ea[2] = 0x20;
+
+    /* Set the top bit to indicate random Nicira address. */
+    ea[3] |= 0x80;
+}
 /* Returns true if 'ea' is a reserved multicast address, that a bridge must
  * never forward, false otherwise. */
 static inline bool eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
@@ -100,6 +109,8 @@ static inline bool eth_addr_is_reserved(const uint8_t ea[ETH_ADDR_LEN])
             && ea[4] == 0x00
             && (ea[5] & 0xf0) == 0x00);
 }
+
+bool eth_addr_from_string(const char *, uint8_t ea[ETH_ADDR_LEN]);
 
 void compose_benign_packet(struct ofpbuf *, const char *tag,
                            uint16_t snap_type,
@@ -215,6 +226,10 @@ BUILD_ASSERT_DECL(VLAN_ETH_HEADER_LEN == sizeof(struct vlan_eth_header));
 #define IP_VER(ip_ihl_ver) ((ip_ihl_ver) >> 4)
 #define IP_IHL(ip_ihl_ver) ((ip_ihl_ver) & 15)
 #define IP_IHL_VER(ihl, ver) (((ver) << 4) | (ihl))
+
+/* TOS fields. */
+#define IP_ECN_MASK 0x03
+#define IP_DSCP_MASK 0xfc
 
 #define IP_TYPE_ICMP 1
 #define IP_TYPE_TCP 6

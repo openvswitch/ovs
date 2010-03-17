@@ -1,0 +1,312 @@
+m4_define([JSON_CHECK_POSITIVE], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([json positive])
+   AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
+   AT_CAPTURE_FILE([input])
+   AT_CHECK([test-json $4 input], [0], [stdout], [])
+   AT_CHECK([cat stdout], [0], [$3
+])
+   AT_CLEANUP])
+
+m4_define([JSON_CHECK_NEGATIVE], 
+  [AT_SETUP([$1])
+   AT_KEYWORDS([json negative])
+   AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
+   AT_CAPTURE_FILE([input])
+   AT_CHECK([test-json $4 input], [1], [stdout], [])
+   AT_CHECK([[sed 's/^error: [^:]*:/error:/' < stdout]], [0], [$3
+])
+   AT_CLEANUP])
+
+AT_BANNER([JSON -- arrays])
+
+JSON_CHECK_POSITIVE([empty array], [[ [   ] ]], [[[]]])
+JSON_CHECK_POSITIVE([single-element array], [[ [ 1 ] ]], [[[1]]])
+JSON_CHECK_POSITIVE([2-element array], [[ [ 1, 2 ] ]], [[[1,2]]])
+JSON_CHECK_POSITIVE([many-element array],
+                    [[ [ 1, 2, 3, 4, 5 ] ]],
+                    [[[1,2,3,4,5]]])
+JSON_CHECK_NEGATIVE([missing comma], [[ [ 1, 2, 3 4, 5 ] ]],
+                    [error: syntax error expecting '@:>@' or ','])
+JSON_CHECK_NEGATIVE([trailing comma not allowed], 
+                    [[[1,2,]]], [error: syntax error expecting value])
+JSON_CHECK_NEGATIVE([doubled comma not allowed], 
+                    [[[1,,2]]], [error: syntax error expecting value])
+
+AT_BANNER([JSON -- strings])
+
+JSON_CHECK_POSITIVE([empty string], [[[ "" ]]], [[[""]]])
+JSON_CHECK_POSITIVE([1-character strings], 
+                    [[[ "a", "b", "c" ]]],
+                    [[["a","b","c"]]])
+JSON_CHECK_POSITIVE([escape sequences], 
+  [[[ " \" \\ \/ \b \f \n \r \t" ]]],
+  [[[" \" \\ / \b \f \n \r \t"]]])
+JSON_CHECK_POSITIVE([Unicode escape sequences], 
+  [[[ " \u0022 \u005c \u002F \u0008 \u000c \u000A \u000d \u0009" ]]],
+  [[[" \" \\ / \b \f \n \r \t"]]])
+JSON_CHECK_POSITIVE([surrogate pairs],
+  [[["\ud834\udd1e"]]],
+  [[["𝄞"]]])
+JSON_CHECK_NEGATIVE([a string by itself is not valid JSON], ["xxx"],
+                    [error: syntax error at beginning of input])
+JSON_CHECK_NEGATIVE([end of line in quoted string],
+                    [[["xxx
+"]]],
+                    [error: U+000A must be escaped in quoted string])
+JSON_CHECK_NEGATIVE([formfeed in quoted string],
+                    [[["xxx"]]],
+                    [error: U+000C must be escaped in quoted string])
+JSON_CHECK_NEGATIVE([bad escape in quoted string],
+                    [[["\x12"]]],
+                    [error: bad escape \x])
+JSON_CHECK_NEGATIVE([\u must be followed by 4 hex digits (1)],
+                    [[["\u1x"]]],
+                    [error: quoted string ends within \u escape])
+JSON_CHECK_NEGATIVE([\u must be followed by 4 hex digits (2)],
+                    [[["\u1xyz"]]],
+                    [error: malformed \u escape])
+JSON_CHECK_NEGATIVE([isolated leading surrogate not allowed],
+                    [[["\ud834xxx"]]],
+                    [error: malformed escaped surrogate pair])
+JSON_CHECK_NEGATIVE([surrogatess must paired properly],
+                    [[["\ud834\u1234"]]],
+                    [error: second half of escaped surrogate pair is not trailing surrogate])
+JSON_CHECK_NEGATIVE([null bytes not allowed], 
+                    [[["\u0000"]]], 
+                    [error: null bytes not supported in quoted strings])
+
+AT_SETUP([end of input in quoted string])
+AT_KEYWORDS([json negative])
+AT_CHECK([printf '\"xxx' | test-json -], [1],
+  [error: line 0, column 4, byte 4: unexpected end of input in quoted string
+])
+AT_CLEANUP
+
+AT_BANNER([JSON -- objects])
+
+JSON_CHECK_POSITIVE([empty object], [[{ }]], [[{}]])
+JSON_CHECK_POSITIVE([simple object],
+                    [[{"b": 2, "a": 1, "c": 3}]],
+                    [[{"a":1,"b":2,"c":3}]])
+JSON_CHECK_NEGATIVE([bad value], [[{"a": }, "b": 2]], 
+                    [error: syntax error expecting value])
+JSON_CHECK_NEGATIVE([missing colon], [[{"b": 2, "a" 1, "c": 3}]],
+                    [error: syntax error parsing object expecting ':'])
+JSON_CHECK_NEGATIVE([missing comma], [[{"b": 2 "a" 1, "c": 3}]],
+                    [error: syntax error expecting '}' or ','])
+JSON_CHECK_NEGATIVE([trailing comma not allowed],
+                    [[{"b": 2, "a": 1, "c": 3, }]],
+                    [[error: syntax error parsing object expecting string]])
+JSON_CHECK_NEGATIVE([doubled comma not allowed],
+                    [[{"b": 2, "a": 1,, "c": 3}]],
+                    [[error: syntax error parsing object expecting string]])
+JSON_CHECK_NEGATIVE([names must be strings],
+                    [[{1: 2}]],
+                    [[error: syntax error parsing object expecting string]])
+
+AT_BANNER([JSON -- literal names])
+
+JSON_CHECK_POSITIVE([null], [[[ null ]]], [[[null]]])
+JSON_CHECK_POSITIVE([false], [[[ false ]]], [[[false]]])
+JSON_CHECK_POSITIVE([true], [[[ true ]]], [[[true]]])
+JSON_CHECK_NEGATIVE([a literal by itself is not valid JSON], [null],
+                    [error: syntax error at beginning of input])
+JSON_CHECK_NEGATIVE([nullify is invalid], [[[ nullify ]]], 
+                    [error: invalid keyword 'nullify'])
+JSON_CHECK_NEGATIVE([nubs is invalid], [[[ nubs ]]],
+                    [error: invalid keyword 'nubs'])
+JSON_CHECK_NEGATIVE([xxx is invalid], [[[ xxx ]]], 
+                    [error: invalid keyword 'xxx'])
+
+AT_BANNER([JSON -- numbers])
+
+JSON_CHECK_POSITIVE(
+  [integers expressed as reals],
+  [[[1.0000000000,
+     2.00000000000000000000000000000000000,
+     2e5,
+     2.1234e4,
+     2.1230e3,
+     0e-10000,
+     0e10000]]],
+  [[[1,2,200000,21234,2123,0,0]]])
+JSON_CHECK_POSITIVE(
+  [large integers], 
+  [[[9223372036854775807, -9223372036854775808]]],
+  [[[9223372036854775807,-9223372036854775808]]])
+JSON_CHECK_POSITIVE(
+  [large integers expressed as reals], 
+  [[[9223372036854775807.0, -9223372036854775808.0,
+     92233720.36854775807e11, -9.223372036854775808e18]]],
+  [[[9223372036854775807,-9223372036854775808,9223372036854775807,-9223372036854775808]]])
+# It seems likely that the following test will fail on some system that
+# rounds slightly differently in arithmetic or in printf, but I'd like
+# to keep it this way until we run into such a system.
+JSON_CHECK_POSITIVE(
+  [large integers that overflow to reals], 
+  [[[9223372036854775807000, -92233720368547758080000]]],
+  [[[9.22337203685478e+21,-9.22337203685478e+22]]])
+
+JSON_CHECK_POSITIVE(
+  [negative zero],
+  [[[-0, -0.0, 1e-9999, -1e-9999]]],
+  [[[0,0,0,0]]])
+
+JSON_CHECK_POSITIVE(
+  [reals], 
+  [[[0.0, 1.0, 2.0, 3.0, 3.5, 81.250]]],
+  [[[0,1,2,3,3.5,81.25]]])
+JSON_CHECK_POSITIVE(
+  [scientific notation],
+  [[[1e3, 1E3, 2.5E2, 1e+3, 125e-3, 3.125e-2, 3125e-05, 1.525878906e-5]]],
+  [[[1000,1000,250,1000,0.125,0.03125,0.03125,1.525878906e-05]]])
+# It seems likely that the following test will fail on some system that
+# rounds slightly differently in arithmetic or in printf, but I'd like
+# to keep it this way until we run into such a system.
+JSON_CHECK_POSITIVE(
+  [+/- DBL_MAX],
+  [[[1.7976931348623157e+308, -1.7976931348623157e+308]]],
+  [[[1.79769313486232e+308,-1.79769313486232e+308]]])
+
+JSON_CHECK_POSITIVE(
+  [negative reals], 
+  [[[-0, -1.0, -2.0, -3.0, -3.5, -8.1250]]],
+  [[[0,-1,-2,-3,-3.5,-8.125]]])
+JSON_CHECK_POSITIVE(
+  [negative scientific notation],
+  [[[-1e3, -1E3, -2.5E2, -1e+3, -125e-3, -3.125e-2, -3125e-05, -1.525878906e-5]]],
+  [[[-1000,-1000,-250,-1000,-0.125,-0.03125,-0.03125,-1.525878906e-05]]])
+JSON_CHECK_POSITIVE(
+  [1e-9999 underflows to 0],
+  [[[1e-9999]]],
+  [[[0]]])
+JSON_CHECK_NEGATIVE([a number by itself is not valid JSON], [1],
+                    [error: syntax error at beginning of input])
+JSON_CHECK_NEGATIVE(
+  [leading zeros not allowed],
+  [[[0123]]],
+  [error: leading zeros not allowed])
+JSON_CHECK_NEGATIVE(
+  [1e9999 is too big],
+  [[[1e9999]]],
+  [error: number outside valid range])
+JSON_CHECK_NEGATIVE(
+  [exponent bigger than INT_MAX],
+  [[[1e9999999999999999999]]],
+  [error: exponent outside valid range])
+JSON_CHECK_NEGATIVE(
+  [decimal point must be followed by digit],
+  [[[1.]]],
+  [error: decimal point must be followed by digit])
+JSON_CHECK_NEGATIVE(
+  [exponent must contain at least one digit (1)],
+  [[[1e]]],
+  [error: exponent must contain at least one digit])
+JSON_CHECK_NEGATIVE(
+  [exponent must contain at least one digit (2)],
+  [[[1e+]]],
+  [error: exponent must contain at least one digit])
+JSON_CHECK_NEGATIVE(
+  [exponent must contain at least one digit (3)],
+  [[[1e-]]],
+  [error: exponent must contain at least one digit])
+
+AT_BANNER([JSON -- RFC 4627 examples])
+
+JSON_CHECK_POSITIVE([RFC 4267 object example],
+[[{
+   "Image": {
+       "Width":  800,
+       "Height": 600,
+       "Title":  "View from 15th Floor",
+       "Thumbnail": {
+           "Url":    "http://www.example.com/image/481989943",
+           "Height": 125,
+           "Width":  "100"
+       },
+       "IDs": [116, 943, 234, 38793]
+     }
+}]],
+[[{"Image":{"Height":600,"IDs":[116,943,234,38793],"Thumbnail":{"Height":125,"Url":"http://www.example.com/image/481989943","Width":"100"},"Title":"View from 15th Floor","Width":800}}]])
+
+JSON_CHECK_POSITIVE([RFC 4267 array example],
+[[[
+   {
+      "precision": "zip",
+      "Latitude":  37.7668,
+      "Longitude": -122.3959,
+      "Address":   "",
+      "City":      "SAN FRANCISCO",
+      "State":     "CA",
+      "Zip":       "94107",
+      "Country":   "US"
+   },
+   {
+      "precision": "zip",
+      "Latitude":  37.371991,
+      "Longitude": -122.026020,
+      "Address":   "",
+      "City":      "SUNNYVALE",
+      "State":     "CA",
+      "Zip":       "94085",
+      "Country":   "US"
+   }
+]]],
+[[[{"Address":"","City":"SAN FRANCISCO","Country":"US","Latitude":37.7668,"Longitude":-122.3959,"State":"CA","Zip":"94107","precision":"zip"},{"Address":"","City":"SUNNYVALE","Country":"US","Latitude":37.371991,"Longitude":-122.02602,"State":"CA","Zip":"94085","precision":"zip"}]]])
+
+AT_BANNER([JSON -- pathological cases])
+
+JSON_CHECK_NEGATIVE([trailing garbage], [[[1]null]],
+                    [error: trailing garbage at end of input])
+JSON_CHECK_NEGATIVE([formfeeds are not valid white space],
+                    [[[]]], [error: invalid character U+000c])
+JSON_CHECK_NEGATIVE([';' is not a valid token],
+                    [;], [error: invalid character ';'])
+JSON_CHECK_NEGATIVE([arrays nesting too deep],
+                    [m4_for([i], [0], [1002], [1], [@<:@])dnl
+                     m4_for([i], [0], [1002], [1], [@:>@])],
+                    [error: input exceeds maximum nesting depth 1000])
+JSON_CHECK_NEGATIVE([objects nesting too deep],
+                    [m4_for([i], [0], [1002], [1], [{"x":])dnl
+                     m4_for([i], [0], [1002], [1], [}])],
+                    [error: input exceeds maximum nesting depth 1000])
+
+AT_SETUP([input may not be empty])
+AT_KEYWORDS([json negative])
+AT_CHECK([test-json /dev/null], [1], [error: line 0, column 0, byte 0: empty input stream
+])
+AT_CLEANUP
+
+AT_BANNER([JSON -- multiple inputs])
+
+JSON_CHECK_POSITIVE([multiple adjacent objects], [[{}{}{}]], [[{}
+{}
+{}]],
+  [--multiple])
+
+JSON_CHECK_POSITIVE([multiple space-separated objects], [[{}  {}  {}]], [[{}
+{}
+{}]],
+  [--multiple])
+
+JSON_CHECK_POSITIVE([multiple objects on separate lines], [[{}
+{}
+{}]], [[{}
+{}
+{}]],
+  [--multiple])
+
+JSON_CHECK_POSITIVE([multiple objects and arrays], [[{}[]{}[]]], [[{}
+[]
+{}
+[]]],
+  [--multiple])
+
+JSON_CHECK_NEGATIVE([garbage between multiple objects], [[{}x{}]], [[{}
+error: invalid keyword 'x'
+{}]], [--multiple])
+
+JSON_CHECK_NEGATIVE([garbage after multiple objects], [[{}{}x]], [[{}
+{}
+error: invalid keyword 'x']], [--multiple])

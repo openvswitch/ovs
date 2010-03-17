@@ -5,6 +5,7 @@
 
 struct net;
 
+#include <linux/version.h>
 /* Before 2.6.21, struct net_device has a "struct class_device" member named
  * class_dev.  Beginning with 2.6.21, struct net_device instead has a "struct
  * device" member named dev.  Otherwise the usage of these members is pretty
@@ -23,12 +24,34 @@ struct net;
 static inline
 struct net *dev_net(const struct net_device *dev)
 {
+#ifdef CONFIG_NET_NS
+	return dev->nd_net;
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+	return &init_net;
+#else
 	return NULL;
+#endif
+}
+
+static inline
+void dev_net_set(struct net_device *dev, const struct net *net)
+{
+#ifdef CONFIG_NET_NS
+	dev->nd_dev = net;
+#endif
 }
 #endif /* linux kernel < 2.6.26 */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+#define NETIF_F_NETNS_LOCAL 0
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
 #define proc_net init_net.proc_net
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
+typedef int netdev_tx_t;
 #endif
 
 #ifndef for_each_netdev
@@ -40,6 +63,18 @@ struct net *dev_net(const struct net_device *dev)
 #define for_each_netdev(net,d) list_for_each_entry(d, &dev_base_head, dev_list)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+#define net_xmit_eval(e)       ((e) == NET_XMIT_CN? 0 : (e))
+#endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+extern void unregister_netdevice_queue(struct net_device *dev,
+					struct list_head *head);
+extern void unregister_netdevice_many(struct list_head *head);
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+extern void dev_disable_lro(struct net_device *dev);
+#endif
 
 #endif

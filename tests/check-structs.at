@@ -1,0 +1,41 @@
+AT_BANNER([struct alignment checker unit tests])
+
+m4_define([check_structs], [$top_srcdir/build-aux/check-structs])
+m4_define([RUN_STRUCT_CHECKER], 
+  [AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_DATA([test.h], [$1
+])
+   AT_CHECK_UNQUOTED([$PYTHON check_structs test.h], [$2], [$3], [$4])])
+
+AT_SETUP([check struct tail padding])
+RUN_STRUCT_CHECKER(
+[struct xyz {
+    uint16_t x;
+};], 
+  [1], [], 
+  [test.h:3: warning: struct xyz needs 2 bytes of tail padding
+])
+AT_CLEANUP
+
+AT_SETUP([check struct internal alignment])
+RUN_STRUCT_CHECKER(
+[struct xyzzy {
+    uint16_t x;
+    uint32_t y;
+};], 
+  [1], [], 
+  [test.h:3: warning: struct xyzzy member y is 2 bytes short of 4-byte alignment
+])
+AT_CLEANUP
+
+AT_SETUP([check struct declared size])
+RUN_STRUCT_CHECKER(
+[struct wibble {
+    uint64_t z;
+};
+OFP_ASSERT(sizeof(struct wibble) == 12);
+], 
+  [1], [], 
+  [test.h:4: warning: struct wibble is 8 bytes long but declared as 12
+])
+AT_CLEANUP

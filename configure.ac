@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2009 Nicira Networks
+# Copyright (c) 2008, 2009, 2010 Nicira Networks
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-AC_PREREQ(2.63)
+AC_PREREQ(2.64)
 AC_INIT(openvswitch, 0.99.2, ovs-bugs@openvswitch.org)
 NX_BUILDNR
 AC_CONFIG_SRCDIR([datapath/datapath.c])
@@ -38,6 +38,8 @@ AC_USE_SYSTEM_EXTENSIONS
 AC_C_BIGENDIAN
 AC_SYS_LARGEFILE
 
+AC_SEARCH_LIBS([pow], [m])
+
 OVS_CHECK_COVERAGE
 OVS_CHECK_NDEBUG
 OVS_CHECK_NETLINK
@@ -56,7 +58,6 @@ OVS_CHECK_MALLOC_HOOKS
 OVS_CHECK_VALGRIND
 OVS_CHECK_TTY_LOCK_DIR
 OVS_CHECK_SOCKET_LIBS
-OVS_CHECK_FAULT_LIBS
 
 AC_CHECK_FUNCS([strsignal])
 
@@ -87,5 +88,8 @@ datapath/linux-2.6/Kbuild
 datapath/linux-2.6/Makefile
 datapath/linux-2.6/Makefile.main
 tests/atlocal])
+
+dnl This makes sure that include/openflow gets created in the build directory.
+AC_CONFIG_COMMANDS([include/openflow/openflow.h.stamp])
 
 AC_OUTPUT

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -139,6 +139,7 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, flow_t *flow)
             if (vh) {
                 flow->dl_type = vh->vlan_next_type;
                 flow->dl_vlan = vh->vlan_tci & htons(VLAN_VID_MASK);
+                flow->dl_vlan_pcp = (ntohs(vh->vlan_tci) & 0xe000) >> 13;
             }
         }
         memcpy(flow->dl_src, eth->eth_src, ETH_ADDR_LEN);
@@ -150,6 +151,7 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, flow_t *flow)
             if (nh) {
                 flow->nw_src = nh->ip_src;
                 flow->nw_dst = nh->ip_dst;
+                flow->nw_tos = nh->ip_tos & IP_DSCP_MASK;
                 flow->nw_proto = nh->ip_proto;
                 packet->l4 = b.data;
                 if (!IP_IS_FRAGMENT(nh->ip_frag_off)) {
@@ -235,47 +237,28 @@ flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
     stats->n_packets = 1;
 }
 
-/* The Open vSwitch datapath supports matching on ARP payloads, which 
- * OpenFlow does not.  This function is identical to 'flow_to_match',
- * but does not hide the datapath's ability to match on ARP. */
-void
-flow_to_ovs_match(const flow_t *flow, uint32_t wildcards, 
-                  struct ofp_match *match)
-{
-    match->wildcards = htonl(wildcards);
-    match->in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
-                           : flow->in_port);
-    match->dl_vlan = flow->dl_vlan;
-    memcpy(match->dl_src, flow->dl_src, ETH_ADDR_LEN);
-    memcpy(match->dl_dst, flow->dl_dst, ETH_ADDR_LEN);
-    match->dl_type = flow->dl_type;
-    match->nw_src = flow->nw_src;
-    match->nw_dst = flow->nw_dst;
-    match->nw_proto = flow->nw_proto;
-    match->tp_src = flow->tp_src;
-    match->tp_dst = flow->tp_dst;
-    match->pad = 0;
-}
-
 /* Extract 'flow' with 'wildcards' into the OpenFlow match structure
  * 'match'. */
 void
 flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
 {
-    flow_to_ovs_match(flow, wildcards, match);
-
-    /* The datapath supports matching on an ARP's opcode and IP addresses, 
-     * but OpenFlow does not.  We wildcard and zero out the appropriate
-     * fields so that OpenFlow is unaware of our trickery. */
-    if (flow->dl_type == htons(ETH_TYPE_ARP)) {
-        wildcards |= (OFPFW_NW_PROTO | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL);
-        match->nw_src = 0;
-        match->nw_dst = 0;
-        match->nw_proto = 0;
-    }
     match->wildcards = htonl(wildcards);
+    match->in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
+                           : flow->in_port);
+    match->dl_vlan = flow->dl_vlan;
+    match->dl_vlan_pcp = flow->dl_vlan_pcp;
+    memcpy(match->dl_src, flow->dl_src, ETH_ADDR_LEN);
+    memcpy(match->dl_dst, flow->dl_dst, ETH_ADDR_LEN);
+    match->dl_type = flow->dl_type;
+    match->nw_src = flow->nw_src;
+    match->nw_dst = flow->nw_dst;
+    match->nw_tos = flow->nw_tos;
+    match->nw_proto = flow->nw_proto;
+    match->tp_src = flow->tp_src;
+    match->tp_dst = flow->tp_dst;
+    memset(match->pad1, '\0', sizeof match->pad1);
+    memset(match->pad2, '\0', sizeof match->pad2);
 }
-
 
 void
 flow_from_match(flow_t *flow, uint32_t *wildcards,
@@ -284,26 +267,20 @@ flow_from_match(flow_t *flow, uint32_t *wildcards,
     if (wildcards) {
         *wildcards = ntohl(match->wildcards);
     }
-    /* The datapath supports matching on an ARP's opcode and IP addresses, 
-     * but OpenFlow does not.  In case the controller hasn't, we need to 
-     * set the appropriate wildcard bits so that we're externally 
-     * OpenFlow-compliant. */
-    if (match->dl_type == htons(ETH_TYPE_ARP)) {
-        *wildcards |= (OFPFW_NW_PROTO | OFPFW_NW_SRC_ALL | OFPFW_NW_DST_ALL);
-    }
-
     flow->nw_src = match->nw_src;
     flow->nw_dst = match->nw_dst;
     flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
                      : ntohs(match->in_port));
     flow->dl_vlan = match->dl_vlan;
+    flow->dl_vlan_pcp = match->dl_vlan_pcp;
     flow->dl_type = match->dl_type;
     flow->tp_src = match->tp_src;
     flow->tp_dst = match->tp_dst;
     memcpy(flow->dl_src, match->dl_src, ETH_ADDR_LEN);
     memcpy(flow->dl_dst, match->dl_dst, ETH_ADDR_LEN);
+    flow->nw_tos = match->nw_tos;
     flow->nw_proto = match->nw_proto;
-    flow->reserved = 0;
+    memset(flow->reserved, 0, sizeof flow->reserved);
 }
 
 char *
@@ -317,11 +294,12 @@ flow_to_string(const flow_t *flow)
 void
 flow_format(struct ds *ds, const flow_t *flow)
 {
-    ds_put_format(ds, "in_port%04x:vlan%d mac"ETH_ADDR_FMT"->"ETH_ADDR_FMT" "
-                  "type%04x proto%"PRId8" ip"IP_FMT"->"IP_FMT" port%d->%d",
-                  flow->in_port, ntohs(flow->dl_vlan),
+    ds_put_format(ds, "in_port%04x:vlan%d:pcp%d mac"ETH_ADDR_FMT
+                  "->"ETH_ADDR_FMT" type%04x proto%"PRId8" tos%"PRIu8
+                  " ip"IP_FMT"->"IP_FMT" port%d->%d",
+                  flow->in_port, ntohs(flow->dl_vlan), flow->dl_vlan_pcp,
                   ETH_ADDR_ARGS(flow->dl_src), ETH_ADDR_ARGS(flow->dl_dst),
-                  ntohs(flow->dl_type), flow->nw_proto,
+                  ntohs(flow->dl_type), flow->nw_proto, flow->nw_tos,
                   IP_ARGS(&flow->nw_src), IP_ARGS(&flow->nw_dst),
                   ntohs(flow->tp_src), ntohs(flow->tp_dst));
 }

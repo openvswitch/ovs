@@ -45,6 +45,14 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 			mutex_unlock(&dp->mutex);
 		}
 		break;
+
+	case NETDEV_CHANGEMTU:
+		if (!is_dp_dev(dev)) {
+			mutex_lock(&dp->mutex);
+			set_dp_devs_mtu(dp, dev);
+			mutex_unlock(&dp->mutex);
+		}
+		break;
 	}
 	return NOTIFY_DONE;
 }
