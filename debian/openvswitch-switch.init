@@ -210,6 +210,11 @@ case "$1" in
             ovsdb-tool -vANY:console:emer \
                 create /etc/openvswitch-switch/conf \
                 /usr/share/openvswitch/vswitch.ovsschema
+        else
+            # Upgrade or downgrade schema and compact database.
+            ovsdb-tool -vANY:console:emer \
+                convert /etc/openvswitch-switch/conf \
+                /usr/share/openvswitch/vswitch.ovsschema
         fi
 
         if test "$ENABLE_MONITOR" = y; then
