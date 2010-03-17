@@ -505,11 +505,11 @@ AT_CHECK(
     [set bridge br0 \
       'other_config:datapath_id="0123456789ab"' \
       'other_config:hwaddr="00:11:22:33:44:55"' \
-      'external-ids={"xs-network-uuids"="9c45f225-a7cf-439d-976d-83db6271fda1"}' -- \
-     add bridge br0 external_ids '"xs-network-names"="local; remote; cloud"'])], 
+      'external-ids={"uuids"="9c45f225-a7cf-439d-976d-83db6271fda1"}' -- \
+     add bridge br0 external_ids '"roles"="local; remote; cloud"'])], 
   [0], [], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL_ONELINE([get bridge br0 other_config external-ids])], 
-  [0], [{datapath_id="0123456789ab", hwaddr="00:11:22:33:44:55"}\n{xs-network-names="local; remote; cloud", xs-network-uuids="9c45f225-a7cf-439d-976d-83db6271fda1"}
+  [0], [{datapath_id="0123456789ab", hwaddr="00:11:22:33:44:55"}\n{roles="local; remote; cloud", uuids="9c45f225-a7cf-439d-976d-83db6271fda1"}
 ], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([get bridge br0 other_config:hwaddr -- --if-exists get bridge br0 other-config:nonexistent])], 
   [0], ["00:11:22:33:44:55"
