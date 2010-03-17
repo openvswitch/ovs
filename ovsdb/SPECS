@@ -101,6 +101,7 @@ is represented by <database-schema>, as described below.
     A JSON object with the following members:
 
         "columns": {<id>: <column-schema>, ...}   required
+        "maxRows": <integer>                      optional
 
     The value of "columns" is a JSON object whose names are column
     names and whose values are <column-schema>s.
@@ -121,6 +122,13 @@ is represented by <database-schema>, as described below.
         ephemeral: when the database is closed and reopened, or when
         the database process is stopped and then started again, each
         "_version" also changes to a new random value.
+
+    If "maxRows" is specified, as a positive integer, it limits the
+    maximum number of rows that may be present in the table.  This is
+    a "deferred" constraint, enforced only at transaction commit time
+    (see the "transact" request below).  If "maxRows" is not
+    specified, the size of the table is limited only by the resources
+    available to the database server.
 
 <column-schema>
 
@@ -361,6 +369,11 @@ include at least the following:
         existed, if the column's row was inserted within the
         transaction), and this column is not allowed to be empty
         because its <type> has a "min" of 1.
+
+    "error": "constraint violation"
+
+        The number of rows in a table exceeds the maximum number
+        permitted by the table's "maxRows" value (see <table-schema>).
 
 If "params" contains one or more "wait" operations, then the
 transaction may take an arbitrary amount of time to complete.  The

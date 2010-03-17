@@ -18,6 +18,7 @@
 #include "table.h"
 
 #include <assert.h>
+#include <limits.h>
 
 #include "json.h"
 #include "column.h"
@@ -35,7 +36,8 @@ add_column(struct ovsdb_table_schema *ts, struct ovsdb_column *column)
 }
 
 struct ovsdb_table_schema *
-ovsdb_table_schema_create(const char *name, bool mutable)
+ovsdb_table_schema_create(const char *name, bool mutable,
+                          unsigned int max_rows)
 {
     struct ovsdb_column *uuid, *version;
     struct ovsdb_table_schema *ts;
@@ -44,6 +46,7 @@ ovsdb_table_schema_create(const char *name, bool mutable)
     ts->name = xstrdup(name);
     ts->mutable = mutable;
     shash_init(&ts->columns);
+    ts->max_rows = max_rows;
 
     uuid = ovsdb_column_create("_uuid", false, true, &ovsdb_type_uuid);
     add_column(ts, uuid);
@@ -62,7 +65,7 @@ ovsdb_table_schema_clone(const struct ovsdb_table_schema *old)
     struct ovsdb_table_schema *new;
     struct shash_node *node;
 
-    new = ovsdb_table_schema_create(old->name, old->mutable);
+    new = ovsdb_table_schema_create(old->name, old->mutable, old->max_rows);
     SHASH_FOR_EACH (node, &old->columns) {
         const struct ovsdb_column *column = node->data;
 
@@ -94,10 +97,11 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
                              struct ovsdb_table_schema **tsp)
 {
     struct ovsdb_table_schema *ts;
-    const struct json *columns, *mutable;
+    const struct json *columns, *mutable, *max_rows;
     struct shash_node *node;
     struct ovsdb_parser parser;
     struct ovsdb_error *error;
+    long long int n_max_rows;
 
     *tsp = NULL;
 
@@ -105,9 +109,21 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
     columns = ovsdb_parser_member(&parser, "columns", OP_OBJECT);
     mutable = ovsdb_parser_member(&parser, "mutable",
                                   OP_TRUE | OP_FALSE | OP_OPTIONAL);
+    max_rows = ovsdb_parser_member(&parser, "maxRows",
+                                   OP_INTEGER | OP_OPTIONAL);
     error = ovsdb_parser_finish(&parser);
     if (error) {
         return error;
+    }
+
+    if (max_rows) {
+        if (json_integer(max_rows) <= 0) {
+            return ovsdb_syntax_error(json, NULL,
+                                      "maxRows must be at least 1");
+        }
+        n_max_rows = max_rows->u.integer;
+    } else {
+        n_max_rows = UINT_MAX;
     }
 
     if (shash_is_empty(json_object(columns))) {
@@ -116,7 +132,8 @@ ovsdb_table_schema_from_json(const struct json *json, const char *name,
     }
 
     ts = ovsdb_table_schema_create(name,
-                                   mutable ? json_boolean(mutable) : true);
+                                   mutable ? json_boolean(mutable) : true,
+                                   MIN(n_max_rows, UINT_MAX));
     SHASH_FOR_EACH (node, json_object(columns)) {
         struct ovsdb_column *column;
 
@@ -160,6 +177,9 @@ ovsdb_table_schema_to_json(const struct ovsdb_table_schema *ts)
         }
     }
     json_object_put(json, "columns", columns);
+    if (ts->max_rows != UINT_MAX) {
+        json_object_put(json, "maxRows", json_integer_create(ts->max_rows));
+    }
 
     return json;
 }

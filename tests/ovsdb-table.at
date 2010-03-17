@@ -10,6 +10,11 @@ OVSDB_CHECK_POSITIVE([immutable table with one column],
       "mutable": false}']],
   [[{"columns":{"name":{"type":"string"}},"mutable":false}]])
 
+OVSDB_CHECK_POSITIVE([table with maxRows of 2],
+  [[parse-table mytable '{"columns": {"name": {"type": "string"}}, 
+                          "maxRows": 2}']],
+  [[{"columns":{"name":{"type":"string"}},"maxRows":2}]])
+
 OVSDB_CHECK_NEGATIVE([column names may not begin with _],
   [[parse-table mytable \
     '{"columns": {"_column": {"type": "integer"}}}']],
@@ -23,3 +28,8 @@ OVSDB_CHECK_NEGATIVE([table must have at least one column (1)],
 OVSDB_CHECK_NEGATIVE([table must have at least one column (2)],
   [[parse-table mytable '{"columns": {}}']],
   [[table must have at least one column]])
+
+OVSDB_CHECK_NEGATIVE([table maxRows must be positive],
+  [[parse-table mytable '{"columns": {"name": {"type": "string"}}, 
+                          "maxRows": 0}']],
+  [[syntax "{"columns":{"name":{"type":"string"}},"maxRows":0}": syntax error: maxRows must be at least 1]])

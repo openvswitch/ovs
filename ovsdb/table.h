@@ -29,10 +29,12 @@ struct ovsdb_table_schema {
     char *name;
     bool mutable;
     struct shash columns;       /* Contains "struct ovsdb_column *"s. */
+    unsigned int max_rows;      /* Maximum number of rows. */
 };
 
 struct ovsdb_table_schema *ovsdb_table_schema_create(const char *name,
-                                                     bool mutable);
+                                                     bool mutable,
+                                                     unsigned int max_rows);
 struct ovsdb_table_schema *ovsdb_table_schema_clone(
     const struct ovsdb_table_schema *);
 void ovsdb_table_schema_destroy(struct ovsdb_table_schema *);

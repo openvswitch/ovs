@@ -441,6 +441,27 @@ determine_changes(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
     return NULL;
 }
 
+static struct ovsdb_error * WARN_UNUSED_RESULT
+check_max_rows(struct ovsdb_txn *txn)
+{
+    struct ovsdb_txn_table *t;
+
+    LIST_FOR_EACH (t, struct ovsdb_txn_table, node, &txn->txn_tables) {
+        size_t n_rows = hmap_count(&t->table->rows);
+        unsigned int max_rows = t->table->schema->max_rows;
+
+        if (n_rows > max_rows) {
+            return ovsdb_error("constraint violation",
+                               "transaction causes \"%s\" table to contain "
+                               "%zu rows, greater than the schema-defined "
+                               "limit of %u row(s)",
+                               t->table->schema->name, n_rows, max_rows);
+        }
+    }
+
+    return NULL;
+}
+
 struct ovsdb_error *
 ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
 {
@@ -457,6 +478,13 @@ ovsdb_txn_commit(struct ovsdb_txn *txn, bool durable)
     if (list_is_empty(&txn->txn_tables)) {
         ovsdb_txn_abort(txn);
         return NULL;
+    }
+
+    /* Check maximum rows table constraints. */
+    error = check_max_rows(txn);
+    if (error) {
+        ovsdb_txn_abort(txn);
+        return error;
     }
 
     /* Update reference counts and check referential integrity. */

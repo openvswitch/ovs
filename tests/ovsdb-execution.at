@@ -28,7 +28,8 @@ m4_define([CONSTRAINT_SCHEMA],
        "constrained": {
          "columns": {
            "positive": {"type": {"key": {"type": "integer",
-                                         "minInteger": 1}}}}}}}]])
+                                         "minInteger": 1}}}},
+         "maxRows": 1}}}]])
 
 m4_define([WEAK_SCHEMA],
   [[{"name": "weak",
@@ -462,10 +463,20 @@ OVSDB_CHECK_EXECUTION([insert and update constraints],
       {"op": "update",
        "table": "constrained",
        "where": [],
-       "row": {"positive": -2}}]]]],
+       "row": {"positive": -2}}]]],
+   [[["constraints",
+      {"op": "insert",
+       "table": "constrained",
+       "row": {"positive": 1}}]]],
+   [[["constraints",
+      {"op": "insert",
+       "table": "constrained",
+       "row": {"positive": 2}}]]]],
   [[[{"details":"0 is less than minimum allowed value 1","error":"constraint violation"}]
 [{"details":"-1 is less than minimum allowed value 1","error":"constraint violation"}]
 [{"details":"-2 is less than minimum allowed value 1","error":"constraint violation"}]
+[{"uuid":["uuid","<0>"]}]
+[{"uuid":["uuid","<1>"]},{"details":"transaction causes \"constrained\" table to contain 2 rows, greater than the schema-defined limit of 1 row(s)","error":"constraint violation"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([referential integrity -- simple],
