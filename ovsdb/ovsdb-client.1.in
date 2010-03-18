@@ -147,6 +147,7 @@ other command, they have no effect.
 .so lib/daemon.man
 .SS "Logging Options"
 .so lib/vlog.man
+.SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/ssl-bootstrap.man
 .SS "Other Options"

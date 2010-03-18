@@ -50,6 +50,7 @@ run a single command, e.g.:
 .so lib/daemon.man
 .SS "Logging Options"
 .so lib/vlog.man
+.SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .SS "Other Options"
 .so lib/common.man

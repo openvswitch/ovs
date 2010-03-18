@@ -1,4 +1,3 @@
-.SS "Public Key Infrastructure Options"
 .IP "\fB\-p\fR \fIprivkey.pem\fR"
 .IQ "\fB\-\-private\-key=\fIprivkey.pem\fR"
 Specifies a PEM file containing the private key used as \fB\*(PN\fR's

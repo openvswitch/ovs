@@ -478,6 +478,7 @@ described in \fBFlow Syntax\fR, above.
 \fB--strict\fR
 Uses strict matching when running flow modification commands.
 .
+.SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/vlog.man
 .so lib/common.man

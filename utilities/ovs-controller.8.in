@@ -81,6 +81,7 @@ to it by switches.
 This option is only for debugging the Open vSwitch implementation of
 ``fail open'' mode.  It must not be used in production.
 .
+.SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/ssl-peer-ca-cert.man
 .so lib/daemon.man

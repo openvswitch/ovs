@@ -120,6 +120,7 @@ zero will cause \fBovs\-vsctl\fR to wait forever.  If the timeout expires,
 not used, \fBovs\-vsctl\fR uses a timeout of five seconds.
 (A timeout would normally happen only if the database cannot be contacted.)
 .
+.SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/vlog.man
 .
