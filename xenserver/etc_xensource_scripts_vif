@@ -133,8 +133,8 @@ xs550_set_internal_network_uuid()
         local bridge=$1
         local net_uuid=$(xenstore-read "${PRIVATE}/network-uuid" 2>/dev/null)
         if [ -n "${net_uuid}" ] ; then
-            logger -t scripts-vif "${bridge} xs-network-uuids ${net_uuid}"
-            echo "-- br-set-external-id $bridge xs-network-uuids ${net_uuid}"
+            logger -t scripts-vif "${bridge} network-uuids ${net_uuid}"
+            echo "-- br-set-external-id $bridge network-uuids ${net_uuid}"
         fi
     fi
 }

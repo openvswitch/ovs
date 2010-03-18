@@ -653,7 +653,7 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xenbr2 configuration
     --with-iface --if-exists del-port eth2
     --may-exist add-br xenbr2
     --may-exist add-port xenbr2 eth2
-    br-set-external-id xenbr2 xs-network-uuids d08c8749-0c8f-9e8d-ce25-fd364661ee99
+    br-set-external-id xenbr2 network-uuids d08c8749-0c8f-9e8d-ce25-fd364661ee99
     set Interface xenbr2 MAC="00:15:17:a0:29:80"
 /sbin/ifup xenbr2
 /sbin/update-issue
@@ -716,11 +716,11 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi3 configuration
     --with-iface --if-exists del-port eth3
     --may-exist add-br xenbr3
     --may-exist add-port xenbr3 eth3
-    br-set-external-id xenbr3 xs-network-uuids 2902ae1b-8013-897a-b697-0b200ea3aaa5;db7bdc03-074d-42ae-fc73-9b06de1d57f6
+    br-set-external-id xenbr3 network-uuids 2902ae1b-8013-897a-b697-0b200ea3aaa5;db7bdc03-074d-42ae-fc73-9b06de1d57f6
     set Interface xenbr3 MAC="00:15:17:a0:29:81"
     --if-exists del-br xapi3
     --may-exist add-br xapi3 xenbr3 123
-    br-set-external-id xapi3 xs-network-uuids 2902ae1b-8013-897a-b697-0b200ea3aaa5;db7bdc03-074d-42ae-fc73-9b06de1d57f6
+    br-set-external-id xapi3 network-uuids 2902ae1b-8013-897a-b697-0b200ea3aaa5;db7bdc03-074d-42ae-fc73-9b06de1d57f6
     set Interface xapi3 MAC="00:15:17:a0:29:81"
 /sbin/ifup xapi3
 /sbin/update-issue
@@ -801,7 +801,7 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi1 configuration
     --with-iface --if-exists del-port bond0
     --fake-iface add-bond xapi1 bond0 eth0 eth1
     set Port bond0 MAC="00:22:19:22:4b:af" bond_downdelay=200 other-config:"bond-miimon"=100 other-config:"bond-use_carrier"=1 other-config:"bond-mode"="balance-slb" bond_updelay=31000
-    br-set-external-id xapi1 xs-network-uuids 99be2da4-6c33-6f8e-49ea-3bc592fe3c85;45cbbb43-113d-a712-3231-c6463f253cef
+    br-set-external-id xapi1 network-uuids 99be2da4-6c33-6f8e-49ea-3bc592fe3c85;45cbbb43-113d-a712-3231-c6463f253cef
     set Interface xapi1 MAC="00:22:19:22:4b:af"
 /sbin/ifup xapi1
 action_up: bring up bond0
@@ -882,11 +882,11 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi2 configuration
     --with-iface --if-exists del-port bond0
     --fake-iface add-bond xapi1 bond0 eth0 eth1
     set Port bond0 MAC="00:22:19:22:4b:af" bond_downdelay=200 other-config:"bond-miimon"=100 other-config:"bond-use_carrier"=1 other-config:"bond-mode"="balance-slb" bond_updelay=31000
-    br-set-external-id xapi1 xs-network-uuids 99be2da4-6c33-6f8e-49ea-3bc592fe3c85;45cbbb43-113d-a712-3231-c6463f253cef
+    br-set-external-id xapi1 network-uuids 99be2da4-6c33-6f8e-49ea-3bc592fe3c85;45cbbb43-113d-a712-3231-c6463f253cef
     set Interface xapi1 MAC="00:22:19:22:4b:af"
     --if-exists del-br xapi2
     --may-exist add-br xapi2 xapi1 4
-    br-set-external-id xapi2 xs-network-uuids 99be2da4-6c33-6f8e-49ea-3bc592fe3c85;45cbbb43-113d-a712-3231-c6463f253cef
+    br-set-external-id xapi2 network-uuids 99be2da4-6c33-6f8e-49ea-3bc592fe3c85;45cbbb43-113d-a712-3231-c6463f253cef
     set Interface xapi2 MAC="00:22:19:22:4b:af"
 /sbin/ifup xapi2
 action_up: bring up bond0

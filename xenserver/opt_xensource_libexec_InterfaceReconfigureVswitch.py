@@ -333,9 +333,9 @@ def set_br_external_ids(pif):
         xs_network_uuids += [nwrec['uuid']]
 
     vsctl_argv = []
-    vsctl_argv += ['# configure xs-network-uuids']
+    vsctl_argv += ['# configure network-uuids']
     vsctl_argv += ['--', 'br-set-external-id', pif_bridge_name(pif),
-            'xs-network-uuids', ';'.join(xs_network_uuids)]
+            'network-uuids', ';'.join(xs_network_uuids)]
 
     vsctl_argv += ['# configure MAC']
     vsctl_argv += ['--', 'set', 'Interface', pif_ipdev_name(pif),
@@ -438,8 +438,8 @@ class DatapathVswitch(Datapath):
 
         #nw = db().get_pif_record(self._pif)['network']
         #nwrec = db().get_network_record(nw)
-        #vsctl_argv += ['# deconfigure xs-network-uuids']
-        #vsctl_argv += ['--del-entry=bridge.%s.xs-network-uuids=%s' % (bridge,nwrec['uuid'])]
+        #vsctl_argv += ['# deconfigure network-uuids']
+        #vsctl_argv += ['--del-entry=bridge.%s.network-uuids=%s' % (bridge,nwrec['uuid'])]
 
         log("deconfigure ipdev %s on %s" % (ipdev,bridge))
         vsctl_argv += ["# deconfigure ipdev %s" % ipdev]

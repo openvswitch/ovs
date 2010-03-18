@@ -80,8 +80,8 @@ install -m 644 xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/InterfaceReconfigureVswitch.py
 install -m 755 xenserver/etc_xensource_scripts_vif \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/vif
-install -m 755 xenserver/usr_share_vswitch_scripts_refresh-xs-network-uuids \
-               $RPM_BUILD_ROOT/usr/share/vswitch/scripts/refresh-xs-network-uuids
+install -m 755 xenserver/usr_share_vswitch_scripts_refresh-network-uuids \
+               $RPM_BUILD_ROOT/usr/share/vswitch/scripts/refresh-network-uuids
 install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT/usr/share/vswitch/scripts/xen-bugtool
 install -m 755 xenserver/usr_sbin_brctl \
@@ -339,7 +339,7 @@ fi
 %if %(echo '%{xen_version}'|awk -F"." '{if ($3>=18) print 1; else print 0;}')
 /lib/modules/%{xen_version}/kernel/net/vswitch/ip_gre_mod.ko
 %endif
-/usr/share/vswitch/scripts/refresh-xs-network-uuids
+/usr/share/vswitch/scripts/refresh-network-uuids
 /usr/share/vswitch/scripts/interface-reconfigure
 /usr/share/vswitch/scripts/InterfaceReconfigure.py
 /usr/share/vswitch/scripts/InterfaceReconfigureBridge.py

@@ -126,9 +126,12 @@
         Key-value pairs that identify this bridge's role in external systems.
         The currently defined key-value pairs are:
         <dl>
-          <dt><code>xs-network-uuids</code></dt>
-          <dd>Space-delimited set of the Citrix XenServer network UUIDs with
-            which this bridge is associated.</dd>
+          <dt><code>network-uuids</code></dt>
+          <dd>Space-delimited set of universally unique identifier(s) for the
+            network with which this bridge is associated.  The form of the
+            identifier(s) depends on the type of the host.  On a Citrix
+            XenServer host, the network identifiers are RFC 4122 UUIDs as
+            displayed by, e.g., <code>xe network-list</code>.</dd>
         </dl>
       </column>
 
@@ -265,7 +268,7 @@
         IDs for the fake bridge are defined here by prefixing a
         <ref table="Bridge"/> <ref table="Bridge" column="external_ids"/> key
         with <code>fake-bridge-</code>,
-        e.g. <code>fake-bridge-xs-network-uuids</code>.
+        e.g. <code>fake-bridge-network-uuids</code>.
       </column>
 
       <column name="other_config">
