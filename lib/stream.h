@@ -29,7 +29,7 @@ void stream_usage(const char *name, bool active, bool passive, bool bootstrap);
 /* Bidirectional byte streams. */
 int stream_verify_name(const char *name);
 int stream_open(const char *name, struct stream **);
-int stream_open_block(const char *name, struct stream **);
+int stream_open_block(int error, struct stream **);
 void stream_close(struct stream *);
 const char *stream_get_name(const struct stream *);
 uint32_t stream_get_remote_ip(const struct stream *);

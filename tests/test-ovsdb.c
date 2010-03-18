@@ -1764,7 +1764,7 @@ do_idl(int argc, char *argv[])
     if (argc > 2) {
         struct stream *stream;
 
-        error = stream_open_block(argv[1], &stream);
+        error = stream_open_block(stream_open(argv[1], &stream), &stream);
         if (error) {
             ovs_fatal(error, "failed to connect to \"%s\"", argv[1]);
         }

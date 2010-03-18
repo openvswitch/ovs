@@ -274,7 +274,7 @@ do_request(int argc OVS_UNUSED, char *argv[])
         ovs_fatal(0, "not a valid JSON-RPC request: %s", string);
     }
 
-    error = stream_open_block(argv[1], &stream);
+    error = stream_open_block(stream_open(argv[1], &stream), &stream);
     if (error) {
         ovs_fatal(error, "could not open \"%s\"", argv[1]);
     }
@@ -313,7 +313,7 @@ do_notify(int argc OVS_UNUSED, char *argv[])
         ovs_fatal(0, "not a JSON RPC-valid notification: %s", string);
     }
 
-    error = stream_open_block(argv[1], &stream);
+    error = stream_open_block(stream_open(argv[1], &stream), &stream);
     if (error) {
         ovs_fatal(error, "could not open \"%s\"", argv[1]);
     }

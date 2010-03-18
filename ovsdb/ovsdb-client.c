@@ -224,7 +224,7 @@ open_jsonrpc(const char *server)
     struct stream *stream;
     int error;
 
-    error = stream_open_block(server, &stream);
+    error = stream_open_block(stream_open(server, &stream), &stream);
     if (error == EAFNOSUPPORT) {
         struct pstream *pstream;
 
