@@ -51,7 +51,6 @@ static struct vconn_class stream_vconn_class;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 25);
 
 static void vconn_stream_clear_txbuf(struct vconn_stream *);
-static int count_fields(const char *);
 
 static struct vconn *
 vconn_stream_new(struct stream *stream, int connect_status)
@@ -76,22 +75,14 @@ vconn_stream_new(struct stream *stream, int connect_status)
  *
  * Returns 0 if successful, otherwise a positive errno value. */
 static int
-vconn_stream_open(const char *name_, char *suffix OVS_UNUSED,
+vconn_stream_open(const char *name, char *suffix OVS_UNUSED,
                   struct vconn **vconnp)
 {
     struct stream *stream;
-    char *name;
     int error;
 
-    if (!strncmp(name_, "tcp:", 4) && count_fields(name_) < 3) {
-        name = xasprintf("%s:%d", name_, OFP_TCP_PORT);
-    } else if (!strncmp(name_, "ssl:", 4) && count_fields(name_) < 3) {
-        name = xasprintf("%s:%d", name_, OFP_SSL_PORT);
-    } else {
-        name = xstrdup(name_);
-    }
-    error = stream_open(name, &stream);
-    free(name);
+    error = stream_open_with_default_ports(name, OFP_TCP_PORT, OFP_SSL_PORT,
+                                           &stream);
 
     if (error && error != EAGAIN) {
         return error;
@@ -302,29 +293,21 @@ pvconn_pstream_cast(struct pvconn *pvconn)
  * Returns 0 if successful, otherwise a positive errno value.  (The current
  * implementation never fails.) */
 static int
-pvconn_pstream_listen(const char *name_, char *suffix OVS_UNUSED,
+pvconn_pstream_listen(const char *name, char *suffix OVS_UNUSED,
                       struct pvconn **pvconnp)
 {
     struct pvconn_pstream *ps;
     struct pstream *pstream;
-    char *name;
     int error;
 
-    if (!strncmp(name_, "ptcp:", 5) && count_fields(name_) < 2) {
-        name = xasprintf("%s%d", name_, OFP_TCP_PORT);
-    } else if (!strncmp(name_, "pssl:", 5) && count_fields(name_) < 2) {
-        name = xasprintf("%s%d", name_, OFP_SSL_PORT);
-    } else {
-        name = xstrdup(name_);
-    }
-    error = pstream_open(name, &pstream);
-    free(name);
+    error = pstream_open_with_default_ports(name, OFP_TCP_PORT, OFP_SSL_PORT,
+                                            &pstream);
     if (error) {
         return error;
     }
 
     ps = xmalloc(sizeof *ps);
-    pvconn_init(&ps->pvconn, &pstream_pvconn_class, name_);
+    pvconn_init(&ps->pvconn, &pstream_pvconn_class, name);
     ps->pstream = pstream;
     *pvconnp = &ps->pvconn;
     return 0;
@@ -363,23 +346,6 @@ pvconn_pstream_wait(struct pvconn *pvconn)
 {
     struct pvconn_pstream *ps = pvconn_pstream_cast(pvconn);
     pstream_wait(ps->pstream);
-}
-
-static int
-count_fields(const char *s_)
-{
-    char *s, *field, *save_ptr;
-    int n = 0;
-
-    save_ptr = NULL;
-    s = xstrdup(s_);
-    for (field = strtok_r(s, ":", &save_ptr); field != NULL;
-         field = strtok_r(NULL, ":", &save_ptr)) {
-        n++;
-    }
-    free(s);
-
-    return n;
 }
 
 /* Stream-based vconns and pvconns. */

@@ -61,5 +61,16 @@ void pstream_close(struct pstream *);
 int pstream_accept(struct pstream *, struct stream **);
 int pstream_accept_block(struct pstream *, struct stream **);
 void pstream_wait(struct pstream *);
+
+/* Convenience funtions. */
+
+int stream_open_with_default_ports(const char *name,
+                                   uint16_t default_tcp_port,
+                                   uint16_t default_ssl_port,
+                                   struct stream **);
+int pstream_open_with_default_ports(const char *name,
+                                    uint16_t default_ptcp_port,
+                                    uint16_t default_pssl_port,
+                                    struct pstream **);
 
 #endif /* stream.h */

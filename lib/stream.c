@@ -647,3 +647,72 @@ pstream_init(struct pstream *pstream, struct pstream_class *class,
     pstream->class = class;
     pstream->name = xstrdup(name);
 }
+
+static int
+count_fields(const char *s_)
+{
+    char *s, *field, *save_ptr;
+    int n = 0;
+
+    save_ptr = NULL;
+    s = xstrdup(s_);
+    for (field = strtok_r(s, ":", &save_ptr); field != NULL;
+         field = strtok_r(NULL, ":", &save_ptr)) {
+        n++;
+    }
+    free(s);
+
+    return n;
+}
+
+/* Like stream_open(), but for tcp streams the port defaults to
+ * 'default_tcp_port' if no port number is given and for SSL streams the port
+ * defaults to 'default_ssl_port' if no port number is given. */
+int
+stream_open_with_default_ports(const char *name_,
+                               uint16_t default_tcp_port,
+                               uint16_t default_ssl_port,
+                               struct stream **streamp)
+{
+    char *name;
+    int error;
+
+    if (!strncmp(name_, "tcp:", 4) && count_fields(name_) < 3) {
+        name = xasprintf("%s:%d", name_, default_tcp_port);
+    } else if (!strncmp(name_, "ssl:", 4) && count_fields(name_) < 3) {
+        name = xasprintf("%s:%d", name_, default_ssl_port);
+    } else {
+        name = xstrdup(name_);
+    }
+    error = stream_open(name, streamp);
+    free(name);
+
+    return error;
+}
+
+/* Like pstream_open(), but for ptcp streams the port defaults to
+ * 'default_ptcp_port' if no port number is given and for passive SSL streams
+ * the port defaults to 'default_pssl_port' if no port number is given. */
+int
+pstream_open_with_default_ports(const char *name_,
+                                uint16_t default_ptcp_port,
+                                uint16_t default_pssl_port,
+                                struct pstream **pstreamp)
+{
+    char *name;
+    int error;
+
+    if (!strncmp(name_, "ptcp:", 5) && count_fields(name_) < 2) {
+        name = xasprintf("%s%d", name_, default_ptcp_port);
+    } else if (!strncmp(name_, "pssl:", 5) && count_fields(name_) < 2) {
+        name = xasprintf("%s%d", name_, default_pssl_port);
+    } else {
+        name = xstrdup(name_);
+    }
+    error = pstream_open(name, pstreamp);
+    free(name);
+
+    return error;
+}
+
+
