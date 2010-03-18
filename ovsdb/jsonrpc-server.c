@@ -144,7 +144,7 @@ ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
     struct pstream *listener;
     int error;
 
-    error = pstream_open(name, &listener);
+    error = jsonrpc_pstream_open(name, &listener);
     if (error && error != EAFNOSUPPORT) {
         VLOG_ERR_RL(&rl, "%s: listen failed: %s", name, strerror(error));
         return;

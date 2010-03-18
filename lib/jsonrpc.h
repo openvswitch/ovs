@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,9 +25,20 @@
 
 struct json;
 struct jsonrpc_msg;
+struct pstream;
 struct stream;
 
 /* API for a JSON-RPC stream. */
+
+/* Default port numbers.
+ *
+ * There is nothing standard about these port numbers.  They are simply what
+ * we have chosen. */
+#define JSONRPC_TCP_PORT 6632
+#define JSONRPC_SSL_PORT 6632
+
+int jsonrpc_stream_open(const char *name, struct stream **);
+int jsonrpc_pstream_open(const char *name, struct pstream **);
 
 struct jsonrpc *jsonrpc_open(struct stream *);
 void jsonrpc_close(struct jsonrpc *);

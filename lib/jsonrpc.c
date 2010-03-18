@@ -56,6 +56,24 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
 static void jsonrpc_received(struct jsonrpc *);
 static void jsonrpc_cleanup(struct jsonrpc *);
 
+/* This is just the same as stream_open() except that it uses the default
+ * JSONRPC ports if none is specified. */
+int
+jsonrpc_stream_open(const char *name, struct stream **streamp)
+{
+    return stream_open_with_default_ports(name, JSONRPC_TCP_PORT,
+                                          JSONRPC_SSL_PORT, streamp);
+}
+
+/* This is just the same as pstream_open() except that it uses the default
+ * JSONRPC ports if none is specified. */
+int
+jsonrpc_pstream_open(const char *name, struct pstream **pstreamp)
+{
+    return pstream_open_with_default_ports(name, JSONRPC_TCP_PORT,
+                                           JSONRPC_SSL_PORT, pstreamp);
+}
+
 struct jsonrpc *
 jsonrpc_open(struct stream *stream)
 {
@@ -727,12 +745,12 @@ jsonrpc_session_connect(struct jsonrpc_session *s)
 
     jsonrpc_session_disconnect(s);
     if (!reconnect_is_passive(s->reconnect)) {
-        error = stream_open(name, &s->stream);
+        error = jsonrpc_stream_open(name, &s->stream);
         if (!error) {
             reconnect_connecting(s->reconnect, time_msec());
         }
     } else {
-        error = s->pstream ? 0 : pstream_open(name, &s->pstream);
+        error = s->pstream ? 0 : jsonrpc_pstream_open(name, &s->pstream);
         if (!error) {
             reconnect_listening(s->reconnect, time_msec());
         }
