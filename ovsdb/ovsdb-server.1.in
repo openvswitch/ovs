@@ -61,6 +61,9 @@ described below.
 These commands are specific to \fBovsdb\-server\fR.
 .IP "\fBexit\fR"
 Causes \fBovsdb\-server\fR to gracefully terminate.
+.IP "\fBovsdb-server/compact\fR"
+Compacts the database in-place.  The database is also automatically
+compacted occasionally.
 .so lib/vlog-unixctl.man
 .SH "SEE ALSO"
 .

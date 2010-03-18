@@ -41,4 +41,6 @@ struct ovsdb_error *ovsdb_log_write(struct ovsdb_log *, struct json *)
 struct ovsdb_error *ovsdb_log_commit(struct ovsdb_log *)
     WARN_UNUSED_RESULT;
 
+off_t ovsdb_log_get_offset(const struct ovsdb_log *);
+
 #endif /* ovsdb/log.h */

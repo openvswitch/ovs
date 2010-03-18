@@ -369,3 +369,11 @@ ovsdb_log_commit(struct ovsdb_log *file)
     return 0;
 }
 
+/* Returns the current offset into the file backing 'log', in bytes.  This
+ * reflects the number of bytes that have been read or written in the file.  If
+ * the whole file has been read, this is the file size. */
+off_t
+ovsdb_log_get_offset(const struct ovsdb_log *log)
+{
+    return log->offset;
+}

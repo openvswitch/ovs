@@ -50,6 +50,7 @@
 #define THIS_MODULE VLM_ovsdb_server
 
 static unixctl_cb_func ovsdb_server_exit;
+static unixctl_cb_func ovsdb_server_compact;
 
 static void parse_options(int argc, char *argv[], char **file_namep,
                           struct shash *remotes, char **unixctl_pathp,
@@ -68,6 +69,7 @@ main(int argc, char *argv[])
     struct ovsdb_jsonrpc_server *jsonrpc;
     struct shash remotes;
     struct ovsdb_error *error;
+    struct ovsdb_file *file;
     struct ovsdb *db;
     struct process *run_process;
     char *file_name;
@@ -87,7 +89,7 @@ main(int argc, char *argv[])
     die_if_already_running();
     daemonize_start();
 
-    error = ovsdb_file_open(file_name, false, &db);
+    error = ovsdb_file_open(file_name, false, &db, &file);
     if (error) {
         ovs_fatal(0, "%s", ovsdb_error_to_string(error));
     }
@@ -119,6 +121,8 @@ main(int argc, char *argv[])
     daemonize_complete();
 
     unixctl_command_register("exit", ovsdb_server_exit, &exiting);
+    unixctl_command_register("ovsdb-server/compact", ovsdb_server_compact,
+                             file);
 
     exiting = false;
     while (!exiting) {
@@ -232,6 +236,25 @@ ovsdb_server_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
     bool *exiting = exiting_;
     *exiting = true;
     unixctl_command_reply(conn, 200, NULL);
+}
+
+static void
+ovsdb_server_compact(struct unixctl_conn *conn, const char *args OVS_UNUSED,
+                     void *file_)
+{
+    struct ovsdb_file *file = file_;
+    struct ovsdb_error *error;
+
+    VLOG_INFO("compacting database by user request");
+    error = ovsdb_file_compact(file);
+    if (!error) {
+        unixctl_command_reply(conn, 200, NULL);
+    } else {
+        char *s = ovsdb_error_to_string(error);
+        ovsdb_error_destroy(error);
+        unixctl_command_reply(conn, 503, s);
+        free(s);
+    }
 }
 
 static void

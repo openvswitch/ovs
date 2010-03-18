@@ -89,6 +89,123 @@ AT_CHECK(
   [test ! -e pid || kill `cat pid`])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
+
+AT_SETUP([compacting online])
+AT_KEYWORDS([ovsdb server compact])
+AT_DATA([schema], [ORDINAL_SCHEMA
+])
+touch .db.~lock~
+AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
+AT_CHECK([ovsdb-server --detach --pidfile=$PWD/pid --unixctl=$PWD/unixctl --remote=punix:socket --log-file=$PWD/ovsdb-server.log db], [0], [ignore], [ignore])
+AT_CAPTURE_FILE([ovsdb-server.log])
+dnl Do a bunch of random transactions that put crap in the database log.
+AT_CHECK(
+  [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
+      set -- $pair
+      ovsdb-client transact unix:socket '
+        ["ordinals",
+         {"op": "insert",
+          "table": "ordinals",
+          "row": {"name": "'$1'", "number": '$2'}},
+         {"op": "comment",
+          "comment": "add row for '"$pair"'"}]'
+      ovsdb-client transact unix:socket '
+        ["ordinals",
+         {"op": "delete",
+          "table": "ordinals",
+          "where": [["number", "==", '$2']]},
+         {"op": "comment",
+          "comment": "delete row for '"$2"'"}]'
+      ovsdb-client transact unix:socket '
+        ["ordinals",
+         {"op": "insert",
+          "table": "ordinals",
+          "row": {"name": "'$1'", "number": '$2'}},
+         {"op": "comment",
+          "comment": "add back row for '"$pair"'"}]'
+    done]],
+  [0], [stdout], [ignore], [test ! -e pid || kill `cat pid`])
+dnl Check that all the crap is in fact in the database log.
+AT_CHECK([[perl $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/']], [0],
+  [[{"name":"ordinals","tables":{"ordinals":{"columns":{"name":{"type":"string"},"number":{"type":"integer"}}}}}
+{"ordinals":{"<0>":{"name":"zero"}},"_comment":"add row for zero 0","_date":0}
+{"ordinals":{"<0>":null},"_comment":"delete row for 0","_date":0}
+{"ordinals":{"<1>":{"name":"zero"}},"_comment":"add back row for zero 0","_date":0}
+{"ordinals":{"<2>":{"number":1,"name":"one"}},"_comment":"add row for one 1","_date":0}
+{"ordinals":{"<2>":null},"_comment":"delete row for 1","_date":0}
+{"ordinals":{"<3>":{"number":1,"name":"one"}},"_comment":"add back row for one 1","_date":0}
+{"ordinals":{"<4>":{"number":2,"name":"two"}},"_comment":"add row for two 2","_date":0}
+{"ordinals":{"<4>":null},"_comment":"delete row for 2","_date":0}
+{"ordinals":{"<5>":{"number":2,"name":"two"}},"_comment":"add back row for two 2","_date":0}
+{"ordinals":{"<6>":{"number":3,"name":"three"}},"_comment":"add row for three 3","_date":0}
+{"ordinals":{"<6>":null},"_comment":"delete row for 3","_date":0}
+{"ordinals":{"<7>":{"number":3,"name":"three"}},"_comment":"add back row for three 3","_date":0}
+{"ordinals":{"<8>":{"number":4,"name":"four"}},"_comment":"add row for four 4","_date":0}
+{"ordinals":{"<8>":null},"_comment":"delete row for 4","_date":0}
+{"ordinals":{"<9>":{"number":4,"name":"four"}},"_comment":"add back row for four 4","_date":0}
+{"ordinals":{"<10>":{"number":5,"name":"five"}},"_comment":"add row for five 5","_date":0}
+{"ordinals":{"<10>":null},"_comment":"delete row for 5","_date":0}
+{"ordinals":{"<11>":{"number":5,"name":"five"}},"_comment":"add back row for five 5","_date":0}
+]], [], [test ! -e pid || kill `cat pid`])
+dnl Dump out and check the actual database contents.
+AT_CHECK([[ovsdb-client dump unix:socket ordinals]],
+  [0], [stdout], [ignore])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+  [_uuid                                name  number
+------------------------------------ ----- ------
+<0> five  5     @&t@
+<1> four  4     @&t@
+<2> one   1     @&t@
+<3> three 3     @&t@
+<4> two   2     @&t@
+<5> zero  0     @&t@
+], [], [test ! -e pid || kill `cat pid`])
+dnl Now compact the database in-place.
+AT_CHECK([[ovs-appctl -t $PWD/unixctl ovsdb-server/compact]],
+  [0], [], [ignore], [test ! -e pid || kill `cat pid`])
+dnl We can't fully re-check the contents of the database log, because the
+dnl order of the records is not predictable, but there should only be 4 lines
+dnl in it now.
+AT_CAPTURE_FILE([db])
+AT_CHECK([wc -l < db], [0], [4
+], [], [test ! -e pid || kill `cat pid`])
+dnl And check that the dumped data is the same too:
+AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore],
+  [test ! -e pid || kill `cat pid`])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+  [_uuid                                name  number
+------------------------------------ ----- ------
+<0> five  5     @&t@
+<1> four  4     @&t@
+<2> one   1     @&t@
+<3> three 3     @&t@
+<4> two   2     @&t@
+<5> zero  0     @&t@
+], [], [test ! -e pid || kill `cat pid`])
+dnl Now do some more transactions.
+AT_CHECK(
+  [[ovsdb-client transact unix:socket '
+     ["ordinals",
+      {"op": "delete",
+       "table": "ordinals",
+       "where": [["number", "<", 3]]}]']],
+  [0], [[[{"count":3}]
+]], [ignore], [test ! -e pid || kill `cat pid`])
+dnl There should be 6 lines in the log now.
+AT_CHECK([wc -l < db], [0], [6
+], [], [test ! -e pid || kill `cat pid`])
+dnl Then check that the dumped data is correct.
+AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore],
+  [test ! -e pid || kill `cat pid`])
+AT_CHECK([perl $srcdir/uuidfilt.pl stdout], [0],
+  [_uuid                                name  number
+------------------------------------ ----- ------
+<0> five  5     @&t@
+<1> four  4     @&t@
+<2> three 3     @&t@
+], [], [test ! -e pid || kill `cat pid`])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
 
 AT_BANNER([OVSDB -- ovsdb-server transactions (SSL sockets)])
 

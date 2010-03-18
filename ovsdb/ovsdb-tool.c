@@ -207,7 +207,7 @@ compact_or_convert(const char *src_name, const char *dst_name,
     /* Save a copy. */
     check_ovsdb_error(new_schema
                       ? ovsdb_file_open_as_schema(src_name, new_schema, &db)
-                      : ovsdb_file_open(src_name, true, &db));
+                      : ovsdb_file_open(src_name, true, &db, NULL));
     check_ovsdb_error(ovsdb_file_save_copy(dst_name, false, comment, db));
     ovsdb_destroy(db);
 
@@ -248,7 +248,7 @@ transact(bool read_only, const char *db_file_name, const char *transaction)
     struct json *request, *result;
     struct ovsdb *db;
 
-    check_ovsdb_error(ovsdb_file_open(db_file_name, read_only, &db));
+    check_ovsdb_error(ovsdb_file_open(db_file_name, read_only, &db, NULL));
 
     request = parse_json(transaction);
     result = ovsdb_execute(db, request, 0, NULL);
