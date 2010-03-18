@@ -327,9 +327,16 @@ do_ca_cert_bootstrap(struct stream *stream)
 
     fd = open(ca_cert_file, O_CREAT | O_EXCL | O_WRONLY, 0444);
     if (fd < 0) {
-        VLOG_ERR("could not bootstrap CA cert: creating %s failed: %s",
-                 ca_cert_file, strerror(errno));
-        return errno;
+        if (errno == EEXIST) {
+            VLOG_INFO("reading CA cert %s created by another process",
+                      ca_cert_file);
+            stream_ssl_set_ca_cert_file(ca_cert_file, true);
+            return EPROTO;
+        } else {
+            VLOG_ERR("could not bootstrap CA cert: creating %s failed: %s",
+                     ca_cert_file, strerror(errno));
+            return errno;
+        }
     }
 
     file = fdopen(fd, "w");
