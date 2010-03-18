@@ -41,6 +41,7 @@
 #include "util.h"
 #include "stream-provider.h"
 #include "stream.h"
+#include "timeval.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_stream_ssl
@@ -129,20 +130,24 @@ struct ssl_stream
 /* SSL context created by ssl_init(). */
 static SSL_CTX *ctx;
 
-/* Required configuration. */
-static bool has_private_key, has_certificate, has_ca_cert;
+struct ssl_config_file {
+    bool read;                  /* Whether the file was successfully read. */
+    char *file_name;            /* Configured file name, if any. */
+    long long int next_retry;   /* If 'file_name' but not 'read', next time to
+                                 * retry reading.  */
+};
+
+/* SSL configuration files. */
+static struct ssl_config_file private_key;
+static struct ssl_config_file certificate;
+static struct ssl_config_file ca_cert;
 
 /* Ordinarily, we require a CA certificate for the peer to be locally
- * available.  'has_ca_cert' is true when this is the case, and neither of the
- * following variables matter.
- *
- * We can, however, bootstrap the CA certificate from the peer at the beginning
- * of our first connection then use that certificate on all subsequent
- * connections, saving it to a file for use in future runs also.  In this case,
- * 'has_ca_cert' is false, 'bootstrap_ca_cert' is true, and 'ca_cert_file'
- * names the file to be saved. */
+ * available.  We can, however, bootstrap the CA certificate from the peer at
+ * the beginning of our first connection then use that certificate on all
+ * subsequent connections, saving it to a file for use in future runs also.  In
+ * this case, 'bootstrap_ca_cert' is true. */
 static bool bootstrap_ca_cert;
-static char *ca_cert_file;
 
 /* Who knows what can trigger various SSL errors, so let's throttle them down
  * quite a bit. */
@@ -157,6 +162,8 @@ static int interpret_ssl_error(const char *function, int ret, int error,
                                int *want);
 static DH *tmp_dh_callback(SSL *ssl, int is_export OVS_UNUSED, int keylength);
 static void log_ca_cert(const char *file_name, X509 *cert);
+static void stream_ssl_set_ca_cert_file__(const char *file_name,
+                                          bool bootstrap);
 
 static short int
 want_to_poll_events(int want)
@@ -190,15 +197,15 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
 
     /* Check for all the needful configuration. */
     retval = 0;
-    if (!has_private_key) {
+    if (!private_key.read) {
         VLOG_ERR("Private key must be configured to use SSL");
         retval = ENOPROTOOPT;
     }
-    if (!has_certificate) {
+    if (!certificate.read) {
         VLOG_ERR("Certificate must be configured to use SSL");
         retval = ENOPROTOOPT;
     }
-    if (!has_ca_cert && !bootstrap_ca_cert) {
+    if (!ca_cert.read && !bootstrap_ca_cert) {
         VLOG_ERR("CA certificate must be configured to use SSL");
         retval = ENOPROTOOPT;
     }
@@ -298,7 +305,7 @@ do_ca_cert_bootstrap(struct stream *stream)
 {
     struct ssl_stream *sslv = ssl_stream_cast(stream);
     STACK_OF(X509) *chain;
-    X509 *ca_cert;
+    X509 *cert;
     FILE *file;
     int error;
     int fd;
@@ -309,11 +316,11 @@ do_ca_cert_bootstrap(struct stream *stream)
                  "peer");
         return EPROTO;
     }
-    ca_cert = sk_X509_value(chain, sk_X509_num(chain) - 1);
+    cert = sk_X509_value(chain, sk_X509_num(chain) - 1);
 
-    /* Check that 'ca_cert' is self-signed.  Otherwise it is not a CA
+    /* Check that 'cert' is self-signed.  Otherwise it is not a CA
      * certificate and we should not attempt to use it as one. */
-    error = X509_check_issued(ca_cert, ca_cert);
+    error = X509_check_issued(cert, cert);
     if (error) {
         VLOG_ERR("could not bootstrap CA cert: obtained certificate is "
                  "not self-signed (%s)",
@@ -325,16 +332,16 @@ do_ca_cert_bootstrap(struct stream *stream)
         return EPROTO;
     }
 
-    fd = open(ca_cert_file, O_CREAT | O_EXCL | O_WRONLY, 0444);
+    fd = open(ca_cert.file_name, O_CREAT | O_EXCL | O_WRONLY, 0444);
     if (fd < 0) {
         if (errno == EEXIST) {
             VLOG_INFO("reading CA cert %s created by another process",
-                      ca_cert_file);
-            stream_ssl_set_ca_cert_file(ca_cert_file, true);
+                      ca_cert.file_name);
+            stream_ssl_set_ca_cert_file__(ca_cert.file_name, true);
             return EPROTO;
         } else {
             VLOG_ERR("could not bootstrap CA cert: creating %s failed: %s",
-                     ca_cert_file, strerror(errno));
+                     ca_cert.file_name, strerror(errno));
             return errno;
         }
     }
@@ -344,41 +351,42 @@ do_ca_cert_bootstrap(struct stream *stream)
         int error = errno;
         VLOG_ERR("could not bootstrap CA cert: fdopen failed: %s",
                  strerror(error));
-        unlink(ca_cert_file);
+        unlink(ca_cert.file_name);
         return error;
     }
 
-    if (!PEM_write_X509(file, ca_cert)) {
+    if (!PEM_write_X509(file, cert)) {
         VLOG_ERR("could not bootstrap CA cert: PEM_write_X509 to %s failed: "
-                 "%s", ca_cert_file, ERR_error_string(ERR_get_error(), NULL));
+                 "%s", ca_cert.file_name,
+                 ERR_error_string(ERR_get_error(), NULL));
         fclose(file);
-        unlink(ca_cert_file);
+        unlink(ca_cert.file_name);
         return EIO;
     }
 
     if (fclose(file)) {
         int error = errno;
         VLOG_ERR("could not bootstrap CA cert: writing %s failed: %s",
-                 ca_cert_file, strerror(error));
-        unlink(ca_cert_file);
+                 ca_cert.file_name, strerror(error));
+        unlink(ca_cert.file_name);
         return error;
     }
 
-    VLOG_INFO("successfully bootstrapped CA cert to %s", ca_cert_file);
-    log_ca_cert(ca_cert_file, ca_cert);
+    VLOG_INFO("successfully bootstrapped CA cert to %s", ca_cert.file_name);
+    log_ca_cert(ca_cert.file_name, cert);
     bootstrap_ca_cert = false;
-    has_ca_cert = true;
+    ca_cert.read = true;
 
-    /* SSL_CTX_add_client_CA makes a copy of ca_cert's relevant data. */
-    SSL_CTX_add_client_CA(ctx, ca_cert);
+    /* SSL_CTX_add_client_CA makes a copy of cert's relevant data. */
+    SSL_CTX_add_client_CA(ctx, cert);
 
     /* SSL_CTX_use_certificate() takes ownership of the certificate passed in.
-     * 'ca_cert' is owned by sslv->ssl, so we need to duplicate it. */
-    ca_cert = X509_dup(ca_cert);
-    if (!ca_cert) {
+     * 'cert' is owned by sslv->ssl, so we need to duplicate it. */
+    cert = X509_dup(cert);
+    if (!cert) {
         out_of_memory();
     }
-    if (SSL_CTX_load_verify_locations(ctx, ca_cert_file, NULL) != 1) {
+    if (SSL_CTX_load_verify_locations(ctx, ca_cert.file_name, NULL) != 1) {
         VLOG_ERR("SSL_CTX_load_verify_locations: %s",
                  ERR_error_string(ERR_get_error(), NULL));
         return EPROTO;
@@ -899,13 +907,30 @@ tmp_dh_callback(SSL *ssl OVS_UNUSED, int is_export OVS_UNUSED, int keylength)
 bool
 stream_ssl_is_configured(void) 
 {
-    return has_private_key || has_certificate || has_ca_cert;
+    return private_key.file_name || certificate.file_name || ca_cert.file_name;
+}
+
+static bool
+update_ssl_config(struct ssl_config_file *config, const char *file_name)
+{
+    if (ssl_init()
+        || !file_name
+        || (config->file_name
+            && !strcmp(config->file_name, file_name)
+            && time_msec() < config->next_retry)) {
+        return false;
+    }
+
+    config->next_retry = time_msec() + 60 * 1000;
+    free(config->file_name);
+    config->file_name = xstrdup(file_name);
+    return true;
 }
 
 void
 stream_ssl_set_private_key_file(const char *file_name)
 {
-    if (ssl_init()) {
+    if (!update_ssl_config(&private_key, file_name)) {
         return;
     }
     if (SSL_CTX_use_PrivateKey_file(ctx, file_name, SSL_FILETYPE_PEM) != 1) {
@@ -913,13 +938,13 @@ stream_ssl_set_private_key_file(const char *file_name)
                  ERR_error_string(ERR_get_error(), NULL));
         return;
     }
-    has_private_key = true;
+    private_key.read = true;
 }
 
 void
 stream_ssl_set_certificate_file(const char *file_name)
 {
-    if (ssl_init()) {
+    if (!update_ssl_config(&certificate, file_name)) {
         return;
     }
     if (SSL_CTX_use_certificate_chain_file(ctx, file_name) != 1) {
@@ -927,7 +952,7 @@ stream_ssl_set_certificate_file(const char *file_name)
                  ERR_error_string(ERR_get_error(), NULL));
         return;
     }
-    has_certificate = true;
+    certificate.read = true;
 }
 
 /* Reads the X509 certificate or certificates in file 'file_name'.  On success,
@@ -1047,25 +1072,15 @@ log_ca_cert(const char *file_name, X509 *cert)
     ds_destroy(&fp);
 }
 
-/* Sets 'file_name' as the name of the file from which to read the CA
- * certificate used to verify the peer within SSL connections.  If 'bootstrap'
- * is false, the file must exist.  If 'bootstrap' is false, then the file is
- * read if it is exists; if it does not, then it will be created from the CA
- * certificate received from the peer on the first SSL connection. */
-void
-stream_ssl_set_ca_cert_file(const char *file_name, bool bootstrap)
+static void
+stream_ssl_set_ca_cert_file__(const char *file_name, bool bootstrap)
 {
     X509 **certs;
     size_t n_certs;
     struct stat s;
 
-    if (ssl_init()) {
-        return;
-    }
-
     if (bootstrap && stat(file_name, &s) && errno == ENOENT) {
         bootstrap_ca_cert = true;
-        ca_cert_file = xstrdup(file_name);
     } else if (!read_cert_file(file_name, &certs, &n_certs)) {
         size_t i;
 
@@ -1091,6 +1106,24 @@ stream_ssl_set_ca_cert_file(const char *file_name, bool bootstrap)
             return;
         }
 
-        has_ca_cert = true;
+        bootstrap_ca_cert = false;
     }
+    ca_cert.read = true;
 }
+
+/* Sets 'file_name' as the name of the file from which to read the CA
+ * certificate used to verify the peer within SSL connections.  If 'bootstrap'
+ * is false, the file must exist.  If 'bootstrap' is false, then the file is
+ * read if it is exists; if it does not, then it will be created from the CA
+ * certificate received from the peer on the first SSL connection. */
+void
+stream_ssl_set_ca_cert_file(const char *file_name, bool bootstrap)
+{
+    if (!update_ssl_config(&ca_cert, file_name)) {
+        return;
+    }
+
+    stream_ssl_set_ca_cert_file__(file_name, bootstrap);
+}
+
+

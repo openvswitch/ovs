@@ -348,49 +348,14 @@ bridge_init(const struct ovsrec_open_vswitch *cfg)
 }
 
 #ifdef HAVE_OPENSSL
-static bool
-config_string_change(const char *value, char **valuep)
-{
-    if (value && (!*valuep || strcmp(value, *valuep))) {
-        free(*valuep);
-        *valuep = xstrdup(value);
-        return true;
-    } else {
-        return false;
-    }
-}
-
 static void
 bridge_configure_ssl(const struct ovsrec_ssl *ssl)
 {
-    /* XXX SSL should be configurable on a per-bridge basis.
-     * XXX should be possible to de-configure SSL. */
-    static char *private_key_file;
-    static char *certificate_file;
-    static char *cacert_file;
-    struct stat s;
-
-    if (!ssl) {
-        /* XXX We can't un-set SSL settings. */
-        return;
-    }
-
-    if (config_string_change(ssl->private_key, &private_key_file)) {
-        stream_ssl_set_private_key_file(private_key_file);
-    }
-
-    if (config_string_change(ssl->certificate, &certificate_file)) {
-        stream_ssl_set_certificate_file(certificate_file);
-    }
-
-    /* We assume that even if the filename hasn't changed, if the CA cert 
-     * file has been removed, that we want to move back into
-     * boot-strapping mode.  This opens a small security hole, because
-     * the old certificate will still be trusted until vSwitch is
-     * restarted.  We may want to address this in vconn's SSL library. */
-    if (config_string_change(ssl->ca_cert, &cacert_file)
-        || (cacert_file && stat(cacert_file, &s) && errno == ENOENT)) {
-        stream_ssl_set_ca_cert_file(cacert_file, ssl->bootstrap_ca_cert);
+    /* XXX SSL should be configurable on a per-bridge basis. */
+    if (ssl) {
+        stream_ssl_set_private_key_file(ssl->private_key);
+        stream_ssl_set_certificate_file(ssl->certificate);
+        stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
     }
 }
 #endif
