@@ -640,14 +640,14 @@ bucket_insert(struct cls_bucket *bucket, struct cls_rule *rule)
 {
     struct cls_rule *pos;
     LIST_FOR_EACH (pos, struct cls_rule, node.list, &bucket->rules) {
-        if (pos->priority <= rule->priority) {
-            if (pos->priority == rule->priority
-                && pos->wc.wildcards == rule->wc.wildcards
+        if (pos->priority == rule->priority) {
+            if (pos->wc.wildcards == rule->wc.wildcards
                 && rules_match_1wild(pos, rule, rule->table_idx))
             {
                 list_replace(&rule->node.list, &pos->node.list);
                 return pos;
             }
+        } else if (pos->priority < rule->priority) {
             break;
         }
     }
