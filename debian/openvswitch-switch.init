@@ -230,6 +230,9 @@ case "$1" in
         set -- "$@" --detach --pidfile $monitor_opt
         set -- "$@" --remote punix:/var/run/ovsdb-server
         set -- "$@" /etc/openvswitch-switch/conf
+        set -- "$@" --private-key=db:SSL,private_key
+        set -- "$@" --certificate=db:SSL,certificate
+        set -- "$@" --bootstrap-ca-cert=db:SSL,ca_cert
         set -- "$@" $OVSDB_SERVER_OPTS
         echo -n "Starting ovsdb-server: "
         start-stop-daemon --start --quiet --pidfile /var/run/ovsdb-server.pid \

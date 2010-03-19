@@ -90,6 +90,60 @@ AT_CHECK(
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 
+AT_SETUP([SSL db: implementation])
+AT_KEYWORDS([ovsdb server positive ssl $5])
+AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+AT_SKIP_IF([test "x$RANDOM" = x])
+SSL_PORT=`expr 32767 + \( $RANDOM % 32767 \)`
+PKIDIR=$abs_top_srcdir/tests
+AT_SKIP_IF([expr "$PKIDIR" : ".*[ 	'\"
+\\]"])
+AT_DATA([schema],
+  [[{"name": "mydb",
+     "tables": {
+       "SSL": {
+         "columns": {
+           "private_key": {"type": "string"},
+           "certificate": {"type": "string"},
+           "ca_cert": {"type": "string"}}}}}
+]])
+AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+AT_CHECK(
+  [[ovsdb-tool transact db \
+     '["mydb",
+       {"op": "insert",
+        "table": "SSL",
+        "row": {"private_key": "'"$PKIDIR/testpki-privkey2.pem"'",
+                "certificate": "'"$PKIDIR/testpki-cert2.pem"'",
+                "ca_cert": "'"$PKIDIR/testpki-cacert.pem"'"}}]']],
+  [0], [ignore], [ignore])
+AT_CHECK(
+  [ovsdb-server --detach --pidfile=$PWD/pid \
+        --private-key=db:SSL,private_key \
+        --certificate=db:SSL,certificate \
+        --ca-cert=db:SSL,ca_cert \
+         --remote=pssl:$SSL_PORT:127.0.0.1 --unixctl=$PWD/unixctl db],
+  [0], [ignore], [ignore])
+AT_CHECK(
+  [[ovsdb-client \
+        --private-key=$PKIDIR/testpki-privkey.pem \
+        --certificate=$PKIDIR/testpki-cert.pem \
+        --ca-cert=$PKIDIR/testpki-cacert.pem \
+        transact ssl:127.0.0.1:$SSL_PORT \
+        '["mydb",
+          {"op": "select",
+           "table": "SSL",
+           "where": [],
+           "columns": ["private_key"]}]']], 
+  [0], [stdout], [ignore], [test ! -e pid || kill `cat pid`])
+cat stdout >> output
+AT_CHECK_UNQUOTED(
+  [perl $srcdir/uuidfilt.pl output], [0], 
+  [[[{"rows":[{"private_key":"$PKIDIR/testpki-privkey2.pem"}]}]
+]], [ignore], [test ! -e pid || kill `cat pid`])
+OVSDB_SERVER_SHUTDOWN
+AT_CLEANUP
+
 AT_SETUP([compacting online])
 AT_KEYWORDS([ovsdb server compact])
 AT_DATA([schema], [ORDINAL_SCHEMA

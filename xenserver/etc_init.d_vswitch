@@ -171,12 +171,13 @@ function start_ovsdb_server {
         valgrind_opt="valgrind --log-file=$OVSDB_SERVER_VALGRIND_LOG $OVSDB_SERVER_VALGRIND_OPT"
         daemonize="n"
     fi
+    ssl_opts="--private-key=db:SSL,private_key --certificate=db:SSL,certificate --bootstrap-ca-cert=db:SSL,ca_cert"
     if [ "$daemonize" != "y" ]; then
         # Start in background and force a "success" message
         action "Starting ovsdb_server ($strace_opt$valgrind_opt)" true
-        (nice -n "$OVSDB_SERVER_PRIORITY" $strace_opt $valgrind_opt "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach $monitor_opt --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $remotes) &
+        (nice -n "$OVSDB_SERVER_PRIORITY" $strace_opt $valgrind_opt "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach $monitor_opt --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $remotes $ssl_opts) &
     else
-        action "Starting ovsdb-server" nice -n "$OVSDB_SERVER_PRIORITY" "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach $monitor_opt --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $remotes
+        action "Starting ovsdb-server" nice -n "$OVSDB_SERVER_PRIORITY" "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach $monitor_opt --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $remotes $ssl_opts
     fi
 }
 

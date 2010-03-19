@@ -49,6 +49,12 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_ovsdb_server
 
+/* SSL configuration. */
+static char *private_key_file;
+static char *certificate_file;
+static char *ca_cert_file;
+static bool bootstrap_ca_cert;
+
 static unixctl_cb_func ovsdb_server_exit;
 static unixctl_cb_func ovsdb_server_compact;
 
@@ -57,8 +63,8 @@ static void parse_options(int argc, char *argv[], char **file_namep,
                           char **run_command);
 static void usage(void) NO_RETURN;
 
-static void set_remotes(struct ovsdb_jsonrpc_server *jsonrpc,
-                        const struct ovsdb *db, struct shash *remotes);
+static void reconfigure_from_db(struct ovsdb_jsonrpc_server *jsonrpc,
+                                const struct ovsdb *db, struct shash *remotes);
 
 int
 main(int argc, char *argv[])
@@ -95,7 +101,7 @@ main(int argc, char *argv[])
     }
 
     jsonrpc = ovsdb_jsonrpc_server_create(db);
-    set_remotes(jsonrpc, db, &remotes);
+    reconfigure_from_db(jsonrpc, db, &remotes);
 
     retval = unixctl_server_create(unixctl_path, &unixctl);
     if (retval) {
@@ -126,7 +132,7 @@ main(int argc, char *argv[])
 
     exiting = false;
     while (!exiting) {
-        set_remotes(jsonrpc, db, &remotes);
+        reconfigure_from_db(jsonrpc, db, &remotes);
         ovsdb_jsonrpc_server_run(jsonrpc);
         unixctl_server_run(unixctl);
         ovsdb_trigger_run(db, time_msec());
@@ -159,13 +165,14 @@ main(int argc, char *argv[])
 }
 
 static void
-query_db_remotes(const char *name_, const struct ovsdb *db,
-                 struct shash *remotes)
+parse_db_string_column(const struct ovsdb *db,
+                       const char *name_,
+                       const struct ovsdb_table **tablep,
+                       const struct ovsdb_column **columnp)
 {
     char *name, *table_name, *column_name;
     const struct ovsdb_column *column;
     const struct ovsdb_table *table;
-    const struct ovsdb_row *row;
     char *save_ptr = NULL;
 
     name = xstrdup(name_);
@@ -173,26 +180,68 @@ query_db_remotes(const char *name_, const struct ovsdb *db,
     table_name = strtok_r(NULL, ",", &save_ptr);
     column_name = strtok_r(NULL, ",", &save_ptr);
     if (!table_name || !column_name) {
-        ovs_fatal(0, "remote \"%s\": invalid syntax", name_);
+        ovs_fatal(0, "\"%s\": invalid syntax", name_);
     }
 
     table = ovsdb_get_table(db, table_name);
     if (!table) {
-        ovs_fatal(0, "remote \"%s\": no table named %s", name_, table_name);
+        ovs_fatal(0, "\"%s\": no table named %s", name_, table_name);
     }
 
     column = ovsdb_table_schema_get_column(table->schema, column_name);
     if (!column) {
-        ovs_fatal(0, "remote \"%s\": table \"%s\" has no column \"%s\"",
+        ovs_fatal(0, "\"%s\": table \"%s\" has no column \"%s\"",
                   name_, table_name, column_name);
     }
+    free(name);
 
     if (column->type.key.type != OVSDB_TYPE_STRING
         || column->type.value.type != OVSDB_TYPE_VOID) {
-        ovs_fatal(0, "remote \"%s\": type of table \"%s\" column \"%s\" is "
+        ovs_fatal(0, "\"%s\": table \"%s\" column \"%s\" is "
                   "not string or set of strings",
-                  name_, table_name, column_name);
+                  name_, table->schema->name, column->name);
     }
+
+    *columnp = column;
+    *tablep = table;
+}
+
+static const char *
+query_db_string(const struct ovsdb *db, const char *name)
+{
+    if (!name || strncmp(name, "db:", 3)) {
+        return name;
+    } else {
+        const struct ovsdb_column *column;
+        const struct ovsdb_table *table;
+        const struct ovsdb_row *row;
+
+        parse_db_string_column(db, name, &table, &column);
+
+        HMAP_FOR_EACH (row, struct ovsdb_row, hmap_node, &table->rows) {
+            const struct ovsdb_datum *datum;
+            size_t i;
+
+            datum = &row->fields[column->index];
+            for (i = 0; i < datum->n; i++) {
+                if (datum->keys[i].string[0]) {
+                    return datum->keys[i].string;
+                }
+            }
+        }
+        return NULL;
+    }
+}
+
+static void
+query_db_remotes(const char *name, const struct ovsdb *db,
+                 struct shash *remotes)
+{
+    const struct ovsdb_column *column;
+    const struct ovsdb_table *table;
+    const struct ovsdb_row *row;
+
+    parse_db_string_column(db, name, &table, &column);
 
     HMAP_FOR_EACH (row, struct ovsdb_row, hmap_node, &table->rows) {
         const struct ovsdb_datum *datum;
@@ -203,17 +252,17 @@ query_db_remotes(const char *name_, const struct ovsdb *db,
             shash_add_once(remotes, datum->keys[i].string, NULL);
         }
     }
-
-    free(name);
 }
 
+/* Reconfigures ovsdb-server based on information in the database. */
 static void
-set_remotes(struct ovsdb_jsonrpc_server *jsonrpc,
-            const struct ovsdb *db, struct shash *remotes)
+reconfigure_from_db(struct ovsdb_jsonrpc_server *jsonrpc,
+                    const struct ovsdb *db, struct shash *remotes)
 {
     struct shash resolved_remotes;
     struct shash_node *node;
 
+    /* Configure remotes. */
     shash_init(&resolved_remotes);
     SHASH_FOR_EACH (node, remotes) {
         const char *name = node->name;
@@ -226,8 +275,13 @@ set_remotes(struct ovsdb_jsonrpc_server *jsonrpc,
     }
     ovsdb_jsonrpc_server_set_remotes(jsonrpc, &resolved_remotes);
     shash_destroy(&resolved_remotes);
-}
 
+    /* Configure SSL. */
+    stream_ssl_set_private_key_file(query_db_string(db, private_key_file));
+    stream_ssl_set_certificate_file(query_db_string(db, certificate_file));
+    stream_ssl_set_ca_cert_file(query_db_string(db, ca_cert_file),
+                                bootstrap_ca_cert);
+}
 
 static void
 ovsdb_server_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
@@ -282,7 +336,9 @@ parse_options(int argc, char *argv[], char **file_namep,
         LEAK_CHECKER_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
         {"bootstrap-ca-cert", required_argument, 0, OPT_BOOTSTRAP_CA_CERT},
-        STREAM_SSL_LONG_OPTIONS
+        {"private-key", required_argument, 0, 'p'},
+        {"certificate", required_argument, 0, 'c'},
+        {"ca-cert",     required_argument, 0, 'C'},
 #endif
         {0, 0, 0, 0},
     };
@@ -322,13 +378,24 @@ parse_options(int argc, char *argv[], char **file_namep,
         LEAK_CHECKER_OPTION_HANDLERS
 
 #ifdef HAVE_OPENSSL
-        STREAM_SSL_OPTION_HANDLERS
+        case 'p':
+            private_key_file = optarg;
+            break;
+
+        case 'c':
+            certificate_file = optarg;
+            break;
+
+        case 'C':
+            ca_cert_file = optarg;
+            bootstrap_ca_cert = false;
+            break;
 
         case OPT_BOOTSTRAP_CA_CERT:
-            stream_ssl_set_ca_cert_file(optarg, true);
+            ca_cert_file = optarg;
+            bootstrap_ca_cert = true;
             break;
 #endif
-
 
         case '?':
             exit(EXIT_FAILURE);
