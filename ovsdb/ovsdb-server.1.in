@@ -32,6 +32,14 @@ Adds \fIremote\fR as a connection method used by \fBovsdb\-server\fR.
 .RS
 .so ovsdb/remote-passive.man
 .so ovsdb/remote-active.man
+.
+.IP "\fBdb:\fItable\fB,\fIcolumn\fR"
+Reads additional connection methods from \fIcolumn\fR in all of the
+rows in \fItable\fR within the \fBovsdb\-server\fR database.  The
+\fIcolumn\fR must have type string or set of strings.  The connection
+methods in the column must have one of the forms described above.  As
+the contents of \fIcolumn\fR changes, \fBovsdb\-server\fR also adds
+and drops connection methods accordingly.
 .RE
 .
 .IP "\fB\-\-run=\fIcommand\fR]"
@@ -52,6 +60,7 @@ run a single command, e.g.:
 .so lib/vlog.man
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
+.so lib/ssl-bootstrap.man
 .SS "Other Options"
 .so lib/common.man
 .SH "RUNTIME MANAGEMENT COMMANDS"
