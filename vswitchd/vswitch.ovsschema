@@ -229,4 +229,5 @@
        "ca_cert": {
          "type": "string"},
        "bootstrap_ca_cert": {
-         "type": "boolean"}}}}}
+         "type": "boolean"}},
+     "maxRows": 1}}}
