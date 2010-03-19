@@ -111,7 +111,7 @@ tcls_insert(struct tcls *tcls, const struct test_rule *rule)
             free(tcls->rules[i]);
             tcls->rules[i] = xmemdup(rule, sizeof *rule);
             return tcls->rules[i];
-        } else if (pos->priority <= rule->cls_rule.priority) {
+        } else if (pos->priority < rule->cls_rule.priority) {
             break;
         }
     }
