@@ -11,10 +11,10 @@ private key specified on \fB\-p\fR or \fB\-\-private\-key\fR to be
 trustworthy.  The certificate must be signed by the certificate
 authority (CA) that the peer in SSL connections will use to verify it.
 .
-.IP "\fB\-C\fR \fIswitch\-cacert.pem\fR"
-.IQ "\fB\-\-ca\-cert=\fIswitch\-cacert.pem\fR"
+.IP "\fB\-C\fR \fIcacert.pem\fR"
+.IQ "\fB\-\-ca\-cert=\fIcacert.pem\fR"
 Specifies a PEM file containing the CA certificate that \fB\*(PN\fR
 should use to verify certificates presented to it by SSL peers.  (This
 may be the same certificate that SSL peers use to verify the
 certificate specified on \fB\-c\fR or \fB\-\-certificate\fR, or it may
-beq a different one, depending on the PKI design in use.)
+be a different one, depending on the PKI design in use.)
