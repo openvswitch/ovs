@@ -2929,6 +2929,7 @@ modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
     } else {
         size_t actions_len = n_actions * sizeof *rule->actions;
 
+        rule->flow_cookie = ofm->cookie;
         if (n_actions == rule->n_actions
             && !memcmp(ofm->actions, rule->actions, actions_len))
         {
@@ -2938,7 +2939,6 @@ modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
         free(rule->actions);
         rule->actions = xmemdup(ofm->actions, actions_len);
         rule->n_actions = n_actions;
-        rule->flow_cookie = ofm->cookie;
 
         if (rule->cr.wc.wildcards) {
             COVERAGE_INC(ofproto_mod_wc_flow);
