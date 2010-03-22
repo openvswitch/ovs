@@ -8,6 +8,7 @@ TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/ovsdb-macros.at \
 	tests/library.at \
+	tests/classifier.at \
 	tests/check-structs.at \
 	tests/daemon.at \
 	tests/vconn.at \
@@ -170,7 +171,9 @@ tests_test_aes128_SOURCES = tests/test-aes128.c
 tests_test_aes128_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-classifier
-tests_test_classifier_SOURCES = tests/test-classifier.c
+tests_test_classifier_SOURCES = \
+	tests/test-classifier.c \
+	tests/test-command-line.c
 tests_test_classifier_LDADD = lib/libopenvswitch.a
 
 noinst_PROGRAMS += tests/test-csum

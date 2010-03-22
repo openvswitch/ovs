@@ -30,9 +30,11 @@
 #include "classifier.h"
 #include <errno.h>
 #include <limits.h>
+#include "command-line.h"
 #include "flow.h"
 #include <limits.h>
 #include "packets.h"
+#include "test-command-line.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -479,7 +481,7 @@ shuffle(unsigned int *p, size_t n)
 
 /* Tests an empty classifier. */
 static void
-test_empty(void)
+test_empty(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     struct classifier cls;
     struct tcls tcls;
@@ -495,14 +497,14 @@ test_empty(void)
 
 /* Destroys a null classifier. */
 static void
-test_destroy_null(void)
+test_destroy_null(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     classifier_destroy(NULL);
 }
 
 /* Tests classification with one rule at a time. */
 static void
-test_single_rule(void)
+test_single_rule(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     unsigned int wc_fields;     /* Hilarious. */
 
@@ -540,7 +542,7 @@ test_single_rule(void)
 
 /* Tests replacing one rule by another. */
 static void
-test_rule_replacement(void)
+test_rule_replacement(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     unsigned int wc_fields;
 
@@ -591,7 +593,7 @@ random_wcf_in_table(int table, int seed)
 /* Tests classification with two rules at a time that fall into the same
  * bucket. */
 static void
-test_two_rules_in_one_bucket(void)
+test_two_rules_in_one_bucket(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     int table, rel_pri, wcf_pat, value_pat;
 
@@ -680,7 +682,7 @@ test_two_rules_in_one_bucket(void)
 /* Tests classification with two rules at a time that fall into the same
  * table but different buckets. */
 static void
-test_two_rules_in_one_table(void)
+test_two_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     int table, rel_pri, wcf_pat;
 
@@ -756,7 +758,7 @@ test_two_rules_in_one_table(void)
 /* Tests classification with two rules at a time that fall into different
  * tables. */
 static void
-test_two_rules_in_different_tables(void)
+test_two_rules_in_different_tables(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     int table1, table2, rel_pri, wcf_pat;
 
@@ -825,7 +827,7 @@ test_two_rules_in_different_tables(void)
 /* Tests classification with many rules at a time that fall into the same
  * bucket but have unique priorities (and various wildcards). */
 static void
-test_many_rules_in_one_bucket(void)
+test_many_rules_in_one_bucket(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     enum { MAX_RULES = 50 };
     int iteration, table;
@@ -869,7 +871,7 @@ test_many_rules_in_one_bucket(void)
 /* Tests classification with many rules at a time that fall into the same
  * table but random buckets. */
 static void
-test_many_rules_in_one_table(void)
+test_many_rules_in_one_table(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     enum { MAX_RULES = 50 };
     int iteration, table;
@@ -912,7 +914,8 @@ test_many_rules_in_one_table(void)
 /* Tests classification with many rules at a time that fall into random buckets
  * in random tables. */
 static void
-test_many_rules_in_different_tables(void)
+test_many_rules_in_different_tables(int argc OVS_UNUSED,
+                                    char *argv[] OVS_UNUSED)
 {
     enum { MAX_RULES = 50 };
     int iteration;
@@ -957,36 +960,35 @@ test_many_rules_in_different_tables(void)
             compare_classifiers(&cls, &tcls);
             free(rule);
         }
-        putchar('.');
-        fflush(stdout);
 
         destroy_classifier(&cls);
         tcls_destroy(&tcls);
     }
 }
 
-static void
-run_test(void (*function)(void))
-{
-    function();
-    putchar('.');
-    fflush(stdout);
-}
-
 int
-main(void)
+main(int argc, char *argv[])
 {
+    static const struct command all_commands[] = {
+        { "empty", 0, 0, test_empty },
+        { "destroy-null", 0, 0, test_destroy_null },
+        { "single-rule", 0, 0, test_single_rule },
+        { "rule-replacement", 0, 0, test_rule_replacement },
+        { "two-rules-in-one-bucket", 0, 0, test_two_rules_in_one_bucket },
+        { "two-rules-in-one-table", 0, 0, test_two_rules_in_one_table },
+        { "two-rules-in-different-tables", 0, 0,
+          test_two_rules_in_different_tables },
+        { "many-rules-in-one-bucket", 0, 0,
+          test_many_rules_in_one_bucket },
+        { "many-rules-in-one-table", 0, 0, test_many_rules_in_one_table },
+        { "many-rules-in-different-tables", 0, 0,
+          test_many_rules_in_different_tables },
+        { NULL, 0, 0, NULL },
+    };
+
+    set_program_name(argv[0]);
     init_values();
-    run_test(test_empty);
-    run_test(test_destroy_null);
-    run_test(test_single_rule);
-    run_test(test_rule_replacement);
-    run_test(test_two_rules_in_one_bucket);
-    run_test(test_two_rules_in_one_table);
-    run_test(test_two_rules_in_different_tables);
-    run_test(test_many_rules_in_one_bucket);
-    run_test(test_many_rules_in_one_table);
-    run_test(test_many_rules_in_different_tables);
-    putchar('\n');
+    parse_test_options(argc, argv, all_commands);
+    run_command(argc - 1, argv + 1, all_commands);
     return 0;
 }

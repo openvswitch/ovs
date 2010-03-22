@@ -1,0 +1,18 @@
+AT_BANNER([classifier unit tests])
+
+m4_define([CHECK_CLASSIFIER],
+  [AT_SETUP([m4_translit([$1], [-], [ ])])
+   AT_KEYWORDS([classifier $2])
+   AT_CHECK([test-classifier $1])
+   AT_CLEANUP])
+
+CHECK_CLASSIFIER([empty])
+CHECK_CLASSIFIER([destroy-null])
+CHECK_CLASSIFIER([single-rule], [slow])
+CHECK_CLASSIFIER([rule-replacement], [slow])
+CHECK_CLASSIFIER([two-rules-in-one-bucket])
+CHECK_CLASSIFIER([two-rules-in-one-table])
+CHECK_CLASSIFIER([two-rules-in-different-tables])
+CHECK_CLASSIFIER([many-rules-in-one-bucket], [slow])
+CHECK_CLASSIFIER([many-rules-in-one-table], [slow])
+CHECK_CLASSIFIER([many-rules-in-different-tables], [slow])
