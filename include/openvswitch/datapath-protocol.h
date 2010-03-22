@@ -211,7 +211,6 @@ struct odp_flow_key {
     __u8   dl_dst[ETH_ALEN];     /* Ethernet destination address. */
     __u8   nw_proto;             /* IP protocol or low 8 bits of ARP opcode. */
     __u8   nw_tos;               /* IP ToS (DSCP field, 6 bits). */
-    __u32  reserved[1];          /* Reserved for later use. */
 };
 
 /* Flags for ODP_FLOW. */

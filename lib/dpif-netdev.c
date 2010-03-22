@@ -664,8 +664,6 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp,
 {
     struct dp_netdev_flow *flow;
 
-    BUILD_ASSERT_DECL(ARRAY_SIZE(key->reserved) == 1);
-    assert(!key->reserved[0]);
     HMAP_FOR_EACH_WITH_HASH (flow, struct dp_netdev_flow, node,
                              odp_flow_key_hash(key, 0), &dp->flow_table) {
         if (odp_flow_key_equal(&flow->key, key)) {

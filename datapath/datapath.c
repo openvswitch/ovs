@@ -1009,7 +1009,6 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 	error = -EFAULT;
 	if (copy_from_user(&uf, ufp, sizeof(struct odp_flow_put)))
 		goto error;
-	memset(uf.flow.key.reserved, 0, sizeof uf.flow.key.reserved);
 
 	table = rcu_dereference(dp->table);
 	flow = dp_table_lookup(table, &uf.flow.key);
@@ -1154,7 +1153,6 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	error = -EFAULT;
 	if (copy_from_user(&uf, ufp, sizeof uf))
 		goto error;
-	memset(uf.key.reserved, 0, sizeof uf.key.reserved);
 
 	flow = dp_table_lookup(table, &uf.key);
 	error = -ENOENT;
@@ -1190,7 +1188,6 @@ static int query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 
 		if (__copy_from_user(&uf, ufp, sizeof uf))
 			return -EFAULT;
-		memset(uf.key.reserved, 0, sizeof uf.key.reserved);
 
 		flow = dp_table_lookup(table, &uf.key);
 		if (!flow)
