@@ -49,11 +49,13 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_ovsdb_server
 
+#if HAVE_OPENSSL
 /* SSL configuration. */
 static char *private_key_file;
 static char *certificate_file;
 static char *ca_cert_file;
 static bool bootstrap_ca_cert;
+#endif
 
 static unixctl_cb_func ovsdb_server_exit;
 static unixctl_cb_func ovsdb_server_compact;
@@ -206,6 +208,7 @@ parse_db_string_column(const struct ovsdb *db,
     *tablep = table;
 }
 
+#if HAVE_OPENSSL
 static const char *
 query_db_string(const struct ovsdb *db, const char *name)
 {
@@ -232,6 +235,7 @@ query_db_string(const struct ovsdb *db, const char *name)
         return NULL;
     }
 }
+#endif /* HAVE_OPENSSL */
 
 static void
 query_db_remotes(const char *name, const struct ovsdb *db,
@@ -276,11 +280,13 @@ reconfigure_from_db(struct ovsdb_jsonrpc_server *jsonrpc,
     ovsdb_jsonrpc_server_set_remotes(jsonrpc, &resolved_remotes);
     shash_destroy(&resolved_remotes);
 
+#if HAVE_OPENSSL
     /* Configure SSL. */
     stream_ssl_set_private_key_file(query_db_string(db, private_key_file));
     stream_ssl_set_certificate_file(query_db_string(db, certificate_file));
     stream_ssl_set_ca_cert_file(query_db_string(db, ca_cert_file),
                                 bootstrap_ca_cert);
+#endif
 }
 
 static void
