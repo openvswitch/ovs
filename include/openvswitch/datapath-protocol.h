@@ -245,15 +245,15 @@ struct odp_flowvec {
 #define ODPAT_OUTPUT_GROUP      1    /* Output to all ports in group. */
 #define ODPAT_CONTROLLER        2    /* Send copy to controller. */
 #define ODPAT_SET_DL_TCI        3    /* Set the 802.1q VLAN VID and/or PCP. */
-#define ODPAT_STRIP_VLAN        5    /* Strip the 802.1q header. */
-#define ODPAT_SET_DL_SRC        6    /* Ethernet source address. */
-#define ODPAT_SET_DL_DST        7    /* Ethernet destination address. */
-#define ODPAT_SET_NW_SRC        8    /* IP source address. */
-#define ODPAT_SET_NW_DST        9    /* IP destination address. */
-#define ODPAT_SET_NW_TOS        10   /* IP ToS/DSCP field (6 bits). */
-#define ODPAT_SET_TP_SRC        11   /* TCP/UDP source port. */
-#define ODPAT_SET_TP_DST        12   /* TCP/UDP destination port. */
-#define ODPAT_N_ACTIONS         13
+#define ODPAT_STRIP_VLAN        4    /* Strip the 802.1q header. */
+#define ODPAT_SET_DL_SRC        5    /* Ethernet source address. */
+#define ODPAT_SET_DL_DST        6    /* Ethernet destination address. */
+#define ODPAT_SET_NW_SRC        7    /* IP source address. */
+#define ODPAT_SET_NW_DST        8    /* IP destination address. */
+#define ODPAT_SET_NW_TOS        9    /* IP ToS/DSCP field (6 bits). */
+#define ODPAT_SET_TP_SRC        10   /* TCP/UDP source port. */
+#define ODPAT_SET_TP_DST        11   /* TCP/UDP destination port. */
+#define ODPAT_N_ACTIONS         12
 
 struct odp_action_output {
     __u16 type;                  /* ODPAT_OUTPUT. */
