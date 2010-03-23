@@ -5,7 +5,7 @@
 # trademarks of Citrix Systems, Inc., in the United States and other
 # countries.
 
-# Copyright (c) 2009 Nicira Networks.
+# Copyright (c) 2009, 2010 Nicira Networks.
 
 from XSConsoleLog import *
 
@@ -296,6 +296,8 @@ class XSFeatureVSwitch:
         inPane.NewLine()
         inPane.AddStatusField(Lang("ovs-vswitchd status", 20),
                               VSwitchService.Inst("vswitch", "ovs-vswitchd").status())
+        inPane.AddStatusField(Lang("ovsdb-server status", 20),
+                              VSwitchService.Inst("vswitch", "ovsdb-server").status())
         inPane.AddStatusField(Lang("ovs-brcompatd status", 20),
                               VSwitchService.Inst("vswitch", "ovs-brcompatd").status())
 
