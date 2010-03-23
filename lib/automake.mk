@@ -205,6 +205,8 @@ EXTRA_DIST += \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl.man \
 	lib/ssl-syn.man \
+	lib/unixctl.man \
+	lib/unixctl-syn.man \
 	lib/vconn-active.man \
 	lib/vconn-passive.man \
 	lib/vlog-unixctl.man \
