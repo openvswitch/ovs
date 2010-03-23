@@ -86,6 +86,7 @@ This option is only for debugging the Open vSwitch implementation of
 .so lib/ssl-peer-ca-cert.man
 .so lib/daemon.man
 .so lib/vlog.man
+.so lib/unixctl.man
 .so lib/common.man
 .
 .SH EXAMPLES
