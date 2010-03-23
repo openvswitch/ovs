@@ -58,6 +58,10 @@ ovsdb_schema_destroy(struct ovsdb_schema *schema)
 {
     struct shash_node *node;
 
+    if (!schema) {
+        return;
+    }
+
     SHASH_FOR_EACH (node, &schema->tables) {
         ovsdb_table_schema_destroy(node->data);
     }
