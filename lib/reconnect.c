@@ -28,7 +28,6 @@
 #define STATES                                  \
     STATE(VOID, 1 << 0)                         \
     STATE(BACKOFF, 1 << 1)                      \
-    STATE(START_CONNECT, 1 << 2)                \
     STATE(CONNECT_IN_PROGRESS, 1 << 3)          \
     STATE(ACTIVE, 1 << 4)                       \
     STATE(IDLE, 1 << 5)                         \
@@ -260,8 +259,7 @@ reconnect_disable(struct reconnect *fsm, long long int now)
 void
 reconnect_force_reconnect(struct reconnect *fsm, long long int now)
 {
-    if (fsm->state & (S_START_CONNECT | S_CONNECT_IN_PROGRESS
-                      | S_ACTIVE | S_IDLE)) {
+    if (fsm->state & (S_CONNECT_IN_PROGRESS | S_ACTIVE | S_IDLE)) {
         reconnect_transition__(fsm, now, S_RECONNECT);
     }
 }
@@ -402,7 +400,6 @@ reconnect_deadline__(const struct reconnect *fsm)
     case S_BACKOFF:
         return fsm->state_entered + fsm->backoff;
 
-    case S_START_CONNECT:
     case S_CONNECT_IN_PROGRESS:
         return fsm->state_entered + MAX(1000, fsm->backoff);
 
@@ -460,7 +457,6 @@ reconnect_run(struct reconnect *fsm, long long int now)
         case S_BACKOFF:
             return RECONNECT_CONNECT;
 
-        case S_START_CONNECT:
         case S_CONNECT_IN_PROGRESS:
             return RECONNECT_DISCONNECT;
 
@@ -482,7 +478,7 @@ reconnect_run(struct reconnect *fsm, long long int now)
 
         NOT_REACHED();
     } else {
-        return fsm->state == S_START_CONNECT ? RECONNECT_CONNECT : 0;
+        return 0;
     }
 }
 
