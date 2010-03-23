@@ -42,9 +42,12 @@ ifeq (,$(wildcard $(VERSION_FILE)))
   $(error Linux kernel source not configured - missing version.h)
 endif
 
-CONFIG_FILE := $(KSRC)/include/linux/autoconf.h
+CONFIG_FILE := $(KSRC)/include/generated/autoconf.h
 ifeq (,$(wildcard $(CONFIG_FILE)))
-  $(error Linux kernel source not configured - missing autoconf.h)
+  CONFIG_FILE := $(KSRC)/include/linux/autoconf.h
+  ifeq (,$(wildcard $(CONFIG_FILE)))
+    $(error Linux kernel source not configured - missing autoconf.h)
+  endif
 endif
 
 default:

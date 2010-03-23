@@ -70,8 +70,9 @@ AC_DEFUN([OVS_CHECK_LINUX26], [
          AC_ERROR([Linux kernel in build tree $KBUILD26 (source tree $KSRC26) is not version 2.6])
        fi
     fi
-    if ! test -e "$KBUILD26"/include/linux/version.h || \
-       ! test -e "$KBUILD26"/include/linux/autoconf.h; then
+    if test ! -e "$KBUILD26"/include/linux/version.h || \
+       (test ! -e "$KBUILD26"/include/linux/autoconf.h && \
+        test ! -e "$KBUILD26"/include/generated/autoconf.h); then
 	AC_MSG_ERROR([Linux kernel source in $KBUILD26 is not configured])
     fi
     OVS_CHECK_LINUX26_COMPAT
