@@ -137,8 +137,11 @@ fatal_signal_handler(int sig_nr)
 void
 fatal_signal_run(void)
 {
-    int sig_nr = stored_sig_nr;
+    int sig_nr;
 
+    fatal_signal_init();
+
+    sig_nr = stored_sig_nr;
     if (sig_nr != SIG_ATOMIC_MAX) {
         call_hooks(sig_nr);
 
@@ -152,6 +155,7 @@ fatal_signal_run(void)
 void
 fatal_signal_wait(void)
 {
+    fatal_signal_init();
     poll_fd_wait(signal_fds[0], POLLIN);
 }
 
