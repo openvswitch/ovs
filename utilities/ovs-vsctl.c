@@ -36,6 +36,7 @@
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "process.h"
+#include "stream-ssl.h"
 #include "svec.h"
 #include "vswitchd/vswitch-idl.h"
 #include "timeval.h"
@@ -174,6 +175,7 @@ parse_options(int argc, char *argv[])
         OPT_NO_SYSLOG,
         OPT_NO_WAIT,
         OPT_DRY_RUN,
+        OPT_PEER_CA_CERT,
         VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
@@ -186,6 +188,10 @@ parse_options(int argc, char *argv[])
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
         VLOG_LONG_OPTIONS,
+#ifdef HAVE_OPENSSL
+        STREAM_SSL_LONG_OPTIONS
+        {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
+#endif
         {0, 0, 0, 0},
     };
 
@@ -235,6 +241,14 @@ parse_options(int argc, char *argv[])
             break;
 
         VLOG_OPTION_HANDLERS
+
+#ifdef HAVE_OPENSSL
+        STREAM_SSL_OPTION_HANDLERS
+
+        case OPT_PEER_CA_CERT:
+            stream_ssl_set_peer_ca_cert_file(optarg);
+            break;
+#endif
 
         case '?':
             exit(EXIT_FAILURE);
