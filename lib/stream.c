@@ -145,6 +145,43 @@ stream_usage(const char *name, bool active, bool passive,
 #endif
 }
 
+/* Given 'name', a stream name in the form "TYPE:ARGS", stores the class
+ * named "TYPE" into '*classp' and returns 0.  Returns EAFNOSUPPORT and stores
+ * a null pointer into '*classp' if 'name' is in the wrong form or if no such
+ * class exists. */
+static int
+stream_lookup_class(const char *name, struct stream_class **classp)
+{
+    size_t prefix_len;
+    size_t i;
+
+    check_stream_classes();
+
+    *classp = NULL;
+    prefix_len = strcspn(name, ":");
+    if (name[prefix_len] == '\0') {
+        return EAFNOSUPPORT;
+    }
+    for (i = 0; i < ARRAY_SIZE(stream_classes); i++) {
+        struct stream_class *class = stream_classes[i];
+        if (strlen(class->name) == prefix_len
+            && !memcmp(class->name, name, prefix_len)) {
+            *classp = class;
+            return 0;
+        }
+    }
+    return EAFNOSUPPORT;
+}
+
+/* Returns 0 if 'name' is a stream name in the form "TYPE:ARGS" and TYPE is
+ * a supported stream type, otherwise EAFNOSUPPORT.  */
+int
+stream_verify_name(const char *name)
+{
+    struct stream_class *class;
+    return stream_lookup_class(name, &class);
+}
+
 /* Attempts to connect a stream to a remote peer.  'name' is a connection name
  * in the form "TYPE:ARGS", where TYPE is an active stream class's name and
  * ARGS are stream class-specific.
@@ -155,34 +192,34 @@ stream_usage(const char *name, bool active, bool passive,
 int
 stream_open(const char *name, struct stream **streamp)
 {
-    size_t prefix_len;
-    size_t i;
+    struct stream_class *class;
+    struct stream *stream;
+    char *suffix_copy;
+    int error;
 
     COVERAGE_INC(stream_open);
-    check_stream_classes();
 
+    /* Look up the class. */
+    error = stream_lookup_class(name, &class);
+    if (!class) {
+        goto error;
+    }
+
+    /* Call class's "open" function. */
+    suffix_copy = xstrdup(strchr(name, ':') + 1);
+    error = class->open(name, suffix_copy, &stream);
+    free(suffix_copy);
+    if (error) {
+        goto error;
+    }
+
+    /* Success. */
+    *streamp = stream;
+    return 0;
+
+error:
     *streamp = NULL;
-    prefix_len = strcspn(name, ":");
-    if (prefix_len == strlen(name)) {
-        return EAFNOSUPPORT;
-    }
-    for (i = 0; i < ARRAY_SIZE(stream_classes); i++) {
-        struct stream_class *class = stream_classes[i];
-        if (strlen(class->name) == prefix_len
-            && !memcmp(class->name, name, prefix_len)) {
-            struct stream *stream;
-            char *suffix_copy = xstrdup(name + prefix_len + 1);
-            int retval = class->open(name, suffix_copy, &stream);
-            free(suffix_copy);
-            if (!retval) {
-                assert(stream->state != SCS_CONNECTING
-                       || stream->class->connect);
-                *streamp = stream;
-            }
-            return retval;
-        }
-    }
-    return EAFNOSUPPORT;
+    return error;
 }
 
 int
@@ -399,6 +436,43 @@ stream_send_wait(struct stream *stream)
     stream_wait(stream, STREAM_SEND);
 }
 
+/* Given 'name', a pstream name in the form "TYPE:ARGS", stores the class
+ * named "TYPE" into '*classp' and returns 0.  Returns EAFNOSUPPORT and stores
+ * a null pointer into '*classp' if 'name' is in the wrong form or if no such
+ * class exists. */
+static int
+pstream_lookup_class(const char *name, struct pstream_class **classp)
+{
+    size_t prefix_len;
+    size_t i;
+
+    check_stream_classes();
+
+    *classp = NULL;
+    prefix_len = strcspn(name, ":");
+    if (name[prefix_len] == '\0') {
+        return EAFNOSUPPORT;
+    }
+    for (i = 0; i < ARRAY_SIZE(pstream_classes); i++) {
+        struct pstream_class *class = pstream_classes[i];
+        if (strlen(class->name) == prefix_len
+            && !memcmp(class->name, name, prefix_len)) {
+            *classp = class;
+            return 0;
+        }
+    }
+    return EAFNOSUPPORT;
+}
+
+/* Returns 0 if 'name' is a pstream name in the form "TYPE:ARGS" and TYPE is
+ * a supported pstream type, otherwise EAFNOSUPPORT.  */
+int
+pstream_verify_name(const char *name)
+{
+    struct pstream_class *class;
+    return pstream_lookup_class(name, &class);
+}
+
 /* Attempts to start listening for remote stream connections.  'name' is a
  * connection name in the form "TYPE:ARGS", where TYPE is an passive stream
  * class's name and ARGS are stream class-specific.
@@ -409,30 +483,34 @@ stream_send_wait(struct stream *stream)
 int
 pstream_open(const char *name, struct pstream **pstreamp)
 {
-    size_t prefix_len;
-    size_t i;
+    struct pstream_class *class;
+    struct pstream *pstream;
+    char *suffix_copy;
+    int error;
 
-    check_stream_classes();
+    COVERAGE_INC(pstream_open);
 
+    /* Look up the class. */
+    error = pstream_lookup_class(name, &class);
+    if (!class) {
+        goto error;
+    }
+
+    /* Call class's "open" function. */
+    suffix_copy = xstrdup(strchr(name, ':') + 1);
+    error = class->listen(name, suffix_copy, &pstream);
+    free(suffix_copy);
+    if (error) {
+        goto error;
+    }
+
+    /* Success. */
+    *pstreamp = pstream;
+    return 0;
+
+error:
     *pstreamp = NULL;
-    prefix_len = strcspn(name, ":");
-    if (prefix_len == strlen(name)) {
-        return EAFNOSUPPORT;
-    }
-    for (i = 0; i < ARRAY_SIZE(pstream_classes); i++) {
-        struct pstream_class *class = pstream_classes[i];
-        if (strlen(class->name) == prefix_len
-            && !memcmp(class->name, name, prefix_len)) {
-            char *suffix_copy = xstrdup(name + prefix_len + 1);
-            int retval = class->listen(name, suffix_copy, pstreamp);
-            free(suffix_copy);
-            if (retval) {
-                *pstreamp = NULL;
-            }
-            return retval;
-        }
-    }
-    return EAFNOSUPPORT;
+    return error;
 }
 
 /* Returns the name that was used to open 'pstream'.  The caller must not

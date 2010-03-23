@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ struct stream;
 void stream_usage(const char *name, bool active, bool passive, bool bootstrap);
 
 /* Bidirectional byte streams. */
+int stream_verify_name(const char *name);
 int stream_open(const char *name, struct stream **);
 int stream_open_block(const char *name, struct stream **);
 void stream_close(struct stream *);
@@ -53,6 +54,7 @@ void stream_recv_wait(struct stream *);
 void stream_send_wait(struct stream *);
 
 /* Passive streams: listeners for incoming stream connections. */
+int pstream_verify_name(const char *name);
 int pstream_open(const char *name, struct pstream **);
 const char *pstream_get_name(const struct pstream *);
 void pstream_close(struct pstream *);
