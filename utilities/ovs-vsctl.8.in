@@ -83,6 +83,7 @@ contacts to query or modify configuration.  The default is
 following forms:
 .RS
 .so ovsdb/remote-active.man
+.so ovsdb/remote-passive.man
 .RE
 .
 .IP "\fB\-\-no\-wait\fR"

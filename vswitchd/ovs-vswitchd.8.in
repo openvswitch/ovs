@@ -22,6 +22,7 @@ The mandatory \fIdatabase\fR argument specifies the
 \fBovsdb\-server\fR from which \fBovs\-vswitchd\fR's configuration
 should be retrieved.  It takes one of the following forms:
 .so ovsdb/remote-active.man
+.so ovsdb/remote-passive.man
 .PP
 \fBovs\-vswitchd\fR retrieves its configuration from \fIdatabase\fR at
 startup.  It sets up Open vSwitch datapaths and then operates
