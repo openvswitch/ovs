@@ -31,7 +31,8 @@
     STATE(CONNECT_IN_PROGRESS, 1 << 3)          \
     STATE(ACTIVE, 1 << 4)                       \
     STATE(IDLE, 1 << 5)                         \
-    STATE(RECONNECT, 1 << 6)
+    STATE(RECONNECT, 1 << 6)                    \
+    STATE(LISTENING, 1 << 7)
 enum state {
 #define STATE(NAME, VALUE) S_##NAME = VALUE,
     STATES
@@ -50,6 +51,7 @@ struct reconnect {
     int min_backoff;
     int max_backoff;
     int probe_interval;
+    bool passive;
 
     /* State. */
     enum state state;
@@ -95,6 +97,7 @@ reconnect_create(long long int now)
     fsm->min_backoff = 1000;
     fsm->max_backoff = 8000;
     fsm->probe_interval = 5000;
+    fsm->passive = false;
 
     fsm->state = S_VOID;
     fsm->state_entered = now;
@@ -218,6 +221,32 @@ reconnect_set_probe_interval(struct reconnect *fsm, int probe_interval)
     fsm->probe_interval = probe_interval ? MAX(1000, probe_interval) : 0;
 }
 
+/* Returns true if 'fsm' is in passive mode, false if 'fsm' is in active mode
+ * (the default). */
+bool
+reconnect_is_passive(const struct reconnect *fsm)
+{
+    return fsm->passive;
+}
+
+/* Configures 'fsm' for active or passive mode.  In active mode (the default),
+ * the FSM is attempting to connect to a remote host.  In passive mode, the FSM
+ * is listening for connections from a remote host. */
+void
+reconnect_set_passive(struct reconnect *fsm, bool passive, long long int now)
+{
+    if (fsm->passive != passive) {
+        fsm->passive = passive;
+
+        if (passive
+            ? fsm->state & (S_CONNECT_IN_PROGRESS | S_RECONNECT)
+            : fsm->state == S_LISTENING && reconnect_may_retry(fsm)) {
+            reconnect_transition__(fsm, now, S_BACKOFF);
+            fsm->backoff = 0;
+        }
+    }
+}
+
 /* Returns true if 'fsm' has been enabled with reconnect_enable().  Calling
  * another function that indicates a change in connection state, such as
  * reconnect_disconnected() or reconnect_force_reconnect(), will also enable
@@ -284,19 +313,28 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
             } else {
                 VLOG_INFO("%s: connection dropped", fsm->name);
             }
-        } else {
+        } else if (fsm->state == S_LISTENING) {
             if (error > 0) {
-                VLOG_WARN("%s: connection attempt failed (%s)",
+                VLOG_WARN("%s: error listening for connections (%s)",
                           fsm->name, strerror(error));
             } else {
-                VLOG_INFO("%s: connection attempt timed out", fsm->name);
+                VLOG_INFO("%s: error listening for connections", fsm->name);
+            }
+        } else {
+            const char *type = fsm->passive ? "listen" : "connection";
+            if (error > 0) {
+                VLOG_WARN("%s: %s attempt failed (%s)",
+                          fsm->name, type, strerror(error));
+            } else {
+                VLOG_INFO("%s: %s attempt timed out", fsm->name, type);
             }
         }
 
         /* Back off. */
         if (fsm->state & (S_ACTIVE | S_IDLE)
-            && fsm->last_received - fsm->last_connected >= fsm->backoff) {
-            fsm->backoff = fsm->min_backoff;
+             && (fsm->last_received - fsm->last_connected >= fsm->backoff
+                 || fsm->passive)) {
+            fsm->backoff = fsm->passive ? 0 : fsm->min_backoff;
         } else {
             if (fsm->backoff < fsm->min_backoff) {
                 fsm->backoff = fsm->min_backoff;
@@ -305,8 +343,13 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
             } else {
                 fsm->backoff *= 2;
             }
-            VLOG_INFO("%s: waiting %.3g seconds before reconnect\n",
-                      fsm->name, fsm->backoff / 1000.0);
+            if (fsm->passive) {
+                VLOG_INFO("%s: waiting %.3g seconds before trying to "
+                          "listen again", fsm->name, fsm->backoff / 1000.0);
+            } else {
+                VLOG_INFO("%s: waiting %.3g seconds before reconnect",
+                          fsm->name, fsm->backoff / 1000.0);
+            }
         }
 
         reconnect_transition__(fsm, now,
@@ -314,16 +357,55 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
     }
 }
 
-/* Tell 'fsm' that a connection attempt is in progress.
+/* Tell 'fsm' that a connection or listening attempt is in progress.
  *
- * The FSM will start a timer, after which the connection attempt will be
- * aborted (by returning RECONNECT_DISCONNECT from reconect_run()).  */
+ * The FSM will start a timer, after which the connection or listening attempt
+ * will be aborted (by returning RECONNECT_DISCONNECT from reconect_run()).  */
 void
 reconnect_connecting(struct reconnect *fsm, long long int now)
 {
     if (fsm->state != S_CONNECT_IN_PROGRESS) {
-        VLOG_INFO("%s: connecting...", fsm->name);
+        if (fsm->passive) {
+            VLOG_INFO("%s: listening...", fsm->name);
+        } else {
+            VLOG_INFO("%s: connecting...", fsm->name);
+        }
         reconnect_transition__(fsm, now, S_CONNECT_IN_PROGRESS);
+    }
+}
+
+/* Tell 'fsm' that the client is listening for connection attempts.  This state
+ * last indefinitely until the client reports some change.
+ *
+ * The natural progression from this state is for the client to report that a
+ * connection has been accepted or is in progress of being accepted, by calling
+ * reconnect_connecting() or reconnect_connected().
+ *
+ * The client may also report that listening failed (e.g. accept() returned an
+ * unexpected error such as ENOMEM) by calling reconnect_listen_error(), in
+ * which case the FSM will back off and eventually return RECONNECT_CONNECT
+ * from reconnect_run() to tell the client to try listening again. */
+void
+reconnect_listening(struct reconnect *fsm, long long int now)
+{
+    if (fsm->state != S_LISTENING) {
+        VLOG_INFO("%s: listening...", fsm->name);
+        reconnect_transition__(fsm, now, S_LISTENING);
+    }
+}
+
+/* Tell 'fsm' that the client's attempt to accept a connection failed
+ * (e.g. accept() returned an unexpected error such as ENOMEM).
+ *
+ * If the FSM is currently listening (reconnect_listening() was called), it
+ * will back off and eventually return RECONNECT_CONNECT from reconnect_run()
+ * to tell the client to try listening again.  If there is an active
+ * connection, this will be delayed until that connection drops. */
+void
+reconnect_listen_error(struct reconnect *fsm, long long int now, int error)
+{
+    if (fsm->state == S_LISTENING) {
+        reconnect_disconnected(fsm, now, error);
     }
 }
 
@@ -395,6 +477,7 @@ reconnect_deadline__(const struct reconnect *fsm)
     assert(fsm->state_entered != LLONG_MIN);
     switch (fsm->state) {
     case S_VOID:
+    case S_LISTENING:
         return LLONG_MAX;
 
     case S_BACKOFF:
@@ -425,9 +508,9 @@ reconnect_deadline__(const struct reconnect *fsm)
  *
  *     - 0: The client need not take any action.
  *
- *     - RECONNECT_CONNECT: The client should start a connection attempt and
- *       indicate this by calling reconnect_connecting().  If the connection
- *       attempt has definitely succeeded, it should call
+ *     - Active client, RECONNECT_CONNECT: The client should start a connection
+ *       attempt and indicate this by calling reconnect_connecting().  If the
+ *       connection attempt has definitely succeeded, it should call
  *       reconnect_connected().  If the connection attempt has definitely
  *       failed, it should call reconnect_connect_failed().
  *
@@ -437,9 +520,19 @@ reconnect_deadline__(const struct reconnect *fsm)
  *       (e.g. connect()) even if the connection might soon abort due to a
  *       failure at a high-level (e.g. SSL negotiation failure).
  *
+ *     - Passive client, RECONNECT_CONNECT: The client should try to listen for
+ *       a connection, if it is not already listening.  It should call
+ *       reconnect_listening() if successful, otherwise reconnect_connecting()
+ *       or reconnected_connect_failed() if the attempt is in progress or
+ *       definitely failed, respectively.
+ *
+ *       A listening passive client should constantly attempt to accept a new
+ *       connection and report an accepted connection with
+ *       reconnect_connected().
+ *
  *     - RECONNECT_DISCONNECT: The client should abort the current connection
- *       or connection attempt and call reconnect_disconnected() or
- *       reconnect_connect_failed() to indicate it.
+ *       or connection attempt or listen attempt and call
+ *       reconnect_disconnected() or reconnect_connect_failed() to indicate it.
  *
  *     - RECONNECT_PROBE: The client should send some kind of request to the
  *       peer that will elicit a response, to ensure that the connection is
@@ -474,6 +567,9 @@ reconnect_run(struct reconnect *fsm, long long int now)
 
         case S_RECONNECT:
             return RECONNECT_DISCONNECT;
+
+        case S_LISTENING:
+            return 0;
         }
 
         NOT_REACHED();

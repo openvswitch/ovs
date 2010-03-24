@@ -1109,3 +1109,123 @@ timeout
   no timeout
 ])
 AT_CLEANUP
+
+######################################################################
+AT_SETUP([passive mode])
+AT_KEYWORDS([reconnect])
+AT_DATA([input], [passive
+enable
+
+# Start listening.
+timeout
+run
+listening
+
+# Listening never times out.
+timeout
+run
+
+# Listening failed (accept() returned funny error?).  Back off and try again.
+listen-error 0
+timeout
+run
+listening
+
+# Connection accepted.
+connected
+received
+advance 1000
+received
+
+# Connection times out.
+timeout
+run
+timeout
+run
+disconnected
+
+# Start listening again.
+timeout
+run
+listening
+])
+AT_CHECK([test-reconnect < input], [0], 
+  [### t=1000 ###
+passive
+enable
+  in BACKOFF for 0 ms (0 ms backoff)
+
+# Start listening.
+timeout
+  advance 0 ms
+run
+  should connect
+listening
+  in LISTENING for 0 ms (0 ms backoff)
+
+# Listening never times out.
+timeout
+  no timeout
+run
+
+# Listening failed (accept() returned funny error?).  Back off and try again.
+listen-error 0
+  in BACKOFF for 0 ms (1000 ms backoff)
+timeout
+  advance 1000 ms
+
+### t=2000 ###
+  in BACKOFF for 1000 ms (1000 ms backoff)
+run
+  should connect
+listening
+  in LISTENING for 0 ms (1000 ms backoff)
+
+# Connection accepted.
+connected
+  in ACTIVE for 0 ms (1000 ms backoff)
+  created 1000, last received 1000, last connected 2000
+  1 successful connections out of 1 attempts, seqno 1
+  connected (0 ms), total 0 ms connected
+received
+  created 1000, last received 2000, last connected 2000
+advance 1000
+
+### t=3000 ###
+  in ACTIVE for 1000 ms (1000 ms backoff)
+  connected (1000 ms), total 1000 ms connected
+received
+  created 1000, last received 3000, last connected 2000
+
+# Connection times out.
+timeout
+  advance 5000 ms
+
+### t=8000 ###
+  in ACTIVE for 6000 ms (1000 ms backoff)
+  connected (6000 ms), total 6000 ms connected
+run
+  should send probe
+  in IDLE for 0 ms (1000 ms backoff)
+timeout
+  advance 5000 ms
+
+### t=13000 ###
+  in IDLE for 5000 ms (1000 ms backoff)
+  connected (11000 ms), total 11000 ms connected
+run
+  should disconnect
+disconnected
+  in BACKOFF for 0 ms (0 ms backoff)
+  1 successful connections out of 1 attempts, seqno 2
+  not connected (0 ms), total 11000 ms connected
+
+# Start listening again.
+timeout
+  advance 0 ms
+run
+  should connect
+listening
+  in LISTENING for 0 ms (0 ms backoff)
+])
+AT_CLEANUP

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,10 @@ void reconnect_set_backoff(struct reconnect *,
                            int min_backoff, int max_backoff);
 void reconnect_set_probe_interval(struct reconnect *, int probe_interval);
 
+bool reconnect_is_passive(const struct reconnect *);
+void reconnect_set_passive(struct reconnect *, bool passive,
+                           long long int now);
+
 bool reconnect_is_enabled(const struct reconnect *);
 void reconnect_enable(struct reconnect *, long long int now);
 void reconnect_disable(struct reconnect *, long long int now);
@@ -61,6 +65,8 @@ unsigned int reconnect_get_connection_duration(const struct reconnect *,
 
 void reconnect_disconnected(struct reconnect *, long long int now, int error);
 void reconnect_connecting(struct reconnect *, long long int now);
+void reconnect_listening(struct reconnect *, long long int now);
+void reconnect_listen_error(struct reconnect *, long long int now, int error);
 void reconnect_connected(struct reconnect *, long long int now);
 void reconnect_connect_failed(struct reconnect *, long long int now,
                               int error);
