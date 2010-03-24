@@ -133,8 +133,7 @@ static SSL_CTX *ctx;
 struct ssl_config_file {
     bool read;                  /* Whether the file was successfully read. */
     char *file_name;            /* Configured file name, if any. */
-    long long int next_retry;   /* If 'file_name' but not 'read', next time to
-                                 * retry reading.  */
+    struct timespec mtime;      /* File mtime as of last time we read it. */
 };
 
 /* SSL configuration files. */
@@ -335,9 +334,10 @@ do_ca_cert_bootstrap(struct stream *stream)
     fd = open(ca_cert.file_name, O_CREAT | O_EXCL | O_WRONLY, 0444);
     if (fd < 0) {
         if (errno == EEXIST) {
-            VLOG_INFO("reading CA cert %s created by another process",
+            VLOG_INFO("CA cert %s created by another process",
                       ca_cert.file_name);
-            stream_ssl_set_ca_cert_file__(ca_cert.file_name, true);
+            /* We'll read it the next time around the main loop because
+             * update_ssl_config() will see that it now exists. */
             return EPROTO;
         } else {
             VLOG_ERR("could not bootstrap CA cert: creating %s failed: %s",
@@ -910,18 +910,46 @@ stream_ssl_is_configured(void)
     return private_key.file_name || certificate.file_name || ca_cert.file_name;
 }
 
+static void
+get_mtime(const char *file_name, struct timespec *mtime)
+{
+    struct stat s;
+
+    if (!stat(file_name, &s)) {
+        mtime->tv_sec = s.st_mtime;
+
+#if HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC
+        mtime->tv_nsec = s.st_mtim.tv_nsec;
+#elif HAVE_STRUCT_STAT_ST_MTIMENSEC
+        mtime->tv_nsec = s.st_mtimensec;
+#else
+        mtime->tv_nsec = 0;
+#endif
+    } else {
+        mtime->tv_sec = mtime->tv_nsec = 0;
+    }
+}
+
 static bool
 update_ssl_config(struct ssl_config_file *config, const char *file_name)
 {
-    if (ssl_init()
-        || !file_name
-        || (config->file_name
-            && !strcmp(config->file_name, file_name)
-            && time_msec() < config->next_retry)) {
+    struct timespec mtime;
+
+    if (ssl_init() || !file_name) {
         return false;
     }
 
-    config->next_retry = time_msec() + 60 * 1000;
+    /* If the file name hasn't changed and neither has the file contents, stop
+     * here. */
+    get_mtime(file_name, &mtime);
+    if (config->file_name
+        && !strcmp(config->file_name, file_name)
+        && mtime.tv_sec == config->mtime.tv_sec
+        && mtime.tv_nsec == config->mtime.tv_nsec) {
+        return false;
+    }
+
+    config->mtime = mtime;
     free(config->file_name);
     config->file_name = xstrdup(file_name);
     return true;
