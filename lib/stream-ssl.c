@@ -141,6 +141,11 @@ static struct ssl_config_file private_key;
 static struct ssl_config_file certificate;
 static struct ssl_config_file ca_cert;
 
+/* Ordinarily, the SSL client and server verify each other's certificates using
+ * a CA certificate.  Setting this to false disables this behavior.  (This is a
+ * security risk.) */
+static bool verify_peer_cert = true;
+
 /* Ordinarily, we require a CA certificate for the peer to be locally
  * available.  We can, however, bootstrap the CA certificate from the peer at
  * the beginning of our first connection then use that certificate on all
@@ -204,7 +209,7 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
         VLOG_ERR("Certificate must be configured to use SSL");
         retval = ENOPROTOOPT;
     }
-    if (!ca_cert.read && !bootstrap_ca_cert) {
+    if (!ca_cert.read && verify_peer_cert && !bootstrap_ca_cert) {
         VLOG_ERR("CA certificate must be configured to use SSL");
         retval = ENOPROTOOPT;
     }
@@ -243,7 +248,7 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
         retval = ENOPROTOOPT;
         goto error;
     }
-    if (bootstrap_ca_cert && type == CLIENT) {
+    if (!verify_peer_cert || (bootstrap_ca_cert && type == CLIENT)) {
         SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
     }
 
@@ -425,9 +430,10 @@ ssl_connect(struct stream *stream)
             }
         } else if (bootstrap_ca_cert) {
             return do_ca_cert_bootstrap(stream);
-        } else if ((SSL_get_verify_mode(sslv->ssl)
-                    & (SSL_VERIFY_NONE | SSL_VERIFY_PEER))
-                   != SSL_VERIFY_PEER) {
+        } else if (verify_peer_cert
+                   && ((SSL_get_verify_mode(sslv->ssl)
+                       & (SSL_VERIFY_NONE | SSL_VERIFY_PEER))
+                       != SSL_VERIFY_PEER)) {
             /* Two or more SSL connections completed at the same time while we
              * were in bootstrap mode.  Only one of these can finish the
              * bootstrap successfully.  The other one(s) must be rejected
@@ -1106,7 +1112,11 @@ stream_ssl_set_ca_cert_file__(const char *file_name, bool bootstrap)
     size_t n_certs;
     struct stat s;
 
-    if (bootstrap && stat(file_name, &s) && errno == ENOENT) {
+    if (!strcmp(file_name, "none")) {
+        verify_peer_cert = false;
+        VLOG_WARN("Peer certificate validation disabled "
+                  "(this is a security risk)");
+    } else if (bootstrap && stat(file_name, &s) && errno == ENOENT) {
         bootstrap_ca_cert = true;
     } else if (!read_cert_file(file_name, &certs, &n_certs)) {
         size_t i;

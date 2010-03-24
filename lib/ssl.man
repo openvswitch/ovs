@@ -22,3 +22,9 @@ should use to verify certificates presented to it by SSL peers.  (This
 may be the same certificate that SSL peers use to verify the
 certificate specified on \fB\-c\fR or \fB\-\-certificate\fR, or it may
 be a different one, depending on the PKI design in use.)
+.
+.IP "\fB\-C none\fR"
+.IQ "\fB\-\-ca\-cert=none\fR"
+Disables verification of certificates presented by SSL peers.  This
+introduces a security risk, because it means that certificates cannot
+be verified to be those of known trusted hosts.
