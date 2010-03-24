@@ -157,7 +157,7 @@ Prerequisites section, follow the procedure below to build.
 
 7. Initialize the configuration database using ovsdb-tool, e.g.:
 
-      % ovsdb-tool create /etc/ovs-vswitchd.conf.db vswitchd/vswitch.ovsschema
+      % ovsdb-tool create /usr/local/etc/ovs-vswitchd.conf.db vswitchd/vswitch.ovsschema
 
 Startup
 =======
@@ -167,7 +167,7 @@ configuration database, ovsdb-server.  Configure it to use the
 database you created during step 7 of installation, above, and to
 listen on a Unix domain socket, e.g.:
 
-      % ovsdb-server /etc/ovs-vswitchd.conf.db --remote=punix:/var/run/ovsdb-server
+      % ovsdb-server /usr/local/etc/ovs-vswitchd.conf.db --remote=punix:/usr/local/var/run/ovsdb-server
 
 Then initialize the database with "ovs-vsctl init".  This is only
 necessary the first time after you create the database with
@@ -178,7 +178,7 @@ ovsdb-tool (but running it at any time is harmless):
 Then start the main Open vSwitch daemon, telling it to connect to the
 same Unix domain socket:
 
-      % ovs-vswitchd unix:/var/run/ovsdb-server
+      % ovs-vswitchd unix:/usr/local/var/run/ovsdb-server
 
 Now you may use ovs-vsctl to set up bridges and other Open vSwitch
 features.  For example, to create a bridge named br0 and add ports
