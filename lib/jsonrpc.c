@@ -684,6 +684,7 @@ jsonrpc_session_close(struct jsonrpc_session *s)
     if (s) {
         jsonrpc_close(s->rpc);
         reconnect_destroy(s->reconnect);
+        stream_close(s->stream);
         free(s);
     }
 }
