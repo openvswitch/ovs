@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -317,10 +317,10 @@ log_poll_interval(long long int last_wakeup, const struct rusage *last_rusage)
         struct rusage rusage;
 
         getrusage(RUSAGE_SELF, &rusage);
-        VLOG_WARN("%u ms poll interval (%lld ms user, %lld ms system) "
+        VLOG_WARN("%lld ms poll interval (%lld ms user, %lld ms system) "
                   "is over %u times the weighted mean interval %u ms "
                   "(%u samples)",
-                  (interval + 8) / 16,
+                  now - last_wakeup,
                   timeval_diff_msec(&rusage.ru_utime, &last_rusage->ru_utime),
                   timeval_diff_msec(&rusage.ru_stime, &last_rusage->ru_stime),
                   interval / mean_interval,
