@@ -74,6 +74,17 @@ Open vSwitch distribution for instructions on how to build and load
 the Open vSwitch kernel module.
 .PP
 .SH OPTIONS
+.IP "\fB--mlockall\fR"
+Causes \fBovs\-vswitchd\fR to call the \fBmlockall()\fR function, to
+attempt to lock all of its process memory into physical RAM,
+preventing the kernel from paging any of its memory to disk.  This
+helps to avoid networking interruptions due to system memory pressure.
+.IP
+Some systems do not support \fBmlockall()\fR at all, and other systems
+only allow privileged users, such as the superuser, to use it.
+\fBovs\-vswitchd\fR emits a log message if \fBmlockall()\fR is
+unavailable or unsuccessful.
+.
 .IP "\fB--fake-proc-net\fR"
 Causes \fBovs\-vswitchd\fR to simulate some files in \fB/proc/net/vlan\fR
 and \fB/proc/net/bonding\fR that some legacy software expects to

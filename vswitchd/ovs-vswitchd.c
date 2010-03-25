@@ -22,6 +22,9 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef HAVE_MLOCKALL
+#include <sys/mman.h>
+#endif
 
 #include "bridge.h"
 #include "command-line.h"
@@ -136,6 +139,7 @@ parse_options(int argc, char *argv[])
 {
     enum {
         OPT_PEER_CA_CERT = UCHAR_MAX + 1,
+        OPT_MLOCKALL,
         OPT_FAKE_PROC_NET,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS,
@@ -144,6 +148,7 @@ parse_options(int argc, char *argv[])
     static struct option long_options[] = {
         {"help",        no_argument, 0, 'h'},
         {"version",     no_argument, 0, 'V'},
+        {"mlockall",    no_argument, 0, OPT_MLOCKALL},
         {"fake-proc-net", no_argument, 0, OPT_FAKE_PROC_NET},
         DAEMON_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
@@ -174,6 +179,16 @@ parse_options(int argc, char *argv[])
         case 'V':
             OVS_PRINT_VERSION(OFP_VERSION, OFP_VERSION);
             exit(EXIT_SUCCESS);
+
+        case OPT_MLOCKALL:
+#ifdef HAVE_MLOCKALL
+            if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
+                VLOG_ERR("mlockall failed: %s", strerror(errno));
+            }
+#else
+            VLOG_ERR("mlockall not supported on this system");
+#endif
+            break;
 
         case OPT_FAKE_PROC_NET:
             error = proc_net_compat_init();

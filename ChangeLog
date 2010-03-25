@@ -12,6 +12,11 @@ v0.99.0 - 14 Jan 2010
 ---------------------
     - User-space forwarding engine
     - Bug fixes
+	
+v0.90.7 - 29 Nov 2009
+---------------------
+    - Add support for NetFlow active timeouts
+    - Bug fixes
 
 v0.90.6 - 6 Oct 2009
 --------------------
