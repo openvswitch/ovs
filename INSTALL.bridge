@@ -10,7 +10,6 @@ compatibility hooks for environments that are not tightly tied to the
 Linux bridging tools; they are more efficient and better reflect the
 actual operation and status.
 
-
 Installation Procedure
 ----------------------
 
@@ -18,42 +17,35 @@ The procedure below explains how to use the Open vSwitch bridge
 compatibility support.  This procedure is written from the perspective
 of a system administrator manually loading and starting Open vSwitch
 in bridge compatibility mode, but of course in practice one would want
-to update system scripts to follow these steps.
+to update system scripts to follow these steps.  If you do edit your
+system configuration files to start Open vSwitch at boot time, make
+sure that it starts up before any bridge configuration (e.g. before
+any calls to "brctl" or "ifup" of any bridge interfaces), to ensure
+that the Open vSwitch kernel modules are loaded before the Linux
+kernel bridge module.
 
-1. Build and install the Open vSwitch kernel modules and userspace
-   programs as described in INSTALL.Linux.
+1. Build, install, and start up the Open vSwitch kernel modules and
+   userspace programs as described in INSTALL.Linux.
 
    It is important to run "make install", because some Open vSwitch
    programs expect to find files in locations selected at installation
-   time.
+   time.  The instructions below assume that files are installed in
+   their default locations, under /usr/local.
 
-2. Load both the openvswitch and brcompat kernel modules (which were
-   built in step 1), e.g.:
+2. Load the brcompat kernel module (which was built in step 1), e.g.:
 
-      % insmod datapath/linux-2.6/openvswitch_mod.ko
       % insmod datapath/linux-2.6/brcompat_mod.ko
 
-   These kernel modules cannot be loaded if the Linux bridge module is
-   already loaded.  Thus, you may need to remove any existing bridges
-   and unload the bridge module with "rmmod bridge" before you can do
-   this.  In addition, if you edit your system configuration files to
-   load these modules at boot time, it should happen before any bridge
-   configuration (e.g. before any calls to "brctl" or "ifup" of any
-   bridge interfaces), to ensure that the Open vSwitch kernel modules
-   are loaded before the Linux kernel bridge module.
+   (openvswitch_mod.ko should already have been loaded.)
 
-3. Start ovsdb-server, ovs-vswitchd, and ovs-brcompatd, e.g.:
-
-      % ovsdb-server /etc/ovs-vswitchd.conf.db \
-                --remote=punix:/var/run/ovsdb-server
-
-      % ovs-vswitchd --pidfile --detach -vANY:console:EMER \
-                unix:/var/run/ovsdb-server
+3. Start ovs-brcompatd:
 
       % ovs-brcompatd --pidfile --detach -vANY:console:EMER \
-                unix:/var/run/ovsdb-server
+                unix:/usr/local/var/run/ovsdb-server
 
-5. Now you should be able to manage the Open vSwitch using brctl and
+   (ovsdb-server and ovs-vswitchd should already have been loaded.)
+
+4. Now you should be able to manage the Open vSwitch using brctl and
    related tools.  For example, you can create an Open vSwitch bridge,
    add interfaces to it, then print information about bridges with the
    commands:
