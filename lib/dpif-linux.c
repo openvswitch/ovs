@@ -661,6 +661,8 @@ get_major(const char *target)
         }
     }
 
+    fclose(file);
+
     VLOG_ERR("%s: %s major not found (is the module loaded?)", fn, target);
     return -ENODEV;
 }
