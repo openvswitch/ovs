@@ -135,12 +135,15 @@ EOF
         printf "or 5.5.0-25727p (Update 2).\n\n"
     elif md5sum -c --status <<EOF
 ca141d60061dcfdade73e75abc6529b5  /usr/sbin/brctl
-b8e9835862ef1a9cec2a3f477d26c989  /etc/xensource/scripts/vif
-ce451d3c985fd1db6497a363f0d9dedb  /opt/xensource/libexec/interface-reconfigure
-2b53f500431fcba5276c896e9e4281b9  /usr/sbin/xen-bugtool
+02cf136237ed85fcbcc1efc15ce0591c  /opt/xensource/libexec/interface-reconfigure
+3a192ee70ebf2153c90051b3af95f331  /opt/xensource/libexec/InterfaceReconfigureBridge.py
+f71cadf1464caefa7943de0ab47fdd8a  /opt/xensource/libexec/InterfaceReconfigure.py
+d70f08f235fb1bfd49a0580e440f15a0  /opt/xensource/libexec/InterfaceReconfigureVswitch.py
+f5c85ca825b1e6f5a0845530981cd836  /etc/xensource/scripts/vif
+facb851606f82ca2bcc760a4d91bbe33  /usr/sbin/xen-bugtool
 EOF
     then
-        printf "\nVerified host scripts from XenServer 5.5.900.\n\n"
+        printf "\nVerified host scripts from XenServer 5.5.900-29381p.\n\n"
     else
 cat <<EOF
 
