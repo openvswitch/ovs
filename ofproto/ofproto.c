@@ -3367,33 +3367,33 @@ uninstall_idle_flow(struct ofproto *ofproto, struct rule *rule)
 static void
 send_flow_removed(struct ofproto *p, struct rule *rule, uint8_t reason)
 {
-    long long int now = time_msec();
-    struct ofconn *ofconn;
-    struct ofconn *prev;
-    struct ofpbuf *buf = NULL;
-
     /* We limit the maximum number of queued flow expirations it by accounting
      * them under the counter for replies.  That works because preventing
      * OpenFlow requests from being processed also prevents new flows from
      * being added (and expiring).  (It also prevents processing OpenFlow
      * requests that would not add new flows, so it is imperfect.) */
 
-    prev = NULL;
-    LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
-        if (rule->send_flow_removed && rconn_is_connected(ofconn->rconn)) {
-            if (prev) {
-                queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
-            } else {
-                buf = compose_flow_removed(rule, now, reason);
+    if (rule->send_flow_removed) {
+        long long int now = time_msec();
+        struct ofconn *prev = NULL;
+        struct ofpbuf *buf = NULL;
+        struct ofconn *ofconn;
+
+        LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
+            if (rconn_is_connected(ofconn->rconn)) {
+                if (prev) {
+                    queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
+                } else {
+                    buf = compose_flow_removed(rule, now, reason);
+                }
+                prev = ofconn;
             }
-            prev = ofconn;
+        }
+        if (prev) {
+            queue_tx(buf, prev, prev->reply_counter);
         }
     }
-    if (prev) {
-        queue_tx(buf, prev, prev->reply_counter);
-    }
 }
-
 
 static void
 expire_rule(struct cls_rule *cls_rule, void *p_)
