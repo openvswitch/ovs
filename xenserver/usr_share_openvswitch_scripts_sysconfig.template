@@ -9,13 +9,17 @@
 
 # ENABLE_BRCOMPAT: If 'y' than emulate linux bridging interfaces
 #    using the brcompat kernel module and ovs-brcompatd daemon
-# ENABLE_BRCOMPAT=y
+#    This is required and enabled by default for XenServer 5.5.0,
+#    and not required and not enabled by default for later versions.
+# ENABLE_BRCOMPAT=?
 
 # ENABLE_FAKE_PROC_NET: If 'y' then emulate linux bonding and vlan
 #    files in /proc as if the bonding and vlan demultiplexing done in
 #    ovs-vswitchd were being implemented using existing Linux mechanisms.
 #    This is useful in some cases when replacing existing solutions.
-# ENABLE_FAKE_PROC_NET=y
+#    This is required and enabled by default for XenServer 5.5.0,
+#    and not required and not enabled by default for later versions.
+# ENABLE_FAKE_PROC_NET=?
 
 # ENABLE_MONITOR: If 'y' then monitor daemon processes and restart them
 #    if they die due to an error signal.

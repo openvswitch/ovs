@@ -21,11 +21,19 @@
 
 . /etc/init.d/functions
 
+. /etc/xensource-inventory
 test -e /etc/sysconfig/openvswitch && . /etc/sysconfig/openvswitch
 
 # General config variables in /etc/sysconfig/openvswitch
-: ${ENABLE_BRCOMPAT:=y}
-: ${ENABLE_FAKE_PROC_NET:=y}
+if test "$PRODUCT_VERSION" = "5.5.0"; then
+    # XenServer 5.5.0 needs ovs-brcompatd and /proc/net simulation.
+    : ${ENABLE_BRCOMPAT:=y}
+    : ${ENABLE_FAKE_PROC_NET:=y}
+else
+    # Later versions don't need them.
+    : ${ENABLE_BRCOMPAT:=n}
+    : ${ENABLE_FAKE_PROC_NET:=n}
+fi
 : ${ENABLE_MONITOR:=y}
 : ${FORCE_COREFILES:=y}
 
@@ -115,7 +123,7 @@ function insert_modules_if_required {
         action "Inserting llc module" modprobe llc
         action "Inserting openvswitch module" modprobe openvswitch_mod
     fi
-    if [ -n "$BRCOMPATD_PIDFILE" ] && ! lsmod | grep -q "brcompat_mod"; then
+    if [ "$ENABLE_BRCOMPATD" = "y" ] && [ -n "$BRCOMPATD_PIDFILE" ] && ! lsmod | grep -q "brcompat_mod"; then
         action "Inserting brcompat module" modprobe brcompat_mod
     fi
     if [ -f "/lib/modules/`uname -r`/kernel/net/openvswitch/ip_gre_mod.ko" ] && ! lsmod | grep -q "ip_gre_mod"; then
@@ -338,10 +346,9 @@ EOF
 }
 
 function set_system_uuid {
-    system_uuid=$(. /etc/xensource-inventory && echo $INSTALLATION_UUID)
-    if test -n "$system_uuid"; then
+    if test -n "$INSTALLATION_UUID"; then
         action "Configuring Open vSwitch system UUID" true
-        $vsctl --no-wait set Open_vSwitch . external-ids:system-uuid="$system_uuid"
+        $vsctl --no-wait set Open_vSwitch . external-ids:system-uuid="$INSTALLATION_UUID"
     else
         action "Configuring Open vSwitch system UUID" false
     fi
