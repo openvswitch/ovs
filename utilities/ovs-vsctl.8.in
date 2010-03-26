@@ -79,7 +79,7 @@ the global options by \fB\-\-\fR.
 .IP "\fB\-\-db=\fIserver\fR"
 Sets \fIserver\fR as the database server that \fBovs\-vsctl\fR
 contacts to query or modify configuration.  The default is
-\fBunix:@RUNDIR@/ovsdb\-server\fR.  \fIserver\fR must take one of the
+\fBunix:@RUNDIR@/db.sock\fR.  \fIserver\fR must take one of the
 following forms:
 .RS
 .so ovsdb/remote-active.man

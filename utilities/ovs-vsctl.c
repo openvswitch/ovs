@@ -449,7 +449,7 @@ default_db(void)
 {
     static char *def;
     if (!def) {
-        def = xasprintf("unix:%s/ovsdb-server", ovs_rundir);
+        def = xasprintf("unix:%s/db.sock", ovs_rundir);
     }
     return def;
 }

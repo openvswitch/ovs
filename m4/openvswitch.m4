@@ -113,9 +113,10 @@ AC_DEFUN([OVS_CHECK_RUNDIR],
   [AC_ARG_WITH(
      [rundir], 
      AC_HELP_STRING([--with-rundir=DIR], 
-                    [directory used for pidfiles [[LOCALSTATEDIR/run]]]),
+                    [directory used for pidfiles
+                    [[LOCALSTATEDIR/run/openvswitch]]]),
      [RUNDIR=$withval],
-     [RUNDIR='${localstatedir}/run'])
+     [RUNDIR='${localstatedir}/run/openvswitch'])
    AC_SUBST([RUNDIR])])
 
 dnl Checks for the directory in which to store logs.

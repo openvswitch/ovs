@@ -41,7 +41,7 @@ kernel bridge module.
 3. Start ovs-brcompatd:
 
       % ovs-brcompatd --pidfile --detach -vANY:console:EMER \
-                unix:/usr/local/var/run/ovsdb-server
+                unix:/usr/local/var/run/openvswitch/db.sock
 
    (ovsdb-server and ovs-vswitchd should already have been loaded.)
 

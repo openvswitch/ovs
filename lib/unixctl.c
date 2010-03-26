@@ -443,7 +443,7 @@ unixctl_server_destroy(struct unixctl_server *server)
 
 /* Connects to a Vlog server socket.  'path' should be the name of a Vlog
  * server socket.  If it does not start with '/', it will be prefixed with
- * ovs_rundir (e.g. /var/run).
+ * ovs_rundir (e.g. /var/run/openvswitch).
  *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,
  * sets '*clientp' to the new unixctl_client, otherwise to NULL. */

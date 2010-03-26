@@ -117,13 +117,13 @@ class VSwitchControllerDialogue(Dialogue):
 #             ChoiceDef(Lang("Restart ovs-brcompatd"),
 #                       lambda: self.restartService("vswitch-brcompatd"))
             ]
-        self.menu = Menu(self, None, Lang("Configure vSwitch"), choiceDefs)
+        self.menu = Menu(self, None, Lang("Configure Open vSwitch"), choiceDefs)
 
         self.ChangeState("INITIAL")
 
     def BuildPane(self):
         pane = self.NewPane(DialoguePane(self.parent))
-        pane.TitleSet(Lang("Configure vSwitch"))
+        pane.TitleSet(Lang("Configure Open vSwitch"))
         pane.AddBox()
 
     def ChangeState(self, inState):
@@ -251,13 +251,13 @@ class VSwitchControllerDialogue(Dialogue):
         for host in hosts:
             Layout.Inst().TransientBanner("Updating host %d out of %d" 
                     % (self.hostsUpdated + 1, self.hostsInPool))
-            session.xenapi.host.call_plugin(host, "vswitch-cfg-update", "update", {})
+            session.xenapi.host.call_plugin(host, "openvswitch-cfg-update", "update", {})
             self.hostsUpdated = self.hostsUpdated + 1
 
     def _updateThisServer(self, session):
         data = Data.Inst()
         host = data.host.opaqueref()
-        session.xenapi.host.call_plugin(host, "vswitch-cfg-update", "update", {})
+        session.xenapi.host.call_plugin(host, "openvswitch-cfg-update", "update", {})
 
 
 class XSFeatureVSwitch:
@@ -266,12 +266,12 @@ class XSFeatureVSwitch:
     def StatusUpdateHandler(cls, inPane):
         data = Data.Inst()
 
-        inPane.AddTitleField(Lang("vSwitch"))
+        inPane.AddTitleField(Lang("Open vSwitch"))
 
         inPane.NewLine()
 
         inPane.AddStatusField(Lang("Version", 20),
-                              VSwitchService.Inst("vswitch", "ovs-vswitchd").version())
+                              VSwitchService.Inst("openvswitch", "ovs-vswitchd").version())
 
         inPane.NewLine()
 
@@ -295,11 +295,11 @@ class XSFeatureVSwitch:
 
         inPane.NewLine()
         inPane.AddStatusField(Lang("ovs-vswitchd status", 20),
-                              VSwitchService.Inst("vswitch", "ovs-vswitchd").status())
+                              VSwitchService.Inst("openvswitch", "ovs-vswitchd").status())
         inPane.AddStatusField(Lang("ovsdb-server status", 20),
-                              VSwitchService.Inst("vswitch", "ovsdb-server").status())
+                              VSwitchService.Inst("openvswitch", "ovsdb-server").status())
         inPane.AddStatusField(Lang("ovs-brcompatd status", 20),
-                              VSwitchService.Inst("vswitch", "ovs-brcompatd").status())
+                              VSwitchService.Inst("openvswitch", "ovs-brcompatd").status())
 
         inPane.AddKeyHelpField( {
             Lang("<Enter>") : Lang("Reconfigure"),
@@ -317,7 +317,7 @@ class XSFeatureVSwitch:
             {
                 'menuname' : 'MENU_NETWORK',
                 'menupriority' : 800,
-                'menutext' : Lang('vSwitch') ,
+                'menutext' : Lang('Open vSwitch') ,
                 'statusupdatehandler' : self.StatusUpdateHandler,
                 'activatehandler' : self.ActivateHandler
             }

@@ -5,7 +5,8 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
-alias vswitch='service vswitch'
+alias vswitch='service openvswitch'
+alias openvswitch='service openvswitch'
 
 function watchdp {
 	watch ovs-dpctl show "$@"
@@ -41,7 +42,7 @@ function monitorlogs {
         done
         grep="$grep'"
     fi
-    cmd="tail -F /var/log/messages /var/log/ovs-vswitchd.log /var/log/xensource.log $grep | tee /var/log/monitorlogs.out"
+    cmd="tail -F /var/log/messages /var/log/openvswitch/ovs-vswitchd.log /var/log/openvswitch/ovs-brcompatd.log /var/log/openvswitch/ovsdb-server /var/log/xensource.log $grep | tee /var/log/monitorlogs.out"
     printf "cmd: $cmd\n"
     eval "$cmd"
 }

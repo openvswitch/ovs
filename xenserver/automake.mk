@@ -9,12 +9,13 @@ EXTRA_DIST += \
 	xenserver/LICENSE \
 	xenserver/README \
 	xenserver/automake.mk \
-	xenserver/etc_init.d_vswitch \
-	xenserver/etc_init.d_vswitch-xapi-update \
-	xenserver/etc_logrotate.d_vswitch \
-	xenserver/etc_profile.d_vswitch.sh \
-	xenserver/etc_xapi.d_plugins_vswitch-cfg-update \
+	xenserver/etc_init.d_openvswitch \
+	xenserver/etc_init.d_openvswitch-xapi-update \
+	xenserver/etc_logrotate.d_openvswitch \
+	xenserver/etc_profile.d_openvswitch.sh \
+	xenserver/etc_xapi.d_plugins_openvswitch-cfg-update \
 	xenserver/etc_xensource_scripts_vif \
+	xenserver/openvswitch-xen.spec \
 	xenserver/opt_xensource_libexec_InterfaceReconfigure.py \
 	xenserver/opt_xensource_libexec_InterfaceReconfigureBridge.py \
 	xenserver/opt_xensource_libexec_InterfaceReconfigureVswitch.py \
@@ -22,6 +23,5 @@ EXTRA_DIST += \
 	xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
 	xenserver/usr_sbin_brctl \
 	xenserver/usr_sbin_xen-bugtool \
-	xenserver/usr_share_vswitch_scripts_refresh-network-uuids \
-	xenserver/usr_share_vswitch_scripts_sysconfig.template \
-	xenserver/vswitch-xen.spec
+	xenserver/usr_share_openvswitch_scripts_refresh-network-uuids \
+	xenserver/usr_share_openvswitch_scripts_sysconfig.template

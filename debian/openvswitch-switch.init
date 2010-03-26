@@ -205,7 +205,7 @@ case "$1" in
         fi
 
         # Create an empty configuration database if it doesn't exist.
-        if test ! -e /etc/openvswitch-switch/conf; then
+        if test ! -e /etc/openvswitch/conf.db; then
             # Create configuration database.
             ovsdb-tool -vANY:console:emer \
                 create /etc/openvswitch-switch/conf \

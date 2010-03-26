@@ -47,7 +47,7 @@ handle_promiscuous()
 		esac
 		;;
 	    vswitch)
-		logger -t script-vif "${dev}: Promiscuous ports are not supported via vSwitch."
+		logger -t script-vif "${dev}: Promiscuous ports are not supported via Open vSwitch."
 		;;
 	esac
     fi

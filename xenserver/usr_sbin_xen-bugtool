@@ -119,9 +119,10 @@ HP_CMA_LOG = '/var/spool/compaq/cma.log'
 HP_HPASMD_LOG = '/var/spool/compaq/hpasmd.log'
 VAR_LOG_DIR = '/var/log/'
 VNCTERM_CORE_DIR = '/var/xen/vncterm'
-VSWITCH_CORE_DIR = '/var/xen/vswitch'
-OVS_VSWITCH_CONF = '/etc/ovs-vswitchd.conf.db'
-OVS_VSWITCH_DBCACHE = '/var/xapi/network.dbcache'
+OPENVSWITCH_CORE_DIR = '/var/xen/openvswitch'
+OPENVSWITCH_CONF = '/etc/openvswitch/conf.db'
+OPENVSWITCH_DBCACHE = '/var/xapi/network.dbcache'
+OPENVSWITCH_LOG_DIR = '/var/log/openvswitch'
 XENSOURCE_INVENTORY = '/etc/xensource-inventory'
 OEM_CONFIG_DIR = '/var/xsconfig'
 OEM_CONFIG_FILES_RE = re.compile(r'^.*xensource-inventory$')
@@ -278,9 +279,9 @@ CAP_SYSTEM_LOGS          = 'system-logs'
 CAP_SYSTEM_SERVICES      = 'system-services'
 CAP_TAPDISK_LOGS         = 'tapdisk-logs'
 CAP_VNCTERM              = 'vncterm'
-CAP_VSWITCH_CONFIG       = 'vswitch-config'
-CAP_VSWITCH_LOGS         = 'vswitch-logs'
-CAP_VSWITCH_STATUS       = 'vswitch-status'
+CAP_OPENVSWITCH_CONFIG   = 'openvswitch-config'
+CAP_OPENVSWITCH_LOGS     = 'openvswitch-logs'
+CAP_OPENVSWITCH_STATUS   = 'openvswitch-status'
 CAP_WLB                  = 'wlb'
 CAP_X11_LOGS             = 'X11'
 CAP_X11_AUTH             = 'X11-auth'
@@ -345,10 +346,10 @@ cap(CAP_SYSTEM_SERVICES,     PII_NO,                    max_size=5*KB,
     max_time=20)
 cap(CAP_TAPDISK_LOGS,        PII_NO,                    max_size=64*KB)
 cap(CAP_VNCTERM,             PII_MAYBE, checked = False)
-cap(CAP_VSWITCH_CONFIG,      PII_YES,
+cap(CAP_OPENVSWITCH_CONFIG,  PII_YES,
                                         min_size=0,     max_size=20*MB)
-cap(CAP_VSWITCH_LOGS,        PII_YES,                   max_size=20*MB)
-cap(CAP_VSWITCH_STATUS,      PII_YES,                   max_size=19*KB,
+cap(CAP_OPENVSWITCH_LOGS,    PII_YES,                   max_size=20*MB)
+cap(CAP_OPENVSWITCH_STATUS,  PII_YES,                   max_size=19*KB,
     max_time=30)
 cap(CAP_WLB,                 PII_NO,                    max_size=3*MB,
     max_time=20)
@@ -497,7 +498,8 @@ def main(argv = None):
                    CAP_NETWORK_CONFIG, CAP_NETWORK_STATUS, CAP_PROCESS_LIST, CAP_HIGH_AVAILABILITY,
                    CAP_PAM, CAP_PERSISTENT_STATS, CAP_MULTIPATH,
                    CAP_SYSTEM_LOGS, CAP_SYSTEM_SERVICES, CAP_TAPDISK_LOGS,
-                   CAP_VNCTERM, CAP_VSWITCH_CONFIG, CAP_VSWITCH_LOGS, CAP_VSWITCH_STATUS, CAP_WLB, 
+                   CAP_VNCTERM, CAP_OPENVSWITCH_CONFIG,
+                   CAP_OPENVSWITCH_LOGS, CAP_OPENVSWITCH_STATUS, CAP_WLB, 
                    CAP_X11_LOGS, CAP_X11_AUTH, CAP_XAPI_DEBUG, CAP_XAPI_SUBPROCESS, 
                    CAP_XENSERVER_CONFIG, CAP_XENSERVER_DOMAINS, CAP_XENSERVER_DATABASES, 
                    CAP_XENSERVER_INSTALL, CAP_XENSERVER_LOGS, CAP_XEN_INFO, CAP_XHA_LIVESET, CAP_YUM]
@@ -710,24 +712,25 @@ exclude those logs from the archive.
 
     tree_output(CAP_VNCTERM, VNCTERM_CORE_DIR)
 
-    file_output(CAP_VSWITCH_CONFIG, [OVS_VSWITCH_CONF])
-    file_output(CAP_VSWITCH_CONFIG, [OVS_VSWITCH_DBCACHE])
+    file_output(CAP_OPENVSWITCH_CONFIG, [OPENVSWITCH_CONF])
+    file_output(CAP_OPENVSWITCH_CONFIG, [OPENVSWITCH_DBCACHE])
 
-    file_output(CAP_VSWITCH_LOGS, 
-         [ VAR_LOG_DIR + x for x in
-           [ 'ovs-brcompatd.log', 'ovs-vswitchd.log', 'ovsdb-server.log', 'vswitch-cfg-update.log', 'vswitch-xsplugin.log' ] +
+    file_output(CAP_OPENVSWITCH_LOGS, 
+         [ OPENVSWITCH_LOG_DIR + x for x in
+           [ 'ovs-brcompatd.log', 'ovs-vswitchd.log', 'ovsdb-server.log', 
+             'openvswitch-cfg-update.log', 'openvswitch-xsplugin.log' ] +
            [ f % n for n in range(1, 20) \
                  for f in ['ovs-brcompatd.log.%d', 'ovs-brcompatd.log.%d.gz', 
                            'ovs-vswitchd.log.%d', 'ovs-vswitchd.log.%d.gz',
                            'ovsdb-server.log.%d', 'ovsdb-server.log.%d.gz']]])
 
-    cmd_output(CAP_VSWITCH_STATUS, [OVS_DPCTL, 'show'])
-    tree_output(CAP_VSWITCH_STATUS, VSWITCH_CORE_DIR)
+    cmd_output(CAP_OPENVSWITCH_STATUS, [OVS_DPCTL, 'show'])
+    tree_output(CAP_OPENVSWITCH_STATUS, OPENVSWITCH_CORE_DIR)
     for d in dp_list():
-        cmd_output(CAP_VSWITCH_STATUS, [OVS_OFCTL, 'show', d])
-        cmd_output(CAP_VSWITCH_STATUS, [OVS_OFCTL, 'status', d])
-        cmd_output(CAP_VSWITCH_STATUS, [OVS_OFCTL, 'dump-flows', d])
-        cmd_output(CAP_VSWITCH_STATUS, [OVS_DPCTL, 'dump-flows', d])
+        cmd_output(CAP_OPENVSWITCH_STATUS, [OVS_OFCTL, 'show', d])
+        cmd_output(CAP_OPENVSWITCH_STATUS, [OVS_OFCTL, 'status', d])
+        cmd_output(CAP_OPENVSWITCH_STATUS, [OVS_OFCTL, 'dump-flows', d])
+        cmd_output(CAP_OPENVSWITCH_STATUS, [OVS_DPCTL, 'dump-flows', d])
 
     cmd_output(CAP_WLB, [XE, 'pool-retrieve-wlb-diagnostics'])
 

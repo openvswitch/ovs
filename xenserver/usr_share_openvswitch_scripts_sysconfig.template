@@ -1,4 +1,4 @@
-### Configuration options for vswitch
+### Configuration options for openvswitch
 
 # Copyright (C) 2009, 2010 Nicira Networks, Inc.
 #
@@ -27,29 +27,29 @@
 # COREFILE_PATTERN: Pattern used to determine path and filename for
 #     core files when FORCE_COREFILES is 'y'.  This is Linux specific.
 #     See the manpage for "core".
-# COREFILE_PATTERN="/var/log/%e-%t"
+# COREFILE_PATTERN="/var/xen/openvswitch/%e-%t"
 
 # OVSDB_SERVER_REMOTES: Space-separated list of methods on which to have
 #     ovsdb-server listen or connect for a JSON-RPC connection.
-# OVSDB_SERVER_REMOTES="punix:/var/run/ovsdb-server db:Open_vSwitch,managers"
+# OVSDB_SERVER_REMOTES="punix:/var/run/openvswitch/db.sock db:Open_vSwitch,managers"
 
 # OVSDB_SERVER_DB: File for which ovsdb-server uses for storage.
-# OVSDB_SERVER_DB=/etc/ovs-vswitchd.conf.db
+# OVSDB_SERVER_DB=/etc/openvswitch/conf.db
 
 # OVSDB_SERVER_PIDFILE: File in which to store the pid of the running
 #     ovsdb-server.
-# OVSDB_SERVER_PIDFILE=/var/run/ovsdb-server.pid
+# OVSDB_SERVER_PIDFILE=/var/run/openvswitch/ovsdb-server.pid
 
 # OVSDB_SERVER_RUN_DIR: Set the directory in which ovsdb-server should be
 #     run.  This mainly affects where core files will be placed.
-# OVSDB_SERVER_RUN_DIR=/var/xen/vswitch
+# OVSDB_SERVER_RUN_DIR=/var/xen/openvswitch
 
 # OVSDB_SERVER_PRIORITY: "nice" priority at which to run ovsdb-server and 
 #     related processes.
 # OVSDB_SERVER_PRIORITY=-10
 
 # OVSDB_SERVER_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
-# OVSDB_SERVER_LOGFILE=/var/log/ovsdb-server.log
+# OVSDB_SERVER_LOGFILE=/var/log/openvswitch/ovsdb-server.log
 
 # OVSDB_SERVER_FILE_LOGLEVEL: Log level at which to log into the
 #     OVSDB_SERVER_LOG file.  If this is null or not set the logfile will
@@ -99,19 +99,19 @@
 
 # VSWITCHD_OVSDB_SERVER: Method to have ovs-vswitchd initiate a JSON-RPC
 #     connection to an ovsdb-server instance.
-# VSWITCHD_OVSDB_SERVER=unix:/var/run/ovsdb-server
+# VSWITCHD_OVSDB_SERVER=unix:/var/run/openvswitch/db.sock
 
 # VSWITCHD_OVSDB_SCHEMA: Schema file to use for generating a new OVSDB
 #     ovs-vswitchd database.
-# VSWITCHD_OVSDB_SCHEMA=/usr/share/vswitch/vswitch.ovsschema
+# VSWITCHD_OVSDB_SCHEMA=/usr/share/openvswitch/vswitch.ovsschema
 
 # VSWITCHD_PIDFILE: File in which to store the pid of the running
 #     ovs-vswitchd.
-# VSWITCHD_PIDFILE=/var/run/ovs-vswitchd.pid
+# VSWITCHD_PIDFILE=/var/run/openvswitch/ovs-vswitchd.pid
 
 # VSWITCHD_RUN_DIR: Set the directory in which ovs-vswitchd should be
 #     run.  This mainly affects where core files will be placed.
-# VSWITCHD_RUN_DIR=/var/xen/vswitch
+# VSWITCHD_RUN_DIR=/var/xen/openvswitch
 
 # VSWITCHD_PRIORITY: "nice" priority at which to run ovs-vswitchd and related
 #     processes.
@@ -125,7 +125,7 @@
 # VSWITCHD_MLOCKALL=yes
 
 # VSWITCHD_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
-# VSWITCHD_LOGFILE=/var/log/ovs-vswitchd.log
+# VSWITCHD_LOGFILE=/var/log/openvswitch/ovs-vswitchd.log
 
 # VSWITCHD_FILE_LOGLEVEL: Log level at which to log into the
 #     VSWITCHD_LOG file.  If this is null or not set the logfile will
@@ -176,18 +176,18 @@
 #     If this is the empty string, ovs-brcompatd will not be started and
 #     the brcompat_mod kernel module will not be inserted.  Note that
 #     the default is to use brcompat!
-# BRCOMPATD_PIDFILE=/var/run/ovs-brcompatd.pid
+# BRCOMPATD_PIDFILE=/var/run/openvswitch/ovs-brcompatd.pid
 
 # BRCOMPATD_RUN_DIR: Set the directory in which ovs-brcompatd should be
 #     run.  This mainly affects where core files will be placed.
-# BRCOMPATD_RUN_DIR=/var/xen/vswitch
+# BRCOMPATD_RUN_DIR=/var/xen/openvswitch
 
 # BRCOMPATD_PRIORITY: "nice" priority at which to run ovs-vswitchd and related
 #     processes.
 # BRCOMPATD_PRIORITY=-10
 
 # BRCOMPATD_LOGFILE: File to send the FILE_LOGLEVEL log messages to.
-# BRCOMPATD_LOGFILE=/var/log/ovs-brcompatd.log
+# BRCOMPATD_LOGFILE=/var/log/openvswitch/ovs-brcompatd.log
 
 # BRCOMPATD_FILE_LOGLEVEL: Log level at which to log into the
 #     BRCOMPATD_LOG file.  If this is null or not set the logfile will

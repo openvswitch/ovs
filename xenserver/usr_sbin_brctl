@@ -22,9 +22,9 @@ import sys
 
 argv0 = sys.argv[0]
 
-BRCTL = "/usr/lib/vswitch/xs-original/brctl"
+BRCTL = "/usr/lib/openvswitch/xs-original/brctl"
 VSCTL = "/usr/bin/ovs-vsctl"
-OVSDB_SERVER = "unix:/var/run/ovsdb-server"
+OVSDB_SERVER = "unix:/var/run/openvswitch/db.sock"
 
 # Execute the real brctl program, passing the same arguments that were passed
 # to us.

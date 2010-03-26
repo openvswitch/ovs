@@ -28,9 +28,9 @@ Once you have a distribution tarball, copy it into
    cd /tmp
    tar xfz /usr/src/redhat/SOURCES/openvswitch-$VERSION.tar.gz
    rpmbuild \
-        -D "vswitch_version $VERSION" \
+        -D "openvswitch_version $VERSION" \
         -D "xen_version $XENKERNEL" \
-        -bb openvswitch-$VERSION/xenserver/vswitch-xen.spec
+        -bb openvswitch-$VERSION/xenserver/openvswitch-xen.spec
 
 where:
 
@@ -43,26 +43,26 @@ where:
     It always ends in "xen".
 
 Two RPMs will be output into /usr/src/redhat/RPMS, whose names begin
-with "vswitch" and "vswitch-debuginfo".
+with "openvswitch" and "openvswitch-debuginfo".
 
 Installing Open vSwitch for XenServer
 -------------------------------------
 
 To install Open vSwitch on a XenServer host, or to upgrade to a newer
-version, copy the "vswitch" RPM to that host with "scp", then install
+version, copy the "openvswitch" RPM to that host with "scp", then install
 it with "rpm -U", e.g.:
 
-     scp vswitch-$VERSION-1.i386.rpm root@<host>:
+     scp openvswitch-$VERSION-1.i386.rpm root@<host>:
 (At this point you will have to enter <host>'s root password.) 
      ssh root@<host>
 (At this point you will have to enter <host>'s root password again.) 
-     rpm -U vswitch-$VERSION-1.i386.rpm
+     rpm -U openvswitch-$VERSION-1.i386.rpm
 
 To uninstall Open vSwitch from a XenServer host, remove the package:
 
      ssh root@<host>
 (At this point you will have to enter <host>'s root password again.) 
-     rpm -e vswitch
+     rpm -e openvswitch
 
 After installing or uninstalling Open vSwitch, the XenServer should be
 rebooted as soon as possible.

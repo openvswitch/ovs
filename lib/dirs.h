@@ -18,8 +18,8 @@
 #define DIRS_H 1
 
 extern const char ovs_pkgdatadir[]; /* /usr/local/share/openvswitch */
-extern const char ovs_rundir[];     /* /usr/local/var/run */
-extern const char ovs_logdir[];     /* /usr/local/var/log */
+extern const char ovs_rundir[];     /* /usr/local/var/run/openvswitch */
+extern const char ovs_logdir[];     /* /usr/local/var/log/openvswitch */
 extern const char ovs_bindir[];     /* /usr/local/bin */
 
 #endif /* dirs.h */
