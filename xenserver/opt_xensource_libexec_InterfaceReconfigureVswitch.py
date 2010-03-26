@@ -297,6 +297,10 @@ def configure_datapath(pif):
         vsctl_argv += ['# add physical device %s' % iface]
         vsctl_argv += ['--', '--may-exist', 'add-port', bridge, iface]
 
+    vsctl_argv += ['# configure Bridge MAC']
+    vsctl_argv += ['--', 'set', 'Bridge', bridge,
+                   'other-config:hwaddr=%s' % vsctl_escape(db().get_pif_record(pif)['MAC'])]
+
     vsctl_argv += set_br_external_ids(pif)
     vsctl_argv += ['## done configuring datapath %s' % bridge]
 
@@ -337,10 +341,6 @@ def set_br_external_ids(pif):
     vsctl_argv += ['--', 'br-set-external-id', pif_bridge_name(pif),
             'network-uuids', ';'.join(xs_network_uuids)]
 
-    vsctl_argv += ['# configure MAC']
-    vsctl_argv += ['--', 'set', 'Interface', pif_ipdev_name(pif),
-                   'MAC=%s' % vsctl_escape(dprec['MAC'])]
-
     return vsctl_argv
 
 #
@@ -374,6 +374,8 @@ class DatapathVswitch(Datapath):
         vsctl_argv += c
         extra_ports += e
 
+        dpname = pif_bridge_name(self._dp)
+        
         if pif_is_vlan(self._pif):
             # XXX this is only needed on XS5.5, because XAPI misguidedly
             # creates the fake bridge (via bridge ioctl) before it calls us.
@@ -382,7 +384,7 @@ class DatapathVswitch(Datapath):
             # configure_datapath() set up the underlying datapath bridge.
             # Stack a VLAN bridge on top of it.
             vsctl_argv += ['--', '--may-exist', 'add-br',
-                           bridge, pif_bridge_name(self._dp), pifrec['VLAN']]
+                           bridge, dpname, pifrec['VLAN']]
 
             vsctl_argv += set_br_external_ids(self._pif)
 
@@ -391,6 +393,11 @@ class DatapathVswitch(Datapath):
             vsctl_argv += datapath_deconfigure_ipdev(ipdev)
             vsctl_argv += ["# reconfigure ipdev %s" % ipdev]
             vsctl_argv += ['--', 'add-port', bridge, ipdev]
+
+        if ipdev != dpname:
+            vsctl_argv += ['# configure Interface MAC']
+            vsctl_argv += ['--', 'set', 'Interface', pif_ipdev_name(self._pif),
+                           'MAC=%s' % vsctl_escape(dprec['MAC'])]
 
         self._vsctl_argv = vsctl_argv
         self._extra_ports = extra_ports
