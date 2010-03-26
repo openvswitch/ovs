@@ -160,7 +160,7 @@ static void rule_install(struct ofproto *, struct rule *,
 static void rule_uninstall(struct ofproto *, struct rule *);
 static void rule_post_uninstall(struct ofproto *, struct rule *);
 static void send_flow_removed(struct ofproto *p, struct rule *rule,
-                              long long int now, uint8_t reason);
+                              uint8_t reason);
 
 struct ofconn {
     struct list node;
@@ -2923,8 +2923,7 @@ modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
     }
 
     if (command == OFPFC_DELETE) {
-        long long int now = time_msec();
-        send_flow_removed(p, rule, now, OFPRR_DELETE);
+        send_flow_removed(p, rule, OFPRR_DELETE);
         rule_remove(p, rule);
     } else {
         size_t actions_len = n_actions * sizeof *rule->actions;
@@ -3366,9 +3365,9 @@ uninstall_idle_flow(struct ofproto *ofproto, struct rule *rule)
     }
 }
 static void
-send_flow_removed(struct ofproto *p, struct rule *rule,
-                  long long int now, uint8_t reason)
+send_flow_removed(struct ofproto *p, struct rule *rule, uint8_t reason)
 {
+    long long int now = time_msec();
     struct ofconn *ofconn;
     struct ofconn *prev;
     struct ofpbuf *buf = NULL;
@@ -3437,7 +3436,7 @@ expire_rule(struct cls_rule *cls_rule, void *p_)
     }
 
     if (!rule_is_hidden(rule)) {
-        send_flow_removed(p, rule, now,
+        send_flow_removed(p, rule,
                           (now >= hard_expire
                            ? OFPRR_HARD_TIMEOUT : OFPRR_IDLE_TIMEOUT));
     }
