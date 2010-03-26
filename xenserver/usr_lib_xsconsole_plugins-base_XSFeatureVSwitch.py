@@ -298,8 +298,12 @@ class XSFeatureVSwitch:
                               VSwitchService.Inst("openvswitch", "ovs-vswitchd").status())
         inPane.AddStatusField(Lang("ovsdb-server status", 20),
                               VSwitchService.Inst("openvswitch", "ovsdb-server").status())
-        inPane.AddStatusField(Lang("ovs-brcompatd status", 20),
-                              VSwitchService.Inst("openvswitch", "ovs-brcompatd").status())
+
+        # Only XenServer 5.5.0 runs ovs-brcompatd
+        xs_version = data.host.software_version.product_version('')
+        if (xs_version == "5.5.0"):
+            inPane.AddStatusField(Lang("ovs-brcompatd status", 20),
+                   VSwitchService.Inst("openvswitch", "ovs-brcompatd").status())
 
         inPane.AddKeyHelpField( {
             Lang("<Enter>") : Lang("Reconfigure"),
