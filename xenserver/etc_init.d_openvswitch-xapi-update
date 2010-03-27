@@ -1,11 +1,11 @@
 #!/bin/bash
 #
-# vswitch-xapi-update
+# openvswitch-xapi-update
 #
 # chkconfig: 2345 95 01
-# description: Update vswitch configuration from XAPI database at boot
+# description: Update Open vSwitch configuration from XAPI database at boot
 
-# Copyright (C) 2009 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010 Nicira Networks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,12 +22,12 @@
 . /etc/init.d/functions
 
 function do_host_call {
-    xe host-call-plugin host-uuid="$INSTALLATION_UUID" plugin="vswitch-cfg-update" fn="update" >/dev/null
+    xe host-call-plugin host-uuid="$INSTALLATION_UUID" plugin="openvswitch-cfg-update" fn="update" >/dev/null
 }
 
 function start {
     if [ ! -f /etc/xensource-inventory ]; then
-        printf "vswitch-xapi-update ERROR: XenSource inventory not present in /etc/xensource-inventory\n"
+        printf "openvswitch-xapi-update ERROR: XenSource inventory not present in /etc/xensource-inventory\n"
         exit 1
     fi
     source /etc/xensource-inventory
@@ -45,7 +45,7 @@ case "$1" in
         start
         ;;
     help)
-        printf "vswitch-xapi-update [start|stop|restart]\n"
+        printf "openvswitch-xapi-update [start|stop|restart]\n"
         ;;
     *)
         printf "Unknown command: $1\n"
