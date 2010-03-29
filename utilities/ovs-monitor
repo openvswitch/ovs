@@ -16,9 +16,9 @@
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-OPENFLOWD_PID=/var/run/ovs-openflowd.pid
-OPENFLOWD_SOCK=/var/run/ovs-openflowd.mgmt
-LOG_FILE=/var/log/openflow/monitor
+OPENFLOWD_PID=/var/run/openvswitch/ovs-openflowd.pid
+OPENFLOWD_SOCK=/var/run/openvswitch/ovs-openflowd.mgmt
+LOG_FILE=/var/log/openvswitch/ovs-monitor.log
 INTERVAL=1
 FAIL_THRESH=3
 
