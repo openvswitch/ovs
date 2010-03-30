@@ -974,7 +974,7 @@ netdev_linux_destroy(struct netdev_dev *netdev_dev_)
         destroy_patch(netdev_dev);
     }
 
-    free(netdev_dev_);
+    free(netdev_dev);
 }
 
 static int
