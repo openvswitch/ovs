@@ -52,6 +52,7 @@ void netdev_dev_init(struct netdev_dev *, const char *name,
                      const struct netdev_class *);
 void netdev_dev_uninit(struct netdev_dev *, bool destroy);
 const char *netdev_dev_get_type(const struct netdev_dev *);
+const struct netdev_class *netdev_dev_get_class(const struct netdev_dev *);
 const char *netdev_dev_get_name(const struct netdev_dev *);
 struct netdev_dev *netdev_dev_from_name(const char *name);
 void netdev_dev_get_devices(const struct netdev_class *,

@@ -157,6 +157,7 @@ static struct rtnetlink_notifier netdev_linux_poll_notifier;
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
+static int netdev_linux_init(void);
 static int if_up(const char *name);
 static int destroy_gre(const char *name);
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
@@ -178,21 +179,28 @@ static int set_etheraddr(const char *netdev_name, int hwaddr_family,
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
 
+static bool
+is_netdev_linux_class(const struct netdev_class *netdev_class)
+{
+    return netdev_class->init == netdev_linux_init;
+}
+
 static struct netdev_dev_linux *
 netdev_dev_linux_cast(const struct netdev_dev *netdev_dev)
 {
-    const char *type = netdev_dev_get_type(netdev_dev);
-    assert(!strcmp(type, "system") || !strcmp(type, "tap")
-            || !strcmp(type, "gre") || !strcmp(type, "patch"));
+    const struct netdev_class *netdev_class = netdev_dev_get_class(netdev_dev);
+    assert(is_netdev_linux_class(netdev_class));
+
     return CONTAINER_OF(netdev_dev, struct netdev_dev_linux, netdev_dev);
 }
 
 static struct netdev_linux *
 netdev_linux_cast(const struct netdev *netdev)
 {
-    const char *type = netdev_get_type(netdev);
-    assert(!strcmp(type, "system") || !strcmp(type, "tap")
-            || !strcmp(type, "gre") || !strcmp(type, "patch"));
+    struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
+    const struct netdev_class *netdev_class = netdev_dev_get_class(netdev_dev);
+    assert(is_netdev_linux_class(netdev_class));
+
     return CONTAINER_OF(netdev, struct netdev_linux, netdev);
 }
 
@@ -230,8 +238,13 @@ netdev_linux_cache_cb(const struct rtnetlink_change *change,
     if (change) {
         struct netdev_dev *base_dev = netdev_dev_from_name(change->ifname);
         if (base_dev) {
-            dev = netdev_dev_linux_cast(base_dev);
-            dev->cache_valid = 0;
+            const struct netdev_class *netdev_class =
+                                                netdev_dev_get_class(base_dev);
+
+            if (is_netdev_linux_class(netdev_class)) {
+                dev = netdev_dev_linux_cast(base_dev);
+                dev->cache_valid = 0;
+            }
         }
     } else {
         struct shash device_shash;

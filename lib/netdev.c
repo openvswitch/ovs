@@ -1051,6 +1051,13 @@ netdev_dev_get_type(const struct netdev_dev *netdev_dev)
     return netdev_dev->netdev_class->type;
 }
 
+/* Returns the class associated with 'netdev_dev'. */
+const struct netdev_class *
+netdev_dev_get_class(const struct netdev_dev *netdev_dev)
+{
+    return netdev_dev->netdev_class;
+}
+
 /* Returns the name of 'netdev_dev'.
  *
  * The caller must not free the returned value. */
