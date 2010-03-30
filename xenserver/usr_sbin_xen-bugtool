@@ -68,6 +68,7 @@ OS_RELEASE = platform.release()
 #
 
 BUG_DIR = "/var/opt/xen/bug-report"
+PLUGIN_DIR = "/etc/xensource/bugtool"
 XAPI_BLOBS = '/var/xapi/blobs'
 EXTLINUX_CONFIG = '/boot/extlinux.conf'
 GRUB_CONFIG = '/boot/grub/menu.lst'
@@ -106,23 +107,22 @@ SYSCONFIG_NETWORK = '/etc/sysconfig/network'
 SYSCONFIG_NETWORK_SCRIPTS = '/etc/sysconfig/network-scripts'
 IFCFG_RE = re.compile(r'^.*/ifcfg-.*')
 ROUTE_RE = re.compile(r'^.*/route-.*')
+NETWORK_DBCACHE = '/var/xapi/network.dbcache'
 RESOLV_CONF = '/etc/resolv.conf'
 MULTIPATH_CONF = '/etc/multipath.conf'
 NSSWITCH_CONF = '/etc/nsswitch.conf'
 NTP_CONF = '/etc/ntp.conf'
 IPTABLES_CONFIG = '/etc/sysconfig/iptables-config'
+HOSTS = '/etc/hosts'
 HOSTS_ALLOW = '/etc/hosts.allow'
 HOSTS_DENY = '/etc/hosts.deny'
 DHCP_LEASE_DIR = '/var/lib/dhclient'
-DELL_OMSA_LOGS = '/var/log/dell'
-HP_CMA_LOG = '/var/spool/compaq/cma.log'
-HP_HPASMD_LOG = '/var/spool/compaq/hpasmd.log'
+OPENVSWITCH_CORE_DIR = '/var/xen/openvswitch'
+OPENVSWITCH_CONF = '/etc/ovs-vswitchd.conf'
+OPENVSWITCH_CONF_DB = '/etc/openvswitch/conf.db'
+OPENVSWITCH_VSWITCHD_PID = '/var/run/openvswitch/ovs-vswitchd.pid'
 VAR_LOG_DIR = '/var/log/'
 VNCTERM_CORE_DIR = '/var/xen/vncterm'
-OPENVSWITCH_CORE_DIR = '/var/xen/openvswitch'
-OPENVSWITCH_CONF = '/etc/openvswitch/conf.db'
-OPENVSWITCH_DBCACHE = '/var/xapi/network.dbcache'
-OPENVSWITCH_LOG_DIR = '/var/log/openvswitch'
 XENSOURCE_INVENTORY = '/etc/xensource-inventory'
 OEM_CONFIG_DIR = '/var/xsconfig'
 OEM_CONFIG_FILES_RE = re.compile(r'^.*xensource-inventory$')
@@ -131,6 +131,7 @@ INITIAL_INVENTORY = '/opt/xensource/etc/initial-inventory'
 VENDORKERNEL_INVENTORY = '/etc/vendorkernel-inventory'
 STATIC_VDIS = '/etc/xensource/static-vdis'
 POOL_CONF = '/etc/xensource/pool.conf'
+NETWORK_CONF = '/etc/xensource/network.conf'
 PTOKEN = '/etc/xensource/ptoken'
 XAPI_CONF = '/etc/xensource/xapi.conf'
 XAPI_SSL_CONF = '/etc/xensource/xapi-ssl.conf'
@@ -151,12 +152,16 @@ INSTALLED_REPOS_DIR = '/etc/xensource/installed-repos'
 PATCH_APPLIED_DIR = '/var/patch/applied'
 XENSERVER_LOGS = \
     [ VAR_LOG_DIR + x for x in
-      ['xensource.log', 'xenstored-access.log', 'SMlog', 'xen/xenstored-trace.log', 
-       'xen/xen-hotplug.log', 'xen/domain-builder-ng.log'] +
+      ['xensource.log', 'audit.log', 'xenstored-access.log', 'SMlog', 'xen/xenstored-trace.log', 
+       'xen/xen-hotplug.log', 'xen/domain-builder-ng.log', 'squeezed.log',
+       'openvswitch/ovs-brcompatd.log', 'openvswitch/ovs-vswitchd.log', 'openvswitch/ovsdb-server.log' ] +
       [ f % n for n in range(1, 20) \
             for f in ['xensource.log.%d', 'xensource.log.%d.gz','SMlog.%d', 'SMlog.%d.gz',
-                      'xenstored-access.log.%d', 'xenstored-access.log.%d.gz', \
-                      'xen/xenstored-access.log.%d', 'xen/xenstored-access.log.%d.gz' ]]] \
+                      'audit.log.%d', 'audit.log.%d.gz', 'xenstored-access.log.%d', 'xenstored-access.log.%d.gz', \
+                      'xen/xenstored-access.log.%d', 'xen/xenstored-access.log.%d.gz', 'squeezed.log.%d', \
+                      'openvswitch/ovs-brcompatd.log.%d', 'openvswitch/ovs-brcompatd.log.%d.gz', \
+                      'openvswitch/ovs-vswitchd.log.%d', 'openvswitch/ovs-vswitchd.log.%d.gz', \
+                      'openvswitch/ovsdb-server.log.%d', 'openvswitch/ovsdb-server.log.%d.gz']]] \
       + glob.glob('/tmp/qemu.[0-9]*')
 OEM_XENSERVER_LOGS_RE = re.compile(r'^.*xensource\.log$')
 XHA_LOG = '/var/log/xha.log'
@@ -164,7 +169,17 @@ XHAD_CONF = '/etc/xensource/xhad.conf'
 YUM_LOG = '/var/log/yum.log'
 YUM_REPOS_DIR = '/etc/yum.repos.d'
 PAM_DIR = '/etc/pam.d'
-
+FIST_RE = re.compile(r'.*/fist_')
+LICENSE_LOGS = \
+             [ VAR_LOG_DIR + x for x in
+               ['v6d.log'] +
+               [ f % n for n in range(1, 20) \
+                 for f in ['v6d.log.%d', 'v6d.log.%d.gz' ]]]
+LWIDENTITY_JOIN_LOG = '/tmp/lwidentity.join.log'
+HOSTS_LWIDENTITY_ORIG = '/etc/hosts.lwidentity.orig'
+KRB5_CONF = '/etc/krb5.conf'
+LIKEWISE_DIR = '/var/lib/likewise'
+XENGUEST_LOG = '/tmp/xenguest.log'
 
 #
 # External programs
@@ -193,12 +208,15 @@ LOSETUP = '/sbin/losetup'
 LS = '/bin/ls'
 LSPCI = '/sbin/lspci'
 LVS = '/usr/sbin/lvs'
+LVDISPLAY = '/usr/sbin/lvdisplay'
 MD5SUM = '/usr/bin/md5sum'
+MODINFO = '/sbin/modinfo'
 MULTIPATHD = '/sbin/multipathd'
 NETSTAT = '/bin/netstat'
-OMREPORT = '/opt/dell/srvadmin/oma/bin/omreport'
 OVS_DPCTL = '/usr/bin/ovs-dpctl'
 OVS_OFCTL = '/usr/bin/ovs-ofctl'
+OVS_VSCTL = '/usr/bin/ovs-vsctl'
+OVS_APPCTL = '/usr/bin/ovs-appctl'
 PS = '/bin/ps'
 PVS = '/usr/sbin/pvs'
 ROUTE = '/sbin/route'
@@ -236,7 +254,6 @@ PII_NO            = 'no'
 PII_YES           = 'yes'
 PII_MAYBE         = 'maybe'
 PII_IF_CUSTOMIZED = 'if_customized'
-
 KEY      = 0
 PII      = 1
 MIN_SIZE = 2
@@ -245,6 +262,7 @@ MIN_TIME = 4
 MAX_TIME = 5
 MIME     = 6
 CHECKED  = 7
+HIDDEN   = 8
 
 MIME_DATA = 'application/data'
 MIME_TEXT = 'text/plain'
@@ -279,14 +297,12 @@ CAP_SYSTEM_LOGS          = 'system-logs'
 CAP_SYSTEM_SERVICES      = 'system-services'
 CAP_TAPDISK_LOGS         = 'tapdisk-logs'
 CAP_VNCTERM              = 'vncterm'
-CAP_OPENVSWITCH_CONFIG   = 'openvswitch-config'
-CAP_OPENVSWITCH_LOGS     = 'openvswitch-logs'
-CAP_OPENVSWITCH_STATUS   = 'openvswitch-status'
 CAP_WLB                  = 'wlb'
 CAP_X11_LOGS             = 'X11'
 CAP_X11_AUTH             = 'X11-auth'
 CAP_XAPI_DEBUG           = 'xapi-debug'
 CAP_XAPI_SUBPROCESS      = 'xapi-subprocess'
+CAP_XENRT                = 'xenrt'
 CAP_XENSERVER_CONFIG     = 'xenserver-config'
 CAP_XENSERVER_DOMAINS    = 'xenserver-domains'
 CAP_XENSERVER_DATABASES  = 'xenserver-databases'
@@ -305,9 +321,9 @@ unlimited_data = False
 dbg = False
 
 def cap(key, pii=PII_MAYBE, min_size=-1, max_size=-1, min_time=-1,
-        max_time=-1, mime=MIME_TEXT, checked=True):
+        max_time=-1, mime=MIME_TEXT, checked=True, hidden=False):
     caps[key] = (key, pii, min_size, max_size, min_time, max_time, mime,
-                 checked)
+                 checked, hidden)
     cap_sizes[key] = 0
 
 
@@ -322,11 +338,11 @@ cap(CAP_FIRSTBOOT,           PII_YES,   min_size=60*KB, max_size=80*KB)
 cap(CAP_HARDWARE_INFO,       PII_MAYBE,                 max_size=30*KB,
     max_time=20)
 cap(CAP_HDPARM_T,            PII_NO,    min_size=0,     max_size=5*KB,
-    min_time=20, max_time=90, checked=False)
+    min_time=20, max_time=90, checked=False, hidden=True)
 cap(CAP_HIGH_AVAILABILITY,   PII_MAYBE,                 max_size=5*MB)
 cap(CAP_HOST_CRASHDUMP_DUMPS,PII_YES, checked = False)
 cap(CAP_HOST_CRASHDUMP_LOGS, PII_NO)
-cap(CAP_KERNEL_INFO,         PII_MAYBE,                 max_size=80*KB,
+cap(CAP_KERNEL_INFO,         PII_MAYBE,                 max_size=120*KB,
     max_time=5)
 cap(CAP_LOSETUP_A,           PII_MAYBE,                 max_size=KB, max_time=5)
 cap(CAP_MULTIPATH,           PII_MAYBE,                 max_size=10*KB,
@@ -335,22 +351,17 @@ cap(CAP_NETWORK_CONFIG,      PII_IF_CUSTOMIZED,
                                         min_size=0,     max_size=20*KB)
 cap(CAP_NETWORK_STATUS,      PII_YES,                   max_size=19*KB,
     max_time=30)
-cap(CAP_PAM,                 PII_NO,                    max_size=10*KB)
+cap(CAP_PAM,                 PII_NO,                    max_size=30*KB)
 cap(CAP_PERSISTENT_STATS,    PII_MAYBE,                 max_size=50*MB,
     max_time=60)
-cap(CAP_PROCESS_LIST,        PII_YES,                   max_size=10*KB,
-    max_time=10)
+cap(CAP_PROCESS_LIST,        PII_YES,                   max_size=30*KB,
+    max_time=20)
 cap(CAP_SYSTEM_LOGS,         PII_MAYBE,                 max_size=50*MB,
     max_time=5)
 cap(CAP_SYSTEM_SERVICES,     PII_NO,                    max_size=5*KB,
     max_time=20)
 cap(CAP_TAPDISK_LOGS,        PII_NO,                    max_size=64*KB)
 cap(CAP_VNCTERM,             PII_MAYBE, checked = False)
-cap(CAP_OPENVSWITCH_CONFIG,  PII_YES,
-                                        min_size=0,     max_size=20*MB)
-cap(CAP_OPENVSWITCH_LOGS,    PII_YES,                   max_size=20*MB)
-cap(CAP_OPENVSWITCH_STATUS,  PII_YES,                   max_size=19*KB,
-    max_time=30)
 cap(CAP_WLB,                 PII_NO,                    max_size=3*MB,
     max_time=20)
 cap(CAP_X11_LOGS,            PII_NO,                    max_size=100*KB)
@@ -358,14 +369,16 @@ cap(CAP_X11_AUTH,            PII_NO,                    max_size=100*KB)
 cap(CAP_XAPI_DEBUG,          PII_MAYBE,                 max_size=10*MB)
 cap(CAP_XAPI_SUBPROCESS,     PII_NO,                    max_size=5*KB,
     max_time=10)
-cap(CAP_XENSERVER_CONFIG,    PII_MAYBE,                 max_size=50*KB,
+cap(CAP_XENRT,               PII_NO,    min_size=0,     max_size=5*KB,
+    checked=False, hidden=True)
+cap(CAP_XENSERVER_CONFIG,    PII_MAYBE,                 max_size=80*KB,
     max_time=5)
 cap(CAP_XENSERVER_DOMAINS,   PII_NO,                    max_size=1*KB,
     max_time=5)
 cap(CAP_XENSERVER_DATABASES, PII_YES,   min_size=500*KB,max_size=2*MB,
-    max_time=20)
+    max_time=40)
 cap(CAP_XENSERVER_INSTALL,   PII_MAYBE, min_size=10*KB, max_size=300*KB)
-cap(CAP_XENSERVER_LOGS,      PII_MAYBE, min_size=0,     max_size=50*MB)
+cap(CAP_XENSERVER_LOGS,      PII_MAYBE, min_size=0,     max_size=70*MB)
 cap(CAP_XEN_INFO,            PII_MAYBE,                 max_size=20*KB,
     max_time=10)
 cap(CAP_XHA_LIVESET,         PII_MAYBE,                 max_size=10*KB,
@@ -389,10 +402,13 @@ def output_ts(x):
 
 def cmd_output(cap, args, label = None, filter = None):
     if cap in entries:
-        a = [aa for aa in args]
-        a[0] = os.path.basename(a[0])
         if not label:
-            label = ' '.join(a)
+            if isinstance(args, list):
+                a = [aa for aa in args]
+                a[0] = os.path.basename(a[0])
+                label = ' '.join(a)
+            else:
+                label = args
         data[label] = {'cap': cap, 'cmd_args': args, 'filter': filter}
 
 def file_output(cap, path_list):
@@ -487,6 +503,11 @@ def main(argv = None):
         print >>sys.stderr, opterr
         return 2
 
+    try:
+        load_plugins(True)
+    except:
+        pass
+
     inventory = readKeyValueFile(XENSOURCE_INVENTORY)
     if inventory.has_key('OEM_BUILD_NUMBER'):
         cap(CAP_OEM,                 PII_MAYBE,                 max_size=5*MB,
@@ -498,10 +519,8 @@ def main(argv = None):
                    CAP_NETWORK_CONFIG, CAP_NETWORK_STATUS, CAP_PROCESS_LIST, CAP_HIGH_AVAILABILITY,
                    CAP_PAM, CAP_PERSISTENT_STATS, CAP_MULTIPATH,
                    CAP_SYSTEM_LOGS, CAP_SYSTEM_SERVICES, CAP_TAPDISK_LOGS,
-                   CAP_VNCTERM, CAP_OPENVSWITCH_CONFIG,
-                   CAP_OPENVSWITCH_LOGS, CAP_OPENVSWITCH_STATUS, CAP_WLB, 
-                   CAP_X11_LOGS, CAP_X11_AUTH, CAP_XAPI_DEBUG, CAP_XAPI_SUBPROCESS, 
-                   CAP_XENSERVER_CONFIG, CAP_XENSERVER_DOMAINS, CAP_XENSERVER_DATABASES, 
+                   CAP_VNCTERM, CAP_WLB, CAP_X11_LOGS, CAP_X11_AUTH, CAP_XAPI_DEBUG, CAP_XAPI_SUBPROCESS, 
+                   CAP_XENRT, CAP_XENSERVER_CONFIG, CAP_XENSERVER_DOMAINS, CAP_XENSERVER_DATABASES, 
                    CAP_XENSERVER_INSTALL, CAP_XENSERVER_LOGS, CAP_XEN_INFO, CAP_XHA_LIVESET, CAP_YUM]
     else:
         entries = [e for e in caps.keys() if caps[e][CHECKED]]
@@ -603,6 +622,7 @@ exclude those logs from the archive.
     cmd_output(CAP_DISK_INFO, [SG_MAP, '-x'])
     func_output(CAP_DISK_INFO, 'scsi-hosts', dump_scsi_hosts)
     tree_output(CAP_DISK_INFO, PROC_DRIVER_CCISS_DIR)
+    cmd_output(CAP_DISK_INFO, [LVDISPLAY, '--map'])
 
     tree_output(CAP_FIRSTBOOT, FIRSTBOOT_DIR)
 
@@ -613,6 +633,7 @@ exclude those logs from the archive.
     file_output(CAP_HARDWARE_INFO, [PROC_USB_DEV, PROC_SCSI])
     file_output(CAP_HARDWARE_INFO, [BOOT_TIME_CPUS, BOOT_TIME_MEMORY])
     file_output(CAP_HARDWARE_INFO, [SYSCONFIG_HWCONF])
+    cmd_output(CAP_HARDWARE_INFO, [LS, '-lR', '/dev'])
     # FIXME IDE?
 
     for d in disk_list():
@@ -631,6 +652,7 @@ exclude those logs from the archive.
     cmd_output(CAP_KERNEL_INFO, [SYSCTL, '-A'])
     file_output(CAP_KERNEL_INFO, [MODPROBE_CONF])
     tree_output(CAP_KERNEL_INFO, MODPROBE_DIR)
+    func_output(CAP_KERNEL_INFO, 'modinfo', module_info)
 
     cmd_output(CAP_LOSETUP_A, [LOSETUP, '-a'])
 
@@ -638,10 +660,13 @@ exclude those logs from the archive.
     cmd_output(CAP_MULTIPATH, [DMSETUP, 'status'])
     func_output(CAP_MULTIPATH, 'multipathd_topology', multipathd_topology)
 
+    file_output(CAP_NETWORK_CONFIG, [NETWORK_CONF])
+    file_output(CAP_NETWORK_CONFIG, [NETWORK_DBCACHE])
     tree_output(CAP_NETWORK_CONFIG, SYSCONFIG_NETWORK_SCRIPTS, IFCFG_RE)
     tree_output(CAP_NETWORK_CONFIG, SYSCONFIG_NETWORK_SCRIPTS, ROUTE_RE)
-    file_output(CAP_NETWORK_CONFIG, [SYSCONFIG_NETWORK, RESOLV_CONF, NSSWITCH_CONF])
+    file_output(CAP_NETWORK_CONFIG, [SYSCONFIG_NETWORK, RESOLV_CONF, NSSWITCH_CONF, HOSTS])
     file_output(CAP_NETWORK_CONFIG, [NTP_CONF, IPTABLES_CONFIG, HOSTS_ALLOW, HOSTS_DENY])
+    file_output(CAP_NETWORK_CONFIG, [OPENVSWITCH_CONF, OPENVSWITCH_CONF_DB])
 
     cmd_output(CAP_NETWORK_STATUS, [IFCONFIG, '-a'])
     cmd_output(CAP_NETWORK_STATUS, [ROUTE, '-n'])
@@ -672,38 +697,50 @@ exclude those logs from the archive.
     tree_output(CAP_NETWORK_STATUS, PROC_NET_VLAN_DIR)
     cmd_output(CAP_NETWORK_STATUS, [TC, '-s', 'qdisc'])
     file_output(CAP_NETWORK_STATUS, [PROC_NET_SOFTNET_STAT])
-
-    tree_output(CAP_OEM, DELL_OMSA_LOGS)
-    file_output(CAP_OEM, [HP_CMA_LOG, HP_HPASMD_LOG])
-    if os.path.exists(OMREPORT):
-        cmd_output(CAP_OEM, [OMREPORT, 'system', 'alertlog'])
-        cmd_output(CAP_OEM, [OMREPORT, 'system', 'cmdlog'])
-        cmd_output(CAP_OEM, [OMREPORT, 'system', 'esmlog'])
-        cmd_output(CAP_OEM, [OMREPORT, 'system', 'postlog'])
-        cmd_output(CAP_OEM, [OMREPORT, 'chassis', 'fans'])
-        cmd_output(CAP_OEM, [OMREPORT, 'chassis', 'memory'])
-        cmd_output(CAP_OEM, [OMREPORT, 'chassis', 'temps'])
-        cmd_output(CAP_OEM, [OMREPORT, 'storage', 'controller'])
-        for i in range(0, 4):
-            cmd_output(CAP_OEM, [OMREPORT, 'storage', 'adisk', 'controller=%d' % i])
-            cmd_output(CAP_OEM, [OMREPORT, 'storage', 'vdisk', 'controller=%d' % i])
-    cmd_output(CAP_OEM, [FIND, '/.state', '-size', '+20k', '-exec', 'ls', '-l', '{}',';'], 
-               label = "state+20k")
+    tree_output(CAP_NETWORK_STATUS, OPENVSWITCH_CORE_DIR)
+    if os.path.exists(OPENVSWITCH_VSWITCHD_PID):
+        cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'show'])
+        for d in dp_list():
+            cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'show', d])
+            cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'status', d])
+            cmd_output(CAP_NETWORK_STATUS, [OVS_OFCTL, 'dump-flows', d])
+            cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'dump-flows', d])
+        try:
+            vspidfile = open(OPENVSWITCH_VSWITCHD_PID)
+            vspid = int(vspidfile.readline().strip())
+            vspidfile.close()
+            for b in bond_list(vspid):
+                cmd_output(CAP_NETWORK_STATUS,
+                           [OVS_APPCTL, '-t', '/var/run/ovs-vswitchd.%s.ctl' % vspid, '-e' 'bond/show %s' % b],
+                           'ovs-appctl-bond-show-%s.out' % b)
+        except e:
+            pass
 
     tree_output(CAP_PAM, PAM_DIR)
+    file_output(CAP_PAM, [KRB5_CONF])
+    tree_output(CAP_PAM, LIKEWISE_DIR)
 
     func_output(CAP_PERSISTENT_STATS, 'xapi_rrd-host', dump_xapi_rrds)
 
-    cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo', 'pid,tty,stat,time,nice,psr,pcpu,pmem,wchan:25,args'], label='process-tree')
+    cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo', 'pid,tty,stat,time,nice,psr,pcpu,pmem,nwchan,wchan:25,args'], label='process-tree')
+    func_output(CAP_PROCESS_LIST, 'fd_usage', fd_usage)
 
     file_output(CAP_SYSTEM_LOGS,
          [ VAR_LOG_DIR + x for x in
-           [ 'syslog', 'messages', 'monitor_memory.log', 'secure', 'debug', 'dmesg', 'boot.msg' ] +
+           [ 'crit.log', 'kern.log', 'daemon.log', 'user.log', 'syslog', 'messages',
+             'monitor_memory.log', 'secure', 'debug', 'dmesg', 'boot.msg', 'blktap.log' ] +
            [ f % n for n in range(1, 20) \
-                 for f in ['messages.%d', 'messages.%d.gz', 'monitor_memory.log.%d', 
-                           'monitor_memory.log.%d.gz', 'secure.%d', 'secure.%d.gz']]])
+                 for f in ['crit.log.%d', 'crit.log.%d.gz',
+                           'kern.log.%d', 'kern.log.%d.gz',
+                           'daemon.log.%d', 'daemon.log.%d.gz',
+                           'user.log.%d', 'user.log.%d.gz',
+                           'messages.%d', 'messages.%d.gz',
+                           'monitor_memory.log.%d', 'monitor_memory.log.%d.gz',
+                           'secure.%d', 'secure.%d.gz',
+                           'blktap.log.%d']]])
     if not os.path.exists('/var/log/dmesg') and not os.path.exists('/var/log/boot.msg'):
         cmd_output(CAP_SYSTEM_LOGS, [DMESG])
+    file_output(CAP_SYSTEM_LOGS, [LWIDENTITY_JOIN_LOG, HOSTS_LWIDENTITY_ORIG])
 
     cmd_output(CAP_SYSTEM_SERVICES, [CHKCONFIG, '--list'])
 
@@ -711,26 +748,6 @@ exclude those logs from the archive.
         generate_tapdisk_logs()
 
     tree_output(CAP_VNCTERM, VNCTERM_CORE_DIR)
-
-    file_output(CAP_OPENVSWITCH_CONFIG, [OPENVSWITCH_CONF])
-    file_output(CAP_OPENVSWITCH_CONFIG, [OPENVSWITCH_DBCACHE])
-
-    file_output(CAP_OPENVSWITCH_LOGS, 
-         [ OPENVSWITCH_LOG_DIR + x for x in
-           [ 'ovs-brcompatd.log', 'ovs-vswitchd.log', 'ovsdb-server.log', 
-             'openvswitch-cfg-update.log', 'openvswitch-xsplugin.log' ] +
-           [ f % n for n in range(1, 20) \
-                 for f in ['ovs-brcompatd.log.%d', 'ovs-brcompatd.log.%d.gz', 
-                           'ovs-vswitchd.log.%d', 'ovs-vswitchd.log.%d.gz',
-                           'ovsdb-server.log.%d', 'ovsdb-server.log.%d.gz']]])
-
-    cmd_output(CAP_OPENVSWITCH_STATUS, [OVS_DPCTL, 'show'])
-    tree_output(CAP_OPENVSWITCH_STATUS, OPENVSWITCH_CORE_DIR)
-    for d in dp_list():
-        cmd_output(CAP_OPENVSWITCH_STATUS, [OVS_OFCTL, 'show', d])
-        cmd_output(CAP_OPENVSWITCH_STATUS, [OVS_OFCTL, 'status', d])
-        cmd_output(CAP_OPENVSWITCH_STATUS, [OVS_OFCTL, 'dump-flows', d])
-        cmd_output(CAP_OPENVSWITCH_STATUS, [OVS_DPCTL, 'dump-flows', d])
 
     cmd_output(CAP_WLB, [XE, 'pool-retrieve-wlb-diagnostics'])
 
@@ -741,12 +758,16 @@ exclude those logs from the archive.
 
     func_output(CAP_XAPI_SUBPROCESS, 'xapi_subprocesses', dump_xapi_subprocess_info)
 
+    tree_output(CAP_XENRT, '/tmp', FIST_RE)
+
     file_output(CAP_XENSERVER_CONFIG, [INITIAL_INVENTORY])
-    file_output(CAP_XENSERVER_CONFIG, [POOL_CONF, PTOKEN, XAPI_CONF, XAPI_SSL_CONF, STATIC_VDIS, 
+    file_output(CAP_XENSERVER_CONFIG, [POOL_CONF, PTOKEN, XAPI_CONF, XAPI_SSL_CONF, 
                                        XENSOURCE_INVENTORY, VENDORKERNEL_INVENTORY])
     cmd_output(CAP_XENSERVER_CONFIG, [LS, '-lR', '/opt/xensource'])
     cmd_output(CAP_XENSERVER_CONFIG, [BIN_STATIC_VDIS, 'list'])
     tree_output(CAP_XENSERVER_CONFIG, OEM_CONFIG_DIR, OEM_CONFIG_FILES_RE)
+    tree_output(CAP_XENSERVER_CONFIG, STATIC_VDIS)
+    cmd_output(CAP_XENSERVER_CONFIG, [LS, '-lR', STATIC_VDIS])
 
     func_output(CAP_XENSERVER_DATABASES, 'xapi-db.xml', dump_filtered_xapi_db)
     cmd_output(CAP_XENSERVER_DATABASES, [XENSTORE_LS])
@@ -773,8 +794,9 @@ exclude those logs from the archive.
     tree_output(CAP_XENSERVER_INSTALL, INSTALLED_REPOS_DIR)
     tree_output(CAP_XENSERVER_INSTALL, PATCH_APPLIED_DIR)
 
-    file_output(CAP_XENSERVER_LOGS, [LOG_CONF])
+    file_output(CAP_XENSERVER_LOGS, [LOG_CONF, XENGUEST_LOG])
     file_output(CAP_XENSERVER_LOGS, XENSERVER_LOGS)
+    file_output(CAP_XENSERVER_LOGS, LICENSE_LOGS)
     tree_output(CAP_XENSERVER_LOGS, OEM_CONFIG_DIR, OEM_XENSERVER_LOGS_RE)
 
     try:
@@ -798,6 +820,11 @@ exclude those logs from the archive.
     file_output(CAP_YUM, [YUM_LOG])
     tree_output(CAP_YUM, YUM_REPOS_DIR)
     cmd_output(CAP_YUM, [RPM, '-qa'])
+
+    try:
+        load_plugins()
+    except:
+        pass
     
     # permit the user to filter out data
     for k in sorted(data.keys()):
@@ -842,7 +869,10 @@ exclude those logs from the archive.
             print >>sys.stderr, "    %s (%d, %d)" % (c, caps[c][MAX_SIZE], 
                                                      cap_sizes[c])
     return 0
-    
+
+def find_tapdisk_logs():
+    return glob.glob('/var/log/blktap/*.log*')
+
 def generate_tapdisk_logs():
     for pid in pidof('tapdisk'):
 	try:
@@ -852,12 +882,12 @@ def generate_tapdisk_logs():
             pass
     # give processes a second to write their logs
     time.sleep(1)
-    file_output(CAP_TAPDISK_LOGS, ['/tmp/tapdisk.log.%d' % pid for pid in pidof('tapdisk')])
+    file_output(CAP_TAPDISK_LOGS, find_tapdisk_logs())
 
 def clean_tapdisk_logs():
-    for filename in [f for f in os.listdir('/tmp') if f.startswith('tapdisk.log.')]:
+    for filename in find_tapdisk_logs():
         try:
-            os.remove(os.path.join('tmp', filename))
+            os.remove(filename)
         except :
             pass
 
@@ -941,14 +971,23 @@ def dump_xapi_rrds(cap):
     session.xenapi.session.logout()
     return output
 
-def filter_db_pii(str):
-    str = re.sub(r'(password_transformed&quot; &quot;)[^ ]+(&quot;)', r'\1REMOVED\2', str)
-    str = re.sub(r'(wlb_password=")[^"]+(")', r'\1REMOVED\2', str)
+def filter_db_pii(str, state):
+    if 'in_secret_table' not in state:
+        state['in_secret_table'] = False
+
+    if str.startswith('<table ') and 'name="secret"' in str:
+        state['in_secret_table'] = True
+    elif str.startswith('</table>'):
+        state['in_secret_table'] = False
+    
+    if state['in_secret_table'] and str.startswith("<row"): # match only on DB rows
+        str = re.sub(r'(value=")[^"]+(")', r'\1REMOVED\2', str)
     return str
 
 def dump_filtered_xapi_db(cap):
     db_file = None
     format = None
+    state = {}
 
     # determine db format
     c = open(DB_CONF, 'r')
@@ -985,7 +1024,7 @@ def dump_filtered_xapi_db(cap):
         while p != -1:
             str = remain[:p+1]
             remain = remain[p+1:]
-            output += filter_db_pii(str)
+            output += filter_db_pii(str, state)
             p = remain.find('>')
         rec = ih.read(2048)
     output += remain
@@ -1021,6 +1060,20 @@ def dump_scsi_hosts(cap):
         output += "    %s%s\n" % (procname, modelname and (" -> %s" % modelname) or '')
 
     return output
+
+def module_info(cap):
+    output = StringIO.StringIO()
+    modules = open(PROC_MODULES, 'r')
+    procs = []
+
+    for line in modules:
+        module = line.split()[0]
+        procs.append(ProcOutput([MODINFO, module], caps[cap][MAX_TIME], output))
+    modules.close()
+
+    run_procs([procs])
+
+    return output.getvalue()
 
 def csl_logs(cap):
     socket.setdefaulttimeout(5)
@@ -1078,6 +1131,110 @@ def multipathd_topology(cap):
     stdout, stderr = pipe.communicate('show topology')
 
     return stdout
+
+def dp_list():
+    output = StringIO.StringIO()
+    procs = [ProcOutput([OVS_DPCTL, 'dump-dps'], caps[CAP_NETWORK_STATUS][MAX_TIME], output)]
+
+    run_procs([procs])
+
+    if not procs[0].timed_out:
+        return output.getvalue().splitlines()
+    return []
+
+def bond_list(pid):
+    output = StringIO.StringIO()
+    procs = [ProcOutput([OVS_APPCTL, '-t', '/var/run/ovs-vswitchd.%s.ctl' % pid, '-e' 'bond/list'], caps[CAP_NETWORK_STATUS][MAX_TIME], output)]
+
+    run_procs([procs])
+
+    if not procs[0].timed_out:
+        bonds = output.getvalue().splitlines()[1:]
+        return [x.split('\t')[1] for x in bonds]
+    return []
+
+def fd_usage(cap):
+    output = ''
+    fd_dict = {}
+    for d in [p for p in os.listdir('/proc') if p.isdigit()]:
+        try:
+            fh = open('/proc/'+d+'/cmdline')
+            name = fh.readline()
+            num_fds = len(os.listdir(os.path.join('/proc/'+d+'/fd')))
+            if num_fds > 0:
+                if not num_fds in fd_dict:
+                    fd_dict[num_fds] = []
+                fd_dict[num_fds].append(name.replace('\0', ' ').strip())
+        finally:
+            fh.close()
+    keys = fd_dict.keys()
+    keys.sort(lambda a, b: int(b) - int(a))
+    for k in keys:
+        output += "%s: %s\n" % (k, str(fd_dict[k]))
+    return output
+
+def load_plugins(just_capabilities = False):
+    def getText(nodelist):
+        rc = ""
+        for node in nodelist:
+            if node.nodeType == node.TEXT_NODE:
+                rc += node.data
+        return rc.encode()
+
+    def getBoolAttr(el, attr, default = False):
+        ret = default
+        val = el.getAttribute(attr).lower()
+        if val in ['true', 'false', 'yes', 'no']:
+            ret = val in ['true', 'yes']
+        return ret
+        
+    for dir in [d for d in os.listdir(PLUGIN_DIR) if os.path.isdir(os.path.join(PLUGIN_DIR, d))]:
+        if not caps.has_key(dir):
+            if not os.path.exists("%s/%s.xml" % (PLUGIN_DIR, dir)):
+                continue
+            xmldoc = parse("%s/%s.xml" % (PLUGIN_DIR, dir))
+            assert xmldoc.documentElement.tagName == "capability"
+
+            pii, min_size, max_size, min_time, max_time, mime = \
+                 PII_MAYBE, -1,-1,-1,-1, MIME_TEXT
+
+            if xmldoc.documentElement.getAttribute("pii") in [PII_NO, PII_YES, PII_MAYBE, PII_IF_CUSTOMIZED]:
+                pii = xmldoc.documentElement.getAttribute("pii")
+            if xmldoc.documentElement.getAttribute("min_size") != '':
+                min_size = long(xmldoc.documentElement.getAttribute("min_size"))
+            if xmldoc.documentElement.getAttribute("max_size") != '':
+                max_size = long(xmldoc.documentElement.getAttribute("max_size"))
+            if xmldoc.documentElement.getAttribute("min_time") != '':
+                min_time = int(xmldoc.documentElement.getAttribute("min_time"))
+            if xmldoc.documentElement.getAttribute("max_time") != '':
+                max_time = int(xmldoc.documentElement.getAttribute("max_time"))
+            if xmldoc.documentElement.getAttribute("mime") in [MIME_DATA, MIME_TEXT]:
+                mime = xmldoc.documentElement.getAttribute("mime")
+            checked = getBoolAttr(xmldoc.documentElement, 'checked', True)
+            hidden = getBoolAttr(xmldoc.documentElement, 'hidden', False)
+
+            cap(dir, pii, min_size, max_size, min_time, max_time, mime, checked, hidden)
+
+        if just_capabilities:
+            continue
+                    
+        plugdir = os.path.join(PLUGIN_DIR, dir)
+        for file in [f for f in os.listdir(plugdir) if f.endswith('.xml')]:
+            xmldoc = parse(os.path.join(plugdir, file))
+            assert xmldoc.documentElement.tagName == "collect"
+
+            for el in xmldoc.documentElement.getElementsByTagName("*"):
+                if el.tagName == "files":
+                    file_output(dir, getText(el.childNodes).split())
+                elif el.tagName == "directory":
+                    pattern = el.getAttribute("pattern")
+                    if pattern == '': pattern = None
+                    negate = getBoolAttr(el, 'negate')
+                    tree_output(dir, getText(el.childNodes), pattern and re.compile(pattern) or None, negate)
+                elif el.tagName == "command":
+                    label = el.getAttribute("label")
+                    if label == '': label = None
+                    cmd_output(dir, getText(el.childNodes), label)
 
 def make_tar(subdir, suffix, output_fd):
     global SILENT_MODE, data
@@ -1262,7 +1419,7 @@ def size_of(f, pattern, negate):
 def print_capabilities():
     document = getDOMImplementation().createDocument(
         "ns", CAP_XML_ROOT, None)
-    map(lambda key: capability(document, key), caps.keys())
+    map(lambda key: capability(document, key), [k for k in caps.keys() if not caps[k][HIDDEN]])
     print document.toprettyxml()
 
 def capability(document, key):
@@ -1292,13 +1449,6 @@ def yes(prompt):
 
 partition_re = re.compile(r'(.*[0-9]+$)|(^xvd)')
 
-def dp_list():
-    command = [OVS_DPCTL, "dump-dps"]
-    proc = Popen(command, bufsize=1, stdin=dev_null, stdout=PIPE, stderr=dev_null)
-    (dps, err) = proc.communicate()
-    return dps.splitlines()
-
-
 def disk_list():
     disks = []
     try:
@@ -1317,6 +1467,7 @@ def disk_list():
 
 class ProcOutput:
     debug = False
+
     def __init__(self, command, max_time, inst=None, filter=None):
         self.command = command
         self.max_time = max_time
@@ -1327,22 +1478,26 @@ class ProcOutput:
         self.failed = False
         self.timeout = int(time.time()) + self.max_time
         self.filter = filter
+        self.filter_state = {}
 
     def __del__(self):
         self.terminate()
+
+    def cmdAsStr(self):
+        return isinstance(self.command, list) and ' '.join(self.command) or self.command
 
     def run(self):
         self.timed_out = False
         try:
             if ProcOutput.debug:
-                output_ts("Starting '%s'" % ' '.join(self.command))
-            self.proc = Popen(self.command, bufsize=1, stdin=dev_null, stdout=PIPE, stderr=dev_null)
+                output_ts("Starting '%s'" % self.cmdAsStr())
+            self.proc = Popen(self.command, bufsize=1, stdin=dev_null, stdout=PIPE, stderr=dev_null, shell=isinstance(self.command, str))
             old = fcntl.fcntl(self.proc.stdout.fileno(), fcntl.F_GETFD)
             fcntl.fcntl(self.proc.stdout.fileno(), fcntl.F_SETFD, old | fcntl.FD_CLOEXEC)
             self.running = True
             self.failed = False
         except:
-            output_ts("'%s' failed" % ' '.join(self.command))
+            output_ts("'%s' failed" % self.cmdAsStr())
             self.running = False
             self.failed = True
 
@@ -1366,7 +1521,7 @@ class ProcOutput:
             self.running = False
         else:
             if self.filter:
-                line = self.filter(line)
+                line = self.filter(line, self.filter_state)
             if self.inst:
                 self.inst.write(line)
 
@@ -1402,7 +1557,7 @@ def run_procs(procs):
 
             # handle timeout
             if p.running and now > p.timeout:
-                output_ts("'%s' timed out" % ' '.join(p.command))
+                output_ts("'%s' timed out" % p.cmdAsStr())
                 if p.inst:
                     p.inst.write("\n** timeout **\n")
                 p.timed_out = True
