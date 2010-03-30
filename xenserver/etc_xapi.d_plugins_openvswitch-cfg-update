@@ -76,6 +76,8 @@ def removeControllerCfg():
                    "--", "del-ssl"])
 
 def setControllerCfg(controller):
+    # /etc/xensource/xapi-ssl.pem is mentioned twice below because it
+    # contains both the private key and the certificate.
     vswitchCfgMod(["--", "clear", "Open_vSwitch", ".", "managers",
                    "--", "del-ssl",
                    "--", "--bootstrap", "set-ssl",
