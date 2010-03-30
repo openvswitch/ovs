@@ -25,6 +25,7 @@ import XenAPIPlugin
 import XenAPI
 import os
 import subprocess
+import syslog
 
 vsctl="/usr/bin/ovs-vsctl"
 cacert_filename="/etc/openvswitch/vswitchd.cacert"
@@ -102,6 +103,13 @@ def vswitchCfgMod(action_args):
     if exitcode != 0:
         raise XenAPIPlugin.Failure("VSWITCH_CONFIG_MOD_FAILURE",
                                    [ str(exitcode) , str(action_args) ])
+
+def emergency_reset(session, args):
+    # This function is just a place holder for testing until the real
+    # functionality is implemented.
+    syslog.syslog("openvswitch-cfg-update: emergency_reset called")
+    return "Need to implement emergency_reset"
     
 if __name__ == "__main__":
-    XenAPIPlugin.dispatch({"update": update})
+    XenAPIPlugin.dispatch({"update": update,
+                           "emergency_reset": emergency_reset})
