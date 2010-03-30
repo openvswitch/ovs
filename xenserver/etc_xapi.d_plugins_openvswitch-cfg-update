@@ -80,6 +80,7 @@ def setControllerCfg(controller):
                    "--", "del-ssl",
                    "--", "--bootstrap", "set-ssl",
                    "/etc/xensource/xapi-ssl.pem",
+                   "/etc/xensource/xapi-ssl.pem",
                    cacert_filename,
                    "--", "set", "Open_vSwitch", ".",
                    'managers="ssl:' + controller + ':6632"'])
