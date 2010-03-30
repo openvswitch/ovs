@@ -21,8 +21,8 @@ set -e
 
 case "$1" in
     purge)
-        rm -f /etc/openvswitch-switch/conf
-        rm -f /etc/openvswitch-switch/.conf.~lock~
+        rm -f /etc/openvswitch/conf.db
+        rm -f /etc/openvswitch/.conf.db.~lock~
         rm -f /etc/default/openvswitch-switch
         rm -f /var/log/openvswitch/*
         ;;

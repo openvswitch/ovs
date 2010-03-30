@@ -37,9 +37,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 DAEMON=/usr/bin/ovs-switchui
 NAME=openvswitch-switchui
-DESC="Open vSwitch switch monitor"
+DESC="Open vSwitch UI"
 
-PIDFILE=/var/run/$NAME.pid 
+PIDFILE=/var/run/openvswitch/$NAME.pid 
 
 test -x $DAEMON || exit 0
 

@@ -66,11 +66,11 @@ running_pid()
 # running name
 #
 # Checks for a running process named 'name' by looking for a pidfile
-# named /var/run/${name}.pid
+# named /var/run/openvswitch/${name}.pid
 running()
 {
     local name=$1
-    local pidfile=/var/run/${name}.pid
+    local pidfile=/var/run/openvswitch/${name}.pid
 
     # No pidfile, probably no daemon present
     [ ! -f "$pidfile" ] && return 1
@@ -84,11 +84,11 @@ running()
 # force_stop name
 #
 # Checks for a running process named 'name', by looking for a pidfile
-# named /var/run/${name}.pid, and then kills it and waits for it to
-# die.
+# named /var/run/openvswitch/${name}.pid, and then kills it and waits 
+# for it to die.
 force_stop() {
     local name=$1
-    local pidfile=/var/run/${name}.pid
+    local pidfile=/var/run/openvswitch/${name}.pid
 
     [ ! -f "$pidfile" ] && return
     if running $name; then
@@ -206,14 +206,16 @@ case "$1" in
 
         # Create an empty configuration database if it doesn't exist.
         if test ! -e /etc/openvswitch/conf.db; then
+            install -d -m 755 -o root -g root /etc/openvswitch
+
             # Create configuration database.
             ovsdb-tool -vANY:console:emer \
-                create /etc/openvswitch-switch/conf \
+                create /etc/openvswitch/conf.db \
                 /usr/share/openvswitch/vswitch.ovsschema
         else
             # Upgrade or downgrade schema and compact database.
             ovsdb-tool -vANY:console:emer \
-                convert /etc/openvswitch-switch/conf \
+                convert /etc/openvswitch/conf.db \
                 /usr/share/openvswitch/vswitch.ovsschema
         fi
 
@@ -223,19 +225,29 @@ case "$1" in
             monitor_opt=
         fi
 
+        if [ ! -d /var/run/openvswitch ]; then
+            install -d -m 755 -o root -g root /var/run/openvswitch
+        fi
+
+        if [ ! -d /var/log/openvswitch ]; then
+            install -d -m 755 -o root -g root /var/log/openvswitch
+        fi
+
         # Start ovsdb-server.
         set --
+        set -- "$@" /etc/openvswitch/conf.db
         set -- "$@" --verbose=ANY:console:emer --verbose=ANY:syslog:err
-        set -- "$@" --log-file
+        set -- "$@" --log-file=/var/log/openvswitch/ovsdb-server.log
         set -- "$@" --detach --pidfile $monitor_opt
-        set -- "$@" --remote punix:/var/run/ovsdb-server
-        set -- "$@" /etc/openvswitch-switch/conf
+        set -- "$@" --remote punix:/var/run/openvswitch/db.sock
+        set -- "$@" --remote db:Open_vSwitch,managers
         set -- "$@" --private-key=db:SSL,private_key
         set -- "$@" --certificate=db:SSL,certificate
         set -- "$@" --bootstrap-ca-cert=db:SSL,ca_cert
         set -- "$@" $OVSDB_SERVER_OPTS
         echo -n "Starting ovsdb-server: "
-        start-stop-daemon --start --quiet --pidfile /var/run/ovsdb-server.pid \
+        start-stop-daemon --start --quiet \
+            --pidfile /var/run/openvswitch/ovsdb-server.pid \
             --exec $ovsdb_server -- "$@"
         if running ovsdb-server; then
             echo "ovsdb-server."
@@ -248,12 +260,13 @@ case "$1" in
         # Start ovs-vswitchd.
         set --
         set -- "$@" --verbose=ANY:console:emer --verbose=ANY:syslog:err
-        set -- "$@" --log-file
+        set -- "$@" --log-file=/var/log/openvswitch/ovs-vswitchd.log
         set -- "$@" --detach --pidfile $monitor_opt
-        set -- "$@" unix:/var/run/ovsdb-server
+        set -- "$@" unix:/var/run/openvswitch/db.sock
         set -- "$@" $OVS_VSWITCHD_OPTS
         echo -n "Starting ovs-vswitchd: "
-        start-stop-daemon --start --quiet --pidfile /var/run/ovs-vswitchd.pid \
+        start-stop-daemon --start --quiet \
+            --pidfile /var/run/openvswitch/ovs-vswitchd.pid \
             --exec $ovs_vswitchd -- "$@"
         if running ovs-vswitchd; then
             echo "ovs-vswitchd."
@@ -264,13 +277,13 @@ case "$1" in
     stop)
         echo -n "Stopping ovs-vswitchd: "
         start-stop-daemon --stop --quiet --oknodo \
-            --pidfile /var/run/ovs-vswitchd.pid \
+            --pidfile /var/run/openvswitch/ovs-vswitchd.pid \
             --exec $ovs_vswitchd
         echo "ovs-vswitchd."
 
         echo -n "Stopping ovsdb-server: "
         start-stop-daemon --stop --quiet --oknodo \
-            --pidfile /var/run/ovsdb-server.pid \
+            --pidfile /var/run/openvswitch/ovsdb-server.pid \
             --exec $ovsdb_server
         echo "ovsdb-server."
         ;;

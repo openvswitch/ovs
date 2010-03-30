@@ -15,8 +15,8 @@ my $debconf_owner = 'openvswitch-switch';
 
 my $default = '/etc/default/openvswitch-switch';
 my $template = '/usr/share/openvswitch/switch/default.template';
-my $etc = '/etc/openvswitch-switch';
-my $rundir = '/var/run';
+my $etc = '/etc/openvswitch';
+my $rundir = '/var/run/openvswitch';
 my $privkey_file = "$etc/of0-privkey.pem";
 my $req_file = "$etc/of0-req.pem";
 my $cert_file = "$etc/of0-cert.pem";

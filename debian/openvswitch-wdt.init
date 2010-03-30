@@ -37,9 +37,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 DAEMON=/usr/sbin/ovs-wdt
 NAME=openvswitch-wdt
-DESC="Open vSwitch switch watchdog"
+DESC="Open vSwitch watchdog"
 
-PIDFILE=/var/run/$NAME.pid 
+PIDFILE=/var/run/openvswitch/$NAME.pid 
 
 test -x $DAEMON || exit 0
 

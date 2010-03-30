@@ -35,7 +35,7 @@ NAME=ovs-controller         # Introduce the short server's name here
 DESC=ovs-controller         # Introduce a short description here
 LOGDIR=/var/log/openvswitch # Log directory to use
 
-PIDFILE=/var/run/$NAME.pid 
+PIDFILE=/var/run/openvswitch/$NAME.pid 
 
 test -x $DAEMON || exit 0
 

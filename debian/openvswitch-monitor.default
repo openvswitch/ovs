@@ -18,11 +18,11 @@ THRESHOLD=3
 INTERVAL=1
 
 # LOG_FILE: File to log messages related to monitoring.
-LOG_FILE="/var/log/openvswitch/monitor"
+LOG_FILE="/var/log/openvswitch/ovs-monitor.log"
 
 # SWITCH_VCONN: The vconn used to connect to the switch
 # (ovs-openflowd).  The ovs-openflowd must be configured to listen to
 # this vconn.  The default here set is also listened to by default by
 # the openvswitch-switch package, so ordinarily there is no need to
 # modify this.
-SWITCH_VCONN="/var/run/ovs-openflowd.mgmt"
+SWITCH_VCONN="/var/run/openvswitch/ovs-openflowd.mgmt"
