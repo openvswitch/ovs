@@ -28,7 +28,7 @@ vsctl="/usr/bin/ovs-vsctl"
 # XAPI before build 29381 (approximately) did not provide some of the
 # data in XenStore that we rely on.
 . /etc/xensource-inventory
-if test "$PRODUCT_VERSION" = "5.5.0" || test "${BUILD_NUMBER%p}" -le 26131
+if test "$PRODUCT_VERSION" = "5.5.0" || test "${BUILD_NUMBER%[a-z]}" -le 26131
 then
     xs550=true
 else
