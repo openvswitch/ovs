@@ -25,7 +25,7 @@
 #include "hash.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
-#include "openvswitch/datapath-protocol.h"
+#include "openvswitch/xflow.h"
 #include "packets.h"
 
 #include "vlog.h"
@@ -220,7 +220,7 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, flow_t *flow)
  */
 void
 flow_extract_stats(const flow_t *flow, struct ofpbuf *packet, 
-        struct odp_flow_stats *stats)
+        struct xflow_flow_stats *stats)
 {
     memset(stats, '\0', sizeof(*stats));
 
@@ -243,7 +243,7 @@ void
 flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
 {
     match->wildcards = htonl(wildcards);
-    match->in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
+    match->in_port = htons(flow->in_port == XFLOWP_LOCAL ? OFPP_LOCAL
                            : flow->in_port);
     match->dl_vlan = flow->dl_vlan;
     match->dl_vlan_pcp = flow->dl_vlan_pcp;
@@ -269,7 +269,7 @@ flow_from_match(flow_t *flow, uint32_t *wildcards,
     }
     flow->nw_src = match->nw_src;
     flow->nw_dst = match->nw_dst;
-    flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
+    flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? XFLOWP_LOCAL
                      : ntohs(match->in_port));
     flow->dl_vlan = match->dl_vlan;
     flow->dl_vlan_pcp = match->dl_vlan_pcp;

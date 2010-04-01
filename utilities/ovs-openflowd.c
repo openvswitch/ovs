@@ -28,7 +28,6 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "dirs.h"
-#include "dpif.h"
 #include "leak-checker.h"
 #include "list.h"
 #include "netdev.h"
@@ -44,6 +43,7 @@
 #include "unixctl.h"
 #include "util.h"
 #include "vconn.h"
+#include "xfif.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_openflowd
@@ -109,7 +109,7 @@ main(int argc, char *argv[])
     struct ofproto *ofproto;
     struct ofsettings s;
     int error;
-    struct dpif *dpif;
+    struct xfif *xfif;
     struct netflow_options nf_options;
 
     proctitle_init(argc, argv);
@@ -131,7 +131,7 @@ main(int argc, char *argv[])
     VLOG_INFO("Open vSwitch version %s", VERSION BUILDNR);
     VLOG_INFO("OpenFlow protocol version 0x%02x", OFP_VERSION);
 
-    error = dpif_create_and_open(s.dp_name, s.dp_type, &dpif);
+    error = xfif_create_and_open(s.dp_name, s.dp_type, &xfif);
     if (error) {
         ovs_fatal(error, "could not create datapath");
     }
@@ -148,7 +148,7 @@ main(int argc, char *argv[])
                 ovs_fatal(error, "failed to open %s as a device", port);
             }
 
-            error = dpif_port_add(dpif, port, 0, NULL);
+            error = xfif_port_add(xfif, port, 0, NULL);
             if (error) {
                 ovs_fatal(error, "failed to add %s as a port", port);
             }
@@ -218,17 +218,17 @@ main(int argc, char *argv[])
             ovs_fatal(error, "unrecoverable datapath error");
         }
         unixctl_server_run(unixctl);
-        dp_run();
+        xf_run();
         netdev_run();
 
         ofproto_wait(ofproto);
         unixctl_server_wait(unixctl);
-        dp_wait();
+        xf_wait();
         netdev_wait();
         poll_block();
     }
 
-    dpif_close(dpif);
+    xfif_close(xfif);
 
     return 0;
 }
@@ -496,7 +496,7 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     }
 
     /* Local and remote vconns. */
-    dp_parse_name(argv[0], &s->dp_name, &s->dp_type);
+    xf_parse_name(argv[0], &s->dp_name, &s->dp_type);
 
     s->controller_name = argc > 1 ? xstrdup(argv[1]) : NULL;
 

@@ -128,13 +128,13 @@ static struct dp_bucket **find_bucket(struct dp_table *table, u32 hash)
 	return &table->buckets[l1][l2];
 }
 
-static int search_bucket(const struct dp_bucket *bucket, const struct odp_flow_key *key)
+static int search_bucket(const struct dp_bucket *bucket, const struct xflow_key *key)
 {
 	int i;
 
 	for (i = 0; i < bucket->n_flows; i++) {
 		struct sw_flow *flow = rcu_dereference(bucket->flows[i]);
-		if (!memcmp(&flow->key, key, sizeof(struct odp_flow_key)))
+		if (!memcmp(&flow->key, key, sizeof(struct xflow_key)))
 			return i;
 	}
 
@@ -142,7 +142,7 @@ static int search_bucket(const struct dp_bucket *bucket, const struct odp_flow_k
 }
 
 static struct sw_flow *lookup_flow(struct dp_table *table, u32 hash,
-				   const struct odp_flow_key *key)
+				   const struct xflow_key *key)
 {
 	struct dp_bucket **bucketp = find_bucket(table, hash);
 	struct dp_bucket *bucket = rcu_dereference(*bucketp);
@@ -159,7 +159,7 @@ static struct sw_flow *lookup_flow(struct dp_table *table, u32 hash,
 }
 
 static u32 flow_hash(const struct dp_table *table,
-		     const struct odp_flow_key *key)
+		     const struct xflow_key *key)
 {
 	return jhash2((u32*)key, sizeof *key / sizeof(u32), table->hash_seed);
 }
@@ -173,7 +173,7 @@ static u32 flow_hash(const struct dp_table *table,
  * successful, otherwise %NULL.
  */
 struct sw_flow *dp_table_lookup(struct dp_table *table,
-				const struct odp_flow_key *key)
+				const struct xflow_key *key)
 {
 	return lookup_flow(table, flow_hash(table, key), key);
 }

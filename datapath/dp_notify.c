@@ -1,6 +1,6 @@
 /*
  * Distributed under the terms of the GNU GPL version 2.
- * Copyright (c) 2007, 2008, 2009 Nicira Networks.
+ * Copyright (c) 2007, 2008, 2009, 2010 Nicira Networks.
  *
  * Significant portions of this file may be copied from parts of the Linux
  * kernel, by Linus Torvalds and others.
@@ -38,7 +38,7 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 		break;
 
 	case NETDEV_CHANGENAME:
-		if (p->port_no != ODPP_LOCAL) {
+		if (p->port_no != XFLOWP_LOCAL) {
 			mutex_lock(&dp->mutex);
 			dp_sysfs_del_if(p);
 			dp_sysfs_add_if(p);

@@ -20,7 +20,6 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include "collectors.h"
-#include "dpif.h"
 #include "compiler.h"
 #include "netdev.h"
 #include "ofpbuf.h"
@@ -31,6 +30,7 @@
 #include "sflow_api.h"
 #include "socket-util.h"
 #include "timeval.h"
+#include "xfif.h"
 
 #define THIS_MODULE VLM_sflow
 #include "vlog.h"
@@ -45,10 +45,10 @@ struct ofproto_sflow {
     struct collectors *collectors;
     SFLAgent *sflow_agent;
     struct ofproto_sflow_options *options;
-    struct dpif *dpif;
+    struct xfif *xfif;
     time_t next_tick;
     size_t n_flood, n_all;
-    struct port_array ports;    /* Indexed by ODP port number. */
+    struct port_array ports;    /* Indexed by XFLOW port number. */
 };
 
 #define RECEIVER_INDEX 1
@@ -241,7 +241,7 @@ void
 ofproto_sflow_clear(struct ofproto_sflow *os)
 {
     struct ofproto_sflow_port *osp;
-    unsigned int odp_port;
+    unsigned int xflow_port;
 
     if (os->sflow_agent) {
         sfl_agent_release(os->sflow_agent);
@@ -252,13 +252,13 @@ ofproto_sflow_clear(struct ofproto_sflow *os)
     ofproto_sflow_options_destroy(os->options);
     os->options = NULL;
 
-    PORT_ARRAY_FOR_EACH (osp, &os->ports, odp_port) {
-        ofproto_sflow_del_port(os, odp_port);
+    PORT_ARRAY_FOR_EACH (osp, &os->ports, xflow_port) {
+        ofproto_sflow_del_port(os, xflow_port);
     }
     port_array_clear(&os->ports);
 
     /* Turn off sampling to save CPU cycles. */
-    dpif_set_sflow_probability(os->dpif, 0);
+    xfif_set_sflow_probability(os->xfif, 0);
 }
 
 bool
@@ -268,12 +268,12 @@ ofproto_sflow_is_enabled(const struct ofproto_sflow *os)
 }
 
 struct ofproto_sflow *
-ofproto_sflow_create(struct dpif *dpif)
+ofproto_sflow_create(struct xfif *xfif)
 {
     struct ofproto_sflow *os;
 
     os = xcalloc(1, sizeof *os);
-    os->dpif = dpif;
+    os->xfif = xfif;
     os->next_tick = time_now() + 1;
     port_array_init(&os->ports);
     return os;
@@ -291,13 +291,13 @@ ofproto_sflow_destroy(struct ofproto_sflow *os)
 
 static void
 ofproto_sflow_add_poller(struct ofproto_sflow *os,
-                         struct ofproto_sflow_port *osp, uint16_t odp_port)
+                         struct ofproto_sflow_port *osp, uint16_t xflow_port)
 {
     SFLPoller *poller = sfl_agent_addPoller(os->sflow_agent, &osp->dsi, os,
                                             sflow_agent_get_counters);
     sfl_poller_set_sFlowCpInterval(poller, os->options->polling_interval);
     sfl_poller_set_sFlowCpReceiver(poller, RECEIVER_INDEX);
-    sfl_poller_set_bridgePort(poller, odp_port);
+    sfl_poller_set_bridgePort(poller, xflow_port);
 }
 
 static void
@@ -312,7 +312,7 @@ ofproto_sflow_add_sampler(struct ofproto_sflow *os,
 }
 
 void
-ofproto_sflow_add_port(struct ofproto_sflow *os, uint16_t odp_port,
+ofproto_sflow_add_port(struct ofproto_sflow *os, uint16_t xflow_port,
                        const char *netdev_name)
 {
     struct ofproto_sflow_port *osp;
@@ -320,7 +320,7 @@ ofproto_sflow_add_port(struct ofproto_sflow *os, uint16_t odp_port,
     uint32_t ifindex;
     int error;
 
-    ofproto_sflow_del_port(os, odp_port);
+    ofproto_sflow_del_port(os, xflow_port);
 
     /* Open network device. */
     error = netdev_open_default(netdev_name, &netdev);
@@ -335,21 +335,21 @@ ofproto_sflow_add_port(struct ofproto_sflow *os, uint16_t odp_port,
     osp->netdev = netdev;
     ifindex = netdev_get_ifindex(netdev);
     if (ifindex <= 0) {
-        ifindex = (os->sflow_agent->subId << 16) + odp_port;
+        ifindex = (os->sflow_agent->subId << 16) + xflow_port;
     }
     SFL_DS_SET(osp->dsi, 0, ifindex, 0);
-    port_array_set(&os->ports, odp_port, osp);
+    port_array_set(&os->ports, xflow_port, osp);
 
     /* Add poller. */
     if (os->sflow_agent) {
-        ofproto_sflow_add_poller(os, osp, odp_port);
+        ofproto_sflow_add_poller(os, osp, xflow_port);
     }
 }
 
 void
-ofproto_sflow_del_port(struct ofproto_sflow *os, uint16_t odp_port)
+ofproto_sflow_del_port(struct ofproto_sflow *os, uint16_t xflow_port)
 {
-    struct ofproto_sflow_port *osp = port_array_get(&os->ports, odp_port);
+    struct ofproto_sflow_port *osp = port_array_get(&os->ports, xflow_port);
     if (osp) {
         if (os->sflow_agent) {
             sfl_agent_removePoller(os->sflow_agent, &osp->dsi);
@@ -357,7 +357,7 @@ ofproto_sflow_del_port(struct ofproto_sflow *os, uint16_t odp_port)
         }
         netdev_close(osp->netdev);
         free(osp);
-        port_array_set(&os->ports, odp_port, NULL);
+        port_array_set(&os->ports, xflow_port, NULL);
     }
 }
 
@@ -368,7 +368,7 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     struct ofproto_sflow_port *osp;
     bool options_changed;
     SFLReceiver *receiver;
-    unsigned int odp_port;
+    unsigned int xflow_port;
     SFLAddress agentIP;
     time_t now;
 
@@ -435,48 +435,48 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     sfl_receiver_set_sFlowRcvrTimeout(receiver, 0xffffffff);
 
     /* Set the sampling_rate down in the datapath. */
-    dpif_set_sflow_probability(os->dpif,
+    xfif_set_sflow_probability(os->xfif,
                                MAX(1, UINT32_MAX / options->sampling_rate));
 
     /* Add samplers and pollers for the currently known ports. */
-    PORT_ARRAY_FOR_EACH (osp, &os->ports, odp_port) {
+    PORT_ARRAY_FOR_EACH (osp, &os->ports, xflow_port) {
         ofproto_sflow_add_sampler(os, osp,
                                   options->sampling_rate, options->header_len);
     }
 }
 
 static int
-ofproto_sflow_odp_port_to_ifindex(const struct ofproto_sflow *os,
-                                  uint16_t odp_port)
+ofproto_sflow_xflow_port_to_ifindex(const struct ofproto_sflow *os,
+                                  uint16_t xflow_port)
 {
-    struct ofproto_sflow_port *osp = port_array_get(&os->ports, odp_port);
+    struct ofproto_sflow_port *osp = port_array_get(&os->ports, xflow_port);
     return osp ? SFL_DS_INDEX(osp->dsi) : 0;
 }
 
 void
-ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
+ofproto_sflow_received(struct ofproto_sflow *os, struct xflow_msg *msg)
 {
     SFL_FLOW_SAMPLE_TYPE fs;
     SFLFlow_sample_element hdrElem;
     SFLSampled_header *header;
     SFLFlow_sample_element switchElem;
     SFLSampler *sampler;
-    const struct odp_sflow_sample_header *hdr;
-    const union odp_action *actions;
+    const struct xflow_sflow_sample_header *hdr;
+    const union xflow_action *actions;
     struct ofpbuf payload;
     size_t n_actions, n_outputs;
     size_t min_size;
     flow_t flow;
     size_t i;
 
-    /* Get odp_sflow_sample_header. */
+    /* Get xflow_sflow_sample_header. */
     min_size = sizeof *msg + sizeof *hdr;
     if (min_size > msg->length) {
         VLOG_WARN_RL(&rl, "sFlow packet too small (%"PRIu32" < %zu)",
                      msg->length, min_size);
         return;
     }
-    hdr = (const struct odp_sflow_sample_header *) (msg + 1);
+    hdr = (const struct xflow_sflow_sample_header *) (msg + 1);
 
     /* Get actions. */
     n_actions = hdr->n_actions;
@@ -492,16 +492,16 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
                      n_actions, msg->length, min_size);
         return;
     }
-    actions = (const union odp_action *) (hdr + 1);
+    actions = (const union xflow_action *) (hdr + 1);
 
     /* Get packet payload and extract flow. */
-    payload.data = (union odp_action *) (actions + n_actions);
+    payload.data = (union xflow_action *) (actions + n_actions);
     payload.size = msg->length - min_size;
     flow_extract(&payload, msg->port, &flow);
 
     /* Build a flow sample */
     memset(&fs, 0, sizeof fs);
-    fs.input = ofproto_sflow_odp_port_to_ifindex(os, msg->port);
+    fs.input = ofproto_sflow_xflow_port_to_ifindex(os, msg->port);
     fs.output = 0;              /* Filled in correctly below. */
     fs.sample_pool = hdr->sample_pool;
 
@@ -537,21 +537,21 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     /* Figure out the output ports. */
     n_outputs = 0;
     for (i = 0; i < n_actions; i++) {
-        const union odp_action *a = &actions[i];
+        const union xflow_action *a = &actions[i];
 
         switch (a->type) {
-        case ODPAT_OUTPUT:
-            fs.output = ofproto_sflow_odp_port_to_ifindex(os, a->output.port);
+        case XFLOWAT_OUTPUT:
+            fs.output = ofproto_sflow_xflow_port_to_ifindex(os, a->output.port);
             n_outputs++;
             break;
 
-        case ODPAT_OUTPUT_GROUP:
+        case XFLOWAT_OUTPUT_GROUP:
             n_outputs += (a->output_group.group == DP_GROUP_FLOOD ? os->n_flood
                           : a->output_group.group == DP_GROUP_ALL ? os->n_all
                           : 0);
             break;
 
-        case ODPAT_SET_DL_TCI:
+        case XFLOWAT_SET_DL_TCI:
             if (a->dl_tci.mask & htons(VLAN_VID_MASK)) {
                 switchElem.flowType.sw.dst_vlan = vlan_tci_to_vid(a->dl_tci.tci);
             }

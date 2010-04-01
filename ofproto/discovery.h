@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,13 @@
 
 #include <stdbool.h>
 
-struct dpif;
+struct xfif;
 struct discovery;
 struct settings;
 struct switch_status;
 
 int discovery_create(const char *accept_controller_re, bool update_resolv_conf,
-                     struct dpif *, struct switch_status *,
+                     struct xfif *, struct switch_status *,
                      struct discovery **);
 void discovery_destroy(struct discovery *);
 void discovery_set_update_resolv_conf(struct discovery *,

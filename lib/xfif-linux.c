@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "dpif.h"
+#include "xfif.h"
 
 #include <assert.h>
 #include <ctype.h>
@@ -30,22 +30,22 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#include "dpif-provider.h"
 #include "ofpbuf.h"
 #include "poll-loop.h"
 #include "rtnetlink.h"
 #include "svec.h"
 #include "util.h"
+#include "xfif-provider.h"
 
 #include "vlog.h"
-#define THIS_MODULE VLM_dpif_linux
+#define THIS_MODULE VLM_xfif_linux
 
 /* Datapath interface for the openvswitch Linux kernel module. */
-struct dpif_linux {
-    struct dpif dpif;
+struct xfif_linux {
+    struct xfif xfif;
     int fd;
 
-    /* Used by dpif_linux_get_all_names(). */
+    /* Used by xfif_linux_get_all_names(). */
     char *local_ifname;
     int minor;
 
@@ -58,25 +58,25 @@ struct dpif_linux {
 
 static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
 
-static int do_ioctl(const struct dpif *, int cmd, const void *arg);
+static int do_ioctl(const struct xfif *, int cmd, const void *arg);
 static int lookup_minor(const char *name, int *minor);
-static int finish_open(struct dpif *, const char *local_ifname);
+static int finish_open(struct xfif *, const char *local_ifname);
 static int get_openvswitch_major(void);
-static int create_minor(const char *name, int minor, struct dpif **dpifp);
-static int open_minor(int minor, struct dpif **dpifp);
+static int create_minor(const char *name, int minor, struct xfif **xfifp);
+static int open_minor(int minor, struct xfif **xfifp);
 static int make_openvswitch_device(int minor, char **fnp);
-static void dpif_linux_port_changed(const struct rtnetlink_change *,
-                                    void *dpif);
+static void xfif_linux_port_changed(const struct rtnetlink_change *,
+                                    void *xfif);
 
-static struct dpif_linux *
-dpif_linux_cast(const struct dpif *dpif)
+static struct xfif_linux *
+xfif_linux_cast(const struct xfif *xfif)
 {
-    dpif_assert_class(dpif, &dpif_linux_class);
-    return CONTAINER_OF(dpif, struct dpif_linux, dpif);
+    xfif_assert_class(xfif, &xfif_linux_class);
+    return CONTAINER_OF(xfif, struct xfif_linux, xfif);
 }
 
 static int
-dpif_linux_enumerate(struct svec *all_dps)
+xfif_linux_enumerate(struct svec *all_dps)
 {
     int major;
     int error;
@@ -89,16 +89,16 @@ dpif_linux_enumerate(struct svec *all_dps)
     }
 
     error = 0;
-    for (i = 0; i < ODP_MAX; i++) {
-        struct dpif *dpif;
+    for (i = 0; i < XFLOW_MAX; i++) {
+        struct xfif *xfif;
         char devname[16];
         int retval;
 
         sprintf(devname, "dp%d", i);
-        retval = dpif_open(devname, "system", &dpif);
+        retval = xfif_open(devname, "system", &xfif);
         if (!retval) {
             svec_add(all_dps, devname);
-            dpif_uninit(dpif, true);
+            xfif_uninit(xfif, true);
         } else if (retval != ENODEV && !error) {
             error = retval;
         }
@@ -107,8 +107,8 @@ dpif_linux_enumerate(struct svec *all_dps)
 }
 
 static int
-dpif_linux_open(const char *name, const char *type OVS_UNUSED, bool create,
-                struct dpif **dpifp)
+xfif_linux_open(const char *name, const char *type OVS_UNUSED, bool create,
+                struct xfif **xfifp)
 {
     int minor;
 
@@ -116,11 +116,11 @@ dpif_linux_open(const char *name, const char *type OVS_UNUSED, bool create,
             && isdigit((unsigned char)name[2]) ? atoi(name + 2) : -1;
     if (create) {
         if (minor >= 0) {
-            return create_minor(name, minor, dpifp);
+            return create_minor(name, minor, xfifp);
         } else {
             /* Scan for unused minor number. */
-            for (minor = 0; minor < ODP_MAX; minor++) {
-                int error = create_minor(name, minor, dpifp);
+            for (minor = 0; minor < XFLOW_MAX; minor++) {
+                int error = create_minor(name, minor, xfifp);
                 if (error != EBUSY) {
                     return error;
                 }
@@ -130,8 +130,8 @@ dpif_linux_open(const char *name, const char *type OVS_UNUSED, bool create,
             return ENOBUFS;
         }
     } else {
-        struct dpif_linux *dpif;
-        struct odp_port port;
+        struct xfif_linux *xfif;
+        struct xflow_port port;
         int error;
 
         if (minor < 0) {
@@ -141,72 +141,72 @@ dpif_linux_open(const char *name, const char *type OVS_UNUSED, bool create,
             }
         }
 
-        error = open_minor(minor, dpifp);
+        error = open_minor(minor, xfifp);
         if (error) {
             return error;
         }
-        dpif = dpif_linux_cast(*dpifp);
+        xfif = xfif_linux_cast(*xfifp);
 
         /* We need the local port's ifindex for the poll function.  Start by
          * getting the local port's name. */
         memset(&port, 0, sizeof port);
-        port.port = ODPP_LOCAL;
-        if (ioctl(dpif->fd, ODP_PORT_QUERY, &port)) {
+        port.port = XFLOWP_LOCAL;
+        if (ioctl(xfif->fd, XFLOW_PORT_QUERY, &port)) {
             error = errno;
             if (error != ENODEV) {
                 VLOG_WARN("%s: probe returned unexpected error: %s",
-                          dpif_name(*dpifp), strerror(error));
+                          xfif_name(*xfifp), strerror(error));
             }
-            dpif_uninit(*dpifp, true);
+            xfif_uninit(*xfifp, true);
             return error;
         }
 
         /* Then use that to finish up opening. */
-        return finish_open(&dpif->dpif, port.devname);
+        return finish_open(&xfif->xfif, port.devname);
     }
 }
 
 static void
-dpif_linux_close(struct dpif *dpif_)
+xfif_linux_close(struct xfif *xfif_)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    rtnetlink_notifier_unregister(&dpif->port_notifier);
-    svec_destroy(&dpif->changed_ports);
-    free(dpif->local_ifname);
-    close(dpif->fd);
-    free(dpif);
+    struct xfif_linux *xfif = xfif_linux_cast(xfif_);
+    rtnetlink_notifier_unregister(&xfif->port_notifier);
+    svec_destroy(&xfif->changed_ports);
+    free(xfif->local_ifname);
+    close(xfif->fd);
+    free(xfif);
 }
 
 static int
-dpif_linux_get_all_names(const struct dpif *dpif_, struct svec *all_names)
+xfif_linux_get_all_names(const struct xfif *xfif_, struct svec *all_names)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct xfif_linux *xfif = xfif_linux_cast(xfif_);
 
-    svec_add_nocopy(all_names, xasprintf("dp%d", dpif->minor));
-    svec_add(all_names, dpif->local_ifname);
+    svec_add_nocopy(all_names, xasprintf("dp%d", xfif->minor));
+    svec_add(all_names, xfif->local_ifname);
     return 0;
 }
 
 static int
-dpif_linux_destroy(struct dpif *dpif_)
+xfif_linux_destroy(struct xfif *xfif_)
 {
-    return do_ioctl(dpif_, ODP_DP_DESTROY, NULL);
+    return do_ioctl(xfif_, XFLOW_DP_DESTROY, NULL);
 }
 
 static int
-dpif_linux_get_stats(const struct dpif *dpif_, struct odp_stats *stats)
+xfif_linux_get_stats(const struct xfif *xfif_, struct xflow_stats *stats)
 {
     memset(stats, 0, sizeof *stats);
-    return do_ioctl(dpif_, ODP_DP_STATS, stats);
+    return do_ioctl(xfif_, XFLOW_DP_STATS, stats);
 }
 
 static int
-dpif_linux_get_drop_frags(const struct dpif *dpif_, bool *drop_fragsp)
+xfif_linux_get_drop_frags(const struct xfif *xfif_, bool *drop_fragsp)
 {
     int drop_frags;
     int error;
 
-    error = do_ioctl(dpif_, ODP_GET_DROP_FRAGS, &drop_frags);
+    error = do_ioctl(xfif_, XFLOW_GET_DROP_FRAGS, &drop_frags);
     if (!error) {
         *drop_fragsp = drop_frags & 1;
     }
@@ -214,23 +214,23 @@ dpif_linux_get_drop_frags(const struct dpif *dpif_, bool *drop_fragsp)
 }
 
 static int
-dpif_linux_set_drop_frags(struct dpif *dpif_, bool drop_frags)
+xfif_linux_set_drop_frags(struct xfif *xfif_, bool drop_frags)
 {
     int drop_frags_int = drop_frags;
-    return do_ioctl(dpif_, ODP_SET_DROP_FRAGS, &drop_frags_int);
+    return do_ioctl(xfif_, XFLOW_SET_DROP_FRAGS, &drop_frags_int);
 }
 
 static int
-dpif_linux_port_add(struct dpif *dpif_, const char *devname, uint16_t flags,
+xfif_linux_port_add(struct xfif *xfif_, const char *devname, uint16_t flags,
                     uint16_t *port_no)
 {
-    struct odp_port port;
+    struct xflow_port port;
     int error;
 
     memset(&port, 0, sizeof port);
     strncpy(port.devname, devname, sizeof port.devname);
     port.flags = flags;
-    error = do_ioctl(dpif_, ODP_PORT_ADD, &port);
+    error = do_ioctl(xfif_, XFLOW_PORT_ADD, &port);
     if (!error) {
         *port_no = port.port;
     }
@@ -238,59 +238,59 @@ dpif_linux_port_add(struct dpif *dpif_, const char *devname, uint16_t flags,
 }
 
 static int
-dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no)
+xfif_linux_port_del(struct xfif *xfif_, uint16_t port_no)
 {
     int tmp = port_no;
-    return do_ioctl(dpif_, ODP_PORT_DEL, &tmp);
+    return do_ioctl(xfif_, XFLOW_PORT_DEL, &tmp);
 }
 
 static int
-dpif_linux_port_query_by_number(const struct dpif *dpif_, uint16_t port_no,
-                          struct odp_port *port)
+xfif_linux_port_query_by_number(const struct xfif *xfif_, uint16_t port_no,
+                          struct xflow_port *port)
 {
     memset(port, 0, sizeof *port);
     port->port = port_no;
-    return do_ioctl(dpif_, ODP_PORT_QUERY, port);
+    return do_ioctl(xfif_, XFLOW_PORT_QUERY, port);
 }
 
 static int
-dpif_linux_port_query_by_name(const struct dpif *dpif_, const char *devname,
-                              struct odp_port *port)
+xfif_linux_port_query_by_name(const struct xfif *xfif_, const char *devname,
+                              struct xflow_port *port)
 {
     memset(port, 0, sizeof *port);
     strncpy(port->devname, devname, sizeof port->devname);
-    return do_ioctl(dpif_, ODP_PORT_QUERY, port);
+    return do_ioctl(xfif_, XFLOW_PORT_QUERY, port);
 }
 
 static int
-dpif_linux_flow_flush(struct dpif *dpif_)
+xfif_linux_flow_flush(struct xfif *xfif_)
 {
-    return do_ioctl(dpif_, ODP_FLOW_FLUSH, NULL);
+    return do_ioctl(xfif_, XFLOW_FLOW_FLUSH, NULL);
 }
 
 static int
-dpif_linux_port_list(const struct dpif *dpif_, struct odp_port *ports, int n)
+xfif_linux_port_list(const struct xfif *xfif_, struct xflow_port *ports, int n)
 {
-    struct odp_portvec pv;
+    struct xflow_portvec pv;
     int error;
 
     pv.ports = ports;
     pv.n_ports = n;
-    error = do_ioctl(dpif_, ODP_PORT_LIST, &pv);
+    error = do_ioctl(xfif_, XFLOW_PORT_LIST, &pv);
     return error ? -error : pv.n_ports;
 }
 
 static int
-dpif_linux_port_poll(const struct dpif *dpif_, char **devnamep)
+xfif_linux_port_poll(const struct xfif *xfif_, char **devnamep)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct xfif_linux *xfif = xfif_linux_cast(xfif_);
 
-    if (dpif->change_error) {
-        dpif->change_error = false;
-        svec_clear(&dpif->changed_ports);
+    if (xfif->change_error) {
+        xfif->change_error = false;
+        svec_clear(&xfif->changed_ports);
         return ENOBUFS;
-    } else if (dpif->changed_ports.n) {
-        *devnamep = dpif->changed_ports.names[--dpif->changed_ports.n];
+    } else if (xfif->changed_ports.n) {
+        *devnamep = xfif->changed_ports.names[--xfif->changed_ports.n];
         return 0;
     } else {
         return EAGAIN;
@@ -298,10 +298,10 @@ dpif_linux_port_poll(const struct dpif *dpif_, char **devnamep)
 }
 
 static void
-dpif_linux_port_poll_wait(const struct dpif *dpif_)
+xfif_linux_port_poll_wait(const struct xfif *xfif_)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    if (dpif->changed_ports.n || dpif->change_error) {
+    struct xfif_linux *xfif = xfif_linux_cast(xfif_);
+    if (xfif->changed_ports.n || xfif->change_error) {
         poll_immediate_wake();
     } else {
         rtnetlink_notifier_wait();
@@ -309,124 +309,124 @@ dpif_linux_port_poll_wait(const struct dpif *dpif_)
 }
 
 static int
-dpif_linux_port_group_get(const struct dpif *dpif_, int group,
+xfif_linux_port_group_get(const struct xfif *xfif_, int group,
                           uint16_t ports[], int n)
 {
-    struct odp_port_group pg;
+    struct xflow_port_group pg;
     int error;
 
     assert(n <= UINT16_MAX);
     pg.group = group;
     pg.ports = ports;
     pg.n_ports = n;
-    error = do_ioctl(dpif_, ODP_PORT_GROUP_GET, &pg);
+    error = do_ioctl(xfif_, XFLOW_PORT_GROUP_GET, &pg);
     return error ? -error : pg.n_ports;
 }
 
 static int
-dpif_linux_port_group_set(struct dpif *dpif_, int group,
+xfif_linux_port_group_set(struct xfif *xfif_, int group,
                           const uint16_t ports[], int n)
 {
-    struct odp_port_group pg;
+    struct xflow_port_group pg;
 
     assert(n <= UINT16_MAX);
     pg.group = group;
     pg.ports = (uint16_t *) ports;
     pg.n_ports = n;
-    return do_ioctl(dpif_, ODP_PORT_GROUP_SET, &pg);
+    return do_ioctl(xfif_, XFLOW_PORT_GROUP_SET, &pg);
 }
 
 static int
-dpif_linux_flow_get(const struct dpif *dpif_, struct odp_flow flows[], int n)
+xfif_linux_flow_get(const struct xfif *xfif_, struct xflow_flow flows[], int n)
 {
-    struct odp_flowvec fv;
+    struct xflow_flowvec fv;
     fv.flows = flows;
     fv.n_flows = n;
-    return do_ioctl(dpif_, ODP_FLOW_GET, &fv);
+    return do_ioctl(xfif_, XFLOW_FLOW_GET, &fv);
 }
 
 static int
-dpif_linux_flow_put(struct dpif *dpif_, struct odp_flow_put *put)
+xfif_linux_flow_put(struct xfif *xfif_, struct xflow_flow_put *put)
 {
-    return do_ioctl(dpif_, ODP_FLOW_PUT, put);
+    return do_ioctl(xfif_, XFLOW_FLOW_PUT, put);
 }
 
 static int
-dpif_linux_flow_del(struct dpif *dpif_, struct odp_flow *flow)
+xfif_linux_flow_del(struct xfif *xfif_, struct xflow_flow *flow)
 {
-    return do_ioctl(dpif_, ODP_FLOW_DEL, flow);
+    return do_ioctl(xfif_, XFLOW_FLOW_DEL, flow);
 }
 
 static int
-dpif_linux_flow_list(const struct dpif *dpif_, struct odp_flow flows[], int n)
+xfif_linux_flow_list(const struct xfif *xfif_, struct xflow_flow flows[], int n)
 {
-    struct odp_flowvec fv;
+    struct xflow_flowvec fv;
     int error;
 
     fv.flows = flows;
     fv.n_flows = n;
-    error = do_ioctl(dpif_, ODP_FLOW_LIST, &fv);
+    error = do_ioctl(xfif_, XFLOW_FLOW_LIST, &fv);
     return error ? -error : fv.n_flows;
 }
 
 static int
-dpif_linux_execute(struct dpif *dpif_, uint16_t in_port,
-                   const union odp_action actions[], int n_actions,
+xfif_linux_execute(struct xfif *xfif_, uint16_t in_port,
+                   const union xflow_action actions[], int n_actions,
                    const struct ofpbuf *buf)
 {
-    struct odp_execute execute;
+    struct xflow_execute execute;
     memset(&execute, 0, sizeof execute);
     execute.in_port = in_port;
-    execute.actions = (union odp_action *) actions;
+    execute.actions = (union xflow_action *) actions;
     execute.n_actions = n_actions;
     execute.data = buf->data;
     execute.length = buf->size;
-    return do_ioctl(dpif_, ODP_EXECUTE, &execute);
+    return do_ioctl(xfif_, XFLOW_EXECUTE, &execute);
 }
 
 static int
-dpif_linux_recv_get_mask(const struct dpif *dpif_, int *listen_mask)
+xfif_linux_recv_get_mask(const struct xfif *xfif_, int *listen_mask)
 {
-    return do_ioctl(dpif_, ODP_GET_LISTEN_MASK, listen_mask);
+    return do_ioctl(xfif_, XFLOW_GET_LISTEN_MASK, listen_mask);
 }
 
 static int
-dpif_linux_recv_set_mask(struct dpif *dpif_, int listen_mask)
+xfif_linux_recv_set_mask(struct xfif *xfif_, int listen_mask)
 {
-    return do_ioctl(dpif_, ODP_SET_LISTEN_MASK, &listen_mask);
+    return do_ioctl(xfif_, XFLOW_SET_LISTEN_MASK, &listen_mask);
 }
 
 static int
-dpif_linux_get_sflow_probability(const struct dpif *dpif_,
+xfif_linux_get_sflow_probability(const struct xfif *xfif_,
                                  uint32_t *probability)
 {
-    return do_ioctl(dpif_, ODP_GET_SFLOW_PROBABILITY, probability);
+    return do_ioctl(xfif_, XFLOW_GET_SFLOW_PROBABILITY, probability);
 }
 
 static int
-dpif_linux_set_sflow_probability(struct dpif *dpif_, uint32_t probability)
+xfif_linux_set_sflow_probability(struct xfif *xfif_, uint32_t probability)
 {
-    return do_ioctl(dpif_, ODP_SET_SFLOW_PROBABILITY, &probability);
+    return do_ioctl(xfif_, XFLOW_SET_SFLOW_PROBABILITY, &probability);
 }
 
 static int
-dpif_linux_recv(struct dpif *dpif_, struct ofpbuf **bufp)
+xfif_linux_recv(struct xfif *xfif_, struct ofpbuf **bufp)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
+    struct xfif_linux *xfif = xfif_linux_cast(xfif_);
     struct ofpbuf *buf;
     int retval;
     int error;
 
     buf = ofpbuf_new(65536);
-    retval = read(dpif->fd, ofpbuf_tail(buf), ofpbuf_tailroom(buf));
+    retval = read(xfif->fd, ofpbuf_tail(buf), ofpbuf_tailroom(buf));
     if (retval < 0) {
         error = errno;
         if (error != EAGAIN) {
             VLOG_WARN_RL(&error_rl, "%s: read failed: %s",
-                         dpif_name(dpif_), strerror(error));
+                         xfif_name(xfif_), strerror(error));
         }
-    } else if (retval >= sizeof(struct odp_msg)) {
-        struct odp_msg *msg = buf->data;
+    } else if (retval >= sizeof(struct xflow_msg)) {
+        struct xflow_msg *msg = buf->data;
         if (msg->length <= retval) {
             buf->size += retval;
             *bufp = buf;
@@ -434,16 +434,16 @@ dpif_linux_recv(struct dpif *dpif_, struct ofpbuf **bufp)
         } else {
             VLOG_WARN_RL(&error_rl, "%s: discarding message truncated "
                          "from %"PRIu32" bytes to %d",
-                         dpif_name(dpif_), msg->length, retval);
+                         xfif_name(xfif_), msg->length, retval);
             error = ERANGE;
         }
     } else if (!retval) {
-        VLOG_WARN_RL(&error_rl, "%s: unexpected end of file", dpif_name(dpif_));
+        VLOG_WARN_RL(&error_rl, "%s: unexpected end of file", xfif_name(xfif_));
         error = EPROTO;
     } else {
         VLOG_WARN_RL(&error_rl,
                      "%s: discarding too-short message (%d bytes)",
-                     dpif_name(dpif_), retval);
+                     xfif_name(xfif_), retval);
         error = ERANGE;
     }
 
@@ -453,55 +453,55 @@ dpif_linux_recv(struct dpif *dpif_, struct ofpbuf **bufp)
 }
 
 static void
-dpif_linux_recv_wait(struct dpif *dpif_)
+xfif_linux_recv_wait(struct xfif *xfif_)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    poll_fd_wait(dpif->fd, POLLIN);
+    struct xfif_linux *xfif = xfif_linux_cast(xfif_);
+    poll_fd_wait(xfif->fd, POLLIN);
 }
 
-const struct dpif_class dpif_linux_class = {
+const struct xfif_class xfif_linux_class = {
     "system",
     NULL,
     NULL,
-    dpif_linux_enumerate,
-    dpif_linux_open,
-    dpif_linux_close,
-    dpif_linux_get_all_names,
-    dpif_linux_destroy,
-    dpif_linux_get_stats,
-    dpif_linux_get_drop_frags,
-    dpif_linux_set_drop_frags,
-    dpif_linux_port_add,
-    dpif_linux_port_del,
-    dpif_linux_port_query_by_number,
-    dpif_linux_port_query_by_name,
-    dpif_linux_port_list,
-    dpif_linux_port_poll,
-    dpif_linux_port_poll_wait,
-    dpif_linux_port_group_get,
-    dpif_linux_port_group_set,
-    dpif_linux_flow_get,
-    dpif_linux_flow_put,
-    dpif_linux_flow_del,
-    dpif_linux_flow_flush,
-    dpif_linux_flow_list,
-    dpif_linux_execute,
-    dpif_linux_recv_get_mask,
-    dpif_linux_recv_set_mask,
-    dpif_linux_get_sflow_probability,
-    dpif_linux_set_sflow_probability,
-    dpif_linux_recv,
-    dpif_linux_recv_wait,
+    xfif_linux_enumerate,
+    xfif_linux_open,
+    xfif_linux_close,
+    xfif_linux_get_all_names,
+    xfif_linux_destroy,
+    xfif_linux_get_stats,
+    xfif_linux_get_drop_frags,
+    xfif_linux_set_drop_frags,
+    xfif_linux_port_add,
+    xfif_linux_port_del,
+    xfif_linux_port_query_by_number,
+    xfif_linux_port_query_by_name,
+    xfif_linux_port_list,
+    xfif_linux_port_poll,
+    xfif_linux_port_poll_wait,
+    xfif_linux_port_group_get,
+    xfif_linux_port_group_set,
+    xfif_linux_flow_get,
+    xfif_linux_flow_put,
+    xfif_linux_flow_del,
+    xfif_linux_flow_flush,
+    xfif_linux_flow_list,
+    xfif_linux_execute,
+    xfif_linux_recv_get_mask,
+    xfif_linux_recv_set_mask,
+    xfif_linux_get_sflow_probability,
+    xfif_linux_set_sflow_probability,
+    xfif_linux_recv,
+    xfif_linux_recv_wait,
 };
 
 static int get_openvswitch_major(void);
 static int get_major(const char *target);
 
 static int
-do_ioctl(const struct dpif *dpif_, int cmd, const void *arg)
+do_ioctl(const struct xfif *xfif_, int cmd, const void *arg)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    return ioctl(dpif->fd, cmd, arg) ? errno : 0;
+    struct xfif_linux *xfif = xfif_linux_cast(xfif_);
+    return ioctl(xfif->fd, cmd, arg) ? errno : 0;
 }
 
 static int
@@ -542,7 +542,7 @@ lookup_minor(const char *name, int *minorp)
         VLOG_WARN("%s ethtool bus_info has unexpected format", name);
         error = EPROTOTYPE;
         goto error_close_sock;
-    } else if (port_no != ODPP_LOCAL) {
+    } else if (port_no != XFLOWP_LOCAL) {
         /* This is an Open vSwitch device but not the local port.  We
          * intentionally support only using the name of the local port as the
          * name of a datapath; otherwise, it would be too difficult to
@@ -684,14 +684,14 @@ get_major(const char *target)
 }
 
 static int
-finish_open(struct dpif *dpif_, const char *local_ifname)
+finish_open(struct xfif *xfif_, const char *local_ifname)
 {
-    struct dpif_linux *dpif = dpif_linux_cast(dpif_);
-    dpif->local_ifname = xstrdup(local_ifname);
-    dpif->local_ifindex = if_nametoindex(local_ifname);
-    if (!dpif->local_ifindex) {
+    struct xfif_linux *xfif = xfif_linux_cast(xfif_);
+    xfif->local_ifname = xstrdup(local_ifname);
+    xfif->local_ifindex = if_nametoindex(local_ifname);
+    if (!xfif->local_ifindex) {
         int error = errno;
-        dpif_uninit(dpif_, true);
+        xfif_uninit(xfif_, true);
         VLOG_WARN("could not get ifindex of %s device: %s",
                   local_ifname, strerror(errno));
         return error;
@@ -700,22 +700,22 @@ finish_open(struct dpif *dpif_, const char *local_ifname)
 }
 
 static int
-create_minor(const char *name, int minor, struct dpif **dpifp)
+create_minor(const char *name, int minor, struct xfif **xfifp)
 {
-    int error = open_minor(minor, dpifp);
+    int error = open_minor(minor, xfifp);
     if (!error) {
-        error = do_ioctl(*dpifp, ODP_DP_CREATE, name);
+        error = do_ioctl(*xfifp, XFLOW_DP_CREATE, name);
         if (!error) {
-            error = finish_open(*dpifp, name);
+            error = finish_open(*xfifp, name);
         } else {
-            dpif_uninit(*dpifp, true);
+            xfif_uninit(*xfifp, true);
         }
     }
     return error;
 }
 
 static int
-open_minor(int minor, struct dpif **dpifp)
+open_minor(int minor, struct xfif **xfifp)
 {
     int error;
     char *fn;
@@ -728,25 +728,25 @@ open_minor(int minor, struct dpif **dpifp)
 
     fd = open(fn, O_RDONLY | O_NONBLOCK);
     if (fd >= 0) {
-        struct dpif_linux *dpif = xmalloc(sizeof *dpif);
-        error = rtnetlink_notifier_register(&dpif->port_notifier,
-                                           dpif_linux_port_changed, dpif);
+        struct xfif_linux *xfif = xmalloc(sizeof *xfif);
+        error = rtnetlink_notifier_register(&xfif->port_notifier,
+                                           xfif_linux_port_changed, xfif);
         if (!error) {
             char *name;
 
             name = xasprintf("dp%d", minor);
-            dpif_init(&dpif->dpif, &dpif_linux_class, name, minor, minor);
+            xfif_init(&xfif->xfif, &xfif_linux_class, name, minor, minor);
             free(name);
 
-            dpif->fd = fd;
-            dpif->local_ifname = NULL;
-            dpif->minor = minor;
-            dpif->local_ifindex = 0;
-            svec_init(&dpif->changed_ports);
-            dpif->change_error = false;
-            *dpifp = &dpif->dpif;
+            xfif->fd = fd;
+            xfif->local_ifname = NULL;
+            xfif->minor = minor;
+            xfif->local_ifindex = 0;
+            svec_init(&xfif->changed_ports);
+            xfif->change_error = false;
+            *xfifp = &xfif->xfif;
         } else {
-            free(dpif);
+            free(xfif);
         }
     } else {
         error = errno;
@@ -758,23 +758,23 @@ open_minor(int minor, struct dpif **dpifp)
 }
 
 static void
-dpif_linux_port_changed(const struct rtnetlink_change *change, void *dpif_)
+xfif_linux_port_changed(const struct rtnetlink_change *change, void *xfif_)
 {
-    struct dpif_linux *dpif = dpif_;
+    struct xfif_linux *xfif = xfif_;
 
     if (change) {
-        if (change->master_ifindex == dpif->local_ifindex
+        if (change->master_ifindex == xfif->local_ifindex
             && (change->nlmsg_type == RTM_NEWLINK
                 || change->nlmsg_type == RTM_DELLINK))
         {
             /* Our datapath changed, either adding a new port or deleting an
              * existing one. */
-            if (!svec_contains(&dpif->changed_ports, change->ifname)) {
-                svec_add(&dpif->changed_ports, change->ifname);
-                svec_sort(&dpif->changed_ports);
+            if (!svec_contains(&xfif->changed_ports, change->ifname)) {
+                svec_add(&xfif->changed_ports, change->ifname);
+                svec_sort(&xfif->changed_ports);
             }
         }
     } else {
-        dpif->change_error = true;
+        xfif->change_error = true;
     }
 }

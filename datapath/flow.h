@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -15,19 +15,19 @@
 #include <linux/rcupdate.h>
 #include <linux/gfp.h>
 
-#include "openvswitch/datapath-protocol.h"
+#include "openvswitch/xflow.h"
 
 struct sk_buff;
 
 struct sw_flow_actions {
 	struct rcu_head rcu;
 	unsigned int n_actions;
-	union odp_action actions[];
+	union xflow_action actions[];
 };
 
 struct sw_flow {
 	struct rcu_head rcu;
-	struct odp_flow_key key;
+	struct xflow_key key;
 	struct sw_flow_actions *sf_acts;
 
 	struct timespec used;	/* Last used time. */
@@ -46,7 +46,7 @@ struct sw_flow_actions *flow_actions_alloc(size_t n_actions);
 void flow_free(struct sw_flow *);
 void flow_deferred_free(struct sw_flow *);
 void flow_deferred_free_acts(struct sw_flow_actions *);
-int flow_extract(struct sk_buff *, u16 in_port, struct odp_flow_key *);
+int flow_extract(struct sk_buff *, u16 in_port, struct xflow_key *);
 void flow_used(struct sw_flow *, struct sk_buff *);
 
 int flow_init(void);

@@ -17,11 +17,11 @@
 #ifndef DPIF_PROVIDER_H
 #define DPIF_PROVIDER_H 1
 
-/* Provider interface to dpifs, which provide an interface to an Open vSwitch
+/* Provider interface to xfifs, which provide an interface to an Open vSwitch
  * datapath. */
 
 #include <assert.h>
-#include "dpif.h"
+#include "xfif.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -29,23 +29,23 @@ extern "C" {
 
 /* Open vSwitch datapath interface.
  *
- * This structure should be treated as opaque by dpif implementations. */
-struct dpif {
-    const struct dpif_class *dpif_class;
+ * This structure should be treated as opaque by xfif implementations. */
+struct xfif {
+    const struct xfif_class *xfif_class;
     char *base_name;
     char *full_name;
     uint8_t netflow_engine_type;
     uint8_t netflow_engine_id;
 };
 
-void dpif_init(struct dpif *, const struct dpif_class *, const char *name,
+void xfif_init(struct xfif *, const struct xfif_class *, const char *name,
                uint8_t netflow_engine_type, uint8_t netflow_engine_id);
-void dpif_uninit(struct dpif *dpif, bool close);
+void xfif_uninit(struct xfif *xfif, bool close);
 
-static inline void dpif_assert_class(const struct dpif *dpif,
-                                     const struct dpif_class *dpif_class)
+static inline void xfif_assert_class(const struct xfif *xfif,
+                                     const struct xfif_class *xfif_class)
 {
-    assert(dpif->dpif_class == dpif_class);
+    assert(xfif->xfif_class == xfif_class);
 }
 
 /* Datapath interface class structure, to be defined by each implementation of
@@ -58,14 +58,14 @@ static inline void dpif_assert_class(const struct dpif *dpif,
  * necessary to obtain a result.  Thus, they may not return EAGAIN or
  * EWOULDBLOCK or EINPROGRESS.  We may relax this requirement in the future if
  * and when we encounter performance problems. */
-struct dpif_class {
-    /* Type of dpif in this class, e.g. "system", "netdev", etc.
+struct xfif_class {
+    /* Type of xfif in this class, e.g. "system", "netdev", etc.
      *
      * One of the providers should supply a "system" type, since this is
-     * the type assumed if no type is specified when opening a dpif. */
+     * the type assumed if no type is specified when opening a xfif. */
     const char *type;
 
-    /* Performs periodic work needed by dpifs of this class, if any is
+    /* Performs periodic work needed by xfifs of this class, if any is
      * necessary. */
     void (*run)(void);
 
@@ -74,7 +74,7 @@ struct dpif_class {
     void (*wait)(void);
 
     /* Enumerates the names of all known created datapaths, if possible, into
-     * 'all_dps'.  The caller has already initialized 'all_dps' and other dpif
+     * 'all_dps'.  The caller has already initialized 'all_dps' and other xfif
      * classes might already have added names to it.
      *
      * This is used by the vswitch at startup, so that it can delete any
@@ -84,20 +84,20 @@ struct dpif_class {
      * case this function may be a null pointer. */
     int (*enumerate)(struct svec *all_dps);
 
-    /* Attempts to open an existing dpif called 'name', if 'create' is false,
-     * or to open an existing dpif or create a new one, if 'create' is true.
-     * 'type' corresponds to the 'type' field used in the dpif_class
+    /* Attempts to open an existing xfif called 'name', if 'create' is false,
+     * or to open an existing xfif or create a new one, if 'create' is true.
+     * 'type' corresponds to the 'type' field used in the xfif_class
      * structure.
      *
-     * If successful, stores a pointer to the new dpif in '*dpifp'.  On failure
-     * there are no requirements on what is stored in '*dpifp'. */
+     * If successful, stores a pointer to the new xfif in '*xfifp'.  On failure
+     * there are no requirements on what is stored in '*xfifp'. */
     int (*open)(const char *name, const char *type, bool create,
-                struct dpif **dpifp);
+                struct xfif **xfifp);
 
-    /* Closes 'dpif' and frees associated memory. */
-    void (*close)(struct dpif *dpif);
+    /* Closes 'xfif' and frees associated memory. */
+    void (*close)(struct xfif *xfif);
 
-    /* Enumerates all names that may be used to open 'dpif' into 'all_names'.
+    /* Enumerates all names that may be used to open 'xfif' into 'all_names'.
      * The Linux datapath, for example, supports opening a datapath both by
      * number, e.g. "dp0", and by the name of the datapath's local port.  For
      * some datapaths, this might be an infinite set (e.g. in a file name,
@@ -112,55 +112,55 @@ struct dpif_class {
      * function may be a null pointer.
      *
      * This is used by the vswitch at startup, */
-    int (*get_all_names)(const struct dpif *dpif, struct svec *all_names);
+    int (*get_all_names)(const struct xfif *xfif, struct svec *all_names);
 
-    /* Attempts to destroy the dpif underlying 'dpif'.
+    /* Attempts to destroy the xfif underlying 'xfif'.
      *
-     * If successful, 'dpif' will not be used again except as an argument for
+     * If successful, 'xfif' will not be used again except as an argument for
      * the 'close' member function. */
-    int (*destroy)(struct dpif *dpif);
+    int (*destroy)(struct xfif *xfif);
 
-    /* Retrieves statistics for 'dpif' into 'stats'. */
-    int (*get_stats)(const struct dpif *dpif, struct odp_stats *stats);
+    /* Retrieves statistics for 'xfif' into 'stats'. */
+    int (*get_stats)(const struct xfif *xfif, struct xflow_stats *stats);
 
-    /* Retrieves 'dpif''s current treatment of IP fragments into '*drop_frags':
+    /* Retrieves 'xfif''s current treatment of IP fragments into '*drop_frags':
      * true indicates that fragments are dropped, false indicates that
      * fragments are treated in the same way as other IP packets (except that
      * the L4 header cannot be read). */
-    int (*get_drop_frags)(const struct dpif *dpif, bool *drop_frags);
+    int (*get_drop_frags)(const struct xfif *xfif, bool *drop_frags);
 
-    /* Changes 'dpif''s treatment of IP fragments to 'drop_frags', whose
+    /* Changes 'xfif''s treatment of IP fragments to 'drop_frags', whose
      * meaning is the same as for the get_drop_frags member function. */
-    int (*set_drop_frags)(struct dpif *dpif, bool drop_frags);
+    int (*set_drop_frags)(struct xfif *xfif, bool drop_frags);
 
-    /* Creates a new port in 'dpif' connected to network device 'devname'.
-     * 'flags' is a set of ODP_PORT_* flags.  If successful, sets '*port_no'
+    /* Creates a new port in 'xfif' connected to network device 'devname'.
+     * 'flags' is a set of XFLOW_PORT_* flags.  If successful, sets '*port_no'
      * to the new port's port number. */
-    int (*port_add)(struct dpif *dpif, const char *devname, uint16_t flags,
+    int (*port_add)(struct xfif *xfif, const char *devname, uint16_t flags,
                     uint16_t *port_no);
 
-    /* Removes port numbered 'port_no' from 'dpif'. */
-    int (*port_del)(struct dpif *dpif, uint16_t port_no);
+    /* Removes port numbered 'port_no' from 'xfif'. */
+    int (*port_del)(struct xfif *xfif, uint16_t port_no);
 
-    /* Queries 'dpif' for a port with the given 'port_no' or 'devname'.  Stores
+    /* Queries 'xfif' for a port with the given 'port_no' or 'devname'.  Stores
      * information about the port into '*port' if successful. */
-    int (*port_query_by_number)(const struct dpif *dpif, uint16_t port_no,
-                                struct odp_port *port);
-    int (*port_query_by_name)(const struct dpif *dpif, const char *devname,
-                              struct odp_port *port);
+    int (*port_query_by_number)(const struct xfif *xfif, uint16_t port_no,
+                                struct xflow_port *port);
+    int (*port_query_by_name)(const struct xfif *xfif, const char *devname,
+                              struct xflow_port *port);
 
-    /* Stores in 'ports' information about up to 'n' ports attached to 'dpif',
-     * in no particular order.  Returns the number of ports attached to 'dpif'
+    /* Stores in 'ports' information about up to 'n' ports attached to 'xfif',
+     * in no particular order.  Returns the number of ports attached to 'xfif'
      * (not the number stored), if successful, otherwise a negative errno
      * value. */
-    int (*port_list)(const struct dpif *dpif, struct odp_port *ports, int n);
+    int (*port_list)(const struct xfif *xfif, struct xflow_port *ports, int n);
 
-    /* Polls for changes in the set of ports in 'dpif'.  If the set of ports in
-     * 'dpif' has changed, then this function should do one of the
+    /* Polls for changes in the set of ports in 'xfif'.  If the set of ports in
+     * 'xfif' has changed, then this function should do one of the
      * following:
      *
      * - Preferably: store the name of the device that was added to or deleted
-     *   from 'dpif' in '*devnamep' and return 0.  The caller is responsible
+     *   from 'xfif' in '*devnamep' and return 0.  The caller is responsible
      *   for freeing '*devnamep' (with free()) when it no longer needs it.
      *
      * - Alternatively: return ENOBUFS, without indicating the device that was
@@ -170,32 +170,32 @@ struct dpif_class {
      * indicating a device that was not actually added or deleted or returns
      * ENOBUFS without any change, are acceptable.
      *
-     * If the set of ports in 'dpif' has not changed, returns EAGAIN.  May also
+     * If the set of ports in 'xfif' has not changed, returns EAGAIN.  May also
      * return other positive errno values to indicate that something has gone
      * wrong. */
-    int (*port_poll)(const struct dpif *dpif, char **devnamep);
+    int (*port_poll)(const struct xfif *xfif, char **devnamep);
 
     /* Arranges for the poll loop to wake up when 'port_poll' will return a
      * value other than EAGAIN. */
-    void (*port_poll_wait)(const struct dpif *dpif);
+    void (*port_poll_wait)(const struct xfif *xfif);
 
     /* Stores in 'ports' the port numbers of up to 'n' ports that belong to
-     * 'group' in 'dpif'.  Returns the number of ports in 'group' (not the
+     * 'group' in 'xfif'.  Returns the number of ports in 'group' (not the
      * number stored), if successful, otherwise a negative errno value. */
-    int (*port_group_get)(const struct dpif *dpif, int group,
+    int (*port_group_get)(const struct xfif *xfif, int group,
                           uint16_t ports[], int n);
 
-    /* Changes port group 'group' in 'dpif' to consist of the 'n' ports whose
+    /* Changes port group 'group' in 'xfif' to consist of the 'n' ports whose
      * numbers are given in 'ports'.
      *
      * Use the get_stats member function to obtain the number of supported port
      * groups. */
-    int (*port_group_set)(struct dpif *dpif, int group,
+    int (*port_group_set)(struct xfif *xfif, int group,
                           const uint16_t ports[], int n);
 
     /* For each flow 'flow' in the 'n' flows in 'flows':
      *
-     * - If a flow matching 'flow->key' exists in 'dpif':
+     * - If a flow matching 'flow->key' exists in 'xfif':
      *
      *     Stores 0 into 'flow->stats.error' and stores statistics for the flow
      *     into 'flow->stats'.
@@ -210,7 +210,7 @@ struct dpif_class {
      *
      * - Flow-specific errors are indicated by a positive errno value in
      *   'flow->stats.error'.  In particular, ENOENT indicates that no flow
-     *   matching 'flow->key' exists in 'dpif'.  When an error value is stored,
+     *   matching 'flow->key' exists in 'xfif'.  When an error value is stored,
      *   the contents of 'flow->key' are preserved but other members of 'flow'
      *   should be treated as indeterminate.
      *
@@ -220,103 +220,104 @@ struct dpif_class {
      * this update occurred, in which the caller must not depend on any
      * elements in 'flows' being updated or not updated.
      */
-    int (*flow_get)(const struct dpif *dpif, struct odp_flow flows[], int n);
+    int (*flow_get)(const struct xfif *xfif, struct xflow_flow flows[], int n);
 
-    /* Adds or modifies a flow in 'dpif' as specified in 'put':
+    /* Adds or modifies a flow in 'xfif' as specified in 'put':
      *
-     * - If the flow specified in 'put->flow' does not exist in 'dpif', then
-     *   behavior depends on whether ODPPF_CREATE is specified in 'put->flags':
+     * - If the flow specified in 'put->flow' does not exist in 'xfif', then
+     *   behavior depends on whether XFLOWPF_CREATE is specified in 'put->flags':
      *   if it is, the flow will be added, otherwise the operation will fail
      *   with ENOENT.
      *
-     * - Otherwise, the flow specified in 'put->flow' does exist in 'dpif'.
-     *   Behavior in this case depends on whether ODPPF_MODIFY is specified in
+     * - Otherwise, the flow specified in 'put->flow' does exist in 'xfif'.
+     *   Behavior in this case depends on whether XFLOWPF_MODIFY is specified in
      *   'put->flags': if it is, the flow's actions will be updated, otherwise
      *   the operation will fail with EEXIST.  If the flow's actions are
-     *   updated, then its statistics will be zeroed if ODPPF_ZERO_STATS is set
+     *   updated, then its statistics will be zeroed if XFLOWPF_ZERO_STATS is set
      *   in 'put->flags', left as-is otherwise.
      */
-    int (*flow_put)(struct dpif *dpif, struct odp_flow_put *put);
+    int (*flow_put)(struct xfif *xfif, struct xflow_flow_put *put);
 
-    /* Deletes a flow matching 'flow->key' from 'dpif' or returns ENOENT if
-     * 'dpif' does not contain such a flow.
+    /* Deletes a flow matching 'flow->key' from 'xfif' or returns ENOENT if
+     * 'xfif' does not contain such a flow.
      *
      * If successful, updates 'flow->stats', 'flow->n_actions', and
      * 'flow->actions' as described in more detail under the flow_get member
      * function below. */
-    int (*flow_del)(struct dpif *dpif, struct odp_flow *flow);
+    int (*flow_del)(struct xfif *xfif, struct xflow_flow *flow);
 
-    /* Deletes all flows from 'dpif' and clears all of its queues of received
+    /* Deletes all flows from 'xfif' and clears all of its queues of received
      * packets. */
-    int (*flow_flush)(struct dpif *dpif);
+    int (*flow_flush)(struct xfif *xfif);
 
-    /* Stores up to 'n' flows in 'dpif' into 'flows', updating their statistics
+    /* Stores up to 'n' flows in 'xfif' into 'flows', updating their statistics
      * and actions as described under the flow_get member function.  If
-     * successful, returns the number of flows actually present in 'dpif',
-     * which might be greater than the number stored (if 'dpif' has more than
+     * successful, returns the number of flows actually present in 'xfif',
+     * which might be greater than the number stored (if 'xfif' has more than
      * 'n' flows).  On failure, returns a negative errno value. */
-    int (*flow_list)(const struct dpif *dpif, struct odp_flow flows[], int n);
+    int (*flow_list)(const struct xfif *xfif,
+                     struct xflow_flow flows[], int n);
 
     /* Performs the 'n_actions' actions in 'actions' on the Ethernet frame
      * specified in 'packet'.
      *
      * Pretends that the frame was originally received on the port numbered
-     * 'in_port'.  This affects only ODPAT_OUTPUT_GROUP actions, which will not
-     * send a packet out their input port.  Specify the number of an unused
+     * 'in_port'.  This affects only XFLOWAT_OUTPUT_GROUP actions, which will
+     * not send a packet out their input port.  Specify the number of an unused
      * port (e.g. UINT16_MAX is currently always unused) to avoid this
      * behavior. */
-    int (*execute)(struct dpif *dpif, uint16_t in_port,
-                   const union odp_action actions[], int n_actions,
+    int (*execute)(struct xfif *xfif, uint16_t in_port,
+                   const union xflow_action actions[], int n_actions,
                    const struct ofpbuf *packet);
 
-    /* Retrieves 'dpif''s "listen mask" into '*listen_mask'.  Each ODPL_* bit
-     * set in '*listen_mask' indicates the 'dpif' will receive messages of the
+    /* Retrieves 'xfif''s "listen mask" into '*listen_mask'.  Each XFLOWL_* bit
+     * set in '*listen_mask' indicates the 'xfif' will receive messages of the
      * corresponding type when it calls the recv member function. */
-    int (*recv_get_mask)(const struct dpif *dpif, int *listen_mask);
+    int (*recv_get_mask)(const struct xfif *xfif, int *listen_mask);
 
-    /* Sets 'dpif''s "listen mask" to 'listen_mask'.  Each ODPL_* bit set in
-     * 'listen_mask' indicates the 'dpif' will receive messages of the
+    /* Sets 'xfif''s "listen mask" to 'listen_mask'.  Each XFLOWL_* bit set in
+     * 'listen_mask' indicates the 'xfif' will receive messages of the
      * corresponding type when it calls the recv member function. */
-    int (*recv_set_mask)(struct dpif *dpif, int listen_mask);
+    int (*recv_set_mask)(struct xfif *xfif, int listen_mask);
 
-    /* Retrieves 'dpif''s sFlow sampling probability into '*probability'.
+    /* Retrieves 'xfif''s sFlow sampling probability into '*probability'.
      * Return value is 0 or a positive errno value.  EOPNOTSUPP indicates that
      * the datapath does not support sFlow, as does a null pointer.
      *
      * '*probability' is expressed as the number of packets out of UINT_MAX to
      * sample, e.g. probability/UINT_MAX is the probability of sampling a given
      * packet. */
-    int (*get_sflow_probability)(const struct dpif *dpif,
+    int (*get_sflow_probability)(const struct xfif *xfif,
                                  uint32_t *probability);
 
-    /* Sets 'dpif''s sFlow sampling probability to 'probability'.  Return value
+    /* Sets 'xfif''s sFlow sampling probability to 'probability'.  Return value
      * is 0 or a positive errno value.  EOPNOTSUPP indicates that the datapath
      * does not support sFlow, as does a null pointer.
      *
      * 'probability' is expressed as the number of packets out of UINT_MAX to
      * sample, e.g. probability/UINT_MAX is the probability of sampling a given
      * packet. */
-    int (*set_sflow_probability)(struct dpif *dpif, uint32_t probability);
+    int (*set_sflow_probability)(struct xfif *xfif, uint32_t probability);
 
-    /* Attempts to receive a message from 'dpif'.  If successful, stores the
+    /* Attempts to receive a message from 'xfif'.  If successful, stores the
      * message into '*packetp'.  The message, if one is received, must begin
-     * with 'struct odp_msg' as a header.  Only messages of the types selected
-     * with the set_listen_mask member function should be received.
+     * with 'struct xflow_msg' as a header.  Only messages of the types
+     * selected with the set_listen_mask member function should be received.
      *
      * This function must not block.  If no message is ready to be received
      * when it is called, it should return EAGAIN without blocking. */
-    int (*recv)(struct dpif *dpif, struct ofpbuf **packetp);
+    int (*recv)(struct xfif *xfif, struct ofpbuf **packetp);
 
-    /* Arranges for the poll loop to wake up when 'dpif' has a message queued
+    /* Arranges for the poll loop to wake up when 'xfif' has a message queued
      * to be received with the recv member function. */
-    void (*recv_wait)(struct dpif *dpif);
+    void (*recv_wait)(struct xfif *xfif);
 };
 
-extern const struct dpif_class dpif_linux_class;
-extern const struct dpif_class dpif_netdev_class;
+extern const struct xfif_class xfif_linux_class;
+extern const struct xfif_class xfif_netdev_class;
 
 #ifdef  __cplusplus
 }
 #endif
 
-#endif /* dpif-provider.h */
+#endif /* xfif-provider.h */

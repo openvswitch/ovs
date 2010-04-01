@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -13,13 +13,13 @@
 
 struct datapath;
 struct sk_buff;
-struct odp_flow_key;
-union odp_action;
+struct xflow_key;
+union xflow_action;
 
 int dp_xmit_skb(struct sk_buff *);
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
-		    struct odp_flow_key *key,
-		    const union odp_action *, int n_actions,
+		    struct xflow_key *key,
+		    const union xflow_action *, int n_actions,
 		    gfp_t gfp);
 
 #endif /* actions.h */

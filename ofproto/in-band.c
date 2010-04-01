@@ -23,22 +23,22 @@
 #include <string.h>
 #include <stdlib.h>
 #include "dhcp.h"
-#include "dpif.h"
 #include "flow.h"
 #include "mac-learning.h"
 #include "netdev.h"
-#include "odp-util.h"
+#include "xflow-util.h"
 #include "ofp-print.h"
 #include "ofproto.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
-#include "openvswitch/datapath-protocol.h"
+#include "openvswitch/xflow.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rconn.h"
 #include "status.h"
 #include "timeval.h"
 #include "vconn.h"
+#include "xfif.h"
 
 #define THIS_MODULE VLM_in_band
 #include "vlog.h"
@@ -421,7 +421,7 @@ in_band_msg_in_hook(struct in_band *in_band, const flow_t *flow,
  * allowed to be set up in the datapath. */
 bool
 in_band_rule_check(struct in_band *in_band, const flow_t *flow,
-                   const struct odp_actions *actions)
+                   const struct xflow_actions *actions)
 {
     if (!in_band) {
         return true;
@@ -436,8 +436,8 @@ in_band_rule_check(struct in_band *in_band, const flow_t *flow,
         int i;
 
         for (i=0; i<actions->n_actions; i++) {
-            if (actions->actions[i].output.type == ODPAT_OUTPUT 
-                    && actions->actions[i].output.port == ODPP_LOCAL) {
+            if (actions->actions[i].output.type == XFLOWAT_OUTPUT 
+                    && actions->actions[i].output.port == XFLOWP_LOCAL) {
                 return true;
             }   
         }
@@ -475,7 +475,7 @@ in_band_run(struct in_band *in_band)
     if (local_mac) {
         /* Allow DHCP requests to be sent from the local port. */
         memset(&flow, 0, sizeof flow);
-        flow.in_port = ODPP_LOCAL;
+        flow.in_port = XFLOWP_LOCAL;
         flow.dl_type = htons(ETH_TYPE_IP);
         memcpy(flow.dl_src, local_mac, ETH_ADDR_LEN);
         flow.nw_proto = IP_TYPE_UDP;
@@ -600,7 +600,7 @@ in_band_flushed(struct in_band *in_band)
 }
 
 int
-in_band_create(struct ofproto *ofproto, struct dpif *dpif,
+in_band_create(struct ofproto *ofproto, struct xfif *xfif,
                struct switch_status *ss, struct rconn *controller, 
                struct in_band **in_bandp)
 {
@@ -609,7 +609,7 @@ in_band_create(struct ofproto *ofproto, struct dpif *dpif,
     struct netdev *local_netdev;
     int error;
 
-    error = dpif_port_get_name(dpif, ODPP_LOCAL,
+    error = xfif_port_get_name(xfif, XFLOWP_LOCAL,
                                local_name, sizeof local_name);
     if (error) {
         VLOG_ERR("failed to initialize in-band control: cannot get name "

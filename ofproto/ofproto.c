@@ -25,20 +25,19 @@
 #include "classifier.h"
 #include "coverage.h"
 #include "discovery.h"
-#include "dpif.h"
 #include "dynamic-string.h"
 #include "fail-open.h"
 #include "in-band.h"
 #include "mac-learning.h"
 #include "netdev.h"
 #include "netflow.h"
-#include "odp-util.h"
+#include "xflow-util.h"
 #include "ofp-print.h"
 #include "ofproto-sflow.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
-#include "openvswitch/datapath-protocol.h"
+#include "openvswitch/xflow.h"
 #include "packets.h"
 #include "pinsched.h"
 #include "pktbuf.h"
@@ -54,6 +53,7 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "vconn.h"
+#include "xfif.h"
 #include "xtoxll.h"
 
 #define THIS_MODULE VLM_ofproto
@@ -77,7 +77,7 @@ static void hton_ofp_phy_port(struct ofp_phy_port *);
 static int xlate_actions(const union ofp_action *in, size_t n_in,
                          const flow_t *flow, struct ofproto *ofproto,
                          const struct ofpbuf *packet,
-                         struct odp_actions *out, tag_type *tags,
+                         struct xflow_actions *out, tag_type *tags,
                          bool *may_set_up_flow, uint16_t *nf_output_iface);
 
 struct rule {
@@ -115,13 +115,13 @@ struct rule {
 
     /* Datapath actions.
      *
-     * A super-rule with wildcard fields never has ODP actions (since the
+     * A super-rule with wildcard fields never has XFLOW actions (since the
      * datapath only supports exact-match flows). */
     bool installed;             /* Installed in datapath? */
     bool may_install;           /* True ordinarily; false if actions must
                                  * be reassessed for every packet. */
-    int n_odp_actions;
-    union odp_action *odp_actions;
+    int n_xflow_actions;
+    union xflow_action *xflow_actions;
 };
 
 static inline bool
@@ -194,9 +194,9 @@ struct ofproto {
     char *dp_desc;              /* Datapath description. */
 
     /* Datapath. */
-    struct dpif *dpif;
+    struct xfif *xfif;
     struct netdev_monitor *netdev_monitor;
-    struct port_array ports;    /* Index is ODP port nr; ofport->opp.port_no is
+    struct port_array ports;    /* Index is XFLOW port nr; ofport->opp.port_no is
                                  * OFP port nr. */
     struct shash port_by_name;
     uint32_t max_ports;
@@ -243,13 +243,13 @@ static void send_packet_in_miss(struct ofpbuf *, void *ofproto);
 static void send_packet_in_action(struct ofpbuf *, void *ofproto);
 static void update_used(struct ofproto *);
 static void update_stats(struct ofproto *, struct rule *,
-                         const struct odp_flow_stats *);
+                         const struct xflow_flow_stats *);
 static void expire_rule(struct cls_rule *, void *ofproto);
 static void active_timeout(struct ofproto *ofproto, struct rule *rule);
 static bool revalidate_rule(struct ofproto *p, struct rule *rule);
 static void revalidate_cb(struct cls_rule *rule_, void *p_);
 
-static void handle_odp_msg(struct ofproto *, struct ofpbuf *);
+static void handle_xflow_msg(struct ofproto *, struct ofpbuf *);
 
 static void handle_openflow(struct ofconn *, struct ofproto *,
                             struct ofpbuf *);
@@ -265,35 +265,35 @@ ofproto_create(const char *datapath, const char *datapath_type,
                const struct ofhooks *ofhooks, void *aux,
                struct ofproto **ofprotop)
 {
-    struct odp_stats stats;
+    struct xflow_stats stats;
     struct ofproto *p;
-    struct dpif *dpif;
+    struct xfif *xfif;
     int error;
 
     *ofprotop = NULL;
 
     /* Connect to datapath and start listening for messages. */
-    error = dpif_open(datapath, datapath_type, &dpif);
+    error = xfif_open(datapath, datapath_type, &xfif);
     if (error) {
         VLOG_ERR("failed to open datapath %s: %s", datapath, strerror(error));
         return error;
     }
-    error = dpif_get_dp_stats(dpif, &stats);
+    error = xfif_get_xf_stats(xfif, &stats);
     if (error) {
         VLOG_ERR("failed to obtain stats for datapath %s: %s",
                  datapath, strerror(error));
-        dpif_close(dpif);
+        xfif_close(xfif);
         return error;
     }
-    error = dpif_recv_set_mask(dpif, ODPL_MISS | ODPL_ACTION | ODPL_SFLOW);
+    error = xfif_recv_set_mask(xfif, XFLOWL_MISS | XFLOWL_ACTION | XFLOWL_SFLOW);
     if (error) {
         VLOG_ERR("failed to listen on datapath %s: %s",
                  datapath, strerror(error));
-        dpif_close(dpif);
+        xfif_close(xfif);
         return error;
     }
-    dpif_flow_flush(dpif);
-    dpif_recv_purge(dpif);
+    xfif_flow_flush(xfif);
+    xfif_recv_purge(xfif);
 
     /* Initialize settings. */
     p = xzalloc(sizeof *p);
@@ -306,7 +306,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
     p->dp_desc = xstrdup(DEFAULT_DP_DESC);
 
     /* Initialize datapath. */
-    p->dpif = dpif;
+    p->xfif = xfif;
     p->netdev_monitor = netdev_monitor_create();
     port_array_init(&p->ports);
     shash_init(&p->port_by_name);
@@ -444,7 +444,7 @@ ofproto_set_in_band(struct ofproto *p, bool in_band)
 {
     if (in_band != (p->in_band != NULL)) {
         if (in_band) {
-            return in_band_create(p, p->dpif, p->switch_status,
+            return in_band_create(p, p->xfif, p->switch_status,
                                   p->controller->rconn, &p->in_band);
         } else {
             ofproto_set_discovery(p, false, NULL, true);
@@ -467,7 +467,7 @@ ofproto_set_discovery(struct ofproto *p, bool discovery,
                 return error;
             }
             error = discovery_create(re, update_resolv_conf,
-                                     p->dpif, p->switch_status,
+                                     p->xfif, p->switch_status,
                                      &p->discovery);
             if (error) {
                 return error;
@@ -575,12 +575,12 @@ ofproto_set_sflow(struct ofproto *ofproto,
     if (oso) {
         if (!os) {
             struct ofport *ofport;
-            unsigned int odp_port;
+            unsigned int xflow_port;
 
-            os = ofproto->sflow = ofproto_sflow_create(ofproto->dpif);
+            os = ofproto->sflow = ofproto_sflow_create(ofproto->xfif);
             refresh_port_groups(ofproto);
-            PORT_ARRAY_FOR_EACH (ofport, &ofproto->ports, odp_port) {
-                ofproto_sflow_add_port(os, odp_port,
+            PORT_ARRAY_FOR_EACH (ofport, &ofproto->ports, xflow_port) {
+                ofproto_sflow_add_port(os, xflow_port,
                                        netdev_get_name(ofport->netdev));
             }
         }
@@ -725,7 +725,7 @@ ofproto_destroy(struct ofproto *p)
         ofconn_destroy(ofconn);
     }
 
-    dpif_close(p->dpif);
+    xfif_close(p->xfif);
     netdev_monitor_destroy(p->netdev_monitor);
     PORT_ARRAY_FOR_EACH (ofport, &p->ports, port_no) {
         ofport_free(ofport);
@@ -802,7 +802,7 @@ ofproto_run1(struct ofproto *p)
         struct ofpbuf *buf;
         int error;
 
-        error = dpif_recv(p->dpif, &buf);
+        error = xfif_recv(p->xfif, &buf);
         if (error) {
             if (error == ENODEV) {
                 /* Someone destroyed the datapath behind our back.  The caller
@@ -810,16 +810,16 @@ ofproto_run1(struct ofproto *p)
                  * spin from here on out. */
                 static struct vlog_rate_limit rl2 = VLOG_RATE_LIMIT_INIT(1, 5);
                 VLOG_ERR_RL(&rl2, "%s: datapath was destroyed externally",
-                            dpif_name(p->dpif));
+                            xfif_name(p->xfif));
                 return ENODEV;
             }
             break;
         }
 
-        handle_odp_msg(p, buf);
+        handle_xflow_msg(p, buf);
     }
 
-    while ((error = dpif_port_poll(p->dpif, &devname)) != EAGAIN) {
+    while ((error = xfif_port_poll(p->xfif, &devname)) != EAGAIN) {
         process_port_change(p, error, devname);
     }
     while ((error = netdev_monitor_poll(p->netdev_monitor,
@@ -939,8 +939,8 @@ ofproto_wait(struct ofproto *p)
     struct ofconn *ofconn;
     size_t i;
 
-    dpif_recv_wait(p->dpif);
-    dpif_port_poll_wait(p->dpif);
+    xfif_recv_wait(p->xfif);
+    xfif_port_poll_wait(p->xfif);
     netdev_monitor_poll_wait(p->netdev_monitor);
     LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
         ofconn_wait(ofconn);
@@ -1000,19 +1000,19 @@ ofproto_send_packet(struct ofproto *p, const flow_t *flow,
                     const union ofp_action *actions, size_t n_actions,
                     const struct ofpbuf *packet)
 {
-    struct odp_actions odp_actions;
+    struct xflow_actions xflow_actions;
     int error;
 
-    error = xlate_actions(actions, n_actions, flow, p, packet, &odp_actions,
+    error = xlate_actions(actions, n_actions, flow, p, packet, &xflow_actions,
                           NULL, NULL, NULL);
     if (error) {
         return error;
     }
 
-    /* XXX Should we translate the dpif_execute() errno value into an OpenFlow
+    /* XXX Should we translate the xfif_execute() errno value into an OpenFlow
      * error code? */
-    dpif_execute(p->dpif, flow->in_port, odp_actions.actions,
-                 odp_actions.n_actions, packet);
+    xfif_execute(p->xfif, flow->in_port, xflow_actions.actions,
+                 xflow_actions.n_actions, packet);
     return 0;
 }
 
@@ -1053,7 +1053,7 @@ destroy_rule(struct cls_rule *rule_, void *ofproto_)
     /* Mark the flow as not installed, even though it might really be
      * installed, so that rule_remove() doesn't bother trying to uninstall it.
      * There is no point in uninstalling it individually since we are about to
-     * blow away all the flows with dpif_flow_flush(). */
+     * blow away all the flows with xfif_flow_flush(). */
     rule->installed = false;
 
     rule_remove(ofproto, rule);
@@ -1064,7 +1064,7 @@ ofproto_flush_flows(struct ofproto *ofproto)
 {
     COVERAGE_INC(ofproto_flush);
     classifier_for_each(&ofproto->cls, CLS_INC_ALL, destroy_rule, ofproto);
-    dpif_flow_flush(ofproto->dpif);
+    xfif_flow_flush(ofproto->xfif);
     if (ofproto->in_band) {
         in_band_flushed(ofproto->in_band);
     }
@@ -1079,19 +1079,19 @@ reinit_ports(struct ofproto *p)
     struct svec devnames;
     struct ofport *ofport;
     unsigned int port_no;
-    struct odp_port *odp_ports;
-    size_t n_odp_ports;
+    struct xflow_port *xflow_ports;
+    size_t n_xflow_ports;
     size_t i;
 
     svec_init(&devnames);
     PORT_ARRAY_FOR_EACH (ofport, &p->ports, port_no) {
         svec_add (&devnames, (char *) ofport->opp.name);
     }
-    dpif_port_list(p->dpif, &odp_ports, &n_odp_ports);
-    for (i = 0; i < n_odp_ports; i++) {
-        svec_add (&devnames, odp_ports[i].devname);
+    xfif_port_list(p->xfif, &xflow_ports, &n_xflow_ports);
+    for (i = 0; i < n_xflow_ports; i++) {
+        svec_add (&devnames, xflow_ports[i].devname);
     }
-    free(odp_ports);
+    free(xflow_ports);
 
     svec_sort_unique(&devnames);
     for (i = 0; i < devnames.n; i++) {
@@ -1117,7 +1117,7 @@ refresh_port_group(struct ofproto *p, unsigned int group)
             ports[n_ports++] = port_no;
         }
     }
-    dpif_port_group_set(p->dpif, group, ports, n_ports);
+    xfif_port_group_set(p->xfif, group, ports, n_ports);
     free(ports);
 
     return n_ports;
@@ -1134,7 +1134,7 @@ refresh_port_groups(struct ofproto *p)
 }
 
 static struct ofport *
-make_ofport(const struct odp_port *odp_port)
+make_ofport(const struct xflow_port *xflow_port)
 {
     struct netdev_options netdev_options;
     enum netdev_flags flags;
@@ -1144,7 +1144,7 @@ make_ofport(const struct odp_port *odp_port)
     int error;
 
     memset(&netdev_options, 0, sizeof netdev_options);
-    netdev_options.name = odp_port->devname;
+    netdev_options.name = xflow_port->devname;
     netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
     netdev_options.may_open = true;
 
@@ -1152,17 +1152,17 @@ make_ofport(const struct odp_port *odp_port)
     if (error) {
         VLOG_WARN_RL(&rl, "ignoring port %s (%"PRIu16") because netdev %s "
                      "cannot be opened (%s)",
-                     odp_port->devname, odp_port->port,
-                     odp_port->devname, strerror(error));
+                     xflow_port->devname, xflow_port->port,
+                     xflow_port->devname, strerror(error));
         return NULL;
     }
 
     ofport = xmalloc(sizeof *ofport);
     ofport->netdev = netdev;
-    ofport->opp.port_no = odp_port_to_ofp_port(odp_port->port);
+    ofport->opp.port_no = xflow_port_to_ofp_port(xflow_port->port);
     netdev_get_etheraddr(netdev, ofport->opp.hw_addr);
-    memcpy(ofport->opp.name, odp_port->devname,
-           MIN(sizeof ofport->opp.name, sizeof odp_port->devname));
+    memcpy(ofport->opp.name, xflow_port->devname,
+           MIN(sizeof ofport->opp.name, sizeof xflow_port->devname));
     ofport->opp.name[sizeof ofport->opp.name - 1] = '\0';
 
     netdev_get_flags(netdev, &flags);
@@ -1178,15 +1178,15 @@ make_ofport(const struct odp_port *odp_port)
 }
 
 static bool
-ofport_conflicts(const struct ofproto *p, const struct odp_port *odp_port)
+ofport_conflicts(const struct ofproto *p, const struct xflow_port *xflow_port)
 {
-    if (port_array_get(&p->ports, odp_port->port)) {
+    if (port_array_get(&p->ports, xflow_port->port)) {
         VLOG_WARN_RL(&rl, "ignoring duplicate port %"PRIu16" in datapath",
-                     odp_port->port);
+                     xflow_port->port);
         return true;
-    } else if (shash_find(&p->port_by_name, odp_port->devname)) {
+    } else if (shash_find(&p->port_by_name, xflow_port->devname)) {
         VLOG_WARN_RL(&rl, "ignoring duplicate device %s in datapath",
-                     odp_port->devname);
+                     xflow_port->devname);
         return true;
     } else {
         return false;
@@ -1235,28 +1235,28 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
 static void
 ofport_install(struct ofproto *p, struct ofport *ofport)
 {
-    uint16_t odp_port = ofp_port_to_odp_port(ofport->opp.port_no);
+    uint16_t xflow_port = ofp_port_to_xflow_port(ofport->opp.port_no);
     const char *netdev_name = (const char *) ofport->opp.name;
 
     netdev_monitor_add(p->netdev_monitor, ofport->netdev);
-    port_array_set(&p->ports, odp_port, ofport);
+    port_array_set(&p->ports, xflow_port, ofport);
     shash_add(&p->port_by_name, netdev_name, ofport);
     if (p->sflow) {
-        ofproto_sflow_add_port(p->sflow, odp_port, netdev_name);
+        ofproto_sflow_add_port(p->sflow, xflow_port, netdev_name);
     }
 }
 
 static void
 ofport_remove(struct ofproto *p, struct ofport *ofport)
 {
-    uint16_t odp_port = ofp_port_to_odp_port(ofport->opp.port_no);
+    uint16_t xflow_port = ofp_port_to_xflow_port(ofport->opp.port_no);
 
     netdev_monitor_remove(p->netdev_monitor, ofport->netdev);
-    port_array_set(&p->ports, odp_port, NULL);
+    port_array_set(&p->ports, xflow_port, NULL);
     shash_delete(&p->port_by_name,
                  shash_find(&p->port_by_name, (char *) ofport->opp.name));
     if (p->sflow) {
-        ofproto_sflow_del_port(p->sflow, odp_port);
+        ofproto_sflow_del_port(p->sflow, xflow_port);
     }
 }
 
@@ -1272,7 +1272,7 @@ ofport_free(struct ofport *ofport)
 static void
 update_port(struct ofproto *p, const char *devname)
 {
-    struct odp_port odp_port;
+    struct xflow_port xflow_port;
     struct ofport *old_ofport;
     struct ofport *new_ofport;
     int error;
@@ -1280,7 +1280,7 @@ update_port(struct ofproto *p, const char *devname)
     COVERAGE_INC(ofproto_update_port);
 
     /* Query the datapath for port information. */
-    error = dpif_port_query_by_name(p->dpif, devname, &odp_port);
+    error = xfif_port_query_by_name(p->xfif, devname, &xflow_port);
 
     /* Find the old ofport. */
     old_ofport = shash_find_data(&p->port_by_name, devname);
@@ -1296,16 +1296,16 @@ update_port(struct ofproto *p, const char *devname)
              * reliably but more portably by comparing the old port's MAC
              * against the new port's MAC.  However, this code isn't that smart
              * and always sends an OFPPR_MODIFY (XXX). */
-            old_ofport = port_array_get(&p->ports, odp_port.port);
+            old_ofport = port_array_get(&p->ports, xflow_port.port);
         }
     } else if (error != ENOENT && error != ENODEV) {
-        VLOG_WARN_RL(&rl, "dpif_port_query_by_name returned unexpected error "
+        VLOG_WARN_RL(&rl, "xfif_port_query_by_name returned unexpected error "
                      "%s", strerror(error));
         return;
     }
 
     /* Create a new ofport. */
-    new_ofport = !error ? make_ofport(&odp_port) : NULL;
+    new_ofport = !error ? make_ofport(&xflow_port) : NULL;
 
     /* Eliminate a few pathological cases. */
     if (!old_ofport && !new_ofport) {
@@ -1344,20 +1344,20 @@ update_port(struct ofproto *p, const char *devname)
 static int
 init_ports(struct ofproto *p)
 {
-    struct odp_port *ports;
+    struct xflow_port *ports;
     size_t n_ports;
     size_t i;
     int error;
 
-    error = dpif_port_list(p->dpif, &ports, &n_ports);
+    error = xfif_port_list(p->xfif, &ports, &n_ports);
     if (error) {
         return error;
     }
 
     for (i = 0; i < n_ports; i++) {
-        const struct odp_port *odp_port = &ports[i];
-        if (!ofport_conflicts(p, odp_port)) {
-            struct ofport *ofport = make_ofport(odp_port);
+        const struct xflow_port *xflow_port = &ports[i];
+        if (!ofport_conflicts(p, xflow_port)) {
+            struct ofport *ofport = make_ofport(xflow_port);
             if (ofport) {
                 ofport_install(p, ofport);
             }
@@ -1469,7 +1469,7 @@ static void
 rule_free(struct rule *rule)
 {
     free(rule->actions);
-    free(rule->odp_actions);
+    free(rule->xflow_actions);
     free(rule);
 }
 
@@ -1514,7 +1514,7 @@ rule_has_out_port(const struct rule *rule, uint16_t out_port)
 }
 
 /* Executes the actions indicated by 'rule' on 'packet', which is in flow
- * 'flow' and is considered to have arrived on ODP port 'in_port'.
+ * 'flow' and is considered to have arrived on XFLOW port 'in_port'.
  *
  * The flow that 'packet' actually contains does not need to actually match
  * 'rule'; the actions in 'rule' will be applied to it either way.  Likewise,
@@ -1522,24 +1522,24 @@ rule_has_out_port(const struct rule *rule, uint16_t out_port)
  * out whether or not the packet actually matches 'rule'.
  *
  * If 'rule' is an exact-match rule and 'flow' actually equals the rule's flow,
- * the caller must already have accurately composed ODP actions for it given
+ * the caller must already have accurately composed XFLOW actions for it given
  * 'packet' using rule_make_actions().  If 'rule' is a wildcard rule, or if
  * 'rule' is an exact-match rule but 'flow' is not the rule's flow, then this
- * function will compose a set of ODP actions based on 'rule''s OpenFlow
+ * function will compose a set of XFLOW actions based on 'rule''s OpenFlow
  * actions and apply them to 'packet'. */
 static void
 rule_execute(struct ofproto *ofproto, struct rule *rule,
              struct ofpbuf *packet, const flow_t *flow)
 {
-    const union odp_action *actions;
+    const union xflow_action *actions;
     size_t n_actions;
-    struct odp_actions a;
+    struct xflow_actions a;
 
-    /* Grab or compose the ODP actions.
+    /* Grab or compose the XFLOW actions.
      *
      * The special case for an exact-match 'rule' where 'flow' is not the
      * rule's flow is important to avoid, e.g., sending a packet out its input
-     * port simply because the ODP actions were composed for the wrong
+     * port simply because the XFLOW actions were composed for the wrong
      * scenario. */
     if (rule->cr.wc.wildcards || !flow_equal(flow, &rule->cr.flow)) {
         struct rule *super = rule->super ? rule->super : rule;
@@ -1550,14 +1550,14 @@ rule_execute(struct ofproto *ofproto, struct rule *rule,
         actions = a.actions;
         n_actions = a.n_actions;
     } else {
-        actions = rule->odp_actions;
-        n_actions = rule->n_odp_actions;
+        actions = rule->xflow_actions;
+        n_actions = rule->n_xflow_actions;
     }
 
-    /* Execute the ODP actions. */
-    if (!dpif_execute(ofproto->dpif, flow->in_port,
+    /* Execute the XFLOW actions. */
+    if (!xfif_execute(ofproto->xfif, flow->in_port,
                       actions, n_actions, packet)) {
-        struct odp_flow_stats stats;
+        struct xflow_flow_stats stats;
         flow_extract_stats(flow, packet, &stats);
         update_stats(ofproto, rule, &stats);
         rule->used = time_msec();
@@ -1634,7 +1634,7 @@ rule_make_actions(struct ofproto *p, struct rule *rule,
                   const struct ofpbuf *packet)
 {
     const struct rule *super;
-    struct odp_actions a;
+    struct xflow_actions a;
     size_t actions_len;
 
     assert(!rule->cr.wc.wildcards);
@@ -1646,12 +1646,12 @@ rule_make_actions(struct ofproto *p, struct rule *rule,
                   &rule->nf_flow.output_iface);
 
     actions_len = a.n_actions * sizeof *a.actions;
-    if (rule->n_odp_actions != a.n_actions
-        || memcmp(rule->odp_actions, a.actions, actions_len)) {
-        COVERAGE_INC(ofproto_odp_unchanged);
-        free(rule->odp_actions);
-        rule->n_odp_actions = a.n_actions;
-        rule->odp_actions = xmemdup(a.actions, actions_len);
+    if (rule->n_xflow_actions != a.n_actions
+        || memcmp(rule->xflow_actions, a.actions, actions_len)) {
+        COVERAGE_INC(ofproto_xflow_unchanged);
+        free(rule->xflow_actions);
+        rule->n_xflow_actions = a.n_actions;
+        rule->xflow_actions = xmemdup(a.actions, actions_len);
         return true;
     } else {
         return false;
@@ -1660,14 +1660,14 @@ rule_make_actions(struct ofproto *p, struct rule *rule,
 
 static int
 do_put_flow(struct ofproto *ofproto, struct rule *rule, int flags,
-            struct odp_flow_put *put)
+            struct xflow_flow_put *put)
 {
     memset(&put->flow.stats, 0, sizeof put->flow.stats);
-    odp_flow_key_from_flow(&put->flow.key, &rule->cr.flow);
-    put->flow.actions = rule->odp_actions;
-    put->flow.n_actions = rule->n_odp_actions;
+    xflow_key_from_flow(&put->flow.key, &rule->cr.flow);
+    put->flow.actions = rule->xflow_actions;
+    put->flow.n_actions = rule->n_xflow_actions;
     put->flags = flags;
-    return dpif_flow_put(ofproto->dpif, put);
+    return xfif_flow_put(ofproto->xfif, put);
 }
 
 static void
@@ -1676,9 +1676,9 @@ rule_install(struct ofproto *p, struct rule *rule, struct rule *displaced_rule)
     assert(!rule->cr.wc.wildcards);
 
     if (rule->may_install) {
-        struct odp_flow_put put;
+        struct xflow_flow_put put;
         if (!do_put_flow(p, rule,
-                         ODPPF_CREATE | ODPPF_MODIFY | ODPPF_ZERO_STATS,
+                         XFLOWPF_CREATE | XFLOWPF_MODIFY | XFLOWPF_ZERO_STATS,
                          &put)) {
             rule->installed = true;
             if (displaced_rule) {
@@ -1695,9 +1695,9 @@ static void
 rule_reinstall(struct ofproto *ofproto, struct rule *rule)
 {
     if (rule->installed) {
-        struct odp_flow_put put;
+        struct xflow_flow_put put;
         COVERAGE_INC(ofproto_dp_missed);
-        do_put_flow(ofproto, rule, ODPPF_CREATE | ODPPF_MODIFY, &put);
+        do_put_flow(ofproto, rule, XFLOWPF_CREATE | XFLOWPF_MODIFY, &put);
     } else {
         rule_install(ofproto, rule, NULL);
     }
@@ -1715,9 +1715,9 @@ rule_update_actions(struct ofproto *ofproto, struct rule *rule)
     if (rule->may_install) {
         if (rule->installed) {
             if (actions_changed) {
-                struct odp_flow_put put;
-                do_put_flow(ofproto, rule, ODPPF_CREATE | ODPPF_MODIFY
-                                           | ODPPF_ZERO_STATS, &put);
+                struct xflow_flow_put put;
+                do_put_flow(ofproto, rule, XFLOWPF_CREATE | XFLOWPF_MODIFY
+                                           | XFLOWPF_ZERO_STATS, &put);
                 update_stats(ofproto, rule, &put.flow.stats);
 
                 /* Temporarily set the old output iface so that NetFlow
@@ -1745,7 +1745,7 @@ rule_account(struct ofproto *ofproto, struct rule *rule, uint64_t extra_bytes)
         && total_bytes > rule->accounted_bytes)
     {
         ofproto->ofhooks->account_flow_cb(
-            &rule->cr.flow, rule->odp_actions, rule->n_odp_actions,
+            &rule->cr.flow, rule->xflow_actions, rule->n_xflow_actions,
             total_bytes - rule->accounted_bytes, ofproto->aux);
         rule->accounted_bytes = total_bytes;
     }
@@ -1756,13 +1756,13 @@ rule_uninstall(struct ofproto *p, struct rule *rule)
 {
     assert(!rule->cr.wc.wildcards);
     if (rule->installed) {
-        struct odp_flow odp_flow;
+        struct xflow_flow xflow_flow;
 
-        odp_flow_key_from_flow(&odp_flow.key, &rule->cr.flow);
-        odp_flow.actions = NULL;
-        odp_flow.n_actions = 0;
-        if (!dpif_flow_del(p->dpif, &odp_flow)) {
-            update_stats(p, rule, &odp_flow.stats);
+        xflow_key_from_flow(&xflow_flow.key, &rule->cr.flow);
+        xflow_flow.actions = NULL;
+        xflow_flow.n_actions = 0;
+        if (!xfif_flow_del(p->xfif, &xflow_flow)) {
+            update_stats(p, rule, &xflow_flow.stats);
         }
         rule->installed = false;
 
@@ -1922,7 +1922,7 @@ handle_get_config_request(struct ofproto *p, struct ofconn *ofconn,
     bool drop_frags;
 
     /* Figure out flags. */
-    dpif_get_drop_frags(p->dpif, &drop_frags);
+    xfif_get_drop_frags(p->xfif, &drop_frags);
     flags = drop_frags ? OFPC_FRAG_DROP : OFPC_FRAG_NORMAL;
 
     /* Send reply. */
@@ -1950,10 +1950,10 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
     if (ofconn == p->controller) {
         switch (flags & OFPC_FRAG_MASK) {
         case OFPC_FRAG_NORMAL:
-            dpif_set_drop_frags(p->dpif, false);
+            xfif_set_drop_frags(p->xfif, false);
             break;
         case OFPC_FRAG_DROP:
-            dpif_set_drop_frags(p->dpif, true);
+            xfif_set_drop_frags(p->xfif, true);
             break;
         default:
             VLOG_WARN_RL(&rl, "requested bad fragment mode (flags=%"PRIx16")",
@@ -1976,10 +1976,10 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static void
-add_output_group_action(struct odp_actions *actions, uint16_t group,
+add_output_group_action(struct xflow_actions *actions, uint16_t group,
                         uint16_t *nf_output_iface)
 {
-    odp_actions_add(actions, ODPAT_OUTPUT_GROUP)->output_group.group = group;
+    xflow_actions_add(actions, XFLOWAT_OUTPUT_GROUP)->output_group.group = group;
 
     if (group == DP_GROUP_ALL || group == DP_GROUP_FLOOD) {
         *nf_output_iface = NF_OUT_FLOOD;
@@ -1987,10 +1987,10 @@ add_output_group_action(struct odp_actions *actions, uint16_t group,
 }
 
 static void
-add_controller_action(struct odp_actions *actions,
+add_controller_action(struct xflow_actions *actions,
                       const struct ofp_action_output *oao)
 {
-    union odp_action *a = odp_actions_add(actions, ODPAT_CONTROLLER);
+    union xflow_action *a = xflow_actions_add(actions, XFLOWAT_CONTROLLER);
     a->controller.arg = oao->max_len ? ntohs(oao->max_len) : UINT32_MAX;
 }
 
@@ -2004,7 +2004,7 @@ struct action_xlate_ctx {
                                   * without a packet to refer to. */
 
     /* Output. */
-    struct odp_actions *out;    /* Datapath actions. */
+    struct xflow_actions *out;    /* Datapath actions. */
     tag_type *tags;             /* Tags associated with OFPP_NORMAL actions. */
     bool may_set_up_flow;       /* True ordinarily; false if the actions must
                                  * be reassessed for every packet. */
@@ -2032,7 +2032,7 @@ add_output_action(struct action_xlate_ctx *ctx, uint16_t port)
          */
     }
 
-    odp_actions_add(ctx->out, ODPAT_OUTPUT)->output.port = port;
+    xflow_actions_add(ctx->out, XFLOWAT_OUTPUT)->output.port = port;
     ctx->nf_output_iface = port;
 }
 
@@ -2082,7 +2082,7 @@ static void
 xlate_output_action(struct action_xlate_ctx *ctx,
                     const struct ofp_action_output *oao)
 {
-    uint16_t odp_port;
+    uint16_t xflow_port;
     uint16_t prev_nf_output_iface = ctx->nf_output_iface;
 
     ctx->nf_output_iface = NF_OUT_DROP;
@@ -2114,12 +2114,12 @@ xlate_output_action(struct action_xlate_ctx *ctx,
         add_controller_action(ctx->out, oao);
         break;
     case OFPP_LOCAL:
-        add_output_action(ctx, ODPP_LOCAL);
+        add_output_action(ctx, XFLOWP_LOCAL);
         break;
     default:
-        odp_port = ofp_port_to_odp_port(ntohs(oao->port));
-        if (odp_port != ctx->flow->in_port) {
-            add_output_action(ctx, odp_port);
+        xflow_port = ofp_port_to_xflow_port(ntohs(oao->port));
+        if (xflow_port != ctx->flow->in_port) {
+            add_output_action(ctx, xflow_port);
         }
         break;
     }
@@ -2145,7 +2145,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     switch (subtype) {
     case NXAST_RESUBMIT:
         nar = (const struct nx_action_resubmit *) nah;
-        xlate_table_action(ctx, ofp_port_to_odp_port(ntohs(nar->in_port)));
+        xlate_table_action(ctx, ofp_port_to_xflow_port(ntohs(nar->in_port)));
         break;
 
     default:
@@ -2172,7 +2172,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
     for (ia = actions_first(&iter, in, n_in); ia; ia = actions_next(&iter)) {
         uint16_t type = ntohs(ia->type);
-        union odp_action *oa;
+        union xflow_action *oa;
 
         switch (type) {
         case OFPAT_OUTPUT:
@@ -2180,56 +2180,56 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             break;
 
         case OFPAT_SET_VLAN_VID:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_DL_TCI);
+            oa = xflow_actions_add(ctx->out, XFLOWAT_SET_DL_TCI);
             oa->dl_tci.tci = ia->vlan_vid.vlan_vid & htons(VLAN_VID_MASK);
             oa->dl_tci.mask = htons(VLAN_VID_MASK);
             break;
 
         case OFPAT_SET_VLAN_PCP:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_DL_TCI);
+            oa = xflow_actions_add(ctx->out, XFLOWAT_SET_DL_TCI);
             oa->dl_tci.tci = htons((ia->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT)
                                    & VLAN_PCP_MASK);
             oa->dl_tci.mask = htons(VLAN_PCP_MASK);
             break;
 
         case OFPAT_STRIP_VLAN:
-            odp_actions_add(ctx->out, ODPAT_STRIP_VLAN);
+            xflow_actions_add(ctx->out, XFLOWAT_STRIP_VLAN);
             break;
 
         case OFPAT_SET_DL_SRC:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_DL_SRC);
+            oa = xflow_actions_add(ctx->out, XFLOWAT_SET_DL_SRC);
             memcpy(oa->dl_addr.dl_addr,
                    ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
             break;
 
         case OFPAT_SET_DL_DST:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_DL_DST);
+            oa = xflow_actions_add(ctx->out, XFLOWAT_SET_DL_DST);
             memcpy(oa->dl_addr.dl_addr,
                    ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
             break;
 
         case OFPAT_SET_NW_SRC:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_NW_SRC);
+            oa = xflow_actions_add(ctx->out, XFLOWAT_SET_NW_SRC);
             oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_DST:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_NW_DST);
+            oa = xflow_actions_add(ctx->out, XFLOWAT_SET_NW_DST);
             oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_TOS:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_NW_TOS);
+            oa = xflow_actions_add(ctx->out, XFLOWAT_SET_NW_TOS);
             oa->nw_tos.nw_tos = ia->nw_tos.nw_tos;
             break;
 
         case OFPAT_SET_TP_SRC:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_TP_SRC);
+            oa = xflow_actions_add(ctx->out, XFLOWAT_SET_TP_SRC);
             oa->tp_port.tp_port = ia->tp_port.tp_port;
             break;
 
         case OFPAT_SET_TP_DST:
-            oa = odp_actions_add(ctx->out, ODPAT_SET_TP_DST);
+            oa = xflow_actions_add(ctx->out, XFLOWAT_SET_TP_DST);
             oa->tp_port.tp_port = ia->tp_port.tp_port;
             break;
 
@@ -2248,13 +2248,13 @@ static int
 xlate_actions(const union ofp_action *in, size_t n_in,
               const flow_t *flow, struct ofproto *ofproto,
               const struct ofpbuf *packet,
-              struct odp_actions *out, tag_type *tags, bool *may_set_up_flow,
+              struct xflow_actions *out, tag_type *tags, bool *may_set_up_flow,
               uint16_t *nf_output_iface)
 {
     tag_type no_tags = 0;
     struct action_xlate_ctx ctx;
-    COVERAGE_INC(ofproto_ofp2odp);
-    odp_actions_init(out);
+    COVERAGE_INC(ofproto_ofp2xflow);
+    xflow_actions_init(out);
     ctx.flow = flow;
     ctx.recurse = 0;
     ctx.ofproto = ofproto;
@@ -2277,8 +2277,8 @@ xlate_actions(const union ofp_action *in, size_t n_in,
     if (nf_output_iface) {
         *nf_output_iface = ctx.nf_output_iface;
     }
-    if (odp_actions_overflow(out)) {
-        odp_actions_init(out);
+    if (xflow_actions_overflow(out)) {
+        xflow_actions_init(out);
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_TOO_MANY);
     }
     return 0;
@@ -2290,7 +2290,7 @@ handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
 {
     struct ofp_packet_out *opo;
     struct ofpbuf payload, *buffer;
-    struct odp_actions actions;
+    struct xflow_actions actions;
     int n_actions;
     uint16_t in_port;
     flow_t flow;
@@ -2314,14 +2314,14 @@ handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
         buffer = NULL;
     }
 
-    flow_extract(&payload, ofp_port_to_odp_port(ntohs(opo->in_port)), &flow);
+    flow_extract(&payload, ofp_port_to_xflow_port(ntohs(opo->in_port)), &flow);
     error = xlate_actions((const union ofp_action *) opo->actions, n_actions,
                           &flow, p, &payload, &actions, NULL, NULL, NULL);
     if (error) {
         return error;
     }
 
-    dpif_execute(p->dpif, flow.in_port, actions.actions, actions.n_actions,
+    xfif_execute(p->xfif, flow.in_port, actions.actions, actions.n_actions,
                  &payload);
     ofpbuf_delete(buffer);
 
@@ -2370,7 +2370,7 @@ handle_port_mod(struct ofproto *p, struct ofp_header *oh)
     opm = (struct ofp_port_mod *) oh;
 
     port = port_array_get(&p->ports,
-                          ofp_port_to_odp_port(ntohs(opm->port_no)));
+                          ofp_port_to_xflow_port(ntohs(opm->port_no)));
     if (!port) {
         return ofp_mkerr(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_PORT);
     } else if (memcmp(port->opp.hw_addr, opm->hw_addr, OFP_ETH_ALEN)) {
@@ -2454,7 +2454,7 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
 {
     struct ofp_table_stats *ots;
     struct ofpbuf *msg;
-    struct odp_stats dpstats;
+    struct xflow_stats xfstats;
     int n_exact, n_subrules, n_wild;
 
     msg = start_stats_reply(request, sizeof *ots * 2);
@@ -2466,17 +2466,17 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
     n_wild = classifier_count(&p->cls) - classifier_count_exact(&p->cls);
 
     /* Hash table. */
-    dpif_get_dp_stats(p->dpif, &dpstats);
+    xfif_get_xf_stats(p->xfif, &xfstats);
     ots = append_stats_reply(sizeof *ots, ofconn, &msg);
     memset(ots, 0, sizeof *ots);
     ots->table_id = TABLEID_HASH;
     strcpy(ots->name, "hash");
     ots->wildcards = htonl(0);
-    ots->max_entries = htonl(dpstats.max_capacity);
+    ots->max_entries = htonl(xfstats.max_capacity);
     ots->active_count = htonl(n_exact);
-    ots->lookup_count = htonll(dpstats.n_frags + dpstats.n_hit +
-                               dpstats.n_missed);
-    ots->matched_count = htonll(dpstats.n_hit); /* XXX */
+    ots->lookup_count = htonll(xfstats.n_frags + xfstats.n_hit +
+                               xfstats.n_missed);
+    ots->matched_count = htonll(xfstats.n_hit); /* XXX */
 
     /* Classifier table. */
     ots = append_stats_reply(sizeof *ots, ofconn, &msg);
@@ -2506,7 +2506,7 @@ append_port_stat(struct ofport *port, uint16_t port_no, struct ofconn *ofconn,
     netdev_get_stats(port->netdev, &stats);
 
     ops = append_stats_reply(sizeof *ops, ofconn, &msg);
-    ops->port_no = htons(odp_port_to_ofp_port(port_no));
+    ops->port_no = htons(xflow_port_to_ofp_port(port_no));
     memset(ops->pad, 0, sizeof ops->pad);
     ops->rx_packets = htonll(stats.rx_packets);
     ops->tx_packets = htonll(stats.tx_packets);
@@ -2541,7 +2541,7 @@ handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
     msg = start_stats_reply(osr, sizeof *ops * 16);
     if (psr->port_no != htons(OFPP_NONE)) {
         port = port_array_get(&p->ports, 
-                ofp_port_to_odp_port(ntohs(psr->port_no)));
+                ofp_port_to_xflow_port(ntohs(psr->port_no)));
         if (port) {
             append_port_stat(port, ntohs(psr->port_no), ofconn, msg);
         }
@@ -2571,8 +2571,8 @@ query_stats(struct ofproto *p, struct rule *rule,
 {
     uint64_t packet_count, byte_count;
     struct rule *subrule;
-    struct odp_flow *odp_flows;
-    size_t n_odp_flows;
+    struct xflow_flow *xflow_flows;
+    size_t n_xflow_flows;
 
     /* Start from historical data for 'rule' itself that are no longer tracked
      * by the datapath.  This counts, for example, subrules that have
@@ -2585,31 +2585,31 @@ query_stats(struct ofproto *p, struct rule *rule,
      *
      * Also, add any statistics that are not tracked by the datapath for each
      * subrule.  This includes, for example, statistics for packets that were
-     * executed "by hand" by ofproto via dpif_execute() but must be accounted
+     * executed "by hand" by ofproto via xfif_execute() but must be accounted
      * to a flow. */
-    n_odp_flows = rule->cr.wc.wildcards ? list_size(&rule->list) : 1;
-    odp_flows = xzalloc(n_odp_flows * sizeof *odp_flows);
+    n_xflow_flows = rule->cr.wc.wildcards ? list_size(&rule->list) : 1;
+    xflow_flows = xzalloc(n_xflow_flows * sizeof *xflow_flows);
     if (rule->cr.wc.wildcards) {
         size_t i = 0;
         LIST_FOR_EACH (subrule, struct rule, list, &rule->list) {
-            odp_flow_key_from_flow(&odp_flows[i++].key, &subrule->cr.flow);
+            xflow_key_from_flow(&xflow_flows[i++].key, &subrule->cr.flow);
             packet_count += subrule->packet_count;
             byte_count += subrule->byte_count;
         }
     } else {
-        odp_flow_key_from_flow(&odp_flows[0].key, &rule->cr.flow);
+        xflow_key_from_flow(&xflow_flows[0].key, &rule->cr.flow);
     }
 
     /* Fetch up-to-date statistics from the datapath and add them in. */
-    if (!dpif_flow_get_multiple(p->dpif, odp_flows, n_odp_flows)) {
+    if (!xfif_flow_get_multiple(p->xfif, xflow_flows, n_xflow_flows)) {
         size_t i;
-        for (i = 0; i < n_odp_flows; i++) {
-            struct odp_flow *odp_flow = &odp_flows[i];
-            packet_count += odp_flow->stats.n_packets;
-            byte_count += odp_flow->stats.n_bytes;
+        for (i = 0; i < n_xflow_flows; i++) {
+            struct xflow_flow *xflow_flow = &xflow_flows[i];
+            packet_count += xflow_flow->stats.n_packets;
+            byte_count += xflow_flow->stats.n_bytes;
         }
     }
-    free(odp_flows);
+    free(xflow_flows);
 
     /* Return the stats to the caller. */
     *packet_countp = packet_count;
@@ -2852,7 +2852,7 @@ msec_from_nsec(uint64_t sec, uint32_t nsec)
 
 static void
 update_time(struct ofproto *ofproto, struct rule *rule,
-            const struct odp_flow_stats *stats)
+            const struct xflow_flow_stats *stats)
 {
     long long int used = msec_from_nsec(stats->used_sec, stats->used_nsec);
     if (used > rule->used) {
@@ -2866,7 +2866,7 @@ update_time(struct ofproto *ofproto, struct rule *rule,
 
 static void
 update_stats(struct ofproto *ofproto, struct rule *rule,
-             const struct odp_flow_stats *stats)
+             const struct xflow_flow_stats *stats)
 {
     if (stats->n_packets) {
         update_time(ofproto, rule, stats);
@@ -3183,10 +3183,10 @@ handle_openflow(struct ofconn *ofconn, struct ofproto *p,
 }
 
 static void
-handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
+handle_xflow_miss_msg(struct ofproto *p, struct ofpbuf *packet)
 {
-    struct odp_msg *msg = packet->data;
-    uint16_t in_port = odp_port_to_ofp_port(msg->port);
+    struct xflow_msg *msg = packet->data;
+    uint16_t in_port = xflow_port_to_ofp_port(msg->port);
     struct rule *rule;
     struct ofpbuf payload;
     flow_t flow;
@@ -3198,12 +3198,12 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
     /* Check with in-band control to see if this packet should be sent
      * to the local port regardless of the flow table. */
     if (in_band_msg_in_hook(p->in_band, &flow, &payload)) {
-        union odp_action action;
+        union xflow_action action;
 
         memset(&action, 0, sizeof(action));
-        action.output.type = ODPAT_OUTPUT;
-        action.output.port = ODPP_LOCAL;
-        dpif_execute(p->dpif, flow.in_port, &action, 1, &payload);
+        action.output.type = XFLOWAT_OUTPUT;
+        action.output.port = XFLOWP_LOCAL;
+        xfif_execute(p->xfif, flow.in_port, &action, 1, &payload);
     }
 
     rule = lookup_valid_rule(p, &flow);
@@ -3262,30 +3262,30 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
 }
 
 static void
-handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
+handle_xflow_msg(struct ofproto *p, struct ofpbuf *packet)
 {
-    struct odp_msg *msg = packet->data;
+    struct xflow_msg *msg = packet->data;
 
     switch (msg->type) {
-    case _ODPL_ACTION_NR:
+    case _XFLOWL_ACTION_NR:
         COVERAGE_INC(ofproto_ctlr_action);
-        pinsched_send(p->action_sched, odp_port_to_ofp_port(msg->port), packet,
+        pinsched_send(p->action_sched, xflow_port_to_ofp_port(msg->port), packet,
                       send_packet_in_action, p);
         break;
 
-    case _ODPL_SFLOW_NR:
+    case _XFLOWL_SFLOW_NR:
         if (p->sflow) {
             ofproto_sflow_received(p->sflow, msg);
         }
         ofpbuf_delete(packet);
         break;
 
-    case _ODPL_MISS_NR:
-        handle_odp_miss_msg(p, packet);
+    case _XFLOWL_MISS_NR:
+        handle_xflow_miss_msg(p, packet);
         break;
 
     default:
-        VLOG_WARN_RL(&rl, "received ODP message of unexpected type %"PRIu32,
+        VLOG_WARN_RL(&rl, "received XFLOW message of unexpected type %"PRIu32,
                      msg->type);
         break;
     }
@@ -3452,26 +3452,26 @@ active_timeout(struct ofproto *ofproto, struct rule *rule)
     if (ofproto->netflow && !is_controller_rule(rule) &&
         netflow_active_timeout_expired(ofproto->netflow, &rule->nf_flow)) {
         struct ofexpired expired;
-        struct odp_flow odp_flow;
+        struct xflow_flow xflow_flow;
 
         /* Get updated flow stats. */
-        memset(&odp_flow, 0, sizeof odp_flow);
+        memset(&xflow_flow, 0, sizeof xflow_flow);
         if (rule->installed) {
-            odp_flow_key_from_flow(&odp_flow.key, &rule->cr.flow);
-            odp_flow.flags = ODPFF_ZERO_TCP_FLAGS;
-            dpif_flow_get(ofproto->dpif, &odp_flow);
+            xflow_key_from_flow(&xflow_flow.key, &rule->cr.flow);
+            xflow_flow.flags = XFLOWFF_ZERO_TCP_FLAGS;
+            xfif_flow_get(ofproto->xfif, &xflow_flow);
 
-            if (odp_flow.stats.n_packets) {
-                update_time(ofproto, rule, &odp_flow.stats);
-                netflow_flow_update_flags(&rule->nf_flow, odp_flow.stats.ip_tos,
-                                          odp_flow.stats.tcp_flags);
+            if (xflow_flow.stats.n_packets) {
+                update_time(ofproto, rule, &xflow_flow.stats);
+                netflow_flow_update_flags(&rule->nf_flow, xflow_flow.stats.ip_tos,
+                                          xflow_flow.stats.tcp_flags);
             }
         }
 
         expired.flow = rule->cr.flow;
         expired.packet_count = rule->packet_count +
-                               odp_flow.stats.n_packets;
-        expired.byte_count = rule->byte_count + odp_flow.stats.n_bytes;
+                               xflow_flow.stats.n_packets;
+        expired.byte_count = rule->byte_count + xflow_flow.stats.n_bytes;
         expired.used = rule->used;
 
         netflow_expire(ofproto->netflow, &rule->nf_flow, &expired);
@@ -3485,28 +3485,28 @@ active_timeout(struct ofproto *ofproto, struct rule *rule)
 static void
 update_used(struct ofproto *p)
 {
-    struct odp_flow *flows;
+    struct xflow_flow *flows;
     size_t n_flows;
     size_t i;
     int error;
 
-    error = dpif_flow_list_all(p->dpif, &flows, &n_flows);
+    error = xfif_flow_list_all(p->xfif, &flows, &n_flows);
     if (error) {
         return;
     }
 
     for (i = 0; i < n_flows; i++) {
-        struct odp_flow *f = &flows[i];
+        struct xflow_flow *f = &flows[i];
         struct rule *rule;
         flow_t flow;
 
-        odp_flow_key_to_flow(&f->key, &flow);
+        xflow_key_to_flow(&f->key, &flow);
 
         rule = rule_from_cls_rule(
             classifier_find_rule_exactly(&p->cls, &flow, 0, UINT16_MAX));
         if (!rule || !rule->installed) {
             COVERAGE_INC(ofproto_unexpected_rule);
-            dpif_flow_del(p->dpif, f);
+            xfif_flow_del(p->xfif, f);
             continue;
         }
 
@@ -3520,7 +3520,7 @@ static void
 do_send_packet_in(struct ofconn *ofconn, uint32_t buffer_id,
                   const struct ofpbuf *packet, int send_len)
 {
-    struct odp_msg *msg = packet->data;
+    struct xflow_msg *msg = packet->data;
     struct ofpbuf payload;
     struct ofpbuf *opi;
     uint8_t reason;
@@ -3530,8 +3530,8 @@ do_send_packet_in(struct ofconn *ofconn, uint32_t buffer_id,
     payload.size = msg->length - sizeof *msg;
 
     /* Construct ofp_packet_in message. */
-    reason = msg->type == _ODPL_ACTION_NR ? OFPR_ACTION : OFPR_NO_MATCH;
-    opi = make_packet_in(buffer_id, odp_port_to_ofp_port(msg->port), reason,
+    reason = msg->type == _XFLOWL_ACTION_NR ? OFPR_ACTION : OFPR_NO_MATCH;
+    opi = make_packet_in(buffer_id, xflow_port_to_ofp_port(msg->port), reason,
                          &payload, send_len);
 
     /* Send. */
@@ -3543,7 +3543,7 @@ send_packet_in_action(struct ofpbuf *packet, void *p_)
 {
     struct ofproto *p = p_;
     struct ofconn *ofconn;
-    struct odp_msg *msg;
+    struct xflow_msg *msg;
 
     msg = packet->data;
     LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
@@ -3561,7 +3561,7 @@ send_packet_in_miss(struct ofpbuf *packet, void *p_)
     bool in_fail_open = p->fail_open && fail_open_is_active(p->fail_open);
     struct ofconn *ofconn;
     struct ofpbuf payload;
-    struct odp_msg *msg;
+    struct xflow_msg *msg;
 
     msg = packet->data;
     payload.data = msg + 1;
@@ -3585,7 +3585,7 @@ pick_datapath_id(const struct ofproto *ofproto)
 {
     const struct ofport *port;
 
-    port = port_array_get(&ofproto->ports, ODPP_LOCAL);
+    port = port_array_get(&ofproto->ports, XFLOWP_LOCAL);
     if (port) {
         uint8_t ea[ETH_ADDR_LEN];
         int error;
@@ -3610,7 +3610,7 @@ pick_fallback_dpid(void)
 
 static bool
 default_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
-                         struct odp_actions *actions, tag_type *tags,
+                         struct xflow_actions *actions, tag_type *tags,
                          uint16_t *nf_output_iface, void *ofproto_)
 {
     struct ofproto *ofproto = ofproto_;
@@ -3640,7 +3640,7 @@ default_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
     if (out_port < 0) {
         add_output_group_action(actions, DP_GROUP_FLOOD, nf_output_iface);
     } else if (out_port != flow->in_port) {
-        odp_actions_add(actions, ODPAT_OUTPUT)->output.port = out_port;
+        xflow_actions_add(actions, XFLOWAT_OUTPUT)->output.port = out_port;
         *nf_output_iface = out_port;
     } else {
         /* Drop. */

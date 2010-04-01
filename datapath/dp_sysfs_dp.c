@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -276,7 +276,7 @@ static DP_DEVICE_ATTR(root_id, S_IRUGO, show_root_id, NULL);
 static ssize_t show_bridge_id(DEVICE_PARAMS, char *buf)
 {
 	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
-	const unsigned char *addr = dp->ports[ODPP_LOCAL]->dev->dev_addr;
+	const unsigned char *addr = dp->ports[XFLOWP_LOCAL]->dev->dev_addr;
 
 	/* xxx Do we need a lock of some sort? */
 	return sprintf(buf, "%.2x%.2x.%.2x%.2x%.2x%.2x%.2x%.2x\n",
@@ -464,7 +464,7 @@ static struct attribute_group bridge_group = {
  */
 int dp_sysfs_add_dp(struct datapath *dp)
 {
-	struct kobject *kobj = &dp->ports[ODPP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj;
+	struct kobject *kobj = &dp->ports[XFLOWP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj;
 	int err;
 
 	/* Create /sys/class/net/<devname>/bridge directory. */
@@ -493,7 +493,7 @@ int dp_sysfs_add_dp(struct datapath *dp)
 
 int dp_sysfs_del_dp(struct datapath *dp)
 {
-	struct kobject *kobj = &dp->ports[ODPP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj;
+	struct kobject *kobj = &dp->ports[XFLOWP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj;
 
 	kobject_del(&dp->ifobj);
 	sysfs_remove_group(kobj, &bridge_group);

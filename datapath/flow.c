@@ -121,10 +121,10 @@ struct sw_flow_actions *flow_actions_alloc(size_t n_actions)
 {
 	struct sw_flow_actions *sfa;
 
-	if (n_actions > (PAGE_SIZE - sizeof *sfa) / sizeof(union odp_action))
+	if (n_actions > (PAGE_SIZE - sizeof *sfa) / sizeof(union xflow_action))
 		return ERR_PTR(-EINVAL);
 
-	sfa = kmalloc(sizeof *sfa + n_actions * sizeof(union odp_action),
+	sfa = kmalloc(sizeof *sfa + n_actions * sizeof(union xflow_action),
 		      GFP_KERNEL);
 	if (!sfa)
 		return ERR_PTR(-ENOMEM);
@@ -194,7 +194,7 @@ static int is_snap(const struct eth_snap_hdr *esh)
 /* Parses the Ethernet frame in 'skb', which was received on 'in_port',
  * and initializes 'key' to match.  Returns 1 if 'skb' contains an IP
  * fragment, 0 otherwise. */
-int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
+int flow_extract(struct sk_buff *skb, u16 in_port, struct xflow_key *key)
 {
 	struct ethhdr *eth;
 	struct eth_snap_hdr *esh;
@@ -214,13 +214,13 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	eth = eth_hdr(skb);
 	esh = (struct eth_snap_hdr *) eth;
 	nh_ofs = sizeof *eth;
-	if (likely(ntohs(eth->h_proto) >= ODP_DL_TYPE_ETH2_CUTOFF))
+	if (likely(ntohs(eth->h_proto) >= XFLOW_DL_TYPE_ETH2_CUTOFF))
 		key->dl_type = eth->h_proto;
 	else if (skb->len >= sizeof *esh && is_snap(esh)) {
 		key->dl_type = esh->ethertype;
 		nh_ofs = sizeof *esh;
 	} else {
-		key->dl_type = htons(ODP_DL_TYPE_NOT_ETH_TYPE);
+		key->dl_type = htons(XFLOW_DL_TYPE_NOT_ETH_TYPE);
 		if (skb->len >= nh_ofs + sizeof(struct llc_pdu_un)) {
 			nh_ofs += sizeof(struct llc_pdu_un); 
 		}
@@ -231,7 +231,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	    skb->len >= nh_ofs + sizeof(struct vlan_hdr)) {
 		struct vlan_hdr *vh = (struct vlan_hdr*)(skb->data + nh_ofs);
 		key->dl_type = vh->h_vlan_encapsulated_proto;
-		key->dl_tci = vh->h_vlan_TCI | htons(ODP_TCI_PRESENT);
+		key->dl_tci = vh->h_vlan_TCI | htons(XFLOW_TCI_PRESENT);
 		nh_ofs += sizeof(struct vlan_hdr);
 	}
 	memcpy(key->dl_src, eth->h_source, ETH_ALEN);

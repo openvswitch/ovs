@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "odp-util.h"
+#include "xflow-util.h"
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,16 +26,16 @@
 #include "timeval.h"
 #include "util.h"
 
-union odp_action *
-odp_actions_add(struct odp_actions *actions, uint16_t type)
+union xflow_action *
+xflow_actions_add(struct xflow_actions *actions, uint16_t type)
 {
-    union odp_action *a;
-    if (actions->n_actions < MAX_ODP_ACTIONS) {
+    union xflow_action *a;
+    if (actions->n_actions < MAX_XFLOW_ACTIONS) {
         a = &actions->actions[actions->n_actions++];
     } else {
-        COVERAGE_INC(odp_overflow);
-        actions->n_actions = MAX_ODP_ACTIONS + 1;
-        a = &actions->actions[MAX_ODP_ACTIONS - 1];
+        COVERAGE_INC(xflow_overflow);
+        actions->n_actions = MAX_XFLOW_ACTIONS + 1;
+        a = &actions->actions[MAX_XFLOW_ACTIONS - 1];
     }
     memset(a, 0, sizeof *a);
     a->type = type;
@@ -43,7 +43,7 @@ odp_actions_add(struct odp_actions *actions, uint16_t type)
 }
 
 void
-format_odp_flow_key(struct ds *ds, const struct odp_flow_key *key)
+format_xflow_key(struct ds *ds, const struct xflow_key *key)
 {
     ds_put_format(ds, "in_port%04x", key->in_port);
     if (key->dl_tci) {
@@ -60,48 +60,48 @@ format_odp_flow_key(struct ds *ds, const struct odp_flow_key *key)
 }
 
 void
-format_odp_action(struct ds *ds, const union odp_action *a)
+format_xflow_action(struct ds *ds, const union xflow_action *a)
 {
     switch (a->type) {
-    case ODPAT_OUTPUT:
+    case XFLOWAT_OUTPUT:
         ds_put_format(ds, "%"PRIu16, a->output.port);
         break;
-    case ODPAT_OUTPUT_GROUP:
+    case XFLOWAT_OUTPUT_GROUP:
         ds_put_format(ds, "g%"PRIu16, a->output_group.group);
         break;
-    case ODPAT_CONTROLLER:
+    case XFLOWAT_CONTROLLER:
         ds_put_format(ds, "ctl(%"PRIu32")", a->controller.arg);
         break;
-    case ODPAT_SET_DL_TCI:
+    case XFLOWAT_SET_DL_TCI:
         ds_put_format(ds, "set_tci(%04"PRIx16",mask=%04"PRIx16")",
                       ntohs(a->dl_tci.tci), ntohs(a->dl_tci.mask));
         break;
-    case ODPAT_STRIP_VLAN:
+    case XFLOWAT_STRIP_VLAN:
         ds_put_format(ds, "strip_vlan");
         break;
-    case ODPAT_SET_DL_SRC:
+    case XFLOWAT_SET_DL_SRC:
         ds_put_format(ds, "set_dl_src("ETH_ADDR_FMT")",
                ETH_ADDR_ARGS(a->dl_addr.dl_addr));
         break;
-    case ODPAT_SET_DL_DST:
+    case XFLOWAT_SET_DL_DST:
         ds_put_format(ds, "set_dl_dst("ETH_ADDR_FMT")",
                ETH_ADDR_ARGS(a->dl_addr.dl_addr));
         break;
-    case ODPAT_SET_NW_SRC:
+    case XFLOWAT_SET_NW_SRC:
         ds_put_format(ds, "set_nw_src("IP_FMT")",
                       IP_ARGS(&a->nw_addr.nw_addr));
         break;
-    case ODPAT_SET_NW_DST:
+    case XFLOWAT_SET_NW_DST:
         ds_put_format(ds, "set_nw_dst("IP_FMT")",
                       IP_ARGS(&a->nw_addr.nw_addr));
         break;
-    case ODPAT_SET_NW_TOS:
+    case XFLOWAT_SET_NW_TOS:
         ds_put_format(ds, "set_nw_tos(%"PRIu8")", a->nw_tos.nw_tos);
         break;
-    case ODPAT_SET_TP_SRC:
+    case XFLOWAT_SET_TP_SRC:
         ds_put_format(ds, "set_tp_src(%"PRIu16")", ntohs(a->tp_port.tp_port));
         break;
-    case ODPAT_SET_TP_DST:
+    case XFLOWAT_SET_TP_DST:
         ds_put_format(ds, "set_tp_dst(%"PRIu16")", ntohs(a->tp_port.tp_port));
         break;
     default:
@@ -111,7 +111,7 @@ format_odp_action(struct ds *ds, const union odp_action *a)
 }
 
 void
-format_odp_actions(struct ds *ds, const union odp_action *actions,
+format_xflow_actions(struct ds *ds, const union xflow_action *actions,
                    size_t n_actions)
 {
     size_t i;
@@ -119,7 +119,7 @@ format_odp_actions(struct ds *ds, const union odp_action *actions,
         if (i) {
             ds_put_char(ds, ',');
         }
-        format_odp_action(ds, &actions[i]);
+        format_xflow_action(ds, &actions[i]);
     }
     if (!n_actions) {
         ds_put_cstr(ds, "drop");
@@ -127,7 +127,7 @@ format_odp_actions(struct ds *ds, const union odp_action *actions,
 }
 
 void
-format_odp_flow_stats(struct ds *ds, const struct odp_flow_stats *s)
+format_xflow_flow_stats(struct ds *ds, const struct xflow_flow_stats *s)
 {
     ds_put_format(ds, "packets:%llu, bytes:%llu, used:",
                   (unsigned long long int) s->n_packets,
@@ -141,17 +141,17 @@ format_odp_flow_stats(struct ds *ds, const struct odp_flow_stats *s)
 }
 
 void
-format_odp_flow(struct ds *ds, const struct odp_flow *f)
+format_xflow_flow(struct ds *ds, const struct xflow_flow *f)
 {
-    format_odp_flow_key(ds, &f->key);
+    format_xflow_key(ds, &f->key);
     ds_put_cstr(ds, ", ");
-    format_odp_flow_stats(ds, &f->stats);
+    format_xflow_flow_stats(ds, &f->stats);
     ds_put_cstr(ds, ", actions:");
-    format_odp_actions(ds, f->actions, f->n_actions);
+    format_xflow_actions(ds, f->actions, f->n_actions);
 }
 
 void
-odp_flow_key_from_flow(struct odp_flow_key *key, const struct flow *flow)
+xflow_key_from_flow(struct xflow_key *key, const struct flow *flow)
 {
     key->nw_src = flow->nw_src;
     key->nw_dst = flow->nw_dst;
@@ -162,7 +162,7 @@ odp_flow_key_from_flow(struct odp_flow_key *key, const struct flow *flow)
         uint16_t vid = flow->dl_vlan & htons(VLAN_VID_MASK);
         uint16_t pcp = htons((flow->dl_vlan_pcp << VLAN_PCP_SHIFT)
                              & VLAN_PCP_MASK);
-        key->dl_tci = vid | pcp | htons(ODP_TCI_PRESENT);
+        key->dl_tci = vid | pcp | htons(XFLOW_TCI_PRESENT);
     }
     key->dl_type = flow->dl_type;
     key->tp_src = flow->tp_src;
@@ -171,11 +171,10 @@ odp_flow_key_from_flow(struct odp_flow_key *key, const struct flow *flow)
     memcpy(key->dl_dst, flow->dl_dst, ETH_ALEN);
     key->nw_proto = flow->nw_proto;
     key->nw_tos = flow->nw_tos;
-    memset(key->reserved, 0, sizeof key->reserved);
 }
 
 void
-odp_flow_key_to_flow(const struct odp_flow_key *key, struct flow *flow)
+xflow_key_to_flow(const struct xflow_key *key, struct flow *flow)
 {
     flow->nw_src = key->nw_src;
     flow->nw_dst = key->nw_dst;

@@ -24,12 +24,12 @@
 #include <string.h>
 #include "dhcp-client.h"
 #include "dhcp.h"
-#include "dpif.h"
 #include "netdev.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "status.h"
 #include "stream-ssl.h"
+#include "xfif.h"
 
 #define THIS_MODULE VLM_discovery
 #include "vlog.h"
@@ -95,7 +95,7 @@ discovery_status_cb(struct status_reply *sr, void *d_)
 
 int
 discovery_create(const char *re, bool update_resolv_conf,
-                 struct dpif *dpif, struct switch_status *ss,
+                 struct xfif *xfif, struct switch_status *ss,
                  struct discovery **discoveryp)
 {
     struct discovery *d;
@@ -112,7 +112,7 @@ discovery_create(const char *re, bool update_resolv_conf,
     d->update_resolv_conf = update_resolv_conf;
 
     /* Initialize DHCP client. */
-    error = dpif_port_get_name(dpif, ODPP_LOCAL,
+    error = xfif_port_get_name(xfif, XFLOWP_LOCAL,
                                local_name, sizeof local_name);
     if (error) {
         VLOG_ERR("failed to query datapath local port: %s", strerror(error));

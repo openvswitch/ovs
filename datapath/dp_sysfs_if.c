@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -286,7 +286,7 @@ int dp_sysfs_add_if(struct net_bridge_port *p)
 	/* Create symlink from /sys/class/net/<devname>/brport/bridge to
 	 * /sys/class/net/<bridgename>. */
 	err = sysfs_create_link(&p->kobj,
-				&dp->ports[ODPP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj,
+				&dp->ports[XFLOWP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj,
 				SYSFS_BRIDGE_PORT_LINK); /* "bridge" */
 	if (err)
 		goto err_del;

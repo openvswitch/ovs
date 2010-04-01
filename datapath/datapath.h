@@ -118,14 +118,14 @@ struct dp_port_group {
  * @waitqueue: Waitqueue, for waiting for new packets in @queues.
  * @n_flows: Number of flows currently in flow table.
  * @table: Current flow table (RCU protected).
- * @groups: Port groups, used by ODPAT_OUTPUT_GROUP action (RCU protected).
+ * @groups: Port groups, used by XFLOWAT_OUTPUT_GROUP action (RCU protected).
  * @n_ports: Number of ports currently in @ports.
- * @ports: Map from port number to &struct net_bridge_port.  %ODPP_LOCAL port
+ * @ports: Map from port number to &struct net_bridge_port.  %XFLOWP_LOCAL port
  * always exists, other ports may be %NULL.
  * @port_list: List of all ports in @ports in arbitrary order.
  * @stats_percpu: Per-CPU datapath statistics.
  * @sflow_probability: Number of packets out of UINT_MAX to sample to the
- * %ODPL_SFLOW queue, e.g. (@sflow_probability/UINT_MAX) is the probability of
+ * %XFLOWL_SFLOW queue, e.g. (@sflow_probability/UINT_MAX) is the probability of
  * sampling a given packet.
  */
 struct datapath {
@@ -205,7 +205,7 @@ extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 /* Flow table. */
 struct dp_table *dp_table_create(unsigned int n_buckets);
 void dp_table_destroy(struct dp_table *, int free_flows);
-struct sw_flow *dp_table_lookup(struct dp_table *, const struct odp_flow_key *);
+struct sw_flow *dp_table_lookup(struct dp_table *, const struct xflow_key *);
 int dp_table_insert(struct dp_table *, struct sw_flow *);
 int dp_table_delete(struct dp_table *, struct sw_flow *);
 int dp_table_expand(struct datapath *);
@@ -224,7 +224,7 @@ struct datapath *get_dp(int dp_idx);
 
 static inline const char *dp_name(const struct datapath *dp)
 {
-	return dp->ports[ODPP_LOCAL]->dev->name;
+	return dp->ports[XFLOWP_LOCAL]->dev->name;
 }
 
 #if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)

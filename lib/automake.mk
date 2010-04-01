@@ -21,9 +21,9 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/command-line.c \
 	lib/command-line.h \
 	lib/compiler.h \
+	lib/coverage-counters.h \
 	lib/coverage.c \
 	lib/coverage.h \
-	lib/coverage-counters.h \
 	lib/csum.c \
 	lib/csum.h \
 	lib/daemon.c \
@@ -34,11 +34,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/dhcp.h \
 	lib/dhparams.h \
 	lib/dirs.h \
-	lib/dpif-linux.c \
-	lib/dpif-netdev.c \
-	lib/dpif-provider.h \
-	lib/dpif.c \
-	lib/dpif.h \
 	lib/dynamic-string.c \
 	lib/dynamic-string.h \
 	lib/fatal-signal.c \
@@ -67,8 +62,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/netdev-provider.h \
 	lib/netdev.c \
 	lib/netdev.h \
-	lib/odp-util.c \
-	lib/odp-util.h \
 	lib/ofp-print.c \
 	lib/ofp-print.h \
 	lib/ofpbuf.c \
@@ -149,6 +142,13 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/vlog-modules.def \
 	lib/vlog.c \
 	lib/vlog.h \
+	lib/xfif-linux.c \
+	lib/xfif-netdev.c \
+	lib/xfif-provider.h \
+	lib/xfif.c \
+	lib/xfif.h \
+	lib/xflow-util.c \
+	lib/xflow-util.h \
 	lib/xtoxll.h
 nodist_lib_libopenvswitch_a_SOURCES = \
 	lib/coverage-counters.c \
@@ -194,22 +194,22 @@ EXTRA_DIST += \
 	lib/dhparams.h
 
 EXTRA_DIST += \
-	lib/common.man \
 	lib/common-syn.man \
-	lib/daemon.man \
+	lib/common.man \
 	lib/daemon-syn.man \
-	lib/dpif.man \
+	lib/daemon.man \
 	lib/leak-checker.man \
-	lib/ssl-bootstrap.man \
 	lib/ssl-bootstrap-syn.man \
+	lib/ssl-bootstrap.man \
 	lib/ssl-peer-ca-cert.man \
-	lib/ssl.man \
 	lib/ssl-syn.man \
+	lib/ssl.man \
 	lib/vconn-active.man \
 	lib/vconn-passive.man \
-	lib/vlog-unixctl.man \
 	lib/vlog-syn.man \
-	lib/vlog.man
+	lib/vlog-unixctl.man \
+	lib/vlog.man \
+	lib/xfif.man
 
 
 lib/dirs.c: Makefile
@@ -227,15 +227,13 @@ install-data-local:
 
 # All the source files that have coverage counters.
 COVERAGE_FILES = \
-	lib/dpif.c \
 	lib/flow.c \
-	lib/lockfile.c \
 	lib/hmap.c \
+	lib/lockfile.c \
 	lib/mac-learning.c \
-	lib/netdev.c \
 	lib/netdev-linux.c \
+	lib/netdev.c \
 	lib/netlink.c \
-	lib/odp-util.c \
 	lib/poll-loop.c \
 	lib/process.c \
 	lib/rconn.c \
@@ -245,6 +243,8 @@ COVERAGE_FILES = \
 	lib/unixctl.c \
 	lib/util.c \
 	lib/vconn.c \
+	lib/xfif.c \
+	lib/xflow-util.c \
 	ofproto/ofproto.c \
 	ofproto/pktbuf.c \
 	vswitchd/bridge.c \
