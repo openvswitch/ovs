@@ -62,7 +62,7 @@ Description: Monitoring utility for OpenFlow switches
 Package: openvswitch-pki
 Architecture: all
 Depends: ${shlibs:Depends}, ${misc:Depends}, openvswitch-common (= ${binary:Version})
-Description: Open vSwitch public key infrastructure
+Description: A dependency package for the Open vSwitch public key infrastructure
  openvswitch-pki provides PKI (public key infrastructure) support for
  Open vSwitch switches and controllers, reducing the risk of
  man-in-the-middle attacks on the Open vSwitch network infrastructure.
@@ -131,7 +131,7 @@ Depends:
  openvswitch-switchui (= ${binary:Version}), 
  openvswitch-datapath-module (= ${binary:Version}),
  corekeeper, openvswitch-monitor, openvswitch-wdt, ${misc:Depends}
-Description: Metapackage for installing a Nicira Open vSwitch switch
+Description: A meta-package for installing a Nicira Open vSwitch switch
  Installing this package will install everything needed for a Nicira
  Portwell-based Open vSwitch switch, including monitoring and the switch UI.
 
