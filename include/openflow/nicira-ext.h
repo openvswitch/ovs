@@ -63,7 +63,7 @@ enum nx_action_subtype {
 /* Action structure for NXAST_RESUBMIT. */
 struct nx_action_resubmit {
     uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 8. */
+    uint16_t len;                   /* Length is 16. */
     uint32_t vendor;                /* NX_VENDOR_ID. */
     uint16_t subtype;               /* NXAST_RESUBMIT. */
     uint16_t in_port;               /* New in_port for checking flow table. */
@@ -74,7 +74,7 @@ OFP_ASSERT(sizeof(struct nx_action_resubmit) == 16);
 /* Header for Nicira-defined actions. */
 struct nx_action_header {
     uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 8. */
+    uint16_t len;                   /* Length is (at least) 16. */
     uint32_t vendor;                /* NX_VENDOR_ID. */
     uint16_t subtype;               /* NXAST_*. */
     uint8_t pad[6];
