@@ -250,7 +250,7 @@ done
 plugin=$(readlink /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py)
 if [ "$plugin" != "/usr/share/openvswitch/scripts/XSFeatureVSwitch.py" ]; then
     rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py
-    ln -s /usr/share/openvswitch/scripts/XSFeatureVSwitch.py /usr/lib/xsconsole/plugins-base/ || printf "Could not link to vSswitch xsconsole plugin.\n"
+    ln -s /usr/share/openvswitch/scripts/XSFeatureVSwitch.py /usr/lib/xsconsole/plugins-base/ || printf "Could not link to Open vSwitch xsconsole plugin.\n"
 fi
 
 # Ensure all required services are set to run
@@ -291,6 +291,13 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
         /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
         /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo \
         || printf "Could not remove Open vSwitch xsconsole plugin.\n"
+
+    rm -f /usr/share/openvswitch/scripts/InterfaceReconfigure.pyc \
+        /usr/share/openvswitch/scripts/InterfaceReconfigure.pyo \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyc \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyo \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyc \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyo 
 
     # Restore original XenServer scripts
     for f in \
