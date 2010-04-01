@@ -7,8 +7,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"Report-Msgid-Bugs-To: dev@openvswitch.org\n"
-"POT-Creation-Date: 2009-12-15 09:36-0800\n"
+"Report-Msgid-Bugs-To: openvswitch@packages.debian.org\n"
+"POT-Creation-Date: 2010-03-31 23:19-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -25,16 +25,16 @@ msgstr ""
 #. Type: multiselect
 #. Description
 #: ../openvswitch-switch-config.templates:1002
-msgid "OpenFlow switch network devices:"
+msgid "Open vSwitch network devices:"
 msgstr ""
 
 #. Type: multiselect
 #. Description
 #: ../openvswitch-switch-config.templates:1002
 msgid ""
-"Choose the network devices that should become part of the OpenFlow switch.  "
-"At least two devices must be selected for this machine to be a useful "
-"switch.  Unselecting all network devices will disable the OpenFlow switch "
+"Choose the network devices that should become part of the Open vSwitch "
+"instance.  At least two devices must be selected for this machine to be a "
+"useful switch.  Unselecting all network devices will disable  Open vSwitch "
 "entirely."
 msgstr ""
 
@@ -44,9 +44,9 @@ msgstr ""
 msgid ""
 "The network devices that you select should not be configured with IP or IPv6 "
 "addresses, even if the switch contacts the controller over one of the "
-"selected network devices.  This is because a running OpenFlow switch takes "
-"over network devices at a low level: they become part of the switch and "
-"cannot be used for other purposes."
+"selected network devices.  This is because a running Open vSwitch takes over "
+"network devices at a low level: they become part of the switch and cannot be "
+"used for other purposes."
 msgstr ""
 
 #. Type: error
@@ -59,8 +59,8 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:2001
 msgid ""
-"No network devices were selected for inclusion in the OpenFlow switch. The "
-"switch will be disabled."
+"No network devices were selected for inclusion in the Open vSwitch "
+"instance.  The switch will be disabled."
 msgstr ""
 
 #. Type: note
@@ -73,8 +73,8 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:3001
 msgid ""
-"The following network devices selected to be part of the OpenFlow switch "
-"have IP or IPv6 addresses configured:"
+"The following network devices selected to be part of the Open vSwitch "
+"instance have IP or IPv6 addresses configured:"
 msgstr ""
 
 #. Type: note
@@ -88,9 +88,9 @@ msgstr ""
 #: ../openvswitch-switch-config.templates:3001
 msgid ""
 "This is usually a mistake, even if the switch contacts the controller over "
-"one of the selected network devices.  This is because a running OpenFlow "
-"switch takes over network devices at a low level: they become part of the "
-"switch and cannot be used for other purposes."
+"one of the selected network devices.  This is because running Open vSwitch  "
+"takes over network devices at a low level: they become part of the switch  "
+"and cannot be used for other purposes."
 msgstr ""
 
 #. Type: note
@@ -117,7 +117,7 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:4002
 msgid ""
-"The OpenFlow switch must be able to contact the OpenFlow controller over the "
+"Open vSwitch must be able to contact the OpenFlow controller over the  "
 "network.  It can do so in one of three ways:"
 msgstr ""
 
@@ -127,10 +127,10 @@ msgstr ""
 msgid ""
 "discovery: A single network is used for OpenFlow traffic and other data "
 "traffic; that is, the switch contacts the controller over one of the network "
-"devices selected as OpenFlow switch network devices in the previous "
-"question.  The switch automatically determines the location of the "
-"controller using a DHCP request with an OpenFlow-specific vendor option.  "
-"This is the most common case."
+"devices selected as Open vSwitch network devices in the previous question.  "
+"The switch automatically determines the location of the controller using a "
+"DHCP request with an OpenFlow-specific vendor option.  This is the most "
+"common case."
 msgstr ""
 
 #. Type: select
@@ -146,14 +146,14 @@ msgstr ""
 msgid ""
 "out-of-band: OpenFlow traffic uses a network separate from the data traffic "
 "that it controls.  If this is the case, the control network must already be "
-"configured on a network device other than one of those selected as an "
-"OpenFlow switch netdev in the previous question."
+"configured on a network device other than one of those selected as an Open "
+"vSwitch netdev in the previous question."
 msgstr ""
 
 #. Type: note
 #. Description
 #: ../openvswitch-switch-config.templates:5001
-msgid "Preparing to discover controller."
+msgid "Preparing to discover controller"
 msgstr ""
 
 #. Type: note
@@ -233,9 +233,9 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:8001
 msgid ""
-"For in-band communication with the controller, the OpenFlow switch must be "
-"able to determine its own IP address.  Its IP address may be configured "
-"statically or dynamically."
+"For in-band communication with the controller, the Open vSwitch instance  "
+"must be able to determine its own IP address.  Its IP address may be  "
+"configured statically or dynamically."
 msgstr ""
 
 #. Type: string
@@ -278,9 +278,9 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:10001
 msgid ""
-"Specify how the OpenFlow switch should connect to the OpenFlow controller. "
-"The value should be in form \"ssl:IP[:PORT]\" to connect to the controller "
-"over SSL (recommended for security) or \"tcp:IP[:PORT]\" to connect over "
+"Specify how Open vSwitch should connect to the OpenFlow controller.  The  "
+"value should be in form \"ssl:IP[:PORT]\" to connect to the controller over "
+"SSL (recommended for security) or \"tcp:IP[:PORT]\" to connect over "
 "cleartext TCP."
 msgstr ""
 
@@ -302,15 +302,15 @@ msgstr ""
 #. Type: string
 #. Description
 #: ../openvswitch-switch-config.templates:12001
-msgid "OpenFlow PKI server host name or URL:"
+msgid "Open vSwitch PKI server host name or URL:"
 msgstr ""
 
 #. Type: string
 #. Description
 #: ../openvswitch-switch-config.templates:12001
 msgid ""
-"Specify a URL to the OpenFlow public key infrastructure (PKI).  If a host "
-"name or IP address is specified in place of a URL, then http://<host>/"
+"Specify a URL to the Open vSwitch public key infrastructure (PKI).  If a "
+"host name or IP address is specified in place of a URL, then http://<host>/"
 "openvswitch/pki/ will be used, where <host> is the specified host name or IP "
 "address."
 msgstr ""
@@ -319,15 +319,16 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:12001
 msgid ""
-"The OpenFlow PKI is usually on the same machine as the OpenFlow controller."
+"The Open vSwitch PKI is usually on the same machine as the OpenFlow "
+"controller."
 msgstr ""
 
 #. Type: string
 #. Description
 #: ../openvswitch-switch-config.templates:12001
 msgid ""
-"The setup process will connect to the OpenFlow PKI server over HTTP, using "
-"the system's configured default HTTP proxy (if any)."
+"The setup process will connect to the Open vSwitch PKI server over HTTP, "
+"using the system's configured default HTTP proxy (if any)."
 msgstr ""
 
 #. Type: error
@@ -346,78 +347,66 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:13001
 msgid ""
-"Ensure that the OpenFlow PKI server is correctly configured and available at "
-"${pki-uri}.  If the system is configured to use an HTTP proxy, also make "
-"sure that the HTTP proxy is available and that the PKI server can be reached "
-"through it."
+"Ensure that the Open vSwitch PKI server is correctly configured and "
+"available at ${pki-uri}.  If the system is configured to use an HTTP proxy, "
+"also make sure that the HTTP proxy is available and that the PKI server can "
+"be reached through it."
 msgstr ""
 
-#. Type: select
-#. Choices
-#. Type: select
-#. Choices
-#. Type: select
-#. Choices
-#: ../openvswitch-switch-config.templates:14001
-#: ../openvswitch-switch-config.templates:15001
-#: ../openvswitch-switch-config.templates:17001
-msgid "yes, no"
-msgstr ""
-
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:14002
+#: ../openvswitch-switch-config.templates:14001
 msgid "Is ${fingerprint} the controller CA's fingerprint?"
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:14002
+#: ../openvswitch-switch-config.templates:14001
 msgid ""
 "If a man-in-the-middle attack is possible in your network environment, check "
-"that the controller CA's fingerprint is really ${fingerprint}.  Answer \"yes"
-"\" if it matches, \"no\" if there is a discrepancy."
+"that the controller CA's fingerprint is really ${fingerprint}.  Answer \"true"
+"\" if it matches, \"false\" if there is a discrepancy."
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:14002
+#: ../openvswitch-switch-config.templates:14001
 msgid ""
 "If a man-in-the-middle attack is not a concern, there is no need to verify "
-"the fingerprint.  Simply answer \"yes\"."
+"the fingerprint.  Simply answer \"true\"."
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:15002
+#: ../openvswitch-switch-config.templates:15001
 msgid "Send certificate request to switch CA?"
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:15002
+#: ../openvswitch-switch-config.templates:15001
 msgid ""
-"Before it can connect to the controller over SSL, the OpenFlow switch's key "
-"must be signed by the switch certificate authority (CA) located on the "
-"OpenFlow PKI server, which is usually collocated with the OpenFlow "
+"Before it can connect to the controller over SSL, the Open vSwitch's key "
+"must be signed by the switch certificate authority (CA) located  on the Open "
+"vSwitch PKI server, which is usually collocated with the OpenFlow "
 "controller.  A signing request can be sent to the PKI server now."
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:15002
+#: ../openvswitch-switch-config.templates:15001
 msgid ""
-"Answer \"yes\" to send a signing request to the switch CA now.  This is "
+"Answer \"true\" to send a signing request to the switch CA now.  This is "
 "ordinarily the correct choice.  There is no harm in sending a given signing "
 "request more than once."
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:15002
+#: ../openvswitch-switch-config.templates:15001
 msgid ""
-"Answer \"no\" to skip sending a signing request to the switch CA. Unless the "
-"request has already been sent to the switch CA, manual sending of the "
+"Answer \"false\" to skip sending a signing request to the switch CA. Unless "
+"the request has already been sent to the switch CA, manual sending of the "
 "request and signing will be necessary."
 msgstr ""
 
@@ -437,29 +426,29 @@ msgstr ""
 #. Description
 #: ../openvswitch-switch-config.templates:16001
 msgid ""
-"Ensure that the OpenFlow PKI server is correctly configured and available at "
-"${pki-uri}."
+"Ensure that the Open vSwitch PKI server is correctly configured and "
+"available at ${pki-uri}."
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:17002
+#: ../openvswitch-switch-config.templates:17001
 msgid "Fetch signed switch certificate from PKI server?"
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:17002
+#: ../openvswitch-switch-config.templates:17001
 msgid ""
-"Before it can connect to the controller over SSL, the OpenFlow switch's key "
-"must be signed by the switch certificate authority (CA) located on the "
-"OpenFlow PKI server, which is usually collocated with the OpenFlow "
+"Before it can connect to the controller over SSL, the Open vSwitch's key "
+"must be signed by the switch certificate authority (CA) located  on the Open "
+"vSwitch PKI server, which is usually collocated with the  OpenFlow "
 "controller."
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:17002
+#: ../openvswitch-switch-config.templates:17001
 msgid ""
 "At this point, a signing request has been sent to the switch CA (or sending "
 "a request has been manually skipped), but the signed certificate has not yet "
@@ -467,21 +456,22 @@ msgid ""
 "approve the signing request."
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:17002
+#: ../openvswitch-switch-config.templates:17001
 msgid ""
-"Answer \"yes\" to attempt to retrieve the signed switch certificate from the "
-"switch CA.  If the switch certificate request has been signed at the PKI "
+"Answer \"true\" to attempt to retrieve the signed switch certificate from "
+"the switch CA.  If the switch certificate request has been signed at the PKI "
 "server, this is the correct choice."
 msgstr ""
 
-#. Type: select
+#. Type: boolean
 #. Description
-#: ../openvswitch-switch-config.templates:17002
+#: ../openvswitch-switch-config.templates:17001
 msgid ""
-"Answer \"no\" to postpone switch configuration.  The configuration process "
-"must be restarted later, when the switch certificate request has been signed."
+"Answer \"false\" to postpone switch configuration.  The configuration "
+"process must be restarted later, when the switch certificate request has "
+"been signed."
 msgstr ""
 
 #. Type: error
@@ -511,13 +501,13 @@ msgstr ""
 #. Type: note
 #. Description
 #: ../openvswitch-switch-config.templates:19001
-msgid "OpenFlow Switch Setup Finished"
+msgid "Open vSwitch Setup Finished"
 msgstr ""
 
 #. Type: note
 #. Description
 #: ../openvswitch-switch-config.templates:19001
 msgid ""
-"Setup of this OpenFlow switch is finished.  Complete the setup procedure to "
-"enable the switch."
+"Setup of this Open vSwitch instance is finished.  Complete the setup  "
+"procedure to enable the switch."
 msgstr ""
