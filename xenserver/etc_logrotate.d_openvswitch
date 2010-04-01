@@ -5,7 +5,7 @@
 # notice and this notice are preserved.  This file is offered as-is,
 # without warranty of any kind.
 
-/var/log/openvswitch/* {
+/var/log/openvswitch/*.log {
 	sharedscripts
 	missingok
 	postrotate
