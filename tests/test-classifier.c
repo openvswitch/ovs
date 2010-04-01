@@ -373,7 +373,6 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
                ETH_ADDR_LEN);
         flow.nw_proto = nw_proto_values[get_value(&x, N_NW_PROTO_VALUES)];
         flow.nw_tos = nw_tos_values[get_value(&x, N_NW_TOS_VALUES)];
-        memset(flow.reserved, 0, sizeof flow.reserved);
 
         for (include = 1; include <= 3; include++) {
             cr0 = lookup_with_include_bits(cls, &flow, include);

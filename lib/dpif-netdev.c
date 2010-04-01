@@ -95,14 +95,14 @@ struct dp_netdev_port {
 /* A flow in dp_netdev's 'flow_table'. */
 struct dp_netdev_flow {
     struct hmap_node node;      /* Element in dp_netdev's 'flow_table'. */
-    flow_t key;
+    struct odp_flow_key key;
 
     /* Statistics. */
-	struct timeval used;        /* Last used time, in milliseconds. */
-	long long int packet_count; /* Number of packets matched. */
-	long long int byte_count;   /* Number of bytes matched. */
-	uint8_t ip_tos;             /* IP TOS value. */
-	uint16_t tcp_ctl;           /* Bitwise-OR of seen tcp_ctl values. */
+    struct timeval used;        /* Last used time, in milliseconds. */
+    long long int packet_count; /* Number of packets matched. */
+    long long int byte_count;   /* Number of bytes matched. */
+    uint8_t ip_tos;             /* IP TOS value. */
+    uint16_t tcp_ctl;           /* Bitwise-OR of seen tcp_ctl values. */
 
     /* Actions. */
     union odp_action *actions;
@@ -137,7 +137,7 @@ static int do_del_port(struct dp_netdev *, uint16_t port_no);
 static int dp_netdev_output_control(struct dp_netdev *, const struct ofpbuf *,
                                     int queue_no, int port_no, uint32_t arg);
 static int dp_netdev_execute_actions(struct dp_netdev *,
-                                     struct ofpbuf *, flow_t *,
+                                     struct ofpbuf *, struct odp_flow_key *,
                                      const union odp_action *, int n);
 
 static struct dpif_netdev *
@@ -659,14 +659,14 @@ dpif_netdev_port_group_set(struct dpif *dpif, int group_no,
 }
 
 static struct dp_netdev_flow *
-dp_netdev_lookup_flow(const struct dp_netdev *dp, const flow_t *key)
+dp_netdev_lookup_flow(const struct dp_netdev *dp,
+                      const struct odp_flow_key *key)
 {
     struct dp_netdev_flow *flow;
 
-    assert(!key->reserved[0] && !key->reserved[1] && !key->reserved[2]);
     HMAP_FOR_EACH_WITH_HASH (flow, struct dp_netdev_flow, node,
-                             flow_hash(key, 0), &dp->flow_table) {
-        if (flow_equal(&flow->key, key)) {
+                             odp_flow_key_hash(key, 0), &dp->flow_table) {
+        if (odp_flow_key_equal(&flow->key, key)) {
             return flow;
         }
     }
@@ -812,7 +812,6 @@ add_flow(struct dpif *dpif, struct odp_flow *odp_flow)
 
     flow = xzalloc(sizeof *flow);
     flow->key = odp_flow->key;
-    memset(flow->key.reserved, 0, sizeof flow->key.reserved);
 
     error = set_flow_actions(flow, odp_flow);
     if (error) {
@@ -820,7 +819,8 @@ add_flow(struct dpif *dpif, struct odp_flow *odp_flow)
         return error;
     }
 
-    hmap_insert(&dp->flow_table, &flow->node, flow_hash(&flow->key, 0));
+    hmap_insert(&dp->flow_table, &flow->node,
+                odp_flow_key_hash(&flow->key, 0));
     return 0;
 }
 
@@ -907,6 +907,7 @@ dpif_netdev_execute(struct dpif *dpif, uint16_t in_port,
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct ofpbuf copy;
     bool mutates;
+    struct odp_flow_key key;
     flow_t flow;
     int error;
 
@@ -933,7 +934,8 @@ dpif_netdev_execute(struct dpif *dpif, uint16_t in_port,
         copy = *packet;
     }
     flow_extract(&copy, in_port, &flow);
-    error = dp_netdev_execute_actions(dp, &copy, &flow, actions, n_actions);
+    odp_flow_key_from_flow(&key, &flow);
+    error = dp_netdev_execute_actions(dp, &copy, &key, actions, n_actions);
     if (mutates) {
         ofpbuf_uninit(&copy);
     }
@@ -1002,7 +1004,8 @@ dpif_netdev_recv_wait(struct dpif *dpif)
 }
 
 static void
-dp_netdev_flow_used(struct dp_netdev_flow *flow, const flow_t *key,
+dp_netdev_flow_used(struct dp_netdev_flow *flow,
+                    const struct odp_flow_key *key,
                     const struct ofpbuf *packet)
 {
     time_timeval(&flow->used);
@@ -1024,12 +1027,14 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
                      struct ofpbuf *packet)
 {
     struct dp_netdev_flow *flow;
-    flow_t key;
+    struct odp_flow_key key;
+    flow_t f;
 
-    if (flow_extract(packet, port->port_no, &key) && dp->drop_frags) {
+    if (flow_extract(packet, port->port_no, &f) && dp->drop_frags) {
         dp->n_frags++;
         return;
     }
+    odp_flow_key_from_flow(&key, &f);
 
     flow = dp_netdev_lookup_flow(dp, &key);
     if (flow) {
@@ -1096,7 +1101,7 @@ dp_netdev_wait(void)
  * bits outside of 'mask'.
  */
 static void
-dp_netdev_modify_vlan_tci(struct ofpbuf *packet, flow_t *key,
+dp_netdev_modify_vlan_tci(struct ofpbuf *packet, struct odp_flow_key *key,
                           uint16_t tci, uint16_t mask)
 {
     struct vlan_eth_header *veh;
@@ -1125,7 +1130,7 @@ dp_netdev_modify_vlan_tci(struct ofpbuf *packet, flow_t *key,
 }
 
 static void
-dp_netdev_strip_vlan(struct ofpbuf *packet, flow_t *key)
+dp_netdev_strip_vlan(struct ofpbuf *packet, struct odp_flow_key *key)
 {
     struct vlan_eth_header *veh = packet->l2;
     if (veh->veth_type == htons(ETH_TYPE_VLAN)) {
@@ -1145,7 +1150,7 @@ dp_netdev_strip_vlan(struct ofpbuf *packet, flow_t *key)
 }
 
 static void
-dp_netdev_set_dl_src(struct ofpbuf *packet, flow_t *key,
+dp_netdev_set_dl_src(struct ofpbuf *packet, struct odp_flow_key *key,
                      const uint8_t dl_addr[ETH_ADDR_LEN])
 {
     struct eth_header *eh = packet->l2;
@@ -1154,7 +1159,7 @@ dp_netdev_set_dl_src(struct ofpbuf *packet, flow_t *key,
 }
 
 static void
-dp_netdev_set_dl_dst(struct ofpbuf *packet, flow_t *key,
+dp_netdev_set_dl_dst(struct ofpbuf *packet, struct odp_flow_key *key,
                      const uint8_t dl_addr[ETH_ADDR_LEN])
 {
     struct eth_header *eh = packet->l2;
@@ -1163,7 +1168,7 @@ dp_netdev_set_dl_dst(struct ofpbuf *packet, flow_t *key,
 }
 
 static void
-dp_netdev_set_nw_addr(struct ofpbuf *packet, flow_t *key,
+dp_netdev_set_nw_addr(struct ofpbuf *packet, struct odp_flow_key *key,
                       const struct odp_action_nw_addr *a)
 {
     if (key->dl_type == htons(ETH_TYPE_IP)) {
@@ -1195,7 +1200,7 @@ dp_netdev_set_nw_addr(struct ofpbuf *packet, flow_t *key,
 }
 
 static void
-dp_netdev_set_nw_tos(struct ofpbuf *packet, flow_t *key,
+dp_netdev_set_nw_tos(struct ofpbuf *packet, struct odp_flow_key *key,
                      const struct odp_action_nw_tos *a)
 {
     if (key->dl_type == htons(ETH_TYPE_IP)) {
@@ -1213,10 +1218,10 @@ dp_netdev_set_nw_tos(struct ofpbuf *packet, flow_t *key,
 }
 
 static void
-dp_netdev_set_tp_port(struct ofpbuf *packet, flow_t *key,
+dp_netdev_set_tp_port(struct ofpbuf *packet, struct odp_flow_key *key,
                       const struct odp_action_tp_port *a)
 {
-	if (key->dl_type == htons(ETH_TYPE_IP)) {
+    if (key->dl_type == htons(ETH_TYPE_IP)) {
         uint16_t *field;
         if (key->nw_proto == IPPROTO_TCP) {
             struct tcp_header *th = packet->l4;
@@ -1244,7 +1249,7 @@ static void
 dp_netdev_output_port(struct dp_netdev *dp, struct ofpbuf *packet,
                       uint16_t out_port)
 {
-	struct dp_netdev_port *p = dp->ports[out_port];
+    struct dp_netdev_port *p = dp->ports[out_port];
     if (p) {
         netdev_send(p->netdev, packet);
     }
@@ -1254,15 +1259,15 @@ static void
 dp_netdev_output_group(struct dp_netdev *dp, uint16_t group, uint16_t in_port,
                        struct ofpbuf *packet)
 {
-	struct odp_port_group *g = &dp->groups[group];
-	int i;
+    struct odp_port_group *g = &dp->groups[group];
+    int i;
 
-	for (i = 0; i < g->n_ports; i++) {
+    for (i = 0; i < g->n_ports; i++) {
         uint16_t out_port = g->ports[i];
         if (out_port != in_port) {
             dp_netdev_output_port(dp, packet, out_port);
         }
-	}
+    }
 }
 
 static int
@@ -1294,66 +1299,66 @@ dp_netdev_output_control(struct dp_netdev *dp, const struct ofpbuf *packet,
 
 static int
 dp_netdev_execute_actions(struct dp_netdev *dp,
-                          struct ofpbuf *packet, flow_t *key,
+                          struct ofpbuf *packet, struct odp_flow_key *key,
                           const union odp_action *actions, int n_actions)
 {
     int i;
     for (i = 0; i < n_actions; i++) {
         const union odp_action *a = &actions[i];
 
-		switch (a->type) {
-		case ODPAT_OUTPUT:
+        switch (a->type) {
+        case ODPAT_OUTPUT:
             dp_netdev_output_port(dp, packet, a->output.port);
-			break;
+            break;
 
-		case ODPAT_OUTPUT_GROUP:
-			dp_netdev_output_group(dp, a->output_group.group, key->in_port,
+        case ODPAT_OUTPUT_GROUP:
+            dp_netdev_output_group(dp, a->output_group.group, key->in_port,
                                    packet);
-			break;
+            break;
 
-		case ODPAT_CONTROLLER:
+        case ODPAT_CONTROLLER:
             dp_netdev_output_control(dp, packet, _ODPL_ACTION_NR,
                                      key->in_port, a->controller.arg);
-			break;
+            break;
 
-		case ODPAT_SET_VLAN_VID:
-			dp_netdev_modify_vlan_tci(packet, key, ntohs(a->vlan_vid.vlan_vid),
+ 		case ODPAT_SET_VLAN_VID:
+ 			dp_netdev_modify_vlan_tci(packet, key, ntohs(a->vlan_vid.vlan_vid),
                                       VLAN_VID_MASK);
+             break;
+
+ 		case ODPAT_SET_VLAN_PCP:
+ 			dp_netdev_modify_vlan_tci(
+                 packet, key, a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT,
+                 VLAN_PCP_MASK);
+              break;
+
+        case ODPAT_STRIP_VLAN:
+            dp_netdev_strip_vlan(packet, key);
             break;
 
-		case ODPAT_SET_VLAN_PCP:
-			dp_netdev_modify_vlan_tci(
-                packet, key, a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT,
-                VLAN_PCP_MASK);
-            break;
-
-		case ODPAT_STRIP_VLAN:
-			dp_netdev_strip_vlan(packet, key);
-			break;
-
-		case ODPAT_SET_DL_SRC:
+        case ODPAT_SET_DL_SRC:
             dp_netdev_set_dl_src(packet, key, a->dl_addr.dl_addr);
-			break;
+            break;
 
-		case ODPAT_SET_DL_DST:
+        case ODPAT_SET_DL_DST:
             dp_netdev_set_dl_dst(packet, key, a->dl_addr.dl_addr);
-			break;
+            break;
 
-		case ODPAT_SET_NW_SRC:
-		case ODPAT_SET_NW_DST:
-			dp_netdev_set_nw_addr(packet, key, &a->nw_addr);
-			break;
+        case ODPAT_SET_NW_SRC:
+        case ODPAT_SET_NW_DST:
+            dp_netdev_set_nw_addr(packet, key, &a->nw_addr);
+            break;
 
-		case ODPAT_SET_NW_TOS:
-			dp_netdev_set_nw_tos(packet, key, &a->nw_tos);
-			break;
+        case ODPAT_SET_NW_TOS:
+            dp_netdev_set_nw_tos(packet, key, &a->nw_tos);
+            break;
 
-		case ODPAT_SET_TP_SRC:
-		case ODPAT_SET_TP_DST:
-			dp_netdev_set_tp_port(packet, key, &a->tp_port);
-			break;
-		}
-	}
+        case ODPAT_SET_TP_SRC:
+        case ODPAT_SET_TP_DST:
+            dp_netdev_set_tp_port(packet, key, &a->tp_port);
+            break;
+        }
+    }
     return 0;
 }
 

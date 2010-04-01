@@ -1663,7 +1663,7 @@ do_put_flow(struct ofproto *ofproto, struct rule *rule, int flags,
             struct odp_flow_put *put)
 {
     memset(&put->flow.stats, 0, sizeof put->flow.stats);
-    put->flow.key = rule->cr.flow;
+    odp_flow_key_from_flow(&put->flow.key, &rule->cr.flow);
     put->flow.actions = rule->odp_actions;
     put->flow.n_actions = rule->n_odp_actions;
     put->flags = flags;
@@ -1758,7 +1758,7 @@ rule_uninstall(struct ofproto *p, struct rule *rule)
     if (rule->installed) {
         struct odp_flow odp_flow;
 
-        odp_flow.key = rule->cr.flow;
+        odp_flow_key_from_flow(&odp_flow.key, &rule->cr.flow);
         odp_flow.actions = NULL;
         odp_flow.n_actions = 0;
         if (!dpif_flow_del(p->dpif, &odp_flow)) {
@@ -2589,12 +2589,12 @@ query_stats(struct ofproto *p, struct rule *rule,
     if (rule->cr.wc.wildcards) {
         size_t i = 0;
         LIST_FOR_EACH (subrule, struct rule, list, &rule->list) {
-            odp_flows[i++].key = subrule->cr.flow;
+            odp_flow_key_from_flow(&odp_flows[i++].key, &subrule->cr.flow);
             packet_count += subrule->packet_count;
             byte_count += subrule->byte_count;
         }
     } else {
-        odp_flows[0].key = rule->cr.flow;
+        odp_flow_key_from_flow(&odp_flows[0].key, &rule->cr.flow);
     }
 
     /* Fetch up-to-date statistics from the datapath and add them in. */
@@ -3454,7 +3454,7 @@ active_timeout(struct ofproto *ofproto, struct rule *rule)
         /* Get updated flow stats. */
         memset(&odp_flow, 0, sizeof odp_flow);
         if (rule->installed) {
-            odp_flow.key = rule->cr.flow;
+            odp_flow_key_from_flow(&odp_flow.key, &rule->cr.flow);
             odp_flow.flags = ODPFF_ZERO_TCP_FLAGS;
             dpif_flow_get(ofproto->dpif, &odp_flow);
 
@@ -3495,9 +3495,12 @@ update_used(struct ofproto *p)
     for (i = 0; i < n_flows; i++) {
         struct odp_flow *f = &flows[i];
         struct rule *rule;
+        flow_t flow;
+
+        odp_flow_key_to_flow(&f->key, &flow);
 
         rule = rule_from_cls_rule(
-            classifier_find_rule_exactly(&p->cls, &f->key, 0, UINT16_MAX));
+            classifier_find_rule_exactly(&p->cls, &flow, 0, UINT16_MAX));
         if (!rule || !rule->installed) {
             COVERAGE_INC(ofproto_unexpected_rule);
             dpif_flow_del(p->dpif, f);

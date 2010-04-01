@@ -280,7 +280,6 @@ flow_from_match(flow_t *flow, uint32_t *wildcards,
     memcpy(flow->dl_dst, match->dl_dst, ETH_ADDR_LEN);
     flow->nw_tos = match->nw_tos;
     flow->nw_proto = match->nw_proto;
-    memset(flow->reserved, 0, sizeof flow->reserved);
 }
 
 char *
