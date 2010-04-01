@@ -757,8 +757,9 @@ queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
 		err = vswitch_skb_checksum_setup(skb);
 		if (err)
 			goto err_kfree_skbs;
-#ifndef CHECKSUM_HW
+
 		if (skb->ip_summed == CHECKSUM_PARTIAL) {
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 			/* Until 2.6.22, the start of the transport header was
 			 * also the start of data to be checksummed.  Linux
@@ -769,17 +770,11 @@ queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
 			skb_set_transport_header(skb, skb->csum_start -
 						 skb_headroom(skb));
 #endif
+
 			err = skb_checksum_help(skb);
 			if (err)
 				goto err_kfree_skbs;
 		}
-#else
-		if (skb->ip_summed == CHECKSUM_HW) {
-			err = skb_checksum_help(skb, 0);
-			if (err)
-				goto err_kfree_skbs;
-		}
-#endif
 
 		err = skb_cow(skb, sizeof *header);
 		if (err)
