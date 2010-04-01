@@ -202,7 +202,6 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	int nh_ofs;
 
 	memset(key, 0, sizeof *key);
-	key->dl_vlan = htons(ODP_VLAN_NONE);
 	key->in_port = in_port;
 
 	if (skb->len < sizeof *eth)
@@ -232,8 +231,7 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	    skb->len >= nh_ofs + sizeof(struct vlan_hdr)) {
 		struct vlan_hdr *vh = (struct vlan_hdr*)(skb->data + nh_ofs);
 		key->dl_type = vh->h_vlan_encapsulated_proto;
-		key->dl_vlan = vh->h_vlan_TCI & htons(VLAN_VID_MASK);
-		key->dl_vlan_pcp = (ntohs(vh->h_vlan_TCI) & VLAN_PCP_MASK) >> VLAN_PCP_SHIFT;
+		key->dl_tci = vh->h_vlan_TCI | htons(ODP_TCI_PRESENT);
 		nh_ofs += sizeof(struct vlan_hdr);
 	}
 	memcpy(key->dl_src, eth->h_source, ETH_ALEN);

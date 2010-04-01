@@ -664,6 +664,8 @@ dp_netdev_lookup_flow(const struct dp_netdev *dp,
 {
     struct dp_netdev_flow *flow;
 
+    BUILD_ASSERT_DECL(ARRAY_SIZE(key->reserved) == 1);
+    assert(!key->reserved[0]);
     HMAP_FOR_EACH_WITH_HASH (flow, struct dp_netdev_flow, node,
                              odp_flow_key_hash(key, 0), &dp->flow_table) {
         if (odp_flow_key_equal(&flow->key, key)) {
@@ -742,16 +744,14 @@ dpif_netdev_validate_actions(const union odp_action *actions, int n_actions,
         case ODPAT_CONTROLLER:
             break;
 
-        case ODPAT_SET_VLAN_VID:
+        case ODPAT_SET_DL_TCI:
             *mutates = true;
-            if (a->vlan_vid.vlan_vid & htons(~VLAN_VID_MASK)) {
+            if (a->dl_tci.mask != htons(VLAN_VID_MASK)
+                && a->dl_tci.mask != htons(VLAN_PCP_MASK)
+                && a->dl_tci.mask != htons(VLAN_VID_MASK | VLAN_PCP_MASK)) {
                 return EINVAL;
             }
-            break;
-
-        case ODPAT_SET_VLAN_PCP:
-            *mutates = true;
-            if (a->vlan_pcp.vlan_pcp & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT)) {
+            if (a->dl_tci.tci & ~a->dl_tci.mask){
                 return EINVAL;
             }
             break;
@@ -1092,25 +1092,16 @@ dp_netdev_wait(void)
 }
 
 
-/* Modify the TCI field of 'packet'.  If a VLAN tag is not present, one
- * is added with the TCI field set to 'tci'.  If a VLAN tag is present, 
- * then 'mask' bits are cleared before 'tci' is logically OR'd into the
- * TCI field.
- *
- * Note that the function does not ensure that 'tci' does not affect
- * bits outside of 'mask'.
- */
+/* Modify or add a 802.1Q header in 'packet' according to 'a'. */
 static void
-dp_netdev_modify_vlan_tci(struct ofpbuf *packet, struct odp_flow_key *key,
-                          uint16_t tci, uint16_t mask)
+dp_netdev_set_dl_tci(struct ofpbuf *packet, struct odp_flow_key *key,
+                     const struct odp_action_dl_tci *a)
 {
     struct vlan_eth_header *veh;
 
-    if (key->dl_vlan != htons(ODP_VLAN_NONE)) {
-        /* Clear 'mask' bits, but maintain other TCI bits. */
+    if (key->dl_tci) {
         veh = packet->l2;
-        veh->veth_tci &= ~htons(mask);
-        veh->veth_tci |= htons(tci);
+        veh->veth_tci = (veh->veth_tci & ~a->mask) | a->tci;
     } else {
         /* Insert new 802.1Q header. */
         struct eth_header *eh = packet->l2;
@@ -1118,7 +1109,7 @@ dp_netdev_modify_vlan_tci(struct ofpbuf *packet, struct odp_flow_key *key,
         memcpy(tmp.veth_dst, eh->eth_dst, ETH_ADDR_LEN);
         memcpy(tmp.veth_src, eh->eth_src, ETH_ADDR_LEN);
         tmp.veth_type = htons(ETH_TYPE_VLAN);
-        tmp.veth_tci = htons(tci);
+        tmp.veth_tci = htons(a->tci);
         tmp.veth_next_type = eh->eth_type;
 
         veh = ofpbuf_push_uninit(packet, VLAN_HEADER_LEN);
@@ -1126,7 +1117,7 @@ dp_netdev_modify_vlan_tci(struct ofpbuf *packet, struct odp_flow_key *key,
         packet->l2 = (char*)packet->l2 - VLAN_HEADER_LEN;
     }
 
-    key->dl_vlan = veh->veth_tci & htons(VLAN_VID_MASK);
+    key->dl_tci = veh->veth_tci | htons(ODP_TCI_PRESENT);
 }
 
 static void
@@ -1145,7 +1136,7 @@ dp_netdev_strip_vlan(struct ofpbuf *packet, struct odp_flow_key *key)
         packet->l2 = (char*)packet->l2 + VLAN_HEADER_LEN;
         memcpy(packet->data, &tmp, sizeof tmp);
 
-        key->dl_vlan = htons(ODP_VLAN_NONE);
+        key->dl_tci = htons(0);
     }
 }
 
@@ -1321,16 +1312,9 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
                                      key->in_port, a->controller.arg);
             break;
 
- 		case ODPAT_SET_VLAN_VID:
- 			dp_netdev_modify_vlan_tci(packet, key, ntohs(a->vlan_vid.vlan_vid),
-                                      VLAN_VID_MASK);
-             break;
-
- 		case ODPAT_SET_VLAN_PCP:
- 			dp_netdev_modify_vlan_tci(
-                 packet, key, a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT,
-                 VLAN_PCP_MASK);
-              break;
+        case ODPAT_SET_DL_TCI:
+            dp_netdev_set_dl_tci(packet, key, &a->dl_tci);
+            break;
 
         case ODPAT_STRIP_VLAN:
             dp_netdev_strip_vlan(packet, key);

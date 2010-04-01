@@ -2078,8 +2078,9 @@ compose_actions(struct bridge *br, const flow_t *flow, uint16_t vlan,
             if (p->vlan == OFP_VLAN_NONE) {
                 odp_actions_add(actions, ODPAT_STRIP_VLAN);
             } else {
-                a = odp_actions_add(actions, ODPAT_SET_VLAN_VID);
-                a->vlan_vid.vlan_vid = htons(p->vlan);
+                a = odp_actions_add(actions, ODPAT_SET_DL_TCI);
+                a->dl_tci.tci = htons(p->vlan & VLAN_VID_MASK);
+                a->dl_tci.mask = htons(VLAN_VID_MASK);
             }
             cur_vlan = p->vlan;
         }

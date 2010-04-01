@@ -45,10 +45,14 @@ odp_actions_add(struct odp_actions *actions, uint16_t type)
 void
 format_odp_flow_key(struct ds *ds, const struct odp_flow_key *key)
 {
-    ds_put_format(ds, "in_port%04x:vlan%d:pcp%d mac"ETH_ADDR_FMT
-                  "->"ETH_ADDR_FMT" type%04x proto%"PRId8" tos%"PRIu8
-                  " ip"IP_FMT"->"IP_FMT" port%d->%d",
-                  key->in_port, ntohs(key->dl_vlan), key->dl_vlan_pcp,
+    ds_put_format(ds, "in_port%04x", key->in_port);
+    if (key->dl_tci) {
+        ds_put_format(ds, ":vlan%"PRIu16":pcp%d",
+                      vlan_tci_to_vid(key->dl_tci),
+                      vlan_tci_to_pcp(key->dl_tci));
+    }
+    ds_put_format(ds, " mac"ETH_ADDR_FMT"->"ETH_ADDR_FMT" type%04x "
+                  "proto%"PRId8" tos%"PRIu8" ip"IP_FMT"->"IP_FMT" port%d->%d",
                   ETH_ADDR_ARGS(key->dl_src), ETH_ADDR_ARGS(key->dl_dst),
                   ntohs(key->dl_type), key->nw_proto, key->nw_tos,
                   IP_ARGS(&key->nw_src), IP_ARGS(&key->nw_dst),
@@ -68,11 +72,9 @@ format_odp_action(struct ds *ds, const union odp_action *a)
     case ODPAT_CONTROLLER:
         ds_put_format(ds, "ctl(%"PRIu32")", a->controller.arg);
         break;
-    case ODPAT_SET_VLAN_VID:
-        ds_put_format(ds, "set_vlan(%"PRIu16")", ntohs(a->vlan_vid.vlan_vid));
-        break;
-    case ODPAT_SET_VLAN_PCP:
-        ds_put_format(ds, "set_vlan_pcp(%"PRIu8")", a->vlan_pcp.vlan_pcp);
+    case ODPAT_SET_DL_TCI:
+        ds_put_format(ds, "set_tci(%04"PRIx16",mask=%04"PRIx16")",
+                      ntohs(a->dl_tci.tci), ntohs(a->dl_tci.mask));
         break;
     case ODPAT_STRIP_VLAN:
         ds_put_format(ds, "strip_vlan");
@@ -154,14 +156,20 @@ odp_flow_key_from_flow(struct odp_flow_key *key, const struct flow *flow)
     key->nw_src = flow->nw_src;
     key->nw_dst = flow->nw_dst;
     key->in_port = flow->in_port;
-    key->dl_vlan = flow->dl_vlan;
+    if (flow->dl_vlan == htons(OFP_VLAN_NONE)) {
+        key->dl_tci = htons(0);
+    } else {
+        uint16_t vid = flow->dl_vlan & htons(VLAN_VID_MASK);
+        uint16_t pcp = htons((flow->dl_vlan_pcp << VLAN_PCP_SHIFT)
+                             & VLAN_PCP_MASK);
+        key->dl_tci = vid | pcp | htons(ODP_TCI_PRESENT);
+    }
     key->dl_type = flow->dl_type;
     key->tp_src = flow->tp_src;
     key->tp_dst = flow->tp_dst;
     memcpy(key->dl_src, flow->dl_src, ETH_ALEN);
     memcpy(key->dl_dst, flow->dl_dst, ETH_ALEN);
     key->nw_proto = flow->nw_proto;
-    key->dl_vlan_pcp = flow->dl_vlan_pcp;
     key->nw_tos = flow->nw_tos;
     memset(key->reserved, 0, sizeof key->reserved);
 }
@@ -172,13 +180,18 @@ odp_flow_key_to_flow(const struct odp_flow_key *key, struct flow *flow)
     flow->nw_src = key->nw_src;
     flow->nw_dst = key->nw_dst;
     flow->in_port = key->in_port;
-    flow->dl_vlan = key->dl_vlan;
+    if (key->dl_tci) {
+        flow->dl_vlan = htons(vlan_tci_to_vid(key->dl_tci));
+        flow->dl_vlan_pcp = vlan_tci_to_pcp(key->dl_tci);
+    } else {
+        flow->dl_vlan = htons(OFP_VLAN_NONE);
+        flow->dl_vlan_pcp = 0;
+    }
     flow->dl_type = key->dl_type;
     flow->tp_src = key->tp_src;
     flow->tp_dst = key->tp_dst;
     memcpy(flow->dl_src, key->dl_src, ETH_ALEN);
     memcpy(flow->dl_dst, key->dl_dst, ETH_ALEN);
     flow->nw_proto = key->nw_proto;
-    flow->dl_vlan_pcp = key->dl_vlan_pcp;
     flow->nw_tos = key->nw_tos;
 }
