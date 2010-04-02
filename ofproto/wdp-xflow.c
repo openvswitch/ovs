@@ -1206,7 +1206,8 @@ wx_get_features(const struct wdp *wdp, struct ofpbuf **featuresp)
     unsigned int port_no;
     struct wdp_port *port;
 
-    osf = make_openflow(sizeof *osf, OFPT_FEATURES_REPLY, &buf);
+    buf = ofpbuf_new(sizeof *osf);
+    osf = ofpbuf_put_zeros(buf, sizeof *osf);
     osf->n_tables = 2;
     osf->capabilities = htonl(OFPC_ARP_MATCH_IP);
     osf->actions = htonl((1u << OFPAT_OUTPUT) |

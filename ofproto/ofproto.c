@@ -1009,9 +1009,16 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
     if (!error) {
         struct ofp_switch_features *osf = features->data;
 
+        update_openflow_length(features);
+        osf->header.version = OFP_VERSION;
+        osf->header.type = OFPT_FEATURES_REPLY;
         osf->header.xid = oh->xid;
+
         osf->datapath_id = htonll(p->datapath_id);
         osf->n_buffers = htonl(pktbuf_capacity());
+        memset(osf->pad, 0, sizeof osf->pad);
+
+        /* Turn on capabilities implemented by ofproto. */
         osf->capabilities |= htonl(OFPC_FLOW_STATS | OFPC_TABLE_STATS |
                                    OFPC_PORT_STATS);
 

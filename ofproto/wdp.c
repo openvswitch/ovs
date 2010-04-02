@@ -44,7 +44,10 @@
 
 /* wdp_rule */
 
-/* The caller is responsible for initialization 'rule->cr'. */
+/* Initializes a new 'struct wdp_rule', copying in the 'n_actions' elements of
+ * 'actions'.
+ *
+ * The caller is responsible for initializing 'rule->cr'. */
 void
 wdp_rule_init(struct wdp_rule *rule, const union ofp_action *actions,
               size_t n_actions)
@@ -57,6 +60,7 @@ wdp_rule_init(struct wdp_rule *rule, const union ofp_action *actions,
     rule->client_data = NULL;
 }
 
+/* Frees the data in 'rule'. */
 void
 wdp_rule_uninit(struct wdp_rule *rule)
 {
@@ -111,7 +115,7 @@ void
 wdp_run(void)
 {
     struct shash_node *node;
-    SHASH_FOR_EACH(node, &wdp_classes) {
+    SHASH_FOR_EACH (node, &wdp_classes) {
         const struct registered_wdp_class *registered_class = node->data;
         if (registered_class->wdp_class->run) {
             registered_class->wdp_class->run();
@@ -175,7 +179,8 @@ wdp_unregister_provider(const char *type)
 
     registered_class = node->data;
     if (registered_class->refcount) {
-        VLOG_WARN("attempted to unregister in use datapath provider: %s", type);
+        VLOG_WARN("attempted to unregister in use datapath provider: %s",
+                  type);
         return EBUSY;
     }
 
@@ -185,7 +190,7 @@ wdp_unregister_provider(const char *type)
     return 0;
 }
 
-/* Clears 'types' and enumerates the types of all currently registered datapath
+/* Clears 'types' and enumerates the types of all currently registered wdp
  * providers into it.  The caller must first initialize the svec. */
 void
 wdp_enumerate_types(struct svec *types)
@@ -195,15 +200,15 @@ wdp_enumerate_types(struct svec *types)
     wdp_initialize();
     svec_clear(types);
 
-    SHASH_FOR_EACH(node, &wdp_classes) {
+    SHASH_FOR_EACH (node, &wdp_classes) {
         const struct registered_wdp_class *registered_class = node->data;
         svec_add(types, registered_class->wdp_class->type);
     }
 }
 
-/* Clears 'names' and enumerates the names of all known created datapaths with
- * the given 'type'.  The caller must first initialize the svec. Returns 0 if
- * successful, otherwise a positive errno value.
+/* Clears 'names' and enumerates the names of all known created datapaths
+ * with the given 'type'.  The caller must first initialize the svec. Returns 0
+ * if successful, otherwise a positive errno value.
  *
  * Some kinds of datapaths might not be practically enumerable.  This is not
  * considered an error. */
@@ -236,7 +241,7 @@ wdp_enumerate_names(const char *type, struct svec *names)
     return error;
 }
 
-/* Parses 'datapath name', which is of the form type@name into its
+/* Parses 'datapath_name', which is of the form type@name, into its
  * component pieces.  'name' and 'type' must be freed by the caller. */
 void
 wdp_parse_name(const char *datapath_name_, char **name, char **type)
@@ -407,6 +412,17 @@ wdp_delete(struct wdp *wdp)
     return error;
 }
 
+/* Obtains the set of features supported by 'wdp'.
+ *
+ * If successful, returns 0 and stores in '*featuresp' a newly allocated
+ * "struct ofp_switch_features" that describes the features and ports supported
+ * by 'wdp'.  The caller is responsible for initializing the header,
+ * datapath_id, and n_buffers members of the returned "struct
+ * ofp_switch_features".  The caller must free the returned buffer (with
+ * ofpbuf_delete()) when it is no longer needed.
+ *
+ * On error, returns an OpenFlow error code (as constructed by ofp_mkerr()) and
+ * sets '*featuresp' to NULL. */
 int
 wdp_get_features(const struct wdp *wdp, struct ofpbuf **featuresp)
 {
@@ -418,7 +434,8 @@ wdp_get_features(const struct wdp *wdp, struct ofpbuf **featuresp)
 }
 
 /* Retrieves statistics for 'wdp' into 'stats'.  Returns 0 if successful,
- * otherwise a positive errno value. */
+ * otherwise a positive errno value.  On error, clears 'stats' to
+ * all-bits-zero. */
 int
 wdp_get_wdp_stats(const struct wdp *wdp, struct wdp_stats *stats)
 {
@@ -457,11 +474,33 @@ wdp_set_drop_frags(struct wdp *wdp, bool drop_frags)
     return error;
 }
 
-/* Attempts to add 'devname' as a port on 'wdp'.  If 'internal' is true,
- * creates the port as an internal port.  If successful, returns 0 and sets
- * '*port_nop' to the new port's port number (if 'port_nop' is non-null).  On
- * failure, returns a positive errno value and sets '*port_nop' to UINT16_MAX
- * (if 'port_nop' is non-null). */
+/* Attempts to add 'devname' as a port on 'wdp':
+ *
+ *   - If 'internal' is true, attempts to create a new internal port (a virtual
+ *     port implemented in software) by that name.
+ *
+ *   - If 'internal' is false, 'devname' must name an existing network device.
+ *
+ * If successful, returns 0 and sets '*port_nop' to the new port's OpenFlow
+ * port number (if 'port_nop' is non-null).  On failure, returns a positive
+ * errno value and sets '*port_nop' to OFPP_NONE (if 'port_nop' is non-null).
+ *
+ * Some wildcarded datapaths might have fixed sets of ports.  For these
+ * datapaths this function will always fail.
+ *
+ * Possible error return values include:
+ *
+ *   - ENODEV: No device named 'devname' exists (if 'internal' is false).
+ *
+ *   - EEXIST: A device named 'devname' already exists (if 'internal' is true).
+ *
+ *   - EINVAL: Device 'devname' is not supported as part of a datapath (e.g. it
+ *     is not an Ethernet device), or 'devname' is too long for a network
+ *     device name (if 'internal' is true), or this datapath has a fixed set of
+ *     ports.
+ *
+ *   - EFBIG: The datapath already has as many ports as it can support.
+ */
 int
 wdp_port_add(struct wdp *wdp, const char *devname,
              bool internal, uint16_t *port_nop)
@@ -478,7 +517,7 @@ wdp_port_add(struct wdp *wdp, const char *devname,
     } else {
         VLOG_WARN_RL(&error_rl, "%s: failed to add %s as port: %s",
                      wdp_name(wdp), devname, strerror(error));
-        port_no = UINT16_MAX;
+        port_no = OFPP_NONE;
     }
     if (port_nop) {
         *port_nop = port_no;
@@ -486,8 +525,20 @@ wdp_port_add(struct wdp *wdp, const char *devname,
     return error;
 }
 
-/* Attempts to remove 'wdp''s port number 'port_no'.  Returns 0 if successful,
- * otherwise a positive errno value. */
+/* Attempts to remove 'wdp''s port numbered 'port_no'.  Returns 0 if
+ * successful, otherwise a positive errno value.
+ *
+ * Some wildcarded datapaths might have fixed sets of ports.  For these
+ * datapaths this function will always fail.
+ *
+ * Possible error return values include:
+ *
+ *   - EINVAL: 'port_no' is outside the valid range, or this datapath has a
+ *     fixed set of ports, or this particular port is not removable (e.g. it is
+ *     the local port).
+ *
+ *   - ENOENT: 'wdp' currently has no port numbered 'port_no'.
+ */
 int
 wdp_port_del(struct wdp *wdp, uint16_t port_no)
 {
@@ -505,7 +556,14 @@ wdp_port_del(struct wdp *wdp, uint16_t port_no)
  * a positive errno value and sets '*portp' to NULL.
  *
  * The caller must not modify or free the returned wdp_port.  Calling
- * wdp_run() or wdp_port_poll() may free the returned wdp_port. */
+ * wdp_run() or wdp_port_poll() may free the returned wdp_port.
+ *
+ * Possible error return values include:
+ *
+ *   - EINVAL: 'port_no' is outside the valid range.
+ *
+ *   - ENOENT: 'wdp' currently has no port numbered 'port_no'.
+ */
 int
 wdp_port_query_by_number(const struct wdp *wdp, uint16_t port_no,
                          struct wdp_port **portp)
@@ -525,7 +583,14 @@ wdp_port_query_by_number(const struct wdp *wdp, uint16_t port_no,
 }
 
 /* Same as wdp_port_query_by_number() except that it look for a port named
- * 'devname' in 'wdp'. */
+ * 'devname' in 'wdp'.
+ *
+ * Possible error return values include:
+ *
+ *   - ENODEV: No device named 'devname' exists.
+ *
+ *   - ENOENT: 'devname' exists but it is not attached as a port on 'wdp'.
+ */
 int
 wdp_port_query_by_name(const struct wdp *wdp, const char *devname,
                        struct wdp_port **portp)
@@ -550,6 +615,8 @@ wdp_port_query_by_name(const struct wdp *wdp, const char *devname,
  * a copy of the port's name in '*namep'.  On failure, returns a positive errno
  * value and stores NULL in '*namep'.
  *
+ * Error return values are the same as for wdp_port_query_by_name().
+ *
  * The caller is responsible for freeing '*namep' (with free()). */
 int
 wdp_port_get_name(struct wdp *wdp, uint16_t port_no, char **namep)
@@ -562,7 +629,7 @@ wdp_port_get_name(struct wdp *wdp, uint16_t port_no, char **namep)
     return error;
 }
 
-/* Obtains a list of all the ports in 'wdp'.
+/* Obtains a list of all the ports in 'wdp', in no particular order.
  *
  * If successful, returns 0 and sets '*portsp' to point to an array of
  * pointers to port structures and '*n_portsp' to the number of pointers in the
