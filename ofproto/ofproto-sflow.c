@@ -30,6 +30,7 @@
 #include "sflow_api.h"
 #include "socket-util.h"
 #include "timeval.h"
+#include "wdp.h"
 #include "xfif.h"
 
 #define THIS_MODULE VLM_sflow
@@ -45,7 +46,7 @@ struct ofproto_sflow {
     struct collectors *collectors;
     SFLAgent *sflow_agent;
     struct ofproto_sflow_options *options;
-    struct xfif *xfif;
+    struct wdp *wdp;
     time_t next_tick;
     size_t n_flood, n_all;
     struct port_array ports;    /* Indexed by XFLOW port number. */
@@ -258,7 +259,7 @@ ofproto_sflow_clear(struct ofproto_sflow *os)
     port_array_clear(&os->ports);
 
     /* Turn off sampling to save CPU cycles. */
-    xfif_set_sflow_probability(os->xfif, 0);
+    wdp_set_sflow_probability(os->wdp, 0);
 }
 
 bool
@@ -268,12 +269,12 @@ ofproto_sflow_is_enabled(const struct ofproto_sflow *os)
 }
 
 struct ofproto_sflow *
-ofproto_sflow_create(struct xfif *xfif)
+ofproto_sflow_create(struct wdp *wdp)
 {
     struct ofproto_sflow *os;
 
     os = xcalloc(1, sizeof *os);
-    os->xfif = xfif;
+    os->wdp = wdp;
     os->next_tick = time_now() + 1;
     port_array_init(&os->ports);
     return os;
@@ -435,8 +436,8 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
     sfl_receiver_set_sFlowRcvrTimeout(receiver, 0xffffffff);
 
     /* Set the sampling_rate down in the datapath. */
-    xfif_set_sflow_probability(os->xfif,
-                               MAX(1, UINT32_MAX / options->sampling_rate));
+    wdp_set_sflow_probability(os->wdp,
+                              MAX(1, UINT32_MAX / options->sampling_rate));
 
     /* Add samplers and pollers for the currently known ports. */
     PORT_ARRAY_FOR_EACH (osp, &os->ports, xflow_port) {
@@ -546,9 +547,11 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct xflow_msg *msg)
             break;
 
         case XFLOWAT_OUTPUT_GROUP:
+#if 0
             n_outputs += (a->output_group.group == DP_GROUP_FLOOD ? os->n_flood
                           : a->output_group.group == DP_GROUP_ALL ? os->n_all
                           : 0);
+#endif
             break;
 
         case XFLOWAT_SET_DL_TCI:

@@ -33,11 +33,6 @@ struct ofhooks;
 struct ofproto;
 struct svec;
 
-enum {
-    DP_GROUP_FLOOD = 0,
-    DP_GROUP_ALL = 1
-};
-
 struct ofexpired {
     flow_t flow;
     uint64_t packet_count;      /* Packets from subrules. */
@@ -108,12 +103,10 @@ void ofproto_get_all_flows(struct ofproto *p, struct ds *);
 int ofproto_send_packet(struct ofproto *, const flow_t *,
                         const union ofp_action *, size_t n_actions,
                         const struct ofpbuf *);
-void ofproto_add_flow(struct ofproto *, const flow_t *, uint32_t wildcards,
-                      unsigned int priority,
+void ofproto_add_flow(struct ofproto *, const flow_t *,
                       const union ofp_action *, size_t n_actions,
                       int idle_timeout);
-void ofproto_delete_flow(struct ofproto *, const flow_t *, uint32_t wildcards,
-                         unsigned int priority);
+void ofproto_delete_flow(struct ofproto *, const flow_t *);
 void ofproto_flush_flows(struct ofproto *);
 
 /* Hooks for ovs-vswitchd. */

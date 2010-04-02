@@ -21,16 +21,22 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "list.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "port-array.h"
-#include "queue.h"
 #include "random.h"
 #include "rconn.h"
 #include "status.h"
 #include "timeval.h"
 #include "vconn.h"
+#include "wdp.h"
+
+struct wdp_packet_queue {
+    struct list list;
+    int n;
+};
 
 struct pinsched {
     /* Client-supplied parameters. */
@@ -38,7 +44,7 @@ struct pinsched {
     int burst_limit;          /* Maximum token bucket size, in packets. */
 
     /* One queue per physical port. */
-    struct port_array queues;   /* Array of "struct ovs_queue *". */
+    struct port_array queues;   /* Array of "struct wdp_packet_queue". */
     int n_queued;               /* Sum over queues[*].n. */
     unsigned int last_tx_port;  /* Last port checked in round-robin. */
 
@@ -63,12 +69,15 @@ struct pinsched {
     struct status_category *ss_cat;
 };
 
-static struct ofpbuf *
-dequeue_packet(struct pinsched *ps, struct ovs_queue *q,
+static struct wdp_packet *
+dequeue_packet(struct pinsched *ps, struct wdp_packet_queue *q,
                unsigned int port_no)
 {
-    struct ofpbuf *packet = queue_pop_head(q);
-    if (!q->n) {
+    struct wdp_packet *packet;
+
+    packet = CONTAINER_OF(list_pop_front(&q->list), struct wdp_packet, list);
+    q->n--;
+    if (list_is_empty(&q->list)) {
         free(q);
         port_array_set(&ps->queues, port_no, NULL);
     }
@@ -80,11 +89,11 @@ dequeue_packet(struct pinsched *ps, struct ovs_queue *q,
 static void
 drop_packet(struct pinsched *ps)
 {
-    struct ovs_queue *longest;  /* Queue currently selected as longest. */
-    int n_longest;              /* # of queues of same length as 'longest'. */
+    struct wdp_packet_queue *longest;
+    int n_longest;
     unsigned int longest_port_no;
     unsigned int port_no;
-    struct ovs_queue *q;
+    struct wdp_packet_queue *q;
 
     ps->n_queue_dropped++;
 
@@ -108,14 +117,16 @@ drop_packet(struct pinsched *ps)
     }
 
     /* FIXME: do we want to pop the tail instead? */
-    ofpbuf_delete(dequeue_packet(ps, longest, longest_port_no));
+    wdp_packet_destroy(dequeue_packet(ps, longest, longest_port_no));
 }
 
 /* Remove and return the next packet to transmit (in round-robin order). */
-static struct ofpbuf *
+static struct wdp_packet *
 get_tx_packet(struct pinsched *ps)
 {
-    struct ovs_queue *q = port_array_next(&ps->queues, &ps->last_tx_port);
+    struct wdp_packet_queue *q;
+
+    q = port_array_next(&ps->queues, &ps->last_tx_port);
     if (!q) {
         q = port_array_first(&ps->queues, &ps->last_tx_port);
     }
@@ -150,7 +161,7 @@ get_token(struct pinsched *ps)
 
 void
 pinsched_send(struct pinsched *ps, uint16_t port_no,
-              struct ofpbuf *packet, pinsched_tx_cb *cb, void *aux)
+              struct wdp_packet *packet, pinsched_tx_cb *cb, void *aux)
 {
     if (!ps) {
         cb(packet, aux);
@@ -161,13 +172,13 @@ pinsched_send(struct pinsched *ps, uint16_t port_no,
         cb(packet, aux);
     } else {
         /* Otherwise queue it up for the periodic callback to drain out. */
-        struct ovs_queue *q;
+        struct wdp_packet_queue *q;
 
         /* We are called with a buffer obtained from xfif_recv() that has much
          * more allocated space than actual content most of the time.  Since
          * we're going to store the packet for some time, free up that
          * otherwise wasted space. */
-        ofpbuf_trim(packet);
+        ofpbuf_trim(packet->payload);
 
         if (ps->n_queued >= ps->burst_limit) {
             drop_packet(ps);
@@ -175,10 +186,12 @@ pinsched_send(struct pinsched *ps, uint16_t port_no,
         q = port_array_get(&ps->queues, port_no);
         if (!q) {
             q = xmalloc(sizeof *q);
-            queue_init(q);
+            list_init(&q->list);
+            q->n = 0;
             port_array_set(&ps->queues, port_no, q);
         }
-        queue_push_tail(q, packet);
+        list_push_back(&q->list, &packet->list);
+        q->n++;
         ps->n_queued++;
         ps->n_limited++;
     }

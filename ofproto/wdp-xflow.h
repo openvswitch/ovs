@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010 Nicira Networks.
+ * Copyright (c) 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,9 @@
  * limitations under the License.
  */
 
-#ifndef IN_BAND_H
-#define IN_BAND_H 1
+#ifndef WDP_XFLOW_H
+#define WDP_XFLOW_H 1
 
-#include "flow.h"
+void wdp_xflow_register(void);
 
-struct in_band;
-struct xflow_actions;
-struct ofproto;
-struct rconn;
-struct settings;
-struct switch_status;
-struct wdp;
-
-int in_band_create(struct ofproto *, struct wdp *, struct switch_status *,
-                   struct rconn *controller, struct in_band **);
-void in_band_destroy(struct in_band *);
-void in_band_run(struct in_band *);
-void in_band_wait(struct in_band *);
-void in_band_flushed(struct in_band *);
-
-#endif /* in-band.h */
+#endif /* ofproto/wdp-xflow.h */

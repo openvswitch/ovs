@@ -391,6 +391,7 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
         netdev_options.args = &options;
         netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
         netdev_options.may_create = true;
+        netdev_options.may_open = true;
         if (iface_is_internal(iface->port->bridge, iface_cfg->name)) {
             netdev_options.may_open = true;
         }
@@ -1238,7 +1239,7 @@ bridge_run_one(struct bridge *br)
         return error;
     }
 
-    mac_learning_run(br->ml, ofproto_get_revalidate_set(br->ofproto));
+    //XXX mac_learning_run(br->ml, ofproto_get_revalidate_set(br->ofproto));
     bond_run(br);
 
     error = ofproto_run2(br->ofproto, br->flush);
@@ -1580,8 +1581,8 @@ bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
         action.output.len = htons(sizeof action);
         action.output.port = htons(OFPP_NORMAL);
         memset(&flow, 0, sizeof flow);
-        ofproto_add_flow(br->ofproto, &flow, OFPFW_ALL, 0,
-                         &action, 1, 0);
+        flow.wildcards = OFPFW_ALL;
+        ofproto_add_flow(br->ofproto, &flow, &action, 1, 0);
 
         ofproto_set_in_band(br->ofproto, false);
         ofproto_set_max_backoff(br->ofproto, 1);

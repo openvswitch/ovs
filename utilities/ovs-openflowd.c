@@ -33,6 +33,7 @@
 #include "netdev.h"
 #include "ofpbuf.h"
 #include "ofproto/ofproto.h"
+#include "ofproto/wdp.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -218,12 +219,12 @@ main(int argc, char *argv[])
             ovs_fatal(error, "unrecoverable datapath error");
         }
         unixctl_server_run(unixctl);
-        xf_run();
+        wdp_run();
         netdev_run();
 
         ofproto_wait(ofproto);
         unixctl_server_wait(unixctl);
-        xf_wait();
+        wdp_wait();
         netdev_wait();
         poll_block();
     }

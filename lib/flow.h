@@ -32,6 +32,8 @@ struct ofpbuf;
 
 typedef struct flow flow_t;
 struct flow {
+    uint32_t wildcards;         /* Wildcards. */
+    uint32_t priority;          /* Priority. */
     uint32_t nw_src;            /* IP source address. */
     uint32_t nw_dst;            /* IP destination address. */
     uint16_t in_port;           /* Input switch port. */
@@ -48,7 +50,7 @@ struct flow {
 
 /* Assert that there are FLOW_SIG_SIZE bytes of significant data in "struct
  * flow", followed by FLOW_PAD_SIZE bytes of padding. */
-#define FLOW_SIG_SIZE 33
+#define FLOW_SIG_SIZE 41
 #define FLOW_PAD_SIZE 3
 BUILD_ASSERT_DECL(offsetof(struct flow, nw_tos) == FLOW_SIG_SIZE - 1);
 BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->nw_tos) == 1);
@@ -57,8 +59,9 @@ BUILD_ASSERT_DECL(sizeof(struct flow) == FLOW_SIG_SIZE + FLOW_PAD_SIZE);
 int flow_extract(struct ofpbuf *, uint16_t in_port, flow_t *);
 void flow_extract_stats(const flow_t *flow, struct ofpbuf *packet, 
         struct xflow_flow_stats *stats);
-void flow_to_match(const flow_t *, uint32_t wildcards, struct ofp_match *);
-void flow_from_match(flow_t *, uint32_t *wildcards, const struct ofp_match *);
+void flow_to_match(const flow_t *, struct ofp_match *);
+void flow_from_match(flow_t *, unsigned int priority,
+                     const struct ofp_match *);
 char *flow_to_string(const flow_t *);
 void flow_format(struct ds *, const flow_t *);
 void flow_print(FILE *, const flow_t *);
@@ -86,7 +89,6 @@ flow_hash(const flow_t *flow, uint32_t basis)
 
 /* Information on wildcards for a flow, as a supplement to flow_t. */
 struct flow_wildcards {
-    uint32_t wildcards;         /* enum ofp_flow_wildcards (in host order). */
     uint32_t nw_src_mask;       /* 1-bit in each significant nw_src bit. */
     uint32_t nw_dst_mask;       /* 1-bit in each significant nw_dst bit. */
 };
@@ -113,9 +115,9 @@ flow_nw_bits_to_mask(uint32_t wildcards, int shift)
 static inline void
 flow_wildcards_init(struct flow_wildcards *wc, uint32_t wildcards)
 {
-    wc->wildcards = wildcards & OFPFW_ALL;
-    wc->nw_src_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_SRC_SHIFT);
-    wc->nw_dst_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_DST_SHIFT);
+    wildcards &= OFPFW_ALL;
+    wc->nw_src_mask = flow_nw_bits_to_mask(wildcards, OFPFW_NW_SRC_SHIFT);
+    wc->nw_dst_mask = flow_nw_bits_to_mask(wildcards, OFPFW_NW_DST_SHIFT);
 }
 
 #endif /* flow.h */

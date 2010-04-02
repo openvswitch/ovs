@@ -302,7 +302,7 @@ struct xfif_class {
     /* Attempts to receive a message from 'xfif'.  If successful, stores the
      * message into '*packetp'.  The message, if one is received, must begin
      * with 'struct xflow_msg' as a header.  Only messages of the types
-     * selected with the set_listen_mask member function should be received.
+     * selected with the recv_set_mask member function should be received.
      *
      * This function must not block.  If no message is ready to be received
      * when it is called, it should return EAGAIN without blocking. */

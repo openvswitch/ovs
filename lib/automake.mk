@@ -247,6 +247,8 @@ COVERAGE_FILES = \
 	lib/xflow-util.c \
 	ofproto/ofproto.c \
 	ofproto/pktbuf.c \
+	ofproto/wdp.c \
+	ofproto/wdp-xflow.c \
 	vswitchd/bridge.c \
 	vswitchd/ovs-brcompatd.c
 lib/coverage-counters.c: $(COVERAGE_FILES) lib/coverage-scan.pl

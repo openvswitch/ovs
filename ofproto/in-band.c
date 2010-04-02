@@ -38,6 +38,7 @@
 #include "status.h"
 #include "timeval.h"
 #include "vconn.h"
+#include "wdp.h"
 #include "xfif.h"
 
 #define THIS_MODULE VLM_in_band
@@ -214,8 +215,6 @@ enum {
 struct ib_rule {
     bool installed;
     flow_t flow;
-    uint32_t wildcards;
-    unsigned int priority;
 };
 
 struct in_band {
@@ -351,8 +350,7 @@ drop_flow(struct in_band *in_band, int rule_idx)
 
     if (rule->installed) {
         rule->installed = false;
-        ofproto_delete_flow(in_band->ofproto, &rule->flow, rule->wildcards,
-                            rule->priority);
+        ofproto_delete_flow(in_band->ofproto, &rule->flow);
     }
 }
 
@@ -370,81 +368,15 @@ set_up_flow(struct in_band *in_band, int rule_idx, const flow_t *flow,
 
         rule->installed = true;
         rule->flow = *flow;
-        rule->wildcards = OFPFW_ALL & ~fixed_fields;
-        rule->priority = IB_BASE_PRIORITY + (N_IB_RULES - rule_idx);
+        rule->flow.wildcards = OFPFW_ALL & ~fixed_fields;
+        rule->flow.priority = IB_BASE_PRIORITY + (N_IB_RULES - rule_idx);
 
         action.type = htons(OFPAT_OUTPUT);
         action.output.len = htons(sizeof action);
         action.output.port = htons(out_port);
         action.output.max_len = htons(0);
-        ofproto_add_flow(in_band->ofproto, &rule->flow, rule->wildcards,
-                         rule->priority, &action, 1, 0);
+        ofproto_add_flow(in_band->ofproto, &rule->flow, &action, 1, 0);
     }
-}
-
-/* Returns true if 'packet' should be sent to the local port regardless
- * of the flow table. */ 
-bool
-in_band_msg_in_hook(struct in_band *in_band, const flow_t *flow, 
-                    const struct ofpbuf *packet)
-{
-    if (!in_band) {
-        return false;
-    }
-
-    /* Regardless of how the flow table is configured, we want to be
-     * able to see replies to our DHCP requests. */
-    if (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IP_TYPE_UDP
-            && flow->tp_src == htons(DHCP_SERVER_PORT)
-            && flow->tp_dst == htons(DHCP_CLIENT_PORT)
-            && packet->l7) {
-        struct dhcp_header *dhcp;
-        const uint8_t *local_mac;
-
-        dhcp = ofpbuf_at(packet, (char *)packet->l7 - (char *)packet->data,
-                         sizeof *dhcp);
-        if (!dhcp) {
-            return false;
-        }
-
-        local_mac = get_local_mac(in_band);
-        if (eth_addr_equals(dhcp->chaddr, local_mac)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/* Returns true if the rule that would match 'flow' with 'actions' is 
- * allowed to be set up in the datapath. */
-bool
-in_band_rule_check(struct in_band *in_band, const flow_t *flow,
-                   const struct xflow_actions *actions)
-{
-    if (!in_band) {
-        return true;
-    }
-
-    /* Don't allow flows that would prevent DHCP replies from being seen
-     * by the local port. */
-    if (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IP_TYPE_UDP
-            && flow->tp_src == htons(DHCP_SERVER_PORT) 
-            && flow->tp_dst == htons(DHCP_CLIENT_PORT)) {
-        int i;
-
-        for (i=0; i<actions->n_actions; i++) {
-            if (actions->actions[i].output.type == XFLOWAT_OUTPUT 
-                    && actions->actions[i].output.port == XFLOWP_LOCAL) {
-                return true;
-            }   
-        }
-        return false;
-    }
-
-    return true;
 }
 
 void
@@ -475,7 +407,7 @@ in_band_run(struct in_band *in_band)
     if (local_mac) {
         /* Allow DHCP requests to be sent from the local port. */
         memset(&flow, 0, sizeof flow);
-        flow.in_port = XFLOWP_LOCAL;
+        flow.in_port = OFPP_LOCAL;
         flow.dl_type = htons(ETH_TYPE_IP);
         memcpy(flow.dl_src, local_mac, ETH_ADDR_LEN);
         flow.nw_proto = IP_TYPE_UDP;
@@ -600,17 +532,16 @@ in_band_flushed(struct in_band *in_band)
 }
 
 int
-in_band_create(struct ofproto *ofproto, struct xfif *xfif,
+in_band_create(struct ofproto *ofproto, struct wdp *wdp,
                struct switch_status *ss, struct rconn *controller, 
                struct in_band **in_bandp)
 {
     struct in_band *in_band;
-    char local_name[IF_NAMESIZE];
+    char *local_name;
     struct netdev *local_netdev;
     int error;
 
-    error = xfif_port_get_name(xfif, XFLOWP_LOCAL,
-                               local_name, sizeof local_name);
+    error = wdp_port_get_name(wdp, OFPP_LOCAL, &local_name);
     if (error) {
         VLOG_ERR("failed to initialize in-band control: cannot get name "
                  "of datapath local port (%s)", strerror(error));
@@ -621,8 +552,10 @@ in_band_create(struct ofproto *ofproto, struct xfif *xfif,
     if (error) {
         VLOG_ERR("failed to initialize in-band control: cannot open "
                  "datapath local port %s (%s)", local_name, strerror(error));
+        free(local_name);
         return error;
     }
+    free(local_name);
 
     in_band = xzalloc(sizeof *in_band);
     in_band->ofproto = ofproto;

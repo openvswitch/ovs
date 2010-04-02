@@ -117,14 +117,12 @@ struct cls_rule {
     } node;
     flow_t flow;                /* All field values. */
     struct flow_wildcards wc;   /* Wildcards for fields. */
-    unsigned int priority;      /* Larger numbers are higher priorities. */
     unsigned int table_idx;     /* Index into struct classifier 'tables'. */
 };
 
-void cls_rule_from_flow(struct cls_rule *, const flow_t *, uint32_t wildcards,
-                        unsigned int priority);
-void cls_rule_from_match(struct cls_rule *, const struct ofp_match *,
-                         unsigned int priority);
+void cls_rule_from_flow(struct cls_rule *, const flow_t *);
+void cls_rule_from_match(struct cls_rule *, unsigned int priority,
+                         const struct ofp_match *);
 char *cls_rule_to_string(const struct cls_rule *);
 void cls_rule_print(const struct cls_rule *);
 void cls_rule_moved(struct classifier *,
@@ -137,6 +135,7 @@ void classifier_destroy(struct classifier *);
 bool classifier_is_empty(const struct classifier *);
 int classifier_count(const struct classifier *);
 int classifier_count_exact(const struct classifier *);
+int classifier_count_wild(const struct classifier *);
 struct cls_rule *classifier_insert(struct classifier *, struct cls_rule *);
 void classifier_insert_exact(struct classifier *, struct cls_rule *);
 void classifier_remove(struct classifier *, struct cls_rule *);
@@ -145,8 +144,7 @@ struct cls_rule *classifier_lookup_wild(const struct classifier *,
                                         const flow_t *);
 struct cls_rule *classifier_lookup_exact(const struct classifier *,
                                          const flow_t *);
-bool classifier_rule_overlaps(const struct classifier *, const flow_t *, 
-                              uint32_t wildcards, unsigned int priority);
+bool classifier_rule_overlaps(const struct classifier *, const flow_t *);
 
 typedef void cls_cb_func(struct cls_rule *, void *aux);
 
@@ -157,12 +155,9 @@ enum {
 };
 void classifier_for_each(const struct classifier *, int include,
                          cls_cb_func *, void *aux);
-void classifier_for_each_match(const struct classifier *,
-                               const struct cls_rule *,
+void classifier_for_each_match(const struct classifier *, const flow_t *,
                                int include, cls_cb_func *, void *aux);
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
-                                              const flow_t *target,
-                                              uint32_t wildcards,
-                                              unsigned int priority);
+                                              const flow_t *target);
 
 #endif /* classifier.h */

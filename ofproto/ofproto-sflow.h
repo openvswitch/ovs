@@ -21,11 +21,11 @@
 #include <stdint.h>
 #include "svec.h"
 
-struct xfif;
-struct xflow_msg;
 struct ofproto_sflow_options;
+struct wdp;
+struct xflow_msg;
 
-struct ofproto_sflow *ofproto_sflow_create(struct xfif *);
+struct ofproto_sflow *ofproto_sflow_create(struct wdp *);
 void ofproto_sflow_destroy(struct ofproto_sflow *);
 void ofproto_sflow_set_options(struct ofproto_sflow *,
                                const struct ofproto_sflow_options *);

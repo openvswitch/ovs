@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ void svec_add(struct svec *, const char *);
 void svec_add_nocopy(struct svec *, char *);
 void svec_del(struct svec *, const char *);
 void svec_append(struct svec *, const struct svec *);
+void svec_move(struct svec *, struct svec *);
 void svec_terminate(struct svec *);
 void svec_sort(struct svec *);
 void svec_sort_unique(struct svec *);

@@ -1103,7 +1103,7 @@ xfif_init(struct xfif *xfif, const struct xfif_class *xfif_class,
  *
  * Normally this function only needs to be called from xfif_close().
  * However, it may be called by providers due to an error on opening
- * that occurs after initialization.  It this case xfif_close() would
+ * that occurs after initialization.  In this case xfif_close() would
  * never be called. */
 void
 xfif_uninit(struct xfif *xfif, bool close)

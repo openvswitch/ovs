@@ -154,7 +154,7 @@ void
 xflow_key_from_flow(struct xflow_key *key, const struct flow *flow)
 {
     key->nw_src = flow->nw_src;
-    key->nw_dst = flow->nw_dst;
+    key->nw_dst = ofp_port_to_xflow_port(flow->nw_dst);
     key->in_port = flow->in_port;
     if (flow->dl_vlan == htons(OFP_VLAN_NONE)) {
         key->dl_tci = htons(0);
@@ -176,9 +176,11 @@ xflow_key_from_flow(struct xflow_key *key, const struct flow *flow)
 void
 xflow_key_to_flow(const struct xflow_key *key, struct flow *flow)
 {
+    flow->wildcards = 0;
+    flow->priority = 0xffff;
     flow->nw_src = key->nw_src;
     flow->nw_dst = key->nw_dst;
-    flow->in_port = key->in_port;
+    flow->in_port = xflow_port_to_ofp_port(key->in_port);
     if (key->dl_tci) {
         flow->dl_vlan = htons(vlan_tci_to_vid(key->dl_tci));
         flow->dl_vlan_pcp = vlan_tci_to_pcp(key->dl_tci);

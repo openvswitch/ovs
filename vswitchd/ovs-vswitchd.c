@@ -32,6 +32,7 @@
 #include "daemon.h"
 #include "leak-checker.h"
 #include "netdev.h"
+#include "ofproto/wdp.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "proc-net-compat.h"
@@ -117,7 +118,7 @@ main(int argc, char *argv[])
             }
         }
         unixctl_server_run(unixctl);
-        xf_run();
+        wdp_run();
         netdev_run();
 
         signal_wait(sighup);
@@ -126,7 +127,7 @@ main(int argc, char *argv[])
         }
         ovsdb_idl_wait(idl);
         unixctl_server_wait(unixctl);
-        xf_wait();
+        wdp_wait();
         netdev_wait();
         poll_block();
     }

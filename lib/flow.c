@@ -240,9 +240,9 @@ flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
 /* Extract 'flow' with 'wildcards' into the OpenFlow match structure
  * 'match'. */
 void
-flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
+flow_to_match(const flow_t *flow, struct ofp_match *match)
 {
-    match->wildcards = htonl(wildcards);
+    match->wildcards = htonl(flow->wildcards);
     match->in_port = htons(flow->in_port == XFLOWP_LOCAL ? OFPP_LOCAL
                            : flow->in_port);
     match->dl_vlan = flow->dl_vlan;
@@ -261,12 +261,11 @@ flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
 }
 
 void
-flow_from_match(flow_t *flow, uint32_t *wildcards,
+flow_from_match(flow_t *flow, unsigned int priority,
                 const struct ofp_match *match)
 {
-    if (wildcards) {
-        *wildcards = ntohl(match->wildcards);
-    }
+    flow->wildcards = ntohl(match->wildcards);
+    flow->priority = priority;
     flow->nw_src = match->nw_src;
     flow->nw_dst = match->nw_dst;
     flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? XFLOWP_LOCAL
@@ -293,9 +292,11 @@ flow_to_string(const flow_t *flow)
 void
 flow_format(struct ds *ds, const flow_t *flow)
 {
-    ds_put_format(ds, "in_port%04x:vlan%d:pcp%d mac"ETH_ADDR_FMT
+    ds_put_format(ds, "wild%08"PRIx32" pri%"PRIu32" "
+                  "in_port%04x:vlan%d:pcp%d mac"ETH_ADDR_FMT
                   "->"ETH_ADDR_FMT" type%04x proto%"PRId8" tos%"PRIu8
                   " ip"IP_FMT"->"IP_FMT" port%d->%d",
+                  flow->wildcards, flow->priority,
                   flow->in_port, ntohs(flow->dl_vlan), flow->dl_vlan_pcp,
                   ETH_ADDR_ARGS(flow->dl_src), ETH_ADDR_ARGS(flow->dl_dst),
                   ntohs(flow->dl_type), flow->nw_proto, flow->nw_tos,
