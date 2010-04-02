@@ -45,6 +45,7 @@
 #include "datapath.h"
 #include "actions.h"
 #include "flow.h"
+#include "table.h"
 #include "vport-internal_dev.h"
 
 #include "compat.h"
@@ -240,7 +241,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 
 	/* Allocate table. */
 	err = -ENOMEM;
-	rcu_assign_pointer(dp->table, dp_table_create(DP_L1_SIZE));
+	rcu_assign_pointer(dp->table, tbl_create(0));
 	if (!dp->table)
 		goto err_free_dp;
 
@@ -271,7 +272,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 err_destroy_local_port:
 	dp_detach_port(dp->ports[ODPP_LOCAL], 1);
 err_destroy_table:
-	dp_table_destroy(dp->table, 0);
+	tbl_destroy(dp->table, NULL);
 err_free_dp:
 	kfree(dp);
 err_put_module:
@@ -298,7 +299,7 @@ static void do_destroy_dp(struct datapath *dp)
 
 	dp_detach_port(dp->ports[ODPP_LOCAL], 1);
 
-	dp_table_destroy(dp->table, 1);
+	tbl_destroy(dp->table, flow_free_tbl);
 
 	for (i = 0; i < DP_N_QUEUES; i++)
 		skb_queue_purge(&dp->queues[i]);
@@ -511,7 +512,7 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	struct datapath *dp = p->dp;
 	struct dp_stats_percpu *stats;
 	struct odp_flow_key key;
-	struct sw_flow *flow;
+	struct tbl_node *flow_node;
 
 	WARN_ON_ONCE(skb_shared(skb));
 	skb_warn_if_lro(skb);
@@ -530,8 +531,9 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 		}
 	}
 
-	flow = dp_table_lookup(rcu_dereference(dp->table), &key);
-	if (flow) {
+	flow_node = tbl_lookup(rcu_dereference(dp->table), &key, flow_hash(&key), flow_cmp);
+	if (flow_node) {
+		struct sw_flow *flow = flow_cast(flow_node);
 		struct sw_flow_actions *acts = rcu_dereference(flow->sf_acts);
 		flow_used(flow, skb);
 		execute_actions(dp, skb, &key, acts->actions, acts->n_actions,
@@ -854,8 +856,18 @@ err:
 
 static int flush_flows(struct datapath *dp)
 {
-	dp->n_flows = 0;
-	return dp_table_flush(dp);
+	struct tbl *old_table = rcu_dereference(dp->table);
+	struct tbl *new_table;
+
+	new_table = tbl_create(0);
+	if (!new_table)
+		return -ENOMEM;
+
+	rcu_assign_pointer(dp->table, new_table);
+
+	tbl_deferred_destroy(old_table, flow_free_tbl);
+
+	return 0;
 }
 
 static int validate_actions(const struct sw_flow_actions *actions)
@@ -952,11 +964,27 @@ static void clear_stats(struct sw_flow *flow)
 	flow->byte_count = 0;
 }
 
+static int expand_table(struct datapath *dp)
+{
+	struct tbl *old_table = rcu_dereference(dp->table);
+	struct tbl *new_table;
+
+	new_table = tbl_expand(old_table);
+	if (IS_ERR(new_table))
+		return PTR_ERR(new_table);
+
+	rcu_assign_pointer(dp->table, new_table);
+	tbl_deferred_destroy(old_table, NULL);
+
+	return 0;
+}
+
 static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 {
 	struct odp_flow_put uf;
+	struct tbl_node *flow_node;
 	struct sw_flow *flow;
-	struct dp_table *table;
+	struct tbl *table;
 	struct odp_flow_stats stats;
 	int error;
 
@@ -966,8 +994,8 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 	memset(uf.flow.key.reserved, 0, sizeof uf.flow.key.reserved);
 
 	table = rcu_dereference(dp->table);
-	flow = dp_table_lookup(table, &uf.flow.key);
-	if (!flow) {
+	flow_node = tbl_lookup(table, &uf.flow.key, flow_hash(&uf.flow.key), flow_cmp);
+	if (!flow_node) {
 		/* No such flow. */
 		struct sw_flow_actions *acts;
 
@@ -976,12 +1004,8 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 			goto error;
 
 		/* Expand table, if necessary, to make room. */
-		if (dp->n_flows >= table->n_buckets) {
-			error = -ENOSPC;
-			if (table->n_buckets >= DP_MAX_BUCKETS)
-				goto error;
-
-			error = dp_table_expand(dp);
+		if (tbl_count(table) >= tbl_n_buckets(table)) {
+			error = expand_table(dp);
 			if (error)
 				goto error;
 			table = rcu_dereference(dp->table);
@@ -1004,15 +1028,17 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 		rcu_assign_pointer(flow->sf_acts, acts);
 
 		/* Put flow in bucket. */
-		error = dp_table_insert(table, flow);
+		error = tbl_insert(table, &flow->tbl_node, flow_hash(&flow->key));
 		if (error)
 			goto error_free_flow_acts;
-		dp->n_flows++;
+
 		memset(&stats, 0, sizeof(struct odp_flow_stats));
 	} else {
 		/* We found a matching flow. */
 		struct sw_flow_actions *old_acts, *new_acts;
 		unsigned long int flags;
+
+		flow = flow_cast(flow_node);
 
 		/* Bail out if we're not allowed to modify an existing flow. */
 		error = -EEXIST;
@@ -1100,8 +1126,9 @@ static int answer_query(struct sw_flow *flow, u32 query_flags,
 
 static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 {
-	struct dp_table *table = rcu_dereference(dp->table);
+	struct tbl *table = rcu_dereference(dp->table);
 	struct odp_flow uf;
+	struct tbl_node *flow_node;
 	struct sw_flow *flow;
 	int error;
 
@@ -1110,13 +1137,12 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 		goto error;
 	memset(uf.key.reserved, 0, sizeof uf.key.reserved);
 
-	flow = dp_table_lookup(table, &uf.key);
+	flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
 	error = -ENOENT;
-	if (!flow)
+	if (!flow_node)
 		goto error;
 
-	/* XXX redundant lookup */
-	error = dp_table_delete(table, flow);
+	error = tbl_remove(table, flow_node);
 	if (error)
 		goto error;
 
@@ -1124,7 +1150,8 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	 * be using this flow.  We used to synchronize_rcu() to make sure that
 	 * we get completely accurate stats, but that blows our performance,
 	 * badly. */
-	dp->n_flows--;
+
+	flow = flow_cast(flow_node);
 	error = answer_query(flow, 0, ufp);
 	flow_deferred_free(flow);
 
@@ -1134,23 +1161,23 @@ error:
 
 static int query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 {
-	struct dp_table *table = rcu_dereference(dp->table);
+	struct tbl *table = rcu_dereference(dp->table);
 	int i;
 	for (i = 0; i < flowvec->n_flows; i++) {
 		struct __user odp_flow *ufp = &flowvec->flows[i];
 		struct odp_flow uf;
-		struct sw_flow *flow;
+		struct tbl_node *flow_node;
 		int error;
 
 		if (__copy_from_user(&uf, ufp, sizeof uf))
 			return -EFAULT;
 		memset(uf.key.reserved, 0, sizeof uf.key.reserved);
 
-		flow = dp_table_lookup(table, &uf.key);
-		if (!flow)
+		flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
+		if (!flow_node)
 			error = __put_user(ENOENT, &ufp->stats.error);
 		else
-			error = answer_query(flow, uf.flags, ufp);
+			error = answer_query(flow_cast(flow_node), uf.flags, ufp);
 		if (error)
 			return -EFAULT;
 	}
@@ -1163,8 +1190,9 @@ struct list_flows_cbdata {
 	int listed_flows;
 };
 
-static int list_flow(struct sw_flow *flow, void *cbdata_)
+static int list_flow(struct tbl_node *node, void *cbdata_)
 {
+	struct sw_flow *flow = flow_cast(node);
 	struct list_flows_cbdata *cbdata = cbdata_;
 	struct odp_flow __user *ufp = &cbdata->uflows[cbdata->listed_flows++];
 	int error;
@@ -1191,8 +1219,7 @@ static int list_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 	cbdata.uflows = flowvec->flows;
 	cbdata.n_flows = flowvec->n_flows;
 	cbdata.listed_flows = 0;
-	error = dp_table_foreach(rcu_dereference(dp->table),
-				 list_flow, &cbdata);
+	error = tbl_foreach(rcu_dereference(dp->table), list_flow, &cbdata);
 	return error ? error : cbdata.listed_flows;
 }
 
@@ -1295,12 +1322,13 @@ error:
 
 static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 {
+	struct tbl *table = rcu_dereference(dp->table);
 	struct odp_stats stats;
 	int i;
 
-	stats.n_flows = dp->n_flows;
-	stats.cur_capacity = rcu_dereference(dp->table)->n_buckets;
-	stats.max_capacity = DP_MAX_BUCKETS;
+	stats.n_flows = tbl_count(table);
+	stats.cur_capacity = tbl_n_buckets(table);
+	stats.max_capacity = TBL_MAX_BUCKETS;
 	stats.n_ports = dp->n_ports;
 	stats.max_ports = DP_MAX_PORTS;
 	stats.max_groups = DP_MAX_GROUPS;

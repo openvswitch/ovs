@@ -14,6 +14,7 @@
 #include <linux/if_vlan.h>
 #include <net/llc_pdu.h>
 #include <linux/kernel.h>
+#include <linux/jhash.h>
 #include <linux/jiffies.h>
 #include <linux/llc.h>
 #include <linux/module.h>
@@ -31,6 +32,7 @@
 #include "compat.h"
 
 struct kmem_cache *flow_cache;
+static unsigned int hash_seed;
 
 struct arp_eth_header
 {
@@ -134,12 +136,18 @@ struct sw_flow_actions *flow_actions_alloc(size_t n_actions)
 
 
 /* Frees 'flow' immediately. */
-void flow_free(struct sw_flow *flow)
+static void flow_free(struct sw_flow *flow)
 {
 	if (unlikely(!flow))
 		return;
 	kfree(flow->sf_acts);
 	kmem_cache_free(flow_cache, flow);
+}
+
+void flow_free_tbl(struct tbl_node *node)
+{
+	struct sw_flow *flow = flow_cast(node);
+	flow_free(flow);
 }
 
 /* RCU callback used by flow_deferred_free. */
@@ -319,6 +327,24 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	return retval;
 }
 
+struct sw_flow *flow_cast(const struct tbl_node *node)
+{
+	return container_of(node, struct sw_flow, tbl_node);
+}
+
+u32 flow_hash(const struct odp_flow_key *key)
+{
+	return jhash2((u32*)key, sizeof *key / sizeof(u32), hash_seed);
+}
+
+int flow_cmp(const struct tbl_node *node, void *key2_)
+{
+	const struct odp_flow_key *key1 = &flow_cast(node)->key;
+	const struct odp_flow_key *key2 = key2_;
+
+	return !memcmp(key1, key2, sizeof(struct odp_flow_key));
+}
+
 /* Initializes the flow module.
  * Returns zero if successful or a negative error code. */
 int flow_init(void)
@@ -327,6 +353,8 @@ int flow_init(void)
 					0, NULL);
 	if (flow_cache == NULL)
 		return -ENOMEM;
+
+	get_random_bytes(&hash_seed, sizeof hash_seed);
 
 	return 0;
 }

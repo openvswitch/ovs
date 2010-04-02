@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -8,44 +8,80 @@
 
 #include "flow.h"
 #include "datapath.h"
+#include "table.h"
 
 #include <linux/gfp.h>
-#include <linux/jhash.h>
-#include <linux/random.h>
 #include <linux/slab.h>
-#include <linux/vmalloc.h>
 #include <linux/mm.h>
-#include <linux/highmem.h>
 #include <asm/pgtable.h>
 
-static inline int bucket_size(int n_flows)
+/**
+ * struct tbl - hash table
+ * @n_buckets: number of buckets (a power of 2 between %TBL_L1_SIZE and
+ * %TBL_MAX_BUCKETS)
+ * @buckets: pointer to @n_buckets/%TBL_L1_SIZE pointers to %TBL_L1_SIZE pointers
+ * to buckets
+ * @rcu: RCU callback structure
+ * @obj_destructor: Called on each element when the table is destroyed.
+ *
+ * The @buckets array is logically an array of pointers to buckets.  It is
+ * broken into two levels to avoid the need to kmalloc() any object larger than
+ * a single page or to use vmalloc().  @buckets is always nonnull, as is each
+ * @buckets[i], but each @buckets[i][j] is nonnull only if the specified hash
+ * bucket is nonempty (for 0 <= i < @n_buckets/%TBL_L1_SIZE, 0 <= j <
+ * %TBL_L1_SIZE).
+ */
+struct tbl {
+	struct rcu_head rcu;
+	unsigned int n_buckets;
+	struct tbl_bucket ***buckets;
+	unsigned int count;
+	void (*obj_destructor)(struct tbl_node *);
+};
+
+/**
+ * struct tbl_bucket - single bucket within a hash table
+ * @rcu: RCU callback structure
+ * @n_objs: number of objects in @objs[] array
+ * @objs: array of @n_objs pointers to table nodes contained inside objects
+ *
+ * The expected number of objects per bucket is 1, but this allows for an
+ * arbitrary number of collisions.
+ */
+struct tbl_bucket {
+	struct rcu_head rcu;
+	unsigned int n_objs;
+	struct tbl_node *objs[];
+};
+
+static inline int bucket_size(int n_objs)
 {
-	return sizeof(struct dp_bucket) + sizeof(struct sw_flow*) * n_flows;
+	return sizeof(struct tbl_bucket) + sizeof(struct tbl_node *) * n_objs;
 }
 
-static struct dp_bucket *dp_bucket_alloc(int n_flows)
+static struct tbl_bucket *bucket_alloc(int n_objs)
 {
-	return kmalloc(bucket_size(n_flows), GFP_KERNEL);
+	return kmalloc(bucket_size(n_objs), GFP_KERNEL);
 }
 
-static void free_buckets(struct dp_bucket ***l1, unsigned int n_buckets,
-			 int free_flows)
+static void free_buckets(struct tbl_bucket ***l1, unsigned int n_buckets,
+			 void (*free_obj)(struct tbl_node *))
 {
 	unsigned int i;
 
-	for (i = 0; i < n_buckets >> DP_L1_BITS; i++) {
-		struct dp_bucket **l2 = l1[i];
+	for (i = 0; i < n_buckets >> TBL_L1_BITS; i++) {
+		struct tbl_bucket **l2 = l1[i];
 		unsigned int j;
 
-		for (j = 0; j < DP_L1_SIZE; j++) {
-			struct dp_bucket *bucket = l2[j];
+		for (j = 0; j < TBL_L1_SIZE; j++) {
+			struct tbl_bucket *bucket = l2[j];
 			if (!bucket)
 				continue;
 
-			if (free_flows) {
+			if (free_obj) {
 				unsigned int k;
-				for (k = 0; k < bucket->n_flows; k++)
-					flow_free(bucket->flows[k]);
+				for (k = 0; k < bucket->n_objs; k++)
+					free_obj(bucket->objs[k]);
 			}
 			kfree(bucket);
 		}
@@ -54,19 +90,19 @@ static void free_buckets(struct dp_bucket ***l1, unsigned int n_buckets,
 	kfree(l1);
 }
 
-static struct dp_bucket ***alloc_buckets(unsigned int n_buckets)
+static struct tbl_bucket ***alloc_buckets(unsigned int n_buckets)
 {
-	struct dp_bucket ***l1;
+	struct tbl_bucket ***l1;
 	unsigned int i;
 
-	l1 = kmalloc((n_buckets >> DP_L1_BITS) * sizeof(struct dp_bucket**),
+	l1 = kmalloc((n_buckets >> TBL_L1_BITS) * sizeof(struct tbl_bucket **),
 		     GFP_KERNEL);
 	if (!l1)
 		return NULL;
-	for (i = 0; i < n_buckets >> DP_L1_BITS; i++) {
-		l1[i] = (struct dp_bucket **)get_zeroed_page(GFP_KERNEL);
+	for (i = 0; i < n_buckets >> TBL_L1_BITS; i++) {
+		l1[i] = (struct tbl_bucket **)get_zeroed_page(GFP_KERNEL);
 		if (!l1[i]) {
-			free_buckets(l1, i << DP_L1_BITS, 0);
+			free_buckets(l1, i << TBL_L1_BITS, 0);
 			return NULL;
 		}
 	}
@@ -74,16 +110,19 @@ static struct dp_bucket ***alloc_buckets(unsigned int n_buckets)
 }
 
 /**
- * dp_table_create - create and return a new flow table
+ * tbl_create - create and return a new hash table
  * @n_buckets: number of buckets in the new table
  *
- * Creates and returns a new flow table, or %NULL if memory cannot be
- * allocated.  @n_buckets must be a power of 2 in the range %DP_L1_SIZE to
- * %DP_MAX_BUCKETS.
+ * Creates and returns a new hash table, or %NULL if memory cannot be
+ * allocated.  @n_buckets must be a power of 2 in the range %TBL_L1_SIZE to
+ * %TBL_MAX_BUCKETS.
  */
-struct dp_table *dp_table_create(unsigned int n_buckets)
+struct tbl *tbl_create(unsigned int n_buckets)
 {
-	struct dp_table *table;
+	struct tbl *table;
+
+	if (!n_buckets)
+		n_buckets = TBL_L1_SIZE;
 
 	table = kzalloc(sizeof *table, GFP_KERNEL);
 	if (!table)
@@ -93,7 +132,6 @@ struct dp_table *dp_table_create(unsigned int n_buckets)
 	table->buckets = alloc_buckets(n_buckets);
 	if (!table->buckets)
 		goto err_free_table;
-	get_random_bytes(&table->hash_seed, sizeof table->hash_seed);
 
 	return table;
 
@@ -104,108 +142,126 @@ err:
 }
 
 /**
- * dp_table_destroy - destroy flow table and optionally the flows it contains
- * @table: table to destroy (must not be %NULL)
- * @free_flows: whether to destroy the flows
+ * tbl_destroy - destroy hash table and optionally the objects it contains
+ * @table: table to destroy
+ * @destructor: function to be called on objects at destruction time
  *
- * If @free_flows is zero, then the buckets in @table are destroyed but not the
- * flows within those buckets.  This behavior is useful when a table is being
- * replaced by a larger or smaller one without destroying the flows.
+ * If a destructor is null, then the buckets in @table are destroyed
+ * but not the objects within those buckets.  This behavior is useful when a
+ * table is being replaced by a larger or smaller one without destroying the
+ * objects.
  *
- * If @free_flows is nonzero, then the flows in @table are destroyed as well as
- * the buckets.
+ * If a destructor is not null, then it is called on the objects in @table
+ * before destroying the buckets.
  */
-void dp_table_destroy(struct dp_table *table, int free_flows)
+void tbl_destroy(struct tbl *table, void (*destructor)(struct tbl_node *))
 {
-	free_buckets(table->buckets, table->n_buckets, free_flows);
+	if (!table)
+		return;
+
+	free_buckets(table->buckets, table->n_buckets, destructor);
 	kfree(table);
 }
 
-static struct dp_bucket **find_bucket(struct dp_table *table, u32 hash)
+static void destroy_table_rcu(struct rcu_head *rcu)
 {
-	unsigned int l1 = (hash & (table->n_buckets - 1)) >> DP_L1_SHIFT;
-	unsigned int l2 = hash & ((1 << DP_L2_BITS) - 1);
+	struct tbl *table = container_of(rcu, struct tbl, rcu);
+	tbl_destroy(table, table->obj_destructor);
+}
+
+/**
+ * tbl_deferred_destroy - destroy table after a RCU grace period
+ * @table: table to destroy
+ * @destructor: function to be called on objects at destruction time
+ *
+ * Calls tbl_destroy() on @table after an RCU grace period. If @destructor is
+ * not null it is called on every element before the table is destroyed. */
+void tbl_deferred_destroy(struct tbl *table, void (*destructor)(struct tbl_node *))
+{
+	if (!table)
+		return;
+
+	table->obj_destructor = destructor;
+	call_rcu(&table->rcu, destroy_table_rcu);
+}
+
+static struct tbl_bucket **find_bucket(struct tbl *table, u32 hash)
+{
+	unsigned int l1 = (hash & (table->n_buckets - 1)) >> TBL_L1_SHIFT;
+	unsigned int l2 = hash & ((1 << TBL_L2_BITS) - 1);
 	return &table->buckets[l1][l2];
 }
 
-static int search_bucket(const struct dp_bucket *bucket, const struct odp_flow_key *key)
+static int search_bucket(const struct tbl_bucket *bucket, void *target, u32 hash,
+			 int (*cmp)(const struct tbl_node *, void *))
 {
 	int i;
 
-	for (i = 0; i < bucket->n_flows; i++) {
-		struct sw_flow *flow = rcu_dereference(bucket->flows[i]);
-		if (!memcmp(&flow->key, key, sizeof(struct odp_flow_key)))
+	for (i = 0; i < bucket->n_objs; i++) {
+		struct tbl_node *obj = rcu_dereference(bucket->objs[i]);
+		if (obj->hash == hash && likely(cmp(obj, target)))
 			return i;
 	}
 
 	return -1;
 }
 
-static struct sw_flow *lookup_flow(struct dp_table *table, u32 hash,
-				   const struct odp_flow_key *key)
+/**
+ * tbl_lookup - searches hash table for a matching object
+ * @table: hash table to search
+ * @target: identifier for the object that is being searched for, will be
+ * provided as an argument to @cmp when making comparisions
+ * @hash: hash of @target
+ * @cmp: comparision function to match objects with the given hash, returns
+ * nonzero if the objects match, zero otherwise
+ *
+ * Searches @table for an object identified by @target.  Returns the tbl_node
+ * contained in the object if successful, otherwise %NULL.
+ */
+struct tbl_node *tbl_lookup(struct tbl *table, void *target, u32 hash,
+			    int (*cmp)(const struct tbl_node *, void *))
 {
-	struct dp_bucket **bucketp = find_bucket(table, hash);
-	struct dp_bucket *bucket = rcu_dereference(*bucketp);
+	struct tbl_bucket **bucketp = find_bucket(table, hash);
+	struct tbl_bucket *bucket = rcu_dereference(*bucketp);
 	int index;
 
 	if (!bucket)
 		return NULL;
 
-	index = search_bucket(bucket, key);
+	index = search_bucket(bucket, target, hash, cmp);
 	if (index < 0)
 		return NULL;
 
-	return bucket->flows[index];
-}
-
-static u32 flow_hash(const struct dp_table *table,
-		     const struct odp_flow_key *key)
-{
-	return jhash2((u32*)key, sizeof *key / sizeof(u32), table->hash_seed);
+	return bucket->objs[index];
 }
 
 /**
- * dp_table_lookup - searches flow table for a matching flow
- * @table: flow table to search
- * @key: flow key for which to search
- *
- * Searches @table for a flow whose key is equal to @key.  Returns the flow if
- * successful, otherwise %NULL.
- */
-struct sw_flow *dp_table_lookup(struct dp_table *table,
-				const struct odp_flow_key *key)
-{
-	return lookup_flow(table, flow_hash(table, key), key);
-}
-
-/**
- * dp_table_foreach - iterate through flow table
+ * tbl_foreach - iterate through hash table
  * @table: table to iterate
- * @callback: function to call for each flow entry
+ * @callback: function to call for each entry
  * @aux: Extra data to pass to @callback
  *
- * Iterates through all of the flows in @table in hash order, passing each of
+ * Iterates through all of the objects in @table in hash order, passing each of
  * them in turn to @callback.  If @callback returns nonzero, this terminates
- * the iteration and dp_table_foreach() returns the same value.  Returns 0 if
+ * the iteration and tbl_foreach() returns the same value.  Returns 0 if
  * @callback never returns nonzero.
  *
  * This function does not try to intelligently handle the case where @callback
  * adds or removes flows in @table.
  */
-int dp_table_foreach(struct dp_table *table,
-		     int (*callback)(struct sw_flow *flow, void *aux),
-		     void *aux)
+int tbl_foreach(struct tbl *table,
+		int (*callback)(struct tbl_node *, void *aux), void *aux)
 {
 	unsigned int i, j, k;
-	for (i = 0; i < table->n_buckets >> DP_L1_BITS; i++) {
-		struct dp_bucket **l2 = table->buckets[i];
-		for (j = 0; j < DP_L1_SIZE; j++) {
-			struct dp_bucket *bucket = rcu_dereference(l2[j]);
+	for (i = 0; i < table->n_buckets >> TBL_L1_BITS; i++) {
+		struct tbl_bucket **l2 = table->buckets[i];
+		for (j = 0; j < TBL_L1_SIZE; j++) {
+			struct tbl_bucket *bucket = rcu_dereference(l2[j]);
 			if (!bucket)
 				continue;
 
-			for (k = 0; k < bucket->n_flows; k++) {
-				int error = (*callback)(bucket->flows[k], aux);
+			for (k = 0; k < bucket->n_objs; k++) {
+				int error = (*callback)(bucket->objs[k], aux);
 				if (error)
 					return error;
 			}
@@ -214,154 +270,154 @@ int dp_table_foreach(struct dp_table *table,
 	return 0;
 }
 
-static int insert_flow(struct sw_flow *flow, void *new_table_)
+static int insert_table_flow(struct tbl_node *node, void *new_table_)
 {
-	struct dp_table *new_table = new_table_;
-	return dp_table_insert(new_table, flow);
-}
-
-static void dp_free_table_rcu(struct rcu_head *rcu)
-{
-	struct dp_table *table = container_of(rcu, struct dp_table, rcu);
-	dp_table_destroy(table, 0);
+	struct tbl *new_table = new_table_;
+	return tbl_insert(new_table, node, node->hash);
 }
 
 /**
- * dp_table_expand - replace datapath's flow table by one with more buckets
- * @dp: datapath to expand
+ * tbl_expand - create a hash table with more buckets
+ * @table: table to expand
  *
- * Replaces @dp's flow table by one that has twice as many buckets.  All of the
- * flows in @dp's flow table are moved to the new flow table.  Returns 0 if
- * successful, otherwise a negative error.
+ * Creates a new table containing the same objects as @table but with twice
+ * as many buckets.  Returns 0 if successful, otherwise a negative error.  The
+ * caller should free @table upon success (probably using
+ * tbl_deferred_destroy()).
  */
-int dp_table_expand(struct datapath *dp)
+struct tbl *tbl_expand(struct tbl *table)
 {
-	struct dp_table *old_table = rcu_dereference(dp->table);
-	struct dp_table *new_table;
+	int err;
+	int n_buckets = table->n_buckets * 2;
+	struct tbl *new_table;
 
-	new_table = dp_table_create(old_table->n_buckets * 2);
+	if (n_buckets >= TBL_MAX_BUCKETS) {
+		err = -ENOSPC;
+		goto error;
+	}
+
+	err = -ENOMEM;
+	new_table = tbl_create(n_buckets);
 	if (!new_table)
 		goto error;
 
-	if (dp_table_foreach(old_table, insert_flow, new_table))
+	if (tbl_foreach(table, insert_table_flow, new_table))
 		goto error_free_new_table;
 
-	rcu_assign_pointer(dp->table, new_table);
-	call_rcu(&old_table->rcu, dp_free_table_rcu);
-	return 0;
+	return new_table;
 
 error_free_new_table:
-	dp_table_destroy(new_table, 0);
+	tbl_destroy(new_table, NULL);
 error:
-	return -ENOMEM;
-}
-
-static void dp_free_table_and_flows_rcu(struct rcu_head *rcu)
-{
-	struct dp_table *table = container_of(rcu, struct dp_table, rcu);
-	dp_table_destroy(table, 1);
+	return ERR_PTR(err);
 }
 
 /**
- * dp_table_flush - clear datapath's flow table
- * @dp: datapath to clear
+ * tbl_n_buckets - returns the number of buckets
+ * @table: table to examine
  *
- * Replaces @dp's flow table by an empty flow table, destroying all the flows
- * in the old table (after a suitable RCU grace period).
+ * Returns the number of buckets currently allocated in @table, useful when
+ * deciding whether to expand.
  */
-int dp_table_flush(struct datapath *dp)
+int tbl_n_buckets(struct tbl *table)
 {
-	struct dp_table *old_table = rcu_dereference(dp->table);
-	struct dp_table *new_table = dp_table_create(DP_L1_SIZE);
-	if (!new_table)
-		return -ENOMEM;
-	rcu_assign_pointer(dp->table, new_table);
-	call_rcu(&old_table->rcu, dp_free_table_and_flows_rcu);
-	return 0;
+	return table->n_buckets;
 }
 
-static void dp_free_bucket_rcu(struct rcu_head *rcu)
+static void free_bucket_rcu(struct rcu_head *rcu)
 {
-	struct dp_bucket *bucket = container_of(rcu, struct dp_bucket, rcu);
+	struct tbl_bucket *bucket = container_of(rcu, struct tbl_bucket, rcu);
 	kfree(bucket);
 }
 
 /**
- * dp_table_insert - insert flow into table
- * @table: table in which to insert flow
- * @target: flow to insert
+ * tbl_insert - insert object into table
+ * @table: table in which to insert object
+ * @target: tbl_node contained in object to insert
+ * @hash: hash of object to insert
  *
- * The caller must ensure that no flow with key identical to @target->key
+ * The caller must ensure that no object considered to be identical to @target
  * already exists in @table.  Returns 0 or a negative error (currently just
  * -ENOMEM).
- *
- * The caller is responsible for updating &struct datapath's n_flows member.
  */
-int dp_table_insert(struct dp_table *table, struct sw_flow *target)
+int tbl_insert(struct tbl *table, struct tbl_node *target, u32 hash)
 {
-	u32 hash = flow_hash(table, &target->key);
-	struct dp_bucket **oldp = find_bucket(table, hash);
-	struct dp_bucket *old = *rcu_dereference(oldp);
-	unsigned int n = old ? old->n_flows : 0;
-	struct dp_bucket *new = dp_bucket_alloc(n + 1);
+	struct tbl_bucket **oldp = find_bucket(table, hash);
+	struct tbl_bucket *old = *rcu_dereference(oldp);
+	unsigned int n = old ? old->n_objs : 0;
+	struct tbl_bucket *new = bucket_alloc(n + 1);
 
 	if (!new)
 		return -ENOMEM;
 
-	new->n_flows = n + 1;
+	target->hash = hash;
+
+	new->n_objs = n + 1;
 	if (old)
-		memcpy(new->flows, old->flows, n * sizeof(struct sw_flow*));
-	new->flows[n] = target;
+		memcpy(new->objs, old->objs, n * sizeof(struct tbl_node *));
+	new->objs[n] = target;
 
 	rcu_assign_pointer(*oldp, new);
 	if (old)
-		call_rcu(&old->rcu, dp_free_bucket_rcu);
+		call_rcu(&old->rcu, free_bucket_rcu);
+
+	table->count++;
 
 	return 0;
 }
 
 /**
- * dp_table_delete - remove flow from table
- * @table: table from which to remove flow
- * @target: flow to remove
+ * tbl_delete - remove object from table
+ * @table: table from which to remove object
+ * @target: tbl_node inside of object to remove
  *
  * The caller must ensure that @target itself is in @table.  (It is not
- * good enough for @table to contain a different flow with a key equal to
- * @target's key.)
+ * good enough for @table to contain a different object considered identical
+ * @target.)
  *
  * Returns 0 or a negative error (currently just -ENOMEM).  Yes, it *is*
- * possible for a flow deletion to fail due to lack of memory.
- *
- * The caller is responsible for updating &struct datapath's n_flows member.
+ * possible for object deletion to fail due to lack of memory.
  */
-int dp_table_delete(struct dp_table *table, struct sw_flow *target)
+int tbl_remove(struct tbl *table, struct tbl_node *target)
 {
-	u32 hash = flow_hash(table, &target->key);
-	struct dp_bucket **oldp = find_bucket(table, hash);
-	struct dp_bucket *old = *rcu_dereference(oldp);
-	unsigned int n = old->n_flows;
-	struct dp_bucket *new;
+	struct tbl_bucket **oldp = find_bucket(table, target->hash);
+	struct tbl_bucket *old = *rcu_dereference(oldp);
+	unsigned int n = old->n_objs;
+	struct tbl_bucket *new;
 
 	if (n > 1) {
 		unsigned int i;
 
-		new = dp_bucket_alloc(n - 1);
+		new = bucket_alloc(n - 1);
 		if (!new)
 			return -ENOMEM;
 
-		new->n_flows = 0;
+		new->n_objs = 0;
 		for (i = 0; i < n; i++) {
-			struct sw_flow *flow = old->flows[i];
-			if (flow != target)
-				new->flows[new->n_flows++] = flow;
+			struct tbl_node *obj = old->objs[i];
+			if (obj != target)
+				new->objs[new->n_objs++] = obj;
 		}
-		WARN_ON_ONCE(new->n_flows != n - 1);
+		WARN_ON_ONCE(new->n_objs != n - 1);
 	} else {
 		new = NULL;
 	}
 
 	rcu_assign_pointer(*oldp, new);
-	call_rcu(&old->rcu, dp_free_bucket_rcu);
+	call_rcu(&old->rcu, free_bucket_rcu);
+
+	table->count--;
 
 	return 0;
+}
+
+/**
+ * tbl_count - retrieves the number of stored objects
+ * @table: table to count
+ *
+ * Returns the number of objects that have been inserted into the hash table.
+ */
+unsigned int tbl_count(struct tbl *table)
+{
+	return table->count;
 }
