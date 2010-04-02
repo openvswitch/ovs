@@ -109,6 +109,9 @@ struct rule {
 
     /* OpenFlow actions.
      *
+     * 'n_actions' is the number of elements in the 'actions' array.  A single
+     * action may take up more more than one element's worth of space.
+     *
      * A subrule has no actions (it uses the super-rule's actions). */
     int n_actions;
     union ofp_action *actions;
@@ -2874,9 +2877,18 @@ update_stats(struct ofproto *ofproto, struct rule *rule,
     }
 }
 
+/* Implements OFPFC_ADD and the cases for OFPFC_MODIFY and OFPFC_MODIFY_STRICT
+ * in which no matching flow already exists in the flow table.
+ *
+ * Adds the flow specified by 'ofm', which is followed by 'n_actions'
+ * ofp_actions, to 'p''s flow table.  Returns 0 on success or an OpenFlow error
+ * code as encoded by ofp_mkerr() on failure.
+ *
+ * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
+ * if any. */
 static int
 add_flow(struct ofproto *p, struct ofconn *ofconn,
-         struct ofp_flow_mod *ofm, size_t n_actions)
+         const struct ofp_flow_mod *ofm, size_t n_actions)
 {
     struct ofpbuf *packet;
     struct rule *rule;
@@ -2914,112 +2926,224 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
     return error;
 }
 
-static int
-modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
-            size_t n_actions, uint16_t command, struct rule *rule)
+static struct rule *
+find_flow_strict(struct ofproto *p, const struct ofp_flow_mod *ofm)
 {
-    if (rule_is_hidden(rule)) {
-        return 0;
-    }
-
-    if (command == OFPFC_DELETE) {
-        long long int now = time_msec();
-        send_flow_removed(p, rule, now, OFPRR_DELETE);
-        rule_remove(p, rule);
-    } else {
-        size_t actions_len = n_actions * sizeof *rule->actions;
-
-        rule->flow_cookie = ofm->cookie;
-        if (n_actions == rule->n_actions
-            && !memcmp(ofm->actions, rule->actions, actions_len))
-        {
-            return 0;
-        }
-
-        free(rule->actions);
-        rule->actions = xmemdup(ofm->actions, actions_len);
-        rule->n_actions = n_actions;
-
-        if (rule->cr.wc.wildcards) {
-            COVERAGE_INC(ofproto_mod_wc_flow);
-            p->need_revalidate = true;
-        } else {
-            rule_update_actions(p, rule);
-        }
-    }
-
-    return 0;
-}
-
-static int
-modify_flows_strict(struct ofproto *p, const struct ofp_flow_mod *ofm,
-                    size_t n_actions, uint16_t command)
-{
-    struct rule *rule;
     uint32_t wildcards;
     flow_t flow;
 
     flow_from_match(&flow, &wildcards, &ofm->match);
-    rule = rule_from_cls_rule(classifier_find_rule_exactly(
+    return rule_from_cls_rule(classifier_find_rule_exactly(
                                   &p->cls, &flow, wildcards,
                                   ntohs(ofm->priority)));
+}
 
-    if (rule) {
-        if (command == OFPFC_DELETE
-            && ofm->out_port != htons(OFPP_NONE)
-            && !rule_has_out_port(rule, ofm->out_port)) {
-            return 0;
-        }
+static int
+send_buffered_packet(struct ofproto *ofproto, struct ofconn *ofconn,
+                     struct rule *rule, const struct ofp_flow_mod *ofm)
+{
+    struct ofpbuf *packet;
+    uint16_t in_port;
+    flow_t flow;
+    int error;
 
-        modify_flow(p, ofm, n_actions, command, rule);
+    if (ofm->buffer_id == htonl(UINT32_MAX)) {
+        return 0;
     }
+
+    error = pktbuf_retrieve(ofconn->pktbuf, ntohl(ofm->buffer_id),
+                            &packet, &in_port);
+    if (error) {
+        return error;
+    }
+
+    flow_extract(packet, in_port, &flow);
+    rule_execute(ofproto, rule, packet, &flow);
+    ofpbuf_delete(packet);
+
     return 0;
 }
+
+/* OFPFC_MODIFY and OFPFC_MODIFY_STRICT. */
 
 struct modify_flows_cbdata {
     struct ofproto *ofproto;
     const struct ofp_flow_mod *ofm;
-    uint16_t out_port;
     size_t n_actions;
-    uint16_t command;
+    struct rule *match;
 };
 
-static void
-modify_flows_cb(struct cls_rule *rule_, void *cbdata_)
-{
-    struct rule *rule = rule_from_cls_rule(rule_);
-    struct modify_flows_cbdata *cbdata = cbdata_;
+static int modify_flow(struct ofproto *, const struct ofp_flow_mod *,
+                       size_t n_actions, struct rule *);
+static void modify_flows_cb(struct cls_rule *, void *cbdata_);
 
-    if (cbdata->out_port != htons(OFPP_NONE)
-        && !rule_has_out_port(rule, cbdata->out_port)) {
-        return;
-    }
-
-    modify_flow(cbdata->ofproto, cbdata->ofm, cbdata->n_actions,
-                cbdata->command, rule);
-}
-
+/* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code as
+ * encoded by ofp_mkerr() on failure.
+ *
+ * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
+ * if any. */
 static int
-modify_flows_loose(struct ofproto *p, const struct ofp_flow_mod *ofm,
-                   size_t n_actions, uint16_t command)
+modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
+                   const struct ofp_flow_mod *ofm, size_t n_actions)
 {
     struct modify_flows_cbdata cbdata;
     struct cls_rule target;
 
     cbdata.ofproto = p;
     cbdata.ofm = ofm;
-    cbdata.out_port = (command == OFPFC_DELETE ? ofm->out_port
-                       : htons(OFPP_NONE));
     cbdata.n_actions = n_actions;
-    cbdata.command = command;
+    cbdata.match = NULL;
 
     cls_rule_from_match(&target, &ofm->match, 0);
 
     classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
                               modify_flows_cb, &cbdata);
-    return 0;
+    if (cbdata.match) {
+        /* This credits the packet to whichever flow happened to happened to
+         * match last.  That's weird.  Maybe we should do a lookup for the
+         * flow that actually matches the packet?  Who knows. */
+        send_buffered_packet(p, ofconn, cbdata.match, ofm);
+        return 0;
+    } else {
+        return add_flow(p, ofconn, ofm, n_actions);
+    }
 }
 
+/* Implements OFPFC_MODIFY_STRICT.  Returns 0 on success or an OpenFlow error
+ * code as encoded by ofp_mkerr() on failure.
+ *
+ * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
+ * if any. */
+static int
+modify_flow_strict(struct ofproto *p, struct ofconn *ofconn,
+                   struct ofp_flow_mod *ofm, size_t n_actions)
+{
+    struct rule *rule = find_flow_strict(p, ofm);
+    if (rule && !rule_is_hidden(rule)) {
+        modify_flow(p, ofm, n_actions, rule);
+        return send_buffered_packet(p, ofconn, rule, ofm);
+    } else {
+        return add_flow(p, ofconn, ofm, n_actions);
+    }
+}
+
+/* Callback for modify_flows_loose(). */
+static void
+modify_flows_cb(struct cls_rule *rule_, void *cbdata_)
+{
+    struct rule *rule = rule_from_cls_rule(rule_);
+    struct modify_flows_cbdata *cbdata = cbdata_;
+
+    if (!rule_is_hidden(rule)) {
+        cbdata->match = rule;
+        modify_flow(cbdata->ofproto, cbdata->ofm, cbdata->n_actions, rule);
+    }
+}
+
+/* Implements core of OFPFC_MODIFY and OFPFC_MODIFY_STRICT where 'rule' has
+ * been identified as a flow in 'p''s flow table to be modified, by changing
+ * the rule's actions to match those in 'ofm' (which is followed by 'n_actions'
+ * ofp_action[] structures). */
+static int
+modify_flow(struct ofproto *p, const struct ofp_flow_mod *ofm,
+            size_t n_actions, struct rule *rule)
+{
+    size_t actions_len = n_actions * sizeof *rule->actions;
+
+    rule->flow_cookie = ofm->cookie;
+
+    /* If the actions are the same, do nothing. */
+    if (n_actions == rule->n_actions
+        && !memcmp(ofm->actions, rule->actions, actions_len))
+    {
+        return 0;
+    }
+
+    /* Replace actions. */
+    free(rule->actions);
+    rule->actions = xmemdup(ofm->actions, actions_len);
+    rule->n_actions = n_actions;
+
+    /* Make sure that the datapath gets updated properly. */
+    if (rule->cr.wc.wildcards) {
+        COVERAGE_INC(ofproto_mod_wc_flow);
+        p->need_revalidate = true;
+    } else {
+        rule_update_actions(p, rule);
+    }
+
+    return 0;
+}
+
+/* OFPFC_DELETE implementation. */
+
+struct delete_flows_cbdata {
+    struct ofproto *ofproto;
+    uint16_t out_port;
+};
+
+static void delete_flows_cb(struct cls_rule *, void *cbdata_);
+static void delete_flow(struct ofproto *, struct rule *, uint16_t out_port);
+
+/* Implements OFPFC_DELETE. */
+static void
+delete_flows_loose(struct ofproto *p, const struct ofp_flow_mod *ofm)
+{
+    struct delete_flows_cbdata cbdata;
+    struct cls_rule target;
+
+    cbdata.ofproto = p;
+    cbdata.out_port = ofm->out_port;
+
+    cls_rule_from_match(&target, &ofm->match, 0);
+
+    classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
+                              delete_flows_cb, &cbdata);
+}
+
+/* Implements OFPFC_DELETE_STRICT. */
+static void
+delete_flow_strict(struct ofproto *p, struct ofp_flow_mod *ofm)
+{
+    struct rule *rule = find_flow_strict(p, ofm);
+    if (rule) {
+        delete_flow(p, rule, ofm->out_port);
+    }
+}
+
+/* Callback for delete_flows_loose(). */
+static void
+delete_flows_cb(struct cls_rule *rule_, void *cbdata_)
+{
+    struct rule *rule = rule_from_cls_rule(rule_);
+    struct delete_flows_cbdata *cbdata = cbdata_;
+
+    delete_flow(cbdata->ofproto, rule, cbdata->out_port);
+}
+
+/* Implements core of OFPFC_DELETE and OFPFC_DELETE_STRICT where 'rule' has
+ * been identified as a flow to delete from 'p''s flow table, by deleting the
+ * flow and sending out a OFPT_FLOW_REMOVED message to any interested
+ * controller.
+ *
+ * Will not delete 'rule' if it is hidden.  Will delete 'rule' only if
+ * 'out_port' is htons(OFPP_NONE) or if 'rule' actually outputs to the
+ * specified 'out_port'. */
+static void
+delete_flow(struct ofproto *p, struct rule *rule, uint16_t out_port)
+{
+    if (rule_is_hidden(rule)) {
+        return;
+    }
+
+    if (out_port != htons(OFPP_NONE) && !rule_has_out_port(rule, out_port)) {
+        return;
+    }
+
+    send_flow_removed(p, rule, time_msec(), OFPRR_DELETE);
+    rule_remove(p, rule);
+}
+
 static int
 handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
                 struct ofp_flow_mod *ofm)
@@ -3057,16 +3181,18 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
         return add_flow(p, ofconn, ofm, n_actions);
 
     case OFPFC_MODIFY:
-        return modify_flows_loose(p, ofm, n_actions, OFPFC_MODIFY);
+        return modify_flows_loose(p, ofconn, ofm, n_actions);
 
     case OFPFC_MODIFY_STRICT:
-        return modify_flows_strict(p, ofm, n_actions, OFPFC_MODIFY);
+        return modify_flow_strict(p, ofconn, ofm, n_actions);
 
     case OFPFC_DELETE:
-        return modify_flows_loose(p, ofm, n_actions, OFPFC_DELETE);
+        delete_flows_loose(p, ofm);
+        return 0;
 
     case OFPFC_DELETE_STRICT:
-        return modify_flows_strict(p, ofm, n_actions, OFPFC_DELETE);
+        delete_flow_strict(p, ofm);
+        return 0;
 
     default:
         return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_BAD_COMMAND);
