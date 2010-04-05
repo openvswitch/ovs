@@ -627,6 +627,12 @@ str_to_action(char *str, struct ofpbuf *b)
             struct ofp_action_nw_tos *nt;
             nt = put_action(b, sizeof *nt, OFPAT_SET_NW_TOS);
             nt->nw_tos = str_to_u32(arg);
+        } else if (!strcasecmp(act, "resubmit")) {
+            struct nx_action_resubmit *nar;
+            nar = put_action(b, sizeof *nar, OFPAT_VENDOR);
+            nar->vendor = htonl(NX_VENDOR_ID);
+            nar->subtype = htons(NXAST_RESUBMIT);
+            nar->in_port = htons(str_to_u32(arg));
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "drop")) {
