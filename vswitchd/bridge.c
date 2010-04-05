@@ -137,6 +137,8 @@ struct port {
     int updelay, downdelay;     /* Delay before iface goes up/down, in ms. */
     bool bond_compat_is_stale;  /* Need to call port_update_bond_compat()? */
     bool bond_fake_iface;       /* Fake a bond interface for legacy compat? */
+    int bond_rebalance_interval; /* Interval between rebalances, in ms. */
+    long long int bond_next_rebalance; /* Next rebalancing time. */
 
     /* Port mirroring info. */
     mirror_mask_t src_mirrors;  /* Mirrors triggered when packet received. */
@@ -180,7 +182,6 @@ struct bridge {
 
     /* Bonding. */
     bool has_bonded_ports;
-    long long int bond_next_rebalance;
 
     /* Flow tracking. */
     bool flush;
@@ -807,16 +808,25 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 }
 
 static const char *
-bridge_get_other_config(const struct ovsrec_bridge *br_cfg, const char *key)
+get_ovsrec_key_value(const char *key, char **keys, char **values, size_t n)
 {
     size_t i;
 
-    for (i = 0; i < br_cfg->n_other_config; i++) {
-        if (!strcmp(br_cfg->key_other_config[i], key)) {
-            return br_cfg->value_other_config[i];
+    for (i = 0; i < n; i++) {
+        if (!strcmp(keys[i], key)) {
+            return values[i];
         }
     }
     return NULL;
+}
+
+static const char *
+bridge_get_other_config(const struct ovsrec_bridge *br_cfg, const char *key)
+{
+    return get_ovsrec_key_value(key,
+                                br_cfg->key_other_config,
+                                br_cfg->value_other_config,
+                                br_cfg->n_other_config);
 }
 
 static void
@@ -1145,7 +1155,6 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
     port_array_init(&br->ifaces);
 
     br->flush = false;
-    br->bond_next_rebalance = time_msec() + 10000;
 
     list_push_back(&all_bridges, &br->node);
 
@@ -2365,22 +2374,18 @@ static void
 bridge_account_checkpoint_ofhook_cb(void *br_)
 {
     struct bridge *br = br_;
+    long long int now;
     size_t i;
 
     if (!br->has_bonded_ports) {
         return;
     }
 
-    /* The current ofproto implementation calls this callback at least once a
-     * second, so this timer implementation is sufficient. */
-    if (time_msec() < br->bond_next_rebalance) {
-        return;
-    }
-    br->bond_next_rebalance = time_msec() + 10000;
-
+    now = time_msec();
     for (i = 0; i < br->n_ports; i++) {
         struct port *port = br->ports[i];
-        if (port->n_ifaces > 1) {
+        if (port->n_ifaces > 1 && now >= port->bond_next_rebalance) {
+            port->bond_next_rebalance = now + port->bond_rebalance_interval;
             bond_rebalance_port(port);
         }
     }
@@ -2827,7 +2832,7 @@ bond_unixctl_show(struct unixctl_conn *conn,
     ds_put_format(&ds, "updelay: %d ms\n", port->updelay);
     ds_put_format(&ds, "downdelay: %d ms\n", port->downdelay);
     ds_put_format(&ds, "next rebalance: %lld ms\n",
-                  port->bridge->bond_next_rebalance - time_msec());
+                  port->bond_next_rebalance - time_msec());
     for (j = 0; j < port->n_ifaces; j++) {
         const struct iface *iface = port->ifaces[j];
         struct bond_entry *be;
@@ -3090,10 +3095,22 @@ port_create(struct bridge *br, const char *name)
     return port;
 }
 
+static const char *
+get_port_other_config(const struct ovsrec_port *port, const char *key,
+                      const char *default_value)
+{
+    const char *value = get_ovsrec_key_value(key,
+                                             port->key_other_config,
+                                             port->value_other_config,
+                                             port->n_other_config);
+    return value ? value : default_value;
+}
+
 static void
 port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 {
     struct shash old_ifaces, new_ifaces;
+    long long int next_rebalance;
     struct shash_node *node;
     unsigned long *trunks;
     int vlan;
@@ -3121,6 +3138,15 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     port->updelay = cfg->bond_downdelay;
     if (port->downdelay < 0) {
         port->downdelay = 0;
+    }
+    port->bond_rebalance_interval = atoi(
+        get_port_other_config(cfg, "bond-rebalance-interval", "10000"));
+    if (port->bond_rebalance_interval < 1000) {
+        port->bond_rebalance_interval = 1000;
+    }
+    next_rebalance = time_msec() + port->bond_rebalance_interval;
+    if (port->bond_next_rebalance > next_rebalance) {
+        port->bond_next_rebalance = next_rebalance;
     }
 
     /* Get rid of deleted interfaces and add new interfaces. */
@@ -3299,6 +3325,8 @@ port_update_bonding(struct port *port)
             }
             port->no_ifaces_tag = tag_create_random();
             bond_choose_active_iface(port);
+            port->bond_next_rebalance
+                = time_msec() + port->bond_rebalance_interval;
         }
         port->bond_compat_is_stale = true;
         port->bond_fake_iface = port->cfg->bond_fake_iface;

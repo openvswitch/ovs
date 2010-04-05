@@ -278,6 +278,13 @@
           <dt><code>hwaddr</code></dt>
           <dd>An Ethernet address in the form
             <code><var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var></code>.</dd>
+          <dt><code>bond-rebalance-interval</code></dt>
+          <dd>For a bonded port, the number of milliseconds between
+            successive attempts to rebalance the bond, that is, to
+            move source MACs and their flows from one interface on
+            the bond to another in an attempt to keep usage of each
+            interface roughly equal.  The default is 10000 (10
+            seconds), and the minimum is 1000 (1 second).</dd>
         </dl>
       </column>
     </group>
