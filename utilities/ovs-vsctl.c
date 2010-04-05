@@ -108,6 +108,11 @@ static void do_vsctl(const char *args,
                      struct vsctl_command *, size_t n_commands,
                      struct ovsdb_idl *);
 
+static const struct vsctl_table_class *get_table(const char *table_name);
+static void set_column(const struct vsctl_table_class *,
+                       const struct ovsdb_idl_row *, const char *arg);
+
+
 int
 main(int argc, char *argv[])
 {
@@ -1173,7 +1178,8 @@ static void
 add_port(struct vsctl_context *ctx,
          const char *br_name, const char *port_name,
          bool may_exist, bool fake_iface,
-         char *iface_names[], int n_ifaces)
+         char *iface_names[], int n_ifaces,
+         char *settings[], int n_settings)
 {
     struct vsctl_info info;
     struct vsctl_bridge *bridge;
@@ -1248,6 +1254,10 @@ add_port(struct vsctl_context *ctx,
         ovsrec_port_set_tag(port, &tag, 1);
     }
 
+    for (i = 0; i < n_settings; i++) {
+        set_column(get_table("Port"), &port->header_, settings[i]);
+    }
+
     bridge_insert_port((bridge->parent ? bridge->parent->br_cfg
                         : bridge->br_cfg), port);
 
@@ -1260,7 +1270,7 @@ cmd_add_port(struct vsctl_context *ctx)
     bool may_exist = shash_find(&ctx->options, "--may-exist") != 0;
 
     add_port(ctx, ctx->argv[1], ctx->argv[2], may_exist, false,
-             &ctx->argv[2], 1);
+             &ctx->argv[2], 1, &ctx->argv[3], ctx->argc - 3);
 }
 
 static void
@@ -1268,9 +1278,24 @@ cmd_add_bond(struct vsctl_context *ctx)
 {
     bool may_exist = shash_find(&ctx->options, "--may-exist") != 0;
     bool fake_iface = shash_find(&ctx->options, "--fake-iface");
+    int n_ifaces;
+    int i;
+
+    n_ifaces = ctx->argc - 3;
+    for (i = 3; i < ctx->argc; i++) {
+        if (strchr(ctx->argv[i], '=')) {
+            n_ifaces = i - 3;
+            break;
+        }
+    }
+    if (n_ifaces < 2) {
+        vsctl_fatal("add-bond requires at least 2 interfaces, but only "
+                    "%d were specified", n_ifaces);
+    }
 
     add_port(ctx, ctx->argv[1], ctx->argv[2], may_exist, fake_iface,
-             &ctx->argv[3], ctx->argc - 3);
+             &ctx->argv[3], n_ifaces,
+             &ctx->argv[n_ifaces + 3], ctx->argc - 3 - n_ifaces);
 }
 
 static void
@@ -2493,7 +2518,7 @@ static const struct vsctl_command_syntax all_commands[] = {
 
     /* Port commands. */
     {"list-ports", 1, 1, cmd_list_ports, NULL, ""},
-    {"add-port", 2, 2, cmd_add_port, NULL, "--may-exist"},
+    {"add-port", 2, INT_MAX, cmd_add_port, NULL, "--may-exist"},
     {"add-bond", 4, INT_MAX, cmd_add_bond, NULL, "--may-exist,--fake-iface"},
     {"del-port", 1, 2, cmd_del_port, NULL, "--if-exists,--with-iface"},
     {"port-to-br", 1, 1, cmd_port_to_br, NULL, ""},

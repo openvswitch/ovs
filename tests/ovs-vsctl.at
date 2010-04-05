@@ -262,9 +262,11 @@ OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL(
   [add-br a], 
   [add-br b], 
-  [add-port a a1],
+  [add-port a a1 tag=9],
+  [get port a1 tag],
   [--may-exist add-port b b1],
-  [del-port a a1])], [0], [], [], [OVS_VSCTL_CLEANUP])
+  [del-port a a1])], [0], [9
+], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-port b b1])], [0], [], [],
   [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([--may-exist add-port a b1])], [1], [], 
@@ -284,9 +286,11 @@ AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
   [add-br a], 
-  [add-bond a bond0 a1 a2 a3],
+  [add-bond a bond0 a1 a2 a3 tag=9],
+  [get Port bond0 tag],
   [del-port bond0])], [0], [
 
+9
 
 ], [], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0])
