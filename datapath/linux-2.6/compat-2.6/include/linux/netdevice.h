@@ -77,4 +77,12 @@ extern void unregister_netdevice_many(struct list_head *head);
 extern void dev_disable_lro(struct net_device *dev);
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
+static inline const struct net_device_stats *
+dev_get_stats(struct net_device *dev)
+{
+	return dev->get_stats(dev);
+}
+#endif
+
 #endif
