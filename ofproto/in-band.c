@@ -504,6 +504,7 @@ in_band_run(struct in_band *in_band)
                     (OFPFW_DL_TYPE | OFPFW_DL_SRC | OFPFW_NW_PROTO),
                     OFPP_NORMAL);
     } else {
+        drop_flow(in_band, IBR_FROM_LOCAL_DHCP);
         drop_flow(in_band, IBR_TO_LOCAL_ARP);
         drop_flow(in_band, IBR_FROM_LOCAL_ARP);
     }
