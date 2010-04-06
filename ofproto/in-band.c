@@ -410,7 +410,7 @@ in_band_msg_in_hook(struct in_band *in_band, const flow_t *flow,
         }
 
         local_mac = get_local_mac(in_band);
-        if (eth_addr_equals(dhcp->chaddr, local_mac)) {
+        if (local_mac && eth_addr_equals(dhcp->chaddr, local_mac)) {
             return true;
         }
     }
