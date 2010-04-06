@@ -58,7 +58,7 @@ static struct shash dpif_classes = SHASH_INITIALIZER(&dpif_classes);
 static struct vlog_rate_limit dpmsg_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
 /* Not really much point in logging many dpif errors. */
-static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
+static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
 static void log_operation(const struct dpif *, const char *operation,
                           int error);
