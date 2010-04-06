@@ -202,7 +202,7 @@ if test ! -e /etc/openvswitch/conf.db; then
 
     # Create ovs-vswitchd config database
     ovsdb-tool -vANY:console:emer create /etc/openvswitch/conf.db \
-            /usr/share/openvswitch/vswitch.ovsschema \
+            /usr/share/openvswitch/vswitch.ovsschema
 
     # Create initial table in config database
     ovsdb-tool -vANY:console:emer transact /etc/openvswitch/conf.db \
