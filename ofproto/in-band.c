@@ -645,6 +645,12 @@ void
 in_band_destroy(struct in_band *in_band)
 {
     if (in_band) {
+        int i;
+
+        for (i = 0; i < N_IB_RULES; i++) {
+            drop_flow(in_band, i);
+        }
+
         switch_status_unregister(in_band->ss_cat);
         netdev_close(in_band->local_netdev);
         netdev_close(in_band->remote_netdev);
