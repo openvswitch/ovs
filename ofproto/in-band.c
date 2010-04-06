@@ -649,6 +649,7 @@ in_band_destroy(struct in_band *in_band)
         netdev_close(in_band->local_netdev);
         netdev_close(in_band->remote_netdev);
         /* We don't own the rconn. */
+        free(in_band);
     }
 }
 
