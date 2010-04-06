@@ -279,10 +279,12 @@ get_remote_mac(struct in_band *ib)
                              "to controller "IP_FMT"): %s",
                              next_hop_dev, IP_ARGS(&ib->controller_ip),
                              strerror(retval));
+                free(next_hop_dev);
                 ib->next_remote_refresh = now + 1;
                 return NULL;
             }
         }
+        free(next_hop_dev);
 
         /* Look up the MAC address of the next-hop IP address. */
         retval = netdev_arp_lookup(ib->remote_netdev, r_in4.s_addr,
@@ -292,7 +294,6 @@ get_remote_mac(struct in_band *ib)
                         IP_ARGS(&r_in4.s_addr), strerror(retval));
         }
         have_mac = !eth_addr_is_zero(ib->remote_mac);
-        free(next_hop_dev);
         if (have_mac
             && !eth_addr_equals(ib->last_remote_mac, ib->remote_mac)) {
             VLOG_DBG("remote MAC address changed from "ETH_ADDR_FMT" to "
