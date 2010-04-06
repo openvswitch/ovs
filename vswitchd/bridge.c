@@ -338,6 +338,7 @@ bridge_init(const struct ovsrec_open_vswitch *cfg)
             }
         }
     }
+    svec_destroy(&bridge_names);
     svec_destroy(&dpif_names);
     svec_destroy(&dpif_types);
 
