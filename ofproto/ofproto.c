@@ -1669,6 +1669,7 @@ do_put_flow(struct ofproto *ofproto, struct rule *rule, int flags,
     put->flow.key = rule->cr.flow;
     put->flow.actions = rule->odp_actions;
     put->flow.n_actions = rule->n_odp_actions;
+    put->flow.flags = 0;
     put->flags = flags;
     return dpif_flow_put(ofproto->dpif, put);
 }
@@ -1764,6 +1765,7 @@ rule_uninstall(struct ofproto *p, struct rule *rule)
         odp_flow.key = rule->cr.flow;
         odp_flow.actions = NULL;
         odp_flow.n_actions = 0;
+        odp_flow.flags = 0;
         if (!dpif_flow_del(p->dpif, &odp_flow)) {
             update_stats(p, rule, &odp_flow.stats);
         }
