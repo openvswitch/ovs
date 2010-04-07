@@ -49,8 +49,8 @@
  * connection to the controller, and thus the whole network would go down for
  * that period of time.
  *
- * So, instead, we add some special caseswhen we are connected to a controller,
- * but not yet sure that it has admitted us:
+ * So, instead, we add some special cases when we are connected to a
+ * controller, but not yet sure that it has admitted us:
  *
  *     - We set up flows immediately ourselves, but simultaneously send out an
  *       OFPT_PACKET_IN to the controller.  We put a special bogus buffer-id in
