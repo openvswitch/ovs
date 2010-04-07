@@ -261,7 +261,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         OPT_OUT_OF_BAND,
         OPT_IN_BAND,
         OPT_NETFLOW,
-        OPT_MGMT_ID,
         OPT_PORTS,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS

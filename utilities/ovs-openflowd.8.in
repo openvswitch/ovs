@@ -167,14 +167,6 @@ Ethernet address of the datapath's local port (which is typically
 randomly generated) in the lower 48 bits and zeros in the upper 16.
 .
 .TP
-\fB--mgmt-id=\fImgmtid\fR
-Sets \fImgmtid\fR, which must consist of exactly 12 hexadecimal
-digits, as the switch's management ID.
-.IP
-If this option is omitted, the management ID defaults to 0, signaling
-to the controller that management is supported but not configured.
-.
-.TP
 \fB--mfr-desc=\fIdesc\fR
 Set the description of the switch's manufacturer to \fIdesc\fR, which
 may contain up to 255 ASCII characters.
