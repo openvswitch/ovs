@@ -86,8 +86,8 @@ install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
                $RPM_BUILD_ROOT/usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py
 
-install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/net/openvswitch
-find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/net/openvswitch \;
+install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch
+find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch \;
 
 # Get rid of stuff we don't want to make RPM happy.
 rm \
@@ -103,7 +103,7 @@ rm \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-kill.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-openflowd.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-pki.8
-rm -f $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/net/openvswitch/veth_mod.ko
+rm -f $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch/veth_mod.ko
 
 install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
 
@@ -332,10 +332,10 @@ fi
 /etc/xapi.d/plugins/openvswitch-cfg-update
 /etc/logrotate.d/openvswitch
 /etc/profile.d/openvswitch.sh
-/lib/modules/%{xen_version}/kernel/net/openvswitch/openvswitch_mod.ko
-/lib/modules/%{xen_version}/kernel/net/openvswitch/brcompat_mod.ko
+/lib/modules/%{xen_version}/kernel/extra/openvswitch/openvswitch_mod.ko
+/lib/modules/%{xen_version}/kernel/extra/openvswitch/brcompat_mod.ko
 %if %(echo '%{xen_version}'|awk -F"." '{if ($3>=18) print 1; else print 0;}')
-/lib/modules/%{xen_version}/kernel/net/openvswitch/ip_gre_mod.ko
+/lib/modules/%{xen_version}/kernel/extra/openvswitch/ip_gre_mod.ko
 %endif
 /usr/share/openvswitch/scripts/refresh-network-uuids
 /usr/share/openvswitch/scripts/interface-reconfigure
