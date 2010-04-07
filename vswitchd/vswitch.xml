@@ -127,8 +127,8 @@
         The currently defined key-value pairs are:
         <dl>
           <dt><code>network-uuids</code></dt>
-          <dd>Space-delimited set of universally unique identifier(s) for the
-            network with which this bridge is associated.  The form of the
+          <dd>Semicolon-delimited set of universally unique identifier(s) for
+            the network with which this bridge is associated.  The form of the
             identifier(s) depends on the type of the host.  On a Citrix
             XenServer host, the network identifiers are RFC 4122 UUIDs as
             displayed by, e.g., <code>xe network-list</code>.</dd>
