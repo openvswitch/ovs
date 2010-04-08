@@ -46,7 +46,7 @@ handle_promiscuous()
 		    *) echo 0 > /sys/class/net/${dev}/brport/promisc ;;
 		esac
 		;;
-	    vswitch)
+	    openvswitch)
 		logger -t script-vif "${dev}: Promiscuous ports are not supported via Open vSwitch."
 		;;
 	esac
@@ -164,7 +164,7 @@ add_to_bridge()
 	    ${BRCTL} setfd "${bridge}" 0                        || logger -t scripts-vif "Failed to brctl setfd ${bridge} 0"
 	    ${BRCTL} addif "${bridge}" "${dev}"                 || logger -t scripts-vif "Failed to brctl addif ${bridge} ${dev}"
 	    ;;
-	vswitch)
+	openvswitch)
 	    if [ "$TYPE" = "vif" ] ; then
 		local vif_details=$(handle_vswitch_vif_details)
 	    fi
@@ -182,7 +182,7 @@ remove_from_bridge()
 	bridge)
 	    # Nothing to do
 	    ;;
-	vswitch)
+	openvswitch)
             # If ovs-brcompatd is running, it might already have deleted the
             # port.  Use --if-exists to suppress the error that would otherwise
             # arise in that case.
@@ -202,7 +202,8 @@ else
 fi
 
 case $NETWORK_MODE in
-    bridge|vswitch) ;;
+    bridge|openvswitch) ;;
+    vswitch) NETWORK_MODE=openvswitch ;;
     *)
 	logger -t scripts-vif "Unknown network mode $NETWORK_MODE"
 	exit 1
