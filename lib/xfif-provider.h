@@ -54,10 +54,11 @@ static inline void xfif_assert_class(const struct xfif *xfif,
  * These functions return 0 if successful or a positive errno value on failure,
  * except where otherwise noted.
  *
- * These functions are expected to execute synchronously, that is, to block as
- * necessary to obtain a result.  Thus, they may not return EAGAIN or
- * EWOULDBLOCK or EINPROGRESS.  We may relax this requirement in the future if
- * and when we encounter performance problems. */
+ * Most of these functions are expected to execute synchronously, that is, to
+ * block as necessary to obtain a result.  Thus, these functions may return
+ * EAGAIN (or EWOULDBLOCK or EINPROGRESS) only where the function descriptions
+ * explicitly say those errors are a possibility.  We may relax this
+ * requirement in the future if and when we encounter performance problems. */
 struct xfif_class {
     /* Type of xfif in this class, e.g. "system", "netdev", etc.
      *
