@@ -129,9 +129,6 @@ function insert_modules_if_required {
     if [ -f "/lib/modules/`uname -r`/kernel/extra/openvswitch/veth_mod.ko" ] && ! lsmod | grep -q "veth_mod"; then
         action "Inserting veth module" modprobe veth_mod
     fi
-    if [ -f "/lib/modules/`uname -r`/kernel/extra/openvswitch/ip_gre_mod.ko" ] && ! lsmod | grep -q "ip_gre_mod"; then
-        action "Inserting ip_gre module" modprobe ip_gre_mod
-    fi
 }
 
 function remove_modules {
@@ -140,9 +137,6 @@ function remove_modules {
     fi
     if lsmod | grep -q "openvswitch_mod"; then
         action "Removing openvswitch module" rmmod openvswitch_mod.ko
-    fi
-    if lsmod | grep -q "ip_gre_mod"; then
-        action "Removing ip_gre module" rmmod ip_gre_mod.ko
     fi
 }
 

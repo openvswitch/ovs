@@ -333,9 +333,6 @@ fi
 /etc/profile.d/openvswitch.sh
 /lib/modules/%{xen_version}/kernel/extra/openvswitch/openvswitch_mod.ko
 /lib/modules/%{xen_version}/kernel/extra/openvswitch/brcompat_mod.ko
-%if %(echo '%{xen_version}'|awk -F"." '{if ($3>=18) print 1; else print 0;}')
-/lib/modules/%{xen_version}/kernel/extra/openvswitch/ip_gre_mod.ko
-%endif
 %if %(echo '%{xen_version}'|awk -F"[.-]" '{if ($3==18) print 1; else print 0;}')
 /lib/modules/%{xen_version}/kernel/extra/openvswitch/veth_mod.ko
 %endif

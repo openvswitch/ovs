@@ -50,17 +50,12 @@
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
-#include "openvswitch/gre.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink.h"
 #include "socket-util.h"
 #include "shash.h"
 #include "svec.h"
-
-#ifndef GRE_IOCTL_ONLY
-#include <linux/if_link.h>
-#endif
 
 #define THIS_MODULE VLM_netdev_linux
 #include "vlog.h"
@@ -123,27 +118,6 @@ struct netdev_linux {
 /* An AF_INET socket (used for ioctl operations). */
 static int af_inet_sock = -1;
 
-struct gre_config {
-    uint32_t local_ip;
-    uint32_t remote_ip;
-    uint32_t in_key;
-    uint32_t out_key;
-    uint8_t tos;
-    bool have_in_key;
-    bool have_out_key;
-    bool in_csum;
-    bool out_csum;
-    bool pmtud;
-};
-
-static struct {
-    union {
-        struct nl_sock *nl_sock;
-        int ioctl_fd;
-    };
-    bool use_ioctl;
-} gre_descriptors;
-
 struct netdev_linux_notifier {
     struct netdev_notifier notifier;
     struct list node;
@@ -158,8 +132,7 @@ static struct rtnetlink_notifier netdev_linux_poll_notifier;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 static int netdev_linux_init(void);
-static int if_up(const char *name);
-static int destroy_gre(const char *name);
+
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
                                    int cmd, const char *cmd_name);
 static int netdev_linux_do_ioctl(const char *name, struct ifreq *, int cmd,
@@ -260,344 +233,21 @@ netdev_linux_cache_cb(const struct rtnetlink_change *change,
     }
 }
 
-/* The arguments are marked as unused to prevent warnings on platforms where
- * the Netlink interface isn't supported. */
 static int
-setup_gre_netlink(const char *name OVS_UNUSED,
-                  struct gre_config *config OVS_UNUSED, bool create OVS_UNUSED)
+if_up(const char *name)
 {
-#ifdef GRE_IOCTL_ONLY
-    return EOPNOTSUPP;
-#else
-    int error;
-    struct ofpbuf request, *reply;
-    unsigned int nl_flags;
-    struct ifinfomsg ifinfomsg;
-    struct nlattr *linkinfo_hdr;
-    struct nlattr *info_data_hdr;
-    uint16_t iflags = 0;
-    uint16_t oflags = 0;
-
-    VLOG_DBG("%s: attempting to create gre device using netlink", name);
-
-    if (!gre_descriptors.nl_sock) {
-        error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0,
-                               &gre_descriptors.nl_sock);
-        if (error) {
-            VLOG_WARN("couldn't create netlink socket: %s", strerror(error));
-            goto error;
-        }
-    }
-
-    ofpbuf_init(&request, 0);
-
-    nl_flags = NLM_F_REQUEST;
-    if (create) {
-        nl_flags |= NLM_F_CREATE|NLM_F_EXCL;
-    }
-
-    /* We over-reserve space, because we do some pointer arithmetic
-     * and don't want the buffer address shifting under us. */
-    nl_msg_put_nlmsghdr(&request, gre_descriptors.nl_sock, 2048, RTM_NEWLINK,
-                        nl_flags);
-
-    memset(&ifinfomsg, 0, sizeof ifinfomsg);
-    ifinfomsg.ifi_family = AF_UNSPEC;
-    nl_msg_put(&request, &ifinfomsg, sizeof ifinfomsg);
-
-    linkinfo_hdr = ofpbuf_tail(&request);
-    nl_msg_put_unspec(&request, IFLA_LINKINFO, NULL, 0);
-
-    nl_msg_put_unspec(&request, IFLA_INFO_KIND, "gretap", 6);
-
-    info_data_hdr = ofpbuf_tail(&request);
-    nl_msg_put_unspec(&request, IFLA_INFO_DATA, NULL, 0);
-
-    /* Set flags */
-    if (config->have_in_key) {
-        iflags |= GRE_KEY;
-    }
-    if (config->have_out_key) {
-        oflags |= GRE_KEY;
-    }
-
-    if (config->in_csum) {
-        iflags |= GRE_CSUM;
-    }
-    if (config->out_csum) {
-        oflags |= GRE_CSUM;
-    }
-
-    /* Add options */
-    nl_msg_put_u32(&request, IFLA_GRE_IKEY, config->in_key);
-    nl_msg_put_u32(&request, IFLA_GRE_OKEY, config->out_key);
-    nl_msg_put_u16(&request, IFLA_GRE_IFLAGS, iflags);
-    nl_msg_put_u16(&request, IFLA_GRE_OFLAGS, oflags);
-    nl_msg_put_u32(&request, IFLA_GRE_LOCAL, config->local_ip);
-    nl_msg_put_u32(&request, IFLA_GRE_REMOTE, config->remote_ip);
-    nl_msg_put_u8(&request, IFLA_GRE_PMTUDISC, config->pmtud);
-    nl_msg_put_u8(&request, IFLA_GRE_TTL, IPDEFTTL);
-    nl_msg_put_u8(&request, IFLA_GRE_TOS, config->tos);
-
-    info_data_hdr->nla_len = (char *)ofpbuf_tail(&request)
-                                - (char *)info_data_hdr;
-    linkinfo_hdr->nla_len = (char *)ofpbuf_tail(&request)
-                                - (char *)linkinfo_hdr;
-
-    nl_msg_put_string(&request, IFLA_IFNAME, name);
-
-    error = nl_sock_transact(gre_descriptors.nl_sock, &request, &reply);
-    ofpbuf_uninit(&request);
-    if (error) {
-        VLOG_WARN("couldn't transact netlink socket: %s", strerror(error));
-        goto error;
-    }
-    ofpbuf_delete(reply);
-
-error:
-    return error;
-#endif
-}
-
-static int
-setup_gre_ioctl(const char *name, struct gre_config *config, bool create)
-{
-    struct ip_tunnel_parm p;
     struct ifreq ifr;
 
-    VLOG_DBG("%s: attempting to create gre device using ioctl", name);
+    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+    ifr.ifr_flags = IFF_UP;
 
-    memset(&p, 0, sizeof p);
-
-    strncpy(p.name, name, IFNAMSIZ);
-
-    p.iph.version = 4;
-    p.iph.ihl = 5;
-    p.iph.protocol = IPPROTO_GRE;
-    p.iph.saddr = config->local_ip;
-    p.iph.daddr = config->remote_ip;
-    p.iph.ttl = IPDEFTTL;
-    p.iph.tos = config->tos;
-
-    if (config->have_in_key) {
-        p.i_flags |= GRE_KEY;
-        p.i_key = config->in_key;
-    }
-    if (config->have_out_key) {
-        p.o_flags |= GRE_KEY;
-        p.o_key = config->out_key;
-    }
-
-    if (config->in_csum) {
-        p.i_flags |= GRE_CSUM;
-    }
-    if (config->out_csum) {
-        p.o_flags |= GRE_CSUM;
-    }
-
-    if (config->pmtud) {
-        p.iph.frag_off = htons(IP_DONT_FRAGMENT);
-    }
-
-    strncpy(ifr.ifr_name, create ? GRE_IOCTL_DEVICE : name, IFNAMSIZ);
-    ifr.ifr_ifru.ifru_data = (void *)&p;
-
-    if (!gre_descriptors.ioctl_fd) {
-        gre_descriptors.ioctl_fd = socket(AF_INET, SOCK_DGRAM, 0);
-        if (gre_descriptors.ioctl_fd < 0) {
-            VLOG_WARN("couldn't create gre ioctl socket: %s", strerror(errno));
-            gre_descriptors.ioctl_fd = 0;
-            return errno;
-        }
-    }
-
-    if (ioctl(gre_descriptors.ioctl_fd, create ? SIOCADDGRETAP : SIOCCHGGRETAP,
-              &ifr) < 0) {
-        VLOG_WARN("couldn't do gre ioctl: %s", strerror(errno));
+    if (ioctl(af_inet_sock, SIOCSIFFLAGS, &ifr) == -1) {
+        VLOG_DBG_RL(&rl, "%s: failed to bring device up: %s",
+                    name, strerror(errno));
         return errno;
     }
 
     return 0;
-}
-
-/* The arguments are marked as unused to prevent warnings on platforms where
- * the Netlink interface isn't supported. */
-static bool
-check_gre_device_netlink(const char *name OVS_UNUSED)
-{
-#ifdef GRE_IOCTL_ONLY
-    return false;
-#else
-    static const struct nl_policy getlink_policy[] = {
-        [IFLA_LINKINFO] = { .type = NL_A_NESTED, .optional = false },
-    };
-
-    static const struct nl_policy linkinfo_policy[] = {
-        [IFLA_INFO_KIND] = { .type = NL_A_STRING, .optional = false },
-    };
-
-    int error;
-    bool ret = false;
-    struct ofpbuf request, *reply;
-    struct ifinfomsg ifinfomsg;
-    struct nlattr *getlink_attrs[ARRAY_SIZE(getlink_policy)];
-    struct nlattr *linkinfo_attrs[ARRAY_SIZE(linkinfo_policy)];
-    struct ofpbuf linkinfo;
-    const char *device_kind;
-
-    ofpbuf_init(&request, 0);
-
-    nl_msg_put_nlmsghdr(&request, gre_descriptors.nl_sock,
-                        NLMSG_LENGTH(sizeof ifinfomsg), RTM_GETLINK,
-                        NLM_F_REQUEST);
-
-    memset(&ifinfomsg, 0, sizeof ifinfomsg);
-    ifinfomsg.ifi_family = AF_UNSPEC;
-    ifinfomsg.ifi_index =  do_get_ifindex(name);
-    nl_msg_put(&request, &ifinfomsg, sizeof ifinfomsg);
-
-    error = nl_sock_transact(gre_descriptors.nl_sock, &request, &reply);
-    ofpbuf_uninit(&request);
-    if (error) {
-        VLOG_WARN("couldn't transact netlink socket: %s", strerror(error));
-        return false;
-    }
-
-    if (!nl_policy_parse(reply, NLMSG_HDRLEN + sizeof(struct ifinfomsg),
-                         getlink_policy, getlink_attrs,
-                         ARRAY_SIZE(getlink_policy))) {
-        VLOG_WARN("received bad rtnl message (getlink policy)");
-        goto error;
-    }
-
-    linkinfo.data = (void *)nl_attr_get(getlink_attrs[IFLA_LINKINFO]);
-    linkinfo.size = nl_attr_get_size(getlink_attrs[IFLA_LINKINFO]);
-    if (!nl_policy_parse(&linkinfo, 0, linkinfo_policy,
-                        linkinfo_attrs, ARRAY_SIZE(linkinfo_policy))) {
-        VLOG_WARN("received bad rtnl message (linkinfo policy)");
-        goto error;
-    }
-
-    device_kind = nl_attr_get_string(linkinfo_attrs[IFLA_INFO_KIND]);
-    ret = !strcmp(device_kind, "gretap");
-
-error:
-    ofpbuf_delete(reply);
-    return ret;
-#endif
-}
-
-static bool
-check_gre_device_ioctl(const char *name)
-{
-    struct ethtool_drvinfo drvinfo;
-    int error;
-
-    memset(&drvinfo, 0, sizeof drvinfo);
-    error = netdev_linux_do_ethtool(name, (struct ethtool_cmd *)&drvinfo,
-                                    ETHTOOL_GDRVINFO, "ETHTOOL_GDRVINFO");
-
-    return !error && !strcmp(drvinfo.driver, "ip_gre")
-           && !strcmp(drvinfo.bus_info, "gretap");
-}
-
-static int
-setup_gre(const char *name, const struct shash *args, bool create)
-{
-    int error;
-    struct in_addr in_addr;
-    struct shash_node *node;
-    struct gre_config config;
-
-    memset(&config, 0, sizeof config);
-    config.in_csum = true;
-    config.out_csum = true;
-    config.pmtud = true;
-
-    SHASH_FOR_EACH (node, args) {
-        if (!strcmp(node->name, "remote_ip")) {
-            if (lookup_ip(node->data, &in_addr)) {
-                VLOG_WARN("bad 'remote_ip' for gre device %s ", name);
-            } else {
-                config.remote_ip = in_addr.s_addr;
-            }
-        } else if (!strcmp(node->name, "local_ip")) {
-            if (lookup_ip(node->data, &in_addr)) {
-                VLOG_WARN("bad 'local_ip' for gre device %s ", name);
-            } else {
-                config.local_ip = in_addr.s_addr;
-            }
-        } else if (!strcmp(node->name, "key")) {
-            config.have_in_key = true;
-            config.have_out_key = true;
-            config.in_key = htonl(atoi(node->data));
-            config.out_key = htonl(atoi(node->data));
-        } else if (!strcmp(node->name, "in_key")) {
-            config.have_in_key = true;
-            config.in_key = htonl(atoi(node->data));
-        } else if (!strcmp(node->name, "out_key")) {
-            config.have_out_key = true;
-            config.out_key = htonl(atoi(node->data));
-        } else if (!strcmp(node->name, "tos")) {
-            config.tos = atoi(node->data);
-        } else if (!strcmp(node->name, "csum")) {
-            if (!strcmp(node->data, "false")) {
-                config.in_csum = false;
-                config.out_csum = false;
-            }
-        } else if (!strcmp(node->name, "pmtud")) {
-            if (!strcmp(node->data, "false")) {
-                config.pmtud = false;
-            }
-        } else {
-            VLOG_WARN("unknown gre argument '%s'", node->name);
-        }
-    }
-
-    if (!config.remote_ip) {
-        VLOG_WARN("gre type requires valid 'remote_ip' argument");
-        error = EINVAL;
-        goto error;
-    }
-
-    if (!gre_descriptors.use_ioctl) {
-        error = setup_gre_netlink(name, &config, create);
-        if (error == EOPNOTSUPP) {
-            gre_descriptors.use_ioctl = true;
-        }
-    }
-    if (gre_descriptors.use_ioctl) {
-        error = setup_gre_ioctl(name, &config, create);
-    }
-
-    if (create && error == EEXIST) {
-        bool gre_device;
-
-        if (gre_descriptors.use_ioctl) {
-            gre_device = check_gre_device_ioctl(name);
-        } else {
-            gre_device = check_gre_device_netlink(name);
-        }
-
-        if (!gre_device) {
-            goto error;
-        }
-
-        VLOG_WARN("replacing existing gre device %s", name);
-        error = destroy_gre(name);
-        if (error) {
-            goto error;
-        }
-
-        if (gre_descriptors.use_ioctl) {
-            error = setup_gre_ioctl(name, &config, create);
-        } else {
-            error = setup_gre_netlink(name, &config, create);
-        }
-    }
-
-error:
-    return error;
 }
 
 /* A veth may be created using the 'command' "+<name>,<peer>". A veth may 
@@ -785,51 +435,6 @@ error:
 }
 
 static int
-if_up(const char *name)
-{
-    struct ifreq ifr;
-
-    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
-    ifr.ifr_flags = IFF_UP;
-
-    if (ioctl(af_inet_sock, SIOCSIFFLAGS, &ifr) == -1) {
-        VLOG_DBG_RL(&rl, "%s: failed to bring device up: %s",
-                    name, strerror(errno));
-        return errno;
-    }
-
-    return 0;
-}
-
-static int
-netdev_linux_create_gre(const char *name, const char *type OVS_UNUSED,
-                    const struct shash *args, struct netdev_dev **netdev_devp)
-{
-    struct netdev_dev_linux *netdev_dev;
-    int error;
-
-    netdev_dev = xzalloc(sizeof *netdev_dev);
-
-    error = setup_gre(name, args, true);
-    if (error) {
-        goto error;
-    }
-
-    error = if_up(name);
-    if (error) {
-        goto error;
-    }
-
-    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_gre_class);
-    *netdev_devp = &netdev_dev->netdev_dev;
-    return 0;
-
-error:
-    free(netdev_dev);
-    return error;
-}
-
-static int
 netdev_linux_create_patch(const char *name, const char *type OVS_UNUSED,
                     const struct shash *args, struct netdev_dev **netdev_devp)
 {
@@ -851,75 +456,6 @@ netdev_linux_create_patch(const char *name, const char *type OVS_UNUSED,
     return 0;
 }
 
-static int
-netdev_linux_reconfigure_gre(struct netdev_dev *netdev_dev_,
-                             const struct shash *args)
-{
-    const char *name = netdev_dev_get_name(netdev_dev_);
-
-    return setup_gre(name, args, false);
-}
-
-/* The arguments are marked as unused to prevent warnings on platforms where
- * the Netlink interface isn't supported. */
-static int
-destroy_gre_netlink(const char *name OVS_UNUSED)
-{
-#ifdef GRE_IOCTL_ONLY
-    return EOPNOTSUPP;
-#else
-    int error;
-    struct ofpbuf request, *reply;
-    struct ifinfomsg ifinfomsg;
-    int ifindex;
-
-    ofpbuf_init(&request, 0);
-    
-    nl_msg_put_nlmsghdr(&request, gre_descriptors.nl_sock, 0, RTM_DELLINK,
-                        NLM_F_REQUEST);
-
-    memset(&ifinfomsg, 0, sizeof ifinfomsg);
-    ifinfomsg.ifi_family = AF_UNSPEC;
-    nl_msg_put(&request, &ifinfomsg, sizeof ifinfomsg);
-
-    ifindex = do_get_ifindex(name);
-    nl_msg_put_u32(&request, IFLA_LINK, ifindex);
-
-    nl_msg_put_string(&request, IFLA_IFNAME, name);
-
-    error = nl_sock_transact(gre_descriptors.nl_sock, &request, &reply);
-    ofpbuf_uninit(&request);
-    if (error) {
-        VLOG_WARN("couldn't transact netlink socket: %s", strerror(error));
-        goto error;
-    }
-    ofpbuf_delete(reply);
-
-error:
-    return 0;
-#endif
-}
-
-static int
-destroy_gre_ioctl(const char *name)
-{
-    struct ip_tunnel_parm p;
-    struct ifreq ifr;
-
-    memset(&p, 0, sizeof p);
-    strncpy(p.name, name, IFNAMSIZ);
-
-    strncpy(ifr.ifr_name, name, IFNAMSIZ);
-    ifr.ifr_ifru.ifru_data = (void *)&p;
-
-    if (ioctl(gre_descriptors.ioctl_fd, SIOCDELGRETAP, &ifr) < 0) {
-        VLOG_WARN("couldn't do gre ioctl: %s\n", strerror(errno));
-        return errno;
-    }
-
-    return 0;
-}
-
 static void
 destroy_tap(struct netdev_dev_linux *netdev_dev)
 {
@@ -927,16 +463,6 @@ destroy_tap(struct netdev_dev_linux *netdev_dev)
 
     if (state->fd >= 0) {
         close(state->fd);
-    }
-}
-
-static int
-destroy_gre(const char *name)
-{
-    if (gre_descriptors.use_ioctl) {
-        return destroy_gre_ioctl(name);
-    } else {
-        return destroy_gre_netlink(name);
     }
 }
 
@@ -968,8 +494,6 @@ netdev_linux_destroy(struct netdev_dev *netdev_dev_)
         }
     } else if (!strcmp(type, "tap")) {
         destroy_tap(netdev_dev);
-    } else if (!strcmp(type, "gre")) {
-        destroy_gre(netdev_dev_get_name(&netdev_dev->netdev_dev));
     } else if (!strcmp(type, "patch")) {
         destroy_patch(netdev_dev);
     }
@@ -2211,54 +1735,6 @@ const struct netdev_class netdev_tap_class = {
     netdev_linux_poll_remove,
 };
 
-const struct netdev_class netdev_gre_class = {
-    "gre",
-
-    netdev_linux_init,
-    netdev_linux_run,
-    netdev_linux_wait,
-
-    netdev_linux_create_gre,
-    netdev_linux_destroy,
-    netdev_linux_reconfigure_gre,
-
-    netdev_linux_open,
-    netdev_linux_close,
-
-    NULL,                       /* enumerate */
-
-    netdev_linux_recv,
-    netdev_linux_recv_wait,
-    netdev_linux_drain,
-
-    netdev_linux_send,
-    netdev_linux_send_wait,
-
-    netdev_linux_set_etheraddr,
-    netdev_linux_get_etheraddr,
-    netdev_linux_get_mtu,
-    netdev_linux_get_ifindex,
-    netdev_linux_get_carrier,
-    netdev_linux_get_stats,
-
-    netdev_linux_get_features,
-    netdev_linux_set_advertisements,
-    netdev_linux_get_vlan_vid,
-    netdev_linux_set_policing,
-
-    netdev_linux_get_in4,
-    netdev_linux_set_in4,
-    netdev_linux_get_in6,
-    netdev_linux_add_router,
-    netdev_linux_get_next_hop,
-    netdev_linux_arp_lookup,
-
-    netdev_linux_update_flags,
-
-    netdev_linux_poll_add,
-    netdev_linux_poll_remove,
-};
-
 const struct netdev_class netdev_patch_class = {
     "patch",
 
@@ -2306,6 +1782,7 @@ const struct netdev_class netdev_patch_class = {
     netdev_linux_poll_add,
     netdev_linux_poll_remove,
 };
+
 
 static int
 get_stats_via_netlink(int ifindex, struct netdev_stats *stats)

@@ -54,14 +54,14 @@ static void poll_notify(const struct netdev_gre *netdev);
 static struct netdev_dev_gre *
 netdev_dev_gre_cast(const struct netdev_dev *netdev_dev)
 {
-    netdev_dev_assert_class(netdev_dev, &netdev_grenew_class);
+    netdev_dev_assert_class(netdev_dev, &netdev_gre_class);
     return CONTAINER_OF(netdev_dev, struct netdev_dev_gre, netdev_dev);
 }
 
 static struct netdev_gre *
 netdev_gre_cast(const struct netdev *netdev)
 {
-    netdev_assert_class(netdev, &netdev_grenew_class);
+    netdev_assert_class(netdev, &netdev_gre_class);
     return CONTAINER_OF(netdev, struct netdev_gre, netdev);
 }
 
@@ -200,7 +200,7 @@ netdev_gre_create(const char *name, const char *type OVS_UNUSED,
     }
 
     netdev_dev = xmalloc(sizeof *netdev_dev);
-    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_grenew_class);
+    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_gre_class);
 
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
@@ -427,8 +427,8 @@ poll_notify(const struct netdev_gre *netdev)
     }
 }
 
-const struct netdev_class netdev_grenew_class = {
-    "grenew",
+const struct netdev_class netdev_gre_class = {
+    "gre",
 
     netdev_gre_init,
     NULL,                       /* run */

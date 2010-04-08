@@ -40,17 +40,11 @@
 #ifndef OPENVSWITCH_GRE_H
 #define OPENVSWITCH_GRE_H 1
 
-#include <linux/ip.h>
-#include <linux/if_tunnel.h>
-#include <linux/version.h>
-
 #ifdef __KERNEL__
 #include <linux/types.h>
 #else
 #include <sys/types.h>
 #endif
-
-/* New GRE config. */
 
 #define GRE_F_IN_CSUM		(1 << 0) /* Require incoming packets to have checksums. */
 #define GRE_F_OUT_CSUM		(1 << 1) /* Checksum outgoing packets. */
@@ -69,36 +63,5 @@ struct gre_port_config {
 	__u8	tos;
 	__u8	ttl;
 };
-
-/* Old GRE config. */
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
-#define GRE_IOCTL_ONLY
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
-enum
-{
-	IFLA_GRE_UNSPEC,
-	IFLA_GRE_LINK,
-	IFLA_GRE_IFLAGS,
-	IFLA_GRE_OFLAGS,
-	IFLA_GRE_IKEY,
-	IFLA_GRE_OKEY,
-	IFLA_GRE_LOCAL,
-	IFLA_GRE_REMOTE,
-	IFLA_GRE_TTL,
-	IFLA_GRE_TOS,
-	IFLA_GRE_PMTUDISC,
-	__IFLA_GRE_MAX,
-};
-
-#define IFLA_GRE_MAX	(__IFLA_GRE_MAX - 1)
-#endif
-
-#define GRE_IOCTL_DEVICE "gre0"
-
-#define SIOCGETGRETAP	SIOCGETTUNNEL
-#define SIOCADDGRETAP	(SIOCDEVPRIVATE + 10)
-#define SIOCDELGRETAP	SIOCDELTUNNEL
-#define SIOCCHGGRETAP	(SIOCDEVPRIVATE + 11)
 
 #endif /* openvswitch/gre.h */

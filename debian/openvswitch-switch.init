@@ -191,14 +191,11 @@ unload_modules() {
         done
     fi
     unload_module openvswitch_mod
-    unload_module ip_gre_mod
 }
 
 case "$1" in
     start)
         load_module openvswitch_mod
-        unload_module ip_gre
-        load_module ip_gre_mod
 
         if test -n "$CORE_LIMIT"; then
             check_op "Setting core limit to $CORE_LIMIT" ulimit -c "$CORE_LIMIT"

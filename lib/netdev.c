@@ -46,7 +46,6 @@ static const struct netdev_class *base_netdev_classes[] = {
     &netdev_tap_class,
     &netdev_gre_class,
     &netdev_patch_class,
-    &netdev_grenew_class,
 };
 
 static struct shash netdev_classes = SHASH_INITIALIZER(&netdev_classes);
