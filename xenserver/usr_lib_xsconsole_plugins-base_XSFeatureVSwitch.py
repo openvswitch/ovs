@@ -233,11 +233,11 @@ class VSwitchControllerDialogue(Dialogue):
         pools = session.xenapi.pool.get_all()
         # We assume there is only ever one pool...
         if len(pools) == 0:
-            log.error("No pool for host.")
-            raise XenAPIPlugin.Failure("NO_POOL_FOR_HOST", [])
+            XSLogFatal(Lang("No pool found for host."))
+            return
         if len(pools) > 1:
-            log.error("More than one pool for host.")
-            raise XenAPIPlugin.Failure("MORE_THAN_ONE_POOL_FOR_HOST", [])
+            XSLogFatal(Lang("More than one pool for host."))
+            return
         session.xenapi.pool.remove_from_other_config(pools[0], key)
         if value != None:
             session.xenapi.pool.add_to_other_config(pools[0], key, value)
