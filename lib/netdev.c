@@ -1069,7 +1069,7 @@ netdev_init(struct netdev *netdev, struct netdev_dev *netdev_dev)
  *
  * Normally this function only needs to be called from netdev_close().
  * However, it may be called by providers due to an error on opening
- * that occurs after initialization.  It this case netdev_close() would
+ * that occurs after initialization.  In this case netdev_close() would
  * never be called. */
 void
 netdev_uninit(struct netdev *netdev, bool close)
