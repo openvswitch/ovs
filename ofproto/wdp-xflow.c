@@ -1314,23 +1314,35 @@ wx_port_del(struct wdp *wdp, uint16_t port_no)
 }
 
 static int
+wx_answer_port_query(const struct wdp_port *port, struct wdp_port *portp)
+{
+    if (port) {
+        wdp_port_copy(portp, port);
+        return 0;
+    } else {
+        return ENOENT;
+    }
+}
+
+static int
 wx_port_query_by_number(const struct wdp *wdp, uint16_t port_no,
-                        struct wdp_port **portp)
+                        struct wdp_port *portp)
 {
     struct wx *wx = wx_cast(wdp);
+    const struct wdp_port *port;
 
-    *portp = port_array_get(&wx->ports, ofp_port_to_xflow_port(port_no));
-    return *portp ? 0 : ENOENT;
+    port = port_array_get(&wx->ports, ofp_port_to_xflow_port(port_no));
+    return wx_answer_port_query(port, portp);
 }
 
 static int
 wx_port_query_by_name(const struct wdp *wdp, const char *devname,
-                      struct wdp_port **portp)
+                      struct wdp_port *portp)
 {
     struct wx *wx = wx_cast(wdp);
 
-    *portp = shash_find_data(&wx->port_by_name, devname);
-    return *portp ? 0 : ENOENT;
+    return wx_answer_port_query(shash_find_data(&wx->port_by_name, devname),
+                                portp);
 }
 
 static int
@@ -1379,12 +1391,10 @@ wx_port_set_config(struct wdp *wdp, uint16_t port_no, uint32_t config)
 }
 
 static int
-wx_port_list(const struct wdp *wdp, struct wdp_port ***portsp,
-             size_t *n_portsp)
+wx_port_list(const struct wdp *wdp, struct wdp_port **portsp, size_t *n_portsp)
 {
     struct wx *wx = wx_cast(wdp);
-    struct wdp_port **ports;
-    struct wdp_port *port;
+    struct wdp_port *ports, *port;
     unsigned int port_no;
     size_t n_ports, i;
 
@@ -1392,7 +1402,7 @@ wx_port_list(const struct wdp *wdp, struct wdp_port ***portsp,
     *portsp = ports = xmalloc(n_ports * sizeof *ports);
     i = 0;
     PORT_ARRAY_FOR_EACH (port, &wx->ports, port_no) {
-        ports[i++] = port;
+        wdp_port_copy(&ports[i++], port);
     }
     assert(i == n_ports);
 

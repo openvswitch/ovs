@@ -1133,7 +1133,7 @@ static int
 handle_port_mod(struct ofproto *p, struct ofp_header *oh)
 {
     const struct ofp_port_mod *opm;
-    struct wdp_port *port;
+    struct wdp_port port;
     int error;
 
     error = check_ofp_message(oh, OFPT_PORT_MOD, sizeof *opm);
@@ -1142,11 +1142,10 @@ handle_port_mod(struct ofproto *p, struct ofp_header *oh)
     }
     opm = (struct ofp_port_mod *) oh;
 
-    wdp_port_query_by_number(p->wdp, ntohs(opm->port_no), &port);
-    if (!port) {
-        return ofp_mkerr(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_PORT);
-    } else if (memcmp(port->opp.hw_addr, opm->hw_addr, OFP_ETH_ALEN)) {
-        return ofp_mkerr(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_HW_ADDR);
+    if (wdp_port_query_by_number(p->wdp, ntohs(opm->port_no), &port)) {
+        error = ofp_mkerr(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_PORT);
+    } else if (memcmp(port.opp.hw_addr, opm->hw_addr, OFP_ETH_ALEN)) {
+        error = ofp_mkerr(OFPET_PORT_MOD_FAILED, OFPPMFC_BAD_HW_ADDR);
     } else {
         uint32_t mask, new_config;
 
@@ -1154,16 +1153,18 @@ handle_port_mod(struct ofproto *p, struct ofp_header *oh)
                                    | OFPPC_NO_RECV | OFPPC_NO_RECV_STP
                                    | OFPPC_NO_FLOOD | OFPPC_NO_FWD
                                    | OFPPC_NO_PACKET_IN);
-        new_config = (port->opp.config & ~mask) | (ntohl(opm->config) & mask);
-        if (new_config != port->opp.config) {
+        new_config = (port.opp.config & ~mask) | (ntohl(opm->config) & mask);
+        if (new_config != port.opp.config) {
             wdp_port_set_config(p->wdp, ntohs(opm->port_no), new_config);
         }
         if (opm->advertise) {
-            netdev_set_advertisements(port->netdev, ntohl(opm->advertise));
+            netdev_set_advertisements(port.netdev, ntohl(opm->advertise));
         }
+        error = 0;
     }
+    wdp_port_free(&port);
 
-    return 0;
+    return error;
 }
 
 static struct ofpbuf *
@@ -1302,22 +1303,22 @@ handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
 
     msg = start_stats_reply(osr, sizeof *ops * 16);
     if (psr->port_no != htons(OFPP_NONE)) {
-        struct wdp_port *port;
+        struct wdp_port port;
 
-        wdp_port_query_by_number(p->wdp, ntohs(psr->port_no), &port);
-        if (port) {
-            append_port_stat(port, ofconn, msg);
+        if (!wdp_port_query_by_number(p->wdp, ntohs(psr->port_no), &port)) {
+            append_port_stat(&port, ofconn, msg);
+            wdp_port_free(&port);
         }
     } else {
-        struct wdp_port **ports;
+        struct wdp_port *ports;
         size_t n_ports;
         size_t i;
 
         wdp_port_list(p->wdp, &ports, &n_ports);
         for (i = 0; i < n_ports; i++) {
-            append_port_stat(ports[i], ofconn, msg);
+            append_port_stat(&ports[i], ofconn, msg);
         }
-        free(ports);
+        wdp_port_array_free(ports, n_ports);
     }
 
     queue_tx(msg, ofconn, ofconn->reply_counter);
@@ -1873,11 +1874,12 @@ handle_flow_miss(struct ofproto *p, struct wdp_packet *packet)
     rule = wdp_flow_match(p->wdp, &flow);
     if (!rule) {
         /* Don't send a packet-in if OFPPC_NO_PACKET_IN asserted. */
-        struct wdp_port *port;
+        struct wdp_port port;
 
-        wdp_port_query_by_number(p->wdp, packet->in_port, &port);
-        if (port) {
-            if (port->opp.config & OFPPC_NO_PACKET_IN) {
+        if (!wdp_port_query_by_number(p->wdp, packet->in_port, &port)) {
+            bool no_packet_in = (port.opp.config & OFPPC_NO_PACKET_IN) != 0;
+            wdp_port_free(&port);
+            if (no_packet_in) {
                 COVERAGE_INC(ofproto_no_packet_in);
                 wdp_packet_destroy(packet);
                 return;
@@ -2066,19 +2068,20 @@ send_packet_in_miss(struct wdp_packet *packet, void *p_)
 static uint64_t
 pick_datapath_id(const struct ofproto *ofproto)
 {
-    struct wdp_port *port;
+    struct wdp_port port;
 
-    wdp_port_query_by_number(ofproto->wdp, OFPP_LOCAL, &port);
-    if (port) {
+    if (!wdp_port_query_by_number(ofproto->wdp, OFPP_LOCAL, &port)) {
         uint8_t ea[ETH_ADDR_LEN];
         int error;
 
-        error = netdev_get_etheraddr(port->netdev, ea);
+        error = netdev_get_etheraddr(port.netdev, ea);
         if (!error) {
+            wdp_port_free(&port);
             return eth_addr_to_uint64(ea);
         }
         VLOG_WARN("could not get MAC address for %s (%s)",
-                  netdev_get_name(port->netdev), strerror(error));
+                  netdev_get_name(port.netdev), strerror(error));
+        wdp_port_free(&port);
     }
 
     return ofproto->fallback_dpid;

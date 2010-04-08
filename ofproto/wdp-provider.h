@@ -188,27 +188,23 @@ struct wdp_class {
     int (*port_del)(struct wdp *wdp, uint16_t port_no);
 
     /* Looks up a port in 'wdp' by name or number.  On success, returns 0 and
-     * points '*portp' to a wdp_port representing the specified port.  On
-     * failure, returns a positive errno value and sets '*portp' to NULL.
+     * initializes '*portp'.  On failure, returns a positive errno value.
      *
-     * The caller is not allowed to modify or free the returned wdp_port.  The
-     * wdp_port must remain accessible until the next call to the 'run' member
-     * function for this class or or wdp_port_poll() for 'wdp'. */
+     * The caller takes ownership of everything in '*portp' and will eventually
+     * free it with, e.g., wdp_port_free(). */
     int (*port_query_by_number)(const struct wdp *wdp, uint16_t port_no,
-                                struct wdp_port **portp);
+                                struct wdp_port *portp);
     int (*port_query_by_name)(const struct wdp *wdp, const char *devname,
-                              struct wdp_port **portp);
+                              struct wdp_port *portp);
 
-    /* Obtains a list of all the ports in 'wdp'.  Sets '*portsp' to point to
-     * an array of pointers to port structures and '*n_portsp' to the number of
-     * pointers in the array.
+    /* Obtains a list of all the ports in 'wdp'.  Sets '*portsp' to point to an
+     * array of port structures and '*n_portsp' to the number of ports in the
+     * array.
      *
-     * The caller is responsible for freeing '*portsp' by calling free().  The
-     * calleris not allowed to modify or free the individual wdp_port
-     * structures.  The wdp_ports must remain accessible until the next call to
-     * the 'run' member function for this class or or wdp_port_poll() for
-     * 'wdp'. */
-    int (*port_list)(const struct wdp *wdp, struct wdp_port ***portsp,
+     * The caller takes ownership of '*portsp' and all of the ports in it and
+     * is responsible for freeing the ports and the array with, e.g.,
+     * wdp_port_array_free(). */
+    int (*port_list)(const struct wdp *wdp, struct wdp_port **portsp,
                      size_t *n_portsp);
 
     int (*port_set_config)(struct wdp *sdpif, uint16_t port_no,

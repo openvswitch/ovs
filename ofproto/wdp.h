@@ -103,21 +103,24 @@ int wdp_set_drop_frags(struct wdp *, bool drop_frags);
 
 struct wdp_port {
     struct netdev *netdev;
-    struct ofp_phy_port opp;    /* In host byte order. */
+    struct ofp_phy_port opp;    /* In *host* byte order. */
     char *devname;              /* Network device name. */
     bool internal;
 };
+void wdp_port_clear(struct wdp_port *);
+void wdp_port_copy(struct wdp_port *, const struct wdp_port *);
+void wdp_port_free(struct wdp_port *);
+void wdp_port_array_free(struct wdp_port *, size_t n);
 
 int wdp_port_add(struct wdp *, const char *devname, bool internal,
                    uint16_t *port_no);
 int wdp_port_del(struct wdp *, uint16_t port_no);
 int wdp_port_query_by_number(const struct wdp *, uint16_t port_no,
-                               struct wdp_port **);
+                             struct wdp_port *);
 int wdp_port_query_by_name(const struct wdp *, const char *devname,
-                             struct wdp_port **);
+                           struct wdp_port *);
 int wdp_port_get_name(struct wdp *, uint16_t port_no, char **namep);
-int wdp_port_list(const struct wdp *,
-                    struct wdp_port ***, size_t *n_ports);
+int wdp_port_list(const struct wdp *, struct wdp_port **, size_t *n_ports);
 
 int wdp_port_set_config(struct wdp *, uint16_t port_no, uint32_t config);
 

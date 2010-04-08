@@ -27,6 +27,7 @@
 #include "coverage.h"
 #include "dynamic-string.h"
 #include "flow.h"
+#include "netdev.h"
 #include "netlink.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
@@ -478,6 +479,47 @@ wdp_set_drop_frags(struct wdp *wdp, bool drop_frags)
     return error;
 }
 
+/* Clears the contents of 'port'. */
+void
+wdp_port_clear(struct wdp_port *port)
+{
+    memset(port, 0, sizeof *port);
+}
+
+/* Makes a deep copy of 'old' in 'port'.  The caller may free 'port''s data
+ * with wdp_port_free(). */
+void
+wdp_port_copy(struct wdp_port *port, const struct wdp_port *old)
+{
+    port->netdev = old->netdev ? netdev_reopen(old->netdev) : NULL;
+    port->opp = old->opp;
+    port->devname = old->devname ? xstrdup(old->devname) : NULL;
+    port->internal = old->internal;
+}
+
+/* Frees the data that 'port' points to (but not 'port' itself). */
+void
+wdp_port_free(struct wdp_port *port)
+{
+    if (port) {
+        netdev_close(port->netdev);
+        free(port->devname);
+    }
+}
+
+/* Frees the data that each of the 'n' ports in 'ports' points to, and then
+ * frees 'ports' itself. */
+void
+wdp_port_array_free(struct wdp_port *ports, size_t n)
+{
+    size_t i;
+
+    for (i = 0; i < n; i++) {
+        wdp_port_free(&ports[i]);
+    }
+    free(ports);
+}
+
 /* Attempts to add 'devname' as a port on 'wdp':
  *
  *   - If 'internal' is true, attempts to create a new internal port (a virtual
@@ -561,9 +603,9 @@ wdp_port_del(struct wdp *wdp, uint16_t port_no)
     return error;
 }
 
-/* Looks up port number 'port_no' in 'wdp'.  On success, returns 0 and points
- * '*portp' to a wdp_port representing the specified port.  On failure, returns
- * a positive errno value and sets '*portp' to NULL.
+/* Looks up port number 'port_no' in 'wdp'.  On success, returns 0 and
+ * initializes 'port' with port details.  On failure, returns a positive errno
+ * value and clears the contents of 'port' (with wdp_port_clear()).
  *
  * The caller must not modify or free the returned wdp_port.  Calling
  * wdp_run() or wdp_port_poll() may free the returned wdp_port.
@@ -576,16 +618,16 @@ wdp_port_del(struct wdp *wdp, uint16_t port_no)
  */
 int
 wdp_port_query_by_number(const struct wdp *wdp, uint16_t port_no,
-                         struct wdp_port **portp)
+                         struct wdp_port *port)
 {
     int error;
 
-    error = wdp->wdp_class->port_query_by_number(wdp, port_no, portp);
+    error = wdp->wdp_class->port_query_by_number(wdp, port_no, port);
     if (!error) {
         VLOG_DBG_RL(&wdpmsg_rl, "%s: port %"PRIu16" is device %s",
-                    wdp_name(wdp), port_no, (*portp)->devname);
+                    wdp_name(wdp), port_no, port->devname);
     } else {
-        *portp = NULL;
+        wdp_port_clear(port);
         VLOG_WARN_RL(&error_rl, "%s: failed to query port %"PRIu16": %s",
                      wdp_name(wdp), port_no, strerror(error));
     }
@@ -603,14 +645,14 @@ wdp_port_query_by_number(const struct wdp *wdp, uint16_t port_no,
  */
 int
 wdp_port_query_by_name(const struct wdp *wdp, const char *devname,
-                       struct wdp_port **portp)
+                       struct wdp_port *port)
 {
-    int error = wdp->wdp_class->port_query_by_name(wdp, devname, portp);
+    int error = wdp->wdp_class->port_query_by_name(wdp, devname, port);
     if (!error) {
         VLOG_DBG_RL(&wdpmsg_rl, "%s: device %s is on port %"PRIu16,
-                    wdp_name(wdp), devname, (*portp)->opp.port_no);
+                    wdp_name(wdp), devname, port->opp.port_no);
     } else {
-        *portp = NULL;
+        wdp_port_clear(port);
 
         /* Log level is DBG here because all the current callers are interested
          * in whether 'wdp' actually has a port 'devname', so that it's not
@@ -631,27 +673,29 @@ wdp_port_query_by_name(const struct wdp *wdp, const char *devname,
 int
 wdp_port_get_name(struct wdp *wdp, uint16_t port_no, char **namep)
 {
-    struct wdp_port *port;
+    struct wdp_port port;
     int error;
 
     error = wdp_port_query_by_number(wdp, port_no, &port);
-    *namep = !error ? xstrdup(port->devname) : NULL;
+    *namep = port.devname;
+    port.devname = NULL;
+    wdp_port_free(&port);
+
     return error;
 }
 
 /* Obtains a list of all the ports in 'wdp', in no particular order.
  *
- * If successful, returns 0 and sets '*portsp' to point to an array of
- * pointers to port structures and '*n_portsp' to the number of pointers in the
- * array.  On failure, returns a positive errno value and sets '*portsp' to
- * NULL and '*n_portsp' to 0.
+ * If successful, returns 0 and sets '*portsp' to point to an array of struct
+ * wdp_port and '*n_portsp' to the number of pointers in the array.  On
+ * failure, returns a positive errno value and sets '*portsp' to NULL and
+ * '*n_portsp' to 0.
  *
- * The caller is responsible for freeing '*portsp' by calling free().  The
- * caller must not free the individual wdp_port structures.  Calling
- * wdp_run() or wdp_port_poll() may free the returned wdp_ports. */
+ * The caller is responsible for freeing '*portsp' and the individual wdp_port
+ * structures, e.g. with wdp_port_array_free().  */
 int
 wdp_port_list(const struct wdp *wdp,
-              struct wdp_port ***portsp, size_t *n_portsp)
+              struct wdp_port **portsp, size_t *n_portsp)
 {
     int error;
 
