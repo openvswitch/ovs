@@ -303,7 +303,6 @@ create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
  * If the 'may_open' flag is set then the call will succeed even if another
  * caller has already opened it.  It may be to false if the device should not
  * currently be open. */
-
 int
 netdev_open(struct netdev_options *options, struct netdev **netdevp)
 {
@@ -370,6 +369,14 @@ netdev_open_default(const char *name, struct netdev **netdevp)
     return netdev_open(&options, netdevp);
 }
 
+/* Increments the reference count on 'netdev'.  Returns 'netdev'. */
+struct netdev *
+netdev_reopen(struct netdev *netdev)
+{
+    netdev->ref_cnt++;
+    return netdev;
+}
+
 /* Reconfigures the device 'netdev' with 'args'.  'args' may be empty
  * or NULL if none are needed. */
 int
@@ -395,11 +402,13 @@ netdev_reconfigure(struct netdev *netdev, const struct shash *args)
     return 0;
 }
 
-/* Closes and destroys 'netdev'. */
+/* Decrements the reference count on 'netdev'.  If the reference count reaches
+ * zero, closes and destroys 'netdev'. */
 void
 netdev_close(struct netdev *netdev)
 {
-    if (netdev) {
+    assert(!netdev || netdev->ref_cnt > 0);
+    if (netdev && !--netdev->ref_cnt) {
         struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
 
         assert(netdev_dev->ref_cnt);
@@ -1062,6 +1071,7 @@ netdev_init(struct netdev *netdev, struct netdev_dev *netdev_dev)
 {
     memset(netdev, 0, sizeof *netdev);
     netdev->netdev_dev = netdev_dev;
+    netdev->ref_cnt = 1;
     list_push_back(&netdev_list, &netdev->node);
 }
 

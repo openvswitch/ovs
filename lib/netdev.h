@@ -101,6 +101,7 @@ void netdev_enumerate_types(struct svec *types);
 
 int netdev_open(struct netdev_options *, struct netdev **);
 int netdev_open_default(const char *name, struct netdev **);
+struct netdev *netdev_reopen(struct netdev *);
 int netdev_reconfigure(struct netdev *, const struct shash *args);
 void netdev_close(struct netdev *);
 
