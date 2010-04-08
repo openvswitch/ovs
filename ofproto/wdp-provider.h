@@ -141,17 +141,49 @@ struct wdp_class {
      * the L4 header cannot be read). */
     int (*get_drop_frags)(const struct wdp *wdp, bool *drop_frags);
 
-    /* Changes 'wdp''s treatment of IP fragments to 'drop_frags', whose
-     * meaning is the same as for the get_drop_frags member function. */
+    /* Changes 'wdp''s treatment of IP fragments to 'drop_frags', whose meaning
+     * is the same as for the get_drop_frags member function.  EOPNOTSUPP
+     * indicates that the datapath does not support changing the fragment
+     * dropping policy, as does a null pointer. */
     int (*set_drop_frags)(struct wdp *wdp, bool drop_frags);
 
     /* Creates a new port in 'wdp' connected to network device 'devname'.  If
      * 'internal' is true, creates the port as an internal port.  If
-     * successful, sets '*port_no' to the new port's port number. */
+     * successful, sets '*port_nop' to the new port's port number.
+     *
+     * Possible error return values include:
+     *
+     *   - ENODEV: No device named 'devname' exists (if 'internal' is false).
+     *
+     *   - EEXIST: A device named 'devname' already exists (if 'internal' is
+     *     true).
+     *
+     *   - EINVAL: Device 'devname' is not supported as part of a datapath
+     *     (e.g. it is not an Ethernet device), or 'devname' is too long for a
+     *     network device name (if 'internal' is true)
+     *
+     *   - EFBIG: The datapath already has as many ports as it can support.
+     *
+     *   - EOPNOTSUPP: 'wdp' has a fixed set of ports.
+     *
+     * A null pointer is equivalent to returning EOPNOTSUPP.
+     */
     int (*port_add)(struct wdp *wdp, const char *devname,
-                    bool internal, uint16_t *port_no);
+                    bool internal, uint16_t *port_nop);
 
-    /* Removes port numbered 'port_no' from 'wdp'. */
+    /* Removes port numbered 'port_no' from 'wdp'.
+     *
+     * Possible error return values include:
+     *
+     *   - EINVAL: 'port_no' is outside the valid range, or this particular
+     *     port is not removable (e.g. it is the local port).
+     *
+     *   - ENOENT: 'wdp' currently has no port numbered 'port_no'.
+     *
+     *   - EOPNOTSUPP: 'wdp' has a fixed set of ports.
+     *
+     * A null pointer is equivalent to returning EOPNOTSUPP.
+     */
     int (*port_del)(struct wdp *wdp, uint16_t port_no);
 
     /* Looks up a port in 'wdp' by name or number.  On success, returns 0 and
@@ -198,11 +230,17 @@ struct wdp_class {
      *
      * If the set of ports in 'wdp' has not changed, returns EAGAIN.  May
      * also return other positive errno values to indicate that something has
-     * gone wrong. */
+     * gone wrong.
+     *
+     * If 'wdp' has a fixed set of ports, this function may be null, which is
+     * equivalent to always returning EAGAIN.
+     */
     int (*port_poll)(const struct wdp *wdp, char **devnamep);
 
     /* Arranges for the poll loop to wake up when 'port_poll' will return a
-     * value other than EAGAIN. */
+     * value other than EAGAIN.
+     *
+     * If 'wdp' has a fixed set of ports, this function may be null. */
     void (*port_poll_wait)(const struct wdp *wdp);
 
     /* If 'wdp' contains a flow exactly equal to 'flow', returns that flow.

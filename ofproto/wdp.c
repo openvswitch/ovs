@@ -465,11 +465,15 @@ wdp_get_drop_frags(const struct wdp *wdp, bool *drop_frags)
 
 /* Changes 'wdp''s treatment of IP fragments to 'drop_frags', whose meaning is
  * the same as for the get_drop_frags member function.  Returns 0 if
- * successful, otherwise a positive errno value. */
+ * successful, otherwise a positive errno value.  EOPNOTSUPP indicates that
+ * 'wdp''s fragment dropping policy is not configurable. */
 int
 wdp_set_drop_frags(struct wdp *wdp, bool drop_frags)
 {
-    int error = wdp->wdp_class->set_drop_frags(wdp, drop_frags);
+    int error;
+    error = (wdp->wdp_class->set_drop_frags
+             ? wdp->wdp_class->set_drop_frags(wdp, drop_frags)
+             : EOPNOTSUPP);
     log_operation(wdp, "set_drop_frags", error);
     return error;
 }
@@ -496,10 +500,11 @@ wdp_set_drop_frags(struct wdp *wdp, bool drop_frags)
  *
  *   - EINVAL: Device 'devname' is not supported as part of a datapath (e.g. it
  *     is not an Ethernet device), or 'devname' is too long for a network
- *     device name (if 'internal' is true), or this datapath has a fixed set of
- *     ports.
+ *     device name (if 'internal' is true)
  *
  *   - EFBIG: The datapath already has as many ports as it can support.
+ *
+ *   - EOPNOTSUPP: 'wdp' has a fixed set of ports.
  */
 int
 wdp_port_add(struct wdp *wdp, const char *devname,
@@ -510,7 +515,9 @@ wdp_port_add(struct wdp *wdp, const char *devname,
 
     COVERAGE_INC(wdp_port_add);
 
-    error = wdp->wdp_class->port_add(wdp, devname, internal, &port_no);
+    error = (wdp->wdp_class->port_add
+             ? wdp->wdp_class->port_add(wdp, devname, internal, &port_no)
+             : EOPNOTSUPP);
     if (!error) {
         VLOG_DBG_RL(&wdpmsg_rl, "%s: added %s as port %"PRIu16,
                     wdp_name(wdp), devname, port_no);
@@ -533,11 +540,12 @@ wdp_port_add(struct wdp *wdp, const char *devname,
  *
  * Possible error return values include:
  *
- *   - EINVAL: 'port_no' is outside the valid range, or this datapath has a
- *     fixed set of ports, or this particular port is not removable (e.g. it is
- *     the local port).
+ *   - EINVAL: 'port_no' is outside the valid range, or this particular port is
+ *     not removable (e.g. it is the local port).
  *
  *   - ENOENT: 'wdp' currently has no port numbered 'port_no'.
+ *
+ *   - EOPNOTSUPP: 'wdp' has a fixed set of ports.
  */
 int
 wdp_port_del(struct wdp *wdp, uint16_t port_no)
@@ -546,7 +554,9 @@ wdp_port_del(struct wdp *wdp, uint16_t port_no)
 
     COVERAGE_INC(wdp_port_del);
 
-    error = wdp->wdp_class->port_del(wdp, port_no);
+    error = (wdp->wdp_class->port_del
+             ? wdp->wdp_class->port_del(wdp, port_no)
+             : EOPNOTSUPP);
     log_operation(wdp, "port_del", error);
     return error;
 }
@@ -679,7 +689,9 @@ wdp_port_set_config(struct wdp *wdp, uint16_t port_no, uint32_t config)
 int
 wdp_port_poll(const struct wdp *wdp, char **devnamep)
 {
-    int error = wdp->wdp_class->port_poll(wdp, devnamep);
+    int error = (wdp->wdp_class->port_poll
+                 ? wdp->wdp_class->port_poll(wdp, devnamep)
+                 : EAGAIN);
     if (error) {
         *devnamep = NULL;
     }
@@ -691,7 +703,9 @@ wdp_port_poll(const struct wdp *wdp, char **devnamep)
 void
 wdp_port_poll_wait(const struct wdp *wdp)
 {
-    wdp->wdp_class->port_poll_wait(wdp);
+    if (wdp->wdp_class->port_poll_wait) {
+        wdp->wdp_class->port_poll_wait(wdp);
+    }
 }
 
 /* Deletes all flows from 'wdp'.  Returns 0 if successful, otherwise a
