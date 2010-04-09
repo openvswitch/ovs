@@ -3702,7 +3702,7 @@ send_packet_in_miss(struct ofpbuf *packet, void *p_)
                                   ? pktbuf_get_null()
                                   : pktbuf_save(pb, &payload, msg->port));
             int send_len = (buffer_id != UINT32_MAX ? ofconn->miss_send_len
-                            : UINT32_MAX);
+                            : INT_MAX);
             do_send_packet_in(ofconn, buffer_id, packet, send_len);
         }
     }
