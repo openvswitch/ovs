@@ -481,17 +481,23 @@ netdev_enumerate(struct svec *svec)
  * guaranteed to contain at least ETH_TOTAL_MIN bytes.  Otherwise, returns a
  * positive errno value.  Returns EAGAIN immediately if no packet is ready to
  * be returned.
+ *
+ * Some network devices may not implement support for this function.  In such
+ * cases this function will always return EOPNOTSUPP.
  */
 int
 netdev_recv(struct netdev *netdev, struct ofpbuf *buffer)
 {
+    int (*recv)(struct netdev *, void *, size_t);
     int retval;
 
     assert(buffer->size == 0);
     assert(ofpbuf_tailroom(buffer) >= ETH_TOTAL_MIN);
 
-    retval = netdev_get_dev(netdev)->netdev_class->recv(netdev, buffer->data,
-             ofpbuf_tailroom(buffer));
+    recv = netdev_get_dev(netdev)->netdev_class->recv;
+    retval = (recv
+              ? (recv)(netdev, buffer->data, ofpbuf_tailroom(buffer))
+              : -EOPNOTSUPP);
     if (retval >= 0) {
         COVERAGE_INC(netdev_received);
         buffer->size += retval;
@@ -509,14 +515,22 @@ netdev_recv(struct netdev *netdev, struct ofpbuf *buffer)
 void
 netdev_recv_wait(struct netdev *netdev)
 {
-    netdev_get_dev(netdev)->netdev_class->recv_wait(netdev);
+    void (*recv_wait)(struct netdev *);
+
+    recv_wait = netdev_get_dev(netdev)->netdev_class->recv_wait;
+    if (recv_wait) {
+        recv_wait(netdev);
+    }
 }
 
 /* Discards all packets waiting to be received from 'netdev'. */
 int
 netdev_drain(struct netdev *netdev)
 {
-    return netdev_get_dev(netdev)->netdev_class->drain(netdev);
+    int (*drain)(struct netdev *);
+
+    drain = netdev_get_dev(netdev)->netdev_class->drain;
+    return drain ? drain(netdev) : 0;
 }
 
 /* Sends 'buffer' on 'netdev'.  Returns 0 if successful, otherwise a positive
@@ -527,12 +541,18 @@ netdev_drain(struct netdev *netdev)
  * The caller retains ownership of 'buffer' in all cases.
  *
  * The kernel maintains a packet transmission queue, so the caller is not
- * expected to do additional queuing of packets. */
+ * expected to do additional queuing of packets.
+ *
+ * Some network devices may not implement support for this function.  In such
+ * cases this function will always return EOPNOTSUPP. */
 int
 netdev_send(struct netdev *netdev, const struct ofpbuf *buffer)
 {
-    int error = netdev_get_dev(netdev)->netdev_class->send(netdev, 
-            buffer->data, buffer->size);
+    int (*send)(struct netdev *, const void *, size_t);
+    int error;
+
+    send = netdev_get_dev(netdev)->netdev_class->send;
+    error = send ? (send)(netdev, buffer->data, buffer->size) : EOPNOTSUPP;
     if (!error) {
         COVERAGE_INC(netdev_sent);
     }
@@ -549,7 +569,12 @@ netdev_send(struct netdev *netdev, const struct ofpbuf *buffer)
 void
 netdev_send_wait(struct netdev *netdev)
 {
-    return netdev_get_dev(netdev)->netdev_class->send_wait(netdev);
+    void (*send_wait)(struct netdev *);
+
+    send_wait = netdev_get_dev(netdev)->netdev_class->send_wait;
+    if (send_wait) {
+        send_wait(netdev);
+    }
 }
 
 /* Attempts to set 'netdev''s MAC address to 'mac'.  Returns 0 if successful,
