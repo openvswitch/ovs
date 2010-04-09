@@ -334,10 +334,9 @@ do_ca_cert_bootstrap(struct stream *stream)
     fd = open(ca_cert.file_name, O_CREAT | O_EXCL | O_WRONLY, 0444);
     if (fd < 0) {
         if (errno == EEXIST) {
-            VLOG_INFO("CA cert %s created by another process",
+            VLOG_INFO("reading CA cert %s created by another process",
                       ca_cert.file_name);
-            /* We'll read it the next time around the main loop because
-             * update_ssl_config() will see that it now exists. */
+            stream_ssl_set_ca_cert_file(ca_cert.file_name, true);
             return EPROTO;
         } else {
             VLOG_ERR("could not bootstrap CA cert: creating %s failed: %s",
