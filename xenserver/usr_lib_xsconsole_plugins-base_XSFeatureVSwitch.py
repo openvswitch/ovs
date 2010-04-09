@@ -327,5 +327,6 @@ class XSFeatureVSwitch:
             }
         )
 
-# Register this plugin when module is imported
-XSFeatureVSwitch().Register()
+# Register this plugin when module is imported, IFF vswitchd is running
+if os.path.exists('/var/run/openvswitch/ovs-vswitchd.pid'):
+    XSFeatureVSwitch().Register()
