@@ -1999,7 +1999,7 @@ add_controller_action(struct odp_actions *actions,
 
 struct action_xlate_ctx {
     /* Input. */
-    const flow_t *flow;         /* Flow to which these actions correspond. */
+    flow_t flow;                /* Flow to which these actions correspond. */
     int recurse;                /* Recursion level, via xlate_table_action. */
     struct ofproto *ofproto;
     const struct ofpbuf *packet; /* The packet corresponding to 'flow', or a
@@ -2062,13 +2062,11 @@ static void
 xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
 {
     if (!ctx->recurse) {
+        uint16_t old_in_port = ctx->flow.in_port;
         struct rule *rule;
-        flow_t flow;
 
-        flow = *ctx->flow;
-        flow.in_port = in_port;
-
-        rule = lookup_valid_rule(ctx->ofproto, &flow);
+        ctx->flow.in_port = in_port;
+        rule = lookup_valid_rule(ctx->ofproto, &ctx->flow);
         if (rule) {
             if (rule->super) {
                 rule = rule->super;
@@ -2078,6 +2076,7 @@ xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
             do_xlate_actions(rule->actions, rule->n_actions, ctx);
             ctx->recurse--;
         }
+        ctx->flow.in_port = old_in_port;
     }
 }
 
@@ -2092,13 +2091,13 @@ xlate_output_action(struct action_xlate_ctx *ctx,
 
     switch (ntohs(oao->port)) {
     case OFPP_IN_PORT:
-        add_output_action(ctx, ctx->flow->in_port);
+        add_output_action(ctx, ctx->flow.in_port);
         break;
     case OFPP_TABLE:
-        xlate_table_action(ctx, ctx->flow->in_port);
+        xlate_table_action(ctx, ctx->flow.in_port);
         break;
     case OFPP_NORMAL:
-        if (!ctx->ofproto->ofhooks->normal_cb(ctx->flow, ctx->packet,
+        if (!ctx->ofproto->ofhooks->normal_cb(&ctx->flow, ctx->packet,
                                               ctx->out, ctx->tags,
                                               &ctx->nf_output_iface,
                                               ctx->ofproto->aux)) {
@@ -2121,7 +2120,7 @@ xlate_output_action(struct action_xlate_ctx *ctx,
         break;
     default:
         odp_port = ofp_port_to_odp_port(ntohs(oao->port));
-        if (odp_port != ctx->flow->in_port) {
+        if (odp_port != ctx->flow.in_port) {
             add_output_action(ctx, odp_port);
         }
         break;
@@ -2165,9 +2164,9 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
     const union ofp_action *ia;
     const struct ofport *port;
 
-    port = port_array_get(&ctx->ofproto->ports, ctx->flow->in_port);
+    port = port_array_get(&ctx->ofproto->ports, ctx->flow.in_port);
     if (port && port->opp.config & (OFPPC_NO_RECV | OFPPC_NO_RECV_STP) &&
-        port->opp.config & (eth_addr_equals(ctx->flow->dl_dst, stp_eth_addr)
+        port->opp.config & (eth_addr_equals(ctx->flow.dl_dst, stp_eth_addr)
                             ? OFPPC_NO_RECV_STP : OFPPC_NO_RECV)) {
         /* Drop this flow. */
         return;
@@ -2255,7 +2254,7 @@ xlate_actions(const union ofp_action *in, size_t n_in,
     struct action_xlate_ctx ctx;
     COVERAGE_INC(ofproto_ofp2odp);
     odp_actions_init(out);
-    ctx.flow = flow;
+    ctx.flow = *flow;
     ctx.recurse = 0;
     ctx.ofproto = ofproto;
     ctx.packet = packet;
