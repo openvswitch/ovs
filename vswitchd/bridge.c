@@ -1291,7 +1291,7 @@ check_duplicate_ifaces(struct bridge *br, struct iface *iface, void *ifaces_)
 }
 
 static void
-bridge_update_desc(struct bridge *br)
+bridge_update_desc(struct bridge *br OVS_UNUSED)
 {
 #if 0
     bool changed = false;
