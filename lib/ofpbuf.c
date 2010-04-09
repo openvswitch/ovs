@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -217,6 +217,17 @@ ofpbuf_push_uninit(struct ofpbuf *b, size_t size)
     b->data = (char*)b->data - size;
     b->size += size;
     return b->data;
+}
+
+/* Prefixes 'size' zeroed bytes to the head end of 'b'.  'b' must have at least
+ * 'size' bytes of headroom.  Returns a pointer to the first byte of the data's
+ * location in the ofpbuf. */
+void *
+ofpbuf_push_zeros(struct ofpbuf *b, size_t size)
+{
+    void *dst = ofpbuf_push_uninit(b, size);
+    memset(dst, 0, size);
+    return dst;
 }
 
 void *

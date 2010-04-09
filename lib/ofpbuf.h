@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,7 @@ void *ofpbuf_put_zeros(struct ofpbuf *, size_t);
 void *ofpbuf_put(struct ofpbuf *, const void *, size_t);
 void ofpbuf_reserve(struct ofpbuf *, size_t);
 void *ofpbuf_push_uninit(struct ofpbuf *b, size_t);
+void *ofpbuf_push_zeros(struct ofpbuf *, size_t);
 void *ofpbuf_push(struct ofpbuf *b, const void *, size_t);
 
 size_t ofpbuf_headroom(const struct ofpbuf *);
