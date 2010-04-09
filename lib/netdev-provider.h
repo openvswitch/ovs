@@ -175,15 +175,28 @@ struct netdev_class {
     /* Attempts to receive a packet from 'netdev' into the 'size' bytes in
      * 'buffer'.  If successful, returns the number of bytes in the received
      * packet, otherwise a negative errno value.  Returns -EAGAIN immediately
-     * if no packet is ready to be received. */
+     * if no packet is ready to be received.
+     *
+     * May return -EOPNOTSUPP if a network device does not implement packet
+     * reception through this interface.  This function may be set to null if
+     * it would always return -EOPNOTSUPP anyhow.  (This will disable the OVS
+     * integrated DHCP client and OpenFlow controller discovery, and prevent
+     * the network device from being usefully used by the netdev-based
+     * "userspace datapath".) */
     int (*recv)(struct netdev *netdev, void *buffer, size_t size);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when a packet is ready to be received with netdev_recv() on
-     * 'netdev'. */
+     * 'netdev'.
+     *
+     * May be null if not needed, such as for a network device that does not
+     * implement packet reception through the 'recv' member function. */
     void (*recv_wait)(struct netdev *netdev);
 
-    /* Discards all packets waiting to be received from 'netdev'. */
+    /* Discards all packets waiting to be received from 'netdev'.
+     *
+     * May be null if not needed, such as for a network device that does not
+     * implement packet reception through the 'recv' member function. */
     int (*drain)(struct netdev *netdev);
 
     /* Sends the 'size'-byte packet in 'buffer' on 'netdev'.  Returns 0 if
@@ -196,7 +209,14 @@ struct netdev_class {
      *
      * The network device is expected to maintain a packet transmission queue,
      * so that the caller does not ordinarily have to do additional queuing of
-     * packets. */
+     * packets.
+     *
+     * May return EOPNOTSUPP if a network device does not implement packet
+     * transmission through this interface.  This function may be set to null
+     * if it would always return EOPNOTSUPP anyhow.  (This will disable the OVS
+     * integrated DHCP client and OpenFlow controller discovery, and prevent
+     * the network device from being usefully used by the netdev-based
+     * "userspace datapath".) */
     int (*send)(struct netdev *netdev, const void *buffer, size_t size);
 
     /* Registers with the poll loop to wake up from the next call to
@@ -205,7 +225,10 @@ struct netdev_class {
      *
      * The network device is expected to maintain a packet transmission queue,
      * so that the caller does not ordinarily have to do additional queuing of
-     * packets.  Thus, this function is unlikely to ever be useful. */
+     * packets.  Thus, this function is unlikely to ever be useful.
+     *
+     * May be null if not needed, such as for a network device that does not
+     * implement packet transmission through the 'send' member function. */
     void (*send_wait)(struct netdev *netdev);
 
     /* Sets 'netdev''s Ethernet address to 'mac' */
