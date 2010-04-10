@@ -405,6 +405,20 @@ str_to_u32(const char *str)
     return value;
 }
 
+static uint64_t
+str_to_u64(const char *str) 
+{
+    char *tail;
+    uint64_t value;
+
+    errno = 0;
+    value = strtoull(str, &tail, 0);
+    if (errno == EINVAL || errno == ERANGE || *tail) {
+        ovs_fatal(0, "invalid numeric format %s", str);
+    }
+    return value;
+}
+
 static void
 str_to_mac(const char *str, uint8_t mac[6]) 
 {
@@ -810,7 +824,7 @@ str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
             } else if (hard_timeout && !strcmp(name, "hard_timeout")) {
                 *hard_timeout = atoi(value);
             } else if (cookie && !strcmp(name, "cookie")) {
-                *cookie = atoi(value);
+                *cookie = str_to_u64(value);
             } else if (parse_field(name, &f)) {
                 void *data = (char *) match + f->offset;
                 if (!strcmp(value, "*") || !strcmp(value, "ANY")) {

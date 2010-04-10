@@ -407,6 +407,16 @@ only known to be implemented by Open vSwitch.
 not yet expose to the user.)
 .
 .PP
+The \fBadd\-flow\fR, \fBadd\-flows\fR, and \fBmod\-flows\fR commands
+support an additional optional field:
+.
+.IP \fBcookie=\fIvalue\fR
+.
+A cookie is an opaque identifier that can be associated with the flow.
+\fIvalue\fR can be any 64-bit number and need not be unique among
+flows.
+.
+.PP
 The \fBadd-flow\fR, \fBadd-flows\fR, and \fBdel-flows\fR commands
 support an additional optional field:
 .
