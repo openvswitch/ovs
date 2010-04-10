@@ -675,7 +675,7 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
     print_wild(&f, "in_port=", w & OFPFW_IN_PORT, verbosity,
                "%d", ntohs(om->in_port));
     print_wild(&f, "dl_vlan=", w & OFPFW_DL_VLAN, verbosity,
-               "0x%04x", ntohs(om->dl_vlan));
+               "%d", ntohs(om->dl_vlan));
     print_wild(&f, "dl_vlan_pcp=", w & OFPFW_DL_VLAN_PCP, verbosity,
                "%d", om->dl_vlan_pcp);
     print_wild(&f, "dl_src=", w & OFPFW_DL_SRC, verbosity,
