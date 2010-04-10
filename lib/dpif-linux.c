@@ -31,6 +31,7 @@
 #include <unistd.h>
 
 #include "dpif-provider.h"
+#include "netdev.h"
 #include "ofpbuf.h"
 #include "poll-loop.h"
 #include "rtnetlink.h"
@@ -190,6 +191,28 @@ dpif_linux_get_all_names(const struct dpif *dpif_, struct svec *all_names)
 static int
 dpif_linux_destroy(struct dpif *dpif_)
 {
+    struct odp_port *ports;
+    size_t n_ports;
+    int err;
+    int i;
+
+    err = dpif_port_list(dpif_, &ports, &n_ports);
+    if (err) {
+        return err;
+    }
+
+    for (i = 0; i < n_ports; i++) {
+        if (ports[i].port != ODPP_LOCAL) {
+            err = do_ioctl(dpif_, ODP_VPORT_DEL, ports[i].devname);
+            if (err) {
+                VLOG_WARN_RL(&error_rl, "%s: error deleting port %s (%s)",
+                             dpif_name(dpif_), ports[i].devname, strerror(err));
+            }
+        }
+    }
+
+    free(ports);
+
     return do_ioctl(dpif_, ODP_DP_DESTROY, NULL);
 }
 
@@ -241,7 +264,27 @@ static int
 dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no)
 {
     int tmp = port_no;
-    return do_ioctl(dpif_, ODP_PORT_DETACH, &tmp);
+    int err;
+    struct odp_port port;
+
+    err = dpif_port_query_by_number(dpif_, port_no, &port);
+    if (err) {
+        return err;
+    }
+
+    err = do_ioctl(dpif_, ODP_PORT_DETACH, &tmp);
+    if (err) {
+        return err;
+    }
+
+    if (!netdev_is_open(port.devname)) {
+        /* Try deleting the port if no one has it open.  This shouldn't
+         * actually be necessary unless the config changed while we weren't
+         * running but it won't hurt anything if the port is already gone. */
+        do_ioctl(dpif_, ODP_VPORT_DEL, port.devname);
+    }
+
+    return 0;
 }
 
 static int
