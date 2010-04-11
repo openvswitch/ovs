@@ -252,7 +252,10 @@ struct netdev_class {
      * specified by POSIX for if_nametoindex() and by SNMP for ifIndex.  An
      * ifindex value should be unique within a host and remain stable at least
      * until reboot.  SNMP says an ifindex "ranges between 1 and the value of
-     * ifNumber" but many systems do not follow this rule anyhow. */
+     * ifNumber" but many systems do not follow this rule anyhow.
+     *
+     * This function may be set to null if it would always return -EOPNOTSUPP.
+     */
     int (*get_ifindex)(const struct netdev *netdev);
 
     /* Sets 'carrier' to true if carrier is active (link light is on) on
@@ -268,7 +271,10 @@ struct netdev_class {
 
     /* Stores the features supported by 'netdev' into each of '*current',
      * '*advertised', '*supported', and '*peer'.  Each value is a bitmap of
-     * "enum ofp_port_features" bits, in host byte order. */
+     * "enum ofp_port_features" bits, in host byte order.
+     *
+     * This function may be set to null if it would always return EOPNOTSUPP.
+     */
     int (*get_features)(struct netdev *netdev,
                         uint32_t *current, uint32_t *advertised,
                         uint32_t *supported, uint32_t *peer);

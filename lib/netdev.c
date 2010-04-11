@@ -629,23 +629,37 @@ netdev_get_mtu(const struct netdev *netdev, int *mtup)
  * value should be unique within a host and remain stable at least until
  * reboot.  SNMP says an ifindex "ranges between 1 and the value of ifNumber"
  * but many systems do not follow this rule anyhow.
+ *
+ * Some network devices may not implement support for this function.  In such
+ * cases this function will always return -EOPNOTSUPP.
  */
 int
 netdev_get_ifindex(const struct netdev *netdev)
 {
-    return netdev_get_dev(netdev)->netdev_class->get_ifindex(netdev);
+    int (*get_ifindex)(const struct netdev *);
+
+    get_ifindex = netdev_get_dev(netdev)->netdev_class->get_ifindex;
+
+    return get_ifindex ? get_ifindex(netdev) : -EOPNOTSUPP;
 }
 
 /* Stores the features supported by 'netdev' into each of '*current',
  * '*advertised', '*supported', and '*peer' that are non-null.  Each value is a
  * bitmap of "enum ofp_port_features" bits, in host byte order.  Returns 0 if
  * successful, otherwise a positive errno value.  On failure, all of the
- * passed-in values are set to 0. */
+ * passed-in values are set to 0.
+ *
+ * Some network devices may not implement support for this function.  In such
+ * cases this function will always return EOPNOTSUPP.
+ */
 int
 netdev_get_features(struct netdev *netdev,
                     uint32_t *current, uint32_t *advertised,
                     uint32_t *supported, uint32_t *peer)
 {
+    int (*get_features)(struct netdev *netdev,
+                        uint32_t *current, uint32_t *advertised,
+                        uint32_t *supported, uint32_t *peer);
     uint32_t dummy[4];
     int error;
 
@@ -662,8 +676,10 @@ netdev_get_features(struct netdev *netdev,
         peer = &dummy[3];
     }
 
-    error = netdev_get_dev(netdev)->netdev_class->get_features(netdev, current,
-            advertised, supported, peer);
+    get_features = netdev_get_dev(netdev)->netdev_class->get_features;
+    error = get_features
+                    ? get_features(netdev, current, advertised, supported, peer)
+                    : EOPNOTSUPP;
     if (error) {
         *current = *advertised = *supported = *peer = 0;
     }
