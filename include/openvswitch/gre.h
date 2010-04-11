@@ -40,6 +40,7 @@
 #ifndef OPENVSWITCH_GRE_H
 #define OPENVSWITCH_GRE_H 1
 
+#include <linux/ip.h>
 #include <linux/if_tunnel.h>
 #include <linux/version.h>
 
