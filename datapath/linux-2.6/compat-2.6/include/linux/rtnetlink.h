@@ -30,4 +30,17 @@ static inline void rtnl_set_sk_err(struct net *net, u32 group, int error)
 	((void) rtnl_notify(skb, net, pid, group, nlh, flags))
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+static inline int rtnl_is_locked(void)
+{
+	if (unlikely(rtnl_trylock())) {
+		rtnl_unlock();
+		return 0;
+	}
+
+	return 1;
+}
+
+#endif
+
 #endif /* linux/rtnetlink.h wrapper */
