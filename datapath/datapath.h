@@ -21,6 +21,9 @@
 #include "flow.h"
 #include "dp_sysfs.h"
 
+struct vport;
+struct dp_port;
+
 /* Mask for the priority bits in a vlan header.  If we ever merge upstream
  * then this should go into include/linux/if_vlan.h. */
 #define VLAN_PCP_MASK 0xe000
@@ -120,7 +123,7 @@ struct dp_port_group {
  * @table: Current flow table (RCU protected).
  * @groups: Port groups, used by ODPAT_OUTPUT_GROUP action (RCU protected).
  * @n_ports: Number of ports currently in @ports.
- * @ports: Map from port number to &struct net_bridge_port.  %ODPP_LOCAL port
+ * @ports: Map from port number to &struct dp_port.  %ODPP_LOCAL port
  * always exists, other ports may be %NULL.
  * @port_list: List of all ports in @ports in arbitrary order.
  * @stats_percpu: Per-CPU datapath statistics.
@@ -148,7 +151,7 @@ struct datapath {
 
 	/* Switch ports. */
 	unsigned int n_ports;
-	struct net_bridge_port *ports[DP_MAX_PORTS];
+	struct dp_port *ports[DP_MAX_PORTS];
 	struct list_head port_list;
 
 	/* Stats. */
@@ -159,23 +162,23 @@ struct datapath {
 };
 
 /**
- * struct net_bridge_port - one port within a datapath
+ * struct dp_port - one port within a datapath
  * @port_no: Index into @dp's @ports array.
  * @dp: Datapath to which this port belongs.
- * @dev: The network device attached to this port.  The @br_port member in @dev
- * points back to this &struct net_bridge_port.
+ * @vport: The network device attached to this port.  The contents depends on
+ * the device and should be accessed only through the vport_* functions.
  * @kobj: Represents /sys/class/net/<devname>/brport.
  * @linkname: The name of the link from /sys/class/net/<datapath>/brif to this
- * &struct net_bridge_port.  (We keep this around so that we can delete it
- * if @dev gets renamed.)  Set to the null string when no link exists.
+ * &struct dp_port.  (We keep this around so that we can delete it if the
+ * device gets renamed.)  Set to the null string when no link exists.
  * @node: Element in @dp's @port_list.
  * @sflow_pool: Number of packets that were candidates for sFlow sampling,
  * regardless of whether they were actually chosen and sent down to userspace.
  */
-struct net_bridge_port {
+struct dp_port {
 	u16 port_no;
 	struct datapath	*dp;
-	struct net_device *dev;
+	struct vport *vport;
 	struct kobject kobj;
 	char linkname[IFNAMSIZ];
 	struct list_head node;
@@ -191,10 +194,12 @@ enum csum_type {
 
 /**
  * struct ovs_skb_cb - OVS data in skb CB
+ * @br_port: The bridge port on which the skb entered the switch.
  * @ip_summed: Consistently stores L4 checksumming status across different
  * kernel versions.
  */
 struct ovs_skb_cb {
+	struct dp_port		*dp_port;
 	enum csum_type		ip_summed;
 	__be32			tun_id;
 };
@@ -215,18 +220,14 @@ int dp_table_foreach(struct dp_table *table,
 		     int (*callback)(struct sw_flow *flow, void *aux),
 		     void *aux);
 
-void dp_process_received_packet(struct sk_buff *, struct net_bridge_port *);
-int dp_del_port(struct net_bridge_port *);
+void dp_process_received_packet(struct dp_port *, struct sk_buff *);
+int dp_detach_port(struct dp_port *, int may_delete);
 int dp_output_control(struct datapath *, struct sk_buff *, int, u32 arg);
 int dp_min_mtu(const struct datapath *dp);
-void set_dp_devs_mtu(const struct datapath *dp, struct net_device *dev);
+void set_internal_devs_mtu(const struct datapath *dp);
 
 struct datapath *get_dp(int dp_idx);
-
-static inline const char *dp_name(const struct datapath *dp)
-{
-	return dp->ports[ODPP_LOCAL]->dev->name;
-}
+const char *dp_name(const struct datapath *dp);
 
 #if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
 int vswitch_skb_checksum_setup(struct sk_buff *skb);

@@ -97,7 +97,6 @@ static inline struct ovs_tcphdr *ovs_tcp_hdr(const struct sk_buff *skb)
 
 void flow_used(struct sw_flow *flow, struct sk_buff *skb)
 {
-	unsigned long flags;
 	u8 tcp_flags = 0;
 
 	if (flow->key.dl_type == htons(ETH_P_IP) && iphdr_ok(skb)) {
@@ -109,12 +108,12 @@ void flow_used(struct sw_flow *flow, struct sk_buff *skb)
 		}
 	}
 
-	spin_lock_irqsave(&flow->lock, flags);
+	spin_lock_bh(&flow->lock);
 	getnstimeofday(&flow->used);
 	flow->packet_count++;
 	flow->byte_count += skb->len;
 	flow->tcp_flags |= tcp_flags;
-	spin_unlock_irqrestore(&flow->lock, flags);
+	spin_unlock_bh(&flow->lock);
 }
 
 struct sw_flow_actions *flow_actions_alloc(size_t n_actions)

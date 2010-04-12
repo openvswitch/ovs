@@ -230,7 +230,7 @@ dpif_linux_port_add(struct dpif *dpif_, const char *devname, uint16_t flags,
     memset(&port, 0, sizeof port);
     strncpy(port.devname, devname, sizeof port.devname);
     port.flags = flags;
-    error = do_ioctl(dpif_, ODP_PORT_ADD, &port);
+    error = do_ioctl(dpif_, ODP_PORT_ATTACH, &port);
     if (!error) {
         *port_no = port.port;
     }
@@ -241,7 +241,7 @@ static int
 dpif_linux_port_del(struct dpif *dpif_, uint16_t port_no)
 {
     int tmp = port_no;
-    return do_ioctl(dpif_, ODP_PORT_DEL, &tmp);
+    return do_ioctl(dpif_, ODP_PORT_DETACH, &tmp);
 }
 
 static int

@@ -18,10 +18,11 @@
 #include <net/inet_ecn.h>
 #include <net/ip.h>
 #include <net/checksum.h>
-#include "datapath.h"
-#include "dp_dev.h"
+
 #include "actions.h"
+#include "datapath.h"
 #include "openvswitch/datapath-protocol.h"
+#include "vport.h"
 
 static struct sk_buff *
 make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
@@ -360,42 +361,27 @@ static inline unsigned packet_length(const struct sk_buff *skb)
 	return length;
 }
 
-int dp_xmit_skb(struct sk_buff *skb)
-{
-	struct datapath *dp = skb->dev->br_port->dp;
-	int len = skb->len;
-
-	if (packet_length(skb) > skb->dev->mtu && !skb_is_gso(skb)) {
-		printk(KERN_WARNING "%s: dropped over-mtu packet: %d > %d\n",
-		       dp_name(dp), packet_length(skb), skb->dev->mtu);
-		kfree_skb(skb);
-		return -E2BIG;
-	}
-
-	forward_ip_summed(skb);
-	dev_queue_xmit(skb);
-
-	return len;
-}
-
 static void
 do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 {
-	struct net_bridge_port *p;
-	struct net_device *dev;
+	struct dp_port *p;
+	int mtu;
 
 	if (!skb)
 		goto error;
 
-	p = dp->ports[out_port];
+	p = rcu_dereference(dp->ports[out_port]);
 	if (!p)
 		goto error;
 
-	dev = skb->dev = p->dev;
-	if (is_dp_dev(dev))
-		dp_dev_recv(dev, skb);
-	else
-		dp_xmit_skb(skb);
+	mtu = vport_get_mtu(p->vport);
+	if (packet_length(skb) > mtu && !skb_is_gso(skb)) {
+		printk(KERN_WARNING "%s: dropped over-mtu packet: %d > %d\n",
+		       dp_name(dp), packet_length(skb), mtu);
+		goto error;
+	}
+
+	vport_send(p->vport, skb);
 	return;
 
 error:
@@ -414,8 +400,8 @@ static int output_group(struct datapath *dp, __u16 group,
 	if (!g)
 		return -1;
 	for (i = 0; i < g->n_ports; i++) {
-		struct net_bridge_port *p = dp->ports[g->ports[i]];
-		if (!p || skb->dev == p->dev)
+		struct dp_port *p = rcu_dereference(dp->ports[g->ports[i]]);
+		if (!p || OVS_CB(skb)->dp_port == p)
 			continue;
 		if (prev_port != -1) {
 			struct sk_buff *clone = skb_clone(skb, gfp);
@@ -441,7 +427,7 @@ output_control(struct datapath *dp, struct sk_buff *skb, u32 arg, gfp_t gfp)
  * information about what happened to it. */
 static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 			 const union odp_action *a, int n_actions,
-			 gfp_t gfp, struct net_bridge_port *nbp)
+			 gfp_t gfp, struct dp_port *dp_port)
 {
 	struct odp_sflow_sample_header *hdr;
 	unsigned int actlen = n_actions * sizeof(union odp_action);
@@ -455,7 +441,7 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 	memcpy(__skb_push(nskb, actlen), a, actlen);
 	hdr = (struct odp_sflow_sample_header*)__skb_push(nskb, hdrlen);
 	hdr->n_actions = n_actions;
-	hdr->sample_pool = atomic_read(&nbp->sflow_pool);
+	hdr->sample_pool = atomic_read(&dp_port->sflow_pool);
 	dp_output_control(dp, nskb, _ODPL_SFLOW_NR, 0);
 }
 
@@ -473,7 +459,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 	int err;
 
 	if (dp->sflow_probability) {
-		struct net_bridge_port *p = skb->dev->br_port;
+		struct dp_port *p = OVS_CB(skb)->dp_port;
 		if (p) {
 			atomic_inc(&p->sflow_pool);
 			if (dp->sflow_probability == UINT_MAX ||

@@ -61,8 +61,8 @@
 #define ODP_GET_LISTEN_MASK     _IOW('O', 5, int)
 #define ODP_SET_LISTEN_MASK     _IOR('O', 6, int)
 
-#define ODP_PORT_ADD            _IOR('O', 7, struct odp_port)
-#define ODP_PORT_DEL            _IOR('O', 8, int)
+#define ODP_PORT_ATTACH         _IOR('O', 7, struct odp_port)
+#define ODP_PORT_DETACH         _IOR('O', 8, int)
 #define ODP_PORT_QUERY          _IOWR('O', 9, struct odp_port)
 #define ODP_PORT_LIST           _IOWR('O', 10, struct odp_portvec)
 
@@ -79,6 +79,15 @@
 
 #define ODP_SET_SFLOW_PROBABILITY _IOR('O', 19, int)
 #define ODP_GET_SFLOW_PROBABILITY _IOW('O', 20, int)
+
+#define ODP_VPORT_ADD           _IOR('O', 21, struct odp_vport_add)
+#define ODP_VPORT_MOD           _IOR('O', 22, struct odp_vport_mod)
+#define ODP_VPORT_DEL           _IO('O', 23)
+#define ODP_VPORT_STATS_GET     _IOWR('O', 24, struct odp_vport_stats_req)
+#define ODP_VPORT_ETHER_GET     _IOWR('O', 25, struct odp_vport_ether)
+#define ODP_VPORT_ETHER_SET     _IOW('O', 26, struct odp_vport_ether)
+#define ODP_VPORT_MTU_GET       _IOWR('O', 27, struct odp_vport_mtu)
+#define ODP_VPORT_MTU_SET       _IOW('O', 28, struct odp_vport_mtu)
 
 struct odp_stats {
     /* Flows. */
@@ -354,6 +363,48 @@ struct odp_execute {
 
     const void *data;
     __u32 length;
+};
+
+#define VPORT_TYPE_SIZE     16
+struct odp_vport_add {
+    char port_type[VPORT_TYPE_SIZE];
+    char devname[16];            /* IFNAMSIZ */
+    void *config;
+};
+
+struct odp_vport_mod {
+    char devname[16];            /* IFNAMSIZ */
+    void *config;
+};
+
+struct odp_vport_stats {
+    __u64 rx_packets;
+    __u64 tx_packets;
+    __u64 rx_bytes;
+    __u64 tx_bytes;
+    __u64 rx_dropped;
+    __u64 tx_dropped;
+    __u64 rx_errors;
+    __u64 tx_errors;
+    __u64 rx_frame_err;
+    __u64 rx_over_err;
+    __u64 rx_crc_err;
+    __u64 collisions;
+};
+
+struct odp_vport_stats_req {
+    char devname[16];            /* IFNAMSIZ */
+    struct odp_vport_stats stats;
+};
+
+struct odp_vport_ether {
+    char devname[16];            /* IFNAMSIZ */
+    unsigned char ether_addr[ETH_ALEN];
+};
+
+struct odp_vport_mtu {
+    char devname[16];            /* IFNAMSIZ */
+    __u16 mtu;
 };
 
 /* Values below this cutoff are 802.3 packets and the two bytes

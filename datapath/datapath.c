@@ -12,7 +12,6 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/if_arp.h>
-#include <linux/if_bridge.h>
 #include <linux/if_vlan.h>
 #include <linux/in.h>
 #include <linux/ip.h>
@@ -21,7 +20,6 @@
 #include <linux/etherdevice.h>
 #include <linux/kernel.h>
 #include <linux/kthread.h>
-#include <linux/llc.h>
 #include <linux/mutex.h>
 #include <linux/percpu.h>
 #include <linux/rcupdate.h>
@@ -42,13 +40,12 @@
 #include <linux/workqueue.h>
 #include <linux/dmi.h>
 #include <net/inet_ecn.h>
-#include <net/llc.h>
 
 #include "openvswitch/datapath-protocol.h"
 #include "datapath.h"
 #include "actions.h"
-#include "dp_dev.h"
 #include "flow.h"
+#include "vport-internal_dev.h"
 
 #include "compat.h"
 
@@ -62,7 +59,7 @@ EXPORT_SYMBOL(dp_ioctl_hook);
  * dp_mutex nests inside the RTNL lock: if you need both you must take the RTNL
  * lock first.
  *
- * It is safe to access the datapath and net_bridge_port structures with just
+ * It is safe to access the datapath and dp_port structures with just
  * dp_mutex.
  */
 static struct datapath *dps[ODP_MAX];
@@ -71,7 +68,7 @@ static DEFINE_MUTEX(dp_mutex);
 /* Number of milliseconds between runs of the maintenance thread. */
 #define MAINT_SLEEP_MSECS 1000
 
-static int new_nbp(struct datapath *, struct net_device *, int port_no);
+static int new_dp_port(struct datapath *, struct odp_port *, int port_no);
 
 /* Must be called with rcu_read_lock or dp_mutex. */
 struct datapath *get_dp(int dp_idx)
@@ -94,6 +91,12 @@ static struct datapath *get_dp_locked(int dp_idx)
 	return dp;
 }
 
+/* Must be called with rcu_read_lock or RTNL lock. */
+const char *dp_name(const struct datapath *dp)
+{
+	return vport_get_name(dp->ports[ODPP_LOCAL]->vport);
+}
+
 static inline size_t br_nlmsg_size(void)
 {
 	return NLMSG_ALIGN(sizeof(struct ifinfomsg))
@@ -106,13 +109,20 @@ static inline size_t br_nlmsg_size(void)
 }
 
 static int dp_fill_ifinfo(struct sk_buff *skb,
-			  const struct net_bridge_port *port,
+			  const struct dp_port *port,
 			  int event, unsigned int flags)
 {
 	const struct datapath *dp = port->dp;
-	const struct net_device *dev = port->dev;
+	int ifindex = vport_get_ifindex(port->vport);
+	int iflink = vport_get_iflink(port->vport);
 	struct ifinfomsg *hdr;
 	struct nlmsghdr *nlh;
+
+	if (ifindex < 0)
+		return ifindex;
+
+	if (iflink < 0)
+		return iflink;
 
 	nlh = nlmsg_put(skb, 0, 0, event, sizeof(*hdr), flags);
 	if (nlh == NULL)
@@ -121,24 +131,26 @@ static int dp_fill_ifinfo(struct sk_buff *skb,
 	hdr = nlmsg_data(nlh);
 	hdr->ifi_family = AF_BRIDGE;
 	hdr->__ifi_pad = 0;
-	hdr->ifi_type = dev->type;
-	hdr->ifi_index = dev->ifindex;
-	hdr->ifi_flags = dev_get_flags(dev);
+	hdr->ifi_type = ARPHRD_ETHER;
+	hdr->ifi_index = ifindex;
+	hdr->ifi_flags = vport_get_flags(port->vport);
 	hdr->ifi_change = 0;
 
-	NLA_PUT_STRING(skb, IFLA_IFNAME, dev->name);
-	NLA_PUT_U32(skb, IFLA_MASTER, dp->ports[ODPP_LOCAL]->dev->ifindex);
-	NLA_PUT_U32(skb, IFLA_MTU, dev->mtu);
+	NLA_PUT_STRING(skb, IFLA_IFNAME, vport_get_name(port->vport));
+	NLA_PUT_U32(skb, IFLA_MASTER, vport_get_ifindex(dp->ports[ODPP_LOCAL]->vport));
+	NLA_PUT_U32(skb, IFLA_MTU, vport_get_mtu(port->vport));
 #ifdef IFLA_OPERSTATE
 	NLA_PUT_U8(skb, IFLA_OPERSTATE,
-		   netif_running(dev) ? dev->operstate : IF_OPER_DOWN);
+		   vport_is_running(port->vport)
+			? vport_get_operstate(port->vport)
+			: IF_OPER_DOWN);
 #endif
 
-	if (dev->addr_len)
-		NLA_PUT(skb, IFLA_ADDRESS, dev->addr_len, dev->dev_addr);
+	NLA_PUT(skb, IFLA_ADDRESS, ETH_ALEN,
+					vport_get_addr(port->vport));
 
-	if (dev->ifindex != dev->iflink)
-		NLA_PUT_U32(skb, IFLA_LINK, dev->iflink);
+	if (ifindex != iflink)
+		NLA_PUT_U32(skb, IFLA_LINK,iflink);
 
 	return nlmsg_end(skb, nlh);
 
@@ -147,9 +159,8 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static void dp_ifinfo_notify(int event, struct net_bridge_port *port)
+static void dp_ifinfo_notify(int event, struct dp_port *port)
 {
-	struct net *net = dev_net(port->dev);
 	struct sk_buff *skb;
 	int err = -ENOBUFS;
 
@@ -164,11 +175,11 @@ static void dp_ifinfo_notify(int event, struct net_bridge_port *port)
 		kfree_skb(skb);
 		goto errout;
 	}
-	rtnl_notify(skb, net, 0, RTNLGRP_LINK, NULL, GFP_KERNEL);
+	rtnl_notify(skb, &init_net, 0, RTNLGRP_LINK, NULL, GFP_KERNEL);
 	return;
 errout:
 	if (err < 0)
-		rtnl_set_sk_err(net, RTNLGRP_LINK, err);
+		rtnl_set_sk_err(&init_net, RTNLGRP_LINK, err);
 }
 
 static void release_dp(struct kobject *kobj)
@@ -183,7 +194,7 @@ static struct kobj_type dp_ktype = {
 
 static int create_dp(int dp_idx, const char __user *devnamep)
 {
-	struct net_device *dp_dev;
+	struct odp_port internal_dev_port;
 	char devname[IFNAMSIZ];
 	struct datapath *dp;
 	int err;
@@ -234,14 +245,13 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 		goto err_free_dp;
 
 	/* Set up our datapath device. */
-	dp_dev = dp_dev_create(dp, devname, ODPP_LOCAL);
-	err = PTR_ERR(dp_dev);
-	if (IS_ERR(dp_dev))
-		goto err_destroy_table;
-
-	err = new_nbp(dp, dp_dev, ODPP_LOCAL);
+	strncpy(internal_dev_port.devname, devname, IFNAMSIZ - 1);
+	internal_dev_port.flags = ODP_PORT_INTERNAL;
+	err = new_dp_port(dp, &internal_dev_port, ODPP_LOCAL);
 	if (err) {
-		dp_dev_destroy(dp_dev);
+		if (err == -EBUSY)
+			err = -EEXIST;
+
 		goto err_destroy_table;
 	}
 
@@ -259,7 +269,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	return 0;
 
 err_destroy_local_port:
-	dp_del_port(dp->ports[ODPP_LOCAL]);
+	dp_detach_port(dp->ports[ODPP_LOCAL], 1);
 err_destroy_table:
 	dp_table_destroy(dp->table, 0);
 err_free_dp:
@@ -275,18 +285,18 @@ err:
 
 static void do_destroy_dp(struct datapath *dp)
 {
-	struct net_bridge_port *p, *n;
+	struct dp_port *p, *n;
 	int i;
 
 	list_for_each_entry_safe (p, n, &dp->port_list, node)
 		if (p->port_no != ODPP_LOCAL)
-			dp_del_port(p);
+			dp_detach_port(p, 1);
 
 	dp_sysfs_del_dp(dp);
 
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
-	dp_del_port(dp->ports[ODPP_LOCAL]);
+	dp_detach_port(dp->ports[ODPP_LOCAL], 1);
 
 	dp_table_destroy(dp->table, 1);
 
@@ -320,9 +330,9 @@ err_unlock:
 	return err;
 }
 
-static void release_nbp(struct kobject *kobj)
+static void release_dp_port(struct kobject *kobj)
 {
-	struct net_bridge_port *p = container_of(kobj, struct net_bridge_port, kobj);
+	struct dp_port *p = container_of(kobj, struct dp_port, kobj);
 	kfree(p);
 }
 
@@ -330,36 +340,45 @@ static struct kobj_type brport_ktype = {
 #ifdef CONFIG_SYSFS
 	.sysfs_ops = &brport_sysfs_ops,
 #endif
-	.release = release_nbp
+	.release = release_dp_port
 };
 
 /* Called with RTNL lock and dp_mutex. */
-static int new_nbp(struct datapath *dp, struct net_device *dev, int port_no)
+static int new_dp_port(struct datapath *dp, struct odp_port *odp_port, int port_no)
 {
-	struct net_bridge_port *p;
+	struct vport *vport;
+	struct dp_port *p;
+	int err;
 
-	if (dev->br_port != NULL)
-		return -EBUSY;
+	vport = vport_locate(odp_port->devname);
+	if (!vport) {
+		vport_lock();
+
+		if (odp_port->flags & ODP_PORT_INTERNAL)
+			vport = __vport_add(odp_port->devname, "internal", NULL);
+		else
+			vport = __vport_add(odp_port->devname, "netdev", NULL);
+
+		vport_unlock();
+
+		if (IS_ERR(vport))
+			return PTR_ERR(vport);
+	}
 
 	p = kzalloc(sizeof(*p), GFP_KERNEL);
 	if (!p)
 		return -ENOMEM;
 
-	dev_set_promiscuity(dev, 1);
-	dev_hold(dev);
 	p->port_no = port_no;
 	p->dp = dp;
-	p->dev = dev;
 	atomic_set(&p->sflow_pool, 0);
-	if (!is_dp_dev(dev))
-		rcu_assign_pointer(dev->br_port, p);
-	else {
-		/* It would make sense to assign dev->br_port here too, but
-		 * that causes packets received on internal ports to get caught
-		 * in dp_frame_hook().  In turn dp_frame_hook() can reject them
-		 * back to network stack, but that's a waste of time. */
+
+	err = vport_attach(vport, p);
+	if (err) {
+		kfree(p);
+		return err;
 	}
-	dev_disable_lro(dev);
+
 	rcu_assign_pointer(dp->ports[port_no], p);
 	list_add_rcu(&p->node, &dp->port_list);
 	dp->n_ports++;
@@ -374,9 +393,8 @@ static int new_nbp(struct datapath *dp, struct net_device *dev, int port_no)
 	return 0;
 }
 
-static int add_port(int dp_idx, struct odp_port __user *portp)
+static int attach_port(int dp_idx, struct odp_port __user *portp)
 {
-	struct net_device *dev;
 	struct datapath *dp;
 	struct odp_port port;
 	int port_no;
@@ -400,35 +418,16 @@ static int add_port(int dp_idx, struct odp_port __user *portp)
 	goto out_unlock_dp;
 
 got_port_no:
-	if (!(port.flags & ODP_PORT_INTERNAL)) {
-		err = -ENODEV;
-		dev = dev_get_by_name(&init_net, port.devname);
-		if (!dev)
-			goto out_unlock_dp;
-
-		err = -EINVAL;
-		if (dev->flags & IFF_LOOPBACK || dev->type != ARPHRD_ETHER ||
-		    is_dp_dev(dev))
-			goto out_put;
-	} else {
-		dev = dp_dev_create(dp, port.devname, port_no);
-		err = PTR_ERR(dev);
-		if (IS_ERR(dev))
-			goto out_unlock_dp;
-		dev_hold(dev);
-	}
-
-	err = new_nbp(dp, dev, port_no);
+	err = new_dp_port(dp, &port, port_no);
 	if (err)
-		goto out_put;
+		goto out_unlock_dp;
 
-	set_dp_devs_mtu(dp, dev);
+	if (!(port.flags & ODP_PORT_INTERNAL))
+		set_internal_devs_mtu(dp);
 	dp_sysfs_add_if(dp->ports[port_no]);
 
 	err = __put_user(port_no, &portp->port);
 
-out_put:
-	dev_put(dev);
 out_unlock_dp:
 	mutex_unlock(&dp->mutex);
 out_unlock_rtnl:
@@ -437,45 +436,48 @@ out:
 	return err;
 }
 
-int dp_del_port(struct net_bridge_port *p)
+int dp_detach_port(struct dp_port *p, int may_delete)
 {
+	struct vport *vport = p->vport;
+	int err;
+
 	ASSERT_RTNL();
 
 	if (p->port_no != ODPP_LOCAL)
 		dp_sysfs_del_if(p);
 	dp_ifinfo_notify(RTM_DELLINK, p);
 
-	p->dp->n_ports--;
-
-	if (is_dp_dev(p->dev)) {
-		/* Make sure that no packets arrive from now on, since
-		 * dp_dev_xmit() will try to find itself through
-		 * p->dp->ports[], and we're about to set that to null. */
-		netif_tx_disable(p->dev);
-	}
-
 	/* First drop references to device. */
-	dev_set_promiscuity(p->dev, -1);
+	p->dp->n_ports--;
 	list_del_rcu(&p->node);
 	rcu_assign_pointer(p->dp->ports[p->port_no], NULL);
-	rcu_assign_pointer(p->dev->br_port, NULL);
+
+	err = vport_detach(vport);
+	if (err)
+		return err;
 
 	/* Then wait until no one is still using it, and destroy it. */
 	synchronize_rcu();
 
-	if (is_dp_dev(p->dev))
-		dp_dev_destroy(p->dev);
-	dev_put(p->dev);
+	if (may_delete) {
+		const char *port_type = vport_get_type(vport);
+
+		if (!strcmp(port_type, "netdev") || !strcmp(port_type, "internal")) {
+			vport_lock();
+			__vport_del(vport);
+			vport_unlock();
+		}
+	}
+
 	kobject_put(&p->kobj);
 
 	return 0;
 }
 
-static int del_port(int dp_idx, int port_no)
+static int detach_port(int dp_idx, int port_no)
 {
-	struct net_bridge_port *p;
+	struct dp_port *p;
 	struct datapath *dp;
-	LIST_HEAD(dp_devs);
 	int err;
 
 	err = -EINVAL;
@@ -493,7 +495,7 @@ static int del_port(int dp_idx, int port_no)
 	if (!p)
 		goto out_unlock_dp;
 
-	err = dp_del_port(p);
+	err = dp_detach_port(p, 1);
 
 out_unlock_dp:
 	mutex_unlock(&dp->mutex);
@@ -503,31 +505,8 @@ out:
 	return err;
 }
 
-/* Must be called with rcu_read_lock. */
-static void
-do_port_input(struct net_bridge_port *p, struct sk_buff *skb) 
-{
-	/* LRO isn't suitable for bridging.  We turn it off but make sure
-	 * that it wasn't reactivated. */
-	if (skb_warn_if_lro(skb))
-		return;
-
-	/* Make our own copy of the packet.  Otherwise we will mangle the
-	 * packet for anyone who came before us (e.g. tcpdump via AF_PACKET).
-	 * (No one comes after us, since we tell handle_bridge() that we took
-	 * the packet.) */
-	skb = skb_share_check(skb, GFP_ATOMIC);
-	if (!skb)
-		return;
-
-	/* Push the Ethernet header back on. */
-	skb_push(skb, ETH_HLEN);
-	skb_reset_mac_header(skb);
-	dp_process_received_packet(skb, p);
-}
-
 /* Must be called with rcu_read_lock and with bottom-halves disabled. */
-void dp_process_received_packet(struct sk_buff *skb, struct net_bridge_port *p)
+void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 {
 	struct datapath *dp = p->dp;
 	struct dp_stats_percpu *stats;
@@ -535,9 +514,10 @@ void dp_process_received_packet(struct sk_buff *skb, struct net_bridge_port *p)
 	struct sw_flow *flow;
 
 	WARN_ON_ONCE(skb_shared(skb));
+	skb_warn_if_lro(skb);
 
+	OVS_CB(skb)->dp_port = p;
 	compute_ip_summed(skb, false);
-	OVS_CB(skb)->tun_id = 0;
 
 	/* BHs are off so we don't have to use get_cpu()/put_cpu() here. */
 	stats = percpu_ptr(dp->stats_percpu, smp_processor_id());
@@ -562,29 +542,6 @@ void dp_process_received_packet(struct sk_buff *skb, struct net_bridge_port *p)
 		dp_output_control(dp, skb, _ODPL_MISS_NR, OVS_CB(skb)->tun_id);
 	}
 }
-
-/*
- * Used as br_handle_frame_hook.  (Cannot run bridge at the same time, even on
- * different set of devices!)
- */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
-/* Called with rcu_read_lock and bottom-halves disabled. */
-static struct sk_buff *dp_frame_hook(struct net_bridge_port *p,
-					 struct sk_buff *skb)
-{
-	do_port_input(p, skb);
-	return NULL;
-}
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
-/* Called with rcu_read_lock and bottom-halves disabled. */
-static int dp_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
-{
-	do_port_input(p, *pskb);
-	return 1;
-}
-#else
-#error
-#endif
 
 #if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
 /* This code is based on a skb_checksum_setup from net/dev/core.c from a
@@ -779,13 +736,10 @@ queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
 	int port_no;
 	int err;
 
-	port_no = ODPP_LOCAL;
-	if (skb->dev) {
-		if (skb->dev->br_port)
-			port_no = skb->dev->br_port->port_no;
-		else if (is_dp_dev(skb->dev))
-			port_no = dp_dev_priv(skb->dev)->port_no;
-	}
+	if (OVS_CB(skb)->dp_port)
+		port_no = OVS_CB(skb)->dp_port->port_no;
+	else
+		port_no = ODPP_LOCAL;
 
 	do {
 		struct odp_msg *header;
@@ -1304,11 +1258,10 @@ static int do_execute(struct datapath *dp, const struct odp_execute *executep)
 	if (!skb)
 		goto error_free_actions;
 
-	if (execute.in_port < DP_MAX_PORTS) {
-		struct net_bridge_port *p = dp->ports[execute.in_port];
-		if (p)
-			skb->dev = p->dev;
-	}
+	if (execute.in_port < DP_MAX_PORTS)
+		OVS_CB(skb)->dp_port = dp->ports[execute.in_port];
+	else
+		OVS_CB(skb)->dp_port = NULL;
 
 	err = -EFAULT;
 	if (copy_from_user(skb_put(skb, execute.length), execute.data,
@@ -1368,57 +1321,58 @@ static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 /* MTU of the dp pseudo-device: ETH_DATA_LEN or the minimum of the ports */
 int dp_min_mtu(const struct datapath *dp)
 {
-	struct net_bridge_port *p;
+	struct dp_port *p;
 	int mtu = 0;
 
 	ASSERT_RTNL();
 
 	list_for_each_entry_rcu (p, &dp->port_list, node) {
-		struct net_device *dev = p->dev;
+		int dev_mtu;
 
 		/* Skip any internal ports, since that's what we're trying to
 		 * set. */
-		if (is_dp_dev(dev))
+		if (is_internal_vport(p->vport))
 			continue;
 
-		if (!mtu || dev->mtu < mtu)
-			mtu = dev->mtu;
+		dev_mtu = vport_get_mtu(p->vport);
+		if (!mtu || dev_mtu < mtu)
+			mtu = dev_mtu;
 	}
 
 	return mtu ? mtu : ETH_DATA_LEN;
 }
 
-/* Sets the MTU of all datapath devices to the minimum of the ports. 'dev'
- * is the device whose MTU may have changed.  Must be called with RTNL lock
- * and dp_mutex. */
-void set_dp_devs_mtu(const struct datapath *dp, struct net_device *dev)
+/* Sets the MTU of all datapath devices to the minimum of the ports.  Must
+ * be called with RTNL lock and dp_mutex. */
+void set_internal_devs_mtu(const struct datapath *dp)
 {
-	struct net_bridge_port *p;
+	struct dp_port *p;
 	int mtu;
 
 	ASSERT_RTNL();
 
-	if (is_dp_dev(dev))
-		return;
-
 	mtu = dp_min_mtu(dp);
 
 	list_for_each_entry_rcu (p, &dp->port_list, node) {
-		struct net_device *br_dev = p->dev;
-
-		if (is_dp_dev(br_dev))
-			dev_set_mtu(br_dev, mtu);
+		if (is_internal_vport(p->vport))
+			vport_set_mtu(p->vport, mtu);
 	}
 }
 
 static int
-put_port(const struct net_bridge_port *p, struct odp_port __user *uop)
+put_port(const struct dp_port *p, struct odp_port __user *uop)
 {
 	struct odp_port op;
+
 	memset(&op, 0, sizeof op);
-	strncpy(op.devname, p->dev->name, sizeof op.devname);
+
+	rcu_read_lock();
+	strncpy(op.devname, vport_get_name(p->vport), sizeof op.devname);
+	rcu_read_unlock();
+
 	op.port = p->port_no;
-	op.flags = is_dp_dev(p->dev) ? ODP_PORT_INTERNAL : 0;
+	op.flags = is_internal_vport(p->vport) ? ODP_PORT_INTERNAL : 0;
+
 	return copy_to_user(uop, &op, sizeof op) ? -EFAULT : 0;
 }
 
@@ -1429,41 +1383,52 @@ query_port(struct datapath *dp, struct odp_port __user *uport)
 
 	if (copy_from_user(&port, uport, sizeof port))
 		return -EFAULT;
+
 	if (port.devname[0]) {
-		struct net_bridge_port *p;
-		struct net_device *dev;
-		int err;
+		struct vport *vport;
+		struct dp_port *dp_port;
+		int err = 0;
 
 		port.devname[IFNAMSIZ - 1] = '\0';
 
-		dev = dev_get_by_name(&init_net, port.devname);
-		if (!dev)
-			return -ENODEV;
+		vport_lock();
+		rcu_read_lock();
 
-		p = dev->br_port;
-		if (!p && is_dp_dev(dev)) {
-			struct dp_dev *dp_dev = dp_dev_priv(dev);
-			if (dp_dev->dp == dp)
-				p = dp->ports[dp_dev->port_no];
+		vport = vport_locate(port.devname);
+		if (!vport) {
+			err = -ENODEV;
+			goto error_unlock;
 		}
-		err = p && p->dp == dp ? put_port(p, uport) : -ENOENT;
-		dev_put(dev);
 
-		return err;
+		dp_port = vport_get_dp_port(vport);
+		if (!dp_port || dp_port->dp != dp) {
+			err = -ENOENT;
+			goto error_unlock;
+		}
+
+		port.port = dp_port->port_no;
+
+error_unlock:
+		rcu_read_unlock();
+		vport_unlock();
+
+		if (err)
+			return err;
 	} else {
 		if (port.port >= DP_MAX_PORTS)
 			return -EINVAL;
 		if (!dp->ports[port.port])
 			return -ENOENT;
-		return put_port(dp->ports[port.port], uport);
 	}
+
+	return put_port(dp->ports[port.port], uport);
 }
 
 static int
 list_ports(struct datapath *dp, struct odp_portvec __user *pvp)
 {
 	struct odp_portvec pv;
-	struct net_bridge_port *p;
+	struct dp_port *p;
 	int idx;
 
 	if (copy_from_user(&pv, pvp, sizeof pv))
@@ -1580,14 +1545,46 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		err = destroy_dp(dp_idx);
 		goto exit;
 
-	case ODP_PORT_ADD:
-		err = add_port(dp_idx, (struct odp_port __user *)argp);
+	case ODP_PORT_ATTACH:
+		err = attach_port(dp_idx, (struct odp_port __user *)argp);
 		goto exit;
 
-	case ODP_PORT_DEL:
+	case ODP_PORT_DETACH:
 		err = get_user(port_no, (int __user *)argp);
 		if (!err)
-			err = del_port(dp_idx, port_no);
+			err = detach_port(dp_idx, port_no);
+		goto exit;
+
+	case ODP_VPORT_ADD:
+		err = vport_add((struct odp_vport_add __user *)argp);
+		goto exit;
+
+	case ODP_VPORT_MOD:
+		err = vport_mod((struct odp_vport_mod __user *)argp);
+		goto exit;
+
+	case ODP_VPORT_DEL:
+		err = vport_del((char __user *)argp);
+		goto exit;
+
+	case ODP_VPORT_STATS_GET:
+		err = vport_stats_get((struct odp_vport_stats_req __user *)argp);
+		goto exit;
+
+	case ODP_VPORT_ETHER_GET:
+		err = vport_ether_get((struct odp_vport_ether __user *)argp);
+		goto exit;
+
+	case ODP_VPORT_ETHER_SET:
+		err = vport_ether_set((struct odp_vport_ether __user *)argp);
+		goto exit;
+
+	case ODP_VPORT_MTU_GET:
+		err = vport_mtu_get((struct odp_vport_mtu __user *)argp);
+		goto exit;
+
+	case ODP_VPORT_MTU_SET:
+		err = vport_mtu_set((struct odp_vport_mtu __user *)argp);
 		goto exit;
 	}
 
@@ -1784,89 +1781,37 @@ struct file_operations openvswitch_fops = {
 
 static int major;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
-static struct llc_sap *dp_stp_sap;
-
-static int dp_stp_rcv(struct sk_buff *skb, struct net_device *dev,
-		      struct packet_type *pt, struct net_device *orig_dev)
-{
-	/* We don't really care about STP packets, we just listen for them for
-	 * mutual exclusion with the bridge module, so this just discards
-	 * them. */
-	kfree_skb(skb);
-	return 0;
-}
-
-static int dp_avoid_bridge_init(void)
-{
-	/* Register to receive STP packets because the bridge module also
-	 * attempts to do so.  Since there can only be a single listener for a
-	 * given protocol, this provides mutual exclusion against the bridge
-	 * module, preventing both of them from being loaded at the same
-	 * time. */
-	dp_stp_sap = llc_sap_open(LLC_SAP_BSPAN, dp_stp_rcv);
-	if (!dp_stp_sap) {
-		printk(KERN_ERR "openvswitch: can't register sap for STP (probably the bridge module is loaded)\n");
-		return -EADDRINUSE;
-	}
-	return 0;
-}
-
-static void dp_avoid_bridge_exit(void)
-{
-	llc_sap_put(dp_stp_sap);
-}
-#else  /* Linux 2.6.27 or later. */
-static int dp_avoid_bridge_init(void)
-{
-	/* Linux 2.6.27 introduces a way for multiple clients to register for
-	 * STP packets, which interferes with what we try to do above.
-	 * Instead, just check whether there's a bridge hook defined.  This is
-	 * not as safe--the bridge module is willing to load over the top of
-	 * us--but it provides a little bit of protection. */
-	if (br_handle_frame_hook) {
-		printk(KERN_ERR "openvswitch: bridge module is loaded, cannot load over it\n");
-		return -EADDRINUSE;
-	}
-	return 0;
-}
-
-static void dp_avoid_bridge_exit(void)
-{
-	/* Nothing to do. */
-}
-#endif	/* Linux 2.6.27 or later */
-
 static int __init dp_init(void)
 {
+	struct sk_buff *dummy_skb;
 	int err;
 
-	printk("Open vSwitch %s, built "__DATE__" "__TIME__"\n", VERSION BUILDNR);
+	BUILD_BUG_ON(sizeof(struct ovs_skb_cb) > sizeof(dummy_skb->cb));
 
-	err = dp_avoid_bridge_init();
-	if (err)
-		return err;
+	printk("Open vSwitch %s, built "__DATE__" "__TIME__"\n", VERSION BUILDNR);
 
 	err = flow_init();
 	if (err)
 		goto error;
 
-	err = register_netdevice_notifier(&dp_device_notifier);
+	err = vport_init();
 	if (err)
 		goto error_flow_exit;
+
+	err = register_netdevice_notifier(&dp_device_notifier);
+	if (err)
+		goto error_vport_exit;
 
 	major = register_chrdev(0, "openvswitch", &openvswitch_fops);
 	if (err < 0)
 		goto error_unreg_notifier;
 
-	/* Hook into callback used by the bridge to intercept packets.
-	 * Parasites we are. */
-	br_handle_frame_hook = dp_frame_hook;
-
 	return 0;
 
 error_unreg_notifier:
 	unregister_netdevice_notifier(&dp_device_notifier);
+error_vport_exit:
+	vport_exit();
 error_flow_exit:
 	flow_exit();
 error:
@@ -1878,9 +1823,8 @@ static void dp_cleanup(void)
 	rcu_barrier();
 	unregister_chrdev(major, "openvswitch");
 	unregister_netdevice_notifier(&dp_device_notifier);
+	vport_exit();
 	flow_exit();
-	br_handle_frame_hook = NULL;
-	dp_avoid_bridge_exit();
 }
 
 module_init(dp_init);
