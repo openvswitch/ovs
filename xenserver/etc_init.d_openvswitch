@@ -126,7 +126,7 @@ function insert_modules_if_required {
     if [ "$ENABLE_BRCOMPAT" = "y" ] && [ -n "$BRCOMPATD_PIDFILE" ] && ! lsmod | grep -q "brcompat_mod"; then
         action "Inserting brcompat module" modprobe brcompat_mod
     fi
-    if [ -f "/lib/modules/`uname -r`/kernel/net/openvswitch/ip_gre_mod.ko" ] && ! lsmod | grep -q "ip_gre_mod"; then
+    if [ -f "/lib/modules/`uname -r`/kernel/extra/openvswitch/ip_gre_mod.ko" ] && ! lsmod | grep -q "ip_gre_mod"; then
         action "Inserting ip_gre module" modprobe ip_gre_mod
     fi
 }
