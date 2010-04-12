@@ -173,7 +173,7 @@ fail_open_recover(struct fail_open *fo)
         fo->next_bogus_packet_in = LLONG_MAX;
 
         memset(&flow, 0, sizeof flow);
-        ofproto_delete_flow(fo->ofproto, &flow, OFPFW_ALL, FAIL_OPEN_PRIORITY);
+        ofproto_delete_flow(fo->ofproto, &flow, OVSFW_ALL, FAIL_OPEN_PRIORITY);
     }
 }
 
@@ -201,7 +201,7 @@ fail_open_flushed(struct fail_open *fo)
         action.output.len = htons(sizeof action);
         action.output.port = htons(OFPP_NORMAL);
         memset(&flow, 0, sizeof flow);
-        ofproto_add_flow(fo->ofproto, &flow, OFPFW_ALL, FAIL_OPEN_PRIORITY,
+        ofproto_add_flow(fo->ofproto, &flow, OVSFW_ALL, FAIL_OPEN_PRIORITY,
                          &action, 1, 0);
     }
 }

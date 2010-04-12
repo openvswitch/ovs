@@ -134,8 +134,8 @@ ofp_packet_in(struct ds *string, const void *oh, size_t len, int verbosity)
         struct ofp_match match;
         packet.data = (void *) op->data;
         packet.size = data_len;
-        flow_extract(&packet, ntohs(op->in_port), &flow);
-        flow_to_match(&flow, 0, &match);
+        flow_extract(&packet, 0, ntohs(op->in_port), &flow);
+        flow_to_match(&flow, 0, false, &match);
         ofp_print_match(string, &match, verbosity);
         ds_put_char(string, '\n');
     }
@@ -190,6 +190,13 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
         const struct nx_action_resubmit *nar = (struct nx_action_resubmit *)nah;
         ds_put_format(string, "resubmit:");
         ofp_print_port_name(string, ntohs(nar->in_port));
+        break;
+    }
+
+    case NXAST_SET_TUNNEL: {
+        const struct nx_action_set_tunnel *nast =
+                                            (struct nx_action_set_tunnel *)nah;
+        ds_put_format(string, "set_tunnel:0x%08"PRIx32, ntohl(nast->tun_id));
         break;
     }
 
@@ -671,6 +678,9 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
         } else {
             skip_type = false;
         }
+    }
+    if (w & NXFW_TUN_ID) {
+        ds_put_cstr(&f, "tun_id_wild,");
     }
     print_wild(&f, "in_port=", w & OFPFW_IN_PORT, verbosity,
                "%d", ntohs(om->in_port));

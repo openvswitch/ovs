@@ -647,6 +647,12 @@ str_to_action(char *str, struct ofpbuf *b)
             nar->vendor = htonl(NX_VENDOR_ID);
             nar->subtype = htons(NXAST_RESUBMIT);
             nar->in_port = htons(str_to_u32(arg));
+        } else if (!strcasecmp(act, "set_tunnel")) {
+            struct nx_action_set_tunnel *nast;
+            nast = put_action(b, sizeof *nast, OFPAT_VENDOR);
+            nast->vendor = htonl(NX_VENDOR_ID);
+            nast->subtype = htons(NXAST_SET_TUNNEL);
+            nast->tun_id = htonl(str_to_u32(arg));
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "drop")) {
@@ -717,7 +723,7 @@ static bool
 parse_field(const char *name, const struct field **f_out) 
 {
 #define F_OFS(MEMBER) offsetof(struct ofp_match, MEMBER)
-    static const struct field fields[] = { 
+    static const struct field fields[] = {
         { "in_port", OFPFW_IN_PORT, F_U16, F_OFS(in_port), 0 },
         { "dl_vlan", OFPFW_DL_VLAN, F_U16, F_OFS(dl_vlan), 0 },
         { "dl_vlan_pcp", OFPFW_DL_VLAN_PCP, F_U8, F_OFS(dl_vlan_pcp), 0 },
@@ -825,6 +831,8 @@ str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
                 *hard_timeout = atoi(value);
             } else if (cookie && !strcmp(name, "cookie")) {
                 *cookie = str_to_u64(value);
+            } else if (!strcmp(name, "tun_id_wild")) {
+                wildcards |= NXFW_TUN_ID;
             } else if (parse_field(name, &f)) {
                 void *data = (char *) match + f->offset;
                 if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
@@ -1027,6 +1035,24 @@ static void do_del_flows(int argc, char *argv[])
     ofm->buffer_id = htonl(UINT32_MAX);
     ofm->out_port = htons(out_port);
     ofm->priority = htons(priority);
+
+    open_vconn(argv[1], &vconn);
+    send_openflow_buffer(vconn, buffer);
+    vconn_close(vconn);
+}
+
+static void
+do_tun_cookie(int argc OVS_UNUSED, char *argv[])
+{
+    struct nxt_tun_id_cookie *tun_id_cookie;
+    struct ofpbuf *buffer;
+    struct vconn *vconn;
+
+    tun_id_cookie = make_openflow(sizeof *tun_id_cookie, OFPT_VENDOR, &buffer);
+
+    tun_id_cookie->vendor = htonl(NX_VENDOR_ID);
+    tun_id_cookie->subtype = htonl(NXT_TUN_ID_FROM_COOKIE);
+    tun_id_cookie->set = !strcmp(argv[2], "true");
 
     open_vconn(argv[1], &vconn);
     send_openflow_buffer(vconn, buffer);
@@ -1274,6 +1300,7 @@ static const struct command all_commands[] = {
     { "add-flows", 2, 2, do_add_flows },
     { "mod-flows", 2, 2, do_mod_flows },
     { "del-flows", 1, 2, do_del_flows },
+    { "tun-cookie", 2, 2, do_tun_cookie },
     { "dump-ports", 1, 2, do_dump_ports },
     { "mod-port", 3, 3, do_mod_port },
     { "probe", 1, 1, do_probe },

@@ -537,6 +537,7 @@ void dp_process_received_packet(struct sk_buff *skb, struct net_bridge_port *p)
 	WARN_ON_ONCE(skb_shared(skb));
 
 	compute_ip_summed(skb, false);
+	OVS_CB(skb)->tun_id = 0;
 
 	/* BHs are off so we don't have to use get_cpu()/put_cpu() here. */
 	stats = percpu_ptr(dp->stats_percpu, smp_processor_id());
@@ -558,7 +559,7 @@ void dp_process_received_packet(struct sk_buff *skb, struct net_bridge_port *p)
 		stats->n_hit++;
 	} else {
 		stats->n_missed++;
-		dp_output_control(dp, skb, _ODPL_MISS_NR, 0);
+		dp_output_control(dp, skb, _ODPL_MISS_NR, OVS_CB(skb)->tun_id);
 	}
 }
 
@@ -1302,6 +1303,7 @@ static int do_execute(struct datapath *dp, const struct odp_execute *executep)
 	skb = alloc_skb(execute.length, GFP_KERNEL);
 	if (!skb)
 		goto error_free_actions;
+
 	if (execute.in_port < DP_MAX_PORTS) {
 		struct net_bridge_port *p = dp->ports[execute.in_port];
 		if (p)

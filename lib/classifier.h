@@ -44,10 +44,11 @@
 #include "flow.h"
 #include "hmap.h"
 #include "list.h"
+#include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 
 /* Number of bytes of fields in a rule. */
-#define CLS_N_BYTES 31
+#define CLS_N_BYTES 37
 
 /* Fields in a rule.
  *
@@ -59,6 +60,7 @@
     /*        wildcard bit(s)    member name  name     */   \
     /*        -----------------  -----------  -------- */   \
     CLS_FIELD(OFPFW_IN_PORT,     in_port,     IN_PORT)      \
+    CLS_FIELD(NXFW_TUN_ID,       tun_id,      TUN_ID)       \
     CLS_FIELD(OFPFW_DL_VLAN,     dl_vlan,     DL_VLAN)      \
     CLS_FIELD(OFPFW_DL_VLAN_PCP, dl_vlan_pcp, DL_VLAN_PCP)  \
     CLS_FIELD(OFPFW_DL_SRC,      dl_src,      DL_SRC)       \
@@ -121,10 +123,11 @@ struct cls_rule {
     unsigned int table_idx;     /* Index into struct classifier 'tables'. */
 };
 
-void cls_rule_from_flow(struct cls_rule *, const flow_t *, uint32_t wildcards,
-                        unsigned int priority);
-void cls_rule_from_match(struct cls_rule *, const struct ofp_match *,
-                         unsigned int priority);
+void cls_rule_from_flow(const flow_t *, uint32_t wildcards,
+                        unsigned int priority, struct cls_rule *);
+void cls_rule_from_match(const struct ofp_match *, unsigned int priority,
+                         bool tun_id_from_cookie, uint64_t cookie,
+                         struct cls_rule *);
 char *cls_rule_to_string(const struct cls_rule *);
 void cls_rule_print(const struct cls_rule *);
 void cls_rule_moved(struct classifier *,

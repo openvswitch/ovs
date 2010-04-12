@@ -932,7 +932,7 @@ dpif_netdev_execute(struct dpif *dpif, uint16_t in_port,
          * if we don't. */
         copy = *packet;
     }
-    flow_extract(&copy, in_port, &flow);
+    flow_extract(&copy, 0, in_port, &flow);
     error = dp_netdev_execute_actions(dp, &copy, &flow, actions, n_actions);
     if (mutates) {
         ofpbuf_uninit(&copy);
@@ -1026,7 +1026,7 @@ dp_netdev_port_input(struct dp_netdev *dp, struct dp_netdev_port *port,
     struct dp_netdev_flow *flow;
     flow_t key;
 
-    if (flow_extract(packet, port->port_no, &key) && dp->drop_frags) {
+    if (flow_extract(packet, 0, port->port_no, &key) && dp->drop_frags) {
         dp->n_frags++;
         return;
     }

@@ -58,6 +58,11 @@ make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
 	return NULL;
 }
 
+static void set_tunnel(struct sk_buff *skb, struct odp_flow_key *key,
+		       __be32 tun_id)
+{
+	OVS_CB(skb)->tun_id = key->tun_id = tun_id;
+}
 
 static struct sk_buff *
 vlan_pull_tag(struct sk_buff *skb)
@@ -477,6 +482,8 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		}
 	}
 
+	OVS_CB(skb)->tun_id = 0;
+
 	for (; n_actions > 0; a++, n_actions--) {
 		WARN_ON_ONCE(skb_shared(skb));
 		if (prev_port != -1) {
@@ -500,6 +507,10 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 				kfree_skb(skb);
 				return err;
 			}
+			break;
+
+		case ODPAT_SET_TUNNEL:
+			set_tunnel(skb, key, a->tunnel.tun_id);
 			break;
 
 		case ODPAT_SET_VLAN_VID:

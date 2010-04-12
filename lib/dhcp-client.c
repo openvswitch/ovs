@@ -931,7 +931,7 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
             goto drained;
         }
 
-        flow_extract(&b, 0, &flow);
+        flow_extract(&b, 0, 0, &flow);
         if (flow.dl_type != htons(ETH_TYPE_IP)
             || flow.nw_proto != IP_TYPE_UDP
             || flow.tp_dst != htons(DHCP_CLIENT_PORT)

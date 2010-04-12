@@ -55,8 +55,8 @@ static bool rules_match_2wild(const struct cls_rule *wild1,
 /* Converts the flow in 'flow' into a cls_rule in 'rule', with the given
  * 'wildcards' and 'priority'.*/
 void
-cls_rule_from_flow(struct cls_rule *rule, const flow_t *flow,
-                   uint32_t wildcards, unsigned int priority)
+cls_rule_from_flow(const flow_t *flow, uint32_t wildcards,
+                   unsigned int priority, struct cls_rule *rule)
 {
     assert(!flow->reserved[0] && !flow->reserved[1] && !flow->reserved[2]);
     rule->flow = *flow;
@@ -66,13 +66,15 @@ cls_rule_from_flow(struct cls_rule *rule, const flow_t *flow,
 }
 
 /* Converts the ofp_match in 'match' into a cls_rule in 'rule', with the given
- * 'priority'. */
+ * 'priority'.  If 'tun_id_from_cookie' is set then the upper 32 bits of
+ * 'cookie' are stored in the rule as the tunnel ID. */
 void
-cls_rule_from_match(struct cls_rule *rule, const struct ofp_match *match,
-                    unsigned int priority)
+cls_rule_from_match(const struct ofp_match *match, unsigned int priority,
+                    bool tun_id_from_cookie, uint64_t cookie,
+                    struct cls_rule *rule)
 {
     uint32_t wildcards;
-    flow_from_match(&rule->flow, &wildcards, match);
+    flow_from_match(match, tun_id_from_cookie, cookie, &rule->flow, &wildcards);
     flow_wildcards_init(&rule->wc, wildcards);
     rule->priority = rule->wc.wildcards ? priority : UINT16_MAX;
     rule->table_idx = table_idx_from_wildcards(rule->wc.wildcards);
@@ -305,7 +307,7 @@ classifier_lookup_wild(const struct classifier *cls, const flow_t *flow)
         struct cls_rule target;
         int i;
 
-        cls_rule_from_flow(&target, flow, 0, 0);
+        cls_rule_from_flow(flow, 0, 0, &target);
         for (i = 0; i < CLS_N_FIELDS; i++) {
             struct cls_rule *rule = search_table(&cls->tables[i], i, &target);
             if (rule && (!best || rule->priority > best->priority)) {
@@ -330,7 +332,7 @@ classifier_find_rule_exactly(const struct classifier *cls,
         return search_exact_table(cls, flow_hash(target, 0), target);
     }
 
-    assert(wildcards == (wildcards & OFPFW_ALL));
+    assert(wildcards == (wildcards & OVSFW_ALL));
     table_idx = table_idx_from_wildcards(wildcards);
     hash = hash_fields(target, table_idx);
     HMAP_FOR_EACH_WITH_HASH (bucket, struct cls_bucket, hmap_node, hash,
@@ -367,7 +369,7 @@ classifier_rule_overlaps(const struct classifier *cls,
             true : false;
     }
 
-    cls_rule_from_flow(&target_rule, target, wildcards, priority);
+    cls_rule_from_flow(target, wildcards, priority, &target_rule);
 
     for (tbl = &cls->tables[0]; tbl < &cls->tables[CLS_N_FIELDS]; tbl++) {
         struct cls_bucket *bucket;

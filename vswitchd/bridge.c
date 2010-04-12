@@ -1590,8 +1590,7 @@ bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
         action.output.len = htons(sizeof action);
         action.output.port = htons(OFPP_NORMAL);
         memset(&flow, 0, sizeof flow);
-        ofproto_add_flow(br->ofproto, &flow, OFPFW_ALL, 0,
-                         &action, 1, 0);
+        ofproto_add_flow(br->ofproto, &flow, OVSFW_ALL, 0, &action, 1, 0);
 
         ofproto_set_in_band(br->ofproto, false);
         ofproto_set_max_backoff(br->ofproto, 1);
@@ -2779,7 +2778,7 @@ bond_send_learning_packets(struct port *port)
         n_packets++;
         compose_benign_packet(&packet, "Open vSwitch Bond Failover", 0xf177,
                               e->mac);
-        flow_extract(&packet, ODPP_NONE, &flow);
+        flow_extract(&packet, 0, ODPP_NONE, &flow);
         retval = ofproto_send_packet(br->ofproto, &flow, actions, a - actions,
                                      &packet);
         if (retval) {

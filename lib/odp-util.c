@@ -55,6 +55,9 @@ format_odp_action(struct ds *ds, const union odp_action *a)
     case ODPAT_CONTROLLER:
         ds_put_format(ds, "ctl(%"PRIu32")", a->controller.arg);
         break;
+    case ODPAT_SET_TUNNEL:
+        ds_put_format(ds, "set_tunnel(0x%08"PRIx32")", ntohl(a->tunnel.tun_id));
+        break;
     case ODPAT_SET_VLAN_VID:
         ds_put_format(ds, "set_vlan(%"PRIu16")", ntohs(a->vlan_vid.vlan_vid));
         break;

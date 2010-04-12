@@ -202,8 +202,9 @@ int flow_extract(struct sk_buff *skb, u16 in_port, struct odp_flow_key *key)
 	int nh_ofs;
 
 	memset(key, 0, sizeof *key);
-	key->dl_vlan = htons(ODP_VLAN_NONE);
+	key->tun_id = OVS_CB(skb)->tun_id;
 	key->in_port = in_port;
+	key->dl_vlan = htons(ODP_VLAN_NONE);
 
 	if (skb->len < sizeof *eth)
 		return 0;

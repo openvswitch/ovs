@@ -27,6 +27,7 @@
 #include "openflow/openflow.h"
 #include "openvswitch/datapath-protocol.h"
 #include "packets.h"
+#include "xtoxll.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_flow
@@ -87,9 +88,12 @@ pull_vlan(struct ofpbuf *packet)
     return ofpbuf_try_pull(packet, VLAN_HEADER_LEN);
 }
 
-/* Returns 1 if 'packet' is an IP fragment, 0 otherwise. */
+/* Returns 1 if 'packet' is an IP fragment, 0 otherwise.
+ * 'tun_id' is in network byte order, while 'in_port' is in host byte order.
+ * These byte orders are the same as they are in struct odp_flow_key. */
 int
-flow_extract(struct ofpbuf *packet, uint16_t in_port, flow_t *flow)
+flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
+             flow_t *flow)
 {
     struct ofpbuf b = *packet;
     struct eth_header *eth;
@@ -98,8 +102,9 @@ flow_extract(struct ofpbuf *packet, uint16_t in_port, flow_t *flow)
     COVERAGE_INC(flow_extract);
 
     memset(flow, 0, sizeof *flow);
-    flow->dl_vlan = htons(OFP_VLAN_NONE);
+    flow->tun_id = tun_id;
     flow->in_port = in_port;
+    flow->dl_vlan = htons(OFP_VLAN_NONE);
 
     packet->l2 = b.data;
     packet->l3 = NULL;
@@ -240,9 +245,14 @@ flow_extract_stats(const flow_t *flow, struct ofpbuf *packet,
 /* Extract 'flow' with 'wildcards' into the OpenFlow match structure
  * 'match'. */
 void
-flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
+flow_to_match(const flow_t *flow, uint32_t wildcards, bool tun_id_from_cookie,
+              struct ofp_match *match)
 {
+    if (!tun_id_from_cookie) {
+        wildcards &= OFPFW_ALL;
+    }
     match->wildcards = htonl(wildcards);
+
     match->in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
                            : flow->in_port);
     match->dl_vlan = flow->dl_vlan;
@@ -261,14 +271,21 @@ flow_to_match(const flow_t *flow, uint32_t wildcards, struct ofp_match *match)
 }
 
 void
-flow_from_match(flow_t *flow, uint32_t *wildcards,
-                const struct ofp_match *match)
+flow_from_match(const struct ofp_match *match, bool tun_id_from_cookie,
+                uint64_t cookie, flow_t *flow, uint32_t *wildcards)
 {
     if (wildcards) {
         *wildcards = ntohl(match->wildcards);
+
+        if (!tun_id_from_cookie) {
+            *wildcards |= NXFW_TUN_ID;
+        }
     }
     flow->nw_src = match->nw_src;
     flow->nw_dst = match->nw_dst;
+    if (tun_id_from_cookie) {
+        flow->tun_id = htonl(ntohll(cookie) >> 32);
+    }
     flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
                      : ntohs(match->in_port));
     flow->dl_vlan = match->dl_vlan;
@@ -294,14 +311,27 @@ flow_to_string(const flow_t *flow)
 void
 flow_format(struct ds *ds, const flow_t *flow)
 {
-    ds_put_format(ds, "in_port%04x:vlan%d:pcp%d mac"ETH_ADDR_FMT
-                  "->"ETH_ADDR_FMT" type%04x proto%"PRId8" tos%"PRIu8
-                  " ip"IP_FMT"->"IP_FMT" port%d->%d",
-                  flow->in_port, ntohs(flow->dl_vlan), flow->dl_vlan_pcp,
-                  ETH_ADDR_ARGS(flow->dl_src), ETH_ADDR_ARGS(flow->dl_dst),
-                  ntohs(flow->dl_type), flow->nw_proto, flow->nw_tos,
-                  IP_ARGS(&flow->nw_src), IP_ARGS(&flow->nw_dst),
-                  ntohs(flow->tp_src), ntohs(flow->tp_dst));
+    ds_put_format(ds, "tunnel%08"PRIx32":in_port%04"PRIx16
+                      ":vlan%"PRIu16":pcp%"PRIu8
+                      " mac"ETH_ADDR_FMT"->"ETH_ADDR_FMT
+                      " type%04"PRIx16
+                      " proto%"PRIu8
+                      " tos%"PRIu8
+                      " ip"IP_FMT"->"IP_FMT
+                      " port%"PRIu16"->%"PRIu16,
+                  ntohl(flow->tun_id),
+                  flow->in_port,
+                  ntohs(flow->dl_vlan),
+                  flow->dl_vlan_pcp,
+                  ETH_ADDR_ARGS(flow->dl_src),
+                  ETH_ADDR_ARGS(flow->dl_dst),
+                  ntohs(flow->dl_type),
+                  flow->nw_proto,
+                  flow->nw_tos,
+                  IP_ARGS(&flow->nw_src),
+                  IP_ARGS(&flow->nw_dst),
+                  ntohs(flow->tp_src),
+                  ntohs(flow->tp_dst));
 }
 
 void

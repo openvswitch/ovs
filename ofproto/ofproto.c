@@ -219,6 +219,7 @@ struct ofproto {
     bool need_revalidate;
     long long int next_expiration;
     struct tag_set revalidate_set;
+    bool tun_id_from_cookie;
 
     /* OpenFlow connections. */
     struct list all_conns;
@@ -1029,7 +1030,7 @@ ofproto_add_flow(struct ofproto *p,
     rule = rule_create(p, NULL, actions, n_actions,
                        idle_timeout >= 0 ? idle_timeout : 5 /* XXX */, 
                        0, 0, false);
-    cls_rule_from_flow(&rule->cr, flow, wildcards, priority);
+    cls_rule_from_flow(flow, wildcards, priority, &rule->cr);
     rule_insert(p, rule, NULL, 0);
 }
 
@@ -1583,7 +1584,7 @@ rule_insert(struct ofproto *p, struct rule *rule, struct ofpbuf *packet,
     /* Send the packet and credit it to the rule. */
     if (packet) {
         flow_t flow;
-        flow_extract(packet, in_port, &flow);
+        flow_extract(packet, 0, in_port, &flow);
         rule_execute(p, rule, packet, &flow);
     }
 
@@ -1610,9 +1611,8 @@ rule_create_subrule(struct ofproto *ofproto, struct rule *rule,
                                        rule->idle_timeout, rule->hard_timeout,
                                        0, false);
     COVERAGE_INC(ofproto_subrule_create);
-    cls_rule_from_flow(&subrule->cr, flow, 0,
-                       (rule->cr.priority <= UINT16_MAX ? UINT16_MAX
-                        : rule->cr.priority));
+    cls_rule_from_flow(flow, 0, (rule->cr.priority <= UINT16_MAX ? UINT16_MAX
+                        : rule->cr.priority), &subrule->cr);
     classifier_insert_exact(&ofproto->cls, &subrule->cr);
 
     return subrule;
@@ -2146,6 +2146,8 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
                     const struct nx_action_header *nah)
 {
     const struct nx_action_resubmit *nar;
+    const struct nx_action_set_tunnel *nast;
+    union odp_action *oa;
     int subtype = ntohs(nah->subtype);
 
     assert(nah->vendor == htonl(NX_VENDOR_ID));
@@ -2153,6 +2155,12 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
     case NXAST_RESUBMIT:
         nar = (const struct nx_action_resubmit *) nah;
         xlate_table_action(ctx, ofp_port_to_odp_port(ntohs(nar->in_port)));
+        break;
+
+    case NXAST_SET_TUNNEL:
+        nast = (const struct nx_action_set_tunnel *) nah;
+        oa = odp_actions_add(ctx->out, ODPAT_SET_TUNNEL);
+        ctx->flow.tun_id = oa->tunnel.tun_id = nast->tun_id;
         break;
 
     /* If you add a new action here that modifies flow data, don't forget to
@@ -2327,7 +2335,7 @@ handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
         buffer = NULL;
     }
 
-    flow_extract(&payload, ofp_port_to_odp_port(ntohs(opo->in_port)), &flow);
+    flow_extract(&payload, 0, ofp_port_to_odp_port(ntohs(opo->in_port)), &flow);
     error = xlate_actions((const union ofp_action *) opo->actions, n_actions,
                           &flow, p, &payload, &actions, NULL, NULL, NULL);
     if (error) {
@@ -2496,7 +2504,8 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
     memset(ots, 0, sizeof *ots);
     ots->table_id = TABLEID_CLASSIFIER;
     strcpy(ots->name, "classifier");
-    ots->wildcards = htonl(OFPFW_ALL);
+    ots->wildcards = p->tun_id_from_cookie ? htonl(OVSFW_ALL)
+                                           : htonl(OFPFW_ALL);
     ots->max_entries = htonl(65536);
     ots->active_count = htonl(n_wild);
     ots->lookup_count = htonll(0);              /* XXX */
@@ -2654,7 +2663,8 @@ flow_stats_cb(struct cls_rule *rule_, void *cbdata_)
     ofs->length = htons(len);
     ofs->table_id = rule->cr.wc.wildcards ? TABLEID_CLASSIFIER : TABLEID_HASH;
     ofs->pad = 0;
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofs->match);
+    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
+                  cbdata->ofproto->tun_id_from_cookie, &ofs->match);
     ofs->duration_sec = htonl(sec);
     ofs->duration_nsec = htonl(msec * 1000000);
     ofs->cookie = rule->flow_cookie;
@@ -2695,7 +2705,7 @@ handle_flow_stats_request(struct ofproto *p, struct ofconn *ofconn,
     cbdata.ofconn = ofconn;
     cbdata.out_port = fsr->out_port;
     cbdata.msg = start_stats_reply(osr, 1024);
-    cls_rule_from_match(&target, &fsr->match, 0);
+    cls_rule_from_match(&fsr->match, 0, false, 0, &target);
     classifier_for_each_match(&p->cls, &target,
                               table_id_to_include(fsr->table_id),
                               flow_stats_cb, &cbdata);
@@ -2724,7 +2734,8 @@ flow_stats_ds_cb(struct cls_rule *rule_, void *cbdata_)
     }
 
     query_stats(cbdata->ofproto, rule, &packet_count, &byte_count);
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &match);
+    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards,
+                  cbdata->ofproto->tun_id_from_cookie, &match);
 
     ds_put_format(results, "duration=%llds, ",
                   (time_msec() - rule->created) / 1000);
@@ -2746,12 +2757,12 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results)
     struct flow_stats_ds_cbdata cbdata;
 
     memset(&match, 0, sizeof match);
-    match.wildcards = htonl(OFPFW_ALL);
+    match.wildcards = htonl(OVSFW_ALL);
 
     cbdata.ofproto = p;
     cbdata.results = results;
 
-    cls_rule_from_match(&target, &match, 0);
+    cls_rule_from_match(&match, 0, false, 0, &target);
     classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
                               flow_stats_ds_cb, &cbdata);
 }
@@ -2804,7 +2815,7 @@ handle_aggregate_stats_request(struct ofproto *p, struct ofconn *ofconn,
     cbdata.packet_count = 0;
     cbdata.byte_count = 0;
     cbdata.n_flows = 0;
-    cls_rule_from_match(&target, &asr->match, 0);
+    cls_rule_from_match(&asr->match, 0, false, 0, &target);
     classifier_for_each_match(&p->cls, &target,
                               table_id_to_include(asr->table_id),
                               aggregate_stats_cb, &cbdata);
@@ -2912,7 +2923,8 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
         flow_t flow;
         uint32_t wildcards;
 
-        flow_from_match(&flow, &wildcards, &ofm->match);
+        flow_from_match(&ofm->match, p->tun_id_from_cookie, ofm->cookie,
+                        &flow, &wildcards);
         if (classifier_rule_overlaps(&p->cls, &flow, wildcards,
                                      ntohs(ofm->priority))) {
             return ofp_mkerr(OFPET_FLOW_MOD_FAILED, OFPFMFC_OVERLAP);
@@ -2923,7 +2935,8 @@ add_flow(struct ofproto *p, struct ofconn *ofconn,
                        n_actions, ntohs(ofm->idle_timeout),
                        ntohs(ofm->hard_timeout),  ofm->cookie,
                        ofm->flags & htons(OFPFF_SEND_FLOW_REM));
-    cls_rule_from_match(&rule->cr, &ofm->match, ntohs(ofm->priority));
+    cls_rule_from_match(&ofm->match, ntohs(ofm->priority),
+                        p->tun_id_from_cookie, ofm->cookie, &rule->cr);
 
     error = 0;
     if (ofm->buffer_id != htonl(UINT32_MAX)) {
@@ -2945,7 +2958,8 @@ find_flow_strict(struct ofproto *p, const struct ofp_flow_mod *ofm)
     uint32_t wildcards;
     flow_t flow;
 
-    flow_from_match(&flow, &wildcards, &ofm->match);
+    flow_from_match(&ofm->match, p->tun_id_from_cookie, ofm->cookie,
+                    &flow, &wildcards);
     return rule_from_cls_rule(classifier_find_rule_exactly(
                                   &p->cls, &flow, wildcards,
                                   ntohs(ofm->priority)));
@@ -2970,7 +2984,7 @@ send_buffered_packet(struct ofproto *ofproto, struct ofconn *ofconn,
         return error;
     }
 
-    flow_extract(packet, in_port, &flow);
+    flow_extract(packet, 0, in_port, &flow);
     rule_execute(ofproto, rule, packet, &flow);
     ofpbuf_delete(packet);
 
@@ -3007,7 +3021,8 @@ modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
     cbdata.n_actions = n_actions;
     cbdata.match = NULL;
 
-    cls_rule_from_match(&target, &ofm->match, 0);
+    cls_rule_from_match(&ofm->match, 0, p->tun_id_from_cookie, ofm->cookie,
+                        &target);
 
     classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
                               modify_flows_cb, &cbdata);
@@ -3108,7 +3123,8 @@ delete_flows_loose(struct ofproto *p, const struct ofp_flow_mod *ofm)
     cbdata.ofproto = p;
     cbdata.out_port = ofm->out_port;
 
-    cls_rule_from_match(&target, &ofm->match, 0);
+    cls_rule_from_match(&ofm->match, 0, p->tun_id_from_cookie, ofm->cookie,
+                        &target);
 
     classifier_for_each_match(&p->cls, &target, CLS_INC_ALL,
                               delete_flows_cb, &cbdata);
@@ -3213,18 +3229,38 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
 }
 
 static int
+handle_tun_id_from_cookie(struct ofproto *p, struct nxt_tun_id_cookie *msg)
+{
+    int error;
+
+    error = check_ofp_message(&msg->header, OFPT_VENDOR, sizeof *msg);
+    if (error) {
+        return error;
+    }
+
+    p->tun_id_from_cookie = !!msg->set;
+    return 0;
+}
+
+static int
 handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
 {
     struct ofp_vendor_header *ovh = msg;
     struct nicira_header *nh;
 
     if (ntohs(ovh->header.length) < sizeof(struct ofp_vendor_header)) {
+        VLOG_WARN_RL(&rl, "received vendor message of length %zu "
+                          "(expected at least %zu)",
+                   ntohs(ovh->header.length), sizeof(struct ofp_vendor_header));
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
     if (ovh->vendor != htonl(NX_VENDOR_ID)) {
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
     }
     if (ntohs(ovh->header.length) < sizeof(struct nicira_header)) {
+        VLOG_WARN_RL(&rl, "received Nicira vendor message of length %zu "
+                          "(expected at least %zu)",
+                     ntohs(ovh->header.length), sizeof(struct nicira_header));
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
 
@@ -3233,6 +3269,9 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
     case NXT_STATUS_REQUEST:
         return switch_status_handle_request(p->switch_status, ofconn->rconn,
                                             msg);
+
+    case NXT_TUN_ID_FROM_COOKIE:
+        return handle_tun_id_from_cookie(p, msg);
     }
 
     return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
@@ -3330,7 +3369,7 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
 
     payload.data = msg + 1;
     payload.size = msg->length - sizeof *msg;
-    flow_extract(&payload, msg->port, &flow);
+    flow_extract(&payload, msg->arg, msg->port, &flow);
 
     /* Check with in-band control to see if this packet should be sent
      * to the local port regardless of the flow table. */
@@ -3470,7 +3509,8 @@ revalidate_rule(struct ofproto *p, struct rule *rule)
 }
 
 static struct ofpbuf *
-compose_flow_removed(const struct rule *rule, long long int now, uint8_t reason)
+compose_flow_removed(struct ofproto *p, const struct rule *rule,
+                     long long int now, uint8_t reason)
 {
     struct ofp_flow_removed *ofr;
     struct ofpbuf *buf;
@@ -3479,7 +3519,8 @@ compose_flow_removed(const struct rule *rule, long long int now, uint8_t reason)
     uint32_t msec = tdiff - (sec * 1000);
 
     ofr = make_openflow(sizeof *ofr, OFPT_FLOW_REMOVED, &buf);
-    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, &ofr->match);
+    flow_to_match(&rule->cr.flow, rule->cr.wc.wildcards, p->tun_id_from_cookie,
+                  &ofr->match);
     ofr->cookie = rule->flow_cookie;
     ofr->priority = htons(rule->cr.priority);
     ofr->reason = reason;
@@ -3524,7 +3565,7 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
             if (prev) {
                 queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
             } else {
-                buf = compose_flow_removed(rule, now, reason);
+                buf = compose_flow_removed(p, rule, now, reason);
             }
             prev = ofconn;
         }

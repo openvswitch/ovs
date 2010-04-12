@@ -370,7 +370,7 @@ set_up_flow(struct in_band *in_band, int rule_idx, const flow_t *flow,
 
         rule->installed = true;
         rule->flow = *flow;
-        rule->wildcards = OFPFW_ALL & ~fixed_fields;
+        rule->wildcards = OVSFW_ALL & ~fixed_fields;
         rule->priority = IB_BASE_PRIORITY + (N_IB_RULES - rule_idx);
 
         action.type = htons(OFPAT_OUTPUT);

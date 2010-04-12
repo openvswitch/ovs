@@ -195,7 +195,8 @@ enum csum_type {
  * kernel versions.
  */
 struct ovs_skb_cb {
-	enum csum_type	ip_summed;
+	enum csum_type		ip_summed;
+	__be32			tun_id;
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
 

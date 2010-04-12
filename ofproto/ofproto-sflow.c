@@ -496,7 +496,7 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     /* Get packet payload and extract flow. */
     payload.data = (union odp_action *) (actions + n_actions);
     payload.size = msg->length - min_size;
-    flow_extract(&payload, msg->port, &flow);
+    flow_extract(&payload, 0, msg->port, &flow);
 
     /* Build a flow sample */
     memset(&fs, 0, sizeof fs);

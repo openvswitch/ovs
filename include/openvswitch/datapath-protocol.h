@@ -127,7 +127,8 @@ struct odp_stats {
  * @arg: Argument value whose meaning depends on @type.
  *
  * For @type == %_ODPL_MISS_NR, the header is followed by packet data.  The
- * @arg member is unused and set to 0.
+ * @arg member is the ID (in network byte order) of the tunnel that
+ * encapsulated this packet. It is 0 if the packet was not received on a tunnel.
  *
  * For @type == %_ODPL_ACTION_NR, the header is followed by packet data.  The
  * @arg member is copied from the &struct odp_action_controller that caused
@@ -191,6 +192,7 @@ struct odp_flow_stats {
 };
 
 struct odp_flow_key {
+    __be32 tun_id;               /* Encapsulating tunnel ID. */
     __be32 nw_src;               /* IP source address. */
     __be32 nw_dst;               /* IP destination address. */
     __u16  in_port;              /* Input switch port. */
@@ -253,7 +255,8 @@ struct odp_flowvec {
 #define ODPAT_SET_NW_TOS        10   /* IP ToS/DSCP field (6 bits). */
 #define ODPAT_SET_TP_SRC        11   /* TCP/UDP source port. */
 #define ODPAT_SET_TP_DST        12   /* TCP/UDP destination port. */
-#define ODPAT_N_ACTIONS         13
+#define ODPAT_SET_TUNNEL        13   /* Set the encapsulating tunnel ID. */
+#define ODPAT_N_ACTIONS         14
 
 struct odp_action_output {
     __u16 type;                  /* ODPAT_OUTPUT. */
@@ -273,6 +276,12 @@ struct odp_action_controller {
     __u16 type;                 /* ODPAT_OUTPUT_CONTROLLER. */
     __u16 reserved;
     __u32 arg;                  /* Copied to struct odp_msg 'arg' member. */
+};
+
+struct odp_action_tunnel {
+    __u16 type;                 /* ODPAT_SET_TUNNEL. */
+    __u16 reserved;
+    __be32 tun_id;              /* Tunnel ID. */
 };
 
 /* Action structure for ODPAT_SET_VLAN_VID. */
@@ -326,6 +335,7 @@ union odp_action {
     struct odp_action_output output;
     struct odp_action_output_group output_group;
     struct odp_action_controller controller;
+    struct odp_action_tunnel tunnel;
     struct odp_action_vlan_vid vlan_vid;
     struct odp_action_vlan_pcp vlan_pcp;
     struct odp_action_dl_addr dl_addr;

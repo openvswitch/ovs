@@ -1358,6 +1358,7 @@ check_nicira_action(const union ofp_action *a, unsigned int len)
 
     switch (ntohs(nah->subtype)) {
     case NXAST_RESUBMIT:
+    case NXAST_SET_TUNNEL:
         return check_action_exact_len(a, len, 16);
     default:
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
@@ -1466,7 +1467,7 @@ normalize_match(struct ofp_match *m)
     enum { OFPFW_TP = OFPFW_TP_SRC | OFPFW_TP_DST };
     uint32_t wc;
 
-    wc = ntohl(m->wildcards) & OFPFW_ALL;
+    wc = ntohl(m->wildcards) & OVSFW_ALL;
     if (wc & OFPFW_DL_TYPE) {
         m->dl_type = 0;
 

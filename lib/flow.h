@@ -21,9 +21,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "hash.h"
-#include "openflow/openflow.h"
 #include "openvswitch/datapath-protocol.h"
 #include "util.h"
 
@@ -33,11 +33,13 @@ struct ofpbuf;
 
 typedef struct odp_flow_key flow_t;
 
-int flow_extract(struct ofpbuf *, uint16_t in_port, flow_t *);
+int flow_extract(struct ofpbuf *, uint32_t tun_id, uint16_t in_port, flow_t *);
 void flow_extract_stats(const flow_t *flow, struct ofpbuf *packet, 
         struct odp_flow_stats *stats);
-void flow_to_match(const flow_t *, uint32_t wildcards, struct ofp_match *);
-void flow_from_match(flow_t *, uint32_t *wildcards, const struct ofp_match *);
+void flow_to_match(const flow_t *, uint32_t wildcards, bool tun_id_cookie,
+                   struct ofp_match *);
+void flow_from_match(const struct ofp_match *, bool tun_id_from_cookie,
+                     uint64_t cookie, flow_t *, uint32_t *wildcards);
 char *flow_to_string(const flow_t *);
 void flow_format(struct ds *, const flow_t *);
 void flow_print(FILE *, const flow_t *);
@@ -94,7 +96,7 @@ flow_nw_bits_to_mask(uint32_t wildcards, int shift)
 static inline void
 flow_wildcards_init(struct flow_wildcards *wc, uint32_t wildcards)
 {
-    wc->wildcards = wildcards & OFPFW_ALL;
+    wc->wildcards = wildcards & OVSFW_ALL;
     wc->nw_src_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_SRC_SHIFT);
     wc->nw_dst_mask = flow_nw_bits_to_mask(wc->wildcards, OFPFW_NW_DST_SHIFT);
 }

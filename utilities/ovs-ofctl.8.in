@@ -391,14 +391,22 @@ Sets the IP ToS/DSCP field to \fItos\fR.  Valid values are between 0 and
 255, inclusive.  Note that the two lower reserved bits are never
 modified.
 .
+.RE
+.IP
+The following actions are Nicira vendor extensions that, as of this writing, are
+only known to be implemented by Open vSwitch:
+.
+.RS
+.
 .IP \fBresubmit\fB:\fIport\fR
 Re-searches the OpenFlow flow table with the \fBin_port\fR field
 replaced by \fIport\fR and executes the actions found, if any, in
 addition to any other actions in this flow entry.  Recursive
 \fBresubmit\fR actions are ignored.
-.IP
-This action is a Nicira vendor extension that, as of this writing, is
-only known to be implemented by Open vSwitch.
+.
+.IP \fBset_tunnel\fB:\fIid\fR
+If outputting to a port that encapsulates the packet in a tunnel and supports
+an identifier (such as GRE), sets the identifier to \fBid\fR.
 .
 .RE
 .

@@ -45,6 +45,10 @@ enum nicira_type {
     NXT_FLOW_END_CONFIG__OBSOLETE,
     NXT_FLOW_END__OBSOLETE,
     NXT_MGMT__OBSOLETE,
+
+    /* Use the high 32 bits of the cookie field as the tunnel ID in the flow
+     * match. */
+    NXT_TUN_ID_FROM_COOKIE,
 };
 
 struct nicira_header {
@@ -54,6 +58,14 @@ struct nicira_header {
 };
 OFP_ASSERT(sizeof(struct nicira_header) == 16);
 
+struct nxt_tun_id_cookie {
+    struct ofp_header header;
+    uint32_t vendor;            /* NX_VENDOR_ID. */
+    uint32_t subtype;           /* NXT_TUN_ID_FROM_COOKIE */
+    uint8_t set;                /* Nonzero to enable, zero to disable. */
+    uint8_t pad[7];
+};
+OFP_ASSERT(sizeof(struct nxt_tun_id_cookie) == 24);
 
 enum nx_action_subtype {
     NXAST_SNAT__OBSOLETE,           /* No longer used. */
@@ -80,13 +92,15 @@ enum nx_action_subtype {
      *
      * NXAST_RESUBMIT may be used any number of times within a set of actions.
      */
-    NXAST_RESUBMIT
+    NXAST_RESUBMIT,
+
+    NXAST_SET_TUNNEL                /* Set encapsulating tunnel ID. */
 };
 
 /* Action structure for NXAST_RESUBMIT. */
 struct nx_action_resubmit {
     uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 8. */
+    uint16_t len;                   /* Length is 16. */
     uint32_t vendor;                /* NX_VENDOR_ID. */
     uint16_t subtype;               /* NXAST_RESUBMIT. */
     uint16_t in_port;               /* New in_port for checking flow table. */
@@ -94,14 +108,31 @@ struct nx_action_resubmit {
 };
 OFP_ASSERT(sizeof(struct nx_action_resubmit) == 16);
 
+/* Action structure for NXAST_SET_TUNNEL. */
+struct nx_action_set_tunnel {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 16. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_SET_TUNNEL. */
+    uint8_t pad[2];
+    uint32_t tun_id;                /* Tunnel ID. */
+};
+OFP_ASSERT(sizeof(struct nx_action_set_tunnel) == 16);
+
 /* Header for Nicira-defined actions. */
 struct nx_action_header {
     uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is 8. */
+    uint16_t len;                   /* Length is 16. */
     uint32_t vendor;                /* NX_VENDOR_ID. */
     uint16_t subtype;               /* NXAST_*. */
     uint8_t pad[6];
 };
 OFP_ASSERT(sizeof(struct nx_action_header) == 16);
+
+/* Wildcard for tunnel ID. */
+#define NXFW_TUN_ID  (1 << 25)
+
+#define NXFW_ALL NXFW_TUN_ID
+#define OVSFW_ALL (OFPFW_ALL | NXFW_ALL)
 
 #endif /* openflow/nicira-ext.h */

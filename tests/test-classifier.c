@@ -238,6 +238,7 @@ static uint32_t nw_src_values[] = { T_HTONL(0xc0a80001),
                                     T_HTONL(0xc0a04455) };
 static uint32_t nw_dst_values[] = { T_HTONL(0xc0a80002),
                                     T_HTONL(0xc0a04455) };
+static uint32_t tun_id_values[] = { 0, 0xffff0000 };
 static uint16_t in_port_values[] = { T_HTONS(1), T_HTONS(OFPP_LOCAL) };
 static uint16_t dl_vlan_values[] = { T_HTONS(101), T_HTONS(0) };
 static uint8_t dl_vlan_pcp_values[] = { 7, 0 };
@@ -257,6 +258,9 @@ static void *values[CLS_N_FIELDS][2];
 static void
 init_values(void)
 {
+    values[CLS_F_IDX_TUN_ID][0] = &tun_id_values[0];
+    values[CLS_F_IDX_TUN_ID][1] = &tun_id_values[1];
+
     values[CLS_F_IDX_IN_PORT][0] = &in_port_values[0];
     values[CLS_F_IDX_IN_PORT][1] = &in_port_values[1];
 
@@ -296,6 +300,7 @@ init_values(void)
 
 #define N_NW_SRC_VALUES ARRAY_SIZE(nw_src_values)
 #define N_NW_DST_VALUES ARRAY_SIZE(nw_dst_values)
+#define N_TUN_ID_VALUES ARRAY_SIZE(tun_id_values)
 #define N_IN_PORT_VALUES ARRAY_SIZE(in_port_values)
 #define N_DL_VLAN_VALUES ARRAY_SIZE(dl_vlan_values)
 #define N_DL_VLAN_PCP_VALUES ARRAY_SIZE(dl_vlan_pcp_values)
@@ -309,6 +314,7 @@ init_values(void)
 
 #define N_FLOW_VALUES (N_NW_SRC_VALUES *        \
                        N_NW_DST_VALUES *        \
+                       N_TUN_ID_VALUES *        \
                        N_IN_PORT_VALUES *       \
                        N_DL_VLAN_VALUES *       \
                        N_DL_VLAN_PCP_VALUES *   \
@@ -360,6 +366,7 @@ compare_classifiers(struct classifier *cls, struct tcls *tcls)
         x = i;
         flow.nw_src = nw_src_values[get_value(&x, N_NW_SRC_VALUES)];
         flow.nw_dst = nw_dst_values[get_value(&x, N_NW_DST_VALUES)];
+        flow.tun_id = tun_id_values[get_value(&x, N_TUN_ID_VALUES)];
         flow.in_port = in_port_values[get_value(&x, N_IN_PORT_VALUES)];
         flow.dl_vlan = dl_vlan_values[get_value(&x, N_DL_VLAN_VALUES)];
         flow.dl_vlan_pcp = dl_vlan_pcp_values[get_value(&x,
@@ -462,8 +469,8 @@ make_rule(int wc_fields, unsigned int priority, int value_pat)
     }
 
     rule = xzalloc(sizeof *rule);
-    cls_rule_from_flow(&rule->cls_rule, &flow, wildcards,
-                       !wildcards ? UINT_MAX : priority);
+    cls_rule_from_flow(&flow, wildcards, !wildcards ? UINT_MAX : priority,
+                       &rule->cls_rule);
     return rule;
 }
 
