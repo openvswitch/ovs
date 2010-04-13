@@ -780,9 +780,9 @@ str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
         if (!act_str) {
             ovs_fatal(0, "must specify an action");
         }
-        *(act_str-1) = '\0';
+        *act_str = '\0';
 
-        act_str = strchr(act_str, '=');
+        act_str = strchr(act_str + 1, '=');
         if (!act_str) {
             ovs_fatal(0, "must specify an action");
         }
