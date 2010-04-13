@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ format_odp_action(struct ds *ds, const union odp_action *a)
         ds_put_format(ds, "set_tp_dst(%"PRIu16")", ntohs(a->tp_port.tp_port));
         break;
     default:
-        ds_put_format(ds, "***bad action %"PRIu16"***", a->type);
+        ds_put_format(ds, "***bad action 0x%"PRIx16"***", a->type);
         break;
     }
 }
