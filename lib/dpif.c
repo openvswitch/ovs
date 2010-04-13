@@ -724,6 +724,11 @@ dpif_flow_get(const struct dpif *dpif, struct odp_flow *flow)
     if (!error) {
         error = flow->stats.error;
     }
+    if (error) {
+        /* Make the results predictable on error. */
+        memset(&flow->stats, 0, sizeof flow->stats);
+        flow->n_actions = 0;
+    }
     if (should_log_flow_message(error)) {
         log_flow_operation(dpif, "flow_get", error, flow);
     }
