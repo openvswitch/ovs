@@ -24,6 +24,10 @@ AC_DEFUN([OVS_CHECK_LINUX26], [
               [KBUILD26="$withval"], [KBUILD26=])dnl
   if test -n "$KBUILD26"; then
     KBUILD26=`eval echo "$KBUILD26"`
+    case $KBUILD26 in
+        /*) ;;
+        *) KBUILD26=`pwd`/$KBUILD26 ;;
+    esac
 
     # The build directory is what the user provided.
     # Make sure that it exists.
