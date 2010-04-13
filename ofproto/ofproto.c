@@ -2150,6 +2150,9 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
         xlate_table_action(ctx, ofp_port_to_odp_port(ntohs(nar->in_port)));
         break;
 
+    /* If you add a new action here that modifies flow data, don't forget to
+     * update the flow key in ctx->flow in the same key. */
+
     default:
         VLOG_DBG_RL(&rl, "unknown Nicira action type %"PRIu16, subtype);
         break;
@@ -2183,21 +2186,25 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
         case OFPAT_SET_VLAN_VID:
             oa = odp_actions_add(ctx->out, ODPAT_SET_VLAN_VID);
-            oa->vlan_vid.vlan_vid = ia->vlan_vid.vlan_vid;
+            ctx->flow.dl_vlan = oa->vlan_vid.vlan_vid = ia->vlan_vid.vlan_vid;
             break;
 
         case OFPAT_SET_VLAN_PCP:
             oa = odp_actions_add(ctx->out, ODPAT_SET_VLAN_PCP);
-            oa->vlan_pcp.vlan_pcp = ia->vlan_pcp.vlan_pcp;
+            ctx->flow.dl_vlan_pcp = oa->vlan_pcp.vlan_pcp = ia->vlan_pcp.vlan_pcp;
             break;
 
         case OFPAT_STRIP_VLAN:
             odp_actions_add(ctx->out, ODPAT_STRIP_VLAN);
+            ctx->flow.dl_vlan = OFP_VLAN_NONE;
+            ctx->flow.dl_vlan_pcp = 0;
             break;
 
         case OFPAT_SET_DL_SRC:
             oa = odp_actions_add(ctx->out, ODPAT_SET_DL_SRC);
             memcpy(oa->dl_addr.dl_addr,
+                   ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
+            memcpy(ctx->flow.dl_src,
                    ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
             break;
 
@@ -2205,31 +2212,33 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             oa = odp_actions_add(ctx->out, ODPAT_SET_DL_DST);
             memcpy(oa->dl_addr.dl_addr,
                    ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
+            memcpy(ctx->flow.dl_dst,
+                   ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
             break;
 
         case OFPAT_SET_NW_SRC:
             oa = odp_actions_add(ctx->out, ODPAT_SET_NW_SRC);
-            oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
+            ctx->flow.nw_src = oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_DST:
             oa = odp_actions_add(ctx->out, ODPAT_SET_NW_DST);
-            oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
+            ctx->flow.nw_dst = oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_TOS:
             oa = odp_actions_add(ctx->out, ODPAT_SET_NW_TOS);
-            oa->nw_tos.nw_tos = ia->nw_tos.nw_tos;
+            ctx->flow.nw_tos = oa->nw_tos.nw_tos = ia->nw_tos.nw_tos;
             break;
 
         case OFPAT_SET_TP_SRC:
             oa = odp_actions_add(ctx->out, ODPAT_SET_TP_SRC);
-            oa->tp_port.tp_port = ia->tp_port.tp_port;
+            ctx->flow.tp_src = oa->tp_port.tp_port = ia->tp_port.tp_port;
             break;
 
         case OFPAT_SET_TP_DST:
             oa = odp_actions_add(ctx->out, ODPAT_SET_TP_DST);
-            oa->tp_port.tp_port = ia->tp_port.tp_port;
+            ctx->flow.tp_dst = oa->tp_port.tp_port = ia->tp_port.tp_port;
             break;
 
         case OFPAT_VENDOR:

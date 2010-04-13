@@ -57,7 +57,28 @@ OFP_ASSERT(sizeof(struct nicira_header) == 16);
 
 enum nx_action_subtype {
     NXAST_SNAT__OBSOLETE,           /* No longer used. */
-    NXAST_RESUBMIT                  /* Throw against flow table again. */
+
+    /* Searches the flow table again, using a flow that is slightly modified
+     * from the original lookup:
+     *
+     *    - The flow's in_port is changed to that specified in the 'in_port'
+     *      member of struct nx_action_resubmit.
+     *
+     *    - If NXAST_RESUBMIT is preceded by actions that affect the flow
+     *      (e.g. OFPAT_SET_VLAN_VID), then the flow is updated with the new
+     *      values.
+     *
+     * If the modified flow matches in the flow table, then the corresponding
+     * actions are executed, except that NXAST_RESUBMIT actions found in the
+     * secondary set of actions are ignored.  Afterward, actions following
+     * NXAST_RESUBMIT in the original set of actions, if any, are executed; any
+     * changes made to the packet (e.g. changes to VLAN) by secondary actions
+     * persist when those actions are executed, although the original in_port
+     * is restored.
+     *
+     * NXAST_RESUBMIT may be used any number of times within a set of actions.
+     */
+    NXAST_RESUBMIT
 };
 
 /* Action structure for NXAST_RESUBMIT. */
