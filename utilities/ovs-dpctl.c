@@ -473,11 +473,11 @@ do_dump_flows(int argc OVS_UNUSED, char *argv[])
 
         f->actions = actions;
         f->n_actions = MAX_ACTIONS;
-        dpif_flow_get(dpif, f);
-
-        ds_clear(&ds);
-        format_odp_flow(&ds, f);
-        printf("%s\n", ds_cstr(&ds));
+        if (!dpif_flow_get(dpif, f)) {
+            ds_clear(&ds);
+            format_odp_flow(&ds, f);
+            printf("%s\n", ds_cstr(&ds));
+        }
     }
     ds_destroy(&ds);
     dpif_close(dpif);
