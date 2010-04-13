@@ -435,6 +435,14 @@ netdev_exists(const char *name)
     }
 }
 
+/* Returns true if a network device named 'name' is currently opened,
+ * otherwise false. */
+bool
+netdev_is_open(const char *name)
+{
+    return !!shash_find_data(&netdev_dev_shash, name);
+}
+
 /*  Clears 'svec' and enumerates the names of all known network devices. */
 int
 netdev_enumerate(struct svec *svec)

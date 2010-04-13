@@ -105,6 +105,7 @@ int netdev_reconfigure(struct netdev *, const struct shash *args);
 void netdev_close(struct netdev *);
 
 bool netdev_exists(const char *name);
+bool netdev_is_open(const char *name);
 
 int netdev_enumerate(struct svec *);
 
