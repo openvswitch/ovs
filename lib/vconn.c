@@ -25,6 +25,7 @@
 #include <string.h>
 #include "coverage.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "flow.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
@@ -272,6 +273,8 @@ vconn_open_block(const char *name, int min_version, struct vconn **vconnp)
 {
     struct vconn *vconn;
     int error;
+
+    fatal_signal_run();
 
     error = vconn_open(name, min_version, &vconn);
     while (error == EAGAIN) {
@@ -607,6 +610,9 @@ int
 vconn_send_block(struct vconn *vconn, struct ofpbuf *msg)
 {
     int retval;
+
+    fatal_signal_run();
+
     while ((retval = vconn_send(vconn, msg)) == EAGAIN) {
         vconn_run(vconn);
         vconn_run_wait(vconn);
@@ -621,6 +627,9 @@ int
 vconn_recv_block(struct vconn *vconn, struct ofpbuf **msgp)
 {
     int retval;
+
+    fatal_signal_run();
+
     while ((retval = vconn_recv(vconn, msgp)) == EAGAIN) {
         vconn_run(vconn);
         vconn_run_wait(vconn);

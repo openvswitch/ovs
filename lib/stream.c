@@ -25,6 +25,7 @@
 #include <string.h>
 #include "coverage.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "flow.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
@@ -236,6 +237,8 @@ int
 stream_open_block(int error, struct stream **streamp)
 {
     struct stream *stream = *streamp;
+
+    fatal_signal_run();
 
     while (error == EAGAIN) {
         stream_run(stream);
@@ -570,6 +573,7 @@ pstream_accept_block(struct pstream *pstream, struct stream **new_stream)
 {
     int error;
 
+    fatal_signal_run();
     while ((error = pstream_accept(pstream, new_stream)) == EAGAIN) {
         pstream_wait(pstream);
         poll_block();

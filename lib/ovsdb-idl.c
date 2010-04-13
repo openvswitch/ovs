@@ -25,6 +25,7 @@
 
 #include "bitmap.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb-data.h"
@@ -1281,6 +1282,7 @@ ovsdb_idl_txn_commit_block(struct ovsdb_idl_txn *txn)
 {
     enum ovsdb_idl_txn_status status;
 
+    fatal_signal_run();
     while ((status = ovsdb_idl_txn_commit(txn)) == TXN_INCOMPLETE) {
         ovsdb_idl_run(txn->idl);
         ovsdb_idl_wait(txn->idl);

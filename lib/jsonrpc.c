@@ -23,6 +23,7 @@
 
 #include "byteq.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "json.h"
 #include "list.h"
 #include "ofpbuf.h"
@@ -293,6 +294,8 @@ jsonrpc_send_block(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
 {
     int error;
 
+    fatal_signal_run();
+
     error = jsonrpc_send(rpc, msg);
     if (error) {
         return error;
@@ -314,6 +317,7 @@ jsonrpc_recv_block(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
     for (;;) {
         int error = jsonrpc_recv(rpc, msgp);
         if (error != EAGAIN) {
+            fatal_signal_run();
             return error;
         }
 
