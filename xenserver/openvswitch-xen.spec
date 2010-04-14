@@ -103,7 +103,6 @@ rm \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-kill.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-openflowd.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-pki.8
-rm -f $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch/veth_mod.ko
 
 install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
 
@@ -336,6 +335,9 @@ fi
 /lib/modules/%{xen_version}/kernel/extra/openvswitch/brcompat_mod.ko
 %if %(echo '%{xen_version}'|awk -F"." '{if ($3>=18) print 1; else print 0;}')
 /lib/modules/%{xen_version}/kernel/extra/openvswitch/ip_gre_mod.ko
+%endif
+%if %(echo '%{xen_version}'|awk -F"[.-]" '{if ($3==18) print 1; else print 0;}')
+/lib/modules/%{xen_version}/kernel/extra/openvswitch/veth_mod.ko
 %endif
 /usr/share/openvswitch/scripts/refresh-network-uuids
 /usr/share/openvswitch/scripts/interface-reconfigure
