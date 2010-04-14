@@ -91,6 +91,10 @@ struct tap_state {
     int fd;
 };
 
+struct patch_state {
+    char *peer;
+};
+
 struct netdev_dev_linux {
     struct netdev_dev netdev_dev;
 
@@ -107,6 +111,7 @@ struct netdev_dev_linux {
 
     union {
         struct tap_state tap;
+        struct patch_state patch;
     } state;
 };
 
@@ -152,6 +157,7 @@ static struct rtnetlink_notifier netdev_linux_poll_notifier;
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
+static int if_up(const char *name);
 static int destroy_gre(const char *name);
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
                                    int cmd, const char *cmd_name);
@@ -177,7 +183,7 @@ netdev_dev_linux_cast(const struct netdev_dev *netdev_dev)
 {
     const char *type = netdev_dev_get_type(netdev_dev);
     assert(!strcmp(type, "system") || !strcmp(type, "tap")
-            || !strcmp(type, "gre"));
+            || !strcmp(type, "gre") || !strcmp(type, "patch"));
     return CONTAINER_OF(netdev_dev, struct netdev_dev_linux, netdev_dev);
 }
 
@@ -186,7 +192,7 @@ netdev_linux_cast(const struct netdev *netdev)
 {
     const char *type = netdev_get_type(netdev);
     assert(!strcmp(type, "system") || !strcmp(type, "tap")
-            || !strcmp(type, "gre"));
+            || !strcmp(type, "gre") || !strcmp(type, "patch"));
     return CONTAINER_OF(netdev, struct netdev_linux, netdev);
 }
 
@@ -581,6 +587,106 @@ error:
     return error;
 }
 
+/* A veth may be created using the 'command' "+<name>,<peer>". A veth may 
+ * be destroyed by using the 'command' "-<name>", where <name> can be 
+ * either side of the device.
+ */
+static int
+modify_veth(const char *format, ...)
+{
+    FILE *veth_file;
+    va_list args;
+    int retval;
+
+    veth_file = fopen("/sys/class/net/veth_pairs", "w");
+    if (!veth_file) {
+        VLOG_WARN_RL(&rl, "could not open veth device.  Are you running a "
+                "supported XenServer with the kernel module loaded?");
+        return ENODEV;
+    }
+    setvbuf(veth_file, NULL, _IONBF, 0);
+
+    va_start(args, format);
+    retval = vfprintf(veth_file, format, args);
+    va_end(args);
+
+    fclose(veth_file);
+    if (retval < 0) {
+        VLOG_WARN_RL(&rl, "could not destroy patch: %s", strerror(errno));
+        return errno;
+    }
+
+    return 0;
+}
+
+static int
+create_patch(const char *name, const char *peer)
+{
+    int retval;
+    struct netdev_dev *peer_nd;
+
+
+    /* Only create the veth if the peer didn't already do it. */
+    peer_nd = netdev_dev_from_name(peer);
+    if (peer_nd) {
+        if (!strcmp("patch", netdev_dev_get_type(peer_nd))) {
+            struct netdev_dev_linux *ndl = netdev_dev_linux_cast(peer_nd);
+            if (!strcmp(name, ndl->state.patch.peer)) {
+                return 0;
+            } else {
+                VLOG_WARN_RL(&rl, "peer '%s' already paired with '%s'", 
+                        peer, ndl->state.patch.peer);
+                return EINVAL;
+            }
+        } else {
+            VLOG_WARN_RL(&rl, "peer '%s' exists and is not a patch", peer);
+            return EINVAL;
+        }
+    }
+
+    retval = modify_veth("+%s,%s", name, peer);
+    if (retval) {
+        return retval;
+    }
+
+    retval = if_up(name);
+    if (retval) {
+        return retval;
+    }
+
+    retval = if_up(peer);
+    if (retval) {
+        return retval;
+    }
+
+    return 0;
+}
+
+static int
+setup_patch(const char *name, const struct shash *args, char **peer_)
+{
+    const char *peer;
+
+    peer = shash_find_data(args, "peer");
+    if (!peer) {
+        VLOG_WARN("patch type requires valid 'peer' argument");
+        return EINVAL;
+    }
+
+    if (shash_count(args) > 1) {
+        VLOG_WARN("patch type takes only a 'peer' argument");
+        return EINVAL;
+    }
+
+    if (strlen(peer) >= IFNAMSIZ) {
+        VLOG_WARN_RL(&rl, "patch 'peer' arg too long");
+        return EINVAL;
+    }
+
+    *peer_ = xstrdup(peer);
+    return create_patch(name, peer);
+}
+
 /* Creates the netdev device of 'type' with 'name'. */
 static int
 netdev_linux_create_system(const char *name, const char *type OVS_UNUSED,
@@ -711,6 +817,28 @@ error:
 }
 
 static int
+netdev_linux_create_patch(const char *name, const char *type OVS_UNUSED,
+                    const struct shash *args, struct netdev_dev **netdev_devp)
+{
+    struct netdev_dev_linux *netdev_dev;
+    char *peer = NULL;
+    int error;
+
+    error = setup_patch(name, args, &peer);
+    if (error) {
+        free(peer);
+        return error;
+    }
+
+    netdev_dev = xzalloc(sizeof *netdev_dev);
+    netdev_dev->state.patch.peer = peer;
+    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_patch_class);
+    *netdev_devp = &netdev_dev->netdev_dev;
+
+    return 0;
+}
+
+static int
 netdev_linux_reconfigure_gre(struct netdev_dev *netdev_dev_,
                              const struct shash *args)
 {
@@ -799,6 +927,19 @@ destroy_gre(const char *name)
     }
 }
 
+static void
+destroy_patch(struct netdev_dev_linux *netdev_dev)
+{
+    const char *name = netdev_dev_get_name(&netdev_dev->netdev_dev);
+    struct patch_state *state = &netdev_dev->state.patch;
+
+    /* Only destroy veth if 'peer' doesn't exist as an existing netdev. */
+    if (!netdev_dev_from_name(state->peer)) {
+        modify_veth("-%s", name);
+    }
+    free(state->peer);
+}
+
 /* Destroys the netdev device 'netdev_dev_'. */
 static void
 netdev_linux_destroy(struct netdev_dev *netdev_dev_)
@@ -816,6 +957,8 @@ netdev_linux_destroy(struct netdev_dev *netdev_dev_)
         destroy_tap(netdev_dev);
     } else if (!strcmp(type, "gre")) {
         destroy_gre(netdev_dev_get_name(&netdev_dev->netdev_dev));
+    } else if (!strcmp(type, "patch")) {
+        destroy_patch(netdev_dev);
     }
 
     free(netdev_dev_);
@@ -2065,6 +2208,54 @@ const struct netdev_class netdev_gre_class = {
     netdev_linux_create_gre,
     netdev_linux_destroy,
     netdev_linux_reconfigure_gre,
+
+    netdev_linux_open,
+    netdev_linux_close,
+
+    NULL,                       /* enumerate */
+
+    netdev_linux_recv,
+    netdev_linux_recv_wait,
+    netdev_linux_drain,
+
+    netdev_linux_send,
+    netdev_linux_send_wait,
+
+    netdev_linux_set_etheraddr,
+    netdev_linux_get_etheraddr,
+    netdev_linux_get_mtu,
+    netdev_linux_get_ifindex,
+    netdev_linux_get_carrier,
+    netdev_linux_get_stats,
+
+    netdev_linux_get_features,
+    netdev_linux_set_advertisements,
+    netdev_linux_get_vlan_vid,
+    netdev_linux_set_policing,
+
+    netdev_linux_get_in4,
+    netdev_linux_set_in4,
+    netdev_linux_get_in6,
+    netdev_linux_add_router,
+    netdev_linux_get_next_hop,
+    netdev_linux_arp_lookup,
+
+    netdev_linux_update_flags,
+
+    netdev_linux_poll_add,
+    netdev_linux_poll_remove,
+};
+
+const struct netdev_class netdev_patch_class = {
+    "patch",
+
+    netdev_linux_init,
+    netdev_linux_run,
+    netdev_linux_wait,
+
+    netdev_linux_create_patch,
+    netdev_linux_destroy,
+    NULL,                       /* reconfigure */
 
     netdev_linux_open,
     netdev_linux_close,

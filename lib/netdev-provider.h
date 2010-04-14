@@ -385,6 +385,7 @@ struct netdev_class {
 extern const struct netdev_class netdev_linux_class;
 extern const struct netdev_class netdev_tap_class;
 extern const struct netdev_class netdev_gre_class;
+extern const struct netdev_class netdev_patch_class;
 
 #ifdef  __cplusplus
 }

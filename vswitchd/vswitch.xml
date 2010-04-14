@@ -357,6 +357,12 @@
           <dd>A TUN/TAP device managed by Open vSwitch.</dd>
           <dt><code>gre</code></dt>
           <dd>A GRE tunnel device managed by Open vSwitch.</dd>
+          <dt><code>patch</code></dt>
+          <dd>A pair of virtual devices that act as a patch cable.  A 
+            <code>peer</code> argument is required that indicates the name
+            of the other side of the patch.  Since a patch must work in
+            pairs, a second patch interface must be declared with the
+            <code>name</code> and <code>peer</code> arguments reversed.</dd>
         </dl>
       </column>
 
