@@ -449,7 +449,7 @@ identified by bridge name.
 .PP
 Names of tables, records, and columns are not case-sensitive, and
 \fB--\fR and \fB_\fR are treated interchangeably.  Unique
-abbreviations are acceptable, e.g. \fBnet\fR or \fRn\fR is sufficient
+abbreviations are acceptable, e.g. \fBnet\fR or \fBn\fR is sufficient
 to identify the \fBNetFlow\fR table.
 .
 .ST "Database Values"
@@ -545,7 +545,7 @@ Sets each \fIcolumn\fR in \fIrecord\fR in \fItable\fR to the empty set
 or empty map, as appropriate.  This command applies only to columns
 that are allowed to be empty.
 .
-.IP "create \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
+.IP "\fBcreate\fR \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
 Creates a new record in \fItable\fR and sets the initial values of
 each \fIcolumn\fR.  Columns not explicitly set will receive their
 default values.  Outputs the UUID of the new row.
