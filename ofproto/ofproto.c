@@ -2062,11 +2062,17 @@ static void
 xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
 {
     if (!ctx->recurse) {
-        uint16_t old_in_port = ctx->flow.in_port;
+        uint16_t old_in_port;
         struct rule *rule;
 
+        /* Look up a flow with 'in_port' as the input port.  Then restore the
+         * original input port (otherwise OFPP_NORMAL and OFPP_IN_PORT will
+         * have surprising behavior). */
+        old_in_port = ctx->flow.in_port;
         ctx->flow.in_port = in_port;
         rule = lookup_valid_rule(ctx->ofproto, &ctx->flow);
+        ctx->flow.in_port = old_in_port;
+
         if (rule) {
             if (rule->super) {
                 rule = rule->super;
@@ -2076,7 +2082,6 @@ xlate_table_action(struct action_xlate_ctx *ctx, uint16_t in_port)
             do_xlate_actions(rule->actions, rule->n_actions, ctx);
             ctx->recurse--;
         }
-        ctx->flow.in_port = old_in_port;
     }
 }
 

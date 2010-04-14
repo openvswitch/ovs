@@ -61,14 +61,16 @@ enum nx_action_subtype {
     /* Searches the flow table again, using a flow that is slightly modified
      * from the original lookup:
      *
-     *    - The flow's in_port is changed to that specified in the 'in_port'
-     *      member of struct nx_action_resubmit.
+     *    - The 'in_port' member of struct nx_action_resubmit is used as the
+     *      flow's in_port.
      *
      *    - If NXAST_RESUBMIT is preceded by actions that affect the flow
      *      (e.g. OFPAT_SET_VLAN_VID), then the flow is updated with the new
      *      values.
      *
-     * If the modified flow matches in the flow table, then the corresponding
+     * Following the lookup, the original in_port is restored.
+     *
+     * If the modified flow matched in the flow table, then the corresponding
      * actions are executed, except that NXAST_RESUBMIT actions found in the
      * secondary set of actions are ignored.  Afterward, actions following
      * NXAST_RESUBMIT in the original set of actions, if any, are executed; any
