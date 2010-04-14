@@ -954,9 +954,12 @@ update_ssl_config(struct ssl_config_file *config, const char *file_name)
         return false;
     }
 
+    /* Update 'config'. */
     config->mtime = mtime;
-    free(config->file_name);
-    config->file_name = xstrdup(file_name);
+    if (file_name != config->file_name) {
+        free(config->file_name);
+        config->file_name = xstrdup(file_name);
+    }
     return true;
 }
 
