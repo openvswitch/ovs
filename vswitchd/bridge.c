@@ -2171,25 +2171,39 @@ is_bcast_arp_reply(const flow_t *flow)
             && eth_addr_is_broadcast(flow->dl_dst));
 }
 
-/* If the composed actions may be applied to any packet in the given 'flow',
- * returns true.  Otherwise, the actions should only be applied to 'packet', or
- * not at all, if 'packet' was NULL. */
+/* Determines whether packets in 'flow' within 'br' should be forwarded or
+ * dropped.  Returns true if they may be forwarded, false if they should be
+ * dropped.
+ *
+ * If 'have_packet' is true, it indicates that the caller is processing a
+ * received packet.  If 'have_packet' is false, then the caller is just
+ * revalidating an existing flow because configuration has changed.  Either
+ * way, 'have_packet' only affects logging (there is no point in logging errors
+ * during revalidation).
+ *
+ * Sets '*in_portp' to the input port.  This will be a null pointer if
+ * flow->in_port does not designate a known input port (in which case
+ * is_admissible() returns false).
+ *
+ * When returning true, sets '*vlanp' to the effective VLAN of the input
+ * packet, as returned by flow_get_vlan().
+ *
+ * May also add tags to '*tags', although the current implementation only does
+ * so in one special case.
+ */
 static bool
-process_flow(struct bridge *br, const flow_t *flow,
-             const struct ofpbuf *packet, struct odp_actions *actions,
-             tag_type *tags, uint16_t *nf_output_iface)
+is_admissible(struct bridge *br, const flow_t *flow, bool have_packet,
+              tag_type *tags, int *vlanp, struct port **in_portp)
 {
     struct iface *in_iface;
     struct port *in_port;
-    struct port *out_port = NULL; /* By default, drop the packet/flow. */
     int vlan;
-    int out_port_idx;
 
     /* Find the interface and port structure for the received packet. */
     in_iface = iface_from_dp_ifidx(br, flow->in_port);
     if (!in_iface) {
         /* No interface?  Something fishy... */
-        if (packet != NULL) {
+        if (have_packet) {
             /* Odd.  A few possible reasons here:
              *
              * - We deleted an interface but there are still a few packets
@@ -2207,29 +2221,29 @@ process_flow(struct bridge *br, const flow_t *flow,
                          "interface %"PRIu16, br->name, flow->in_port); 
         }
 
-        /* Return without adding any actions, to drop packets on this flow. */
-        return true;
+        *in_portp = NULL;
+        return false;
     }
-    in_port = in_iface->port;
-    vlan = flow_get_vlan(br, flow, in_port, !!packet);
+    *in_portp = in_port = in_iface->port;
+    *vlanp = vlan = flow_get_vlan(br, flow, in_port, have_packet);
     if (vlan < 0) {
-        goto done;
+        return false;
     }
 
     /* Drop frames for reserved multicast addresses. */
     if (eth_addr_is_reserved(flow->dl_dst)) {
-        goto done;
+        return false;
     }
 
     /* Drop frames on ports reserved for mirroring. */
     if (in_port->is_mirror_output_port) {
-        if (packet) {
+        if (have_packet) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_WARN_RL(&rl, "bridge %s: dropping packet received on port "
                          "%s, which is reserved exclusively for mirroring",
                          br->name, in_port->name);
         }
-        goto done;
+        return false;
     }
 
     /* Packets received on bonds need special attention to avoid duplicates. */
@@ -2240,7 +2254,7 @@ process_flow(struct bridge *br, const flow_t *flow,
             *tags |= in_port->active_iface_tag;
             if (in_port->active_iface != in_iface->port_ifidx) {
                 /* Drop all multicast packets on inactive slaves. */
-                goto done;
+                return false;
             }
         }
 
@@ -2251,8 +2265,30 @@ process_flow(struct bridge *br, const flow_t *flow,
         src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
         if (src_idx != -1 && src_idx != in_port->port_idx &&
             !is_bcast_arp_reply(flow)) {
-                goto done;
+                return false;
         }
+    }
+
+    return true;
+}
+
+/* If the composed actions may be applied to any packet in the given 'flow',
+ * returns true.  Otherwise, the actions should only be applied to 'packet', or
+ * not at all, if 'packet' was NULL. */
+static bool
+process_flow(struct bridge *br, const flow_t *flow,
+             const struct ofpbuf *packet, struct odp_actions *actions,
+             tag_type *tags, uint16_t *nf_output_iface)
+{
+    struct port *in_port;
+    struct port *out_port;
+    int vlan;
+    int out_port_idx;
+
+    /* Check whether we should drop packets in this flow. */
+    if (!is_admissible(br, flow, packet != NULL, tags, &vlan, &in_port)) {
+        out_port = NULL;
+        goto done;
     }
 
     /* Learn source MAC (but don't try to learn from revalidation). */
@@ -2281,8 +2317,10 @@ process_flow(struct bridge *br, const flow_t *flow,
     }
 
 done:
-    compose_actions(br, flow, vlan, in_port, out_port, tags, actions,
-                    nf_output_iface);
+    if (in_port) {
+        compose_actions(br, flow, vlan, in_port, out_port, tags, actions,
+                        nf_output_iface);
+    }
 
     return true;
 }
