@@ -2255,16 +2255,13 @@ process_flow(struct bridge *br, const flow_t *flow,
         }
     }
 
-    /* MAC learning. */
-    out_port = FLOOD_PORT;
     /* Learn source MAC (but don't try to learn from revalidation). */
     if (packet) {
         update_learning_table(br, flow, vlan, in_port);
     }
 
     /* Determine output port. */
-    out_port_idx = mac_learning_lookup_tag(br->ml, flow->dl_dst, vlan,
-                                           tags);
+    out_port_idx = mac_learning_lookup_tag(br->ml, flow->dl_dst, vlan, tags);
     if (out_port_idx >= 0 && out_port_idx < br->n_ports) {
         out_port = br->ports[out_port_idx];
     } else if (!packet && !eth_addr_is_multicast(flow->dl_dst)) {
@@ -2274,6 +2271,8 @@ process_flow(struct bridge *br, const flow_t *flow,
          * on a bond and blackhole packets before the learning table is
          * updated to reflect the correct port. */
         return false;
+    } else {
+        out_port = FLOOD_PORT;
     }
 
     /* Don't send packets out their input ports. */
