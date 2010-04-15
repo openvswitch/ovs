@@ -2223,10 +2223,12 @@ process_flow(struct bridge *br, const flow_t *flow,
 
     /* Drop frames on ports reserved for mirroring. */
     if (in_port->is_mirror_output_port) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-        VLOG_WARN_RL(&rl, "bridge %s: dropping packet received on port %s, "
-                     "which is reserved exclusively for mirroring",
-                     br->name, in_port->name);
+        if (packet) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl, "bridge %s: dropping packet received on port "
+                         "%s, which is reserved exclusively for mirroring",
+                         br->name, in_port->name);
+        }
         goto done;
     }
 
