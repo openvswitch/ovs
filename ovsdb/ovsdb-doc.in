@@ -14,9 +14,14 @@ from OVSDB import *
 
 argv0 = sys.argv[0]
 
-def textToNroff(s):
+def textToNroff(s, font=r'\fR'):
     def escape(match):
         c = match.group(0)
+        if c == '-':
+            if font == r'\fB':
+                return r'\-'
+            else:
+                return '-'
         if c == '\\':
             return r'\e'
         elif c == '"':
@@ -26,17 +31,18 @@ def textToNroff(s):
         else:
             raise Error("bad escape")
 
-    s = re.sub('([\\\\"\'])', escape, s)
+    # Escape - \ " ' as needed by nroff.
+    s = re.sub('([-"\'\\\\])', escape, s)
     if s.startswith('.'):
         s = '\\' + s
     return s
 
 def escapeNroffLiteral(s):
-    return r'\fB%s\fR' % textToNroff(s)
+    return r'\fB%s\fR' % textToNroff(s, r'\fB')
 
 def inlineXmlToNroff(node, font):
     if node.nodeType == node.TEXT_NODE:
-        return textToNroff(node.data)
+        return textToNroff(node.data, font)
     elif node.nodeType == node.ELEMENT_NODE:
         if node.tagName == 'code' or node.tagName == 'em':
             s = r'\fB'
