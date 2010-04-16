@@ -448,8 +448,13 @@ ofproto_set_in_band(struct ofproto *p, bool in_band)
 {
     if (in_band != (p->in_band != NULL)) {
         if (in_band) {
-            return in_band_create(p, p->dpif, p->switch_status,
-                                  p->controller->rconn, &p->in_band);
+            int error;
+
+            error = in_band_create(p, p->dpif, p->switch_status, &p->in_band);
+            if (error) {
+                return error;
+            }
+            in_band_set_remotes(p->in_band, &p->controller->rconn, 1);
         } else {
             ofproto_set_discovery(p, false, NULL, true);
             in_band_destroy(p->in_band);

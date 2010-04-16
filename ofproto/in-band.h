@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,14 +28,18 @@ struct settings;
 struct switch_status;
 
 int in_band_create(struct ofproto *, struct dpif *, struct switch_status *,
-                   struct rconn *controller, struct in_band **);
+                   struct in_band **);
 void in_band_destroy(struct in_band *);
+
+void in_band_set_remotes(struct in_band *, struct rconn **, size_t n);
+
 void in_band_run(struct in_band *);
+void in_band_wait(struct in_band *);
+
 bool in_band_msg_in_hook(struct in_band *, const flow_t *, 
                          const struct ofpbuf *packet);
 bool in_band_rule_check(struct in_band *, const flow_t *,
                         const struct odp_actions *);
-void in_band_wait(struct in_band *);
 void in_band_flushed(struct in_band *);
 
 #endif /* in-band.h */
