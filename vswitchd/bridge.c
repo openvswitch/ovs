@@ -2380,18 +2380,16 @@ bridge_account_flow_ofhook_cb(const flow_t *flow,
                               void *br_)
 {
     struct bridge *br = br_;
-    struct port *in_port;
     const union odp_action *a;
+    struct port *in_port;
+    tag_type tags = 0;
+    int vlan;
 
     /* Feed information from the active flows back into the learning table
      * to ensure that table is always in sync with what is actually flowing
      * through the datapath. */
-    in_port = port_from_dp_ifidx(br, flow->in_port);
-    if (in_port) {
-        int vlan = flow_get_vlan(br, flow, in_port, false);
-         if (vlan >= 0) {
-            update_learning_table(br, flow, vlan, in_port);
-        }
+    if (is_admissible(br, flow, false, &tags, &vlan, &in_port)) {
+        update_learning_table(br, flow, vlan, in_port);
     }
 
     if (!br->has_bonded_ports) {
