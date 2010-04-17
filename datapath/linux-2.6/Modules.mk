@@ -1,6 +1,8 @@
 openvswitch_sources += \
+	linux-2.6/compat-2.6/addrconf_core-openvswitch.c \
 	linux-2.6/compat-2.6/dev-openvswitch.c \
 	linux-2.6/compat-2.6/genetlink-openvswitch.c \
+	linux-2.6/compat-2.6/ip_output-openvswitch.c \
 	linux-2.6/compat-2.6/random32.c \
 	linux-2.6/compat-2.6/skbuff-openvswitch.c
 openvswitch_headers += \
@@ -11,6 +13,8 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/linux/err.h \
 	linux-2.6/compat-2.6/include/linux/icmp.h \
 	linux-2.6/compat-2.6/include/linux/if_arp.h \
+	linux-2.6/compat-2.6/include/linux/if_ether.h \
+	linux-2.6/compat-2.6/include/linux/in.h \
 	linux-2.6/compat-2.6/include/linux/ip.h \
 	linux-2.6/compat-2.6/include/linux/ipv6.h \
 	linux-2.6/compat-2.6/include/linux/jiffies.h \
@@ -34,8 +38,11 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/linux/udp.h \
 	linux-2.6/compat-2.6/include/linux/workqueue.h \
 	linux-2.6/compat-2.6/include/net/checksum.h \
+	linux-2.6/compat-2.6/include/net/dst.h \
 	linux-2.6/compat-2.6/include/net/genetlink.h \
-	linux-2.6/compat-2.6/include/net/netlink.h
+	linux-2.6/compat-2.6/include/net/ip.h \
+	linux-2.6/compat-2.6/include/net/netlink.h \
+	linux-2.6/compat-2.6/include/net/route.h
 
 both_modules += brcompat
 brcompat_sources = \
@@ -53,10 +60,10 @@ veth_headers =
 dist_modules += ip_gre
 build_modules += $(if $(BUILD_GRE),ip_gre)
 ip_gre_sources = \
-	linux-2.6/compat-2.6/addrconf_core-ip_gre.c \
+	linux-2.6/compat-2.6/addrconf_core-openvswitch.c \
 	linux-2.6/compat-2.6/dev-ip_gre.c \
 	linux-2.6/compat-2.6/ip_gre.c \
-	linux-2.6/compat-2.6/ip_output-ip_gre.c \
+	linux-2.6/compat-2.6/ip_output-openvswitch.c \
 	linux-2.6/compat-2.6/net_namespace-ip_gre.c
 ip_gre_headers = \
 	linux-2.6/compat-2.6/compat26.h \

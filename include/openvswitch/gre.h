@@ -43,6 +43,34 @@
 #include <linux/if_tunnel.h>
 #include <linux/version.h>
 
+#ifdef __KERNEL__
+#include <linux/types.h>
+#else
+#include <sys/types.h>
+#endif
+
+/* New GRE config. */
+
+#define GRE_F_IN_CSUM		(1 << 0) /* Require incoming packets to have checksums. */
+#define GRE_F_OUT_CSUM		(1 << 1) /* Checksum outgoing packets. */
+#define GRE_F_IN_KEY_MATCH	(1 << 2) /* Store the key in tun_id to match in flow table. */
+#define GRE_F_OUT_KEY_ACTION	(1 << 3) /* Get the key from a SET_TUNNEL action. */
+#define GRE_F_TOS_INHERIT	(1 << 4) /* Inherit the ToS from the inner packet. */
+#define GRE_F_TTL_INHERIT	(1 << 5) /* Inherit the TTL from the inner packet. */
+#define GRE_F_PMTUD		(1 << 6) /* Enable path MTU discovery. */
+
+struct gre_port_config {
+	__u32	flags;
+	__be32	saddr;
+	__be32	daddr;
+	__be32	in_key;
+	__be32	out_key;
+	__u8	tos;
+	__u8	ttl;
+};
+
+/* Old GRE config. */
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
 #define GRE_IOCTL_ONLY
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)

@@ -24,6 +24,7 @@ extern struct vport_ops gre_vport_ops;
 static struct vport_ops *base_vport_ops_list[] = {
 	&netdev_vport_ops,
 	&internal_vport_ops,
+	&gre_vport_ops,
 };
 
 static const struct vport_ops **vport_ops_list;
