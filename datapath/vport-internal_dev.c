@@ -17,6 +17,7 @@
 #include <linux/workqueue.h>
 
 #include "datapath.h"
+#include "openvswitch/internal_dev.h"
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
@@ -32,6 +33,12 @@ struct internal_dev {
 
 	struct net_device_stats stats;
 	struct pcpu_lstats *lstats;
+
+	/* This is warty support for XAPI, which does not support summing bond
+	 * device statistics itself.  'extra_stats' can be set by userspace via
+	 * the DP_DEV_SET_STATS ioctl and, if they are, then they are added to
+	 * the real device stats. */
+	struct pcpu_lstats extra_stats;
 };
 
 struct vport_ops internal_vport_ops;
@@ -48,7 +55,10 @@ static struct net_device_stats *internal_dev_get_stats(struct net_device *netdev
 	int i;
 
 	stats = &internal_dev->stats;
-	memset(stats, 0, sizeof(struct net_device_stats));
+	stats->rx_bytes = internal_dev->extra_stats.rx_bytes;
+	stats->rx_packets = internal_dev->extra_stats.rx_packets;
+	stats->tx_bytes = internal_dev->extra_stats.tx_bytes;
+	stats->tx_packets = internal_dev->extra_stats.tx_packets;
 	for_each_possible_cpu(i) {
 		const struct pcpu_lstats *lb_stats;
 
@@ -169,6 +179,22 @@ static void internal_dev_free(struct net_device *netdev)
 
 static int internal_dev_do_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
+	struct internal_dev *internal_dev = internal_dev_priv(dev);
+
+	if (cmd == INTERNAL_DEV_SET_STATS) {
+		struct internal_dev_stats stats;
+
+		if (copy_from_user(&stats, ifr->ifr_data, sizeof(stats)))
+			return -EFAULT;
+
+		internal_dev->extra_stats.rx_bytes = stats.rx_bytes;
+		internal_dev->extra_stats.rx_packets = stats.rx_packets;
+		internal_dev->extra_stats.tx_bytes = stats.tx_bytes;
+		internal_dev->extra_stats.tx_packets = stats.tx_packets;
+
+		return 0;
+	}
+
 	if (dp_ioctl_hook)
 		return dp_ioctl_hook(dev, ifr, cmd);
 	return -EOPNOTSUPP;

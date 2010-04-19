@@ -137,6 +137,7 @@ struct port {
     int updelay, downdelay;     /* Delay before iface goes up/down, in ms. */
     bool bond_compat_is_stale;  /* Need to call port_update_bond_compat()? */
     bool bond_fake_iface;       /* Fake a bond interface for legacy compat? */
+    long bond_next_fake_iface_update; /* Next update to fake bond stats. */
     int bond_rebalance_interval; /* Interval between rebalances, in ms. */
     long long int bond_next_rebalance; /* Next rebalancing time. */
 
@@ -1847,6 +1848,34 @@ bond_enable_slave(struct iface *iface, bool enable)
     port->bond_compat_is_stale = true;
 }
 
+/* Attempts to make the sum of the bond slaves' statistics appear on the fake
+ * bond interface. */
+static void
+bond_update_fake_iface_stats(struct port *port)
+{
+    struct netdev_stats bond_stats;
+    struct netdev *bond_dev;
+    size_t i;
+
+    memset(&bond_stats, 0, sizeof bond_stats);
+
+    for (i = 0; i < port->n_ifaces; i++) {
+        struct netdev_stats slave_stats;
+
+        if (!netdev_get_stats(port->ifaces[i]->netdev, &slave_stats)) {
+            bond_stats.rx_packets += slave_stats.rx_packets;
+            bond_stats.rx_bytes += slave_stats.rx_bytes;
+            bond_stats.tx_packets += slave_stats.tx_packets;
+            bond_stats.tx_bytes += slave_stats.tx_bytes;
+        }
+    }
+
+    if (!netdev_open_default(port->name, &bond_dev)) {
+        netdev_set_stats(bond_dev, &bond_stats);
+        netdev_close(bond_dev);
+    }
+}
+
 static void
 bond_run(struct bridge *br)
 {
@@ -1861,6 +1890,12 @@ bond_run(struct bridge *br)
                 if (time_msec() >= iface->delay_expires) {
                     bond_enable_slave(iface, !iface->enabled);
                 }
+            }
+
+            if (port->bond_fake_iface
+                && time_msec() >= port->bond_next_fake_iface_update) {
+                bond_update_fake_iface_stats(port);
+                port->bond_next_fake_iface_update = time_msec() + 1000;
             }
         }
 
@@ -1886,6 +1921,9 @@ bond_wait(struct bridge *br)
             if (iface->delay_expires != LLONG_MAX) {
                 poll_timer_wait(iface->delay_expires - time_msec());
             }
+        }
+        if (port->bond_fake_iface) {
+            poll_timer_wait(port->bond_next_fake_iface_update - time_msec());
         }
     }
 }
@@ -3364,6 +3402,10 @@ port_update_bonding(struct port *port)
             bond_choose_active_iface(port);
             port->bond_next_rebalance
                 = time_msec() + port->bond_rebalance_interval;
+
+            if (port->cfg->bond_fake_iface) {
+                port->bond_next_fake_iface_update = time_msec();
+            }
         }
         port->bond_compat_is_stale = true;
         port->bond_fake_iface = port->cfg->bond_fake_iface;

@@ -456,6 +456,7 @@ const struct netdev_class netdev_gre_class = {
     NULL,                       /* get_ifindex */
     netdev_gre_get_carrier,
     netdev_gre_get_stats,
+    NULL,                       /* set_stats */
 
     NULL,                       /* get_features */
     NULL,                       /* set_advertisements */

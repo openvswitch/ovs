@@ -50,6 +50,8 @@
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openvswitch/internal_dev.h"
+#include "openvswitch/gre.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink.h"
@@ -79,7 +81,7 @@ enum {
     VALID_IN6 = 1 << 3,
     VALID_MTU = 1 << 4,
     VALID_CARRIER = 1 << 5,
-    VALID_IS_INTERNAL = 1 << 6
+    VALID_IS_PSEUDO = 1 << 6       /* Represents is_internal and is_tap. */
 };
 
 struct tap_state {
@@ -96,13 +98,16 @@ struct netdev_dev_linux {
     struct shash_node *shash_node;
     unsigned int cache_valid;
 
+    /* The following are figured out "on demand" only.  They are only valid
+     * when the corresponding VALID_* bit in 'cache_valid' is set. */
     int ifindex;
     uint8_t etheraddr[ETH_ADDR_LEN];
     struct in_addr address, netmask;
     struct in6_addr in6;
     int mtu;
     int carrier;
-    bool is_internal;
+    bool is_internal;           /* Is this an openvswitch internal device? */
+    bool is_tap;                /* Is this a tuntap device? */
 
     union {
         struct tap_state tap;
@@ -899,6 +904,35 @@ check_for_working_netlink_stats(void)
     }
 }
 
+/* Brings the 'is_internal' and 'is_tap' members of 'netdev_dev' up-to-date. */
+static void
+netdev_linux_update_is_pseudo(struct netdev_dev_linux *netdev_dev)
+{
+    if (!(netdev_dev->cache_valid & VALID_IS_PSEUDO)) {
+        const char *name = netdev_dev_get_name(&netdev_dev->netdev_dev);
+        const char *type = netdev_dev_get_type(&netdev_dev->netdev_dev);
+        
+        netdev_dev->is_tap = !strcmp(type, "tap");
+        netdev_dev->is_internal = false;
+        if (!netdev_dev->is_tap) {
+            struct ethtool_drvinfo drvinfo;
+            int error;
+
+            memset(&drvinfo, 0, sizeof drvinfo);
+            error = netdev_linux_do_ethtool(name,
+                                            (struct ethtool_cmd *)&drvinfo,
+                                            ETHTOOL_GDRVINFO,
+                                            "ETHTOOL_GDRVINFO");
+
+            if (!error && !strcmp(drvinfo.driver, "openvswitch")) {
+                netdev_dev->is_internal = true;
+            }
+        }
+
+        netdev_dev->cache_valid |= VALID_IS_PSEUDO;
+    }
+}
+
 /* Retrieves current device stats for 'netdev'.
  *
  * XXX All of the members of struct netdev_stats are 64 bits wide, but on
@@ -916,26 +950,7 @@ netdev_linux_get_stats(const struct netdev *netdev_,
 
     COVERAGE_INC(netdev_get_stats);
 
-    if (!(netdev_dev->cache_valid & VALID_IS_INTERNAL)) {
-        netdev_dev->is_internal = !strcmp(netdev_get_type(netdev_), "tap");
-        if (!netdev_dev->is_internal) {
-            struct ethtool_drvinfo drvinfo;
-
-            memset(&drvinfo, 0, sizeof drvinfo);
-            error = netdev_linux_do_ethtool(netdev_get_name(netdev_),
-                                            (struct ethtool_cmd *)&drvinfo,
-                                            ETHTOOL_GDRVINFO,
-                                            "ETHTOOL_GDRVINFO");
-
-            if (!error) {
-                netdev_dev->is_internal = !strcmp(drvinfo.driver,
-                                                        "openvswitch");
-            }
-        }
-
-        netdev_dev->cache_valid |= VALID_IS_INTERNAL;
-    }
-
+    netdev_linux_update_is_pseudo(netdev_dev);
     if (netdev_dev->is_internal) {
         collect_stats = &raw_stats;
     }
@@ -958,7 +973,7 @@ netdev_linux_get_stats(const struct netdev *netdev_,
      * will appear to be swapped relative to the other ports since we are the
      * one sending the data, not a remote computer.  For consistency, we swap
      * them back here. */
-    if (!error && netdev_dev->is_internal) {
+    if (!error && (netdev_dev->is_internal || netdev_dev->is_tap)) {
         stats->rx_packets = raw_stats.tx_packets;
         stats->tx_packets = raw_stats.rx_packets;
         stats->rx_bytes = raw_stats.tx_bytes;
@@ -983,6 +998,41 @@ netdev_linux_get_stats(const struct netdev *netdev_,
     }
 
     return error;
+}
+
+static int
+netdev_linux_set_stats(struct netdev *netdev,
+                       const struct netdev_stats *stats)
+{
+    struct netdev_dev_linux *netdev_dev =
+        netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct internal_dev_stats dp_dev_stats;
+    struct ifreq ifr;
+
+    /* We must reject this call if 'netdev' is not an Open vSwitch internal
+     * port, because the ioctl that we are about to execute is in the "device
+     * private ioctls" range, which means that executing it on a device that
+     * is not the type we expect could do any random thing.
+     *
+     * (Amusingly, these ioctl numbers are commented "THESE IOCTLS ARE
+     * _DEPRECATED_ AND WILL DISAPPEAR IN 2.5.X" in linux/sockios.h.  I guess
+     * DaveM is a little behind on that.) */
+    netdev_linux_update_is_pseudo(netdev_dev);
+    if (!netdev_dev->is_internal) {
+        return EOPNOTSUPP;
+    }
+
+    /* This actually only sets the *offset* that the dp_dev applies, but in our
+     * usage for fake bond devices the dp_dev never has any traffic of it own
+     * so it has the same effect. */
+    dp_dev_stats.rx_packets = stats->rx_packets;
+    dp_dev_stats.rx_bytes = stats->rx_bytes;
+    dp_dev_stats.tx_packets = stats->tx_packets;
+    dp_dev_stats.tx_bytes = stats->tx_bytes;
+    ifr.ifr_data = (void *) &dp_dev_stats;
+    return netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr,
+                                 INTERNAL_DEV_SET_STATS,
+                                 "INTERNAL_DEV_SET_STATS");
 }
 
 /* Stores the features supported by 'netdev' into each of '*current',
@@ -1668,6 +1718,7 @@ const struct netdev_class netdev_linux_class = {
     netdev_linux_get_ifindex,
     netdev_linux_get_carrier,
     netdev_linux_get_stats,
+    netdev_linux_set_stats,
 
     netdev_linux_get_features,
     netdev_linux_set_advertisements,
@@ -1716,6 +1767,7 @@ const struct netdev_class netdev_tap_class = {
     netdev_linux_get_ifindex,
     netdev_linux_get_carrier,
     netdev_linux_get_stats,
+    NULL,                       /* set_stats */
 
     netdev_linux_get_features,
     netdev_linux_set_advertisements,
@@ -1764,6 +1816,7 @@ const struct netdev_class netdev_patch_class = {
     netdev_linux_get_ifindex,
     netdev_linux_get_carrier,
     netdev_linux_get_stats,
+    NULL,                       /* set_stats */
 
     netdev_linux_get_features,
     netdev_linux_set_advertisements,
