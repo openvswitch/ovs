@@ -412,13 +412,8 @@ Exception 1: Put a space after (but not before) the "sizeof" keyword.
 Exception 2: Put a space between the () used in a cast and the
 expression whose type is cast: (void *) 0.
 
-  Break long lines before binary operators and the ternary operators ?
-and :, rather than after them, e.g.
-
-    if (first_long_condition() || second_long_condition()
-        || third_long_condition())
-
-and
+  Break long lines before the ternary operators ? and :, rather than
+after them, e.g.
 
     return (out_port != VIGP_CONTROL_PATH
             ? alpheus_output_port(dp, skb, out_port)
