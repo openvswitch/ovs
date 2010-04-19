@@ -293,6 +293,9 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     # Restore original XenServer scripts
     for f in \
         /opt/xensource/libexec/interface-reconfigure \
+        /opt/xensource/libexec/InterfaceReconfigure.py \
+        /opt/xensource/libexec/InterfaceReconfigureBridge.py \
+        /opt/xensource/libexec/InterfaceReconfigureVswitch.py \
         /etc/xensource/scripts/vif \
         /usr/sbin/xen-bugtool \
         /usr/sbin/brctl
