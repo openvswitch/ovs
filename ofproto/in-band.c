@@ -175,11 +175,6 @@
  *      problems and amount of processing, we decided to hold off for
  *      the time-being.
  *
- *    - Multiple Controllers.  There is nothing intrinsic in the high-
- *      level design that prevents using multiple (known) controllers, 
- *      however, the current implementation's data structures assume
- *      only one.
- *
  *    - Differing Controllers for Switches.  All switches must know
  *      the L3 addresses for all the controllers that other switches 
  *      may use, since rules need to be set up to allow traffic related
