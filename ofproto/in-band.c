@@ -313,24 +313,23 @@ refresh_remotes(struct in_band *ib)
 {
     struct in_band_remote *r;
     bool any_changes;
-    int min_refresh;
 
     if (time_now() < ib->next_remote_refresh) {
         return false;
     }
 
     any_changes = false;
-    min_refresh = 10;
+    ib->next_remote_refresh = TIME_MAX;
     for (r = ib->remotes; r < &ib->remotes[ib->n_remotes]; r++) {
         uint8_t old_remote_mac[ETH_ADDR_LEN];
-        int refresh_interval;
+        time_t next_refresh;
 
         /* Save old MAC. */
         memcpy(old_remote_mac, r->remote_mac, ETH_ADDR_LEN);
 
         /* Refresh remote information. */
-        refresh_interval = refresh_remote(ib, r);
-        min_refresh = MIN(min_refresh, refresh_interval);
+        next_refresh = refresh_remote(ib, r) + time_now();
+        ib->next_remote_refresh = MIN(ib->next_remote_refresh, next_refresh);
 
         /* If the MAC changed, log the changes. */
         if (!eth_addr_equals(r->remote_mac, old_remote_mac)) {
@@ -345,7 +344,6 @@ refresh_remotes(struct in_band *ib)
             }
         }
     }
-    ib->next_remote_refresh = time_now() + min_refresh;
 
     return any_changes;
 }
