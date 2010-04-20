@@ -454,7 +454,7 @@ ipv6_build_icmp(struct sk_buff *skb, struct sk_buff *nskb, unsigned int mtu,
 
 static bool
 send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
-		 struct sk_buff *skb, unsigned int mtu)
+		 struct sk_buff *skb, unsigned int mtu, __be32 flow_key)
 {
 	unsigned int eth_hdr_len = ETH_HLEN;
 	unsigned int total_length, header_length, payload_length;
@@ -530,12 +530,9 @@ send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
 	 * outgoing packet for the fake received packet.  If the keys are
 	 * not symmetric then PMTUD needs to be disabled since we won't have
 	 * any way of synthesizing packets. */
-	if (mutable->port_config.flags & GRE_F_IN_KEY_MATCH) {
-		if (mutable->port_config.flags & GRE_F_OUT_KEY_ACTION)
-			OVS_CB(nskb)->tun_id = OVS_CB(skb)->tun_id;
-		else
-			OVS_CB(nskb)->tun_id = mutable->port_config.out_key;
-	}
+	if (mutable->port_config.flags & GRE_F_IN_KEY_MATCH &&
+	    mutable->port_config.flags & GRE_F_OUT_KEY_ACTION)
+		OVS_CB(nskb)->tun_id = flow_key;
 
 	vport_receive(vport, nskb);
 
@@ -631,7 +628,8 @@ check_checksum(struct sk_buff *skb)
 static int
 parse_gre_header(struct iphdr *iph, __be16 *flags, __be32 *key)
 {
-	__be16 *flagsp = (__be16 *)(iph + 1);
+	/* IP and ICMP protocol handlers check that the IHL is valid. */
+	__be16 *flagsp = (__be16 *)((u8 *)iph + (iph->ihl << 2));
 	__be16 *protocol = flagsp + 1;
 	__be32 *options = (__be32 *)(protocol + 1);
 	int hdr_len;
@@ -771,16 +769,30 @@ gre_err(struct sk_buff *skb, u32 info)
 	if (!vport)
 		return;
 
-	if ((mutable->port_config.flags & GRE_F_IN_CSUM) && !(flags & GRE_CSUM))
+	/* Packets received by this function were previously sent by us, so
+	 * any comparisons should be to the output values, not the input.
+	 * However, it's not really worth it to have a hash table based on
+	 * output keys (especially since ICMP error handling of tunneled packets
+	 * isn't that reliable anyways).  Therefore, we do a lookup based on the
+	 * out key as if it were the in key and then check to see if the input
+	 * and output keys are the same. */
+	if (mutable->port_config.in_key != mutable->port_config.out_key)
 		return;
 
-	tot_hdr_len = sizeof(struct iphdr) + tunnel_hdr_len;
+	if (!!(mutable->port_config.flags & GRE_F_IN_KEY_MATCH) !=
+	    !!(mutable->port_config.flags & GRE_F_OUT_KEY_ACTION))
+		return;
+
+	if ((mutable->port_config.flags & GRE_F_OUT_CSUM) && !(flags & GRE_CSUM))
+		return;
+
+	tunnel_hdr_len += iph->ihl << 2;
 
 	orig_mac_header = skb_mac_header(skb) - skb->data;
 	orig_nw_header = skb_network_header(skb) - skb->data;
-	skb_set_mac_header(skb, tot_hdr_len);
+	skb_set_mac_header(skb, tunnel_hdr_len);
 
-	tot_hdr_len += ETH_HLEN;
+	tot_hdr_len = tunnel_hdr_len + ETH_HLEN;
 
 	skb->protocol = eth_hdr(skb)->h_proto;
 	if (skb->protocol == htons(ETH_P_8021Q)) {
@@ -788,18 +800,18 @@ gre_err(struct sk_buff *skb, u32 info)
 		skb->protocol = vlan_eth_hdr(skb)->h_vlan_encapsulated_proto;
 	}
 
+	skb_set_network_header(skb, tot_hdr_len);
+	mtu -= tot_hdr_len;
+
 	if (skb->protocol == htons(ETH_P_IP))
 		tot_hdr_len += sizeof(struct iphdr);
-	else if (skb->protocol == htons(ETH_P_IP))
+	else if (skb->protocol == htons(ETH_P_IPV6))
 		tot_hdr_len += sizeof(struct ipv6hdr);
 	else
 		goto out;
 
 	if (!pskb_may_pull(skb, tot_hdr_len))
 		goto out;
-
-	skb_set_network_header(skb, tot_hdr_len);
-	mtu -= tot_hdr_len;
 
 	if (skb->protocol == htons(ETH_P_IP)) {
 		if (mtu < IP_MIN_MTU) {
@@ -823,7 +835,7 @@ gre_err(struct sk_buff *skb, u32 info)
 	}
 
 	__pskb_pull(skb, tunnel_hdr_len);
-	send_frag_needed(vport, mutable, skb, mtu);
+	send_frag_needed(vport, mutable, skb, mtu, key);
 	skb_push(skb, tunnel_hdr_len);
 
 out:
@@ -920,7 +932,7 @@ build_packet(struct vport *vport, const struct mutable_config *mutable,
 
 		if ((old_iph->frag_off & htons(IP_DF)) &&
 		    mtu < ntohs(old_iph->tot_len)) {
-			if (send_frag_needed(vport, mutable, skb, mtu))
+			if (send_frag_needed(vport, mutable, skb, mtu, OVS_CB(skb)->tun_id))
 				goto error_free;
 		}
 
@@ -933,7 +945,7 @@ build_packet(struct vport *vport, const struct mutable_config *mutable,
 			frag_off = htons(IP_DF);
 
 		if (mtu < packet_length) {
-			if (send_frag_needed(vport, mutable, skb, mtu))
+			if (send_frag_needed(vport, mutable, skb, mtu, OVS_CB(skb)->tun_id))
 				goto error_free;
 		}
 	}
@@ -1159,6 +1171,9 @@ set_config(const struct vport *cur_vport, struct mutable_config *mutable,
 
 	if (old_vport && old_vport != cur_vport)
 		return -EEXIST;
+
+	if (mutable->port_config.flags & GRE_F_OUT_KEY_ACTION)
+		mutable->port_config.out_key = 0;
 
 	mutable->tunnel_hlen = sizeof(struct iphdr) + GRE_HEADER_SECTION;
 
