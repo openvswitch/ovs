@@ -200,6 +200,7 @@ struct ofconn {
     struct rconn_packet_counter *reply_counter;
 
     /* type == OFCONN_CONTROLLER only. */
+    enum nx_role role;           /* Role. */
     struct hmap_node hmap_node;  /* In struct ofproto's "controllers" map. */
     struct discovery *discovery; /* Controller discovery object, if enabled. */
     struct status_category *ss;  /* Switch status category. */
@@ -1312,6 +1313,10 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
         struct ofp_port_status *ops;
         struct ofpbuf *b;
 
+        if (ofconn->role == NX_ROLE_SLAVE) {
+            continue;
+        }
+
         ops = make_openflow_xid(sizeof *ops, OFPT_PORT_STATUS, 0, &b);
         ops->reason = reason;
         ops->desc = ofport->opp;
@@ -1467,6 +1472,7 @@ ofconn_create(struct ofproto *p, struct rconn *rconn, enum ofconn_type type)
     list_push_back(&p->all_conns, &ofconn->node);
     ofconn->rconn = rconn;
     ofconn->type = type;
+    ofconn->role = NX_ROLE_OTHER;
     ofconn->packet_in_counter = rconn_packet_counter_create ();
     ofconn->pktbuf = NULL;
     ofconn->miss_send_len = 0;
@@ -2074,7 +2080,7 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
     }
     flags = ntohs(osc->flags);
 
-    if (ofconn->type == OFCONN_CONTROLLER) {
+    if (ofconn->type == OFCONN_CONTROLLER && ofconn->role != NX_ROLE_SLAVE) {
         switch (flags & OFPC_FRAG_MASK) {
         case OFPC_FRAG_NORMAL:
             dpif_set_drop_frags(p->dpif, false);
@@ -2421,6 +2427,29 @@ xlate_actions(const union ofp_action *in, size_t n_in,
     return 0;
 }
 
+/* Checks whether 'ofconn' is a slave controller.  If so, returns an OpenFlow
+ * error message code (composed with ofp_mkerr()) for the caller to propagate
+ * upward.  Otherwise, returns 0.
+ *
+ * 'oh' is used to make log messages more informative. */
+static int
+reject_slave_controller(struct ofconn *ofconn, const struct ofp_header *oh)
+{
+    if (ofconn->type == OFCONN_CONTROLLER && ofconn->role == NX_ROLE_SLAVE) {
+        static struct vlog_rate_limit perm_rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        char *type_name;
+
+        type_name = ofp_message_type_to_string(oh->type);
+        VLOG_WARN_RL(&perm_rl, "rejecting %s message from slave controller",
+                     type_name);
+        free(type_name);
+
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
+    } else {
+        return 0;
+    }
+}
+
 static int
 handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
                   struct ofp_header *oh)
@@ -2432,6 +2461,11 @@ handle_packet_out(struct ofproto *p, struct ofconn *ofconn,
     uint16_t in_port;
     flow_t flow;
     int error;
+
+    error = reject_slave_controller(ofconn, oh);
+    if (error) {
+        return error;
+    }
 
     error = check_ofp_packet_out(oh, &payload, &n_actions, p->max_ports);
     if (error) {
@@ -2494,12 +2528,17 @@ update_port_config(struct ofproto *p, struct ofport *port,
 }
 
 static int
-handle_port_mod(struct ofproto *p, struct ofp_header *oh)
+handle_port_mod(struct ofproto *p, struct ofconn *ofconn,
+                struct ofp_header *oh)
 {
     const struct ofp_port_mod *opm;
     struct ofport *port;
     int error;
 
+    error = reject_slave_controller(ofconn, oh);
+    if (error) {
+        return error;
+    }
     error = check_ofp_message(oh, OFPT_PORT_MOD, sizeof *opm);
     if (error) {
         return error;
@@ -3296,6 +3335,10 @@ handle_flow_mod(struct ofproto *p, struct ofconn *ofconn,
     size_t n_actions;
     int error;
 
+    error = reject_slave_controller(ofconn, &ofm->header);
+    if (error) {
+        return error;
+    }
     error = check_ofp_message_array(&ofm->header, OFPT_FLOW_MOD, sizeof *ofm,
                                     sizeof *ofm->actions, &n_actions);
     if (error) {
@@ -3359,6 +3402,59 @@ handle_tun_id_from_cookie(struct ofproto *p, struct nxt_tun_id_cookie *msg)
 }
 
 static int
+handle_role_request(struct ofproto *ofproto,
+                    struct ofconn *ofconn, struct nicira_header *msg)
+{
+    struct nx_role_request *nrr;
+    struct nx_role_request *reply;
+    struct ofpbuf *buf;
+    uint32_t role;
+
+    if (ntohs(msg->header.length) != sizeof *nrr) {
+        VLOG_WARN_RL(&rl, "received role request of length %zu (expected %zu)",
+                     ntohs(msg->header.length), sizeof *nrr);
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    nrr = (struct nx_role_request *) msg;
+
+    if (ofconn->type != OFCONN_CONTROLLER) {
+        VLOG_WARN_RL(&rl, "ignoring role request on non-controller "
+                     "connection");
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_EPERM);
+    }
+
+    role = ntohl(nrr->role);
+    if (role != NX_ROLE_OTHER && role != NX_ROLE_MASTER
+        && role != NX_ROLE_SLAVE) {
+        VLOG_WARN_RL(&rl, "received request for unknown role %"PRIu32, role);
+
+        /* There's no good error code for this. */
+        return ofp_mkerr(OFPET_BAD_REQUEST, -1);
+    }
+
+    if (role == NX_ROLE_MASTER) {
+        struct ofconn *other;
+
+        HMAP_FOR_EACH (other, struct ofconn, hmap_node,
+                       &ofproto->controllers) {
+            if (other->role == NX_ROLE_MASTER) {
+                other->role = NX_ROLE_SLAVE;
+            }
+        }
+    }
+    ofconn->role = role;
+
+    reply = make_openflow_xid(sizeof *reply, OFPT_VENDOR, msg->header.xid,
+                              &buf);
+    reply->nxh.vendor = htonl(NX_VENDOR_ID);
+    reply->nxh.subtype = htonl(NXT_ROLE_REPLY);
+    reply->role = htonl(role);
+    queue_tx(buf, ofconn, ofconn->reply_counter);
+
+    return 0;
+}
+
+static int
 handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
 {
     struct ofp_vendor_header *ovh = msg;
@@ -3388,6 +3484,9 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
 
     case NXT_TUN_ID_FROM_COOKIE:
         return handle_tun_id_from_cookie(p, msg);
+
+    case NXT_ROLE_REQUEST:
+        return handle_role_request(p, ofconn, msg);
     }
 
     return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_SUBTYPE);
@@ -3440,7 +3539,7 @@ handle_openflow(struct ofconn *ofconn, struct ofproto *p,
         break;
 
     case OFPT_PORT_MOD:
-        error = handle_port_mod(p, oh);
+        error = handle_port_mod(p, ofconn, oh);
         break;
 
     case OFPT_FLOW_MOD:
@@ -3658,6 +3757,7 @@ uninstall_idle_flow(struct ofproto *ofproto, struct rule *rule)
         rule_uninstall(ofproto, rule);
     }
 }
+
 static void
 send_flow_removed(struct ofproto *p, struct rule *rule,
                   long long int now, uint8_t reason)
@@ -3674,7 +3774,8 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
 
     prev = NULL;
     LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
-        if (rule->send_flow_removed && rconn_is_connected(ofconn->rconn)) {
+        if (rule->send_flow_removed && rconn_is_connected(ofconn->rconn)
+            && ofconn->role != NX_ROLE_SLAVE) {
             if (prev) {
                 queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
             } else {
@@ -3852,11 +3953,13 @@ send_packet_in(struct ofproto *ofproto, struct ofpbuf *packet)
 
     prev = NULL;
     LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
-        if (prev) {
-            pinsched_send(prev->schedulers[msg->type], msg->port,
-                          ofpbuf_clone(packet), do_send_packet_in, prev);
+        if (ofconn->role != NX_ROLE_SLAVE) {
+            if (prev) {
+                pinsched_send(prev->schedulers[msg->type], msg->port,
+                              ofpbuf_clone(packet), do_send_packet_in, prev);
+            }
+            prev = ofconn;
         }
-        prev = ofconn;
     }
     if (prev) {
         pinsched_send(prev->schedulers[msg->type], msg->port,

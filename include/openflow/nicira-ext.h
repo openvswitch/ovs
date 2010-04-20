@@ -49,6 +49,11 @@ enum nicira_type {
     /* Use the high 32 bits of the cookie field as the tunnel ID in the flow
      * match. */
     NXT_TUN_ID_FROM_COOKIE,
+
+    /* Controller role support.  The request body is struct nx_role_request.
+     * The reply echos the request. */
+    NXT_ROLE_REQUEST,
+    NXT_ROLE_REPLY
 };
 
 struct nicira_header {
@@ -66,6 +71,36 @@ struct nxt_tun_id_cookie {
     uint8_t pad[7];
 };
 OFP_ASSERT(sizeof(struct nxt_tun_id_cookie) == 24);
+
+/* Configures the "role" of the sending controller.  The default role is:
+ *
+ *    - Other (NX_ROLE_OTHER), which allows the controller access to all
+ *      OpenFlow features.
+ *
+ * The other possible roles are a related pair:
+ *
+ *    - Master (NX_ROLE_MASTER) is equivalent to Other, except that there may
+ *      be at most one Master controller at a time: when a controller
+ *      configures itself as Master, any existing Master is demoted to the
+ *      Slave role.
+ *
+ *    - Slave (NX_ROLE_SLAVE) allows the controller read-only access to
+ *      OpenFlow features.  In particular attempts to modify the flow table
+ *      will be rejected with an OFPBRC_EPERM error.
+ *
+ *      Slave controllers also do not receive asynchronous messages
+ *      (OFPT_PACKET_IN, OFPT_FLOW_REMOVED, OFPT_PORT_STATUS).
+ */
+struct nx_role_request {
+    struct nicira_header nxh;
+    uint32_t role;              /* One of NX_ROLE_*. */
+};
+
+enum nx_role {
+    NX_ROLE_OTHER,              /* Default role, full access. */
+    NX_ROLE_MASTER,             /* Full access, at most one. */
+    NX_ROLE_SLAVE               /* Read-only access. */
+};
 
 enum nx_action_subtype {
     NXAST_SNAT__OBSOLETE,           /* No longer used. */
