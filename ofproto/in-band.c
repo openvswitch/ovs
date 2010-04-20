@@ -626,8 +626,22 @@ make_rules(struct in_band *ib,
 }
 
 static void
-clear_rules(struct in_band *ib)
+drop_rule(struct in_band *ib, const struct in_band_rule *rule)
 {
+    ofproto_delete_flow(ib->ofproto, &rule->flow,
+                        rule->wildcards, rule->priority);
+}
+
+/* Drops from the flow table all of the flows set up by 'ib', then clears out
+ * the information about the installed flows so that they can be filled in
+ * again if necessary. */
+static void
+drop_rules(struct in_band *ib)
+{
+    /* Drop rules. */
+    make_rules(ib, drop_rule);
+
+    /* Clear out state. */
     memset(ib->installed_local_mac, 0, sizeof ib->installed_local_mac);
 
     free(ib->remote_ips);
@@ -637,20 +651,6 @@ clear_rules(struct in_band *ib)
     free(ib->remote_macs);
     ib->remote_macs = NULL;
     ib->n_remote_macs = 0;
-}
-
-static void
-drop_rule(struct in_band *ib, const struct in_band_rule *rule)
-{
-    ofproto_delete_flow(ib->ofproto, &rule->flow,
-                        rule->wildcards, rule->priority);
-}
-
-static void
-drop_rules(struct in_band *ib)
-{
-    make_rules(ib, drop_rule);
-    clear_rules(ib);
 }
 
 static void
@@ -666,6 +666,7 @@ add_rule(struct in_band *ib, const struct in_band_rule *rule)
                      rule->priority, &action, 1, 0);
 }
 
+/* Inserts flows into the flow table for the current state of 'ib'. */
 static void
 add_rules(struct in_band *ib)
 {
