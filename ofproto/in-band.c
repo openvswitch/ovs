@@ -797,33 +797,48 @@ in_band_destroy(struct in_band *ib)
     }
 }
 
+static bool
+any_rconns_changed(const struct in_band *ib, struct rconn **remotes, size_t n)
+{
+    size_t i;
+
+    if (n != ib->n_remotes) {
+        return true;
+    }
+
+    for (i = 0; i < n; i++) {
+        if (ib->remotes[i].rconn != remotes[i]) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void
 in_band_set_remotes(struct in_band *ib, struct rconn **remotes, size_t n)
 {
     size_t i;
 
     /* Optimize the case where the rconns are the same as last time. */
-    if (n == ib->n_remotes) {
-        for (i = 0; i < n; i++) {
-            if (ib->remotes[i].rconn != remotes[i]) {
-                goto different;
-            }
-        }
+    if (!any_rconns_changed(ib, remotes, n)) {
         return;
-
-    different:;
     }
 
+    /* Clear old remotes. */
     for (i = 0; i < ib->n_remotes; i++) {
         /* We don't own the rconn. */
         netdev_close(ib->remotes[i].remote_netdev);
     }
     free(ib->remotes);
 
-    ib->next_remote_refresh = TIME_MIN;
+    /* Set up new remotes. */
     ib->remotes = n ? xzalloc(n * sizeof *ib->remotes) : 0;
     ib->n_remotes = n;
     for (i = 0; i < n; i++) {
         ib->remotes[i].rconn = remotes[i];
     }
+
+    /* Force refresh in next call to in_band_run(). */
+    ib->next_remote_refresh = TIME_MIN;
 }
