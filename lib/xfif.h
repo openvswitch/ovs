@@ -15,8 +15,8 @@
  */
 
 
-#ifndef DPIF_H
-#define DPIF_H 1
+#ifndef XFIF_H
+#define XFIF_H 1
 
 #include "openvswitch/xflow.h"
 #include <stdbool.h>

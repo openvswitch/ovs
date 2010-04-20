@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DPIF_PROVIDER_H
-#define DPIF_PROVIDER_H 1
+#ifndef XFIF_PROVIDER_H
+#define XFIF_PROVIDER_H 1
 
 /* Provider interface to xfifs, which provide an interface to an Open vSwitch
  * datapath. */

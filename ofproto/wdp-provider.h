@@ -207,7 +207,7 @@ struct wdp_class {
     int (*port_list)(const struct wdp *wdp, struct wdp_port **portsp,
                      size_t *n_portsp);
 
-    int (*port_set_config)(struct wdp *sdpif, uint16_t port_no,
+    int (*port_set_config)(struct wdp *wdp, uint16_t port_no,
                            uint32_t config);
 
     /* Polls for changes in the set of ports in 'wdp'.  If the set of ports
