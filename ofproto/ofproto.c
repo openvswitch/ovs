@@ -255,6 +255,9 @@ struct ofproto {
     /* In-band control. */
     struct in_band *in_band;
     long long int next_in_band_update;
+    struct sockaddr_in *extra_in_band_remotes;
+    size_t n_extra_remotes;
+
     /* Flow table. */
     struct classifier cls;
     bool need_revalidate;
@@ -525,11 +528,13 @@ update_in_band_remotes(struct ofproto *ofproto)
 {
     const struct ofconn *ofconn;
     struct sockaddr_in *addrs;
+    size_t max_addrs, n_addrs;
     bool discovery;
-    size_t n_addrs;
+    size_t i;
 
-
-    addrs = xmalloc(hmap_count(&ofproto->controllers) * sizeof *addrs);
+    /* Allocate enough memory for as many remotes as we could possibly have. */
+    max_addrs = ofproto->n_extra_remotes + hmap_count(&ofproto->controllers);
+    addrs = xmalloc(max_addrs * sizeof *addrs);
     n_addrs = 0;
 
     /* Add all the remotes. */
@@ -545,6 +550,9 @@ update_in_band_remotes(struct ofproto *ofproto)
         if (ofconn->discovery) {
             discovery = true;
         }
+    }
+    for (i = 0; i < ofproto->n_extra_remotes; i++) {
+        addrs[n_addrs++] = ofproto->extra_in_band_remotes[i];
     }
 
     /* Create or update or destroy in-band.
@@ -640,6 +648,47 @@ ofproto_set_controllers(struct ofproto *p,
         ofconn->ss = switch_status_register(p->switch_status, "remote",
                                             rconn_status_cb, ofconn->rconn);
     }
+}
+
+static bool
+any_extras_changed(const struct ofproto *ofproto,
+                   const struct sockaddr_in *extras, size_t n)
+{
+    size_t i;
+
+    if (n != ofproto->n_extra_remotes) {
+        return true;
+    }
+
+    for (i = 0; i < n; i++) {
+        const struct sockaddr_in *old = &ofproto->extra_in_band_remotes[i];
+        const struct sockaddr_in *new = &extras[i];
+
+        if (old->sin_addr.s_addr != new->sin_addr.s_addr ||
+            old->sin_port != new->sin_port) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* Sets the 'n' TCP port addresses in 'extras' as ones to which 'ofproto''s
+ * in-band control should guarantee access, in the same way that in-band
+ * control guarantees access to OpenFlow controllers. */
+void
+ofproto_set_extra_in_band_remotes(struct ofproto *ofproto,
+                                  const struct sockaddr_in *extras, size_t n)
+{
+    if (!any_extras_changed(ofproto, extras, n)) {
+        return;
+    }
+
+    free(ofproto->extra_in_band_remotes);
+    ofproto->n_extra_remotes = n;
+    ofproto->extra_in_band_remotes = xmemdup(extras, n * sizeof *extras);
+
+    update_in_band_remotes(ofproto);
 }
 
 void
@@ -845,6 +894,7 @@ ofproto_destroy(struct ofproto *p)
 
     in_band_destroy(p->in_band);
     p->in_band = NULL;
+    free(p->extra_in_band_remotes);
 
     ofproto_flush_flows(p);
     classifier_destroy(&p->cls);
