@@ -336,12 +336,14 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             break;
 
         case OPT_FAIL_MODE:
-            if (!strcmp(optarg, "open")) {
+            if (!strcmp(optarg, "open") || !strcmp(optarg, "standalone")) {
                 controller_opts.fail = OFPROTO_FAIL_STANDALONE;
-            } else if (!strcmp(optarg, "closed")) {
+            } else if (!strcmp(optarg, "closed")
+                       || !strcmp(optarg, "secure")) {
                 controller_opts.fail = OFPROTO_FAIL_SECURE;
             } else {
-                ovs_fatal(0, "--fail argument must be \"open\" or \"closed\"");
+                ovs_fatal(0, "--fail argument must be \"standalone\" "
+                          "or \"secure\"");
             }
             break;
 

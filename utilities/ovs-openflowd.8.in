@@ -243,23 +243,24 @@ Ethernet address of the datapath's local port (which is typically
 randomly generated) in the lower 48 bits and zeros in the upper 16.
 .
 .TP
-\fB--fail=\fR[\fBopen\fR|\fBclosed\fR]
+\fB--fail=\fR[\fBstandalone\fR|\fBsecure\fR]
 The controller is, ordinarily, responsible for setting up all flows on
 the OpenFlow switch.  Thus, if the connection to the controller fails,
 no new network connections can be set up.  If the connection to the
 controller stays down long enough, no packets can pass through the
 switch at all.
 .IP
-If this option is set to \fBopen\fR (the default), \fBovs\-openflowd\fR will
+If this option is set to \fBstandalone\fR (the default),
+\fBovs\-openflowd\fR will
 take over responsibility for setting up flows in the local datapath
 when no message has been received from the controller for three times
 the inactivity probe interval (see below), or 45 seconds by default.
 In this ``fail open'' mode, \fBovs\-openflowd\fR causes the datapath to act
 like an ordinary MAC-learning switch.  \fBovs\-openflowd\fR will continue to
 retry connection to the controller in the background and, when the
-connection succeeds, it discontinues its fail-open behavior.
+connection succeeds, it discontinues its standalone switching behavior.
 .IP
-If this option is set to \fBclosed\fR, then \fBovs\-openflowd\fR will not
+If this option is set to \fBsecure\fR, then \fBovs\-openflowd\fR will not
 set up flows on its own when the controller connection fails.
 .
 .TP
@@ -301,7 +302,7 @@ more information about in-band control).
 .RE
 .
 .IP
-As a result, when both \fB--fail=closed\fR and \fB--out-of-band\fR are
+As a result, when both \fB--fail=secure\fR and \fB--out-of-band\fR are
 specified, this option has no effect.
 .
 .TP
