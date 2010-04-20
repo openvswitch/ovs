@@ -6,12 +6,12 @@ ovs\-openflowd \- OpenFlow switch implementation
 .
 .SH SYNOPSIS
 .B ovs\-openflowd
-[\fIoptions\fR] \fIdatapath\fR [\fIcontroller\fR]
+[\fIoptions\fR] \fIdatapath\fR [\fIcontroller\fR\&...]
 .
 .SH DESCRIPTION
 The \fBovs\-openflowd\fR program implements an OpenFlow switch using a
-flow-based datapath.  \fBovs\-openflowd\fR connects to an OpenFlow controller
-over TCP or SSL.
+flow-based datapath.  \fBovs\-openflowd\fR connects to one or more
+OpenFlow controllers over TCP or SSL.
 .PP
 The mandatory \fIdatapath\fR argument argument specifies the local datapath
 to relay.  It takes one of the following forms:
@@ -19,17 +19,17 @@ to relay.  It takes one of the following forms:
 .so lib/dpif.man
 .
 .PP
-The optional \fIcontroller\fR argument specifies how to connect to
+The optional \fIcontroller\fR arguments specify how to connect to
 the OpenFlow controller.  It takes one of the following forms:
 .
 .so lib/vconn-active.man
 .
 .PP
-If \fIcontroller\fR is omitted, \fBovs\-openflowd\fR attempts to discover the
-location of the controller automatically (see below).
+If no \fIcontroller\fR is specified, \fBovs\-openflowd\fR attempts to
+discover the location of a controller automatically (see below).
 .
-.SS "Contacting the Controller"
-The OpenFlow switch must be able to contact the OpenFlow controller
+.SS "Contacting Controllers"
+The OpenFlow switch must be able to contact the OpenFlow controllers
 over the network.  It can do so in one of two ways:
 .
 .IP out-of-band
@@ -60,8 +60,8 @@ manually or discovered automatically:
 .RS
 .IP "controller discovery"
 To make \fBovs\-openflowd\fR discover the location of the controller
-automatically, do not specify the location of the controller on the
-\fBovs\-openflowd\fR command line.
+automatically, do not specify a controller on the \fBovs\-openflowd\fR
+command line.
 .IP
 In this mode, \fBovs\-openflowd\fR will broadcast a DHCP request with vendor
 class identifier \fBOpenFlow\fR across the network devices added to
@@ -159,8 +159,8 @@ the local port network device, and start the DHCP client afterward.
 .TP
 \fB--datapath-id=\fIdpid\fR
 Sets \fIdpid\fR, which must consist of exactly 16 hexadecimal digits,
-as the datapath ID that the switch will use to identify itself to the
-OpenFlow controller.
+as the datapath ID that the switch will use to identify itself to
+OpenFlow controllers.
 .IP
 If this option is omitted, the default datapath ID is taken from the
 Ethernet address of the datapath's local port (which is typically

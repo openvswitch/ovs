@@ -158,11 +158,6 @@ struct bridge {
     bool sent_config_request;   /* Successfully sent config request? */
     uint8_t default_ea[ETH_ADDR_LEN]; /* Default MAC. */
 
-    /* Support for remote controllers. */
-    char *controller;           /* NULL if there is no remote controller;
-                                 * "discover" to do controller discovery;
-                                 * otherwise a vconn name. */
-
     /* OpenFlow switch processing. */
     struct ofproto *ofproto;    /* OpenFlow switch. */
 
@@ -208,9 +203,9 @@ static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
 static unixctl_cb_func bridge_unixctl_dump_flows;
 static int bridge_run_one(struct bridge *);
-static const struct ovsrec_controller *bridge_get_controller(
-                      const struct ovsrec_open_vswitch *ovs_cfg,
-                      const struct bridge *br);
+static size_t bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
+                                     const struct bridge *br,
+                                     struct ovsrec_controller ***controllersp);
 static void bridge_reconfigure_one(const struct ovsrec_open_vswitch *,
                                    struct bridge *);
 static void bridge_reconfigure_controller(const struct ovsrec_open_vswitch *,
@@ -745,8 +740,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         /* Set sFlow configuration on this bridge. */
         if (br->cfg->sflow) {
             const struct ovsrec_sflow *sflow_cfg = br->cfg->sflow;
-            const struct ovsrec_controller *ctrl;
+            struct ovsrec_controller **controllers;
             struct ofproto_sflow_options oso;
+            size_t n_controllers;
+            size_t i;
 
             memset(&oso, 0, sizeof oso);
 
@@ -771,8 +768,14 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             oso.sub_id = sflow_bridge_number++;
             oso.agent_device = sflow_cfg->agent;
 
-            ctrl = bridge_get_controller(ovs_cfg, br);
-            oso.control_ip = ctrl ? ctrl->local_ip : NULL;
+            oso.control_ip = NULL;
+            n_controllers = bridge_get_controllers(ovs_cfg, br, &controllers);
+            for (i = 0; i < n_controllers; i++) {
+                if (controllers[i]->local_ip) {
+                    oso.control_ip = controllers[i]->local_ip;
+                    break;
+                }
+            }
             ofproto_set_sflow(br->ofproto, &oso);
 
             svec_destroy(&oso.targets);
@@ -1052,7 +1055,7 @@ bridge_wait(void)
 
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         ofproto_wait(br->ofproto);
-        if (br->controller) {
+        if (ofproto_has_controller(br->ofproto)) {
             continue;
         }
 
@@ -1182,7 +1185,6 @@ bridge_destroy(struct bridge *br)
         }
         dpif_close(br->dpif);
         ofproto_destroy(br->ofproto);
-        free(br->controller);
         mac_learning_destroy(br->ml);
         port_array_destroy(&br->ifaces);
         free(br->ports);
@@ -1258,21 +1260,31 @@ bridge_run_one(struct bridge *br)
     return error;
 }
 
-static const struct ovsrec_controller *
-bridge_get_controller(const struct ovsrec_open_vswitch *ovs_cfg,
-                      const struct bridge *br)
+static size_t
+bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
+                       const struct bridge *br,
+                       struct ovsrec_controller ***controllersp)
 {
-    const struct ovsrec_controller *controller;
+    struct ovsrec_controller **controllers;
+    size_t n_controllers;
 
-    controller = (br->cfg->controller ? br->cfg->controller
-                  : ovs_cfg->controller ? ovs_cfg->controller
-                  : NULL);
-
-    if (controller && !strcmp(controller->target, "none")) {
-        return NULL;
+    if (br->cfg->n_controller) {
+        controllers = br->cfg->controller;
+        n_controllers = br->cfg->n_controller;
+    } else {
+        controllers = ovs_cfg->controller;
+        n_controllers = ovs_cfg->n_controller;
     }
 
-    return controller;
+    if (n_controllers == 1 && !strcmp(controllers[0]->target, "none")) {
+        controllers = NULL;
+        n_controllers = 0;
+    }
+
+    if (controllersp) {
+        *controllersp = controllers;
+    }
+    return n_controllers;
 }
 
 static bool
@@ -1391,7 +1403,7 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
      * user didn't specify one.
      *
      * XXX perhaps we should synthesize a port ourselves in this case. */
-    if (bridge_get_controller(ovs_cfg, br)) {
+    if (bridge_get_controllers(ovs_cfg, br, NULL)) {
         char local_name[IF_NAMESIZE];
         int error;
 
@@ -1506,78 +1518,20 @@ static void
 bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
                               struct bridge *br)
 {
-    const struct ovsrec_controller *c;
+    struct ovsrec_controller **controllers;
+    size_t n_controllers;
 
-    c = bridge_get_controller(ovs_cfg, br);
-    if ((br->controller != NULL) != (c != NULL)) {
+    n_controllers = bridge_get_controllers(ovs_cfg, br, &controllers);
+    if (ofproto_has_controller(br->ofproto) != (n_controllers != 0)) {
         ofproto_flush_flows(br->ofproto);
     }
-    free(br->controller);
-    br->controller = c ? xstrdup(c->target) : NULL;
 
-    if (c) {
-        struct ofproto_controller oc;
-
-        if (strcmp(c->target, "discover")) {
-            struct iface *local_iface;
-            struct in_addr ip;
-
-            local_iface = bridge_get_local_iface(br);
-            if (local_iface && c->local_ip && inet_aton(c->local_ip, &ip)) {
-                struct netdev *netdev = local_iface->netdev;
-                struct in_addr mask, gateway;
-
-                if (!c->local_netmask || !inet_aton(c->local_netmask, &mask)) {
-                    mask.s_addr = 0;
-                }
-                if (!c->local_gateway
-                    || !inet_aton(c->local_gateway, &gateway)) {
-                    gateway.s_addr = 0;
-                }
-
-                netdev_turn_flags_on(netdev, NETDEV_UP, true);
-                if (!mask.s_addr) {
-                    mask.s_addr = guess_netmask(ip.s_addr);
-                }
-                if (!netdev_set_in4(netdev, ip, mask)) {
-                    VLOG_INFO("bridge %s: configured IP address "IP_FMT", "
-                              "netmask "IP_FMT,
-                              br->name, IP_ARGS(&ip.s_addr),
-                              IP_ARGS(&mask.s_addr));
-                }
-
-                if (gateway.s_addr) {
-                    if (!netdev_add_router(netdev, gateway)) {
-                        VLOG_INFO("bridge %s: configured gateway "IP_FMT,
-                                  br->name, IP_ARGS(&gateway.s_addr));
-                    }
-                }
-            }
-        }
-
-        oc.target = c->target;
-        oc.max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8;
-        oc.probe_interval = (c->inactivity_probe
-                             ? *c->inactivity_probe / 1000 : 5);
-        oc.fail = (!c->fail_mode
-                   || !strcmp(c->fail_mode, "standalone")
-                   || !strcmp(c->fail_mode, "open")
-                   ? OFPROTO_FAIL_STANDALONE
-                   : OFPROTO_FAIL_SECURE);
-        oc.band = (!c->connection_mode
-                   || !strcmp(c->connection_mode, "in-band")
-                   ? OFPROTO_IN_BAND
-                   : OFPROTO_OUT_OF_BAND);
-        oc.accept_re = c->discover_accept_regex;
-        oc.update_resolv_conf = c->discover_update_resolv_conf;
-        oc.rate_limit = (c->controller_rate_limit
-                         ? *c->controller_rate_limit : 0);
-        oc.burst_limit = (c->controller_burst_limit
-                          ? *c->controller_burst_limit : 0);
-        ofproto_set_controller(br->ofproto, &oc);
-    } else {
+    if (!n_controllers) {
         union ofp_action action;
         flow_t flow;
+
+        /* Clear out controllers. */
+        ofproto_set_controllers(br->ofproto, NULL, 0);
 
         /* Set up a flow that matches every packet and directs them to
          * OFPP_NORMAL (which goes to us). */
@@ -1587,8 +1541,76 @@ bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
         action.output.port = htons(OFPP_NORMAL);
         memset(&flow, 0, sizeof flow);
         ofproto_add_flow(br->ofproto, &flow, OVSFW_ALL, 0, &action, 1, 0);
+    } else {
+        struct ofproto_controller *ocs;
+        size_t i;
 
-        ofproto_set_controller(br->ofproto, NULL);
+        ocs = xmalloc(n_controllers * sizeof *ocs);
+        for (i = 0; i < n_controllers; i++) {
+            struct ovsrec_controller *c = controllers[i];
+            struct ofproto_controller *oc = &ocs[i];
+
+            if (strcmp(c->target, "discover")) {
+                struct iface *local_iface;
+                struct in_addr ip;
+
+                local_iface = bridge_get_local_iface(br);
+                if (local_iface && c->local_ip
+                    && inet_aton(c->local_ip, &ip)) {
+                    struct netdev *netdev = local_iface->netdev;
+                    struct in_addr mask, gateway;
+
+                    if (!c->local_netmask
+                        || !inet_aton(c->local_netmask, &mask)) {
+                        mask.s_addr = 0;
+                    }
+                    if (!c->local_gateway
+                        || !inet_aton(c->local_gateway, &gateway)) {
+                        gateway.s_addr = 0;
+                    }
+
+                    netdev_turn_flags_on(netdev, NETDEV_UP, true);
+                    if (!mask.s_addr) {
+                        mask.s_addr = guess_netmask(ip.s_addr);
+                    }
+                    if (!netdev_set_in4(netdev, ip, mask)) {
+                        VLOG_INFO("bridge %s: configured IP address "IP_FMT", "
+                                  "netmask "IP_FMT,
+                                  br->name, IP_ARGS(&ip.s_addr),
+                                  IP_ARGS(&mask.s_addr));
+                    }
+
+                    if (gateway.s_addr) {
+                        if (!netdev_add_router(netdev, gateway)) {
+                            VLOG_INFO("bridge %s: configured gateway "IP_FMT,
+                                      br->name, IP_ARGS(&gateway.s_addr));
+                        }
+                    }
+                }
+            }
+
+            oc->target = c->target;
+            oc->max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8;
+            oc->probe_interval = (c->inactivity_probe
+                                 ? *c->inactivity_probe / 1000 : 5);
+            oc->fail = (!c->fail_mode
+                       || !strcmp(c->fail_mode, "standalone")
+                       || !strcmp(c->fail_mode, "open")
+                       ? OFPROTO_FAIL_STANDALONE
+                       : OFPROTO_FAIL_SECURE);
+            oc->band = (!c->connection_mode
+                       || !strcmp(c->connection_mode, "in-band")
+                       ? OFPROTO_IN_BAND
+                       : OFPROTO_OUT_OF_BAND);
+            oc->accept_re = c->discover_accept_regex;
+            oc->update_resolv_conf = c->discover_update_resolv_conf;
+            oc->rate_limit = (c->controller_rate_limit
+                             ? *c->controller_rate_limit : 0);
+            oc->burst_limit = (c->controller_burst_limit
+                              ? *c->controller_burst_limit : 0);
+        }
+        ofproto_set_controllers(br->ofproto, ocs, n_controllers);
+        free(ocs);
     }
 }
 

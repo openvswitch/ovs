@@ -354,6 +354,87 @@ CHECK_IFACES([a], [a1], [a2], [a3])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
+AT_SETUP([controllers])
+AT_KEYWORDS([controller ovs-vsctl])
+OVS_VSCTL_SETUP
+AT_CHECK([RUN_OVS_VSCTL_TOGETHER(
+  [add-br br0], 
+
+  [set-controller tcp:1.2.3.4],
+  [get-controller],
+  [get-controller default],
+  [get-controller br0],
+
+  [set-controller br0 tcp:4.5.6.7],
+  [get-controller],
+  [get-controller default],
+  [get-controller br0],
+
+  [del-controller],
+  [get-controller],
+  [get-controller default],
+  [get-controller br0],
+
+  [set-controller default tcp:8.9.10.11],
+  [get-controller],
+  [get-controller default],
+  [get-controller br0],
+
+  [del-controller default],
+  [get-controller],
+  [get-controller default],
+  [get-controller br0],
+
+  [del-controller br0],
+  [get-controller],
+  [get-controller default],
+  [get-controller br0],
+
+  [set-controller default tcp:1.2.3.4 tcp:4.5.6.7],
+  [get-controller],
+  [get-controller default],
+  [get-controller br0],
+
+  [set-controller br0 tcp:8.9.10.11 tcp:5.4.3.2],
+  [get-controller],
+  [get-controller default],
+  [get-controller br0])], [0], [
+
+tcp:1.2.3.4
+tcp:1.2.3.4
+tcp:1.2.3.4
+
+tcp:1.2.3.4
+tcp:1.2.3.4
+tcp:4.5.6.7
+
+
+
+tcp:4.5.6.7
+
+tcp:8.9.10.11
+tcp:8.9.10.11
+tcp:4.5.6.7
+
+
+
+tcp:4.5.6.7
+
+
+
+
+
+tcp:1.2.3.4\ntcp:4.5.6.7
+tcp:1.2.3.4\ntcp:4.5.6.7
+tcp:1.2.3.4\ntcp:4.5.6.7
+
+tcp:1.2.3.4\ntcp:4.5.6.7
+tcp:1.2.3.4\ntcp:4.5.6.7
+tcp:5.4.3.2\ntcp:8.9.10.11
+], [], [OVS_VSCTL_CLEANUP])
+OVS_VSCTL_CLEANUP
+AT_CLEANUP
+
 dnl ----------------------------------------------------------------------
 AT_BANNER([ovs-vsctl unit tests -- fake bridges])
 

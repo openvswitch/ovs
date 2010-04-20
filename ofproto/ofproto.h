@@ -100,8 +100,8 @@ bool ofproto_is_alive(const struct ofproto *);
 
 /* Configuration. */
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
-void ofproto_set_controller(struct ofproto *,
-                            const struct ofproto_controller *);
+void ofproto_set_controllers(struct ofproto *,
+                             const struct ofproto_controller *, size_t n);
 void ofproto_set_desc(struct ofproto *,
                       const char *mfr_desc, const char *hw_desc,
                       const char *sw_desc, const char *serial_desc,
@@ -115,8 +115,7 @@ int ofproto_set_stp(struct ofproto *, bool enable_stp);
 
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
-void ofproto_get_controller(const struct ofproto *,
-                            struct ofproto_controller *);
+bool ofproto_has_controller(const struct ofproto *);
 void ofproto_get_listeners(const struct ofproto *, struct svec *);
 void ofproto_get_snoops(const struct ofproto *, struct svec *);
 void ofproto_get_all_flows(struct ofproto *p, struct ds *);

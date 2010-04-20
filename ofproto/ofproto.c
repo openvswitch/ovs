@@ -165,26 +165,66 @@ static void rule_post_uninstall(struct ofproto *, struct rule *);
 static void send_flow_removed(struct ofproto *p, struct rule *rule,
                               long long int now, uint8_t reason);
 
-struct ofconn {
-    struct list node;
-    struct rconn *rconn;
-    struct pktbuf *pktbuf;
-    int miss_send_len;
-
-    struct rconn_packet_counter *packet_in_counter;
-
-    /* Number of OpenFlow messages queued as replies to OpenFlow requests, and
-     * the maximum number before we stop reading OpenFlow requests.  */
-#define OFCONN_REPLY_MAX 100
-    struct rconn_packet_counter *reply_counter;
+/* ofproto supports two kinds of OpenFlow connections:
+ *
+ *   - "Controller connections": Connections to ordinary OpenFlow controllers.
+ *     ofproto maintains persistent connections to these controllers and by
+ *     default sends them asynchronous messages such as packet-ins.
+ *
+ *   - "Transient connections", e.g. from ovs-ofctl.  When these connections
+ *     drop, it is the other side's responsibility to reconnect them if
+ *     necessary.  ofproto does not send them asynchronous messages by default.
+ */
+enum ofconn_type {
+    OFCONN_CONTROLLER,          /* An OpenFlow controller. */
+    OFCONN_TRANSIENT            /* A transient connection. */
 };
 
-static struct ofconn *ofconn_create(struct ofproto *, struct rconn *);
+/* An OpenFlow connection. */
+struct ofconn {
+    struct ofproto *ofproto;    /* The ofproto that owns this connection. */
+    struct list node;           /* In struct ofproto's "all_conns" list. */
+    struct rconn *rconn;        /* OpenFlow connection. */
+    enum ofconn_type type;      /* Type. */
+
+    /* OFPT_PACKET_IN related data. */
+    struct rconn_packet_counter *packet_in_counter; /* # queued on 'rconn'. */
+    struct pinsched *schedulers[2]; /* Indexed by reason code; see below. */
+    struct pktbuf *pktbuf;         /* OpenFlow packet buffers. */
+    int miss_send_len;             /* Bytes to send of buffered packets. */
+
+    /* Number of OpenFlow messages queued on 'rconn' as replies to OpenFlow
+     * requests, and the maximum number before we stop reading OpenFlow
+     * requests.  */
+#define OFCONN_REPLY_MAX 100
+    struct rconn_packet_counter *reply_counter;
+
+    /* type == OFCONN_CONTROLLER only. */
+    struct hmap_node hmap_node;  /* In struct ofproto's "controllers" map. */
+    struct discovery *discovery; /* Controller discovery object, if enabled. */
+    struct status_category *ss;  /* Switch status category. */
+};
+
+/* We use OFPR_NO_MATCH and OFPR_ACTION as indexes into struct ofconn's
+ * "schedulers" array.  Their values are 0 and 1, and their meanings and values
+ * coincide with _ODPL_MISS_NR and _ODPL_ACTION_NR, so this is convenient.  In
+ * case anything ever changes, check their values here.  */
+#define N_SCHEDULERS 2
+BUILD_ASSERT_DECL(OFPR_NO_MATCH == 0);
+BUILD_ASSERT_DECL(OFPR_NO_MATCH == _ODPL_MISS_NR);
+BUILD_ASSERT_DECL(OFPR_ACTION == 1);
+BUILD_ASSERT_DECL(OFPR_ACTION == _ODPL_ACTION_NR);
+
+static struct ofconn *ofconn_create(struct ofproto *, struct rconn *,
+                                    enum ofconn_type);
 static void ofconn_destroy(struct ofconn *);
 static void ofconn_run(struct ofconn *, struct ofproto *);
 static void ofconn_wait(struct ofconn *);
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
                      struct rconn_packet_counter *counter);
+
+static void send_packet_in(struct ofproto *, struct ofpbuf *odp_msg);
+static void do_send_packet_in(struct ofpbuf *odp_msg, void *ofconn);
 
 struct ofproto {
     /* Settings. */
@@ -206,11 +246,8 @@ struct ofproto {
 
     /* Configuration. */
     struct switch_status *switch_status;
-    struct status_category *ss_cat;
     struct in_band *in_band;
-    struct discovery *discovery;
     struct fail_open *fail_open;
-    struct pinsched *miss_sched, *action_sched;
     struct netflow *netflow;
     struct ofproto_sflow *sflow;
 
@@ -222,8 +259,8 @@ struct ofproto {
     bool tun_id_from_cookie;
 
     /* OpenFlow connections. */
-    struct list all_conns;
-    struct ofconn *controller;
+    struct hmap controllers;   /* Controller "struct ofconn"s. */
+    struct list all_conns;     /* Contains "struct ofconn"s. */
     struct pvconn **listeners;
     size_t n_listeners;
     struct pvconn **snoops;
@@ -243,8 +280,7 @@ static const struct ofhooks default_ofhooks;
 
 static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
-static void send_packet_in_miss(struct ofpbuf *, void *ofproto);
-static void send_packet_in_action(struct ofpbuf *, void *ofproto);
+
 static void update_used(struct ofproto *);
 static void update_stats(struct ofproto *, struct rule *,
                          const struct odp_flow_stats *);
@@ -319,9 +355,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
     /* Initialize submodules. */
     p->switch_status = switch_status_create(p);
     p->in_band = NULL;
-    p->discovery = NULL;
     p->fail_open = NULL;
-    p->miss_sched = p->action_sched = NULL;
     p->netflow = NULL;
     p->sflow = NULL;
 
@@ -333,9 +367,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
 
     /* Initialize OpenFlow connections. */
     list_init(&p->all_conns);
-    p->controller = ofconn_create(p, rconn_create(5, 8));
-    p->controller->pktbuf = pktbuf_create();
-    p->controller->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
+    hmap_init(&p->controllers);
     p->listeners = NULL;
     p->n_listeners = 0;
     p->snoops = NULL;
@@ -352,10 +384,6 @@ ofproto_create(const char *datapath, const char *datapath_type,
         p->ml = mac_learning_create();
     }
 
-    /* Register switch status category. */
-    p->ss_cat = switch_status_register(p->switch_status, "remote",
-                                       rconn_status_cb, p->controller->rconn);
-
     /* Pick final datapath ID. */
     p->datapath_id = pick_datapath_id(p);
     VLOG_INFO("using datapath ID %016"PRIx64, p->datapath_id);
@@ -370,103 +398,212 @@ ofproto_set_datapath_id(struct ofproto *p, uint64_t datapath_id)
     uint64_t old_dpid = p->datapath_id;
     p->datapath_id = datapath_id ? datapath_id : pick_datapath_id(p);
     if (p->datapath_id != old_dpid) {
+        struct ofconn *ofconn;
+
         VLOG_INFO("datapath ID changed to %016"PRIx64, p->datapath_id);
-        rconn_reconnect(p->controller->rconn);
+
+        /* Force all active connections to reconnect, since there is no way to
+         * notify a controller that the datapath ID has changed. */
+        LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
+            rconn_reconnect(ofconn->rconn);
+        }
     }
 }
 
-void
-ofproto_set_controller(struct ofproto *p, const struct ofproto_controller *c)
+static bool
+is_discovery_controller(const struct ofproto_controller *c)
 {
-    int rate_limit, burst_limit;
-    bool in_band;
+    return !strcmp(c->target, "discover");
+}
 
-    if (c) {
-        int probe_interval;
-        bool discovery;
+static bool
+is_in_band_controller(const struct ofproto_controller *c)
+{
+    return is_discovery_controller(c) || c->band == OFPROTO_IN_BAND;
+}
 
-        discovery = !strcmp(c->target, "discover");
-        in_band = discovery || c->band == OFPROTO_IN_BAND;
+/* Creates a new controller in 'ofproto'.  Some of the settings are initially
+ * drawn from 'c', but update_controller() needs to be called later to finish
+ * the new ofconn's configuration. */
+static void
+add_controller(struct ofproto *ofproto, const struct ofproto_controller *c)
+{
+    struct discovery *discovery;
+    struct ofconn *ofconn;
 
-        rconn_set_max_backoff(p->controller->rconn, c->max_backoff);
-
-        probe_interval = c->probe_interval ? MAX(c->probe_interval, 5) : 0;
-        rconn_set_probe_interval(p->controller->rconn, probe_interval);
-
-        if (discovery != (p->discovery != NULL)) {
-            rconn_disconnect(p->controller->rconn);
-            if (discovery) {
-                if (discovery_create(c->accept_re, c->update_resolv_conf,
-                                     p->dpif, p->switch_status,
-                                     &p->discovery)) {
-                    return;
-                }
-            } else {
-                discovery_destroy(p->discovery);
-                p->discovery = NULL;
-            }
-        }
-
-        if (discovery) {
-            discovery_set_update_resolv_conf(p->discovery,
-                                             c->update_resolv_conf);
-            discovery_set_accept_controller_re(p->discovery, c->accept_re);
-        } else {
-            if (strcmp(rconn_get_name(p->controller->rconn), c->target)) {
-                rconn_connect(p->controller->rconn, c->target);
-            }
+    if (is_discovery_controller(c)) {
+        int error = discovery_create(c->accept_re, c->update_resolv_conf,
+                                     ofproto->dpif, ofproto->switch_status,
+                                     &discovery);
+        if (error) {
+            return;
         }
     } else {
-        rconn_disconnect(p->controller->rconn);
-        in_band = false;
+        discovery = NULL;
     }
 
-    if (in_band != (p->in_band != NULL)) {
-        if (in_band) {
-            int error;
+    ofconn = ofconn_create(ofproto, rconn_create(5, 8), OFCONN_CONTROLLER);
+    ofconn->pktbuf = pktbuf_create();
+    ofconn->miss_send_len = OFP_DEFAULT_MISS_SEND_LEN;
+    if (discovery) {
+        ofconn->discovery = discovery;
+    } else {
+        rconn_connect(ofconn->rconn, c->target);
+    }
+    hmap_insert(&ofproto->controllers, &ofconn->hmap_node,
+                hash_string(c->target, 0));
+}
 
-            error = in_band_create(p, p->dpif, p->switch_status, &p->in_band);
-            if (!error) {
-                in_band_set_remotes(p->in_band, &p->controller->rconn, 1);
+/* Reconfigures 'ofconn' to match 'c'.  This function cannot update an ofconn's
+ * target or turn discovery on or off (these are done by creating new ofconns
+ * and deleting old ones), but it can update the rest of an ofconn's
+ * settings. */
+static void
+update_controller(struct ofconn *ofconn, const struct ofproto_controller *c)
+{
+    struct ofproto *ofproto = ofconn->ofproto;
+    int probe_interval;
+    int i;
+
+    rconn_set_max_backoff(ofconn->rconn, c->max_backoff);
+
+    probe_interval = c->probe_interval ? MAX(c->probe_interval, 5) : 0;
+    rconn_set_probe_interval(ofconn->rconn, probe_interval);
+
+    if (ofconn->discovery) {
+        discovery_set_update_resolv_conf(ofconn->discovery,
+                                         c->update_resolv_conf);
+        discovery_set_accept_controller_re(ofconn->discovery, c->accept_re);
+    }
+
+    for (i = 0; i < N_SCHEDULERS; i++) {
+        struct pinsched **s = &ofconn->schedulers[i];
+
+        if (c->rate_limit > 0) {
+            if (!*s) {
+                *s = pinsched_create(c->rate_limit, c->burst_limit,
+                                     ofproto->switch_status);
+            } else {
+                pinsched_set_limits(*s, c->rate_limit, c->burst_limit);
             }
         } else {
-            in_band_destroy(p->in_band);
-            p->in_band = NULL;
+            pinsched_destroy(*s);
+            *s = NULL;
         }
-        rconn_reconnect(p->controller->rconn);
+    }
+}
+
+static const char *
+ofconn_get_target(const struct ofconn *ofconn)
+{
+    return ofconn->discovery ? "discover" : rconn_get_name(ofconn->rconn);
+}
+
+static struct ofconn *
+find_controller_by_target(struct ofproto *ofproto, const char *target)
+{
+    struct ofconn *ofconn;
+
+    HMAP_FOR_EACH_WITH_HASH (ofconn, struct ofconn, hmap_node,
+                             hash_string(target, 0), &ofproto->controllers) {
+        if (!strcmp(ofconn_get_target(ofconn), target)) {
+            return ofconn;
+        }
+    }
+    return NULL;
+}
+
+void
+ofproto_set_controllers(struct ofproto *p,
+                        const struct ofproto_controller *controllers,
+                        size_t n_controllers)
+{
+    struct shash new_controllers;
+    struct rconn **in_band_rconns;
+    enum ofproto_fail_mode fail_mode;
+    struct ofconn *ofconn, *next;
+    bool ss_exists;
+    size_t n_in_band;
+    size_t i;
+
+    shash_init(&new_controllers);
+    for (i = 0; i < n_controllers; i++) {
+        const struct ofproto_controller *c = &controllers[i];
+
+        shash_add_once(&new_controllers, c->target, &controllers[i]);
+        if (!find_controller_by_target(p, c->target)) {
+            add_controller(p, c);
+        }
     }
 
-    if (c && c->fail == OFPROTO_FAIL_STANDALONE) {
-        struct rconn *rconn = p->controller->rconn;
-        int trigger_duration = rconn_get_probe_interval(rconn) * 3;
-        if (!p->fail_open) {
-            p->fail_open = fail_open_create(p, trigger_duration,
-                                            p->switch_status, rconn);
+    in_band_rconns = xmalloc(n_controllers * sizeof *in_band_rconns);
+    n_in_band = 0;
+    fail_mode = OFPROTO_FAIL_STANDALONE;
+    ss_exists = false;
+    HMAP_FOR_EACH_SAFE (ofconn, next, struct ofconn, hmap_node,
+                        &p->controllers) {
+        struct ofproto_controller *c;
+
+        c = shash_find_data(&new_controllers, ofconn_get_target(ofconn));
+        if (!c) {
+            ofconn_destroy(ofconn);
         } else {
-            fail_open_set_trigger_duration(p->fail_open, trigger_duration);
+            update_controller(ofconn, c);
+
+            if (ofconn->ss) {
+                ss_exists = true;
+            }
+            if (is_in_band_controller(c)) {
+                in_band_rconns[n_in_band++] = ofconn->rconn;
+            }
+
+            if (c->fail == OFPROTO_FAIL_SECURE) {
+                fail_mode = OFPROTO_FAIL_SECURE;
+            }
         }
+    }
+    shash_destroy(&new_controllers);
+
+    if (n_in_band) {
+        if (!p->in_band) {
+            in_band_create(p, p->dpif, p->switch_status, &p->in_band);
+        }
+        if (p->in_band) {
+            in_band_set_remotes(p->in_band, in_band_rconns, n_in_band);
+        }
+    } else {
+        in_band_destroy(p->in_band);
+        p->in_band = NULL;
+    }
+    free(in_band_rconns);
+
+    if (!hmap_is_empty(&p->controllers)
+        && fail_mode == OFPROTO_FAIL_STANDALONE) {
+        struct rconn **rconns;
+        size_t n;
+
+        if (!p->fail_open) {
+            p->fail_open = fail_open_create(p, p->switch_status);
+        }
+
+        n = 0;
+        rconns = xmalloc(hmap_count(&p->controllers) * sizeof *rconns);
+        HMAP_FOR_EACH (ofconn, struct ofconn, hmap_node, &p->controllers) {
+            rconns[n++] = ofconn->rconn;
+        }
+
+        fail_open_set_controllers(p->fail_open, rconns, n);
+        /* p->fail_open takes ownership of 'rconns'. */
     } else {
         fail_open_destroy(p->fail_open);
         p->fail_open = NULL;
     }
 
-    rate_limit = c ? c->rate_limit : 0;
-    burst_limit = c ? c->burst_limit : 0;
-    if (rate_limit > 0) {
-        if (!p->miss_sched) {
-            p->miss_sched = pinsched_create(rate_limit, burst_limit,
-                                                  p->switch_status);
-            p->action_sched = pinsched_create(rate_limit, burst_limit,
-                                                    NULL);
-        } else {
-            pinsched_set_limits(p->miss_sched, rate_limit, burst_limit);
-            pinsched_set_limits(p->action_sched, rate_limit, burst_limit);
-        }
-    } else {
-        pinsched_destroy(p->miss_sched);
-        p->miss_sched = NULL;
-        pinsched_destroy(p->action_sched);
-        p->action_sched = NULL;
+    if (!hmap_is_empty(&p->controllers) && !ss_exists) {
+        ofconn = CONTAINER_OF(hmap_first(&p->controllers),
+                              struct ofconn, hmap_node);
+        ofconn->ss = switch_status_register(p->switch_status, "remote",
+                                            rconn_status_cb, ofconn->rconn);
     }
 }
 
@@ -629,27 +766,10 @@ ofproto_get_datapath_id(const struct ofproto *ofproto)
     return ofproto->datapath_id;
 }
 
-void
-ofproto_get_controller(const struct ofproto *p, struct ofproto_controller *c)
+bool
+ofproto_has_controller(const struct ofproto *ofproto)
 {
-    memset(c, 0, sizeof *c);
-    if (p->discovery) {
-        struct discovery *d = p->discovery;
-
-        c->target = "discover";
-        c->accept_re = (char *) discovery_get_accept_controller_re(d);
-        c->update_resolv_conf = discovery_get_update_resolv_conf(d);
-    } else if (p->controller) {
-        c->target = (char *) rconn_get_name(p->controller->rconn);
-    } else {
-        return;
-    }
-
-    c->max_backoff = rconn_get_max_backoff(p->controller->rconn);
-    c->probe_interval = rconn_get_probe_interval(p->controller->rconn);
-    c->fail = p->fail_open ? OFPROTO_FAIL_STANDALONE : OFPROTO_FAIL_SECURE;
-    c->band = p->in_band ? OFPROTO_IN_BAND : OFPROTO_OUT_OF_BAND;
-    pinsched_get_limits(p->miss_sched, &c->rate_limit, &c->burst_limit);
+    return !hmap_is_empty(&ofproto->controllers);
 }
 
 void
@@ -698,6 +818,7 @@ ofproto_destroy(struct ofproto *p)
                         &p->all_conns) {
         ofconn_destroy(ofconn);
     }
+    hmap_destroy(&p->controllers);
 
     dpif_close(p->dpif);
     netdev_monitor_destroy(p->netdev_monitor);
@@ -707,13 +828,8 @@ ofproto_destroy(struct ofproto *p)
     shash_destroy(&p->port_by_name);
 
     switch_status_destroy(p->switch_status);
-    discovery_destroy(p->discovery);
-    pinsched_destroy(p->miss_sched);
-    pinsched_destroy(p->action_sched);
     netflow_destroy(p->netflow);
     ofproto_sflow_destroy(p->sflow);
-
-    switch_status_unregister(p->ss_cat);
 
     for (i = 0; i < p->n_listeners; i++) {
         pvconn_close(p->listeners[i]);
@@ -757,6 +873,27 @@ process_port_change(struct ofproto *ofproto, int error, char *devname)
         update_port(ofproto, devname);
         free(devname);
     }
+}
+
+/* One of ofproto's "snoop" pvconns has accepted a new connection on 'vconn'.
+ * Connects this vconn to a controller. */
+static void
+add_snooper(struct ofproto *ofproto, struct vconn *vconn)
+{
+    struct ofconn *ofconn;
+
+    /* Arbitrarily pick the first controller in the list for monitoring.  We
+     * could do something smarter or more flexible later, if it ever proves
+     * useful. */
+    LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
+        if (ofconn->type == OFCONN_CONTROLLER) {
+            rconn_add_monitor(ofconn->rconn, vconn);
+            return;
+        }
+
+    }
+    VLOG_INFO_RL(&rl, "no controller connection to monitor");
+    vconn_close(vconn);
 }
 
 int
@@ -803,21 +940,6 @@ ofproto_run1(struct ofproto *p)
     if (p->in_band) {
         in_band_run(p->in_band);
     }
-    if (p->discovery) {
-        char *controller_name;
-        if (rconn_is_connectivity_questionable(p->controller->rconn)) {
-            discovery_question_connectivity(p->discovery);
-        }
-        if (discovery_run(p->discovery, &controller_name)) {
-            if (controller_name) {
-                rconn_connect(p->controller->rconn, controller_name);
-            } else {
-                rconn_disconnect(p->controller->rconn);
-            }
-        }
-    }
-    pinsched_run(p->miss_sched, send_packet_in_miss, p);
-    pinsched_run(p->action_sched, send_packet_in_action, p);
 
     LIST_FOR_EACH_SAFE (ofconn, next_ofconn, struct ofconn, node,
                         &p->all_conns) {
@@ -836,7 +958,8 @@ ofproto_run1(struct ofproto *p)
 
         retval = pvconn_accept(p->listeners[i], OFP_VERSION, &vconn);
         if (!retval) {
-            ofconn_create(p, rconn_new_from_vconn("passive", vconn));
+            ofconn_create(p, rconn_new_from_vconn("passive", vconn),
+                          OFCONN_TRANSIENT);
         } else if (retval != EAGAIN) {
             VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
         }
@@ -848,7 +971,7 @@ ofproto_run1(struct ofproto *p)
 
         retval = pvconn_accept(p->snoops[i], OFP_VERSION, &vconn);
         if (!retval) {
-            rconn_add_monitor(p->controller->rconn, vconn);
+            add_snooper(p, vconn);
         } else if (retval != EAGAIN) {
             VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
         }
@@ -921,14 +1044,9 @@ ofproto_wait(struct ofproto *p)
     if (p->in_band) {
         in_band_wait(p->in_band);
     }
-    if (p->discovery) {
-        discovery_wait(p->discovery);
-    }
     if (p->fail_open) {
         fail_open_wait(p->fail_open);
     }
-    pinsched_wait(p->miss_sched);
-    pinsched_wait(p->action_sched);
     if (p->sflow) {
         ofproto_sflow_wait(p->sflow);
     }
@@ -965,7 +1083,7 @@ ofproto_get_revalidate_set(struct ofproto *ofproto)
 bool
 ofproto_is_alive(const struct ofproto *p)
 {
-    return p->discovery || rconn_is_alive(p->controller->rconn);
+    return !hmap_is_empty(&p->controllers);
 }
 
 int
@@ -1342,14 +1460,16 @@ init_ports(struct ofproto *p)
 }
 
 static struct ofconn *
-ofconn_create(struct ofproto *p, struct rconn *rconn)
+ofconn_create(struct ofproto *p, struct rconn *rconn, enum ofconn_type type)
 {
-    struct ofconn *ofconn = xmalloc(sizeof *ofconn);
+    struct ofconn *ofconn = xzalloc(sizeof *ofconn);
+    ofconn->ofproto = p;
     list_push_back(&p->all_conns, &ofconn->node);
     ofconn->rconn = rconn;
+    ofconn->type = type;
+    ofconn->packet_in_counter = rconn_packet_counter_create ();
     ofconn->pktbuf = NULL;
     ofconn->miss_send_len = 0;
-    ofconn->packet_in_counter = rconn_packet_counter_create ();
     ofconn->reply_counter = rconn_packet_counter_create ();
     return ofconn;
 }
@@ -1357,7 +1477,13 @@ ofconn_create(struct ofproto *p, struct rconn *rconn)
 static void
 ofconn_destroy(struct ofconn *ofconn)
 {
+    if (ofconn->type == OFCONN_CONTROLLER) {
+        hmap_remove(&ofconn->ofproto->controllers, &ofconn->hmap_node);
+    }
+    discovery_destroy(ofconn->discovery);
+
     list_remove(&ofconn->node);
+    switch_status_unregister(ofconn->ss);
     rconn_destroy(ofconn->rconn);
     rconn_packet_counter_destroy(ofconn->packet_in_counter);
     rconn_packet_counter_destroy(ofconn->reply_counter);
@@ -1369,6 +1495,25 @@ static void
 ofconn_run(struct ofconn *ofconn, struct ofproto *p)
 {
     int iteration;
+    size_t i;
+
+    if (ofconn->discovery) {
+        char *controller_name;
+        if (rconn_is_connectivity_questionable(ofconn->rconn)) {
+            discovery_question_connectivity(ofconn->discovery);
+        }
+        if (discovery_run(ofconn->discovery, &controller_name)) {
+            if (controller_name) {
+                rconn_connect(ofconn->rconn, controller_name);
+            } else {
+                rconn_disconnect(ofconn->rconn);
+            }
+        }
+    }
+
+    for (i = 0; i < N_SCHEDULERS; i++) {
+        pinsched_run(ofconn->schedulers[i], do_send_packet_in, ofconn);
+    }
 
     rconn_run(ofconn->rconn);
 
@@ -1388,7 +1533,7 @@ ofconn_run(struct ofconn *ofconn, struct ofproto *p)
         }
     }
 
-    if (ofconn != p->controller && !rconn_is_alive(ofconn->rconn)) {
+    if (!ofconn->discovery && !rconn_is_alive(ofconn->rconn)) {
         ofconn_destroy(ofconn);
     }
 }
@@ -1396,6 +1541,14 @@ ofconn_run(struct ofconn *ofconn, struct ofproto *p)
 static void
 ofconn_wait(struct ofconn *ofconn)
 {
+    int i;
+
+    if (ofconn->discovery) {
+        discovery_wait(ofconn->discovery);
+    }
+    for (i = 0; i < N_SCHEDULERS; i++) {
+        pinsched_wait(ofconn->schedulers[i]);
+    }
     rconn_run_wait(ofconn->rconn);
     if (rconn_packet_counter_read (ofconn->reply_counter) < OFCONN_REPLY_MAX) {
         rconn_recv_wait(ofconn->rconn);
@@ -1921,7 +2074,7 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
     }
     flags = ntohs(osc->flags);
 
-    if (ofconn == p->controller) {
+    if (ofconn->type == OFCONN_CONTROLLER) {
         switch (flags & OFPC_FRAG_MASK) {
         case OFPC_FRAG_NORMAL:
             dpif_set_drop_frags(p->dpif, false);
@@ -1933,14 +2086,6 @@ handle_set_config(struct ofproto *p, struct ofconn *ofconn,
             VLOG_WARN_RL(&rl, "requested bad fragment mode (flags=%"PRIx16")",
                          osc->flags);
             break;
-        }
-    }
-
-    if ((ntohs(osc->miss_send_len) != 0) != (ofconn->miss_send_len != 0)) {
-        if (ntohs(osc->miss_send_len) != 0) {
-            ofconn->pktbuf = pktbuf_create();
-        } else {
-            pktbuf_destroy(ofconn->pktbuf);
         }
     }
 
@@ -3333,7 +3478,6 @@ static void
 handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
 {
     struct odp_msg *msg = packet->data;
-    uint16_t in_port = odp_port_to_ofp_port(msg->port);
     struct rule *rule;
     struct ofpbuf payload;
     flow_t flow;
@@ -3369,7 +3513,7 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
         }
 
         COVERAGE_INC(ofproto_packet_in);
-        pinsched_send(p->miss_sched, in_port, packet, send_packet_in_miss, p);
+        send_packet_in(p, packet);
         return;
     }
 
@@ -3390,8 +3534,7 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
     rule_execute(p, rule, &payload, &flow);
     rule_reinstall(p, rule);
 
-    if (rule->super && rule->super->cr.priority == FAIL_OPEN_PRIORITY
-        && rconn_is_connected(p->controller->rconn)) {
+    if (rule->super && rule->super->cr.priority == FAIL_OPEN_PRIORITY) {
         /*
          * Extra-special case for fail-open mode.
          *
@@ -3402,7 +3545,7 @@ handle_odp_miss_msg(struct ofproto *p, struct ofpbuf *packet)
          *
          * See the top-level comment in fail-open.c for more information.
          */
-        pinsched_send(p->miss_sched, in_port, packet, send_packet_in_miss, p);
+        send_packet_in(p, packet);
     } else {
         ofpbuf_delete(packet);
     }
@@ -3416,8 +3559,7 @@ handle_odp_msg(struct ofproto *p, struct ofpbuf *packet)
     switch (msg->type) {
     case _ODPL_ACTION_NR:
         COVERAGE_INC(ofproto_ctlr_action);
-        pinsched_send(p->action_sched, odp_port_to_ofp_port(msg->port), packet,
-                      send_packet_in_action, p);
+        send_packet_in(p, packet);
         break;
 
     case _ODPL_SFLOW_NR:
@@ -3663,67 +3805,65 @@ update_used(struct ofproto *p)
 }
 
 static void
-do_send_packet_in(struct ofconn *ofconn, uint32_t buffer_id,
-                  const struct ofpbuf *packet, int send_len)
+do_send_packet_in(struct ofpbuf *packet, void *ofconn_)
 {
+    struct ofconn *ofconn = ofconn_;
+    struct ofproto *ofproto = ofconn->ofproto;
     struct odp_msg *msg = packet->data;
     struct ofpbuf payload;
     struct ofpbuf *opi;
-    uint8_t reason;
+    uint32_t buffer_id;
+    int send_len;
 
     /* Extract packet payload from 'msg'. */
     payload.data = msg + 1;
     payload.size = msg->length - sizeof *msg;
 
-    /* Construct ofp_packet_in message. */
-    reason = msg->type == _ODPL_ACTION_NR ? OFPR_ACTION : OFPR_NO_MATCH;
-    opi = make_packet_in(buffer_id, odp_port_to_ofp_port(msg->port), reason,
-                         &payload, send_len);
+    /* Construct packet-in message. */
+    send_len = INT_MAX;
+    if (msg->type == _ODPL_ACTION_NR) {
+        buffer_id = UINT32_MAX;
+    } else {
+        if (ofproto->fail_open && fail_open_is_active(ofproto->fail_open)) {
+            buffer_id = pktbuf_get_null();
+        } else {
+            buffer_id = pktbuf_save(ofconn->pktbuf, &payload, msg->port);
+        }
+        if (buffer_id != UINT32_MAX) {
+            send_len = ofconn->miss_send_len;
+        }
+    }
+    opi = make_packet_in(buffer_id, odp_port_to_ofp_port(msg->port),
+                         msg->type, &payload, send_len);
 
     /* Send. */
     rconn_send_with_limit(ofconn->rconn, opi, ofconn->packet_in_counter, 100);
-}
 
-static void
-send_packet_in_action(struct ofpbuf *packet, void *p_)
-{
-    struct ofproto *p = p_;
-    struct ofconn *ofconn;
-    struct odp_msg *msg;
-
-    msg = packet->data;
-    LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
-        if (ofconn == p->controller || ofconn->miss_send_len) {
-            do_send_packet_in(ofconn, UINT32_MAX, packet, msg->arg);
-        }
-    }
     ofpbuf_delete(packet);
 }
 
 static void
-send_packet_in_miss(struct ofpbuf *packet, void *p_)
+send_packet_in(struct ofproto *ofproto, struct ofpbuf *packet)
 {
-    struct ofproto *p = p_;
-    bool in_fail_open = p->fail_open && fail_open_is_active(p->fail_open);
-    struct ofconn *ofconn;
-    struct ofpbuf payload;
-    struct odp_msg *msg;
+    struct odp_msg *msg = packet->data;
+    struct ofconn *ofconn, *prev;
 
-    msg = packet->data;
-    payload.data = msg + 1;
-    payload.size = msg->length - sizeof *msg;
-    LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
-        if (ofconn->miss_send_len) {
-            struct pktbuf *pb = ofconn->pktbuf;
-            uint32_t buffer_id = (in_fail_open
-                                  ? pktbuf_get_null()
-                                  : pktbuf_save(pb, &payload, msg->port));
-            int send_len = (buffer_id != UINT32_MAX ? ofconn->miss_send_len
-                            : INT_MAX);
-            do_send_packet_in(ofconn, buffer_id, packet, send_len);
+    assert(msg->type == _ODPL_MISS_NR || msg->type == _ODPL_ACTION_NR);
+
+    prev = NULL;
+    LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
+        if (prev) {
+            pinsched_send(prev->schedulers[msg->type], msg->port,
+                          ofpbuf_clone(packet), do_send_packet_in, prev);
         }
+        prev = ofconn;
     }
-    ofpbuf_delete(packet);
+    if (prev) {
+        pinsched_send(prev->schedulers[msg->type], msg->port,
+                      packet, do_send_packet_in, prev);
+    } else {
+        ofpbuf_delete(packet);
+    }
 }
 
 static uint64_t

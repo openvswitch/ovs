@@ -661,8 +661,8 @@ del_bridge(struct ovsdb_idl *idl,
     if (br->sflow) {
         ovsrec_sflow_delete(br->sflow);
     }
-    if (br->controller) {
-        ovsrec_controller_delete(br->controller);
+    for (i = 0; i < br->n_controller; i++) {
+        ovsrec_controller_delete(br->controller[i]);
     }
 
     /* Remove 'br' from the vswitch's list of bridges. */

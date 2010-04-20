@@ -130,7 +130,6 @@ static void
 config_status_cb(struct status_reply *sr, void *ofproto_)
 {
     const struct ofproto *ofproto = ofproto_;
-    struct ofproto_controller controller;
     uint64_t datapath_id;
     struct svec listeners;
     size_t i;
@@ -146,14 +145,6 @@ config_status_cb(struct status_reply *sr, void *ofproto_)
         status_reply_put(sr, "management%zu=%s", i, listeners.names[i]);
     }
     svec_destroy(&listeners);
-
-    ofproto_get_controller(ofproto, &controller);
-    if (controller.probe_interval) {
-        status_reply_put(sr, "probe-interval=%d", controller.probe_interval);
-    }
-    if (controller.max_backoff) {
-        status_reply_put(sr, "max-backoff=%d", controller.max_backoff);
-    }
 }
 
 static void
