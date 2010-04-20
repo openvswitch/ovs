@@ -833,7 +833,7 @@ in_band_set_remotes(struct in_band *ib, struct rconn **remotes, size_t n)
     free(ib->remotes);
 
     /* Set up new remotes. */
-    ib->remotes = n ? xzalloc(n * sizeof *ib->remotes) : 0;
+    ib->remotes = n ? xzalloc(n * sizeof *ib->remotes) : NULL;
     ib->n_remotes = n;
     for (i = 0; i < n; i++) {
         ib->remotes[i].rconn = remotes[i];
