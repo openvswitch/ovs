@@ -1516,22 +1516,11 @@ bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
     br->controller = c ? xstrdup(c->target) : NULL;
 
     if (c) {
-        int max_backoff, probe;
-        int rate_limit, burst_limit;
+        struct ofproto_controller oc;
 
-        if (!strcmp(c->target, "discover")) {
-            ofproto_set_discovery(br->ofproto, true,
-                                  c->discover_accept_regex,
-                                  c->discover_update_resolv_conf);
-        } else {
+        if (strcmp(c->target, "discover")) {
             struct iface *local_iface;
             struct in_addr ip;
-            bool in_band;
-
-            in_band = (!c->connection_mode
-                       || !strcmp(c->connection_mode, "out-of-band"));
-            ofproto_set_discovery(br->ofproto, false, NULL, NULL);
-            ofproto_set_in_band(br->ofproto, in_band);
 
             local_iface = bridge_get_local_iface(br);
             if (local_iface && c->local_ip && inet_aton(c->local_ip, &ip)) {
@@ -1566,20 +1555,26 @@ bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
             }
         }
 
-        ofproto_set_failure(br->ofproto,
-                            (!c->fail_mode
-                             || !strcmp(c->fail_mode, "standalone")
-                             || !strcmp(c->fail_mode, "open")));
-
-        probe = c->inactivity_probe ? *c->inactivity_probe / 1000 : 5;
-        ofproto_set_probe_interval(br->ofproto, probe);
-
-        max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8;
-        ofproto_set_max_backoff(br->ofproto, max_backoff);
-
-        rate_limit = c->controller_rate_limit ? *c->controller_rate_limit : 0;
-        burst_limit = c->controller_burst_limit ? *c->controller_burst_limit : 0;
-        ofproto_set_rate_limit(br->ofproto, rate_limit, burst_limit);
+        oc.target = c->target;
+        oc.max_backoff = c->max_backoff ? *c->max_backoff / 1000 : 8;
+        oc.probe_interval = (c->inactivity_probe
+                             ? *c->inactivity_probe / 1000 : 5);
+        oc.fail = (!c->fail_mode
+                   || !strcmp(c->fail_mode, "standalone")
+                   || !strcmp(c->fail_mode, "open")
+                   ? OFPROTO_FAIL_STANDALONE
+                   : OFPROTO_FAIL_SECURE);
+        oc.band = (!c->connection_mode
+                   || !strcmp(c->connection_mode, "in-band")
+                   ? OFPROTO_IN_BAND
+                   : OFPROTO_OUT_OF_BAND);
+        oc.accept_re = c->discover_accept_regex;
+        oc.update_resolv_conf = c->discover_update_resolv_conf;
+        oc.rate_limit = (c->controller_rate_limit
+                         ? *c->controller_rate_limit : 0);
+        oc.burst_limit = (c->controller_burst_limit
+                          ? *c->controller_burst_limit : 0);
+        ofproto_set_controller(br->ofproto, &oc);
     } else {
         union ofp_action action;
         flow_t flow;
@@ -1593,13 +1588,8 @@ bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
         memset(&flow, 0, sizeof flow);
         ofproto_add_flow(br->ofproto, &flow, OVSFW_ALL, 0, &action, 1, 0);
 
-        ofproto_set_in_band(br->ofproto, false);
-        ofproto_set_max_backoff(br->ofproto, 1);
-        ofproto_set_probe_interval(br->ofproto, 5);
-        ofproto_set_failure(br->ofproto, false);
+        ofproto_set_controller(br->ofproto, NULL);
     }
-
-    ofproto_set_controller(br->ofproto, br->controller);
 }
 
 static void

@@ -268,6 +268,14 @@ pinsched_destroy(struct pinsched *ps)
 }
 
 void
+pinsched_get_limits(const struct pinsched *ps,
+                    int *rate_limit, int *burst_limit)
+{
+    *rate_limit = ps->rate_limit;
+    *burst_limit = ps->burst_limit;
+}
+
+void
 pinsched_set_limits(struct pinsched *ps, int rate_limit, int burst_limit)
 {
     if (rate_limit <= 0) {

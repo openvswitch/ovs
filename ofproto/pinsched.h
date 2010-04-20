@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ struct switch_status;
 typedef void pinsched_tx_cb(struct ofpbuf *, void *aux);
 struct pinsched *pinsched_create(int rate_limit, int burst_limit,
                                  struct switch_status *);
+void pinsched_get_limits(const struct pinsched *,
+                         int *rate_limit, int *burst_limit);
 void pinsched_set_limits(struct pinsched *, int rate_limit, int burst_limit);
 void pinsched_destroy(struct pinsched *);
 void pinsched_send(struct pinsched *, uint16_t port_no, struct ofpbuf *,

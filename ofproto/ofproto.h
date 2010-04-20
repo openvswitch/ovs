@@ -55,6 +55,33 @@ struct ofproto_sflow_options {
     char *control_ip;
 };
 
+/* How the switch should act if the controller cannot be contacted. */
+enum ofproto_fail_mode {
+    OFPROTO_FAIL_SECURE,        /* Preserve flow table. */
+    OFPROTO_FAIL_STANDALONE     /* Act as a standalone switch. */
+};
+
+enum ofproto_band {
+    OFPROTO_IN_BAND,            /* In-band connection to controller. */
+    OFPROTO_OUT_OF_BAND         /* Out-of-band connection to controller. */
+};
+
+struct ofproto_controller {
+    char *target;               /* e.g. "tcp:127.0.0.1" */
+    int max_backoff;            /* Maximum reconnection backoff, in seconds. */
+    int probe_interval;         /* Max idle time before probing, in seconds. */
+    enum ofproto_fail_mode fail; /* Controller failure handling mode. */
+    enum ofproto_band band;      /* In-band or out-of-band? */
+
+    /* Discovery options. */
+    char *accept_re;            /* Regexp for acceptable controllers.  */
+    bool update_resolv_conf;    /* Update /etc/resolv.conf? */
+
+    /* OpenFlow packet-in rate-limiting. */
+    int rate_limit;             /* Max packet-in rate in packets per second. */
+    int burst_limit;            /* Limit on accumulating packet credits. */
+};
+
 #define DEFAULT_MFR_DESC "Nicira Networks, Inc."
 #define DEFAULT_HW_DESC "Open vSwitch"
 #define DEFAULT_SW_DESC VERSION BUILDNR
@@ -73,33 +100,23 @@ bool ofproto_is_alive(const struct ofproto *);
 
 /* Configuration. */
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
-void ofproto_set_probe_interval(struct ofproto *, int probe_interval);
-void ofproto_set_max_backoff(struct ofproto *, int max_backoff);
+void ofproto_set_controller(struct ofproto *,
+                            const struct ofproto_controller *);
 void ofproto_set_desc(struct ofproto *,
                       const char *mfr_desc, const char *hw_desc,
                       const char *sw_desc, const char *serial_desc,
                       const char *dp_desc);
-int ofproto_set_in_band(struct ofproto *, bool in_band);
-int ofproto_set_discovery(struct ofproto *, bool discovery,
-                          const char *accept_controller_re,
-                          bool update_resolv_conf);
-int ofproto_set_controller(struct ofproto *, const char *controller);
 int ofproto_set_listeners(struct ofproto *, const struct svec *listeners);
 int ofproto_set_snoops(struct ofproto *, const struct svec *snoops);
 int ofproto_set_netflow(struct ofproto *,
                         const struct netflow_options *nf_options);
 void ofproto_set_sflow(struct ofproto *, const struct ofproto_sflow_options *);
-void ofproto_set_failure(struct ofproto *, bool fail_open);
-void ofproto_set_rate_limit(struct ofproto *, int rate_limit, int burst_limit);
 int ofproto_set_stp(struct ofproto *, bool enable_stp);
 
 /* Configuration querying. */
 uint64_t ofproto_get_datapath_id(const struct ofproto *);
-int ofproto_get_probe_interval(const struct ofproto *);
-int ofproto_get_max_backoff(const struct ofproto *);
-bool ofproto_get_in_band(const struct ofproto *);
-bool ofproto_get_discovery(const struct ofproto *);
-const char *ofproto_get_controller(const struct ofproto *);
+void ofproto_get_controller(const struct ofproto *,
+                            struct ofproto_controller *);
 void ofproto_get_listeners(const struct ofproto *, struct svec *);
 void ofproto_get_snoops(const struct ofproto *, struct svec *);
 void ofproto_get_all_flows(struct ofproto *p, struct ds *);

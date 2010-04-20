@@ -376,20 +376,98 @@ ofproto_set_datapath_id(struct ofproto *p, uint64_t datapath_id)
 }
 
 void
-ofproto_set_probe_interval(struct ofproto *p, int probe_interval)
+ofproto_set_controller(struct ofproto *p, const struct ofproto_controller *c)
 {
-    probe_interval = probe_interval ? MAX(probe_interval, 5) : 0;
-    rconn_set_probe_interval(p->controller->rconn, probe_interval);
-    if (p->fail_open) {
-        int trigger_duration = probe_interval ? probe_interval * 3 : 15;
-        fail_open_set_trigger_duration(p->fail_open, trigger_duration);
-    }
-}
+    int rate_limit, burst_limit;
+    bool in_band;
 
-void
-ofproto_set_max_backoff(struct ofproto *p, int max_backoff)
-{
-    rconn_set_max_backoff(p->controller->rconn, max_backoff);
+    if (c) {
+        int probe_interval;
+        bool discovery;
+
+        discovery = !strcmp(c->target, "discover");
+        in_band = discovery || c->band == OFPROTO_IN_BAND;
+
+        rconn_set_max_backoff(p->controller->rconn, c->max_backoff);
+
+        probe_interval = c->probe_interval ? MAX(c->probe_interval, 5) : 0;
+        rconn_set_probe_interval(p->controller->rconn, probe_interval);
+
+        if (discovery != (p->discovery != NULL)) {
+            rconn_disconnect(p->controller->rconn);
+            if (discovery) {
+                if (discovery_create(c->accept_re, c->update_resolv_conf,
+                                     p->dpif, p->switch_status,
+                                     &p->discovery)) {
+                    return;
+                }
+            } else {
+                discovery_destroy(p->discovery);
+                p->discovery = NULL;
+            }
+        }
+
+        if (discovery) {
+            discovery_set_update_resolv_conf(p->discovery,
+                                             c->update_resolv_conf);
+            discovery_set_accept_controller_re(p->discovery, c->accept_re);
+        } else {
+            if (strcmp(rconn_get_name(p->controller->rconn), c->target)) {
+                rconn_connect(p->controller->rconn, c->target);
+            }
+        }
+    } else {
+        rconn_disconnect(p->controller->rconn);
+        in_band = false;
+    }
+
+    if (in_band != (p->in_band != NULL)) {
+        if (in_band) {
+            int error;
+
+            error = in_band_create(p, p->dpif, p->switch_status, &p->in_band);
+            if (!error) {
+                in_band_set_remotes(p->in_band, &p->controller->rconn, 1);
+            }
+        } else {
+            in_band_destroy(p->in_band);
+            p->in_band = NULL;
+        }
+        rconn_reconnect(p->controller->rconn);
+    }
+
+    if (c && c->fail == OFPROTO_FAIL_STANDALONE) {
+        struct rconn *rconn = p->controller->rconn;
+        int trigger_duration = rconn_get_probe_interval(rconn) * 3;
+        if (!p->fail_open) {
+            p->fail_open = fail_open_create(p, trigger_duration,
+                                            p->switch_status, rconn);
+        } else {
+            fail_open_set_trigger_duration(p->fail_open, trigger_duration);
+        }
+    } else {
+        fail_open_destroy(p->fail_open);
+        p->fail_open = NULL;
+    }
+
+    rate_limit = c ? c->rate_limit : 0;
+    burst_limit = c ? c->burst_limit : 0;
+    if (rate_limit > 0) {
+        if (!p->miss_sched) {
+            p->miss_sched = pinsched_create(rate_limit, burst_limit,
+                                                  p->switch_status);
+            p->action_sched = pinsched_create(rate_limit, burst_limit,
+                                                    NULL);
+        } else {
+            pinsched_set_limits(p->miss_sched, rate_limit, burst_limit);
+            pinsched_set_limits(p->action_sched, rate_limit, burst_limit);
+        }
+    } else {
+        pinsched_destroy(p->miss_sched);
+        p->miss_sched = NULL;
+        pinsched_destroy(p->action_sched);
+        p->action_sched = NULL;
+    }
 }
 
 void
@@ -440,73 +518,6 @@ ofproto_set_desc(struct ofproto *p,
         }
         free(p->dp_desc);
         p->dp_desc = xstrdup(dp_desc);
-    }
-}
-
-int
-ofproto_set_in_band(struct ofproto *p, bool in_band)
-{
-    if (in_band != (p->in_band != NULL)) {
-        if (in_band) {
-            int error;
-
-            error = in_band_create(p, p->dpif, p->switch_status, &p->in_band);
-            if (error) {
-                return error;
-            }
-            in_band_set_remotes(p->in_band, &p->controller->rconn, 1);
-        } else {
-            ofproto_set_discovery(p, false, NULL, true);
-            in_band_destroy(p->in_band);
-            p->in_band = NULL;
-        }
-        rconn_reconnect(p->controller->rconn);
-    }
-    return 0;
-}
-
-int
-ofproto_set_discovery(struct ofproto *p, bool discovery,
-                      const char *re, bool update_resolv_conf)
-{
-    if (discovery != (p->discovery != NULL)) {
-        if (discovery) {
-            int error = ofproto_set_in_band(p, true);
-            if (error) {
-                return error;
-            }
-            error = discovery_create(re, update_resolv_conf,
-                                     p->dpif, p->switch_status,
-                                     &p->discovery);
-            if (error) {
-                return error;
-            }
-        } else {
-            discovery_destroy(p->discovery);
-            p->discovery = NULL;
-        }
-        rconn_disconnect(p->controller->rconn);
-    } else if (discovery) {
-        discovery_set_update_resolv_conf(p->discovery, update_resolv_conf);
-        return discovery_set_accept_controller_re(p->discovery, re);
-    }
-    return 0;
-}
-
-int
-ofproto_set_controller(struct ofproto *ofproto, const char *controller)
-{
-    if (ofproto->discovery) {
-        return EINVAL;
-    } else if (controller) {
-        if (strcmp(rconn_get_name(ofproto->controller->rconn), controller)) {
-            return rconn_connect(ofproto->controller->rconn, controller);
-        } else {
-            return 0;
-        }
-    } else {
-        rconn_disconnect(ofproto->controller->rconn);
-        return 0;
     }
 }
 
@@ -600,49 +611,6 @@ ofproto_set_sflow(struct ofproto *ofproto,
     }
 }
 
-void
-ofproto_set_failure(struct ofproto *ofproto, bool fail_open)
-{
-    if (fail_open) {
-        struct rconn *rconn = ofproto->controller->rconn;
-        int trigger_duration = rconn_get_probe_interval(rconn) * 3;
-        if (!ofproto->fail_open) {
-            ofproto->fail_open = fail_open_create(ofproto, trigger_duration,
-                                                  ofproto->switch_status,
-                                                  rconn);
-        } else {
-            fail_open_set_trigger_duration(ofproto->fail_open,
-                                           trigger_duration);
-        }
-    } else {
-        fail_open_destroy(ofproto->fail_open);
-        ofproto->fail_open = NULL;
-    }
-}
-
-void
-ofproto_set_rate_limit(struct ofproto *ofproto,
-                       int rate_limit, int burst_limit)
-{
-    if (rate_limit > 0) {
-        if (!ofproto->miss_sched) {
-            ofproto->miss_sched = pinsched_create(rate_limit, burst_limit,
-                                                  ofproto->switch_status);
-            ofproto->action_sched = pinsched_create(rate_limit, burst_limit,
-                                                    NULL);
-        } else {
-            pinsched_set_limits(ofproto->miss_sched, rate_limit, burst_limit);
-            pinsched_set_limits(ofproto->action_sched,
-                                rate_limit, burst_limit);
-        }
-    } else {
-        pinsched_destroy(ofproto->miss_sched);
-        ofproto->miss_sched = NULL;
-        pinsched_destroy(ofproto->action_sched);
-        ofproto->action_sched = NULL;
-    }
-}
-
 int
 ofproto_set_stp(struct ofproto *ofproto OVS_UNUSED, bool enable_stp)
 {
@@ -661,34 +629,27 @@ ofproto_get_datapath_id(const struct ofproto *ofproto)
     return ofproto->datapath_id;
 }
 
-int
-ofproto_get_probe_interval(const struct ofproto *ofproto)
+void
+ofproto_get_controller(const struct ofproto *p, struct ofproto_controller *c)
 {
-    return rconn_get_probe_interval(ofproto->controller->rconn);
-}
+    memset(c, 0, sizeof *c);
+    if (p->discovery) {
+        struct discovery *d = p->discovery;
 
-int
-ofproto_get_max_backoff(const struct ofproto *ofproto)
-{
-    return rconn_get_max_backoff(ofproto->controller->rconn);
-}
+        c->target = "discover";
+        c->accept_re = (char *) discovery_get_accept_controller_re(d);
+        c->update_resolv_conf = discovery_get_update_resolv_conf(d);
+    } else if (p->controller) {
+        c->target = (char *) rconn_get_name(p->controller->rconn);
+    } else {
+        return;
+    }
 
-bool
-ofproto_get_in_band(const struct ofproto *ofproto)
-{
-    return ofproto->in_band != NULL;
-}
-
-bool
-ofproto_get_discovery(const struct ofproto *ofproto)
-{
-    return ofproto->discovery != NULL;
-}
-
-const char *
-ofproto_get_controller(const struct ofproto *ofproto)
-{
-    return rconn_get_name(ofproto->controller->rconn);
+    c->max_backoff = rconn_get_max_backoff(p->controller->rconn);
+    c->probe_interval = rconn_get_probe_interval(p->controller->rconn);
+    c->fail = p->fail_open ? OFPROTO_FAIL_STANDALONE : OFPROTO_FAIL_SECURE;
+    c->band = p->in_band ? OFPROTO_IN_BAND : OFPROTO_OUT_OF_BAND;
+    pinsched_get_limits(p->miss_sched, &c->rate_limit, &c->burst_limit);
 }
 
 void
@@ -724,8 +685,11 @@ ofproto_destroy(struct ofproto *p)
     }
 
     /* Destroy fail-open and in-band early, since they touch the classifier. */
-    ofproto_set_failure(p, false);
-    ofproto_set_in_band(p, false);
+    fail_open_destroy(p->fail_open);
+    p->fail_open = NULL;
+
+    in_band_destroy(p->in_band);
+    p->in_band = NULL;
 
     ofproto_flush_flows(p);
     classifier_destroy(&p->cls);

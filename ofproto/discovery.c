@@ -155,11 +155,23 @@ discovery_destroy(struct discovery *d)
     }
 }
 
+bool
+discovery_get_update_resolv_conf(const struct discovery *d)
+{
+    return d->update_resolv_conf;
+}
+
 void
 discovery_set_update_resolv_conf(struct discovery *d,
                                  bool update_resolv_conf)
 {
     d->update_resolv_conf = update_resolv_conf;
+}
+
+const char *
+discovery_get_accept_controller_re(const struct discovery *d)
+{
+    return d->re;
 }
 
 int
