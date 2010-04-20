@@ -692,8 +692,11 @@ void
 in_band_run(struct in_band *ib)
 {
     struct in_band_remote *r;
+    bool local_change, remote_change;
 
-    if (!refresh_local(ib) && !refresh_remotes(ib)) {
+    local_change = refresh_local(ib);
+    remote_change = refresh_remotes(ib);
+    if (!local_change && !remote_change) {
         /* Nothing changed, nothing to do. */
         return;
     }
