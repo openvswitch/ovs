@@ -62,7 +62,7 @@ int pstream_accept(struct pstream *, struct stream **);
 int pstream_accept_block(struct pstream *, struct stream **);
 void pstream_wait(struct pstream *);
 
-/* Convenience funtions. */
+/* Convenience functions. */
 
 int stream_open_with_default_ports(const char *name,
                                    uint16_t default_tcp_port,
