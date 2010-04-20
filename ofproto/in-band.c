@@ -252,12 +252,19 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
     char *next_hop_dev;
     int retval;
 
+    memset(r->remote_mac, 0, sizeof r->remote_mac);
+
     /* Get remote IP address. */
     r->remote_ip = rconn_get_remote_ip(r->rconn);
+    if (!r->remote_ip) {
+        /* No remote IP address means that this rconn is probably either
+         * configured for a non-IP based protocol (e.g. "unix:") or
+         * misconfigured entirely.  No point in refreshing quickly. */
+        return 10;
+    }
 
     /* Find the next-hop IP address. */
     remote_inaddr.s_addr = r->remote_ip;
-    memset(r->remote_mac, 0, sizeof r->remote_mac);
     retval = netdev_get_next_hop(ib->local_netdev, &remote_inaddr,
                                  &next_hop_inaddr, &next_hop_dev);
     if (retval) {
@@ -295,10 +302,10 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
                     IP_ARGS(&next_hop_inaddr.s_addr), strerror(retval));
     }
 
-    /* If we have an IP address but not a MAC address, then refresh quickly,
-     * since we probably will get a MAC address soon (via ARP).  Otherwise, we
-     * can afford to wait a little while. */
-    return r->remote_ip && eth_addr_is_zero(r->remote_mac) ? 1 : 10;
+    /* If we don't have a MAC address, then refresh quickly, since we probably
+     * will get a MAC address soon (via ARP).  Otherwise, we can afford to wait
+     * a little while. */
+    return eth_addr_is_zero(r->remote_mac) ? 1 : 10;
 }
 
 static bool
@@ -316,25 +323,16 @@ refresh_remotes(struct in_band *ib)
     min_refresh = 10;
     for (r = ib->remotes; r < &ib->remotes[ib->n_remotes]; r++) {
         uint8_t old_remote_mac[ETH_ADDR_LEN];
-        uint32_t old_remote_ip;
         int refresh_interval;
 
-        /* Save old remote information. */
-        old_remote_ip = r->remote_ip;
+        /* Save old MAC. */
         memcpy(old_remote_mac, r->remote_mac, ETH_ADDR_LEN);
 
         /* Refresh remote information. */
         refresh_interval = refresh_remote(ib, r);
         min_refresh = MIN(min_refresh, refresh_interval);
 
-        /* If anything changed, log the changes. */
-        if (old_remote_ip != r->remote_ip) {
-            any_changes = true;
-            if (r->remote_ip) {
-                VLOG_DBG("remote IP address changed from "IP_FMT" to "IP_FMT,
-                         IP_ARGS(&old_remote_ip), IP_ARGS(&r->remote_ip));
-            }
-        }
+        /* If the MAC changed, log the changes. */
         if (!eth_addr_equals(r->remote_mac, old_remote_mac)) {
             any_changes = true;
             if (!eth_addr_is_zero(r->remote_mac)
