@@ -740,10 +740,12 @@ in_band_wait(struct in_band *in_band)
     }
 }
 
+/* ofproto has flushed all flows from the flow table and it is calling us back
+ * to allow us to reinstall the ones that are important to us. */
 void
 in_band_flushed(struct in_band *in_band)
 {
-    clear_rules(in_band);
+    add_rules(in_band);
 }
 
 int
