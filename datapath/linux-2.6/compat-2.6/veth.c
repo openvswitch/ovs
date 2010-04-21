@@ -526,7 +526,17 @@ static __init int veth_init(void)
 
 static __exit void veth_exit(void)
 {
+	struct veth_priv *p, *n;
+
+	rtnl_lock();
+
+	list_for_each_entry_safe(p, n, &veth_list, list)
+		veth_dellink(p->dev);
+
+	rtnl_unlock();
+
 	unregister_netdevice_notifier(&veth_notifier_block);
+	veth_destroy_sysfs();
 }
 
 module_init(veth_init);
