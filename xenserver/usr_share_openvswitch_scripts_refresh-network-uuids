@@ -1,12 +1,21 @@
-#! /bin/sh
+#! /usr/bin/python
 
-. /etc/xensource-inventory
+import sys
+sys.path.insert(0, "/opt/xensource/libexec")
+from InterfaceReconfigure import *
+from InterfaceReconfigureVswitch import *
 
-for pif in $(xe pif-list --minimal host-uuid=${INSTALLATION_UUID} currently-attached=true VLAN=-1 | sed 's/,/ /g'); do
-    printf "Refreshing PIF %s...  " $pif
-    if /opt/xensource/libexec/interface-reconfigure --pif-uuid=$pif up; then
-        printf "done\n"
-    else
-        printf "error!\n"
-    fi
-done
+db_init_from_xenapi(None)
+
+vsctl_argv = []
+for pif in db().get_all_pifs():
+    pifrec = db().get_pif_record(pif)
+    if not pif_is_vlan(pif) and pifrec['currently_attached']:
+        vsctl_argv += set_br_external_ids(pif)
+
+#log("modifying configuration:")
+#for c in vsctl_argv:
+#    log("  %s" % c)
+
+if vsctl_argv != []:
+    datapath_modify_config(vsctl_argv)
