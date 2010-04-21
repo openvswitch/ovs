@@ -162,6 +162,8 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
                   [OVS_DEFINE([HAVE_NLA_GET_BE16])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/in.h], [ipv4_is_multicast],
                   [OVS_DEFINE([HAVE_IPV4_IS_MULTICAST])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/string.h $KSRC26/include/linux/slab.h],
+                  [kmemdup], [OVS_DEFINE([HAVE_KMEMDUP])])
   # Check for the proto_data_valid member in struct sk_buff.  The [^@]
   # is necessary because some versions of this header remove the
   # member but retain the kerneldoc comment that describes it (which
