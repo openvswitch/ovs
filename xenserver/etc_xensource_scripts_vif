@@ -116,10 +116,7 @@ handle_vswitch_vif_details()
     if [ -n "${address}" ] ; then
 	set_vif_external_id "vif-mac" "${address}"
     fi
-}
 
-xs550_set_internal_network_uuid()
-{
     if $xs550; then
         # vNetManager needs to know the network UUID(s) associated with each
         # datapath.  Normally interface-reconfigure adds them, but XAPI does
@@ -131,7 +128,6 @@ xs550_set_internal_network_uuid()
         # the initial ovs-vswitchd connection to vNetManager and setting this
         # configuration variable, but vNetManager can tolerate that.
         local bridge=$1
-        local net_uuid=$(xenstore-read "${PRIVATE}/network-uuid" 2>/dev/null)
         if [ -n "${net_uuid}" ] ; then
             logger -t scripts-vif "${bridge} network-uuids ${net_uuid}"
             echo "-- br-set-external-id $bridge network-uuids ${net_uuid}"
@@ -166,10 +162,10 @@ add_to_bridge()
 	    ;;
 	openvswitch)
 	    if [ "$TYPE" = "vif" ] ; then
-		local vif_details=$(handle_vswitch_vif_details)
+		local vif_details=$(handle_vswitch_vif_details $bridge)
 	    fi
 
-	    $vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details $(xs550_set_internal_network_uuid $bridge)
+	    $vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details
 	    ;;
     esac
 	    
