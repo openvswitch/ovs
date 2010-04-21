@@ -611,3 +611,31 @@ fsync_parent_dir(const char *file_name)
 
     return error;
 }
+
+/* Obtains the modification time of the file named 'file_name' to the greatest
+ * supported precision.  If successful, stores the mtime in '*mtime' and
+ * returns 0.  On error, returns a positive errno value and stores zeros in
+ * '*mtime'. */
+int
+get_mtime(const char *file_name, struct timespec *mtime)
+{
+    struct stat s;
+
+    if (!stat(file_name, &s)) {
+        mtime->tv_sec = s.st_mtime;
+
+#if HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC
+        mtime->tv_nsec = s.st_mtim.tv_nsec;
+#elif HAVE_STRUCT_STAT_ST_MTIMENSEC
+        mtime->tv_nsec = s.st_mtimensec;
+#else
+        mtime->tv_nsec = 0;
+#endif
+
+        return 0;
+    } else {
+        mtime->tv_sec = mtime->tv_nsec = 0;
+        return errno;
+    }
+}
+

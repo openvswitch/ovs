@@ -37,7 +37,6 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "socket-util.h"
-#include "socket-util.h"
 #include "util.h"
 #include "stream-provider.h"
 #include "stream.h"
@@ -913,26 +912,6 @@ bool
 stream_ssl_is_configured(void) 
 {
     return private_key.file_name || certificate.file_name || ca_cert.file_name;
-}
-
-static void
-get_mtime(const char *file_name, struct timespec *mtime)
-{
-    struct stat s;
-
-    if (!stat(file_name, &s)) {
-        mtime->tv_sec = s.st_mtime;
-
-#if HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC
-        mtime->tv_nsec = s.st_mtim.tv_nsec;
-#elif HAVE_STRUCT_STAT_ST_MTIMENSEC
-        mtime->tv_nsec = s.st_mtimensec;
-#else
-        mtime->tv_nsec = 0;
-#endif
-    } else {
-        mtime->tv_sec = mtime->tv_nsec = 0;
-    }
 }
 
 static bool
