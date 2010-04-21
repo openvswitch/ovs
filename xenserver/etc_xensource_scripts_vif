@@ -39,17 +39,17 @@ handle_promiscuous()
 {
     local arg=$(xenstore-read "${PRIVATE}/other-config/promiscuous" 2>/dev/null)
     if [ $? -eq 0 -a -n "${arg}" ] ; then
-	case $NETWORK_MODE in
-	    bridge)
-		case "${arg}" in 
-		    true|on) echo 1 > /sys/class/net/${dev}/brport/promisc ;;
-		    *) echo 0 > /sys/class/net/${dev}/brport/promisc ;;
-		esac
-		;;
-	    openvswitch)
-		logger -t script-vif "${dev}: Promiscuous ports are not supported via Open vSwitch."
-		;;
-	esac
+        case $NETWORK_MODE in
+            bridge)
+                case "${arg}" in 
+                    true|on) echo 1 > /sys/class/net/${dev}/brport/promisc ;;
+                    *) echo 0 > /sys/class/net/${dev}/brport/promisc ;;
+                esac
+                ;;
+            openvswitch)
+                logger -t script-vif "${dev}: Promiscuous ports are not supported via Open vSwitch."
+                ;;
+        esac
     fi
 }
 
@@ -70,8 +70,8 @@ handle_mtu()
 {
     local mtu=$(xenstore-read "${PRIVATE}/MTU" 2>/dev/null)
     if [ $? -eq 0 -a -n "${mtu}" ]; then
-	logger -t scripts-vif "Setting ${dev} MTU ${mtu}"
-	${IP} link set "${dev}" mtu ${mtu} || logger -t scripts-vif "Failed to ip link set ${dev} mtu ${mtu}. Error code $?"
+        logger -t scripts-vif "Setting ${dev} MTU ${mtu}"
+        ${IP} link set "${dev}" mtu ${mtu} || logger -t scripts-vif "Failed to ip link set ${dev} mtu ${mtu}. Error code $?"
     fi
 }
 
@@ -89,10 +89,10 @@ handle_vswitch_vif_details()
 {
     local vm=$(xenstore-read "/local/domain/$DOMID/vm" 2>/dev/null)
     if [ $? -eq 0 -a -n "${vm}" ] ; then
-	local vm_uuid=$(xenstore-read "$vm/uuid" 2>/dev/null)
+        local vm_uuid=$(xenstore-read "$vm/uuid" 2>/dev/null)
     fi
     if [ -n "${vm_uuid}" ] ; then
-	set_vif_external_id "vm-uuid" "${vm_uuid}"
+        set_vif_external_id "vm-uuid" "${vm_uuid}"
     fi
 
     local vif_uuid=$(xenstore-read "${PRIVATE}/vif-uuid" 2>/dev/null)
@@ -100,7 +100,7 @@ handle_vswitch_vif_details()
         vif_uuid=$(xe vif-list --minimal vm-uuid="${vm_uuid}" device=$DEVID)
     fi
     if [ -n "${vif_uuid}" ] ; then
-	set_vif_external_id "vif-uuid" "${vif_uuid}"
+        set_vif_external_id "vif-uuid" "${vif_uuid}"
     fi
 
     local vif_details=
@@ -109,12 +109,12 @@ handle_vswitch_vif_details()
         net_uuid=$(xe vif-param-get uuid="${vif_uuid}" param-name=network-uuid)
     fi
     if [ -n "${net_uuid}" ] ; then
-	set_vif_external_id "network-uuid" "${net_uuid}"
+        set_vif_external_id "network-uuid" "${net_uuid}"
     fi
 
     local address=$(xenstore-read "/local/domain/$DOMID/device/vif/$DEVID/mac" 2>/dev/null)
     if [ -n "${address}" ] ; then
-	set_vif_external_id "vif-mac" "${address}"
+        set_vif_external_id "vif-mac" "${address}"
     fi
 
     if $xs550; then
@@ -139,13 +139,13 @@ add_to_bridge()
 {
     local address=$(xenstore-read "${PRIVATE}/bridge-MAC")
     if [ $? -ne 0 -o -z "${address}" ]; then
-	logger -t scripts-vif "Failed to read ${PRIVATE}/bridge-MAC from xenstore"
-	exit 1
+        logger -t scripts-vif "Failed to read ${PRIVATE}/bridge-MAC from xenstore"
+        exit 1
     fi
     local bridge=$(xenstore-read "${PRIVATE}/bridge")
     if [ $? -ne 0 -o -z "${bridge}" ]; then
-	logger -t scripts-vif "Failed to read ${PRIVATE}/bridge from xenstore"
-	exit 1
+        logger -t scripts-vif "Failed to read ${PRIVATE}/bridge from xenstore"
+        exit 1
     fi
     logger -t scripts-vif "Adding ${dev} to ${bridge} with address ${address}"
 
@@ -156,34 +156,34 @@ add_to_bridge()
     ${IP} addr flush "${dev}"                           || logger -t scripts-vif "Failed to ip addr flush ${dev}"
 
     case $NETWORK_MODE in
-	bridge)
-	    ${BRCTL} setfd "${bridge}" 0                        || logger -t scripts-vif "Failed to brctl setfd ${bridge} 0"
-	    ${BRCTL} addif "${bridge}" "${dev}"                 || logger -t scripts-vif "Failed to brctl addif ${bridge} ${dev}"
-	    ;;
-	openvswitch)
-	    if [ "$TYPE" = "vif" ] ; then
-		local vif_details=$(handle_vswitch_vif_details $bridge)
-	    fi
+    bridge)
+        ${BRCTL} setfd "${bridge}" 0                    || logger -t scripts-vif "Failed to brctl setfd ${bridge} 0"
+        ${BRCTL} addif "${bridge}" "${dev}"             || logger -t scripts-vif "Failed to brctl addif ${bridge} ${dev}"
+        ;;
+    openvswitch)
+        if [ "$TYPE" = "vif" ] ; then
+            local vif_details=$(handle_vswitch_vif_details $bridge)
+        fi
 
-	    $vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details
-	    ;;
+        $vsctl -- --if-exists del-port $dev -- add-port $bridge $dev $vif_details
+        ;;
     esac
-	    
+        
     ${IP} link set "${dev}" up                          || logger -t scripts-vif "Failed to ip link set ${dev} up"
 }
 
 remove_from_bridge()
 {
     case $NETWORK_MODE in
-	bridge)
-	    # Nothing to do
-	    ;;
-	openvswitch)
-            # If ovs-brcompatd is running, it might already have deleted the
-            # port.  Use --if-exists to suppress the error that would otherwise
-            # arise in that case.
-	    $vsctl -- --if-exists del-port $dev
-	    ;;
+    bridge)
+        # Nothing to do
+        ;;
+    openvswitch)
+        # If ovs-brcompatd is running, it might already have deleted the
+        # port.  Use --if-exists to suppress the error that would otherwise
+        # arise in that case.
+        $vsctl -- --if-exists del-port $dev
+        ;;
     esac
 }
 
@@ -201,26 +201,26 @@ case $NETWORK_MODE in
     bridge|openvswitch) ;;
     vswitch) NETWORK_MODE=openvswitch ;;
     *)
-	logger -t scripts-vif "Unknown network mode $NETWORK_MODE"
-	exit 1
-	;;
+        logger -t scripts-vif "Unknown network mode $NETWORK_MODE"
+        exit 1
+        ;;
 esac
 
 case ${TYPE} in
     vif)
-	DOMID=`echo ${XENBUS_PATH} | cut -f 3 -d '/'`
-	DEVID=`echo ${XENBUS_PATH} | cut -f 4 -d '/'`
-	dev=vif${DOMID}.${DEVID}
-	;;
+        DOMID=`echo ${XENBUS_PATH} | cut -f 3 -d '/'`
+        DEVID=`echo ${XENBUS_PATH} | cut -f 4 -d '/'`
+        dev=vif${DOMID}.${DEVID}
+        ;;
     tap)
-	dev=$INTERFACE
-	DOMID=`echo ${dev#tap} | cut -f 1 -d '.'`
-	DEVID=`echo ${dev#tap} | cut -f 2 -d '.'`
-	;;
+        dev=$INTERFACE
+        DOMID=`echo ${dev#tap} | cut -f 1 -d '.'`
+        DEVID=`echo ${dev#tap} | cut -f 2 -d '.'`
+        ;;
     *)  
-	logger -t scripts-vif "unknown interface type ${TYPE}"
-	exit 1
-	;;
+        logger -t scripts-vif "unknown interface type ${TYPE}"
+        exit 1
+        ;;
 esac
 
 XAPI=/xapi/${DOMID}/hotplug/vif/${DEVID}
@@ -230,37 +230,37 @@ PRIVATE=/xapi/${DOMID}/private/vif/${DEVID}
 logger -t scripts-vif "Called as \"$@\" domid:$DOMID devid:$DEVID mode:$NETWORK_MODE"
 case "${ACTION}" in
 online)
-	if [ "${TYPE}" = "vif" ] ; then
-	    handle_ethtool rx
-	    handle_ethtool tx
-	    handle_ethtool sg
-	    handle_ethtool tso
-	    handle_ethtool ufo
-	    handle_ethtool gso
+    if [ "${TYPE}" = "vif" ] ; then
+        handle_ethtool rx
+        handle_ethtool tx
+        handle_ethtool sg
+        handle_ethtool tso
+        handle_ethtool ufo
+        handle_ethtool gso
 
-	    handle_mtu
-	    add_to_bridge
-	    handle_promiscuous
+        handle_mtu
+        add_to_bridge
+        handle_promiscuous
 
-	    xenstore-write "${HOTPLUG}/vif" "${dev}"
-	    xenstore-write "${HOTPLUG}/hotplug" "online"
+        xenstore-write "${HOTPLUG}/vif" "${dev}"
+        xenstore-write "${HOTPLUG}/hotplug" "online"
 
-	    # xs-xen.pq.hq:91e986b8e49f netback-wait-for-hotplug
-	    xenstore-write "/local/domain/0/backend/vif/${DOMID}/${DEVID}/hotplug-status" "connected"
-	fi
-	;;
+        # xs-xen.pq.hq:91e986b8e49f netback-wait-for-hotplug
+        xenstore-write "/local/domain/0/backend/vif/${DOMID}/${DEVID}/hotplug-status" "connected"
+    fi
+    ;;
 
 add)
-	if [ "${TYPE}" = "tap" ] ; then
-	    add_to_bridge
-	fi
-	;;
+    if [ "${TYPE}" = "tap" ] ; then
+        add_to_bridge
+    fi
+    ;;
 
 remove)
-	if [ "${TYPE}" = "vif" ] ;then
-	    xenstore-rm "${HOTPLUG}/hotplug"
-	fi
-	logger -t scripts-vif "${dev} has been removed"
-	remove_from_bridge
-	;;
+    if [ "${TYPE}" = "vif" ] ;then
+        xenstore-rm "${HOTPLUG}/hotplug"
+    fi
+    logger -t scripts-vif "${dev} has been removed"
+    remove_from_bridge
+    ;;
 esac
