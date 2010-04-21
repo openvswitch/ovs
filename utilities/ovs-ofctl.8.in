@@ -311,7 +311,8 @@ Same as \fBdl_type=0x0800,nw_proto=17\fR.
 Same as \fBdl_type=0x0806\fR.
 .
 .PP
-The \fBadd-flow\fR and \fBadd-flows\fR commands require an additional field:
+The \fBadd-flow\fR and \fBadd-flows\fR commands require an additional
+field, which must be the final field specified:
 .
 .IP \fBactions=\fR[\fItarget\fR][\fB,\fItarget\fR...]\fR
 Specifies a comma-separated list of actions to take on a packet when the 
