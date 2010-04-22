@@ -331,6 +331,7 @@ netdev_port_receive(struct net_bridge_port *p, struct sk_buff *skb)
 	/* Push the Ethernet header back on. */
 	skb_push(skb, ETH_HLEN);
 	skb_reset_mac_header(skb);
+	compute_ip_summed(skb, false);
 
 	vport_receive(vport, skb);
 }

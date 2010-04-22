@@ -534,6 +534,7 @@ send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
 	    mutable->port_config.flags & GRE_F_OUT_KEY_ACTION)
 		OVS_CB(nskb)->tun_id = flow_key;
 
+	compute_ip_summed(nskb, false);
 	vport_receive(vport, nskb);
 
 	return true;
@@ -902,6 +903,8 @@ gre_rcv(struct sk_buff *skb)
 		OVS_CB(skb)->tun_id = 0;
 
 	skb_push(skb, ETH_HLEN);
+	compute_ip_summed(skb, false);
+
 	vport_receive(vport, skb);
 
 	return 0;

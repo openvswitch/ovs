@@ -522,7 +522,6 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	skb_warn_if_lro(skb);
 
 	OVS_CB(skb)->dp_port = p;
-	compute_ip_summed(skb, false);
 
 	/* BHs are off so we don't have to use get_cpu()/put_cpu() here. */
 	stats = percpu_ptr(dp->stats_percpu, smp_processor_id());
@@ -625,8 +624,7 @@ out:
  *	be computed if it is sent off box.  Unfortunately on earlier kernels,
  *	this case is impossible to distinguish from #2, despite having opposite
  *	meanings.  Xen adds an extra field on earlier kernels (see #4) in order
- *	to distinguish the different states.  The only real user of this type
- *	with bridging is Xen (on later kernels).
+ *	to distinguish the different states.
  * 4. CHECKSUM_UNNECESSARY (with proto_csum_blank true): This packet was
  *	generated locally by a Xen DomU and has a partial checksum.  If it is
  *	handled on this machine (Dom0 or DomU), then the checksum will not be
@@ -650,12 +648,7 @@ out:
  * packet is processed by the local IP stack, in which case it will need to
  * be reverified).  If we receive a packet with CHECKSUM_HW that really means
  * CHECKSUM_PARTIAL, it will be sent with the wrong checksum.  However, there
- * shouldn't be any devices that do this with bridging.
- *
- * The bridge has similar behavior and this function closely resembles
- * skb_forward_csum().  It is slightly different because we are only concerned
- * with bridging and not other types of forwarding and can get away with
- * slightly more optimal behavior.*/
+ * shouldn't be any devices that do this with bridging. */
 void
 compute_ip_summed(struct sk_buff *skb, bool xmit)
 {
@@ -670,14 +663,14 @@ compute_ip_summed(struct sk_buff *skb, bool xmit)
 		break;
 #ifdef CHECKSUM_HW
 	/* In theory this could be either CHECKSUM_PARTIAL or CHECKSUM_COMPLETE.
-	 * However, we should only get CHECKSUM_PARTIAL packets from Xen, which
-	 * uses some special fields to represent this (see below).  Since we
-	 * can only make one type work, pick the one that actually happens in
-	 * practice.
+	 * However, on the receive side we should only get CHECKSUM_PARTIAL
+	 * packets from Xen, which uses some special fields to represent this
+	 * (see below).  Since we can only make one type work, pick the one
+	 * that actually happens in practice.
 	 *
-	 * The one exception to this is if we are on the transmit path
-	 * (basically after skb_checksum_setup() has been run) the type has
-	 * already been converted, so we should stay with that. */
+	 * On the transmit side (basically after skb_checksum_setup()
+	 * has been run or on internal dev transmit), packets with
+	 * CHECKSUM_COMPLETE aren't generated, so assume CHECKSUM_PARTIAL. */
 	case CHECKSUM_HW:
 		if (!xmit)
 			OVS_CB(skb)->ip_summed = OVS_CSUM_COMPLETE;
@@ -710,6 +703,10 @@ compute_ip_summed(struct sk_buff *skb, bool xmit)
 #endif
 }
 
+/* This function closely resembles skb_forward_csum() used by the bridge.  It
+ * is slightly different because we are only concerned with bridging and not
+ * other types of forwarding and can get away with slightly more optimal
+ * behavior.*/
 void
 forward_ip_summed(struct sk_buff *skb)
 {
@@ -741,9 +738,7 @@ queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
 		skb->next = NULL;
 
 		/* If a checksum-deferred packet is forwarded to the
-		 * controller, correct the pointers and checksum.  This happens
-		 * on a regular basis only on Xen, on which VMs can pass up
-		 * packets that do not have their checksum computed.
+		 * controller, correct the pointers and checksum.
 		 */
 		err = vswitch_skb_checksum_setup(skb);
 		if (err)

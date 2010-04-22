@@ -99,6 +99,8 @@ static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 	lb_stats->tx_bytes += skb->len;
 
 	skb_reset_mac_header(skb);
+	compute_ip_summed(skb, true);
+
 	rcu_read_lock_bh();
 	vport_receive(vport, skb);
 	rcu_read_unlock_bh();
@@ -129,11 +131,14 @@ static void internal_dev_getinfo(struct net_device *netdev,
 }
 
 static struct ethtool_ops internal_dev_ethtool_ops = {
-	.get_drvinfo = internal_dev_getinfo,
-	.get_link = ethtool_op_get_link,
-	.get_sg = ethtool_op_get_sg,
-	.get_tx_csum = ethtool_op_get_tx_csum,
-	.get_tso = ethtool_op_get_tso,
+	.get_drvinfo	= internal_dev_getinfo,
+	.get_link	= ethtool_op_get_link,
+	.get_sg		= ethtool_op_get_sg,
+	.set_sg		= ethtool_op_set_sg,
+	.get_tx_csum	= ethtool_op_get_tx_csum,
+	.set_tx_csum	= ethtool_op_set_tx_hw_csum,
+	.get_tso	= ethtool_op_get_tso,
+	.set_tso	= ethtool_op_set_tso,
 };
 
 static int internal_dev_change_mtu(struct net_device *netdev, int new_mtu)
@@ -230,7 +235,8 @@ do_setup(struct net_device *netdev)
 	netdev->tx_queue_len = 0;
 
 	netdev->flags = IFF_BROADCAST | IFF_MULTICAST;
-	netdev->features = NETIF_F_LLTX; /* XXX other features? */
+	netdev->features = NETIF_F_LLTX | NETIF_F_SG | NETIF_F_HIGHDMA
+				| NETIF_F_HW_CSUM | NETIF_F_TSO;
 
 	vport_gen_ether_addr(netdev->dev_addr);
 }

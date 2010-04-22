@@ -1038,7 +1038,9 @@ vport_get_mtu(const struct vport *vport)
  * @skb: skb that was received
  *
  * Must be called with rcu_read_lock and bottom halves disabled.  The packet
- * cannot be shared and skb->data should point to the Ethernet header.
+ * cannot be shared and skb->data should point to the Ethernet header.  The
+ * caller must have already called compute_ip_summed() to initialize the
+ * checksumming fields.
  */
 void
 vport_receive(struct vport *vport, struct sk_buff *skb)
