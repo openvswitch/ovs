@@ -728,8 +728,10 @@ handle_csum_offload(struct sk_buff *skb)
 {
 	if (skb->ip_summed == CHECKSUM_PARTIAL)
 		return skb_checksum_help(skb);
-	else
+	else {
+		skb->ip_summed = CHECKSUM_NONE;
 		return 0;
+	}
 }
 
 /* Called with rcu_read_lock and bottom-halves disabled. */
@@ -960,6 +962,10 @@ build_packet(struct vport *vport, const struct mutable_config *mutable,
 
 	create_gre_header(skb, mutable);
 
+	/* Allow our local IP stack to fragment the outer packet even if the
+	 * DF bit is set as a last resort. */
+	skb->local_df = 1;
+
 	memset(&(IPCB(skb)->opt), 0, sizeof(IPCB(skb)->opt));
 	IPCB(skb)->flags = 0;
 
@@ -1067,15 +1073,10 @@ gre_send(struct vport *vport, struct sk_buff *skb)
 	iph.daddr = rt->rt_dst;
 	iph.saddr = rt->rt_src;
 
-	/* Allow our local IP stack to fragment the outer packet even if the
-	 * DF bit is set as a last resort. */
-	skb->local_df = 1;
-
 	nf_reset(skb);
 	secpath_reset(skb);
 	skb_dst_drop(skb);
 	skb_dst_set(skb, &rt->u.dst);
-	skb->ip_summed = CHECKSUM_NONE;
 
 	/* If we are doing GSO on a pskb it is better to make sure that the
 	 * headroom is correct now.  We will only have to copy the portion in
@@ -1092,14 +1093,16 @@ gre_send(struct vport *vport, struct sk_buff *skb)
 		}
 	}
 
+	forward_ip_summed(skb);
 	vswitch_skb_checksum_setup(skb);
+
 	skb = handle_gso(skb);
 	if (unlikely(IS_ERR(skb))) {
 		vport_record_error(vport, VPORT_E_TX_DROPPED);
 		goto error;
 	}
 
-	/* Process GSO segments.  Try to do any work on the entire packet that
+	/* Process GSO segments.  Try to do any work for the entire packet that
 	 * doesn't involve actually writing to it before this point. */
 	orig_len = 0;
 	do {
