@@ -285,7 +285,7 @@ Restarting Open vSwitch on a live server is not guaranteed to work.  It is
 provided as a convenience for those situations in which it does work.
 
 EOF
-    read -s -r -n 1 -p "Countinue with restart (y/N): " response
+    read -s -r -n 1 -p "Continue with restart (y/N): " response
     printf "\n"
     case "$response" in
         y|Y)
