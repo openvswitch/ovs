@@ -204,6 +204,7 @@ struct ofconn {
     struct hmap_node hmap_node;  /* In struct ofproto's "controllers" map. */
     struct discovery *discovery; /* Controller discovery object, if enabled. */
     struct status_category *ss;  /* Switch status category. */
+    enum ofproto_band band;      /* In-band or out-of-band? */
 };
 
 /* We use OFPR_NO_MATCH and OFPR_ACTION as indexes into struct ofconn's
@@ -247,11 +248,13 @@ struct ofproto {
 
     /* Configuration. */
     struct switch_status *switch_status;
-    struct in_band *in_band;
     struct fail_open *fail_open;
     struct netflow *netflow;
     struct ofproto_sflow *sflow;
 
+    /* In-band control. */
+    struct in_band *in_band;
+    long long int next_in_band_update;
     /* Flow table. */
     struct classifier cls;
     bool need_revalidate;
@@ -466,6 +469,9 @@ update_controller(struct ofconn *ofconn, const struct ofproto_controller *c)
     int probe_interval;
     int i;
 
+    ofconn->band = (is_in_band_controller(c)
+                    ? OFPROTO_IN_BAND : OFPROTO_OUT_OF_BAND);
+
     rconn_set_max_backoff(ofconn->rconn, c->max_backoff);
 
     probe_interval = c->probe_interval ? MAX(c->probe_interval, 5) : 0;
@@ -514,17 +520,63 @@ find_controller_by_target(struct ofproto *ofproto, const char *target)
     return NULL;
 }
 
+static void
+update_in_band_remotes(struct ofproto *ofproto)
+{
+    const struct ofconn *ofconn;
+    struct sockaddr_in *addrs;
+    bool discovery;
+    size_t n_addrs;
+
+
+    addrs = xmalloc(hmap_count(&ofproto->controllers) * sizeof *addrs);
+    n_addrs = 0;
+
+    /* Add all the remotes. */
+    discovery = false;
+    HMAP_FOR_EACH (ofconn, struct ofconn, hmap_node, &ofproto->controllers) {
+        struct sockaddr_in *sin = &addrs[n_addrs];
+
+        sin->sin_addr.s_addr = rconn_get_remote_ip(ofconn->rconn);
+        if (sin->sin_addr.s_addr) {
+            sin->sin_port = rconn_get_remote_port(ofconn->rconn);
+            n_addrs++;
+        }
+        if (ofconn->discovery) {
+            discovery = true;
+        }
+    }
+
+    /* Create or update or destroy in-band.
+     *
+     * Ordinarily we only enable in-band if there's at least one remote
+     * address, but discovery needs the in-band rules for DHCP to be installed
+     * even before we know any remote addresses. */
+    if (n_addrs || discovery) {
+        if (!ofproto->in_band) {
+            in_band_create(ofproto, ofproto->dpif, ofproto->switch_status,
+                           &ofproto->in_band);
+        }
+        in_band_set_remotes(ofproto->in_band, addrs, n_addrs);
+        ofproto->next_in_band_update = time_msec() + 1000;
+    } else {
+        in_band_destroy(ofproto->in_band);
+        ofproto->in_band = NULL;
+    }
+
+    /* Clean up. */
+    free(addrs);
+}
+
 void
 ofproto_set_controllers(struct ofproto *p,
                         const struct ofproto_controller *controllers,
                         size_t n_controllers)
 {
     struct shash new_controllers;
-    struct rconn **in_band_rconns;
     enum ofproto_fail_mode fail_mode;
     struct ofconn *ofconn, *next;
     bool ss_exists;
-    size_t n_in_band;
     size_t i;
 
     shash_init(&new_controllers);
@@ -537,8 +589,6 @@ ofproto_set_controllers(struct ofproto *p,
         }
     }
 
-    in_band_rconns = xmalloc(n_controllers * sizeof *in_band_rconns);
-    n_in_band = 0;
     fail_mode = OFPROTO_FAIL_STANDALONE;
     ss_exists = false;
     HMAP_FOR_EACH_SAFE (ofconn, next, struct ofconn, hmap_node,
@@ -550,14 +600,9 @@ ofproto_set_controllers(struct ofproto *p,
             ofconn_destroy(ofconn);
         } else {
             update_controller(ofconn, c);
-
             if (ofconn->ss) {
                 ss_exists = true;
             }
-            if (is_in_band_controller(c)) {
-                in_band_rconns[n_in_band++] = ofconn->rconn;
-            }
-
             if (c->fail == OFPROTO_FAIL_SECURE) {
                 fail_mode = OFPROTO_FAIL_SECURE;
             }
@@ -565,18 +610,7 @@ ofproto_set_controllers(struct ofproto *p,
     }
     shash_destroy(&new_controllers);
 
-    if (n_in_band) {
-        if (!p->in_band) {
-            in_band_create(p, p->dpif, p->switch_status, &p->in_band);
-        }
-        if (p->in_band) {
-            in_band_set_remotes(p->in_band, in_band_rconns, n_in_band);
-        }
-    } else {
-        in_band_destroy(p->in_band);
-        p->in_band = NULL;
-    }
-    free(in_band_rconns);
+    update_in_band_remotes(p);
 
     if (!hmap_is_empty(&p->controllers)
         && fail_mode == OFPROTO_FAIL_STANDALONE) {
@@ -939,6 +973,9 @@ ofproto_run1(struct ofproto *p)
     }
 
     if (p->in_band) {
+        if (time_msec() >= p->next_in_band_update) {
+            update_in_band_remotes(p);
+        }
         in_band_run(p->in_band);
     }
 
@@ -1043,6 +1080,7 @@ ofproto_wait(struct ofproto *p)
         ofconn_wait(ofconn);
     }
     if (p->in_band) {
+        poll_timer_wait(p->next_in_band_update - time_msec());
         in_band_wait(p->in_band);
     }
     if (p->fail_open) {

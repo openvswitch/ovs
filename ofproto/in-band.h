@@ -31,7 +31,8 @@ int in_band_create(struct ofproto *, struct dpif *, struct switch_status *,
                    struct in_band **);
 void in_band_destroy(struct in_band *);
 
-void in_band_set_remotes(struct in_band *, struct rconn **, size_t n);
+void in_band_set_remotes(struct in_band *,
+                         const struct sockaddr_in *, size_t n);
 
 void in_band_run(struct in_band *);
 void in_band_wait(struct in_band *);
