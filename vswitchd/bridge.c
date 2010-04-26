@@ -36,6 +36,7 @@
 #include "dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
+#include "jsonrpc.h"
 #include "list.h"
 #include "mac-learning.h"
 #include "netdev.h"
@@ -209,7 +210,9 @@ static size_t bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
 static void bridge_reconfigure_one(const struct ovsrec_open_vswitch *,
                                    struct bridge *);
 static void bridge_reconfigure_controller(const struct ovsrec_open_vswitch *,
-                                          struct bridge *);
+                                          struct bridge *,
+                                          const struct sockaddr_in *managers,
+                                          size_t n_managers);
 static void bridge_get_all_ifaces(const struct bridge *, struct shash *ifaces);
 static void bridge_fetch_dp_ifaces(struct bridge *);
 static void bridge_flush(struct bridge *);
@@ -513,6 +516,44 @@ iterate_and_prune_ifaces(struct bridge *br,
     }
 }
 
+/* Looks at the list of managers in 'ovs_cfg' and extracts their remote IP
+ * addresses and ports into '*managersp' and '*n_managersp'.  The caller is
+ * responsible for freeing '*managersp' (with free()).
+ *
+ * You may be asking yourself "why does ovs-vswitchd care?", because
+ * ovsdb-server is responsible for connecting to the managers, and ovs-vswitchd
+ * should not be and in fact is not directly involved in that.  But
+ * ovs-vswitchd needs to make sure that ovsdb-server can reach the managers, so
+ * it has to tell in-band control where the managers are to enable that.
+ */
+static void
+collect_managers(const struct ovsrec_open_vswitch *ovs_cfg,
+                 struct sockaddr_in **managersp, size_t *n_managersp)
+{
+    struct sockaddr_in *managers = NULL;
+    size_t n_managers = 0;
+
+    if (ovs_cfg->n_managers > 0) {
+        size_t i;
+
+        managers = xmalloc(ovs_cfg->n_managers * sizeof *managers);
+        for (i = 0; i < ovs_cfg->n_managers; i++) {
+            const char *name = ovs_cfg->managers[i];
+            struct sockaddr_in *sin = &managers[i];
+
+            if ((!strncmp(name, "tcp:", 4)
+                 && inet_parse_active(name + 4, JSONRPC_TCP_PORT, sin)) ||
+                (!strncmp(name, "ssl:", 4)
+                 && inet_parse_active(name + 4, JSONRPC_SSL_PORT, sin))) {
+                n_managers++;
+            }
+        }
+    }
+
+    *managersp = managers;
+    *n_managersp = n_managers;
+}
+
 void
 bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 {
@@ -520,12 +561,16 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     struct shash old_br, new_br;
     struct shash_node *node;
     struct bridge *br, *next;
+    struct sockaddr_in *managers;
+    size_t n_managers;
     size_t i;
     int sflow_bridge_number;
 
     COVERAGE_INC(bridge_reconfigure);
 
     txn = ovsdb_idl_txn_create(ovs_cfg->header_.table->idl);
+
+    collect_managers(ovs_cfg, &managers, &n_managers);
 
     /* Collect old and new bridges. */
     shash_init(&old_br);
@@ -792,7 +837,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
          * yet; when a controller is configured, resetting the datapath ID will
          * immediately disconnect from the controller, so it's better to set
          * the datapath ID before the controller. */
-        bridge_reconfigure_controller(ovs_cfg, br);
+        bridge_reconfigure_controller(ovs_cfg, br, managers, n_managers);
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         for (i = 0; i < br->n_ports; i++) {
@@ -810,6 +855,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
     ovsdb_idl_txn_commit(txn);
     ovsdb_idl_txn_destroy(txn); /* XXX */
+
+    free(managers);
 }
 
 static const char *
@@ -1516,10 +1563,14 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
 
 static void
 bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
-                              struct bridge *br)
+                              struct bridge *br,
+                              const struct sockaddr_in *managers,
+                              size_t n_managers)
 {
     struct ovsrec_controller **controllers;
     size_t n_controllers;
+
+    ofproto_set_extra_in_band_remotes(br->ofproto, managers, n_managers);
 
     n_controllers = bridge_get_controllers(ovs_cfg, br, &controllers);
     if (ofproto_has_controller(br->ofproto) != (n_controllers != 0)) {
