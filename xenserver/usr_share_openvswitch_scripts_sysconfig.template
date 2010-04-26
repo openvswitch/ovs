@@ -236,3 +236,11 @@
 #     This option's value is honored only when BRCOMPATD_VALGRIND_LOG is
 #     set to a nonempty string.
 # BRCOMPATD_VALGRIND_OPT=""
+
+# XENSERVERD_PIDFILE: File in which to store the pid of the running
+#     ovs-xenserved.
+# XENSERVERD_PIDFILE=/var/run/openvswitch/ovs-xenserverd.pid
+
+# XENSERVERD_RUN_DIR: Set the directory in which ovs-xenserverd should be
+#     run.  This mainly affects where core files will be placed.
+# XENSERVERD_RUN_DIR=/var/xen/openvswitch

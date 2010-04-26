@@ -79,6 +79,7 @@ install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/xen-bugtool
 install -m 755 xenserver/usr_sbin_brctl \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/brctl
+install -m 755 xenserver/ovs-xenserverd $RPM_BUILD_ROOT/usr/sbin/
 install -m 755 xenserver/usr_share_openvswitch_scripts_sysconfig.template \
          $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/sysconfig.template
 install -d -m 755 $RPM_BUILD_ROOT/usr/lib/xsconsole/plugins-base
@@ -351,6 +352,7 @@ fi
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/sbin/ovs-brcompatd
 /usr/sbin/ovs-vswitchd
+/usr/sbin/ovs-xenserverd
 /usr/sbin/ovsdb-server
 /usr/bin/ovs-appctl
 /usr/bin/ovs-dpctl
@@ -369,6 +371,7 @@ fi
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
+/usr/share/man/man8/ovs-xenserverd.8.gz
 /var/lib/openvswitch
 %exclude /usr/lib/xsconsole/plugins-base/*.pyc
 %exclude /usr/lib/xsconsole/plugins-base/*.pyo

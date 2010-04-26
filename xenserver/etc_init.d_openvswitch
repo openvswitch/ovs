@@ -81,11 +81,16 @@ fi
 : ${BRCOMPATD_VALGRIND_LOG:=}
 : ${BRCOMPATD_VALGRIND_OPT:=}
 
+# Config variables specific to ovs-xenserverd
+: ${XENSERVERD_PIDFILE:=/var/run/openvswitch/ovs-xenserverd.pid}
+: ${XENSERVERD_RUN_DIR:=/var/xen/openvswitch}
+
 # Full paths to executables & modules
 ovsdb_server="/usr/sbin/ovsdb-server"
 ovsdb_tool="/usr/bin/ovsdb-tool"
 vswitchd="/usr/sbin/ovs-vswitchd"
 brcompatd="/usr/sbin/ovs-brcompatd"
+xenserverd="/usr/sbin/ovs-xenserverd"
 dpctl="/usr/bin/ovs-dpctl"
 appctl="/usr/bin/ovs-appctl"
 ofctl="/usr/bin/ovs-ofctl"
@@ -293,6 +298,17 @@ function start_brcompatd {
     fi
 }
 
+function start_xenserverd {
+    if [ ! -d "$XENSERVERD_RUN_DIR" ]; then
+        install -d -m 755 -o root -g root "$XENSERVERD_RUN_DIR"
+    fi
+    cd "$XENSERVERD_RUN_DIR"
+
+    install -d -m 755 -o root -g root `dirname $XENSERVERD_PIDFILE`
+    action "Starting ovs-xenserverd" "$xenserverd" --no-chdir --pidfile=$XENSERVERD_PIDFILE --detach $monitor_opt -vANY:CONSOLE:EMER
+    fi
+}
+
 function stop_ovsdb_server {
     if [ -f "$OVSDB_SERVER_PIDFILE" ]; then
         local pid=$(cat "$OVSDB_SERVER_PIDFILE")
@@ -314,6 +330,14 @@ function stop_brcompatd {
         local pid=$(cat "$BRCOMPATD_PIDFILE")
         action "Killing ovs-brcompatd ($pid)" kill -TERM $pid
         rm -f "$BRCOMPATD_PIDFILE"
+    fi
+}
+
+function stop_xenserverd {
+    if [ -f "$XENSERVERD_PIDFILE" ]; then
+        local pid=$(cat "$XENSERVERD_PIDFILE")
+        action "Killing ovs-xenserverd ($pid)" kill -TERM $pid
+        rm -f "$XENSERVERD_PIDFILE"
     fi
 }
 
@@ -391,10 +415,12 @@ function start {
     if [ "${ENABLE_BRCOMPAT}" = "y" ] ; then
         start_brcompatd
     fi
+    start_xenserverd
     touch /var/lock/subsys/openvswitch
 }
 
 function stop {
+    stop_xenserverd
     stop_brcompatd
     stop_vswitchd
     stop_ovsdb_server
@@ -430,12 +456,14 @@ case "$1" in
         status -p "$OVSDB_SERVER_PIDFILE" ovsdb-server &&
         status -p "$VSWITCHD_PIDFILE" ovs-vswitchd &&
         (test "$ENABLE_BRCOMPAT" != "y" || 
-            status -p "$BRCOMPATD_PIDFILE" ovs-brcompatd)
+            status -p "$BRCOMPATD_PIDFILE" ovs-brcompatd) &&
+        status -p "$XENSERVERD_PIDFILE" ovs-xenserverd
         ;;
     version)
         /usr/sbin/ovsdb-server -V
         /usr/sbin/ovs-vswitchd -V
         /usr/sbin/ovs-brcompatd -V
+        /usr/sbin/ovs-xenserverd -V
         ;;
     help)
         printf "openvswitch [start|stop|restart|unload|status|version]\n"

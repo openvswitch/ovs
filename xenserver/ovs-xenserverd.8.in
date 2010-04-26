@@ -1,0 +1,40 @@
+.\" -*- nroff -*-
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.TH ovs\-xenserverd 8 "April 2010" "Open vSwitch" "Open vSwitch Manual"
+.ds PN ovs\-xenserverd
+.
+.SH NAME
+ovs\-xenserverd \- Open vSwitch daemon for XenServer-specific functionality
+.
+.SH SYNOPSIS
+\fBovs\-xenserverd \fR[\fIoptions\fR]
+.
+.SH DESCRIPTION
+A daemon that provides XenServer-specific functionality for Open
+vSwitch.  Currently, its only purpose is to ensure that network UUIDs
+in the Open vSwitch database are kept up-to-date when the XenServer
+host joins or leaves a pool.  It does so by running
+\fB@pkgdatadir@/scripts/refresh-network-uuids\fR.
+.PP
+\fBovs\-xenserverd\fR is useful only on Citrix XenServer hosts.
+Running it on any other kind of host is harmless but not useful.
+.SH OPTIONS
+.so lib/daemon.man
+.SS "Public Key Infrastructure Options"
+.so lib/vlog.man
+.so lib/common.man
+.
+.SH "RUNTIME MANAGEMENT COMMANDS"
+\fBovs\-appctl\fR(8) can send commands to a running
+\fBovs\-xenserverd\fR process.  The currently supported commands are
+described below.
+.so lib/vlog-unixctl.man
+.SH "SEE ALSO"
+.BR ovs\-appctl (8),
+.BR ovs\-vswitchd (8),
+.BR ovsdb\-server (1),
+\fBINSTALL.Linux\fR in the Open vSwitch distribution.
