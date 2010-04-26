@@ -209,10 +209,10 @@ static size_t bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
                                      struct ovsrec_controller ***controllersp);
 static void bridge_reconfigure_one(const struct ovsrec_open_vswitch *,
                                    struct bridge *);
-static void bridge_reconfigure_controller(const struct ovsrec_open_vswitch *,
-                                          struct bridge *,
-                                          const struct sockaddr_in *managers,
-                                          size_t n_managers);
+static void bridge_reconfigure_remotes(const struct ovsrec_open_vswitch *,
+                                       struct bridge *,
+                                       const struct sockaddr_in *managers,
+                                       size_t n_managers);
 static void bridge_get_all_ifaces(const struct bridge *, struct shash *ifaces);
 static void bridge_fetch_dp_ifaces(struct bridge *);
 static void bridge_flush(struct bridge *);
@@ -837,7 +837,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
          * yet; when a controller is configured, resetting the datapath ID will
          * immediately disconnect from the controller, so it's better to set
          * the datapath ID before the controller. */
-        bridge_reconfigure_controller(ovs_cfg, br, managers, n_managers);
+        bridge_reconfigure_remotes(ovs_cfg, br, managers, n_managers);
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         for (i = 0; i < br->n_ports; i++) {
@@ -1562,10 +1562,10 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
 }
 
 static void
-bridge_reconfigure_controller(const struct ovsrec_open_vswitch *ovs_cfg,
-                              struct bridge *br,
-                              const struct sockaddr_in *managers,
-                              size_t n_managers)
+bridge_reconfigure_remotes(const struct ovsrec_open_vswitch *ovs_cfg,
+                           struct bridge *br,
+                           const struct sockaddr_in *managers,
+                           size_t n_managers)
 {
     struct ovsrec_controller **controllers;
     size_t n_controllers;
