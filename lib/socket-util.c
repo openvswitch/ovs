@@ -292,6 +292,55 @@ guess_netmask(uint32_t ip)
             : htonl(0));                          /* ??? */
 }
 
+/* Parses 'target', which should be a string in the format "<host>[:<port>]".
+ * <host> is required.  If 'default_port' is nonzero then <port> is optional
+ * and defaults to 'default_port'.
+ *
+ * On success, returns true and stores the parsed remote address into '*sinp'.
+ * On failure, logs an error, stores zeros into '*sinp', and returns false. */
+bool
+inet_parse_active(const char *target_, uint16_t default_port,
+                  struct sockaddr_in *sinp)
+{
+    char *target = xstrdup(target_);
+    char *save_ptr = NULL;
+    const char *host_name;
+    const char *port_string;
+    bool ok = false;
+
+    /* Defaults. */
+    sinp->sin_family = AF_INET;
+    sinp->sin_port = htons(default_port);
+
+    /* Tokenize. */
+    host_name = strtok_r(target, ":", &save_ptr);
+    port_string = strtok_r(NULL, ":", &save_ptr);
+    if (!host_name) {
+        VLOG_ERR("%s: bad peer name format", target_);
+        goto exit;
+    }
+
+    /* Look up IP, port. */
+    if (lookup_ip(host_name, &sinp->sin_addr)) {
+        goto exit;
+    }
+    if (port_string && atoi(port_string)) {
+        sinp->sin_port = htons(atoi(port_string));
+    } else if (!default_port) {
+        VLOG_ERR("%s: port number must be specified", target_);
+        goto exit;
+    }
+
+    ok = true;
+
+exit:
+    if (!ok) {
+        memset(sinp, 0, sizeof *sinp);
+    }
+    free(target);
+    return ok;
+}
+
 /* Opens a non-blocking IPv4 socket of the specified 'style' and connects to
  * 'target', which should be a string in the format "<host>[:<port>]".  <host>
  * is required.  If 'default_port' is nonzero then <port> is optional and
@@ -307,40 +356,15 @@ guess_netmask(uint32_t ip)
  * If 'sinp' is non-null, then on success the target address is stored into
  * '*sinp'. */
 int
-inet_open_active(int style, const char *target_, uint16_t default_port,
+inet_open_active(int style, const char *target, uint16_t default_port,
                  struct sockaddr_in *sinp, int *fdp)
 {
-    char *target = xstrdup(target_);
-    char *save_ptr = NULL;
-    const char *host_name;
-    const char *port_string;
     struct sockaddr_in sin;
     int fd = -1;
     int error;
 
-    /* Defaults. */
-    memset(&sin, 0, sizeof sin);
-    sin.sin_family = AF_INET;
-    sin.sin_port = htons(default_port);
-
-    /* Tokenize. */
-    host_name = strtok_r(target, ":", &save_ptr);
-    port_string = strtok_r(NULL, ":", &save_ptr);
-    if (!host_name) {
-        ovs_error(0, "%s: bad peer name format", target_);
-        error = EAFNOSUPPORT;
-        goto exit;
-    }
-
-    /* Look up IP, port. */
-    error = lookup_ip(host_name, &sin.sin_addr);
-    if (error) {
-        goto exit;
-    }
-    if (port_string && atoi(port_string)) {
-        sin.sin_port = htons(atoi(port_string));
-    } else if (!default_port) {
-        VLOG_ERR("%s: port number must be specified", target_);
+    /* Parse. */
+    if (!inet_parse_active(target, default_port, &sin)) {
         error = EAFNOSUPPORT;
         goto exit;
     }
@@ -348,7 +372,7 @@ inet_open_active(int style, const char *target_, uint16_t default_port,
     /* Create non-blocking socket. */
     fd = socket(AF_INET, style, 0);
     if (fd < 0) {
-        VLOG_ERR("%s: socket: %s", target_, strerror(errno));
+        VLOG_ERR("%s: socket: %s", target, strerror(errno));
         error = errno;
         goto exit;
     }
@@ -379,7 +403,6 @@ exit:
     } else {
         *fdp = -1;
     }
-    free(target);
     return error;
 }
 
