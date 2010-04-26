@@ -249,7 +249,7 @@ function start_brcompatd {
     local syslog_opt="-vANY:SYSLOG:${BRCOMPATD_SYSLOG_LOGLEVEL}"
     local logfile_file_opt=""
     local logfile_level_opt=""
-    if [ -d "$BRCOMPATD_RUN_DIR" ]; then
+    if [ ! -d "$BRCOMPATD_RUN_DIR" ]; then
         install -d -m 755 -o root -g root "$BRCOMPATD_RUN_DIR"
     fi
     cd "$BRCOMPATD_RUN_DIR"
