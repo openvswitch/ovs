@@ -2760,7 +2760,7 @@ handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
 
 static void
 append_port_stat(struct ofport *port, uint16_t port_no, struct ofconn *ofconn, 
-                 struct ofpbuf *msg)
+                 struct ofpbuf **msgp)
 {
     struct netdev_stats stats;
     struct ofp_port_stats *ops;
@@ -2770,7 +2770,7 @@ append_port_stat(struct ofport *port, uint16_t port_no, struct ofconn *ofconn,
      * netdev_get_stats() will log errors. */
     netdev_get_stats(port->netdev, &stats);
 
-    ops = append_stats_reply(sizeof *ops, ofconn, &msg);
+    ops = append_stats_reply(sizeof *ops, ofconn, msgp);
     ops->port_no = htons(odp_port_to_ofp_port(port_no));
     memset(ops->pad, 0, sizeof ops->pad);
     ops->rx_packets = htonll(stats.rx_packets);
@@ -2808,11 +2808,11 @@ handle_port_stats_request(struct ofproto *p, struct ofconn *ofconn,
         port = port_array_get(&p->ports, 
                 ofp_port_to_odp_port(ntohs(psr->port_no)));
         if (port) {
-            append_port_stat(port, ntohs(psr->port_no), ofconn, msg);
+            append_port_stat(port, ntohs(psr->port_no), ofconn, &msg);
         }
     } else {
         PORT_ARRAY_FOR_EACH (port, &p->ports, port_no) {
-            append_port_stat(port, port_no, ofconn, msg);
+            append_port_stat(port, port_no, ofconn, &msg);
         }
     }
 
