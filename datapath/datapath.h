@@ -143,9 +143,11 @@ enum csum_type {
 
 /**
  * struct ovs_skb_cb - OVS data in skb CB
- * @br_port: The bridge port on which the skb entered the switch.
+ * @dp_port: The datapath port on which the skb entered the switch.
  * @ip_summed: Consistently stores L4 checksumming status across different
  * kernel versions.
+ * @tun_id: ID (in network byte order) of the tunnel that encapsulated this
+ * packet. It is 0 if the packet was not received on a tunnel.
  */
 struct ovs_skb_cb {
 	struct dp_port		*dp_port;
