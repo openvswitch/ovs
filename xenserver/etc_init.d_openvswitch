@@ -84,6 +84,15 @@ fi
 # Config variables specific to ovs-xenserverd
 : ${XENSERVERD_PIDFILE:=/var/run/openvswitch/ovs-xenserverd.pid}
 : ${XENSERVERD_RUN_DIR:=/var/xen/openvswitch}
+: ${XENSERVERD_PRIORITY:=}
+: ${XENSERVERD_LOGFILE:=}
+: ${XENSERVERD_FILE_LOGLEVEL:=}
+: ${XENSERVERD_SYSLOG_LOGLEVEL:=}
+: ${XENSERVERD_MEMLEAK_LOGFILE:=}
+: ${XENSERVERD_STRACE_LOG:=}
+: ${XENSERVERD_STRACE_OPT:=}
+: ${XENSERVERD_VALGRIND_LOG:=}
+: ${XENSERVERD_VALGRIND_OPT:=}
 
 # Full paths to executables & modules
 ovsdb_server="/usr/sbin/ovsdb-server"
@@ -145,157 +154,101 @@ function remove_modules {
     fi
 }
 
-function start_ovsdb_server {
-    local syslog_opt="-vANY:SYSLOG:${OVSDB_SERVER_SYSLOG_LOGLEVEL}"
-    local logfile_file_opt=""
-    local logfile_level_opt=""
-    if [ ! -d "$OVSDB_SERVER_RUN_DIR" ]; then
-        install -d -m 755 -o root -g root "$OVSDB_SERVER_RUN_DIR"
-    fi
-    cd "$OVSDB_SERVER_RUN_DIR"
-    local remotes=
-    for remote in $OVSDB_SERVER_REMOTES; do
-        remotes="$remotes --remote=$remote"
-    done
+function start_daemon {
+    local DAEMON=$1
+    shift
+    local BINARY=$1
 
-    install -d -m 755 -o root -g root `dirname $OVSDB_SERVER_LOGFILE`
-    if [ -n "$OVSDB_SERVER_FILE_LOGLEVEL" ]; then
-        logfile_level_opt="-vANY:FILE:${OVSDB_SERVER_FILE_LOGLEVEL}"
-        logfile_file_opt="--log-file=$OVSDB_SERVER_LOGFILE"
+    # cd to daemon's run_dir so core files get dumped into a sensible place.
+    eval local run_dir=\$${DAEMON}_RUN_DIR
+    if [ ! -d "$run_dir" ]; then
+        install -d -m 755 -o root -g root "$run_dir"
+    fi
+    cd "$run_dir"
+    
+    # Configure log levels.
+    eval local syslog_loglevel=\$${DAEMON}_SYSLOG_LOGLEVEL
+    eval local file_loglevel=\$${DAEMON}_FILE_LOGLEVEL
+    eval local logfile=\$${DAEMON}_LOGFILE
+    set -- "$@" -vANY:CONSOLE:EMER -vANY:SYSLOG:"$syslog_loglevel"
+    if test -n "$file_loglevel" && test -n "$logfile"; then
+        install -d -m 755 -o root -g root `dirname "$logfile"`
+        set -- "$@" --log-file="$logfile" -vANY:FILE:"$file_loglevel"
     fi
 
-    local leak_opt=""
-    if [ -n "$OVSDB_SERVER_MEMLEAK_LOGFILE" ]; then
-        leak_opt="--check-leaks=$OVSDB_SERVER_MEMLEAK_LOGFILE"
-        if [ -e "$OVSDB_SERVER_MEMLEAK_LOGFILE" ]; then
-            mv "$OVSDB_SERVER_MEMLEAK_LOGFILE" "$OVSDB_SERVER_MEMLEAK_LOGFILE.prev"
+    # Configure leak checker.
+    eval local memleak_logfile=\$${DAEMON}_MEMLEAK_LOGFILE
+    if test -n "$memleak_logfile"; then
+        set -- "$@" --check-leaks="$memleak_logfile"
+        if test -e "$memleak_logfile"; then
+            mv "$memleak_logfile" "$memleak_logfile.prev"
         fi
     fi
-    local strace_opt=""
-    local daemonize="y"
-    if [ -n "$OVSDB_SERVER_STRACE_LOG" ] && [ -n "$OVSDB_SERVER_VALGRIND_LOG" ]; then
+
+    # Configure debugging wrappers.
+    eval local strace_log=\$${DAEMON}_STRACE_LOG
+    eval local strace_opt=\$${DAEMON}_STRACE_OPT
+    eval local valgrind_log=\$${DAEMON}_VALGRIND_LOG
+    eval local valgrind_opt=\$${DAEMON}_VALGRIND_OPT
+    if test -n "$strace_log" && test -n "$valgrind_log"; then
         printf "Can not start with both VALGRIND and STRACE\n"
         exit 1
-    fi
-    if [ -n "$OVSDB_SERVER_STRACE_LOG" ]; then
-        strace_opt="strace -o $OVSDB_SERVER_STRACE_LOG $OVSDB_SERVER_STRACE_OPT"
-        daemonize="n"
-    fi
-    if [ -n "$OVSDB_SERVER_VALGRIND_LOG" ]; then
-        valgrind_opt="valgrind --log-file=$OVSDB_SERVER_VALGRIND_LOG $OVSDB_SERVER_VALGRIND_OPT"
-        daemonize="n"
-    fi
-    ssl_opts="--private-key=db:SSL,private_key --certificate=db:SSL,certificate --bootstrap-ca-cert=db:SSL,ca_cert"
-    install -d -m 755 -o root -g root `dirname $OVSDB_SERVER_PIDFILE`
-    if [ "$daemonize" != "y" ]; then
-        # Start in background and force a "success" message
-        action "Starting ovsdb_server ($strace_opt$valgrind_opt)" true
-        (nice -n "$OVSDB_SERVER_PRIORITY" $strace_opt $valgrind_opt "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach $monitor_opt --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $remotes $ssl_opts) &
+    elif test -n "$strace_log"; then
+        local mode=strace
+        set -- $nice strace -o "$strace_log" $strace_opt "$@"
+    elif test -n "$valgrind_log"; then
+        local mode=valgrind
+        set -- $nice valgrind --log-file="$valgrind_log" $valgrind_opt "$@"
     else
-        action "Starting ovsdb-server" nice -n "$OVSDB_SERVER_PRIORITY" "$ovsdb_server" "$OVSDB_SERVER_DB" --pidfile="$OVSDB_SERVER_PIDFILE" --detach $monitor_opt --no-chdir -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $remotes $ssl_opts
+        local mode=production
+        eval local pidfile=\$${DAEMON}_PIDFILE
+        install -d -m 755 -o root -g root `dirname $VSWITCHD_PIDFILE`
+        set -- $nice "$@" --pidfile="$pidfile" --detach $monitor_opt --no-chdir
+    fi
+
+    # Configure niceness.
+    eval local priority=\$${DAEMON}_PRIORITY
+    if test -n "$priority"; then
+        set -- nice -n $priority "$@"
+    fi
+
+    if test $mode = production; then
+        action "Starting `basename $BINARY`" "$@"
+    else
+        # Start in background and force a "success" message
+        action "Starting ovs-vswitchd with $mode debugging" true
+        ("$@") &
     fi
 }
 
+function start_ovsdb_server {
+    set -- "$ovsdb_server" "$OVSDB_SERVER_DB"
+    for remote in $OVSDB_SERVER_REMOTES; do
+        set -- "$@" --remote="$remote"
+    done
+    set -- "$@" --private-key=db:SSL,private_key --certificate=db:SSL,certificate --bootstrap-ca-cert=db:SSL,ca_cert
+    start_daemon OVSDB_SERVER "$@"
+}
+
 function start_vswitchd {
-    local syslog_opt="-vANY:SYSLOG:${VSWITCHD_SYSLOG_LOGLEVEL}"
-    local logfile_file_opt=""
-    local logfile_level_opt=""
-    if [ ! -d "$VSWITCHD_RUN_DIR" ]; then
-        install -d -m 755 -o root -g root "$VSWITCHD_RUN_DIR"
-    fi
-    cd "$VSWITCHD_RUN_DIR"
-
-    install -d -m 755 -o root -g root `dirname $VSWITCHD_LOGFILE`
-    if [ -n "$VSWITCHD_FILE_LOGLEVEL" ]; then
-        logfile_level_opt="-vANY:FILE:${VSWITCHD_FILE_LOGLEVEL}"
-        logfile_file_opt="--log-file=$VSWITCHD_LOGFILE"
-    fi
-
-    local leak_opt=""
-    if [ -n "$VSWITCHD_MEMLEAK_LOGFILE" ]; then
-        leak_opt="--check-leaks=$VSWITCHD_MEMLEAK_LOGFILE"
-        if [ -e "$VSWITCHD_MEMLEAK_LOGFILE" ]; then
-            mv "$VSWITCHD_MEMLEAK_LOGFILE" "$VSWITCHD_MEMLEAK_LOGFILE.prev"
-        fi
-    fi
-    local strace_opt=""
-    local daemonize="y"
-    if [ -n "$VSWITCHD_STRACE_LOG" ] && [ -n "$VSWITCHD_VALGRIND_LOG" ]; then
-        printf "Can not start with both VALGRIND and STRACE\n"
-        exit 1
-    fi
-    if [ -n "$VSWITCHD_STRACE_LOG" ]; then
-        strace_opt="strace -o $VSWITCHD_STRACE_LOG $VSWITCHD_STRACE_OPT"
-        daemonize="n"
-    fi
-    if [ -n "$VSWITCHD_VALGRIND_LOG" ]; then
-        valgrind_opt="valgrind --log-file=$VSWITCHD_VALGRIND_LOG $VSWITCHD_VALGRIND_OPT"
-        daemonize="n"
-    fi
-    local fake_proc_net_opt=""
+    local fake_proc_net_opt=
     if [ "$ENABLE_FAKE_PROC_NET" = "y" ]; then
         fake_proc_net_opt="--fake-proc-net"
     fi
+
+    local mlockall_opt=
     if [ "$VSWITCHD_MLOCKALL" != "no" ]; then
         mlockall_opt="--mlockall"
     fi
 
-    install -d -m 755 -o root -g root `dirname $VSWITCHD_PIDFILE`
-    if [ "$daemonize" != "y" ]; then
-        # Start in background and force a "success" message
-        action "Starting ovs-vswitchd ($strace_opt$valgrind_opt)" true
-        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach $monitor_opt --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $mlockall_opt "$VSWITCHD_OVSDB_SERVER") &
-    else
-        action "Starting ovs-vswitchd" nice -n "$VSWITCHD_PRIORITY" "$vswitchd" --pidfile="$VSWITCHD_PIDFILE" --detach $monitor_opt --no-chdir $fake_proc_net_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt $mlockall_opt "$VSWITCHD_OVSDB_SERVER"
-    fi
-}
+    start_daemon VSWITCHD "$vswitchd" $fake_proc_net_opt $mlockall_opt \
+                 "$VSWITCHD_OVSDB_SERVER"
+ }
 
 function start_brcompatd {
-    local syslog_opt="-vANY:SYSLOG:${BRCOMPATD_SYSLOG_LOGLEVEL}"
-    local logfile_file_opt=""
-    local logfile_level_opt=""
-    if [ ! -d "$BRCOMPATD_RUN_DIR" ]; then
-        install -d -m 755 -o root -g root "$BRCOMPATD_RUN_DIR"
-    fi
-    cd "$BRCOMPATD_RUN_DIR"
-
-    install -d -m 755 -o root -g root `dirname $BRCOMPATD_LOGFILE`
-    if [ -n "$BRCOMPATD_FILE_LOGLEVEL" ]; then
-        logfile_level_opt="-vANY:FILE:${BRCOMPATD_FILE_LOGLEVEL}"
-        logfile_file_opt="--log-file=$BRCOMPATD_LOGFILE"
-    fi
-
-    local leak_opt=""
-    if [ -n "$BRCOMPATD_MEMLEAK_LOGFILE" ]; then
-        leak_opt="--check-leaks=$BRCOMPATD_MEMLEAK_LOGFILE"
-        if [ -e "$BRCOMPATD_MEMLEAK_LOGFILE" ]; then
-            mv "$BRCOMPATD_MEMLEAK_LOGFILE" "$BRCOMPATD_MEMLEAK_LOGFILE.prev"
-        fi
-    fi
-    local strace_opt=""
-    local daemonize="y"
-    if [ -n "$BRCOMPATD_STRACE_LOG" ] && [ -n "$BRCOMPATD_VALGRIND_LOG" ]; then
-        printf "Can not start with both VALGRIND and STRACE\n"
-        exit 1
-    fi
-    if [ -n "$BRCOMPATD_STRACE_LOG" ]; then
-        strace_opt="strace -o $BRCOMPATD_STRACE_LOG $BRCOMPATD_STRACE_OPT"
-        daemonize="n"
-    fi
-    if [ -n "$VALGRIND_LOG" ]; then
-        valgrind_opt="valgrind --log-file=$BRCOMPATD_VALGRIND_LOG $BRCOMPATD_VALGRIND_OPT"
-        daemonize="n"
-    fi
-    appctl_cmd="$appctl --target=/var/run/openvswitch/ovs-vswitchd.\`cat $VSWITCHD_PIDFILE\`.ctl %s"
-
-    install -d -m 755 -o root -g root `dirname $BRCOMPATD_PIDFILE`
-    if [ "$daemonize" != "y" ]; then
-        # Start in background and force a "success" message
-        action "Starting ovs-brcompatd ($strace_opt$valgrind_opt)" true
-        (nice -n "$VSWITCHD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd"--no-chdir --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER") &
-    else
-        action "Starting ovs-brcompatd" nice -n "$BRCOMPATD_PRIORITY" $strace_opt $valgrind_opt "$brcompatd" --no-chdir --appctl-command="$appctl_cmd" --pidfile=$BRCOMPATD_PIDFILE --detach $monitor_opt -vANY:CONSOLE:EMER $syslog_opt $logfile_level_opt $logfile_file_opt $leak_opt "$VSWITCHD_OVSDB_SERVER"
-    fi
+    start_daemon BRCOMPATD "$brcompatd" \
+                 --appctl-command="$appctl --target=/var/run/openvswitch/ovs-vswitchd.\`cat $VSWITCHD_PIDFILE\`.ctl %s" \
+                 "$VSWITCHD_OVSDB_SERVER"
 }
 
 function start_xenserverd {
@@ -306,38 +259,16 @@ function start_xenserverd {
 
     install -d -m 755 -o root -g root `dirname $XENSERVERD_PIDFILE`
     action "Starting ovs-xenserverd" "$xenserverd" --no-chdir --pidfile=$XENSERVERD_PIDFILE --detach $monitor_opt -vANY:CONSOLE:EMER
-    fi
 }
 
-function stop_ovsdb_server {
-    if [ -f "$OVSDB_SERVER_PIDFILE" ]; then
-        local pid=$(cat "$OVSDB_SERVER_PIDFILE")
-        action "Killing ovsdb-server ($pid)" kill -TERM $pid
-        rm -f "$OVSDB_SERVER_PIDFILE"
-    fi
-}
-
-function stop_vswitchd {
-    if [ -f "$VSWITCHD_PIDFILE" ]; then
-        local pid=$(cat "$VSWITCHD_PIDFILE")
-        action "Killing ovs-vswitchd ($pid)" kill -TERM $pid
-        rm -f "$VSWITCHD_PIDFILE"
-    fi
-}
-
-function stop_brcompatd {
-    if [ -f "$BRCOMPATD_PIDFILE" ]; then
-        local pid=$(cat "$BRCOMPATD_PIDFILE")
-        action "Killing ovs-brcompatd ($pid)" kill -TERM $pid
-        rm -f "$BRCOMPATD_PIDFILE"
-    fi
-}
-
-function stop_xenserverd {
-    if [ -f "$XENSERVERD_PIDFILE" ]; then
-        local pid=$(cat "$XENSERVERD_PIDFILE")
-        action "Killing ovs-xenserverd ($pid)" kill -TERM $pid
-        rm -f "$XENSERVERD_PIDFILE"
+function stop_daemon {
+    local DAEMON=$1
+    local BINARY=$2
+    eval local pidfile=\$${DAEMON}_PIDFILE
+    if test -f "$pidfile"; then
+        local pid=$(cat "$pidfile")
+        action "Killing `basename $BINARY` ($pid)" kill $pid
+        rm -f "$pidfile"
     fi
 }
 
@@ -420,10 +351,10 @@ function start {
 }
 
 function stop {
-    stop_xenserverd
-    stop_brcompatd
-    stop_vswitchd
-    stop_ovsdb_server
+    stop_daemon XENSERVERD "$xenserverd"
+    stop_daemon BRCOMPATD "$brcompatd"
+    stop_daemon VSWITCHD "$vswitchd"
+    stop_daemon OVSDB_SERVER "$ovsdb_server"
     rm -f /var/lock/subsys/openvswitch
 }
 
