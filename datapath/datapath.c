@@ -551,22 +551,9 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 }
 
 #if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
-/* This code is based on a skb_checksum_setup from net/dev/core.c from a
- * combination of Lenny's 2.6.26 Xen kernel and Xen's
- * linux-2.6.18-92.1.10.el5.xs5.0.0.394.644.  We can't call this function
- * directly because it isn't exported in all versions. */
-static int skb_pull_up_to(struct sk_buff *skb, void *ptr)
-{
-	if (ptr < (void *)skb->tail)
-		return 1;
-	if (__pskb_pull_tail(skb,
-			     ptr - (void *)skb->data - skb_headlen(skb))) {
-		return 1;
-	} else {
-		return 0;
-	}
-}
-
+/* This code is based on skb_checksum_setup() from Xen's net/dev/core.c.  We
+ * can't call this function directly because it isn't exported in all
+ * versions. */
 int vswitch_skb_checksum_setup(struct sk_buff *skb)
 {
 	struct iphdr *iph;
@@ -580,7 +567,7 @@ int vswitch_skb_checksum_setup(struct sk_buff *skb)
 	if (skb->protocol != htons(ETH_P_IP))
 		goto out;
 
-	if (!skb_pull_up_to(skb, skb_network_header(skb) + sizeof(struct iphdr)))
+	if (!pskb_may_pull(skb, skb_network_header(skb) + sizeof(struct iphdr) - skb->data))
 		goto out;
 
 	iph = ip_hdr(skb);
@@ -602,7 +589,7 @@ int vswitch_skb_checksum_setup(struct sk_buff *skb)
 		goto out;
 	}
 
-	if (!skb_pull_up_to(skb, th + csum_offset + 2))
+	if (!pskb_may_pull(skb, th + csum_offset + 2 - skb->data))
 		goto out;
 
 	skb->ip_summed = CHECKSUM_PARTIAL;
