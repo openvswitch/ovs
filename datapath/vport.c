@@ -277,10 +277,13 @@ vport_del(const char __user *udevname)
 	struct vport *vport;
 	struct dp_port *dp_port;
 	int err = 0;
+	int retval;
 
-	if (strncpy_from_user(devname, udevname, IFNAMSIZ - 1) < 0)
+	retval = strncpy_from_user(devname, udevname, IFNAMSIZ);
+	if (retval < 0)
 		return -EFAULT;
-	devname[IFNAMSIZ - 1] = '\0';
+	else if (retval >= IFNAMSIZ)
+		return -ENAMETOOLONG;
 
 	rtnl_lock();
 
