@@ -428,8 +428,7 @@ got_port_no:
 	if (err)
 		goto out_unlock_dp;
 
-	if (!(port.flags & ODP_PORT_INTERNAL))
-		set_internal_devs_mtu(dp);
+	set_internal_devs_mtu(dp);
 	dp_sysfs_add_if(dp->ports[port_no]);
 
 	err = __put_user(port_no, &portp->port);
@@ -1358,7 +1357,7 @@ int dp_min_mtu(const struct datapath *dp)
 }
 
 /* Sets the MTU of all datapath devices to the minimum of the ports.  Must
- * be called with RTNL lock and dp_mutex. */
+ * be called with RTNL lock. */
 void set_internal_devs_mtu(const struct datapath *dp)
 {
 	struct dp_port *p;

@@ -144,13 +144,7 @@ static int internal_dev_change_mtu(struct net_device *netdev, int new_mtu)
 		return -EINVAL;
 
 	if (dp_port) {
-		int min_mtu;
-
-		mutex_lock(&dp_port->dp->mutex);
-		min_mtu = dp_min_mtu(dp_port->dp);
-		mutex_unlock(&dp_port->dp->mutex);
-
-		if (new_mtu > min_mtu)
+		if (new_mtu > dp_min_mtu(dp_port->dp))
 			return -EINVAL;
 	}
 

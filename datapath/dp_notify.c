@@ -54,11 +54,8 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 		break;
 
 	case NETDEV_CHANGEMTU:
-		if (!is_internal_dev(dev)) {
-			mutex_lock(&dp->mutex);
+		if (!is_internal_dev(dev))
 			set_internal_devs_mtu(dp);
-			mutex_unlock(&dp->mutex);
-		}
 		break;
 	}
 	return NOTIFY_DONE;
