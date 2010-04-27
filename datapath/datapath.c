@@ -203,7 +203,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 
 	if (devnamep) {
 		err = -EFAULT;
-		if (strncpy_from_user(devname, devnamep, IFNAMSIZ - 1) < 0)
+		if (strncpy_from_user(devname, devnamep, IFNAMSIZ) < 0)
 			goto err;
 		devname[IFNAMSIZ - 1] = '\0';
 	} else {
