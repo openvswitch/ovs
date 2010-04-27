@@ -202,7 +202,7 @@ function start_daemon {
     else
         local mode=production
         eval local pidfile=\$${DAEMON}_PIDFILE
-        install -d -m 755 -o root -g root `dirname $VSWITCHD_PIDFILE`
+        install -d -m 755 -o root -g root `dirname $pidfile`
         set -- "$@" --pidfile="$pidfile" --detach $monitor_opt --no-chdir
     fi
 
