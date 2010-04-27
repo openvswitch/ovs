@@ -202,10 +202,14 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	int i;
 
 	if (devnamep) {
-		err = -EFAULT;
-		if (strncpy_from_user(devname, devnamep, IFNAMSIZ) < 0)
+		int retval = strncpy_from_user(devname, devnamep, IFNAMSIZ);
+		if (retval < 0) {
+			err = -EFAULT;
 			goto err;
-		devname[IFNAMSIZ - 1] = '\0';
+		} else if (retval >= IFNAMSIZ) {
+			err = -ENAMETOOLONG;
+			goto err;
+		}
 	} else {
 		snprintf(devname, sizeof devname, "of%d", dp_idx);
 	}
