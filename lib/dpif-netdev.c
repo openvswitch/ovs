@@ -1280,7 +1280,8 @@ dp_netdev_output_control(struct dp_netdev *dp, const struct ofpbuf *packet,
     }
 
     msg_size = sizeof *header + packet->size;
-    msg = ofpbuf_new(msg_size);
+    msg = ofpbuf_new(msg_size + DPIF_RECV_MSG_PADDING);
+    ofpbuf_reserve(msg, DPIF_RECV_MSG_PADDING);
     header = ofpbuf_put_uninit(msg, sizeof *header);
     header->type = queue_no;
     header->length = msg_size;

@@ -21,7 +21,9 @@
  * datapath. */
 
 #include <assert.h>
+#include "openflow/openflow.h"
 #include "dpif.h"
+#include "util.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -300,8 +302,10 @@ struct dpif_class {
 
     /* Attempts to receive a message from 'dpif'.  If successful, stores the
      * message into '*packetp'.  The message, if one is received, must begin
-     * with 'struct odp_msg' as a header.  Only messages of the types selected
-     * with the set_listen_mask member function should be received.
+     * with 'struct odp_msg' as a header, and must have at least
+     * DPIF_RECV_MSG_PADDING bytes of headroom (allocated using
+     * e.g. ofpbuf_reserve()).  Only messages of the types selected with the
+     * set_listen_mask member function should be received.
      *
      * This function must not block.  If no message is ready to be received
      * when it is called, it should return EAGAIN without blocking. */
@@ -311,6 +315,14 @@ struct dpif_class {
      * to be received with the recv member function. */
     void (*recv_wait)(struct dpif *dpif);
 };
+
+/* Minimum number of bytes of headroom for a packet returned by the 'recv'
+ * member function (see above).  This headroom allows "struct odp_msg" to be
+ * replaced by "struct ofp_packet_in" without copying the buffer. */
+#define DPIF_RECV_MSG_PADDING (sizeof(struct ofp_packet_in) \
+                               - sizeof(struct odp_msg))
+BUILD_ASSERT_DECL(sizeof(struct ofp_packet_in) > sizeof(struct odp_msg));
+BUILD_ASSERT_DECL(DPIF_RECV_MSG_PADDING % 4 == 0);
 
 extern const struct dpif_class dpif_linux_class;
 extern const struct dpif_class dpif_netdev_class;

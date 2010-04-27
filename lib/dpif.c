@@ -1015,7 +1015,8 @@ dpif_set_sflow_probability(struct dpif *dpif, uint32_t probability)
 
 /* Attempts to receive a message from 'dpif'.  If successful, stores the
  * message into '*packetp'.  The message, if one is received, will begin with
- * 'struct odp_msg' as a header.  Only messages of the types selected with
+ * 'struct odp_msg' as a header, and will have at least DPIF_RECV_MSG_PADDING
+ * bytes of headroom.  Only messages of the types selected with
  * dpif_set_listen_mask() will ordinarily be received (but if a message type is
  * enabled and then later disabled, some stragglers might pop up).
  *
@@ -1026,8 +1027,10 @@ dpif_recv(struct dpif *dpif, struct ofpbuf **packetp)
 {
     int error = dpif->dpif_class->recv(dpif, packetp);
     if (!error) {
+        struct ofpbuf *buf = *packetp;
+
+        assert(ofpbuf_headroom(buf) >= DPIF_RECV_MSG_PADDING);
         if (VLOG_IS_DBG_ENABLED()) {
-            struct ofpbuf *buf = *packetp;
             struct odp_msg *msg = buf->data;
             void *payload = msg + 1;
             size_t payload_len = buf->size - sizeof *msg;

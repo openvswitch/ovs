@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2009, 2010 Nicira Networks.
+ * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3993,65 +3994,127 @@ update_used(struct ofproto *p)
     free(flows);
 }
 
+/* pinsched callback for sending 'packet' on 'ofconn'. */
 static void
 do_send_packet_in(struct ofpbuf *packet, void *ofconn_)
 {
     struct ofconn *ofconn = ofconn_;
-    struct ofproto *ofproto = ofconn->ofproto;
-    struct odp_msg *msg = packet->data;
-    struct ofpbuf payload;
-    struct ofpbuf *opi;
-    uint32_t buffer_id;
-    int send_len;
 
-    /* Extract packet payload from 'msg'. */
-    payload.data = msg + 1;
-    payload.size = msg->length - sizeof *msg;
-
-    /* Construct packet-in message. */
-    send_len = INT_MAX;
-    if (msg->type == _ODPL_ACTION_NR) {
-        buffer_id = UINT32_MAX;
-    } else {
-        if (ofproto->fail_open && fail_open_is_active(ofproto->fail_open)) {
-            buffer_id = pktbuf_get_null();
-        } else {
-            buffer_id = pktbuf_save(ofconn->pktbuf, &payload, msg->port);
-        }
-        if (buffer_id != UINT32_MAX) {
-            send_len = ofconn->miss_send_len;
-        }
-    }
-    opi = make_packet_in(buffer_id, odp_port_to_ofp_port(msg->port),
-                         msg->type, &payload, send_len);
-
-    /* Send. */
-    rconn_send_with_limit(ofconn->rconn, opi, ofconn->packet_in_counter, 100);
-
-    ofpbuf_delete(packet);
+    rconn_send_with_limit(ofconn->rconn, packet,
+                          ofconn->packet_in_counter, 100);
 }
 
+/* Takes 'packet', which has been converted with do_convert_to_packet_in(), and
+ * finalizes its content for sending on 'ofconn', and passes it to 'ofconn''s
+ * packet scheduler for sending.
+ *
+ * If 'clone' is true, the caller retains ownership of 'packet'.  Otherwise,
+ * ownership is transferred to this function. */
+static void
+schedule_packet_in(struct ofconn *ofconn, struct ofpbuf *packet, bool clone)
+{
+    struct ofproto *ofproto = ofconn->ofproto;
+    struct ofp_packet_in *opi = packet->data;
+    uint16_t in_port = ofp_port_to_odp_port(ntohs(opi->in_port));
+    int send_len, trim_size;
+    uint32_t buffer_id;
+
+    /* Get buffer. */
+    if (opi->reason == OFPR_ACTION) {
+        buffer_id = UINT32_MAX;
+    } else if (ofproto->fail_open && fail_open_is_active(ofproto->fail_open)) {
+        buffer_id = pktbuf_get_null();
+    } else {
+        struct ofpbuf payload;
+        payload.data = opi->data;
+        payload.size = packet->size - offsetof(struct ofp_packet_in, data);
+        buffer_id = pktbuf_save(ofconn->pktbuf, &payload, in_port);
+    }
+
+    /* Figure out how much of the packet to send. */
+    send_len = ntohs(opi->total_len);
+    if (buffer_id != UINT32_MAX) {
+        send_len = MIN(send_len, ofconn->miss_send_len);
+    }
+
+    /* Adjust packet length and clone if necessary. */
+    trim_size = offsetof(struct ofp_packet_in, data) + send_len;
+    if (clone) {
+        packet = ofpbuf_clone_data(packet->data, trim_size);
+        opi = packet->data;
+    } else {
+        packet->size = trim_size;
+    }
+
+    /* Update packet headers. */
+    opi->buffer_id = htonl(buffer_id);
+    update_openflow_length(packet);
+
+    /* Hand over to packet scheduler.  It might immediately call into
+     * do_send_packet_in() or it might buffer it for a while (until a later
+     * call to pinsched_run()). */
+    pinsched_send(ofconn->schedulers[opi->reason], in_port,
+                  packet, do_send_packet_in, ofconn);
+}
+
+/* Replace struct odp_msg header in 'packet' by equivalent struct
+ * ofp_packet_in.  The odp_msg must have sufficient headroom to do so (e.g. as
+ * returned by dpif_recv()).
+ *
+ * The conversion is not complete: the caller still needs to trim any unneeded
+ * payload off the end of the buffer, set the length in the OpenFlow header,
+ * and set buffer_id.  Those require us to know the controller settings and so
+ * must be done on a per-controller basis. */
+static void
+do_convert_to_packet_in(struct ofpbuf *packet)
+{
+    struct odp_msg *msg = packet->data;
+    struct ofp_packet_in *opi;
+    uint8_t reason;
+    uint16_t total_len;
+    uint16_t in_port;
+
+    /* Extract relevant header fields */
+    reason = (msg->type == _ODPL_ACTION_NR ? OFPR_ACTION : OFPR_NO_MATCH);
+    total_len = msg->length - sizeof *msg;
+    in_port = odp_port_to_ofp_port(msg->port);
+
+    /* Repurpose packet buffer by overwriting header. */
+    ofpbuf_pull(packet, sizeof(struct odp_msg));
+    opi = ofpbuf_push_zeros(packet, offsetof(struct ofp_packet_in, data));
+    opi->header.version = OFP_VERSION;
+    opi->header.type = OFPT_PACKET_IN;
+    opi->total_len = htons(total_len);
+    opi->in_port = htons(in_port);
+    opi->reason = reason;
+}
+
+/* Given 'packet' containing an odp_msg of type _ODPL_ACTION_NR or
+ * _ODPL_MISS_NR, sends an OFPT_PACKET_IN message to each OpenFlow controller
+ * as necessary according to their individual configurations.
+ *
+ * 'packet' must have sufficient headroom to convert it into a struct
+ * ofp_packet_in (e.g. as returned by dpif_recv()).
+ *
+ * Takes ownership of 'packet'. */
 static void
 send_packet_in(struct ofproto *ofproto, struct ofpbuf *packet)
 {
-    struct odp_msg *msg = packet->data;
     struct ofconn *ofconn, *prev;
 
-    assert(msg->type == _ODPL_MISS_NR || msg->type == _ODPL_ACTION_NR);
+    do_convert_to_packet_in(packet);
 
     prev = NULL;
     LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
         if (ofconn->role != NX_ROLE_SLAVE) {
             if (prev) {
-                pinsched_send(prev->schedulers[msg->type], msg->port,
-                              ofpbuf_clone(packet), do_send_packet_in, prev);
+                schedule_packet_in(prev, packet, true);
             }
             prev = ofconn;
         }
     }
     if (prev) {
-        pinsched_send(prev->schedulers[msg->type], msg->port,
-                      packet, do_send_packet_in, prev);
+        schedule_packet_in(prev, packet, false);
     } else {
         ofpbuf_delete(packet);
     }
