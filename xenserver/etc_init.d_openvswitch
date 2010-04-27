@@ -216,7 +216,7 @@ function start_daemon {
         action "Starting `basename $BINARY`" "$@"
     else
         # Start in background and force a "success" message
-        action "Starting ovs-vswitchd with $mode debugging" true
+        action "Starting `basename $BINARY` with $mode debugging" true
         ("$@") &
     fi
 }
