@@ -195,15 +195,15 @@ function start_daemon {
         exit 1
     elif test -n "$strace_log"; then
         local mode=strace
-        set -- $nice strace -o "$strace_log" $strace_opt "$@"
+        set -- strace -o "$strace_log" $strace_opt "$@"
     elif test -n "$valgrind_log"; then
         local mode=valgrind
-        set -- $nice valgrind --log-file="$valgrind_log" $valgrind_opt "$@"
+        set -- valgrind --log-file="$valgrind_log" $valgrind_opt "$@"
     else
         local mode=production
         eval local pidfile=\$${DAEMON}_PIDFILE
         install -d -m 755 -o root -g root `dirname $VSWITCHD_PIDFILE`
-        set -- $nice "$@" --pidfile="$pidfile" --detach $monitor_opt --no-chdir
+        set -- "$@" --pidfile="$pidfile" --detach $monitor_opt --no-chdir
     fi
 
     # Configure niceness.
