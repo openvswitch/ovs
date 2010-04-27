@@ -252,13 +252,7 @@ function start_brcompatd {
 }
 
 function start_xenserverd {
-    if [ ! -d "$XENSERVERD_RUN_DIR" ]; then
-        install -d -m 755 -o root -g root "$XENSERVERD_RUN_DIR"
-    fi
-    cd "$XENSERVERD_RUN_DIR"
-
-    install -d -m 755 -o root -g root `dirname $XENSERVERD_PIDFILE`
-    action "Starting ovs-xenserverd" "$xenserverd" --no-chdir --pidfile=$XENSERVERD_PIDFILE --detach $monitor_opt -vANY:CONSOLE:EMER
+    start_daemon XENSERVERD "$xenserverd"
 }
 
 function stop_daemon {
