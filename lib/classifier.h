@@ -46,6 +46,10 @@
 #include "list.h"
 #include "openflow/openflow.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /* Number of bytes of fields in a rule. */
 #define CLS_N_BYTES 31
 
@@ -126,9 +130,9 @@ void cls_rule_from_match(struct cls_rule *, unsigned int priority,
 char *cls_rule_to_string(const struct cls_rule *);
 void cls_rule_print(const struct cls_rule *);
 void cls_rule_moved(struct classifier *,
-                    struct cls_rule *old, struct cls_rule *new);
-void cls_rule_replace(struct classifier *, const struct cls_rule *old,
-                      struct cls_rule *new);
+                    struct cls_rule *old_rule, struct cls_rule *new_rule);
+void cls_rule_replace(struct classifier *, const struct cls_rule *old_rule,
+                      struct cls_rule *new_rule);
 
 void classifier_init(struct classifier *);
 void classifier_destroy(struct classifier *);
@@ -159,5 +163,9 @@ void classifier_for_each_match(const struct classifier *, const flow_t *,
                                int include, cls_cb_func *, void *aux);
 struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                               const flow_t *target);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* classifier.h */
