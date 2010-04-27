@@ -246,7 +246,8 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 		goto err_free_dp;
 
 	/* Set up our datapath device. */
-	strncpy(internal_dev_port.devname, devname, IFNAMSIZ - 1);
+	BUILD_BUG_ON(sizeof(internal_dev_port.devname) != sizeof(devname));
+	strcpy(internal_dev_port.devname, devname);
 	internal_dev_port.flags = ODP_PORT_INTERNAL;
 	err = new_dp_port(dp, &internal_dev_port, ODPP_LOCAL);
 	if (err) {
