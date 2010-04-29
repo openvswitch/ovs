@@ -1474,7 +1474,13 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
         if (!port) {
             port = port_create(br, node->name);
         }
+
         port_reconfigure(port, node->data);
+        if (!port->n_ifaces) {
+            VLOG_WARN("bridge %s: port %s has no interfaces, dropping",
+                      br->name, port->name);
+            port_destroy(port);
+        }
     }
     shash_destroy(&old_ports);
     shash_destroy(&new_ports);
@@ -3604,6 +3610,19 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     iface->netdev = NULL;
     iface->cfg = if_cfg;
 
+    /* Attempt to create the network interface in case it doesn't exist yet. */
+    if (!iface_is_internal(port->bridge, iface->name)) {
+        error = set_up_iface(if_cfg, iface, true);
+        if (error) {
+            VLOG_WARN("could not create iface %s: %s", iface->name,
+                      strerror(error));
+
+            free(iface->name);
+            free(iface);
+            return NULL;
+        }
+    }
+
     if (port->n_ifaces >= port->allocated_ifaces) {
         port->ifaces = x2nrealloc(port->ifaces, &port->allocated_ifaces,
                                   sizeof *port->ifaces);
@@ -3611,16 +3630,6 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     port->ifaces[port->n_ifaces++] = iface;
     if (port->n_ifaces > 1) {
         port->bridge->has_bonded_ports = true;
-    }
-
-    /* Attempt to create the network interface in case it
-     * doesn't exist yet. */
-    if (!iface_is_internal(port->bridge, iface->name)) {
-        error = set_up_iface(if_cfg, iface, true);
-        if (error) {
-            VLOG_WARN("could not create iface %s: %s", iface->name,
-                    strerror(error));
-        }
     }
 
     VLOG_DBG("attached network device %s to port %s", iface->name, port->name);
