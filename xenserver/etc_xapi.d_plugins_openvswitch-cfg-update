@@ -58,10 +58,18 @@ def update(session, args):
     currentController = vswitchCurrentController()
     if controller == "" and currentController != "":
         delete_cacert()
+        try:
+            emergency_reset(session, None)
+        except:
+            pass
         removeControllerCfg()
         return "Successfully removed controller config"
     elif controller != currentController:
         delete_cacert()
+        try:
+            emergency_reset(session, None)
+        except:
+            pass
         setControllerCfg(controller)
         return "Successfully set controller to " + controller
     else:
@@ -110,10 +118,13 @@ def vswitchCfgMod(action_args):
                                    [ str(exitcode) , str(action_args) ])
 
 def emergency_reset(session, args):
-    # This function is just a place holder for testing until the real
-    # functionality is implemented.
-    syslog.syslog("openvswitch-cfg-update: emergency_reset called")
-    return "Need to implement emergency_reset"
+    cmd = [vsctl, "emer-reset"]
+    exitcode = subprocess.call(cmd)
+    if exitcode != 0:
+        raise XenAPIPlugin.Failure("VSWITCH_EMER_RESET_FAILURE",
+                                   [ str(exitcode) ])
+
+    return "Successfully reset configuration"
     
 if __name__ == "__main__":
     XenAPIPlugin.dispatch({"update": update,
