@@ -439,6 +439,9 @@ SSL commands:\n\
   del-ssl                     delete the SSL configuration\n\
   set-ssl PRIV-KEY CERT CA-CERT  set the SSL configuration\n\
 \n\
+Switch commands:\n\
+  emer-reset                  reset switch to known good state\n\
+\n\
 Database commands:\n\
   list TBL [REC]              list RECord (or all records) in TBL\n\
   get TBL REC COL[:KEY]       print values of COLumns in RECORD in TBL\n\
@@ -854,6 +857,84 @@ ovs_delete_bridge(const struct ovsrec_open_vswitch *ovs,
 static void
 cmd_init(struct vsctl_context *ctx OVS_UNUSED)
 {
+}
+
+static void
+cmd_emer_reset(struct vsctl_context *ctx)
+{
+    const struct ovsdb_idl *idl = ctx->idl;
+    const struct ovsrec_bridge *br;
+    const struct ovsrec_port *port;
+    const struct ovsrec_interface *iface;
+    const struct ovsrec_mirror *mirror, *next_mirror;
+    const struct ovsrec_controller *ctrl, *next_ctrl;
+    const struct ovsrec_netflow *nf, *next_nf;
+    const struct ovsrec_ssl *ssl, *next_ssl;
+    const struct ovsrec_sflow *sflow, *next_sflow;
+
+
+    /* Reset the Open_vSwitch table. */
+    ovsrec_open_vswitch_set_managers(ctx->ovs, NULL, 0);
+    ovsrec_open_vswitch_set_controller(ctx->ovs, NULL, 0);
+    ovsrec_open_vswitch_set_ssl(ctx->ovs, NULL);
+
+    OVSREC_BRIDGE_FOR_EACH (br, idl) {
+        int i;
+        char *hw_key = "hwaddr";
+        char *hw_val = NULL;
+
+        ovsrec_bridge_set_controller(br, NULL, 0);
+        ovsrec_bridge_set_mirrors(br, NULL, 0);
+        ovsrec_bridge_set_netflow(br, NULL);
+        ovsrec_bridge_set_sflow(br, NULL);
+        ovsrec_bridge_set_flood_vlans(br, NULL, 0);
+
+        /* We only want to save the "hwaddr" key from other_config. */
+        for (i=0; i < br->n_other_config; i++) {
+            if (!strcmp(br->key_other_config[i], hw_key)) {
+                hw_val = br->value_other_config[i];
+                break;
+            }
+        }
+        if (hw_val) {
+            char *val = xstrdup(hw_val);
+            ovsrec_bridge_set_other_config(br, &hw_key, &val, 1);
+            free(val);
+        } else {
+            ovsrec_bridge_set_other_config(br, NULL, NULL, 0);
+        }
+    }
+
+    OVSREC_PORT_FOR_EACH (port, idl) {
+        ovsrec_port_set_other_config(port, NULL, NULL, 0);
+    }
+
+    OVSREC_INTERFACE_FOR_EACH (iface, idl) {
+        /* xxx What do we do about gre/patch devices created by mgr? */
+
+        ovsrec_interface_set_ingress_policing_rate(iface, 0);
+        ovsrec_interface_set_ingress_policing_burst(iface, 0);
+    }
+
+    OVSREC_MIRROR_FOR_EACH_SAFE (mirror, next_mirror, idl) {
+        ovsrec_mirror_delete(mirror);
+    }
+
+    OVSREC_CONTROLLER_FOR_EACH_SAFE (ctrl, next_ctrl, idl) {
+        ovsrec_controller_delete(ctrl);
+    }
+
+    OVSREC_NETFLOW_FOR_EACH_SAFE (nf, next_nf, idl) {
+        ovsrec_netflow_delete(nf);
+    }
+
+    OVSREC_SSL_FOR_EACH_SAFE (ssl, next_ssl, idl) {
+        ovsrec_ssl_delete(ssl);
+    }
+
+    OVSREC_SFLOW_FOR_EACH_SAFE (sflow, next_sflow, idl) {
+        ovsrec_sflow_delete(sflow);
+    }
 }
 
 static void
@@ -2644,6 +2725,9 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"get-ssl", 0, 0, cmd_get_ssl, NULL, ""},
     {"del-ssl", 0, 0, cmd_del_ssl, NULL, ""},
     {"set-ssl", 3, 3, cmd_set_ssl, NULL, "--bootstrap"},
+
+    /* Switch commands. */
+    {"emer-reset", 0, 0, cmd_emer_reset, NULL, ""},
 
     /* Parameter commands. */
     {"get", 3, INT_MAX, cmd_get, NULL, "--if-exists"},
