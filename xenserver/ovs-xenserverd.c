@@ -162,6 +162,9 @@ static struct timespec pool_conf_mtime;
 /* The executing instance of refresh-network-uuids, or NULL if none. */
 static struct process *refresh_script;
 
+/* Time at which to start the refresh script. */
+static long long int next_refresh = LLONG_MAX;
+
 static void
 network_uuid_refresh_run(void)
 {
@@ -183,7 +186,9 @@ network_uuid_refresh_run(void)
         refresh_script = NULL;
     }
 
-    /* Otherwise, check for a change in timestamp.
+    /* Otherwise, schedule a refresh in a few seconds if the timestamp has
+     * changed.  Refreshing immediately doesn't work because XAPI takes a while
+     * to switch over to new UUIDs.
      *
      * (We will always detect a change in timestamp when we start up.  That's
      * good, since it means that the refresh-network-uuids script gets
@@ -192,8 +197,16 @@ network_uuid_refresh_run(void)
     get_mtime("/etc/xensource/pool.conf", &new_mtime);
     if (new_mtime.tv_sec != pool_conf_mtime.tv_sec
         || new_mtime.tv_nsec != pool_conf_mtime.tv_nsec) {
+        next_refresh = time_msec() + 10 * 1000;
+        return;
+    }
+
+    /* Otherwise, if our timer expired then start the refresh. */
+    if (time_msec() >= next_refresh) {
         struct stat s;
         char *argv[2];
+
+        next_refresh = LLONG_MAX;
 
         argv[0] = xasprintf("%s/scripts/refresh-network-uuids",
                             ovs_pkgdatadir);
@@ -222,7 +235,12 @@ network_uuid_refresh_wait(void)
 {
     if (refresh_script) {
         process_wait(refresh_script);
-    } else if (pool_conf_mtime.tv_sec) {
-        poll_timer_wait(1000);
+    } else {
+        if (pool_conf_mtime.tv_sec) {
+            poll_timer_wait(1000);
+        }
+        if (next_refresh != LLONG_MAX) {
+            poll_timer_wait(next_refresh - time_msec());
+        }
     }
 }
