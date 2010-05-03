@@ -177,6 +177,7 @@ struct bridge {
     struct port **ports;
     size_t n_ports, allocated_ports;
     struct shash iface_by_name; /* "struct iface"s indexed by name. */
+    struct shash port_by_name;  /* "struct port"s indexed by name. */
 
     /* Bonding. */
     bool has_bonded_ports;
@@ -1208,6 +1209,7 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
 
     port_array_init(&br->ifaces);
 
+    shash_init(&br->port_by_name);
     shash_init(&br->iface_by_name);
 
     br->flush = false;
@@ -1238,6 +1240,7 @@ bridge_destroy(struct bridge *br)
         ofproto_destroy(br->ofproto);
         mac_learning_destroy(br->ml);
         port_array_destroy(&br->ifaces);
+        shash_destroy(&br->port_by_name);
         shash_destroy(&br->iface_by_name);
         free(br->ports);
         free(br->name);
@@ -3226,6 +3229,7 @@ port_create(struct bridge *br, const char *name)
                                sizeof *br->ports);
     }
     br->ports[br->n_ports++] = port;
+    shash_add_assert(&br->port_by_name, port->name, port);
 
     VLOG_INFO("created port %s on bridge %s", port->name, br->name);
     bridge_flush(br);
@@ -3414,6 +3418,8 @@ port_destroy(struct port *port)
             iface_destroy(port->ifaces[port->n_ifaces - 1]);
         }
 
+        shash_find_and_delete_assert(&br->port_by_name, port->name);
+
         del = br->ports[port->port_idx] = br->ports[--br->n_ports];
         del->port_idx = port->port_idx;
 
@@ -3435,15 +3441,7 @@ port_from_dp_ifidx(const struct bridge *br, uint16_t dp_ifidx)
 static struct port *
 port_lookup(const struct bridge *br, const char *name)
 {
-    size_t i;
-
-    for (i = 0; i < br->n_ports; i++) {
-        struct port *port = br->ports[i];
-        if (!strcmp(port->name, name)) {
-            return port;
-        }
-    }
-    return NULL;
+    return shash_find_data(&br->port_by_name, name);
 }
 
 static struct iface *
