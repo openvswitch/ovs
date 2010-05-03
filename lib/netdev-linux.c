@@ -156,6 +156,7 @@ static int set_etheraddr(const char *netdev_name, int hwaddr_family,
                          const uint8_t[ETH_ADDR_LEN]);
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
+static int get_rtnl_sock(struct nl_sock **);
 
 static bool
 is_netdev_linux_class(const struct netdev_class *netdev_class)
@@ -1850,8 +1851,7 @@ get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
                          .min_len = sizeof(struct rtnl_link_stats) },
     };
 
-
-    static struct nl_sock *rtnl_sock;
+    struct nl_sock *rtnl_sock;
     struct ofpbuf request;
     struct ofpbuf *reply;
     struct ifinfomsg *ifi;
@@ -1859,13 +1859,9 @@ get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
     struct nlattr *attrs[ARRAY_SIZE(rtnlgrp_link_policy)];
     int error;
 
-    if (!rtnl_sock) {
-        error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &rtnl_sock);
-        if (error) {
-            VLOG_ERR_RL(&rl, "failed to create rtnetlink socket: %s",
-                        strerror(error));
-            return error;
-        }
+    error = get_rtnl_sock(&rtnl_sock);
+    if (error) {
+        return error;
     }
 
     ofpbuf_init(&request, 0);
@@ -2127,5 +2123,28 @@ netdev_linux_get_ipv4(const struct netdev *netdev, struct in_addr *ip,
         const struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
         *ip = sin->sin_addr;
     }
+    return error;
+}
+
+/* Obtains a Netlink routing socket that is not subscribed to any multicast
+ * groups.  Returns 0 if successful, otherwise a positive errno value.  Stores
+ * the socket in '*rtnl_sockp' if successful, otherwise a null pointer. */
+static int
+get_rtnl_sock(struct nl_sock **rtnl_sockp)
+{
+    static struct nl_sock *sock;
+    int error;
+
+    if (!sock) {
+        error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &sock);
+        if (error) {
+            VLOG_ERR_RL(&rl, "failed to create rtnetlink socket: %s",
+                        strerror(error));
+        }
+    } else {
+        error = 0;
+    }
+
+    *rtnl_sockp = sock;
     return error;
 }
