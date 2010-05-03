@@ -81,7 +81,8 @@ enum {
     VALID_IN6 = 1 << 3,
     VALID_MTU = 1 << 4,
     VALID_CARRIER = 1 << 5,
-    VALID_IS_PSEUDO = 1 << 6       /* Represents is_internal and is_tap. */
+    VALID_IS_PSEUDO = 1 << 6,       /* Represents is_internal and is_tap. */
+    VALID_POLICING = 1 << 7
 };
 
 struct tap_state {
@@ -108,6 +109,8 @@ struct netdev_dev_linux {
     int carrier;
     bool is_internal;           /* Is this an openvswitch internal device? */
     bool is_tap;                /* Is this a tuntap device? */
+    uint32_t kbits_rate;        /* Policing data. */
+    uint32_t kbits_burst;
 
     union {
         struct tap_state tap;
@@ -1285,6 +1288,8 @@ done:
 static int
 netdev_linux_remove_policing(struct netdev *netdev)
 {
+    struct netdev_dev_linux *netdev_dev =
+        netdev_dev_linux_cast(netdev_get_dev(netdev));
     const char *netdev_name = netdev_get_name(netdev);
     char command[1024];
 
@@ -1295,6 +1300,9 @@ netdev_linux_remove_policing(struct netdev *netdev)
         VLOG_WARN_RL(&rl, "%s: problem removing policing", netdev_name);
         return ECHILD;
     }
+    netdev_dev->kbits_rate = 0;
+    netdev_dev->kbits_burst = 0;
+    netdev_dev->cache_valid |= VALID_POLICING;
     return 0;
 }
 
@@ -1303,18 +1311,26 @@ static int
 netdev_linux_set_policing(struct netdev *netdev,
                           uint32_t kbits_rate, uint32_t kbits_burst)
 {
+    struct netdev_dev_linux *netdev_dev =
+        netdev_dev_linux_cast(netdev_get_dev(netdev));
     const char *netdev_name = netdev_get_name(netdev);
     char command[1024];
 
     COVERAGE_INC(netdev_set_policing);
 
+    kbits_burst = (!kbits_rate ? 0       /* Force to 0 if no rate specified. */
+                   : !kbits_burst ? 1000 /* Default to 1000 kbits if 0. */
+                   : kbits_burst);       /* Stick with user-specified value. */
+
+    if (netdev_dev->cache_valid & VALID_POLICING
+        && netdev_dev->kbits_rate == kbits_rate
+        && netdev_dev->kbits_burst == kbits_burst) {
+        /* Assume that settings haven't changed since we last set them. */
+        return 0;
+    }
+
     netdev_linux_remove_policing(netdev);
     if (kbits_rate) {
-        if (!kbits_burst) {
-            /* Default to 1000 kilobits if not specified. */
-            kbits_burst = 1000;
-        }
-
         snprintf(command, sizeof(command), POLICE_ADD_CMD, netdev_name);
         if (system(command) != 0) {
             VLOG_WARN_RL(&rl, "%s: problem adding policing", netdev_name);
@@ -1328,6 +1344,10 @@ netdev_linux_set_policing(struct netdev *netdev,
                     netdev_name);
             return -1;
         }
+
+        netdev_dev->kbits_rate = kbits_rate;
+        netdev_dev->kbits_burst = kbits_burst;
+        netdev_dev->cache_valid |= VALID_POLICING;
     }
 
     return 0;
