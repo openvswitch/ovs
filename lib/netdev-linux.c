@@ -24,6 +24,7 @@
 #include <linux/ip.h>
 #include <linux/types.h>
 #include <linux/ethtool.h>
+#include <linux/pkt_sched.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
 #include <linux/version.h>
@@ -1276,30 +1277,57 @@ done:
 
 #define POLICE_ADD_CMD "/sbin/tc qdisc add dev %s handle ffff: ingress"
 #define POLICE_CONFIG_CMD "/sbin/tc filter add dev %s parent ffff: protocol ip prio 50 u32 match ip src 0.0.0.0/0 police rate %dkbit burst %dk mtu 65535 drop flowid :1"
-/* We redirect stderr to /dev/null because we often want to remove all
- * traffic control configuration on a port so its in a known state.  If
- * this done when there is no such configuration, tc complains, so we just
- * always ignore it.
- */
-#define POLICE_DEL_CMD "/sbin/tc qdisc del dev %s handle ffff: ingress 2>/dev/null"
 
 /* Remove ingress policing from 'netdev'.  Returns 0 if successful, otherwise a
- * positive errno value. */
+ * positive errno value.
+ *
+ * This function is equivalent to running
+ *     /sbin/tc qdisc del dev %s handle ffff: ingress
+ * but it is much, much faster.
+ */
 static int
 netdev_linux_remove_policing(struct netdev *netdev)
 {
     struct netdev_dev_linux *netdev_dev =
         netdev_dev_linux_cast(netdev_get_dev(netdev));
     const char *netdev_name = netdev_get_name(netdev);
-    char command[1024];
 
-    /* xxx This should be more careful about only adding if it
-     * xxx actually exists, as opposed to always deleting it. */
-    snprintf(command, sizeof(command), POLICE_DEL_CMD, netdev_name);
-    if (system(command) == -1) {
-        VLOG_WARN_RL(&rl, "%s: problem removing policing", netdev_name);
-        return ECHILD;
+    struct ofpbuf request;
+    struct ofpbuf *reply;
+    struct tcmsg *tcmsg;
+    struct nl_sock *rtnl_sock;
+    int ifindex;
+    int error;
+
+    error = get_ifindex(netdev, &ifindex);
+    if (error) {
+        return error;
     }
+
+    error = get_rtnl_sock(&rtnl_sock);
+    if (error) {
+        return error;
+    }
+
+    ofpbuf_init(&request, 0);
+    nl_msg_put_nlmsghdr(&request, rtnl_sock, sizeof *tcmsg,
+                        RTM_DELQDISC, NLM_F_REQUEST);
+    tcmsg = ofpbuf_put_zeros(&request, sizeof *tcmsg);
+    tcmsg->tcm_family = AF_UNSPEC;
+    tcmsg->tcm_ifindex = ifindex;
+    tcmsg->tcm_handle = 0xffff0000;
+    tcmsg->tcm_parent = TC_H_INGRESS;
+    nl_msg_put_string(&request, TCA_KIND, "ingress");
+    nl_msg_put_unspec(&request, TCA_OPTIONS, NULL, 0);
+    error = nl_sock_transact(rtnl_sock, &request, &reply);
+    ofpbuf_uninit(&request);
+    ofpbuf_delete(reply);
+    if (error && error != ENOENT) {
+        VLOG_WARN_RL(&rl, "%s: removing policing failed: %s",
+                     netdev_name, strerror(error));
+        return error;
+    }
+
     netdev_dev->kbits_rate = 0;
     netdev_dev->kbits_burst = 0;
     netdev_dev->cache_valid |= VALID_POLICING;
