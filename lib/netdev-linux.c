@@ -1280,6 +1280,24 @@ done:
  */
 #define POLICE_DEL_CMD "/sbin/tc qdisc del dev %s handle ffff: ingress 2>/dev/null"
 
+/* Remove ingress policing from 'netdev'.  Returns 0 if successful, otherwise a
+ * positive errno value. */
+static int
+netdev_linux_remove_policing(struct netdev *netdev)
+{
+    const char *netdev_name = netdev_get_name(netdev);
+    char command[1024];
+
+    /* xxx This should be more careful about only adding if it
+     * xxx actually exists, as opposed to always deleting it. */
+    snprintf(command, sizeof(command), POLICE_DEL_CMD, netdev_name);
+    if (system(command) == -1) {
+        VLOG_WARN_RL(&rl, "%s: problem removing policing", netdev_name);
+        return ECHILD;
+    }
+    return 0;
+}
+
 /* Attempts to set input rate limiting (policing) policy. */
 static int
 netdev_linux_set_policing(struct netdev *netdev,
@@ -1289,17 +1307,12 @@ netdev_linux_set_policing(struct netdev *netdev,
     char command[1024];
 
     COVERAGE_INC(netdev_set_policing);
+
+    netdev_linux_remove_policing(netdev);
     if (kbits_rate) {
         if (!kbits_burst) {
             /* Default to 1000 kilobits if not specified. */
             kbits_burst = 1000;
-        }
-
-        /* xxx This should be more careful about only adding if it
-         * xxx actually exists, as opposed to always deleting it. */
-        snprintf(command, sizeof(command), POLICE_DEL_CMD, netdev_name);
-        if (system(command) == -1) {
-            VLOG_WARN_RL(&rl, "%s: problem removing policing", netdev_name);
         }
 
         snprintf(command, sizeof(command), POLICE_ADD_CMD, netdev_name);
@@ -1314,11 +1327,6 @@ netdev_linux_set_policing(struct netdev *netdev,
             VLOG_WARN_RL(&rl, "%s: problem configuring policing",
                     netdev_name);
             return -1;
-        }
-    } else {
-        snprintf(command, sizeof(command), POLICE_DEL_CMD, netdev_name);
-        if (system(command) == -1) {
-            VLOG_WARN_RL(&rl, "%s: problem removing policing", netdev_name);
         }
     }
 
