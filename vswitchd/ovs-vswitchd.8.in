@@ -106,6 +106,9 @@ to be loaded.
 \fBovs\-vswitchd\fR process.  The currently supported commands are
 described below.  The command descriptions assume an understanding of
 how to configure Open vSwitch.
+.SS "GENERAL COMMANDS"
+.IP "\fBexit\fR"
+Causes \fBovs\-vswitchd\fR to gracefully terminate.
 .SS "BRIDGE COMMANDS"
 These commands manage bridges.
 .IP "\fBfdb/show\fR \fIbridge\fR"
