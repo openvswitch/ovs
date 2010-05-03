@@ -122,7 +122,8 @@ struct port {
     struct bridge *bridge;
     size_t port_idx;
     int vlan;                   /* -1=trunk port, else a 12-bit VLAN ID. */
-    unsigned long *trunks;      /* Bitmap of trunked VLANs, if 'vlan' == -1. */
+    unsigned long *trunks;      /* Bitmap of trunked VLANs, if 'vlan' == -1.
+                                 * NULL if all VLANs are trunked. */
     char *name;
 
     /* An ordinary bridge port has 1 interface.
@@ -2073,7 +2074,8 @@ dst_is_duplicate(const struct dst *dsts, size_t n_dsts,
 static bool
 port_trunks_vlan(const struct port *port, uint16_t vlan)
 {
-    return port->vlan < 0 && bitmap_is_set(port->trunks, vlan);
+    return (port->vlan < 0
+            && (!port->trunks || bitmap_is_set(port->trunks, vlan)));
 }
 
 static bool
@@ -3354,7 +3356,7 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 
     /* Get trunked VLANs. */
     trunks = NULL;
-    if (vlan < 0) {
+    if (vlan < 0 && cfg->n_trunks) {
         size_t n_errors;
         size_t i;
 
@@ -3373,17 +3375,14 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
                      port->name, cfg->n_trunks);
         }
         if (n_errors == cfg->n_trunks) {
-            if (n_errors) {
-                VLOG_ERR("port %s: no valid trunks, trunking all VLANs",
-                         port->name);
-            }
-            bitmap_set_multiple(trunks, 0, 4096, 1);
-        }
-    } else {
-        if (cfg->n_trunks) {
-            VLOG_ERR("port %s: ignoring trunks in favor of implicit vlan",
+            VLOG_ERR("port %s: no valid trunks, trunking all VLANs",
                      port->name);
+            bitmap_free(trunks);
+            trunks = NULL;
         }
+    } else if (vlan >= 0 && cfg->n_trunks) {
+        VLOG_ERR("port %s: ignoring trunks in favor of implicit vlan",
+                 port->name);
     }
     if (trunks == NULL
         ? port->trunks != NULL
