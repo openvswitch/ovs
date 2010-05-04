@@ -2205,7 +2205,7 @@ add_controller_action(struct odp_actions *actions,
                       const struct ofp_action_output *oao)
 {
     union odp_action *a = odp_actions_add(actions, ODPAT_CONTROLLER);
-    a->controller.arg = oao->max_len ? ntohs(oao->max_len) : UINT32_MAX;
+    a->controller.arg = ntohs(oao->max_len);
 }
 
 struct action_xlate_ctx {
@@ -4008,10 +4008,14 @@ do_send_packet_in(struct ofpbuf *packet, void *ofconn_)
  * finalizes its content for sending on 'ofconn', and passes it to 'ofconn''s
  * packet scheduler for sending.
  *
+ * 'max_len' specifies the maximum number of bytes of the packet to send on
+ * 'ofconn' (INT_MAX specifies no limit).
+ *
  * If 'clone' is true, the caller retains ownership of 'packet'.  Otherwise,
  * ownership is transferred to this function. */
 static void
-schedule_packet_in(struct ofconn *ofconn, struct ofpbuf *packet, bool clone)
+schedule_packet_in(struct ofconn *ofconn, struct ofpbuf *packet, int max_len,
+                   bool clone)
 {
     struct ofproto *ofproto = ofconn->ofproto;
     struct ofp_packet_in *opi = packet->data;
@@ -4036,6 +4040,7 @@ schedule_packet_in(struct ofconn *ofconn, struct ofpbuf *packet, bool clone)
     if (buffer_id != UINT32_MAX) {
         send_len = MIN(send_len, ofconn->miss_send_len);
     }
+    send_len = MIN(send_len, max_len);
 
     /* Adjust packet length and clone if necessary. */
     trim_size = offsetof(struct ofp_packet_in, data) + send_len;
@@ -4064,8 +4069,11 @@ schedule_packet_in(struct ofconn *ofconn, struct ofpbuf *packet, bool clone)
  * The conversion is not complete: the caller still needs to trim any unneeded
  * payload off the end of the buffer, set the length in the OpenFlow header,
  * and set buffer_id.  Those require us to know the controller settings and so
- * must be done on a per-controller basis. */
-static void
+ * must be done on a per-controller basis.
+ *
+ * Returns the maximum number of bytes of the packet that should be sent to
+ * the controller (INT_MAX if no limit). */
+static int
 do_convert_to_packet_in(struct ofpbuf *packet)
 {
     struct odp_msg *msg = packet->data;
@@ -4073,9 +4081,16 @@ do_convert_to_packet_in(struct ofpbuf *packet)
     uint8_t reason;
     uint16_t total_len;
     uint16_t in_port;
+    int max_len;
 
     /* Extract relevant header fields */
-    reason = (msg->type == _ODPL_ACTION_NR ? OFPR_ACTION : OFPR_NO_MATCH);
+    if (msg->type == _ODPL_ACTION_NR) {
+        reason = OFPR_ACTION;
+        max_len = msg->arg;
+    } else {
+        reason = OFPR_NO_MATCH;
+        max_len = INT_MAX;
+    }
     total_len = msg->length - sizeof *msg;
     in_port = odp_port_to_ofp_port(msg->port);
 
@@ -4087,6 +4102,8 @@ do_convert_to_packet_in(struct ofpbuf *packet)
     opi->total_len = htons(total_len);
     opi->in_port = htons(in_port);
     opi->reason = reason;
+
+    return max_len;
 }
 
 /* Given 'packet' containing an odp_msg of type _ODPL_ACTION_NR or
@@ -4101,20 +4118,21 @@ static void
 send_packet_in(struct ofproto *ofproto, struct ofpbuf *packet)
 {
     struct ofconn *ofconn, *prev;
+    int max_len;
 
-    do_convert_to_packet_in(packet);
+    max_len = do_convert_to_packet_in(packet);
 
     prev = NULL;
     LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
         if (ofconn->role != NX_ROLE_SLAVE) {
             if (prev) {
-                schedule_packet_in(prev, packet, true);
+                schedule_packet_in(prev, packet, max_len, true);
             }
             prev = ofconn;
         }
     }
     if (prev) {
-        schedule_packet_in(prev, packet, false);
+        schedule_packet_in(prev, packet, max_len, false);
     } else {
         ofpbuf_delete(packet);
     }
