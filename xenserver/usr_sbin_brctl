@@ -1,6 +1,6 @@
 #! /usr/bin/python
 #
-# Copyright (c) 2009 Nicira Networks.
+# Copyright (c) 2009, 2010 Nicira Networks.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -99,6 +99,15 @@ def cmd_show():
             print "\t\t\t\t\t\t\t%s" % port
 
 def main():
+    # Check the network configuration mode.
+    try:
+        network_mode = read_first_line_of_file('/etc/xensource/network.conf')
+        if network_mode == 'bridge':
+            delegate()
+    except:
+        # File probably doesn't exist
+        pass
+
     # Parse the command line.
     try:
         options, args = getopt.gnu_getopt(sys.argv[1:],

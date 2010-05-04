@@ -24,6 +24,12 @@
 . /etc/xensource-inventory
 test -e /etc/sysconfig/openvswitch && . /etc/sysconfig/openvswitch
 
+NETWORK_MODE=$(cat /etc/xensource/network.conf)
+if test "$NETWORK_MODE" = bridge; then
+    echo "Open vSwitch disabled (/etc/xensource/network.conf is 'bridge')" >&2
+    exit 0
+fi
+
 # General config variables in /etc/sysconfig/openvswitch
 if test "$PRODUCT_VERSION" = "5.5.0"; then
     # XenServer 5.5.0 needs ovs-brcompatd and /proc/net simulation.
