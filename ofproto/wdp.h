@@ -20,6 +20,10 @@
 #include "classifier.h"
 #include "list.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct ofpbuf;
 struct svec;
 struct wdp;
@@ -218,5 +222,9 @@ void wdp_recv_wait(struct wdp *);
 
 void wdp_get_netflow_ids(const struct wdp *,
                            uint8_t *engine_type, uint8_t *engine_id);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* wdp.h */
