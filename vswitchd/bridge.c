@@ -823,7 +823,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             }
             ofproto_set_sflow(br->ofproto, &oso);
 
-            svec_destroy(&oso.targets);
+            /* Do not destroy oso.targets because it is owned by sflow_cfg. */
         } else {
             ofproto_set_sflow(br->ofproto, NULL);
         }
