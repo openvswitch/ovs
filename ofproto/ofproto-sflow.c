@@ -519,8 +519,11 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     hdrElem.tag = SFLFLOW_HEADER;
     header = &hdrElem.flowType.header;
     header->header_protocol = SFLHEADER_ETHERNET_ISO8023;
-    header->frame_length = payload.size;
-    header->stripped = 4; /* Ethernet FCS stripped off. */
+    /* The frame_length should include the Ethernet FCS (4 bytes),
+       but it has already been stripped,  so we need to add 4 here. */
+    header->frame_length = payload.size + 4;
+    /* Ethernet FCS stripped off. */
+    header->stripped = 4;
     header->header_length = MIN(payload.size,
                                 sampler->sFlowFsMaximumHeaderSize);
     header->header_bytes = payload.data;
