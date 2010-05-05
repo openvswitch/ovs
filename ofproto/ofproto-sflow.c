@@ -301,12 +301,11 @@ ofproto_sflow_add_poller(struct ofproto_sflow *os,
 
 static void
 ofproto_sflow_add_sampler(struct ofproto_sflow *os,
-			  struct ofproto_sflow_port *osp,
-			  u_int32_t sampling_rate, u_int32_t header_len)
+			  struct ofproto_sflow_port *osp)
 {
     SFLSampler *sampler = sfl_agent_addSampler(os->sflow_agent, &osp->dsi);
-    sfl_sampler_set_sFlowFsPacketSamplingRate(sampler, sampling_rate);
-    sfl_sampler_set_sFlowFsMaximumHeaderSize(sampler, header_len);
+    sfl_sampler_set_sFlowFsPacketSamplingRate(sampler, os->options->sampling_rate);
+    sfl_sampler_set_sFlowFsMaximumHeaderSize(sampler, os->options->header_len);
     sfl_sampler_set_sFlowFsReceiver(sampler, RECEIVER_INDEX);
 }
 
@@ -339,9 +338,10 @@ ofproto_sflow_add_port(struct ofproto_sflow *os, uint16_t odp_port,
     SFL_DS_SET(osp->dsi, 0, ifindex, 0);
     port_array_set(&os->ports, odp_port, osp);
 
-    /* Add poller. */
+    /* Add poller and sampler. */
     if (os->sflow_agent) {
         ofproto_sflow_add_poller(os, osp, odp_port);
+        ofproto_sflow_add_sampler(os, osp);
     }
 }
 
@@ -439,8 +439,8 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
 
     /* Add samplers and pollers for the currently known ports. */
     PORT_ARRAY_FOR_EACH (osp, &os->ports, odp_port) {
-        ofproto_sflow_add_sampler(os, osp,
-                                  options->sampling_rate, options->header_len);
+        ofproto_sflow_add_poller(os, osp, odp_port);
+        ofproto_sflow_add_sampler(os, osp);
     }
 }
 
