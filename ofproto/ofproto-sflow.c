@@ -533,7 +533,9 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct odp_msg *msg)
     switchElem.tag = SFLFLOW_EX_SWITCH;
     switchElem.flowType.sw.src_vlan = ntohs(flow.dl_vlan);
     switchElem.flowType.sw.src_priority = -1; /* XXX */
-    switchElem.flowType.sw.dst_vlan = -1;     /* Filled in correctly below. */
+     /* Initialize the output VLAN and priority to be the same as the input,
+        but these fields can be overriden below if affected by an action. */
+    switchElem.flowType.sw.dst_vlan = switchElem.flowType.sw.src_vlan;
     switchElem.flowType.sw.dst_priority = switchElem.flowType.sw.src_priority;
 
     /* Figure out the output ports. */
