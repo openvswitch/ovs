@@ -20,6 +20,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "vlog.h"
 
 struct pstream;
 struct stream;
@@ -72,5 +73,17 @@ int pstream_open_with_default_ports(const char *name,
                                     uint16_t default_ptcp_port,
                                     uint16_t default_pssl_port,
                                     struct pstream **);
+
+/* Error reporting. */
+
+enum stream_content_type {
+    STREAM_UNKNOWN,
+    STREAM_OPENFLOW,
+    STREAM_SSL,
+    STREAM_JSONRPC
+};
+
+void stream_report_content(const void *, size_t, enum stream_content_type,
+                           enum vlog_module, const char *stream_name);
 
 #endif /* stream.h */

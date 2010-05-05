@@ -267,6 +267,12 @@ jsonrpc_recv(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
             if (json_parser_is_done(rpc->parser)) {
                 jsonrpc_received(rpc);
                 if (rpc->status) {
+                    const struct byteq *q = &rpc->input;
+                    if (q->head <= BYTEQ_SIZE) {
+                        stream_report_content(q->buffer, q->head,
+                                              STREAM_JSONRPC,
+                                              THIS_MODULE, rpc->name);
+                    }
                     return rpc->status;
                 }
             }

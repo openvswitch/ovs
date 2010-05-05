@@ -124,6 +124,10 @@ struct ssl_stream
      * deadlock and livelock situations above.
      */
     int rx_want, tx_want;
+
+    /* A few bytes of header data in case SSL negotation fails. */
+    uint8_t head[2];
+    short int n_head;
 };
 
 /* SSL context created by ssl_init(). */
@@ -264,6 +268,7 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
     sslv->ssl = ssl;
     sslv->txbuf = NULL;
     sslv->rx_want = sslv->tx_want = SSL_NOTHING;
+    sslv->n_head = 0;
     *streamp = &sslv->stream;
     return 0;
 
@@ -414,6 +419,13 @@ ssl_connect(struct stream *stream)
         /* Fall through. */
 
     case STATE_SSL_CONNECTING:
+        /* Capture the first few bytes of received data so that we can guess
+         * what kind of funny data we've been sent if SSL negotation fails. */
+        if (sslv->n_head <= 0) {
+            sslv->n_head = recv(sslv->fd, sslv->head, sizeof sslv->head,
+                                MSG_PEEK);
+        }
+
         retval = (sslv->type == CLIENT
                    ? SSL_connect(sslv->ssl) : SSL_accept(sslv->ssl));
         if (retval != 1) {
@@ -425,6 +437,8 @@ ssl_connect(struct stream *stream)
                 interpret_ssl_error((sslv->type == CLIENT ? "SSL_connect"
                                      : "SSL_accept"), retval, error, &unused);
                 shutdown(sslv->fd, SHUT_RDWR);
+                stream_report_content(sslv->head, sslv->n_head, STREAM_SSL,
+                                      THIS_MODULE, stream_get_name(stream));
                 return EPROTO;
             }
         } else if (bootstrap_ca_cert) {

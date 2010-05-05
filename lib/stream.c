@@ -718,5 +718,66 @@ pstream_open_with_default_ports(const char *name_,
 
     return error;
 }
+
+/* Attempts to guess the content type of a stream whose first few bytes were
+ * the 'size' bytes of 'data'. */
+static enum stream_content_type
+stream_guess_content(const uint8_t *data, size_t size)
+{
+    if (size >= 2) {
+#define PAIR(A, B) (((A) << 8) | (B))
+        switch (PAIR(data[0], data[1])) {
+        case PAIR(0x16, 0x03):  /* Handshake, version 3. */
+            return STREAM_SSL;
+        case PAIR('{', '"'):
+            return STREAM_JSONRPC;
+        case PAIR(OFP_VERSION, OFPT_HELLO):
+            return STREAM_OPENFLOW;
+        }
+    }
 
+    return STREAM_UNKNOWN;
+}
 
+/* Returns a string represenation of 'type'. */
+static const char *
+stream_content_type_to_string(enum stream_content_type type)
+{
+    switch (type) {
+    case STREAM_UNKNOWN:
+    default:
+        return "unknown";
+
+    case STREAM_JSONRPC:
+        return "JSON-RPC";
+
+    case STREAM_OPENFLOW:
+        return "OpenFlow";
+
+    case STREAM_SSL:
+        return "SSL";
+    }
+}
+
+/* Attempts to guess the content type of a stream whose first few bytes were
+ * the 'size' bytes of 'data'.  If this is done successfully, and the guessed
+ * content type is other than 'expected_type', then log a message in vlog
+ * module 'module', naming 'stream_name' as the source, explaining what
+ * content was expected and what was actually received. */
+void
+stream_report_content(const void *data, size_t size,
+                      enum stream_content_type expected_type,
+                      enum vlog_module module, const char *stream_name)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+    enum stream_content_type actual_type;
+
+    actual_type = stream_guess_content(data, size);
+    if (actual_type != expected_type && actual_type != STREAM_UNKNOWN) {
+        vlog_rate_limit(module, VLL_WARN, &rl,
+                        "%s: received %s data on %s channel",
+                        stream_name,
+                        stream_content_type_to_string(expected_type),
+                        stream_content_type_to_string(actual_type));
+    }
+}

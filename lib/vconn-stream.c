@@ -44,6 +44,7 @@ struct vconn_stream
     struct stream *stream;
     struct ofpbuf *rxbuf;
     struct ofpbuf *txbuf;
+    int n_packets;
 };
 
 static struct vconn_class stream_vconn_class;
@@ -63,6 +64,7 @@ vconn_stream_new(struct stream *stream, int connect_status)
     s->stream = stream;
     s->txbuf = NULL;
     s->rxbuf = NULL;
+    s->n_packets = 0;
     s->vconn.remote_ip = stream_get_remote_ip(stream);
     s->vconn.remote_port = stream_get_remote_port(stream);
     s->vconn.local_ip = stream_get_local_ip(stream);
@@ -102,6 +104,12 @@ static void
 vconn_stream_close(struct vconn *vconn)
 {
     struct vconn_stream *s = vconn_stream_cast(vconn);
+
+    if ((vconn->error == EPROTO || s->n_packets < 1) && s->rxbuf) {
+        stream_report_content(s->rxbuf->data, s->rxbuf->size, STREAM_OPENFLOW,
+                              THIS_MODULE, vconn_get_name(vconn));
+    }
+
     stream_close(s->stream);
     vconn_stream_clear_txbuf(s);
     ofpbuf_delete(s->rxbuf);
@@ -172,6 +180,7 @@ vconn_stream_recv(struct vconn *vconn, struct ofpbuf **bufferp)
         }
     }
 
+    s->n_packets++;
     *bufferp = s->rxbuf;
     s->rxbuf = NULL;
     return 0;
