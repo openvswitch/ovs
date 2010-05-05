@@ -889,10 +889,11 @@
       of switches.</p>
 
     <column name="agent">
-      IP address to report as ``agent address'' to collectors.  If not
-      specified, defaults to the <ref table="Controller" column="local_ip"/> in
-      the collector's <ref table="Controller"/>.  If neither is specified,
-      sFlow is disabled.
+      Name of the network device whose IP address should be reported as the
+      ``agent address'' to collectors.  If not specified, the IP address
+      defaults to the <ref table="Controller" column="local_ip"/> in the
+      collector's <ref table="Controller"/>.  If an agent IP address cannot be
+      determined either way, sFlow is disabled.
     </column>
 
     <column name="header">
