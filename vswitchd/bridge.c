@@ -176,6 +176,7 @@ struct bridge {
     /* Bridge ports. */
     struct port **ports;
     size_t n_ports, allocated_ports;
+    struct shash iface_by_name; /* "struct iface"s indexed by name. */
 
     /* Bonding. */
     bool has_bonded_ports;
@@ -236,6 +237,7 @@ static void bond_enable_slave(struct iface *iface, bool enable);
 
 static struct port *port_create(struct bridge *, const char *name);
 static void port_reconfigure(struct port *, const struct ovsrec_port *);
+static void port_del_ifaces(struct port *, const struct ovsrec_port *);
 static void port_destroy(struct port *);
 static struct port *port_lookup(const struct bridge *, const char *name);
 static struct iface *port_lookup_iface(const struct port *, const char *name);
@@ -1206,6 +1208,8 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
 
     port_array_init(&br->ifaces);
 
+    shash_init(&br->iface_by_name);
+
     br->flush = false;
 
     list_push_back(&all_bridges, &br->node);
@@ -1234,6 +1238,7 @@ bridge_destroy(struct bridge *br)
         ofproto_destroy(br->ofproto);
         mac_learning_destroy(br->ml);
         port_array_destroy(&br->ifaces);
+        shash_destroy(&br->iface_by_name);
         free(br->ports);
         free(br->name);
         free(br);
@@ -1334,22 +1339,6 @@ bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
     return n_controllers;
 }
 
-static bool
-check_duplicate_ifaces(struct bridge *br, struct iface *iface, void *ifaces_)
-{
-    struct svec *ifaces = ifaces_;
-    if (!svec_contains(ifaces, iface->name)) {
-        svec_add(ifaces, iface->name);
-        svec_sort(ifaces);
-        return true;
-    } else {
-        VLOG_ERR("bridge %s: %s interface is on multiple ports, "
-                 "removing from %s",
-                 br->name, iface->name, iface->port->name);
-        return false;
-    }
-}
-
 static void
 bridge_update_desc(struct bridge *br OVS_UNUSED)
 {
@@ -1424,7 +1413,6 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
                        struct bridge *br)
 {
     struct shash old_ports, new_ports;
-    struct svec ifaces;
     struct svec listeners, old_listeners;
     struct svec snoops, old_snoops;
     struct shash_node *node;
@@ -1463,12 +1451,23 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
         }
     }
 
-    /* Get rid of deleted ports and add new ports. */
+    /* Get rid of deleted ports.
+     * Get rid of deleted interfaces on ports that still exist. */
     SHASH_FOR_EACH (node, &old_ports) {
-        if (!shash_find(&new_ports, node->name)) {
-            port_destroy(node->data);
+        struct port *port = node->data;
+        const struct ovsrec_port *port_cfg;
+
+        port_cfg = shash_find_data(&new_ports, node->name);
+        if (!port_cfg) {
+            port_destroy(port);
+        } else {
+            port_del_ifaces(port, port_cfg);
         }
     }
+
+    /* Create new ports.
+     * Add new interfaces to existing ports.
+     * Reconfigure existing ports. */
     SHASH_FOR_EACH (node, &new_ports) {
         struct port *port = shash_find_data(&old_ports, node->name);
         if (!port) {
@@ -1484,11 +1483,6 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
     }
     shash_destroy(&old_ports);
     shash_destroy(&new_ports);
-
-    /* Check and delete duplicate interfaces. */
-    svec_init(&ifaces);
-    iterate_and_prune_ifaces(br, check_duplicate_ifaces, &ifaces);
-    svec_destroy(&ifaces);
 
     /* Delete all flows if we're switching from connected to standalone or vice
      * versa.  (XXX Should we delete all flows if we are switching from one
@@ -3251,30 +3245,42 @@ get_port_other_config(const struct ovsrec_port *port, const char *key,
 }
 
 static void
+port_del_ifaces(struct port *port, const struct ovsrec_port *cfg)
+{
+    struct shash new_ifaces;
+    size_t i;
+
+    /* Collect list of new interfaces. */
+    shash_init(&new_ifaces);
+    for (i = 0; i < cfg->n_interfaces; i++) {
+        const char *name = cfg->interfaces[i]->name;
+        shash_add_once(&new_ifaces, name, NULL);
+    }
+
+    /* Get rid of deleted interfaces. */
+    for (i = 0; i < port->n_ifaces; ) {
+        if (!shash_find(&new_ifaces, cfg->interfaces[i]->name)) {
+            iface_destroy(port->ifaces[i]);
+        } else {
+            i++;
+        }
+    }
+
+    shash_destroy(&new_ifaces);
+}
+
+static void
 port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
 {
-    struct shash old_ifaces, new_ifaces;
+    struct shash new_ifaces;
     long long int next_rebalance;
-    struct shash_node *node;
     unsigned long *trunks;
     int vlan;
     size_t i;
 
     port->cfg = cfg;
 
-    /* Collect old and new interfaces. */
-    shash_init(&old_ifaces);
-    shash_init(&new_ifaces);
-    for (i = 0; i < port->n_ifaces; i++) {
-        shash_add(&old_ifaces, port->ifaces[i]->name, port->ifaces[i]);
-    }
-    for (i = 0; i < cfg->n_interfaces; i++) {
-        const char *name = cfg->interfaces[i]->name;
-        if (!shash_add_once(&new_ifaces, name, cfg->interfaces[i])) {
-            VLOG_WARN("port %s: %s specified twice as port interface",
-                      port->name, name);
-        }
-    }
+    /* Update settings. */
     port->updelay = cfg->bond_updelay;
     if (port->updelay < 0) {
         port->updelay = 0;
@@ -3293,23 +3299,32 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
         port->bond_next_rebalance = next_rebalance;
     }
 
-    /* Get rid of deleted interfaces and add new interfaces. */
-    SHASH_FOR_EACH (node, &old_ifaces) {
-        if (!shash_find(&new_ifaces, node->name)) {
-            iface_destroy(node->data);
-        }
-    }
-    SHASH_FOR_EACH (node, &new_ifaces) {
-        const struct ovsrec_interface *if_cfg = node->data;
+    /* Add new interfaces and update 'cfg' member of existing ones. */
+    shash_init(&new_ifaces);
+    for (i = 0; i < cfg->n_interfaces; i++) {
+        const struct ovsrec_interface *if_cfg = cfg->interfaces[i];
         struct iface *iface;
 
-        iface = shash_find_data(&old_ifaces, if_cfg->name);
-        if (!iface) {
-            iface_create(port, if_cfg);
-        } else {
+        if (!shash_add_once(&new_ifaces, if_cfg->name, NULL)) {
+            VLOG_WARN("port %s: %s specified twice as port interface",
+                      port->name, if_cfg->name);
+            continue;
+        }
+
+        iface = iface_lookup(port->bridge, if_cfg->name);
+        if (iface) {
+            if (iface->port != port) {
+                VLOG_ERR("bridge %s: %s interface is on multiple ports, "
+                         "removing from %s",
+                         port->bridge->name, if_cfg->name, iface->port->name);
+                continue;
+            }
             iface->cfg = if_cfg;
+        } else {
+            iface_create(port, if_cfg);
         }
     }
+    shash_destroy(&new_ifaces);
 
     /* Get VLAN tag. */
     vlan = -1;
@@ -3374,7 +3389,6 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     bitmap_free(port->trunks);
     port->trunks = trunks;
 
-    shash_destroy(&old_ifaces);
     shash_destroy(&new_ifaces);
 }
 
@@ -3435,15 +3449,8 @@ port_lookup(const struct bridge *br, const char *name)
 static struct iface *
 port_lookup_iface(const struct port *port, const char *name)
 {
-    size_t j;
-
-    for (j = 0; j < port->n_ifaces; j++) {
-        struct iface *iface = port->ifaces[j];
-        if (!strcmp(iface->name, name)) {
-            return iface;
-        }
-    }
-    return NULL;
+    struct iface *iface = iface_lookup(port->bridge, name);
+    return iface && iface->port == port ? iface : NULL;
 }
 
 static void
@@ -3596,6 +3603,7 @@ port_update_vlan_compat(struct port *port)
 static struct iface *
 iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
 {
+    struct bridge *br = port->bridge;
     struct iface *iface;
     char *name = if_cfg->name;
     int error;
@@ -3611,7 +3619,7 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     iface->cfg = if_cfg;
 
     /* Attempt to create the network interface in case it doesn't exist yet. */
-    if (!iface_is_internal(port->bridge, iface->name)) {
+    if (!iface_is_internal(br, iface->name)) {
         error = set_up_iface(if_cfg, iface, true);
         if (error) {
             VLOG_WARN("could not create iface %s: %s", iface->name,
@@ -3623,18 +3631,20 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
         }
     }
 
+    shash_add_assert(&br->iface_by_name, iface->name, iface);
+
     if (port->n_ifaces >= port->allocated_ifaces) {
         port->ifaces = x2nrealloc(port->ifaces, &port->allocated_ifaces,
                                   sizeof *port->ifaces);
     }
     port->ifaces[port->n_ifaces++] = iface;
     if (port->n_ifaces > 1) {
-        port->bridge->has_bonded_ports = true;
+        br->has_bonded_ports = true;
     }
 
     VLOG_DBG("attached network device %s to port %s", iface->name, port->name);
 
-    bridge_flush(port->bridge);
+    bridge_flush(br);
 
     return iface;
 }
@@ -3647,6 +3657,8 @@ iface_destroy(struct iface *iface)
         struct bridge *br = port->bridge;
         bool del_active = port->active_iface == iface->port_ifidx;
         struct iface *del;
+
+        shash_find_and_delete_assert(&br->iface_by_name, iface->name);
 
         if (iface->dp_ifidx >= 0) {
             port_array_set(&br->ifaces, iface->dp_ifidx, NULL);
@@ -3673,18 +3685,7 @@ iface_destroy(struct iface *iface)
 static struct iface *
 iface_lookup(const struct bridge *br, const char *name)
 {
-    size_t i, j;
-
-    for (i = 0; i < br->n_ports; i++) {
-        struct port *port = br->ports[i];
-        for (j = 0; j < port->n_ifaces; j++) {
-            struct iface *iface = port->ifaces[j];
-            if (!strcmp(iface->name, name)) {
-                return iface;
-            }
-        }
-    }
-    return NULL;
+    return shash_find_data(&br->iface_by_name, name);
 }
 
 static struct iface *
@@ -3706,7 +3707,6 @@ iface_from_dp_ifidx(const struct bridge *br, uint16_t dp_ifidx)
 static bool
 iface_is_internal(const struct bridge *br, const char *if_name)
 {
-    /* XXX wastes time */
     struct iface *iface;
     struct port *port;
 

@@ -100,6 +100,13 @@ shash_add_once(struct shash *sh, const char *name, const void *data)
 }
 
 void
+shash_add_assert(struct shash *sh, const char *name, const void *data)
+{
+    bool added OVS_UNUSED = shash_add_once(sh, name, data);
+    assert(added);
+}
+
+void
 shash_delete(struct shash *sh, struct shash_node *node)
 {
     hmap_remove(&sh->map, &node->node);
@@ -140,6 +147,14 @@ shash_find_and_delete(struct shash *sh, const char *name)
     } else {
         return NULL;
     }
+}
+
+void *
+shash_find_and_delete_assert(struct shash *sh, const char *name)
+{
+    void *data = shash_find_and_delete(sh, name);
+    assert(data != NULL);
+    return data;
 }
 
 struct shash_node *
