@@ -1879,6 +1879,12 @@ static const struct vsctl_table_class tables[] = {
     {&ovsrec_table_ssl,
      {{&ovsrec_table_open_vswitch, NULL, &ovsrec_open_vswitch_col_ssl}}},
 
+    {&ovsrec_table_sflow,
+     {{&ovsrec_table_bridge,
+       &ovsrec_bridge_col_name,
+       &ovsrec_bridge_col_sflow},
+      {NULL, NULL, NULL}}},
+
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
 };
 
