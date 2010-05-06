@@ -285,6 +285,8 @@ flow_from_match(const struct ofp_match *match, bool tun_id_from_cookie,
     flow->nw_dst = match->nw_dst;
     if (tun_id_from_cookie) {
         flow->tun_id = htonl(ntohll(cookie) >> 32);
+    } else {
+        flow->tun_id = 0;
     }
     flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
                      : ntohs(match->in_port));
