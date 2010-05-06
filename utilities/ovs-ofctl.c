@@ -162,7 +162,7 @@ usage(void)
            "  add-flows SWITCH FILE       add flows from FILE\n"
            "  mod-flows SWITCH FLOW       modify actions of matching FLOWs\n"
            "  del-flows SWITCH [FLOW]     delete matching FLOWs\n"
-           "  monitor SWITCH MISSLEN EXP  print packets received from SWITCH\n"
+           "  monitor SWITCH [MISSLEN]    print packets received from SWITCH\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe VCONN                 probe whether VCONN is up\n"
            "  ping VCONN [N]              latency of N-byte echos\n"
