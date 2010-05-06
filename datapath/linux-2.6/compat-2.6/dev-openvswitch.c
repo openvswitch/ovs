@@ -2,7 +2,7 @@
 
 #include <linux/netdevice.h>
 
-#ifndef NETIF_F_LRO
+#ifdef NETIF_F_LRO
 #include <linux/ethtool.h>
 
 /**
