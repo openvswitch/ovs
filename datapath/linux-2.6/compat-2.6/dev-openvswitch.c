@@ -1,4 +1,4 @@
-#ifndef HAVE_SKB_WARN_LRO
+#ifndef HAVE_DEV_DISABLE_LRO
 
 #include <linux/netdevice.h>
 
@@ -25,7 +25,8 @@ void dev_disable_lro(struct net_device *dev)
 	}
 	WARN_ON(dev->features & NETIF_F_LRO);
 }
-
+#else
+void dev_disable_lro(struct net_device *dev) { }
 #endif /* NETIF_F_LRO */
 
-#endif /* HAVE_SKB_WARN_LRO */
+#endif /* HAVE_DEV_DISABLE_LRO */

@@ -1,4 +1,4 @@
-#ifndef HAVE_SKB_WARN_LRO
+#if !defined(HAVE_SKB_WARN_LRO) && defined(NETIF_F_LRO)
 
 #include <linux/netdevice.h>
 
@@ -9,4 +9,4 @@ void __skb_warn_lro_forwarding(const struct sk_buff *skb)
 				    " while LRO is enabled\n", skb->dev->name);
 }
 
-#endif /* HAVE_SKB_WARN_LRO */
+#endif
