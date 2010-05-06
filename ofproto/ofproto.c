@@ -223,6 +223,8 @@ static struct ofconn *ofconn_create(struct ofproto *, struct rconn *,
 static void ofconn_destroy(struct ofconn *);
 static void ofconn_run(struct ofconn *, struct ofproto *);
 static void ofconn_wait(struct ofconn *);
+static bool ofconn_receives_async_msgs(const struct ofconn *);
+
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
                      struct rconn_packet_counter *counter);
 
@@ -1402,7 +1404,7 @@ send_port_status(struct ofproto *p, const struct ofport *ofport,
         struct ofp_port_status *ops;
         struct ofpbuf *b;
 
-        if (ofconn->role == NX_ROLE_SLAVE) {
+        if (!ofconn_receives_async_msgs(ofconn)) {
             continue;
         }
 
@@ -1649,6 +1651,22 @@ ofconn_wait(struct ofconn *ofconn)
         rconn_recv_wait(ofconn->rconn);
     } else {
         COVERAGE_INC(ofproto_ofconn_stuck);
+    }
+}
+
+/* Returns true if 'ofconn' should receive asynchronous messages. */
+static bool
+ofconn_receives_async_msgs(const struct ofconn *ofconn)
+{
+    if (ofconn->type == OFCONN_CONTROLLER) {
+        /* Ordinary controllers always get asynchronous messages unless they
+         * have configured themselves as "slaves".  */
+        return ofconn->role != NX_ROLE_SLAVE;
+    } else {
+        /* Transient connections don't get asynchronous messages unless they
+         * have explicitly asked for them by setting a nonzero miss send
+         * length. */
+        return ofconn->miss_send_len > 0;
     }
 }
 
@@ -3864,7 +3882,7 @@ send_flow_removed(struct ofproto *p, struct rule *rule,
     prev = NULL;
     LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
         if (rule->send_flow_removed && rconn_is_connected(ofconn->rconn)
-            && ofconn->role != NX_ROLE_SLAVE) {
+            && ofconn_receives_async_msgs(ofconn)) {
             if (prev) {
                 queue_tx(ofpbuf_clone(buf), prev, prev->reply_counter);
             } else {
@@ -4126,7 +4144,7 @@ send_packet_in(struct ofproto *ofproto, struct ofpbuf *packet)
 
     prev = NULL;
     LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
-        if (ofconn->role != NX_ROLE_SLAVE) {
+        if (ofconn_receives_async_msgs(ofconn)) {
             if (prev) {
                 schedule_packet_in(prev, packet, max_len, true);
             }
