@@ -205,16 +205,15 @@ static inline struct sk_buff *skb_gso_segment(struct sk_buff *skb,
 }
 #endif	/* before 2.6.18 */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
-
-extern void __skb_warn_lro_forwarding(const struct sk_buff *skb);
-
+#ifndef HAVE_SKB_WARN_LRO
 #ifndef NETIF_F_LRO
 static inline bool skb_warn_if_lro(const struct sk_buff *skb)
 {
 	return false;
 }
 #else
+extern void __skb_warn_lro_forwarding(const struct sk_buff *skb);
+
 static inline bool skb_warn_if_lro(const struct sk_buff *skb)
 {
 	/* LRO sets gso_size but not gso_type, whereas if GSO is really
@@ -227,7 +226,7 @@ static inline bool skb_warn_if_lro(const struct sk_buff *skb)
 	return false;
 }
 #endif /* NETIF_F_LRO */
-#endif /* kernel < 2.6.27 */
+#endif /* HAVE_SKB_WARN_LRO */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
 static inline struct sk_buff *netdev_alloc_skb_ip_align(struct net_device *dev,

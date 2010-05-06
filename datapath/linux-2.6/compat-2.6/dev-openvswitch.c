@@ -1,12 +1,8 @@
-#include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+#ifndef HAVE_SKB_WARN_LRO
 
 #include <linux/netdevice.h>
 
 #ifndef NETIF_F_LRO
-void dev_disable_lro(struct net_device *dev) { }
-#else
-
 #include <linux/ethtool.h>
 
 /**
@@ -32,4 +28,4 @@ void dev_disable_lro(struct net_device *dev)
 
 #endif /* NETIF_F_LRO */
 
-#endif /* kernel < 2.6.27 */
+#endif /* HAVE_SKB_WARN_LRO */
