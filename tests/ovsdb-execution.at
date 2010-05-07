@@ -644,7 +644,8 @@ OVSDB_CHECK_EXECUTION([weak references],
    [[["weak",
       {"op": "insert",
        "table": "a",
-       "row": {}}]]],
+       "row": {"a2a1": ["named-uuid", "me"]},
+       "uuid-name": "me"}]]],
    dnl Try to delete row from "b" that is referred to by weak references
    dnl from "a" table "a2b" column that requires exactly one value.
    [[["weak",
