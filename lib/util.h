@@ -80,7 +80,7 @@ extern const char *program_name;
 /* Given POINTER, the address of the given MEMBER in a STRUCT object, returns
    the STRUCT object. */
 #define CONTAINER_OF(POINTER, STRUCT, MEMBER)                           \
-        ((STRUCT *) ((char *) (POINTER) - offsetof (STRUCT, MEMBER)))
+        ((STRUCT *) (void *) ((char *) (POINTER) - offsetof (STRUCT, MEMBER)))
 
 #ifdef  __cplusplus
 extern "C" {
