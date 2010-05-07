@@ -126,6 +126,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/timeval.c \
 	lib/timeval.h \
 	lib/type-props.h \
+	lib/unaligned.h \
 	lib/unicode.c \
 	lib/unicode.h \
 	lib/unixctl.c \
