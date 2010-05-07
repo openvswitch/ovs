@@ -50,7 +50,7 @@ AT_CHECK(
 ], [ignore], [test ! -e pid || kill `cat pid`])
 AT_CHECK(
   [[ovsdb-client get-schema unix:socket nonexistent]], 
-  [1], [], [[ovsdb-client: syntax "{"syntax":"[\"nonexistent\"]","details":"get_schema request specifies unknown database nonexistent","error":"unknown database"}": syntax error: Parsing database schema failed: Required 'name' member is missing.
+  [1], [], [[ovsdb-client: syntax "{"details":"get_schema request specifies unknown database nonexistent","error":"unknown database","syntax":"[\"nonexistent\"]"}": syntax error: Parsing database schema failed: Required 'name' member is missing.
 ]], [test ! -e pid || kill `cat pid`])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
@@ -180,26 +180,26 @@ AT_CHECK(
     done]],
   [0], [stdout], [ignore], [test ! -e pid || kill `cat pid`])
 dnl Check that all the crap is in fact in the database log.
-AT_CHECK([[perl $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/']], [0],
+AT_CHECK([[perl $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9]*/"_date":0/' | test-json --multiple -]], [0],
   [[{"name":"ordinals","tables":{"ordinals":{"columns":{"name":{"type":"string"},"number":{"type":"integer"}}}}}
-{"ordinals":{"<0>":{"name":"zero"}},"_comment":"add row for zero 0","_date":0}
-{"ordinals":{"<0>":null},"_comment":"delete row for 0","_date":0}
-{"ordinals":{"<1>":{"name":"zero"}},"_comment":"add back row for zero 0","_date":0}
-{"ordinals":{"<2>":{"number":1,"name":"one"}},"_comment":"add row for one 1","_date":0}
-{"ordinals":{"<2>":null},"_comment":"delete row for 1","_date":0}
-{"ordinals":{"<3>":{"number":1,"name":"one"}},"_comment":"add back row for one 1","_date":0}
-{"ordinals":{"<4>":{"number":2,"name":"two"}},"_comment":"add row for two 2","_date":0}
-{"ordinals":{"<4>":null},"_comment":"delete row for 2","_date":0}
-{"ordinals":{"<5>":{"number":2,"name":"two"}},"_comment":"add back row for two 2","_date":0}
-{"ordinals":{"<6>":{"number":3,"name":"three"}},"_comment":"add row for three 3","_date":0}
-{"ordinals":{"<6>":null},"_comment":"delete row for 3","_date":0}
-{"ordinals":{"<7>":{"number":3,"name":"three"}},"_comment":"add back row for three 3","_date":0}
-{"ordinals":{"<8>":{"number":4,"name":"four"}},"_comment":"add row for four 4","_date":0}
-{"ordinals":{"<8>":null},"_comment":"delete row for 4","_date":0}
-{"ordinals":{"<9>":{"number":4,"name":"four"}},"_comment":"add back row for four 4","_date":0}
-{"ordinals":{"<10>":{"number":5,"name":"five"}},"_comment":"add row for five 5","_date":0}
-{"ordinals":{"<10>":null},"_comment":"delete row for 5","_date":0}
-{"ordinals":{"<11>":{"number":5,"name":"five"}},"_comment":"add back row for five 5","_date":0}
+{"_comment":"add row for zero 0","_date":0,"ordinals":{"<0>":{"name":"zero"}}}
+{"_comment":"delete row for 0","_date":0,"ordinals":{"<0>":null}}
+{"_comment":"add back row for zero 0","_date":0,"ordinals":{"<1>":{"name":"zero"}}}
+{"_comment":"add row for one 1","_date":0,"ordinals":{"<2>":{"name":"one","number":1}}}
+{"_comment":"delete row for 1","_date":0,"ordinals":{"<2>":null}}
+{"_comment":"add back row for one 1","_date":0,"ordinals":{"<3>":{"name":"one","number":1}}}
+{"_comment":"add row for two 2","_date":0,"ordinals":{"<4>":{"name":"two","number":2}}}
+{"_comment":"delete row for 2","_date":0,"ordinals":{"<4>":null}}
+{"_comment":"add back row for two 2","_date":0,"ordinals":{"<5>":{"name":"two","number":2}}}
+{"_comment":"add row for three 3","_date":0,"ordinals":{"<6>":{"name":"three","number":3}}}
+{"_comment":"delete row for 3","_date":0,"ordinals":{"<6>":null}}
+{"_comment":"add back row for three 3","_date":0,"ordinals":{"<7>":{"name":"three","number":3}}}
+{"_comment":"add row for four 4","_date":0,"ordinals":{"<8>":{"name":"four","number":4}}}
+{"_comment":"delete row for 4","_date":0,"ordinals":{"<8>":null}}
+{"_comment":"add back row for four 4","_date":0,"ordinals":{"<9>":{"name":"four","number":4}}}
+{"_comment":"add row for five 5","_date":0,"ordinals":{"<10>":{"name":"five","number":5}}}
+{"_comment":"delete row for 5","_date":0,"ordinals":{"<10>":null}}
+{"_comment":"add back row for five 5","_date":0,"ordinals":{"<11>":{"name":"five","number":5}}}
 ]], [], [test ! -e pid || kill `cat pid`])
 dnl Dump out and check the actual database contents.
 AT_CHECK([[ovsdb-client dump unix:socket ordinals]],

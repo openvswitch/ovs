@@ -87,7 +87,7 @@ ovsdb_syntax_error(const struct json *json, const char *tag,
 
     if (json) {
         /* XXX this is much too much information in some cases */
-        error->syntax = json_to_string(json, 0);
+        error->syntax = json_to_string(json, JSSF_SORT);
     }
 
     return error;
