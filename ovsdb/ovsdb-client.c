@@ -917,14 +917,22 @@ do_monitor(int argc, char *argv[])
             ovsdb_column_set_add(&columns, column);
         }
     } else {
-        struct shash_node *node;
+        const struct shash_node **nodes;
+        size_t i, n;
 
-        SHASH_FOR_EACH (node, &table->columns) {
-            const struct ovsdb_column *column = node->data;
-            if (column->index != OVSDB_COL_UUID) {
+        n = shash_count(&table->columns);
+        nodes = shash_sort(&table->columns);
+        for (i = 0; i < n; i++) {
+            const struct ovsdb_column *column = nodes[i]->data;
+            if (column->index != OVSDB_COL_UUID
+                && column->index != OVSDB_COL_VERSION) {
                 ovsdb_column_set_add(&columns, column);
             }
         }
+        free(nodes);
+
+        ovsdb_column_set_add(&columns,
+                             ovsdb_table_schema_get_column(table, "_version"));
     }
 
     if (argc >= 6 && *argv[5] != '\0') {
