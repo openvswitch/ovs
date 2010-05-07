@@ -27,6 +27,7 @@
 #include "openflow/openflow.h"
 #include "openvswitch/datapath-protocol.h"
 #include "packets.h"
+#include "unaligned.h"
 #include "xtoxll.h"
 
 #include "vlog.h"
@@ -154,8 +155,8 @@ flow_extract(struct ofpbuf *packet, uint32_t tun_id, uint16_t in_port,
         if (flow->dl_type == htons(ETH_TYPE_IP)) {
             const struct ip_header *nh = pull_ip(&b);
             if (nh) {
-                flow->nw_src = nh->ip_src;
-                flow->nw_dst = nh->ip_dst;
+                flow->nw_src = get_unaligned_u32(&nh->ip_src);
+                flow->nw_dst = get_unaligned_u32(&nh->ip_dst);
                 flow->nw_tos = nh->ip_tos & IP_DSCP_MASK;
                 flow->nw_proto = nh->ip_proto;
                 packet->l4 = b.data;
