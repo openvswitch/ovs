@@ -239,9 +239,6 @@ success:
 void
 ofproto_sflow_clear(struct ofproto_sflow *os)
 {
-    struct ofproto_sflow_port *osp;
-    unsigned int odp_port;
-
     if (os->sflow_agent) {
         sfl_agent_release(os->sflow_agent);
         os->sflow_agent = NULL;
@@ -250,11 +247,6 @@ ofproto_sflow_clear(struct ofproto_sflow *os)
     os->collectors = NULL;
     ofproto_sflow_options_destroy(os->options);
     os->options = NULL;
-
-    PORT_ARRAY_FOR_EACH (osp, &os->ports, odp_port) {
-        ofproto_sflow_del_port(os, odp_port);
-    }
-    port_array_clear(&os->ports);
 
     /* Turn off sampling to save CPU cycles. */
     dpif_set_sflow_probability(os->dpif, 0);
@@ -282,7 +274,13 @@ void
 ofproto_sflow_destroy(struct ofproto_sflow *os)
 {
     if (os) {
+        struct ofproto_sflow_port *osp;
+        unsigned int odp_port;
+
         ofproto_sflow_clear(os);
+        PORT_ARRAY_FOR_EACH (osp, &os->ports, odp_port) {
+            ofproto_sflow_del_port(os, odp_port);
+        }
         port_array_destroy(&os->ports);
         free(os);
     }
