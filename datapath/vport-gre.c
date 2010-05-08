@@ -1087,7 +1087,9 @@ gre_send(struct vport *vport, struct sk_buff *skb)
 	 * the segments.  This is particularly beneficial on Xen where we get
 	 * lots of GSO pskbs.  Conversely, we delay copying if it is just to
 	 * get our own writable clone because GSO may do the copy for us. */
-	max_headroom = LL_RESERVED_SPACE(rt->u.dst.dev) + mutable->tunnel_hlen;
+	max_headroom = LL_RESERVED_SPACE(rt->u.dst.dev) + rt->u.dst.header_len
+			+ mutable->tunnel_hlen;
+
 	if (skb_headroom(skb) < max_headroom) {
 		skb = check_headroom(skb, max_headroom);
 		if (unlikely(IS_ERR(skb))) {
