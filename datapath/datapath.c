@@ -1143,7 +1143,8 @@ error:
 static int query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 {
 	struct tbl *table = rcu_dereference(dp->table);
-	int i;
+	u32 i;
+
 	for (i = 0; i < flowvec->n_flows; i++) {
 		struct __user odp_flow *ufp = &flowvec->flows[i];
 		struct odp_flow uf;
@@ -1167,8 +1168,8 @@ static int query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 
 struct list_flows_cbdata {
 	struct odp_flow __user *uflows;
-	int n_flows;
-	int listed_flows;
+	u32 n_flows;
+	u32 listed_flows;
 };
 
 static int list_flow(struct tbl_node *node, void *cbdata_)

@@ -242,7 +242,7 @@ struct odp_flow_put {
 
 struct odp_flowvec {
     struct odp_flow *flows;
-    int n_flows;
+    __u32 n_flows;
 };
 
 /* The VLAN id is 12 bits, so we can use the entire 16 bits to indicate
