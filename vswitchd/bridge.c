@@ -3613,6 +3613,8 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
     iface->netdev = NULL;
     iface->cfg = if_cfg;
 
+    shash_add_assert(&br->iface_by_name, iface->name, iface);
+
     /* Attempt to create the network interface in case it doesn't exist yet. */
     if (!iface_is_internal(br, iface->name)) {
         error = set_up_iface(if_cfg, iface, true);
@@ -3620,13 +3622,12 @@ iface_create(struct port *port, const struct ovsrec_interface *if_cfg)
             VLOG_WARN("could not create iface %s: %s", iface->name,
                       strerror(error));
 
+            shash_find_and_delete_assert(&br->iface_by_name, iface->name);
             free(iface->name);
             free(iface);
             return NULL;
         }
     }
-
-    shash_add_assert(&br->iface_by_name, iface->name, iface);
 
     if (port->n_ifaces >= port->allocated_ifaces) {
         port->ifaces = x2nrealloc(port->ifaces, &port->allocated_ifaces,
