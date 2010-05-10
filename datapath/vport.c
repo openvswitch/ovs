@@ -21,11 +21,13 @@
 
 extern struct vport_ops netdev_vport_ops;
 extern struct vport_ops internal_vport_ops;
+extern struct vport_ops patch_vport_ops;
 extern struct vport_ops gre_vport_ops;
 
 static struct vport_ops *base_vport_ops_list[] = {
 	&netdev_vport_ops,
 	&internal_vport_ops,
+	&patch_vport_ops,
 	&gre_vport_ops,
 };
 
