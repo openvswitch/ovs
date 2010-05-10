@@ -116,61 +116,65 @@ vconn_stream_connect(struct vconn *vconn)
 }
 
 static int
-vconn_stream_recv(struct vconn *vconn, struct ofpbuf **bufferp)
+vconn_stream_recv__(struct vconn_stream *s, int rx_len)
 {
-    struct vconn_stream *s = vconn_stream_cast(vconn);
-    struct ofpbuf *rx;
-    size_t want_bytes;
-    ssize_t retval;
+    struct ofpbuf *rx = s->rxbuf;
+    int want_bytes, retval;
 
-    if (s->rxbuf == NULL) {
-        s->rxbuf = ofpbuf_new(1564);
-    }
-    rx = s->rxbuf;
-
-again:
-    if (sizeof(struct ofp_header) > rx->size) {
-        want_bytes = sizeof(struct ofp_header) - rx->size;
-    } else {
-        struct ofp_header *oh = rx->data;
-        size_t length = ntohs(oh->length);
-        if (length < sizeof(struct ofp_header)) {
-            VLOG_ERR_RL(&rl, "received too-short ofp_header (%zu bytes)",
-                        length);
-            return EPROTO;
-        }
-        want_bytes = length - rx->size;
-        if (!want_bytes) {
-            *bufferp = rx;
-            s->rxbuf = NULL;
-            return 0;
-        }
-    }
+    want_bytes = rx_len - rx->size;
     ofpbuf_prealloc_tailroom(rx, want_bytes);
-
     retval = stream_recv(s->stream, ofpbuf_tail(rx), want_bytes);
     if (retval > 0) {
         rx->size += retval;
-        if (retval == want_bytes) {
-            if (rx->size > sizeof(struct ofp_header)) {
-                *bufferp = rx;
-                s->rxbuf = NULL;
-                return 0;
-            } else {
-                goto again;
-            }
-        }
-        return EAGAIN;
+        return retval == want_bytes ? 0 : EAGAIN;
     } else if (retval == 0) {
         if (rx->size) {
             VLOG_ERR_RL(&rl, "connection dropped mid-packet");
             return EPROTO;
-        } else {
-            return EOF;
         }
+        return EOF;
     } else {
         return -retval;
     }
+}
+
+static int
+vconn_stream_recv(struct vconn *vconn, struct ofpbuf **bufferp)
+{
+    struct vconn_stream *s = vconn_stream_cast(vconn);
+    const struct ofp_header *oh;
+    int rx_len;
+
+    /* Allocate new receive buffer if we don't have one. */
+    if (s->rxbuf == NULL) {
+        s->rxbuf = ofpbuf_new(1564);
+    }
+
+    /* Read ofp_header. */
+    if (s->rxbuf->size < sizeof(struct ofp_header)) {
+        int retval = vconn_stream_recv__(s, sizeof(struct ofp_header));
+        if (retval) {
+            return retval;
+        }
+    }
+
+    /* Read payload. */
+    oh = s->rxbuf->data;
+    rx_len = ntohs(oh->length);
+    if (rx_len < sizeof(struct ofp_header)) {
+        VLOG_ERR_RL(&rl, "received too-short ofp_header (%zu bytes)",
+                    rx_len);
+        return EPROTO;
+    } else if (s->rxbuf->size < rx_len) {
+        int retval = vconn_stream_recv__(s, rx_len);
+        if (retval) {
+            return retval;
+        }
+    }
+
+    *bufferp = s->rxbuf;
+    s->rxbuf = NULL;
+    return 0;
 }
 
 static void
