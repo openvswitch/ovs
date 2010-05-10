@@ -1047,8 +1047,12 @@ vport_receive(struct vport *vport, struct sk_buff *skb)
 {
 	struct dp_port *dp_port = vport_get_dp_port(vport);
 
-	if (!dp_port)
+	if (!dp_port) {
+		vport_record_error(vport, VPORT_E_RX_DROPPED);
+		kfree_skb(skb);
+
 		return;
+	}
 
 	if (vport->ops->flags & VPORT_F_GEN_STATS) {
 		struct vport_percpu_stats *stats;
