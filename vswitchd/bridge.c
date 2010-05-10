@@ -3391,8 +3391,6 @@ port_reconfigure(struct port *port, const struct ovsrec_port *cfg)
     }
     bitmap_free(port->trunks);
     port->trunks = trunks;
-
-    shash_destroy(&new_ifaces);
 }
 
 static void
