@@ -32,6 +32,7 @@
 #include "command-line.h"
 #include "flow.h"
 #include "packets.h"
+#include "xtoxll.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -221,30 +222,20 @@ tcls_delete_matches(struct tcls *cls,
     }
 }
 
-#ifdef WORDS_BIGENDIAN
-#define T_HTONL(VALUE) ((uint32_t) (VALUE))
-#define T_HTONS(VALUE) ((uint32_t) (VALUE))
-#else
-#define T_HTONL(VALUE) (((((uint32_t) (VALUE)) & 0x000000ff) << 24) | \
-                      ((((uint32_t) (VALUE)) & 0x0000ff00) <<  8) | \
-                      ((((uint32_t) (VALUE)) & 0x00ff0000) >>  8) | \
-                      ((((uint32_t) (VALUE)) & 0xff000000) >> 24))
-#define T_HTONS(VALUE) (((((uint16_t) (VALUE)) & 0xff00) >> 8) |  \
-                      ((((uint16_t) (VALUE)) & 0x00ff) << 8))
-#endif
-
-static uint32_t nw_src_values[] = { T_HTONL(0xc0a80001),
-                                    T_HTONL(0xc0a04455) };
-static uint32_t nw_dst_values[] = { T_HTONL(0xc0a80002),
-                                    T_HTONL(0xc0a04455) };
+static uint32_t nw_src_values[] = { CONSTANT_HTONL(0xc0a80001),
+                                    CONSTANT_HTONL(0xc0a04455) };
+static uint32_t nw_dst_values[] = { CONSTANT_HTONL(0xc0a80002),
+                                    CONSTANT_HTONL(0xc0a04455) };
 static uint32_t tun_id_values[] = { 0, 0xffff0000 };
-static uint16_t in_port_values[] = { T_HTONS(1), T_HTONS(OFPP_LOCAL) };
-static uint16_t dl_vlan_values[] = { T_HTONS(101), T_HTONS(0) };
+static uint16_t in_port_values[] = { CONSTANT_HTONS(1),
+                                     CONSTANT_HTONS(OFPP_LOCAL) };
+static uint16_t dl_vlan_values[] = { CONSTANT_HTONS(101), CONSTANT_HTONS(0) };
 static uint8_t dl_vlan_pcp_values[] = { 7, 0 };
 static uint16_t dl_type_values[]
-            = { T_HTONS(ETH_TYPE_IP), T_HTONS(ETH_TYPE_ARP) };
-static uint16_t tp_src_values[] = { T_HTONS(49362), T_HTONS(80) };
-static uint16_t tp_dst_values[] = { T_HTONS(6667), T_HTONS(22) };
+            = { CONSTANT_HTONS(ETH_TYPE_IP), CONSTANT_HTONS(ETH_TYPE_ARP) };
+static uint16_t tp_src_values[] = { CONSTANT_HTONS(49362),
+                                    CONSTANT_HTONS(80) };
+static uint16_t tp_dst_values[] = { CONSTANT_HTONS(6667), CONSTANT_HTONS(22) };
 static uint8_t dl_src_values[][6] = { { 0x00, 0x02, 0xe3, 0x0f, 0x80, 0xa4 },
                                       { 0x5e, 0x33, 0x7f, 0x5f, 0x1e, 0x99 } };
 static uint8_t dl_dst_values[][6] = { { 0x4a, 0x27, 0x71, 0xae, 0x64, 0xc1 },

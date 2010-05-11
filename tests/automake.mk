@@ -78,7 +78,8 @@ lcov_wrappers = \
 	tests/lcov/test-timeval \
 	tests/lcov/test-type-props \
 	tests/lcov/test-uuid \
-	tests/lcov/test-vconn
+	tests/lcov/test-vconn \
+	tests/lcov/test-xtoxll
 
 $(lcov_wrappers): tests/lcov-wrapper.in
 	@test -d tests/lcov || mkdir tests/lcov
@@ -126,7 +127,8 @@ valgrind_wrappers = \
 	tests/valgrind/test-timeval \
 	tests/valgrind/test-type-props \
 	tests/valgrind/test-uuid \
-	tests/valgrind/test-vconn
+	tests/valgrind/test-vconn \
+	tests/valgrind/test-xtoxll
 
 $(valgrind_wrappers): tests/valgrind-wrapper.in
 	@test -d tests/valgrind || mkdir tests/valgrind
@@ -267,6 +269,10 @@ EXTRA_DIST += \
 	tests/testpki-privkey2.pem \
 	tests/testpki-req.pem \
 	tests/testpki-req2.pem
+
+noinst_PROGRAMS += tests/test-xtoxll
+tests_test_xtoxll_SOURCES = tests/test-xtoxll.c
+tests_test_xtoxll_LDADD = lib/libopenvswitch.a
 
 # Python tests.
 EXTRA_DIST += \
