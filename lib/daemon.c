@@ -353,6 +353,18 @@ monitor_daemon(pid_t daemon_pid)
             free(s);
 
             if (should_restart(status)) {
+                if (WCOREDUMP(status)) {
+                    /* Disable further core dumps to save disk space. */
+                    struct rlimit r;
+
+                    r.rlim_cur = 0;
+                    r.rlim_max = 0;
+                    if (setrlimit(RLIMIT_CORE, &r) == -1) {
+                        VLOG_WARN("failed to disable core dumps: %s",
+                                  strerror(errno));
+                    }
+                }
+
                 VLOG_ERR("%s, restarting", status_msg);
                 daemon_pid = fork_and_wait_for_startup(&daemonize_fd);
                 if (!daemon_pid) {
