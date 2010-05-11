@@ -273,20 +273,16 @@ flow_to_match(const flow_t *flow, uint32_t wildcards, bool tun_id_from_cookie,
 
 void
 flow_from_match(const struct ofp_match *match, bool tun_id_from_cookie,
-                uint64_t cookie, flow_t *flow, uint32_t *wildcards)
+                uint64_t cookie, flow_t *flow, uint32_t *flow_wildcards)
 {
-    if (wildcards) {
-        *wildcards = ntohl(match->wildcards);
+	uint32_t wildcards = ntohl(match->wildcards);
 
-        if (!tun_id_from_cookie) {
-            *wildcards |= NXFW_TUN_ID;
-        }
-    }
     flow->nw_src = match->nw_src;
     flow->nw_dst = match->nw_dst;
-    if (tun_id_from_cookie) {
+    if (tun_id_from_cookie && !(wildcards & NXFW_TUN_ID)) {
         flow->tun_id = htonl(ntohll(cookie) >> 32);
     } else {
+        wildcards |= NXFW_TUN_ID;
         flow->tun_id = 0;
     }
     flow->in_port = (match->in_port == htons(OFPP_LOCAL) ? ODPP_LOCAL
@@ -301,6 +297,10 @@ flow_from_match(const struct ofp_match *match, bool tun_id_from_cookie,
     flow->nw_tos = match->nw_tos;
     flow->nw_proto = match->nw_proto;
     memset(flow->reserved, 0, sizeof flow->reserved);
+
+    if (flow_wildcards) {
+        *flow_wildcards = wildcards;
+    }
 }
 
 char *
