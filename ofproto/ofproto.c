@@ -4028,6 +4028,8 @@ schedule_packet_in(struct ofconn *ofconn, struct ofpbuf *packet, int max_len,
         buffer_id = UINT32_MAX;
     } else if (ofproto->fail_open && fail_open_is_active(ofproto->fail_open)) {
         buffer_id = pktbuf_get_null();
+    } else if (!ofconn->pktbuf) {
+        buffer_id = UINT32_MAX;
     } else {
         struct ofpbuf payload;
         payload.data = opi->data;
