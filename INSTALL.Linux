@@ -69,6 +69,11 @@ you will also need the following software:
 
     - Python 2.x, for x >= 4.
 
+If you modify the ovsdbmonitor tool, then you will also need the
+following:
+
+    - pyuic4 from PyQt4 (http://www.riverbankcomputing.co.uk).
+
 Installation Requirements
 -------------------------
 
@@ -90,6 +95,22 @@ following software:
       installed as /usr/sbin/tcpdump.  If tcpdump is not installed, or
       if it is installed in a different location, then some Open
       vSwitch log messages will not be as detailed.
+
+To run the ovsdmonitor tool, the machine must also have the following
+software:
+
+    - Python 2.x, for x >= 4.
+
+    - Python Twisted Conch.
+
+    - Python JSON.
+
+    - PySide or PyQt4.
+
+    - Python Zope interface module.
+
+(On Debian "lenny" the above can be installed with "apt-get install
+python-json python-qt4 python-zopeinterface python-twisted-conch".)
 
 Building and Installing Open vSwitch for Linux
 ==============================================

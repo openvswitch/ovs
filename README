@@ -67,6 +67,9 @@ The main components of this distribution are:
     * ovs-appctl, a utility that sends commands to running Open
       vSwitch daemons.
 
+    * ovsdbmonitor, a GUI tool for remotely viewing OVS databases and
+      OpenFlow flow tables.
+
 Open vSwitch also provides an OpenFlow implementation and tools for
 those interested in OpenFlow but not additional Open vSwitch features:
 

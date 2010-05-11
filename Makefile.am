@@ -69,6 +69,7 @@ SUFFIXES += .in
                 -e 's,[@]pkgdatadir[@],$(pkgdatadir),g' \
                 -e 's,[@]sysconfdir[@],$(sysconfdir),g' \
                 -e 's,[@]abs_top_srcdir[@],$(abs_top_srcdir),g' \
+                -e 's,[@]ovsdbmonitordir[@],$(ovsdbmonitordir),g' \
             > $@.tmp
 	@if head -n 1 $@.tmp | grep -q '#!'; then \
 	    echo chmod +x $@.tmp; \
