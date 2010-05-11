@@ -1291,7 +1291,7 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 static const struct command all_commands[] = {
     { "show", 1, 1, do_show },
     { "status", 1, 2, do_status },
-    { "monitor", 1, 3, do_monitor },
+    { "monitor", 1, 2, do_monitor },
     { "dump-desc", 1, 1, do_dump_desc },
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 1, 2, do_dump_flows },
