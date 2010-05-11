@@ -236,6 +236,5 @@ vport_from_priv(const void *priv)
 
 void vport_receive(struct vport *, struct sk_buff *);
 void vport_record_error(struct vport *, enum vport_err_type err_type);
-void vport_gen_ether_addr(u8 *addr);
 
 #endif /* vport.h */

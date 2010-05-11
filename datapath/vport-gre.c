@@ -32,6 +32,7 @@
 #include "openvswitch/gre.h"
 #include "table.h"
 #include "vport.h"
+#include "vport-generic.h"
 
 /* The absolute minimum fragment size.  Note that there are many other
  * definitions of the minimum MTU. */
@@ -1218,7 +1219,7 @@ gre_create(const char *name, const void __user *config)
 		goto error_free_vport;
 	}
 
-	vport_gen_ether_addr(gre_vport->mutable->eth_addr);
+	vport_gen_rand_ether_addr(gre_vport->mutable->eth_addr);
 	gre_vport->mutable->mtu = ETH_DATA_LEN;
 
 	err = set_config(NULL, gre_vport->mutable, config);
@@ -1321,7 +1322,6 @@ gre_set_mtu(struct vport *vport, int mtu)
 {
 	struct gre_vport *gre_vport = gre_vport_priv(vport);
 	struct mutable_config *mutable;
-	struct dp_port *dp_port;
 
 	mutable = kmemdup(gre_vport->mutable, sizeof(struct mutable_config), GFP_KERNEL);
 	if (!mutable)
@@ -1329,10 +1329,6 @@ gre_set_mtu(struct vport *vport, int mtu)
 
 	mutable->mtu = mtu;
 	assign_config_rcu(vport, mutable);
-
-	dp_port = vport_get_dp_port(vport);
-	if (dp_port)
-		set_internal_devs_mtu(dp_port->dp);
 
 	return 0;
 }
@@ -1368,24 +1364,6 @@ gre_get_addr(const struct vport *vport)
 	return rcu_dereference(gre_vport->mutable)->eth_addr;
 }
 
-static unsigned
-gre_get_dev_flags(const struct vport *vport)
-{
-	return IFF_UP | IFF_RUNNING | IFF_LOWER_UP;
-}
-
-static int
-gre_is_running(const struct vport *vport)
-{
-	return 1;
-}
-
-static unsigned char
-gre_get_operstate(const struct vport *vport)
-{
-	return IF_OPER_UP;
-}
-
 static int
 gre_get_mtu(const struct vport *vport)
 {
@@ -1405,9 +1383,9 @@ struct vport_ops gre_vport_ops = {
 	.set_addr	= gre_set_addr,
 	.get_name	= gre_get_name,
 	.get_addr	= gre_get_addr,
-	.get_dev_flags	= gre_get_dev_flags,
-	.is_running	= gre_is_running,
-	.get_operstate	= gre_get_operstate,
+	.get_dev_flags	= vport_gen_get_dev_flags,
+	.is_running	= vport_gen_is_running,
+	.get_operstate	= vport_gen_get_operstate,
 	.get_mtu	= gre_get_mtu,
 	.send		= gre_send,
 };

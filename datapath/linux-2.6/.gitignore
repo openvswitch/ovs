@@ -27,6 +27,7 @@
 /table.c
 /tmp
 /veth.c
+/vport-generic.c
 /vport-gre.c
 /vport-internal_dev.c
 /vport-netdev.c
