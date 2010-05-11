@@ -143,8 +143,24 @@ omitted and the \fB--strict\fR option is not used, all flows in the
 switch's tables are removed.  See \fBFlow Syntax\fR, below, for the 
 syntax of \fIflows\fR.
 .
-.TP
-\fBmonitor \fIswitch\fR [\fImiss-len\fR]
+.IP "\fBsnoop \fIswitch\fR"
+Connects to \fIswitch\fR and prints to the console all OpenFlow
+messages received.  Unlike other \fBovs\-ofctl\fR commands, if
+\fIswitch\fR is the name of a bridge, then the \fBsnoop\fR command
+connects to a Unix domain socket named
+\fB@RUNDIR@/\fIbridge\fB.snoop\fR.  \fBovs\-vswitchd\fR listens on
+such a socket for each bridge and sends to it all of the OpenFlow
+messages sent to or received from its configured OpenFlow controller.
+Thus, this command can be used to view OpenFlow protocol activity
+between a switch and its controller.
+.IP
+When a switch has more than one controller configured, only the
+protocol to and from a single controller, chosen arbitrarily by Open
+vSwitch, is given.  If a switch has no controller configured, or if
+the configured controller is disconnected, no traffic is sent, so
+monitoring will not show any traffic.
+.
+.IQ "\fBmonitor \fIswitch\fR [\fImiss-len\fR]"
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Usually, \fIswitch\fR should specify a connection
 named on \fBovs\-openflowd\fR(8)'s \fB-l\fR or \fB--listen\fR command line
@@ -152,10 +168,11 @@ option.
 .IP
 If \fImiss-len\fR is provided, \fBovs\-ofctl\fR sends an OpenFlow ``set
 configuration'' message at connection setup time that requests
-\fImiss-len\fR bytes of each packet that misses the flow table.  The
-OpenFlow reference implementation does not send these messages to the
+\fImiss-len\fR bytes of each packet that misses the flow table.  Open vSwitch
+does not send these and other asynchronous messages to an
 \fBovs\-ofctl monitor\fR client connection unless a nonzero value is
-specified on this argument.
+specified on this argument.  (Thus, if \fImiss\-len\fR is not
+specified, very little traffic will ordinarily be printed.)
 .IP
 This command may be useful for debugging switch or controller
 implementations.

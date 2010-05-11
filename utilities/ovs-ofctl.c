@@ -214,13 +214,14 @@ open_vconn_socket(const char *name, struct vconn **vconnp)
 }
 
 static void
-open_vconn(const char *name, struct vconn **vconnp)
+open_vconn__(const char *name, const char *default_suffix,
+             struct vconn **vconnp)
 {
     struct dpif *dpif;
     struct stat s;
     char *bridge_path, *datapath_name, *datapath_type;
 
-    bridge_path = xasprintf("%s/%s.mgmt", ovs_rundir, name);
+    bridge_path = xasprintf("%s/%s.%s", ovs_rundir, name, default_suffix);
     dp_parse_name(name, &datapath_name, &datapath_type);
 
     if (strstr(name, ":")) {
@@ -241,7 +242,8 @@ open_vconn(const char *name, struct vconn **vconnp)
             VLOG_INFO("datapath %s is named %s", name, dpif_name);
         }
 
-        socket_name = xasprintf("%s/%s.mgmt", ovs_rundir, dpif_name);
+        socket_name = xasprintf("%s/%s.%s",
+                                ovs_rundir, dpif_name, default_suffix);
         if (stat(socket_name, &s)) {
             ovs_fatal(errno, "cannot connect to %s: stat failed on %s",
                       name, socket_name);
@@ -259,6 +261,12 @@ open_vconn(const char *name, struct vconn **vconnp)
     free(datapath_name);
     free(datapath_type);
     free(bridge_path);
+}
+
+static void
+open_vconn(const char *name, struct vconn **vconnp)
+{
+    return open_vconn__(name, "mgmt", vconnp);
 }
 
 static void *
@@ -1060,7 +1068,18 @@ do_tun_cookie(int argc OVS_UNUSED, char *argv[])
 }
 
 static void
-do_monitor(int argc OVS_UNUSED, char *argv[])
+monitor_vconn(struct vconn *vconn)
+{
+    for (;;) {
+        struct ofpbuf *b;
+        run(vconn_recv_block(vconn, &b), "vconn_recv");
+        ofp_print(stderr, b->data, b->size, 2);
+        ofpbuf_delete(b);
+    }
+}
+
+static void
+do_monitor(int argc, char *argv[])
 {
     struct vconn *vconn;
 
@@ -1074,12 +1093,16 @@ do_monitor(int argc OVS_UNUSED, char *argv[])
         osc->miss_send_len = htons(miss_send_len);
         send_openflow_buffer(vconn, buf);
     }
-    for (;;) {
-        struct ofpbuf *b;
-        run(vconn_recv_block(vconn, &b), "vconn_recv");
-        ofp_print(stderr, b->data, b->size, 2);
-        ofpbuf_delete(b);
-    }
+    monitor_vconn(vconn);
+}
+
+static void
+do_snoop(int argc OVS_UNUSED, char *argv[])
+{
+    struct vconn *vconn;
+
+    open_vconn__(argv[1], "snoop", &vconn);
+    monitor_vconn(vconn);
 }
 
 static void
@@ -1292,6 +1315,7 @@ static const struct command all_commands[] = {
     { "show", 1, 1, do_show },
     { "status", 1, 2, do_status },
     { "monitor", 1, 2, do_monitor },
+    { "snoop", 1, 1, do_snoop },
     { "dump-desc", 1, 1, do_dump_desc },
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 1, 2, do_dump_flows },
