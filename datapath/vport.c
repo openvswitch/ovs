@@ -400,9 +400,12 @@ vport_stats_get(struct odp_vport_stats_req __user *ustats_req)
 		goto out;
 	}
 
-	if (vport->ops->get_stats)
+	if (vport->ops->get_stats) {
+		rcu_read_lock();
 		err = vport->ops->get_stats(vport, &stats_req.stats);
-	else if (vport->ops->flags & VPORT_F_GEN_STATS) {
+		rcu_read_unlock();
+
+	} else if (vport->ops->flags & VPORT_F_GEN_STATS) {
 		int i;
 
 		memset(&stats_req.stats, 0, sizeof(struct odp_vport_stats));
@@ -475,7 +478,9 @@ vport_ether_get(struct odp_vport_ether __user *uvport_ether)
 		goto out;
 	}
 
+	rcu_read_lock();
 	memcpy(vport_ether.ether_addr, vport_get_addr(vport), ETH_ALEN);
+	rcu_read_unlock();
 
 out:
 	vport_unlock();
@@ -632,11 +637,17 @@ vport_locate(const char *name)
 		dump_stack();
 	}
 
+	rcu_read_lock();
+
 	hlist_for_each_entry(vport, node, bucket, hash_node)
 		if (!strcmp(name, vport_get_name(vport)))
-			return vport;
+			goto out;
 
-	return NULL;
+	vport = NULL;
+
+out:
+	rcu_read_unlock();
+	return vport;
 }
 
 static void

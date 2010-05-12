@@ -1305,8 +1305,12 @@ static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 		skb->protocol = htons(ETH_P_802_2);
 
 	flow_extract(skb, execute->in_port, &key);
+
+	rcu_read_lock();
 	err = execute_actions(dp, skb, &key, actions->actions,
 			      actions->n_actions, GFP_KERNEL);
+	rcu_read_unlock();
+
 	kfree(actions);
 	return err;
 
