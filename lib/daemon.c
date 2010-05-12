@@ -323,14 +323,15 @@ should_restart(int status)
 static void
 monitor_daemon(pid_t daemon_pid)
 {
-    /* XXX Should limit the rate at which we restart the daemon. */
     /* XXX Should log daemon's stderr output at startup time. */
     const char *saved_program_name;
+    time_t last_restart;
     char *status_msg;
 
     saved_program_name = program_name;
     program_name = xasprintf("monitor(%s)", program_name);
     status_msg = xstrdup("healthy");
+    last_restart = TIME_MIN;
     for (;;) {
         int retval;
         int status;
@@ -364,6 +365,21 @@ monitor_daemon(pid_t daemon_pid)
                                   strerror(errno));
                     }
                 }
+
+                /* Throttle restarts to no more than once every 10 seconds. */
+                if (time(NULL) < last_restart + 10) {
+                    VLOG_WARN("%s, waiting until 10 seconds since last "
+                              "restart", status_msg);
+                    for (;;) {
+                        time_t now = time(NULL);
+                        time_t wakeup = last_restart + 10;
+                        if (now >= wakeup) {
+                            break;
+                        }
+                        sleep(wakeup - now);
+                    }
+                }
+                last_restart = time(NULL);
 
                 VLOG_ERR("%s, restarting", status_msg);
                 daemon_pid = fork_and_wait_for_startup(&daemonize_fd);
