@@ -1015,7 +1015,6 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 	} else {
 		/* We found a matching flow. */
 		struct sw_flow_actions *old_acts, *new_acts;
-		unsigned long int flags;
 
 		flow = flow_cast(flow_node);
 
@@ -1040,11 +1039,11 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 		}
 
 		/* Fetch stats, then clear them if necessary. */
-		spin_lock_irqsave(&flow->lock, flags);
+		spin_lock_bh(&flow->lock);
 		get_stats(flow, stats);
 		if (uf->flags & ODPPF_ZERO_STATS)
 			clear_stats(flow);
-		spin_unlock_irqrestore(&flow->lock, flags);
+		spin_unlock_bh(&flow->lock);
 	}
 
 	return 0;
@@ -1084,15 +1083,14 @@ static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 {
 	struct sw_flow_actions *sf_acts;
 	struct odp_flow_stats stats;
-	unsigned long int flags;
 	u32 n_actions;
 
-	spin_lock_irqsave(&flow->lock, flags);
+	spin_lock_bh(&flow->lock);
 	get_stats(flow, &stats);
-	if (query_flags & ODPFF_ZERO_TCP_FLAGS) {
+	if (query_flags & ODPFF_ZERO_TCP_FLAGS)
 		flow->tcp_flags = 0;
-	}
-	spin_unlock_irqrestore(&flow->lock, flags);
+
+	spin_unlock_bh(&flow->lock);
 
 	if (copy_to_user(ustats, &stats, sizeof(struct odp_flow_stats)) ||
 	    get_user(n_actions, n_actionsp))
