@@ -830,9 +830,10 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 err_kfree_skb:
 	kfree_skb(skb);
 err:
-	stats = percpu_ptr(dp->stats_percpu, get_cpu());
+	local_bh_disable();
+	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
 	stats->n_lost++;
-	put_cpu();
+	local_bh_enable();
 
 	return err;
 }

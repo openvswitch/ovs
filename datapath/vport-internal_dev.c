@@ -11,10 +11,8 @@
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
 #include <linux/percpu.h>
-#include <linux/preempt.h>
 #include <linux/rcupdate.h>
 #include <linux/skbuff.h>
-#include <linux/workqueue.h>
 
 #include "datapath.h"
 #include "openvswitch/internal_dev.h"
@@ -81,8 +79,7 @@ static int internal_dev_mac_addr(struct net_device *dev, void *p)
 	return 0;
 }
 
-/* Not reentrant (because it is called with BHs disabled), but may be called
- * simultaneously on different CPUs. */
+/* Called with rcu_read_lock and bottom-halves disabled. */
 static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
 	struct internal_dev *internal_dev = internal_dev_priv(netdev);
@@ -101,9 +98,7 @@ static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 	skb_reset_mac_header(skb);
 	compute_ip_summed(skb, true);
 
-	rcu_read_lock_bh();
 	vport_receive(vport, skb);
-	rcu_read_unlock_bh();
 
 	return 0;
 }
@@ -340,11 +335,11 @@ internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 		netif_rx_ni(skb);
 	netdev->last_rx = jiffies;
 
-	preempt_disable();
+	local_bh_disable();
 	lb_stats = per_cpu_ptr(internal_dev->lstats, smp_processor_id());
 	lb_stats->rx_packets++;
 	lb_stats->rx_bytes += len;
-	preempt_enable();
+	local_bh_enable();
 
 	return len;
 }
