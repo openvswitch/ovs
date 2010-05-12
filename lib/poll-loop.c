@@ -73,6 +73,18 @@ poll_fd_wait(int fd, short int events)
     return new_waiter(fd, events);
 }
 
+/* The caller must ensure that 'msec' is not negative. */
+static void
+poll_timer_wait__(int msec)
+{
+    if (timeout < 0 || msec < timeout) {
+        timeout = msec;
+        if (VLOG_IS_DBG_ENABLED()) {
+            backtrace_capture(&timeout_backtrace);
+        }
+    }
+}
+
 /* Causes the following call to poll_block() to block for no more than 'msec'
  * milliseconds.  If 'msec' is nonpositive, the following call to poll_block()
  * will not block at all.
@@ -81,14 +93,11 @@ poll_fd_wait(int fd, short int events)
  * is affected.  The timer will need to be re-registered after poll_block() is
  * called if it is to persist. */
 void
-poll_timer_wait(int msec)
+poll_timer_wait(long long int msec)
 {
-    if (timeout < 0 || msec < timeout) {
-        timeout = MAX(0, msec);
-        if (VLOG_IS_DBG_ENABLED()) {
-            backtrace_capture(&timeout_backtrace);
-        }
-    }
+    poll_timer_wait__(msec < 0 ? 0
+                      : msec > INT_MAX ? INT_MAX
+                      : msec);
 }
 
 /* Causes the following call to poll_block() to wake up immediately, without

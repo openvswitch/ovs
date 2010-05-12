@@ -221,12 +221,7 @@ static void
 wait_timeout(long long int started)
 {
     long long int now = time_msec();
-    long long int timeout = 10000 - (now - started);
-    if (timeout <= 0) {
-        poll_immediate_wake();
-    } else {
-        poll_timer_wait(timeout);
-    }
+    poll_timer_wait(10000 - (now - started));
 }
 
 void

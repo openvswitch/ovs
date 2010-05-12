@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ ovsdb_trigger_wait(struct ovsdb *db, long long int now)
         }
 
         if (deadline < LLONG_MAX) {
-            poll_timer_wait(MIN(deadline - now, INT_MAX));
+            poll_timer_wait(deadline - now);
         }
     }
 }
