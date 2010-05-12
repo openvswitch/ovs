@@ -1155,7 +1155,7 @@ ofproto_wait(struct ofproto *p)
         ofconn_wait(ofconn);
     }
     if (p->in_band) {
-        poll_timer_wait(p->next_in_band_update - time_msec());
+        poll_timer_wait_until(p->next_in_band_update);
         in_band_wait(p->in_band);
     }
     if (p->fail_open) {
@@ -1172,7 +1172,7 @@ ofproto_wait(struct ofproto *p)
         VLOG_DBG_RL(&rl, "need revalidate in ofproto_wait_cb()");
         poll_immediate_wake();
     } else if (p->next_expiration != LLONG_MAX) {
-        poll_timer_wait(p->next_expiration - time_msec());
+        poll_timer_wait_until(p->next_expiration);
     }
     for (i = 0; i < p->n_listeners; i++) {
         pvconn_wait(p->listeners[i]);

@@ -240,7 +240,7 @@ network_uuid_refresh_wait(void)
             poll_timer_wait(1000);
         }
         if (next_refresh != LLONG_MAX) {
-            poll_timer_wait(next_refresh - time_msec());
+            poll_timer_wait_until(next_refresh);
         }
     }
 }

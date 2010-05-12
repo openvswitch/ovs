@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks, Inc.
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -907,14 +907,7 @@ scanner_run(struct scanner *s, struct ezio *ezio)
 static void
 scanner_wait(struct scanner *s)
 {
-    long long int now = time_msec();
-    long long int expires = s->last_move + 750;
-    if (now >= expires) {
-        poll_immediate_wake();
-    } else {
-        poll_timer_wait(expires - now);
-    }
-
+    poll_timer_wait_until(s->last_move + 750);
 }
 
 static void

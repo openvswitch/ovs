@@ -745,14 +745,9 @@ in_band_run(struct in_band *ib)
 void
 in_band_wait(struct in_band *in_band)
 {
-    time_t now = time_now();
-    time_t wakeup 
+    long long int wakeup
             = MIN(in_band->next_remote_refresh, in_band->next_local_refresh);
-    if (wakeup > now) {
-        poll_timer_wait((wakeup - now) * 1000);
-    } else {
-        poll_immediate_wake();
-    }
+    poll_timer_wait_until(wakeup * 1000);
 }
 
 /* ofproto has flushed all flows from the flow table and it is calling us back

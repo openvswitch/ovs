@@ -293,6 +293,6 @@ mac_learning_wait(struct mac_learning *ml)
 {
     if (!list_is_empty(&ml->lrus)) {
         struct mac_entry *e = mac_entry_from_lru_node(ml->lrus.next);
-        poll_timer_wait((e->expires - time_now()) * 1000);
+        poll_timer_wait_until(e->expires * 1000LL);
     }
 }

@@ -1986,11 +1986,11 @@ bond_wait(struct bridge *br)
         for (j = 0; j < port->n_ifaces; j++) {
             struct iface *iface = port->ifaces[j];
             if (iface->delay_expires != LLONG_MAX) {
-                poll_timer_wait(iface->delay_expires - time_msec());
+                poll_timer_wait_until(iface->delay_expires);
             }
         }
         if (port->bond_fake_iface) {
-            poll_timer_wait(port->bond_next_fake_iface_update - time_msec());
+            poll_timer_wait_until(port->bond_next_fake_iface_update);
         }
     }
 }

@@ -100,6 +100,23 @@ poll_timer_wait(long long int msec)
                       : msec);
 }
 
+/* Causes the following call to poll_block() to wake up when the current time,
+ * as returned by time_msec(), reaches 'msec' or later.  If 'msec' is earlier
+ * than the current time, the following call to poll_block() will not block at
+ * all.
+ *
+ * The timer registration is one-shot: only the following call to poll_block()
+ * is affected.  The timer will need to be re-registered after poll_block() is
+ * called if it is to persist. */
+void
+poll_timer_wait_until(long long int msec)
+{
+    long long int now = time_msec();
+    poll_timer_wait__(msec <= now ? 0
+                      : msec < now + INT_MAX ? msec - now
+                      : INT_MAX);
+}
+
 /* Causes the following call to poll_block() to wake up immediately, without
  * blocking. */
 void

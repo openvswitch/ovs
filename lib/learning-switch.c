@@ -220,8 +220,7 @@ lswitch_run(struct lswitch *sw, struct rconn *rconn)
 static void
 wait_timeout(long long int started)
 {
-    long long int now = time_msec();
-    poll_timer_wait(10000 - (now - started));
+    poll_timer_wait_until(started + 10000);
 }
 
 void

@@ -242,7 +242,7 @@ main(int argc, char *argv[])
             refresh();
 
             poll_fd_wait(STDIN_FILENO, POLLIN);
-            poll_timer_wait(timeout - time_msec());
+            poll_timer_wait_until(timeout);
             poll_block();
         } while (time_msec() < timeout);
         age_messages();
@@ -868,7 +868,7 @@ fetch_status(struct rconn *rconn, struct dict *dict, long long timeout)
 
         rconn_run_wait(rconn);
         rconn_recv_wait(rconn);
-        poll_timer_wait(timeout - time_msec());
+        poll_timer_wait_until(timeout);
         poll_block();
     }
 }
@@ -1714,7 +1714,7 @@ menu_show(const struct menu *menu, int start, bool select)
         refresh();
 
         if (pos < min || pos > max) {
-            poll_timer_wait(adjust - time_msec());
+            poll_timer_wait_until(adjust);
         }
         poll_fd_wait(STDIN_FILENO, POLLIN);
         poll_block();
@@ -1946,7 +1946,7 @@ static void
 block_until(long long timeout)
 {
     while (timeout > time_msec()) {
-        poll_timer_wait(timeout - time_msec());
+        poll_timer_wait_until(timeout);
         poll_block();
     }
     drain_keyboard_buffer();

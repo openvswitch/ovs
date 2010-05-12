@@ -271,7 +271,7 @@ void
 fail_open_wait(struct fail_open *fo)
 {
     if (fo->next_bogus_packet_in != LLONG_MAX) {
-        poll_timer_wait(fo->next_bogus_packet_in - time_msec());
+        poll_timer_wait_until(fo->next_bogus_packet_in);
     }
 }
 

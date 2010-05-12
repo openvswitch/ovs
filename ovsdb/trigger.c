@@ -102,7 +102,7 @@ ovsdb_trigger_wait(struct ovsdb *db, long long int now)
         }
 
         if (deadline < LLONG_MAX) {
-            poll_timer_wait(deadline - now);
+            poll_timer_wait_until(deadline);
         }
     }
 }
