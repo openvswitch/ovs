@@ -512,11 +512,12 @@ out:
 	return err;
 }
 
-/* Must be called with rcu_read_lock and with bottom-halves disabled. */
+/* Must be called with rcu_read_lock. */
 void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 {
 	struct datapath *dp = p->dp;
 	struct dp_stats_percpu *stats;
+	int stats_counter_off;
 	struct odp_flow_key key;
 	struct tbl_node *flow_node;
 
@@ -525,14 +526,11 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 
 	OVS_CB(skb)->dp_port = p;
 
-	/* BHs are off so we don't have to use get_cpu()/put_cpu() here. */
-	stats = percpu_ptr(dp->stats_percpu, smp_processor_id());
-
 	if (flow_extract(skb, p ? p->port_no : ODPP_NONE, &key)) {
 		if (dp->drop_frags) {
 			kfree_skb(skb);
-			stats->n_frags++;
-			return;
+			stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
+			goto out;
 		}
 	}
 
@@ -543,11 +541,17 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 		flow_used(flow, skb);
 		execute_actions(dp, skb, &key, acts->actions, acts->n_actions,
 				GFP_ATOMIC);
-		stats->n_hit++;
+		stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
 	} else {
-		stats->n_missed++;
+		stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
 		dp_output_control(dp, skb, _ODPL_MISS_NR, OVS_CB(skb)->tun_id);
 	}
+
+out:
+	local_bh_disable();
+	stats = per_cpu_ptr(dp->stats_percpu, smp_processor_id());
+	(*(u64 *)((u8 *)stats + stats_counter_off))++;
+	local_bh_enable();
 }
 
 #if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)

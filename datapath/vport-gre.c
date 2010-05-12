@@ -735,7 +735,7 @@ handle_csum_offload(struct sk_buff *skb)
 	}
 }
 
-/* Called with rcu_read_lock and bottom-halves disabled. */
+/* Called with rcu_read_lock. */
 static void
 gre_err(struct sk_buff *skb, u32 info)
 {
@@ -847,7 +847,7 @@ out:
 	skb->protocol = htons(ETH_P_IP);
 }
 
-/* Called with rcu_read_lock and bottom-halves disabled. */
+/* Called with rcu_read_lock. */
 static int
 gre_rcv(struct sk_buff *skb)
 {
