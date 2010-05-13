@@ -960,28 +960,24 @@ static int expand_table(struct datapath *dp)
 	return 0;
 }
 
-static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
+static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
+		       struct odp_flow_stats *stats)
 {
-	struct odp_flow_put uf;
 	struct tbl_node *flow_node;
 	struct sw_flow *flow;
 	struct tbl *table;
-	struct odp_flow_stats stats;
 	int error;
 
-	error = -EFAULT;
-	if (copy_from_user(&uf, ufp, sizeof(struct odp_flow_put)))
-		goto error;
-	memset(uf.flow.key.reserved, 0, sizeof uf.flow.key.reserved);
+	memset(uf->flow.key.reserved, 0, sizeof uf->flow.key.reserved);
 
 	table = rcu_dereference(dp->table);
-	flow_node = tbl_lookup(table, &uf.flow.key, flow_hash(&uf.flow.key), flow_cmp);
+	flow_node = tbl_lookup(table, &uf->flow.key, flow_hash(&uf->flow.key), flow_cmp);
 	if (!flow_node) {
 		/* No such flow. */
 		struct sw_flow_actions *acts;
 
 		error = -ENOENT;
-		if (!(uf.flags & ODPPF_CREATE))
+		if (!(uf->flags & ODPPF_CREATE))
 			goto error;
 
 		/* Expand table, if necessary, to make room. */
@@ -997,12 +993,12 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 		flow = kmem_cache_alloc(flow_cache, GFP_KERNEL);
 		if (flow == NULL)
 			goto error;
-		flow->key = uf.flow.key;
+		flow->key = uf->flow.key;
 		spin_lock_init(&flow->lock);
 		clear_stats(flow);
 
 		/* Obtain actions. */
-		acts = get_actions(&uf.flow);
+		acts = get_actions(&uf->flow);
 		error = PTR_ERR(acts);
 		if (IS_ERR(acts))
 			goto error_free_flow;
@@ -1013,7 +1009,7 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 		if (error)
 			goto error_free_flow_acts;
 
-		memset(&stats, 0, sizeof(struct odp_flow_stats));
+		memset(stats, 0, sizeof(struct odp_flow_stats));
 	} else {
 		/* We found a matching flow. */
 		struct sw_flow_actions *old_acts, *new_acts;
@@ -1023,11 +1019,11 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 
 		/* Bail out if we're not allowed to modify an existing flow. */
 		error = -EEXIST;
-		if (!(uf.flags & ODPPF_MODIFY))
+		if (!(uf->flags & ODPPF_MODIFY))
 			goto error;
 
 		/* Swap actions. */
-		new_acts = get_actions(&uf.flow);
+		new_acts = get_actions(&uf->flow);
 		error = PTR_ERR(new_acts);
 		if (IS_ERR(new_acts))
 			goto error;
@@ -1043,16 +1039,12 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 
 		/* Fetch stats, then clear them if necessary. */
 		spin_lock_irqsave(&flow->lock, flags);
-		get_stats(flow, &stats);
-		if (uf.flags & ODPPF_ZERO_STATS)
+		get_stats(flow, stats);
+		if (uf->flags & ODPPF_ZERO_STATS)
 			clear_stats(flow);
 		spin_unlock_irqrestore(&flow->lock, flags);
 	}
 
-	/* Copy stats to userspace. */
-	if (__copy_to_user(&ufp->flow.stats, &stats,
-			   sizeof(struct odp_flow_stats)))
-		return -EFAULT;
 	return 0;
 
 error_free_flow_acts:
@@ -1063,21 +1055,52 @@ error:
 	return error;
 }
 
-static int put_actions(const struct sw_flow *flow, struct odp_flow __user *ufp)
+static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 {
-	union odp_action __user *actions;
+	struct odp_flow_stats stats;
+	struct odp_flow_put uf;
+	int error;
+
+	if (copy_from_user(&uf, ufp, sizeof(struct odp_flow_put)))
+		return -EFAULT;
+
+	error = do_put_flow(dp, &uf, &stats);
+	if (error)
+		return error;
+
+	if (__copy_to_user(&ufp->flow.stats, &stats,
+			   sizeof(struct odp_flow_stats)))
+		return -EFAULT;
+
+	return 0;
+}
+
+static int do_answer_query(struct sw_flow *flow, u32 query_flags,
+			   struct odp_flow_stats __user *ustats,
+			   union odp_action __user *actions,
+			   u32 __user *n_actionsp)
+{
 	struct sw_flow_actions *sf_acts;
+	struct odp_flow_stats stats;
+	unsigned long int flags;
 	u32 n_actions;
 
-	if (__get_user(actions, &ufp->actions) ||
-	    __get_user(n_actions, &ufp->n_actions))
+	spin_lock_irqsave(&flow->lock, flags);
+	get_stats(flow, &stats);
+	if (query_flags & ODPFF_ZERO_TCP_FLAGS) {
+		flow->tcp_flags = 0;
+	}
+	spin_unlock_irqrestore(&flow->lock, flags);
+
+	if (__copy_to_user(ustats, &stats, sizeof(struct odp_flow_stats)) ||
+	    __get_user(n_actions, n_actionsp))
 		return -EFAULT;
 
 	if (!n_actions)
 		return 0;
 
 	sf_acts = rcu_dereference(flow->sf_acts);
-	if (__put_user(sf_acts->n_actions, &ufp->n_actions) ||
+	if (__put_user(sf_acts->n_actions, n_actionsp) ||
 	    (actions && copy_to_user(actions, sf_acts->actions,
 				     sizeof(union odp_action) *
 				     min(sf_acts->n_actions, n_actions))))
@@ -1089,64 +1112,62 @@ static int put_actions(const struct sw_flow *flow, struct odp_flow __user *ufp)
 static int answer_query(struct sw_flow *flow, u32 query_flags,
 			struct odp_flow __user *ufp)
 {
-	struct odp_flow_stats stats;
-	unsigned long int flags;
+	union odp_action *actions;
 
-	spin_lock_irqsave(&flow->lock, flags);
-	get_stats(flow, &stats);
-
-	if (query_flags & ODPFF_ZERO_TCP_FLAGS) {
-		flow->tcp_flags = 0;
-	}
-	spin_unlock_irqrestore(&flow->lock, flags);
-
-	if (__copy_to_user(&ufp->stats, &stats, sizeof(struct odp_flow_stats)))
+	if (__get_user(actions, &ufp->actions))
 		return -EFAULT;
-	return put_actions(flow, ufp);
+
+	return do_answer_query(flow, query_flags,
+			       &ufp->stats, actions, &ufp->n_actions);
+}
+
+static struct sw_flow *do_del_flow(struct datapath *dp, struct odp_flow_key *key)
+{
+	struct tbl *table = rcu_dereference(dp->table);
+	struct tbl_node *flow_node;
+	int error;
+
+	memset(key->reserved, 0, sizeof key->reserved);
+	flow_node = tbl_lookup(table, key, flow_hash(key), flow_cmp);
+	if (!flow_node)
+		return ERR_PTR(-ENOENT);
+
+	error = tbl_remove(table, flow_node);
+	if (error)
+		return ERR_PTR(error);
+
+	/* XXX Returned flow_node's statistics might lose a few packets, since
+	 * other CPUs can be using this flow.  We used to synchronize_rcu() to
+	 * make sure that we get completely accurate stats, but that blows our
+	 * performance, badly. */
+	return flow_cast(flow_node);
 }
 
 static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 {
-	struct tbl *table = rcu_dereference(dp->table);
-	struct odp_flow uf;
-	struct tbl_node *flow_node;
 	struct sw_flow *flow;
+	struct odp_flow uf;
 	int error;
 
-	error = -EFAULT;
 	if (copy_from_user(&uf, ufp, sizeof uf))
-		goto error;
-	memset(uf.key.reserved, 0, sizeof uf.key.reserved);
+		return -EFAULT;
 
-	flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
-	error = -ENOENT;
-	if (!flow_node)
-		goto error;
+	flow = do_del_flow(dp, &uf.key);
+	if (IS_ERR(flow))
+		return PTR_ERR(flow);
 
-	error = tbl_remove(table, flow_node);
-	if (error)
-		goto error;
-
-	/* XXX These statistics might lose a few packets, since other CPUs can
-	 * be using this flow.  We used to synchronize_rcu() to make sure that
-	 * we get completely accurate stats, but that blows our performance,
-	 * badly. */
-
-	flow = flow_cast(flow_node);
 	error = answer_query(flow, 0, ufp);
 	flow_deferred_free(flow);
-
-error:
 	return error;
 }
 
-static int query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
+static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 {
 	struct tbl *table = rcu_dereference(dp->table);
 	u32 i;
 
 	for (i = 0; i < flowvec->n_flows; i++) {
-		struct __user odp_flow *ufp = &flowvec->flows[i];
+		struct odp_flow __user *ufp = &flowvec->flows[i];
 		struct odp_flow uf;
 		struct tbl_node *flow_node;
 		int error;
@@ -1190,7 +1211,7 @@ static int list_flow(struct tbl_node *node, void *cbdata_)
 	return 0;
 }
 
-static int list_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
+static int do_list_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 {
 	struct list_flows_cbdata cbdata;
 	int error;
@@ -1231,31 +1252,26 @@ static int do_flowvec_ioctl(struct datapath *dp, unsigned long argp,
 		: __put_user(retval, &uflowvec->n_flows));
 }
 
-static int do_execute(struct datapath *dp, const struct odp_execute *executep)
+static int do_execute(struct datapath *dp, const struct odp_execute *execute)
 {
-	struct odp_execute execute;
 	struct odp_flow_key key;
 	struct sk_buff *skb;
 	struct sw_flow_actions *actions;
 	struct ethhdr *eth;
 	int err;
 
-	err = -EFAULT;
-	if (copy_from_user(&execute, executep, sizeof execute))
-		goto error;
-
 	err = -EINVAL;
-	if (execute.length < ETH_HLEN || execute.length > 65535)
+	if (execute->length < ETH_HLEN || execute->length > 65535)
 		goto error;
 
 	err = -ENOMEM;
-	actions = flow_actions_alloc(execute.n_actions);
+	actions = flow_actions_alloc(execute->n_actions);
 	if (!actions)
 		goto error;
 
 	err = -EFAULT;
-	if (copy_from_user(actions->actions, execute.actions,
-			   execute.n_actions * sizeof *execute.actions))
+	if (copy_from_user(actions->actions, execute->actions,
+			   execute->n_actions * sizeof *execute->actions))
 		goto error_free_actions;
 
 	err = validate_actions(actions);
@@ -1263,18 +1279,18 @@ static int do_execute(struct datapath *dp, const struct odp_execute *executep)
 		goto error_free_actions;
 
 	err = -ENOMEM;
-	skb = alloc_skb(execute.length, GFP_KERNEL);
+	skb = alloc_skb(execute->length, GFP_KERNEL);
 	if (!skb)
 		goto error_free_actions;
 
-	if (execute.in_port < DP_MAX_PORTS)
-		OVS_CB(skb)->dp_port = dp->ports[execute.in_port];
+	if (execute->in_port < DP_MAX_PORTS)
+		OVS_CB(skb)->dp_port = dp->ports[execute->in_port];
 	else
 		OVS_CB(skb)->dp_port = NULL;
 
 	err = -EFAULT;
-	if (copy_from_user(skb_put(skb, execute.length), execute.data,
-			   execute.length))
+	if (copy_from_user(skb_put(skb, execute->length), execute->data,
+			   execute->length))
 		goto error_free_skb;
 
 	skb_reset_mac_header(skb);
@@ -1288,7 +1304,7 @@ static int do_execute(struct datapath *dp, const struct odp_execute *executep)
 	else
 		skb->protocol = htons(ETH_P_802_2);
 
-	flow_extract(skb, execute.in_port, &key);
+	flow_extract(skb, execute->in_port, &key);
 	err = execute_actions(dp, skb, &key, actions->actions,
 			      actions->n_actions, GFP_KERNEL);
 	kfree(actions);
@@ -1300,6 +1316,16 @@ error_free_actions:
 	kfree(actions);
 error:
 	return err;
+}
+
+static int execute_packet(struct datapath *dp, const struct odp_execute __user *executep)
+{
+	struct odp_execute execute;
+
+	if (copy_from_user(&execute, executep, sizeof execute))
+		return -EFAULT;
+
+	return do_execute(dp, &execute);
 }
 
 static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
@@ -1435,25 +1461,36 @@ error_unlock:
 }
 
 static int
-list_ports(struct datapath *dp, struct odp_portvec __user *pvp)
+do_list_ports(struct datapath *dp, struct odp_port __user *uports, int n_ports)
 {
-	struct odp_portvec pv;
-	struct dp_port *p;
-	int idx;
+	int idx = 0;
+	if (n_ports) {
+		struct dp_port *p;
 
-	if (copy_from_user(&pv, pvp, sizeof pv))
-		return -EFAULT;
-
-	idx = 0;
-	if (pv.n_ports) {
 		list_for_each_entry_rcu (p, &dp->port_list, node) {
-			if (put_port(p, &pv.ports[idx]))
+			if (put_port(p, &uports[idx]))
 				return -EFAULT;
-			if (idx++ >= pv.n_ports)
+			if (idx++ >= n_ports)
 				break;
 		}
 	}
-	return put_user(dp->n_ports, &pvp->n_ports);
+	return idx;
+}
+
+static int
+list_ports(struct datapath *dp, struct odp_portvec __user *upv)
+{
+	struct odp_portvec pv;
+	int retval;
+
+	if (copy_from_user(&pv, upv, sizeof pv))
+		return -EFAULT;
+
+	retval = do_list_ports(dp, pv.ports, pv.n_ports);
+	if (retval < 0)
+		return retval;
+
+	return put_user(retval, &upv->n_ports);
 }
 
 /* RCU callback for freeing a dp_port_group */
@@ -1464,34 +1501,27 @@ static void free_port_group(struct rcu_head *rcu)
 }
 
 static int
-set_port_group(struct datapath *dp, const struct odp_port_group __user *upg)
+do_set_port_group(struct datapath *dp, u16 __user *ports, int n_ports, int group)
 {
-	struct odp_port_group pg;
 	struct dp_port_group *new_group, *old_group;
 	int error;
 
-	error = -EFAULT;
-	if (copy_from_user(&pg, upg, sizeof pg))
-		goto error;
-
 	error = -EINVAL;
-	if (pg.n_ports > DP_MAX_PORTS || pg.group >= DP_MAX_GROUPS)
+	if (n_ports > DP_MAX_PORTS || group >= DP_MAX_GROUPS)
 		goto error;
 
 	error = -ENOMEM;
-	new_group = kmalloc(sizeof *new_group + sizeof(u16) * pg.n_ports,
-			    GFP_KERNEL);
+	new_group = kmalloc(sizeof *new_group + sizeof(u16) * n_ports, GFP_KERNEL);
 	if (!new_group)
 		goto error;
 
-	new_group->n_ports = pg.n_ports;
+	new_group->n_ports = n_ports;
 	error = -EFAULT;
-	if (copy_from_user(new_group->ports, pg.ports,
-			   sizeof(u16) * pg.n_ports))
+	if (copy_from_user(new_group->ports, ports, sizeof(u16) * n_ports))
 		goto error_free;
 
-	old_group = rcu_dereference(dp->groups[pg.group]);
-	rcu_assign_pointer(dp->groups[pg.group], new_group);
+	old_group = rcu_dereference(dp->groups[group]);
+	rcu_assign_pointer(dp->groups[group], new_group);
 	if (old_group)
 		call_rcu(&old_group->rcu, free_port_group);
 	return 0;
@@ -1503,27 +1533,46 @@ error:
 }
 
 static int
-get_port_group(struct datapath *dp, struct odp_port_group *upg)
+set_port_group(struct datapath *dp, const struct odp_port_group __user *upg)
 {
 	struct odp_port_group pg;
-	struct dp_port_group *g;
-	u16 n_copy;
 
 	if (copy_from_user(&pg, upg, sizeof pg))
 		return -EFAULT;
 
-	if (pg.group >= DP_MAX_GROUPS)
+	return do_set_port_group(dp, pg.ports, pg.n_ports, pg.group);
+}
+
+static int
+do_get_port_group(struct datapath *dp,
+		  u16 __user *ports, int n_ports, int group,
+		  u16 __user *n_portsp)
+{
+	struct dp_port_group *g;
+	u16 n_copy;
+
+	if (group >= DP_MAX_GROUPS)
 		return -EINVAL;
 
-	g = dp->groups[pg.group];
-	n_copy = g ? min_t(int, g->n_ports, pg.n_ports) : 0;
-	if (n_copy && copy_to_user(pg.ports, g->ports, n_copy * sizeof(u16)))
+	g = dp->groups[group];
+	n_copy = g ? min_t(int, g->n_ports, n_ports) : 0;
+	if (n_copy && copy_to_user(ports, g->ports, n_copy * sizeof(u16)))
 		return -EFAULT;
 
-	if (put_user(g ? g->n_ports : 0, &upg->n_ports))
+	if (put_user(g ? g->n_ports : 0, n_portsp))
 		return -EFAULT;
 
 	return 0;
+}
+
+static int get_port_group(struct datapath *dp, struct odp_port_group __user *upg)
+{
+	struct odp_port_group pg;
+
+	if (copy_from_user(&pg, upg, sizeof pg))
+		return -EFAULT;
+
+	return do_get_port_group(dp, pg.ports, pg.n_ports, pg.group, &pg.n_ports);
 }
 
 static int get_listen_mask(const struct file *f)
@@ -1677,15 +1726,15 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		break;
 
 	case ODP_FLOW_GET:
-		err = do_flowvec_ioctl(dp, argp, query_flows);
+		err = do_flowvec_ioctl(dp, argp, do_query_flows);
 		break;
 
 	case ODP_FLOW_LIST:
-		err = do_flowvec_ioctl(dp, argp, list_flows);
+		err = do_flowvec_ioctl(dp, argp, do_list_flows);
 		break;
 
 	case ODP_EXECUTE:
-		err = do_execute(dp, (struct odp_execute __user *)argp);
+		err = execute_packet(dp, (struct odp_execute __user *)argp);
 		break;
 
 	default:

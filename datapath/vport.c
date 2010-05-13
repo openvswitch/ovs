@@ -187,30 +187,26 @@ vport_exit(void)
  * on device type).  This function is for userspace callers and assumes no
  * locks are held.
  */
-int
-vport_add(const struct odp_vport_add __user *uvport_config)
+static int
+do_vport_add(struct odp_vport_add *vport_config)
 {
-	struct odp_vport_add vport_config;
 	struct vport *vport;
 	int err = 0;
 
-	if (copy_from_user(&vport_config, uvport_config, sizeof(struct odp_vport_add)))
-		return -EFAULT;
-
-	vport_config.port_type[VPORT_TYPE_SIZE - 1] = '\0';
-	vport_config.devname[IFNAMSIZ - 1] = '\0';
+	vport_config->port_type[VPORT_TYPE_SIZE - 1] = '\0';
+	vport_config->devname[IFNAMSIZ - 1] = '\0';
 
 	rtnl_lock();
 
-	vport = vport_locate(vport_config.devname);
+	vport = vport_locate(vport_config->devname);
 	if (vport) {
 		err = -EEXIST;
 		goto out;
 	}
 
 	vport_lock();
-	vport = __vport_add(vport_config.devname, vport_config.port_type,
-			    vport_config.config);
+	vport = __vport_add(vport_config->devname, vport_config->port_type,
+			    vport_config->config);
 	vport_unlock();
 
 	if (IS_ERR(vport))
@@ -219,6 +215,17 @@ vport_add(const struct odp_vport_add __user *uvport_config)
 out:
 	rtnl_unlock();
 	return err;
+}
+
+int
+vport_add(const struct odp_vport_add __user *uvport_config)
+{
+	struct odp_vport_add vport_config;
+
+	if (copy_from_user(&vport_config, uvport_config, sizeof(struct odp_vport_add)))
+		return -EFAULT;
+
+	return do_vport_add(&vport_config);
 }
 
 /**
@@ -230,33 +237,40 @@ out:
  * dependent on device type).  This function is for userspace callers and
  * assumes no locks are held.
  */
-int
-vport_mod(const struct odp_vport_mod __user *uvport_config)
+static int
+do_vport_mod(struct odp_vport_mod *vport_config)
 {
-	struct odp_vport_mod vport_config;
 	struct vport *vport;
 	int err;
 
-	if (copy_from_user(&vport_config, uvport_config, sizeof(struct odp_vport_mod)))
-		return -EFAULT;
-
-	vport_config.devname[IFNAMSIZ - 1] = '\0';
+	vport_config->devname[IFNAMSIZ - 1] = '\0';
 
 	rtnl_lock();
 
-	vport = vport_locate(vport_config.devname);
+	vport = vport_locate(vport_config->devname);
 	if (!vport) {
 		err = -ENODEV;
 		goto out;
 	}
 
 	vport_lock();
-	err = __vport_mod(vport, vport_config.config);
+	err = __vport_mod(vport, vport_config->config);
 	vport_unlock();
 
 out:
 	rtnl_unlock();
 	return err;
+}
+
+int
+vport_mod(const struct odp_vport_mod __user *uvport_config)
+{
+	struct odp_vport_mod vport_config;
+
+	if (copy_from_user(&vport_config, uvport_config, sizeof(struct odp_vport_mod)))
+		return -EFAULT;
+
+	return do_vport_mod(&vport_config);
 }
 
 /**
