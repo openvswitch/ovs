@@ -30,7 +30,6 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/linux/netfilter_bridge.h \
 	linux-2.6/compat-2.6/include/linux/netfilter_ipv4.h \
 	linux-2.6/compat-2.6/include/linux/netlink.h \
-	linux-2.6/compat-2.6/include/linux/percpu.h \
 	linux-2.6/compat-2.6/include/linux/random.h \
 	linux-2.6/compat-2.6/include/linux/rculist.h \
 	linux-2.6/compat-2.6/include/linux/rtnetlink.h \

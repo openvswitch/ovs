@@ -1347,7 +1347,7 @@ static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
 	stats.n_frags = stats.n_hit = stats.n_missed = stats.n_lost = 0;
 	for_each_possible_cpu(i) {
 		const struct dp_stats_percpu *s;
-		s = percpu_ptr(dp->stats_percpu, i);
+		s = per_cpu_ptr(dp->stats_percpu, i);
 		stats.n_frags += s->n_frags;
 		stats.n_hit += s->n_hit;
 		stats.n_missed += s->n_missed;
