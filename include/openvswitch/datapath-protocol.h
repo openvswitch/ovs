@@ -181,7 +181,7 @@ struct odp_port {
 
 struct odp_portvec {
     struct odp_port *ports;
-    int n_ports;
+    __u32 n_ports;
 };
 
 struct odp_port_group {
