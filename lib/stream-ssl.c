@@ -478,6 +478,11 @@ ssl_close(struct stream *stream)
      * background. */
     SSL_shutdown(sslv->ssl);
 
+    /* SSL_shutdown() might have signaled an error, in which case we need to
+     * flush it out of the OpenSSL error queue or the next OpenSSL operation
+     * will falsely signal an error. */
+    ERR_clear_error();
+
     SSL_free(sslv->ssl);
     close(sslv->fd);
     free(sslv);
