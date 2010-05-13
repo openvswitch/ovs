@@ -431,7 +431,7 @@ got_port_no:
 	set_internal_devs_mtu(dp);
 	dp_sysfs_add_if(dp->ports[port_no]);
 
-	err = __put_user(port_no, &portp->port);
+	err = put_user(port_no, &portp->port);
 
 out_unlock_dp:
 	mutex_unlock(&dp->mutex);
@@ -1068,8 +1068,8 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 	if (error)
 		return error;
 
-	if (__copy_to_user(&ufp->flow.stats, &stats,
-			   sizeof(struct odp_flow_stats)))
+	if (copy_to_user(&ufp->flow.stats, &stats,
+			 sizeof(struct odp_flow_stats)))
 		return -EFAULT;
 
 	return 0;
@@ -1092,15 +1092,15 @@ static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 	}
 	spin_unlock_irqrestore(&flow->lock, flags);
 
-	if (__copy_to_user(ustats, &stats, sizeof(struct odp_flow_stats)) ||
-	    __get_user(n_actions, n_actionsp))
+	if (copy_to_user(ustats, &stats, sizeof(struct odp_flow_stats)) ||
+	    get_user(n_actions, n_actionsp))
 		return -EFAULT;
 
 	if (!n_actions)
 		return 0;
 
 	sf_acts = rcu_dereference(flow->sf_acts);
-	if (__put_user(sf_acts->n_actions, n_actionsp) ||
+	if (put_user(sf_acts->n_actions, n_actionsp) ||
 	    (actions && copy_to_user(actions, sf_acts->actions,
 				     sizeof(union odp_action) *
 				     min(sf_acts->n_actions, n_actions))))
@@ -1114,7 +1114,7 @@ static int answer_query(struct sw_flow *flow, u32 query_flags,
 {
 	union odp_action *actions;
 
-	if (__get_user(actions, &ufp->actions))
+	if (get_user(actions, &ufp->actions))
 		return -EFAULT;
 
 	return do_answer_query(flow, query_flags,
@@ -1172,13 +1172,13 @@ static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec
 		struct tbl_node *flow_node;
 		int error;
 
-		if (__copy_from_user(&uf, ufp, sizeof uf))
+		if (copy_from_user(&uf, ufp, sizeof uf))
 			return -EFAULT;
 		memset(uf.key.reserved, 0, sizeof uf.key.reserved);
 
 		flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
 		if (!flow_node)
-			error = __put_user(ENOENT, &ufp->stats.error);
+			error = put_user(ENOENT, &ufp->stats.error);
 		else
 			error = answer_query(flow_cast(flow_node), uf.flags, ufp);
 		if (error)
@@ -1200,7 +1200,7 @@ static int list_flow(struct tbl_node *node, void *cbdata_)
 	struct odp_flow __user *ufp = &cbdata->uflows[cbdata->listed_flows++];
 	int error;
 
-	if (__copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
+	if (copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
 		return -EFAULT;
 	error = answer_query(flow, 0, ufp);
 	if (error)
@@ -1235,21 +1235,16 @@ static int do_flowvec_ioctl(struct datapath *dp, unsigned long argp,
 	int retval;
 
 	uflowvec = (struct odp_flowvec __user *)argp;
-	if (!access_ok(VERIFY_WRITE, uflowvec, sizeof *uflowvec) ||
-	    copy_from_user(&flowvec, uflowvec, sizeof flowvec))
+	if (copy_from_user(&flowvec, uflowvec, sizeof flowvec))
 		return -EFAULT;
 
 	if (flowvec.n_flows > INT_MAX / sizeof(struct odp_flow))
 		return -EINVAL;
 
-	if (!access_ok(VERIFY_WRITE, flowvec.flows,
-		       flowvec.n_flows * sizeof(struct odp_flow)))
-		return -EFAULT;
-
 	retval = function(dp, &flowvec);
 	return (retval < 0 ? retval
 		: retval == flowvec.n_flows ? 0
-		: __put_user(retval, &uflowvec->n_flows));
+		: put_user(retval, &uflowvec->n_flows));
 }
 
 static int do_execute(struct datapath *dp, const struct odp_execute *execute)
