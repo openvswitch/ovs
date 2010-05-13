@@ -155,8 +155,16 @@ Thus, this command can be used to view OpenFlow protocol activity
 between a switch and its controller.
 .IP
 When a switch has more than one controller configured, only the
-protocol to and from a single controller, chosen arbitrarily by Open
-vSwitch, is given.  If a switch has no controller configured, or if
+traffic to and from a single controller is output.  If none of the
+controllers is configured as a master or a slave (using a Nicira
+extension to OpenFlow), then a controller is chosen arbitrarily among
+them.  If there is a master controller, it is chosen; otherwise, if
+there are any controllers that are not masters or slaves, one is
+chosen arbitrarily; otherwise, a slave controller is chosen
+arbitrarily.  This choice is made once at connection time and does not
+change as controllers reconfigure their roles.
+.IP
+If a switch has no controller configured, or if
 the configured controller is disconnected, no traffic is sent, so
 monitoring will not show any traffic.
 .

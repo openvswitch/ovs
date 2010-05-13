@@ -963,25 +963,47 @@ process_port_change(struct ofproto *ofproto, int error, char *devname)
     }
 }
 
+/* Returns a "preference level" for snooping 'ofconn'.  A higher return value
+ * means that 'ofconn' is more interesting for monitoring than a lower return
+ * value. */
+static int
+snoop_preference(const struct ofconn *ofconn)
+{
+    switch (ofconn->role) {
+    case NX_ROLE_MASTER:
+        return 3;
+    case NX_ROLE_OTHER:
+        return 2;
+    case NX_ROLE_SLAVE:
+        return 1;
+    default:
+        /* Shouldn't happen. */
+        return 0;
+    }
+}
+
 /* One of ofproto's "snoop" pvconns has accepted a new connection on 'vconn'.
  * Connects this vconn to a controller. */
 static void
 add_snooper(struct ofproto *ofproto, struct vconn *vconn)
 {
-    struct ofconn *ofconn;
+    struct ofconn *ofconn, *best;
 
-    /* Arbitrarily pick the first controller in the list for monitoring.  We
-     * could do something smarter or more flexible later, if it ever proves
-     * useful. */
+    /* Pick a controller for monitoring. */
+    best = NULL;
     LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
-        if (ofconn->type == OFCONN_CONTROLLER) {
-            rconn_add_monitor(ofconn->rconn, vconn);
-            return;
+        if (ofconn->type == OFCONN_CONTROLLER
+            && (!best || snoop_preference(ofconn) > snoop_preference(best))) {
+            best = ofconn;
         }
-
     }
-    VLOG_INFO_RL(&rl, "no controller connection to monitor");
-    vconn_close(vconn);
+
+    if (best) {
+        rconn_add_monitor(best->rconn, vconn);
+    } else {
+        VLOG_INFO_RL(&rl, "no controller connection to snoop");
+        vconn_close(vconn);
+    }
 }
 
 int
