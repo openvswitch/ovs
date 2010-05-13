@@ -37,7 +37,10 @@
  * ----------------------------------------------------------------------
  */
 
-/* Protocol between userspace and kernel datapath. */
+/* Protocol between userspace and kernel datapath.
+ *
+ * Be sure to update datapath/odp-compat.h if you change any of the structures
+ * in here. */
 
 #ifndef OPENVSWITCH_DATAPATH_PROTOCOL_H
 #define OPENVSWITCH_DATAPATH_PROTOCOL_H 1

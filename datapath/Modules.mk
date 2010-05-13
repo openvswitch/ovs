@@ -28,6 +28,7 @@ openvswitch_headers = \
 	datapath.h \
 	dp_sysfs.h \
 	flow.h \
+	odp-compat.h \
 	table.h \
 	vport.h \
 	vport-internal_dev.h \

@@ -15,6 +15,7 @@
 
 #include "datapath.h"
 #include "openvswitch/datapath-protocol.h"
+#include "odp-compat.h"
 
 struct vport;
 struct dp_port;
@@ -30,6 +31,11 @@ void vport_exit(void);
 int vport_add(const struct odp_vport_add __user *);
 int vport_mod(const struct odp_vport_mod __user *);
 int vport_del(const char __user *udevname);
+
+#ifdef CONFIG_COMPAT
+int compat_vport_add(struct compat_odp_vport_add __user *);
+int compat_vport_mod(struct compat_odp_vport_mod __user *);
+#endif
 
 int vport_stats_get(struct odp_vport_stats_req __user *);
 int vport_ether_get(struct odp_vport_ether __user *);

@@ -14,6 +14,7 @@
 #include <linux/mutex.h>
 #include <linux/percpu.h>
 #include <linux/rtnetlink.h>
+#include <linux/compat.h>
 
 #include "vport.h"
 
@@ -228,6 +229,24 @@ vport_add(const struct odp_vport_add __user *uvport_config)
 	return do_vport_add(&vport_config);
 }
 
+#ifdef CONFIG_COMPAT
+int
+compat_vport_add(struct compat_odp_vport_add *ucompat)
+{
+	struct compat_odp_vport_add compat;
+	struct odp_vport_add vport_config;
+
+	if (copy_from_user(&compat, ucompat, sizeof(struct compat_odp_vport_add)))
+		return -EFAULT;
+
+	memcpy(vport_config.port_type, compat.port_type, VPORT_TYPE_SIZE);
+	memcpy(vport_config.devname, compat.devname, IFNAMSIZ);
+	vport_config.config = compat_ptr(compat.config);
+
+	return do_vport_add(&vport_config);
+}
+#endif
+
 /**
  *	vport_mod - modify existing vport device (for userspace callers)
  *
@@ -272,6 +291,23 @@ vport_mod(const struct odp_vport_mod __user *uvport_config)
 
 	return do_vport_mod(&vport_config);
 }
+
+#ifdef CONFIG_COMPAT
+int
+compat_vport_mod(struct compat_odp_vport_mod *ucompat)
+{
+	struct compat_odp_vport_mod compat;
+	struct odp_vport_mod vport_config;
+
+	if (copy_from_user(&compat, ucompat, sizeof(struct compat_odp_vport_mod)))
+		return -EFAULT;
+
+	memcpy(vport_config.devname, compat.devname, IFNAMSIZ);
+	vport_config.config = compat_ptr(compat.config);
+
+	return do_vport_mod(&vport_config);
+}
+#endif
 
 /**
  *	vport_del - delete existing vport device (for userspace callers)

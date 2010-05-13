@@ -40,11 +40,13 @@
 #include <linux/workqueue.h>
 #include <linux/dmi.h>
 #include <net/inet_ecn.h>
+#include <linux/compat.h>
 
 #include "openvswitch/datapath-protocol.h"
 #include "datapath.h"
 #include "actions.h"
 #include "flow.h"
+#include "odp-compat.h"
 #include "table.h"
 #include "vport-internal_dev.h"
 
@@ -1751,6 +1753,311 @@ static int dp_has_packet_of_interest(struct datapath *dp, int listeners)
 	return 0;
 }
 
+#ifdef CONFIG_COMPAT
+static int compat_list_ports(struct datapath *dp, struct compat_odp_portvec __user *upv)
+{
+	struct compat_odp_portvec pv;
+	int retval;
+
+	if (copy_from_user(&pv, upv, sizeof pv))
+		return -EFAULT;
+
+	retval = do_list_ports(dp, compat_ptr(pv.ports), pv.n_ports);
+	if (retval < 0)
+		return retval;
+
+	return put_user(retval, &upv->n_ports);
+}
+
+static int compat_set_port_group(struct datapath *dp, const struct compat_odp_port_group __user *upg)
+{
+	struct compat_odp_port_group pg;
+
+	if (copy_from_user(&pg, upg, sizeof pg))
+		return -EFAULT;
+
+	return do_set_port_group(dp, compat_ptr(pg.ports), pg.n_ports, pg.group);
+}
+
+static int compat_get_port_group(struct datapath *dp, struct compat_odp_port_group __user *upg)
+{
+	struct compat_odp_port_group pg;
+
+	if (copy_from_user(&pg, upg, sizeof pg))
+		return -EFAULT;
+
+	return do_get_port_group(dp, compat_ptr(pg.ports), pg.n_ports,
+				 pg.group, &pg.n_ports);
+}
+
+static int compat_get_flow(struct odp_flow *flow, const struct compat_odp_flow __user *compat)
+{
+	compat_uptr_t actions;
+
+	if (!access_ok(VERIFY_READ, compat, sizeof(struct compat_odp_flow)) ||
+	    __copy_from_user(&flow->stats, &compat->stats, sizeof(struct odp_flow_stats)) ||
+	    __copy_from_user(&flow->key, &compat->key, sizeof(struct odp_flow_key)) ||
+	    __get_user(actions, &compat->actions) ||
+	    __get_user(flow->n_actions, &compat->n_actions) ||
+	    __get_user(flow->flags, &compat->flags))
+		return -EFAULT;
+
+	flow->actions = compat_ptr(actions);
+	return 0;
+}
+
+static int compat_put_flow(struct datapath *dp, struct compat_odp_flow_put __user *ufp)
+{
+	struct odp_flow_stats stats;
+	struct odp_flow_put fp;
+	int error;
+
+	if (compat_get_flow(&fp.flow, &ufp->flow) ||
+	    get_user(fp.flags, &ufp->flags))
+		return -EFAULT;
+
+	error = do_put_flow(dp, &fp, &stats);
+	if (error)
+		return error;
+
+	if (copy_to_user(&ufp->flow.stats, &stats,
+			 sizeof(struct odp_flow_stats)))
+		return -EFAULT;
+
+	return 0;
+}
+
+static int compat_answer_query(struct sw_flow *flow, u32 query_flags,
+			       struct compat_odp_flow __user *ufp)
+{
+	compat_uptr_t actions;
+
+	if (get_user(actions, &ufp->actions))
+		return -EFAULT;
+
+	return do_answer_query(flow, query_flags, &ufp->stats,
+			       compat_ptr(actions), &ufp->n_actions);
+}
+
+static int compat_del_flow(struct datapath *dp, struct compat_odp_flow __user *ufp)
+{
+	struct sw_flow *flow;
+	struct odp_flow uf;
+	int error;
+
+	if (compat_get_flow(&uf, ufp))
+		return -EFAULT;
+
+	flow = do_del_flow(dp, &uf.key);
+	if (IS_ERR(flow))
+		return PTR_ERR(flow);
+
+	error = compat_answer_query(flow, 0, ufp);
+	flow_deferred_free(flow);
+	return error;
+}
+
+static int compat_query_flows(struct datapath *dp, struct compat_odp_flow *flows, u32 n_flows)
+{
+	struct tbl *table = rcu_dereference(dp->table);
+	u32 i;
+
+	for (i = 0; i < n_flows; i++) {
+		struct compat_odp_flow __user *ufp = &flows[i];
+		struct odp_flow uf;
+		struct tbl_node *flow_node;
+		int error;
+
+		if (compat_get_flow(&uf, ufp))
+			return -EFAULT;
+		memset(uf.key.reserved, 0, sizeof uf.key.reserved);
+
+		flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
+		if (!flow_node)
+			error = put_user(ENOENT, &ufp->stats.error);
+		else
+			error = compat_answer_query(flow_cast(flow_node), uf.flags, ufp);
+		if (error)
+			return -EFAULT;
+	}
+	return n_flows;
+}
+
+struct compat_list_flows_cbdata {
+	struct compat_odp_flow __user *uflows;
+	u32 n_flows;
+	u32 listed_flows;
+};
+
+static int compat_list_flow(struct tbl_node *node, void *cbdata_)
+{
+	struct sw_flow *flow = flow_cast(node);
+	struct compat_list_flows_cbdata *cbdata = cbdata_;
+	struct compat_odp_flow __user *ufp = &cbdata->uflows[cbdata->listed_flows++];
+	int error;
+
+	if (copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
+		return -EFAULT;
+	error = compat_answer_query(flow, 0, ufp);
+	if (error)
+		return error;
+
+	if (cbdata->listed_flows >= cbdata->n_flows)
+		return cbdata->listed_flows;
+	return 0;
+}
+
+static int compat_list_flows(struct datapath *dp, struct compat_odp_flow *flows, u32 n_flows)
+{
+	struct compat_list_flows_cbdata cbdata;
+	int error;
+
+	if (!n_flows)
+		return 0;
+
+	cbdata.uflows = flows;
+	cbdata.n_flows = n_flows;
+	cbdata.listed_flows = 0;
+	error = tbl_foreach(rcu_dereference(dp->table), compat_list_flow, &cbdata);
+	return error ? error : cbdata.listed_flows;
+}
+
+static int compat_flowvec_ioctl(struct datapath *dp, unsigned long argp,
+				int (*function)(struct datapath *,
+						struct compat_odp_flow *,
+						u32 n_flows))
+{
+	struct compat_odp_flowvec __user *uflowvec;
+	struct compat_odp_flow __user *flows;
+	struct compat_odp_flowvec flowvec;
+	int retval;
+
+	uflowvec = compat_ptr(argp);
+	if (!access_ok(VERIFY_WRITE, uflowvec, sizeof *uflowvec) ||
+	    copy_from_user(&flowvec, uflowvec, sizeof flowvec))
+		return -EFAULT;
+
+	if (flowvec.n_flows > INT_MAX / sizeof(struct compat_odp_flow))
+		return -EINVAL;
+
+	flows = compat_ptr(flowvec.flows);
+	if (!access_ok(VERIFY_WRITE, flows,
+		       flowvec.n_flows * sizeof(struct compat_odp_flow)))
+		return -EFAULT;
+
+	retval = function(dp, flows, flowvec.n_flows);
+	return (retval < 0 ? retval
+		: retval == flowvec.n_flows ? 0
+		: put_user(retval, &uflowvec->n_flows));
+}
+
+static int compat_execute(struct datapath *dp, const struct compat_odp_execute __user *uexecute)
+{
+	struct odp_execute execute;
+	compat_uptr_t actions;
+	compat_uptr_t data;
+
+	if (!access_ok(VERIFY_READ, uexecute, sizeof(struct compat_odp_execute)) ||
+	    __get_user(execute.in_port, &uexecute->in_port) ||
+	    __get_user(actions, &uexecute->actions) ||
+	    __get_user(execute.n_actions, &uexecute->n_actions) ||
+	    __get_user(data, &uexecute->data) ||
+	    __get_user(execute.length, &uexecute->length))
+		return -EFAULT;
+
+	execute.actions = compat_ptr(actions);
+	execute.data = compat_ptr(data);
+
+	return do_execute(dp, &execute);
+}
+
+static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned long argp)
+{
+	int dp_idx = iminor(f->f_dentry->d_inode);
+	struct datapath *dp;
+	int err;
+
+	switch (cmd) {
+	case ODP_DP_DESTROY:
+	case ODP_FLOW_FLUSH:
+		/* Ioctls that don't need any translation at all. */
+		return openvswitch_ioctl(f, cmd, argp);
+
+	case ODP_DP_CREATE:
+	case ODP_PORT_ATTACH:
+	case ODP_PORT_DETACH:
+	case ODP_VPORT_DEL:
+	case ODP_VPORT_MTU_SET:
+	case ODP_VPORT_MTU_GET:
+	case ODP_VPORT_ETHER_SET:
+	case ODP_VPORT_ETHER_GET:
+	case ODP_VPORT_STATS_GET:
+	case ODP_DP_STATS:
+	case ODP_GET_DROP_FRAGS:
+	case ODP_SET_DROP_FRAGS:
+	case ODP_SET_LISTEN_MASK:
+	case ODP_GET_LISTEN_MASK:
+	case ODP_SET_SFLOW_PROBABILITY:
+	case ODP_GET_SFLOW_PROBABILITY:
+	case ODP_PORT_QUERY:
+		/* Ioctls that just need their pointer argument extended. */
+		return openvswitch_ioctl(f, cmd, (unsigned long)compat_ptr(argp));
+
+	case ODP_VPORT_ADD32:
+		return compat_vport_add(compat_ptr(argp));
+
+	case ODP_VPORT_MOD32:
+		return compat_vport_mod(compat_ptr(argp));
+	}
+
+	dp = get_dp_locked(dp_idx);
+	err = -ENODEV;
+	if (!dp)
+		goto exit;
+
+	switch (cmd) {
+	case ODP_PORT_LIST32:
+		err = compat_list_ports(dp, compat_ptr(argp));
+		break;
+
+	case ODP_PORT_GROUP_SET32:
+		err = compat_set_port_group(dp, compat_ptr(argp));
+		break;
+
+	case ODP_PORT_GROUP_GET32:
+		err = compat_get_port_group(dp, compat_ptr(argp));
+		break;
+
+	case ODP_FLOW_PUT32:
+		err = compat_put_flow(dp, compat_ptr(argp));
+		break;
+
+	case ODP_FLOW_DEL32:
+		err = compat_del_flow(dp, compat_ptr(argp));
+		break;
+
+	case ODP_FLOW_GET32:
+		err = compat_flowvec_ioctl(dp, argp, compat_query_flows);
+		break;
+
+	case ODP_FLOW_LIST32:
+		err = compat_flowvec_ioctl(dp, argp, compat_list_flows);
+		break;
+
+	case ODP_EXECUTE32:
+		err = compat_execute(dp, compat_ptr(argp));
+		break;
+
+	default:
+		err = -ENOIOCTLCMD;
+		break;
+	}
+	mutex_unlock(&dp->mutex);
+exit:
+	return err;
+}
+#endif
+
 ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 		      loff_t *ppos)
 {
@@ -1830,6 +2137,9 @@ struct file_operations openvswitch_fops = {
 	.read  = openvswitch_read,
 	.poll  = openvswitch_poll,
 	.unlocked_ioctl = openvswitch_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = openvswitch_compat_ioctl,
+#endif
 	/* XXX .fasync = openvswitch_fasync, */
 };
 
