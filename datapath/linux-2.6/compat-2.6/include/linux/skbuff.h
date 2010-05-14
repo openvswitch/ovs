@@ -83,7 +83,7 @@ static inline int skb_clone_writable(struct sk_buff *skb, int len)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
+#ifndef HAVE_SKB_DST_ACCESSOR_FUNCS
 static inline struct dst_entry *skb_dst(const struct sk_buff *skb)
 {
 	return (struct dst_entry *)skb->dst;

@@ -160,6 +160,8 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
                   [OVS_DEFINE([HAVE_PROTO_DATA_VALID])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [raw],
                   [OVS_DEFINE([HAVE_MAC_RAW])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_dst(],
+                  [OVS_DEFINE([HAVE_SKB_DST_ACCESSOR_FUNCS])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], 
                   [skb_copy_from_linear_data_offset],
                   [OVS_DEFINE([HAVE_SKB_COPY_FROM_LINEAR_DATA_OFFSET])])
