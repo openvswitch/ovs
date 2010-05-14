@@ -141,33 +141,16 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   rm -f datapath/linux-2.6/kcompat.h.new
   mkdir -p datapath/linux-2.6
   : > datapath/linux-2.6/kcompat.h.new
-  OVS_GREP_IFELSE([$KSRC26/include/linux/types.h], [bool],
-                  [OVS_DEFINE([HAVE_BOOL_TYPE])])
-  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_transport_header],
-                  [OVS_DEFINE([HAVE_SKBUFF_HEADER_HELPERS])])
-  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [raw],
-                  [OVS_DEFINE([HAVE_MAC_RAW])])
-  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], 
-                  [skb_copy_from_linear_data_offset],
-                  [OVS_DEFINE([HAVE_SKB_COPY_FROM_LINEAR_DATA_OFFSET])])
-  OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [NLA_NUL_STRING],
-                  [OVS_DEFINE([HAVE_NLA_NUL_STRING])])
+
   OVS_GREP_IFELSE([$KSRC26/include/linux/err.h], [ERR_CAST],
                   [OVS_DEFINE([HAVE_ERR_CAST])])
-  OVS_GREP_IFELSE([$KSRC26/include/net/checksum.h], [csum_unfold],
-                  [OVS_DEFINE([HAVE_CSUM_UNFOLD])])
-  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_cow],
-                  [OVS_DEFINE([HAVE_SKB_COW])])
-  OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [nla_get_be16],
-                  [OVS_DEFINE([HAVE_NLA_GET_BE16])])
+
   OVS_GREP_IFELSE([$KSRC26/include/linux/in.h], [ipv4_is_multicast],
                   [OVS_DEFINE([HAVE_IPV4_IS_MULTICAST])])
-  OVS_GREP_IFELSE([$KSRC26/include/linux/string.h $KSRC26/include/linux/slab.h],
-                  [kmemdup], [OVS_DEFINE([HAVE_KMEMDUP])])
-  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_warn_if_lro],
-                  [OVS_DEFINE([HAVE_SKB_WARN_LRO])])
+
   OVS_GREP_IFELSE([$KSRC26/include/linux/netdevice.h], [dev_disable_lro],
                   [OVS_DEFINE([HAVE_DEV_DISABLE_LRO])])
+
   # Check for the proto_data_valid member in struct sk_buff.  The [^@]
   # is necessary because some versions of this header remove the
   # member but retain the kerneldoc comment that describes it (which
@@ -175,8 +158,35 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   # quoting rules.
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [[[^@]]proto_data_valid],
                   [OVS_DEFINE([HAVE_PROTO_DATA_VALID])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [raw],
+                  [OVS_DEFINE([HAVE_MAC_RAW])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], 
+                  [skb_copy_from_linear_data_offset],
+                  [OVS_DEFINE([HAVE_SKB_COPY_FROM_LINEAR_DATA_OFFSET])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_cow],
+                  [OVS_DEFINE([HAVE_SKB_COW])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_transport_header],
+                  [OVS_DEFINE([HAVE_SKBUFF_HEADER_HELPERS])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_warn_if_lro],
+                  [OVS_DEFINE([HAVE_SKB_WARN_LRO])])
+
+  OVS_GREP_IFELSE([$KSRC26/include/linux/string.h $KSRC26/include/linux/slab.h],
+                  [kmemdup], [OVS_DEFINE([HAVE_KMEMDUP])])
+
+  OVS_GREP_IFELSE([$KSRC26/include/linux/types.h], [bool],
+                  [OVS_DEFINE([HAVE_BOOL_TYPE])])
+
+  OVS_GREP_IFELSE([$KSRC26/include/net/checksum.h], [csum_unfold],
+                  [OVS_DEFINE([HAVE_CSUM_UNFOLD])])
+
+  OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [NLA_NUL_STRING],
+                  [OVS_DEFINE([HAVE_NLA_NUL_STRING])])
+  OVS_GREP_IFELSE([$KSRC26/include/net/netlink.h], [nla_get_be16],
+                  [OVS_DEFINE([HAVE_NLA_GET_BE16])])
+
   OVS_CHECK_LOG2_H
   OVS_CHECK_VETH
+
   if cmp -s datapath/linux-2.6/kcompat.h.new \
             datapath/linux-2.6/kcompat.h >/dev/null 2>&1; then
     rm datapath/linux-2.6/kcompat.h.new
