@@ -447,6 +447,7 @@ wx_rule_insert(struct wx *wx, struct wx_rule *rule, struct ofpbuf *packet,
 
     /* Free the rule that was displaced, if any. */
     if (displaced_rule) {
+        rule->wr.client_data = displaced_rule->wr.client_data;
         wx_rule_destroy(wx, displaced_rule);
     }
 }
