@@ -146,9 +146,6 @@ function insert_modules_if_required {
     if [ "$ENABLE_BRCOMPAT" = "y" ] && [ -n "$BRCOMPATD_PIDFILE" ] && ! lsmod | grep -q "brcompat_mod"; then
         action "Inserting brcompat module" modprobe brcompat_mod
     fi
-    if [ -f "/lib/modules/`uname -r`/kernel/extra/openvswitch/veth_mod.ko" ] && ! lsmod | grep -q "veth_mod"; then
-        action "Inserting veth module" modprobe veth_mod
-    fi
 }
 
 function remove_modules {

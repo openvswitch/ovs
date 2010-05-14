@@ -41,14 +41,14 @@ struct netdev_patch {
 static struct netdev_dev_patch *
 netdev_dev_patch_cast(const struct netdev_dev *netdev_dev)
 {
-    netdev_dev_assert_class(netdev_dev, &netdev_patchnew_class);
+    netdev_dev_assert_class(netdev_dev, &netdev_patch_class);
     return CONTAINER_OF(netdev_dev, struct netdev_dev_patch, netdev_dev);
 }
 
 static struct netdev_patch *
 netdev_patch_cast(const struct netdev *netdev)
 {
-    netdev_assert_class(netdev, &netdev_patchnew_class);
+    netdev_assert_class(netdev, &netdev_patch_class);
     return CONTAINER_OF(netdev, struct netdev_patch, netdev);
 }
 
@@ -119,7 +119,7 @@ netdev_patch_create(const char *name, const char *type OVS_UNUSED,
     }
 
     netdev_dev = xmalloc(sizeof *netdev_dev);
-    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_patchnew_class);
+    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_patch_class);
 
     *netdev_devp = &netdev_dev->netdev_dev;
     return 0;
@@ -173,8 +173,8 @@ netdev_patch_close(struct netdev *netdev_)
     free(netdev);
 }
 
-const struct netdev_class netdev_patchnew_class = {
-    "patchnew",
+const struct netdev_class netdev_patch_class = {
+    "patch",
 
     NULL,                       /* init */
     NULL,                       /* run */

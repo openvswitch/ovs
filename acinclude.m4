@@ -113,16 +113,6 @@ AC_DEFUN([OVS_DEFINE], [
   echo '#define $1 1' >> datapath/linux-2.6/kcompat.h.new
 ])
 
-AC_DEFUN([OVS_CHECK_VETH], [
-  AC_MSG_CHECKING([whether to build veth module])
-  if test "$sublevel" = 18; then
-    AC_MSG_RESULT([yes])
-    AC_SUBST([BUILD_VETH], 1)
-  else
-    AC_MSG_RESULT([no])
-  fi
-])
-
 AC_DEFUN([OVS_CHECK_LOG2_H], [
   AC_MSG_CHECKING([for $KSRC26/include/linux/log2.h])
   if test -e $KSRC26/include/linux/log2.h; then
@@ -189,7 +179,6 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
                   [OVS_DEFINE([HAVE_NLA_GET_BE16])])
 
   OVS_CHECK_LOG2_H
-  OVS_CHECK_VETH
 
   if cmp -s datapath/linux-2.6/kcompat.h.new \
             datapath/linux-2.6/kcompat.h >/dev/null 2>&1; then

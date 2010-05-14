@@ -55,8 +55,3 @@ brcompat_sources = \
 	brc_procfs.c
 brcompat_headers = \
 	brc_procfs.h
-
-dist_modules += veth
-build_modules += $(if $(BUILD_VETH),veth)
-veth_sources = linux-2.6/compat-2.6/veth.c
-veth_headers = 
