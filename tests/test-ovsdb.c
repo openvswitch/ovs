@@ -741,7 +741,7 @@ do_evaluate_conditions(int argc OVS_UNUSED, char *argv[])
     json_destroy(json);
 
     for (i = 0; i < n_conditions; i++) {
-        printf("condition %2d:", i);
+        printf("condition %2zu:", i);
         for (j = 0; j < n_rows; j++) {
             bool result = ovsdb_condition_evaluate(rows[j], &conditions[i]);
             if (j % 5 == 0) {
@@ -847,7 +847,7 @@ do_execute_mutations(int argc OVS_UNUSED, char *argv[])
     json_destroy(json);
 
     for (i = 0; i < n_sets; i++) {
-        printf("mutation %2d:\n", i);
+        printf("mutation %2zu:\n", i);
         for (j = 0; j < n_rows; j++) {
             struct ovsdb_error *error;
             struct ovsdb_row *row;
@@ -969,7 +969,7 @@ do_query(int argc OVS_UNUSED, char *argv[])
         memset(cbdata.counts, 0, cbdata.n_rows * sizeof *cbdata.counts);
         ovsdb_query(table, &cnd, do_query_cb, &cbdata);
 
-        printf("query %2d:", i);
+        printf("query %2zu:", i);
         for (j = 0; j < cbdata.n_rows; j++) {
             if (j % 5 == 0) {
                 putchar(' ');
@@ -1102,7 +1102,7 @@ do_query_distinct(int argc OVS_UNUSED, char *argv[])
         }
         ovsdb_row_set_destroy(&results);
 
-        printf("query %2d:", i);
+        printf("query %2zu:", i);
         for (j = 0; j < n_rows; j++) {
             int count = rows[j].class->count;
 
@@ -1597,7 +1597,7 @@ parse_uuids(const struct json *json, struct ovsdb_symbol_table *symtab,
     struct uuid uuid;
 
     if (json->type == JSON_STRING && uuid_from_string(&uuid, json->u.string)) {
-        char *name = xasprintf("#%d#", *n);
+        char *name = xasprintf("#%zu#", *n);
         fprintf(stderr, "%s = "UUID_FMT"\n", name, UUID_ARGS(&uuid));
         ovsdb_symbol_table_put(symtab, name, &uuid, false);
         free(name);
