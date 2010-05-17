@@ -66,6 +66,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/netdev-gre.c \
 	lib/netdev-linux.c \
 	lib/netdev-provider.h \
+	lib/netdev-vport.c \
+	lib/netdev-vport.h \
 	lib/netdev.c \
 	lib/netdev.h \
 	lib/odp-util.c \
