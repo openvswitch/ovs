@@ -1522,7 +1522,7 @@ ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
 
     if (txn->inc_index + 2 > results->n) {
         VLOG_WARN_RL(&syntax_rl, "reply does not contain enough operations "
-                     "for increment (has %u, needs %u)",
+                     "for increment (has %zu, needs %u)",
                      results->n, txn->inc_index + 2);
         return false;
     }
@@ -1536,7 +1536,7 @@ ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
     }
     if (count->u.integer != 1) {
         VLOG_WARN_RL(&syntax_rl,
-                     "\"mutate\" reply \"count\" is %"PRId64" instead of 1",
+                     "\"mutate\" reply \"count\" is %lld instead of 1",
                      count->u.integer);
         return false;
     }
@@ -1547,7 +1547,7 @@ ovsdb_idl_txn_process_inc_reply(struct ovsdb_idl_txn *txn,
         return false;
     }
     if (rows->u.array.n != 1) {
-        VLOG_WARN_RL(&syntax_rl, "\"select\" reply \"rows\" has %u elements "
+        VLOG_WARN_RL(&syntax_rl, "\"select\" reply \"rows\" has %zu elements "
                      "instead of 1",
                      rows->u.array.n);
         return false;
@@ -1577,7 +1577,7 @@ ovsdb_idl_txn_process_insert_reply(struct ovsdb_idl_txn_insert *insert,
 
     if (insert->op_index >= results->n) {
         VLOG_WARN_RL(&syntax_rl, "reply does not contain enough operations "
-                     "for insert (has %u, needs %u)",
+                     "for insert (has %zu, needs %u)",
                      results->n, insert->op_index);
         return false;
     }
