@@ -35,6 +35,7 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/linux/rtnetlink.h \
 	linux-2.6/compat-2.6/include/linux/skbuff.h \
 	linux-2.6/compat-2.6/include/linux/slab.h \
+	linux-2.6/compat-2.6/include/linux/stddef.h \
 	linux-2.6/compat-2.6/include/linux/tcp.h \
 	linux-2.6/compat-2.6/include/linux/timer.h \
 	linux-2.6/compat-2.6/include/linux/types.h \
