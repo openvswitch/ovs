@@ -3540,7 +3540,7 @@ handle_role_request(struct ofproto *ofproto,
     uint32_t role;
 
     if (ntohs(msg->header.length) != sizeof *nrr) {
-        VLOG_WARN_RL(&rl, "received role request of length %zu (expected %zu)",
+        VLOG_WARN_RL(&rl, "received role request of length %u (expected %zu)",
                      ntohs(msg->header.length), sizeof *nrr);
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
     }
@@ -3590,7 +3590,7 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
     struct nicira_header *nh;
 
     if (ntohs(ovh->header.length) < sizeof(struct ofp_vendor_header)) {
-        VLOG_WARN_RL(&rl, "received vendor message of length %zu "
+        VLOG_WARN_RL(&rl, "received vendor message of length %u "
                           "(expected at least %zu)",
                    ntohs(ovh->header.length), sizeof(struct ofp_vendor_header));
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
@@ -3599,7 +3599,7 @@ handle_vendor(struct ofproto *p, struct ofconn *ofconn, void *msg)
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);
     }
     if (ntohs(ovh->header.length) < sizeof(struct nicira_header)) {
-        VLOG_WARN_RL(&rl, "received Nicira vendor message of length %zu "
+        VLOG_WARN_RL(&rl, "received Nicira vendor message of length %u "
                           "(expected at least %zu)",
                      ntohs(ovh->header.length), sizeof(struct nicira_header));
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
