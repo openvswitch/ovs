@@ -306,12 +306,27 @@ parse_command(int argc, char *argv[], struct vsctl_command *command)
 
     shash_init(&command->options);
     for (i = 0; i < argc; i++) {
-        if (argv[i][0] != '-') {
+        const char *option = argv[i];
+        const char *equals;
+        char *key, *value;
+
+        if (option[0] != '-') {
             break;
         }
-        if (!shash_add_once(&command->options, argv[i], NULL)) {
+
+        equals = strchr(option, '=');
+        if (equals) {
+            key = xmemdup0(option, equals - option);
+            value = xstrdup(equals + 1);
+        } else {
+            key = xstrdup(option);
+            value = NULL;
+        }
+
+        if (shash_find(&command->options, key)) {
             vsctl_fatal("'%s' option specified multiple times", argv[i]);
         }
+        shash_add_nocopy(&command->options, key, value);
     }
     if (i == argc) {
         vsctl_fatal("missing command name");
@@ -325,9 +340,19 @@ parse_command(int argc, char *argv[], struct vsctl_command *command)
             SHASH_FOR_EACH (node, &command->options) {
                 const char *s = strstr(p->options, node->name);
                 int end = s ? s[strlen(node->name)] : EOF;
-                if (end != ',' && end != ' ' && end != '\0') {
+
+                if (end != '=' && end != ',' && end != ' ' && end != '\0') {
                     vsctl_fatal("'%s' command has no '%s' option",
                                 argv[i], node->name);
+                }
+                if ((end == '=') != (node->data != NULL)) {
+                    if (end == '=') {
+                        vsctl_fatal("missing argument to '%s' option on '%s' "
+                                    "command", node->name, argv[i]);
+                    } else {
+                        vsctl_fatal("'%s' option on '%s' does not accept an "
+                                    "argument", node->name, argv[i]);
+                    }
                 }
             }
 
