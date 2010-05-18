@@ -2604,13 +2604,15 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     if (wait_for_reload && status == TXN_SUCCESS) {
         next_cfg = ovsdb_idl_txn_get_increment_new_value(txn);
     }
-    for (c = commands; c < &commands[n_commands]; c++) {
-        if (c->syntax->postprocess) {
-            struct vsctl_context ctx;
+    if (status == TXN_UNCHANGED || status == TXN_SUCCESS) {
+        for (c = commands; c < &commands[n_commands]; c++) {
+            if (c->syntax->postprocess) {
+                struct vsctl_context ctx;
 
-            vsctl_context_init(&ctx, c, idl, txn, ovs);
-            (c->syntax->postprocess)(&ctx);
-            vsctl_context_done(&ctx, c);
+                vsctl_context_init(&ctx, c, idl, txn, ovs);
+                (c->syntax->postprocess)(&ctx);
+                vsctl_context_done(&ctx, c);
+            }
         }
     }
     error = xstrdup(ovsdb_idl_txn_get_error(txn));
