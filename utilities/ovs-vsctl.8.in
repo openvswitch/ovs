@@ -442,16 +442,23 @@ A bridge port.  Records may be identified by port name.
 .IP "\fBInterface\fR"
 A network device attached to a port.  Records may be identified by
 name.
+.IP "\fBMirror\fR"
+A port mirroring configuration attached to a bridge.  Records may be
+identified by mirror name.
 .IP "\fBController\fR"
 Configuration for an OpenFlow controller.  A controller attached to a
 particular bridge may be identified by the bridge's name.  The default
 controller controller for an Open vSwitch may be identified by
 specifying \fB.\fR as the record name.
-.IP "\fBMirror\fR"
-A port mirroring configuration attached to a bridge.  Records may be
-identified by mirror name.
 .IP "\fBNetFlow\fR"
 A NetFlow configuration attached to a bridge.  Records may be
+identified by bridge name.
+.IP "\fBSSL\fR"
+The global SSL configuration for \fBovs\-vswitchd\fR.  The record
+attached to the \fBOpen_vSwitch\fR table may be identified by
+specifying \fB.\fR as the record name.
+.IP "\fBsFlow\fR"
+An sFlow configuration attached to a bridge.  Records may be
 identified by bridge name.
 .PP
 Names of tables, records, and columns are not case-sensitive, and
