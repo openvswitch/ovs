@@ -1163,7 +1163,7 @@ netdev_linux_remove_policing(struct netdev *netdev)
     error = nl_sock_transact(rtnl_sock, &request, &reply);
     ofpbuf_uninit(&request);
     ofpbuf_delete(reply);
-    if (error && error != ENOENT) {
+    if (error && error != ENOENT && error != EINVAL) {
         VLOG_WARN_RL(&rl, "%s: removing policing failed: %s",
                      netdev_name, strerror(error));
         return error;
