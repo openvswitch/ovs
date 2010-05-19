@@ -22,6 +22,9 @@
 
 #include "compat.h"
 
+/* If the native device stats aren't 64 bit use the vport stats tracking instead. */
+#define USE_VPORT_STATS (sizeof(((struct net_device_stats *)0)->rx_bytes) < sizeof(u64))
+
 static void netdev_port_receive(struct net_bridge_port *, struct sk_buff *);
 
 /*
@@ -95,6 +98,16 @@ netdev_create(const char *name, const void __user *config)
 	if (netdev_vport->dev->br_port) {
 		err = -EBUSY;
 		goto error_put;
+	}
+
+	/* If we are using the vport stats layer initialize it to the current
+	 * values so we are roughly consistent with the device stats. */
+	if (USE_VPORT_STATS) {
+		struct odp_vport_stats stats;
+
+		err = netdev_get_stats(vport, &stats);
+		if (!err)
+			vport_set_stats(vport, &stats);
 	}
 
 	return vport;
@@ -291,7 +304,8 @@ netdev_get_vport(struct net_device *dev)
 
 struct vport_ops netdev_vport_ops = {
 	.type		= "netdev",
-	.flags		= VPORT_F_REQUIRED,
+	.flags          = (VPORT_F_REQUIRED |
+			  (USE_VPORT_STATS ? VPORT_F_GEN_STATS : 0)),
 	.init		= netdev_init,
 	.exit		= netdev_exit,
 	.create		= netdev_create,
