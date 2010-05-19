@@ -341,9 +341,12 @@ try_again:
 }
 
 /* Sends 'request' to the kernel via 'sock' and waits for a response.  If
- * successful, stores the reply into '*replyp' and returns 0.  The caller is
- * responsible for destroying the reply with ofpbuf_delete().  On failure,
- * returns a positive errno value and stores a null pointer into '*replyp'.
+ * successful, returns 0.  On failure, returns a positive errno value.
+ *
+ * If 'replyp' is nonnull, then on success '*replyp' is set to the kernel's
+ * reply, which the caller is responsible for freeing with ofpbuf_delete(), and
+ * on failure '*replyp' is set to NULL.  If 'replyp' is null, then the kernel's
+ * reply, if any, is discarded.
  *
  * nlmsg_len in 'msg' will be finalized to match msg->size, and nlmsg_pid will
  * be set to 'sock''s pid, before the message is sent.  NLM_F_ACK will be set
@@ -386,7 +389,9 @@ nl_sock_transact(struct nl_sock *sock,
     struct ofpbuf *reply;
     int retval;
 
-    *replyp = NULL;
+    if (replyp) {
+        *replyp = NULL;
+    }
 
     /* Ensure that we get a reply even if this message doesn't ordinarily call
      * for one. */
@@ -425,7 +430,11 @@ recv:
         return retval != EAGAIN ? retval : EPROTO;
     }
 
-    *replyp = reply;
+    if (replyp) {
+        *replyp = reply;
+    } else {
+        ofpbuf_delete(reply);
+    }
     return 0;
 }
 
