@@ -10,34 +10,17 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
-#include <linux/percpu.h>
 #include <linux/rcupdate.h>
 #include <linux/skbuff.h>
 
 #include "datapath.h"
-#include "openvswitch/internal_dev.h"
 #include "vport-generic.h"
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
-struct pcpu_lstats {
-	unsigned long rx_packets;
-	unsigned long rx_bytes;
-	unsigned long tx_packets;
-	unsigned long tx_bytes;
-};
-
 struct internal_dev {
 	struct vport *vport;
-
 	struct net_device_stats stats;
-	struct pcpu_lstats *lstats;
-
-	/* This is warty support for XAPI, which does not support summing bond
-	 * device statistics itself.  'extra_stats' can be set by userspace via
-	 * the DP_DEV_SET_STATS ioctl and, if they are, then they are added to
-	 * the real device stats. */
-	struct pcpu_lstats extra_stats;
 };
 
 static inline struct internal_dev *internal_dev_priv(struct net_device *netdev)
@@ -45,26 +28,32 @@ static inline struct internal_dev *internal_dev_priv(struct net_device *netdev)
 	return netdev_priv(netdev);
 }
 
-static struct net_device_stats *internal_dev_get_stats(struct net_device *netdev)
+/* This function is only called by the kernel network layer.  It is not a vport
+ * get_stats() function.  If a vport get_stats() function is defined that
+ * results in this being called it will cause infinite recursion. */
+static struct net_device_stats *internal_dev_sys_stats(struct net_device *netdev)
 {
-	struct internal_dev *internal_dev = internal_dev_priv(netdev);
-	struct net_device_stats *stats;
-	int i;
+	struct vport *vport = internal_dev_get_vport(netdev);
+	struct net_device_stats *stats = &internal_dev_priv(netdev)->stats;
 
-	stats = &internal_dev->stats;
-	stats->rx_bytes = internal_dev->extra_stats.rx_bytes;
-	stats->rx_packets = internal_dev->extra_stats.rx_packets;
-	stats->tx_bytes = internal_dev->extra_stats.tx_bytes;
-	stats->tx_packets = internal_dev->extra_stats.tx_packets;
-	for_each_possible_cpu(i) {
-		const struct pcpu_lstats *lb_stats;
+	if (vport) {
+		struct odp_vport_stats vport_stats;
 
-		lb_stats = per_cpu_ptr(internal_dev->lstats, i);
-		stats->rx_bytes   += lb_stats->rx_bytes;
-		stats->rx_packets += lb_stats->rx_packets;
-		stats->tx_bytes   += lb_stats->tx_bytes;
-		stats->tx_packets += lb_stats->tx_packets;
+		vport_get_stats(vport, &vport_stats);
+
+		/* The tx and rx stats need to be swapped because the switch
+		 * and host OS have opposite perspectives. */
+		stats->rx_packets	= vport_stats.tx_packets;
+		stats->tx_packets	= vport_stats.rx_packets;
+		stats->rx_bytes		= vport_stats.tx_bytes;
+		stats->tx_bytes		= vport_stats.rx_bytes;
+		stats->rx_errors	= vport_stats.tx_errors;
+		stats->tx_errors	= vport_stats.rx_errors;
+		stats->rx_dropped	= vport_stats.tx_dropped;
+		stats->tx_dropped	= vport_stats.rx_dropped;
+		stats->collisions	= vport_stats.collisions;
 	}
+
 	return stats;
 }
 
@@ -81,18 +70,14 @@ static int internal_dev_mac_addr(struct net_device *dev, void *p)
 /* Called with rcu_read_lock and bottom-halves disabled. */
 static int internal_dev_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
-	struct internal_dev *internal_dev = internal_dev_priv(netdev);
 	struct vport *vport = internal_dev_get_vport(netdev);
-	struct pcpu_lstats *lb_stats;
 
 	/* We need our own clone. */
 	skb = skb_share_check(skb, GFP_ATOMIC);
-	if (!skb)
+	if (!skb) {
+		vport_record_error(vport, VPORT_E_RX_DROPPED);
 		return 0;
-
-	lb_stats = per_cpu_ptr(internal_dev->lstats, smp_processor_id());
-	lb_stats->tx_packets++;
-	lb_stats->tx_bytes += skb->len;
+	}
 
 	skb_reset_mac_header(skb);
 	compute_ip_summed(skb, true);
@@ -151,58 +136,28 @@ static int internal_dev_change_mtu(struct net_device *netdev, int new_mtu)
 	return 0;
 }
 
-static int internal_dev_init(struct net_device *netdev)
-{
-	struct internal_dev *internal_dev = internal_dev_priv(netdev);
-
-	internal_dev->lstats = alloc_percpu(struct pcpu_lstats);
-	if (!internal_dev->lstats)
-		return -ENOMEM;
-
-	return 0;
-}
-
 static void internal_dev_free(struct net_device *netdev)
 {
-	struct internal_dev *internal_dev = internal_dev_priv(netdev);
-
-	free_percpu(internal_dev->lstats);
 	free_netdev(netdev);
 }
 
 static int internal_dev_do_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
-	struct internal_dev *internal_dev = internal_dev_priv(dev);
-
-	if (cmd == INTERNAL_DEV_SET_STATS) {
-		struct internal_dev_stats stats;
-
-		if (copy_from_user(&stats, ifr->ifr_data, sizeof(stats)))
-			return -EFAULT;
-
-		internal_dev->extra_stats.rx_bytes = stats.rx_bytes;
-		internal_dev->extra_stats.rx_packets = stats.rx_packets;
-		internal_dev->extra_stats.tx_bytes = stats.tx_bytes;
-		internal_dev->extra_stats.tx_packets = stats.tx_packets;
-
-		return 0;
-	}
-
 	if (dp_ioctl_hook)
 		return dp_ioctl_hook(dev, ifr, cmd);
+
 	return -EOPNOTSUPP;
 }
 
 #ifdef HAVE_NET_DEVICE_OPS
 static const struct net_device_ops internal_dev_netdev_ops = {
-	.ndo_init = internal_dev_init,
 	.ndo_open = internal_dev_open,
 	.ndo_stop = internal_dev_stop,
 	.ndo_start_xmit = internal_dev_xmit,
 	.ndo_set_mac_address = internal_dev_mac_addr,
 	.ndo_do_ioctl = internal_dev_do_ioctl,
 	.ndo_change_mtu = internal_dev_change_mtu,
-	.ndo_get_stats = internal_dev_get_stats,
+	.ndo_get_stats = internal_dev_sys_stats,
 };
 #endif
 
@@ -215,13 +170,12 @@ do_setup(struct net_device *netdev)
 	netdev->netdev_ops = &internal_dev_netdev_ops;
 #else
 	netdev->do_ioctl = internal_dev_do_ioctl;
-	netdev->get_stats = internal_dev_get_stats;
+	netdev->get_stats = internal_dev_sys_stats;
 	netdev->hard_start_xmit = internal_dev_xmit;
 	netdev->open = internal_dev_open;
 	netdev->stop = internal_dev_stop;
 	netdev->set_mac_address = internal_dev_mac_addr;
 	netdev->change_mtu = internal_dev_change_mtu;
-	netdev->init = internal_dev_init;
 #endif
 
 	netdev->destructor = internal_dev_free;
@@ -319,8 +273,6 @@ static int
 internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 {
 	struct net_device *netdev = netdev_vport_priv(vport)->dev;
-	struct internal_dev *internal_dev = internal_dev_priv(netdev);
-	struct pcpu_lstats *lb_stats;
 	int len;
 
 	skb->dev = netdev;
@@ -334,18 +286,12 @@ internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 		netif_rx_ni(skb);
 	netdev->last_rx = jiffies;
 
-	local_bh_disable();
-	lb_stats = per_cpu_ptr(internal_dev->lstats, smp_processor_id());
-	lb_stats->rx_packets++;
-	lb_stats->rx_bytes += len;
-	local_bh_enable();
-
 	return len;
 }
 
 struct vport_ops internal_vport_ops = {
 	.type		= "internal",
-	.flags		= VPORT_F_REQUIRED,
+	.flags		= VPORT_F_REQUIRED | VPORT_F_GEN_STATS,
 	.create		= internal_dev_create,
 	.destroy	= internal_dev_destroy,
 	.attach		= internal_dev_attach,
@@ -355,7 +301,6 @@ struct vport_ops internal_vport_ops = {
 	.get_name	= netdev_get_name,
 	.get_addr	= netdev_get_addr,
 	.get_kobj	= netdev_get_kobj,
-	.get_stats	= netdev_get_stats,
 	.get_dev_flags	= netdev_get_dev_flags,
 	.is_running	= netdev_is_running,
 	.get_operstate	= netdev_get_operstate,
