@@ -2490,7 +2490,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
 
         case OFPAT_STRIP_VLAN:
             odp_actions_add(ctx->out, ODPAT_STRIP_VLAN);
-            ctx->flow.dl_vlan = OFP_VLAN_NONE;
+            ctx->flow.dl_vlan = htons(OFP_VLAN_NONE);
             ctx->flow.dl_vlan_pcp = 0;
             break;
 
