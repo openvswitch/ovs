@@ -421,7 +421,14 @@ recv:
         ofpbuf_delete(reply);
         goto recv;
     }
-    if (nl_msg_nlmsgerr(reply, &retval)) {
+
+    /* If the reply is an error, discard the reply and return the error code.
+     *
+     * Except: if the reply is just an acknowledgement (error code of 0), and
+     * the caller is interested in the reply (replyp != NULL), pass the reply
+     * up to the caller.  Otherwise the caller will get a return value of 0
+     * and null '*replyp', which makes unwary callers likely to segfault. */
+    if (nl_msg_nlmsgerr(reply, &retval) && (retval || !replyp)) {
         ofpbuf_delete(reply);
         if (retval) {
             VLOG_DBG_RL(&rl, "received NAK error=%d (%s)",
