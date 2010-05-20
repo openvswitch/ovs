@@ -6,12 +6,12 @@ ovs\-openflowd \- OpenFlow switch implementation
 .
 .SH SYNOPSIS
 .B ovs\-openflowd
-[\fIoptions\fR] \fIdatapath\fR [\fIcontroller\fR]
+[\fIoptions\fR] \fIdatapath\fR [\fIcontroller\fR\&...]
 .
 .SH DESCRIPTION
 The \fBovs\-openflowd\fR program implements an OpenFlow switch using a
-flow-based datapath.  \fBovs\-openflowd\fR connects to an OpenFlow controller
-over TCP or SSL.
+flow-based datapath.  \fBovs\-openflowd\fR connects to one or more
+OpenFlow controllers over TCP or SSL.
 .PP
 The mandatory \fIdatapath\fR argument argument specifies the local datapath
 to relay.  It takes one of the following forms:
@@ -19,17 +19,17 @@ to relay.  It takes one of the following forms:
 .so lib/xfif.man
 .
 .PP
-The optional \fIcontroller\fR argument specifies how to connect to
+The optional \fIcontroller\fR arguments specify how to connect to
 the OpenFlow controller.  It takes one of the following forms:
 .
 .so lib/vconn-active.man
 .
 .PP
-If \fIcontroller\fR is omitted, \fBovs\-openflowd\fR attempts to discover the
-location of the controller automatically (see below).
+If no \fIcontroller\fR is specified, \fBovs\-openflowd\fR attempts to
+discover the location of a controller automatically (see below).
 .
-.SS "Contacting the Controller"
-The OpenFlow switch must be able to contact the OpenFlow controller
+.SS "Contacting Controllers"
+The OpenFlow switch must be able to contact the OpenFlow controllers
 over the network.  It can do so in one of two ways:
 .
 .IP out-of-band
@@ -60,8 +60,8 @@ manually or discovered automatically:
 .RS
 .IP "controller discovery"
 To make \fBovs\-openflowd\fR discover the location of the controller
-automatically, do not specify the location of the controller on the
-\fBovs\-openflowd\fR command line.
+automatically, do not specify a controller on the \fBovs\-openflowd\fR
+command line.
 .IP
 In this mode, \fBovs\-openflowd\fR will broadcast a DHCP request with vendor
 class identifier \fBOpenFlow\fR across the network devices added to
@@ -159,20 +159,12 @@ the local port network device, and start the DHCP client afterward.
 .TP
 \fB--datapath-id=\fIdpid\fR
 Sets \fIdpid\fR, which must consist of exactly 16 hexadecimal digits,
-as the datapath ID that the switch will use to identify itself to the
-OpenFlow controller.
+as the datapath ID that the switch will use to identify itself to
+OpenFlow controllers.
 .IP
 If this option is omitted, the default datapath ID is taken from the
 Ethernet address of the datapath's local port (which is typically
 randomly generated) in the lower 48 bits and zeros in the upper 16.
-.
-.TP
-\fB--mgmt-id=\fImgmtid\fR
-Sets \fImgmtid\fR, which must consist of exactly 12 hexadecimal
-digits, as the switch's management ID.
-.IP
-If this option is omitted, the management ID defaults to 0, signaling
-to the controller that management is supported but not configured.
 .
 .TP
 \fB--mfr-desc=\fIdesc\fR
@@ -251,23 +243,24 @@ Ethernet address of the datapath's local port (which is typically
 randomly generated) in the lower 48 bits and zeros in the upper 16.
 .
 .TP
-\fB--fail=\fR[\fBopen\fR|\fBclosed\fR]
+\fB--fail=\fR[\fBstandalone\fR|\fBsecure\fR]
 The controller is, ordinarily, responsible for setting up all flows on
 the OpenFlow switch.  Thus, if the connection to the controller fails,
 no new network connections can be set up.  If the connection to the
 controller stays down long enough, no packets can pass through the
 switch at all.
 .IP
-If this option is set to \fBopen\fR (the default), \fBovs\-openflowd\fR will
+If this option is set to \fBstandalone\fR (the default),
+\fBovs\-openflowd\fR will
 take over responsibility for setting up flows in the local datapath
 when no message has been received from the controller for three times
 the inactivity probe interval (see below), or 45 seconds by default.
 In this ``fail open'' mode, \fBovs\-openflowd\fR causes the datapath to act
 like an ordinary MAC-learning switch.  \fBovs\-openflowd\fR will continue to
 retry connection to the controller in the background and, when the
-connection succeeds, it discontinues its fail-open behavior.
+connection succeeds, it discontinues its standalone switching behavior.
 .IP
-If this option is set to \fBclosed\fR, then \fBovs\-openflowd\fR will not
+If this option is set to \fBsecure\fR, then \fBovs\-openflowd\fR will not
 set up flows on its own when the controller connection fails.
 .
 .TP
@@ -309,7 +302,7 @@ more information about in-band control).
 .RE
 .
 .IP
-As a result, when both \fB--fail=closed\fR and \fB--out-of-band\fR are
+As a result, when both \fB--fail=secure\fR and \fB--out-of-band\fR are
 specified, this option has no effect.
 .
 .TP

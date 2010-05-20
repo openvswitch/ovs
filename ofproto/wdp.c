@@ -982,6 +982,19 @@ wdp_get_netflow_ids(const struct wdp *wdp,
     *engine_id = wdp->netflow_engine_id;
 }
 
+/* Returns a copy of 'old'.  The packet's payload, if any, is copied as well,
+ * but if it is longer than 'trim' bytes it is truncated to that length. */
+struct wdp_packet *
+wdp_packet_clone(const struct wdp_packet *old, size_t trim)
+{
+    struct wdp_packet *new = xmemdup(old, sizeof *old);
+    if (old->payload) {
+        new->payload = ofpbuf_clone_data(old->payload->data,
+                                         MIN(trim, old->payload->size));
+    }
+    return new;
+}
+
 void
 wdp_packet_destroy(struct wdp_packet *packet)
 {

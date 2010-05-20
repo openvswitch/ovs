@@ -432,7 +432,7 @@ wx_rule_insert(struct wx *wx, struct wx_rule *rule, struct ofpbuf *packet,
     /* Send the packet and credit it to the rule. */
     if (packet) {
         flow_t flow;
-        flow_extract(packet, in_port, &flow);
+        flow_extract(packet, 0, in_port, &flow);
         wx_rule_execute(wx, rule, packet, &flow);
     }
 
@@ -461,7 +461,7 @@ wx_rule_create_subrule(struct wx *wx, struct wx_rule *rule, const flow_t *flow)
                              rule->wr.idle_timeout,
                              rule->wr.hard_timeout);
     COVERAGE_INC(wx_subrule_create);
-    cls_rule_from_flow(&subrule->wr.cr, flow);
+    cls_rule_from_flow(flow, &subrule->wr.cr);
     classifier_insert_exact(&wx->cls, &subrule->wr.cr);
 
     return subrule;
@@ -593,12 +593,12 @@ add_controller_action(struct xflow_actions *actions,
                       const struct ofp_action_output *oao)
 {
     union xflow_action *a = xflow_actions_add(actions, XFLOWAT_CONTROLLER);
-    a->controller.arg = oao->max_len ? ntohs(oao->max_len) : UINT32_MAX;
+    a->controller.arg = ntohs(oao->max_len);
 }
 
 struct wx_xlate_ctx {
     /* Input. */
-    const flow_t *flow;         /* Flow to which these actions correspond. */
+    flow_t flow;                /* Flow to which these actions correspond. */
     int recurse;                /* Recursion level, via xlate_table_action. */
     struct wx *wx;
     const struct ofpbuf *packet; /* The packet corresponding to 'flow', or a
@@ -660,13 +660,17 @@ static void
 xlate_table_action(struct wx_xlate_ctx *ctx, uint16_t in_port)
 {
     if (!ctx->recurse) {
+        uint16_t old_in_port;
         struct wx_rule *rule;
-        flow_t flow;
 
-        flow = *ctx->flow;
-        flow.in_port = in_port;
+        /* Look up a flow with 'in_port' as the input port.  Then restore the
+         * original input port (otherwise OFPP_NORMAL and OFPP_IN_PORT will
+         * have surprising behavior). */
+        old_in_port = ctx->flow.in_port;
+        ctx->flow.in_port = in_port;
+        rule = wx_rule_lookup_valid(ctx->wx, &ctx->flow);
+        ctx->flow.in_port = old_in_port;
 
-        rule = wx_rule_lookup_valid(ctx->wx, &flow);
         if (rule) {
             if (rule->super) {
                 rule = rule->super;
@@ -690,10 +694,10 @@ xlate_output_action(struct wx_xlate_ctx *ctx,
 
     switch (ntohs(oao->port)) {
     case OFPP_IN_PORT:
-        add_output_action(ctx, ctx->flow->in_port);
+        add_output_action(ctx, ctx->flow.in_port);
         break;
     case OFPP_TABLE:
-        xlate_table_action(ctx, ctx->flow->in_port);
+        xlate_table_action(ctx, ctx->flow.in_port);
         break;
     case OFPP_NORMAL:
 #if 0
@@ -723,7 +727,7 @@ xlate_output_action(struct wx_xlate_ctx *ctx,
         break;
     default:
         xflow_port = ofp_port_to_xflow_port(ntohs(oao->port));
-        if (xflow_port != ctx->flow->in_port) {
+        if (xflow_port != ctx->flow.in_port) {
             add_output_action(ctx, xflow_port);
         }
         break;
@@ -744,6 +748,8 @@ xlate_nicira_action(struct wx_xlate_ctx *ctx,
                     const struct nx_action_header *nah)
 {
     const struct nx_action_resubmit *nar;
+    const struct nx_action_set_tunnel *nast;
+    union xflow_action *oa;
     int subtype = ntohs(nah->subtype);
 
     assert(nah->vendor == htonl(NX_VENDOR_ID));
@@ -752,6 +758,15 @@ xlate_nicira_action(struct wx_xlate_ctx *ctx,
         nar = (const struct nx_action_resubmit *) nah;
         xlate_table_action(ctx, ofp_port_to_xflow_port(ntohs(nar->in_port)));
         break;
+
+    case NXAST_SET_TUNNEL:
+        nast = (const struct nx_action_set_tunnel *) nah;
+        oa = xflow_actions_add(ctx->out, XFLOWAT_SET_TUNNEL);
+        ctx->flow.tun_id = oa->tunnel.tun_id = nast->tun_id;
+        break;
+
+    /* If you add a new action here that modifies flow data, don't forget to
+     * update the flow key in ctx->flow in the same key. */
 
     default:
         VLOG_DBG_RL(&rl, "unknown Nicira action type %"PRIu16, subtype);
@@ -767,9 +782,9 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
     const union ofp_action *ia;
     const struct wdp_port *port;
 
-    port = port_array_get(&ctx->wx->ports, ctx->flow->in_port);
+    port = port_array_get(&ctx->wx->ports, ctx->flow.in_port);
     if (port && port->opp.config & (OFPPC_NO_RECV | OFPPC_NO_RECV_STP) &&
-        port->opp.config & (eth_addr_equals(ctx->flow->dl_dst, stp_eth_addr)
+        port->opp.config & (eth_addr_equals(ctx->flow.dl_dst, stp_eth_addr)
                             ? OFPPC_NO_RECV_STP : OFPPC_NO_RECV)) {
         /* Drop this flow. */
         return;
@@ -788,6 +803,7 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             oa = xflow_actions_add(ctx->out, XFLOWAT_SET_DL_TCI);
             oa->dl_tci.tci = ia->vlan_vid.vlan_vid & htons(VLAN_VID_MASK);
             oa->dl_tci.mask = htons(VLAN_VID_MASK);
+            ctx->flow.dl_vlan = ia->vlan_vid.vlan_vid;
             break;
 
         case OFPAT_SET_VLAN_PCP:
@@ -795,15 +811,24 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             oa->dl_tci.tci = htons((ia->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT)
                                    & VLAN_PCP_MASK);
             oa->dl_tci.mask = htons(VLAN_PCP_MASK);
+
+            if (ctx->flow.dl_vlan == htons(OFP_VLAN_NONE)) {
+                ctx->flow.dl_vlan = htons(0);
+            }
+            ctx->flow.dl_vlan_pcp = ia->vlan_pcp.vlan_pcp;
             break;
 
         case OFPAT_STRIP_VLAN:
             xflow_actions_add(ctx->out, XFLOWAT_STRIP_VLAN);
+            ctx->flow.dl_vlan = htons(OFP_VLAN_NONE);
+            ctx->flow.dl_vlan_pcp = 0;
             break;
 
         case OFPAT_SET_DL_SRC:
             oa = xflow_actions_add(ctx->out, XFLOWAT_SET_DL_SRC);
             memcpy(oa->dl_addr.dl_addr,
+                   ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
+            memcpy(ctx->flow.dl_src,
                    ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
             break;
 
@@ -811,31 +836,33 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             oa = xflow_actions_add(ctx->out, XFLOWAT_SET_DL_DST);
             memcpy(oa->dl_addr.dl_addr,
                    ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
+            memcpy(ctx->flow.dl_dst,
+                   ((struct ofp_action_dl_addr *) ia)->dl_addr, ETH_ADDR_LEN);
             break;
 
         case OFPAT_SET_NW_SRC:
             oa = xflow_actions_add(ctx->out, XFLOWAT_SET_NW_SRC);
-            oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
+            ctx->flow.nw_src = oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_DST:
             oa = xflow_actions_add(ctx->out, XFLOWAT_SET_NW_DST);
-            oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
+            ctx->flow.nw_dst = oa->nw_addr.nw_addr = ia->nw_addr.nw_addr;
             break;
 
         case OFPAT_SET_NW_TOS:
             oa = xflow_actions_add(ctx->out, XFLOWAT_SET_NW_TOS);
-            oa->nw_tos.nw_tos = ia->nw_tos.nw_tos;
+            ctx->flow.nw_tos = oa->nw_tos.nw_tos = ia->nw_tos.nw_tos;
             break;
 
         case OFPAT_SET_TP_SRC:
             oa = xflow_actions_add(ctx->out, XFLOWAT_SET_TP_SRC);
-            oa->tp_port.tp_port = ia->tp_port.tp_port;
+            ctx->flow.tp_src = oa->tp_port.tp_port = ia->tp_port.tp_port;
             break;
 
         case OFPAT_SET_TP_DST:
             oa = xflow_actions_add(ctx->out, XFLOWAT_SET_TP_DST);
-            oa->tp_port.tp_port = ia->tp_port.tp_port;
+            ctx->flow.tp_dst = oa->tp_port.tp_port = ia->tp_port.tp_port;
             break;
 
         case OFPAT_VENDOR:
@@ -885,7 +912,7 @@ wx_xlate_actions(struct wx *wx, const union ofp_action *in, size_t n_in,
     struct wx_xlate_ctx ctx;
     COVERAGE_INC(wx_ofp2xflow);
     xflow_actions_init(out);
-    ctx.flow = flow;
+    ctx.flow = *flow;
     ctx.recurse = 0;
     ctx.wx = wx;
     ctx.packet = packet;
@@ -1139,7 +1166,7 @@ wx_open(const struct wdp_class *wdp_class, const char *name, bool create,
     if (!error) {
         struct wx *wx;
 
-        wx = xmalloc(sizeof *wx);
+        wx = xzalloc(sizeof *wx);
         list_push_back(&all_wx, &wx->list_node);
         wdp_init(&wx->wdp, wdp_class, name, 0, 0);
         wx->xfif = xfif;
@@ -1597,7 +1624,7 @@ wx_flow_put(struct wdp *wdp, const struct wdp_flow_put *put,
 
     rule = wx_rule_create(NULL, put->actions, put->n_actions,
                           put->idle_timeout, put->hard_timeout);
-    cls_rule_from_flow(&rule->wr.cr, put->flow);
+    cls_rule_from_flow(put->flow, &rule->wr.cr);
     wx_rule_insert(wx, rule, NULL, 0);
 
     if (old_stats) {
@@ -1661,7 +1688,7 @@ wx_execute(struct wdp *wdp, uint16_t in_port,
     flow_t flow;
     int error;
 
-    flow_extract((struct ofpbuf *) packet, in_port, &flow);
+    flow_extract((struct ofpbuf *) packet, 0, in_port, &flow);
     error = wx_xlate_actions(wx, actions, n_actions, &flow, packet,
                              &xflow_actions, NULL);
     if (error) {
@@ -1754,11 +1781,13 @@ wx_translate_xflow_msg(struct xflow_msg *msg, struct ofpbuf *payload,
 {
     packet->in_port = xflow_port_to_ofp_port(msg->port);
     packet->send_len = 0;
+    packet->tun_id = 0;
 
     switch (msg->type) {
     case _XFLOWL_MISS_NR:
         packet->channel = WDP_CHAN_MISS;
         packet->payload = payload;
+        packet->tun_id = msg->arg;
         return 0;
 
     case _XFLOWL_ACTION_NR:
@@ -1816,7 +1845,7 @@ wx_explode_rule(struct wx *wx, struct xflow_msg *msg, struct ofpbuf *payload)
     struct wx_rule *rule;
     flow_t flow;
 
-    flow_extract(payload, xflow_port_to_ofp_port(msg->port), &flow);
+    flow_extract(payload, 0, xflow_port_to_ofp_port(msg->port), &flow);
 
     if (wx_is_local_dhcp_reply(wx, &flow, payload)) {
         union xflow_action action;

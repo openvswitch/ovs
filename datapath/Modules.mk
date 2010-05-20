@@ -12,20 +12,27 @@ dist_modules = $(both_modules)	# Modules to distribute
 openvswitch_sources = \
 	actions.c \
 	datapath.c \
-	dp_dev.c \
 	dp_notify.c \
 	dp_sysfs_dp.c \
 	dp_sysfs_if.c \
 	flow.c \
-	table.c
+	table.c \
+	vport.c \
+	vport-gre.c \
+	vport-internal_dev.c \
+	vport-netdev.c
 
 openvswitch_headers = \
 	actions.h \
 	compat.h \
 	datapath.h \
-	dp_dev.h \
 	dp_sysfs.h \
-	flow.h
+	flow.h \
+	table.h \
+	vport.h \
+	vport-internal_dev.h \
+	vport-netdev.h \
+	xflow-compat.h
 
 dist_sources = $(foreach module,$(dist_modules),$($(module)_sources))
 dist_headers = $(foreach module,$(dist_modules),$($(module)_headers))

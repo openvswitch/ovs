@@ -404,7 +404,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     pkt_len = ntohs(opi->header.length) - pkt_ofs;
     pkt.data = opi->data;
     pkt.size = pkt_len;
-    flow_extract(&pkt, in_port, &flow);
+    flow_extract(&pkt, 0, in_port, &flow);
 
     if (may_learn(sw, in_port) && sw->ml) {
         if (mac_learning_learn(sw->ml, flow.dl_src, 0, in_port)) {

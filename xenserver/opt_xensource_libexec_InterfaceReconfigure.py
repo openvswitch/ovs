@@ -863,7 +863,7 @@ def DatapathFactory(pif):
     if network_backend == "bridge":
         from InterfaceReconfigureBridge import DatapathBridge
         return DatapathBridge(pif)
-    elif network_backend == "vswitch":
+    elif network_backend in ["openvswitch", "vswitch"]:
         from InterfaceReconfigureVswitch import DatapathVswitch
         return DatapathVswitch(pif)
     else:

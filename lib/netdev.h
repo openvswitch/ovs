@@ -106,6 +106,7 @@ int netdev_reconfigure(struct netdev *, const struct shash *args);
 void netdev_close(struct netdev *);
 
 bool netdev_exists(const char *name);
+bool netdev_is_open(const char *name);
 
 int netdev_enumerate(struct svec *);
 
@@ -147,6 +148,7 @@ int netdev_turn_flags_on(struct netdev *, enum netdev_flags, bool permanent);
 int netdev_turn_flags_off(struct netdev *, enum netdev_flags, bool permanent);
 
 int netdev_get_stats(const struct netdev *, struct netdev_stats *);
+int netdev_set_stats(struct netdev *, const struct netdev_stats *);
 int netdev_set_policing(struct netdev *, uint32_t kbits_rate, 
                         uint32_t kbits_burst);
 

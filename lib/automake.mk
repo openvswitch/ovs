@@ -58,6 +58,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/lockfile.h \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
+	lib/netdev-gre.c \
 	lib/netdev-linux.c \
 	lib/netdev-provider.h \
 	lib/netdev.c \
@@ -205,13 +206,14 @@ EXTRA_DIST += \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl-syn.man \
 	lib/ssl.man \
+	lib/unixctl.man \
+	lib/unixctl-syn.man \
 	lib/vconn-active.man \
 	lib/vconn-passive.man \
 	lib/vlog-syn.man \
 	lib/vlog-unixctl.man \
 	lib/vlog.man \
 	lib/xfif.man
-
 
 lib/dirs.c: Makefile
 	($(ro_c) && \

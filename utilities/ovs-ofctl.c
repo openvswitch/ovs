@@ -162,7 +162,7 @@ usage(void)
            "  add-flows SWITCH FILE       add flows from FILE\n"
            "  mod-flows SWITCH FLOW       modify actions of matching FLOWs\n"
            "  del-flows SWITCH [FLOW]     delete matching FLOWs\n"
-           "  monitor SWITCH MISSLEN EXP  print packets received from SWITCH\n"
+           "  monitor SWITCH [MISSLEN]    print packets received from SWITCH\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe VCONN                 probe whether VCONN is up\n"
            "  ping VCONN [N]              latency of N-byte echos\n"
@@ -214,13 +214,14 @@ open_vconn_socket(const char *name, struct vconn **vconnp)
 }
 
 static void
-open_vconn(const char *name, struct vconn **vconnp)
+open_vconn__(const char *name, const char *default_suffix,
+             struct vconn **vconnp)
 {
     struct xfif *xfif;
     struct stat s;
     char *bridge_path, *datapath_name, *datapath_type;
 
-    bridge_path = xasprintf("%s/%s.mgmt", ovs_rundir, name);
+    bridge_path = xasprintf("%s/%s.%s", ovs_rundir, name, default_suffix);
     xf_parse_name(name, &datapath_name, &datapath_type);
 
     if (strstr(name, ":")) {
@@ -241,7 +242,8 @@ open_vconn(const char *name, struct vconn **vconnp)
             VLOG_INFO("datapath %s is named %s", name, xfif_name);
         }
 
-        socket_name = xasprintf("%s/%s.mgmt", ovs_rundir, xfif_name);
+        socket_name = xasprintf("%s/%s.%s",
+                                ovs_rundir, xfif_name, default_suffix);
         if (stat(socket_name, &s)) {
             ovs_fatal(errno, "cannot connect to %s: stat failed on %s",
                       name, socket_name);
@@ -259,6 +261,12 @@ open_vconn(const char *name, struct vconn **vconnp)
     free(datapath_name);
     free(datapath_type);
     free(bridge_path);
+}
+
+static void
+open_vconn(const char *name, struct vconn **vconnp)
+{
+    return open_vconn__(name, "mgmt", vconnp);
 }
 
 static void *
@@ -399,6 +407,20 @@ str_to_u32(const char *str)
 
     errno = 0;
     value = strtoul(str, &tail, 0);
+    if (errno == EINVAL || errno == ERANGE || *tail) {
+        ovs_fatal(0, "invalid numeric format %s", str);
+    }
+    return value;
+}
+
+static uint64_t
+str_to_u64(const char *str) 
+{
+    char *tail;
+    uint64_t value;
+
+    errno = 0;
+    value = strtoull(str, &tail, 0);
     if (errno == EINVAL || errno == ERANGE || *tail) {
         ovs_fatal(0, "invalid numeric format %s", str);
     }
@@ -627,6 +649,18 @@ str_to_action(char *str, struct ofpbuf *b)
             struct ofp_action_nw_tos *nt;
             nt = put_action(b, sizeof *nt, OFPAT_SET_NW_TOS);
             nt->nw_tos = str_to_u32(arg);
+        } else if (!strcasecmp(act, "resubmit")) {
+            struct nx_action_resubmit *nar;
+            nar = put_action(b, sizeof *nar, OFPAT_VENDOR);
+            nar->vendor = htonl(NX_VENDOR_ID);
+            nar->subtype = htons(NXAST_RESUBMIT);
+            nar->in_port = htons(str_to_u32(arg));
+        } else if (!strcasecmp(act, "set_tunnel")) {
+            struct nx_action_set_tunnel *nast;
+            nast = put_action(b, sizeof *nast, OFPAT_VENDOR);
+            nast->vendor = htonl(NX_VENDOR_ID);
+            nast->subtype = htons(NXAST_SET_TUNNEL);
+            nast->tun_id = htonl(str_to_u32(arg));
         } else if (!strcasecmp(act, "output")) {
             put_output_action(b, str_to_u32(arg));
         } else if (!strcasecmp(act, "drop")) {
@@ -697,7 +731,7 @@ static bool
 parse_field(const char *name, const struct field **f_out) 
 {
 #define F_OFS(MEMBER) offsetof(struct ofp_match, MEMBER)
-    static const struct field fields[] = { 
+    static const struct field fields[] = {
         { "in_port", OFPFW_IN_PORT, F_U16, F_OFS(in_port), 0 },
         { "dl_vlan", OFPFW_DL_VLAN, F_U16, F_OFS(dl_vlan), 0 },
         { "dl_vlan_pcp", OFPFW_DL_VLAN_PCP, F_U8, F_OFS(dl_vlan_pcp), 0 },
@@ -760,9 +794,9 @@ str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
         if (!act_str) {
             ovs_fatal(0, "must specify an action");
         }
-        *(act_str-1) = '\0';
+        *act_str = '\0';
 
-        act_str = strchr(act_str, '=');
+        act_str = strchr(act_str + 1, '=');
         if (!act_str) {
             ovs_fatal(0, "must specify an action");
         }
@@ -804,7 +838,9 @@ str_to_flow(char *string, struct ofp_match *match, struct ofpbuf *actions,
             } else if (hard_timeout && !strcmp(name, "hard_timeout")) {
                 *hard_timeout = atoi(value);
             } else if (cookie && !strcmp(name, "cookie")) {
-                *cookie = atoi(value);
+                *cookie = str_to_u64(value);
+            } else if (!strcmp(name, "tun_id_wild")) {
+                wildcards |= NXFW_TUN_ID;
             } else if (parse_field(name, &f)) {
                 void *data = (char *) match + f->offset;
                 if (!strcmp(value, "*") || !strcmp(value, "ANY")) {
@@ -1014,7 +1050,36 @@ static void do_del_flows(int argc, char *argv[])
 }
 
 static void
-do_monitor(int argc OVS_UNUSED, char *argv[])
+do_tun_cookie(int argc OVS_UNUSED, char *argv[])
+{
+    struct nxt_tun_id_cookie *tun_id_cookie;
+    struct ofpbuf *buffer;
+    struct vconn *vconn;
+
+    tun_id_cookie = make_openflow(sizeof *tun_id_cookie, OFPT_VENDOR, &buffer);
+
+    tun_id_cookie->vendor = htonl(NX_VENDOR_ID);
+    tun_id_cookie->subtype = htonl(NXT_TUN_ID_FROM_COOKIE);
+    tun_id_cookie->set = !strcmp(argv[2], "true");
+
+    open_vconn(argv[1], &vconn);
+    send_openflow_buffer(vconn, buffer);
+    vconn_close(vconn);
+}
+
+static void
+monitor_vconn(struct vconn *vconn)
+{
+    for (;;) {
+        struct ofpbuf *b;
+        run(vconn_recv_block(vconn, &b), "vconn_recv");
+        ofp_print(stderr, b->data, b->size, 2);
+        ofpbuf_delete(b);
+    }
+}
+
+static void
+do_monitor(int argc, char *argv[])
 {
     struct vconn *vconn;
 
@@ -1028,12 +1093,16 @@ do_monitor(int argc OVS_UNUSED, char *argv[])
         osc->miss_send_len = htons(miss_send_len);
         send_openflow_buffer(vconn, buf);
     }
-    for (;;) {
-        struct ofpbuf *b;
-        run(vconn_recv_block(vconn, &b), "vconn_recv");
-        ofp_print(stderr, b->data, b->size, 2);
-        ofpbuf_delete(b);
-    }
+    monitor_vconn(vconn);
+}
+
+static void
+do_snoop(int argc OVS_UNUSED, char *argv[])
+{
+    struct vconn *vconn;
+
+    open_vconn__(argv[1], "snoop", &vconn);
+    monitor_vconn(vconn);
 }
 
 static void
@@ -1245,7 +1314,8 @@ do_help(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 static const struct command all_commands[] = {
     { "show", 1, 1, do_show },
     { "status", 1, 2, do_status },
-    { "monitor", 1, 3, do_monitor },
+    { "monitor", 1, 2, do_monitor },
+    { "snoop", 1, 1, do_snoop },
     { "dump-desc", 1, 1, do_dump_desc },
     { "dump-tables", 1, 1, do_dump_tables },
     { "dump-flows", 1, 2, do_dump_flows },
@@ -1254,6 +1324,7 @@ static const struct command all_commands[] = {
     { "add-flows", 2, 2, do_add_flows },
     { "mod-flows", 2, 2, do_mod_flows },
     { "del-flows", 1, 2, do_del_flows },
+    { "tun-cookie", 2, 2, do_tun_cookie },
     { "dump-ports", 1, 2, do_dump_ports },
     { "mod-port", 3, 3, do_mod_port },
     { "probe", 1, 1, do_probe },

@@ -26,6 +26,8 @@ struct wdp_packet;
 typedef void pinsched_tx_cb(struct wdp_packet *, void *aux);
 struct pinsched *pinsched_create(int rate_limit, int burst_limit,
                                  struct switch_status *);
+void pinsched_get_limits(const struct pinsched *,
+                         int *rate_limit, int *burst_limit);
 void pinsched_set_limits(struct pinsched *, int rate_limit, int burst_limit);
 void pinsched_destroy(struct pinsched *);
 void pinsched_send(struct pinsched *, uint16_t port_no, struct wdp_packet *,

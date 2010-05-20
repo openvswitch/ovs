@@ -132,7 +132,6 @@ config_status_cb(struct status_reply *sr, void *ofproto_)
     const struct ofproto *ofproto = ofproto_;
     uint64_t datapath_id;
     struct svec listeners;
-    int probe_interval, max_backoff;
     size_t i;
 
     datapath_id = ofproto_get_datapath_id(ofproto);
@@ -146,16 +145,6 @@ config_status_cb(struct status_reply *sr, void *ofproto_)
         status_reply_put(sr, "management%zu=%s", i, listeners.names[i]);
     }
     svec_destroy(&listeners);
-
-    probe_interval = ofproto_get_probe_interval(ofproto);
-    if (probe_interval) {
-        status_reply_put(sr, "probe-interval=%d", probe_interval);
-    }
-
-    max_backoff = ofproto_get_max_backoff(ofproto);
-    if (max_backoff) {
-        status_reply_put(sr, "max-backoff=%d", max_backoff);
-    }
 }
 
 static void

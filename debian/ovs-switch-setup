@@ -15,8 +15,8 @@ my $debconf_owner = 'openvswitch-switch';
 
 my $default = '/etc/default/openvswitch-switch';
 my $template = '/usr/share/openvswitch/switch/default.template';
-my $etc = '/etc/openvswitch-switch';
-my $rundir = '/var/run';
+my $etc = '/etc/openvswitch';
+my $rundir = '/var/run/openvswitch';
 my $privkey_file = "$etc/of0-privkey.pem";
 my $req_file = "$etc/of0-req.pem";
 my $cert_file = "$etc/of0-cert.pem";
@@ -254,10 +254,10 @@ my (@states) =
        return 'skip' if -e $cert_file;
 
        for (;;) {
-           db_set('send-cert-req', 'yes');
+           db_set('send-cert-req', 'true');
            db_input('send-cert-req');
            return 'prev' if db_go();
-           return 'next' if db_get('send-cert-req') eq 'no';
+           return 'next' if db_get('send-cert-req') eq 'false';
 
            my $pki_uri = db_get('pki-uri');
            my ($pki_base_uri) = $pki_uri =~ m%^([^/]+://[^/]+)/%;
@@ -282,7 +282,7 @@ my (@states) =
        db_subst('verify-controller-ca', 'fingerprint', $cacert_fingerprint);
        db_input('verify-controller-ca');
        return 'prev' if db_go();
-       return 'next' if db_get('verify-controller-ca') eq 'yes';
+       return 'next' if db_get('verify-controller-ca') eq 'true';
        unlink($cacert_file);
        return 'prev';
    },
@@ -291,10 +291,10 @@ my (@states) =
        return 'skip' if -e $cert_file;
 
        for (;;) {
-           db_set('fetch-switch-cert', 'yes');
+           db_set('fetch-switch-cert', 'true');
            db_input('fetch-switch-cert');
            return 'prev' if db_go();
-           exit(1) if db_get('fetch-switch-cert') eq 'no';
+           exit(1) if db_get('fetch-switch-cert') eq 'false';
 
            my $pki_uri = db_get('pki-uri');
            my $url = "$pki_uri/switchca/certs/$req_fingerprint-cert.pem";

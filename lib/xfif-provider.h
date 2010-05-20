@@ -21,7 +21,9 @@
  * datapath. */
 
 #include <assert.h>
+#include "openflow/openflow.h"
 #include "xfif.h"
+#include "util.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -302,8 +304,10 @@ struct xfif_class {
 
     /* Attempts to receive a message from 'xfif'.  If successful, stores the
      * message into '*packetp'.  The message, if one is received, must begin
-     * with 'struct xflow_msg' as a header.  Only messages of the types
-     * selected with the recv_set_mask member function should be received.
+     * with 'struct xflow_msg' as a header, and must have at least
+     * XFIF_RECV_MSG_PADDING bytes of headroom (allocated using
+     * e.g. ofpbuf_reserve()).  Only messages of the types selected with the
+     * set_listen_mask member function should be received.
      *
      * This function must not block.  If no message is ready to be received
      * when it is called, it should return EAGAIN without blocking. */
@@ -313,6 +317,14 @@ struct xfif_class {
      * to be received with the recv member function. */
     void (*recv_wait)(struct xfif *xfif);
 };
+
+/* Minimum number of bytes of headroom for a packet returned by the 'recv'
+ * member function (see above).  This headroom allows "struct xflow_msg" to be
+ * replaced by "struct ofp_packet_in" without copying the buffer. */
+#define XFIF_RECV_MSG_PADDING (sizeof(struct ofp_packet_in) \
+                               - sizeof(struct xflow_msg))
+BUILD_ASSERT_DECL(sizeof(struct ofp_packet_in) > sizeof(struct xflow_msg));
+BUILD_ASSERT_DECL(XFIF_RECV_MSG_PADDING % 4 == 0);
 
 extern const struct xfif_class xfif_linux_class;
 extern const struct xfif_class xfif_netdev_class;

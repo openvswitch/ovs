@@ -24,6 +24,7 @@
 #include <linux/ip.h>
 #include <linux/types.h>
 #include <linux/ethtool.h>
+#include <linux/pkt_sched.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
 #include <linux/version.h>
@@ -50,6 +51,7 @@
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openvswitch/internal_dev.h"
 #include "openvswitch/gre.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -57,10 +59,6 @@
 #include "socket-util.h"
 #include "shash.h"
 #include "svec.h"
-
-#ifndef GRE_IOCTL_ONLY
-#include <linux/if_link.h>
-#endif
 
 #define THIS_MODULE VLM_netdev_linux
 #include "vlog.h"
@@ -84,11 +82,16 @@ enum {
     VALID_IN6 = 1 << 3,
     VALID_MTU = 1 << 4,
     VALID_CARRIER = 1 << 5,
-    VALID_IS_INTERNAL = 1 << 6
+    VALID_IS_PSEUDO = 1 << 6,       /* Represents is_internal and is_tap. */
+    VALID_POLICING = 1 << 7
 };
 
 struct tap_state {
     int fd;
+};
+
+struct patch_state {
+    char *peer;
 };
 
 struct netdev_dev_linux {
@@ -97,16 +100,22 @@ struct netdev_dev_linux {
     struct shash_node *shash_node;
     unsigned int cache_valid;
 
+    /* The following are figured out "on demand" only.  They are only valid
+     * when the corresponding VALID_* bit in 'cache_valid' is set. */
     int ifindex;
     uint8_t etheraddr[ETH_ADDR_LEN];
     struct in_addr address, netmask;
     struct in6_addr in6;
     int mtu;
     int carrier;
-    bool is_internal;
+    bool is_internal;           /* Is this an openvswitch internal device? */
+    bool is_tap;                /* Is this a tuntap device? */
+    uint32_t kbits_rate;        /* Policing data. */
+    uint32_t kbits_burst;
 
     union {
         struct tap_state tap;
+        struct patch_state patch;
     } state;
 };
 
@@ -117,27 +126,6 @@ struct netdev_linux {
 
 /* An AF_INET socket (used for ioctl operations). */
 static int af_inet_sock = -1;
-
-struct gre_config {
-    uint32_t local_ip;
-    uint32_t remote_ip;
-    uint32_t in_key;
-    uint32_t out_key;
-    uint8_t tos;
-    bool have_in_key;
-    bool have_out_key;
-    bool in_csum;
-    bool out_csum;
-    bool pmtud;
-};
-
-static struct {
-    union {
-        struct nl_sock *nl_sock;
-        int ioctl_fd;
-    };
-    bool use_ioctl;
-} gre_descriptors;
 
 struct netdev_linux_notifier {
     struct netdev_notifier notifier;
@@ -152,7 +140,8 @@ static struct rtnetlink_notifier netdev_linux_poll_notifier;
  * additional log messages. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
-static int destroy_gre(const char *name);
+static int netdev_linux_init(void);
+
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
                                    int cmd, const char *cmd_name);
 static int netdev_linux_do_ioctl(const char *name, struct ifreq *, int cmd,
@@ -171,22 +160,30 @@ static int set_etheraddr(const char *netdev_name, int hwaddr_family,
                          const uint8_t[ETH_ADDR_LEN]);
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
+static int get_rtnl_sock(struct nl_sock **);
+
+static bool
+is_netdev_linux_class(const struct netdev_class *netdev_class)
+{
+    return netdev_class->init == netdev_linux_init;
+}
 
 static struct netdev_dev_linux *
 netdev_dev_linux_cast(const struct netdev_dev *netdev_dev)
 {
-    const char *type = netdev_dev_get_type(netdev_dev);
-    assert(!strcmp(type, "system") || !strcmp(type, "tap")
-            || !strcmp(type, "gre"));
+    const struct netdev_class *netdev_class = netdev_dev_get_class(netdev_dev);
+    assert(is_netdev_linux_class(netdev_class));
+
     return CONTAINER_OF(netdev_dev, struct netdev_dev_linux, netdev_dev);
 }
 
 static struct netdev_linux *
 netdev_linux_cast(const struct netdev *netdev)
 {
-    const char *type = netdev_get_type(netdev);
-    assert(!strcmp(type, "system") || !strcmp(type, "tap")
-            || !strcmp(type, "gre"));
+    struct netdev_dev *netdev_dev = netdev_get_dev(netdev);
+    const struct netdev_class *netdev_class = netdev_dev_get_class(netdev_dev);
+    assert(is_netdev_linux_class(netdev_class));
+
     return CONTAINER_OF(netdev, struct netdev_linux, netdev);
 }
 
@@ -224,8 +221,13 @@ netdev_linux_cache_cb(const struct rtnetlink_change *change,
     if (change) {
         struct netdev_dev *base_dev = netdev_dev_from_name(change->ifname);
         if (base_dev) {
-            dev = netdev_dev_linux_cast(base_dev);
-            dev->cache_valid = 0;
+            const struct netdev_class *netdev_class =
+                                                netdev_dev_get_class(base_dev);
+
+            if (is_netdev_linux_class(netdev_class)) {
+                dev = netdev_dev_linux_cast(base_dev);
+                dev->cache_valid = 0;
+            }
         }
     } else {
         struct shash device_shash;
@@ -241,344 +243,121 @@ netdev_linux_cache_cb(const struct rtnetlink_change *change,
     }
 }
 
-/* The arguments are marked as unused to prevent warnings on platforms where
- * the Netlink interface isn't supported. */
 static int
-setup_gre_netlink(const char *name OVS_UNUSED,
-                  struct gre_config *config OVS_UNUSED, bool create OVS_UNUSED)
+if_up(const char *name)
 {
-#ifdef GRE_IOCTL_ONLY
-    return EOPNOTSUPP;
-#else
-    int error;
-    struct ofpbuf request, *reply;
-    unsigned int nl_flags;
-    struct ifinfomsg ifinfomsg;
-    struct nlattr *linkinfo_hdr;
-    struct nlattr *info_data_hdr;
-    uint16_t iflags = 0;
-    uint16_t oflags = 0;
-
-    VLOG_DBG("%s: attempting to create gre device using netlink", name);
-
-    if (!gre_descriptors.nl_sock) {
-        error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0,
-                               &gre_descriptors.nl_sock);
-        if (error) {
-            VLOG_WARN("couldn't create netlink socket: %s", strerror(error));
-            goto error;
-        }
-    }
-
-    ofpbuf_init(&request, 0);
-
-    nl_flags = NLM_F_REQUEST;
-    if (create) {
-        nl_flags |= NLM_F_CREATE|NLM_F_EXCL;
-    }
-
-    /* We over-reserve space, because we do some pointer arithmetic
-     * and don't want the buffer address shifting under us. */
-    nl_msg_put_nlmsghdr(&request, gre_descriptors.nl_sock, 2048, RTM_NEWLINK,
-                        nl_flags);
-
-    memset(&ifinfomsg, 0, sizeof ifinfomsg);
-    ifinfomsg.ifi_family = AF_UNSPEC;
-    nl_msg_put(&request, &ifinfomsg, sizeof ifinfomsg);
-
-    linkinfo_hdr = ofpbuf_tail(&request);
-    nl_msg_put_unspec(&request, IFLA_LINKINFO, NULL, 0);
-
-    nl_msg_put_unspec(&request, IFLA_INFO_KIND, "gretap", 6);
-
-    info_data_hdr = ofpbuf_tail(&request);
-    nl_msg_put_unspec(&request, IFLA_INFO_DATA, NULL, 0);
-
-    /* Set flags */
-    if (config->have_in_key) {
-        iflags |= GRE_KEY;
-    }
-    if (config->have_out_key) {
-        oflags |= GRE_KEY;
-    }
-
-    if (config->in_csum) {
-        iflags |= GRE_CSUM;
-    }
-    if (config->out_csum) {
-        oflags |= GRE_CSUM;
-    }
-
-    /* Add options */
-    nl_msg_put_u32(&request, IFLA_GRE_IKEY, config->in_key);
-    nl_msg_put_u32(&request, IFLA_GRE_OKEY, config->out_key);
-    nl_msg_put_u16(&request, IFLA_GRE_IFLAGS, iflags);
-    nl_msg_put_u16(&request, IFLA_GRE_OFLAGS, oflags);
-    nl_msg_put_u32(&request, IFLA_GRE_LOCAL, config->local_ip);
-    nl_msg_put_u32(&request, IFLA_GRE_REMOTE, config->remote_ip);
-    nl_msg_put_u8(&request, IFLA_GRE_PMTUDISC, config->pmtud);
-    nl_msg_put_u8(&request, IFLA_GRE_TTL, IPDEFTTL);
-    nl_msg_put_u8(&request, IFLA_GRE_TOS, config->tos);
-
-    info_data_hdr->nla_len = (char *)ofpbuf_tail(&request)
-                                - (char *)info_data_hdr;
-    linkinfo_hdr->nla_len = (char *)ofpbuf_tail(&request)
-                                - (char *)linkinfo_hdr;
-
-    nl_msg_put_string(&request, IFLA_IFNAME, name);
-
-    error = nl_sock_transact(gre_descriptors.nl_sock, &request, &reply);
-    ofpbuf_uninit(&request);
-    if (error) {
-        VLOG_WARN("couldn't transact netlink socket: %s", strerror(error));
-        goto error;
-    }
-    ofpbuf_delete(reply);
-
-error:
-    return error;
-#endif
-}
-
-static int
-setup_gre_ioctl(const char *name, struct gre_config *config, bool create)
-{
-    struct ip_tunnel_parm p;
     struct ifreq ifr;
 
-    VLOG_DBG("%s: attempting to create gre device using ioctl", name);
+    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+    ifr.ifr_flags = IFF_UP;
 
-    memset(&p, 0, sizeof p);
-
-    strncpy(p.name, name, IFNAMSIZ);
-
-    p.iph.version = 4;
-    p.iph.ihl = 5;
-    p.iph.protocol = IPPROTO_GRE;
-    p.iph.saddr = config->local_ip;
-    p.iph.daddr = config->remote_ip;
-    p.iph.ttl = IPDEFTTL;
-    p.iph.tos = config->tos;
-
-    if (config->have_in_key) {
-        p.i_flags |= GRE_KEY;
-        p.i_key = config->in_key;
-    }
-    if (config->have_out_key) {
-        p.o_flags |= GRE_KEY;
-        p.o_key = config->out_key;
-    }
-
-    if (config->in_csum) {
-        p.i_flags |= GRE_CSUM;
-    }
-    if (config->out_csum) {
-        p.o_flags |= GRE_CSUM;
-    }
-
-    if (config->pmtud) {
-        p.iph.frag_off = htons(IP_DONT_FRAGMENT);
-    }
-
-    strncpy(ifr.ifr_name, create ? GRE_IOCTL_DEVICE : name, IFNAMSIZ);
-    ifr.ifr_ifru.ifru_data = (void *)&p;
-
-    if (!gre_descriptors.ioctl_fd) {
-        gre_descriptors.ioctl_fd = socket(AF_INET, SOCK_DGRAM, 0);
-        if (gre_descriptors.ioctl_fd < 0) {
-            VLOG_WARN("couldn't create gre ioctl socket: %s", strerror(errno));
-            gre_descriptors.ioctl_fd = 0;
-            return errno;
-        }
-    }
-
-    if (ioctl(gre_descriptors.ioctl_fd, create ? SIOCADDGRETAP : SIOCCHGGRETAP,
-              &ifr) < 0) {
-        VLOG_WARN("couldn't do gre ioctl: %s", strerror(errno));
+    if (ioctl(af_inet_sock, SIOCSIFFLAGS, &ifr) == -1) {
+        VLOG_DBG_RL(&rl, "%s: failed to bring device up: %s",
+                    name, strerror(errno));
         return errno;
     }
 
     return 0;
 }
 
-/* The arguments are marked as unused to prevent warnings on platforms where
- * the Netlink interface isn't supported. */
-static bool
-check_gre_device_netlink(const char *name OVS_UNUSED)
+/* A veth may be created using the 'command' "+<name>,<peer>". A veth may 
+ * be destroyed by using the 'command' "-<name>", where <name> can be 
+ * either side of the device.
+ */
+static int
+modify_veth(const char *format, ...)
 {
-#ifdef GRE_IOCTL_ONLY
-    return false;
-#else
-    static const struct nl_policy getlink_policy[] = {
-        [IFLA_LINKINFO] = { .type = NL_A_NESTED, .optional = false },
-    };
+    FILE *veth_file;
+    va_list args;
+    int retval;
 
-    static const struct nl_policy linkinfo_policy[] = {
-        [IFLA_INFO_KIND] = { .type = NL_A_STRING, .optional = false },
-    };
+    veth_file = fopen("/sys/class/net/veth_pairs", "w");
+    if (!veth_file) {
+        VLOG_WARN_RL(&rl, "could not open veth device.  Are you running a "
+                "supported XenServer with the kernel module loaded?");
+        return ENODEV;
+    }
+    setvbuf(veth_file, NULL, _IONBF, 0);
 
-    int error;
-    bool ret = false;
-    struct ofpbuf request, *reply;
-    struct ifinfomsg ifinfomsg;
-    struct nlattr *getlink_attrs[ARRAY_SIZE(getlink_policy)];
-    struct nlattr *linkinfo_attrs[ARRAY_SIZE(linkinfo_policy)];
-    struct ofpbuf linkinfo;
-    const char *device_kind;
+    va_start(args, format);
+    retval = vfprintf(veth_file, format, args);
+    va_end(args);
 
-    ofpbuf_init(&request, 0);
-
-    nl_msg_put_nlmsghdr(&request, gre_descriptors.nl_sock,
-                        NLMSG_LENGTH(sizeof ifinfomsg), RTM_GETLINK,
-                        NLM_F_REQUEST);
-
-    memset(&ifinfomsg, 0, sizeof ifinfomsg);
-    ifinfomsg.ifi_family = AF_UNSPEC;
-    ifinfomsg.ifi_index =  do_get_ifindex(name);
-    nl_msg_put(&request, &ifinfomsg, sizeof ifinfomsg);
-
-    error = nl_sock_transact(gre_descriptors.nl_sock, &request, &reply);
-    ofpbuf_uninit(&request);
-    if (error) {
-        VLOG_WARN("couldn't transact netlink socket: %s", strerror(error));
-        return false;
+    fclose(veth_file);
+    if (retval < 0) {
+        VLOG_WARN_RL(&rl, "could not destroy patch: %s", strerror(errno));
+        return errno;
     }
 
-    if (!nl_policy_parse(reply, NLMSG_HDRLEN + sizeof(struct ifinfomsg),
-                         getlink_policy, getlink_attrs,
-                         ARRAY_SIZE(getlink_policy))) {
-        VLOG_WARN("received bad rtnl message (getlink policy)");
-        goto error;
-    }
-
-    linkinfo.data = (void *)nl_attr_get(getlink_attrs[IFLA_LINKINFO]);
-    linkinfo.size = nl_attr_get_size(getlink_attrs[IFLA_LINKINFO]);
-    if (!nl_policy_parse(&linkinfo, 0, linkinfo_policy,
-                        linkinfo_attrs, ARRAY_SIZE(linkinfo_policy))) {
-        VLOG_WARN("received bad rtnl message (linkinfo policy)");
-        goto error;
-    }
-
-    device_kind = nl_attr_get_string(linkinfo_attrs[IFLA_INFO_KIND]);
-    ret = !strcmp(device_kind, "gretap");
-
-error:
-    ofpbuf_delete(reply);
-    return ret;
-#endif
-}
-
-static bool
-check_gre_device_ioctl(const char *name)
-{
-    struct ethtool_drvinfo drvinfo;
-    int error;
-
-    memset(&drvinfo, 0, sizeof drvinfo);
-    error = netdev_linux_do_ethtool(name, (struct ethtool_cmd *)&drvinfo,
-                                    ETHTOOL_GDRVINFO, "ETHTOOL_GDRVINFO");
-
-    return !error && !strcmp(drvinfo.driver, "ip_gre")
-           && !strcmp(drvinfo.bus_info, "gretap");
+    return 0;
 }
 
 static int
-setup_gre(const char *name, const struct shash *args, bool create)
+create_patch(const char *name, const char *peer)
 {
-    int error;
-    struct in_addr in_addr;
-    struct shash_node *node;
-    struct gre_config config;
+    int retval;
+    struct netdev_dev *peer_nd;
 
-    memset(&config, 0, sizeof config);
-    config.in_csum = true;
-    config.out_csum = true;
-    config.pmtud = true;
 
-    SHASH_FOR_EACH (node, args) {
-        if (!strcmp(node->name, "remote_ip")) {
-            if (lookup_ip(node->data, &in_addr)) {
-                VLOG_WARN("bad 'remote_ip' for gre device %s ", name);
+    /* Only create the veth if the peer didn't already do it. */
+    peer_nd = netdev_dev_from_name(peer);
+    if (peer_nd) {
+        if (!strcmp("patch", netdev_dev_get_type(peer_nd))) {
+            struct netdev_dev_linux *ndl = netdev_dev_linux_cast(peer_nd);
+            if (!strcmp(name, ndl->state.patch.peer)) {
+                return 0;
             } else {
-                config.remote_ip = in_addr.s_addr;
-            }
-        } else if (!strcmp(node->name, "local_ip")) {
-            if (lookup_ip(node->data, &in_addr)) {
-                VLOG_WARN("bad 'local_ip' for gre device %s ", name);
-            } else {
-                config.local_ip = in_addr.s_addr;
-            }
-        } else if (!strcmp(node->name, "key")) {
-            config.have_in_key = true;
-            config.have_out_key = true;
-            config.in_key = htonl(atoi(node->data));
-            config.out_key = htonl(atoi(node->data));
-        } else if (!strcmp(node->name, "in_key")) {
-            config.have_in_key = true;
-            config.in_key = htonl(atoi(node->data));
-        } else if (!strcmp(node->name, "out_key")) {
-            config.have_out_key = true;
-            config.out_key = htonl(atoi(node->data));
-        } else if (!strcmp(node->name, "tos")) {
-            config.tos = atoi(node->data);
-        } else if (!strcmp(node->name, "csum")) {
-            if (!strcmp(node->data, "false")) {
-                config.in_csum = false;
-                config.out_csum = false;
-            }
-        } else if (!strcmp(node->name, "pmtud")) {
-            if (!strcmp(node->data, "false")) {
-                config.pmtud = false;
+                VLOG_WARN_RL(&rl, "peer '%s' already paired with '%s'", 
+                        peer, ndl->state.patch.peer);
+                return EINVAL;
             }
         } else {
-            VLOG_WARN("unknown gre argument '%s'", node->name);
+            VLOG_WARN_RL(&rl, "peer '%s' exists and is not a patch", peer);
+            return EINVAL;
         }
     }
 
-    if (!config.remote_ip) {
-        VLOG_WARN("gre type requires valid 'remote_ip' argument");
-        error = EINVAL;
-        goto error;
+    retval = modify_veth("+%s,%s", name, peer);
+    if (retval) {
+        return retval;
     }
 
-    if (!gre_descriptors.use_ioctl) {
-        error = setup_gre_netlink(name, &config, create);
-        if (error == EOPNOTSUPP) {
-            gre_descriptors.use_ioctl = true;
-        }
-    }
-    if (gre_descriptors.use_ioctl) {
-        error = setup_gre_ioctl(name, &config, create);
+    retval = if_up(name);
+    if (retval) {
+        return retval;
     }
 
-    if (create && error == EEXIST) {
-        bool gre_device;
-
-        if (gre_descriptors.use_ioctl) {
-            gre_device = check_gre_device_ioctl(name);
-        } else {
-            gre_device = check_gre_device_netlink(name);
-        }
-
-        if (!gre_device) {
-            goto error;
-        }
-
-        VLOG_WARN("replacing existing gre device %s", name);
-        error = destroy_gre(name);
-        if (error) {
-            goto error;
-        }
-
-        if (gre_descriptors.use_ioctl) {
-            error = setup_gre_ioctl(name, &config, create);
-        } else {
-            error = setup_gre_netlink(name, &config, create);
-        }
+    retval = if_up(peer);
+    if (retval) {
+        return retval;
     }
 
-error:
-    return error;
+    return 0;
+}
+
+static int
+setup_patch(const char *name, const struct shash *args, char **peer_)
+{
+    const char *peer;
+
+    peer = shash_find_data(args, "peer");
+    if (!peer) {
+        VLOG_WARN("patch type requires valid 'peer' argument");
+        return EINVAL;
+    }
+
+    if (shash_count(args) > 1) {
+        VLOG_WARN("patch type takes only a 'peer' argument");
+        return EINVAL;
+    }
+
+    if (strlen(peer) >= IFNAMSIZ) {
+        VLOG_WARN_RL(&rl, "patch 'peer' arg too long");
+        return EINVAL;
+    }
+
+    *peer_ = xstrdup(peer);
+    return create_patch(name, peer);
 }
 
 /* Creates the netdev device of 'type' with 'name'. */
@@ -666,115 +445,23 @@ error:
 }
 
 static int
-if_up(const char *name)
-{
-    struct ifreq ifr;
-
-    strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
-    ifr.ifr_flags = IFF_UP;
-
-    if (ioctl(af_inet_sock, SIOCSIFFLAGS, &ifr) == -1) {
-        VLOG_DBG_RL(&rl, "%s: failed to bring device up: %s",
-                    name, strerror(errno));
-        return errno;
-    }
-
-    return 0;
-}
-
-static int
-netdev_linux_create_gre(const char *name, const char *type OVS_UNUSED,
+netdev_linux_create_patch(const char *name, const char *type OVS_UNUSED,
                     const struct shash *args, struct netdev_dev **netdev_devp)
 {
     struct netdev_dev_linux *netdev_dev;
+    char *peer = NULL;
     int error;
+
+    error = setup_patch(name, args, &peer);
+    if (error) {
+        free(peer);
+        return error;
+    }
 
     netdev_dev = xzalloc(sizeof *netdev_dev);
-
-    error = setup_gre(name, args, true);
-    if (error) {
-        goto error;
-    }
-
-    error = if_up(name);
-    if (error) {
-        goto error;
-    }
-
-    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_gre_class);
+    netdev_dev->state.patch.peer = peer;
+    netdev_dev_init(&netdev_dev->netdev_dev, name, &netdev_patch_class);
     *netdev_devp = &netdev_dev->netdev_dev;
-    return 0;
-
-error:
-    free(netdev_dev);
-    return error;
-}
-
-static int
-netdev_linux_reconfigure_gre(struct netdev_dev *netdev_dev_,
-                             const struct shash *args)
-{
-    const char *name = netdev_dev_get_name(netdev_dev_);
-
-    return setup_gre(name, args, false);
-}
-
-/* The arguments are marked as unused to prevent warnings on platforms where
- * the Netlink interface isn't supported. */
-static int
-destroy_gre_netlink(const char *name OVS_UNUSED)
-{
-#ifdef GRE_IOCTL_ONLY
-    return EOPNOTSUPP;
-#else
-    int error;
-    struct ofpbuf request, *reply;
-    struct ifinfomsg ifinfomsg;
-    int ifindex;
-
-    ofpbuf_init(&request, 0);
-    
-    nl_msg_put_nlmsghdr(&request, gre_descriptors.nl_sock, 0, RTM_DELLINK,
-                        NLM_F_REQUEST);
-
-    memset(&ifinfomsg, 0, sizeof ifinfomsg);
-    ifinfomsg.ifi_family = AF_UNSPEC;
-    nl_msg_put(&request, &ifinfomsg, sizeof ifinfomsg);
-
-    ifindex = do_get_ifindex(name);
-    nl_msg_put_u32(&request, IFLA_LINK, ifindex);
-
-    nl_msg_put_string(&request, IFLA_IFNAME, name);
-
-    error = nl_sock_transact(gre_descriptors.nl_sock, &request, &reply);
-    ofpbuf_uninit(&request);
-    if (error) {
-        VLOG_WARN("couldn't transact netlink socket: %s", strerror(error));
-        goto error;
-    }
-    ofpbuf_delete(reply);
-
-error:
-    return 0;
-#endif
-}
-
-static int
-destroy_gre_ioctl(const char *name)
-{
-    struct ip_tunnel_parm p;
-    struct ifreq ifr;
-
-    memset(&p, 0, sizeof p);
-    strncpy(p.name, name, IFNAMSIZ);
-
-    strncpy(ifr.ifr_name, name, IFNAMSIZ);
-    ifr.ifr_ifru.ifru_data = (void *)&p;
-
-    if (ioctl(gre_descriptors.ioctl_fd, SIOCDELGRETAP, &ifr) < 0) {
-        VLOG_WARN("couldn't do gre ioctl: %s\n", strerror(errno));
-        return errno;
-    }
 
     return 0;
 }
@@ -789,14 +476,17 @@ destroy_tap(struct netdev_dev_linux *netdev_dev)
     }
 }
 
-static int
-destroy_gre(const char *name)
+static void
+destroy_patch(struct netdev_dev_linux *netdev_dev)
 {
-    if (gre_descriptors.use_ioctl) {
-        return destroy_gre_ioctl(name);
-    } else {
-        return destroy_gre_netlink(name);
+    const char *name = netdev_dev_get_name(&netdev_dev->netdev_dev);
+    struct patch_state *state = &netdev_dev->state.patch;
+
+    /* Only destroy veth if 'peer' doesn't exist as an existing netdev. */
+    if (!netdev_dev_from_name(state->peer)) {
+        modify_veth("-%s", name);
     }
+    free(state->peer);
 }
 
 /* Destroys the netdev device 'netdev_dev_'. */
@@ -814,11 +504,11 @@ netdev_linux_destroy(struct netdev_dev *netdev_dev_)
         }
     } else if (!strcmp(type, "tap")) {
         destroy_tap(netdev_dev);
-    } else if (!strcmp(type, "gre")) {
-        destroy_gre(netdev_dev_get_name(&netdev_dev->netdev_dev));
+    } else if (!strcmp(type, "patch")) {
+        destroy_patch(netdev_dev);
     }
 
-    free(netdev_dev_);
+    free(netdev_dev);
 }
 
 static int
@@ -1219,6 +909,35 @@ check_for_working_netlink_stats(void)
     }
 }
 
+/* Brings the 'is_internal' and 'is_tap' members of 'netdev_dev' up-to-date. */
+static void
+netdev_linux_update_is_pseudo(struct netdev_dev_linux *netdev_dev)
+{
+    if (!(netdev_dev->cache_valid & VALID_IS_PSEUDO)) {
+        const char *name = netdev_dev_get_name(&netdev_dev->netdev_dev);
+        const char *type = netdev_dev_get_type(&netdev_dev->netdev_dev);
+        
+        netdev_dev->is_tap = !strcmp(type, "tap");
+        netdev_dev->is_internal = false;
+        if (!netdev_dev->is_tap) {
+            struct ethtool_drvinfo drvinfo;
+            int error;
+
+            memset(&drvinfo, 0, sizeof drvinfo);
+            error = netdev_linux_do_ethtool(name,
+                                            (struct ethtool_cmd *)&drvinfo,
+                                            ETHTOOL_GDRVINFO,
+                                            "ETHTOOL_GDRVINFO");
+
+            if (!error && !strcmp(drvinfo.driver, "openvswitch")) {
+                netdev_dev->is_internal = true;
+            }
+        }
+
+        netdev_dev->cache_valid |= VALID_IS_PSEUDO;
+    }
+}
+
 /* Retrieves current device stats for 'netdev'.
  *
  * XXX All of the members of struct netdev_stats are 64 bits wide, but on
@@ -1236,26 +955,7 @@ netdev_linux_get_stats(const struct netdev *netdev_,
 
     COVERAGE_INC(netdev_get_stats);
 
-    if (!(netdev_dev->cache_valid & VALID_IS_INTERNAL)) {
-        netdev_dev->is_internal = !strcmp(netdev_get_type(netdev_), "tap");
-        if (!netdev_dev->is_internal) {
-            struct ethtool_drvinfo drvinfo;
-
-            memset(&drvinfo, 0, sizeof drvinfo);
-            error = netdev_linux_do_ethtool(netdev_get_name(netdev_),
-                                            (struct ethtool_cmd *)&drvinfo,
-                                            ETHTOOL_GDRVINFO,
-                                            "ETHTOOL_GDRVINFO");
-
-            if (!error) {
-                netdev_dev->is_internal = !strcmp(drvinfo.driver,
-                                                        "openvswitch");
-            }
-        }
-
-        netdev_dev->cache_valid |= VALID_IS_INTERNAL;
-    }
-
+    netdev_linux_update_is_pseudo(netdev_dev);
     if (netdev_dev->is_internal) {
         collect_stats = &raw_stats;
     }
@@ -1278,7 +978,7 @@ netdev_linux_get_stats(const struct netdev *netdev_,
      * will appear to be swapped relative to the other ports since we are the
      * one sending the data, not a remote computer.  For consistency, we swap
      * them back here. */
-    if (!error && netdev_dev->is_internal) {
+    if (!error && (netdev_dev->is_internal || netdev_dev->is_tap)) {
         stats->rx_packets = raw_stats.tx_packets;
         stats->tx_packets = raw_stats.rx_packets;
         stats->rx_bytes = raw_stats.tx_bytes;
@@ -1303,6 +1003,41 @@ netdev_linux_get_stats(const struct netdev *netdev_,
     }
 
     return error;
+}
+
+static int
+netdev_linux_set_stats(struct netdev *netdev,
+                       const struct netdev_stats *stats)
+{
+    struct netdev_dev_linux *netdev_dev =
+        netdev_dev_linux_cast(netdev_get_dev(netdev));
+    struct internal_dev_stats dp_dev_stats;
+    struct ifreq ifr;
+
+    /* We must reject this call if 'netdev' is not an Open vSwitch internal
+     * port, because the ioctl that we are about to execute is in the "device
+     * private ioctls" range, which means that executing it on a device that
+     * is not the type we expect could do any random thing.
+     *
+     * (Amusingly, these ioctl numbers are commented "THESE IOCTLS ARE
+     * _DEPRECATED_ AND WILL DISAPPEAR IN 2.5.X" in linux/sockios.h.  I guess
+     * DaveM is a little behind on that.) */
+    netdev_linux_update_is_pseudo(netdev_dev);
+    if (!netdev_dev->is_internal) {
+        return EOPNOTSUPP;
+    }
+
+    /* This actually only sets the *offset* that the dp_dev applies, but in our
+     * usage for fake bond devices the dp_dev never has any traffic of it own
+     * so it has the same effect. */
+    dp_dev_stats.rx_packets = stats->rx_packets;
+    dp_dev_stats.rx_bytes = stats->rx_bytes;
+    dp_dev_stats.tx_packets = stats->tx_packets;
+    dp_dev_stats.tx_bytes = stats->tx_bytes;
+    ifr.ifr_data = (void *) &dp_dev_stats;
+    return netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr,
+                                 INTERNAL_DEV_SET_STATS,
+                                 "INTERNAL_DEV_SET_STATS");
 }
 
 /* Stores the features supported by 'netdev' into each of '*current',
@@ -1542,35 +1277,88 @@ done:
 
 #define POLICE_ADD_CMD "/sbin/tc qdisc add dev %s handle ffff: ingress"
 #define POLICE_CONFIG_CMD "/sbin/tc filter add dev %s parent ffff: protocol ip prio 50 u32 match ip src 0.0.0.0/0 police rate %dkbit burst %dk mtu 65535 drop flowid :1"
-/* We redirect stderr to /dev/null because we often want to remove all
- * traffic control configuration on a port so its in a known state.  If
- * this done when there is no such configuration, tc complains, so we just
- * always ignore it.
+
+/* Remove ingress policing from 'netdev'.  Returns 0 if successful, otherwise a
+ * positive errno value.
+ *
+ * This function is equivalent to running
+ *     /sbin/tc qdisc del dev %s handle ffff: ingress
+ * but it is much, much faster.
  */
-#define POLICE_DEL_CMD "/sbin/tc qdisc del dev %s handle ffff: ingress 2>/dev/null"
+static int
+netdev_linux_remove_policing(struct netdev *netdev)
+{
+    struct netdev_dev_linux *netdev_dev =
+        netdev_dev_linux_cast(netdev_get_dev(netdev));
+    const char *netdev_name = netdev_get_name(netdev);
+
+    struct ofpbuf request;
+    struct ofpbuf *reply;
+    struct tcmsg *tcmsg;
+    struct nl_sock *rtnl_sock;
+    int ifindex;
+    int error;
+
+    error = get_ifindex(netdev, &ifindex);
+    if (error) {
+        return error;
+    }
+
+    error = get_rtnl_sock(&rtnl_sock);
+    if (error) {
+        return error;
+    }
+
+    ofpbuf_init(&request, 0);
+    nl_msg_put_nlmsghdr(&request, rtnl_sock, sizeof *tcmsg,
+                        RTM_DELQDISC, NLM_F_REQUEST);
+    tcmsg = ofpbuf_put_zeros(&request, sizeof *tcmsg);
+    tcmsg->tcm_family = AF_UNSPEC;
+    tcmsg->tcm_ifindex = ifindex;
+    tcmsg->tcm_handle = 0xffff0000;
+    tcmsg->tcm_parent = TC_H_INGRESS;
+    nl_msg_put_string(&request, TCA_KIND, "ingress");
+    nl_msg_put_unspec(&request, TCA_OPTIONS, NULL, 0);
+    error = nl_sock_transact(rtnl_sock, &request, &reply);
+    ofpbuf_uninit(&request);
+    ofpbuf_delete(reply);
+    if (error && error != ENOENT) {
+        VLOG_WARN_RL(&rl, "%s: removing policing failed: %s",
+                     netdev_name, strerror(error));
+        return error;
+    }
+
+    netdev_dev->kbits_rate = 0;
+    netdev_dev->kbits_burst = 0;
+    netdev_dev->cache_valid |= VALID_POLICING;
+    return 0;
+}
 
 /* Attempts to set input rate limiting (policing) policy. */
 static int
 netdev_linux_set_policing(struct netdev *netdev,
                           uint32_t kbits_rate, uint32_t kbits_burst)
 {
+    struct netdev_dev_linux *netdev_dev =
+        netdev_dev_linux_cast(netdev_get_dev(netdev));
     const char *netdev_name = netdev_get_name(netdev);
     char command[1024];
 
     COVERAGE_INC(netdev_set_policing);
+
+    kbits_burst = (!kbits_rate ? 0       /* Force to 0 if no rate specified. */
+                   : !kbits_burst ? 1000 /* Default to 1000 kbits if 0. */
+                   : kbits_burst);       /* Stick with user-specified value. */
+
+    if (netdev_dev->cache_valid & VALID_POLICING
+        && netdev_dev->kbits_rate == kbits_rate
+        && netdev_dev->kbits_burst == kbits_burst) {
+        /* Assume that settings haven't changed since we last set them. */
+        return 0;
+    }
+
+    netdev_linux_remove_policing(netdev);
     if (kbits_rate) {
-        if (!kbits_burst) {
-            /* Default to 1000 kilobits if not specified. */
-            kbits_burst = 1000;
-        }
-
-        /* xxx This should be more careful about only adding if it
-         * xxx actually exists, as opposed to always deleting it. */
-        snprintf(command, sizeof(command), POLICE_DEL_CMD, netdev_name);
-        if (system(command) == -1) {
-            VLOG_WARN_RL(&rl, "%s: problem removing policing", netdev_name);
-        }
-
         snprintf(command, sizeof(command), POLICE_ADD_CMD, netdev_name);
         if (system(command) != 0) {
             VLOG_WARN_RL(&rl, "%s: problem adding policing", netdev_name);
@@ -1584,11 +1372,10 @@ netdev_linux_set_policing(struct netdev *netdev,
                     netdev_name);
             return -1;
         }
-    } else {
-        snprintf(command, sizeof(command), POLICE_DEL_CMD, netdev_name);
-        if (system(command) == -1) {
-            VLOG_WARN_RL(&rl, "%s: problem removing policing", netdev_name);
-        }
+
+        netdev_dev->kbits_rate = kbits_rate;
+        netdev_dev->kbits_burst = kbits_burst;
+        netdev_dev->cache_valid |= VALID_POLICING;
     }
 
     return 0;
@@ -1988,6 +1775,7 @@ const struct netdev_class netdev_linux_class = {
     netdev_linux_get_ifindex,
     netdev_linux_get_carrier,
     netdev_linux_get_stats,
+    netdev_linux_set_stats,
 
     netdev_linux_get_features,
     netdev_linux_set_advertisements,
@@ -2036,6 +1824,7 @@ const struct netdev_class netdev_tap_class = {
     netdev_linux_get_ifindex,
     netdev_linux_get_carrier,
     netdev_linux_get_stats,
+    NULL,                       /* set_stats */
 
     netdev_linux_get_features,
     netdev_linux_set_advertisements,
@@ -2055,16 +1844,16 @@ const struct netdev_class netdev_tap_class = {
     netdev_linux_poll_remove,
 };
 
-const struct netdev_class netdev_gre_class = {
-    "gre",
+const struct netdev_class netdev_patch_class = {
+    "patch",
 
     netdev_linux_init,
     netdev_linux_run,
     netdev_linux_wait,
 
-    netdev_linux_create_gre,
+    netdev_linux_create_patch,
     netdev_linux_destroy,
-    netdev_linux_reconfigure_gre,
+    NULL,                       /* reconfigure */
 
     netdev_linux_open,
     netdev_linux_close,
@@ -2084,6 +1873,7 @@ const struct netdev_class netdev_gre_class = {
     netdev_linux_get_ifindex,
     netdev_linux_get_carrier,
     netdev_linux_get_stats,
+    NULL,                       /* set_stats */
 
     netdev_linux_get_features,
     netdev_linux_set_advertisements,
@@ -2102,6 +1892,7 @@ const struct netdev_class netdev_gre_class = {
     netdev_linux_poll_add,
     netdev_linux_poll_remove,
 };
+
 
 static int
 get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
@@ -2116,8 +1907,7 @@ get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
                          .min_len = sizeof(struct rtnl_link_stats) },
     };
 
-
-    static struct nl_sock *rtnl_sock;
+    struct nl_sock *rtnl_sock;
     struct ofpbuf request;
     struct ofpbuf *reply;
     struct ifinfomsg *ifi;
@@ -2125,13 +1915,9 @@ get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
     struct nlattr *attrs[ARRAY_SIZE(rtnlgrp_link_policy)];
     int error;
 
-    if (!rtnl_sock) {
-        error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &rtnl_sock);
-        if (error) {
-            VLOG_ERR_RL(&rl, "failed to create rtnetlink socket: %s",
-                        strerror(error));
-            return error;
-        }
+    error = get_rtnl_sock(&rtnl_sock);
+    if (error) {
+        return error;
     }
 
     ofpbuf_init(&request, 0);
@@ -2393,5 +2179,28 @@ netdev_linux_get_ipv4(const struct netdev *netdev, struct in_addr *ip,
         const struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
         *ip = sin->sin_addr;
     }
+    return error;
+}
+
+/* Obtains a Netlink routing socket that is not subscribed to any multicast
+ * groups.  Returns 0 if successful, otherwise a positive errno value.  Stores
+ * the socket in '*rtnl_sockp' if successful, otherwise a null pointer. */
+static int
+get_rtnl_sock(struct nl_sock **rtnl_sockp)
+{
+    static struct nl_sock *sock;
+    int error;
+
+    if (!sock) {
+        error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &sock);
+        if (error) {
+            VLOG_ERR_RL(&rl, "failed to create rtnetlink socket: %s",
+                        strerror(error));
+        }
+    } else {
+        error = 0;
+    }
+
+    *rtnl_sockp = sock;
     return error;
 }

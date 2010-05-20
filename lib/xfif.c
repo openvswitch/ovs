@@ -58,7 +58,7 @@ static struct shash xfif_classes = SHASH_INITIALIZER(&xfif_classes);
 static struct vlog_rate_limit dpmsg_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 
 /* Not really much point in logging many xfif errors. */
-static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(9999, 5);
+static struct vlog_rate_limit error_rl = VLOG_RATE_LIMIT_INIT(60, 5);
 
 static void log_operation(const struct xfif *, const char *operation,
                           int error);
@@ -724,6 +724,11 @@ xfif_flow_get(const struct xfif *xfif, struct xflow_flow *flow)
     if (!error) {
         error = flow->stats.error;
     }
+    if (error) {
+        /* Make the results predictable on error. */
+        memset(&flow->stats, 0, sizeof flow->stats);
+        flow->n_actions = 0;
+    }
     if (should_log_flow_message(error)) {
         log_flow_operation(xfif, "flow_get", error, flow);
     }
@@ -1010,7 +1015,8 @@ xfif_set_sflow_probability(struct xfif *xfif, uint32_t probability)
 
 /* Attempts to receive a message from 'xfif'.  If successful, stores the
  * message into '*packetp'.  The message, if one is received, will begin with
- * 'struct xflow_msg' as a header.  Only messages of the types selected with
+ * 'struct xflow_msg' as a header, and will have at least XFIF_RECV_MSG_PADDING
+ * bytes of headroom.  Only messages of the types selected with
  * xfif_set_listen_mask() will ordinarily be received (but if a message type is
  * enabled and then later disabled, some stragglers might pop up).
  *
@@ -1021,8 +1027,10 @@ xfif_recv(struct xfif *xfif, struct ofpbuf **packetp)
 {
     int error = xfif->xfif_class->recv(xfif, packetp);
     if (!error) {
+        struct ofpbuf *buf = *packetp;
+
+        assert(ofpbuf_headroom(buf) >= XFIF_RECV_MSG_PADDING);
         if (VLOG_IS_DBG_ENABLED()) {
-            struct ofpbuf *buf = *packetp;
             struct xflow_msg *msg = buf->data;
             void *payload = msg + 1;
             size_t payload_len = buf->size - sizeof *msg;

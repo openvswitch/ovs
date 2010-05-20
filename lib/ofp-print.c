@@ -134,8 +134,8 @@ ofp_packet_in(struct ds *string, const void *oh, size_t len, int verbosity)
         struct ofp_match match;
         packet.data = (void *) op->data;
         packet.size = data_len;
-        flow_extract(&packet, ntohs(op->in_port), &flow);
-        flow_to_match(&flow, &match);
+        flow_extract(&packet, 0, ntohs(op->in_port), &flow);
+        flow_to_match(&flow, false, &match);
         ofp_print_match(string, &match, verbosity);
         ds_put_char(string, '\n');
     }
@@ -190,6 +190,13 @@ ofp_print_nx_action(struct ds *string, const struct nx_action_header *nah)
         const struct nx_action_resubmit *nar = (struct nx_action_resubmit *)nah;
         ds_put_format(string, "resubmit:");
         ofp_print_port_name(string, ntohs(nar->in_port));
+        break;
+    }
+
+    case NXAST_SET_TUNNEL: {
+        const struct nx_action_set_tunnel *nast =
+                                            (struct nx_action_set_tunnel *)nah;
+        ds_put_format(string, "set_tunnel:0x%08"PRIx32, ntohl(nast->tun_id));
         break;
     }
 
@@ -672,10 +679,13 @@ ofp_match_to_string(const struct ofp_match *om, int verbosity)
             skip_type = false;
         }
     }
+    if (w & NXFW_TUN_ID) {
+        ds_put_cstr(&f, "tun_id_wild,");
+    }
     print_wild(&f, "in_port=", w & OFPFW_IN_PORT, verbosity,
                "%d", ntohs(om->in_port));
     print_wild(&f, "dl_vlan=", w & OFPFW_DL_VLAN, verbosity,
-               "0x%04x", ntohs(om->dl_vlan));
+               "%d", ntohs(om->dl_vlan));
     print_wild(&f, "dl_vlan_pcp=", w & OFPFW_DL_VLAN_PCP, verbosity,
                "%d", om->dl_vlan_pcp);
     print_wild(&f, "dl_src=", w & OFPFW_DL_SRC, verbosity,
@@ -743,7 +753,7 @@ ofp_print_flow_mod(struct ds *string, const void *oh, size_t len,
     default:
         ds_put_format(string, " cmd:%d ", ntohs(ofm->command));
     }
-    ds_put_format(string, "cookie:%"PRIx64" idle:%d hard:%d pri:%d "
+    ds_put_format(string, "cookie:0x%"PRIx64" idle:%d hard:%d pri:%d "
             "buf:%#x flags:%"PRIx16" ", ntohll(ofm->cookie), 
             ntohs(ofm->idle_timeout), ntohs(ofm->hard_timeout),
             ofm->match.wildcards ? ntohs(ofm->priority) : (uint16_t)-1,
@@ -778,7 +788,7 @@ ofp_print_flow_removed(struct ds *string, const void *oh,
         break;
     }
     ds_put_format(string, 
-         " cookie%"PRIx64" pri%"PRIu16" secs%"PRIu32" nsecs%"PRIu32
+         " cookie0x%"PRIx64" pri%"PRIu16" secs%"PRIu32" nsecs%"PRIu32
          " idle%"PRIu16" pkts%"PRIu64" bytes%"PRIu64"\n", 
          ntohll(ofr->cookie),
          ofr->match.wildcards ? ntohs(ofr->priority) : (uint16_t)-1,
@@ -1000,7 +1010,7 @@ ofp_flow_stats_reply(struct ds *string, const void *body_, size_t len,
             break;
         }
 
-        ds_put_format(string, "  cookie=%"PRIu64", ", ntohll(fs->cookie));
+        ds_put_format(string, "  cookie=0x%"PRIx64", ", ntohll(fs->cookie));
         ds_put_format(string, "duration_sec=%"PRIu32"s, ", 
                     ntohl(fs->duration_sec));
         ds_put_format(string, "duration_nsec=%"PRIu32"ns, ", 

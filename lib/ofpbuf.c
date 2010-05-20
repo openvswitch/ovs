@@ -218,6 +218,17 @@ ofpbuf_push_uninit(struct ofpbuf *b, size_t size)
     return b->data;
 }
 
+/* Prefixes 'size' zeroed bytes to the head end of 'b'.  'b' must have at least
+ * 'size' bytes of headroom.  Returns a pointer to the first byte of the data's
+ * location in the ofpbuf. */
+void *
+ofpbuf_push_zeros(struct ofpbuf *b, size_t size)
+{
+    void *dst = ofpbuf_push_uninit(b, size);
+    memset(dst, 0, size);
+    return dst;
+}
+
 void *
 ofpbuf_push(struct ofpbuf *b, const void *p, size_t size) 
 {

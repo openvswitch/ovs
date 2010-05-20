@@ -25,8 +25,8 @@
 #
 ### BEGIN INIT INFO
 # Provides:          corekeeper
-# Required-Start:
-# Required-Stop:     
+# Required-Start:    $remote_fs
+# Required-Stop:     $remote_fs
 # Should-Start:      $syslog
 # Should-Stop:       
 # Default-Start:     2 3 4 5

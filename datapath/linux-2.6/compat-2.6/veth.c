@@ -454,10 +454,13 @@ static ssize_t veth_store_veth_pairs(struct class *cls, const char *buffer,
 		rtnl_unlock();
 		return retval ? retval : count;
 	} else if (c == '-') {
+		char devname[IFNAMSIZ + 1] = "";
 		struct net_device *dev;
 
+		strncat(devname, buffer,
+			min_t(int, sizeof devname, strcspn(buffer, "\n")));
 		rtnl_lock();
-		dev = dev_get_by_name(buffer);
+		dev = __dev_get_by_name(devname);
 		if (!dev)
 			retval = -ENODEV;
 		else if (dev->init != veth_dev_init)
@@ -523,7 +526,17 @@ static __init int veth_init(void)
 
 static __exit void veth_exit(void)
 {
+	struct veth_priv *p, *n;
+
+	rtnl_lock();
+
+	list_for_each_entry_safe(p, n, &veth_list, list)
+		veth_dellink(p->dev);
+
+	rtnl_unlock();
+
 	unregister_netdevice_notifier(&veth_notifier_block);
+	veth_destroy_sysfs();
 }
 
 module_init(veth_init);

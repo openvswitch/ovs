@@ -45,7 +45,8 @@ xflow_actions_add(struct xflow_actions *actions, uint16_t type)
 void
 format_xflow_key(struct ds *ds, const struct xflow_key *key)
 {
-    ds_put_format(ds, "in_port%04x", key->in_port);
+    ds_put_format(ds, "tunnel%"PRIx32":in_port%04x",
+                  key->tun_id, key->in_port);
     if (key->dl_tci) {
         ds_put_format(ds, ":vlan%"PRIu16":pcp%d",
                       vlan_tci_to_vid(key->dl_tci),
@@ -71,6 +72,9 @@ format_xflow_action(struct ds *ds, const union xflow_action *a)
         break;
     case XFLOWAT_CONTROLLER:
         ds_put_format(ds, "ctl(%"PRIu32")", a->controller.arg);
+        break;
+    case XFLOWAT_SET_TUNNEL:
+        ds_put_format(ds, "set_tunnel(0x%08"PRIx32")", ntohl(a->tunnel.tun_id));
         break;
     case XFLOWAT_SET_DL_TCI:
         ds_put_format(ds, "set_tci(%04"PRIx16",mask=%04"PRIx16")",
@@ -105,7 +109,7 @@ format_xflow_action(struct ds *ds, const union xflow_action *a)
         ds_put_format(ds, "set_tp_dst(%"PRIu16")", ntohs(a->tp_port.tp_port));
         break;
     default:
-        ds_put_format(ds, "***bad action %"PRIu16"***", a->type);
+        ds_put_format(ds, "***bad action 0x%"PRIx16"***", a->type);
         break;
     }
 }
@@ -153,9 +157,10 @@ format_xflow_flow(struct ds *ds, const struct xflow_flow *f)
 void
 xflow_key_from_flow(struct xflow_key *key, const struct flow *flow)
 {
+    key->tun_id = flow->tun_id;
     key->nw_src = flow->nw_src;
-    key->nw_dst = ofp_port_to_xflow_port(flow->nw_dst);
-    key->in_port = flow->in_port;
+    key->nw_dst = flow->nw_dst;
+    key->in_port = ofp_port_to_xflow_port(flow->in_port);
     if (flow->dl_vlan == htons(OFP_VLAN_NONE)) {
         key->dl_tci = htons(0);
     } else {
@@ -178,6 +183,7 @@ xflow_key_to_flow(const struct xflow_key *key, struct flow *flow)
 {
     flow->wildcards = 0;
     flow->priority = 0xffff;
+    flow->tun_id = key->tun_id;
     flow->nw_src = key->nw_src;
     flow->nw_dst = key->nw_dst;
     flow->in_port = xflow_port_to_ofp_port(key->in_port);

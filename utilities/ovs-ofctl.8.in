@@ -143,8 +143,32 @@ omitted and the \fB--strict\fR option is not used, all flows in the
 switch's tables are removed.  See \fBFlow Syntax\fR, below, for the 
 syntax of \fIflows\fR.
 .
-.TP
-\fBmonitor \fIswitch\fR [\fImiss-len\fR]
+.IP "\fBsnoop \fIswitch\fR"
+Connects to \fIswitch\fR and prints to the console all OpenFlow
+messages received.  Unlike other \fBovs\-ofctl\fR commands, if
+\fIswitch\fR is the name of a bridge, then the \fBsnoop\fR command
+connects to a Unix domain socket named
+\fB@RUNDIR@/\fIbridge\fB.snoop\fR.  \fBovs\-vswitchd\fR listens on
+such a socket for each bridge and sends to it all of the OpenFlow
+messages sent to or received from its configured OpenFlow controller.
+Thus, this command can be used to view OpenFlow protocol activity
+between a switch and its controller.
+.IP
+When a switch has more than one controller configured, only the
+traffic to and from a single controller is output.  If none of the
+controllers is configured as a master or a slave (using a Nicira
+extension to OpenFlow), then a controller is chosen arbitrarily among
+them.  If there is a master controller, it is chosen; otherwise, if
+there are any controllers that are not masters or slaves, one is
+chosen arbitrarily; otherwise, a slave controller is chosen
+arbitrarily.  This choice is made once at connection time and does not
+change as controllers reconfigure their roles.
+.IP
+If a switch has no controller configured, or if
+the configured controller is disconnected, no traffic is sent, so
+monitoring will not show any traffic.
+.
+.IQ "\fBmonitor \fIswitch\fR [\fImiss-len\fR]"
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Usually, \fIswitch\fR should specify a connection
 named on \fBovs\-openflowd\fR(8)'s \fB-l\fR or \fB--listen\fR command line
@@ -152,10 +176,11 @@ option.
 .IP
 If \fImiss-len\fR is provided, \fBovs\-ofctl\fR sends an OpenFlow ``set
 configuration'' message at connection setup time that requests
-\fImiss-len\fR bytes of each packet that misses the flow table.  The
-OpenFlow reference implementation does not send these messages to the
+\fImiss-len\fR bytes of each packet that misses the flow table.  Open vSwitch
+does not send these and other asynchronous messages to an
 \fBovs\-ofctl monitor\fR client connection unless a nonzero value is
-specified on this argument.
+specified on this argument.  (Thus, if \fImiss\-len\fR is not
+specified, very little traffic will ordinarily be printed.)
 .IP
 This command may be useful for debugging switch or controller
 implementations.
@@ -311,7 +336,8 @@ Same as \fBdl_type=0x0800,nw_proto=17\fR.
 Same as \fBdl_type=0x0806\fR.
 .
 .PP
-The \fBadd-flow\fR and \fBadd-flows\fR commands require an additional field:
+The \fBadd-flow\fR and \fBadd-flows\fR commands require an additional
+field, which must be the final field specified:
 .
 .IP \fBactions=\fR[\fItarget\fR][\fB,\fItarget\fR...]\fR
 Specifies a comma-separated list of actions to take on a packet when the 
@@ -392,10 +418,37 @@ Sets the IP ToS/DSCP field to \fItos\fR.  Valid values are between 0 and
 modified.
 .
 .RE
+.IP
+The following actions are Nicira vendor extensions that, as of this writing, are
+only known to be implemented by Open vSwitch:
+.
+.RS
+.
+.IP \fBresubmit\fB:\fIport\fR
+Re-searches the OpenFlow flow table with the \fBin_port\fR field
+replaced by \fIport\fR and executes the actions found, if any, in
+addition to any other actions in this flow entry.  Recursive
+\fBresubmit\fR actions are ignored.
+.
+.IP \fBset_tunnel\fB:\fIid\fR
+If outputting to a port that encapsulates the packet in a tunnel and supports
+an identifier (such as GRE), sets the identifier to \fBid\fR.
+.
+.RE
 .
 .IP
 (The OpenFlow protocol supports other actions that \fBovs\-ofctl\fR does
 not yet expose to the user.)
+.
+.PP
+The \fBadd\-flow\fR, \fBadd\-flows\fR, and \fBmod\-flows\fR commands
+support an additional optional field:
+.
+.IP \fBcookie=\fIvalue\fR
+.
+A cookie is an opaque identifier that can be associated with the flow.
+\fIvalue\fR can be any 64-bit number and need not be unique among
+flows.
 .
 .PP
 The \fBadd-flow\fR, \fBadd-flows\fR, and \fBdel-flows\fR commands

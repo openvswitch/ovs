@@ -52,6 +52,7 @@ void netdev_dev_init(struct netdev_dev *, const char *name,
                      const struct netdev_class *);
 void netdev_dev_uninit(struct netdev_dev *, bool destroy);
 const char *netdev_dev_get_type(const struct netdev_dev *);
+const struct netdev_class *netdev_dev_get_class(const struct netdev_dev *);
 const char *netdev_dev_get_name(const struct netdev_dev *);
 struct netdev_dev *netdev_dev_from_name(const char *name);
 void netdev_dev_get_devices(const struct netdev_class *,
@@ -253,7 +254,10 @@ struct netdev_class {
      * specified by POSIX for if_nametoindex() and by SNMP for ifIndex.  An
      * ifindex value should be unique within a host and remain stable at least
      * until reboot.  SNMP says an ifindex "ranges between 1 and the value of
-     * ifNumber" but many systems do not follow this rule anyhow. */
+     * ifNumber" but many systems do not follow this rule anyhow.
+     *
+     * This function may be set to null if it would always return -EOPNOTSUPP.
+     */
     int (*get_ifindex)(const struct netdev *netdev);
 
     /* Sets 'carrier' to true if carrier is active (link light is on) on
@@ -267,9 +271,20 @@ struct netdev_class {
      * (UINT64_MAX). */
     int (*get_stats)(const struct netdev *netdev, struct netdev_stats *);
 
+    /* Sets the device stats for 'netdev' to 'stats'.
+     *
+     * Most network devices won't support this feature and will set this
+     * function pointer to NULL, which is equivalent to returning EOPNOTSUPP.
+     *
+     * Some network devices might only allow setting their stats to 0. */
+    int (*set_stats)(struct netdev *netdev, const struct netdev_stats *);
+
     /* Stores the features supported by 'netdev' into each of '*current',
      * '*advertised', '*supported', and '*peer'.  Each value is a bitmap of
-     * "enum ofp_port_features" bits, in host byte order. */
+     * "enum ofp_port_features" bits, in host byte order.
+     *
+     * This function may be set to null if it would always return EOPNOTSUPP.
+     */
     int (*get_features)(struct netdev *netdev,
                         uint32_t *current, uint32_t *advertised,
                         uint32_t *supported, uint32_t *peer);
@@ -387,6 +402,7 @@ struct netdev_class {
 extern const struct netdev_class netdev_linux_class;
 extern const struct netdev_class netdev_tap_class;
 extern const struct netdev_class netdev_gre_class;
+extern const struct netdev_class netdev_patch_class;
 
 #ifdef  __cplusplus
 }

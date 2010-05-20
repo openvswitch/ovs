@@ -39,7 +39,7 @@ void ds_clear(struct ds *);
 void ds_truncate(struct ds *, size_t new_length);
 void ds_reserve(struct ds *, size_t min_length);
 char *ds_put_uninit(struct ds *, size_t n);
-void ds_put_char(struct ds *, char);
+static inline void ds_put_char(struct ds *, char);
 void ds_put_utf8(struct ds *, int uc);
 void ds_put_char_multiple(struct ds *, char, size_t n);
 void ds_put_buffer(struct ds *, const char *, size_t n);
@@ -63,5 +63,20 @@ void ds_swap(struct ds *, struct ds *);
 
 int ds_last(const struct ds *);
 void ds_chomp(struct ds *, int c);
+
+/* Inline functions. */
+
+void ds_put_char__(struct ds *, char);
+
+static inline void
+ds_put_char(struct ds *ds, char c)
+{
+    if (ds->length < ds->allocated) {
+        ds->string[ds->length++] = c;
+        ds->string[ds->length] = '\0';
+    } else {
+        ds_put_char__(ds, c);
+    }
+}
 
 #endif /* dynamic-string.h */

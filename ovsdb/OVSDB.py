@@ -193,6 +193,17 @@ class Atom:
         elif self.type == 'uuid':
             return self.value.value
 
+# Returns integer x formatted in decimal with thousands set off by commas.
+def commafy(x):
+    return _commafy("%d" % x)
+def _commafy(s):
+    if s.startswith('-'):
+        return '-' + _commafy(s[1:])
+    elif len(s) <= 3:
+        return s
+    else:
+        return _commafy(s[:-3]) + ',' + _commafy(s[-3:])
+
 class BaseType:
     def __init__(self, type,
                  enum=None,
@@ -253,13 +264,14 @@ class BaseType:
                                                  ', '.join(literals[1:-1]),
                                                  literals[-1])
         elif self.minInteger != None and self.maxInteger != None:
-            return 'in range [%d,%d]' % (self.minInteger, self.maxInteger)
+            return 'in range %s to %s' % (commafy(self.minInteger),
+                                         commafy(self.maxInteger))
         elif self.minInteger != None:
-            return 'at least %d' % self.minInteger
+            return 'at least %s' % commafy(self.minInteger)
         elif self.maxInteger != None:
-            return 'at most %d' % self.maxInteger
+            return 'at most %s' % commafy(self.maxInteger)
         elif self.minReal != None and self.maxReal != None:
-            return 'in range [%g, %g]' % (self.minReal, self.maxReal)
+            return 'in range %g to %g' % (self.minReal, self.maxReal)
         elif self.minReal != None:
             return 'at least %g' % self.minReal
         elif self.maxReal != None:

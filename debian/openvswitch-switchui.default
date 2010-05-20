@@ -13,7 +13,7 @@
 # The ovs-openflowd must be configured to listen to this vconn.  The default
 # here set is also listened to by default by the openvswitch-switch
 # package, so ordinarily there is no need to modify this.
-SWITCH_VCONN="unix:/var/run/ovs-openflowd.mgmt"
+SWITCH_VCONN="unix:/var/run/openvswitch/ovs-openflowd.mgmt"
 
 # EZIO3_DEVICE: To display the switch monitor on an EZIO3 (aka
 # MTB-134) 16x2 LCD displays found on server appliances made by

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * This file is offered under your choice of two licenses: Apache 2.0 or GNU
  * GPL 2.0 or later.  The permission statements for each of these licenses is
@@ -40,36 +40,24 @@
 #ifndef OPENVSWITCH_GRE_H
 #define OPENVSWITCH_GRE_H 1
 
-#include <linux/if_tunnel.h>
-#include <linux/version.h>
+#include <linux/types.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
-#define GRE_IOCTL_ONLY
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
-enum
-{
-	IFLA_GRE_UNSPEC,
-	IFLA_GRE_LINK,
-	IFLA_GRE_IFLAGS,
-	IFLA_GRE_OFLAGS,
-	IFLA_GRE_IKEY,
-	IFLA_GRE_OKEY,
-	IFLA_GRE_LOCAL,
-	IFLA_GRE_REMOTE,
-	IFLA_GRE_TTL,
-	IFLA_GRE_TOS,
-	IFLA_GRE_PMTUDISC,
-	__IFLA_GRE_MAX,
+#define GRE_F_IN_CSUM		(1 << 0) /* Require incoming packets to have checksums. */
+#define GRE_F_OUT_CSUM		(1 << 1) /* Checksum outgoing packets. */
+#define GRE_F_IN_KEY_MATCH	(1 << 2) /* Store the key in tun_id to match in flow table. */
+#define GRE_F_OUT_KEY_ACTION	(1 << 3) /* Get the key from a SET_TUNNEL action. */
+#define GRE_F_TOS_INHERIT	(1 << 4) /* Inherit the ToS from the inner packet. */
+#define GRE_F_TTL_INHERIT	(1 << 5) /* Inherit the TTL from the inner packet. */
+#define GRE_F_PMTUD		(1 << 6) /* Enable path MTU discovery. */
+
+struct gre_port_config {
+	__u32	flags;
+	__be32	saddr;
+	__be32	daddr;
+	__be32	in_key;
+	__be32	out_key;
+	__u8	tos;
+	__u8	ttl;
 };
-
-#define IFLA_GRE_MAX	(__IFLA_GRE_MAX - 1)
-#endif
-
-#define GRE_IOCTL_DEVICE "gre0"
-
-#define SIOCGETGRETAP	SIOCGETTUNNEL
-#define SIOCADDGRETAP	(SIOCDEVPRIVATE + 10)
-#define SIOCDELGRETAP	SIOCDELTUNNEL
-#define SIOCCHGGRETAP	(SIOCDEVPRIVATE + 11)
 
 #endif /* openvswitch/gre.h */

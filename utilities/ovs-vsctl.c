@@ -36,6 +36,7 @@
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "process.h"
+#include "stream-ssl.h"
 #include "svec.h"
 #include "vswitchd/vswitch-idl.h"
 #include "timeval.h"
@@ -108,6 +109,11 @@ static void do_vsctl(const char *args,
                      struct vsctl_command *, size_t n_commands,
                      struct ovsdb_idl *);
 
+static const struct vsctl_table_class *get_table(const char *table_name);
+static void set_column(const struct vsctl_table_class *,
+                       const struct ovsdb_idl_row *, const char *arg);
+
+
 int
 main(int argc, char *argv[])
 {
@@ -169,6 +175,7 @@ parse_options(int argc, char *argv[])
         OPT_NO_SYSLOG,
         OPT_NO_WAIT,
         OPT_DRY_RUN,
+        OPT_PEER_CA_CERT,
         VLOG_OPTION_ENUMS
     };
     static struct option long_options[] = {
@@ -181,6 +188,10 @@ parse_options(int argc, char *argv[])
         {"help", no_argument, 0, 'h'},
         {"version", no_argument, 0, 'V'},
         VLOG_LONG_OPTIONS,
+#ifdef HAVE_OPENSSL
+        STREAM_SSL_LONG_OPTIONS
+        {"peer-ca-cert", required_argument, 0, OPT_PEER_CA_CERT},
+#endif
         {0, 0, 0, 0},
     };
 
@@ -230,6 +241,14 @@ parse_options(int argc, char *argv[])
             break;
 
         VLOG_OPTION_HANDLERS
+
+#ifdef HAVE_OPENSSL
+        STREAM_SSL_OPTION_HANDLERS
+
+        case OPT_PEER_CA_CERT:
+            stream_ssl_set_peer_ca_cert_file(optarg);
+            break;
+#endif
 
         case '?':
             exit(EXIT_FAILURE);
@@ -420,6 +439,9 @@ SSL commands:\n\
   del-ssl                     delete the SSL configuration\n\
   set-ssl PRIV-KEY CERT CA-CERT  set the SSL configuration\n\
 \n\
+Switch commands:\n\
+  emer-reset                  reset switch to known good state\n\
+\n\
 Database commands:\n\
   list TBL [REC]              list RECord (or all records) in TBL\n\
   get TBL REC COL[:KEY]       print values of COLumns in RECORD in TBL\n\
@@ -470,7 +492,8 @@ struct vsctl_context {
 struct vsctl_bridge {
     struct ovsrec_bridge *br_cfg;
     char *name;
-    struct ovsrec_controller *ctrl;
+    struct ovsrec_controller **ctrl;
+    size_t n_ctrl;
     struct vsctl_bridge *parent;
     int vlan;
 };
@@ -489,7 +512,8 @@ struct vsctl_info {
     struct shash bridges;
     struct shash ports;
     struct shash ifaces;
-    struct ovsrec_controller *ctrl;
+    struct ovsrec_controller **ctrl;
+    size_t n_ctrl;
 };
 
 static char *
@@ -526,7 +550,13 @@ add_bridge(struct vsctl_info *b,
     br->name = xstrdup(name);
     br->parent = parent;
     br->vlan = vlan;
-    br->ctrl = parent ? parent->br_cfg->controller : br_cfg->controller;
+    if (parent) {
+        br->ctrl = parent->br_cfg->controller;
+        br->n_ctrl = parent->br_cfg->n_controller;
+    } else {
+        br->ctrl = br_cfg->controller;
+        br->n_ctrl = br_cfg->n_controller;
+    }
     shash_add(&b->bridges, br->name, br);
     return br;
 }
@@ -591,6 +621,7 @@ get_info(const struct ovsrec_open_vswitch *ovs, struct vsctl_info *info)
     shash_init(&info->ifaces);
 
     info->ctrl = ovs->controller;
+    info->n_ctrl = ovs->n_controller;
 
     shash_init(&bridges);
     shash_init(&ports);
@@ -826,6 +857,84 @@ ovs_delete_bridge(const struct ovsrec_open_vswitch *ovs,
 static void
 cmd_init(struct vsctl_context *ctx OVS_UNUSED)
 {
+}
+
+static void
+cmd_emer_reset(struct vsctl_context *ctx)
+{
+    const struct ovsdb_idl *idl = ctx->idl;
+    const struct ovsrec_bridge *br;
+    const struct ovsrec_port *port;
+    const struct ovsrec_interface *iface;
+    const struct ovsrec_mirror *mirror, *next_mirror;
+    const struct ovsrec_controller *ctrl, *next_ctrl;
+    const struct ovsrec_netflow *nf, *next_nf;
+    const struct ovsrec_ssl *ssl, *next_ssl;
+    const struct ovsrec_sflow *sflow, *next_sflow;
+
+
+    /* Reset the Open_vSwitch table. */
+    ovsrec_open_vswitch_set_managers(ctx->ovs, NULL, 0);
+    ovsrec_open_vswitch_set_controller(ctx->ovs, NULL, 0);
+    ovsrec_open_vswitch_set_ssl(ctx->ovs, NULL);
+
+    OVSREC_BRIDGE_FOR_EACH (br, idl) {
+        int i;
+        char *hw_key = "hwaddr";
+        char *hw_val = NULL;
+
+        ovsrec_bridge_set_controller(br, NULL, 0);
+        ovsrec_bridge_set_mirrors(br, NULL, 0);
+        ovsrec_bridge_set_netflow(br, NULL);
+        ovsrec_bridge_set_sflow(br, NULL);
+        ovsrec_bridge_set_flood_vlans(br, NULL, 0);
+
+        /* We only want to save the "hwaddr" key from other_config. */
+        for (i=0; i < br->n_other_config; i++) {
+            if (!strcmp(br->key_other_config[i], hw_key)) {
+                hw_val = br->value_other_config[i];
+                break;
+            }
+        }
+        if (hw_val) {
+            char *val = xstrdup(hw_val);
+            ovsrec_bridge_set_other_config(br, &hw_key, &val, 1);
+            free(val);
+        } else {
+            ovsrec_bridge_set_other_config(br, NULL, NULL, 0);
+        }
+    }
+
+    OVSREC_PORT_FOR_EACH (port, idl) {
+        ovsrec_port_set_other_config(port, NULL, NULL, 0);
+    }
+
+    OVSREC_INTERFACE_FOR_EACH (iface, idl) {
+        /* xxx What do we do about gre/patch devices created by mgr? */
+
+        ovsrec_interface_set_ingress_policing_rate(iface, 0);
+        ovsrec_interface_set_ingress_policing_burst(iface, 0);
+    }
+
+    OVSREC_MIRROR_FOR_EACH_SAFE (mirror, next_mirror, idl) {
+        ovsrec_mirror_delete(mirror);
+    }
+
+    OVSREC_CONTROLLER_FOR_EACH_SAFE (ctrl, next_ctrl, idl) {
+        ovsrec_controller_delete(ctrl);
+    }
+
+    OVSREC_NETFLOW_FOR_EACH_SAFE (nf, next_nf, idl) {
+        ovsrec_netflow_delete(nf);
+    }
+
+    OVSREC_SSL_FOR_EACH_SAFE (ssl, next_ssl, idl) {
+        ovsrec_ssl_delete(ssl);
+    }
+
+    OVSREC_SFLOW_FOR_EACH_SAFE (sflow, next_sflow, idl) {
+        ovsrec_sflow_delete(sflow);
+    }
 }
 
 static void
@@ -1173,7 +1282,8 @@ static void
 add_port(struct vsctl_context *ctx,
          const char *br_name, const char *port_name,
          bool may_exist, bool fake_iface,
-         char *iface_names[], int n_ifaces)
+         char *iface_names[], int n_ifaces,
+         char *settings[], int n_settings)
 {
     struct vsctl_info info;
     struct vsctl_bridge *bridge;
@@ -1248,6 +1358,10 @@ add_port(struct vsctl_context *ctx,
         ovsrec_port_set_tag(port, &tag, 1);
     }
 
+    for (i = 0; i < n_settings; i++) {
+        set_column(get_table("Port"), &port->header_, settings[i]);
+    }
+
     bridge_insert_port((bridge->parent ? bridge->parent->br_cfg
                         : bridge->br_cfg), port);
 
@@ -1260,7 +1374,7 @@ cmd_add_port(struct vsctl_context *ctx)
     bool may_exist = shash_find(&ctx->options, "--may-exist") != 0;
 
     add_port(ctx, ctx->argv[1], ctx->argv[2], may_exist, false,
-             &ctx->argv[2], 1);
+             &ctx->argv[2], 1, &ctx->argv[3], ctx->argc - 3);
 }
 
 static void
@@ -1268,9 +1382,24 @@ cmd_add_bond(struct vsctl_context *ctx)
 {
     bool may_exist = shash_find(&ctx->options, "--may-exist") != 0;
     bool fake_iface = shash_find(&ctx->options, "--fake-iface");
+    int n_ifaces;
+    int i;
+
+    n_ifaces = ctx->argc - 3;
+    for (i = 3; i < ctx->argc; i++) {
+        if (strchr(ctx->argv[i], '=')) {
+            n_ifaces = i - 3;
+            break;
+        }
+    }
+    if (n_ifaces < 2) {
+        vsctl_fatal("add-bond requires at least 2 interfaces, but only "
+                    "%d were specified", n_ifaces);
+    }
 
     add_port(ctx, ctx->argv[1], ctx->argv[2], may_exist, fake_iface,
-             &ctx->argv[3], ctx->argc - 3);
+             &ctx->argv[3], n_ifaces,
+             &ctx->argv[n_ifaces + 3], ctx->argc - 3 - n_ifaces);
 }
 
 static void
@@ -1401,6 +1530,29 @@ cmd_iface_to_br(struct vsctl_context *ctx)
     free_info(&info);
 }
 
+/* Print targets of the 'n_controllers' in 'controllers' on the output for
+ * 'ctx'. */
+static void
+print_controllers(struct vsctl_context *ctx,
+                  struct ovsrec_controller **controllers,
+                  size_t n_controllers)
+{
+    /* Print the targets in sorted order for reproducibility. */
+    struct svec targets;
+    size_t i;
+
+    svec_init(&targets);
+    for (i = 0; i < n_controllers; i++) {
+        svec_add(&targets, controllers[i]->target);
+    }
+
+    svec_sort(&targets);
+    for (i = 0; i < targets.n; i++) {
+        ds_put_format(&ctx->output, "%s\n", targets.names[i]);
+    }
+    svec_destroy(&targets);
+}
+
 static void
 cmd_get_controller(struct vsctl_context *ctx)
 {
@@ -1408,25 +1560,29 @@ cmd_get_controller(struct vsctl_context *ctx)
 
     get_info(ctx->ovs, &info);
 
-    if (ctx->argc == 1) {
-        /* Return the controller from the "Open_vSwitch" table */
-        if (info.ctrl) {
-            ds_put_format(&ctx->output, "%s\n", info.ctrl->target);
-        }
+    if (ctx->argc == 1 || !strcmp(ctx->argv[1], "default")) {
+        print_controllers(ctx, info.ctrl, info.n_ctrl);
     } else {
-        /* Return the controller for a particular bridge. */
         struct vsctl_bridge *br = find_bridge(&info, ctx->argv[1], true);
-
-        /* If no controller is explicitly defined for the requested
-         * bridge, fallback to the "Open_vSwitch" table's controller. */
-        if (br->ctrl) {
-            ds_put_format(&ctx->output, "%s\n", br->ctrl->target);
-        } else if (info.ctrl) {
-            ds_put_format(&ctx->output, "%s\n", info.ctrl->target);
+        if (br->n_ctrl) {
+            print_controllers(ctx, br->ctrl, br->n_ctrl);
+        } else {
+            print_controllers(ctx, info.ctrl, info.n_ctrl);
         }
     }
 
     free_info(&info);
+}
+
+static void
+delete_controllers(struct ovsrec_controller **controllers,
+                   size_t n_controllers)
+{
+    size_t i;
+
+    for (i = 0; i < n_controllers; i++) {
+        ovsrec_controller_delete(controllers[i]);
+    }
 }
 
 static void
@@ -1436,52 +1592,98 @@ cmd_del_controller(struct vsctl_context *ctx)
 
     get_info(ctx->ovs, &info);
 
-    if (ctx->argc == 1) {
-        if (info.ctrl) {
-            ovsrec_controller_delete(info.ctrl);
-            ovsrec_open_vswitch_set_controller(ctx->ovs, NULL);
+    if (ctx->argc == 1 || !strcmp(ctx->argv[1], "default")) {
+        if (info.n_ctrl) {
+            delete_controllers(info.ctrl, info.n_ctrl);
+            ovsrec_open_vswitch_set_controller(ctx->ovs, NULL, 0);
         }
     } else {
         struct vsctl_bridge *br = find_real_bridge(&info, ctx->argv[1], true);
-
         if (br->ctrl) {
-            ovsrec_controller_delete(br->ctrl);
-            ovsrec_bridge_set_controller(br->br_cfg, NULL);
+            delete_controllers(br->ctrl, br->n_ctrl);
+            ovsrec_bridge_set_controller(br->br_cfg, NULL, 0);
         }
     }
 
     free_info(&info);
 }
 
+static struct ovsrec_controller **
+insert_controllers(struct ovsdb_idl_txn *txn, char *targets[], size_t n)
+{
+    struct ovsrec_controller **controllers;
+    size_t i;
+
+    controllers = xmalloc(n * sizeof *controllers);
+    for (i = 0; i < n; i++) {
+        controllers[i] = ovsrec_controller_insert(txn);
+        ovsrec_controller_set_target(controllers[i], targets[i]);
+    }
+
+    return controllers;
+}
+
+static void
+set_default_controllers(struct vsctl_context *ctx, char *targets[], size_t n)
+{
+    struct ovsrec_controller **controllers;
+
+    delete_controllers(ctx->ovs->controller, ctx->ovs->n_controller);
+
+    controllers = insert_controllers(ctx->txn, targets, n);
+    ovsrec_open_vswitch_set_controller(ctx->ovs, controllers, n);
+    free(controllers);
+}
+
 static void
 cmd_set_controller(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
-    struct ovsrec_controller *ctrl;
 
     get_info(ctx->ovs, &info);
 
     if (ctx->argc == 2) {
-        /* Set the controller in the "Open_vSwitch" table. */
-        if (info.ctrl) {
-            ovsrec_controller_delete(info.ctrl);
-        }
-        ctrl = ovsrec_controller_insert(ctx->txn);
-        ovsrec_controller_set_target(ctrl, ctx->argv[1]);
-        ovsrec_open_vswitch_set_controller(ctx->ovs, ctrl);
+        /* Set one controller in the "Open_vSwitch" table. */
+        set_default_controllers(ctx, &ctx->argv[1], 1);
+    } else if (!strcmp(ctx->argv[1], "default")) {
+        /* Set one or more controllers in the "Open_vSwitch" table. */
+        set_default_controllers(ctx, &ctx->argv[2], ctx->argc - 2);
     } else {
-        /* Set the controller for a particular bridge. */
+        /* Set one or more controllers for a particular bridge. */
         struct vsctl_bridge *br = find_real_bridge(&info, ctx->argv[1], true);
+        struct ovsrec_controller **controllers;
+        size_t n;
 
-        if (br->ctrl) {
-            ovsrec_controller_delete(br->ctrl);
-        }
-        ctrl = ovsrec_controller_insert(ctx->txn);
-        ovsrec_controller_set_target(ctrl, ctx->argv[2]);
-        ovsrec_bridge_set_controller(br->br_cfg, ctrl);
+        delete_controllers(br->ctrl, br->n_ctrl);
+
+        n = ctx->argc - 2;
+        controllers = insert_controllers(ctx->txn, &ctx->argv[2], n);
+        ovsrec_bridge_set_controller(br->br_cfg, controllers, n);
+        free(controllers);
     }
 
     free_info(&info);
+}
+
+static const char *
+get_fail_mode(struct ovsrec_controller **controllers, size_t n_controllers)
+{
+    const char *fail_mode;
+    size_t i;
+
+    fail_mode = NULL;
+    for (i = 0; i < n_controllers; i++) {
+        const char *s = controllers[i]->fail_mode;
+        if (s) {
+            if (!strcmp(s, "secure")) {
+                return s;
+            } else {
+                fail_mode = s;
+            }
+        }
+    }
+
+    return fail_mode;
 }
 
 static void
@@ -1492,23 +1694,18 @@ cmd_get_fail_mode(struct vsctl_context *ctx)
 
     get_info(ctx->ovs, &info);
 
-    if (ctx->argc == 1) {
+    if (ctx->argc == 1 || !strcmp(ctx->argv[1], "default")) {
         /* Return the fail-mode from the "Open_vSwitch" table */
-        if (info.ctrl && info.ctrl->fail_mode) {
-            fail_mode = info.ctrl->fail_mode;
-        }
+        fail_mode = get_fail_mode(info.ctrl, info.n_ctrl);
     } else {
         /* Return the fail-mode for a particular bridge. */
         struct vsctl_bridge *br = find_bridge(&info, ctx->argv[1], true);
 
-        /* If no controller or fail-mode is explicitly defined for the 
-         * requested bridge, fallback to the "Open_vSwitch" table's 
-         * setting. */
-        if (br->ctrl && br->ctrl->fail_mode) {
-            fail_mode = br->ctrl->fail_mode;
-        } else if (info.ctrl && info.ctrl->fail_mode) {
-            fail_mode = info.ctrl->fail_mode;
-        }
+        /* If no controller is defined for the requested bridge, fallback to
+         * the "Open_vSwitch" table's controller. */
+        fail_mode = (br->n_ctrl
+                     ? get_fail_mode(br->ctrl, br->n_ctrl)
+                     : get_fail_mode(info.ctrl, info.n_ctrl));
     }
 
     if (fail_mode && strlen(fail_mode)) {
@@ -1519,22 +1716,29 @@ cmd_get_fail_mode(struct vsctl_context *ctx)
 }
 
 static void
+set_fail_mode(struct ovsrec_controller **controllers, size_t n_controllers,
+              const char *fail_mode)
+{
+    size_t i;
+
+    for (i = 0; i < n_controllers; i++) {
+        ovsrec_controller_set_fail_mode(controllers[i], fail_mode);
+    }
+}
+
+static void
 cmd_del_fail_mode(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
 
     get_info(ctx->ovs, &info);
 
-    if (ctx->argc == 1) {
-        if (info.ctrl && info.ctrl->fail_mode) {
-            ovsrec_controller_set_fail_mode(info.ctrl, NULL);
-        }
+    if (ctx->argc == 1 || !strcmp(ctx->argv[1], "default")) {
+        set_fail_mode(info.ctrl, info.n_ctrl, NULL);
     } else {
         struct vsctl_bridge *br = find_real_bridge(&info, ctx->argv[1], true);
 
-        if (br->ctrl && br->ctrl->fail_mode) {
-            ovsrec_controller_set_fail_mode(br->ctrl, NULL);
-        }
+        set_fail_mode(br->ctrl, br->n_ctrl, NULL);
     }
 
     free_info(&info);
@@ -1544,29 +1748,36 @@ static void
 cmd_set_fail_mode(struct vsctl_context *ctx)
 {
     struct vsctl_info info;
+    const char *bridge;
     const char *fail_mode;
 
     get_info(ctx->ovs, &info);
 
-    fail_mode = (ctx->argc == 2) ? ctx->argv[1] : ctx->argv[2];
+    if (ctx->argc == 2) {
+        bridge = "default";
+        fail_mode = ctx->argv[1];
+    } else {
+        bridge = ctx->argv[1];
+        fail_mode = ctx->argv[2];
+    }
 
     if (strcmp(fail_mode, "standalone") && strcmp(fail_mode, "secure")) {
         vsctl_fatal("fail-mode must be \"standalone\" or \"secure\"");
     }
 
-    if (ctx->argc == 2) {
+    if (!strcmp(bridge, "default")) {
         /* Set the fail-mode in the "Open_vSwitch" table. */
         if (!info.ctrl) {
             vsctl_fatal("no controller declared");
         }
-        ovsrec_controller_set_fail_mode(info.ctrl, fail_mode);
+        set_fail_mode(info.ctrl, info.n_ctrl, fail_mode);
     } else {
-        struct vsctl_bridge *br = find_real_bridge(&info, ctx->argv[1], true);
+        struct vsctl_bridge *br = find_real_bridge(&info, bridge, true);
 
         if (!br->ctrl) {
             vsctl_fatal("no controller declared for %s", br->name);
         }
-        ovsrec_controller_set_fail_mode(br->ctrl, fail_mode);
+        set_fail_mode(br->ctrl, br->n_ctrl, fail_mode);
     }
 
     free_info(&info);
@@ -1667,6 +1878,12 @@ static const struct vsctl_table_class tables[] = {
 
     {&ovsrec_table_ssl,
      {{&ovsrec_table_open_vswitch, NULL, &ovsrec_open_vswitch_col_ssl}}},
+
+    {&ovsrec_table_sflow,
+     {{&ovsrec_table_bridge,
+       &ovsrec_bridge_col_name,
+       &ovsrec_bridge_col_sflow},
+      {NULL, NULL, NULL}}},
 
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
 };
@@ -2493,7 +2710,7 @@ static const struct vsctl_command_syntax all_commands[] = {
 
     /* Port commands. */
     {"list-ports", 1, 1, cmd_list_ports, NULL, ""},
-    {"add-port", 2, 2, cmd_add_port, NULL, "--may-exist"},
+    {"add-port", 2, INT_MAX, cmd_add_port, NULL, "--may-exist"},
     {"add-bond", 4, INT_MAX, cmd_add_bond, NULL, "--may-exist,--fake-iface"},
     {"del-port", 1, 2, cmd_del_port, NULL, "--if-exists,--with-iface"},
     {"port-to-br", 1, 1, cmd_port_to_br, NULL, ""},
@@ -2505,7 +2722,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     /* Controller commands. */
     {"get-controller", 0, 1, cmd_get_controller, NULL, ""},
     {"del-controller", 0, 1, cmd_del_controller, NULL, ""},
-    {"set-controller", 1, 2, cmd_set_controller, NULL, ""},
+    {"set-controller", 1, INT_MAX, cmd_set_controller, NULL, ""},
     {"get-fail-mode", 0, 1, cmd_get_fail_mode, NULL, ""},
     {"del-fail-mode", 0, 1, cmd_del_fail_mode, NULL, ""},
     {"set-fail-mode", 1, 2, cmd_set_fail_mode, NULL, ""},
@@ -2514,6 +2731,9 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"get-ssl", 0, 0, cmd_get_ssl, NULL, ""},
     {"del-ssl", 0, 0, cmd_del_ssl, NULL, ""},
     {"set-ssl", 3, 3, cmd_set_ssl, NULL, "--bootstrap"},
+
+    /* Switch commands. */
+    {"emer-reset", 0, 0, cmd_emer_reset, NULL, ""},
 
     /* Parameter commands. */
     {"get", 3, INT_MAX, cmd_get, NULL, "--if-exists"},

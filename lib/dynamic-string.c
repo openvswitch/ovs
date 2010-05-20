@@ -66,7 +66,7 @@ ds_put_uninit(struct ds *ds, size_t n)
 }
 
 void
-ds_put_char(struct ds *ds, char c)
+ds_put_char__(struct ds *ds, char c)
 {
     *ds_put_uninit(ds, 1) = c;
 }

@@ -18,15 +18,17 @@
 #include <linux/if_bridge.h>
 #include <linux/rtnetlink.h>
 #include <linux/spinlock.h>
-#include "dp_sysfs.h"
+
 #include "datapath.h"
+#include "dp_sysfs.h"
+#include "vport.h"
 
 #ifdef CONFIG_SYSFS
 
 struct brport_attribute {
 	struct attribute	attr;
-	ssize_t (*show)(struct net_bridge_port *, char *);
-	ssize_t (*store)(struct net_bridge_port *, unsigned long);
+	ssize_t (*show)(struct dp_port *, char *);
+	ssize_t (*store)(struct dp_port *, unsigned long);
 };
 
 #define BRPORT_ATTR(_name,_mode,_show,_store)		        \
@@ -38,7 +40,7 @@ struct brport_attribute brport_attr_##_name = { 	        \
 	.store	= _store,					\
 };
 
-static ssize_t show_path_cost(struct net_bridge_port *p, char *buf)
+static ssize_t show_path_cost(struct dp_port *p, char *buf)
 {
 #if 0
 	return sprintf(buf, "%d\n", p->path_cost);
@@ -46,7 +48,7 @@ static ssize_t show_path_cost(struct net_bridge_port *p, char *buf)
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static ssize_t store_path_cost(struct net_bridge_port *p, unsigned long v)
+static ssize_t store_path_cost(struct dp_port *p, unsigned long v)
 {
 #if 0
 	br_stp_set_path_cost(p, v);
@@ -56,7 +58,7 @@ static ssize_t store_path_cost(struct net_bridge_port *p, unsigned long v)
 static BRPORT_ATTR(path_cost, S_IRUGO | S_IWUSR,
 		   show_path_cost, store_path_cost);
 
-static ssize_t show_priority(struct net_bridge_port *p, char *buf)
+static ssize_t show_priority(struct dp_port *p, char *buf)
 {
 #if 0
 	return sprintf(buf, "%d\n", p->priority);
@@ -64,7 +66,7 @@ static ssize_t show_priority(struct net_bridge_port *p, char *buf)
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static ssize_t store_priority(struct net_bridge_port *p, unsigned long v)
+static ssize_t store_priority(struct dp_port *p, unsigned long v)
 {
 #if 0
 	if (v >= (1<<(16-BR_PORT_BITS)))
@@ -76,7 +78,7 @@ static ssize_t store_priority(struct net_bridge_port *p, unsigned long v)
 static BRPORT_ATTR(priority, S_IRUGO | S_IWUSR,
 			 show_priority, store_priority);
 
-static ssize_t show_designated_root(struct net_bridge_port *p, char *buf)
+static ssize_t show_designated_root(struct dp_port *p, char *buf)
 {
 #if 0
 	return br_show_bridge_id(buf, &p->designated_root);
@@ -86,7 +88,7 @@ static ssize_t show_designated_root(struct net_bridge_port *p, char *buf)
 }
 static BRPORT_ATTR(designated_root, S_IRUGO, show_designated_root, NULL);
 
-static ssize_t show_designated_bridge(struct net_bridge_port *p, char *buf)
+static ssize_t show_designated_bridge(struct dp_port *p, char *buf)
 {
 #if 0
 	return br_show_bridge_id(buf, &p->designated_bridge);
@@ -96,7 +98,7 @@ static ssize_t show_designated_bridge(struct net_bridge_port *p, char *buf)
 }
 static BRPORT_ATTR(designated_bridge, S_IRUGO, show_designated_bridge, NULL);
 
-static ssize_t show_designated_port(struct net_bridge_port *p, char *buf)
+static ssize_t show_designated_port(struct dp_port *p, char *buf)
 {
 #if 0
 	return sprintf(buf, "%d\n", p->designated_port);
@@ -106,7 +108,7 @@ static ssize_t show_designated_port(struct net_bridge_port *p, char *buf)
 }
 static BRPORT_ATTR(designated_port, S_IRUGO, show_designated_port, NULL);
 
-static ssize_t show_designated_cost(struct net_bridge_port *p, char *buf)
+static ssize_t show_designated_cost(struct dp_port *p, char *buf)
 {
 #if 0
 	return sprintf(buf, "%d\n", p->designated_cost);
@@ -116,7 +118,7 @@ static ssize_t show_designated_cost(struct net_bridge_port *p, char *buf)
 }
 static BRPORT_ATTR(designated_cost, S_IRUGO, show_designated_cost, NULL);
 
-static ssize_t show_port_id(struct net_bridge_port *p, char *buf)
+static ssize_t show_port_id(struct dp_port *p, char *buf)
 {
 #if 0
 	return sprintf(buf, "0x%x\n", p->port_id);
@@ -126,14 +128,14 @@ static ssize_t show_port_id(struct net_bridge_port *p, char *buf)
 }
 static BRPORT_ATTR(port_id, S_IRUGO, show_port_id, NULL);
 
-static ssize_t show_port_no(struct net_bridge_port *p, char *buf)
+static ssize_t show_port_no(struct dp_port *p, char *buf)
 {
 	return sprintf(buf, "0x%x\n", p->port_no);
 }
 
 static BRPORT_ATTR(port_no, S_IRUGO, show_port_no, NULL);
 
-static ssize_t show_change_ack(struct net_bridge_port *p, char *buf)
+static ssize_t show_change_ack(struct dp_port *p, char *buf)
 {
 #if 0
 	return sprintf(buf, "%d\n", p->topology_change_ack);
@@ -143,7 +145,7 @@ static ssize_t show_change_ack(struct net_bridge_port *p, char *buf)
 }
 static BRPORT_ATTR(change_ack, S_IRUGO, show_change_ack, NULL);
 
-static ssize_t show_config_pending(struct net_bridge_port *p, char *buf)
+static ssize_t show_config_pending(struct dp_port *p, char *buf)
 {
 #if 0
 	return sprintf(buf, "%d\n", p->config_pending);
@@ -153,7 +155,7 @@ static ssize_t show_config_pending(struct net_bridge_port *p, char *buf)
 }
 static BRPORT_ATTR(config_pending, S_IRUGO, show_config_pending, NULL);
 
-static ssize_t show_port_state(struct net_bridge_port *p, char *buf)
+static ssize_t show_port_state(struct dp_port *p, char *buf)
 {
 #if 0
 	return sprintf(buf, "%d\n", p->state);
@@ -163,7 +165,7 @@ static ssize_t show_port_state(struct net_bridge_port *p, char *buf)
 }
 static BRPORT_ATTR(state, S_IRUGO, show_port_state, NULL);
 
-static ssize_t show_message_age_timer(struct net_bridge_port *p,
+static ssize_t show_message_age_timer(struct dp_port *p,
 					    char *buf)
 {
 #if 0
@@ -174,7 +176,7 @@ static ssize_t show_message_age_timer(struct net_bridge_port *p,
 }
 static BRPORT_ATTR(message_age_timer, S_IRUGO, show_message_age_timer, NULL);
 
-static ssize_t show_forward_delay_timer(struct net_bridge_port *p,
+static ssize_t show_forward_delay_timer(struct dp_port *p,
 					    char *buf)
 {
 #if 0
@@ -185,7 +187,7 @@ static ssize_t show_forward_delay_timer(struct net_bridge_port *p,
 }
 static BRPORT_ATTR(forward_delay_timer, S_IRUGO, show_forward_delay_timer, NULL);
 
-static ssize_t show_hold_timer(struct net_bridge_port *p,
+static ssize_t show_hold_timer(struct dp_port *p,
 					    char *buf)
 {
 #if 0
@@ -215,13 +217,13 @@ static struct brport_attribute *brport_attrs[] = {
 };
 
 #define to_brport_attr(_at) container_of(_at, struct brport_attribute, attr)
-#define to_brport(obj)	container_of(obj, struct net_bridge_port, kobj)
+#define to_brport(obj)	container_of(obj, struct dp_port, kobj)
 
 static ssize_t brport_show(struct kobject * kobj,
 			   struct attribute * attr, char * buf)
 {
 	struct brport_attribute * brport_attr = to_brport_attr(attr);
-	struct net_bridge_port * p = to_brport(kobj);
+	struct dp_port * p = to_brport(kobj);
 
 	return brport_attr->show(p, buf);
 }
@@ -230,7 +232,7 @@ static ssize_t brport_store(struct kobject * kobj,
 			    struct attribute * attr,
 			    const char * buf, size_t count)
 {
-	struct net_bridge_port * p = to_brport(kobj);
+	struct dp_port * p = to_brport(kobj);
 #if 0
 	struct brport_attribute * brport_attr = to_brport_attr(attr);
 	char *endp;
@@ -271,22 +273,24 @@ struct sysfs_ops brport_sysfs_ops = {
  * Creates a brport subdirectory with bridge attributes.
  * Puts symlink in bridge's brport subdirectory
  */
-int dp_sysfs_add_if(struct net_bridge_port *p)
+int dp_sysfs_add_if(struct dp_port *p)
 {
+	struct kobject *kobj = vport_get_kobj(p->vport);
 	struct datapath *dp = p->dp;
 	struct brport_attribute **a;
 	int err;
 
 	/* Create /sys/class/net/<devname>/brport directory. */
-	err = kobject_add(&p->kobj, &p->dev->NETDEV_DEV_MEMBER.kobj,
-			  SYSFS_BRIDGE_PORT_ATTR);
+	if (!kobj)
+		return -ENOENT;
+
+	err = kobject_add(&p->kobj, kobj, SYSFS_BRIDGE_PORT_ATTR);
 	if (err)
 		goto err;
 
 	/* Create symlink from /sys/class/net/<devname>/brport/bridge to
 	 * /sys/class/net/<bridgename>. */
-	err = sysfs_create_link(&p->kobj,
-				&dp->ports[XFLOWP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj,
+	err = sysfs_create_link(&p->kobj, vport_get_kobj(dp->ports[XFLOWP_LOCAL]->vport),
 				SYSFS_BRIDGE_PORT_LINK); /* "bridge" */
 	if (err)
 		goto err_del;
@@ -300,10 +304,10 @@ int dp_sysfs_add_if(struct net_bridge_port *p)
 
 	/* Create symlink from /sys/class/net/<bridgename>/brif/<devname> to
 	 * /sys/class/net/<devname>/brport.  */
-	err = sysfs_create_link(&dp->ifobj, &p->kobj, p->dev->name);
+	err = sysfs_create_link(&dp->ifobj, &p->kobj, vport_get_name(p->vport));
 	if (err)
 		goto err_del;
-	strcpy(p->linkname, p->dev->name);
+	strcpy(p->linkname, vport_get_name(p->vport));
 
 	kobject_uevent(&p->kobj, KOBJ_ADD);
 
@@ -316,7 +320,7 @@ err:
 	return err;
 }
 
-int dp_sysfs_del_if(struct net_bridge_port *p)
+int dp_sysfs_del_if(struct dp_port *p)
 {
 	if (p->linkname[0]) {
 		sysfs_remove_link(&p->dp->ifobj, p->linkname);

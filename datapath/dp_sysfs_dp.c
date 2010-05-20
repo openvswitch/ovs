@@ -26,23 +26,28 @@
 
 #include "dp_sysfs.h"
 #include "datapath.h"
-#include "dp_dev.h"
+#include "vport-internal_dev.h"
 
 #ifdef CONFIG_SYSFS
 #define to_dev(obj)	container_of(obj, struct device, kobj)
 
 /* Hack to attempt to build on more platforms. */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
-#define DP_DEVICE_ATTR CLASS_DEVICE_ATTR
+#define INTERNAL_DEVICE_ATTR CLASS_DEVICE_ATTR
 #define DEVICE_PARAMS struct class_device *d
 #define DEVICE_ARGS d
 #define DEV_ATTR(NAME) class_device_attr_##NAME
 #else
-#define DP_DEVICE_ATTR DEVICE_ATTR
+#define INTERNAL_DEVICE_ATTR DEVICE_ATTR
 #define DEVICE_PARAMS struct device *d, struct device_attribute *attr
 #define DEVICE_ARGS d, attr
 #define DEV_ATTR(NAME) dev_attr_##NAME
 #endif
+
+struct datapath *sysfs_get_dp(struct net_device *netdev)
+{
+	return vport_get_dp_port(internal_dev_get_vport(netdev))->dp;
+}
 
 /*
  * Common code for storing bridge parameters.
@@ -51,7 +56,7 @@ static ssize_t store_bridge_parm(DEVICE_PARAMS,
 				 const char *buf, size_t len,
 				 void (*set)(struct datapath *, unsigned long))
 {
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	char *endp;
 	unsigned long val;
 
@@ -83,7 +88,7 @@ static ssize_t store_bridge_parm(DEVICE_PARAMS,
 static ssize_t show_forward_delay(DEVICE_PARAMS, char *buf)
 {
 #if 0
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	return sprintf(buf, "%lu\n", jiffies_to_clock_t(br->forward_delay));
 #else
 	return sprintf(buf, "%d\n", 0);
@@ -107,7 +112,7 @@ static ssize_t store_forward_delay(DEVICE_PARAMS,
 {
 	return store_bridge_parm(DEVICE_ARGS, buf, len, set_forward_delay);
 }
-static DP_DEVICE_ATTR(forward_delay, S_IRUGO | S_IWUSR,
+static INTERNAL_DEVICE_ATTR(forward_delay, S_IRUGO | S_IWUSR,
 		   show_forward_delay, store_forward_delay);
 
 static ssize_t show_hello_time(DEVICE_PARAMS, char *buf)
@@ -138,7 +143,7 @@ static ssize_t store_hello_time(DEVICE_PARAMS,
 {
 	return store_bridge_parm(DEVICE_ARGS, buf, len, set_hello_time);
 }
-static DP_DEVICE_ATTR(hello_time, S_IRUGO | S_IWUSR, show_hello_time,
+static INTERNAL_DEVICE_ATTR(hello_time, S_IRUGO | S_IWUSR, show_hello_time,
 		   store_hello_time);
 
 static ssize_t show_max_age(DEVICE_PARAMS, char *buf)
@@ -168,12 +173,12 @@ static ssize_t store_max_age(DEVICE_PARAMS,
 {
 	return store_bridge_parm(DEVICE_ARGS, buf, len, set_max_age);
 }
-static DP_DEVICE_ATTR(max_age, S_IRUGO | S_IWUSR, show_max_age, store_max_age);
+static INTERNAL_DEVICE_ATTR(max_age, S_IRUGO | S_IWUSR, show_max_age, store_max_age);
 
 static ssize_t show_ageing_time(DEVICE_PARAMS, char *buf)
 {
 #if 0
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	return sprintf(buf, "%lu\n", jiffies_to_clock_t(br->ageing_time));
 #else
 	return sprintf(buf, "%d\n", 0);
@@ -194,13 +199,13 @@ static ssize_t store_ageing_time(DEVICE_PARAMS,
 {
 	return store_bridge_parm(DEVICE_ARGS, buf, len, set_ageing_time);
 }
-static DP_DEVICE_ATTR(ageing_time, S_IRUGO | S_IWUSR, show_ageing_time,
+static INTERNAL_DEVICE_ATTR(ageing_time, S_IRUGO | S_IWUSR, show_ageing_time,
 		   store_ageing_time);
 
 static ssize_t show_stp_state(DEVICE_PARAMS, char *buf)
 {
 #if 0
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	return sprintf(buf, "%d\n", br->stp_enabled);
 #else
 	return sprintf(buf, "%d\n", 0);
@@ -212,7 +217,7 @@ static ssize_t store_stp_state(DEVICE_PARAMS,
 			       const char *buf,
 			       size_t len)
 {
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 #if 0
 	char *endp;
 	unsigned long val;
@@ -233,13 +238,13 @@ static ssize_t store_stp_state(DEVICE_PARAMS,
 
 	return len;
 }
-static DP_DEVICE_ATTR(stp_state, S_IRUGO | S_IWUSR, show_stp_state,
+static INTERNAL_DEVICE_ATTR(stp_state, S_IRUGO | S_IWUSR, show_stp_state,
 		   store_stp_state);
 
 static ssize_t show_priority(DEVICE_PARAMS, char *buf)
 {
 #if 0
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	return sprintf(buf, "%d\n",
 		       (br->bridge_id.prio[0] << 8) | br->bridge_id.prio[1]);
 #else
@@ -261,7 +266,7 @@ static ssize_t store_priority(DEVICE_PARAMS,
 {
 	return store_bridge_parm(DEVICE_ARGS, buf, len, set_priority);
 }
-static DP_DEVICE_ATTR(priority, S_IRUGO | S_IWUSR, show_priority, store_priority);
+static INTERNAL_DEVICE_ATTR(priority, S_IRUGO | S_IWUSR, show_priority, store_priority);
 
 static ssize_t show_root_id(DEVICE_PARAMS, char *buf)
 {
@@ -271,18 +276,18 @@ static ssize_t show_root_id(DEVICE_PARAMS, char *buf)
 	return sprintf(buf, "0000.010203040506\n");
 #endif
 }
-static DP_DEVICE_ATTR(root_id, S_IRUGO, show_root_id, NULL);
+static INTERNAL_DEVICE_ATTR(root_id, S_IRUGO, show_root_id, NULL);
 
 static ssize_t show_bridge_id(DEVICE_PARAMS, char *buf)
 {
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
-	const unsigned char *addr = dp->ports[XFLOWP_LOCAL]->dev->dev_addr;
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
+	const unsigned char *addr = vport_get_addr(dp->ports[XFLOWP_LOCAL]->vport);
 
 	/* xxx Do we need a lock of some sort? */
 	return sprintf(buf, "%.2x%.2x.%.2x%.2x%.2x%.2x%.2x%.2x\n",
 			0, 0, addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
 }
-static DP_DEVICE_ATTR(bridge_id, S_IRUGO, show_bridge_id, NULL);
+static INTERNAL_DEVICE_ATTR(bridge_id, S_IRUGO, show_bridge_id, NULL);
 
 static ssize_t show_root_port(DEVICE_PARAMS, char *buf)
 {
@@ -292,7 +297,7 @@ static ssize_t show_root_port(DEVICE_PARAMS, char *buf)
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static DP_DEVICE_ATTR(root_port, S_IRUGO, show_root_port, NULL);
+static INTERNAL_DEVICE_ATTR(root_port, S_IRUGO, show_root_port, NULL);
 
 static ssize_t show_root_path_cost(DEVICE_PARAMS, char *buf)
 {
@@ -302,7 +307,7 @@ static ssize_t show_root_path_cost(DEVICE_PARAMS, char *buf)
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static DP_DEVICE_ATTR(root_path_cost, S_IRUGO, show_root_path_cost, NULL);
+static INTERNAL_DEVICE_ATTR(root_path_cost, S_IRUGO, show_root_path_cost, NULL);
 
 static ssize_t show_topology_change(DEVICE_PARAMS, char *buf)
 {
@@ -312,69 +317,69 @@ static ssize_t show_topology_change(DEVICE_PARAMS, char *buf)
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static DP_DEVICE_ATTR(topology_change, S_IRUGO, show_topology_change, NULL);
+static INTERNAL_DEVICE_ATTR(topology_change, S_IRUGO, show_topology_change, NULL);
 
 static ssize_t show_topology_change_detected(DEVICE_PARAMS, char *buf)
 {
 #if 0
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	return sprintf(buf, "%d\n", br->topology_change_detected);
 #else
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static DP_DEVICE_ATTR(topology_change_detected, S_IRUGO,
+static INTERNAL_DEVICE_ATTR(topology_change_detected, S_IRUGO,
 		   show_topology_change_detected, NULL);
 
 static ssize_t show_hello_timer(DEVICE_PARAMS, char *buf)
 {
 #if 0
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	return sprintf(buf, "%ld\n", br_timer_value(&br->hello_timer));
 #else
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static DP_DEVICE_ATTR(hello_timer, S_IRUGO, show_hello_timer, NULL);
+static INTERNAL_DEVICE_ATTR(hello_timer, S_IRUGO, show_hello_timer, NULL);
 
 static ssize_t show_tcn_timer(DEVICE_PARAMS, char *buf)
 {
 #if 0
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	return sprintf(buf, "%ld\n", br_timer_value(&br->tcn_timer));
 #else
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static DP_DEVICE_ATTR(tcn_timer, S_IRUGO, show_tcn_timer, NULL);
+static INTERNAL_DEVICE_ATTR(tcn_timer, S_IRUGO, show_tcn_timer, NULL);
 
 static ssize_t show_topology_change_timer(DEVICE_PARAMS, char *buf)
 {
 #if 0
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	return sprintf(buf, "%ld\n", br_timer_value(&br->topology_change_timer));
 #else
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static DP_DEVICE_ATTR(topology_change_timer, S_IRUGO, show_topology_change_timer,
+static INTERNAL_DEVICE_ATTR(topology_change_timer, S_IRUGO, show_topology_change_timer,
 		   NULL);
 
 static ssize_t show_gc_timer(DEVICE_PARAMS, char *buf)
 {
 #if 0
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	return sprintf(buf, "%ld\n", br_timer_value(&br->gc_timer));
 #else
 	return sprintf(buf, "%d\n", 0);
 #endif
 }
-static DP_DEVICE_ATTR(gc_timer, S_IRUGO, show_gc_timer, NULL);
+static INTERNAL_DEVICE_ATTR(gc_timer, S_IRUGO, show_gc_timer, NULL);
 
 static ssize_t show_group_addr(DEVICE_PARAMS, char *buf)
 {
 #if 0
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 	return sprintf(buf, "%x:%x:%x:%x:%x:%x\n",
 		       br->group_addr[0], br->group_addr[1],
 		       br->group_addr[2], br->group_addr[3],
@@ -387,7 +392,7 @@ static ssize_t show_group_addr(DEVICE_PARAMS, char *buf)
 static ssize_t store_group_addr(DEVICE_PARAMS,
 				const char *buf, size_t len)
 {
-	struct datapath *dp = dp_dev_get_dp(to_net_dev(d));
+	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
 #if 0
 	unsigned new_addr[6];
 	int i;
@@ -423,7 +428,7 @@ static ssize_t store_group_addr(DEVICE_PARAMS,
 	return len;
 }
 
-static DP_DEVICE_ATTR(group_addr, S_IRUGO | S_IWUSR,
+static INTERNAL_DEVICE_ATTR(group_addr, S_IRUGO | S_IWUSR,
 		   show_group_addr, store_group_addr);
 
 static struct attribute *bridge_attrs[] = {
@@ -464,7 +469,7 @@ static struct attribute_group bridge_group = {
  */
 int dp_sysfs_add_dp(struct datapath *dp)
 {
-	struct kobject *kobj = &dp->ports[XFLOWP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj;
+	struct kobject *kobj = vport_get_kobj(dp->ports[XFLOWP_LOCAL]->vport);
 	int err;
 
 	/* Create /sys/class/net/<devname>/bridge directory. */
@@ -493,7 +498,7 @@ int dp_sysfs_add_dp(struct datapath *dp)
 
 int dp_sysfs_del_dp(struct datapath *dp)
 {
-	struct kobject *kobj = &dp->ports[XFLOWP_LOCAL]->dev->NETDEV_DEV_MEMBER.kobj;
+	struct kobject *kobj = vport_get_kobj(dp->ports[XFLOWP_LOCAL]->vport);
 
 	kobject_del(&dp->ifobj);
 	sysfs_remove_group(kobj, &bridge_group);
@@ -503,6 +508,6 @@ int dp_sysfs_del_dp(struct datapath *dp)
 #else /* !CONFIG_SYSFS */
 int dp_sysfs_add_dp(struct datapath *dp) { return 0; }
 int dp_sysfs_del_dp(struct datapath *dp) { return 0; }
-int dp_sysfs_add_if(struct net_bridge_port *p) { return 0; }
-int dp_sysfs_del_if(struct net_bridge_port *p) { return 0; }
+int dp_sysfs_add_if(struct dp_port *p) { return 0; }
+int dp_sysfs_del_if(struct dp_port *p) { return 0; }
 #endif /* !CONFIG_SYSFS */

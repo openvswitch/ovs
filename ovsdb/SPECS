@@ -251,6 +251,8 @@ over HTTP, for these reasons:
 
     * The JSON-RPC specification for HTTP transport is incomplete.
 
+We are using TCP port 6632 for the database JSON-RPC connection.
+
 The database wire protocol consists of the following JSON-RPC methods:
 
 list_dbs

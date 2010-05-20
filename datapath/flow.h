@@ -16,6 +16,7 @@
 #include <linux/gfp.h>
 
 #include "openvswitch/xflow.h"
+#include "table.h"
 
 struct sk_buff;
 
@@ -27,6 +28,8 @@ struct sw_flow_actions {
 
 struct sw_flow {
 	struct rcu_head rcu;
+	struct tbl_node tbl_node;
+
 	struct xflow_key key;
 	struct sw_flow_actions *sf_acts;
 
@@ -43,11 +46,15 @@ struct sw_flow {
 extern struct kmem_cache *flow_cache;
 
 struct sw_flow_actions *flow_actions_alloc(size_t n_actions);
-void flow_free(struct sw_flow *);
 void flow_deferred_free(struct sw_flow *);
 void flow_deferred_free_acts(struct sw_flow_actions *);
 int flow_extract(struct sk_buff *, u16 in_port, struct xflow_key *);
 void flow_used(struct sw_flow *, struct sk_buff *);
+
+struct sw_flow *flow_cast(const struct tbl_node *);
+u32 flow_hash(const struct xflow_key *key);
+int flow_cmp(const struct tbl_node *, void *target);
+void flow_free_tbl(struct tbl_node *);
 
 int flow_init(void);
 void flow_exit(void);

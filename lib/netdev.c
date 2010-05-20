@@ -45,6 +45,7 @@ static const struct netdev_class *base_netdev_classes[] = {
     &netdev_linux_class,
     &netdev_tap_class,
     &netdev_gre_class,
+    &netdev_patch_class,
 };
 
 static struct shash netdev_classes = SHASH_INITIALIZER(&netdev_classes);
@@ -443,6 +444,14 @@ netdev_exists(const char *name)
     }
 }
 
+/* Returns true if a network device named 'name' is currently opened,
+ * otherwise false. */
+bool
+netdev_is_open(const char *name)
+{
+    return !!shash_find_data(&netdev_dev_shash, name);
+}
+
 /*  Clears 'svec' and enumerates the names of all known network devices. */
 int
 netdev_enumerate(struct svec *svec)
@@ -629,23 +638,37 @@ netdev_get_mtu(const struct netdev *netdev, int *mtup)
  * value should be unique within a host and remain stable at least until
  * reboot.  SNMP says an ifindex "ranges between 1 and the value of ifNumber"
  * but many systems do not follow this rule anyhow.
+ *
+ * Some network devices may not implement support for this function.  In such
+ * cases this function will always return -EOPNOTSUPP.
  */
 int
 netdev_get_ifindex(const struct netdev *netdev)
 {
-    return netdev_get_dev(netdev)->netdev_class->get_ifindex(netdev);
+    int (*get_ifindex)(const struct netdev *);
+
+    get_ifindex = netdev_get_dev(netdev)->netdev_class->get_ifindex;
+
+    return get_ifindex ? get_ifindex(netdev) : -EOPNOTSUPP;
 }
 
 /* Stores the features supported by 'netdev' into each of '*current',
  * '*advertised', '*supported', and '*peer' that are non-null.  Each value is a
  * bitmap of "enum ofp_port_features" bits, in host byte order.  Returns 0 if
  * successful, otherwise a positive errno value.  On failure, all of the
- * passed-in values are set to 0. */
+ * passed-in values are set to 0.
+ *
+ * Some network devices may not implement support for this function.  In such
+ * cases this function will always return EOPNOTSUPP.
+ */
 int
 netdev_get_features(struct netdev *netdev,
                     uint32_t *current, uint32_t *advertised,
                     uint32_t *supported, uint32_t *peer)
 {
+    int (*get_features)(struct netdev *netdev,
+                        uint32_t *current, uint32_t *advertised,
+                        uint32_t *supported, uint32_t *peer);
     uint32_t dummy[4];
     int error;
 
@@ -662,8 +685,10 @@ netdev_get_features(struct netdev *netdev,
         peer = &dummy[3];
     }
 
-    error = netdev_get_dev(netdev)->netdev_class->get_features(netdev, current,
-            advertised, supported, peer);
+    get_features = netdev_get_dev(netdev)->netdev_class->get_features;
+    error = get_features
+                    ? get_features(netdev, current, advertised, supported, peer)
+                    : EOPNOTSUPP;
     if (error) {
         *current = *advertised = *supported = *peer = 0;
     }
@@ -942,6 +967,19 @@ netdev_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     return error;
 }
 
+/* Attempts to change the stats for 'netdev' to those provided in 'stats'.
+ * Returns 0 if successful, otherwise a positive errno value.
+ *
+ * This will probably fail for most network devices.  Some devices might only
+ * allow setting their stats to 0. */
+int
+netdev_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
+{
+    return (netdev_get_dev(netdev)->netdev_class->set_stats
+             ? netdev_get_dev(netdev)->netdev_class->set_stats(netdev, stats)
+             : EOPNOTSUPP);
+}
+
 /* Attempts to set input rate limiting (policing) policy, such that up to
  * 'kbits_rate' kbps of traffic is accepted, with a maximum accumulative burst
  * size of 'kbits' kb. */
@@ -1049,6 +1087,13 @@ const char *
 netdev_dev_get_type(const struct netdev_dev *netdev_dev)
 {
     return netdev_dev->netdev_class->type;
+}
+
+/* Returns the class associated with 'netdev_dev'. */
+const struct netdev_class *
+netdev_dev_get_class(const struct netdev_dev *netdev_dev)
+{
+    return netdev_dev->netdev_class;
 }
 
 /* Returns the name of 'netdev_dev'.

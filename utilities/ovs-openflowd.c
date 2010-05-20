@@ -49,17 +49,11 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_openflowd
 
-/* Behavior when the connection to the controller fails. */
-enum fail_mode {
-    FAIL_OPEN,                  /* Act as learning switch. */
-    FAIL_CLOSED                 /* Drop all packets. */
-};
-
 /* Settings that may be configured by the user. */
 struct ofsettings {
-    /* Overall mode of operation. */
-    bool discovery;           /* Discover the controller automatically? */
-    bool in_band;             /* Connect to controller in-band? */
+    /* Controller configuration. */
+    struct ofproto_controller *controllers;
+    size_t n_controllers;
 
     /* Datapath. */
     uint64_t datapath_id;       /* Datapath ID. */
@@ -75,23 +69,11 @@ struct ofsettings {
     const char *dp_desc;        /* Datapath description. */
 
     /* Related vconns and network devices. */
-    const char *controller_name; /* Controller (if not discovery mode). */
     struct svec listeners;       /* Listen for management connections. */
     struct svec snoops;          /* Listen for controller snooping conns. */
 
     /* Failure behavior. */
-    enum fail_mode fail_mode; /* Act as learning switch if no controller? */
     int max_idle;             /* Idle time for flows in fail-open mode. */
-    int probe_interval;       /* # seconds idle before sending echo request. */
-    int max_backoff;          /* Max # seconds between connection attempts. */
-
-    /* Packet-in rate-limiting. */
-    int rate_limit;           /* Tokens added to bucket per second. */
-    int burst_limit;          /* Maximum number token bucket size. */
-
-    /* Discovery behavior. */
-    const char *accept_controller_re; /* Controller vconns to accept. */
-    bool update_resolv_conf;          /* Update /etc/resolv.conf? */
 
     /* Spanning tree protocol. */
     bool enable_stp;
@@ -161,15 +143,6 @@ main(int argc, char *argv[])
     if (error) {
         ovs_fatal(error, "could not initialize openflow switch");
     }
-    error = ofproto_set_in_band(ofproto, s.in_band);
-    if (error) {
-        ovs_fatal(error, "failed to configure in-band control");
-    }
-    error = ofproto_set_discovery(ofproto, s.discovery, s.accept_controller_re,
-                                  s.update_resolv_conf);
-    if (error) {
-        ovs_fatal(error, "failed to configure controller discovery");
-    }
     if (s.datapath_id) {
         ofproto_set_datapath_id(ofproto, s.datapath_id);
     }
@@ -196,20 +169,11 @@ main(int argc, char *argv[])
     if (error) {
         ovs_fatal(error, "failed to configure NetFlow collectors");
     }
-    ofproto_set_failure(ofproto, s.fail_mode == FAIL_OPEN);
-    ofproto_set_probe_interval(ofproto, s.probe_interval);
-    ofproto_set_max_backoff(ofproto, s.max_backoff);
-    ofproto_set_rate_limit(ofproto, s.rate_limit, s.burst_limit);
     error = ofproto_set_stp(ofproto, s.enable_stp);
     if (error) {
         ovs_fatal(error, "failed to configure STP");
     }
-    if (!s.discovery) {
-        error = ofproto_set_controller(ofproto, s.controller_name);
-        if (error) {
-            ovs_fatal(error, "failed to configure controller");
-        }
-    }
+    ofproto_set_controllers(ofproto, s.controllers, s.n_controllers);
 
     daemonize_complete();
 
@@ -262,7 +226,6 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         OPT_OUT_OF_BAND,
         OPT_IN_BAND,
         OPT_NETFLOW,
-        OPT_MGMT_ID,
         OPT_PORTS,
         VLOG_OPTION_ENUMS,
         LEAK_CHECKER_OPTION_ENUMS
@@ -305,8 +268,18 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
         {0, 0, 0, 0},
     };
     char *short_options = long_options_to_short_options(long_options);
+    struct ofproto_controller controller_opts;
 
     /* Set defaults that we can figure out before parsing options. */
+    controller_opts.target = NULL;
+    controller_opts.max_backoff = 8;
+    controller_opts.probe_interval = 5;
+    controller_opts.fail = OFPROTO_FAIL_STANDALONE;
+    controller_opts.band = OFPROTO_IN_BAND;
+    controller_opts.accept_re = NULL;
+    controller_opts.update_resolv_conf = true;
+    controller_opts.rate_limit = 0;
+    controller_opts.burst_limit = 0;
     s->datapath_id = 0;
     s->mfr_desc = NULL;
     s->hw_desc = NULL;
@@ -315,16 +288,8 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
     s->dp_desc = NULL;
     svec_init(&s->listeners);
     svec_init(&s->snoops);
-    s->fail_mode = FAIL_OPEN;
     s->max_idle = 0;
-    s->probe_interval = 0;
-    s->max_backoff = 8;
-    s->update_resolv_conf = true;
-    s->rate_limit = 0;
-    s->burst_limit = 0;
-    s->accept_controller_re = NULL;
     s->enable_stp = false;
-    s->in_band = true;
     svec_init(&s->netflow);
     svec_init(&s->ports);
     for (;;) {
@@ -364,26 +329,28 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             break;
 
         case OPT_ACCEPT_VCONN:
-            s->accept_controller_re = optarg;
+            controller_opts.accept_re = optarg;
             break;
 
         case OPT_NO_RESOLV_CONF:
-            s->update_resolv_conf = false;
+            controller_opts.update_resolv_conf = false;
             break;
 
         case OPT_FAIL_MODE:
-            if (!strcmp(optarg, "open")) {
-                s->fail_mode = FAIL_OPEN;
-            } else if (!strcmp(optarg, "closed")) {
-                s->fail_mode = FAIL_CLOSED;
+            if (!strcmp(optarg, "open") || !strcmp(optarg, "standalone")) {
+                controller_opts.fail = OFPROTO_FAIL_STANDALONE;
+            } else if (!strcmp(optarg, "closed")
+                       || !strcmp(optarg, "secure")) {
+                controller_opts.fail = OFPROTO_FAIL_SECURE;
             } else {
-                ovs_fatal(0, "--fail argument must be \"open\" or \"closed\"");
+                ovs_fatal(0, "--fail argument must be \"standalone\" "
+                          "or \"secure\"");
             }
             break;
 
         case OPT_INACTIVITY_PROBE:
-            s->probe_interval = atoi(optarg);
-            if (s->probe_interval < 5) {
+            controller_opts.probe_interval = atoi(optarg);
+            if (controller_opts.probe_interval < 5) {
                 ovs_fatal(0, "--inactivity-probe argument must be at least 5");
             }
             break;
@@ -401,28 +368,28 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             break;
 
         case OPT_MAX_BACKOFF:
-            s->max_backoff = atoi(optarg);
-            if (s->max_backoff < 1) {
+            controller_opts.max_backoff = atoi(optarg);
+            if (controller_opts.max_backoff < 1) {
                 ovs_fatal(0, "--max-backoff argument must be at least 1");
-            } else if (s->max_backoff > 3600) {
-                s->max_backoff = 3600;
+            } else if (controller_opts.max_backoff > 3600) {
+                controller_opts.max_backoff = 3600;
             }
             break;
 
         case OPT_RATE_LIMIT:
             if (optarg) {
-                s->rate_limit = atoi(optarg);
-                if (s->rate_limit < 1) {
+                controller_opts.rate_limit = atoi(optarg);
+                if (controller_opts.rate_limit < 1) {
                     ovs_fatal(0, "--rate-limit argument must be at least 1");
                 }
             } else {
-                s->rate_limit = 1000;
+                controller_opts.rate_limit = 1000;
             }
             break;
 
         case OPT_BURST_LIMIT:
-            s->burst_limit = atoi(optarg);
-            if (s->burst_limit < 1) {
+            controller_opts.burst_limit = atoi(optarg);
+            if (controller_opts.burst_limit < 1) {
                 ovs_fatal(0, "--burst-limit argument must be at least 1");
             }
             break;
@@ -436,11 +403,11 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
             break;
 
         case OPT_OUT_OF_BAND:
-            s->in_band = false;
+            controller_opts.band = OFPROTO_OUT_OF_BAND;
             break;
 
         case OPT_IN_BAND:
-            s->in_band = true;
+            controller_opts.band = OFPROTO_IN_BAND;
             break;
 
         case OPT_NETFLOW:
@@ -496,26 +463,46 @@ parse_options(int argc, char *argv[], struct ofsettings *s)
                   "use --help for usage");
     }
 
-    /* Local and remote vconns. */
-    xf_parse_name(argv[0], &s->dp_name, &s->dp_type);
-
-    s->controller_name = argc > 1 ? xstrdup(argv[1]) : NULL;
-
     /* Set accept_controller_regex. */
-    if (!s->accept_controller_re) {
-        s->accept_controller_re
+    if (!controller_opts.accept_re) {
+        controller_opts.accept_re
             = stream_ssl_is_configured() ? "^ssl:.*" : "^tcp:.*";
     }
 
-    /* Mode of operation. */
-    s->discovery = s->controller_name == NULL;
-    if (s->discovery && !s->in_band) {
-        ovs_fatal(0, "Cannot perform discovery with out-of-band control");
+    /* Rate limiting. */
+    if (controller_opts.rate_limit && controller_opts.rate_limit < 100) {
+        VLOG_WARN("Rate limit set to unusually low value %d",
+                  controller_opts.rate_limit);
     }
 
-    /* Rate limiting. */
-    if (s->rate_limit && s->rate_limit < 100) {
-        VLOG_WARN("Rate limit set to unusually low value %d", s->rate_limit);
+    /* Local vconns. */
+    xf_parse_name(argv[0], &s->dp_name, &s->dp_type);
+
+    /* Controllers. */
+    s->n_controllers = argc > 1 ? argc - 1 : 1;
+    s->controllers = xmalloc(s->n_controllers * sizeof *s->controllers);
+    if (argc > 1) {
+        size_t i;
+
+        for (i = 0; i < s->n_controllers; i++) {
+            s->controllers[i] = controller_opts;
+            s->controllers[i].target = argv[i + 1];
+        }
+    } else {
+        s->controllers[0] = controller_opts;
+        s->controllers[0].target = "discover";
+    }
+
+    /* Sanity check. */
+    if (controller_opts.band == OFPROTO_OUT_OF_BAND) {
+        size_t i;
+
+        for (i = 0; i < s->n_controllers; i++) {
+            if (!strcmp(s->controllers[i].target, "discover")) {
+                ovs_fatal(0, "Cannot perform discovery with out-of-band "
+                          "control");
+            }
+        }
     }
 }
 
@@ -523,10 +510,10 @@ static void
 usage(void)
 {
     printf("%s: an OpenFlow switch implementation.\n"
-           "usage: %s [OPTIONS] DATAPATH [CONTROLLER]\n"
+           "usage: %s [OPTIONS] DATAPATH [CONTROLLER...]\n"
            "DATAPATH is a local datapath (e.g. \"dp0\").\n"
-           "CONTROLLER is an active OpenFlow connection method; if it is\n"
-           "omitted, then ovs-openflowd performs controller discovery.\n",
+           "Each CONTROLLER is an active OpenFlow connection method.  If\n"
+           "none is given, ovs-openflowd performs controller discovery.\n",
            program_name, program_name);
     vconn_usage(true, true, true);
     printf("\nOpenFlow options:\n"

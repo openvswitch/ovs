@@ -18,20 +18,20 @@ ovs\-switch\-setup does not accept any command-line options.
 .IP /etc/default/openvswitch-switch
 Main configuration file for Open vSwitch switch.
 
-.IP /etc/openvswitch-switch/cacert.pem
+.IP /etc/openvswitch/cacert.pem
 Default location of CA certificate for OpenFlow controllers.
 
-.IP /etc/openvswitch-switch/of0-cert.pem
+.IP /etc/openvswitch/of0-cert.pem
 Default location of certificate for the Open vSwitch switch's private key.
 
-.IP /etc/openvswitch-switch/of0-privkey.pem
+.IP /etc/openvswitch/of0-privkey.pem
 Default location of the Open vSwitch switch's private key.  This file
 should be readable only by \fBroot\fR.
 
-.IP /etc/openvswitch-switch/of0-req.pem
+.IP /etc/openvswitch/of0-req.pem
 Default location of certificate request for the Open vSwitch switch's
 certificate.  This file is not used after the signed certificate
-(typically \fB/etc/openvswitch-switch/of0-cert.pem\fR, above) has been
+(typically \fB/etc/openvswitch/of0-cert.pem\fR, above) has been
 obtained from the OpenFlow PKI server.
 
 .SH "SEE ALSO"

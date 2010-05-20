@@ -18,10 +18,11 @@
 #include <net/inet_ecn.h>
 #include <net/ip.h>
 #include <net/checksum.h>
-#include "datapath.h"
-#include "dp_dev.h"
+
 #include "actions.h"
+#include "datapath.h"
 #include "openvswitch/xflow.h"
+#include "vport.h"
 
 static struct sk_buff *
 make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
@@ -32,19 +33,7 @@ make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
 
 		nskb = skb_copy_expand(skb, headroom, skb_tailroom(skb), gfp);
 		if (nskb) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-			/* Before 2.6.24 these fields were not copied when
-			 * doing an skb_copy_expand. */
-			nskb->ip_summed = skb->ip_summed;
-			nskb->csum = skb->csum;
-#endif
-#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
-			/* These fields are copied in skb_clone but not in
-			 * skb_copy or related functions.  We need to manually
-			 * copy them over here. */
-			nskb->proto_data_valid = skb->proto_data_valid;
-			nskb->proto_csum_blank = skb->proto_csum_blank;
-#endif
+			set_skb_csum_bits(skb, nskb);
 			kfree_skb(skb);
 			return nskb;
 		}
@@ -58,6 +47,11 @@ make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
 	return NULL;
 }
 
+static void set_tunnel(struct sk_buff *skb, struct xflow_key *key,
+		       __be32 tun_id)
+{
+	OVS_CB(skb)->tun_id = key->tun_id = tun_id;
+}
 
 static struct sk_buff *
 vlan_pull_tag(struct sk_buff *skb)
@@ -348,42 +342,27 @@ static inline unsigned packet_length(const struct sk_buff *skb)
 	return length;
 }
 
-int dp_xmit_skb(struct sk_buff *skb)
-{
-	struct datapath *dp = skb->dev->br_port->dp;
-	int len = skb->len;
-
-	if (packet_length(skb) > skb->dev->mtu && !skb_is_gso(skb)) {
-		printk(KERN_WARNING "%s: dropped over-mtu packet: %d > %d\n",
-		       dp_name(dp), packet_length(skb), skb->dev->mtu);
-		kfree_skb(skb);
-		return -E2BIG;
-	}
-
-	forward_ip_summed(skb);
-	dev_queue_xmit(skb);
-
-	return len;
-}
-
 static void
 do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 {
-	struct net_bridge_port *p;
-	struct net_device *dev;
+	struct dp_port *p;
+	int mtu;
 
 	if (!skb)
 		goto error;
 
-	p = dp->ports[out_port];
+	p = rcu_dereference(dp->ports[out_port]);
 	if (!p)
 		goto error;
 
-	dev = skb->dev = p->dev;
-	if (is_dp_dev(dev))
-		dp_dev_recv(dev, skb);
-	else
-		dp_xmit_skb(skb);
+	mtu = vport_get_mtu(p->vport);
+	if (packet_length(skb) > mtu && !skb_is_gso(skb)) {
+		printk(KERN_WARNING "%s: dropped over-mtu packet: %d > %d\n",
+		       dp_name(dp), packet_length(skb), mtu);
+		goto error;
+	}
+
+	vport_send(p->vport, skb);
 	return;
 
 error:
@@ -402,8 +381,8 @@ static int output_group(struct datapath *dp, __u16 group,
 	if (!g)
 		return -1;
 	for (i = 0; i < g->n_ports; i++) {
-		struct net_bridge_port *p = dp->ports[g->ports[i]];
-		if (!p || skb->dev == p->dev)
+		struct dp_port *p = rcu_dereference(dp->ports[g->ports[i]]);
+		if (!p || OVS_CB(skb)->dp_port == p)
 			continue;
 		if (prev_port != -1) {
 			struct sk_buff *clone = skb_clone(skb, gfp);
@@ -429,7 +408,7 @@ output_control(struct datapath *dp, struct sk_buff *skb, u32 arg, gfp_t gfp)
  * information about what happened to it. */
 static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 			 const union xflow_action *a, int n_actions,
-			 gfp_t gfp, struct net_bridge_port *nbp)
+			 gfp_t gfp, struct dp_port *dp_port)
 {
 	struct xflow_sflow_sample_header *hdr;
 	unsigned int actlen = n_actions * sizeof(union xflow_action);
@@ -443,7 +422,7 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 	memcpy(__skb_push(nskb, actlen), a, actlen);
 	hdr = (struct xflow_sflow_sample_header*)__skb_push(nskb, hdrlen);
 	hdr->n_actions = n_actions;
-	hdr->sample_pool = atomic_read(&nbp->sflow_pool);
+	hdr->sample_pool = atomic_read(&dp_port->sflow_pool);
 	dp_output_control(dp, nskb, _XFLOWL_SFLOW_NR, 0);
 }
 
@@ -461,7 +440,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 	int err;
 
 	if (dp->sflow_probability) {
-		struct net_bridge_port *p = skb->dev->br_port;
+		struct dp_port *p = OVS_CB(skb)->dp_port;
 		if (p) {
 			atomic_inc(&p->sflow_pool);
 			if (dp->sflow_probability == UINT_MAX ||
@@ -469,6 +448,8 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 				sflow_sample(dp, skb, a, n_actions, gfp, p);
 		}
 	}
+
+	OVS_CB(skb)->tun_id = 0;
 
 	for (; n_actions > 0; a++, n_actions--) {
 		WARN_ON_ONCE(skb_shared(skb));
@@ -493,6 +474,10 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 				kfree_skb(skb);
 				return err;
 			}
+			break;
+
+		case XFLOWAT_SET_TUNNEL:
+			set_tunnel(skb, key, a->tunnel.tun_id);
 			break;
 
 		case XFLOWAT_SET_DL_TCI:

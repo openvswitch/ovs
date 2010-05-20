@@ -931,7 +931,7 @@ xfif_netdev_execute(struct xfif *xfif, uint16_t in_port,
          * if we don't. */
         copy = *packet;
     }
-    flow_extract(&copy, in_port, &flow);
+    flow_extract(&copy, 0, in_port, &flow);
     xflow_key_from_flow(&key, &flow);
     error = xf_netdev_execute_actions(xf, &copy, &key, actions, n_actions);
     if (mutates) {
@@ -1028,7 +1028,7 @@ xf_netdev_port_input(struct xf_netdev *xf, struct xf_netdev_port *port,
     struct xflow_key key;
     flow_t f;
 
-    if (flow_extract(packet, port->port_no, &f) && xf->drop_frags) {
+    if (flow_extract(packet, 0, port->port_no, &f) && xf->drop_frags) {
         xf->n_frags++;
         return;
     }
@@ -1274,8 +1274,9 @@ xf_netdev_output_control(struct xf_netdev *xf, const struct ofpbuf *packet,
     }
 
     msg_size = sizeof *header + packet->size;
-    msg = ofpbuf_new(msg_size);
+    msg = ofpbuf_new(msg_size + XFIF_RECV_MSG_PADDING);
     header = ofpbuf_put_uninit(msg, sizeof *header);
+    ofpbuf_reserve(msg, XFIF_RECV_MSG_PADDING);
     header->type = queue_no;
     header->length = msg_size;
     header->port = port_no;

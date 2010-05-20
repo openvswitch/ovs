@@ -25,6 +25,7 @@ import XenAPIPlugin
 import XenAPI
 import os
 import subprocess
+import syslog
 
 vsctl="/usr/bin/ovs-vsctl"
 cacert_filename="/etc/openvswitch/vswitchd.cacert"
@@ -46,16 +47,29 @@ def update(session, args):
         raise XenAPIPlugin.Failure("MORE_THAN_ONE_POOL_FOR_HOST", [])
     pool = session.xenapi.pool.get_record(pools[0])
     try:
-        controller = pool["other_config"]["vSwitchController"]
+        try:
+            controller = pool["vswitch_controller"]
+        except KeyError:
+            # On systems older than XenServer 5.6.0, we needed to store
+            # the key in "other_config".
+            controller = pool["other_config"]["vSwitchController"]
     except KeyError, e:
         controller = ""
     currentController = vswitchCurrentController()
     if controller == "" and currentController != "":
         delete_cacert()
+        try:
+            emergency_reset(session, None)
+        except:
+            pass
         removeControllerCfg()
         return "Successfully removed controller config"
     elif controller != currentController:
         delete_cacert()
+        try:
+            emergency_reset(session, None)
+        except:
+            pass
         setControllerCfg(controller)
         return "Successfully set controller to " + controller
     else:
@@ -102,6 +116,16 @@ def vswitchCfgMod(action_args):
     if exitcode != 0:
         raise XenAPIPlugin.Failure("VSWITCH_CONFIG_MOD_FAILURE",
                                    [ str(exitcode) , str(action_args) ])
+
+def emergency_reset(session, args):
+    cmd = [vsctl, "emer-reset"]
+    exitcode = subprocess.call(cmd)
+    if exitcode != 0:
+        raise XenAPIPlugin.Failure("VSWITCH_EMER_RESET_FAILURE",
+                                   [ str(exitcode) ])
+
+    return "Successfully reset configuration"
     
 if __name__ == "__main__":
-    XenAPIPlugin.dispatch({"update": update})
+    XenAPIPlugin.dispatch({"update": update,
+                           "emergency_reset": emergency_reset})

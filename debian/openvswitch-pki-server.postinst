@@ -1,5 +1,5 @@
 #!/bin/sh
-# postinst script for openflow
+# postinst script for openflow-pki-server
 #
 # see: dh_installdeb(1)
 

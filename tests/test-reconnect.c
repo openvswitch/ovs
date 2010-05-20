@@ -235,6 +235,24 @@ diff_stats(const struct reconnect_stats *old,
     }
 }
 
+static void
+do_set_passive(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    reconnect_set_passive(reconnect, true, now);
+}
+
+static void
+do_listening(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
+{
+    reconnect_listening(reconnect, now);
+}
+
+static void
+do_listen_error(int argc OVS_UNUSED, char *argv[])
+{
+    reconnect_listen_error(reconnect, now, atoi(argv[1]));
+}
+
 static const struct command commands[] = {
     { "enable", 0, 0, do_enable },
     { "disable", 0, 0, do_disable },
@@ -248,6 +266,9 @@ static const struct command commands[] = {
     { "advance", 1, 1, do_advance },
     { "timeout", 0, 0, do_timeout },
     { "set-max-tries", 1, 1, do_set_max_tries },
+    { "passive", 0, 0, do_set_passive },
+    { "listening", 0, 0, do_listening },
+    { "listen-error", 1, 1, do_listen_error },
     { NULL, 0, 0, NULL },
 };
 

@@ -62,11 +62,18 @@ struct wdp_stats {
 struct wdp_rule {
     struct cls_rule cr;
 
-    union ofp_action *actions;  /* OpenFlow actions. */
-    int n_actions;              /* Number of elements in 'actions' array. */
     long long int created;      /* Time created, in ms since the epoch. */
     uint16_t idle_timeout;      /* In seconds from time of last use. */
     uint16_t hard_timeout;      /* In seconds from time of creation. */
+
+    /* OpenFlow actions.
+     *
+     * 'n_actions' is the number of elements in the 'actions' array.  A single
+     * action may take up more more than one element's worth of space.
+     *
+     * A subrule has no actions (it uses the super-rule's actions). */
+    union ofp_action *actions;  /* OpenFlow actions. */
+    int n_actions;              /* Number of elements in 'actions' array. */
 
     void *client_data;
 };
@@ -205,11 +212,13 @@ enum wdp_channel {
 struct wdp_packet {
     struct list list;
     enum wdp_channel channel;
+    uint32_t tun_id;
     uint16_t in_port;
     int send_len;
     struct ofpbuf *payload;
 };
 
+struct wdp_packet *wdp_packet_clone(const struct wdp_packet *, size_t);
 void wdp_packet_destroy(struct wdp_packet *);
 
 int wdp_recv_get_mask(const struct wdp *, int *listen_mask);

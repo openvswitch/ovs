@@ -134,6 +134,17 @@ fatal_signal_handler(int sig_nr)
     stored_sig_nr = sig_nr;
 }
 
+/* Check whether a fatal signal has occurred and, if so, call the fatal signal
+ * hooks and exit.
+ *
+ * This function is called automatically by poll_block(), but specialized
+ * programs that may not always call poll_block() on a regular basis should
+ * also call it periodically.  (Therefore, any function with "block" in its
+ * name should call fatal_signal_run() each time it is called, either directly
+ * or through poll_block(), because such functions can only used by specialized
+ * programs that can afford to block outside their main loop around
+ * poll_block().)
+ */
 void
 fatal_signal_run(void)
 {

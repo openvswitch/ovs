@@ -241,9 +241,6 @@ success:
 void
 ofproto_sflow_clear(struct ofproto_sflow *os)
 {
-    struct ofproto_sflow_port *osp;
-    unsigned int xflow_port;
-
     if (os->sflow_agent) {
         sfl_agent_release(os->sflow_agent);
         os->sflow_agent = NULL;
@@ -252,11 +249,6 @@ ofproto_sflow_clear(struct ofproto_sflow *os)
     os->collectors = NULL;
     ofproto_sflow_options_destroy(os->options);
     os->options = NULL;
-
-    PORT_ARRAY_FOR_EACH (osp, &os->ports, xflow_port) {
-        ofproto_sflow_del_port(os, xflow_port);
-    }
-    port_array_clear(&os->ports);
 
     /* Turn off sampling to save CPU cycles. */
     wdp_set_sflow_probability(os->wdp, 0);
@@ -284,7 +276,13 @@ void
 ofproto_sflow_destroy(struct ofproto_sflow *os)
 {
     if (os) {
+        struct ofproto_sflow_port *osp;
+        unsigned int xflow_port;
+
         ofproto_sflow_clear(os);
+        PORT_ARRAY_FOR_EACH (osp, &os->ports, xflow_port) {
+            ofproto_sflow_del_port(os, xflow_port);
+        }
         port_array_destroy(&os->ports);
         free(os);
     }
@@ -303,12 +301,11 @@ ofproto_sflow_add_poller(struct ofproto_sflow *os,
 
 static void
 ofproto_sflow_add_sampler(struct ofproto_sflow *os,
-			  struct ofproto_sflow_port *osp,
-			  u_int32_t sampling_rate, u_int32_t header_len)
+			  struct ofproto_sflow_port *osp)
 {
     SFLSampler *sampler = sfl_agent_addSampler(os->sflow_agent, &osp->dsi);
-    sfl_sampler_set_sFlowFsPacketSamplingRate(sampler, sampling_rate);
-    sfl_sampler_set_sFlowFsMaximumHeaderSize(sampler, header_len);
+    sfl_sampler_set_sFlowFsPacketSamplingRate(sampler, os->options->sampling_rate);
+    sfl_sampler_set_sFlowFsMaximumHeaderSize(sampler, os->options->header_len);
     sfl_sampler_set_sFlowFsReceiver(sampler, RECEIVER_INDEX);
 }
 
@@ -341,9 +338,10 @@ ofproto_sflow_add_port(struct ofproto_sflow *os, uint16_t xflow_port,
     SFL_DS_SET(osp->dsi, 0, ifindex, 0);
     port_array_set(&os->ports, xflow_port, osp);
 
-    /* Add poller. */
+    /* Add poller and sampler. */
     if (os->sflow_agent) {
         ofproto_sflow_add_poller(os, osp, xflow_port);
+        ofproto_sflow_add_sampler(os, osp);
     }
 }
 
@@ -441,8 +439,8 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
 
     /* Add samplers and pollers for the currently known ports. */
     PORT_ARRAY_FOR_EACH (osp, &os->ports, xflow_port) {
-        ofproto_sflow_add_sampler(os, osp,
-                                  options->sampling_rate, options->header_len);
+        ofproto_sflow_add_poller(os, osp, xflow_port);
+        ofproto_sflow_add_sampler(os, osp);
     }
 }
 
@@ -498,7 +496,7 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct xflow_msg *msg)
     /* Get packet payload and extract flow. */
     payload.data = (union xflow_action *) (actions + n_actions);
     payload.size = msg->length - min_size;
-    flow_extract(&payload, msg->port, &flow);
+    flow_extract(&payload, 0, msg->port, &flow);
 
     /* Build a flow sample */
     memset(&fs, 0, sizeof fs);
@@ -521,8 +519,11 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct xflow_msg *msg)
     hdrElem.tag = SFLFLOW_HEADER;
     header = &hdrElem.flowType.header;
     header->header_protocol = SFLHEADER_ETHERNET_ISO8023;
-    header->frame_length = payload.size;
-    header->stripped = 4; /* Ethernet FCS stripped off. */
+    /* The frame_length should include the Ethernet FCS (4 bytes),
+       but it has already been stripped,  so we need to add 4 here. */
+    header->frame_length = payload.size + 4;
+    /* Ethernet FCS stripped off. */
+    header->stripped = 4;
     header->header_length = MIN(payload.size,
                                 sampler->sFlowFsMaximumHeaderSize);
     header->header_bytes = payload.data;
@@ -532,7 +533,9 @@ ofproto_sflow_received(struct ofproto_sflow *os, struct xflow_msg *msg)
     switchElem.tag = SFLFLOW_EX_SWITCH;
     switchElem.flowType.sw.src_vlan = ntohs(flow.dl_vlan);
     switchElem.flowType.sw.src_priority = -1; /* XXX */
-    switchElem.flowType.sw.dst_vlan = -1;     /* Filled in correctly below. */
+     /* Initialize the output VLAN and priority to be the same as the input,
+        but these fields can be overriden below if affected by an action. */
+    switchElem.flowType.sw.dst_vlan = switchElem.flowType.sw.src_vlan;
     switchElem.flowType.sw.dst_priority = switchElem.flowType.sw.src_priority;
 
     /* Figure out the output ports. */

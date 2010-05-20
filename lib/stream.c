@@ -25,6 +25,7 @@
 #include <string.h>
 #include "coverage.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "flow.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
@@ -145,6 +146,43 @@ stream_usage(const char *name, bool active, bool passive,
 #endif
 }
 
+/* Given 'name', a stream name in the form "TYPE:ARGS", stores the class
+ * named "TYPE" into '*classp' and returns 0.  Returns EAFNOSUPPORT and stores
+ * a null pointer into '*classp' if 'name' is in the wrong form or if no such
+ * class exists. */
+static int
+stream_lookup_class(const char *name, struct stream_class **classp)
+{
+    size_t prefix_len;
+    size_t i;
+
+    check_stream_classes();
+
+    *classp = NULL;
+    prefix_len = strcspn(name, ":");
+    if (name[prefix_len] == '\0') {
+        return EAFNOSUPPORT;
+    }
+    for (i = 0; i < ARRAY_SIZE(stream_classes); i++) {
+        struct stream_class *class = stream_classes[i];
+        if (strlen(class->name) == prefix_len
+            && !memcmp(class->name, name, prefix_len)) {
+            *classp = class;
+            return 0;
+        }
+    }
+    return EAFNOSUPPORT;
+}
+
+/* Returns 0 if 'name' is a stream name in the form "TYPE:ARGS" and TYPE is
+ * a supported stream type, otherwise EAFNOSUPPORT.  */
+int
+stream_verify_name(const char *name)
+{
+    struct stream_class *class;
+    return stream_lookup_class(name, &class);
+}
+
 /* Attempts to connect a stream to a remote peer.  'name' is a connection name
  * in the form "TYPE:ARGS", where TYPE is an active stream class's name and
  * ARGS are stream class-specific.
@@ -155,43 +193,53 @@ stream_usage(const char *name, bool active, bool passive,
 int
 stream_open(const char *name, struct stream **streamp)
 {
-    size_t prefix_len;
-    size_t i;
-
-    COVERAGE_INC(stream_open);
-    check_stream_classes();
-
-    *streamp = NULL;
-    prefix_len = strcspn(name, ":");
-    if (prefix_len == strlen(name)) {
-        return EAFNOSUPPORT;
-    }
-    for (i = 0; i < ARRAY_SIZE(stream_classes); i++) {
-        struct stream_class *class = stream_classes[i];
-        if (strlen(class->name) == prefix_len
-            && !memcmp(class->name, name, prefix_len)) {
-            struct stream *stream;
-            char *suffix_copy = xstrdup(name + prefix_len + 1);
-            int retval = class->open(name, suffix_copy, &stream);
-            free(suffix_copy);
-            if (!retval) {
-                assert(stream->state != SCS_CONNECTING
-                       || stream->class->connect);
-                *streamp = stream;
-            }
-            return retval;
-        }
-    }
-    return EAFNOSUPPORT;
-}
-
-int
-stream_open_block(const char *name, struct stream **streamp)
-{
+    struct stream_class *class;
     struct stream *stream;
+    char *suffix_copy;
     int error;
 
-    error = stream_open(name, &stream);
+    COVERAGE_INC(stream_open);
+
+    /* Look up the class. */
+    error = stream_lookup_class(name, &class);
+    if (!class) {
+        goto error;
+    }
+
+    /* Call class's "open" function. */
+    suffix_copy = xstrdup(strchr(name, ':') + 1);
+    error = class->open(name, suffix_copy, &stream);
+    free(suffix_copy);
+    if (error) {
+        goto error;
+    }
+
+    /* Success. */
+    *streamp = stream;
+    return 0;
+
+error:
+    *streamp = NULL;
+    return error;
+}
+
+/* Blocks until a previously started stream connection attempt succeeds or
+ * fails.  'error' should be the value returned by stream_open() and 'streamp'
+ * should point to the stream pointer set by stream_open().  Returns 0 if
+ * successful, otherwise a positive errno value other than EAGAIN or
+ * EINPROGRESS.  If successful, leaves '*streamp' untouched; on error, closes
+ * '*streamp' and sets '*streamp' to null.
+ *
+ * Typical usage:
+ *   error = stream_open_block(stream_open("tcp:1.2.3.4:5", &stream), &stream);
+ */
+int
+stream_open_block(int error, struct stream **streamp)
+{
+    struct stream *stream = *streamp;
+
+    fatal_signal_run();
+
     while (error == EAGAIN) {
         stream_run(stream);
         stream_run_wait(stream);
@@ -399,6 +447,43 @@ stream_send_wait(struct stream *stream)
     stream_wait(stream, STREAM_SEND);
 }
 
+/* Given 'name', a pstream name in the form "TYPE:ARGS", stores the class
+ * named "TYPE" into '*classp' and returns 0.  Returns EAFNOSUPPORT and stores
+ * a null pointer into '*classp' if 'name' is in the wrong form or if no such
+ * class exists. */
+static int
+pstream_lookup_class(const char *name, struct pstream_class **classp)
+{
+    size_t prefix_len;
+    size_t i;
+
+    check_stream_classes();
+
+    *classp = NULL;
+    prefix_len = strcspn(name, ":");
+    if (name[prefix_len] == '\0') {
+        return EAFNOSUPPORT;
+    }
+    for (i = 0; i < ARRAY_SIZE(pstream_classes); i++) {
+        struct pstream_class *class = pstream_classes[i];
+        if (strlen(class->name) == prefix_len
+            && !memcmp(class->name, name, prefix_len)) {
+            *classp = class;
+            return 0;
+        }
+    }
+    return EAFNOSUPPORT;
+}
+
+/* Returns 0 if 'name' is a pstream name in the form "TYPE:ARGS" and TYPE is
+ * a supported pstream type, otherwise EAFNOSUPPORT.  */
+int
+pstream_verify_name(const char *name)
+{
+    struct pstream_class *class;
+    return pstream_lookup_class(name, &class);
+}
+
 /* Attempts to start listening for remote stream connections.  'name' is a
  * connection name in the form "TYPE:ARGS", where TYPE is an passive stream
  * class's name and ARGS are stream class-specific.
@@ -409,30 +494,34 @@ stream_send_wait(struct stream *stream)
 int
 pstream_open(const char *name, struct pstream **pstreamp)
 {
-    size_t prefix_len;
-    size_t i;
+    struct pstream_class *class;
+    struct pstream *pstream;
+    char *suffix_copy;
+    int error;
 
-    check_stream_classes();
+    COVERAGE_INC(pstream_open);
 
+    /* Look up the class. */
+    error = pstream_lookup_class(name, &class);
+    if (!class) {
+        goto error;
+    }
+
+    /* Call class's "open" function. */
+    suffix_copy = xstrdup(strchr(name, ':') + 1);
+    error = class->listen(name, suffix_copy, &pstream);
+    free(suffix_copy);
+    if (error) {
+        goto error;
+    }
+
+    /* Success. */
+    *pstreamp = pstream;
+    return 0;
+
+error:
     *pstreamp = NULL;
-    prefix_len = strcspn(name, ":");
-    if (prefix_len == strlen(name)) {
-        return EAFNOSUPPORT;
-    }
-    for (i = 0; i < ARRAY_SIZE(pstream_classes); i++) {
-        struct pstream_class *class = pstream_classes[i];
-        if (strlen(class->name) == prefix_len
-            && !memcmp(class->name, name, prefix_len)) {
-            char *suffix_copy = xstrdup(name + prefix_len + 1);
-            int retval = class->listen(name, suffix_copy, pstreamp);
-            free(suffix_copy);
-            if (retval) {
-                *pstreamp = NULL;
-            }
-            return retval;
-        }
-    }
-    return EAFNOSUPPORT;
+    return error;
 }
 
 /* Returns the name that was used to open 'pstream'.  The caller must not
@@ -484,6 +573,7 @@ pstream_accept_block(struct pstream *pstream, struct stream **new_stream)
 {
     int error;
 
+    fatal_signal_run();
     while ((error = pstream_accept(pstream, new_stream)) == EAGAIN) {
         pstream_wait(pstream);
         poll_block();
@@ -560,4 +650,134 @@ pstream_init(struct pstream *pstream, struct pstream_class *class,
 {
     pstream->class = class;
     pstream->name = xstrdup(name);
+}
+
+static int
+count_fields(const char *s_)
+{
+    char *s, *field, *save_ptr;
+    int n = 0;
+
+    save_ptr = NULL;
+    s = xstrdup(s_);
+    for (field = strtok_r(s, ":", &save_ptr); field != NULL;
+         field = strtok_r(NULL, ":", &save_ptr)) {
+        n++;
+    }
+    free(s);
+
+    return n;
+}
+
+/* Like stream_open(), but for tcp streams the port defaults to
+ * 'default_tcp_port' if no port number is given and for SSL streams the port
+ * defaults to 'default_ssl_port' if no port number is given. */
+int
+stream_open_with_default_ports(const char *name_,
+                               uint16_t default_tcp_port,
+                               uint16_t default_ssl_port,
+                               struct stream **streamp)
+{
+    char *name;
+    int error;
+
+    if (!strncmp(name_, "tcp:", 4) && count_fields(name_) < 3) {
+        name = xasprintf("%s:%d", name_, default_tcp_port);
+    } else if (!strncmp(name_, "ssl:", 4) && count_fields(name_) < 3) {
+        name = xasprintf("%s:%d", name_, default_ssl_port);
+    } else {
+        name = xstrdup(name_);
+    }
+    error = stream_open(name, streamp);
+    free(name);
+
+    return error;
+}
+
+/* Like pstream_open(), but for ptcp streams the port defaults to
+ * 'default_ptcp_port' if no port number is given and for passive SSL streams
+ * the port defaults to 'default_pssl_port' if no port number is given. */
+int
+pstream_open_with_default_ports(const char *name_,
+                                uint16_t default_ptcp_port,
+                                uint16_t default_pssl_port,
+                                struct pstream **pstreamp)
+{
+    char *name;
+    int error;
+
+    if (!strncmp(name_, "ptcp:", 5) && count_fields(name_) < 2) {
+        name = xasprintf("%s%d", name_, default_ptcp_port);
+    } else if (!strncmp(name_, "pssl:", 5) && count_fields(name_) < 2) {
+        name = xasprintf("%s%d", name_, default_pssl_port);
+    } else {
+        name = xstrdup(name_);
+    }
+    error = pstream_open(name, pstreamp);
+    free(name);
+
+    return error;
+}
+
+/* Attempts to guess the content type of a stream whose first few bytes were
+ * the 'size' bytes of 'data'. */
+static enum stream_content_type
+stream_guess_content(const uint8_t *data, size_t size)
+{
+    if (size >= 2) {
+#define PAIR(A, B) (((A) << 8) | (B))
+        switch (PAIR(data[0], data[1])) {
+        case PAIR(0x16, 0x03):  /* Handshake, version 3. */
+            return STREAM_SSL;
+        case PAIR('{', '"'):
+            return STREAM_JSONRPC;
+        case PAIR(OFP_VERSION, OFPT_HELLO):
+            return STREAM_OPENFLOW;
+        }
+    }
+
+    return STREAM_UNKNOWN;
+}
+
+/* Returns a string represenation of 'type'. */
+static const char *
+stream_content_type_to_string(enum stream_content_type type)
+{
+    switch (type) {
+    case STREAM_UNKNOWN:
+    default:
+        return "unknown";
+
+    case STREAM_JSONRPC:
+        return "JSON-RPC";
+
+    case STREAM_OPENFLOW:
+        return "OpenFlow";
+
+    case STREAM_SSL:
+        return "SSL";
+    }
+}
+
+/* Attempts to guess the content type of a stream whose first few bytes were
+ * the 'size' bytes of 'data'.  If this is done successfully, and the guessed
+ * content type is other than 'expected_type', then log a message in vlog
+ * module 'module', naming 'stream_name' as the source, explaining what
+ * content was expected and what was actually received. */
+void
+stream_report_content(const void *data, size_t size,
+                      enum stream_content_type expected_type,
+                      enum vlog_module module, const char *stream_name)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+    enum stream_content_type actual_type;
+
+    actual_type = stream_guess_content(data, size);
+    if (actual_type != expected_type && actual_type != STREAM_UNKNOWN) {
+        vlog_rate_limit(module, VLL_WARN, &rl,
+                        "%s: received %s data on %s channel",
+                        stream_name,
+                        stream_content_type_to_string(expected_type),
+                        stream_content_type_to_string(actual_type));
+    }
 }

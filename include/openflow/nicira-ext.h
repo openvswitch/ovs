@@ -45,6 +45,15 @@ enum nicira_type {
     NXT_FLOW_END_CONFIG__OBSOLETE,
     NXT_FLOW_END__OBSOLETE,
     NXT_MGMT__OBSOLETE,
+
+    /* Use the high 32 bits of the cookie field as the tunnel ID in the flow
+     * match. */
+    NXT_TUN_ID_FROM_COOKIE,
+
+    /* Controller role support.  The request body is struct nx_role_request.
+     * The reply echos the request. */
+    NXT_ROLE_REQUEST,
+    NXT_ROLE_REPLY
 };
 
 struct nicira_header {
@@ -54,10 +63,73 @@ struct nicira_header {
 };
 OFP_ASSERT(sizeof(struct nicira_header) == 16);
 
+struct nxt_tun_id_cookie {
+    struct ofp_header header;
+    uint32_t vendor;            /* NX_VENDOR_ID. */
+    uint32_t subtype;           /* NXT_TUN_ID_FROM_COOKIE */
+    uint8_t set;                /* Nonzero to enable, zero to disable. */
+    uint8_t pad[7];
+};
+OFP_ASSERT(sizeof(struct nxt_tun_id_cookie) == 24);
+
+/* Configures the "role" of the sending controller.  The default role is:
+ *
+ *    - Other (NX_ROLE_OTHER), which allows the controller access to all
+ *      OpenFlow features.
+ *
+ * The other possible roles are a related pair:
+ *
+ *    - Master (NX_ROLE_MASTER) is equivalent to Other, except that there may
+ *      be at most one Master controller at a time: when a controller
+ *      configures itself as Master, any existing Master is demoted to the
+ *      Slave role.
+ *
+ *    - Slave (NX_ROLE_SLAVE) allows the controller read-only access to
+ *      OpenFlow features.  In particular attempts to modify the flow table
+ *      will be rejected with an OFPBRC_EPERM error.
+ *
+ *      Slave controllers also do not receive asynchronous messages
+ *      (OFPT_PACKET_IN, OFPT_FLOW_REMOVED, OFPT_PORT_STATUS).
+ */
+struct nx_role_request {
+    struct nicira_header nxh;
+    uint32_t role;              /* One of NX_ROLE_*. */
+};
+
+enum nx_role {
+    NX_ROLE_OTHER,              /* Default role, full access. */
+    NX_ROLE_MASTER,             /* Full access, at most one. */
+    NX_ROLE_SLAVE               /* Read-only access. */
+};
 
 enum nx_action_subtype {
     NXAST_SNAT__OBSOLETE,           /* No longer used. */
-    NXAST_RESUBMIT                  /* Throw against flow table again. */
+
+    /* Searches the flow table again, using a flow that is slightly modified
+     * from the original lookup:
+     *
+     *    - The 'in_port' member of struct nx_action_resubmit is used as the
+     *      flow's in_port.
+     *
+     *    - If NXAST_RESUBMIT is preceded by actions that affect the flow
+     *      (e.g. OFPAT_SET_VLAN_VID), then the flow is updated with the new
+     *      values.
+     *
+     * Following the lookup, the original in_port is restored.
+     *
+     * If the modified flow matched in the flow table, then the corresponding
+     * actions are executed, except that NXAST_RESUBMIT actions found in the
+     * secondary set of actions are ignored.  Afterward, actions following
+     * NXAST_RESUBMIT in the original set of actions, if any, are executed; any
+     * changes made to the packet (e.g. changes to VLAN) by secondary actions
+     * persist when those actions are executed, although the original in_port
+     * is restored.
+     *
+     * NXAST_RESUBMIT may be used any number of times within a set of actions.
+     */
+    NXAST_RESUBMIT,
+
+    NXAST_SET_TUNNEL                /* Set encapsulating tunnel ID. */
 };
 
 /* Action structure for NXAST_RESUBMIT. */
@@ -71,14 +143,31 @@ struct nx_action_resubmit {
 };
 OFP_ASSERT(sizeof(struct nx_action_resubmit) == 16);
 
+/* Action structure for NXAST_SET_TUNNEL. */
+struct nx_action_set_tunnel {
+    uint16_t type;                  /* OFPAT_VENDOR. */
+    uint16_t len;                   /* Length is 16. */
+    uint32_t vendor;                /* NX_VENDOR_ID. */
+    uint16_t subtype;               /* NXAST_SET_TUNNEL. */
+    uint8_t pad[2];
+    uint32_t tun_id;                /* Tunnel ID. */
+};
+OFP_ASSERT(sizeof(struct nx_action_set_tunnel) == 16);
+
 /* Header for Nicira-defined actions. */
 struct nx_action_header {
     uint16_t type;                  /* OFPAT_VENDOR. */
-    uint16_t len;                   /* Length is (at least) 16. */
+    uint16_t len;                   /* Length is 16. */
     uint32_t vendor;                /* NX_VENDOR_ID. */
     uint16_t subtype;               /* NXAST_*. */
     uint8_t pad[6];
 };
 OFP_ASSERT(sizeof(struct nx_action_header) == 16);
+
+/* Wildcard for tunnel ID. */
+#define NXFW_TUN_ID  (1 << 25)
+
+#define NXFW_ALL NXFW_TUN_ID
+#define OVSFW_ALL (OFPFW_ALL | NXFW_ALL)
 
 #endif /* openflow/nicira-ext.h */

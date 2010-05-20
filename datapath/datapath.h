@@ -21,6 +21,9 @@
 #include "flow.h"
 #include "dp_sysfs.h"
 
+struct vport;
+struct dp_port;
+
 /* Mask for the priority bits in a vlan header.  If we ever merge upstream
  * then this should go into include/linux/if_vlan.h. */
 #define VLAN_PCP_MASK 0xe000
@@ -28,56 +31,6 @@
 
 #define DP_MAX_PORTS 1024
 #define DP_MAX_GROUPS 16
-
-#define DP_L2_BITS (PAGE_SHIFT - ilog2(sizeof(struct dp_bucket*)))
-#define DP_L2_SIZE (1 << DP_L2_BITS)
-#define DP_L2_SHIFT 0
-
-#define DP_L1_BITS (PAGE_SHIFT - ilog2(sizeof(struct dp_bucket**)))
-#define DP_L1_SIZE (1 << DP_L1_BITS)
-#define DP_L1_SHIFT DP_L2_BITS
-
-/* For 4 kB pages, this is 1,048,576 on 32-bit or 262,144 on 64-bit. */
-#define DP_MAX_BUCKETS (DP_L1_SIZE * DP_L2_SIZE)
-
-/**
- * struct dp_table - flow table
- * @n_buckets: number of buckets (a power of 2 between %DP_L1_SIZE and
- * %DP_MAX_BUCKETS)
- * @buckets: pointer to @n_buckets/%DP_L1_SIZE pointers to %DP_L1_SIZE pointers
- * to buckets
- * @hash_seed: random number used for flow hashing, to make the hash
- * distribution harder to predict
- * @rcu: RCU callback structure
- *
- * The @buckets array is logically an array of pointers to buckets.  It is
- * broken into two levels to avoid the need to kmalloc() any object larger than
- * a single page or to use vmalloc().  @buckets is always nonnull, as is each
- * @buckets[i], but each @buckets[i][j] is nonnull only if the specified hash
- * bucket is nonempty (for 0 <= i < @n_buckets/%DP_L1_SIZE, 0 <= j <
- * %DP_L1_SIZE).
- */
-struct dp_table {
-	unsigned int n_buckets;
-	struct dp_bucket ***buckets;
-	unsigned int hash_seed;
-	struct rcu_head rcu;
-};
-
-/**
- * struct dp_bucket - single bucket within datapath flow table
- * @rcu: RCU callback structure
- * @n_flows: number of flows in @flows[] array
- * @flows: array of @n_flows pointers to flows
- *
- * The expected number of flows per bucket is 1, but this allows for an
- * arbitrary number of collisions.
- */
-struct dp_bucket {
-	struct rcu_head rcu;
-	unsigned int n_flows;
-	struct sw_flow *flows[];
-};
 
 #define DP_N_QUEUES 3
 #define DP_MAX_QUEUE_LEN 100
@@ -120,7 +73,7 @@ struct dp_port_group {
  * @table: Current flow table (RCU protected).
  * @groups: Port groups, used by XFLOWAT_OUTPUT_GROUP action (RCU protected).
  * @n_ports: Number of ports currently in @ports.
- * @ports: Map from port number to &struct net_bridge_port.  %XFLOWP_LOCAL port
+ * @ports: Map from port number to &struct dp_port.  %XFLOWP_LOCAL port
  * always exists, other ports may be %NULL.
  * @port_list: List of all ports in @ports in arbitrary order.
  * @stats_percpu: Per-CPU datapath statistics.
@@ -140,15 +93,14 @@ struct datapath {
 	wait_queue_head_t waitqueue;
 
 	/* Flow table. */
-	unsigned int n_flows;
-	struct dp_table *table;
+	struct tbl *table;
 
 	/* Port groups. */
 	struct dp_port_group *groups[DP_MAX_GROUPS];
 
 	/* Switch ports. */
 	unsigned int n_ports;
-	struct net_bridge_port *ports[DP_MAX_PORTS];
+	struct dp_port *ports[DP_MAX_PORTS];
 	struct list_head port_list;
 
 	/* Stats. */
@@ -159,23 +111,23 @@ struct datapath {
 };
 
 /**
- * struct net_bridge_port - one port within a datapath
+ * struct dp_port - one port within a datapath
  * @port_no: Index into @dp's @ports array.
  * @dp: Datapath to which this port belongs.
- * @dev: The network device attached to this port.  The @br_port member in @dev
- * points back to this &struct net_bridge_port.
+ * @vport: The network device attached to this port.  The contents depends on
+ * the device and should be accessed only through the vport_* functions.
  * @kobj: Represents /sys/class/net/<devname>/brport.
  * @linkname: The name of the link from /sys/class/net/<datapath>/brif to this
- * &struct net_bridge_port.  (We keep this around so that we can delete it
- * if @dev gets renamed.)  Set to the null string when no link exists.
+ * &struct dp_port.  (We keep this around so that we can delete it if the
+ * device gets renamed.)  Set to the null string when no link exists.
  * @node: Element in @dp's @port_list.
  * @sflow_pool: Number of packets that were candidates for sFlow sampling,
  * regardless of whether they were actually chosen and sent down to userspace.
  */
-struct net_bridge_port {
+struct dp_port {
 	u16 port_no;
 	struct datapath	*dp;
-	struct net_device *dev;
+	struct vport *vport;
 	struct kobject kobj;
 	char linkname[IFNAMSIZ];
 	struct list_head node;
@@ -191,41 +143,30 @@ enum csum_type {
 
 /**
  * struct ovs_skb_cb - OVS data in skb CB
+ * @dp_port: The datapath port on which the skb entered the switch.
  * @ip_summed: Consistently stores L4 checksumming status across different
  * kernel versions.
+ * @tun_id: ID (in network byte order) of the tunnel that encapsulated this
+ * packet. It is 0 if the packet was not received on a tunnel.
  */
 struct ovs_skb_cb {
-	enum csum_type	ip_summed;
+	struct dp_port		*dp_port;
+	enum csum_type		ip_summed;
+	__be32			tun_id;
 };
 #define OVS_CB(skb) ((struct ovs_skb_cb *)(skb)->cb)
 
 extern struct notifier_block dp_device_notifier;
 extern int (*dp_ioctl_hook)(struct net_device *dev, struct ifreq *rq, int cmd);
 
-/* Flow table. */
-struct dp_table *dp_table_create(unsigned int n_buckets);
-void dp_table_destroy(struct dp_table *, int free_flows);
-struct sw_flow *dp_table_lookup(struct dp_table *, const struct xflow_key *);
-int dp_table_insert(struct dp_table *, struct sw_flow *);
-int dp_table_delete(struct dp_table *, struct sw_flow *);
-int dp_table_expand(struct datapath *);
-int dp_table_flush(struct datapath *);
-int dp_table_foreach(struct dp_table *table,
-		     int (*callback)(struct sw_flow *flow, void *aux),
-		     void *aux);
-
-void dp_process_received_packet(struct sk_buff *, struct net_bridge_port *);
-int dp_del_port(struct net_bridge_port *);
+void dp_process_received_packet(struct dp_port *, struct sk_buff *);
+int dp_detach_port(struct dp_port *, int may_delete);
 int dp_output_control(struct datapath *, struct sk_buff *, int, u32 arg);
 int dp_min_mtu(const struct datapath *dp);
-void set_dp_devs_mtu(const struct datapath *dp, struct net_device *dev);
+void set_internal_devs_mtu(const struct datapath *dp);
 
 struct datapath *get_dp(int dp_idx);
-
-static inline const char *dp_name(const struct datapath *dp)
-{
-	return dp->ports[XFLOWP_LOCAL]->dev->name;
-}
+const char *dp_name(const struct datapath *dp);
 
 #if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
 int vswitch_skb_checksum_setup(struct sk_buff *skb);

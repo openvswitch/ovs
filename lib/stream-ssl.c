@@ -37,7 +37,6 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "socket-util.h"
-#include "socket-util.h"
 #include "util.h"
 #include "stream-provider.h"
 #include "stream.h"
@@ -125,6 +124,10 @@ struct ssl_stream
      * deadlock and livelock situations above.
      */
     int rx_want, tx_want;
+
+    /* A few bytes of header data in case SSL negotation fails. */
+    uint8_t head[2];
+    short int n_head;
 };
 
 /* SSL context created by ssl_init(). */
@@ -140,6 +143,11 @@ struct ssl_config_file {
 static struct ssl_config_file private_key;
 static struct ssl_config_file certificate;
 static struct ssl_config_file ca_cert;
+
+/* Ordinarily, the SSL client and server verify each other's certificates using
+ * a CA certificate.  Setting this to false disables this behavior.  (This is a
+ * security risk.) */
+static bool verify_peer_cert = true;
 
 /* Ordinarily, we require a CA certificate for the peer to be locally
  * available.  We can, however, bootstrap the CA certificate from the peer at
@@ -204,7 +212,7 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
         VLOG_ERR("Certificate must be configured to use SSL");
         retval = ENOPROTOOPT;
     }
-    if (!ca_cert.read && !bootstrap_ca_cert) {
+    if (!ca_cert.read && verify_peer_cert && !bootstrap_ca_cert) {
         VLOG_ERR("CA certificate must be configured to use SSL");
         retval = ENOPROTOOPT;
     }
@@ -243,7 +251,7 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
         retval = ENOPROTOOPT;
         goto error;
     }
-    if (bootstrap_ca_cert && type == CLIENT) {
+    if (!verify_peer_cert || (bootstrap_ca_cert && type == CLIENT)) {
         SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
     }
 
@@ -260,6 +268,7 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
     sslv->ssl = ssl;
     sslv->txbuf = NULL;
     sslv->rx_want = sslv->tx_want = SSL_NOTHING;
+    sslv->n_head = 0;
     *streamp = &sslv->stream;
     return 0;
 
@@ -334,10 +343,9 @@ do_ca_cert_bootstrap(struct stream *stream)
     fd = open(ca_cert.file_name, O_CREAT | O_EXCL | O_WRONLY, 0444);
     if (fd < 0) {
         if (errno == EEXIST) {
-            VLOG_INFO("CA cert %s created by another process",
+            VLOG_INFO("reading CA cert %s created by another process",
                       ca_cert.file_name);
-            /* We'll read it the next time around the main loop because
-             * update_ssl_config() will see that it now exists. */
+            stream_ssl_set_ca_cert_file(ca_cert.file_name, true);
             return EPROTO;
         } else {
             VLOG_ERR("could not bootstrap CA cert: creating %s failed: %s",
@@ -411,6 +419,13 @@ ssl_connect(struct stream *stream)
         /* Fall through. */
 
     case STATE_SSL_CONNECTING:
+        /* Capture the first few bytes of received data so that we can guess
+         * what kind of funny data we've been sent if SSL negotation fails. */
+        if (sslv->n_head <= 0) {
+            sslv->n_head = recv(sslv->fd, sslv->head, sizeof sslv->head,
+                                MSG_PEEK);
+        }
+
         retval = (sslv->type == CLIENT
                    ? SSL_connect(sslv->ssl) : SSL_accept(sslv->ssl));
         if (retval != 1) {
@@ -422,13 +437,16 @@ ssl_connect(struct stream *stream)
                 interpret_ssl_error((sslv->type == CLIENT ? "SSL_connect"
                                      : "SSL_accept"), retval, error, &unused);
                 shutdown(sslv->fd, SHUT_RDWR);
+                stream_report_content(sslv->head, sslv->n_head, STREAM_SSL,
+                                      THIS_MODULE, stream_get_name(stream));
                 return EPROTO;
             }
         } else if (bootstrap_ca_cert) {
             return do_ca_cert_bootstrap(stream);
-        } else if ((SSL_get_verify_mode(sslv->ssl)
-                    & (SSL_VERIFY_NONE | SSL_VERIFY_PEER))
-                   != SSL_VERIFY_PEER) {
+        } else if (verify_peer_cert
+                   && ((SSL_get_verify_mode(sslv->ssl)
+                       & (SSL_VERIFY_NONE | SSL_VERIFY_PEER))
+                       != SSL_VERIFY_PEER)) {
             /* Two or more SSL connections completed at the same time while we
              * were in bootstrap mode.  Only one of these can finish the
              * bootstrap successfully.  The other one(s) must be rejected
@@ -459,6 +477,11 @@ ssl_close(struct stream *stream)
      * since we don't have any way to continue the close operation in the
      * background. */
     SSL_shutdown(sslv->ssl);
+
+    /* SSL_shutdown() might have signaled an error, in which case we need to
+     * flush it out of the OpenSSL error queue or the next OpenSSL operation
+     * will falsely signal an error. */
+    ERR_clear_error();
 
     SSL_free(sslv->ssl);
     close(sslv->fd);
@@ -910,26 +933,6 @@ stream_ssl_is_configured(void)
     return private_key.file_name || certificate.file_name || ca_cert.file_name;
 }
 
-static void
-get_mtime(const char *file_name, struct timespec *mtime)
-{
-    struct stat s;
-
-    if (!stat(file_name, &s)) {
-        mtime->tv_sec = s.st_mtime;
-
-#if HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC
-        mtime->tv_nsec = s.st_mtim.tv_nsec;
-#elif HAVE_STRUCT_STAT_ST_MTIMENSEC
-        mtime->tv_nsec = s.st_mtimensec;
-#else
-        mtime->tv_nsec = 0;
-#endif
-    } else {
-        mtime->tv_sec = mtime->tv_nsec = 0;
-    }
-}
-
 static bool
 update_ssl_config(struct ssl_config_file *config, const char *file_name)
 {
@@ -949,9 +952,12 @@ update_ssl_config(struct ssl_config_file *config, const char *file_name)
         return false;
     }
 
+    /* Update 'config'. */
     config->mtime = mtime;
-    free(config->file_name);
-    config->file_name = xstrdup(file_name);
+    if (file_name != config->file_name) {
+        free(config->file_name);
+        config->file_name = xstrdup(file_name);
+    }
     return true;
 }
 
@@ -1107,7 +1113,11 @@ stream_ssl_set_ca_cert_file__(const char *file_name, bool bootstrap)
     size_t n_certs;
     struct stat s;
 
-    if (bootstrap && stat(file_name, &s) && errno == ENOENT) {
+    if (!strcmp(file_name, "none")) {
+        verify_peer_cert = false;
+        VLOG_WARN("Peer certificate validation disabled "
+                  "(this is a security risk)");
+    } else if (bootstrap && stat(file_name, &s) && errno == ENOENT) {
         bootstrap_ca_cert = true;
     } else if (!read_cert_file(file_name, &certs, &n_certs)) {
         size_t i;

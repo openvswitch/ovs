@@ -9,7 +9,7 @@
 # e.g. "--fail=open"
 OVSDB_SERVER_OPTS=
 
-# OVS_VSWITCHD_OPTS: Additional options to pass to ovs-openflowd,
+# OVS_VSWITCHD_OPTS: Additional options to pass to ovs-vswitchd,
 # e.g. "--fail=open"
 OVS_VSWITCHD_OPTS=
 

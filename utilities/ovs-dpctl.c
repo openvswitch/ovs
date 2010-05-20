@@ -473,11 +473,12 @@ do_dump_flows(int argc OVS_UNUSED, char *argv[])
 
         f->actions = actions;
         f->n_actions = MAX_ACTIONS;
-        xfif_flow_get(xfif, f);
+        if (!xfif_flow_get(xfif, f)) {
 
-        ds_clear(&ds);
-        format_xflow_flow(&ds, f);
-        printf("%s\n", ds_cstr(&ds));
+            ds_clear(&ds);
+            format_xflow_flow(&ds, f);
+            printf("%s\n", ds_cstr(&ds));
+        }
     }
     ds_destroy(&ds);
     xfif_close(xfif);

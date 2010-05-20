@@ -1,0 +1,8 @@
+.IP "\fB\-\-unixctl=\fIsocket\fR"
+Sets the name of the control socket on which \fB\*(PN\fR listens for
+runtime management commands (see \fBRUNTIME MANAGEMENT COMMANDS\fR,
+below).  If \fIsocket\fR does not begin with \fB/\fR, it is
+interpreted as relative to \fB@RUNDIR@\fR.  If \fB\-\-unixctl\fR is
+not used at all, the default socket is
+\fB@RUNDIR@/\*(PN.\fIpid\fB.ctl\fR, where \fIpid\fR is \fB\*(PN\fR's
+process ID.

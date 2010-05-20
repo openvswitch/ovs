@@ -10,16 +10,34 @@
 #define ACTIONS_H 1
 
 #include <linux/gfp.h>
+#include <linux/skbuff.h>
 
 struct datapath;
 struct sk_buff;
 struct xflow_key;
 union xflow_action;
 
-int dp_xmit_skb(struct sk_buff *);
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		    struct xflow_key *key,
 		    const union xflow_action *, int n_actions,
 		    gfp_t gfp);
+
+static inline void
+set_skb_csum_bits(const struct sk_buff *old_skb, struct sk_buff *new_skb)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+	/* Before 2.6.24 these fields were not copied when
+	 * doing an skb_copy_expand. */
+	new_skb->ip_summed = old_skb->ip_summed;
+	new_skb->csum = old_skb->csum;
+#endif
+#if defined(CONFIG_XEN) && defined(HAVE_PROTO_DATA_VALID)
+	/* These fields are copied in skb_clone but not in
+	 * skb_copy or related functions.  We need to manually
+	 * copy them over here. */
+	new_skb->proto_data_valid = old_skb->proto_data_valid;
+	new_skb->proto_csum_blank = old_skb->proto_csum_blank;
+#endif
+}
 
 #endif /* actions.h */

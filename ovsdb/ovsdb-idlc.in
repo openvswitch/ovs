@@ -158,7 +158,14 @@ def printCIDLHeader(schemaFile):
         print '''
 const struct %(s)s *%(s)s_first(const struct ovsdb_idl *);
 const struct %(s)s *%(s)s_next(const struct %(s)s *);
-#define %(S)s_FOR_EACH(ROW, IDL) for ((ROW) = %(s)s_first(IDL); (ROW); (ROW) = %(s)s_next(ROW))
+#define %(S)s_FOR_EACH(ROW, IDL) \\
+        for ((ROW) = %(s)s_first(IDL); \\
+             (ROW); \\
+             (ROW) = %(s)s_next(ROW))
+#define %(S)s_FOR_EACH_SAFE(ROW, NEXT, IDL) \\
+        for ((ROW) = %(s)s_first(IDL); \\
+             (ROW) ? ((NEXT) = %(s)s_next(ROW), 1) : 0; \\
+             (ROW) = (NEXT))
 
 void %(s)s_delete(const struct %(s)s *);
 struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);

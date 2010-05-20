@@ -25,6 +25,7 @@
 #include <string.h>
 #include "coverage.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "flow.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
@@ -272,6 +273,8 @@ vconn_open_block(const char *name, int min_version, struct vconn **vconnp)
 {
     struct vconn *vconn;
     int error;
+
+    fatal_signal_run();
 
     error = vconn_open(name, min_version, &vconn);
     while (error == EAGAIN) {
@@ -607,6 +610,9 @@ int
 vconn_send_block(struct vconn *vconn, struct ofpbuf *msg)
 {
     int retval;
+
+    fatal_signal_run();
+
     while ((retval = vconn_send(vconn, msg)) == EAGAIN) {
         vconn_run(vconn);
         vconn_run_wait(vconn);
@@ -621,6 +627,9 @@ int
 vconn_recv_block(struct vconn *vconn, struct ofpbuf **msgp)
 {
     int retval;
+
+    fatal_signal_run();
+
     while ((retval = vconn_recv(vconn, msgp)) == EAGAIN) {
         vconn_run(vconn);
         vconn_run_wait(vconn);
@@ -1349,6 +1358,7 @@ check_nicira_action(const union ofp_action *a, unsigned int len)
 
     switch (ntohs(nah->subtype)) {
     case NXAST_RESUBMIT:
+    case NXAST_SET_TUNNEL:
         return check_action_exact_len(a, len, 16);
     default:
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR_TYPE);
@@ -1457,7 +1467,7 @@ normalize_match(struct ofp_match *m)
     enum { OFPFW_TP = OFPFW_TP_SRC | OFPFW_TP_DST };
     uint32_t wc;
 
-    wc = ntohl(m->wildcards) & OFPFW_ALL;
+    wc = ntohl(m->wildcards) & OVSFW_ALL;
     if (wc & OFPFW_DL_TYPE) {
         m->dl_type = 0;
 

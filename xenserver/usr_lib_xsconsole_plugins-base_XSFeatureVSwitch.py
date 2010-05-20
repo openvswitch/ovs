@@ -99,9 +99,13 @@ class VSwitchControllerDialogue(Dialogue):
 
         self.hostsInPool = 0
         self.hostsUpdated = 0
+        self.xs_version = data.host.software_version.product_version('')
         pool = data.GetPoolForThisHost()
         if pool is not None:
-            self.controller = pool.get("other_config", {}).get("vSwitchController", "")
+            if self.xs_version == "5.5.0":
+                self.controller = pool.get("other_config", {}).get("vSwitchController", "")
+            else:
+                self.controller = pool.get("vswitch_controller", "")
         else:
             self.controller = ""
 
@@ -222,25 +226,30 @@ class VSwitchControllerDialogue(Dialogue):
     def SetController(self, ip):
         self.hostsInPool = 0
         self.hostsUpdated = 0
-        Task.Sync(lambda s: self._modifyPoolConfig(s, "vSwitchController", ip))
+        Task.Sync(lambda s: self._modifyPoolConfig(s, ip or ""))
         # Should be done asynchronously, maybe with an external script?
         Task.Sync(lambda s: self._updateActiveServers(s))
 
-    def _modifyPoolConfig(self, session, key, value):
+    def _modifyPoolConfig(self, session, value):
         """Modify pool configuration.
 
-        If value == None then delete key, otherwise set key to value."""
+        If value == "" then delete configuration, otherwise set to value.
+        """
         pools = session.xenapi.pool.get_all()
         # We assume there is only ever one pool...
         if len(pools) == 0:
-            log.error("No pool for host.")
-            raise XenAPIPlugin.Failure("NO_POOL_FOR_HOST", [])
+            XSLogFatal(Lang("No pool found for host."))
+            return
         if len(pools) > 1:
-            log.error("More than one pool for host.")
-            raise XenAPIPlugin.Failure("MORE_THAN_ONE_POOL_FOR_HOST", [])
-        session.xenapi.pool.remove_from_other_config(pools[0], key)
-        if value != None:
-            session.xenapi.pool.add_to_other_config(pools[0], key, value)
+            XSLogFatal(Lang("More than one pool for host."))
+            return
+        if self.xs_version == "5.5.0":
+            key = "vSwitchController"
+            session.xenapi.pool.remove_from_other_config(pools[0], key)
+            if value != None:
+                session.xenapi.pool.add_to_other_config(pools[0], key, value)
+        else:
+            session.xenapi.pool.set_vswitch_controller(value)
         Data.Inst().Update()
 
     def _updateActiveServers(self, session):
@@ -265,6 +274,7 @@ class XSFeatureVSwitch:
     @classmethod
     def StatusUpdateHandler(cls, inPane):
         data = Data.Inst()
+        xs_version = data.host.software_version.product_version('')
 
         inPane.AddTitleField(Lang("Open vSwitch"))
 
@@ -277,7 +287,10 @@ class XSFeatureVSwitch:
 
         pool = data.GetPoolForThisHost()
         if pool is not None:
-            dbController = pool.get("other_config", {}).get("vSwitchController", "")
+            if (xs_version == "5.5.0"):
+                dbController = pool.get("other_config", {}).get("vSwitchController", "")
+            else:
+                dbController = pool.get("vswitch_controller", "")
         else:
             dbController = ""
 
@@ -300,7 +313,6 @@ class XSFeatureVSwitch:
                               VSwitchService.Inst("openvswitch", "ovsdb-server").status())
 
         # Only XenServer 5.5.0 runs ovs-brcompatd
-        xs_version = data.host.software_version.product_version('')
         if (xs_version == "5.5.0"):
             inPane.AddStatusField(Lang("ovs-brcompatd status", 20),
                    VSwitchService.Inst("openvswitch", "ovs-brcompatd").status())
@@ -327,5 +339,6 @@ class XSFeatureVSwitch:
             }
         )
 
-# Register this plugin when module is imported
-XSFeatureVSwitch().Register()
+# Register this plugin when module is imported, IFF vswitchd is running
+if os.path.exists('/var/run/openvswitch/ovs-vswitchd.pid'):
+    XSFeatureVSwitch().Register()

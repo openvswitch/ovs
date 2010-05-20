@@ -44,6 +44,7 @@ struct vconn_stream
     struct stream *stream;
     struct ofpbuf *rxbuf;
     struct ofpbuf *txbuf;
+    int n_packets;
 };
 
 static struct vconn_class stream_vconn_class;
@@ -51,7 +52,6 @@ static struct vconn_class stream_vconn_class;
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 25);
 
 static void vconn_stream_clear_txbuf(struct vconn_stream *);
-static int count_fields(const char *);
 
 static struct vconn *
 vconn_stream_new(struct stream *stream, int connect_status)
@@ -64,6 +64,7 @@ vconn_stream_new(struct stream *stream, int connect_status)
     s->stream = stream;
     s->txbuf = NULL;
     s->rxbuf = NULL;
+    s->n_packets = 0;
     s->vconn.remote_ip = stream_get_remote_ip(stream);
     s->vconn.remote_port = stream_get_remote_port(stream);
     s->vconn.local_ip = stream_get_local_ip(stream);
@@ -76,22 +77,14 @@ vconn_stream_new(struct stream *stream, int connect_status)
  *
  * Returns 0 if successful, otherwise a positive errno value. */
 static int
-vconn_stream_open(const char *name_, char *suffix OVS_UNUSED,
+vconn_stream_open(const char *name, char *suffix OVS_UNUSED,
                   struct vconn **vconnp)
 {
     struct stream *stream;
-    char *name;
     int error;
 
-    if (!strncmp(name_, "tcp:", 4) && count_fields(name_) < 3) {
-        name = xasprintf("%s:%d", name_, OFP_TCP_PORT);
-    } else if (!strncmp(name_, "ssl:", 4) && count_fields(name_) < 3) {
-        name = xasprintf("%s:%d", name_, OFP_SSL_PORT);
-    } else {
-        name = xstrdup(name_);
-    }
-    error = stream_open(name, &stream);
-    free(name);
+    error = stream_open_with_default_ports(name, OFP_TCP_PORT, OFP_SSL_PORT,
+                                           &stream);
 
     if (error && error != EAGAIN) {
         return error;
@@ -111,6 +104,12 @@ static void
 vconn_stream_close(struct vconn *vconn)
 {
     struct vconn_stream *s = vconn_stream_cast(vconn);
+
+    if ((vconn->error == EPROTO || s->n_packets < 1) && s->rxbuf) {
+        stream_report_content(s->rxbuf->data, s->rxbuf->size, STREAM_OPENFLOW,
+                              THIS_MODULE, vconn_get_name(vconn));
+    }
+
     stream_close(s->stream);
     vconn_stream_clear_txbuf(s);
     ofpbuf_delete(s->rxbuf);
@@ -125,61 +124,66 @@ vconn_stream_connect(struct vconn *vconn)
 }
 
 static int
-vconn_stream_recv(struct vconn *vconn, struct ofpbuf **bufferp)
+vconn_stream_recv__(struct vconn_stream *s, int rx_len)
 {
-    struct vconn_stream *s = vconn_stream_cast(vconn);
-    struct ofpbuf *rx;
-    size_t want_bytes;
-    ssize_t retval;
+    struct ofpbuf *rx = s->rxbuf;
+    int want_bytes, retval;
 
-    if (s->rxbuf == NULL) {
-        s->rxbuf = ofpbuf_new(1564);
-    }
-    rx = s->rxbuf;
-
-again:
-    if (sizeof(struct ofp_header) > rx->size) {
-        want_bytes = sizeof(struct ofp_header) - rx->size;
-    } else {
-        struct ofp_header *oh = rx->data;
-        size_t length = ntohs(oh->length);
-        if (length < sizeof(struct ofp_header)) {
-            VLOG_ERR_RL(&rl, "received too-short ofp_header (%zu bytes)",
-                        length);
-            return EPROTO;
-        }
-        want_bytes = length - rx->size;
-        if (!want_bytes) {
-            *bufferp = rx;
-            s->rxbuf = NULL;
-            return 0;
-        }
-    }
+    want_bytes = rx_len - rx->size;
     ofpbuf_prealloc_tailroom(rx, want_bytes);
-
     retval = stream_recv(s->stream, ofpbuf_tail(rx), want_bytes);
     if (retval > 0) {
         rx->size += retval;
-        if (retval == want_bytes) {
-            if (rx->size > sizeof(struct ofp_header)) {
-                *bufferp = rx;
-                s->rxbuf = NULL;
-                return 0;
-            } else {
-                goto again;
-            }
-        }
-        return EAGAIN;
+        return retval == want_bytes ? 0 : EAGAIN;
     } else if (retval == 0) {
         if (rx->size) {
             VLOG_ERR_RL(&rl, "connection dropped mid-packet");
             return EPROTO;
-        } else {
-            return EOF;
         }
+        return EOF;
     } else {
         return -retval;
     }
+}
+
+static int
+vconn_stream_recv(struct vconn *vconn, struct ofpbuf **bufferp)
+{
+    struct vconn_stream *s = vconn_stream_cast(vconn);
+    const struct ofp_header *oh;
+    int rx_len;
+
+    /* Allocate new receive buffer if we don't have one. */
+    if (s->rxbuf == NULL) {
+        s->rxbuf = ofpbuf_new(1564);
+    }
+
+    /* Read ofp_header. */
+    if (s->rxbuf->size < sizeof(struct ofp_header)) {
+        int retval = vconn_stream_recv__(s, sizeof(struct ofp_header));
+        if (retval) {
+            return retval;
+        }
+    }
+
+    /* Read payload. */
+    oh = s->rxbuf->data;
+    rx_len = ntohs(oh->length);
+    if (rx_len < sizeof(struct ofp_header)) {
+        VLOG_ERR_RL(&rl, "received too-short ofp_header (%zu bytes)",
+                    rx_len);
+        return EPROTO;
+    } else if (s->rxbuf->size < rx_len) {
+        int retval = vconn_stream_recv__(s, rx_len);
+        if (retval) {
+            return retval;
+        }
+    }
+
+    s->n_packets++;
+    *bufferp = s->rxbuf;
+    s->rxbuf = NULL;
+    return 0;
 }
 
 static void
@@ -302,29 +306,21 @@ pvconn_pstream_cast(struct pvconn *pvconn)
  * Returns 0 if successful, otherwise a positive errno value.  (The current
  * implementation never fails.) */
 static int
-pvconn_pstream_listen(const char *name_, char *suffix OVS_UNUSED,
+pvconn_pstream_listen(const char *name, char *suffix OVS_UNUSED,
                       struct pvconn **pvconnp)
 {
     struct pvconn_pstream *ps;
     struct pstream *pstream;
-    char *name;
     int error;
 
-    if (!strncmp(name_, "ptcp:", 5) && count_fields(name_) < 2) {
-        name = xasprintf("%s%d", name_, OFP_TCP_PORT);
-    } else if (!strncmp(name_, "pssl:", 5) && count_fields(name_) < 2) {
-        name = xasprintf("%s%d", name_, OFP_SSL_PORT);
-    } else {
-        name = xstrdup(name_);
-    }
-    error = pstream_open(name, &pstream);
-    free(name);
+    error = pstream_open_with_default_ports(name, OFP_TCP_PORT, OFP_SSL_PORT,
+                                            &pstream);
     if (error) {
         return error;
     }
 
     ps = xmalloc(sizeof *ps);
-    pvconn_init(&ps->pvconn, &pstream_pvconn_class, name_);
+    pvconn_init(&ps->pvconn, &pstream_pvconn_class, name);
     ps->pstream = pstream;
     *pvconnp = &ps->pvconn;
     return 0;
@@ -363,23 +359,6 @@ pvconn_pstream_wait(struct pvconn *pvconn)
 {
     struct pvconn_pstream *ps = pvconn_pstream_cast(pvconn);
     pstream_wait(ps->pstream);
-}
-
-static int
-count_fields(const char *s_)
-{
-    char *s, *field, *save_ptr;
-    int n = 0;
-
-    save_ptr = NULL;
-    s = xstrdup(s_);
-    for (field = strtok_r(s, ":", &save_ptr); field != NULL;
-         field = strtok_r(NULL, ":", &save_ptr)) {
-        n++;
-    }
-    free(s);
-
-    return n;
 }
 
 /* Stream-based vconns and pvconns. */

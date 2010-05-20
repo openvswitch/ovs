@@ -28,10 +28,19 @@ struct switch_status;
 struct wdp;
 
 int in_band_create(struct ofproto *, struct wdp *, struct switch_status *,
-                   struct rconn *controller, struct in_band **);
+                   struct in_band **);
 void in_band_destroy(struct in_band *);
+
+void in_band_set_remotes(struct in_band *,
+                         const struct sockaddr_in *, size_t n);
+
 void in_band_run(struct in_band *);
 void in_band_wait(struct in_band *);
+
+bool in_band_msg_in_hook(struct in_band *, const flow_t *, 
+                         const struct ofpbuf *packet);
+bool in_band_rule_check(struct in_band *, const flow_t *,
+                        const struct xflow_actions *);
 void in_band_flushed(struct in_band *);
 
 #endif /* in-band.h */

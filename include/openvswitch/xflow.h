@@ -37,7 +37,10 @@
  * ----------------------------------------------------------------------
  */
 
-/* Protocol between userspace and kernel datapath. */
+/* Protocol between userspace and kernel datapath.
+ *
+ * Be sure to update datapath/xflow-compat.h if you change any of the
+ * structures in here. */
 
 #ifndef XFLOW_H
 #define XFLOW_H 1
@@ -61,8 +64,8 @@
 #define XFLOW_GET_LISTEN_MASK     _IOW('O', 5, int)
 #define XFLOW_SET_LISTEN_MASK     _IOR('O', 6, int)
 
-#define XFLOW_PORT_ADD            _IOR('O', 7, struct xflow_port)
-#define XFLOW_PORT_DEL            _IOR('O', 8, int)
+#define XFLOW_PORT_ATTACH         _IOR('O', 7, struct xflow_port)
+#define XFLOW_PORT_DETACH         _IOR('O', 8, int)
 #define XFLOW_PORT_QUERY          _IOWR('O', 9, struct xflow_port)
 #define XFLOW_PORT_LIST           _IOWR('O', 10, struct xflow_portvec)
 
@@ -79,6 +82,15 @@
 
 #define XFLOW_SET_SFLOW_PROBABILITY _IOR('O', 19, int)
 #define XFLOW_GET_SFLOW_PROBABILITY _IOW('O', 20, int)
+
+#define XFLOW_VPORT_ADD           _IOR('O', 21, struct xflow_vport_add)
+#define XFLOW_VPORT_MOD           _IOR('O', 22, struct xflow_vport_mod)
+#define XFLOW_VPORT_DEL           _IO('O', 23)
+#define XFLOW_VPORT_STATS_GET     _IOWR('O', 24, struct xflow_vport_stats_req)
+#define XFLOW_VPORT_ETHER_GET     _IOWR('O', 25, struct xflow_vport_ether)
+#define XFLOW_VPORT_ETHER_SET     _IOW('O', 26, struct xflow_vport_ether)
+#define XFLOW_VPORT_MTU_GET       _IOWR('O', 27, struct xflow_vport_mtu)
+#define XFLOW_VPORT_MTU_SET       _IOW('O', 28, struct xflow_vport_mtu)
 
 struct xflow_stats {
     /* Flows. */
@@ -127,8 +139,8 @@ struct xflow_stats {
  * @arg: Argument value whose meaning depends on @type.
  *
  * For @type == %_XFLOWL_MISS_NR, the header is followed by packet data.  The
- * @arg member is unused and set to 0.
- *
+ * @arg member is the ID (in network byte order) of the tunnel that
+ * encapsulated this packet. It is 0 if the packet was not received on a tunnel. *
  * For @type == %_XFLOWL_ACTION_NR, the header is followed by packet data.  The
  * @arg member is copied from the &struct xflow_action_controller that caused
  * the &struct xflow_msg to be composed.
@@ -173,7 +185,7 @@ struct xflow_port {
 
 struct xflow_portvec {
     struct xflow_port *ports;
-    int n_ports;
+    __u32 n_ports;
 };
 
 struct xflow_port_group {
@@ -201,6 +213,7 @@ struct xflow_flow_stats {
 #define XFLOW_TCI_PRESENT 0x1000  /* CFI bit */
 
 struct xflow_key {
+    __be32 tun_id;               /* Encapsulating tunnel ID. */
     __be32 nw_src;               /* IP source address. */
     __be32 nw_dst;               /* IP destination address. */
     __u16  in_port;              /* Input switch port. */
@@ -239,7 +252,7 @@ struct xflow_flow_put {
 
 struct xflow_flowvec {
     struct xflow_flow *flows;
-    int n_flows;
+    __u32 n_flows;
 };
 
 /* Action types. */
@@ -255,7 +268,8 @@ struct xflow_flowvec {
 #define XFLOWAT_SET_NW_TOS        9  /* IP ToS/DSCP field (6 bits). */
 #define XFLOWAT_SET_TP_SRC        10 /* TCP/UDP source port. */
 #define XFLOWAT_SET_TP_DST        11 /* TCP/UDP destination port. */
-#define XFLOWAT_N_ACTIONS         12
+#define XFLOWAT_SET_TUNNEL        12 /* Set the encapsulating tunnel ID. */
+#define XFLOWAT_N_ACTIONS         13
 
 struct xflow_action_output {
     __u16 type;                  /* XFLOWAT_OUTPUT. */
@@ -275,6 +289,12 @@ struct xflow_action_controller {
     __u16 type;                 /* XFLOWAT_OUTPUT_CONTROLLER. */
     __u16 reserved;
     __u32 arg;                  /* Copied to struct xflow_msg 'arg' member. */
+};
+
+struct xflow_action_tunnel {
+    __u16 type;                 /* XFLOWAT_SET_TUNNEL. */
+    __u16 reserved;
+    __be32 tun_id;              /* Tunnel ID. */
 };
 
 /* Action structure for XFLOWAT_SET_DL_TCI. */
@@ -320,6 +340,7 @@ union xflow_action {
     struct xflow_action_output output;
     struct xflow_action_output_group output_group;
     struct xflow_action_controller controller;
+    struct xflow_action_tunnel tunnel;
     struct xflow_action_dl_tci dl_tci;
     struct xflow_action_dl_addr dl_addr;
     struct xflow_action_nw_addr nw_addr;
@@ -337,6 +358,48 @@ struct xflow_execute {
 
     const void *data;
     __u32 length;
+};
+
+#define VPORT_TYPE_SIZE     16
+struct xflow_vport_add {
+    char port_type[VPORT_TYPE_SIZE];
+    char devname[16];            /* IFNAMSIZ */
+    void *config;
+};
+
+struct xflow_vport_mod {
+    char devname[16];            /* IFNAMSIZ */
+    void *config;
+};
+
+struct xflow_vport_stats {
+    __u64 rx_packets;
+    __u64 tx_packets;
+    __u64 rx_bytes;
+    __u64 tx_bytes;
+    __u64 rx_dropped;
+    __u64 tx_dropped;
+    __u64 rx_errors;
+    __u64 tx_errors;
+    __u64 rx_frame_err;
+    __u64 rx_over_err;
+    __u64 rx_crc_err;
+    __u64 collisions;
+};
+
+struct xflow_vport_stats_req {
+    char devname[16];            /* IFNAMSIZ */
+    struct xflow_vport_stats stats;
+};
+
+struct xflow_vport_ether {
+    char devname[16];            /* IFNAMSIZ */
+    unsigned char ether_addr[ETH_ALEN];
+};
+
+struct xflow_vport_mtu {
+    char devname[16];            /* IFNAMSIZ */
+    __u16 mtu;
 };
 
 /* Values below this cutoff are 802.3 packets and the two bytes

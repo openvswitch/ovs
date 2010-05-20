@@ -23,6 +23,7 @@
 
 #include "byteq.h"
 #include "dynamic-string.h"
+#include "fatal-signal.h"
 #include "json.h"
 #include "list.h"
 #include "ofpbuf.h"
@@ -55,6 +56,24 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
 
 static void jsonrpc_received(struct jsonrpc *);
 static void jsonrpc_cleanup(struct jsonrpc *);
+
+/* This is just the same as stream_open() except that it uses the default
+ * JSONRPC ports if none is specified. */
+int
+jsonrpc_stream_open(const char *name, struct stream **streamp)
+{
+    return stream_open_with_default_ports(name, JSONRPC_TCP_PORT,
+                                          JSONRPC_SSL_PORT, streamp);
+}
+
+/* This is just the same as pstream_open() except that it uses the default
+ * JSONRPC ports if none is specified. */
+int
+jsonrpc_pstream_open(const char *name, struct pstream **pstreamp)
+{
+    return pstream_open_with_default_ports(name, JSONRPC_TCP_PORT,
+                                           JSONRPC_SSL_PORT, pstreamp);
+}
 
 struct jsonrpc *
 jsonrpc_open(struct stream *stream)
@@ -248,6 +267,12 @@ jsonrpc_recv(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
             if (json_parser_is_done(rpc->parser)) {
                 jsonrpc_received(rpc);
                 if (rpc->status) {
+                    const struct byteq *q = &rpc->input;
+                    if (q->head <= BYTEQ_SIZE) {
+                        stream_report_content(q->buffer, q->head,
+                                              STREAM_JSONRPC,
+                                              THIS_MODULE, rpc->name);
+                    }
                     return rpc->status;
                 }
             }
@@ -275,6 +300,8 @@ jsonrpc_send_block(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
 {
     int error;
 
+    fatal_signal_run();
+
     error = jsonrpc_send(rpc, msg);
     if (error) {
         return error;
@@ -296,6 +323,7 @@ jsonrpc_recv_block(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
     for (;;) {
         int error = jsonrpc_recv(rpc, msgp);
         if (error != EAGAIN) {
+            fatal_signal_run();
             return error;
         }
 
@@ -637,12 +665,20 @@ struct jsonrpc_session {
     struct reconnect *reconnect;
     struct jsonrpc *rpc;
     struct stream *stream;
+    struct pstream *pstream;
     unsigned int seqno;
 };
 
-/* Creates and returns a jsonrpc_session that connects and reconnects, with
- * back-off, to 'name', which should be a string acceptable to
- * stream_open(). */
+/* Creates and returns a jsonrpc_session to 'name', which should be a string
+ * acceptable to stream_open() or pstream_open().
+ *
+ * If 'name' is an active connection method, e.g. "tcp:127.1.2.3", the new
+ * jsonrpc_session connects and reconnects, with back-off, to 'name'.
+ *
+ * If 'name' is a passive connection method, e.g. "ptcp:", the new
+ * jsonrpc_session listens for connections to 'name'.  It maintains at most one
+ * connection at any given time.  Any new connection causes the previous one
+ * (if any) to be dropped. */
 struct jsonrpc_session *
 jsonrpc_session_open(const char *name)
 {
@@ -654,7 +690,12 @@ jsonrpc_session_open(const char *name)
     reconnect_enable(s->reconnect, time_msec());
     s->rpc = NULL;
     s->stream = NULL;
+    s->pstream = NULL;
     s->seqno = 0;
+
+    if (!pstream_verify_name(name)) {
+        reconnect_set_passive(s->reconnect, true, time_msec());
+    }
 
     return s;
 }
@@ -673,6 +714,7 @@ jsonrpc_session_open_unreliably(struct jsonrpc *jsonrpc)
     reconnect_connected(s->reconnect, time_msec());
     s->rpc = jsonrpc;
     s->stream = NULL;
+    s->pstream = NULL;
     s->seqno = 0;
 
     return s;
@@ -685,6 +727,7 @@ jsonrpc_session_close(struct jsonrpc_session *s)
         jsonrpc_close(s->rpc);
         reconnect_destroy(s->reconnect);
         stream_close(s->stream);
+        pstream_close(s->pstream);
         free(s);
     }
 }
@@ -707,14 +750,24 @@ jsonrpc_session_disconnect(struct jsonrpc_session *s)
 static void
 jsonrpc_session_connect(struct jsonrpc_session *s)
 {
+    const char *name = reconnect_get_name(s->reconnect);
     int error;
 
     jsonrpc_session_disconnect(s);
-    error = stream_open(reconnect_get_name(s->reconnect), &s->stream);
+    if (!reconnect_is_passive(s->reconnect)) {
+        error = jsonrpc_stream_open(name, &s->stream);
+        if (!error) {
+            reconnect_connecting(s->reconnect, time_msec());
+        }
+    } else {
+        error = s->pstream ? 0 : jsonrpc_pstream_open(name, &s->pstream);
+        if (!error) {
+            reconnect_listening(s->reconnect, time_msec());
+        }
+    }
+
     if (error) {
         reconnect_connect_failed(s->reconnect, time_msec(), error);
-    } else {
-        reconnect_connecting(s->reconnect, time_msec());
     }
     s->seqno++;
 }
@@ -722,6 +775,27 @@ jsonrpc_session_connect(struct jsonrpc_session *s)
 void
 jsonrpc_session_run(struct jsonrpc_session *s)
 {
+    if (s->pstream) {
+        struct stream *stream;
+        int error;
+
+        error = pstream_accept(s->pstream, &stream);
+        if (!error) {
+            if (s->rpc || s->stream) {
+                VLOG_INFO_RL(&rl,
+                             "%s: new connection replacing active connection",
+                             reconnect_get_name(s->reconnect));
+                jsonrpc_session_disconnect(s);
+            }
+            reconnect_connected(s->reconnect, time_msec());
+            s->rpc = jsonrpc_open(stream);
+        } else if (error != EAGAIN) {
+            reconnect_listen_error(s->reconnect, time_msec(), error);
+            pstream_close(s->pstream);
+            s->pstream = NULL;
+        }
+    }
+
     if (s->rpc) {
         int error;
 
@@ -780,6 +854,9 @@ jsonrpc_session_wait(struct jsonrpc_session *s)
     } else if (s->stream) {
         stream_run_wait(s->stream);
         stream_connect_wait(s->stream);
+    }
+    if (s->pstream) {
+        pstream_wait(s->pstream);
     }
     reconnect_wait(s->reconnect, time_msec());
 }

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 AC_PREREQ(2.64)
-AC_INIT(openvswitch, 0.99.2, ovs-bugs@openvswitch.org)
+AC_INIT(openvswitch, 1.0.0, ovs-bugs@openvswitch.org)
 NX_BUILDNR
 AC_CONFIG_SRCDIR([datapath/datapath.c])
 AC_CONFIG_MACRO_DIR([m4])
@@ -49,6 +49,8 @@ OVS_CHECK_CURSES
 OVS_CHECK_LINUX_VT_H
 OVS_CHECK_PCRE
 OVS_CHECK_PYTHON
+OVS_CHECK_PYUIC4
+OVS_CHECK_OVSDBMONITOR
 OVS_CHECK_IF_PACKET
 OVS_CHECK_STRTOK_R
 AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec, struct stat.st_mtimensec],
@@ -94,5 +96,7 @@ tests/atlocal])
 
 dnl This makes sure that include/openflow gets created in the build directory.
 AC_CONFIG_COMMANDS([include/openflow/openflow.h.stamp])
+
+AC_CONFIG_COMMANDS([ovsdb/ovsdbmonitor/dummy], [:])
 
 AC_OUTPUT

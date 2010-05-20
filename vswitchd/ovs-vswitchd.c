@@ -51,6 +51,8 @@
 #include "vlog.h"
 #define THIS_MODULE VLM_vswitchd
 
+static unixctl_cb_func ovs_vswitchd_exit;
+
 static const char *parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
@@ -62,7 +64,7 @@ main(int argc, char *argv[])
     struct ovsdb_idl *idl;
     const char *remote;
     bool need_reconfigure;
-    bool inited;
+    bool inited, exiting;
     unsigned int idl_seqno;
     int retval;
 
@@ -83,6 +85,7 @@ main(int argc, char *argv[])
     if (retval) {
         exit(EXIT_FAILURE);
     }
+    unixctl_command_register("exit", ovs_vswitchd_exit, &exiting);
 
     daemonize_complete();
 
@@ -91,7 +94,8 @@ main(int argc, char *argv[])
 
     need_reconfigure = false;
     inited = false;
-    for (;;) {
+    exiting = false;
+    while (!exiting) {
         if (signal_poll(sighup)) {
             vlog_reopen_log_file();
         }
@@ -252,4 +256,13 @@ usage(void)
            "  -V, --version           display version information\n");
     leak_checker_usage();
     exit(EXIT_SUCCESS);
+}
+
+static void
+ovs_vswitchd_exit(struct unixctl_conn *conn, const char *args OVS_UNUSED,
+                  void *exiting_)
+{
+    bool *exiting = exiting_;
+    *exiting = true;
+    unixctl_command_reply(conn, 200, NULL);
 }

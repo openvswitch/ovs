@@ -1,5 +1,5 @@
 #!/bin/sh
-# postinst script for openvswitch
+# postinst script for openvswitch-pki
 #
 # see: dh_installdeb(1)
 

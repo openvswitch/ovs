@@ -30,9 +30,11 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include "netdev.h"
 #include "ofpbuf.h"
 #include "poll-loop.h"
 #include "rtnetlink.h"
+#include "shash.h"
 #include "svec.h"
 #include "util.h"
 #include "xfif-provider.h"
@@ -51,7 +53,7 @@ struct xfif_linux {
 
     /* Change notification. */
     int local_ifindex;          /* Ifindex of local port. */
-    struct svec changed_ports;  /* Ports that have changed. */
+    struct shash changed_ports;  /* Ports that have changed. */
     struct rtnetlink_notifier port_notifier;
     bool change_error;
 };
@@ -171,7 +173,7 @@ xfif_linux_close(struct xfif *xfif_)
 {
     struct xfif_linux *xfif = xfif_linux_cast(xfif_);
     rtnetlink_notifier_unregister(&xfif->port_notifier);
-    svec_destroy(&xfif->changed_ports);
+    shash_destroy(&xfif->changed_ports);
     free(xfif->local_ifname);
     close(xfif->fd);
     free(xfif);
@@ -190,6 +192,28 @@ xfif_linux_get_all_names(const struct xfif *xfif_, struct svec *all_names)
 static int
 xfif_linux_destroy(struct xfif *xfif_)
 {
+    struct xflow_port *ports;
+    size_t n_ports;
+    int err;
+    int i;
+
+    err = xfif_port_list(xfif_, &ports, &n_ports);
+    if (err) {
+        return err;
+    }
+
+    for (i = 0; i < n_ports; i++) {
+        if (ports[i].port != XFLOWP_LOCAL) {
+            err = do_ioctl(xfif_, XFLOW_VPORT_DEL, ports[i].devname);
+            if (err) {
+                VLOG_WARN_RL(&error_rl, "%s: error deleting port %s (%s)",
+                             xfif_name(xfif_), ports[i].devname, strerror(err));
+            }
+        }
+    }
+
+    free(ports);
+
     return do_ioctl(xfif_, XFLOW_DP_DESTROY, NULL);
 }
 
@@ -230,7 +254,7 @@ xfif_linux_port_add(struct xfif *xfif_, const char *devname, uint16_t flags,
     memset(&port, 0, sizeof port);
     strncpy(port.devname, devname, sizeof port.devname);
     port.flags = flags;
-    error = do_ioctl(xfif_, XFLOW_PORT_ADD, &port);
+    error = do_ioctl(xfif_, XFLOW_PORT_ATTACH, &port);
     if (!error) {
         *port_no = port.port;
     }
@@ -241,7 +265,27 @@ static int
 xfif_linux_port_del(struct xfif *xfif_, uint16_t port_no)
 {
     int tmp = port_no;
-    return do_ioctl(xfif_, XFLOW_PORT_DEL, &tmp);
+    int err;
+    struct xflow_port port;
+
+    err = xfif_port_query_by_number(xfif_, port_no, &port);
+    if (err) {
+        return err;
+    }
+
+    err = do_ioctl(xfif_, XFLOW_PORT_DETACH, &tmp);
+    if (err) {
+        return err;
+    }
+
+    if (!netdev_is_open(port.devname)) {
+        /* Try deleting the port if no one has it open.  This shouldn't
+         * actually be necessary unless the config changed while we weren't
+         * running but it won't hurt anything if the port is already gone. */
+        do_ioctl(xfif_, XFLOW_VPORT_DEL, port.devname);
+    }
+
+    return 0;
 }
 
 static int
@@ -287,10 +331,12 @@ xfif_linux_port_poll(const struct xfif *xfif_, char **devnamep)
 
     if (xfif->change_error) {
         xfif->change_error = false;
-        svec_clear(&xfif->changed_ports);
+        shash_clear(&xfif->changed_ports);
         return ENOBUFS;
-    } else if (xfif->changed_ports.n) {
-        *devnamep = xfif->changed_ports.names[--xfif->changed_ports.n];
+    } else if (!shash_is_empty(&xfif->changed_ports)) {
+        struct shash_node *node = shash_first(&xfif->changed_ports);
+        *devnamep = xstrdup(node->name);
+        shash_delete(&xfif->changed_ports, node);
         return 0;
     } else {
         return EAGAIN;
@@ -301,7 +347,7 @@ static void
 xfif_linux_port_poll_wait(const struct xfif *xfif_)
 {
     struct xfif_linux *xfif = xfif_linux_cast(xfif_);
-    if (xfif->changed_ports.n || xfif->change_error) {
+    if (!shash_is_empty(&xfif->changed_ports) || xfif->change_error) {
         poll_immediate_wake();
     } else {
         rtnetlink_notifier_wait();
@@ -417,7 +463,8 @@ xfif_linux_recv(struct xfif *xfif_, struct ofpbuf **bufp)
     int retval;
     int error;
 
-    buf = ofpbuf_new(65536);
+    buf = ofpbuf_new(65536 + XFIF_RECV_MSG_PADDING);
+    ofpbuf_reserve(buf, XFIF_RECV_MSG_PADDING);
     retval = read(xfif->fd, ofpbuf_tail(buf), ofpbuf_tailroom(buf));
     if (retval < 0) {
         error = errno;
@@ -742,7 +789,7 @@ open_minor(int minor, struct xfif **xfifp)
             xfif->local_ifname = NULL;
             xfif->minor = minor;
             xfif->local_ifindex = 0;
-            svec_init(&xfif->changed_ports);
+            shash_init(&xfif->changed_ports);
             xfif->change_error = false;
             *xfifp = &xfif->xfif;
         } else {
@@ -769,10 +816,7 @@ xfif_linux_port_changed(const struct rtnetlink_change *change, void *xfif_)
         {
             /* Our datapath changed, either adding a new port or deleting an
              * existing one. */
-            if (!svec_contains(&xfif->changed_ports, change->ifname)) {
-                svec_add(&xfif->changed_ports, change->ifname);
-                svec_sort(&xfif->changed_ports);
-            }
+            shash_add_once(&xfif->changed_ports, change->ifname, NULL);
         }
     } else {
         xfif->change_error = true;

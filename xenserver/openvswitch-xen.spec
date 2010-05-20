@@ -79,14 +79,16 @@ install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/xen-bugtool
 install -m 755 xenserver/usr_sbin_brctl \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/brctl
+install -m 755 xenserver/ovs-xenserverd $RPM_BUILD_ROOT/usr/sbin/
 install -m 755 xenserver/usr_share_openvswitch_scripts_sysconfig.template \
          $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/sysconfig.template
+install -d -m 755 $RPM_BUILD_ROOT/usr/lib/xsconsole/plugins-base
 install -m 644 \
         xenserver/usr_lib_xsconsole_plugins-base_XSFeatureVSwitch.py \
-               $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/XSFeatureVSwitch.py
+               $RPM_BUILD_ROOT/usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py
 
-install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/net/openvswitch
-find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/net/openvswitch \;
+install -d -m 755 $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch
+find datapath/linux-2.6 -name *.ko -exec install -m 755  \{\} $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/extra/openvswitch \;
 
 # Get rid of stuff we don't want to make RPM happy.
 rm \
@@ -102,7 +104,6 @@ rm \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-kill.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-openflowd.8 \
     $RPM_BUILD_ROOT/usr/share/man/man8/ovs-pki.8
-rm -f $RPM_BUILD_ROOT/lib/modules/%{xen_version}/kernel/net/openvswitch/veth_mod.ko
 
 install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
 
@@ -201,7 +202,7 @@ if test ! -e /etc/openvswitch/conf.db; then
 
     # Create ovs-vswitchd config database
     ovsdb-tool -vANY:console:emer create /etc/openvswitch/conf.db \
-            /usr/share/openvswitch/vswitch.ovsschema \
+            /usr/share/openvswitch/vswitch.ovsschema
 
     # Create initial table in config database
     ovsdb-tool -vANY:console:emer transact /etc/openvswitch/conf.db \
@@ -246,13 +247,6 @@ do
     fi
 done
 
-# Install xsconsole plugin
-plugin=$(readlink /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py)
-if [ "$plugin" != "/usr/share/openvswitch/scripts/XSFeatureVSwitch.py" ]; then
-    rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py
-    ln -s /usr/share/openvswitch/scripts/XSFeatureVSwitch.py /usr/lib/xsconsole/plugins-base/ || printf "Could not link to vSswitch xsconsole plugin.\n"
-fi
-
 # Ensure all required services are set to run
 for s in openvswitch openvswitch-xapi-update; do
     if chkconfig --list $s >/dev/null 2>&1; then
@@ -287,14 +281,22 @@ fi
 %postun
 if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
 
-    rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py \
-        /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
-        /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo \
-        || printf "Could not remove Open vSwitch xsconsole plugin.\n"
+    rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
+        /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo
+
+    rm -f /usr/share/openvswitch/scripts/InterfaceReconfigure.pyc \
+        /usr/share/openvswitch/scripts/InterfaceReconfigure.pyo \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyc \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureBridge.pyo \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyc \
+        /usr/share/openvswitch/scripts/InterfaceReconfigureVSwitch.pyo 
 
     # Restore original XenServer scripts
     for f in \
         /opt/xensource/libexec/interface-reconfigure \
+        /opt/xensource/libexec/InterfaceReconfigure.py \
+        /opt/xensource/libexec/InterfaceReconfigureBridge.py \
+        /opt/xensource/libexec/InterfaceReconfigureVswitch.py \
         /etc/xensource/scripts/vif \
         /usr/sbin/xen-bugtool \
         /usr/sbin/brctl
@@ -333,10 +335,10 @@ fi
 /etc/xapi.d/plugins/openvswitch-cfg-update
 /etc/logrotate.d/openvswitch
 /etc/profile.d/openvswitch.sh
-/lib/modules/%{xen_version}/kernel/net/openvswitch/openvswitch_mod.ko
-/lib/modules/%{xen_version}/kernel/net/openvswitch/brcompat_mod.ko
-%if %(echo '%{xen_version}'|awk -F"." '{if ($3>=18) print 1; else print 0;}')
-/lib/modules/%{xen_version}/kernel/net/openvswitch/ip_gre_mod.ko
+/lib/modules/%{xen_version}/kernel/extra/openvswitch/openvswitch_mod.ko
+/lib/modules/%{xen_version}/kernel/extra/openvswitch/brcompat_mod.ko
+%if %(echo '%{xen_version}'|awk -F"[.-]" '{if ($3==18) print 1; else print 0;}')
+/lib/modules/%{xen_version}/kernel/extra/openvswitch/veth_mod.ko
 %endif
 /usr/share/openvswitch/scripts/refresh-network-uuids
 /usr/share/openvswitch/scripts/interface-reconfigure
@@ -345,12 +347,12 @@ fi
 /usr/share/openvswitch/scripts/InterfaceReconfigureVswitch.py
 /usr/share/openvswitch/scripts/vif
 /usr/share/openvswitch/scripts/xen-bugtool
-/usr/share/openvswitch/scripts/XSFeatureVSwitch.py
 /usr/share/openvswitch/scripts/brctl
 /usr/share/openvswitch/scripts/sysconfig.template
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/sbin/ovs-brcompatd
 /usr/sbin/ovs-vswitchd
+/usr/sbin/ovs-xenserverd
 /usr/sbin/ovsdb-server
 /usr/bin/ovs-appctl
 /usr/bin/ovs-dpctl
@@ -358,6 +360,7 @@ fi
 /usr/bin/ovs-vsctl
 /usr/bin/ovsdb-client
 /usr/bin/ovsdb-tool
+/usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.py
 /usr/share/man/man1/ovsdb-client.1.gz
 /usr/share/man/man1/ovsdb-server.1.gz
 /usr/share/man/man1/ovsdb-tool.1.gz
@@ -368,6 +371,9 @@ fi
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
+/usr/share/man/man8/ovs-xenserverd.8.gz
 /var/lib/openvswitch
+%exclude /usr/lib/xsconsole/plugins-base/*.pyc
+%exclude /usr/lib/xsconsole/plugins-base/*.pyo
 %exclude /usr/share/openvswitch/scripts/*.pyc
 %exclude /usr/share/openvswitch/scripts/*.pyo

@@ -16,7 +16,7 @@
       </column>
 
       <column name="controller">
-        Default <ref table="Controller"/> used by bridges.  May be
+        Default OpenFlow <ref table="Controller"/> set used by bridges.  May be
         overridden on a per-bridge basis by the <ref table="Bridge"
         column="controller"/> column in <ref table="Bridge"/>.
       </column>
@@ -104,10 +104,11 @@
 
     <group title="OpenFlow Configuration">
       <column name="controller">
-        OpenFlow controller.  If unset, defaults to that specified by
-        <ref column="controller" table="Open_vSwitch"/> in the
-        <ref table="Open_vSwitch"/> table.  If the default is also unset, then
-        no OpenFlow controller will be used.
+        OpenFlow controller set.  If unset, defaults to the set of
+        controllers specified by <ref column="controller"
+        table="Open_vSwitch"/> in the <ref table="Open_vSwitch"/>
+        table.  If the default is also unset, then no OpenFlow
+        controllers will be used.
       </column>
 
       <column name="datapath_id">
@@ -127,8 +128,8 @@
         The currently defined key-value pairs are:
         <dl>
           <dt><code>network-uuids</code></dt>
-          <dd>Space-delimited set of universally unique identifier(s) for the
-            network with which this bridge is associated.  The form of the
+          <dd>Semicolon-delimited set of universally unique identifier(s) for
+            the network with which this bridge is associated.  The form of the
             identifier(s) depends on the type of the host.  On a Citrix
             XenServer host, the network identifiers are RFC 4122 UUIDs as
             displayed by, e.g., <code>xe network-list</code>.</dd>
@@ -278,6 +279,13 @@
           <dt><code>hwaddr</code></dt>
           <dd>An Ethernet address in the form
             <code><var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var></code>.</dd>
+          <dt><code>bond-rebalance-interval</code></dt>
+          <dd>For a bonded port, the number of milliseconds between
+            successive attempts to rebalance the bond, that is, to
+            move source MACs and their flows from one interface on
+            the bond to another in an attempt to keep usage of each
+            interface roughly equal.  The default is 10000 (10
+            seconds), and the minimum is 1000 (1 second).</dd>
         </dl>
       </column>
     </group>
@@ -349,7 +357,94 @@
           <dt><code>tap</code></dt>
           <dd>A TUN/TAP device managed by Open vSwitch.</dd>
           <dt><code>gre</code></dt>
-          <dd>A GRE tunnel device managed by Open vSwitch.</dd>
+          <dd>An Ethernet over RFC 1702 Generic Routing Encapsulation over IPv4
+             tunnel.  Each tunnel must be uniquely identified by the
+             combination of <code>remote_ip</code>, <code>local_ip</code>, and
+             <code>in_key</code>.  Note that if two ports are defined that are
+             the same except one has an optional identifier and the other does
+             not, the more specific one is matched first.  <code>in_key</code>
+             is considered more specific than <code>local_ip</code> if a port
+             defines one and another port defines the other.  The arguments
+             are:
+            <dl>
+              <dt><code>remote_ip</code></dt>
+              <dd>Required.  The tunnel endpoint.</dd>
+            </dl>
+            <dl>
+              <dt><code>local_ip</code></dt>
+              <dd>Optional.  The destination IP that received packets must
+                match.  Default is to match all addresses.</dd>
+            </dl>
+            <dl>
+              <dt><code>in_key</code></dt>
+              <dd>Optional.  The GRE key that received packets must contain.
+                It may either be a 32-bit number (no key and a key of 0 are
+                treated as equivalent) or the word <code>flow</code>.  If
+                <code>flow</code> is specified then any key will be accepted
+                and the key will be placed in the <code>tun_id</code> field
+                for matching in the flow table.  The ovs-ofctl manual page
+                contains additional information about matching fields in
+                OpenFlow flows.  Default is no key.</dd>
+            </dl>
+            <dl>
+              <dt><code>out_key</code></dt>
+              <dd>Optional.  The GRE key to be set on outgoing packets.  It may
+                either be a 32-bit number or the word <code>flow</code>.  If
+                <code>flow</code> is specified then the key may be set using
+                the <code>set_tunnel</code> Nicira OpenFlow vendor extension (0
+                is used in the absense of an action).  The ovs-ofctl manual
+                page contains additional information about the Nicira OpenFlow
+                vendor extensions.  Default is no key.</dd>
+            </dl>
+            <dl>
+              <dt><code>key</code></dt>
+              <dd>Optional.  Shorthand to set <code>in_key</code> and
+                <code>out_key</code> at the same time.</dd>
+            </dl>
+            <dl>
+              <dt><code>tos</code></dt>
+              <dd>Optional.  The value of the ToS bits to be set on the
+                encapsulating packet.  It may also be the word
+                <code>inherit</code>, in which case the ToS will be copied from
+                the inner packet if it is IPv4 or IPv6 (otherwise it will be
+                0).  Note that the ECN fields are always inherited.  Default is
+                0.</dd>
+            </dl>
+            <dl>
+              <dt><code>ttl</code></dt>
+              <dd>Optional.  The TTL to be set on the encapsulating packet.
+                It may also be the word <code>inherit</code>, in which case the
+                TTL will be copied from the inner packet if it is IPv4 or IPv6
+                (otherwise it will be the system default, typically 64).
+                Default is the system default TTL.</dd>
+            </dl>
+            <dl>
+              <dt><code>csum</code></dt>
+              <dd>Optional.  Compute GRE checksums for outgoing packets and
+                require checksums for incoming packets.  Default is enabled,
+                set to <code>false</code> to disable.</dd>
+            </dl>
+            <dl>
+              <dt><code>pmtud</code></dt>
+              <dd>Optional.  Enable tunnel path MTU discovery.  If enabled
+                ``ICMP destination unreachable - fragmentation'' needed
+                messages will be generated for IPv4 packets with the DF bit set
+                and IPv6 packets above the minimum MTU if the packet size
+                exceeds the path MTU minus the size of the tunnel headers.  It
+                also forces the encapsulating packet DF bit to be set (it is
+                always set if the inner packet implies path MTU discovery).
+                Note that this option causes behavior that is typically
+                reserved for routers and therefore is not entirely in
+                compliance with the IEEE 802.1D specification for bridges.
+                Default is enabled, set to <code>false</code> to disable.</dd>
+            </dl>
+          </dd>
+          <dt><code>patch</code></dt>
+          <dd>A pair of virtual devices that act as a patch cable.  A 
+            <code>peer</code> argument is required that indicates the name
+            of the other side of the patch.  Since a patch must work in
+            pairs, a second patch interface must be declared with the
+            <code>name</code> and <code>peer</code> arguments reversed.</dd>
         </dl>
       </column>
 
@@ -493,13 +588,20 @@
   </table>
 
   <table name="Controller" title="OpenFlow controller configuration.">
-    An OpenFlow controller.
+    <p>An OpenFlow controller.</p>
+
+    <p>Open vSwitch permits a bridge to have any number of OpenFlow
+       controllers.  When multiple controllers are configured, Open vSwitch
+       connects to all of them simultaneously.  OpenFlow 1.0 does not specify
+       how multiple controllers coordinate in interacting with a single switch,
+       so more than one controller should be specified only if the controllers
+       are themselves designed to coordinate with each other.</p>
 
     <group title="Core Features">
       <column name="target">
-        Connection method for controller.
-        The following connection methods are currently
-        supported:
+        <p>Connection method for controller.
+          The following connection methods are currently
+          supported:</p>
         <dl>
           <dt><code>ssl:<var>ip</var></code>[<code>:<var>port</var></code>]</dt>
           <dd>
@@ -516,15 +618,58 @@
             the given <var>ip</var>, which must be expressed as an IP address
             (not a DNS name).</dd>
           <dt><code>discover</code></dt>
-          <dd>Enables controller discovery.</dd>
+          <dd>
+            <p>Enables controller discovery.</p>
+            <p>In controller discovery mode, Open vSwitch broadcasts a DHCP
+              request with vendor class identifier <code>OpenFlow</code> across
+              all of the bridge's network devices.  It will accept any valid
+              DHCP reply that has the same vendor class identifier and includes
+              a vendor-specific option with code 1 whose contents are a string
+              specifying the location of the controller in the same format as
+              <ref column="target"/>.</p>
+            <p>The DHCP reply may also, optionally, include a vendor-specific
+              option with code 2 whose contents are a string specifying the URI
+              to the base of the OpenFlow PKI
+              (e.g. <code>http://192.168.0.1/openflow/pki</code>).  This URI is
+              used only for bootstrapping the OpenFlow PKI at initial switch
+              setup; <code>ovs-vswitchd</code> does not use it at all.</p>
+          </dd>
           <dt><code>none</code></dt>
           <dd>Disables the controller.</dd>
         </dl>
+	<p>When multiple controllers are configured for a single bridge, the
+	  <ref column="target"/> values must be unique.  Duplicate
+	  <ref column="target"/> values yield unspecified results.</p>
       </column>
 
       <column name="connection_mode">
-        Either <code>in-band</code> or <code>out-of-band</code>.  If not
-        specified, the default is implementation-specific.
+	<p>If it is specified, this setting must be one of the following
+	strings that describes how Open vSwitch contacts this OpenFlow
+	controller over the network:</p>
+
+	<dl>
+	  <dt><code>in-band</code></dt>
+	  <dd>In this mode, this controller's OpenFlow traffic travels over the
+	    bridge associated with the controller.  With this setting, Open
+	    vSwitch allows traffic to and from the controller regardless of the
+	    contents of the OpenFlow flow table.  (Otherwise, Open vSwitch
+	    would never be able to connect to the controller, because it did
+	    not have a flow to enable it.)  This is the most common connection
+	    mode because it is not necessary to maintain two independent
+	    networks.</dd>
+	  <dt><code>out-of-band</code></dt>
+	  <dd>In this mode, OpenFlow traffic uses a control network separate
+	    from the bridge associated with this controller, that is, the
+	    bridge does not use any of its own network devices to communicate
+	    with the controller.  The control network must be configured
+	    separately, before or after <code>ovs-vswitchd</code> is started.
+	  </dd>
+	</dl>
+
+        <p>If not specified, the default is implementation-specific.  If
+          <ref column="target"/> is <code>discover</code>, the connection mode
+          is always treated as <code>in-band</code> regardless of the actual
+          setting.</p>
       </column>
     </group>
 
@@ -558,7 +703,7 @@
               times the inactivity probe interval
               (see <ref column="inactivity_probe"/>), then Open vSwitch
               will take over responsibility for setting up flows.  In
-              this mode, Open vSwitch causes the datapath to act like an
+              this mode, Open vSwitch causes the bridge to act like an
               ordinary MAC-learning switch.  Open vSwitch will continue
               to retry connecting to the controller in the background
               and, when the connection succeeds, it will discontinue its
@@ -569,19 +714,20 @@
               connecting to the controller forever.</dd>
           </dl>
         </p>
-        <p>If this value is unset, the default is
-        implementation-specific.</p>
+        <p>If this value is unset, the default is implementation-specific.</p>
+	<p>When more than one controller is configured,
+	  <ref column="fail_mode"/> is considered only when none of the
+	  configured controllers can be contacted.  At that point, the bridge
+	  enters secure mode if any of the controllers'
+	  <ref column="fail_mode"/> is set to <code>secure</code>.  Otherwise,
+	  it enters standalone mode if at least one <ref column="fail_mode"/>
+	  is set to <code>standalone</code>.  If none of the
+	  <ref column="fail_mode"/> values are set, the default is
+	  implementation-defined.</p>
       </column>
     </group>
 
     <group title="OpenFlow Rate Limiting">
-        <column name="controller_burst_limit">
-          In conjunction with <ref column="controller_rate_limit"/>,
-          the maximum number of unused packet credits that the bridge will
-          allow to accumulate, in packets.  If not specified, the default
-          is implementation-specific.
-        </column>
-
         <column name="controller_rate_limit">
           <p>The maximum rate at which packets in unknown flows will be
             forwarded to the OpenFlow controller, in packets per second.  This
@@ -601,11 +747,21 @@
             actual rate that packets are sent to the controller is up to
             twice the specified rate.</p>
         </column>
+
+        <column name="controller_burst_limit">
+          In conjunction with <ref column="controller_rate_limit"/>,
+          the maximum number of unused packet credits that the bridge will
+          allow to accumulate, in packets.  If not specified, the default
+          is implementation-specific.
+        </column>
     </group>
 
-    <group title="Additional Configuration for Discovery">
+    <group title="Additional Discovery Configuration">
+      <p>These values are considered only when <ref column="target"/>
+	is <code>discover</code>.</p>
+
       <column name="discover_accept_regex">
-        If <ref column="target"/> is <code>discover</code>, a POSIX
+        A POSIX
         extended regular expression against which the discovered controller
         location is validated.  The regular expression is implicitly
         anchored at the beginning of the controller location string, as
@@ -614,8 +770,7 @@
       </column>
 
       <column name="discover_update_resolv_conf">
-        If <ref column="target"/> is <code>discover</code>,
-        whether to update <code>/etc/resolv.conf</code> when the
+        Whether to update <code>/etc/resolv.conf</code> when the
         controller is discovered.  If not specified, the default
         is implementation-specific.  Open vSwitch will only modify
         <code>/etc/resolv.conf</code> if the DHCP response that it receives
@@ -623,20 +778,35 @@
       </column>
     </group>
 
-    <group title="Additional Configuration without Discovery">
-      <column name="local_gateway">
-        If <ref column="target"/> is not <code>discover</code>, the IP
-        address of the gateway to configure on the local port.
-      </column>
+    <group title="Additional In-Band Configuration">
+      <p>These values are considered only in in-band control mode (see
+	<ref column="connection_mode"/>) and only when <ref column="target"/>
+	is not <code>discover</code>.  (For controller discovery, the network
+	configuration obtained via DHCP is used instead.)</p>
+
+      <p>When multiple controllers are configured on a single bridge, there
+	should be only one set of unique values in these columns.  If different
+	values are set for these columns in different controllers, the effect
+	is unspecified.</p>
 
       <column name="local_ip">
-        If <ref column="target"/> is not <code>discover</code>, the IP
-        address to configure on the local port.
+        The IP address to configure on the local port,
+        e.g. <code>192.168.0.123</code>.  If this value is unset, then
+        <ref column="local_netmask"/> and <ref column="local_gateway"/> are
+        ignored.
       </column>
 
       <column name="local_netmask">
-        If <ref column="target"/> is not <code>discover</code>, the IP
-        netmask to configure on the local port.
+        The IP netmask to configure on the local port,
+        e.g. <code>255.255.255.0</code>.  If <ref column="local_ip"/> is set
+        but this value is unset, then the default is chosen based on whether
+        the IP address is class A, B, or C.
+      </column>
+
+      <column name="local_gateway">
+        The IP address of the gateway to configure on the local port, as a
+        string, e.g. <code>192.168.0.1</code>.  Leave this column unset if
+        this network has no gateway.
       </column>
     </group>
   </table>
@@ -719,10 +889,11 @@
       of switches.</p>
 
     <column name="agent">
-      IP address to report as ``agent address'' to collectors.  If not
-      specified, defaults to the <ref table="Controller" column="local_ip"/> in
-      the collector's <ref table="Controller"/>.  If neither is specified,
-      sFlow is disabled.
+      Name of the network device whose IP address should be reported as the
+      ``agent address'' to collectors.  If not specified, the IP address
+      defaults to the <ref table="Controller" column="local_ip"/> in the
+      collector's <ref table="Controller"/>.  If an agent IP address cannot be
+      determined either way, sFlow is disabled.
     </column>
 
     <column name="header">

@@ -28,8 +28,10 @@ int discovery_create(const char *accept_controller_re, bool update_resolv_conf,
                      struct wdp *, struct switch_status *,
                      struct discovery **);
 void discovery_destroy(struct discovery *);
+bool discovery_get_update_resolv_conf(const struct discovery *);
 void discovery_set_update_resolv_conf(struct discovery *,
                                       bool update_resolv_conf);
+const char *discovery_get_accept_controller_re(const struct discovery *);
 int discovery_set_accept_controller_re(struct discovery *, const char *re);
 void discovery_question_connectivity(struct discovery *);
 bool discovery_run(struct discovery *, char **controller_name);

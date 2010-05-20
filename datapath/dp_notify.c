@@ -11,21 +11,28 @@
 #include <linux/netdevice.h>
 
 #include "datapath.h"
-#include "dp_dev.h"
+#include "vport-internal_dev.h"
+#include "vport-netdev.h"
 
 static int dp_device_event(struct notifier_block *unused, unsigned long event, 
 		void *ptr) 
 {
 	struct net_device *dev = ptr;
-	struct net_bridge_port *p;
+	struct vport *vport;
+	struct dp_port *p;
 	struct datapath *dp;
 
-	if (is_dp_dev(dev)) {
-		struct dp_dev *dp_dev = dp_dev_priv(dev);
-		p = dp_dev->dp->ports[dp_dev->port_no];
-	} else {
-		p = dev->br_port;
+	if (is_internal_dev(dev))
+		vport = internal_dev_get_vport(dev);
+	else {
+		vport = netdev_get_vport(dev);
+
+		if (!vport)
+			return NOTIFY_DONE;
 	}
+
+	p = vport_get_dp_port(vport);
+
 	if (!p)
 		return NOTIFY_DONE;
 	dp = p->dp;
@@ -33,7 +40,7 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 	switch (event) {
 	case NETDEV_UNREGISTER:
 		mutex_lock(&dp->mutex);
-		dp_del_port(p);
+		dp_detach_port(p, 1);
 		mutex_unlock(&dp->mutex);
 		break;
 
@@ -47,11 +54,8 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 		break;
 
 	case NETDEV_CHANGEMTU:
-		if (!is_dp_dev(dev)) {
-			mutex_lock(&dp->mutex);
-			set_dp_devs_mtu(dp, dev);
-			mutex_unlock(&dp->mutex);
-		}
+		if (!is_internal_dev(dev))
+			set_internal_devs_mtu(dp);
 		break;
 	}
 	return NOTIFY_DONE;
