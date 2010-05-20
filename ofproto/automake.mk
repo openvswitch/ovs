@@ -29,5 +29,6 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/status.h \
 	ofproto/wdp-provider.h \
 	ofproto/wdp-xflow.c \
+	ofproto/wdp-xflow.h \
 	ofproto/wdp.c \
 	ofproto/wdp.h
