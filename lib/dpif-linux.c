@@ -28,6 +28,7 @@
 #include <linux/sockios.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "dpif-provider.h"
