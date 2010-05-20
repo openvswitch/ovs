@@ -101,6 +101,7 @@
 #define ODP_VPORT_ETHER_SET     _IOW('O', 26, struct odp_vport_ether)
 #define ODP_VPORT_MTU_GET       _IOWR('O', 27, struct odp_vport_mtu)
 #define ODP_VPORT_MTU_SET       _IOW('O', 28, struct odp_vport_mtu)
+#define ODP_VPORT_STATS_SET     _IOWR('O', 29, struct odp_vport_stats_req)
 
 struct odp_stats {
     /* Flows. */

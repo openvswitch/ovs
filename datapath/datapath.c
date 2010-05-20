@@ -1634,6 +1634,10 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		err = vport_user_stats_get((struct odp_vport_stats_req __user *)argp);
 		goto exit;
 
+	case ODP_VPORT_STATS_SET:
+		err = vport_user_stats_set((struct odp_vport_stats_req __user *)argp);
+		goto exit;
+
 	case ODP_VPORT_ETHER_GET:
 		err = vport_user_ether_get((struct odp_vport_ether __user *)argp);
 		goto exit;
@@ -1998,6 +2002,7 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 	case ODP_VPORT_MTU_GET:
 	case ODP_VPORT_ETHER_SET:
 	case ODP_VPORT_ETHER_GET:
+	case ODP_VPORT_STATS_SET:
 	case ODP_VPORT_STATS_GET:
 	case ODP_DP_STATS:
 	case ODP_GET_DROP_FRAGS:

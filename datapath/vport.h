@@ -32,6 +32,7 @@ int compat_vport_user_mod(struct compat_odp_vport_mod __user *);
 #endif
 
 int vport_user_stats_get(struct odp_vport_stats_req __user *);
+int vport_user_stats_set(struct odp_vport_stats_req __user *);
 int vport_user_ether_get(struct odp_vport_ether __user *);
 int vport_user_ether_set(struct odp_vport_ether __user *);
 int vport_user_mtu_get(struct odp_vport_mtu __user *);
@@ -54,14 +55,15 @@ int vport_detach(struct vport *);
 
 int vport_set_mtu(struct vport *, int mtu);
 int vport_set_addr(struct vport *, const unsigned char *);
+int vport_set_stats(struct vport *, struct odp_vport_stats *);
 
 const char *vport_get_name(const struct vport *);
 const char *vport_get_type(const struct vport *);
 const unsigned char *vport_get_addr(const struct vport *);
 
 struct dp_port *vport_get_dp_port(const struct vport *);
-
 struct kobject *vport_get_kobj(const struct vport *);
+int vport_get_stats(struct vport *, struct odp_vport_stats *);
 
 unsigned vport_get_flags(const struct vport *);
 int vport_is_running(const struct vport *);
@@ -84,8 +86,6 @@ struct vport_percpu_stats {
 };
 
 struct vport_err_stats {
-	spinlock_t lock;
-
 	u64 rx_dropped;
 	u64 rx_errors;
 	u64 rx_frame_err;
@@ -102,7 +102,10 @@ struct vport {
 	struct dp_port *dp_port;
 
 	struct vport_percpu_stats *percpu_stats;
+
+	spinlock_t stats_lock;
 	struct vport_err_stats err_stats;
+	struct odp_vport_stats offset_stats;
 };
 
 #define VPORT_F_REQUIRED	(1 << 0) /* If init fails, module loading fails. */
@@ -133,12 +136,15 @@ struct vport {
  * @detach: Detach a vport from a datapath.  May be null if not needed.
  * @set_mtu: Set the device's MTU.  May be null if not supported.
  * @set_addr: Set the device's MAC address.  May be null if not supported.
+ * @set_stats: Provides stats as an offset to be added to the device stats.
+ * May be null if not supported.
  * @get_name: Get the device's name.
  * @get_addr: Get the device's MAC address.
  * @get_kobj: Get the kobj associated with the device (may return null).
  * @get_stats: Fill in the transmit/receive stats.  May be null if stats are
- * not supported or if generic stats are in use.  If defined overrides
- * VPORT_F_GEN_STATS.
+ * not supported or if generic stats are in use.  If defined and
+ * VPORT_F_GEN_STATS is also set, the error stats are added to those already
+ * collected.
  * @get_dev_flags: Get the device's flags.
  * @is_running: Checks whether the device is running.
  * @get_operstate: Get the device's operating state.
@@ -168,6 +174,7 @@ struct vport_ops {
 
 	int (*set_mtu)(struct vport *, int mtu);
 	int (*set_addr)(struct vport *, const unsigned char *);
+	int (*set_stats)(const struct vport *, struct odp_vport_stats *);
 
 	/* Called with rcu_read_lock or RTNL lock. */
 	const char *(*get_name)(const struct vport *);
