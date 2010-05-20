@@ -98,6 +98,9 @@ read INSTALL.bridge.
 To build RPMs for installing Open vSwitch on a Citrix XenServer host
 or resource pool, read INSTALL.XenServer.
 
+To use Open vSwitch with KVM on Linux, read INSTALL.Linux, then
+INSTALL.KVM.
+
 To install Open vSwitch without using a kernel module, read
 INSTALL.userspace.
 
