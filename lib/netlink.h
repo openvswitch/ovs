@@ -103,6 +103,7 @@ uint16_t nl_attr_get_u16(const struct nlattr *);
 uint32_t nl_attr_get_u32(const struct nlattr *);
 uint64_t nl_attr_get_u64(const struct nlattr *);
 const char *nl_attr_get_string(const struct nlattr *);
+void nl_attr_get_nested(const struct nlattr *, struct ofpbuf *);
 
 /* Netlink attribute policy.
  *
@@ -117,6 +118,8 @@ struct nl_policy
 
 bool nl_policy_parse(const struct ofpbuf *, size_t offset,
                      const struct nl_policy[],
+                     struct nlattr *[], size_t n_attrs);
+bool nl_parse_nested(const struct nlattr *, const struct nl_policy[],
                      struct nlattr *[], size_t n_attrs);
 
 /* Miscellaneous. */

@@ -770,6 +770,15 @@ nl_attr_get_string(const struct nlattr *nla)
     return nl_attr_get(nla);
 }
 
+/* Initializes 'nested' to the payload of 'nla'.  Doesn't initialize every
+ * field in 'nested', but enough to poke around with it in a read-only way. */
+void
+nl_attr_get_nested(const struct nlattr *nla, struct ofpbuf *nested)
+{
+    nested->data = (void *) nl_attr_get(nla);
+    nested->size = nl_attr_get_size(nla);
+}
+
 /* Default minimum and maximum payload sizes for each type of attribute. */
 static const size_t attr_len_range[][2] = {
     [0 ... N_NL_ATTR_TYPES - 1] = { 0, SIZE_MAX },
@@ -880,6 +889,20 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
         return false;
     }
     return true;
+}
+
+/* Parses the Netlink attributes within 'nla'.  'policy[i]', for 0 <= i <
+ * n_attrs, specifies how the attribute with nla_type == i is parsed; a pointer
+ * to attribute i is stored in attrs[i].  Returns true if successful, false on
+ * failure. */
+bool
+nl_parse_nested(const struct nlattr *nla, const struct nl_policy policy[],
+                struct nlattr *attrs[], size_t n_attrs)
+{
+    struct ofpbuf buf;
+
+    nl_attr_get_nested(nla, &buf);
+    return nl_policy_parse(&buf, 0, policy, attrs, n_attrs);
 }
 
 /* Miscellaneous.  */
