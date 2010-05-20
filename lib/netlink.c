@@ -772,7 +772,7 @@ static const size_t attr_len_range[][2] = {
     [NL_A_U64] = { 8, 8 },
     [NL_A_STRING] = { 1, SIZE_MAX },
     [NL_A_FLAG] = { 0, SIZE_MAX },
-    [NL_A_NESTED] = { NLMSG_HDRLEN, SIZE_MAX },
+    [NL_A_NESTED] = { 0, SIZE_MAX },
 };
 
 /* Parses the 'msg' starting at the given 'nla_offset' as a sequence of Netlink
