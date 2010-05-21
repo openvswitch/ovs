@@ -49,6 +49,19 @@ int nl_sock_transact(struct nl_sock *, const struct ofpbuf *request,
                      struct ofpbuf **reply);
 
 void nl_sock_wait(const struct nl_sock *, short int events);
+
+/* Table dumping. */
+struct nl_dump {
+    uint32_t seq;
+    struct nl_sock *sock;
+    int status;
+    struct ofpbuf *buffer;
+};
+
+void nl_dump_start(struct nl_dump *, struct nl_sock *,
+                   const struct ofpbuf *request);
+bool nl_dump_next(struct nl_dump *, struct ofpbuf *reply);
+int nl_dump_done(struct nl_dump *);
 
 /* Netlink messages. */
 
@@ -77,6 +90,9 @@ void nl_msg_put_u32(struct ofpbuf *, uint16_t type, uint32_t value);
 void nl_msg_put_u64(struct ofpbuf *, uint16_t type, uint64_t value);
 void nl_msg_put_string(struct ofpbuf *, uint16_t type, const char *value);
 void nl_msg_put_nested(struct ofpbuf *, uint16_t type, struct ofpbuf *);
+
+/* Separating buffers into individual messages. */
+struct nlmsghdr *nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg);
 
 /* Netlink attribute types. */
 enum nl_attr_type

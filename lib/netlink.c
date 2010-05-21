@@ -445,6 +445,143 @@ recv:
     return 0;
 }
 
+/* Starts a Netlink "dump" operation, by sending 'request' to the kernel via
+ * 'sock', and initializes 'dump' to reflect the state of the operation.
+ *
+ * nlmsg_len in 'msg' will be finalized to match msg->size, and nlmsg_pid will
+ * be set to 'sock''s pid, before the message is sent.  NLM_F_DUMP and
+ * NLM_F_ACK will be set in nlmsg_flags.
+ *
+ * The properties of Netlink make dump operations reliable as long as all of
+ * the following are true:
+ *
+ *   - At most a single dump is in progress at a time on a given nl_sock.
+ *
+ *   - The nl_sock is not subscribed to any multicast groups.
+ *
+ *   - The nl_sock is not used to send any other messages before the dump
+ *     operation is complete.
+ *
+ * This function provides no status indication.  An error status for the entire
+ * dump operation is provided when it is completed by calling nl_dump_done().
+ *
+ * The caller is responsible for destroying 'request'.  The caller must not
+ * close 'sock' before it completes the dump operation (by calling
+ * nl_dump_done()).
+ */
+void
+nl_dump_start(struct nl_dump *dump,
+              struct nl_sock *sock, const struct ofpbuf *request)
+{
+    struct nlmsghdr *nlmsghdr = nl_msg_nlmsghdr(request);
+    nlmsghdr->nlmsg_flags |= NLM_F_DUMP | NLM_F_ACK;
+    dump->seq = nlmsghdr->nlmsg_seq;
+    dump->sock = sock;
+    dump->status = nl_sock_send(sock, request, true);
+    dump->buffer = NULL;
+}
+
+/* Helper function for nl_dump_next(). */
+static int
+nl_dump_recv(struct nl_dump *dump, struct ofpbuf **bufferp)
+{
+    struct nlmsghdr *nlmsghdr;
+    struct ofpbuf *buffer;
+    int retval;
+
+    retval = nl_sock_recv(dump->sock, bufferp, true);
+    if (retval) {
+        return retval == EINTR ? EAGAIN : retval;
+    }
+    buffer = *bufferp;
+
+    nlmsghdr = nl_msg_nlmsghdr(buffer);
+    if (dump->seq != nlmsghdr->nlmsg_seq) {
+        VLOG_DBG_RL(&rl, "ignoring seq %"PRIu32" != expected %"PRIu32,
+                    nlmsghdr->nlmsg_seq, dump->seq);
+        return EAGAIN;
+    }
+
+    if (nl_msg_nlmsgerr(buffer, &retval)) {
+        VLOG_INFO_RL(&rl, "netlink dump request error (%s)",
+                     strerror(retval));
+        return retval && retval != EAGAIN ? retval : EPROTO;
+    }
+
+    return 0;
+}
+
+/* Attempts to retrieve another reply from 'dump', which must have been
+ * initialized with nl_dump_start().
+ *
+ * If successful, returns true and points 'reply->data' and 'reply->size' to
+ * the message that was retrieved.  The caller must not modify 'reply' (because
+ * it points into the middle of a larger buffer).
+ *
+ * On failure, returns false and sets 'reply->data' to NULL and 'reply->size'
+ * to 0.  Failure might indicate an actual error or merely the end of replies.
+ * An error status for the entire dump operation is provided when it is
+ * completed by calling nl_dump_done().
+ */
+bool
+nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply)
+{
+    struct nlmsghdr *nlmsghdr;
+
+    reply->data = NULL;
+    reply->size = 0;
+    if (dump->status) {
+        return false;
+    }
+
+    if (dump->buffer && !dump->buffer->size) {
+        ofpbuf_delete(dump->buffer);
+        dump->buffer = NULL;
+    }
+    while (!dump->buffer) {
+        int retval = nl_dump_recv(dump, &dump->buffer);
+        if (retval) {
+            ofpbuf_delete(dump->buffer);
+            dump->buffer = NULL;
+            if (retval != EAGAIN) {
+                dump->status = retval;
+                return false;
+            }
+        }
+    }
+
+    nlmsghdr = nl_msg_next(dump->buffer, reply);
+    if (!nlmsghdr) {
+        VLOG_WARN_RL(&rl, "netlink dump reply contains message fragment");
+        dump->status = EPROTO;
+        return false;
+    } else if (nlmsghdr->nlmsg_type == NLMSG_DONE) {
+        dump->status = EOF;
+        return false;
+    }
+
+    return true;
+}
+
+/* Completes Netlink dump operation 'dump', which must have been initialized
+ * with nl_dump_start().  Returns 0 if the dump operation was error-free,
+ * otherwise a positive errno value describing the problem. */
+int
+nl_dump_done(struct nl_dump *dump)
+{
+    /* Drain any remaining messages that the client didn't read.  Otherwise the
+     * kernel will continue to queue them up and waste buffer space. */
+    while (!dump->status) {
+        struct ofpbuf reply;
+        if (!nl_dump_next(dump, &reply)) {
+            assert(dump->status);
+        }
+    }
+
+    ofpbuf_delete(dump->buffer);
+    return dump->status == EOF ? 0 : dump->status;
+}
+
 /* Causes poll_block() to wake up when any of the specified 'events' (which is
  * a OR'd combination of POLLIN, POLLOUT, etc.) occur on 'sock'. */
 void
@@ -686,6 +823,33 @@ nl_msg_put_nested(struct ofpbuf *msg,
     nl_msg_nlmsghdr(nested_msg)->nlmsg_len = nested_msg->size;
     nl_msg_put_unspec(msg, type, nested_msg->data, nested_msg->size);
 }
+
+/* If 'buffer' begins with a valid "struct nlmsghdr", pulls the header and its
+ * payload off 'buffer', stores header and payload in 'msg->data' and
+ * 'msg->size', and returns a pointer to the header.
+ *
+ * If 'buffer' does not begin with a "struct nlmsghdr" or begins with one that
+ * is invalid, returns NULL without modifying 'buffer'. */
+struct nlmsghdr *
+nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg)
+{
+    if (buffer->size >= sizeof(struct nlmsghdr)) {
+        struct nlmsghdr *nlmsghdr = nl_msg_nlmsghdr(buffer);
+        size_t len = nlmsghdr->nlmsg_len;
+        if (len >= sizeof *nlmsghdr && len <= buffer->size) {
+            msg->data = nlmsghdr;
+            msg->size = len;
+            ofpbuf_pull(buffer, len);
+            return nlmsghdr;
+        }
+    }
+
+    msg->data = NULL;
+    msg->size = 0;
+    return NULL;
+}
+
+/* Attributes. */
 
 /* Returns the first byte in the payload of attribute 'nla'. */
 const void *
