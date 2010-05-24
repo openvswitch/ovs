@@ -20,13 +20,12 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 
-#include "list.h"
 #include "netdev-provider.h"
+#include "netdev-vport.h"
 #include "openflow/openflow.h"
 #include "openvswitch/gre.h"
 #include "openvswitch/xflow.h"
 #include "packets.h"
-#include "shash.h"
 #include "socket-util.h"
 
 #define THIS_MODULE VLM_netdev_gre
@@ -40,17 +39,6 @@ struct netdev_gre {
     struct netdev netdev;
 };
 
-struct netdev_gre_notifier {
-    struct netdev_notifier notifier;
-    struct list node;
-};
-
-static int ioctl_fd = -1;
-static struct shash netdev_gre_notifiers =
-                                    SHASH_INITIALIZER(&netdev_gre_notifiers);
-
-static void poll_notify(const struct netdev_gre *netdev);
-
 static struct netdev_dev_gre *
 netdev_dev_gre_cast(const struct netdev_dev *netdev_dev)
 {
@@ -63,26 +51,6 @@ netdev_gre_cast(const struct netdev *netdev)
 {
     netdev_assert_class(netdev, &netdev_gre_class);
     return CONTAINER_OF(netdev, struct netdev_gre, netdev);
-}
-
-static int
-netdev_gre_init(void)
-{
-    static int status = -1;
-    if (status < 0) {
-        ioctl_fd = open("/dev/net/dp0", O_RDONLY | O_NONBLOCK);
-        status = ioctl_fd >= 0 ? 0 : errno;
-        if (status) {
-            VLOG_ERR("failed to open ioctl fd: %s", strerror(status));
-        }
-    }
-    return status;
-}
-
-static int
-do_ioctl(int cmd, void *arg)
-{
-    return ioctl(ioctl_fd, cmd, arg) ? errno : 0;
 }
 
 static int
@@ -183,16 +151,16 @@ netdev_gre_create(const char *name, const char *type OVS_UNUSED,
         return err;
     }
 
-    err = do_ioctl(XFLOW_VPORT_ADD, &ova);
+    err = netdev_vport_do_ioctl(XFLOW_VPORT_ADD, &ova);
     if (err == EEXIST) {
         VLOG_WARN("%s: destroying existing device", name);
 
-        err = do_ioctl(XFLOW_VPORT_DEL, ova.devname);
+        err = netdev_vport_do_ioctl(XFLOW_VPORT_DEL, ova.devname);
         if (err) {
             return err;
         }
 
-        err = do_ioctl(XFLOW_VPORT_ADD, &ova);
+        err = netdev_vport_do_ioctl(XFLOW_VPORT_ADD, &ova);
     }
 
     if (err) {
@@ -222,7 +190,7 @@ netdev_gre_reconfigure(struct netdev_dev *netdev_dev_, const struct shash *args)
         return err;
     }
 
-    return do_ioctl(XFLOW_VPORT_MOD, &ovm);
+    return netdev_vport_do_ioctl(XFLOW_VPORT_MOD, &ovm);
 }
 
 static void
@@ -230,7 +198,7 @@ netdev_gre_destroy(struct netdev_dev *netdev_dev_)
 {
     struct netdev_dev_gre *netdev_dev = netdev_dev_gre_cast(netdev_dev_);
 
-    do_ioctl(XFLOW_VPORT_DEL, (char *)netdev_dev_get_name(netdev_dev_));
+    netdev_vport_do_ioctl(XFLOW_VPORT_DEL, (char *)netdev_dev_get_name(netdev_dev_));
     free(netdev_dev);
 }
 
@@ -254,183 +222,10 @@ netdev_gre_close(struct netdev *netdev_)
     free(netdev);
 }
 
-static int
-netdev_gre_set_etheraddr(struct netdev *netdev_,
-                         const uint8_t mac[ETH_ADDR_LEN])
-{
-    struct netdev_gre *netdev = netdev_gre_cast(netdev_);
-    struct xflow_vport_ether vport_ether;
-    int err;
-
-    ovs_strlcpy(vport_ether.devname, netdev_get_name(netdev_),
-                sizeof vport_ether.devname);
-
-    memcpy(vport_ether.ether_addr, mac, ETH_ADDR_LEN);
-
-    err = ioctl(ioctl_fd, XFLOW_VPORT_ETHER_SET, &vport_ether);
-    if (err) {
-        return err;
-    }
-
-    poll_notify(netdev);
-    return 0;
-}
-
-static int
-netdev_gre_get_etheraddr(const struct netdev *netdev_,
-                         uint8_t mac[ETH_ADDR_LEN])
-{
-    struct xflow_vport_ether vport_ether;
-    int err;
-
-    ovs_strlcpy(vport_ether.devname, netdev_get_name(netdev_),
-                sizeof vport_ether.devname);
-
-    err = ioctl(ioctl_fd, XFLOW_VPORT_ETHER_GET, &vport_ether);
-    if (err) {
-        return err;
-    }
-
-    memcpy(mac, vport_ether.ether_addr, ETH_ADDR_LEN);
-    return 0;
-}
-
-static int
-netdev_gre_get_mtu(const struct netdev *netdev_, int *mtup)
-{
-    struct xflow_vport_mtu vport_mtu;
-    int err;
-
-    ovs_strlcpy(vport_mtu.devname, netdev_get_name(netdev_),
-                sizeof vport_mtu.devname);
-
-    err = ioctl(ioctl_fd, XFLOW_VPORT_MTU_GET, &vport_mtu);
-    if (err) {
-        return err;
-    }
-
-    *mtup = vport_mtu.mtu;
-    return 0;
-}
-
-static int
-netdev_gre_get_carrier(const struct netdev *netdev OVS_UNUSED, bool *carrier)
-{
-    *carrier = true;
-    return 0;
-}
-
-static int
-netdev_gre_get_stats(const struct netdev *netdev_, struct netdev_stats *stats)
-{
-    const char *name = netdev_get_name(netdev_);
-    struct xflow_vport_stats_req ovsr;
-    int err;
-
-    ovs_strlcpy(ovsr.devname, name, sizeof ovsr.devname);
-    err = do_ioctl(XFLOW_VPORT_STATS_GET, &ovsr);
-    if (err) {
-        return err;
-    }
-
-    stats->rx_packets = ovsr.stats.rx_packets;
-    stats->tx_packets = ovsr.stats.tx_packets;
-    stats->rx_bytes = ovsr.stats.rx_bytes;
-    stats->tx_bytes = ovsr.stats.tx_bytes;
-    stats->rx_errors = ovsr.stats.rx_errors;
-    stats->tx_errors = ovsr.stats.tx_errors;
-    stats->rx_dropped = ovsr.stats.rx_dropped;
-    stats->tx_dropped = ovsr.stats.tx_dropped;
-    stats->multicast = UINT64_MAX;
-    stats->collisions = ovsr.stats.collisions;
-    stats->rx_length_errors = UINT64_MAX;
-    stats->rx_over_errors = ovsr.stats.rx_over_err;
-    stats->rx_crc_errors = ovsr.stats.rx_crc_err;
-    stats->rx_frame_errors = ovsr.stats.rx_frame_err;
-    stats->rx_fifo_errors = UINT64_MAX;
-    stats->rx_missed_errors = UINT64_MAX;
-    stats->tx_aborted_errors = UINT64_MAX;
-    stats->tx_carrier_errors = UINT64_MAX;
-    stats->tx_fifo_errors = UINT64_MAX;
-    stats->tx_heartbeat_errors = UINT64_MAX;
-    stats->tx_window_errors = UINT64_MAX;
-
-    return 0;
-}
-
-static int
-netdev_gre_update_flags(struct netdev *netdev OVS_UNUSED,
-                        enum netdev_flags off, enum netdev_flags on OVS_UNUSED,
-                        enum netdev_flags *old_flagsp)
-{
-    if (off & (NETDEV_UP | NETDEV_PROMISC)) {
-        return EOPNOTSUPP;
-    }
-
-    *old_flagsp = NETDEV_UP | NETDEV_PROMISC;
-    return 0;
-}
-
-static int
-netdev_gre_poll_add(struct netdev *netdev, void (*cb)(struct netdev_notifier *),
-                    void *aux, struct netdev_notifier **notifierp)
-{
-    const char *netdev_name = netdev_get_name(netdev);
-    struct netdev_gre_notifier *notifier;
-    struct list *list;
-
-    list = shash_find_data(&netdev_gre_notifiers, netdev_name);
-    if (!list) {
-        list = xmalloc(sizeof *list);
-        list_init(list);
-        shash_add(&netdev_gre_notifiers, netdev_name, list);
-    }
-
-    notifier = xmalloc(sizeof *notifier);
-    netdev_notifier_init(&notifier->notifier, netdev, cb, aux);
-    list_push_back(list, &notifier->node);
-
-    *notifierp = &notifier->notifier;
-    return 0;
-}
-
-static void
-netdev_gre_poll_remove(struct netdev_notifier *notifier_)
-{
-    struct netdev_gre_notifier *notifier =
-                CONTAINER_OF(notifier_, struct netdev_gre_notifier, notifier);
-    struct list *list;
-
-    list = list_remove(&notifier->node);
-    if (list_is_empty(list)) {
-        const char *netdev_name = netdev_get_name(notifier_->netdev);
-        shash_delete(&netdev_gre_notifiers,
-                     shash_find(&netdev_gre_notifiers, netdev_name));
-        free(list);
-    }
-    free(notifier);
-}
-
-static void
-poll_notify(const struct netdev_gre *netdev)
-{
-    struct list *list = shash_find_data(&netdev_gre_notifiers,
-                                        netdev_get_name(&netdev->netdev));
-
-    if (list) {
-        struct netdev_gre_notifier *notifier;
-
-        LIST_FOR_EACH (notifier, struct netdev_gre_notifier, node, list) {
-            struct netdev_notifier *n = &notifier->notifier;
-            n->cb(n);
-        }
-    }
-}
-
 const struct netdev_class netdev_gre_class = {
     "gre",
 
-    netdev_gre_init,
+    NULL,                       /* init */
     NULL,                       /* run */
     NULL,                       /* wait */
 
@@ -450,12 +245,12 @@ const struct netdev_class netdev_gre_class = {
     NULL,                       /* send */
     NULL,                       /* send_wait */
 
-    netdev_gre_set_etheraddr,
-    netdev_gre_get_etheraddr,
-    netdev_gre_get_mtu,
+    netdev_vport_set_etheraddr,
+    netdev_vport_get_etheraddr,
+    netdev_vport_get_mtu,
     NULL,                       /* get_ifindex */
-    netdev_gre_get_carrier,
-    netdev_gre_get_stats,
+    netdev_vport_get_carrier,
+    netdev_vport_get_stats,
     NULL,                       /* set_stats */
 
     NULL,                       /* get_features */
@@ -470,8 +265,8 @@ const struct netdev_class netdev_gre_class = {
     NULL,                       /* get_next_hop */
     NULL,                       /* arp_lookup */
 
-    netdev_gre_update_flags,
+    netdev_vport_update_flags,
 
-    netdev_gre_poll_add,
-    netdev_gre_poll_remove,
+    netdev_vport_poll_add,
+    netdev_vport_poll_remove,
 };

@@ -21,7 +21,12 @@
 #include "flow.h"
 #include "svec.h"
 
-static const int NF_ACTIVE_TIMEOUT_DEFAULT = 600;
+/* Default active timeout interval, in seconds.
+ *
+ * (The active timeout interval is the interval at which NetFlow records are
+ * sent for flows that do not expire, so that such flows are still
+ * accounted.) */
+#define NF_ACTIVE_TIMEOUT_DEFAULT 600
 
 struct ofexpired;
 

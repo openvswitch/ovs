@@ -17,14 +17,17 @@
 #include <linux/compat.h>
 
 #include "vport.h"
+#include "vport-internal_dev.h"
 
 extern struct vport_ops netdev_vport_ops;
 extern struct vport_ops internal_vport_ops;
+extern struct vport_ops patch_vport_ops;
 extern struct vport_ops gre_vport_ops;
 
 static struct vport_ops *base_vport_ops_list[] = {
 	&netdev_vport_ops,
 	&internal_vport_ops,
+	&patch_vport_ops,
 	&gre_vport_ops,
 };
 
@@ -882,9 +885,20 @@ vport_set_mtu(struct vport *vport, int mtu)
 	if (mtu < 68)
 		return -EINVAL;
 
-	if (vport->ops->set_mtu)
-		return vport->ops->set_mtu(vport, mtu);
-	else
+	if (vport->ops->set_mtu) {
+		int ret;
+
+		ret = vport->ops->set_mtu(vport, mtu);
+
+		if (!ret && !is_internal_vport(vport)) {
+			struct dp_port *dp_port = vport_get_dp_port(vport);
+
+			if (dp_port)
+				set_internal_devs_mtu(dp_port->dp);
+		}
+
+		return ret;
+	} else
 		return -EOPNOTSUPP;
 }
 
@@ -1215,26 +1229,4 @@ vport_record_error(struct vport *vport, enum vport_err_type err_type)
 
 		spin_unlock_bh(&vport->err_stats.lock);
 	}
-}
-
-/**
- *	vport_gen_ether_addr - generate an Ethernet address
- *
- * @addr: location to store generated address
- *
- * Generates a random Ethernet address for use when creating a device that
- * has no natural address.
- */
-void
-vport_gen_ether_addr(u8 *addr)
-{
-	random_ether_addr(addr);
-
-	/* Set the OUI to the Nicira one. */
-	addr[0] = 0x00;
-	addr[1] = 0x23;
-	addr[2] = 0x20;
-
-	/* Set the top bit to indicate random address. */
-	addr[3] |= 0x80;
 }

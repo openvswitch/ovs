@@ -18,9 +18,11 @@ openvswitch_sources = \
 	flow.c \
 	table.c \
 	vport.c \
+	vport-generic.c \
 	vport-gre.c \
 	vport-internal_dev.c \
-	vport-netdev.c
+	vport-netdev.c \
+	vport-patch.c
 
 openvswitch_headers = \
 	actions.h \
@@ -30,6 +32,7 @@ openvswitch_headers = \
 	flow.h \
 	table.h \
 	vport.h \
+	vport-generic.h \
 	vport-internal_dev.h \
 	vport-netdev.h \
 	xflow-compat.h

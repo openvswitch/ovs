@@ -22,7 +22,9 @@
 #include <net/icmp.h>
 #include <net/inet_ecn.h>
 #include <net/ip.h>
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 #include <net/ipv6.h>
+#endif
 #include <net/protocol.h>
 #include <net/route.h>
 #include <net/xfrm.h>
@@ -32,6 +34,7 @@
 #include "openvswitch/gre.h"
 #include "table.h"
 #include "vport.h"
+#include "vport-generic.h"
 
 /* The absolute minimum fragment size.  Note that there are many other
  * definitions of the minimum MTU. */
@@ -376,6 +379,7 @@ ipv4_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
 	icmph->checksum = csum_fold(nskb->csum);
 }
 
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 static bool
 ipv6_should_icmp(struct sk_buff *skb)
 {
@@ -451,13 +455,14 @@ ipv6_build_icmp(struct sk_buff *skb, struct sk_buff *nskb, unsigned int mtu,
 						+ payload_length,
 						ipv6h->nexthdr, nskb->csum);
 }
+#endif /* IPv6 */
 
 static bool
 send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
 		 struct sk_buff *skb, unsigned int mtu, __be32 flow_key)
 {
 	unsigned int eth_hdr_len = ETH_HLEN;
-	unsigned int total_length, header_length, payload_length;
+	unsigned int total_length = 0, header_length = 0, payload_length;
 	struct ethhdr *eh, *old_eh = eth_hdr(skb);
 	struct sk_buff *nskb;
 
@@ -468,7 +473,9 @@ send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
 
 		if (!ipv4_should_icmp(skb))
 			return true;
-	} else {
+	}
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+	else if (skb->protocol == htons(ETH_P_IPV6)) {
 		if (mtu < IPV6_MIN_MTU)
 			return false;
 
@@ -480,6 +487,9 @@ send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
 		if (!ipv6_should_icmp(skb))
 			return true;
 	}
+#endif
+	else
+		return false;
 
 	/* Allocate */
 	if (old_eh->h_proto == htons(ETH_P_8021Q))
@@ -490,12 +500,16 @@ send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
 		header_length = sizeof(struct iphdr) + sizeof(struct icmphdr);
 		total_length = min_t(unsigned int, header_length +
 						   payload_length, 576);
-	} else {
+	}
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+	else {
 		header_length = sizeof(struct ipv6hdr) +
 				sizeof(struct icmp6hdr);
 		total_length = min_t(unsigned int, header_length +
 						  payload_length, IPV6_MIN_MTU);
 	}
+#endif
+
 	total_length = min(total_length, mutable->mtu);
 	payload_length = total_length - header_length;
 
@@ -522,8 +536,10 @@ send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
 	/* Protocol */
 	if (skb->protocol == htons(ETH_P_IP))
 		ipv4_build_icmp(skb, nskb, mtu, payload_length);
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	else
 		ipv6_build_icmp(skb, nskb, mtu, payload_length);
+#endif
 
 	/* Assume that flow based keys are symmetric with respect to input
 	 * and output and use the key that we were going to put on the
@@ -671,8 +687,10 @@ ecn_encapsulate(u8 tos, struct sk_buff *skb)
 
 	if (skb->protocol == htons(ETH_P_IP))
 		inner = ((struct iphdr *)skb_network_header(skb))->tos;
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	else if (skb->protocol == htons(ETH_P_IPV6))
 		inner = ipv6_get_dsfield((struct ipv6hdr *)skb_network_header(skb));
+#endif
 	else
 		inner = 0;
 
@@ -700,7 +718,9 @@ ecn_decapsulate(u8 tos, struct sk_buff *skb)
 				return;
 
 			IP_ECN_set_ce((struct iphdr *)(nw_header + skb->data));
-		} else if (protocol == htons(ETH_P_IPV6)) {
+		}
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+		else if (protocol == htons(ETH_P_IPV6)) {
 			if (unlikely(!pskb_may_pull(skb, nw_header
 			    + sizeof(struct ipv6hdr))))
 				return;
@@ -708,6 +728,7 @@ ecn_decapsulate(u8 tos, struct sk_buff *skb)
 			IP6_ECN_set_ce((struct ipv6hdr *)(nw_header
 							  + skb->data));
 		}
+#endif
 	}
 }
 
@@ -808,8 +829,10 @@ gre_err(struct sk_buff *skb, u32 info)
 
 	if (skb->protocol == htons(ETH_P_IP))
 		tot_hdr_len += sizeof(struct iphdr);
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 	else if (skb->protocol == htons(ETH_P_IPV6))
 		tot_hdr_len += sizeof(struct ipv6hdr);
+#endif
 	else
 		goto out;
 
@@ -824,7 +847,9 @@ gre_err(struct sk_buff *skb, u32 info)
 				goto out;
 		}
 
-	} else if (skb->protocol == htons(ETH_P_IPV6)) {
+	}
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+	else if (skb->protocol == htons(ETH_P_IPV6)) {
 		if (mtu < IPV6_MIN_MTU) {
 			unsigned int packet_length = sizeof(struct ipv6hdr) +
 					      ntohs(ipv6_hdr(skb)->payload_len);
@@ -836,6 +861,7 @@ gre_err(struct sk_buff *skb, u32 info)
 				goto out;
 		}
 	}
+#endif
 
 	__pskb_pull(skb, tunnel_hdr_len);
 	send_frag_needed(vport, mutable, skb, mtu, key);
@@ -941,7 +967,9 @@ build_packet(struct vport *vport, const struct mutable_config *mutable,
 				goto error_free;
 		}
 
-	} else if (skb->protocol == htons(ETH_P_IPV6)) {
+	}
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+	else if (skb->protocol == htons(ETH_P_IPV6)) {
 		unsigned int packet_length = skb->len - ETH_HLEN
 			- (eth_hdr(skb)->h_proto == htons(ETH_P_8021Q) ? VLAN_HLEN : 0);
 
@@ -954,6 +982,7 @@ build_packet(struct vport *vport, const struct mutable_config *mutable,
 				goto error_free;
 		}
 	}
+#endif
 
 	skb_reset_transport_header(skb);
 	new_iph = (struct iphdr *)skb_push(skb, mutable->tunnel_hlen);
@@ -995,7 +1024,6 @@ gre_send(struct vport *vport, struct sk_buff *skb)
 	const struct mutable_config *mutable = rcu_dereference(gre_vport->mutable);
 
 	struct iphdr *old_iph;
-	struct ipv6hdr *old_ipv6h;
 	int orig_len;
 	struct iphdr iph;
 	struct rtable *rt;
@@ -1015,21 +1043,24 @@ gre_send(struct vport *vport, struct sk_buff *skb)
 		if (unlikely(!pskb_may_pull(skb, skb_network_header(skb)
 		    + sizeof(struct iphdr) - skb->data)))
 			skb->protocol = 0;
-	} else if (skb->protocol == htons(ETH_P_IPV6)) {
+	}
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+	else if (skb->protocol == htons(ETH_P_IPV6)) {
 		if (unlikely(!pskb_may_pull(skb, skb_network_header(skb)
 		    + sizeof(struct ipv6hdr) - skb->data)))
 			skb->protocol = 0;
 	}
-
+#endif
 	old_iph = ip_hdr(skb);
-	old_ipv6h = ipv6_hdr(skb);
 
 	iph.tos = mutable->port_config.tos;
 	if (mutable->port_config.flags & GRE_F_TOS_INHERIT) {
 		if (skb->protocol == htons(ETH_P_IP))
 			iph.tos = old_iph->tos;
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 		else if (skb->protocol == htons(ETH_P_IPV6))
 			iph.tos = ipv6_get_dsfield(ipv6_hdr(skb));
+#endif
 	}
 	iph.tos = ecn_encapsulate(iph.tos, skb);
 
@@ -1048,8 +1079,10 @@ gre_send(struct vport *vport, struct sk_buff *skb)
 	if (mutable->port_config.flags & GRE_F_TTL_INHERIT) {
 		if (skb->protocol == htons(ETH_P_IP))
 			iph.ttl = old_iph->ttl;
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
 		else if (skb->protocol == htons(ETH_P_IPV6))
-			iph.ttl = old_ipv6h->hop_limit;
+			iph.ttl = ipv6_hdr(skb)->hop_limit;
+#endif
 	}
 	if (!iph.ttl)
 		iph.ttl = dst_metric(&rt->u.dst, RTAX_HOPLIMIT);
@@ -1066,9 +1099,11 @@ gre_send(struct vport *vport, struct sk_buff *skb)
 	if (skb->protocol == htons(ETH_P_IP)) {
 		iph.frag_off |= old_iph->frag_off & htons(IP_DF);
 		mtu = max(mtu, IP_MIN_MTU);
-
-	} else if (skb->protocol == htons(ETH_P_IPV6))
+	}
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+	else if (skb->protocol == htons(ETH_P_IPV6))
 		mtu = max(mtu, IPV6_MIN_MTU);
+#endif
 
 	iph.version = 4;
 	iph.ihl = sizeof(struct iphdr) >> 2;
@@ -1218,7 +1253,7 @@ gre_create(const char *name, const void __user *config)
 		goto error_free_vport;
 	}
 
-	vport_gen_ether_addr(gre_vport->mutable->eth_addr);
+	vport_gen_rand_ether_addr(gre_vport->mutable->eth_addr);
 	gre_vport->mutable->mtu = ETH_DATA_LEN;
 
 	err = set_config(NULL, gre_vport->mutable, config);
@@ -1321,7 +1356,6 @@ gre_set_mtu(struct vport *vport, int mtu)
 {
 	struct gre_vport *gre_vport = gre_vport_priv(vport);
 	struct mutable_config *mutable;
-	struct dp_port *dp_port;
 
 	mutable = kmemdup(gre_vport->mutable, sizeof(struct mutable_config), GFP_KERNEL);
 	if (!mutable)
@@ -1329,10 +1363,6 @@ gre_set_mtu(struct vport *vport, int mtu)
 
 	mutable->mtu = mtu;
 	assign_config_rcu(vport, mutable);
-
-	dp_port = vport_get_dp_port(vport);
-	if (dp_port)
-		set_internal_devs_mtu(dp_port->dp);
 
 	return 0;
 }
@@ -1368,24 +1398,6 @@ gre_get_addr(const struct vport *vport)
 	return rcu_dereference(gre_vport->mutable)->eth_addr;
 }
 
-static unsigned
-gre_get_dev_flags(const struct vport *vport)
-{
-	return IFF_UP | IFF_RUNNING | IFF_LOWER_UP;
-}
-
-static int
-gre_is_running(const struct vport *vport)
-{
-	return 1;
-}
-
-static unsigned char
-gre_get_operstate(const struct vport *vport)
-{
-	return IF_OPER_UP;
-}
-
 static int
 gre_get_mtu(const struct vport *vport)
 {
@@ -1405,9 +1417,9 @@ struct vport_ops gre_vport_ops = {
 	.set_addr	= gre_set_addr,
 	.get_name	= gre_get_name,
 	.get_addr	= gre_get_addr,
-	.get_dev_flags	= gre_get_dev_flags,
-	.is_running	= gre_is_running,
-	.get_operstate	= gre_get_operstate,
+	.get_dev_flags	= vport_gen_get_dev_flags,
+	.is_running	= vport_gen_is_running,
+	.get_operstate	= vport_gen_get_operstate,
 	.get_mtu	= gre_get_mtu,
 	.send		= gre_send,
 };

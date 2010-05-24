@@ -16,6 +16,7 @@
 
 #include "datapath.h"
 #include "openvswitch/internal_dev.h"
+#include "vport-generic.h"
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
@@ -233,7 +234,7 @@ do_setup(struct net_device *netdev)
 	netdev->features = NETIF_F_LLTX | NETIF_F_SG | NETIF_F_HIGHDMA
 				| NETIF_F_HW_CSUM | NETIF_F_TSO;
 
-	vport_gen_ether_addr(netdev->dev_addr);
+	vport_gen_rand_ether_addr(netdev->dev_addr);
 }
 
 static struct vport *

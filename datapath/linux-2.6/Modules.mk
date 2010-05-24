@@ -36,6 +36,7 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/linux/rtnetlink.h \
 	linux-2.6/compat-2.6/include/linux/skbuff.h \
 	linux-2.6/compat-2.6/include/linux/slab.h \
+	linux-2.6/compat-2.6/include/linux/stddef.h \
 	linux-2.6/compat-2.6/include/linux/tcp.h \
 	linux-2.6/compat-2.6/include/linux/timer.h \
 	linux-2.6/compat-2.6/include/linux/types.h \
@@ -55,8 +56,3 @@ brcompat_sources = \
 	brc_procfs.c
 brcompat_headers = \
 	brc_procfs.h
-
-dist_modules += veth
-build_modules += $(if $(BUILD_VETH),veth)
-veth_sources = linux-2.6/compat-2.6/veth.c
-veth_headers = 

@@ -3,8 +3,7 @@
 
 #include_next <net/dst.h>
 
-#include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
+#ifndef HAVE_SKB_DST_ACCESSOR_FUNCS
 
 static inline void skb_dst_drop(struct sk_buff *skb)
 {
@@ -13,6 +12,6 @@ static inline void skb_dst_drop(struct sk_buff *skb)
 	skb->dst = 0UL;
 }
 
-#endif /* linux kernel < 2.6.31 */
+#endif
 
 #endif
