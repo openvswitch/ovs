@@ -2179,6 +2179,9 @@ wx_port_update(struct wx *wx, const char *devname)
         wx_port_install(wx, new_wdp_port);
     }
     wx_port_free(old_wdp_port);
+
+    /* Update port groups. */
+    wx_port_refresh_groups(wx);
 }
 
 static int
