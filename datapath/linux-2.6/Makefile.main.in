@@ -50,6 +50,9 @@ endif
 
 default:
 	$(MAKE) -C $(KSRC) M=$(builddir) modules
+
+modules_install:
+	$(MAKE) -C $(KSRC) M=$(builddir) modules_install
 endif
 
 # Much of the kernel build system in this file is derived from Intel's
