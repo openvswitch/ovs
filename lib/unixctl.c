@@ -34,6 +34,7 @@
 #include "poll-loop.h"
 #include "shash.h"
 #include "socket-util.h"
+#include "svec.h"
 #include "util.h"
 
 #ifndef SCM_CREDENTIALS
@@ -82,11 +83,23 @@ unixctl_help(struct unixctl_conn *conn, const char *args OVS_UNUSED,
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
     struct shash_node *node;
+    struct svec names;
+    const char *name;
+    size_t i;
 
     ds_put_cstr(&ds, "The available commands are:\n");
+
+    svec_init(&names);
     SHASH_FOR_EACH (node, &commands) {
-        ds_put_format(&ds, "\t%s\n", node->name);
+        svec_add(&names, node->name);
     }
+    svec_sort(&names);
+
+    SVEC_FOR_EACH (i, name, &names) {
+        ds_put_format(&ds, "\t%s\n", name);
+    }
+    svec_destroy(&names);
+
     unixctl_command_reply(conn, 214, ds_cstr(&ds));
     ds_destroy(&ds);
 }
