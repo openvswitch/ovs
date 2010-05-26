@@ -92,6 +92,8 @@ and \fB/proc/net/bonding\fR that some legacy software expects to
 exist.  This option should only be used if such legacy software is
 actually in use.  It requires the \fBbrcompat_mod.ko\fR kernel module
 to be loaded.
+.IP
+On non-Linux hosts, this option is accepted but has no effect.
 .
 .so lib/daemon.man
 .SS "Public Key Infrastructure Options"
