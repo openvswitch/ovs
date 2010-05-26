@@ -27,6 +27,10 @@
 #include "openvswitch/xflow.h"
 #include "util.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct ds;
 struct ofp_match;
 struct ofpbuf;
@@ -122,5 +126,9 @@ flow_wildcards_init(struct flow_wildcards *wc, uint32_t wildcards)
     wc->nw_src_mask = flow_nw_bits_to_mask(wildcards, OFPFW_NW_SRC_SHIFT);
     wc->nw_dst_mask = flow_nw_bits_to_mask(wildcards, OFPFW_NW_DST_SHIFT);
 }
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* flow.h */
