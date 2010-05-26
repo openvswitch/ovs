@@ -42,7 +42,9 @@
 #define THIS_MODULE VLM_dpif
 
 static const struct dpif_class *base_dpif_classes[] = {
+#ifdef HAVE_NETLINK
     &dpif_linux_class,
+#endif
     &dpif_netdev_class,
 };
 

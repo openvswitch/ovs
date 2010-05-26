@@ -34,7 +34,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/dhcp.h \
 	lib/dhparams.h \
 	lib/dirs.h \
-	lib/dpif-linux.c \
 	lib/dpif-netdev.c \
 	lib/dpif-provider.h \
 	lib/dpif.c \
@@ -63,12 +62,7 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/lockfile.h \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
-	lib/netdev-gre.c \
-	lib/netdev-linux.c \
-	lib/netdev-patch.c \
 	lib/netdev-provider.h \
-	lib/netdev-vport.c \
-	lib/netdev-vport.h \
 	lib/netdev.c \
 	lib/netdev.h \
 	lib/odp-util.c \
@@ -106,8 +100,6 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/rconn.h \
 	lib/reconnect.c \
 	lib/reconnect.h \
-	lib/rtnetlink.c \
-	lib/rtnetlink.h \
 	lib/sat-math.h \
 	lib/sha1.c \
 	lib/sha1.h \
@@ -175,9 +167,17 @@ endif
 
 if HAVE_NETLINK
 lib_libopenvswitch_a_SOURCES += \
+	lib/dpif-linux.c \
+	lib/netdev-gre.c \
+	lib/netdev-linux.c \
+	lib/netdev-patch.c \
+	lib/netdev-vport.c \
+	lib/netdev-vport.h \
 	lib/netlink-protocol.h \
 	lib/netlink.c \
-	lib/netlink.h
+	lib/netlink.h \
+	lib/rtnetlink.c \
+	lib/rtnetlink.h
 endif
 
 if HAVE_OPENSSL
