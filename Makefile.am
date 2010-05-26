@@ -60,6 +60,12 @@ noinst_SCRIPTS =
 OVSIDL_BUILT =
 SUFFIXES =
 
+# This ensures that files added to EXTRA_DIST are always distributed,
+# even if they are inside an Automake if...endif conditional block that is
+# disabled by some particular "configure" run.  For more information, see:
+# http://article.gmane.org/gmane.comp.sysutils.automake.general/10891
+noinst_HEADERS += $(EXTRA_DIST)
+
 EXTRA_DIST += \
 	build-aux/update-debian-changelog \
 	soexpand.pl
