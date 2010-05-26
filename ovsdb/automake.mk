@@ -60,6 +60,8 @@ EXTRA_DIST += ovsdb/ovsdb-server.1.in
 
 # ovsdb-idlc
 EXTRA_DIST += \
+	ovsdb/OVSDB.py \
+	ovsdb/SPECS \
 	ovsdb/simplejson/__init__.py \
 	ovsdb/simplejson/_speedups.c				\
 	ovsdb/simplejson/decoder.py				\

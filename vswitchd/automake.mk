@@ -21,7 +21,9 @@ vswitchd_ovs_vswitchd_LDADD = \
 	lib/libsflow.a \
 	lib/libopenvswitch.a \
 	$(SSL_LIBS)
-EXTRA_DIST += vswitchd/ovs-vswitchd.8.in
+EXTRA_DIST += \
+	vswitchd/ovs-vswitchd.8.in \
+	vswitchd/INTERNALS
 
 if HAVE_NETLINK
 sbin_PROGRAMS += vswitchd/ovs-brcompatd

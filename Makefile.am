@@ -28,14 +28,20 @@ endif
 BUILT_SOURCES =
 CLEANFILES =
 DISTCLEANFILES =
-EXTRA_DIST = INSTALL.bridge \
+EXTRA_DIST = \
+	CodingStyle \
 	INSTALL.KVM \
 	INSTALL.Linux \
-	INSTALL.userspace \
 	INSTALL.OpenFlow \
 	INSTALL.SSL \
 	INSTALL.XenServer \
-	README-gcov
+	INSTALL.bridge \
+	INSTALL.userspace \
+	NOTICE \
+	README-gcov \
+	REPORTING-BUGS \
+	SubmittingPatches \
+	boot.sh
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =

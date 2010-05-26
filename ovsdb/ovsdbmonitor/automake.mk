@@ -19,6 +19,7 @@ ovsdbmonitor_pyfiles = \
 	ovsdb/ovsdbmonitor/qt4reactor.py
 EXTRA_DIST += \
 	$(ovsdbmonitor_pyfiles) \
+	ovsdb/ovsdbmonitor/COPYING \
 	ovsdb/ovsdbmonitor/ConfigWindow.ui \
 	ovsdb/ovsdbmonitor/FlowWindow.ui \
 	ovsdb/ovsdbmonitor/HostWindow.ui \
