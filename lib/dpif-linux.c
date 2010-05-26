@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <net/if.h>
+#include <linux/types.h>
 #include <linux/ethtool.h>
 #include <linux/rtnetlink.h>
 #include <linux/sockios.h>
