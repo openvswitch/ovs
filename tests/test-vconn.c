@@ -396,7 +396,7 @@ static const struct command commands[] = {
 };
 
 int
-main(int argc OVS_UNUSED, char *argv[])
+main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
     time_init();
