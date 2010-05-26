@@ -352,17 +352,18 @@ lookup_with_include_bits(const struct classifier *cls,
 static void
 compare_classifiers(struct classifier *cls, struct tcls *tcls)
 {
+    static const int confidence = 500;
     unsigned int i;
 
     assert(classifier_count(cls) == tcls->n_rules);
     assert(classifier_count_exact(cls) == tcls_count_exact(tcls));
-    for (i = 0; i < N_FLOW_VALUES; i++) {
+    for (i = 0; i < confidence; i++) {
         struct cls_rule *cr0, *cr1;
         flow_t flow;
         unsigned int x;
         int include;
 
-        x = i;
+        x = rand () % N_FLOW_VALUES;
         flow.nw_src = nw_src_values[get_value(&x, N_NW_SRC_VALUES)];
         flow.nw_dst = nw_dst_values[get_value(&x, N_NW_DST_VALUES)];
         flow.tun_id = tun_id_values[get_value(&x, N_TUN_ID_VALUES)];
