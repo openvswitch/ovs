@@ -573,7 +573,9 @@ update_in_band_remotes(struct ofproto *ofproto)
             in_band_create(ofproto, ofproto->dpif, ofproto->switch_status,
                            &ofproto->in_band);
         }
-        in_band_set_remotes(ofproto->in_band, addrs, n_addrs);
+        if (ofproto->in_band) {
+            in_band_set_remotes(ofproto->in_band, addrs, n_addrs);
+        }
         ofproto->next_in_band_update = time_msec() + 1000;
     } else {
         in_band_destroy(ofproto->in_band);
