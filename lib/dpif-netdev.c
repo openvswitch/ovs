@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 #include <net/if.h>
 #include <stdlib.h>
 #include <string.h>

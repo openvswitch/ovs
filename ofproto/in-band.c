@@ -19,6 +19,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <sys/socket.h>
 #include <net/if.h>
 #include <string.h>
 #include <stdlib.h>

@@ -19,6 +19,7 @@
 #include "ofproto.h"
 #include <errno.h>
 #include <inttypes.h>
+#include <sys/socket.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <stdbool.h>
