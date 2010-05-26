@@ -10,11 +10,6 @@ AT_SETUP([test TCP/IP checksumming])
 AT_CHECK([test-csum], [0], [ignore])
 AT_CLEANUP
 
-AT_SETUP([test flow classifier])
-AT_KEYWORDS([slow])
-AT_CHECK([test-classifier], [0], [ignore])
-AT_CLEANUP
-
 AT_SETUP([test hash functions])
 AT_CHECK([test-hash], [0], [ignore])
 AT_CLEANUP

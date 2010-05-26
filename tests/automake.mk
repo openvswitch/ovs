@@ -8,6 +8,7 @@ TESTSUITE_AT = \
 	tests/testsuite.at \
 	tests/ovsdb-macros.at \
 	tests/library.at \
+	tests/classifier.at \
 	tests/check-structs.at \
 	tests/daemon.at \
 	tests/vconn.at \
