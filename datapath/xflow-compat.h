@@ -11,8 +11,9 @@
 
 /* 32-bit ioctl compatibility definitions for datapath protocol. */
 
+#include "openvswitch/xflow.h"
+
 #ifdef CONFIG_COMPAT
-#include "openvswitch/datapath-protocol.h"
 #include <linux/compat.h>
 
 #define XFLOW_PORT_LIST32		_IOWR('O', 10, struct compat_xflow_portvec)
