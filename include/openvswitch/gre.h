@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * This file is offered under your choice of two licenses: Apache 2.0 or GNU
  * GPL 2.0 or later.  The permission statements for each of these licenses is
@@ -40,11 +40,7 @@
 #ifndef OPENVSWITCH_GRE_H
 #define OPENVSWITCH_GRE_H 1
 
-#ifdef __KERNEL__
 #include <linux/types.h>
-#else
-#include <sys/types.h>
-#endif
 
 #define GRE_F_IN_CSUM		(1 << 0) /* Require incoming packets to have checksums. */
 #define GRE_F_OUT_CSUM		(1 << 1) /* Checksum outgoing packets. */
