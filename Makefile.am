@@ -52,7 +52,9 @@ noinst_SCRIPTS =
 OVSIDL_BUILT =
 SUFFIXES =
 
-EXTRA_DIST += soexpand.pl
+EXTRA_DIST += \
+	build-aux/update-debian-changelog \
+	soexpand.pl
 
 ro_c = echo '/* -*- mode: c; buffer-read-only: t -*- */'
 
