@@ -546,6 +546,10 @@ update_in_band_remotes(struct ofproto *ofproto)
     HMAP_FOR_EACH (ofconn, struct ofconn, hmap_node, &ofproto->controllers) {
         struct sockaddr_in *sin = &addrs[n_addrs];
 
+        if (ofconn->band == OFPROTO_OUT_OF_BAND) {
+            continue;
+        }
+
         sin->sin_addr.s_addr = rconn_get_remote_ip(ofconn->rconn);
         if (sin->sin_addr.s_addr) {
             sin->sin_port = rconn_get_remote_port(ofconn->rconn);
