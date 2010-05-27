@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  * Distributed under the terms of the GNU GPL version 2.
  *
  * Significant portions of this file may be copied from parts of the Linux
@@ -14,6 +14,7 @@
 #include <linux/types.h>
 #include <linux/rcupdate.h>
 #include <linux/gfp.h>
+#include <linux/time.h>
 
 #include "openvswitch/datapath-protocol.h"
 #include "table.h"
