@@ -53,7 +53,7 @@ static inline void skb_copy_to_linear_data_offset(struct sk_buff *skb,
 #define NET_SKB_PAD	16
 #endif
 
-#ifndef HAVE_SKB_COW
+#ifndef HAVE_SKB_COW_HEAD
 static inline int __skb_cow(struct sk_buff *skb, unsigned int headroom,
                             int cloned)
 {
@@ -74,7 +74,7 @@ static inline int skb_cow_head(struct sk_buff *skb, unsigned int headroom)
 {
 	return __skb_cow(skb, headroom, skb_header_cloned(skb));
 }
-#endif  /* !HAVE_SKB_COW */
+#endif	/* !HAVE_SKB_COW_HEAD */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
 static inline int skb_clone_writable(struct sk_buff *skb, int len)
