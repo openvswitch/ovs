@@ -36,6 +36,7 @@
 #include "netflow.h"
 #include "odp-util.h"
 #include "ofp-print.h"
+#include "ofp-util.h"
 #include "ofproto-sflow.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"

@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "coverage.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"

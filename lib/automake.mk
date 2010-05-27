@@ -69,6 +69,8 @@ lib_libopenvswitch_a_SOURCES = \
 	lib/odp-util.h \
 	lib/ofp-print.c \
 	lib/ofp-print.h \
+	lib/ofp-util.c \
+	lib/ofp-util.h \
 	lib/ofpbuf.c \
 	lib/ofpbuf.h \
 	lib/ovsdb-data.c \

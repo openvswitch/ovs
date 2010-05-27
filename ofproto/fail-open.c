@@ -21,6 +21,7 @@
 #include "flow.h"
 #include "mac-learning.h"
 #include "odp-util.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "ofproto.h"
 #include "pktbuf.h"

@@ -39,6 +39,7 @@
 #include "netlink.h"
 #include "odp-util.h"
 #include "ofp-print.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"

@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include "dynamic-string.h"
 #include "list.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "ofproto.h"
 #include "openflow/nicira-ext.h"

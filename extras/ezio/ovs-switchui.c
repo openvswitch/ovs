@@ -35,6 +35,7 @@
 #include "ezio.h"
 #include "fatal-signal.h"
 #include "netdev.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
