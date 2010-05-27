@@ -2,6 +2,7 @@
 #define __LINUX_IF_VLAN_WRAPPER_H 1
 
 #include_next <linux/if_vlan.h>
+#include <linux/skbuff.h>
 
 /*
  * The behavior of __vlan_put_tag() has changed over time:
