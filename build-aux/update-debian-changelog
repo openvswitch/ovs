@@ -18,7 +18,7 @@ if test ! -e "$CHANGELOG"; then
     exit 1
 fi
 
-if grep '($(VERSION))' debian/changelog >/dev/null 2>&1; then
+if grep '('$VERSION')' debian/changelog >/dev/null 2>&1; then
     :
 else
     echo "Adding change log record for $VERSION to $CHANGELOG"
