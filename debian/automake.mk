@@ -62,6 +62,7 @@ EXTRA_DIST += \
 	debian/rules \
 	debian/rules.modules
 
-dist-hook:
+dist-hook-debian-changelog:
 	$(srcdir)/build-aux/update-debian-changelog '$(distdir)/debian/changelog' '$(VERSION)'
-EXTRA_DIST += build-aux/check-structs
+DIST_HOOKS += dist-hook-debian-changelog
+EXTRA_DIST += build-aux/update-debian-changelog
