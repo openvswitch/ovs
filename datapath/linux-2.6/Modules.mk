@@ -16,6 +16,7 @@ openvswitch_headers += \
 	linux-2.6/compat-2.6/include/linux/if.h \
 	linux-2.6/compat-2.6/include/linux/if_arp.h \
 	linux-2.6/compat-2.6/include/linux/if_ether.h \
+	linux-2.6/compat-2.6/include/linux/if_vlan.h \
 	linux-2.6/compat-2.6/include/linux/in.h \
 	linux-2.6/compat-2.6/include/linux/inetdevice.h \
 	linux-2.6/compat-2.6/include/linux/ip.h \
