@@ -52,10 +52,10 @@ void nl_sock_wait(const struct nl_sock *, short int events);
 
 /* Table dumping. */
 struct nl_dump {
-    uint32_t seq;
-    struct nl_sock *sock;
-    int status;
-    struct ofpbuf *buffer;
+    struct nl_sock *sock;       /* Socket being dumped. */
+    uint32_t seq;               /* Expected nlmsg_seq for replies. */
+    struct ofpbuf *buffer;      /* Receive buffer currently being iterated. */
+    int status;                 /* 0=OK, EOF=done, or positive errno value. */
 };
 
 void nl_dump_start(struct nl_dump *, struct nl_sock *,
@@ -89,7 +89,11 @@ void nl_msg_put_u16(struct ofpbuf *, uint16_t type, uint16_t value);
 void nl_msg_put_u32(struct ofpbuf *, uint16_t type, uint32_t value);
 void nl_msg_put_u64(struct ofpbuf *, uint16_t type, uint64_t value);
 void nl_msg_put_string(struct ofpbuf *, uint16_t type, const char *value);
-void nl_msg_put_nested(struct ofpbuf *, uint16_t type, struct ofpbuf *);
+
+size_t nl_msg_start_nested(struct ofpbuf *, uint16_t type);
+void nl_msg_end_nested(struct ofpbuf *, size_t offset);
+void nl_msg_put_nested(struct ofpbuf *, uint16_t type,
+                       const void *data, size_t size);
 
 /* Separating buffers into individual messages. */
 struct nlmsghdr *nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg);

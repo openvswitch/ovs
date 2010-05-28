@@ -813,15 +813,37 @@ nl_msg_put_string(struct ofpbuf *msg, uint16_t type, const char *value)
     nl_msg_put_unspec(msg, type, value, strlen(value) + 1);
 }
 
-/* Appends a Netlink attribute of the given 'type' and the given buffered
- * netlink message in 'nested_msg' to 'msg'.  The nlmsg_len field in
- * 'nested_msg' is finalized to match 'nested_msg->size'. */
+/* Adds the header for nested Netlink attributes to 'msg', with the specified
+ * 'type', and returns the header's offset within 'msg'.  The caller should add
+ * the content for the nested Netlink attribute to 'msg' (e.g. using the other
+ * nl_msg_*() functions), and then pass the returned offset to
+ * nl_msg_end_nested() to finish up the nested attributes. */
+size_t
+nl_msg_start_nested(struct ofpbuf *msg, uint16_t type)
+{
+    size_t offset = msg->size;
+    nl_msg_put_unspec(msg, type, NULL, 0);
+    return offset;
+}
+
+/* Finalizes a nested Netlink attribute in 'msg'.  'offset' should be the value
+ * returned by nl_msg_start_nested(). */
+void
+nl_msg_end_nested(struct ofpbuf *msg, size_t offset)
+{
+    struct nlattr *attr = ofpbuf_at_assert(msg, offset, sizeof *attr);
+    attr->nla_len = msg->size - offset;
+}
+
+/* Appends a nested Netlink attribute of the given 'type', with the 'size'
+ * bytes of content starting at 'data', to 'msg'. */
 void
 nl_msg_put_nested(struct ofpbuf *msg,
-                  uint16_t type, struct ofpbuf *nested_msg)
+                  uint16_t type, const void *data, size_t size)
 {
-    nl_msg_nlmsghdr(nested_msg)->nlmsg_len = nested_msg->size;
-    nl_msg_put_unspec(msg, type, nested_msg->data, nested_msg->size);
+    size_t offset = nl_msg_start_nested(msg, type);
+    nl_msg_put(msg, data, size);
+    nl_msg_end_nested(msg, offset);
 }
 
 /* If 'buffer' begins with a valid "struct nlmsghdr", pulls the header and its
