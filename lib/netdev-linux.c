@@ -125,6 +125,9 @@ struct netdev_linux {
 /* An AF_INET socket (used for ioctl operations). */
 static int af_inet_sock = -1;
 
+/* A Netlink routing socket that is not subscribed to any multicast groups. */
+static struct nl_sock *rtnl_sock;
+
 struct netdev_linux_notifier {
     struct netdev_notifier notifier;
     struct list node;
@@ -158,7 +161,6 @@ static int set_etheraddr(const char *netdev_name, int hwaddr_family,
                          const uint8_t[ETH_ADDR_LEN]);
 static int get_stats_via_netlink(int ifindex, struct netdev_stats *stats);
 static int get_stats_via_proc(const char *netdev_name, struct netdev_stats *stats);
-static int get_rtnl_sock(struct nl_sock **);
 
 static bool
 is_netdev_linux_class(const struct netdev_class *netdev_class)
@@ -184,16 +186,26 @@ netdev_linux_cast(const struct netdev *netdev)
 
     return CONTAINER_OF(netdev, struct netdev_linux, netdev);
 }
-
+
 static int
 netdev_linux_init(void)
 {
     static int status = -1;
     if (status < 0) {
+        /* Create AF_INET socket. */
         af_inet_sock = socket(AF_INET, SOCK_DGRAM, 0);
         status = af_inet_sock >= 0 ? 0 : errno;
         if (status) {
             VLOG_ERR("failed to create inet socket: %s", strerror(status));
+        }
+
+        /* Create rtnetlink socket. */
+        if (!status) {
+            status = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &rtnl_sock);
+            if (status) {
+                VLOG_ERR_RL(&rl, "failed to create rtnetlink socket: %s",
+                            strerror(status));
+            }
         }
     }
     return status;
@@ -1117,16 +1129,10 @@ netdev_linux_remove_policing(struct netdev *netdev)
     struct ofpbuf request;
     struct ofpbuf *reply;
     struct tcmsg *tcmsg;
-    struct nl_sock *rtnl_sock;
     int ifindex;
     int error;
 
     error = get_ifindex(netdev, &ifindex);
-    if (error) {
-        return error;
-    }
-
-    error = get_rtnl_sock(&rtnl_sock);
     if (error) {
         return error;
     }
@@ -1679,18 +1685,12 @@ get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
                          .min_len = sizeof(struct rtnl_link_stats) },
     };
 
-    struct nl_sock *rtnl_sock;
     struct ofpbuf request;
     struct ofpbuf *reply;
     struct ifinfomsg *ifi;
     const struct rtnl_link_stats *rtnl_stats;
     struct nlattr *attrs[ARRAY_SIZE(rtnlgrp_link_policy)];
     int error;
-
-    error = get_rtnl_sock(&rtnl_sock);
-    if (error) {
-        return error;
-    }
 
     ofpbuf_init(&request, 0);
     nl_msg_put_nlmsghdr(&request, sizeof *ifi, RTM_GETLINK, NLM_F_REQUEST);
@@ -1950,28 +1950,5 @@ netdev_linux_get_ipv4(const struct netdev *netdev, struct in_addr *ip,
         const struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
         *ip = sin->sin_addr;
     }
-    return error;
-}
-
-/* Obtains a Netlink routing socket that is not subscribed to any multicast
- * groups.  Returns 0 if successful, otherwise a positive errno value.  Stores
- * the socket in '*rtnl_sockp' if successful, otherwise a null pointer. */
-static int
-get_rtnl_sock(struct nl_sock **rtnl_sockp)
-{
-    static struct nl_sock *sock;
-    int error;
-
-    if (!sock) {
-        error = nl_sock_create(NETLINK_ROUTE, 0, 0, 0, &sock);
-        if (error) {
-            VLOG_ERR_RL(&rl, "failed to create rtnetlink socket: %s",
-                        strerror(error));
-        }
-    } else {
-        error = 0;
-    }
-
-    *rtnl_sockp = sock;
     return error;
 }
