@@ -363,9 +363,9 @@ static int new_dp_port(struct datapath *dp, struct odp_port *odp_port, int port_
 		vport_lock();
 
 		if (odp_port->flags & ODP_PORT_INTERNAL)
-			vport = __vport_add(odp_port->devname, "internal", NULL);
+			vport = vport_add(odp_port->devname, "internal", NULL);
 		else
-			vport = __vport_add(odp_port->devname, "netdev", NULL);
+			vport = vport_add(odp_port->devname, "netdev", NULL);
 
 		vport_unlock();
 
@@ -471,7 +471,7 @@ int dp_detach_port(struct dp_port *p, int may_delete)
 
 		if (!strcmp(port_type, "netdev") || !strcmp(port_type, "internal")) {
 			vport_lock();
-			__vport_del(vport);
+			vport_del(vport);
 			vport_unlock();
 		}
 	}
@@ -1619,35 +1619,35 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		goto exit;
 
 	case ODP_VPORT_ADD:
-		err = vport_add((struct odp_vport_add __user *)argp);
+		err = vport_user_add((struct odp_vport_add __user *)argp);
 		goto exit;
 
 	case ODP_VPORT_MOD:
-		err = vport_mod((struct odp_vport_mod __user *)argp);
+		err = vport_user_mod((struct odp_vport_mod __user *)argp);
 		goto exit;
 
 	case ODP_VPORT_DEL:
-		err = vport_del((char __user *)argp);
+		err = vport_user_del((char __user *)argp);
 		goto exit;
 
 	case ODP_VPORT_STATS_GET:
-		err = vport_stats_get((struct odp_vport_stats_req __user *)argp);
+		err = vport_user_stats_get((struct odp_vport_stats_req __user *)argp);
 		goto exit;
 
 	case ODP_VPORT_ETHER_GET:
-		err = vport_ether_get((struct odp_vport_ether __user *)argp);
+		err = vport_user_ether_get((struct odp_vport_ether __user *)argp);
 		goto exit;
 
 	case ODP_VPORT_ETHER_SET:
-		err = vport_ether_set((struct odp_vport_ether __user *)argp);
+		err = vport_user_ether_set((struct odp_vport_ether __user *)argp);
 		goto exit;
 
 	case ODP_VPORT_MTU_GET:
-		err = vport_mtu_get((struct odp_vport_mtu __user *)argp);
+		err = vport_user_mtu_get((struct odp_vport_mtu __user *)argp);
 		goto exit;
 
 	case ODP_VPORT_MTU_SET:
-		err = vport_mtu_set((struct odp_vport_mtu __user *)argp);
+		err = vport_user_mtu_set((struct odp_vport_mtu __user *)argp);
 		goto exit;
 	}
 
@@ -2011,10 +2011,10 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 		return openvswitch_ioctl(f, cmd, (unsigned long)compat_ptr(argp));
 
 	case ODP_VPORT_ADD32:
-		return compat_vport_add(compat_ptr(argp));
+		return compat_vport_user_add(compat_ptr(argp));
 
 	case ODP_VPORT_MOD32:
-		return compat_vport_mod(compat_ptr(argp));
+		return compat_vport_user_mod(compat_ptr(argp));
 	}
 
 	dp = get_dp_locked(dp_idx);

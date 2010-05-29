@@ -22,30 +22,30 @@ struct dp_port;
 
 /* The following definitions are for users of the vport subsytem: */
 
+int vport_user_add(const struct odp_vport_add __user *);
+int vport_user_mod(const struct odp_vport_mod __user *);
+int vport_user_del(const char __user *udevname);
+
+#ifdef CONFIG_COMPAT
+int compat_vport_user_add(struct compat_odp_vport_add __user *);
+int compat_vport_user_mod(struct compat_odp_vport_mod __user *);
+#endif
+
+int vport_user_stats_get(struct odp_vport_stats_req __user *);
+int vport_user_ether_get(struct odp_vport_ether __user *);
+int vport_user_ether_set(struct odp_vport_ether __user *);
+int vport_user_mtu_get(struct odp_vport_mtu __user *);
+int vport_user_mtu_set(struct odp_vport_mtu __user *);
+
 void vport_lock(void);
 void vport_unlock(void);
 
 int vport_init(void);
 void vport_exit(void);
 
-int vport_add(const struct odp_vport_add __user *);
-int vport_mod(const struct odp_vport_mod __user *);
-int vport_del(const char __user *udevname);
-
-#ifdef CONFIG_COMPAT
-int compat_vport_add(struct compat_odp_vport_add __user *);
-int compat_vport_mod(struct compat_odp_vport_mod __user *);
-#endif
-
-int vport_stats_get(struct odp_vport_stats_req __user *);
-int vport_ether_get(struct odp_vport_ether __user *);
-int vport_ether_set(struct odp_vport_ether __user *);
-int vport_mtu_get(struct odp_vport_mtu __user *);
-int vport_mtu_set(struct odp_vport_mtu __user *);
-
-struct vport *__vport_add(const char *name, const char *type, const void __user *config);
-int __vport_mod(struct vport *, const void __user *config);
-int __vport_del(struct vport *);
+struct vport *vport_add(const char *name, const char *type, const void __user *config);
+int vport_mod(struct vport *, const void __user *config);
+int vport_del(struct vport *);
 
 struct vport *vport_locate(const char *name);
 

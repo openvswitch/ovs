@@ -153,7 +153,7 @@ vport_del_all(void)
 		struct hlist_node *node, *next;
 
 		hlist_for_each_entry_safe(vport, node, next, bucket, hash_node)
-			__vport_del(vport);
+			vport_del(vport);
 	}
 
 	vport_unlock();
@@ -182,15 +182,6 @@ vport_exit(void)
 	kfree(dev_table);
 }
 
-/**
- *	vport_add - add vport device (for userspace callers)
- *
- * @uvport_config: New port configuration.
- *
- * Creates a new vport with the specified configuration (which is dependent
- * on device type).  This function is for userspace callers and assumes no
- * locks are held.
- */
 static int
 do_vport_add(struct odp_vport_add *vport_config)
 {
@@ -209,8 +200,8 @@ do_vport_add(struct odp_vport_add *vport_config)
 	}
 
 	vport_lock();
-	vport = __vport_add(vport_config->devname, vport_config->port_type,
-			    vport_config->config);
+	vport = vport_add(vport_config->devname, vport_config->port_type,
+			  vport_config->config);
 	vport_unlock();
 
 	if (IS_ERR(vport))
@@ -221,8 +212,17 @@ out:
 	return err;
 }
 
+/**
+ *	vport_user_add - add vport device (for userspace callers)
+ *
+ * @uvport_config: New port configuration.
+ *
+ * Creates a new vport with the specified configuration (which is dependent
+ * on device type).  This function is for userspace callers and assumes no
+ * locks are held.
+ */
 int
-vport_add(const struct odp_vport_add __user *uvport_config)
+vport_user_add(const struct odp_vport_add __user *uvport_config)
 {
 	struct odp_vport_add vport_config;
 
@@ -234,7 +234,7 @@ vport_add(const struct odp_vport_add __user *uvport_config)
 
 #ifdef CONFIG_COMPAT
 int
-compat_vport_add(struct compat_odp_vport_add *ucompat)
+compat_vport_user_add(struct compat_odp_vport_add *ucompat)
 {
 	struct compat_odp_vport_add compat;
 	struct odp_vport_add vport_config;
@@ -250,15 +250,6 @@ compat_vport_add(struct compat_odp_vport_add *ucompat)
 }
 #endif
 
-/**
- *	vport_mod - modify existing vport device (for userspace callers)
- *
- * @uvport_config: New configuration for vport
- *
- * Modifies an existing device with the specified configuration (which is
- * dependent on device type).  This function is for userspace callers and
- * assumes no locks are held.
- */
 static int
 do_vport_mod(struct odp_vport_mod *vport_config)
 {
@@ -276,7 +267,7 @@ do_vport_mod(struct odp_vport_mod *vport_config)
 	}
 
 	vport_lock();
-	err = __vport_mod(vport, vport_config->config);
+	err = vport_mod(vport, vport_config->config);
 	vport_unlock();
 
 out:
@@ -284,8 +275,17 @@ out:
 	return err;
 }
 
+/**
+ *	vport_user_mod - modify existing vport device (for userspace callers)
+ *
+ * @uvport_config: New configuration for vport
+ *
+ * Modifies an existing device with the specified configuration (which is
+ * dependent on device type).  This function is for userspace callers and
+ * assumes no locks are held.
+ */
 int
-vport_mod(const struct odp_vport_mod __user *uvport_config)
+vport_user_mod(const struct odp_vport_mod __user *uvport_config)
 {
 	struct odp_vport_mod vport_config;
 
@@ -297,7 +297,7 @@ vport_mod(const struct odp_vport_mod __user *uvport_config)
 
 #ifdef CONFIG_COMPAT
 int
-compat_vport_mod(struct compat_odp_vport_mod *ucompat)
+compat_vport_user_mod(struct compat_odp_vport_mod *ucompat)
 {
 	struct compat_odp_vport_mod compat;
 	struct odp_vport_mod vport_config;
@@ -313,7 +313,7 @@ compat_vport_mod(struct compat_odp_vport_mod *ucompat)
 #endif
 
 /**
- *	vport_del - delete existing vport device (for userspace callers)
+ *	vport_user_del - delete existing vport device (for userspace callers)
  *
  * @udevname: Name of device to delete
  *
@@ -324,7 +324,7 @@ compat_vport_mod(struct compat_odp_vport_mod *ucompat)
  * assumes no locks are held.
  */
 int
-vport_del(const char __user *udevname)
+vport_user_del(const char __user *udevname)
 {
 	char devname[IFNAMSIZ];
 	struct vport *vport;
@@ -367,7 +367,7 @@ dp_port_out:
 	}
 
 	vport_lock();
-	err = __vport_del(vport);
+	err = vport_del(vport);
 	vport_unlock();
 
 out:
@@ -376,7 +376,7 @@ out:
 }
 
 /**
- *	vport_stats_get - retrieve device stats (for userspace callers)
+ *	vport_user_stats_get - retrieve device stats (for userspace callers)
  *
  * @ustats_req: Stats request parameters.
  *
@@ -384,7 +384,7 @@ out:
  * function is for userspace callers and assumes no locks are held.
  */
 int
-vport_stats_get(struct odp_vport_stats_req __user *ustats_req)
+vport_user_stats_get(struct odp_vport_stats_req __user *ustats_req)
 {
 	struct odp_vport_stats_req stats_req;
 	struct vport *vport;
@@ -454,7 +454,7 @@ out:
 }
 
 /**
- *	vport_ether_get - retrieve device Ethernet address (for userspace callers)
+ *	vport_user_ether_get - retrieve device Ethernet address (for userspace callers)
  *
  * @uvport_ether: Ethernet address request parameters.
  *
@@ -462,7 +462,7 @@ out:
  * userspace callers and assumes no locks are held.
  */
 int
-vport_ether_get(struct odp_vport_ether __user *uvport_ether)
+vport_user_ether_get(struct odp_vport_ether __user *uvport_ether)
 {
 	struct odp_vport_ether vport_ether;
 	struct vport *vport;
@@ -496,7 +496,7 @@ out:
 }
 
 /**
- *	vport_ether_set - set device Ethernet address (for userspace callers)
+ *	vport_user_ether_set - set device Ethernet address (for userspace callers)
  *
  * @uvport_ether: Ethernet address request parameters.
  *
@@ -506,7 +506,7 @@ out:
  * are held.
  */
 int
-vport_ether_set(struct odp_vport_ether __user *uvport_ether)
+vport_user_ether_set(struct odp_vport_ether __user *uvport_ether)
 {
 	struct odp_vport_ether vport_ether;
 	struct vport *vport;
@@ -535,7 +535,7 @@ out:
 }
 
 /**
- *	vport_mut_get - retrieve device MTU (for userspace callers)
+ *	vport_user_mtu_get - retrieve device MTU (for userspace callers)
  *
  * @uvport_mtu: MTU request parameters.
  *
@@ -543,7 +543,7 @@ out:
  * callers and assumes no locks are held.
  */
 int
-vport_mtu_get(struct odp_vport_mtu __user *uvport_mtu)
+vport_user_mtu_get(struct odp_vport_mtu __user *uvport_mtu)
 {
 	struct odp_vport_mtu vport_mtu;
 	struct vport *vport;
@@ -575,7 +575,7 @@ out:
 }
 
 /**
- *	vport_mtu_set - set device MTU (for userspace callers)
+ *	vport_user_mtu_set - set device MTU (for userspace callers)
  *
  * @uvport_mtu: MTU request parameters.
  *
@@ -584,7 +584,7 @@ out:
  * for userspace callers and assumes no locks are held.
  */
 int
-vport_mtu_set(struct odp_vport_mtu __user *uvport_mtu)
+vport_user_mtu_set(struct odp_vport_mtu __user *uvport_mtu)
 {
 	struct odp_vport_mtu vport_mtu;
 	struct vport *vport;
@@ -722,7 +722,7 @@ vport_free(struct vport *vport)
 }
 
 /**
- *	__vport_add - add vport device (for kernel callers)
+ *	vport_add - add vport device (for kernel callers)
  *
  * @name: Name of new device.
  * @type: Type of new device (to be matched against types in registered vport
@@ -733,7 +733,7 @@ vport_free(struct vport *vport)
  * on device type).  Both RTNL and vport locks must be held.
  */
 struct vport *
-__vport_add(const char *name, const char *type, const void __user *config)
+vport_add(const char *name, const char *type, const void __user *config)
 {
 	struct vport *vport;
 	int err = 0;
@@ -762,7 +762,7 @@ out:
 }
 
 /**
- *	__vport_mod - modify existing vport device (for kernel callers)
+ *	vport_mod - modify existing vport device (for kernel callers)
  *
  * @vport: vport to modify.
  * @config: Device type specific configuration.  Userspace pointer.
@@ -771,7 +771,7 @@ out:
  * dependent on device type).  Both RTNL and vport locks must be held.
  */
 int
-__vport_mod(struct vport *vport, const void __user *config)
+vport_mod(struct vport *vport, const void __user *config)
 {
 	ASSERT_RTNL();
 	ASSERT_VPORT();
@@ -783,7 +783,7 @@ __vport_mod(struct vport *vport, const void __user *config)
 }
 
 /**
- *	__vport_del - delete existing vport device (for kernel callers)
+ *	vport_del - delete existing vport device (for kernel callers)
  *
  * @vport: vport to delete.
  *
@@ -792,7 +792,7 @@ __vport_mod(struct vport *vport, const void __user *config)
  * Both RTNL and vport locks must be held.
  */
 int
-__vport_del(struct vport *vport)
+vport_del(struct vport *vport)
 {
 	ASSERT_RTNL();
 	ASSERT_VPORT();
