@@ -779,6 +779,14 @@ netdev_linux_update_is_pseudo(struct netdev_dev_linux *netdev_dev)
     }
 }
 
+static void
+swap_uint64(uint64_t *a, uint64_t *b)
+{
+    *a ^= *b;
+    *b ^= *a;
+    *a ^= *b;
+}
+
 /* Retrieves current device stats for 'netdev'.
  *
  * XXX All of the members of struct netdev_stats are 64 bits wide, but on
@@ -791,15 +799,8 @@ netdev_linux_get_stats(const struct netdev *netdev_,
                                 netdev_dev_linux_cast(netdev_get_dev(netdev_));
     static int use_netlink_stats = -1;
     int error;
-    struct netdev_stats raw_stats;
-    struct netdev_stats *collect_stats = stats;
 
     COVERAGE_INC(netdev_get_stats);
-
-    netdev_linux_update_is_pseudo(netdev_dev);
-    if (netdev_dev->is_internal) {
-        collect_stats = &raw_stats;
-    }
 
     if (use_netlink_stats < 0) {
         use_netlink_stats = check_for_working_netlink_stats();
@@ -809,27 +810,22 @@ netdev_linux_get_stats(const struct netdev *netdev_,
 
         error = get_ifindex(netdev_, &ifindex);
         if (!error) {
-            error = get_stats_via_netlink(ifindex, collect_stats);
+            error = get_stats_via_netlink(ifindex, stats);
         }
     } else {
-        error = get_stats_via_proc(netdev_get_name(netdev_), collect_stats);
+        error = get_stats_via_proc(netdev_get_name(netdev_), stats);
     }
 
     /* If this port is an internal port then the transmit and receive stats
      * will appear to be swapped relative to the other ports since we are the
      * one sending the data, not a remote computer.  For consistency, we swap
      * them back here. */
+    netdev_linux_update_is_pseudo(netdev_dev);
     if (!error && (netdev_dev->is_internal || netdev_dev->is_tap)) {
-        stats->rx_packets = raw_stats.tx_packets;
-        stats->tx_packets = raw_stats.rx_packets;
-        stats->rx_bytes = raw_stats.tx_bytes;
-        stats->tx_bytes = raw_stats.rx_bytes;
-        stats->rx_errors = raw_stats.tx_errors;
-        stats->tx_errors = raw_stats.rx_errors;
-        stats->rx_dropped = raw_stats.tx_dropped;
-        stats->tx_dropped = raw_stats.rx_dropped;
-        stats->multicast = raw_stats.multicast;
-        stats->collisions = raw_stats.collisions;
+        swap_uint64(&stats->rx_packets, &stats->tx_packets);
+        swap_uint64(&stats->rx_bytes, &stats->tx_bytes);
+        swap_uint64(&stats->rx_errors, &stats->tx_errors);
+        swap_uint64(&stats->rx_dropped, &stats->tx_dropped);
         stats->rx_length_errors = 0;
         stats->rx_over_errors = 0;
         stats->rx_crc_errors = 0;
