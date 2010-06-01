@@ -172,8 +172,8 @@ xflow_key_from_flow(struct xflow_key *key, const struct flow *flow)
     key->dl_type = flow->dl_type;
     key->tp_src = flow->tp_src;
     key->tp_dst = flow->tp_dst;
-    memcpy(key->dl_src, flow->dl_src, ETH_ALEN);
-    memcpy(key->dl_dst, flow->dl_dst, ETH_ALEN);
+    memcpy(key->dl_src, flow->dl_src, ETH_ADDR_LEN);
+    memcpy(key->dl_dst, flow->dl_dst, ETH_ADDR_LEN);
     key->nw_proto = flow->nw_proto;
     key->nw_tos = flow->nw_tos;
 }
@@ -197,8 +197,8 @@ xflow_key_to_flow(const struct xflow_key *key, struct flow *flow)
     flow->dl_type = key->dl_type;
     flow->tp_src = key->tp_src;
     flow->tp_dst = key->tp_dst;
-    memcpy(flow->dl_src, key->dl_src, ETH_ALEN);
-    memcpy(flow->dl_dst, key->dl_dst, ETH_ALEN);
+    memcpy(flow->dl_src, key->dl_src, ETH_ADDR_LEN);
+    memcpy(flow->dl_dst, key->dl_dst, ETH_ADDR_LEN);
     flow->nw_proto = key->nw_proto;
     flow->nw_tos = key->nw_tos;
 }

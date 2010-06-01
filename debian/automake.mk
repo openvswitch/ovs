@@ -61,3 +61,8 @@ EXTRA_DIST += \
 	debian/reconfigure \
 	debian/rules \
 	debian/rules.modules
+
+dist-hook-debian-changelog:
+	$(srcdir)/build-aux/update-debian-changelog '$(distdir)/debian/changelog' '$(VERSION)'
+DIST_HOOKS += dist-hook-debian-changelog
+EXTRA_DIST += build-aux/update-debian-changelog

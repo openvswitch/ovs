@@ -45,12 +45,22 @@
 #ifndef XFLOW_H
 #define XFLOW_H 1
 
+/* The ovs_be<N> types indicate that an object is in big-endian, not
+ * native-endian, byte order.  They are otherwise equivalent to uint<N>_t.
+ * The Linux kernel already has __be<N> types for this, which take on
+ * additional semantics when the "sparse" static checker is used, so we use
+ * those types when compiling the kernel. */
 #ifdef __KERNEL__
 #include <linux/types.h>
+#define ovs_be16 __be16
+#define ovs_be32 __be32
+#define ovs_be64 __be64
 #else
-#include <sys/types.h>
+#include <stdint.h>
+#define ovs_be16 uint16_t
+#define ovs_be32 uint32_t
+#define ovs_be64 uint64_t
 #endif
-#include <linux/if_ether.h>
 
 #define XFLOW_MAX 256             /* Maximum number of datapaths. */
 
@@ -94,32 +104,32 @@
 
 struct xflow_stats {
     /* Flows. */
-    __u32 n_flows;              /* Number of flows in flow table. */
-    __u32 cur_capacity;         /* Current flow table capacity. */
-    __u32 max_capacity;         /* Maximum expansion of flow table capacity. */
+    uint32_t n_flows;           /* Number of flows in flow table. */
+    uint32_t cur_capacity;      /* Current flow table capacity. */
+    uint32_t max_capacity;      /* Maximum expansion of flow table capacity. */
 
     /* Ports. */
-    __u32 n_ports;              /* Current number of ports. */
-    __u32 max_ports;            /* Maximum supported number of ports. */
-    __u16 max_groups;           /* Maximum number of port groups. */
-    __u16 reserved;
+    uint32_t n_ports;           /* Current number of ports. */
+    uint32_t max_ports;         /* Maximum supported number of ports. */
+    uint16_t max_groups;        /* Maximum number of port groups. */
+    uint16_t reserved;
 
     /* Lookups. */
-    __u64 n_frags;              /* Number of dropped IP fragments. */
-    __u64 n_hit;                /* Number of flow table matches. */
-    __u64 n_missed;             /* Number of flow table misses. */
-    __u64 n_lost;               /* Number of misses not sent to userspace. */
+    uint64_t n_frags;           /* Number of dropped IP fragments. */
+    uint64_t n_hit;             /* Number of flow table matches. */
+    uint64_t n_missed;          /* Number of flow table misses. */
+    uint64_t n_lost;            /* Number of misses not sent to userspace. */
 
     /* Queues. */
-    __u16 max_miss_queue;       /* Max length of XFLOWL_MISS queue. */
-    __u16 max_action_queue;     /* Max length of XFLOWL_ACTION queue. */
-    __u16 max_sflow_queue;      /* Max length of XFLOWL_SFLOW queue. */
+    uint16_t max_miss_queue;    /* Max length of XFLOWL_MISS queue. */
+    uint16_t max_action_queue;  /* Max length of XFLOWL_ACTION queue. */
+    uint16_t max_sflow_queue;   /* Max length of XFLOWL_SFLOW queue. */
 };
 
 /* Logical ports. */
-#define XFLOWP_LOCAL      ((__u16)0)
-#define XFLOWP_NONE       ((__u16)-1)
-#define XFLOWP_NORMAL     ((__u16)-2)
+#define XFLOWP_LOCAL      ((uint16_t)0)
+#define XFLOWP_NONE       ((uint16_t)-1)
+#define XFLOWP_NORMAL     ((uint16_t)-2)
 
 /* Listening channels. */
 #define _XFLOWL_MISS_NR   0       /* Packet missed in flow table. */
@@ -151,11 +161,11 @@ struct xflow_stats {
  * packet data.
  */
 struct xflow_msg {
-    __u32 type;
-    __u32 length;
-    __u16 port;
-    __u16 reserved;
-    __u32 arg;
+    uint32_t type;
+    uint32_t length;
+    uint16_t port;
+    uint16_t reserved;
+    uint32_t arg;
 };
 
 /**
@@ -171,37 +181,37 @@ struct xflow_msg {
  * packet data.
  */
 struct xflow_sflow_sample_header {
-    __u32 sample_pool;
-    __u32 n_actions;
+    uint32_t sample_pool;
+    uint32_t n_actions;
 };
 
 #define XFLOW_PORT_INTERNAL (1 << 0) /* This port is simulated. */
 struct xflow_port {
     char devname[16];           /* IFNAMSIZ */
-    __u16 port;
-    __u16 flags;
-    __u32 reserved2;
+    uint16_t port;
+    uint16_t flags;
+    uint32_t reserved2;
 };
 
 struct xflow_portvec {
     struct xflow_port *ports;
-    __u32 n_ports;
+    uint32_t n_ports;
 };
 
 struct xflow_port_group {
-    __u16 *ports;
-    __u16 n_ports;                /* Number of ports. */
-    __u16 group;                  /* Group number. */
+    uint16_t *ports;
+    uint16_t n_ports;           /* Number of ports. */
+    uint16_t group;             /* Group number. */
 };
 
 struct xflow_flow_stats {
-    __u64 n_packets;            /* Number of matched packets. */
-    __u64 n_bytes;              /* Number of matched bytes. */
-    __u64 used_sec;             /* Time last used. */
-    __u32 used_nsec;
-    __u8 tcp_flags;
-    __u8 ip_tos;
-    __u16 error;                /* Used by XFLOW_FLOW_GET. */
+    uint64_t n_packets;         /* Number of matched packets. */
+    uint64_t n_bytes;           /* Number of matched bytes. */
+    uint64_t used_sec;          /* Time last used. */
+    uint32_t used_nsec;
+    uint8_t tcp_flags;
+    uint8_t ip_tos;
+    uint16_t error;             /* Used by XFLOW_FLOW_GET. */
 };
 
 /*
@@ -213,19 +223,19 @@ struct xflow_flow_stats {
 #define XFLOW_TCI_PRESENT 0x1000  /* CFI bit */
 
 struct xflow_key {
-    __be32 tun_id;               /* Encapsulating tunnel ID. */
-    __be32 nw_src;               /* IP source address. */
-    __be32 nw_dst;               /* IP destination address. */
-    __u16  in_port;              /* Input switch port. */
-    __be16 dl_tci;               /* All zeros if 802.1Q header absent,
-                                  * XFLOW_TCI_PRESENT set if present. */
-    __be16 dl_type;              /* Ethernet frame type. */
-    __be16 tp_src;               /* TCP/UDP source port. */
-    __be16 tp_dst;               /* TCP/UDP destination port. */
-    __u8   dl_src[ETH_ALEN];     /* Ethernet source address. */
-    __u8   dl_dst[ETH_ALEN];     /* Ethernet destination address. */
-    __u8   nw_proto;             /* IP protocol or low 8 bits of ARP opcode. */
-    __u8   nw_tos;               /* IP ToS (DSCP field, 6 bits). */
+    ovs_be32 tun_id;            /* Encapsulating tunnel ID. */
+    ovs_be32 nw_src;            /* IP source address. */
+    ovs_be32 nw_dst;            /* IP destination address. */
+    uint16_t in_port;           /* Input switch port. */
+    ovs_be16 dl_tci;            /* All zeros if 802.1Q header absent,
+                                 * XFLOW_TCI_PRESENT set if present. */
+    ovs_be16 dl_type;           /* Ethernet frame type. */
+    ovs_be16 tp_src;            /* TCP/UDP source port. */
+    ovs_be16 tp_dst;            /* TCP/UDP destination port. */
+    uint8_t  dl_src[6];         /* Ethernet source address. */
+    uint8_t  dl_dst[6];         /* Ethernet destination address. */
+    uint8_t  nw_proto;          /* IP protocol or low 8 bits of ARP opcode. */
+    uint8_t  nw_tos;            /* IP ToS (DSCP field, 6 bits). */
 };
 
 /* Flags for XFLOW_FLOW. */
@@ -235,8 +245,8 @@ struct xflow_flow {
     struct xflow_flow_stats stats;
     struct xflow_key key;
     union xflow_action *actions;
-    __u32 n_actions;
-    __u32 flags;
+    uint32_t n_actions;
+    uint32_t flags;
 };
 
 /* Flags for XFLOW_FLOW_PUT. */
@@ -247,12 +257,12 @@ struct xflow_flow {
 /* XFLOW_FLOW_PUT argument. */
 struct xflow_flow_put {
     struct xflow_flow flow;
-    __u32 flags;
+    uint32_t flags;
 };
 
 struct xflow_flowvec {
     struct xflow_flow *flows;
-    __u32 n_flows;
+    uint32_t n_flows;
 };
 
 /* Action types. */
@@ -272,71 +282,71 @@ struct xflow_flowvec {
 #define XFLOWAT_N_ACTIONS         13
 
 struct xflow_action_output {
-    __u16 type;                  /* XFLOWAT_OUTPUT. */
-    __u16 port;                  /* Output port. */
-    __u16 reserved1;
-    __u16 reserved2;
+    uint16_t type;              /* XFLOWAT_OUTPUT. */
+    uint16_t port;              /* Output port. */
+    uint16_t reserved1;
+    uint16_t reserved2;
 };
 
 struct xflow_action_output_group {
-    __u16 type;                 /* XFLOWAT_OUTPUT_GROUP. */
-    __u16 group;                /* Group number. */
-    __u16 reserved1;
-    __u16 reserved2;
+    uint16_t type;              /* XFLOWAT_OUTPUT_GROUP. */
+    uint16_t group;             /* Group number. */
+    uint16_t reserved1;
+    uint16_t reserved2;
 };
 
 struct xflow_action_controller {
-    __u16 type;                 /* XFLOWAT_OUTPUT_CONTROLLER. */
-    __u16 reserved;
-    __u32 arg;                  /* Copied to struct xflow_msg 'arg' member. */
+    uint16_t type;              /* XFLOWAT_OUTPUT_CONTROLLER. */
+    uint16_t reserved;
+    uint32_t arg;               /* Copied to struct xflow_msg 'arg' member. */
 };
 
 struct xflow_action_tunnel {
-    __u16 type;                 /* XFLOWAT_SET_TUNNEL. */
-    __u16 reserved;
-    __be32 tun_id;              /* Tunnel ID. */
+    uint16_t type;              /* XFLOWAT_SET_TUNNEL. */
+    uint16_t reserved;
+    ovs_be32 tun_id;            /* Tunnel ID. */
 };
 
 /* Action structure for XFLOWAT_SET_DL_TCI. */
 struct xflow_action_dl_tci {
-    __u16 type;                  /* XFLOWAT_SET_DL_TCI. */
-    __be16 tci;                  /* New TCI.  Bits not in mask must be zero. */
-    __be16 mask;                 /* 0x0fff to set VID, 0xe000 to set PCP,
-                                    or 0xefff to set both. */
-    __u16 reserved;
+    uint16_t type;              /* XFLOWAT_SET_DL_TCI. */
+    ovs_be16 tci;               /* New TCI.  Bits not in mask must be zero. */
+    ovs_be16 mask;              /* 0x0fff to set VID, 0xe000 to set PCP,
+                                 * or 0xefff to set both. */
+    uint16_t reserved;
 };
 
 /* Action structure for XFLOWAT_SET_DL_SRC/DST. */
 struct xflow_action_dl_addr {
-    __u16 type;                  /* XFLOWAT_SET_DL_SRC/DST. */
-    __u8 dl_addr[ETH_ALEN];      /* Ethernet address. */
+    uint16_t type;              /* XFLOWAT_SET_DL_SRC/DST. */
+    uint8_t dl_addr[6];         /* Ethernet address. */
 };
 
 /* Action structure for XFLOWAT_SET_NW_SRC/DST. */
 struct xflow_action_nw_addr {
-    __u16 type;                 /* XFLOWAT_SET_TW_SRC/DST. */
-    __u16 reserved;
-    __be32 nw_addr;             /* IP address. */
+    uint16_t type;              /* XFLOWAT_SET_TW_SRC/DST. */
+    uint16_t reserved;
+    ovs_be32 nw_addr;           /* IP address. */
 };
 
 struct xflow_action_nw_tos {
-    __u16 type;                  /* XFLOWAT_SET_NW_TOS. */
-    __u8 nw_tos;                 /* IP ToS/DSCP field (6 bits). */
-    __u8 reserved1;
-    __u16 reserved2;
-    __u16 reserved3;
+    uint16_t type;              /* XFLOWAT_SET_NW_TOS. */
+    uint8_t nw_tos;             /* IP ToS/DSCP field (6 bits). */
+    uint8_t reserved1;
+    uint16_t reserved2;
+    uint16_t reserved3;
 };
 
 /* Action structure for XFLOWAT_SET_TP_SRC/DST. */
 struct xflow_action_tp_port {
-    __u16 type;                  /* XFLOWAT_SET_TP_SRC/DST. */
-    __be16 tp_port;              /* TCP/UDP port. */
-    __u16 reserved1;
-    __u16 reserved2;
+    uint16_t type;              /* XFLOWAT_SET_TP_SRC/DST. */
+    ovs_be16 tp_port;           /* TCP/UDP port. */
+    uint16_t reserved1;
+    uint16_t reserved2;
 };
 
 union xflow_action {
-    __u16 type;
+    uint16_t type;
     struct xflow_action_output output;
     struct xflow_action_output_group output_group;
     struct xflow_action_controller controller;
@@ -349,57 +359,57 @@ union xflow_action {
 };
 
 struct xflow_execute {
-    __u16 in_port;
-    __u16 reserved1;
-    __u32 reserved2;
+    uint16_t in_port;
+    uint16_t reserved1;
+    uint32_t reserved2;
 
     union xflow_action *actions;
-    __u32 n_actions;
+    uint32_t n_actions;
 
     const void *data;
-    __u32 length;
+    uint32_t length;
 };
 
 #define VPORT_TYPE_SIZE     16
 struct xflow_vport_add {
     char port_type[VPORT_TYPE_SIZE];
-    char devname[16];            /* IFNAMSIZ */
+    char devname[16];           /* IFNAMSIZ */
     void *config;
 };
 
 struct xflow_vport_mod {
-    char devname[16];            /* IFNAMSIZ */
+    char devname[16];           /* IFNAMSIZ */
     void *config;
 };
 
 struct xflow_vport_stats {
-    __u64 rx_packets;
-    __u64 tx_packets;
-    __u64 rx_bytes;
-    __u64 tx_bytes;
-    __u64 rx_dropped;
-    __u64 tx_dropped;
-    __u64 rx_errors;
-    __u64 tx_errors;
-    __u64 rx_frame_err;
-    __u64 rx_over_err;
-    __u64 rx_crc_err;
-    __u64 collisions;
+    uint64_t rx_packets;
+    uint64_t tx_packets;
+    uint64_t rx_bytes;
+    uint64_t tx_bytes;
+    uint64_t rx_dropped;
+    uint64_t tx_dropped;
+    uint64_t rx_errors;
+    uint64_t tx_errors;
+    uint64_t rx_frame_err;
+    uint64_t rx_over_err;
+    uint64_t rx_crc_err;
+    uint64_t collisions;
 };
 
 struct xflow_vport_stats_req {
-    char devname[16];            /* IFNAMSIZ */
+    char devname[16];           /* IFNAMSIZ */
     struct xflow_vport_stats stats;
 };
 
 struct xflow_vport_ether {
-    char devname[16];            /* IFNAMSIZ */
-    unsigned char ether_addr[ETH_ALEN];
+    char devname[16];           /* IFNAMSIZ */
+    unsigned char ether_addr[6];
 };
 
 struct xflow_vport_mtu {
-    char devname[16];            /* IFNAMSIZ */
-    __u16 mtu;
+    char devname[16];           /* IFNAMSIZ */
+    uint16_t mtu;
 };
 
 /* Values below this cutoff are 802.3 packets and the two bytes

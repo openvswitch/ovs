@@ -160,11 +160,11 @@ dnl <C0> is not allowed anywhere in a UTF-8 string.
 dnl <ED A0 80> is a surrogate and not allowed in UTF-8.
 OVSDB_CHECK_POSITIVE([no invalid UTF-8 sequences in strings],
   [parse-atoms '[["string"]]' \
-     '@<:@"m4_esyscmd([printf "\xc0"])"@:>@' \
-     '@<:@"m4_esyscmd([printf "\xed\xa0\x80"])"@:>@' \
+     '@<:@"m4_esyscmd([printf "\300"])"@:>@' \
+     '@<:@"m4_esyscmd([printf "\355\240\200"])"@:>@' \
 ],
-  [constraint violation: "m4_esyscmd([printf "\xc0"])" is not a valid UTF-8 string: invalid UTF-8 sequence 0xc0
-constraint violation: "m4_esyscmd([printf "\xed\xa0\x80"])" is not a valid UTF-8 string: invalid UTF-8 sequence 0xed 0xa0])
+  [constraint violation: "m4_esyscmd([printf "\300"])" is not a valid UTF-8 string: invalid UTF-8 sequence 0xc0
+constraint violation: "m4_esyscmd([printf "\355\240\200"])" is not a valid UTF-8 string: invalid UTF-8 sequence 0xed 0xa0])
 
 OVSDB_CHECK_NEGATIVE([real not acceptable integer string atom],
   [[parse-atom-strings '["integer"]' '0.5' ]],

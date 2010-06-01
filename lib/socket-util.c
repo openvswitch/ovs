@@ -26,6 +26,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
 #include "fatal-signal.h"
@@ -53,6 +55,28 @@ set_nonblocking(int fd)
     }
 }
 
+static bool
+rlim_is_finite(rlim_t limit)
+{
+    if (limit == RLIM_INFINITY) {
+        return false;
+    }
+
+#ifdef RLIM_SAVED_CUR           /* FreeBSD 8.0 lacks RLIM_SAVED_CUR. */
+    if (limit == RLIM_SAVED_CUR) {
+        return false;
+    }
+#endif
+
+#ifdef RLIM_SAVED_MAX           /* FreeBSD 8.0 lacks RLIM_SAVED_MAX. */
+    if (limit == RLIM_SAVED_MAX) {
+        return false;
+    }
+#endif
+
+    return true;
+}
+
 /* Returns the maximum valid FD value, plus 1. */
 int
 get_max_fds(void)
@@ -60,10 +84,7 @@ get_max_fds(void)
     static int max_fds = -1;
     if (max_fds < 0) {
         struct rlimit r;
-        if (!getrlimit(RLIMIT_NOFILE, &r)
-            && r.rlim_cur != RLIM_INFINITY
-            && r.rlim_cur != RLIM_SAVED_MAX
-            && r.rlim_cur != RLIM_SAVED_CUR) {
+        if (!getrlimit(RLIMIT_NOFILE, &r) && rlim_is_finite(r.rlim_cur)) {
             max_fds = r.rlim_cur;
         } else {
             VLOG_WARN("failed to obtain fd limit, defaulting to 1024");

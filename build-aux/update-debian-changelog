@@ -1,0 +1,37 @@
+#! /bin/sh
+
+if test $# != 2; then
+    cat <<EOF 
+$0, to update version information a Debian changelog
+usage: $0 CHANGELOG VERSION
+
+This utility checks whether CHANGELOG, which should be a Debian changelog
+file, contains a record for VERSION.  If not, then it adds one at the top.
+EOF
+    exit 1
+fi
+
+CHANGELOG=$1
+VERSION=$2
+if test ! -e "$CHANGELOG"; then
+    echo "$0: $CHANGELOG does not exist (use --help for help"
+    exit 1
+fi
+
+if grep '('$VERSION')' debian/changelog >/dev/null 2>&1; then
+    :
+else
+    echo "Adding change log record for $VERSION to $CHANGELOG"
+    {
+        cat <<EOF
+openvswitch ($VERSION) unstable; urgency=low
+
+  * New upstream version.
+
+ -- Open vSwitch team <dev@openvswitch.org>  `date -u +"%a, %d %b %Y %H:%M:%S +0000"`
+
+EOF
+        cat "$CHANGELOG"
+    } > "$CHANGELOG".new
+    mv "$CHANGELOG".new "$CHANGELOG"
+fi

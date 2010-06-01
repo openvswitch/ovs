@@ -28,17 +28,24 @@ endif
 BUILT_SOURCES =
 CLEANFILES =
 DISTCLEANFILES =
-EXTRA_DIST = INSTALL.bridge \
+EXTRA_DIST = \
+	CodingStyle \
 	INSTALL.KVM \
 	INSTALL.Linux \
-	INSTALL.userspace \
 	INSTALL.OpenFlow \
 	INSTALL.SSL \
 	INSTALL.XenServer \
-	README-gcov
+	INSTALL.bridge \
+	INSTALL.userspace \
+	NOTICE \
+	README-gcov \
+	REPORTING-BUGS \
+	SubmittingPatches \
+	boot.sh
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =
+DIST_HOOKS =
 dist_man_MANS =
 dist_pkgdata_DATA =
 dist_pkgdata_SCRIPTS =
@@ -52,7 +59,9 @@ noinst_SCRIPTS =
 OVSIDL_BUILT =
 SUFFIXES =
 
-EXTRA_DIST += soexpand.pl
+EXTRA_DIST += \
+	build-aux/update-debian-changelog \
+	soexpand.pl
 
 ro_c = echo '/* -*- mode: c; buffer-read-only: t -*- */'
 
@@ -78,6 +87,32 @@ SUFFIXES += .in
 	fi
 	mv $@.tmp $@
 
+# If we're checked out from a Git repository, make sure that every
+# file that is in Git is distributed.
+dist-hook-git:
+	if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1; then    \
+	  rc=0;								      \
+	  for d in `cd $(srcdir) && git ls-files`; do			      \
+	    if test ! -e $(distdir)/$$d; then				      \
+	      case $$d in # (						      \
+	        .gitignore|*/.gitignore) ;; # (				      \
+		*)							      \
+		   if test $$rc = 0; then				      \
+		     echo "The distribution is missing the following files:"; \
+		     rc=1;						      \
+		   fi;							      \
+	           echo "$$d";						      \
+	           ;;							      \
+	      esac;							      \
+	    fi								      \
+	  done;								      \
+	  exit $$rc;							      \
+	fi
+DIST_HOOKS += dist-hook-git
+
+dist-hook: $(DIST_HOOKS)
+.PHONY: $(DIST_HOOKS)
+
 include lib/automake.mk
 include ofproto/automake.mk
 include utilities/automake.mk
@@ -89,3 +124,4 @@ include vswitchd/automake.mk
 include ovsdb/automake.mk
 include xenserver/automake.mk
 include extras/ezio/automake.mk
+

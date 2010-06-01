@@ -18,6 +18,7 @@
 #include "discovery.h"
 #include <errno.h>
 #include <inttypes.h>
+#include <sys/socket.h>
 #include <net/if.h>
 #include <regex.h>
 #include <stdlib.h>

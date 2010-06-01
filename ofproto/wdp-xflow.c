@@ -1127,7 +1127,7 @@ wx_wait_one(struct wx *wx)
     if (wx->need_revalidate /*|| !tag_set_is_empty(&p->revalidate_set)*/) {
         poll_immediate_wake();
     } else if (wx->next_expiration != LLONG_MAX) {
-        poll_timer_wait(wx->next_expiration - time_msec());
+        poll_timer_wait_until(wx->next_expiration);
     }
 }
 

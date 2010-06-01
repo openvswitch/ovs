@@ -23,6 +23,7 @@
 #include <netinet/tcp.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #include "packets.h"
 #include "socket-util.h"

@@ -157,8 +157,8 @@ AC_DEFUN([OVS_CHECK_LINUX26_COMPAT], [
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], 
                   [skb_copy_from_linear_data_offset],
                   [OVS_DEFINE([HAVE_SKB_COPY_FROM_LINEAR_DATA_OFFSET])])
-  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_cow],
-                  [OVS_DEFINE([HAVE_SKB_COW])])
+  OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_cow_head],
+                  [OVS_DEFINE([HAVE_SKB_COW_HEAD])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_transport_header],
                   [OVS_DEFINE([HAVE_SKBUFF_HEADER_HELPERS])])
   OVS_GREP_IFELSE([$KSRC26/include/linux/skbuff.h], [skb_warn_if_lro],

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,8 @@ struct poll_waiter;
 
 /* Schedule events to wake up the following poll_block(). */
 struct poll_waiter *poll_fd_wait(int fd, short int events);
-void poll_timer_wait(int msec);
+void poll_timer_wait(long long int msec);
+void poll_timer_wait_until(long long int msec);
 void poll_immediate_wake(void);
 
 /* Wait until an event occurs. */

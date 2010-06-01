@@ -18,6 +18,7 @@
 #define XFLOW_UTIL_H 1
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 #include "hash.h"

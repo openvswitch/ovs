@@ -42,7 +42,9 @@
 #define THIS_MODULE VLM_xfif
 
 static const struct xfif_class *base_xfif_classes[] = {
+#ifdef HAVE_NETLINK
     &xfif_linux_class,
+#endif
     &xfif_netdev_class,
 };
 

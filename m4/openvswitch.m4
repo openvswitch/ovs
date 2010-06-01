@@ -290,10 +290,10 @@ AC_DEFUN([OVS_CHECK_PYTHON_MODULE],
       if test $HAVE_PYTHON = yes; then
         AS_ECHO(["running $PYTHON -c 'import $1
 import sys
-sys.exit(0)'..."]) >AS_MESSAGE_LOG_FD 2>&1
+sys.exit(0)'..."]) >&AS_MESSAGE_LOG_FD 2>&1
         if $PYTHON -c 'import $1
 import sys
-sys.exit(0)' >AS_MESSAGE_LOG_FD 2>&1; then
+sys.exit(0)' >&AS_MESSAGE_LOG_FD 2>&1; then
           ovs_cv_py_[]AS_TR_SH([$1])=yes
         fi
       fi])])

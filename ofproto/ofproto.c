@@ -19,6 +19,7 @@
 #include "ofproto.h"
 #include <errno.h>
 #include <inttypes.h>
+#include <sys/socket.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <stdbool.h>
@@ -450,6 +451,10 @@ update_in_band_remotes(struct ofproto *ofproto)
     HMAP_FOR_EACH (ofconn, struct ofconn, hmap_node, &ofproto->controllers) {
         struct sockaddr_in *sin = &addrs[n_addrs];
 
+        if (ofconn->band == OFPROTO_OUT_OF_BAND) {
+            continue;
+        }
+
         sin->sin_addr.s_addr = rconn_get_remote_ip(ofconn->rconn);
         if (sin->sin_addr.s_addr) {
             sin->sin_port = rconn_get_remote_port(ofconn->rconn);
@@ -473,7 +478,9 @@ update_in_band_remotes(struct ofproto *ofproto)
             in_band_create(ofproto, ofproto->wdp, ofproto->switch_status,
                            &ofproto->in_band);
         }
-        in_band_set_remotes(ofproto->in_band, addrs, n_addrs);
+        if (ofproto->in_band) {
+            in_band_set_remotes(ofproto->in_band, addrs, n_addrs);
+        }
         ofproto->next_in_band_update = time_msec() + 1000;
     } else {
         in_band_destroy(ofproto->in_band);
@@ -988,7 +995,7 @@ ofproto_wait(struct ofproto *p)
         ofconn_wait(ofconn);
     }
     if (p->in_band) {
-        poll_timer_wait(p->next_in_band_update - time_msec());
+        poll_timer_wait_until(p->next_in_band_update);
         in_band_wait(p->in_band);
     }
     if (p->fail_open) {

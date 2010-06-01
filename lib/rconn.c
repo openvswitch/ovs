@@ -500,9 +500,8 @@ rconn_run_wait(struct rconn *rc)
 
     timeo = timeout(rc);
     if (timeo != UINT_MAX) {
-        unsigned int expires = sat_add(rc->state_entered, timeo);
-        unsigned int remaining = sat_sub(expires, time_now());
-        poll_timer_wait(sat_mul(remaining, 1000));
+        long long int expires = sat_add(rc->state_entered, timeo);
+        poll_timer_wait_until(expires * 1000);
     }
 
     if ((rc->state & (S_ACTIVE | S_IDLE)) && rc->txq.n) {

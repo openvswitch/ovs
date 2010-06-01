@@ -612,6 +612,6 @@ void
 ofproto_sflow_wait(struct ofproto_sflow *os)
 {
     if (ofproto_sflow_is_enabled(os)) {
-        poll_timer_wait(os->next_tick * 1000 - time_msec());
+        poll_timer_wait_until(os->next_tick * 1000LL);
     }
 }

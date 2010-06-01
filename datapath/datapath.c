@@ -1573,7 +1573,7 @@ static int get_port_group(struct datapath *dp, struct xflow_port_group __user *u
 	if (copy_from_user(&pg, upg, sizeof pg))
 		return -EFAULT;
 
-	return do_get_port_group(dp, pg.ports, pg.n_ports, pg.group, &pg.n_ports);
+	return do_get_port_group(dp, pg.ports, pg.n_ports, pg.group, &upg->n_ports);
 }
 
 static int get_listen_mask(const struct file *f)
@@ -1791,7 +1791,7 @@ static int compat_get_port_group(struct datapath *dp, struct compat_xflow_port_g
 		return -EFAULT;
 
 	return do_get_port_group(dp, compat_ptr(pg.ports), pg.n_ports,
-				 pg.group, &pg.n_ports);
+				 pg.group, &upg->n_ports);
 }
 
 static int compat_get_flow(struct xflow_flow *flow, const struct compat_xflow_flow __user *compat)

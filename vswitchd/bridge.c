@@ -20,6 +20,7 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <inttypes.h>
+#include <sys/socket.h>
 #include <net/if.h>
 #include <openflow/openflow.h>
 #include <signal.h>
@@ -1988,11 +1989,11 @@ bond_wait(struct bridge *br)
         for (j = 0; j < port->n_ifaces; j++) {
             struct iface *iface = port->ifaces[j];
             if (iface->delay_expires != LLONG_MAX) {
-                poll_timer_wait(iface->delay_expires - time_msec());
+                poll_timer_wait_until(iface->delay_expires);
             }
         }
         if (port->bond_fake_iface) {
-            poll_timer_wait(port->bond_next_fake_iface_update - time_msec());
+            poll_timer_wait_until(port->bond_next_fake_iface_update);
         }
     }
 }
@@ -2271,12 +2272,17 @@ update_learning_table(struct bridge *br, const flow_t *flow, int vlan,
     }
 }
 
+/* A VM broadcasts a gratuitous ARP to indicate that it has resumed after
+ * migration.  Older Citrix-patched Linux DomU used gratuitous ARP replies to
+ * indicate this; newer upstream kernels use gratuitous ARP requests. */
 static bool
-is_bcast_arp_reply(const flow_t *flow)
+is_gratuitous_arp(const flow_t *flow)
 {
     return (flow->dl_type == htons(ETH_TYPE_ARP)
-            && flow->nw_proto == ARP_OP_REPLY
-            && eth_addr_is_broadcast(flow->dl_dst));
+            && eth_addr_is_broadcast(flow->dl_dst)
+            && (flow->nw_proto == ARP_OP_REPLY
+                || (flow->nw_proto == ARP_OP_REQUEST
+                    && flow->nw_src == flow->nw_dst)));
 }
 
 /* Determines whether packets in 'flow' within 'br' should be forwarded or
@@ -2368,11 +2374,11 @@ is_admissible(struct bridge *br, const flow_t *flow, bool have_packet,
 
         /* Drop all packets for which we have learned a different input
          * port, because we probably sent the packet on one slave and got
-         * it back on the other.  Broadcast ARP replies are an exception
+         * it back on the other.  Gratuitous ARP packets are an exception
          * to this rule: the host has moved to another switch. */
         src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
         if (src_idx != -1 && src_idx != in_port->port_idx &&
-            !is_bcast_arp_reply(flow)) {
+            !is_gratuitous_arp(flow)) {
                 return false;
         }
     }

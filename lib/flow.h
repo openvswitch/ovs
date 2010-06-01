@@ -25,6 +25,7 @@
 #include "openflow/openflow.h"
 #include "hash.h"
 #include "openvswitch/xflow.h"
+#include "packets.h"
 #include "util.h"
 
 #ifdef  __cplusplus
@@ -47,8 +48,8 @@ struct flow {
     uint16_t dl_type;           /* Ethernet frame type. */
     uint16_t tp_src;            /* TCP/UDP source port. */
     uint16_t tp_dst;            /* TCP/UDP destination port. */
-    uint8_t dl_src[ETH_ALEN];   /* Ethernet source address. */
-    uint8_t dl_dst[ETH_ALEN];   /* Ethernet destination address. */
+    uint8_t dl_src[ETH_ADDR_LEN]; /* Ethernet source address. */
+    uint8_t dl_dst[ETH_ADDR_LEN]; /* Ethernet destination address. */
     uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
     uint8_t dl_vlan_pcp;        /* Input VLAN priority. */
     uint8_t nw_tos;             /* IP ToS (DSCP field, 6 bits). */

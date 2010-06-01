@@ -73,6 +73,18 @@ poll_fd_wait(int fd, short int events)
     return new_waiter(fd, events);
 }
 
+/* The caller must ensure that 'msec' is not negative. */
+static void
+poll_timer_wait__(int msec)
+{
+    if (timeout < 0 || msec < timeout) {
+        timeout = msec;
+        if (VLOG_IS_DBG_ENABLED()) {
+            backtrace_capture(&timeout_backtrace);
+        }
+    }
+}
+
 /* Causes the following call to poll_block() to block for no more than 'msec'
  * milliseconds.  If 'msec' is nonpositive, the following call to poll_block()
  * will not block at all.
@@ -81,14 +93,28 @@ poll_fd_wait(int fd, short int events)
  * is affected.  The timer will need to be re-registered after poll_block() is
  * called if it is to persist. */
 void
-poll_timer_wait(int msec)
+poll_timer_wait(long long int msec)
 {
-    if (timeout < 0 || msec < timeout) {
-        timeout = MAX(0, msec);
-        if (VLOG_IS_DBG_ENABLED()) {
-            backtrace_capture(&timeout_backtrace);
-        }
-    }
+    poll_timer_wait__(msec < 0 ? 0
+                      : msec > INT_MAX ? INT_MAX
+                      : msec);
+}
+
+/* Causes the following call to poll_block() to wake up when the current time,
+ * as returned by time_msec(), reaches 'msec' or later.  If 'msec' is earlier
+ * than the current time, the following call to poll_block() will not block at
+ * all.
+ *
+ * The timer registration is one-shot: only the following call to poll_block()
+ * is affected.  The timer will need to be re-registered after poll_block() is
+ * called if it is to persist. */
+void
+poll_timer_wait_until(long long int msec)
+{
+    long long int now = time_msec();
+    poll_timer_wait__(msec <= now ? 0
+                      : msec < now + INT_MAX ? msec - now
+                      : INT_MAX);
 }
 
 /* Causes the following call to poll_block() to wake up immediately, without

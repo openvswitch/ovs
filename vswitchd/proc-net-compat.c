@@ -1,4 +1,4 @@
-/* Copyright (c) 2009 Nicira Networks
+/* Copyright (c) 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 
 #include <config.h>
 #include "proc-net-compat.h"
+
+#ifdef HAVE_NETLINK
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
@@ -346,3 +348,25 @@ update_vlan_config(void)
     set_proc_file("net/vlan", "config", ds_cstr(&ds));
     ds_destroy(&ds);
 }
+#else  /* !HAVE_NETLINK */
+#include "compiler.h"
+
+int
+proc_net_compat_init(void)
+{
+    return 0;
+}
+
+void
+proc_net_compat_update_bond(const char *name OVS_UNUSED,
+                            const struct compat_bond *bond OVS_UNUSED)
+{
+}
+
+void
+proc_net_compat_update_vlan(const char *tagged_dev OVS_UNUSED,
+                            const char *trunk_dev OVS_UNUSED,
+                            int vid OVS_UNUSED)
+{
+}
+#endif  /* !HAVE_NETLINK */
