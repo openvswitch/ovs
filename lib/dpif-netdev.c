@@ -375,11 +375,8 @@ do_add_port(struct dp_netdev *dp, const char *devname, uint16_t flags,
     memset(&netdev_options, 0, sizeof netdev_options);
     netdev_options.name = devname;
     netdev_options.ethertype = NETDEV_ETH_TYPE_ANY;
-    netdev_options.may_create = true;
     if (internal) {
         netdev_options.type = "tap";
-    } else {
-        netdev_options.may_open = true;
     }
 
     error = netdev_open(&netdev_options, &netdev);

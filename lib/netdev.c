@@ -265,12 +265,6 @@ create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
 {
     struct netdev_class *netdev_class;
 
-    if (!options->may_create) {
-        VLOG_WARN("attempted to create a device that may not be created: %s",
-                  options->name);
-        return ENODEV;
-    }
-
     if (!options->type || strlen(options->type) == 0) {
         /* Default to system. */
         options->type = "system";
@@ -297,15 +291,7 @@ create_device(struct netdev_options *options, struct netdev_dev **netdev_devp)
  * 'ethertype' may be a 16-bit Ethernet protocol value in host byte order to
  * capture frames of that type received on the device.  It may also be one of
  * the 'enum netdev_pseudo_ethertype' values to receive frames in one of those
- * categories.
- *
- * If the 'may_create' flag is set then this is allowed to be the first time
- * the device is opened (i.e. the refcount will be 1 after this call).  It
- * may be set to false if the device should have already been created.
- *
- * If the 'may_open' flag is set then the call will succeed even if another
- * caller has already opened it.  It may be to false if the device should not
- * currently be open. */
+ * categories. */
 
 int
 netdev_open(struct netdev_options *options, struct netdev **netdevp)
@@ -330,18 +316,12 @@ netdev_open(struct netdev_options *options, struct netdev **netdevp)
         }
         update_device_args(netdev_dev, options->args);
 
-    } else if (options->may_open) {
-        if (!shash_is_empty(options->args) &&
-            !compare_device_args(netdev_dev, options->args)) {
+    } else if (!shash_is_empty(options->args) &&
+               !compare_device_args(netdev_dev, options->args)) {
 
-            VLOG_WARN("%s: attempted to open already created netdev with "
-                      "different arguments", options->name);
-            return EINVAL;
-        }
-    } else {
-        VLOG_WARN("%s: attempted to create a netdev device with bound name",
-                  options->name);
-        return EEXIST;
+        VLOG_WARN("%s: attempted to open already open netdev with "
+                  "different arguments", options->name);
+        return EINVAL;
     }
 
     error = netdev_dev->netdev_class->open(netdev_dev, options->ethertype, 
@@ -364,11 +344,8 @@ netdev_open_default(const char *name, struct netdev **netdevp)
     struct netdev_options options;
 
     memset(&options, 0, sizeof options);
-
     options.name = name;
     options.ethertype = NETDEV_ETH_TYPE_NONE;
-    options.may_create = true;
-    options.may_open = true;
 
     return netdev_open(&options, netdevp);
 }

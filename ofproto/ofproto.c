@@ -1358,7 +1358,6 @@ make_ofport(const struct odp_port *odp_port)
     memset(&netdev_options, 0, sizeof netdev_options);
     netdev_options.name = odp_port->devname;
     netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
-    netdev_options.may_open = true;
 
     error = netdev_open(&netdev_options, &netdev);
     if (error) {

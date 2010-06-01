@@ -396,10 +396,6 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
         }
         netdev_options.args = &options;
         netdev_options.ethertype = NETDEV_ETH_TYPE_NONE;
-        netdev_options.may_create = true;
-        if (iface_is_internal(iface->port->bridge, iface_cfg->name)) {
-            netdev_options.may_open = true;
-        }
 
         error = netdev_open(&netdev_options, &iface->netdev);
 

@@ -160,8 +160,6 @@ dhclient_create(const char *netdev_name,
     memset(&netdev_options, 0, sizeof netdev_options);
     netdev_options.name = netdev_name;
     netdev_options.ethertype = ETH_TYPE_IP;
-    netdev_options.may_create = true;
-    netdev_options.may_open = true;
 
     error = netdev_open(&netdev_options, &netdev);
     /* XXX install socket filter to catch only DHCP packets. */

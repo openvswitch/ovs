@@ -85,8 +85,6 @@ struct netdev_options {
     const char *type;
     const struct shash *args;
     int ethertype;
-    bool may_create;
-    bool may_open;
 };
 
 struct netdev;
