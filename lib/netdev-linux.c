@@ -88,6 +88,7 @@ enum {
 
 struct tap_state {
     int fd;
+    bool opened;
 };
 
 struct netdev_dev_linux {
@@ -371,8 +372,15 @@ netdev_linux_open(struct netdev_dev *netdev_dev_, int ethertype,
         goto error;
     }
 
-    if (!strcmp(netdev_dev_get_type(netdev_dev_), "tap")) {
+    if (!strcmp(netdev_dev_get_type(netdev_dev_), "tap") &&
+        !netdev_dev->state.tap.opened) {
+
+        /* We assume that the first user of the tap device is the primary user
+         * and give them the tap FD.  Subsequent users probably just expect
+         * this to be a system device so open it normally to avoid send/receive
+         * directions appearing to be reversed. */
         netdev->fd = netdev_dev->state.tap.fd;
+        netdev_dev->state.tap.opened = true;
     } else if (ethertype != NETDEV_ETH_TYPE_NONE) {
         struct sockaddr_ll sll;
         int protocol;
