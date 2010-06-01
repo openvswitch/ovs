@@ -1,3 +1,8 @@
+v1.0.1 - 31 May 2010
+--------------------
+    - New "patch" interface type
+    - Bug fixes
+
 v1.0.0 - 15 May 2010
 --------------------
     - Configuration database with remote management
