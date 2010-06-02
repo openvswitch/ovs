@@ -26,64 +26,6 @@ struct vport_ops netdev_vport_ops;
 
 static void netdev_port_receive(struct net_bridge_port *, struct sk_buff *);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
-static struct llc_sap *netdev_stp_sap;
-
-static int
-netdev_stp_rcv(struct sk_buff *skb, struct net_device *dev,
-		      struct packet_type *pt, struct net_device *orig_dev)
-{
-	/* We don't really care about STP packets, we just listen for them for
-	 * mutual exclusion with the bridge module, so this just discards
-	 * them. */
-	kfree_skb(skb);
-	return 0;
-}
-
-static int
-netdev_avoid_bridge_init(void)
-{
-	/* Register to receive STP packets because the bridge module also
-	 * attempts to do so.  Since there can only be a single listener for a
-	 * given protocol, this provides mutual exclusion against the bridge
-	 * module, preventing both of them from being loaded at the same
-	 * time. */
-	netdev_stp_sap = llc_sap_open(LLC_SAP_BSPAN, netdev_stp_rcv);
-	if (!netdev_stp_sap) {
-		printk(KERN_ERR "openvswitch: can't register sap for STP (probably the bridge module is loaded)\n");
-		return -EADDRINUSE;
-	}
-	return 0;
-}
-
-static void
-netdev_avoid_bridge_exit(void)
-{
-	llc_sap_put(netdev_stp_sap);
-}
-#else  /* Linux 2.6.27 or later. */
-static int
-netdev_avoid_bridge_init(void)
-{
-	/* Linux 2.6.27 introduces a way for multiple clients to register for
-	 * STP packets, which interferes with what we try to do above.
-	 * Instead, just check whether there's a bridge hook defined.  This is
-	 * not as safe--the bridge module is willing to load over the top of
-	 * us--but it provides a little bit of protection. */
-	if (br_handle_frame_hook) {
-		printk(KERN_ERR "openvswitch: bridge module is loaded, cannot load over it\n");
-		return -EADDRINUSE;
-	}
-	return 0;
-}
-
-static void
-netdev_avoid_bridge_exit(void)
-{
-	/* Nothing to do. */
-}
-#endif	/* Linux 2.6.27 or later */
-
 /*
  * Used as br_handle_frame_hook.  (Cannot run bridge at the same time, even on
  * different set of devices!)
@@ -111,12 +53,6 @@ netdev_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 static int
 netdev_init(void)
 {
-	int err;
-
-	err = netdev_avoid_bridge_init();
-	if (err)
-		return err;
-
 	/* Hook into callback used by the bridge to intercept packets.
 	 * Parasites we are. */
 	br_handle_frame_hook = netdev_frame_hook;
@@ -128,7 +64,6 @@ static void
 netdev_exit(void)
 {
 	br_handle_frame_hook = NULL;
-	netdev_avoid_bridge_exit();
 }
 
 static struct vport *
@@ -379,3 +314,19 @@ struct vport_ops netdev_vport_ops = {
 	.get_mtu	= netdev_get_mtu,
 	.send		= netdev_send,
 };
+
+/*
+ * Open vSwitch cannot safely coexist with the Linux bridge module on any
+ * released version of Linux, because there is only a single bridge hook
+ * function and only a single br_port member in struct net_device.
+ *
+ * Declaring and exporting this symbol enforces mutual exclusion.  The bridge
+ * module also exports the same symbol, so the module loader will refuse to
+ * load both modules at the same time (e.g. "bridge: exports duplicate symbol
+ * br_should_route_hook (owned by openvswitch_mod)").
+ *
+ * The use of "typeof" here avoids the need to track changes in the type of
+ * br_should_route_hook over various kernel versions.
+ */
+typeof(br_should_route_hook) br_should_route_hook;
+EXPORT_SYMBOL(br_should_route_hook);
