@@ -487,8 +487,10 @@ the syntax is that of strings in JSON, e.g. backslashes may be used to
 escape special characters.  The empty string must be represented as a
 pair of double quotes (\fB""\fR).
 .IP "UUID"
-A universally unique identifier in the style of RFC 4122,
-e.g. \fBf81d4fae-7dec-11d0-a765-00a0c91e6bf6\fR.
+Either a universally unique identifier in the style of RFC 4122,
+e.g. \fBf81d4fae\-7dec\-11d0\-a765\-00a0c91e6bf6\fR, or an \fB@\fIname\fR
+defined by the \fBcreate\fR command within the same \fBovs\-vsctl\fR
+invocation.
 .PP
 Multiple values in a single column may be separated by spaces or a
 single comma.  When multiple values are present, duplicates are not
@@ -559,10 +561,15 @@ Sets each \fIcolumn\fR in \fIrecord\fR in \fItable\fR to the empty set
 or empty map, as appropriate.  This command applies only to columns
 that are allowed to be empty.
 .
-.IP "\fBcreate\fR \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
+.IP "[\fB--id=@\fIname\fR] \fBcreate\fR \fItable column\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR..."
 Creates a new record in \fItable\fR and sets the initial values of
 each \fIcolumn\fR.  Columns not explicitly set will receive their
 default values.  Outputs the UUID of the new row.
+.IP
+If \fB@\fIname\fR is specified, then the UUID for the new row may be
+referred to by that name elsewhere in the same \fBovs\-vsctl\fR
+invocation in contexts where a UUID is expected.  Such references may
+precede or follow the \fBcreate\fR command.
 .
 .IP "\fR[\fB\-\-if\-exists\fR] \fBdestroy \fItable record\fR..."
 Deletes each specified \fIrecord\fR from \fItable\fR.  Unless
@@ -586,6 +593,12 @@ Delete bridge \fBbr0\fR if it exists (the \fB\-\-\fR is required to
 separate \fBdel\-br\fR's options from the global options):
 .IP
 .B "ovs\-vsctl \-\- \-\-if\-exists del\-br br0"
+.PP
+Set the \fBqos\fR column of the \fBPort\fR record for \fBeth0\fR to
+point to a new \fBQoS\fR record, which in turn points with its queue 0
+to a new \fBQueue\fR record:
+.IP
+.B "ovs-vsctl \-\- set port eth0 qos=@newqos \-\- \-\-id=@newqos create qos type=linux\-htb other\-config:max\-rate=1000000 queues:0=@newqueue \-\- \-\-id=@newqueue create queue other\-config:min\-rate=1000000 other\-config:max\-rate=1000000"
 .
 .SH "EXIT STATUS"
 .IP "0"
@@ -599,3 +612,4 @@ bridge that does not exist.
 .
 .BR ovsdb\-server (1),
 .BR ovs\-vswitchd (8).
+\

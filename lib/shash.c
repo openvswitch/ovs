@@ -79,13 +79,21 @@ shash_count(const struct shash *shash)
 /* It is the caller's responsibility to avoid duplicate names, if that is
  * desirable. */
 struct shash_node *
-shash_add(struct shash *sh, const char *name, const void *data)
+shash_add_nocopy(struct shash *sh, char *name, const void *data)
 {
     struct shash_node *node = xmalloc(sizeof *node);
-    node->name = xstrdup(name);
+    node->name = name;
     node->data = (void *) data;
     hmap_insert(&sh->map, &node->node, hash_name(name));
     return node;
+}
+
+/* It is the caller's responsibility to avoid duplicate names, if that is
+ * desirable. */
+struct shash_node *
+shash_add(struct shash *sh, const char *name, const void *data)
+{
+    return shash_add_nocopy(sh, xstrdup(name), data);
 }
 
 bool

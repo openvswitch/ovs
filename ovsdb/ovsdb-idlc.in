@@ -378,7 +378,7 @@ void
 struct %(s)s *
 %(s)s_insert(struct ovsdb_idl_txn *txn)
 {
-    return %(s)s_cast(ovsdb_idl_txn_insert(txn, &%(p)stable_classes[%(P)sTABLE_%(T)s]));
+    return %(s)s_cast(ovsdb_idl_txn_insert(txn, &%(p)stable_classes[%(P)sTABLE_%(T)s], NULL));
 }
 ''' % {'s': structName,
        'p': prefix,

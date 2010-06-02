@@ -75,7 +75,8 @@ struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
 
 char *ovsdb_atom_from_string(union ovsdb_atom *,
-                             const struct ovsdb_base_type *, const char *)
+                             const struct ovsdb_base_type *, const char *,
+                             struct ovsdb_symbol_table *)
     WARN_UNUSED_RESULT;
 void ovsdb_atom_to_string(const union ovsdb_atom *, enum ovsdb_atomic_type,
                           struct ds *);
@@ -142,7 +143,8 @@ struct json *ovsdb_datum_to_json(const struct ovsdb_datum *,
                                  const struct ovsdb_type *);
 
 char *ovsdb_datum_from_string(struct ovsdb_datum *,
-                             const struct ovsdb_type *, const char *)
+                              const struct ovsdb_type *, const char *,
+                              struct ovsdb_symbol_table *)
     WARN_UNUSED_RESULT;
 void ovsdb_datum_to_string(const struct ovsdb_datum *,
                            const struct ovsdb_type *, struct ds *);
@@ -216,6 +218,7 @@ struct ovsdb_symbol *ovsdb_symbol_table_put(struct ovsdb_symbol_table *,
                                             const struct uuid *, bool used);
 struct ovsdb_symbol *ovsdb_symbol_table_insert(struct ovsdb_symbol_table *,
                                                const char *name);
+const char *ovsdb_symbol_table_find_unused(const struct ovsdb_symbol_table *);
 
 /* Tokenization
  *
