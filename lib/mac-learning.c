@@ -175,11 +175,14 @@ is_learning_vlan(const struct mac_learning *ml, uint16_t vlan)
  * that now need revalidation.
  *
  * The 'vlan' parameter is used to maintain separate per-VLAN learning tables.
- * Specify 0 if this behavior is undesirable. */
+ * Specify 0 if this behavior is undesirable.
+ *
+ * 'lock_type' specifies whether the entry should be locked or existing locks
+ * are check. */
 tag_type
 mac_learning_learn(struct mac_learning *ml,
                    const uint8_t src_mac[ETH_ADDR_LEN], uint16_t vlan,
-                   uint16_t src_port)
+                   uint16_t src_port, enum grat_arp_lock_type lock_type)
 {
     struct mac_entry *e;
     struct list *bucket;
@@ -209,32 +212,42 @@ mac_learning_learn(struct mac_learning *ml,
         e->port = -1;
         e->vlan = vlan;
         e->tag = make_unknown_mac_tag(ml, src_mac, vlan);
+        e->grat_arp_lock = TIME_MIN;
     }
 
-    /* Make the entry most-recently-used. */
-    list_remove(&e->lru_node);
-    list_push_back(&ml->lrus, &e->lru_node);
-    e->expires = time_now() + MAC_ENTRY_IDLE_TIME;
+    if (lock_type != GRAT_ARP_LOCK_CHECK || time_now() >= e->grat_arp_lock) {
+        /* Make the entry most-recently-used. */
+        list_remove(&e->lru_node);
+        list_push_back(&ml->lrus, &e->lru_node);
+        e->expires = time_now() + MAC_ENTRY_IDLE_TIME;
+        if (lock_type == GRAT_ARP_LOCK_SET) {
+            e->grat_arp_lock = time_now() + MAC_GRAT_ARP_LOCK_TIME;
+        }
 
-    /* Did we learn something? */
-    if (e->port != src_port) {
-        tag_type old_tag = e->tag;
-        e->port = src_port;
-        e->tag = tag_create_random();
-        COVERAGE_INC(mac_learning_learned);
-        return old_tag;
+        /* Did we learn something? */
+        if (e->port != src_port) {
+            tag_type old_tag = e->tag;
+            e->port = src_port;
+            e->tag = tag_create_random();
+            COVERAGE_INC(mac_learning_learned);
+            return old_tag;
+        }
     }
+
     return 0;
 }
 
 /* Looks up MAC 'dst' for VLAN 'vlan' in 'ml'.  Returns the port on which a
- * frame destined for 'dst' should be sent, -1 if unknown. */
+ * frame destined for 'dst' should be sent, -1 if unknown. 'is_grat_arp_locked'
+ * is an optional parameter that returns whether the entry is currently
+ * locked. */
 int
 mac_learning_lookup(const struct mac_learning *ml,
-                    const uint8_t dst[ETH_ADDR_LEN], uint16_t vlan)
+                    const uint8_t dst[ETH_ADDR_LEN], uint16_t vlan,
+                    bool *is_grat_arp_locked)
 {
     tag_type tag = 0;
-    return mac_learning_lookup_tag(ml, dst, vlan, &tag);
+    return mac_learning_lookup_tag(ml, dst, vlan, &tag, is_grat_arp_locked);
 }
 
 /* Looks up MAC 'dst' for VLAN 'vlan' in 'ml'.  Returns the port on which a
@@ -242,11 +255,14 @@ mac_learning_lookup(const struct mac_learning *ml,
  *
  * Adds to '*tag' (which the caller must have initialized) the tag that should
  * be attached to any flow created based on the return value, if any, to allow
- * those flows to be revalidated when the MAC learning entry changes. */
+ * those flows to be revalidated when the MAC learning entry changes.
+ *
+ * 'is_grat_arp_locked' is an optional parameter that returns whether the entry
+ * is currently locked.*/
 int
 mac_learning_lookup_tag(const struct mac_learning *ml,
                         const uint8_t dst[ETH_ADDR_LEN], uint16_t vlan,
-                        tag_type *tag)
+                        tag_type *tag, bool *is_grat_arp_locked)
 {
     if (eth_addr_is_multicast(dst) || !is_learning_vlan(ml, vlan)) {
         return -1;
@@ -255,6 +271,11 @@ mac_learning_lookup_tag(const struct mac_learning *ml,
                                             dst, vlan);
         if (e) {
             *tag |= e->tag;
+
+            if (is_grat_arp_locked) {
+                *is_grat_arp_locked = time_now() < e->grat_arp_lock;
+            }
+
             return e->port;
         } else {
             *tag |= make_unknown_mac_tag(ml, dst, vlan);

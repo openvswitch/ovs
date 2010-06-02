@@ -4230,7 +4230,8 @@ default_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
     /* Learn source MAC (but don't try to learn from revalidation). */
     if (packet != NULL) {
         tag_type rev_tag = mac_learning_learn(ofproto->ml, flow->dl_src,
-                                              0, flow->in_port);
+                                              0, flow->in_port,
+                                              GRAT_ARP_LOCK_NONE);
         if (rev_tag) {
             /* The log messages here could actually be useful in debugging,
              * so keep the rate limit relatively high. */
@@ -4242,7 +4243,8 @@ default_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
     }
 
     /* Determine output port. */
-    out_port = mac_learning_lookup_tag(ofproto->ml, flow->dl_dst, 0, tags);
+    out_port = mac_learning_lookup_tag(ofproto->ml, flow->dl_dst, 0, tags,
+                                       NULL);
     if (out_port < 0) {
         add_output_group_action(actions, DP_GROUP_FLOOD, nf_output_iface);
     } else if (out_port != flow->in_port) {

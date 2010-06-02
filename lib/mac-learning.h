@@ -31,11 +31,22 @@
 /* Time, in seconds, before expiring a mac_entry due to inactivity. */
 #define MAC_ENTRY_IDLE_TIME 60
 
+/* Time, in seconds, to lock an entry updated by a gratuitous ARP to avoid
+ * relearning based on a reflection from a bond slave. */
+#define MAC_GRAT_ARP_LOCK_TIME 5
+
+enum grat_arp_lock_type {
+    GRAT_ARP_LOCK_NONE,
+    GRAT_ARP_LOCK_SET,
+    GRAT_ARP_LOCK_CHECK
+};
+
 /* A MAC learning table entry. */
 struct mac_entry {
     struct list hash_node;      /* Element in a mac_learning 'table' list. */
     struct list lru_node;       /* Element in 'lrus' or 'free' list. */
     time_t expires;             /* Expiration time. */
+    time_t grat_arp_lock;       /* Gratuitous ARP lock expiration time. */
     uint8_t mac[ETH_ADDR_LEN];  /* Known MAC address. */
     uint16_t vlan;              /* VLAN tag. */
     int port;                   /* Port on which MAC was most recently seen. */
@@ -61,12 +72,15 @@ bool mac_learning_set_flood_vlans(struct mac_learning *,
                                   unsigned long *bitmap);
 tag_type mac_learning_learn(struct mac_learning *,
                             const uint8_t src[ETH_ADDR_LEN], uint16_t vlan,
-                            uint16_t src_port);
+                            uint16_t src_port, enum grat_arp_lock_type
+                            lock_type);
 int mac_learning_lookup(const struct mac_learning *,
-                        const uint8_t dst[ETH_ADDR_LEN], uint16_t vlan);
+                        const uint8_t dst[ETH_ADDR_LEN], uint16_t vlan,
+                        bool *is_grat_arp_locked);
 int mac_learning_lookup_tag(const struct mac_learning *,
                             const uint8_t dst[ETH_ADDR_LEN],
-                            uint16_t vlan, tag_type *tag);
+                            uint16_t vlan, tag_type *tag,
+                            bool *is_grat_arp_locked);
 void mac_learning_flush(struct mac_learning *);
 void mac_learning_run(struct mac_learning *, struct tag_set *);
 void mac_learning_wait(struct mac_learning *);

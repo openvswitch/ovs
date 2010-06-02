@@ -401,7 +401,8 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     flow_extract(&pkt, 0, in_port, &flow);
 
     if (may_learn(sw, in_port) && sw->ml) {
-        if (mac_learning_learn(sw->ml, flow.dl_src, 0, in_port)) {
+        if (mac_learning_learn(sw->ml, flow.dl_src, 0, in_port,
+                               GRAT_ARP_LOCK_NONE)) {
             VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
                         "port %"PRIu16, sw->datapath_id,
                         ETH_ADDR_ARGS(flow.dl_src), in_port);
@@ -418,7 +419,7 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
     }
 
     if (sw->ml) {
-        int learned_port = mac_learning_lookup(sw->ml, flow.dl_dst, 0);
+        int learned_port = mac_learning_lookup(sw->ml, flow.dl_dst, 0, NULL);
         if (learned_port >= 0 && may_send(sw, learned_port)) {
             out_port = learned_port;
         }

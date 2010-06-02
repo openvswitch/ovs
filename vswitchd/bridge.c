@@ -2246,25 +2246,6 @@ static int flow_get_vlan(struct bridge *br, const flow_t *flow,
     return vlan;
 }
 
-static void
-update_learning_table(struct bridge *br, const flow_t *flow, int vlan,
-                      struct port *in_port)
-{
-    tag_type rev_tag = mac_learning_learn(br->ml, flow->dl_src,
-                                          vlan, in_port->port_idx);
-    if (rev_tag) {
-        /* The log messages here could actually be useful in debugging,
-         * so keep the rate limit relatively high. */
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30,
-                                                                300);
-        VLOG_DBG_RL(&rl, "bridge %s: learned that "ETH_ADDR_FMT" is "
-                    "on port %s in VLAN %d",
-                    br->name, ETH_ADDR_ARGS(flow->dl_src),
-                    in_port->name, vlan);
-        ofproto_revalidate(br->ofproto, rev_tag);
-    }
-}
-
 /* A VM broadcasts a gratuitous ARP to indicate that it has resumed after
  * migration.  Older Citrix-patched Linux DomU used gratuitous ARP replies to
  * indicate this; newer upstream kernels use gratuitous ARP requests. */
@@ -2276,6 +2257,34 @@ is_gratuitous_arp(const flow_t *flow)
             && (flow->nw_proto == ARP_OP_REPLY
                 || (flow->nw_proto == ARP_OP_REQUEST
                     && flow->nw_src == flow->nw_dst)));
+}
+
+static void
+update_learning_table(struct bridge *br, const flow_t *flow, int vlan,
+                      struct port *in_port)
+{
+    enum grat_arp_lock_type lock_type;
+    tag_type rev_tag;
+
+    /* We don't want to learn from gratuitous ARP packets that are reflected
+     * back over bond slaves so we lock the learning table. */
+    lock_type = !is_gratuitous_arp(flow) ? GRAT_ARP_LOCK_NONE :
+                    (in_port->n_ifaces == 1) ? GRAT_ARP_LOCK_SET :
+                                               GRAT_ARP_LOCK_CHECK;
+
+    rev_tag = mac_learning_learn(br->ml, flow->dl_src, vlan, in_port->port_idx,
+                                 lock_type);
+    if (rev_tag) {
+        /* The log messages here could actually be useful in debugging,
+         * so keep the rate limit relatively high. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30,
+                                                                300);
+        VLOG_DBG_RL(&rl, "bridge %s: learned that "ETH_ADDR_FMT" is "
+                    "on port %s in VLAN %d",
+                    br->name, ETH_ADDR_ARGS(flow->dl_src),
+                    in_port->name, vlan);
+        ofproto_revalidate(br->ofproto, rev_tag);
+    }
 }
 
 /* Determines whether packets in 'flow' within 'br' should be forwarded or
@@ -2356,6 +2365,7 @@ is_admissible(struct bridge *br, const flow_t *flow, bool have_packet,
     /* Packets received on bonds need special attention to avoid duplicates. */
     if (in_port->n_ifaces > 1) {
         int src_idx;
+        bool is_grat_arp_locked;
 
         if (eth_addr_is_multicast(flow->dl_dst)) {
             *tags |= in_port->active_iface_tag;
@@ -2368,10 +2378,14 @@ is_admissible(struct bridge *br, const flow_t *flow, bool have_packet,
         /* Drop all packets for which we have learned a different input
          * port, because we probably sent the packet on one slave and got
          * it back on the other.  Gratuitous ARP packets are an exception
-         * to this rule: the host has moved to another switch. */
-        src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan);
+         * to this rule: the host has moved to another switch.  The exception
+         * to the exception is if we locked the learning table to avoid
+         * reflections on bond slaves.  If this is the case, just drop the
+         * packet now. */
+        src_idx = mac_learning_lookup(br->ml, flow->dl_src, vlan,
+                                      &is_grat_arp_locked);
         if (src_idx != -1 && src_idx != in_port->port_idx &&
-            !is_gratuitous_arp(flow)) {
+            (!is_gratuitous_arp(flow) || is_grat_arp_locked)) {
                 return false;
         }
     }
@@ -2404,7 +2418,8 @@ process_flow(struct bridge *br, const flow_t *flow,
     }
 
     /* Determine output port. */
-    out_port_idx = mac_learning_lookup_tag(br->ml, flow->dl_dst, vlan, tags);
+    out_port_idx = mac_learning_lookup_tag(br->ml, flow->dl_dst, vlan, tags,
+                                           NULL);
     if (out_port_idx >= 0 && out_port_idx < br->n_ports) {
         out_port = br->ports[out_port_idx];
     } else if (!packet && !eth_addr_is_multicast(flow->dl_dst)) {
