@@ -160,7 +160,8 @@ main(int argc, char *argv[])
                   "use --help for help");
     }
 
-    rconn = rconn_new(argv[0], 5, 5);
+    rconn = rconn_create(5, 5);
+    rconn_connect(rconn, argv[0]);
 
     die_if_already_running();
     daemonize();

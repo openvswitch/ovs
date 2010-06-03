@@ -37,9 +37,6 @@
 struct vconn;
 struct rconn_packet_counter;
 
-struct rconn *rconn_new(const char *name, 
-                        int inactivity_probe_interval, int max_backoff);
-struct rconn *rconn_new_from_vconn(struct vconn *);
 struct rconn *rconn_create(int inactivity_probe_interval, int max_backoff);
 
 void rconn_set_max_backoff(struct rconn *, int max_backoff);

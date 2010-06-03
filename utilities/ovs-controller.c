@@ -210,7 +210,8 @@ main(int argc, char *argv[])
 static void
 new_switch(struct switch_ *sw, struct vconn *vconn)
 {
-    sw->rconn = rconn_new_from_vconn(vconn);
+    sw->rconn = rconn_create(60, 0);
+    rconn_connect_unreliably(sw->rconn, vconn);
     sw->lswitch = lswitch_create(sw->rconn, learn_macs, exact_flows,
                                  set_up_flows ? max_idle : -1,
                                  action_normal);

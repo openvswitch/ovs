@@ -145,24 +145,6 @@ static void copy_to_monitor(struct rconn *, const struct ofpbuf *);
 static bool is_connected_state(enum state);
 static bool is_admitted_msg(const struct ofpbuf *);
 
-/* Creates a new rconn, connects it (reliably) to 'name', and returns it. */
-struct rconn *
-rconn_new(const char *name, int inactivity_probe_interval, int max_backoff)
-{
-    struct rconn *rc = rconn_create(inactivity_probe_interval, max_backoff);
-    rconn_connect(rc, name);
-    return rc;
-}
-
-/* Creates a new rconn, connects it (unreliably) to 'vconn', and returns it. */
-struct rconn *
-rconn_new_from_vconn(struct vconn *vconn) 
-{
-    struct rconn *rc = rconn_create(60, 0);
-    rconn_connect_unreliably(rc, vconn);
-    return rc;
-}
-
 /* Creates and returns a new rconn.
  *
  * 'probe_interval' is a number of seconds.  If the interval passes once
@@ -174,7 +156,10 @@ rconn_new_from_vconn(struct vconn *vconn)
  * 'max_backoff' is the maximum number of seconds between attempts to connect
  * to the peer.  The actual interval starts at 1 second and doubles on each
  * failure until it reaches 'max_backoff'.  If 0 is specified, the default of
- * 8 seconds is used. */
+ * 8 seconds is used.
+ *
+ * The new rconn is initially unconnected.  Use rconn_connect() or
+ * rconn_connect_unreliably() to connect it. */
 struct rconn *
 rconn_create(int probe_interval, int max_backoff)
 {
