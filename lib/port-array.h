@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,6 +84,7 @@ void port_array_init(struct port_array *);
 void port_array_destroy(struct port_array *);
 void port_array_clear(struct port_array *);
 void port_array_set(struct port_array *, uint16_t idx, void *);
+void port_array_delete(struct port_array *, uint16_t idx);
 void *port_array_first(const struct port_array *, unsigned int *);
 void *port_array_next(const struct port_array *, unsigned int *);
 unsigned int port_array_count(const struct port_array *);

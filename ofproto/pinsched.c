@@ -70,7 +70,7 @@ dequeue_packet(struct pinsched *ps, struct ovs_queue *q,
     struct ofpbuf *packet = queue_pop_head(q);
     if (!q->n) {
         free(q);
-        port_array_set(&ps->queues, port_no, NULL);
+        port_array_delete(&ps->queues, port_no);
     }
     ps->n_queued--;
     return packet;

@@ -1478,7 +1478,7 @@ ofport_remove(struct ofproto *p, struct ofport *ofport)
     uint16_t odp_port = ofp_port_to_odp_port(ofport->opp.port_no);
 
     netdev_monitor_remove(p->netdev_monitor, ofport->netdev);
-    port_array_set(&p->ports, odp_port, NULL);
+    port_array_delete(&p->ports, odp_port);
     shash_delete(&p->port_by_name,
                  shash_find(&p->port_by_name, (char *) ofport->opp.name));
     if (p->sflow) {

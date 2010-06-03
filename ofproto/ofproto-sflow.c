@@ -354,7 +354,7 @@ ofproto_sflow_del_port(struct ofproto_sflow *os, uint16_t odp_port)
         }
         netdev_close(osp->netdev);
         free(osp);
-        port_array_set(&os->ports, odp_port, NULL);
+        port_array_delete(&os->ports, odp_port);
     }
 }
 
