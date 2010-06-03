@@ -71,7 +71,7 @@ static bool mute = false;
 static char *unixctl_path = NULL;
 
 static int do_switching(struct switch_ *);
-static void new_switch(struct switch_ *, struct vconn *, const char *name);
+static void new_switch(struct switch_ *, struct vconn *);
 static void parse_options(int argc, char *argv[]);
 static void usage(void) NO_RETURN;
 
@@ -108,7 +108,7 @@ main(int argc, char *argv[])
             if (n_switches >= MAX_SWITCHES) {
                 ovs_fatal(0, "max %d switch connections", n_switches);
             }
-            new_switch(&switches[n_switches++], vconn, name);
+            new_switch(&switches[n_switches++], vconn);
             continue;
         } else if (retval == EAFNOSUPPORT) {
             struct pvconn *pvconn;
@@ -150,7 +150,7 @@ main(int argc, char *argv[])
             retval = pvconn_accept(listeners[i], OFP_VERSION, &new_vconn);
             if (!retval || retval == EAGAIN) {
                 if (!retval) {
-                    new_switch(&switches[n_switches++], new_vconn, "tcp");
+                    new_switch(&switches[n_switches++], new_vconn);
                 }
                 i++;
             } else {
@@ -208,9 +208,9 @@ main(int argc, char *argv[])
 }
 
 static void
-new_switch(struct switch_ *sw, struct vconn *vconn, const char *name)
+new_switch(struct switch_ *sw, struct vconn *vconn)
 {
-    sw->rconn = rconn_new_from_vconn(name, vconn);
+    sw->rconn = rconn_new_from_vconn(vconn);
     sw->lswitch = lswitch_create(sw->rconn, learn_macs, exact_flows,
                                  set_up_flows ? max_idle : -1,
                                  action_normal);

@@ -39,7 +39,7 @@ struct rconn_packet_counter;
 
 struct rconn *rconn_new(const char *name, 
                         int inactivity_probe_interval, int max_backoff);
-struct rconn *rconn_new_from_vconn(const char *name, struct vconn *);
+struct rconn *rconn_new_from_vconn(struct vconn *);
 struct rconn *rconn_create(int inactivity_probe_interval, int max_backoff);
 
 void rconn_set_max_backoff(struct rconn *, int max_backoff);
@@ -48,8 +48,7 @@ void rconn_set_probe_interval(struct rconn *, int inactivity_probe_interval);
 int rconn_get_probe_interval(const struct rconn *);
 
 int rconn_connect(struct rconn *, const char *name);
-void rconn_connect_unreliably(struct rconn *,
-                              const char *name, struct vconn *vconn);
+void rconn_connect_unreliably(struct rconn *, struct vconn *vconn);
 void rconn_reconnect(struct rconn *);
 void rconn_disconnect(struct rconn *);
 void rconn_destroy(struct rconn *);

@@ -1078,8 +1078,7 @@ ofproto_run1(struct ofproto *p)
 
         retval = pvconn_accept(p->listeners[i], OFP_VERSION, &vconn);
         if (!retval) {
-            ofconn_create(p, rconn_new_from_vconn("passive", vconn),
-                          OFCONN_TRANSIENT);
+            ofconn_create(p, rconn_new_from_vconn(vconn), OFCONN_TRANSIENT);
         } else if (retval != EAGAIN) {
             VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
         }

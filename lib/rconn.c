@@ -156,10 +156,10 @@ rconn_new(const char *name, int inactivity_probe_interval, int max_backoff)
 
 /* Creates a new rconn, connects it (unreliably) to 'vconn', and returns it. */
 struct rconn *
-rconn_new_from_vconn(const char *name, struct vconn *vconn) 
+rconn_new_from_vconn(struct vconn *vconn) 
 {
     struct rconn *rc = rconn_create(60, 0);
-    rconn_connect_unreliably(rc, name, vconn);
+    rconn_connect_unreliably(rc, vconn);
     return rc;
 }
 
@@ -257,12 +257,11 @@ rconn_connect(struct rconn *rc, const char *name)
 }
 
 void
-rconn_connect_unreliably(struct rconn *rc,
-                         const char *name, struct vconn *vconn)
+rconn_connect_unreliably(struct rconn *rc, struct vconn *vconn)
 {
     assert(vconn != NULL);
     rconn_disconnect(rc);
-    set_vconn_name(rc, name);
+    set_vconn_name(rc, vconn_get_name(vconn));
     rc->reliable = false;
     rc->vconn = vconn;
     rc->last_connected = time_now();
