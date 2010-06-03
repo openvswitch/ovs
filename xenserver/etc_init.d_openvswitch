@@ -35,10 +35,12 @@ if test "$PRODUCT_VERSION" = "5.5.0"; then
     # XenServer 5.5.0 needs ovs-brcompatd and /proc/net simulation.
     : ${ENABLE_BRCOMPAT:=y}
     : ${ENABLE_FAKE_PROC_NET:=y}
+    : ${ENABLE_XENSERVERD:=y}
 else
     # Later versions don't need them.
     : ${ENABLE_BRCOMPAT:=n}
     : ${ENABLE_FAKE_PROC_NET:=n}
+    : ${ENABLE_XENSERVERD:=n}
 fi
 : ${ENABLE_MONITOR:=y}
 : ${FORCE_COREFILES:=y}
@@ -343,7 +345,9 @@ function start {
     if [ "${ENABLE_BRCOMPAT}" = "y" ] ; then
         start_brcompatd
     fi
-    start_xenserverd
+    if [ "${ENABLE_XENSERVERD}" = "y" ] ; then
+        start_xenserverd
+    fi
     touch /var/lock/subsys/openvswitch
 }
 
@@ -385,7 +389,8 @@ case "$1" in
         status -p "$VSWITCHD_PIDFILE" ovs-vswitchd &&
         (test "$ENABLE_BRCOMPAT" != "y" || 
             status -p "$BRCOMPATD_PIDFILE" ovs-brcompatd) &&
-        status -p "$XENSERVERD_PIDFILE" ovs-xenserverd
+        (test "$ENABLE_XENSERVERD" != "y" ||
+            status -p "$XENSERVERD_PIDFILE" ovs-xenserverd)
         ;;
     version)
         /usr/sbin/ovsdb-server -V

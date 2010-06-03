@@ -21,6 +21,11 @@
 #    and not required and not enabled by default for later versions.
 # ENABLE_FAKE_PROC_NET=?
 
+# ENABLE_XENSERVERD: If 'y' then monitor system for changes in pool membership
+#    This is required and enabled by default for XenServer 5.5.0,
+#    and not required and not enabled by default for later versions.
+# ENABLE_XENSERVERD=?
+
 # ENABLE_MONITOR: If 'y' then monitor daemon processes and restart them
 #    if they die due to an error signal.
 # ENABLE_MONITOR=y
