@@ -197,6 +197,7 @@ network_uuid_refresh_run(void)
     get_mtime("/etc/xensource/pool.conf", &new_mtime);
     if (new_mtime.tv_sec != pool_conf_mtime.tv_sec
         || new_mtime.tv_nsec != pool_conf_mtime.tv_nsec) {
+        pool_conf_mtime = new_mtime;
         next_refresh = time_msec() + 10 * 1000;
         return;
     }
@@ -225,7 +226,6 @@ network_uuid_refresh_run(void)
                      argv[0], strerror(errno));
         }
 
-        pool_conf_mtime = new_mtime;
         free(argv[0]);
     }
 }
