@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,8 +195,8 @@ nl_sock_destroy(struct nl_sock *sock)
 }
 
 /* Tries to send 'msg', which must contain a Netlink message, to the kernel on
- * 'sock'.  nlmsg_len in 'msg' will be finalized to match msg->size before the
- * message is sent.
+ * 'sock'.  nlmsg_len in 'msg' will be finalized to match msg->size, and
+ * nlmsg_pid will be set to 'sock''s pid, before the message is sent.
  *
  * Returns 0 if successful, otherwise a positive errno value.  If
  * 'wait' is true, then the send will wait until buffer space is ready;
@@ -204,9 +204,11 @@ nl_sock_destroy(struct nl_sock *sock)
 int
 nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait) 
 {
+    struct nlmsghdr *nlmsg = nl_msg_nlmsghdr(msg);
     int error;
 
-    nl_msg_nlmsghdr(msg)->nlmsg_len = msg->size;
+    nlmsg->nlmsg_len = msg->size;
+    nlmsg->nlmsg_pid = sock->pid;
     do {
         int retval;
         retval = send(sock->fd, msg->data, msg->size, wait ? 0 : MSG_DONTWAIT);
@@ -221,7 +223,7 @@ nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
 
 /* Tries to send the 'n_iov' chunks of data in 'iov' to the kernel on 'sock' as
  * a single Netlink message.  (The message must be fully formed and not require
- * finalization of its nlmsg_len field.)
+ * finalization of its nlmsg_len or nlmsg_pid fields.)
  *
  * Returns 0 if successful, otherwise a positive errno value.  If 'wait' is
  * true, then the send will wait until buffer space is ready; otherwise,
@@ -342,6 +344,10 @@ try_again:
  * successful, stores the reply into '*replyp' and returns 0.  The caller is
  * responsible for destroying the reply with ofpbuf_delete().  On failure,
  * returns a positive errno value and stores a null pointer into '*replyp'.
+ *
+ * nlmsg_len in 'msg' will be finalized to match msg->size, and nlmsg_pid will
+ * be set to 'sock''s pid, before the message is sent.  NLM_F_ACK will be set
+ * in nlmsg_flags.
  *
  * The caller is responsible for destroying 'request'.
  *
@@ -487,8 +493,7 @@ nl_msg_reserve(struct ofpbuf *msg, size_t size)
 }
 
 /* Puts a nlmsghdr at the beginning of 'msg', which must be initially empty.
- * Uses the given 'type' and 'flags'.  'sock' is used to obtain a PID and
- * sequence number for proper routing of replies.  'expected_payload' should be
+ * Uses the given 'type' and 'flags'.  'expected_payload' should be
  * an estimate of the number of payload bytes to be supplied; if the size of
  * the payload is unknown a value of 0 is acceptable.
  *
@@ -500,10 +505,13 @@ nl_msg_reserve(struct ofpbuf *msg, size_t size)
  * is often NLM_F_REQUEST indicating that a request is being made, commonly
  * or'd with NLM_F_ACK to request an acknowledgement.
  *
- * nl_msg_put_genlmsghdr is more convenient for composing a Generic Netlink
+ * Sets the new nlmsghdr's nlmsg_pid field to 0 for now.  nl_sock_send() will
+ * fill it in just before sending the message.
+ *
+ * nl_msg_put_genlmsghdr() is more convenient for composing a Generic Netlink
  * message. */
 void
-nl_msg_put_nlmsghdr(struct ofpbuf *msg, struct nl_sock *sock,
+nl_msg_put_nlmsghdr(struct ofpbuf *msg,
                     size_t expected_payload, uint32_t type, uint32_t flags) 
 {
     struct nlmsghdr *nlmsghdr;
@@ -516,14 +524,13 @@ nl_msg_put_nlmsghdr(struct ofpbuf *msg, struct nl_sock *sock,
     nlmsghdr->nlmsg_type = type;
     nlmsghdr->nlmsg_flags = flags;
     nlmsghdr->nlmsg_seq = ++next_seq;
-    nlmsghdr->nlmsg_pid = sock->pid;
+    nlmsghdr->nlmsg_pid = 0;
 }
 
 /* Puts a nlmsghdr and genlmsghdr at the beginning of 'msg', which must be
- * initially empty.  'sock' is used to obtain a PID and sequence number for
- * proper routing of replies.  'expected_payload' should be an estimate of the
- * number of payload bytes to be supplied; if the size of the payload is
- * unknown a value of 0 is acceptable.
+ * initially empty.  'expected_payload' should be an estimate of the number of
+ * payload bytes to be supplied; if the size of the payload is unknown a value
+ * of 0 is acceptable.
  *
  * 'family' is the family number obtained via nl_lookup_genl_family().
  *
@@ -536,17 +543,18 @@ nl_msg_put_nlmsghdr(struct ofpbuf *msg, struct nl_sock *sock,
  *
  * 'version' is a version number specific to the family and command (often 1).
  *
- * nl_msg_put_nlmsghdr should be used to compose Netlink messages that are not
- * Generic Netlink messages. */
+ * Sets the new nlmsghdr's nlmsg_pid field to 0 for now.  nl_sock_send() will
+ * fill it in just before sending the message.
+ *
+ * nl_msg_put_nlmsghdr() should be used to compose Netlink messages that are
+ * not Generic Netlink messages. */
 void
-nl_msg_put_genlmsghdr(struct ofpbuf *msg, struct nl_sock *sock,
-                      size_t expected_payload, int family, uint32_t flags,
-                      uint8_t cmd, uint8_t version)
+nl_msg_put_genlmsghdr(struct ofpbuf *msg, size_t expected_payload,
+                      int family, uint32_t flags, uint8_t cmd, uint8_t version)
 {
     struct genlmsghdr *genlmsghdr;
 
-    nl_msg_put_nlmsghdr(msg, sock, GENL_HDRLEN + expected_payload,
-                        family, flags);
+    nl_msg_put_nlmsghdr(msg, GENL_HDRLEN + expected_payload, family, flags);
     assert(msg->size == NLMSG_HDRLEN);
     genlmsghdr = nl_msg_put_uninit(msg, GENL_HDRLEN);
     genlmsghdr->cmd = cmd;
@@ -877,7 +885,7 @@ static int do_lookup_genl_family(const char *name)
     }
 
     ofpbuf_init(&request, 0);
-    nl_msg_put_genlmsghdr(&request, sock, 0, GENL_ID_CTRL, NLM_F_REQUEST,
+    nl_msg_put_genlmsghdr(&request, 0, GENL_ID_CTRL, NLM_F_REQUEST,
                           CTRL_CMD_GETFAMILY, 1);
     nl_msg_put_string(&request, CTRL_ATTR_FAMILY_NAME, name);
     retval = nl_sock_transact(sock, &request, &reply);

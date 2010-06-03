@@ -1132,8 +1132,7 @@ netdev_linux_remove_policing(struct netdev *netdev)
     }
 
     ofpbuf_init(&request, 0);
-    nl_msg_put_nlmsghdr(&request, rtnl_sock, sizeof *tcmsg,
-                        RTM_DELQDISC, NLM_F_REQUEST);
+    nl_msg_put_nlmsghdr(&request, sizeof *tcmsg, RTM_DELQDISC, NLM_F_REQUEST);
     tcmsg = ofpbuf_put_zeros(&request, sizeof *tcmsg);
     tcmsg->tcm_family = AF_UNSPEC;
     tcmsg->tcm_ifindex = ifindex;
@@ -1694,8 +1693,7 @@ get_stats_via_netlink(int ifindex, struct netdev_stats *stats)
     }
 
     ofpbuf_init(&request, 0);
-    nl_msg_put_nlmsghdr(&request, rtnl_sock, sizeof *ifi,
-                        RTM_GETLINK, NLM_F_REQUEST);
+    nl_msg_put_nlmsghdr(&request, sizeof *ifi, RTM_GETLINK, NLM_F_REQUEST);
     ifi = ofpbuf_put_zeros(&request, sizeof *ifi);
     ifi->ifi_family = PF_UNSPEC;
     ifi->ifi_index = ifindex;

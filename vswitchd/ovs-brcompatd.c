@@ -115,7 +115,7 @@ lookup_brc_multicast_group(int *multicast_group)
         return retval;
     }
     ofpbuf_init(&request, 0);
-    nl_msg_put_genlmsghdr(&request, sock, 0, brc_family,
+    nl_msg_put_genlmsghdr(&request, 0, brc_family,
             NLM_F_REQUEST, BRC_GENL_C_QUERY_MC, 1);
     retval = nl_sock_transact(sock, &request, &reply);
     ofpbuf_uninit(&request);
@@ -663,7 +663,7 @@ static struct ofpbuf *
 compose_reply(uint32_t seq, int error)
 {
     struct ofpbuf *reply = ofpbuf_new(4096);
-    nl_msg_put_genlmsghdr(reply, brc_sock, 32, brc_family, NLM_F_REQUEST,
+    nl_msg_put_genlmsghdr(reply, 32, brc_family, NLM_F_REQUEST,
                           BRC_GENL_C_DP_RESULT, 1);
     ((struct nlmsghdr *) reply->data)->nlmsg_seq = seq;
     nl_msg_put_u32(reply, BRC_GENL_A_ERR_CODE, error);

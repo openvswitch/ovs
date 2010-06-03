@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,11 +59,10 @@ bool nl_msg_nlmsgerr(const struct ofpbuf *, int *error);
 void nl_msg_reserve(struct ofpbuf *, size_t);
 
 /* Appending headers and raw data. */
-void nl_msg_put_nlmsghdr(struct ofpbuf *, struct nl_sock *,
-                         size_t expected_payload,
+void nl_msg_put_nlmsghdr(struct ofpbuf *, size_t expected_payload,
                          uint32_t type, uint32_t flags);
-void nl_msg_put_genlmsghdr(struct ofpbuf *, struct nl_sock *,
-                           size_t expected_payload, int family, uint32_t flags,
+void nl_msg_put_genlmsghdr(struct ofpbuf *, size_t expected_payload,
+                           int family, uint32_t flags,
                            uint8_t cmd, uint8_t version);
 void nl_msg_put(struct ofpbuf *, const void *, size_t);
 void *nl_msg_put_uninit(struct ofpbuf *, size_t);

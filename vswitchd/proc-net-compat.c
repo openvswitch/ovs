@@ -76,7 +76,7 @@ set_proc_file(const char *dir, const char *file, const char *data)
     int retval;
 
     ofpbuf_init(&request, 0);
-    nl_msg_put_genlmsghdr(&request, brc_sock, 1024, brc_family, NLM_F_REQUEST,
+    nl_msg_put_genlmsghdr(&request, 1024, brc_family, NLM_F_REQUEST,
                           BRC_GENL_C_SET_PROC, 1);
     nl_msg_put_string(&request, BRC_GENL_A_PROC_DIR, dir);
     nl_msg_put_string(&request, BRC_GENL_A_PROC_NAME, file);
