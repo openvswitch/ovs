@@ -136,7 +136,7 @@ static bool timed_out(const struct rconn *);
 static void state_transition(struct rconn *, enum state);
 static void set_vconn_name(struct rconn *, const char *name);
 static int try_send(struct rconn *);
-static int reconnect(struct rconn *);
+static void reconnect(struct rconn *);
 static void report_error(struct rconn *, int error);
 static void disconnect(struct rconn *, int error);
 static void flush_queue(struct rconn *);
@@ -232,13 +232,13 @@ rconn_get_probe_interval(const struct rconn *rc)
     return rc->probe_interval;
 }
 
-int
+void
 rconn_connect(struct rconn *rc, const char *name)
 {
     rconn_disconnect(rc);
     set_vconn_name(rc, name);
     rc->reliable = true;
-    return reconnect(rc);
+    reconnect(rc);
 }
 
 void
@@ -311,7 +311,7 @@ run_VOID(struct rconn *rc OVS_UNUSED)
     /* Nothing to do. */
 }
 
-static int
+static void
 reconnect(struct rconn *rc)
 {
     int retval;
@@ -330,7 +330,6 @@ reconnect(struct rconn *rc)
         rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
         disconnect(rc, retval);
     }
-    return retval;
 }
 
 static unsigned int

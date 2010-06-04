@@ -44,7 +44,7 @@ int rconn_get_max_backoff(const struct rconn *);
 void rconn_set_probe_interval(struct rconn *, int inactivity_probe_interval);
 int rconn_get_probe_interval(const struct rconn *);
 
-int rconn_connect(struct rconn *, const char *name);
+void rconn_connect(struct rconn *, const char *name);
 void rconn_connect_unreliably(struct rconn *, struct vconn *vconn);
 void rconn_reconnect(struct rconn *);
 void rconn_disconnect(struct rconn *);
