@@ -40,9 +40,9 @@ def delete_cacert():
 
 def update(session, args):
     # Refresh bridge network UUIDs in case this host joined or left a pool.
-    script = "/usr/share/openvswitch/scripts/refresh-network-uuids"
+    script = "/opt/xensource/libexec/interface-reconfigure"
     try:
-        retval = subprocess.call(script)
+        retval = subprocess.call([script, "rewrite"])
         if retval != 0:
             syslog.syslog("%s exited with status %d" % (script, retval))
     except OSError, e:
