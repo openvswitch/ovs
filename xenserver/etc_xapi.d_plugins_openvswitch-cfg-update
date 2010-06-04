@@ -39,6 +39,15 @@ def delete_cacert():
         pass
 
 def update(session, args):
+    # Refresh bridge network UUIDs in case this host joined or left a pool.
+    script = "/usr/share/openvswitch/scripts/refresh-network-uuids"
+    try:
+        retval = subprocess.call(script)
+        if retval != 0:
+            syslog.syslog("%s exited with status %d" % (script, retval))
+    except OSError, e:
+        syslog.syslog("%s: failed to execute (%s)" % (script, e.strerror))
+
     pools = session.xenapi.pool.get_all()
     # We assume there is only ever one pool...
     if len(pools) == 0:
