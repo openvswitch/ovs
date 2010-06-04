@@ -115,6 +115,7 @@ if [ ! -f /etc/xensource-inventory ]; then
     printf "XenSource inventory not present in /etc/xensource-inventory"
     exit 1
 fi
+. /etc/xensource-inventory
 
 if [ "$1" = "1" ]; then
     if md5sum -c --status <<EOF
@@ -157,6 +158,21 @@ XenServer scripts that you were previously using.
 
 EOF
     fi
+fi
+
+# On XenServer 5.5.0, we need refresh-network-uuids to run whenever
+# XAPI starts or restarts.  (On XenServer 5.6.0, XAPI calls the
+# "update" method of the vswitch-cfg-update plugin whenever it starts
+# or restarts, so this is no longer necessary.)
+if test "$PRODUCT_VERSION" = "5.5.0"; then
+    RNU=/usr/share/openvswitch/scripts/refresh-network-uuids
+    XSS=/opt/xensource/libexec/xapi-startup-script
+    if test -e $XSS && (test ! -L $XSS || test "`readlink $XSS`" != $RNU); then
+        echo "$XSS is already in use, refusing to overwrite"
+        exit 1
+    fi
+    rm -f $XSS
+    ln -s $RNU $XSS
 fi
 
 if test ! -e /var/xapi/network.dbcache; then
@@ -280,6 +296,11 @@ fi
 
 %postun
 if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
+    . /etc/xensource-inventory
+    if test "$PRODUCT_VERSION" = "5.5.0"; then
+        XSS=/opt/xensource/libexec/xapi-startup-script
+        rm -f $XSS
+    fi
 
     rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
         /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo
