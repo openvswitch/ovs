@@ -358,6 +358,17 @@ class DatapathVswitch(Datapath):
         
         log("Configured for Vswitch datapath")
 
+    @classmethod
+    def rewrite(cls):
+        vsctl_argv = []
+        for pif in db().get_all_pifs():
+            pifrec = db().get_pif_record(pif)
+            if not pif_is_vlan(pif) and pifrec['currently_attached']:
+                vsctl_argv += set_br_external_ids(pif)
+
+        if vsctl_argv != []:
+            datapath_modify_config(vsctl_argv)
+
     def configure_ipdev(self, cfg):
         cfg.write("TYPE=Ethernet\n")
 

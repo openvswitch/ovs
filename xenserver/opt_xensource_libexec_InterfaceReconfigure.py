@@ -803,6 +803,12 @@ class Datapath(object):
     def __init__(self, pif):
         self._pif = pif
 
+    @classmethod
+    def rewrite(cls):
+        """Class method called when write action is called. Can be used
+           to update any backend specific configuration."""
+        pass
+
     def configure_ipdev(self, cfg):
         """Write ifcfg TYPE field for an IPdev, plus any type specific
            fields to cfg
@@ -850,7 +856,7 @@ class Datapath(object):
         """
         raise NotImplementedError
         
-def DatapathFactory(pif):
+def DatapathFactory():
     # XXX Need a datapath object for bridgeless PIFs
 
     try:
@@ -862,9 +868,9 @@ def DatapathFactory(pif):
     
     if network_backend == "bridge":
         from InterfaceReconfigureBridge import DatapathBridge
-        return DatapathBridge(pif)
+        return DatapathBridge
     elif network_backend in ["openvswitch", "vswitch"]:
         from InterfaceReconfigureVswitch import DatapathVswitch
-        return DatapathVswitch(pif)
+        return DatapathVswitch
     else:
         raise Error("unknown network backend %s" % network_backend)

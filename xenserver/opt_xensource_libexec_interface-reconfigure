@@ -415,7 +415,7 @@ def action_up(pif, force):
     pifrec = db().get_pif_record(pif)
 
     ipdev = pif_ipdev_name(pif)
-    dp = DatapathFactory(pif)
+    dp = DatapathFactory()(pif)
 
     log("action_up: %s" % ipdev)
 
@@ -455,7 +455,7 @@ def action_up(pif, force):
 
 def action_down(pif):
     ipdev = pif_ipdev_name(pif)
-    dp = DatapathFactory(pif)
+    dp = DatapathFactory()(pif)
 
     log("action_down: %s" % ipdev)
 
@@ -463,6 +463,9 @@ def action_down(pif):
 
     dp.bring_down()
 
+def action_rewrite():
+    DatapathFactory().rewrite()
+    
 # This is useful for reconfiguring the mgmt interface after having lost connectivity to the pool master
 def action_force_rewrite(bridge, config):
     def getUUID():
@@ -666,7 +669,7 @@ def main(argv=None):
                 pif = db().get_pif_by_uuid(pif_uuid)
 
             if action == "rewrite":
-                pass
+                action_rewrite()
             else:
                 if not pif:
                     raise Usage("No PIF given")
