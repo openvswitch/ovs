@@ -164,14 +164,14 @@ dhclient_create(const char *netdev_name,
     error = netdev_open(&netdev_options, &netdev);
     /* XXX install socket filter to catch only DHCP packets. */
     if (error) {
-        VLOG_ERR("could not open %s network device: %s",
+        VLOG_ERR("%s: could not open network device: %s",
                  netdev_name, strerror(error));
         return error;
     }
 
     error = netdev_turn_flags_on(netdev, NETDEV_UP, false);
     if (error) {
-        VLOG_ERR("could not bring %s device up: %s",
+        VLOG_ERR("%s: could not bring device up: %s",
                  netdev_name, strerror(error));
         netdev_close(netdev);
         return error;
@@ -224,6 +224,14 @@ struct netdev *
 dhclient_get_netdev(struct dhclient *cli)
 {
     return cli->netdev;
+}
+
+/* Returns the name of the network device in use by 'cli'.  The caller must
+ * not modify or destroy the returned string. */
+const char *
+dhclient_get_name(const struct dhclient *cli)
+{
+    return netdev_get_name(cli->netdev);
 }
 
 /* Forces 'cli' into a (re)initialization state, in which no address is bound
@@ -402,6 +410,7 @@ dhclient_get_config(const struct dhclient *cli)
 int
 dhclient_configure_netdev(struct dhclient *cli)
 {
+    const char *cli_name = dhclient_get_name(cli);
     struct in_addr addr = { dhclient_get_ip(cli) };
     struct in_addr mask = { dhclient_get_netmask(cli) };
     struct in_addr router = { dhclient_get_router(cli) };
@@ -409,18 +418,16 @@ dhclient_configure_netdev(struct dhclient *cli)
 
     error = netdev_set_in4(cli->netdev, addr, mask);
     if (error) {
-        VLOG_ERR("could not set %s address "IP_FMT"/"IP_FMT": %s",
-                 netdev_get_name(cli->netdev),
-                 IP_ARGS(&addr.s_addr), IP_ARGS(&mask.s_addr),
+        VLOG_ERR("%s: could not set address "IP_FMT"/"IP_FMT" (%s)",
+                 cli_name, IP_ARGS(&addr.s_addr), IP_ARGS(&mask.s_addr),
                  strerror(error));
     }
 
     if (!error && router.s_addr) {
         error = netdev_add_router(cli->netdev, router);
         if (error) {
-            VLOG_ERR("failed to add default route to "IP_FMT" on %s: %s",
-                     IP_ARGS(&router), netdev_get_name(cli->netdev),
-                     strerror(error));
+            VLOG_ERR("%s: failed to add default route to "IP_FMT" (%s)",
+                     cli_name, IP_ARGS(&router), strerror(error));
         }
     }
 
@@ -433,6 +440,7 @@ dhclient_configure_netdev(struct dhclient *cli)
 int
 dhclient_update_resolv_conf(struct dhclient *cli)
 {
+    const char *cli_name = dhclient_get_name(cli);
     uint32_t dns_server;
     char *domain_name;
     bool has_domain_name;
@@ -444,14 +452,15 @@ dhclient_update_resolv_conf(struct dhclient *cli)
         return 0;
     }
     if (!dhcp_msg_get_ip(cli->binding, DHCP_CODE_DNS_SERVER, 0, &dns_server)) {
-        VLOG_DBG("binding does not include any DNS servers");
+        VLOG_DBG("%s: binding does not include any DNS servers", cli_name);
         return 0;
     }
 
     sprintf(new_name, "/etc/resolv.conf.tmp%ld", (long int) getpid());
     new = fopen(new_name, "w");
     if (!new) {
-        VLOG_WARN("%s: create: %s", new_name, strerror(errno));
+        VLOG_WARN("%s: could not create %s (%s)",
+                  cli_name, new_name, strerror(errno));
         return errno;
     }
 
@@ -462,11 +471,12 @@ dhclient_update_resolv_conf(struct dhclient *cli)
                    "ABCDEFGHIJKLMNOPQRSTUVWXYZ") == strlen(domain_name)) {
             fprintf(new, "domain %s\n", domain_name);
         } else {
-            VLOG_WARN("ignoring invalid domain name %s", domain_name);
+            VLOG_WARN("%s: ignoring invalid domain name %s",
+                      cli_name, domain_name);
             has_domain_name = false;
         }
     } else {
-        VLOG_DBG("binding does not include domain name");
+        VLOG_DBG("%s: binding does not include domain name", cli_name);
     }
     free(domain_name);
 
@@ -490,17 +500,19 @@ dhclient_update_resolv_conf(struct dhclient *cli)
         }
         fclose(old);
     } else {
-        VLOG_DBG("/etc/resolv.conf: open: %s", strerror(errno));
+        VLOG_DBG("%s: failed to open /etc/resolv.conf (%s)",
+                 cli_name, strerror(errno));
     }
 
     if (fclose(new) < 0) {
-        VLOG_WARN("%s: close: %s", new_name, strerror(errno));
+        VLOG_WARN("%s: closing %s failed (%s)",
+                  cli_name, new_name, strerror(errno));
         return errno;
     }
 
     if (rename(new_name, "/etc/resolv.conf") < 0) {
-        VLOG_WARN("failed to rename %s to /etc/resolv.conf: %s",
-                  new_name, strerror(errno));
+        VLOG_WARN("%s: failed to rename %s to /etc/resolv.conf (%s)",
+                  cli_name, new_name, strerror(errno));
         return errno;
     }
 
@@ -566,13 +578,16 @@ static bool
 dhcp_receive(struct dhclient *cli, unsigned int msgs, struct dhcp_msg *msg)
 {
     while (do_receive_msg(cli, msg)) {
+        const char *cli_name = dhclient_get_name(cli);
+
         if (msg->type > 31 || !((1u << msg->type) & msgs)) {
-            VLOG_DBG_RL(&rl, "received unexpected %s in %s state: %s",
+            VLOG_DBG_RL(&rl, "%s: received unexpected %s in %s state: %s",
+                        cli_name,
                         dhcp_type_name(msg->type), state_name(cli->state),
                         dhcp_msg_to_string(msg, false, &cli->s));
         } else if (msg->xid != cli->xid) {
-            VLOG_DBG_RL(&rl,
-                        "ignoring %s with xid != %08"PRIx32" in %s state: %s",
+            VLOG_DBG_RL(&rl, "%s: ignoring %s with xid != %08"PRIx32" "
+                        "in %s state: %s", cli_name,
                         dhcp_type_name(msg->type), msg->xid,
                         state_name(cli->state),
                         dhcp_msg_to_string(msg, false, &cli->s));
@@ -587,20 +602,25 @@ dhcp_receive(struct dhclient *cli, unsigned int msgs, struct dhcp_msg *msg)
 static bool
 validate_offered_options(struct dhclient *cli, const struct dhcp_msg *msg)
 {
+    const char *cli_name = dhclient_get_name(cli);
     uint32_t lease, netmask;
+
     if (!dhcp_msg_get_secs(msg, DHCP_CODE_LEASE_TIME, 0, &lease)) {
-        VLOG_WARN_RL(&rl, "%s lacks lease time: %s", dhcp_type_name(msg->type),
+        VLOG_WARN_RL(&rl, "%s: %s lacks lease time (%s)",
+                     cli_name, dhcp_type_name(msg->type),
                      dhcp_msg_to_string(msg, false, &cli->s));
     } else if (!dhcp_msg_get_ip(msg, DHCP_CODE_SUBNET_MASK, 0, &netmask)) {
-        VLOG_WARN_RL(&rl, "%s lacks netmask: %s", dhcp_type_name(msg->type),
+        VLOG_WARN_RL(&rl, "%s: %s lacks netmask (%s)",
+                     cli_name, dhcp_type_name(msg->type),
                      dhcp_msg_to_string(msg, false, &cli->s));
     } else if (lease < MIN_ACCEPTABLE_LEASE) {
-        VLOG_WARN_RL(&rl, "Ignoring %s with %"PRIu32"-second lease time: %s",
+        VLOG_WARN_RL(&rl, "%s: ignoring %s with %"PRIu32"-second "
+                     "lease time (%s)", cli_name,
                      dhcp_type_name(msg->type), lease,
                      dhcp_msg_to_string(msg, false, &cli->s));
     } else if (cli->validate_offer && !cli->validate_offer(msg, cli->aux)) {
-        VLOG_DBG_RL(&rl, "client validation hook refused offer: %s",
-                    dhcp_msg_to_string(msg, false, &cli->s));
+        VLOG_DBG_RL(&rl, "%s: client validation hook refused offer (%s)",
+                    cli_name, dhcp_msg_to_string(msg, false, &cli->s));
     } else {
         return true;
     }
@@ -610,6 +630,7 @@ validate_offered_options(struct dhclient *cli, const struct dhcp_msg *msg)
 static void
 dhclient_run_SELECTING(struct dhclient *cli)
 {
+    const char *cli_name = dhclient_get_name(cli);
     struct dhcp_msg msg;
 
     send_reliably(cli, make_dhcpdiscover);
@@ -623,13 +644,13 @@ dhclient_run_SELECTING(struct dhclient *cli)
         }
         if (!dhcp_msg_get_ip(&msg, DHCP_CODE_SERVER_IDENTIFIER,
                              0, &cli->server_ip)) {
-            VLOG_WARN_RL(&rl, "DHCPOFFER lacks server identifier: %s",
-                         dhcp_msg_to_string(&msg, false, &cli->s));
+            VLOG_WARN_RL(&rl, "%s: DHCPOFFER lacks server identifier (%s)",
+                         cli_name, dhcp_msg_to_string(&msg, false, &cli->s));
             continue;
         }
 
-        VLOG_DBG_RL(&rl, "accepting DHCPOFFER: %s",
-                    dhcp_msg_to_string(&msg, false, &cli->s));
+        VLOG_DBG_RL(&rl, "%s: accepting DHCPOFFER (%s)",
+                    cli_name, dhcp_msg_to_string(&msg, false, &cli->s));
         cli->ipaddr = msg.yiaddr;
         state_transition(cli, S_REQUESTING);
         break;
@@ -637,7 +658,8 @@ dhclient_run_SELECTING(struct dhclient *cli)
 }
 
 static bool
-same_binding(const struct dhcp_msg *old, const struct dhcp_msg *new)
+same_binding(const char *cli_name,
+             const struct dhcp_msg *old, const struct dhcp_msg *new)
 {
     static const int codes[] = {
         DHCP_CODE_SUBNET_MASK,
@@ -660,8 +682,9 @@ same_binding(const struct dhcp_msg *old, const struct dhcp_msg *new)
     bool same = true;
 
     if (old->yiaddr != new->yiaddr) {
-        VLOG_WARN("DHCP binding changed IP address from "IP_FMT" to "IP_FMT,
-                  IP_ARGS(&old->yiaddr), IP_ARGS(&new->yiaddr));
+        VLOG_WARN("%s: DHCP binding changed IP address "
+                  "from "IP_FMT" to "IP_FMT,
+                  cli_name, IP_ARGS(&old->yiaddr), IP_ARGS(&new->yiaddr));
         same = false;
     }
     for (i = 0; i < ARRAY_SIZE(codes); i++) {
@@ -671,7 +694,8 @@ same_binding(const struct dhcp_msg *old, const struct dhcp_msg *new)
         if (!dhcp_option_equals(old_opt, new_opt)) {
             struct ds old_string = DS_EMPTY_INITIALIZER;
             struct ds new_string = DS_EMPTY_INITIALIZER;
-            VLOG_WARN("DHCP binding changed option from %s to %s",
+            VLOG_WARN("%s: DHCP binding changed option from %s to %s",
+                      cli_name,
                       dhcp_option_to_string(old_opt, code, &old_string),
                       dhcp_option_to_string(new_opt, code, &new_string));
             ds_destroy(&old_string);
@@ -700,7 +724,7 @@ receive_ack(struct dhclient *cli)
         uint32_t lease = 0, t1 = 0, t2 = 0;
 
         if (cli->binding) {
-            if (!same_binding(cli->binding, &msg)) {
+            if (!same_binding(dhclient_get_name(cli), cli->binding, &msg)) {
                 cli->changed = true;
             }
             dhcp_msg_uninit(cli->binding);
@@ -732,7 +756,8 @@ receive_ack(struct dhclient *cli)
             cli->router = INADDR_ANY;
         }
         state_transition(cli, S_BOUND);
-        VLOG_DBG("Bound: %s", dhcp_msg_to_string(&msg, false, &cli->s));
+        VLOG_DBG("%s: bound (%s)", dhclient_get_name(cli),
+                 dhcp_msg_to_string(&msg, false, &cli->s));
         return true;
     }
 }
@@ -821,10 +846,12 @@ dhclient_wait(struct dhclient *cli)
 static void
 state_transition(struct dhclient *cli, enum dhclient_state state)
 {
+    const char *cli_name = dhclient_get_name(cli);
     bool was_bound = dhclient_is_bound(cli);
     bool am_bound;
+
     if (cli->state != state) {
-        VLOG_DBG("entering %s", state_name(state)); 
+        VLOG_DBG("%s: entering %s", cli_name, state_name(state)); 
         cli->state = state;
     }
     cli->state_entered = time_now();
@@ -835,19 +862,18 @@ state_transition(struct dhclient *cli, enum dhclient_state state)
         if (am_bound) {
             assert(cli->binding != NULL);
             VLOG_INFO("%s: obtained address "IP_FMT", netmask "IP_FMT,
-                      netdev_get_name(cli->netdev),
+                      cli_name,
                       IP_ARGS(&cli->ipaddr), IP_ARGS(&cli->netmask));
             if (cli->router) {
                 VLOG_INFO("%s: obtained default gateway "IP_FMT,
-                          netdev_get_name(cli->netdev), IP_ARGS(&cli->router));
+                          cli_name, IP_ARGS(&cli->router));
             }
         } else {
             dhcp_msg_uninit(cli->binding);
             free(cli->binding);
             cli->binding = NULL;
 
-            VLOG_INFO("%s: network address unbound",
-                      netdev_get_name(cli->netdev));
+            VLOG_INFO("%s: network address unbound", cli_name);
         }
     }
     if (cli->state & (S_SELECTING | S_REQUESTING | S_REBOOTING)) {
@@ -905,6 +931,7 @@ timeout(struct dhclient *cli, unsigned int secs)
 static bool
 do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
 {
+    const char *cli_name = dhclient_get_name(cli);
     uint8_t cli_mac[ETH_ADDR_LEN];
     struct ofpbuf b;
     int mtu;
@@ -936,13 +963,15 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
         ip = b.l3;
         if (IP_IS_FRAGMENT(ip->ip_frag_off)) {
             /* We don't do reassembly. */
-            VLOG_WARN_RL(&rl, "ignoring fragmented DHCP datagram");
+            VLOG_WARN_RL(&rl, "%s: ignoring fragmented DHCP datagram",
+                         cli_name);
             continue;
         }
 
         dhcp = b.l7;
         if (!dhcp) {
-            VLOG_WARN_RL(&rl, "ignoring DHCP datagram with missing payload");
+            VLOG_WARN_RL(&rl, "%s: ignoring DHCP datagram with missing "
+                         "payload", cli_name);
             continue;
         }
 
@@ -950,10 +979,11 @@ do_receive_msg(struct dhclient *cli, struct dhcp_msg *msg)
         error = dhcp_parse(msg, &b);
         if (!error) {
             if (VLOG_IS_DBG_ENABLED()) {
-                VLOG_DBG_RL(&rl, "received %s",
+                VLOG_DBG_RL(&rl, "%s: received %s", cli_name,
                             dhcp_msg_to_string(msg, false, &cli->s)); 
             } else {
-                VLOG_INFO_RL(&rl, "received %s", dhcp_type_name(msg->type));
+                VLOG_INFO_RL(&rl, "%s: received %s",
+                             cli_name, dhcp_type_name(msg->type));
             }
             ofpbuf_uninit(&b);
             return true;
@@ -968,6 +998,7 @@ drained:
 static void
 do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
 {
+    const char *cli_name = dhclient_get_name(cli);
     struct ofpbuf b;
     struct eth_header eh;
     struct ip_header nh;
@@ -1030,17 +1061,18 @@ do_send_msg(struct dhclient *cli, const struct dhcp_msg *msg)
      * Ethernet at some point.  1500 bytes should be enough for anyone. */
     if (b.size <= ETH_TOTAL_MAX) {
         if (VLOG_IS_DBG_ENABLED()) {
-            VLOG_DBG("sending %s", dhcp_msg_to_string(msg, false, &cli->s)); 
+            VLOG_DBG("%s: sending %s",
+                     cli_name, dhcp_msg_to_string(msg, false, &cli->s)); 
         } else {
-            VLOG_INFO("sending %s", dhcp_type_name(msg->type));
+            VLOG_INFO("%s: sending %s", cli_name, dhcp_type_name(msg->type));
         }
         error = netdev_send(cli->netdev, &b);
         if (error) {
-            VLOG_ERR("send failed on %s: %s",
+            VLOG_ERR("%s: send failed on %s (%s)", cli_name,
                      netdev_get_name(cli->netdev), strerror(error));
         }
     } else {
-        VLOG_ERR("cannot send %zu-byte Ethernet frame", b.size);
+        VLOG_ERR("%s: cannot send %zu-byte Ethernet frame", cli_name, b.size);
     }
 
     ofpbuf_uninit(&b);

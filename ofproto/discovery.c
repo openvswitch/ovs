@@ -36,6 +36,7 @@
 #include "vlog.h"
 
 struct discovery {
+    char *dpif_name;
     char *re;
     bool update_resolv_conf;
     regex_t *regex;
@@ -105,6 +106,8 @@ discovery_create(const char *re, bool update_resolv_conf,
 
     d = xzalloc(sizeof *d);
 
+    d->dpif_name = xstrdup(dpif_base_name(dpif));
+
     /* Controller regular expression. */
     error = discovery_set_accept_controller_re(d, re);
     if (error) {
@@ -116,13 +119,15 @@ discovery_create(const char *re, bool update_resolv_conf,
     error = dpif_port_get_name(dpif, ODPP_LOCAL,
                                local_name, sizeof local_name);
     if (error) {
-        VLOG_ERR("failed to query datapath local port: %s", strerror(error));
+        VLOG_ERR("%s: failed to query datapath local port: %s",
+                 d->dpif_name, strerror(error));
         goto error_regfree;
     }
     error = dhclient_create(local_name, modify_dhcp_request,
                             validate_dhcp_offer, d, &d->dhcp);
     if (error) {
-        VLOG_ERR("failed to initialize DHCP client: %s", strerror(error));
+        VLOG_ERR("%s: failed to initialize DHCP client: %s",
+                 d->dpif_name, strerror(error));
         goto error_regfree;
     }
     dhclient_set_max_timeout(d->dhcp, 3);
@@ -138,6 +143,7 @@ error_regfree:
     regfree(d->regex);
     free(d->regex);
 error_free:
+    free(d->dpif_name);
     free(d);
     *discoveryp = 0;
     return error;
@@ -152,6 +158,7 @@ discovery_destroy(struct discovery *d)
         free(d->regex);
         dhclient_destroy(d->dhcp);
         switch_status_unregister(d->ss_cat);
+        free(d->dpif_name);
         free(d);
     }
 }
@@ -190,7 +197,7 @@ discovery_set_accept_controller_re(struct discovery *d, const char *re_)
         size_t length = regerror(error, regex, NULL, 0);
         char *buffer = xmalloc(length);
         regerror(error, regex, buffer, length);
-        VLOG_WARN("%s: %s", re, buffer);
+        VLOG_WARN("%s: %s: %s", d->dpif_name, re, buffer);
         free(regex);
         free(re);
         return EINVAL;
@@ -236,12 +243,14 @@ discovery_run(struct discovery *d, char **controller_name)
     if (dhclient_is_bound(d->dhcp)) {
         *controller_name = dhcp_msg_get_string(dhclient_get_config(d->dhcp),
                                                DHCP_CODE_OFP_CONTROLLER_VCONN);
-        VLOG_INFO("%s: discovered controller", *controller_name);
+        VLOG_INFO("%s: discovered controller %s",
+                  d->dpif_name, *controller_name);
         d->n_changes++;
     } else {
         *controller_name = NULL;
         if (d->n_changes) {
-            VLOG_INFO("discovered controller no longer available");
+            VLOG_INFO("%s: discovered controller no longer available",
+                      d->dpif_name);
             d->n_changes++;
         }
     }
@@ -271,13 +280,14 @@ validate_dhcp_offer(const struct dhcp_msg *msg, void *d_)
 
     vconn_name = dhcp_msg_get_string(msg, DHCP_CODE_OFP_CONTROLLER_VCONN);
     if (!vconn_name) {
-        VLOG_WARN_RL(&rl, "rejecting DHCP offer missing controller vconn");
+        VLOG_WARN_RL(&rl, "%s: rejecting DHCP offer missing controller vconn",
+                     d->dpif_name);
         return false;
     }
     accept = !regexec(d->regex, vconn_name, 0, NULL, 0);
     if (!accept) {
-        VLOG_WARN_RL(&rl, "rejecting controller vconn that fails to match %s",
-                     d->re);
+        VLOG_WARN_RL(&rl, "%s: rejecting controller vconn that fails to "
+                     "match %s", d->dpif_name, d->re);
     }
     free(vconn_name);
     return accept;
