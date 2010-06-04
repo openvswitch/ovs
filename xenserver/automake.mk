@@ -25,11 +25,3 @@ EXTRA_DIST += \
 	xenserver/usr_sbin_xen-bugtool \
 	xenserver/usr_share_openvswitch_scripts_refresh-network-uuids \
 	xenserver/usr_share_openvswitch_scripts_sysconfig.template
-
-noinst_PROGRAMS += xenserver/ovs-xenserverd
-xenserver_ovs_xenserverd_SOURCES = xenserver/ovs-xenserverd.c
-xenserver_ovs_xenserverd_LDADD = lib/libopenvswitch.a
-
-man_MANS += xenserver/ovs-xenserverd.8
-DISTCLEANFILES += xenserver/ovs-xenserverd.8
-EXTRA_DIST += xenserver/ovs-xenserverd.8.in
