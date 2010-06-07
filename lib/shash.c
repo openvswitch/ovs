@@ -40,6 +40,16 @@ shash_destroy(struct shash *sh)
     }
 }
 
+/* Like shash_destroy(), but also free() each node's 'data'. */
+void
+shash_destroy_free_data(struct shash *sh)
+{
+    if (sh) {
+        shash_clear_free_data(sh);
+        hmap_destroy(&sh->map);
+    }
+}
+
 void
 shash_swap(struct shash *a, struct shash *b)
 {
@@ -59,6 +69,20 @@ shash_clear(struct shash *sh)
 
     SHASH_FOR_EACH_SAFE (node, next, sh) {
         hmap_remove(&sh->map, &node->node);
+        free(node->name);
+        free(node);
+    }
+}
+
+/* Like shash_clear(), but also free() each node's 'data'. */
+void
+shash_clear_free_data(struct shash *sh)
+{
+    struct shash_node *node, *next;
+
+    SHASH_FOR_EACH_SAFE (node, next, sh) {
+        hmap_remove(&sh->map, &node->node);
+        free(node->data);
         free(node->name);
         free(node);
     }
