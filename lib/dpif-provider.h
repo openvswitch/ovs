@@ -18,7 +18,9 @@
 #define DPIF_PROVIDER_H 1
 
 /* Provider interface to dpifs, which provide an interface to an Open vSwitch
- * datapath. */
+ * datapath.  A datapath is a collection of physical or virtual ports that are
+ * exposed over OpenFlow as a single switch.  Datapaths and the collections of
+ * ports that they contain may be fixed or dynamic. */
 
 #include <assert.h>
 #include "openflow/openflow.h"

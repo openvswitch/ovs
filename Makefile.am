@@ -38,6 +38,7 @@ EXTRA_DIST = \
 	INSTALL.bridge \
 	INSTALL.userspace \
 	NOTICE \
+	PORTING \
 	README-gcov \
 	REPORTING-BUGS \
 	SubmittingPatches \
