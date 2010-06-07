@@ -21,7 +21,7 @@
 
 #include "list.h"
 #include "netdev-vport.h"
-#include "openvswitch/datapath-protocol.h"
+#include "openvswitch/xflow.h"
 #include "shash.h"
 #include "socket-util.h"
 
@@ -59,7 +59,7 @@ int
 netdev_vport_set_etheraddr(struct netdev *netdev,
                            const uint8_t mac[ETH_ADDR_LEN])
 {
-    struct odp_vport_ether vport_ether;
+    struct xflow_vport_ether vport_ether;
     int err;
 
     ovs_strlcpy(vport_ether.devname, netdev_get_name(netdev),
@@ -67,7 +67,7 @@ netdev_vport_set_etheraddr(struct netdev *netdev,
 
     memcpy(vport_ether.ether_addr, mac, ETH_ADDR_LEN);
 
-    err = netdev_vport_do_ioctl(ODP_VPORT_ETHER_SET, &vport_ether);
+    err = netdev_vport_do_ioctl(XFLOW_VPORT_ETHER_SET, &vport_ether);
     if (err) {
         return err;
     }
@@ -80,13 +80,13 @@ int
 netdev_vport_get_etheraddr(const struct netdev *netdev,
                            uint8_t mac[ETH_ADDR_LEN])
 {
-    struct odp_vport_ether vport_ether;
+    struct xflow_vport_ether vport_ether;
     int err;
 
     ovs_strlcpy(vport_ether.devname, netdev_get_name(netdev),
                 sizeof vport_ether.devname);
 
-    err = netdev_vport_do_ioctl(ODP_VPORT_ETHER_GET, &vport_ether);
+    err = netdev_vport_do_ioctl(XFLOW_VPORT_ETHER_GET, &vport_ether);
     if (err) {
         return err;
     }
@@ -98,13 +98,13 @@ netdev_vport_get_etheraddr(const struct netdev *netdev,
 int
 netdev_vport_get_mtu(const struct netdev *netdev, int *mtup)
 {
-    struct odp_vport_mtu vport_mtu;
+    struct xflow_vport_mtu vport_mtu;
     int err;
 
     ovs_strlcpy(vport_mtu.devname, netdev_get_name(netdev),
                 sizeof vport_mtu.devname);
 
-    err = netdev_vport_do_ioctl(ODP_VPORT_MTU_GET, &vport_mtu);
+    err = netdev_vport_do_ioctl(XFLOW_VPORT_MTU_GET, &vport_mtu);
     if (err) {
         return err;
     }
@@ -124,11 +124,11 @@ int
 netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
     const char *name = netdev_get_name(netdev);
-    struct odp_vport_stats_req ovsr;
+    struct xflow_vport_stats_req ovsr;
     int err;
 
     ovs_strlcpy(ovsr.devname, name, sizeof ovsr.devname);
-    err = netdev_vport_do_ioctl(ODP_VPORT_STATS_GET, &ovsr);
+    err = netdev_vport_do_ioctl(XFLOW_VPORT_STATS_GET, &ovsr);
     if (err) {
         return err;
     }

@@ -281,7 +281,7 @@ static INTERNAL_DEVICE_ATTR(root_id, S_IRUGO, show_root_id, NULL);
 static ssize_t show_bridge_id(DEVICE_PARAMS, char *buf)
 {
 	struct datapath *dp = sysfs_get_dp(to_net_dev(d));
-	const unsigned char *addr = vport_get_addr(dp->ports[ODPP_LOCAL]->vport);
+	const unsigned char *addr = vport_get_addr(dp->ports[XFLOWP_LOCAL]->vport);
 
 	/* xxx Do we need a lock of some sort? */
 	return sprintf(buf, "%.2x%.2x.%.2x%.2x%.2x%.2x%.2x%.2x\n",
@@ -469,7 +469,7 @@ static struct attribute_group bridge_group = {
  */
 int dp_sysfs_add_dp(struct datapath *dp)
 {
-	struct kobject *kobj = vport_get_kobj(dp->ports[ODPP_LOCAL]->vport);
+	struct kobject *kobj = vport_get_kobj(dp->ports[XFLOWP_LOCAL]->vport);
 	int err;
 
 	/* Create /sys/class/net/<devname>/bridge directory. */
@@ -498,7 +498,7 @@ int dp_sysfs_add_dp(struct datapath *dp)
 
 int dp_sysfs_del_dp(struct datapath *dp)
 {
-	struct kobject *kobj = vport_get_kobj(dp->ports[ODPP_LOCAL]->vport);
+	struct kobject *kobj = vport_get_kobj(dp->ports[XFLOWP_LOCAL]->vport);
 
 	kobject_del(&dp->ifobj);
 	sysfs_remove_group(kobj, &bridge_group);

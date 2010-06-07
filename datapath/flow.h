@@ -16,7 +16,7 @@
 #include <linux/gfp.h>
 #include <linux/time.h>
 
-#include "openvswitch/datapath-protocol.h"
+#include "openvswitch/xflow.h"
 #include "table.h"
 
 struct sk_buff;
@@ -24,14 +24,14 @@ struct sk_buff;
 struct sw_flow_actions {
 	struct rcu_head rcu;
 	unsigned int n_actions;
-	union odp_action actions[];
+	union xflow_action actions[];
 };
 
 struct sw_flow {
 	struct rcu_head rcu;
 	struct tbl_node tbl_node;
 
-	struct odp_flow_key key;
+	struct xflow_key key;
 	struct sw_flow_actions *sf_acts;
 
 	struct timespec used;	/* Last used time. */
@@ -49,11 +49,11 @@ extern struct kmem_cache *flow_cache;
 struct sw_flow_actions *flow_actions_alloc(size_t n_actions);
 void flow_deferred_free(struct sw_flow *);
 void flow_deferred_free_acts(struct sw_flow_actions *);
-int flow_extract(struct sk_buff *, u16 in_port, struct odp_flow_key *);
+int flow_extract(struct sk_buff *, u16 in_port, struct xflow_key *);
 void flow_used(struct sw_flow *, struct sk_buff *);
 
 struct sw_flow *flow_cast(const struct tbl_node *);
-u32 flow_hash(const struct odp_flow_key *key);
+u32 flow_hash(const struct xflow_key *key);
 int flow_cmp(const struct tbl_node *, void *target);
 void flow_free_tbl(struct tbl_node *);
 

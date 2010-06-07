@@ -20,7 +20,6 @@
 #include <stdlib.h>
 #include "flow.h"
 #include "mac-learning.h"
-#include "odp-util.h"
 #include "ofpbuf.h"
 #include "ofproto.h"
 #include "pktbuf.h"
@@ -263,7 +262,9 @@ fail_open_recover(struct fail_open *fo)
         fo->next_bogus_packet_in = LLONG_MAX;
 
         memset(&flow, 0, sizeof flow);
-        ofproto_delete_flow(fo->ofproto, &flow, OVSFW_ALL, FAIL_OPEN_PRIORITY);
+        flow.wildcards = OVSFW_ALL;
+        flow.priority = FAIL_OPEN_PRIORITY;
+        ofproto_delete_flow(fo->ofproto, &flow);
     }
 }
 
@@ -291,8 +292,9 @@ fail_open_flushed(struct fail_open *fo)
         action.output.len = htons(sizeof action);
         action.output.port = htons(OFPP_NORMAL);
         memset(&flow, 0, sizeof flow);
-        ofproto_add_flow(fo->ofproto, &flow, OVSFW_ALL, FAIL_OPEN_PRIORITY,
-                         &action, 1, 0);
+        flow.wildcards = OVSFW_ALL;
+        flow.priority = FAIL_OPEN_PRIORITY;
+        ofproto_add_flow(fo->ofproto, &flow, &action, 1, 0);
     }
 }
 

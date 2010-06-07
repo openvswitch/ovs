@@ -30,12 +30,12 @@ openvswitch_headers = \
 	datapath.h \
 	dp_sysfs.h \
 	flow.h \
-	odp-compat.h \
 	table.h \
 	vport.h \
 	vport-generic.h \
 	vport-internal_dev.h \
-	vport-netdev.h
+	vport-netdev.h \
+	xflow-compat.h
 
 dist_sources = $(foreach module,$(dist_modules),$($(module)_sources))
 dist_headers = $(foreach module,$(dist_modules),$($(module)_headers))

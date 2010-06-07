@@ -184,7 +184,7 @@ netdev_get_kobj(const struct vport *vport)
 }
 
 int
-netdev_get_stats(const struct vport *vport, struct odp_vport_stats *stats)
+netdev_get_stats(const struct vport *vport, struct xflow_vport_stats *stats)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	const struct net_device_stats *netdev_stats;

@@ -71,14 +71,14 @@ struct dp_port_group {
  * @waitqueue: Waitqueue, for waiting for new packets in @queues.
  * @n_flows: Number of flows currently in flow table.
  * @table: Current flow table (RCU protected).
- * @groups: Port groups, used by ODPAT_OUTPUT_GROUP action (RCU protected).
+ * @groups: Port groups, used by XFLOWAT_OUTPUT_GROUP action (RCU protected).
  * @n_ports: Number of ports currently in @ports.
- * @ports: Map from port number to &struct dp_port.  %ODPP_LOCAL port
+ * @ports: Map from port number to &struct dp_port.  %XFLOWP_LOCAL port
  * always exists, other ports may be %NULL.
  * @port_list: List of all ports in @ports in arbitrary order.
  * @stats_percpu: Per-CPU datapath statistics.
  * @sflow_probability: Number of packets out of UINT_MAX to sample to the
- * %ODPL_SFLOW queue, e.g. (@sflow_probability/UINT_MAX) is the probability of
+ * %XFLOWL_SFLOW queue, e.g. (@sflow_probability/UINT_MAX) is the probability of
  * sampling a given packet.
  */
 struct datapath {

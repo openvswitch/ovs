@@ -1,4 +1,4 @@
-# Copyright (C) 2009 Nicira Networks, Inc.
+# Copyright (C) 2009, 2010 Nicira Networks, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -26,4 +26,9 @@ ofproto_libofproto_a_SOURCES = \
 	ofproto/pinsched.c \
 	ofproto/pinsched.h \
 	ofproto/status.c \
-	ofproto/status.h
+	ofproto/status.h \
+	ofproto/wdp-provider.h \
+	ofproto/wdp-xflow.c \
+	ofproto/wdp-xflow.h \
+	ofproto/wdp.c \
+	ofproto/wdp.h

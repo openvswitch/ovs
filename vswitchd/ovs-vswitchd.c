@@ -30,9 +30,9 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "daemon.h"
-#include "dpif.h"
 #include "leak-checker.h"
 #include "netdev.h"
+#include "ofproto/wdp.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "proc-net-compat.h"
@@ -46,6 +46,7 @@
 #include "util.h"
 #include "vconn.h"
 #include "vswitchd/vswitch-idl.h"
+#include "xfif.h"
 
 #include "vlog.h"
 #define THIS_MODULE VLM_vswitchd
@@ -121,7 +122,7 @@ main(int argc, char *argv[])
             }
         }
         unixctl_server_run(unixctl);
-        dp_run();
+        wdp_run();
         netdev_run();
 
         signal_wait(sighup);
@@ -130,7 +131,7 @@ main(int argc, char *argv[])
         }
         ovsdb_idl_wait(idl);
         unixctl_server_wait(unixctl);
-        dp_wait();
+        wdp_wait();
         netdev_wait();
         poll_block();
     }

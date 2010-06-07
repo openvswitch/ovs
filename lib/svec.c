@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,6 +108,16 @@ svec_append(struct svec *svec, const struct svec *other)
     for (i = 0; i < other->n; i++) {
         svec_add(svec, other->names[i]);
     }
+}
+
+void
+svec_move(struct svec *svec, struct svec *other)
+{
+    size_t i;
+    for (i = 0; i < other->n; i++) {
+        svec_add_nocopy(svec, other->names[i]);
+    }
+    other->n = 0;
 }
 
 void

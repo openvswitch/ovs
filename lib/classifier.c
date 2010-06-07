@@ -52,17 +52,16 @@ static bool rules_match_1wild(const struct cls_rule *fixed,
 static bool rules_match_2wild(const struct cls_rule *wild1,
                               const struct cls_rule *wild2, int field_idx);
 
-/* Converts the flow in 'flow' into a cls_rule in 'rule', with the given
- * 'wildcards' and 'priority'.*/
+/* Converts the flow in 'flow' into a cls_rule in 'rule'. */
 void
-cls_rule_from_flow(const flow_t *flow, uint32_t wildcards,
-                   unsigned int priority, struct cls_rule *rule)
+cls_rule_from_flow(const flow_t *flow, struct cls_rule *rule)
 {
-    assert(!flow->reserved[0] && !flow->reserved[1] && !flow->reserved[2]);
     rule->flow = *flow;
-    flow_wildcards_init(&rule->wc, wildcards);
-    rule->priority = priority;
-    rule->table_idx = table_idx_from_wildcards(rule->wc.wildcards);
+    if (!rule->flow.wildcards && rule->flow.priority < UINT16_MAX) {
+        rule->flow.priority = UINT16_MAX;
+    }
+    flow_wildcards_init(&rule->wc, flow->wildcards);
+    rule->table_idx = table_idx_from_wildcards(flow->wildcards);
 }
 
 /* Converts the ofp_match in 'match' into a cls_rule in 'rule', with the given
@@ -73,11 +72,10 @@ cls_rule_from_match(const struct ofp_match *match, unsigned int priority,
                     bool tun_id_from_cookie, uint64_t cookie,
                     struct cls_rule *rule)
 {
-    uint32_t wildcards;
-    flow_from_match(match, tun_id_from_cookie, cookie, &rule->flow, &wildcards);
-    flow_wildcards_init(&rule->wc, wildcards);
-    rule->priority = rule->wc.wildcards ? priority : UINT16_MAX;
-    rule->table_idx = table_idx_from_wildcards(rule->wc.wildcards);
+    flow_from_match(match, rule->flow.wildcards ? priority : UINT16_MAX,
+                    tun_id_from_cookie, cookie, &rule->flow);
+    flow_wildcards_init(&rule->wc, rule->flow.wildcards);
+    rule->table_idx = table_idx_from_wildcards(rule->flow.wildcards);
 }
 
 /* Converts 'rule' to a string and returns the string.  The caller must free
@@ -87,7 +85,7 @@ cls_rule_to_string(const struct cls_rule *rule)
 {
     struct ds s = DS_EMPTY_INITIALIZER;
     ds_put_format(&s, "wildcards=%x priority=%u ",
-                  rule->wc.wildcards, rule->priority);
+                  rule->flow.wildcards, rule->flow.priority);
     flow_format(&s, &rule->flow);
     return ds_cstr(&s);
 }
@@ -99,7 +97,8 @@ cls_rule_to_string(const struct cls_rule *rule)
 void
 cls_rule_print(const struct cls_rule *rule)
 {
-    printf("wildcards=%x priority=%u ", rule->wc.wildcards, rule->priority);
+    printf("wildcards=%x priority=%u ",
+           rule->flow.wildcards, rule->flow.priority);
     flow_print(stdout, &rule->flow);
     putc('\n', stdout);
 }
@@ -116,7 +115,7 @@ cls_rule_moved(struct classifier *cls, struct cls_rule *old,
                struct cls_rule *new)
 {
     if (old != new) {
-        if (new->wc.wildcards) {
+        if (new->flow.wildcards) {
             list_moved(&new->node.list);
         } else {
             hmap_node_moved(&cls->exact_table,
@@ -143,10 +142,10 @@ cls_rule_replace(struct classifier *cls, const struct cls_rule *old,
                  struct cls_rule *new)
 {
     assert(old != new);
-    assert(old->wc.wildcards == new->wc.wildcards);
-    assert(old->priority == new->priority);
+    assert(old->flow.wildcards == new->flow.wildcards);
+    assert(old->flow.priority == new->flow.priority);
 
-    if (new->wc.wildcards) {
+    if (new->flow.wildcards) {
         list_replace(&new->node.list, &old->node.list);
     } else {
         hmap_replace(&cls->exact_table, &old->node.hmap, &new->node.hmap);
@@ -209,6 +208,14 @@ classifier_count_exact(const struct classifier *cls)
     return hmap_count(&cls->exact_table);
 }
 
+/* Returns the number of rules in 'classifier' that have at least one
+ * wildcard. */
+int
+classifier_count_wild(const struct classifier *cls)
+{
+    return classifier_count(cls) - classifier_count_exact(cls);
+}
+
 /* Inserts 'rule' into 'cls'.  Transfers ownership of 'rule' to 'cls'.
  *
  * If 'cls' already contains an identical rule (including wildcards, values of
@@ -224,8 +231,8 @@ struct cls_rule *
 classifier_insert(struct classifier *cls, struct cls_rule *rule)
 {
     struct cls_rule *old;
-    assert((rule->wc.wildcards == 0) == (rule->table_idx == CLS_F_IDX_EXACT));
-    old = (rule->wc.wildcards
+    assert((rule->flow.wildcards == 0) == (rule->table_idx == CLS_F_IDX_EXACT));
+    old = (rule->flow.wildcards
            ? table_insert(&cls->tables[rule->table_idx], rule)
            : insert_exact_rule(cls, rule));
     if (!old) {
@@ -236,7 +243,7 @@ classifier_insert(struct classifier *cls, struct cls_rule *rule)
 
 /* Inserts 'rule' into 'cls'.  Transfers ownership of 'rule' to 'cls'.
  *
- * 'rule' must be an exact-match rule (rule->wc.wildcards must be 0) and 'cls'
+ * 'rule' must be an exact-match rule (rule->flow.wildcards must be 0) and 'cls'
  * must not contain any rule with an identical key. */
 void
 classifier_insert_exact(struct classifier *cls, struct cls_rule *rule)
@@ -251,7 +258,7 @@ classifier_insert_exact(struct classifier *cls, struct cls_rule *rule)
 void
 classifier_remove(struct classifier *cls, struct cls_rule *rule)
 {
-    if (rule->wc.wildcards) {
+    if (rule->flow.wildcards) {
         /* Remove 'rule' from bucket.  If that empties the bucket, remove the
          * bucket from its table. */
         struct hmap *table = &cls->tables[rule->table_idx];
@@ -307,10 +314,10 @@ classifier_lookup_wild(const struct classifier *cls, const flow_t *flow)
         struct cls_rule target;
         int i;
 
-        cls_rule_from_flow(flow, 0, 0, &target);
+        cls_rule_from_flow(flow, &target);
         for (i = 0; i < CLS_N_FIELDS; i++) {
             struct cls_rule *rule = search_table(&cls->tables[i], i, &target);
-            if (rule && (!best || rule->priority > best->priority)) {
+            if (rule && (!best || rule->flow.priority > best->flow.priority)) {
                 best = rule;
             }
         }
@@ -320,30 +327,29 @@ classifier_lookup_wild(const struct classifier *cls, const flow_t *flow)
 
 struct cls_rule *
 classifier_find_rule_exactly(const struct classifier *cls,
-                             const flow_t *target, uint32_t wildcards,
-                             unsigned int priority)
+                             const flow_t *target)
 {
     struct cls_bucket *bucket;
     int table_idx;
     uint32_t hash;
 
-    if (!wildcards) {
+    if (!target->wildcards) {
         /* Ignores 'priority'. */
         return search_exact_table(cls, flow_hash(target, 0), target);
     }
 
-    assert(wildcards == (wildcards & OVSFW_ALL));
-    table_idx = table_idx_from_wildcards(wildcards);
+    assert(target->wildcards == (target->wildcards & OVSFW_ALL));
+    table_idx = table_idx_from_wildcards(target->wildcards);
     hash = hash_fields(target, table_idx);
     HMAP_FOR_EACH_WITH_HASH (bucket, struct cls_bucket, hmap_node, hash,
                              &cls->tables[table_idx]) {
         if (equal_fields(&bucket->fixed, target, table_idx)) {
             struct cls_rule *pos;
             LIST_FOR_EACH (pos, struct cls_rule, node.list, &bucket->rules) {
-                if (pos->priority < priority) {
+                if (pos->flow.priority < target->priority) {
                     return NULL;
-                } else if (pos->priority == priority &&
-                           pos->wc.wildcards == wildcards &&
+                } else if (pos->flow.priority == target->priority &&
+                           pos->flow.wildcards == target->wildcards &&
                            flow_equal(target, &pos->flow)) {
                     return pos;
                 }
@@ -353,23 +359,21 @@ classifier_find_rule_exactly(const struct classifier *cls,
     return NULL;
 }
 
-/* Checks if the flow defined by 'target' with 'wildcards' at 'priority' 
- * overlaps with any other rule at the same priority in the classifier.  
- * Two rules are considered overlapping if a packet could match both. */
+/* Checks if the flow defined by 'target' overlaps with any other rule at the
+ * same priority in the classifier.  Two rules are considered overlapping if a
+ * packet could match both. */
 bool
-classifier_rule_overlaps(const struct classifier *cls,
-                         const flow_t *target, uint32_t wildcards,
-                         unsigned int priority)
+classifier_rule_overlaps(const struct classifier *cls, const flow_t *target)
 {
     struct cls_rule target_rule;
     const struct hmap *tbl;
 
-    if (!wildcards) {
+    if (!target->wildcards) {
         return search_exact_table(cls, flow_hash(target, 0), target) ?
             true : false;
     }
 
-    cls_rule_from_flow(target, wildcards, priority, &target_rule);
+    cls_rule_from_flow(target, &target_rule);
 
     for (tbl = &cls->tables[0]; tbl < &cls->tables[CLS_N_FIELDS]; tbl++) {
         struct cls_bucket *bucket;
@@ -379,7 +383,7 @@ classifier_rule_overlaps(const struct classifier *cls,
 
             LIST_FOR_EACH (rule, struct cls_rule, node.list,
                            &bucket->rules) {
-                if (rule->priority == priority 
+                if (rule->flow.priority == target->priority 
                         && rules_match_2wild(rule, &target_rule, 0)) {
                     return true;
                 }
@@ -390,7 +394,7 @@ classifier_rule_overlaps(const struct classifier *cls,
     return false;
 }
 
-/* Ignores target->priority.
+/* Ignores target->flow.priority.
  *
  * 'callback' is allowed to delete the rule that is passed as its argument, but
  * it must not delete (or move) any other rules in 'cls' that are in the same
@@ -399,9 +403,12 @@ classifier_rule_overlaps(const struct classifier *cls,
  * wildcards and an exact-match rule will never be in the same table. */
 void
 classifier_for_each_match(const struct classifier *cls,
-                          const struct cls_rule *target,
+                          const flow_t *target_flow,
                           int include, cls_cb_func *callback, void *aux)
 {
+    struct cls_rule target;
+
+    cls_rule_from_flow(target_flow, &target);
     if (include & CLS_INC_WILD) {
         const struct hmap *table;
 
@@ -424,7 +431,7 @@ classifier_for_each_match(const struct classifier *cls,
                 prev_rule = NULL;
                 LIST_FOR_EACH (rule, struct cls_rule, node.list,
                                &bucket->rules) {
-                    if (rules_match_1wild(rule, target, 0)) {
+                    if (rules_match_1wild(rule, &target, 0)) {
                         if (prev_rule) {
                             callback(prev_rule, aux);
                         }
@@ -439,21 +446,21 @@ classifier_for_each_match(const struct classifier *cls,
     }
 
     if (include & CLS_INC_EXACT) {
-        if (target->wc.wildcards) {
+        if (target.flow.wildcards) {
             struct cls_rule *rule, *next_rule;
 
             HMAP_FOR_EACH_SAFE (rule, next_rule, struct cls_rule, node.hmap,
                                 &cls->exact_table) {
-                if (rules_match_1wild(rule, target, 0)) {
+                if (rules_match_1wild(rule, &target, 0)) {
                     callback(rule, aux);
                 }
             }
         } else {
             /* Optimization: there can be at most one match in the exact
              * table. */
-            size_t hash = flow_hash(&target->flow, 0);
+            size_t hash = flow_hash(&target.flow, 0);
             struct cls_rule *rule = search_exact_table(cls, hash,
-                                                       &target->flow);
+                                                       &target.flow);
             if (rule) {
                 callback(rule, aux);
             }
@@ -642,14 +649,14 @@ bucket_insert(struct cls_bucket *bucket, struct cls_rule *rule)
 {
     struct cls_rule *pos;
     LIST_FOR_EACH (pos, struct cls_rule, node.list, &bucket->rules) {
-        if (pos->priority == rule->priority) {
-            if (pos->wc.wildcards == rule->wc.wildcards
+        if (pos->flow.priority == rule->flow.priority) {
+            if (pos->flow.wildcards == rule->flow.wildcards
                 && rules_match_1wild(pos, rule, rule->table_idx))
             {
                 list_replace(&rule->node.list, &pos->node.list);
                 return pos;
             }
-        } else if (pos->priority < rule->priority) {
+        } else if (pos->flow.priority < rule->flow.priority) {
             break;
         }
     }
@@ -814,7 +821,7 @@ static bool
 rules_match_1wild(const struct cls_rule *fixed, const struct cls_rule *wild,
                   int field_idx)
 {
-    return rules_match(fixed, wild, wild->wc.wildcards, wild->wc.nw_src_mask,
+    return rules_match(fixed, wild, wild->flow.wildcards, wild->wc.nw_src_mask,
                        wild->wc.nw_dst_mask, field_idx);
 }
 
@@ -829,7 +836,7 @@ rules_match_2wild(const struct cls_rule *wild1, const struct cls_rule *wild2,
                   int field_idx)
 {
     return rules_match(wild1, wild2, 
-                       wild1->wc.wildcards | wild2->wc.wildcards, 
+                       wild1->flow.wildcards | wild2->flow.wildcards, 
                        wild1->wc.nw_src_mask & wild2->wc.nw_src_mask,
                        wild1->wc.nw_dst_mask & wild2->wc.nw_dst_mask, 
                        field_idx);

@@ -23,7 +23,7 @@
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "openflow/openflow.h"
-#include "openvswitch/datapath-protocol.h"
+#include "openvswitch/xflow.h"
 #include "packets.h"
 #include "socket-util.h"
 
@@ -89,7 +89,7 @@ netdev_patch_create(const char *name, const char *type OVS_UNUSED,
                   const struct shash *args, struct netdev_dev **netdev_devp)
 {
     int err;
-    struct odp_vport_add ova;
+    struct xflow_vport_add ova;
     const char *peer;
     struct netdev_dev_patch *netdev_dev;
 
@@ -102,16 +102,16 @@ netdev_patch_create(const char *name, const char *type OVS_UNUSED,
     ovs_strlcpy(ova.devname, name, sizeof ova.devname);
     ova.config = (char *)peer;
 
-    err = netdev_vport_do_ioctl(ODP_VPORT_ADD, &ova);
+    err = netdev_vport_do_ioctl(XFLOW_VPORT_ADD, &ova);
     if (err == EEXIST) {
         VLOG_WARN("%s: destroying existing device", name);
 
-        err = netdev_vport_do_ioctl(ODP_VPORT_DEL, ova.devname);
+        err = netdev_vport_do_ioctl(XFLOW_VPORT_DEL, ova.devname);
         if (err) {
             return err;
         }
 
-        err = netdev_vport_do_ioctl(ODP_VPORT_ADD, &ova);
+        err = netdev_vport_do_ioctl(XFLOW_VPORT_ADD, &ova);
     }
 
     if (err) {
@@ -129,7 +129,7 @@ static int
 netdev_patch_reconfigure(struct netdev_dev *netdev_dev_, const struct shash *args)
 {
     const char *name = netdev_dev_get_name(netdev_dev_);
-    struct odp_vport_mod ovm;
+    struct xflow_vport_mod ovm;
     const char *peer;
     int err;
 
@@ -141,7 +141,7 @@ netdev_patch_reconfigure(struct netdev_dev *netdev_dev_, const struct shash *arg
     ovs_strlcpy(ovm.devname, name, sizeof ovm.devname);
     ovm.config = (char *)peer;
 
-    return netdev_vport_do_ioctl(ODP_VPORT_MOD, &ovm);
+    return netdev_vport_do_ioctl(XFLOW_VPORT_MOD, &ovm);
 }
 
 static void
@@ -149,7 +149,7 @@ netdev_patch_destroy(struct netdev_dev *netdev_dev_)
 {
     struct netdev_dev_patch *netdev_dev = netdev_dev_patch_cast(netdev_dev_);
 
-    netdev_vport_do_ioctl(ODP_VPORT_DEL, (char *)netdev_dev_get_name(netdev_dev_));
+    netdev_vport_do_ioctl(XFLOW_VPORT_DEL, (char *)netdev_dev_get_name(netdev_dev_));
     free(netdev_dev);
 }
 

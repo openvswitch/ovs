@@ -157,10 +157,9 @@ void
 ofpbuf_trim(struct ofpbuf *b)
 {
     /* XXX These could be supported, but the current client doesn't care. */
-    assert(b->data == b->base);
     assert(b->l2 == NULL && b->l3 == NULL && b->l4 == NULL && b->l7 == NULL);
     if (b->allocated > b->size) {
-        b->base = b->data = xrealloc(b->base, b->size);
+        b->base = b->data = xrealloc(b->data, b->size);
         b->allocated = b->size;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009 Nicira Networks.
+ * Copyright (c) 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ static void rtnetlink_report_notify_error(void);
  * caller must not modify or free.
  *
  * This is probably not the function that you want.  You should probably be
- * using dpif_port_poll() or netdev_monitor_create(), which unlike this
+ * using xfif_port_poll() or netdev_monitor_create(), which unlike this
  * function are not Linux-specific.
  *
  * Returns 0 if successful, otherwise a positive errno value. */

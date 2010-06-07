@@ -14,12 +14,12 @@
 
 struct datapath;
 struct sk_buff;
-struct odp_flow_key;
-union odp_action;
+struct xflow_key;
+union xflow_action;
 
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
-		    struct odp_flow_key *key,
-		    const union odp_action *, int n_actions,
+		    struct xflow_key *key,
+		    const union xflow_action *, int n_actions,
 		    gfp_t gfp);
 
 static inline void

@@ -14,8 +14,8 @@
 #include <linux/spinlock.h>
 
 #include "datapath.h"
-#include "openvswitch/datapath-protocol.h"
-#include "odp-compat.h"
+#include "openvswitch/xflow.h"
+#include "xflow-compat.h"
 
 struct vport;
 struct dp_port;
@@ -28,20 +28,20 @@ void vport_unlock(void);
 int vport_init(void);
 void vport_exit(void);
 
-int vport_add(const struct odp_vport_add __user *);
-int vport_mod(const struct odp_vport_mod __user *);
+int vport_add(const struct xflow_vport_add __user *);
+int vport_mod(const struct xflow_vport_mod __user *);
 int vport_del(const char __user *udevname);
 
 #ifdef CONFIG_COMPAT
-int compat_vport_add(struct compat_odp_vport_add __user *);
-int compat_vport_mod(struct compat_odp_vport_mod __user *);
+int compat_vport_add(struct compat_xflow_vport_add __user *);
+int compat_vport_mod(struct compat_xflow_vport_mod __user *);
 #endif
 
-int vport_stats_get(struct odp_vport_stats_req __user *);
-int vport_ether_get(struct odp_vport_ether __user *);
-int vport_ether_set(struct odp_vport_ether __user *);
-int vport_mtu_get(struct odp_vport_mtu __user *);
-int vport_mtu_set(struct odp_vport_mtu __user *);
+int vport_stats_get(struct xflow_vport_stats_req __user *);
+int vport_ether_get(struct xflow_vport_ether __user *);
+int vport_ether_set(struct xflow_vport_ether __user *);
+int vport_mtu_get(struct xflow_vport_mtu __user *);
+int vport_mtu_set(struct xflow_vport_mtu __user *);
 
 struct vport *__vport_add(const char *name, const char *type, const void __user *config);
 int __vport_mod(struct vport *, const void __user *config);
@@ -173,7 +173,7 @@ struct vport_ops {
 	const char *(*get_name)(const struct vport *);
 	const unsigned char *(*get_addr)(const struct vport *);
 	struct kobject *(*get_kobj)(const struct vport *);
-	int (*get_stats)(const struct vport *, struct odp_vport_stats *);
+	int (*get_stats)(const struct vport *, struct xflow_vport_stats *);
 
 	unsigned (*get_dev_flags)(const struct vport *);
 	int (*is_running)(const struct vport *);

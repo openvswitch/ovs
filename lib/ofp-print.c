@@ -135,7 +135,7 @@ ofp_packet_in(struct ds *string, const void *oh, size_t len, int verbosity)
         packet.data = (void *) op->data;
         packet.size = data_len;
         flow_extract(&packet, 0, ntohs(op->in_port), &flow);
-        flow_to_match(&flow, 0, false, &match);
+        flow_to_match(&flow, false, &match);
         ofp_print_match(string, &match, verbosity);
         ds_put_char(string, '\n');
     }

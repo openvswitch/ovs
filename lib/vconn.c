@@ -975,7 +975,7 @@ make_flow_mod(uint16_t command, const flow_t *flow, size_t actions_len)
     ofm->header.length = htons(size);
     ofm->cookie = 0;
     ofm->match.wildcards = htonl(0);
-    ofm->match.in_port = htons(flow->in_port == ODPP_LOCAL ? OFPP_LOCAL
+    ofm->match.in_port = htons(flow->in_port == XFLOWP_LOCAL ? OFPP_LOCAL
                                : flow->in_port);
     memcpy(ofm->match.dl_src, flow->dl_src, sizeof ofm->match.dl_src);
     memcpy(ofm->match.dl_dst, flow->dl_dst, sizeof ofm->match.dl_dst);
@@ -1066,7 +1066,7 @@ make_packet_out(const struct ofpbuf *packet, uint32_t buffer_id,
     opo->header.length = htons(size);
     opo->header.xid = htonl(0);
     opo->buffer_id = htonl(buffer_id);
-    opo->in_port = htons(in_port == ODPP_LOCAL ? OFPP_LOCAL : in_port);
+    opo->in_port = htons(in_port == XFLOWP_LOCAL ? OFPP_LOCAL : in_port);
     opo->actions_len = htons(actions_len);
     ofpbuf_put(out, actions, actions_len);
     if (packet) {

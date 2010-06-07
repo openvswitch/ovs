@@ -33,11 +33,10 @@
 #include "command-line.h"
 #include "compiler.h"
 #include "dirs.h"
-#include "dpif.h"
 #include "dynamic-string.h"
 #include "netdev.h"
 #include "netlink.h"
-#include "odp-util.h"
+#include "xflow-util.h"
 #include "ofp-print.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
@@ -49,6 +48,7 @@
 #include "timeval.h"
 #include "util.h"
 #include "vconn.h"
+#include "xfif.h"
 #include "xtoxll.h"
 
 #include "vlog.h"
@@ -218,12 +218,12 @@ static void
 open_vconn__(const char *name, const char *default_suffix,
              struct vconn **vconnp)
 {
-    struct dpif *dpif;
+    struct xfif *xfif;
     struct stat s;
     char *bridge_path, *datapath_name, *datapath_type;
 
     bridge_path = xasprintf("%s/%s.%s", ovs_rundir, name, default_suffix);
-    dp_parse_name(name, &datapath_name, &datapath_type);
+    xf_parse_name(name, &datapath_name, &datapath_type);
 
     if (strstr(name, ":")) {
         run(vconn_open_block(name, OFP_VERSION, vconnp),
@@ -232,19 +232,19 @@ open_vconn__(const char *name, const char *default_suffix,
         open_vconn_socket(name, vconnp);
     } else if (!stat(bridge_path, &s) && S_ISSOCK(s.st_mode)) {
         open_vconn_socket(bridge_path, vconnp);
-    } else if (!dpif_open(datapath_name, datapath_type, &dpif)) {
-        char dpif_name[IF_NAMESIZE + 1];
+    } else if (!xfif_open(datapath_name, datapath_type, &xfif)) {
+        char xfif_name[IF_NAMESIZE + 1];
         char *socket_name;
 
-        run(dpif_port_get_name(dpif, ODPP_LOCAL, dpif_name, sizeof dpif_name),
-            "obtaining name of %s", dpif_name);
-        dpif_close(dpif);
-        if (strcmp(dpif_name, name)) {
-            VLOG_INFO("datapath %s is named %s", name, dpif_name);
+        run(xfif_port_get_name(xfif, XFLOWP_LOCAL, xfif_name, sizeof xfif_name),
+            "obtaining name of %s", xfif_name);
+        xfif_close(xfif);
+        if (strcmp(xfif_name, name)) {
+            VLOG_INFO("datapath %s is named %s", name, xfif_name);
         }
 
         socket_name = xasprintf("%s/%s.%s",
-                                ovs_rundir, dpif_name, default_suffix);
+                                ovs_rundir, xfif_name, default_suffix);
         if (stat(socket_name, &s)) {
             ovs_fatal(errno, "cannot connect to %s: stat failed on %s",
                       name, socket_name);

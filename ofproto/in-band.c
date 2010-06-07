@@ -24,10 +24,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include "dhcp.h"
-#include "dpif.h"
 #include "flow.h"
 #include "netdev.h"
-#include "odp-util.h"
 #include "ofproto.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -35,6 +33,7 @@
 #include "poll-loop.h"
 #include "status.h"
 #include "timeval.h"
+#include "wdp.h"
 
 #define THIS_MODULE VLM_in_band
 #include "vlog.h"
@@ -225,8 +224,6 @@ enum {
 
 struct in_band_rule {
     flow_t flow;
-    uint32_t wildcards;
-    unsigned int priority;
 };
 
 /* Track one remote IP and next hop information. */
@@ -393,141 +390,76 @@ in_band_status_cb(struct status_reply *sr, void *in_band_)
     }
 }
 
-/* Returns true if 'packet' should be sent to the local port regardless
- * of the flow table. */ 
-bool
-in_band_msg_in_hook(struct in_band *in_band, const flow_t *flow, 
-                    const struct ofpbuf *packet)
-{
-    if (!in_band) {
-        return false;
-    }
-
-    /* Regardless of how the flow table is configured, we want to be
-     * able to see replies to our DHCP requests. */
-    if (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IP_TYPE_UDP
-            && flow->tp_src == htons(DHCP_SERVER_PORT)
-            && flow->tp_dst == htons(DHCP_CLIENT_PORT)
-            && packet->l7) {
-        struct dhcp_header *dhcp;
-
-        dhcp = ofpbuf_at(packet, (char *)packet->l7 - (char *)packet->data,
-                         sizeof *dhcp);
-        if (!dhcp) {
-            return false;
-        }
-
-        refresh_local(in_band);
-        if (!eth_addr_is_zero(in_band->local_mac)
-            && eth_addr_equals(dhcp->chaddr, in_band->local_mac)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/* Returns true if the rule that would match 'flow' with 'actions' is 
- * allowed to be set up in the datapath. */
-bool
-in_band_rule_check(struct in_band *in_band, const flow_t *flow,
-                   const struct odp_actions *actions)
-{
-    if (!in_band) {
-        return true;
-    }
-
-    /* Don't allow flows that would prevent DHCP replies from being seen
-     * by the local port. */
-    if (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IP_TYPE_UDP
-            && flow->tp_src == htons(DHCP_SERVER_PORT) 
-            && flow->tp_dst == htons(DHCP_CLIENT_PORT)) {
-        int i;
-
-        for (i=0; i<actions->n_actions; i++) {
-            if (actions->actions[i].output.type == ODPAT_OUTPUT 
-                    && actions->actions[i].output.port == ODPP_LOCAL) {
-                return true;
-            }   
-        }
-        return false;
-    }
-
-    return true;
-}
-
 static void
 init_rule(struct in_band_rule *rule, unsigned int priority)
 {
-    rule->wildcards = OVSFW_ALL;
-    rule->priority = priority;
-
-    /* Not strictly necessary but seems cleaner. */
+    /* Clearing the flow is not strictly necessary but it seems cleaner. */
     memset(&rule->flow, 0, sizeof rule->flow);
+
+    rule->flow.wildcards = OVSFW_ALL;
+    rule->flow.priority = priority;
 }
 
 static void
-set_in_port(struct in_band_rule *rule, uint16_t odp_port)
+set_in_port(struct in_band_rule *rule, uint16_t ofp_port)
 {
-    rule->wildcards &= ~OFPFW_IN_PORT;
-    rule->flow.in_port = odp_port;
+    rule->flow.wildcards &= ~OFPFW_IN_PORT;
+    rule->flow.in_port = ofp_port;
 }
 
 static void
 set_dl_type(struct in_band_rule *rule, uint16_t dl_type)
 {
-    rule->wildcards &= ~OFPFW_DL_TYPE;
+    rule->flow.wildcards &= ~OFPFW_DL_TYPE;
     rule->flow.dl_type = dl_type;
 }
 
 static void
 set_dl_src(struct in_band_rule *rule, const uint8_t dl_src[ETH_ADDR_LEN])
 {
-    rule->wildcards &= ~OFPFW_DL_SRC;
+    rule->flow.wildcards &= ~OFPFW_DL_SRC;
     memcpy(rule->flow.dl_src, dl_src, ETH_ADDR_LEN);
 }
 
 static void
 set_dl_dst(struct in_band_rule *rule, const uint8_t dl_dst[ETH_ADDR_LEN])
 {
-    rule->wildcards &= ~OFPFW_DL_DST;
+    rule->flow.wildcards &= ~OFPFW_DL_DST;
     memcpy(rule->flow.dl_dst, dl_dst, ETH_ADDR_LEN);
 }
 
 static void
 set_tp_src(struct in_band_rule *rule, uint16_t tp_src)
 {
-    rule->wildcards &= ~OFPFW_TP_SRC;
+    rule->flow.wildcards &= ~OFPFW_TP_SRC;
     rule->flow.tp_src = tp_src;
 }
 
 static void
 set_tp_dst(struct in_band_rule *rule, uint16_t tp_dst)
 {
-    rule->wildcards &= ~OFPFW_TP_DST;
+    rule->flow.wildcards &= ~OFPFW_TP_DST;
     rule->flow.tp_dst = tp_dst;
 }
 
 static void
 set_nw_proto(struct in_band_rule *rule, uint8_t nw_proto)
 {
-    rule->wildcards &= ~OFPFW_NW_PROTO;
+    rule->flow.wildcards &= ~OFPFW_NW_PROTO;
     rule->flow.nw_proto = nw_proto;
 }
 
 static void
 set_nw_src(struct in_band_rule *rule, const struct in_addr nw_src)
 {
-    rule->wildcards &= ~OFPFW_NW_SRC_MASK;
+    rule->flow.wildcards &= ~OFPFW_NW_SRC_MASK;
     rule->flow.nw_src = nw_src.s_addr;
 }
 
 static void
 set_nw_dst(struct in_band_rule *rule, const struct in_addr nw_dst)
 {
-    rule->wildcards &= ~OFPFW_NW_DST_MASK;
+    rule->flow.wildcards &= ~OFPFW_NW_DST_MASK;
     rule->flow.nw_dst = nw_dst.s_addr;
 }
 
@@ -541,7 +473,7 @@ make_rules(struct in_band *ib,
     if (!eth_addr_is_zero(ib->installed_local_mac)) {
         /* (a) Allow DHCP requests sent from the local port. */
         init_rule(&rule, IBR_FROM_LOCAL_DHCP);
-        set_in_port(&rule, ODPP_LOCAL);
+        set_in_port(&rule, OFPP_LOCAL);
         set_dl_type(&rule, htons(ETH_TYPE_IP));
         set_dl_src(&rule, ib->installed_local_mac);
         set_nw_proto(&rule, IP_TYPE_UDP);
@@ -636,8 +568,7 @@ make_rules(struct in_band *ib,
 static void
 drop_rule(struct in_band *ib, const struct in_band_rule *rule)
 {
-    ofproto_delete_flow(ib->ofproto, &rule->flow,
-                        rule->wildcards, rule->priority);
+    ofproto_delete_flow(ib->ofproto, &rule->flow);
 }
 
 /* Drops from the flow table all of the flows set up by 'ib', then clears out
@@ -670,8 +601,7 @@ add_rule(struct in_band *ib, const struct in_band_rule *rule)
     action.output.len = htons(sizeof action);
     action.output.port = htons(OFPP_NORMAL);
     action.output.max_len = htons(0);
-    ofproto_add_flow(ib->ofproto, &rule->flow, rule->wildcards,
-                     rule->priority, &action, 1, 0);
+    ofproto_add_flow(ib->ofproto, &rule->flow, &action, 1, 0);
 }
 
 /* Inserts flows into the flow table for the current state of 'ib'. */
@@ -760,16 +690,15 @@ in_band_flushed(struct in_band *in_band)
 }
 
 int
-in_band_create(struct ofproto *ofproto, struct dpif *dpif,
+in_band_create(struct ofproto *ofproto, struct wdp *wdp,
                struct switch_status *ss, struct in_band **in_bandp)
 {
     struct in_band *in_band;
-    char local_name[IF_NAMESIZE];
     struct netdev *local_netdev;
+    char *local_name;
     int error;
 
-    error = dpif_port_get_name(dpif, ODPP_LOCAL,
-                               local_name, sizeof local_name);
+    error = wdp_port_get_name(wdp, OFPP_LOCAL, &local_name);
     if (error) {
         VLOG_ERR("failed to initialize in-band control: cannot get name "
                  "of datapath local port (%s)", strerror(error));
@@ -780,8 +709,10 @@ in_band_create(struct ofproto *ofproto, struct dpif *dpif,
     if (error) {
         VLOG_ERR("failed to initialize in-band control: cannot open "
                  "datapath local port %s (%s)", local_name, strerror(error));
+        free(local_name);
         return error;
     }
+    free(local_name);
 
     in_band = xzalloc(sizeof *in_band);
     in_band->ofproto = ofproto;

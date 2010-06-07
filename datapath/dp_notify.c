@@ -45,7 +45,7 @@ static int dp_device_event(struct notifier_block *unused, unsigned long event,
 		break;
 
 	case NETDEV_CHANGENAME:
-		if (p->port_no != ODPP_LOCAL) {
+		if (p->port_no != XFLOWP_LOCAL) {
 			mutex_lock(&dp->mutex);
 			dp_sysfs_del_if(p);
 			dp_sysfs_add_if(p);

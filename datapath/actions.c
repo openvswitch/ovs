@@ -21,7 +21,7 @@
 
 #include "actions.h"
 #include "datapath.h"
-#include "openvswitch/datapath-protocol.h"
+#include "openvswitch/xflow.h"
 #include "vport.h"
 
 static struct sk_buff *
@@ -47,7 +47,7 @@ make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
 	return NULL;
 }
 
-static void set_tunnel(struct sk_buff *skb, struct odp_flow_key *key,
+static void set_tunnel(struct sk_buff *skb, struct xflow_key *key,
 		       __be32 tun_id)
 {
 	OVS_CB(skb)->tun_id = key->tun_id = tun_id;
@@ -80,20 +80,13 @@ vlan_pull_tag(struct sk_buff *skb)
 
 static struct sk_buff *
 modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
-		struct odp_flow_key *key, const union odp_action *a,
+		struct xflow_key *key, const union xflow_action *a,
 		int n_actions, gfp_t gfp)
 {
-	u16 tci, mask;
+	__be16 mask = a->dl_tci.mask;
+	__be16 tci = a->dl_tci.tci;
 
-	if (a->type == ODPAT_SET_VLAN_VID) {
-		tci = ntohs(a->vlan_vid.vlan_vid);
-		mask = VLAN_VID_MASK;
-		key->dl_vlan = a->vlan_vid.vlan_vid;
-	} else {
-		tci = a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT;
-		mask = VLAN_PCP_MASK;
-		key->dl_vlan_pcp = a->vlan_pcp.vlan_pcp;
-	}
+	key->dl_tci = (key->dl_tci & ~(mask | VLAN_TAG_PRESENT)) | tci;
 
 	skb = make_writable(skb, VLAN_HLEN, gfp);
 	if (!skb)
@@ -104,7 +97,7 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		struct vlan_ethhdr *vh = vlan_eth_hdr(skb);
 		__be16 old_tci = vh->h_vlan_TCI;
 
-		vh->h_vlan_TCI = htons((ntohs(vh->h_vlan_TCI) & ~mask) | tci);
+		vh->h_vlan_TCI = (vh->h_vlan_TCI & ~mask) | tci;
 
 		if (OVS_CB(skb)->ip_summed == OVS_CSUM_COMPLETE) {
 			__be16 diff[] = { ~old_tci, vh->h_vlan_TCI };
@@ -154,10 +147,10 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 				/* GSO can change the checksum type so update.*/
 				compute_ip_summed(segs, true);
 
-				segs = __vlan_put_tag(segs, tci);
+				segs = __vlan_put_tag(segs, ntohs(tci));
 				err = -ENOMEM;
 				if (segs) {
-					struct odp_flow_key segkey = *key;
+					struct xflow_key segkey = *key;
 					err = execute_actions(dp, segs,
 							      &segkey, a + 1,
 							      n_actions - 1,
@@ -185,7 +178,7 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		 * e.g. vconfig(8)), so call the software-only version
 		 * __vlan_put_tag() directly instead.
 		 */
-		skb = __vlan_put_tag(skb, tci);
+		skb = __vlan_put_tag(skb, ntohs(tci));
 		if (!skb)
 			return ERR_PTR(-ENOMEM);
 
@@ -200,25 +193,25 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 }
 
 static struct sk_buff *strip_vlan(struct sk_buff *skb,
-				  struct odp_flow_key *key, gfp_t gfp)
+				  struct xflow_key *key, gfp_t gfp)
 {
 	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		vlan_pull_tag(skb);
-		key->dl_vlan = htons(ODP_VLAN_NONE);
+		key->dl_tci = htons(0);
 	}
 	return skb;
 }
 
 static struct sk_buff *set_dl_addr(struct sk_buff *skb,
-				   struct odp_flow_key *key,
-				   const struct odp_action_dl_addr *a,
+				   struct xflow_key *key,
+				   const struct xflow_action_dl_addr *a,
 				   gfp_t gfp)
 {
 	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		struct ethhdr *eh = eth_hdr(skb);
-		if (a->type == ODPAT_SET_DL_SRC) {
+		if (a->type == XFLOWAT_SET_DL_SRC) {
 			memcpy(eh->h_source, a->dl_addr, ETH_ALEN);
 			memcpy(key->dl_src, a->dl_addr, ETH_ALEN);
 		} else {
@@ -250,8 +243,8 @@ static void update_csum(__sum16 *sum, struct sk_buff *skb,
 }
 
 static struct sk_buff *set_nw_addr(struct sk_buff *skb,
-				   struct odp_flow_key *key,
-				   const struct odp_action_nw_addr *a,
+				   struct xflow_key *key,
+				   const struct xflow_action_nw_addr *a,
 				   gfp_t gfp)
 {
 	if (key->dl_type != htons(ETH_P_IP))
@@ -260,7 +253,7 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		struct iphdr *nh = ip_hdr(skb);
-		u32 *f = a->type == ODPAT_SET_NW_SRC ? &nh->saddr : &nh->daddr;
+		u32 *f = a->type == XFLOWAT_SET_NW_SRC ? &nh->saddr : &nh->daddr;
 		u32 old = *f;
 		u32 new = a->nw_addr;
 
@@ -274,7 +267,7 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 		update_csum(&nh->check, skb, old, new, 0);
 		*f = new;
 
-		if (a->type == ODPAT_SET_NW_SRC)
+		if (a->type == XFLOWAT_SET_NW_SRC)
 			key->nw_src = a->nw_addr;
 		else
 			key->nw_dst = a->nw_addr;
@@ -283,8 +276,8 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 }
 
 static struct sk_buff *set_nw_tos(struct sk_buff *skb,
-				   struct odp_flow_key *key,
-				   const struct odp_action_nw_tos *a,
+				   struct xflow_key *key,
+				   const struct xflow_action_nw_tos *a,
 				   gfp_t gfp)
 {
 	if (key->dl_type != htons(ETH_P_IP))
@@ -308,8 +301,8 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 }
 
 static struct sk_buff *
-set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
-	    const struct odp_action_tp_port *a,
+set_tp_port(struct sk_buff *skb, struct xflow_key *key,
+	    const struct xflow_action_tp_port *a,
 	    gfp_t gfp)
 {
 	int check_ofs;
@@ -327,13 +320,13 @@ set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
 	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		struct udphdr *th = udp_hdr(skb);
-		u16 *f = a->type == ODPAT_SET_TP_SRC ? &th->source : &th->dest;
+		u16 *f = a->type == XFLOWAT_SET_TP_SRC ? &th->source : &th->dest;
 		u16 old = *f;
 		u16 new = a->tp_port;
 		update_csum((u16*)(skb_transport_header(skb) + check_ofs), 
 				skb, old, new, 0);
 		*f = new;
-		if (a->type == ODPAT_SET_TP_SRC)
+		if (a->type == XFLOWAT_SET_TP_SRC)
 			key->tp_src = a->tp_port;
 		else
 			key->tp_dst = a->tp_port;
@@ -408,18 +401,18 @@ output_control(struct datapath *dp, struct sk_buff *skb, u32 arg, gfp_t gfp)
 	skb = skb_clone(skb, gfp);
 	if (!skb)
 		return -ENOMEM;
-	return dp_output_control(dp, skb, _ODPL_ACTION_NR, arg);
+	return dp_output_control(dp, skb, _XFLOWL_ACTION_NR, arg);
 }
 
 /* Send a copy of this packet up to the sFlow agent, along with extra
  * information about what happened to it. */
 static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
-			 const union odp_action *a, int n_actions,
+			 const union xflow_action *a, int n_actions,
 			 gfp_t gfp, struct dp_port *dp_port)
 {
-	struct odp_sflow_sample_header *hdr;
-	unsigned int actlen = n_actions * sizeof(union odp_action);
-	unsigned int hdrlen = sizeof(struct odp_sflow_sample_header);
+	struct xflow_sflow_sample_header *hdr;
+	unsigned int actlen = n_actions * sizeof(union xflow_action);
+	unsigned int hdrlen = sizeof(struct xflow_sflow_sample_header);
 	struct sk_buff *nskb;
 
 	nskb = skb_copy_expand(skb, actlen + hdrlen, 0, gfp);
@@ -427,16 +420,16 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 		return;
 
 	memcpy(__skb_push(nskb, actlen), a, actlen);
-	hdr = (struct odp_sflow_sample_header*)__skb_push(nskb, hdrlen);
+	hdr = (struct xflow_sflow_sample_header*)__skb_push(nskb, hdrlen);
 	hdr->n_actions = n_actions;
 	hdr->sample_pool = atomic_read(&dp_port->sflow_pool);
-	dp_output_control(dp, nskb, _ODPL_SFLOW_NR, 0);
+	dp_output_control(dp, nskb, _XFLOWL_SFLOW_NR, 0);
 }
 
 /* Execute a list of actions against 'skb'. */
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
-		    struct odp_flow_key *key,
-		    const union odp_action *a, int n_actions,
+		    struct xflow_key *key,
+		    const union xflow_action *a, int n_actions,
 		    gfp_t gfp)
 {
 	/* Every output action needs a separate clone of 'skb', but the common
@@ -466,16 +459,16 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		}
 
 		switch (a->type) {
-		case ODPAT_OUTPUT:
+		case XFLOWAT_OUTPUT:
 			prev_port = a->output.port;
 			break;
 
-		case ODPAT_OUTPUT_GROUP:
+		case XFLOWAT_OUTPUT_GROUP:
 			prev_port = output_group(dp, a->output_group.group,
 						 skb, gfp);
 			break;
 
-		case ODPAT_CONTROLLER:
+		case XFLOWAT_CONTROLLER:
 			err = output_control(dp, skb, a->controller.arg, gfp);
 			if (err) {
 				kfree_skb(skb);
@@ -483,37 +476,36 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			}
 			break;
 
-		case ODPAT_SET_TUNNEL:
+		case XFLOWAT_SET_TUNNEL:
 			set_tunnel(skb, key, a->tunnel.tun_id);
 			break;
 
-		case ODPAT_SET_VLAN_VID:
-		case ODPAT_SET_VLAN_PCP:
+		case XFLOWAT_SET_DL_TCI:
 			skb = modify_vlan_tci(dp, skb, key, a, n_actions, gfp);
 			if (IS_ERR(skb))
 				return PTR_ERR(skb);
 			break;
 
-		case ODPAT_STRIP_VLAN:
+		case XFLOWAT_STRIP_VLAN:
 			skb = strip_vlan(skb, key, gfp);
 			break;
 
-		case ODPAT_SET_DL_SRC:
-		case ODPAT_SET_DL_DST:
+		case XFLOWAT_SET_DL_SRC:
+		case XFLOWAT_SET_DL_DST:
 			skb = set_dl_addr(skb, key, &a->dl_addr, gfp);
 			break;
 
-		case ODPAT_SET_NW_SRC:
-		case ODPAT_SET_NW_DST:
+		case XFLOWAT_SET_NW_SRC:
+		case XFLOWAT_SET_NW_DST:
 			skb = set_nw_addr(skb, key, &a->nw_addr, gfp);
 			break;
 
-		case ODPAT_SET_NW_TOS:
+		case XFLOWAT_SET_NW_TOS:
 			skb = set_nw_tos(skb, key, &a->nw_tos, gfp);
 			break;
 
-		case ODPAT_SET_TP_SRC:
-		case ODPAT_SET_TP_DST:
+		case XFLOWAT_SET_TP_SRC:
+		case XFLOWAT_SET_TP_DST:
 			skb = set_tp_port(skb, key, &a->tp_port, gfp);
 			break;
 		}

@@ -25,12 +25,13 @@
 #include <string.h>
 #include "dhcp-client.h"
 #include "dhcp.h"
-#include "dpif.h"
 #include "netdev.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "status.h"
 #include "stream-ssl.h"
+#include "wdp.h"
+#include "xfif.h"
 
 #define THIS_MODULE VLM_discovery
 #include "vlog.h"
@@ -96,11 +97,11 @@ discovery_status_cb(struct status_reply *sr, void *d_)
 
 int
 discovery_create(const char *re, bool update_resolv_conf,
-                 struct dpif *dpif, struct switch_status *ss,
+                 struct wdp *wdp, struct switch_status *ss,
                  struct discovery **discoveryp)
 {
     struct discovery *d;
-    char local_name[IF_NAMESIZE];
+    char *local_name;
     int error;
 
     d = xzalloc(sizeof *d);
@@ -113,14 +114,14 @@ discovery_create(const char *re, bool update_resolv_conf,
     d->update_resolv_conf = update_resolv_conf;
 
     /* Initialize DHCP client. */
-    error = dpif_port_get_name(dpif, ODPP_LOCAL,
-                               local_name, sizeof local_name);
+    error = wdp_port_get_name(wdp, OFPP_LOCAL, &local_name);
     if (error) {
         VLOG_ERR("failed to query datapath local port: %s", strerror(error));
         goto error_regfree;
     }
     error = dhclient_create(local_name, modify_dhcp_request,
                             validate_dhcp_offer, d, &d->dhcp);
+    free(local_name);
     if (error) {
         VLOG_ERR("failed to initialize DHCP client: %s", strerror(error));
         goto error_regfree;

@@ -42,11 +42,11 @@
 #include <net/inet_ecn.h>
 #include <linux/compat.h>
 
-#include "openvswitch/datapath-protocol.h"
+#include "openvswitch/xflow.h"
 #include "datapath.h"
 #include "actions.h"
 #include "flow.h"
-#include "odp-compat.h"
+#include "xflow-compat.h"
 #include "table.h"
 #include "vport-internal_dev.h"
 
@@ -65,18 +65,18 @@ EXPORT_SYMBOL(dp_ioctl_hook);
  * It is safe to access the datapath and dp_port structures with just
  * dp_mutex.
  */
-static struct datapath *dps[ODP_MAX];
+static struct datapath *dps[XFLOW_MAX];
 static DEFINE_MUTEX(dp_mutex);
 
 /* Number of milliseconds between runs of the maintenance thread. */
 #define MAINT_SLEEP_MSECS 1000
 
-static int new_dp_port(struct datapath *, struct odp_port *, int port_no);
+static int new_dp_port(struct datapath *, struct xflow_port *, int port_no);
 
 /* Must be called with rcu_read_lock or dp_mutex. */
 struct datapath *get_dp(int dp_idx)
 {
-	if (dp_idx < 0 || dp_idx >= ODP_MAX)
+	if (dp_idx < 0 || dp_idx >= XFLOW_MAX)
 		return NULL;
 	return rcu_dereference(dps[dp_idx]);
 }
@@ -97,7 +97,7 @@ static struct datapath *get_dp_locked(int dp_idx)
 /* Must be called with rcu_read_lock or RTNL lock. */
 const char *dp_name(const struct datapath *dp)
 {
-	return vport_get_name(dp->ports[ODPP_LOCAL]->vport);
+	return vport_get_name(dp->ports[XFLOWP_LOCAL]->vport);
 }
 
 static inline size_t br_nlmsg_size(void)
@@ -140,7 +140,7 @@ static int dp_fill_ifinfo(struct sk_buff *skb,
 	hdr->ifi_change = 0;
 
 	NLA_PUT_STRING(skb, IFLA_IFNAME, vport_get_name(port->vport));
-	NLA_PUT_U32(skb, IFLA_MASTER, vport_get_ifindex(dp->ports[ODPP_LOCAL]->vport));
+	NLA_PUT_U32(skb, IFLA_MASTER, vport_get_ifindex(dp->ports[XFLOWP_LOCAL]->vport));
 	NLA_PUT_U32(skb, IFLA_MTU, vport_get_mtu(port->vport));
 #ifdef IFLA_OPERSTATE
 	NLA_PUT_U8(skb, IFLA_OPERSTATE,
@@ -197,7 +197,7 @@ static struct kobj_type dp_ktype = {
 
 static int create_dp(int dp_idx, const char __user *devnamep)
 {
-	struct odp_port internal_dev_port;
+	struct xflow_port internal_dev_port;
 	char devname[IFNAMSIZ];
 	struct datapath *dp;
 	int err;
@@ -254,8 +254,8 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	/* Set up our datapath device. */
 	BUILD_BUG_ON(sizeof(internal_dev_port.devname) != sizeof(devname));
 	strcpy(internal_dev_port.devname, devname);
-	internal_dev_port.flags = ODP_PORT_INTERNAL;
-	err = new_dp_port(dp, &internal_dev_port, ODPP_LOCAL);
+	internal_dev_port.flags = XFLOW_PORT_INTERNAL;
+	err = new_dp_port(dp, &internal_dev_port, XFLOWP_LOCAL);
 	if (err) {
 		if (err == -EBUSY)
 			err = -EEXIST;
@@ -277,7 +277,7 @@ static int create_dp(int dp_idx, const char __user *devnamep)
 	return 0;
 
 err_destroy_local_port:
-	dp_detach_port(dp->ports[ODPP_LOCAL], 1);
+	dp_detach_port(dp->ports[XFLOWP_LOCAL], 1);
 err_destroy_table:
 	tbl_destroy(dp->table, NULL);
 err_free_dp:
@@ -297,14 +297,14 @@ static void do_destroy_dp(struct datapath *dp)
 	int i;
 
 	list_for_each_entry_safe (p, n, &dp->port_list, node)
-		if (p->port_no != ODPP_LOCAL)
+		if (p->port_no != XFLOWP_LOCAL)
 			dp_detach_port(p, 1);
 
 	dp_sysfs_del_dp(dp);
 
 	rcu_assign_pointer(dps[dp->dp_idx], NULL);
 
-	dp_detach_port(dp->ports[ODPP_LOCAL], 1);
+	dp_detach_port(dp->ports[XFLOWP_LOCAL], 1);
 
 	tbl_destroy(dp->table, flow_free_tbl);
 
@@ -352,20 +352,20 @@ static struct kobj_type brport_ktype = {
 };
 
 /* Called with RTNL lock and dp_mutex. */
-static int new_dp_port(struct datapath *dp, struct odp_port *odp_port, int port_no)
+static int new_dp_port(struct datapath *dp, struct xflow_port *xflow_port, int port_no)
 {
 	struct vport *vport;
 	struct dp_port *p;
 	int err;
 
-	vport = vport_locate(odp_port->devname);
+	vport = vport_locate(xflow_port->devname);
 	if (!vport) {
 		vport_lock();
 
-		if (odp_port->flags & ODP_PORT_INTERNAL)
-			vport = __vport_add(odp_port->devname, "internal", NULL);
+		if (xflow_port->flags & XFLOW_PORT_INTERNAL)
+			vport = __vport_add(xflow_port->devname, "internal", NULL);
 		else
-			vport = __vport_add(odp_port->devname, "netdev", NULL);
+			vport = __vport_add(xflow_port->devname, "netdev", NULL);
 
 		vport_unlock();
 
@@ -401,10 +401,10 @@ static int new_dp_port(struct datapath *dp, struct odp_port *odp_port, int port_
 	return 0;
 }
 
-static int attach_port(int dp_idx, struct odp_port __user *portp)
+static int attach_port(int dp_idx, struct xflow_port __user *portp)
 {
 	struct datapath *dp;
-	struct odp_port port;
+	struct xflow_port port;
 	int port_no;
 	int err;
 
@@ -450,7 +450,7 @@ int dp_detach_port(struct dp_port *p, int may_delete)
 
 	ASSERT_RTNL();
 
-	if (p->port_no != ODPP_LOCAL)
+	if (p->port_no != XFLOWP_LOCAL)
 		dp_sysfs_del_if(p);
 	dp_ifinfo_notify(RTM_DELLINK, p);
 
@@ -488,7 +488,7 @@ static int detach_port(int dp_idx, int port_no)
 	int err;
 
 	err = -EINVAL;
-	if (port_no < 0 || port_no >= DP_MAX_PORTS || port_no == ODPP_LOCAL)
+	if (port_no < 0 || port_no >= DP_MAX_PORTS || port_no == XFLOWP_LOCAL)
 		goto out;
 
 	rtnl_lock();
@@ -518,7 +518,7 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 	struct datapath *dp = p->dp;
 	struct dp_stats_percpu *stats;
 	int stats_counter_off;
-	struct odp_flow_key key;
+	struct xflow_key key;
 	struct tbl_node *flow_node;
 
 	WARN_ON_ONCE(skb_shared(skb));
@@ -526,7 +526,7 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 
 	OVS_CB(skb)->dp_port = p;
 
-	if (flow_extract(skb, p ? p->port_no : ODPP_NONE, &key)) {
+	if (flow_extract(skb, p ? p->port_no : XFLOWP_NONE, &key)) {
 		if (dp->drop_frags) {
 			kfree_skb(skb);
 			stats_counter_off = offsetof(struct dp_stats_percpu, n_frags);
@@ -544,7 +544,7 @@ void dp_process_received_packet(struct dp_port *p, struct sk_buff *skb)
 		stats_counter_off = offsetof(struct dp_stats_percpu, n_hit);
 	} else {
 		stats_counter_off = offsetof(struct dp_stats_percpu, n_missed);
-		dp_output_control(dp, skb, _ODPL_MISS_NR, OVS_CB(skb)->tun_id);
+		dp_output_control(dp, skb, _XFLOWL_MISS_NR, OVS_CB(skb)->tun_id);
 	}
 
 out:
@@ -735,10 +735,10 @@ queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
 	if (OVS_CB(skb)->dp_port)
 		port_no = OVS_CB(skb)->dp_port->port_no;
 	else
-		port_no = ODPP_LOCAL;
+		port_no = XFLOWP_LOCAL;
 
 	do {
-		struct odp_msg *header;
+		struct xflow_msg *header;
 
 		nskb = skb->next;
 		skb->next = NULL;
@@ -772,7 +772,7 @@ queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
 		if (err)
 			goto err_kfree_skbs;
 
-		header = (struct odp_msg*)__skb_push(skb, sizeof *header);
+		header = (struct xflow_msg*)__skb_push(skb, sizeof *header);
 		header->type = queue_no;
 		header->length = skb->len;
 		header->port = port_no;
@@ -802,7 +802,7 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 	int err;
 
 	WARN_ON_ONCE(skb_shared(skb));
-	BUG_ON(queue_no != _ODPL_MISS_NR && queue_no != _ODPL_ACTION_NR && queue_no != _ODPL_SFLOW_NR);
+	BUG_ON(queue_no != _XFLOWL_MISS_NR && queue_no != _XFLOWL_ACTION_NR && queue_no != _XFLOWL_SFLOW_NR);
 	queue = &dp->queues[queue_no];
 	err = -ENOBUFS;
 	if (skb_queue_len(queue) >= DP_MAX_QUEUE_LEN)
@@ -863,36 +863,37 @@ static int validate_actions(const struct sw_flow_actions *actions)
 	unsigned int i;
 
 	for (i = 0; i < actions->n_actions; i++) {
-		const union odp_action *a = &actions->actions[i];
+		const union xflow_action *a = &actions->actions[i];
+		__be16 mask;
+
 		switch (a->type) {
-		case ODPAT_OUTPUT:
+		case XFLOWAT_OUTPUT:
 			if (a->output.port >= DP_MAX_PORTS)
 				return -EINVAL;
 			break;
 
-		case ODPAT_OUTPUT_GROUP:
+		case XFLOWAT_OUTPUT_GROUP:
 			if (a->output_group.group >= DP_MAX_GROUPS)
 				return -EINVAL;
 			break;
 
-		case ODPAT_SET_VLAN_VID:
-			if (a->vlan_vid.vlan_vid & htons(~VLAN_VID_MASK))
+		case XFLOWAT_SET_DL_TCI:
+			mask = a->dl_tci.mask;
+			if (mask != htons(VLAN_VID_MASK) &&
+			    mask != htons(VLAN_PCP_MASK) &&
+			    mask != htons(VLAN_VID_MASK | VLAN_PCP_MASK))
+				return -EINVAL;
+			if (a->dl_tci.tci & ~mask)
 				return -EINVAL;
 			break;
 
-		case ODPAT_SET_VLAN_PCP:
-			if (a->vlan_pcp.vlan_pcp
-			    & ~(VLAN_PCP_MASK >> VLAN_PCP_SHIFT))
-				return -EINVAL;
-			break;
-
-		case ODPAT_SET_NW_TOS:
+		case XFLOWAT_SET_NW_TOS:
 			if (a->nw_tos.nw_tos & INET_ECN_MASK)
 				return -EINVAL;
 			break;
 
 		default:
-			if (a->type >= ODPAT_N_ACTIONS)
+			if (a->type >= XFLOWAT_N_ACTIONS)
 				return -EOPNOTSUPP;
 			break;
 		}
@@ -901,7 +902,7 @@ static int validate_actions(const struct sw_flow_actions *actions)
 	return 0;
 }
 
-static struct sw_flow_actions *get_actions(const struct odp_flow *flow)
+static struct sw_flow_actions *get_actions(const struct xflow_flow *flow)
 {
 	struct sw_flow_actions *actions;
 	int error;
@@ -913,7 +914,7 @@ static struct sw_flow_actions *get_actions(const struct odp_flow *flow)
 
 	error = -EFAULT;
 	if (copy_from_user(actions->actions, flow->actions,
-			   flow->n_actions * sizeof(union odp_action)))
+			   flow->n_actions * sizeof(union xflow_action)))
 		goto error_free_actions;
 	error = validate_actions(actions);
 	if (error)
@@ -927,7 +928,7 @@ error:
 	return ERR_PTR(error);
 }
 
-static void get_stats(struct sw_flow *flow, struct odp_flow_stats *stats)
+static void get_stats(struct sw_flow *flow, struct xflow_flow_stats *stats)
 {
 	if (flow->used.tv_sec) {
 		stats->used_sec = flow->used.tv_sec;
@@ -967,15 +968,13 @@ static int expand_table(struct datapath *dp)
 	return 0;
 }
 
-static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
-		       struct odp_flow_stats *stats)
+static int do_put_flow(struct datapath *dp, struct xflow_flow_put *uf,
+		       struct xflow_flow_stats *stats)
 {
 	struct tbl_node *flow_node;
 	struct sw_flow *flow;
 	struct tbl *table;
 	int error;
-
-	memset(uf->flow.key.reserved, 0, sizeof uf->flow.key.reserved);
 
 	table = rcu_dereference(dp->table);
 	flow_node = tbl_lookup(table, &uf->flow.key, flow_hash(&uf->flow.key), flow_cmp);
@@ -984,7 +983,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 		struct sw_flow_actions *acts;
 
 		error = -ENOENT;
-		if (!(uf->flags & ODPPF_CREATE))
+		if (!(uf->flags & XFLOWPF_CREATE))
 			goto error;
 
 		/* Expand table, if necessary, to make room. */
@@ -1016,7 +1015,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 		if (error)
 			goto error_free_flow_acts;
 
-		memset(stats, 0, sizeof(struct odp_flow_stats));
+		memset(stats, 0, sizeof(struct xflow_flow_stats));
 	} else {
 		/* We found a matching flow. */
 		struct sw_flow_actions *old_acts, *new_acts;
@@ -1025,7 +1024,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 
 		/* Bail out if we're not allowed to modify an existing flow. */
 		error = -EEXIST;
-		if (!(uf->flags & ODPPF_MODIFY))
+		if (!(uf->flags & XFLOWPF_MODIFY))
 			goto error;
 
 		/* Swap actions. */
@@ -1036,7 +1035,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 		old_acts = rcu_dereference(flow->sf_acts);
 		if (old_acts->n_actions != new_acts->n_actions ||
 		    memcmp(old_acts->actions, new_acts->actions,
-			   sizeof(union odp_action) * old_acts->n_actions)) {
+			   sizeof(union xflow_action) * old_acts->n_actions)) {
 			rcu_assign_pointer(flow->sf_acts, new_acts);
 			flow_deferred_free_acts(old_acts);
 		} else {
@@ -1046,7 +1045,7 @@ static int do_put_flow(struct datapath *dp, struct odp_flow_put *uf,
 		/* Fetch stats, then clear them if necessary. */
 		spin_lock_bh(&flow->lock);
 		get_stats(flow, stats);
-		if (uf->flags & ODPPF_ZERO_STATS)
+		if (uf->flags & XFLOWPF_ZERO_STATS)
 			clear_stats(flow);
 		spin_unlock_bh(&flow->lock);
 	}
@@ -1061,13 +1060,13 @@ error:
 	return error;
 }
 
-static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
+static int put_flow(struct datapath *dp, struct xflow_flow_put __user *ufp)
 {
-	struct odp_flow_stats stats;
-	struct odp_flow_put uf;
+	struct xflow_flow_stats stats;
+	struct xflow_flow_put uf;
 	int error;
 
-	if (copy_from_user(&uf, ufp, sizeof(struct odp_flow_put)))
+	if (copy_from_user(&uf, ufp, sizeof(struct xflow_flow_put)))
 		return -EFAULT;
 
 	error = do_put_flow(dp, &uf, &stats);
@@ -1075,29 +1074,29 @@ static int put_flow(struct datapath *dp, struct odp_flow_put __user *ufp)
 		return error;
 
 	if (copy_to_user(&ufp->flow.stats, &stats,
-			 sizeof(struct odp_flow_stats)))
+			 sizeof(struct xflow_flow_stats)))
 		return -EFAULT;
 
 	return 0;
 }
 
 static int do_answer_query(struct sw_flow *flow, u32 query_flags,
-			   struct odp_flow_stats __user *ustats,
-			   union odp_action __user *actions,
+			   struct xflow_flow_stats __user *ustats,
+			   union xflow_action __user *actions,
 			   u32 __user *n_actionsp)
 {
 	struct sw_flow_actions *sf_acts;
-	struct odp_flow_stats stats;
+	struct xflow_flow_stats stats;
 	u32 n_actions;
 
 	spin_lock_bh(&flow->lock);
 	get_stats(flow, &stats);
-	if (query_flags & ODPFF_ZERO_TCP_FLAGS)
+	if (query_flags & XFLOWFF_ZERO_TCP_FLAGS)
 		flow->tcp_flags = 0;
 
 	spin_unlock_bh(&flow->lock);
 
-	if (copy_to_user(ustats, &stats, sizeof(struct odp_flow_stats)) ||
+	if (copy_to_user(ustats, &stats, sizeof(struct xflow_flow_stats)) ||
 	    get_user(n_actions, n_actionsp))
 		return -EFAULT;
 
@@ -1107,7 +1106,7 @@ static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 	sf_acts = rcu_dereference(flow->sf_acts);
 	if (put_user(sf_acts->n_actions, n_actionsp) ||
 	    (actions && copy_to_user(actions, sf_acts->actions,
-				     sizeof(union odp_action) *
+				     sizeof(union xflow_action) *
 				     min(sf_acts->n_actions, n_actions))))
 		return -EFAULT;
 
@@ -1115,9 +1114,9 @@ static int do_answer_query(struct sw_flow *flow, u32 query_flags,
 }
 
 static int answer_query(struct sw_flow *flow, u32 query_flags,
-			struct odp_flow __user *ufp)
+			struct xflow_flow __user *ufp)
 {
-	union odp_action *actions;
+	union xflow_action *actions;
 
 	if (get_user(actions, &ufp->actions))
 		return -EFAULT;
@@ -1126,13 +1125,12 @@ static int answer_query(struct sw_flow *flow, u32 query_flags,
 			       &ufp->stats, actions, &ufp->n_actions);
 }
 
-static struct sw_flow *do_del_flow(struct datapath *dp, struct odp_flow_key *key)
+static struct sw_flow *do_del_flow(struct datapath *dp, struct xflow_key *key)
 {
 	struct tbl *table = rcu_dereference(dp->table);
 	struct tbl_node *flow_node;
 	int error;
 
-	memset(key->reserved, 0, sizeof key->reserved);
 	flow_node = tbl_lookup(table, key, flow_hash(key), flow_cmp);
 	if (!flow_node)
 		return ERR_PTR(-ENOENT);
@@ -1148,10 +1146,10 @@ static struct sw_flow *do_del_flow(struct datapath *dp, struct odp_flow_key *key
 	return flow_cast(flow_node);
 }
 
-static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
+static int del_flow(struct datapath *dp, struct xflow_flow __user *ufp)
 {
 	struct sw_flow *flow;
-	struct odp_flow uf;
+	struct xflow_flow uf;
 	int error;
 
 	if (copy_from_user(&uf, ufp, sizeof uf))
@@ -1166,20 +1164,19 @@ static int del_flow(struct datapath *dp, struct odp_flow __user *ufp)
 	return error;
 }
 
-static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
+static int do_query_flows(struct datapath *dp, const struct xflow_flowvec *flowvec)
 {
 	struct tbl *table = rcu_dereference(dp->table);
 	u32 i;
 
 	for (i = 0; i < flowvec->n_flows; i++) {
-		struct odp_flow __user *ufp = &flowvec->flows[i];
-		struct odp_flow uf;
+		struct xflow_flow __user *ufp = &flowvec->flows[i];
+		struct xflow_flow uf;
 		struct tbl_node *flow_node;
 		int error;
 
 		if (copy_from_user(&uf, ufp, sizeof uf))
 			return -EFAULT;
-		memset(uf.key.reserved, 0, sizeof uf.key.reserved);
 
 		flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
 		if (!flow_node)
@@ -1193,7 +1190,7 @@ static int do_query_flows(struct datapath *dp, const struct odp_flowvec *flowvec
 }
 
 struct list_flows_cbdata {
-	struct odp_flow __user *uflows;
+	struct xflow_flow __user *uflows;
 	u32 n_flows;
 	u32 listed_flows;
 };
@@ -1202,7 +1199,7 @@ static int list_flow(struct tbl_node *node, void *cbdata_)
 {
 	struct sw_flow *flow = flow_cast(node);
 	struct list_flows_cbdata *cbdata = cbdata_;
-	struct odp_flow __user *ufp = &cbdata->uflows[cbdata->listed_flows++];
+	struct xflow_flow __user *ufp = &cbdata->uflows[cbdata->listed_flows++];
 	int error;
 
 	if (copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
@@ -1216,7 +1213,7 @@ static int list_flow(struct tbl_node *node, void *cbdata_)
 	return 0;
 }
 
-static int do_list_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
+static int do_list_flows(struct datapath *dp, const struct xflow_flowvec *flowvec)
 {
 	struct list_flows_cbdata cbdata;
 	int error;
@@ -1233,17 +1230,17 @@ static int do_list_flows(struct datapath *dp, const struct odp_flowvec *flowvec)
 
 static int do_flowvec_ioctl(struct datapath *dp, unsigned long argp,
 			    int (*function)(struct datapath *,
-					    const struct odp_flowvec *))
+					    const struct xflow_flowvec *))
 {
-	struct odp_flowvec __user *uflowvec;
-	struct odp_flowvec flowvec;
+	struct xflow_flowvec __user *uflowvec;
+	struct xflow_flowvec flowvec;
 	int retval;
 
-	uflowvec = (struct odp_flowvec __user *)argp;
+	uflowvec = (struct xflow_flowvec __user *)argp;
 	if (copy_from_user(&flowvec, uflowvec, sizeof flowvec))
 		return -EFAULT;
 
-	if (flowvec.n_flows > INT_MAX / sizeof(struct odp_flow))
+	if (flowvec.n_flows > INT_MAX / sizeof(struct xflow_flow))
 		return -EINVAL;
 
 	retval = function(dp, &flowvec);
@@ -1252,9 +1249,9 @@ static int do_flowvec_ioctl(struct datapath *dp, unsigned long argp,
 		: put_user(retval, &uflowvec->n_flows));
 }
 
-static int do_execute(struct datapath *dp, const struct odp_execute *execute)
+static int do_execute(struct datapath *dp, const struct xflow_execute *execute)
 {
-	struct odp_flow_key key;
+	struct xflow_key key;
 	struct sk_buff *skb;
 	struct sw_flow_actions *actions;
 	struct ethhdr *eth;
@@ -1322,9 +1319,9 @@ error:
 	return err;
 }
 
-static int execute_packet(struct datapath *dp, const struct odp_execute __user *executep)
+static int execute_packet(struct datapath *dp, const struct xflow_execute __user *executep)
 {
-	struct odp_execute execute;
+	struct xflow_execute execute;
 
 	if (copy_from_user(&execute, executep, sizeof execute))
 		return -EFAULT;
@@ -1332,10 +1329,10 @@ static int execute_packet(struct datapath *dp, const struct odp_execute __user *
 	return do_execute(dp, &execute);
 }
 
-static int get_dp_stats(struct datapath *dp, struct odp_stats __user *statsp)
+static int get_dp_stats(struct datapath *dp, struct xflow_stats __user *statsp)
 {
 	struct tbl *table = rcu_dereference(dp->table);
-	struct odp_stats stats;
+	struct xflow_stats stats;
 	int i;
 
 	stats.n_flows = tbl_count(table);
@@ -1400,9 +1397,9 @@ void set_internal_devs_mtu(const struct datapath *dp)
 }
 
 static int
-put_port(const struct dp_port *p, struct odp_port __user *uop)
+put_port(const struct dp_port *p, struct xflow_port __user *uop)
 {
-	struct odp_port op;
+	struct xflow_port op;
 
 	memset(&op, 0, sizeof op);
 
@@ -1411,15 +1408,15 @@ put_port(const struct dp_port *p, struct odp_port __user *uop)
 	rcu_read_unlock();
 
 	op.port = p->port_no;
-	op.flags = is_internal_vport(p->vport) ? ODP_PORT_INTERNAL : 0;
+	op.flags = is_internal_vport(p->vport) ? XFLOW_PORT_INTERNAL : 0;
 
 	return copy_to_user(uop, &op, sizeof op) ? -EFAULT : 0;
 }
 
 static int
-query_port(struct datapath *dp, struct odp_port __user *uport)
+query_port(struct datapath *dp, struct xflow_port __user *uport)
 {
-	struct odp_port port;
+	struct xflow_port port;
 
 	if (copy_from_user(&port, uport, sizeof port))
 		return -EFAULT;
@@ -1465,7 +1462,7 @@ error_unlock:
 }
 
 static int
-do_list_ports(struct datapath *dp, struct odp_port __user *uports, int n_ports)
+do_list_ports(struct datapath *dp, struct xflow_port __user *uports, int n_ports)
 {
 	int idx = 0;
 	if (n_ports) {
@@ -1482,9 +1479,9 @@ do_list_ports(struct datapath *dp, struct odp_port __user *uports, int n_ports)
 }
 
 static int
-list_ports(struct datapath *dp, struct odp_portvec __user *upv)
+list_ports(struct datapath *dp, struct xflow_portvec __user *upv)
 {
-	struct odp_portvec pv;
+	struct xflow_portvec pv;
 	int retval;
 
 	if (copy_from_user(&pv, upv, sizeof pv))
@@ -1537,9 +1534,9 @@ error:
 }
 
 static int
-set_port_group(struct datapath *dp, const struct odp_port_group __user *upg)
+set_port_group(struct datapath *dp, const struct xflow_port_group __user *upg)
 {
-	struct odp_port_group pg;
+	struct xflow_port_group pg;
 
 	if (copy_from_user(&pg, upg, sizeof pg))
 		return -EFAULT;
@@ -1569,9 +1566,9 @@ do_get_port_group(struct datapath *dp,
 	return 0;
 }
 
-static int get_port_group(struct datapath *dp, struct odp_port_group __user *upg)
+static int get_port_group(struct datapath *dp, struct xflow_port_group __user *upg)
 {
-	struct odp_port_group pg;
+	struct xflow_port_group pg;
 
 	if (copy_from_user(&pg, upg, sizeof pg))
 		return -EFAULT;
@@ -1600,54 +1597,54 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 
 	/* Handle commands with special locking requirements up front. */
 	switch (cmd) {
-	case ODP_DP_CREATE:
+	case XFLOW_DP_CREATE:
 		err = create_dp(dp_idx, (char __user *)argp);
 		goto exit;
 
-	case ODP_DP_DESTROY:
+	case XFLOW_DP_DESTROY:
 		err = destroy_dp(dp_idx);
 		goto exit;
 
-	case ODP_PORT_ATTACH:
-		err = attach_port(dp_idx, (struct odp_port __user *)argp);
+	case XFLOW_PORT_ATTACH:
+		err = attach_port(dp_idx, (struct xflow_port __user *)argp);
 		goto exit;
 
-	case ODP_PORT_DETACH:
+	case XFLOW_PORT_DETACH:
 		err = get_user(port_no, (int __user *)argp);
 		if (!err)
 			err = detach_port(dp_idx, port_no);
 		goto exit;
 
-	case ODP_VPORT_ADD:
-		err = vport_add((struct odp_vport_add __user *)argp);
+	case XFLOW_VPORT_ADD:
+		err = vport_add((struct xflow_vport_add __user *)argp);
 		goto exit;
 
-	case ODP_VPORT_MOD:
-		err = vport_mod((struct odp_vport_mod __user *)argp);
+	case XFLOW_VPORT_MOD:
+		err = vport_mod((struct xflow_vport_mod __user *)argp);
 		goto exit;
 
-	case ODP_VPORT_DEL:
+	case XFLOW_VPORT_DEL:
 		err = vport_del((char __user *)argp);
 		goto exit;
 
-	case ODP_VPORT_STATS_GET:
-		err = vport_stats_get((struct odp_vport_stats_req __user *)argp);
+	case XFLOW_VPORT_STATS_GET:
+		err = vport_stats_get((struct xflow_vport_stats_req __user *)argp);
 		goto exit;
 
-	case ODP_VPORT_ETHER_GET:
-		err = vport_ether_get((struct odp_vport_ether __user *)argp);
+	case XFLOW_VPORT_ETHER_GET:
+		err = vport_ether_get((struct xflow_vport_ether __user *)argp);
 		goto exit;
 
-	case ODP_VPORT_ETHER_SET:
-		err = vport_ether_set((struct odp_vport_ether __user *)argp);
+	case XFLOW_VPORT_ETHER_SET:
+		err = vport_ether_set((struct xflow_vport_ether __user *)argp);
 		goto exit;
 
-	case ODP_VPORT_MTU_GET:
-		err = vport_mtu_get((struct odp_vport_mtu __user *)argp);
+	case XFLOW_VPORT_MTU_GET:
+		err = vport_mtu_get((struct xflow_vport_mtu __user *)argp);
 		goto exit;
 
-	case ODP_VPORT_MTU_SET:
-		err = vport_mtu_set((struct odp_vport_mtu __user *)argp);
+	case XFLOW_VPORT_MTU_SET:
+		err = vport_mtu_set((struct xflow_vport_mtu __user *)argp);
 		goto exit;
 	}
 
@@ -1657,15 +1654,15 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		goto exit;
 
 	switch (cmd) {
-	case ODP_DP_STATS:
-		err = get_dp_stats(dp, (struct odp_stats __user *)argp);
+	case XFLOW_DP_STATS:
+		err = get_dp_stats(dp, (struct xflow_stats __user *)argp);
 		break;
 
-	case ODP_GET_DROP_FRAGS:
+	case XFLOW_GET_DROP_FRAGS:
 		err = put_user(dp->drop_frags, (int __user *)argp);
 		break;
 
-	case ODP_SET_DROP_FRAGS:
+	case XFLOW_SET_DROP_FRAGS:
 		err = get_user(drop_frags, (int __user *)argp);
 		if (err)
 			break;
@@ -1676,69 +1673,69 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		err = 0;
 		break;
 
-	case ODP_GET_LISTEN_MASK:
+	case XFLOW_GET_LISTEN_MASK:
 		err = put_user(get_listen_mask(f), (int __user *)argp);
 		break;
 
-	case ODP_SET_LISTEN_MASK:
+	case XFLOW_SET_LISTEN_MASK:
 		err = get_user(listeners, (int __user *)argp);
 		if (err)
 			break;
 		err = -EINVAL;
-		if (listeners & ~ODPL_ALL)
+		if (listeners & ~XFLOWL_ALL)
 			break;
 		err = 0;
 		set_listen_mask(f, listeners);
 		break;
 
-	case ODP_GET_SFLOW_PROBABILITY:
+	case XFLOW_GET_SFLOW_PROBABILITY:
 		err = put_user(dp->sflow_probability, (unsigned int __user *)argp);
 		break;
 
-	case ODP_SET_SFLOW_PROBABILITY:
+	case XFLOW_SET_SFLOW_PROBABILITY:
 		err = get_user(sflow_probability, (unsigned int __user *)argp);
 		if (!err)
 			dp->sflow_probability = sflow_probability;
 		break;
 
-	case ODP_PORT_QUERY:
-		err = query_port(dp, (struct odp_port __user *)argp);
+	case XFLOW_PORT_QUERY:
+		err = query_port(dp, (struct xflow_port __user *)argp);
 		break;
 
-	case ODP_PORT_LIST:
-		err = list_ports(dp, (struct odp_portvec __user *)argp);
+	case XFLOW_PORT_LIST:
+		err = list_ports(dp, (struct xflow_portvec __user *)argp);
 		break;
 
-	case ODP_PORT_GROUP_SET:
-		err = set_port_group(dp, (struct odp_port_group __user *)argp);
+	case XFLOW_PORT_GROUP_SET:
+		err = set_port_group(dp, (struct xflow_port_group __user *)argp);
 		break;
 
-	case ODP_PORT_GROUP_GET:
-		err = get_port_group(dp, (struct odp_port_group __user *)argp);
+	case XFLOW_PORT_GROUP_GET:
+		err = get_port_group(dp, (struct xflow_port_group __user *)argp);
 		break;
 
-	case ODP_FLOW_FLUSH:
+	case XFLOW_FLOW_FLUSH:
 		err = flush_flows(dp);
 		break;
 
-	case ODP_FLOW_PUT:
-		err = put_flow(dp, (struct odp_flow_put __user *)argp);
+	case XFLOW_FLOW_PUT:
+		err = put_flow(dp, (struct xflow_flow_put __user *)argp);
 		break;
 
-	case ODP_FLOW_DEL:
-		err = del_flow(dp, (struct odp_flow __user *)argp);
+	case XFLOW_FLOW_DEL:
+		err = del_flow(dp, (struct xflow_flow __user *)argp);
 		break;
 
-	case ODP_FLOW_GET:
+	case XFLOW_FLOW_GET:
 		err = do_flowvec_ioctl(dp, argp, do_query_flows);
 		break;
 
-	case ODP_FLOW_LIST:
+	case XFLOW_FLOW_LIST:
 		err = do_flowvec_ioctl(dp, argp, do_list_flows);
 		break;
 
-	case ODP_EXECUTE:
-		err = execute_packet(dp, (struct odp_execute __user *)argp);
+	case XFLOW_EXECUTE:
+		err = execute_packet(dp, (struct xflow_execute __user *)argp);
 		break;
 
 	default:
@@ -1761,9 +1758,9 @@ static int dp_has_packet_of_interest(struct datapath *dp, int listeners)
 }
 
 #ifdef CONFIG_COMPAT
-static int compat_list_ports(struct datapath *dp, struct compat_odp_portvec __user *upv)
+static int compat_list_ports(struct datapath *dp, struct compat_xflow_portvec __user *upv)
 {
-	struct compat_odp_portvec pv;
+	struct compat_xflow_portvec pv;
 	int retval;
 
 	if (copy_from_user(&pv, upv, sizeof pv))
@@ -1776,9 +1773,9 @@ static int compat_list_ports(struct datapath *dp, struct compat_odp_portvec __us
 	return put_user(retval, &upv->n_ports);
 }
 
-static int compat_set_port_group(struct datapath *dp, const struct compat_odp_port_group __user *upg)
+static int compat_set_port_group(struct datapath *dp, const struct compat_xflow_port_group __user *upg)
 {
-	struct compat_odp_port_group pg;
+	struct compat_xflow_port_group pg;
 
 	if (copy_from_user(&pg, upg, sizeof pg))
 		return -EFAULT;
@@ -1786,9 +1783,9 @@ static int compat_set_port_group(struct datapath *dp, const struct compat_odp_po
 	return do_set_port_group(dp, compat_ptr(pg.ports), pg.n_ports, pg.group);
 }
 
-static int compat_get_port_group(struct datapath *dp, struct compat_odp_port_group __user *upg)
+static int compat_get_port_group(struct datapath *dp, struct compat_xflow_port_group __user *upg)
 {
-	struct compat_odp_port_group pg;
+	struct compat_xflow_port_group pg;
 
 	if (copy_from_user(&pg, upg, sizeof pg))
 		return -EFAULT;
@@ -1797,13 +1794,13 @@ static int compat_get_port_group(struct datapath *dp, struct compat_odp_port_gro
 				 pg.group, &upg->n_ports);
 }
 
-static int compat_get_flow(struct odp_flow *flow, const struct compat_odp_flow __user *compat)
+static int compat_get_flow(struct xflow_flow *flow, const struct compat_xflow_flow __user *compat)
 {
 	compat_uptr_t actions;
 
-	if (!access_ok(VERIFY_READ, compat, sizeof(struct compat_odp_flow)) ||
-	    __copy_from_user(&flow->stats, &compat->stats, sizeof(struct odp_flow_stats)) ||
-	    __copy_from_user(&flow->key, &compat->key, sizeof(struct odp_flow_key)) ||
+	if (!access_ok(VERIFY_READ, compat, sizeof(struct compat_xflow_flow)) ||
+	    __copy_from_user(&flow->stats, &compat->stats, sizeof(struct xflow_flow_stats)) ||
+	    __copy_from_user(&flow->key, &compat->key, sizeof(struct xflow_key)) ||
 	    __get_user(actions, &compat->actions) ||
 	    __get_user(flow->n_actions, &compat->n_actions) ||
 	    __get_user(flow->flags, &compat->flags))
@@ -1813,10 +1810,10 @@ static int compat_get_flow(struct odp_flow *flow, const struct compat_odp_flow _
 	return 0;
 }
 
-static int compat_put_flow(struct datapath *dp, struct compat_odp_flow_put __user *ufp)
+static int compat_put_flow(struct datapath *dp, struct compat_xflow_flow_put __user *ufp)
 {
-	struct odp_flow_stats stats;
-	struct odp_flow_put fp;
+	struct xflow_flow_stats stats;
+	struct xflow_flow_put fp;
 	int error;
 
 	if (compat_get_flow(&fp.flow, &ufp->flow) ||
@@ -1828,14 +1825,14 @@ static int compat_put_flow(struct datapath *dp, struct compat_odp_flow_put __use
 		return error;
 
 	if (copy_to_user(&ufp->flow.stats, &stats,
-			 sizeof(struct odp_flow_stats)))
+			 sizeof(struct xflow_flow_stats)))
 		return -EFAULT;
 
 	return 0;
 }
 
 static int compat_answer_query(struct sw_flow *flow, u32 query_flags,
-			       struct compat_odp_flow __user *ufp)
+			       struct compat_xflow_flow __user *ufp)
 {
 	compat_uptr_t actions;
 
@@ -1846,10 +1843,10 @@ static int compat_answer_query(struct sw_flow *flow, u32 query_flags,
 			       compat_ptr(actions), &ufp->n_actions);
 }
 
-static int compat_del_flow(struct datapath *dp, struct compat_odp_flow __user *ufp)
+static int compat_del_flow(struct datapath *dp, struct compat_xflow_flow __user *ufp)
 {
 	struct sw_flow *flow;
-	struct odp_flow uf;
+	struct xflow_flow uf;
 	int error;
 
 	if (compat_get_flow(&uf, ufp))
@@ -1864,20 +1861,19 @@ static int compat_del_flow(struct datapath *dp, struct compat_odp_flow __user *u
 	return error;
 }
 
-static int compat_query_flows(struct datapath *dp, struct compat_odp_flow *flows, u32 n_flows)
+static int compat_query_flows(struct datapath *dp, struct compat_xflow_flow *flows, u32 n_flows)
 {
 	struct tbl *table = rcu_dereference(dp->table);
 	u32 i;
 
 	for (i = 0; i < n_flows; i++) {
-		struct compat_odp_flow __user *ufp = &flows[i];
-		struct odp_flow uf;
+		struct compat_xflow_flow __user *ufp = &flows[i];
+		struct xflow_flow uf;
 		struct tbl_node *flow_node;
 		int error;
 
 		if (compat_get_flow(&uf, ufp))
 			return -EFAULT;
-		memset(uf.key.reserved, 0, sizeof uf.key.reserved);
 
 		flow_node = tbl_lookup(table, &uf.key, flow_hash(&uf.key), flow_cmp);
 		if (!flow_node)
@@ -1891,7 +1887,7 @@ static int compat_query_flows(struct datapath *dp, struct compat_odp_flow *flows
 }
 
 struct compat_list_flows_cbdata {
-	struct compat_odp_flow __user *uflows;
+	struct compat_xflow_flow __user *uflows;
 	u32 n_flows;
 	u32 listed_flows;
 };
@@ -1900,7 +1896,7 @@ static int compat_list_flow(struct tbl_node *node, void *cbdata_)
 {
 	struct sw_flow *flow = flow_cast(node);
 	struct compat_list_flows_cbdata *cbdata = cbdata_;
-	struct compat_odp_flow __user *ufp = &cbdata->uflows[cbdata->listed_flows++];
+	struct compat_xflow_flow __user *ufp = &cbdata->uflows[cbdata->listed_flows++];
 	int error;
 
 	if (copy_to_user(&ufp->key, &flow->key, sizeof flow->key))
@@ -1914,7 +1910,7 @@ static int compat_list_flow(struct tbl_node *node, void *cbdata_)
 	return 0;
 }
 
-static int compat_list_flows(struct datapath *dp, struct compat_odp_flow *flows, u32 n_flows)
+static int compat_list_flows(struct datapath *dp, struct compat_xflow_flow *flows, u32 n_flows)
 {
 	struct compat_list_flows_cbdata cbdata;
 	int error;
@@ -1931,12 +1927,12 @@ static int compat_list_flows(struct datapath *dp, struct compat_odp_flow *flows,
 
 static int compat_flowvec_ioctl(struct datapath *dp, unsigned long argp,
 				int (*function)(struct datapath *,
-						struct compat_odp_flow *,
+						struct compat_xflow_flow *,
 						u32 n_flows))
 {
-	struct compat_odp_flowvec __user *uflowvec;
-	struct compat_odp_flow __user *flows;
-	struct compat_odp_flowvec flowvec;
+	struct compat_xflow_flowvec __user *uflowvec;
+	struct compat_xflow_flow __user *flows;
+	struct compat_xflow_flowvec flowvec;
 	int retval;
 
 	uflowvec = compat_ptr(argp);
@@ -1944,12 +1940,12 @@ static int compat_flowvec_ioctl(struct datapath *dp, unsigned long argp,
 	    copy_from_user(&flowvec, uflowvec, sizeof flowvec))
 		return -EFAULT;
 
-	if (flowvec.n_flows > INT_MAX / sizeof(struct compat_odp_flow))
+	if (flowvec.n_flows > INT_MAX / sizeof(struct compat_xflow_flow))
 		return -EINVAL;
 
 	flows = compat_ptr(flowvec.flows);
 	if (!access_ok(VERIFY_WRITE, flows,
-		       flowvec.n_flows * sizeof(struct compat_odp_flow)))
+		       flowvec.n_flows * sizeof(struct compat_xflow_flow)))
 		return -EFAULT;
 
 	retval = function(dp, flows, flowvec.n_flows);
@@ -1958,13 +1954,13 @@ static int compat_flowvec_ioctl(struct datapath *dp, unsigned long argp,
 		: put_user(retval, &uflowvec->n_flows));
 }
 
-static int compat_execute(struct datapath *dp, const struct compat_odp_execute __user *uexecute)
+static int compat_execute(struct datapath *dp, const struct compat_xflow_execute __user *uexecute)
 {
-	struct odp_execute execute;
+	struct xflow_execute execute;
 	compat_uptr_t actions;
 	compat_uptr_t data;
 
-	if (!access_ok(VERIFY_READ, uexecute, sizeof(struct compat_odp_execute)) ||
+	if (!access_ok(VERIFY_READ, uexecute, sizeof(struct compat_xflow_execute)) ||
 	    __get_user(execute.in_port, &uexecute->in_port) ||
 	    __get_user(actions, &uexecute->actions) ||
 	    __get_user(execute.n_actions, &uexecute->n_actions) ||
@@ -1985,35 +1981,35 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 	int err;
 
 	switch (cmd) {
-	case ODP_DP_DESTROY:
-	case ODP_FLOW_FLUSH:
+	case XFLOW_DP_DESTROY:
+	case XFLOW_FLOW_FLUSH:
 		/* Ioctls that don't need any translation at all. */
 		return openvswitch_ioctl(f, cmd, argp);
 
-	case ODP_DP_CREATE:
-	case ODP_PORT_ATTACH:
-	case ODP_PORT_DETACH:
-	case ODP_VPORT_DEL:
-	case ODP_VPORT_MTU_SET:
-	case ODP_VPORT_MTU_GET:
-	case ODP_VPORT_ETHER_SET:
-	case ODP_VPORT_ETHER_GET:
-	case ODP_VPORT_STATS_GET:
-	case ODP_DP_STATS:
-	case ODP_GET_DROP_FRAGS:
-	case ODP_SET_DROP_FRAGS:
-	case ODP_SET_LISTEN_MASK:
-	case ODP_GET_LISTEN_MASK:
-	case ODP_SET_SFLOW_PROBABILITY:
-	case ODP_GET_SFLOW_PROBABILITY:
-	case ODP_PORT_QUERY:
+	case XFLOW_DP_CREATE:
+	case XFLOW_PORT_ATTACH:
+	case XFLOW_PORT_DETACH:
+	case XFLOW_VPORT_DEL:
+	case XFLOW_VPORT_MTU_SET:
+	case XFLOW_VPORT_MTU_GET:
+	case XFLOW_VPORT_ETHER_SET:
+	case XFLOW_VPORT_ETHER_GET:
+	case XFLOW_VPORT_STATS_GET:
+	case XFLOW_DP_STATS:
+	case XFLOW_GET_DROP_FRAGS:
+	case XFLOW_SET_DROP_FRAGS:
+	case XFLOW_SET_LISTEN_MASK:
+	case XFLOW_GET_LISTEN_MASK:
+	case XFLOW_SET_SFLOW_PROBABILITY:
+	case XFLOW_GET_SFLOW_PROBABILITY:
+	case XFLOW_PORT_QUERY:
 		/* Ioctls that just need their pointer argument extended. */
 		return openvswitch_ioctl(f, cmd, (unsigned long)compat_ptr(argp));
 
-	case ODP_VPORT_ADD32:
+	case XFLOW_VPORT_ADD32:
 		return compat_vport_add(compat_ptr(argp));
 
-	case ODP_VPORT_MOD32:
+	case XFLOW_VPORT_MOD32:
 		return compat_vport_mod(compat_ptr(argp));
 	}
 
@@ -2023,35 +2019,35 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 		goto exit;
 
 	switch (cmd) {
-	case ODP_PORT_LIST32:
+	case XFLOW_PORT_LIST32:
 		err = compat_list_ports(dp, compat_ptr(argp));
 		break;
 
-	case ODP_PORT_GROUP_SET32:
+	case XFLOW_PORT_GROUP_SET32:
 		err = compat_set_port_group(dp, compat_ptr(argp));
 		break;
 
-	case ODP_PORT_GROUP_GET32:
+	case XFLOW_PORT_GROUP_GET32:
 		err = compat_get_port_group(dp, compat_ptr(argp));
 		break;
 
-	case ODP_FLOW_PUT32:
+	case XFLOW_FLOW_PUT32:
 		err = compat_put_flow(dp, compat_ptr(argp));
 		break;
 
-	case ODP_FLOW_DEL32:
+	case XFLOW_FLOW_DEL32:
 		err = compat_del_flow(dp, compat_ptr(argp));
 		break;
 
-	case ODP_FLOW_GET32:
+	case XFLOW_FLOW_GET32:
 		err = compat_flowvec_ioctl(dp, argp, compat_query_flows);
 		break;
 
-	case ODP_FLOW_LIST32:
+	case XFLOW_FLOW_LIST32:
 		err = compat_flowvec_ioctl(dp, argp, compat_list_flows);
 		break;
 
-	case ODP_EXECUTE32:
+	case XFLOW_EXECUTE32:
 		err = compat_execute(dp, compat_ptr(argp));
 		break;
 
