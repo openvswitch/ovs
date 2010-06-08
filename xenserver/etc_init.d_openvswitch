@@ -28,8 +28,11 @@ NETWORK_MODE=$(cat /etc/xensource/network.conf)
 case $NETWORK_MODE in
     vswitch|openvswitch)
         ;;
+    bridge)
+        exit 0
+        ;;
     *)
-        echo "Open vSwitch disabled (/etc/xensource/network.conf is not 'openvswitch')" >&2
+        echo "Open vSwitch disabled (/etc/xensource/network.conf is invalid)" >&2
         exit 0
         ;;
 esac
