@@ -99,6 +99,5 @@ VLOG_MODULE(wcelim)
 VLOG_MODULE(vswitchd)
 VLOG_MODULE(vt)
 VLOG_MODULE(xenserver)
-VLOG_MODULE(xenserverd)
 
 #undef VLOG_MODULE

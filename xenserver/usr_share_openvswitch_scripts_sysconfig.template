@@ -21,11 +21,6 @@
 #    and not required and not enabled by default for later versions.
 # ENABLE_FAKE_PROC_NET=?
 
-# ENABLE_XENSERVERD: If 'y' then monitor system for changes in pool membership
-#    This is required and enabled by default for XenServer 5.5.0,
-#    and not required and not enabled by default for later versions.
-# ENABLE_XENSERVERD=?
-
 # ENABLE_MONITOR: If 'y' then monitor daemon processes and restart them
 #    if they die due to an error signal.
 # ENABLE_MONITOR=y
@@ -241,11 +236,3 @@
 #     This option's value is honored only when BRCOMPATD_VALGRIND_LOG is
 #     set to a nonempty string.
 # BRCOMPATD_VALGRIND_OPT=""
-
-# XENSERVERD_PIDFILE: File in which to store the pid of the running
-#     ovs-xenserved.
-# XENSERVERD_PIDFILE=/var/run/openvswitch/ovs-xenserverd.pid
-
-# XENSERVERD_RUN_DIR: Set the directory in which ovs-xenserverd should be
-#     run.  This mainly affects where core files will be placed.
-# XENSERVERD_RUN_DIR=/var/xen/openvswitch
