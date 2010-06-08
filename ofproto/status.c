@@ -97,7 +97,7 @@ rconn_status_cb(struct status_reply *sr, void *rconn_)
     uint32_t remote_ip = rconn_get_remote_ip(rconn);
     uint32_t local_ip = rconn_get_local_ip(rconn);
 
-    status_reply_put(sr, "name=%s", rconn_get_name(rconn));
+    status_reply_put(sr, "name=%s", rconn_get_target(rconn));
     if (remote_ip) {
         status_reply_put(sr, "remote-ip="IP_FMT, IP_ARGS(&remote_ip));
         status_reply_put(sr, "remote-port=%d", 

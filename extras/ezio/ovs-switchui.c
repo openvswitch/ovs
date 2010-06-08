@@ -161,7 +161,7 @@ main(int argc, char *argv[])
     }
 
     rconn = rconn_create(5, 5);
-    rconn_connect(rconn, argv[0]);
+    rconn_connect(rconn, argv[0], NULL);
 
     die_if_already_running();
     daemonize();

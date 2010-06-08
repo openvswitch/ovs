@@ -225,6 +225,7 @@ static void ofconn_destroy(struct ofconn *);
 static void ofconn_run(struct ofconn *, struct ofproto *);
 static void ofconn_wait(struct ofconn *);
 static bool ofconn_receives_async_msgs(const struct ofconn *);
+static char *ofconn_make_name(const struct ofproto *, const char *target);
 
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
                      struct rconn_packet_counter *counter);
@@ -459,7 +460,9 @@ add_controller(struct ofproto *ofproto, const struct ofproto_controller *c)
     if (discovery) {
         ofconn->discovery = discovery;
     } else {
-        rconn_connect(ofconn->rconn, c->target);
+        char *name = ofconn_make_name(ofproto, c->target);
+        rconn_connect(ofconn->rconn, c->target, name);
+        free(name);
     }
     hmap_insert(&ofproto->controllers, &ofconn->hmap_node,
                 hash_string(c->target, 0));
@@ -510,7 +513,7 @@ update_controller(struct ofconn *ofconn, const struct ofproto_controller *c)
 static const char *
 ofconn_get_target(const struct ofconn *ofconn)
 {
-    return ofconn->discovery ? "discover" : rconn_get_name(ofconn->rconn);
+    return ofconn->discovery ? "discover" : rconn_get_target(ofconn->rconn);
 }
 
 static struct ofconn *
@@ -1079,9 +1082,13 @@ ofproto_run1(struct ofproto *p)
         retval = pvconn_accept(p->listeners[i], OFP_VERSION, &vconn);
         if (!retval) {
             struct rconn *rconn;
+            char *name;
 
             rconn = rconn_create(60, 0);
-            rconn_connect_unreliably(rconn, vconn);
+            name = ofconn_make_name(p, vconn_get_name(vconn));
+            rconn_connect_unreliably(rconn, vconn, name);
+            free(name);
+
             ofconn_create(p, rconn, OFCONN_TRANSIENT);
         } else if (retval != EAGAIN) {
             VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
@@ -1632,7 +1639,9 @@ ofconn_run(struct ofconn *ofconn, struct ofproto *p)
         }
         if (discovery_run(ofconn->discovery, &controller_name)) {
             if (controller_name) {
-                rconn_connect(ofconn->rconn, controller_name);
+                char *ofconn_name = ofconn_make_name(p, controller_name);
+                rconn_connect(ofconn->rconn, controller_name, ofconn_name);
+                free(ofconn_name);
             } else {
                 rconn_disconnect(ofconn->rconn);
             }
@@ -1699,6 +1708,18 @@ ofconn_receives_async_msgs(const struct ofconn *ofconn)
          * length. */
         return ofconn->miss_send_len > 0;
     }
+}
+
+/* Returns a human-readable name for an OpenFlow connection between 'ofproto'
+ * and 'target', suitable for use in log messages for identifying the
+ * connection.
+ *
+ * The name is dynamically allocated.  The caller should free it (with free())
+ * when it is no longer needed. */
+static char *
+ofconn_make_name(const struct ofproto *ofproto, const char *target)
+{
+    return xasprintf("%s<->%s", dpif_base_name(ofproto->dpif), target);
 }
 
 /* Caller is responsible for initializing the 'cr' member of the returned
