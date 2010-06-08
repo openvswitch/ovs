@@ -78,10 +78,12 @@ represent reasonable porting targets for different purposes:
 
     - The "wdp" branch has a software architecture that can take
       advantage of hardware with support for wildcards (e.g. TCAMs or
-      similar).  This branch has known important bugs.
+      similar).  This branch has known important bugs, but is the basis
+      of a few ongoing hardware projects, so we expect the quality to
+      improve rapidly.
 
-Since its architecture is better, in the medium to long term we hope
-to fix the problems in the "wdp" branch and merge it into "master".
+Since its architecture is better, in the medium to long term we will
+fix the problems in the "wdp" branch and merge it into "master".
 
 In porting OVS, the major difference between the two branches is the
 form of the flow table in the datapath:
