@@ -25,10 +25,14 @@
 test -e /etc/sysconfig/openvswitch && . /etc/sysconfig/openvswitch
 
 NETWORK_MODE=$(cat /etc/xensource/network.conf)
-if test "$NETWORK_MODE" = bridge; then
-    echo "Open vSwitch disabled (/etc/xensource/network.conf is 'bridge')" >&2
-    exit 0
-fi
+case $NETWORK_MODE in
+    vswitch|openvswitch)
+        ;;
+    *)
+        echo "Open vSwitch disabled (/etc/xensource/network.conf is not 'openvswitch')" >&2
+        exit 0
+        ;;
+esac
 
 # General config variables in /etc/sysconfig/openvswitch
 if test "$PRODUCT_VERSION" = "5.5.0"; then
