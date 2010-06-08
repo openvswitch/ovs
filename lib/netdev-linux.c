@@ -48,6 +48,7 @@
 #include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "netdev-provider.h"
+#include "netdev-vport.h"
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
@@ -76,14 +77,15 @@ static struct rtnetlink_notifier netdev_linux_cache_notifier;
 static int cache_notifier_refcount;
 
 enum {
-    VALID_IFINDEX = 1 << 0,
-    VALID_ETHERADDR = 1 << 1,
-    VALID_IN4 = 1 << 2,
-    VALID_IN6 = 1 << 3,
-    VALID_MTU = 1 << 4,
-    VALID_CARRIER = 1 << 5,
-    VALID_IS_PSEUDO = 1 << 6,       /* Represents is_internal and is_tap. */
-    VALID_POLICING = 1 << 7
+    VALID_IFINDEX           = 1 << 0,
+    VALID_ETHERADDR         = 1 << 1,
+    VALID_IN4               = 1 << 2,
+    VALID_IN6               = 1 << 3,
+    VALID_MTU               = 1 << 4,
+    VALID_CARRIER           = 1 << 5,
+    VALID_IS_PSEUDO         = 1 << 6, /* Represents is_internal and is_tap. */
+    VALID_POLICING          = 1 << 7,
+    VALID_HAVE_VPORT_STATS  = 1 << 8
 };
 
 struct tap_state {
@@ -109,6 +111,7 @@ struct netdev_dev_linux {
     bool is_tap;                /* Is this a tuntap device? */
     uint32_t kbits_rate;        /* Policing data. */
     uint32_t kbits_burst;
+    bool have_vport_stats;
 
     union {
         struct tap_state tap;
@@ -795,10 +798,7 @@ swap_uint64(uint64_t *a, uint64_t *b)
     *a ^= *b;
 }
 
-/* Retrieves current device stats for 'netdev'.
- *
- * XXX All of the members of struct netdev_stats are 64 bits wide, but on
- * 32-bit architectures the Linux network stats are only 32 bits. */
+/* Retrieves current device stats for 'netdev'. */
 static int
 netdev_linux_get_stats(const struct netdev *netdev_,
                        struct netdev_stats *stats)
@@ -810,26 +810,39 @@ netdev_linux_get_stats(const struct netdev *netdev_,
 
     COVERAGE_INC(netdev_get_stats);
 
-    if (use_netlink_stats < 0) {
-        use_netlink_stats = check_for_working_netlink_stats();
-    }
-    if (use_netlink_stats) {
-        int ifindex;
+    if (netdev_dev->have_vport_stats ||
+        !(netdev_dev->cache_valid & VALID_HAVE_VPORT_STATS)) {
 
-        error = get_ifindex(netdev_, &ifindex);
-        if (!error) {
-            error = get_stats_via_netlink(ifindex, stats);
+        error = netdev_vport_get_stats(netdev_, stats);
+        netdev_dev->have_vport_stats = !error;
+        netdev_dev->cache_valid |= VALID_HAVE_VPORT_STATS;
+    }
+
+    if (!netdev_dev->have_vport_stats) {
+        if (use_netlink_stats < 0) {
+            use_netlink_stats = check_for_working_netlink_stats();
         }
-    } else {
-        error = get_stats_via_proc(netdev_get_name(netdev_), stats);
+        if (use_netlink_stats) {
+            int ifindex;
+
+            error = get_ifindex(netdev_, &ifindex);
+            if (!error) {
+                error = get_stats_via_netlink(ifindex, stats);
+            }
+        } else {
+            error = get_stats_via_proc(netdev_get_name(netdev_), stats);
+        }
     }
 
     /* If this port is an internal port then the transmit and receive stats
      * will appear to be swapped relative to the other ports since we are the
      * one sending the data, not a remote computer.  For consistency, we swap
-     * them back here. */
+     * them back here. This does not apply if we are getting stats from the
+     * vport layer because it always tracks stats from the perspective of the
+     * switch. */
     netdev_linux_update_is_pseudo(netdev_dev);
-    if (!error && (netdev_dev->is_internal || netdev_dev->is_tap)) {
+    if (!error && !netdev_dev->have_vport_stats &&
+        (netdev_dev->is_internal || netdev_dev->is_tap)) {
         swap_uint64(&stats->rx_packets, &stats->tx_packets);
         swap_uint64(&stats->rx_bytes, &stats->tx_bytes);
         swap_uint64(&stats->rx_errors, &stats->tx_errors);
