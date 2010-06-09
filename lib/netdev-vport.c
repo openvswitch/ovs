@@ -159,6 +159,40 @@ netdev_vport_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 }
 
 int
+netdev_vport_set_stats(struct netdev *netdev, const struct netdev_stats *stats)
+{
+    struct odp_vport_stats_req ovsr;
+    int err;
+
+    ovs_strlcpy(ovsr.devname, netdev_get_name(netdev), sizeof ovsr.devname);
+
+    ovsr.stats.rx_packets = stats->rx_packets;
+    ovsr.stats.tx_packets = stats->tx_packets;
+    ovsr.stats.rx_bytes = stats->rx_bytes;
+    ovsr.stats.tx_bytes = stats->tx_bytes;
+    ovsr.stats.rx_errors = stats->rx_errors;
+    ovsr.stats.tx_errors = stats->tx_errors;
+    ovsr.stats.rx_dropped = stats->rx_dropped;
+    ovsr.stats.tx_dropped = stats->tx_dropped;
+    ovsr.stats.collisions = stats->collisions;
+    ovsr.stats.rx_over_err = stats->rx_over_errors;
+    ovsr.stats.rx_crc_err = stats->rx_crc_errors;
+    ovsr.stats.rx_frame_err = stats->rx_frame_errors;
+
+    err = netdev_vport_do_ioctl(ODP_VPORT_STATS_SET, &ovsr);
+
+    /* If the vport layer doesn't know about the device, that doesn't mean it
+     * doesn't exist (after all were able to open it when netdev_open() was
+     * called), it just means that it isn't attached and we'll be getting
+     * stats a different way. */
+    if (err == ENODEV) {
+        err = EOPNOTSUPP;
+    }
+
+    return err;
+}
+
+int
 netdev_vport_update_flags(struct netdev *netdev OVS_UNUSED,
                         enum netdev_flags off, enum netdev_flags on OVS_UNUSED,
                         enum netdev_flags *old_flagsp)

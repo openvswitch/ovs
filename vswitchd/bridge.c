@@ -1927,10 +1927,19 @@ bond_update_fake_iface_stats(struct port *port)
         struct netdev_stats slave_stats;
 
         if (!netdev_get_stats(port->ifaces[i]->netdev, &slave_stats)) {
-            bond_stats.rx_packets += slave_stats.rx_packets;
-            bond_stats.rx_bytes += slave_stats.rx_bytes;
-            bond_stats.tx_packets += slave_stats.tx_packets;
-            bond_stats.tx_bytes += slave_stats.tx_bytes;
+            /* XXX: We swap the stats here because they are swapped back when
+             * reported by the internal device.  The reason for this is
+             * internal devices normally represent packets going into the system
+             * but when used as fake bond device they represent packets leaving
+             * the system.  We really should do this in the internal device
+             * itself because changing it here reverses the counts from the
+             * perspective of the switch.  However, the internal device doesn't
+             * know what type of device it represents so we have to do it here
+             * for now. */
+            bond_stats.tx_packets += slave_stats.rx_packets;
+            bond_stats.tx_bytes += slave_stats.rx_bytes;
+            bond_stats.rx_packets += slave_stats.tx_packets;
+            bond_stats.rx_bytes += slave_stats.tx_bytes;
         }
     }
 

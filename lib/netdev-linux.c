@@ -52,7 +52,6 @@
 #include "netlink.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
-#include "openvswitch/internal_dev.h"
 #include "openvswitch/gre.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -863,41 +862,6 @@ netdev_linux_get_stats(const struct netdev *netdev_,
     return error;
 }
 
-static int
-netdev_linux_set_stats(struct netdev *netdev,
-                       const struct netdev_stats *stats)
-{
-    struct netdev_dev_linux *netdev_dev =
-        netdev_dev_linux_cast(netdev_get_dev(netdev));
-    struct internal_dev_stats dp_dev_stats;
-    struct ifreq ifr;
-
-    /* We must reject this call if 'netdev' is not an Open vSwitch internal
-     * port, because the ioctl that we are about to execute is in the "device
-     * private ioctls" range, which means that executing it on a device that
-     * is not the type we expect could do any random thing.
-     *
-     * (Amusingly, these ioctl numbers are commented "THESE IOCTLS ARE
-     * _DEPRECATED_ AND WILL DISAPPEAR IN 2.5.X" in linux/sockios.h.  I guess
-     * DaveM is a little behind on that.) */
-    netdev_linux_update_is_pseudo(netdev_dev);
-    if (!netdev_dev->is_internal) {
-        return EOPNOTSUPP;
-    }
-
-    /* This actually only sets the *offset* that the dp_dev applies, but in our
-     * usage for fake bond devices the dp_dev never has any traffic of it own
-     * so it has the same effect. */
-    dp_dev_stats.rx_packets = stats->rx_packets;
-    dp_dev_stats.rx_bytes = stats->rx_bytes;
-    dp_dev_stats.tx_packets = stats->tx_packets;
-    dp_dev_stats.tx_bytes = stats->tx_bytes;
-    ifr.ifr_data = (void *) &dp_dev_stats;
-    return netdev_linux_do_ioctl(netdev_get_name(netdev), &ifr,
-                                 INTERNAL_DEV_SET_STATS,
-                                 "INTERNAL_DEV_SET_STATS");
-}
-
 /* Stores the features supported by 'netdev' into each of '*current',
  * '*advertised', '*supported', and '*peer' that are non-null.  Each value is a
  * bitmap of "enum ofp_port_features" bits, in host byte order.  Returns 0 if
@@ -1633,7 +1597,7 @@ const struct netdev_class netdev_linux_class = {
     netdev_linux_get_ifindex,
     netdev_linux_get_carrier,
     netdev_linux_get_stats,
-    netdev_linux_set_stats,
+    netdev_vport_set_stats,
 
     netdev_linux_get_features,
     netdev_linux_set_advertisements,

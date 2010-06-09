@@ -29,6 +29,7 @@ int netdev_vport_get_etheraddr(const struct netdev *,
 int netdev_vport_get_mtu(const struct netdev *, int *mtup);
 int netdev_vport_get_carrier(const struct netdev *, bool *carrier);
 int netdev_vport_get_stats(const struct netdev *, struct netdev_stats *);
+int netdev_vport_set_stats(struct netdev *, const struct netdev_stats *);
 int netdev_vport_update_flags(struct netdev *, enum netdev_flags off,
                               enum netdev_flags on,
                               enum netdev_flags *old_flagsp);
