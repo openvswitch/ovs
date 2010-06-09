@@ -172,7 +172,14 @@ if test "$PRODUCT_VERSION" = "5.5.0"; then
     fi
     rm -f $XSS
     ln -s $RNU $XSS
+
+    # If /etc/xensource/network.conf doesn't exist (it was added in 5.6.0),
+    # then interface-reconfigure will be unhappy when we run it below.
+    if test ! -e /etc/xensource/network.conf; then
+        echo bridge > /etc/xensource/network.conf
+    fi
 fi
+
 
 if test ! -e /var/xapi/network.dbcache; then
     if test "$1" = 1; then
