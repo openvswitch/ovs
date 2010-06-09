@@ -428,7 +428,7 @@ vlog_init(void)
     vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_INFO);
 
     boot_time = time_msec();
-    now = time_now();
+    now = time_wall();
     if (now < 0) {
         struct tm tm;
         char s[128];

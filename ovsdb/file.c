@@ -737,7 +737,7 @@ ovsdb_file_txn_commit(struct json *json, const char *comment,
     if (comment) {
         json_object_put_string(json, "_comment", comment);
     }
-    json_object_put(json, "_date", json_integer_create(time_now()));
+    json_object_put(json, "_date", json_integer_create(time_wall()));
 
     error = ovsdb_log_write(log, json);
     json_destroy(json);

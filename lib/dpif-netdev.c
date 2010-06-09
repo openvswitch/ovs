@@ -99,7 +99,7 @@ struct dp_netdev_flow {
     flow_t key;
 
     /* Statistics. */
-	struct timeval used;        /* Last used time, in milliseconds. */
+	struct timespec used;       /* Last used time. */
 	long long int packet_count; /* Number of packets matched. */
 	long long int byte_count;   /* Number of bytes matched. */
 	uint8_t ip_tos;             /* IP TOS value. */
@@ -680,7 +680,7 @@ answer_flow_query(struct dp_netdev_flow *flow, uint32_t query_flags,
         odp_flow->stats.n_packets = flow->packet_count;
         odp_flow->stats.n_bytes = flow->byte_count;
         odp_flow->stats.used_sec = flow->used.tv_sec;
-        odp_flow->stats.used_nsec = flow->used.tv_usec * 1000;
+        odp_flow->stats.used_nsec = flow->used.tv_nsec;
         odp_flow->stats.tcp_flags = TCP_FLAGS(flow->tcp_ctl);
         odp_flow->stats.ip_tos = flow->ip_tos;
         odp_flow->stats.error = 0;
@@ -826,7 +826,7 @@ static void
 clear_stats(struct dp_netdev_flow *flow)
 {
     flow->used.tv_sec = 0;
-    flow->used.tv_usec = 0;
+    flow->used.tv_nsec = 0;
     flow->packet_count = 0;
     flow->byte_count = 0;
     flow->ip_tos = 0;
@@ -1003,7 +1003,7 @@ static void
 dp_netdev_flow_used(struct dp_netdev_flow *flow, const flow_t *key,
                     const struct ofpbuf *packet)
 {
-    time_timeval(&flow->used);
+    time_timespec(&flow->used);
     flow->packet_count++;
     flow->byte_count += packet->size;
     if (key->dl_type == htons(ETH_TYPE_IP)) {

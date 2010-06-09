@@ -90,7 +90,7 @@ nl_sock_create(int protocol, int multicast_group,
 
     if (next_seq == 0) {
         /* Pick initial sequence number. */
-        next_seq = getpid() ^ time_now();
+        next_seq = getpid() ^ time_wall();
     }
 
     *sockp = NULL;

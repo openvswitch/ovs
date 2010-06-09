@@ -206,7 +206,7 @@ struct odp_port_group {
 struct odp_flow_stats {
     uint64_t n_packets;         /* Number of matched packets. */
     uint64_t n_bytes;           /* Number of matched bytes. */
-    uint64_t used_sec;          /* Time last used. */
+    uint64_t used_sec;          /* Time last used, in system monotonic time. */
     uint32_t used_nsec;
     uint8_t  tcp_flags;
     uint8_t  ip_tos;
