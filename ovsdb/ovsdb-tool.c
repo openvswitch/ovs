@@ -189,7 +189,7 @@ compact_or_convert(const char *src_name, const char *dst_name,
 
     /* Lock the source, if we will be replacing it. */
     if (in_place) {
-        retval = lockfile_lock(src_name, INT_MAX, &src_lock);
+        retval = lockfile_lock(src_name, 0, &src_lock);
         if (retval) {
             ovs_fatal(retval, "%s: failed to lock lockfile", src_name);
         }
@@ -199,7 +199,7 @@ compact_or_convert(const char *src_name, const char *dst_name,
     if (in_place) {
         dst_name = xasprintf("%s.tmp", src_name);
     }
-    retval = lockfile_lock(dst_name, INT_MAX, &dst_lock);
+    retval = lockfile_lock(dst_name, 0, &dst_lock);
     if (retval) {
         ovs_fatal(retval, "%s: failed to lock lockfile", dst_name);
     }
