@@ -158,7 +158,6 @@ struct bridge {
     struct list node;           /* Node in global list of bridges. */
     char *name;                 /* User-specified arbitrary name. */
     struct mac_learning *ml;    /* MAC learning table. */
-    bool sent_config_request;   /* Successfully sent config request? */
     uint8_t default_ea[ETH_ADDR_LEN]; /* Default MAC. */
 
     /* OpenFlow switch processing. */
@@ -186,9 +185,6 @@ struct bridge {
 
     /* Flow tracking. */
     bool flush;
-
-    /* Flow statistics gathering. */
-    time_t next_stats_request;
 
     /* Port mirroring. */
     struct mirror *mirrors[MAX_MIRRORS];
@@ -1202,7 +1198,6 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
     br->name = xstrdup(br_cfg->name);
     br->cfg = br_cfg;
     br->ml = mac_learning_create();
-    br->sent_config_request = false;
     eth_addr_nicira_random(br->default_ea);
 
     port_array_init(&br->ifaces);
