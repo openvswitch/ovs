@@ -231,9 +231,10 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
     }
 }
 
-void
+bool
 ovsdb_idl_run(struct ovsdb_idl *idl)
 {
+    unsigned int initial_change_seqno = idl->change_seqno;
     int i;
 
     assert(!idl->txn);
@@ -290,6 +291,8 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
         }
         jsonrpc_msg_destroy(msg);
     }
+
+    return initial_change_seqno != idl->change_seqno;
 }
 
 void

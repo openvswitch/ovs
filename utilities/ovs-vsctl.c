@@ -119,7 +119,6 @@ int
 main(int argc, char *argv[])
 {
     struct ovsdb_idl *idl;
-    unsigned int seqno;
     struct vsctl_command *commands;
     size_t n_commands;
     char *args;
@@ -147,19 +146,13 @@ main(int argc, char *argv[])
 
     /* Now execute the commands. */
     idl = the_idl = ovsdb_idl_create(db, &ovsrec_idl_class);
-    seqno = ovsdb_idl_get_seqno(idl);
     trials = 0;
     for (;;) {
-        unsigned int new_seqno;
-
-        ovsdb_idl_run(idl);
-        new_seqno = ovsdb_idl_get_seqno(idl);
-        if (new_seqno != seqno) {
+        if (ovsdb_idl_run(idl)) {
             if (++trials > 5) {
                 vsctl_fatal("too many database inconsistency failures");
             }
             do_vsctl(args, commands, n_commands, idl);
-            seqno = new_seqno;
         }
 
         ovsdb_idl_wait(idl);

@@ -62,9 +62,7 @@ main(int argc, char *argv[])
     struct signal *sighup;
     struct ovsdb_idl *idl;
     const char *remote;
-    bool need_reconfigure;
     bool inited, exiting;
-    unsigned int idl_seqno;
     int retval;
 
     proctitle_init(argc, argv);
@@ -89,27 +87,27 @@ main(int argc, char *argv[])
     daemonize_complete();
 
     idl = ovsdb_idl_create(remote, &ovsrec_idl_class);
-    idl_seqno = ovsdb_idl_get_seqno(idl);
 
-    need_reconfigure = false;
     inited = false;
     exiting = false;
     while (!exiting) {
+        bool need_reconfigure;
+
         if (signal_poll(sighup)) {
             vlog_reopen_log_file();
         }
+
+        need_reconfigure = false;
         if (inited && bridge_run()) {
             need_reconfigure = true;
         }
-        ovsdb_idl_run(idl);
-        if (idl_seqno != ovsdb_idl_get_seqno(idl)) {
-            idl_seqno = ovsdb_idl_get_seqno(idl);
+        if (ovsdb_idl_run(idl)) {
             need_reconfigure = true;
         }
+
         if (need_reconfigure) {
             const struct ovsrec_open_vswitch *cfg;
 
-            need_reconfigure = false;
             cfg = ovsrec_open_vswitch_first(idl);
             if (cfg) {
                 if (inited) {
