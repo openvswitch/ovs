@@ -345,8 +345,13 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     rm -f /etc/openvswitch/vswitchd.cacert
     rm -f /var/xapi/network.dbcache
 
-    # Configure system to use bridge
-    echo bridge > /etc/xensource/network.conf
+    if test "$PRODUCT_VERSION" != "5.5.0"; then
+        # Configure system to use bridge
+        echo bridge > /etc/xensource/network.conf
+    else
+        # Get rid of network.conf entirely, to make the system pristine.
+        rm -f /etc/xensource/network.conf
+    fi
 
     printf "\nYou MUST reboot the server now to complete the change to\n"
     printf "standard Xen networking.  Attempts to modify networking on the\n"
