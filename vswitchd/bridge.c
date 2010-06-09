@@ -163,13 +163,6 @@ struct bridge {
     /* OpenFlow switch processing. */
     struct ofproto *ofproto;    /* OpenFlow switch. */
 
-    /* Description strings. */
-    char *mfr_desc;             /* Manufacturer. */
-    char *hw_desc;              /* Hardware. */
-    char *sw_desc;              /* Software version. */
-    char *serial_desc;          /* Serial number. */
-    char *dp_desc;              /* Datapath description. */
-
     /* Kernel datapath information. */
     struct dpif *dpif;          /* Datapath. */
     struct port_array ifaces;   /* Indexed by kernel datapath port number. */
@@ -1336,75 +1329,6 @@ bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
 }
 
 static void
-bridge_update_desc(struct bridge *br OVS_UNUSED)
-{
-#if 0
-    bool changed = false;
-    const char *desc;
-
-    desc = cfg_get_string(0, "bridge.%s.mfr-desc", br->name);
-    if (desc != br->mfr_desc) {
-        free(br->mfr_desc);
-        if (desc) {
-            br->mfr_desc = xstrdup(desc);
-        } else {
-            br->mfr_desc = xstrdup(DEFAULT_MFR_DESC);
-        }
-        changed = true;
-    }
-
-    desc = cfg_get_string(0, "bridge.%s.hw-desc", br->name);
-    if (desc != br->hw_desc) {
-        free(br->hw_desc);
-        if (desc) {
-            br->hw_desc = xstrdup(desc);
-        } else {
-            br->hw_desc = xstrdup(DEFAULT_HW_DESC);
-        }
-        changed = true;
-    }
-
-    desc = cfg_get_string(0, "bridge.%s.sw-desc", br->name);
-    if (desc != br->sw_desc) {
-        free(br->sw_desc);
-        if (desc) {
-            br->sw_desc = xstrdup(desc);
-        } else {
-            br->sw_desc = xstrdup(DEFAULT_SW_DESC);
-        }
-        changed = true;
-    }
-
-    desc = cfg_get_string(0, "bridge.%s.serial-desc", br->name);
-    if (desc != br->serial_desc) {
-        free(br->serial_desc);
-        if (desc) {
-            br->serial_desc = xstrdup(desc);
-        } else {
-            br->serial_desc = xstrdup(DEFAULT_SERIAL_DESC);
-        }
-        changed = true;
-    }
-
-    desc = cfg_get_string(0, "bridge.%s.dp-desc", br->name);
-    if (desc != br->dp_desc) {
-        free(br->dp_desc);
-        if (desc) {
-            br->dp_desc = xstrdup(desc);
-        } else {
-            br->dp_desc = xstrdup(DEFAULT_DP_DESC);
-        }
-        changed = true;
-    }
-
-    if (changed) {
-        ofproto_set_desc(br->ofproto, br->mfr_desc, br->hw_desc,
-                br->sw_desc, br->serial_desc, br->dp_desc);
-    }
-#endif
-}
-
-static void
 bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
                        struct bridge *br)
 {
@@ -1553,8 +1477,6 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
 #endif
 
     mirror_reconfigure(br);
-
-    bridge_update_desc(br);
 }
 
 static void
