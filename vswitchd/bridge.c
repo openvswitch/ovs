@@ -1408,50 +1408,7 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
      * versa.  (XXX Should we delete all flows if we are switching from one
      * controller to another?) */
 
-#if 0
-    /* Configure OpenFlow management listeners. */
-    svec_init(&listeners);
-    cfg_get_all_strings(&listeners, "bridge.%s.openflow.listeners", br->name);
-    if (!listeners.n) {
-        svec_add_nocopy(&listeners, xasprintf("punix:%s/%s.mgmt",
-                                              ovs_rundir, br->name));
-    } else if (listeners.n == 1 && !strcmp(listeners.names[0], "none")) {
-        svec_clear(&listeners);
-    }
-    svec_sort_unique(&listeners);
-
-    svec_init(&old_listeners);
-    ofproto_get_listeners(br->ofproto, &old_listeners);
-    svec_sort_unique(&old_listeners);
-
-    if (!svec_equal(&listeners, &old_listeners)) {
-        ofproto_set_listeners(br->ofproto, &listeners);
-    }
-    svec_destroy(&listeners);
-    svec_destroy(&old_listeners);
-
-    /* Configure OpenFlow controller connection snooping. */
-    svec_init(&snoops);
-    cfg_get_all_strings(&snoops, "bridge.%s.openflow.snoops", br->name);
-    if (!snoops.n) {
-        svec_add_nocopy(&snoops, xasprintf("punix:%s/%s.snoop",
-                                           ovs_rundir, br->name));
-    } else if (snoops.n == 1 && !strcmp(snoops.names[0], "none")) {
-        svec_clear(&snoops);
-    }
-    svec_sort_unique(&snoops);
-
-    svec_init(&old_snoops);
-    ofproto_get_snoops(br->ofproto, &old_snoops);
-    svec_sort_unique(&old_snoops);
-
-    if (!svec_equal(&snoops, &old_snoops)) {
-        ofproto_set_snoops(br->ofproto, &snoops);
-    }
-    svec_destroy(&snoops);
-    svec_destroy(&old_snoops);
-#else
-    /* Default listener. */
+    /* Configure OpenFlow management listener. */
     svec_init(&listeners);
     svec_add_nocopy(&listeners, xasprintf("punix:%s/%s.mgmt",
                                           ovs_rundir, br->name));
@@ -1463,7 +1420,7 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
     svec_destroy(&listeners);
     svec_destroy(&old_listeners);
 
-    /* Default snoop. */
+    /* Configure OpenFlow controller connection snooping. */
     svec_init(&snoops);
     svec_add_nocopy(&snoops, xasprintf("punix:%s/%s.snoop",
                                        ovs_rundir, br->name));
@@ -1474,7 +1431,6 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
     }
     svec_destroy(&snoops);
     svec_destroy(&old_snoops);
-#endif
 
     mirror_reconfigure(br);
 }
