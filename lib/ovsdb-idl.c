@@ -1517,7 +1517,6 @@ ovsdb_idl_txn_insert(struct ovsdb_idl_txn *txn,
 
     row->table = ovsdb_idl_table_from_class(txn->idl, class);
     row->new = xmalloc(class->n_columns * sizeof *row->new);
-    row->written = bitmap_allocate(class->n_columns);
     hmap_insert(&row->table->rows, &row->hmap_node, uuid_hash(&row->uuid));
     hmap_insert(&txn->txn_rows, &row->txn_node, uuid_hash(&row->uuid));
     return row;
