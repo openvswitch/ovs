@@ -311,7 +311,7 @@ static void
                 print "%sif (!row->n_%s) {" % (indent, columnName)
                 print "%s    %s = xmalloc(%s * sizeof *%s);" % (indent, keyVar, nMax, keyVar)
                 if valueVar:
-                    print "%s    %s = xmalloc(%s * sizeof %s);" % (indent, valueVar, nMax, valueVar)
+                    print "%s    %s = xmalloc(%s * sizeof *%s);" % (indent, valueVar, nMax, valueVar)
                 print "%s}" % indent
                 print "%s%s[row->n_%s] = %s;" % (indent, keyVar, columnName, keySrc)
                 if valueVar:
