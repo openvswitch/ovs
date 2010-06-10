@@ -260,33 +260,6 @@ static struct ofhooks bridge_ofhooks;
 
 /* Public functions. */
 
-/* Adds the name of each interface used by a bridge, including local and
- * internal ports, to 'svec'. */
-void
-bridge_get_ifaces(struct svec *svec) 
-{
-    struct bridge *br, *next;
-    size_t i, j;
-
-    LIST_FOR_EACH_SAFE (br, next, struct bridge, node, &all_bridges) {
-        for (i = 0; i < br->n_ports; i++) {
-            struct port *port = br->ports[i];
-
-            for (j = 0; j < port->n_ifaces; j++) {
-                struct iface *iface = port->ifaces[j];
-                if (iface->dp_ifidx < 0) {
-                    VLOG_ERR("%s interface not in datapath %s, ignoring",
-                             iface->name, dpif_name(br->dpif));
-                } else {
-                    if (iface->dp_ifidx != ODPP_LOCAL) {
-                        svec_add(svec, iface->name);
-                    }
-                }
-            }
-        }
-    }
-}
-
 void
 bridge_init(const struct ovsrec_open_vswitch *cfg)
 {
@@ -1246,19 +1219,6 @@ bridge_lookup(const char *name)
         }
     }
     return NULL;
-}
-
-bool
-bridge_exists(const char *name)
-{
-    return bridge_lookup(name) ? true : false;
-}
-
-uint64_t
-bridge_get_datapathid(const char *name)
-{
-    struct bridge *br = bridge_lookup(name);
-    return br ? ofproto_get_datapath_id(br->ofproto) : 0;
 }
 
 /* Handle requests for a listing of all flows known by the OpenFlow

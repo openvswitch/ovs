@@ -16,8 +16,8 @@
 #ifndef VSWITCHD_BRIDGE_H
 #define VSWITCHD_BRIDGE_H 1
 
-#include <stddef.h>
-#include "list.h"
+#include <stdbool.h>
+#include <stdint.h>
 
 struct ovsrec_open_vswitch;
 struct svec;
@@ -26,8 +26,5 @@ void bridge_init(const struct ovsrec_open_vswitch *);
 void bridge_reconfigure(const struct ovsrec_open_vswitch *);
 int bridge_run(void);
 void bridge_wait(void);
-bool bridge_exists(const char *);
-uint64_t bridge_get_datapathid(const char *name);
-void bridge_get_ifaces(struct svec *svec);
 
 #endif /* bridge.h */
