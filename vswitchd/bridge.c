@@ -189,9 +189,6 @@ struct bridge {
 /* List of all bridges. */
 static struct list all_bridges = LIST_INITIALIZER(&all_bridges);
 
-/* Maximum number of datapaths. */
-enum { DP_MAX = 256 };
-
 static struct bridge *bridge_create(const struct ovsrec_bridge *br_cfg);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
