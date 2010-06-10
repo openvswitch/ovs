@@ -82,12 +82,10 @@ struct iface {
     long long delay_expires;    /* Time after which 'enabled' may change. */
 
     /* These members are valid only after bridge_reconfigure() causes them to
-     * be initialized.*/
+     * be initialized. */
     int dp_ifidx;               /* Index within kernel datapath. */
     struct netdev *netdev;      /* Network device. */
     bool enabled;               /* May be chosen for flows? */
-
-    /* This member is only valid *during* bridge_reconfigure(). */
     const struct ovsrec_interface *cfg;
 };
 
@@ -125,6 +123,7 @@ struct port {
     int vlan;                   /* -1=trunk port, else a 12-bit VLAN ID. */
     unsigned long *trunks;      /* Bitmap of trunked VLANs, if 'vlan' == -1.
                                  * NULL if all VLANs are trunked. */
+    const struct ovsrec_port *cfg;
     char *name;
 
     /* An ordinary bridge port has 1 interface.
@@ -148,9 +147,6 @@ struct port {
     mirror_mask_t src_mirrors;  /* Mirrors triggered when packet received. */
     mirror_mask_t dst_mirrors;  /* Mirrors triggered when packet sent. */
     bool is_mirror_output_port; /* Does port mirroring send frames here? */
-
-    /* This member is only valid *during* bridge_reconfigure(). */
-    const struct ovsrec_port *cfg;
 };
 
 #define DP_MAX_PORTS 255
@@ -159,6 +155,7 @@ struct bridge {
     char *name;                 /* User-specified arbitrary name. */
     struct mac_learning *ml;    /* MAC learning table. */
     uint8_t default_ea[ETH_ADDR_LEN]; /* Default MAC. */
+    const struct ovsrec_bridge *cfg;
 
     /* OpenFlow switch processing. */
     struct ofproto *ofproto;    /* OpenFlow switch. */
@@ -181,9 +178,6 @@ struct bridge {
 
     /* Port mirroring. */
     struct mirror *mirrors[MAX_MIRRORS];
-
-    /* This member is only valid *during* bridge_reconfigure(). */
-    const struct ovsrec_bridge *cfg;
 };
 
 /* List of all bridges. */
@@ -1085,6 +1079,12 @@ bridge_run(void)
             ovsrec_open_vswitch_set_cur_cfg(cfg, cfg->next_cfg);
             ovsdb_idl_txn_commit(txn);
             ovsdb_idl_txn_destroy(txn); /* XXX */
+        } else {
+            /* We still need to reconfigure to avoid dangling pointers to
+             * now-destroyed ovsrec structures inside bridge data. */
+            static const struct ovsrec_open_vswitch null_cfg;
+
+            bridge_reconfigure(&null_cfg);
         }
     }
 }
