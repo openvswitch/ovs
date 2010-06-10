@@ -63,8 +63,6 @@ struct gre_vport {
 	struct mutable_config *mutable;
 };
 
-struct vport_ops gre_vport_ops;
-
 /* Protected by RCU. */
 static struct tbl *port_table;
 

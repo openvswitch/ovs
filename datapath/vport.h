@@ -237,4 +237,11 @@ vport_from_priv(const void *priv)
 void vport_receive(struct vport *, struct sk_buff *);
 void vport_record_error(struct vport *, enum vport_err_type err_type);
 
+/* List of statically compiled vport implementations.  Don't forget to also
+ * add yours to the list at the top of vport.c. */
+extern struct vport_ops netdev_vport_ops;
+extern struct vport_ops internal_vport_ops;
+extern struct vport_ops patch_vport_ops;
+extern struct vport_ops gre_vport_ops;
+
 #endif /* vport.h */

@@ -35,8 +35,6 @@ struct patch_vport {
 	struct device_config *devconf;
 };
 
-struct vport_ops patch_vport_ops;
-
 /* Protected by RTNL lock. */
 static struct hlist_head *peer_table;
 #define PEER_HASH_BUCKETS 256

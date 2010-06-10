@@ -40,8 +40,6 @@ struct internal_dev {
 	struct pcpu_lstats extra_stats;
 };
 
-struct vport_ops internal_vport_ops;
-
 static inline struct internal_dev *internal_dev_priv(struct net_device *netdev)
 {
 	return netdev_priv(netdev);

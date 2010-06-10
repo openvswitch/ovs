@@ -22,8 +22,6 @@
 
 #include "compat.h"
 
-struct vport_ops netdev_vport_ops;
-
 static void netdev_port_receive(struct net_bridge_port *, struct sk_buff *);
 
 /*
