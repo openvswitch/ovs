@@ -624,17 +624,8 @@ free_info(struct vsctl_info *info)
     }
     shash_destroy(&info->bridges);
 
-    SHASH_FOR_EACH (node, &info->ports) {
-        struct vsctl_port *port = node->data;
-        free(port);
-    }
-    shash_destroy(&info->ports);
-
-    SHASH_FOR_EACH (node, &info->ifaces) {
-        struct vsctl_iface *iface = node->data;
-        free(iface);
-    }
-    shash_destroy(&info->ifaces);
+    shash_destroy_free_data(&info->ports);
+    shash_destroy_free_data(&info->ifaces);
 }
 
 static void

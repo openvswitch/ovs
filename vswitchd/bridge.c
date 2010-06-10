@@ -362,7 +362,6 @@ static int
 set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
              bool create)
 {
-    struct shash_node *node;
     struct shash options;
     int error = 0;
     size_t i;
@@ -410,11 +409,7 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
             error = EINVAL;
         }
     }
-
-    SHASH_FOR_EACH (node, &options) {
-        free(node->data);
-    }
-    shash_destroy(&options);
+    shash_destroy_free_data(&options);
 
     return error;
 }
