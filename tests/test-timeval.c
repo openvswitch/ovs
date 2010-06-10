@@ -70,8 +70,12 @@ do_test(void)
         }
 
         if (gettimeofday_in_msec() - start_gtod >= TIME_UPDATE_INTERVAL) {
-            assert(time_msec() - start_time_msec >= TIME_UPDATE_INTERVAL);
-            assert(time_wall_msec() - start_time_wall >= TIME_UPDATE_INTERVAL);
+            /* gettimeofday() and time_msec() have different granularities in
+             * their time sources.  Depending on the rounding used this could
+             * result in a slight difference, so we allow for 1 ms of slop. */
+            assert(time_msec() - start_time_msec >= TIME_UPDATE_INTERVAL - 1);
+            assert(time_wall_msec() - start_time_wall >=
+                                                      TIME_UPDATE_INTERVAL - 1);
             break;
         }
     }
