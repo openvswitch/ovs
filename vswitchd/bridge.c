@@ -189,6 +189,9 @@ struct bridge {
 /* List of all bridges. */
 static struct list all_bridges = LIST_INITIALIZER(&all_bridges);
 
+/* OVSDB IDL used to obtain configuration. */
+static struct ovsdb_idl *idl;
+
 static struct bridge *bridge_create(const struct ovsrec_bridge *br_cfg);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
@@ -257,21 +260,47 @@ static struct ofhooks bridge_ofhooks;
 
 /* Public functions. */
 
+/* Initializes the bridge module, configuring it to obtain its configuration
+ * from an OVSDB server accessed over 'remote', which should be a string in a
+ * form acceptable to ovsdb_idl_create(). */
 void
-bridge_init(const struct ovsrec_open_vswitch *cfg)
+bridge_init(const char *remote)
 {
+    /* Create connection to database. */
+    idl = ovsdb_idl_create(remote, &ovsrec_idl_class);
+
+    /* Register unixctl commands. */
+    unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
+    unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
+                             NULL);
+    bond_init();
+}
+
+/* Performs configuration that is only necessary once at ovs-vswitchd startup,
+ * but for which the ovs-vswitchd configuration 'cfg' is required. */
+static void
+bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
+{
+    static bool already_configured_once;
     struct svec bridge_names;
     struct svec dpif_names, dpif_types;
     size_t i;
 
-    unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
+    /* Only do this once per ovs-vswitchd run. */
+    if (already_configured_once) {
+        return;
+    }
+    already_configured_once = true;
 
+    /* Get all the configured bridges' names from 'cfg' into 'bridge_names'. */
     svec_init(&bridge_names);
     for (i = 0; i < cfg->n_bridges; i++) {
         svec_add(&bridge_names, cfg->bridges[i]->name);
     }
     svec_sort(&bridge_names);
 
+    /* Iterate over all system dpifs and delete any of them that do not appear
+     * in 'cfg'. */
     svec_init(&dpif_names);
     svec_init(&dpif_types);
     dp_enumerate_types(&dpif_types);
@@ -282,12 +311,14 @@ bridge_init(const struct ovsrec_open_vswitch *cfg)
 
         dp_enumerate_names(dpif_types.names[i], &dpif_names);
 
+        /* For each dpif... */
         for (j = 0; j < dpif_names.n; j++) {
             retval = dpif_open(dpif_names.names[j], dpif_types.names[i], &dpif);
             if (!retval) {
                 struct svec all_names;
                 size_t k;
 
+                /* ...check whether any of its names is in 'bridge_names'. */
                 svec_init(&all_names);
                 dpif_get_all_names(dpif, &all_names);
                 for (k = 0; k < all_names.n; k++) {
@@ -295,7 +326,10 @@ bridge_init(const struct ovsrec_open_vswitch *cfg)
                         goto found;
                     }
                 }
+
+                /* No.  Delete the dpif. */
                 dpif_delete(dpif);
+
             found:
                 svec_destroy(&all_names);
                 dpif_close(dpif);
@@ -305,12 +339,6 @@ bridge_init(const struct ovsrec_open_vswitch *cfg)
     svec_destroy(&bridge_names);
     svec_destroy(&dpif_names);
     svec_destroy(&dpif_types);
-
-    unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
-                             NULL);
-
-    bond_init();
-    bridge_reconfigure(cfg);
 }
 
 #ifdef HAVE_OPENSSL
@@ -510,10 +538,9 @@ collect_managers(const struct ovsrec_open_vswitch *ovs_cfg,
     *n_managersp = n_managers;
 }
 
-void
+static void
 bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 {
-    struct ovsdb_idl_txn *txn;
     struct shash old_br, new_br;
     struct shash_node *node;
     struct bridge *br, *next;
@@ -523,8 +550,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     int sflow_bridge_number;
 
     COVERAGE_INC(bridge_reconfigure);
-
-    txn = ovsdb_idl_txn_create(ovs_cfg->header_.table->idl);
 
     collect_managers(ovs_cfg, &managers, &n_managers);
 
@@ -812,11 +837,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         iterate_and_prune_ifaces(br, set_iface_properties, NULL);
     }
 
-    ovsrec_open_vswitch_set_cur_cfg(ovs_cfg, ovs_cfg->next_cfg);
-
-    ovsdb_idl_txn_commit(txn);
-    ovsdb_idl_txn_destroy(txn); /* XXX */
-
     free(managers);
 }
 
@@ -1035,25 +1055,38 @@ dpid_from_hash(const void *data, size_t n)
     return eth_addr_to_uint64(hash);
 }
 
-int
+void
 bridge_run(void)
 {
-    struct bridge *br, *next;
-    int retval;
+    bool datapath_destroyed;
+    struct bridge *br;
 
-    retval = 0;
-    LIST_FOR_EACH_SAFE (br, next, struct bridge, node, &all_bridges) {
+    /* Let each bridge do the work that it needs to do. */
+    datapath_destroyed = false;
+    LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         int error = bridge_run_one(br);
         if (error) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_ERR_RL(&rl, "bridge %s: datapath was destroyed externally, "
                         "forcing reconfiguration", br->name);
-            if (!retval) {
-                retval = error;
-            }
+            datapath_destroyed = true;
         }
     }
-    return retval;
+
+    /* (Re)configure if necessary. */
+    if (ovsdb_idl_run(idl) || datapath_destroyed) {
+        const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(idl);
+        if (cfg) {
+            struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);
+
+            bridge_configure_once(cfg);
+            bridge_reconfigure(cfg);
+
+            ovsrec_open_vswitch_set_cur_cfg(cfg, cfg->next_cfg);
+            ovsdb_idl_txn_commit(txn);
+            ovsdb_idl_txn_destroy(txn); /* XXX */
+        }
+    }
 }
 
 void
@@ -1070,6 +1103,7 @@ bridge_wait(void)
         mac_learning_wait(br->ml);
         bond_wait(br);
     }
+    ovsdb_idl_wait(idl);
 }
 
 /* Forces 'br' to revalidate all of its flows.  This is appropriate when 'br''s
