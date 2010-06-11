@@ -52,6 +52,9 @@ INSTALL.userspace for more information.
       be compiled with IPv6 support (CONFIG_IPV6).  This allows for
       special handling (such as path MTU discovery) of IPv6 packets.
 
+      To use Open vSwitch support for TAP devices, you must enable
+      CONFIG_TUN.
+
     - To build a kernel module, you need the same version of GCC that
       was used to build that kernel.
 
@@ -100,7 +103,8 @@ following software:
       if it is installed in a different location, then some Open
       vSwitch log messages will not be as detailed.
 
-You should ensure that /dev/urandom exists.
+You should ensure that /dev/urandom exists.  To support TAP devices,
+you must also ensure that /dev/net/tun exists.
 
 To run the ovsdmonitor tool, the machine must also have the following
 software:
