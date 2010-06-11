@@ -971,7 +971,7 @@ disconnect(struct rconn *rc, int error)
             rc->backoff = 1;
         } else {
             rc->backoff = MIN(rc->max_backoff, MAX(1, 2 * rc->backoff));
-            VLOG_INFO("%s: waiting %d seconds before reconnect\n",
+            VLOG_INFO("%s: waiting %d seconds before reconnect",
                       rc->name, rc->backoff);
         }
         rc->backoff_deadline = now + rc->backoff;
