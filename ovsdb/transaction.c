@@ -152,7 +152,8 @@ find_txn_row(const struct ovsdb_table *table, const struct uuid *uuid)
 }
 
 static struct ovsdb_error * WARN_UNUSED_RESULT
-ovsdb_txn_adjust_atom_refs(struct ovsdb_txn *txn,
+ovsdb_txn_adjust_atom_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
+                           const struct ovsdb_column *c,
                            const struct ovsdb_base_type *base,
                            const union ovsdb_atom *atoms, unsigned int n,
                            int delta)
@@ -174,8 +175,12 @@ ovsdb_txn_adjust_atom_refs(struct ovsdb_txn *txn,
                 txn_row = ovsdb_txn_row_modify(txn, row)->txn_row;
             } else {
                 return ovsdb_error("referential integrity violation",
-                                   "reference to nonexistent row "
-                                   UUID_FMT, UUID_ARGS(uuid));
+                                   "Table %s column %s row "UUID_FMT" "
+                                   "references nonexistent row "UUID_FMT" in "
+                                   "table %s.",
+                                   r->table->schema->name, c->name,
+                                   UUID_ARGS(ovsdb_row_get_uuid(r)),
+                                   UUID_ARGS(uuid), table->schema->name);
             }
         }
         txn_row->n_refs += delta;
@@ -191,10 +196,10 @@ ovsdb_txn_adjust_row_refs(struct ovsdb_txn *txn, const struct ovsdb_row *r,
     const struct ovsdb_datum *field = &r->fields[column->index];
     struct ovsdb_error *error;
 
-    error = ovsdb_txn_adjust_atom_refs(txn, &column->type.key,
+    error = ovsdb_txn_adjust_atom_refs(txn, r, column, &column->type.key,
                                        field->keys, field->n, delta);
     if (!error) {
-        error = ovsdb_txn_adjust_atom_refs(txn, &column->type.value,
+        error = ovsdb_txn_adjust_atom_refs(txn, r, column, &column->type.value,
                                            field->values, field->n, delta);
     }
     return error;

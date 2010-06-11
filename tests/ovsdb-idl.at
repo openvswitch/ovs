@@ -265,11 +265,11 @@ OVSDB_CHECK_IDL([self-linking idl, inconsistent ops],
        "where": []}]' \
 ]],
   [[000: empty
-001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"details":"reference to nonexistent row <1>","error":"referential integrity violation"}]}
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"details":"Table link1 column k row <0> references nonexistent row <1> in table link1.","error":"referential integrity violation"}]}
 002: {"error":null,"result":[{"uuid":["uuid","<2>"]},{"uuid":["uuid","<3>"]}]}
 003: i=1 k=1 ka=[] l2= uuid=<2>
 003: i=2 k=1 ka=[] l2= uuid=<3>
-004: {"error":null,"result":[{"count":2},{"details":"reference to nonexistent row <4>","error":"referential integrity violation"}]}
+004: {"error":null,"result":[{"count":2},{"details":"Table link1 column k row <2> references nonexistent row <4> in table link1.","error":"referential integrity violation"}]}
 005: {"error":null,"result":[{"count":1},{"details":"cannot delete link1 row <2> because of 1 remaining reference(s)","error":"referential integrity violation"}]}
 006: {"error":null,"result":[{"count":1}]}
 007: i=1 k=1 ka=[] l2= uuid=<2>
@@ -305,8 +305,8 @@ OVSDB_CHECK_IDL([self-linking idl, sets],
     '["idltest",
       {"op": "update",
        "table": "link1",
-       "where": [],
-       "row": {"ka": ["set", [["uuid", "#0#"], ["uuid", "88702e78-845b-4a6e-ad08-cf68922ae84a"], ["uuid", "#2#"], ["uuid", "1ac2b12e-b767-4805-a55d-43976e40c465"]]]}}]' \
+       "where": [["i", "==", 2]],
+       "row": {"ka": ["set", [["uuid", "#0#"], ["uuid", "88702e78-845b-4a6e-ad08-cf68922ae84a"], ["uuid", "#2#"]]]}}]' \
     '+["idltest",
       {"op": "delete",
        "table": "link1",
@@ -322,7 +322,7 @@ OVSDB_CHECK_IDL([self-linking idl, sets],
 004: i=1 k=0 ka=[0 1 2 3] l2= uuid=<1>
 004: i=2 k=0 ka=[0 1 2 3] l2= uuid=<2>
 004: i=3 k=0 ka=[0 1 2 3] l2= uuid=<3>
-005: {"error":null,"result":[{"count":4},{"details":"reference to nonexistent row <4>","error":"referential integrity violation"}]}
+005: {"error":null,"result":[{"count":1},{"details":"Table link1 column ka row <2> references nonexistent row <4> in table link1.","error":"referential integrity violation"}]}
 006: {"error":null,"result":[{"count":4}]}
 007: empty
 008: done

@@ -580,7 +580,7 @@ OVSDB_CHECK_EXECUTION([referential integrity -- mutual references],
        "table": "b",
        "where": [["b", "==", 1]]}]]]],
   [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]
-[{"uuid":["uuid","<2>"]},{"details":"reference to nonexistent row <3>","error":"referential integrity violation"}]
+[{"uuid":["uuid","<2>"]},{"details":"Table a column a2b row <2> references nonexistent row <3> in table b.","error":"referential integrity violation"}]
 [{"count":1},{"details":"cannot delete a row <0> because of 1 remaining reference(s)","error":"referential integrity violation"}]
 [{"count":1},{"details":"cannot delete b row <1> because of 1 remaining reference(s)","error":"referential integrity violation"}]
 [{"count":1},{"details":"cannot delete a row <0> because of 1 remaining reference(s)","error":"referential integrity violation"}]
