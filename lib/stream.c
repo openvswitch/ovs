@@ -240,14 +240,16 @@ stream_open_block(int error, struct stream **streamp)
 
     fatal_signal_run();
 
-    while (error == EAGAIN) {
-        stream_run(stream);
-        stream_run_wait(stream);
-        stream_connect_wait(stream);
-        poll_block();
-        error = stream_connect(stream);
+    if (!error) {
+        while ((error = stream_connect(stream)) == EAGAIN) {
+            stream_run(stream);
+            stream_run_wait(stream);
+            stream_connect_wait(stream);
+            poll_block();
+        }
         assert(error != EINPROGRESS);
     }
+
     if (error) {
         stream_close(stream);
         *streamp = NULL;

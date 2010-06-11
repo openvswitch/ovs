@@ -85,13 +85,16 @@ vconn_stream_open(const char *name, char *suffix OVS_UNUSED,
 
     error = stream_open_with_default_ports(name, OFP_TCP_PORT, OFP_SSL_PORT,
                                            &stream);
-
-    if (error && error != EAGAIN) {
-        return error;
+    if (!error) {
+        error = stream_connect(stream);
+        if (!error || error == EAGAIN) {
+            *vconnp = vconn_stream_new(stream, error);
+            return 0;
+        }
     }
 
-    *vconnp = vconn_stream_new(stream, error);
-    return 0;
+    stream_close(stream);
+    return error;
 }
 
 static struct vconn_stream *

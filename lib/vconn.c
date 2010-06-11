@@ -278,14 +278,16 @@ vconn_open_block(const char *name, int min_version, struct vconn **vconnp)
     fatal_signal_run();
 
     error = vconn_open(name, min_version, &vconn);
-    while (error == EAGAIN) {
-        vconn_run(vconn);
-        vconn_run_wait(vconn);
-        vconn_connect_wait(vconn);
-        poll_block();
-        error = vconn_connect(vconn);
+    if (!error) {
+        while ((error == vconn_connect(vconn)) == EAGAIN) {
+            vconn_run(vconn);
+            vconn_run_wait(vconn);
+            vconn_connect_wait(vconn);
+            poll_block();
+        }
         assert(error != EINPROGRESS);
     }
+
     if (error) {
         vconn_close(vconn);
         *vconnp = NULL;

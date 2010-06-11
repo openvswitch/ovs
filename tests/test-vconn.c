@@ -141,7 +141,9 @@ test_refuse_connection(int argc OVS_UNUSED, char *argv[])
     struct fake_pvconn fpv;
     struct vconn *vconn;
 
-    expected_error = !strcmp(type, "unix") ? EPIPE : ECONNRESET;
+    expected_error = (!strcmp(type, "unix") ? EPIPE
+                      : !strcmp(type, "tcp") ? ECONNRESET
+                      : EPROTO);
 
     fpv_create(type, &fpv);
     CHECK_ERRNO(vconn_open(fpv.vconn_name, OFP_VERSION, &vconn), 0);
