@@ -557,9 +557,8 @@ send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
 static struct sk_buff *
 check_headroom(struct sk_buff *skb, int headroom)
 {
-	if (skb_headroom(skb) < headroom ||
-	    (skb_cloned(skb) && !skb_clone_writable(skb, 0))) {
-		struct sk_buff *nskb = skb_realloc_headroom(skb, headroom);
+	if (skb_headroom(skb) < headroom || skb_header_cloned(skb)) {
+		struct sk_buff *nskb = skb_realloc_headroom(skb, max(headroom, 64));
 		if (!nskb) {
 			kfree_skb(skb);
 			return ERR_PTR(-ENOMEM);
