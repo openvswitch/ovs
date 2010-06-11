@@ -35,6 +35,8 @@
 struct reconnect *reconnect_create(long long int now);
 void reconnect_destroy(struct reconnect *);
 
+void reconnect_set_quiet(struct reconnect *, bool quiet);
+
 const char *reconnect_get_name(const struct reconnect *);
 void reconnect_set_name(struct reconnect *, const char *name);
 

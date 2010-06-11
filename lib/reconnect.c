@@ -52,6 +52,7 @@ struct reconnect {
     int max_backoff;
     int probe_interval;
     bool passive;
+    enum vlog_level info;       /* Used for informational messages. */
 
     /* State. */
     enum state state;
@@ -98,6 +99,7 @@ reconnect_create(long long int now)
     fsm->max_backoff = 8000;
     fsm->probe_interval = 5000;
     fsm->passive = false;
+    fsm->info = VLL_INFO;
 
     fsm->state = S_VOID;
     fsm->state_entered = now;
@@ -118,6 +120,22 @@ reconnect_destroy(struct reconnect *fsm)
         free(fsm->name);
         free(fsm);
     }
+}
+
+/* If 'quiet' is true, 'fsm' will log informational messages at level VLL_DBG,
+ * by default keeping them out of log files.  This is appropriate if the
+ * connection is one that is expected to be short-lived, so that the log
+ * messages are merely distracting.
+ *
+ * If 'quiet' is false, 'fsm' logs informational messages at level VLL_INFO.
+ * This is the default.
+ *
+ * This setting has no effect on the log level of debugging, warning, or error
+ * messages. */
+void
+reconnect_set_quiet(struct reconnect *fsm, bool quiet)
+{
+    fsm->info = quiet ? VLL_DBG : VLL_INFO;
 }
 
 /* Returns 'fsm''s name. */
@@ -309,16 +327,17 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
                 VLOG_WARN("%s: connection dropped (%s)",
                           fsm->name, strerror(error));
             } else if (error == EOF) {
-                VLOG_INFO("%s: connection closed by peer", fsm->name);
+                VLOG(fsm->info, "%s: connection closed by peer", fsm->name);
             } else {
-                VLOG_INFO("%s: connection dropped", fsm->name);
+                VLOG(fsm->info, "%s: connection dropped", fsm->name);
             }
         } else if (fsm->state == S_LISTENING) {
             if (error > 0) {
                 VLOG_WARN("%s: error listening for connections (%s)",
                           fsm->name, strerror(error));
             } else {
-                VLOG_INFO("%s: error listening for connections", fsm->name);
+                VLOG(fsm->info, "%s: error listening for connections",
+                     fsm->name);
             }
         } else {
             const char *type = fsm->passive ? "listen" : "connection";
@@ -326,7 +345,7 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
                 VLOG_WARN("%s: %s attempt failed (%s)",
                           fsm->name, type, strerror(error));
             } else {
-                VLOG_INFO("%s: %s attempt timed out", fsm->name, type);
+                VLOG(fsm->info, "%s: %s attempt timed out", fsm->name, type);
             }
         }
 
@@ -344,10 +363,10 @@ reconnect_disconnected(struct reconnect *fsm, long long int now, int error)
                 fsm->backoff *= 2;
             }
             if (fsm->passive) {
-                VLOG_INFO("%s: waiting %.3g seconds before trying to "
+                VLOG(fsm->info, "%s: waiting %.3g seconds before trying to "
                           "listen again", fsm->name, fsm->backoff / 1000.0);
             } else {
-                VLOG_INFO("%s: waiting %.3g seconds before reconnect",
+                VLOG(fsm->info, "%s: waiting %.3g seconds before reconnect",
                           fsm->name, fsm->backoff / 1000.0);
             }
         }
@@ -366,9 +385,9 @@ reconnect_connecting(struct reconnect *fsm, long long int now)
 {
     if (fsm->state != S_CONNECT_IN_PROGRESS) {
         if (fsm->passive) {
-            VLOG_INFO("%s: listening...", fsm->name);
+            VLOG(fsm->info, "%s: listening...", fsm->name);
         } else {
-            VLOG_INFO("%s: connecting...", fsm->name);
+            VLOG(fsm->info, "%s: connecting...", fsm->name);
         }
         reconnect_transition__(fsm, now, S_CONNECT_IN_PROGRESS);
     }
@@ -389,7 +408,7 @@ void
 reconnect_listening(struct reconnect *fsm, long long int now)
 {
     if (fsm->state != S_LISTENING) {
-        VLOG_INFO("%s: listening...", fsm->name);
+        VLOG(fsm->info, "%s: listening...", fsm->name);
         reconnect_transition__(fsm, now, S_LISTENING);
     }
 }
@@ -422,7 +441,7 @@ reconnect_connected(struct reconnect *fsm, long long int now)
     if (!is_connected_state(fsm->state)) {
         reconnect_connecting(fsm, now);
 
-        VLOG_INFO("%s: connected", fsm->name);
+        VLOG(fsm->info, "%s: connected", fsm->name);
         reconnect_transition__(fsm, now, S_ACTIVE);
         fsm->last_connected = now;
     }

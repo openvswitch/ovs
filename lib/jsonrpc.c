@@ -700,7 +700,10 @@ jsonrpc_session_open(const char *name)
 }
 
 /* Creates and returns a jsonrpc_session that is initially connected to
- * 'jsonrpc'.  If the connection is dropped, it will not be reconnected. */
+ * 'jsonrpc'.  If the connection is dropped, it will not be reconnected.
+ *
+ * On the assumption that such connections are likely to be short-lived
+ * (e.g. from ovs-vsctl), informational logging for them is suppressed. */
 struct jsonrpc_session *
 jsonrpc_session_open_unreliably(struct jsonrpc *jsonrpc)
 {
@@ -708,6 +711,7 @@ jsonrpc_session_open_unreliably(struct jsonrpc *jsonrpc)
 
     s = xmalloc(sizeof *s);
     s->reconnect = reconnect_create(time_msec());
+    reconnect_set_quiet(s->reconnect, true);
     reconnect_set_name(s->reconnect, jsonrpc_get_name(jsonrpc));
     reconnect_set_max_tries(s->reconnect, 0);
     reconnect_connected(s->reconnect, time_msec());
