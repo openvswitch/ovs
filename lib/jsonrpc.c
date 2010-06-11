@@ -802,7 +802,7 @@ jsonrpc_session_run(struct jsonrpc_session *s)
         jsonrpc_run(s->rpc);
         error = jsonrpc_get_status(s->rpc);
         if (error) {
-            reconnect_disconnected(s->reconnect, time_msec(), 0);
+            reconnect_disconnected(s->reconnect, time_msec(), error);
             jsonrpc_session_disconnect(s);
         }
     } else if (s->stream) {
