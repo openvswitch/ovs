@@ -100,6 +100,8 @@ following software:
       if it is installed in a different location, then some Open
       vSwitch log messages will not be as detailed.
 
+You should ensure that /dev/urandom exists.
+
 To run the ovsdmonitor tool, the machine must also have the following
 software:
 
