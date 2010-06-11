@@ -249,7 +249,6 @@ jsonrpc_recv(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
                     return rpc->status;
                 }
             } else if (retval == 0) {
-                VLOG_INFO_RL(&rl, "%s: connection closed", rpc->name);
                 jsonrpc_error(rpc, EOF);
                 return EOF;
             }
