@@ -2428,7 +2428,7 @@ cmd_remove(struct vsctl_context *ctx)
     }
     if (old.n < type->n_min) {
         vsctl_fatal("\"remove\" operation would put %u %s in column %s of "
-                    "table %s but the minimun number is %u",
+                    "table %s but the minimum number is %u",
                     old.n,
                     type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
                     column->name, table->class->name, type->n_min);
