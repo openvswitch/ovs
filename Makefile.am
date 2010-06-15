@@ -25,6 +25,7 @@ else
 AM_LDFLAGS = -export-dynamic
 endif
 
+ALL_LOCAL =
 BUILT_SOURCES =
 CLEANFILES =
 DISTCLEANFILES =
@@ -118,6 +119,7 @@ dist-hook-git:
 DIST_HOOKS += dist-hook-git
 
 dist-hook: $(DIST_HOOKS)
+all-local: $(ALL_LOCAL)
 .PHONY: $(DIST_HOOKS)
 
 include lib/automake.mk
