@@ -36,6 +36,9 @@ install-exec-local:
 	chmod +x ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
 	$(INSTALL_PROGRAM) ovsdb/ovsdbmonitor/ovsdbmonitor.tmp $(DESTDIR)$(bindir)/ovsdbmonitor
 	rm ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
+DISTCLEANFILES += \
+	ovsdb/ovsdbmonitor/ovsdbmonitor \
+	ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
 endif
 
 SUFFIXES += .ui .py
