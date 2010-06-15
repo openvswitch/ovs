@@ -191,37 +191,48 @@
       <p>A bridge port must be configured for VLANs in one of two
         mutually exclusive ways:
         <ul>
-          <li>A ``trunk port'' has an empty value for
-            <ref column="tag"/> and a possibly non-empty
-            <ref column="trunks"/> value.</li>
+          <li>A ``trunk port'' has an empty value for <ref
+            column="tag"/>.  Its <ref column="trunks"/> value may be
+            empty or non-empty.</li>
           <li>An ``implicitly tagged VLAN port'' or ``access port''
-            has an nonempty value for <ref column="tag"/> and an empty
-            <ref column="trunks"/> value.</li>
+            has an nonempty value for <ref column="tag"/>.  Its
+            <ref column="trunks"/> value must be empty.</li>
         </ul>
         If <ref column="trunks"/> and <ref column="tag"/> are both
         nonempty, the configuration is ill-formed.
       </p>
 
       <column name="tag">
-        <p>If nonempty, this port's implicitly tagged VLAN.  Frames
-          arriving on trunk ports will be forwarded to this port only
-          if they are tagged with the given VLAN.  Frames arriving on
-          other VLAN ports will be forwarded to this port only if they
-          have the same <ref column="tag"/> value.  Frames forwarded
-          to this port will not have an 802.1Q header.</p>
-        <p>When a frame with a 802.1Q header that indicates a nonzero VLAN is
-          received on an implicit VLAN port, it is discarded.</p>
-        <p>Must be empty if this is a trunk port.</p>
+        <p>
+          If this is an access port (see above), the port's implicitly
+          tagged VLAN.  Must be empty if this is a trunk port.
+        </p>
+        <p>
+          Frames arriving on trunk ports will be forwarded to this
+          port only if they are tagged with the given VLAN (or, if
+          <ref column="tag"/> is 0, then if they lack a VLAN header).
+          Frames arriving on other access ports will be forwarded to
+          this port only if they have the same <ref column="tag"/>
+          value.  Frames forwarded to this port will not have an
+          802.1Q header.
+        </p>
+        <p>
+          When a frame with a 802.1Q header that indicates a nonzero
+          VLAN is received on an access port, it is discarded.
+        </p>
       </column>
 
       <column name="trunks">
-        <p>The 802.1Q VLAN(s) that this port trunks.  If the column is
-          empty, then the port trunks all VLANs as well as packets that
-          have no VLAN header.  Otherwise, only frames that have an
-          802.1Q header with one of the specified VLANs are accepted.
-          If <code>0</code> is included, then frames without an 802.1Q
-          header are also accepted.</p>
-        <p>Must be empty unless this is a trunk port.</p>
+        <p>
+          If this is a trunk port (see above), the 802.1Q VLAN(s) that
+          this port trunks; if it is empty, then the port trunks all
+          VLANs.  Must be empty if this is an access port.
+        </p>
+        <p>
+          Frames arriving on trunk ports are dropped if they are not
+          in one of the specified VLANs.  For this purpose, packets
+          that have no VLAN header are treated as part of VLAN 0.
+        </p>
       </column>
     </group>
 
