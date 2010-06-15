@@ -33,5 +33,5 @@ openvswitch ($VERSION) unstable; urgency=low
 EOF
         cat "$CHANGELOG"
     } > "$CHANGELOG".new
-    mv "$CHANGELOG".new "$CHANGELOG"
+    mv -f "$CHANGELOG".new "$CHANGELOG"
 fi
