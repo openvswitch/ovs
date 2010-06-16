@@ -908,6 +908,55 @@ ovsdb_idl_next_row(const struct ovsdb_idl_row *row)
 
     return next_real_row(table, hmap_next(&table->rows, &row->hmap_node));
 }
+
+/* Reads and returns the value of 'column' within 'row'.  If an ongoing
+ * transaction has changed 'column''s value, the modified value is returned.
+ *
+ * The caller must not modify or free the returned value.
+ *
+ * Various kinds of changes can invalidate the returned value: writing to the
+ * same 'column' in 'row' (e.g. with ovsdb_idl_txn_write()), deleting 'row'
+ * (e.g. with ovsdb_idl_txn_delete()), or completing an ongoing transaction
+ * (e.g. with ovsdb_idl_txn_commit() or ovsdb_idl_txn_abort()).  If the
+ * returned value is needed for a long time, it is best to make a copy of it
+ * with ovsdb_datum_clone(). */
+const struct ovsdb_datum *
+ovsdb_idl_read(const struct ovsdb_idl_row *row,
+               const struct ovsdb_idl_column *column)
+{
+    const struct ovsdb_idl_table_class *class = row->table->class;
+    size_t column_idx = column - class->columns;
+
+    assert(row->new != NULL);
+    assert(column_idx < class->n_columns);
+
+    if (row->written && bitmap_is_set(row->written, column_idx)) {
+        return &row->new[column_idx];
+    } else if (row->old) {
+        return &row->old[column_idx];
+    } else {
+        return ovsdb_datum_default(&column->type);
+    }
+}
+
+/* Same as ovsdb_idl_read(), except that it also asserts that 'column' has key
+ * type 'key_type' and value type 'value_type'.  (Scalar and set types will
+ * have a value type of OVSDB_TYPE_VOID.)
+ *
+ * This is useful in code that "knows" that a particular column has a given
+ * type, so that it will abort if someone changes the column's type without
+ * updating the code that uses it. */
+const struct ovsdb_datum *
+ovsdb_idl_get(const struct ovsdb_idl_row *row,
+              const struct ovsdb_idl_column *column,
+              enum ovsdb_atomic_type key_type OVS_UNUSED,
+              enum ovsdb_atomic_type value_type OVS_UNUSED)
+{
+    assert(column->type.key.type == key_type);
+    assert(column->type.value.type == value_type);
+
+    return ovsdb_idl_read(row, column);
+}
 
 /* Transactions. */
 
@@ -1407,24 +1456,6 @@ ovsdb_idl_txn_complete(struct ovsdb_idl_txn *txn,
 {
     txn->status = status;
     hmap_remove(&txn->idl->outstanding_txns, &txn->hmap_node);
-}
-
-void
-ovsdb_idl_txn_read(const struct ovsdb_idl_row *row,
-                   const struct ovsdb_idl_column *column,
-                   struct ovsdb_datum *datum)
-{
-    const struct ovsdb_idl_table_class *class = row->table->class;
-    size_t column_idx = column - class->columns;
-
-    assert(row->new != NULL);
-    if (row->written && bitmap_is_set(row->written, column_idx)) {
-        ovsdb_datum_clone(datum, &row->new[column_idx], &column->type);
-    } else if (row->old) {
-        ovsdb_datum_clone(datum, &row->old[column_idx], &column->type);
-    } else {
-        ovsdb_datum_init_default(datum, &column->type);
-    }
 }
 
 void

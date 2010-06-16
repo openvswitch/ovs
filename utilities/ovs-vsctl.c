@@ -1989,23 +1989,21 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
         const struct ovsdb_idl_row *row;
         unsigned int best_score = 0;
 
-        /* It might make sense to relax this assertion. */
-        assert(id->name_column->type.key.type == OVSDB_TYPE_STRING);
-
         referrer = NULL;
         for (row = ovsdb_idl_first_row(ctx->idl, id->table);
              row != NULL && best_score != UINT_MAX;
              row = ovsdb_idl_next_row(row))
         {
-            struct ovsdb_datum name;
+            const struct ovsdb_datum *name;
 
-            ovsdb_idl_txn_read(row, id->name_column, &name);
-            if (name.n == 1) {
+            name = ovsdb_idl_get(row, id->name_column,
+                                 OVSDB_TYPE_STRING, OVSDB_TYPE_VOID);
+            if (name->n == 1) {
                 unsigned int score;
 
                 score = (partial_match_ok
-                         ? score_partial_match(name.keys[0].string, record_id)
-                         : !strcmp(name.keys[0].string, record_id));
+                         ? score_partial_match(name->keys[0].string, record_id)
+                         : !strcmp(name->keys[0].string, record_id));
                 if (score > best_score) {
                     referrer = row;
                     best_score = score;
@@ -2013,7 +2011,6 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
                     referrer = NULL;
                 }
             }
-            ovsdb_datum_destroy(&name, &id->name_column->type);
         }
         if (best_score && !referrer) {
             vsctl_fatal("multiple rows in %s match \"%s\"",
@@ -2026,17 +2023,14 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
 
     final = NULL;
     if (id->uuid_column) {
-        struct ovsdb_datum uuid;
+        const struct ovsdb_datum *uuid;
 
-        assert(id->uuid_column->type.key.type == OVSDB_TYPE_UUID);
-        assert(id->uuid_column->type.value.type == OVSDB_TYPE_VOID);
-
-        ovsdb_idl_txn_read(referrer, id->uuid_column, &uuid);
-        if (uuid.n == 1) {
+        uuid = ovsdb_idl_get(referrer, id->uuid_column,
+                             OVSDB_TYPE_UUID, OVSDB_TYPE_VOID);
+        if (uuid->n == 1) {
             final = ovsdb_idl_get_row_for_uuid(ctx->idl, table->class,
-                                               &uuid.keys[0].uuid);
+                                               &uuid->keys[0].uuid);
         }
-        ovsdb_datum_destroy(&uuid, &id->uuid_column->type);
     } else {
         final = referrer;
     }
@@ -2297,7 +2291,7 @@ cmd_get(struct vsctl_context *ctx)
     row = must_get_row(ctx, table, record_id);
     for (i = 3; i < ctx->argc; i++) {
         const struct ovsdb_idl_column *column;
-        struct ovsdb_datum datum;
+        const struct ovsdb_datum *datum;
         char *key_string;
 
         /* Special case for obtaining the UUID of a row.  We can't just do this
@@ -2313,7 +2307,7 @@ cmd_get(struct vsctl_context *ctx)
                                             &column, &key_string,
                                             NULL, NULL, 0, NULL));
 
-        ovsdb_idl_txn_read(row, column, &datum);
+        datum = ovsdb_idl_read(row, column);
         if (key_string) {
             union ovsdb_atom key;
             unsigned int idx;
@@ -2327,7 +2321,7 @@ cmd_get(struct vsctl_context *ctx)
                                                 &column->type.key,
                                                 key_string, ctx->symtab));
 
-            idx = ovsdb_datum_find_key(&datum, &key,
+            idx = ovsdb_datum_find_key(datum, &key,
                                        column->type.key.type);
             if (idx == UINT_MAX) {
                 if (!if_exists) {
@@ -2336,15 +2330,14 @@ cmd_get(struct vsctl_context *ctx)
                                 column->name);
                 }
             } else {
-                ovsdb_atom_to_string(&datum.values[idx],
+                ovsdb_atom_to_string(&datum->values[idx],
                                      column->type.value.type, out);
             }
             ovsdb_atom_destroy(&key, column->type.key.type);
         } else {
-            ovsdb_datum_to_string(&datum, &column->type, out);
+            ovsdb_datum_to_string(datum, &column->type, out);
         }
         ds_put_char(out, '\n');
-        ovsdb_datum_destroy(&datum, &column->type);
 
         free(key_string);
     }
@@ -2360,15 +2353,13 @@ list_record(const struct vsctl_table_class *table,
                   UUID_ARGS(&row->uuid));
     for (i = 0; i < table->class->n_columns; i++) {
         const struct ovsdb_idl_column *column = &table->class->columns[i];
-        struct ovsdb_datum datum;
+        const struct ovsdb_datum *datum;
 
-        ovsdb_idl_txn_read(row, column, &datum);
+        datum = ovsdb_idl_read(row, column);
 
         ds_put_format(out, "%-20s: ", column->name);
-        ovsdb_datum_to_string(&datum, &column->type, out);
+        ovsdb_datum_to_string(datum, &column->type, out);
         ds_put_char(out, '\n');
-
-        ovsdb_datum_destroy(&datum, &column->type);
     }
 }
 
@@ -2421,7 +2412,7 @@ set_column(const struct vsctl_table_class *table,
 
     if (key_string) {
         union ovsdb_atom key, value;
-        struct ovsdb_datum old, new;
+        struct ovsdb_datum datum;
 
         if (column->type.value.type == OVSDB_TYPE_VOID) {
             vsctl_fatal("cannot specify key to set for non-map column %s",
@@ -2433,17 +2424,15 @@ set_column(const struct vsctl_table_class *table,
         die_if_error(ovsdb_atom_from_string(&value, &column->type.value,
                                             value_string, symtab));
 
-        ovsdb_datum_init_empty(&new);
-        ovsdb_datum_add_unsafe(&new, &key, &value, &column->type);
+        ovsdb_datum_init_empty(&datum);
+        ovsdb_datum_add_unsafe(&datum, &key, &value, &column->type);
 
         ovsdb_atom_destroy(&key, column->type.key.type);
         ovsdb_atom_destroy(&value, column->type.value.type);
 
-        ovsdb_idl_txn_read(row, column, &old);
-        ovsdb_datum_union(&old, &new, &column->type, true);
-        ovsdb_idl_txn_write(row, column, &old);
-
-        ovsdb_datum_destroy(&new, &column->type);
+        ovsdb_datum_union(&datum, ovsdb_idl_read(row, column),
+                          &column->type, false);
+        ovsdb_idl_txn_write(row, column, &datum);
     } else {
         struct ovsdb_datum datum;
 
@@ -2490,7 +2479,7 @@ cmd_add(struct vsctl_context *ctx)
     die_if_error(get_column(table, column_name, &column));
 
     type = &column->type;
-    ovsdb_idl_txn_read(row, column, &old);
+    ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
     for (i = 4; i < ctx->argc; i++) {
         struct ovsdb_type add_type;
         struct ovsdb_datum add;
@@ -2531,7 +2520,7 @@ cmd_remove(struct vsctl_context *ctx)
     die_if_error(get_column(table, column_name, &column));
 
     type = &column->type;
-    ovsdb_idl_txn_read(row, column, &old);
+    ovsdb_datum_clone(&old, ovsdb_idl_read(row, column), &column->type);
     for (i = 4; i < ctx->argc; i++) {
         struct ovsdb_type rm_type;
         struct ovsdb_datum rm;
@@ -2681,8 +2670,8 @@ is_condition_satified(const struct vsctl_table_class *table,
     };
 
     const struct ovsdb_idl_column *column;
+    const struct ovsdb_datum *have_datum;
     char *key_string, *value_string;
-    struct ovsdb_datum have_datum;
     const char *operator;
     unsigned int idx;
     char *error;
@@ -2696,7 +2685,7 @@ is_condition_satified(const struct vsctl_table_class *table,
         vsctl_fatal("%s: missing value", arg);
     }
 
-    ovsdb_idl_txn_read(row, column, &have_datum);
+    have_datum = ovsdb_idl_read(row, column);
     if (key_string) {
         union ovsdb_atom want_key, want_value;
 
@@ -2710,10 +2699,10 @@ is_condition_satified(const struct vsctl_table_class *table,
         die_if_error(ovsdb_atom_from_string(&want_value, &column->type.value,
                                             value_string, symtab));
 
-        idx = ovsdb_datum_find_key(&have_datum,
+        idx = ovsdb_datum_find_key(have_datum,
                                    &want_key, column->type.key.type);
         if (idx != UINT_MAX) {
-            cmp = ovsdb_atom_compare_3way(&have_datum.values[idx],
+            cmp = ovsdb_atom_compare_3way(&have_datum->values[idx],
                                           &want_value,
                                           column->type.value.type);
         }
@@ -2726,11 +2715,10 @@ is_condition_satified(const struct vsctl_table_class *table,
         die_if_error(ovsdb_datum_from_string(&want_datum, &column->type,
                                              value_string, symtab));
         idx = 0;
-        cmp = ovsdb_datum_compare_3way(&have_datum, &want_datum,
+        cmp = ovsdb_datum_compare_3way(have_datum, &want_datum,
                                        &column->type);
         ovsdb_datum_destroy(&want_datum, &column->type);
     }
-    ovsdb_datum_destroy(&have_datum, &column->type);
 
     free(key_string);
     free(value_string);

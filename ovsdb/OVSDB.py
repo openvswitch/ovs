@@ -298,6 +298,9 @@ class BaseType:
                     'boolean': 'bool ',
                     'string': 'char *'}[self.type]
 
+    def toAtomicType(self):
+        return "OVSDB_TYPE_%s" % self.type.upper()
+
     def copyCValue(self, dst, src):
         args = {'dst': dst, 'src': src}
         if self.refTable:

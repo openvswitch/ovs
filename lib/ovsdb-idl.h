@@ -33,6 +33,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "compiler.h"
+#include "ovsdb-types.h"
 
 struct json;
 struct ovsdb_datum;
@@ -58,6 +59,13 @@ const struct ovsdb_idl_row *ovsdb_idl_get_row_for_uuid(
 const struct ovsdb_idl_row *ovsdb_idl_first_row(
     const struct ovsdb_idl *, const struct ovsdb_idl_table_class *);
 const struct ovsdb_idl_row *ovsdb_idl_next_row(const struct ovsdb_idl_row *);
+
+const struct ovsdb_datum *ovsdb_idl_read(const struct ovsdb_idl_row *,
+                                         const struct ovsdb_idl_column *);
+const struct ovsdb_datum *ovsdb_idl_get(const struct ovsdb_idl_row *,
+                                        const struct ovsdb_idl_column *,
+                                        enum ovsdb_atomic_type key_type,
+                                        enum ovsdb_atomic_type value_type);
 
 enum ovsdb_idl_txn_status {
     TXN_UNCHANGED,              /* Transaction didn't include any changes. */
@@ -90,9 +98,6 @@ int64_t ovsdb_idl_txn_get_increment_new_value(const struct ovsdb_idl_txn *);
 const struct uuid *ovsdb_idl_txn_get_insert_uuid(const struct ovsdb_idl_txn *,
                                                  const struct uuid *);
 
-void ovsdb_idl_txn_read(const struct ovsdb_idl_row *,
-                        const struct ovsdb_idl_column *,
-                        struct ovsdb_datum *);
 void ovsdb_idl_txn_write(const struct ovsdb_idl_row *,
                          const struct ovsdb_idl_column *,
                          struct ovsdb_datum *);
