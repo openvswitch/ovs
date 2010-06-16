@@ -719,7 +719,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         dpid = bridge_pick_datapath_id(br, ea, hw_addr_iface);
         ofproto_set_datapath_id(br->ofproto, dpid);
 
-        dpid_string = xasprintf("%012"PRIx64, dpid);
+        dpid_string = xasprintf("%016"PRIx64, dpid);
         ovsrec_bridge_set_datapath_id(br->cfg, dpid_string);
         free(dpid_string);
 
