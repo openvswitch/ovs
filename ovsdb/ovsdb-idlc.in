@@ -456,6 +456,12 @@ void
                 if type.value:
                     print "        " + type.value.copyCValue("datum.values[i].%s" % type.value.type, "%s[i]" % valueVar)
                 print "    }"
+                if type.value:
+                    valueType = type.value.toAtomicType()
+                else:
+                    valueType = "OVSDB_TYPE_VOID"
+                print "    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
+                    type.key.toAtomicType(), valueType)
             print "    ovsdb_idl_txn_write(&row->header_, &%(s)s_columns[%(S)s_COL_%(C)s], &datum);" \
                 % {'s': structName,
                    'S': structName.upper(),
