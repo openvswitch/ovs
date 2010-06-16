@@ -843,25 +843,25 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 }
 
 static const char *
-get_ovsrec_key_value(const char *key, char **keys, char **values, size_t n)
+get_ovsrec_key_value(const struct ovsdb_idl_row *row,
+                     const struct ovsdb_idl_column *column,
+                     const char *key)
 {
-    size_t i;
+    const struct ovsdb_datum *datum;
+    union ovsdb_atom atom;
+    unsigned int idx;
 
-    for (i = 0; i < n; i++) {
-        if (!strcmp(keys[i], key)) {
-            return values[i];
-        }
-    }
-    return NULL;
+    datum = ovsdb_idl_get(row, column, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
+    atom.string = (char *) key;
+    idx = ovsdb_datum_find_key(datum, &atom, OVSDB_TYPE_STRING);
+    return idx == UINT_MAX ? NULL : datum->values[idx].string;
 }
 
 static const char *
 bridge_get_other_config(const struct ovsrec_bridge *br_cfg, const char *key)
 {
-    return get_ovsrec_key_value(key,
-                                br_cfg->key_other_config,
-                                br_cfg->value_other_config,
-                                br_cfg->n_other_config);
+    return get_ovsrec_key_value(&br_cfg->header_,
+                                &ovsrec_bridge_col_other_config, key);
 }
 
 static void
@@ -3237,10 +3237,10 @@ static const char *
 get_port_other_config(const struct ovsrec_port *port, const char *key,
                       const char *default_value)
 {
-    const char *value = get_ovsrec_key_value(key,
-                                             port->key_other_config,
-                                             port->value_other_config,
-                                             port->n_other_config);
+    const char *value;
+
+    value = get_ovsrec_key_value(&port->header_, &ovsrec_port_col_other_config,
+                                 key);
     return value ? value : default_value;
 }
 
