@@ -84,6 +84,11 @@ struct ovsdb_error *ovsdb_atom_from_json(union ovsdb_atom *,
                                          const struct json *,
                                          struct ovsdb_symbol_table *)
     WARN_UNUSED_RESULT;
+struct ovsdb_error *ovsdb_datum_from_json_unique(struct ovsdb_datum *,
+                                                 const struct ovsdb_type *,
+                                                 const struct json *,
+                                                 struct ovsdb_symbol_table *)
+    WARN_UNUSED_RESULT;
 struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
 
@@ -142,6 +147,10 @@ struct ovsdb_error *ovsdb_datum_sort(struct ovsdb_datum *,
 
 void ovsdb_datum_sort_assert(struct ovsdb_datum *,
                              enum ovsdb_atomic_type key_type);
+
+size_t ovsdb_datum_sort_unique(struct ovsdb_datum *,
+                               enum ovsdb_atomic_type key_type,
+                               enum ovsdb_atomic_type value_type);
 
 struct ovsdb_error *ovsdb_datum_check_constraints(
     const struct ovsdb_datum *, const struct ovsdb_type *)

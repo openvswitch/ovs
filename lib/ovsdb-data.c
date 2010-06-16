@@ -935,6 +935,7 @@ ovsdb_datum_swap(struct ovsdb_datum *a, struct ovsdb_datum *b)
 
 struct ovsdb_datum_sort_cbdata {
     enum ovsdb_atomic_type key_type;
+    enum ovsdb_atomic_type value_type;
     struct ovsdb_datum *datum;
 };
 
@@ -942,10 +943,18 @@ static int
 ovsdb_datum_sort_compare_cb(size_t a, size_t b, void *cbdata_)
 {
     struct ovsdb_datum_sort_cbdata *cbdata = cbdata_;
+    int retval;
 
-    return ovsdb_atom_compare_3way(&cbdata->datum->keys[a],
-                                   &cbdata->datum->keys[b],
-                                   cbdata->key_type);
+    retval = ovsdb_atom_compare_3way(&cbdata->datum->keys[a],
+                                     &cbdata->datum->keys[b],
+                                     cbdata->key_type);
+    if (retval || cbdata->value_type == OVSDB_TYPE_VOID) {
+        return retval;
+    }
+
+    return ovsdb_atom_compare_3way(&cbdata->datum->values[a],
+                                   &cbdata->datum->values[b],
+                                   cbdata->value_type);
 }
 
 static void
@@ -959,6 +968,19 @@ ovsdb_datum_sort_swap_cb(size_t a, size_t b, void *cbdata_)
     }
 }
 
+static void
+ovsdb_datum_sort__(struct ovsdb_datum *datum, enum ovsdb_atomic_type key_type,
+                   enum ovsdb_atomic_type value_type)
+{
+    struct ovsdb_datum_sort_cbdata cbdata;
+
+    cbdata.key_type = key_type;
+    cbdata.value_type = value_type;
+    cbdata.datum = datum;
+    sort(datum->n, ovsdb_datum_sort_compare_cb, ovsdb_datum_sort_swap_cb,
+         &cbdata);
+}
+
 /* The keys in an ovsdb_datum must be unique and in sorted order.  Most
  * functions that modify an ovsdb_datum maintain these invariants.  For those
  * that don't, this function checks and restores these invariants for 'datum',
@@ -970,30 +992,25 @@ ovsdb_datum_sort_swap_cb(size_t a, size_t b, void *cbdata_)
 struct ovsdb_error *
 ovsdb_datum_sort(struct ovsdb_datum *datum, enum ovsdb_atomic_type key_type)
 {
+    size_t i;
+
     if (datum->n < 2) {
         return NULL;
-    } else {
-        struct ovsdb_datum_sort_cbdata cbdata;
-        size_t i;
+    }
 
-        cbdata.key_type = key_type;
-        cbdata.datum = datum;
-        sort(datum->n, ovsdb_datum_sort_compare_cb, ovsdb_datum_sort_swap_cb,
-             &cbdata);
+    ovsdb_datum_sort__(datum, key_type, OVSDB_TYPE_VOID);
 
-        for (i = 0; i < datum->n - 1; i++) {
-            if (ovsdb_atom_equals(&datum->keys[i], &datum->keys[i + 1],
-                                  key_type)) {
-                if (datum->values) {
-                    return ovsdb_error(NULL, "map contains duplicate key");
-                } else {
-                    return ovsdb_error(NULL, "set contains duplicate");
-                }
+    for (i = 0; i < datum->n - 1; i++) {
+        if (ovsdb_atom_equals(&datum->keys[i], &datum->keys[i + 1],
+                              key_type)) {
+            if (datum->values) {
+                return ovsdb_error(NULL, "map contains duplicate key");
+            } else {
+                return ovsdb_error(NULL, "set contains duplicate");
             }
         }
-
-        return NULL;
     }
+    return NULL;
 }
 
 /* This function is the same as ovsdb_datum_sort(), except that the caller
@@ -1007,6 +1024,46 @@ ovsdb_datum_sort_assert(struct ovsdb_datum *datum,
     if (error) {
         NOT_REACHED();
     }
+}
+
+/* This is similar to ovsdb_datum_sort(), except that it drops duplicate keys
+ * instead of reporting an error.  In a map type, the smallest value among a
+ * group of duplicate pairs is retained and the others are dropped.
+ *
+ * Returns the number of keys (or pairs) that were dropped. */
+size_t
+ovsdb_datum_sort_unique(struct ovsdb_datum *datum,
+                        enum ovsdb_atomic_type key_type,
+                        enum ovsdb_atomic_type value_type)
+{
+    size_t src, dst;
+
+    if (datum->n < 2) {
+        return 0;
+    }
+
+    ovsdb_datum_sort__(datum, key_type, value_type);
+
+    dst = 1;
+    for (src = 1; src < datum->n; src++) {
+        if (ovsdb_atom_equals(&datum->keys[src], &datum->keys[dst - 1],
+                              key_type)) {
+            ovsdb_atom_destroy(&datum->keys[src], key_type);
+            if (value_type != OVSDB_TYPE_VOID) {
+                ovsdb_atom_destroy(&datum->values[src], value_type);
+            }
+        } else {
+            if (src != dst) {
+                datum->keys[dst] = datum->keys[src];
+                if (value_type != OVSDB_TYPE_VOID) {
+                    datum->values[dst] = datum->values[src];
+                }
+            }
+            dst++;
+        }
+    }
+    datum->n = dst;
+    return datum->n - src;
 }
 
 /* Checks that each of the atoms in 'datum' conforms to the constraints
@@ -1043,21 +1100,11 @@ ovsdb_datum_check_constraints(const struct ovsdb_datum *datum,
     return NULL;
 }
 
-/* Parses 'json' as a datum of the type described by 'type'.  If successful,
- * returns NULL and initializes 'datum' with the parsed datum.  On failure,
- * returns an error and the contents of 'datum' are indeterminate.  The caller
- * is responsible for freeing the error or the datum that is returned.
- *
- * Violations of constraints expressed by 'type' are treated as errors.
- *
- * If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.  Refer to
- * ovsdb/SPECS for information about this, and for the syntax that this
- * function accepts. */
-struct ovsdb_error *
-ovsdb_datum_from_json(struct ovsdb_datum *datum,
-                      const struct ovsdb_type *type,
-                      const struct json *json,
-                      struct ovsdb_symbol_table *symtab)
+static struct ovsdb_error *
+ovsdb_datum_from_json__(struct ovsdb_datum *datum,
+                        const struct ovsdb_type *type,
+                        const struct json *json,
+                        struct ovsdb_symbol_table *symtab)
 {
     struct ovsdb_error *error;
 
@@ -1118,12 +1165,6 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
 
             datum->n++;
         }
-
-        error = ovsdb_datum_sort(datum, type->key.type);
-        if (error) {
-            goto error;
-        }
-
         return NULL;
 
     error:
@@ -1143,6 +1184,52 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
     }
 }
 
+/* Parses 'json' as a datum of the type described by 'type'.  If successful,
+ * returns NULL and initializes 'datum' with the parsed datum.  On failure,
+ * returns an error and the contents of 'datum' are indeterminate.  The caller
+ * is responsible for freeing the error or the datum that is returned.
+ *
+ * Violations of constraints expressed by 'type' are treated as errors.
+ *
+ * If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.  Refer to
+ * ovsdb/SPECS for information about this, and for the syntax that this
+ * function accepts. */
+struct ovsdb_error *
+ovsdb_datum_from_json(struct ovsdb_datum *datum,
+                      const struct ovsdb_type *type,
+                      const struct json *json,
+                      struct ovsdb_symbol_table *symtab)
+{
+    struct ovsdb_error *error;
+
+    error = ovsdb_datum_from_json__(datum, type, json, symtab);
+    if (error) {
+        return error;
+    }
+
+    error = ovsdb_datum_sort(datum, type->key.type);
+    if (error) {
+        ovsdb_datum_destroy(datum, type);
+    }
+    return error;
+}
+
+/* This is the same as ovsdb_datum_from_json(), except that duplicate values
+ * in a set or map are dropped instead of being treated as an error. */
+struct ovsdb_error *
+ovsdb_datum_from_json_unique(struct ovsdb_datum *datum,
+                             const struct ovsdb_type *type,
+                             const struct json *json,
+                             struct ovsdb_symbol_table *symtab)
+{
+    struct ovsdb_error *error;
+
+    error = ovsdb_datum_from_json__(datum, type, json, symtab);
+    if (!error) {
+        ovsdb_datum_sort_unique(datum, type->key.type, type->value.type);
+    }
+    return error;
+}
 
 /* Converts 'datum', of the specified 'type', to JSON format, and returns the
  * JSON.  The caller is responsible for freeing the returned JSON.
