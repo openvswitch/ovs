@@ -24,6 +24,10 @@
 
 #include "flow.h"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct ofpbuf;
 struct ofp_action_header;
 struct ofp_header;
@@ -135,5 +139,9 @@ ofp_mkerr(uint16_t type, uint16_t code)
     assert(type > 0 && type <= 0x7fff);
     return (type << 16) | code;
 }
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* vconn.h */
