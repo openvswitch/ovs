@@ -112,7 +112,10 @@
       </column>
 
       <column name="datapath_id">
-        Reports the OpenFlow datapath ID in use.  Exactly 16 hex digits.
+        Reports the OpenFlow datapath ID in use.  Exactly 16 hex
+        digits.  (Setting this column will have no useful effect.  Set
+        <ref column="other_config"/>:<code>other-config</code>
+        instead.)
       </column>
     </group>
 
