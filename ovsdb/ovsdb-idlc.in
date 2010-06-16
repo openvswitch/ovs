@@ -124,6 +124,7 @@ def printCIDLHeader(schemaFile):
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "ovsdb-data.h"
 #include "ovsdb-idl-provider.h"
 #include "uuid.h"''' % {'prefix': prefix.upper()}
 
@@ -173,6 +174,18 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
 
         for columnName, column in sorted(table.columns.iteritems()):
             print 'void %(s)s_verify_%(c)s(const struct %(s)s *);' % {'s': structName, 'c': columnName}
+
+        print """
+/* Functions for fetching columns as \"struct ovsdb_datum\"s.  (This is
+   rarely useful.  More often, it is easier to access columns by using
+   the members of %(s)s directly.) */""" % {'s': structName}
+        for columnName, column in sorted(table.columns.iteritems()):
+            if column.type.value:
+                valueParam = ', enum ovsdb_atomic_type value_type'
+            else:
+                valueParam = ''
+            print 'const struct ovsdb_datum *%(s)s_get_%(c)s(const struct %(s)s *, enum ovsdb_atomic_type key_type%(v)s);' % {
+                's': structName, 'c': columnName, 'v': valueParam}
 
         print
         for columnName, column in sorted(table.columns.iteritems()):
@@ -397,6 +410,42 @@ void
         'S': structName.upper(),
         'c': columnName,
         'C': columnName.upper()}
+
+        # Get functions.
+        for columnName, column in sorted(table.columns.iteritems()):
+            if column.type.value:
+                valueParam = ',\n\tenum ovsdb_atomic_type value_type OVS_UNUSED'
+                valueType = '\n    assert(value_type == %s);' % column.type.value.toAtomicType()
+                valueComment = "\n * 'value_type' must be %s." % column.type.value.toAtomicType()
+            else:
+                valueParam = ''
+                valueType = ''
+                valueComment = ''
+            print """
+/* Returns the %(c)s column's value in 'row' as a struct ovsdb_datum.
+ * This is useful occasionally: for example, ovsdb_datum_find_key() is an
+ * easier and more efficient way to search for a given key than implementing
+ * the same operation on the "cooked" form in 'row'.
+ *
+ * 'key_type' must be %(kt)s.%(vc)s
+ * (This helps to avoid silent bugs if someone changes %(c)s's
+ * type without updating the caller.)
+ *
+ * The caller must not modify or free the returned value.
+ *
+ * Various kinds of changes can invalidate the returned value: modifying
+ * 'column' within 'row', deleting 'row', or completing an ongoing transaction.
+ * If the returned value is needed for a long time, it is best to make a copy
+ * of it with ovsdb_datum_clone(). */
+const struct ovsdb_datum *
+%(s)s_get_%(c)s(const struct %(s)s *row,
+\tenum ovsdb_atomic_type key_type OVS_UNUSED%(v)s)
+{
+    assert(key_type == %(kt)s);%(vt)s
+    return ovsdb_idl_read(&row->header_, &%(s)s_col_%(c)s);
+}""" % {'s': structName, 'c': columnName,
+       'kt': column.type.key.toAtomicType(),
+       'v': valueParam, 'vt': valueType, 'vc': valueComment}
 
         # Set functions.
         for columnName, column in sorted(table.columns.iteritems()):
