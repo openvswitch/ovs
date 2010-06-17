@@ -46,6 +46,7 @@
 #include "ofpbuf.h"
 #include "ofproto/netflow.h"
 #include "ofproto/ofproto.h"
+#include "ovsdb-data.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "port-array.h"
@@ -104,6 +105,7 @@ struct mirror {
     struct bridge *bridge;
     size_t idx;
     char *name;
+    struct uuid uuid;           /* UUID of this "mirror" record in database. */
 
     /* Selection criteria. */
     struct shash src_ports;     /* Name is port name; data is always NULL. */
@@ -239,7 +241,7 @@ static void port_update_bond_compat(struct port *);
 static void port_update_vlan_compat(struct port *);
 static void port_update_bonding(struct port *);
 
-static struct mirror *mirror_create(struct bridge *, const char *name);
+static void mirror_create(struct bridge *, struct ovsrec_mirror *);
 static void mirror_destroy(struct mirror *);
 static void mirror_reconfigure(struct bridge *);
 static void mirror_reconfigure_one(struct mirror *, struct ovsrec_mirror *);
@@ -3815,50 +3817,51 @@ iface_update_qos(struct iface *iface, const struct ovsrec_qos *qos)
 
 /* Port mirroring. */
 
+static struct mirror *
+mirror_find_by_uuid(struct bridge *br, const struct uuid *uuid)
+{
+    int i;
+
+    for (i = 0; i < MAX_MIRRORS; i++) {
+        struct mirror *m = br->mirrors[i];
+        if (m && uuid_equals(uuid, &m->uuid)) {
+            return m;
+        }
+    }
+    return NULL;
+}
+
 static void
 mirror_reconfigure(struct bridge *br)
 {
-    struct shash old_mirrors, new_mirrors;
-    struct shash_node *node;
     unsigned long *rspan_vlans;
     int i;
 
-    /* Collect old mirrors. */
-    shash_init(&old_mirrors);
+    /* Get rid of deleted mirrors. */
     for (i = 0; i < MAX_MIRRORS; i++) {
-        if (br->mirrors[i]) {
-            shash_add(&old_mirrors, br->mirrors[i]->name, br->mirrors[i]);
-        }
-    }
+        struct mirror *m = br->mirrors[i];
+        if (m) {
+            const struct ovsdb_datum *mc;
+            union ovsdb_atom atom;
 
-    /* Collect new mirrors. */
-    shash_init(&new_mirrors);
-    for (i = 0; i < br->cfg->n_mirrors; i++) {
-        struct ovsrec_mirror *cfg = br->cfg->mirrors[i];
-        if (!shash_add_once(&new_mirrors, cfg->name, cfg)) {
-            VLOG_WARN("bridge %s: %s specified twice as mirror",
-                      br->name, cfg->name);
-        }
-    }
-
-    /* Get rid of deleted mirrors and add new mirrors. */
-    SHASH_FOR_EACH (node, &old_mirrors) {
-        if (!shash_find(&new_mirrors, node->name)) {
-            mirror_destroy(node->data);
-        }
-    }
-    SHASH_FOR_EACH (node, &new_mirrors) {
-        struct mirror *mirror = shash_find_data(&old_mirrors, node->name);
-        if (!mirror) {
-            mirror = mirror_create(br, node->name);
-            if (!mirror) {
-                break;
+            mc = ovsrec_bridge_get_mirrors(br->cfg, OVSDB_TYPE_UUID);
+            atom.uuid = br->mirrors[i]->uuid;
+            if (ovsdb_datum_find_key(mc, &atom, OVSDB_TYPE_UUID) == UINT_MAX) {
+                mirror_destroy(m);
             }
         }
-        mirror_reconfigure_one(mirror, node->data);
     }
-    shash_destroy(&old_mirrors);
-    shash_destroy(&new_mirrors);
+
+    /* Add new mirrors and reconfigure existing ones. */
+    for (i = 0; i < br->cfg->n_mirrors; i++) {
+        struct ovsrec_mirror *cfg = br->cfg->mirrors[i];
+        struct mirror *m = mirror_find_by_uuid(br, &cfg->header_.uuid);
+        if (m) {
+            mirror_reconfigure_one(m, cfg);
+        } else {
+            mirror_create(br, cfg);
+        }
+    }
 
     /* Update port reserved status. */
     for (i = 0; i < br->n_ports; i++) {
@@ -3893,8 +3896,8 @@ mirror_reconfigure(struct bridge *br)
     }
 }
 
-static struct mirror *
-mirror_create(struct bridge *br, const char *name)
+static void
+mirror_create(struct bridge *br, struct ovsrec_mirror *cfg)
 {
     struct mirror *m;
     size_t i;
@@ -3902,21 +3905,21 @@ mirror_create(struct bridge *br, const char *name)
     for (i = 0; ; i++) {
         if (i >= MAX_MIRRORS) {
             VLOG_WARN("bridge %s: maximum of %d port mirrors reached, "
-                      "cannot create %s", br->name, MAX_MIRRORS, name);
-            return NULL;
+                      "cannot create %s", br->name, MAX_MIRRORS, cfg->name);
+            return;
         }
         if (!br->mirrors[i]) {
             break;
         }
     }
 
-    VLOG_INFO("created port mirror %s on bridge %s", name, br->name);
+    VLOG_INFO("created port mirror %s on bridge %s", cfg->name, br->name);
     bridge_flush(br);
 
     br->mirrors[i] = m = xzalloc(sizeof *m);
     m->bridge = br;
     m->idx = i;
-    m->name = xstrdup(name);
+    m->name = xstrdup(cfg->name);
     shash_init(&m->src_ports);
     shash_init(&m->dst_ports);
     m->vlans = NULL;
@@ -3924,7 +3927,7 @@ mirror_create(struct bridge *br, const char *name)
     m->out_vlan = -1;
     m->out_port = NULL;
 
-    return m;
+    mirror_reconfigure_one(m, cfg);
 }
 
 static void
@@ -4025,6 +4028,12 @@ mirror_reconfigure_one(struct mirror *m, struct ovsrec_mirror *cfg)
     size_t n_vlans;
     int *vlans;
     size_t i;
+
+    /* Set name. */
+    if (strcmp(cfg->name, m->name)) {
+        free(m->name);
+        m->name = xstrdup(cfg->name);
+    }
 
     /* Get output port. */
     if (cfg->output_port) {
