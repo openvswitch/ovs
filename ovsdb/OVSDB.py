@@ -329,9 +329,9 @@ class BaseType:
             stmts += self.enum.cInitDatum("%s.enum_" % var)
         if self.type == 'integer':
             if self.minInteger != None:
-                stmts.append('%s.u.integer.min = %d;' % (var, self.minInteger))
+                stmts.append('%s.u.integer.min = INT64_C(%d);' % (var, self.minInteger))
             if self.maxInteger != None:
-                stmts.append('%s.u.integer.max = %d;' % (var, self.maxInteger))
+                stmts.append('%s.u.integer.max = INT64_C(%d);' % (var, self.maxInteger))
         elif self.type == 'real':
             if self.minReal != None:
                 stmts.append('%s.u.real.min = %d;' % (var, self.minReal))
