@@ -3944,6 +3944,7 @@ mirror_destroy(struct mirror *m)
         free(m->vlans);
 
         m->bridge->mirrors[m->idx] = NULL;
+        free(m->name);
         free(m);
 
         bridge_flush(br);
