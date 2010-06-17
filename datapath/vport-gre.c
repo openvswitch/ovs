@@ -733,7 +733,7 @@ static struct sk_buff *
 handle_gso(struct sk_buff *skb)
 {
 	if (skb_is_gso(skb)) {
-		struct sk_buff *nskb = skb_gso_segment(skb, NETIF_F_SG);
+		struct sk_buff *nskb = skb_gso_segment(skb, 0);
 
 		dev_kfree_skb(skb);
 		return nskb;

@@ -32,6 +32,7 @@
 #include <asm/system.h>
 #include <asm/div64.h>
 #include <asm/bug.h>
+#include <asm/highmem.h>
 #include <linux/netfilter_bridge.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/inetdevice.h>
@@ -743,23 +744,15 @@ queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
 		nskb = skb->next;
 		skb->next = NULL;
 
-		if (skb->ip_summed == CHECKSUM_PARTIAL) {
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
-			/* Until 2.6.22, the start of the transport header was
-			 * also the start of data to be checksummed.  Linux
-			 * 2.6.22 introduced the csum_start field for this
-			 * purpose, but we should point the transport header to
-			 * it anyway for backward compatibility, as
-			 * dev_queue_xmit() does even in 2.6.28. */
-			skb_set_transport_header(skb, skb->csum_start -
-						 skb_headroom(skb));
+		/* Until 2.6.22, the start of the transport header was
+		 * also the start of data to be checksummed.  Linux
+		 * 2.6.22 introduced the csum_start field for this
+		 * purpose, but we should point the transport header to
+		 * it anyway for backward compatibility, as
+		 * dev_queue_xmit() does even in 2.6.28. */
+		skb_set_transport_header(skb, skb->csum_start - skb_headroom(skb));
 #endif
-
-			err = skb_checksum_help(skb);
-			if (err)
-				goto err_kfree_skbs;
-		}
 
 		err = skb_cow(skb, sizeof *header);
 		if (err)
@@ -810,7 +803,7 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 	/* Break apart GSO packets into their component pieces.  Otherwise
 	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */
 	if (skb_is_gso(skb)) {
-		struct sk_buff *nskb = skb_gso_segment(skb, 0);
+		struct sk_buff *nskb = skb_gso_segment(skb, NETIF_F_SG | NETIF_F_HW_CSUM);
 		if (nskb) {
 			kfree_skb(skb);
 			skb = nskb;
@@ -2067,6 +2060,100 @@ exit:
 }
 #endif
 
+/* Unfortunately this function is not exported so this is a verbatim copy
+ * from net/core/datagram.c in 2.6.30. */
+static int skb_copy_and_csum_datagram(const struct sk_buff *skb, int offset,
+				      u8 __user *to, int len,
+				      __wsum *csump)
+{
+	int start = skb_headlen(skb);
+	int pos = 0;
+	int i, copy = start - offset;
+
+	/* Copy header. */
+	if (copy > 0) {
+		int err = 0;
+		if (copy > len)
+			copy = len;
+		*csump = csum_and_copy_to_user(skb->data + offset, to, copy,
+					       *csump, &err);
+		if (err)
+			goto fault;
+		if ((len -= copy) == 0)
+			return 0;
+		offset += copy;
+		to += copy;
+		pos = copy;
+	}
+
+	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+		int end;
+
+		WARN_ON(start > offset + len);
+
+		end = start + skb_shinfo(skb)->frags[i].size;
+		if ((copy = end - offset) > 0) {
+			__wsum csum2;
+			int err = 0;
+			u8  *vaddr;
+			skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
+			struct page *page = frag->page;
+
+			if (copy > len)
+				copy = len;
+			vaddr = kmap(page);
+			csum2 = csum_and_copy_to_user(vaddr +
+							frag->page_offset +
+							offset - start,
+						      to, copy, 0, &err);
+			kunmap(page);
+			if (err)
+				goto fault;
+			*csump = csum_block_add(*csump, csum2, pos);
+			if (!(len -= copy))
+				return 0;
+			offset += copy;
+			to += copy;
+			pos += copy;
+		}
+		start = end;
+	}
+
+	if (skb_shinfo(skb)->frag_list) {
+		struct sk_buff *list = skb_shinfo(skb)->frag_list;
+
+		for (; list; list=list->next) {
+			int end;
+
+			WARN_ON(start > offset + len);
+
+			end = start + list->len;
+			if ((copy = end - offset) > 0) {
+				__wsum csum2 = 0;
+				if (copy > len)
+					copy = len;
+				if (skb_copy_and_csum_datagram(list,
+							       offset - start,
+							       to, copy,
+							       &csum2))
+					goto fault;
+				*csump = csum_block_add(*csump, csum2, pos);
+				if ((len -= copy) == 0)
+					return 0;
+				offset += copy;
+				to += copy;
+				pos += copy;
+			}
+			start = end;
+		}
+	}
+	if (!len)
+		return 0;
+
+fault:
+	return -EFAULT;
+}
+
 ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 		      loff_t *ppos)
 {
@@ -2075,8 +2162,7 @@ ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 	int dp_idx = iminor(f->f_dentry->d_inode);
 	struct datapath *dp = get_dp(dp_idx);
 	struct sk_buff *skb;
-	struct iovec __user iov;
-	size_t copy_bytes;
+	size_t copy_bytes, tot_copy_bytes;
 	int retval;
 
 	if (!dp)
@@ -2111,12 +2197,44 @@ ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 		}
 	}
 success:
-	copy_bytes = min_t(size_t, skb->len, nbytes);
-	iov.iov_base = buf;
-	iov.iov_len = copy_bytes;
-	retval = skb_copy_datagram_iovec(skb, 0, &iov, iov.iov_len);
+	copy_bytes = tot_copy_bytes = min_t(size_t, skb->len, nbytes);
+	
+	retval = 0;
+	if (skb->ip_summed == CHECKSUM_PARTIAL) {
+		__wsum csum = 0;
+		int csum_start, csum_offset;
+
+		csum_start = skb_transport_header(skb) - skb->data;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+		csum_offset = skb->csum_offset;
+#else
+		csum_offset = skb->csum;
+#endif
+		if (csum_start + csum_offset + sizeof(__sum16) <= copy_bytes) {
+			retval = skb_copy_and_csum_datagram(skb, csum_start, buf + csum_start,
+							    copy_bytes - csum_start, &csum);
+
+			if (!retval) {
+				__sum16 __user *csump;
+
+				copy_bytes = csum_start;
+				csump = (__sum16 __user *)(buf + csum_start + csum_offset);
+				put_user(csum_fold(csum), csump);
+			}
+		}
+	}
+
+	if (!retval) {
+		struct iovec __user iov;
+
+		iov.iov_base = buf;
+		iov.iov_len = copy_bytes;
+		retval = skb_copy_datagram_iovec(skb, 0, &iov, iov.iov_len);
+	}
+
 	if (!retval)
-		retval = copy_bytes;
+		retval = tot_copy_bytes;
+
 	kfree_skb(skb);
 
 error:
