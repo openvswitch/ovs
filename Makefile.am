@@ -43,6 +43,7 @@ EXTRA_DIST = \
 	README-gcov \
 	REPORTING-BUGS \
 	SubmittingPatches \
+	WHY-OVS \
 	boot.sh
 bin_PROGRAMS =
 sbin_PROGRAMS =
