@@ -743,13 +743,6 @@ queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
 		nskb = skb->next;
 		skb->next = NULL;
 
-		/* If a checksum-deferred packet is forwarded to the
-		 * controller, correct the pointers and checksum.
-		 */
-		err = vswitch_skb_checksum_setup(skb);
-		if (err)
-			goto err_kfree_skbs;
-
 		if (skb->ip_summed == CHECKSUM_PARTIAL) {
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
@@ -809,6 +802,10 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 		goto err_kfree_skb;
 
 	forward_ip_summed(skb);
+
+	err = vswitch_skb_checksum_setup(skb);
+	if (err)
+		goto err_kfree_skb;
 
 	/* Break apart GSO packets into their component pieces.  Otherwise
 	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */
