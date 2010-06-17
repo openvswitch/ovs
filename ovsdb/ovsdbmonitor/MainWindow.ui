@@ -92,6 +92,26 @@
           </item>
          </layout>
         </widget>
+        <widget class="QWidget" name="QoS">
+         <attribute name="title">
+          <string>QoS</string>
+         </attribute>
+         <layout class="QGridLayout" name="gridLayout_10">
+          <item row="0" column="0">
+           <widget class="QTableWidget" name="QoSTable"/>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="Queue">
+         <attribute name="title">
+          <string>Queue</string>
+         </attribute>
+         <layout class="QGridLayout" name="gridLayout_11">
+          <item row="0" column="0">
+           <widget class="QTableWidget" name="QueueTable"/>
+          </item>
+         </layout>
+        </widget>
         <widget class="QWidget" name="sFlow">
          <attribute name="title">
           <string>sFlow</string>

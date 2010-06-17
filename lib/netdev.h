@@ -97,6 +97,7 @@ int netdev_register_provider(const struct netdev_class *);
 int netdev_unregister_provider(const char *type);
 void netdev_enumerate_types(struct svec *types);
 
+/* Open and close. */
 int netdev_open(struct netdev_options *, struct netdev **);
 int netdev_open_default(const char *name, struct netdev **);
 int netdev_reconfigure(struct netdev *, const struct shash *args);
@@ -107,11 +108,13 @@ bool netdev_is_open(const char *name);
 
 int netdev_enumerate(struct svec *);
 
+/* Basic properties. */
 const char *netdev_get_name(const struct netdev *);
 const char *netdev_get_type(const struct netdev *);
 int netdev_get_mtu(const struct netdev *, int *mtup);
 int netdev_get_ifindex(const struct netdev *);
 
+/* Packet send and receive. */
 int netdev_recv(struct netdev *, struct ofpbuf *);
 void netdev_recv_wait(struct netdev *);
 int netdev_drain(struct netdev *);
@@ -119,9 +122,11 @@ int netdev_drain(struct netdev *);
 int netdev_send(struct netdev *, const struct ofpbuf *);
 void netdev_send_wait(struct netdev *);
 
+/* Hardware address. */
 int netdev_set_etheraddr(struct netdev *, const uint8_t mac[6]);
 int netdev_get_etheraddr(const struct netdev *, uint8_t mac[6]);
 
+/* PHY interface. */
 int netdev_get_carrier(const struct netdev *, bool *carrier);
 int netdev_get_features(struct netdev *,
                         uint32_t *current, uint32_t *advertised,
@@ -130,6 +135,7 @@ uint64_t netdev_features_to_bps(uint32_t features);
 bool netdev_features_is_full_duplex(uint32_t features);
 int netdev_set_advertisements(struct netdev *, uint32_t advertise);
 
+/* TCP/IP stack interface. */
 int netdev_get_in4(const struct netdev *, struct in_addr *address,
                    struct in_addr *netmask);
 int netdev_set_in4(struct netdev *, struct in_addr addr, struct in_addr mask);
@@ -143,15 +149,62 @@ int netdev_get_flags(const struct netdev *, enum netdev_flags *);
 int netdev_set_flags(struct netdev *, enum netdev_flags, bool permanent);
 int netdev_turn_flags_on(struct netdev *, enum netdev_flags, bool permanent);
 int netdev_turn_flags_off(struct netdev *, enum netdev_flags, bool permanent);
-
-int netdev_get_stats(const struct netdev *, struct netdev_stats *);
-int netdev_set_stats(struct netdev *, const struct netdev_stats *);
-int netdev_set_policing(struct netdev *, uint32_t kbits_rate, 
-                        uint32_t kbits_burst);
-
-int netdev_get_vlan_vid(const struct netdev *, int *vlan_vid);
 struct netdev *netdev_find_dev_by_in4(const struct in_addr *);
 
+/* Statistics. */
+int netdev_get_stats(const struct netdev *, struct netdev_stats *);
+int netdev_set_stats(struct netdev *, const struct netdev_stats *);
+
+/* Quality of service. */
+struct netdev_qos_capabilities {
+    unsigned int n_queues;
+};
+
+struct netdev_queue_stats {
+    /* Values of unsupported statistics are set to all-1-bits (UINT64_MAX). */
+    uint64_t tx_bytes;
+    uint64_t tx_packets;
+    uint64_t tx_errors;
+};
+
+int netdev_set_policing(struct netdev *, uint32_t kbits_rate,
+                        uint32_t kbits_burst);
+
+int netdev_get_qos_types(const struct netdev *, struct svec *types);
+int netdev_get_qos_capabilities(const struct netdev *,
+                                const char *type,
+                                struct netdev_qos_capabilities *);
+int netdev_get_n_queues(const struct netdev *,
+                        const char *type, unsigned int *n_queuesp);
+
+int netdev_get_qos(const struct netdev *,
+                   const char **typep, struct shash *details);
+int netdev_set_qos(struct netdev *,
+                   const char *type, const struct shash *details);
+
+int netdev_get_queue(const struct netdev *,
+                     unsigned int queue_id, struct shash *details);
+int netdev_set_queue(struct netdev *,
+                     unsigned int queue_id, const struct shash *details);
+int netdev_delete_queue(struct netdev *, unsigned int queue_id);
+int netdev_get_queue_stats(const struct netdev *, unsigned int queue_id,
+                           struct netdev_queue_stats *);
+
+typedef void netdev_dump_queues_cb(unsigned int queue_id,
+                                   const struct shash *details, void *aux);
+int netdev_dump_queues(const struct netdev *,
+                       netdev_dump_queues_cb *, void *aux);
+
+typedef void netdev_dump_queue_stats_cb(unsigned int queue_id,
+                                        struct netdev_queue_stats *,
+                                        void *aux);
+int netdev_dump_queue_stats(const struct netdev *,
+                            netdev_dump_queue_stats_cb *, void *aux);
+
+/* Linux stuff. */
+int netdev_get_vlan_vid(const struct netdev *, int *vlan_vid);
+
+/* Monitoring for changes in network device status. */
 struct netdev_monitor *netdev_monitor_create(void);
 void netdev_monitor_destroy(struct netdev_monitor *);
 int netdev_monitor_add(struct netdev_monitor *, struct netdev *);

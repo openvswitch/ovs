@@ -253,6 +253,7 @@ static struct iface *iface_from_dp_ifidx(const struct bridge *,
                                          uint16_t dp_ifidx);
 static bool iface_is_internal(const struct bridge *, const char *name);
 static void iface_set_mac(struct iface *);
+static void iface_update_qos(struct iface *, const struct ovsrec_qos *);
 
 /* Hooks into ofproto processing. */
 static struct ofhooks bridge_ofhooks;
@@ -832,9 +833,14 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         for (i = 0; i < br->n_ports; i++) {
             struct port *port = br->ports[i];
+            int j;
 
             port_update_vlan_compat(port);
             port_update_bonding(port);
+
+            for (j = 0; j < port->n_ifaces; j++) {
+                iface_update_qos(port->ifaces[j], port->cfg->qos);
+            }
         }
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
@@ -3641,6 +3647,90 @@ iface_set_mac(struct iface *iface)
                 VLOG_ERR("interface %s: setting MAC failed (%s)",
                          iface->name, strerror(error));
             }
+        }
+    }
+}
+
+static void
+shash_from_ovs_idl_map(char **keys, char **values, size_t n,
+                       struct shash *shash)
+{
+    size_t i;
+
+    shash_init(shash);
+    for (i = 0; i < n; i++) {
+        shash_add(shash, keys[i], values[i]);
+    }
+}
+
+struct iface_delete_queues_cbdata {
+    struct netdev *netdev;
+    const int64_t *queue_ids;
+    size_t n_queue_ids;
+};
+
+static bool
+queue_ids_include(const int64_t *ids, size_t n, int64_t target)
+{
+    size_t low = 0;
+    size_t high = n;
+
+    while (low < high) {
+        size_t mid = low + (high - low) / 2;
+        if (target > ids[mid]) {
+            high = mid;
+        } else if (target < ids[mid]) {
+            low = mid + 1;
+        } else {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void
+iface_delete_queues(unsigned int queue_id,
+                    const struct shash *details OVS_UNUSED, void *cbdata_)
+{
+    struct iface_delete_queues_cbdata *cbdata = cbdata_;
+
+    if (!queue_ids_include(cbdata->queue_ids, cbdata->n_queue_ids, queue_id)) {
+        netdev_delete_queue(cbdata->netdev, queue_id);
+    }
+}
+
+static void
+iface_update_qos(struct iface *iface, const struct ovsrec_qos *qos)
+{
+    if (!qos || qos->type[0] == '\0') {
+        netdev_set_qos(iface->netdev, NULL, NULL);
+    } else {
+        struct iface_delete_queues_cbdata cbdata;
+        struct shash details;
+        size_t i;
+
+        /* Configure top-level Qos for 'iface'. */
+        shash_from_ovs_idl_map(qos->key_other_config, qos->value_other_config,
+                               qos->n_other_config, &details);
+        netdev_set_qos(iface->netdev, qos->type, &details);
+        shash_destroy(&details);
+
+        /* Deconfigure queues that were deleted. */
+        cbdata.netdev = iface->netdev;
+        cbdata.queue_ids = qos->key_queues;
+        cbdata.n_queue_ids = qos->n_queues;
+        netdev_dump_queues(iface->netdev, iface_delete_queues, &cbdata);
+
+        /* Configure queues for 'iface'. */
+        for (i = 0; i < qos->n_queues; i++) {
+            const struct ovsrec_queue *queue = qos->value_queues[i];
+            unsigned int queue_id = qos->key_queues[i];
+
+            shash_from_ovs_idl_map(queue->key_other_config,
+                                   queue->value_other_config,
+                                   queue->n_other_config, &details);
+            netdev_set_queue(iface->netdev, queue_id, &details);
+            shash_destroy(&details);
         }
     }
 }

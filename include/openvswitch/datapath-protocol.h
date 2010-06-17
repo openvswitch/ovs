@@ -279,7 +279,9 @@ struct odp_flowvec {
 #define ODPAT_SET_TP_SRC        11   /* TCP/UDP source port. */
 #define ODPAT_SET_TP_DST        12   /* TCP/UDP destination port. */
 #define ODPAT_SET_TUNNEL        13   /* Set the encapsulating tunnel ID. */
-#define ODPAT_N_ACTIONS         14
+#define ODPAT_SET_PRIORITY      14   /* Set skb->priority. */
+#define ODPAT_POP_PRIORITY      15   /* Restore original skb->priority. */
+#define ODPAT_N_ACTIONS         16
 
 struct odp_action_output {
     uint16_t type;              /* ODPAT_OUTPUT. */
@@ -353,6 +355,13 @@ struct odp_action_tp_port {
     uint16_t reserved2;
 };
 
+/* Action structure for ODPAT_SET_PRIORITY. */
+struct odp_action_priority {
+    uint16_t type;              /* ODPAT_SET_PRIORITY. */
+    uint16_t reserved;
+    uint32_t priority;          /* skb->priority value. */
+};
+
 union odp_action {
     uint16_t type;
     struct odp_action_output output;
@@ -365,6 +374,7 @@ union odp_action {
     struct odp_action_nw_addr nw_addr;
     struct odp_action_nw_tos nw_tos;
     struct odp_action_tp_port tp_port;
+    struct odp_action_priority priority;
 };
 
 struct odp_execute {

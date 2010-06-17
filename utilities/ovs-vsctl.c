@@ -1904,6 +1904,14 @@ static const struct vsctl_table_class tables[] = {
      {{&ovsrec_table_port, &ovsrec_port_col_name, NULL},
       {NULL, NULL, NULL}}},
 
+    {&ovsrec_table_qos,
+     {{&ovsrec_table_port, &ovsrec_port_col_name, &ovsrec_port_col_qos},
+      {NULL, NULL, NULL}}},
+
+    {&ovsrec_table_queue,
+     {{NULL, NULL, NULL},
+      {NULL, NULL, NULL}}},
+
     {&ovsrec_table_ssl,
      {{&ovsrec_table_open_vswitch, NULL, &ovsrec_open_vswitch_col_ssl}}},
 

@@ -18,6 +18,7 @@
 #define OFP_UTIL_H 1
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "flow.h"
@@ -77,6 +78,7 @@ const union ofp_action *actions_first(struct actions_iterator *,
 const union ofp_action *actions_next(struct actions_iterator *);
 int validate_actions(const union ofp_action *, size_t n_actions,
                      int max_ports);
+bool action_outputs_to_port(const union ofp_action *, uint16_t port);
 
 void normalize_match(struct ofp_match *);
 

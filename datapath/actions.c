@@ -444,6 +444,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 	 * then freeing the original skbuff is wasteful.  So the following code
 	 * is slightly obscure just to avoid that. */
 	int prev_port = -1;
+	u32 priority = skb->priority;
 	int err;
 
 	if (dp->sflow_probability) {
@@ -515,6 +516,14 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		case ODPAT_SET_TP_SRC:
 		case ODPAT_SET_TP_DST:
 			skb = set_tp_port(skb, key, &a->tp_port, gfp);
+			break;
+
+		case ODPAT_SET_PRIORITY:
+			skb->priority = a->priority.priority;
+			break;
+
+		case ODPAT_POP_PRIORITY:
+			skb->priority = priority;
 			break;
 		}
 		if (!skb)

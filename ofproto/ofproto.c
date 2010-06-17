@@ -59,6 +59,9 @@
 #include "vconn.h"
 #include "xtoxll.h"
 
+#include <linux/types.h>        /* XXX */
+#include <linux/pkt_sched.h>    /* XXX */
+
 #define THIS_MODULE VLM_ofproto
 #include "vlog.h"
 
@@ -1798,7 +1801,7 @@ rule_has_out_port(const struct rule *rule, uint16_t out_port)
     }
     for (oa = actions_first(&i, rule->actions, rule->n_actions); oa;
          oa = actions_next(&i)) {
-        if (oa->type == htons(OFPAT_OUTPUT) && oa->output.port == out_port) {
+        if (action_outputs_to_port(oa, out_port)) {
             return true;
         }
     }
@@ -2070,15 +2073,11 @@ is_controller_rule(struct rule *rule)
      * NetFlow expiration messages since it is just part of the control
      * logic for the network and not real traffic. */
 
-    if (rule && rule->super) {
-        struct rule *super = rule->super;
-
-        return super->n_actions == 1 &&
-               super->actions[0].type == htons(OFPAT_OUTPUT) &&
-               super->actions[0].output.port == htons(OFPP_CONTROLLER);
-    }
-
-    return false;
+    return (rule
+            && rule->super
+            && rule->super->n_actions == 1
+            && action_outputs_to_port(&rule->super->actions[0],
+                                      htons(OFPP_CONTROLLER)));
 }
 
 static void
@@ -2195,7 +2194,8 @@ handle_features_request(struct ofproto *p, struct ofconn *ofconn,
                          (1u << OFPAT_SET_NW_DST) |
                          (1u << OFPAT_SET_NW_TOS) |
                          (1u << OFPAT_SET_TP_SRC) |
-                         (1u << OFPAT_SET_TP_DST));
+                         (1u << OFPAT_SET_TP_DST) |
+                         (1u << OFPAT_ENQUEUE));
 
     PORT_ARRAY_FOR_EACH (port, &p->ports, port_no) {
         hton_ofp_phy_port(ofpbuf_put(buf, &port->opp, sizeof port->opp));
@@ -2423,6 +2423,48 @@ xlate_output_action(struct action_xlate_ctx *ctx,
     }
 }
 
+/* If the final ODP action in 'ctx' is "pop priority", drop it, as an
+ * optimization, because we're going to add another action that sets the
+ * priority immediately after, or because there are no actions following the
+ * pop.  */
+static void
+remove_pop_action(struct action_xlate_ctx *ctx)
+{
+    size_t n = ctx->out->n_actions;
+    if (n > 0 && ctx->out->actions[n - 1].type == ODPAT_POP_PRIORITY) {
+        ctx->out->n_actions--;
+    }
+}
+
+static void
+xlate_enqueue_action(struct action_xlate_ctx *ctx,
+                     const struct ofp_action_enqueue *oae)
+{
+    uint16_t ofp_port, odp_port;
+
+    /* Figure out ODP output port. */
+    ofp_port = ntohs(oae->port);
+    if (ofp_port != OFPP_IN_PORT) {
+        odp_port = ofp_port_to_odp_port(ofp_port);
+    } else {
+        odp_port = ctx->flow.in_port;
+    }
+
+    /* Add ODP actions. */
+    remove_pop_action(ctx);
+    odp_actions_add(ctx->out, ODPAT_SET_PRIORITY)->priority.priority
+        = TC_H_MAKE(1, ntohl(oae->queue_id)); /* XXX */
+    add_output_action(ctx, odp_port);
+    odp_actions_add(ctx->out, ODPAT_POP_PRIORITY);
+
+    /* Update NetFlow output port. */
+    if (ctx->nf_output_iface == NF_OUT_DROP) {
+        ctx->nf_output_iface = odp_port;
+    } else if (ctx->nf_output_iface != NF_OUT_FLOOD) {
+        ctx->nf_output_iface = NF_OUT_MULTI;
+    }
+}
+
 static void
 xlate_nicira_action(struct action_xlate_ctx *ctx,
                     const struct nx_action_header *nah)
@@ -2446,7 +2488,7 @@ xlate_nicira_action(struct action_xlate_ctx *ctx,
         break;
 
     /* If you add a new action here that modifies flow data, don't forget to
-     * update the flow key in ctx->flow in the same key. */
+     * update the flow key in ctx->flow at the same time. */
 
     default:
         VLOG_DBG_RL(&rl, "unknown Nicira action type %"PRIu16, subtype);
@@ -2540,6 +2582,10 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             xlate_nicira_action(ctx, (const struct nx_action_header *) ia);
             break;
 
+        case OFPAT_ENQUEUE:
+            xlate_enqueue_action(ctx, (const struct ofp_action_enqueue *) ia);
+            break;
+
         default:
             VLOG_DBG_RL(&rl, "unknown action type %"PRIu16, type);
             break;
@@ -2567,6 +2613,7 @@ xlate_actions(const union ofp_action *in, size_t n_in,
     ctx.may_set_up_flow = true;
     ctx.nf_output_iface = NF_OUT_DROP;
     do_xlate_actions(in, n_in, &ctx);
+    remove_pop_action(&ctx);
 
     /* Check with in-band control to see if we're allowed to set up this
      * flow. */
@@ -3144,6 +3191,95 @@ handle_aggregate_stats_request(struct ofproto *p, struct ofconn *ofconn,
     return 0;
 }
 
+struct queue_stats_cbdata {
+    struct ofconn *ofconn;
+    struct ofpbuf *msg;
+    uint16_t port_no;
+};
+
+static void
+put_queue_stats(struct queue_stats_cbdata *cbdata, uint16_t queue_id,
+                const struct netdev_queue_stats *stats)
+{
+    struct ofp_queue_stats *reply;
+
+    reply = append_stats_reply(sizeof *reply, cbdata->ofconn, &cbdata->msg);
+    reply->port_no = htons(cbdata->port_no);
+    memset(reply->pad, 0, sizeof reply->pad);
+    reply->queue_id = htonl(queue_id);
+    reply->tx_bytes = htonll(stats->tx_bytes);
+    reply->tx_packets = htonll(stats->tx_packets);
+    reply->tx_errors = htonll(stats->tx_errors);
+}
+
+static void
+handle_queue_stats_dump_cb(unsigned int queue_id,
+                           struct netdev_queue_stats *stats,
+                           void *cbdata_)
+{
+    struct queue_stats_cbdata *cbdata = cbdata_;
+
+    put_queue_stats(cbdata, queue_id, stats);
+}
+
+static void
+handle_queue_stats_for_port(struct ofport *port, uint16_t port_no,
+                            uint16_t queue_id,
+                            struct queue_stats_cbdata *cbdata)
+{
+    cbdata->port_no = port_no;
+    if (queue_id == OFPQ_ALL) {
+        netdev_dump_queue_stats(port->netdev,
+                                handle_queue_stats_dump_cb, cbdata);
+    } else {
+        struct netdev_queue_stats stats;
+
+        netdev_get_queue_stats(port->netdev, queue_id, &stats);
+        put_queue_stats(cbdata, queue_id, &stats);
+    }
+}
+
+static int
+handle_queue_stats_request(struct ofproto *ofproto, struct ofconn *ofconn,
+                           const struct ofp_stats_request *osr,
+                           size_t arg_size)
+{
+    struct ofp_queue_stats_request *qsr;
+    struct queue_stats_cbdata cbdata;
+    struct ofport *port;
+    unsigned int port_no;
+    uint32_t queue_id;
+
+    if (arg_size != sizeof *qsr) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    qsr = (struct ofp_queue_stats_request *) osr->body;
+
+    COVERAGE_INC(ofproto_queue_req);
+
+    cbdata.ofconn = ofconn;
+    cbdata.msg = start_stats_reply(osr, 128);
+
+    port_no = ntohs(qsr->port_no);
+    queue_id = ntohl(qsr->queue_id);
+    if (port_no == OFPP_ALL) {
+        PORT_ARRAY_FOR_EACH (port, &ofproto->ports, port_no) {
+            handle_queue_stats_for_port(port, port_no, queue_id, &cbdata);
+        }
+    } else if (port_no < ofproto->max_ports) {
+        port = port_array_get(&ofproto->ports, port_no);
+        if (port) {
+            handle_queue_stats_for_port(port, port_no, queue_id, &cbdata);
+        }
+    } else {
+        ofpbuf_delete(cbdata.msg);
+        return ofp_mkerr(OFPET_QUEUE_OP_FAILED, OFPQOFC_BAD_PORT);
+    }
+    queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
+
+    return 0;
+}
+
 static int
 handle_stats_request(struct ofproto *p, struct ofconn *ofconn,
                      struct ofp_header *oh)
@@ -3174,6 +3310,9 @@ handle_stats_request(struct ofproto *p, struct ofconn *ofconn,
 
     case OFPST_PORT:
         return handle_port_stats_request(p, ofconn, osr, arg_size);
+
+    case OFPST_QUEUE:
+        return handle_queue_stats_request(p, ofconn, osr, arg_size);
 
     case OFPST_VENDOR:
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);

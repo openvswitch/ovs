@@ -22,6 +22,7 @@
 #include "ofpbuf.h"
 #include "packets.h"
 #include "random.h"
+#include "xtoxll.h"
 
 #define THIS_MODULE VLM_ofp_util
 #include "vlog.h"
@@ -489,8 +490,11 @@ check_action_exact_len(const union ofp_action *a, unsigned int len,
     return 0;
 }
 
+/* Checks that 'port' is a valid output port for the OFPAT_OUTPUT action, given
+ * that the switch will never have more than 'max_ports' ports.  Returns 0 if
+ * 'port' is valid, otherwise an ofp_mkerr() return code. */
 static int
-check_action_port(int port, int max_ports)
+check_output_port(uint16_t port, int max_ports)
 {
     switch (port) {
     case OFPP_IN_PORT:
@@ -503,12 +507,37 @@ check_action_port(int port, int max_ports)
         return 0;
 
     default:
-        if (port >= 0 && port < max_ports) {
+        if (port < max_ports) {
             return 0;
         }
         VLOG_WARN_RL(&bad_ofmsg_rl, "unknown output port %x", port);
         return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT);
     }
+}
+
+/* Checks that 'action' is a valid OFPAT_ENQUEUE action, given that the switch
+ * will never have more than 'max_ports' ports.  Returns 0 if 'port' is valid,
+ * otherwise an ofp_mkerr() return code. */
+static int
+check_enqueue_action(const union ofp_action *a, unsigned int len,
+                     int max_ports)
+{
+    const struct ofp_action_enqueue *oae;
+    uint16_t port;
+    int error;
+
+    error = check_action_exact_len(a, len, 16);
+    if (error) {
+        return error;
+    }
+
+    oae = (const struct ofp_action_enqueue *) a;
+    port = ntohs(oae->port);
+    if (port < max_ports || port == OFPP_IN_PORT) {
+        return 0;
+    }
+    VLOG_WARN_RL(&bad_ofmsg_rl, "unknown enqueue port %x", port);
+    return ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_OUT_PORT);
 }
 
 static int
@@ -539,8 +568,11 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
 
     switch (ntohs(a->type)) {
     case OFPAT_OUTPUT:
-        error = check_action_port(ntohs(a->output.port), max_ports);
-        return error ? error : check_action_exact_len(a, len, 8);
+        error = check_action_exact_len(a, len, 8);
+        if (error) {
+            return error;
+        }
+        return check_output_port(ntohs(a->output.port), max_ports);
 
     case OFPAT_SET_VLAN_VID:
     case OFPAT_SET_VLAN_PCP:
@@ -560,6 +592,9 @@ check_action(const union ofp_action *a, unsigned int len, int max_ports)
         return (a->vendor.vendor == htonl(NX_VENDOR_ID)
                 ? check_nicira_action(a, len)
                 : ofp_mkerr(OFPET_BAD_ACTION, OFPBAC_BAD_VENDOR));
+
+    case OFPAT_ENQUEUE:
+        return check_enqueue_action(a, len, max_ports);
 
     default:
         VLOG_WARN_RL(&bad_ofmsg_rl, "unknown action type %"PRIu16,
@@ -601,6 +636,21 @@ validate_actions(const union ofp_action *actions, size_t n_actions,
         a += n_slots;
     }
     return 0;
+}
+
+/* Returns true if 'action' outputs to 'port' (which must be in network byte
+ * order), false otherwise. */
+bool
+action_outputs_to_port(const union ofp_action *action, uint16_t port)
+{
+    switch (ntohs(action->type)) {
+    case OFPAT_OUTPUT:
+        return action->output.port == port;
+    case OFPAT_ENQUEUE:
+        return ((const struct ofp_action_enqueue *) action)->port == port;
+    default:
+        return false;
+    }
 }
 
 /* The set of actions must either come from a trusted source or have been
