@@ -1131,7 +1131,9 @@ gre_send(struct vport *vport, struct sk_buff *skb)
 	}
 
 	forward_ip_summed(skb);
-	vswitch_skb_checksum_setup(skb);
+
+	if (unlikely(vswitch_skb_checksum_setup(skb)))
+		goto error_free;
 
 	skb = handle_gso(skb);
 	if (unlikely(IS_ERR(skb))) {

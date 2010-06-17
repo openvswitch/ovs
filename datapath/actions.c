@@ -113,6 +113,8 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 						~skb->csum);
 		}
 	} else {
+		int err;
+
 		/* Add vlan header */
 
 		/* Set up checksumming pointers for checksum-deferred packets
@@ -120,7 +122,11 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		 * when we send the packet out on the wire, and it will fail at
 		 * that point because skb_checksum_setup() will not look inside
 		 * an 802.1Q header. */
-		vswitch_skb_checksum_setup(skb);
+		err = vswitch_skb_checksum_setup(skb);
+		if (unlikely(err)) {
+			kfree_skb(skb);
+			return ERR_PTR(err);
+		}	
 
 		/* GSO is not implemented for packets with an 802.1Q header, so
 		 * we have to do segmentation before we add that header.
