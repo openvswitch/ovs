@@ -3754,27 +3754,16 @@ shash_from_ovs_idl_map(char **keys, char **values, size_t n,
 
 struct iface_delete_queues_cbdata {
     struct netdev *netdev;
-    const int64_t *queue_ids;
-    size_t n_queue_ids;
+    const struct ovsdb_datum *queues;
 };
 
 static bool
-queue_ids_include(const int64_t *ids, size_t n, int64_t target)
+queue_ids_include(const struct ovsdb_datum *queues, int64_t target)
 {
-    size_t low = 0;
-    size_t high = n;
+    union ovsdb_atom atom;
 
-    while (low < high) {
-        size_t mid = low + (high - low) / 2;
-        if (target > ids[mid]) {
-            high = mid;
-        } else if (target < ids[mid]) {
-            low = mid + 1;
-        } else {
-            return true;
-        }
-    }
-    return false;
+    atom.integer = target;
+    return ovsdb_datum_find_key(queues, &atom, OVSDB_TYPE_INTEGER) != UINT_MAX;
 }
 
 static void
@@ -3783,7 +3772,7 @@ iface_delete_queues(unsigned int queue_id,
 {
     struct iface_delete_queues_cbdata *cbdata = cbdata_;
 
-    if (!queue_ids_include(cbdata->queue_ids, cbdata->n_queue_ids, queue_id)) {
+    if (!queue_ids_include(cbdata->queues, queue_id)) {
         netdev_delete_queue(cbdata->netdev, queue_id);
     }
 }
@@ -3806,8 +3795,8 @@ iface_update_qos(struct iface *iface, const struct ovsrec_qos *qos)
 
         /* Deconfigure queues that were deleted. */
         cbdata.netdev = iface->netdev;
-        cbdata.queue_ids = qos->key_queues;
-        cbdata.n_queue_ids = qos->n_queues;
+        cbdata.queues = ovsrec_qos_get_queues(qos, OVSDB_TYPE_INTEGER,
+                                              OVSDB_TYPE_UUID);
         netdev_dump_queues(iface->netdev, iface_delete_queues, &cbdata);
 
         /* Configure queues for 'iface'. */
