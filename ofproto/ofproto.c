@@ -414,15 +414,11 @@ ofproto_set_datapath_id(struct ofproto *p, uint64_t datapath_id)
     uint64_t old_dpid = p->datapath_id;
     p->datapath_id = datapath_id ? datapath_id : pick_datapath_id(p);
     if (p->datapath_id != old_dpid) {
-        struct ofconn *ofconn;
-
         VLOG_INFO("datapath ID changed to %016"PRIx64, p->datapath_id);
 
         /* Force all active connections to reconnect, since there is no way to
          * notify a controller that the datapath ID has changed. */
-        LIST_FOR_EACH (ofconn, struct ofconn, node, &p->all_conns) {
-            rconn_reconnect(ofconn->rconn);
-        }
+        ofproto_reconnect_controllers(p);
     }
 }
 
@@ -664,6 +660,18 @@ ofproto_set_controllers(struct ofproto *p,
                               struct ofconn, hmap_node);
         ofconn->ss = switch_status_register(p->switch_status, "remote",
                                             rconn_status_cb, ofconn->rconn);
+    }
+}
+
+/* Drops the connections between 'ofproto' and all of its controllers, forcing
+ * them to reconnect. */
+void
+ofproto_reconnect_controllers(struct ofproto *ofproto)
+{
+    struct ofconn *ofconn;
+
+    LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
+        rconn_reconnect(ofconn->rconn);
     }
 }
 

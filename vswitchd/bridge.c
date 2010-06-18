@@ -195,6 +195,7 @@ static struct bridge *bridge_create(const struct ovsrec_bridge *br_cfg);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
 static unixctl_cb_func bridge_unixctl_dump_flows;
+static unixctl_cb_func bridge_unixctl_reconnect;
 static int bridge_run_one(struct bridge *);
 static size_t bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
                                      const struct bridge *br,
@@ -271,6 +272,8 @@ bridge_init(const char *remote)
     /* Register unixctl commands. */
     unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
     unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
+                             NULL);
+    unixctl_command_register("bridge/reconnect", bridge_unixctl_reconnect,
                              NULL);
     bond_init();
 }
@@ -1351,6 +1354,29 @@ bridge_unixctl_dump_flows(struct unixctl_conn *conn,
 
     unixctl_command_reply(conn, 200, ds_cstr(&results));
     ds_destroy(&results);
+}
+
+/* "bridge/reconnect [BRIDGE]": makes BRIDGE drop all of its controller
+ * connections and reconnect.  If BRIDGE is not specified, then all bridges
+ * drop their controller connections and reconnect. */
+static void
+bridge_unixctl_reconnect(struct unixctl_conn *conn,
+                         const char *args, void *aux OVS_UNUSED)
+{
+    struct bridge *br;
+    if (args[0] != '\0') {
+        br = bridge_lookup(args);
+        if (!br) {
+            unixctl_command_reply(conn, 501, "Unknown bridge");
+            return;
+        }
+        ofproto_reconnect_controllers(br->ofproto);
+    } else {
+        LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
+            ofproto_reconnect_controllers(br->ofproto);
+        }
+    }
+    unixctl_command_reply(conn, 200, NULL);
 }
 
 static int
