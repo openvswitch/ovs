@@ -3198,7 +3198,7 @@ struct queue_stats_cbdata {
 };
 
 static void
-put_queue_stats(struct queue_stats_cbdata *cbdata, uint16_t queue_id,
+put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
                 const struct netdev_queue_stats *stats)
 {
     struct ofp_queue_stats *reply;
@@ -3213,7 +3213,7 @@ put_queue_stats(struct queue_stats_cbdata *cbdata, uint16_t queue_id,
 }
 
 static void
-handle_queue_stats_dump_cb(unsigned int queue_id,
+handle_queue_stats_dump_cb(uint32_t queue_id,
                            struct netdev_queue_stats *stats,
                            void *cbdata_)
 {
@@ -3224,7 +3224,7 @@ handle_queue_stats_dump_cb(unsigned int queue_id,
 
 static void
 handle_queue_stats_for_port(struct ofport *port, uint16_t port_no,
-                            uint16_t queue_id,
+                            uint32_t queue_id,
                             struct queue_stats_cbdata *cbdata)
 {
     cbdata->port_no = port_no;
