@@ -21,6 +21,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "util.h"
+ 
+#ifdef  __cplusplus
+extern "C" {
+#endif
 
 /* Doubly linked list head or element. */
 struct list {
@@ -66,5 +70,9 @@ bool list_is_empty(const struct list *);
          (NEXT = CONTAINER_OF((ITER)->MEMBER.next, STRUCT, MEMBER), \
           &(ITER)->MEMBER != (LIST));                               \
          ITER = NEXT)
+ 
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* list.h */
