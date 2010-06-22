@@ -79,7 +79,7 @@ dequeue_packet(struct pinsched *ps, struct wdp_packet_queue *q,
     q->n--;
     if (list_is_empty(&q->list)) {
         free(q);
-        port_array_set(&ps->queues, port_no, NULL);
+        port_array_delete(&ps->queues, port_no);
     }
     ps->n_queued--;
     return packet;

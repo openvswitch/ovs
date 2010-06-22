@@ -115,7 +115,7 @@ lookup_brc_multicast_group(int *multicast_group)
         return retval;
     }
     ofpbuf_init(&request, 0);
-    nl_msg_put_genlmsghdr(&request, sock, 0, brc_family,
+    nl_msg_put_genlmsghdr(&request, 0, brc_family,
             NLM_F_REQUEST, BRC_GENL_C_QUERY_MC, 1);
     retval = nl_sock_transact(sock, &request, &reply);
     ofpbuf_uninit(&request);
@@ -279,68 +279,6 @@ get_bridge_ports(const struct ovsrec_bridge *br, struct svec *ports,
 {
     do_get_bridge_parts(br, ports, vlan, false);
 }
-
-#if 0
-/* Go through the configuration file and remove any ports that no longer
- * exist associated with a bridge. */
-static void
-prune_ports(void)
-{
-    int i, j;
-    struct svec bridges, delete;
-
-    if (cfg_lock(NULL, 0)) {
-        /* Couldn't lock config file. */
-        return;
-    }
-
-    svec_init(&bridges);
-    svec_init(&delete);
-    cfg_get_subsections(&bridges, "bridge");
-    for (i=0; i<bridges.n; i++) {
-        const char *br_name = bridges.names[i];
-        struct svec ifaces;
-
-        /* Check that each bridge interface exists. */
-        svec_init(&ifaces);
-        get_bridge_ifaces(br_name, &ifaces, -1);
-        for (j = 0; j < ifaces.n; j++) {
-            const char *iface_name = ifaces.names[j];
-
-            /* The local port and internal ports are created and destroyed by
-             * ovs-vswitchd itself, so don't bother checking for them at all.
-             * In practice, they might not exist if ovs-vswitchd hasn't
-             * finished reloading since the configuration file was updated. */
-            if (!strcmp(iface_name, br_name)
-                || cfg_get_bool(0, "iface.%s.internal", iface_name)) {
-                continue;
-            }
-
-            if (!netdev_exists(iface_name)) {
-                VLOG_INFO_RL(&rl, "removing dead interface %s from %s",
-                             iface_name, br_name);
-                svec_add(&delete, iface_name);
-            }
-        }
-        svec_destroy(&ifaces);
-    }
-    svec_destroy(&bridges);
-
-    if (delete.n) {
-        size_t i;
-
-        for (i = 0; i < delete.n; i++) {
-            cfg_del_match("bridge.*.port=%s", delete.names[i]);
-            cfg_del_match("bonding.*.slave=%s", delete.names[i]);
-        }
-        reload_config();
-        cfg_unlock();
-    } else {
-        cfg_unlock();
-    }
-    svec_destroy(&delete);
-}
-#endif
 
 static struct ovsdb_idl_txn *
 txn_from_openvswitch(const struct ovsrec_open_vswitch *ovs)
@@ -725,7 +663,7 @@ static struct ofpbuf *
 compose_reply(uint32_t seq, int error)
 {
     struct ofpbuf *reply = ofpbuf_new(4096);
-    nl_msg_put_genlmsghdr(reply, brc_sock, 32, brc_family, NLM_F_REQUEST,
+    nl_msg_put_genlmsghdr(reply, 32, brc_family, NLM_F_REQUEST,
                           BRC_GENL_C_DP_RESULT, 1);
     ((struct nlmsghdr *) reply->data)->nlmsg_seq = seq;
     nl_msg_put_u32(reply, BRC_GENL_A_ERR_CODE, error);
@@ -1417,10 +1355,6 @@ main(int argc, char *argv[])
          */
         if (ovs && prune_timeout) {
             rtnl_recv_update(idl, ovs);
-#if 0
-            prune_ports();
-#endif
-
             nl_sock_wait(rtnl_sock, POLLIN);
             poll_timer_wait(prune_timeout);
         }

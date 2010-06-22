@@ -101,6 +101,7 @@
 #define XFLOW_VPORT_ETHER_SET     _IOW('O', 26, struct xflow_vport_ether)
 #define XFLOW_VPORT_MTU_GET       _IOWR('O', 27, struct xflow_vport_mtu)
 #define XFLOW_VPORT_MTU_SET       _IOW('O', 28, struct xflow_vport_mtu)
+#define XFLOW_VPORT_STATS_SET     _IOWR('O', 29, struct xflow_vport_stats_req)
 
 struct xflow_stats {
     /* Flows. */
@@ -207,7 +208,7 @@ struct xflow_port_group {
 struct xflow_flow_stats {
     uint64_t n_packets;         /* Number of matched packets. */
     uint64_t n_bytes;           /* Number of matched bytes. */
-    uint64_t used_sec;          /* Time last used. */
+    uint64_t used_sec;          /* Time last used, in system monotonic time. */
     uint32_t used_nsec;
     uint8_t tcp_flags;
     uint8_t ip_tos;
@@ -279,7 +280,9 @@ struct xflow_flowvec {
 #define XFLOWAT_SET_TP_SRC        10 /* TCP/UDP source port. */
 #define XFLOWAT_SET_TP_DST        11 /* TCP/UDP destination port. */
 #define XFLOWAT_SET_TUNNEL        12 /* Set the encapsulating tunnel ID. */
-#define XFLOWAT_N_ACTIONS         13
+#define XFLOWAT_SET_PRIORITY      14 /* Set skb->priority. */
+#define XFLOWAT_POP_PRIORITY      15 /* Restore original skb->priority. */
+#define XFLOWAT_N_ACTIONS         16
 
 struct xflow_action_output {
     uint16_t type;              /* XFLOWAT_OUTPUT. */
@@ -337,6 +340,13 @@ struct xflow_action_nw_tos {
     uint16_t reserved3;
 };
 
+/* Action structure for XFLOWAT_SET_PRIORITY. */
+struct xflow_action_priority {
+    uint16_t type;              /* XFLOWAT_SET_PRIORITY. */
+    uint16_t reserved;
+    uint32_t priority;          /* skb->priority value. */
+};
+
 /* Action structure for XFLOWAT_SET_TP_SRC/DST. */
 struct xflow_action_tp_port {
     uint16_t type;              /* XFLOWAT_SET_TP_SRC/DST. */
@@ -356,6 +366,7 @@ union xflow_action {
     struct xflow_action_nw_addr nw_addr;
     struct xflow_action_nw_tos nw_tos;
     struct xflow_action_tp_port tp_port;
+    struct xflow_action_priority priority;
 };
 
 struct xflow_execute {

@@ -111,7 +111,8 @@ static void do_vsctl(const char *args,
 
 static const struct vsctl_table_class *get_table(const char *table_name);
 static void set_column(const struct vsctl_table_class *,
-                       const struct ovsdb_idl_row *, const char *arg);
+                       const struct ovsdb_idl_row *, const char *arg,
+                       struct ovsdb_symbol_table *);
 
 
 int
@@ -306,12 +307,27 @@ parse_command(int argc, char *argv[], struct vsctl_command *command)
 
     shash_init(&command->options);
     for (i = 0; i < argc; i++) {
-        if (argv[i][0] != '-') {
+        const char *option = argv[i];
+        const char *equals;
+        char *key, *value;
+
+        if (option[0] != '-') {
             break;
         }
-        if (!shash_add_once(&command->options, argv[i], NULL)) {
+
+        equals = strchr(option, '=');
+        if (equals) {
+            key = xmemdup0(option, equals - option);
+            value = xstrdup(equals + 1);
+        } else {
+            key = xstrdup(option);
+            value = NULL;
+        }
+
+        if (shash_find(&command->options, key)) {
             vsctl_fatal("'%s' option specified multiple times", argv[i]);
         }
+        shash_add_nocopy(&command->options, key, value);
     }
     if (i == argc) {
         vsctl_fatal("missing command name");
@@ -325,9 +341,19 @@ parse_command(int argc, char *argv[], struct vsctl_command *command)
             SHASH_FOR_EACH (node, &command->options) {
                 const char *s = strstr(p->options, node->name);
                 int end = s ? s[strlen(node->name)] : EOF;
-                if (end != ',' && end != ' ' && end != '\0') {
+
+                if (end != '=' && end != ',' && end != ' ' && end != '\0') {
                     vsctl_fatal("'%s' command has no '%s' option",
                                 argv[i], node->name);
+                }
+                if ((end == '=') != (node->data != NULL)) {
+                    if (end == '=') {
+                        vsctl_fatal("missing argument to '%s' option on '%s' "
+                                    "command", node->name, argv[i]);
+                    } else {
+                        vsctl_fatal("'%s' option on '%s' does not accept an "
+                                    "argument", node->name, argv[i]);
+                    }
                 }
             }
 
@@ -486,6 +512,7 @@ struct vsctl_context {
     struct ds output;
     struct ovsdb_idl *idl;
     struct ovsdb_idl_txn *txn;
+    struct ovsdb_symbol_table *symtab;
     const struct ovsrec_open_vswitch *ovs;
 };
 
@@ -1359,7 +1386,8 @@ add_port(struct vsctl_context *ctx,
     }
 
     for (i = 0; i < n_settings; i++) {
-        set_column(get_table("Port"), &port->header_, settings[i]);
+        set_column(get_table("Port"), &port->header_, settings[i],
+                   ctx->symtab);
     }
 
     bridge_insert_port((bridge->parent ? bridge->parent->br_cfg
@@ -1876,6 +1904,14 @@ static const struct vsctl_table_class tables[] = {
      {{&ovsrec_table_port, &ovsrec_port_col_name, NULL},
       {NULL, NULL, NULL}}},
 
+    {&ovsrec_table_qos,
+     {{&ovsrec_table_port, &ovsrec_port_col_name, &ovsrec_port_col_qos},
+      {NULL, NULL, NULL}}},
+
+    {&ovsrec_table_queue,
+     {{NULL, NULL, NULL},
+      {NULL, NULL, NULL}}},
+
     {&ovsrec_table_ssl,
      {{&ovsrec_table_open_vswitch, NULL, &ovsrec_open_vswitch_col_ssl}}},
 
@@ -2204,7 +2240,7 @@ cmd_get(struct vsctl_context *ctx)
 
             die_if_error(ovsdb_atom_from_string(&key,
                                                 &column->type.key,
-                                                key_string));
+                                                key_string, ctx->symtab));
 
             idx = ovsdb_datum_find_key(&datum, &key,
                                        column->type.key.type);
@@ -2284,7 +2320,8 @@ cmd_list(struct vsctl_context *ctx)
 
 static void
 set_column(const struct vsctl_table_class *table,
-           const struct ovsdb_idl_row *row, const char *arg)
+           const struct ovsdb_idl_row *row, const char *arg,
+           struct ovsdb_symbol_table *symtab)
 {
     const struct ovsdb_idl_column *column;
     char *key_string, *value_string;
@@ -2307,9 +2344,9 @@ set_column(const struct vsctl_table_class *table,
         }
 
         die_if_error(ovsdb_atom_from_string(&key, &column->type.key,
-                                            key_string));
+                                            key_string, symtab));
         die_if_error(ovsdb_atom_from_string(&value, &column->type.value,
-                                            value_string));
+                                            value_string, symtab));
 
         ovsdb_datum_init_empty(&new);
         ovsdb_datum_add_unsafe(&new, &key, &value, &column->type);
@@ -2326,7 +2363,7 @@ set_column(const struct vsctl_table_class *table,
         struct ovsdb_datum datum;
 
         die_if_error(ovsdb_datum_from_string(&datum, &column->type,
-                                             value_string));
+                                             value_string, symtab));
         ovsdb_idl_txn_write(row, column, &datum);
     }
 
@@ -2346,7 +2383,7 @@ cmd_set(struct vsctl_context *ctx)
     table = get_table(table_name);
     row = must_get_row(ctx, table, record_id);
     for (i = 3; i < ctx->argc; i++) {
-        set_column(table, row, ctx->argv[i]);
+        set_column(table, row, ctx->argv[i], ctx->symtab);
     }
 }
 
@@ -2376,7 +2413,8 @@ cmd_add(struct vsctl_context *ctx)
         add_type = *type;
         add_type.n_min = 1;
         add_type.n_max = UINT_MAX;
-        die_if_error(ovsdb_datum_from_string(&add, &add_type, ctx->argv[i]));
+        die_if_error(ovsdb_datum_from_string(&add, &add_type, ctx->argv[i],
+                                             ctx->symtab));
         ovsdb_datum_union(&old, &add, type, false);
         ovsdb_datum_destroy(&add, type);
     }
@@ -2417,18 +2455,20 @@ cmd_remove(struct vsctl_context *ctx)
         rm_type = *type;
         rm_type.n_min = 1;
         rm_type.n_max = UINT_MAX;
-        error = ovsdb_datum_from_string(&rm, &rm_type, ctx->argv[i]);
+        error = ovsdb_datum_from_string(&rm, &rm_type,
+                                        ctx->argv[i], ctx->symtab);
         if (error && ovsdb_type_is_map(&rm_type)) {
             free(error);
             rm_type.value.type = OVSDB_TYPE_VOID;
-            die_if_error(ovsdb_datum_from_string(&rm, &rm_type, ctx->argv[i]));
+            die_if_error(ovsdb_datum_from_string(&rm, &rm_type,
+                                                 ctx->argv[i], ctx->symtab));
         }
         ovsdb_datum_subtract(&old, type, &rm, &rm_type);
         ovsdb_datum_destroy(&rm, &rm_type);
     }
     if (old.n < type->n_min) {
         vsctl_fatal("\"remove\" operation would put %u %s in column %s of "
-                    "table %s but the minimun number is %u",
+                    "table %s but the minimum number is %u",
                     old.n,
                     type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
                     column->name, table->class->name, type->n_min);
@@ -2469,15 +2509,36 @@ cmd_clear(struct vsctl_context *ctx)
 static void
 cmd_create(struct vsctl_context *ctx)
 {
+    const char *id = shash_find_data(&ctx->options, "--id");
     const char *table_name = ctx->argv[1];
     const struct vsctl_table_class *table;
     const struct ovsdb_idl_row *row;
+    const struct uuid *uuid;
     int i;
 
+    if (id) {
+        struct ovsdb_symbol *symbol;
+
+        if (id[0] != '@') {
+            vsctl_fatal("row id \"%s\" does not begin with \"@\"", id);
+        }
+
+        symbol = ovsdb_symbol_table_insert(ctx->symtab, id);
+        if (symbol->used) {
+            vsctl_fatal("row id \"%s\" may only be used to insert a single "
+                        "row", id);
+        }
+        symbol->used = true;
+
+        uuid = &symbol->uuid;
+    } else {
+        uuid = NULL;
+    }
+
     table = get_table(table_name);
-    row = ovsdb_idl_txn_insert(ctx->txn, table->class);
+    row = ovsdb_idl_txn_insert(ctx->txn, table->class, uuid);
     for (i = 2; i < ctx->argc; i++) {
-        set_column(table, row, ctx->argv[i]);
+        set_column(table, row, ctx->argv[i], ctx->symtab);
     }
     ds_put_format(&ctx->output, UUID_FMT, UUID_ARGS(&row->uuid));
 }
@@ -2542,7 +2603,8 @@ where_uuid_equals(const struct uuid *uuid)
 static void
 vsctl_context_init(struct vsctl_context *ctx, struct vsctl_command *command,
                    struct ovsdb_idl *idl, struct ovsdb_idl_txn *txn,
-                   const struct ovsrec_open_vswitch *ovs)
+                   const struct ovsrec_open_vswitch *ovs,
+    struct ovsdb_symbol_table *symtab)
 {
     ctx->argc = command->argc;
     ctx->argv = command->argv;
@@ -2552,7 +2614,7 @@ vsctl_context_init(struct vsctl_context *ctx, struct vsctl_command *command,
     ctx->idl = idl;
     ctx->txn = txn;
     ctx->ovs = ovs;
-
+    ctx->symtab = symtab;
 }
 
 static void
@@ -2568,6 +2630,8 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     struct ovsdb_idl_txn *txn;
     const struct ovsrec_open_vswitch *ovs;
     enum ovsdb_idl_txn_status status;
+    struct ovsdb_symbol_table *symtab;
+    const char *unused;
     struct vsctl_command *c;
     int64_t next_cfg = 0;
     char *error;
@@ -2591,11 +2655,12 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         json_destroy(where);
     }
 
+    symtab = ovsdb_symbol_table_create();
     for (c = commands; c < &commands[n_commands]; c++) {
         struct vsctl_context ctx;
 
         ds_init(&c->output);
-        vsctl_context_init(&ctx, c, idl, txn, ovs);
+        vsctl_context_init(&ctx, c, idl, txn, ovs, symtab);
         (c->syntax->run)(&ctx);
         vsctl_context_done(&ctx, c);
     }
@@ -2604,18 +2669,27 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     if (wait_for_reload && status == TXN_SUCCESS) {
         next_cfg = ovsdb_idl_txn_get_increment_new_value(txn);
     }
-    for (c = commands; c < &commands[n_commands]; c++) {
-        if (c->syntax->postprocess) {
-            struct vsctl_context ctx;
+    if (status == TXN_UNCHANGED || status == TXN_SUCCESS) {
+        for (c = commands; c < &commands[n_commands]; c++) {
+            if (c->syntax->postprocess) {
+                struct vsctl_context ctx;
 
-            vsctl_context_init(&ctx, c, idl, txn, ovs);
-            (c->syntax->postprocess)(&ctx);
-            vsctl_context_done(&ctx, c);
+                vsctl_context_init(&ctx, c, idl, txn, ovs, symtab);
+                (c->syntax->postprocess)(&ctx);
+                vsctl_context_done(&ctx, c);
+            }
         }
     }
     error = xstrdup(ovsdb_idl_txn_get_error(txn));
     ovsdb_idl_txn_destroy(txn);
     the_idl_txn = NULL;
+
+    unused = ovsdb_symbol_table_find_unused(symtab);
+    if (unused) {
+        vsctl_fatal("row id \"%s\" is referenced but never created (e.g. "
+                    "with \"-- --id=%s create ...\")", unused, unused);
+    }
+    ovsdb_symbol_table_destroy(symtab);
 
     switch (status) {
     case TXN_INCOMPLETE:
@@ -2646,6 +2720,8 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
 
     for (c = commands; c < &commands[n_commands]; c++) {
         struct ds *ds = &c->output;
+        struct shash_node *node;
+
         if (oneline) {
             size_t j;
 
@@ -2670,6 +2746,10 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
             fputs(ds_cstr(ds), stdout);
         }
         ds_destroy(&c->output);
+
+        SHASH_FOR_EACH (node, &c->options) {
+            free(node->data);
+        }
         shash_destroy(&c->options);
     }
     free(commands);
@@ -2742,7 +2822,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"add", 4, INT_MAX, cmd_add, NULL, ""},
     {"remove", 4, INT_MAX, cmd_remove, NULL, ""},
     {"clear", 3, INT_MAX, cmd_clear, NULL, ""},
-    {"create", 2, INT_MAX, cmd_create, post_create, ""},
+    {"create", 2, INT_MAX, cmd_create, post_create, "--id="},
     {"destroy", 1, INT_MAX, cmd_destroy, NULL, "--if-exists"},
 
     {NULL, 0, 0, NULL, NULL, NULL},

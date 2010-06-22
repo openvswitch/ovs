@@ -40,6 +40,16 @@ shash_destroy(struct shash *sh)
     }
 }
 
+/* Like shash_destroy(), but also free() each node's 'data'. */
+void
+shash_destroy_free_data(struct shash *sh)
+{
+    if (sh) {
+        shash_clear_free_data(sh);
+        hmap_destroy(&sh->map);
+    }
+}
+
 void
 shash_swap(struct shash *a, struct shash *b)
 {
@@ -64,6 +74,20 @@ shash_clear(struct shash *sh)
     }
 }
 
+/* Like shash_clear(), but also free() each node's 'data'. */
+void
+shash_clear_free_data(struct shash *sh)
+{
+    struct shash_node *node, *next;
+
+    SHASH_FOR_EACH_SAFE (node, next, sh) {
+        hmap_remove(&sh->map, &node->node);
+        free(node->data);
+        free(node->name);
+        free(node);
+    }
+}
+
 bool
 shash_is_empty(const struct shash *shash)
 {
@@ -79,13 +103,21 @@ shash_count(const struct shash *shash)
 /* It is the caller's responsibility to avoid duplicate names, if that is
  * desirable. */
 struct shash_node *
-shash_add(struct shash *sh, const char *name, const void *data)
+shash_add_nocopy(struct shash *sh, char *name, const void *data)
 {
     struct shash_node *node = xmalloc(sizeof *node);
-    node->name = xstrdup(name);
+    node->name = name;
     node->data = (void *) data;
     hmap_insert(&sh->map, &node->node, hash_name(name));
     return node;
+}
+
+/* It is the caller's responsibility to avoid duplicate names, if that is
+ * desirable. */
+struct shash_node *
+shash_add(struct shash *sh, const char *name, const void *data)
+{
+    return shash_add_nocopy(sh, xstrdup(name), data);
 }
 
 bool

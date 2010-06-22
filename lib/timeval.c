@@ -34,11 +34,17 @@
 /* Initialized? */
 static bool inited;
 
+/* Does this system have monotonic timers? */
+static bool monotonic_inited;
+static clockid_t monotonic_clock;
+
 /* Has a timer tick occurred? */
-static volatile sig_atomic_t tick;
+static volatile sig_atomic_t wall_tick;
+static volatile sig_atomic_t monotonic_tick;
 
 /* The current time, as of the last refresh. */
-static struct timeval now;
+static struct timespec wall_time;
+static struct timespec monotonic_time;
 
 /* Time at which to die with SIGALRM (if not TIME_MIN). */
 static time_t deadline = TIME_MIN;
@@ -46,7 +52,8 @@ static time_t deadline = TIME_MIN;
 static void set_up_timer(void);
 static void set_up_signal(int flags);
 static void sigalrm_handler(int);
-static void refresh_if_ticked(void);
+static void refresh_wall_if_ticked(void);
+static void refresh_monotonic_if_ticked(void);
 static time_t time_add(time_t, time_t);
 static void block_sigalrm(sigset_t *);
 static void unblock_sigalrm(const sigset_t *);
@@ -64,11 +71,30 @@ time_init(void)
     coverage_init();
 
     inited = true;
-    gettimeofday(&now, NULL);
-    tick = false;
+    time_refresh();
 
     set_up_signal(SA_RESTART);
     set_up_timer();
+}
+
+static void
+set_up_monotonic(void)
+{
+    int err;
+
+    if (monotonic_inited) {
+        return;
+    }
+
+    err = clock_gettime(CLOCK_MONOTONIC, &monotonic_time);
+    if (!err) {
+        monotonic_clock = CLOCK_MONOTONIC;
+    } else {
+        monotonic_clock = CLOCK_REALTIME;
+        VLOG_DBG("monotonic timer not available");
+    }
+
+    monotonic_inited = true;
 }
 
 static void
@@ -115,13 +141,21 @@ time_enable_restart(void)
 static void
 set_up_timer(void)
 {
-    struct itimerval itimer;
+    timer_t timer_id;
+    struct itimerspec itimer;
+
+    set_up_monotonic();
+
+    if (timer_create(monotonic_clock, NULL, &timer_id)) {
+        ovs_fatal(errno, "timer_create failed");
+    }
 
     itimer.it_interval.tv_sec = 0;
-    itimer.it_interval.tv_usec = TIME_UPDATE_INTERVAL * 1000;
+    itimer.it_interval.tv_nsec = TIME_UPDATE_INTERVAL * 1000 * 1000;
     itimer.it_value = itimer.it_interval;
-    if (setitimer(ITIMER_REAL, &itimer, NULL)) {
-        ovs_fatal(errno, "setitimer failed");
+
+    if (timer_settime(timer_id, 0, &itimer, NULL)) {
+        ovs_fatal(errno, "timer_settime failed");
     }
 }
 
@@ -136,39 +170,96 @@ time_postfork(void)
     set_up_timer();
 }
 
+static void
+refresh_wall(void)
+{
+    clock_gettime(CLOCK_REALTIME, &wall_time);
+    wall_tick = false;
+}
+
+static void
+refresh_monotonic(void)
+{
+    set_up_monotonic();
+
+    if (monotonic_clock == CLOCK_MONOTONIC) {
+        clock_gettime(monotonic_clock, &monotonic_time);
+    } else {
+        refresh_wall_if_ticked();
+        monotonic_time = wall_time;
+    }
+
+    monotonic_tick = false;
+}
+
 /* Forces a refresh of the current time from the kernel.  It is not usually
  * necessary to call this function, since the time will be refreshed
  * automatically at least every TIME_UPDATE_INTERVAL milliseconds. */
 void
 time_refresh(void)
 {
-    gettimeofday(&now, NULL);
-    tick = false;
+    wall_tick = monotonic_tick = true;
+}
+
+/* Returns a monotonic timer, in seconds. */
+time_t
+time_now(void)
+{
+    refresh_monotonic_if_ticked();
+    return monotonic_time.tv_sec;
+}
+
+/* Same as time_now() except does not write to static variables, for use in
+ * signal handlers. set_up_monotonic() must have already been called. */
+static time_t
+time_now_sig(void)
+{
+    struct timespec cur_time;
+
+    clock_gettime(monotonic_clock, &cur_time);
+    return cur_time.tv_sec;
 }
 
 /* Returns the current time, in seconds. */
 time_t
-time_now(void)
+time_wall(void)
 {
-    refresh_if_ticked();
-    return now.tv_sec;
+    refresh_wall_if_ticked();
+    return wall_time.tv_sec;
+}
+
+/* Returns a monotonic timer, in ms (within TIME_UPDATE_INTERVAL ms). */
+long long int
+time_msec(void)
+{
+    refresh_monotonic_if_ticked();
+    return timespec_to_msec(&monotonic_time);
 }
 
 /* Returns the current time, in ms (within TIME_UPDATE_INTERVAL ms). */
 long long int
-time_msec(void)
+time_wall_msec(void)
 {
-    refresh_if_ticked();
-    return timeval_to_msec(&now);
+    refresh_wall_if_ticked();
+    return timespec_to_msec(&wall_time);
+}
+
+/* Stores a monotonic timer, accurate within TIME_UPDATE_INTERVAL ms, into
+ * '*ts'. */
+void
+time_timespec(struct timespec *ts)
+{
+    refresh_monotonic_if_ticked();
+    *ts = monotonic_time;
 }
 
 /* Stores the current time, accurate within TIME_UPDATE_INTERVAL ms, into
- * '*tv'. */
+ * '*ts'. */
 void
-time_timeval(struct timeval *tv)
+time_wall_timespec(struct timespec *ts)
 {
-    refresh_if_ticked();
-    *tv = now;
+    refresh_wall_if_ticked();
+    *ts = wall_time;
 }
 
 /* Configures the program to die with SIGALRM 'secs' seconds from now, if
@@ -252,18 +343,28 @@ time_add(time_t a, time_t b)
 static void
 sigalrm_handler(int sig_nr)
 {
-    tick = true;
-    if (deadline != TIME_MIN && time(0) > deadline) {
+    wall_tick = true;
+    monotonic_tick = true;
+    if (deadline != TIME_MIN && time_now_sig() > deadline) {
         fatal_signal_handler(sig_nr);
     }
 }
 
 static void
-refresh_if_ticked(void)
+refresh_wall_if_ticked(void)
 {
     assert(inited);
-    if (tick) {
-        time_refresh();
+    if (wall_tick) {
+        refresh_wall();
+    }
+}
+
+static void
+refresh_monotonic_if_ticked(void)
+{
+    assert(inited);
+    if (monotonic_tick) {
+        refresh_monotonic();
     }
 }
 
@@ -284,6 +385,12 @@ unblock_sigalrm(const sigset_t *oldsigs)
     if (sigprocmask(SIG_SETMASK, oldsigs, NULL)) {
         ovs_fatal(errno, "sigprocmask");
     }
+}
+
+long long int
+timespec_to_msec(const struct timespec *ts)
+{
+    return (long long int) ts->tv_sec * 1000 + ts->tv_nsec / (1000 * 1000);
 }
 
 long long int

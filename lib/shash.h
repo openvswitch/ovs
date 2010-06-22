@@ -44,12 +44,15 @@ struct shash {
 
 void shash_init(struct shash *);
 void shash_destroy(struct shash *);
+void shash_destroy_free_data(struct shash *);
 void shash_swap(struct shash *, struct shash *);
 void shash_moved(struct shash *);
 void shash_clear(struct shash *);
+void shash_clear_free_data(struct shash *);
 bool shash_is_empty(const struct shash *);
 size_t shash_count(const struct shash *);
 struct shash_node *shash_add(struct shash *, const char *, const void *);
+struct shash_node *shash_add_nocopy(struct shash *, char *, const void *);
 bool shash_add_once(struct shash *, const char *, const void *);
 void shash_add_assert(struct shash *, const char *, const void *);
 void shash_delete(struct shash *, struct shash_node *);

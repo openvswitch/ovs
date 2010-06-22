@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ void dhclient_set_max_timeout(struct dhclient *, unsigned int max_timeout);
 void dhclient_destroy(struct dhclient *);
 
 struct netdev *dhclient_get_netdev(struct dhclient *);
+const char *dhclient_get_name(const struct dhclient *);
 
 void dhclient_init(struct dhclient *, uint32_t requested_ip);
 void dhclient_release(struct dhclient *);

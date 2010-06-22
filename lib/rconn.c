@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "coverage.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
@@ -64,7 +65,8 @@ struct rconn {
     time_t state_entered;
 
     struct vconn *vconn;
-    char *name;
+    char *name;                 /* Human-readable descriptive name. */
+    char *target;               /* vconn name, passed to vconn_open(). */
     bool reliable;
 
     struct ovs_queue txq;
@@ -134,9 +136,10 @@ static unsigned int elapsed_in_this_state(const struct rconn *);
 static unsigned int timeout(const struct rconn *);
 static bool timed_out(const struct rconn *);
 static void state_transition(struct rconn *, enum state);
-static void set_vconn_name(struct rconn *, const char *name);
+static void rconn_set_target__(struct rconn *,
+                               const char *target, const char *name);
 static int try_send(struct rconn *);
-static int reconnect(struct rconn *);
+static void reconnect(struct rconn *);
 static void report_error(struct rconn *, int error);
 static void disconnect(struct rconn *, int error);
 static void flush_queue(struct rconn *);
@@ -144,24 +147,6 @@ static void question_connectivity(struct rconn *);
 static void copy_to_monitor(struct rconn *, const struct ofpbuf *);
 static bool is_connected_state(enum state);
 static bool is_admitted_msg(const struct ofpbuf *);
-
-/* Creates a new rconn, connects it (reliably) to 'name', and returns it. */
-struct rconn *
-rconn_new(const char *name, int inactivity_probe_interval, int max_backoff)
-{
-    struct rconn *rc = rconn_create(inactivity_probe_interval, max_backoff);
-    rconn_connect(rc, name);
-    return rc;
-}
-
-/* Creates a new rconn, connects it (unreliably) to 'vconn', and returns it. */
-struct rconn *
-rconn_new_from_vconn(const char *name, struct vconn *vconn) 
-{
-    struct rconn *rc = rconn_create(60, 0);
-    rconn_connect_unreliably(rc, name, vconn);
-    return rc;
-}
 
 /* Creates and returns a new rconn.
  *
@@ -174,7 +159,10 @@ rconn_new_from_vconn(const char *name, struct vconn *vconn)
  * 'max_backoff' is the maximum number of seconds between attempts to connect
  * to the peer.  The actual interval starts at 1 second and doubles on each
  * failure until it reaches 'max_backoff'.  If 0 is specified, the default of
- * 8 seconds is used. */
+ * 8 seconds is used.
+ *
+ * The new rconn is initially unconnected.  Use rconn_connect() or
+ * rconn_connect_unreliably() to connect it. */
 struct rconn *
 rconn_create(int probe_interval, int max_backoff)
 {
@@ -185,6 +173,7 @@ rconn_create(int probe_interval, int max_backoff)
 
     rc->vconn = NULL;
     rc->name = xstrdup("void");
+    rc->target = xstrdup("void");
     rc->reliable = false;
 
     queue_init(&rc->txq);
@@ -247,22 +236,37 @@ rconn_get_probe_interval(const struct rconn *rc)
     return rc->probe_interval;
 }
 
-int
-rconn_connect(struct rconn *rc, const char *name)
+/* Drops any existing connection on 'rc', then sets up 'rc' to connect to
+ * 'target' and reconnect as needed.  'target' should be a remote OpenFlow
+ * target in a form acceptable to vconn_open().
+ *
+ * If 'name' is nonnull, then it is used in log messages in place of 'target'.
+ * It should presumably give more information to a human reader than 'target',
+ * but it need not be acceptable to vconn_open(). */
+void
+rconn_connect(struct rconn *rc, const char *target, const char *name)
 {
     rconn_disconnect(rc);
-    set_vconn_name(rc, name);
+    rconn_set_target__(rc, target, name);
     rc->reliable = true;
-    return reconnect(rc);
+    reconnect(rc);
 }
 
+/* Drops any existing connection on 'rc', then configures 'rc' to use
+ * 'vconn'.  If the connection on 'vconn' drops, 'rc' will not reconnect on it
+ * own.
+ *
+ * By default, the target obtained from vconn_get_name(vconn) is used in log
+ * messages.  If 'name' is nonnull, then it is used instead.  It should
+ * presumably give more information to a human reader than the target, but it
+ * need not be acceptable to vconn_open(). */
 void
 rconn_connect_unreliably(struct rconn *rc,
-                         const char *name, struct vconn *vconn)
+                         struct vconn *vconn, const char *name)
 {
     assert(vconn != NULL);
     rconn_disconnect(rc);
-    set_vconn_name(rc, name);
+    rconn_set_target__(rc, vconn_get_name(vconn), name);
     rc->reliable = false;
     rc->vconn = vconn;
     rc->last_connected = time_now();
@@ -287,7 +291,7 @@ rconn_disconnect(struct rconn *rc)
             vconn_close(rc->vconn);
             rc->vconn = NULL;
         }
-        set_vconn_name(rc, "void");
+        rconn_set_target__(rc, "void", NULL);
         rc->reliable = false;
 
         rc->backoff = 0;
@@ -305,6 +309,7 @@ rconn_destroy(struct rconn *rc)
         size_t i;
 
         free(rc->name);
+        free(rc->target);
         vconn_close(rc->vconn);
         flush_queue(rc);
         queue_destroy(&rc->txq);
@@ -327,14 +332,14 @@ run_VOID(struct rconn *rc OVS_UNUSED)
     /* Nothing to do. */
 }
 
-static int
+static void
 reconnect(struct rconn *rc)
 {
     int retval;
 
     VLOG_INFO("%s: connecting...", rc->name);
     rc->n_attempted_connections++;
-    retval = vconn_open(rc->name, OFP_VERSION, &rc->vconn);
+    retval = vconn_open(rc->target, OFP_VERSION, &rc->vconn);
     if (!retval) {
         rc->remote_ip = vconn_get_remote_ip(rc->vconn);
         rc->local_ip = vconn_get_local_ip(rc->vconn);
@@ -346,7 +351,6 @@ reconnect(struct rconn *rc)
         rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
         disconnect(rc, retval);
     }
-    return retval;
 }
 
 static unsigned int
@@ -637,11 +641,29 @@ rconn_add_monitor(struct rconn *rc, struct vconn *vconn)
     }
 }
 
-/* Returns 'rc''s name (the 'name' argument passed to rconn_new()). */
+/* Returns 'rc''s name.  This is a name for human consumption, appropriate for
+ * use in log messages.  It is not necessarily a name that may be passed
+ * directly to, e.g., vconn_open(). */
 const char *
 rconn_get_name(const struct rconn *rc)
 {
     return rc->name;
+}
+
+/* Sets 'rc''s name to 'new_name'. */
+void
+rconn_set_name(struct rconn *rc, const char *new_name)
+{
+    free(rc->name);
+    rc->name = xstrdup(new_name);
+}
+
+/* Returns 'rc''s target.  This is intended to be a string that may be passed
+ * directly to, e.g., vconn_open(). */
+const char *
+rconn_get_target(const struct rconn *rc)
+{
+    return rc->target;
 }
 
 /* Returns true if 'rconn' is connected or in the process of reconnecting,
@@ -863,14 +885,18 @@ rconn_packet_counter_dec(struct rconn_packet_counter *c)
     }
 }
 
-/* Set the name of the remote vconn to 'name' and clear out the cached IP
- * address and port information, since changing the name also likely changes
- * these values. */
+/* Set rc->target and rc->name to 'target' and 'name', respectively.  If 'name'
+ * is null, 'target' is used.
+ *
+ * Also, clear out the cached IP address and port information, since changing
+ * the target also likely changes these values. */
 static void
-set_vconn_name(struct rconn *rc, const char *name)
+rconn_set_target__(struct rconn *rc, const char *target, const char *name)
 {
     free(rc->name);
-    rc->name = xstrdup(name);
+    rc->name = xstrdup(name ? name : target);
+    free(rc->target);
+    rc->target = xstrdup(target);
     rc->local_ip = 0;
     rc->remote_ip = 0;
     rc->remote_port = 0;

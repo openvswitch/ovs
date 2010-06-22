@@ -25,22 +25,27 @@
 test -e /etc/sysconfig/openvswitch && . /etc/sysconfig/openvswitch
 
 NETWORK_MODE=$(cat /etc/xensource/network.conf)
-if test "$NETWORK_MODE" = bridge; then
-    echo "Open vSwitch disabled (/etc/xensource/network.conf is 'bridge')" >&2
-    exit 0
-fi
+case $NETWORK_MODE in
+    vswitch|openvswitch)
+        ;;
+    bridge)
+        exit 0
+        ;;
+    *)
+        echo "Open vSwitch disabled (/etc/xensource/network.conf is invalid)" >&2
+        exit 0
+        ;;
+esac
 
 # General config variables in /etc/sysconfig/openvswitch
 if test "$PRODUCT_VERSION" = "5.5.0"; then
     # XenServer 5.5.0 needs ovs-brcompatd and /proc/net simulation.
     : ${ENABLE_BRCOMPAT:=y}
     : ${ENABLE_FAKE_PROC_NET:=y}
-    : ${ENABLE_XENSERVERD:=y}
 else
     # Later versions don't need them.
     : ${ENABLE_BRCOMPAT:=n}
     : ${ENABLE_FAKE_PROC_NET:=n}
-    : ${ENABLE_XENSERVERD:=n}
 fi
 : ${ENABLE_MONITOR:=y}
 : ${FORCE_COREFILES:=y}
@@ -89,25 +94,11 @@ fi
 : ${BRCOMPATD_VALGRIND_LOG:=}
 : ${BRCOMPATD_VALGRIND_OPT:=}
 
-# Config variables specific to ovs-xenserverd
-: ${XENSERVERD_PIDFILE:=/var/run/openvswitch/ovs-xenserverd.pid}
-: ${XENSERVERD_RUN_DIR:=/var/xen/openvswitch}
-: ${XENSERVERD_PRIORITY:=}
-: ${XENSERVERD_LOGFILE:=}
-: ${XENSERVERD_FILE_LOGLEVEL:=}
-: ${XENSERVERD_SYSLOG_LOGLEVEL:=}
-: ${XENSERVERD_MEMLEAK_LOGFILE:=}
-: ${XENSERVERD_STRACE_LOG:=}
-: ${XENSERVERD_STRACE_OPT:=}
-: ${XENSERVERD_VALGRIND_LOG:=}
-: ${XENSERVERD_VALGRIND_OPT:=}
-
 # Full paths to executables & modules
 ovsdb_server="/usr/sbin/ovsdb-server"
 ovsdb_tool="/usr/bin/ovsdb-tool"
 vswitchd="/usr/sbin/ovs-vswitchd"
 brcompatd="/usr/sbin/ovs-brcompatd"
-xenserverd="/usr/sbin/ovs-xenserverd"
 dpctl="/usr/bin/ovs-dpctl"
 appctl="/usr/bin/ovs-appctl"
 ofctl="/usr/bin/ovs-ofctl"
@@ -256,10 +247,6 @@ function start_brcompatd {
                  "$VSWITCHD_OVSDB_SERVER"
 }
 
-function start_xenserverd {
-    start_daemon XENSERVERD "$xenserverd"
-}
-
 function stop_daemon {
     local DAEMON=$1
     local BINARY=$2
@@ -345,14 +332,10 @@ function start {
     if [ "${ENABLE_BRCOMPAT}" = "y" ] ; then
         start_brcompatd
     fi
-    if [ "${ENABLE_XENSERVERD}" = "y" ] ; then
-        start_xenserverd
-    fi
     touch /var/lock/subsys/openvswitch
 }
 
 function stop {
-    stop_daemon XENSERVERD "$xenserverd"
     stop_daemon BRCOMPATD "$brcompatd"
     stop_daemon VSWITCHD "$vswitchd"
     stop_daemon OVSDB_SERVER "$ovsdb_server"
@@ -388,15 +371,12 @@ case "$1" in
         status -p "$OVSDB_SERVER_PIDFILE" ovsdb-server &&
         status -p "$VSWITCHD_PIDFILE" ovs-vswitchd &&
         (test "$ENABLE_BRCOMPAT" != "y" || 
-            status -p "$BRCOMPATD_PIDFILE" ovs-brcompatd) &&
-        (test "$ENABLE_XENSERVERD" != "y" ||
-            status -p "$XENSERVERD_PIDFILE" ovs-xenserverd)
+            status -p "$BRCOMPATD_PIDFILE" ovs-brcompatd)
         ;;
     version)
         /usr/sbin/ovsdb-server -V
         /usr/sbin/ovs-vswitchd -V
         /usr/sbin/ovs-brcompatd -V
-        /usr/sbin/ovs-xenserverd -V
         ;;
     help)
         printf "openvswitch [start|stop|restart|unload|status|version]\n"

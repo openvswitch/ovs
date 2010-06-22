@@ -63,8 +63,6 @@ struct gre_vport {
 	struct mutable_config *mutable;
 };
 
-struct vport_ops gre_vport_ops;
-
 /* Protected by RCU. */
 static struct tbl *port_table;
 
@@ -559,9 +557,8 @@ send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
 static struct sk_buff *
 check_headroom(struct sk_buff *skb, int headroom)
 {
-	if (skb_headroom(skb) < headroom ||
-	    (skb_cloned(skb) && !skb_clone_writable(skb, 0))) {
-		struct sk_buff *nskb = skb_realloc_headroom(skb, headroom);
+	if (skb_headroom(skb) < headroom || skb_header_cloned(skb)) {
+		struct sk_buff *nskb = skb_realloc_headroom(skb, max(headroom, 64));
 		if (!nskb) {
 			kfree_skb(skb);
 			return ERR_PTR(-ENOMEM);
@@ -736,7 +733,7 @@ static struct sk_buff *
 handle_gso(struct sk_buff *skb)
 {
 	if (skb_is_gso(skb)) {
-		struct sk_buff *nskb = skb_gso_segment(skb, NETIF_F_SG);
+		struct sk_buff *nskb = skb_gso_segment(skb, 0);
 
 		dev_kfree_skb(skb);
 		return nskb;
@@ -1134,7 +1131,9 @@ gre_send(struct vport *vport, struct sk_buff *skb)
 	}
 
 	forward_ip_summed(skb);
-	vswitch_skb_checksum_setup(skb);
+
+	if (unlikely(vswitch_skb_checksum_setup(skb)))
+		goto error_free;
 
 	skb = handle_gso(skb);
 	if (unlikely(IS_ERR(skb))) {

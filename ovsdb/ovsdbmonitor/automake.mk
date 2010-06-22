@@ -32,9 +32,13 @@ if BUILD_OVSDBMONITOR
 noinst_SCRIPTS += ovsdb/ovsdbmonitor/ovsdbmonitor
 ovsdbmonitor_DATA = $(ovsdbmonitor_pyfiles)
 install-exec-local:
-	sed -e '/NOINSTALL/d' < ovsdb/ovsdbmonitor/ovsdbmonitor > ovsdbmonitor.tmp
-	chmod +x ovsdbmonitor.tmp
-	$(INSTALL_PROGRAM) ovsdbmonitor.tmp $(DESTDIR)$(bindir)/ovsdbmonitor
+	sed -e '/NOINSTALL/d' < ovsdb/ovsdbmonitor/ovsdbmonitor > ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
+	chmod +x ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
+	$(INSTALL_PROGRAM) ovsdb/ovsdbmonitor/ovsdbmonitor.tmp $(DESTDIR)$(bindir)/ovsdbmonitor
+	rm ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
+DISTCLEANFILES += \
+	ovsdb/ovsdbmonitor/ovsdbmonitor \
+	ovsdb/ovsdbmonitor/ovsdbmonitor.tmp
 endif
 
 SUFFIXES += .ui .py

@@ -34,6 +34,7 @@
 #include "netdev.h"
 #include "netflow.h"
 #include "ofp-print.h"
+#include "ofp-util.h"
 #include "ofproto-sflow.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
@@ -161,6 +162,7 @@ static void ofconn_destroy(struct ofconn *);
 static void ofconn_run(struct ofconn *, struct ofproto *);
 static void ofconn_wait(struct ofconn *);
 static bool ofconn_receives_async_msgs(const struct ofconn *);
+static char *ofconn_make_name(const struct ofproto *, const char *target);
 
 static void queue_tx(struct ofpbuf *msg, const struct ofconn *ofconn,
                      struct rconn_packet_counter *counter);
@@ -364,7 +366,9 @@ add_controller(struct ofproto *ofproto, const struct ofproto_controller *c)
     if (discovery) {
         ofconn->discovery = discovery;
     } else {
-        rconn_connect(ofconn->rconn, c->target);
+        char *name = ofconn_make_name(ofproto, c->target);
+        rconn_connect(ofconn->rconn, c->target, name);
+        free(name);
     }
     hmap_insert(&ofproto->controllers, &ofconn->hmap_node,
                 hash_string(c->target, 0));
@@ -415,7 +419,7 @@ update_controller(struct ofconn *ofconn, const struct ofproto_controller *c)
 static const char *
 ofconn_get_target(const struct ofconn *ofconn)
 {
-    return ofconn->discovery ? "discover" : rconn_get_name(ofconn->rconn);
+    return ofconn->discovery ? "discover" : rconn_get_target(ofconn->rconn);
 }
 
 static struct ofconn *
@@ -941,8 +945,15 @@ ofproto_run1(struct ofproto *p)
 
         retval = pvconn_accept(p->listeners[i], OFP_VERSION, &vconn);
         if (!retval) {
-            ofconn_create(p, rconn_new_from_vconn("passive", vconn),
-                          OFCONN_TRANSIENT);
+            struct rconn *rconn;
+            char *name;
+
+            rconn = rconn_create(60, 0);
+            name = ofconn_make_name(p, vconn_get_name(vconn));
+            rconn_connect_unreliably(rconn, vconn, name);
+            free(name);
+
+            ofconn_create(p, rconn, OFCONN_TRANSIENT);
         } else if (retval != EAGAIN) {
             VLOG_WARN_RL(&rl, "accept failed (%s)", strerror(retval));
         }
@@ -1123,7 +1134,9 @@ ofconn_run(struct ofconn *ofconn, struct ofproto *p)
         }
         if (discovery_run(ofconn->discovery, &controller_name)) {
             if (controller_name) {
-                rconn_connect(ofconn->rconn, controller_name);
+                char *ofconn_name = ofconn_make_name(p, controller_name);
+                rconn_connect(ofconn->rconn, controller_name, ofconn_name);
+                free(ofconn_name);
             } else {
                 rconn_disconnect(ofconn->rconn);
             }
@@ -1191,6 +1204,18 @@ ofconn_receives_async_msgs(const struct ofconn *ofconn)
         return ofconn->miss_send_len > 0;
     }
 }
+
+/* Returns a human-readable name for an OpenFlow connection between 'ofproto'
+ * and 'target', suitable for use in log messages for identifying the
+ * connection.
+ *
+ * The name is dynamically allocated.  The caller should free it (with free())
+ * when it is no longer needed. */
+static char *
+ofconn_make_name(const struct ofproto *ofproto, const char *target)
+{
+    return xasprintf("%s<->%s", wdp_base_name(ofproto->wdp), target);
+}
 
 static bool
 rule_has_out_port(const struct wdp_rule *rule, uint16_t out_port)
@@ -1203,7 +1228,7 @@ rule_has_out_port(const struct wdp_rule *rule, uint16_t out_port)
     }
     for (oa = actions_first(&i, rule->actions, rule->n_actions); oa;
          oa = actions_next(&i)) {
-        if (oa->type == htons(OFPAT_OUTPUT) && oa->output.port == out_port) {
+        if (action_outputs_to_port(oa, out_port)) {
             return true;
         }
     }
@@ -1820,6 +1845,105 @@ handle_aggregate_stats_request(struct ofproto *p, struct ofconn *ofconn,
     return 0;
 }
 
+struct queue_stats_cbdata {
+    struct ofconn *ofconn;
+    struct ofpbuf *msg;
+    uint16_t port_no;
+};
+
+static void
+put_queue_stats(struct queue_stats_cbdata *cbdata, uint32_t queue_id,
+                const struct netdev_queue_stats *stats)
+{
+    struct ofp_queue_stats *reply;
+
+    reply = append_stats_reply(sizeof *reply, cbdata->ofconn, &cbdata->msg);
+    reply->port_no = htons(cbdata->port_no);
+    memset(reply->pad, 0, sizeof reply->pad);
+    reply->queue_id = htonl(queue_id);
+    reply->tx_bytes = htonll(stats->tx_bytes);
+    reply->tx_packets = htonll(stats->tx_packets);
+    reply->tx_errors = htonll(stats->tx_errors);
+}
+
+static void
+handle_queue_stats_dump_cb(uint32_t queue_id,
+                           struct netdev_queue_stats *stats,
+                           void *cbdata_)
+{
+    struct queue_stats_cbdata *cbdata = cbdata_;
+
+    put_queue_stats(cbdata, queue_id, stats);
+}
+
+static void
+handle_queue_stats_for_port(struct wdp_port *port, uint32_t queue_id,
+                            struct queue_stats_cbdata *cbdata)
+{
+    cbdata->port_no = port->opp.port_no;
+    if (queue_id == OFPQ_ALL) {
+        netdev_dump_queue_stats(port->netdev,
+                                handle_queue_stats_dump_cb, cbdata);
+    } else {
+        struct netdev_queue_stats stats;
+
+        netdev_get_queue_stats(port->netdev, queue_id, &stats);
+        put_queue_stats(cbdata, queue_id, &stats);
+    }
+}
+
+static int
+handle_queue_stats_request(struct ofproto *ofproto, struct ofconn *ofconn,
+                           const struct ofp_stats_request *osr,
+                           size_t arg_size)
+{
+    struct ofp_queue_stats_request *qsr;
+    struct queue_stats_cbdata cbdata;
+    unsigned int port_no;
+    uint32_t queue_id;
+
+    if (arg_size != sizeof *qsr) {
+        return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    qsr = (struct ofp_queue_stats_request *) osr->body;
+
+    COVERAGE_INC(ofproto_queue_req);
+
+    cbdata.ofconn = ofconn;
+    cbdata.msg = start_stats_reply(osr, 128);
+
+    port_no = ntohs(qsr->port_no);
+    queue_id = ntohl(qsr->queue_id);
+    if (port_no == OFPP_ALL) {
+        struct wdp_port *ports;
+        size_t n_ports, i;
+
+        wdp_port_list(ofproto->wdp, &ports, &n_ports);
+        /* XXX deal with wdp_port_list() errors */
+        for (i = 0; i < n_ports; i++) {
+            handle_queue_stats_for_port(&ports[i], queue_id, &cbdata);
+        }
+        wdp_port_array_free(ports, n_ports);
+    } else if (port_no < ofproto->max_ports) {
+        struct wdp_port port;
+        int error;
+
+        error = wdp_port_query_by_number(ofproto->wdp, port_no, &port);
+        if (!error) {
+            handle_queue_stats_for_port(&port, queue_id, &cbdata);
+        } else {
+            /* XXX deal with wdp_port_query_by_number() errors */
+        }
+        wdp_port_free(&port);
+    } else {
+        ofpbuf_delete(cbdata.msg);
+        return ofp_mkerr(OFPET_QUEUE_OP_FAILED, OFPQOFC_BAD_PORT);
+    }
+    queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
+
+    return 0;
+}
+
 static int
 handle_stats_request(struct ofproto *p, struct ofconn *ofconn,
                      struct ofp_header *oh)
@@ -1850,6 +1974,9 @@ handle_stats_request(struct ofproto *p, struct ofconn *ofconn,
 
     case OFPST_PORT:
         return handle_port_stats_request(p, ofconn, osr, arg_size);
+
+    case OFPST_QUEUE:
+        return handle_queue_stats_request(p, ofconn, osr, arg_size);
 
     case OFPST_VENDOR:
         return ofp_mkerr(OFPET_BAD_REQUEST, OFPBRC_BAD_VENDOR);

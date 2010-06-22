@@ -202,12 +202,23 @@ const struct netdev_class netdev_patch_class = {
     NULL,                       /* get_ifindex */
     netdev_vport_get_carrier,
     netdev_vport_get_stats,
-    NULL,                       /* set_stats */
+    netdev_vport_set_stats,
 
     NULL,                       /* get_features */
     NULL,                       /* set_advertisements */
     NULL,                       /* get_vlan_vid */
+
     NULL,                       /* set_policing */
+    NULL,                       /* get_qos_types */
+    NULL,                       /* get_qos_capabilities */
+    NULL,                       /* get_qos */
+    NULL,                       /* set_qos */
+    NULL,                       /* get_queue */
+    NULL,                       /* set_queue */
+    NULL,                       /* delete_queue */
+    NULL,                       /* get_queue_stats */
+    NULL,                       /* dump_queues */
+    NULL,                       /* dump_queue_stats */
 
     NULL,                       /* get_in4 */
     NULL,                       /* set_in4 */

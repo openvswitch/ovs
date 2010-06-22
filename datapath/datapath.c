@@ -32,6 +32,7 @@
 #include <asm/system.h>
 #include <asm/div64.h>
 #include <asm/bug.h>
+#include <asm/highmem.h>
 #include <linux/netfilter_bridge.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/inetdevice.h>
@@ -363,9 +364,9 @@ static int new_dp_port(struct datapath *dp, struct xflow_port *xflow_port, int p
 		vport_lock();
 
 		if (xflow_port->flags & XFLOW_PORT_INTERNAL)
-			vport = __vport_add(xflow_port->devname, "internal", NULL);
+			vport = vport_add(xflow_port->devname, "internal", NULL);
 		else
-			vport = __vport_add(xflow_port->devname, "netdev", NULL);
+			vport = vport_add(xflow_port->devname, "netdev", NULL);
 
 		vport_unlock();
 
@@ -471,7 +472,7 @@ int dp_detach_port(struct dp_port *p, int may_delete)
 
 		if (!strcmp(port_type, "netdev") || !strcmp(port_type, "internal")) {
 			vport_lock();
-			__vport_del(vport);
+			vport_del(vport);
 			vport_unlock();
 		}
 	}
@@ -743,31 +744,6 @@ queue_control_packets(struct sk_buff *skb, struct sk_buff_head *queue,
 		nskb = skb->next;
 		skb->next = NULL;
 
-		/* If a checksum-deferred packet is forwarded to the
-		 * controller, correct the pointers and checksum.
-		 */
-		err = vswitch_skb_checksum_setup(skb);
-		if (err)
-			goto err_kfree_skbs;
-
-		if (skb->ip_summed == CHECKSUM_PARTIAL) {
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
-			/* Until 2.6.22, the start of the transport header was
-			 * also the start of data to be checksummed.  Linux
-			 * 2.6.22 introduced the csum_start field for this
-			 * purpose, but we should point the transport header to
-			 * it anyway for backward compatibility, as
-			 * dev_queue_xmit() does even in 2.6.28. */
-			skb_set_transport_header(skb, skb->csum_start -
-						 skb_headroom(skb));
-#endif
-
-			err = skb_checksum_help(skb);
-			if (err)
-				goto err_kfree_skbs;
-		}
-
 		err = skb_cow(skb, sizeof *header);
 		if (err)
 			goto err_kfree_skbs;
@@ -810,10 +786,14 @@ dp_output_control(struct datapath *dp, struct sk_buff *skb, int queue_no,
 
 	forward_ip_summed(skb);
 
+	err = vswitch_skb_checksum_setup(skb);
+	if (err)
+		goto err_kfree_skb;
+
 	/* Break apart GSO packets into their component pieces.  Otherwise
 	 * userspace may try to stuff a 64kB packet into a 1500-byte MTU. */
 	if (skb_is_gso(skb)) {
-		struct sk_buff *nskb = skb_gso_segment(skb, 0);
+		struct sk_buff *nskb = skb_gso_segment(skb, NETIF_F_SG | NETIF_F_HW_CSUM);
 		if (nskb) {
 			kfree_skb(skb);
 			skb = nskb;
@@ -1616,35 +1596,39 @@ static long openvswitch_ioctl(struct file *f, unsigned int cmd,
 		goto exit;
 
 	case XFLOW_VPORT_ADD:
-		err = vport_add((struct xflow_vport_add __user *)argp);
+		err = vport_user_add((struct xflow_vport_add __user *)argp);
 		goto exit;
 
 	case XFLOW_VPORT_MOD:
-		err = vport_mod((struct xflow_vport_mod __user *)argp);
+		err = vport_user_mod((struct xflow_vport_mod __user *)argp);
 		goto exit;
 
 	case XFLOW_VPORT_DEL:
-		err = vport_del((char __user *)argp);
+		err = vport_user_del((char __user *)argp);
 		goto exit;
 
 	case XFLOW_VPORT_STATS_GET:
-		err = vport_stats_get((struct xflow_vport_stats_req __user *)argp);
+		err = vport_user_stats_get((struct xflow_vport_stats_req __user *)argp);
+		goto exit;
+
+	case XFLOW_VPORT_STATS_SET:
+		err = vport_user_stats_set((struct xflow_vport_stats_req __user *)argp);
 		goto exit;
 
 	case XFLOW_VPORT_ETHER_GET:
-		err = vport_ether_get((struct xflow_vport_ether __user *)argp);
+		err = vport_user_ether_get((struct xflow_vport_ether __user *)argp);
 		goto exit;
 
 	case XFLOW_VPORT_ETHER_SET:
-		err = vport_ether_set((struct xflow_vport_ether __user *)argp);
+		err = vport_user_ether_set((struct xflow_vport_ether __user *)argp);
 		goto exit;
 
 	case XFLOW_VPORT_MTU_GET:
-		err = vport_mtu_get((struct xflow_vport_mtu __user *)argp);
+		err = vport_user_mtu_get((struct xflow_vport_mtu __user *)argp);
 		goto exit;
 
 	case XFLOW_VPORT_MTU_SET:
-		err = vport_mtu_set((struct xflow_vport_mtu __user *)argp);
+		err = vport_user_mtu_set((struct xflow_vport_mtu __user *)argp);
 		goto exit;
 	}
 
@@ -1994,6 +1978,7 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 	case XFLOW_VPORT_MTU_GET:
 	case XFLOW_VPORT_ETHER_SET:
 	case XFLOW_VPORT_ETHER_GET:
+	case XFLOW_VPORT_STATS_SET:
 	case XFLOW_VPORT_STATS_GET:
 	case XFLOW_DP_STATS:
 	case XFLOW_GET_DROP_FRAGS:
@@ -2007,10 +1992,10 @@ static long openvswitch_compat_ioctl(struct file *f, unsigned int cmd, unsigned 
 		return openvswitch_ioctl(f, cmd, (unsigned long)compat_ptr(argp));
 
 	case XFLOW_VPORT_ADD32:
-		return compat_vport_add(compat_ptr(argp));
+		return compat_vport_user_add(compat_ptr(argp));
 
 	case XFLOW_VPORT_MOD32:
-		return compat_vport_mod(compat_ptr(argp));
+		return compat_vport_user_mod(compat_ptr(argp));
 	}
 
 	dp = get_dp_locked(dp_idx);
@@ -2061,6 +2046,100 @@ exit:
 }
 #endif
 
+/* Unfortunately this function is not exported so this is a verbatim copy
+ * from net/core/datagram.c in 2.6.30. */
+static int skb_copy_and_csum_datagram(const struct sk_buff *skb, int offset,
+				      u8 __user *to, int len,
+				      __wsum *csump)
+{
+	int start = skb_headlen(skb);
+	int pos = 0;
+	int i, copy = start - offset;
+
+	/* Copy header. */
+	if (copy > 0) {
+		int err = 0;
+		if (copy > len)
+			copy = len;
+		*csump = csum_and_copy_to_user(skb->data + offset, to, copy,
+					       *csump, &err);
+		if (err)
+			goto fault;
+		if ((len -= copy) == 0)
+			return 0;
+		offset += copy;
+		to += copy;
+		pos = copy;
+	}
+
+	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+		int end;
+
+		WARN_ON(start > offset + len);
+
+		end = start + skb_shinfo(skb)->frags[i].size;
+		if ((copy = end - offset) > 0) {
+			__wsum csum2;
+			int err = 0;
+			u8  *vaddr;
+			skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
+			struct page *page = frag->page;
+
+			if (copy > len)
+				copy = len;
+			vaddr = kmap(page);
+			csum2 = csum_and_copy_to_user(vaddr +
+							frag->page_offset +
+							offset - start,
+						      to, copy, 0, &err);
+			kunmap(page);
+			if (err)
+				goto fault;
+			*csump = csum_block_add(*csump, csum2, pos);
+			if (!(len -= copy))
+				return 0;
+			offset += copy;
+			to += copy;
+			pos += copy;
+		}
+		start = end;
+	}
+
+	if (skb_shinfo(skb)->frag_list) {
+		struct sk_buff *list = skb_shinfo(skb)->frag_list;
+
+		for (; list; list=list->next) {
+			int end;
+
+			WARN_ON(start > offset + len);
+
+			end = start + list->len;
+			if ((copy = end - offset) > 0) {
+				__wsum csum2 = 0;
+				if (copy > len)
+					copy = len;
+				if (skb_copy_and_csum_datagram(list,
+							       offset - start,
+							       to, copy,
+							       &csum2))
+					goto fault;
+				*csump = csum_block_add(*csump, csum2, pos);
+				if ((len -= copy) == 0)
+					return 0;
+				offset += copy;
+				to += copy;
+				pos += copy;
+			}
+			start = end;
+		}
+	}
+	if (!len)
+		return 0;
+
+fault:
+	return -EFAULT;
+}
+
 ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 		      loff_t *ppos)
 {
@@ -2069,8 +2148,7 @@ ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 	int dp_idx = iminor(f->f_dentry->d_inode);
 	struct datapath *dp = get_dp(dp_idx);
 	struct sk_buff *skb;
-	struct iovec __user iov;
-	size_t copy_bytes;
+	size_t copy_bytes, tot_copy_bytes;
 	int retval;
 
 	if (!dp)
@@ -2105,12 +2183,51 @@ ssize_t openvswitch_read(struct file *f, char __user *buf, size_t nbytes,
 		}
 	}
 success:
-	copy_bytes = min_t(size_t, skb->len, nbytes);
-	iov.iov_base = buf;
-	iov.iov_len = copy_bytes;
-	retval = skb_copy_datagram_iovec(skb, 0, &iov, iov.iov_len);
+	copy_bytes = tot_copy_bytes = min_t(size_t, skb->len, nbytes);
+	
+	retval = 0;
+	if (skb->ip_summed == CHECKSUM_PARTIAL) {
+		if (copy_bytes == skb->len) {
+			__wsum csum = 0;
+			int csum_start, csum_offset;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+			/* Until 2.6.22, the start of the transport header was
+			 * also the start of data to be checksummed.  Linux
+			 * 2.6.22 introduced the csum_start field for this
+			 * purpose, but we should point the transport header to
+			 * it anyway for backward compatibility, as
+			 * dev_queue_xmit() does even in 2.6.28. */
+			skb_set_transport_header(skb, skb->csum_start - skb_headroom(skb));
+			csum_offset = skb->csum_offset;
+#else
+			csum_offset = skb->csum;
+#endif
+			csum_start = skb_transport_header(skb) - skb->data;
+			retval = skb_copy_and_csum_datagram(skb, csum_start, buf + csum_start,
+							    copy_bytes - csum_start, &csum);
+			if (!retval) {
+				__sum16 __user *csump;
+
+				copy_bytes = csum_start;
+				csump = (__sum16 __user *)(buf + csum_start + csum_offset);
+				put_user(csum_fold(csum), csump);
+			}
+		} else
+			retval = skb_checksum_help(skb);
+	}
+
+	if (!retval) {
+		struct iovec __user iov;
+
+		iov.iov_base = buf;
+		iov.iov_len = copy_bytes;
+		retval = skb_copy_datagram_iovec(skb, 0, &iov, iov.iov_len);
+	}
+
 	if (!retval)
-		retval = copy_bytes;
+		retval = tot_copy_bytes;
+
 	kfree_skb(skb);
 
 error:

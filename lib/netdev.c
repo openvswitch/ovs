@@ -972,6 +972,285 @@ netdev_set_policing(struct netdev *netdev, uint32_t kbits_rate,
             : EOPNOTSUPP);
 }
 
+/* Adds to 'types' all of the forms of QoS supported by 'netdev', or leaves it
+ * empty if 'netdev' does not support QoS.  Any names added to 'types' should
+ * be documented as valid for the "type" column in the "QoS" table in
+ * vswitchd/vswitch.xml (which is built as ovs-vswitchd.conf.db(8)).
+ *
+ * Every network device supports disabling QoS with a type of "", but this type
+ * will not be added to 'types'.
+ *
+ * The caller must initialize 'types' (e.g. with svec_init()) before calling
+ * this function.  The caller is responsible for destroying 'types' (e.g. with
+ * svec_destroy()) when it is no longer needed.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+netdev_get_qos_types(const struct netdev *netdev, struct svec *types)
+{
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+    return (class->get_qos_types
+            ? class->get_qos_types(netdev, types)
+            : 0);
+}
+
+/* Queries 'netdev' for its capabilities regarding the specified 'type' of QoS,
+ * which should be "" or one of the types returned by netdev_get_qos_types()
+ * for 'netdev'.  Returns 0 if successful, otherwise a positive errno value.
+ * On success, initializes 'caps' with the QoS capabilities; on failure, clears
+ * 'caps' to all zeros. */
+int
+netdev_get_qos_capabilities(const struct netdev *netdev, const char *type,
+                            struct netdev_qos_capabilities *caps)
+{
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+
+    if (*type) {
+        int retval = (class->get_qos_capabilities
+                      ? class->get_qos_capabilities(netdev, type, caps)
+                      : EOPNOTSUPP);
+        if (retval) {
+            memset(caps, 0, sizeof *caps);
+        }
+        return retval;
+    } else {
+        /* Every netdev supports turning off QoS. */
+        memset(caps, 0, sizeof *caps);
+        return 0;
+    }
+}
+
+/* Obtains the number of queues supported by 'netdev' for the specified 'type'
+ * of QoS.  Returns 0 if successful, otherwise a positive errno value.  Stores
+ * the number of queues (zero on failure) in '*n_queuesp'.
+ *
+ * This is just a simple wrapper around netdev_get_qos_capabilities(). */
+int
+netdev_get_n_queues(const struct netdev *netdev,
+                    const char *type, unsigned int *n_queuesp)
+{
+    struct netdev_qos_capabilities caps;
+    int retval;
+
+    retval = netdev_get_qos_capabilities(netdev, type, &caps);
+    *n_queuesp = caps.n_queues;
+    return retval;
+}
+
+/* Queries 'netdev' about its currently configured form of QoS.  If successful,
+ * stores the name of the current form of QoS into '*typep', stores any details
+ * of configuration as string key-value pairs in 'details', and returns 0.  On
+ * failure, sets '*typep' to NULL and returns a positive errno value.
+ *
+ * A '*typep' of "" indicates that QoS is currently disabled on 'netdev'.
+ *
+ * The caller must initialize 'details' as an empty shash (e.g. with
+ * shash_init()) before calling this function.  The caller must free 'details',
+ * including 'data' members, when it is no longer needed (e.g. with
+ * shash_destroy_free_data()).
+ *
+ * The caller must not modify or free '*typep'.
+ *
+ * '*typep' will be one of the types returned by netdev_get_qos_types() for
+ * 'netdev'.  The contents of 'details' should be documented as valid for
+ * '*typep' in the "other_config" column in the "QoS" table in
+ * vswitchd/vswitch.xml (which is built as ovs-vswitchd.conf.db(8)). */
+int
+netdev_get_qos(const struct netdev *netdev,
+               const char **typep, struct shash *details)
+{
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+    int retval;
+
+    if (class->get_qos) {
+        retval = class->get_qos(netdev, typep, details);
+        if (retval) {
+            *typep = NULL;
+            shash_clear_free_data(details);
+        }
+        return retval;
+    } else {
+        /* 'netdev' doesn't support QoS, so report that QoS is disabled. */
+        *typep = "";
+        return 0;
+    }
+}
+
+/* Attempts to reconfigure QoS on 'netdev', changing the form of QoS to 'type'
+ * with details of configuration from 'details'.  Returns 0 if successful,
+ * otherwise a positive errno value.  On error, the previous QoS configuration
+ * is retained.
+ *
+ * When this function changes the type of QoS (not just 'details'), this also
+ * resets all queue configuration for 'netdev' to their defaults (which depend
+ * on the specific type of QoS).  Otherwise, the queue configuration for
+ * 'netdev' is unchanged.
+ *
+ * 'type' should be "" (to disable QoS) or one of the types returned by
+ * netdev_get_qos_types() for 'netdev'.  The contents of 'details' should be
+ * documented as valid for the given 'type' in the "other_config" column in the
+ * "QoS" table in vswitchd/vswitch.xml (which is built as
+ * ovs-vswitchd.conf.db(8)).
+ *
+ * NULL may be specified for 'details' if there are no configuration
+ * details. */
+int
+netdev_set_qos(struct netdev *netdev,
+               const char *type, const struct shash *details)
+{
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+
+    if (!type) {
+        type = "";
+    }
+
+    if (class->set_qos) {
+        if (!details) {
+            static struct shash empty = SHASH_INITIALIZER(&empty);
+            details = &empty;
+        }
+        return class->set_qos(netdev, type, details);
+    } else {
+        return *type ? EOPNOTSUPP : 0;
+    }
+}
+
+/* Queries 'netdev' for information about the queue numbered 'queue_id'.  If
+ * successful, adds that information as string key-value pairs to 'details'.
+ * Returns 0 if successful, otherwise a positive errno value.
+ *
+ * 'queue_id' must be less than the number of queues supported by 'netdev' for
+ * the current form of QoS (e.g. as returned by netdev_get_n_queues(netdev)).
+ *
+ * The returned contents of 'details' should be documented as valid for the
+ * given 'type' in the "other_config" column in the "Queue" table in
+ * vswitchd/vswitch.xml (which is built as ovs-vswitchd.conf.db(8)).
+ *
+ * The caller must initialize 'details' (e.g. with shash_init()) before calling
+ * this function.  The caller must free 'details', including 'data' members,
+ * when it is no longer needed (e.g. with shash_destroy_free_data()). */
+int
+netdev_get_queue(const struct netdev *netdev,
+                 unsigned int queue_id, struct shash *details)
+{
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+    int retval;
+
+    retval = (class->get_queue
+              ? class->get_queue(netdev, queue_id, details)
+              : EOPNOTSUPP);
+    if (retval) {
+        shash_clear_free_data(details);
+    }
+    return retval;
+}
+
+/* Configures the queue numbered 'queue_id' on 'netdev' with the key-value
+ * string pairs in 'details'.  The contents of 'details' should be documented
+ * as valid for the given 'type' in the "other_config" column in the "Queue"
+ * table in vswitchd/vswitch.xml (which is built as ovs-vswitchd.conf.db(8)).
+ * Returns 0 if successful, otherwise a positive errno value.  On failure, the
+ * given queue's configuration should be unmodified.
+ *
+ * 'queue_id' must be less than the number of queues supported by 'netdev' for
+ * the current form of QoS (e.g. as returned by netdev_get_n_queues(netdev)).
+ *
+ * This function does not modify 'details', and the caller retains ownership of
+ * it.
+ */
+int
+netdev_set_queue(struct netdev *netdev,
+                 unsigned int queue_id, const struct shash *details)
+{
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+    return (class->set_queue
+            ? class->set_queue(netdev, queue_id, details)
+            : EOPNOTSUPP);
+}
+
+/* Attempts to delete the queue numbered 'queue_id' from 'netdev'.  Some kinds
+ * of QoS may have a fixed set of queues, in which case attempts to delete them
+ * will fail with EOPNOTSUPP.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  On failure, the
+ * given queue will be unmodified.
+ *
+ * 'queue_id' must be less than the number of queues supported by 'netdev' for
+ * the current form of QoS (e.g. as returned by
+ * netdev_get_n_queues(netdev)). */
+int
+netdev_delete_queue(struct netdev *netdev, unsigned int queue_id)
+{
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+    return (class->delete_queue
+            ? class->delete_queue(netdev, queue_id)
+            : EOPNOTSUPP);
+}
+
+/* Obtains statistics about 'queue_id' on 'netdev'.  On success, returns 0 and
+ * fills 'stats' with the queue's statistics; individual members of 'stats' may
+ * be set to all-1-bits if the statistic is unavailable.  On failure, returns a
+ * positive errno value and fills 'stats' with all-1-bits. */
+int
+netdev_get_queue_stats(const struct netdev *netdev, unsigned int queue_id,
+                       struct netdev_queue_stats *stats)
+{
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+    int retval;
+
+    retval = (class->get_queue_stats
+              ? class->get_queue_stats(netdev, queue_id, stats)
+              : EOPNOTSUPP);
+    if (retval) {
+        memset(stats, 0xff, sizeof *stats);
+    }
+    return retval;
+}
+
+/* Iterates over all of 'netdev''s queues, calling 'cb' with the queue's ID,
+ * its configuration, and the 'aux' specified by the caller.  The order of
+ * iteration is unspecified, but (when successful) each queue is visited
+ * exactly once.
+ *
+ * Calling this function may be more efficient than calling netdev_get_queue()
+ * for every queue.
+ *
+ * 'cb' must not modify or free the 'details' argument passed in.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  On error, some
+ * configured queues may not have been included in the iteration. */
+int
+netdev_dump_queues(const struct netdev *netdev,
+                   netdev_dump_queues_cb *cb, void *aux)
+{
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+    return (class->dump_queues
+            ? class->dump_queues(netdev, cb, aux)
+            : EOPNOTSUPP);
+}
+
+/* Iterates over all of 'netdev''s queues, calling 'cb' with the queue's ID,
+ * its statistics, and the 'aux' specified by the caller.  The order of
+ * iteration is unspecified, but (when successful) each queue is visited
+ * exactly once.
+ *
+ * Calling this function may be more efficient than calling
+ * netdev_get_queue_stats() for every queue.
+ *
+ * 'cb' must not modify or free the statistics passed in.
+ *
+ * Returns 0 if successful, otherwise a positive errno value.  On error, some
+ * configured queues may not have been included in the iteration. */
+int
+netdev_dump_queue_stats(const struct netdev *netdev,
+                        netdev_dump_queue_stats_cb *cb, void *aux)
+{
+    const struct netdev_class *class = netdev_get_dev(netdev)->netdev_class;
+    return (class->dump_queue_stats
+            ? class->dump_queue_stats(netdev, cb, aux)
+            : EOPNOTSUPP);
+}
+
 /* If 'netdev' is a VLAN network device (e.g. one created with vconfig(8)),
  * sets '*vlan_vid' to the VLAN VID associated with that device and returns 0.
  * Otherwise returns a errno value (specifically ENOENT if 'netdev_name' is the

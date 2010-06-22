@@ -158,18 +158,10 @@ struct bridge {
     struct list node;           /* Node in global list of bridges. */
     char *name;                 /* User-specified arbitrary name. */
     struct mac_learning *ml;    /* MAC learning table. */
-    bool sent_config_request;   /* Successfully sent config request? */
     uint8_t default_ea[ETH_ADDR_LEN]; /* Default MAC. */
 
     /* OpenFlow switch processing. */
     struct ofproto *ofproto;    /* OpenFlow switch. */
-
-    /* Description strings. */
-    char *mfr_desc;             /* Manufacturer. */
-    char *hw_desc;              /* Hardware. */
-    char *sw_desc;              /* Software version. */
-    char *serial_desc;          /* Serial number. */
-    char *dp_desc;              /* Datapath description. */
 
     /* Kernel datapath information. */
     struct xfif *xfif;          /* Datapath. */
@@ -186,9 +178,6 @@ struct bridge {
 
     /* Flow tracking. */
     bool flush;
-
-    /* Flow statistics gathering. */
-    time_t next_stats_request;
 
     /* Port mirroring. */
     struct mirror *mirrors[MAX_MIRRORS];
@@ -264,6 +253,7 @@ static struct iface *iface_from_xf_ifidx(const struct bridge *,
                                          uint16_t xf_ifidx);
 static bool iface_is_internal(const struct bridge *, const char *name);
 static void iface_set_mac(struct iface *);
+static void iface_update_qos(struct iface *, const struct ovsrec_qos *);
 
 /* Hooks into ofproto processing. */
 static struct ofhooks bridge_ofhooks;
@@ -729,7 +719,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         dpid = bridge_pick_datapath_id(br, ea, hw_addr_iface);
         ofproto_set_datapath_id(br->ofproto, dpid);
 
-        dpid_string = xasprintf("%012"PRIx64, dpid);
+        dpid_string = xasprintf("%016"PRIx64, dpid);
         ovsrec_bridge_set_datapath_id(br->cfg, dpid_string);
         free(dpid_string);
 
@@ -842,9 +832,14 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         for (i = 0; i < br->n_ports; i++) {
             struct port *port = br->ports[i];
+            int j;
 
             port_update_vlan_compat(port);
             port_update_bonding(port);
+
+            for (j = 0; j < port->n_ifaces; j++) {
+                iface_update_qos(port->ifaces[j], port->cfg->qos);
+            }
         }
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
@@ -1201,7 +1196,6 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
     br->name = xstrdup(br_cfg->name);
     br->cfg = br_cfg;
     br->ml = mac_learning_create();
-    br->sent_config_request = false;
     eth_addr_nicira_random(br->default_ea);
 
     port_array_init(&br->ifaces);
@@ -1340,75 +1334,6 @@ bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
 }
 
 static void
-bridge_update_desc(struct bridge *br OVS_UNUSED)
-{
-#if 0
-    bool changed = false;
-    const char *desc;
-
-    desc = cfg_get_string(0, "bridge.%s.mfr-desc", br->name);
-    if (desc != br->mfr_desc) {
-        free(br->mfr_desc);
-        if (desc) {
-            br->mfr_desc = xstrdup(desc);
-        } else {
-            br->mfr_desc = xstrdup(DEFAULT_MFR_DESC);
-        }
-        changed = true;
-    }
-
-    desc = cfg_get_string(0, "bridge.%s.hw-desc", br->name);
-    if (desc != br->hw_desc) {
-        free(br->hw_desc);
-        if (desc) {
-            br->hw_desc = xstrdup(desc);
-        } else {
-            br->hw_desc = xstrdup(DEFAULT_HW_DESC);
-        }
-        changed = true;
-    }
-
-    desc = cfg_get_string(0, "bridge.%s.sw-desc", br->name);
-    if (desc != br->sw_desc) {
-        free(br->sw_desc);
-        if (desc) {
-            br->sw_desc = xstrdup(desc);
-        } else {
-            br->sw_desc = xstrdup(DEFAULT_SW_DESC);
-        }
-        changed = true;
-    }
-
-    desc = cfg_get_string(0, "bridge.%s.serial-desc", br->name);
-    if (desc != br->serial_desc) {
-        free(br->serial_desc);
-        if (desc) {
-            br->serial_desc = xstrdup(desc);
-        } else {
-            br->serial_desc = xstrdup(DEFAULT_SERIAL_DESC);
-        }
-        changed = true;
-    }
-
-    desc = cfg_get_string(0, "bridge.%s.dp-desc", br->name);
-    if (desc != br->dp_desc) {
-        free(br->dp_desc);
-        if (desc) {
-            br->dp_desc = xstrdup(desc);
-        } else {
-            br->dp_desc = xstrdup(DEFAULT_DP_DESC);
-        }
-        changed = true;
-    }
-
-    if (changed) {
-        ofproto_set_desc(br->ofproto, br->mfr_desc, br->hw_desc,
-                br->sw_desc, br->serial_desc, br->dp_desc);
-    }
-#endif
-}
-
-static void
 bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
                        struct bridge *br)
 {
@@ -1488,50 +1413,7 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
      * versa.  (XXX Should we delete all flows if we are switching from one
      * controller to another?) */
 
-#if 0
-    /* Configure OpenFlow management listeners. */
-    svec_init(&listeners);
-    cfg_get_all_strings(&listeners, "bridge.%s.openflow.listeners", br->name);
-    if (!listeners.n) {
-        svec_add_nocopy(&listeners, xasprintf("punix:%s/%s.mgmt",
-                                              ovs_rundir, br->name));
-    } else if (listeners.n == 1 && !strcmp(listeners.names[0], "none")) {
-        svec_clear(&listeners);
-    }
-    svec_sort_unique(&listeners);
-
-    svec_init(&old_listeners);
-    ofproto_get_listeners(br->ofproto, &old_listeners);
-    svec_sort_unique(&old_listeners);
-
-    if (!svec_equal(&listeners, &old_listeners)) {
-        ofproto_set_listeners(br->ofproto, &listeners);
-    }
-    svec_destroy(&listeners);
-    svec_destroy(&old_listeners);
-
-    /* Configure OpenFlow controller connection snooping. */
-    svec_init(&snoops);
-    cfg_get_all_strings(&snoops, "bridge.%s.openflow.snoops", br->name);
-    if (!snoops.n) {
-        svec_add_nocopy(&snoops, xasprintf("punix:%s/%s.snoop",
-                                           ovs_rundir, br->name));
-    } else if (snoops.n == 1 && !strcmp(snoops.names[0], "none")) {
-        svec_clear(&snoops);
-    }
-    svec_sort_unique(&snoops);
-
-    svec_init(&old_snoops);
-    ofproto_get_snoops(br->ofproto, &old_snoops);
-    svec_sort_unique(&old_snoops);
-
-    if (!svec_equal(&snoops, &old_snoops)) {
-        ofproto_set_snoops(br->ofproto, &snoops);
-    }
-    svec_destroy(&snoops);
-    svec_destroy(&old_snoops);
-#else
-    /* Default listener. */
+    /* Configure OpenFlow management listener. */
     svec_init(&listeners);
     svec_add_nocopy(&listeners, xasprintf("punix:%s/%s.mgmt",
                                           ovs_rundir, br->name));
@@ -1543,7 +1425,7 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
     svec_destroy(&listeners);
     svec_destroy(&old_listeners);
 
-    /* Default snoop. */
+    /* Configure OpenFlow controller connection snooping. */
     svec_init(&snoops);
     svec_add_nocopy(&snoops, xasprintf("punix:%s/%s.snoop",
                                        ovs_rundir, br->name));
@@ -1554,11 +1436,8 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
     }
     svec_destroy(&snoops);
     svec_destroy(&old_snoops);
-#endif
 
     mirror_reconfigure(br);
-
-    bridge_update_desc(br);
 }
 
 static void
@@ -1927,10 +1806,19 @@ bond_update_fake_iface_stats(struct port *port)
         struct netdev_stats slave_stats;
 
         if (!netdev_get_stats(port->ifaces[i]->netdev, &slave_stats)) {
-            bond_stats.rx_packets += slave_stats.rx_packets;
-            bond_stats.rx_bytes += slave_stats.rx_bytes;
-            bond_stats.tx_packets += slave_stats.tx_packets;
-            bond_stats.tx_bytes += slave_stats.tx_bytes;
+            /* XXX: We swap the stats here because they are swapped back when
+             * reported by the internal device.  The reason for this is
+             * internal devices normally represent packets going into the system
+             * but when used as fake bond device they represent packets leaving
+             * the system.  We really should do this in the internal device
+             * itself because changing it here reverses the counts from the
+             * perspective of the switch.  However, the internal device doesn't
+             * know what type of device it represents so we have to do it here
+             * for now. */
+            bond_stats.tx_packets += slave_stats.rx_packets;
+            bond_stats.tx_bytes += slave_stats.rx_bytes;
+            bond_stats.rx_packets += slave_stats.tx_packets;
+            bond_stats.rx_bytes += slave_stats.tx_bytes;
         }
     }
 
@@ -3760,6 +3648,90 @@ iface_set_mac(struct iface *iface)
                 VLOG_ERR("interface %s: setting MAC failed (%s)",
                          iface->name, strerror(error));
             }
+        }
+    }
+}
+
+static void
+shash_from_ovs_idl_map(char **keys, char **values, size_t n,
+                       struct shash *shash)
+{
+    size_t i;
+
+    shash_init(shash);
+    for (i = 0; i < n; i++) {
+        shash_add(shash, keys[i], values[i]);
+    }
+}
+
+struct iface_delete_queues_cbdata {
+    struct netdev *netdev;
+    const int64_t *queue_ids;
+    size_t n_queue_ids;
+};
+
+static bool
+queue_ids_include(const int64_t *ids, size_t n, int64_t target)
+{
+    size_t low = 0;
+    size_t high = n;
+
+    while (low < high) {
+        size_t mid = low + (high - low) / 2;
+        if (target > ids[mid]) {
+            high = mid;
+        } else if (target < ids[mid]) {
+            low = mid + 1;
+        } else {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void
+iface_delete_queues(unsigned int queue_id,
+                    const struct shash *details OVS_UNUSED, void *cbdata_)
+{
+    struct iface_delete_queues_cbdata *cbdata = cbdata_;
+
+    if (!queue_ids_include(cbdata->queue_ids, cbdata->n_queue_ids, queue_id)) {
+        netdev_delete_queue(cbdata->netdev, queue_id);
+    }
+}
+
+static void
+iface_update_qos(struct iface *iface, const struct ovsrec_qos *qos)
+{
+    if (!qos || qos->type[0] == '\0') {
+        netdev_set_qos(iface->netdev, NULL, NULL);
+    } else {
+        struct iface_delete_queues_cbdata cbdata;
+        struct shash details;
+        size_t i;
+
+        /* Configure top-level Qos for 'iface'. */
+        shash_from_ovs_idl_map(qos->key_other_config, qos->value_other_config,
+                               qos->n_other_config, &details);
+        netdev_set_qos(iface->netdev, qos->type, &details);
+        shash_destroy(&details);
+
+        /* Deconfigure queues that were deleted. */
+        cbdata.netdev = iface->netdev;
+        cbdata.queue_ids = qos->key_queues;
+        cbdata.n_queue_ids = qos->n_queues;
+        netdev_dump_queues(iface->netdev, iface_delete_queues, &cbdata);
+
+        /* Configure queues for 'iface'. */
+        for (i = 0; i < qos->n_queues; i++) {
+            const struct ovsrec_queue *queue = qos->value_queues[i];
+            unsigned int queue_id = qos->key_queues[i];
+
+            shash_from_ovs_idl_map(queue->key_other_config,
+                                   queue->value_other_config,
+                                   queue->n_other_config, &details);
+            netdev_set_queue(iface->netdev, queue_id, &details);
+            shash_destroy(&details);
         }
     }
 }

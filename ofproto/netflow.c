@@ -109,7 +109,7 @@ netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
 {
     struct netflow_v5_header *nf_hdr;
     struct netflow_v5_record *nf_rec;
-    struct timeval now;
+    struct timespec now;
 
     nf_flow->last_expired += nf->active_timeout;
 
@@ -120,7 +120,7 @@ netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
         return;
     }
 
-    time_timeval(&now);
+    time_wall_timespec(&now);
 
     if (!nf->packet.size) {
         nf_hdr = ofpbuf_put_zeros(&nf->packet, sizeof *nf_hdr);
@@ -128,7 +128,7 @@ netflow_expire(struct netflow *nf, struct netflow_flow *nf_flow,
         nf_hdr->count = htons(0);
         nf_hdr->sysuptime = htonl(time_msec() - nf->boot_time);
         nf_hdr->unix_secs = htonl(now.tv_sec);
-        nf_hdr->unix_nsecs = htonl(now.tv_usec * 1000);
+        nf_hdr->unix_nsecs = htonl(now.tv_nsec);
         nf_hdr->flow_seq = htonl(nf->netflow_cnt++);
         nf_hdr->engine_type = nf->engine_type;
         nf_hdr->engine_id = nf->engine_id;

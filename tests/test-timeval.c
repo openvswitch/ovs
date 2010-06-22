@@ -48,10 +48,11 @@ do_test(void)
      * setitimer()).  Then ensure that, if time has really advanced by
      * TIME_UPDATE_INTERVAL, then time_msec() reports that it advanced.
      */
-    long long int start_time_msec;
+    long long int start_time_msec, start_time_wall;
     long long int start_gtod;
 
     start_time_msec = time_msec();
+    start_time_wall = time_wall_msec();
     start_gtod = gettimeofday_in_msec();
     for (;;) {
         /* Wait up to 1 second.  Using select() to do the timeout avoids
@@ -69,7 +70,12 @@ do_test(void)
         }
 
         if (gettimeofday_in_msec() - start_gtod >= TIME_UPDATE_INTERVAL) {
-            assert(time_msec() - start_time_msec >= TIME_UPDATE_INTERVAL);
+            /* gettimeofday() and time_msec() have different granularities in
+             * their time sources.  Depending on the rounding used this could
+             * result in a slight difference, so we allow for 1 ms of slop. */
+            assert(time_msec() - start_time_msec >= TIME_UPDATE_INTERVAL - 1);
+            assert(time_wall_msec() - start_time_wall >=
+                                                      TIME_UPDATE_INTERVAL - 1);
             break;
         }
     }

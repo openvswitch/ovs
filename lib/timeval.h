@@ -26,6 +26,7 @@ extern "C" {
 #endif
 
 struct pollfd;
+struct timespec;
 struct timeval;
 
 /* POSIX allows floating-point time_t, but we don't support it. */
@@ -38,10 +39,9 @@ BUILD_ASSERT_DECL(TYPE_IS_SIGNED(time_t));
 #define TIME_MAX TYPE_MAXIMUM(time_t)
 #define TIME_MIN TYPE_MINIMUM(time_t)
 
-/* Interval between updates to the time reported by time_gettimeofday(), in ms.
- * This should not be adjusted much below 10 ms or so with the current
- * implementation, or too much time will be wasted in signal handlers and calls
- * to time(0). */
+/* Interval between updates to the reported time, in ms.  This should not be
+ * adjusted much below 10 ms or so with the current implementation, or too
+ * much time will be wasted in signal handlers and calls to clock_gettime(). */
 #define TIME_UPDATE_INTERVAL 100
 
 void time_init(void);
@@ -50,11 +50,15 @@ void time_enable_restart(void);
 void time_postfork(void);
 void time_refresh(void);
 time_t time_now(void);
+time_t time_wall(void);
 long long int time_msec(void);
-void time_timeval(struct timeval *);
+long long int time_wall_msec(void);
+void time_timespec(struct timespec *);
+void time_wall_timespec(struct timespec *);
 void time_alarm(unsigned int secs);
 int time_poll(struct pollfd *, int n_pollfds, int timeout);
 
+long long int timespec_to_msec(const struct timespec *);
 long long int timeval_to_msec(const struct timeval *);
 
 #ifdef  __cplusplus

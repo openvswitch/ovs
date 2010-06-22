@@ -25,6 +25,7 @@ else
 AM_LDFLAGS = -export-dynamic
 endif
 
+ALL_LOCAL =
 BUILT_SOURCES =
 CLEANFILES =
 DISTCLEANFILES =
@@ -38,9 +39,11 @@ EXTRA_DIST = \
 	INSTALL.bridge \
 	INSTALL.userspace \
 	NOTICE \
+	PORTING \
 	README-gcov \
 	REPORTING-BUGS \
 	SubmittingPatches \
+	WHY-OVS \
 	boot.sh
 bin_PROGRAMS =
 sbin_PROGRAMS =
@@ -58,6 +61,12 @@ noinst_PROGRAMS =
 noinst_SCRIPTS =
 OVSIDL_BUILT =
 SUFFIXES =
+
+# This ensures that files added to EXTRA_DIST are always distributed,
+# even if they are inside an Automake if...endif conditional block that is
+# disabled by some particular "configure" run.  For more information, see:
+# http://article.gmane.org/gmane.comp.sysutils.automake.general/10891
+noinst_HEADERS += $(EXTRA_DIST)
 
 EXTRA_DIST += \
 	build-aux/update-debian-changelog \
@@ -111,6 +120,7 @@ dist-hook-git:
 DIST_HOOKS += dist-hook-git
 
 dist-hook: $(DIST_HOOKS)
+all-local: $(ALL_LOCAL)
 .PHONY: $(DIST_HOOKS)
 
 include lib/automake.mk

@@ -35,6 +35,7 @@
 #include "ezio.h"
 #include "fatal-signal.h"
 #include "netdev.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
@@ -160,7 +161,8 @@ main(int argc, char *argv[])
                   "use --help for help");
     }
 
-    rconn = rconn_new(argv[0], 5, 5);
+    rconn = rconn_create(5, 5);
+    rconn_connect(rconn, argv[0], NULL);
 
     die_if_already_running();
     daemonize();

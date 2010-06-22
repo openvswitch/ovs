@@ -396,7 +396,7 @@ do_parse_atom_strings(int argc, char *argv[])
         union ovsdb_atom atom;
         struct ds out;
 
-        die_if_error(ovsdb_atom_from_string(&atom, &base, argv[i]));
+        die_if_error(ovsdb_atom_from_string(&atom, &base, argv[i], NULL));
 
         ds_init(&out);
         ovsdb_atom_to_string(&atom, base.type, &out);
@@ -448,7 +448,7 @@ do_parse_data_strings(int argc, char *argv[])
         struct ovsdb_datum datum;
         struct ds out;
 
-        die_if_error(ovsdb_datum_from_string(&datum, &type, argv[i]));
+        die_if_error(ovsdb_datum_from_string(&datum, &type, argv[i], NULL));
 
         ds_init(&out);
         ovsdb_datum_to_string(&datum, &type, &out);

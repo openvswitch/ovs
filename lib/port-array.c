@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008 Nicira Networks.
+ * Copyright (c) 2008, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,6 +93,17 @@ port_array_set(struct port_array *pa, uint16_t idx, void *p)
 
     /* Set level 3. */
     l3->l3[PORT_ARRAY_L3(idx)] = p;
+}
+
+/* Sets 'pa' element numbered 'idx' to NULL. */
+void
+port_array_delete(struct port_array *pa, uint16_t idx)
+{
+    unsigned int l1_idx = PORT_ARRAY_L1(idx);
+    unsigned int l2_idx = PORT_ARRAY_L2(idx);
+    unsigned int l3_idx = PORT_ARRAY_L3(idx);
+
+    pa->l1[l1_idx]->l2[l2_idx]->l3[l3_idx] = NULL;
 }
 
 static void *

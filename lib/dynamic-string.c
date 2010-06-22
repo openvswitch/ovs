@@ -179,7 +179,7 @@ void
 ds_put_strftime(struct ds *ds, const char *template, const struct tm *tm)
 {
     if (!tm) {
-        time_t now = time_now();
+        time_t now = time_wall();
         tm = localtime(&now);
     }
     for (;;) {

@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include "coverage.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/openflow.h"
 #include "timeval.h"

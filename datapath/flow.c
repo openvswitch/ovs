@@ -111,7 +111,7 @@ void flow_used(struct sw_flow *flow, struct sk_buff *skb)
 	}
 
 	spin_lock_bh(&flow->lock);
-	getnstimeofday(&flow->used);
+	ktime_get_ts(&flow->used);
 	flow->packet_count++;
 	flow->byte_count += skb->len;
 	flow->tcp_flags |= tcp_flags;

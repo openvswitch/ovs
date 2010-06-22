@@ -72,11 +72,11 @@ proc_net_compat_init(void)
 static int
 set_proc_file(const char *dir, const char *file, const char *data)
 {
-    struct ofpbuf request, *reply;
+    struct ofpbuf request;
     int retval;
 
     ofpbuf_init(&request, 0);
-    nl_msg_put_genlmsghdr(&request, brc_sock, 1024, brc_family, NLM_F_REQUEST,
+    nl_msg_put_genlmsghdr(&request, 1024, brc_family, NLM_F_REQUEST,
                           BRC_GENL_C_SET_PROC, 1);
     nl_msg_put_string(&request, BRC_GENL_A_PROC_DIR, dir);
     nl_msg_put_string(&request, BRC_GENL_A_PROC_NAME, file);
@@ -84,9 +84,8 @@ set_proc_file(const char *dir, const char *file, const char *data)
         nl_msg_put_string(&request, BRC_GENL_A_PROC_DATA, data);
     }
 
-    retval = nl_sock_transact(brc_sock, &request, &reply);
+    retval = nl_sock_transact(brc_sock, &request, NULL);
     ofpbuf_uninit(&request);
-    ofpbuf_delete(reply);
     if (retval) {
         VLOG_WARN_RL(&rl, "failed to %s /proc/%s/%s (%s)",
                      data ? "update" : "remove", dir, file, strerror(retval));

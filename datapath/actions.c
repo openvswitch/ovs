@@ -106,6 +106,8 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 						~skb->csum);
 		}
 	} else {
+		int err;
+
 		/* Add vlan header */
 
 		/* Set up checksumming pointers for checksum-deferred packets
@@ -113,7 +115,11 @@ modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 		 * when we send the packet out on the wire, and it will fail at
 		 * that point because skb_checksum_setup() will not look inside
 		 * an 802.1Q header. */
-		vswitch_skb_checksum_setup(skb);
+		err = vswitch_skb_checksum_setup(skb);
+		if (unlikely(err)) {
+			kfree_skb(skb);
+			return ERR_PTR(err);
+		}	
 
 		/* GSO is not implemented for packets with an 802.1Q header, so
 		 * we have to do segmentation before we add that header.
@@ -437,6 +443,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 	 * then freeing the original skbuff is wasteful.  So the following code
 	 * is slightly obscure just to avoid that. */
 	int prev_port = -1;
+	u32 priority = skb->priority;
 	int err;
 
 	if (dp->sflow_probability) {
@@ -507,6 +514,14 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 		case XFLOWAT_SET_TP_SRC:
 		case XFLOWAT_SET_TP_DST:
 			skb = set_tp_port(skb, key, &a->tp_port, gfp);
+			break;
+
+		case XFLOWAT_SET_PRIORITY:
+			skb->priority = a->priority.priority;
+			break;
+
+		case XFLOWAT_POP_PRIORITY:
+			skb->priority = priority;
 			break;
 		}
 		if (!skb)

@@ -356,7 +356,7 @@ ofproto_sflow_del_port(struct ofproto_sflow *os, uint16_t xflow_port)
         }
         netdev_close(osp->netdev);
         free(osp);
-        port_array_set(&os->ports, xflow_port, NULL);
+        port_array_delete(&os->ports, xflow_port);
     }
 }
 
@@ -417,7 +417,7 @@ ofproto_sflow_set_options(struct ofproto_sflow *os,
         sfl_agent_release(os->sflow_agent);
     }
     os->sflow_agent = xcalloc(1, sizeof *os->sflow_agent);
-    now = time_now();
+    now = time_wall();
     sfl_agent_init(os->sflow_agent,
                    &agentIP,
                    options->sub_id,
@@ -602,7 +602,7 @@ ofproto_sflow_run(struct ofproto_sflow *os)
     if (ofproto_sflow_is_enabled(os)) {
         time_t now = time_now();
         if (now >= os->next_tick) {
-            sfl_agent_tick(os->sflow_agent, now);
+            sfl_agent_tick(os->sflow_agent, time_wall());
             os->next_tick = now + 1;
         }
     }

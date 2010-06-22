@@ -1460,10 +1460,18 @@ ovsdb_idl_txn_delete(const struct ovsdb_idl_row *row_)
 
 const struct ovsdb_idl_row *
 ovsdb_idl_txn_insert(struct ovsdb_idl_txn *txn,
-                     const struct ovsdb_idl_table_class *class)
+                     const struct ovsdb_idl_table_class *class,
+                     const struct uuid *uuid)
 {
     struct ovsdb_idl_row *row = ovsdb_idl_row_create__(class);
-    uuid_generate(&row->uuid);
+
+    if (uuid) {
+        assert(!ovsdb_idl_txn_get_row(txn, uuid));
+        row->uuid = *uuid;
+    } else {
+        uuid_generate(&row->uuid);
+    }
+
     row->table = ovsdb_idl_table_from_class(txn->idl, class);
     row->new = xmalloc(class->n_columns * sizeof *row->new);
     row->written = bitmap_allocate(class->n_columns);

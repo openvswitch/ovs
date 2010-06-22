@@ -84,7 +84,8 @@ void ovsdb_idl_txn_write(const struct ovsdb_idl_row *,
                          struct ovsdb_datum *);
 void ovsdb_idl_txn_delete(const struct ovsdb_idl_row *);
 const struct ovsdb_idl_row *ovsdb_idl_txn_insert(
-    struct ovsdb_idl_txn *, const struct ovsdb_idl_table_class *);
+    struct ovsdb_idl_txn *, const struct ovsdb_idl_table_class *,
+    const struct uuid *);
 
 struct ovsdb_idl *ovsdb_idl_txn_get_idl (struct ovsdb_idl_txn *);
 

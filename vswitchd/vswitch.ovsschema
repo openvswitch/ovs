@@ -22,8 +22,18 @@
        "next_cfg": {
          "type": "integer"},
        "cur_cfg": {
-         "type": "integer"}},
+         "type": "integer"},
+       "capabilities": {
+         "type": {"key": "string",
+                  "value": {"type": "uuid",
+                            "refTable": "Capability"},
+                  "min": 0, "max": "unlimited"}}},
      "maxRows": 1},
+   "Capability": {
+     "columns": {
+       "details": {
+         "type": {"key": "string", "value": "string",
+                  "min": 0, "max": "unlimited"}}}},
    "Bridge": {
      "columns": {
        "name": {
@@ -80,6 +90,10 @@
                           "minInteger": 0,
                           "maxInteger": 4095},
                   "min": 0, "max": 1}},
+       "qos": {
+         "type": {"key": {"type": "uuid",
+                          "refTable": "QoS"},
+                  "min": 0, "max": 1}},
        "mac": {
          "type": {"key": {"type": "string"},
                   "min": 0, "max": 1}},
@@ -117,6 +131,25 @@
        "ofport": {
          "type": {"key": "integer", "min": 0, "max": 1},
          "ephemeral": true}}},
+   "QoS": {
+     "columns": {
+       "type": {
+         "type": "string"},
+       "queues": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0,
+                          "maxInteger": 4294967295},
+                  "value": {"type": "uuid",
+                            "refTable": "Queue"},
+                  "min": 0, "max": "unlimited"}},
+       "other_config": {
+         "type": {"key": "string", "value": "string", 
+                  "min": 0, "max": "unlimited"}}}},
+   "Queue": {
+     "columns": {
+       "other_config": {
+         "type": {"key": "string", "value": "string", 
+                  "min": 0, "max": "unlimited"}}}},
    "Mirror": {
      "columns": {
        "name": {

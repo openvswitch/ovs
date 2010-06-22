@@ -56,6 +56,14 @@
         <ref column="next_cfg"/> after it finishes applying a set of
         configuration changes.
       </column>
+
+      <column name="capabilities">
+        Describes functionality supported by the hardware and software platform
+        on which this Open vSwitch is based.  Clients should not modify this
+        column.  See the <ref table="Capability"/> description for defined
+        capability categories and the meaning of associated
+        <ref table="Capability"/> records.
+      </column>
     </group>
   </table>
 
@@ -112,7 +120,10 @@
       </column>
 
       <column name="datapath_id">
-        Reports the OpenFlow datapath ID in use.  Exactly 16 hex digits.
+        Reports the OpenFlow datapath ID in use.  Exactly 16 hex
+        digits.  (Setting this column will have no useful effect.  Set
+        <ref column="other_config"/>:<code>other-config</code>
+        instead.)
       </column>
     </group>
 
@@ -180,37 +191,48 @@
       <p>A bridge port must be configured for VLANs in one of two
         mutually exclusive ways:
         <ul>
-          <li>A ``trunk port'' has an empty value for
-            <ref column="tag"/> and a possibly non-empty
-            <ref column="trunks"/> value.</li>
+          <li>A ``trunk port'' has an empty value for <ref
+            column="tag"/>.  Its <ref column="trunks"/> value may be
+            empty or non-empty.</li>
           <li>An ``implicitly tagged VLAN port'' or ``access port''
-            has an nonempty value for <ref column="tag"/> and an empty
-            <ref column="trunks"/> value.</li>
+            has an nonempty value for <ref column="tag"/>.  Its
+            <ref column="trunks"/> value must be empty.</li>
         </ul>
         If <ref column="trunks"/> and <ref column="tag"/> are both
         nonempty, the configuration is ill-formed.
       </p>
 
       <column name="tag">
-        <p>If nonempty, this port's implicitly tagged VLAN.  Frames
-          arriving on trunk ports will be forwarded to this port only
-          if they are tagged with the given VLAN.  Frames arriving on
-          other VLAN ports will be forwarded to this port only if they
-          have the same <ref column="tag"/> value.  Frames forwarded
-          to this port will not have an 802.1Q header.</p>
-        <p>When a frame with a 802.1Q header that indicates a nonzero VLAN is
-          received on an implicit VLAN port, it is discarded.</p>
-        <p>Must be empty if this is a trunk port.</p>
+        <p>
+          If this is an access port (see above), the port's implicitly
+          tagged VLAN.  Must be empty if this is a trunk port.
+        </p>
+        <p>
+          Frames arriving on trunk ports will be forwarded to this
+          port only if they are tagged with the given VLAN (or, if
+          <ref column="tag"/> is 0, then if they lack a VLAN header).
+          Frames arriving on other access ports will be forwarded to
+          this port only if they have the same <ref column="tag"/>
+          value.  Frames forwarded to this port will not have an
+          802.1Q header.
+        </p>
+        <p>
+          When a frame with a 802.1Q header that indicates a nonzero
+          VLAN is received on an access port, it is discarded.
+        </p>
       </column>
 
       <column name="trunks">
-        <p>The 802.1Q VLAN(s) that this port trunks.  If the column is
-          empty, then the port trunks all VLANs as well as packets that
-          have no VLAN header.  Otherwise, only frames that have an
-          802.1Q header with one of the specified VLANs are accepted.
-          If <code>0</code> is included, then frames without an 802.1Q
-          header are also accepted.</p>
-        <p>Must be empty unless this is a trunk port.</p>
+        <p>
+          If this is a trunk port (see above), the 802.1Q VLAN(s) that
+          this port trunks; if it is empty, then the port trunks all
+          VLANs.  Must be empty if this is an access port.
+        </p>
+        <p>
+          Frames arriving on trunk ports are dropped if they are not
+          in one of the specified VLANs.  For this purpose, packets
+          that have no VLAN header are treated as part of VLAN 0.
+        </p>
       </column>
     </group>
 
@@ -250,6 +272,10 @@
     </group>
 
     <group title="Other Features">
+      <column name="qos">
+        Quality of Service configuration for this port.
+      </column>
+      
       <column name="mac">
         The MAC address to use for this port for the purpose of choosing the
         bridge's MAC address.  This column does not necessarily reflect the
@@ -504,6 +530,87 @@
         </dl>
       </column>
     </group>
+  </table>
+
+  <table name="QoS" title="Quality of Service configuration">
+    <p>Quality of Service (QoS) configuration for each Port that
+      references it.</p>
+
+    <column name="type">
+      <p>The type of QoS to implement.  The <ref table="Open_vSwitch"
+        column="capabilities"/> column in the <ref table="Open_vSwitch"/> table
+        identifies the types that a switch actually supports.  The currently
+        defined types are listed below:</p>
+      <dl>
+        <dt><code>linux-htb</code></dt>
+        <dd>Linux ``hierarchy token bucket'' classifier.</dd>
+      </dl>
+    </column>
+
+    <column name="queues">
+      <p>A map from queue numbers to <ref table="Queue"/> records.  The
+        supported range of queue numbers depend on <ref column="type"/>.  The
+        queue numbers are the same as the <code>queue_id</code> used in
+        OpenFlow in <code>struct ofp_action_enqueue</code> and other
+        structures.  Queue 0 is used by OpenFlow output actions that do not
+        specify a specific queue.</p>
+    </column>
+
+    <column name="other_config">
+      <p>Key-value pairs for configuring QoS features that depend on
+        <ref column="type"/>.</p>
+      <p>The <code>linux-htb</code> class supports the following key-value
+        pairs:</p>
+      <dl>
+        <dt><code>max-rate</code></dt>
+        <dd>Maximum rate shared by all queued traffic, in bit/s.
+          Optional.  If not specified, for physical interfaces, the
+          default is the link rate.  For other interfaces or if the
+          link rate cannot be determined, the default is currently 100
+          Mbps.</dd>
+      </dl>
+    </column>
+  </table>
+
+  <table name="Queue" title="QoS output queue.">
+    <p>A configuration for a port output queue, used in configuring Quality of
+      Service (QoS) features.  May be referenced by <ref column="queues"
+      table="QoS"/> column in <ref table="QoS"/> table.</p>
+
+    <column name="other_config">
+      <p>Key-value pairs for configuring the output queue.  The supported
+        key-value pairs and their meanings depend on the <ref column="type"/>
+        of the <ref column="QoS"/> records that reference this row.</p>
+      <p>The key-value pairs defined for <ref table="QoS"/> <ref table="QoS"
+        column="type"/> of <code>min-rate</code> are:</p>
+      <dl>
+        <dt><code>min-rate</code></dt>
+        <dd>Minimum guaranteed bandwidth, in bit/s.  Required.</dd>
+      </dl>
+      <p>The key-value pairs defined for <ref table="QoS"/> <ref table="QoS"
+        column="type"/> of <code>linux-htb</code> are:</p>
+      <dl>
+        <dt><code>min-rate</code></dt>
+        <dd>Minimum guaranteed bandwidth, in bit/s.  Required.</dd>
+        <dt><code>max-rate</code></dt>
+        <dd>Maximum allowed bandwidth, in bit/s.  Optional.  If specified, the
+          queue's rate will not be allowed to exceed the specified value, even
+          if excess bandwidth is available.  If unspecified, defaults to no
+          limit.</dd>
+        <dt><code>burst</code></dt>
+        <dd>Burst size, in bits.  This is the maximum amount of ``credits''
+          that a queue can accumulate while it is idle.  Optional.  Details of
+          the <code>linux-htb</code> implementation require a minimum burst
+          size, so a too-small <code>burst</code> will be silently
+          ignored.</dd>
+        <dt><code>priority</code></dt>
+        <dd>A nonnegative 32-bit integer.  Defaults to 0 if
+          unspecified.  A queue with a smaller <code>priority</code>
+          will receive all the excess bandwidth that it can use before
+          a queue with a larger value receives any.  Specific priority
+          values are unimportant; only relative ordering matters.</dd>
+      </dl>
+    </column>
   </table>
 
   <table name="Mirror" title="Port mirroring (SPAN/RSPAN).">
@@ -915,6 +1022,48 @@
     <column name="targets">
       sFlow targets in the form
       <code><var>ip</var>:<var>port</var></code>.
+    </column>
+  </table>
+
+  <table name="Capability">
+    <p>Records in this table describe functionality supported by the hardware
+      and software platform on which this Open vSwitch is based.  Clients
+      should not modify this table.</p>
+
+    <p>A record in this table is meaningful only if it is referenced by the
+      <ref table="Open_vSwitch" column="capabilities"/> column in the
+      <ref table="Open_vSwitch"/> table.  The key used to reference it, called
+      the record's ``category,'' determines the meanings of the
+      <ref column="details"/> column.  The following general forms of
+      categories are currently defined:</p>
+
+    <dl>
+      <dt><code>qos-<var>type</var></code></dt>
+      <dd><var>type</var> is supported as the value for
+        <ref column="type" table="QoS"/> in the <ref table="QoS"/> table.
+      </dd>
+    </dl>
+
+    <column name="details">
+      <p>Key-value pairs that describe capabilities.  The meaning of the pairs
+      depends on the category key that the <ref table="Open_vSwitch"
+      column="capabilities"/> column in the <ref table="Open_vSwitch"/> table
+      uses to reference this record, as described above.</p>
+
+      <p>The presence of a record for category <code>qos-<var>type</var></code>
+          indicates that the switch supports <var>type</var> as the value of
+          the <ref table="QoS" column="type"/> column in the <ref table="QoS"/>
+          table.  The following key-value pairs are defined to further describe
+          QoS capabilities:</p>
+
+      <dl>
+        <dt><code>n-queues</code></dt>
+        <dd>Number of supported queues, as a positive integer.  Keys in the
+          <ref table="QoS" column="queues"/> column for <ref table="QoS"/>
+          records whose <ref table="QoS" column="type"/> value
+          equals <var>type</var> must range between 0 and this value minus one,
+          inclusive.</dd>
+      </dl>
     </column>
   </table>
 </database>

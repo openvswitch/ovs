@@ -25,6 +25,7 @@
 #include "dhcp.h"
 #include "netdev.h"
 #include "netflow.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
@@ -42,6 +43,9 @@
 #include "xflow-util.h"
 #include "xtoxll.h"
 
+#include <linux/types.h>        /* XXX */
+#include <linux/pkt_sched.h>    /* XXX */
+
 #define THIS_MODULE VLM_wdp_xflow
 #include "vlog.h"
 
@@ -57,8 +61,8 @@ struct wx {
     struct xfif *xfif;
     struct classifier cls;
     struct netdev_monitor *netdev_monitor;
-    struct port_array ports;    /* Index is ODP port nr; wdp_port->opp.port_no
-                                 * is OFP port nr. */
+    struct port_array ports;    /* Index is xflow port nr;
+                                 * wdp_port->opp.port_no is OFP port nr. */
     struct shash port_by_name;
     bool need_revalidate;
     long long int next_expiration;
@@ -107,7 +111,7 @@ struct wx_rule {
 
     /* Datapath actions.
      *
-     * A super-rule with wildcard fields never has XFLOW actions (since the
+     * A super-rule with wildcard fields never has xflow actions (since the
      * datapath only supports exact-match flows). */
     bool installed;             /* Installed in datapath? */
     bool may_install;           /* True ordinarily; false if actions must
@@ -240,15 +244,11 @@ is_controller_rule(struct wx_rule *rule)
      * NetFlow expiration messages since it is just part of the control
      * logic for the network and not real traffic. */
 
-    if (rule && rule->super) {
-        struct wdp_rule *super = &rule->super->wr;
-
-        return super->n_actions == 1 &&
-            super->actions[0].type == htons(OFPAT_OUTPUT) &&
-            super->actions[0].output.port == htons(OFPP_CONTROLLER);
-    }
-
-    return false;
+    return (rule
+            && rule->super
+            && rule->super->n_actions == 1
+            && action_outputs_to_port(&rule->super->actions[0],
+                                      htons(OFPP_CONTROLLER)));
 }
 #endif
 
@@ -364,7 +364,7 @@ wx_rule_create(struct wx_rule *super,
 }
 
 /* Executes the actions indicated by 'rule' on 'packet', which is in flow
- * 'flow' and is considered to have arrived on XFLOW port 'in_port'.
+ * 'flow' and is considered to have arrived on xflow port 'in_port'.
  *
  * The flow that 'packet' actually contains does not need to actually match
  * 'rule'; the actions in 'rule' will be applied to it either way.  Likewise,
@@ -372,10 +372,10 @@ wx_rule_create(struct wx_rule *super,
  * out whether or not the packet actually matches 'rule'.
  *
  * If 'rule' is an exact-match rule and 'flow' actually equals the rule's flow,
- * the caller must already have accurately composed XFLOW actions for it given
+ * the caller must already have accurately composed xflow actions for it given
  * 'packet' using rule_make_actions().  If 'rule' is a wildcard rule, or if
  * 'rule' is an exact-match rule but 'flow' is not the rule's flow, then this
- * function will compose a set of XFLOW actions based on 'rule''s OpenFlow
+ * function will compose a set of xflow actions based on 'rule''s OpenFlow
  * actions and apply them to 'packet'. */
 static void
 wx_rule_execute(struct wx *wx, struct wx_rule *rule,
@@ -385,11 +385,11 @@ wx_rule_execute(struct wx *wx, struct wx_rule *rule,
     size_t n_actions;
     struct xflow_actions a;
 
-    /* Grab or compose the XFLOW actions.
+    /* Grab or compose the xflow actions.
      *
      * The special case for an exact-match 'rule' where 'flow' is not the
      * rule's flow is important to avoid, e.g., sending a packet out its input
-     * port simply because the XFLOW actions were composed for the wrong
+     * port simply because the xflow actions were composed for the wrong
      * scenario. */
     if (rule->wr.cr.flow.wildcards
         || !flow_equal(flow, &rule->wr.cr.flow))
@@ -406,7 +406,7 @@ wx_rule_execute(struct wx *wx, struct wx_rule *rule,
         n_actions = rule->n_xflow_actions;
     }
 
-    /* Execute the XFLOW actions. */
+    /* Execute the xflow actions. */
     if (!xfif_execute(wx->xfif, flow->in_port,
                       actions, n_actions, packet)) {
         struct xflow_flow_stats stats;
@@ -743,6 +743,48 @@ xlate_output_action(struct wx_xlate_ctx *ctx,
     }
 }
 
+/* If the final xflow action in 'ctx' is "pop priority", drop it, as an
+ * optimization, because we're going to add another action that sets the
+ * priority immediately after, or because there are no actions following the
+ * pop.  */
+static void
+remove_pop_action(struct wx_xlate_ctx *ctx)
+{
+    size_t n = ctx->out->n_actions;
+    if (n > 0 && ctx->out->actions[n - 1].type == XFLOWAT_POP_PRIORITY) {
+        ctx->out->n_actions--;
+    }
+}
+
+static void
+xlate_enqueue_action(struct wx_xlate_ctx *ctx,
+                     const struct ofp_action_enqueue *oae)
+{
+    uint16_t ofp_port, xflow_port;
+
+    /* Figure out xflow output port. */
+    ofp_port = ntohs(oae->port);
+    if (ofp_port != OFPP_IN_PORT) {
+        xflow_port = ofp_port_to_xflow_port(ofp_port);
+    } else {
+        xflow_port = ctx->flow.in_port;
+    }
+
+    /* Add xflow actions. */
+    remove_pop_action(ctx);
+    xflow_actions_add(ctx->out, XFLOWAT_SET_PRIORITY)->priority.priority
+        = TC_H_MAKE(1, ntohl(oae->queue_id)); /* XXX */
+    add_output_action(ctx, xflow_port);
+    xflow_actions_add(ctx->out, XFLOWAT_POP_PRIORITY);
+
+    /* Update NetFlow output port. */
+    if (ctx->nf_output_iface == NF_OUT_DROP) {
+        ctx->nf_output_iface = xflow_port;
+    } else if (ctx->nf_output_iface != NF_OUT_FLOOD) {
+        ctx->nf_output_iface = NF_OUT_MULTI;
+    }
+}
+
 static void
 xlate_nicira_action(struct wx_xlate_ctx *ctx,
                     const struct nx_action_header *nah)
@@ -766,7 +808,7 @@ xlate_nicira_action(struct wx_xlate_ctx *ctx,
         break;
 
     /* If you add a new action here that modifies flow data, don't forget to
-     * update the flow key in ctx->flow in the same key. */
+     * update the flow key in ctx->flow at the same time. */
 
     default:
         VLOG_DBG_RL(&rl, "unknown Nicira action type %"PRIu16, subtype);
@@ -865,6 +907,10 @@ do_xlate_actions(const union ofp_action *in, size_t n_in,
             ctx->flow.tp_dst = oa->tp_port.tp_port = ia->tp_port.tp_port;
             break;
 
+        case OFPAT_ENQUEUE:
+            xlate_enqueue_action(ctx, (const struct ofp_action_enqueue *) ia);
+            break;
+
         case OFPAT_VENDOR:
             xlate_nicira_action(ctx, (const struct nx_action_header *) ia);
             break;
@@ -921,6 +967,7 @@ wx_xlate_actions(struct wx *wx, const union ofp_action *in, size_t n_in,
     ctx.may_set_up_flow = true;
     ctx.nf_output_iface = NF_OUT_DROP;
     do_xlate_actions(in, n_in, &ctx);
+    remove_pop_action(&ctx);
 
     if (may_set_up_flow) {
         *may_set_up_flow = ctx.may_set_up_flow && wx_may_set_up(flow, out);
@@ -1248,7 +1295,8 @@ wx_get_features(const struct wdp *wdp, struct ofpbuf **featuresp)
                          (1u << OFPAT_SET_NW_DST) |
                          (1u << OFPAT_SET_NW_TOS) |
                          (1u << OFPAT_SET_TP_SRC) |
-                         (1u << OFPAT_SET_TP_DST));
+                         (1u << OFPAT_SET_TP_DST) |
+                         (1u << OFPAT_ENQUEUE));
 
     PORT_ARRAY_FOR_EACH (port, &wx->ports, port_no) {
         hton_ofp_phy_port(ofpbuf_put(buf, &port->opp, sizeof port->opp));
@@ -2100,7 +2148,7 @@ wx_port_remove(struct wx *wx, struct wdp_port *wdp_port)
     uint16_t xflow_port = ofp_port_to_xflow_port(wdp_port->opp.port_no);
 
     netdev_monitor_remove(wx->netdev_monitor, wdp_port->netdev);
-    port_array_set(&wx->ports, xflow_port, NULL);
+    port_array_delete(&wx->ports, xflow_port);
     shash_delete(&wx->port_by_name,
                  shash_find(&wx->port_by_name, (char *) wdp_port->opp.name));
 }

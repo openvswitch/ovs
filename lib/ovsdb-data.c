@@ -366,7 +366,7 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 
 static char *
 ovsdb_atom_from_string__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
-                         const char *s)
+                         const char *s, struct ovsdb_symbol_table *symtab)
 {
     switch (type) {
     case OVSDB_TYPE_VOID:
@@ -427,7 +427,9 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
         break;
 
     case OVSDB_TYPE_UUID:
-        if (!uuid_from_string(&atom->uuid, s)) {
+        if (*s == '@') {
+            atom->uuid = ovsdb_symbol_table_insert(symtab, s)->uuid;
+        } else if (!uuid_from_string(&atom->uuid, s)) {
             return xasprintf("\"%s\" is not a valid UUID", s);
         }
         break;
@@ -454,19 +456,24 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
  *      - OVSDB_TYPE_STRING: A JSON string if it begins with a quote, otherwise
  *        an arbitrary string.
  *
- *      - OVSDB_TYPE_UUID: A UUID in RFC 4122 format.
+ *      - OVSDB_TYPE_UUID: A UUID in RFC 4122 format.  If 'symtab' is nonnull,
+ *        then an identifier beginning with '@' is also acceptable.  If the
+ *        named identifier is already in 'symtab', then the associated UUID is
+ *        used; otherwise, a new, random UUID is used and added to the symbol
+ *        table.
  *
  * Returns a null pointer if successful, otherwise an error message describing
  * the problem.  The caller is responsible for freeing the error.
  */
 char *
 ovsdb_atom_from_string(union ovsdb_atom *atom,
-                       const struct ovsdb_base_type *base, const char *s)
+                       const struct ovsdb_base_type *base, const char *s,
+                       struct ovsdb_symbol_table *symtab)
 {
     struct ovsdb_error *error;
     char *msg;
 
-    msg = ovsdb_atom_from_string__(atom, base->type, s);
+    msg = ovsdb_atom_from_string__(atom, base->type, s, symtab);
     if (msg) {
         return msg;
     }
@@ -1028,13 +1035,13 @@ skip_spaces(const char *p)
 
 static char *
 parse_atom_token(const char **s, const struct ovsdb_base_type *base,
-                 union ovsdb_atom *atom)
+                 union ovsdb_atom *atom, struct ovsdb_symbol_table *symtab)
 {
     char *token, *error;
 
     error = ovsdb_token_parse(s, &token);
     if (!error) {
-        error = ovsdb_atom_from_string(atom, base, token);
+        error = ovsdb_atom_from_string(atom, base, token, symtab);
         free(token);
     }
     return error;
@@ -1042,18 +1049,19 @@ parse_atom_token(const char **s, const struct ovsdb_base_type *base,
 
 static char *
 parse_key_value(const char **s, const struct ovsdb_type *type,
-                union ovsdb_atom *key, union ovsdb_atom *value)
+                union ovsdb_atom *key, union ovsdb_atom *value,
+                struct ovsdb_symbol_table *symtab)
 {
     const char *start = *s;
     char *error;
 
-    error = parse_atom_token(s, &type->key, key);
+    error = parse_atom_token(s, &type->key, key, symtab);
     if (!error && type->value.type != OVSDB_TYPE_VOID) {
         *s = skip_spaces(*s);
         if (**s == '=') {
             (*s)++;
             *s = skip_spaces(*s);
-            error = parse_atom_token(s, &type->value, value);
+            error = parse_atom_token(s, &type->value, value, symtab);
         } else {
             error = xasprintf("%s: syntax error at \"%c\" expecting \"=\"",
                               start, **s);
@@ -1080,10 +1088,14 @@ free_key_value(const struct ovsdb_type *type,
  * or, for a map, '='-delimited pairs of atoms.  Each atom must in a format
  * acceptable to ovsdb_atom_from_string().  Optionally, a set may be enclosed
  * in "[]" or a map in "{}"; for an empty set or map these punctuators are
- * required. */
+ * required.
+ *
+ * Optionally, a symbol table may be supplied as 'symtab'.  It is passed to
+ * ovsdb_atom_to_string(). */
 char *
 ovsdb_datum_from_string(struct ovsdb_datum *datum,
-                        const struct ovsdb_type *type, const char *s)
+                        const struct ovsdb_type *type, const char *s,
+                        struct ovsdb_symbol_table *symtab)
 {
     bool is_map = ovsdb_type_is_map(type);
     struct ovsdb_error *dberror;
@@ -1118,7 +1130,7 @@ ovsdb_datum_from_string(struct ovsdb_datum *datum,
         }
 
         /* Add to datum. */
-        error = parse_key_value(&p, type, &key, &value);
+        error = parse_key_value(&p, type, &key, &value, symtab);
         if (error) {
             goto error;
         }
@@ -1548,6 +1560,21 @@ ovsdb_symbol_table_insert(struct ovsdb_symbol_table *symtab,
         symbol = ovsdb_symbol_table_put(symtab, name, &uuid, false);
     }
     return symbol;
+}
+
+const char *
+ovsdb_symbol_table_find_unused(const struct ovsdb_symbol_table *symtab)
+{
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, &symtab->sh) {
+        struct ovsdb_symbol *symbol = node->data;
+        if (!symbol->used) {
+            return node->name;
+        }
+    }
+
+    return NULL;
 }
 
 /* Extracts a token from the beginning of 's' and returns a pointer just after

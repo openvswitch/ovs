@@ -419,6 +419,18 @@ struct ofp_action_header {
 };
 OFP_ASSERT(sizeof(struct ofp_action_header) == 8);
 
+/* OFPAT_ENQUEUE action struct: send packets to given queue on port. */
+struct ofp_action_enqueue {
+    uint16_t type;            /* OFPAT_ENQUEUE. */
+    uint16_t len;             /* Len is 16. */
+    uint16_t port;            /* Port that queue belongs. Should
+                                 refer to a valid physical port
+                                 (i.e. < OFPP_MAX) or OFPP_IN_PORT. */
+    uint8_t pad[6];           /* Pad for 64-bit alignment. */
+    uint32_t queue_id;        /* Where to enqueue the packets. */
+};
+OFP_ASSERT(sizeof(struct ofp_action_enqueue) == 16);
+
 union ofp_action {
     uint16_t type;
     struct ofp_action_header header;
@@ -713,8 +725,8 @@ enum ofp_stats_types {
     OFPST_PORT,
 
     /* Queue statistics for a port
-     * The request body defines the port
-     * The reply body is an array of struct ofp_queue_stats */
+     * The request body is struct ofp_queue_stats_request.
+     * The reply body is an array of struct ofp_queue_stats. */
     OFPST_QUEUE,
 
     /* Vendor extension.
@@ -858,6 +870,29 @@ struct ofp_port_stats {
     uint64_t collisions;     /* Number of collisions. */
 };
 OFP_ASSERT(sizeof(struct ofp_port_stats) == 104);
+
+/* All ones is used to indicate all queues in a port (for stats retrieval). */
+#define OFPQ_ALL      0xffffffff
+
+/* Body for ofp_stats_request of type OFPST_QUEUE. */
+struct ofp_queue_stats_request {
+    uint16_t port_no;        /* All ports if OFPP_ALL. */
+    uint8_t pad[2];          /* Align to 32-bits. */
+    uint32_t queue_id;       /* All queues if OFPQ_ALL. */
+};
+OFP_ASSERT(sizeof(struct ofp_queue_stats_request) == 8);
+
+/* Body for ofp_stats_reply of type OFPST_QUEUE consists of an array of this
+ * structure type. */
+struct ofp_queue_stats {
+    uint16_t port_no;
+    uint8_t pad[2];          /* Align to 32-bits. */
+    uint32_t queue_id;       /* Queue id. */
+    uint64_t tx_bytes;       /* Number of transmitted bytes. */
+    uint64_t tx_packets;     /* Number of transmitted packets. */
+    uint64_t tx_errors;      /* Number of packets dropped due to overrun. */
+};
+OFP_ASSERT(sizeof(struct ofp_queue_stats) == 32);
 
 /* Vendor extension. */
 struct ofp_vendor_header {

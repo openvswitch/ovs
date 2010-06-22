@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009 Nicira Networks.
+ * Copyright (c) 2008, 2009, 2010 Nicira Networks.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ nl_sock_create(int protocol, int multicast_group,
 
     if (next_seq == 0) {
         /* Pick initial sequence number. */
-        next_seq = getpid() ^ time_now();
+        next_seq = getpid() ^ time_wall();
     }
 
     *sockp = NULL;
@@ -195,8 +195,8 @@ nl_sock_destroy(struct nl_sock *sock)
 }
 
 /* Tries to send 'msg', which must contain a Netlink message, to the kernel on
- * 'sock'.  nlmsg_len in 'msg' will be finalized to match msg->size before the
- * message is sent.
+ * 'sock'.  nlmsg_len in 'msg' will be finalized to match msg->size, and
+ * nlmsg_pid will be set to 'sock''s pid, before the message is sent.
  *
  * Returns 0 if successful, otherwise a positive errno value.  If
  * 'wait' is true, then the send will wait until buffer space is ready;
@@ -204,9 +204,11 @@ nl_sock_destroy(struct nl_sock *sock)
 int
 nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait) 
 {
+    struct nlmsghdr *nlmsg = nl_msg_nlmsghdr(msg);
     int error;
 
-    nl_msg_nlmsghdr(msg)->nlmsg_len = msg->size;
+    nlmsg->nlmsg_len = msg->size;
+    nlmsg->nlmsg_pid = sock->pid;
     do {
         int retval;
         retval = send(sock->fd, msg->data, msg->size, wait ? 0 : MSG_DONTWAIT);
@@ -221,7 +223,7 @@ nl_sock_send(struct nl_sock *sock, const struct ofpbuf *msg, bool wait)
 
 /* Tries to send the 'n_iov' chunks of data in 'iov' to the kernel on 'sock' as
  * a single Netlink message.  (The message must be fully formed and not require
- * finalization of its nlmsg_len field.)
+ * finalization of its nlmsg_len or nlmsg_pid fields.)
  *
  * Returns 0 if successful, otherwise a positive errno value.  If 'wait' is
  * true, then the send will wait until buffer space is ready; otherwise,
@@ -339,9 +341,16 @@ try_again:
 }
 
 /* Sends 'request' to the kernel via 'sock' and waits for a response.  If
- * successful, stores the reply into '*replyp' and returns 0.  The caller is
- * responsible for destroying the reply with ofpbuf_delete().  On failure,
- * returns a positive errno value and stores a null pointer into '*replyp'.
+ * successful, returns 0.  On failure, returns a positive errno value.
+ *
+ * If 'replyp' is nonnull, then on success '*replyp' is set to the kernel's
+ * reply, which the caller is responsible for freeing with ofpbuf_delete(), and
+ * on failure '*replyp' is set to NULL.  If 'replyp' is null, then the kernel's
+ * reply, if any, is discarded.
+ *
+ * nlmsg_len in 'msg' will be finalized to match msg->size, and nlmsg_pid will
+ * be set to 'sock''s pid, before the message is sent.  NLM_F_ACK will be set
+ * in nlmsg_flags.
  *
  * The caller is responsible for destroying 'request'.
  *
@@ -380,7 +389,9 @@ nl_sock_transact(struct nl_sock *sock,
     struct ofpbuf *reply;
     int retval;
 
-    *replyp = NULL;
+    if (replyp) {
+        *replyp = NULL;
+    }
 
     /* Ensure that we get a reply even if this message doesn't ordinarily call
      * for one. */
@@ -410,7 +421,14 @@ recv:
         ofpbuf_delete(reply);
         goto recv;
     }
-    if (nl_msg_nlmsgerr(reply, &retval)) {
+
+    /* If the reply is an error, discard the reply and return the error code.
+     *
+     * Except: if the reply is just an acknowledgement (error code of 0), and
+     * the caller is interested in the reply (replyp != NULL), pass the reply
+     * up to the caller.  Otherwise the caller will get a return value of 0
+     * and null '*replyp', which makes unwary callers likely to segfault. */
+    if (nl_msg_nlmsgerr(reply, &retval) && (retval || !replyp)) {
         ofpbuf_delete(reply);
         if (retval) {
             VLOG_DBG_RL(&rl, "received NAK error=%d (%s)",
@@ -419,8 +437,149 @@ recv:
         return retval != EAGAIN ? retval : EPROTO;
     }
 
-    *replyp = reply;
+    if (replyp) {
+        *replyp = reply;
+    } else {
+        ofpbuf_delete(reply);
+    }
     return 0;
+}
+
+/* Starts a Netlink "dump" operation, by sending 'request' to the kernel via
+ * 'sock', and initializes 'dump' to reflect the state of the operation.
+ *
+ * nlmsg_len in 'msg' will be finalized to match msg->size, and nlmsg_pid will
+ * be set to 'sock''s pid, before the message is sent.  NLM_F_DUMP and
+ * NLM_F_ACK will be set in nlmsg_flags.
+ *
+ * The properties of Netlink make dump operations reliable as long as all of
+ * the following are true:
+ *
+ *   - At most a single dump is in progress at a time on a given nl_sock.
+ *
+ *   - The nl_sock is not subscribed to any multicast groups.
+ *
+ *   - The nl_sock is not used to send any other messages before the dump
+ *     operation is complete.
+ *
+ * This function provides no status indication.  An error status for the entire
+ * dump operation is provided when it is completed by calling nl_dump_done().
+ *
+ * The caller is responsible for destroying 'request'.  The caller must not
+ * close 'sock' before it completes the dump operation (by calling
+ * nl_dump_done()).
+ */
+void
+nl_dump_start(struct nl_dump *dump,
+              struct nl_sock *sock, const struct ofpbuf *request)
+{
+    struct nlmsghdr *nlmsghdr = nl_msg_nlmsghdr(request);
+    nlmsghdr->nlmsg_flags |= NLM_F_DUMP | NLM_F_ACK;
+    dump->seq = nlmsghdr->nlmsg_seq;
+    dump->sock = sock;
+    dump->status = nl_sock_send(sock, request, true);
+    dump->buffer = NULL;
+}
+
+/* Helper function for nl_dump_next(). */
+static int
+nl_dump_recv(struct nl_dump *dump, struct ofpbuf **bufferp)
+{
+    struct nlmsghdr *nlmsghdr;
+    struct ofpbuf *buffer;
+    int retval;
+
+    retval = nl_sock_recv(dump->sock, bufferp, true);
+    if (retval) {
+        return retval == EINTR ? EAGAIN : retval;
+    }
+    buffer = *bufferp;
+
+    nlmsghdr = nl_msg_nlmsghdr(buffer);
+    if (dump->seq != nlmsghdr->nlmsg_seq) {
+        VLOG_DBG_RL(&rl, "ignoring seq %"PRIu32" != expected %"PRIu32,
+                    nlmsghdr->nlmsg_seq, dump->seq);
+        return EAGAIN;
+    }
+
+    if (nl_msg_nlmsgerr(buffer, &retval)) {
+        VLOG_INFO_RL(&rl, "netlink dump request error (%s)",
+                     strerror(retval));
+        return retval && retval != EAGAIN ? retval : EPROTO;
+    }
+
+    return 0;
+}
+
+/* Attempts to retrieve another reply from 'dump', which must have been
+ * initialized with nl_dump_start().
+ *
+ * If successful, returns true and points 'reply->data' and 'reply->size' to
+ * the message that was retrieved.  The caller must not modify 'reply' (because
+ * it points into the middle of a larger buffer).
+ *
+ * On failure, returns false and sets 'reply->data' to NULL and 'reply->size'
+ * to 0.  Failure might indicate an actual error or merely the end of replies.
+ * An error status for the entire dump operation is provided when it is
+ * completed by calling nl_dump_done().
+ */
+bool
+nl_dump_next(struct nl_dump *dump, struct ofpbuf *reply)
+{
+    struct nlmsghdr *nlmsghdr;
+
+    reply->data = NULL;
+    reply->size = 0;
+    if (dump->status) {
+        return false;
+    }
+
+    if (dump->buffer && !dump->buffer->size) {
+        ofpbuf_delete(dump->buffer);
+        dump->buffer = NULL;
+    }
+    while (!dump->buffer) {
+        int retval = nl_dump_recv(dump, &dump->buffer);
+        if (retval) {
+            ofpbuf_delete(dump->buffer);
+            dump->buffer = NULL;
+            if (retval != EAGAIN) {
+                dump->status = retval;
+                return false;
+            }
+        }
+    }
+
+    nlmsghdr = nl_msg_next(dump->buffer, reply);
+    if (!nlmsghdr) {
+        VLOG_WARN_RL(&rl, "netlink dump reply contains message fragment");
+        dump->status = EPROTO;
+        return false;
+    } else if (nlmsghdr->nlmsg_type == NLMSG_DONE) {
+        dump->status = EOF;
+        return false;
+    }
+
+    return true;
+}
+
+/* Completes Netlink dump operation 'dump', which must have been initialized
+ * with nl_dump_start().  Returns 0 if the dump operation was error-free,
+ * otherwise a positive errno value describing the problem. */
+int
+nl_dump_done(struct nl_dump *dump)
+{
+    /* Drain any remaining messages that the client didn't read.  Otherwise the
+     * kernel will continue to queue them up and waste buffer space. */
+    while (!dump->status) {
+        struct ofpbuf reply;
+        if (!nl_dump_next(dump, &reply)) {
+            assert(dump->status);
+        }
+    }
+
+    ofpbuf_delete(dump->buffer);
+    return dump->status == EOF ? 0 : dump->status;
 }
 
 /* Causes poll_block() to wake up when any of the specified 'events' (which is
@@ -487,8 +646,7 @@ nl_msg_reserve(struct ofpbuf *msg, size_t size)
 }
 
 /* Puts a nlmsghdr at the beginning of 'msg', which must be initially empty.
- * Uses the given 'type' and 'flags'.  'sock' is used to obtain a PID and
- * sequence number for proper routing of replies.  'expected_payload' should be
+ * Uses the given 'type' and 'flags'.  'expected_payload' should be
  * an estimate of the number of payload bytes to be supplied; if the size of
  * the payload is unknown a value of 0 is acceptable.
  *
@@ -500,10 +658,13 @@ nl_msg_reserve(struct ofpbuf *msg, size_t size)
  * is often NLM_F_REQUEST indicating that a request is being made, commonly
  * or'd with NLM_F_ACK to request an acknowledgement.
  *
- * nl_msg_put_genlmsghdr is more convenient for composing a Generic Netlink
+ * Sets the new nlmsghdr's nlmsg_pid field to 0 for now.  nl_sock_send() will
+ * fill it in just before sending the message.
+ *
+ * nl_msg_put_genlmsghdr() is more convenient for composing a Generic Netlink
  * message. */
 void
-nl_msg_put_nlmsghdr(struct ofpbuf *msg, struct nl_sock *sock,
+nl_msg_put_nlmsghdr(struct ofpbuf *msg,
                     size_t expected_payload, uint32_t type, uint32_t flags) 
 {
     struct nlmsghdr *nlmsghdr;
@@ -516,14 +677,13 @@ nl_msg_put_nlmsghdr(struct ofpbuf *msg, struct nl_sock *sock,
     nlmsghdr->nlmsg_type = type;
     nlmsghdr->nlmsg_flags = flags;
     nlmsghdr->nlmsg_seq = ++next_seq;
-    nlmsghdr->nlmsg_pid = sock->pid;
+    nlmsghdr->nlmsg_pid = 0;
 }
 
 /* Puts a nlmsghdr and genlmsghdr at the beginning of 'msg', which must be
- * initially empty.  'sock' is used to obtain a PID and sequence number for
- * proper routing of replies.  'expected_payload' should be an estimate of the
- * number of payload bytes to be supplied; if the size of the payload is
- * unknown a value of 0 is acceptable.
+ * initially empty.  'expected_payload' should be an estimate of the number of
+ * payload bytes to be supplied; if the size of the payload is unknown a value
+ * of 0 is acceptable.
  *
  * 'family' is the family number obtained via nl_lookup_genl_family().
  *
@@ -536,17 +696,18 @@ nl_msg_put_nlmsghdr(struct ofpbuf *msg, struct nl_sock *sock,
  *
  * 'version' is a version number specific to the family and command (often 1).
  *
- * nl_msg_put_nlmsghdr should be used to compose Netlink messages that are not
- * Generic Netlink messages. */
+ * Sets the new nlmsghdr's nlmsg_pid field to 0 for now.  nl_sock_send() will
+ * fill it in just before sending the message.
+ *
+ * nl_msg_put_nlmsghdr() should be used to compose Netlink messages that are
+ * not Generic Netlink messages. */
 void
-nl_msg_put_genlmsghdr(struct ofpbuf *msg, struct nl_sock *sock,
-                      size_t expected_payload, int family, uint32_t flags,
-                      uint8_t cmd, uint8_t version)
+nl_msg_put_genlmsghdr(struct ofpbuf *msg, size_t expected_payload,
+                      int family, uint32_t flags, uint8_t cmd, uint8_t version)
 {
     struct genlmsghdr *genlmsghdr;
 
-    nl_msg_put_nlmsghdr(msg, sock, GENL_HDRLEN + expected_payload,
-                        family, flags);
+    nl_msg_put_nlmsghdr(msg, GENL_HDRLEN + expected_payload, family, flags);
     assert(msg->size == NLMSG_HDRLEN);
     genlmsghdr = nl_msg_put_uninit(msg, GENL_HDRLEN);
     genlmsghdr->cmd = cmd;
@@ -652,16 +813,65 @@ nl_msg_put_string(struct ofpbuf *msg, uint16_t type, const char *value)
     nl_msg_put_unspec(msg, type, value, strlen(value) + 1);
 }
 
-/* Appends a Netlink attribute of the given 'type' and the given buffered
- * netlink message in 'nested_msg' to 'msg'.  The nlmsg_len field in
- * 'nested_msg' is finalized to match 'nested_msg->size'. */
+/* Adds the header for nested Netlink attributes to 'msg', with the specified
+ * 'type', and returns the header's offset within 'msg'.  The caller should add
+ * the content for the nested Netlink attribute to 'msg' (e.g. using the other
+ * nl_msg_*() functions), and then pass the returned offset to
+ * nl_msg_end_nested() to finish up the nested attributes. */
+size_t
+nl_msg_start_nested(struct ofpbuf *msg, uint16_t type)
+{
+    size_t offset = msg->size;
+    nl_msg_put_unspec(msg, type, NULL, 0);
+    return offset;
+}
+
+/* Finalizes a nested Netlink attribute in 'msg'.  'offset' should be the value
+ * returned by nl_msg_start_nested(). */
+void
+nl_msg_end_nested(struct ofpbuf *msg, size_t offset)
+{
+    struct nlattr *attr = ofpbuf_at_assert(msg, offset, sizeof *attr);
+    attr->nla_len = msg->size - offset;
+}
+
+/* Appends a nested Netlink attribute of the given 'type', with the 'size'
+ * bytes of content starting at 'data', to 'msg'. */
 void
 nl_msg_put_nested(struct ofpbuf *msg,
-                  uint16_t type, struct ofpbuf *nested_msg)
+                  uint16_t type, const void *data, size_t size)
 {
-    nl_msg_nlmsghdr(nested_msg)->nlmsg_len = nested_msg->size;
-    nl_msg_put_unspec(msg, type, nested_msg->data, nested_msg->size);
+    size_t offset = nl_msg_start_nested(msg, type);
+    nl_msg_put(msg, data, size);
+    nl_msg_end_nested(msg, offset);
 }
+
+/* If 'buffer' begins with a valid "struct nlmsghdr", pulls the header and its
+ * payload off 'buffer', stores header and payload in 'msg->data' and
+ * 'msg->size', and returns a pointer to the header.
+ *
+ * If 'buffer' does not begin with a "struct nlmsghdr" or begins with one that
+ * is invalid, returns NULL without modifying 'buffer'. */
+struct nlmsghdr *
+nl_msg_next(struct ofpbuf *buffer, struct ofpbuf *msg)
+{
+    if (buffer->size >= sizeof(struct nlmsghdr)) {
+        struct nlmsghdr *nlmsghdr = nl_msg_nlmsghdr(buffer);
+        size_t len = nlmsghdr->nlmsg_len;
+        if (len >= sizeof *nlmsghdr && len <= buffer->size) {
+            msg->data = nlmsghdr;
+            msg->size = len;
+            ofpbuf_pull(buffer, len);
+            return nlmsghdr;
+        }
+    }
+
+    msg->data = NULL;
+    msg->size = 0;
+    return NULL;
+}
+
+/* Attributes. */
 
 /* Returns the first byte in the payload of attribute 'nla'. */
 const void *
@@ -746,6 +956,15 @@ nl_attr_get_string(const struct nlattr *nla)
     return nl_attr_get(nla);
 }
 
+/* Initializes 'nested' to the payload of 'nla'.  Doesn't initialize every
+ * field in 'nested', but enough to poke around with it in a read-only way. */
+void
+nl_attr_get_nested(const struct nlattr *nla, struct ofpbuf *nested)
+{
+    nested->data = (void *) nl_attr_get(nla);
+    nested->size = nl_attr_get_size(nla);
+}
+
 /* Default minimum and maximum payload sizes for each type of attribute. */
 static const size_t attr_len_range[][2] = {
     [0 ... N_NL_ATTR_TYPES - 1] = { 0, SIZE_MAX },
@@ -755,7 +974,7 @@ static const size_t attr_len_range[][2] = {
     [NL_A_U64] = { 8, 8 },
     [NL_A_STRING] = { 1, SIZE_MAX },
     [NL_A_FLAG] = { 0, SIZE_MAX },
-    [NL_A_NESTED] = { NLMSG_HDRLEN, SIZE_MAX },
+    [NL_A_NESTED] = { 0, SIZE_MAX },
 };
 
 /* Parses the 'msg' starting at the given 'nla_offset' as a sequence of Netlink
@@ -857,6 +1076,20 @@ nl_policy_parse(const struct ofpbuf *msg, size_t nla_offset,
     }
     return true;
 }
+
+/* Parses the Netlink attributes within 'nla'.  'policy[i]', for 0 <= i <
+ * n_attrs, specifies how the attribute with nla_type == i is parsed; a pointer
+ * to attribute i is stored in attrs[i].  Returns true if successful, false on
+ * failure. */
+bool
+nl_parse_nested(const struct nlattr *nla, const struct nl_policy policy[],
+                struct nlattr *attrs[], size_t n_attrs)
+{
+    struct ofpbuf buf;
+
+    nl_attr_get_nested(nla, &buf);
+    return nl_policy_parse(&buf, 0, policy, attrs, n_attrs);
+}
 
 /* Miscellaneous.  */
 
@@ -877,7 +1110,7 @@ static int do_lookup_genl_family(const char *name)
     }
 
     ofpbuf_init(&request, 0);
-    nl_msg_put_genlmsghdr(&request, sock, 0, GENL_ID_CTRL, NLM_F_REQUEST,
+    nl_msg_put_genlmsghdr(&request, 0, GENL_ID_CTRL, NLM_F_REQUEST,
                           CTRL_CMD_GETFAMILY, 1);
     nl_msg_put_string(&request, CTRL_ATTR_FAMILY_NAME, name);
     retval = nl_sock_transact(sock, &request, &reply);

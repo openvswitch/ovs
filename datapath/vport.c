@@ -19,11 +19,8 @@
 #include "vport.h"
 #include "vport-internal_dev.h"
 
-extern struct vport_ops netdev_vport_ops;
-extern struct vport_ops internal_vport_ops;
-extern struct vport_ops patch_vport_ops;
-extern struct vport_ops gre_vport_ops;
-
+/* List of statically compiled vport implementations.  Don't forget to also
+ * add yours to the list at the bottom of vport.h. */
 static struct vport_ops *base_vport_ops_list[] = {
 	&netdev_vport_ops,
 	&internal_vport_ops,
@@ -113,11 +110,6 @@ vport_init(void)
 	for (i = 0; i < ARRAY_SIZE(base_vport_ops_list); i++) {
 		struct vport_ops *new_ops = base_vport_ops_list[i];
 
-		if (new_ops->get_stats && new_ops->flags & VPORT_F_GEN_STATS) {
-			printk(KERN_INFO "openvswitch: both get_stats() and VPORT_F_GEN_STATS defined on vport %s, dropping VPORT_F_GEN_STATS\n", new_ops->type);
-			new_ops->flags &= ~VPORT_F_GEN_STATS;
-		}
-
 		if (new_ops->init)
 			err = new_ops->init();
 		else
@@ -153,7 +145,7 @@ vport_del_all(void)
 		struct hlist_node *node, *next;
 
 		hlist_for_each_entry_safe(vport, node, next, bucket, hash_node)
-			__vport_del(vport);
+			vport_del(vport);
 	}
 
 	vport_unlock();
@@ -182,15 +174,6 @@ vport_exit(void)
 	kfree(dev_table);
 }
 
-/**
- *	vport_add - add vport device (for userspace callers)
- *
- * @uvport_config: New port configuration.
- *
- * Creates a new vport with the specified configuration (which is dependent
- * on device type).  This function is for userspace callers and assumes no
- * locks are held.
- */
 static int
 do_vport_add(struct xflow_vport_add *vport_config)
 {
@@ -209,8 +192,8 @@ do_vport_add(struct xflow_vport_add *vport_config)
 	}
 
 	vport_lock();
-	vport = __vport_add(vport_config->devname, vport_config->port_type,
-			    vport_config->config);
+	vport = vport_add(vport_config->devname, vport_config->port_type,
+			  vport_config->config);
 	vport_unlock();
 
 	if (IS_ERR(vport))
@@ -221,8 +204,17 @@ out:
 	return err;
 }
 
+/**
+ *	vport_user_add - add vport device (for userspace callers)
+ *
+ * @uvport_config: New port configuration.
+ *
+ * Creates a new vport with the specified configuration (which is dependent
+ * on device type).  This function is for userspace callers and assumes no
+ * locks are held.
+ */
 int
-vport_add(const struct xflow_vport_add __user *uvport_config)
+vport_user_add(const struct xflow_vport_add __user *uvport_config)
 {
 	struct xflow_vport_add vport_config;
 
@@ -234,7 +226,7 @@ vport_add(const struct xflow_vport_add __user *uvport_config)
 
 #ifdef CONFIG_COMPAT
 int
-compat_vport_add(struct compat_xflow_vport_add *ucompat)
+compat_vport_user_add(struct compat_xflow_vport_add *ucompat)
 {
 	struct compat_xflow_vport_add compat;
 	struct xflow_vport_add vport_config;
@@ -250,15 +242,6 @@ compat_vport_add(struct compat_xflow_vport_add *ucompat)
 }
 #endif
 
-/**
- *	vport_mod - modify existing vport device (for userspace callers)
- *
- * @uvport_config: New configuration for vport
- *
- * Modifies an existing device with the specified configuration (which is
- * dependent on device type).  This function is for userspace callers and
- * assumes no locks are held.
- */
 static int
 do_vport_mod(struct xflow_vport_mod *vport_config)
 {
@@ -276,7 +259,7 @@ do_vport_mod(struct xflow_vport_mod *vport_config)
 	}
 
 	vport_lock();
-	err = __vport_mod(vport, vport_config->config);
+	err = vport_mod(vport, vport_config->config);
 	vport_unlock();
 
 out:
@@ -284,8 +267,17 @@ out:
 	return err;
 }
 
+/**
+ *	vport_user_mod - modify existing vport device (for userspace callers)
+ *
+ * @uvport_config: New configuration for vport
+ *
+ * Modifies an existing device with the specified configuration (which is
+ * dependent on device type).  This function is for userspace callers and
+ * assumes no locks are held.
+ */
 int
-vport_mod(const struct xflow_vport_mod __user *uvport_config)
+vport_user_mod(const struct xflow_vport_mod __user *uvport_config)
 {
 	struct xflow_vport_mod vport_config;
 
@@ -297,7 +289,7 @@ vport_mod(const struct xflow_vport_mod __user *uvport_config)
 
 #ifdef CONFIG_COMPAT
 int
-compat_vport_mod(struct compat_xflow_vport_mod *ucompat)
+compat_vport_user_mod(struct compat_xflow_vport_mod *ucompat)
 {
 	struct compat_xflow_vport_mod compat;
 	struct xflow_vport_mod vport_config;
@@ -313,7 +305,7 @@ compat_vport_mod(struct compat_xflow_vport_mod *ucompat)
 #endif
 
 /**
- *	vport_del - delete existing vport device (for userspace callers)
+ *	vport_user_del - delete existing vport device (for userspace callers)
  *
  * @udevname: Name of device to delete
  *
@@ -324,7 +316,7 @@ compat_vport_mod(struct compat_xflow_vport_mod *ucompat)
  * assumes no locks are held.
  */
 int
-vport_del(const char __user *udevname)
+vport_user_del(const char __user *udevname)
 {
 	char devname[IFNAMSIZ];
 	struct vport *vport;
@@ -367,7 +359,7 @@ dp_port_out:
 	}
 
 	vport_lock();
-	err = __vport_del(vport);
+	err = vport_del(vport);
 	vport_unlock();
 
 out:
@@ -376,7 +368,7 @@ out:
 }
 
 /**
- *	vport_stats_get - retrieve device stats (for userspace callers)
+ *	vport_user_stats_get - retrieve device stats (for userspace callers)
  *
  * @ustats_req: Stats request parameters.
  *
@@ -384,7 +376,7 @@ out:
  * function is for userspace callers and assumes no locks are held.
  */
 int
-vport_stats_get(struct xflow_vport_stats_req __user *ustats_req)
+vport_user_stats_get(struct xflow_vport_stats_req __user *ustats_req)
 {
 	struct xflow_vport_stats_req stats_req;
 	struct vport *vport;
@@ -403,45 +395,7 @@ vport_stats_get(struct xflow_vport_stats_req __user *ustats_req)
 		goto out;
 	}
 
-	if (vport->ops->get_stats) {
-		rcu_read_lock();
-		err = vport->ops->get_stats(vport, &stats_req.stats);
-		rcu_read_unlock();
-
-	} else if (vport->ops->flags & VPORT_F_GEN_STATS) {
-		int i;
-
-		memset(&stats_req.stats, 0, sizeof(struct xflow_vport_stats));
-
-		for_each_possible_cpu(i) {
-			const struct vport_percpu_stats *percpu_stats;
-
-			percpu_stats = per_cpu_ptr(vport->percpu_stats, i);
-			stats_req.stats.rx_bytes	+= percpu_stats->rx_bytes;
-			stats_req.stats.rx_packets	+= percpu_stats->rx_packets;
-			stats_req.stats.tx_bytes	+= percpu_stats->tx_bytes;
-			stats_req.stats.tx_packets	+= percpu_stats->tx_packets;
-		}
-
-		spin_lock_bh(&vport->err_stats.lock);
-
-		stats_req.stats.rx_dropped	= vport->err_stats.rx_dropped;
-		stats_req.stats.rx_errors	= vport->err_stats.rx_errors
-						+ vport->err_stats.rx_frame_err
-						+ vport->err_stats.rx_over_err
-						+ vport->err_stats.rx_crc_err;
-		stats_req.stats.rx_frame_err	= vport->err_stats.rx_frame_err;
-		stats_req.stats.rx_over_err	= vport->err_stats.rx_over_err;
-		stats_req.stats.rx_crc_err	= vport->err_stats.rx_crc_err;
-		stats_req.stats.tx_dropped	= vport->err_stats.tx_dropped;
-		stats_req.stats.tx_errors	= vport->err_stats.tx_errors;
-		stats_req.stats.collisions	= vport->err_stats.collisions;
-
-		spin_unlock_bh(&vport->err_stats.lock);
-
-		err = 0;
-	} else
-		err = -EOPNOTSUPP;
+	err = vport_get_stats(vport, &stats_req.stats);
 
 out:
 	vport_unlock();
@@ -454,7 +408,48 @@ out:
 }
 
 /**
- *	vport_ether_get - retrieve device Ethernet address (for userspace callers)
+ *	vport_user_stats_set - sets offset device stats (for userspace callers)
+ *
+ * @ustats_req: Stats set parameters.
+ *
+ * Provides a set of transmit, receive, and error stats to be added as an
+ * offset to the collect data when stats are retreived.  Some devices may not
+ * support setting the stats, in which case the result will always be
+ * -EOPNOTSUPP.  This function is for userspace callers and assumes no locks
+ * are held.
+ */
+int
+vport_user_stats_set(struct xflow_vport_stats_req __user *ustats_req)
+{
+	struct xflow_vport_stats_req stats_req;
+	struct vport *vport;
+	int err;
+
+	if (copy_from_user(&stats_req, ustats_req, sizeof(struct xflow_vport_stats_req)))
+		return -EFAULT;
+
+	stats_req.devname[IFNAMSIZ - 1] = '\0';
+
+	rtnl_lock();
+	vport_lock();
+
+	vport = vport_locate(stats_req.devname);
+	if (!vport) {
+		err = -ENODEV;
+		goto out;
+	}
+
+	err = vport_set_stats(vport, &stats_req.stats);
+
+out:
+	vport_unlock();
+	rtnl_unlock();
+	return err;
+}
+
+
+/**
+ *	vport_user_ether_get - retrieve device Ethernet address (for userspace callers)
  *
  * @uvport_ether: Ethernet address request parameters.
  *
@@ -462,7 +457,7 @@ out:
  * userspace callers and assumes no locks are held.
  */
 int
-vport_ether_get(struct xflow_vport_ether __user *uvport_ether)
+vport_user_ether_get(struct xflow_vport_ether __user *uvport_ether)
 {
 	struct xflow_vport_ether vport_ether;
 	struct vport *vport;
@@ -496,7 +491,7 @@ out:
 }
 
 /**
- *	vport_ether_set - set device Ethernet address (for userspace callers)
+ *	vport_user_ether_set - set device Ethernet address (for userspace callers)
  *
  * @uvport_ether: Ethernet address request parameters.
  *
@@ -506,7 +501,7 @@ out:
  * are held.
  */
 int
-vport_ether_set(struct xflow_vport_ether __user *uvport_ether)
+vport_user_ether_set(struct xflow_vport_ether __user *uvport_ether)
 {
 	struct xflow_vport_ether vport_ether;
 	struct vport *vport;
@@ -535,7 +530,7 @@ out:
 }
 
 /**
- *	vport_mut_get - retrieve device MTU (for userspace callers)
+ *	vport_user_mtu_get - retrieve device MTU (for userspace callers)
  *
  * @uvport_mtu: MTU request parameters.
  *
@@ -543,7 +538,7 @@ out:
  * callers and assumes no locks are held.
  */
 int
-vport_mtu_get(struct xflow_vport_mtu __user *uvport_mtu)
+vport_user_mtu_get(struct xflow_vport_mtu __user *uvport_mtu)
 {
 	struct xflow_vport_mtu vport_mtu;
 	struct vport *vport;
@@ -575,7 +570,7 @@ out:
 }
 
 /**
- *	vport_mtu_set - set device MTU (for userspace callers)
+ *	vport_user_mtu_set - set device MTU (for userspace callers)
  *
  * @uvport_mtu: MTU request parameters.
  *
@@ -584,7 +579,7 @@ out:
  * for userspace callers and assumes no locks are held.
  */
 int
-vport_mtu_set(struct xflow_vport_mtu __user *uvport_mtu)
+vport_user_mtu_set(struct xflow_vport_mtu __user *uvport_mtu)
 {
 	struct xflow_vport_mtu vport_mtu;
 	struct vport *vport;
@@ -699,7 +694,7 @@ vport_alloc(int priv_size, const struct vport_ops *ops)
 		if (!vport->percpu_stats)
 			return ERR_PTR(-ENOMEM);
 
-		spin_lock_init(&vport->err_stats.lock);
+		spin_lock_init(&vport->stats_lock);
 	}
 
 	return vport;
@@ -722,7 +717,7 @@ vport_free(struct vport *vport)
 }
 
 /**
- *	__vport_add - add vport device (for kernel callers)
+ *	vport_add - add vport device (for kernel callers)
  *
  * @name: Name of new device.
  * @type: Type of new device (to be matched against types in registered vport
@@ -733,7 +728,7 @@ vport_free(struct vport *vport)
  * on device type).  Both RTNL and vport locks must be held.
  */
 struct vport *
-__vport_add(const char *name, const char *type, const void __user *config)
+vport_add(const char *name, const char *type, const void __user *config)
 {
 	struct vport *vport;
 	int err = 0;
@@ -762,7 +757,7 @@ out:
 }
 
 /**
- *	__vport_mod - modify existing vport device (for kernel callers)
+ *	vport_mod - modify existing vport device (for kernel callers)
  *
  * @vport: vport to modify.
  * @config: Device type specific configuration.  Userspace pointer.
@@ -771,7 +766,7 @@ out:
  * dependent on device type).  Both RTNL and vport locks must be held.
  */
 int
-__vport_mod(struct vport *vport, const void __user *config)
+vport_mod(struct vport *vport, const void __user *config)
 {
 	ASSERT_RTNL();
 	ASSERT_VPORT();
@@ -783,7 +778,7 @@ __vport_mod(struct vport *vport, const void __user *config)
 }
 
 /**
- *	__vport_del - delete existing vport device (for kernel callers)
+ *	vport_del - delete existing vport device (for kernel callers)
  *
  * @vport: vport to delete.
  *
@@ -792,7 +787,7 @@ __vport_mod(struct vport *vport, const void __user *config)
  * Both RTNL and vport locks must be held.
  */
 int
-__vport_del(struct vport *vport)
+vport_del(struct vport *vport)
 {
 	ASSERT_RTNL();
 	ASSERT_VPORT();
@@ -927,6 +922,34 @@ vport_set_addr(struct vport *vport, const unsigned char *addr)
 }
 
 /**
+ *	vport_set_stats - sets offset device stats (for kernel callers)
+ *
+ * @vport: vport on which to set stats
+ * @stats: stats to set
+ *
+ * Provides a set of transmit, receive, and error stats to be added as an
+ * offset to the collect data when stats are retreived.  Some devices may not
+ * support setting the stats, in which case the result will always be
+ * -EOPNOTSUPP.  RTNL lock must be held.
+ */
+int
+vport_set_stats(struct vport *vport, struct xflow_vport_stats *stats)
+{
+	ASSERT_RTNL();
+
+	if (vport->ops->flags & VPORT_F_GEN_STATS) {
+		spin_lock_bh(&vport->stats_lock);
+		memcpy(&vport->offset_stats, stats, sizeof(struct xflow_vport_stats));
+		spin_unlock_bh(&vport->stats_lock);
+
+		return 0;
+	} else if (vport->ops->set_stats)
+		return vport->ops->set_stats(vport, stats);
+	else
+		return -EOPNOTSUPP;
+}
+
+/**
  *	vport_get_name - retrieve device name
  *
  * @vport: vport from which to retrieve the name.
@@ -999,6 +1022,92 @@ vport_get_kobj(const struct vport *vport)
 		return vport->ops->get_kobj(vport);
 	else
 		return NULL;
+}
+
+/**
+ *	vport_get_stats - retrieve device stats (for kernel callers)
+ *
+ * @vport: vport from which to retrieve the stats
+ * @stats: location to store stats
+ *
+ * Retrieves transmit, receive, and error stats for the given device.
+ */
+int
+vport_get_stats(struct vport *vport, struct xflow_vport_stats *stats)
+{
+	struct xflow_vport_stats dev_stats;
+	struct xflow_vport_stats *dev_statsp = NULL;
+	int err;
+
+	if (vport->ops->get_stats) {
+		if (vport->ops->flags & VPORT_F_GEN_STATS)
+			dev_statsp = &dev_stats;
+		else
+			dev_statsp = stats;
+
+		rcu_read_lock();
+		err = vport->ops->get_stats(vport, dev_statsp);
+		rcu_read_unlock();
+
+		if (err)
+			goto out;
+	}
+
+	if (vport->ops->flags & VPORT_F_GEN_STATS) {
+		int i;
+
+		/* We potentially have 3 sources of stats that need to be
+		 * combined: those we have collected (split into err_stats and
+		 * percpu_stats), offset_stats from set_stats(), and device
+		 * error stats from get_stats() (for errors that happen
+		 * downstream and therefore aren't reported through our
+		 * vport_record_error() function). */
+
+		spin_lock_bh(&vport->stats_lock);
+
+		memcpy(stats, &vport->offset_stats, sizeof(struct xflow_vport_stats));
+
+		stats->rx_errors	+= vport->err_stats.rx_errors
+						+ vport->err_stats.rx_frame_err
+						+ vport->err_stats.rx_over_err
+						+ vport->err_stats.rx_crc_err;
+		stats->tx_errors	+= vport->err_stats.tx_errors;
+		stats->tx_dropped	+= vport->err_stats.tx_dropped;
+		stats->rx_dropped	+= vport->err_stats.rx_dropped;
+		stats->rx_over_err	+= vport->err_stats.rx_over_err;
+		stats->rx_crc_err	+= vport->err_stats.rx_crc_err;
+		stats->rx_frame_err	+= vport->err_stats.rx_frame_err;
+		stats->collisions	+= vport->err_stats.collisions;
+
+		spin_unlock_bh(&vport->stats_lock);
+
+		if (dev_statsp) {
+			stats->rx_errors	+= dev_statsp->rx_errors;
+			stats->tx_errors	+= dev_statsp->tx_errors;
+			stats->rx_dropped	+= dev_statsp->rx_dropped;
+			stats->tx_dropped	+= dev_statsp->tx_dropped;
+			stats->rx_over_err	+= dev_statsp->rx_over_err;
+			stats->rx_crc_err	+= dev_statsp->rx_crc_err;
+			stats->rx_frame_err	+= dev_statsp->rx_frame_err;
+			stats->collisions	+= dev_statsp->collisions;
+		}
+
+		for_each_possible_cpu(i) {
+			const struct vport_percpu_stats *percpu_stats;
+
+			percpu_stats = per_cpu_ptr(vport->percpu_stats, i);
+			stats->rx_bytes		+= percpu_stats->rx_bytes;
+			stats->rx_packets	+= percpu_stats->rx_packets;
+			stats->tx_bytes		+= percpu_stats->tx_bytes;
+			stats->tx_packets	+= percpu_stats->tx_packets;
+		}
+
+		err = 0;
+	} else
+		err = -EOPNOTSUPP;
+
+out:
+	return err;
 }
 
 /**
@@ -1191,7 +1300,7 @@ vport_record_error(struct vport *vport, enum vport_err_type err_type)
 {
 	if (vport->ops->flags & VPORT_F_GEN_STATS) {
 
-		spin_lock_bh(&vport->err_stats.lock);
+		spin_lock_bh(&vport->stats_lock);
 
 		switch (err_type) {
 		case VPORT_E_RX_DROPPED:
@@ -1227,6 +1336,6 @@ vport_record_error(struct vport *vport, enum vport_err_type err_type)
 			break;
 		};
 
-		spin_unlock_bh(&vport->err_stats.lock);
+		spin_unlock_bh(&vport->stats_lock);
 	}
 }

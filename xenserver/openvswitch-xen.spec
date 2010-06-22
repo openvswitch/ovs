@@ -79,7 +79,6 @@ install -m 755 xenserver/usr_sbin_xen-bugtool \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/xen-bugtool
 install -m 755 xenserver/usr_sbin_brctl \
              $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/brctl
-install -m 755 xenserver/ovs-xenserverd $RPM_BUILD_ROOT/usr/sbin/
 install -m 755 xenserver/usr_share_openvswitch_scripts_sysconfig.template \
          $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/sysconfig.template
 install -d -m 755 $RPM_BUILD_ROOT/usr/lib/xsconsole/plugins-base
@@ -115,6 +114,7 @@ if [ ! -f /etc/xensource-inventory ]; then
     printf "XenSource inventory not present in /etc/xensource-inventory"
     exit 1
 fi
+. /etc/xensource-inventory
 
 if [ "$1" = "1" ]; then
     if md5sum -c --status <<EOF
@@ -158,6 +158,28 @@ XenServer scripts that you were previously using.
 EOF
     fi
 fi
+
+# On XenServer 5.5.0, we need refresh-network-uuids to run whenever
+# XAPI starts or restarts.  (On XenServer 5.6.0, XAPI calls the
+# "update" method of the vswitch-cfg-update plugin whenever it starts
+# or restarts, so this is no longer necessary.)
+if test "$PRODUCT_VERSION" = "5.5.0"; then
+    RNU=/usr/share/openvswitch/scripts/refresh-network-uuids
+    XSS=/opt/xensource/libexec/xapi-startup-script
+    if test -e $XSS && (test ! -L $XSS || test "`readlink $XSS`" != $RNU); then
+        echo "$XSS is already in use, refusing to overwrite"
+        exit 1
+    fi
+    rm -f $XSS
+    ln -s $RNU $XSS
+
+    # If /etc/xensource/network.conf doesn't exist (it was added in 5.6.0),
+    # then interface-reconfigure will be unhappy when we run it below.
+    if test ! -e /etc/xensource/network.conf; then
+        echo bridge > /etc/xensource/network.conf
+    fi
+fi
+
 
 if test ! -e /var/xapi/network.dbcache; then
     if test "$1" = 1; then
@@ -280,6 +302,11 @@ fi
 
 %postun
 if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
+    . /etc/xensource-inventory
+    if test "$PRODUCT_VERSION" = "5.5.0"; then
+        XSS=/opt/xensource/libexec/xapi-startup-script
+        rm -f $XSS
+    fi
 
     rm -f /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyc \
         /usr/lib/xsconsole/plugins-base/XSFeatureVSwitch.pyo
@@ -318,8 +345,13 @@ if [ "$1" = "0" ]; then     # $1 = 1 for upgrade
     rm -f /etc/openvswitch/vswitchd.cacert
     rm -f /var/xapi/network.dbcache
 
-    # Configure system to use bridge
-    echo bridge > /etc/xensource/network.conf
+    if test "$PRODUCT_VERSION" != "5.5.0"; then
+        # Configure system to use bridge
+        echo bridge > /etc/xensource/network.conf
+    else
+        # Get rid of network.conf entirely, to make the system pristine.
+        rm -f /etc/xensource/network.conf
+    fi
 
     printf "\nYou MUST reboot the server now to complete the change to\n"
     printf "standard Xen networking.  Attempts to modify networking on the\n"
@@ -349,7 +381,6 @@ fi
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/sbin/ovs-brcompatd
 /usr/sbin/ovs-vswitchd
-/usr/sbin/ovs-xenserverd
 /usr/sbin/ovsdb-server
 /usr/bin/ovs-appctl
 /usr/bin/ovs-dpctl
@@ -368,7 +399,6 @@ fi
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
-/usr/share/man/man8/ovs-xenserverd.8.gz
 /var/lib/openvswitch
 %exclude /usr/lib/xsconsole/plugins-base/*.pyc
 %exclude /usr/lib/xsconsole/plugins-base/*.pyo
