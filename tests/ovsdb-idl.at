@@ -1,6 +1,7 @@
 AT_BANNER([OVSDB -- interface description language (IDL)])
 
-# OVSDB_CHECK_IDL(TITLE, [PRE-IDL-TXN], TRANSACTIONS, OUTPUT, [KEYWORDS])
+# OVSDB_CHECK_IDL(TITLE, [PRE-IDL-TXN], TRANSACTIONS, OUTPUT, [KEYWORDS],
+#                 [FILTER])
 #
 # Creates a database with a schema derived from idltest.ovsidl, runs
 # each PRE-IDL-TXN (if any), starts an ovsdb-server on that database,
@@ -11,7 +12,8 @@ AT_BANNER([OVSDB -- interface description language (IDL)])
 # by markers of the form <N> where N is a number.  The first unique
 # UUID is replaced by <0>, the next by <1>, and so on.  If a given
 # UUID appears more than once it is always replaced by the same
-# marker.
+# marker.  If FILTER is supplied then the output is also filtered
+# through the specified program.
 #
 # TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
 m4_define([OVSDB_CHECK_IDL], 
@@ -24,8 +26,8 @@ m4_define([OVSDB_CHECK_IDL],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $3], 
             [0], [stdout], [ignore], [kill `cat pid`])
-   AT_CHECK([sort stdout | perl $srcdir/uuidfilt.pl], [0], [$4], [],
-            [kill `cat pid`])
+   AT_CHECK([sort stdout | perl $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4], [], [kill `cat pid`])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -269,14 +271,16 @@ OVSDB_CHECK_IDL([self-linking idl, inconsistent ops],
 002: {"error":null,"result":[{"uuid":["uuid","<2>"]},{"uuid":["uuid","<3>"]}]}
 003: i=1 k=1 ka=[] l2= uuid=<2>
 003: i=2 k=1 ka=[] l2= uuid=<3>
-004: {"error":null,"result":[{"count":2},{"details":"Table link1 column k row <2> references nonexistent row <4> in table link1.","error":"referential integrity violation"}]}
+004: {"error":null,"result":[{"count":2},{"details":"Table link1 column k row <x> references nonexistent row <4> in table link1.","error":"referential integrity violation"}]}
 005: {"error":null,"result":[{"count":1},{"details":"cannot delete link1 row <2> because of 1 remaining reference(s)","error":"referential integrity violation"}]}
 006: {"error":null,"result":[{"count":1}]}
 007: i=1 k=1 ka=[] l2= uuid=<2>
 008: {"error":null,"result":[{"count":1}]}
 009: empty
 010: done
-]])
+]],
+  [],
+  [[sed -e '/004:/s/row <[23]> references/row <x> references/']])
 
 OVSDB_CHECK_IDL([self-linking idl, sets],
   [],
