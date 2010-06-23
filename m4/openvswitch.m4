@@ -265,6 +265,32 @@ else:
    fi
    AM_CONDITIONAL([HAVE_PYTHON], [test "$HAVE_PYTHON" = yes])])
 
+dnl Checks for dot.
+AC_DEFUN([OVS_CHECK_DOT],
+  [AC_CACHE_CHECK(
+    [for dot],
+    [ovs_cv_dot],
+    [dnl "dot" writes -V output to stderr:
+     if (dot -V) 2>&1 | grep '^dot - [gG]raphviz version' >/dev/null 2>&1; then
+       ovs_cv_dot=yes
+     else
+       ovs_cv_dot=no
+     fi])])
+
+dnl Check whether to build E-R diagrams.
+AC_DEFUN([OVS_CHECK_ER_DIAGRAMS],
+  [AC_REQUIRE([OVS_CHECK_DOT])
+   AC_REQUIRE([OVS_CHECK_PYTHON])
+   AC_CACHE_CHECK(
+    [whether to build E-R diagrams for database],
+    [ovs_cv_er_diagrams],
+    [if test $ovs_cv_dot != no && test $ovs_cv_python != no; then
+       ovs_cv_er_diagrams=yes
+     else
+       ovs_cv_er_diagrams=no
+     fi])
+   AM_CONDITIONAL([BUILD_ER_DIAGRAMS], [test $ovs_cv_er_diagrams = yes])])
+
 dnl Checks for pyuic4.
 AC_DEFUN([OVS_CHECK_PYUIC4],
   [AC_CACHE_CHECK(

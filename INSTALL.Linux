@@ -81,6 +81,12 @@ following:
 
     - pyuic4 from PyQt4 (http://www.riverbankcomputing.co.uk).
 
+If you modify the vswitchd database schema, then the E-R diagram in
+the ovs-vswitchd.conf.db(5) manpage will be updated properly only if
+you have the following:
+
+    - "dot" from graphviz (http://www.graphviz.org/).
+
 Installation Requirements
 -------------------------
 

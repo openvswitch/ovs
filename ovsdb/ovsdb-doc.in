@@ -213,10 +213,10 @@ Column	Type
     s += body
     return s
 
-def docsToNroff(schemaFile, xmlFile, title=None):
+def docsToNroff(schemaFile, xmlFile, erFile, title=None):
     schema = DbSchema.fromJson(json.load(open(schemaFile, "r")))
     doc = xml.dom.minidom.parse(xmlFile).documentElement
-
+    
     schemaDate = os.stat(schemaFile).st_mtime
     xmlDate = os.stat(xmlFile).st_mtime
     d = date.fromtimestamp(max(schemaDate, xmlDate))
@@ -224,7 +224,10 @@ def docsToNroff(schemaFile, xmlFile, title=None):
     if title == None:
         title = schema.name
 
-    s = r'''.TH %s 5 "%s" "Open vSwitch" "Open vSwitch Manual"
+    # Putting '\" pt as the first line tells "man" that the manpage
+    # needs to be preprocessed by "pic" and "tbl".
+    s = r''''\" pt
+.TH %s 5 "%s" "Open vSwitch" "Open vSwitch Manual"
 .\" -*- nroff -*-
 .de TQ
 .  br
@@ -275,6 +278,24 @@ Table	Purpose
         tableSummary += "%s\t%s\n" % (name, textToNroff(title))
     tableSummary += '.TE\n'
     s += tableSummary
+
+    if erFile:
+        s += """
+.sp 1
+.SH "TABLE RELATIONSHIPS"
+.PP
+The following diagram shows the relationship among tables in the
+database.  Each node represents a table.  Each edge leads from the
+table that contains it and points to the table that its value
+represents.  Edges are labeled with their column names.
+.RS -1in
+"""
+        erStream = open(erFile, "r")
+        for line in erStream:
+            s += line + '\n'
+        erStream.close()
+        s += ".RE\n"
+
     for node in tableNodes:
         s += tableToNroff(schema, node) + "\n"
     return s
@@ -288,6 +309,7 @@ where SCHEMA is an OVSDB schema in JSON format
   and XML is OVSDB documentation in XML format.
 
 The following options are also available:
+  --er-diagram=DIAGRAM.PIC    include E-R diagram from DIAGRAM.PIC
   --title=TITLE               use TITLE as title instead of schema name
   -h, --help                  display this help message
   -V, --version               display version information\
@@ -298,14 +320,18 @@ if __name__ == "__main__":
     try:
         try:
             options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
-                                              ['title=', 'help', 'version'])
+                                              ['er-diagram=', 'title=',
+                                               'help', 'version'])
         except getopt.GetoptError, geo:
             sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
             sys.exit(1)
 
+        er_diagram = None
         title = None
         for key, value in options:
-            if key == '--title':
+            if key == '--er-diagram':
+                er_diagram = value
+            elif key == '--title':
                 title = value
             elif key in ['-h', '--help']:
                 usage()
@@ -320,7 +346,7 @@ if __name__ == "__main__":
             sys.exit(1)
         
         # XXX we should warn about undocumented tables or columns
-        s = docsToNroff(args[0], args[1])
+        s = docsToNroff(args[0], args[1], er_diagram)
         for line in s.split("\n"):
             line = line.strip()
             if len(line):

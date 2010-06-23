@@ -1,0 +1,87 @@
+#! @PYTHON@
+
+from datetime import date
+import getopt
+import os
+import re
+import sys
+
+sys.path.insert(0, "@abs_top_srcdir@/ovsdb")
+import simplejson as json
+
+from OVSDB import *
+
+argv0 = sys.argv[0]
+
+def printEdge(tableName, baseType, label):
+    if baseType.refTable:
+        options = {}
+        options['label'] = '"%s"' % label
+        if baseType.refType == 'weak':
+            options['constraint'] = 'false'
+        print "\t%s -> %s [%s];" % (
+            tableName,
+            baseType.refTable,
+            ', '.join(['%s=%s' % (k,v) for k,v in options.items()]))
+
+def schemaToDot(schemaFile):
+    schema = DbSchema.fromJson(json.load(open(schemaFile, "r")))
+
+    print "digraph %s {" % schema.name
+    for tableName, table in schema.tables.iteritems():
+        print '\tsize="6.5,4";'
+        print '\tmargin="0";'
+        print "\tnode [shape=box];"
+        print "\t%s;" % tableName
+        for columnName, column in table.columns.iteritems():
+            if column.type.value:
+                printEdge(tableName, column.type.key, "%s key" % columnName)
+                printEdge(tableName, column.type.value, "%s value" % columnName)
+            else:
+                printEdge(tableName, column.type.key, columnName)
+    print "}";
+
+def usage():
+    print """\
+%(argv0)s: compiles ovsdb schemas to graphviz format
+Prints a .dot file that "dot" can render to an entity-relationship diagram
+usage: %(argv0)s [OPTIONS] SCHEMA
+where SCHEMA is an OVSDB schema in JSON format
+
+The following options are also available:
+  -h, --help                  display this help message
+  -V, --version               display version information\
+""" % {'argv0': argv0}
+    sys.exit(0)
+
+if __name__ == "__main__":
+    try:
+        try:
+            options, args = getopt.gnu_getopt(sys.argv[1:], 'hV',
+                                              ['help', 'version'])
+        except getopt.GetoptError, geo:
+            sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
+            sys.exit(1)
+
+        for key, value in options:
+            if key in ['-h', '--help']:
+                usage()
+            elif key in ['-V', '--version']:
+                print "ovsdb-dot (Open vSwitch) @VERSION@"
+            else:
+                sys.exit(0)
+            
+        if len(args) != 1:
+            sys.stderr.write("%s: exactly 1 non-option argument required "
+                             "(use --help for help)\n" % argv0)
+            sys.exit(1)
+
+        schemaToDot(args[0])
+        
+    except Error, e:
+        sys.stderr.write("%s: %s\n" % (argv0, e.msg))
+        sys.exit(1)
+
+# Local variables:
+# mode: python
+# End:
