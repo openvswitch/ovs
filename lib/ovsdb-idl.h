@@ -16,6 +16,20 @@
 #ifndef OVSDB_IDL_H
 #define OVSDB_IDL_H 1
 
+/* Open vSwitch Database Interface Definition Language (OVSDB IDL).
+ *
+ * The OVSDB IDL maintains an in-memory replica of a database.  It issues RPC
+ * requests to an OVSDB database server and parses the responses, converting
+ * raw JSON into data structures that are easier for clients to digest.  Most
+ * notably, references to rows via UUID become C pointers.
+ *
+ * The IDL also assists with issuing database transactions.  The client creates
+ * a transaction, manipulates the IDL data structures, and commits or aborts
+ * the transaction.  The IDL then composes and issues the necessary JSON-RPC
+ * requests and reports to the client whether the transaction completed
+ * successfully.
+ */
+
 #include <stdbool.h>
 #include <stdint.h>
 #include "compiler.h"
