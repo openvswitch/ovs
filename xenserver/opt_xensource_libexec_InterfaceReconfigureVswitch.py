@@ -90,7 +90,9 @@ For a non-VLAN, non-bond master PIF, the PIF is its own physical device PIF.
 
 A VLAN PIF cannot be a datapath PIF.
 """
-    if pif_is_vlan(pif):
+    if pif_is_tunnel(pif):
+        return []
+    elif pif_is_vlan(pif):
         # Seems like overkill...
         raise Error("get-physical-pifs should not get passed a VLAN")
     elif pif_is_bond(pif):
@@ -124,6 +126,9 @@ def vsctl_escape(s):
         else:
             return r'\x%02x' % ord(c)
     return '"' + re.sub(r'["\\\000-\037]', escape, s) + '"'
+
+def datapath_configure_tunnel(pif):
+    pass
 
 def datapath_configure_bond(pif,slaves):
     bridge = pif_bridge_name(pif)
@@ -292,10 +297,12 @@ def configure_datapath(pif):
         vsctl_argv += ['# configure bond %s' % pif_netdev_name(pif)]
         vsctl_argv += datapath_configure_bond(pif, physical_devices)
         extra_up_ports += [pif_netdev_name(pif)]
-    else:
+    elif len(physical_devices) == 1:
         iface = pif_netdev_name(physical_devices[0])
         vsctl_argv += ['# add physical device %s' % iface]
         vsctl_argv += ['--', '--may-exist', 'add-port', bridge, iface]
+    elif pif_is_tunnel(pif):
+        datapath_configure_tunnel(pif)
 
     vsctl_argv += ['# configure Bridge MAC']
     vsctl_argv += ['--', 'set', 'Bridge', bridge,

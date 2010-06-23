@@ -241,19 +241,25 @@ def _strlist_from_xml(n, ltag, itag):
             ret.append(_str_from_xml(n))
     return ret
 
-def _otherconfig_to_xml(xml, parent, val, attrs):
-    otherconfig = xml.createElement("other_config")
-    parent.appendChild(otherconfig)
+def _map_to_xml(xml, parent, tag, val, attrs):
+    e = xml.createElement(tag)
+    parent.appendChild(e)
     for n,v in val.items():
         if not n in attrs:
             raise Error("Unknown other-config attribute: %s" % n)
-        _str_to_xml(xml, otherconfig, n, v)
-def _otherconfig_from_xml(n, attrs):
+        _str_to_xml(xml, e, n, v)
+
+def _map_from_xml(n, attrs):
     ret = {}
     for n in n.childNodes:
         if n.nodeName in attrs:
             ret[n.nodeName] = _str_from_xml(n)
     return ret
+
+def _otherconfig_to_xml(xml, parent, val, attrs):
+    return _map_to_xml(xml, parent, "other_config", val, attrs)
+def _otherconfig_from_xml(n, attrs):
+    return _map_from_xml(n, attrs)
 
 #
 # Definitions of the database objects (and their attributes) used by interface-reconfigure.
@@ -267,6 +273,7 @@ def _otherconfig_from_xml(n, attrs):
 
 _PIF_XML_TAG = "pif"
 _VLAN_XML_TAG = "vlan"
+_TUNNEL_XML_TAG = "tunnel"
 _BOND_XML_TAG = "bond"
 _NETWORK_XML_TAG = "network"
 
@@ -287,6 +294,10 @@ _PIF_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),
                'VLAN_master_of': (_str_to_xml,_str_from_xml),
                'VLAN_slave_of': (lambda x, p, t, v: _strlist_to_xml(x, p, 'VLAN_slave_of', 'master', v),
                                  lambda n: _strlist_from_xml(n, 'VLAN_slave_Of', 'master')),
+               'tunnel_access_PIF_of': (lambda x, p, t, v: _strlist_to_xml(x, p, 'tunnel_access_PIF_of', 'pif', v),
+                                        lambda n: _strlist_from_xml(n, 'tunnel_access_PIF_of', 'pif')),
+               'tunnel_transport_PIF_of':  (lambda x, p, t, v: _strlist_to_xml(x, p, 'tunnel_transport_PIF_of', 'pif', v),
+                                            lambda n: _strlist_from_xml(n, 'tunnel_transport_PIF_of', 'pif')),
                'ip_configuration_mode': (_str_to_xml,_str_from_xml),
                'IP': (_str_to_xml,_str_from_xml),
                'netmask': (_str_to_xml,_str_from_xml),
@@ -308,6 +319,10 @@ _VLAN_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),
                 'untagged_PIF': (_str_to_xml,_str_from_xml),
               }
 
+_TUNNEL_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),
+                  'access_PIF': (_str_to_xml,_str_from_xml),
+                  'transport_PIF': (_str_to_xml,_str_from_xml),
+                }
 _BOND_ATTRS = { 'uuid': (_str_to_xml,_str_from_xml),
                'master': (_str_to_xml,_str_from_xml),
                'slaves': (lambda x, p, t, v: _strlist_to_xml(x, p, 'slaves', 'slave', v),
@@ -382,6 +397,16 @@ class DatabaseCache(object):
             self.__vlans[v] = {}
             for f in _VLAN_ATTRS:
                 self.__vlans[v][f] = rec[f]
+
+    def __get_tunnel_records_from_xapi(self, session):
+        self.__tunnels = {}
+        for t in session.xenapi.tunnel.get_all():
+            rec = session.xenapi.tunnel.get_record(t)
+            if not self.__pif_on_host(rec['transport_PIF']):
+                continue
+            self.__tunnels[t] = {}
+            for f in _TUNNEL_ATTRS:
+                self.__tunnels[t][f] = rec[f]
 
     def __get_bond_records_from_xapi(self, session):
         self.__bonds = {}
@@ -459,6 +484,7 @@ class DatabaseCache(object):
 
                 self.__get_pif_records_from_xapi(session, host)
 
+                self.__get_tunnel_records_from_xapi(session)
                 self.__get_vlan_records_from_xapi(session)
                 self.__get_bond_records_from_xapi(session)
                 self.__get_network_records_from_xapi(session)
@@ -473,6 +499,7 @@ class DatabaseCache(object):
             self.__pifs = {}
             self.__bonds = {}
             self.__vlans = {}
+            self.__tunnels = {}
             self.__networks = {}
 
             assert(len(xml.childNodes) == 1)
@@ -492,6 +519,9 @@ class DatabaseCache(object):
                 elif n.nodeName == _VLAN_XML_TAG:
                     (ref,rec) = self.__from_xml(n, _VLAN_ATTRS)
                     self.__vlans[ref] = rec
+                elif n.nodeName == _TUNNEL_XML_TAG:
+                    (ref,rec) = self.__from_xml(n, _TUNNEL_ATTRS)
+                    self.__vlans[ref] = rec
                 elif n.nodeName == _NETWORK_XML_TAG:
                     (ref,rec) = self.__from_xml(n, _NETWORK_ATTRS)
                     self.__networks[ref] = rec
@@ -508,6 +538,8 @@ class DatabaseCache(object):
             self.__to_xml(xml, xml.documentElement, _BOND_XML_TAG, ref, rec, _BOND_ATTRS)
         for (ref,rec) in self.__vlans.items():
             self.__to_xml(xml, xml.documentElement, _VLAN_XML_TAG, ref, rec, _VLAN_ATTRS)
+        for (ref,rec) in self.__tunnels.items():
+            self.__to_xml(xml, xml.documentElement, _TUNNEL_XML_TAG, ref, rec, _TUNNEL_ATTRS)
         for (ref,rec) in self.__networks.items():
             self.__to_xml(xml, xml.documentElement, _NETWORK_XML_TAG, ref, rec,
                           _NETWORK_ATTRS)
@@ -789,6 +821,12 @@ def pif_get_vlan_masters(pif):
     pifrec = db().get_pif_record(pif)
     vlans = [db().get_vlan_record(v) for v in pifrec['VLAN_slave_of']]
     return [v['untagged_PIF'] for v in vlans if v and db().pif_exists(v['untagged_PIF'])]
+
+#
+# Tunnel PIFs
+#
+def pif_is_tunnel(pif):
+    return len(db().get_pif_record(pif)['tunnel_access_PIF_of']) > 0
 
 #
 # Datapath base class

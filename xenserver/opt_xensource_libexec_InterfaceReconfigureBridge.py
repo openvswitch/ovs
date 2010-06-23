@@ -423,6 +423,9 @@ def _configure_pif(pif):
 
 class DatapathBridge(Datapath):
     def __init__(self, pif):
+        if pif_is_tunnel(pif):
+            raise Error("Tunnel PIFs are not supported in Bridge mode")
+
         Datapath.__init__(self, pif)
         log("Configured for Bridge datapath")
 
