@@ -382,7 +382,12 @@ class DatabaseCache(object):
                 continue
             self.__pifs[p] = {}
             for f in _PIF_ATTRS:
-                self.__pifs[p][f] = rec[f]
+                if f in [ "tunnel_access_PIF_of", "tunnel_transport_PIF_of" ] and f not in rec:
+                    # XenServer 5.5 network records did not have
+                    # these fields, so allow them to be missing.
+                    pass
+                else:
+                    self.__pifs[p][f] = rec[f]
             self.__pifs[p]['other_config'] = {}
             for f in _PIF_OTHERCONFIG_ATTRS:
                 if not rec['other_config'].has_key(f): continue
@@ -484,7 +489,13 @@ class DatabaseCache(object):
 
                 self.__get_pif_records_from_xapi(session, host)
 
-                self.__get_tunnel_records_from_xapi(session)
+                try:
+                    self.__get_tunnel_records_from_xapi(session)
+                except XenAPI.Failure, e:
+                    error,details = e.details
+                    if error == "MESSAGE_METHOD_UNKNOWN" and details == "tunnel.get_all":
+                        pass
+
                 self.__get_vlan_records_from_xapi(session)
                 self.__get_bond_records_from_xapi(session)
                 self.__get_network_records_from_xapi(session)
@@ -826,7 +837,8 @@ def pif_get_vlan_masters(pif):
 # Tunnel PIFs
 #
 def pif_is_tunnel(pif):
-    return len(db().get_pif_record(pif)['tunnel_access_PIF_of']) > 0
+    rec = db().get_pif_record(pif)
+    return rec.has_key('tunnel_access_PIF_of') and len(rec['tunnel_access_PIF_of']) > 0
 
 #
 # Datapath base class
