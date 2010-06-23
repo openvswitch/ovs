@@ -186,6 +186,11 @@ static struct list all_bridges = LIST_INITIALIZER(&all_bridges);
 /* OVSDB IDL used to obtain configuration. */
 static struct ovsdb_idl *idl;
 
+/* Each time this timer expires, the bridge fetches statistics for every
+ * interface and pushes them into the database. */
+#define IFACE_STATS_INTERVAL (5 * 1000) /* In milliseconds. */
+static long long int iface_stats_timer = LLONG_MIN;
+
 static struct bridge *bridge_create(const struct ovsrec_bridge *br_cfg);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
@@ -285,6 +290,8 @@ bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
         return;
     }
     already_configured_once = true;
+
+    iface_stats_timer = time_msec() + IFACE_STATS_INTERVAL;
 
     /* Get all the configured bridges' names from 'cfg' into 'bridge_names'. */
     svec_init(&bridge_names);
@@ -1049,6 +1056,53 @@ dpid_from_hash(const void *data, size_t n)
     return eth_addr_to_uint64(hash);
 }
 
+static void
+iface_refresh_stats(struct iface *iface)
+{
+    struct iface_stat {
+        char *name;
+        int offset;
+    };
+    static const struct iface_stat iface_stats[] = {
+        { "rx_packets", offsetof(struct netdev_stats, rx_packets) },
+        { "tx_packets", offsetof(struct netdev_stats, tx_packets) },
+        { "rx_bytes", offsetof(struct netdev_stats, rx_bytes) },
+        { "tx_bytes", offsetof(struct netdev_stats, tx_bytes) },
+        { "rx_dropped", offsetof(struct netdev_stats, rx_dropped) },
+        { "tx_dropped", offsetof(struct netdev_stats, tx_dropped) },
+        { "rx_errors", offsetof(struct netdev_stats, rx_errors) },
+        { "tx_errors", offsetof(struct netdev_stats, tx_errors) },
+        { "rx_frame_err", offsetof(struct netdev_stats, rx_frame_errors) },
+        { "rx_over_err", offsetof(struct netdev_stats, rx_over_errors) },
+        { "rx_crc_err", offsetof(struct netdev_stats, rx_crc_errors) },
+        { "collisions", offsetof(struct netdev_stats, collisions) },
+    };
+    enum { N_STATS = ARRAY_SIZE(iface_stats) };
+    const struct iface_stat *s;
+
+    char *keys[N_STATS];
+    int64_t values[N_STATS];
+    int n;
+
+    struct netdev_stats stats;
+
+    /* Intentionally ignore return value, since errors will set 'stats' to
+     * all-1s, and we will deal with that correctly below. */
+    netdev_get_stats(iface->netdev, &stats);
+
+    n = 0;
+    for (s = iface_stats; s < &iface_stats[N_STATS]; s++) {
+        uint64_t value = *(uint64_t *) (((char *) &stats) + s->offset);
+        if (value != UINT64_MAX) {
+            keys[n] = s->name;
+            values[n] = value;
+            n++;
+        }
+    }
+
+    ovsrec_interface_set_statistics(iface->cfg, keys, values, n);
+}
+
 void
 bridge_run(void)
 {
@@ -1087,6 +1141,30 @@ bridge_run(void)
             bridge_reconfigure(&null_cfg);
         }
     }
+
+    /* Refresh interface stats if necessary. */
+    if (time_msec() >= iface_stats_timer) {
+        struct ovsdb_idl_txn *txn;
+
+        txn = ovsdb_idl_txn_create(idl);
+        LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
+            size_t i;
+
+            for (i = 0; i < br->n_ports; i++) {
+                struct port *port = br->ports[i];
+                size_t j;
+
+                for (j = 0; j < port->n_ifaces; j++) {
+                    struct iface *iface = port->ifaces[j];
+                    iface_refresh_stats(iface);
+                }
+            }
+        }
+        ovsdb_idl_txn_commit(txn);
+        ovsdb_idl_txn_destroy(txn); /* XXX */
+
+        iface_stats_timer = time_msec() + IFACE_STATS_INTERVAL;
+    }
 }
 
 void
@@ -1104,6 +1182,7 @@ bridge_wait(void)
         bond_wait(br);
     }
     ovsdb_idl_wait(idl);
+    poll_timer_wait_until(iface_stats_timer);
 }
 
 /* Forces 'br' to revalidate all of its flows.  This is appropriate when 'br''s
