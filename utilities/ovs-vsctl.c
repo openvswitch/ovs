@@ -1967,7 +1967,8 @@ get_table(const char *table_name)
 
 static const struct ovsdb_idl_row *
 get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
-              const struct vsctl_row_id *id, const char *record_id)
+              const struct vsctl_row_id *id, const char *record_id,
+              bool partial_match_ok)
 {
     const struct ovsdb_idl_row *referrer, *final;
 
@@ -1999,8 +2000,11 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
 
             ovsdb_idl_txn_read(row, id->name_column, &name);
             if (name.n == 1) {
-                unsigned int score = score_partial_match(name.keys[0].string,
-                                                         record_id);
+                unsigned int score;
+
+                score = (partial_match_ok
+                         ? score_partial_match(name.keys[0].string, record_id)
+                         : !strcmp(name.keys[0].string, record_id));
                 if (score > best_score) {
                     referrer = row;
                     best_score = score;
@@ -2040,8 +2044,9 @@ get_row_by_id(struct vsctl_context *ctx, const struct vsctl_table_class *table,
 }
 
 static const struct ovsdb_idl_row *
-get_row(struct vsctl_context *ctx,
-        const struct vsctl_table_class *table, const char *record_id)
+get_row__(struct vsctl_context *ctx,
+          const struct vsctl_table_class *table, const char *record_id,
+          bool partial_match_ok)
 {
     const struct ovsdb_idl_row *row;
     struct uuid uuid;
@@ -2052,13 +2057,21 @@ get_row(struct vsctl_context *ctx,
         int i;
 
         for (i = 0; i < ARRAY_SIZE(table->row_ids); i++) {
-            row = get_row_by_id(ctx, table, &table->row_ids[i], record_id);
+            row = get_row_by_id(ctx, table, &table->row_ids[i], record_id,
+                                partial_match_ok);
             if (row) {
                 break;
             }
         }
     }
     return row;
+}
+
+static const struct ovsdb_idl_row *
+get_row(struct vsctl_context *ctx,
+        const struct vsctl_table_class *table, const char *record_id)
+{
+    return get_row__(ctx, table, record_id, true);
 }
 
 static const struct ovsdb_idl_row *
