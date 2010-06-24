@@ -122,7 +122,6 @@ main(int argc, char *argv[])
     struct vsctl_command *commands;
     size_t n_commands;
     char *args;
-    int trials;
 
     set_program_name(argv[0]);
     signal(SIGPIPE, SIG_IGN);
@@ -146,12 +145,8 @@ main(int argc, char *argv[])
 
     /* Now execute the commands. */
     idl = the_idl = ovsdb_idl_create(db, &ovsrec_idl_class);
-    trials = 0;
     for (;;) {
         if (ovsdb_idl_run(idl)) {
-            if (++trials > 5) {
-                vsctl_fatal("too many database inconsistency failures");
-            }
             do_vsctl(args, commands, n_commands, idl);
         }
 
@@ -507,6 +502,10 @@ struct vsctl_context {
     struct ovsdb_idl_txn *txn;
     struct ovsdb_symbol_table *symtab;
     const struct ovsrec_open_vswitch *ovs;
+
+    /* A command may set this member to true if some prerequisite is not met
+     * and the caller should wait for something to change and then retry. */
+    bool try_again;
 };
 
 struct vsctl_bridge {
@@ -2608,6 +2607,8 @@ vsctl_context_init(struct vsctl_context *ctx, struct vsctl_command *command,
     ctx->txn = txn;
     ctx->ovs = ovs;
     ctx->symtab = symtab;
+
+    ctx->try_again = false;
 }
 
 static void
@@ -2650,12 +2651,18 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
 
     symtab = ovsdb_symbol_table_create();
     for (c = commands; c < &commands[n_commands]; c++) {
+        ds_init(&c->output);
+    }
+    for (c = commands; c < &commands[n_commands]; c++) {
         struct vsctl_context ctx;
 
-        ds_init(&c->output);
         vsctl_context_init(&ctx, c, idl, txn, ovs, symtab);
         (c->syntax->run)(&ctx);
         vsctl_context_done(&ctx, c);
+
+        if (ctx.try_again) {
+            goto try_again;
+        }
     }
 
     status = ovsdb_idl_txn_commit_block(txn);
@@ -2682,7 +2689,6 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         vsctl_fatal("row id \"%s\" is referenced but never created (e.g. "
                     "with \"-- --id=%s create ...\")", unused, unused);
     }
-    ovsdb_symbol_table_destroy(symtab);
 
     switch (status) {
     case TXN_INCOMPLETE:
@@ -2697,11 +2703,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         break;
 
     case TXN_TRY_AGAIN:
-        for (c = commands; c < &commands[n_commands]; c++) {
-            ds_destroy(&c->output);
-        }
-        free(error);
-        return;
+        goto try_again;
 
     case TXN_ERROR:
         vsctl_fatal("transaction error: %s", error);
@@ -2710,6 +2712,8 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
         NOT_REACHED();
     }
     free(error);
+
+    ovsdb_symbol_table_destroy(symtab);
 
     for (c = commands; c < &commands[n_commands]; c++) {
         struct ds *ds = &c->output;
@@ -2765,6 +2769,17 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     ovsdb_idl_destroy(idl);
 
     exit(EXIT_SUCCESS);
+
+try_again:
+    /* Our transaction needs to be rerun, or a prerequisite was not met.  Free
+     * resources and return so that the caller can try again. */
+    ovsdb_idl_txn_abort(txn);
+    ovsdb_idl_txn_destroy(txn);
+    ovsdb_symbol_table_destroy(symtab);
+    for (c = commands; c < &commands[n_commands]; c++) {
+        ds_destroy(&c->output);
+    }
+    free(error);
 }
 
 static const struct vsctl_command_syntax all_commands[] = {
