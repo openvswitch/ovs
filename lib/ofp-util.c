@@ -754,3 +754,40 @@ normalize_match(struct ofp_match *m)
     m->wildcards = htonl(wc);
 }
 
+/* Returns a string that describes 'match' in a very literal way, without
+ * interpreting its contents except in a very basic fashion.  The returned
+ * string is intended to be fixed-length, so that it is easy to see differences
+ * between two such strings if one is put above another.  This is useful for
+ * describing changes made by normalize_match().
+ *
+ * The caller must free the returned string (with free()). */
+char *
+ofp_match_to_literal_string(const struct ofp_match *match)
+{
+    return xasprintf("wildcards=%#10"PRIx32" "
+                     " in_port=%5"PRId16" "
+                     " dl_src="ETH_ADDR_FMT" "
+                     " dl_dst="ETH_ADDR_FMT" "
+                     " dl_vlan=%5"PRId16" "
+                     " dl_vlan_pcp=%3"PRId8" "
+                     " dl_type=%#6"PRIx16" "
+                     " nw_tos=%#4"PRIx8" "
+                     " nw_proto=%#4"PRIx16" "
+                     " nw_src=%#10"PRIx32" "
+                     " nw_dst=%#10"PRIx32" "
+                     " tp_src=%5"PRId16" "
+                     " tp_dst=%5"PRId16,
+                     ntohl(match->wildcards),
+                     ntohs(match->in_port),
+                     ETH_ADDR_ARGS(match->dl_src),
+                     ETH_ADDR_ARGS(match->dl_dst),
+                     ntohs(match->dl_vlan),
+                     match->dl_vlan_pcp,
+                     ntohs(match->dl_type),
+                     match->nw_tos,
+                     match->nw_proto,
+                     ntohl(match->nw_src),
+                     ntohl(match->nw_dst),
+                     ntohs(match->tp_src),
+                     ntohs(match->tp_dst));
+}

@@ -81,6 +81,7 @@ int validate_actions(const union ofp_action *, size_t n_actions,
 bool action_outputs_to_port(const union ofp_action *, uint16_t port);
 
 void normalize_match(struct ofp_match *);
+char *ofp_match_to_literal_string(const struct ofp_match *match);
 
 static inline int
 ofp_mkerr(uint16_t type, uint16_t code)
