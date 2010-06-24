@@ -670,8 +670,10 @@ ovsdb_idl_row_clear_new(struct ovsdb_idl_row *row)
             const struct ovsdb_idl_table_class *class = row->table->class;
             size_t i;
 
-            BITMAP_FOR_EACH_1 (i, class->n_columns, row->written) {
-                ovsdb_datum_destroy(&row->new[i], &class->columns[i].type);
+            if (row->written) {
+                BITMAP_FOR_EACH_1 (i, class->n_columns, row->written) {
+                    ovsdb_datum_destroy(&row->new[i], &class->columns[i].type);
+                }
             }
             free(row->new);
             free(row->written);
@@ -1233,18 +1235,22 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
             row_json = json_object_create();
             json_object_put(op, "row", row_json);
 
-            BITMAP_FOR_EACH_1 (idx, class->n_columns, row->written) {
-                const struct ovsdb_idl_column *column = &class->columns[idx];
+            if (row->written) {
+                BITMAP_FOR_EACH_1 (idx, class->n_columns, row->written) {
+                    const struct ovsdb_idl_column *column =
+                                                        &class->columns[idx];
 
-                if (row->old
-                    ? !ovsdb_datum_equals(&row->old[idx], &row->new[idx],
-                                          &column->type)
-                    : !ovsdb_datum_is_default(&row->new[idx], &column->type)) {
-                    json_object_put(row_json, column->name,
-                                    substitute_uuids(
-                                        ovsdb_datum_to_json(&row->new[idx],
-                                                            &column->type),
-                                        txn));
+                    if (row->old
+                        ? !ovsdb_datum_equals(&row->old[idx], &row->new[idx],
+                                              &column->type)
+                        : !ovsdb_datum_is_default(&row->new[idx],
+                                                  &column->type)) {
+                        json_object_put(row_json, column->name,
+                                        substitute_uuids(
+                                            ovsdb_datum_to_json(&row->new[idx],
+                                                                &column->type),
+                                            txn));
+                    }
                 }
             }
 
