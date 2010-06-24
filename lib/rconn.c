@@ -147,6 +147,7 @@ static void question_connectivity(struct rconn *);
 static void copy_to_monitor(struct rconn *, const struct ofpbuf *);
 static bool is_connected_state(enum state);
 static bool is_admitted_msg(const struct ofpbuf *);
+static bool rconn_logging_connection_attempts__(const struct rconn *);
 
 /* Creates and returns a new rconn.
  *
@@ -337,7 +338,9 @@ reconnect(struct rconn *rc)
 {
     int retval;
 
-    VLOG_INFO("%s: connecting...", rc->name);
+    if (rconn_logging_connection_attempts__(rc)) {
+        VLOG_INFO("%s: connecting...", rc->name);
+    }
     rc->n_attempted_connections++;
     retval = vconn_open(rc->target, OFP_VERSION, &rc->vconn);
     if (!retval) {
@@ -383,10 +386,15 @@ run_CONNECTING(struct rconn *rc)
         state_transition(rc, S_ACTIVE);
         rc->last_connected = rc->state_entered;
     } else if (retval != EAGAIN) {
-        VLOG_INFO("%s: connection failed (%s)", rc->name, strerror(retval));
+        if (rconn_logging_connection_attempts__(rc)) {
+            VLOG_INFO("%s: connection failed (%s)",
+                      rc->name, strerror(retval));
+        }
         disconnect(rc, retval);
     } else if (timed_out(rc)) {
-        VLOG_INFO("%s: connection timed out", rc->name);
+        if (rconn_logging_connection_attempts__(rc)) {
+            VLOG_INFO("%s: connection timed out", rc->name);
+        }
         rc->backoff_deadline = TIME_MAX; /* Prevent resetting backoff. */
         disconnect(rc, ETIMEDOUT);
     }
@@ -969,10 +977,17 @@ disconnect(struct rconn *rc, int error)
 
         if (now >= rc->backoff_deadline) {
             rc->backoff = 1;
-        } else {
-            rc->backoff = MIN(rc->max_backoff, MAX(1, 2 * rc->backoff));
+        } else if (rc->backoff < rc->max_backoff / 2) {
+            rc->backoff = MAX(1, 2 * rc->backoff);
             VLOG_INFO("%s: waiting %d seconds before reconnect",
                       rc->name, rc->backoff);
+        } else {
+            if (rconn_logging_connection_attempts__(rc)) {
+                VLOG_INFO("%s: continuing to retry connections in the "
+                          "background but suppressing further logging",
+                          rc->name);
+            }
+            rc->backoff = rc->max_backoff;
         }
         rc->backoff_deadline = now + rc->backoff;
         state_transition(rc, S_BACKOFF);
@@ -1103,4 +1118,13 @@ is_admitted_msg(const struct ofpbuf *b)
                                 (1u << OFPT_GET_CONFIG_REQUEST) |
                                 (1u << OFPT_GET_CONFIG_REPLY) |
                                 (1u << OFPT_SET_CONFIG)));
+}
+
+/* Returns true if 'rc' is currently logging information about connection
+ * attempts, false if logging should be suppressed because 'rc' hasn't
+ * successuflly connected in too long. */
+static bool
+rconn_logging_connection_attempts__(const struct rconn *rc)
+{
+    return rc->backoff < rc->max_backoff;
 }
