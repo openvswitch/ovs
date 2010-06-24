@@ -2209,6 +2209,15 @@ cmd_get(struct vsctl_context *ctx)
         struct ovsdb_datum datum;
         char *key_string;
 
+        /* Special case for obtaining the UUID of a row.  We can't just do this
+         * through parse_column_key_value() below since it returns a "struct
+         * ovsdb_idl_column" and the UUID column doesn't have one. */
+        if (!strcasecmp(ctx->argv[i], "_uuid")
+            || !strcasecmp(ctx->argv[i], "-uuid")) {
+            ds_put_format(out, UUID_FMT"\n", UUID_ARGS(&row->uuid));
+            continue;
+        }
+
         die_if_error(parse_column_key_value(ctx->argv[i], table,
                                             &column, &key_string, NULL));
 
