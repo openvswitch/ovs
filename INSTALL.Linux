@@ -242,11 +242,11 @@ installation, above, and to listen on a Unix domain socket, e.g.:
 
       % ovsdb-server /usr/local/etc/ovs-vswitchd.conf.db --remote=punix:/usr/local/var/run/openvswitch/db.sock
 
-Then initialize the database with "ovs-vsctl init".  This is only
+Then initialize the database using ovs-vsctl.  This is only
 necessary the first time after you create the database with
 ovsdb-tool (but running it at any time is harmless):
 
-      % ovs-vsctl init
+      % ovs-vsctl --no-wait init
 
 Then start the main Open vSwitch daemon, telling it to connect to the
 same Unix domain socket:
