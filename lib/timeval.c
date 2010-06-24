@@ -141,7 +141,7 @@ time_enable_restart(void)
 static void
 set_up_timer(void)
 {
-    timer_t timer_id;
+    static timer_t timer_id;    /* "static" to avoid apparent memory leak. */
     struct itimerspec itimer;
 
     set_up_monotonic();
