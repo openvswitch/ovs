@@ -50,6 +50,7 @@ static struct ovsdb_jsonrpc_session *ovsdb_jsonrpc_session_create(
 static void ovsdb_jsonrpc_session_run_all(struct ovsdb_jsonrpc_remote *);
 static void ovsdb_jsonrpc_session_wait_all(struct ovsdb_jsonrpc_remote *);
 static void ovsdb_jsonrpc_session_close_all(struct ovsdb_jsonrpc_remote *);
+static void ovsdb_jsonrpc_session_reconnect_all(struct ovsdb_jsonrpc_remote *);
 
 /* Triggers. */
 static void ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *,
@@ -170,6 +171,20 @@ ovsdb_jsonrpc_server_del_remote(struct shash_node *node)
     pstream_close(remote->listener);
     shash_delete(&remote->server->remotes, node);
     free(remote);
+}
+
+/* Forces all of the JSON-RPC sessions managed by 'svr' to disconnect and
+ * reconnect. */
+void
+ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *svr)
+{
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, &svr->remotes) {
+        struct ovsdb_jsonrpc_remote *remote = node->data;
+
+        ovsdb_jsonrpc_session_reconnect_all(remote);
+    }
 }
 
 void
@@ -344,6 +359,22 @@ ovsdb_jsonrpc_session_close_all(struct ovsdb_jsonrpc_remote *remote)
     LIST_FOR_EACH_SAFE (s, next, struct ovsdb_jsonrpc_session, node,
                         &remote->sessions) {
         ovsdb_jsonrpc_session_close(s);
+    }
+}
+
+/* Forces all of the JSON-RPC sessions managed by 'remote' to disconnect and
+ * reconnect. */
+static void
+ovsdb_jsonrpc_session_reconnect_all(struct ovsdb_jsonrpc_remote *remote)
+{
+    struct ovsdb_jsonrpc_session *s, *next;
+
+    LIST_FOR_EACH_SAFE (s, next, struct ovsdb_jsonrpc_session, node,
+                        &remote->sessions) {
+        jsonrpc_session_force_reconnect(s->js);
+        if (!jsonrpc_session_is_alive(s->js)) {
+            ovsdb_jsonrpc_session_close(s);
+        }
     }
 }
 

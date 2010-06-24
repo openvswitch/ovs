@@ -85,6 +85,14 @@ Causes \fBovsdb\-server\fR to gracefully terminate.
 .IP "\fBovsdb-server/compact\fR"
 Compacts the database in-place.  The database is also automatically
 compacted occasionally.
+.
+.IP "\fBovsdb\-server/reconnect\fR"
+Makes \fBovsdb\-server\fR drop all of the JSON\-RPC
+connections to database clients and reconnect.
+.IP
+This command might be useful for debugging issues with database
+clients.
+.
 .so lib/vlog-unixctl.man
 .SH "SEE ALSO"
 .

@@ -25,6 +25,8 @@ void ovsdb_jsonrpc_server_destroy(struct ovsdb_jsonrpc_server *);
 void ovsdb_jsonrpc_server_set_remotes(struct ovsdb_jsonrpc_server *,
                                       const struct shash *);
 
+void ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *);
+
 void ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *);
 void ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *);
 
