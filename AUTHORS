@@ -1,0 +1,49 @@
+The following people, in alphabetical order, have either authored or
+signed off on commits in the Open vSwitch version control repository.
+
+Andy Southgate          andy.southgate@citrix.com
+Ben Pfaff               blp@nicira.com
+Dan Wendlandt           dan@nicira.com
+David Erickson          derickso@stanford.edu
+Glen Gibb               grg@stanford.edu
+Ian Campbell            Ian.Campbell@citrix.com
+Jean Tourrilhes         jt@hpl.hp.com
+Jeremy Stribling        strib@nicira.com
+Jesse Gross             jesse@nicira.com
+Jun Nakajima            jun.nakajima@intel.com
+Justin Pettit           jpettit@nicira.com
+Keith Amidon            keith@nicira.com
+Martin Casado           casado@nicira.com
+Natasha Gude            natasha@nicira.com
+Neil McKee              neil.mckee@inmon.com
+Paul Fazzone            pfazzone@nicira.com
+Reid Price              reid@nicira.com
+Tetsuo NAKAGAWA         nakagawa@mxc.nes.nec.co.jp
+Thomas Lacroix          thomas.lacroix@citrix.com
+Todd Deshane            deshantm@gmail.com
+Tom Everman             teverman@google.com
+Wei Yongjun             yjwei@cn.fujitsu.com
+Yu Zhiguo               yuzg@cn.fujitsu.com
+
+The following additional people are mentioned in commit logs as having
+provided helpful bug reports or suggestions.
+
+Brandon Heller          brandonh@stanford.edu
+Cedric Hobbs            cedric@nicira.com
+Ghanem Bahri            bahri.ghanem@gmail.com
+Henrik Amren            henrik@nicira.com
+Jan Medved              jmedved@juniper.net
+Jeongkeun Lee           jklee@hp.com
+Joan Cirer              joan@ev0.net
+John Galgay             john@galgay.net
+Paulo Cravero           pcravero@as2594.net
+Peter Balland           peter@nicira.com
+Ram Jothikumar          rjothikumar@nicira.com
+Rob Hoes                rob.hoes@citrix.com
+Sean Brady              sbrady@gtfservices.com
+Srini Seetharaman       seethara@stanford.edu
+Takayuki HAMA           t-hama@cb.jp.nec.com
+kk yap                  yapkke@stanford.edu
+
+Thanks to all Open vSwitch contributors.  If you are not listed above
+but believe that you should be, please write to dev@openvswitch.org.
