@@ -12,6 +12,7 @@
 # GNU Lesser General Public License for more details.
 #
 from InterfaceReconfigure import *
+import os
 import re
 
 #
@@ -367,6 +368,13 @@ class DatapathVswitch(Datapath):
 
     @classmethod
     def rewrite(cls):
+        if not os.path.exists("/var/run/openvswitch/db.sock"):
+            # ovsdb-server is not running, so we can't update the database.
+            # Probably we are being called as part of system shutdown.  Just
+            # skip the update, since the external-ids will be updated on the
+            # next boot anyhow.
+            return
+
         vsctl_argv = []
         for pif in db().get_all_pifs():
             pifrec = db().get_pif_record(pif)
