@@ -42,7 +42,7 @@ test -x $DAEMON || exit 0
 . /lib/lsb/init-functions
 
 # Default options, these can be overriden by the information
-# at /etc/default/$NAME
+# at /etc/default/openvswitch-controller
 DAEMON_OPTS=""          # Additional options given to the server 
 
 DODTIME=10              # Time to wait for the server to die, in seconds
@@ -260,7 +260,7 @@ case "$1" in
         log_warning_msg "cannot re-read the config file (use restart)."
         ;;
   *)
-        N=/etc/init.d/$NAME
+        N=/etc/init.d/openvswitch-controller
         echo "Usage: $N {start|stop|force-stop|restart|force-reload|status}" >&2
         exit 1
         ;;

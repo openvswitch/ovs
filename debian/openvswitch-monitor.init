@@ -46,7 +46,7 @@ test -x $DAEMON || exit 0
 . /lib/lsb/init-functions
 
 # Default options, these can be overriden by the information
-# at /etc/default/$NAME
+# at /etc/default/openvswitch-monitor
 DAEMON_OPTS=""          # Additional options given to the daemon 
 
 DODTIME=10              # Time to wait for the daemon to die, in seconds
@@ -55,8 +55,9 @@ DODTIME=10              # Time to wait for the daemon to die, in seconds
                         # 'restart' will not work
                         
 # Include defaults if available
-if [ -f /etc/default/$NAME ] ; then
-    . /etc/default/$NAME
+default=/etc/default/openvswitch-monitor
+if [ -f $default ] ; then
+    . $default
 fi
 
 set -e
@@ -165,7 +166,7 @@ case "$1" in
         log_warning_msg "cannot re-read the config file (use restart)."
         ;;
   *)
-        N=/etc/init.d/$NAME
+        N=/etc/init.d/openvswitch-monitor
         echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
         exit 1
         ;;
