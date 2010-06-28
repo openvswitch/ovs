@@ -82,6 +82,9 @@ bool action_outputs_to_port(const union ofp_action *, uint16_t port);
 
 void normalize_match(struct ofp_match *);
 
+void hton_ofp_phy_port(struct ofp_phy_port *);
+void ntoh_ofp_phy_port(struct ofp_phy_port *);
+
 static inline int
 ofp_mkerr(uint16_t type, uint16_t code)
 {

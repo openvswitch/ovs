@@ -754,3 +754,23 @@ normalize_match(struct ofp_match *m)
     m->wildcards = htonl(wc);
 }
 
+/* Converts all of the fields in 'opp' from host to native byte-order. */
+void
+hton_ofp_phy_port(struct ofp_phy_port *opp)
+{
+    opp->port_no = htons(opp->port_no);
+    opp->config = htonl(opp->config);
+    opp->state = htonl(opp->state);
+    opp->curr = htonl(opp->curr);
+    opp->advertised = htonl(opp->advertised);
+    opp->supported = htonl(opp->supported);
+    opp->peer = htonl(opp->peer);
+}
+
+/* Converts all of the fields in 'opp' from native to host byte-order. */
+void
+ntoh_ofp_phy_port(struct ofp_phy_port *opp)
+{
+    /* ntohX and htonX are really the same functions. */
+    hton_ofp_phy_port(opp);
+}

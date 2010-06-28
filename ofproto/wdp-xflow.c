@@ -1260,18 +1260,6 @@ wx_destroy(struct wdp *wdp)
     return xfif_delete(wx->xfif);
 }
 
-static void
-hton_ofp_phy_port(struct ofp_phy_port *opp)
-{
-    opp->port_no = htons(opp->port_no);
-    opp->config = htonl(opp->config);
-    opp->state = htonl(opp->state);
-    opp->curr = htonl(opp->curr);
-    opp->advertised = htonl(opp->advertised);
-    opp->supported = htonl(opp->supported);
-    opp->peer = htonl(opp->peer);
-}
-
 static int
 wx_get_features(const struct wdp *wdp, struct ofpbuf **featuresp)
 {
