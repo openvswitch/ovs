@@ -71,7 +71,8 @@ struct wx {
 static struct list all_wx = LIST_INITIALIZER(&all_wx);
 
 static int wx_port_init(struct wx *);
-static void wx_port_run(struct wx *);
+static void wx_port_process_change(struct wx *wx, int error, char *devname,
+                                   wdp_port_poll_cb_func *cb, void *aux);
 static void wx_port_refresh_groups(struct wx *);
 
 enum {
@@ -1130,8 +1131,6 @@ revalidate_cb(struct cls_rule *sub_, void *cbdata_)
 static void
 wx_run_one(struct wx *wx)
 {
-    wx_port_run(wx);
-
     if (time_msec() >= wx->next_expiration) {
         COVERAGE_INC(wx_expiration);
         wx->next_expiration = time_msec() + 1000;
@@ -1169,8 +1168,6 @@ wx_run(void)
 static void
 wx_wait_one(struct wx *wx)
 {
-    xfif_port_poll_wait(wx->xfif);
-    netdev_monitor_poll_wait(wx->netdev_monitor);
     if (wx->need_revalidate /*|| !tag_set_is_empty(&p->revalidate_set)*/) {
         poll_immediate_wake();
     } else if (wx->next_expiration != LLONG_MAX) {
@@ -1474,19 +1471,38 @@ wx_port_list(const struct wdp *wdp, struct wdp_port **portsp, size_t *n_portsp)
 }
 
 static int
-wx_port_poll(const struct wdp *wdp, char **devnamep)
+wx_port_poll(struct wdp *wdp, wdp_port_poll_cb_func *cb, void *aux)
 {
     struct wx *wx = wx_cast(wdp);
+    char *devname;
+    int retval;
+    int error;
 
-    return xfif_port_poll(wx->xfif, devnamep);
+    retval = 0;
+    while ((error = xfif_port_poll(wx->xfif, &devname)) != EAGAIN) {
+        wx_port_process_change(wx, error, devname, cb, aux);
+        if (error && error != ENOBUFS) {
+            retval = error;
+        }
+    }
+    while ((error = netdev_monitor_poll(wx->netdev_monitor,
+                                        &devname)) != EAGAIN) {
+        wx_port_process_change(wx, error, devname, cb, aux);
+        if (error && error != ENOBUFS) {
+            retval = error;
+        }
+    }
+    return retval;
 }
 
-static void
+static int
 wx_port_poll_wait(const struct wdp *wdp)
 {
     struct wx *wx = wx_cast(wdp);
 
     xfif_port_poll_wait(wx->xfif);
+    netdev_monitor_poll_wait(wx->netdev_monitor);
+    return 0;
 }
 
 static struct wdp_rule *
@@ -1951,32 +1967,19 @@ wx_recv_wait(struct wdp *wdp)
     xfif_recv_wait(wx->xfif);
 }
 
-static void wx_port_update(struct wx *, const char *devname);
-static void wx_port_reinit(struct wx *);
+static void wx_port_update(struct wx *, const char *devname,
+                           wdp_port_poll_cb_func *cb, void *aux);
+static void wx_port_reinit(struct wx *, wdp_port_poll_cb_func *cb, void *aux);
 
 static void
-wx_port_process_change(struct wx *wx, int error, char *devname)
+wx_port_process_change(struct wx *wx, int error, char *devname,
+                       wdp_port_poll_cb_func *cb, void *aux)
 {
     if (error == ENOBUFS) {
-        wx_port_reinit(wx);
+        wx_port_reinit(wx, cb, aux);
     } else if (!error) {
-        wx_port_update(wx, devname);
+        wx_port_update(wx, devname, cb, aux);
         free(devname);
-    }
-}
-
-static void
-wx_port_run(struct wx *wx)
-{
-    char *devname;
-    int error;
-
-    while ((error = xfif_port_poll(wx->xfif, &devname)) != EAGAIN) {
-        wx_port_process_change(wx, error, devname);
-    }
-    while ((error = netdev_monitor_poll(wx->netdev_monitor,
-                                        &devname)) != EAGAIN) {
-        wx_port_process_change(wx, error, devname);
     }
 }
 
@@ -2011,7 +2014,7 @@ wx_port_refresh_groups(struct wx *wx)
 }
 
 static void
-wx_port_reinit(struct wx *wx)
+wx_port_reinit(struct wx *wx, wdp_port_poll_cb_func *cb, void *aux)
 {
     struct svec devnames;
     struct wdp_port *wdp_port;
@@ -2032,7 +2035,7 @@ wx_port_reinit(struct wx *wx)
 
     svec_sort_unique(&devnames);
     for (i = 0; i < devnames.n; i++) {
-        wx_port_update(wx, devnames.names[i]);
+        wx_port_update(wx, devnames.names[i], cb, aux);
     }
     svec_destroy(&devnames);
 
@@ -2151,7 +2154,8 @@ wx_port_free(struct wdp_port *wdp_port)
 }
 
 static void
-wx_port_update(struct wx *wx, const char *devname)
+wx_port_update(struct wx *wx, const char *devname,
+               wdp_port_poll_cb_func *cb, void *aux)
 {
     struct xflow_port xflow_port;
     struct wdp_port *old_wdp_port;
@@ -2212,10 +2216,21 @@ wx_port_update(struct wx *wx, const char *devname)
     if (new_wdp_port) {
         wx_port_install(wx, new_wdp_port);
     }
-    wx_port_free(old_wdp_port);
+
+    /* Call back. */
+    if (!old_wdp_port) {
+        (*cb)(&new_wdp_port->opp, OFPPR_ADD, aux);
+    } else if (!new_wdp_port) {
+        (*cb)(&old_wdp_port->opp, OFPPR_DELETE, aux);
+    } else {
+        (*cb)(&new_wdp_port->opp, OFPPR_MODIFY, aux);
+    }
 
     /* Update port groups. */
     wx_port_refresh_groups(wx);
+
+    /* Clean up. */
+    wx_port_free(old_wdp_port);
 }
 
 static int

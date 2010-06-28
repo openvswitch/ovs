@@ -714,42 +714,36 @@ wdp_port_set_config(struct wdp *wdp, uint16_t port_no, uint32_t config)
     return wdp->wdp_class->port_set_config(wdp, port_no, config);
 }
 
-/* Polls for changes in the set of ports in 'wdp'.  If the set of ports in
- * 'wdp' has changed, this function does one of the following:
+/* Polls for changes in the set of ports in 'wdp' since the last call to this
+ * function or, if this is the first call, since 'wdp' was opened.  For each
+ * change, calls 'cb' passing 'aux' and:
  *
- * - Stores the name of the device that was added to or deleted from 'wdp' in
- *   '*devnamep' and returns 0.  The caller is responsible for freeing
- *   '*devnamep' (with free()) when it no longer needs it.
+ *   - For a port that has been added, OFPPR_ADD as 'reason' and the new port's
+ *     "struct ofp_phy_port" as 'opp'.
  *
- * - Returns ENOBUFS and sets '*devnamep' to NULL.
+ *   - For a port that has been removed, OFPPR_DELETE as 'reason' and the
+ *     deleted port's former "struct ofp_phy_port" as 'opp'.
  *
- * This function may also return 'false positives', where it returns 0 and
- * '*devnamep' names a device that was not actually added or deleted or it
- * returns ENOBUFS without any change.
+ *   - For a port whose configuration has changed, OFPPR_MODIFY as 'reason' and
+ *     the modified port's new "struct ofp_phy_port" as 'opp'.
  *
- * Returns EAGAIN if the set of ports in 'wdp' has not changed.  May also
- * return other positive errno values to indicate that something has gone
- * wrong. */
+ * 'opp' is in *host* byte order.
+ *
+ * Normally returns 0.  May also return a positive errno value to indicate
+ * that something has gone wrong.
+ */
 int
-wdp_port_poll(const struct wdp *wdp, char **devnamep)
+wdp_port_poll(struct wdp *wdp, wdp_port_poll_cb_func *cb, void *aux)
 {
-    int error = (wdp->wdp_class->port_poll
-                 ? wdp->wdp_class->port_poll(wdp, devnamep)
-                 : EAGAIN);
-    if (error) {
-        *devnamep = NULL;
-    }
-    return error;
+    return wdp->wdp_class->port_poll(wdp, cb, aux);
 }
 
-/* Arranges for the poll loop to wake up when port_poll(wdp) will return a
- * value other than EAGAIN. */
-void
+/* Arranges for the poll loop to wake up when 'port_poll' will call its
+ * callback. */
+int
 wdp_port_poll_wait(const struct wdp *wdp)
 {
-    if (wdp->wdp_class->port_poll_wait) {
-        wdp->wdp_class->port_poll_wait(wdp);
-    }
+    return wdp->wdp_class->port_poll_wait(wdp);
 }
 
 /* Deletes all flows from 'wdp'.  Returns 0 if successful, otherwise a

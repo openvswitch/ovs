@@ -210,35 +210,36 @@ struct wdp_class {
     int (*port_set_config)(struct wdp *wdp, uint16_t port_no,
                            uint32_t config);
 
-    /* Polls for changes in the set of ports in 'wdp'.  If the set of ports
-     * in 'wdp' has changed, then this function should do one of the
-     * following:
+    /* Polls for changes in the set of ports in 'wdp' since the last call to
+     * this function or, if this is the first call, since this wdp was opened.
+     * For each change, calls 'cb' passing 'aux' and:
      *
-     * - Preferably: store the name of the device that was added to or deleted
-     *   from 'wdp' in '*devnamep' and return 0.  The caller is responsible
-     *   for freeing '*devnamep' (with free()) when it no longer needs it.
+     *   - For a port that has been added, OFPPR_ADD as 'reason' and the new
+     *     port's "struct ofp_phy_port" as 'opp'.
      *
-     * - Alternatively: return ENOBUFS, without indicating the device that was
-     *   added or deleted.
+     *   - For a port that has been removed, OFPPR_DELETE as 'reason' and the
+     *     deleted port's former "struct ofp_phy_port" as 'opp'.
      *
-     * Occasional 'false positives', in which the function returns 0 while
-     * indicating a device that was not actually added or deleted or returns
-     * ENOBUFS without any change, are acceptable.
+     *   - For a port whose configuration has changed, OFPPR_MODIFY as 'reason'
+     *     and the modified port's new "struct ofp_phy_port" as 'opp'.
      *
-     * If the set of ports in 'wdp' has not changed, returns EAGAIN.  May
-     * also return other positive errno values to indicate that something has
-     * gone wrong.
+     * If 'wdp' has a fixed set of ports, this function must still be present
+     * (to report changes to port configurations) but it will never report
+     * OFPPR_ADD or OFPPR_DELETE as a reason.
      *
-     * If 'wdp' has a fixed set of ports, this function may be null, which is
-     * equivalent to always returning EAGAIN.
+     * 'opp' is in *host* byte order.
+     *
+     * Normally returns 0.  May also return a positive errno value to indicate
+     * that something has gone wrong.
      */
-    int (*port_poll)(const struct wdp *wdp, char **devnamep);
+    int (*port_poll)(struct wdp *wdp,
+                     void (*cb)(const struct ofp_phy_port *opp,
+                                uint8_t reason, void *aux),
+                     void *aux);
 
-    /* Arranges for the poll loop to wake up when 'port_poll' will return a
-     * value other than EAGAIN.
-     *
-     * If 'wdp' has a fixed set of ports, this function may be null. */
-    void (*port_poll_wait)(const struct wdp *wdp);
+    /* Arranges for the poll loop to wake up when 'port_poll' will call its
+     * callback. */
+    int (*port_poll_wait)(const struct wdp *wdp);
 
     /* If 'wdp' contains a flow exactly equal to 'flow', returns that flow.
      * Otherwise returns null. */

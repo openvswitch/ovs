@@ -902,6 +902,30 @@ add_snooper(struct ofproto *ofproto, struct vconn *vconn)
     }
 }
 
+static void
+ofproto_port_poll_cb(const struct ofp_phy_port *opp, uint8_t reason,
+                     void *ofproto_)
+{
+    /* XXX Should limit the number of queued port status change messages. */
+    struct ofproto *ofproto = ofproto_;
+    struct ofconn *ofconn;
+
+    LIST_FOR_EACH (ofconn, struct ofconn, node, &ofproto->all_conns) {
+        struct ofp_port_status *ops;
+        struct ofpbuf *b;
+
+        if (!ofconn_receives_async_msgs(ofconn)) {
+            continue;
+        }
+
+        ops = make_openflow_xid(sizeof *ops, OFPT_PORT_STATUS, 0, &b);
+        ops->reason = reason;
+        ops->desc = *opp;
+        hton_ofp_phy_port(&ops->desc);
+        queue_tx(b, ofconn, NULL);
+    }
+}
+
 int
 ofproto_run1(struct ofproto *p)
 {
@@ -928,6 +952,8 @@ ofproto_run1(struct ofproto *p)
 
         handle_wdp_packet(p, xmemdup(&packet, sizeof packet));
     }
+
+    wdp_port_poll(p->wdp, ofproto_port_poll_cb, p);
 
     if (p->in_band) {
         if (time_msec() >= p->next_in_band_update) {
@@ -2721,7 +2747,7 @@ schedule_packet_in(struct ofconn *ofconn, struct wdp_packet *packet,
 }
 
 /* Converts 'packet->payload' to a struct ofp_packet_in.  It must have
- * sufficient headroom to do so (e.g. as returned by dpif_recv()).
+ * sufficient headroom to do so (e.g. as returned by xfif_recv()).
  *
  * The conversion is not complete: the caller still needs to trim any unneeded
  * payload off the end of the buffer, set the length in the OpenFlow header,

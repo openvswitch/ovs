@@ -135,8 +135,10 @@ int wdp_port_list(const struct wdp *, struct wdp_port **, size_t *n_ports);
 
 int wdp_port_set_config(struct wdp *, uint16_t port_no, uint32_t config);
 
-int wdp_port_poll(const struct wdp *, char **devnamep);
-void wdp_port_poll_wait(const struct wdp *);
+typedef void wdp_port_poll_cb_func(const struct ofp_phy_port *opp,
+                                   uint8_t reason, void *aux);
+int wdp_port_poll(struct wdp *, wdp_port_poll_cb_func *cb, void *aux);
+int wdp_port_poll_wait(const struct wdp *);
 
 int wdp_flow_flush(struct wdp *);
 
