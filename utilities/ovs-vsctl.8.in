@@ -140,9 +140,12 @@ Open vSwitch database if it is empty.  This command is provided to
 initialize the database without executing any other command.
 .
 .IP "\fBemer\-reset\fR"
-Reset the configuration into a clean state.  This will clear the
-configuration of items likely to have been configured by a manager.
-The core networking configuration will be left as is.
+Reset the configuration into a clean state.  It deconfigures OpenFlow
+controllers, OVSDB servers, and SSL, and deletes port mirroring,
+NetFlow, and sFlow configuration.  This command also removes all
+\fBother\-config\fR keys from all database records, except that
+\fBother-config:hwaddr\fR is preserved if it is present in a Bridge
+record.  Other networking configuration is left as-is.
 .
 .SS "Bridge Commands"
 These commands examine and manipulate Open vSwitch bridges.

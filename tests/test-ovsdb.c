@@ -1565,31 +1565,6 @@ print_idl(struct ovsdb_idl *idl, int step)
     }
 }
 
-static unsigned int
-print_updated_idl(struct ovsdb_idl *idl, struct jsonrpc *rpc,
-                  int step, unsigned int seqno)
-{
-    for (;;) {
-        unsigned int new_seqno;
-
-        if (rpc) {
-            jsonrpc_run(rpc);
-        }
-        ovsdb_idl_run(idl);
-        new_seqno = ovsdb_idl_get_seqno(idl);
-        if (new_seqno != seqno) {
-            print_idl(idl, step);
-            return new_seqno;
-        }
-
-        if (rpc) {
-            jsonrpc_wait(rpc);
-        }
-        ovsdb_idl_wait(idl);
-        poll_block();
-    }
-}
-
 static void
 parse_uuids(const struct json *json, struct ovsdb_symbol_table *symtab,
             size_t *n)
@@ -1786,8 +1761,19 @@ do_idl(int argc, char *argv[])
             /* The previous transaction didn't change anything. */
             arg++;
         } else {
-            seqno = print_updated_idl(idl, rpc, step++, seqno);
+            /* Wait for update. */
+            while (ovsdb_idl_get_seqno(idl) == seqno && !ovsdb_idl_run(idl)) {
+                jsonrpc_run(rpc);
+
+                ovsdb_idl_wait(idl);
+                jsonrpc_wait(rpc);
+                poll_block();
+            }
+
+            /* Print update. */
+            print_idl(idl, step++);
         }
+        seqno = ovsdb_idl_get_seqno(idl);
 
         if (!strcmp(arg, "reconnect")) {
             printf("%03d: reconnect\n", step++);
@@ -1816,7 +1802,11 @@ do_idl(int argc, char *argv[])
     if (rpc) {
         jsonrpc_close(rpc);
     }
-    print_updated_idl(idl, NULL, step++, seqno);
+    while (ovsdb_idl_get_seqno(idl) == seqno && !ovsdb_idl_run(idl)) {
+        ovsdb_idl_wait(idl);
+        poll_block();
+    }
+    print_idl(idl, step++);
     ovsdb_idl_destroy(idl);
     printf("%03d: done\n", step);
 }

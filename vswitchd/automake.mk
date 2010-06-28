@@ -46,13 +46,31 @@ vswitchd/vswitch-idl.ovsidl: $(VSWITCH_IDL_FILES)
 	$(OVSDB_IDLC) -C $(srcdir) annotate $(VSWITCH_IDL_FILES) > $@.tmp
 	mv $@.tmp $@
 
+# vswitch E-R diagram
+if BUILD_ER_DIAGRAMS
+$(srcdir)/vswitchd/vswitch.pic: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
+	$(OVSDB_DOT) $(srcdir)/vswitchd/vswitch.ovsschema \
+		| dot -T pic \
+		| sed -e "/^'/d" \
+		      -e '/^box attrs0/d' \
+		      -e 's/linethick = 0;/linethick = 1;/' \
+		> $@.tmp
+	mv $@.tmp $@
+else
+$(srcdir)/vswitchd/vswitch.pic: ovsdb/ovsdb-dot.in vswitchd/vswitch.ovsschema
+	touch $@
+endif
+EXTRA_DIST += vswitchd/vswitch.pic
+
 # vswitch schema documentation
 EXTRA_DIST += vswitchd/vswitch.xml
 dist_man_MANS += vswitchd/ovs-vswitchd.conf.db.5
 vswitchd/ovs-vswitchd.conf.db.5: \
-	ovsdb/ovsdb-doc.in vswitchd/vswitch.xml vswitchd/vswitch.ovsschema
+	ovsdb/ovsdb-doc.in vswitchd/vswitch.xml vswitchd/vswitch.ovsschema \
+	$(srcdir)/vswitchd/vswitch.pic
 	$(OVSDB_DOC) \
 		--title="ovs-vswitchd.conf.db" \
+		--er-diagram=$(srcdir)/vswitchd/vswitch.pic \
 		$(srcdir)/vswitchd/vswitch.ovsschema \
 		$(srcdir)/vswitchd/vswitch.xml > $@.tmp
 	mv $@.tmp $@

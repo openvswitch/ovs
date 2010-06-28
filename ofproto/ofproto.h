@@ -99,6 +99,7 @@ bool ofproto_is_alive(const struct ofproto *);
 void ofproto_set_datapath_id(struct ofproto *, uint64_t datapath_id);
 void ofproto_set_controllers(struct ofproto *,
                              const struct ofproto_controller *, size_t n);
+void ofproto_reconnect_controllers(struct ofproto *);
 void ofproto_set_extra_in_band_remotes(struct ofproto *,
                                        const struct sockaddr_in *, size_t n);
 void ofproto_set_desc(struct ofproto *,

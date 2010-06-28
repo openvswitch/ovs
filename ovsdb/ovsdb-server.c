@@ -59,6 +59,7 @@ static bool bootstrap_ca_cert;
 
 static unixctl_cb_func ovsdb_server_exit;
 static unixctl_cb_func ovsdb_server_compact;
+static unixctl_cb_func ovsdb_server_reconnect;
 
 static void parse_options(int argc, char *argv[], char **file_namep,
                           struct shash *remotes, char **unixctl_pathp,
@@ -131,6 +132,8 @@ main(int argc, char *argv[])
     unixctl_command_register("exit", ovsdb_server_exit, &exiting);
     unixctl_command_register("ovsdb-server/compact", ovsdb_server_compact,
                              file);
+    unixctl_command_register("ovsdb-server/reconnect", ovsdb_server_reconnect,
+                             jsonrpc);
 
     exiting = false;
     while (!exiting) {
@@ -315,6 +318,18 @@ ovsdb_server_compact(struct unixctl_conn *conn, const char *args OVS_UNUSED,
         unixctl_command_reply(conn, 503, s);
         free(s);
     }
+}
+
+/* "ovsdb-server/reconnect": makes ovsdb-server drop all of its JSON-RPC
+ * connections and reconnect. */
+static void
+ovsdb_server_reconnect(struct unixctl_conn *conn, const char *args OVS_UNUSED,
+                       void *jsonrpc_)
+{
+    struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
+
+    ovsdb_jsonrpc_server_reconnect(jsonrpc);
+    unixctl_command_reply(conn, 200, NULL);
 }
 
 static void

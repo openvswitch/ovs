@@ -136,6 +136,11 @@ static void ovsdb_idl_txn_abort_all(struct ovsdb_idl *);
 static bool ovsdb_idl_txn_process_reply(struct ovsdb_idl *,
                                         const struct jsonrpc_msg *msg);
 
+/* Creates and returns a connection to database 'remote', which should be in a
+ * form acceptable to jsonrpc_session_open().  The connection will maintain an
+ * in-memory replica of the remote database whose schema is described by
+ * 'class'.  (Ordinarily 'class' is compiled from an OVSDB schema automatically
+ * by ovsdb-idlc.) */
 struct ovsdb_idl *
 ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class)
 {
@@ -171,6 +176,7 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class)
     return idl;
 }
 
+/* Destroys 'idl' and all of the data structures that it manages. */
 void
 ovsdb_idl_destroy(struct ovsdb_idl *idl)
 {
@@ -231,9 +237,30 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
     }
 }
 
-void
+/* Processes a batch of messages from the database server on 'idl'.  Returns
+ * true if the database as seen through 'idl' changed, false if it did not
+ * change.  The initial fetch of the entire contents of the remote database is
+ * considered to be one kind of change.
+ *
+ * When this function returns false, the client may continue to use any data
+ * structures it obtained from 'idl' in the past.  But when it returns true,
+ * the client must not access any of these data structures again, because they
+ * could have freed or reused for other purposes.
+ *
+ * This function can return occasional false positives, that is, report that
+ * the database changed even though it didn't.  This happens if the connection
+ * to the database drops and reconnects, which causes the database contents to
+ * be reloaded even if they didn't change.  (It could also happen if the
+ * database server sends out a "change" that reflects what we already thought
+ * was in the database, but the database server is not supposed to do that.)
+ *
+ * As an alternative to checking the return value, the client may check for
+ * changes in the value returned by ovsdb_idl_get_seqno().
+ */
+bool
 ovsdb_idl_run(struct ovsdb_idl *idl)
 {
+    unsigned int initial_change_seqno = idl->change_seqno;
     int i;
 
     assert(!idl->txn);
@@ -290,8 +317,12 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
         }
         jsonrpc_msg_destroy(msg);
     }
+
+    return initial_change_seqno != idl->change_seqno;
 }
 
+/* Arranges for poll_block() to wake up when ovsdb_idl_run() has something to
+ * do or when activity occurs on a transaction on 'idl'. */
 void
 ovsdb_idl_wait(struct ovsdb_idl *idl)
 {
@@ -299,18 +330,30 @@ ovsdb_idl_wait(struct ovsdb_idl *idl)
     jsonrpc_session_recv_wait(idl->session);
 }
 
+/* Returns a number that represents the state of 'idl'.  When 'idl' is updated
+ * (by ovsdb_idl_run()), the return value changes. */
 unsigned int
 ovsdb_idl_get_seqno(const struct ovsdb_idl *idl)
 {
     return idl->change_seqno;
 }
 
+/* Returns true if 'idl' successfully connected to the remote database and
+ * retrieved its contents (even if the connection subsequently dropped and is
+ * in the process of reconnecting).  If so, then 'idl' contains an atomic
+ * snapshot of the database's contents (but it might be arbitrarily old if the
+ * connection dropped).
+ *
+ * Returns false if 'idl' has never connected or retrieved the database's
+ * contents.  If so, 'idl' is empty. */
 bool
 ovsdb_idl_has_ever_connected(const struct ovsdb_idl *idl)
 {
     return ovsdb_idl_get_seqno(idl) != 0;
 }
 
+/* Forces 'idl' to drop its connection to the database and reconnect.  In the
+ * meantime, the contents of 'idl' will not change. */
 void
 ovsdb_idl_force_reconnect(struct ovsdb_idl *idl)
 {
@@ -627,8 +670,10 @@ ovsdb_idl_row_clear_new(struct ovsdb_idl_row *row)
             const struct ovsdb_idl_table_class *class = row->table->class;
             size_t i;
 
-            BITMAP_FOR_EACH_1 (i, class->n_columns, row->written) {
-                ovsdb_datum_destroy(&row->new[i], &class->columns[i].type);
+            if (row->written) {
+                BITMAP_FOR_EACH_1 (i, class->n_columns, row->written) {
+                    ovsdb_datum_destroy(&row->new[i], &class->columns[i].type);
+                }
             }
             free(row->new);
             free(row->written);
@@ -1190,18 +1235,22 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
             row_json = json_object_create();
             json_object_put(op, "row", row_json);
 
-            BITMAP_FOR_EACH_1 (idx, class->n_columns, row->written) {
-                const struct ovsdb_idl_column *column = &class->columns[idx];
+            if (row->written) {
+                BITMAP_FOR_EACH_1 (idx, class->n_columns, row->written) {
+                    const struct ovsdb_idl_column *column =
+                                                        &class->columns[idx];
 
-                if (row->old
-                    ? !ovsdb_datum_equals(&row->old[idx], &row->new[idx],
-                                          &column->type)
-                    : !ovsdb_datum_is_default(&row->new[idx], &column->type)) {
-                    json_object_put(row_json, column->name,
-                                    substitute_uuids(
-                                        ovsdb_datum_to_json(&row->new[idx],
-                                                            &column->type),
-                                        txn));
+                    if (row->old
+                        ? !ovsdb_datum_equals(&row->old[idx], &row->new[idx],
+                                              &column->type)
+                        : !ovsdb_datum_is_default(&row->new[idx],
+                                                  &column->type)) {
+                        json_object_put(row_json, column->name,
+                                        substitute_uuids(
+                                            ovsdb_datum_to_json(&row->new[idx],
+                                                                &column->type),
+                                            txn));
+                    }
                 }
             }
 
@@ -1474,7 +1523,6 @@ ovsdb_idl_txn_insert(struct ovsdb_idl_txn *txn,
 
     row->table = ovsdb_idl_table_from_class(txn->idl, class);
     row->new = xmalloc(class->n_columns * sizeof *row->new);
-    row->written = bitmap_allocate(class->n_columns);
     hmap_insert(&row->table->rows, &row->hmap_node, uuid_hash(&row->uuid));
     hmap_insert(&txn->txn_rows, &row->txn_node, uuid_hash(&row->uuid));
     return row;

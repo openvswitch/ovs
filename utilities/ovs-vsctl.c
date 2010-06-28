@@ -119,7 +119,6 @@ int
 main(int argc, char *argv[])
 {
     struct ovsdb_idl *idl;
-    unsigned int seqno;
     struct vsctl_command *commands;
     size_t n_commands;
     char *args;
@@ -147,19 +146,13 @@ main(int argc, char *argv[])
 
     /* Now execute the commands. */
     idl = the_idl = ovsdb_idl_create(db, &ovsrec_idl_class);
-    seqno = ovsdb_idl_get_seqno(idl);
     trials = 0;
     for (;;) {
-        unsigned int new_seqno;
-
-        ovsdb_idl_run(idl);
-        new_seqno = ovsdb_idl_get_seqno(idl);
-        if (new_seqno != seqno) {
+        if (ovsdb_idl_run(idl)) {
             if (++trials > 5) {
                 vsctl_fatal("too many database inconsistency failures");
             }
             do_vsctl(args, commands, n_commands, idl);
-            seqno = new_seqno;
         }
 
         ovsdb_idl_wait(idl);
@@ -624,17 +617,8 @@ free_info(struct vsctl_info *info)
     }
     shash_destroy(&info->bridges);
 
-    SHASH_FOR_EACH (node, &info->ports) {
-        struct vsctl_port *port = node->data;
-        free(port);
-    }
-    shash_destroy(&info->ports);
-
-    SHASH_FOR_EACH (node, &info->ifaces) {
-        struct vsctl_iface *iface = node->data;
-        free(iface);
-    }
-    shash_destroy(&info->ifaces);
+    shash_destroy_free_data(&info->ports);
+    shash_destroy_free_data(&info->ifaces);
 }
 
 static void
@@ -2224,6 +2208,15 @@ cmd_get(struct vsctl_context *ctx)
         const struct ovsdb_idl_column *column;
         struct ovsdb_datum datum;
         char *key_string;
+
+        /* Special case for obtaining the UUID of a row.  We can't just do this
+         * through parse_column_key_value() below since it returns a "struct
+         * ovsdb_idl_column" and the UUID column doesn't have one. */
+        if (!strcasecmp(ctx->argv[i], "_uuid")
+            || !strcasecmp(ctx->argv[i], "-uuid")) {
+            ds_put_format(out, UUID_FMT"\n", UUID_ARGS(&row->uuid));
+            continue;
+        }
 
         die_if_error(parse_column_key_value(ctx->argv[i], table,
                                             &column, &key_string, NULL));

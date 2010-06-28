@@ -249,7 +249,6 @@ jsonrpc_recv(struct jsonrpc *rpc, struct jsonrpc_msg **msgp)
                     return rpc->status;
                 }
             } else if (retval == 0) {
-                VLOG_INFO_RL(&rl, "%s: connection closed", rpc->name);
                 jsonrpc_error(rpc, EOF);
                 return EOF;
             }
@@ -701,7 +700,10 @@ jsonrpc_session_open(const char *name)
 }
 
 /* Creates and returns a jsonrpc_session that is initially connected to
- * 'jsonrpc'.  If the connection is dropped, it will not be reconnected. */
+ * 'jsonrpc'.  If the connection is dropped, it will not be reconnected.
+ *
+ * On the assumption that such connections are likely to be short-lived
+ * (e.g. from ovs-vsctl), informational logging for them is suppressed. */
 struct jsonrpc_session *
 jsonrpc_session_open_unreliably(struct jsonrpc *jsonrpc)
 {
@@ -709,6 +711,7 @@ jsonrpc_session_open_unreliably(struct jsonrpc *jsonrpc)
 
     s = xmalloc(sizeof *s);
     s->reconnect = reconnect_create(time_msec());
+    reconnect_set_quiet(s->reconnect, true);
     reconnect_set_name(s->reconnect, jsonrpc_get_name(jsonrpc));
     reconnect_set_max_tries(s->reconnect, 0);
     reconnect_connected(s->reconnect, time_msec());
@@ -802,7 +805,7 @@ jsonrpc_session_run(struct jsonrpc_session *s)
         jsonrpc_run(s->rpc);
         error = jsonrpc_get_status(s->rpc);
         if (error) {
-            reconnect_disconnected(s->reconnect, time_msec(), 0);
+            reconnect_disconnected(s->reconnect, time_msec(), error);
             jsonrpc_session_disconnect(s);
         }
     } else if (s->stream) {

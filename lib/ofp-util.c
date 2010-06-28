@@ -691,7 +691,7 @@ normalize_match(struct ofp_match *m)
         /* Can't sensibly match on network or transport headers if the
          * data link type is unknown. */
         wc |= OFPFW_NW | OFPFW_TP;
-        m->nw_src = m->nw_dst = m->nw_proto = 0;
+        m->nw_src = m->nw_dst = m->nw_proto = m->nw_tos = 0;
         m->tp_src = m->tp_dst = 0;
     } else if (m->dl_type == htons(ETH_TYPE_IP)) {
         if (wc & OFPFW_NW_PROTO) {
@@ -722,6 +722,11 @@ normalize_match(struct ofp_match *m)
         if (wc & OFPFW_NW_DST_MASK) {
             m->nw_dst &= flow_nw_bits_to_mask(wc, OFPFW_NW_DST_SHIFT);
         }
+        if (wc & OFPFW_NW_TOS) {
+            m->nw_tos = 0;
+        } else {
+            m->nw_tos &= IP_DSCP_MASK;
+        }
     } else if (m->dl_type == htons(ETH_TYPE_ARP)) {
         if (wc & OFPFW_NW_PROTO) {
             m->nw_proto = 0;
@@ -732,12 +737,12 @@ normalize_match(struct ofp_match *m)
         if (wc & OFPFW_NW_DST_MASK) {
             m->nw_dst &= flow_nw_bits_to_mask(wc, OFPFW_NW_DST_SHIFT);
         }
-        m->tp_src = m->tp_dst = 0;
+        m->tp_src = m->tp_dst = m->nw_tos = 0;
     } else {
         /* Network and transport layer fields will always be extracted as
          * zeros, so we can do an exact-match on those values. */
         wc &= ~(OFPFW_NW | OFPFW_TP);
-        m->nw_proto = m->nw_src = m->nw_dst = 0;
+        m->nw_proto = m->nw_src = m->nw_dst = m->nw_tos = 0;
         m->tp_src = m->tp_dst = 0;
     }
     if (wc & OFPFW_DL_SRC) {

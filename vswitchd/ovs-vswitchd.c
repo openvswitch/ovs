@@ -61,11 +61,8 @@ main(int argc, char *argv[])
 {
     struct unixctl_server *unixctl;
     struct signal *sighup;
-    struct ovsdb_idl *idl;
     const char *remote;
-    bool need_reconfigure;
-    bool inited, exiting;
-    unsigned int idl_seqno;
+    bool exiting;
     int retval;
 
     proctitle_init(argc, argv);
@@ -89,47 +86,19 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
-    idl = ovsdb_idl_create(remote, &ovsrec_idl_class);
-    idl_seqno = ovsdb_idl_get_seqno(idl);
-
-    need_reconfigure = false;
-    inited = false;
+    bridge_init(remote);
     exiting = false;
     while (!exiting) {
         if (signal_poll(sighup)) {
             vlog_reopen_log_file();
         }
-        if (inited && bridge_run()) {
-            need_reconfigure = true;
-        }
-        ovsdb_idl_run(idl);
-        if (idl_seqno != ovsdb_idl_get_seqno(idl)) {
-            idl_seqno = ovsdb_idl_get_seqno(idl);
-            need_reconfigure = true;
-        }
-        if (need_reconfigure) {
-            const struct ovsrec_open_vswitch *cfg;
-
-            need_reconfigure = false;
-            cfg = ovsrec_open_vswitch_first(idl);
-            if (cfg) {
-                if (inited) {
-                    bridge_reconfigure(cfg);
-                } else {
-                    bridge_init(cfg);
-                    inited = true;
-                }
-            }
-        }
+        bridge_run();
         unixctl_server_run(unixctl);
         wdp_run();
         netdev_run();
 
         signal_wait(sighup);
-        if (inited) {
-            bridge_wait();
-        }
-        ovsdb_idl_wait(idl);
+        bridge_wait();
         unixctl_server_wait(unixctl);
         wdp_wait();
         netdev_wait();

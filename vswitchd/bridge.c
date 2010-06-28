@@ -82,12 +82,10 @@ struct iface {
     long long delay_expires;    /* Time after which 'enabled' may change. */
 
     /* These members are valid only after bridge_reconfigure() causes them to
-     * be initialized.*/
+     * be initialized. */
     int xf_ifidx;               /* Index within kernel datapath. */
     struct netdev *netdev;      /* Network device. */
     bool enabled;               /* May be chosen for flows? */
-
-    /* This member is only valid *during* bridge_reconfigure(). */
     const struct ovsrec_interface *cfg;
 };
 
@@ -125,6 +123,7 @@ struct port {
     int vlan;                   /* -1=trunk port, else a 12-bit VLAN ID. */
     unsigned long *trunks;      /* Bitmap of trunked VLANs, if 'vlan' == -1.
                                  * NULL if all VLANs are trunked. */
+    const struct ovsrec_port *cfg;
     char *name;
 
     /* An ordinary bridge port has 1 interface.
@@ -148,9 +147,6 @@ struct port {
     mirror_mask_t src_mirrors;  /* Mirrors triggered when packet received. */
     mirror_mask_t dst_mirrors;  /* Mirrors triggered when packet sent. */
     bool is_mirror_output_port; /* Does port mirroring send frames here? */
-
-    /* This member is only valid *during* bridge_reconfigure(). */
-    const struct ovsrec_port *cfg;
 };
 
 #define DP_MAX_PORTS 255
@@ -159,6 +155,7 @@ struct bridge {
     char *name;                 /* User-specified arbitrary name. */
     struct mac_learning *ml;    /* MAC learning table. */
     uint8_t default_ea[ETH_ADDR_LEN]; /* Default MAC. */
+    const struct ovsrec_bridge *cfg;
 
     /* OpenFlow switch processing. */
     struct ofproto *ofproto;    /* OpenFlow switch. */
@@ -181,21 +178,24 @@ struct bridge {
 
     /* Port mirroring. */
     struct mirror *mirrors[MAX_MIRRORS];
-
-    /* This member is only valid *during* bridge_reconfigure(). */
-    const struct ovsrec_bridge *cfg;
 };
 
 /* List of all bridges. */
 static struct list all_bridges = LIST_INITIALIZER(&all_bridges);
 
-/* Maximum number of datapaths. */
-enum { DP_MAX = 256 };
+/* OVSDB IDL used to obtain configuration. */
+static struct ovsdb_idl *idl;
+
+/* Each time this timer expires, the bridge fetches statistics for every
+ * interface and pushes them into the database. */
+#define IFACE_STATS_INTERVAL (5 * 1000) /* In milliseconds. */
+static long long int iface_stats_timer = LLONG_MIN;
 
 static struct bridge *bridge_create(const struct ovsrec_bridge *br_cfg);
 static void bridge_destroy(struct bridge *);
 static struct bridge *bridge_lookup(const char *name);
 static unixctl_cb_func bridge_unixctl_dump_flows;
+static unixctl_cb_func bridge_unixctl_reconnect;
 static int bridge_run_one(struct bridge *);
 static size_t bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
                                      const struct bridge *br,
@@ -260,48 +260,51 @@ static struct ofhooks bridge_ofhooks;
 
 /* Public functions. */
 
-/* Adds the name of each interface used by a bridge, including local and
- * internal ports, to 'svec'. */
+/* Initializes the bridge module, configuring it to obtain its configuration
+ * from an OVSDB server accessed over 'remote', which should be a string in a
+ * form acceptable to ovsdb_idl_create(). */
 void
-bridge_get_ifaces(struct svec *svec) 
+bridge_init(const char *remote)
 {
-    struct bridge *br, *next;
-    size_t i, j;
+    /* Create connection to database. */
+    idl = ovsdb_idl_create(remote, &ovsrec_idl_class);
 
-    LIST_FOR_EACH_SAFE (br, next, struct bridge, node, &all_bridges) {
-        for (i = 0; i < br->n_ports; i++) {
-            struct port *port = br->ports[i];
-
-            for (j = 0; j < port->n_ifaces; j++) {
-                struct iface *iface = port->ifaces[j];
-                if (iface->xf_ifidx < 0) {
-                    VLOG_ERR("%s interface not in datapath %s, ignoring",
-                             iface->name, xfif_name(br->xfif));
-                } else {
-                    if (iface->xf_ifidx != XFLOWP_LOCAL) {
-                        svec_add(svec, iface->name);
-                    }
-                }
-            }
-        }
-    }
+    /* Register unixctl commands. */
+    unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
+    unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
+                             NULL);
+    unixctl_command_register("bridge/reconnect", bridge_unixctl_reconnect,
+                             NULL);
+    bond_init();
 }
 
-void
-bridge_init(const struct ovsrec_open_vswitch *cfg)
+/* Performs configuration that is only necessary once at ovs-vswitchd startup,
+ * but for which the ovs-vswitchd configuration 'cfg' is required. */
+static void
+bridge_configure_once(const struct ovsrec_open_vswitch *cfg)
 {
+    static bool already_configured_once;
     struct svec bridge_names;
     struct svec xfif_names, xfif_types;
     size_t i;
 
-    unixctl_command_register("fdb/show", bridge_unixctl_fdb_show, NULL);
+    /* Only do this once per ovs-vswitchd run. */
+    if (already_configured_once) {
+        return;
+    }
+    already_configured_once = true;
 
+    iface_stats_timer = time_msec() + IFACE_STATS_INTERVAL;
+
+    /* Get all the configured bridges' names from 'cfg' into 'bridge_names'. */
     svec_init(&bridge_names);
     for (i = 0; i < cfg->n_bridges; i++) {
         svec_add(&bridge_names, cfg->bridges[i]->name);
     }
     svec_sort(&bridge_names);
 
+    /* Iterate over all system xfifs and delete any of them that do not appear
+     * in 'cfg'. */
     svec_init(&xfif_names);
     svec_init(&xfif_types);
     xf_enumerate_types(&xfif_types);
@@ -312,12 +315,14 @@ bridge_init(const struct ovsrec_open_vswitch *cfg)
 
         xf_enumerate_names(xfif_types.names[i], &xfif_names);
 
+        /* For each xfif... */
         for (j = 0; j < xfif_names.n; j++) {
             retval = xfif_open(xfif_names.names[j], xfif_types.names[i], &xfif);
             if (!retval) {
                 struct svec all_names;
                 size_t k;
 
+                /* ...check whether any of its names is in 'bridge_names'. */
                 svec_init(&all_names);
                 xfif_get_all_names(xfif, &all_names);
                 for (k = 0; k < all_names.n; k++) {
@@ -325,7 +330,10 @@ bridge_init(const struct ovsrec_open_vswitch *cfg)
                         goto found;
                     }
                 }
+
+                /* No.  Delete the xfif. */
                 xfif_delete(xfif);
+
             found:
                 svec_destroy(&all_names);
                 xfif_close(xfif);
@@ -335,12 +343,6 @@ bridge_init(const struct ovsrec_open_vswitch *cfg)
     svec_destroy(&bridge_names);
     svec_destroy(&xfif_names);
     svec_destroy(&xfif_types);
-
-    unixctl_command_register("bridge/dump-flows", bridge_unixctl_dump_flows,
-                             NULL);
-
-    bond_init();
-    bridge_reconfigure(cfg);
 }
 
 #ifdef HAVE_OPENSSL
@@ -362,7 +364,6 @@ static int
 set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
              bool create)
 {
-    struct shash_node *node;
     struct shash options;
     int error = 0;
     size_t i;
@@ -409,11 +410,7 @@ set_up_iface(const struct ovsrec_interface *iface_cfg, struct iface *iface,
             error = EINVAL;
         }
     }
-
-    SHASH_FOR_EACH (node, &options) {
-        free(node->data);
-    }
-    shash_destroy(&options);
+    shash_destroy_free_data(&options);
 
     return error;
 }
@@ -544,10 +541,9 @@ collect_managers(const struct ovsrec_open_vswitch *ovs_cfg,
     *n_managersp = n_managers;
 }
 
-void
+static void
 bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 {
-    struct ovsdb_idl_txn *txn;
     struct shash old_br, new_br;
     struct shash_node *node;
     struct bridge *br, *next;
@@ -557,8 +553,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
     int sflow_bridge_number;
 
     COVERAGE_INC(bridge_reconfigure);
-
-    txn = ovsdb_idl_txn_create(ovs_cfg->header_.table->idl);
 
     collect_managers(ovs_cfg, &managers, &n_managers);
 
@@ -846,11 +840,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         iterate_and_prune_ifaces(br, set_iface_properties, NULL);
     }
 
-    ovsrec_open_vswitch_set_cur_cfg(ovs_cfg, ovs_cfg->next_cfg);
-
-    ovsdb_idl_txn_commit(txn);
-    ovsdb_idl_txn_destroy(txn); /* XXX */
-
     free(managers);
 }
 
@@ -1069,25 +1058,115 @@ dpid_from_hash(const void *data, size_t n)
     return eth_addr_to_uint64(hash);
 }
 
-int
+static void
+iface_refresh_stats(struct iface *iface)
+{
+    struct iface_stat {
+        char *name;
+        int offset;
+    };
+    static const struct iface_stat iface_stats[] = {
+        { "rx_packets", offsetof(struct netdev_stats, rx_packets) },
+        { "tx_packets", offsetof(struct netdev_stats, tx_packets) },
+        { "rx_bytes", offsetof(struct netdev_stats, rx_bytes) },
+        { "tx_bytes", offsetof(struct netdev_stats, tx_bytes) },
+        { "rx_dropped", offsetof(struct netdev_stats, rx_dropped) },
+        { "tx_dropped", offsetof(struct netdev_stats, tx_dropped) },
+        { "rx_errors", offsetof(struct netdev_stats, rx_errors) },
+        { "tx_errors", offsetof(struct netdev_stats, tx_errors) },
+        { "rx_frame_err", offsetof(struct netdev_stats, rx_frame_errors) },
+        { "rx_over_err", offsetof(struct netdev_stats, rx_over_errors) },
+        { "rx_crc_err", offsetof(struct netdev_stats, rx_crc_errors) },
+        { "collisions", offsetof(struct netdev_stats, collisions) },
+    };
+    enum { N_STATS = ARRAY_SIZE(iface_stats) };
+    const struct iface_stat *s;
+
+    char *keys[N_STATS];
+    int64_t values[N_STATS];
+    int n;
+
+    struct netdev_stats stats;
+
+    /* Intentionally ignore return value, since errors will set 'stats' to
+     * all-1s, and we will deal with that correctly below. */
+    netdev_get_stats(iface->netdev, &stats);
+
+    n = 0;
+    for (s = iface_stats; s < &iface_stats[N_STATS]; s++) {
+        uint64_t value = *(uint64_t *) (((char *) &stats) + s->offset);
+        if (value != UINT64_MAX) {
+            keys[n] = s->name;
+            values[n] = value;
+            n++;
+        }
+    }
+
+    ovsrec_interface_set_statistics(iface->cfg, keys, values, n);
+}
+
+void
 bridge_run(void)
 {
-    struct bridge *br, *next;
-    int retval;
+    bool datapath_destroyed;
+    struct bridge *br;
 
-    retval = 0;
-    LIST_FOR_EACH_SAFE (br, next, struct bridge, node, &all_bridges) {
+    /* Let each bridge do the work that it needs to do. */
+    datapath_destroyed = false;
+    LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         int error = bridge_run_one(br);
         if (error) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             VLOG_ERR_RL(&rl, "bridge %s: datapath was destroyed externally, "
                         "forcing reconfiguration", br->name);
-            if (!retval) {
-                retval = error;
-            }
+            datapath_destroyed = true;
         }
     }
-    return retval;
+
+    /* (Re)configure if necessary. */
+    if (ovsdb_idl_run(idl) || datapath_destroyed) {
+        const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(idl);
+        if (cfg) {
+            struct ovsdb_idl_txn *txn = ovsdb_idl_txn_create(idl);
+
+            bridge_configure_once(cfg);
+            bridge_reconfigure(cfg);
+
+            ovsrec_open_vswitch_set_cur_cfg(cfg, cfg->next_cfg);
+            ovsdb_idl_txn_commit(txn);
+            ovsdb_idl_txn_destroy(txn); /* XXX */
+        } else {
+            /* We still need to reconfigure to avoid dangling pointers to
+             * now-destroyed ovsrec structures inside bridge data. */
+            static const struct ovsrec_open_vswitch null_cfg;
+
+            bridge_reconfigure(&null_cfg);
+        }
+    }
+
+    /* Refresh interface stats if necessary. */
+    if (time_msec() >= iface_stats_timer) {
+        struct ovsdb_idl_txn *txn;
+
+        txn = ovsdb_idl_txn_create(idl);
+        LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
+            size_t i;
+
+            for (i = 0; i < br->n_ports; i++) {
+                struct port *port = br->ports[i];
+                size_t j;
+
+                for (j = 0; j < port->n_ifaces; j++) {
+                    struct iface *iface = port->ifaces[j];
+                    iface_refresh_stats(iface);
+                }
+            }
+        }
+        ovsdb_idl_txn_commit(txn);
+        ovsdb_idl_txn_destroy(txn); /* XXX */
+
+        iface_stats_timer = time_msec() + IFACE_STATS_INTERVAL;
+    }
 }
 
 void
@@ -1104,6 +1183,8 @@ bridge_wait(void)
         mac_learning_wait(br->ml);
         bond_wait(br);
     }
+    ovsdb_idl_wait(idl);
+    poll_timer_wait_until(iface_stats_timer);
 }
 
 /* Forces 'br' to revalidate all of its flows.  This is appropriate when 'br''s
@@ -1252,19 +1333,6 @@ bridge_lookup(const char *name)
     return NULL;
 }
 
-bool
-bridge_exists(const char *name)
-{
-    return bridge_lookup(name) ? true : false;
-}
-
-uint64_t
-bridge_get_datapathid(const char *name)
-{
-    struct bridge *br = bridge_lookup(name);
-    return br ? ofproto_get_datapath_id(br->ofproto) : 0;
-}
-
 /* Handle requests for a listing of all flows known by the OpenFlow
  * stack, including those normally hidden. */
 static void
@@ -1285,6 +1353,29 @@ bridge_unixctl_dump_flows(struct unixctl_conn *conn,
 
     unixctl_command_reply(conn, 200, ds_cstr(&results));
     ds_destroy(&results);
+}
+
+/* "bridge/reconnect [BRIDGE]": makes BRIDGE drop all of its controller
+ * connections and reconnect.  If BRIDGE is not specified, then all bridges
+ * drop their controller connections and reconnect. */
+static void
+bridge_unixctl_reconnect(struct unixctl_conn *conn,
+                         const char *args, void *aux OVS_UNUSED)
+{
+    struct bridge *br;
+    if (args[0] != '\0') {
+        br = bridge_lookup(args);
+        if (!br) {
+            unixctl_command_reply(conn, 501, "Unknown bridge");
+            return;
+        }
+        ofproto_reconnect_controllers(br->ofproto);
+    } else {
+        LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
+            ofproto_reconnect_controllers(br->ofproto);
+        }
+    }
+    unixctl_command_reply(conn, 200, NULL);
 }
 
 static int

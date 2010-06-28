@@ -32,7 +32,7 @@
 #include <asm/system.h>
 #include <asm/div64.h>
 #include <asm/bug.h>
-#include <asm/highmem.h>
+#include <linux/highmem.h>
 #include <linux/netfilter_bridge.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/inetdevice.h>

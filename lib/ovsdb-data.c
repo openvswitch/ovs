@@ -1513,14 +1513,7 @@ void
 ovsdb_symbol_table_destroy(struct ovsdb_symbol_table *symtab)
 {
     if (symtab) {
-        struct shash_node *node, *next;
-
-        SHASH_FOR_EACH_SAFE (node, next, &symtab->sh) {
-            struct ovsdb_symbol *symbol = node->data;
-            free(symbol);
-            shash_delete(&symtab->sh, node);
-        }
-        shash_destroy(&symtab->sh);
+        shash_destroy_free_data(&symtab->sh);
         free(symtab);
     }
 }

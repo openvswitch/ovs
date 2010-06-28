@@ -150,20 +150,40 @@ AT_CLEANUP
 
 AT_SETUP([daemon --detach closes standard fds])
 AT_CAPTURE_FILE([pid])
+AT_CAPTURE_FILE([status])
+AT_CAPTURE_FILE([stderr])
 OVSDB_INIT([db])
-AT_CHECK([(yes; echo $? > status) | ovsdb-server --detach --pidfile=$PWD/pid --unixctl=$PWD/unixctl db], [0], [], [stderr])
+AT_CHECK([(yes 2>stderr; echo $? > status) | ovsdb-server --detach --pidfile=$PWD/pid --unixctl=$PWD/unixctl db], [0], [], [])
 AT_CHECK([kill `cat pid`])
 AT_CHECK([test -s status])
-AT_CHECK([kill -l `cat status`], [0], [PIPE
+if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
+  # Something in the environment caused SIGPIPE to be ignored, but
+  # 'yes' at least told us that it got EPIPE.  Good enough; we know
+  # that stdout was closed.
+  :
+else
+  # Otherwise make sure that 'yes' died from SIGPIPE.
+  AT_CHECK([kill -l `cat status`], [0], [PIPE
 ])
+fi
 AT_CLEANUP
 
 AT_SETUP([daemon --detach --monitor closes standard fds])
 AT_CAPTURE_FILE([pid])
+AT_CAPTURE_FILE([status])
+AT_CAPTURE_FILE([stderr])
 OVSDB_INIT([db])
-AT_CHECK([(yes; echo $? > status) | ovsdb-server --detach --monitor --pidfile=$PWD/pid --unixctl=$PWD/unixctl db], [0], [], [stderr])
+AT_CHECK([(yes 2>stderr; echo $? > status) | ovsdb-server --detach --monitor --pidfile=$PWD/pid --unixctl=$PWD/unixctl db], [0], [], [])
 AT_CHECK([kill `cat pid`])
 AT_CHECK([test -s status])
-AT_CHECK([kill -l `cat status`], [0], [PIPE
+if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
+  # Something in the environment caused SIGPIPE to be ignored, but
+  # 'yes' at least told us that it got EPIPE.  Good enough; we know
+  # that stdout was closed.
+  :
+else
+  # Otherwise make sure that 'yes' died from SIGPIPE.
+  AT_CHECK([kill -l `cat status`], [0], [PIPE
 ])
+fi
 AT_CLEANUP

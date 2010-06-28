@@ -204,6 +204,8 @@ def ifup(netdev):
 #
 
 def pif_rename_physical_devices(pif):
+    if pif_is_tunnel(pif):
+        return
 
     if pif_is_vlan(pif):
         pif = pif_get_vlan_slave(pif)

@@ -64,6 +64,26 @@
         capability categories and the meaning of associated
         <ref table="Capability"/> records.
       </column>
+
+      <column name="statistics">
+        <p>
+          Key-value pairs that report statistics about a running Open_vSwitch
+          daemon.  The current implementation updates these counters
+          periodically.  In the future, we plan to, instead, update them only
+          when they are queried (e.g. using an OVSDB <code>select</code>
+          operation) and perhaps at other times, but not on any regular
+          periodic basis.</p>
+        <p>
+          The currently defined key-value pairs are listed below.  Some Open
+          vSwitch implementations may not support some statistics, in which
+          case those key-value pairs are omitted.</p>
+        <dl>
+          <dt><code>load-average</code></dt>
+          <dd>
+            System load average multiplied by 100 and rounded to the nearest
+            integer.</dd>
+        </dl>
+      </column>
     </group>
   </table>
 
@@ -528,6 +548,69 @@
               For Citrix XenServer, this is the value of the <code>MAC</code>
               field in the VIF record for this interface.</dd>
         </dl>
+      </column>
+
+      <column name="statistics">
+        <p>
+          Key-value pairs that report interface statistics.  The current
+          implementation updates these counters periodically.  In the future,
+          we plan to, instead, update them when an interface is created, when
+          they are queried (e.g. using an OVSDB <code>select</code> operation),
+          and just before an interface is deleted due to virtual interface
+          hot-unplug or VM shutdown, and perhaps at other times, but not on any
+          regular periodic basis.</p>
+        <p>
+          The currently defined key-value pairs are listed below.  These are
+          the same statistics reported by OpenFlow in its <code>struct
+          ofp_port_stats</code> structure.  If an interface does not support a
+          given statistic, then that pair is omitted.</p>
+        <ul>
+          <li>
+            Successful transmit and receive counters:
+            <dl>
+              <dt><code>rx_packets</code></dt>
+              <dd>Number of received packets.</dd>
+              <dt><code>rx_bytes</code></dt>
+              <dd>Number of received bytes.</dd>
+              <dt><code>tx_packets</code></dt>
+              <dd>Number of transmitted packets.</dd>
+              <dt><code>tx_bytes</code></dt>
+              <dd>Number of transmitted bytes.</dd>
+            </dl>
+          </li>
+          <li>
+            Receive errors:
+            <dl>
+              <dt><code>rx_dropped</code></dt>
+              <dd>Number of packets dropped by RX.</dd>
+              <dt><code>rx_frame_err</code></dt>
+              <dd>Number of frame alignment errors.</dd>
+              <dt><code>rx_over_err</code></dt>
+              <dd>Number of packets with RX overrun.</dd>
+              <dt><code>rx_crc_err</code></dt>
+              <dd>Number of CRC errors.</dd>
+              <dt><code>rx_errors</code></dt>
+              <dd>
+                Total number of receive errors, greater than or equal
+                to the sum of the above.
+              </dd>
+            </dl>
+          </li>
+          <li>
+            Transmit errors:
+            <dl>
+              <dt><code>tx_dropped</code></dt>
+              <dd>Number of packets dropped by TX.</dd>
+              <dt><code>collisions</code></dt>
+              <dd>Number of collisions.</dd>
+              <dt><code>tx_errors</code></dt>
+              <dd>
+                Total number of transmit errors, greater
+                than or equal to the sum of the above.
+              </dd>
+            </dl>
+          </li>
+        </ul>
       </column>
     </group>
   </table>

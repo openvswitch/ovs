@@ -66,6 +66,7 @@ struct ssl_stream
     int fd;
     SSL *ssl;
     struct ofpbuf *txbuf;
+    unsigned int session_nr;
 
     /* rx_want and tx_want record the result of the last call to SSL_read()
      * and SSL_write(), respectively:
@@ -125,7 +126,7 @@ struct ssl_stream
      */
     int rx_want, tx_want;
 
-    /* A few bytes of header data in case SSL negotation fails. */
+    /* A few bytes of header data in case SSL negotiation fails. */
     uint8_t head[2];
     short int n_head;
 };
@@ -156,6 +157,10 @@ static bool verify_peer_cert = true;
  * this case, 'bootstrap_ca_cert' is true. */
 static bool bootstrap_ca_cert;
 
+/* Session number.  Used in debug logging messages to uniquely identify a
+ * session. */
+static unsigned int next_session_nr;
+
 /* Who knows what can trigger various SSL errors, so let's throttle them down
  * quite a bit. */
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 25);
@@ -171,6 +176,8 @@ static DH *tmp_dh_callback(SSL *ssl, int is_export OVS_UNUSED, int keylength);
 static void log_ca_cert(const char *file_name, X509 *cert);
 static void stream_ssl_set_ca_cert_file__(const char *file_name,
                                           bool bootstrap);
+static void ssl_protocol_cb(int write_p, int version, int content_type,
+                            const void *, size_t, SSL *, void *sslv_);
 
 static short int
 want_to_poll_events(int want)
@@ -268,7 +275,14 @@ new_ssl_stream(const char *name, int fd, enum session_type type,
     sslv->ssl = ssl;
     sslv->txbuf = NULL;
     sslv->rx_want = sslv->tx_want = SSL_NOTHING;
+    sslv->session_nr = next_session_nr++;
     sslv->n_head = 0;
+
+    if (VLOG_IS_DBG_ENABLED()) {
+        SSL_set_msg_callback(ssl, ssl_protocol_cb);
+        SSL_set_msg_callback_arg(ssl, sslv);
+    }
+
     *streamp = &sslv->stream;
     return 0;
 
@@ -1163,5 +1177,98 @@ stream_ssl_set_ca_cert_file(const char *file_name, bool bootstrap)
 
     stream_ssl_set_ca_cert_file__(file_name, bootstrap);
 }
+
+/* SSL protocol logging. */
 
+static const char *
+ssl_alert_level_to_string(uint8_t type)
+{
+    switch (type) {
+    case 1: return "warning";
+    case 2: return "fatal";
+    default: return "<unknown>";
+    }
+}
 
+static const char *
+ssl_alert_description_to_string(uint8_t type)
+{
+    switch (type) {
+    case 0: return "close_notify";
+    case 10: return "unexpected_message";
+    case 20: return "bad_record_mac";
+    case 21: return "decryption_failed";
+    case 22: return "record_overflow";
+    case 30: return "decompression_failure";
+    case 40: return "handshake_failure";
+    case 42: return "bad_certificate";
+    case 43: return "unsupported_certificate";
+    case 44: return "certificate_revoked";
+    case 45: return "certificate_expired";
+    case 46: return "certificate_unknown";
+    case 47: return "illegal_parameter";
+    case 48: return "unknown_ca";
+    case 49: return "access_denied";
+    case 50: return "decode_error";
+    case 51: return "decrypt_error";
+    case 60: return "export_restriction";
+    case 70: return "protocol_version";
+    case 71: return "insufficient_security";
+    case 80: return "internal_error";
+    case 90: return "user_canceled";
+    case 100: return "no_renegotiation";
+    default: return "<unknown>";
+    }
+}
+
+static const char *
+ssl_handshake_type_to_string(uint8_t type)
+{
+    switch (type) {
+    case 0: return "hello_request";
+    case 1: return "client_hello";
+    case 2: return "server_hello";
+    case 11: return "certificate";
+    case 12: return "server_key_exchange";
+    case 13: return "certificate_request";
+    case 14: return "server_hello_done";
+    case 15: return "certificate_verify";
+    case 16: return "client_key_exchange";
+    case 20: return "finished";
+    default: return "<unknown>";
+    }
+}
+
+static void
+ssl_protocol_cb(int write_p, int version OVS_UNUSED, int content_type,
+                const void *buf_, size_t len, SSL *ssl OVS_UNUSED, void *sslv_)
+{
+    const struct ssl_stream *sslv = sslv_;
+    const uint8_t *buf = buf_;
+    struct ds details;
+
+    if (!VLOG_IS_DBG_ENABLED()) {
+        return;
+    }
+
+    ds_init(&details);
+    if (content_type == 20) {
+        ds_put_cstr(&details, "change_cipher_spec");
+    } else if (content_type == 21) {
+        ds_put_format(&details, "alert: %s, %s",
+                      ssl_alert_level_to_string(buf[0]),
+                      ssl_alert_description_to_string(buf[1]));
+    } else if (content_type == 22) {
+        ds_put_format(&details, "handshake: %s",
+                      ssl_handshake_type_to_string(buf[0]));
+    } else {
+        ds_put_format(&details, "type %d", content_type);
+    }
+
+    VLOG_DBG("%s%u%s%s %s (%zu bytes)",
+             sslv->type == CLIENT ? "client" : "server",
+             sslv->session_nr, write_p ? "-->" : "<--",
+             stream_get_name(&sslv->stream), ds_cstr(&details), len);
+
+    ds_destroy(&details);
+}

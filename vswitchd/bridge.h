@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Nicira Networks
+/* Copyright (c) 2008, 2009, 2010 Nicira Networks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,13 @@
 #ifndef VSWITCHD_BRIDGE_H
 #define VSWITCHD_BRIDGE_H 1
 
-#include <stddef.h>
-#include "list.h"
+#include <stdbool.h>
+#include <stdint.h>
 
-struct ovsrec_open_vswitch;
 struct svec;
 
-void bridge_init(const struct ovsrec_open_vswitch *);
-void bridge_reconfigure(const struct ovsrec_open_vswitch *);
-int bridge_run(void);
+void bridge_init(const char *remote);
+void bridge_run(void);
 void bridge_wait(void);
-bool bridge_exists(const char *);
-uint64_t bridge_get_datapathid(const char *name);
-void bridge_get_ifaces(struct svec *svec);
 
 #endif /* bridge.h */

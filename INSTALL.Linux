@@ -81,6 +81,12 @@ following:
 
     - pyuic4 from PyQt4 (http://www.riverbankcomputing.co.uk).
 
+If you modify the vswitchd database schema, then the E-R diagram in
+the ovs-vswitchd.conf.db(5) manpage will be updated properly only if
+you have the following:
+
+    - "dot" from graphviz (http://www.graphviz.org/).
+
 Installation Requirements
 -------------------------
 
@@ -186,6 +192,41 @@ Prerequisites section, follow the procedure below to build.
    To verify that the modules have been loaded, run "/sbin/lsmod" and
    check that openvswitch_mod is listed.
 
+   If the "insmod" operation fails, look at the last few kernel log
+   messages (e.g. with "dmesg | tail"):
+
+      - The message "openvswitch_mod: exports duplicate symbol
+        br_should_route_hook (owned by bridge)" means that the bridge
+        module is loaded.  Run "/sbin/rmmod bridge" to remove it.
+
+        If "/sbin/rmmod bridge" fails with "ERROR: Module bridge does
+        not exist in /proc/modules", then the bridge is compiled into
+        the kernel, rather than as a module.  Open vSwitch does not
+        support this configuration (see "Build Requirements", above).
+
+      - The message "openvswitch_mod: exports duplicate symbol
+        dp_ioctl_hook (owned by ofdatapath)" means that the ofdatapath
+        module from the OpenFlow reference implementation is loaded.
+        Run "/sbin/rmmod ofdatapath" to remove it.  (You might have to
+        delete any existing datapaths beforehand, using the "dpctl"
+        program included with the OpenFlow reference implementation.
+        "ovs-dpctl" will not work.)
+
+      - Otherwise, the most likely problem is that Open vSwitch was
+        built for a kernel different from the one into which you are
+        trying to load it.  Run "modinfo" on openvswitch_mod.ko and on
+        a module built for the running kernel, e.g.:
+
+           % /sbin/modinfo openvswitch_mod.ko
+           % /sbin/modinfo /lib/modules/`uname -r`/kernel/net/bridge/bridge.ko
+
+        Compare the "vermagic" lines output by the two commands.  If
+        they differ, then Open vSwitch was built for the wrong kernel.
+
+      - If you decide to report a bug or ask a question related to
+        module loading, please include the output from the "dmesg" and
+        "modinfo" commands mentioned above.
+
 7. Initialize the configuration database using ovsdb-tool, e.g.:
 
       % ovsdb-tool create /usr/local/etc/ovs-vswitchd.conf.db vswitchd/vswitch.ovsschema
@@ -194,17 +235,18 @@ Startup
 =======
 
 Before starting ovs-vswitchd itself, you need to start its
-configuration database, ovsdb-server.  Configure it to use the
-database you created during step 7 of installation, above, and to
-listen on a Unix domain socket, e.g.:
+configuration database, ovsdb-server.  Each machine on which Open
+vSwitch is installed should run its own copy of ovsdb-server.
+Configure it to use the database you created during step 7 of
+installation, above, and to listen on a Unix domain socket, e.g.:
 
       % ovsdb-server /usr/local/etc/ovs-vswitchd.conf.db --remote=punix:/usr/local/var/run/openvswitch/db.sock
 
-Then initialize the database with "ovs-vsctl init".  This is only
+Then initialize the database using ovs-vsctl.  This is only
 necessary the first time after you create the database with
 ovsdb-tool (but running it at any time is harmless):
 
-      % ovs-vsctl init
+      % ovs-vsctl --no-wait init
 
 Then start the main Open vSwitch daemon, telling it to connect to the
 same Unix domain socket:

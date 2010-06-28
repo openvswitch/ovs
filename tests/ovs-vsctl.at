@@ -567,7 +567,7 @@ OVS_VSCTL_SETUP
 AT_CHECK([RUN_OVS_VSCTL([create b name=br0])], 
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 cp stdout out1
-AT_CHECK([RUN_OVS_VSCTL([list b])], 
+AT_CHECK([RUN_OVS_VSCTL([list b], [get b br0 _uuid])], 
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 cp stdout out2
 AT_CHECK([perl $srcdir/uuidfilt.pl out1 out2], [0], 
@@ -584,6 +584,7 @@ netflow             : []
 other_config        : {}
 ports               : []
 sflow               : []
+<0>
 ]], [ignore], [test ! -e pid || kill `cat pid`])
 AT_CHECK(
   [RUN_OVS_VSCTL(
