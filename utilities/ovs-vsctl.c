@@ -465,6 +465,7 @@ Database commands:\n\
   clear TBL REC COL           clear values from COLumn in RECord in TBL\n\
   create TBL COL[:KEY]=VALUE  create and initialize new record\n\
   destroy TBL REC             delete REC from TBL\n\
+  wait-until TBL REC [COL[:KEY]=VALUE]  wait until condition is true\n\
 Potentially unsafe database commands require --force option.\n\
 \n\
 Options:\n\
@@ -2237,7 +2238,7 @@ parse_column_key_value(const char *arg,
             const char *op = allowed_operators[i];
             size_t op_len = strlen(op);
 
-            if (op_len > best_len && !strncmp(op, p, op_len)) {
+            if (op_len > best_len && !strncmp(op, p, op_len) && p[op_len]) {
                 best_len = op_len;
                 best = op;
             }
@@ -2250,13 +2251,7 @@ parse_column_key_value(const char *arg,
         if (operatorp) {
             *operatorp = best;
         }
-
-        p += best_len;
-        if (p[0] == '\0') {
-            error = missing_operator_error(arg, allowed_operators, n_allowed);
-            goto error;
-        }
-        *valuep = xstrdup(p);
+        *valuep = xstrdup(p + best_len);
     } else {
         if (valuep) {
             *valuep = NULL;
@@ -2675,6 +2670,105 @@ cmd_destroy(struct vsctl_context *ctx)
         }
     }
 }
+
+static bool
+is_condition_satified(const struct vsctl_table_class *table,
+                      const struct ovsdb_idl_row *row, const char *arg,
+                      struct ovsdb_symbol_table *symtab)
+{
+    static const char *operators[] = {
+        "=", "!=", "<", ">", "<=", ">="
+    };
+
+    const struct ovsdb_idl_column *column;
+    char *key_string, *value_string;
+    struct ovsdb_datum have_datum;
+    const char *operator;
+    unsigned int idx;
+    char *error;
+    int cmp;
+
+    error = parse_column_key_value(arg, table, &column, &key_string,
+                                   &operator, operators, ARRAY_SIZE(operators),
+                                   &value_string);
+    die_if_error(error);
+    if (!value_string) {
+        vsctl_fatal("%s: missing value", arg);
+    }
+
+    ovsdb_idl_txn_read(row, column, &have_datum);
+    if (key_string) {
+        union ovsdb_atom want_key, want_value;
+
+        if (column->type.value.type == OVSDB_TYPE_VOID) {
+            vsctl_fatal("cannot specify key to check for non-map column %s",
+                        column->name);
+        }
+
+        die_if_error(ovsdb_atom_from_string(&want_key, &column->type.key,
+                                            key_string, symtab));
+        die_if_error(ovsdb_atom_from_string(&want_value, &column->type.value,
+                                            value_string, symtab));
+
+        idx = ovsdb_datum_find_key(&have_datum,
+                                   &want_key, column->type.key.type);
+        if (idx != UINT_MAX) {
+            cmp = ovsdb_atom_compare_3way(&have_datum.values[idx],
+                                          &want_value,
+                                          column->type.value.type);
+        }
+
+        ovsdb_atom_destroy(&want_key, column->type.key.type);
+        ovsdb_atom_destroy(&want_value, column->type.value.type);
+    } else {
+        struct ovsdb_datum want_datum;
+
+        die_if_error(ovsdb_datum_from_string(&want_datum, &column->type,
+                                             value_string, symtab));
+        idx = 0;
+        cmp = ovsdb_datum_compare_3way(&have_datum, &want_datum,
+                                       &column->type);
+        ovsdb_datum_destroy(&want_datum, &column->type);
+    }
+    ovsdb_datum_destroy(&have_datum, &column->type);
+
+    free(key_string);
+    free(value_string);
+
+    return (idx == UINT_MAX ? false
+            : !strcmp(operator, "=") ? cmp == 0
+            : !strcmp(operator, "!=") ? cmp != 0
+            : !strcmp(operator, "<") ? cmp < 0
+            : !strcmp(operator, ">") ? cmp > 0
+            : !strcmp(operator, "<=") ? cmp <= 0
+            : !strcmp(operator, ">=") ? cmp >= 0
+            : (abort(), 0));
+}
+
+static void
+cmd_wait_until(struct vsctl_context *ctx)
+{
+    const char *table_name = ctx->argv[1];
+    const char *record_id = ctx->argv[2];
+    const struct vsctl_table_class *table;
+    const struct ovsdb_idl_row *row;
+    int i;
+
+    table = get_table(table_name);
+
+    row = get_row__(ctx, table, record_id, false);
+    if (!row) {
+        ctx->try_again = true;
+        return;
+    }
+
+    for (i = 3; i < ctx->argc; i++) {
+        if (!is_condition_satified(table, row, ctx->argv[i], ctx->symtab)) {
+            ctx->try_again = true;
+            return;
+        }
+    }
+}
 
 static struct json *
 where_uuid_equals(const struct uuid *uuid)
@@ -2930,6 +3024,7 @@ static const struct vsctl_command_syntax all_commands[] = {
     {"clear", 3, INT_MAX, cmd_clear, NULL, ""},
     {"create", 2, INT_MAX, cmd_create, post_create, "--id="},
     {"destroy", 1, INT_MAX, cmd_destroy, NULL, "--if-exists"},
+    {"wait-until", 2, INT_MAX, cmd_wait_until, NULL, ""},
 
     {NULL, 0, 0, NULL, NULL, NULL},
 };

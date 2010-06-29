@@ -577,6 +577,38 @@ precede or follow the \fBcreate\fR command.
 .IP "\fR[\fB\-\-if\-exists\fR] \fBdestroy \fItable record\fR..."
 Deletes each specified \fIrecord\fR from \fItable\fR.  Unless
 \fB\-\-if\-exists\fR is specified, each \fIrecord\fRs must exist.
+.
+.IP "\fBwait\-until \fItable record \fR[\fIcolumn\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR]..."
+Waits until \fItable\fR contains a record named \fIrecord\fR whose
+\fIcolumn\fR equals \fIvalue\fR or, if \fIkey\fR is specified, whose
+\fIcolumn\fR contains a \fIkey\fR with the specified \fIvalue\fR.  Any
+of the operators \fB!=\fR, \fB<\fR, \fB>\fR, \fB<=\fR, or \fB>=\fR may
+be substituted for \fB=\fR to test for inequality, less than, greater
+than, less than or equal to, or greater than or equal to,
+respectively.  (Don't forget to escape \fB<\fR or \fB>\fR from
+interpretation by the shell.)
+.IP
+If no \fIcolumn\fR[\fB:\fIkey\fR]\fB=\fIvalue\fR arguments are given,
+this command waits only until \fIrecord\fR exists.  If more than one
+such argument is given, the command waits until all of them are
+satisfied.
+.IP
+Usually \fBwait\-until\fR should be placed at the beginning of a set
+of \fBovs\-vsctl\fR commands.  For example, \fBwait\-until bridge br0
+\-\- get bridge br0 datapath_id\fR waits until a bridge named
+\fBbr0\fR is created, then prints its \fBdatapath_id\fR column,
+whereas \fBget bridge br0 datapath_id \-\- wait\-until bridge br0\fR
+will abort if no bridge named \fBbr0\fR exists when \fBovs\-vsctl\fR
+initially connects to the database.
+.IP
+Unlike all the other database commands, \fBwait\-until\fR treats its
+\fIrecord\fR argument as case-sensitive and does not allow it to be
+abbreviated.  Otherwise, \fBwait\-until br1\fR would be satisfied by a
+bridge named \fBbr10\fR.
+.IP
+Consider specifying \fB\-\-timeout=0\fR along with
+\fB\-\-wait\-until\fR, to prevent \fBovs\-vsctl\fR from terminating
+after waiting only at most 5 seconds.
 .SH "EXAMPLES"
 Create a new bridge named br0 and add port eth0 to it:
 .IP
