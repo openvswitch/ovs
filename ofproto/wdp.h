@@ -48,20 +48,7 @@ struct wdp_table_stats {
 };
 
 struct wdp_stats {
-    struct wdp_table_stats exact;
-    struct wdp_table_stats wild;
-
-    /* Ports. */
-    unsigned int n_ports;       /* Current number of ports. */
     unsigned int max_ports;     /* Maximum supported number of ports. */
-
-    /* Lookups. */
-    unsigned long long int n_frags;  /* Number of dropped IP fragments. */
-
-    /* Queues. */
-    unsigned int max_miss_queue;   /* Max length of WDP_CHAN_MISS queue. */
-    unsigned int max_action_queue; /* Max length of WDP_CHAN_ACTION queue. */
-    unsigned int max_sflow_queue;  /* Max length of WDP_CHAN_SFLOW queue. */
 };
 
 struct wdp_rule {
