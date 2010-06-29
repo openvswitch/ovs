@@ -136,6 +136,11 @@ struct wdp_class {
     /* Retrieves statistics for 'wdp' into 'stats'. */
     int (*get_stats)(const struct wdp *wdp, struct wdp_stats *stats);
 
+    /* Appends to 'stats' one or more 'struct ofp_table_stats' structures that
+     * represent the tables maintained by 'wdp'.  Returns 0 if successful,
+     * otherwise an OpenFlow error code constructed with ofp_mkerr(). */
+    int (*get_table_stats)(const struct wdp *wdp, struct ofpbuf *stats);
+
     /* Retrieves 'wdp''s current treatment of IP fragments into '*drop_frags':
      * true indicates that fragments are dropped, false indicates that
      * fragments are treated in the same way as other IP packets (except that

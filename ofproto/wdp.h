@@ -24,6 +24,11 @@
 extern "C" {
 #endif
 
+enum {
+    TABLEID_HASH = 0,
+    TABLEID_CLASSIFIER = 1
+};
+
 struct ofpbuf;
 struct svec;
 struct wdp;
@@ -108,6 +113,7 @@ int wdp_delete(struct wdp *);
 
 int wdp_get_features(const struct wdp *, struct ofpbuf **featuresp);
 int wdp_get_wdp_stats(const struct wdp *, struct wdp_stats *);
+int wdp_get_table_stats(const struct wdp *, struct ofpbuf *stats);
 
 int wdp_get_drop_frags(const struct wdp *, bool *drop_frags);
 int wdp_set_drop_frags(struct wdp *, bool drop_frags);

@@ -64,11 +64,6 @@
 
 #include "sflow_api.h"
 
-enum {
-    TABLEID_HASH = 0,
-    TABLEID_CLASSIFIER = 1
-};
-
 struct ofproto_rule {
     uint64_t flow_cookie;       /* Controller-issued identifier. 
                                    (Kept in network-byte order.) */
@@ -1568,39 +1563,17 @@ static int
 handle_table_stats_request(struct ofproto *p, struct ofconn *ofconn,
                            struct ofp_stats_request *request)
 {
-    struct ofp_table_stats *ots;
     struct ofpbuf *msg;
-    struct wdp_stats dpstats;
+    int error;
 
-    msg = start_stats_reply(request, sizeof *ots * 2);
-
-    wdp_get_wdp_stats(p->wdp, &dpstats);
-
-    /* Hash table. */
-    ots = append_stats_reply(sizeof *ots, ofconn, &msg);
-    memset(ots, 0, sizeof *ots);
-    ots->table_id = TABLEID_HASH;
-    strcpy(ots->name, "hash");
-    ots->wildcards = htonl(0);
-    ots->max_entries = htonl(dpstats.exact.max_capacity);
-    ots->active_count = htonl(dpstats.exact.n_flows);
-    ots->lookup_count = htonll(dpstats.exact.n_hit + dpstats.exact.n_missed);
-    ots->matched_count = htonll(dpstats.exact.n_hit);
-
-    /* Classifier table. */
-    ots = append_stats_reply(sizeof *ots, ofconn, &msg);
-    memset(ots, 0, sizeof *ots);
-    ots->table_id = TABLEID_CLASSIFIER;
-    strcpy(ots->name, "classifier");
-    ots->wildcards = p->tun_id_from_cookie ? htonl(OVSFW_ALL)
-                                           : htonl(OFPFW_ALL);
-    ots->max_entries = htonl(dpstats.wild.max_capacity);
-    ots->active_count = htonl(dpstats.wild.n_flows);
-    ots->lookup_count = htonll(dpstats.wild.n_hit + dpstats.wild.n_missed);
-    ots->matched_count = htonll(dpstats.wild.n_hit);
-
-    queue_tx(msg, ofconn, ofconn->reply_counter);
-    return 0;
+    msg = start_stats_reply(request, sizeof(struct ofp_table_stats) * 3);
+    error = wdp_get_table_stats(p->wdp, msg);
+    if (!error) {
+        queue_tx(msg, ofconn, ofconn->reply_counter);
+    } else {
+        ofpbuf_delete(msg);
+    }
+    return error;
 }
 
 static void

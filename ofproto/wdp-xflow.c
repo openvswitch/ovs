@@ -1307,38 +1307,47 @@ wx_get_stats(const struct wdp *wdp, struct wdp_stats *stats)
 {
     struct wx *wx = wx_cast(wdp);
     struct xflow_stats xflow_stats;
-    int n_subrules;
     int error;
 
     error = xfif_get_xf_stats(wx->xfif, &xflow_stats);
+    stats->max_ports = xflow_stats.max_ports;
+    return error;
+}
+
+static int
+wx_get_table_stats(const struct wdp *wdp, struct ofpbuf *stats)
+{
+    struct wx *wx = wx_cast(wdp);
+    struct xflow_stats xflow_stats;
+    struct ofp_table_stats *exact, *wild;
+    int n_subrules;
+
+    xfif_get_xf_stats(wx->xfif, &xflow_stats);
+    /* XXX should pass up errors, but there are no appropriate OpenFlow error
+     * codes. */
 
     n_subrules = 0;
     classifier_for_each(&wx->cls, CLS_INC_EXACT, count_subrules, &n_subrules);
 
-    stats->exact.n_flows = classifier_count_exact(&wx->cls) - n_subrules;
-    stats->exact.cur_capacity = xflow_stats.cur_capacity;
-    stats->exact.max_capacity = MIN(WX_MAX_EXACT, xflow_stats.max_capacity);
-    stats->exact.n_hit = xflow_stats.n_hit;
-    stats->exact.n_missed = xflow_stats.n_missed;
-    stats->exact.n_lost = xflow_stats.n_lost;
+    exact = ofpbuf_put_zeros(stats, sizeof *exact);
+    exact->table_id = TABLEID_HASH;
+    strcpy(exact->name, "exact");
+    exact->wildcards = htonl(0);
+    exact->max_entries = htonl(MIN(WX_MAX_EXACT, xflow_stats.max_capacity));
+    exact->active_count = htonl(classifier_count_exact(&wx->cls) - n_subrules);
+    exact->lookup_count = htonll(xflow_stats.n_hit + xflow_stats.n_missed);
+    exact->matched_count = htonll(xflow_stats.n_hit);
 
-    stats->wild.n_flows = classifier_count_wild(&wx->cls);
-    stats->wild.cur_capacity = WX_MAX_WILD;
-    stats->wild.max_capacity = WX_MAX_WILD;
-    stats->wild.n_hit = 0;      /* XXX */
-    stats->wild.n_missed = 0;   /* XXX */
-    stats->wild.n_lost = 0;     /* XXX */
+    wild = ofpbuf_put_zeros(stats, sizeof *exact);
+    wild->table_id = TABLEID_CLASSIFIER;
+    strcpy(wild->name, "classifier");
+    wild->wildcards = htonl(OVSFW_ALL);
+    wild->max_entries = htonl(WX_MAX_WILD);
+    wild->active_count = htonl(classifier_count_wild(&wx->cls));
+    wild->lookup_count = htonll(0);  /* XXX */
+    wild->matched_count = htonll(0); /* XXX */
 
-    stats->n_ports = xflow_stats.n_ports;
-    stats->max_ports = xflow_stats.max_ports;
-
-    stats->n_frags = xflow_stats.n_frags;
-
-    stats->max_miss_queue = xflow_stats.max_miss_queue;
-    stats->max_action_queue = xflow_stats.max_action_queue;
-    stats->max_sflow_queue = xflow_stats.max_sflow_queue;
-
-    return error;
+    return 0;
 }
 
 static int
@@ -2327,6 +2336,7 @@ wdp_xflow_register(void)
         wx_destroy,
         wx_get_features,
         wx_get_stats,
+        wx_get_table_stats,
         wx_get_drop_frags,
         wx_set_drop_frags,
         wx_port_add,
