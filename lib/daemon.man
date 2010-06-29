@@ -1,9 +1,12 @@
 .TP
-\fB--pidfile\fR[\fB=\fIpidfile\fR]
+\fB\-\-pidfile\fR[\fB=\fIpidfile\fR]
 Causes a file (by default, \fB\*(PN.pid\fR) to be created indicating
-the PID of the running process.  If \fIpidfile\fR is not specified, or
+the PID of the running process.  If the \fIpidfile\fR argument is not
+specified, or
 if it does not begin with \fB/\fR, then it is created in
 \fB@RUNDIR@\fR.
+.IP
+If \fB--pidfile\fR is not specified, no pidfile is created.
 .
 .TP
 \fB--overwrite-pidfile\fR
