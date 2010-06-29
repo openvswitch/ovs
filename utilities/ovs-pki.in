@@ -249,6 +249,7 @@ email_in_dn    = no                    # Don't add the email into cert DN
 name_opt       = ca_default            # Subject name display option
 cert_opt       = ca_default            # Certificate display option
 copy_extensions = none                 # Don't copy extensions from request
+unique_subject = no                    # Allow certs with duplicate subjects
 
 # For the CA policy
 [ policy ]
