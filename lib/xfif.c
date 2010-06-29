@@ -30,6 +30,7 @@
 #include "netlink.h"
 #include "xflow-util.h"
 #include "ofp-print.h"
+#include "ofp-util.h"
 #include "ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -1134,9 +1135,13 @@ log_operation(const struct xfif *xfif, const char *operation, int error)
 {
     if (!error) {
         VLOG_DBG_RL(&dpmsg_rl, "%s: %s success", xfif_name(xfif), operation);
-    } else {
+    } else if (is_errno(error)) {
         VLOG_WARN_RL(&error_rl, "%s: %s failed (%s)",
                      xfif_name(xfif), operation, strerror(error));
+    } else {
+        VLOG_WARN_RL(&error_rl, "%s: %s failed (%d/%d)",
+                     xfif_name(xfif), operation,
+                     get_ofp_err_type(error), get_ofp_err_code(error));
     }
 }
 
