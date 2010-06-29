@@ -1633,5 +1633,5 @@ error:
 bool
 ovsdb_token_is_delim(unsigned char c)
 {
-    return strchr(":=, []{}", c) != NULL;
+    return strchr(":=, []{}!<>", c) != NULL;
 }

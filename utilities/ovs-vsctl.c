@@ -2104,15 +2104,65 @@ get_column(const struct vsctl_table_class *table, const char *column_name,
     }
 }
 
+static char *
+missing_operator_error(const char *arg, const char **allowed_operators,
+                       size_t n_allowed)
+{
+    struct ds s;
+
+    ds_init(&s);
+    ds_put_format(&s, "%s: argument does not end in ", arg);
+    ds_put_format(&s, "\"%s\"", allowed_operators[0]);
+    if (n_allowed == 2) {
+        ds_put_format(&s, " or \"%s\"", allowed_operators[1]);
+    } else if (n_allowed > 2) {
+        size_t i;
+
+        for (i = 1; i < n_allowed - 1; i++) {
+            ds_put_format(&s, ", \"%s\"", allowed_operators[i]);
+        }
+        ds_put_format(&s, ", or \"%s\"", allowed_operators[i]);
+    }
+    ds_put_format(&s, " followed by a value.");
+
+    return ds_steal_cstr(&s);
+}
+
+/* Breaks 'arg' apart into a number of fields in the following order:
+ *
+ *      - If 'columnp' is nonnull, the name of a column in 'table'.  The column
+ *        is stored into '*columnp'.  The column name may be abbreviated.
+ *
+ *      - If 'keyp' is nonnull, optionally a key string.  (If both 'columnp'
+ *        and 'keyp' are nonnull, then the column and key names are expected to
+ *        be separated by ':').  The key is stored as a malloc()'d string into
+ *        '*keyp', or NULL if no key is present in 'arg'.
+ *
+ *      - If 'valuep' is nonnull, an operator followed by a value string.  The
+ *        allowed operators are the 'n_allowed' string in 'allowed_operators',
+ *        or just "=" if 'n_allowed' is 0.  If 'operatorp' is nonnull, then the
+ *        operator is stored into '*operatorp' (one of the pointers from
+ *        'allowed_operators' is stored; nothing is malloc()'d).  The value is
+ *        stored as a malloc()'d string into '*valuep', or NULL if no value is
+ *        present in 'arg'.
+ *
+ * At least 'columnp' or 'keyp' must be nonnull.
+ *
+ * On success, returns NULL.  On failure, returned a malloc()'d string error
+ * message and stores NULL into all of the nonnull output arguments. */
 static char * WARN_UNUSED_RESULT
-parse_column_key_value(const char *arg, const struct vsctl_table_class *table,
-                       const struct ovsdb_idl_column **columnp,
-                       char **keyp, char **valuep)
+parse_column_key_value(const char *arg,
+                       const struct vsctl_table_class *table,
+                       const struct ovsdb_idl_column **columnp, char **keyp,
+                       const char **operatorp,
+                       const char **allowed_operators, size_t n_allowed,
+                       char **valuep)
 {
     const char *p = arg;
     char *error;
 
     assert(columnp || keyp);
+    assert(!(operatorp && !valuep));
     if (keyp) {
         *keyp = NULL;
     }
@@ -2157,12 +2207,43 @@ parse_column_key_value(const char *arg, const struct vsctl_table_class *table,
     }
 
     /* Parse value string. */
-    if (*p == '=') {
-        if (!valuep) {
-            error = xasprintf("%s: value not accepted here", arg);
+    if (valuep) {
+        const char *best;
+        size_t best_len;
+        size_t i;
+
+        if (!allowed_operators) {
+            static const char *equals = "=";
+            allowed_operators = &equals;
+            n_allowed = 1;
+        }
+
+        best = NULL;
+        best_len = 0;
+        for (i = 0; i < n_allowed; i++) {
+            const char *op = allowed_operators[i];
+            size_t op_len = strlen(op);
+
+            if (op_len > best_len && !strncmp(op, p, op_len)) {
+                best_len = op_len;
+                best = op;
+            }
+        }
+        if (!best) {
+            error = missing_operator_error(arg, allowed_operators, n_allowed);
             goto error;
         }
-        *valuep = xstrdup(p + 1);
+
+        if (operatorp) {
+            *operatorp = best;
+        }
+
+        p += best_len;
+        if (p[0] == '\0') {
+            error = missing_operator_error(arg, allowed_operators, n_allowed);
+            goto error;
+        }
+        *valuep = xstrdup(p);
     } else {
         if (valuep) {
             *valuep = NULL;
@@ -2186,6 +2267,9 @@ error:
     if (valuep) {
         free(*valuep);
         *valuep = NULL;
+        if (operatorp) {
+            *operatorp = NULL;
+        }
     }
     return error;
 }
@@ -2218,7 +2302,8 @@ cmd_get(struct vsctl_context *ctx)
         }
 
         die_if_error(parse_column_key_value(ctx->argv[i], table,
-                                            &column, &key_string, NULL));
+                                            &column, &key_string,
+                                            NULL, NULL, 0, NULL));
 
         ovsdb_idl_txn_read(row, column, &datum);
         if (key_string) {
@@ -2320,7 +2405,7 @@ set_column(const struct vsctl_table_class *table,
     char *error;
 
     error = parse_column_key_value(arg, table, &column, &key_string,
-                                   &value_string);
+                                   NULL, NULL, 0, &value_string);
     die_if_error(error);
     if (!value_string) {
         vsctl_fatal("%s: missing value", arg);

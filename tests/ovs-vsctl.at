@@ -659,7 +659,7 @@ AT_CHECK([RUN_OVS_VSCTL([get b br0 :y=z])],
   [1], [], [ovs-vsctl: :y=z: missing column name
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id:y=z])], 
-  [1], [], [ovs-vsctl: datapath_id:y=z: value not accepted here
+  [1], [], [ovs-vsctl: datapath_id:y=z: trailing garbage "=z" in argument
 ], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([get b br0 datapath_id::])], 
   [1], [], [ovs-vsctl: datapath_id::: trailing garbage ":" in argument
