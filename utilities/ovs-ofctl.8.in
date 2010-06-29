@@ -61,19 +61,19 @@ pairs whose key names begin with \fIkey\fR are printed.  If \fIkey\fR is
 omitted, all key-value pairs are printed.
 .
 .TP
-\fBdump-tables \fIswitch\fR
+\fBdump\-tables \fIswitch\fR
 Prints to the console statistics for each of the flow tables used by
 \fIswitch\fR.
 .
 .TP
-\fBdump-ports \fIswitch\fR [\fInetdev\fR]
+\fBdump\-ports \fIswitch\fR [\fInetdev\fR]
 Prints to the console statistics for network devices associated with 
 \fIswitch\fR.  If \fInetdev\fR is specified, only the statistics
 associated with that device will be printed.  \fInetdev\fR can be an
 OpenFlow assigned port number or device name, e.g. \fBeth0\fR.
 .
 .TP
-\fBmod-port \fIswitch\fR \fInetdev\fR \fIaction\fR
+\fBmod\-port \fIswitch\fR \fInetdev\fR \fIaction\fR
 Modify characteristics of an interface monitored by \fIswitch\fR.  
 \fInetdev\fR can be referred to by its OpenFlow assigned port number or 
 the device name, e.g. \fBeth0\fR.  The \fIaction\fR may be any one of the
@@ -100,7 +100,7 @@ spanning tree protocol is not in use.
 .RE
 .
 .TP
-\fBdump-flows \fIswitch \fR[\fIflows\fR]
+\fBdump\-flows \fIswitch \fR[\fIflows\fR]
 Prints to the console all flow entries in \fIswitch\fR's
 tables that match \fIflows\fR.  If \fIflows\fR is omitted, all flows
 in the switch are retrieved.  See \fBFlow Syntax\fR, below, for the
@@ -108,7 +108,7 @@ syntax of \fIflows\fR.  The output format is described in
 \fBTable Entry Output\fR.
 .
 .TP
-\fBdump-aggregate \fIswitch \fR[\fIflows\fR]
+\fBdump\-aggregate \fIswitch \fR[\fIflows\fR]
 Prints to the console aggregate statistics for flows in 
 \fIswitch\fR's tables that match \fIflows\fR.  If \fIflows\fR is omitted, 
 the statistics are aggregated across all flows in the switch's flow
@@ -116,30 +116,30 @@ tables.  See \fBFlow Syntax\fR, below, for the syntax of \fIflows\fR.
 The output format is descrbed in \fBTable Entry Output\fR.
 .
 .TP
-\fBadd-flow \fIswitch flow\fR
+\fBadd\-flow \fIswitch flow\fR
 Add the flow entry as described by \fIflow\fR to the \fIswitch\fR's 
 tables.  The flow entry is in the format described in \fBFlow Syntax\fR, 
 below.
 .
 .TP
-\fBadd-flows \fIswitch file\fR
+\fBadd\-flows \fIswitch file\fR
 Add flow entries as described in \fIfile\fR to \fIswitch\fR's 
 tables.  Each line in \fIfile\fR is a flow entry in the format
 described in \fBFlow Syntax\fR, below.
 .
 .TP
-\fBmod-flows \fIswitch flow\fR
+\fBmod\-flows \fIswitch flow\fR
 Modify the actions in entries from the \fIswitch\fR's tables 
-that match \fIflow\fR.  When invoked with the \fB--strict\fR option,
+that match \fIflow\fR.  When invoked with the \fB\-\-strict\fR option,
 wildcards are not treated as active for matching purposes.  See 
 \fBFlow Syntax\fR, below, for the syntax of \fIflows\fR.
 .
 .TP
-\fBdel-flows \fIswitch \fR[\fIflow\fR]
+\fBdel\-flows \fIswitch \fR[\fIflow\fR]
 Deletes entries from the \fIswitch\fR's tables that match
-\fIflow\fR.  When invoked with the \fB--strict\fR option, wildcards are 
+\fIflow\fR.  When invoked with the \fB\-\-strict\fR option, wildcards are 
 not treated as active for matching purposes.  If \fIflow\fR is 
-omitted and the \fB--strict\fR option is not used, all flows in the 
+omitted and the \fB\-\-strict\fR option is not used, all flows in the 
 switch's tables are removed.  See \fBFlow Syntax\fR, below, for the 
 syntax of \fIflows\fR.
 .
@@ -171,7 +171,7 @@ monitoring will not show any traffic.
 .IQ "\fBmonitor \fIswitch\fR [\fImiss-len\fR]"
 Connects to \fIswitch\fR and prints to the console all OpenFlow
 messages received.  Usually, \fIswitch\fR should specify a connection
-named on \fBovs\-openflowd\fR(8)'s \fB-l\fR or \fB--listen\fR command line
+named on \fBovs\-openflowd\fR(8)'s \fB\-l\fR or \fB\-\-listen\fR command line
 option.
 .IP
 If \fImiss-len\fR is provided, \fBovs\-ofctl\fR sends an OpenFlow ``set
@@ -195,7 +195,7 @@ applied to OpenFlow controllers.
 .TP
 \fBprobe \fItarget\fR
 Sends a single OpenFlow echo-request message to \fItarget\fR and waits
-for the response.  With the \fB-t\fR or \fB--timeout\fR option, this
+for the response.  With the \fB\-t\fR or \fB\-\-timeout\fR option, this
 command can test whether an OpenFlow switch or controller is up and
 running.
 .
@@ -348,7 +348,7 @@ Same as \fBdl_type=0x0800,nw_proto=17\fR.
 Same as \fBdl_type=0x0806\fR.
 .
 .PP
-The \fBadd-flow\fR and \fBadd-flows\fR commands require an additional
+The \fBadd\-flow\fR and \fBadd\-flows\fR commands require an additional
 field, which must be the final field specified:
 .
 .IP \fBactions=\fR[\fItarget\fR][\fB,\fItarget\fR...]\fR
@@ -463,7 +463,7 @@ A cookie is an opaque identifier that can be associated with the flow.
 flows.
 .
 .PP
-The \fBadd-flow\fR, \fBadd-flows\fR, and \fBdel-flows\fR commands
+The \fBadd\-flow\fR, \fBadd\-flows\fR, and \fBdel\-flows\fR commands
 support an additional optional field:
 .
 .IP \fBpriority=\fIvalue\fR
@@ -475,7 +475,7 @@ priority value of 65535.  When adding a flow, if the field is not specified,
 the flow's priority will default to 32768.
 .
 .PP
-The \fBadd-flow\fR and \fBadd-flows\fR commands support additional
+The \fBadd\-flow\fR and \fBadd\-flows\fR commands support additional
 optional fields:
 .
 .TP
@@ -490,28 +490,28 @@ regardless of activity.  A value of 0 (the default) gives the flow no
 hard expiration deadline.
 .
 .PP
-The \fBdump-flows\fR, \fBdump-aggregate\fR, \fBdel-flow\fR 
-and \fBdel-flows\fR commands support one additional optional field:
+The \fBdump\-flows\fR, \fBdump\-aggregate\fR, \fBdel\-flow\fR 
+and \fBdel\-flows\fR commands support one additional optional field:
 .
 .TP
 \fBout_port=\fIport\fR
 If set, a matching flow must include an output action to \fIport\fR.
 .
 .PP
-The \fBdump-flows\fR and \fBdump-aggregate\fR commands support an
+The \fBdump\-flows\fR and \fBdump\-aggregate\fR commands support an
 additional optional field:
 .
 .IP \fBtable=\fInumber\fR
 If specified, limits the flows about which statistics are gathered to
 those in the table with the given \fInumber\fR.  Tables are numbered
-as shown by the \fBdump-tables\fR command.
+as shown by the \fBdump\-tables\fR command.
 .
 If this field is not specified, or if \fInumber\fR is given as
 \fB255\fR, statistics are gathered about flows from all tables.
 .
 .SS "Table Entry Output"
 .
-The \fBdump-tables\fR and \fBdump-aggregate\fR commands print information 
+The \fBdump\-tables\fR and \fBdump\-aggregate\fR commands print information 
 about the entries in a datapath's tables.  Each line of output is a 
 unique flow entry, which begins with some common information:
 .
@@ -521,7 +521,7 @@ The number of seconds the entry has been in the table.
 .IP \fBtable_id\fR
 The table that contains the flow.  When a packet arrives, the switch 
 begins searching for an entry at the lowest numbered table.  Tables are 
-numbered as shown by the \fBdump-tables\fR command.
+numbered as shown by the \fBdump\-tables\fR command.
 .
 .IP \fBpriority\fR
 The priority of the entry in relation to other entries within the same
@@ -540,7 +540,7 @@ described in \fBFlow Syntax\fR, above.
 .
 .SH OPTIONS
 .TP
-\fB--strict\fR
+\fB\-\-strict\fR
 Uses strict matching when running flow modification commands.
 .
 .SS "Public Key Infrastructure Options"
@@ -553,16 +553,16 @@ Uses strict matching when running flow modification commands.
 The following examples assume that an OpenFlow switch on the local
 host has been configured to listen for management connections on a
 Unix domain socket named \fB@RUNDIR@/openflow.sock\fR, e.g. by
-specifying \fB--listen=punix:@RUNDIR@/openflow.sock\fR on the
+specifying \fB\-\-listen=punix:@RUNDIR@/openflow.sock\fR on the
 \fBovs\-openflowd\fR(8) command line.
 .
 .TP
-\fBovs\-ofctl dump-tables unix:@RUNDIR@/openflow.sock\fR
+\fBovs\-ofctl dump\-tables unix:@RUNDIR@/openflow.sock\fR
 Prints out the switch's table stats.  (This is more interesting after
 some traffic has passed through.)
 .
 .TP
-\fBovs\-ofctl dump-flows unix:@RUNDIR@/openflow.sock\fR
+\fBovs\-ofctl dump\-flows unix:@RUNDIR@/openflow.sock\fR
 Prints the flow entries in the switch.
 .
 .SH "SEE ALSO"

@@ -20,7 +20,7 @@ on the local machine.
 .PP
 The mandatory \fIdatabase\fR argument normally takes the form
 \fBunix:\fIfile\fR, where \fIfile\fR is the name of a Unix domain
-socket on which \fBovsdb-server\fR is listening.  However, all of the
+socket on which \fBovsdb\-server\fR is listening.  However, all of the
 following forms are accepted:
 .so ovsdb/remote-active.man
 .so ovsdb/remote-passive.man
@@ -76,7 +76,7 @@ Open vSwitch distribution for instructions on how to build and load
 the Open vSwitch kernel module.
 .PP
 .SH OPTIONS
-.IP "\fB--mlockall\fR"
+.IP "\fB\-\-mlockall\fR"
 Causes \fBovs\-vswitchd\fR to call the \fBmlockall()\fR function, to
 attempt to lock all of its process memory into physical RAM,
 preventing the kernel from paging any of its memory to disk.  This
@@ -87,7 +87,7 @@ only allow privileged users, such as the superuser, to use it.
 \fBovs\-vswitchd\fR emits a log message if \fBmlockall()\fR is
 unavailable or unsuccessful.
 .
-.IP "\fB--fake-proc-net\fR"
+.IP "\fB\-\-fake\-proc\-net\fR"
 Causes \fBovs\-vswitchd\fR to simulate some files in \fB/proc/net/vlan\fR
 and \fB/proc/net/bonding\fR that some legacy software expects to
 exist.  This option should only be used if such legacy software is
@@ -125,9 +125,9 @@ their controller connections and reconnect.
 .IP
 This command might be useful for debugging OpenFlow controller issues.
 .
-.IP "\fBbridge/dump-flows\fR \fIbridge\fR"
+.IP "\fBbridge/dump\-flows\fR \fIbridge\fR"
 Lists all flows in \fIbridge\fR, including those normally hidden to
-commands such as \fBovs-ofctl dump-flows\fR.  Flows set up by mechanisms
+commands such as \fBovs\-ofctl dump\-flows\fR.  Flows set up by mechanisms
 such as in-band control and fail-open are hidden from the controller
 since it is not allowed to modify or override them.
 .SS "BOND COMMANDS"
@@ -160,14 +160,14 @@ cause the MAC hash to be shifted to a new slave in the usual
 manner.
 .IP
 A MAC hash cannot be migrated to a disabled slave.
-.IP "\fBbond/set-active-slave\fR \fIport\fR \fIslave\fR"
+.IP "\fBbond/set\-active\-slave\fR \fIport\fR \fIslave\fR"
 Sets \fIslave\fR as the active slave on \fIport\fR.  \fIslave\fR must
 currently be enabled.
 .IP
 The setting is not permanent: a new active slave will be selected
 if \fIslave\fR becomes disabled.
-.IP "\fBbond/enable-slave\fR \fIport\fR \fIslave\fR"
-.IQ "\fBbond/disable-slave\fR \fIport\fR \fIslave\fR"
+.IP "\fBbond/enable\-slave\fR \fIport\fR \fIslave\fR"
+.IQ "\fBbond/disable\-slave\fR \fIport\fR \fIslave\fR"
 Enables (or disables) \fIslave\fR on the given bond \fIport\fR, skipping any
 updelay (or downdelay).
 .IP

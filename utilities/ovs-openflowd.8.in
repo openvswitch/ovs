@@ -39,7 +39,7 @@ any of the network devices added to the datapath with \fBovs\-dpctl
 add\-if\fR in its communication with the controller.
 .IP
 To use \fBovs\-openflowd\fR in a network with out-of-band control, specify
-\fB--out-of-band\fR on the \fBovs\-openflowd\fR command line.  The control
+\fB\-\-out\-of\-band\fR on the \fBovs\-openflowd\fR command line.  The control
 network must be configured separately, before or after \fBovs\-openflowd\fR
 is started.
 .
@@ -82,27 +82,27 @@ address range 192.168.0.20 through 192.168.0.30 to OpenFlow switches
 that follow the switch protocol and addresses 192.168.0.1 through
 192.168.0.10 to all other DHCP clients:
 .IP
-default-lease-time 600;
+default\-lease\-time 600;
 .br
-max-lease-time 7200;
+max\-lease\-time 7200;
 .br
 option space openflow;
 .br
-option openflow.controller-vconn code 1 = text;
+option openflow.controller\-vconn code 1 = text;
 .br
-option openflow.pki-uri code 2 = text;
+option openflow.pki\-uri code 2 = text;
 .br
 class "OpenFlow" {
 .br
-  match if option vendor-class-identifier = "OpenFlow";
+  match if option vendor\-class\-identifier = "OpenFlow";
 .br
-  vendor-option-space openflow;
+  vendor\-option\-space openflow;
 .br
-  option openflow.controller-vconn "tcp:192.168.0.10";
+  option openflow.controller\-vconn "tcp:192.168.0.10";
 .br
-  option openflow.pki-uri "http://192.168.0.10/openflow/pki";
+  option openflow.pki\-uri "http://192.168.0.10/openflow/pki";
 .br
-  option vendor-class-identifier "OpenFlow";
+  option vendor\-class\-identifier "OpenFlow";
 .br
 }
 .br
@@ -157,7 +157,7 @@ the local port network device, and start the DHCP client afterward.
 .SH OPTIONS
 .SS "OpenFlow Options"
 .TP
-\fB--datapath-id=\fIdpid\fR
+\fB\-\-datapath\-id=\fIdpid\fR
 Sets \fIdpid\fR, which must consist of exactly 16 hexadecimal digits,
 as the datapath ID that the switch will use to identify itself to
 OpenFlow controllers.
@@ -167,27 +167,27 @@ Ethernet address of the datapath's local port (which is typically
 randomly generated) in the lower 48 bits and zeros in the upper 16.
 .
 .TP
-\fB--mfr-desc=\fIdesc\fR
+\fB\-\-mfr\-desc=\fIdesc\fR
 Set the description of the switch's manufacturer to \fIdesc\fR, which
 may contain up to 255 ASCII characters.
 .
 .TP
-\fB--hw-desc=\fIdesc\fR
+\fB\-\-hw\-desc=\fIdesc\fR
 Set the description of the switch's hardware revision to \fIdesc\fR, which
 may contain up to 255 ASCII characters.
 .
 .TP
-\fB--sw-desc=\fIdesc\fR
+\fB\-\-sw\-desc=\fIdesc\fR
 Set the description of the switch's software revision to \fIdesc\fR, which
 may contain up to 255 ASCII characters.
 .
 .TP
-\fB--serial-desc=\fIdesc\fR
+\fB\-\-serial\-desc=\fIdesc\fR
 Set the description of the switch's serial number to \fIdesc\fR, which
 may contain up to 31 ASCII characters.
 .
 .TP
-\fB--dp-desc=\fIdesc\fR
+\fB\-\-dp\-desc=\fIdesc\fR
 Set the description of the datapath to \fIdesc\fR, which may contain up to
 255 ASCII characters.  Note that this field is intended for debugging
 purposes and is not guaranteed to be unique and should not be used as
@@ -195,7 +195,7 @@ the primary identifier of the datapath.
 .
 .SS "Controller Discovery Options"
 .TP
-\fB--accept-vconn=\fIregex\fR
+\fB\-\-accept\-vconn=\fIregex\fR
 When \fBovs\-openflowd\fR performs controller discovery (see \fBContacting
 the Controller\fR, above, for more information about controller
 discovery), it validates the controller location obtained via DHCP
@@ -204,8 +204,8 @@ names match the regular expression will be accepted.
 .IP
 The default regular expression is \fBssl:.*\fR (meaning that only SSL
 controller connections will be accepted) when any of the SSL
-configuration options \fB--private-key\fR, \fB--certificate\fR, or
-\fB--ca-cert\fR is specified.  The default is \fB^tcp:.*\fR otherwise
+configuration options \fB\-\-private\-key\fR, \fB\-\-certificate\fR, or
+\fB\-\-ca\-cert\fR is specified.  The default is \fB^tcp:.*\fR otherwise
 (meaning that only TCP controller connections will be accepted).
 .IP
 The \fIregex\fR is implicitly anchored at the beginning of the
@@ -214,7 +214,7 @@ controller location string, as if it begins with \fB^\fR.
 When controller discovery is not performed, this option has no effect.
 .
 .TP
-\fB--no-resolv-conf\fR
+\fB\-\-no\-resolv\-conf\fR
 When \fBovs\-openflowd\fR performs controller discovery (see \fBContacting
 the Controller\fR, above, for more information about controller
 discovery), by default it overwrites the system's
@@ -233,7 +233,7 @@ When controller discovery is not performed, this option has no effect.
 .
 .SS "Networking Options"
 .TP
-\fB--datapath-id=\fIdpid\fR
+\fB\-\-datapath\-id=\fIdpid\fR
 Sets \fIdpid\fR, which must consist of exactly 16 hexadecimal digits,
 as the datapath ID that the switch will use to identify itself to the
 OpenFlow controller.
@@ -243,7 +243,7 @@ Ethernet address of the datapath's local port (which is typically
 randomly generated) in the lower 48 bits and zeros in the upper 16.
 .
 .TP
-\fB--fail=\fR[\fBstandalone\fR|\fBsecure\fR]
+\fB\-\-fail=\fR[\fBstandalone\fR|\fBsecure\fR]
 The controller is, ordinarily, responsible for setting up all flows on
 the OpenFlow switch.  Thus, if the connection to the controller fails,
 no new network connections can be set up.  If the connection to the
@@ -264,7 +264,7 @@ If this option is set to \fBsecure\fR, then \fBovs\-openflowd\fR will not
 set up flows on its own when the controller connection fails.
 .
 .TP
-\fB--inactivity-probe=\fIsecs\fR
+\fB\-\-inactivity\-probe=\fIsecs\fR
 When the OpenFlow switch is connected to the controller, the
 switch waits for a message to be received from the controller for
 \fIsecs\fR seconds before it sends a inactivity probe to the
@@ -278,7 +278,7 @@ interval also changes the interval before entering fail-open mode (see
 above).
 .
 .TP
-\fB--max-idle=\fIsecs\fR|\fBpermanent\fR
+\fB\-\-max\-idle=\fIsecs\fR|\fBpermanent\fR
 Sets \fIsecs\fR as the number of seconds that a flow set up by the
 OpenFlow switch will remain in the switch's flow table without any
 matching packets being seen.  If \fBpermanent\fR is specified, which
@@ -291,7 +291,7 @@ OpenFlow switch sets up itself:
 .
 .RS
 .IP \(bu
-When \fB--fail=open\fR is specified, flows set up when the
+When \fB\-\-fail=open\fR is specified, flows set up when the
 switch has not been able to contact the controller for the configured
 fail-open delay.
 .
@@ -302,11 +302,11 @@ more information about in-band control).
 .RE
 .
 .IP
-As a result, when both \fB--fail=secure\fR and \fB--out-of-band\fR are
+As a result, when both \fB\-\-fail=secure\fR and \fB\-\-out\-of\-band\fR are
 specified, this option has no effect.
 .
 .TP
-\fB--max-backoff=\fIsecs\fR
+\fB\-\-max\-backoff=\fIsecs\fR
 Sets the maximum time between attempts to connect to the controller to
 \fIsecs\fR, which must be at least 1.  The actual interval between
 connection attempts starts at 1 second and doubles on each failing
@@ -314,7 +314,7 @@ attempt until it reaches the maximum.  The default maximum backoff
 time is 8 seconds.
 .
 .TP
-\fB-l\fR, \fB--listen=\fImethod\fR
+\fB\-l\fR, \fB\-\-listen=\fImethod\fR
 By default, the switch listens for OpenFlow management connections on a
 Unix domain socket named \fB@RUNDIR@/\fIdatapath\fB.mgmt\fR.  This socket 
 can be used to perform local OpenFlow monitoring and administration with
@@ -331,27 +331,27 @@ used, no listeners will be created.
 .RE
 .
 .TP
-\fB--snoop=\fImethod\fR
+\fB\-\-snoop=\fImethod\fR
 Configures the switch to additionally listen for incoming OpenFlow
 connections for controller connection snooping.  The \fImethod\fR must
 be given as one of the passive OpenFlow connection methods listed
-under the \fB--listen\fR option above.  This option may be specified
+under the \fB\-\-listen\fR option above.  This option may be specified
 multiple times to listen to multiple connection methods.
 .IP
 If \fBovs\-ofctl monitor\fR is used to connect to \fImethod\fR specified on
-\fB--snoop\fR, it will display all the OpenFlow messages traveling
+\fB\-\-snoop\fR, it will display all the OpenFlow messages traveling
 between the switch and its controller on the primary OpenFlow
 connection.  This can be useful for debugging switch and controller
 problems.
 .
 .TP
-\fB--in-band\fR, \fB--out-of-band\fR
+\fB\-\-in\-band\fR, \fB\-\-out\-of\-band\fR
 Configures \fBovs\-openflowd\fR to operate in in-band or out-of-band control
 mode (see \fBContacting the Controller\fR above).  When neither option
 is given, the default is in-band control.
 .
 .TP
-\fB--netflow=\fIip\fB:\fIport\fR
+\fB\-\-netflow=\fIip\fB:\fIport\fR
 Configures the given UDP \fIport\fR on the specified IP \fIip\fR as
 a recipient of NetFlow messages for expired flows.  The \fIip\fR must
 be specified numerically, not as a DNS name.
@@ -367,25 +367,25 @@ OpenFlow controller for flow-setup processing.  This feature prevents
 a single OpenFlow switch from overwhelming a controller.
 .
 .TP
-\fB--rate-limit\fR[\fB=\fIrate\fR]
+\fB\-\-rate\-limit\fR[\fB=\fIrate\fR]
 .
 Limits the maximum rate at which packets will be forwarded to the
 OpenFlow controller to \fIrate\fR packets per second.  If \fIrate\fR
 is not specified then the default of 1,000 packets per second is used.
 .IP
-If \fB--rate-limit\fR is not used, then the switch does not limit the
+If \fB\-\-rate\-limit\fR is not used, then the switch does not limit the
 rate at which packets are forwarded to the controller.
 .
 .TP
-\fB--burst-limit=\fIburst\fR
+\fB\-\-burst\-limit=\fIburst\fR
 .
 Sets the maximum number of unused packet credits that the switch will
 allow to accumulate during time in which no packets are being
 forwarded to the OpenFlow controller to \fIburst\fR (measured in
 packets).  The default \fIburst\fR is one-quarter of the \fIrate\fR
-specified on \fB--rate-limit\fR.
+specified on \fB\-\-rate\-limit\fR.
 .
-This option takes effect only when \fB--rate-limit\fR is also specified.
+This option takes effect only when \fB\-\-rate\-limit\fR is also specified.
 .
 .SS "Datapath Options"
 .

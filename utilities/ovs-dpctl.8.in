@@ -77,7 +77,7 @@ Removes each \fInetdev\fR from the list of network devices datapath
 \fIdp\fR monitors.
 .
 .TP
-\fBdump-dps\fR
+\fBdump\-dps\fR
 Prints the name of each configured datapath on a separate line.
 .
 .TP
@@ -90,7 +90,7 @@ If one or more datapaths are specified, information on only those
 datapaths are displayed.  Otherwise, \fBovs\-dpctl\fR displays information
 about all configured datapaths.
 .
-.IP "\fBdump-flows \fIdp\fR"
+.IP "\fBdump\-flows \fIdp\fR"
 Prints to the console all flow entries in datapath \fIdp\fR's
 flow table.
 .IP
@@ -98,15 +98,15 @@ This command is primarily useful for debugging Open vSwitch.  The flow
 table entries that it displays are not
 OpenFlow flow entries.  Instead, they are different and considerably
 simpler flows maintained by the Open vSwitch kernel module.
-.IP "\fBdel-flows \fIdp\fR"
+.IP "\fBdel\-flows \fIdp\fR"
 Deletes all flow entries from datapath \fIdp\fR's flow table.
 .IP
 This command is primarily useful for debugging Open vSwitch.  As
-discussed in \fBdump-flows\fR, these entries are
+discussed in \fBdump\-flows\fR, these entries are
 not OpenFlow flow entries.  By deleting them, the process that set them
 up may be confused about their disappearance.
 .
-.IP "\fBdump-groups \fIdp\fR"
+.IP "\fBdump\-groups \fIdp\fR"
 Prints to the console the sets of port groups maintained by datapath
 \fIdp\fR.  Ordinarily there are at least 2 port groups in a datapath
 that \fBovs\-openflowd\fR or \fBovs\-vswitch\fR is controlling: group
@@ -118,7 +118,7 @@ This command is primarily useful for debugging Open vSwitch.  OpenFlow
 does not have a concept of port groups.
 .SH OPTIONS
 .TP
-\fB-t\fR, \fB--timeout=\fIsecs\fR
+\fB\-t\fR, \fB\-\-timeout=\fIsecs\fR
 Limits \fBovs\-dpctl\fR runtime to approximately \fIsecs\fR seconds.  If
 the timeout expires, \fBovs\-dpctl\fR will exit with a \fBSIGALRM\fR
 signal.

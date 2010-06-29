@@ -18,5 +18,5 @@ the server to send the CA certificate, but
 \fBovs\-controller\fR(8) can be configured to do so with the
 \fB\-\-peer\-ca\-cert\fR option.
 .IP
-This option is mutually exclusive with \fB-C\fR and
+This option is mutually exclusive with \fB\-C\fR and
 \fB\-\-ca\-cert\fR.

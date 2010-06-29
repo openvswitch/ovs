@@ -7,7 +7,7 @@ Sets the logging level for \fImodule\fR in \fIfacility\fR to
 .RS
 .IP \(bu
 \fImodule\fR may be any valid module name (as displayed by the
-\fB--list\fR action on \fBovs\-appctl\fR(8)), or the special name
+\fB\-\-list\fR action on \fBovs\-appctl\fR(8)), or the special name
 \fBANY\fR to set the logging levels for all modules.
 .
 .IP \(bu
@@ -17,7 +17,7 @@ respectively, or \fBANY\fR to set the logging levels for both
 facilities.  If it is omitted, \fIfacility\fR defaults to \fBANY\fR.
 .IP
 The log level for the \fBfile\fR facility has no effect unless
-\fB\*(PN\fR was invoked with the \fB--log-file\fR option.
+\fB\*(PN\fR was invoked with the \fB\-\-log\-file\fR option.
 .IP \(bu 
 \fIlevel\fR must be one of \fBemer\fR, \fBerr\fR, \fBwarn\fR,
 \fBinfo\fR, or
@@ -36,4 +36,4 @@ Causes \fB\*(PN\fR to close and reopen its log file.  (This is useful
 after rotating log files, to cause a new log file to be used.)
 .IP
 This has no effect unless \fB\*(PN\fR was invoked with the
-\fB--log-file\fR option.
+\fB\-\-log\-file\fR option.

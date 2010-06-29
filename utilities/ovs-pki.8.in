@@ -20,7 +20,7 @@ Stand\-alone commands with their arguments:
 .br
 \fBovs\-pki\fR \fBfingerprint\fR \fIFILE\fR
 .br
-\fBovs\-pki\fR \fBself-sign\fR \fINAME\fR
+\fBovs\-pki\fR \fBself\-sign\fR \fINAME\fR
 .sp
 The following additional commands manage an online PKI:
 .br
@@ -182,9 +182,9 @@ of the certificate; otherwise, it is the SHA\-1 digest of the entire
 file.
 
 .TP
-\fBself-sign\fR \fINAME\fR
+\fBself\-sign\fR \fINAME\fR
 Signs the certificate request named \fINAME\fB\-req.pem\fR using the
-private key \fINAME\fB-privkey.pem\fR, producing a self-signed
+private key \fINAME\fB\-privkey.pem\fR, producing a self-signed
 certificate named \fINAME\fB\-cert.pem\fR.  The input files should have
 been produced with \fBovs\-pki req\fR.
 

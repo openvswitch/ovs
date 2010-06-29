@@ -11,12 +11,12 @@
 ovs\-appctl \- utility for configuring running Open vSwitch daemons
 .
 .SH SYNOPSIS
-\fBovs\-appctl\fR [\fB--target=\fItarget\fR | \fB-t\fR \fItarget\fR]
+\fBovs\-appctl\fR [\fB\-\-target=\fItarget\fR | \fB\-t\fR \fItarget\fR]
 \fIcommand \fR[\fIarg\fR...]
 .br
-\fBovs\-appctl\fR --help
+\fBovs\-appctl\fR \-\-help
 .br
-\fBovs\-appctl\fR --version
+\fBovs\-appctl\fR \-\-version
 .SH DESCRIPTION
 Open vSwitch daemons accept certain commands at runtime to control
 their behavior and query their settings.  Every daemon accepts the
@@ -40,8 +40,8 @@ on which an Open vSwitch daemon is listening for control channel
 connections.  By default, each daemon listens on a Unix domain socket
 named \fB@RUNDIR@/\fIprogram\fB.\fIpid\fB.ctl\fR, where \fIprogram\fR
 is the program's name and \fIpid\fR is its process ID.  For example,
-if \fBovs-vswitchd\fR has PID 123, it would listen on
-\fB@RUNDIR@/ovs-vswitchd.123.ctl\fR.
+if \fBovs\-vswitchd\fR has PID 123, it would listen on
+\fB@RUNDIR@/ovs\-vswitchd.123.ctl\fR.
 .IP
 Otherwise, \fBovs\-appctl\fR looks for a pidfile, that is, a file
 whose contents are the process ID of a running process as a decimal
@@ -64,7 +64,7 @@ Lists the known logging modules and their current levels.
 .IP "\fBvlog/set\fR \fImodule\fR[\fB:\fIfacility\fR[\fB:\fIlevel\fR]]"
 Sets the logging level for \fImodule\fR in \fIfacility\fR to
 \fIlevel\fR.  The \fImodule\fR may be any valid module name (as
-displayed by the \fB--list\fR option) or the special name \fBANY\fR to
+displayed by the \fB\-\-list\fR option) or the special name \fBANY\fR to
 set the logging levels for all modules.  The \fIfacility\fR may be
 \fBsyslog\fR or \fBconsole\fR to set the levels for logging to the
 system log or to the console, respectively, or \fBANY\fR to set the
@@ -83,14 +83,14 @@ expanded as follows:
 .
 .RS
 .IP \fB%A\fR
-The name of the application logging the message, e.g. \fBovs-vswitchd\fR.
+The name of the application logging the message, e.g. \fBovs\-vswitchd\fR.
 .
 .IP \fB%c\fR
-The name of the module (as shown by \fBovs\-appctl --list\fR) logging
+The name of the module (as shown by \fBovs\-appctl \-\-list\fR) logging
 the message.
 .
 .IP \fB%d\fR
-The current date and time in ISO 8601 format (YYYY-MM-DD HH:MM:SS).
+The current date and time in ISO 8601 format (YYYY\-MM\-DD HH:MM:SS).
 .
 .IP \fB%d{\fIformat\fB}\fR
 The current date and time in the specified \fIformat\fR, which takes
@@ -126,7 +126,7 @@ A few options may appear between the \fB%\fR and the format specifier
 character, in this order:
 .
 .RS
-.IP \fB-\fR
+.IP \fB\-\fR
 Left justify the escape's expansion within its field width.  Right
 justification is the default.
 .
@@ -150,7 +150,7 @@ is useful after rotating log files, to cause a new log file to be
 used.)
 .IP
 This has no effect if the target application was not invoked with the
-\fB--log-file\fR option.
+\fB\-\-log\-file\fR option.
 .
 .SH OPTIONS
 .

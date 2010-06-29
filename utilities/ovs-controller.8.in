@@ -21,7 +21,7 @@ one or more of the following OpenFlow connection methods:
 .RE
 .
 .SH OPTIONS
-.IP "\fB-n\fR, \fB--noflow\fR"
+.IP "\fB\-n\fR, \fB\-\-noflow\fR"
 By default, \fBovs\-controller\fR sets up a flow in each OpenFlow switch
 whenever it receives a packet whose destination is known due through
 MAC learning.  This option disables flow setup, so that every packet
@@ -31,7 +31,7 @@ This option is most useful for debugging.  It reduces switching
 performance, so it should not be used in production.
 .
 .TP
-\fB--max-idle=\fIsecs\fR|\fBpermanent\fR
+\fB\-\-max\-idle=\fIsecs\fR|\fBpermanent\fR
 Sets \fIsecs\fR as the number of seconds that a flow set up by the
 controller will remain in the switch's flow table without any matching
 packets being seen.  If \fBpermanent\fR is specified, which is not
@@ -40,33 +40,33 @@ recommended, flows will never expire.  The default is 60 seconds.
 This option affects only flows set up by the OpenFlow controller.  In
 some configurations, the switch can set up some flows
 on its own.  To set the idle time for those flows, pass
-\fB--max-idle\fR to \fBovs\-openflowd\fR (on the switch).
+\fB\-\-max\-idle\fR to \fBovs\-openflowd\fR (on the switch).
 .IP
-This option has no effect when \fB-n\fR (or \fB--noflow\fR) is in use
+This option has no effect when \fB\-n\fR (or \fB\-\-noflow\fR) is in use
 (because the controller does not set up flows in that case).
 .
-.IP "\fB-H\fR, \fB--hub\fR"
+.IP "\fB\-H\fR, \fB\-\-hub\fR"
 By default, the controller acts as an L2 MAC-learning switch.  This
 option changes its behavior to that of a hub that floods packets on
 all but the incoming port.
 .IP
-If \fB-H\fR (or \fB--hub\fR) and \fB-n\fR (or \fB--noflow\fR) are used
+If \fB\-H\fR (or \fB\-\-hub\fR) and \fB\-n\fR (or \fB\-\-noflow\fR) are used
 together, then the cumulative effect is that every packet passes
 through the controller and every packet is flooded.
 .IP
 This option is most useful for debugging.  It reduces switching
 performance, so it should not be used in production.
 .
-.IP "\fB-w\fR, \fB--wildcard\fR"
+.IP "\fB\-w\fR, \fB\-\-wildcard\fR"
 By default, \fBovs\-controller\fR sets up exact-match flows.  This
 option allows it to set up wildcarded flows, which may reduce
 flow-setup latency by causing less traffic to be sent up to the
 controller.
 .IP
-This option has no effect when \fB-n\fR (or \fB--noflow\fR) is in use
+This option has no effect when \fB\-n\fR (or \fB\-\-noflow\fR) is in use
 (because the controller does not set up flows in that case).
 .
-.IP "\fB-N\fR, \fB--normal\fR"
+.IP "\fB\-N\fR, \fB\-\-normal\fR"
 By default, \fBovs\-controller\fR directs packets to a particular port
 or floods them.  This option causes it to direct non-flooded packets
 to the OpenFlow \fBOFPP_NORMAL\fR port.  This allows the switch itself
@@ -74,7 +74,7 @@ to make decisions about packet destinations.  Support for
 \fBOFPP_NORMAL\fR is optional in OpenFlow, so this option may not well
 with some non-Open vSwitch switches.
 .
-.IP "\fB--mute\fR"
+.IP "\fB\-\-mute\fR"
 Prevents ovs\-controller from replying to any OpenFlow messages sent
 to it by switches.
 .IP
