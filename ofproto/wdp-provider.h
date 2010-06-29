@@ -410,6 +410,10 @@ struct wdp_class {
      * when it is called, it should return EAGAIN without blocking. */
     int (*recv)(struct wdp *wdp, struct wdp_packet *packet);
 
+    /* Discards any queued messages that otherwise would be received by the
+     * 'recv' member function for 'wdp'. */
+    int (*recv_purge)(struct wdp *wdp);
+
     /* Arranges for the poll loop to wake up when 'wdp' has a message queued
      * to be received with the recv member function. */
     void (*recv_wait)(struct wdp *wdp);

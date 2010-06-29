@@ -1960,6 +1960,59 @@ wx_recv(struct wdp *wdp, struct wdp_packet *packet)
 }
 
 static void
+wx_recv_purge_queue__(struct wx *wx, int max, int xflow_listen_mask,
+                      int *errorp)
+{
+    int error;
+
+    error = xfif_recv_set_mask(wx->xfif, xflow_listen_mask);
+    if (!error) {
+        struct ofpbuf *buf;
+
+        while (max > 0 && (error = xfif_recv(wx->xfif, &buf)) == 0) {
+            ofpbuf_delete(buf);
+            max--;
+        }
+    }
+    if (error && error != EAGAIN) {
+        *errorp = error;
+    }
+}
+
+static int
+wx_recv_purge(struct wdp *wdp)
+{
+    struct wx *wx = wx_cast(wdp);
+    struct xflow_stats xflow_stats;
+    int xflow_listen_mask;
+    int retval, error;
+
+    xfif_get_xf_stats(wx->xfif, &xflow_stats);
+
+    error = xfif_recv_get_mask(wx->xfif, &xflow_listen_mask);
+    if (error || !(xflow_listen_mask & XFLOWL_ALL)) {
+        return error;
+    }
+
+    if (xflow_listen_mask & XFLOWL_MISS) {
+        wx_recv_purge_queue__(wx, xflow_stats.max_miss_queue, XFLOWL_MISS,
+                              &error);
+    }
+    if (xflow_listen_mask & XFLOWL_ACTION) {
+        wx_recv_purge_queue__(wx, xflow_stats.max_action_queue, XFLOWL_ACTION,
+                              &error);
+    }
+    if (xflow_listen_mask & XFLOWL_SFLOW) {
+        wx_recv_purge_queue__(wx, xflow_stats.max_sflow_queue, XFLOWL_SFLOW,
+                              &error);
+    }
+
+    retval = xfif_recv_set_mask(wx->xfif, xflow_listen_mask);
+    return retval ? retval : error;
+}
+
+
+static void
 wx_recv_wait(struct wdp *wdp)
 {
     struct wx *wx = wx_cast(wdp);
@@ -2299,6 +2352,7 @@ wdp_xflow_register(void)
         wx_get_sflow_probability,
         wx_set_sflow_probability,
         wx_recv,
+        wx_recv_purge,
         wx_recv_wait,
     };
 

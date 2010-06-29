@@ -935,27 +935,8 @@ wdp_recv(struct wdp *wdp, struct wdp_packet *packet)
 int
 wdp_recv_purge(struct wdp *wdp)
 {
-    struct wdp_stats stats;
-    unsigned int i;
-    int error;
-
     COVERAGE_INC(wdp_purge);
-
-    error = wdp_get_wdp_stats(wdp, &stats);
-    if (error) {
-        return error;
-    }
-
-    for (i = 0; i < stats.max_miss_queue + stats.max_action_queue + stats.max_sflow_queue; i++) {
-        struct wdp_packet packet;
-
-        error = wdp_recv(wdp, &packet);
-        if (error) {
-            return error == EAGAIN ? 0 : error;
-        }
-        ofpbuf_delete(packet.payload);
-    }
-    return 0;
+    return wdp->wdp_class->recv_purge(wdp);
 }
 
 /* Arranges for the poll loop to wake up when 'wdp' has a message queued to be
