@@ -277,7 +277,7 @@ json_real_create(double real)
 void
 json_object_put(struct json *json, const char *name, struct json *value)
 {
-    shash_add(json->u.object, name, value);
+    json_destroy(shash_replace(json->u.object, name, value));
 }
 
 void
