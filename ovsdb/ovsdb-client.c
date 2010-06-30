@@ -936,14 +936,30 @@ do_monitor(int argc, char *argv[])
     }
 
     if (argc >= 6 && *argv[5] != '\0') {
+        bool initial, insert, delete, modify;
         char *save_ptr = NULL;
         char *token;
 
-        select = json_object_create();
+        initial = insert = delete = modify = false;
+
         for (token = strtok_r(argv[5], ",", &save_ptr); token != NULL;
              token = strtok_r(NULL, ",", &save_ptr)) {
-            json_object_put(select, token, json_boolean_create(true));
+            if (!strcmp(token, "initial")) {
+                initial = true;
+            } else if (!strcmp(token, "insert")) {
+                insert = true;
+            } else if (!strcmp(token, "delete")) {
+                delete = true;
+            } else if (!strcmp(token, "modify")) {
+                modify = true;
+            }
         }
+
+        select = json_object_create();
+        json_object_put(select, "initial", json_boolean_create(initial));
+        json_object_put(select, "insert", json_boolean_create(insert));
+        json_object_put(select, "delete", json_boolean_create(delete));
+        json_object_put(select, "modify", json_boolean_create(modify));
     } else {
         select = NULL;
     }
