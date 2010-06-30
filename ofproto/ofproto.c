@@ -1494,12 +1494,12 @@ handle_port_mod(struct ofproto *p, struct ofconn *ofconn,
                                    | OFPPC_NO_PACKET_IN);
         new_config = (port.opp.config & ~mask) | (ntohl(opm->config) & mask);
         if (new_config != port.opp.config) {
-            wdp_port_set_config(p->wdp, ntohs(opm->port_no), new_config);
+            error = wdp_port_set_config(p->wdp, ntohs(opm->port_no),
+                                        new_config);
         }
         if (opm->advertise) {
             netdev_set_advertisements(port.netdev, ntohl(opm->advertise));
         }
-        error = 0;
     }
     wdp_port_free(&port);
 

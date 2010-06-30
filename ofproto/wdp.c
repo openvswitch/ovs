@@ -724,6 +724,10 @@ wdp_port_list(const struct wdp *wdp,
     return error;
 }
 
+/* Updates the configuration for the port number 'port_no' within 'wdp' to
+ * 'config', which is a set of OpenFlow OFPPC_* constants in host byte order.
+ * Returns 0 if successful, otherwise an OpenFlow error code constructed with
+ * ofp_mkerr().  */
 int
 wdp_port_set_config(struct wdp *wdp, uint16_t port_no, uint32_t config)
 {
