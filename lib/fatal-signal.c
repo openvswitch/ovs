@@ -215,9 +215,7 @@ fatal_signal_add_file_to_unlink(const char *file)
         fatal_signal_add_hook(unlink_files, cancel_files, NULL, true);
     }
 
-    if (!shash_find(&files, file)) {
-        shash_add(&files, file, NULL);
-    }
+    shash_add_once(&files, file, NULL);
 }
 
 /* Unregisters 'file' from being unlinked when the program terminates via

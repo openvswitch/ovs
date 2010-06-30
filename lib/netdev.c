@@ -1483,9 +1483,7 @@ netdev_monitor_cb(struct netdev_notifier *notifier)
 {
     struct netdev_monitor *monitor = notifier->aux;
     const char *name = netdev_get_name(notifier->netdev);
-    if (!shash_find(&monitor->changed_netdevs, name)) {
-        shash_add(&monitor->changed_netdevs, name, NULL);
-    }
+    shash_add_once(&monitor->changed_netdevs, name, NULL);
 }
 
 /* Attempts to add 'netdev' as a netdev monitored by 'monitor'.  Returns 0 if

@@ -645,9 +645,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         shash_init(&cur_ifaces);
         for (i = 0; i < n_dpif_ports; i++) {
             const char *name = dpif_ports[i].devname;
-            if (!shash_find(&cur_ifaces, name)) {
-                shash_add(&cur_ifaces, name, NULL);
-            }
+            shash_add_once(&cur_ifaces, name, NULL);
         }
         free(dpif_ports);
 

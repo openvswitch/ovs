@@ -157,15 +157,13 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class)
         struct ovsdb_idl_table *table = &idl->tables[i];
         size_t j;
 
-        assert(!shash_find(&idl->table_by_name, tc->name));
-        shash_add(&idl->table_by_name, tc->name, table);
+        shash_add_assert(&idl->table_by_name, tc->name, table);
         table->class = tc;
         shash_init(&table->columns);
         for (j = 0; j < tc->n_columns; j++) {
             const struct ovsdb_idl_column *column = &tc->columns[j];
 
-            assert(!shash_find(&table->columns, column->name));
-            shash_add(&table->columns, column->name, column);
+            shash_add_assert(&table->columns, column->name, column);
         }
         hmap_init(&table->rows);
         table->idl = idl;
