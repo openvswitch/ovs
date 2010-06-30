@@ -147,6 +147,26 @@ shash_add_assert(struct shash *sh, const char *name, const void *data)
     assert(added);
 }
 
+/* Searches for 'name' in 'sh'.  If it does not already exist, adds it along
+ * with 'data' and returns NULL.  If it does already exist, replaces its data
+ * by 'data' and returns the data that it formerly contained. */
+void *
+shash_replace(struct shash *sh, const char *name, const void *data)
+{
+    size_t hash = hash_name(name);
+    struct shash_node *node;
+
+    node = shash_find__(sh, name, hash);
+    if (!node) {
+        shash_add_nocopy__(sh, xstrdup(name), data, hash);
+        return NULL;
+    } else {
+        void *old_data = node->data;
+        node->data = (void *) data;
+        return old_data;
+    }
+}
+
 void
 shash_delete(struct shash *sh, struct shash_node *node)
 {

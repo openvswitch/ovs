@@ -55,6 +55,7 @@ struct shash_node *shash_add(struct shash *, const char *, const void *);
 struct shash_node *shash_add_nocopy(struct shash *, char *, const void *);
 bool shash_add_once(struct shash *, const char *, const void *);
 void shash_add_assert(struct shash *, const char *, const void *);
+void *shash_replace(struct shash *, const char *, const void *data);
 void shash_delete(struct shash *, struct shash_node *);
 struct shash_node *shash_find(const struct shash *, const char *);
 void *shash_find_data(const struct shash *, const char *);
