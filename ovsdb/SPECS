@@ -5,6 +5,19 @@
 Basic Notation
 --------------
 
+OVSDB uses JSON, as defined by RFC 4627, for its schema format and its
+wire protocol format.  The JSON implementation in Open vSwitch has the
+following limitations:
+
+     - Null bytes (\u0000) are not allowed in strings.
+
+     - Only UTF-8 encoding is supported.  (RFC 4627 also mentions
+       UTF-16BE, UTF-16LE, and UTF-32.)
+
+     - RFC 4627 says that names within a JSON object should be unique.
+       The Open vSwitch JSON parser discards all but the last value
+       for a name that is specified more than once.
+
 The descriptions below use the following shorthand notations for JSON
 values.  Additional notation is presented later.
 
