@@ -25,8 +25,7 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 \fBovsdb\-client \fR[\fIoptions\fR] \fBdump\fI server database\fR
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI server database table\fR
-[\fIcolumn\fR[\fB,\fIcolumn\fR]...]
-[\fIselect\fR[\fB,\fIselect\fR]...]
+[\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
 .br
 \fBovsdb\-client help\fR
 .IP "Output formatting options:"
@@ -79,22 +78,28 @@ operations, and prints the received reply on stdout.
 Connects to \fIserver\fR, retrieves all of the data in \fIdatabase\fR,
 and prints it on stdout as a series of tables.
 .
-.IP "\fBmonitor\fI server database table\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...] [\fIselect\fR[\fB,\fIselect\fR]...]"
+.IP "\fBmonitor\fI server database table\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
 Connects to \fIserver\fR and monitors the contents of \fItable\fR in
 \fIdatabase\fR.  By default, the initial contents of \fItable\fR are
 printed, followed by each change as it occurs.  If at least one
-\fIcolumn\fR is specified, only those columns are monitored.  If at
-least one \fIselect\fR is specified, they are interpreted as follows:
+\fIcolumn\fR is specified, only those columns are monitored.  The
+following \fIcolumn\fR names have special meanings:
 .RS
-.IP "\fBinitial\fR"
-Print the initial contents of the specified columns.
-.IP "\fBinsert\fR"
-Print newly inserted rows.
-.IP "\fBdelete\fR"
-Print deleted rows.
-.IP "\fBmodify\fR"
-Print old and new values of modified rows.
+.IP "\fB!initial\fR"
+Do not print the initial contents of the specified columns.
+.IP "\fB!insert\fR"
+Do not print newly inserted rows.
+.IP "\fB!delete\fR"
+Do not print deleted rows.
+.IP "\fB!modify\fR"
+Do not print modifications to existing rows.
 .RE
+.IP
+Multiple [\fIcolumn\fR[\fB,\fIcolumn\fR]...] groups may be specified
+as separate arguments, e.g. to apply different reporting parameters to
+each group.  Whether multiple groups or only a single group is
+specified, any given column may only be mentioned once on the command
+line.
 .IP
 If \fB\-\-detach\fR is used with \fBmonitor\fR, then \fBovsdb\-client\fR
 detaches after it has successfully received and printed the initial

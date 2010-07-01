@@ -188,9 +188,10 @@ usage(void)
            "\n  transact SERVER TRANSACTION\n"
            "    run TRANSACTION (a JSON array of operations) on SERVER\n"
            "    and print the results as JSON on stdout\n"
-           "\n  monitor SERVER DATABASE TABLE [COLUMN,...] [SELECT,...]\n"
-           "    monitor contents of (COLUMNs in) TABLE in DATABASE on SERVER\n"
-           "    Valid SELECTs are: initial, insert, delete, modify\n"
+           "\n  monitor SERVER DATABASE TABLE [COLUMN,...]...\n"
+           "    monitor contents of COLUMNs in TABLE in DATABASE on SERVER.\n"
+           "    COLUMNs may include !initial, !insert, !delete, !modify\n"
+           "    to avoid seeing the specified kinds of changes.\n"
            "\n  dump SERVER DATABASE\n"
            "    dump contents of DATABASE on SERVER to stdout\n",
            program_name, program_name);
@@ -879,6 +880,87 @@ monitor_print(struct json *table_updates,
 }
 
 static void
+add_column(const char *server, const struct ovsdb_column *column,
+           struct ovsdb_column_set *columns, struct json *columns_json)
+{
+    if (ovsdb_column_set_contains(columns, column->index)) {
+        ovs_fatal(0, "%s: column \"%s\" mentioned multiple times",
+                  server, column->name);
+    }
+    ovsdb_column_set_add(columns, column);
+    json_array_add(columns_json, json_string_create(column->name));
+}
+
+static struct json *
+parse_monitor_columns(char *arg, const char *server, const char *database,
+                      const struct ovsdb_table_schema *table,
+                      struct ovsdb_column_set *columns)
+{
+    bool initial, insert, delete, modify;
+    struct json *mr, *columns_json;
+    char *save_ptr = NULL;
+    char *token;
+
+    mr = json_object_create();
+    columns_json = json_array_create_empty();
+    json_object_put(mr, "columns", columns_json);
+
+    initial = insert = delete = modify = true;
+    for (token = strtok_r(arg, ",", &save_ptr); token != NULL;
+         token = strtok_r(NULL, ",", &save_ptr)) {
+        if (!strcmp(token, "!initial")) {
+            initial = false;
+        } else if (!strcmp(token, "!insert")) {
+            insert = false;
+        } else if (!strcmp(token, "!delete")) {
+            delete = false;
+        } else if (!strcmp(token, "!modify")) {
+            modify = false;
+        } else {
+            const struct ovsdb_column *column;
+
+            column = ovsdb_table_schema_get_column(table, token);
+            if (!column) {
+                ovs_fatal(0, "%s: table \"%s\" in %s does not have a "
+                          "column named \"%s\"",
+                          server, table->name, database, token);
+            }
+            add_column(server, column, columns, columns_json);
+        }
+    }
+
+    if (columns_json->u.array.n == 0) {
+        const struct shash_node **nodes;
+        size_t i, n;
+
+        n = shash_count(&table->columns);
+        nodes = shash_sort(&table->columns);
+        for (i = 0; i < n; i++) {
+            const struct ovsdb_column *column = nodes[i]->data;
+            if (column->index != OVSDB_COL_UUID
+                && column->index != OVSDB_COL_VERSION) {
+                add_column(server, column, columns, columns_json);
+            }
+        }
+        free(nodes);
+
+        add_column(server, ovsdb_table_schema_get_column(table,"_version"),
+                   columns, columns_json);
+    }
+
+    if (!initial || !insert || !delete || !modify) {
+        struct json *select = json_object_create();
+        json_object_put(select, "initial", json_boolean_create(initial));
+        json_object_put(select, "insert", json_boolean_create(insert));
+        json_object_put(select, "delete", json_boolean_create(delete));
+        json_object_put(select, "modify", json_boolean_create(modify));
+        json_object_put(mr, "select", select);
+    }
+
+    return mr;
+}
+
+static void
 do_monitor(int argc, char *argv[])
 {
     const char *server = argv[1];
@@ -889,8 +971,8 @@ do_monitor(int argc, char *argv[])
     struct ovsdb_schema *schema;
     struct jsonrpc_msg *request;
     struct jsonrpc *rpc;
-    struct json *select, *monitor, *monitor_request, *monitor_requests,
-        *request_id;
+    struct json *monitor, *monitor_request_array,
+        *monitor_requests, *request_id;
 
     rpc = open_jsonrpc(server);
 
@@ -901,78 +983,27 @@ do_monitor(int argc, char *argv[])
                   server, database, table_name);
     }
 
-    if (argc >= 5 && *argv[4] != '\0') {
-        char *save_ptr = NULL;
-        char *token;
+    monitor_request_array = json_array_create_empty();
+    if (argc > 4) {
+        int i;
 
-        for (token = strtok_r(argv[4], ",", &save_ptr); token != NULL;
-             token = strtok_r(NULL, ",", &save_ptr)) {
-            const struct ovsdb_column *column;
-            column = ovsdb_table_schema_get_column(table, token);
-            if (!column) {
-                ovs_fatal(0, "%s: table \"%s\" in %s does not have a "
-                          "column named \"%s\"",
-                          server, table_name, database, token);
-            }
-            ovsdb_column_set_add(&columns, column);
+        for (i = 4; i < argc; i++) {
+            json_array_add(
+                monitor_request_array,
+                parse_monitor_columns(argv[i], server, database, table,
+                                      &columns));
         }
     } else {
-        const struct shash_node **nodes;
-        size_t i, n;
-
-        n = shash_count(&table->columns);
-        nodes = shash_sort(&table->columns);
-        for (i = 0; i < n; i++) {
-            const struct ovsdb_column *column = nodes[i]->data;
-            if (column->index != OVSDB_COL_UUID
-                && column->index != OVSDB_COL_VERSION) {
-                ovsdb_column_set_add(&columns, column);
-            }
-        }
-        free(nodes);
-
-        ovsdb_column_set_add(&columns,
-                             ovsdb_table_schema_get_column(table, "_version"));
-    }
-
-    if (argc >= 6 && *argv[5] != '\0') {
-        bool initial, insert, delete, modify;
-        char *save_ptr = NULL;
-        char *token;
-
-        initial = insert = delete = modify = false;
-
-        for (token = strtok_r(argv[5], ",", &save_ptr); token != NULL;
-             token = strtok_r(NULL, ",", &save_ptr)) {
-            if (!strcmp(token, "initial")) {
-                initial = true;
-            } else if (!strcmp(token, "insert")) {
-                insert = true;
-            } else if (!strcmp(token, "delete")) {
-                delete = true;
-            } else if (!strcmp(token, "modify")) {
-                modify = true;
-            }
-        }
-
-        select = json_object_create();
-        json_object_put(select, "initial", json_boolean_create(initial));
-        json_object_put(select, "insert", json_boolean_create(insert));
-        json_object_put(select, "delete", json_boolean_create(delete));
-        json_object_put(select, "modify", json_boolean_create(modify));
-    } else {
-        select = NULL;
-    }
-
-    monitor_request = json_object_create();
-    json_object_put(monitor_request,
-                    "columns", ovsdb_column_set_to_json(&columns));
-    if (select) {
-        json_object_put(monitor_request, "select", select);
+        /* Allocate a writable empty string since parse_monitor_columns() is
+         * going to strtok() it and that's risky with literal "". */
+        char empty[] = "";
+        json_array_add(
+            monitor_request_array,
+            parse_monitor_columns(empty, server, database, table, &columns));
     }
 
     monitor_requests = json_object_create();
-    json_object_put(monitor_requests, table_name, monitor_request);
+    json_object_put(monitor_requests, table_name, monitor_request_array);
 
     monitor = json_array_create_3(json_string_create(database),
                                   json_null_create(), monitor_requests);
@@ -1266,7 +1297,7 @@ static const struct command all_commands[] = {
     { "list-tables", 2, 2, do_list_tables },
     { "list-columns", 2, 3, do_list_columns },
     { "transact", 2, 2, do_transact },
-    { "monitor", 3, 5, do_monitor },
+    { "monitor", 3, INT_MAX, do_monitor },
     { "dump", 2, 2, do_dump },
     { "help", 0, INT_MAX, do_help },
     { NULL, 0, 0, NULL },
