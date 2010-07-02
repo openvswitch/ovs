@@ -199,18 +199,9 @@ struct ofproto {
     size_t n_listeners;
     struct pvconn **snoops;
     size_t n_snoops;
-
-    /* Hooks for ovs-vswitchd. */
-    const struct ofhooks *ofhooks;
-    void *aux;
-
-    /* Used by default ofhooks. */
-    struct mac_learning *ml;
 };
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-static const struct ofhooks default_ofhooks;
 
 static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
@@ -285,17 +276,6 @@ ofproto_create(const char *datapath, const char *datapath_type,
     p->n_listeners = 0;
     p->snoops = NULL;
     p->n_snoops = 0;
-
-    /* Initialize hooks. */
-    if (ofhooks) {
-        p->ofhooks = ofhooks;
-        p->aux = aux;
-        p->ml = NULL;
-    } else {
-        p->ofhooks = &default_ofhooks;
-        p->aux = p;
-        p->ml = mac_learning_create();
-    }
 
     /* Pick final datapath ID. */
     p->datapath_id = pick_datapath_id(p);
@@ -833,8 +813,6 @@ ofproto_destroy(struct ofproto *p)
     }
     free(p->snoops);
 
-    mac_learning_destroy(p->ml);
-
     free(p->mfr_desc);
     free(p->hw_desc);
     free(p->sw_desc);
@@ -1009,13 +987,6 @@ ofproto_run1(struct ofproto *p)
 
     return 0;
 }
-
-struct revalidate_cbdata {
-    struct ofproto *ofproto;
-    bool revalidate_all;        /* Revalidate all exact-match rules? */
-    bool revalidate_subrules;   /* Revalidate all exact-match subrules? */
-    struct tag_set revalidate_set; /* Set of tags to revalidate. */
-};
 
 int
 ofproto_run2(struct ofproto *p OVS_UNUSED, bool revalidate_all OVS_UNUSED)
