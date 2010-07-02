@@ -296,17 +296,18 @@ mac_learning_flush(struct mac_learning *ml)
     }
 }
 
-void
-mac_learning_run(struct mac_learning *ml, struct tag_set *set)
+tag_type
+mac_learning_run(struct mac_learning *ml)
 {
     struct mac_entry *e;
+    tag_type tags = 0;
+
     while (get_lru(ml, &e) && time_now() >= e->expires) {
         COVERAGE_INC(mac_learning_expired);
-        if (set) {
-            tag_set_add(set, e->tag);
-        }
+        tags |= e->tag;
         free_mac_entry(ml, e);
     }
+    return tags;
 }
 
 void

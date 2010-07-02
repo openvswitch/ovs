@@ -151,7 +151,7 @@ lswitch_run(struct lswitch *sw, struct rconn *rconn)
     long long int now = time_msec();
 
     if (sw->ml) {
-        mac_learning_run(sw->ml, NULL);
+        mac_learning_run(sw->ml);
     }
 
     /* If we're waiting for more replies, keeping waiting for up to 10 s. */
