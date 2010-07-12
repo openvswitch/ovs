@@ -84,6 +84,31 @@ ovsdb_atom_init_default(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
     }
 }
 
+/* Returns a read-only atom of the given 'type' that has the default value for
+ * 'type'.  The caller must not modify or free the returned atom.
+ *
+ * See ovsdb_atom_init_default() for an explanation of the default value of an
+ * atom. */
+const union ovsdb_atom *
+ovsdb_atom_default(enum ovsdb_atomic_type type)
+{
+    static union ovsdb_atom default_atoms[OVSDB_N_TYPES];
+    static bool inited;
+
+    if (!inited) {
+        int i;
+
+        for (i = 0; i < OVSDB_N_TYPES; i++) {
+            if (i != OVSDB_TYPE_VOID) {
+                ovsdb_atom_init_default(&default_atoms[i], i);
+            }
+        }
+        inited = true;
+    }
+
+    assert(ovsdb_atomic_type_is_valid(type));
+    return &default_atoms[type];
+}
 
 /* Returns true if 'atom', which must have the given 'type', has the default
  * value for that type.
@@ -349,8 +374,11 @@ ovsdb_atom_from_json__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
  * returns an error and the contents of 'atom' are indeterminate.  The caller
  * is responsible for freeing the error or the atom that is returned.
  *
+ * Violations of constraints expressed by 'base' are treated as errors.
+ *
  * If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.  Refer to
- * ovsdb/SPECS information about this and other syntactical details. */
+ * ovsdb/SPECS for information about this, and for the syntax that this
+ * function accepts. */
 struct ovsdb_error *
 ovsdb_atom_from_json(union ovsdb_atom *atom,
                      const struct ovsdb_base_type *base,
@@ -372,7 +400,10 @@ ovsdb_atom_from_json(union ovsdb_atom *atom,
 }
 
 /* Converts 'atom', of the specified 'type', to JSON format, and returns the
- * JSON.  The caller is responsible for freeing the returned JSON. */
+ * JSON.  The caller is responsible for freeing the returned JSON.
+ *
+ * Refer to ovsdb/SPECS for the format of the JSON that this function
+ * produces. */
 struct json *
 ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
@@ -776,6 +807,39 @@ ovsdb_datum_init_default(struct ovsdb_datum *datum,
     datum->values = alloc_default_atoms(type->value.type, datum->n);
 }
 
+/* Returns a read-only datum of the given 'type' that has the default value for
+ * 'type'.  The caller must not modify or free the returned datum.
+ *
+ * See ovsdb_datum_init_default() for an explanation of the default value of a
+ * datum. */
+const struct ovsdb_datum *
+ovsdb_datum_default(const struct ovsdb_type *type)
+{
+    if (type->n_min == 0) {
+        static const struct ovsdb_datum empty;
+        return &empty;
+    } else if (type->n_min == 1) {
+        static struct ovsdb_datum default_data[OVSDB_N_TYPES][OVSDB_N_TYPES];
+        struct ovsdb_datum *d;
+        int kt = type->key.type;
+        int vt = type->value.type;
+
+        assert(ovsdb_type_is_valid(type));
+
+        d = &default_data[kt][vt];
+        if (!d->n) {
+            d->n = 1;
+            d->keys = (union ovsdb_atom *) ovsdb_atom_default(kt);
+            if (vt != OVSDB_TYPE_VOID) {
+                d->values = (union ovsdb_atom *) ovsdb_atom_default(vt);
+            }
+        }
+        return d;
+    } else {
+        NOT_REACHED();
+    }
+}
+
 /* Returns true if 'datum', which must have the given 'type', has the default
  * value for that type.
  *
@@ -979,6 +1043,16 @@ ovsdb_datum_check_constraints(const struct ovsdb_datum *datum,
     return NULL;
 }
 
+/* Parses 'json' as a datum of the type described by 'type'.  If successful,
+ * returns NULL and initializes 'datum' with the parsed datum.  On failure,
+ * returns an error and the contents of 'datum' are indeterminate.  The caller
+ * is responsible for freeing the error or the datum that is returned.
+ *
+ * Violations of constraints expressed by 'type' are treated as errors.
+ *
+ * If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.  Refer to
+ * ovsdb/SPECS for information about this, and for the syntax that this
+ * function accepts. */
 struct ovsdb_error *
 ovsdb_datum_from_json(struct ovsdb_datum *datum,
                       const struct ovsdb_type *type,
@@ -1069,12 +1143,18 @@ ovsdb_datum_from_json(struct ovsdb_datum *datum,
     }
 }
 
+
+/* Converts 'datum', of the specified 'type', to JSON format, and returns the
+ * JSON.  The caller is responsible for freeing the returned JSON.
+ *
+ * 'type' constraints on datum->n are ignored.
+ *
+ * Refer to ovsdb/SPECS for the format of the JSON that this function
+ * produces. */
 struct json *
 ovsdb_datum_to_json(const struct ovsdb_datum *datum,
                     const struct ovsdb_type *type)
 {
-    /* These tests somewhat tolerate a 'datum' that does not exactly match
-     * 'type', in particular a datum with 'n' not in the allowed range. */
     if (datum->n == 1 && !ovsdb_type_is_map(type)) {
         return ovsdb_atom_to_json(&datum->keys[0], type->key.type);
     } else if (type->value.type == OVSDB_TYPE_VOID) {

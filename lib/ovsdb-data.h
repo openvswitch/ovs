@@ -33,6 +33,7 @@ union ovsdb_atom {
 };
 
 void ovsdb_atom_init_default(union ovsdb_atom *, enum ovsdb_atomic_type);
+const union ovsdb_atom *ovsdb_atom_default(enum ovsdb_atomic_type);
 bool ovsdb_atom_is_default(const union ovsdb_atom *, enum ovsdb_atomic_type);
 void ovsdb_atom_clone(union ovsdb_atom *, const union ovsdb_atom *,
                       enum ovsdb_atomic_type);
@@ -128,6 +129,7 @@ void ovsdb_datum_init_empty(struct ovsdb_datum *);
 void ovsdb_datum_init_default(struct ovsdb_datum *, const struct ovsdb_type *);
 bool ovsdb_datum_is_default(const struct ovsdb_datum *,
                             const struct ovsdb_type *);
+const struct ovsdb_datum *ovsdb_datum_default(const struct ovsdb_type *);
 void ovsdb_datum_clone(struct ovsdb_datum *, const struct ovsdb_datum *,
                        const struct ovsdb_type *);
 void ovsdb_datum_destroy(struct ovsdb_datum *, const struct ovsdb_type *);
