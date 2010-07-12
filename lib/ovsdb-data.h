@@ -38,12 +38,22 @@ void ovsdb_atom_clone(union ovsdb_atom *, const union ovsdb_atom *,
                       enum ovsdb_atomic_type);
 void ovsdb_atom_swap(union ovsdb_atom *, union ovsdb_atom *);
 
+/* Returns false if ovsdb_atom_destroy() is a no-op when it is applied to an
+ * initialized atom of the given 'type', true if ovsdb_atom_destroy() actually
+ * does something.
+ *
+ * This can be used to avoid calling ovsdb_atom_destroy() for each element in
+ * an array of homogeneous atoms.  (It's not worthwhile for a single atom.) */
 static inline bool
 ovsdb_atom_needs_destruction(enum ovsdb_atomic_type type)
 {
     return type == OVSDB_TYPE_STRING;
 }
 
+/* Frees the contents of 'atom', which must have the specified 'type'.
+ *
+ * This does not actually call free(atom).  If necessary, the caller must be
+ * responsible for that. */
 static inline void
 ovsdb_atom_destroy(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
@@ -59,6 +69,8 @@ int ovsdb_atom_compare_3way(const union ovsdb_atom *,
                             const union ovsdb_atom *,
                             enum ovsdb_atomic_type);
 
+/* Returns true if 'a' and 'b', which are both of type 'type', has the same
+ * contents, false if their contents differ.  */
 static inline bool ovsdb_atom_equals(const union ovsdb_atom *a,
                                      const union ovsdb_atom *b,
                                      enum ovsdb_atomic_type type)

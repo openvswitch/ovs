@@ -37,6 +37,20 @@ wrap_json(const char *name, struct json *wrapped)
     return json_array_create_2(json_string_create(name), wrapped);
 }
 
+/* Initializes 'atom' with the default value of the given 'type'.
+ *
+ * The default value for an atom is as defined in ovsdb/SPECS:
+ *
+ *      - "integer" or "real": 0
+ *
+ *      - "boolean": false
+ *
+ *      - "string": "" (the empty string)
+ *
+ *      - "uuid": 00000000-0000-0000-0000-000000000000
+ *
+ * The caller must eventually arrange for 'atom' to be destroyed (with
+ * ovsdb_atom_destroy()). */
 void
 ovsdb_atom_init_default(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
@@ -70,6 +84,12 @@ ovsdb_atom_init_default(union ovsdb_atom *atom, enum ovsdb_atomic_type type)
     }
 }
 
+
+/* Returns true if 'atom', which must have the given 'type', has the default
+ * value for that type.
+ *
+ * See ovsdb_atom_init_default() for an explanation of the default value of an
+ * atom. */
 bool
 ovsdb_atom_is_default(const union ovsdb_atom *atom,
                       enum ovsdb_atomic_type type)
@@ -99,6 +119,10 @@ ovsdb_atom_is_default(const union ovsdb_atom *atom,
     }
 }
 
+/* Initializes 'new' as a copy of 'old', with the given 'type'.
+ *
+ * The caller must eventually arrange for 'new' to be destroyed (with
+ * ovsdb_atom_destroy()). */
 void
 ovsdb_atom_clone(union ovsdb_atom *new, const union ovsdb_atom *old,
                  enum ovsdb_atomic_type type)
@@ -133,6 +157,7 @@ ovsdb_atom_clone(union ovsdb_atom *new, const union ovsdb_atom *old,
     }
 }
 
+/* Swaps the contents of 'a' and 'b', which need not have the same type. */
 void
 ovsdb_atom_swap(union ovsdb_atom *a, union ovsdb_atom *b)
 {
@@ -141,6 +166,8 @@ ovsdb_atom_swap(union ovsdb_atom *a, union ovsdb_atom *b)
     *b = tmp;
 }
 
+/* Returns a hash value for 'atom', which has the specified 'type', folding
+ * 'basis' into the calculation. */
 uint32_t
 ovsdb_atom_hash(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                 uint32_t basis)
@@ -170,6 +197,8 @@ ovsdb_atom_hash(const union ovsdb_atom *atom, enum ovsdb_atomic_type type,
     }
 }
 
+/* Compares 'a' and 'b', which both have type 'type', and returns a
+ * strcmp()-like result. */
 int
 ovsdb_atom_compare_3way(const union ovsdb_atom *a,
                         const union ovsdb_atom *b,
@@ -315,6 +344,13 @@ ovsdb_atom_from_json__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
                               ovsdb_atomic_type_to_string(type));
 }
 
+/* Parses 'json' as an atom of the type described by 'base'.  If successful,
+ * returns NULL and initializes 'atom' with the parsed atom.  On failure,
+ * returns an error and the contents of 'atom' are indeterminate.  The caller
+ * is responsible for freeing the error or the atom that is returned.
+ *
+ * If 'symtab' is nonnull, then named UUIDs in 'symtab' are accepted.  Refer to
+ * ovsdb/SPECS information about this and other syntactical details. */
 struct ovsdb_error *
 ovsdb_atom_from_json(union ovsdb_atom *atom,
                      const struct ovsdb_base_type *base,
@@ -335,6 +371,8 @@ ovsdb_atom_from_json(union ovsdb_atom *atom,
     return error;
 }
 
+/* Converts 'atom', of the specified 'type', to JSON format, and returns the
+ * JSON.  The caller is responsible for freeing the returned JSON. */
 struct json *
 ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 {
@@ -463,7 +501,8 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom, enum ovsdb_atomic_type type,
  *        table.
  *
  * Returns a null pointer if successful, otherwise an error message describing
- * the problem.  The caller is responsible for freeing the error.
+ * the problem.  On failure, the contents of 'atom' are indeterminate.  The
+ * caller is responsible for freeing the atom or the error.
  */
 char *
 ovsdb_atom_from_string(union ovsdb_atom *atom,
@@ -706,6 +745,8 @@ alloc_default_atoms(enum ovsdb_atomic_type type, size_t n)
     }
 }
 
+/* Initializes 'datum' as an empty datum.  (An empty datum can be treated as
+ * any type.) */
 void
 ovsdb_datum_init_empty(struct ovsdb_datum *datum)
 {
@@ -714,6 +755,18 @@ ovsdb_datum_init_empty(struct ovsdb_datum *datum)
     datum->values = NULL;
 }
 
+/* Initializes 'datum' as a datum that has the default value for 'type'.
+ *
+ * The default value for a particular type is as defined in ovsdb/SPECS:
+ *
+ *    - If n_min is 0, then the default value is the empty set (or map).
+ *
+ *    - If n_min is 1, the default value is a single value or a single
+ *      key-value pair, whose key and value are the defaults for their
+ *      atomic types.  (See ovsdb_atom_init_default() for details.)
+ *
+ *    - n_min > 1 is invalid.  See ovsdb_type_is_valid().
+ */
 void
 ovsdb_datum_init_default(struct ovsdb_datum *datum,
                          const struct ovsdb_type *type)
@@ -723,6 +776,11 @@ ovsdb_datum_init_default(struct ovsdb_datum *datum,
     datum->values = alloc_default_atoms(type->value.type, datum->n);
 }
 
+/* Returns true if 'datum', which must have the given 'type', has the default
+ * value for that type.
+ *
+ * See ovsdb_datum_init_default() for an explanation of the default value of a
+ * datum. */
 bool
 ovsdb_datum_is_default(const struct ovsdb_datum *datum,
                        const struct ovsdb_type *type)
@@ -764,6 +822,10 @@ clone_atoms(const union ovsdb_atom *old, enum ovsdb_atomic_type type, size_t n)
     }
 }
 
+/* Initializes 'new' as a copy of 'old', with the given 'type'.
+ *
+ * The caller must eventually arrange for 'new' to be destroyed (with
+ * ovsdb_datum_destroy()). */
 void
 ovsdb_datum_clone(struct ovsdb_datum *new, const struct ovsdb_datum *old,
                   const struct ovsdb_type *type)
@@ -787,6 +849,10 @@ free_data(enum ovsdb_atomic_type type,
     free(atoms);
 }
 
+/* Frees the data owned by 'datum', which must have the given 'type'.
+ *
+ * This does not actually call free(datum).  If necessary, the caller must be
+ * responsible for that. */
 void
 ovsdb_datum_destroy(struct ovsdb_datum *datum, const struct ovsdb_type *type)
 {
@@ -794,6 +860,7 @@ ovsdb_datum_destroy(struct ovsdb_datum *datum, const struct ovsdb_type *type)
     free_data(type->value.type, datum->values, datum->n);
 }
 
+/* Swaps the contents of 'a' and 'b', which need not have the same type. */
 void
 ovsdb_datum_swap(struct ovsdb_datum *a, struct ovsdb_datum *b)
 {
@@ -828,6 +895,14 @@ ovsdb_datum_sort_swap_cb(size_t a, size_t b, void *cbdata_)
     }
 }
 
+/* The keys in an ovsdb_datum must be unique and in sorted order.  Most
+ * functions that modify an ovsdb_datum maintain these invariants.  For those
+ * that don't, this function checks and restores these invariants for 'datum',
+ * whose keys are of type 'key_type'.
+ *
+ * This function returns NULL if successful, otherwise an error message.  The
+ * caller must free the returned error when it is no longer needed.  On error,
+ * 'datum' is sorted but not unique. */
 struct ovsdb_error *
 ovsdb_datum_sort(struct ovsdb_datum *datum, enum ovsdb_atomic_type key_type)
 {
@@ -857,6 +932,9 @@ ovsdb_datum_sort(struct ovsdb_datum *datum, enum ovsdb_atomic_type key_type)
     }
 }
 
+/* This function is the same as ovsdb_datum_sort(), except that the caller
+ * knows that 'datum' is unique.  The operation therefore "cannot fail", so
+ * this function assert-fails if it actually does. */
 void
 ovsdb_datum_sort_assert(struct ovsdb_datum *datum,
                         enum ovsdb_atomic_type key_type)
