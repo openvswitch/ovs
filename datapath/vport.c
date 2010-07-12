@@ -9,6 +9,7 @@
 #include <linux/dcache.h>
 #include <linux/etherdevice.h>
 #include <linux/if.h>
+#include <linux/if_vlan.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
@@ -1275,6 +1276,17 @@ vport_receive(struct vport *vport, struct sk_buff *skb)
 	dp_process_received_packet(dp_port, skb);
 }
 
+static inline unsigned
+packet_length(const struct sk_buff *skb)
+{
+	unsigned length = skb->len - ETH_HLEN;
+
+	if (skb->protocol == htons(ETH_P_8021Q))
+		length -= VLAN_HLEN;
+
+	return length;
+}
+
 /**
  *	vport_send - send a packet on a device
  *
@@ -1288,25 +1300,28 @@ int
 vport_send(struct vport *vport, struct sk_buff *skb)
 {
 	int *loop_count;
+	int mtu;
 	int sent;
 
 	loop_count = &per_cpu_ptr(vport_loop_counter, get_cpu())->count[!!in_interrupt()];
 	(*loop_count)++;
 
-	if (likely(*loop_count <= VPORT_MAX_LOOPS)) {
-		sent = vport->ops->send(vport, skb);
-	} else {
+	if (unlikely(*loop_count > VPORT_MAX_LOOPS)) {
 		if (net_ratelimit())
 			printk(KERN_WARNING "%s: dropping packet that has looped more than %d times\n",
 			       dp_name(vport_get_dp_port(vport)->dp), VPORT_MAX_LOOPS);
-
-		sent = 0;
-		kfree_skb(skb);
-		vport_record_error(vport, VPORT_E_TX_DROPPED);
+		goto error;
 	}
 
-	(*loop_count)--;
-	put_cpu();
+	mtu = vport_get_mtu(vport);
+	if (unlikely(packet_length(skb) > mtu && !skb_is_gso(skb))) {
+		if (net_ratelimit())
+			printk(KERN_WARNING "%s: dropped over-mtu packet: %d > %d\n",
+			       dp_name(vport_get_dp_port(vport)->dp), packet_length(skb), mtu);
+		goto error;
+	}
+
+	sent = vport->ops->send(vport, skb);
 
 	if (vport->ops->flags & VPORT_F_GEN_STATS && sent > 0) {
 		struct vport_percpu_stats *stats;
@@ -1319,6 +1334,16 @@ vport_send(struct vport *vport, struct sk_buff *skb)
 
 		local_bh_enable();
 	}
+
+	goto out;
+
+error:
+	sent = 0;
+	kfree_skb(skb);
+	vport_record_error(vport, VPORT_E_TX_DROPPED);
+out:
+	(*loop_count)--;
+	put_cpu();
 
 	return sent;
 }

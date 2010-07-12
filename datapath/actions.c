@@ -347,19 +347,10 @@ set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
 	return skb;
 }
 
-static inline unsigned packet_length(const struct sk_buff *skb)
-{
-	unsigned length = skb->len - ETH_HLEN;
-	if (skb->protocol == htons(ETH_P_8021Q))
-		length -= VLAN_HLEN;
-	return length;
-}
-
 static void
 do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 {
 	struct dp_port *p;
-	int mtu;
 
 	if (!skb)
 		goto error;
@@ -367,13 +358,6 @@ do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 	p = rcu_dereference(dp->ports[out_port]);
 	if (!p)
 		goto error;
-
-	mtu = vport_get_mtu(p->vport);
-	if (packet_length(skb) > mtu && !skb_is_gso(skb)) {
-		printk(KERN_WARNING "%s: dropped over-mtu packet: %d > %d\n",
-		       dp_name(dp), packet_length(skb), mtu);
-		goto error;
-	}
 
 	vport_send(p->vport, skb);
 	return;
