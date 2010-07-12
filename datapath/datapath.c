@@ -2196,18 +2196,13 @@ success:
 			int csum_start, csum_offset;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
-			/* Until 2.6.22, the start of the transport header was
-			 * also the start of data to be checksummed.  Linux
-			 * 2.6.22 introduced the csum_start field for this
-			 * purpose, but we should point the transport header to
-			 * it anyway for backward compatibility, as
-			 * dev_queue_xmit() does even in 2.6.28. */
-			skb_set_transport_header(skb, skb->csum_start - skb_headroom(skb));
+			csum_start = skb->csum_start - skb_headroom(skb);
 			csum_offset = skb->csum_offset;
 #else
+			csum_start = skb_transport_header(skb) - skb->data;
 			csum_offset = skb->csum;
 #endif
-			csum_start = skb_transport_header(skb) - skb->data;
+			BUG_ON(csum_start >= skb_headlen(skb));
 			retval = skb_copy_and_csum_datagram(skb, csum_start, buf + csum_start,
 							    copy_bytes - csum_start, &csum);
 			if (!retval) {
@@ -2215,6 +2210,8 @@ success:
 
 				copy_bytes = csum_start;
 				csump = (__sum16 __user *)(buf + csum_start + csum_offset);
+
+				BUG_ON((char *)csump + sizeof(__sum16) > buf + nbytes);
 				put_user(csum_fold(csum), csump);
 			}
 		} else
