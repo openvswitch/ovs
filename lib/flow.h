@@ -77,22 +77,40 @@ static inline int flow_compare(const flow_t *, const flow_t *);
 static inline bool flow_equal(const flow_t *, const flow_t *);
 static inline size_t flow_hash(const flow_t *, uint32_t basis);
 
+/* Compares members of 'a' and 'b' except for 'wildcards' and 'priority' and
+ * returns a strcmp()-like return value. */
 static inline int
 flow_compare(const flow_t *a, const flow_t *b)
 {
-    return memcmp(a, b, FLOW_SIG_SIZE);
+    /* Assert that 'wildcards' and 'priority' are leading 32-bit fields. */
+    BUILD_ASSERT_DECL(offsetof(struct flow, wildcards) == 0);
+    BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->wildcards) == 4);
+    BUILD_ASSERT_DECL(offsetof(struct flow, priority) == 4);
+    BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->priority) == 4);
+
+    return memcmp((char *) a + 8, (char *) b + 8, FLOW_SIG_SIZE - 8);
 }
 
+/* Returns true if all members of 'a' and 'b' are equal except for 'wildcards'
+ * and 'priority', false otherwise. */
 static inline bool
 flow_equal(const flow_t *a, const flow_t *b)
 {
     return !flow_compare(a, b);
 }
 
+/* Returns a hash value for 'flow' that does not include 'wildcards' or
+ * 'priority', folding 'basis' into the hash value. */
 static inline size_t
 flow_hash(const flow_t *flow, uint32_t basis)
 {
-    return hash_bytes(flow, FLOW_SIG_SIZE, basis);
+    /* Assert that 'wildcards' and 'priority' are leading 32-bit fields. */
+    BUILD_ASSERT_DECL(offsetof(struct flow, wildcards) == 0);
+    BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->wildcards) == 4);
+    BUILD_ASSERT_DECL(offsetof(struct flow, priority) == 4);
+    BUILD_ASSERT_DECL(sizeof(((struct flow *)0)->priority) == 4);
+
+    return hash_bytes((char *) flow + 8, FLOW_SIG_SIZE - 8, basis);
 }
 
 /* Information on wildcards for a flow, as a supplement to flow_t. */

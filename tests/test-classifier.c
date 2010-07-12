@@ -95,15 +95,21 @@ tcls_is_empty(const struct tcls *tcls)
     return tcls->n_rules == 0;
 }
 
+static unsigned int
+effective_priority(const flow_t *flow)
+{
+    return flow->wildcards ? flow->priority : MAX(flow->priority, UINT16_MAX);
+}
+
 static struct test_rule *
 tcls_insert(struct tcls *tcls, const struct test_rule *rule)
 {
+    unsigned int priority = effective_priority(&rule->cls_rule.flow);
     size_t i;
 
-    assert(rule->cls_rule.flow.wildcards || rule->cls_rule.flow.priority == UINT_MAX);
     for (i = 0; i < tcls->n_rules; i++) {
         const struct cls_rule *pos = &tcls->rules[i]->cls_rule;
-        if (pos->flow.priority == rule->cls_rule.flow.priority
+        if (pos->flow.priority == priority
             && pos->flow.wildcards == rule->cls_rule.flow.wildcards
             && flow_equal(&pos->flow, &rule->cls_rule.flow)) {
             /* Exact match.
@@ -111,7 +117,7 @@ tcls_insert(struct tcls *tcls, const struct test_rule *rule)
             free(tcls->rules[i]);
             tcls->rules[i] = xmemdup(rule, sizeof *rule);
             return tcls->rules[i];
-        } else if (pos->flow.priority < rule->cls_rule.flow.priority) {
+        } else if (pos->flow.priority < priority) {
             break;
         }
     }
