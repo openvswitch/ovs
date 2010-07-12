@@ -34,6 +34,17 @@ static int n_vport_types;
 static struct hlist_head *dev_table;
 #define VPORT_HASH_BUCKETS 1024
 
+/* We limit the number of times that we pass through vport_send() to
+ * avoid blowing out the stack in the event that we have a loop. There is
+ * a separate counter for each CPU for both interrupt and non-interrupt
+ * context in order to keep the limit deterministic for a given packet. */
+struct percpu_loop_counter {
+	int count[2];
+};
+
+static struct percpu_loop_counter *vport_loop_counter;
+#define VPORT_MAX_LOOPS 5
+
 /* Both RTNL lock and vport_mutex need to be held when updating dev_table.
  *
  * If you use vport_locate and then perform some operations, you need to hold
@@ -107,6 +118,12 @@ vport_init(void)
 		goto error_dev_table;
 	}
 
+	vport_loop_counter = alloc_percpu(struct percpu_loop_counter);
+	if (!vport_loop_counter) {
+		err = -ENOMEM;
+		goto error_ops_list;
+	}
+
 	for (i = 0; i < ARRAY_SIZE(base_vport_ops_list); i++) {
 		struct vport_ops *new_ops = base_vport_ops_list[i];
 
@@ -125,6 +142,8 @@ vport_init(void)
 
 	return 0;
 
+error_ops_list:
+	kfree(vport_ops_list);
 error_dev_table:
 	kfree(dev_table);
 error:
@@ -170,6 +189,7 @@ vport_exit(void)
 			vport_ops_list[i]->exit();
 	}
 
+	free_percpu(vport_loop_counter);
 	kfree(vport_ops_list);
 	kfree(dev_table);
 }
@@ -1267,9 +1287,26 @@ vport_receive(struct vport *vport, struct sk_buff *skb)
 int
 vport_send(struct vport *vport, struct sk_buff *skb)
 {
+	int *loop_count;
 	int sent;
 
-	sent = vport->ops->send(vport, skb);
+	loop_count = &per_cpu_ptr(vport_loop_counter, get_cpu())->count[!!in_interrupt()];
+	(*loop_count)++;
+
+	if (likely(*loop_count <= VPORT_MAX_LOOPS)) {
+		sent = vport->ops->send(vport, skb);
+	} else {
+		if (net_ratelimit())
+			printk(KERN_WARNING "%s: dropping packet that has looped more than %d times\n",
+			       dp_name(vport_get_dp_port(vport)->dp), VPORT_MAX_LOOPS);
+
+		sent = 0;
+		kfree_skb(skb);
+		vport_record_error(vport, VPORT_E_TX_DROPPED);
+	}
+
+	(*loop_count)--;
+	put_cpu();
 
 	if (vport->ops->flags & VPORT_F_GEN_STATS && sent > 0) {
 		struct vport_percpu_stats *stats;
