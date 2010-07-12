@@ -23,10 +23,12 @@
 
 #include "coverage.h"
 #include "dhcp.h"
+#include "mac-learning.h"
 #include "netdev.h"
 #include "netflow.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
+#include "ofproto.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "packets.h"
@@ -64,9 +66,22 @@ struct wx {
     struct port_array ports;    /* Index is xflow port nr;
                                  * wdp_port->opp.port_no is OFP port nr. */
     struct shash port_by_name;
-    bool need_revalidate;
     long long int next_expiration;
+
+    /* Rules that might need to be revalidated. */
+    bool need_revalidate;      /* Revalidate all subrules? */
+    bool revalidate_all;       /* Revalidate all subrules and other rules? */
+    struct tag_set revalidate_set; /* Tag set of (sub)rules to revalidate. */
+
+    /* Hooks for ovs-vswitchd. */
+    const struct ofhooks *ofhooks;
+    void *aux;
+
+    /* Used by default ofhooks. */
+    struct mac_learning *ml;
 };
+
+static const struct ofhooks default_ofhooks;
 
 static struct list all_wx = LIST_INITIALIZER(&all_wx);
 
@@ -89,7 +104,8 @@ wx_cast(const struct wdp *wdp)
 static int
 wx_xlate_actions(struct wx *, const union ofp_action *, size_t n,
                  const flow_t *flow, const struct ofpbuf *packet,
-                 struct xflow_actions *out, bool *may_set_up_flow);
+                 tag_type *tags, struct xflow_actions *out,
+                 bool *may_set_up_flow);
 
 struct wx_rule {
     struct wdp_rule wr;
@@ -98,6 +114,7 @@ struct wx_rule {
     uint64_t byte_count;        /* Number of bytes received. */
     uint64_t accounted_bytes;   /* Number of bytes passed to account_cb. */
     long long int used;         /* Last-used time (0 if never used). */
+    tag_type tags;              /* Tags (set only by hooks). */
 
     /* If 'super' is non-NULL, this rule is a subrule, that is, it is an
      * exact-match rule (having cr.wc.wildcards of 0) generated from the
@@ -397,7 +414,7 @@ wx_rule_execute(struct wx *wx, struct wx_rule *rule,
     {
         struct wx_rule *super = rule->super ? rule->super : rule;
         if (wx_xlate_actions(wx, super->wr.actions, super->wr.n_actions, flow,
-                             packet, &a, NULL)) {
+                             packet, NULL, &a, NULL)) {
             return;
         }
         actions = a.actions;
@@ -481,7 +498,8 @@ wx_rule_make_actions(struct wx *wx, struct wx_rule *rule,
 
     super = rule->super ? rule->super : rule;
     wx_xlate_actions(wx, super->wr.actions, super->wr.n_actions,
-                     &rule->wr.cr.flow, packet, &a, &rule->may_install);
+                     &rule->wr.cr.flow, packet,
+                     &rule->tags, &a, &rule->may_install);
 
     actions_len = a.n_actions * sizeof *a.actions;
     if (rule->n_xflow_actions != a.n_actions
@@ -608,7 +626,7 @@ struct wx_xlate_ctx {
 
     /* Output. */
     struct xflow_actions *out;    /* Datapath actions. */
-    //tag_type *tags;             /* Tags associated with OFPP_NORMAL actions. */
+    tag_type *tags;             /* Tags associated with OFPP_NORMAL actions. */
     bool may_set_up_flow;       /* True ordinarily; false if the actions must
                                  * be reassessed for every packet. */
     uint16_t nf_output_iface;   /* Output interface index for NetFlow. */
@@ -701,8 +719,7 @@ xlate_output_action(struct wx_xlate_ctx *ctx,
         xlate_table_action(ctx, ctx->flow.in_port);
         break;
     case OFPP_NORMAL:
-#if 0
-        if (!ctx->wx->ofhooks->normal_cb(ctx->flow, ctx->packet,
+        if (!ctx->wx->ofhooks->normal_cb(&ctx->flow, ctx->packet,
                                          ctx->out, ctx->tags,
                                          &ctx->nf_output_iface,
                                          ctx->wx->aux)) {
@@ -710,9 +727,7 @@ xlate_output_action(struct wx_xlate_ctx *ctx,
             ctx->may_set_up_flow = false;
         }
         break;
-#else
-        /* fall through to flood for now */
-#endif
+
     case OFPP_FLOOD:
         add_output_group_action(ctx->out, WX_GROUP_FLOOD,
                                 &ctx->nf_output_iface);
@@ -953,9 +968,10 @@ wx_may_set_up(const flow_t *flow, const struct xflow_actions *actions)
 static int
 wx_xlate_actions(struct wx *wx, const union ofp_action *in, size_t n_in,
                  const flow_t *flow, const struct ofpbuf *packet,
-                 struct xflow_actions *out, bool *may_set_up_flow)
+                 tag_type *tags, struct xflow_actions *out,
+                 bool *may_set_up_flow)
 {
-    //tag_type no_tags = 0;
+    tag_type no_tags = 0;
     struct wx_xlate_ctx ctx;
     COVERAGE_INC(wx_ofp2xflow);
     xflow_actions_init(out);
@@ -964,7 +980,7 @@ wx_xlate_actions(struct wx *wx, const union ofp_action *in, size_t n_in,
     ctx.wx = wx;
     ctx.packet = packet;
     ctx.out = out;
-    //ctx.tags = tags ? tags : &no_tags;
+    ctx.tags = tags ? tags : &no_tags;
     ctx.may_set_up_flow = true;
     ctx.nf_output_iface = NF_OUT_DROP;
     do_xlate_actions(in, n_in, &ctx);
@@ -1084,7 +1100,7 @@ struct revalidate_cbdata {
     struct wx *wx;
     bool revalidate_all;        /* Revalidate all exact-match rules? */
     bool revalidate_subrules;   /* Revalidate all exact-match subrules? */
-    //struct tag_set revalidate_set; /* Set of tags to revalidate. */
+    struct tag_set revalidate_set; /* Set of tags to revalidate. */
 };
 
 static bool
@@ -1123,7 +1139,7 @@ revalidate_cb(struct cls_rule *sub_, void *cbdata_)
 
     if (cbdata->revalidate_all
         || (cbdata->revalidate_subrules && sub->super)
-        /*|| (tag_set_intersects(&cbdata->revalidate_set, sub->tags))*/) {
+        || tag_set_intersects(&cbdata->revalidate_set, sub->tags)) {
         revalidate_rule(cbdata->wx, sub);
     }
 }
@@ -1141,13 +1157,13 @@ wx_run_one(struct wx *wx)
         /* XXX account_checkpoint_cb */
     }
 
-    if (wx->need_revalidate /*|| !tag_set_is_empty(&p->revalidate_set)*/) {
+    if (wx->need_revalidate || !tag_set_is_empty(&wx->revalidate_set)) {
         struct revalidate_cbdata cbdata;
         cbdata.wx = wx;
-        cbdata.revalidate_all = false;
+        cbdata.revalidate_all = wx->revalidate_all;
         cbdata.revalidate_subrules = wx->need_revalidate;
-        //cbdata.revalidate_set = wx->revalidate_set;
-        //tag_set_init(&wx->revalidate_set);
+        cbdata.revalidate_set = wx->revalidate_set;
+        tag_set_init(&wx->revalidate_set);
         COVERAGE_INC(wx_revalidate);
         classifier_for_each(&wx->cls, CLS_INC_EXACT, revalidate_cb, &cbdata);
         wx->need_revalidate = false;
@@ -1168,7 +1184,7 @@ wx_run(void)
 static void
 wx_wait_one(struct wx *wx)
 {
-    if (wx->need_revalidate /*|| !tag_set_is_empty(&p->revalidate_set)*/) {
+    if (wx->need_revalidate || !tag_set_is_empty(&wx->revalidate_set)) {
         poll_immediate_wake();
     } else if (wx->next_expiration != LLONG_MAX) {
         poll_timer_wait_until(wx->next_expiration);
@@ -1219,8 +1235,13 @@ wx_open(const struct wdp_class *wdp_class, const char *name, bool create,
         port_array_init(&wx->ports);
         shash_init(&wx->port_by_name);
         wx->next_expiration = time_msec() + 1000;
+        tag_set_init(&wx->revalidate_set);
 
         wx_port_init(wx);
+
+        wx->ofhooks = &default_ofhooks;
+        wx->aux = wx;
+        wx->ml = mac_learning_create();
 
         *wdpp = &wx->wdp;
     }
@@ -1238,6 +1259,7 @@ wx_close(struct wdp *wdp)
     classifier_destroy(&wx->cls);
     netdev_monitor_destroy(wx->netdev_monitor);
     list_remove(&wx->list_node);
+    mac_learning_destroy(wx->ml);
     free(wx);
 }
 
@@ -1751,7 +1773,7 @@ wx_execute(struct wdp *wdp, uint16_t in_port,
 
     flow_extract((struct ofpbuf *) packet, 0, in_port, &flow);
     error = wx_xlate_actions(wx, actions, n_actions, &flow, packet,
-                             &xflow_actions, NULL);
+                             NULL, &xflow_actions, NULL);
     if (error) {
         return error;
     }
@@ -2027,6 +2049,37 @@ wx_recv_wait(struct wdp *wdp)
     struct wx *wx = wx_cast(wdp);
 
     xfif_recv_wait(wx->xfif);
+}
+
+static int
+wx_set_ofhooks(struct wdp *wdp, const struct ofhooks *ofhooks, void *aux)
+{
+    struct wx *wx = wx_cast(wdp);
+
+    if (wx->ofhooks == &default_ofhooks) {
+        mac_learning_destroy(wx->ml);
+        wx->ml = NULL;
+    }
+
+    wx->ofhooks = ofhooks;
+    wx->aux = aux;
+    return 0;
+}
+
+static void
+wx_revalidate(struct wdp *wdp, tag_type tag)
+{
+    struct wx *wx = wx_cast(wdp);
+
+    tag_set_add(&wx->revalidate_set, tag);
+}
+
+static void
+wx_revalidate_all(struct wdp *wdp)
+{
+    struct wx *wx = wx_cast(wdp);
+
+    wx->revalidate_all = true;
 }
 
 static void wx_port_update(struct wx *, const char *devname,
@@ -2364,6 +2417,9 @@ wdp_xflow_register(void)
         wx_recv,
         wx_recv_purge,
         wx_recv_wait,
+        wx_set_ofhooks,
+        wx_revalidate,
+        wx_revalidate_all,
     };
 
     static bool inited = false;
@@ -2399,3 +2455,53 @@ wdp_xflow_register(void)
 
     svec_destroy(&types);
 }
+
+static bool
+default_normal_ofhook_cb(const flow_t *flow, const struct ofpbuf *packet,
+                         struct xflow_actions *actions, tag_type *tags,
+                         uint16_t *nf_output_iface, void *wx_)
+{
+    struct wx *wx = wx_;
+    int out_port;
+
+    /* Drop frames for reserved multicast addresses. */
+    if (eth_addr_is_reserved(flow->dl_dst)) {
+        return true;
+    }
+
+    /* Learn source MAC (but don't try to learn from revalidation). */
+    if (packet != NULL) {
+        tag_type rev_tag = mac_learning_learn(wx->ml, flow->dl_src,
+                                              0, flow->in_port,
+                                              GRAT_ARP_LOCK_NONE);
+        if (rev_tag) {
+            /* The log messages here could actually be useful in debugging,
+             * so keep the rate limit relatively high. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
+            VLOG_DBG_RL(&rl, "learned that "ETH_ADDR_FMT" is on port %"PRIu16,
+                        ETH_ADDR_ARGS(flow->dl_src), flow->in_port);
+            tag_set_add(&wx->revalidate_set, rev_tag);
+        }
+    }
+
+    /* Determine output port. */
+    out_port = mac_learning_lookup_tag(wx->ml, flow->dl_dst, 0, tags,
+                                       NULL);
+    if (out_port < 0) {
+        add_output_group_action(actions, WX_GROUP_FLOOD, nf_output_iface);
+    } else if (out_port != flow->in_port) {
+        xflow_actions_add(actions, XFLOWAT_OUTPUT)->output.port = out_port;
+        *nf_output_iface = out_port;
+    } else {
+        /* Drop. */
+    }
+
+    return true;
+}
+
+static const struct ofhooks default_ofhooks = {
+    NULL,
+    default_normal_ofhook_cb,
+    NULL,
+    NULL
+};

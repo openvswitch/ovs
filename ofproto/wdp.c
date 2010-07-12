@@ -977,6 +977,60 @@ wdp_get_netflow_ids(const struct wdp *wdp,
     *engine_id = wdp->netflow_engine_id;
 }
 
+/* ovs-vswitchd interface.
+ *
+ * This needs to be redesigned, because it only makes sense for wdp-xflow.  The
+ * ofhooks are currently the key to implementing the OFPP_NORMAL feature of
+ * ovs-vswitchd. */
+
+/* Sets the ofhooks for 'wdp' to 'ofhooks' with the accompanying 'aux' value.
+ * Only the xflow implementation of wdp is expected to implement this function;
+ * other implementations should just set it to NULL.
+ *
+ * The ofhooks are currently the key to implementing the OFPP_NORMAL feature of
+ * ovs-vswitchd.  This design is not adequate for the long term; it needs to be
+ * redone.
+ *
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+wdp_set_ofhooks(struct wdp *wdp, const struct ofhooks *ofhooks, void *aux)
+{
+    int error;
+    error = (wdp->wdp_class->set_ofhooks
+             ? wdp->wdp_class->set_ofhooks(wdp, ofhooks, aux)
+             : EOPNOTSUPP);
+    log_operation(wdp, "set_ofhooks", error);
+    return error;
+}
+
+/* Tell 'wdp' to revalidate all the flows that match 'tag'.
+ *
+ * This needs to be redesigned, because it only makes sense for wdp-xflow.
+ * Other implementations cannot practically use this interface and should just
+ * set this to NULL. */
+void
+wdp_revalidate(struct wdp *wdp, tag_type tag)
+{
+    if (wdp->wdp_class->revalidate) {
+        wdp->wdp_class->revalidate(wdp, tag);
+    }
+}
+
+/* Tell 'wdp' to revalidate every flow.  (This is not the same as calling
+ * 'revalidate' with all-1-bits for 'tag' because it also revalidates flows
+ * that do not have any tag at all.)
+ *
+ * This needs to be redesigned, because it only makes sense for wdp-xflow.
+ * Other implementations cannot practically use this interface and should just
+ * set this to NULL. */
+void
+wdp_revalidate_all(struct wdp *wdp)
+{
+    if (wdp->wdp_class->revalidate_all) {
+        wdp->wdp_class->revalidate_all(wdp);
+    }
+}
+
 /* Returns a copy of 'old'.  The packet's payload, if any, is copied as well,
  * but if it is longer than 'trim' bytes it is truncated to that length. */
 struct wdp_packet *

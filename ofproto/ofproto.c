@@ -247,6 +247,7 @@ ofproto_create(const char *datapath, const char *datapath_type,
     }
     wdp_flow_flush(wdp);
     wdp_recv_purge(wdp);
+    wdp_set_ofhooks(wdp, ofhooks, aux);
 
     /* Initialize settings. */
     p = xzalloc(sizeof *p);
@@ -1024,9 +1025,15 @@ ofproto_wait(struct ofproto *p)
 }
 
 void
-ofproto_revalidate(struct ofproto *ofproto OVS_UNUSED, tag_type tag OVS_UNUSED)
+ofproto_revalidate(struct ofproto *ofproto, tag_type tag)
 {
-    //XXX tag_set_add(&ofproto->revalidate_set, tag);
+    wdp_revalidate(ofproto->wdp, tag);
+}
+
+void
+ofproto_revalidate_all(struct ofproto *ofproto)
+{
+    wdp_revalidate_all(ofproto->wdp);
 }
 
 bool

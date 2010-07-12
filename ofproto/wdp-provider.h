@@ -21,6 +21,7 @@
  * datapath. */
 
 #include <assert.h>
+#include "tag.h"
 #include "util.h"
 #include "wdp.h"
 
@@ -426,6 +427,41 @@ struct wdp_class {
     /* Arranges for the poll loop to wake up when 'wdp' has a message queued
      * to be received with the recv member function. */
     void (*recv_wait)(struct wdp *wdp);
+
+    /* ovs-vswitchd interface.
+     *
+     * This needs to be redesigned, because it only makes sense for wdp-xflow.
+     * Other implementations cannot practically use these interfaces and should
+     * just set these pointers to NULL.
+     *
+     * The ofhooks are currently the key to implementing the OFPP_NORMAL
+     * feature of ovs-vswitchd.  This design is not adequate for the long
+     * term; it needs to be redone. */
+
+    /* Sets the ofhooks for 'wdp' to 'ofhooks' with the accompanying 'aux'
+     * value.
+     *
+     * This needs to be redesigned, because it only makes sense for wdp-xflow.
+     * Other implementations cannot practically use this interface and should
+     * just set this to NULL. */
+    int (*set_ofhooks)(struct wdp *wdp,
+                       const struct ofhooks *ofhooks, void *aux);
+
+    /* Tell 'wdp' to revalidate all the flows that match 'tag'.
+     *
+     * This needs to be redesigned, because it only makes sense for wdp-xflow.
+     * Other implementations cannot practically use this interface and should
+     * just set this to NULL. */
+    void (*revalidate)(struct wdp *wdp, tag_type tag);
+
+    /* Tell 'wdp' to revalidate every flow.  (This is not the same as calling
+     * 'revalidate' with all-1-bits for 'tag' because it also revalidates flows
+     * that do not have any tag at all.)
+     *
+     * This needs to be redesigned, because it only makes sense for wdp-xflow.
+     * Other implementations cannot practically use this interface and should
+     * just set this to NULL. */
+    void (*revalidate_all)(struct wdp *wdp);
 };
 
 extern const struct wdp_class wdp_linux_class;

@@ -130,7 +130,9 @@ void ofproto_add_flow(struct ofproto *, const flow_t *,
 void ofproto_delete_flow(struct ofproto *, const flow_t *);
 void ofproto_flush_flows(struct ofproto *);
 
-/* Hooks for ovs-vswitchd. */
+/* Hooks for ovs-vswitchd.
+ *
+ * This needs to be redesigned; it only makes sense for wdp-xflow. */
 struct ofhooks {
     void (*port_changed_cb)(enum ofp_port_reason, const struct ofp_phy_port *,
                             void *aux);
@@ -143,7 +145,7 @@ struct ofhooks {
     void (*account_checkpoint_cb)(void *aux);
 };
 void ofproto_revalidate(struct ofproto *, tag_type);
-struct tag_set *ofproto_get_revalidate_set(struct ofproto *);
+void ofproto_revalidate_all(struct ofproto *);
 
 #ifdef  __cplusplus
 }

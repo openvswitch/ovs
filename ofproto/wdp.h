@@ -19,6 +19,7 @@
 
 #include "classifier.h"
 #include "list.h"
+#include "tag.h"
 
 #ifdef  __cplusplus
 extern "C" {
@@ -29,6 +30,7 @@ enum {
     TABLEID_CLASSIFIER = 1
 };
 
+struct ofhooks;
 struct ofpbuf;
 struct svec;
 struct wdp;
@@ -83,9 +85,6 @@ void wdp_enumerate_types(struct svec *types);
 
 int wdp_enumerate_names(const char *type, struct svec *names);
 void wdp_parse_name(const char *datapath_name, char **name, char **type);
-
-void wdp_run_expiration(struct wdp *);
-void wdp_run_revalidation(struct wdp *, bool revalidate_all);
 
 int wdp_open(const char *name, const char *type, struct wdp **);
 int wdp_create(const char *name, const char *type, struct wdp **);
@@ -195,6 +194,16 @@ int wdp_flow_inject(struct wdp *, struct wdp_rule *,
 int wdp_execute(struct wdp *, uint16_t in_port,
                   const union ofp_action[], size_t n_actions,
                   const struct ofpbuf *);
+
+/* ovs-vswitchd interface.
+ *
+ * This needs to be redesigned, because it only makes sense for wdp-xflow.  The
+ * ofhooks are currently the key to implementing the OFPP_NORMAL feature of
+ * ovs-vswitchd. */
+
+int wdp_set_ofhooks(struct wdp *, const struct ofhooks *, void *aux);
+void wdp_revalidate(struct wdp *, tag_type);
+void wdp_revalidate_all(struct wdp *);
 
 /* Receiving packets that miss the flow table. */
 enum wdp_channel {

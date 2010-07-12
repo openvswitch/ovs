@@ -1193,7 +1193,7 @@ static void
 bridge_flush(struct bridge *br)
 {
     COVERAGE_INC(bridge_flush);
-    br->flush = true;
+    ofproto_revalidate_all(br->ofproto);
     mac_learning_flush(br->ml);
 }
 
@@ -1283,8 +1283,6 @@ bridge_create(const struct ovsrec_bridge *br_cfg)
 
     shash_init(&br->port_by_name);
     shash_init(&br->iface_by_name);
-
-    br->flush = false;
 
     list_push_back(&all_bridges, &br->node);
 
@@ -1381,20 +1379,9 @@ bridge_unixctl_reconnect(struct unixctl_conn *conn,
 static int
 bridge_run_one(struct bridge *br)
 {
-    int error;
-
-    error = ofproto_run1(br->ofproto);
-    if (error) {
-        return error;
-    }
-
-    //XXX mac_learning_run(br->ml, ofproto_get_revalidate_set(br->ofproto));
+    ofproto_revalidate(br->ofproto, mac_learning_run(br->ml));
     bond_run(br);
-
-    error = ofproto_run2(br->ofproto, br->flush);
-    br->flush = false;
-
-    return error;
+    return ofproto_run(br->ofproto);
 }
 
 static size_t
