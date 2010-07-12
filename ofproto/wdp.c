@@ -48,7 +48,8 @@
 /* Initializes a new 'struct wdp_rule', copying in the 'n_actions' elements of
  * 'actions'.
  *
- * The caller is responsible for initializing 'rule->cr'. */
+ * The caller is responsible for initializing 'rule->cr'.  The caller must also
+ * fill in 'rule->ofp_table_id', if the wdp has more than one table. */
 void
 wdp_rule_init(struct wdp_rule *rule, const union ofp_action *actions,
               size_t n_actions)
@@ -58,6 +59,7 @@ wdp_rule_init(struct wdp_rule *rule, const union ofp_action *actions,
     rule->created = time_msec();
     rule->idle_timeout = 0;
     rule->hard_timeout = 0;
+    rule->ofp_table_id = 0;
     rule->client_data = NULL;
 }
 
@@ -792,12 +794,30 @@ wdp_flow_match(struct wdp *wdp, const flow_t *flow)
     return wdp->wdp_class->flow_match(wdp, flow);
 }
 
+/* Iterates through all of the flows in 'wdp''s flow table, passing each flow
+ * that matches the specified search criteria to 'callback' along with 'aux'.
+ *
+ * Flows are filtered out in two ways.  First, based on the bit-mask in
+ * 'include': wdp_rule 'wr' is included only if 'include & (1u <<
+ * wr->ofp_table_id)' is nonzero.
+ *
+ * Flows are also filtered out based on 'target': on a field-by-field basis, a
+ * flow is included if 'target' wildcards that field or if the flow and
+ * 'target' both have the same exact value for the field.  A flow is excluded
+ * if any field does not match based on these criteria.
+ *
+ * Ignores 'target->priority'.
+ *
+ * 'callback' is allowed to delete the rule that is passed as its argument.  It
+ * may modify any flow in 'wdp', e.g. changing their actions.  'callback' must
+ * not delete flows from 'wdp' other than its argument flow, nor may it insert
+ * new flows into 'wdp'. */
 void
 wdp_flow_for_each_match(const struct wdp *wdp, const flow_t *target,
-                        int include, wdp_flow_cb_func *callback, void *aux)
+                        unsigned int include,
+                        wdp_flow_cb_func *callback, void *aux)
 {
-    wdp->wdp_class->flow_for_each_match(wdp, target, include,
-                                        callback, aux); 
+    wdp->wdp_class->flow_for_each_match(wdp, target, include, callback, aux);
 }
 
 int

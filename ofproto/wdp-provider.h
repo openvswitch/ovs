@@ -269,9 +269,9 @@ struct wdp_class {
      * flow that matches the specified search criteria to 'callback' along with
      * 'aux'.
      *
-     * Flows are filtered out in two ways.  First, based on 'include':
-     * Exact-match flows are excluded unless CLS_INC_EXACT is in 'include'.
-     * Wildcarded flows are excluded unless CLS_INC_WILD is in 'include'.
+     * Flows are filtered out in two ways.  First, based on the bit-mask in
+     * 'include': wdp_rule 'wr' is included only if 'include & (1u <<
+     * wr->ofp_table_id)' is nonzero.
      *
      * Flows are also filtered out based on 'target': on a field-by-field
      * basis, a flow is included if 'target' wildcards that field or if the
@@ -285,7 +285,7 @@ struct wdp_class {
      * 'callback' must not delete flows from 'wdp' other than its argument
      * flow, nor may it insert new flows into 'wdp'. */
     void (*flow_for_each_match)(const struct wdp *wdp, const flow_t *flow,
-                                int include,
+                                unsigned int include,
                                 wdp_flow_cb_func *callback, void *aux);
 
     /* Retrieves flow statistics for 'rule', which must be in 'wdp''s flow

@@ -51,6 +51,11 @@
 #define THIS_MODULE VLM_wdp_xflow
 #include "vlog.h"
 
+enum {
+    TABLEID_HASH = 0,
+    TABLEID_CLASSIFIER = 1
+};
+
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* Maximum numbers of rules. */
@@ -355,8 +360,8 @@ wx_rule_has_out_port(const struct wx_rule *rule, uint16_t out_port)
 }
 #endif
 
-/* Caller is responsible for initializing the 'cr' member of the returned
- * rule. */
+/* Caller is responsible for initializing the 'cr' and ofp_table_id members of
+ * the returned rule. */
 static struct wx_rule *
 wx_rule_create(struct wx_rule *super,
                const union ofp_action *actions, size_t n_actions,
@@ -478,6 +483,8 @@ wx_rule_create_subrule(struct wx *wx, struct wx_rule *rule, const flow_t *flow)
     subrule = wx_rule_create(rule, NULL, 0,
                              rule->wr.idle_timeout,
                              rule->wr.hard_timeout);
+    /* Subrules aren't really in any OpenFlow table, so don't bother with
+     * subrule->wr.ofp_table_id. */
     COVERAGE_INC(wx_subrule_create);
     cls_rule_from_flow(flow, &subrule->wr.cr);
     classifier_insert_exact(&wx->cls, &subrule->wr.cr);
@@ -1581,15 +1588,24 @@ wx_for_each_thunk(struct cls_rule *cls_rule, void *aux_)
 
 static void
 wx_flow_for_each_match(const struct wdp *wdp, const flow_t *target,
-                       int include,
+                       unsigned int include,
                        wdp_flow_cb_func *client_callback, void *client_aux)
 {
     struct wx *wx = wx_cast(wdp);
     struct wx_for_each_thunk_aux aux;
+    int cls_include;
+
+    cls_include = 0;
+    if (include & (1u << TABLEID_HASH)) {
+        cls_include |= CLS_INC_EXACT;
+    }
+    if (include & (1u << TABLEID_CLASSIFIER)) {
+        cls_include |= CLS_INC_WILD;
+    }
 
     aux.client_callback = client_callback;
     aux.client_aux = client_aux;
-    classifier_for_each_match(&wx->cls, target, include,
+    classifier_for_each_match(&wx->cls, target, cls_include,
                               wx_for_each_thunk, &aux);
 }
 
@@ -1708,6 +1724,8 @@ wx_flow_put(struct wdp *wdp, const struct wdp_flow_put *put,
     rule = wx_rule_create(NULL, put->actions, put->n_actions,
                           put->idle_timeout, put->hard_timeout);
     cls_rule_from_flow(put->flow, &rule->wr.cr);
+    rule->wr.ofp_table_id = (put->flow->wildcards
+                             ? TABLEID_CLASSIFIER : TABLEID_HASH);
     wx_rule_insert(wx, rule, NULL, 0);
 
     if (old_stats) {

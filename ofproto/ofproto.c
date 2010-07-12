@@ -1669,7 +1669,7 @@ flow_stats_cb(struct wdp_rule *rule, void *cbdata_)
 
     ofs = append_stats_reply(len, cbdata->ofconn, &cbdata->msg);
     ofs->length = htons(len);
-    ofs->table_id = rule->cr.flow.wildcards ? TABLEID_CLASSIFIER : TABLEID_HASH;
+    ofs->table_id = rule->ofp_table_id;
     ofs->pad = 0;
     flow_to_match(&rule->cr.flow, cbdata->ofproto->tun_id_from_cookie,
                   &ofs->match);
@@ -1685,12 +1685,11 @@ flow_stats_cb(struct wdp_rule *rule, void *cbdata_)
     memcpy(ofs->actions, rule->actions, act_len);
 }
 
-static int
+static unsigned int
 table_id_to_include(uint8_t table_id)
 {
-    return (table_id == TABLEID_HASH ? CLS_INC_EXACT
-            : table_id == TABLEID_CLASSIFIER ? CLS_INC_WILD
-            : table_id == 0xff ? CLS_INC_ALL
+    return (table_id == 0xff ? UINT_MAX
+            : table_id < 32 ? 1u << table_id
             : 0);
 }
 
@@ -1714,7 +1713,7 @@ handle_flow_stats_request(struct ofproto *p, struct ofconn *ofconn,
     cbdata.out_port = fsr->out_port;
     cbdata.msg = start_stats_reply(osr, 1024);
     flow_from_match(&fsr->match, 0, false, 0, &target);
-    wdp_flow_for_each_match(p->wdp, &target,
+    wdp_flow_for_each_match(p->wdp, &target, 
                             table_id_to_include(fsr->table_id),
                             flow_stats_cb, &cbdata);
     queue_tx(cbdata.msg, ofconn, ofconn->reply_counter);
@@ -1765,7 +1764,7 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results)
     cbdata.results = results;
 
     flow_from_match(&match, 0, false, 0, &target);
-    wdp_flow_for_each_match(p->wdp, &target, CLS_INC_ALL,
+    wdp_flow_for_each_match(p->wdp, &target, UINT_MAX,
                             flow_stats_ds_cb, &cbdata);
 }
 
@@ -2090,7 +2089,7 @@ modify_flows_loose(struct ofproto *p, struct ofconn *ofconn,
     flow_from_match(&ofm->match, 0, p->tun_id_from_cookie, ofm->cookie,
                     &target);
 
-    wdp_flow_for_each_match(p->wdp, &target, CLS_INC_ALL,
+    wdp_flow_for_each_match(p->wdp, &target, UINT_MAX,
                             modify_flows_cb, &cbdata);
     if (cbdata.match) {
         /* This credits the packet to whichever flow happened to happened to
@@ -2186,7 +2185,7 @@ delete_flows_loose(struct ofproto *p, const struct ofp_flow_mod *ofm)
     flow_from_match(&ofm->match, 0, p->tun_id_from_cookie, ofm->cookie,
                     &target);
 
-    wdp_flow_for_each_match(p->wdp, &target, CLS_INC_ALL,
+    wdp_flow_for_each_match(p->wdp, &target, UINT_MAX,
                             delete_flows_cb, &cbdata);
 }
 

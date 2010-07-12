@@ -25,11 +25,6 @@
 extern "C" {
 #endif
 
-enum {
-    TABLEID_HASH = 0,
-    TABLEID_CLASSIFIER = 1
-};
-
 struct ofhooks;
 struct ofpbuf;
 struct svec;
@@ -59,6 +54,8 @@ struct wdp_rule {
     long long int created;      /* Time created, in ms since the epoch. */
     uint16_t idle_timeout;      /* In seconds from time of last use. */
     uint16_t hard_timeout;      /* In seconds from time of creation. */
+    uint8_t ofp_table_id;       /* OpenFlow table_id in e.g. ofp_flow_stats.
+                                 * Supported range is at most 0...31. */
 
     /* OpenFlow actions.
      *
@@ -149,7 +146,8 @@ struct wdp_rule *wdp_flow_match(struct wdp *, const flow_t *);
 
 typedef void wdp_flow_cb_func(struct wdp_rule *, void *aux);
 void wdp_flow_for_each_match(const struct wdp *, const flow_t *,
-                               int include, wdp_flow_cb_func *, void *aux);
+                             unsigned int include, wdp_flow_cb_func *,
+                             void *aux);
 
 int wdp_flow_get_stats(const struct wdp *, const struct wdp_rule *,
                          struct wdp_flow_stats *);
