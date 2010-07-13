@@ -2283,7 +2283,7 @@ is_admissible(struct bridge *br, const flow_t *flow, bool have_packet,
     int vlan;
 
     /* Find the interface and port structure for the received packet. */
-    in_iface = iface_from_xf_ifidx(br, flow->in_port);
+    in_iface = iface_from_xf_ifidx(br, ofp_port_to_xflow_port(flow->in_port));
     if (!in_iface) {
         /* No interface?  Something fishy... */
         if (have_packet) {
@@ -2868,7 +2868,7 @@ bond_send_learning_packets(struct port *port)
         n_packets++;
         compose_benign_packet(&packet, "Open vSwitch Bond Failover", 0xf177,
                               e->mac);
-        flow_extract(&packet, 0, XFLOWP_NONE, &flow);
+        flow_extract(&packet, 0, OFPP_NONE, &flow);
         retval = ofproto_send_packet(br->ofproto, &flow, actions, a - actions,
                                      &packet);
         if (retval) {
