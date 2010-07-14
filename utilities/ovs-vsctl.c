@@ -458,13 +458,13 @@ Switch commands:\n\
 \n\
 Database commands:\n\
   list TBL [REC]              list RECord (or all records) in TBL\n\
-  get TBL REC COL[:KEY]       print values of COLumns in RECORD in TBL\n\
+  get TBL REC COL[:KEY]       print values of COLumns in RECord in TBL\n\
   set TBL REC COL[:KEY]=VALUE set COLumn values in RECord in TBL\n\
   add TBL REC COL [KEY=]VALUE add (KEY=)VALUE to COLumn in RECord in TBL\n\
   remove TBL REC COL [KEY=]VALUE  remove (KEY=)VALUE from COLumn\n\
   clear TBL REC COL           clear values from COLumn in RECord in TBL\n\
   create TBL COL[:KEY]=VALUE  create and initialize new record\n\
-  destroy TBL REC             delete REC from TBL\n\
+  destroy TBL REC             delete RECord from TBL\n\
   wait-until TBL REC [COL[:KEY]=VALUE]  wait until condition is true\n\
 Potentially unsafe database commands require --force option.\n\
 \n\
