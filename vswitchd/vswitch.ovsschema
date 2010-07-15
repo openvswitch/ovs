@@ -6,10 +6,6 @@
          "type": {"key": {"type": "uuid",
                           "refTable": "Bridge"},
                   "min": 0, "max": "unlimited"}},
-       "controller": {
-         "type": {"key": {"type": "uuid",
-                          "refTable": "Controller"},
-                   "min": 0, "max": "unlimited"}},
        "managers": {
          "type": {"key": "string", "min": 0, "max": "unlimited"}},
        "ssl": {

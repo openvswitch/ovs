@@ -199,13 +199,10 @@ static struct bridge *bridge_lookup(const char *name);
 static unixctl_cb_func bridge_unixctl_dump_flows;
 static unixctl_cb_func bridge_unixctl_reconnect;
 static int bridge_run_one(struct bridge *);
-static size_t bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
-                                     const struct bridge *br,
+static size_t bridge_get_controllers(const struct bridge *br,
                                      struct ovsrec_controller ***controllersp);
-static void bridge_reconfigure_one(const struct ovsrec_open_vswitch *,
-                                   struct bridge *);
-static void bridge_reconfigure_remotes(const struct ovsrec_open_vswitch *,
-                                       struct bridge *,
+static void bridge_reconfigure_one(struct bridge *);
+static void bridge_reconfigure_remotes(struct bridge *,
                                        const struct sockaddr_in *managers,
                                        size_t n_managers);
 static void bridge_get_all_ifaces(const struct bridge *, struct shash *ifaces);
@@ -606,7 +603,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 
     /* Reconfigure all bridges. */
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
-        bridge_reconfigure_one(ovs_cfg, br);
+        bridge_reconfigure_one(br);
     }
 
     /* Add and delete ports on all datapaths.
@@ -799,7 +796,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             oso.agent_device = sflow_cfg->agent;
 
             oso.control_ip = NULL;
-            n_controllers = bridge_get_controllers(ovs_cfg, br, &controllers);
+            n_controllers = bridge_get_controllers(br, &controllers);
             for (i = 0; i < n_controllers; i++) {
                 if (controllers[i]->local_ip) {
                     oso.control_ip = controllers[i]->local_ip;
@@ -822,7 +819,7 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
          * yet; when a controller is configured, resetting the datapath ID will
          * immediately disconnect from the controller, so it's better to set
          * the datapath ID before the controller. */
-        bridge_reconfigure_remotes(ovs_cfg, br, managers, n_managers);
+        bridge_reconfigure_remotes(br, managers, n_managers);
     }
     LIST_FOR_EACH (br, struct bridge, node, &all_bridges) {
         for (i = 0; i < br->n_ports; i++) {
@@ -1399,20 +1396,14 @@ bridge_run_one(struct bridge *br)
 }
 
 static size_t
-bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
-                       const struct bridge *br,
+bridge_get_controllers(const struct bridge *br,
                        struct ovsrec_controller ***controllersp)
 {
     struct ovsrec_controller **controllers;
     size_t n_controllers;
 
-    if (br->cfg->n_controller) {
-        controllers = br->cfg->controller;
-        n_controllers = br->cfg->n_controller;
-    } else {
-        controllers = ovs_cfg->controller;
-        n_controllers = ovs_cfg->n_controller;
-    }
+    controllers = br->cfg->controller;
+    n_controllers = br->cfg->n_controller;
 
     if (n_controllers == 1 && !strcmp(controllers[0]->target, "none")) {
         controllers = NULL;
@@ -1426,8 +1417,7 @@ bridge_get_controllers(const struct ovsrec_open_vswitch *ovs_cfg,
 }
 
 static void
-bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
-                       struct bridge *br)
+bridge_reconfigure_one(struct bridge *br)
 {
     struct shash old_ports, new_ports;
     struct svec listeners, old_listeners;
@@ -1455,7 +1445,7 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
      * user didn't specify one.
      *
      * XXX perhaps we should synthesize a port ourselves in this case. */
-    if (bridge_get_controllers(ovs_cfg, br, NULL)) {
+    if (bridge_get_controllers(br, NULL)) {
         char local_name[IF_NAMESIZE];
         int error;
 
@@ -1533,8 +1523,7 @@ bridge_reconfigure_one(const struct ovsrec_open_vswitch *ovs_cfg,
 }
 
 static void
-bridge_reconfigure_remotes(const struct ovsrec_open_vswitch *ovs_cfg,
-                           struct bridge *br,
+bridge_reconfigure_remotes(struct bridge *br,
                            const struct sockaddr_in *managers,
                            size_t n_managers)
 {
@@ -1543,7 +1532,7 @@ bridge_reconfigure_remotes(const struct ovsrec_open_vswitch *ovs_cfg,
 
     ofproto_set_extra_in_band_remotes(br->ofproto, managers, n_managers);
 
-    n_controllers = bridge_get_controllers(ovs_cfg, br, &controllers);
+    n_controllers = bridge_get_controllers(br, &controllers);
     if (ofproto_has_controller(br->ofproto) != (n_controllers != 0)) {
         ofproto_flush_flows(br->ofproto);
     }

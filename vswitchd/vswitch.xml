@@ -15,12 +15,6 @@
         Set of bridges managed by the daemon.
       </column>
 
-      <column name="controller">
-        Default OpenFlow <ref table="Controller"/> set used by bridges.  May be
-        overridden on a per-bridge basis by the <ref table="Bridge"
-        column="controller"/> column in <ref table="Bridge"/>.
-      </column>
-
       <column name="managers">
         Remote database clients to which the Open vSwitch's database server
         should connect or to which it should listen.
@@ -132,11 +126,8 @@
 
     <group title="OpenFlow Configuration">
       <column name="controller">
-        OpenFlow controller set.  If unset, defaults to the set of
-        controllers specified by <ref column="controller"
-        table="Open_vSwitch"/> in the <ref table="Open_vSwitch"/>
-        table.  If the default is also unset, then no OpenFlow
-        controllers will be used.
+        OpenFlow controller set.  If unset, then no OpenFlow controllers
+        will be used.
       </column>
 
       <column name="datapath_id">
