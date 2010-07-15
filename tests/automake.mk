@@ -92,7 +92,7 @@ LCOV = lcov -b $(abs_top_builddir) -d $(abs_top_builddir) -q
 check-lcov: all tests/atconfig tests/atlocal $(TESTSUITE) $(lcov_wrappers)
 	rm -fr tests/coverage.html tests/coverage.info
 	$(LCOV) -c -i -o - > tests/coverage.info
-	$(SHELL) '$(TESTSUITE)' -C tests CHECK_LCOV=true AUTOTEST_PATH='tests/lcov:$(AUTOTEST_PATH)' $(TESTSUITEFLAGS); \
+	$(SHELL) '$(TESTSUITE)' -C tests CHECK_LCOV=true DISABLE_LCOV=false AUTOTEST_PATH='tests/lcov:$(AUTOTEST_PATH)' $(TESTSUITEFLAGS); \
 		rc=$$?; \
 		echo "Producing coverage.html..."; \
 		cd tests && genhtml -q -o coverage.html coverage.info; \
