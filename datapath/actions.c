@@ -46,12 +46,6 @@ static struct sk_buff *make_writable(struct sk_buff *skb, unsigned min_headroom,
 	return NULL;
 }
 
-static void set_tunnel(struct sk_buff *skb, struct odp_flow_key *key,
-		       __be32 tun_id)
-{
-	OVS_CB(skb)->tun_id = key->tun_id = tun_id;
-}
-
 static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 {
 	struct vlan_ethhdr *vh = vlan_eth_hdr(skb);
@@ -74,7 +68,6 @@ static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 
 	return skb;
 }
-
 
 static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 				       struct odp_flow_key *key, const union odp_action *a,
@@ -469,7 +462,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODPAT_SET_TUNNEL:
-			set_tunnel(skb, key, a->tunnel.tun_id);
+			OVS_CB(skb)->tun_id = key->tun_id = a->tunnel.tun_id;
 			break;
 
 		case ODPAT_SET_VLAN_VID:
