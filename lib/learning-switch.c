@@ -410,7 +410,8 @@ process_packet_in(struct lswitch *sw, struct rconn *rconn, void *opi_)
         }
     }
 
-    if (eth_addr_is_reserved(flow.dl_src)) {
+    /* Drop frames for reserved multicast addresses. */
+    if (eth_addr_is_reserved(flow.dl_dst)) {
         goto drop_it;
     }
 
