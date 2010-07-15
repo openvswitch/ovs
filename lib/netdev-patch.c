@@ -103,7 +103,7 @@ netdev_patch_create(const char *name, const char *type OVS_UNUSED,
     ova.config = (char *)peer;
 
     err = netdev_vport_do_ioctl(ODP_VPORT_ADD, &ova);
-    if (err == EEXIST) {
+    if (err == EBUSY) {
         VLOG_WARN("%s: destroying existing device", name);
 
         err = netdev_vport_do_ioctl(ODP_VPORT_DEL, ova.devname);

@@ -208,7 +208,7 @@ do_vport_add(struct odp_vport_add *vport_config)
 
 	vport = vport_locate(vport_config->devname);
 	if (vport) {
-		err = -EEXIST;
+		err = -EBUSY;
 		goto out;
 	}
 
