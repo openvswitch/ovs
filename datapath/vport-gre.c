@@ -44,6 +44,11 @@
  * number of options. */
 #define GRE_HEADER_SECTION 4
 
+struct gre_base_hdr {
+	__be16 flags;
+	__be16 protocol;
+};
+
 struct mutable_config {
 	struct rcu_head rcu;
 
@@ -567,18 +572,17 @@ static void create_gre_header(struct sk_buff *skb,
 			      const struct mutable_config *mutable)
 {
 	struct iphdr *iph = ip_hdr(skb);
-	__be16 *flags = (__be16 *)(iph + 1);
-	__be16 *protocol = flags + 1;
+	struct gre_base_hdr *greh = (struct gre_base_hdr *)(iph + 1);
 	__be32 *options = (__be32 *)((u8 *)iph + mutable->tunnel_hlen
 					       - GRE_HEADER_SECTION);
 
-	*protocol = htons(ETH_P_TEB);
-	*flags = 0;
+	greh->protocol = htons(ETH_P_TEB);
+	greh->flags = 0;
 
 	/* Work backwards over the options so the checksum is last. */
 	if (mutable->port_config.out_key ||
 	    mutable->port_config.flags & GRE_F_OUT_KEY_ACTION) {
-		*flags |= GRE_KEY;
+		greh->flags |= GRE_KEY;
 
 		if (mutable->port_config.flags & GRE_F_OUT_KEY_ACTION)
 			*options = OVS_CB(skb)->tun_id;
@@ -589,7 +593,7 @@ static void create_gre_header(struct sk_buff *skb,
 	}
 
 	if (mutable->port_config.flags & GRE_F_OUT_CSUM) {
-		*flags |= GRE_CSUM;
+		greh->flags |= GRE_CSUM;
 
 		*options = 0;
 		*(__sum16 *)options = csum_fold(skb_checksum(skb,
@@ -628,27 +632,26 @@ static int check_checksum(struct sk_buff *skb)
 static int parse_gre_header(struct iphdr *iph, __be16 *flags, __be32 *key)
 {
 	/* IP and ICMP protocol handlers check that the IHL is valid. */
-	__be16 *flagsp = (__be16 *)((u8 *)iph + (iph->ihl << 2));
-	__be16 *protocol = flagsp + 1;
-	__be32 *options = (__be32 *)(protocol + 1);
+	struct gre_base_hdr *greh = (struct gre_base_hdr *)((u8 *)iph + (iph->ihl << 2));
+	__be32 *options = (__be32 *)(greh + 1);
 	int hdr_len;
 
-	*flags = *flagsp;
+	*flags = greh->flags;
 
-	if (*flags & (GRE_VERSION | GRE_ROUTING))
+	if (greh->flags & (GRE_VERSION | GRE_ROUTING))
 		return -EINVAL;
 
-	if (*protocol != htons(ETH_P_TEB))
+	if (greh->protocol != htons(ETH_P_TEB))
 		return -EINVAL;
 
 	hdr_len = GRE_HEADER_SECTION;
 
-	if (*flags & GRE_CSUM) {
+	if (greh->flags & GRE_CSUM) {
 		hdr_len += GRE_HEADER_SECTION;
 		options++;
 	}
 
-	if (*flags & GRE_KEY) {
+	if (greh->flags & GRE_KEY) {
 		hdr_len += GRE_HEADER_SECTION;
 
 		*key = *options;
@@ -656,7 +659,7 @@ static int parse_gre_header(struct iphdr *iph, __be16 *flags, __be32 *key)
 	} else
 		*key = 0;
 
-	if (*flags & GRE_SEQ)
+	if (greh->flags & GRE_SEQ)
 		hdr_len += GRE_HEADER_SECTION;
 
 	return hdr_len;
