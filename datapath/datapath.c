@@ -2193,7 +2193,7 @@ success:
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		if (copy_bytes == skb->len) {
 			__wsum csum = 0;
-			int csum_start, csum_offset;
+			unsigned int csum_start, csum_offset;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 			csum_start = skb->csum_start - skb_headroom(skb);
