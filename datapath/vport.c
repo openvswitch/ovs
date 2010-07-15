@@ -43,7 +43,7 @@ struct percpu_loop_counter {
 	int count[2];
 };
 
-static struct percpu_loop_counter *vport_loop_counter;
+static DEFINE_PER_CPU(struct percpu_loop_counter, vport_loop_counter);
 #define VPORT_MAX_LOOPS 5
 
 /* Both RTNL lock and vport_mutex need to be held when updating dev_table.
@@ -116,12 +116,6 @@ int vport_init(void)
 		goto error_dev_table;
 	}
 
-	vport_loop_counter = alloc_percpu(struct percpu_loop_counter);
-	if (!vport_loop_counter) {
-		err = -ENOMEM;
-		goto error_ops_list;
-	}
-
 	for (i = 0; i < ARRAY_SIZE(base_vport_ops_list); i++) {
 		struct vport_ops *new_ops = base_vport_ops_list[i];
 
@@ -140,8 +134,6 @@ int vport_init(void)
 
 	return 0;
 
-error_ops_list:
-	kfree(vport_ops_list);
 error_dev_table:
 	kfree(dev_table);
 error:
@@ -185,7 +177,6 @@ void vport_exit(void)
 			vport_ops_list[i]->exit();
 	}
 
-	free_percpu(vport_loop_counter);
 	kfree(vport_ops_list);
 	kfree(dev_table);
 }
@@ -1256,7 +1247,7 @@ int vport_send(struct vport *vport, struct sk_buff *skb)
 	int mtu;
 	int sent;
 
-	loop_count = &per_cpu_ptr(vport_loop_counter, get_cpu())->count[!!in_interrupt()];
+	loop_count = &get_cpu_var(vport_loop_counter).count[!!in_interrupt()];
 	(*loop_count)++;
 
 	if (unlikely(*loop_count > VPORT_MAX_LOOPS)) {
@@ -1296,7 +1287,7 @@ error:
 	vport_record_error(vport, VPORT_E_TX_DROPPED);
 out:
 	(*loop_count)--;
-	put_cpu();
+	put_cpu_var(vport_loop_counter);
 
 	return sent;
 }
