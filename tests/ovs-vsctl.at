@@ -646,9 +646,6 @@ AT_CHECK([RUN_OVS_VSCTL([list interx x])],
 AT_CHECK([RUN_OVS_VSCTL([list b x])], 
   [1], [], [ovs-vsctl: no row "x" in table Bridge
 ], [OVS_VSCTL_CLEANUP])
-AT_CHECK([RUN_OVS_VSCTL([list b br])], 
-  [1], [], [ovs-vsctl: multiple rows in Bridge match "br"
-], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([get b br0 d])], 
   [1], [], [ovs-vsctl: Bridge contains more than one column whose name matches "d"
 ], [OVS_VSCTL_CLEANUP])
@@ -735,7 +732,7 @@ OVS_VSCTL_SETUP
 # Give the ovs-vsctls a chance to read the database
 sleep 1
 
-AT_CHECK([RUN_OVS_VSCTL([add-br br10 -- set bridge br1 other-config:abc=quux])
+AT_CHECK([RUN_OVS_VSCTL([add-br br10 -- set bridge br10 other-config:abc=quux])
 RUN_OVS_VSCTL([add-br br1 -- set bridge br1 other-config:abc=def -- add-bond br1 bond0 eth0 eth1 -- set port bond0 bond_updelay=500])],
   [0], [], [], [OVS_VSCTL_CLEANUP])
 

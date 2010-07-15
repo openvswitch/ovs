@@ -464,8 +464,9 @@ specifying \fB.\fR as the record name.
 An sFlow configuration attached to a bridge.  Records may be
 identified by bridge name.
 .PP
-Names of tables, records, and columns are not case-sensitive, and
-\fB\-\-\fR and \fB_\fR are treated interchangeably.  Unique
+Record names must be specified in full and with correct
+capitalization.  Names of tables and columns are not case-sensitive,
+and \fB\-\-\fR and \fB_\fR are treated interchangeably.  Unique
 abbreviations are acceptable, e.g. \fBnet\fR or \fBn\fR is sufficient
 to identify the \fBNetFlow\fR table.
 .
@@ -600,11 +601,6 @@ of \fBovs\-vsctl\fR commands.  For example, \fBwait\-until bridge br0
 whereas \fBget bridge br0 datapath_id \-\- wait\-until bridge br0\fR
 will abort if no bridge named \fBbr0\fR exists when \fBovs\-vsctl\fR
 initially connects to the database.
-.IP
-Unlike all the other database commands, \fBwait\-until\fR treats its
-\fIrecord\fR argument as case-sensitive and does not allow it to be
-abbreviated.  Otherwise, \fBwait\-until br1\fR would be satisfied by a
-bridge named \fBbr10\fR.
 .IP
 Consider specifying \fB\-\-timeout=0\fR along with
 \fB\-\-wait\-until\fR, to prevent \fBovs\-vsctl\fR from terminating
