@@ -68,8 +68,7 @@ static DEFINE_MUTEX(vport_mutex);
  * Acquire global vport lock.  See above comment about locking requirements
  * and specific function definitions.  May sleep.
  */
-void
-vport_lock(void)
+void vport_lock(void)
 {
 	mutex_lock(&vport_mutex);
 }
@@ -79,8 +78,7 @@ vport_lock(void)
  *
  * Release lock acquired with vport_lock.
  */
-void
-vport_unlock(void)
+void vport_unlock(void)
 {
 	mutex_unlock(&vport_mutex);
 }
@@ -99,8 +97,7 @@ vport_unlock(void)
  * Called at module load time to initialize the vport subsystem and any
  * compiled in vport types.
  */
-int
-vport_init(void)
+int vport_init(void)
 {
 	int err;
 	int i;
@@ -151,8 +148,7 @@ error:
 	return err;
 }
 
-static void
-vport_del_all(void)
+static void vport_del_all(void)
 {
 	int i;
 
@@ -178,8 +174,7 @@ vport_del_all(void)
  * Called at module exit time to shutdown the vport subsystem and any
  * initialized vport types.
  */
-void
-vport_exit(void)
+void vport_exit(void)
 {
 	int i;
 
@@ -195,8 +190,7 @@ vport_exit(void)
 	kfree(dev_table);
 }
 
-static int
-do_vport_add(struct odp_vport_add *vport_config)
+static int do_vport_add(struct odp_vport_add *vport_config)
 {
 	struct vport *vport;
 	int err = 0;
@@ -234,8 +228,7 @@ out:
  * on device type).  This function is for userspace callers and assumes no
  * locks are held.
  */
-int
-vport_user_add(const struct odp_vport_add __user *uvport_config)
+int vport_user_add(const struct odp_vport_add __user *uvport_config)
 {
 	struct odp_vport_add vport_config;
 
@@ -246,8 +239,7 @@ vport_user_add(const struct odp_vport_add __user *uvport_config)
 }
 
 #ifdef CONFIG_COMPAT
-int
-compat_vport_user_add(struct compat_odp_vport_add *ucompat)
+int compat_vport_user_add(struct compat_odp_vport_add *ucompat)
 {
 	struct compat_odp_vport_add compat;
 	struct odp_vport_add vport_config;
@@ -263,8 +255,7 @@ compat_vport_user_add(struct compat_odp_vport_add *ucompat)
 }
 #endif
 
-static int
-do_vport_mod(struct odp_vport_mod *vport_config)
+static int do_vport_mod(struct odp_vport_mod *vport_config)
 {
 	struct vport *vport;
 	int err;
@@ -297,8 +288,7 @@ out:
  * dependent on device type).  This function is for userspace callers and
  * assumes no locks are held.
  */
-int
-vport_user_mod(const struct odp_vport_mod __user *uvport_config)
+int vport_user_mod(const struct odp_vport_mod __user *uvport_config)
 {
 	struct odp_vport_mod vport_config;
 
@@ -309,8 +299,7 @@ vport_user_mod(const struct odp_vport_mod __user *uvport_config)
 }
 
 #ifdef CONFIG_COMPAT
-int
-compat_vport_user_mod(struct compat_odp_vport_mod *ucompat)
+int compat_vport_user_mod(struct compat_odp_vport_mod *ucompat)
 {
 	struct compat_odp_vport_mod compat;
 	struct odp_vport_mod vport_config;
@@ -336,8 +325,7 @@ compat_vport_user_mod(struct compat_odp_vport_mod *ucompat)
  * reasons, such as lack of memory.  This function is for userspace callers and
  * assumes no locks are held.
  */
-int
-vport_user_del(const char __user *udevname)
+int vport_user_del(const char __user *udevname)
 {
 	char devname[IFNAMSIZ];
 	struct vport *vport;
@@ -396,8 +384,7 @@ out:
  * Retrieves transmit, receive, and error stats for the given device.  This
  * function is for userspace callers and assumes no locks are held.
  */
-int
-vport_user_stats_get(struct odp_vport_stats_req __user *ustats_req)
+int vport_user_stats_get(struct odp_vport_stats_req __user *ustats_req)
 {
 	struct odp_vport_stats_req stats_req;
 	struct vport *vport;
@@ -439,8 +426,7 @@ out:
  * -EOPNOTSUPP.  This function is for userspace callers and assumes no locks
  * are held.
  */
-int
-vport_user_stats_set(struct odp_vport_stats_req __user *ustats_req)
+int vport_user_stats_set(struct odp_vport_stats_req __user *ustats_req)
 {
 	struct odp_vport_stats_req stats_req;
 	struct vport *vport;
@@ -477,8 +463,7 @@ out:
  * Retrieves the Ethernet address of the given device.  This function is for
  * userspace callers and assumes no locks are held.
  */
-int
-vport_user_ether_get(struct odp_vport_ether __user *uvport_ether)
+int vport_user_ether_get(struct odp_vport_ether __user *uvport_ether)
 {
 	struct odp_vport_ether vport_ether;
 	struct vport *vport;
@@ -521,8 +506,7 @@ out:
  * -EOPNOTSUPP.  This function is for userspace callers and assumes no locks
  * are held.
  */
-int
-vport_user_ether_set(struct odp_vport_ether __user *uvport_ether)
+int vport_user_ether_set(struct odp_vport_ether __user *uvport_ether)
 {
 	struct odp_vport_ether vport_ether;
 	struct vport *vport;
@@ -558,8 +542,7 @@ out:
  * Retrieves the MTU of the given device.  This function is for userspace
  * callers and assumes no locks are held.
  */
-int
-vport_user_mtu_get(struct odp_vport_mtu __user *uvport_mtu)
+int vport_user_mtu_get(struct odp_vport_mtu __user *uvport_mtu)
 {
 	struct odp_vport_mtu vport_mtu;
 	struct vport *vport;
@@ -599,8 +582,7 @@ out:
  * MTU, in which case the result will always be -EOPNOTSUPP.  This function is
  * for userspace callers and assumes no locks are held.
  */
-int
-vport_user_mtu_set(struct odp_vport_mtu __user *uvport_mtu)
+int vport_user_mtu_set(struct odp_vport_mtu __user *uvport_mtu)
 {
 	struct odp_vport_mtu vport_mtu;
 	struct vport *vport;
@@ -628,8 +610,7 @@ out:
 	return err;
 }
 
-static struct hlist_head *
-hash_bucket(const char *name)
+static struct hlist_head *hash_bucket(const char *name)
 {
 	unsigned int hash = full_name_hash(name, strlen(name));
 	return &dev_table[hash & (VPORT_HASH_BUCKETS - 1)];
@@ -644,8 +625,7 @@ hash_bucket(const char *name)
  * and held while using the found port.  See the locking comments at the
  * top of the file.
  */
-struct vport *
-vport_locate(const char *name)
+struct vport *vport_locate(const char *name)
 {
 	struct hlist_head *bucket = hash_bucket(name);
 	struct vport *vport;
@@ -669,14 +649,12 @@ out:
 	return vport;
 }
 
-static void
-register_vport(struct vport *vport)
+static void register_vport(struct vport *vport)
 {
 	hlist_add_head(&vport->hash_node, hash_bucket(vport_get_name(vport)));
 }
 
-static void
-unregister_vport(struct vport *vport)
+static void unregister_vport(struct vport *vport)
 {
 	hlist_del(&vport->hash_node);
 }
@@ -692,8 +670,7 @@ unregister_vport(struct vport *vport)
  * vport_priv().  vports that are no longer needed should be released with
  * vport_free().
  */
-struct vport *
-vport_alloc(int priv_size, const struct vport_ops *ops)
+struct vport *vport_alloc(int priv_size, const struct vport_ops *ops)
 {
 	struct vport *vport;
 	size_t alloc_size;
@@ -728,8 +705,7 @@ vport_alloc(int priv_size, const struct vport_ops *ops)
  *
  * Frees a vport allocated with vport_alloc() when it is no longer needed.
  */
-void
-vport_free(struct vport *vport)
+void vport_free(struct vport *vport)
 {
 	if (vport->ops->flags & VPORT_F_GEN_STATS)
 		free_percpu(vport->percpu_stats);
@@ -748,8 +724,7 @@ vport_free(struct vport *vport)
  * Creates a new vport with the specified configuration (which is dependent
  * on device type).  Both RTNL and vport locks must be held.
  */
-struct vport *
-vport_add(const char *name, const char *type, const void __user *config)
+struct vport *vport_add(const char *name, const char *type, const void __user *config)
 {
 	struct vport *vport;
 	int err = 0;
@@ -786,8 +761,7 @@ out:
  * Modifies an existing device with the specified configuration (which is
  * dependent on device type).  Both RTNL and vport locks must be held.
  */
-int
-vport_mod(struct vport *vport, const void __user *config)
+int vport_mod(struct vport *vport, const void __user *config)
 {
 	ASSERT_RTNL();
 	ASSERT_VPORT();
@@ -807,8 +781,7 @@ vport_mod(struct vport *vport, const void __user *config)
  * a datapath.  It is possible to fail for reasons such as lack of memory.
  * Both RTNL and vport locks must be held.
  */
-int
-vport_del(struct vport *vport)
+int vport_del(struct vport *vport)
 {
 	ASSERT_RTNL();
 	ASSERT_VPORT();
@@ -830,8 +803,7 @@ vport_del(struct vport *vport)
  * attached to a vport before it is connected to a datapath and must not be
  * modified while connected.  RTNL lock and the appropriate DP mutex must be held.
  */
-int
-vport_attach(struct vport *vport, struct dp_port *dp_port)
+int vport_attach(struct vport *vport, struct dp_port *dp_port)
 {
 	ASSERT_RTNL();
 
@@ -863,8 +835,7 @@ vport_attach(struct vport *vport, struct dp_port *dp_port)
  * Detaches a vport from a datapath.  May fail for a variety of reasons,
  * including lack of memory.  RTNL lock and the appropriate DP mutex must be held.
  */
-int
-vport_detach(struct vport *vport)
+int vport_detach(struct vport *vport)
 {
 	struct dp_port *dp_port;
 
@@ -893,8 +864,7 @@ vport_detach(struct vport *vport)
  * MTU, in which case the result will always be -EOPNOTSUPP.  RTNL lock must
  * be held.
  */
-int
-vport_set_mtu(struct vport *vport, int mtu)
+int vport_set_mtu(struct vport *vport, int mtu)
 {
 	ASSERT_RTNL();
 
@@ -928,8 +898,7 @@ vport_set_mtu(struct vport *vport, int mtu)
  * setting the Ethernet address, in which case the result will always be
  * -EOPNOTSUPP.  RTNL lock must be held.
  */
-int
-vport_set_addr(struct vport *vport, const unsigned char *addr)
+int vport_set_addr(struct vport *vport, const unsigned char *addr)
 {
 	ASSERT_RTNL();
 
@@ -953,8 +922,7 @@ vport_set_addr(struct vport *vport, const unsigned char *addr)
  * support setting the stats, in which case the result will always be
  * -EOPNOTSUPP.  RTNL lock must be held.
  */
-int
-vport_set_stats(struct vport *vport, struct odp_vport_stats *stats)
+int vport_set_stats(struct vport *vport, struct odp_vport_stats *stats)
 {
 	ASSERT_RTNL();
 
@@ -978,8 +946,7 @@ vport_set_stats(struct vport *vport, struct odp_vport_stats *stats)
  * Retrieves the name of the given device.  Either RTNL lock or rcu_read_lock
  * must be held for the entire duration that the name is in use.
  */
-const char *
-vport_get_name(const struct vport *vport)
+const char *vport_get_name(const struct vport *vport)
 {
 	return vport->ops->get_name(vport);
 }
@@ -992,8 +959,7 @@ vport_get_name(const struct vport *vport)
  * Retrieves the type of the given device.  Either RTNL lock or rcu_read_lock
  * must be held for the entire duration that the type is in use.
  */
-const char *
-vport_get_type(const struct vport *vport)
+const char *vport_get_type(const struct vport *vport)
 {
 	return vport->ops->type;
 }
@@ -1007,8 +973,7 @@ vport_get_type(const struct vport *vport)
  * rcu_read_lock must be held for the entire duration that the Ethernet address
  * is in use.
  */
-const unsigned char *
-vport_get_addr(const struct vport *vport)
+const unsigned char *vport_get_addr(const struct vport *vport)
 {
 	return vport->ops->get_addr(vport);
 }
@@ -1022,8 +987,7 @@ vport_get_addr(const struct vport *vport)
  * lock or rcu_read_lock must be held for the entire duration that the datapath
  * port is being accessed.
  */
-struct dp_port *
-vport_get_dp_port(const struct vport *vport)
+struct dp_port *vport_get_dp_port(const struct vport *vport)
 {
 	return rcu_dereference(vport->dp_port);
 }
@@ -1036,8 +1000,7 @@ vport_get_dp_port(const struct vport *vport)
  * Retrieves the associated kobj or null if no kobj.  The returned kobj is
  * valid for as long as the vport exists.
  */
-struct kobject *
-vport_get_kobj(const struct vport *vport)
+struct kobject *vport_get_kobj(const struct vport *vport)
 {
 	if (vport->ops->get_kobj)
 		return vport->ops->get_kobj(vport);
@@ -1053,8 +1016,7 @@ vport_get_kobj(const struct vport *vport)
  *
  * Retrieves transmit, receive, and error stats for the given device.
  */
-int
-vport_get_stats(struct vport *vport, struct odp_vport_stats *stats)
+int vport_get_stats(struct vport *vport, struct odp_vport_stats *stats)
 {
 	struct odp_vport_stats dev_stats;
 	struct odp_vport_stats *dev_statsp = NULL;
@@ -1139,8 +1101,7 @@ out:
  * Retrieves the flags of the given device.  Either RTNL lock or rcu_read_lock
  * must be held.
  */
-unsigned
-vport_get_flags(const struct vport *vport)
+unsigned vport_get_flags(const struct vport *vport)
 {
 	return vport->ops->get_dev_flags(vport);
 }
@@ -1153,8 +1114,7 @@ vport_get_flags(const struct vport *vport)
  * Checks whether the given device is running.  Either RTNL lock or
  * rcu_read_lock must be held.
  */
-int
-vport_is_running(const struct vport *vport)
+int vport_is_running(const struct vport *vport)
 {
 	return vport->ops->is_running(vport);
 }
@@ -1167,8 +1127,7 @@ vport_is_running(const struct vport *vport)
  * Retrieves the RFC2863 operstate of the given device.  Either RTNL lock or
  * rcu_read_lock must be held.
  */
-unsigned char
-vport_get_operstate(const struct vport *vport)
+unsigned char vport_get_operstate(const struct vport *vport)
 {
 	return vport->ops->get_operstate(vport);
 }
@@ -1183,8 +1142,7 @@ vport_get_operstate(const struct vport *vport)
  * port is returned.  Returns a negative index on error.  Either RTNL lock or
  * rcu_read_lock must be held.
  */
-int
-vport_get_ifindex(const struct vport *vport)
+int vport_get_ifindex(const struct vport *vport)
 {
 	const struct dp_port *dp_port;
 
@@ -1211,8 +1169,7 @@ vport_get_ifindex(const struct vport *vport)
  * Returns a negative index on error.  Either RTNL lock or rcu_read_lock must
  * be held.
  */
-int
-vport_get_iflink(const struct vport *vport)
+int vport_get_iflink(const struct vport *vport)
 {
 	if (vport->ops->get_iflink)
 		return vport->ops->get_iflink(vport);
@@ -1230,8 +1187,7 @@ vport_get_iflink(const struct vport *vport)
  * Retrieves the MTU of the given device.  Either RTNL lock or rcu_read_lock
  * must be held.
  */
-int
-vport_get_mtu(const struct vport *vport)
+int vport_get_mtu(const struct vport *vport)
 {
 	return vport->ops->get_mtu(vport);
 }
@@ -1246,8 +1202,7 @@ vport_get_mtu(const struct vport *vport)
  * skb->data should point to the Ethernet header.  The caller must have already
  * called compute_ip_summed() to initialize the checksumming fields.
  */
-void
-vport_receive(struct vport *vport, struct sk_buff *skb)
+void vport_receive(struct vport *vport, struct sk_buff *skb)
 {
 	struct dp_port *dp_port = vport_get_dp_port(vport);
 
@@ -1276,8 +1231,7 @@ vport_receive(struct vport *vport, struct sk_buff *skb)
 	dp_process_received_packet(dp_port, skb);
 }
 
-static inline unsigned
-packet_length(const struct sk_buff *skb)
+static inline unsigned packet_length(const struct sk_buff *skb)
 {
 	unsigned length = skb->len - ETH_HLEN;
 
@@ -1296,8 +1250,7 @@ packet_length(const struct sk_buff *skb)
  * Sends the given packet and returns the length of data sent.  Either RTNL
  * lock or rcu_read_lock must be held.
  */
-int
-vport_send(struct vport *vport, struct sk_buff *skb)
+int vport_send(struct vport *vport, struct sk_buff *skb)
 {
 	int *loop_count;
 	int mtu;
@@ -1357,8 +1310,7 @@ out:
  * If using the vport generic stats layer indicate that an error of the given
  * type has occured.
  */
-void
-vport_record_error(struct vport *vport, enum vport_err_type err_type)
+void vport_record_error(struct vport *vport, enum vport_err_type err_type)
 {
 	if (vport->ops->flags & VPORT_F_GEN_STATS) {
 

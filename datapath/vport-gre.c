@@ -74,34 +74,30 @@ static unsigned int key_remote_ports;
 static unsigned int local_remote_ports;
 static unsigned int remote_ports;
 
-static inline struct gre_vport *
-gre_vport_priv(const struct vport *vport)
+static inline struct gre_vport *gre_vport_priv(const struct vport *vport)
 {
 	return vport_priv(vport);
 }
 
-static inline struct vport *
-gre_vport_to_vport(const struct gre_vport *gre_vport)
+static inline struct vport *gre_vport_to_vport(const struct gre_vport *gre_vport)
 {
 	return vport_from_priv(gre_vport);
 }
 
-static inline struct gre_vport *
-gre_vport_table_cast(const struct tbl_node *node)
+static inline struct gre_vport *gre_vport_table_cast(const struct tbl_node *node)
 {
 	return container_of(node, struct gre_vport, tbl_node);
 }
 
 /* RCU callback. */
-static void
-free_config(struct rcu_head *rcu)
+static void free_config(struct rcu_head *rcu)
 {
 	struct mutable_config *c = container_of(rcu, struct mutable_config, rcu);
 	kfree(c);
 }
 
-static void
-assign_config_rcu(struct vport *vport, struct mutable_config *new_config)
+static void assign_config_rcu(struct vport *vport,
+			      struct mutable_config *new_config)
 {
 	struct gre_vport *gre_vport = gre_vport_priv(vport);
 	struct mutable_config *old_config;
@@ -111,8 +107,7 @@ assign_config_rcu(struct vport *vport, struct mutable_config *new_config)
 	call_rcu(&old_config->rcu, free_config);
 }
 
-static unsigned int *
-find_port_pool(const struct mutable_config *mutable)
+static unsigned int *find_port_pool(const struct mutable_config *mutable)
 {
 	if (mutable->port_config.flags & GRE_F_IN_KEY_MATCH) {
 		if (mutable->port_config.saddr)
@@ -141,8 +136,7 @@ struct port_lookup_key {
 
 /* Modifies 'target' to store the rcu_dereferenced pointer that was used to do
  * the comparision. */
-static int
-port_cmp(const struct tbl_node *node, void *target)
+static int port_cmp(const struct tbl_node *node, void *target)
 {
 	const struct gre_vport *gre_vport = gre_vport_table_cast(node);
 	struct port_lookup_key *lookup = target;
@@ -156,14 +150,12 @@ port_cmp(const struct tbl_node *node, void *target)
 	       lookup->mutable->port_config.saddr == lookup->vals[LOOKUP_SADDR];
 }
 
-static u32
-port_hash(struct port_lookup_key *lookup)
+static u32 port_hash(struct port_lookup_key *lookup)
 {
 	return jhash2(lookup->vals, ARRAY_SIZE(lookup->vals), 0);
 }
 
-static int
-add_port(struct vport *vport)
+static int add_port(struct vport *vport)
 {
 	struct gre_vport *gre_vport = gre_vport_priv(vport);
 	struct port_lookup_key lookup;
@@ -204,8 +196,7 @@ add_port(struct vport *vport)
 	return 0;
 }
 
-static int
-del_port(struct vport *vport)
+static int del_port(struct vport *vport)
 {
 	struct gre_vport *gre_vport = gre_vport_priv(vport);
 	int err;
@@ -223,9 +214,9 @@ del_port(struct vport *vport)
 #define FIND_PORT_MATCH		(1 << 1)
 #define FIND_PORT_ANY		(FIND_PORT_KEY | FIND_PORT_MATCH)
 
-static struct vport *
-find_port(__be32 saddr, __be32 daddr, __be32 key, int port_type,
-	  const struct mutable_config **mutable)
+static struct vport *find_port(__be32 saddr, __be32 daddr, __be32 key,
+			       int port_type,
+			       const struct mutable_config **mutable)
 {
 	struct port_lookup_key lookup;
 	struct tbl *table = rcu_dereference(port_table);
@@ -284,8 +275,7 @@ found:
 	return gre_vport_to_vport(gre_vport_table_cast(tbl_node));
 }
 
-static bool
-check_ipv4_address(__be32 addr)
+static bool check_ipv4_address(__be32 addr)
 {
 	if (ipv4_is_multicast(addr) || ipv4_is_lbcast(addr)
 	    || ipv4_is_loopback(addr) || ipv4_is_zeronet(addr))
@@ -294,8 +284,7 @@ check_ipv4_address(__be32 addr)
 	return true;
 }
 
-static bool
-ipv4_should_icmp(struct sk_buff *skb)
+static bool ipv4_should_icmp(struct sk_buff *skb)
 {
 	struct iphdr *old_iph = ip_hdr(skb);
 
@@ -335,9 +324,8 @@ ipv4_should_icmp(struct sk_buff *skb)
 	return true;
 }
 
-static void
-ipv4_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
-		unsigned int mtu, unsigned int payload_length)
+static void ipv4_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
+			    unsigned int mtu, unsigned int payload_length)
 {
 	struct iphdr *iph, *old_iph = ip_hdr(skb);
 	struct icmphdr *icmph;
@@ -378,8 +366,7 @@ ipv4_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
 }
 
 #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
-static bool
-ipv6_should_icmp(struct sk_buff *skb)
+static bool ipv6_should_icmp(struct sk_buff *skb)
 {
 	struct ipv6hdr *old_ipv6h = ipv6_hdr(skb);
 	int addr_type;
@@ -415,9 +402,8 @@ ipv6_should_icmp(struct sk_buff *skb)
 	return true;
 }
 
-static void
-ipv6_build_icmp(struct sk_buff *skb, struct sk_buff *nskb, unsigned int mtu,
-		unsigned int payload_length)
+static void ipv6_build_icmp(struct sk_buff *skb, struct sk_buff *nskb,
+			    unsigned int mtu, unsigned int payload_length)
 {
 	struct ipv6hdr *ipv6h, *old_ipv6h = ipv6_hdr(skb);
 	struct icmp6hdr *icmp6h;
@@ -455,9 +441,10 @@ ipv6_build_icmp(struct sk_buff *skb, struct sk_buff *nskb, unsigned int mtu,
 }
 #endif /* IPv6 */
 
-static bool
-send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
-		 struct sk_buff *skb, unsigned int mtu, __be32 flow_key)
+static bool send_frag_needed(struct vport *vport,
+			     const struct mutable_config *mutable,
+			     struct sk_buff *skb, unsigned int mtu,
+			     __be32 flow_key)
 {
 	unsigned int eth_hdr_len = ETH_HLEN;
 	unsigned int total_length = 0, header_length = 0, payload_length;
@@ -554,8 +541,7 @@ send_frag_needed(struct vport *vport, const struct mutable_config *mutable,
 	return true;
 }
 
-static struct sk_buff *
-check_headroom(struct sk_buff *skb, int headroom)
+static struct sk_buff *check_headroom(struct sk_buff *skb, int headroom)
 {
 	if (skb_headroom(skb) < headroom || skb_header_cloned(skb)) {
 		struct sk_buff *nskb = skb_realloc_headroom(skb, headroom + 16);
@@ -576,8 +562,8 @@ check_headroom(struct sk_buff *skb, int headroom)
 	return skb;
 }
 
-static void
-create_gre_header(struct sk_buff *skb, const struct mutable_config *mutable)
+static void create_gre_header(struct sk_buff *skb,
+			      const struct mutable_config *mutable)
 {
 	struct iphdr *iph = ip_hdr(skb);
 	__be16 *flags = (__be16 *)(iph + 1);
@@ -612,8 +598,7 @@ create_gre_header(struct sk_buff *skb, const struct mutable_config *mutable)
 	}
 }
 
-static int
-check_checksum(struct sk_buff *skb)
+static int check_checksum(struct sk_buff *skb)
 {
 	struct iphdr *iph = ip_hdr(skb);
 	__be16 flags = *(__be16 *)(iph + 1);
@@ -639,8 +624,7 @@ check_checksum(struct sk_buff *skb)
 	return (csum == 0);
 }
 
-static int
-parse_gre_header(struct iphdr *iph, __be16 *flags, __be32 *key)
+static int parse_gre_header(struct iphdr *iph, __be16 *flags, __be32 *key)
 {
 	/* IP and ICMP protocol handlers check that the IHL is valid. */
 	__be16 *flagsp = (__be16 *)((u8 *)iph + (iph->ihl << 2));
@@ -677,8 +661,7 @@ parse_gre_header(struct iphdr *iph, __be16 *flags, __be32 *key)
 	return hdr_len;
 }
 
-static inline u8
-ecn_encapsulate(u8 tos, struct sk_buff *skb)
+static inline u8 ecn_encapsulate(u8 tos, struct sk_buff *skb)
 {
 	u8 inner;
 
@@ -694,8 +677,7 @@ ecn_encapsulate(u8 tos, struct sk_buff *skb)
 	return INET_ECN_encapsulate(tos, inner);
 }
 
-static inline void
-ecn_decapsulate(u8 tos, struct sk_buff *skb)
+static inline void ecn_decapsulate(u8 tos, struct sk_buff *skb)
 {
 	if (INET_ECN_is_ce(tos)) {
 		__be16 protocol = skb->protocol;
@@ -729,8 +711,7 @@ ecn_decapsulate(u8 tos, struct sk_buff *skb)
 	}
 }
 
-static struct sk_buff *
-handle_gso(struct sk_buff *skb)
+static struct sk_buff *handle_gso(struct sk_buff *skb)
 {
 	if (skb_is_gso(skb)) {
 		struct sk_buff *nskb = skb_gso_segment(skb, 0);
@@ -742,8 +723,7 @@ handle_gso(struct sk_buff *skb)
 	return skb;
 }
 
-static int
-handle_csum_offload(struct sk_buff *skb)
+static int handle_csum_offload(struct sk_buff *skb)
 {
 	if (skb->ip_summed == CHECKSUM_PARTIAL)
 		return skb_checksum_help(skb);
@@ -754,8 +734,7 @@ handle_csum_offload(struct sk_buff *skb)
 }
 
 /* Called with rcu_read_lock. */
-static void
-gre_err(struct sk_buff *skb, u32 info)
+static void gre_err(struct sk_buff *skb, u32 info)
 {
 	struct vport *vport;
 	const struct mutable_config *mutable;
@@ -871,8 +850,7 @@ out:
 }
 
 /* Called with rcu_read_lock. */
-static int
-gre_rcv(struct sk_buff *skb)
+static int gre_rcv(struct sk_buff *skb)
 {
 	struct vport *vport;
 	const struct mutable_config *mutable;
@@ -937,10 +915,9 @@ error:
 	return 0;
 }
 
-static int
-build_packet(struct vport *vport, const struct mutable_config *mutable,
-	     struct iphdr *iph, struct rtable *rt, int max_headroom, int mtu,
-	     struct sk_buff *skb)
+static int build_packet(struct vport *vport, const struct mutable_config *mutable,
+			struct iphdr *iph, struct rtable *rt, int max_headroom,
+			int mtu, struct sk_buff *skb)
 {
 	int err;
 	struct iphdr *new_iph;
@@ -1014,8 +991,7 @@ error:
 	return 0;
 }
 
-static int
-gre_send(struct vport *vport, struct sk_buff *skb)
+static int gre_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct gre_vport *gre_vport = gre_vport_priv(vport);
 	const struct mutable_config *mutable = rcu_dereference(gre_vport->mutable);
@@ -1167,8 +1143,7 @@ static struct net_protocol gre_protocol_handlers = {
 	.err_handler	=	gre_err,
 };
 
-static int
-gre_init(void)
+static int gre_init(void)
 {
 	int err;
 
@@ -1179,16 +1154,14 @@ gre_init(void)
 	return err;
 }
 
-static void
-gre_exit(void)
+static void gre_exit(void)
 {
 	tbl_destroy(port_table, NULL);
 	inet_del_protocol(&gre_protocol_handlers, IPPROTO_GRE);
 }
 
-static int
-set_config(const struct vport *cur_vport, struct mutable_config *mutable,
-	   const void __user *uconfig)
+static int set_config(const struct vport *cur_vport,
+		      struct mutable_config *mutable, const void __user *uconfig)
 {
 	const struct vport *old_vport;
 	const struct mutable_config *old_mutable;
@@ -1229,8 +1202,7 @@ set_config(const struct vport *cur_vport, struct mutable_config *mutable,
 	return 0;
 }
 
-static struct vport *
-gre_create(const char *name, const void __user *config)
+static struct vport *gre_create(const char *name, const void __user *config)
 {
 	struct vport *vport;
 	struct gre_vport *gre_vport;
@@ -1273,8 +1245,7 @@ error:
 	return ERR_PTR(err);
 }
 
-static int
-gre_modify(struct vport *vport, const void __user *config)
+static int gre_modify(struct vport *vport, const void __user *config)
 {
 	struct gre_vport *gre_vport = gre_vport_priv(vport);
 	struct mutable_config *mutable;
@@ -1325,8 +1296,7 @@ error:
 	return err;
 }
 
-static int
-gre_destroy(struct vport *vport)
+static int gre_destroy(struct vport *vport)
 {
 	struct gre_vport *gre_vport = gre_vport_priv(vport);
 	int port_type;
@@ -1350,8 +1320,7 @@ gre_destroy(struct vport *vport)
 	return 0;
 }
 
-static int
-gre_set_mtu(struct vport *vport, int mtu)
+static int gre_set_mtu(struct vport *vport, int mtu)
 {
 	struct gre_vport *gre_vport = gre_vport_priv(vport);
 	struct mutable_config *mutable;
@@ -1366,8 +1335,7 @@ gre_set_mtu(struct vport *vport, int mtu)
 	return 0;
 }
 
-static int
-gre_set_addr(struct vport *vport, const unsigned char *addr)
+static int gre_set_addr(struct vport *vport, const unsigned char *addr)
 {
 	struct gre_vport *gre_vport = gre_vport_priv(vport);
 	struct mutable_config *mutable;
@@ -1383,22 +1351,19 @@ gre_set_addr(struct vport *vport, const unsigned char *addr)
 }
 
 
-static const char *
-gre_get_name(const struct vport *vport)
+static const char *gre_get_name(const struct vport *vport)
 {
 	const struct gre_vport *gre_vport = gre_vport_priv(vport);
 	return gre_vport->name;
 }
 
-static const unsigned char *
-gre_get_addr(const struct vport *vport)
+static const unsigned char *gre_get_addr(const struct vport *vport)
 {
 	const struct gre_vport *gre_vport = gre_vport_priv(vport);
 	return rcu_dereference(gre_vport->mutable)->eth_addr;
 }
 
-static int
-gre_get_mtu(const struct vport *vport)
+static int gre_get_mtu(const struct vport *vport)
 {
 	const struct gre_vport *gre_vport = gre_vport_priv(vport);
 	return rcu_dereference(gre_vport->mutable)->mtu;

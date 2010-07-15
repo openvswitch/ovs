@@ -24,8 +24,7 @@
 #include "openvswitch/datapath-protocol.h"
 #include "vport.h"
 
-static struct sk_buff *
-make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
+static struct sk_buff *make_writable(struct sk_buff *skb, unsigned min_headroom, gfp_t gfp)
 {
 	if (skb_shared(skb) || skb_cloned(skb)) {
 		struct sk_buff *nskb;
@@ -53,8 +52,7 @@ static void set_tunnel(struct sk_buff *skb, struct odp_flow_key *key,
 	OVS_CB(skb)->tun_id = key->tun_id = tun_id;
 }
 
-static struct sk_buff *
-vlan_pull_tag(struct sk_buff *skb)
+static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 {
 	struct vlan_ethhdr *vh = vlan_eth_hdr(skb);
 	struct ethhdr *eh;
@@ -78,10 +76,9 @@ vlan_pull_tag(struct sk_buff *skb)
 }
 
 
-static struct sk_buff *
-modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
-		struct odp_flow_key *key, const union odp_action *a,
-		int n_actions, gfp_t gfp)
+static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
+				       struct odp_flow_key *key, const union odp_action *a,
+				       int n_actions, gfp_t gfp)
 {
 	u16 tci, mask;
 
@@ -313,10 +310,8 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 	return skb;
 }
 
-static struct sk_buff *
-set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
-	    const struct odp_action_tp_port *a,
-	    gfp_t gfp)
+static struct sk_buff *set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
+				   const struct odp_action_tp_port *a, gfp_t gfp)
 {
 	int check_ofs;
 
@@ -347,8 +342,7 @@ set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
 	return skb;
 }
 
-static void
-do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
+static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port)
 {
 	struct dp_port *p;
 
@@ -392,8 +386,8 @@ static int output_group(struct datapath *dp, __u16 group,
 	return prev_port;
 }
 
-static int
-output_control(struct datapath *dp, struct sk_buff *skb, u32 arg, gfp_t gfp)
+static int output_control(struct datapath *dp, struct sk_buff *skb, u32 arg,
+			  gfp_t gfp)
 {
 	skb = skb_clone(skb, gfp);
 	if (!skb)

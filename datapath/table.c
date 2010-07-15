@@ -367,7 +367,7 @@ int tbl_insert(struct tbl *table, struct tbl_node *target, u32 hash)
 }
 
 /**
- * tbl_delete - remove object from table
+ * tbl_remove - remove object from table
  * @table: table from which to remove object
  * @target: tbl_node inside of object to remove
  *

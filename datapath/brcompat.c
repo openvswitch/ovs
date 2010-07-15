@@ -42,8 +42,8 @@ static u32 brc_seq;		     /* Sequence number for current op. */
 static struct sk_buff *brc_send_command(struct sk_buff *, struct nlattr **attrs);
 static int brc_send_simple_command(struct sk_buff *);
 
-static struct sk_buff *
-brc_make_request(int op, const char *bridge, const char *port)
+static struct sk_buff *brc_make_request(int op, const char *bridge,
+					const char *port)
 {
 	struct sk_buff *skb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 	if (!skb)
@@ -146,8 +146,7 @@ static int brc_get_bridges(int __user *uindices, int n)
 }
 
 /* Legacy deviceless bridge ioctl's.  Called with br_ioctl_mutex. */
-static int
-old_deviceless(void __user *uarg)
+static int old_deviceless(void __user *uarg)
 {
 	unsigned long args[3];
 
@@ -189,8 +188,7 @@ brc_ioctl_deviceless_stub(struct net *net, unsigned int cmd, void __user *uarg)
 	return -EOPNOTSUPP;
 }
 
-static int
-brc_add_del_port(struct net_device *dev, int port_ifindex, int add)
+static int brc_add_del_port(struct net_device *dev, int port_ifindex, int add)
 {
 	struct sk_buff *request;
 	struct net_device *port;
@@ -214,8 +212,8 @@ brc_add_del_port(struct net_device *dev, int port_ifindex, int add)
 	return err;
 }
 
-static int
-brc_get_bridge_info(struct net_device *dev, struct __bridge_info __user *ub)
+static int brc_get_bridge_info(struct net_device *dev,
+			       struct __bridge_info __user *ub)
 {
 	struct __bridge_info b;
 	u64 id = 0;
@@ -234,8 +232,8 @@ brc_get_bridge_info(struct net_device *dev, struct __bridge_info __user *ub)
 	return 0;
 }
 
-static int
-brc_get_port_list(struct net_device *dev, int __user *uindices, int num)
+static int brc_get_port_list(struct net_device *dev, int __user *uindices,
+			     int num)
 {
 	int retval;
 
@@ -306,8 +304,7 @@ nla_put_failure:
 }
 
 /* Legacy ioctl's through SIOCDEVPRIVATE.  Called with rtnl_lock. */
-static int
-old_dev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+static int old_dev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 {
 	unsigned long args[4];
 
@@ -335,8 +332,7 @@ old_dev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 }
 
 /* Called with the rtnl_lock. */
-static int
-brc_dev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+static int brc_dev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 {
 	int err;
 
@@ -413,8 +409,7 @@ static struct nla_policy brc_genl_policy[BRC_GENL_A_MAX + 1] = {
 	[BRC_GENL_A_FDB_DATA] = { .type = NLA_UNSPEC },
 };
 
-static int
-brc_genl_dp_result(struct sk_buff *skb, struct genl_info *info)
+static int brc_genl_dp_result(struct sk_buff *skb, struct genl_info *info)
 {
 	unsigned long int flags;
 	int err;
@@ -461,7 +456,8 @@ static struct genl_ops brc_genl_ops_set_proc = {
 	.dumpit = NULL
 };
 
-static struct sk_buff *brc_send_command(struct sk_buff *request, struct nlattr **attrs)
+static struct sk_buff *brc_send_command(struct sk_buff *request,
+					struct nlattr **attrs)
 {
 	unsigned long int flags;
 	struct sk_buff *reply;
@@ -511,8 +507,7 @@ error:
 	return ERR_PTR(error);
 }
 
-static int 
-__init brc_init(void)
+static int __init brc_init(void)
 {
 	int err;
 
@@ -561,8 +556,7 @@ error:
 	return err;
 }
 
-static void 
-brc_cleanup(void)
+static void brc_cleanup(void)
 {
 	/* Unregister ioctl hooks */
 	dp_ioctl_hook = NULL;

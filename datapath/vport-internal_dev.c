@@ -161,8 +161,7 @@ static const struct net_device_ops internal_dev_netdev_ops = {
 };
 #endif
 
-static void
-do_setup(struct net_device *netdev)
+static void do_setup(struct net_device *netdev)
 {
 	ether_setup(netdev);
 
@@ -189,8 +188,8 @@ do_setup(struct net_device *netdev)
 	vport_gen_rand_ether_addr(netdev->dev_addr);
 }
 
-static struct vport *
-internal_dev_create(const char *name, const void __user *config)
+static struct vport *internal_dev_create(const char *name,
+					 const void __user *config)
 {
 	struct vport *vport;
 	struct netdev_vport *netdev_vport;
@@ -228,8 +227,7 @@ error:
 	return ERR_PTR(err);
 }
 
-static int
-internal_dev_destroy(struct vport *vport)
+static int internal_dev_destroy(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
@@ -239,8 +237,7 @@ internal_dev_destroy(struct vport *vport)
 	return 0;
 }
 
-static int
-internal_dev_attach(struct vport *vport)
+static int internal_dev_attach(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
@@ -254,8 +251,7 @@ internal_dev_attach(struct vport *vport)
 	return 0;
 }
 
-static int
-internal_dev_detach(struct vport *vport)
+static int internal_dev_detach(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
@@ -269,8 +265,7 @@ internal_dev_detach(struct vport *vport)
 	return 0;
 }
 
-static int
-internal_dev_recv(struct vport *vport, struct sk_buff *skb)
+static int internal_dev_recv(struct vport *vport, struct sk_buff *skb)
 {
 	struct net_device *netdev = netdev_vport_priv(vport)->dev;
 	int len;
@@ -319,14 +314,12 @@ int is_internal_dev(const struct net_device *netdev)
 #endif
 }
 
-int
-is_internal_vport(const struct vport *vport)
+int is_internal_vport(const struct vport *vport)
 {
 	return vport->ops == &internal_vport_ops;
 }
 
-struct vport *
-internal_dev_get_vport(struct net_device *netdev)
+struct vport *internal_dev_get_vport(struct net_device *netdev)
 {
 	struct internal_dev *internal_dev = internal_dev_priv(netdev);
 	return rcu_dereference(internal_dev->vport);

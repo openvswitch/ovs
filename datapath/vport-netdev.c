@@ -33,16 +33,15 @@ static void netdev_port_receive(struct net_bridge_port *, struct sk_buff *);
  */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 /* Called with rcu_read_lock and bottom-halves disabled. */
-static struct sk_buff *
-netdev_frame_hook(struct net_bridge_port *p, struct sk_buff *skb)
+static struct sk_buff *netdev_frame_hook(struct net_bridge_port *p,
+					 struct sk_buff *skb)
 {
 	netdev_port_receive(p, skb);
 	return NULL;
 }
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
 /* Called with rcu_read_lock and bottom-halves disabled. */
-static int
-netdev_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
+static int netdev_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 {
 	netdev_port_receive(p, *pskb);
 	return 1;
@@ -51,8 +50,7 @@ netdev_frame_hook(struct net_bridge_port *p, struct sk_buff **pskb)
 #error
 #endif
 
-static int
-netdev_init(void)
+static int netdev_init(void)
 {
 	/* Hook into callback used by the bridge to intercept packets.
 	 * Parasites we are. */
@@ -67,8 +65,7 @@ netdev_exit(void)
 	br_handle_frame_hook = NULL;
 }
 
-static struct vport *
-netdev_create(const char *name, const void __user *config)
+static struct vport *netdev_create(const char *name, const void __user *config)
 {
 	struct vport *vport;
 	struct netdev_vport *netdev_vport;
@@ -120,8 +117,7 @@ error:
 	return ERR_PTR(err);
 }
 
-static int
-netdev_destroy(struct vport *vport)
+static int netdev_destroy(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
@@ -131,8 +127,7 @@ netdev_destroy(struct vport *vport)
 	return 0;
 }
 
-static int
-netdev_attach(struct vport *vport)
+static int netdev_attach(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
@@ -143,8 +138,7 @@ netdev_attach(struct vport *vport)
 	return 0;
 }
 
-static int
-netdev_detach(struct vport *vport)
+static int netdev_detach(struct vport *vport)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 
@@ -154,15 +148,13 @@ netdev_detach(struct vport *vport)
 	return 0;
 }
 
-int
-netdev_set_mtu(struct vport *vport, int mtu)
+int netdev_set_mtu(struct vport *vport, int mtu)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return dev_set_mtu(netdev_vport->dev, mtu);
 }
 
-int
-netdev_set_addr(struct vport *vport, const unsigned char *addr)
+int netdev_set_addr(struct vport *vport, const unsigned char *addr)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	struct sockaddr sa;
@@ -173,29 +165,25 @@ netdev_set_addr(struct vport *vport, const unsigned char *addr)
 	return dev_set_mac_address(netdev_vport->dev, &sa);
 }
 
-const char *
-netdev_get_name(const struct vport *vport)
+const char *netdev_get_name(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->name;
 }
 
-const unsigned char *
-netdev_get_addr(const struct vport *vport)
+const unsigned char *netdev_get_addr(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->dev_addr;
 }
 
-struct kobject *
-netdev_get_kobj(const struct vport *vport)
+struct kobject *netdev_get_kobj(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return &netdev_vport->dev->NETDEV_DEV_MEMBER.kobj;
 }
 
-int
-netdev_get_stats(const struct vport *vport, struct odp_vport_stats *stats)
+int netdev_get_stats(const struct vport *vport, struct odp_vport_stats *stats)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	const struct net_device_stats *netdev_stats;
@@ -218,22 +206,19 @@ netdev_get_stats(const struct vport *vport, struct odp_vport_stats *stats)
 	return 0;
 }
 
-unsigned
-netdev_get_dev_flags(const struct vport *vport)
+unsigned netdev_get_dev_flags(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return dev_get_flags(netdev_vport->dev);
 }
 
-int
-netdev_is_running(const struct vport *vport)
+int netdev_is_running(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netif_running(netdev_vport->dev);
 }
 
-unsigned char
-netdev_get_operstate(const struct vport *vport)
+unsigned char netdev_get_operstate(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->operstate;
@@ -246,23 +231,20 @@ netdev_get_ifindex(const struct vport *vport)
 	return netdev_vport->dev->ifindex;
 }
 
-int
-netdev_get_iflink(const struct vport *vport)
+int netdev_get_iflink(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->iflink;
 }
 
-int
-netdev_get_mtu(const struct vport *vport)
+int netdev_get_mtu(const struct vport *vport)
 {
 	const struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	return netdev_vport->dev->mtu;
 }
 
 /* Must be called with rcu_read_lock. */
-static void
-netdev_port_receive(struct net_bridge_port *p, struct sk_buff *skb)
+static void netdev_port_receive(struct net_bridge_port *p, struct sk_buff *skb)
 {
 	struct vport *vport = (struct vport *)p;
 
@@ -282,8 +264,7 @@ netdev_port_receive(struct net_bridge_port *p, struct sk_buff *skb)
 	vport_receive(vport, skb);
 }
 
-static int
-netdev_send(struct vport *vport, struct sk_buff *skb)
+static int netdev_send(struct vport *vport, struct sk_buff *skb)
 {
 	struct netdev_vport *netdev_vport = netdev_vport_priv(vport);
 	int len = skb->len;
@@ -296,8 +277,7 @@ netdev_send(struct vport *vport, struct sk_buff *skb)
 }
 
 /* Returns null if this device is not attached to a datapath. */
-struct vport *
-netdev_get_vport(struct net_device *dev)
+struct vport *netdev_get_vport(struct net_device *dev)
 {
 	return (struct vport *)dev->br_port;
 }
