@@ -138,7 +138,7 @@ static int do_del_port(struct dp_netdev *, uint16_t port_no);
 static int dp_netdev_output_control(struct dp_netdev *, const struct ofpbuf *,
                                     int queue_no, int port_no, uint32_t arg);
 static int dp_netdev_execute_actions(struct dp_netdev *,
-                                     struct ofpbuf *, flow_t *,
+                                     struct ofpbuf *, const flow_t *,
                                      const union odp_action *, int n);
 
 static struct dpif_netdev *
@@ -1094,7 +1094,7 @@ dp_netdev_wait(void)
  * bits outside of 'mask'.
  */
 static void
-dp_netdev_modify_vlan_tci(struct ofpbuf *packet, flow_t *key,
+dp_netdev_modify_vlan_tci(struct ofpbuf *packet, const flow_t *key,
                           uint16_t tci, uint16_t mask)
 {
     struct vlan_eth_header *veh;
@@ -1118,12 +1118,10 @@ dp_netdev_modify_vlan_tci(struct ofpbuf *packet, flow_t *key,
         memcpy(veh, &tmp, sizeof tmp);
         packet->l2 = (char*)packet->l2 - VLAN_HEADER_LEN;
     }
-
-    key->dl_vlan = veh->veth_tci & htons(VLAN_VID_MASK);
 }
 
 static void
-dp_netdev_strip_vlan(struct ofpbuf *packet, flow_t *key)
+dp_netdev_strip_vlan(struct ofpbuf *packet)
 {
     struct vlan_eth_header *veh = packet->l2;
     if (veh->veth_type == htons(ETH_TYPE_VLAN)) {
@@ -1137,31 +1135,25 @@ dp_netdev_strip_vlan(struct ofpbuf *packet, flow_t *key)
         packet->data = (char*)packet->data + VLAN_HEADER_LEN;
         packet->l2 = (char*)packet->l2 + VLAN_HEADER_LEN;
         memcpy(packet->data, &tmp, sizeof tmp);
-
-        key->dl_vlan = htons(ODP_VLAN_NONE);
     }
 }
 
 static void
-dp_netdev_set_dl_src(struct ofpbuf *packet, flow_t *key,
-                     const uint8_t dl_addr[ETH_ADDR_LEN])
+dp_netdev_set_dl_src(struct ofpbuf *packet, const uint8_t dl_addr[ETH_ADDR_LEN])
 {
     struct eth_header *eh = packet->l2;
     memcpy(eh->eth_src, dl_addr, sizeof eh->eth_src);
-    memcpy(key->dl_src, dl_addr, sizeof key->dl_src);
 }
 
 static void
-dp_netdev_set_dl_dst(struct ofpbuf *packet, flow_t *key,
-                     const uint8_t dl_addr[ETH_ADDR_LEN])
+dp_netdev_set_dl_dst(struct ofpbuf *packet, const uint8_t dl_addr[ETH_ADDR_LEN])
 {
     struct eth_header *eh = packet->l2;
     memcpy(eh->eth_dst, dl_addr, sizeof eh->eth_dst);
-    memcpy(key->dl_dst, dl_addr, sizeof key->dl_dst);
 }
 
 static void
-dp_netdev_set_nw_addr(struct ofpbuf *packet, flow_t *key,
+dp_netdev_set_nw_addr(struct ofpbuf *packet, const flow_t *key,
                       const struct odp_action_nw_addr *a)
 {
     if (key->dl_type == htons(ETH_TYPE_IP)) {
@@ -1183,17 +1175,11 @@ dp_netdev_set_nw_addr(struct ofpbuf *packet, flow_t *key,
         }
         nh->ip_csum = recalc_csum32(nh->ip_csum, *field, a->nw_addr);
         *field = a->nw_addr;
-
-        if (a->type == ODPAT_SET_NW_SRC) {
-            key->nw_src = a->type;
-        } else {
-            key->nw_dst = a->type;
-        }
     }
 }
 
 static void
-dp_netdev_set_nw_tos(struct ofpbuf *packet, flow_t *key,
+dp_netdev_set_nw_tos(struct ofpbuf *packet, const flow_t *key,
                      const struct odp_action_nw_tos *a)
 {
     if (key->dl_type == htons(ETH_TYPE_IP)) {
@@ -1206,12 +1192,11 @@ dp_netdev_set_nw_tos(struct ofpbuf *packet, flow_t *key,
         nh->ip_csum = recalc_csum16(nh->ip_csum, htons((uint16_t)*field),
                 htons((uint16_t)a->nw_tos));
         *field = new;
-        key->nw_tos = a->nw_tos;
     }
 }
 
 static void
-dp_netdev_set_tp_port(struct ofpbuf *packet, flow_t *key,
+dp_netdev_set_tp_port(struct ofpbuf *packet, const flow_t *key,
                       const struct odp_action_tp_port *a)
 {
 	if (key->dl_type == htons(ETH_TYPE_IP)) {
@@ -1228,12 +1213,6 @@ dp_netdev_set_tp_port(struct ofpbuf *packet, flow_t *key,
             *field = a->tp_port;
         } else {
             return;
-        }
-
-        if (a->type == ODPAT_SET_TP_SRC) {
-            key->tp_src = a->tp_port;
-        } else {
-            key->tp_dst = a->tp_port;
         }
     }
 }
@@ -1293,7 +1272,7 @@ dp_netdev_output_control(struct dp_netdev *dp, const struct ofpbuf *packet,
 
 static int
 dp_netdev_execute_actions(struct dp_netdev *dp,
-                          struct ofpbuf *packet, flow_t *key,
+                          struct ofpbuf *packet, const flow_t *key,
                           const union odp_action *actions, int n_actions)
 {
     int i;
@@ -1327,15 +1306,15 @@ dp_netdev_execute_actions(struct dp_netdev *dp,
             break;
 
 		case ODPAT_STRIP_VLAN:
-			dp_netdev_strip_vlan(packet, key);
+			dp_netdev_strip_vlan(packet);
 			break;
 
 		case ODPAT_SET_DL_SRC:
-            dp_netdev_set_dl_src(packet, key, a->dl_addr.dl_addr);
+            dp_netdev_set_dl_src(packet, a->dl_addr.dl_addr);
 			break;
 
 		case ODPAT_SET_DL_DST:
-            dp_netdev_set_dl_dst(packet, key, a->dl_addr.dl_addr);
+            dp_netdev_set_dl_dst(packet, a->dl_addr.dl_addr);
 			break;
 
 		case ODPAT_SET_NW_SRC:

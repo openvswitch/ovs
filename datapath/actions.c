@@ -70,19 +70,18 @@ static struct sk_buff *vlan_pull_tag(struct sk_buff *skb)
 }
 
 static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
-				       struct odp_flow_key *key, const union odp_action *a,
-				       int n_actions, gfp_t gfp)
+				       const struct odp_flow_key *key,
+				       const union odp_action *a, int n_actions,
+				       gfp_t gfp)
 {
 	u16 tci, mask;
 
 	if (a->type == ODPAT_SET_VLAN_VID) {
 		tci = ntohs(a->vlan_vid.vlan_vid);
 		mask = VLAN_VID_MASK;
-		key->dl_vlan = a->vlan_vid.vlan_vid;
 	} else {
 		tci = a->vlan_pcp.vlan_pcp << VLAN_PCP_SHIFT;
 		mask = VLAN_PCP_MASK;
-		key->dl_vlan_pcp = a->vlan_pcp.vlan_pcp;
 	}
 
 	skb = make_writable(skb, VLAN_HLEN, gfp);
@@ -153,9 +152,8 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 				segs = __vlan_put_tag(segs, tci);
 				err = -ENOMEM;
 				if (segs) {
-					struct odp_flow_key segkey = *key;
 					err = execute_actions(dp, segs,
-							      &segkey, a + 1,
+							      key, a + 1,
 							      n_actions - 1,
 							      gfp);
 				}
@@ -195,32 +193,26 @@ static struct sk_buff *modify_vlan_tci(struct datapath *dp, struct sk_buff *skb,
 	return skb;
 }
 
-static struct sk_buff *strip_vlan(struct sk_buff *skb,
-				  struct odp_flow_key *key, gfp_t gfp)
+static struct sk_buff *strip_vlan(struct sk_buff *skb, gfp_t gfp)
 {
 	skb = make_writable(skb, 0, gfp);
-	if (skb) {
+	if (skb)
 		vlan_pull_tag(skb);
-		key->dl_vlan = htons(ODP_VLAN_NONE);
-	}
+
 	return skb;
 }
 
 static struct sk_buff *set_dl_addr(struct sk_buff *skb,
-				   struct odp_flow_key *key,
 				   const struct odp_action_dl_addr *a,
 				   gfp_t gfp)
 {
 	skb = make_writable(skb, 0, gfp);
 	if (skb) {
 		struct ethhdr *eh = eth_hdr(skb);
-		if (a->type == ODPAT_SET_DL_SRC) {
+		if (a->type == ODPAT_SET_DL_SRC)
 			memcpy(eh->h_source, a->dl_addr, ETH_ALEN);
-			memcpy(key->dl_src, a->dl_addr, ETH_ALEN);
-		} else {
+		else
 			memcpy(eh->h_dest, a->dl_addr, ETH_ALEN);
-			memcpy(key->dl_dst, a->dl_addr, ETH_ALEN);
-		}
 	}
 	return skb;
 }
@@ -246,7 +238,7 @@ static void update_csum(__sum16 *sum, struct sk_buff *skb,
 }
 
 static struct sk_buff *set_nw_addr(struct sk_buff *skb,
-				   struct odp_flow_key *key,
+				   const struct odp_flow_key *key,
 				   const struct odp_action_nw_addr *a,
 				   gfp_t gfp)
 {
@@ -269,17 +261,12 @@ static struct sk_buff *set_nw_addr(struct sk_buff *skb,
 		}
 		update_csum(&nh->check, skb, old, new, 0);
 		*f = new;
-
-		if (a->type == ODPAT_SET_NW_SRC)
-			key->nw_src = a->nw_addr;
-		else
-			key->nw_dst = a->nw_addr;
 	}
 	return skb;
 }
 
 static struct sk_buff *set_nw_tos(struct sk_buff *skb,
-				   struct odp_flow_key *key,
+				   const struct odp_flow_key *key,
 				   const struct odp_action_nw_tos *a,
 				   gfp_t gfp)
 {
@@ -298,12 +285,12 @@ static struct sk_buff *set_nw_tos(struct sk_buff *skb,
 		update_csum(&nh->check, skb, htons((uint16_t)old),
 				htons((uint16_t)new), 0);
 		*f = new;
-		key->nw_tos = a->nw_tos;
 	}
 	return skb;
 }
 
-static struct sk_buff *set_tp_port(struct sk_buff *skb, struct odp_flow_key *key,
+static struct sk_buff *set_tp_port(struct sk_buff *skb,
+				   const struct odp_flow_key *key,
 				   const struct odp_action_tp_port *a, gfp_t gfp)
 {
 	int check_ofs;
@@ -327,10 +314,6 @@ static struct sk_buff *set_tp_port(struct sk_buff *skb, struct odp_flow_key *key
 		update_csum((u16*)(skb_transport_header(skb) + check_ofs), 
 				skb, old, new, 0);
 		*f = new;
-		if (a->type == ODPAT_SET_TP_SRC)
-			key->tp_src = a->tp_port;
-		else
-			key->tp_dst = a->tp_port;
 	}
 	return skb;
 }
@@ -412,7 +395,7 @@ static void sflow_sample(struct datapath *dp, struct sk_buff *skb,
 
 /* Execute a list of actions against 'skb'. */
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
-		    struct odp_flow_key *key,
+		    const struct odp_flow_key *key,
 		    const union odp_action *a, int n_actions,
 		    gfp_t gfp)
 {
@@ -462,7 +445,7 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODPAT_SET_TUNNEL:
-			OVS_CB(skb)->tun_id = key->tun_id = a->tunnel.tun_id;
+			OVS_CB(skb)->tun_id = a->tunnel.tun_id;
 			break;
 
 		case ODPAT_SET_VLAN_VID:
@@ -473,12 +456,12 @@ int execute_actions(struct datapath *dp, struct sk_buff *skb,
 			break;
 
 		case ODPAT_STRIP_VLAN:
-			skb = strip_vlan(skb, key, gfp);
+			skb = strip_vlan(skb, gfp);
 			break;
 
 		case ODPAT_SET_DL_SRC:
 		case ODPAT_SET_DL_DST:
-			skb = set_dl_addr(skb, key, &a->dl_addr, gfp);
+			skb = set_dl_addr(skb, &a->dl_addr, gfp);
 			break;
 
 		case ODPAT_SET_NW_SRC:

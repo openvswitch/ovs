@@ -18,7 +18,7 @@ struct odp_flow_key;
 union odp_action;
 
 int execute_actions(struct datapath *dp, struct sk_buff *skb,
-		    struct odp_flow_key *key,
+		    const struct odp_flow_key *key,
 		    const union odp_action *, int n_actions,
 		    gfp_t gfp);
 
