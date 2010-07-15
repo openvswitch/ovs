@@ -55,6 +55,7 @@ struct mutable_config {
 };
 
 struct gre_vport {
+	struct rcu_head rcu;
 	struct tbl_node tbl_node;
 
 	char name[IFNAMSIZ];
@@ -1296,6 +1297,14 @@ error:
 	return err;
 }
 
+static void free_port(struct rcu_head *rcu)
+{
+	struct gre_vport *gre_vport = container_of(rcu, struct gre_vport, rcu);
+
+	kfree(gre_vport->mutable);
+	vport_free(gre_vport_to_vport(gre_vport));
+}
+
 static int gre_destroy(struct vport *vport)
 {
 	struct gre_vport *gre_vport = gre_vport_priv(vport);
@@ -1314,8 +1323,7 @@ static int gre_destroy(struct vport *vport)
 	    gre_vport->mutable->port_config.in_key, port_type, &old_mutable))
 		del_port(vport);
 
-	kfree(gre_vport->mutable);
-	vport_free(vport);
+	call_rcu(&gre_vport->rcu, free_port);
 
 	return 0;
 }
