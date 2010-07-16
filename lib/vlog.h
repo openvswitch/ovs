@@ -60,16 +60,25 @@ enum vlog_facility {
 const char *vlog_get_facility_name(enum vlog_facility);
 enum vlog_facility vlog_get_facility_val(const char *name);
 
-/* VLM_ constant for each vlog module. */
-enum vlog_module {
-#define VLOG_MODULE(NAME) VLM_##NAME,
-#include "vlog-modules.def"
-    VLM_N_MODULES,
-    VLM_ANY_MODULE = -1
+/* A log module. */
+struct vlog_module {
+    const char *name;             /* User-visible name. */
+    int levels[VLF_N_FACILITIES]; /* Minimum log level for each facility. */
+    int min_level;                /* Minimum log level for any facility. */
 };
 
-const char *vlog_get_module_name(enum vlog_module);
-enum vlog_module vlog_get_module_val(const char *name);
+/* Creates and initializes a global instance of a module named MODULE. */
+#if USE_LINKER_SECTIONS
+#define VLOG_DEFINE_MODULE(MODULE)                                      \
+        VLOG_DEFINE_MODULE__(MODULE)                                    \
+        struct vlog_module *vlog_module_ptr_##MODULE                    \
+            __attribute__((section("vlog_modules"))) = &VLM_##MODULE;
+#else
+#define VLOG_DEFINE_MODULE(MODULE) extern struct vlog_module VLM_##MODULE;
+#endif
+
+const char *vlog_get_module_name(const struct vlog_module *);
+struct vlog_module *vlog_module_from_name(const char *name);
 
 /* Rate-limiter for log messages. */
 struct vlog_rate_limit {
@@ -103,12 +112,13 @@ struct vlog_rate_limit {
         }
 
 /* Configuring how each module logs messages. */
-enum vlog_level vlog_get_level(enum vlog_module, enum vlog_facility);
-void vlog_set_levels(enum vlog_module, enum vlog_facility, enum vlog_level);
+enum vlog_level vlog_get_level(const struct vlog_module *, enum vlog_facility);
+void vlog_set_levels(struct vlog_module *,
+                     enum vlog_facility, enum vlog_level);
 char *vlog_set_levels_from_string(const char *);
 char *vlog_get_levels(void);
-bool vlog_is_enabled(enum vlog_module, enum vlog_level);
-bool vlog_should_drop(enum vlog_module, enum vlog_level,
+bool vlog_is_enabled(const struct vlog_module *, enum vlog_level);
+bool vlog_should_drop(const struct vlog_module *, enum vlog_level,
                       struct vlog_rate_limit *);
 void vlog_set_verbosity(const char *arg);
 
@@ -121,19 +131,25 @@ int vlog_reopen_log_file(void);
 /* Function for actual logging. */
 void vlog_init(void);
 void vlog_exit(void);
-void vlog(enum vlog_module, enum vlog_level, const char *format, ...)
+void vlog(const struct vlog_module *, enum vlog_level, const char *format, ...)
     __attribute__((format(printf, 3, 4)));
-void vlog_valist(enum vlog_module, enum vlog_level, const char *, va_list)
+void vlog_valist(const struct vlog_module *, enum vlog_level,
+                 const char *, va_list)
     __attribute__((format(printf, 3, 0)));
-void vlog_rate_limit(enum vlog_module, enum vlog_level,
+void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
                      struct vlog_rate_limit *, const char *, ...)
     __attribute__((format(printf, 4, 5)));
 
-/* Defines THIS_MODULE as MODULE, for use with the convenience macros below. */
-#define VLOG_DEFINE_THIS_MODULE(MODULE) enum { THIS_MODULE = VLM_##MODULE };
+/* Creates and initializes a global instance of a module named MODULE, and
+ * defines a static variable named THIS_MODULE that points to it, for use with
+ * the convenience macros below. */
+#define VLOG_DEFINE_THIS_MODULE(MODULE)                                 \
+        VLOG_DEFINE_MODULE(MODULE)                                      \
+        static struct vlog_module *const THIS_MODULE = &VLM_##MODULE;
 
-/* Convenience macros.  These assume that THIS_MODULE is defined as the current
- * module, as set up by e.g. the VLOG_DEFINE_MODULE macro above.
+/* Convenience macros.  These assume that THIS_MODULE points to a "struct
+ * vlog_module" for the current module, as set up by e.g. the
+ * VLOG_DEFINE_MODULE macro above.
  *
  * Guaranteed to preserve errno.
  */
@@ -180,20 +196,26 @@ void vlog_rate_limit(enum vlog_module, enum vlog_level,
 void vlog_usage(void);
 
 /* Implementation details. */
-#define VLOG(LEVEL, ...)                                \
-    do {                                                \
-        if (min_vlog_levels[THIS_MODULE] >= LEVEL) {    \
-            vlog(THIS_MODULE, LEVEL, __VA_ARGS__);      \
-        }                                               \
+#define VLOG(LEVEL, ...)                            \
+    do {                                            \
+        if (THIS_MODULE->min_level >= LEVEL) {      \
+            vlog(THIS_MODULE, LEVEL, __VA_ARGS__);  \
+        }                                           \
     } while (0)
 #define VLOG_RL(RL, LEVEL, ...)                                     \
     do {                                                            \
-        if (min_vlog_levels[THIS_MODULE] >= LEVEL) {                \
+        if (THIS_MODULE->min_level >= LEVEL) {                      \
             vlog_rate_limit(THIS_MODULE, LEVEL, RL, __VA_ARGS__);   \
         }                                                           \
     } while (0)
-extern enum vlog_level min_vlog_levels[VLM_N_MODULES];
- 
+#define VLOG_DEFINE_MODULE__(MODULE)                                    \
+        struct vlog_module VLM_##MODULE =                               \
+        {                                                               \
+            #MODULE,                                      /* name */    \
+            { [ 0 ... VLF_N_FACILITIES - 1] = VLL_INFO }, /* levels */  \
+            VLL_INFO,                                     /* min_level */ \
+        };
+
 #ifdef  __cplusplus
 }
 #endif

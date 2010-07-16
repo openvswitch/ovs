@@ -149,7 +149,7 @@ main(int argc, char *argv[])
     set_program_name(argv[0]);
     parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);
-    vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_EMER);
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_EMER);
     init_reboot_notifier();
 
     argc -= optind;

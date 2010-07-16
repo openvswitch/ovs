@@ -118,6 +118,7 @@ static void set_column(const struct vsctl_table_class *,
 int
 main(int argc, char *argv[])
 {
+    extern struct vlog_module VLM_reconnect;
     struct ovsdb_idl *idl;
     struct vsctl_command *commands;
     size_t n_commands;
@@ -125,8 +126,8 @@ main(int argc, char *argv[])
 
     set_program_name(argv[0]);
     signal(SIGPIPE, SIG_IGN);
-    vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_WARN);
-    vlog_set_levels(VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
+    vlog_set_levels(&VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
     ovsrec_init();
 
     /* Log our arguments.  This is often valuable for debugging systems. */
@@ -201,7 +202,7 @@ parse_options(int argc, char *argv[])
             break;
 
         case OPT_NO_SYSLOG:
-            vlog_set_levels(VLM_vsctl, VLF_SYSLOG, VLL_WARN);
+            vlog_set_levels(&VLM_vsctl, VLF_SYSLOG, VLL_WARN);
             break;
 
         case OPT_NO_WAIT:
@@ -383,7 +384,7 @@ vsctl_fatal(const char *format, ...)
     message = xvasprintf(format, args);
     va_end(args);
 
-    vlog_set_levels(VLM_vsctl, VLF_CONSOLE, VLL_EMER);
+    vlog_set_levels(&VLM_vsctl, VLF_CONSOLE, VLL_EMER);
     VLOG_ERR("%s", message);
     ovs_error(0, "%s", message);
     vsctl_exit(EXIT_FAILURE);

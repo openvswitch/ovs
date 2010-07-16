@@ -1287,6 +1287,7 @@ rtnl_recv_update(struct ovsdb_idl *idl,
 int
 main(int argc, char *argv[])
 {
+    extern struct vlog_module VLM_reconnect;
     struct unixctl_server *unixctl;
     const char *remote;
     struct ovsdb_idl *idl;
@@ -1294,8 +1295,8 @@ main(int argc, char *argv[])
 
     proctitle_init(argc, argv);
     set_program_name(argv[0]);
-    vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_WARN);
-    vlog_set_levels(VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
+    vlog_set_levels(&VLM_reconnect, VLF_ANY_FACILITY, VLL_WARN);
 
     remote = parse_options(argc, argv);
     signal(SIGPIPE, SIG_IGN);

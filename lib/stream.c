@@ -769,7 +769,7 @@ stream_content_type_to_string(enum stream_content_type type)
 void
 stream_report_content(const void *data, size_t size,
                       enum stream_content_type expected_type,
-                      enum vlog_module module, const char *stream_name)
+                      struct vlog_module *module, const char *stream_name)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
     enum stream_content_type actual_type;

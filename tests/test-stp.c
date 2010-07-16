@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <config.h>
+
 #include "stp.h"
 #include <assert.h>
 #include <ctype.h>

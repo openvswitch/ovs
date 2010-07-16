@@ -401,8 +401,8 @@ int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
-    vlog_set_levels(VLM_ANY_MODULE, VLF_ANY_FACILITY, VLL_EMER);
-    vlog_set_levels(VLM_ANY_MODULE, VLF_CONSOLE, VLL_DBG);
+    vlog_set_levels(NULL, VLF_ANY_FACILITY, VLL_EMER);
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_DBG);
     signal(SIGPIPE, SIG_IGN);
 
     time_alarm(10);

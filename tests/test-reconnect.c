@@ -40,12 +40,13 @@ static void diff_stats(const struct reconnect_stats *old,
 int
 main(void)
 {
+    extern struct vlog_module VLM_reconnect;
     struct reconnect_stats prev;
     unsigned int old_max_tries;
     int old_time;
     char line[128];
 
-    vlog_set_levels(VLM_reconnect, VLF_ANY_FACILITY, VLL_EMER);
+    vlog_set_levels(&VLM_reconnect, VLF_ANY_FACILITY, VLL_EMER);
 
     now = 1000;
     reconnect = reconnect_create(now);
