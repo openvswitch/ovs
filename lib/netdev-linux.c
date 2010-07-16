@@ -1625,7 +1625,7 @@ start_queue_dump(const struct netdev *netdev, struct nl_dump *dump)
     struct tcmsg *tcmsg;
 
     tcmsg = tc_make_request(netdev, RTM_GETTCLASS, 0, &request);
-    tcmsg->tcm_parent = TC_H_ROOT;
+    tcmsg->tcm_parent = 0;
     nl_dump_start(dump, rtnl_sock, &request);
     ofpbuf_uninit(&request);
 }
