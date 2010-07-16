@@ -2654,7 +2654,7 @@ is_condition_satified(const struct vsctl_table_class *table,
     const char *operator;
     unsigned int idx;
     char *error;
-    int cmp;
+    int cmp = 0;
 
     error = parse_column_key_value(arg, table, &column, &key_string,
                                    &operator, operators, ARRAY_SIZE(operators),
@@ -2787,7 +2787,7 @@ do_vsctl(const char *args, struct vsctl_command *commands, size_t n_commands,
     const char *unused;
     struct vsctl_command *c;
     int64_t next_cfg = 0;
-    char *error;
+    char *error = NULL;
 
     txn = the_idl_txn = ovsdb_idl_txn_create(idl);
     if (dry_run) {
